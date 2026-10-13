@@ -1,9 +1,15 @@
 /**
- * 提交门槛自检：注释语言棘轮（ISSUE #678 / 规范 §12.4.6）。
+ * 提交门槛自检：注释语言判据（ISSUE #678 / #1811 收尾 / 规范 §12.4.6）。
  *
- * 这条门禁的价值全在**两个方向**都成立上：既要真的拦住「新增英文注释」，
- * 也要在中文化有进展后**要求收紧基线**（否则基线会长期停在一个宽松的数字上）。
- * 用「临时工作区 + 只放被测文件」跑真脚本，两个方向各断言一次。
+ * 这一条在 ISSUE #1811 收尾时**从棘轮翻成硬闸**：中文化治理已全库清零，
+ * 于是棘轮车道没有成员 —— `--update` 写回去的永远是一份空账，而留下的却是
+ * 一条「手改 JSON 就能把新违规登记成已知存量」的通道（§13.6.2 的两类对照）。
+ * 所以基线文件已删、`--update` / `--strict` 已不存在，用例改判「命中即退 1」
+ * 与「那两个旗标是断头的」。
+ *
+ * 判据的价值仍全在**两个方向**都成立上：既要真的拦住英文注释，也要在合规时
+ * 放行（一个永远返回空的扫描器会让「无违规」全绿）。用「临时工作区 + 只放
+ * 被测文件」跑真脚本，两个方向各断言一次。
  *
  * 为什么必须把「白名单只定义一次」也写成用例：白名单分散成两份（文档一份、
  * 脚本一份）时的表现是「文档说允许、判据说违规」，而两边看起来都对 —— 这正是
@@ -68,49 +74,19 @@ function seedFactsDoc(repo: GateRepo, modules: string[]): void {
   repo.write("docs/reference-facts.md", `# refs\n\n${row}\n`);
 }
 
-/**
- * 判据版本从脚本里读，不在测试里另写一份数字 —— 否则每次升版都要同步改两处，
- * 而「测试里的版本」与「脚本里的版本」谁新谁旧正是这类门禁最容易漂移的地方
- * （规范 §12.5.4：登记处 > 2 时先问能不能是派生视图）。
- */
-function currentRuleVersion(): number {
-  const src = readFileSync(SCRIPT, "utf8");
-  const m = /^const RULE_VERSION = (\d+);/m.exec(src);
-  if (!m)
-    throw new Error("脚本里没有 `const RULE_VERSION = N;`，取不到判据版本");
-  return Number(m[1]);
-}
-
-function seedBaseline(
-  repo: GateRepo,
-  files: Record<string, number>,
-  total: number,
-): void {
-  repo.write(
-    "scripts/.comment-language-baseline.json",
-    JSON.stringify(
-      { ruleVersion: currentRuleVersion(), total, files },
-      null,
-      2,
-    ),
-  );
-}
-
 const CHINESE =
   "/** 组合输入参数：取值失败时回落缺省值。 */\nexport const a = 1;\n";
 const ENGLISH =
   "/** Combine the input parameters and fall back to defaults. */\nexport const a = 1;\n";
 
-describe("注释语言棘轮（规范 §12.4.6）", () => {
+describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
   test("全中文注释 → 通过", ({ repo }) => {
     repo.write("src/lib/ok.ts", CHINESE);
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(0);
   });
 
   test("新增带英文注释的文件 → 阻断，并点名文件与总口径", ({ repo }) => {
-    seedBaseline(repo, {}, 0);
     repo.write("src/lib/fresh.ts", ENGLISH);
     const r = repo.run();
     expect(r.code).toBe(1);
@@ -118,26 +94,29 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(r.output).toContain("注释一律中文");
   });
 
-  test("存量文件的英文注释变多 → 阻断（棘轮只许降不许升）", ({ repo }) => {
+  test("同一文件的英文注释有 1 行也阻断（硬闸：没有存量额度）", ({ repo }) => {
     repo.write("src/lib/legacy.ts", ENGLISH);
-    seedBaseline(repo, { "src/lib/legacy.ts": 1 }, 1);
-    expect(repo.run().code).toBe(0);
-    repo.write("src/lib/legacy.ts", `${ENGLISH}${ENGLISH}`);
-    const r = repo.run();
-    expect(r.code).toBe(1);
-    expect(r.output).toContain("变多");
+    const one = repo.run();
+    expect(one.code).toBe(1);
+    expect(one.output).toContain("注释一律中文");
   });
 
-  test("中文化有进展（基线未收紧）→ 提示；--strict 下阻断", ({ repo }) => {
+  test("合规时放行（反向：判据不是恒红）", ({ repo }) => {
     repo.write("src/lib/legacy.ts", CHINESE);
-    seedBaseline(repo, { "src/lib/legacy.ts": 1 }, 1);
-    const lenient = repo.run();
-    expect(lenient.code).toBe(0);
-    expect(lenient.output).toContain("已减少");
+    const r = repo.run();
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("无英文注释");
+  });
 
-    const strict = repo.run(["--strict"]);
-    expect(strict.code).toBe(1);
-    expect(strict.output).toContain("收紧基线");
+  test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({ repo }) => {
+    /* 少了这一格，「删了 --update」与「--update 还在但没人调」看起来一样。
+     * 这里刻意留一份**违规**：两个旗标都不得把它判绿，也不得落盘任何基线。 */
+    repo.write("src/lib/legacy.ts", ENGLISH);
+    for (const flag of ["--update", "--strict"]) {
+      const r = repo.run([flag]);
+      expect(r.code, `${flag} 不该放行违规`).toBe(1);
+    }
+    expect(repo.exists("scripts/.comment-language-baseline.json")).toBe(false);
   });
 
   test("分隔线 / 标签 / 两词以内英文（TODO）不计入判定", ({ repo }) => {
@@ -152,7 +131,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
   });
 
@@ -172,7 +150,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
   });
 
@@ -191,7 +168,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
   });
 
@@ -211,7 +187,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
   });
 
@@ -242,7 +217,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
   });
 
@@ -254,7 +228,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
       "src/lib/jsdoc-prose-param-name-prose.ts",
       "/** @param {string} from the source label */\nexport const a = 1;\n",
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/jsdoc-prose-param-name-prose.ts");
@@ -274,7 +247,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
   });
 
@@ -291,7 +263,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/jsdoc-continuation-prose.ts");
@@ -306,7 +277,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
       "src/lib/jsdoc-prose.ts",
       "/** @param {string} candidate the command to probe */\nexport const a = 1;\n",
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/jsdoc-prose.ts");
@@ -320,7 +290,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
       "src/lib/directive-doc.ts",
       "// we keep the @ts-expect-error directive here on purpose\nexport const a = 1;\n",
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/directive-doc.ts");
@@ -335,7 +304,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
       "src/lib/url.ts",
       "// see https://example.com/a/b/c for details\nexport const a = 1;\n",
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/url.ts");
@@ -360,7 +328,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "export const a = 1;",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code, r.output).toBe(0);
   });
@@ -379,7 +346,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "export const a = 1;",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code, r.output).toBe(0);
   });
@@ -395,7 +361,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "export const a = 1;",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code, r.output).toBe(0);
   });
@@ -413,7 +378,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "export const a = 1;",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/prose.ts");
@@ -442,7 +406,6 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/components/Widget.tsx");
@@ -465,11 +428,11 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
         "",
       ].join("\n"),
     );
-    seedBaseline(repo, {}, 0);
     const r = repo.run();
     expect(r.code).toBe(1);
-    // 三行都含成句英文 → 应统计到 3（只看首行会漏掉两行）
-    expect(r.output).toContain("src/components/Multi.tsx（3 行）");
+    /* 三行都含成句英文 → 应统计到 3（只看首行会漏掉两行）。
+     * 输出的点位形态是 `<右侧补齐的行数>  <路径>`（硬闸档统一用这一形）。 */
+    expect(r.output).toMatch(/\b3\s+src\/components\/Multi\.tsx/);
   });
 
   test("字符串字面量里的英文不被当成注释", ({ repo }) => {
@@ -477,44 +440,13 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
       "src/lib/str.ts",
       '/** 中文注释。 */\nexport const a = "Combine the input parameters and fall back to defaults.";\n',
     );
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
   });
 
   test("白名单文件整文件豁免（构建期模块必须英文 + 纯 ASCII）", ({ repo }) => {
     seedFactsDoc(repo, ["src/lib/db-schema-ready.ts"]);
     repo.write("src/lib/db-schema-ready.ts", ENGLISH);
-    seedBaseline(repo, {}, 0);
     expect(repo.run().code).toBe(0);
-  });
-
-  test("基线判据版本不一致 → 阻断并指向 --update（旧数字与新口径不是同一个量）", ({
-    repo,
-  }) => {
-    repo.write("src/lib/ok.ts", CHINESE);
-    repo.write(
-      "scripts/.comment-language-baseline.json",
-      JSON.stringify({ ruleVersion: 0, total: 0, files: {} }),
-    );
-    const r = repo.run();
-    expect(r.code).toBe(1);
-    expect(r.output).toContain("判据版本");
-    expect(r.output).toContain("--update");
-  });
-
-  test("--update 建立基线后同一状态通过（棘轮可闭环）", ({ repo }) => {
-    repo.write("src/lib/legacy.ts", ENGLISH);
-    /* 这里**不再**先手写一份 `total: 0` 的基线：那份零基线加一句「--update 必须成功」
-     * 断的正是「把新增的违规收进基线」那扇门 —— 而它现在是判据要拦的行为
-     * （`tests/ratchet-update-guards.test.ts`，台账 E5）。闭环的第一步在生产里长这样：
-     * 基线文件还不存在，`--update` 把它第一次写出来。 */
-    expect(repo.run(["--update"]).code).toBe(0);
-    expect(repo.run().code).toBe(0);
-    const baseline = JSON.parse(
-      repo.read("scripts/.comment-language-baseline.json"),
-    ) as { files: Record<string, number>; ruleVersion: number };
-    expect(baseline.files["src/lib/legacy.ts"]).toBe(1);
-    expect(baseline.ruleVersion).toBe(currentRuleVersion());
   });
 });
 
@@ -552,50 +484,27 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   });
 
   /**
-   * 提交进仓库的基线**必须与提交进仓库的树对得上**。
+   * 翻硬闸之后，仍然要有一条判据盯「**仓库自己的树**是干净的」。
    *
-   * 这条守的是棘轮的一个结构性盲区：临时工作区里跑的用例（上面那批）验证的是
-   * 「脚本判据对不对」，而**仓库自己的基线有没有跟上仓库自己的代码**没有任何
-   * 判据盯着 —— `--update` 写出来的数字只在提交时进历史，此后新增的英文注释
-   * 若因为「钩子没跑 / 跑了没看」被提交进来，基线就会**停在原地**：
-   *   · `check-comment-language.cjs` 在 pre-commit 里报红（提交被拦），
-   *   · 但代码已经在 master 上了 —— 于是**下一个人做任何提交都会失败**，
-   *     且失败原因与他自己的改动毫无关系（实测：7 个文件、20 行，
-   *     出自 4 个已合并的提交）。
-   * 换句话说，这不是「基线滞后」的美观问题，而是「门禁从可信变成噪音」的
-   * 那一刻。写法上把脚本的 `--report` 输出与基线逐项比对即可（同一份脚本、
-   * 同一份判据，不另写一遍统计）。
+   * 上面那批用例在临时工作区里跑，验的是「脚本判据对不对」；而仓库自己有没有
+   * 违规没有任何东西盯着 —— 违规若因为「钩子没跑 / 跑了没看」被提交进来，
+   * 下一个做任何提交的人都会失败，且原因与他的改动毫无关系。棘轮时代靠
+   * 「基线 ⇄ 树逐项比对」守这一格；现在基线没了，守的形态就变成「读数必须为 0」。
+   * 写法上仍走真仓库里的同一个脚本（同一份判据，不另写一遍统计）。
    */
-  test("仓库里的基线覆盖仓库里的代码（否则门禁对下一个提交者报与自己无关的红）", () => {
+  test("仓库自己的树是干净的（硬闸形态下这一格才是终局）", () => {
     const report = runInRepo(["--report"]);
     expect(report.code, report.output).toBe(0);
-    /* `--report` 的输出形如：
-     *   扫描 1012 个代码文件:疑似英文注释 20 行,分布在 7 个文件
-     *        8  （路径）
-     */
     const header = /疑似英文注释 (\d+) 行,分布在 (\d+) 个文件/.exec(
       report.output,
     );
     expect(header, `无法解析 --report 表头：${report.output}`).toBeTruthy();
-    const baseline = JSON.parse(
-      readFileSync(
-        join(REPO_ROOT, "scripts", ".comment-language-baseline.json"),
-        "utf8",
-      ),
-    ) as { total: number; files: Record<string, number> };
-    const actualTotal = Number(header![1]);
-    const actualFiles = Number(header![2]);
-    const baselineFiles = Object.keys(baseline.files ?? {}).length;
     expect(
-      actualTotal,
-      `${actualFiles} 个文件里有 ${actualTotal} 行英文注释未登记进基线` +
-        "（基线 " +
-        `${baseline.total ?? 0} 行 / ${baselineFiles} 个文件）。` +
-        "\n  要么把这些注释改成中文（首选），要么执行" +
-        "\n  node scripts/check-comment-language.cjs --update 收紧基线" +
-        "\n  —— 但**不要**用一个更宽的基线把红遮掉，那等于把门禁改成噪音。",
-    ).toBe(baseline.total ?? 0);
-    expect(actualFiles).toBe(baselineFiles);
+      Number(header![1]),
+      `${header![2]} 个文件里有 ${header![1]} 行英文注释 —— ` +
+        "注释一律中文（§12.4.6）。属构建期纯 ASCII 模块就把路径登记进 " +
+        "docs/reference-facts.md 的 `comment.language.asciiOnly` 一行。",
+    ).toBe(0);
   });
 
   test("规范与启动链路文档都写明了例外的存在（避免「一刀切」被改回去）", () => {

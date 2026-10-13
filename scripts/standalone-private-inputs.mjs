@@ -187,6 +187,33 @@ export const RUNTIME_SCRIPTS = [
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",
   "launcher-core/splash-assets.mjs",
+  // 「收尾定性」这一族（ISSUE #1692 / 规范 §4.5.3）：四种成因的判决表与文案、
+  // 以及运行期退出的写点判据。`dev-launcher.mjs` 顶层静态 import 它 —— 缺这份
+  // 同样是整个编排器 ENOENT，而它的表现最难查：只在**服务已经出过事**的那一刻
+  // 才被走到（`concludeDownstreamExit` 与常驻段的收尾），正常启动一切照旧。
+  "launcher-core/downstream-exit.mjs",
+  // 基础设施层拆分带出来的五份内部分件（ISSUE #1811 第四刀，PR #1823）：
+  // `dev-launcher.mjs`（1540 → 953 行）把预检 / 端口回收 / 下游 / 壳产物名 /
+  // 杂项各自成模块，主文件顶层静态 import 它们。**这五份的登记是 PR #1823 漏了
+  // 的一步**，由 `tests/dist-artifact-hygiene.test.ts` 的「清单覆盖编排器的相对
+  // import 闭包」当场照出来 —— 缺它们的表现正是这条白名单存在的理由：
+  // 桌包脱离仓库后重新编排一次，ESM 在加载期解析整张图 ⇒ `ERR_MODULE_NOT_FOUND`
+  // ⇒ 用户只看到「双击没反应」，而本地开发（源码树齐全）一切照旧。
+  "launcher-core/downstream.mjs",
+  "launcher-core/preflight.mjs",
+  "launcher-core/shell-ops.mjs",
+  "launcher-core/misc-ops.mjs",
+  "launcher-core/port-reap.mjs",
+  // 主流程按阶段拆出来的四份（ISSUE #1811 第五刀）：预检桥段（孤儿回收 / 环境与
+  // 工具链门禁 / 依赖对齐 / 备份恢复 / 端口）、桌面壳阶段、起服务桥段（缓存 /
+  // dev server / 执行器宿主 / 会话锚点 / 后台 schema）、就绪等待（轮询 / 陈旧
+  // 路由表自愈 / 超时定性）。`dev-launcher.mjs`（953 → 753 行）顶层静态 import
+  // 它们 —— 缺任一份就是 `ERR_MODULE_NOT_FOUND`，表现与上面那批一模一样：
+  // 桌包重新编排一次「双击没反应」，本地开发看不出。
+  "launcher-core/startup-gates.mjs",
+  "launcher-core/shell-stage.mjs",
+  "launcher-core/dev-boot.mjs",
+  "launcher-core/ready-wait.mjs",
   // 桌包 standalone 形态的运行入口与它的环境装配（ISSUE #1216）：壳把
   // `node server.js` 换成 `node scripts/standalone-runtime.mjs`，缺这份就是
   // standalone 桌包回到「起不来且没人知道为什么」。

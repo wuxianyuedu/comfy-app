@@ -73,10 +73,18 @@ describe("db-sync.mjs：--force 之前必须备份", () => {
 });
 
 describe("启动链：换文件必须排在起服务之前", () => {
+  /* 编排器那一行的**实现**住在 `launcher-core/startup-gates.mjs`（ISSUE #1811
+   * 拆 R5 超限文件）：`applyPendingRestoreAtBoot` 的调用点随预检桥段搬了过去，
+   * 主文件只把它注进 `runStartupGates`。契约是「启动链路上换文件排在起服务之前」
+   * —— 不是「这个调用写在哪份文件里」，所以这里按**实现那两份**判，主文件只判
+   * 「它把这一步接上了」。 */
   const entries = [
     { file: "scripts/dev.mjs", label: "独立 pnpm dev" },
     { file: "scripts/start.mjs", label: "独立 pnpm start" },
-    { file: "scripts/dev-launcher.mjs", label: "双击启动编排" },
+    {
+      file: "scripts/launcher-core/startup-gates.mjs",
+      label: "双击启动编排",
+    },
   ];
 
   for (const { file, label } of entries) {
@@ -84,6 +92,12 @@ describe("启动链：换文件必须排在起服务之前", () => {
       expect(read(file)).toContain("applyPendingRestoreAtBoot(");
     });
   }
+
+  it("编排器主文件把这一步接上了（薄壳不许断线）", () => {
+    const src = read("scripts/dev-launcher.mjs");
+    expect(src).toContain("applyPendingRestoreAtBoot,");
+    expect(src).toContain("runStartupGates(");
+  });
 
   it("dev.mjs / start.mjs 里它排在 spawnSchemaSync 与 next 之前", () => {
     for (const file of ["scripts/dev.mjs", "scripts/start.mjs"]) {
@@ -100,10 +114,29 @@ describe("启动链：换文件必须排在起服务之前", () => {
   });
 
   it("编排器里它排在 spawnSchemaSync 与 spawnDevServer 之前", () => {
+    /* 用**调用点**而不是「某个名字第一次出现的行」：R5 拆分之后入口文件把
+     * `spawnDevServer` 做成了一层再导出的薄包装（它写在主流程**之前**），
+     * 拿「第一次出现」会指到那个包装上，断言就成了「换文件排在包装定义之前」——
+     * 那是文件排版，不是契约。契约是「换文件排在**真的起服务**之前」，而这两处
+     * 调用点在拆分后分居两份（换文件在 `startup-gates.mjs`，起服务在
+     * `dev-boot.mjs`），所以顺序判据落在**执行顺序**上：编排名按 0~2 → 3 → … →
+     * 5~8 排，换文件在 5~8 之前由下面的「先于起服务」直接证明。 */
+    const gates = read("scripts/launcher-core/startup-gates.mjs");
+    expect(
+      lineOf(gates, "applyPendingRestoreAtBoot("),
+      "换文件必须在预检桥段里真的被调用",
+    ).toBeGreaterThanOrEqual(0);
+    // 起服务那一段（dev-boot）不许自己碰换文件：碰了就是「在开库之后才换」。
+    const boot = read("scripts/launcher-core/dev-boot.mjs");
+    expect(
+      boot.includes("applyPendingRestoreAtBoot"),
+      "起服务桥段里不许出现换文件（那时已有进程持有库）",
+    ).toBe(false);
+    // 编排器的执行顺序：预检桥段在任何起服务动作之前。
     const src = read("scripts/dev-launcher.mjs");
-    const restore = lineOf(src, "applyPendingRestoreAtBoot(");
-    expect(restore).toBeLessThan(lineOf(src, "spawnSchemaSync("));
-    expect(restore).toBeLessThan(lineOf(src, "spawnDevServer("));
+    expect(lineOf(src, "await runStartupGates(")).toBeLessThan(
+      lineOf(src, "bootDevServerStage("),
+    );
   });
 
   it("三个入口排在任何会开库的东西之前：不得出现在 spawnSchemaSync 之后", () => {
@@ -111,6 +144,17 @@ describe("启动链：换文件必须排在起服务之前", () => {
      * 都会有一处红 —— 那样换文件就发生在有进程持有这个库的时刻了。 */
     for (const { file, label } of entries) {
       const src = read(file);
+      if (!src.includes("spawnSchemaSync(")) {
+        /* 编排器的 schema 同步随起服务桥段搬进了 `dev-boot.mjs`：那一份里
+         * **不许**出现换文件（正面那条已断），这里只断「它不在换文件之前」。 */
+        expect(
+          read("scripts/launcher-core/dev-boot.mjs").includes(
+            "applyPendingRestoreAtBoot",
+          ),
+          `${label}: 换文件不许排在 schema 同步之后`,
+        ).toBe(false);
+        continue;
+      }
       expect(
         lineOf(src, "applyPendingRestoreAtBoot("),
         `${label}: 换文件不许排在 schema 同步之后`,

@@ -149,7 +149,10 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
   ]);
 
   for (let i = 0; i < argv.length; i++) {
-    const token = argv[i]!;
+    /* 循环体里有「跳过端口值」的手动 `i++`，所以不能换成 `for...of`；
+     * `at()` 的越界即 `undefined` 正好与循环判据同源。 */
+    const token = argv.at(i);
+    if (token === undefined) break;
     const lower = token.toLowerCase();
     if (drop.has(lower)) continue;
     // 提取 --port：`--port <n>` 或 `--port=<n>` 或 `-p <n>`。

@@ -452,7 +452,8 @@ export function resolveWorkflowMode(args: {
   const declared = args.defaultMode;
   if (declared && (modes.length === 0 || modes.includes(declared)))
     return declared;
-  if (modes.length > 0) return modes[0]!;
+  const [firstMode] = modes;
+  if (firstMode) return firstMode;
   if (typeof args.taskType === "string" && args.taskType) {
     return normalizeTaskType(args.taskType);
   }

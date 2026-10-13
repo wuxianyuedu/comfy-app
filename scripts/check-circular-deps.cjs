@@ -10,12 +10,26 @@
  * 排查成本极高。
  *
  * 判据：把 `src/**` 的 import 图求**强连通分量**(Tarjan)。分量大小 > 1，或
- * 自环(文件 import 自己)，即判定为环。存量由棘轮基线
- * `scripts/.circular-deps-baseline.json` 记录，**只许降不许升**。
+ * 自环(文件 import 自己)，即判定为环。**硬闸**：命中即阻断，没有基线、
+ * 也没有 `--update` 通道 —— 环的存量已清零(见下「为什么是硬闸而不是棘轮」)。
  *
- * 为什么用 SCC 而不是「找一条环路」：SCC 与遍历起点无关(结果稳定、可入基线)，
+ * ## 为什么是硬闸而不是棘轮
+ *
+ * 本判据此前是**棘轮**：存量按「同一环内文件字典序 join('|')」记进
+ * `scripts/.circular-deps-baseline.json`，`--update` 收紧、`--strict` 要求下降。
+ * 但实到今天是 **0 组环**——基线 `cycles: []`，而棘轮在两处退化成纯开销：
+ *
+ *   · 「只许降不许升」在 0 上不可能再收紧(`--update` 无事可做)；
+ *   · 基线文件与 `--update` 通道却仍是活的 —— 一份手改的 `cycles: [...]`
+ *     就能把新环登记成「已知存量」，而这正是硬闸类**本来没有**的中间态。
+ *
+ * 环形依赖的症状是「import 顺序变了就 `undefined is not a function`」，
+ * 排查成本极高，因此不留「冻结一个数字」的口子：**新增一组环即阻断**。
+ * 判据口径与扫描面一字未改，只把「有存量、逐批治理」那一层皮收掉。
+ *
+ * 为什么用 SCC 而不是「找一条环路」：SCC 与遍历起点无关(结果稳定)，
  * 且天然把「同一个环的不同走法」归成一个分量，不会把 A→B→A 与 A→C→A 报成
- * 两条 —— 那个数字会随遍历顺序漂移，做不了棘轮。
+ * 两条 —— 那个数字会随遍历顺序漂移，报出来也说不清到底有几组环。
  *
  * 为什么现在这份图的解析是自己写的：
  *   仓库没有 madge / dependency-cruiser 这类依赖(不引新包)，而 `@/` `~/` 别名
@@ -25,22 +39,19 @@
  *   `require()` 与字符串拼接的路径(本仓库不使用)。
  *
  * 用法:
- *   node scripts/check-circular-deps.cjs           # 检查(棘轮)
- *   node scripts/check-circular-deps.cjs --strict  # 基线未收紧也失败(CI 用)
- *   node scripts/check-circular-deps.cjs --update  # 重写基线(须伴随下降)
+ *   node scripts/check-circular-deps.cjs           # 检查(硬闸:命中即退 1)
  *   node scripts/check-circular-deps.cjs --report  # 只出清单不判失败(盘点用)
+ *   --staged(钩子用)仅当暂存改动落在扫描面(`src/**`)内才扫，口径见 §13.5.8.2
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
-/* 扫描根取 cwd(与 check-file-structure.cjs 同口径:门禁在仓库根被调用),
- * 基线取__dirname 旁(与脚本同目录,便于在临时工作区里被一并复制/断言)。 */
+/* 扫描根取 cwd(与 check-file-structure.cjs 同口径:门禁在仓库根被调用)。 */
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, "src");
-const BASELINE = path.join(__dirname, ".circular-deps-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
+const STAGED = ARGS.has("--staged");
 const REPORT_ONLY = ARGS.has("--report");
 
 /** 扫描目录(与门禁口径一致:只看应用源码,文档与脚本不参与)。 */
@@ -188,14 +199,14 @@ function findCycles(graph) {
       }
     }
   }
-  // 稳定排序:让基线 diff 只反映真实变化
+  // 稳定排序:让同一组环的报出顺序固定(与遍历起点无关)
   return cycles.sort((a, b) => a.join("\n").localeCompare(b.join("\n")));
 }
 
 function main() {
+  if (STAGED && !REPORT_ONLY) skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[circular-deps]" });
   const graph = buildGraph();
   const cycles = findCycles(graph);
-  const current = cycles.map((c) => c.join("|"));
 
   if (REPORT_ONLY) {
     if (cycles.length === 0) {
@@ -210,81 +221,21 @@ function main() {
     return;
   }
 
-  let baseline = [];
-  const hadBaseline = fs.existsSync(BASELINE);
-  if (hadBaseline) {
-    baseline = JSON.parse(fs.readFileSync(BASELINE, "utf8")).cycles || [];
-  }
-
-  const known = new Set(baseline);
-  const added = current.filter((c) => !known.has(c));
-  const removed = baseline.filter((c) => !current.includes(c));
-
-  if (UPDATE) {
-    /* 与 `check-dead-exports` 同一格：note 里写着「只许降不许升」，而这一支此前
-     * 无条件落盘 —— 新增一组环之后跑一次 --update 就把它收进基线。 */
-    if (hadBaseline && added.length) {
-      console.error(
-        `[circular-deps] 拒绝 --update：新增 ${added.length} 组模块循环依赖` +
-          `（基线 ${baseline.length} → 当前 ${current.length}）。\n` +
-          `  棘轮只许降不许升：先按规范 §12.7 拆环（把共享的那一角下沉 / 改成注入），再 --update。\n` +
-          `  新增的几组：\n${added
-            .slice(0, 10)
-            .map((c) => `    · ${c}`)
-            .join("\n")}`,
-      );
-      process.exit(1);
-    }
-    fs.writeFileSync(
-      BASELINE,
-      `${JSON.stringify(
-        {
-          // 说明:键是「同一环内的文件按字典序 join('|')」——与遍历起点无关,
-          // 因此基线稳定。只许下降:消除一个环就 --update 收紧一次。
-          note: "模块循环依赖棘轮(规范 12.7);只许降不许升。--update 收紧。",
-          cycles: current,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-    console.log(`✓ 已写入基线:${current.length} 组循环依赖`);
-    if (removed.length) console.log(`  比上次减少 ${removed.length} 组`);
-    return;
-  }
-
-  let failed = false;
-  if (added.length) {
-    console.error(`✗ 新增 ${added.length} 组模块循环依赖(规范 12.7 禁止):`);
-    for (const c of added) {
-      const files = c.split("|");
-      console.error(`\n  环(${files.length} 个文件):`);
-      for (const f of files) console.error(`    ${f}`);
+  if (cycles.length) {
+    console.error(`✗ 发现 ${cycles.length} 组模块循环依赖(规范 §12.7 禁止):`);
+    for (const c of cycles) {
+      console.error(`\n  环(${c.length} 个文件):`);
+      for (const f of c) console.error(`    ${f}`);
     }
     console.error(
       "\n修法:把「谁都不依赖」的公共部分下沉成叶子模块(类型下沉到类型模块,动作改为回调注入)," +
-        "\n     让依赖方向单向;参见 §12.7 与 ISSUE #574 的断环实例。",
+        "\n     让依赖方向单向;参见 §12.7 与 ISSUE #574 的断环实例。" +
+        "\n     本判据是硬闸(无基线、无 --update):环的存量已清零,新增一组即阻断。",
     );
-    failed = true;
+    process.exit(1);
   }
 
-  if (STRICT && removed.length) {
-    console.error(
-      `✗ 基线里 ${removed.length} 组环已不存在,请收紧基线:node scripts/check-circular-deps.cjs --update`,
-    );
-    failed = true;
-  } else if (removed.length) {
-    console.log(
-      `提示:${removed.length} 组环已消除,可执行 node scripts/check-circular-deps.cjs --update 收紧基线`,
-    );
-  }
-
-  if (!failed) {
-    console.log(
-      `✓ 无新增模块循环依赖(§12.7;基线 ${baseline.length} 组,当前 ${current.length} 组)`,
-    );
-  }
-  process.exit(failed ? 1 : 0);
+  console.log("✓ 无模块循环依赖(§12.7)");
 }
 
 main();

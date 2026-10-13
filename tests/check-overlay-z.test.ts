@@ -1,26 +1,24 @@
 /**
  * 提交门槛自检：把 scripts/check-overlay-z.cjs 当黑盒跑在临时工作区上，
- * 验证「浮层层级刻度」这条棘轮（规范 16 §16.2.5）真的会阻断提交。
+ * 验证「浮层层级刻度」这条**硬闸**（规范 16 §16.2.5）真的会阻断提交。
  *
- * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.5（ISSUE #672）
+ * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.5（ISSUE #672 / #1811）
+ *
+ * 这一条在 ISSUE #1811 收尾时**从棘轮翻成硬闸**（Z3 的存量清零，棘轮车道
+ * 无成员）。所以这里没有 `seedBaseline`：基线文件已删、`--update` 已不存在，
+ * 用例改判「命中即退 1」与「`--update` 是断头的」。
  *
  * 为什么用子进程跑：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用，且内部以
  * `__dirname/..` 定位扫描根 —— 复用同一调用方式才等价于真实门禁。临时工作区与
  * `run` / `write` 由 `tests/helpers/gate-repo.ts` 提供（门禁自测的共用夹具，
  * 收尾挂在 fixture 的 `use` 之后）。
  */
-import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
+import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
   script: "check-overlay-z.cjs",
   dirs: ["src/components/studio", "src/components/ui", "src/app"],
 });
-
-/** 基线是首次 `--update` 写出的（门禁自身的常规用法）。 */
-function seedBaseline(repo: GateRepo): void {
-  const { code, output } = repo.run(["--update"]);
-  expect(code, output).toBe(0);
-}
 
 const INLINE_Z =
   "export function V() {\n  return <div style={{ zIndex: 7 }} />;\n}\n";
@@ -33,7 +31,6 @@ const SCALE_TONE =
 
 describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
   test("行内数字 zIndex 会被阻断（Z1 硬闸）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/A.tsx", INLINE_Z);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -44,15 +41,13 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
   test("任意值写法 z-[<数字>] 会被阻断（Z2 硬闸，规范 03 §3.2）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/B.tsx", ARBITRARY_Z);
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("Z2");
   });
 
-  test("刻度之外的裸数字档 z-9999 会被阻断（Z3：又编一档）", ({ repo }) => {
-    seedBaseline(repo);
+  test("刻度之外的裸数字档 z-9999 会被阻断（Z3 硬闸：又编一档）", ({ repo }) => {
     repo.write("src/components/studio/C.tsx", NUMERIC_TONE);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -60,7 +55,6 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
   });
 
   test("刻度内的具名档放行：z-modal / z-popup / z-canvas-ui …", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/D.tsx", SCALE_TONE);
     for (const tone of [
       "z-base",
@@ -81,7 +75,6 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
   });
 
   test("注释里的旧形态不计入（说明性注释不是实现）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/E.tsx",
       [
@@ -97,7 +90,6 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
   });
 
   test("ui/ 基元目录放行（shadcn 工具生成、尽量不手改，§16.1）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/legacy.tsx",
       'export function V() {\n  return <div className="fixed z-50" />;\n}\n',
@@ -107,23 +99,24 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
   });
 
   test("测试文件放行（测试里的 DOM 与 mock 不算视图实现）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/A.test.tsx", NUMERIC_TONE);
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
   });
 
-  test("棘轮只许降不许升：存量上升被阻断，且 --update 拒绝放宽", ({ repo }) => {
+  test("历史形态翻硬闸后不再有 --update 通道（断头用例）", ({ repo }) => {
+    /* 判据此前是棘轮：`--update` 能把读数写进基线。翻硬闸后那条通道必须消失 ——
+     * 传 `--update` 既不落盘任何 JSON，也不放宽判定（命中仍然退 1）。
+     * 少了这一格，「删了 --update」与「--update 还在但没人调」看起来一样。 */
     repo.write("src/components/studio/F.tsx", NUMERIC_TONE);
-    seedBaseline(repo);
-    repo.write("src/components/studio/F2.tsx", NUMERIC_TONE);
-    const blocked = repo.run();
-    expect(blocked.code).toBe(1);
-    expect(blocked.output).toContain("新增 Z3");
-
     const updated = repo.run(["--update"]);
     expect(updated.code).toBe(1);
-    expect(updated.output).toContain("拒绝放宽基线");
+    expect(repo.exists("scripts/.overlay-z-baseline.json")).toBe(false);
+
+    /* 断言判据真的在计数：不传旗标也必须红。 */
+    const plain = repo.run();
+    expect(plain.code).toBe(1);
+    expect(plain.output).toContain("Z3");
   });
 
   test("--report 只出清单不判失败（排批次用）", ({ repo }) => {
@@ -134,19 +127,12 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
     expect(output).toContain("G.tsx");
   });
 
-  test("治理后 --update 收紧基线", ({ repo }) => {
-    repo.write("src/components/studio/H.tsx", NUMERIC_TONE);
-    seedBaseline(repo);
+  test("无违规时判据是绿的（清零后的自证）", ({ repo }) => {
+    /* 与上面几格互为反向：一个永远返回空的扫描器会让「清单为空」全绿，
+     * 所以「有违规必红」与「无违规必绿」两条都要有。 */
     repo.write("src/components/studio/H.tsx", SCALE_TONE);
-    const tightened = repo.run(["--update"]);
-    expect(tightened.code, tightened.output).toBe(0);
-    expect(tightened.output).toContain("基线已更新：1 → 0");
-    expect(repo.run().code).toBe(0);
-  });
-
-  test("--strict 下基线未收紧即失败（强制跟上治理进度）", ({ repo }) => {
-    seedBaseline(repo);
-    const { code, output } = repo.run(["--strict"]);
+    const { code, output } = repo.run();
     expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
   });
 });

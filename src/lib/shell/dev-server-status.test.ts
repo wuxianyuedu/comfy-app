@@ -8,7 +8,7 @@ import { deriveDevServerStatus } from "./dev-server-status";
 
 const base = {
   everOnline: true,
-  lastProbeOk: true,
+  reachable: true,
   restarted: false,
   lastRestartAt: null,
   lastExit: null,
@@ -34,14 +34,14 @@ describe("deriveDevServerStatus", () => {
     const s = deriveDevServerStatus({
       ...base,
       everOnline: false,
-      lastProbeOk: false,
+      reachable: false,
     });
     expect(s.state).toBe("starting");
     expect(s.label).toBe("应用服务连接中");
   });
 
   it("曾是通的、现在探不通 → offline，并说明影响与恢复方式", () => {
-    const s = deriveDevServerStatus({ ...base, lastProbeOk: false });
+    const s = deriveDevServerStatus({ ...base, reachable: false });
     expect(s.state).toBe("offline");
     expect(s.label).toBe("应用服务已断开");
     expect(s.title).toContain("不可达");
@@ -61,10 +61,10 @@ describe("deriveDevServerStatus", () => {
 
   it("三态文案互不相同且非空（状态必须一眼可辨）", () => {
     const labels = [
-      deriveDevServerStatus({ ...base, everOnline: false, lastProbeOk: false })
+      deriveDevServerStatus({ ...base, everOnline: false, reachable: false })
         .label,
       deriveDevServerStatus(base).label,
-      deriveDevServerStatus({ ...base, lastProbeOk: false }).label,
+      deriveDevServerStatus({ ...base, reachable: false }).label,
     ];
     expect(new Set(labels).size).toBe(3);
     labels.forEach((label) => expect(label.length).toBeGreaterThan(0));
@@ -73,7 +73,7 @@ describe("deriveDevServerStatus", () => {
   it("断开且原因已知 → 状态栏 title 说出**为什么**与**怎么办**（规范 §10.3.1）", () => {
     const s = deriveDevServerStatus({
       ...base,
-      lastProbeOk: false,
+      reachable: false,
       lastExit: exitNotice,
     });
     expect(s.state).toBe("offline");
@@ -84,7 +84,7 @@ describe("deriveDevServerStatus", () => {
   });
 
   it("断开但原因未知 → 保留原来的「怎么恢复」，不退回一句现象陈述", () => {
-    const s = deriveDevServerStatus({ ...base, lastProbeOk: false });
+    const s = deriveDevServerStatus({ ...base, reachable: false });
     expect(s.title).toContain("恢复");
     expect(s.exitNotice).toBeNull();
   });
@@ -113,7 +113,7 @@ describe("deriveDevServerStatus", () => {
     const s = deriveDevServerStatus({
       ...base,
       everOnline: false,
-      lastProbeOk: false,
+      reachable: false,
       lastExit: exitNotice,
     });
     expect(s.state).toBe("starting");
@@ -123,8 +123,8 @@ describe("deriveDevServerStatus", () => {
   it("不再出现 ComfyUI 相关文案（判据已与 ComfyUI 解耦）", () => {
     for (const input of [
       base,
-      { ...base, lastProbeOk: false },
-      { ...base, everOnline: false, lastProbeOk: false },
+      { ...base, reachable: false },
+      { ...base, everOnline: false, reachable: false },
     ]) {
       expect(deriveDevServerStatus(input).title).not.toContain("ComfyUI");
     }

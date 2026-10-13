@@ -212,9 +212,10 @@ function layoutBoundaryPins(
     minY = Infinity;
   for (const id of mIds) {
     const p = middlePos[id];
-    if (p!.x < minX) minX = p!.x;
-    if (p!.x > maxX) maxX = p!.x;
-    if (p!.y < minY) minY = p!.y;
+    if (!p) continue;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
   }
   /* 参考布局：┃ 左输入列 ┃ 中间画布列 ┃ 右输出列 ┃。
    *  每条栏杆与中间包围盒之间的空隙必须 ≥ 一个中间节点的宽度（约 280px）
@@ -312,15 +313,14 @@ function layoutBoundaryPins(
   );
   if (inputsGroup) {
     out.push(inputsGroup);
+    /* `inputs` 与 `inputsRelYs` 是两个按位置配对的数组（前者是 pin 清单、
+     * 后者是算出来的 y）。配对项缺席就跳过：`[i]!` 会把 `undefined` 冒充成
+     * `number` 传给 `buildBoundaryPinNode`，坏的是一张画布。 */
     detail.boundaryPins.inputs.forEach((pin, i) => {
+      const relY = inputsRelYs.at(i);
+      if (relY === undefined) return;
       out.push(
-        buildBoundaryPinNode(
-          pin,
-          "input",
-          "grp:bpin:inputs",
-          inputsRelYs[i]!,
-          inputRelX,
-        ),
+        buildBoundaryPinNode(pin, "input", "grp:bpin:inputs", relY, inputRelX),
       );
     });
   }
@@ -334,12 +334,14 @@ function layoutBoundaryPins(
   if (outputsGroup) {
     out.push(outputsGroup);
     detail.boundaryPins.outputs.forEach((pin, i) => {
+      const relY = outputsRelYs.at(i);
+      if (relY === undefined) return;
       out.push(
         buildBoundaryPinNode(
           pin,
           "output",
           "grp:bpin:outputs",
-          outputsRelYs[i]!,
+          relY,
           outputRelX,
         ),
       );
@@ -645,14 +647,15 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     padY,
   );
 
-  const positionsCount = Object.keys(scopeDetail.positions ?? {}).length;
+  const savedPositions = scopeDetail.positions;
+  const positionsCount = Object.keys(savedPositions ?? {}).length;
 
   const useSavedPositions =
-    scopeDetail.positions != null &&
+    savedPositions != null &&
     positionsCount > 0 &&
     positionsCount >= realNodes.length;
-  if (useSavedPositions) {
-    const positionsById = scopeDetail.positions!;
+  if (useSavedPositions && savedPositions) {
+    const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {
       const p = positionsById[realNode.id];
       return realNode.is_subgraph
@@ -684,8 +687,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
    *    - 已匹配的节点 → 用真实 LiteGraph pos；
    *    - 未匹配的节点 → 复用上面算好的 kahn 排到一块独立区域（紧贴第一行下方）。
    *  这样至少已定位的节点不会"乱跳"，新增的 subgraph 内层节点也不会堆在 (padX, padY)。*/
-  if (positionsCount > 0) {
-    const positionsById = scopeDetail.positions!;
+  if (positionsCount > 0 && savedPositions) {
+    const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {
       const saved = positionsById[realNode.id];
       const kahnPos = kahn[realNode.id];

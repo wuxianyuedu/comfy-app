@@ -23,28 +23,33 @@
  * 认得出「整份复制」而认不出「局部大段复制」。后者交给阈值更低的 v2，
  * 现在先把历史上真实发生过的这一档堵住。
  *
- * 结果记在 `scripts/.code-duplication-baseline.json`(棘轮，只许降不许升)：
- *   · 出现基线外的新孪生对 → 阻断；
- *   · 存量孪生对被修掉 → 提示收紧基线(--strict 下也阻断，与其它棘轮同口径)。
+ * ## 为什么是硬闸而不是棘轮
+ *
+ * 本判据此前是**棘轮**：孪生对记进 `scripts/.code-duplication-baseline.json`，
+ * `--update` 收紧、`--strict` 要求下降。但实到今天是 **0 对孪生**——基线
+ * `pairs: {}`，而棘轮在归零后只剩开销：`--update` 无事可做，基线文件却仍是一条
+ * 「手改就能把新孪生对登记成已知存量」的通道 —— 那正是硬闸类**本来没有**的中间态。
+ * 判据口径与阈值一字未改，只把「有存量、逐批治理」那一层皮收掉：
+ * **新增一对孪生即阻断**，修法只有「抽共享模块」一条。
  *
  * 用法:
- *   node scripts/check-code-duplication.cjs           # 检查(棘轮)
- *   node scripts/check-code-duplication.cjs --strict  # 基线未收紧也失败(CI 用)
- *   node scripts/check-code-duplication.cjs --update  # 重写基线(须伴随下降)
+ *   node scripts/check-code-duplication.cjs           # 检查(硬闸:命中即退 1)
  *   node scripts/check-code-duplication.cjs --report  # 只出清单不判失败(盘点用)
+ *   --staged(钩子用)仅当暂存改动落在扫描面(`src/**`)内才扫，口径见 §13.5.8.2
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const BASELINE = path.join(__dirname, ".code-duplication-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
 
 /** 扫描范围：应用源码。 */
 const SCAN_DIR = "src";
+
+if (STAGED && !REPORT_ONLY) skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[duplication]" });
 const SOURCE_EXT = /\.(ts|tsx)$/;
 
 /** 判据阈值。
@@ -119,12 +124,7 @@ for (let i = 0; i < files.length; i++) {
 }
 twins.sort((x, y) => y.ratio - x.ratio || (x.a + x.b).localeCompare(y.a + y.b));
 
-const key = (t) => `${t.a} ⇄ ${t.b}`;
-const current = Object.fromEntries(
-  twins.map((t) => [key(t), { ratio: Number(t.ratio.toFixed(3)), hits: t.hits, total: t.total }]),
-);
-
-/* ── 报告 / 棘轮 ────────────────────────────────────────── */
+/* ── 报告 / 判定 ────────────────────────────────────────── */
 
 const listLine = (t) =>
   `  · ${t.a}\n    ⇄ ${t.b}\n    ${(t.ratio * 100).toFixed(1)}%（${t.hits}/${t.total} 行可对应）`;
@@ -138,76 +138,21 @@ if (REPORT_ONLY) {
   process.exit(0);
 }
 
-const prev = fs.existsSync(BASELINE)
-  ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-  : null;
-const prevPairs = prev?.pairs ?? null;
-
-if (UPDATE) {
-  const before = prevPairs ? Object.keys(prevPairs).length : 0;
-  const after = Object.keys(current).length;
-  if (prevPairs && after > before) {
-    console.error(
-      `[duplication] 拒绝放宽基线：${before} → ${after} 对孪生（棘轮只许下降）。\n` +
-        "  新增重复必须先抽共享模块，不要用 --update 掩盖。",
-    );
-    process.exit(1);
-  }
-  fs.writeFileSync(
-    BASELINE,
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString().slice(0, 10),
-        note:
-          "跨文件孪生对（≥" + MIN_LINES + " 行、逐行重合 ≥" + MIN_SIMILARITY * 100 + "%）。" +
-          "棘轮只许下降：新增孪生对须先把共享逻辑抽到一处，再收紧基线。",
-        pairs: current,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-  console.log(`[duplication] 基线已更新：${before} → ${after} 对（scripts/.code-duplication-baseline.json）`);
-  process.exit(0);
-}
-
-if (!prevPairs) {
+if (twins.length) {
   console.error(
-    "[duplication] 基线文件缺失：先执行 node scripts/check-code-duplication.cjs --update",
-  );
-  process.exit(1);
-}
-
-const added = twins.filter((t) => !(key(t) in prevPairs));
-const fixed = Object.keys(prevPairs).filter((k) => !(k in current));
-
-console.log(
-  `[duplication] 扫描 ${files.length} 个文件（≥${MIN_LINES} 行）；` +
-    `孪生对 ${twins.length} 对（基线 ${Object.keys(prevPairs).length} 对）`,
-);
-
-if (added.length) {
-  console.error(
-    "[duplication] 基线外新增孪生对（跨文件重复，规范 §12.12）：\n" +
-      added.map(listLine).join("\n") +
+    `[duplication] 发现 ${twins.length} 对跨文件孪生（重复代码，规范 §12.12）：\n` +
+      twins.map(listLine).join("\n") +
       "\n  判据：两份实现逐行重合 ≥" +
       MIN_SIMILARITY * 100 +
       "%。修法是把共享逻辑抽到一个模块（两份各自只留自己的差异），\n" +
-      "  而不是「两边一起改」。若确认是巧合，请调高阈值或把文件登记进豁免清单。",
+      "  而不是「两边一起改」。共享内核里不许放任何一侧的传输层代码（§18.4）。\n" +
+      "  本判据是硬闸（无基线、无 --update）：孪生对的存量已清零，新增一对即阻断。",
   );
   process.exit(1);
 }
 
-if (fixed.length) {
-  const msg =
-    `[duplication] ${fixed.length} 对孪生已被消除（治理有进展）：\n` +
-    fixed.map((k) => `  · ${k}`).join("\n") +
-    "\n  建议执行 node scripts/check-code-duplication.cjs --update 收紧基线。";
-  if (STRICT) {
-    console.error(msg + "\n  --strict 模式：未收紧基线即失败。");
-    process.exit(1);
-  }
-  console.log(msg);
-}
+console.log(
+  `[duplication] 扫描 ${files.length} 个文件（≥${MIN_LINES} 行）；无跨文件孪生对`,
+);
 
 console.log("[duplication] OK");

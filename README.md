@@ -184,7 +184,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 跑质量门禁（typecheck / lint / vitest） | `pnpm check:all`            | `tools/start/verify-quality.ps1`  |
 | 只跑测试                                | `pnpm test:file [文件]`     | `tools/start/run-tests.ps1`       |
 | 连已知基线失败一起跑                    | `pnpm test:full`            | `tools/start/run-tests.ps1 -Full` |
-| 同步依赖 + lint                         | `pnpm install && pnpm lint` | `tools/start/sync-lint.ps1`       |
+| 同步依赖 + lint                         | `pnpm deps:guard && pnpm install && pnpm lint` | `tools/start/sync-lint.ps1`       |
 | 生成 `.env`                             | `pnpm env:init`             | `tools/start/run-local.ps1`       |
 | 建库                                    | `pnpm db:push`              | （双击启动链路会自动做）          |
 | 生成原文文档                            | `pnpm doc:gen`              | `tools/docs/generate-docs.ps1`    |

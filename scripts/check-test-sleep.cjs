@@ -17,13 +17,13 @@
  *
  * ── 它判什么、不判什么 ────────────────────────────────────────────────
  *
- * **不**判「有没有 sleep」（那会误报一片，见下面五类），判的是**裸 sleep 的净数
- * 不许涨** —— 棘轮（`scripts/.test-sleep-baseline.json`，只许降）。
+ * **不**判「有没有 sleep」（那会误报一片，见下面五类），判的是**有没有非豁免的
+ * 裸 sleep 站点** —— **硬闸**：命中即退 1。
  *
- * 为什么是棘轮而不是「零容忍硬闸」：下面五类里的 ①②③④ 都是**正当形态**，
+ * 为什么必须是「逐类登记理由」而不是「零容忍」：下面五类里的 ①②③④ 都是**正当形态**，
  * 让它们全改成 `expect.poll` 是「把判据改坏」而不是「把代码改好」。一条会误报的
  * 判据活不过一次评审（§11.18.4），所以豁免不是赦免名单，而是**逐类登记的理由**。
- * 四类有理由的存量 + 一条「根本不算站点」的口径：
+ * 四类有理由的形态走 `// sleep-ok:` 声明，一条「根本不算站点」的口径由判据自认：
  *
  *   ① **根本不算站点：`setTimeout(…, 0)`** —— 它等的是**宏任务排空**（fire-and-forget
  *      的 promise 落定后登记镜像 / 冲刷微任务队列 / 让 effect 的一轮跑完），**没有时间
@@ -45,10 +45,11 @@
  *      要等防抖窗口过去、或 pino 底层异步落盘的 flush helper。假定时器会把被测逻辑
  *      一起冻住（推不动真文件写入），这类必须是真时间。
  *
- *   ⑤ **真该收口的**（本轮已全数收口到 0 处）—— 手搓 `while + await setTimeout` 轮询、
+ *   ⑤ **真该收口的**（已全数收口到 0 处）—— 手搓 `while + await setTimeout` 轮询、
  *      以及「睡一拍再断状态」。这正是 §11.14 的原靶：条件成立时照样等满、不成立时
  *      只留一句「超时」拿不到现场（`kill-process-tree` 那组换成条件轮询后
- *      文件耗时 3.5s → 0.5s）。它们**不进豁免**，是棘轮守着的存量。
+ *      文件耗时 3.5s → 0.5s）。它们**不进豁免**，由本判据的硬闸守住 ——
+ *      再出现一处就当场断（ISSUE #1811 收尾时棘轮翻硬闸）。
  *
  * ① 之外的四类靠**逐站点** `// sleep-ok: <理由>` 声明豁免。**为什么不让判据自己认**：
  * 「等的是某个条件还是一直不会发生的事」语义上不可判（同一行写法可能两种意图），
@@ -95,7 +96,6 @@
  * 用法：
  *   node scripts/check-test-sleep.cjs            # 检查（进 pre-commit D 组）
  *   node scripts/check-test-sleep.cjs --report   # 只出清单不判失败（盘点用）
- *   node scripts/check-test-sleep.cjs --update   # 收紧基线（须伴随下降）
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
@@ -109,9 +109,7 @@ const {
 } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const BASELINE = path.join(__dirname, ".test-sleep-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
 
 /** 扫描范围：与 `vitest.config.ts` 的 `include` 同口径。 */
@@ -306,18 +304,8 @@ function scanFile(abs) {
   return sites;
 }
 
-function readBaseline() {
-  try {
-    const b = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-    return { total: b.total ?? 0, files: b.files ?? {} };
-  } catch {
-    return { total: 0, files: {} };
-  }
-}
-
 function main() {
   const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
-  const baseline = readBaseline();
 
   /** 全部非豁免站点，按文件归拢。 */
   const live = new Map();
@@ -346,50 +334,16 @@ function main() {
 
   const liveTotal = [...live.values()].reduce((n, v) => n + v.length, 0);
 
-  /* 棘轮：当前 ≤ 基线即通过。基线里的文件清单只作说明（谁在贡献这个数），
-   * 判定只看总数 —— 让某一处收口、另一处新增而总数不涨，是可接受的交换。 */
-  const shrunk = liveTotal < baseline.total;
-  const grown = liveTotal > baseline.total;
-
-  if (UPDATE) {
-    /* 读数不完整时**不许记账**：少读一份就少算几处，把这样的读数写进基线 = 那几处
-     * 从此不会被任何人报出。与 `check-dead-exports` / `check-comment-language` /
-     * `check-gate-repo-boilerplate` 同一条口径。 */
-    if (vanished > 0) {
-      console.error(
-        `[test-sleep] 拒绝 --update：本轮有 ${vanished} 份文件在扫描期间消失，读数不完整。\n` +
-          "  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
-      );
-      return 1;
-    }
-    if (grown) {
-      console.error(
-        `[test-sleep] 拒绝收紧：当前 ${liveTotal} 处 > 原基线 ${baseline.total} 处。` +
-          "\n  `--update` 只用于「收口后把数字降下来」，不能拿来给新增放行。",
-      );
-      return 1;
-    }
-    const out = {
-      total: liveTotal,
-      files: Object.fromEntries(
-        [...live.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([k, v]) => [k, v.length]),
-      ),
-    };
-    fs.writeFileSync(BASELINE, `${JSON.stringify(out, null, 2)}\n`);
-    console.log(
-      `[test-sleep] 基线已收紧：${baseline.total} → ${liveTotal} 处` +
-        `（${out.files ? Object.keys(out.files).length : 0} 份文件；` +
-        `另有 ${exemptTotal} 处已声明豁免，不计入）。`,
-    );
-    return 0;
-  }
+  /* 存量已清零 ⇒ 这是硬闸：**每一处非豁免站点都阻断**，没有基线、没有 `--update`。
+   * 此前它是棘轮（`scripts/.test-sleep-baseline.json`），而清零后的棘轮只剩两个
+   * 无事可做的动作 + 一条「手改 JSON 就能把新站点登记成已知存量」的通道 ——
+   * 硬闸类本来没有那个中间态（§13.6.2 的两类对照）。
+   * 正当形态（等宏任务排空 / mock 内部延迟 / 等一件不会发生的事 / 必须真挂钟）
+   * 走**另一条已经存在的车道**：站点上方 `// sleep-ok: <理由>` 逐条声明。 */
 
   if (REPORT_ONLY) {
     console.log(
-      `[test-sleep] 盘点：裸 sleep ${liveTotal} 处（基线 ${baseline.total}）/ ` +
-        `声明豁免 ${exemptTotal} 处。`,
+      `[test-sleep] 盘点：裸 sleep ${liveTotal} 处 / 声明豁免 ${exemptTotal} 处。`,
     );
     for (const [rel, sites] of [...live.entries()].sort()) {
       console.log(
@@ -399,47 +353,39 @@ function main() {
     return 0;
   }
 
-  if (grown) {
-    console.error(
-      `[ERROR] 测试层裸 sleep 上涨：${baseline.total} → ${liveTotal} 处。\n` +
-        "\n  §11.14 的口径是「等一个条件变成真一律写 `expect.poll`」——" +
-        "\n  `await new Promise(r => setTimeout(r, N))` 是**赌时间**：条件早已成立时照样等满，" +
-        "\n  条件永远不成立时只留一句「超时」、拿不到现场。\n" +
-        "\n  修法：\n" +
-        "    · 等条件收敛 → `await expect.poll(() => 取当前值).toBe(…)`（预算见 vitest.config.ts）；\n" +
-        "    · 真要真挂钟（假定时器会冻住被测逻辑）/ 等宏任务排空 / 是 mock 内部延迟\n" +
-        "      → 在站点上方写一条 `// sleep-ok: <为什么这里必须是真时间>`，声明后不计入棘轮；\n" +
-        "    · 判据自己的夹具不进收口面（`FIXTURE_SKIP`），别为了过门禁去改量具。\n" +
-        "\n  下方是本轮非豁免站点的分布，指针**新增**的那些：",
+  if (liveTotal === 0) {
+    console.log(
+      `[test-sleep] OK —— 裸 sleep 0 处 / 声明豁免 ${exemptTotal} 处。` +
+        /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
+           目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
+        vanishedNote(vanished),
     );
-    for (const [rel, sites] of [...live.entries()].sort()) {
-      const was = baseline.files[rel] ?? 0;
-      const mark = sites.length > was ? " ← 涨了" : "";
-      console.error(
-        `  · ${rel}: ${sites.length} 处（基线 ${was}）${mark}\n` +
-          sites
-            .slice(0, 6)
-            .map((s) => `      ${s.line}: ${s.text}`)
-            .join("\n") +
-          (sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""),
-      );
-    }
-    console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.14。");
-    return 1;
+    return 0;
   }
 
-  const tail = shrunk
-    ? ` —— 比基线少 ${baseline.total - liveTotal} 处，按 §13.5 口径用 ` +
-      "`node scripts/check-test-sleep.cjs --update` 收紧基线"
-    : "";
-  console.log(
-    `[test-sleep] OK —— 裸 sleep ${liveTotal} 处（基线 ${baseline.total}）/ ` +
-      `声明豁免 ${exemptTotal} 处${tail}。` +
-      /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
-         目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-      vanishedNote(vanished),
+  console.error(
+    `[ERROR] 测试层裸 sleep ${liveTotal} 处（本判据是硬闸：存量已清零，新增即阻断）。\n` +
+      "\n  §11.14 的口径是「等一个条件变成真一律写 `expect.poll`」——" +
+      "\n  `await new Promise(r => setTimeout(r, N))` 是**赌时间**：条件早已成立时照样等满，" +
+      "\n  条件永远不成立时只留一句「超时」、拿不到现场。" +
+      "\n\n  修法：" +
+      "\n    · 等条件收敛 → `await expect.poll(() => 取当前值).toBe(…)`（预算见 vitest.config.ts）；" +
+      "\n    · 真要真挂钟（假定时器会冻住被测逻辑）/ 等宏任务排空 / 是 mock 内部延迟" +
+      "\n      → 在站点上方写一条 `// sleep-ok: <为什么这里必须是真时间>`，声明后不计入；" +
+      "\n    · 判据自己的夹具不进收口面（`FIXTURE_SKIP`），别为了过门禁去改量具。",
   );
-  return 0;
+  for (const [rel, sites] of [...live.entries()].sort()) {
+    console.error(
+      `  · ${rel}: ${sites.length} 处\n` +
+        sites
+          .slice(0, 6)
+          .map((s) => `      ${s.line}: ${s.text}`)
+          .join("\n") +
+        (sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""),
+    );
+  }
+  console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.14。");
+  return 1;
 }
 
 /* 自测（`tests/test-sleep-gate.test.ts`）钉的是**站点识别口径** —— 它是个纯逻辑，

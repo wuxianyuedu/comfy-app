@@ -84,7 +84,11 @@ const LEDGER: string[] = [
   "scripts/check-overlay-z.cjs",
   "scripts/check-tsc-diagnostic-executors.cjs",
   "scripts/check-theme-colors.cjs",
-  "scripts/check-ui-primitives.cjs",
+  /* UI 基元判据的文本引擎：`stripComments` 与那份判据**同批抽取**
+   *（ISSUE #1747 的分层）—— 判据脚本已挂文件长度棘轮、到点必须拆，
+   *  而「剥注释」是拆得最干净的那一块（不回答「算不算违规」）。
+   *  它仍是纯 Node 门禁层，不能 import TS 那份 helper。 */
+  "scripts/ui-primitives-engine.cjs",
   "scripts/lib-node-only-scan.mjs",
   // —— 视图层守卫用例里的那一型（就是 NAIVE 台账点名的缺陷形状）——
   "src/components/studio/workflow-editor/fit-viewport-source-guard.test.ts",

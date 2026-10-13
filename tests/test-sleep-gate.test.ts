@@ -13,7 +13,8 @@
  *      判据去判自己的夹具是 §11.18.3.1 记过的坑（走 `maskNonCode`）。
  *   ⑤ **没被 await 的 Promise**（该放）：站点不是「等这条语句过去」，而是别的东西
  *      （例如丢给 `Promise.all` 的填充项）。
- *   ⑥ **棘轮**：当前 > 基线即阻断、`--update` 不许把数字往上涨。
+ *   ⑥ **硬闸**：非豁免站点命中即阻断；`--update` / `--strict` 是断头的
+ *      （ISSUE #1811 收尾时从棘轮翻上来，基线文件已删）。
  *
  * ⚠️ 本文件自己**不进扫描面**（`FIXTURE_SKIP`）：它是喂给判据的被测字符串，
  * 判它等于判自己的量具 —— 与 `tests/test-concurrency-gate.test.ts` 同一取舍。
@@ -55,13 +56,14 @@ const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
 /**
  * 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件 + 判据依赖）。
  *
+ * 翻硬闸后**不再写基线文件**：判据没有基线可读、也没有 `--update` 可写；
+ * 用例要验的正是「这个形态在无基线的档下会/不会红」。
+ *
  * @param files 相对路径 → 内容
- * @param baseline 基线（不传则写一份 total:0 的空基线）
  * @param args 额外参数（如 --update / --report）
  */
 function gate(
   files: Record<string, string>,
-  baseline: { total: number; files?: Record<string, number> } = { total: 0 },
   args: string[] = [],
 ): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "test-sleep-"));
@@ -70,10 +72,6 @@ function gate(
     copyFileSync(src, path.join(root, "scripts", path.basename(src)));
     copyGateDeps(path.join(root, "scripts", path.basename(src)));
   }
-  writeFileSync(
-    path.join(root, "scripts", ".test-sleep-baseline.json"),
-    `${JSON.stringify({ total: baseline.total, files: baseline.files ?? {} }, null, 2)}\n`,
-  );
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -107,7 +105,7 @@ describe("裸 sleep 门禁：该拦的形状（§11.14）", () => {
 `,
     });
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("测试层裸 sleep 上涨");
+    expect(r.output).toContain("测试层裸 sleep 1 处");
     expect(r.output).toContain("tests/a.test.ts: 1 处");
     expect(r.output).toContain("§11.14");
   });
@@ -121,10 +119,10 @@ describe("裸 sleep 门禁：该拦的形状（§11.14）", () => {
 `,
     });
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("测试层裸 sleep 上涨");
+    expect(r.output).toContain("测试层裸 sleep 1 处");
   });
 
-  it("⑥ 棘轮：当前 > 基线 → 阻断；--update 不许把数字往上涨", () => {
+  it("⑥ 两处站点也是阻断（硬闸：没有存量额度）", () => {
     const files = {
       "tests/a.test.ts": `${HEAD}it("x", async () => {
   await new Promise((r) => setTimeout(r, 10));
@@ -132,13 +130,25 @@ describe("裸 sleep 门禁：该拦的形状（§11.14）", () => {
 });
 `,
     };
-    const blocked = gate(files, { total: 1 });
+    const blocked = gate(files);
     expect(blocked.ok).toBe(false);
-    expect(blocked.output).toContain("1 → 2 处");
+    expect(blocked.output).toContain("裸 sleep 2 处");
+  });
 
-    const refused = gate(files, { total: 1 }, ["--update"]);
-    expect(refused.ok).toBe(false);
-    expect(refused.output).toContain("拒绝收紧");
+  it("⑥ 翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", () => {
+    /* 少了这一格，「删了 --update」与「--update 还在但没人调」看起来一样。 */
+    const files = {
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  await new Promise((r) => setTimeout(r, 10));
+});
+`,
+    };
+    for (const flag of ["--update", "--strict"]) {
+      const r = gate(files, [flag]);
+      expect(r.ok, `${flag} 不该放行`).toBe(false);
+      /* 也不许把「收紧基线」当成出路：`--update` 若还在写基线，它就是隐藏的放宽通道。 */
+      expect(r.output, `${flag} 的出路不该指向 --update`).not.toContain("--update");
+    }
   });
 });
 
@@ -192,7 +202,7 @@ describe("裸 sleep 门禁：该放的形状（§11.14）", () => {
 `,
     });
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("测试层裸 sleep 上涨");
+    expect(r.output).toContain("测试层裸 sleep 1 处");
   });
 
   it("④ 字符串 / 注释里的站点不算：判据不去判自己的夹具", () => {
@@ -235,7 +245,7 @@ describe("裸 sleep 门禁：该放的形状（§11.14）", () => {
     /* 这条钉的是「声明的作用半径」：中间隔了非注释代码就断开。
      * 判据若把声明做成「整块/整文件生效」，下一个人会以为只要写一条就全豁免了。 */
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("测试层裸 sleep 上涨");
+    expect(r.output).toContain("测试层裸 sleep 1 处");
   });
 
   it("② 声明可以跨过「包着我的那一句的开头」：vi.mocked(…)( 之上两行的声明仍生效", () => {
@@ -264,7 +274,7 @@ it("x", async () => {
 `,
     });
     expect(helper.ok).toBe(false);
-    expect(helper.output).toContain("测试层裸 sleep 上涨");
+    expect(helper.output).toContain("测试层裸 sleep 1 处");
 
     const callback = gate({
       "tests/a.test.ts": `${HEAD}it("x", () => {
@@ -279,20 +289,16 @@ it("x", async () => {
     expect(callback.output).toContain("裸 sleep 0 处");
   });
 
-  it("⑥ 棘轮：当前 ≤ 基线 → 通过（并提示可以收紧）", () => {
+  it("⑥ 无站点时放行（反向：判据不是恒红）", () => {
     const files = {
       "tests/a.test.ts": `${HEAD}it("x", async () => {
-  await new Promise((r) => setTimeout(r, 10));
+  expect(1).toBe(1);
 });
 `,
     };
-    const ok = gate(files, { total: 1 });
+    const ok = gate(files);
     expect(ok.ok).toBe(true);
-
-    const shrunk = gate(files, { total: 5 });
-    expect(shrunk.ok).toBe(true);
-    expect(shrunk.output).toContain("比基线少 4 处");
-    expect(shrunk.output).toContain("--update");
+    expect(ok.output).toContain("裸 sleep 0 处");
   });
 });
 

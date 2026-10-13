@@ -99,7 +99,8 @@ export async function uploadImageFile(
 const importCache = new Map<string, string>();
 
 export async function importOutputAsInput(localPath: string): Promise<string> {
-  if (importCache.has(localPath)) return importCache.get(localPath)!;
+  const cached = importCache.get(localPath);
+  if (cached !== undefined) return cached;
   const abs = localPath.startsWith("/") ? localPath : `/${localPath}`;
   const res = await fetch(abs);
   if (!res.ok) throw new Error("读取上游输出失败");
@@ -119,9 +120,11 @@ export async function uploadMediaFile(
   file: File,
 ): Promise<{ name: string; url: string }> {
   const name = await uploadImageFile(file);
-  /* 预览地址的拼装收在 `~/lib/media/media-url`（规范 16 §16.2.4.32）——
-   * 出口恒有文件名（`uploadImageFile` 刚返回的），所以这里不会是 null。 */
-  const url = comfyImageUrl({ filename: name })!;
+  /* 预览地址的拼装收在 `~/lib/media/media-url`（规范 16 §16.2.4.32）。
+   * `comfyImageUrl` 对空文件名返回 `null`；`name` 刚由 `uploadImageFile`
+   * 返回、必非空，这里的 `?? ""` 只是不让类型上的 `null` 靠 `!` 消失
+   * ——真出现空会让调用点渲染成空 `src`，比静默拿到一个 `null` 更早暴露。 */
+  const url = comfyImageUrl({ filename: name }) ?? "";
   return { name, url };
 }
 

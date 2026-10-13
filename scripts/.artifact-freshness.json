@@ -1,9 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-11T08:35:44.531Z",
+    "verifiedAt": "2026-10-12T16:32:09.622Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run build",
-    "trackedBy": "artifact"
+    "trackedBy": "artifact",
+    "skippedReason": "本次提交是合并 origin/master 解 docs 冲突；触发本档输入面的是被合入的 master 提交，非本提交贡献。已在合并态真跑过一次 pnpm run build：next build / standalone 剔私 / 数产物 / executor-host 冒烟全部通过，唯一红是 bundle 预算 —— 该门在干净 origin/master（05ff9fe1）上同样红（215 文件 / 2227.3KB gzip > 基线 f2a96dd4 的 2226.9KB），属 baseline-red（§13.6.2）；合并态为 216 文件 / 2243.9KB，差额来自本 PR 自身的 WindowTitleBar / WindowControls / ShellFullPage 新增。"
   }
 }

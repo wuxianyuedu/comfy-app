@@ -253,15 +253,38 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
     });
   });
 
-  it("「TS 重复属性判定」这一步真在 D 组里", () => {
+  it("「TS 重复属性判定」所在的 AST 判据聚合档这一步真在 D 组里", () => {
+    /* 这一条原本钉的是 `check-ts-duplicate-keys.cjs` 单独占一行。ISSUE #1747 续
+     * （§13.5.8.2「第四笔账」）把它连同另外 5 条 AST 判据收进聚合档
+     * `run-ast-gates.cjs` —— 6 条共享一次解析。判据的**执行者**因此从
+     * 「这 6 行」变成「这 1 行」，本用例跟着改靶子（钉的还是同一件事：
+     * 这一步的 flag 层面不许漂）。 */
     expect(
-      steps().find((s) =>
-        s.cmd.includes("scripts/check-ts-duplicate-keys.cjs"),
-      ),
+      steps().find((s) => s.cmd.includes("scripts/run-ast-gates.cjs")),
     ).toEqual({
-      label: "TS 重复属性判定",
-      cmd: "node scripts/check-ts-duplicate-keys.cjs",
+      label: "AST 判据聚合（6 条共享一次解析）",
+      // `--staged` = 输入面跳过（按条透传，口径见 §13.5.8.2）。逐字相等的口径
+      // 保留（这一族的价值就是「flag 层面也不许漂」）。
+      cmd: "node scripts/run-ast-gates.cjs --staged",
     });
+  });
+
+  it("被聚合档接管的 6 条不再单独占一行（否则与聚合档各跑一遍）", () => {
+    for (const script of [
+      "check-react-updater-purity.cjs",
+      "check-non-null-assertions.cjs",
+      "check-void-floats.cjs",
+      "check-ts-duplicate-keys.cjs",
+      "check-form-field-wiring.cjs",
+      "check-click-keyboard.cjs",
+    ]) {
+      expect(
+        steps()
+          .filter((s) => s.cmd.includes(`scripts/${script}`))
+          .map((s) => s.label),
+        `${script} 又单独占了一行 —— 它会与聚合档各跑一遍，白付一次解析`,
+      ).toEqual([]);
+    }
   });
 
   it("旧报告档名不再被任何地方引用（改名后没留孤儿）", () => {

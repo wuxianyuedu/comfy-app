@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck -- 提交门槛脚本:`it.each` 存量棘轮与新增拦截(供 .githooks/pre-commit 的 D 组调用)
 /**
- * 参数化用例：`it.for` ⇄ `it.each` 的存量棘轮 —— 规范见
+ * 参数化用例：`it.for` ⇄ `it.each` 的新增拦截（**硬闸**）—— 规范见
  * docs/standards/11-测试与可观测性.md §11.15。
  *
  * ── 立案现场：同一件事第三次「没有执行者」 ────────────────────────────
@@ -28,9 +28,12 @@
  *
  * ── 它判什么、不判什么 ────────────────────────────────────────────────
  *
- * 判**棘轮**：越界站点数不许超过 `scripts/.test-it-each-baseline.json` 的基线
- * （`--update` 收紧，且**拒绝把数字往上涨**）。基线归零之后，任何一个新增的
- * `.each(` 都会被拦下。
+ * 判**硬闸**：越界站点数须为 **0**（命中即退 1，无基线、无 `--update`）。
+ * 这与它**翻转前**的口径等价 —— 旧形态是棘轮（`scripts/.test-it-each-baseline.json`，
+ * 基线 `total: 0`，只许降），本判据的文件头当时就写着「基线归零之后，任何一个新增的
+ * `.each(` 都会被拦下」：那正是硬闸语义。存量清零后棘轮只剩一件事——
+ * `--update` 是一条「手改那份 JSON 就能把新站点登记成已知存量」的通道，
+ * 而硬闸类**本来没有**这个中间态（与 `check-code-duplication.cjs` 那批同口径）。
  *
  * **不判**（明写在案，别当成漏报）：
  *   · `describe.each` 与 `it.each` / `test.each` **一视同仁** —— §11.15 收口时
@@ -51,7 +54,6 @@
  * 用法：
  *   node scripts/check-test-it-each.cjs            # 检查（进 pre-commit D 组）
  *   node scripts/check-test-it-each.cjs --report   # 只出清单不判失败（盘点用）
- *   node scripts/check-test-it-each.cjs --update   # 收口后收紧基线（拒绝上涨）
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
@@ -67,9 +69,6 @@ const {
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
-const SHOULD_UPDATE = ARGS.has("--update");
-
-const BASELINE = path.join(__dirname, ".test-it-each-baseline.json");
 
 /** 扫描范围：与 `vitest.config.ts` 的 `include` 同口径。 */
 const SCAN_DIRS = ["src", "tests", "e2e"];
@@ -169,50 +168,9 @@ function collect() {
   return { sites, vanished };
 }
 
-function readBaseline() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-    return {
-      total: typeof raw.total === "number" ? raw.total : 0,
-      files: raw.files && typeof raw.files === "object" ? raw.files : {},
-    };
-  } catch {
-    return { total: 0, files: {} };
-  }
-}
-
 function main() {
   const { sites, vanished } = collect();
   const total = [...sites.values()].reduce((n, v) => n + v.length, 0);
-
-  if (SHOULD_UPDATE) {
-    /* 读数不完整时**不许记账**：少读一份就少算几处，把这样的读数写进基线 = 那几处
-     * 从此不会被任何人报出。与 `check-dead-exports` / `check-comment-language` /
-     * `check-gate-repo-boilerplate` 同一条口径。 */
-    if (vanished > 0) {
-      console.error(
-        `[test-it-each] 拒绝 --update：本轮有 ${vanished} 份文件在扫描期间消失，读数不完整。\n` +
-          "  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
-      );
-      return 1;
-    }
-    const base = readBaseline();
-    if (total > base.total) {
-      console.error(
-        `[ERROR] --update 拒绝把基线往上涨（${base.total} → ${total}）。\n` +
-          "  收紧基线的前提是**先收口**：把下面这些站点改成 `it.for` / `describe.for` 再来。",
-      );
-      for (const [rel, list] of [...sites.entries()].sort()) {
-        console.error(`  · ${rel}: ${list.length} 处`);
-      }
-      return 1;
-    }
-    const files = {};
-    for (const [rel, list] of [...sites.entries()].sort()) files[rel] = list.length;
-    fs.writeFileSync(BASELINE, `${JSON.stringify({ total, files }, null, 2)}\n`);
-    console.log(`[test-it-each] 基线已收紧到 ${total} 处（${BASELINE}）。`);
-    return 0;
-  }
 
   if (REPORT_ONLY) {
     console.log(
@@ -227,28 +185,25 @@ function main() {
     return 0;
   }
 
-  const base = readBaseline();
-  if (total > base.total) {
+  if (total > 0) {
     console.error(
-      `[ERROR] 测试层 \`it.each\` 存量涨了：${total} 处 > 基线 ${base.total} 处。\n` +
-        "\n  §11.15：新增参数化用例一律写 **`test.for`**（`describe` 组用 `describe.for`）。" +
+      `[ERROR] 测试层还有 ${total} 处 \`it.each\`（规范 §11.15）：\n` +
+        "\n  §11.15：参数化用例一律写 **`test.for`**（`describe` 组用 `describe.for`）。" +
         "\n  参数化数据一行是**一个参数**，元组由回调自己解构 —— 没有 `it.each` 的隐式摊开；" +
-        "\n  并且**记得加 `as const`**，否则解构出的每一项都带 `undefined`（`tsc` 会报）。\n" +
+        "\n  并且**记得加 `as const`**，否则解构出的每一项都带 `undefined`（`tsc` 会报）。" +
         "\n" +
         "\n  // ❌ 旧写法：元素被隐式摊开成多个参数" +
         "\n  it.each([[a, b]])('%s %s', (a, b) => {});" +
         "\n  // ✅ 新写法：一行原样进、回调自己解构" +
         "\n  it.for([[a, b]] as const)('%s %s', ([a, b]) => {});" +
         "\n" +
-        "\n  （收口后跑 `node scripts/check-test-it-each.cjs --update` 收紧基线。）" +
+        "\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增一处即阻断。" +
         "\n" +
-        "\n  下方是本轮站点，指针**新增**的那些：",
+        "\n  下方是本轮站点：",
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
-      const was = base.files[rel] ?? 0;
-      const mark = list.length > was ? " ← 涨了" : "";
       console.error(
-        `  · ${rel}: ${list.length} 处（基线 ${was}）${mark}\n` +
+        `  · ${rel}: ${list.length} 处\n` +
           list
             .slice(0, 8)
             .map((s) => `      ${s.line}: ${s.text}`)
@@ -260,16 +215,8 @@ function main() {
   }
 
   console.log(
-    `[test-it-each] OK —— ${total} 处 ≤ 基线 ${base.total} 处。` +
-      /* 消失数必须出现在结论里：它等于「这几份文件这一轮没被读过」。静默让判据
-         在没读过的目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-      vanishedNote(vanished),
+    "[test-it-each] OK —— 无 `it.each` 站点" + vanishedNote(vanished),
   );
-  if (total < base.total) {
-    console.log(
-      `  比基线还少了 ${base.total - total} 处：跑 \`--update\` 把基线收紧。`,
-    );
-  }
   return 0;
 }
 

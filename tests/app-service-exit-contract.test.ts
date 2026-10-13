@@ -24,13 +24,23 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { launcherChainSource } from "./helpers/launcher-source";
+
 const ROOT = process.cwd();
 const EXIT_MJS = readFileSync(
   join(ROOT, "scripts", "app-service-exit.mjs"),
   "utf8",
 );
-const LAUNCHER_MJS = readFileSync(
-  join(ROOT, "scripts", "dev-launcher.mjs"),
+/* 断的是**编排链路**（主文件 + 它顶层静态 import 的 `launcher-core/**`）而不是
+ * 单份主文件：`concludeDownstreamExit` 随 R5 拆分搬进了
+ * `launcher-core/downstream.mjs`，只读主文件时 `slice` 拿到空串、
+ * `not.toContain` 则**静默恒真**（拆分的实现位置不是契约，契约是「收尾那一段
+ * 里写不写记录」）。 */
+const LAUNCHER_MJS = launcherChainSource();
+// 「收尾定性」这一族的判据不在入口文件里（§12.6 R5 的姊妹档盯着入口长度），
+// 而在 launcher-core/downstream-exit.mjs。写入侧的成因取值要看**那个**函数体。
+const DOWNSTREAM_EXIT_MJS = readFileSync(
+  join(ROOT, "scripts", "launcher-core", "downstream-exit.mjs"),
   "utf8",
 );
 const EXIT_TS = readFileSync(
@@ -62,13 +72,25 @@ function tsKindUnion(): string[] {
  * 来自 `downstreamExitKind` 的返回字面量。所以判据要落在**那个函数体**上：它 return
  * 什么，就是这份记录可能被写成什么。只查「传参处有没有字面量」会让这条断言在
  * 真实形态下恒为空（自测时就是这样），变成一条永远绿的假判据。
+ *
+ * 运行期那一档（`runtimeExitRecord`）写的是固定字面量 `dev-server`，同样收进来：
+ * 它是「服务起来之后自己没了」唯一有记录的一档（ISSUE #1692 的第二半）。
  */
 function writtenKinds(source: string): string[] {
   const fn = /export function downstreamExitKind\([\s\S]*?\n\}/.exec(
     source,
   )?.[0];
   const body = fn ?? source;
-  return [...body.matchAll(/return\s+"([a-z-]+)"/g)].map((m) => m[1]!);
+  const fromTable = [...body.matchAll(/return\s+"([a-z-]+)"/g)].map(
+    (m) => m[1]!,
+  );
+  const runtime = /export function runtimeExitRecord\([\s\S]*?\n\}/.exec(
+    source,
+  )?.[0];
+  const fromRuntime = [...(runtime ?? "").matchAll(/kind:\s*"([a-z-]+)"/g)].map(
+    (m) => m[1]!,
+  );
+  return [...fromTable, ...fromRuntime];
 }
 
 describe("应用服务退出记录：跨侧同源", () => {
@@ -85,7 +107,9 @@ describe("应用服务退出记录：跨侧同源", () => {
     const ts = tsKindUnion().sort();
     expect(ts.length).toBeGreaterThan(0);
     // 启动编排那条路会写的成因，必须每个都被 TS 认得出。
-    const launcherKinds = [...new Set(writtenKinds(LAUNCHER_MJS))].sort();
+    const launcherKinds = [
+      ...new Set(writtenKinds(DOWNSTREAM_EXIT_MJS)),
+    ].sort();
     expect(launcherKinds.length).toBeGreaterThan(0);
     for (const kind of launcherKinds) {
       expect(ts).toContain(kind);
@@ -115,20 +139,39 @@ describe("应用服务退出记录：跨侧同源", () => {
 
   it("启动编排在回收之前写下记录（写太晚 = 现场已经收走）", () => {
     // 判据 = 写入调用出现在收尾定性函数体内，且该函数以 shutdown 收尾。
-    const conclude = LAUNCHER_MJS.slice(
-      LAUNCHER_MJS.indexOf("async function concludeDownstreamExit"),
-      LAUNCHER_MJS.indexOf("async function concludeDownstreamExit") + 4000,
-    );
+    const at = LAUNCHER_MJS.indexOf("async function concludeDownstreamExit");
+    expect(at, "编排链路上找不到 concludeDownstreamExit（拆分后别断了接线）").toBeGreaterThan(-1);
+    const conclude = LAUNCHER_MJS.slice(at, at + 4000);
     expect(conclude).toContain("writeAppServiceExit(");
-    // 顺序：写记录在 `await shutdown(` 之前。
-    expect(conclude.indexOf("writeAppServiceExit(")).toBeLessThan(
-      conclude.indexOf("await shutdown("),
-    );
+    /* 顺序：写记录必须排在**回收动作**之前。
+     * 回收动作的记法随拆分变过一次（`shutdown(` → `ctx.shutdown(`）——
+     * 认「`shutdown(` 这个调用名」而不是某一种前缀，否则下一次改签名又假红，
+     * 而这条契约（先写后收）与调用方怎么称呼它无关。 */
+    const shutdownAt = conclude.indexOf("shutdown(");
+    expect(shutdownAt, "收尾那一段里找不到 shutdown 调用").toBeGreaterThan(-1);
+    expect(conclude.indexOf("writeAppServiceExit(")).toBeLessThan(shutdownAt);
   });
 
   it("启动编排绝不「启动时清掉」这份记录（清掉就等于恢复后读不到）", () => {
     // 这是本设计的核心约束，误加一行 clear 会让整条链静默失效。
     expect(LAUNCHER_MJS).not.toContain("clearAppServiceExit");
+  });
+
+  it("**运行期**退出也走同一个写点，且在回收整树之前（ISSUE #1692 的第二半）", () => {
+    /* 写侧此前只挂在 `concludeDownstreamExit`（就绪等待期）上，于是「服务起来之后
+     * 自己没了」——用户在界面上真正会看到的「应用服务已断开」——一条记录都不写：
+     * 恢复后读回 null，界面只能回一句把成因猜成「手工 pnpm dev」的兜底。 */
+    expect(DOWNSTREAM_EXIT_MJS).toContain("export function runtimeExitRecord(");
+    // 判据只认「dev 先退出」：壳先走是用户关窗 / 壳被收走，服务是被带走的。
+    expect(DOWNSTREAM_EXIT_MJS).toContain('if (who !== "dev") return null;');
+    // 调用点在常驻段，且排在 `await shutdown(` 之前（写太晚 = 现场已收走）。
+    const resident = LAUNCHER_MJS.slice(
+      LAUNCHER_MJS.indexOf("const record = runtimeExitRecord({"),
+    );
+    expect(resident).toContain("writeAppServiceExit(ROOT, record)");
+    expect(resident.indexOf("writeAppServiceExit(ROOT, record)")).toBeLessThan(
+      resident.indexOf("await shutdown("),
+    );
   });
 
   it("Rust 壳（sidecar 档）写的文件名与 Node 侧逐字相同", () => {

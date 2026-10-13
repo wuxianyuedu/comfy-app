@@ -52,11 +52,10 @@ export function SaveExportButton({
    * 结果翻成三种可见状态（不用在视图里写 async 状态机，见规范 17）。 */
   const onSave = () => {
     void saveExport(label).then((result) => {
-      const ok = result.ok && result.relativePath;
-      saved.flash({
-        savedPath: ok ? result.relativePath! : null,
-        failed: !ok,
-      });
+      /* `relativePath` 收成局部变量：`ok` 这个布尔量记不住「里面那个字段非空」，
+       * 在原地补 `!` 等于让类型替运行时兜底。 */
+      const relativePath = result.ok ? (result.relativePath ?? null) : null;
+      saved.flash({ savedPath: relativePath, failed: !relativePath });
     });
   };
 

@@ -66,11 +66,18 @@
 
 1. **包管理只用 pnpm**（`pnpm exec …`）。禁止 npx / npm run——npm 11.19 在本机
    解析 typescript 别名链会崩溃（`Class extends value undefined`）。
+   **这条有判据**：`scripts/check-doc-references.cjs`（= `pnpm doc:check`）把「台账文档与
+   `AGENTS.md` 里出现 npm 形态的可执行命令」判成硬错误——这类写法一律改为 pnpm；
+   覆盖面是**文档里的命令口径**，不含源码调用（那一路刻意不判——源码里没有对应的
+   可执行形态可由 lint 看）。
 2. **工具链钉死项不可随意改**（改动前必须读规范 §6 并在提交说明里给出理由）：
    - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds` 名单（条数以该文件为准；
      它会随新增依赖变动，别在文档里写死数字）、`verifyDepsBeforeRun: false`
    - `next.config.js`：`experimental.useTypeScriptCli: false`
-3. **进程清理必须杀整棵树，平台判据只收两处**：Node/TS 侧一律经 `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`；非 TS 宿主走命令行入口 `scripts/reap-process.mjs`；Rust 壳侧起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`（退出整树回收同样转交 `reap-process.mjs`）。禁止各处自写 `taskkill` / `process.kill` / `Process.Kill()` / 单杀 leader / `std::process::Command` + `taskkill`（后者在 POSIX 上等于什么都不做）。**POSIX 自建进程组是前提**：`spawn({ detached: true })`。跨平台机制、防自杀判据、孤儿事故根因见 launch-and-build §3.1–§3.3。
+   - **钉死项本身有回归判据**：`tests/turbopack-tracing-excludes.test.ts` 判
+     `useTypeScriptCli: false` 与**实际解析到的 TypeScript 必须配对**（Next 16 里该键的位置、
+     以及关掉它之后解析到 TS7 会让 `next build` 直接退出），改钉死项会当场红。
+3. **进程清理必须杀整棵树，平台判据只收两处**：Node/TS 侧一律经 `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`；非 TS 宿主走命令行入口 `scripts/reap-process.mjs`；Rust 壳侧起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`（退出整树回收同样转交 `reap-process.mjs`）。禁止各处自写 `taskkill` / `process.kill` / `Process.Kill()` / 单杀 leader / `std::process::Command` + `taskkill`（后者在 POSIX 上等于什么都不做）。**POSIX 自建进程组是前提**：`spawn({ detached: true })`。跨平台机制、防自杀判据、孤儿事故根因见 launch-and-build §3.1–§3.3。**这条有回归判据**：`tests/cross-platform-launcher.test.ts` 真起进程树再回收、并断言 `scripts/reap-process.mjs` 真的把目标收掉（Windows 侧的 `taskkill` 参数形态由 `src/lib/process/kill-process-tree.windows.test.ts` 判）。
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，
    不得引入新的固定名日志文件（残留进程句柄会锁死它，用按次命名 + 轮转）。
 5. **改了 `tauri.conf.json` / `src-tauri/src/**` / `splash-assets/**` 必须
@@ -85,7 +92,7 @@
    `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
 6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，但随 ISSUE #623 与 `.cnb.yml` 一同失去调用方（§13.5）——**目前不再有 CI 兜底**。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**合并那一跳现在有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（分钟级，实测数据与为什么不在这里写数见 §13.6.2.1；证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。
 7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + 结构检查 + tsc + eslint +
-   UI/逻辑分离棘轮 + 结构守护与受影响用例 + CHANGELOG 碎片 + 两份生成物同步
+   UI/逻辑分离硬闸 + 结构守护与受影响用例 + CHANGELOG 碎片 + 两份生成物同步
    （`docs/generated/**` 见 §13.5.5、`docs/api/**` 见 §13.5.5.1 —— **后者提交进 git 却
    长达数十次提交没有任何判据**，是 ISSUE #1329 收尾时翻出来的过期面），全部走 `pnpm exec`）。
    测试那一层是「改到哪、测到哪」的增量层（固定清单 + 暂存改动沿**静态 import 图**
@@ -96,15 +103,32 @@
    `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
 8. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
+   **这条现在有判据**：`scripts/check-allow-builds.cjs`（挂在 `.githooks/pre-commit` 的 D 组）
+   拿 `node_modules/.pnpm` 里**已装出来的事实**与名单对账——每个带
+   `preinstall` / `install` / `postinstall` 的包都必须有一条显式条目，`true`（批准）与
+   `false`（显式拒绝）都算回答过，漏答才红；反向（名单里当前没有构建脚本的条目）**刻意不判**，
+   那半数是故意留的位，判它等于误报一片。钩子里那一步带 `--staged`：**只在本次提交动了
+   依赖面**（`package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml`）时才扫全树，
+   未命中会打印「未触及依赖面」而不是冒充结论；不带 flag 的那一档是全量判定（手动 /
+   合并前用）。口径、为什么不读 lockfile、以及「缺 `node_modules`
+   判红而不是跳过」见 §13.5.15。
 9. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
-   锁定会 EPERM 连锁失败）。
+   锁定会 EPERM 连锁失败）。**这条现在有现场执行者**：判据是
+   `scripts/launcher-core/port-reap.mjs` 的 `runningAppInstances(root)`，按**归属**回答
+   「本检出的应用服务在不在跑」（会话锚点心跳 + 端口上进程的命令行命中本检出的
+   `dev.mjs` / `start.mjs`），两个消费点：编排器补装前（`launcher-core/downstream.mjs`
+   的 `syncDependencies`，顺序要紧 —— 主流程里端口检查排在补装之后）与人不经过编排器
+   直接装的那条路（`pnpm deps:guard`，Windows 双击 `tools/start/sync-lint.ps1` 在
+   `pnpm install` 前调它，判到即停）。刻意**不**按「端口有没有人监听」判 —— 隔壁检出
+   占着同一端口不会锁本检出的 `node_modules`。口径与回归测试见 §3.2 与
+   `tests/dev-launcher-dependency-sync.test.ts`。
 10. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
     `fetch(`、`vanillaApi.*`、tRPC 的 options 调用（新集成：`trpc.x.y.queryOptions()` /
     `mutationOptions()`；旧 classic 字样 `api.x.y.useQuery/useMutation` 同判）——逻辑要进
     `<feature>/hooks/`，网络层一律进 `src/lib/<domain>-client.ts`（守卫只豁免
     `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
-    `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit）。
-    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
+    `scripts/check-ui-logic-separation.cjs`（**硬闸：命中即阻断**，已接入 pre-commit；
+    S* 存量已清零、基线已删，没有 `--update` 这条路 —— ISSUE #1811 收尾翻闸）。
 11. **`src/lib` 是域化的：根目录只放顶层单例，模块一律进子域**（ISSUE #565 / §12.5.3 / §18.14）：新增子域必须**同批**登记 `scripts/check-file-structure.cjs` 的 `DOMAINS` 与 `DOMAIN_EXEMPT`（R14）**并**在 `vitest.config.ts` `thresholds` 里按**实测值**设门槛（§18.6）——只做一件 = 门槛挂在判据不认识的目录上、或新域零门槛。叶子域平铺，**不要再造 `admin/` `other/` `shared/` 这类杂物层**。门禁 R13′/R14 跑在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步。**迁移目录连带五查**（import 说明符含 `vi.mock` / `await import` / 门禁白名单 / 测试夹具假路径 / `path.resolve(__dirname, …)` / 规范与碎片里的路径引用），完整清单见 §12.5.3。
 
 12. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`；编排只写 Node（`.mjs`），`.ps1` 只是调用入口**（ISSUE #23 / §8）：`scripts/dev-launcher.mjs` 是**全平台唯一**的启动编排者（端口 / 缓存指纹 / 进度快照 / 回收语义全在这里，平台机制收在 `scripts/launcher-core/**` 与 `kill-process-tree`）；`scripts/dev-launcher.ps1` 只做「定位项目根 → 调用它 → 透传退出码」，**不得**再长出任何 Windows 专属编排（`taskkill` / `Get-CimInstance` / Job Object / `cmd.exe`），长度与内容由 `tests/cross-platform-launcher.test.ts` 守着。**入口放 `tools/<分类>/`，不放仓库根**（ISSUE #29 / §8.6）：启动类归 `tools/start/`，与 `tools/build/`、`tools/shadcn-registry/`、`tools/database-studio/` 按用途并列；**R9「根目录只放工程配置」的另一形态是 git 临时状态文件**（`MERGE_MSG` / `COMMIT_EDITMSG` / `SQUASH_MSG` 一族，ISSUE #1586 / §12.8.6）：它们归 `.git/`，落进工作区只说明「用 `-F` 写提交说明、提交完忘了删」，`.gitignore` 与 R9 两道都挡。R9 的两个形态都在 pre-commit 强制拦截。**跨平台动作 = 写 `.mjs` 逻辑 + 挂 `package.json` 脚本 + 登记 §9.5 对照表**（`check-ps1-consistency.mjs` 在 pre-commit 核对，只写一侧会被拦）；`.ps1` 不是逻辑层，也不代表仓库只能在 Windows 用。含中文的 `.ps1` 必须 **UTF-8 with BOM**（无 BOM 会被 PowerShell 5.1 按 GBK 解码，与 `.bat` 乱码同源）。入口设计原则、禁 `.bat` 的 GBK 代码页根因、`KNOWN_FAILED_FILES` 与 R7/R8/R9 的具体判据见 §8.1–§8.4 与 `tests/check-file-structure.test.ts`。
@@ -125,7 +149,7 @@
     并在提交/实施说明里注明遵循了哪些条目。把「先看文档再改代码」当默认动作，
     不凭项目外部经验或旧记忆猜测本仓库约定。
 
-16. **构建期模块图上的模块：模块级副作用先判就绪、源码保持纯 ASCII**（ISSUE #489 / §5）：任何「加载即读库」的副作用都必须先过 `src/lib/db-schema-ready.ts` 的 `isSchemaReady()`——历史实例是 `src/lib/comfyui/reaper.ts` 经 `enqueue.ts` 的裸 `import "./reaper"` 挂在启动路径上（P3 §5 ADR §14 D3 起该模块加载零副作用、由宿主显式起，但**规则本身不变**：新增「加载即读库」的副作用仍然必须先判就绪）——跳过是安全的（回收幂等、下轮重跑），「表在、查询失败」这类真故障不许被吞；会被 `next-code-frame` 渲染到的模块保持纯 ASCII（中文按字节的 code frame 高亮会触发 Rust `end byte index N is not a char boundary` panic、把整个 `next build` 打死，且偏移敏感、报错完全指不出业务原因）。**排查手法与实践细节**见 §5 排障手册对应两行；业务模块与文档不受此限，中文照常。
+16. **构建期模块图上的模块：模块级副作用先判就绪、源码保持纯 ASCII**（ISSUE #489 / §5）：任何「加载即读库」的副作用都必须先过 `src/lib/db-schema-ready.ts` 的 `isSchemaReady()`——历史实例是 `src/lib/comfyui/reaper.ts` 经 `enqueue.ts` 的裸 `import "./reaper"` 挂在启动路径上（P3 §5 ADR §14 D3 起该模块加载零副作用、由宿主显式起，但**规则本身不变**：新增「加载即读库」的副作用仍然必须先判就绪）——跳过是安全的（回收幂等、下轮重跑），「表在、查询失败」这类真故障不许被吞；会被 `next-code-frame` 渲染到的模块保持纯 ASCII（中文按字节的 code frame 高亮会触发 Rust `end byte index N is not a char boundary` panic、把整个 `next build` 打死，且偏移敏感、报错完全指不出业务原因）。**排查手法与实践细节**见 §5 排障手册对应两行；业务模块与文档不受此限，中文照常。**这条有回归判据**：`tests/reaper-side-effect.test.ts` 判「模块加载零副作用 / 启动点先过表就绪守卫」（顶层裸 `startReaper()`、绕过 `isSchemaReady()` 的裸调 sweeper 都会红），纯 ASCII 那一半由 `tests/lib-node-only-declarations.test.ts` 与 `tests/build-fresh-checkout.test.ts` 守着。
 
 17. **分发产物不得携带开发机私有输入，敏感值不得明文落日志**（ISSUE #489 / §7.3、07 §7.18.2.1）：`next build` 会**无条件**把仓库根 `.env` 与 `db.sqlite` 复制进 `.next/standalone`，进而被 `build-desktop` 内嵌进桌面包——**密钥明文分发**。**别在配置层修这件事**：`outputFileTracingExcludes` 在这条链上不做减法，而 `.env` 那份根本不是 tracing 带进来的（机制、A/B 实测、以及那句已被订正的「Turbopack 不读这份键」只有一份出处：§7.2 第三件事之二与 §7.3——别拿任何一处复述当决策依据，换构建器也不是出路）。防线在产物层，两件同批：`scripts/standalone-private-inputs.mjs`（减法，**递归按形状**且**不穿符号链接**——穿链接删等于损坏指向开发机 pnpm store 的依赖）+ `scripts/check-standalone-contents.cjs`（真数产物，口径同样不穿链接；从 #1217 起接进 `pnpm build` 收尾，顺序是 减法 → 数产物 → 冒烟）。**两层顶层都是默认拒绝**（`STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL`，`src` 不在任何一层、只有 `RUNTIME_SRC` 逐文件放行；开发期文件与 `scripts/` 走同一通道，前者黑名单、后者白名单 `RUNTIME_SCRIPTS`）：新增一项必须**同改两处**并写清「谁在运行期读它」。日志侧：ERROR 镜像（`app-runtime.log`）走另一条独立通道、**不受 pino `redact` 保护**，镜像里不许整包 `JSON.stringify` payload（判据与实测见 07 §7.18.2.1）；写日志类用例给**自己的临时目录**，别让 `pnpm test` 往仓库 `log/` 写字。
 
@@ -133,16 +157,16 @@
 
 19. **源码禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（§12.11 / 门禁 R12）：源码里带一个真的 NUL 字节会让**整个文件**被 git / diff / grep / 多数编辑器判成二进制（`git diff` 只回「Binary files differ」、`grep -rn` 静默跳过），本地钩子还全绿——评审看不到改动。这类 NUL 几乎都来自「拿 NUL 当占位符哨兵」；要表达 NUL 写转义 `"\u0000"`。选哨兵形状时列清「接下来还要跑的每一组正则」、一个都不命中、且用户内容伪造不出同形状。R12 按码位扫 `src/**` 的 `.ts`/`.tsx`（豁免只有制表 / 换行 / 回车）、跑在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步；实例修复与哨兵形状选择的完整判据见 §12.11。
 
-20. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / §12.12、§12.14）：逐行重合 ≥75% **且** 两边 ≥60 行即判定为孪生，由 `scripts/check-code-duplication.cjs` 阻断（棘轮 `scripts/.code-duplication-baseline.json`）；修法是**抽共享模块让两边只留差异**（不是「两边一起改」），共享内核里不许放任何一侧的传输层代码（`server-only` / Next 落盘 / 纯 Node 读文件都由入口注入）。本机默认端口与回环地址只在 `src/lib/endpoints.ts` 定义一次，别处一律 import；回环主机写 `127.0.0.1` 不写 `localhost`（Node fetch 会先解析成 `::1`）。
+20. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / §12.12、§12.14）：逐行重合 ≥75% **且** 两边 ≥60 行即判定为孪生，由 `scripts/check-code-duplication.cjs` **硬闸**阻断（存量已清零，无基线文件、无 `--update`）；修法是**抽共享模块让两边只留差异**（不是「两边一起改」），共享内核里不许放任何一侧的传输层代码（`server-only` / Next 落盘 / 纯 Node 读文件都由入口注入）。本机默认端口与回环地址只在 `src/lib/endpoints.ts` 定义一次，别处一律 import；回环主机写 `127.0.0.1` 不写 `localhost`（Node fetch 会先解析成 `::1`）。
 
-21. **函数长度阈值 400 行进拆分候选、按文件计数走棘轮**（ISSUE #536 / §12.13）：`scripts/check-function-length.cjs` 阻断「新增巨型函数」（棘轮 `scripts/.function-length-baseline.json`，只许降不许升）。**Rust 壳同维度阈值 120 行**（`scripts/check-rust-function-length.cjs` 扫 `src-tauri/src/**`，棘轮 `.rust-function-length-baseline.json`；结构化编排的自然长度比 TSX 短）。R5 管**文件**行数、本条管**函数**行数，两条维度不可互相替代。括号只认 `()` `{}` `[]`（`<` `>` 会把 TSX 泛型 / JSX 标签的深度漂负、函数尾永远找不到 = 静默漏报）；Rust 特有的 `r#"…"#` 原始字符串与 `'` 两义性（字符字面量 vs 生命周期）已在状态机里处理，细节见 §12.13 / §12.13.1。
+21. **函数长度阈值 400 行（Rust 120 行）即阻断，硬闸**（ISSUE #536 / §12.13）：`scripts/check-function-length.cjs` 命中即阻断（存量已清零，无基线文件、无 `--update`）。**Rust 壳同维度阈值 120 行**（`scripts/check-rust-function-length.cjs` 扫 `src-tauri/src/**`；结构化编排的自然长度比 TSX 短）。R5 管**文件**行数、本条管**函数**行数，两条维度不可互相替代。括号只认 `()` `{}` `[]`（`<` `>` 会把 TSX 泛型 / JSX 标签的深度漂负、函数尾永远找不到 = 静默漏报）；Rust 特有的 `r#"…"#` 原始字符串与 `'` 两义性（字符字面量 vs 生命周期）已在状态机里处理，细节见 §12.13 / §12.13.1。
 
 22. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / §18）：**lib 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被 `components` / `app` / `server` 共同依赖的地基；需要共享的类型下沉到 `src/lib` 下的类型模块（实例：`src/lib/workflow/workflow-io-types.ts`）。由 `eslint.config.js` 的 `boundaries` 强制，**元素顺序是语义**（`src/lib/core/**` 等数据层须排在 `src/lib/**` 之前，见 §18.3）。**Node-only 三选一，不许「都没有」**（§18.4）：全部出口只能服务端用 → `import "server-only"`；同领域服务端拆件 → `.server.ts`；纯 Node 宿主（由 `scripts/*.mjs` 动态加载，如 `src/lib/process/kill-process-tree.ts`）→ 两者都不加（给它加 `server-only` 会让启动编排直接崩，`server-only` 入口就是 `throw`）。**新增守卫前先查是否已有更强的一条**：客户端打包安全已由 `tests/client-bundle-node-builtins.test.ts`（从 `"use client"` 入口 DFS 可达性 + 完整引用链）守住，别再写「检查有没有 `server-only`」的第二判据。**R5 超 900 行文件走棘轮**（`--strict` 下新增 / 变大即阻断；**pre-commit 的这一步带的就是
     `--strict`**，ISSUE #1404 之前它是「只提醒」且硬闸档没有执行者），基线 `scripts/.file-size-baseline.json`。
 
 23. **注释语言：一律中文**（ISSUE #678，机器强制）：业务代码、测试、脚本（`.ts` / `.tsx` / `.mjs` / `.cjs` / `.ps1` / Rust）里的注释统一写中文。**唯一例外**：会被 `next-code-frame` 渲染到的构建期模块（硬规则 16 那批）保持纯 ASCII + 英文注释，并在文件头一条说明原因。白名单登记在 `docs/reference-facts.md` 的 `comment.language.asciiOnly` 一行，由 `pnpm doc:check` 核对；判据、例外语义与自查入口见 §12.4.6 与 §9.6。
 
-24. **复用优先：写之前先查、缺能力补地基，不造第二轮子**（§12.18）：动手写一段新逻辑前，先花一次 grep 的代价回答「这能力是不是已经有了、或本该有」——有等价 / 更通用的实现就 import（缺的差异用参数或薄封装补，**不在调用点重抄**）；没有、但属跨模块通用能力（格式化 / 单位换算 / 端口与地址 / 错误信封 / 进程与路径 / 重试与超时…）就补进对应地基（`src/lib/<domain>` 或 `core`）写一次 + 配单测，调用点 import；确认是这一处独有的业务才就地写。补地基的门槛是**真通用**（≥2 个现有调用点、或明确马上有第 2 个）；只有 1 个又看不出第二个的，先就地写、别急着抽象（§12.15 第三条）。地基里不放任何一侧的传输层代码（§18.4 / §12.12）。**分工**：本条管**落笔时的取向**；事后回潮由 §12.12（字面孪生 ≥75%）/ §12.14（端点收口）/ §12.16（零消费导出）机器兜底——**别再为其新写「抓该不该通用」的启发式扫描器**（会误报一片、本身就成了「会静默失效的清单」，那是用造轮子的方式反造轮子）。
+24. **复用优先：写之前先查、缺能力补地基，不造第二轮子**（§12.18）：动手写一段新逻辑前，先花一次 grep 的代价回答「这能力是不是已经有了、或本该有」——有等价 / 更通用的实现就 import（缺的差异用参数或薄封装补，**不在调用点重抄**）；没有、但属跨模块通用能力（格式化 / 单位换算 / 端口与地址 / 错误信封 / 进程与路径 / 重试与超时…）就补进对应地基（`src/lib/<domain>` 或 `core`）写一次 + 配单测，调用点 import；确认是这一处独有的业务才就地写。补地基的门槛是**真通用**（≥2 个现有调用点、或明确马上有第 2 个）；只有 1 个又看不出第二个的，先就地写、别急着抽象（§12.15 第三条）。地基里不放任何一侧的传输层代码（§18.4 / §12.12）。**分工**：本条管**落笔时的取向**；事后回潮由 §12.12（字面孪生 ≥75%）/ §12.14（端点收口）/ §12.16（零消费导出）机器兜底——**别再为其新写「抓该不该通用」的启发式扫描器**（会误报一片、本身就成了「会静默失效的清单」，那是用造轮子的方式反造轮子）。**那两个事后兜底的执行者点名在这里**（本条此前只引章节号、不引脚本，读起来像「没有机器兜底」）：§12.12 的字面孪生由 `scripts/check-code-duplication.cjs` 判，§12.16 的零消费导出由 `scripts/check-dead-exports.cjs` 判，两条都挂在 `.githooks/pre-commit` 的 D 组；两者现在都是**硬闸档**（存量已清零，档位见硬规则 20），所以这里只点名脚本、不点名基线文件 —— 基线文件是会被删掉的那一类，写成路径就是在埋一条会过期的引用。
 
 25. **开工前先跑一次依赖新鲜度**（ISSUE #1569 / §13.5.13）：远端 `master` 上别人升过依赖
     而本地还停在旧的那一套上时，你会在**旧依赖树**上改代码、跑门禁，结论看起来一切正常 ——

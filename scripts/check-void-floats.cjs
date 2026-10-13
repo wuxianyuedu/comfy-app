@@ -42,7 +42,6 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
 const BASELINE = path.join(__dirname, ".void-floats-baseline.json");
@@ -50,6 +49,18 @@ const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
 const STRICT = ARGS.has("--strict");
+const STAGED = ARGS.has("--staged");
+
+/** 扫描根。**必须在 `--staged` 短路之前**，所以提到 `require("typescript")` 上面。 */
+const SCAN_DIR = "src/lib";
+
+/* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
+ * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
+if (STAGED && !REPORT_ONLY && !UPDATE) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[void-floats]" });
+}
+
+const ts = require("typescript");
 
 /**
  * 判据版本:`UnaryExpression(void) 包 CallExpression 作为整条语句` 是唯一形态。
@@ -58,7 +69,6 @@ const STRICT = ARGS.has("--strict");
  */
 const RULE_VERSION = 1;
 
-const SCAN_DIR = "src/lib";
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 
@@ -80,16 +90,17 @@ function collectFiles(dir, out = []) {
   return out;
 }
 
-function countFor(rel) {
-  const abs = path.join(ROOT, rel);
-  const src = fs.readFileSync(abs, "utf8");
-  const sf = ts.createSourceFile(
-    rel,
-    src,
-    ts.ScriptTarget.Latest,
-    true,
-    rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+/**
+ * 规则本体:数一份**已解析**源码里 `void someFn(...)` 语句形式的数量。
+ *
+ * **只吃已解析的 `SourceFile`**，不自己解析 —— 这是「共享颗粒度」的落点
+ * （§13.5.8.2「第四笔账」）:解析全量 ≈550ms,由 `gate-ast-read.cjs` /
+ * `run-ast-gates.cjs` 做一次,规则只遍历、只判定。
+ *
+ * @param {import("typescript").SourceFile} sf
+ * @returns {number}
+ */
+function countTree(sf) {
   let count = 0;
   const visit = (node) => {
     if (
@@ -110,6 +121,31 @@ function countFor(rel) {
   };
   visit(sf);
   return count;
+}
+
+/**
+ * 单条脚本自己的入口:解析一份文件再数。
+ *
+ * @param {string} rel 仓库根相对路径
+ * @param {Map<string, import("typescript").SourceFile>} [parsed]
+ *   聚合档 `run-ast-gates.cjs` 注入的**共享解析结果**（键 = 该 `rel`）。
+ *   传了就复用，不再逐文件 `createSourceFile` —— 只共享解析产物，不共享遍历/判定。
+ *   不传 = 老路径，行为一字不变。
+ */
+function countFor(rel, parsed) {
+  const shared = parsed && parsed.get(rel);
+  if (shared) return countTree(shared);
+  const abs = path.join(ROOT, rel);
+  const src = fs.readFileSync(abs, "utf8");
+  return countTree(
+    ts.createSourceFile(
+      rel,
+      src,
+      ts.ScriptTarget.Latest,
+      true,
+      rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    ),
+  );
 }
 
 function readBaseline() {
@@ -133,12 +169,12 @@ function writeBaseline(files, total) {
   fs.writeFileSync(BASELINE, JSON.stringify(payload, null, 2) + "\n");
 }
 
-function main() {
+function main(parsed) {
   const files = collectFiles(SCAN_DIR).sort();
   const current = {};
   let total = 0;
   for (const rel of files) {
-    const n = countFor(rel);
+    const n = countFor(rel, parsed);
     if (n > 0) {
       current[rel] = n;
       total += n;
@@ -241,4 +277,7 @@ function main() {
   console.log("[void-floats] OK");
 }
 
-main();
+/* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
+module.exports = { countTree, countFor, collectFiles, main, RULE_VERSION, BASELINE, SCAN_DIR, isTestFile };
+
+if (require.main === module) main();

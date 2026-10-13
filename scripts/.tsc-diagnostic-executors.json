@@ -143,8 +143,7 @@
       "markers": [
         "baseline-red",
         "inconclusive",
-        "load-flake",
-        "did-not-run"
+        "load-flake"
       ],
       "reader": "tests/base-check.test.ts",
       "executor": {
@@ -153,6 +152,25 @@
       },
       "baseline": {
         "scripts/base-check.mjs": 107
+      },
+      "section": "13.6.2"
+    },
+    {
+      "id": "base-check-recompute-verdict",
+      "name": "「被门禁拦下先复算 master 基线」的**判决层**（runState 的 did-not-run 一档）",
+      "paths": [
+        "scripts/base-check/verdict.mjs"
+      ],
+      "markers": [
+        "did-not-run"
+      ],
+      "reader": "tests/base-check.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/base-check.test.ts（C 组固定清单）"
+      },
+      "baseline": {
+        "scripts/base-check/verdict.mjs": 12
       },
       "section": "13.6.2"
     },

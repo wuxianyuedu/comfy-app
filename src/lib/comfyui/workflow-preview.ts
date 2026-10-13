@@ -119,6 +119,78 @@ function classifyNode(classType: string): WorkflowPreviewNodeKind {
   return "process";
 }
 
+/** 一张图的邻接关系与最长路径分层结果。 */
+type GraphTopology = {
+  /** 每个节点的入边来源；`Record` 形态便于调用点直接索引。 */
+  incoming: Record<string, Set<string>>;
+  /** 每个节点的出边去向。 */
+  outAdj: Record<string, Set<string>>;
+  /** 节点 id → 层级下标（无入边为 0）。成环节点兜底为 0。 */
+  level: Record<string, number>;
+};
+
+/**
+ * 从节点表构建邻接关系并做最长路径分层（Kahn 风格 BFS）。
+ *
+ * `buildWorkflowPreview` 与 `buildWorkflowPreviewFull` 用的是同一套拓扑：
+ * 收连线 → 算层级 → 成环兜底。抽在这里只为了避免两处各写一遍
+ * `arr[id]!` 的取值（`noUncheckedIndexedAccess` 下 `Record` 索引恒为
+ * `V | undefined`，两处都靠 `!` 抹平），顺带把这段孪生收成一份。
+ */
+function buildGraphTopology(
+  entries: [string, WorkflowGraphNode][],
+): GraphTopology {
+  const incoming: Record<string, Set<string>> = {};
+  const outAdj: Record<string, Set<string>> = {};
+  for (const [id] of entries) {
+    incoming[id] = new Set();
+    outAdj[id] = new Set();
+  }
+  // 连线值是形如 [nodeId, outputIndex] 的二元组；只认两端都已知的那些。
+  for (const [id, node] of entries) {
+    const inputs = node.inputs;
+    if (!inputs || typeof inputs !== "object") continue;
+    const ownIncoming = incoming[id];
+    if (!ownIncoming) continue;
+    for (const v of Object.values(inputs)) {
+      const src = linkTargetId(v);
+      const srcOut = src ? outAdj[src] : undefined;
+      if (src && srcOut) {
+        ownIncoming.add(src);
+        srcOut.add(id);
+      }
+    }
+  }
+
+  const level: Record<string, number> = {};
+  const remaining = new Map<string, number>(
+    Object.entries(incoming).map(([k, v]) => [k, v.size]),
+  );
+  const queue: string[] = [];
+  for (const [id, deg] of remaining) {
+    if (deg === 0) {
+      level[id] = 0;
+      queue.push(id);
+    }
+  }
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (id === undefined) break;
+    const ownOut = outAdj[id];
+    if (!ownOut) continue;
+    const ownLevel = level[id] ?? 0;
+    for (const nxt of ownOut) {
+      level[nxt] = Math.max(level[nxt] ?? 0, ownLevel + 1);
+      remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
+      if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
+    }
+  }
+  // 仍未分到层的节点（成环）—— 一律放到第 0 层。
+  for (const id of Object.keys(incoming)) if (!(id in level)) level[id] = 0;
+
+  return { incoming, outAdj, level };
+}
+
 /**
  * 为工作流图构建紧凑预览。这里做一个轻量的最长路径分层：没有入边的节点排在最左，
  * 纯数据汇排在最右。随后按拓扑序裁剪到前约 14 个节点，让卡片保持可读；
@@ -143,47 +215,8 @@ export function buildWorkflowPreview(
     };
   }
 
-  // 从所有形如 [nodeId, outputIndex] 二元组的输入里收集连线。
-  const incoming: Record<string, Set<string>> = {};
-  const outAdj: Record<string, Set<string>> = {};
-  for (const [id] of entries) {
-    incoming[id] = new Set();
-    outAdj[id] = new Set();
-  }
-  for (const [id, node] of entries) {
-    const inputs = node.inputs;
-    if (!inputs || typeof inputs !== "object") continue;
-    for (const v of Object.values(inputs)) {
-      const src = linkTargetId(v);
-      if (src && outAdj[src]) {
-        incoming[id]!.add(src);
-        outAdj[src].add(id);
-      }
-    }
-  }
-
-  // 最长路径分层（Kahn 风格 BFS，深度 = 父节点最大深度 + 1）。
-  const level: Record<string, number> = {};
-  const remaining = new Map<string, number>(
-    Object.entries(incoming).map(([k, v]) => [k, v.size]),
-  );
-  const queue: string[] = [];
-  for (const [id, deg] of remaining) {
-    if (deg === 0) {
-      level[id] = 0;
-      queue.push(id);
-    }
-  }
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const nxt of outAdj[id]!) {
-      level[nxt] = Math.max(level[nxt] ?? 0, level[id]! + 1);
-      remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
-      if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
-    }
-  }
-  // 仍未分到层的节点（成环）—— 一律放到第 0 层。
-  for (const id of Object.keys(incoming)) if (!(id in level)) level[id] = 0;
+  // 收连线 + 最长路径分层（Kahn 风格 BFS，深度 = 父节点最大深度 + 1）。
+  const { outAdj, level } = buildGraphTopology(entries);
 
   // 节点太多时挑一个有代表性的子集：最多保留 14 个，
   // 偏向数据源与数据汇，以及靠前的层。
@@ -192,7 +225,8 @@ export function buildWorkflowPreview(
   let truncated = false;
   if (visible.length > 14) {
     truncated = true;
-    const kindOf = (id: string) => classifyNode(nodeById.get(id)!.class_type);
+    const kindOf = (id: string) =>
+      classifyNode(nodeById.get(id)?.class_type ?? "Unknown");
     const sinks = visible.filter((id) => kindOf(id) === "output");
     const sources = visible.filter((id) => kindOf(id) === "input");
     const mid = visible.filter(
@@ -215,33 +249,25 @@ export function buildWorkflowPreview(
   const width = 280;
   const height = 80;
 
-  const nodes: WorkflowPreviewNode[] = visible.map((id) => {
+  const nodes: WorkflowPreviewNode[] = [];
+  for (const id of visible) {
+    const node = nodeById.get(id);
+    if (!node) continue;
     const lv = level[id] ?? 0;
-
-    const arr = byLevel[lv] ?? [];
-
-    const row = arr.indexOf(id);
-
-    const node = nodeById.get(id)!;
-
-    return {
+    nodes.push({
       id,
-
       class_type: node.class_type,
-
       kind: classifyNode(node.class_type),
-
       level: lv,
-
-      row,
-    };
-  });
+      row: (byLevel[lv] ?? []).indexOf(id),
+    });
+  }
 
   // 连线：只在可见节点之间保留。
   const visibleSet = new Set(visible);
   const edges: WorkflowPreviewEdge[] = [];
   for (const id of visible) {
-    for (const nxt of outAdj[id]!) {
+    for (const nxt of outAdj[id] ?? []) {
       if (visibleSet.has(nxt)) edges.push({ from: id, to: nxt });
     }
   }
@@ -280,44 +306,7 @@ export function buildWorkflowPreviewFull(
     };
   }
 
-  const incoming: Record<string, Set<string>> = {};
-  const outAdj: Record<string, Set<string>> = {};
-  for (const [id] of entries) {
-    incoming[id] = new Set();
-    outAdj[id] = new Set();
-  }
-  for (const [id, node] of entries) {
-    const inputs = node.inputs;
-    if (!inputs || typeof inputs !== "object") continue;
-    for (const v of Object.values(inputs)) {
-      const src = linkTargetId(v);
-      if (src && outAdj[src]) {
-        incoming[id]!.add(src);
-        outAdj[src].add(id);
-      }
-    }
-  }
-
-  const level: Record<string, number> = {};
-  const remaining = new Map<string, number>(
-    Object.entries(incoming).map(([k, v]) => [k, v.size]),
-  );
-  const queue: string[] = [];
-  for (const [id, deg] of remaining) {
-    if (deg === 0) {
-      level[id] = 0;
-      queue.push(id);
-    }
-  }
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const nxt of outAdj[id]!) {
-      level[nxt] = Math.max(level[nxt] ?? 0, level[id]! + 1);
-      remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
-      if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
-    }
-  }
-  for (const id of Object.keys(incoming)) if (!(id in level)) level[id] = 0;
+  const { outAdj, level } = buildGraphTopology(entries);
 
   const byLevel: Record<number, string[]> = {};
   for (const [id] of entries) {
@@ -341,7 +330,7 @@ export function buildWorkflowPreviewFull(
 
   const edges: WorkflowPreviewEdge[] = [];
   for (const [id] of entries) {
-    for (const nxt of outAdj[id]!) {
+    for (const nxt of outAdj[id] ?? []) {
       edges.push({ from: id, to: nxt });
     }
   }

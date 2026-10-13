@@ -23,6 +23,11 @@ import {
   lockfileDrift,
   verifyInstall,
 } from "../scripts/launcher-core/worktree.mjs";
+import {
+  HEARTBEAT_STALE_MS,
+  touchHeartbeat,
+  writeSession,
+} from "../scripts/dev-launcher-session.mjs";
 import { syncDependencies } from "../scripts/dev-launcher.mjs";
 
 const ROOT = process.cwd();
@@ -181,8 +186,10 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
   });
 
   it("源头里判据齐全：漂移触发补装 + verifyInstall 复核 + 非零出口", () => {
+    /* 实现随编排器拆分搬到 `launcher-core/downstream.mjs`（ISSUE #1811）：
+     * 主文件只剩同名薄包装，拿它断言等于什么都没测。 */
     const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "dev-launcher.mjs"),
+      path.join(ROOT, "scripts", "launcher-core", "downstream.mjs"),
       "utf8",
     );
     expect(src).toContain("export async function syncDependencies");
@@ -194,13 +201,104 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
   });
 
   it("编排主流程真的会调用它，失败即非零退出", () => {
-    const src = fs.readFileSync(
+    /* 调用点随预检桥段搬进 `launcher-core/startup-gates.mjs`（ISSUE #1811 拆 R5）：
+     * 那一段**内部**判 `if (syncProblem)` 并以 `error` 出口交回，编排器那层把任何
+     * `gated.error` 转成 `return 1`。契约是「依赖对齐全在链路里、失败即非零退出」，
+     * 所以两处都要断：产出那侧有失败分支、编排那侧把它变成非零。 */
+    const gates = fs.readFileSync(
+      path.join(ROOT, "scripts", "launcher-core", "startup-gates.mjs"),
+      "utf8",
+    );
+    const call = gates.indexOf("await ctx.syncDependencies(");
+    expect(call, "预检桥段没有调用依赖对齐").toBeGreaterThan(-1);
+    expect(gates.slice(call, call + 400)).toMatch(/if \(syncProblem\)/);
+    const launcher = fs.readFileSync(
       path.join(ROOT, "scripts", "dev-launcher.mjs"),
       "utf8",
     );
-    const call = src.indexOf("await syncDependencies(");
-    expect(call, "启动主流程没有调用依赖对齐").toBeGreaterThan(-1);
-    const after = src.slice(call, call + 500);
-    expect(after).toContain("return 1");
+    /* 编排器接住的那一句是 `if (!gated.ok) {`（拆刀后桥段以 `ok` 出口交回，
+     * `gated.error` 只是它的一个字段）—— 断言按**实际形态**写，不按旧形态。 */
+    const gated = launcher.indexOf("if (!gated.ok) {");
+    expect(gated, "编排器没有接住预检失败").toBeGreaterThan(-1);
+    expect(launcher.slice(gated, gated + 400)).toContain("return 1");
+  });
+});
+
+/**
+ * 补装之前的现场拦截（AGENTS 硬规则 9）。
+ *
+ * 立案现场：编排主流程里端口检查（`reconcilePort`）排在补装**之后**几十行，
+ * 而更早的 `reapStaleSession` 在「上一位 launcher 还活着」时刻意什么都不做 ——
+ * 所以「实例活着 → 直接 pnpm install」这条路是真实存在的，而它的后果不是警告一句
+ * 就完了：原生模块被活进程锁住时 install 以 EPERM 失败，并拖垮后续每一条 pnpm 命令。
+ *
+ * 判据必须按**归属**判，不按「端口有没有人监听」判：隔壁检出占着同一个端口并不会
+ * 锁本检出的 `node_modules`，拿端口当条件会在多检出并行下天天误拦（这也是
+ * `scripts/sync-lint.ps1` 原先那份 `Get-NetTCPConnection` 探测的问题之一）。
+ */
+describe("syncDependencies：本检出实例在跑时先拦下来（AGENTS 硬规则 9）", () => {
+  it("会话锚点新鲜且 launcher 存活 → 不装，原因给出 EPERM 与出口", async () => {
+    const dir = makeRepo();
+    fakeInstall(dir, "lockfileVersion: '9.0'\n\ndrift: true\n");
+    // 现场用现成的写入口造，不手抄文件格式（格式漂了这里会静默变成「没在跑」）。
+    writeSession(dir, {
+      launcher_pid: process.pid,
+      child_pids: [],
+      app_port: 3123,
+      mode: "dev",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(dir);
+    const verdict = await syncDependencies(dir, { status: () => undefined });
+    expect(verdict, "本检出有活实例时不该直接去装依赖").not.toBeNull();
+    expect(verdict).toContain("正在运行");
+    expect(verdict).toContain("EPERM");
+    // 出口必须可执行：说清「先关窗口，下次启动自动接着装」，而不是只报失败。
+    expect(verdict).toContain("重新");
+  });
+
+  it("心跳陈旧（上一位已死）→ 不拦，正常走补装判据", async () => {
+    const dir = makeRepo();
+    fakeInstall(dir, fs.readFileSync(path.join(dir, "pnpm-lock.yaml"), "utf8"));
+    writeSession(dir, {
+      launcher_pid: process.pid,
+      child_pids: [],
+      app_port: 3123,
+      mode: "dev",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(dir, Date.now() - HEARTBEAT_STALE_MS - 1000);
+    // lockfile 一致 → 判据本就返回 null（既不装也不该被拦截分支挡住）。
+    expect(await syncDependencies(dir, { status: () => undefined })).toBeNull();
+  });
+
+  it('拦截排在 pnpmInvocation(["install"]) 之前（放在之后就等于没拦）', () => {
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "launcher-core", "downstream.mjs"),
+      "utf8",
+    );
+    const guard = src.indexOf("runningAppInstances(root)");
+    const install = src.indexOf('pnpmInvocation(["install"])');
+    expect(guard, "补装路径里没有归属探测").toBeGreaterThan(-1);
+    expect(install).toBeGreaterThan(-1);
+    expect(guard, "探测排在 install 之后 —— 那一步已经锁上了").toBeLessThan(
+      install,
+    );
+  });
+
+  it("命令行出口复用同一个判据（不在 .ps1 里再写一份端口探测）", () => {
+    const cli = fs.readFileSync(
+      path.join(ROOT, "scripts", "deps-install-guard.mjs"),
+      "utf8",
+    );
+    expect(cli).toContain("runningAppInstances");
+    const ps1 = fs.readFileSync(
+      path.join(ROOT, "scripts", "sync-lint.ps1"),
+      "utf8",
+    );
+    expect(ps1).toContain("deps-install-guard.mjs");
+    expect(ps1, "又回到 .ps1 自己探端口那一族").not.toMatch(
+      /Get-NetTCPConnection/,
+    );
   });
 });

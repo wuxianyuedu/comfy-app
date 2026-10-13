@@ -11,11 +11,14 @@
 <li><a href="../modules/lib_media_size-presets.html">lib/media/size-presets</a></li>
 <li><a href="" aria-current="page">SIZE_RATIO_PRESETS</a></li></ul>
 <h1>Variable SIZE_RATIO_PRESETS<code class="tsd-tag">Const</code></h1></div>
-<div class="tsd-signature"><span class="tsd-kind-variable">SIZE_RATIO_PRESETS</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_media_size-presets.SizeRatioPreset.html" class="tsd-signature-type tsd-kind-interface">SizeRatioPreset</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol"> = ...</span></div>
+<div class="tsd-signature"><span class="tsd-kind-variable">SIZE_RATIO_PRESETS</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">[</span><a href="../interfaces/lib_media_size-presets.SizeRatioPreset.html" class="tsd-signature-type tsd-kind-interface">SizeRatioPreset</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-symbol">...</span><a href="../interfaces/lib_media_size-presets.SizeRatioPreset.html" class="tsd-signature-type tsd-kind-interface">SizeRatioPreset</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol"> = ...</span></div>
 <div class="tsd-comment tsd-typography"><p>比例预设（8 档）。宽高两侧都列出，避免用户手算倒数比例。</p>
+<p>类型是<strong>非空数组</strong>（<code>[T, ...T[]]</code>）：首项即默认档，各处「<code>find</code> 没命中就
+回退首档」的写法靠它直接拿到 <code>T</code>，不必再补 <code>as T</code> / <code>!</code>
+（<code>noUncheckedIndexedAccess</code> 下普通 <code>T[]</code> 的 <code>[0]</code> 恒为 <code>T | undefined</code>）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/media/size-presets.ts:27</li></ul></aside></div>
+<li>Defined in src/lib/media/size-presets.ts:31</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

@@ -1,7 +1,7 @@
 /**
  * 「每一个棘轮的 `--update` 都拒涨」这条**横切**判据（台账 E5）。
  *
- * 现场：本仓有 21 个「带 `--update` 且真把一份基线写回去」的判据脚本，各自在源码里写了一行
+ * 现场：本仓有若干「带 `--update` 且真把一份基线写回去」的判据脚本，各自在源码里写了一行
  * 「净数不许往上涨」的兜底。但**没有人判过那一行有没有生效** —— 把任意一个脚本的
  * 拒涨分支改成直接落盘（或删除它），全仓用例一个字都不会红，而那条棘轮就此变成
  * 「谁都能用一次 `--update` 悄悄放宽」的门面。这类「判据写了、但没被执行过」正是
@@ -11,7 +11,7 @@
  *
  * 那只能覆盖「已经写了用例的那几家」，而这条判据要的是**集合本身**：
  * 新增一个带 `--update` 与基线文件的判据脚本，如果没被归类，就必须在这里红一次
- * （`完整性：每一个 --update 出口都要被三张表之一点名` 那条用例）。
+ * （`完整性：每一个 --update 出口都要被四张表之一点名` 那条用例）。
  * 抄 20 遍「搭临时仓库跑一次」的样板还会踩 §12.12 的孪生 —— 所以走
  * `tests/helpers/gate-repo.ts` 的命令式出口 `createGateRepo()`，表里每行只写
  * 「这条判据的违规长什么样」。
@@ -29,7 +29,7 @@
  *    `--update` / 改成人的手工登记）—— 退出码判对了、话术把人指向一条自己会拒绝的命令，
  *    同样是在教人绕开判据（`check-tsc-diagnostic-executors.cjs` 就是这样落地的）。
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -94,62 +94,34 @@ const TW4_FIXTURE: Pick<GateRepoOptions, "dirs" | "copy" | "setup"> = {
   setup: linkNodeModules,
 };
 
-/** 函数体行数超过阈值（阈值的唯一来源是脚本自己，这里只保证「一定超」）。 */
-function longFunction(name: string, bodyLines: number): string {
-  return (
-    `export function ${name}() {\n` +
-    Array.from({ length: bodyLines }, (_, i) => `  const v${i} = ${i};`).join(
-      "\n",
-    ) +
-    `\n}\n`
-  );
-}
-
 const RATCHETS: Ratchet[] = [
+  /* R5（`check-file-structure.cjs --strict` 的那一半）：`src` 侧超 900 行的文件棘轮。
+   *
+   * 它此前登记在 PENDING 里，理由是「沙箱里放一份 950 行的文件会连带命中同脚本的
+   * R1–R12 其它规则，第 ② 步（基线 = 现状时必须是绿的）先配不出来」。本轮把那个
+   * 前提拆开看：连带命中是**真的**（最小沙箱缺 `src/proxy.ts` 时 R11 当场红），
+   * 但它是**可配的输入**而不是这条判据的固有属性 —— 把 R1–R12 都喂成绿（本仓
+   * `src/proxy.ts` 就是为此存在的那份约定文件），第 ② 步就成立。
+   *
+   * 所以这一条不做 PENDING，改成把前提写进夹具：`src/proxy.ts` 是 R11 要的存在性
+   * 证据，少了它跑起来的读数是「R11 缺文件」——看起来像 R5 不工作，实际是夹具
+   * 没把输入封住（§12.16 同款：判据的输入边界没封住时它给的是环境噪声）。 */
   {
-    script: "check-function-length.cjs",
-    baseline: "scripts/.function-length-baseline.json",
-    fixture: { dirs: ["src"] },
-    violate: (repo, n) =>
-      repo.write(`src/big${n}.ts`, longFunction(`big${n}`, 450)),
-  },
-  {
-    script: "check-rust-function-length.cjs",
-    baseline: "scripts/.rust-function-length-baseline.json",
-    fixture: { dirs: ["src-tauri/src"] },
-    violate: (repo, n) =>
-      repo.write(
-        `src-tauri/src/r${n}.rs`,
-        `fn big${n}() {\n` +
-          Array.from({ length: 140 }, (_, i) => `  let _${i} = ${i};`).join(
-            "\n",
-          ) +
-          `\n}\n`,
-      ),
-  },
-  /* 基础设施层的**文件**长度棘轮（§12.6 R5 的姊妹档）：R5 / 函数长度 / 非空断言 /
-   * 孪生对四类债务判据的扫描根都只有 `src`，判据自己那一层（`scripts/**` 的 .cjs/.mjs
-   * 与 `tools/**` 的 .ps1，约 43k 行）因此在自己的硬闸之外。它配得进这张表而不是
-   * PENDING —— 沙箱里造一条违规只碰它自己这一条规则：R5 那份之所以进 PENDING，
-   * 是因为同一脚本里 950 行的探针会连带命中 R1–R12 其它规则，第 ② 步配不出来。 */
-  {
-    script: "check-infra-file-size.cjs",
-    baseline: "scripts/.infra-file-size-baseline.json",
-    fixture: { dirs: ["scripts", "tools"] },
+    script: "check-file-structure.cjs",
+    baseline: "scripts/.file-size-baseline.json",
+    /* R5 那一半只在 `--strict` 档判定（不带它时超限文件只打一行「仅提醒」）。
+     * 用默认档走第 ②/③ 步会得到「加第二条违规仍然绿」—— 那判的是「我没把判定档
+     * 打开」，不是棘轮（§11.2.1 第一条：夹具没走进判据）。 */
+    judgeArgs: ["--strict"],
+    fixture: {
+      dirs: ["src"],
+      /* R11 要 `src/proxy.ts` 在场；R1–R12 其余规则在空 `src/` 上都是绿的。 */
+      files: { "src/proxy.ts": "export function proxy() {}\n" },
+    },
     violate: (repo, n) =>
       repo.write(
-        `scripts/big${n}.cjs`,
-        `// 拆分候选\n`.repeat(905) + `module.exports = ${n};\n`,
-      ),
-  },
-  {
-    script: "check-non-null-assertions.cjs",
-    baseline: "scripts/.non-null-assertions-baseline.json",
-    fixture: { dirs: ["src"], env: AST_ENV },
-    violate: (repo, n) =>
-      repo.write(
-        `src/nn${n}.ts`,
-        `export function nn${n}(x?: string): string {\n  return x!;\n}\n`,
+        `src/big${n}.ts`,
+        `// 拆分候选\n`.repeat(905) + `export const big${n} = ${n};\n`,
       ),
   },
   {
@@ -160,107 +132,6 @@ const RATCHETS: Ratchet[] = [
       repo.write(
         `src/lib/vf${n}.ts`,
         `async function vf${n}(): Promise<void> {}\nvoid vf${n}();\n`,
-      ),
-  },
-  {
-    script: "check-overlay-z.cjs",
-    baseline: "scripts/.overlay-z-baseline.json",
-    fixture: {
-      dirs: ["src/components/studio", "src/components/ui", "src/app"],
-    },
-    /**
-     * 落点必须**避开 `src/components/ui/`** —— 那是脚本自己的豁免目录（shadcn 生成件，
-     * §16.1）。把违规写进豁免目录会得到「加第二条仍然绿」，而那判的是豁免而不是棘轮。
-     */
-    violate: (repo, n) =>
-      repo.write(
-        `src/components/studio/Overlay${n}.tsx`,
-        `export function Overlay${n}() {\n  return <div style={{ zIndex: ${n + 40} }} />;\n}\n`,
-      ),
-  },
-  {
-    script: "check-dead-exports.cjs",
-    baseline: ".dead-exports-baseline.json",
-    dir: "root",
-    fixture: {
-      dirs: ["src/lib", "src/trpc", "src/components", "scripts", "tests"],
-    },
-    violate: (repo, n) =>
-      repo.write(
-        `src/lib/orphan${n}.ts`,
-        `export function orphan${n}(): number {\n  return ${n};\n}\n`,
-      ),
-  },
-  {
-    script: "check-circular-deps.cjs",
-    baseline: ".circular-deps-baseline.json",
-    dir: "root",
-    fixture: { dirs: ["src", "scripts"] },
-    violate: (repo, n) => {
-      repo.write(
-        `src/loop${n}a.ts`,
-        `import { b${n} } from "./loop${n}b";\nexport const a${n} = b${n};\n`,
-      );
-      repo.write(
-        `src/loop${n}b.ts`,
-        `import { a${n} } from "./loop${n}a";\nexport const b${n} = a${n};\n`,
-      );
-    },
-  },
-  {
-    script: "check-ui-logic-separation.cjs",
-    baseline: "scripts/.ui-logic-baseline.json",
-    fixture: { dirs: ["src/components"] },
-    violate: (repo, n) =>
-      repo.write(
-        `src/components/Net${n}.tsx`,
-        `export function Net${n}(): Promise<Response> {\n  return fetch("/api/x${n}");\n}\n`,
-      ),
-  },
-  {
-    script: "check-comment-language.cjs",
-    baseline: "scripts/.comment-language-baseline.json",
-    fixture: {
-      dirs: ["src/lib"],
-      copy: [{ from: "scripts/doc-facts.cjs", to: "scripts/doc-facts.cjs" }],
-      files: {
-        "docs/.keep": "",
-        "docs/reference-facts.md":
-          "# refs\n\n| `comment.language.asciiOnly` |  | 白名单 | 本行 | 解析本行 |\n",
-      },
-    },
-    violate: (repo, n) =>
-      repo.write(
-        `src/lib/en${n}.ts`,
-        `/** Combine the input parameters and fall back to defaults. */\nexport const en${n} = ${n};\n`,
-      ),
-  },
-  {
-    /**
-     * 孪生判据的违规形状是「两份 ≥60 行、逐行重合 ≥75%」—— 单文件写不出违规，
-     * 所以每一档写**一对**，且每对的变量名带上档位序号：四份内容全同的文件会被
-     * 数成 C(4,2)=6 对，计数照样涨但涨幅不可预期，判「净数不许放宽」时就不是在判一件事了。
-     */
-    script: "check-code-duplication.cjs",
-    baseline: "scripts/.code-duplication-baseline.json",
-    fixture: { dirs: ["src"] },
-    violate: (repo, n) => {
-      const body = Array.from(
-        { length: 60 },
-        (_, i) => `export const dup${n}v${i} = ${i};`,
-      ).join("\n");
-      repo.write(`src/dup${n}a.ts`, `// 孪生对夹具第 ${n} 对\n${body}\n`);
-      repo.write(`src/dup${n}b.ts`, `// 孪生对夹具第 ${n} 对\n${body}\n`);
-    },
-  },
-  {
-    script: "check-theme-colors.cjs",
-    baseline: "scripts/.theme-color-baseline.json",
-    fixture: { dirs: ["src"] },
-    violate: (repo, n) =>
-      repo.write(
-        `src/Palette${n}.ts`,
-        `/** 第 ${n} 处写死色值（没走 token）。 */\nexport const COLOR${n} = "#ff880${n % 10}";\n`,
       ),
   },
   {
@@ -299,13 +170,9 @@ const RATCHETS: Ratchet[] = [
  * 但「它在不在册」这件事仍由完整性那条用例判 —— 删掉本地用例而不改这张表会红。
  */
 const COVERED_LOCALLY: Record<string, string> = {
-  ".format-baseline.json": "tests/check-format.test.ts",
-  ".click-keyboard-baseline.json": "tests/click-keyboard-gate.test.ts",
   ".form-field-wiring-baseline.json": "tests/form-field-wiring-gate.test.ts",
   ".gate-repo-boilerplate-baseline.json":
     "tests/gate-repo-boilerplate-gate.test.ts",
-  ".test-it-each-baseline.json": "tests/test-it-each-gate.test.ts",
-  ".test-sleep-baseline.json": "tests/test-sleep-gate.test.ts",
   /* 它的判定对象是 registry 漏洞清单，沙箱造不出「一条新 advisory」，
    * 而它自带 `--fixture` 口，本地用例正是对着固定 registry 形状跑 CLI 退出的。 */
   ".dependency-audit-baseline.json": "tests/dependency-audit.test.ts",
@@ -322,12 +189,62 @@ const COVERED_LOCALLY: Record<string, string> = {
   ".bundle-budget-baseline.json": "tests/check-bundle-budget.test.ts",
 };
 
-/** 待配：判据写了拒涨那一支，但今天没有任何行为用例钉过（**只许减，不许增**）。 */
-const PENDING: Record<string, string> = {
-  ".file-size-baseline.json":
-    "沙箱里放一份 950 行的文件会连带命中同脚本的 R1–R12 其它规则，四步里的第 ② 步（基线=现状时必须是绿的）先配不出来",
+/**
+ * 待配：判据写了拒涨那一支，但今天没有任何行为用例钉过。
+ *
+ * **现在为空，而且判据是「必须为空」**（见下面那条用例）—— 这张表只该在
+ * 「某条棘轮刚落地、行为用例还没跟上」的那一小段时间里非空。留着它的意义是
+ * 让那段空窗**被指名**（而不是让一条没被钉过的拒涨分支混在 21 格里看不见），
+ * 不是给「懒得配用例」一个永久的出口。
+ *
+ * 曾经的两格怎么清的：
+ *   · `.file-size-baseline.json` —— 卡点写着「沙箱里放一份 950 行文件会连带命中
+ *     R1–R12 其它规则、第 ② 步配不出来」。拆开看：连带命中是真的（缺
+ *     `src/proxy.ts` 时 R11 当场红），但那份文件是**可配的输入**，
+ *     把 R1–R12 都喂绿第 ② 步就成立 —— 于是它进了 `RATCHETS`，夹具里带
+ *     `src/proxy.ts`。
+ *   · `.ui-primitives-baseline.json` —— 卡点写着「拒涨按 rule id 比较，要先把
+ *     rule 集合钉住」。本轮实测：`HARD_GATE_RULES` 已覆盖全部 85 条，
+ *     `ratchetOnly()` 的返回恒为空 —— **棘轮那条车道上一个成员都没有**，
+ *     于是「拒涨」在这一家无对象可判（`--update` 写回去的永远是一份空账）。
+ *     它不该按「还没配用例」记账，而该按「判据已整条升硬闸、棘轮车道空置」
+ *     记账 —— 见下面 `RETIRED_RATCHETS`。
+ */
+const PENDING: Record<string, string> = {};
+
+/**
+ * 已退出棘轮车道、**只剩硬闸**的判据（基线文件仍在、`--update` 仍是个出口，
+ * 但它写回去的永远是一份空账）。
+ *
+ * 与 `NOT_A_RATCHET` 的差别：那里是「加条目本就是正常用法」，这里是
+ * 「棘轮形态本身被淘汰了」—— 两条路都不该走五步拒涨判据，理由却完全不同，
+ * 所以分两张表。**这一张只许增不许减**（把它退回 PENDING 等于假装还有存量）。
+ */
+const RETIRED_RATCHETS: Record<string, string> = {
   ".ui-primitives-baseline.json":
-    "它的拒涨按 rule id 比较，而「旧基线里没有这个 rule id」既被当成正当的判据引入、又是今天 0 处基线上新增违规的形状 —— 要先把 rule 集合本身钉住才能配拒涨判据",
+    "85 条判据全部在 HARD_GATE_RULES 里（`ratchetOnly()` 恒返回空），棘轮车道已无成员；`--update` 写回去的永远是空账，拒涨无对象可判",
+};
+
+/**
+ * **已翻硬闸**的棘轮（ISSUE #1811 收尾那一批）：基线文件已删、`--update` /
+ * `--strict` 已从脚本里删掉，命中即退 1。
+ *
+ * 为什么这张表必须存在（而不是「翻了就完事」）：翻闸的正确性有一半是**否定式**
+ * 的 —— 「这条判据不再有任何放宽通道」。而否定式没有任何**正面**判据会盯：
+ * `discoveredBaselines()` 现算的是「带 `--update` 且写回基线」的脚本，翻闸之后
+ * 它们自然出网、四张表也都不再点名它们 —— 于是「有人把基线加回去 + 把 `--update`
+ * 也加回去」在**这一个文件里**不会有任何反应（它只会重新出现在 found 里，
+ * 而那时四张表里恰好也没有它 → 完整性那一格才会红。这一格是把那条路的**前半段**
+ * 也钉住：脚本里既不该有那份基线，也不该有 `--update` 的写入通道）。
+ *
+ * 值 = 那条判据的 **自测文件**（照 `COVERED_LOCALLY` 的口径点名，删了它会红）。
+ */
+const HARD_GATE_FLIPS: Record<string, string> = {
+  "check-overlay-z.cjs": "tests/check-overlay-z.test.ts",
+  "check-comment-language.cjs": "tests/comment-language.test.ts",
+  "check-test-sleep.cjs": "tests/test-sleep-gate.test.ts",
+  "check-format.cjs": "tests/check-format.test.ts",
+  "check-ui-logic-separation.cjs": "tests/check-ui-logic-separation.test.ts",
 };
 
 /** 不是计数棘轮的 `--update` 出口：加条目是它的正常用法，拒涨反而错。理由必须写在册子上。 */
@@ -496,8 +413,8 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         try {
           /* ⑤ 这一档单独跑，是因为「治理做到 0」正是棘轮最该硬的时候，而它有一种
            * 共同的失效写法：`if (before && after > before)` —— 基线总数为 0 时整个条件
-           * 短路，拒涨检查**根本不执行**（`check-theme-colors` 与 `check-ui-primitives`
-           * 今天的基线都是 0 处；口径与非 --update 路径共用的先例见
+           * 短路，拒涨检查**根本不执行**（`check-ui-primitives` 今天的基线是 0 处；
+           * 口径与非 --update 路径共用的先例见
            * `check-ui-logic-separation.cjs` 的 `diffAgainstBaseline` 注释）。
            * 干净沙箱 → 先建立一份「0」基线 → 再造一条违规 → --update 必须拒。 */
           const seed = repo.run(["--update"]);
@@ -522,7 +439,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
     );
   }
 
-  describe("完整性：每一个 --update 出口都要被三张表之一点名", () => {
+  describe("完整性：每一个 --update 出口都要被四张表之一点名", () => {
     const found = discoveredBaselines();
 
     it("现算出的基线清单非空（脚本改动让正则失效时，本条要红而不是静默绿）", () => {
@@ -537,29 +454,34 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
             !rowByBaseline(b) &&
             !COVERED_LOCALLY[b] &&
             !PENDING[b] &&
+            !RETIRED_RATCHETS[b] &&
             !NOT_A_RATCHET[b],
         );
       expect(
         unclassified,
         `这些判据脚本带 --update 且就地落盘基线，却没被任何一张表点名 —— ` +
-          `要么补进 RATCHETS（配一条拒涨用例），要么在 PENDING / NOT_A_RATCHET 里写下理由：\n` +
+          `要么补进 RATCHETS（配一条拒涨用例），要么在 PENDING / RETIRED_RATCHETS / ` +
+          `NOT_A_RATCHET 里写下理由：\n` +
           unclassified.join("\n"),
       ).toEqual([]);
     });
 
-    it("PENDING 只许减不许增（新棘轮不许靠登记待办把自己变成「已知欠账」）", () => {
-      const ceiling = 2;
+    it("PENDING 必须为空（新棘轮不许靠登记待办把自己变成「已知欠账」）", () => {
+      /* 上限从 2 收到 0：它那两格本轮都配上了（一格进 RATCHETS、一格进
+       * RETIRED_RATCHETS），再留一个「最多两格」的额度就等于给下一条棘轮
+       * 预支一张免配票 —— 而这张票的代价恰恰是那条拒涨分支**没人钉过**。 */
       expect(
-        Object.keys(PENDING).length,
-        `待配清单只剩 ${ceiling} 格的上限，多出来的那一格必须直接配用例`,
-      ).toBeLessThanOrEqual(ceiling);
+        Object.keys(PENDING),
+        "待配清单必须为空：新增的棘轮在同一批里就把拒涨判据配好",
+      ).toEqual([]);
     });
 
-    it("三张表里点名的基线文件必须还在（删了脚本却忘了删登记 = 下一格假绿灯）", () => {
+    it("四张表里点名的基线文件必须还在（删了脚本却忘了删登记 = 下一格假绿灯）", () => {
       const listed = [
         ...RATCHETS.map((r) => r.baseline.split("/").pop() ?? r.baseline),
         ...Object.keys(COVERED_LOCALLY),
         ...Object.keys(PENDING),
+        ...Object.keys(RETIRED_RATCHETS),
         ...Object.keys(NOT_A_RATCHET),
       ];
       const dir = join(import.meta.dirname, "..", "scripts");
@@ -582,6 +504,12 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           `NOT_A_RATCHET 里的 ${name} 不在现算清单里`,
         ).toBe(true);
       }
+      for (const name of Object.keys(RETIRED_RATCHETS)) {
+        expect(
+          known.has(name),
+          `RETIRED_RATCHETS 里的 ${name} 不在现算清单里`,
+        ).toBe(true);
+      }
       for (const name of Object.keys(COVERED_LOCALLY)) {
         expect(known.has(name), `册上的 ${name} 不在现算清单里`).toBe(true);
       }
@@ -589,7 +517,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
 
     it("表里每一行的脚本与基线，现算清单都要能认出来（防止判据单方面退网）", () => {
       /**
-       * 上面那条判「found ⊆ 三张表」，这一条判反向「表 ⊆ found」。
+       * 上面那条判「found ⊆ 四张表」，这一条判反向「表 ⊆ found」。
        *
        * 只做正向会有一个静默失效面：把某家的落盘写法改成第三种形状（比如经由一个
        * 变量拼路径），现算清单就少一行 —— 正向那条不会红（少的那一行不在 found 里，
@@ -603,6 +531,81 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           `现算清单认不出 ${r.script} 会把 ${name} 写回去 —— ` +
             "要么落盘形状变了（判据退网），要么这一行该删（基线不再由它落盘）",
         ).toBe(true);
+      }
+    });
+
+    it("RETIRED_RATCHETS 的理由必须可核：棘轮车道真的没有成员了", () => {
+      /**
+       * `RETIRED_RATCHETS` 的每一条都是一句**关于判据现状的断言**（「棘轮车道已无成员」），
+       * 而不是一个「暂时先这么记着」的便签。既然它是断言，就得有东西核它 —— 否则
+       * 下一批新判据按棘轮形态落地（先冻结存量、再清零，那正是这条判据鼓励的顺序）
+       * 时，这个条目会继续在册、而那家**真有一条棘轮**却没有五步用例。
+       *
+       * 核的方式是问判据自己而不是抄一份规则清单：`check-ui-primitives.cjs` 的
+       * `ratchetOnly()` 现在从真仓库里算不出任何成员。用一个空 `src/` 沙箱问它，
+       * 比在用例里重列一遍 `HARD_GATE_RULES` 稳（后者会随每次升闸漂）。
+       */
+      for (const name of Object.keys(RETIRED_RATCHETS)) {
+        const row = found.find((f) => f.baseline === name);
+        expect(row, `${name} 不在现算清单里`).toBeDefined();
+        /* 问判据自己：**在干净沙箱里 `--update`**，读它落盘的那份基线。
+         * 「棘轮车道已无成员」的机器形态就是「它写回去的 `rules` 是空对象」——
+         * 棘轮那一支只登记非硬闸规则（见 `ratchetOnly()`）。 */
+        const handle = createGateRepo({ script: row!.script, dirs: ["src"] });
+        try {
+          const seed = handle.repo.run(["--update"]);
+          expect(seed.code, seed.output).toBe(0);
+          /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
+           * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
+          const baselineRel =
+            row!.baseline.split("/").pop() ?? row!.baseline;
+          const written = JSON.parse(
+            handle.repo.read(join("scripts", baselineRel)),
+          ) as { rules?: Record<string, unknown> };
+          expect(
+            Object.keys(written.rules ?? {}),
+            `${row!.script} 的棘轮车道又有成员了（--update 写回了非空 rules）——` +
+              `这一条该从 RETIRED_RATCHETS 移回 RATCHETS 并配五步用例`,
+          ).toEqual([]);
+        } finally {
+          handle.dispose();
+        }
+      }
+    });
+
+    it("HARD_GATE_FLIPS 的否定式必须成立：基线文件已删、`--update` 落盘通道已删", () => {
+      /**
+       * 翻硬闸的正确性有一半是否定式的（「不再有任何放宽通道」），而否定式没有
+       * 正面判据会盯 —— 翻闸之后这些脚本自然从 `discoveredBaselines()` 出网、
+       * 四张表也都不再点名它们。两格：**那份基线文件必须不在**、
+       * **脚本里不许再出现把 `.json` 写回去的调用**。
+       *
+       * 第二格是「有人把 `--update` 加回来」的唯一机器痕迹：加回来必然带一处
+       * 落盘调用（`fs.writeFileSync(<…>.json, …)`），而这一格里看得见。
+       */
+      const dir = join(import.meta.dirname, "..", "scripts");
+      for (const [script, spec] of Object.entries(HARD_GATE_FLIPS)) {
+        const src = readFileSync(join(dir, script), "utf8");
+        /* 认「写一份 .json」这件事本身，而不是认某个变量名 —— 换拼法也躲不过。
+         * 只认写入调用里出现的 `.json` 字面量（读回来比对不算）。 */
+        const writesJson = [...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g)].some(
+          (m) => /"\.[^"]+\.json"|\.json"/.test(m[1] ?? ""),
+        );
+        expect(
+          writesJson,
+          `${script} 里又出现了「把一份 .json 写回去」的调用 —— ` +
+            "这一条已翻硬闸（基线删了、--update 删了），别把放宽通道加回来",
+        ).toBe(false);
+        /* 自测文件必须在（删了它 = 这一条翻闸后没人钉，照 COVERED_LOCALLY 的口径）。 */
+        expect(
+          existsSync(join(import.meta.dirname, "..", spec)),
+          `${script} 翻硬闸时点名的自测 ${spec} 不存在`,
+        ).toBe(true);
+        /* 也不能再出现在现算清单里（出现 = 它又会写一份基线）。 */
+        expect(
+          found.some((f) => f.script === script),
+          `${script} 又回到了现算清单（它会写一份基线）—— 翻硬闸的脚本不该再落盘`,
+        ).toBe(false);
       }
     });
 
