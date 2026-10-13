@@ -507,8 +507,15 @@ null，而 harness 打的是「退出码 **信号** / 不记账」。
 
 | 形态                             | webServer             | 并发                   |
 | -------------------------------- | --------------------- | ---------------------- |
-| 本地默认（未给 `PNPM_START`）    | `pnpm dev`（现场编译） | 收敛到 4（`workers`）  |
+| 本地默认（未给 `PNPM_START`）    | `pnpm dev`（现场编译） | 收敛到 2（`workers`）  |
 | `PNPM_START=1` / `CI=1`（已构建） | `pnpm start`          | 不覆盖 Playwright 默认 |
+
+**档位 2 是 win32 真读数定的（2026-10-13）**：先取过 4，实测仍有 3 条 `page.goto`
+卡 60s（`/settings` ×2、`/workspace` ×1），而单 worker 独跑同一条 spec 时冷编译只要
+14.8s —— 路由不慢，红的是并发下首帧编译被同伴撕超；降到 2 后复测，超时形态
+33 → 3 → 1（剩下那条在 runtime-budget 的 `/workspace`，该 spec 本机单跑也是真红，
+与负载无关）。档位三处同批：`playwright.config.ts` / `scripts/e2e-run.mjs` /
+`tests/e2e-runtime-budget.test.ts` 的钉值。
 
 **本地那条默认刻意不减配**：`pnpm start` 要求先 `pnpm build`，那会把「按需跑一次
 e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` 显式说 —— 而那时账面
