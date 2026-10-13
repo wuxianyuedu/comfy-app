@@ -68,6 +68,26 @@ export function getProject(id: string): CanvasProject | null {
   return all.find((all) => all.id === id) ?? null;
 }
 
+/* 服务端的一行落进本地索引（读侧在**只读到服务端那一行**时的唯一出口）——
+ * `hydrateFromServer` 的对账与 `hydrateProjectFromServer`（打开某一行的前置）
+ * 共用它，两份各写一遍迟早会漂（§12.12：抽共享内核，两边只留差异）。
+ *
+ * 索引里已经有这一行时按 `updatedAt` 取较新的一侧：与对账、与
+ * `listProjectsWithServer` 都是同一条「同 id 取较新」口径。**已经写过就返回
+ * `false`**，两个调用方都靠它判断「要不要广播变更 / 要不要落盘」。
+ * `changed` 由调用方持有而不是这里返回：一次对账要算多行，逐行落盘会把
+ * 一整轮读侧变成 N 次同步写。 */
+function adoptServerProject(
+  row: ServerProjectRow,
+  byId: Map<string, CanvasProject>,
+): boolean {
+  const serverCopy = toCanvasProject(row);
+  const local = byId.get(row.id);
+  if (local && local.updatedAt > serverCopy.updatedAt) return false;
+  byId.set(row.id, serverCopy);
+  return true;
+}
+
 /* 直写到服务端。尽力而为，但**不是「无声」**：失败按「重试有没有用」分两档处置
  *（判据与原因在 `~/lib/project-canvas/sync-notice`）—— 暂时拿不到只留日志、
  * 下一轮自动保存还会再试；服务端明确不收这一份则登记成一个可查的状态，
@@ -195,15 +215,10 @@ export async function hydrateFromServer(): Promise<void> {
   try {
     const serverProjects = await fetchServerProjects();
     const localAll = readIndex();
-    const byId = new Map(localAll.map((localAll) => [localAll.id, localAll]));
+    const byId = readMap();
     let changed = false;
     for (const sp of serverProjects) {
-      const local = byId.get(sp.id);
-      const serverCopy = toCanvasProject(sp);
-      if (!local || serverCopy.updatedAt >= local.updatedAt) {
-        byId.set(sp.id, serverCopy);
-        changed = true;
-      }
+      if (adoptServerProject(sp, byId)) changed = true;
     }
     // 把只存在于本地的项目推上去（迁移修复前的数据）。
     for (const lp of localAll) {
@@ -225,6 +240,49 @@ export async function hydrateFromServer(): Promise<void> {
      * 而它走的是 `sync-notice` 那一条诊断口 —— 本文件不许自己写 console。 */
     logSyncIssue("读取服务端画布列表失败，本轮只用本地索引", e);
     hydrated = false;
+  }
+}
+
+/**
+ * 把**一条**服务端项目行拉进本地索引，并落盘。
+ *
+ * 为什么需要它：界面能看见项目，不等于本机能打开它。侧栏与「所有项目」那一屏
+ * 读的是**并集**（`listProjectsWithServer`），于是「服务端有一行、索引里没有」
+ * 的项目看是看得见的；而打开它的一跳读的是 `getProject(id)`（索引），
+ * 索引里没有 ⇒ 拿到 null ⇒ 闸门照旧弹「先创建或选择一个项目」
+ *（ISSUE #1874：列表里明明点得着，点进去让用户**再建一个**）。
+ *
+ * 判据是「这条是谁的」：索引里有 ⇒ 本机本来就能打开，不碰网络、不写盘
+ *（每次点开项目都发一次请求是另一码事）；索引里没有 ⇒ 这一份此前从来不在
+ * 本机，必须先把服务端那一行落下来，`getProject(id)` 才有东西可交。
+ *
+ * 拉不到 / 服务端说没有这一行 ⇒ 交回 null，调用方照旧走「没有这个项目」那条
+ * 出口（渲染闸门），**不抛**：这里在 `onClick` 里，抛出去就是一句没人接的
+ * unhandled rejection。失败同样不是无声的（硬规则 4）——走 `sync-notice`
+ * 那一条诊断口，本文件不许自己写 console。
+ */
+export async function hydrateProjectFromServer(
+  id: string,
+): Promise<CanvasProject | null> {
+  if (typeof window === "undefined") return null;
+  if (getProject(id)) return getProject(id);
+  try {
+    const wanted = (await fetchServerProjects()).find((row) => row.id === id);
+    /* 服务端没有这一行 ⇒ 没有东西可落，交回 null。**不顺手把整表并进来**：
+     * 本函数回答的是「怎么打开 `id`」，别的行为不归它管 —— 那种「多做了没人
+     * 要的一件事」正是下一轮分叉的来源（整表并进来还会把已有条目的时间戳换成
+     * 本机这一轮的，下一轮对账就分不出谁是新的）。 */
+    if (!wanted) return null;
+    /* 起点是**当前索引**（不是一张空表）：`adoptServerProject` 要在「索引里
+     * 已经有一行」时按 `updatedAt` 决定听谁的，喂空表等于把那条判据跳过去。 */
+    const index = readMap();
+    if (!adoptServerProject(wanted, index)) return null;
+    writeIndex(sortByUpdated(index));
+    emitChanged();
+    return getProject(id);
+  } catch (e) {
+    logSyncIssue("读取服务端画布列表失败，这一行没能拉到本机", e);
+    return null;
   }
 }
 
@@ -509,12 +567,18 @@ export async function listProjectsWithServer(): Promise<{
   }
 }
 
-function sortByUpdated(
-  byId: Map<string, ProjectListEntry>,
-): ProjectListEntry[] {
+function sortByUpdated<T extends { updatedAt: number }>(
+  byId: Map<string, T>,
+): T[] {
   return [...byId.values()].sort(
     (left, right) => right.updatedAt - left.updatedAt,
   );
+}
+
+/** 读索引成 `id → 项目` 表（对账与单行落盘都从这里起步，别各写一遍）。
+ *  同名的排序在 {@link sortByUpdated}：这一族的口径只有「按 `updatedAt` 倒序」一条。 */
+function readMap(): Map<string, CanvasProject> {
+  return new Map(readIndex().map((project) => [project.id, project]));
 }
 
 /**
