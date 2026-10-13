@@ -19,6 +19,7 @@ import { deriveRowState, pathKey } from "../parsing";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { errorText } from "~/lib/error-message";
 import { offsetWithin } from "~/lib/dom-rect";
+import { tailWindowAppend } from "~/lib/page-window";
 import { onNextFrame } from "~/lib/next-frame";
 import {
   useExpansionSet,
@@ -471,10 +472,11 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
           const obj = JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
             setLogs((prev) =>
-              [
-                ...prev,
+              tailWindowAppend(
+                prev,
                 { level: obj.level ?? "info", msg: obj.msg ?? "" },
-              ].slice(-PARSE_LOG_MAX),
+                PARSE_LOG_MAX,
+              ),
             );
           } else if (obj.type === "done") {
             void onDone(obj.report ?? null, !!obj.ok);

@@ -437,7 +437,11 @@ export async function getComfyRuntimeSnapshot(
   if (!opts.force && st.cached && !isStale(st.cached.snap, st.cached.at, now)) {
     return st.cached.snap;
   }
-  if (st.inflight) return st.inflight;
+  /* 在途去重只在**非强制**那一档生效（见下方 `force` 的语义说明）。
+   * `force` 不区分「缓存有多旧」——缓存里的 `running` 与磁盘上的进程可以直接
+   * 相反，而挂着的 `st.inflight` 恰好是最老的一次「没在跑」在那时最贵：
+   * 用户点了启动、查状态、再点一次刷新，拿到的仍是启动前那一问。 */
+  if (!opts.force && st.inflight) return st.inflight;
   const task = snapshotOnce()
     .catch((err: unknown) => {
       logger.warn(`[comfyui] ${errorText(err, "运行态快照失败")}`);
@@ -445,15 +449,28 @@ export async function getComfyRuntimeSnapshot(
       return { ...emptySnapshot(), unverified: true };
     })
     .then((snap) => {
-      st.cached = { at: Date.now(), snap };
-      st.inflight = undefined;
+      /* 迟到的旧结论不许覆盖或清掉更新的那次在途（见 `resetComfyRuntimeSnapshot`）。
+       * 一份慢查询完全可能与一次 reset + 重查交错：后者先回来、写好了新缓存，
+       * 前者随后落地 —— 若不比对身份，它既会把旧事实写回缓存，也会把
+       * `st.inflight` 清成 undefined，让「启动后立刻查两次」的第二次又白跑一趟 IO。 */
+      if (st.inflight === task) {
+        st.cached = { at: Date.now(), snap };
+        st.inflight = undefined;
+      }
       return snap;
     });
   st.inflight = task;
   return task;
 }
 
-/** 丢掉快照缓存：用户刚做过启动/关闭动作，下一问必须重新取事实。 */
+/** 丢掉快照缓存：用户刚做过启动/关闭动作，下一问必须重新取事实。
+ *
+ *  同时**作废在途查询**（`st.inflight = undefined`）：只清缓存的写法挡不住
+ *  「进程表查询正好是动作之前发出的、随后才落地」那条路径 —— 它的 `then` 与
+ *  这里的置空交错后仍然认为自己是当前那次，于是把动作前的旧结论写回缓存，调用方
+ *  （启动 / 关闭动作后的那次 `refetch`）拿到的仍是「未运行」/「仍在运行」。
+ *  置空后那份旧结果只返回给当初的调用者，不再影响缓存；下一次查询必然重新取事实。 */
 export function resetComfyRuntimeSnapshot(): void {
   st.cached = undefined;
+  st.inflight = undefined;
 }
