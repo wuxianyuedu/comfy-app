@@ -26,6 +26,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { launcherChainSource } from "./helpers/launcher-source";
+
 /**
  * 依赖 POSIX 执行语义的用例开关（shebang 能被内核解析、chmod 的 exec 位有效）。
  * Windows 上 libuv 不解析 shebang、chmodSync 不存执行位，这些用例的 spawn
@@ -387,17 +389,9 @@ describe("编排器与启动页的接线契约", () => {
    * 在哪个文件」无关 —— 所以这里把主文件与拆出的几份拼成一份「链路源码」再断言。
    * 逐份读而不是只读主文件：只读主文件时，搬走的实现会让 `indexOf` 落空、
    * `slice(0, -1)` 拿到空串，断言会**静默变成空转**（`not.toContain` 恒真）。 */
-  const launcher = [
-    "dev-launcher.mjs",
-    "launcher-core/preflight.mjs",
-    "launcher-core/port-reap.mjs",
-    "launcher-core/shell-ops.mjs",
-    "launcher-core/downstream.mjs",
-  ]
-    .map((rel) =>
-      fs.readFileSync(path.join(ROOT, "scripts", rel), "utf8"),
-    )
-    .join("\n");
+  /* 走现算的链路闭包（不手抄清单）：抄了就会随下一刀拆文件再漏一处，而漏的
+   * 表现正是这条判据要防的 —— `indexOf` 落空、`not.toContain` 对着空串恒真。 */
+  const launcher = launcherChainSource();
   const splash = fs.readFileSync(
     path.join(ROOT, "src-tauri", "splash-assets", "splash.html"),
     "utf8",
@@ -419,12 +413,23 @@ describe("编排器与启动页的接线契约", () => {
   });
 
   it("门禁失败时把多行提示交给启动页（message 只放一行结论）", () => {
-    const run = launcher.slice(
-      launcher.indexOf("const gateProblem = runToolchainGate(ROOT)"),
-      launcher.indexOf('log("工具链门禁：pnpm 可用'),
+    /* 判决随预检桥段搬进 `launcher-core/startup-gates.mjs`（ISSUE #1811 拆 R5）：
+     * 它产出 `{ message, statusMessage, staleShell }`，编排器那层写启动页。契约是
+     * 「多行提示进 stale_shell 横幅、message 只放一行结论」，不是「这段写在哪」。
+     * 判据落在**产出**上：`statusMessage` 是首行、`staleShell` 是全文。 */
+    const gates = fs.readFileSync(
+      path.join(
+        ROOT,
+        "scripts",
+        "launcher-core",
+        "startup-gates.mjs",
+      ),
+      "utf8",
     );
-    expect(run).toContain("staleShell: gateProblem");
-    expect(run).toContain('gateProblem.split("\\n")[0]');
+    expect(gates).toContain('gateProblem.split("\\n")[0]');
+    expect(gates).toContain("staleShell: gateProblem");
+    // 编排器那一层负责把产出交给启动页（横幅字段不许在转发时丢掉）。
+    expect(launcher).toContain("gated.error.staleShell");
   });
 
   it("起 dev server 用同一个命令形态（commandInvocation），不自己拼可执行名", () => {
@@ -1015,10 +1020,10 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
  *     `--mode prebuilt`）照常起壳、照常查。
  */
 describe("启动期重复判定的短路（ISSUE #1687）", () => {
-  const launcher = fs.readFileSync(
-    path.join(ROOT, "scripts", "dev-launcher.mjs"),
-    "utf8",
-  );
+  /* 自编排那一段的实现随 R5 拆刀（ISSUE #1811）搬进了
+   * `launcher-core/shell-stage.mjs`：判据是**接线形态**（标记怎么判、哪一支不起壳），
+   * 不是「这段写在哪份文件里」，所以走现算的链路闭包。 */
+  const launcher = launcherChainSource();
   const rust = fs.readFileSync(
     path.join(ROOT, "src-tauri", "src", "shell_launch.rs"),
     "utf8",
@@ -1031,11 +1036,16 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
     expect(launcher).toContain(
       'process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1"',
     );
-    expect(launcher).toContain('args.mode === "prebuilt"');
-    // 不起壳的分支必须真的跳过 spawnShell（分支体内不许有 spawn 调用）。
+    expect(launcher).toContain('mode === "prebuilt"');
+    /* 不起壳那一支必须真的跳过 spawnShell。R5 拆刀（ISSUE #1811）把它重整成
+     * **提前返回**（`if (launchedByShell) { …; return { shell: null, staleShell }; }`），
+     * 不再用 `} else {` 分叉 —— 所以「这一段有没有 spawn」要看**从分支开始到它的
+     * return**，用 `} else {` 去切会一路吃到文件尾（那里的 spawnShell 在另一支里）。 */
     const skipStart = launcher.indexOf("if (launchedByShell) {");
-    const elseStart = launcher.indexOf("} else {", skipStart);
-    const skipBody = launcher.slice(skipStart, elseStart);
+    expect(skipStart, "找不到自编排分支（拆刀后别断了接线）").toBeGreaterThan(-1);
+    const skipEnd = launcher.indexOf("return { shell: null, staleShell };", skipStart);
+    expect(skipEnd, "自编排分支要提前返回、不再往下走").toBeGreaterThan(-1);
+    const skipBody = launcher.slice(skipStart, skipEnd);
     expect(skipBody, "自编排分支不许再 spawn 壳").not.toContain("spawnShell(");
     expect(skipBody, "要说清为什么不起壳").toContain("不再起第二个壳");
     // 标记不许再注入给任何壳 / dev server：不会再有「被编排器起的壳」。
