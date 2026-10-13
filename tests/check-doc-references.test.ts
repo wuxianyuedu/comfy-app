@@ -704,21 +704,25 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
     }
   });
 
-  it("把清单里那一步的 --strict 抹掉 → 红，并点名是哪一步", () => {
-    // 这一条就是本刀的现场：文档写 `check-file-structure.cjs`、钩子跑带 --strict 的那一档。
+  it("把清单里那一步的 --staged 抹掉 → 红，并点名是哪一步", () => {
+    // 锚点必须是**今天两侧都带这个 flag** 的一步：这条用例最早拿
+    // `check-file-structure.cjs --strict` 当锚点，而 ISSUE #1811 的 R5 项把 `--strict`
+    // 从钩子与清单里一并删了 —— 锚点命中 0 次（`replaceOnce` 直接抛），这条用例
+    // 在任何检出上都红，且红的原因与「flag 漂移没被抓住」毫无关系。
+    // 换成 `check-function-length.cjs --staged`（钩子 D 组与清单两侧都在）。
     const { code, output } = withDocProbe(() => {
       const abs = join(REPO_ROOT, DOC_REL);
       writeText(
         abs,
         replaceOnce(
           readFileSync(abs, "utf8"),
-          "✅ node scripts/check-file-structure.cjs --strict",
-          "✅ node scripts/check-file-structure.cjs",
+          "✅ node scripts/check-function-length.cjs --staged",
+          "✅ node scripts/check-function-length.cjs",
         ),
       );
     });
     expect(code).not.toBe(0);
-    expect(output).toContain("node scripts/check-file-structure.cjs --strict");
+    expect(output).toContain("node scripts/check-function-length.cjs --staged");
     expect(output).toContain("flag 与钩子不一致");
   });
 
