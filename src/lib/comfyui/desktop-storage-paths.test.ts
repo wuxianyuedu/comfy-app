@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyStorageSlot,
   normalizeDirKey,
+  parseExtraModelPathsConfigArgs,
   parseExtraModelPathsYaml,
   parseStorageDirArgs,
 } from "./desktop-storage-paths";
@@ -122,6 +123,83 @@ describe("parseExtraModelPathsYaml", () => {
       entries: [],
     });
   });
+
+  it("经典写法：段内「名字: 相对路径」即一条路径（ComfyUI 官方示例与恢复 Desktop 实例用）", () => {
+    const parsed = parseExtraModelPathsYaml(
+      [
+        "comfyui_shared:",
+        "  base_path: D:/Comfy-Desktop/ComfyUI-Shared/models",
+        "  checkpoints: checkpoints/",
+        "  loras: loras/",
+        "  clip: clip/",
+        "  vae: vae/",
+        "  clip_vision: clip_vision/",
+        "  sensenova: sensenova/",
+        "",
+      ].join("\n"),
+    );
+    expect(parsed.entries).toEqual([
+      {
+        key: "comfyui_shared",
+        basePath: "D:/Comfy-Desktop/ComfyUI-Shared/models",
+        paths: [
+          "checkpoints/",
+          "loras/",
+          "clip/",
+          "vae/",
+          "clip_vision/",
+          "sensenova/",
+        ],
+      },
+    ]);
+  });
+
+  it("多行块标量（`text_encoders: |`）里每行都是一条路径", () => {
+    const parsed = parseExtraModelPathsYaml(
+      [
+        "comfyui_shared:",
+        "  base_path: D:/x",
+        "  text_encoders: |",
+        "    text_encoders/",
+        "    text_encoders/byter/",
+        "  vae: |",
+        "    vae/",
+        "  checkpoints: checkpoints/",
+        "",
+      ].join("\n"),
+    );
+    expect(parsed.entries).toEqual([
+      {
+        key: "comfyui_shared",
+        basePath: "D:/x",
+        paths: [
+          "text_encoders/",
+          "text_encoders/byter/",
+          "vae/",
+          "checkpoints/",
+        ],
+      },
+    ]);
+  });
+
+  it("真实形状子段：反斜杠 base_path + 无尾斜杠的相对路径都收下", () => {
+    const parsed = parseExtraModelPathsYaml(
+      [
+        "sensenova_local:",
+        "  base_path: 'D:\\Comfy-Desktop\\ComfyUI-Shared\\models'",
+        "  sensenova: sensenova/",
+        "  checkpoints: checkpoints",
+        "",
+      ].join("\n"),
+    );
+    expect(parsed.entries).toEqual([
+      {
+        key: "sensenova_local",
+        basePath: "D:\\Comfy-Desktop\\ComfyUI-Shared\\models",
+        paths: ["sensenova/", "checkpoints"],
+      },
+    ]);
+  });
 });
 
 describe("classifyStorageSlot", () => {
@@ -197,5 +275,30 @@ describe("normalizeDirKey", () => {
     expect(normalizeDirKey("D:\\Models\\")).toBe("d:/models");
     expect(normalizeDirKey("D:/models")).toBe("d:/models");
     expect(normalizeDirKey("D:/MODELS")).toBe(normalizeDirKey("d:/models"));
+  });
+});
+
+describe("parseExtraModelPathsConfigArgs", () => {
+  it("认 --x <值> 与 --x=<值>，遇下一个 flag 截止", () => {
+    expect(
+      parseExtraModelPathsConfigArgs([
+        "--enable-manager",
+        "--extra-model-paths-config",
+        "D:/a/extra.yaml",
+        "D:/b/extra.yaml",
+        "--listen",
+        "0.0.0.0",
+      ]),
+    ).toEqual(["D:/a/extra.yaml", "D:/b/extra.yaml"]);
+    expect(
+      parseExtraModelPathsConfigArgs([
+        "--extra-model-paths-config=D:/c/extra.yaml",
+        "--base-directory",
+        "D:/x",
+      ]),
+    ).toEqual(["D:/c/extra.yaml"]);
+    expect(
+      parseExtraModelPathsConfigArgs(["--base-directory", "D:/x"]),
+    ).toEqual([]);
   });
 });

@@ -227,4 +227,30 @@ describe("resolveDesktopStoragePaths", () => {
       path.join(sourceRoot, "extra_model_paths.yaml"),
     );
   });
+
+  it("--extra-model-paths-config 指向的文件与主 yaml 叠加进共享目录", async () => {
+    const configPath = path.resolve("/etc/extra.yaml");
+    const configYaml = [
+      `comfyui_shared:`,
+      `  base_path: ${SHARED_ROOT}`,
+      `  paths:`,
+      `    - loras`,
+      ``,
+    ].join("\n");
+    const result = await resolveDesktopStoragePaths(
+      DESKTOP_ROOT,
+      baseDeps({
+        resolveArgs: async () => ["--extra-model-paths-config", configPath],
+        readFile: async (target: string) => {
+          const t = path.resolve(target);
+          if (t === configPath) return configYaml;
+          return SHARED_YAML;
+        },
+      }),
+    );
+    const modelPaths = result?.sharedModelDirs.map((d) => d.path) ?? [];
+    // 主 yaml 给 models/input/output，配置文件再给一份 loras，全部合并展示。
+    expect(modelPaths).toContain(path.join(SHARED_ROOT, "models"));
+    expect(modelPaths).toContain(path.join(SHARED_ROOT, "loras"));
+  });
 });
