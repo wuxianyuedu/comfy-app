@@ -527,6 +527,54 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
       }
     });
 
+    it("`RETIRED_RATCHETS` 与 `HARD_GATE_FLIPS` 互斥，且前者的`--update` 出口必须真的还在", () => {
+      /**
+       * 这两张表在说**两种相反的现状**：
+       *   · `RETIRED_RATCHETS` = 「棘轮车道空置，但**出口都还在**，只是写回去的是空账」；
+       *   · `HARD_GATE_FLIPS`  = 「**出口已经删了**，命中即退 1」。
+       *
+       * 同一条判据不可能同时是两者。这一格此前不存在，而它缺的后果 2026-10-13 的复审
+       * 里现了一回：`check-ui-primitives.cjs` 被 §11.25.1 那句「按判据整条升硬闸记进
+       * `RETIRED_RATCHETS`」说成了已翻闸 —— 而它的基线文件与 `--update` 都还在。
+       * **那句文字没有任何判据会红**（文字不可判），但「它属于哪一类」这件事可以：
+       * 只要两张表互斥、且 `RETIRED_RATCHETS` 的每一条都被核出「出口真的还在」，
+       * 「把它说成已翻闸」就再也写不进去 —— 要么它进 `HARD_GATE_FLIPS`（那时基线必须
+       * 真的不在），要么留在这里（那时基线必须真的在）。
+       */
+      const dir = join(import.meta.dirname, "..", "scripts");
+
+      /* ① 两表不许有交集（同一份基线同时说「出口已删」与「出口还在」= 自相矛盾）。
+       *    `HARD_GATE_FLIPS` 的键是**脚本名**、值是自测文件，所以对齐要经 found 走一遍：
+       *    认「这条翻闸脚本今天会写回去的那份基线」。 */
+      const flipsBaselines = new Set(
+        Object.keys(HARD_GATE_FLIPS).flatMap((script) =>
+          found.filter((f) => f.script === script).map((f) => f.baseline),
+        ),
+      );
+      const both = Object.keys(RETIRED_RATCHETS).filter((name) =>
+        flipsBaselines.has(name),
+      );
+      expect(
+        both,
+        `这些基线同时在 RETIRED_RATCHETS 与 HARD_GATE_FLIPS 里 —— ` +
+          `一张说「出口还在」、一张说「出口已删」，只可能有一张对：\n${both.join("\n")}`,
+      ).toEqual([]);
+
+      /* ② `RETIRED_RATCHETS` 的每一条：出口必须**真的还在**（基线在场 + 现算清单认得出
+       *    它会把那份基线写回去）。出口没了 = 它其实是翻闸，该搬去 HARD_GATE_FLIPS。 */
+      for (const name of Object.keys(RETIRED_RATCHETS)) {
+        expect(
+          existsSync(join(dir, name)),
+          `${name} 的基线文件已经不在了 —— 那它不是「车道空置、出口还在」，` +
+            `而是已经翻硬闸：这一条该从 RETIRED_RATCHETS 搬去 HARD_GATE_FLIPS`,
+        ).toBe(true);
+        expect(
+          found.some((f) => f.baseline === name),
+          `${name} 的 --update 落盘通道现算不出来了 —— 出口没了就不该留在 RETIRED_RATCHETS`,
+        ).toBe(true);
+      }
+    });
+
     it("HARD_GATE_FLIPS 的否定式必须成立：基线文件已删、`--update` 落盘通道已删", () => {
       /**
        * 翻硬闸的正确性有一半是否定式的（「不再有任何放宽通道」），而否定式没有

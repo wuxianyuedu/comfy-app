@@ -16,6 +16,11 @@
 > （better-sqlite3 的 `backup()` → `VACUUM INTO`）。
 > 差异表见 `docs/README.md` §8.7 本轮条目与该笔 PR 描述；上一轮为 2026-09-27
 > 七维审计台账，原 2026-08-30 台账条目均已闭环或流程化保留）。
+> **触发式复核 2026-10-13（ISSUE #1811 收尾复审，§8.2 第三条：脚本被删/改名时当次同步）**：
+> ISSUE #1811 逐条翻硬闸之后，F6 那条记的「UI 复用棘轮 78 条存量违规」与它点的
+> `scripts/.ui-primitives-baseline.json:18` 双双过期（现读数 `total: 0` / `rules: {}`，
+> 行号早已不存在），F6 已就地改写成现值；E5 那一段记的「余两格按名登记」也已随之处置完
+> （一格随 R5 翻闸、一格进 `RETIRED_RATCHETS`），E5 正文当时已写明，未改。
 
 ## P0 — 安全/正确性
 
@@ -1286,7 +1291,7 @@
 - [ ] **F3 `next/image` 0 处且 lint 关闭**。证据：`eslint.config.js:185-192`。
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
-- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的一格是**页面级视觉回归** —— 这一档已经整档撤掉（规范 11 §11.8），
+- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用**存量已清零**（ISSUE #1811 收尾：P 系列 85 条全在 `HARD_GATE_RULES` 里，基线 `scripts/.ui-primitives-baseline.json` 的 `total: 0` / `rules: {}`；此前记的「78 条违规」是历史读数、行号 `:18` 也已不存在）。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、那份基线文件的现值。剩余的一格是**页面级视觉回归** —— 这一档已经整档撤掉（规范 11 §11.8），
   现在**没有任何自动判据**，靠 review 看图；Storybook 本来也不替代它。
   **已加的两层判据**（同批）：故事文件的**枚举来源**由
   `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
