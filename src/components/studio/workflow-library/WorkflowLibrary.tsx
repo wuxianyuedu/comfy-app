@@ -33,7 +33,13 @@ const WorkflowCanvasEditor = dynamic(
     /* 分块还没到时的过渡屏 —— 与编辑器自己的加载态同一口径（ISSUE #1691 第 3 条）：
      * **吃满内容列、不当整窗浮层**。`FullScreenLayer` 会连同侧栏与视图页签一起盖掉，
      * 而用户要的是「加载只覆盖右侧部分」。编辑器**加载完成后**仍是全屏视图
-     * （那是它的形态，ISSUE #310），改的只是过渡那一段。 */
+     * （那是它的形态，ISSUE #310），改的只是过渡那一段。
+     *
+     * 这张过渡屏**只在编辑器真的要开时才该出现** —— 调用处因此按 `editingId`
+     * 挂载（见下方渲染点），不能让它常驻：`dynamic()` 的分块是「一渲染就下载」，
+     * 而编辑器是通过态的模态，未打开时它本该什么都不做。常驻的代价是**打开工作流库
+     * 的那一两秒里，整条内容列（列表 + 详情）被一张「加载工作流编辑器…」盖住**
+     * （用户实测口径：「这只是部分区域内容加载中，不要用全屏加载窗口」）。 */
     loading: () => (
       <div className="bg-bg absolute inset-0 flex items-center justify-center">
         <PageLoading label="加载工作流编辑器…" />
@@ -174,12 +180,19 @@ export function WorkflowLibrary({
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      <WorkflowCanvasEditor
-        workflowId={c.editingId ?? ""}
-        open={!!c.editingId}
-        onClose={c.handleEditorClose}
-        onSave={c.load}
-      />
+      {/* 编辑器只在真的打开时才挂载（`c.editingId` 非空）。此前它常驻、
+       *  靠 `open={false}` 自行返回 `null` —— 但 `dynamic()` 的**分块是在组件
+       *  首次渲染时下载的**，于是「打开工作流库」这一步就把 7k 行编辑器的分块
+       *  拉了下来，过渡屏（`absolute inset-0`）顺势盖住整条内容列。
+       *  按需挂载之后，这一步不发生任何下载；用户点「编辑」时才付这一次代价。 */}
+      {c.editingId && (
+        <WorkflowCanvasEditor
+          workflowId={c.editingId}
+          open
+          onClose={c.handleEditorClose}
+          onSave={c.load}
+        />
+      )}
 
       {c.showModelManager && (
         <ModelTagManager
