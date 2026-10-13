@@ -11,6 +11,12 @@
       "command": "zg",
       "args": ["server", "--stdio"],
       "description": "本地优先混合检索：ripgrep(精确/正则) + BM25 + 向量(语义) 统一接口，按含义发现代码并带回链证据。"
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["dlx", "@upstash/context7-mcp@4.3.0"],
+      "description": "第三方库「当前版本」官方文档检索：按 libraryId + 主题拉取版本特定文档与代码示例，治模型训练数据滞后于 Next 16 / React 19 / drizzle 0.45 / tRPC 11 / better-auth 1.7 / Tauri 2 的 API 漂移。只回答「这个版本的 API 长什么样」，不回答「本仓的判据是什么」——判据仍只在 scripts/check-*.cjs 与 .githooks/pre-commit。"
     }
   }
 }
