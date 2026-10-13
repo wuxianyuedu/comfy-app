@@ -5,6 +5,7 @@ import {
   CONTRACT_MODES,
   CUSTOM_INPUT_KINDS,
   addableContractInputs,
+  contractModeTree,
   contractInputCatalog,
   contractModeLabel,
   customInputKindLabel,
@@ -22,6 +23,24 @@ describe("模式契约展示配置", () => {
   it("模式码大小写都能查到展示名；查不到则回落模式码本身", () => {
     expect(contractModeLabel("t2i")).toBe(contractModeLabel("T2I"));
     expect(contractModeLabel("不存在的模式")).toBe("不存在的模式");
+  });
+});
+
+describe("导航树（父行 = 输出类别、子行 = 模式）", () => {
+  it("并集恰好等于全部生成模式，且一个不重（双向比对）", () => {
+    const tree = contractModeTree();
+    const flat = tree.flatMap((group) => group.modes.map((t) => t.code));
+    expect(new Set(flat)).toEqual(new Set(CONTRACT_MODES.map((t) => t.code)));
+    expect(flat.length).toBe(CONTRACT_MODES.length);
+  });
+
+  it("每个分组都非空（空父行没有意义）", () => {
+    for (const group of contractModeTree()) {
+      expect(group.modes.length).toBeGreaterThan(0);
+      expect(group.modes.every((t) => t.category === group.category)).toBe(
+        true,
+      );
+    }
   });
 });
 
