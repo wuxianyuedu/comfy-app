@@ -207,7 +207,7 @@ export function ExtractToolbar({
                       </span>
                     </div>
                     {entry.detail && (
-                      <pre className="bg-bg/70 text-ink-subtle mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 text-[10.5px] leading-relaxed break-all whitespace-pre-wrap">
+                      <pre className="bg-bg/70 text-ink-subtle text-2xs mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 leading-relaxed break-all whitespace-pre-wrap">
                         {entry.detail}
                       </pre>
                     )}
@@ -231,9 +231,9 @@ export function ExtractToolbar({
                 历史日志（含此前会话，保存在 log/workshop/）
               </p>
               {history === null ? (
-                <p className="text-muted-foreground text-[10.5px]">加载中…</p>
+                <p className="text-muted-foreground text-2xs">加载中…</p>
               ) : history.length === 0 ? (
-                <p className="text-muted-foreground text-[10.5px]">
+                <p className="text-muted-foreground text-2xs">
                   还没有落盘的历史日志。
                 </p>
               ) : (
@@ -255,7 +255,7 @@ export function ExtractToolbar({
                         </span>
                       </div>
                       {entry.detail && (
-                        <pre className="bg-bg/70 text-ink-subtle mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 text-[10.5px] leading-relaxed break-all whitespace-pre-wrap">
+                        <pre className="bg-bg/70 text-ink-subtle text-2xs mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 leading-relaxed break-all whitespace-pre-wrap">
                           {entry.detail}
                         </pre>
                       )}

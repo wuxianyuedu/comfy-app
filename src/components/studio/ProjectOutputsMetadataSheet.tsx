@@ -120,7 +120,7 @@ export function ProjectOutputsMetadataSheet({
                       本次生成无参考图（纯文生图）。
                     </p>
                   )}
-                  <p className="text-ink-fainter mt-1.5 text-[10.5px]">
+                  <p className="text-ink-fainter text-2xs mt-1.5">
                     参考图随产出一起保存到项目目录，复现时可一键还原。
                   </p>
                 </section>
@@ -215,7 +215,7 @@ export function ProjectOutputsMetadataSheet({
                     导出 JSON
                   </Button>
                 </div>
-                <p className="text-ink-fainter mt-2 text-[10.5px]">
+                <p className="text-ink-fainter text-2xs mt-2">
                   文件已保存至{""}
                   {/* 形状取自布局那一处定义；组件里抄字面量会在搬根那天说错话。 */}
                   <span className="text-ink-muted font-mono">

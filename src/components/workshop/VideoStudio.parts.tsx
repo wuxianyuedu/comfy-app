@@ -319,7 +319,7 @@ export function ShotCard({
         </Alert>
       )}
       {!shot.imageUrl && !error && (
-        <p className="text-muted-foreground mt-2 text-[10.5px]">
+        <p className="text-muted-foreground text-2xs mt-2">
           该镜头暂无画面 —
           将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
         </p>

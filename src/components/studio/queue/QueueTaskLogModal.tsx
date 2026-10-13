@@ -126,7 +126,7 @@ export function QueueTaskLogModal({
                     onClick={() => void cancel()}
                     disabled={cancelling}
                     data-testid="queue-log-cancel"
-                    className="h-auto rounded-md px-2 py-0.5 text-[10.5px]"
+                    className="text-2xs h-auto rounded-md px-2 py-0.5"
                   >
                     {cancelling ? "× 取消中…" : "× 取消"}
                   </Button>
@@ -140,7 +140,7 @@ export function QueueTaskLogModal({
                   variant="ghost"
                   onClick={() => setRawOpen(true)}
                   data-testid="queue-log-raw"
-                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md px-2 py-0.5 text-[10.5px]"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
                 >
                   查看完整输出
                 </Button>

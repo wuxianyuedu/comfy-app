@@ -158,7 +158,7 @@ export function NodePreviewCard({
               {widgets.slice(0, 32).map((widget, idx) => (
                 <div
                   key={`w-${idx}`}
-                  className="flex items-center gap-1.5 text-[10.5px]"
+                  className="text-2xs flex items-center gap-1.5"
                 >
                   <span
                     className="inline-block shrink-0 rounded-full"

@@ -62,7 +62,7 @@ const RawCliLineCard = memo(function RawCliLineCard({
   if (entry.kind === "json") {
     return (
       <div className="border-border-subtle bg-card/60 rounded-lg border p-2">
-        <div className={`mb-1 font-mono text-[10.5px] uppercase ${tagClass}`}>
+        <div className={`text-2xs mb-1 font-mono uppercase ${tagClass}`}>
           [comfy-cli {entry.tag}]
         </div>
         <JsonViewer
@@ -77,7 +77,7 @@ const RawCliLineCard = memo(function RawCliLineCard({
   return (
     <div className="border-border-subtle bg-card/40 rounded-lg border p-2">
       {entry.tag && (
-        <div className={`mb-1 font-mono text-[10.5px] uppercase ${tagClass}`}>
+        <div className={`text-2xs mb-1 font-mono uppercase ${tagClass}`}>
           [comfy-cli {entry.tag}]
         </div>
       )}

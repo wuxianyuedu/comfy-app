@@ -304,7 +304,7 @@ export function FinalComposer({
                 <div className="text-ink truncate text-xs font-medium">
                   {shot.sceneHeading}
                 </div>
-                <div className="text-muted-foreground mt-0.5 truncate text-[10.5px]">
+                <div className="text-muted-foreground text-2xs mt-0.5 truncate">
                   {shot.clipUrl
                     ? "片段就绪"
                     : shot.imageUrl

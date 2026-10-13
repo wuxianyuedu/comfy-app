@@ -151,7 +151,7 @@ export function HistoryDetailModal({
                     </Button>
                   </div>
                   {actions.folderPopover.helperMissing ? (
-                    <div className="border-warning/30 bg-warning/10 text-warning-strong mb-2 rounded border px-2.5 py-1.5 text-[10.5px] leading-relaxed">
+                    <div className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mb-2 rounded border px-2.5 py-1.5 leading-relaxed">
                       未检测到 ComfyApp
                       助手，浏览器没有弹出「打开外部应用」确认框。
                       请双击运行项目内{""}
@@ -175,7 +175,7 @@ export function HistoryDetailModal({
                       。
                     </div>
                   ) : (
-                    <div className="border-success/20 bg-success/6 text-success-strong mb-2 rounded border px-2.5 py-1.5 text-[10.5px] leading-relaxed">
+                    <div className="border-success/20 bg-success/6 text-success-strong text-2xs mb-2 rounded border px-2.5 py-1.5 leading-relaxed">
                       若浏览器弹出「是否打开外部应用」，点击「打开」即可在资源管理器中打开该目录。
                     </div>
                   )}

@@ -131,7 +131,7 @@ export function SubgraphWidgetRow({
         />
       ) : (
         <span
-          className="min-w-0 truncate rounded-[5px] px-1.5 text-left text-[10.5px] tabular-nums"
+          className="text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums"
           style={{
             /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
              *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
