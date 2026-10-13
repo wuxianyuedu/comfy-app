@@ -35,17 +35,21 @@
  * 三条同时成立才判红 —— 只有 ①（造临时目录）是极常见的正当写法（`test-db`、
  * `symlink-dir`、产物探针……），不吃这一刀。
  *
- * ── 为什么是棘轮 ──────────────────────────────────────────────────────
+ * ── 硬闸（2026-10-13 起）──────────────────────────────────────────────
  *
- * 本批收口时留了三份没迁（`check-file-structure` 1758 行 / 90 条用例、大量直接
+ * 这条判据原先是棘轮：收口时留了三份没迁（`check-file-structure` 大量直接
  * `writeFileSync` 造 Buffers；`check-reformat-only` 要 git init + 软链 node_modules +
- * 工作区之外的探针配置；`gate-executors` 是把**全部**判据脚本整目录拷过去，
- * 与「单脚本」模型不同形）。它们是**存量**、有明确归属，进
- * `scripts/.gate-repo-boilerplate-baseline.json`（棘轮，只许降）。
+ * 工作区之外的探针配置；`gate-executors` 是把**全部**判据脚本过滤拷贝过去，
+ * 与「单脚本」模型不同形），逐份迁完、账记在一份基线里。
  *
- * ⚠️ **不许把新写的门禁自测登记进基线**：基线的语义是「待迁的存量」，
- * 不是「本批不迁的赦免」。新写的就该用 `defineGateRepo`（`--update` 只用于
- * 迁完一份之后把数字降下来）。
+ * 三份都迁进 `defineGateRepo` 之后基线归零，棘轮就只剩坏处：`--update` 与
+ * `--allow-new` 两个动作都无事可做，留下的却是一条「手改那份 JSON 就能把新的
+ * 手搓样板登记成已知存量」的通道 —— 硬闸类本来没有的中间态（§13.6.2 的两类对照）。
+ * 所以基线文件已删、`--update` / `--allow-new` 已删，命中即退 1。
+ *
+ * ⚠️ 合法的例外形态**不在这里开口子**：真需要自己搭工作区而不走共享件的，
+ * 走 §11.16 那条「三条条件不同时成立」的口径（例如只造临时目录、或拉的不是
+ * 本仓 `scripts/` 下的判据脚本）—— 那是判据本来就放过的形状，不是新登记的存量。
  *
  * ── 成本 ──────────────────────────────────────────────────────────────
  *
@@ -53,14 +57,11 @@
  * 这个量级该进钩子而不是按需召唤。
  *
  * 用法：
- *   node scripts/check-gate-repo-boilerplate.cjs            # 检查（进 pre-commit D 组）
+ *   node scripts/check-gate-repo-boilerplate.cjs            # 检查（进 pre-commit D 组，命中即退 1）
  *   node scripts/check-gate-repo-boilerplate.cjs --report   # 只出清单不判失败（盘点用）
- *   node scripts/check-gate-repo-boilerplate.cjs --update   # 迁完一份后收紧基线
- *   node scripts/check-gate-repo-boilerplate.cjs --update --allow-new   # 只给维护者改口径用
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
-const fs = require("node:fs");
 const path = require("node:path");
 const {
   readForScan,
@@ -69,11 +70,8 @@ const {
 } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const BASELINE = path.join(__dirname, ".gate-repo-boilerplate-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
-const ALLOW_NEW = ARGS.has("--allow-new");
 
 /** 扫描范围：与 `vitest.config.ts` 的 `include` 同口径（用例面）。 */
 const TEST_FILE_RE = /\.test\.tsx?$/;
@@ -108,18 +106,8 @@ function scanFile(abs) {
   return SPAWN_FROM_WORKDIR_RE.test(raw);
 }
 
-function readBaseline() {
-  try {
-    const b = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-    return { total: b.total ?? 0, files: b.files ?? {} };
-  } catch {
-    return { total: 0, files: {} };
-  }
-}
-
 function main() {
   const files = walk(path.join(ROOT, "tests"));
-  const baseline = readBaseline();
 
   const live = new Map();
   let vanished = 0;
@@ -133,60 +121,23 @@ function main() {
     }
     if (hit) live.set(rel, true);
   }
-  /* 消失数必须进结论：这条是**棘轮**，少读一份就把 `liveTotal` 报小 ——
-     看着像「存量下降」，实际是这一轮没读。 */
+  /* 消失数必须进结论：少读一份就把读数报小 —— 看着像「样板在减少」，实际是这一轮
+     没读（口径见 `gate-scan-read.cjs`）。 */
   const note = vanishedNote(vanished);
 
   const liveTotal = live.size;
-  const shrunk = liveTotal < baseline.total;
-  const grown = liveTotal > baseline.total;
-
-  if (UPDATE) {
-    /* 棘轮类判据在这里比「报个数」的判据多一层要求：**有文件没读到就不许收紧基线**。
-     * 消失会让 `liveTotal` 偏小，而 `--update` 正是把「这一轮数出来的数」写成新基线 ——
-     * 拿一次不完整的读数收紧，等于把「下一轮再也报不出这些」写进账（§13.5 只许降的
-     * 语义前提是两次读数覆盖同一张面）。 */
-    if (vanished > 0) {
-      console.error(
-        `[gate-repo-boilerplate] 拒绝收紧：本轮有 ${vanished} 份文件在扫描期间消失，` +
-          "读数不完整。\n  等并发用例跑完再执行 `--update`（基线是账，不能记在没读过的面上）。",
-      );
-      return 1;
-    }
-    /* 首次建基线（文件不存在）：允许 —— 那是**记账起点**，不是给新增放行。
-     * 与 `check-ui-logic-separation.cjs` 的 `--update` 门同一口径。 */
-    const firstBaseline = !fs.existsSync(BASELINE);
-    if (grown && !ALLOW_NEW && !firstBaseline) {
-      console.error(
-        `[gate-repo-boilerplate] 拒绝收紧：当前 ${liveTotal} 处 > 原基线 ${baseline.total} 处。` +
-          "\n  基线的语义是「待迁的存量」，不是「本批不迁的赦免」——" +
-          "\n  新写的门禁自测请用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`。",
-      );
-      return 1;
-    }
-    const out = {
-      total: liveTotal,
-      files: Object.fromEntries([...live.keys()].sort().map((k) => [k, true])),
-    };
-    fs.writeFileSync(BASELINE, `${JSON.stringify(out, null, 2)}\n`);
-    console.log(
-      `[gate-repo-boilerplate] 基线已收紧：${baseline.total} → ${liveTotal} 份（待迁存量）。`,
-    );
-    return 0;
-  }
 
   if (REPORT_ONLY) {
     console.log(
-      `[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份（基线 ${baseline.total}）。` +
-        note,
+      `[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份。` + note,
     );
     for (const rel of [...live.keys()].sort()) console.log(`  · ${rel}`);
     return 0;
   }
 
-  if (grown) {
+  if (liveTotal > 0) {
     console.error(
-      `[ERROR] 门禁自测的手搓临时仓库样板上涨：${baseline.total} → ${liveTotal} 份。\n` +
+      `[ERROR] 门禁自测里还在手搓临时仓库样板：${liveTotal} 份。\n` +
         "\n  本仓库 60 余份门禁自测判的是同一件事：把 scripts/ 下的判据脚本当黑盒，" +
         "\n  在一个只放了被测文件的临时仓库里跑一次。这套四件套（mkdtemp + workdir +" +
         "\n  自己写的 run(args) + afterEach rmSync）已收进 `tests/helpers/gate-repo.ts`。\n" +
@@ -195,25 +146,18 @@ function main() {
         "\n    · 用例里从 fixture 取 `repo`：`repo.write(rel, content)` / `repo.run(args)` /" +
         "\n      `repo.read(rel)` / `repo.remove(rel)` / `repo.git(...)`；" +
         "\n    · 收尾由 vitest 保证（`use` 之后），不必再写 `afterEach(() => rmSync(…))`。\n" +
-        "\n  本次读数比基线多的那些（如果这里列出的都不是你新写的，见 §13.6.2 复算基线）：",
+        "\n  需要「夹具选项盖不住」的形状（如整目录过滤拷贝）时，写进 `setup` / `copy`，" +
+        "\n  不要把四件套搬回来。\n" +
+        "\n  本次点名的（如果你根本没碰过它们，见 §13.6.2 复算 master 基线）：",
     );
-    for (const rel of [...live.keys()].sort()) {
-      if (!baseline.files[rel]) console.error(`  · ${rel} ← 新增`);
-    }
+    for (const rel of [...live.keys()].sort()) console.error(`  · ${rel}`);
     console.error(
       "\n口径见 docs/standards/11-测试与可观测性.md §11.16.1。" + note,
     );
     return 1;
   }
 
-  const tail = shrunk
-    ? ` —— 比基线少 ${baseline.total - liveTotal} 份，按 §13.5 口径用 ` +
-      "`node scripts/check-gate-repo-boilerplate.cjs --update` 收紧基线"
-    : "";
-  console.log(
-    `[gate-repo-boilerplate] OK —— 手搓样板 ${liveTotal} 份（基线 ${baseline.total}，均为待迁存量）${tail}。` +
-      note,
-  );
+  console.log(`[gate-repo-boilerplate] OK —— 手搓样板 0 份。` + note);
   return 0;
 }
 
