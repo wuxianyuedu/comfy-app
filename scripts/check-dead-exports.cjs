@@ -67,7 +67,7 @@
  *     模块↔单测的匹配只在内存里比对，不再每模块重读磁盘。
  * 「同基名测试即使没 import 也算消费方」这一旧语义与 `importsModule` 的模糊后缀匹配，
  * 均在 `matchedTestFilesOf` / `specsImport` 里原样保留；`tests/check-dead-exports.test.ts`
- * 的 18 例（含非空死集的夹具 + 真实仓库 `--strict`/`--verify`）即等价性证明。
+ * 的 18 例（含非空死集的夹具 + 真实仓库的 `--verify`）即等价性证明。
  *
  * 用法:
  *   node scripts/check-dead-exports.cjs           # 检查(硬闸:命中即退 1)
@@ -212,7 +212,7 @@ function specsImport(specs, wantedKeys) {
  * 整个语料读一遍（实测 ≈340ms），放在 `main()` 里就白跳过了。
  * 输入面是声明层（`SCAN_ROOTS`）与消费方语料（`USAGE_ROOTS`）的并集：两边任一边
  * 被碰都要真判，所以根清单由这两个既有配置现算，不另抄一份（§12.18）。
- * `--verify`（单符号精确复核）与 `--report` / `--update` 都不跳过。 */
+ * `--verify`（单符号精确复核）与 `--report` 都不跳过。 */
 if (STAGED && !REPORT_ONLY && !verifyArg) {
   skipUnlessStagedTouches({ roots: [...USAGE_ROOTS], tag: "[dead-exports]" });
 }

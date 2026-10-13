@@ -526,8 +526,8 @@ function report(files, reformatOnly, limit) {
         '\n    git add <仅功能相关的文件> && git commit -m "fix(scope): <本次改动>"' +
         "\n    # 用 pnpm exec prettier --write <文件> 格式化（别对全库跑 format:write）" +
         '\n    git add -A && git commit -m "style: 格式化 <范围>"' +
-        "\n\n  若确实要一次性格式化某批文件（清理存量），那就**单独一个提交/PR**做它 ——" +
-        "\n  存量清掉后记得 node scripts/check-format.cjs --update 收紧格式棘轮。",
+        "\n\n  若确实要一次性格式化某批文件（清理存量），那就**单独一个提交/PR**做它。" +
+        "\n  （`check-format.cjs` 已是硬闸、没有 `--update`：存量清零后删掉了那条通道，见 ISSUE #1811。）",
     );
     process.exit(1);
   }
