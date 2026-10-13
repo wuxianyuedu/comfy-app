@@ -28,6 +28,7 @@ import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { PageHeader } from "~/components/ui/page-header";
+import { ViewActions } from "~/components/studio/ViewActions";
 import { Spinner } from "~/components/ui/spinner";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { MaterialLibraryContent } from "~/components/studio/project-canvas/MaterialLibraryContent";
@@ -61,32 +62,33 @@ export function ResourceLibrary() {
   const needsProject = library.scope === "project" && c.projectId === null;
 
   return (
-    <DocumentFrame width="wide" className="px-4 py-6 sm:px-8 sm:py-7">
+    <DocumentFrame
+      width="wide"
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
+    >
       {/* ── 页头：动作（屏名由页签给出，说明问号在顶栏标题右侧） ── */}
-      <PageHeader
-        className="mb-6"
-        srTitle={pageHeaderTitle("library")}
-        actions={
-          <>
-            <uploadPicker.Input />
-            <Hint label="上传素材" wrap>
-              <Button
-                variant="primary"
-                onClick={uploadPicker.open}
-                disabled={library.uploading || needsProject}
-                className="h-auto gap-1.5 rounded-lg px-4 py-2"
-              >
-                {library.uploading ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <Plus data-icon="inline-start" size={16} strokeWidth={1.8} />
-                )}
-                上传素材
-              </Button>
-            </Hint>
-          </>
-        }
-      />
+      <PageHeader srTitle={pageHeaderTitle("library")} />
+
+      {/* 上传挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段「屏名由页签
+          给出之后，留在屏内那一行只剩右对齐的几颗控件」（ISSUE #1871）。 */}
+      <ViewActions>
+        <uploadPicker.Input />
+        <Hint label="上传素材" wrap>
+          <Button
+            variant="primary"
+            onClick={uploadPicker.open}
+            disabled={library.uploading || needsProject}
+            className="h-auto gap-1.5 rounded-lg px-4 py-2"
+          >
+            {library.uploading ? (
+              <Spinner className="size-4" />
+            ) : (
+              <Plus data-icon="inline-start" size={16} strokeWidth={1.8} />
+            )}
+            上传素材
+          </Button>
+        </Hint>
+      </ViewActions>
 
       {/* ── 作用域档 + 搜索 ── */}
       <div className="border-border mb-5 flex flex-wrap items-center gap-3 border-b pb-3">
