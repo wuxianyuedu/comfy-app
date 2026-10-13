@@ -95,8 +95,6 @@ const RATCHETS: Ratchet[] = [
  */
 const COVERED_LOCALLY: Record<string, string> = {
   ".form-field-wiring-baseline.json": "tests/form-field-wiring-gate.test.ts",
-  ".gate-repo-boilerplate-baseline.json":
-    "tests/gate-repo-boilerplate-gate.test.ts",
   /* 它的判定对象是 registry 漏洞清单，沙箱造不出「一条新 advisory」，
    * 而它自带 `--fixture` 口，本地用例正是对着固定 registry 形状跑 CLI 退出的。 */
   ".dependency-audit-baseline.json": "tests/dependency-audit.test.ts",
@@ -191,6 +189,12 @@ const HARD_GATE_FLIPS: Record<string, string> = {
   /* R5（`src` 侧超 900 行）这一半：基线删了、`--strict` / `--update` 删了，超限即阻断 ——
    * 于是它在本表的棘轮车道上「无对象可判」，改由硬闸形态的否定式钉住。 */
   "check-file-structure.cjs": "tests/check-file-structure.test.ts",
+  /* 门禁自测的「手搓临时仓库样板」（ISSUE #1811 收尾）：最后两处待迁存量
+   * （`check-reformat-only` / `gate-executors`）迁进 `defineGateRepo` 后基线归零，
+   * 于是删基线 + 删 `--update` / `--allow-new`，命中即退 1。
+   * 它的落点本就特殊 —— 判的是**别人**的写法而不是 src 代码，所以翻闸后不存在
+   * 「棘轮车道空置」那一档（RETIRED_RATCHETS 是给「基线在、--update 在、写回空账」用的）。 */
+  "check-gate-repo-boilerplate.cjs": "tests/gate-repo-boilerplate-gate.test.ts",
   /* tw4 这一项（ISSUE #1811 的 tw4 半边）：与上面五条同一形状，只是它守的是
    * 「CSS 等价改写」而不是违规计数 —— 清零后棘轮无对象可判，留着基线只等于多一条
    * 「手改 JSON 把新候选登记成已知存量」的通道。两刀改到同一张表，合并后**两条都在**：

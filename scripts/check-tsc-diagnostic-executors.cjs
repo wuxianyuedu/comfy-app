@@ -472,7 +472,8 @@ if (UPDATE) {
   const doc = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
   /* 读数不完整时**不许记账**：少读一份就少算几处声明，`--update` 会把「这一轮没读到」
    * 写成「这里本来就没有」。与 `check-dead-exports` / `check-comment-language` /
-   * `check-test-sleep` / `check-test-it-each` / `check-gate-repo-boilerplate` 同一条口径。 */
+   * `check-test-sleep` / `check-test-it-each` 同一条口径（`check-gate-repo-boilerplate`
+   * 起先也在此列，ISSUE #1811 收尾时它翻成硬闸、`--update` 已删，故不再列入）。 */
   if (vanishedScan > 0) {
     console.error(
       `[tsc-diagnostic-executors] 拒绝 --update：本轮有 ${vanishedScan} 份文件在扫描期间消失，` +
