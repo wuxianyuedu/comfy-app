@@ -92,7 +92,7 @@
    `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
 6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，但随 ISSUE #623 与 `.cnb.yml` 一同失去调用方（§13.5）——**目前不再有 CI 兜底**。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**合并那一跳现在有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（分钟级，实测数据与为什么不在这里写数见 §13.6.2.1；证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。
 7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + 结构检查 + tsc + eslint +
-   UI/逻辑分离棘轮 + 结构守护与受影响用例 + CHANGELOG 碎片 + 两份生成物同步
+   UI/逻辑分离硬闸 + 结构守护与受影响用例 + CHANGELOG 碎片 + 两份生成物同步
    （`docs/generated/**` 见 §13.5.5、`docs/api/**` 见 §13.5.5.1 —— **后者提交进 git 却
    长达数十次提交没有任何判据**，是 ISSUE #1329 收尾时翻出来的过期面），全部走 `pnpm exec`）。
    测试那一层是「改到哪、测到哪」的增量层（固定清单 + 暂存改动沿**静态 import 图**
@@ -119,8 +119,8 @@
     `mutationOptions()`；旧 classic 字样 `api.x.y.useQuery/useMutation` 同判）——逻辑要进
     `<feature>/hooks/`，网络层一律进 `src/lib/<domain>-client.ts`（守卫只豁免
     `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
-    `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit）。
-    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
+    `scripts/check-ui-logic-separation.cjs`（**硬闸：命中即阻断**，已接入 pre-commit；
+    S* 存量已清零、基线已删，没有 `--update` 这条路 —— ISSUE #1811 收尾翻闸）。
 11. **`src/lib` 是域化的：根目录只放顶层单例，模块一律进子域**（ISSUE #565 / §12.5.3 / §18.14）：新增子域必须**同批**登记 `scripts/check-file-structure.cjs` 的 `DOMAINS` 与 `DOMAIN_EXEMPT`（R14）**并**在 `vitest.config.ts` `thresholds` 里按**实测值**设门槛（§18.6）——只做一件 = 门槛挂在判据不认识的目录上、或新域零门槛。叶子域平铺，**不要再造 `admin/` `other/` `shared/` 这类杂物层**。门禁 R13′/R14 跑在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步。**迁移目录连带五查**（import 说明符含 `vi.mock` / `await import` / 门禁白名单 / 测试夹具假路径 / `path.resolve(__dirname, …)` / 规范与碎片里的路径引用），完整清单见 §12.5.3。
 
 12. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`；编排只写 Node（`.mjs`），`.ps1` 只是调用入口**（ISSUE #23 / §8）：`scripts/dev-launcher.mjs` 是**全平台唯一**的启动编排者（端口 / 缓存指纹 / 进度快照 / 回收语义全在这里，平台机制收在 `scripts/launcher-core/**` 与 `kill-process-tree`）；`scripts/dev-launcher.ps1` 只做「定位项目根 → 调用它 → 透传退出码」，**不得**再长出任何 Windows 专属编排（`taskkill` / `Get-CimInstance` / Job Object / `cmd.exe`），长度与内容由 `tests/cross-platform-launcher.test.ts` 守着。**入口放 `tools/<分类>/`，不放仓库根**（ISSUE #29 / §8.6）：启动类归 `tools/start/`，与 `tools/build/`、`tools/shadcn-registry/`、`tools/database-studio/` 按用途并列；**R9「根目录只放工程配置」的另一形态是 git 临时状态文件**（`MERGE_MSG` / `COMMIT_EDITMSG` / `SQUASH_MSG` 一族，ISSUE #1586 / §12.8.6）：它们归 `.git/`，落进工作区只说明「用 `-F` 写提交说明、提交完忘了删」，`.gitignore` 与 R9 两道都挡。R9 的两个形态都在 pre-commit 强制拦截。**跨平台动作 = 写 `.mjs` 逻辑 + 挂 `package.json` 脚本 + 登记 §9.5 对照表**（`check-ps1-consistency.mjs` 在 pre-commit 核对，只写一侧会被拦）；`.ps1` 不是逻辑层，也不代表仓库只能在 Windows 用。含中文的 `.ps1` 必须 **UTF-8 with BOM**（无 BOM 会被 PowerShell 5.1 按 GBK 解码，与 `.bat` 乱码同源）。入口设计原则、禁 `.bat` 的 GBK 代码页根因、`KNOWN_FAILED_FILES` 与 R7/R8/R9 的具体判据见 §8.1–§8.4 与 `tests/check-file-structure.test.ts`。

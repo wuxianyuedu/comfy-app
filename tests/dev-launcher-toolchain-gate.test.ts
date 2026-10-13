@@ -1038,12 +1038,17 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
     );
     expect(launcher).toContain('mode === "prebuilt"');
     /* 不起壳那一支必须真的跳过 spawnShell。R5 拆刀（ISSUE #1811）把它重整成
-     * **提前返回**（`if (launchedByShell) { …; return { shell: null, staleShell }; }`），
+     * **提前返回**（`if (launchedByShell) { …; return { ok: true, shell: null, staleShell }; }`），
      * 不再用 `} else {` 分叉 —— 所以「这一段有没有 spawn」要看**从分支开始到它的
-     * return**，用 `} else {` 去切会一路吃到文件尾（那里的 spawnShell 在另一支里）。 */
+     * return**，用 `} else {` 去切会一路吃到文件尾（那里的 spawnShell 在另一支里）。
+     * 返回形状的 `ok: true` 是本次拆刀补上的（与另一支的 `{ ok: true, shell, staleShell }`
+     * 对齐），断言按**实际形态**写，不按记忆里的旧形态。 */
     const skipStart = launcher.indexOf("if (launchedByShell) {");
     expect(skipStart, "找不到自编排分支（拆刀后别断了接线）").toBeGreaterThan(-1);
-    const skipEnd = launcher.indexOf("return { shell: null, staleShell };", skipStart);
+    const skipEnd = launcher.indexOf(
+      "return { ok: true, shell: null, staleShell };",
+      skipStart,
+    );
     expect(skipEnd, "自编排分支要提前返回、不再往下走").toBeGreaterThan(-1);
     const skipBody = launcher.slice(skipStart, skipEnd);
     expect(skipBody, "自编排分支不许再 spawn 壳").not.toContain("spawnShell(");
