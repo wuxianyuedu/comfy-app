@@ -204,6 +204,16 @@ export const RUNTIME_SCRIPTS = [
   "launcher-core/shell-ops.mjs",
   "launcher-core/misc-ops.mjs",
   "launcher-core/port-reap.mjs",
+  // 主流程按阶段拆出来的四份（ISSUE #1811 第五刀）：预检桥段（孤儿回收 / 环境与
+  // 工具链门禁 / 依赖对齐 / 备份恢复 / 端口）、桌面壳阶段、起服务桥段（缓存 /
+  // dev server / 执行器宿主 / 会话锚点 / 后台 schema）、就绪等待（轮询 / 陈旧
+  // 路由表自愈 / 超时定性）。`dev-launcher.mjs`（953 → 753 行）顶层静态 import
+  // 它们 —— 缺任一份就是 `ERR_MODULE_NOT_FOUND`，表现与上面那批一模一样：
+  // 桌包重新编排一次「双击没反应」，本地开发看不出。
+  "launcher-core/startup-gates.mjs",
+  "launcher-core/shell-stage.mjs",
+  "launcher-core/dev-boot.mjs",
+  "launcher-core/ready-wait.mjs",
   // 桌包 standalone 形态的运行入口与它的环境装配（ISSUE #1216）：壳把
   // `node server.js` 换成 `node scripts/standalone-runtime.mjs`，缺这份就是
   // standalone 桌包回到「起不来且没人知道为什么」。

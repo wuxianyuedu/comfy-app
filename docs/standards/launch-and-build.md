@@ -962,9 +962,22 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 
 | 层         | 文件                                                                              | 内容                                                                                  |
 | ---------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 编排       | `scripts/dev-launcher.mjs`                                                        | 预检 / 端口 / 缓存 / 拉起 / 就绪 / 进度快照 / 收尾定性（**不摸 `process.platform`**） |
+| 编排       | `scripts/dev-launcher.mjs`                                                        | 主流程的顺序与状态串联、常驻循环、收尾定性（**不摸 `process.platform`**）              |
+| 编排分段   | `scripts/launcher-core/{startup-gates,shell-stage,dev-boot,ready-wait}.mjs`        | 主流程按阶段拆出的四段：预检桥段 / 桌面壳阶段 / 起服务桥段 / 就绪等待（ISSUE #1811）    |
+| 编排件     | `scripts/launcher-core/**` 其余                                                     | 端口、缓存指纹、进度快照、会话锚点、壳产物名、日志布局、执行器模式判据                |
 | 平台机制   | `scripts/launcher-core/{procs,shell}.mjs`                                         | 进程与端口探测、进程组拉起、可执行文件解析                                            |
 | 进程树回收 | `src/lib/process/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                    |
+
+> **编排分段为什么拆**：`dev-launcher.mjs` 一度 953 行、其中 `run()` 一个函数约 490 行
+> （「预检 → 端口 → 缓存 → 起服务 → 起壳 → 等就绪 → 常驻」全在一个函数体里），
+> 撞在基础设施层文件长度硬闸（`scripts/check-infra-file-size.cjs`，§12.6 R5 姊妹档）上。
+> 拆法是**按阶段提函数**：四段各自成模块、依赖靠 `ctx` 注入（回引主文件会成环，
+> 复制模块级状态等于「两处各记一半子进程」—— 少收的那半正是残留进程）。
+> `run()` 回到约 340 行，主文件 753 行。
+> 每一段都以「产出什么」为边界，顺序仍由主文件那一层定（0~2 → 3 → 4 → 5~8 → 9 → 10 → 11）；
+> **内部顺序是契约**：换库（`applyPendingRestoreAtBoot`）必须排在起任何开库的东西之前
+> （§9.1），端口族回收必须每次都跑（§1.7）—— 两条都有回归判据钉着（`db-backup-wiring` /
+> `dev-launcher-port-reclaim`）。
 
 > **Windows Job Object 的实现只有一处**：编排器（node）是壳的子进程，若**壳被硬杀**
 > （任务管理器 / 崩溃），它拉起的 `node → pnpm → next` 会残留成孤儿（占端口、锁日志）。

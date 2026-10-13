@@ -114,7 +114,7 @@ function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
             用户想翻日志时不用再去猜是哪一包。 */}
         {group.runId !== null && (
           <span
-            className="text-ink-fainter font-mono text-[10px]"
+            className="text-ink-fainter text-3xs font-mono"
             title={`启动标识 ${group.runId}（与 log/runs/ 下的目录名尾段一致）`}
           >
             {group.runId}
@@ -183,12 +183,12 @@ export function MessageCenterPanel() {
           <span className="relative">
             <BellRing size={16} className="text-primary-strong" />
             {unread > 0 && (
-              <span className="bg-primary absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white">
+              <span className="bg-primary text-3xs absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 font-bold text-white">
                 {unread > 99 ? "99+" : unread}
               </span>
             )}
           </span>
-          <span className="text-ink-bright text-[15px] font-semibold">
+          <span className="text-ink-bright text-sm font-semibold">
             消息中心
           </span>
           <span className="text-ink-muted text-xs">
@@ -299,7 +299,7 @@ export function MessageCenterPanel() {
                                 {fmtTime(m.time)}
                               </time>
                             </div>
-                            <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
+                            <p className="text-ink-soft mt-1 text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">
                               {m.body}
                             </p>
                           </div>
