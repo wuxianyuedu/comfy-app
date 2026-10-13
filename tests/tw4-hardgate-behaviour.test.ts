@@ -33,6 +33,20 @@ import { symlinkDir } from "./helpers/symlink-dir";
 /** 起引擎的实测单次预算（口径同 §11.13：真进程慢到贴边就登记实测值）。 */
 const ENGINE_TIMEOUT = 120_000;
 
+/**
+ * 「判定档退 1 且**点名是哪个文件**」这条断言的读法。
+ *
+ * 两份工具打的是 `path.relative()` 的结果，Windows 上就是 `src\Dirty.tsx`，
+ * 而这一格要钉的是**有没有点名**、不是路径分隔符。从前它写成
+ * `toContain("src/Dirty.tsx")`，于是在 Windows 检出上恒红：本地钩子拦下每一个
+ * 提交，而 PR 是平台侧 squash 合并、不跑钩子，#623 之后也没有 CI 兜底 ——
+ * 这条红是**直接从 master 落进仓库**的。与台账 R12-01「判据不许假定读者的 git
+ * 配置」同一族：**判据也不许假定读者的路径分隔符**。
+ */
+function namesFile(output: string, relPosix: string): boolean {
+  return output.replace(/\\/g, "/").includes(relPosix);
+}
+
 /** 两份工具的公共夹具：`scripts/` 落点 + globals.css + 链回来的 node_modules。 */
 function tw4Fixture(script: string): GateRepoOptions {
   return {
@@ -81,7 +95,7 @@ describe("tw4-canonical-report 硬闸", () => {
       repo.write("src/Dirty.tsx", `export const cls = "!bg-subtle";\n`);
       const r = repo.run(["--check"]);
       expect(r.code).toBe(1);
-      expect(r.output).toContain("src/Dirty.tsx");
+      expect(namesFile(r.output, "src/Dirty.tsx"), r.output).toBe(true);
     },
     ENGINE_TIMEOUT,
   );
@@ -136,7 +150,7 @@ describe("tw4-spacing-canonical 硬闸", () => {
       repo.write("src/Dirty.tsx", `export const cls = "h-[22px]";\n`);
       const r = repo.run(["--check"]);
       expect(r.code).toBe(1);
-      expect(r.output).toContain("src/Dirty.tsx");
+      expect(namesFile(r.output, "src/Dirty.tsx"), r.output).toBe(true);
     },
     ENGINE_TIMEOUT,
   );
