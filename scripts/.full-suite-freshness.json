@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-11T16:38:39.211Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-13T01:07:27.254Z",
+    "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "本次只改 scripts/app-port.mjs 的仓库根口径与调用点（脚本/配置层），不加运行时依赖；受影响的 tests/app-port*.test.ts 已就地跑绿（26 条）。全量覆盖率档与本次改动面无交集，今天不整跑"
+    "skippedReason": "今天真跑过一次全量（8777 passed / 3 failed）—— 那 3 条与本次改动无关：2 条要本机 python venv（环境缺件）、1 条是 e2e 新鲜度账当天未自证（已补记豁免）。因环境缺件这一档今天跑不绿，故按「今天故意不跑」记一条。本次改动不动 src/（覆盖率门槛按 src 子域判），受影响用例（tests/typedoc-run.test.ts + tests/check-docs-api.test.ts，21 条）已就地跑绿，tsc / eslint / prettier 全绿。"
   }
 }

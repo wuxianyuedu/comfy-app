@@ -397,7 +397,7 @@ pnpm build        # Next.js 生产构建（standalone）
 pnpm check        # eslint + tsc --noEmit
 pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
-pnpm docs         # 生成 API 文档到 docs/
+pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）
 pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）

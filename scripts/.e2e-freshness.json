@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-12T03:54:48.342Z",
+    "verifiedAt": "2026-10-13T01:04:20.520Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本次提交只改 AGENTS.md 与 project Skill 两处文档、并把 .workbuddy/memory 移出 git 索引，未触碰任何运行时代码与 e2e 链路"
+    "skippedReason": "本次改动只落在文档生成链（scripts/typedoc-run.mjs / scripts/generate-api-docs.mjs / tools/docs/generate-api-docs.ps1）与它自己的契约用例，不触碰 e2e 覆盖的页面行为，本机也没有可用的浏览器与显示环境。已就地跑绿受影响用例（tests/typedoc-run.test.ts + tests/check-docs-api.test.ts，21 条）与 tsc / eslint / prettier。"
   }
 }

@@ -67,6 +67,7 @@
 | `build/build-all.ps1` | build/ | 一键编排 | 构建 release 壳（= 唯一入口 `app.exe`） |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
 | `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/generate-docs.ps1` / `scripts/generate-docs.mjs`） |
+| `docs/generate-api-docs.ps1` | docs/ | 文档 | 一键重生成 API 文档 `docs/api/**`（跨平台等价：`pnpm run docs`；逻辑在 `scripts/generate-api-docs.mjs`，跑 + 验 + 重试在 `scripts/typedoc-run.mjs`） |
 | `shadcn-registry/start-shadcn-registry.ps1` | shadcn-registry/ | 团队 shadcn Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
 | `README.md` | (根) | 文档 | 本文件 |
 | `database-studio/start-database-studio.ps1` | database-studio/ | 数据库 | 启动 Drizzle Studio（逻辑在 `database-studio/start-database-studio.logic.ps1`） |
@@ -96,6 +97,7 @@
 | `start/run-tests.ps1` | `scripts/run-tests.ps1` |
 | `start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
 | `docs/generate-docs.ps1` | `scripts/generate-docs.ps1` |
+| `docs/generate-api-docs.ps1` | `scripts/generate-api-docs.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
 | `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
 | `start/start-desktop.ps1` | —（自检逻辑内联在入口里，不另起逻辑脚本） |
 
