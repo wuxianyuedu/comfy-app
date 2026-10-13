@@ -89,7 +89,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(52 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(53 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -206,6 +206,14 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种
   # 写法」的文件 ≥ 10 个就阻断，要求拆成两次提交。
   run "格式化提交与行为改动分离" node scripts/check-reformat-only.cjs
+  # 翻闸删掉的旗标（`--update` / `--strict`）不许还在被人教着跑（规范 §13.5.16）：
+  # 翻硬闸会删掉那两个旗标与基线，而「谁还在说跑那条命令」此前**没有任何判据**——
+  # #1845 是人工 grep 一遍清掉 8 处，并把「翻闸时顺手 grep 旧旗标」写成一个**动作**，
+  # 而动作没有执行者，下一批翻闸必然再漂。这里把它机器化，但**只做能证明的那一半**：
+  # 用法块里教人跑自己的那一行、棘轮归类表的陈词（表里点名 = 断言「仍带 --update」）、
+  # 命令清单与红话字面量里 `node scripts/<已翻闸脚本> --update`。沿革叙述（「曾经带
+  # --update，已删」）**刻意不判** —— 判它会误报一片，而会误报的判据活不过一次评审。
+  run "翻闸旗标的散文承诺(硬闸)" node scripts/check-gate-flag-claims.cjs
   # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：硬闸 —— 存量已清零。
   run "地基层零消费导出(硬闸)" node scripts/check-dead-exports.cjs --staged
   # 生成态文档与源同步（规范 §13.5.5）：docs/generated/** 是提交进 git 的原文文档，
