@@ -216,7 +216,9 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
       path.join(ROOT, "scripts", "dev-launcher.mjs"),
       "utf8",
     );
-    const gated = launcher.indexOf("if (gated.error) {");
+    /* 编排器接住的那一句是 `if (!gated.ok) {`（拆刀后桥段以 `ok` 出口交回，
+     * `gated.error` 只是它的一个字段）—— 断言按**实际形态**写，不按旧形态。 */
+    const gated = launcher.indexOf("if (!gated.ok) {");
     expect(gated, "编排器没有接住预检失败").toBeGreaterThan(-1);
     expect(launcher.slice(gated, gated + 400)).toContain("return 1");
   });

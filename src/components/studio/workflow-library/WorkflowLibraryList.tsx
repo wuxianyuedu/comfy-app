@@ -280,7 +280,7 @@ function WorkflowListItem({
           "h-auto w-full min-w-0 rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
           // p71-allow:start brand 渐变 · 选中态 violet→fuchsia 双色（项目品牌视觉 · 与卡片头 logo 呼应）
           selected
-            ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
+            ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-primary-500)_15%,transparent)]"
             : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
           // p71-allow:end
         ].join("")}

@@ -29,7 +29,7 @@
  *    `--update` / 改成人的手工登记）—— 退出码判对了、话术把人指向一条自己会拒绝的命令，
  *    同样是在教人绕开判据（`check-tsc-diagnostic-executors.cjs` 就是这样落地的）。
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -70,11 +70,6 @@ interface Ratchet {
 const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
 
 const RATCHETS: Ratchet[] = [
-  /* 这里**没有** R5（`check-file-structure.cjs` 的「`src` 侧超 900 行」那一半）：
-   * 它在 ISSUE #1811 里翻了硬闸 —— 基线删掉、`--strict` / `--update` 删掉，
-   * 超限即阻断，于是「拒涨」在它身上**无对象可判**（没有基线可写回去，本表的现算
-   * 清单 `discoveredBaselines()` 也就认不出它）。它的硬闸形态由
-   * `tests/check-file-structure.test.ts` 的「R5：超 900 行的文件即阻断」一组守着。 */
   {
     script: "check-void-floats.cjs",
     baseline: "scripts/.void-floats-baseline.json",
@@ -85,56 +80,6 @@ const RATCHETS: Ratchet[] = [
         `async function vf${n}(): Promise<void> {}\nvoid vf${n}();\n`,
       ),
   },
-  {
-    script: "check-overlay-z.cjs",
-    baseline: "scripts/.overlay-z-baseline.json",
-    fixture: {
-      dirs: ["src/components/studio", "src/components/ui", "src/app"],
-    },
-    /**
-     * 落点必须**避开 `src/components/ui/`** —— 那是脚本自己的豁免目录（shadcn 生成件，
-     * §16.1）。把违规写进豁免目录会得到「加第二条仍然绿」，而那判的是豁免而不是棘轮。
-     */
-    violate: (repo, n) =>
-      repo.write(
-        `src/components/studio/Overlay${n}.tsx`,
-        `export function Overlay${n}() {\n  return <div style={{ zIndex: ${n + 40} }} />;\n}\n`,
-      ),
-  },
-  {
-    script: "check-ui-logic-separation.cjs",
-    baseline: "scripts/.ui-logic-baseline.json",
-    fixture: { dirs: ["src/components"] },
-    violate: (repo, n) =>
-      repo.write(
-        `src/components/Net${n}.tsx`,
-        `export function Net${n}(): Promise<Response> {\n  return fetch("/api/x${n}");\n}\n`,
-      ),
-  },
-  {
-    script: "check-comment-language.cjs",
-    baseline: "scripts/.comment-language-baseline.json",
-    fixture: {
-      dirs: ["src/lib"],
-      copy: [{ from: "scripts/doc-facts.cjs", to: "scripts/doc-facts.cjs" }],
-      files: {
-        "docs/.keep": "",
-        "docs/reference-facts.md":
-          "# refs\n\n| `comment.language.asciiOnly` |  | 白名单 | 本行 | 解析本行 |\n",
-      },
-    },
-    violate: (repo, n) =>
-      repo.write(
-        `src/lib/en${n}.ts`,
-        `/** Combine the input parameters and fall back to defaults. */\nexport const en${n} = ${n};\n`,
-      ),
-  },
-  /* 这里**没有** tw4 那两份（`tw4-canonical-report.mjs` / `tw4-spacing-canonical.mjs`）：
-   * 它们在 ISSUE #1811 的 tw4 项里翻了硬闸 —— 基线删掉、`--update` 删掉，`--check`
-   * 命中即退 1，于是「拒涨」在这两家**无对象可判**（没有基线可写回去，
-   * 这一张表的现算清单 `discoveredBaselines()` 也就认不出它们了）。
-   * 它们的硬闸形态由 `tests/tw4-canonical-ratchet.test.ts` 守着（判定档还在、
-   * 放宽通道没被加回来、扫描走共享内核）。 */
 ];
 
 /**
@@ -143,11 +88,9 @@ const RATCHETS: Ratchet[] = [
  * 但「它在不在册」这件事仍由完整性那条用例判 —— 删掉本地用例而不改这张表会红。
  */
 const COVERED_LOCALLY: Record<string, string> = {
-  ".format-baseline.json": "tests/check-format.test.ts",
   ".form-field-wiring-baseline.json": "tests/form-field-wiring-gate.test.ts",
   ".gate-repo-boilerplate-baseline.json":
     "tests/gate-repo-boilerplate-gate.test.ts",
-  ".test-sleep-baseline.json": "tests/test-sleep-gate.test.ts",
   /* 它的判定对象是 registry 漏洞清单，沙箱造不出「一条新 advisory」，
    * 而它自带 `--fixture` 口，本地用例正是对着固定 registry 形状跑 CLI 退出的。 */
   ".dependency-audit-baseline.json": "tests/dependency-audit.test.ts",
@@ -177,9 +120,7 @@ const COVERED_LOCALLY: Record<string, string> = {
  *     R1–R12 其它规则、第 ② 步配不出来」。拆开看：连带命中是真的（缺
  *     `src/proxy.ts` 时 R11 当场红），但那份文件是**可配的输入**，
  *     把 R1–R12 都喂绿第 ② 步就成立 —— 于是它进了 `RATCHETS`，夹具里带
- *     `src/proxy.ts`。**它随后又出了表**：ISSUE #1811 的 R5 项把 R5 翻成硬闸
- *     （基线删掉、`--strict` / `--update` 删掉），拒涨在这一家无对象可判 ——
- *     见 `RATCHETS` 里那条「这里没有 R5」的注释。
+ *     `src/proxy.ts`。
  *   · `.ui-primitives-baseline.json` —— 卡点写着「拒涨按 rule id 比较，要先把
  *     rule 集合钉住」。本轮实测：`HARD_GATE_RULES` 已覆盖全部 85 条，
  *     `ratchetOnly()` 的返回恒为空 —— **棘轮那条车道上一个成员都没有**，
@@ -200,6 +141,35 @@ const PENDING: Record<string, string> = {};
 const RETIRED_RATCHETS: Record<string, string> = {
   ".ui-primitives-baseline.json":
     "85 条判据全部在 HARD_GATE_RULES 里（`ratchetOnly()` 恒返回空），棘轮车道已无成员；`--update` 写回去的永远是空账，拒涨无对象可判",
+};
+
+/**
+ * **已翻硬闸**的棘轮（ISSUE #1811 收尾那一批）：基线文件已删、`--update` /
+ * `--strict` 已从脚本里删掉，命中即退 1。
+ *
+ * 为什么这张表必须存在（而不是「翻了就完事」）：翻闸的正确性有一半是**否定式**
+ * 的 —— 「这条判据不再有任何放宽通道」。而否定式没有任何**正面**判据会盯：
+ * `discoveredBaselines()` 现算的是「带 `--update` 且写回基线」的脚本，翻闸之后
+ * 它们自然出网、四张表也都不再点名它们 —— 于是「有人把基线加回去 + 把 `--update`
+ * 也加回去」在**这一个文件里**不会有任何反应（它只会重新出现在 found 里，
+ * 而那时四张表里恰好也没有它 → 完整性那一格才会红。这一格是把那条路的**前半段**
+ * 也钉住：脚本里既不该有那份基线，也不该有 `--update` 的写入通道）。
+ *
+ * 值 = 那条判据的 **自测文件**（照 `COVERED_LOCALLY` 的口径点名，删了它会红）。
+ */
+const HARD_GATE_FLIPS: Record<string, string> = {
+  "check-overlay-z.cjs": "tests/check-overlay-z.test.ts",
+  "check-comment-language.cjs": "tests/comment-language.test.ts",
+  "check-test-sleep.cjs": "tests/test-sleep-gate.test.ts",
+  "check-format.cjs": "tests/check-format.test.ts",
+  "check-ui-logic-separation.cjs": "tests/check-ui-logic-separation.test.ts",
+  /* R5（`src` 侧超 900 行）这一半：基线删了、`--strict` / `--update` 删了，超限即阻断 ——
+   * 于是它在本表的棘轮车道上「无对象可判」，改由硬闸形态的否定式钉住。 */
+  "check-file-structure.cjs": "tests/check-file-structure.test.ts",
+  /* tw4 那两份（起 Tailwind 引擎、按需跑）：基线删了、`--update` 删了，命中即退 1。
+   * 它们共用一个自测文件。 */
+  "tw4-canonical-report.mjs": "tests/tw4-canonical-ratchet.test.ts",
+  "tw4-spacing-canonical.mjs": "tests/tw4-canonical-ratchet.test.ts",
 };
 
 /** 不是计数棘轮的 `--update` 出口：加条目是它的正常用法，拒涨反而错。理由必须写在册子上。 */
@@ -525,6 +495,42 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         } finally {
           handle.dispose();
         }
+      }
+    });
+
+    it("HARD_GATE_FLIPS 的否定式必须成立：基线文件已删、`--update` 落盘通道已删", () => {
+      /**
+       * 翻硬闸的正确性有一半是否定式的（「不再有任何放宽通道」），而否定式没有
+       * 正面判据会盯 —— 翻闸之后这些脚本自然从 `discoveredBaselines()` 出网、
+       * 四张表也都不再点名它们。两格：**那份基线文件必须不在**、
+       * **脚本里不许再出现把 `.json` 写回去的调用**。
+       *
+       * 第二格是「有人把 `--update` 加回来」的唯一机器痕迹：加回来必然带一处
+       * 落盘调用（`fs.writeFileSync(<…>.json, …)`），而这一格里看得见。
+       */
+      const dir = join(import.meta.dirname, "..", "scripts");
+      for (const [script, spec] of Object.entries(HARD_GATE_FLIPS)) {
+        const src = readFileSync(join(dir, script), "utf8");
+        /* 认「写一份 .json」这件事本身，而不是认某个变量名 —— 换拼法也躲不过。
+         * 只认写入调用里出现的 `.json` 字面量（读回来比对不算）。 */
+        const writesJson = [...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g)].some(
+          (m) => /"\.[^"]+\.json"|\.json"/.test(m[1] ?? ""),
+        );
+        expect(
+          writesJson,
+          `${script} 里又出现了「把一份 .json 写回去」的调用 —— ` +
+            "这一条已翻硬闸（基线删了、--update 删了），别把放宽通道加回来",
+        ).toBe(false);
+        /* 自测文件必须在（删了它 = 这一条翻闸后没人钉，照 COVERED_LOCALLY 的口径）。 */
+        expect(
+          existsSync(join(import.meta.dirname, "..", spec)),
+          `${script} 翻硬闸时点名的自测 ${spec} 不存在`,
+        ).toBe(true);
+        /* 也不能再出现在现算清单里（出现 = 它又会写一份基线）。 */
+        expect(
+          found.some((f) => f.script === script),
+          `${script} 又回到了现算清单（它会写一份基线）—— 翻硬闸的脚本不该再落盘`,
+        ).toBe(false);
       }
     });
 

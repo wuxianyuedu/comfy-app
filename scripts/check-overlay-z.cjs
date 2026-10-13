@@ -20,8 +20,11 @@
  *      （`z-base` / `z-canvas-ui` / `z-canvas-max` / `z-modal` / `z-popup` /
  *      `z-toast`），写裸数字等于又编了一档
  *
- * Z1/Z2 全库清零（**硬闸**）；Z3 是棘轮，存量按文件记账、只许降不许升
- * （基线 `scripts/.overlay-z-baseline.json`）。
+ * 三条**全部是硬闸**：Z1/Z2 很早即清零；Z3 的存量也已清零，于是它的棘轮车道
+ * 没有任何成员（`--update` 写回去的永远是一份空账），留着那份基线只剩
+ * 「手改 JSON 就能把新违规登记成已知存量」这一条通道 —— 那是硬闸类本来没有的
+ * 中间态（规范 §13.6.2 的两类对照）。所以 ISSUE #1811 收尾时删基线、删
+ * `--update` / `--strict`，命中即退 1。
  *
  * 豁免（显式，不做模糊放行）：
  *   · 刻度表自身（`src/lib/shell/overlay-z.ts`）与它的类型/契约测试；
@@ -32,10 +35,12 @@
  *   · `*.test.*` / `__tests__/**` 测试里断言的 DOM 与 mock 不算视图实现。
  *
  * 用法：
- *   node scripts/check-overlay-z.cjs            # 检查（棘轮：只许降不许升）
- *   node scripts/check-overlay-z.cjs --strict   # 基线下调也失败（强制收紧）
+ *   node scripts/check-overlay-z.cjs            # 检查（硬闸：命中即退 1）
+ *   node scripts/check-overlay-z.cjs --staged   # 只在暂存改动触及扫描面时判（钩子用）
  *   node scripts/check-overlay-z.cjs --report   # 只出清单，不判失败（排批次用）
- *   node scripts/check-overlay-z.cjs --update   # 治理后重写基线（须伴随下降）
+ *
+ * `--report` 保留：清零之后的自证靠它（一个永远返回空的扫描器会让「清单为空」
+ * 全绿，这与「判据真的在扫」是两件事）。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -44,10 +49,7 @@ const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
 const STAGED = ARGS.has("--staged");
-const BASELINE = path.join(__dirname, ".overlay-z-baseline.json");
 
 /** 棘轮作用域：视图层（组件 + 路由页面）——与 UI 基元棘轮同口径。 */
 const SCAN_DIRS = ["src/components", "src/app"];
@@ -193,55 +195,14 @@ function total(map) {
   return n;
 }
 
-function writeBaseline(files) {
-  fs.writeFileSync(
-    BASELINE,
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString().slice(0, 10),
-        note:
-          "视图层刻度表之外的 z-index 存量（规范 16 §16.2.5）。棘轮只许下降；" +
-          "新增请先改走刻度（z-modal / z-popup / Z.*），不要用 --update 放水。" +
-          "豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.5 同源）。",
-        rules: Object.fromEntries(
-          Object.entries(RULES).map(([id, r]) => [id, r.label]),
-        ),
-        total: total(files),
-        files,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-}
-
 function main() {
-  if (STAGED && !REPORT_ONLY && !UPDATE) skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[overlay-z]" });
-  const now = collect();
-  const prev = fs.existsSync(BASELINE)
-    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-    : null;
-  const baseFiles = prev?.files ?? null;
-
-  if (UPDATE) {
-    const before = baseFiles ? total(baseFiles) : 0;
-    const after = total(now);
-    /* 「基线在不在」而不是「基线的数是不是非零」：层级这一族已经清到 0 之后，
-     * 旧写法 `before &&` 会整个短路，新写一条内联 z-index 再跑一次 --update
-     * 就把它收进基线（同族已修先例见 check-ui-logic-separation.cjs）。 */
-    if (baseFiles && after > before) {
-      console.error(
-        `[overlay-z] 拒绝放宽基线：${before} → ${after}（棘轮只许下降）。\n` +
-          "  新增的层级请先改走刻度表（z-modal / z-popup / z-canvas-ui / Z.*），不要用 --update 掩盖。",
-      );
-      process.exit(1);
-    }
-    writeBaseline(now);
-    console.log(
-      `[overlay-z] 基线已更新：${before} → ${after}（${path.relative(ROOT, BASELINE)}）`,
-    );
-    process.exit(0);
+  if (STAGED && !REPORT_ONLY) {
+    skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[overlay-z]" });
   }
+  /* 固定入口：判据只认这一个 `--update` 之外的旗标集合，其余一律按检查档跑。
+   * `--update` / `--strict` 在本条已不存在（基线删了），传进来也只是被忽略 ——
+   * 那正是「断头」的形态：没有隐藏的放宽通道。 */
+  const now = collect();
 
   if (REPORT_ONLY) {
     for (const [id, rule] of Object.entries(RULES)) {
@@ -261,33 +222,10 @@ function main() {
     process.exit(0);
   }
 
-  if (!baseFiles) {
-    console.error(
-      "[overlay-z] 基线文件缺失：先执行 node scripts/check-overlay-z.cjs --update",
-    );
-    process.exit(1);
-  }
-
   const problems = [];
-  const dropped = [];
   for (const [rel, counts] of Object.entries(now)) {
-    const b = baseFiles[rel];
     for (const [id, n] of Object.entries(counts)) {
-      if (!b || b[id] === undefined) {
-        problems.push(`新增 ${id}（${RULES[id].label}）→ ${rel}（${n} 处）`);
-      } else if (n > b[id]) {
-        problems.push(
-          `${id} 上升 ${b[id]} → ${n} → ${rel}（${RULES[id].label}）`,
-        );
-      } else if (n < b[id]) {
-        dropped.push(`${id} ${b[id]} → ${n}：${rel}`);
-      }
-    }
-  }
-  for (const [rel, b] of Object.entries(baseFiles)) {
-    const cur = now[rel];
-    for (const [id, n] of Object.entries(b)) {
-      if (!cur || cur[id] === undefined) dropped.push(`${id} ${n} → 0：${rel}`);
+      problems.push(`${id}（${RULES[id].label}）→ ${rel}（${n} 处）`);
     }
   }
 
@@ -300,23 +238,12 @@ function main() {
   if (problems.length) {
     console.error("[overlay-z] 违规（阻断）：\n  " + problems.join("\n  "));
     console.error(
-      "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.5；\n" +
+      "  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。\n" +
+        "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.5；\n" +
         "  改法：层级取自刻度表（~/lib/shell/overlay-z 的 Z.* 或 z-modal / z-popup / z-canvas-ui 工具类），\n" +
-        "  不要再写裸数字或任意值写法。治理后执行 --update 收紧基线。",
+        "  不要再写裸数字或任意值写法。",
     );
     process.exit(1);
-  }
-
-  if (dropped.length) {
-    const msg =
-      `[overlay-z] 检测到 ${dropped.length} 处下降，请收紧基线：\n  ` +
-      dropped.join("\n  ") +
-      "\n  执行 node scripts/check-overlay-z.cjs --update";
-    if (STRICT) {
-      console.error(msg);
-      process.exit(1);
-    }
-    console.log(msg + "（当前非 --strict，仅提示）");
   }
   console.log("[overlay-z] OK");
 }

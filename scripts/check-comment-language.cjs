@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck -- 提交门槛脚本:注释语言棘轮(供 .githooks/pre-commit 的 D 组调用)
 /**
- * 注释语言棘轮 —— 规范见 docs/standards/12-代码组织与文件结构.md §12.4.6。
+ * 注释语言判据（**硬闸**）—— 规范见 docs/standards/12-代码组织与文件结构.md §12.4.6。
  *
  * 背景(ISSUE #678「代码中的注释尽量改成中文」):
  * 本仓库的文档、报错文案、Issue、评审结论全是中文,但源码里的注释大量是英文 ——
@@ -63,7 +63,6 @@ const {
 } = require("./gate-scan-read.cjs");
 
 const ROOT = process.cwd();
-const BASELINE = path.join(__dirname, ".comment-language-baseline.json");
 /**
  * 判据版本：只有判据本身变了（例如换了「疑似英文句子」的阈值）才允许一次性重记，
  *  其余情况数字只许下降 —— 否则 `--update` 就成了「这条先放宽一下」的后门
@@ -72,10 +71,7 @@ const BASELINE = path.join(__dirname, ".comment-language-baseline.json");
  *  会把中文段落里折行的标识符 / 路径 / 类名清单整片判成违规（实测 21 行里 19 行是
  *  这一类），判据因此从「能挡真英文注释」退化成「逼人在引用行上垫中文」。
  */
-const RULE_VERSION = 4;
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
 
 /** 扫描范围:应用源码、门槛脚本、测试、e2e。 */
@@ -362,11 +358,6 @@ function collect(asciiOnly) {
   return { counts, scanned, total, vanished };
 }
 
-function readBaseline() {
-  if (!fs.existsSync(BASELINE)) return { ruleVersion: RULE_VERSION, files: {} };
-  return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-}
-
 async function main() {
   const asciiOnly = await asciiOnlyModules();
   const { counts, scanned, total, vanished } = collect(asciiOnly);
@@ -385,118 +376,30 @@ async function main() {
     return;
   }
 
-  const baseline = readBaseline();
-  const hadBaseline = fs.existsSync(BASELINE);
-
-  if (UPDATE) {
-    /* 读数不完整时**不许记账**：少读一份就少算几行，把这样的读数写进基线 = 那几行
-     * 从此不会被任何人报出。与 `check-dead-exports` / `check-gate-repo-boilerplate`
-     * 同一条口径。 */
-    if (vanished > 0) {
-      console.error(
-        `[comment-language] 拒绝 --update：本轮有 ${vanished} 份文件在扫描期间消失，` +
-          "读数不完整。\n  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
-      );
-      process.exit(1);
-    }
-    /* 同 `check-dead-exports` / `check-circular-deps` 那一格：note 里写着「只许降不许升」，
-     * 而这一支此前无条件落盘 —— 新写几行英文注释后跑一次 --update 就把它们收进基线。
-     * 判据升级（RULE_VERSION 变了）是另一件事：那一档允许重写，且必须先改常数。 */
-    const baselineTotal =
-      typeof baseline.total === "number" ? baseline.total : 0;
-    const sameRule = baseline.ruleVersion === RULE_VERSION;
-    if (hadBaseline && sameRule && total > baselineTotal) {
-      console.error(
-        `[comment-language] 拒绝 --update：当前 ${total} 行 > 基线 ${baselineTotal} 行。\n` +
-          `  棘轮只许降不许升：把新增的注释改成中文（规范 §12.4.6），再 --update。\n` +
-          `  若确属判据变更（现为 RULE_VERSION=${RULE_VERSION}），先改脚本里的常数再 --update。`,
-      );
-      process.exit(1);
-    }
-    fs.writeFileSync(
-      BASELINE,
-      `${JSON.stringify(
-        {
-          generatedAt: new Date().toISOString().slice(0, 10),
-          ruleVersion: RULE_VERSION,
-          note:
-            `疑似英文注释行计数棘轮(规范 12.4.6,判据版本 ${RULE_VERSION});` +
-            "只许降不许升。" +
-            "白名单见 docs/reference-facts.md 的 comment.language.asciiOnly。",
-          total,
-          files: counts,
-        },
-        null,
-        2,
-      )}\n`,
-    );
+  /* 存量已清零 ⇒ 这是硬闸：**任何一处疑似英文注释都阻断**，没有基线、没有
+   * `--update`、没有 `--strict`。此前它是棘轮（`scripts/.comment-language-baseline.json`），
+   * 而清零后的棘轮只剩两个无事可做的动作 + 一条「手改 JSON 就能把新违规登记成
+   * 已知存量」的通道 —— 硬闸类本来没有那个中间态（§13.6.2 的两类对照）。 */
+  if (total === 0) {
     console.log(
-      `✓ 已写入基线:${total} 行 / ${Object.keys(counts).length} 个文件`,
+      `✓ 无英文注释（§12.4.6;扫描 ${scanned} 个文件）` + note,
     );
     return;
   }
 
-  // 判据版本不一致时直接阻断:旧数字与新计数不是同一个量,比对没有意义。
-  if (baseline.ruleVersion !== RULE_VERSION) {
-    console.error(
-      `✗ 基线判据版本 ${baseline.ruleVersion} 与当前 ${RULE_VERSION} 不一致,` +
-        `\n  旧数字与新口径不是同一个量。请执行:node scripts/check-comment-language.cjs --update`,
-    );
-    process.exit(1);
-  }
-
-  const baseFiles = baseline.files || {};
-  const added = [];
-  const grown = [];
-  for (const [rel, n] of Object.entries(counts)) {
-    const base = baseFiles[rel];
-    if (base === undefined) added.push(`${rel}（${n} 行）`);
-    else if (n > base) grown.push(`${rel}（${base} → ${n} 行）`);
-  }
-  const shrunk = Object.entries(baseFiles).filter(
-    ([rel, n]) => (counts[rel] ?? 0) < n,
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  console.error(
+    `✗ ${rows.length} 个文件里共 ${total} 行疑似英文注释（规范 §12.4.6:注释一律中文）:`,
   );
-
-  let failed = false;
-  if (added.length) {
-    console.error(
-      `✗ 新增 ${added.length} 个带英文注释的文件（规范 §12.4.6:注释一律中文）:`,
-    );
-    for (const a of added) console.error(`    ${a}`);
-    failed = true;
-  }
-  if (grown.length) {
-    console.error(
-      `✗ ${grown.length} 个文件的英文注释变多（棘轮只许降不许升）:`,
-    );
-    for (const g of grown) console.error(`    ${g}`);
-    failed = true;
-  }
-  if (failed) {
-    console.error(
-      "\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。" +
-        "\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的" +
-        "\n  `comment.language.asciiOnly` 一行（规范 launch-and-build §9.6）。" +
-        note,
-    );
-    process.exit(1);
-  }
-  if (STRICT && shrunk.length) {
-    console.error(
-      `✗ 基线里 ${shrunk.length} 个文件的英文注释已减少,请收紧基线:` +
-        `\n    node scripts/check-comment-language.cjs --update`,
-    );
-    process.exit(1);
-  } else if (shrunk.length) {
-    console.log(
-      `提示:${shrunk.length} 个文件的英文注释已减少,可执行 node scripts/check-comment-language.cjs --update 收紧基线`,
-    );
-  }
-
-  console.log(
-    `✓ 无新增英文注释（§12.4.6;基线 ${baseline.total ?? 0} 行,当前 ${total} 行,扫描 ${scanned} 个文件）` +
+  for (const [rel, n] of rows) console.error(`    ${String(n).padStart(5)}  ${rel}`);
+  console.error(
+    "\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。" +
+      "\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的" +
+      "\n  `comment.language.asciiOnly` 一行（规范 launch-and-build §9.6）。" +
+      "\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。" +
       note,
   );
+  process.exit(1);
 }
 
 main().catch((err) => {

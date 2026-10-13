@@ -1,5 +1,5 @@
 #!/bin/sh
-# 提交门槛（2026-09-22 并行化重排）：结构硬规则 + 类型检查 + lint + UI/逻辑分离棘轮
+# 提交门槛（2026-09-22 并行化重排）：结构硬规则 + 类型检查 + lint + UI/逻辑分离硬闸
 # + 一批「同一件事只允许一处实现」的机器判据 + CHANGELOG 碎片。
 #
 # 判据内容与各步语义与旧版逐条一致，只改了「执行编排」：
@@ -139,11 +139,10 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 标题行(页签栏)让位：页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会
   # 把页签和右上角窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。
   run "标题行让位硬规则" node scripts/check-title-bar-clearance.cjs --staged
-  # UI 与逻辑分离棘轮(规范 17)。违规数只许降不许升:新增 fetch / vanillaApi / tRPC
-  # hook 进视图层 → 阻断;治理后指标下降也走 `--strict` 阻断 —— AGENTS.md 硬规则 10
-  # 明确「治理后必须 `--update` 收紧基线」,此前只提示不阻断,效果是「基线虚高、
-  # 下一个人借余量偷偷新增」,纪律停在纸面。
-  run "UI/逻辑分离棘轮(--strict)" node scripts/check-ui-logic-separation.cjs --strict
+  # UI 与逻辑分离硬闸(规范 17)。S* 存量已清零(ISSUE #1811 收尾时从棘轮翻上来):
+  # 视图层出现裸 fetch / vanillaApi.* / tRPC hook 即阻断 —— 没有基线、没有
+  # `--update`，也就不存在「借余量偷偷新增」那条路。H1/H2 本来就是硬规则。
+  run "UI/逻辑分离硬闸" node scripts/check-ui-logic-separation.cjs
   # CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
   # 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的文件名与
   # 段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
@@ -199,7 +198,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 44 处牵着 `@xyflow/react`）。这条把「入口的静态图上不该有重依赖」机器化，并打印
   # 整条链（红得能直接改）。修法是把 barrel 那一跳换成深路径 + `dynamic()`。
   run "入口重依赖静态可达性" node scripts/check-barrel-heavy-deps.cjs
-  # prettier 格式棘轮（规范 13.5）：基线 + 只许下降；新增脏文件即阻断。
+  # prettier 格式硬闸（规范 13.5）：未过 prettier 的文件一个都不许有（存量清零后翻闸）。
   # `--staged` 是**输入面跳过**（ISSUE #1747）：它的扫描面实测只有 `src/**` 与
   # `.storybook/**`（1596 / 5940 份被跟踪文件 —— `GLOBS` 连 `.md` 都不收，`IGNORE_GLOBS`
   # 又剔掉 `scripts/` `tests/` `tools/` `e2e/` `public/` `docs/{api,generated}` 与根级配置），
@@ -207,7 +206,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 只改文档 / 只动 `scripts/` `tests/` 这一大类提交根本不在靶子里，扫多少遍结论都一样。
   # 跳过时打印「未触及扫描面」，与扫过之后的 OK 可分辨（不伪造绿）。口径见 §13.5.8.2
   # 与脚本文件头；判据面由 `IGNORE_GLOBS` 自己现算，没有第二份目录清单。
-  run "prettier 格式棘轮" node scripts/check-format.cjs --staged
+  run "prettier 格式硬闸" node scripts/check-format.cjs --staged
   # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种
   # 写法」的文件 ≥ 10 个就阻断，要求拆成两次提交。
   run "格式化提交与行为改动分离" node scripts/check-reformat-only.cjs
@@ -227,10 +226,10 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # src/lib|server|trpc / typedoc.json / 依赖声明时立刻返回 0（重生成实测 31s，
   # 不能给每个前端提交都挂上）。触发面是 typedoc entryPoints 的直接映射，不是启发式。
   run "API 文档生成物与源同步" node scripts/check-docs-api.cjs --staged
-  # 浮层层级刻度（规范 §16.2.5）：行内数字 zIndex 与任意值写法全库清零（硬闸），
-  # 刻度之外的裸数字档按文件记棘轮、只许降不许升。z-index 写错的表现是「时灵时不灵」
+  # 浮层层级刻度（规范 §16.2.5）：Z1/Z2/Z3 三条同为硬闸（刻度之外的裸数字档存量也已
+  # 清零，ISSUE #1811 收尾时从棘轮翻上来）。z-index 写错的表现是「时灵时不灵」
   # ——jsdom 不做层叠与命中测试，单测全绿也照样复现，所以判据只能落在源码形态上。
-  run "浮层层级刻度棘轮" node scripts/check-overlay-z.cjs --staged
+  run "浮层层级刻度硬闸" node scripts/check-overlay-z.cjs --staged
   # src 非空断言 `!` 硬闸（存量已清零）：判据走 TypeScript AST (ts.isNonNullExpression),
   # 不用正则,避免误伤 `!==` / `!x` / 注释里的 `!`。扫描范围是整个 src。
   # 合法例外只有一条道：脚本里的 LEGIT_SITES 逐条登记「下标结构上必然存在」
@@ -283,7 +282,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 占位理由一律被拦（豁免不是绕过）；账文件还没入库时只提醒、不阻断（平台侧 squash 合并
   # 不跑本地钩子，硬规则 6）。
   run "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）" node scripts/freshness-gate.mjs
-  # 注释语言棘轮（规范 §12.4.6）：注释一律中文，只有「会被 next-code-frame 渲染到」
+  # 注释语言硬闸（规范 §12.4.6）：注释一律中文，只有「会被 next-code-frame 渲染到」
   # 的构建期模块例外（Next 的 code frame 按字节切串，命中多字节字符内部时 Rust 侧
   # 直接 panic 把 `next build` 打死，偏移敏感、报错指不出业务原因）。判据本身一直是对的，
   # 但它**从来不在这个钩子里**：脚本头部自称「供 .githooks/pre-commit 与 CI 调用」、
@@ -293,7 +292,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 翻档那条判据（0.64s / 零网络）撑不住「手动档」，所以接进来而不是登记进「按需召唤」。
   # 只接判定档：`--report`（盘点）/ `--update`（收紧基线）/ `--strict`（未收紧即失败）
   # 都是人的动作，不进钩子 —— 基线已是 `total: 0`，「检查」这一档就够。
-  run "注释语言棘轮" node scripts/check-comment-language.cjs
+  run "注释语言硬闸" node scripts/check-comment-language.cjs
   # 用例的环境档（规范 §11.17）。判两件，都是**纯文本、零网络、实测 < 1s**：
   #   ① 「环境早退」——`if (typeof window !== "undefined") return;` 这类写法把用例的
   #      结论挂在**环境的一个全局默认值**上，于是换个默认档（或挪进另一个 project）
@@ -414,17 +413,18 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 两个实测的洞都只有它接得住：reporter 改名（用例喂夹具、看不到真命令）与
   # judgeStillFailing 恒放行（旧版自证只有红侧、判据恒放行时它照样绿）。详见脚本文件头。
   run "已知基线失败登记·自证（碰了这套机制才跑）" node scripts/known-failed-selftest-gate.mjs
-  # 测试层裸 sleep 的净数（规范 §11.14）。§11.14 早就把
+  # 测试层裸 sleep 硬闸（规范 §11.14）。§11.14 早就把
   # `await new Promise(r => setTimeout(r, N))` 定为第一层反模式，执行者写的是
   # 「新增时由 review 拦下」，而实测这句话两头都落空：上一轮清掉的 6 个文件是**抽样**、
   # 口径没有钉住，于是同一个数在两次盘点里从 20 变成 38；`grep -c test-sleep` 在
   # 这个钩子里一直是 0、CI 又随 ISSUE #623 删除 —— 「review 拦下」是唯一的执行者，
   # 而 review 是人、人会漏（同 §13.5.12 的立案现场：判据自称在跑、实际一个执行者都没有）。
-  # 判的是**净数不许涨**（棘轮，`scripts/.test-sleep-baseline.json`，只许降）而不是
-  # 「零容忍」—— 宏任务排空 / 判据自己的夹具 / mock 内部延迟 / 必须真挂钟这四类都是
-  # 正当形态，逐站点写一条 `// sleep-ok: <理由>` 登记豁免，不进棘轮。
+  # 判的是**有没有非豁免站点**（硬闸，命中即退 1）—— 不判「有没有 sleep」是因为
+  # 宏任务排空 / 判据自己的夹具 / mock 内部延迟 / 必须真挂钟这四类都是正当形态，
+  # 逐站点写一条 `// sleep-ok: <理由>` 走**另一条车道**登记豁免。
+  # 存量已清零（ISSUE #1811 收尾时从棘轮翻硬闸）：再出现一处就当场断。
   # 成本实测：纯文本扫描 624 份用例约 0.25s、零网络、零子进程（照 §13.5.4 的成本判据）。
-  run "测试层裸 sleep 棘轮（§11.14）" node scripts/check-test-sleep.cjs
+  run "测试层裸 sleep 硬闸（§11.14）" node scripts/check-test-sleep.cjs
   # 测试层「等异步落定」的写法边界（规范 §11.14.3）。`check-test-sleep.cjs` 管住了
   # 裸 sleep 那一半，而更大量的那一半没人在数：全仓 `await waitFor(...)`
   # （`@testing-library/react` 那个）实测 211 处 / 30 份文件，一条判据都不认识它 ——

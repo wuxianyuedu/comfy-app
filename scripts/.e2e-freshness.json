@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-12T16:32:37.337Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-13T03:43:41.900Z",
+    "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本次提交是合并 origin/master 解 docs 冲突。已在合并态真跑一次 pnpm test:e2e（补全 .env 与 db schema 后）：72 passed / 5 failed + 1 flaky。这 5 条失败与干净 origin/master（05ff9fe1）逐条相同（已用独立 worktree 复算：overlay-entries-as-views 3 条 / theme-token-consumers 1 条 / view-container 1 条），属 baseline-red（§13.6.2），非本次冲突解决引入；本次改动只碰 3 份文档产物。"
+    "skippedReason": "ISSUE #1834：本机 win32 实测 43 failed / 35 passed，66 处 60s goto 超时、33 条卡在 1.0m，散在互不相干的屏上（dev 冷编译 + 8 worker 的响应形态），不是本笔改动带的红；不抬 Playwright timeout、不降 worker 换绿，归因与出口写在 #1834"
   }
 }
