@@ -31,7 +31,10 @@
  */
 import { upperToken } from "~/lib/upper-token";
 import { TypeChip } from "~/components/studio/TypeChip";
-import { WorkflowNodePill } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import {
+  WorkflowNodeActionButton,
+  WorkflowNodePill,
+} from "~/components/studio/workflow-form/WorkflowNodeParts";
 import React from "react";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -337,18 +340,9 @@ export function WorkflowNodeArdot() {
         {/* ── 输出端口行 ── */}
         <PortRowOutput label="images" type="IMAGE" />
 
-        {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
-        <Button
-          variant="primary-solid"
-          className="from-primary to-accent flex h-10.75 w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-sm font-bold text-white hover:opacity-90"
-          style={{
-            fontFamily: "var(--font-sans)",
-            boxShadow:
-              "0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent)",
-          }}
-        >
-          ▶ 用此工作流生成
-        </Button>
+        {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距；Card 自带 overflow-hidden，
+              所以四角交还给卡片 —— 形状本身走唯一出处 WorkflowNodeParts）── */}
+        <WorkflowNodeActionButton corner="clipped" label="▶ 用此工作流生成" />
       </div>
 
       {/* ── 端点层（外层 wrapper 的 absolute 子元素，骑跨 Card 边框）──
