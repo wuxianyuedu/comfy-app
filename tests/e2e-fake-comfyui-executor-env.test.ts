@@ -152,9 +152,13 @@ describe("fakeExecutorEnv：两个平台同一条形状", () => {
       moduleRoot: "/fake/fake-comfyui",
       exists: () => true,
     });
-    expect(result.env.PYTHONPATH).toBe(
-      `/fake/fake-comfyui${path.delimiter}/someone/else`,
-    );
+    /* 分隔符跟着「这条 env 是为**哪个平台**的 Python 拼的」走，不跟宿主 —— 与实现同口径
+     * （真实调用时 `platform` 缺省 = `process.platform`，两者相等，生产形态逐字不变）。
+     * 上一版这里用宿主 `path.delimiter`，而同一个 describe 的形状判据注入的是
+     * `platform: "linux"` 并按 POSIX 路径比对 —— 两条用例对「分隔符归谁管」的要求相反，
+     * 于是在 Windows 开发机上**必然恰好红一条**、在 POSIX 上全绿：这批形状判据
+     * 其实从没在非 POSIX 宿主上自证过（ISSUE #1767 的跨平台那一半）。 */
+    expect(result.env.PYTHONPATH).toBe("/fake/fake-comfyui:/someone/else");
   });
 
   it("替身包不在 / PATH 上没有 Python：给空 env + reason，不抛", () => {
