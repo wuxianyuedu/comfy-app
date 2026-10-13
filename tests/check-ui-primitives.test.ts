@@ -5563,8 +5563,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P83 只管屏级标题：h2 / h3 的多档微排版不入本条", ({ repo }) => {
-    /* 区块级标题刻意保留 10.5–14px 的几档，并成一档会压平层次；判据越界就会
-     * 逼下一个人拆掉合理的排版去迎合机器。 */
+    /* 区块级标题刻意保留 11–14px 的几档，并成一档会压平层次；判据越界就会
+     * 逼下一个人拆掉合理的排版去迎合机器。样本取 12.5px —— 它是调用点**还在用**的
+     * 一档字面量：拿一枚已退役的值当样本，这行源码自己就会变成产物里那条死规则的唯一
+     * 出处（Tailwind 的源扫描连 `tests/**` 一起读，实测过；口径见 03 §3.6.2）。 */
     repo.write(
       "src/components/studio/P83Sections.tsx",
       [
@@ -5572,7 +5574,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "  return (",
         "    <>",
         '      <h2 className="text-sm font-semibold">筛选</h2>',
-        '      <h3 className="text-[10.5px] font-semibold tracking-wider">节点</h3>',
+        '      <h3 className="text-[12.5px] font-semibold tracking-wider">节点</h3>',
         "    </>",
         "  );",
         "}",

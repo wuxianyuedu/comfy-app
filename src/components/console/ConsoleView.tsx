@@ -170,7 +170,7 @@ export function ConsoleView() {
 
             {/* 「这行会被当成什么」的提示块：长度余量 + shell 语法提醒。
                 两者都是「不说清就等于控件哑了」的那一类。 */}
-            <div className="text-ink-fainter flex items-start justify-between gap-3 text-[10.5px]">
+            <div className="text-ink-fainter text-2xs flex items-start justify-between gap-3">
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="flex items-center gap-1.5">
                   <Kbd>Enter</Kbd>
@@ -207,7 +207,7 @@ export function ConsoleView() {
                       disabled={running}
                       onClick={() => c.fill(item.command)}
                       className={cn(
-                        "h-auto max-w-64 rounded px-2 py-0.5 font-mono text-[10.5px] font-normal",
+                        "text-2xs h-auto max-w-64 rounded px-2 py-0.5 font-mono font-normal",
                         item.ok
                           ? "bg-success/10 text-success-strong hover:bg-success/20"
                           : "bg-subtle text-ink-muted hover:text-ink",

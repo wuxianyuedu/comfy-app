@@ -45,9 +45,7 @@ function ToggleRow({
         <span className="text-ink-bright text-[12.5px] font-medium">
           {label}
         </span>
-        {hint && (
-          <span className="text-ink-muted mt-0.5 text-[10.5px]">{hint}</span>
-        )}
+        {hint && <span className="text-ink-muted text-2xs mt-0.5">{hint}</span>}
       </span>
       {/* 开关走 ui/switch（规范 16 §16.2.3）：此前这里自绘了一个
           「圆角底 + 绝对定位圆点」的开关，与 CanvasSettingsPanel 的另一份

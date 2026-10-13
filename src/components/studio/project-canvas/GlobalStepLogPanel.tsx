@@ -216,7 +216,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       onClick={onCancelFromPanel}
                       disabled={cancellingFromPanel}
                       data-testid="log-panel-cancel"
-                      className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
+                      className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 text-2xs h-auto rounded-md border px-2 py-0.5"
                     >
                       {cancellingFromPanel ? "× 取消中…" : "× 取消"}
                     </Button>
@@ -232,7 +232,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <Button
                   variant="outline"
                   onClick={onClear}
-                  className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
+                  className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs h-auto rounded-md border px-2 py-0.5"
                 >
                   清空
                 </Button>

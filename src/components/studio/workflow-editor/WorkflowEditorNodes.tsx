@@ -138,7 +138,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
        *  React Flow 用 `Position` 属性把 Handle 绝对定位，
        *  所以改 flex 的 `justify-…` 只挪得动可见的标签 / 值 ——
        *  圆点始终钉在 wfGroup 的那一侧。 */
-      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 gap-1 px-1.5 py-0.25 text-[10.5px] leading-[1.4]`}
+      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 text-2xs gap-1 px-1.5 py-0.25 leading-[1.4]`}
       style={{
         width: IO_PORT_WIDTH,
         background: "transparent",
@@ -170,7 +170,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
          *  浏览器默认的文字渲染会产生柔化的抗锯齿字形，看起来像字符之间有空隙
          *  （"s a m p l e s"）。`geometricPrecision` 加一点点负字距把字形收拢，
          *  任何缩放级别下都读作一个完整的词。
-         *  字体族与 `font-medium` **刻意不动** —— 这一列只有 10.5px，
+         *  字体族与 `font-medium` **刻意不动** —— 这一列只有 11px（行上是 `text-2xs`），
          *  500 字重正是合适的光学重量；渲染收拢之后再抬到 600 会显得过重。 */
         style={{
           maxWidth: IO_PORT_WIDTH - (valueStr ? 56 : 24),

@@ -185,7 +185,7 @@ export function SeedModeButton({
             控件后行为{" "}
             <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
           </h4>
-          <p className="text-ink-muted text-[10.5px] leading-relaxed">
+          <p className="text-ink-muted text-2xs leading-relaxed">
             seed / 类似数值 widget 点击数字弹出 4 选 1 切换面板
           </p>
         </div>
@@ -215,7 +215,7 @@ export function SeedModeButton({
                   <span className="text-ink-bright text-xs font-semibold">
                     {item.label}
                   </span>
-                  <span className="text-ink-muted truncate text-[10.5px] leading-snug">
+                  <span className="text-ink-muted text-2xs truncate leading-snug">
                     {item.hint}
                   </span>
                 </span>

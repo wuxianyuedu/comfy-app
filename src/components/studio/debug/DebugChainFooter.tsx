@@ -327,7 +327,7 @@ export function DebugChainFooter({
             )}
             {!sourceBusy.busy && source && (
               <div className="flex flex-col">
-                <div className="border-border-subtle bg-subtle text-ink-muted flex shrink-0 items-center justify-between border-b px-4 py-1.5 font-mono text-[10.5px]">
+                <div className="border-border-subtle bg-subtle text-ink-muted text-2xs flex shrink-0 items-center justify-between border-b px-4 py-1.5 font-mono">
                   <span>{source.size.toLocaleString()} 字符</span>
                   <span>{source.modifiedAt}</span>
                 </div>

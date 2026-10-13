@@ -88,7 +88,7 @@ export function WorkflowRunLogButton({
           执行日志
           {live && <StatusDot state="busy" sizeClass="size-1.5" pulse />}
         </span>
-        <span className="text-ink-fainter text-[10.5px]">{statusText}</span>
+        <span className="text-ink-fainter text-2xs">{statusText}</span>
       </Button>
     </Hint>
   );

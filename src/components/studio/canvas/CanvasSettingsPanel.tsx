@@ -212,11 +212,11 @@ function Section({
   return (
     <section className="mb-5 last:mb-0">
       <header className="mb-2">
-        <h3 className="text-ink-soft text-[10.5px] font-semibold tracking-wider uppercase">
+        <h3 className="text-ink-soft text-2xs font-semibold tracking-wider uppercase">
           {title}
         </h3>
         {subtitle && (
-          <p className="text-ink-muted mt-0.5 text-[10.5px]">{subtitle}</p>
+          <p className="text-ink-muted text-2xs mt-0.5">{subtitle}</p>
         )}
       </header>
       <div className="border-border-strong bg-subtle flex flex-col gap-2.5 rounded-lg border p-3">

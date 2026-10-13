@@ -65,7 +65,7 @@ function WorkshopWorkflowSelect({
         </SelectContent>
       </Select>
       {scoped.length === 0 && (
-        <span className="text-faint mt-1 block text-[10.5px]">
+        <span className="text-faint text-2xs mt-1 block">
           工作流库里还没有
           {category === "video" ? "视频" : "生图"}
           类工作流（可在工作室的「工作流库」导入）。
@@ -170,7 +170,7 @@ export function WorkshopAside({
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="text-ink mb-3 flex items-center justify-between text-sm font-semibold">
           生成资源
-          <span className="text-faint text-[10.5px]">
+          <span className="text-faint text-2xs">
             {anyChannelConfigured ? "远端模型已适配" : "远端模型未适配"}
           </span>
         </div>
@@ -204,7 +204,7 @@ export function WorkshopAside({
               <span className="text-ink flex-1 truncate text-[12.5px]">
                 {name}
               </span>
-              <span className="text-faint bg-subtle rounded-md px-2 py-1 text-[10.5px]">
+              <span className="text-faint bg-subtle text-2xs rounded-md px-2 py-1">
                 {tag}
               </span>
             </div>

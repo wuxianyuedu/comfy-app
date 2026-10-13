@@ -156,7 +156,7 @@ export function ErrorPanel({
   }
 
   return (
-    <div className="nodrag nopan border-destructive/30 bg-destructive/6 border-t px-3 py-2 text-[10.5px]">
+    <div className="nodrag nopan border-destructive/30 bg-destructive/6 text-2xs border-t px-3 py-2">
       <div className="flex items-start gap-1.5">
         <Icon
           name="alert"
