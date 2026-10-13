@@ -81,7 +81,7 @@ export function StoryboardPlanner(props: Props) {
                   data-icon="inline-start"
                   name="sparkles"
                   size={13}
-                  className="mr-1 inline align-[-2px]"
+                  className="mr-1"
                 />
                 AI 智能拆镜
               </>
@@ -105,7 +105,7 @@ export function StoryboardPlanner(props: Props) {
                         data-icon="inline-start"
                         name="sparkles"
                         size={13}
-                        className="mr-1 inline align-[-2px]"
+                        className="mr-1"
                       />
                       AI 润色提示词
                     </>

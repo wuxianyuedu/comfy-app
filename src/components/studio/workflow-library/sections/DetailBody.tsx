@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import type { DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
+import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
 
 /* ── 两个页签的重型内容各自懒加载（规范 §12.19 / 02 §2.9） ─────────────────
@@ -170,7 +171,9 @@ export function DetailBody({
               工作流(RAW)格式原件
             </span>
           </div>
-          <div className="bg-canvas-deep max-h-[70vh] overflow-auto rounded-xl">
+          <div
+            className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}
+          >
             {sourceData?.source != null ? (
               <LazyJsonViewer
                 data={sourceData.source}
