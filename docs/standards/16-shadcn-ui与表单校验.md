@@ -423,13 +423,14 @@ auto` 的遮罩压过。
 
 - 行内数字 `zIndex: 7` 与任意值写法 `z-[10000]`（规范 03 §3.2 已禁 arbitrary）
   **全库清零**，属硬闸；
-- 刻度之外的**裸数字具名档**（`z-9999` / `z-80` / `z-99` …）按文件记棘轮、
-  只许降不许升 —— 写得出来就说明又编了一档。
+- 刻度之外的**裸数字具名档**（`z-9999` / `z-80` / `z-99` …）—— 写得出来就说明
+  又编了一档，**存量已清零、同为硬闸**（ISSUE #1811 收尾时从棘轮翻上来：
+  棘轮车道没有成员之后，留着那份基线只剩「手改 JSON 就能把新违规登记成存量」
+  这一条通道，而那是硬闸类本来没有的中间态，见 §13.6.2 的两类对照）。
 
 ```bash
-pnpm ui:overlay-z            # 检查（棘轮 + Z1/Z2 硬闸，pre-commit D 组「浮层层级刻度棘轮」）
-pnpm ui:overlay-z:report     # 只出清单（排批次用，不判失败）
-node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
+pnpm ui:overlay-z            # 检查（Z1/Z2/Z3 三条硬闸，pre-commit D 组「浮层层级刻度棘轮」）
+pnpm ui:overlay-z:report     # 只出清单（排批次用，不判失败；清零后的自证靠它）
 ```
 
 **范围与豁免**（`scripts/check-overlay-z.cjs` 的 `SCAN_DIRS` / `EXEMPT_DIRS`，
