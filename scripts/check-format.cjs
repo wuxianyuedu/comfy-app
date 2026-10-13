@@ -304,7 +304,7 @@ async function main() {
   /* `--staged` 的短路点在**所有**工作之前：未命中扫描面时连 prettier 入口都不解析
    * —— 那条解析在依赖缺失时会 exit 2，而「本次提交没碰扫描面」与「prettier 装没装」
    * 无关，不该被后者带崩（否则把依赖问题伪装成这一步的形态）。
-   * 只作用于 check 档：`--update` / `--report` 照旧全库（见文件头）。 */
+   * 只作用于 check 档：`--report` 照旧全库（见文件头）。 */
   if (STAGED && !REPORT_ONLY) {
     const files = stagedFiles();
     if (files === null) {
