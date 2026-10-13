@@ -53,6 +53,7 @@
 | L8b  | P1   | `scripts/launcher-core/procs.mjs` + `dev-launcher.mjs`           | 端口占用裁定改批量取命令行（一条 CIM / 一条 ps），`cmdlineOf` 契约不变                                 | #1129 |
 | F11  | P1   | `src/lib/page-window.ts` + 三处日志窗口                          | 尾部窗口改增量追加（`tailWindowAppend`：满时原地 `shift`+`push`，不再整份复制 + 切片）                 | #1873 |
 | S14a | P1   | `src/lib/comfyui/status.ts:423-457`                              | 在途查询随 `reset` 作废 + 身份比对才回写；在途去重只在非 `force` 档生效                                | #1873 |
+| S13  | P1   | `src/app/(main)/settings/hooks/use-settings-page-comfy.ts`       | `comfyStatus` 改「事件驱动为主、30s 兜底」：新增 `/api/comfy/state` 长轮询推送（五个变化源：启动 / 就绪 / 关闭 / 退出 / 配置写入） | #1874 |
 
 ## B. 判定修正与例外（📝）
 
@@ -92,7 +93,7 @@ _（全部闭环，见 A 表。）_
 ### C.5 P2（卫生项，随上一批顺手修）
 
 - ⬜ **M12** `src/app/api/logs/current/route.ts`（`readdirSync`/多次 `statSync`）、`api/logs/sessions/route.ts`（同步读+解析 4MiB 尾窗）—— 高频轮询路由的同步 IO。**备注**：该路由已是游标增量 + 1MB 尾窗口；异步化 `fs.promises` 需通读会话边界逻辑（log-session-scope）后谨慎做，单独一轮处理。
-- ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询。**暂缓**：该间隔有 ISSUE #339 的收紧依据，且注释称「服务端有进程级快照兜底」—— 需先核实 `status.ts` 的快照链路（与 S14 的「缓存无失效出口」联动评估），避免误改有意行为。**复核进展（#1873）**：快照链路已核实——TTL `1.5s` / 未绑定端口 `0s`（`COMFY_UNBOUND_PORT_TTL_MS`），且动作后会 `reset`，所以这 5s 不是「兜住一个永不过期的缓存」而是纯轮询节奏，**间隔本身不动**；核实中翻出的那条「启动了却读到旧结论」的窗口已单独闭环（S14a，见 A 表）。
+- ~~**S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询~~ **已闭环（#1874）**：5s 那一拍当初是为「外部拉起的实例要被及时认出来」而收紧的，现在改成**事件驱动为主**（服务端一发现运行态变化就经 `/api/comfy/state` 推过来，设置页收到立刻重问），兜底那一拍从 5s 放到 30s 且只剩「通道自己坏了」这一件事。**复核进展（#1873）**：快照链路已核实——TTL `1.5s` / 未绑定端口 `0s`（`COMFY_UNBOUND_PORT_TTL_MS`），且动作后会 `reset`，所以这 5s 不是「兜住一个永不过期的缓存」而是纯轮询节奏；核实中翻出的那条「启动了却读到旧结论」的窗口已单独闭环（S14a，见 A 表）。
 - ⬜ **S14（剩 `src/server/workshop/comfyui.ts:36-49`）** —— 进程内缓存永不过期且无失效钩子（正确性风险为主）。
   —— `status.ts` 那一半已闭环（**S14a**，见 A 表）：缓存本就有 TTL + `reset` 出口，缺的是「在途查询不随 `reset` 一起作废」，已随 #1873 修。
   —— `workshop/comfyui.ts` 的 `settingsCache` / `resolvedBase` 是**进程内 memo、无失效出口**（改设置文件后要重启才生效）。它属功能语义（何时该失效）而非纯性能，单列一轮。
