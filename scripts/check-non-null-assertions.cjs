@@ -51,12 +51,6 @@ if (STAGED && !REPORT_ONLY) {
 
 const ts = require("typescript");
 
-/** 判据版本:`ts.isNonNullExpression` 语义固定,不会漂;留号便于将来
- *  把 `x?.y!` / `<T>x!` 之类扩展形态纳入时区分。
- *  v1 → v2:扫描范围从 src/lib 扩到整个 src。
- *  v2 → v3:存量清零后翻硬闸,基线文件与 `--update` 一并删除。 */
-const RULE_VERSION = 3;
-
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 
@@ -234,6 +228,6 @@ function main(parsed) {
 }
 
 /* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
-module.exports = { countTree, countFor, collectFiles, main, RULE_VERSION, SCAN_DIR, isTestFile, LEGIT_SITES };
+module.exports = { countTree, countFor, collectFiles, main, SCAN_DIR, isTestFile, LEGIT_SITES };
 
 if (require.main === module) main();
