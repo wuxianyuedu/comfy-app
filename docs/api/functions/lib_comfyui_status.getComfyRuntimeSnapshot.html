@@ -20,6 +20,10 @@
 <p>语义：<code>running</code> 表示「有 ComfyUI 进程活着」，不表示「HTTP 已经能应答」。
 「能不能用」仍由 <code>probeComfyUi()</code> 判定，两者在设置页合起来显示
 「运行中 / 启动中（进程在、接口未就绪）/ 未运行」。</p>
+<p><code>force</code> = 「我不要任何二手答案」：TTL 缓存与在途去重<strong>两条</strong>都跳过。现有两处
+调用者都是这个动机：<code>lifecycle</code> 判到「进程在、端口未绑定」（唯一会自动翻页的
+结论）时当场复核，以及台账里那条「动作后必须重新取事实」的路径 —— 两者都在
+「几秒前、甚至动作之前发出的那份结论可以直接相反」的时机上。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
@@ -27,7 +31,7 @@
 <li><span><span class="tsd-kind-parameter">opts</span>: <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">force</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> = {}</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/lib_comfyui_status.ComfyRuntimeSnapshot.html" class="tsd-signature-type tsd-kind-type-alias">ComfyRuntimeSnapshot</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/status.ts:433</li></ul></aside></div></li></ul></section></div>
+<li>Defined in src/lib/comfyui/status.ts:438</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
