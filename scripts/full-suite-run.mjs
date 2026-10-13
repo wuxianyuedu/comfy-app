@@ -32,7 +32,11 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
-import { runPnpmSync } from "./launcher-core/shell.mjs";
+import {
+  abortedAdvice,
+  classifyOutcome,
+  runPnpmSync,
+} from "./launcher-core/shell.mjs";
 import {
   freshnessTrack,
   gitUser,
@@ -72,6 +76,27 @@ export function shouldRecord({ exitCode, dryRun }) {
 }
 
 /**
+ * 本档的**墙钟预算** —— `runPnpmSync` 的 `timeoutMs`。
+ *
+ * 为什么必须显式给（ISSUE #1834）：缺省是 600_000（`launcher-core/shell.mjs` 的
+ * `runPnpmSync`），而本档在 win32 检出上无争抢时实测就要 ~10 分钟（
+ * `Test Files 3 failed | 695 passed`），只要有任何并发（叠一次运行、机器被别人占着）
+ * 就正好撞在那个默认值上 —— 子进程在 600s 处被砍，`res.status` 为 null。
+ *
+ * 而 600_000 那个数是**别的调用方**的合理默认（单条 `pnpm exec …` 门禁），不该由它
+ * 替本档背书：本档跑的是 698 份用例文件 + 覆盖率。
+ *
+ * 取 1800_000（30 分钟）而不是「实测值 + 一点余量」：它要挡的是**真挂死**，
+ * 不是「机器慢」；20 分钟余量足够让一次并发的全量跑完（实测 10 分钟量级），
+ * 又远小于「挂死」该被检出的时间（钩子那侧的时间型判据见 §13.6.4，那一条不在这里）。
+ */
+export const FULL_SUITE_TIMEOUT_MS = 30 * 60_000;
+
+/* 「被预算砍 vs 判据红」的分流在 `launcher-core/shell.mjs` 的 `classifyOutcome()` /
+ * `abortedAdvice()` —— **那件事只有一份实现**（§12.12）：本档、`artifact-run` 与
+ * 未来的档都读它，各写一份就会在「谁把 `status ?? 1` 又写回去」上分叉。 */
+
+/**
  * @param {string[]} argv
  * @returns {number}
  */
@@ -90,7 +115,9 @@ function main(argv) {
       return 2;
     }
     if (dryRun) {
-      process.stdout.write(`[full-suite-run] 本次不跑、只记一条（${parsed.mode}）：${parsed.reason}\n`);
+      process.stdout.write(
+        `[full-suite-run] 本次不跑、只记一条（${parsed.mode}）：${parsed.reason}\n`,
+      );
       return 0;
     }
     return writeLedgerNote({
@@ -111,7 +138,27 @@ function main(argv) {
     );
     return 0;
   }
-  const res = runPnpmSync(run.args, { cwd: ROOT, stdio: "inherit" });
+  const res = runPnpmSync(run.args, {
+    cwd: ROOT,
+    stdio: "inherit",
+    timeoutMs: FULL_SUITE_TIMEOUT_MS,
+  });
+  /* 三态分流：**「被预算砍」与「判据红」必须长得不一样**（`classifyOutcome`）。
+   * 旧写法 `res.status ?? 1` 把两者都读成 1，于是「这次没测成」会被当成
+   * 「这批用例红了」，下一个人去查用例、查一整天。 */
+  if (classifyOutcome(res) === "aborted") {
+    process.stderr.write(
+      "[full-suite-run] ✗ " +
+        abortedAdvice({
+          label: "全量单测 + 覆盖率",
+          timeoutMs: FULL_SUITE_TIMEOUT_MS,
+        }) +
+        `        （读数：退出码 ${res.status ?? "信号"}，` +
+        `error=${res.error ? String(res.error.code ?? res.error.message) : "无"}）\n` +
+        "        规范：docs/standards/13-提交与-code-review.md §13.5.4\n",
+    );
+    return 1;
+  }
   const exitCode = res.status ?? 1;
   if (!shouldRecord({ exitCode, dryRun })) {
     process.stderr.write(
@@ -122,8 +169,14 @@ function main(argv) {
     );
     return exitCode;
   }
-  const { note } = writeFreshness({ root: ROOT, kind: "full", who: gitUser(TRACK.key) });
-  process.stdout.write(`[full-suite-run] ✓ 全量单测 + 覆盖率通过\n[full-suite-run] ${note}\n`);
+  const { note } = writeFreshness({
+    root: ROOT,
+    kind: "full",
+    who: gitUser(TRACK.key),
+  });
+  process.stdout.write(
+    `[full-suite-run] ✓ 全量单测 + 覆盖率通过\n[full-suite-run] ${note}\n`,
+  );
   return 0;
 }
 

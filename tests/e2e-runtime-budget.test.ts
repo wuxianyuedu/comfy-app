@@ -173,3 +173,74 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
     expect(baseline.metric.factor).toBeGreaterThanOrEqual(1);
   });
 });
+
+/**
+ * 现场编译档的并发（ISSUE #1834）—— **它改的是负载，不是任何判据的预算**。
+ *
+ * 立案现场：`node scripts/e2e-run.mjs` 在 win32 检出上报 43 failed / 35 passed，
+ * 其中 33 条正好卡在 `Test timeout of 60000ms exceeded (1.0m)`，散在互不相干的屏上
+ * —— dev server 按需编译 + 8 worker 并发时，首帧导航吃满自测向预算。
+ *
+ * 这一档的取向是**降并发**而不是抬 `timeout`（`timeout` 是判据本身，抬它等于拿预算
+ * 换绿，会把真挂死的检出时间一起放大 —— §11.13 那句「看到 60s 都超时不要改成 120s」）。
+ * 所以这条用例要钉住的是：**判据一个字没动，动的只有负载**。
+ */
+describe("e2e 的并发档：现场编译 ⟺ 已构建（ISSUE #1834）", () => {
+  const configSrc = readFileSync(
+    join(process.cwd(), "playwright.config.ts"),
+    "utf8",
+  );
+
+  it("现场编译（未给 PNPM_START / 非 CI）⇒ 收敛到 COLD_COMPILE_WORKERS", async () => {
+    const { resolveE2eWorkers } = await import("../playwright.config");
+    // 不是本仓默认的 8（`vitest.config.ts` 那一档），也不是「不设」—— 是那个显式的档。
+    expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv)).toBe(4);
+  });
+
+  it("已构建（CI 或 PNPM_START）⇒ 不覆盖 Playwright 的默认并行", async () => {
+    const { resolveE2eWorkers } = await import("../playwright.config");
+    /* `undefined` 是「不写 `workers` 这个键」——工厂函数不许在这里发明一个数：
+     * 生产构建下首屏零编译，并发不是这一格的自由度。 */
+    expect(
+      resolveE2eWorkers({ CI: "1" } as unknown as NodeJS.ProcessEnv),
+    ).toBeUndefined();
+    expect(
+      resolveE2eWorkers({ PNPM_START: "1" } as unknown as NodeJS.ProcessEnv),
+    ).toBeUndefined();
+  });
+
+  it("两档判的是同一对键：`scripts/e2e-run.mjs` 的读数与配置不分叉", async () => {
+    /* 跑法脚本要在输出里说清「这一趟是哪一档」（否则 8.7 分钟 / 43 failed 这个读数
+     * 读不出是哪种负载），所以它自己也算一遍 —— 两处各写一份就有漂的可能，这条用例
+     * 把它们钉在一起。两边**刻意不互相 import**：`playwright.config.ts` 是 Playwright
+     * 的入口文件，拿它当纯函数库引进来会让跑法脚本依赖整个配置图的求值。 */
+    const { resolveServerMode } = (await import("../scripts/e2e-run.mjs")) as {
+      resolveServerMode: (env: NodeJS.ProcessEnv) => {
+        start: boolean;
+        workers: number | null;
+      };
+    };
+    for (const env of [{}, { CI: "1" }, { PNPM_START: "1" }]) {
+      const viaConfig = (
+        await import("../playwright.config")
+      ).resolveE2eWorkers(env as unknown as NodeJS.ProcessEnv);
+      const viaRunner = resolveServerMode(env as unknown as NodeJS.ProcessEnv);
+      expect(
+        viaRunner.start,
+        "`start` 档与配置里 webServer 那条命令读的是同一对键",
+      ).toBe(viaConfig === undefined);
+      expect(viaRunner.workers).toBe(viaConfig ?? null);
+    }
+  });
+
+  it("`timeout` 一个字节都没动 —— 降的是负载，不是预算", () => {
+    /* 这条是整档的**红线**：如果有人把 `timeout: 60_000` 改成 120_000 来「修」这条红，
+     * 那正是 §11.13 要拦的形态，而它在别处不会红。 */
+    /* 认的是**顶层那个自测向预算**（`use` 之前那一条），不是写死的 `180_000` /
+     * 那两条 webServer 等待窗口 —— 它们各有各的量级，不是这条红线管的东西。 */
+    const topLevelTimeouts = [
+      ...configSrc.matchAll(/^ {2}timeout: ([\d_]+),$/gm),
+    ].map((m) => m[1]);
+    expect(topLevelTimeouts).toEqual(["60_000"]);
+  });
+});

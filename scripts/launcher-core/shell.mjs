@@ -109,6 +109,51 @@ export function spawnInGroup({
 }
 
 /**
+ * 一次同步子进程的**收场**：三种，不是两种。
+ *
+ * 为什么必须有这一层（ISSUE #1834）：`spawnSync` 在墙钟预算处砍掉子进程时
+ * `status` 是 **null**，而调用方普遍写着 `res.status ?? 1` —— 于是「**测量没发生**」
+ * 与「测量结果是红的」在退出码上逐字同形。两种收场的下一动作完全相反：前者去查
+ * 预算 / 这台机器上还有谁在跑，后者去修用例。实测现场：全量档（10 分钟量级）
+ * 撞上 `runPnpmSync` 的缺省 600_000，harness 打「退出码 信号 / 不记账」，
+ * 而看的人只能去猜那是红的哪一种。
+ *
+ * 判据取**进程自己给的证据**，不取退出码的形状：
+ *   · `error` 在 —— 命令压根没起来，或被预算砍（超时时 `error.code` 是 `ETIMEDOUT`）；
+ *   · `error` 不在而 `status === null` —— 被信号打死（`signal` 会带着 `SIGTERM` 那一族）。
+ *
+ * 这一层**不替代**各自的判决（判据照样由调用方自己的退出码 / 指纹定），它只回答
+ * 「这一遍到底有没有量到」—— 那是两份调用方都不该各写一遍的判据（§12.12）。
+ *
+ * @param {{status: number | null, error?: unknown, signal?: NodeJS.Signals | null}} res
+ * @returns {"ran" | "aborted"} `aborted` = 没量到（跑不起来 / 被预算或信号砍掉）
+ */
+export function classifyOutcome(res) {
+  if (res.error) return "aborted";
+  if (res.status === null) return "aborted";
+  /* 有信号、又拿到了退出码：`spawnSync` 只在被信号打死时给 `signal`，那种情况下
+   * `status` 本来就是 null（上一条已经收了）。这里不再按 `signal` 二次判 ——
+   * 多一条永远走不到的判据就是一条会静默失效的账。 */
+  return "ran";
+}
+
+/**
+ * 「被预算砍」与「跑完了但非零」要长得不一样 —— 一段给调用方直接打的话术。
+ *
+ * @param {{label: string, timeoutMs: number}} args `label` 是这一档的名字（如「全量单测 + 覆盖率」）
+ * @returns {string}
+ */
+export function abortedAdvice({ label, timeoutMs }) {
+  return (
+    `${label}的子进程**在墙钟预算处被砍**（${Math.round(timeoutMs / 60_000)} 分钟）—— ` +
+    "这是**测量没发生**，不是判据红：\n" +
+    "        · 它不该被记进任何一份新鲜度账（账记的是「上一次真跑绿」）；\n" +
+    "        · **要修的不是用例** —— 先看这台机器上还有谁在跑，让开再跑一次；\n" +
+    "        · **不要**按「判据红」去隔离重跑单份文件，那回答的是另一个问题。\n"
+  );
+}
+
+/**
  * 同步跑一个命令（`shell: false`，参数按字面量传递，不做引号解析）。
  *
  * @param {string} command @param {string[]} [args]

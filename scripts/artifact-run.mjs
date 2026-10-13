@@ -29,7 +29,11 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
-import { runPnpmSync } from "./launcher-core/shell.mjs";
+import {
+  abortedAdvice,
+  classifyOutcome,
+  runPnpmSync,
+} from "./launcher-core/shell.mjs";
 import {
   freshnessTrack,
   gitUser,
@@ -38,6 +42,9 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
+
+/** 本档的墙钟预算（`next build` + 数产物，分钟级；与全量档同一条理由）。 */
+export const ARTIFACT_TIMEOUT_MS = 30 * 60_000;
 
 /** 本档的登记（账文件 / 键 / 名字 / 「怎么跑」那条命令）。 */
 export const TRACK = freshnessTrack("artifact");
@@ -88,7 +95,9 @@ function main(argv) {
       return 2;
     }
     if (dryRun) {
-      process.stdout.write(`[artifact-run] 本次不跑、只记一条（${parsed.mode}）：${parsed.reason}\n`);
+      process.stdout.write(
+        `[artifact-run] 本次不跑、只记一条（${parsed.mode}）：${parsed.reason}\n`,
+      );
       return 0;
     }
     return writeLedgerNote({
@@ -109,7 +118,26 @@ function main(argv) {
     );
     return 0;
   }
-  const res = runPnpmSync(run.args, { cwd: ROOT, stdio: "inherit" });
+  const res = runPnpmSync(run.args, {
+    cwd: ROOT,
+    stdio: "inherit",
+    /* 显式给预算：产物档跑的是 `next build` + 数产物，它的缺省 600_000 与全量档
+     * 同源、也同病（ISSUE #1834：撞预算时 `status` 为 null，与「判据红」同形）。
+     * 30 分钟是「真挂死」与「机器慢」之间那条线，与全量档同一个数。 */
+    timeoutMs: ARTIFACT_TIMEOUT_MS,
+  });
+  /* 「被预算砍」与「判据红」分开报（`launcher-core/shell.mjs` 一份实现）。 */
+  if (classifyOutcome(res) === "aborted") {
+    process.stderr.write(
+      "[artifact-run] ✗ " +
+        abortedAdvice({
+          label: "产物级护栏（build + 数产物）",
+          timeoutMs: ARTIFACT_TIMEOUT_MS,
+        }) +
+        `        （读数：退出码 ${res.status ?? "信号"}）\n`,
+    );
+    return 1;
+  }
   const exitCode = res.status ?? 1;
   if (!shouldRecord({ exitCode, dryRun })) {
     process.stderr.write(
@@ -119,8 +147,14 @@ function main(argv) {
     );
     return exitCode;
   }
-  const { note } = writeFreshness({ root: ROOT, kind: "artifact", who: gitUser(TRACK.key) });
-  process.stdout.write(`[artifact-run] ✓ 产物级护栏通过\n[artifact-run] ${note}\n`);
+  const { note } = writeFreshness({
+    root: ROOT,
+    kind: "artifact",
+    who: gitUser(TRACK.key),
+  });
+  process.stdout.write(
+    `[artifact-run] ✓ 产物级护栏通过\n[artifact-run] ${note}\n`,
+  );
   return 0;
 }
 
