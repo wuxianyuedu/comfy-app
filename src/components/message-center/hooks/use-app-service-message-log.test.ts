@@ -60,13 +60,37 @@ function stubExitEndpoint({
 type Facts = {
   state: "starting" | "online" | "offline";
   processIsNew: boolean;
+  /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
+  currentRunId: string | null;
 };
 
-/** 挂上 hook 并返回「推进到某一拍」的函数。 */
-function mount(initial: Facts) {
-  return renderHook((props: Facts) => useAppServiceMessageLog(props), {
-    initialProps: initial,
+/** 缺省启动标识：绝大多数用例不关心它，而它又是必填的——不填就等于「拿不到启动
+ *  标识」，消息会落到「未标记启动」那一组，分组断言就什么都不剩了。 */
+const DEFAULT_RUN_ID = "a1b2c3";
+
+/**
+ * 挂上 hook 并返回「推进到某一拍」的函数。
+ *
+ * `rerender` 收**部分事实**并与上一拍合并（`renderHook` 的 rerender 是整体替换，
+ * 而这里几乎每个用例都只改一个字段）；缺省字段取 `DEFAULT_RUN_ID` 那一档。
+ */
+function mount(initial: Partial<Facts> = {}) {
+  let cur: Facts = {
+    state: "starting",
+    processIsNew: false,
+    currentRunId: DEFAULT_RUN_ID,
+    ...initial,
+  };
+  const r = renderHook((props: Facts) => useAppServiceMessageLog(props), {
+    initialProps: cur,
   });
+  return {
+    ...r,
+    rerender: (next: Partial<Facts>) => {
+      cur = { ...cur, ...next };
+      r.rerender(cur);
+    },
+  };
 }
 
 function messages() {
@@ -208,7 +232,6 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     expect(recovered.body).not.toContain("pnpm dev");
     expect(recovered.body).not.toContain("没有经过启动编排");
   });
-
   it("取回之前就卸载 → 不留下消息（一个已消失的 watcher 不该触发全局通知）", async () => {
     /* 端点**挂起**直到用例亲手 resolve：只有这样「卸载」与「应答回来」的先后
      * 才是被排好的确定顺序。立刻 resolve 的 fetch 会在同一轮微任务里把消息写
@@ -248,5 +271,55 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
       );
     });
     expect(messages()).toHaveLength(0);
+  });
+});
+
+describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
+  /* 手验反馈：消息中心里多次启动的记录混成一列平铺，分不清哪几条属于同一次启动
+   * —— 而这个面板记的恰恰是故障，分不清批次等于分不清故障次数。分组键是 launcher
+   * 单点产出的 runId（判据见 `~/lib/shell/message-run-groups`）。 */
+
+  it("断开与恢复盖的是**各自那次启动**的 runId（断开在旧组、恢复在新组）", async () => {
+    stubExitEndpoint({ record: null });
+    /* 旧启动里断 → 新启动起来（旧 runId 断，新 runId 恢复） */
+    const { rerender } = mount({
+      state: "online",
+      processIsNew: false,
+      currentRunId: "old0001",
+    });
+    rerender({
+      state: "offline",
+      processIsNew: false,
+      currentRunId: "old0001",
+    });
+    rerender({ state: "online", processIsNew: true, currentRunId: "new0002" });
+
+    await expect.poll(() => messages().length).toBe(2);
+    expect(messages()[0]!.runId, "恢复属于新一次启动").toBe("new0002");
+    expect(messages()[1]!.runId, "断开属于正在死的那一次").toBe("old0001");
+  });
+
+  it("把「当前是哪一次启动」同步进 store：别的生产方据此盖戳（不必各接一次探活）", async () => {
+    stubExitEndpoint();
+    const { rerender } = mount({ currentRunId: "a1b2c3" });
+    expect(useMessageCenterStore.getState().currentRunId).toBe("a1b2c3");
+
+    rerender({ currentRunId: "d4e5f6" });
+    expect(useMessageCenterStore.getState().currentRunId).toBe("d4e5f6");
+
+    /* 推一条**不带 runId** 的（代码更新 / 版本更新就是这种），它应盖上当前这一次。 */
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "info", title: "某次更新", body: "正文" });
+    expect(messages()[0]!.runId).toBe("d4e5f6");
+  });
+
+  it("拿不到 runId 时留 null（落「未标记启动」那一组，不编一个值）", async () => {
+    stubExitEndpoint();
+    const { rerender } = mount({ currentRunId: null });
+    rerender({ state: "online", processIsNew: true, currentRunId: null });
+
+    await expect.poll(() => messages().length).toBe(1);
+    expect(messages()[0]!.runId).toBeNull();
   });
 });

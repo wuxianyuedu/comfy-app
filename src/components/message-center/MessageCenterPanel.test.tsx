@@ -1,9 +1,13 @@
 /**
- * 消息中心的键盘可达性（规范 06 §6.11）。
+ * 消息中心的键盘可达性（规范 06 §6.11）+ 按「每一次启动」分组的显示。
  *
- * 这条用例钉的是**收口前后的差别**：整行「点一下标记已读」此前是 `<li onClick>`，
+ * 键盘那条钉的是**收口前后的差别**：整行「点一下标记已读」此前是 `<li onClick>`，
  * 键盘用户能 Tab 到行内的删除按钮，却**没有任何路径**标记已读 —— 鼠标点得开、
  * 键盘进不来。收口改成原生 `<Button>` 后，Enter/Space 与焦点语义是免费给的。
+ *
+ * 分组那条钉的是手验反馈「多次启动的记录混在了一起」：每次启动之间要有能一眼
+ * 看出来的分隔，并且要标出哪一组是用户此刻身处的这一次。分组判据本身在
+ * `~/lib/shell/message-run-groups` 的单测里，这里钉的是「面板真的把它渲染出来了」。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -15,7 +19,11 @@ import { useMessageCenterStore } from "./message-center-store";
 afterEach(cleanup);
 
 beforeEach(() => {
-  useMessageCenterStore.setState({ open: true, messages: [] });
+  useMessageCenterStore.setState({
+    open: true,
+    messages: [],
+    currentRunId: null,
+  });
 });
 
 describe("MessageCenterPanel 键盘可达性", () => {
@@ -60,5 +68,54 @@ describe("MessageCenterPanel 键盘可达性", () => {
     await userEvent.click(screen.getByRole("button", { name: "删除该消息" }));
 
     expect(useMessageCenterStore.getState().messages).toHaveLength(0);
+  });
+});
+
+describe("MessageCenterPanel 按「每一次启动」分组", () => {
+  /** 按顺序推几条（最新在后推的会被排到更前，这里直接用 runId 显式表达批次）。 */
+  function pushBatch(runId: string | null, titles: string[]) {
+    for (const title of titles) {
+      useMessageCenterStore
+        .getState()
+        .push({ kind: "info", title, body: "b", runId });
+    }
+  }
+
+  it("两次启动之间有分隔头，且标出哪一组是「本次启动」", () => {
+    useMessageCenterStore.setState({ currentRunId: "b2b2b2" });
+    /* 先推旧的那一批（此刻它在最前），再推新的——新的会被排到最前。 */
+    pushBatch("a1a1a1", ["旧组甲"]);
+    pushBatch("b2b2b2", ["新组甲"]);
+    render(<MessageCenterPanel />);
+
+    expect(screen.getByText("本次启动")).toBeTruthy();
+    expect(screen.getByText("上一次启动")).toBeTruthy();
+    /* 分隔头带上启动标识，用户能直接拿去和 log/runs/ 下的目录对号。 */
+    expect(screen.getByText("a1a1a1")).toBeTruthy();
+    expect(screen.getByText("b2b2b2")).toBeTruthy();
+  });
+
+  it("没有消息时不出现任何组头（空态仍是「暂无系统消息」）", () => {
+    render(<MessageCenterPanel />);
+    expect(screen.queryByText("未标记启动")).toBeNull();
+    expect(screen.queryByText("本次启动")).toBeNull();
+    expect(screen.getByText("暂无系统消息")).toBeTruthy();
+  });
+
+  it("组头带条数（同一次启动里的几条能一眼数出来）", () => {
+    useMessageCenterStore.setState({ currentRunId: "b2b2b2" });
+    pushBatch("b2b2b2", ["甲", "乙", "丙"]);
+    render(<MessageCenterPanel />);
+    expect(screen.getByText("· 3 条")).toBeTruthy();
+  });
+
+  it("写不出 runId 的消息归「未标记启动」，不并进当前那一组", () => {
+    useMessageCenterStore.setState({ currentRunId: "b2b2b2" });
+    pushBatch(null, ["老消息"]);
+    pushBatch("b2b2b2", ["新消息"]);
+    render(<MessageCenterPanel />);
+
+    expect(screen.getByText("本次启动")).toBeTruthy();
+    expect(screen.getByText("未标记启动")).toBeTruthy();
   });
 });

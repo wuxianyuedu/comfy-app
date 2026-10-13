@@ -18,6 +18,13 @@ export interface DevServerStatusViewModel extends DevServerStatus {
   /** 上一次结束记录的落盘时刻（毫秒）；无记录为 null。 */
   lastExitAt: number | null;
   /**
+   * 当前是哪一次**启动**（launcher 的 runId）。
+   *
+   * 消息中心用它把历史消息按「每一次启动」分组，并标出哪一组是当前这一次。
+   * 见 `~/lib/shell/message-run-groups`。
+   */
+  currentRunId: string | null;
+  /**
    * 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；整页刷新**不算**）。
    *
    * 状态栏自己不画它，但**它是「进程换了一个」的唯一判据**——探活失败可能只是
@@ -41,6 +48,7 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     lastExitAt,
     reachable,
     everOnline,
+    currentRunId,
   } = useDevServerLiveness();
   const derived = deriveDevServerStatus({
     everOnline,
@@ -51,5 +59,5 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     lastRestartAt,
     lastExit,
   });
-  return { ...derived, lastRestartAt, lastExitAt, processIsNew };
+  return { ...derived, lastRestartAt, lastExitAt, processIsNew, currentRunId };
 }

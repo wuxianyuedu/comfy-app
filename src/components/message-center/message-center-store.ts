@@ -30,10 +30,27 @@ export interface MessageRecord {
   time: number;
   /** 是否已读（决定状态栏未读计数） */
   read: boolean;
+  /**
+   * 这条消息属于**哪一次启动**（launcher 的 runId）；null = 写入时不知道。
+   *
+   * 存在的理由：消息中心里多次启动的记录此前混成一列平铺，用户分不清哪几条属于
+   * 同一次启动——而这个面板记的恰恰是故障，分不清批次等于分不清故障次数。面板按
+   * 它分组显示（判据见 `~/lib/shell/message-run-groups`）。
+   *
+   * 与 `run/runs/<日期>_<时分秒>-<runId>`、`run/app-service-exit.json` 的 runId
+   * 同源，分组头带上它就能直接和日志目录对号。
+   */
+  runId: string | null;
 }
 
-/** 供 push 传入的载荷（id/time/read 由 store 补全）。 */
-export type NewMessage = Omit<MessageRecord, "id" | "time" | "read">;
+/** 供 push 传入的载荷（id/time/read 由 store 补全，runId 缺省取当前启动）。 */
+export type NewMessage = Omit<
+  MessageRecord,
+  "id" | "time" | "read" | "runId"
+> & {
+  /** 缺省时由 store 用「当前是哪一次启动」盖上，于是各生产方不必各自去取。 */
+  runId?: string | null;
+};
 
 export interface MessageCenterState {
   /** 全屏消息面板是否打开 */
@@ -42,10 +59,21 @@ export interface MessageCenterState {
   messages: MessageRecord[];
   /** 是否已经从持久化里恢复过（只恢复一次，见 `hydrate`）。 */
   hydrated: boolean;
+  /**
+   * 当前是哪一次启动（运行时事实，**不持久化**）。
+   *
+   * 由探活链路在学到 runId 时写进来（`use-app-service-message-log` → 本 store）。
+   * 两个用途：① 面板据此把「本次启动」那一组高亮出来；② `push` 缺省 runId 时
+   * 用它盖戳，于是**所有**生产方（应用服务、代码更新、版本更新）都自动按启动
+   * 分组，不需要每一个都去接一次探活。
+   */
+  currentRunId: string | null;
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
   /** 新增一条消息；未读，排到最前。 */
   push: (m: NewMessage) => void;
+  /** 记下当前是哪一次启动（runId 变化时由探活链路调用）。 */
+  setCurrentRunId: (runId: string | null) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
   remove: (id: string) => void;
@@ -69,15 +97,31 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
   open: false,
   messages: [],
   hydrated: false,
+  currentRunId: null,
   setOpen: (open) => set({ open }),
   toggleOpen: () => set({ open: !get().open }),
   push: (m) =>
     set((s) => ({
       messages: [
-        { ...m, id: makeId(), time: Date.now(), read: false },
+        {
+          ...m,
+          /* runId **没给**时盖「当前这一次启动」：生产方（应用服务 / 代码更新 /
+           * 版本更新）于是不必各自去接探活链路，也不会漏盖——漏盖的消息在面板上
+           * 只能落到「未标记启动」那一组，而它本可以归对批次。
+           *
+           * 判 `=== undefined` 而不是 `??`：**显式给的 null 是「明确不知道」**
+           * （纯手工 `pnpm dev` 起的服务、探活还没答过第一次），它必须留 null；
+           * 被 `??` 补成当前启动，等于断言「它属于现在这次启动」——一个不知道的
+           * 事实，而面板据此分组，断言错了就是分错批次。 */
+          runId: m.runId === undefined ? s.currentRunId : m.runId,
+          id: makeId(),
+          time: Date.now(),
+          read: false,
+        },
         ...s.messages,
       ].slice(0, MAX_MESSAGES),
     })),
+  setCurrentRunId: (runId) => set({ currentRunId: runId }),
   markRead: (id) =>
     set((s) => ({
       messages: s.messages.map((x) => (x.id === id ? { ...x, read: true } : x)),
@@ -117,7 +161,11 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
  * 面板整个打不开。
  */
 
-/** 持久化键（带版本号：形状变了就换键，不去猜旧数据怎么迁）。 */
+/** 持久化键（带版本号：形状变了就换键，不去猜旧数据怎么迁）。
+ *
+ * `runId` 是**追加的可选字段**而不是换键的理由：老数据没有它，读回来时按「未标记
+ * 启动」处理（见 `asMessageRecord`），换键反而会让用户**丢掉全部历史消息**——
+ * 而这个面板记的正是故障，丢历史等于把唯一的留底抹掉。 */
 export const MESSAGE_CENTER_STORAGE_KEY = "comfyapp:message-center:v1";
 
 const MESSAGE_KINDS: readonly MessageKind[] = [
@@ -127,7 +175,10 @@ const MESSAGE_KINDS: readonly MessageKind[] = [
   "info",
 ];
 
-/** 一条记录是否可用（字段齐、类型对、kind 认识）。 */
+/** 一条记录是否可用（字段齐、类型对、kind 认识）。
+ *
+ * `runId` **容忍缺席**（升级前写入的历史消息没有这个字段）：缺了就按 null 处理，
+ * 于是那些消息落到「未标记启动」那一组——不猜它属于哪一次，也不因此丢掉整条。 */
 function asMessageRecord(raw: unknown): MessageRecord | null {
   if (typeof raw !== "object" || raw === null) return null;
   const o = raw as Record<string, unknown>;
@@ -148,6 +199,7 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
     body: o.body,
     time: o.time,
     read: o.read,
+    runId: typeof o.runId === "string" && o.runId ? o.runId : null,
   };
 }
 
@@ -161,7 +213,9 @@ function readPersistedMessages(): MessageRecord[] {
     .slice(0, MAX_MESSAGES);
 }
 
-/** 当前内存里的消息是否已经等于持久化里那一份（避免恢复时空跑一次渲染）。 */
+/** 当前内存里的消息是否已经等于持久化里那一份（避免恢复时空跑一次渲染）。
+ *  `runId` 也参与比较：它是分组键，内存里盖了戳而持久化里没有时若不换引用，
+ *  刷新一次就会丢掉分组依据。 */
 function sameAsPersisted(current: MessageRecord[]): boolean {
   const persisted = readPersistedMessages();
   if (persisted.length !== current.length) return false;
@@ -171,7 +225,8 @@ function sameAsPersisted(current: MessageRecord[]): boolean {
       c?.id === m.id &&
       c.read === m.read &&
       c.title === m.title &&
-      c.body === m.body
+      c.body === m.body &&
+      c?.runId === m.runId
     );
   });
 }
