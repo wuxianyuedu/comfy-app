@@ -124,10 +124,17 @@ export function fakeExecutorEnv({
   moduleRoot = FAKE_CLI_MODULE_ROOT,
   exists = fs.existsSync,
 } = {}) {
-  if (!exists(path.join(moduleRoot, "comfy_cli", "__main__.py"))) {
+  /* 分隔符与 join 口径**跟着注入的 platform 走**，不跟宿主：这份模块存在的理由就是
+   * 「两个平台同一条形状」可以在任一开发机上被判（判据是 `tests/e2e-fake-comfyui-executor-env.test.ts`）。
+   * 用宿主 `path` 时，在 Windows 上判 `platform: "linux"` 会拼出反斜杠路径、
+   * 注入的 `exists` 永不命中 ⇒ 那条形状判据实际只在 POSIX 上自证过。
+   * 真实调用方不受影响：`platform` 缺省就是 `process.platform`，win32 拿 `path.win32`、
+   * POSIX 拿 `path.posix`，与改动前逐字相同。 */
+  const p = platform === "win32" ? path.win32 : path.posix;
+  if (!exists(p.join(moduleRoot, "comfy_cli", "__main__.py"))) {
     return {
       env: {},
-      reason: `假 comfy-cli 包不在：${path.join(moduleRoot, "comfy_cli")}`,
+      reason: `假 comfy-cli 包不在：${p.join(moduleRoot, "comfy_cli")}`,
       python: null,
     };
   }
@@ -142,9 +149,9 @@ export function fakeExecutorEnv({
     };
   }
   /* `PYTHONPATH` **前缀**而不是覆盖：调用方（或用户的 shell）可能已经设了它，
-   * 覆盖会连带掐掉别人的模块解析。分隔符按跑起来的平台给 —— 这里用
-   * `path.delimiter` 而不是写死 `:`（Windows 是 `;`）。 */
-  const existing = env.PYTHONPATH ? `${path.delimiter}${env.PYTHONPATH}` : "";
+   * 覆盖会连带掐掉别人的模块解析。分隔符按**注入的 platform**给（win32 是 `;`、
+   * POSIX 是 `:`），不是按跑起来的宿主 —— 理由见上面那颗 `p`。 */
+  const existing = env.PYTHONPATH ? `${p.delimiter}${env.PYTHONPATH}` : "";
   return {
     env: {
       [COMFY_CLI_PYTHON_KEY]: python,
