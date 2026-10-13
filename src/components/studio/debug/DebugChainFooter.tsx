@@ -241,7 +241,7 @@ export function DebugChainFooter({
           {/* 头部：路径 + 操作按钮 */}
           <div className="border-border-strong flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
-              <span aria-hidden className="text-warning-strong/90 text-[14px]">
+              <span aria-hidden className="text-warning-strong/90 text-sm">
                 ◈
               </span>
               <code

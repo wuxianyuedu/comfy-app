@@ -150,7 +150,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 }}
                 /* 标题本身就是触发器：吃掉基元的高度/圆角/内边距（`h-auto`），
                  *  只留 hover 变色（16 §16.2.4.2）。 */
-                className="text-ink-bright font-title hover:text-primary-strong h-auto max-w-70 truncate rounded-md px-0 py-0 text-[18px] leading-tight font-bold tracking-tight hover:bg-transparent"
+                className="text-ink-bright font-title hover:text-primary-strong h-auto max-w-70 truncate rounded-md px-0 py-0 text-lg leading-tight font-bold tracking-tight hover:bg-transparent"
               >
                 {rootWorkflowName || detail.name}
               </Button>
@@ -159,7 +159,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               const isLast = i === subgraphStack.length - 1;
               /* 所有面包屑通用的截断样式。 */
               const baseCls =
-                "max-w-65 truncate text-[14px] font-medium transition-colors";
+                "max-w-65 truncate text-sm font-medium transition-colors";
               if (isLast) {
                 /* 当前子图：不可点击的 span，配紫色
                  *  选中药丸，视觉上钉住「此处」
@@ -168,7 +168,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                  *  `subgraphStack`）。 */
                 return (
                   <React.Fragment key={crumb.uid + i}>
-                    <span className="text-ink-fainter text-[14px]">/</span>
+                    <span className="text-ink-fainter text-sm">/</span>
                     <span
                       className={`${baseCls} border-primary-500/40 bg-primary-500/15 text-primary-strong rounded-md border px-2 py-0.5`}
                       style={{ cursor: "default" }}
@@ -184,7 +184,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                *  并重新拉取该子图的数据）。 */
               return (
                 <React.Fragment key={crumb.uid + i}>
-                  <span className="text-ink-fainter text-[14px]">/</span>
+                  <span className="text-ink-fainter text-sm">/</span>
                   <Hint label={`${crumb.name}（跳到此层）`}>
                     <Button
                       variant="ghost"

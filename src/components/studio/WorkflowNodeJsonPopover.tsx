@@ -300,7 +300,7 @@ export function NodeJsonPopover({
                   border: "1px solid var(--color-border-strong)",
                   color: "var(--color-ink-muted)",
                 }}
-                className="rounded-md text-[14px] leading-none"
+                className="rounded-md text-sm leading-none"
               >
                 ×
               </Button>
