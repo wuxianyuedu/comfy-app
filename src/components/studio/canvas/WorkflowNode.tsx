@@ -148,7 +148,7 @@ export const FlowNode = React.memo(function FlowNode({
 
   return (
     <div
-      className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.55)]"
+      className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_var(--color-shadow-strong)]"
       ref={hoverRef}
       data-node-id={data.nodeId}
       {...hoverHandlers}

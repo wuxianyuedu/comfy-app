@@ -318,7 +318,7 @@ export function WorkflowNode({
         variant="primary-solid"
         disabled={d.status === "running"}
         onClick={onGenerate}
-        className="nodrag nopan from-primary to-accent rounded-b-node flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+        className="nodrag nopan from-primary to-accent rounded-b-node flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] transition-opacity hover:opacity-95 disabled:opacity-40"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}

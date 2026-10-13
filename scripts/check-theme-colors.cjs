@@ -78,7 +78,8 @@ const isTestFile = (rel) =>
 
 /** `#rrggbb` / `#rgb` / `#rrggbbaa`（8 位），以及 `rgba(...)` / `rgb(...)`。 */
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
-const FUNC_COLOR_RE = /\brgba?\s*\(/g;
+/** 函数色**不加 `\b`**：候选名用 `_` 代替空格，`_rgba(` 前是单词字符会整条漏扫（口径见 03 §3.6.2）。 */
+const FUNC_COLOR_RE = /rgba?\s*\(/g;
 /**
  * `#346` / `#262` 这类 **ISSUE 引用**会被 `HEX_RE` 误当 3 位色值：
  * 3~4 位短写法只接受「整行里没有别的数字型引用迹象」的情形。判据用
