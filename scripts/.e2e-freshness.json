@@ -1,9 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-12T17:30:56.896Z",
+    "verifiedAt": "2026-10-12T16:32:37.337Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm test:e2e",
-    "trackedBy": "e2e"
+    "trackedBy": "e2e",
+    "skippedReason": "本次提交是合并 origin/master 解 docs 冲突。已在合并态真跑一次 pnpm test:e2e（补全 .env 与 db schema 后）：72 passed / 5 failed + 1 flaky。这 5 条失败与干净 origin/master（05ff9fe1）逐条相同（已用独立 worktree 复算：overlay-entries-as-views 3 条 / theme-token-consumers 1 条 / view-container 1 条），属 baseline-red（§13.6.2），非本次冲突解决引入；本次改动只碰 3 份文档产物。"
   }
 }

@@ -114,7 +114,7 @@ function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
             用户想翻日志时不用再去猜是哪一包。 */}
         {group.runId !== null && (
           <span
-            className="text-ink-fainter font-mono text-[10px]"
+            className="text-ink-fainter text-3xs font-mono"
             title={`启动标识 ${group.runId}（与 log/runs/ 下的目录名尾段一致）`}
           >
             {group.runId}
