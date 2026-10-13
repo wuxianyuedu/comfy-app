@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-13T03:43:41.900Z",
+    "verifiedAt": "2026-10-13T07:55:03.590Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "合并 origin/master 后取两侧较新的那条自证（本档的账是单值，没有「两侧都留」的形态）：master 侧 03:43Z 那轮 win32 实测 43 failed / 35 passed、66 处 60s goto 超时、33 条卡在 1.0m，散在互不相干的屏上，归因与出口写在 ISSUE #1834（不抬 Playwright timeout、不降 worker 换绿）；本侧 01:04Z 那条是「本次改动只落文档生成链、不吃 e2e 面」的内容式声明，口径更弱，被 #1834 对全档的归因覆盖，故不另留。"
+    "skippedReason": "win32 全量 e2e 今日已跑三遍（读数与逐条归因在 ISSUE #1834 评论）：失败集是与本改动无关的稳定红（出图链路 / queue-monitor / runtime-budget 性能预算超）与已知红，绿账待这些红清掉后补跑记录"
   }
 }
