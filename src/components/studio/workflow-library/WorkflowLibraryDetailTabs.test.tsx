@@ -13,7 +13,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { DETAIL_TABS } from "./workflow-library-detail-config";
+import {
+  DEFAULT_DETAIL_TAB,
+  DETAIL_TABS,
+} from "./workflow-library-detail-config";
 
 afterEach(cleanup);
 
@@ -24,7 +27,7 @@ const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 function TabHarness({ onValueChange }: { onValueChange?: () => void }) {
   return (
     <Tabs
-      value="canvas"
+      value={DEFAULT_DETAIL_TAB}
       onValueChange={() => onValueChange?.()}
       className="min-h-0 flex-1 gap-0"
     >
@@ -62,15 +65,23 @@ describe("详情面板页签走 ui/tabs", () => {
 
   it("同一时刻只挂载当前页签的面板", () => {
     render(<TabHarness />);
-    expect(screen.getByText("面板：编辑对外参数")).toBeInTheDocument();
-    expect(screen.queryByText("面板：工坊封装")).toBeNull();
+    expect(screen.getByText("面板：工坊封装")).toBeInTheDocument();
+    expect(screen.queryByText("面板：编辑对外参数")).toBeNull();
     expect(screen.queryByText("面板：源文件")).toBeNull();
+  });
+
+  it("默认页签是最轻的那个（工坊封装），不是画布预览", () => {
+    /* 「默认落重型页签」的代价是打开每条工作流都拉起画布引擎
+     * （`@xyflow/react`）。数组第一项即默认页签，判据因此钉在表首。 */
+    expect(DEFAULT_DETAIL_TAB).toBe("params");
+    expect(DETAIL_TABS[0]).toEqual({ key: "params", label: "工坊封装" });
   });
 
   it("点击别的页签会把选中态交给基元（onValueChange 被调用）", () => {
     const onValueChange = vi.fn();
     render(<TabHarness onValueChange={onValueChange} />);
-    fireEvent.click(screen.getByRole("tab", { name: "工坊封装" }));
+    /* 默认页签是「工坊封装」，所以这里点**别的**页签才产生一次切换。 */
+    fireEvent.click(screen.getByRole("tab", { name: "编辑对外参数" }));
     expect(onValueChange).toHaveBeenCalled();
   });
 
