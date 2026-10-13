@@ -33,6 +33,7 @@ import { Input } from "~/components/ui/input";
 
 import { FieldImagePreview } from "./SettingsPrimitives";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { fixed } from "~/lib/number-format";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import type {
@@ -69,7 +70,9 @@ export function UsageTestDialog({
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-md"
       >
-        <div className="border-border bg-surface max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border p-5 shadow-2xl">
+        <div
+          className={`border-border bg-surface ${OVERLAY_MAX_HEIGHT} w-full max-w-md overflow-y-auto rounded-2xl border p-5 shadow-2xl`}
+        >
           <div className="mb-4 flex items-center justify-between">
             <h3 className="u-title">
               实际调用测试 · {USAGE_TEST_KIND_LABELS[usageTest.kind]}

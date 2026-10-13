@@ -205,7 +205,7 @@ export function FinalComposer({
                 data-icon="inline-start"
                 name="play"
                 size={13}
-                className="mr-1 inline align-[-2px]"
+                className="mr-1"
               />
               串播预览
             </Button>
