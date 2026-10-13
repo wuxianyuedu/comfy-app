@@ -27,6 +27,23 @@
  *   node scripts/e2e-run.mjs --skip "<理由>"     不跑，记一条写明理由的豁免账
  *
  * **不落盘**：本档不产基线（那是像素档的 `--update` 档），所以这里没有「录」这一路。
+ *
+ * ── 本地这一档跑的是「现场编译」的形态（ISSUE #1834）────────────────────
+ *
+ * 默认（`PNPM_START` 未设）webServer 走 `pnpm dev`（Turbopack），而 dev server 是
+ * **按需编译**的：某条路由要在第一个 worker 导航到它的**那一刻**编译出来。实测
+ * （win32 检出、8 worker）43 条失败里 33 条正好卡在 60s 自测向预算上、且散在互不
+ * 相干的屏上 —— 那是「服务还没编译完」，不是某条断言不成立。
+ *
+ * 处置**不是**抬 Playwright 的 `timeout`（那是拿预算换绿，会把真挂死的检出时间一起
+ * 放大），而是把并发降到与「首帧要现场编译」相容的档：判据在
+ * `playwright.config.ts` 的 `resolveE2eWorkers()` 一处（`e2e-runtime-budget.test.ts`
+ * 两向钉住它），本文件只负责**把这一档说出来**（`PNPM_START=1` 那一档是生产构建 +
+ * 零编译，并发回到默认）。
+ *
+ * 账面的 `how` 因此也分两档：`--start` 那一趟记的是 `PNPM_START=1 pnpm test:e2e`
+ * —— 「按哪条命令复核的」这一栏必须写清是哪一档，否则下一个人按名义命令复跑、
+ * 遇到的是另一种负载，却看不出差别在哪。
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -77,7 +94,9 @@ export function resolvePlaywrightCli(cwd = ROOT) {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   const bin = pkg?.bin?.playwright;
   if (typeof bin !== "string") {
-    throw new Error(`[e2e-run] @playwright/test 没有 bin.playwright：${pkgPath}`);
+    throw new Error(
+      `[e2e-run] @playwright/test 没有 bin.playwright：${pkgPath}`,
+    );
   }
   const entry = path.resolve(path.dirname(pkgPath), bin.replace(/^\.\//, ""));
   if (!existsSync(entry)) {
@@ -132,6 +151,34 @@ export function planRun(extra = []) {
     args: ["test", ...extra],
   };
 }
+
+/**
+ * 本趟跑的是哪一档 webServer（`playwright.config.ts` 的 `command` 读的是同一对键）。
+ *
+ * **为什么这一档必须由本文件说出来**：两档的负载形态完全不同（现场编译 vs 生产构建），
+ * 而它们的差别在输出里一个字都看不见 —— 下一个人看到「8.7 分钟 / 43 failed」时无法
+ * 判断那是哪一种，只能重新量一遍。
+ *
+ * ⚠️ 与 `playwright.config.ts` 的 `resolveE2eWorkers()` **判的是同一件事**（`CI` 或
+ * `PNPM_START`），但两处**刻意不互相 import**：那份配置是 Playwright 的入口文件，
+ * 由 Playwright 自己加载（会连带拉起整个配置图的求值），拿它当纯函数库引进来等于
+ * 让跑法脚本依赖一个它本来不认识的模块。两处的一致性由
+ * `tests/e2e-runtime-budget.test.ts` 钉住（它读两侧源码比对）。
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{start: boolean, workers: number | null}}
+ *   `workers === null` = 用 Playwright 的默认并行度
+ */
+export function resolveServerMode(env) {
+  if (env.CI || env.PNPM_START) return { start: true, workers: null };
+  return { start: false, workers: COLD_COMPILE_WORKERS };
+}
+
+/**
+ * 现场编译档的并发 —— `playwright.config.ts` 里那个数的**同一个值**（两处由
+ * `tests/e2e-runtime-budget.test.ts` 核一致）。它只用于**报读数**，不参与判决。
+ */
+export const COLD_COMPILE_WORKERS = 4;
 
 /**
  * 这一跑该不该记账 —— 抽成纯入口，好让「红了不记」这条边界能被真跑一次。
@@ -229,7 +276,14 @@ async function main(argv) {
     `[e2e-run] 起 Playwright 前：应用端口 ${preflight.appOccupied ? "有人" : "空"} / ` +
       `替身端口 ${preflight.fakeOccupied ? "有人" : "空"}\n`,
   );
-  process.stdout.write(`[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`);
+  process.stdout.write(
+    `[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`,
+  );
+  const mode = resolveServerMode(env);
+  process.stdout.write(
+    `[e2e-run] webServer：${mode.start ? "pnpm start（生产构建，首屏零编译）" : "pnpm dev（Turbopack，首帧现场编译）"}` +
+      ` / 并发：${mode.workers ?? "Playwright 默认"}\n`,
+  );
   const res = spawnSync(process.execPath, [entry, ...run.args], {
     cwd: ROOT,
     env,
@@ -250,6 +304,9 @@ async function main(argv) {
     root: ROOT,
     kind: "e2e",
     who: gitUser(TRACK.key),
+    /* `how` 收的是**实际跑绿的那条命令**：两档的负载形态不同，账面上必须分得开
+     * （`writeFreshness` 的 `how` 那一栏就是为此存在的）。 */
+    how: mode.start ? "PNPM_START=1 pnpm test:e2e" : TRACK.run,
   });
   process.stdout.write(`[e2e-run] ✓ 全量 e2e 通过\n[e2e-run] ${note}\n`);
   return 0;

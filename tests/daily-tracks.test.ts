@@ -34,10 +34,15 @@ import {
   planRun as artifactPlan,
 } from "../scripts/artifact-run.mjs";
 import {
+  FULL_SUITE_TIMEOUT_MS,
   shouldRecord as suiteRecords,
   TRACK as SUITE_TRACK,
   planRun as suitePlan,
 } from "../scripts/full-suite-run.mjs";
+import {
+  abortedAdvice,
+  classifyOutcome,
+} from "../scripts/launcher-core/shell.mjs";
 import {
   FRESHNESS_TRACKS,
   freshnessRecord,
@@ -432,6 +437,55 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
   });
 });
 
+describe("墙钟预算：**测量没发生**与「判据红」必须分得开（ISSUE #1834）", () => {
+  /* 立案现场：全量档在 win32 检出上无争抢实测 ~10 分钟，而 `runPnpmSync` 的**缺省**
+   * 预算是 600_000 —— 只要有任何并发（叠一次运行），子进程就在 600s 处被砍，
+   * `res.status` 为 null。旧写法 `res.status ?? 1` 把它读成「退出码 1」，
+   * 也就是「这批用例红了」；而下一个人据此去查用例，查到的是空气。 */
+  it("`classifyOutcome`：没量到（起不来 / 被砍）与量到但非零，是两件事", () => {
+    // 被预算砍：`spawnSync` 给 error=ETIMEDOUT、status=null
+    expect(
+      classifyOutcome({ status: null, error: { code: "ETIMEDOUT" } }),
+    ).toBe("aborted");
+    // 被信号打死：error 不在、status 也是 null
+    expect(classifyOutcome({ status: null, error: null })).toBe("aborted");
+    // 命令压根没起来
+    expect(classifyOutcome({ status: null, error: { code: "ENOENT" } })).toBe(
+      "aborted",
+    );
+    // 跑完了、非零 —— 这一个才是「判据红」
+    expect(classifyOutcome({ status: 1, error: null })).toBe("ran");
+    expect(classifyOutcome({ status: 0, error: null })).toBe("ran");
+  });
+
+  it("本档显式给了预算，且大于「实测 10 分钟量级」的并发余量", () => {
+    expect(FULL_SUITE_TIMEOUT_MS).toBeGreaterThan(600_000);
+    // 读的是**实际传给子进程**的那个数（不是只在常量上写一遍）。
+    expect(readText("scripts/full-suite-run.mjs")).toContain(
+      "timeoutMs: FULL_SUITE_TIMEOUT_MS",
+    );
+  });
+
+  it("产物档走同一条分流（同源同病：缺省 600_000）", () => {
+    expect(readText("scripts/artifact-run.mjs")).toContain(
+      "timeoutMs: ARTIFACT_TIMEOUT_MS",
+    );
+    expect(readText("scripts/artifact-run.mjs")).toContain("classifyOutcome");
+  });
+
+  it("两档的红话术**不一样**：被砍时不许说「未通过 … 不记账」那一套", () => {
+    /* 这条判的是「下一动作」：判据红 ⇒ 看用例名去修；被砍 ⇒ 看这台机器上还有谁在跑。
+     * 两种收场共用一段话术时，读的人只能自己猜是哪一种 —— 那正是本单要治的形态。 */
+    const advice = abortedAdvice({
+      label: "全量单测 + 覆盖率",
+      timeoutMs: FULL_SUITE_TIMEOUT_MS,
+    });
+    expect(advice).toContain("测量没发生");
+    expect(advice).toContain("要修的不是用例");
+    expect(advice).not.toContain("不记账");
+  });
+});
+
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`package.json` 的入口真的走这层通道（否则记账这一步没有执行者）", () => {
     const pkg = JSON.parse(readText("package.json")) as {
@@ -455,9 +509,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
         /^ {2}run "([^"]+)" (.+)$/gm,
       ),
     ].map((m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }));
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/freshness-gate.mjs"),
-    );
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
     expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
     expect(hit?.label).toContain("e2e");
     // 标签要说清它现在判的是哪几档 —— 只写其中一档时，另一档红出来会被读成别人的事。

@@ -1,8 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import {
-  resolveAppPort,
-  resolveRepoRoot,
-} from "./scripts/app-port.mjs";
+import { resolveAppPort, resolveRepoRoot } from "./scripts/app-port.mjs";
 import {
   fakeComfyuiEnv,
   fakeComfyuiStatsUrl,
@@ -51,6 +48,46 @@ if (fakeExecutor.reason) {
 }
 const executorEnv: Record<string, string> = fakeExecutor.env;
 
+/**
+ * 现场编译档的并发 —— **不是**「慢机器降并发」那种旋钮，是「首帧要现场编译」这一格的取值。
+ *
+ * 4 的来历：本仓单条 spec 自己的默认自测向预算就写着 60s（`timeout: 60_000`），
+ * 而实测量到的是「首帧导航吃满 60s」—— 也就是说判据说的是「这一屏活不过 60s」，
+ * 而它本来就是这么设计的（这是这一档**该有的**判据，不是要绕开的东西）。
+ * 剩下的唯一自由度是「让首帧编译别被 8 个 worker 同时撕」：4 是实测能过的档，
+ * 与钩子 C 组那个 `--maxWorkers=4` 同一条理由（并发只调负载、不碰判据）。
+ */
+const COLD_COMPILE_WORKERS = 4;
+
+/**
+ * 「这次跑的 webServer 会不会**现场编译**首帧」—— 它决定并发档（ISSUE #1834）。
+ *
+ * 为什么要有这条判据：`PNPM_START` 未设时 webServer 跑 `pnpm dev`（Turbopack），
+ * 而 dev server 是**按需编译**：某一个 worker 第一次导航到某条路由时，那条路由要在
+ * 那一刻编译出来。实测（win32 检出，8 worker 并发、`e2e-run.mjs` 起自己的 dev server）
+ * 43 条失败里有 33 条正好卡在 `Test timeout of 60000ms exceeded (1.0m)`，且散在
+ * 互不相干的屏上（`appearance-steps` / `critical-flows` / `nav-auto-collapse` …）——
+ * **同形态跨屏**说明红的是服务响应，不是某一条断言。
+ *
+ * 而这两件事（冷编译的墙钟 / 用例的自测向预算）**不是同一个旋钮**：抬 `timeout`
+ * 是「拿预算换绿」，它把真挂死的检出时间一起放大；降并发是**改负载**，不碰任何
+ * 判据（同 §13.6.4 那句「降负载的杠杆是并发，不是预算」）。
+ *
+ * 所以这里只做**降并发**这一半：现场编译时收敛到 {@link COLD_COMPILE_WORKERS} 个
+ * worker（排在后面的那批不再与首帧编译抢核），`PNPM_START` 给了（= 生产构建，
+ * 首屏零编译）就照旧用 Playwright 的默认并行。
+ *
+ * **为什么纯函数**：这一格要能被用例两向钉住（冷编译 ⇒ 收敛、已构建 ⇒ 不收敛），
+ * 而「判据自己的取值」没法只在注释里自证（§11.13）。
+ *
+ * @param env
+ * @returns `undefined` = 不覆盖 Playwright 的默认并行度
+ */
+export function resolveE2eWorkers(env: NodeJS.ProcessEnv): number | undefined {
+  if (env.CI) return undefined;
+  return env.PNPM_START ? undefined : COLD_COMPILE_WORKERS;
+}
+
 export default defineConfig({
   testDir: "./e2e",
   testMatch: ["**/*.spec.ts"],
@@ -59,6 +96,9 @@ export default defineConfig({
    * command **不会被执行**，而那正是最需要探测的一条路径。 */
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
+  /* 现场编译档收敛并发（见 `resolveE2eWorkers`）：它改的是**负载**，不是任何判据的
+   * 预算。`undefined`（已构建 / CI）时不写这个键 —— Playwright 用它自己的默认。 */
+  workers: resolveE2eWorkers(process.env),
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"]],
@@ -79,7 +119,13 @@ export default defineConfig({
       // CI 上必须用生产构建 + start：dev server（Turbopack）首屏要现场编译，
       // 冷启动远超 180s 的等待窗口，会让冒烟用例集体超时。CI 门禁已先跑
       // `pnpm build`，这里只需起服务。本地开发仍用 dev（热更新、无需先构建）。
-      command: process.env.CI ? "pnpm start" : "pnpm dev",
+      //
+      // 本地那条默认**刻意不减配**：`pnpm dev` 要求先 `pnpm build` 才能跑 ——
+      // 那会让「按需跑一次 e2e」变成「先花十分钟构建」。要那一档的人用
+      // `PNPM_START=1` 显式说（`scripts/e2e-run.mjs` 认它，语义与 CI 档逐字相同：
+      // 生产构建 + start + 不现场编译 ⇒ 并发也回到默认，见 `resolveE2eWorkers`）。
+      command:
+        process.env.CI || process.env.PNPM_START ? "pnpm start" : "pnpm dev",
       url: appOrigin,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
