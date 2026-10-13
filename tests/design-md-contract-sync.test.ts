@@ -31,7 +31,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { parseRadiusScale, renderedRadiusValues } from "./helpers/radius-scale";
-import { parseTextTiers } from "./helpers/text-tiers";
+import { parseTextTiers, renderedLineHeightPx } from "./helpers/text-tiers";
 import { stripComments } from "./helpers/strip-comments";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
@@ -512,7 +512,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    * **140→122 是同一条「一个尺寸一个名字」口径的第三半**：圆角那条「字面 px 等于某档
    * 当前渲染值就红」此前只判圆角，字号侧只归零了 12 / 13px —— 于是 17 处 14px 的字面量
    * （逐字等于 `text-sm` 的渲染值）与 1 处 18px 的字面量（等于 `text-lg`）长期合法。
-   * 这一批**带着行高一起变**（字面量吃继承的 1.5 ⇒ 21px / 27px，档位自带 16px / 28px），
+   * 这一批**带着行高一起变**（字面量吃继承的 1.5 ⇒ 21px / 27px，档位自带 20px / 28px
+   * ⇒ 实际 −1px / +1px；配对值由下面那条行高判据守着，别凭印象改这里），
    * 与 13px 那批同理：改动点所在行是否由文字定高，按结构判（同族最高兄弟元素 ≥ 新行盒），
    * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而那三颗标题档的名字
    * 不是 t-shirt 形状、在 JSX 里会被 `cn()` 归进颜色组吃掉同行状态色。
@@ -656,7 +657,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   it("12px / 13px 只有一个名字：调用点不许再写字面量档", () => {
     /* 这一档不是棘轮、是**归零等式**：`text-xs`(12) 与 `text-sm`(14) 是已存在的两档，
        而 `text-[12px]` / `text-[13px]` 字号贴着它们、行高却各走一套（字面量只出字号，
-       行高吃继承的 1.5 ⇒ 18px / 19.5px；档位自带 16px / 16px 的配对值）。「同一个字号
+       行高吃继承的 1.5 ⇒ 18px / 19.5px；档位自带的配对值是 16px / 20px —— 所以 13px 那批
+       并入 `text-sm` 的真实行盒变化是 19.5 → 20，不是 19.5 → 16（见下面那条行高判据）。「同一个字号
        两种行高」= 同一把尺上两个名字，所以两批字面量都签字归一（12px→text-xs 289 处那档、
        13px→text-sm 正文那档），再出现字面量就是重新分裂。要更松的行高请显式写 `leading-*`。
        13px 那 62 处并入时，`log-virtual.ts` 的 27/18 两个行高常量与两处用例是**同一批**改的
@@ -725,6 +727,51 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       tiers.byPx.get(11),
       "--text-2xs 不再是 11px？本判据的归一方向要重判",
     ).toBe("2xs");
+  });
+
+  it("档位的配对行高由这张表给：文档与推理都不许凭印象写数字", () => {
+    /* §11.8 撤的是**页面级像素基线**；组件那一侧仍然有人管的两件里，这一件就是
+     * 「具体的 token / 尺寸值对不对」（`getComputedStyle` 类断言）。行高恰好是
+     * 第 3、4 刀全部推理的支点（「字面量吃继承的 1.5，档位自带配对值」），
+     * 而它此前没有任何判据守着 —— 于是文档里一个错的配对值活了很久，
+     * 还被写进两次提交的因果句：`text-sm` 的配对是 **20px**（依赖里
+     * `--text-sm--line-height: calc(1.25 / 0.875)` × 14px），从前到处写的是 16px
+     * （那是 `text-xs` 的）。真 Chromium 读数（Storybook 沙箱，加载的就是这份编译
+     * 产物）：xs 12/16、sm 14/20、lg 18/28、2xs 11/16.5、3xs 10/15 —— 后两档的
+     * 16.5 / 15 是**继承来的 1.5 倍**，不是配对。 */
+    const tiers = parseTextTiers(
+      readFileSync(GLOBALS_PATH, "utf8"),
+      TSHIRT_NAME,
+    );
+    for (const [name, px] of [
+      ["xs", 16],
+      ["sm", 20],
+      ["lg", 28],
+    ] as const) {
+      expect(
+        renderedLineHeightPx(tiers, name),
+        `--text-${name}--line-height 的渲染值变了？凡按行高推理的地方（第 3、4 刀的像素账）要重判`,
+      ).toBe(px);
+    }
+    /* 两颗微标签刻意**不配对**（globals.css 注释自己写着「也不给 --text-*-line-height
+     * 配对」）—— 这正是「10.5px 并进来只动字号、不动行高」的前提。哪天有人给它们
+     * 配了行高，那 52 处的账要重算。 */
+    for (const name of ["2xs", "3xs"] as const) {
+      expect(
+        renderedLineHeightPx(tiers, name),
+        `--text-${name} 被加了配对行高 —— 并入它的那批调用点行盒会变，像素账要重算`,
+      ).toBeNull();
+    }
+    /* 文档侧钉住那个错值：只量代码、放着文档里的错数不管，等于让下一个人
+     * 拿它当前提继续推。 */
+    expect(
+      /text-sm`?\s*出\s*16px/.test(doc),
+      "DESIGN.md 又写「text-sm 出 16px」—— 真机读数是 20px（16px 是 text-xs 的）",
+    ).toBe(false);
+    expect(
+      doc.includes("`text-sm` 出 20px"),
+      "DESIGN.md 里 text-sm 的配对行高要按真机读数写成 20px",
+    ).toBe(true);
   });
 
   it("浮层上限只许走那两档常量；行内图标的 align-[-Npx] 只许留在文本流那一处", () => {
