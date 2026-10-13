@@ -150,11 +150,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       <section className="border-primary-soft bg-primary-soft/30 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-primary u-title flex items-center">
-            <Icon
-              name="sparkles"
-              size={14}
-              className="mr-1.5 inline align-[-2px]"
-            />
+            <Icon name="sparkles" size={14} className="mr-1.5" />
             生成剧本
           </h3>
           {/* 与角色卡一致：本次生成可独立选择 本地 / 远端 的哪个模型 */}
@@ -182,7 +178,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
                   data-icon="inline-start"
                   name="sparkles"
                   size={13}
-                  className="mr-1 inline align-[-2px]"
+                  className="mr-1"
                 />
                 AI 生成剧本
               </>

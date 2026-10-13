@@ -21,6 +21,7 @@ import {
   type VideoTask,
 } from "~/lib/media/video-queue-client";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
 /* ── 视频队列弹窗 —— 接了真实的 VIDEO 任务 ──
  从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
@@ -174,7 +175,9 @@ export function VideoQueueModal({
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
       >
-        <div className="bg-node border-border-strong flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50">
+        <div
+          className={`bg-node border-border-strong flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50`}
+        >
           {/* Header */}
           <div className="border-border-strong flex items-center justify-between border-b px-5 py-3.5">
             <div className="flex items-center gap-3">

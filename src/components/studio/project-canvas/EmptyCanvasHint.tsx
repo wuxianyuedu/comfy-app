@@ -64,6 +64,10 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
           自定义工作流可下拉选用你上传的 ComfyUI 工作流
         </p>
         <p className="text-primary-strong mt-1 text-xs leading-relaxed">
+          {/* 全仓**唯一**一枚 `align-[-Npx]` 还留着，因为父级是普通 `<p>` 的 inline 文本流：
+           *  `vertical-align` 只在这种情形生效（真 Chromium 实测：文本流里 12px 图标的行内偏移
+           *  从 5px 变 6px，而 `items-center` 的 flex 容器里带不带它偏移都是 4.5px）。
+           *  其余 10 处都坐在 `Button` / `flex` 容器里，那两条声明是零效果的抄来的写法，已删。 */}
           <Icon
             name="sparkles"
             size={12}

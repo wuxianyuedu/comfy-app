@@ -13,6 +13,7 @@ import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { comfyImageUrl } from "~/lib/media/media-url";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
  * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
@@ -249,7 +250,7 @@ export function ContentAssetBody({
               filename: galleryImages[gallery.index]?.localPath ?? "",
             })}
             alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
-            className="border-border-strong max-h-[85vh] max-w-[85vw] rounded-lg border object-contain shadow-2xl"
+            className={`border-border-strong ${OVERLAY_MAX_HEIGHT} max-w-[85vw] rounded-lg border object-contain shadow-2xl`}
             onClick={(event) => event.stopPropagation()}
           />
 

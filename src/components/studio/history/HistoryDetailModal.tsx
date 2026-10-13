@@ -23,6 +23,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { zClass } from "~/lib/shell/overlay-z";
 
 interface HistoryDetailModalProps {
@@ -106,7 +107,9 @@ export function HistoryDetailModal({
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
       >
-        <div className="border-border bg-node flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border">
+        <div
+          className={`border-border bg-node flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col overflow-hidden rounded-2xl border`}
+        >
           <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-5 py-3">
             <h3 className="u-title">任务详情</h3>
             <div className="flex items-center gap-2">

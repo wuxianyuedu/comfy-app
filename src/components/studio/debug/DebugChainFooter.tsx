@@ -34,6 +34,7 @@ import { PageLoading } from "~/components/ui/page-loading";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { lastSegments } from "~/lib/path-display";
 import { Button } from "~/components/ui/button";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { errorMessage } from "~/lib/error-message";
 
 export interface RenderChainModule {
@@ -229,7 +230,7 @@ export function DebugChainFooter({
         <DialogContent
           showCloseButton={false}
           className="border-border-strong bg-panel w-[min(860px,92vw)] gap-0 p-0"
-          popupClassName="flex max-h-[78vh] flex-col overflow-hidden rounded-2xl"
+          popupClassName={`flex ${OVERLAY_MAX_HEIGHT} flex-col overflow-hidden rounded-2xl`}
           // 调试弹窗挂在 ReactFlow 节点内，需阻断指针事件冒泡以免触发节点拖拽。
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
