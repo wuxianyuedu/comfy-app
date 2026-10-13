@@ -71,18 +71,35 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > **实测的教训（数字是当时那次事故的账）**：storybook 那批新 stories 一次性带进来
 > 「96 处」`w-[30rem]` / `h-[32rem]` 这类缩写候选（全仓现已各 0 处），直到手工跑
 > `pnpm theme:scan` 才浮出来 —— 那时它只是「没人跑就没人
-> 知道」。现在两者各带一个**棘轮判定档**（ISSUE #1451 要求 2，规范 §13.5.12）：
+> 知道」。现在两者各带一个**硬闸判定档**（ISSUE #1451 要求 2 起步、ISSUE #1811 的
+> tw4 项翻成硬闸，规范 §13.5.12）：
 >
 > ```bash
-> node scripts/tw4-canonical-report.mjs --check   # 源文件 canonical 候选数不许超过基线
-> node scripts/tw4-spacing-canonical.mjs --check  # 待改写处数不许超过基线
+> node scripts/tw4-canonical-report.mjs --check   # 源文件 canonical 候选数须为 0
+> node scripts/tw4-spacing-canonical.mjs --check  # 待改写处数须为 0
 > ```
 >
-> 基线 `scripts/.tw4-canonical-baseline.json` / `scripts/.tw4-spacing-baseline.json`
-> 都是 **`total: 0`** 起步（回潮即红）。红了就 `--write` 落盘、再 `--update` 收紧基线；
-> 测试文件里的候选按人判断（`--write` 默认不碰，见脚本头注）。**别为了让 `--check`
-> 变绿去放宽基线** —— 那份基线由 `tests/tw4-canonical-ratchet.test.ts` 守着形状与
-> 判定档在位，执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
+> 两者**都不再有基线**（曾经各带一份 `total: 0` 的棘轮，ISSUE #1811 翻闸时删掉）：
+> 存量清零之后棘轮的两个动作都无事可做，留下的却是一条「手改那份 JSON 就能把新候选
+> 登记成已知存量」的通道 —— 那正是硬闸类本来没有的中间态（§13.6.2 的两类对照）。
+> 红了就 `--write` 落盘；测试文件里的候选按人判断（`--write` 默认不碰，见脚本头注）。
+> 硬闸形态由两份用例守着：`tests/tw4-canonical-ratchet.test.ts`（**形状** ——
+> 判定档还在、放宽通道没被加回来、扫描走共享内核）与
+> `tests/tw4-hardgate-behaviour.test.ts`（**行为** —— 真候选即退 1、注释里的示例
+> 不算候选、`--update` 这个出口已经不存在；形状守卫读文本，判不出「判定档真的会
+> 退 1」）。执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
+>
+> **翻闸时撞出来的两件事值得记在这**（tw4 这一项不只是删基线）：
+>
+> ① 两份工具的字符串字面量取法此前各写一遍「全文件正则」，于是**注释里用反引号引的
+> 示例与真 className 同形**、被当成候选。修法是从两处收成一处
+> `scripts/tw4-scan-core.mjs`：扫描前先按逐字符状态机**剥注释**（保长、保换行），
+> JS/TS 走它、`.css` / `.snap` 仍按字面量粗取。这不只是少一条误报 —— 剥之前那份
+> 正则还会被注释里的引号**打乱配对**，把注释之后**真的**类名字符串整段漏掉。
+>
+> ② 上面这件事修好之后 `WorkflowNode.tsx` 当场浮出 2 处**真**候选（`px-[14px]` → `px-3.5`、
+> `h-[43px]` → `h-10.75`）—— 它们一直合规地存在，只是被 ① 那句配对错位挡住了。
+> **「判据报了不该报的」与「判据漏了该报的」常是同一个根因的两面。**
 
 **「更名 / 别名 / v3 遗留」那一类**（`!x`、`break-words`、`flex-shrink`、
 `overflow-ellipsis`、`bg-gradient-to-*` …）由 `scripts/tw4-canonical-report.mjs`

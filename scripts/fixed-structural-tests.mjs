@@ -312,11 +312,17 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 无执行者的判定型脚本」这两次改动恰好都落在那一档上，跟着改动走等于专挑它不在
   // 的时机跑。它读的是 `.githooks/pre-commit` 与 `scripts/` 两份文本，import 图追不到。
   "tests/gate-executors.test.ts",
-  // canonical / spacing 两份棘轮基线的形状守卫（ISSUE #1451 要求 2）：两处都
-  // `total: 0`，它们是「零候选起步、只许新增就红」的语义载体 —— 有人为了让
-  // `--check` 变绿去放宽基线（把 total 抬高）正是这一族要拦的动作，而它不在
-  // 任何钩子步骤的 import 面上。与本次暂存改动无关也必须响，所以进固定清单。
+  // canonical / spacing 两份判据的形状守卫（ISSUE #1451 要求 2 / #1811 翻硬闸）：
+  // 它们**不进任何钩子**（起 Tailwind 引擎、单次约 6s），所以「--check 还在判、
+  // 放宽通道没被加回来」这件事没有任何钩子步骤会替它验 —— 与本次暂存改动无关
+  // 也必须响，所以进固定清单。
   "tests/tw4-canonical-ratchet.test.ts",
+  // 同上的**行为**那一半：形状守卫读的是文本（判不出「--check 真的会退 1」——
+  // 一个把判定档写成永远 exit(0) 的版本同样满足「有 --check + 有 process.exit(1)
+  // 字样」）。这一份把两份工具当黑盒跑在临时工作区上，正面钉住「真候选即阻断」、
+  // 「注释里的示例不算候选」、「--update 这个出口已经不存在」。它同样不在任何钩子
+  // 步骤的 import 面上，按同一条理由进固定清单。
+  "tests/tw4-hardgate-behaviour.test.ts",
   // 「用例的环境档」那两条判据（§11.17）的契约测试。它们守的是**下一次有人写用例**：
   // 「环境早退」是「绿有两种含义」里坏的那一种（用例报绿、一条断言都没跑），
   // 而它与某一次具体改动无关 —— 只在被改到时才跑等于专挑它不在的时机跑。
@@ -450,7 +456,9 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 棘轮的 `--update` 拒涨（规范 §11.25 / 台账 E5）：24 个「带 --update 且把基线写回去」
   // 的判据脚本里，实测有**七家的拒涨那一支从来没生效**，且失效写法有三种 ——
   // UPDATE 分支无条件写基线（dead-exports / circular-deps / comment-language /
-  // tw4-canonical / tw4-spacing）、
+  // 以及 tw4-canonical / tw4-spacing 两家 —— 这两家在 ISSUE #1811 的 tw4 项里已
+  // **整条翻硬闸**：基线删掉、`--update` 删掉、`--check` 命中即退 1，于是本表与
+  // 本文件的判决面里都不再有它们的行）、
   // 判断用的 `prev` 在 `--update` 之路上恒为 null（theme-colors，那一支是死代码）、
   // `if (before && …)` 在**已经清到 0 的基线**上整个短路（theme-colors / overlay-z，
   // 而今天四家的基线正是 0 处）—— 它们的 `note` 里都逐字写着「只许降不许升」。

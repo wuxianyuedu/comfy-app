@@ -38,7 +38,6 @@ import {
   type GateRepo,
   type GateRepoOptions,
 } from "./helpers/gate-repo";
-import { symlinkDir } from "./helpers/symlink-dir";
 
 /** 一条棘轮的完整描述：脚本、基线落点、夹具输入、以及「怎么再加一条违规」。 */
 interface Ratchet {
@@ -69,30 +68,6 @@ interface Ratchet {
 
 /** AST 类判据在临时工作区旁边没有 node_modules，靠 NODE_PATH 指回源码仓库。 */
 const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
-
-/**
- * 起 Tailwind 引擎的那两家（`tw4-canonical-report` / `tw4-spacing-canonical`）不能靠
- * `NODE_PATH`：它们是 ESM 的 `import "tailwindcss"`，而 **`NODE_PATH` 对 ESM 解析无效**，
- * 解析只按脚本自身位置向上找 `node_modules`。所以夹具链一份回真仓库（`symlinkDir` =
- * Windows 免特权那一档），另把 `src/app/globals.css` 作为输入拷进去 —— design system 的
- * spacing 倍数表就来自那文件的 `@theme`，缺它脚本直接 ENOENT。
- *
- * `dispose()` 的 `rmSync(recursive)` 把链接当文件 unlink、不穿透（实测真 `node_modules`
- * 完好），所以链进来的东西不会被删掉。
- */
-function linkNodeModules(repo: GateRepo): void {
-  symlinkDir(
-    join(process.cwd(), "node_modules"),
-    join(repo.dir, "node_modules"),
-  );
-}
-
-/** 上面那两家的共同夹具输入（都要 globals.css 才建得起 design system）。 */
-const TW4_FIXTURE: Pick<GateRepoOptions, "dirs" | "copy" | "setup"> = {
-  dirs: ["src"],
-  copy: [{ from: "src/app/globals.css", to: "src/app/globals.css" }],
-  setup: linkNodeModules,
-};
 
 const RATCHETS: Ratchet[] = [
   /* R5（`check-file-structure.cjs --strict` 的那一半）：`src` 侧超 900 行的文件棘轮。
@@ -134,34 +109,12 @@ const RATCHETS: Ratchet[] = [
         `async function vf${n}(): Promise<void> {}\nvoid vf${n}();\n`,
       ),
   },
-  {
-    /**
-     * 「按需跑」的两份棘轮（不进 pre-commit，所以**更**需要行为判据：钩子里那几档
-     * 至少天天响，这一族今天没有任何东西在钉它的 `--update`）。
-     * 它们的文件头一直写着「只许降不许升」，而 `--update` 那一支今天是无条件落盘 ——
-     * 台账 E5 的同一形状，由本判据的现算清单照出来（旧的自测只 `toContain("--update")`，
-     * 那判的是「旗标在场」，不是「旗标拒涨」）。
-     */
-    script: "tw4-canonical-report.mjs",
-    baseline: "scripts/.tw4-canonical-baseline.json",
-    judgeArgs: ["--check"],
-    /* 实测单次 4.8–5.6s（每次都重新起 design system），一格 3–4 次 → 全局 30s 会顶穿。 */
-    timeout: 120_000,
-    fixture: TW4_FIXTURE,
-    violate: (repo, n) =>
-      repo.write(
-        `src/Canonical${n}.tsx`,
-        `export const cls${n} = "!bg-subtle";\n`,
-      ),
-  },
-  {
-    script: "tw4-spacing-canonical.mjs",
-    baseline: "scripts/.tw4-spacing-baseline.json",
-    judgeArgs: ["--check"],
-    fixture: TW4_FIXTURE,
-    violate: (repo, n) =>
-      repo.write(`src/Spacing${n}.tsx`, `export const h${n} = "h-[22px]";\n`),
-  },
+  /* 这里**没有** tw4 那两份（`tw4-canonical-report.mjs` / `tw4-spacing-canonical.mjs`）：
+   * 它们在 ISSUE #1811 的 tw4 项里翻了硬闸 —— 基线删掉、`--update` 删掉，`--check`
+   * 命中即退 1，于是「拒涨」在这两家**无对象可判**（没有基线可写回去，
+   * 这一张表的现算清单 `discoveredBaselines()` 也就认不出它们了）。
+   * 它们的硬闸形态由 `tests/tw4-canonical-ratchet.test.ts` 守形状、由
+   * `tests/tw4-hardgate-behaviour.test.ts` 守行为。 */
 ];
 
 /**
@@ -245,6 +198,13 @@ const HARD_GATE_FLIPS: Record<string, string> = {
   "check-test-sleep.cjs": "tests/test-sleep-gate.test.ts",
   "check-format.cjs": "tests/check-format.test.ts",
   "check-ui-logic-separation.cjs": "tests/check-ui-logic-separation.test.ts",
+  /* tw4 这一项（ISSUE #1811 的 tw4 半边）：与上面五条同一形状，只是它守的是
+   * 「CSS 等价改写」而不是违规计数 —— 清零后棘轮无对象可判，留着基线只等于多一条
+   * 「手改 JSON 把新候选登记成已知存量」的通道。自测点名 `tw4-canonical-ratchet`（形状）：
+   * 行为那一半在同名的 `tests/tw4-hardgate-behaviour.test.ts`，不进这张表 ——
+   * 这张表的值是「删了它会红的那一份」，而形状那份同时守着台账登记与判定档在位。 */
+  "tw4-canonical-report.mjs": "tests/tw4-canonical-ratchet.test.ts",
+  "tw4-spacing-canonical.mjs": "tests/tw4-canonical-ratchet.test.ts",
 };
 
 /** 不是计数棘轮的 `--update` 出口：加条目是它的正常用法，拒涨反而错。理由必须写在册子上。 */

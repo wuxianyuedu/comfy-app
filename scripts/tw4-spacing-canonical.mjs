@@ -17,16 +17,19 @@
  *
  * 用法：
  *   node scripts/tw4-spacing-canonical.mjs              # 扫 src，只列清单（dry-run）
- *   node scripts/tw4-spacing-canonical.mjs --check      # 棘轮判定：候选数不许超过基线
- *   node scripts/tw4-spacing-canonical.mjs --update     # 治理后重写基线（须伴随下降）
+ *   node scripts/tw4-spacing-canonical.mjs --check      # 硬闸判定：候选数须为 0
  *   node scripts/tw4-spacing-canonical.mjs --write      # 落盘
  *   node scripts/tw4-spacing-canonical.mjs <file...>    # 只处理给定文件
  *
- * 棘轮（ISSUE #1451 要求 2，与 `tw4-canonical-report.mjs` 同构）：本工具起 Tailwind
+ * 判定档（ISSUE #1451 要求 2，与 `tw4-canonical-report.mjs` 同构）：本工具起 Tailwind
  * 引擎、不进 pre-commit（判的是「CSS 等价改写」而非正确性），但 03 章那句「按需跑一次」
- * 此前没有任何东西在守。出路 = 按需跑 + 棘轮基线（`scripts/.tw4-spacing-baseline.json`），
- * `--check` 时只许降不许升。执行者与「为什么不进钩子」登记在
- * `scripts/.gate-executor-ledger.json`。
+ * 此前没有任何东西在守。出路 = 按需跑 + **硬闸**：`--check` 命中即退 1，候选须为 0。
+ * 执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
+ *
+ * **为什么是硬闸而不是棘轮**：本判据此前带一份基线（`scripts/.tw4-spacing-baseline.json`），
+ * `--check` 只判「不超过基线」、`--update` 收紧。存量清零后（ISSUE #1811 的 tw4 项）
+ * 棘轮的两个动作都无事可做，留下的却是一条「手改那份 JSON 就能把新候选登记成已知
+ * 存量」的通道 —— 那正是硬闸类本来没有的中间态（§13.6.2 的两类对照）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -34,15 +37,15 @@ import { fileURLToPath } from "node:url";
 
 import { __unstable__loadDesignSystem } from "tailwindcss";
 
+import { rewriteLiterals } from "./tw4-scan-core.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = path.join(ROOT, "src");
 
 const argv = process.argv.slice(2);
 const shouldWrite = argv.includes("--write");
 const shouldCheck = argv.includes("--check");
-const shouldUpdate = argv.includes("--update");
 const targets = argv.filter((arg) => !arg.startsWith("--"));
-const BASELINE = path.join(ROOT, "scripts", ".tw4-spacing-baseline.json");
 
 /** Tailwind v4 的 spacing 基线：`--spacing` 默认 0.25rem，浏览器默认根字号 16px。 */
 const BASE_SPACING_PX = 0.25 * 16;
@@ -51,8 +54,10 @@ const BASE_SPACING_PX = 0.25 * 16;
 const TOKEN = /^((?:[a-zA-Z][\w-]*:)*[a-zA-Z][\w-]*-)\[([^\]\s]+)\](!?)$/;
 /** 只处理 px 任意值（rem / % / calc 不做换算：它们的等价性另有条件）。 */
 const PX_VALUE = /^(\d+(?:\.\d+)?)px$/;
-/** 字符串字面量（普通串与模板串；模板串里的 `${…}` 会作为普通片段保留）。 */
-const STRING_LITERAL = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
+/* 字符串字面量的取法只有一处：`tw4-scan-core.mjs` 的 `stringLiterals()` ——
+ * 它先在**注释之外**扫描。注释里用反引号引的示例（`` `min-h-[22px]` ``）与真的
+ * className 同形，不剥会让 `--check` 报出不存在的候选、`--write` 去改注释里的示例
+ * （「此前写成 `h-[22px]`」被改写成「此前写成 `h-5.5`」= 解释与被解释的东西一起漂）。 */
 
 function read(file) {
   return fs.readFileSync(file, "utf8");
@@ -161,9 +166,12 @@ function rewriteStringContent(content, changes) {
 
 /** @param {string} text @param {Array<{from:string,to:string}>} changes */
 function rewriteText(text, changes) {
-  return text.replace(STRING_LITERAL, (_full, quote, content) => {
-    return quote + rewriteStringContent(content, changes) + quote;
-  });
+  return rewriteLiterals(text, (content) => {
+    const before = changes.length;
+    const next = rewriteStringContent(content, changes);
+    /* 没有发生改写时返回 null，让内核原样保留这一段（幂等性靠它）。 */
+    return changes.length > before ? next : null;
+  }).text;
 }
 
 function* walk(dir) {
@@ -203,85 +211,29 @@ console.log(
     (shouldWrite ? "" : "；加 --write 落盘"),
 );
 
-/* ── 棘轮（--check / --update）：候选处数只许降不许升 ───────────────────
+/* ── 判定档（--check）：候选数须为 0 ────────────────────────────────────
  *
- * 记账口径 = 按文件记「该文件里待改写的处数」。与 `tw4-canonical-report.mjs`
- * 的棘轮同构（那个按源文件记 canonical 候选数），两者互补、各扫一类。
- * 注意：本工具扫全部 `src` 下的 tsx/ts（含测试文件）—— 测试文件里的候选同样进基线，
- * 因为它的改写是**整 token 等值替换**，不像 canonical 那类会改坏断言样本；
- * 若某处测试样本确实不该改，把它写进基线的「允许处数」里，别放宽判据。 */
-
-/* 本轮的账算一次：`--check` 与 `--update` 判的是同一份，各算一遍就会分叉。 */
-const ledger = {};
-for (const { file, changes } of touched) {
-  ledger[path.relative(ROOT, file)] = changes.length;
-}
-
-/** 上一份基线；`null` = 还没有账可记（只有首次记账允许任何存量）。 */
-/** @type {{total: number, files: Record<string, number>} | null} */
-const baseline = fs.existsSync(BASELINE) ? JSON.parse(read(BASELINE)) : null;
-
-/** 比基线高的那些文件（逐文件维度与总数维度互补）。 */
-function overFiles(base) {
-  const over = [];
-  for (const { file, changes } of touched) {
-    const rel = path.relative(ROOT, file);
-    const allowed = base.files[rel] ?? 0;
-    if (changes.length > allowed)
-      over.push(`${rel}：${changes.length} 处（基线 ${allowed}）`);
-  }
-  return over;
-}
-
-if (shouldUpdate) {
-  /* **只许降**：基线在场却算出更高的数 → 拒绝写入、基线一个字节都不动。
-   * 上面那句「只许降不许升」此前只是散文，这一支才让它成立。
-   * 例外只有「还没有基线文件」；判据用 `baseline` 在不在，不用 `baseline.total` ——
-   * 治理到 0 之后它是 0，`if (0 && …)` 会把整条拒涨短路（台账 E5 的共同失效写法）。 */
-  if (baseline) {
-    const over = overFiles(baseline);
-    if (over.length > 0 || total > baseline.total) {
-      console.error(
-        `spacing canonical 棘轮：--update 拒绝写入，候选 ${baseline.total} → ${total} 是上涨。\n` +
-          `  棘轮只许降不许升 —— 收下它等于把这一批新写法记成合法存量。`,
-      );
-      for (const line of over) console.error(`  ✗ ${line}`);
-      console.error(
-        `\n修法：先 node scripts/tw4-spacing-canonical.mjs --write 落盘改写，再 --update 收紧。` +
-          `别为了让它变绿去放宽基线。`,
-      );
-      process.exit(1);
-    }
-  }
-  fs.writeFileSync(
-    BASELINE,
-    `${JSON.stringify({ total, files: ledger }, null, 2)}\n`,
-  );
-  console.log(
-    `棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${total}）`,
-  );
-  process.exit(0);
-}
+ * 计数口径 = 「待改写的处数」按文件记账。与 `tw4-canonical-report.mjs` 的判定档
+ * 同构（那个按源文件记 canonical 候选数），两者互补、各扫一类。
+ * 注意：本工具扫全部 `src` 下的 tsx/ts（含测试文件）—— 测试文件里的候选**同样计入**，
+ * 因为它的改写是**整 token 等值替换**，不像 canonical 那类会改坏断言样本。
+ *
+ * 硬闸形态（ISSUE #1811）：不再有基线、不再有 `--update`，命中即退 1。清零后的
+ * 自证靠**默认档**（不带 flag 的那次清单）—— 一个永远扫不到东西的判据也会「0 处全绿」。 */
 
 if (shouldCheck) {
-  const base = baseline ?? { total: 0, files: {} };
-  const over = overFiles(base);
-  if (over.length > 0 || total > base.total) {
-    console.log(
-      `\nspacing canonical 棘轮：${total} 处 > 基线 ${base.total} 处\n`,
+  if (total > 0) {
+    console.error(
+      `\nspacing canonical 硬闸：待改写 ${total} 处（须为 0）\n`,
     );
-    for (const line of over) console.log(`  ✗ ${line}`);
-    console.log(
-      `\n修法：node scripts/tw4-spacing-canonical.mjs --write 落盘，` +
-        `再 --update 收紧基线。别为了让 --check 变绿去放宽基线。`,
+    for (const { file, changes } of touched) {
+      console.error(`  ✗ ${path.relative(ROOT, file)}：${changes.length} 处`);
+    }
+    console.error(
+      `\n修法：node scripts/tw4-spacing-canonical.mjs --write 落盘改写。`,
     );
     process.exit(1);
   }
-  console.log(
-    `spacing canonical 棘轮：${total} 处 ≤ 基线 ${base.total} 处 ✓` +
-      (total < base.total
-        ? `（比基线少 ${base.total - total} 处，可跑 --update 收紧）`
-        : ""),
-  );
+  console.log("\nspacing canonical 硬闸：0 处 ✓");
   process.exit(0);
 }
