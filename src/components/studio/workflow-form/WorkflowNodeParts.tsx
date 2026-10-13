@@ -148,7 +148,7 @@ export function WorkflowNodeActionButton({
         variant="ghost"
         disabled={disabled}
         onClick={onClick}
-        className="nodrag nopan from-primary to-accent rounded-b-node h-10.75 w-full justify-center gap-2 rounded-t-none bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
+        className="nodrag nopan from-primary to-accent rounded-b-node h-10.75 w-full justify-center gap-2 rounded-t-none bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] hover:opacity-95"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}

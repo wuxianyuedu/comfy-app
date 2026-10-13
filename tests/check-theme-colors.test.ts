@@ -104,6 +104,39 @@ describe("check-theme-colors", () => {
     expect(output).toContain("SURFACE");
   });
 
+  it("候选名里用 `_` 连接的函数色必须算命中（曾经被 `\\b` 整条放过）", () => {
+    /* 这条是量具自验：Tailwind 候选名用 `_` 代替空格，`px_rgba(` 里 `rgba` 前面
+     * 是单词字符，带 `\b` 的正则当场匹配不到 —— 于是这类裸值既不进豁免也不进
+     * 报告，「未豁免 0 处」绿得毫无意义（实测漏过 6 处，含两处退役品牌紫）。
+     * 判据口径本身写在规范 03 §3.6.2 末段：认的是「源码里写了字面色值」。
+     * ⚠️ 类名前缀故意用 `probe-shadow`（不是真 utility）：`tests/**` 也在 Tailwind 的
+     * 默认源扫描范围内，写全一条真的候选名就往产物里发一条死规则 —— 而这个夹具的值
+     * 正是本次要清掉的退役品牌值。判据只看文本里有没有 `_rgba(`，不需要那条类存在。 */
+    const { run } = scanner({
+      "src/components/studio/Thing.tsx":
+        'export const B = () => <button className="probe-shadow-[0_4px_12px_rgba(124,92,252,0.35)]" />;\n',
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    /* 这一档现在是**硬闸**（存量清零、无基线、无 `--update`），话术是「存在未豁免的
+     * 写死色值 + 每处点名处数」，不再是棘轮时代的「基线外新增 0 → 1」。 */
+    expect(output).toContain("存在未豁免的写死色值");
+    expect(output).toContain("src/components/studio/Thing.tsx：1 处");
+  });
+
+  it("对照：同一行只把裸值换成 token 便通过（判据认字面量，不认 shadow 写法）", () => {
+    const { run } = scanner({
+      /* 带上 globals.css 的声明：这份夹具引用了 `--color-primary`，不给声明会
+       * 撞上同脚本的「幽灵 token」硬闸 —— 那条红得对，但会把这条想测的东西盖住。 */
+      "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
+      "src/components/studio/Thing.tsx":
+        'export const B = () => <button className="shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]" />;\n',
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(true);
+    expect(output).toContain("未豁免写死色值 0 处");
+  });
+
   it("不误伤：注释里的色值与 ISSUE 号不算命中", () => {
     const { run } = scanner({
       "src/components/studio/Thing.tsx":

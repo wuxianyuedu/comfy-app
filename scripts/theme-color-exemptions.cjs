@@ -213,7 +213,7 @@ const EXEMPT_TABLES = [
     reason:
       "内容视图内的**极小面积叠层**（水幕），固定暗色清单判据 1+2 都成立：" +
       "它骑在预览图/视频之上、刻意保留 ~0.9 让底层内容隐约可见，" +
-      "换成浅色会与浅色内容糊在一起；条目同时登记进 globals.css 的固定暗色清单",
+      "换成浅色会与浅色内容糊在一起；百分比那行白字的 drop-shadow 与字色同层、同判据；条目同时登记进 globals.css 的固定暗色清单",
   },
   {
     file: "src/components/model/model-cover.ts",
