@@ -147,6 +147,48 @@ describe("check-theme-colors", () => {
     expect(output).toContain("未豁免写死色值 0 处");
   });
 
+  /* 短写法（`#f00` / `#abc4`）与 **ISSUE 引用**（`#346`）在字符集上完全同形 ——
+   * 判据只能靠「`#` 前面有没有颜色属性名」把两者分开。这一格同时钉两侧：
+   * 短色值必须被收（漏了 = 门禁静默放过一整类写法），ISSUE 号必须被放开
+   * （收了 = 每一处 `ISSUE #NNN` 都变成假红）。
+   *
+   * 为什么它此前**没有任何判据**：这段逻辑长在「一条正则 + 一个分支」上，而它的
+   * 失效形态与同类门禁不同 —— 把限制删掉之后，**长的 `HEX_RE` 仍然会收到那个
+   * 短色值**（`{3,8}` 是贪婪的），于是「删掉限制」在唯一那条短色值断言上照绿。
+   * 同一个形状当年还留下过一个只声明不引用的 `SHORT_HEX_RE` 常量：死的那半
+   * 谁都不报，活的那半「看起来还在工作」。 */
+  it("短色值收窄双侧钉死：`#f00` 必须红、ISSUE `#346` 必须绿", () => {
+    const bad = scanner({
+      "src/components/studio/Thing.tsx": 'export const a = { color: "#f00" };\n',
+    });
+    const badRun = bad.run();
+    expect(badRun.ok).toBe(false);
+    expect(badRun.output).toContain("存在未豁免的写死色值");
+
+    const good = scanner({
+      "src/components/studio/Thing.tsx":
+        "// 设计稿引了 ISSUE #346 与 #262\nexport const x = 1;\n",
+    });
+    const goodRun = good.run();
+    expect(goodRun.ok).toBe(true);
+    expect(goodRun.output).toContain("未豁免写死色值 0 处");
+  });
+
+  /* 短写法那一侧还能被「两条路」绕过：比如把 `HEX_RE` 改回「只 3~4 位」、
+   * 另起一条扫长写法 —— 那样两侧都收得到，看似没问题；真正的坑是**只留一条
+   * 收窄的短写法正则**（比如历史上的 `SHORT_HEX_RE`）而长写法那条不认它。
+   * 所以下面这格走**真脚本的可达行为**：把短色值写在没有颜色语境的形态里
+   * （`const x = "#f00"` 不含 color/fill/… 字样），它就该被跳过 —— 这条与
+   * 上一格一起，把「语境」这个判据条件从两侧夹住。 */
+  it("短色值的语境判据是有意为之：无颜色属性名上下文时不收", () => {
+    const { run } = scanner({
+      "src/components/studio/Thing.tsx": 'const x = "#f00";\n',
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(true);
+    expect(output).toContain("未豁免写死色值 0 处");
+  });
+
   it("--report 只出清单，不判失败", () => {
     const { run } = scanner({
       "src/components/studio/Thing.tsx":
