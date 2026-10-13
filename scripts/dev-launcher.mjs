@@ -46,12 +46,14 @@ import {
   startRun,
 } from "./launcher-core/run.mjs";
 import {
-  classifyProbe,
-  describeProbeState,
-  readDiagnosticsTail,
   usesExplicitPort,
   writeLaunchStatus,
 } from "./launcher-core/orchestrator.mjs";
+import {
+  READY_TIMEOUT_MS,
+  describeReadyTimeout,
+  waitForDevReady,
+} from "./launcher-core/ready-wait.mjs";
 // 「收尾定性」这一族（downstreamExitKind / readShellMarkers /
 // describeDownstreamExit / runtimeExitRecord）判的是同一件事的四个侧面，收在
 // launcher-core/downstream-exit.mjs（入口文件长度的约束，§12.6 R5 的姊妹档）。
@@ -75,6 +77,9 @@ import {
   shellStaleWarning,
 } from "./launcher-core/preflight.mjs";
 import { defaultShellExe, resetShellPidFile } from "./launcher-core/shell-ops.mjs";
+import { startShellStage } from "./launcher-core/shell-stage.mjs";
+import { runStartupGates } from "./launcher-core/startup-gates.mjs";
+import { bootDevServerStage } from "./launcher-core/dev-boot.mjs";
 import {
   openBrowser as miscOpsOpenBrowser,
   parseArgs as miscOpsParseArgs,
@@ -144,9 +149,6 @@ export {
 /** 心跳间隔：必须明显小于 dev-launcher-session 的孤儿判定阈值（30s），
  *  否则正常运行的 launcher 会被下一次启动误判成已死。 */
 const HEARTBEAT_INTERVAL_MS = 5_000;
-
-/** 等服务就绪的上限（与 .ps1 的 180 次 × 1s 同口径）。 */
-const READY_TIMEOUT_MS = 180_000;
 
 // ── 日志：log/current/<分区>/（路径固定，退出时整目录归档到 runs/）──
 // 顺序很重要：先 recoverStaleCurrent 收走上一次崩掉的残留，再 startRun 写新
@@ -447,118 +449,66 @@ export async function run(argv = process.argv.slice(2)) {
     });
   let currentPort = portOrNull;
 
-  log(`project_root=${ROOT}`, "INFO");
-  log(`平台=${process.platform}，模式=${args.mode}`, "INFO");
-
-  // 0) 上一次的孤儿回收（必须在起新进程之前：否则新旧实例抢同一端口）
-  const reaped = await reapStaleSession(ROOT);
-  if (reaped)
-    log(`回收上一次运行遗留的进程树：PID ${reaped.join(", ")}`, "WARN");
-
-  // 1) 预检：环境文件（与 dev.mjs / start.mjs 同判据）+ 工具链
-  const envProblem = checkEnvFile(ROOT);
-  if (envProblem) {
-    log("环境配置未就绪，**不会**启动服务。", "ERROR");
-    log(envProblem.message, "ERROR");
-    status("error", 1, "环境配置未就绪：先执行 pnpm env:init", { error: true });
-    return 1;
-  }
-  const gateProblem = runToolchainGate(ROOT);
-  if (gateProblem) {
-    log(gateProblem, "ERROR");
-    // 多行提示分两条写：`status` 的 message 是启动页**一行**标题位，塞整段
-    // 会把「先做什么」挤没；完整提示（含修复命令）放 stale_shell 横幅，
-    // 启动页是多行渲染（见 splash.html 的 renderNotice）。
-    status("error", 1, gateProblem.split("\n")[0] ?? "工具链不可用", {
-      error: true,
-      staleShell: gateProblem,
-    });
-    return 1;
-  }
-  log("工具链门禁：pnpm 可用、node_modules 已安装", "OK");
-
-  // 1.5) 依赖与 lockfile 对齐：拉了更新但没重装时，`node_modules` 是「在但陈旧」的，
-  //      报错会落在业务模块解析失败上，与「依赖没装」这句结论长得完全不一样。
-  //      判据是 lockfile 的**实质差异**（`lockfileDrift`），差异明细复用
-  //      scripts/lockfile/ 的既有实现（唯一出处，质量门禁同源）。
-  const syncProblem = await syncDependencies(ROOT, { status });
-  if (syncProblem) {
-    log(syncProblem, "ERROR");
-    status("error", 1, syncProblem.split("\n")[0] ?? "依赖未对齐", {
-      error: true,
-      staleShell: syncProblem,
-    });
-    return 1;
-  }
-  log("依赖与 lockfile 一致（无需补装）", "OK");
-
-  // 1.6) 待恢复的备份：**必须**排在起任何会打开数据库的东西之前（壳、Next、
-  //      执行宿主、后台 schema 同步）。运行期多个进程持有同一个库，运行期覆盖
-  //      `db.sqlite` 等于在别人握着句柄时换掉文件 —— 这里换是唯一安全的时刻。
-  //      空转（没有标记）是绝大多数启动的形态。
-  const restore = applyPendingRestoreAtBoot(ROOT, {
-    write: (line) => log(line.replace(/^\[db-backup\] /, "").trimEnd(), "INFO"),
-  });
-  if (restore.status === "restored") {
-    log(`数据库已从备份恢复（${restore.from}）`, "OK");
-  } else if (restore.status === "failed") {
-    log(`数据库恢复没能完成：${restore.reason}`, "WARN");
-  }
-
-  // 2) 端口（单一事实源：app-port.mjs，绝不在这里重算）
-  const port = portOrNull ?? resolveAppPort(ROOT);
-  currentPort = port;
-  log(
-    `使用端口 ${port}（.env 显式值优先，否则按检出路径推导，见 §1.1）`,
-    "INFO",
+  // 0~2) 预检桥段（孤儿回收 → 环境/工具链门禁 → 依赖对齐 → 备份恢复 → 端口）
+  // 实现见 `launcher-core/startup-gates.mjs`（ISSUE #1811 拆 R5 超限文件）；
+  // 那一段的**内部顺序是契约**（回收在起进程前、换库在开库前），见模块注释。
+  const gated = await runStartupGates(
+    {
+      log,
+      root: ROOT,
+      status,
+      reapStaleSession,
+      checkEnvFile,
+      runToolchainGate,
+      syncDependencies,
+      applyPendingRestoreAtBoot,
+      resolveAppPort,
+    },
+    { portOrNull, mode: args.mode },
   );
-  status("port-check", 0.05, "正在检查端口占用…");
-
+  if (!gated.ok) {
+    log(gated.error.message, "ERROR");
+    status("error", 1, gated.error.statusMessage, {
+      error: true,
+      ...(gated.error.staleShell ? { staleShell: gated.error.staleShell } : {}),
+    });
+    return 1;
+  }
+  const port = gated.port;
+  currentPort = port;
   // 3) 桌面壳（prebuilt 模式最先拉起：用户双击后第一件事是看见窗口）
+  // 这一段在 `launcher-core/shell-stage.mjs`（ISSUE #1811 拆 R5 超限文件）；
+  // 主文件只把壳层动作与日志出口注进去，并接「找不到壳」这个提前返回。
   let shell = /** @type {import("node:child_process").ChildProcess | null} */ (
     null
   );
   let staleShell = null;
-  // 自编排标记：壳拉起本编排器时注入（`shell_launch.rs` 的 `spawn_orchestrator`）。
-  // 它回答「本次编排是谁拉起的」，只有壳自编排链路（§1.5）里的 prebuilt 会带。
-  const launchedByShell =
-    process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1" && args.mode === "prebuilt";
   if (args.mode === "prebuilt") {
-    const shellExe =
-      args.shellExe ??
-      process.env.COMFYAPP_PREBUILT_SHELL ??
-      defaultShellExe(ROOT);
-    if (!shellExe || !fs.existsSync(shellExe)) {
-      const message =
-        "找不到预编译 Tauri 壳（src-tauri/target/{release,debug}/app[.exe]）。" +
-        "请先执行 cargo build --release --features custom-protocol 或 pnpm tauri build。";
-      log(message, "ERROR");
-      status("error", 1, message, { error: true });
+    const staged = startShellStage(
+      {
+        log,
+        root: ROOT,
+        appendRuntimeWarning,
+        defaultShellExe,
+        ensureSplashResource,
+        spawnShell,
+        resetShellPidFile,
+        shellStaleWarning,
+      },
+      {
+        mode: args.mode,
+        shellExe: args.shellExe,
+        coldStart: args.coldStart,
+        port,
+      },
+    );
+    if (!staged.ok) {
+      log(staged.error, "ERROR");
+      status("error", 1, staged.error, { error: true });
       return 1;
     }
-    staleShell = shellStaleWarning(shellExe, ROOT);
-    if (staleShell) {
-      log(staleShell, "WARN");
-      appendRuntimeWarning(staleShell);
-    }
-    resetShellPidFile(ROOT);
-    if (launchedByShell) {
-      /* 双击壳的自编排链路（§1.5）里，拉起本编排器的那只壳**就是**本次启动唯一
-       * 的应用宿主：启动页与主窗都是 tauri.conf.json 的声明式窗口，每个壳进程
-       * 各建一份。这里若再 spawn 一只壳，同一次启动就有两个壳——用户会看到两个
-       * 一模一样的启动窗口（PR #1712 的回归），两只壳的回收链还互相纠缠（关掉
-       * 任意一只都会把编排器连同另一只一起收走）。所以自编排那次**只编排、
-       * 不起壳**：壳已经在跑，把本地服务起起来就好。 */
-      log("本次编排由桌面壳亲自拉起：壳已在运行，不再起第二个壳。", "INFO");
-    } else {
-      ensureSplashResource(ROOT);
-      shell = spawnShell(shellExe, port, {
-        root: ROOT,
-        foreground: args.coldStart ? "1" : null,
-      });
-      log(`预编译 Tauri 壳已启动（PID ${shell.pid}）：${shellExe}`, "OK");
-      log("Tauri 桌面壳已启动，正在启动本地服务…", "STEP");
-    }
+    shell = staged.shell;
+    staleShell = staged.staleShell;
     status("port-check", 0.05, "桌面壳已启动，正在检查端口占用…", {
       staleShell,
     });
@@ -582,98 +532,50 @@ export async function run(argv = process.argv.slice(2)) {
   log(`端口检查：${portSummary}`, "OK");
   status("port-ready", 0.12, "端口已就绪，处理编译缓存…", { staleShell });
 
-  // 5) .next 缓存策略（与 .ps1 同一指纹口径）
-  const cache = syncNextCache(ROOT, process.env);
-  log(
-    cache.cleaned
-      ? `清空 .next 全量重编译（${cache.reason}）`
-      : `保留 .next 缓存（${cache.reason}）`,
-    cache.cleaned ? "STEP" : "OK",
+  // 5~8) 起服务桥段（缓存策略 → dev server → 执行器宿主 → 会话锚点 → 后台 schema）
+  // 实现见 `launcher-core/dev-boot.mjs`（ISSUE #1811 拆 R5 超限文件）。
+  // 心跳定时器留在这一层：它的句柄要传给两个下游出口（下游退出 / 常驻结束），
+  // 挪进阶段模块就得把句柄再透出来一次 —— 那不是拆分，是搬运所有权。
+  const booted = bootDevServerStage(
+    {
+      log,
+      root: ROOT,
+      status,
+      spawnedChildren: () => spawned,
+      appendRuntimeWarning,
+      syncNextCache,
+      reconcilePnpmVersion,
+      currentDirOf,
+      pruneTimestampedLogs,
+      spawnDevServer,
+      recordPid,
+      spawnExecutorHost,
+      resolveExecutorMode,
+      writeSession,
+      touchHeartbeat,
+      spawnSchemaSync,
+    },
+    {
+      port,
+      host: args.host,
+      mode: args.mode,
+      staleShell,
+      runTimestamp,
+      startedAt,
+    },
   );
-  const pnpm = reconcilePnpmVersion(ROOT);
-  if (pnpm?.tip) {
-    appendRuntimeWarning(pnpm.tip);
-    staleShell = staleShell ? `${staleShell}；${pnpm.tip}` : pnpm.tip;
-  }
-  status("cache", 0.2, "正在启动本地服务（Next.js dev server）…", {
-    staleShell,
-  });
-
-  // 6) 起 dev server（输出重定向到 log/nextjs/，按次命名后轮转保留 5 份）
-  const nextDir = currentDirOf("nextjs", ROOT);
-  pruneTimestampedLogs(nextDir, ["nextjs-stdout-", "nextjs-stderr-"], 5);
-  const nextOut = path.join(nextDir, `nextjs-stdout-${runTimestamp}.log`);
-  const nextErr = path.join(nextDir, `nextjs-stderr-${runTimestamp}.log`);
-  log(`启动 Next.js dev server（${args.host}:${port}）…`, "STEP");
-  // dev 用 let：就绪阶段若检测到「路由表 404」的确切信号，会清缓存重启一次
-  // （见步骤 9 的有界自愈），届时重新赋值 dev 供常驻循环与回收使用。
-  let dev = spawnDevServer(port, args.host, nextOut, nextErr);
-  recordPid(ROOT, "nextjs", dev.pid ?? null);
-  log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
-
-  // 6.5) 可选：拉起 ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）
-  // 默认 `inline` —— Next 里跑 ComfyUI 执行编排；本步 **不 spawn 任何东西**。
-  // `COMFY_EXECUTOR=host` 时把 `scripts/executor-host.mjs` 作为 launcher 的
-  // **又一个受管子进程** 起起来；spawnInGroup 走同一份平台判据（POSIX 自建进程组 /
-  // Windows taskkill 走 `/T`），因此回收、孤儿检测、会话锚点等既有语义一字不改。
-  // 3-B1 起 host 会真正领取 claimedBy='host' 的行；判据与 Next 侧
-  // `resolveExecutorClaim()`（src/lib/comfyui/executor-mode.ts）读同一个 key、
-  // 同一套归一化——这里额外回读 `.env` 是因为纯 Node 不注入 .env，而 Next
-  // server 的 process.env 里有它（@next/env），不回读会造成「Next 写 host 片、
-  // launcher 却不拉 host」的任务停摆组合。
-  // 4-A4 起归一化收在 `launcher-core/executor-mode.mjs`（纯 Node 侧唯一定义，
-  // host 脚本共用同一份），两侧判决是否同值由 tests/executor-mode-consistency.test.ts
-  // 逐值比对（ADR §14 D5）。
-  const { mode: executorMode, unknown: unknownExecutor } =
-    resolveExecutorMode();
-  if (executorMode === "host") {
-    const hostChild = spawnExecutorHost();
-    log(
-      `executor-host 已启动（PID ${hostChild?.pid ?? "?"}，COMFY_EXECUTOR=host 灰度中；host 领取 claimedBy='host' 的行）`,
-      "OK",
-    );
-  } else if (unknownExecutor) {
-    log(
-      `COMFY_EXECUTOR="${unknownExecutor}" 不识别，按默认 inline 处理（可选：inline|host）`,
-      "WARN",
-    );
-  }
-
-  // 7) 会话锚点：把 PID 与心跳落盘，让「进程被杀后仍能回收」成立
-  writeSession(ROOT, {
-    launcher_pid: process.pid,
-    child_pids: spawned
-      .map((c) => c.pid)
-      .filter((pid) => typeof pid === "number"),
-    app_port: port,
-    mode: args.mode,
-    started_at: new Date(startedAt).toISOString(),
-  });
+  let dev = booted.dev;
+  const nextOut = booted.nextOut;
+  const nextErr = booted.nextErr;
+  staleShell = booted.staleShell;
   const heartbeat = setInterval(
     () => touchHeartbeat(ROOT),
     HEARTBEAT_INTERVAL_MS,
   );
-  touchHeartbeat(ROOT);
   clearIntervalGuard(heartbeat);
-
-  // 8) DB schema 自检 + **后台同步**（§9.1）。「拉了含 schema 变更的代码后忘了
-  //    跑 db:push」由这里兜住，但**不阻塞启动** —— drizzle 同步一次 15~30 秒，
-  //    等它等于让用户盯着空窗。判据见 db-schema-state.mjs 的 spawnSchemaSync；
-  //    不一致时它会自动同步，页面经 GET /api/schema 显示「已同步，请刷新」。
-  const schema = spawnSchemaSync(ROOT);
-  if (schema.started) {
-    log(
-      "数据库结构核对已在后台开始（不一致时自动同步，页面会提示刷新）",
-      "INFO",
-    );
-  } else {
-    log(
-      `无法后台核对数据库结构：${schema.reason ?? "原因未知"}（必要时手动跑 pnpm db:push）`,
-      "WARN",
-    );
-  }
-
   // 9) 等就绪（dev server 先退出则立刻定性；检测到路由表 404 则自愈一次）
+  // 循环本体在 `launcher-core/ready-wait.mjs`（ISSUE #1811 拆 R5 超限文件，
+  // §3.3 已随本刀列为实现去处）；这里只接两个出口。
   log(`等待服务就绪（http://${args.host}:${port}）…`, "STEP");
   status("dev-server-starting", 0.3, "本地服务已启动，等待就绪…", {
     staleShell,
@@ -713,99 +615,26 @@ export async function run(argv = process.argv.slice(2)) {
     });
   }
 
-  // 「连上但 /api/health 持续 404」的确切签名 → 判定陈旧路由表，自愈一次。
-  // 阈值给 3 次（约 3s）：单次 404 可能只是路由还在按需编译，不足以定性。
-  const READY_ROUTE_404_THRESHOLD = 3;
-  // 「服务已应答但库还没建」连中几次才提示（约 8s）：后台 db-sync 建表要 30 秒
-  // 上下，单次 503 完全正常，过早开口等于制造噪声。
-  const READY_SCHEMA_NOTICE_THRESHOLD = 8;
-  let consecutive404 = 0;
-  let consecutiveSchemaNotReady = 0;
-  let schemaNoticeSent = false;
-  let recovered = false;
-  let ready = false;
-  /** 最后一次探测的结论：超时出口要靠它讲清「卡在哪一档」（见 §5）。 */
-  let lastProbeState = "not-up";
-  let pollCount = 0;
-  const readyDeadline = Date.now() + READY_TIMEOUT_MS;
-  while (Date.now() < readyDeadline) {
-    if (devExited()) break;
-    const state = await classifyProbe({ port, host: args.host });
-    lastProbeState = state;
-    if (state === "ready") {
-      ready = true;
-      break;
-    }
-    if (state === "route-404") {
-      consecutive404 += 1;
-      if (consecutive404 >= READY_ROUTE_404_THRESHOLD && !recovered) {
-        recovered = true;
-        consecutive404 = 0;
-        log(
-          "检测到路由表 404（服务已应答但 /api/health 未进编译图），判定为陈旧 .next 路由表：清缓存重启 dev server 一次。",
-          "WARN",
-        );
-        status(
-          "dev-server-starting",
-          0.35,
-          "检测到路由表不一致，清缓存重启中…",
-          { staleShell },
-        );
+  const waited = await waitForDevReady(
+    {
+      log,
+      status,
+      devExited,
+      respawnDev: async () => {
         await restartDevForStaleRoutes();
         log(`dev server 已重启（PID ${dev.pid}）`, "OK");
-      }
-      consecutiveSchemaNotReady = 0;
-    } else if (state === "schema-not-ready") {
-      /* 服务活着、路由也在，只是库还没建。**不能就这么空等**：用户看到的将是
-       * 「卡了三分钟、应用自己消失」，而真正该做的是「等一下（后台正在建）」
-       * 或「跑一次 pnpm db:push」——这句话必须在他还盯着屏幕的时候说出来。 */
-      consecutive404 = 0;
-      consecutiveSchemaNotReady += 1;
-      if (
-        consecutiveSchemaNotReady >= READY_SCHEMA_NOTICE_THRESHOLD &&
-        !schemaNoticeSent
-      ) {
-        schemaNoticeSent = true;
-        log(
-          "本地服务已应答，但数据库表还没建（/api/health 503，db=empty）。后台同步正在按 schema 建表（约 30 秒）；" +
-            "若长时间不就绪，手动跑一次 pnpm db:push（见 docs/standards/launch-and-build.md §9.1）。",
-          "WARN",
-        );
-      }
-    } else {
-      // not-up（连不上）：正常的「还没起来」，重置两个计数。
-      consecutive404 = 0;
-      consecutiveSchemaNotReady = 0;
-    }
-    const left = Math.round((readyDeadline - Date.now()) / 1000);
-    const progress =
-      0.3 +
-      Math.min(
-        0.6,
-        ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6,
-      );
-    /* 状态文件降频：就绪等待期每轮都写 launch-status.json（最多 180 次），
-     * 而进度条以秒为粒度 —— 每 5 轮写一次足够顺滑；就绪 / 出错等关键状态
-     * 变化仍在别处即时写。 */
-    if (pollCount % 5 === 0) {
-      status(
-        "dev-server-starting",
-        progress,
-        schemaNoticeSent
-          ? `数据库表还没建，正在等待自动建表（还剩 ${left}s）…`
-          : `正在等待本地服务就绪（还剩 ${left}s）…`,
-        { staleShell },
-      );
-    }
-    /* 轮询退避：前 10 次每 1s（快速冷启动大多几秒内就绪），之后 2s、30 次
-     * 后 3s —— 冷编译普遍 1~3 分钟，固定 1s 是 180 次探测 + 180 次状态文件
-     * 写的纯浪费；就绪感知延迟只出现在冷启动后段（用户本来就在等编译）。
-     * 总超时是墙钟 deadline（Date.now()），退避不会缩短它。 */
-    pollCount += 1;
-    await new Promise((r) =>
-      setTimeout(r, pollCount < 10 ? 1000 : pollCount < 30 ? 2000 : 3000),
-    );
-  }
+      },
+    },
+    {
+      port,
+      host: args.host,
+      staleShell,
+      nextOut,
+      nextErr,
+      panelDir: nextjsLogDir,
+      startedAt,
+    },
+  );
 
   if (devExited()) {
     return await concludeDownstreamExit(downstreamCtx, {
@@ -819,44 +648,15 @@ export async function run(argv = process.argv.slice(2)) {
       port: currentPort,
     });
   }
-  if (!ready) {
-    /* 诊断的取词顺序与理由见 orchestrator.readDiagnosticsTail：Next 的输出走
-     * stdout，而这里过去只读 stderr（那里通常只有 pnpm 的一行脚本横幅），
-     * 于是「最近输出」什么都没说；应用服务自己的转录是随写随见的那一份。 */
-    const tail =
-      readDiagnosticsTail({
-        stderrFile: nextErr,
-        stdoutFile: nextOut,
-        panelDir: nextjsLogDir,
-        panelSince: startedAt,
-      }) || "(无输出)";
-    const stateLine = describeProbeState(lastProbeState);
-    if (recovered) {
-      // 已自愈过一次仍持续 404：不再循环重启，把结论与现场交清楚。
-      log(
-        `清缓存重启一次后 /api/health 仍持续 404，路由表异常未恢复（已停止自动重启，避免循环）。最后一次探测：${stateLine}。最近输出：\n${tail}`,
-        "ERROR",
-      );
-      status(
-        "error",
-        1,
-        "路由表持续异常（已自动清缓存重启一次仍未恢复），见 log/nextjs/",
-        { error: true, staleShell },
-      );
-    } else {
-      log(
-        `服务未在 ${READY_TIMEOUT_MS / 1000}s 内就绪。最后一次探测：${stateLine}。最近输出：\n${tail}`,
-        "ERROR",
-      );
-      status(
-        "error",
-        1,
-        lastProbeState === "schema-not-ready"
-          ? "数据库表一直没建起来：跑一次 pnpm db:push（见 log/nextjs/）"
-          : "服务未在超时内就绪，见 log/nextjs/",
-        { error: true, staleShell },
-      );
-    }
+  if (!waited.ready) {
+    const verdict = describeReadyTimeout({
+      lastProbeState: waited.lastProbeState,
+      recovered: waited.recovered,
+      tail: waited.tail ?? "(无输出)",
+      timeoutMs: READY_TIMEOUT_MS,
+    });
+    log(verdict.log, verdict.level);
+    status("error", 1, verdict.statusMessage, { error: true, staleShell });
     await shutdown(1);
   }
   log(`服务已就绪：http://${args.host}:${port}`, "OK");

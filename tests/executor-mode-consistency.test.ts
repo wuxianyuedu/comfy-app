@@ -38,6 +38,7 @@ import {
   resolveExecutorMode,
 } from "../scripts/launcher-core/executor-mode.mjs";
 import { RUNTIME_SCRIPTS } from "../scripts/standalone-private-inputs.mjs";
+import { launcherChainSource } from "./helpers/launcher-source";
 import { stripComments } from "./helpers/strip-comments";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 
@@ -147,11 +148,14 @@ describe("`.env` 回读这一层只在纯 Node 侧存在，且真的回读", () 
 });
 
 describe("两个纯 Node 宿主不许再各写一份归一化", () => {
+  /* 「编排器」这一侧读**现算的链路闭包**而不是主文件：R5 拆刀（ISSUE #1811）后
+   * 门控那一段住 `launcher-core/dev-boot.mjs`，只读主文件会让 `toContain` 落空
+   * 而 `not.toMatch` 对着空串恒真 —— 那正是这条判据要防的形态。 */
   for (const [label, file] of [
     ["dev-launcher.mjs", LAUNCHER],
     ["executor-host.mjs", HOST],
   ] as const) {
-    const src = fs.readFileSync(file, "utf8");
+    const src = label === "dev-launcher.mjs" ? launcherChainSource() : fs.readFileSync(file, "utf8");
 
     it(`${label} 读同一份 launcher-core/executor-mode.mjs`, () => {
       expect(src).toContain("launcher-core/executor-mode.mjs");

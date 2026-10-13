@@ -196,13 +196,23 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
   });
 
   it("编排主流程真的会调用它，失败即非零退出", () => {
-    const src = fs.readFileSync(
+    /* 调用点随预检桥段搬进 `launcher-core/startup-gates.mjs`（ISSUE #1811 拆 R5）：
+     * 那一段**内部**判 `if (syncProblem)` 并以 `error` 出口交回，编排器那层把任何
+     * `gated.error` 转成 `return 1`。契约是「依赖对齐全在链路里、失败即非零退出」，
+     * 所以两处都要断：产出那侧有失败分支、编排那侧把它变成非零。 */
+    const gates = fs.readFileSync(
+      path.join(ROOT, "scripts", "launcher-core", "startup-gates.mjs"),
+      "utf8",
+    );
+    const call = gates.indexOf("await ctx.syncDependencies(");
+    expect(call, "预检桥段没有调用依赖对齐").toBeGreaterThan(-1);
+    expect(gates.slice(call, call + 400)).toMatch(/if \(syncProblem\)/);
+    const launcher = fs.readFileSync(
       path.join(ROOT, "scripts", "dev-launcher.mjs"),
       "utf8",
     );
-    const call = src.indexOf("await syncDependencies(");
-    expect(call, "启动主流程没有调用依赖对齐").toBeGreaterThan(-1);
-    const after = src.slice(call, call + 500);
-    expect(after).toContain("return 1");
+    const gated = launcher.indexOf("if (gated.error) {");
+    expect(gated, "编排器没有接住预检失败").toBeGreaterThan(-1);
+    expect(launcher.slice(gated, gated + 400)).toContain("return 1");
   });
 });
