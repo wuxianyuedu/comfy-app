@@ -5,6 +5,7 @@ import { ListChecks, ListOrdered, RefreshCcw, WifiOff } from "lucide-react";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
+import { ViewActions } from "~/components/studio/ViewActions";
 import {
   Alert,
   AlertAction,
@@ -65,7 +66,7 @@ export function QueueMonitorView({
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-6 sm:px-8 sm:py-7"
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
     >
       {/* 屏名由页签给出，页头不再重复一次可见标题（`srTitle` 只留给读屏）——
@@ -73,31 +74,25 @@ export function QueueMonitorView({
           什么都没多知道（ISSUE #1693，接 ISSUE #1423 没走完的那一半）。
           那句「多久读一次、位次怎么排」不是每次看屏都要读的，收成悬浮说明 ——
           由顶栏标题右侧那颗问号承载（`viewHelp()`），页头里不再放第二颗。 */}
-      <PageHeader
-        className="mb-6"
-        srTitle={pageHeaderTitle("queue")}
-        actions={
-          <>
-            <span className="text-ink-faint text-xs tabular-nums">
-              {`待执行 ${String(c.waitingCount)}`}
-            </span>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={c.refresh}
-              aria-label="立即重新读取队列"
-              className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-            >
-              <RefreshCcw
-                data-icon="inline-start"
-                className="size-3"
-                aria-hidden
-              />
-              刷新
-            </Button>
-          </>
-        }
-      />
+      <PageHeader srTitle={pageHeaderTitle("queue")} />
+
+      {/* 位次统计与刷新挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段
+          「屏名由页签给出之后，留在屏内那一行只剩右对齐的几颗控件」（ISSUE #1871）。 */}
+      <ViewActions>
+        <span className="text-ink-faint text-xs tabular-nums">
+          {`待执行 ${String(c.waitingCount)}`}
+        </span>
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={c.refresh}
+          aria-label="立即重新读取队列"
+          className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+        >
+          <RefreshCcw data-icon="inline-start" className="size-3" aria-hidden />
+          刷新
+        </Button>
+      </ViewActions>
 
       {c.loadError ? (
         <EmptyState

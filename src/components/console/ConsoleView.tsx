@@ -42,6 +42,7 @@ import { textHandler } from "~/lib/form-props";
 import { Input } from "~/components/ui/input";
 import { Kbd } from "~/components/ui/kbd";
 import { PageHeader } from "~/components/ui/page-header";
+import { ViewActions } from "~/components/studio/ViewActions";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
@@ -67,29 +68,29 @@ export function ConsoleView() {
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-8 sm:px-8 sm:py-10"
+      className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
       backdrop={<AuroraBackground />}
     >
       {/* ── 页头：与历史 / 队列 / 模型库同一形状，收在 `ui/page-header` ── */}
-      <PageHeader
-        className="mb-6"
-        srTitle={pageHeaderTitle("console")}
-        actions={
-          <Hint label="清空输出（保留跑过的命令）">
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={c.clear}
-              disabled={running}
-              aria-label="清空输出"
-              className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-            >
-              <Eraser size={13} aria-hidden />
-              清屏
-            </Button>
-          </Hint>
-        }
-      />
+      <PageHeader srTitle={pageHeaderTitle("console")} />
+
+      {/* 清屏挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段「屏名由页签
+          给出之后，留在屏内那一行只剩右对齐的几颗控件」（ISSUE #1871）。 */}
+      <ViewActions>
+        <Hint label="清空输出（保留跑过的命令）">
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={c.clear}
+            disabled={running}
+            aria-label="清空输出"
+            className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+          >
+            <Eraser size={13} aria-hidden />
+            清屏
+          </Button>
+        </Hint>
+      </ViewActions>
 
       {/* ── 主体：左预设 + 右输出/输入。高度用 `h-[85vh]`（与全库长内容面板同一
              口径）：终端要有「一次看得见多少行」的稳定预期，让它随内容长短伸缩就
