@@ -5539,6 +5539,47 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P83");
   });
 
+  test("P83 `sr-only` 的 h1 不计（读屏锚点不占视觉空间，也不该挂字阶档）", ({
+    repo,
+  }) => {
+    /* ISSUE #1847：屏名已由常驻页签 / 顶栏给出时，视图里的 `h1` 退到 `sr-only` ——
+     * 它不冒充可见标题、也不该挂 `u-title-page`（挂了也不生效）。判据认这个**形态**，
+     * 不是给某个文件开白名单：同一份源码里可见的 h1 照旧要过档。 */
+    repo.write(
+      "src/components/studio/P83SrOnly.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="sr-only">工作流库</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P83 `sr-only` 豁免不收「既不 sr-only 又不走档」的 h1", ({ repo }) => {
+    /* 反面：豁免只对 `sr-only` 生效 —— 同一份源码里另有一条可见的 h1 缺档时，
+     * 判据必须照旧红（否则豁免会变成「这份文件里的 h1 全都放过」）。 */
+    repo.write(
+      "src/components/studio/P83SrOnlyMixed.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <h1 className="sr-only">工作流库</h1>',
+        '      <h1 className="font-title text-ink">另一个屏</h1>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
+  });
+
   test("P83 数组 / cn(...) 形态的 className 要读得到档位（粗锚会在这里漏计）", ({
     repo,
   }) => {
