@@ -167,13 +167,13 @@ export function WorkflowNode({
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-label="类型 工作流"
-            className="text-primary rounded-node flex size-7 shrink-0 items-center justify-center text-[14px] font-bold"
+            className="text-primary rounded-node flex size-7 shrink-0 items-center justify-center text-sm font-bold"
             style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
           >
             W
           </span>
           <span
-            className="text-ink-bright truncate text-[14px] font-bold"
+            className="text-ink-bright truncate text-sm font-bold"
             style={{ fontFamily: "var(--font-sans)" }}
             title={meta.label}
           >
@@ -297,7 +297,7 @@ export function WorkflowNode({
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
-                    className="text-ink-bright min-w-0 truncate text-[14px] font-semibold"
+                    className="text-ink-bright min-w-0 truncate text-sm font-semibold"
                     style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >
