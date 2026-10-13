@@ -98,9 +98,10 @@ const MIN_CHUNKS = 20;
 /**
  * 取当前 HEAD 的修订号，写进基线供「这次读数取自哪一版源码」用。
  *
- * 与 `check-file-structure.cjs` 的 `baselineRev` 同口径（规范 §12.13.3）：
  * 它记的是**基线那一刻的源码修订号**，于是判红时能回答一个此前只能猜的问题
- * ——「涨的这点体积，是不是基线之后那几次改动换来的」。
+ * ——「涨的这点体积，是不是基线之后那几次改动换来的」。（`check-file-structure.cjs`
+ * 那套同名的机制已随 R5 棘轮在 ISSUE #1811 下线；本条是独立实现、不受影响，
+ * 「按行数记账的棘轮要自带修订号」这条口径留在规范 §12.13.3 的最后两段。）
  *
  * git 不可用 / 不在检出里时返回 `null`：那不构成判据，只是少一句归因。
  */
@@ -119,9 +120,9 @@ function headRev() {
  * 反应是「是不是抖动 / 是不是量错了」，而不是「这是那几次改动换来的」。归因不是
  * 锦上添花：**它决定下一步是压回去还是认账**（§13.5.4 的例外流程第一步）。
  *
- * 取不到修订号（旧基线 / git 不可用 / 修订号已不可达）时返回 `null`——
- * 与 `check-file-structure.cjs` 的 `BASELINE_REV_USABLE` 同口径（§12.13.3.1）：
- * 报告里说清「取不到」，而不是拿一个猜的数顶上去。
+ * 取不到修订号（旧基线 / git 不可用 / 修订号已不可达）时返回 `null` ——
+ * 报告里说清「取不到」，而不是拿一个猜的数顶上去（口径的来历是一次真事故，
+ * 见规范 §12.13.3 的 ISSUE #653 那一段）。
  *
  * @param {string|null|undefined} rev
  * @returns {number|null}
@@ -189,8 +190,8 @@ function writeBaseline(m, note) {
         "（raw 一并量、一并打，但不判）；逐文件账是诊断输出，按 sha256 对齐，不进基线。" +
         "棘轮只许下降，" +
         "抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
-    /* 读数是**哪一版源码**的产物（同 `check-file-structure.cjs` 的 `baselineRev`，
-     * 规范 §12.13.3）：判红时用它把「基线过期」从猜测变成事实 —— 见 `commitsSinceBaseline`。 */
+    /* 读数是**哪一版源码**的产物（规范 §12.13.3）：判红时用它把「基线过期」从
+     * 猜测变成事实 —— 见 `commitsSinceBaseline`。 */
     baselineRev: headRev(),
     metric: {
       scope: ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
@@ -317,7 +318,7 @@ function main() {
     const before = base?.metric;
     const grew = before && now.gzip > before.gzip;
     const moreFiles = before && now.files > before.files;
-    /* 拒涨：与 check-overlay-z.cjs / check-file-structure.cjs 那批棘轮同口径 ——
+    /* 拒涨：与 check-overlay-z.cjs 那批棘轮同口径 ——
      * 「--update 只许降」。例外流程（加依赖）必须显式带 --allow-increase，逼出一个
      * 「有人在 PR 里认过账」的动作，而不是让 --update 默默把预算抬高。 */
     if (before && (grew || moreFiles) && !ALLOW_INCREASE) {

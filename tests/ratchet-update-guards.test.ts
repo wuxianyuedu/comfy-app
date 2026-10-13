@@ -70,35 +70,6 @@ interface Ratchet {
 const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
 
 const RATCHETS: Ratchet[] = [
-  /* R5（`check-file-structure.cjs --strict` 的那一半）：`src` 侧超 900 行的文件棘轮。
-   *
-   * 它此前登记在 PENDING 里，理由是「沙箱里放一份 950 行的文件会连带命中同脚本的
-   * R1–R12 其它规则，第 ② 步（基线 = 现状时必须是绿的）先配不出来」。本轮把那个
-   * 前提拆开看：连带命中是**真的**（最小沙箱缺 `src/proxy.ts` 时 R11 当场红），
-   * 但它是**可配的输入**而不是这条判据的固有属性 —— 把 R1–R12 都喂成绿（本仓
-   * `src/proxy.ts` 就是为此存在的那份约定文件），第 ② 步就成立。
-   *
-   * 所以这一条不做 PENDING，改成把前提写进夹具：`src/proxy.ts` 是 R11 要的存在性
-   * 证据，少了它跑起来的读数是「R11 缺文件」——看起来像 R5 不工作，实际是夹具
-   * 没把输入封住（§12.16 同款：判据的输入边界没封住时它给的是环境噪声）。 */
-  {
-    script: "check-file-structure.cjs",
-    baseline: "scripts/.file-size-baseline.json",
-    /* R5 那一半只在 `--strict` 档判定（不带它时超限文件只打一行「仅提醒」）。
-     * 用默认档走第 ②/③ 步会得到「加第二条违规仍然绿」—— 那判的是「我没把判定档
-     * 打开」，不是棘轮（§11.2.1 第一条：夹具没走进判据）。 */
-    judgeArgs: ["--strict"],
-    fixture: {
-      dirs: ["src"],
-      /* R11 要 `src/proxy.ts` 在场；R1–R12 其余规则在空 `src/` 上都是绿的。 */
-      files: { "src/proxy.ts": "export function proxy() {}\n" },
-    },
-    violate: (repo, n) =>
-      repo.write(
-        `src/big${n}.ts`,
-        `// 拆分候选\n`.repeat(905) + `export const big${n} = ${n};\n`,
-      ),
-  },
   {
     script: "check-void-floats.cjs",
     baseline: "scripts/.void-floats-baseline.json",
@@ -198,11 +169,16 @@ const HARD_GATE_FLIPS: Record<string, string> = {
   "check-test-sleep.cjs": "tests/test-sleep-gate.test.ts",
   "check-format.cjs": "tests/check-format.test.ts",
   "check-ui-logic-separation.cjs": "tests/check-ui-logic-separation.test.ts",
+  /* R5（`src` 侧超 900 行）这一半：基线删了、`--strict` / `--update` 删了，超限即阻断 ——
+   * 于是它在本表的棘轮车道上「无对象可判」，改由硬闸形态的否定式钉住。 */
+  "check-file-structure.cjs": "tests/check-file-structure.test.ts",
   /* tw4 这一项（ISSUE #1811 的 tw4 半边）：与上面五条同一形状，只是它守的是
    * 「CSS 等价改写」而不是违规计数 —— 清零后棘轮无对象可判，留着基线只等于多一条
-   * 「手改 JSON 把新候选登记成已知存量」的通道。自测点名 `tw4-canonical-ratchet`（形状）：
-   * 行为那一半在同名的 `tests/tw4-hardgate-behaviour.test.ts`，不进这张表 ——
-   * 这张表的值是「删了它会红的那一份」，而形状那份同时守着台账登记与判定档在位。 */
+   * 「手改 JSON 把新候选登记成已知存量」的通道。两刀改到同一张表，合并后**两条都在**：
+   * R5 与 tw4 各自是一条翻闸记录，删掉任意一条都会让那一刀退网。
+   * 自测点名 `tw4-canonical-ratchet`（形状）：行为那一半在同名的
+   * `tests/tw4-hardgate-behaviour.test.ts`，不进这张表 —— 这张表的值是「删了它会红
+   * 的那一份」，而形状那份同时守着台账登记与判定档在位。 */
   "tw4-canonical-report.mjs": "tests/tw4-canonical-ratchet.test.ts",
   "tw4-spacing-canonical.mjs": "tests/tw4-canonical-ratchet.test.ts",
 };
@@ -517,8 +493,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           expect(seed.code, seed.output).toBe(0);
           /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
            * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
-          const baselineRel =
-            row!.baseline.split("/").pop() ?? row!.baseline;
+          const baselineRel = row!.baseline.split("/").pop() ?? row!.baseline;
           const written = JSON.parse(
             handle.repo.read(join("scripts", baselineRel)),
           ) as { rules?: Record<string, unknown> };
@@ -548,9 +523,9 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         const src = readFileSync(join(dir, script), "utf8");
         /* 认「写一份 .json」这件事本身，而不是认某个变量名 —— 换拼法也躲不过。
          * 只认写入调用里出现的 `.json` 字面量（读回来比对不算）。 */
-        const writesJson = [...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g)].some(
-          (m) => /"\.[^"]+\.json"|\.json"/.test(m[1] ?? ""),
-        );
+        const writesJson = [
+          ...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g),
+        ].some((m) => /"\.[^"]+\.json"|\.json"/.test(m[1] ?? ""));
         expect(
           writesJson,
           `${script} 里又出现了「把一份 .json 写回去」的调用 —— ` +

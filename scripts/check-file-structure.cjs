@@ -10,15 +10,21 @@
  *        保留名,不能改名;配套 R11 保证它没被放错位置或悄悄消失)
  *   R3  禁止时间戳备份文件(\d{8}_\d{6} 模式)——版本回退用 git,不进 src
  *   R4  src/lib 下禁止 .tsx(12.5:lib 无 React)
- *   R5  src/ 下超 900 行的文件列入拆分候选。**默认只提醒不阻塞**;
- *       `--strict` 下按棘轮 `scripts/.file-size-baseline.json` 判:**新增**
- *       超限文件即阻断(存量的只许降不许升)。
- *       **pre-commit 跑的就是带 `--strict` 的这一档**(ISSUE #1404)——这一档此前
- *       写在帮助文本里的执行者是「CI」,而那份流水线已随 ISSUE #623 删除。
- *       扫描范围是**整个 src/**:页面的纯展示视图在 src/app/,逻辑层的大文件在
+ *   R5  src/ 下超 900 行的文件即阻断(**硬闸**,无基线、无 `--strict`)。
+ *       扫描范围是**整个 src/**:页面的纯展示视图在 src/app/,逻辑文件在
  *       src/lib/——只扫 components 会让当时最大的那几个文件完全落在护栏之外(ISSUE #536)。
- *       棘轮的理由(ISSUE #575 第 8 项):「只提醒」挡不住新增长文件 ——
- *       提醒出现在一屏输出里,没有人会因为一行提示去拆文件,于是文件只增不减。
+ *       出口只有一个:拆。
+ *       **为什么不留棘轮**(ISSUE #575 立它、ISSUE #1811 收掉它):「只提醒」挡不住
+ *       新增长文件(提醒是一屏里的一行字,没有人会为它返工,于是文件只增不减),
+ *       所以先是加了棘轮;存量清零后棘轮的两个动作**都无事可做**(`--update` 无余地、
+ *       `--strict` 恒绿),留下的却是一条「手改那份 JSON 就能把新超限文件登记成
+ *       已知存量」的通道 —— 那正是硬闸类本来没有的中间态(§13.6.2 的两类对照)。
+ *       同一维度在基础设施层(`scripts/**` / `tools/**`)由
+ *       `check-infra-file-size.cjs` 同口径硬闸守着(§12.6 的姊妹档)。
+ *       **连带收掉的是整套 `baselineRev` 机制**(ISSUE #637):它存在只为让「基线那一刻的
+ *       行数」与「今天的行数」在**同一个格式口径**下可比(全库 prettier 治理会让
+ *       一字未改的文件凭空多出几十行)。没有基线就没有「两个格式时代」要拉平 ——
+ *       判据退化成一句「这份文件现在是不是超过 900 行」。
  *   R7  Windows 双击入口一律 .ps1:仓库内禁止新增 .bat/.cmd/.vbs
  *       (ISSUE #23 / 规范 launch-and-build.md §8:.bat 走 cmd 的 GBK 代码页,
  *        中文必乱码,历史上被迫做成"不含中文不含逻辑"的哑壳)
@@ -56,7 +62,6 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 /* 扫描面的共用读取（`gate-scan-read.cjs`）：门禁读的是**工作树**，而工作区在遍历
  * 期间不是静止的 —— 别人的进程会清理自己的临时目录（编辑器 / 测试运行器 / 另一个
  * 代理工作区留下的 `_tmp_*`）。裸 `readdirSync` 撞上那个窗口 = 整个脚本以未捕获的
@@ -72,116 +77,13 @@ const {
 } = require("./gate-scan-read.cjs");
 
 const problems = [];
-const splitHints = [];
 /** 遍历途中消失的条目数（目录级 + 文件级）。要进结论行，不许静默跳过。 */
 let vanished = 0;
-/** R5 棘轮用:超限文件 → 行数(路径为仓库相对路径,与基线同一口径)。 */
+/** R5 用:超限文件 → 行数(路径为仓库相对路径)。 */
 const oversizedFiles = {};
 
-/** R5 的文件行数阈值:超过即进「拆分候选」清单。 */
+/** R5 的文件行数阈值:超过即阻断(与 §12.6 的姊妹档 `check-infra-file-size.cjs` 同一个数)。 */
 const SPLIT_HINT_LINES = 900;
-
-/* ── R5 棘轮(ISSUE #575):超限文件路径 → 行数 ──
- * 默认(非 strict)只提醒;`--strict` 下「基线里没有的超限文件」即阻断,
- * 「基线里已有但变大了」一并阻断 —— 只许降不许升。
- * pre-commit 跑的是带 --strict 的这一档(ISSUE #1404)。 */
-const FILE_SIZE_BASELINE = path.join(__dirname, ".file-size-baseline.json");
-/** R5 棘轮的**判据版本**:只有「数行数的口径」本身变了(例如全库 prettier 治理
- *  拆行、整体抬高行长口径)才允许 `--update` 一次性重记,其余情况数字只许下降。
- *  理由与 check-function-length.cjs 的 RULE_VERSION 同源:基线是「该判据下的计数」,
- *  判据一变,旧数字与新计数就不是同一个量 —— 不做标记的重记会被读成「有人放宽棘轮」。
- *
- *  R5_RULE_VERSION 3 变更:行数比对改为按 `baselineRev` **同口径重数**(见下),
- *  不再拿不同「格式时代」的绝对行数直接相减。
- *
- *  R5_RULE_VERSION 4 变更:基线里被记的修订号不可达时,不再拿记录值顶替着比
- *  —— 那等于退回版本 3 要消灭的「跨格式时代相减」,且报错会把「基线过期」误报成
- *  「文件变大」。现在这一支直接指向「重记基线」;记录值也随之一次性重置为
- *  **当前内容**的同口径行数(版本 3 的重记没把这条陷阱一起堵上,存量数字仍
- *  停在另一个格式时代的源码上)。 */
-const R5_RULE_VERSION = 4;
-
-/* ── R5 的行数口径:不同「格式时代」的绝对行数不可直接比较 ──
- * 基线里的数字是在**记它的那个格式口径**的源码上数出来的。而「数行数」这件事
- * 不做归一化(逐行状态机,不重排、不合并行长),于是同一段逻辑的行数完全取决于
- * 它写得多紧凑 —— 一次全库 prettier 治理(把紧凑的单行参数表 / 对象字面量展开、
- * 按宽度拆行)就能让「一个字都没改」的文件凭空多出几十行。
- *
- * 实例(ISSUE #637):`LogPanel.tsx` 的基线 1102 记于 prettier 治理**之前**;
- * 治理后同一文件(内容未增)已是 1236 行。此后任何人**一行都不改它**,CI 也会报
- * 「R5 超限文件继续变大(1102 → 1236)」—— 棘轮把「格式口径变化」读成了「这次
- * 改动让文件变大」,而作者根本无从下手(要他为了过门禁把已格式化的文件再压缩回
- * 1102 行,等于让门禁否掉 §13 的 prettier 口径)。
- *
- * 修法:**基线自带记它那一刻的修订号**,比对前先把「基线数字」按那个修订号的
- * 源码重新数一遍 —— 即同口径重数,而不是拿两个时代的绝对行数相减。
- *   · 基线记录 `baselineRev`;
- *   · 比对时用 `git show <rev>:<file>` 取基线版本的文件内容,按**今天同一套
- *     逐行计数**重新数出 `baseLines`,再与当前行数比较;
- *   · 文件在基线版本里不存在(git 取不到)→ 退回基线上的记录值(不误报);
- *   · 基线缺 `baselineRev`(旧基线)→ 退回基线上的记录值(与历史行为一致),
- *     由下一次 `--update` 补上。
- * 判据是「这个文件在**同口径**下比基线那一刻多没多」——格式时代造成的系统性差异
- * 被自动吸收,而真实的膨胀(有人往文件里加代码)照旧阻断。
- *
- * 为什么不用「全仓整体行数比」换算:实测不行。prettier 是**逐文件**重排,各文件
- * 的展开倍率差异极大(同一批文件里既有 0.958 也有 1.130),全仓比例约等于 1.0,
- * 换算后对 `LogPanel.tsx` 仍判「变大 136 行」——即该口径解决不了它要解决的问题。
- *
- * 「取不到基线修订号」这一支有个陷阱:它同时覆盖「真新增的文件」与「基线修订号
- * 已经不可达的存量文件」——后者是**基线自身过期**,不是文件变大,而退回记录值会
- * 把它判成「继续变大」。故判据拆成两支,并把「修订号是否可用」直接写进报错,
- * 见 `BASELINE_REV_USABLE` 与下面的两条 problems。 */
-
-/** 取当前 HEAD 的修订号,写进基线供日后「同口径重数」用。
- *  git 不可用 / 不在检出里时返回 null(退回记录值,不阻断)。 */
-function headRev() {
-  const res = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
-  return res.stdout.trim() || null;
-}
-
-/** 按**今天的行数口径**重数 `rev` 里该文件的行数;取不到返回 null。
- *  行数口径与主扫描(collectSplitHints)逐字一致:`split("\n").length`。 */
-function linesAtRev(rev, rel) {
-  if (!rev) return null;
-  const res = spawnSync("git", ["show", rev + ":" + rel], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
-  return res.stdout.split("\n").length;
-}
-
-/* ── 基线修订号必须仍可达 ──
- * 「按 baselineRev 同口径重数」有个前提:**那个提交还在当前检出里**。合并提交删掉
- * 被并入的分支后,基线记的修订号(通常是某个分支提交)会变成不可达对象,下一次
- * `git gc` 就把它清掉 —— 此后 `git show <rev>:<file>` 一律失败,同口径重数静默
- * 退化成「拿记录值直接比」,而记录值记在**另一个格式时代**的源码上(见上)。
- *
- * 现场:`LogPanel.tsx` 的基线 988 记于一个已被合并吸收、不再有 ref 指向的分支提交,
- * 而按今天的计数口径、今天的内容重数是 993 行 —— 这个文件**一个字都没改**却天天
- * 判红,且报错写作「R5 超限文件继续变大」,与真实原因(基线修订号不可达)毫无关系。
- *
- * 所以查基线前先确认**基线里那个**修订号真的能被重数:取不到就报出来、指向
- * 「重记基线」,而不是悄悄退回记录值把红判成「文件变大了」。 */
-const BASELINE_REV = (function readBaselineRev() {
-  if (!fs.existsSync(FILE_SIZE_BASELINE)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(FILE_SIZE_BASELINE, "utf8")).baselineRev;
-  } catch {
-    /* 基线损坏由棘轮那一支报「基线文件缺失 / 不可解析」,这里不重复报。 */
-    return null;
-  }
-})();
-
-/** 基线修订号能不能真的拿去重数(在当前检出里可达)。 */
-const BASELINE_REV_USABLE =
-  typeof BASELINE_REV === "string" &&
-  BASELINE_REV.length > 0 &&
-  spawnSync("git", ["cat-file", "-e", BASELINE_REV + "^{commit}"], {
-    encoding: "utf8",
-  }).status === 0;
 
 // 声明层(常量与清单表)拆在同目录的 file-structure-rules.cjs(ISSUE #1811):
 // 这份脚本此前 1213 行、过半是纯数据,R5「超 900 行须拆」正是冲这个形态来的。
@@ -204,9 +106,9 @@ const {
   GIT_TRANSIENT_ROOT_FILES,
 } = require("./file-structure-rules.cjs");
 
-const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
+/* 无 `--update` / `--strict`:R5 已是硬闸(ISSUE #1811 收掉那两条通道),
+ * 而它们是这份脚本里唯一读 ARGS 的地方 —— 旗标整个删掉,不留「传了也没用」的
+ * 参数契约(那种形态会让人以为还能登记存量)。 */
 
 
 
@@ -326,17 +228,18 @@ const STRICT = ARGS.has("--strict");
   }
 })("src");
 
-// ── R5:超大文件的拆分候选(提示级,不阻断) ──
+// ── R5 的读数:src/ 下超 900 行的文件 ──
 // 扫描范围是**整个 src/**,不分层也不分文件类型:
-//   · src/app/       页面的「纯展示视图」(settings/SettingsPageView.tsx 2499 行);
-//   · src/lib/       逻辑层的大文件(comfyui/lifecycle.ts 1041 行);
+//   · src/app/       页面的「纯展示视图」;
+//   · src/lib/       逻辑文件;
 //   · src/components/、src/server/  组件与服务端。
 // 只扫 components(历史口径)会让「最大的那个文件」永远不被提醒;把范围缩到
-// .tsx 会让逻辑层的大文件同样漏网。行数超了就该拆,与它是不是组件、落在哪一层
-// 都无关。App Router 的保留文件(page/layout/route)一并计入。
-// 与函数长度门禁(check-function-length.cjs §12.13)的分工:那个管**函数**,
-// 这个管**文件**;两者都只提示,把存量交给排期,把增量交给棘轮。
-(function collectSplitHints() {
+// .tsx 会让逻辑文件同样漏网。行数超了就该拆,与它是不是组件、落在哪一层都无关。
+// App Router 的保留文件(page/layout/route)一并计入。
+// 测试文件与 `.d.ts` 排除:用例体量不是可维护性信号。
+// 与函数长度门禁(check-function-length.cjs §12.13)的分工:那个管**函数**(400 行),
+// 这个管**文件**(900 行);两条维度不可互相替代,也都是硬闸。
+(function collectOversizedFiles() {
   (function walkHints(dir) {
     const entries = readdirForScan(dir);
     if (entries === null) {
@@ -359,7 +262,6 @@ const STRICT = ARGS.has("--strict");
       }
       const lines = text.split("\n").length;
       if (lines > SPLIT_HINT_LINES) {
-        splitHints.push(p + " (" + lines + " 行,建议拆分)");
         oversizedFiles[p] = lines;
       }
     }
@@ -617,183 +519,23 @@ const STRICT = ARGS.has("--strict");
   }
 })();
 
-// ── R5 棘轮(ISSUE #575 第 8 项) ──
-// 默认只提醒;`--strict` 下按 `scripts/.file-size-baseline.json` 判定:
-//   ① 基线里没有的超限文件 = 新增 → 阻断;
-//   ② 基线里已有但配额(基线行数 × 行数口径换算比)被突破 → 阻断(文件还在长);
-//   ③ 基线里已有但已降到阈值内/行数变小 → 提示收紧基线(不阻断,避免打断提交)。
-// 反模式:只在输出里打一行「建议拆分」。提醒与阻断的区别就是「有没有人为它返工」——
-// 写下那句「只增不减」时本仓有 11 个超限文件,现在基线是 total: 0 / files: {}。
-// pre-commit 从 ISSUE #1404 起跑的就是带 `--strict` 的这一档:再长出一个超限文件即当场拦。
-(function checkFileSizeRatchet() {
-  const names = Object.keys(oversizedFiles).sort();
-  const prev = fs.existsSync(FILE_SIZE_BASELINE)
-    ? JSON.parse(fs.readFileSync(FILE_SIZE_BASELINE, "utf8"))
-    : null;
-  const prevFiles = prev?.files ?? null;
-  /** 基线里这个文件的**同口径行数**:按 baselineRev 的内容、今天的计数口径重数。
-   *  取不到(旧基线 / 文件当时不存在 / git 不可用)时退回基线上的记录值 ——
-   *  退回是「按历史行为比」,只会更严,不会漏放。 */
-  const baseLinesOf = (f, recorded) =>
-    linesAtRev(BASELINE_REV_USABLE ? prev?.baselineRev : null, f) ?? recorded;
-  /** 基线修订号存在却不可达 ⇒ 同口径重数做不了,只能退回记录值(见文件头)。 */
-  const baseRevMissing = Boolean(prev?.baselineRev) && !BASELINE_REV_USABLE;
-
-  if (UPDATE) {
-    /* 「有文件没读到」时一律拒绝重记基线（§11 那一族的棘轮同口径）：把一次不完整的
-     * 读数写进基线，等于让那些条目从此报不出来 —— 下一轮它会以「基线里没有」的形态
-     * 重新变成新增。消失的条目本来就可能是超限文件（读不到行数 ⇒ 不在 `oversizedFiles`
-     * 里 ⇒ 被算成「已修好」），这一支必须关掉。 */
-    if (vanished > 0) {
-      console.error(
-        "[structure] R5 基线拒绝更新:本轮有 " +
-          vanished +
-          " 个条目在遍历期间消失(并发变更),读数不完整 —— 基线里没有它们不代表它们不超限。" +
-          "\n  等扫描面稳定后重跑(理由与同族棘轮一致,见规范 §11 那一族的「棘轮类拒绝 --update」)。",
-      );
-      process.exit(1);
-    }
-    const prevTotal = prevFiles ? Object.keys(prevFiles).length : 0;
-    /* 棘轮只许下降;唯一例外是判据版本抬升(旧数字与新计数不是同一个量)。 */
-    const ruleChanged =
-      Boolean(prevFiles) && prev.ruleVersion !== R5_RULE_VERSION;
-    const grew = prevFiles
-      ? names.filter((f) => f in prevFiles && oversizedFiles[f] > prevFiles[f])
-      : [];
-    const added = prevFiles ? names.filter((f) => !(f in prevFiles)) : [];
-    if (
-      prevFiles &&
-      (grew.length || added.length || names.length > prevTotal) &&
-      !ruleChanged
-    ) {
-      console.error(
-        "[structure] 拒绝放宽 R5 基线(棘轮只许下降):" +
-          (grew.length ? " 变大 " + grew.join(", ") : "") +
-          (added.length ? " 新增 " + added.join(", ") : "") +
-          "\n  新增的先拆分,不要用 --update 掩盖。" +
-          "\n  若确属判据变更(现为 R5_RULE_VERSION=" +
-          R5_RULE_VERSION +
-          "),须先改脚本里的常数再 --update。",
-      );
-      process.exit(1);
-    }
-    fs.writeFileSync(
-      FILE_SIZE_BASELINE,
-      JSON.stringify(
-        {
-          generatedAt: new Date().toISOString().slice(0, 10),
-          ruleVersion: R5_RULE_VERSION,
-          note:
-            "超 " +
-            SPLIT_HINT_LINES +
-            " 行的文件(规范 §12.6 R5 / ISSUE #575)。" +
-            "棘轮只许下降:新增超限文件须先拆分,再收紧基线。" +
-            "比对前按 `baselineRev` 的内容**同口径重数**基线行数(见脚本注释)。",
-          threshold: SPLIT_HINT_LINES,
-          baselineRev: headRev(),
-          total: names.length,
-          files: Object.fromEntries(names.map((f) => [f, oversizedFiles[f]])),
-        },
-        null,
-        2,
-      ) + "\n",
-    );
-    console.log(
-      "[structure] R5 基线已更新:" +
-        names.length +
-        " 个超限文件(scripts/.file-size-baseline.json)" +
-        (ruleChanged
-          ? "【判据版本 " +
-            (prev.ruleVersion ?? "?") +
-            " → " +
-            R5_RULE_VERSION +
-            ",一次性重记】"
-          : ""),
-    );
-    if (!BASELINE_REV_USABLE) {
-      console.warn(
-        "[structure] 警告:新记的基线修订号在本检出里取不到 —— 同口径重数会退化成\n" +
-          "  拿记录值直接比。浅克隆 / 只取单分支的 CI 请先 git fetch --unshallow。",
-      );
-    }
-    return;
-  }
-
-  // 非 strict 只提醒、不判失败 —— 那是一步快跑口径;pre-commit 的那一步带 --strict。
-  if (!STRICT) return;
-
-  if (!prevFiles) {
-    problems.push(
-      "R5 基线文件缺失:先执行 node scripts/check-file-structure.cjs --update",
-    );
-    return;
-  }
-  for (const f of names) {
-    const base = prevFiles[f];
-    if (base === undefined) {
-      problems.push(
-        "R5 新增超限文件(" +
-          f +
-          " → " +
-          oversizedFiles[f] +
-          " 行,阈值 " +
-          SPLIT_HINT_LINES +
-          ")。先拆分,再收紧基线(规范 §12.6 R5)",
-      );
-    } else if (oversizedFiles[f] > baseLinesOf(f, base)) {
-      const baseline = baseLinesOf(f, base);
-      /* 取不到基线修订号 ⇒ 比的是「两个格式时代的绝对行数」,差值不构成判据。
-       * 把这支单独报出来:它的可行动作是**重记基线**,不是拆文件。 */
-      if (baseRevMissing) {
-        problems.push(
-          "R5 基线修订号 " +
-            prev.baselineRev +
-            " 在本检出里取不到(" +
-            f +
-            " → 记录值 " +
-            base +
-            " → 当前 " +
-            oversizedFiles[f] +
-            " 行)。同口径重数无法进行,比的是两个格式时代的绝对行数 —— " +
-            "先补历史(git fetch --unshallow),再执行 node scripts/check-file-structure.cjs --update 重记基线(规范 §12.13.3)",
-        );
-        continue;
-      }
-      problems.push(
-        "R5 超限文件继续变大(" +
-          f +
-          " → " +
-          base +
-          " → " +
-          oversizedFiles[f] +
-          " 行" +
-          (baseline === base ? "" : ";按同口径重数基线为 " + baseline + " 行") +
-          ")。拆分或收紧基线(规范 §12.6 R5)",
-      );
-    }
-  }
-  const shrunk = names.filter(
-    (f) =>
-      prevFiles[f] !== undefined &&
-      oversizedFiles[f] < baseLinesOf(f, prevFiles[f]),
-  );
-  const removed = Object.keys(prevFiles).filter((f) => !(f in oversizedFiles));
-  if (shrunk.length || removed.length) {
-    console.log(
-      "[structure] R5 基线可收紧(执行 --update):" +
-        [...shrunk, ...removed].map((f) => "\n  · " + f).join(""),
-    );
-  }
-})();
-
-if (splitHints.length) {
-  console.log(
-    "[structure] 拆分候选" +
-      (STRICT ? "" : "(仅提醒)") +
-      ":\n  " +
-      splitHints.join("\n  "),
+// ── R5:超 900 行的文件即阻断 ──
+// 硬闸,无基线。上面 collectSplitHints 收的 oversizedFiles 就是全部读数 ——
+// 一条 problem 一个文件,报的是「哪一份、多少行」,出口只有一个:拆。
+// 不设排除清单:一份「这些文件不受本条约束」的白名单正是最容易静默失效的形状
+// (改名 / 挪目录就看不见 = 假绿;同 `check-infra-file-size.cjs` 的口径)。
+for (const [f, n] of Object.entries(oversizedFiles).sort((a, b) => b[1] - a[1])) {
+  problems.push(
+    "R5 超限文件(" +
+      f +
+      " → " +
+      n +
+      " 行,阈值 " +
+      SPLIT_HINT_LINES +
+      ")。拆分(规范 §12.6 R5)",
   );
 }
+
 if (problems.length) {
   /* 消失数两条出口都要给：只在绿色那一行给，等于「判据报红时覆盖范围不可见」——
    * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */

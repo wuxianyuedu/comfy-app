@@ -158,7 +158,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 本地提交前必须通过（.githooks/pre-commit；判据按互不依赖分 4 组并行：
 A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
-✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R12 + R5 棘轮硬闸（见 §12.6/§12.8/§12.11）
+✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R12 + R5 硬闸（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
 ✅ node scripts/run-ast-gates.cjs --staged  # **AST 判据聚合档**：6 条判据（updater 纯净性 / 非空断言 / void 悬空 / TS 重复属性 / FormField 接线 / 点击键等价物）共享**一次解析**，省 ≈1.9s（见下 13.5.8.2「第四笔账」）。共享的是解析产物，遍历与判定各归各条；人的动作仍跑单条脚本
 ✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）
@@ -456,10 +456,10 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | 平台流水线的「构建」+「数产物」那两步                       | **逐日自证 + 改了就当天跑**（`pnpm run build` 走 `scripts/artifact-run.mjs`，账在 `scripts/.artifact-freshness.json`；同样由钩子那一步判。`pnpm run build` 内部已经串了 `next build` → 剥私有输入 → 数产物 → 冒烟，不另拼一遍）                                                                                                               |
 | E2E `playwright test --grep @critical`                               | 平台流水线的「E2E @critical」那一步                         | **被全量 e2e 那一档覆盖**：`--grep @critical` 走的是 `scripts/e2e-run.mjs`（同一入口），而那一档有「每天首次自证」判据（账在 `scripts/.e2e-freshness.json`，钩子 D 组「每档都有主」）。它是全量 e2e 的**子集**，所以子集不另立一档（旧口径「无自动执行者」已作废）。它证明的是功能链路 |
 | `db:push` 建库                                                       | 平台流水线的「建库」那一步                                  | 只在手动跑 E2E 前需要；启动链路本身由 `ensureSchemaCurrent` 自动建表（§9.1），所以它**不是**一条独立的人为纪律                                                                                                                                                                                                                                |
-| R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步                | **已在本地钩子里**（D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步带 `--strict`，ISSUE #1404 翻档；旧口径「本地只提醒」的前提「挂着 11 个存量」已不成立，基线现在 `total: 0`）                                                                                                                                                             |
+| R5 超 900 行文件（`check-file-structure.cjs` 的那一半）              | 平台流水线里跑结构检查的那一步                              | **已在本地钩子里，且已是硬闸**（D 组「文件结构硬规则(R1-R12，R5 硬闸)」；沿革 = 只提醒 → ISSUE #1404 加 `--strict` 棘轮 → ISSUE #1811 基线归零后收成硬闸、`--strict` 一并删除）                                                                                                                                                                |
 | `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步                   | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来                                                                                                                                               |
 | `docs/api/**` 生成物与源同步（`check-docs-api.cjs`）                 | **平台侧与本地都从不跑**（此前是纯空白）                    | **已在本地钩子里**（D 组「API 文档生成物与源同步」，带 `--staged` 条件触发，详见 §13.5.5.1）。翻档前实测 2627 个文件差异、留着指向已删模块的 `lib_comfyui_markdown.html`（ISSUE #1329 收尾）                                                                                                                                                  |
-| `tw4-canonical-report` / `tw4-spacing-canonical`（CSS 等价改写汇总） | 从不跑（03 章只写着「按需跑一次」，那句话没有任何东西在守） | **按需召唤 + 棘轮**：两者都起 Tailwind 引擎（~6s）、判的是「CSS 等价改写」而非正确性，故不进钩子；各带 `--check` 判定档与「零候选起步」基线，并登记 `scripts/.gate-executor-ledger.json`（详见 §13.5.12）                                                                                                                                     |
+| `tw4-canonical-report` / `tw4-spacing-canonical`（CSS 等价改写汇总） | 从不跑（03 章只写着「按需跑一次」，那句话没有任何东西在守） | **按需召唤 + 硬闸**：两者都起 Tailwind 引擎（~6s）、判的是「CSS 等价改写」而非正确性，故不进钩子；各带 `--check` 判定档（候选须为 0），并登记 `scripts/.gate-executor-ledger.json`（详见 §13.5.12）。ISSUE #1811 的 tw4 项已把它们从「基线 `total: 0` 的棘轮」翻成硬闸                                                                          |
 | `report-ts-duplicate-keys`（同一属性指定两次）                       | 从不跑（此前是报告型、零判定档）                            | **已收成判定档**：`check-ts-duplicate-keys.cjs` 接进 D 组「TS 重复属性判定」。落地时实测 0 处，按硬闸落、不走棘轮（ISSUE #1451）                                                                                                                                                                                                              |
 
 > 这张表是**有意留下的欠账**，不是遗漏：把全量 3000+ 用例塞进每次 commit 会让本地
@@ -600,8 +600,10 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
    既然名字就是内容哈希，「按内容对齐」才是唯一能区分「换了名」与「真的变了」的口径，
    而它只有在基线**存了指纹**时才可能成立。
 
-   **基线还要记 `baselineRev`**（`--update` 写入，与 `check-file-structure.cjs` 同口径，
-   见 §12.13.3）：判红时先说出「这批读数取自基线之后的源码还是同一版」——
+   **基线还要记 `baselineRev`**（`--update` 写入；`check-file-structure.cjs` 那套同名的
+   机制已随 R5 棘轮在 ISSUE #1811 下线，**本条这一份是独立实现**、不受影响 ——
+   它对账的是「产物读数取自哪一版源码」，见 §12.13.3 的最后两段「留给下一个做按行数
+   记账棘轮的人」）：判红时先说出「这批读数取自基线之后的源码还是同一版」——
    实测现场就是这一格漏了会走错路。`086e16a0` 落的那份基线是**诚实读数**，
    之后 `50c1845f` 改了 17 个组件文件、体积真涨 1074 字节；而没有归因时，
    判红那句话只有「涨了 493 字节 gzip」，读者的第一反应必然是「抖动 / 量错了」，
@@ -609,7 +611,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
    （例外流程的第一步）。三档输出各有明确写法：`其后本检出上有 N 次提交`（这批读数
    取自基线之后的源码）/ `就是本检出的 HEAD`（上涨来自未提交的改动）/
    `取不到`（旧格式基线 / 不在 git 检出里 / 修订号已不可达 —— 说清取不到，不拿猜测顶替，
-   同 §12.13.3.1 对 `baselineRev` 不可达的处置）。
+   同 §12.13.3 记的 ISSUE #653 那一条处置口径）。
 
    **`raw` 量、打、但不判**：`gzip` 才是「用户要下载多少」，raw 是磁盘/内存形态。两者会
    分叉（往 chunk 末尾塞可压缩冗余：raw 明显涨、gzip 几乎不动），拿 raw 判红只会制造误报。
@@ -660,7 +662,7 @@ HTML 报告给人看、退出码恒 0；本判据是**机器判定档**、量**�
 
 这张表里**原本还有一行**「R5 行数棘轮 → `@` 跑 `check-file-structure.cjs --strict`」，随
 ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前提「挂着 11 个存量」不再成立）之后，
-带 `--strict` 的这一档就写在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」里，
+带 `--strict` 的这一档就写在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 硬闸)」里，
 每次提交都执行 —— **不再需要召唤**（13.5 的清单同步改了这一行）。
 
 **边界（不要做过头）**：
@@ -1590,7 +1592,7 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 比找不到更糟。
 
 **标签从哪来**：`grep -n '^  run "' .githooks/pre-commit` 逐字取，或跑一次提交看 `── check:`
-那些行。D 组当前的标签里，`文件结构硬规则(R1-R12，R5 棘轮硬闸)`、
+那些行。D 组当前的标签里，`文件结构硬规则(R1-R12，R5 硬闸)`、
 `UI/逻辑分离棘轮(--strict)`、`生成态文档与源同步`、`文档引用与权威源一致` 这几个是最常被引用的。
 
 **判据**：`scripts/check-doc-references.cjs` 的 `checkGateStepIndexRefs()`（= `pnpm doc:check`，
