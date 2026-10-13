@@ -13,10 +13,12 @@ import { resolveEffectiveLaunch } from "./desktop-instance";
 import {
   classifyStorageSlot,
   normalizeDirKey,
+  parseExtraModelPathsConfigArgs,
   parseExtraModelPathsYaml,
   parseStorageDirArgs,
   type DesktopStoragePaths,
   type ExtraModelPathEntry,
+  type ExtraModelPathsFile,
   type StorageDirInfo,
   type StorageSlot,
 } from "./desktop-storage-paths";
@@ -123,11 +125,32 @@ export async function resolveDesktopStoragePaths(
     extraPathsCandidates(baseDir, instanceRoot),
     readFile,
   );
-  const parsed = extra
+  const parsedMain = extra
     ? parseExtraModelPathsYaml(extra.content)
-    : { basePath: null, entries: [] };
+    : { basePath: null, entries: [] as ExtraModelPathEntry[] };
 
-  const overrides = parseStorageDirArgs(await resolveArgs(dir));
+  const launchArgs = await resolveArgs(dir);
+  /* `--extra-model-paths-config` 指向的额外 yaml（Desktop 版共享目录的另一种
+   * 声明位置）：逐份解析并叠加 entries；主 yaml 优先，配置文件缺失/读不到按
+   * 「没有这一份」处理。 */
+  const configFiles = parseExtraModelPathsConfigArgs(launchArgs);
+  const mergedEntries: ExtraModelPathEntry[] = [...parsedMain.entries];
+  let configBase: string | null = null;
+  for (const cfg of configFiles) {
+    try {
+      const parsed = parseExtraModelPathsYaml(await readFile(cfg, "utf8"));
+      if (parsed.basePath && !configBase) configBase = parsed.basePath;
+      mergedEntries.push(...parsed.entries);
+    } catch {
+      // 配置文件缺失/读不到：不是错误，按「没有这一份」处理。
+    }
+  }
+  const parsed: ExtraModelPathsFile = {
+    basePath: parsedMain.basePath ?? configBase,
+    entries: mergedEntries,
+  };
+
+  const overrides = parseStorageDirArgs(launchArgs);
   /* 主 base 目录的优先级：启动参数 > yaml 顶层 base_path > 实例布局判据 ——
    * 与 ComfyUI 自己的取值顺序一致（它也先认命令行再认配置文件）。 */
   const primaryBase = overrides.baseDir ?? parsed.basePath ?? baseDir;

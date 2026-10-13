@@ -143,6 +143,10 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
   const result: ExtraModelPathsFile = { basePath: null, entries: [] };
   let current: ExtraModelPathEntry | null = null;
   let awaitingPathItems = false;
+  /* 多行块标量（`text_encoders: |`）里的每行都是一条路径；块随缩进变浅或遇到
+   * 下一个字段结束。 */
+  let blockKey: string | null = null;
+  let blockIndent = -1;
   /* 收尾一个块：没有 basePath 的条目无法定位目录，没有 paths 的条目什么都
    * 不并入 —— 两者都按 ComfyUI 的行为跳过，留在结果里只会让界面多出空行。 */
   const flush = () => {
@@ -151,6 +155,8 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     }
     current = null;
     awaitingPathItems = false;
+    blockKey = null;
+    blockIndent = -1;
   };
 
   for (const rawLine of text.split(/\r?\n/)) {
@@ -159,6 +165,16 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     if (!trimmed || trimmed.startsWith("#")) continue;
 
     const indent = line.length - line.trimStart().length;
+
+    /* 多行块标量的内容行：缩进比块头深（YAML 块标量要求内容缩进更深）。先于此
+     * 判断，避免把块内纯文本行误当新字段。 */
+    if (blockKey !== null && indent > blockIndent) {
+      const value = stripScalar(trimmed);
+      if (value && current) current.paths.push(value);
+      continue;
+    }
+    blockKey = null;
+
     if (indent === 0) {
       const match = TOP_KEY_RE.exec(trimmed);
       flush();
@@ -184,11 +200,32 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     const field = FIELD_RE.exec(line);
     if (!field) continue;
     const name = field[1] ?? "";
-    const value = stripScalar(field[2] ?? "");
-    awaitingPathItems = name === "paths" && !value;
+    const rawFieldValue = (field[2] ?? "").trim();
+    /* 块标量指示符（`|` / `>`）：`text_encoders: |`、`clip_vision: |-` 等。
+     * 「空值」是列表还是块，要在 stripScalar 之前认 —— 块值剥掉指示符后是
+     * 非空（`|`），一并当作路径就会把 `|` 收进目录。 */
+    const isBlockScalar = /^[|>]/.test(rawFieldValue);
+    const value = stripScalar(rawFieldValue);
+    awaitingPathItems = name === "paths" && !value && !isBlockScalar;
     if (name === "base_path") current.basePath = value;
-    else if (name === "paths" && value)
+    else if (name === "is_default") {
+      /* 布尔标记，无目录含义，忽略。 */
+    } else if (name === "paths" && value && !isBlockScalar) {
       current.paths.push(...parseInlineList(value));
+    } else if (value && !isBlockScalar) {
+      /* 经典写法：`checkpoints: checkpoints/`、`sensenova: sensenova/` ——
+       * 段内「名字: 相对路径」即一条并入路径。这是 ComfyUI 官方示例与「恢复
+       * Desktop 实例共享目录」用的写法（base_path 后直接跟各类型名与相对路径），
+       * 本应用此前只认 `paths:` 列表形式，于是那份 yaml 被算成零条目、设置页
+       * 显示「未配置共享目录」。 */
+      current.paths.push(value);
+    } else if (isBlockScalar) {
+      /* 多行块标量（`text_encoders: |` 等）：之后比块头缩进更深的每一行都是
+       * 一条路径，由循环顶部的 blockKey 分支收集。 */
+      blockKey = name;
+      blockIndent = indent;
+    }
+    /* 其余：`paths:` 列表的开始（空值、非块）→ 留待后续 `- 项` 行收集。 */
   }
 
   flush();
@@ -234,6 +271,38 @@ export function parseStorageDirArgs(
     if (!inlineValue) i++;
   }
   return overrides;
+}
+
+/**
+ * 从启动参数里取 `--extra-model-paths-config` 指向的额外 yaml 文件列表。
+ * ComfyUI（main.py:146 附近）用这个参数加载「共享模型目录」配置，Desktop 版
+ * 也可能走这里而不是默认的 `extra_model_paths.yaml`；支持 `--x <值>`、`--x=<值>`
+ * 与 nargs='+' 的多个值（空格分隔，遇到下一个 flag 截止）。这些文件会与主
+ * `extra_model_paths.yaml` 叠加，逐份解析失败按「没有这一份」处理。
+ */
+export function parseExtraModelPathsConfigArgs(
+  args: readonly string[],
+): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i] ?? "";
+    const eq = token.indexOf("=");
+    const flag = eq >= 0 ? token.slice(0, eq) : token;
+    if (flag.toLowerCase() !== "--extra-model-paths-config") continue;
+    const inline = eq >= 0 ? stripScalar(token.slice(eq + 1)) : "";
+    if (inline) {
+      out.push(inline);
+      continue;
+    }
+    // nargs='+'：收集后续非 flag 的 token。
+    for (let j = i + 1; j < args.length; j++) {
+      const t = args[j] ?? "";
+      if (t.startsWith("-")) break;
+      out.push(stripScalar(t));
+      i = j;
+    }
+  }
+  return out;
 }
 
 /**
