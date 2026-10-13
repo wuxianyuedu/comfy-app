@@ -9,6 +9,17 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach } from "vitest";
 import { resetRateLimitBuckets } from "~/server/api/middleware/rate-limit";
 
+import { stripInheritedGitEnv } from "./helpers/git-sandbox-env";
+
+/* 剥掉从钩子继承来的 git 环境（清单与机制见 `helpers/git-sandbox-env.ts`）。
+ *
+ * 放在这里而不是每份用例里：pre-commit 的 C 组跑在 `git commit` 的钩子进程内，
+ * `GIT_DIR` / `GIT_INDEX_FILE` 一路继承进测试 worker。实测 20 份用例文件会自己
+ * `git init` 一个临时仓库，带着那份环境时它们操作的是**调用方的真仓库** ——
+ * 探针文件被写进真索引，下一次提交报 `Error building trees` 而报错一个字都不指向
+ * 那条测试。这一处同时覆盖这些用例 spawn 的子进程（含被测判据脚本内部再起的 git）。 */
+stripInheritedGitEnv();
+
 /* RTL 的自动清理**在本仓库是死的**：`@testing-library/react` 只在
  * `typeof afterEach === "function"` 时才 `afterEach(cleanup)`，而本仓库
  * `globals: false`（`vitest.config.ts`）⇒ `globalThis.afterEach` 是 `undefined`

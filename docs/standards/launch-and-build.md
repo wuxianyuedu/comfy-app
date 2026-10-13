@@ -948,6 +948,21 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 - pnpm 已关闭 `verifyDepsBeforeRun`（见 §6）：任何 pnpm 命令都不会隐式
   补跑 install。dev server 运行期间不要手动跑 `pnpm install`
   （better-sqlite3 等原生模块被进程锁定，install 会 EPERM）。
+  **这条现在有现场执行者，且两侧同一份判据**：`launcher-core/port-reap.mjs` 的
+  `runningAppInstances(root)` 按**归属**回答「本检出的应用服务在不在跑」——会话锚点
+  （`run/launcher-session.json` 心跳新鲜 + launcher PID 存活）或端口上的进程命令行命中
+  本检出的 `dev.mjs` / `start.mjs`。两个消费点：① 编排器补装路径
+  （`launcher-core/downstream.mjs` 的 `syncDependencies`）**在决定要装之前**问一句，
+  判到在跑就不装、报出 PID 与出口 —— 顺序是这条判据存在的理由：主流程里
+  `reconcilePort` 排在补装**之后**，而更早的 `reapStaleSession` 在「上一位 launcher
+  还活着」时刻意什么都不做；② 人不经过编排器直接装的那条路走
+  `scripts/deps-install-guard.mjs`（`pnpm deps:guard`，Windows 双击
+  `tools/start/sync-lint.ps1` 在 `pnpm install` 之前调它，判到即停）。
+  刻意**不**按「端口有没有人监听」判：隔壁检出占着同一端口并不会锁本检出的
+  `node_modules`，那样会在多检出并行下天天误拦（这也是 `sync-lint.ps1` 原先那份
+  自带端口探测的问题——它既判不出归属，又只是警告完照样装）。回归测试见
+  `tests/dev-launcher-dependency-sync.test.ts`（含「拦截必须排在 install 之前」那条
+  源头形状断言）。
 
 ### 3.3 跨平台启动编排器（`scripts/dev-launcher.mjs`）
 
@@ -2879,6 +2894,7 @@ sidecar」两种不同形态的失败。
 | 依赖漏洞扫描棘轮（规范 §13.5 / ISSUE #1331）                          | `scripts/quality-gate.ps1`（`-Mode dependencyAudit`）                                               | `scripts/check-dependency-audit.mjs`（`node scripts/check-dependency-audit.mjs`，契约测试 `tests/dependency-audit.test.ts`；刻意**不**进 pre-commit —— 它是网络请求）          |
 | `src/lib` 的零消费值导出硬闸（规范 §12.16）                           | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）                                                         |
 | pnpm 可执行形态的唯一出口（规范 §2.1.1 / §2.1.7）                     | `scripts/prepare-local-run.ps1`（第 2/3 步经它）                                                    | `scripts/launcher-core/shell.mjs`（`pnpmInvocation` / `runPnpmSync`，契约测试 `tests/dev-launcher-toolchain-gate.test.ts`）                                                    |
+| 「现在能不能安全地 `pnpm install`」—— 原生模块锁定前置检查（AGENTS 硬规则 9） | `scripts/sync-lint.ps1`（装之前的前置检查那一步）                                                    | `scripts/deps-install-guard.mjs`（`pnpm deps:guard`，契约测试 `tests/dev-launcher-dependency-sync.test.ts`；判据本体见 §3.2 的 `runningAppInstances`）                          |
 | 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）                    | `scripts/dev-launcher.ps1`（schema 同步阶段）                                                       | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                                                      |
 | 桌包 standalone 运行（不经编排器的内嵌 server 与宿主，ISSUE #1216）   | `src-tauri\target\release\{{shell.app.exe}}`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；它再按 `COMFY_EXECUTOR` 起 `scripts/executor-host.mjs`。刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
 | 接上提交门槛（`core.hooksPath=.githooks`）                            | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |

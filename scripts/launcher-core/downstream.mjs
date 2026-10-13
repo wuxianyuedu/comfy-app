@@ -21,6 +21,7 @@ import {
   whichCommand,
 } from "./shell.mjs";
 import { lockfileDrift, verifyInstall } from "./worktree.mjs";
+import { runningAppInstances } from "./port-reap.mjs";
 import { writeLaunchStatus } from "./orchestrator.mjs";
 import { writeAppServiceExit } from "../app-service-exit.mjs";
 import {
@@ -58,6 +59,26 @@ export async function syncDependencies(ctx, root, deps = {}) {
   if (drift.state === "fresh") return null;
   if (drift.state === "no-lockfile") {
     return "找不到仓库 pnpm-lock.yaml —— 检出可能不完整，请重新克隆后再试。";
+  }
+  /* AGENTS 硬规则 9 的现场拦截：**在决定要装之前**问一句「本检出的应用服务是不是
+   * 正在跑」。顺序就是这条判据存在的理由 —— 编排主流程里端口检查（`reconcilePort`）
+   * 排在补装**之后**几十行，而更早的 `reapStaleSession` 在「上一位 launcher 还活着」
+   * 时刻意什么都不做，所以今天确实存在一条「实例活着 → 直接 pnpm install」的路。
+   * 后果不是一句警告：better-sqlite3 那类原生模块（`.node`）被活进程锁住时 install 以
+   * EPERM 失败，而它会连带后续每一条 pnpm 命令一起失败 —— 表现是「这个仓库忽然装不上
+   * 也起不来」，排查方向还被指错（按 §13.6.3 会被读成「本机跑不了门禁」）。
+   * 判据按**归属**而不是按端口有没有人：隔壁检出占着同一个端口不会锁本检出的
+   * `node_modules`，拿「端口被占」当拦截条件会在多检出并行下天天误拦。 */
+  const live = await runningAppInstances(root);
+  if (live.running) {
+    return (
+      `本检出的应用服务正在运行（PID ${live.pids.join(", ") || "见 run/launcher-session.json"}），` +
+      "已停止补装依赖。\n" +
+      "dev server 在跑时执行 pnpm install，原生模块（`.node`）会被进程锁住而 EPERM 连锁失败，" +
+      "并拖垮后续每一条 pnpm 命令（AGENTS 硬规则 9）。\n" +
+      "出口：先关掉本检出的应用窗口（或停掉正在跑的 `pnpm dev`），再重新启动 —— " +
+      "依赖补装会在下一次启动时自动接着做。"
+    );
   }
   const firstInstall = drift.state === "no-install";
   ctx.log(
@@ -102,7 +123,10 @@ export async function syncDependencies(ctx, root, deps = {}) {
       "本次安装的输出可在上方日志里查看；修复后重新启动即可（不要只重试不改动）。"
     );
   }
-  ctx.log("依赖补装完成并已复核（.modules.yaml + 关键依赖 + lockfile 一致）", "OK");
+  ctx.log(
+    "依赖补装完成并已复核（.modules.yaml + 关键依赖 + lockfile 一致）",
+    "OK",
+  );
   return null;
 }
 
@@ -118,7 +142,14 @@ export async function syncDependencies(ctx, root, deps = {}) {
  * @param {string} errFile stderr 落盘路径
  * @param {Record<string, string>} [extraEnv] 追加环境变量
  */
-export function spawnDevServer(ctx, port, host, outFile, errFile, extraEnv = {}) {
+export function spawnDevServer(
+  ctx,
+  port,
+  host,
+  outFile,
+  errFile,
+  extraEnv = {},
+) {
   // 起服务用的是**门禁验过的那个命令形态**（`commandInvocation`）：
   // `pnpm` 在 Windows 上常常只有 shebang shim 而 shim 起不来，此时真正能用的是
   // 同目录的 `pnpm.ps1`（经 PowerShell 宿主）。门禁选出来的形态必须在起服务这一
@@ -194,15 +225,10 @@ export function spawnExecutorHost(ctx) {
  *           port?: number | null }} ended 本次退出的现场
  * @returns {Promise<number>}
  */
-export async function concludeDownstreamExit(ctx, {
-  dev,
-  shell,
-  heartbeat,
-  staleShell,
-  stdoutFile,
-  stderrFile,
-  port = null,
-}) {
+export async function concludeDownstreamExit(
+  ctx,
+  { dev, shell, heartbeat, staleShell, stdoutFile, stderrFile, port = null },
+) {
   clearInterval(heartbeat);
   const markers = readShellMarkers(ctx.root);
   const shellExited = shell

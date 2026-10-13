@@ -11,6 +11,7 @@
  */
 import process from "node:process";
 
+import { resolveAppPort } from "../app-port.mjs";
 import {
   isWindows,
   listeningPidsOnPort,
@@ -37,6 +38,60 @@ import {
 /** @param {number} port @returns {number[]} */
 export function scanPorts(port) {
   return [port, port + 1, port + 2];
+}
+
+/**
+ * **本检出**的应用服务此刻有没有在跑 —— AGENTS 硬规则 9 的现场判据。
+ *
+ * 为什么需要它而不是「探端口有没有人监听」：原生模块被锁住的是**本检出的
+ * `node_modules`**，隔壁检出（或任何别的进程）占着同一个端口并不会让它锁住。
+ * 所以两条信号都必须问得出归属：
+ *
+ *   · **会话锚点**（`run/launcher-session.json` + 心跳新鲜 +  launcher PID 存活）
+ *     —— 本检出的编排器还在，它起的 dev server 自然也在；这是最便宜的一条，
+ *     同步、零子进程；
+ *   · **端口上的应用进程** —— 端口取本检出解析出来的那一个（含 +1/+2 顺延位），
+ *     占位 PID 的命令行必须命中「根路径 + 本仓库的 `dev.mjs` / `start.mjs` /
+ *     `next dev|start`」（`isAppDevServerCmdline`），否则按「别人的进程」处理。
+ *
+ * 走第二条而不是只看会话，是因为用户完全可以绕过编排器自己 `pnpm dev` ——
+ * 那时没有会话锚点，而 `node_modules` 一样被锁着。
+ *
+ * @param {string} root 检出根
+ * @returns {Promise<{running: boolean, pids: number[], via: "session" | "port" | null}>}
+ */
+export async function runningAppInstances(root) {
+  if (isSessionOwnerAlive(root)) {
+    const session = readSession(root);
+    const pids = [
+      Number(session?.launcher_pid),
+      ...(Array.isArray(session?.child_pids)
+        ? session.child_pids.map(Number)
+        : []),
+    ].filter((pid) => Number.isFinite(pid) && pid > 0);
+    return {
+      running: true,
+      pids: [...new Set(pids)].sort((a, b) => a - b),
+      via: "session",
+    };
+  }
+
+  const held = [];
+  for (const port of scanPorts(resolveAppPort(root))) {
+    const pids = await listeningPidsOnPort(port);
+    if (pids.length === 0) continue;
+    // 命令行按一次批量查询取回（Windows 上逐 PID 起 PowerShell 是 0.5~1.5s 的冷启动）。
+    const lines = await processCommandLines(pids);
+    for (const pid of pids) {
+      if (isAppDevServerCmdline(lines.get(pid) ?? "", root)) held.push(pid);
+    }
+  }
+  if (held.length === 0) return { running: false, pids: [], via: null };
+  return {
+    running: true,
+    pids: [...new Set(held)].sort((a, b) => a - b),
+    via: "port",
+  };
 }
 
 /**
