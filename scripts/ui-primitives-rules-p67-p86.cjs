@@ -670,6 +670,14 @@ module.exports = {
    * 区块级标题（h2 / h3）**不入本条**：那里刻意保留 10.5–14px 的多档微排版，
    * 并成一档会压平信息层次，那是另一件事，不该由这条判据顺手管。
    *
+   * `sr-only` 的 h1 **也不入本条**（ISSUE #1847）：它不占视觉空间、不冒充可见
+   * 标题，只是留给读屏的跳转锚点（`h1` 是屏幕之间导航的主要锚点，见规范 16
+   * §16.2.4.73.1 第 1 条）。屏名已由常驻页签 / 顶栏给出时，视图里的 `h1` 退到
+   * `sr-only`（`ui/page-header` 的 `srTitle` 就是这一形态，此前只靠 `ui/`
+   * 的 `EXEMPT_DIRS` 天然豁免才没被计数）—— 那时字阶档根本不该挂（挂了也不生效，
+   * 还会让「屏级标题一定有字阶档」这句话变假）。判据认 `sr-only` 这个**形态**，
+   * 不是给某个文件开白名单。
+   *
    * 属性段用 `readJsxAttrsPastTag` 平衡扫描（同 P82 的教训）：`className={cn(...)}`
    * 里的 `>` 不提前收尾、`className={[..].join("")}` 的数组形态也能读全 ——
    * 粗锚 `[^>]*` 会在这两种写法上漏计。 */
@@ -684,6 +692,9 @@ module.exports = {
       while ((m = re.exec(t2)) !== null) {
         const attrs = readJsxAttrsPastTag(t2, re.lastIndex);
         if (attrs === null) continue;
+        /* `sr-only` = 只给读屏的跳转锚点，不占视觉空间、不冒充可见标题 ——
+         * 不是「屏级标题不走档」，而是根本不该有档。 */
+        if (/\bsr-only\b/.test(attrs)) continue;
         const hasTier = /\b(?:u-title-page|text-page)\b/.test(attrs);
         const hardSize =
           /\btext-(?:xs|sm|base|md|lg|xl|2xl|3xl|4xl|5xl)\b|\btext-\[/.test(

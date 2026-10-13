@@ -176,8 +176,11 @@ export const NAV_ITEMS: NavItem[] = [
     icon: <Settings size={22} strokeWidth={1.8} />,
   },
   {
+    /* 名字从「流程」改成「工作流库」（ISSUE #1847）：主页那张功能卡一直写的是
+       「工作流库」，而导航这一项却写「流程」—— 同一件事两个名字，用户点进去还要
+       再认一次。主页卡的用词才是它真正的名字，这里对齐它。 */
     id: "workflows",
-    label: "流程",
+    label: "工作流库",
     enabled: true,
     icon: (
       <svg {...ICON_PROPS}>

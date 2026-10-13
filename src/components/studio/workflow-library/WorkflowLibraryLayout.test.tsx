@@ -306,11 +306,16 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     expect(header).toMatch(
       /workflow-library-header-filters[\s\S]{0,80}flex shrink-0 flex-nowrap/,
     );
-    /* 标题与动作组同样不收缩；标题走屏级字阶档（`u-title-page`），
-     * 不再逐个手写 `text-lg` / `text-ink` —— 那正是字阶档要收掉的东西。 */
-    expect(header).toContain('className="font-title u-title-page shrink-0"');
+    /* 动作组不许被压（规范 03 §3.8.1）。 */
     expect(header).toMatch(
       /ml-auto flex shrink-0 flex-wrap items-center gap-2/,
     );
+
+    /* 屏名不再有可见标题（ISSUE #1847 / #1693）：顶栏与页签常驻写着「工作流库」，
+     * 屏内再写一遍是同一个名字出现两次。名字仍从注册表取（`pageHeaderTitle`），
+     * 且退到 `sr-only` —— 不占视觉空间，但读屏仍能按 `h1` 跳转。 */
+    expect(header).toContain('<h1 className="sr-only">');
+    expect(header).toContain('pageHeaderTitle("workflows")');
+    expect(header).not.toContain("u-title-page");
   });
 });
