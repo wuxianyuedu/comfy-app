@@ -13,6 +13,7 @@
 
 import { FolderInput } from "lucide-react";
 
+import { pageHeaderTitle } from "../NavItems";
 import { Button } from "~/components/ui/button";
 import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
@@ -53,7 +54,12 @@ export function WorkflowLibraryHeader({
 }: WorkflowLibraryHeaderProps) {
   return (
     <div className="border-border-subtle flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-5 py-2.5">
-      <h1 className="font-title u-title-page shrink-0">工作流库</h1>
+      {/* 屏名退到 `sr-only`，视觉上不再占这一行（ISSUE #1847 / #1693）：
+          顶栏（`TopBar`）与页签常驻已写着「工作流库」，屏内再写一遍是同一个名字
+          出现两次 —— 读者什么都没多知道，标题区却实打实吃掉一整行。
+          名字仍从注册表取（`pageHeaderTitle`），不在这里另写一份字面量；
+          `sr-only` 也保证读屏仍能按 `h1` 跳转（「别占空间」≠「没有标题」）。 */}
+      <h1 className="sr-only">{pageHeaderTitle("workflows")}</h1>
 
       {/* 紧凑筛选下拉：紧跟标题右侧，组内不换行（三个下拉是一组，拆行会错位） */}
       <div

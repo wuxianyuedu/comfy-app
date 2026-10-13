@@ -5631,6 +5631,24 @@ navigation-menu pagination radio-group scroll-area slider table
 的真按钮、`description` 在时不渲染悬浮钮。**形状那一半（P86）不受影响**：那一锚是
 `.u-title-page` + `mt-1 text-sm` **同现**，省略可见标题后两个锚都不在，恰好放过。
 
+**工具条形态的页头也吃这一条**（ISSUE #1847）：`WorkflowLibraryHeader` 那类「标题
+与工具栏同处一条横杆」的页头不走 `PageHeader` 基元（见 §16.2.4.73 末段「什么时候
+不要用它」），但**「同一个名字说两遍」的病一样会犯** —— 此前它手写一行
+`<h1 className="font-title u-title-page shrink-0">工作流库</h1>`，而顶栏与页签常驻
+已经写着同一个名字。改法与 `srTitle` 同口径：屏名退到 `sr-only`、名字仍从
+`pageHeaderTitle("workflows")` 取（不另写字面量）。连带那条改动：`workflows` 这一项
+的 `label` 从「流程」改成「工作流库」—— 主页那张功能卡一直写的是后者，导航这一项却
+写「流程」，同一件事两个名字，用户点进去还得再认一次。
+
+> ⚠️ **P83 为此开了 `sr-only` 这个形态的豁免**（`scripts/ui-primitives-rules-p67-p86.cjs`
+> 的 P83）：P83 判「屏级 `h1` 必须带 `.u-title-page`」，而 `sr-only` 的 `h1` 是
+> **读屏锚点、不是可见屏级标题**，字阶档根本不该挂（挂了也不生效，还会让「屏级标题
+> 一定有档」这句话变假）。判据认 `sr-only` 这个**形态**，不是给某个文件开白名单 ——
+> 同一份源码里另有一条可见的 `h1` 缺档时，照旧红（正反例都在
+> `tests/check-ui-primitives.test.ts` 的 P83 差分组）。此前 `ui/page-header` 的
+> `srTitle` 没被 P83 计到，只是因为它落在 `ui/` 的 `EXEMPT_DIRS` 里 —— 视图层要写
+> 同一个形态时，豁免必须写在**判据**上，写不到文件上。
+
 #### 判据：`tests/page-name-single-source.test.ts`
 
 按**形态**取锚（不按名字找，§16.2.4.6 的教训），五条：

@@ -65,7 +65,7 @@ describe("TopBar", () => {
 
   it("标题跟着当前视图走，未知视图回落到「工作区」", () => {
     const { unmount } = renderTopBar("workflows");
-    expect(screen.getByText("流程")).toBeTruthy();
+    expect(screen.getByText("工作流库")).toBeTruthy();
     unmount();
 
     renderTopBar("home");
