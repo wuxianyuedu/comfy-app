@@ -113,7 +113,7 @@ export function FilmStudioShotListPanel({
 
                 {/* Status badge */}
                 <span
-                  className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium ${badge.bg} ${badge.text}`}
+                  className={`shrink-0 rounded-md px-1.5 py-0.5 text-4xs font-medium ${badge.bg} ${badge.text}`}
                 >
                   {badge.label}
                 </span>
