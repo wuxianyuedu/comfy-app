@@ -4,8 +4,8 @@
  * 设置页「ComfyUI 启动 / 状态 / 打开」分区的 sub-hook（`use-settings-page` 的
  * 拆分件，与 `use-settings-page-ollama` / `use-settings-page-db-studio` 同族）。
  *
- * 收口：状态与安装形态两份查询（comfyStatus 5s 轮询、enabled 门控与首屏配置
- * 就绪挂钩）、启动（先把当前草稿里的 ComfyUI 各项落库再拉起，之后重判形态）、
+ * 收口：状态与安装形态两份查询（comfyStatus 事件驱动 + 低频兜底、enabled 门控与
+ * 首屏配置就绪挂钩）、启动（先把当前草稿里的 ComfyUI 各项落库再拉起，之后重判形态）、
  * 关闭、页签内嵌打开（ISSUE #310 的单窗口语义）、系统浏览器打开（与页签并列）、
  * 以及运行时启动日志的 active 判据。
  *
@@ -17,7 +17,7 @@
 import { useCallback, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { runAsyncAction } from "~/lib/async-action";
+import { fireAndForget, runAsyncAction } from "~/lib/async-action";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
@@ -25,8 +25,17 @@ import { shouldUseBrowserTab } from "~/lib/comfy/comfy-embed";
 import { useTRPC } from "~/trpc/react";
 
 import { useExternalAction } from "~/components/ui/use-external-action";
+import { useComfyStateEvents } from "./use-comfy-state-events";
 import { useRuntimeLogSource } from "./use-runtime-log-source";
 import type { Settings } from "./use-settings-page-types";
+
+/** 事件通道之外那条**兜底**轮询的节奏（毫秒）。
+ *
+ *  为什么要留：长轮询断开 / 服务重启 / 事件没送到时，界面不能就此停在旧结论上。
+ *  为什么是 30s 而不是原来的 5s：主角换成了事件（变化发生即推、变化一到即重问），
+ *  这条只是「万一主通道坏了」的后备 —— 后备的节奏该按「多久发现通道坏了」定，
+ *  而不是按「事实能多快追上」定。 */
+const COMFY_STATUS_FALLBACK_MS = 30_000;
 
 export function useSettingsComfy(input: {
   /** 当前偏好草稿：启动动作会先把草稿里的 ComfyUI 各项落库再拉起。 */
@@ -51,9 +60,21 @@ export function useSettingsComfy(input: {
       enabled: statusQueriesEnabled,
     }),
   );
+  /* 状态查询：**事件驱动为主、低频轮询兜底**。
+   *
+   * 5s 那一拍的原话是「外部（桌面版 / 自己的终端）拉起的实例要被及时认出来」，
+   * 而这件事现在有更直接的答案：服务端一认出变化（启动 / 就绪 / 关闭 / 退出 /
+   * 配置写入）就经 `/api/comfy/state` 推过来（见 `useComfyStateEvents`），
+   * 变化一到立刻重问一次 —— 发现延迟从「最多一个轮询间隔」变成「一次往返」。
+   *
+   * 兜底那一拍留着，但**不是**为了追事实，而是为了「通道自己坏了」这件事：
+   * 长轮询断开 / 服务重启 / 事件没送到时，界面不能就此停在旧结论上。因此它
+   * 从 5s 放到 30s —— 这是「后备通道」的节奏，不是「主判据」的节奏。两者是
+   * 两条独立的路（§12.12 的孪生对判据只看实现重合，不看「同一个事实的两条路」），
+   * 不共用计时器：事件那条有自己的开关（见下），这条只是 useQuery 的固定间隔。 */
   const comfyStatusQ = useQuery(
     trpc.setting.comfyStatus.queryOptions(undefined, {
-      refetchInterval: 5_000,
+      refetchInterval: COMFY_STATUS_FALLBACK_MS,
       refetchIntervalInBackground: false,
       enabled: statusQueriesEnabled,
     }),
@@ -65,6 +86,24 @@ export function useSettingsComfy(input: {
   const comfyOpenM = useMutation(trpc.setting.comfyOpen.mutationOptions());
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
+  /* 服务端「运行态变了」的订阅：变化一到就重问一次状态。
+   *
+   * 三条门控都与「此刻重问有没有意义」对齐：
+   *   · 首屏两份配置没就绪 —— 与其他状态查询同一门控（没就绪时那条查询
+   *     压根没发出，重问只会凭空补一发）；
+   *   · 「打开查看」正在进行 —— 那条动作自己会 refetch，此刻再来一发是白跑；
+   *   · 启动 / 关闭动作正在进行 —— 它们也要各自把结果探明后才算完。
+   *
+   * `refetch` 不走 `void`：`fireAndForget` 是库里唯一允许悬空 Promise 的出口
+   * （见 `~/lib/async-action`），失败落在控制台，不吞。 */
+  useComfyStateEvents({
+    paused: !statusQueriesEnabled || comfyOpening || comfyStarting,
+    /* 通道注入是 `fireAndForget` 的调用约定（它刻意不给默认，见该模块文件头）。
+     * 这里**刻意不另开日志**：这条失败（重问状态没成）自己就有可见出口 ——
+     * 状态行留在上一次的结论上、30s 兜底轮询随后再试一次，用户看得到结果；
+     * 而它最常见的成因（服务正在重启）每重启一次打一行只是噪声。 */
+    onChange: () => fireAndForget(comfyStatusQ.refetch(), () => undefined),
+  });
 
   /* ComfyUI / Drizzle Studio 状态探测延后到首屏两份配置就绪后再发：
    * comfyStatus 在 ComfyUI 未运行时要对连续端口段做超时探测（秒级），

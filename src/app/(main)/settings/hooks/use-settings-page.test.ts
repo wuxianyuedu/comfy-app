@@ -32,6 +32,12 @@ import {
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
+import { resetComfyStateClientForTest } from "~/lib/comfy/comfy-state-client";
+import {
+  getComfyStateChange,
+  noteComfyStateChange,
+  resetComfyStateWatchForTest,
+} from "~/lib/comfyui/state-watch";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
 import {
@@ -179,6 +185,15 @@ interface Behavior {
 const neverSettle = (): Promise<void> => new Promise<void>(() => undefined);
 
 let behavior: Behavior = {};
+/* comfyStatus 端点的调用次数：「事件到了要立刻重问一次」那条判据靠它数
+ * （与 `comfyOpenCalls` 同一手法：每个用例整体重置 behavior，计数放外面省得漏。 */
+let comfyStatusCalls = 0;
+/* 「运行态变了」那条长轮询通道收到的请求（`?since=…`）：判「有没有订阅」。 */
+const stateRequests: string[] = [];
+/** 只给用例：这条通道此刻收到的查询串（每次用例前清空）。 */
+function comfyStateRequests(): string[] {
+  return [...stateRequests];
+}
 /* 「在浏览器打开」端点的调用计数：单独一个模块级变量，不放进 behavior ——
  * 每个用例都会整体重置 behavior，塞进去就得在每一处重置点重复，容易漏。 */
 let comfyOpenCalls = 0;
@@ -205,6 +220,7 @@ const mockRouter = t.router({
       return { settings: behavior.settings ?? SETTINGS };
     }),
     comfyStatus: t.procedure.query(async () => {
+      comfyStatusCalls += 1;
       /* 用例可让运行态探测「一直不返回」：用来验证安装形态不依赖它（见对应用例）。 */
       if (behavior.comfyStatusPending) await neverSettle();
       return {
@@ -386,6 +402,13 @@ beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 beforeEach(() => {
   runtimeLogCalls.length = 0;
   sessionLogRequests.length = 0;
+  comfyStatusCalls = 0;
+  stateRequests.length = 0;
+  /* 客户端那条长轮询链与「已见 seq」都挂在 `globalThis` 上（HMR 单例）：不清
+   * 会让上一个用例的订阅与 seq 带进来 —— 表现是这一条用例压根不订阅（链还在），
+   * 或第一条变化被当成「见过」而不派发。 */
+  resetComfyStateClientForTest();
+  resetComfyStateWatchForTest();
   /* 兜底缓存（sessionStorage 快照）跨用例共享同一个 jsdom —— 不清会把上一个
    * 用例的成功配置带进来，让「无兜底 → 整页降级」的用例失去意义。 */
   sessionStorage.clear();
@@ -403,12 +426,30 @@ beforeEach(() => {
         size: 0,
       }),
     ),
+    /* 「运行态变了」那条长轮询通道：默认永远回 204（没有变化）。不装 handler
+     * 的话，只要用例渲染了设置页，客户端那一轮长轮询就会以
+     * `onUnhandledFrame: error` 抛 unhandled InternalError（与上面
+     * `/api/logs/sessions` 同源问题）。 */
+    http.get("*/api/comfy/state", ({ request }) => {
+      const since = Number.parseInt(
+        new URL(request.url).searchParams.get("since") ?? "0",
+        10,
+      );
+      stateRequests.push(new URL(request.url).search);
+      /* 与真实路由同一判决：`since` 比当前纪元旧 → 回那一次变化，否则 204。 */
+      const change = getComfyStateChange();
+      if (change.last === null || change.seq <= since) {
+        return new HttpResponse(null, { status: 204 });
+      }
+      return HttpResponse.json(change.last);
+    }),
   );
 });
 afterEach(() => {
   cleanup();
   behavior = {};
   comfyOpenCalls = 0;
+  comfyStatusCalls = 0;
   server.resetHandlers();
 });
 afterAll(() => server.close());
@@ -898,6 +939,47 @@ describe("useSettingsPage", () => {
     });
     expect(result.current.flash).toEqual({ kind: "err", text: "磁盘只读" });
     expect(result.current.saving).toBe(false);
+  });
+
+  /* ── 运行态变化：事件到了立刻重问一次 ────────────────────────────────
+   * 5s 轮询换成「事件驱动为主、低频兜底」之后，**判据就是这条**：服务端一变
+   * （启动 / 就绪 / 关闭 / 退出 / 配置写入），设置页必须立刻重问状态，
+   * 而不是等下一拍。这条用例把「订阅真的接上了」钉死 —— 只断言「轮询变 30s」
+   * 的话，一个把订阅漏接的实现在用例里是全绿的（界面变成要等半分钟）。 */
+  it("服务端报了运行态变化 → 立刻重问一次状态（不等兜底轮询）", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.comfyStatus).not.toBeNull();
+    const before = comfyStatusCalls;
+
+    /* 服务端那侧真报一次变化：handler 把当前快照发给客户端，与真实服务端
+     * 同一口径（`?since=` 比当前纪元旧 → 回那一次变化）。 */
+    await act(async () => {
+      noteComfyStateChange("ready", "ComfyUI 已就绪");
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await expect.poll(() => comfyStatusCalls).toBeGreaterThan(before);
+  });
+
+  /* 没人看的时候不该占着长轮询连接：首屏配置还没就绪时那条查询压根没发出，
+   * 此时订阅起来只会凭空补一发（而且是与首屏同一批请求里多打的一发）。
+   *
+   * 判据取「跑完首屏之后有没有这条通道的请求」——它比断言内部状态更贴近契约：
+   * 连都没连，事件自然也无从谈起。 */
+  it("首屏配置没就绪时不订阅（没人看就不占连接）", async () => {
+    behavior = { settingsError: "配置读不出来", llmError: "配置读不出来" };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.hasError).toBe(true);
+
+    await act(async () => {
+      noteComfyStateChange("ready", "ComfyUI 已就绪");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(comfyStateRequests()).toEqual([]);
   });
 
   /* 安装形态此前与运行态挤在同一个响应里，于是被秒级探测拖着：打开设置页先看不到
