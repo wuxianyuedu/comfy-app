@@ -80,15 +80,28 @@ const isTestFile = (rel) =>
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
 /** 函数色**不加 `\b`**：候选名用 `_` 代替空格，`_rgba(` 前是单词字符会整条漏扫（口径见 03 §3.6.2）。 */
 const FUNC_COLOR_RE = /rgba?\s*\(/g;
+
 /**
- * `#346` / `#262` 这类 **ISSUE 引用**会被 `HEX_RE` 误当 3 位色值：
- * 3~4 位短写法只接受「整行里没有别的数字型引用迹象」的情形。判据用
- * 「短 hex 后面紧跟引号/空格/分号/括号等值终止符」——`#fff"`、`#abc)`
- * 是真色值，`#346 ` 后面跟中文/数字则是 ISSUE 号。为稳妥起见，短写法
- * 只在**去注释后的代码**里判定（注释里的 `#fff` 本来就该忽略）。
+ * 3~4 位短色值（`#f00` / `#abc4`）的**颜色语境**判据：`#` 前面这一段要出现过
+ * 「这是个颜色的属性名」的字样（`color` / `fill` / `stroke` / `bg-` / …）。
+ *
+ * **为什么必须有这么一条**：`#346` 这类 **ISSUE 引用**在字符集上与 3 位 hex
+ * 完全同形（`346` 全是 hex 字符，长度也对），而 `HEX_RE` 的 `{3,8}` 是贪婪的
+ * —— 无差别收就会把每一处 `ISSUE #NNN` 与 `#609` 报成漏改。收窄只能靠语境：
+ * 短写法带颜色属性名时才算色值（`bg-[#f00]`、`fill="#abc"`），否则跳过。
+ *
+ * **只对短写法生效**：5 位以上（`#346286` 这类）本身就不可能是行号形态，
+ * 因此仍是一律收 —— 长写法不需要也不该带语境要求。
+ *
+ * ⚠️ 这条判据的**失效形态与同类门禁不同**，所以它值一段注释：把收窄删掉时
+ * 判据不会红 —— `HEX_RE` 的 `{3,8}` 是贪婪的，短色值**照样会被它收到**，
+ * 「删掉收窄」在「短色值是否被拦」这条断言上照绿。真正会红的只有
+ * `ISSUE #NNN` 变成假红这一面。同一个形状当年还留下一枚只声明不引用的
+ * `SHORT_HEX_RE`：死的那半谁都不报，活的那半「看起来还在工作」。
+ * 两侧因此都在 `tests/check-theme-colors.test.ts` 钉住（短色值必须红、
+ * ISSUE 号必须绿），口径见规范 03 §3.6.2 末段。
  */
-const SHORT_HEX_RE = /#[0-9a-fA-F]{3,4}(?=["';)\s]|$)/g;
-const SHORT_HEX_CONTEXT_RE =
+const COLOR_CONTEXT_RE =
   /(?:bg|text|border|fill|stroke|color|background|COLOR)[^#]*$/i;
 
 /**
@@ -169,9 +182,9 @@ function colorHitsInLine(line) {
   const hits = [];
   for (const m of line.matchAll(HEX_RE)) {
     const v = m[0];
-    // 3~4 位短写法只在「有颜色语境」时才算色值（避开 ISSUE #346 这类引用）。
-    if (v.length <= 5 && !SHORT_HEX_CONTEXT_RE.test(line.slice(0, m.index)))
-      continue;
+    // 3~4 位短写法（`#f00`）只在「有颜色语境」时才收：`#346` 这类 ISSUE 引用
+    // 恰好也是 3 位合法 hex 字符，无差别收会把每一处 `ISSUE #NNN` 报成漏改。
+    if (v.length <= 5 && !COLOR_CONTEXT_RE.test(line.slice(0, m.index))) continue;
     hits.push(v);
   }
   for (const m of line.matchAll(FUNC_COLOR_RE))
