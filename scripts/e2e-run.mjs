@@ -53,6 +53,17 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
+import {
+  canAutoApply,
+  pendingStatements,
+  pushSchema,
+  riskyStatements,
+} from "./db-push-core.mjs";
+import {
+  probeSchemaSync,
+  readSchemaFingerprint,
+  schemaFingerprint,
+} from "./db-schema-state.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
   E2E_PREFLIGHT_ENV_KEY,
@@ -191,6 +202,124 @@ export function shouldRecord({ exitCode, dryRun }) {
 }
 
 /**
+ * 开跑前的 **schema 预检判词**（纯函数，不起 drizzle、不碰库）。
+ *
+ * ## 为什么 e2e 需要这一卡（ISSUE #1834 收尾翻出来的现场）
+ *
+ * 本机 dev 库落后当前 schema 好几个版本，而待执行批次里含
+ * `DROP TABLE loraTrainingJob`（丢数据）—— 启动链路**按设计**不自动执行这批
+ * （`db-schema-state.mjs`：那种变更必须由人决定）。于是 `pnpm dev` 起来时
+ * `task` 表一直缺 6 列，`queue-status.server.ts` 的查询 500，
+ * **queue-monitor 四条 + main-journey 两条稳定红**，报错话术全在说
+ * 「元素没出现」——看着像产品 bug，真因是这一台机器的库没同步。
+ *
+ * 这一卡不修库（那是人的决定），它只把「跑 8 分钟产出一片看不懂的红」
+ * 换成「开跑前 30 秒告诉你要跑什么」：
+ *   · 指纹一致 ⇒ 放行（正常机器，零成本，毫秒级）；
+ *   · 不一致但 dry-run 没有待执行语句 ⇒ 放行（指纹只是没登记，库本来就对）；
+ *   · 不一致且全是安全语句（建表 / 建索引 / 加列）⇒ 放行（启动链路会后台应用，
+ *     与不带这一卡时的行为一致）；
+ *   · 不一致且**含丢数据语句** ⇒ **阻断**：给出逐条语句与 `pnpm db:push` 出口。
+ *
+ * @param {{
+ *   probe: "ready" | "missing" | "unknown",
+ *   fingerprintMatch: boolean,
+ *   pending: string[],
+ *   autoApplyable: boolean,
+ * }} input
+ * @returns {{verdict: "proceed" | "abort", reason: string, risky?: string[]}}
+ */
+export function schemaPreflightDecision({
+  probe,
+  fingerprintMatch,
+  pending,
+  autoApplyable,
+}) {
+  if (probe !== "ready") {
+    return {
+      verdict: "proceed",
+      reason:
+        "库里还没有表或读不到（全新检出 / 空库）—— 建表那一批启动链路会自动应用",
+    };
+  }
+  if (fingerprintMatch) {
+    return { verdict: "proceed", reason: "库结构与当前 schema 一致" };
+  }
+  if (pending.length === 0) {
+    return {
+      verdict: "proceed",
+      reason: "指纹不一致但 dry-run 没有待执行语句（指纹只是没登记，库本来就对）",
+    };
+  }
+  if (autoApplyable) {
+    return {
+      verdict: "proceed",
+      reason: `待执行 ${pending.length} 条全是安全语句（建表 / 建索引 / 加列）—— 启动链路会后台应用`,
+    };
+  }
+  return {
+    verdict: "abort",
+    reason:
+      "库结构与当前 schema 不一致，且待执行语句里含「会丢数据」的变更 —— " +
+      "启动链路（含本轮 webServer 的 pnpm dev）按设计不自动执行这批",
+    risky: riskyStatements(pending),
+  };
+}
+
+/**
+ * 开跑前的 schema 预检（取证那一层：读指纹，不一致时 dry-run 一次 drizzle）。
+ *
+ * 与 `db-schema-state.mjs` 的 `ensureSchemaCurrent` **同源不同职**：那个是
+ * 启动链路的唯一出口（会真的去同步），这个只回答「该不该放行 e2e 这一趟」，
+ * 永远不写库。指纹一致时零成本（不启动 drizzle）；只有不一致才付一次
+ * dry-run（本机约 17 秒）—— 而那一刻本来就该被拦下。
+ *
+ * @param {string} [root]
+ * @returns {{verdict: "proceed" | "abort", reason: string, risky?: string[]}}
+ */
+export function checkSchemaBeforeRun(root = ROOT) {
+  const probe = probeSchemaSync(root);
+  if (probe !== "ready") {
+    return schemaPreflightDecision({
+      probe,
+      fingerprintMatch: false,
+      pending: [],
+      autoApplyable: false,
+    });
+  }
+  const want = schemaFingerprint(root);
+  /* 判据失效（读不到 schema 源 / 读不到库里的指纹）时**不阻断**：那一档
+   * 没有结论可用，而「拿不到结论」不等于「库是旧的」—— 与 `ensureSchemaCurrent`
+   * 报 `unknown` 的同一条口径。 */
+  if (want === null) {
+    return { verdict: "proceed", reason: "读不到 schema 源文件（判据失效，不阻断）" };
+  }
+  const have = readSchemaFingerprint(root);
+  if (have === null) {
+    return { verdict: "proceed", reason: "读不到库里的指纹（判据失效，不阻断）" };
+  }
+  if (have === want) {
+    return schemaPreflightDecision({
+      probe,
+      fingerprintMatch: true,
+      pending: [],
+      autoApplyable: false,
+    });
+  }
+  /* `force: false` 在无 TTY 下就是一次 dry-run：drizzle 先把语句列出来、
+   * 再要求确认，而确认弹不出来时它原地退出、库不动 —— 那份语句列表正是
+   * 「这批变更危不危险」的唯一依据（口径与 `ensureSchemaCurrent` 同一处）。 */
+  const probeRun = pushSchema(root, { force: false, forward: () => {} });
+  const pending = pendingStatements(probeRun.firstOutput);
+  return schemaPreflightDecision({
+    probe,
+    fingerprintMatch: false,
+    pending,
+    autoApplyable: canAutoApply(pending),
+  });
+}
+
+/**
  * 从 argv 里读出「这次是不是记一条豁免」—— 「给定开关 → 读理由 → 判合不合用」那三步
  * 收在 `scripts/daily-run.mjs` 的 `parseLedgerFlag`（四档共用一份，§12.12）。
  *
@@ -284,6 +413,24 @@ async function main(argv) {
     `[e2e-run] webServer：${mode.start ? "pnpm start（生产构建，首屏零编译）" : "pnpm dev（Turbopack，首帧现场编译）"}` +
       ` / 并发：${mode.workers ?? "Playwright 默认"}\n`,
   );
+  /* 开跑前的 schema 预检（#1834 收尾的现场）：库结构带「会丢数据」的未应用变更时，
+   * webServer 会带着一张缺列的 task 表跑完全程，红成一片且每条都指向错的地方。
+   * 这里把它变成开跑前一条可执行的出口。`--dry-run` / `--skip` 已在上面返回，
+   * 到不了这一步。 */
+  const schema = checkSchemaBeforeRun(ROOT);
+  if (schema.verdict === "abort") {
+    process.stderr.write(`[e2e-run] ✗ ${schema.reason}\n`);
+    for (const statement of schema.risky ?? []) {
+      process.stderr.write(`[e2e-run]   ${statement}\n`);
+    }
+    process.stderr.write(
+      "[e2e-run] 跑下去的下场：task 表缺列 → queue-status 500 → " +
+        "queue-monitor / main-journey 一批红，报错说的是「元素没出现」。\n" +
+        "[e2e-run] 这是要人做「丢不丢得起」决定的变更。先执行：pnpm db:push   然后重跑本档。\n",
+    );
+    return 2;
+  }
+  process.stdout.write(`[e2e-run] schema 预检：${schema.reason}\n`);
   const res = spawnSync(process.execPath, [entry, ...run.args], {
     cwd: ROOT,
     env,
