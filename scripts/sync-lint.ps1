@@ -17,10 +17,14 @@ Usage:
   - 拉取更新后若远端改了 pnpm 相关配置/依赖，node_modules 会与 lockfile 脱节，
     eslint 会抛 "Failed to resolve import xxx" 这类误导读到「以为改坏了代码」。
   - 因此这里先执行一次非交互 pnpm install（CI=true）让依赖对齐，再跑 lint。
-  - 注意：若 dev server（端口取值见 scripts/app-port.ps1：.env 显式 COMFYAPP_PORT
-    优先，缺省按检出路径推导）正在运行，pnpm install 可能因 better-sqlite3
-    等原生模块被进程锁定而 EPERM。此时先打印提示，仍尝试安装；失败则明确给出
-    「先关闭本项目窗口再重试」的指引（见 docs/standards/launch-and-build.md §3/§5）。
+  - 注意：本检出的应用服务（dev server）在跑时，`node_modules` 里的原生模块
+    better-sqlite3 等会被进程锁定，此时 `pnpm install` 会以 EPERM 失败并拖垮后续
+    每一条 pnpm 命令（AGENTS 硬规则 9）。所以这里**先问一句再装**：判据不在本文件，
+    转交 `node scripts\deps-install-guard.mjs`（与编排器补装路径同一份实现，
+    按「占端口的进程是不是本检出的应用服务」判归属，隔壁检出占端口不会误拦）。
+    判到在跑就**不再往下装**，给出「先关窗口再重新双击」的出口；
+    这里不再在本文件里探端口：平台侧的探测只收在 `launcher-core` 那一处，
+    而裸探端口本来也判不出归属（规范 §9 / §9.5）。
 #>
 param()
 
@@ -29,10 +33,6 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
-
-# 应用端口解析（.env 显式值 / 按检出路径推导），与启动链路各层同源（§1.1/§1.4）
-. (Join-Path $PSScriptRoot "app-port.ps1")
-$appPort = Get-AppPort $root
 
 $env:CI = "true"
 
@@ -54,22 +54,18 @@ if (-not $pnpm) {
 }
 Say-OK "node $(& node -v) / pnpm $(& pnpm -v)"
 
-# ── 1) 检测 dev server 占用（install 可能 EPERM 的前置提醒）────
-function Test-PortListening {
-  param([int]$Port)
-  try {
-    $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-    return ($null -ne $conn)
-  } catch { return $false }
+# ── 1) 本检出的应用服务在跑就先拦下来（AGENTS 硬规则 9）───────
+# 判据与编排器的补装路径同一份实现（scripts\deps-install-guard.mjs →
+# launcher-core/port-reap.mjs 的 runningAppInstances），本文件不再自己探端口。
+Say-Info "前置检查：本检出有没有正在运行的应用服务"
+Write-Host ">>> node scripts/deps-install-guard.mjs" -ForegroundColor Yellow
+& node (Join-Path $PSScriptRoot "deps-install-guard.mjs")
+if ($LASTEXITCODE -ne 0) {
+    Say-Err "已停止：这个状态下装依赖会 EPERM 连锁失败（见上方判据给出的原因）。"
+    Say-Info "关掉本检出的应用窗口（或停掉正在跑的 pnpm dev），再重新双击本入口即可。"
+    exit 1
 }
-# 应用端口与启动链路同源（§1.1/§1.4，$appPort 已在上方解析）；此处探测该端口
-# 及相邻两个端口是否被监听，用于在 pnpm install 前提示可能因原生模块被锁而 EPERM。
-$devRunning = (Test-PortListening $appPort) -or (Test-PortListening ($appPort + 1)) -or (Test-PortListening ($appPort + 2))
-if ($devRunning) {
-    Say-Warn "检测到本项目 dev server 可能仍在运行（$appPort/$($appPort+1)/$($appPort+2) 端口被监听）。"
-    Say-Warn "pnpm install 可能因 better-sqlite3 等原生模块被进程锁定而失败（EPERM）。"
-    Say-Warn "若下方安装报错，请先关闭所有本项目窗口，再重新双击本脚本。"
-}
+Say-OK "没有正在运行的应用服务，可以安全装依赖"
 
 # ── 2) pnpm install（非交互，对齐 lockfile）────────────────
 Say-Info "步骤 1/2：pnpm install"
