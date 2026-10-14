@@ -1,4 +1,0 @@
-## Fixed
-
-- **`RadioGroupItem` 把调用方传的选项文字整个吞掉，radio 渲染成没有可访问名的空壳**：`AppearanceSection` 的「圆角」「标题字阶」两组档位在真浏览器里只剩四个空壳 radio（主题卡的「深色/浅色」连带 hint 一起丢），`getByRole("radio", { name: /中 · 16px/ })` 一条也匹配不到 —— 而 `role` / `aria-checked` / `tabindex` 全部照旧正确，所以既有的 `AppearanceSection.test.tsx`（只判这三样）一路全绿，界面却是坏的。根因在基元本身：`RadioGroupItem` 用 `{...props}` 展开（含 `children`），而 JSX 里又显式写了 `<RadioPrimitive.Indicator>` 作为同一位置的 children —— **JSX children 会整个盖掉 `props.children`**，调用方写的内容永远到不了 DOM。修法是显式渲染 `children`（indicator 与调用方内容共存，不是二选一）。判据补在 `src/components/ui/radio-group.test.tsx`：真判「文字在不在、可访问名取不取得到」——只判 role 的形式在这里天然失效（它当初就是绿的）。
-- **这条缺陷的暴露路径记一笔**：它在单测里不可见、在类型检查里不可见、在 lint 里也不可见，是**按 PR #1603 收尾时留的「e2e 那两条可选项」真跑全量 e2e 才照出来的**；顺带纠正一条排查口径 —— 本容器 `CI=true`，`playwright.config.ts` 因此走 `pnpm start`（生产构建），改完源码不重新 `pnpm build` 就会在**陈旧产物**上判红，看上去像修复没生效。
