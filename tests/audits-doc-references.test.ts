@@ -48,7 +48,17 @@
  *
  * 它守的是「台账这类**过程文档**的引用还指得着东西」这条全库级不变量，与任何一次
  * 具体改动无关；`docs/audits/**` 也不在 `doc:check` 的面里，不跑它就等于没有。
- * 成本是读几份文本 + 一次 git 调用（零网络），照 §13.5.4 该进固定清单。
+ * 成本是读几份文本 + **一趟** git 调用（零网络），照 §13.5.4 该进固定清单。
+ *
+ * ## 这一格为什么便宜得起（实测，别退回去）
+ *
+ * `retiredBaselineNames()` 的 git 调用**带 `-- scripts/` pathspec**，结果 memo 在模块级，
+ * 整份文件最多走一趟。本机实测：不带 pathspec 那趟 `git log --all --diff-filter=D --name-only`
+ * 要 13.3s 并吐 608 行；带上之后 3.3s / 64 行，而**过滤出来的文件名集合逐字相等**（20 个）——
+ * 下一步本来就把非 `scripts/.…baseline….json` 的行全丢掉，让 git 遍历整棵树只是白付 I/O。
+ * 这条是**降成本**，不是抬超时（§13.6.4 反对的正是后者）：起因是本检出上那两条 git 用例
+ * 在争用下各自涨到 20s 以上，贴着 30s 的全局 `testTimeout` —— 判据在固定清单里，
+ * 贴边意味着任何人都可能提交不了，而红的是时间不是内容。
  */
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -79,12 +89,26 @@ function auditFiles(): string[] {
  * 不是「全绿」**，下面有一条专门的用例把这个形态判红（一个永远返回空集的扫描器
  * 会让「台账干净」恒真）。
  */
+/** 模块级 memo：整份文件最多走一趟 git（每条用例都重算是白付 I/O）。 */
+let retiredCache: string[] | null = null;
+
 function retiredBaselineNames(): string[] {
+  if (retiredCache) return retiredCache;
   let out = "";
   try {
     out = execFileSync(
       "git",
-      ["log", "--all", "--diff-filter=D", "--name-only", "--pretty=format:"],
+      [
+        "log",
+        "--all",
+        "--diff-filter=D",
+        "--name-only",
+        "--pretty=format:",
+        // 只要 scripts/ 那一层：下面按名字筛的就是 `scripts/.…baseline….json`。
+        // 实测 13.3s → 3.3s，而结果集逐字相等（见文件头那一节）。
+        "--",
+        "scripts/",
+      ],
       { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
     );
   } catch {
@@ -97,7 +121,8 @@ function retiredBaselineNames(): string[] {
     if (!/^scripts\/\.[^/]*baseline[^/]*\.json$/.test(rel)) continue;
     names.add(path.basename(rel));
   }
-  return [...names].sort();
+  retiredCache = [...names].sort();
+  return retiredCache;
 }
 
 /** 当年那份台账写下的「这是历史快照 / 已经没有了」的显式口径。 */
@@ -161,20 +186,29 @@ function findRetiredBaselineClaims(
 }
 
 describe("docs/audits/** 的台账引用不许漂到已删的棘轮基线上", () => {
-  it("台账里点名一份已删基线时，必须当场写明它是历史快照", () => {
-    const retired = new Set(retiredBaselineNames());
-    const files = auditFiles().map((rel) => ({
-      rel,
-      text: readFileSync(path.join(ROOT, rel), "utf8"),
-    }));
-    const bad = findRetiredBaselineClaims(files, retired);
-    expect(
-      bad.map(
-        (b) =>
-          `${b.file}:${b.line} 点名已删基线 ${b.baseline}（同一行没有历史口径）`,
-      ),
-    ).toEqual([]);
-  });
+  it(
+    "台账里点名一份已删基线时，必须当场写明它是历史快照",
+    /* 预算带实测出处（§13.6.4 不许静默抬预算）：本条承担整趟历史遍历 —— 加了
+     * `-- scripts/` pathspec 之后那趟 git 实测 3.3s（不带是 13.3s，结果集逐字相等），
+     * 而这条用例在本机争用下实测 20.2s。全局 `testTimeout` 是 30s，对一份**挂在固定清单**
+     * 里的判据太薄：贴边时的红是时间红、不是内容红，而它拦住的是所有人的提交。
+     * 下一个改这个数的人请先复测（`--no-file-parallelism` 单跑本文件），别顺手删。 */
+    { timeout: 90_000 },
+    () => {
+      const retired = new Set(retiredBaselineNames());
+      const files = auditFiles().map((rel) => ({
+        rel,
+        text: readFileSync(path.join(ROOT, rel), "utf8"),
+      }));
+      const bad = findRetiredBaselineClaims(files, retired);
+      expect(
+        bad.map(
+          (b) =>
+            `${b.file}:${b.line} 点名已删基线 ${b.baseline}（同一行没有历史口径）`,
+        ),
+      ).toEqual([]);
+    },
+  );
 
   /**
    * 判据面**非空**：这条守的是本文件最坏的失效形态 —— `git` 不可用（浅检出 / 沙箱）时
