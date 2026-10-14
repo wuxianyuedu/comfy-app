@@ -457,6 +457,7 @@ export const BUILT_RUNTIME_SCRIPTS = [
 /** 产物根下不该随分发包出去的开发文件（相对产物根）。 */
 export const DEV_ARTIFACTS = [
   "AGENTS.md",
+  "CHANGELOG-archive.md",
   "CHANGELOG.md",
   "README.md",
   "components.json",
