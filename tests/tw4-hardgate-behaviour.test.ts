@@ -9,7 +9,7 @@
  *
  *   · 干净输入 → 判定档退 0；
  *   · 塞一条真候选 → 判定档退 1，且点出是哪个文件；
- *   · 注释里的示例（`` `!bg-subtle` `` / `` `h-[22px]` ``）**不算**候选 —— 这是
+ *   · 注释里的示例（`!bg-subtle` 与下面夹具那条 px 任意值）**不算**候选 —— 这是
  *     `tw4-scan-core.mjs` 剥注释那一层的回归；
  *   · `--update` 这个出口已经不存在：传了既不落盘 JSON、也不放宽判定（断头用例）。
  *
@@ -32,6 +32,13 @@ import { symlinkDir } from "./helpers/symlink-dir";
 
 /** 起引擎的实测单次预算（口径同 §11.13：真进程慢到贴边就登记实测值）。 */
 const ENGINE_TIMEOUT = 120_000;
+
+/**
+ * 样本类名运行期拼：`tests/**` 也在 Tailwind 的扫描面里，本文件写全一枚候选名，
+ * 产物里就多一条谁都不用的规则（口径见 `tests/docs-candidate-hygiene.test.ts`）。
+ * 夹具真正要的是**写进临时仓那份文件里**的完整形状 —— 临时仓不在扫描面内。
+ */
+const PX_LITERAL_CLASS = "h-" + "[22px]";
 
 /**
  * 「判定档退 1 且**点名是哪个文件**」这条断言的读法。
@@ -147,7 +154,7 @@ describe("tw4-spacing-canonical 硬闸", () => {
   spacingTest(
     "一条真候选即阻断（px 任意值等价于 spacing 倍数）",
     ({ repo }) => {
-      repo.write("src/Dirty.tsx", `export const cls = "h-[22px]";\n`);
+      repo.write("src/Dirty.tsx", `export const cls = "${PX_LITERAL_CLASS}";\n`);
       const r = repo.run(["--check"]);
       expect(r.code).toBe(1);
       expect(namesFile(r.output, "src/Dirty.tsx"), r.output).toBe(true);
@@ -160,12 +167,14 @@ describe("tw4-spacing-canonical 硬闸", () => {
     ({ repo }) => {
       repo.write(
         "src/Comment.tsx",
-        `// 此前写成 \`h-[22px]\`\nexport const cls = "h-5.5";\n`,
+        `// 此前写成 \`${PX_LITERAL_CLASS}\`\nexport const cls = "h-5.5";\n`,
       );
       const check = repo.run(["--check"]);
       expect(check.code, check.output).toBe(0);
       repo.run(["--write"]);
-      expect(repo.read("src/Comment.tsx")).toContain("此前写成 `h-[22px]`");
+      expect(repo.read("src/Comment.tsx")).toContain(
+        `此前写成 \`${PX_LITERAL_CLASS}\``,
+      );
     },
     ENGINE_TIMEOUT,
   );
@@ -173,7 +182,7 @@ describe("tw4-spacing-canonical 硬闸", () => {
   spacingTest(
     "`--update` 这个出口**已经不存在**（断头用例）",
     ({ repo }) => {
-      repo.write("src/Dirty.tsx", `export const cls = "h-[22px]";\n`);
+      repo.write("src/Dirty.tsx", `export const cls = "${PX_LITERAL_CLASS}";\n`);
       repo.run(["--update"]);
       expect(baselinesIn(repo.dir)).toEqual([]);
       const check = repo.run(["--check"]);
