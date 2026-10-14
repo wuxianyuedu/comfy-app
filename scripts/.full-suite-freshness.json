@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-14T04:40:20.847Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-14T05:42:10.927Z",
+    "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "本批改动面 = docs/DESIGN.md + tests/design-md-contract-sync.test.ts + 一条碎片，零运行时。被改的那份判据单跑 21 passed，新加的词汇表判据另做三条变异复演（删一条在册值→红在未登记；加一条不在用的在册值→红在过期；把文档那行的值改成汉字→红在未记录）。全量档今天已经跑过三次（见第 9 刀那条账）：9090/9121，三次都只差 use-settings-page.test.ts 的同一对负载型用例（并发下 30s 预算与 fake timers teardown 相撞，串行复跑 45 passed）；本批不碰那份文件也不碰它的 import，不为它抬超时。"
+    "skippedReason": "本次提交是把上游 master 合进 PR 分支的解冲突提交，冲突面只落在 docs/api 生成物与两份新鲜度账上，本次不新增 src/ tests/ 改动；全量口径以合并进去的上游那条同日账为准，本工作区跑不了 25 分钟墙钟的全量档。"
   }
 }

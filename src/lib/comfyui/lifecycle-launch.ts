@@ -37,6 +37,7 @@ import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import {
   buildEarlyExitDetail,
   buildSpawnArgs,
+  diagnoseComfyStartupFailure,
   isKeepAliveDead,
   isPortConflictLine,
   portConflictExitDetail,
@@ -286,6 +287,22 @@ async function launchKeepAliveMode(
     SERVICES_LOG_DIR,
     `comfyui-keepalive-${kaStamp}.err.log`,
   );
+  /* 判死时从本次的重定向日志全文里识别根因：keepAlive 没有直连 stdio，进程
+   * 秒退的证据只在这两个按次命名的文件里 —— 此前判死文案是固定的「进程未
+   * 出现」，而真实成因（解释器没有 pip/uv、缺依赖）就摆在同一份日志里。 */
+  const diagnoseFromRedirectLogs = (): string | null => {
+    const lines: string[] = [];
+    for (const file of [kaErrLog, kaOutLog]) {
+      try {
+        if (!fs.existsSync(file)) continue;
+        lines.push(...fs.readFileSync(file, "utf8").split(/\r?\n/));
+      } catch {
+        /* 读不到就当没有这一份证据，不影响判死本身 */
+      }
+    }
+    return diagnoseComfyStartupFailure(lines);
+  };
+
   /* 按次命名的重定向文件只建不删会一直堆积，每次新拉起顺手保留最近若干次
    * （在建本次的文件之前清，删到的必定都是历史的）。 */
   pruneKeepAliveLogs();
@@ -423,9 +440,13 @@ async function launchKeepAliveMode(
       if (!isKeepAliveDead(missCount)) return null;
       const common =
         "详见 log/services/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
-      return everSeenProcess
-        ? `ComfyUI 启动失败：保活进程已退出。${common}`
-        : `ComfyUI 启动失败：保活拉起后进程未出现。${common}`;
+      const head = everSeenProcess
+        ? "ComfyUI 启动失败：保活进程已退出。"
+        : "ComfyUI 启动失败：保活拉起后进程未出现。";
+      /* 识别出的根因（pip/uv 缺失、缺依赖）拼进文案：让失败直接说「该动哪个
+       * 环境」，而不是只留一句「进程未出现」让人翻日志。识别不出就回落固定文案。 */
+      const diag = diagnoseFromRedirectLogs();
+      return diag ? `${head}${diag}。${common}` : `${head}${common}`;
     },
   });
   if (!result.ok) {
