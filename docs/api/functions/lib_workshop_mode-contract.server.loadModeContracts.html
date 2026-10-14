@@ -16,13 +16,10 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="loadmodecontracts"><span class="tsd-kind-call-signature">loadModeContracts</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">root</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_workshop_model-mode-contract.ModeContract.html" class="tsd-signature-type tsd-kind-interface">ModeContract</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span><a href="#loadmodecontracts" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>读取模式契约注册表（只含改过的模式；坏数据 / 文件缺失按空处理）。</p>
-<p><code>root</code> 默认 <code>process.cwd()</code>（Next server 与桌包侧都锚在应用根），用例传临时
-目录即可真读写而不碰仓库。</p>
-<p>老落点兜底：契约曾存在 <code>data/workshop-mode-contracts.json</code>（本机、不入库），
-在那些机器上升级后<strong>不会</strong>静默丢掉既有配置 —— 新文件不在时才去读它，且只读不搬
-（读路径不产生副作用；下次保存自然落到新位置）。新文件一旦存在就<strong>只认</strong>它，
-否则「老文件里更旧的副本」会在删改之后把内容复活。</p>
+<div class="tsd-comment tsd-typography"><p>生效的契约注册表：成品配置 + 本机覆盖（覆盖在而不空才整份压过）。</p>
+<p>老检出兜底：<code>config/</code> 那一版（ISSUE #1901）在那些机器上留下过一份手改的配置，
+升到本版后<strong>不该静默丢掉</strong>。所以覆盖不在时按「新落点 → 老落点」依次找一次，
+两份都只读不搬（读路径不产生副作用，迁不迁由人决定）。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
@@ -30,7 +27,7 @@
 <li><span><span class="tsd-kind-parameter">root</span>: <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol"> = ...</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_workshop_model-mode-contract.ModeContract.html" class="tsd-signature-type tsd-kind-interface">ModeContract</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/workshop/mode-contract.server.ts:39</li></ul></aside></div></li></ul></section></div>
+<li>Defined in src/lib/workshop/mode-contract.server.ts:47</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
