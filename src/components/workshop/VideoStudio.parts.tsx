@@ -7,6 +7,7 @@ import { Alert } from "~/components/ui/alert";
 import { FieldLabel } from "~/components/ui/field";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { SelectChip } from "~/components/ui/select-chip";
 import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
@@ -58,31 +59,25 @@ export function ChannelSwitch({
     <>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-xs">生成通道</span>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            size="xs"
+        {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。
+            此前与镜头台是同两份逐字相同的 `variant="outline"` + 选中三元，
+            缺的同样是「已选中时的悬停值」那一半（§12.12 孪生对：修法是
+            抽共享，不是两边一起改）。 */}
+        <div role="radiogroup" aria-label="生成通道" className="flex gap-2">
+          <SelectChip
+            shape="segment"
+            selected={channel === "local"}
             onClick={() => onChannelChange("local")}
-            className={`h-auto rounded-lg px-3 py-1.5 ${
-              channel === "local"
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted-foreground hover:bg-subtle"
-            }`}
           >
             本地 · ComfyUI 工作流
-          </Button>
-          <Button
-            variant="outline"
-            size="xs"
+          </SelectChip>
+          <SelectChip
+            shape="segment"
+            selected={channel === "api"}
             onClick={() => onChannelChange("api")}
-            className={`h-auto rounded-lg px-3 py-1.5 ${
-              channel === "api"
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted-foreground hover:bg-subtle"
-            }`}
           >
             API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
-          </Button>
+          </SelectChip>
         </div>
         <Button
           variant="ghost"

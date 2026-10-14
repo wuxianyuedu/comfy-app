@@ -89,7 +89,7 @@
 
 **机器判据（ISSUE #572 第 1 项落地）**：`scripts/lib-node-only-scan.mjs`
 （跨平台入口 `node scripts/lib-node-only-scan.mjs`，契约测试
-`tests/lib-node-only-declarations.test.ts`，接入 pre-commit 与 CI）。它判三件事：
+`tests/lib-node-only-declarations.test.ts`，挂在 `.githooks/pre-commit`；CI 已随 ISSUE #623 删除）。它判三件事：
 
 | 判据             | 形态                                                   | 为什么必须走依赖图                                               |
 | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
