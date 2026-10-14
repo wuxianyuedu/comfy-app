@@ -10,6 +10,10 @@
  *      空态文案（不是一片空白）。
  *
  * 不锁样式类：栏宽度、颜色改了不该让用例红。
+ *
+ * ⚠️ 折叠那一条（同级反馈的第二刀）的判据在 `ModeContractModeNav.test.tsx`：
+ * 折叠是导航自己的交互状态，这一层只摆布局、不感知它 —— 在这里再判一遍等于
+ * 把同一条账记两处。
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
