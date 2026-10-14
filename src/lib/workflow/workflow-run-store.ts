@@ -22,7 +22,7 @@ import {
   writeStorageJson,
 } from "../browser-storage";
 import type { TaskLogEntry } from "../workshop/generation-client";
-import { tailWindow } from "~/lib/page-window";
+import { tailWindow, tailWindowAppend } from "~/lib/page-window";
 
 /** 这次运行**从哪个入口发起**。
  *
@@ -64,6 +64,29 @@ export interface WorkflowRunMeta {
 const MAX_ENTRIES = 32;
 const MAX_LOGS = 300;
 const STORAGE_KEY = "wflib:runs:v1";
+
+/**
+ * 判重只看**尾部**这么多条。
+ *
+ * 重复帧来自「SSE 回放 + 订阅双投递」，只会紧挨着原帧到达（同一批回放里），
+ * 所以窗口够覆盖「同一批重投」就够 —— 扫满整个 `MAX_LOGS` 是把 O(上限) 的
+ * 开销摊在**每一行**上（`stepLogCache` 的 M9 就是同一个形状，那边取的也是 64）。
+ */
+const DEDUPE_WINDOW = 64;
+
+/**
+ * 落盘（`JSON.stringify` 整个登记表 + 同步 `localStorage.setItem`）的合并窗口。
+ *
+ * 一次运行会一行一行推日志（SSE 每来一行一次），而每次 `notify()` 都落盘 =
+ * **每行**一次全表序列化 + 一次同步写（32 条登记 × 最多 300 条日志，实测
+ * 4.2ms / 683KB 一次）。列表本身要立刻更新（React 等着渲染），能合并的只有
+ * **落盘**这一半：窗口内的多次变更只写一次，写的是窗口结束时的最新全表。
+ *
+ * 250ms 是「一次写最多落后这么多」的预算：这份存储的用途是「窗口关掉再打开
+ * 仍能恢复生成中视角」，落后 250ms 无感；而窗口关掉前会 flush（见下），
+ * 终态不会因合并而丢。
+ */
+const PERSIST_COALESCE_MS = 250;
 
 const runs = new Map<string, WorkflowRunMeta>();
 const listeners = new Set<() => void>();
@@ -107,16 +130,52 @@ function hydrate(): void {
 }
 hydrate();
 
+/* ── 落盘合并（见 PERSIST_COALESCE_MS）─────────────────────────────────
+ *
+ * `pendingPersist` 是计时器句柄；非空即表示「已排一次写、还没落」。 */
+let pendingPersist: ReturnType<typeof setTimeout> | null = null;
+
+/** 合并窗口结束后真正落盘，并清掉待办标记。
+ *
+ * **只写「有排过的」**：没有待办时它是空操作 —— 否则 `pagehide` 上一次
+ * 无谓的 `JSON.stringify`，以及更糟的一种：`clearAllWorkflowRuns` 刚撤掉
+ * 待办、紧接着一次 flush 又把**清空之后**的空表写回存储（把「删除」变成
+ * 「写了个空数组」，虽然后果一样，但语义上那次写不该发生）。 */
+function flushPersist(): void {
+  if (pendingPersist === null) return;
+  clearTimeout(pendingPersist);
+  pendingPersist = null;
+  persist();
+}
+
+/** 排一次落盘；窗口内已有待办时不重复排（合并成一次写）。 */
+function schedulePersist(): void {
+  if (pendingPersist !== null) return;
+  pendingPersist = setTimeout(() => {
+    pendingPersist = null;
+    persist();
+  }, PERSIST_COALESCE_MS);
+}
+
 function notify() {
   version += 1;
-  persist();
+  schedulePersist();
   for (const l of listeners) l();
+}
+
+/* 窗口关掉前把待办的写落下去 —— 合并窗口是 250ms，恰好在它里面关窗口
+ * 会丢掉尾部（可能是刚写下的终态）。`pagehide` 比 `beforeunload` 覆盖面广
+ *（后者在部分浏览器/移动端不触发），且这里只需要「尽力写一次」的语义。 */
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPersist);
 }
 
 function touch(meta: WorkflowRunMeta) {
   runs.set(meta.taskId, meta);
   if (runs.size > MAX_ENTRIES) {
-    /* 淘汰最旧的一条（先落盘再删，防丢终态）。 */
+    /* 淘汰最旧的一条 —— 只淘汰**别人**（`oldestKey !== meta.taskId`），
+     * 所以刚落下的这一条（可能是终态）一定还在表里，会被合并窗口结束时
+     * 那次落盘写出去，不会因合并而丢。 */
     let oldestKey: string | null = null;
     let oldestAt = Infinity;
     for (const [key, meta] of runs) {
@@ -231,11 +290,18 @@ export function appendWorkflowRunLog(
   const prev = runs.get(taskId);
   if (!prev) return null;
   const logs = prev.logs ?? [];
-  // 与 GlobalStepLogPanel 的 SSE 去重同款：(t, msg) 重复帧丢弃。
-  if (logs.some((log) => log.t === entry.t && log.msg === entry.msg)) {
-    return logs;
+  // 与 GlobalStepLogPanel / stepLogCache 的 SSE 去重同款：(t, msg) 重复帧丢弃。
+  // 只扫尾部 DEDUPE_WINDOW 条 —— 重复帧只会紧挨着原帧到达，扫满整个窗口是
+  // 把 O(上限) 摊在每一行上。
+  for (
+    let index = Math.max(0, logs.length - DEDUPE_WINDOW);
+    index < logs.length;
+    index += 1
+  ) {
+    const known = logs[index];
+    if (known?.t === entry.t && known?.msg === entry.msg) return logs;
   }
-  const next = tailWindow([...logs, entry], MAX_LOGS);
+  const next = tailWindowAppend(logs, entry, MAX_LOGS);
   touch({ ...prev, logs: next });
   return next;
 }
@@ -277,9 +343,25 @@ export function getWorkflowRunStoreSnapshot(): WorkflowRunStoreSnapshot {
 
 export { subscribe as subscribeWorkflowRunStore };
 
+/**
+ * 立刻把待办的落盘写下去（不等合并窗口）。
+ *
+ * 两处用它：窗口关掉前（`pagehide`，见上）与**测试** —— 用例要断言「写进了
+ * localStorage」就不能依赖真实计时器走满 250ms（把窗口塞进用例会让「改这行
+ * 就变红」的判据变成「改那句 sleep 就变红」）。
+ */
+export function flushWorkflowRunPersist(): void {
+  flushPersist();
+}
+
 /** 测试辅助：清空全部登记（含 localStorage）。 */
 export function clearAllWorkflowRuns(): void {
   runs.clear();
+  /* 先撤掉待办的写：它写的是**清空之前**那份全表，落地会把刚删掉的登记复活。 */
+  if (pendingPersist !== null) {
+    clearTimeout(pendingPersist);
+    pendingPersist = null;
+  }
   removeStorageItem(STORAGE_KEY);
   version += 1;
   for (const l of listeners) l();
