@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-13T07:55:04.472Z",
+    "verifiedAt": "2026-10-13T16:04:17.086Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "今天只动 e2e 档位常数（playwright.config.ts / e2e-run.mjs / tests 的钉值注释），未动 src/；全量档墙钟 10 分钟量级，当日核时让给 ISSUE #1834 的三遍 e2e 读数，full 档顺延自证"
+    "skippedReason": "纯格式化批次：差异只有 prettier 自己写出的类名次序（11 个文件 15 行，零功能改动），且这 15 行在 src/tests 两侧都零断言覆盖（逐串 grep 过）；同批的实质改动在紧随的第 9 刀那个 PR 里，那一档由它自己跑一次全量绿来记"
   }
 }

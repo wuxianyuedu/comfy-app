@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-13T07:55:03.590Z",
+    "verifiedAt": "2026-10-13T16:03:48.714Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "win32 全量 e2e 今日已跑三遍（读数与逐条归因在 ISSUE #1834 评论）：失败集是与本改动无关的稳定红（出图链路 / queue-monitor / runtime-budget 性能预算超）与已知红，绿账待这些红清掉后补跑记录"
+    "skippedReason": "纯格式化批次（text-4xs 的类名次序，11 个文件 15 行）：e2e 侧对这批字符串零断言（grep -rn text-4xs e2e = 0 命中），且本机 e2e 档今天的形态仍是 #1834 那格冷编译 60s 首帧、跑不出绿；由 prettier 硬闸与 check-reformat-only 的整份重排比对判过"
   }
 }
