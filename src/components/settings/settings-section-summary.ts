@@ -60,7 +60,7 @@ export const SETTINGS_SCROLL_ORDER: Section[] = TREE_GROUPS.flatMap(
 const SECTION_SUMMARY: Record<Section, string> = {
   llmLocal: "本机 Ollama 的连接、模型与按任务的温度",
   llmRemote: "OpenAI 兼容接口的模型清单，按用途分组管理",
-  comfyui: "出图后端的路径、端口与实例目录",
+  comfyui: "出图后端装在哪、端口与实例目录（启动与日志在侧栏「ComfyUI」页）",
   database: "本地 SQLite 的可视化浏览与运行 SQL",
   backup: "库的快照与恢复，换文件发生在下次启动",
   appearance: "主题、圆角与标题字阶",

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildEarlyExitDetail,
+  diagnoseComfyStartupFailure,
   deriveComfyUiStatus,
   isWithinWindow,
   type ComfyStatusFacts,
@@ -222,6 +223,59 @@ describe("buildEarlyExitDetail — 进程秒退文案", () => {
     expect(detail).toContain("启动后立即退出");
     expect(detail).toContain("log/services/comfyui-runtime.log");
     expect(extractMissingModule(["some unrelated crash"])).toBeNull();
+  });
+});
+
+/* ── 启动失败根因诊断（keepAlive 判死文案补「该动哪个环境」）─────────────
+ * 现场（用户侧）：ComfyUI 启动失败只显示「保活拉起后进程未出现」，而真实成因
+ * ——ComfyUI-Manager 启动自检发现解释器既没有 pip 也没有 uv、或缺依赖——
+ * 就摆在重定向日志里。这里把「从输出识别根因」逐条钉住。 */
+describe("diagnoseComfyStartupFailure — 从启动输出识别根因", () => {
+  it("认出 ComfyUI-Manager 的 pip/uv 缺失报错（实测现场的原文）", () => {
+    const diag = diagnoseComfyStartupFailure([
+      "[WARNING] [ComfyUI-Manager] python -m pip not available. Falling back to uv.",
+      "[ERROR] [ComfyUI-Manager] Neither python -m pip nor uv are available.",
+    ]);
+    expect(diag).not.toBeNull();
+    expect(diag).toContain("pip/uv");
+    expect(diag).toContain("ensurepip");
+  });
+
+  it("单独的 WARNING 回退行不误报（只有 Neither…available 才是终局）", () => {
+    expect(
+      diagnoseComfyStartupFailure([
+        "[WARNING] [ComfyUI-Manager] python -m pip not available. Falling back to uv.",
+      ]),
+    ).toBeNull();
+  });
+
+  it("认出缺依赖（No module named 'X'）并指向 comfyuiPath", () => {
+    const diag = diagnoseComfyStartupFailure([
+      "Traceback (most recent call last):",
+      "ModuleNotFoundError: No module named 'torch'",
+    ]);
+    expect(diag).not.toBeNull();
+    expect(diag).toContain("No module named 'torch'");
+    expect(diag).toContain("comfyuiPath");
+  });
+
+  it("pip/uv 缺失优先于缺依赖（两者都出现时先修包管理工具）", () => {
+    const diag = diagnoseComfyStartupFailure([
+      "ModuleNotFoundError: No module named 'torch'",
+      "[ERROR] [ComfyUI-Manager] Neither python -m pip nor uv are available.",
+    ]);
+    expect(diag).toContain("pip/uv");
+    expect(diag).not.toContain("No module named");
+  });
+
+  it("普通启动输出识别不出 → 返回 null（caller 回落固定文案）", () => {
+    expect(
+      diagnoseComfyStartupFailure([
+        "Starting server",
+        "To see the GUI go to: http://127.0.0.1:8188",
+      ]),
+    ).toBeNull();
+    expect(diagnoseComfyStartupFailure([])).toBeNull();
   });
 });
 

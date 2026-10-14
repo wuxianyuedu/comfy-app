@@ -309,7 +309,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 「内嵌字体这条链有没有静默降级」：LFS 过滤器、`.githooks/pre-push`、postinstall
   // 里那步 `git lfs install --local --manual`、`@font-face` 的 family 与
   // `--font-title` 首选是否同名 —— 四环每一环失效都**不报错**，最坏的一种是
-  // `*.ttf` 按原字节进历史（23 MB 摘不干净，只能重写共享远端）。它读的是配置文件
+  // 字体按原字节进历史（8.6 MB 摘不干净，只能重写共享远端）。它读的是配置文件
   // 与 index 形状，import 图一概追不到，所以与上面两条同因、必须无条件响。
   "tests/embedded-title-font.test.ts",
   // 「判据有没有执行者」这条纪律自己的执行者（ISSUE #1451 要求 2 / 规范 §13.5.12）。
@@ -522,4 +522,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // NaN）与该放的（斜坡段里的 null / 形状常量）每一条都得有人钉住，
   // 而它们是「下一次有人调这个口径」时才走得进的路径，所以必须进固定清单。
   "tests/e2e-runtime-budget.test.ts",
+  // 「台账这类**过程文档**的引用还指得着东西」（ISSUE #1811 收尾的最后一条遗留项）。
+  // `docs/audits/**` 不在 `doc:check` 的遍历面上（`doc-facts.cjs` 的 `SCOPED_DOC_DIRS`
+  // 只含 `docs/standards` 与 `docs/guides`），于是台账点名一份已删的棘轮基线**不会让
+  // 任何东西变红** —— 这正是那份台账自己写下、却没能变成红的那句话。它读的是
+  // `docs/audits/*.md` 的文本 + 一次 `git log`，import 图一概追不到（改台账不会把
+  // 它拉进受影响清单），跟改动走等于专挑它不在的时机跑，所以与本次暂存改动无关也照跑。
+  "tests/audits-doc-references.test.ts",
 ];

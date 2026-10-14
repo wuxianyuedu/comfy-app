@@ -30,13 +30,14 @@ import { Disclosure } from "~/components/ui/disclosure";
 import {
   STATUS_ROW_CLASS,
   STATUS_TEXT_CLASS,
-} from "../settings-status-row-config";
+  StatusButton,
+} from "~/components/ui/service-status-row";
 
 import { SettingsCard } from "~/components/ui/settings-card";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Toggle } from "~/components/ui/toggle";
-import { StatusButton, Field } from "./SettingsPrimitives";
-import { RuntimeLogBox } from "./RuntimeLogBox";
+import { Field } from "./SettingsPrimitives";
+import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 
 export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   /* 本地 Ollama 下任务温度是主配置区，默认展开。 */

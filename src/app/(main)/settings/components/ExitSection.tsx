@@ -9,7 +9,7 @@
  */
 
 import { SettingsCard } from "~/components/ui/settings-card";
-import { StatusButton } from "./SettingsPrimitives";
+import { StatusButton } from "~/components/ui/service-status-row";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";

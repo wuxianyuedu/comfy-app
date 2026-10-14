@@ -123,7 +123,7 @@ try {
 //
 // 为什么必须在这里：`filter.lfs.clean/smudge/diff` 一般由 `git lfs install` 写进
 // **全局**配置，而新克隆、新机器的全局配置没人保证。少了它的后果不是报错，是**两种
-// 静默降级**：提交侧找不到过滤器 ⇒ `*.ttf` 按**原字节**进历史（23 MB 再也摘不干净，
+// 静默降级**：提交侧找不到过滤器 ⇒ 字体按**原字节**进历史（8.6 MB 再也摘不干净，
 // 只能重写共享远端的历史）；检出侧 ⇒ 拿回来的是一段 `version https://git-lfs…` 文本。
 // 两种都比红难查，所以这一步与上面几步同构：**失败只提示，绝不阻断 `pnpm install`**。
 //
@@ -137,7 +137,7 @@ if (git(["rev-parse", "--is-inside-work-tree"]).ok) {
     lfs.ok
       ? "git-lfs 过滤器已按本检出注册（字体等大文件走 LFS）"
       : "警告：`git lfs install --local --manual` 没跑成（本机没装 git-lfs？）—— " +
-          "此时 .ttf 会按原字节进 git 历史，推送前请先装 git-lfs",
+          "此时字体（*.woff2 / *.ttf）会按原字节进 git 历史，推送前请先装 git-lfs",
   );
 }
 

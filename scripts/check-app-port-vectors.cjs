@@ -10,7 +10,9 @@
  *   3) Rust / PowerShell 侧无法在此环境执行（需 cargo / pwsh），改为断言其
  *      实现与测试**确实引用同一份向量文件** —— 某侧被改回「自己写死值」时
  *      会被拦下，而不是等到 Windows 真机上才发现漂移。
- * 任一侧失败以退出码 1 阻断提交。
+ * 任一侧**给出回答而不一致** → 退出码 1 阻断提交。某一侧**没给出回答**（超时两遍 /
+ * 探测不到解释器）→ 记「未校验」、点名、放行：拿不到测量不等于测量结果是红的（§13.6.4.1），
+ * 而它也不是绿 —— 见下面 `unverified` 那一格与 `decidePythonVerdict`。
  *
  * Node 侧的逐条断言另见 tests/app-port-cross-language.test.ts（vitest 侧同源）；
  * 本脚本是「不装依赖也能跑」的门禁版本（pre-commit 里 tsc/lint 之前更快失败）。
@@ -21,7 +23,45 @@ const { execFileSync } = require("node:child_process");
 
 const ROOT = process.cwd();
 const REL_VECTORS = "tests/fixtures/app-port-vectors.json";
+/** 命令可用性探测的预算（到点 = 「不知道有没有这个命令」，不是「没有」）。 */
+const PROBE_TIMEOUT_MS = 10_000;
+/** Python 侧真跑的预算。话术里的秒数跟着它走，别写死一个会过期的数。 */
+const PY_TIMEOUT_MS = 30_000;
 const problems = [];
+/**
+ * 「没有取证」的一类 —— 与 `problems` 分开放。
+ *
+ * 为什么要分：这条判据此前把子进程超时（`ETIMEDOUT`）与「四侧推导真不一致」塞进同一个数组，
+ * 于是 `report()` 那句标题在**纯超时**时也说得出嘴。实测栽过一次：一笔**纯文档**提交被它拦下，
+ * 报「四语言端口推导一致性失败：- Python 侧自检失败：spawnSync python3 ETIMEDOUT」，
+ * 而同一条判据钩子结束后就地复跑退 0 —— 那不是内容红，是没拿到测量。
+ * 规范 §13.6.4.1（ISSUE #1747）对 C 组早已立了同一条口径：**拿不到测量 ≠ 测量结果是红的**。
+ *
+ * 口径（本线已拍，与 C 组 §13.6.4.1 同形）：**第二遍测量自己说话**，不看 `os.loadavg()`（Windows 恒 0）。
+ *   · 第一遍是超时形态 ⇒ 当场再取证一次；
+ *   · 第二遍给出回答 ⇒ 按那一遍判（绿与真红照旧）；
+ *   · 第二遍**仍只是超时形态** ⇒ 记「未校验」并**放行**，逐条点名，标题不许说成一致性失败；
+ *   · 探测不到 Python（`missing`）同样记「未校验」并点名 —— 它此前是**静默跳过**，那一侧既不参与
+ *     比对也不报红，等于把「四侧一致」悄悄降级成「三侧一致」。
+ * 放行站得住的理由：放行的是**这一次取证**而不是这条判据 —— 其余三面（Node 真跑、Rust / PowerShell
+ * 锁引用）仍在同一趟里判，而 `missing` 与双超时都会被点名，不是无声通过。
+ * 代价与触发面：只有第一遍超时才多花一趟（最坏 `PROBE_TIMEOUT_MS × 2 + PY_TIMEOUT_MS`）；一切正常时
+ * 一次复跑都不跑。
+ */
+const unverified = [];
+
+/**
+ * 子进程「没在预算内回答」的形状。
+ *
+ * `execFileSync` 带 `timeout` 到点时，不同 Node 版本落法不同：`code === "ETIMEDOUT"`，
+ * 或只在 `message` 里带 `ETIMEDOUT` / `timed out`。两个都认，漏一个就又把超时读成内容失败。
+ */
+function isTimeoutLike(e) {
+  if (!e) return false;
+  const code = String(e.code ?? "");
+  const msg = String(e.message ?? "");
+  return code === "ETIMEDOUT" || /ETIMEDOUT|timed out/i.test(msg);
+}
 
 function readIfExists(rel) {
   try {
@@ -31,13 +71,100 @@ function readIfExists(rel) {
   }
 }
 
-function hasCommand(cmd, args) {
+/**
+ * 探测命令是否可用 —— 返回 `"ok"` / `"timeout"` / `"missing"`，**不许糊成一个布尔**：
+ * 糊成一个时（旧实现 `try { … } catch { return false }`），负载高、10 秒预算到点会被读成
+ * 「这台机器没有 Python」，那一侧既不参与比对也不报红 —— 比报错误导得更久。
+ */
+function probeCommand(cmd, args) {
   try {
-    execFileSync(cmd, args, { stdio: "pipe", timeout: 10_000 });
-    return true;
-  } catch {
-    return false;
+    execFileSync(cmd, args, { stdio: "pipe", timeout: PROBE_TIMEOUT_MS });
+    return "ok";
+  } catch (e) {
+    return isTimeoutLike(e) ? "timeout" : "missing";
   }
+}
+
+/**
+ * Python 侧取证**一次**：探测可用命令 → 跑自检脚本。
+ *
+ * `timeout` 与 `missing` 都是「没拿到测量」，但要说的话不同，所以分成两态：前者是
+ * 「这一刻没回答」，后者是「这台机器探测不到 Python」。旧实现把两者糊成一个布尔之后
+ * `missing` 走的是**静默跳过** —— 那一侧既不参与比对也不报红，等于把「四侧一致」
+ * 悄悄降级成「三侧一致」，而输出上一个字都没有。
+ *
+ * @param {string} pyChecker 自检脚本的仓库相对路径
+ * @returns {{state: "answered" | "timeout" | "missing", python: string | null, problems: string[]}}
+ */
+function measurePythonOnce(pyChecker) {
+  const probed = ["python3", "python"].map((c) => [
+    c,
+    probeCommand(c, ["--version"]),
+  ]);
+  const timedOut = probed.filter(([, s]) => s === "timeout").map(([c]) => c);
+  const found = probed.find(([, s]) => s === "ok");
+  if (!found) {
+    return {
+      state: timedOut.length > 0 ? "timeout" : "missing",
+      python: null,
+      problems: [],
+    };
+  }
+  const python = found[0];
+  try {
+    const out = execFileSync(python, [pyChecker], {
+      cwd: ROOT,
+      encoding: "utf8",
+      timeout: PY_TIMEOUT_MS,
+    });
+    return {
+      state: "answered",
+      python,
+      problems: out.includes("OK")
+        ? []
+        : [`Python 侧自检未通过：${out.trim()}`],
+    };
+  } catch (e) {
+    if (isTimeoutLike(e)) return { state: "timeout", python, problems: [] };
+    return {
+      state: "answered",
+      python,
+      problems: [
+        `Python 侧自检失败：${(e.stdout || e.message || "").toString().trim()}`,
+      ],
+    };
+  }
+}
+
+/**
+ * 两遍取证 → 这一侧到底算什么（**纯函数**，用例可以逐格钉住，不必真起 Python）。
+ *
+ * @param {{state: string, python: string | null, problems: string[]}} first 第一遍
+ * @param {{state: string, python: string | null, problems: string[]} | null} second 第二遍（第一遍有回答时为 null）
+ * @returns {{problems: string[], unverified: string[]}}
+ */
+function decidePythonVerdict(first, second) {
+  const sec = second ?? first;
+  if (sec.state === "answered")
+    return { problems: sec.problems, unverified: [] };
+  if (sec.state === "missing") {
+    return {
+      problems: [],
+      unverified: [
+        "这台机器探测不到 python3 / python（`--version` 非零退出，**不是**超时）—— " +
+          "Python 侧本轮**没有取证**，四侧比对实际只答了三侧。在装了 Python 的机器上这一侧会重新参与。",
+      ],
+    };
+  }
+  return {
+    problems: [],
+    unverified: [
+      `Python 侧自检（${sec.python ?? "python"} 跑 scripts/check-app-port-vectors.py）两遍` +
+        `都没有在 ${PY_TIMEOUT_MS / 1000} 秒预算内回答（超时形态）—— **拿不到测量**，` +
+        "不是「四侧推导不一致」。这一侧本轮未取证：已放行并点名（规范 §13.6.4.1），" +
+        "别去改四侧实现 —— 四侧根本没动过。",
+    ],
+  };
 }
 
 async function main() {
@@ -51,12 +178,16 @@ async function main() {
   }
   const vectors = Array.isArray(fixture.vectors) ? fixture.vectors : [];
   if (vectors.length < 5) {
-    problems.push(`共享向量不足（${vectors.length} < 5）—— 防止误删后检查静默全绿`);
+    problems.push(
+      `共享向量不足（${vectors.length} < 5）—— 防止误删后检查静默全绿`,
+    );
   }
   // 向量内自洽
   for (const v of vectors) {
     if (v.port !== 3200 + (v.fnv1a32 % 800)) {
-      problems.push(`向量内不自洽：${JSON.stringify(v.input)} port ≠ 3200 + fnv % 800`);
+      problems.push(
+        `向量内不自洽：${JSON.stringify(v.input)} port ≠ 3200 + fnv % 800`,
+      );
     }
   }
 
@@ -68,7 +199,9 @@ async function main() {
     for (const v of vectors) {
       const norm = mod.normalizeRootForPort(v.input);
       if (norm !== v.normalized) {
-        problems.push(`Node 规范化 ${JSON.stringify(v.input)}：${norm} ≠ ${v.normalized}`);
+        problems.push(
+          `Node 规范化 ${JSON.stringify(v.input)}：${norm} ≠ ${v.normalized}`,
+        );
       }
       if (mod.fnv1a32(norm) !== v.fnv1a32) {
         problems.push(`Node FNV ${JSON.stringify(v.input)} 与向量不符`);
@@ -86,9 +219,13 @@ async function main() {
   // 「壳必须自己读 .env」这条承诺的判据在**四侧解析同一份 .env 得出同一个值**上：
   // 任一侧对「带引号 / 行尾注释 / 注释行」的理解不一致，用户写死的端口就只对一部分
   // 进程可见，剩下的按路径推导去等另一个端口（现象：启动页卡在「等 dev server」）。
-  const envVectors = Array.isArray(fixture.envVectors) ? fixture.envVectors : [];
+  const envVectors = Array.isArray(fixture.envVectors)
+    ? fixture.envVectors
+    : [];
   if (envVectors.length < 4) {
-    problems.push(`envVectors 不足（${envVectors.length} < 4）—— 防止误删后检查静默全绿`);
+    problems.push(
+      `envVectors 不足（${envVectors.length} < 4）—— 防止误删后检查静默全绿`,
+    );
   }
   try {
     const mod = await import(
@@ -97,10 +234,12 @@ async function main() {
     for (const v of envVectors) {
       const got = mod.readEnvFileValue(v.content, "COMFYAPP_PORT");
       const port =
-        got !== null && /^\d+$/.test(got.trim()) ? Number.parseInt(got.trim(), 10) : null;
+        got !== null && /^\d+$/.test(got.trim())
+          ? Number.parseInt(got.trim(), 10)
+          : null;
       if (port !== v.port) {
         problems.push(
-          `Node .env 解析 ${JSON.stringify(v.content)}：${port} ≠ ${v.port}（${v.note}）`
+          `Node .env 解析 ${JSON.stringify(v.content)}：${port} ≠ ${v.port}（${v.note}）`,
         );
       }
     }
@@ -108,34 +247,39 @@ async function main() {
     problems.push(`Node 侧 .env 解析不可导入：${e.message}`);
   }
 
-  // ── ② Python 侧真跑（可用时）──
+  // ── ② Python 侧取证（两遍，形态说话）──
   const pyChecker = "scripts/check-app-port-vectors.py";
   if (!fs.existsSync(path.join(ROOT, pyChecker))) {
     problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
   } else {
-    const python = ["python3", "python"].find((c) => hasCommand(c, ["--version"]));
-    if (python) {
-      try {
-        const out = execFileSync(python, [pyChecker], {
-          cwd: ROOT,
-          encoding: "utf8",
-          timeout: 30_000,
-        });
-        if (!out.includes("OK")) problems.push(`Python 侧自检未通过：${out.trim()}`);
-      } catch (e) {
-        problems.push(`Python 侧自检失败：${(e.stdout || e.message || "").toString().trim()}`);
-      }
+    const first = measurePythonOnce(pyChecker);
+    let second = null;
+    if (first.state === "timeout") {
+      // 与 C 组同形：不猜机器闲不闲（`os.loadavg()` 在 Windows 恒 0），直接再取一遍测量，
+      // 让**第二遍自己的形态**说话。这条日志不许省 —— 静默复跑读起来像卡住了。
+      console.log(
+        "[app-port-vectors] Python 侧第一遍只是超时形态 —— 当场复跑一次再定性（§13.6.4.1）",
+      );
+      second = measurePythonOnce(pyChecker);
     }
+    const verdict = decidePythonVerdict(first, second);
+    problems.push(...verdict.problems);
+    for (const note of verdict.unverified) unverified.push(note);
   }
 
   // ── ③ Rust / PowerShell 侧锁引用（无法在此环境执行）──
   const rust = readIfExists("src-tauri/src/single_instance.rs");
-  if (!rust) problems.push("缺少 Rust 侧实现：src-tauri/src/single_instance.rs");
+  if (!rust)
+    problems.push("缺少 Rust 侧实现：src-tauri/src/single_instance.rs");
   else {
     if (!rust.includes("fn normalize_root_for_port"))
-      problems.push("Rust 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
+      problems.push(
+        "Rust 侧 normalize_root_for_port 缺失（端口推导实现被删？）",
+      );
     if (!rust.includes("app-port-vectors.json"))
-      problems.push("Rust 侧测试未引用共享向量 app-port-vectors.json（四侧一致失效）");
+      problems.push(
+        "Rust 侧测试未引用共享向量 app-port-vectors.json（四侧一致失效）",
+      );
   }
 
   // Rust 侧：`.env` 解析必须与 resolve 出口同源（否则壳又会按路径推导去等另一个端口）
@@ -147,25 +291,35 @@ async function main() {
       "fn port_source_for_root",
     ]) {
       if (!rust.includes(needle)) {
-        problems.push(`Rust 侧缺少 ${needle}（.env 优先的端口解析被改回「只做路径推导」？）`);
+        problems.push(
+          `Rust 侧缺少 ${needle}（.env 优先的端口解析被改回「只做路径推导」？）`,
+        );
       }
     }
     if (!rust.includes("envVectors")) {
-      problems.push("Rust 侧测试未引用共享向量的 envVectors（.env 解析四侧一致失效）");
+      problems.push(
+        "Rust 侧测试未引用共享向量的 envVectors（.env 解析四侧一致失效）",
+      );
     }
   }
 
   const ps = readIfExists("scripts/app-port.ps1");
   if (!ps) problems.push("缺少 PowerShell 侧实现：scripts/app-port.ps1");
   else if (!ps.includes("Get-NormalizedRootForPort"))
-    problems.push("PowerShell 侧 Get-NormalizedRootForPort 缺失（端口推导实现被删？）");
+    problems.push(
+      "PowerShell 侧 Get-NormalizedRootForPort 缺失（端口推导实现被删？）",
+    );
   if (!readIfExists("scripts/check-app-port-vectors.ps1"))
-    problems.push("缺少 PowerShell 侧自检脚本：scripts/check-app-port-vectors.ps1");
+    problems.push(
+      "缺少 PowerShell 侧自检脚本：scripts/check-app-port-vectors.ps1",
+    );
 
   const pyMod = readIfExists("scripts/app_port.py");
   if (!pyMod) problems.push("缺少 Python 侧可导入模块：scripts/app_port.py");
   else if (!pyMod.includes("def normalize_root_for_port"))
-    problems.push("Python 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
+    problems.push(
+      "Python 侧 normalize_root_for_port 缺失（端口推导实现被删？）",
+    );
   // Python 侧的使用者现在只剩这个可导入模块本身与其自检脚本
   //（原先还有 Windows-only 的 start_tauri_launcher.py，已随 ISSUE #784 移除）。
   if (!readIfExists("scripts/check-app-port-vectors.py"))
@@ -175,19 +329,45 @@ async function main() {
 }
 
 function report() {
-  if (problems.length === 0) {
+  if (problems.length === 0 && unverified.length === 0) {
     console.log("[app-port-vectors] 四语言端口推导一致性 OK ✓");
+    return;
+  }
+  if (problems.length === 0) {
+    /* 只有「没拿到测量」这一类：放行，但**当面点名**。
+     * 口径与 C 组 §13.6.4.1 同一条 —— 拿不到测量不等于测量结果是红的；而它也不是绿：
+     * 标题、逐条内容与「这一侧本轮没参与比对」都要说清，否则读者会以为四侧真比对过了。
+     * 已经复跑过一次是这一步的前提（见 main 里那趟 Python 二次取证），不是给人留的作业。 */
+    console.log("[app-port-vectors] 通过，但**未完全取证**（放行）：");
+    for (const u of unverified) console.log("  - [未校验] " + u);
+    console.log("");
+    console.log(
+      "  这一趟仍然判了的：Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用。",
+    );
+    console.log(
+      "        下次取证到之后 Python 侧会重新参与比对；本步以退出码 0 结束。",
+    );
     return;
   }
   console.error("[app-port-vectors] 四语言端口推导一致性失败：");
   for (const p of problems) console.error("  - " + p);
+  for (const u of unverified) console.error("  - [未校验·附带] " + u);
   console.error("");
-  console.error("  规范：docs/standards/launch-and-build.md §1.1（推导算法是跨语言约定，");
+  console.error(
+    "  规范：docs/standards/launch-and-build.md §1.1（推导算法是跨语言约定，",
+  );
   console.error("        四侧实现必须逐字节一致，任一侧改动须四处同步）");
   process.exit(1);
 }
 
-main().catch((e) => {
-  console.error("[app-port-vectors] 检查脚本异常：" + (e && e.message));
-  process.exit(1);
-});
+/* 只在**被直接执行**时跑检查 —— 被 import 时只暴露判据分类那两个纯函数给用例
+ * （`tests/app-port-vectors-timeout-classification.test.ts`）。少了这道守卫，
+ * 任何 `require` 这份文件的用例都会现场跑一次四侧取证并可能 `process.exit`。 */
+if (require.main === module) {
+  main().catch((e) => {
+    console.error("[app-port-vectors] 检查脚本异常：" + (e && e.message));
+    process.exit(1);
+  });
+}
+
+module.exports = { isTimeoutLike, probeCommand, decidePythonVerdict };

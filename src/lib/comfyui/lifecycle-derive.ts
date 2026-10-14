@@ -167,6 +167,53 @@ export function buildEarlyExitDetail(outputLines: string[]): string {
   return "ComfyUI 进程启动后立即退出，详见 log/services/comfyui-runtime.log";
 }
 
+/* ── 启动失败根因诊断（keepAlive 判死文案补「该动哪个环境」）─────────────
+ *
+ * keepAlive 模式没有直连 stdio，进程秒退的证据只在按次命名的重定向日志里，
+ * 而判死文案此前是固定的「保活拉起后进程未出现」——真实成因（解释器没有
+ * pip/uv、缺依赖）就摆在同一份日志里，用户却只能看到一句「进程未出现」，
+ * 不知道该动哪个环境。把最常见的两类根因识别成纯函数（与 bound 模式的
+ * extractMissingModule 同族），失败文案就能带上可行动结论。
+ */
+
+/** ComfyUI-Manager 启动自检找不到 pip/uv 时抛的那句话（`get_pip_cmd` 的
+ *  `python -m pip` → `python -m uv` → `shutil.which('uv')` 三连试全失后的
+ *  收尾报错；实测原文：`Neither python -m pip nor uv are available.`）。
+ *  认核心形态，`python -m ` 前缀与 `are` 的有无都兼容中英文与版本差异。 */
+const PIP_UV_MISSING_PATTERN =
+  /Neither\s+(?:python\s+-m\s+)?pip\s+nor\s+uv\s+(?:are\s+)?available/i;
+
+/**
+ * 从 ComfyUI 的启动输出里识别「环境本身不可用」的根因，给出可行动结论。
+ *
+ * 优先级：①解释器缺 pip/uv（ComfyUI-Manager 自检崩，main.py 在 prestartup
+ * 阶段秒退）→ ②缺依赖（No module named 'X'）。两类成因的用户动作完全不同
+ * （补装包管理工具 vs 装依赖 / 换环境），必须分开说。
+ *
+ * @param outputLines ComfyUI 的 stdout+stderr（顺序任意，按 `\n` 拼接后匹配）
+ * @returns 可行动诊断句；识别不出返回 null（caller 据此回落通用文案）
+ */
+export function diagnoseComfyStartupFailure(
+  outputLines: string[],
+): string | null {
+  const text = outputLines.join("\n");
+  if (PIP_UV_MISSING_PATTERN.test(text)) {
+    return (
+      "ComfyUI 的 Python 环境缺少包管理工具（pip/uv）：ComfyUI-Manager 的启动自检" +
+      "无法安装/校验依赖——请为该实例的解释器补装（如 `python -m ensurepip`，" +
+      "或安装 uv）后重试"
+    );
+  }
+  const missing = extractMissingModule(outputLines);
+  if (missing) {
+    return (
+      `解释器缺少依赖（No module named '${missing}'）——请确认 comfyuiPath ` +
+      "指向装了依赖的环境，或为该环境安装依赖"
+    );
+  }
+  return null;
+}
+
 /** 停止流程的收尾判决所需事实（`stopComfyUiProcess`）。 */
 export interface StopFacts {
   /** 是否握有本进程拉起的子进程句柄。 */

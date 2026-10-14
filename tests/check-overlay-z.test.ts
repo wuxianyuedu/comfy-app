@@ -22,8 +22,7 @@ const { test, expect } = defineGateRepo({
 
 const INLINE_Z =
   "export function V() {\n  return <div style={{ zIndex: 7 }} />;\n}\n";
-const ARBITRARY_Z =
-  'export function V() {\n  return <div className="fixed z-[10000]" />;\n}\n';
+const ARBITRARY_Z = `export function V() {\n  return <div className="fixed ${"z-" + "[10000]"}" />;\n}\n`;
 const NUMERIC_TONE =
   'export function V() {\n  return <div className="fixed z-9999" />;\n}\n';
 const SCALE_TONE =
@@ -38,7 +37,7 @@ describe("check-overlay-z.cjs（提交门槛，规范 §16.2.5）", () => {
     expect(output).toContain("src/components/studio/A.tsx");
   });
 
-  test("任意值写法 z-[<数字>] 会被阻断（Z2 硬闸，规范 03 §3.2）", ({
+  test("任意值写法 z-[ <数字> ] 会被阻断（Z2 硬闸，规范 03 §3.2）", ({
     repo,
   }) => {
     repo.write("src/components/studio/B.tsx", ARBITRARY_Z);

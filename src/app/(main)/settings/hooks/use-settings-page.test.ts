@@ -5,6 +5,12 @@
 //   3. 按任务温度的合并规则（清空 = 删 key，而不是写 undefined）；
 //   4. 失败路径都走 flash 提示（硬规则 4：失败必须有用户可见出口）；
 //   5. openExternalUrl 把生成结果交给系统默认浏览器打开（桌面壳替代外链）。
+//
+// 自 ISSUE #1900 起，**ComfyUI 运行态那一组用例搬去了**
+// `src/components/studio/comfyui/hooks/use-comfyui-control.test.ts`：运行态、
+// 启动 / 关闭 / 打开与启动日志整块归侧栏「ComfyUI」页，判据一条没少。
+// 本文件留在这里的是设置页**自己**的编排（配置读取与播种、Ollama、保存、远端模型、
+// Drizzle Studio、外部链接），外加两条把「运行态真的走干净了」钉死的用例。
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -31,7 +37,11 @@ import {
 } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
-import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
+import { resetComfyStateClientForTest } from "~/lib/comfy/comfy-state-client";
+import {
+  getComfyStateChange,
+  resetComfyStateWatchForTest,
+} from "~/lib/comfyui/state-watch";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
 import {
@@ -156,14 +166,8 @@ interface Behavior {
   llmError?: string;
   saveLlmError?: string;
   saveSettingsError?: string;
-  comfyStart?: { ok: boolean; detail: string };
   /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
   comfyBase?: string | null;
-  /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
-  comfyEmbeddable?: { embeddable: boolean; reason: string };
-  /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
-  comfyOpen?: { ok: boolean; detail: string };
-  /** 让 comfyStatus 端点一直不返回（验证「形态不等运行态探测」）。 */
   comfyStatusPending?: boolean;
   comfyInstance?: {
     pathConfigured: boolean;
@@ -179,9 +183,15 @@ interface Behavior {
 const neverSettle = (): Promise<void> => new Promise<void>(() => undefined);
 
 let behavior: Behavior = {};
-/* 「在浏览器打开」端点的调用计数：单独一个模块级变量，不放进 behavior ——
- * 每个用例都会整体重置 behavior，塞进去就得在每一处重置点重复，容易漏。 */
-let comfyOpenCalls = 0;
+/* 「运行态变了」那条长轮询通道收到的请求（`?since=…`）。
+ *
+ * 这条通道**不再由设置页订阅**（运行态整块搬去了侧栏「ComfyUI」页，
+ * ISSUE #1900），但仍要在默认 handler 里记账：设置页一挂载，客户端那条链是否
+ * 还会连过来 —— 这一条正是「运行态真的走干净了，没有第二个消费方」的现场证据
+ * （见下方「设置页不再订阅运行态通道」那条用例）。 */
+const stateRequests: string[] = [];
+/* `comfyStatus` 端点的调用次数：设置页一次都不该调到它（见对应用例）。 */
+let comfyStatusCalls = 0;
 
 const t = createTestTRPC();
 const mockRouter = t.router({
@@ -204,8 +214,12 @@ const mockRouter = t.router({
       }
       return { settings: behavior.settings ?? SETTINGS };
     }),
+    /* 运行态端点：设置页**不再调用它**（归侧栏「ComfyUI」页）。这里仍然留着，
+     * 因为它恰好是那条判据的反面 —— 它一次都不该被请求到（见
+     * 「设置页不再订阅运行态通道」）。没 handler 会让用例以 unhandled frame 报错，
+     * 那是**假红**（判据被环境吃掉），所以留一个必定计数的桩。 */
     comfyStatus: t.procedure.query(async () => {
-      /* 用例可让运行态探测「一直不返回」：用来验证安装形态不依赖它（见对应用例）。 */
+      comfyStatusCalls += 1;
       if (behavior.comfyStatusPending) await neverSettle();
       return {
         up: behavior.comfyBase != null,
@@ -223,30 +237,7 @@ const mockRouter = t.router({
           desktopManaged: false,
         },
     ),
-    comfyEmbeddable: t.procedure.query(
-      () =>
-        behavior.comfyEmbeddable ?? {
-          embeddable: true,
-          reason: "ComfyUI 已开启 CORS",
-        },
-    ),
-    comfyStart: t.procedure.mutation(
-      () => behavior.comfyStart ?? { ok: true, detail: "已启动" },
-    ),
-    comfyStop: t.procedure.mutation(() => ({
-      ok: true,
-      detail: "已关闭",
-    })),
-    comfyOpen: t.procedure.mutation(() => {
-      comfyOpenCalls += 1;
-      return (
-        behavior.comfyOpen ?? {
-          ok: true,
-          detail: "已用系统默认浏览器打开 ComfyUI",
-        }
-      );
-    }),
-    /* Drizzle Studio：新增分区拉起的 status 查询与动作，均需有 mock handler，
+    /* Drizzle Studio：分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledFrame:error 会让渲染整个 hook 的用例全挂 */
     dbStudioStatus: t.procedure.query(() => {
       if (behavior.dbStudioStatusError) {
@@ -326,72 +317,28 @@ function makeWrapper(queryClient?: QueryClient) {
   };
 }
 
-/**
- * 让 `/api/logs/sessions` 对某个来源回一份会话（其余来源仍走默认空 handler）。
- * 载荷与真实契约同形：会话列表 + 选中会话正文 + 截断 / 尾窗标记。
- */
-function mockSessionsFor(
-  source: string,
-  payload: {
-    content: string;
-    sessions?: Array<{
-      id: string;
-      title: string;
-      startedAt: number | null;
-      scope: "current" | "runs";
-      crashed: boolean;
-    }>;
-    truncated?: boolean;
-    windowed?: boolean;
-  },
-): void {
-  const sessions = payload.sessions ?? [
-    {
-      id: "0",
-      title: "11-05 09:36:12 · 本次运行",
-      startedAt: null,
-      scope: "current" as const,
-      crashed: false,
-    },
-  ];
-  server.use(
-    http.get("*/api/logs/sessions", ({ request }) => {
-      const url = new URL(request.url);
-      if (url.searchParams.get("source") !== source) {
-        return HttpResponse.json(
-          { error: "unexpected source" },
-          { status: 400 },
-        );
-      }
-      return HttpResponse.json({
-        sessions,
-        /* 契约：`sessions` 新→旧，缺省选中第一项（最新那一份）。 */
-        selectedId: sessions[0]?.id ?? null,
-        content: payload.content,
-        truncated: payload.truncated ?? false,
-        windowed: payload.windowed ?? false,
-        size: payload.content.length,
-      });
-    }),
-  );
-}
-
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
-/* 默认「Ollama 运行中」：不设默认值时 vi.fn() 返回 undefined，探测回调会在
- * 上一个用例卸载后跑到，产生「Cannot read properties of undefined」的
- * unhandled rejection（表现为用例绿但文件红）。 */
-/* /api/logs/sessions 默认 handler：设置页挂载就会为三个「启动日志」来源各取一次
- * 会话 + 正文，没有 handler 会以 onUnhandledFrame:error 报 unhandled
- * rejection（与上面 probeMock 同源问题）。各用例按需覆盖。 */
 beforeEach(() => {
   runtimeLogCalls.length = 0;
   sessionLogRequests.length = 0;
+  comfyStatusCalls = 0;
+  stateRequests.length = 0;
+  /* 客户端那条长轮询链与「已见 seq」都挂在 `globalThis` 上（HMR 单例）：不清
+   * 会让上一个用例的订阅与 seq 带进来 —— 表现是这一条用例压根不订阅（链还在），
+   * 或第一条变化被当成「见过」而不派发。 */
+  resetComfyStateClientForTest();
+  resetComfyStateWatchForTest();
   /* 兜底缓存（sessionStorage 快照）跨用例共享同一个 jsdom —— 不清会把上一个
    * 用例的成功配置带进来，让「无兜底 → 整页降级」的用例失去意义。 */
   sessionStorage.clear();
-  isDesktopShellMock.mockReturnValue(true);
+  /* 默认「Ollama 运行中」：不设默认值时 vi.fn() 返回 undefined，探测回调会在
+   * 上一个用例卸载后跑到，产生「Cannot read properties of undefined」的
+   * unhandled rejection（表现为用例绿但文件红）。 */
   probeMock.mockResolvedValue({ up: true, models: [] });
   startMock.mockResolvedValue(undefined);
+  /* /api/logs/sessions 默认 handler：设置页挂载就会为三段「启动日志」各取一次
+   * 会话 + 正文，没有 handler 会以 onUnhandledFrame:error 报 unhandled
+   * rejection（与上面 probeMock 同源问题）。各用例按需覆盖。 */
   server.use(
     http.get("*/api/logs/sessions", () =>
       HttpResponse.json({
@@ -403,12 +350,29 @@ beforeEach(() => {
         size: 0,
       }),
     ),
+    /* 「运行态变了」那条长轮询通道。设置页自 ISSUE #1900 起**不再订阅**它
+     * （运行态整块搬去了侧栏「ComfyUI」页）—— 这里留 handler 是为了让
+     * 「一次都没连过来」这条判据落在**正常应答**上，而不是被
+     * `onUnhandledFrame: error` 的 unhandled 报错冒充。 */
+    http.get("*/api/comfy/state", ({ request }) => {
+      stateRequests.push(new URL(request.url).search);
+      /* 与真实路由同一判决：`since` 比当前纪元旧 → 回那一次变化，否则 204。 */
+      const change = getComfyStateChange();
+      const since = Number.parseInt(
+        new URL(request.url).searchParams.get("since") ?? "0",
+        10,
+      );
+      if (change.last === null || change.seq <= since) {
+        return new HttpResponse(null, { status: 204 });
+      }
+      return HttpResponse.json(change.last);
+    }),
   );
 });
 afterEach(() => {
   cleanup();
   behavior = {};
-  comfyOpenCalls = 0;
+  comfyStatusCalls = 0;
   server.resetHandlers();
 });
 afterAll(() => server.close());
@@ -900,329 +864,6 @@ describe("useSettingsPage", () => {
     expect(result.current.saving).toBe(false);
   });
 
-  /* 安装形态此前与运行态挤在同一个响应里，于是被秒级探测拖着：打开设置页先看不到
-   * 「安装形态」徽标，「端口 / 启动参数」输入框也要等探测完成才消失（探测本身是
-   * 「进程表查询 + 端口探测」，本机负载下到 10s 级）。现在形态走 fs-only 的独立
-   * 查询（与首屏配置同批）。这条把「不等探测」钉死：运行态一直悬着时，controller
-   * 里也必须已经有形态与「已配置」结论。 */
-  it("安装形态不依赖运行态探测：comfyStatus 悬着时形态已经就绪", async () => {
-    behavior = { comfyStatusPending: true };
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-
-    await expect.poll(() => result.current.comfyInstance).not.toBeNull();
-    expect(result.current.comfyInstance?.instanceType).toBe("portable");
-    expect(result.current.comfyInstance?.pathConfigured).toBe(true);
-    // 运行态那份还没落地 —— 正是它此前会把形态一起拖住
-    expect(result.current.comfyStatus).toBeNull();
-  });
-
-  it("ComfyUI 启动：后端返回 detail 直接进提示条", async () => {
-    behavior = { comfyStart: { ok: false, detail: "未找到 main.py" } };
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.startComfy();
-    });
-    expect(result.current.flash).toEqual({
-      kind: "err",
-      text: "未找到 main.py",
-    });
-    expect(result.current.comfyStarting).toBe(false);
-  });
-
-  it("comfyLog.refresh 拉取 comfyui-runtime 的会话日志，未启动时不在跟随态", async () => {
-    mockSessionsFor("comfyui-runtime", {
-      content: "[spawn] pid=123 cmd=python.exe\n[out] Starting ComfyUI\n",
-    });
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.comfyLog.refresh();
-    });
-    expect(result.current.comfyLog.text).toContain("[spawn] pid=123");
-    expect(result.current.comfyLog.active).toBe(false);
-  });
-
-  it("dbStudioLog.refresh 拉取 drizzle-studio-runtime 的会话日志", async () => {
-    mockSessionsFor("drizzle-studio-runtime", {
-      content:
-        "[spawn] pid=456 cmd=node.exe\ndrizzle-kit studio\n[out] Drizzle Studio is running\n",
-    });
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.dbStudioLog.refresh();
-    });
-    expect(result.current.dbStudioLog.text).toContain("[spawn] pid=456");
-    expect(result.current.dbStudioLog.text).toContain(
-      "Drizzle Studio is running",
-    );
-    expect(result.current.dbStudioLog.active).toBe(false);
-  });
-
-  it("ollamaLog.refresh 拉取 ollama-runtime 的会话日志，未启动时不在跟随态", async () => {
-    mockSessionsFor("ollama-runtime", {
-      content:
-        '[spawn] pid=789 cmd=ollama.exe args=["serve"]\n[out] starting ollama serve\n[state] Ollama 已关闭\n',
-    });
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.ollamaLog.refresh();
-    });
-    expect(result.current.ollamaLog.text).toContain("[spawn] pid=789");
-    expect(result.current.ollamaLog.text).toContain("starting ollama serve");
-    expect(result.current.ollamaLog.active).toBe(false);
-  });
-
-  /* 用户反馈第 2 条：多次启动的日志不能混在一起 —— 下拉切到某一次启动时，
-   * 请求要带上那次的会话 id，界面只显示那一次。 */
-  it("切换启动会话：按会话 id 重新拉取，并把选中项与截断提示同步到状态", async () => {
-    /* 契约：新→旧（第一项是最新那一份）。 */
-    const sessions = [
-      {
-        id: "40",
-        title: "11-05 09:36:12 · 本次运行",
-        startedAt: null,
-        scope: "current" as const,
-        crashed: false,
-      },
-      {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: null,
-        scope: "current" as const,
-        crashed: false,
-      },
-    ];
-    server.use(
-      http.get("*/api/logs/sessions", ({ request }) => {
-        const url = new URL(request.url);
-        const session = url.searchParams.get("session");
-        return HttpResponse.json({
-          sessions,
-          selectedId: session ?? "40",
-          content: session === "12" ? "第一次启动的输出" : "第二次启动的输出",
-          truncated: session === "12",
-          windowed: true,
-          size: 8192,
-        });
-      }),
-    );
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-    await expect.poll(() => result.current.comfyLog.text).not.toBe("");
-    expect(result.current.comfyLog.sessions).toHaveLength(2);
-
-    await act(async () => {
-      result.current.comfyLog.selectSession("12");
-    });
-    await expect
-      .poll(() => result.current.comfyLog.text)
-      .toBe("第一次启动的输出");
-    expect(result.current.comfyLog.sessionId).toBe("12");
-    expect(result.current.comfyLog.truncated).toBe(true);
-    expect(result.current.comfyLog.windowed).toBe(true);
-    expect(sessionLogRequests).toContainEqual({
-      source: "comfyui-runtime",
-      session: "12",
-    });
-  });
-
-  /* 用户反馈：启动后有新日志时要自动切到下拉里的最新一项，而不是停在旧会话。 */
-  it("新一轮启动出现（会话列表多出最新一项）时自动切过去，无需手动换下拉", async () => {
-    /* 会话列表可变：先只有一次启动，随后模拟新一次启动写入横幅。 */
-    let sessions = [
-      {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
-        scope: "current" as const,
-        crashed: false,
-      },
-    ];
-    server.use(
-      http.get("*/api/logs/sessions", ({ request }) => {
-        const url = new URL(request.url);
-        const session = url.searchParams.get("session");
-        /* 契约：新→旧，第一项即最新。 */
-        const latestId = sessions[0]!.id;
-        const selectedId = sessions.some((s) => s.id === session)
-          ? session
-          : latestId;
-        return HttpResponse.json({
-          sessions,
-          selectedId,
-          content:
-            selectedId === "12" ? "第一次启动的输出" : "第二次启动的输出",
-          truncated: false,
-          windowed: false,
-          size: 128,
-        });
-      }),
-    );
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-    await expect
-      .poll(() => result.current.comfyLog.text)
-      .toBe("第一次启动的输出");
-
-    /* 新→旧：新一轮启动排在**最上面**（与真实端点同序）。 */
-    sessions = [
-      {
-        id: "40",
-        title: "11-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
-        scope: "current" as const,
-        crashed: false,
-      },
-      {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
-        scope: "current" as const,
-        crashed: false,
-      },
-    ];
-    await act(async () => {
-      await result.current.comfyLog.refresh();
-    });
-    await expect
-      .poll(() => result.current.comfyLog.text)
-      .toBe("第二次启动的输出");
-    expect(result.current.comfyLog.sessionId).toBe("40");
-    expect(sessionLogRequests).toContainEqual({
-      source: "comfyui-runtime",
-      session: "40",
-    });
-  });
-
-  /* 跨包（ISSUE #1587）：归档份的 id 是 `<包名>/<文件名>`，hook 必须**原样**
-   * 回传 —— 它不解析 id（形态判据只在服务端一处），也不该把它当成文件名拼一遍。 */
-  it("切到归档包里的份：原样带上 `<包名>/<文件名>` 的 id 重新拉取", async () => {
-    const archived =
-      "2026-10-04_140000-bbbbbb/comfyui-runtime-20261004-140000.log";
-    const sessions = [
-      {
-        id: "comfyui-runtime-20261005-093612.log",
-        title: "10-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
-        scope: "current" as const,
-        crashed: false,
-      },
-      {
-        id: archived,
-        title: "10-04 14:00:00 · 正常退出 · bbbbbb",
-        startedAt: 1_000,
-        scope: "runs" as const,
-        crashed: false,
-      },
-    ];
-    server.use(
-      http.get("*/api/logs/sessions", ({ request }) => {
-        const url = new URL(request.url);
-        const session = url.searchParams.get("session");
-        const selectedId = sessions.some((s) => s.id === session)
-          ? session!
-          : sessions[0]!.id;
-        return HttpResponse.json({
-          sessions,
-          selectedId,
-          content: selectedId === archived ? "上一包的内容" : "本次运行的内容",
-          truncated: false,
-          windowed: false,
-          size: 64,
-        });
-      }),
-    );
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect
-      .poll(() => result.current.comfyLog.text)
-      .toBe("本次运行的内容");
-
-    await act(async () => {
-      result.current.comfyLog.selectSession(archived);
-    });
-    await expect.poll(() => result.current.comfyLog.text).toBe("上一包的内容");
-    expect(result.current.comfyLog.sessionId).toBe(archived);
-    /* id 原样回传（没有被拆成文件名、也没有被拼上路径） */
-    expect(sessionLogRequests).toContainEqual({
-      source: "comfyui-runtime",
-      session: archived,
-    });
-  });
-
-  it("没有新启动时保持用户选中的旧会话，不因轮询被顶回最新", async () => {
-    /* 契约：新→旧（第一项是最新那一份）。 */
-    const sessions = [
-      {
-        id: "40",
-        title: "11-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
-        scope: "current" as const,
-        crashed: false,
-      },
-      {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
-        scope: "current" as const,
-        crashed: false,
-      },
-    ];
-    server.use(
-      http.get("*/api/logs/sessions", ({ request }) => {
-        const url = new URL(request.url);
-        const session = url.searchParams.get("session");
-        return HttpResponse.json({
-          sessions,
-          selectedId: sessions.some((s) => s.id === session) ? session : "40",
-          content: session === "12" ? "第一次启动的输出" : "第二次启动的输出",
-          truncated: false,
-          windowed: false,
-          size: 128,
-        });
-      }),
-    );
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-    await act(async () => {
-      result.current.comfyLog.selectSession("12");
-    });
-    await expect
-      .poll(() => result.current.comfyLog.text)
-      .toBe("第一次启动的输出");
-
-    await act(async () => {
-      await result.current.comfyLog.refresh();
-    });
-    /* 最新会话的开始时刻没变（没有新启动）→ 不切走 */
-    expect(result.current.comfyLog.sessionId).toBe("12");
-    expect(result.current.comfyLog.text).toBe("第一次启动的输出");
-  });
-
   it("dbStudioStatus 查询失败 → dbStudioStatus 为 null，启动动作仍可用（#92 回归）", async () => {
     behavior = { dbStudioStatusError: "探测崩溃" };
     const { result } = renderHook(() => useSettingsPage(), {
@@ -1389,6 +1030,25 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.llm.extraModels[0]?.name).toBe("qwen3:32b");
   });
 
+  /* ── 运行态从设置页走干净了（ISSUE #1900）────────────────────────────
+   * 这两条是「搬家搬干净了」的机器判据。它们判的**不是**「新页有没有功能」
+   * （那由新页自己的用例管），而是「设置页这一侧有没有偷偷留着第二条通道」——
+   * 留着的表现是全绿且看不出来的：状态行没了，但后台每 30s 还在轮询一个没人读的
+   * 端点，且与「ComfyUI」页各持一份结论（两份漂了也没人发现）。 */
+  it("不再订阅运行态通道（运行态整块归侧栏「ComfyUI」页）", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.drafts).not.toBeNull();
+
+    /* 跑够一个宏任务窗口，让首屏那批请求全部落定。 */
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(stateRequests).toEqual([]);
+    expect(comfyStatusCalls).toBe(0);
+  });
+
   it("分区切换是纯视觉状态", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
@@ -1429,213 +1089,40 @@ describe("useSettingsPage", () => {
       text: "没有可打开的资源地址",
     });
   });
-});
 
-/* ── 「打开查看 ComfyUI」的打开形态（ISSUE #310）───────────────────────
- * 用户明确要求：**只要多页签，不要另开窗口**。所以这里断言的是
- * 「页签里渲染什么」，而不是「去了哪个窗口」——两条用例覆盖可嵌 / 不可嵌，
- * 两者都必须落在同一个页签上，且不可嵌时给出可读的成因。
- */
-describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
-  beforeEach(() => {
-    useShellTabs.setState({
-      tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
-      activeTabId: MAIN_TAB_ID,
-    });
-  });
-
-  it("可嵌 → 打开 ComfyUI 页签并带上内嵌地址", async () => {
-    behavior.comfyBase = "http://127.0.0.1:8188";
-    behavior.comfyEmbeddable = { embeddable: true, reason: "已开启 CORS" };
+  /* ── 运行态从设置页走干净了（ISSUE #1900）────────────────────────────
+   * 这一条判的**不是**「新页有没有功能」（那由新页自己的用例管），而是
+   * 「设置页这一侧有没有偷偷留着第二条通道」—— 留着的表现是全绿且看不出来的：
+   * 状态行没了，但后台每 30s 还在轮询一个没人读的端点，且与「ComfyUI」页各持一份
+   * 结论（两份漂了也没人发现）。 */
+  it("不再订阅运行态通道（运行态整块归侧栏「ComfyUI」页）", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
+    /* 跑够一个宏任务窗口，让首屏那批请求全部落定。 */
     await act(async () => {
-      await result.current.openComfy();
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
-
-    const tab = useShellTabs.getState().tabs.find((t) => t.id === "comfyui");
-    expect(tab).toBeDefined();
-    expect(tab?.url).toBe("http://127.0.0.1:8188");
-    expect(tab?.blockedReason ?? null).toBeNull();
-    expect(useShellTabs.getState().activeTabId).toBe("comfyui");
-    expect(result.current.flash?.kind).toBe("ok");
+    expect(stateRequests).toEqual([]);
+    expect(comfyStatusCalls).toBe(0);
   });
 
-  it("不可嵌 → 页签照常打开但带上可读说明（不静默空白）", async () => {
-    behavior.comfyBase = "http://127.0.0.1:8188";
-    behavior.comfyEmbeddable = {
-      embeddable: false,
-      reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
-    };
+  /* 安装形态此前与运行态挤在同一个响应里，于是被秒级探测拖着：打开设置页先看不到
+   * 「安装形态」徽标，「端口 / 启动参数」输入框也要等探测完成才消失（探测本身是
+   * 「进程表查询 + 端口探测」，本机负载下到 10s 级）。现在形态走 fs-only 的独立
+   * 查询（与首屏配置同批）。这条把「不等探测」钉死 —— 而且设置页这一侧自
+   * ISSUE #1900 起压根不再取运行态，所以那条通道的请求数应当**一次都没有**。 */
+  it("安装形态不依赖运行态探测：comfyStatus 悬着时形态已经就绪", async () => {
+    behavior = { comfyStatusPending: true };
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
 
-    await act(async () => {
-      await result.current.openComfy();
-    });
-
-    const tab = useShellTabs.getState().tabs.find((t) => t.id === "comfyui");
-    expect(tab).toBeDefined();
-    // 不塞内嵌地址（那是空白页签的来源），改为带可读说明。
-    expect(tab?.url ?? null).toBeNull();
-    expect(tab?.blockedReason).toContain("403");
-    /* 说明里必须带上地址：只剩一句「看不了」时，用户既无法自查、也无法判断
-     * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310 第三次回归的现场）。 */
-    expect(tab?.blockedUrl).toBe("http://127.0.0.1:8188");
-    expect(result.current.flash?.kind).toBe("err");
-  });
-
-  it("未运行时给可行动的提示且不开页签", async () => {
-    behavior.comfyBase = null;
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.openComfy();
-    });
-
-    expect(
-      useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
-    ).toBeUndefined();
-    expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
-  });
-});
-
-/* ── 浏览器 / dev 形态：「打开查看」走新浏览器页签，不内嵌 ──────────────
- * 浏览器自带页签栏，应用内不再画假页签栏（见 ShellTabs / shouldUseBrowserTab）。
- * 断言 window.open 被同步调用、且**不**新增应用内 comfyui 页签。 */
-describe("打开查看 ComfyUI — 浏览器形态走新浏览器页签", () => {
-  beforeEach(() => {
-    isDesktopShellMock.mockReturnValue(false); // 非桌面壳 = 浏览器
-    useShellTabs.setState({
-      tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
-      activeTabId: MAIN_TAB_ID,
-    });
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("运行中 → window.open 新浏览器页签，且不开应用内 comfyui 页签", async () => {
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    behavior.comfyBase = "http://127.0.0.1:8188";
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-    // 等状态查询落定，让缓存 base 就绪（浏览器分支优先用缓存、同步开窗）。
-    await expect
-      .poll(() => result.current.comfyStatus?.base)
-      .toBe("http://127.0.0.1:8188");
-
-    await act(async () => {
-      await result.current.openComfy();
-    });
-
-    expect(openSpy).toHaveBeenCalledWith(
-      "http://127.0.0.1:8188",
-      "_blank",
-      "noopener,noreferrer",
-    );
-    expect(
-      useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
-    ).toBeUndefined();
-    expect(result.current.flash?.kind).toBe("ok");
-    expect(result.current.flash?.text).toContain("新浏览器页签");
-  });
-
-  it("未运行 → 不开新页签，给可行动提示", async () => {
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    behavior.comfyBase = null;
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.openComfy();
-    });
-
-    expect(openSpy).not.toHaveBeenCalled();
-    expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
-  });
-});
-
-/* ── 「在浏览器打开」＝页签之外的**并列**出口 ────────────────────────
- * #310 定下「点『打开查看』只出页签」；这条出口是用户主动点的另一条路
- * （放大看 / 装插件 / 多屏），所以断言两件事：
- *   ① 它不再自己判内嵌、也不再开或切页签（页签那套行为完全不受影响）；
- *   ② 地址由服务端自己探（comfyOpen），前端 state 里的旧 base 不作数。
- */
-describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
-  beforeEach(() => {
-    useShellTabs.setState({
-      tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
-      activeTabId: MAIN_TAB_ID,
-    });
-  });
-
-  it("运行中 → 调用 comfyOpen 并回报成功，不新增也不切换页签", async () => {
-    behavior.comfyBase = "http://127.0.0.1:8188";
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.openComfyInBrowser();
-    });
-
-    expect(comfyOpenCalls).toBe(1);
-    expect(result.current.flash?.kind).toBe("ok");
-    /* 关键：这条路径不碰页签栏 —— 用户要的是「页签照旧，另给一个浏览器出口」。 */
-    expect(useShellTabs.getState().tabs).toHaveLength(1);
-    expect(useShellTabs.getState().activeTabId).toBe(MAIN_TAB_ID);
-  });
-
-  it("未运行 → 原样回报服务端的可行动提示（err），且不开页签", async () => {
-    behavior.comfyBase = null;
-    behavior.comfyOpen = {
-      ok: false,
-      detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
-    };
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.openComfyInBrowser();
-    });
-
-    expect(result.current.flash?.kind).toBe("err");
-    expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
-    expect(useShellTabs.getState().tabs).toHaveLength(1);
-  });
-
-  it("打开失败（浏览器命令不可用）→ err 提示，不误报成功", async () => {
-    behavior.comfyBase = "http://127.0.0.1:8188";
-    behavior.comfyOpen = {
-      ok: false,
-      detail: "打开系统浏览器失败：spawn cmd.exe ENOENT",
-    };
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.openComfyInBrowser();
-    });
-
-    expect(result.current.flash?.kind).toBe("err");
-    expect(result.current.flash?.text).toContain("打开系统浏览器失败");
+    await expect.poll(() => result.current.comfyInstance).not.toBeNull();
+    expect(result.current.comfyInstance?.instanceType).toBe("portable");
+    expect(result.current.comfyInstance?.pathConfigured).toBe(true);
+    expect(comfyStatusCalls).toBe(0);
   });
 });

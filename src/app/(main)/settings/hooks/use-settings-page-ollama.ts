@@ -35,7 +35,7 @@ import { sleep } from "~/lib/with-timeout";
 import {
   useRuntimeLogSource,
   type RuntimeLogController,
-} from "./use-runtime-log-source";
+} from "~/components/studio/logs/use-runtime-log-source";
 import type { OllamaStatus } from "./use-settings-page-types";
 
 /** 拉起后轮询的次数与间隔：直接沿用 `OLLAMA_READY` 的退避表（同 retry-policy 一处口径）。 */

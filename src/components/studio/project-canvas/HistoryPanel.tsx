@@ -248,7 +248,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   </div>
                   {pill && (
                     <span
-                      className={`absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 text-[9px] ${pill.cls}`}
+                      className={`text-4xs absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 ${pill.cls}`}
                     >
                       {pill.label}
                     </span>
@@ -327,7 +327,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       </span>
                       {pill && (
                         <span
-                          className={`rounded px-1.5 py-0.5 text-[9px] ${pill.cls}`}
+                          className={`text-4xs rounded px-1.5 py-0.5 ${pill.cls}`}
                         >
                           {pill.label}
                         </span>

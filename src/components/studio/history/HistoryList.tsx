@@ -11,6 +11,7 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "../NavItems";
+import { ViewActions } from "../ViewActions";
 import { useHistoryList } from "./hooks/use-history-list";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 
@@ -84,7 +85,7 @@ export function HistoryList({
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-6 sm:px-8 sm:py-7"
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
     >
       {/* ── Header：标题与侧栏 / 页签同一个出处（`pageHeaderTitle`）。
@@ -92,30 +93,28 @@ export function HistoryList({
              「历史」各占一处 —— 今天多出来的「记录」两个字没多给任何信息，却让
              同一件事在一屏里有了两个名字（`tests/page-name-single-source.test.ts`
              的 `viewLabel` 判据就是这么把它抓出来的）。── */}
-      <PageHeader
-        className="mb-6"
-        srTitle={pageHeaderTitle("history")}
-        actions={
-          <>
-            <SelectMenu
-              value={c.sort}
-              onChange={(value) => c.setSort(value as SortKey)}
-              options={["newest", "oldest"]}
-              labels={{ newest: "时间倒序", oldest: "时间正序" }}
-              aria-label="排序"
-              className="text-xs"
-            />
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={c.refresh}
-              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
-            >
-              ↻ 刷新
-            </Button>
-          </>
-        }
-      />
+      <PageHeader srTitle={pageHeaderTitle("history")} />
+
+      {/* 排序 / 刷新挂到顶栏（`ViewActions`）—— 屏名由页签给出之后，留在屏内的
+          那一行只剩右对齐的两颗按钮、左边一整行空气（ISSUE #1871）。 */}
+      <ViewActions>
+        <SelectMenu
+          value={c.sort}
+          onChange={(value) => c.setSort(value as SortKey)}
+          options={["newest", "oldest"]}
+          labels={{ newest: "时间倒序", oldest: "时间正序" }}
+          aria-label="排序"
+          className="text-xs"
+        />
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={c.refresh}
+          className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
+        >
+          ↻ 刷新
+        </Button>
+      </ViewActions>
 
       {/* ── 状态筛选 pills ── */}
       <div className="mb-6 flex flex-wrap gap-2">

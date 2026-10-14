@@ -161,9 +161,9 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       const rawL = light.raw(name);
       const rawD = dark.raw(name);
       if (rawL === undefined || rawD === undefined) continue;
-      expect.soft(rawL, `${name} 又按主题写了两份（应只转发表达一次）`).toBe(
-        rawD,
-      );
+      expect
+        .soft(rawL, `${name} 又按主题写了两份（应只转发表达一次）`)
+        .toBe(rawD);
     }
   });
 
@@ -266,10 +266,9 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
     );
     /* 软断言：一条桥指向空气时，其余坏的桥也一起报出来（§11.18）。 */
     for (const alias of bridged) {
-      expect.soft(
-        declared.has(alias),
-        `@theme inline 引用了未声明的 --${alias}`,
-      ).toBe(true);
+      expect
+        .soft(declared.has(alias), `@theme inline 引用了未声明的 --${alias}`)
+        .toBe(true);
     }
   });
 });
@@ -284,14 +283,13 @@ describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
        把其余 29 条的结论一起藏起来（§11.18）。 */
     for (const name of ALIASES) {
       if (!t.has(name)) continue;
-      expect.soft(
-        () => t.get(name),
-        `${name} 解析抛错（多半是成环或缺定义）`,
-      ).not.toThrow();
+      expect
+        .soft(() => t.get(name), `${name} 解析抛错（多半是成环或缺定义）`)
+        .not.toThrow();
       expect.soft(t.get(name), `${name} 解不出具体值`).toBeTruthy();
-      expect.soft(t.get(name), `${name} 解出的仍是未展开的 var()`).not.toMatch(
-        /var\(/,
-      );
+      expect
+        .soft(t.get(name), `${name} 解出的仍是未展开的 var()`)
+        .not.toMatch(/var\(/);
     }
   });
 
@@ -344,10 +342,12 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
     /* 软断言：七档圆角是各自独立的判据 —— 一档写成字面 px 不该遮住其余几档
        有没有一起断（§11.18）。 */
     for (const name of ORDER) {
-      expect.soft(
-        derivations.has(name),
-        `${name} 不是「由 --radius 派生」的声明（写成字面 px 就断开了总闸）`,
-      ).toBe(true);
+      expect
+        .soft(
+          derivations.has(name),
+          `${name} 不是「由 --radius 派生」的声明（写成字面 px 就断开了总闸）`,
+        )
+        .toBe(true);
     }
     const px = ORDER.map((name) =>
       renderRadiusPx(derivations.get(name) ?? { coef: 0, offset: 0 }, basePx),
@@ -432,19 +432,16 @@ describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）",
     const t = get();
     for (const name of FONT_CHAIN) {
       expect.soft(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);
-      expect.soft(
-        () => t.get(name),
-        `${name} 解不开（多半是自引用成环）`,
-      ).not.toThrow();
+      expect
+        .soft(() => t.get(name), `${name} 解不开（多半是自引用成环）`)
+        .not.toThrow();
       const value = t.get(name);
-      expect.soft(
-        value,
-        `${name} 解出空值 —— 全站正文会退回浏览器默认字体`,
-      ).toBeTruthy();
-      expect.soft(
-        value,
-        `${name} 解出的仍是未展开的 var()：${value}`,
-      ).not.toMatch(/var\(/);
+      expect
+        .soft(value, `${name} 解出空值 —— 全站正文会退回浏览器默认字体`)
+        .toBeTruthy();
+      expect
+        .soft(value, `${name} 解出的仍是未展开的 var()：${value}`)
+        .not.toMatch(/var\(/);
     }
   });
 
@@ -474,5 +471,65 @@ describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）",
     );
     expect(polluted, "锚点漂了，这条反向验证已经失效").not.toBe(sourceCss);
     expect(polluted).toContain("--font-sans: var(--font-sans);");
+  });
+});
+/* ── T6 标题字阶三颗的住处 ────────────────────────────────────────────
+   它们必须住在 `:root`，**不能住进 `@theme`**。理由不是风格：`@theme` 的 `--text-*`
+   命名空间会被 Tailwind 顺带生成成工具类（实测产物里曾有 `.text-page` /
+   `.text-section` / `.text-stage` 三条，JSX 侧零消费者），而这三颗乘 `--font-scale`、
+   只该经 `.u-title*` 使用。一旦成了 JSX 类名就同时踩两个坑：`cn()` 把不认识的
+   `text-<名字>` 归进**颜色**组、吃掉同一行真正的状态色；调用点写下的还是「一个会随
+   设置页变的字号」。所以「别在 JSX 里用它们」从前只写在注释里，现在由「那个类根本
+   不存在」保证 —— P83 也同步不再认 `text-page` 是合规出口。 */
+const TITLE_TOKENS = ["--text-section", "--text-page", "--text-stage"];
+
+describe("T6 标题字阶三颗住在 :root，不得被 @theme 生成成工具类", () => {
+  it("三颗都还在（移到 :root ≠ 删掉），且基准仍由 --font-scale 给", () => {
+    for (const name of TITLE_TOKENS) {
+      /* 不能用 `braceBlock(sourceCss, ":root")`：`:root` 这个字串先出现在 @theme 的
+         注释里（讲「浅色档不得用裸 :root」那一段），取到的块根本不是声明所在那个。
+         改成直接匹配形状 —— 它同时钉住「住在 :root」与「基准跟着字阶档」。
+         求解器在编译产物里会把 `var(--font-scale, 1)` 代成缺省值 1，所以「跟着变」
+         这一半只能在源码上判；产物那一半判的是「解得出一个具体长度」—— 读不到值的
+         形态是 h1 字号退回继承，那才是这条要防的事。 */
+      const shape = new RegExp(
+        `:root\\s*\\{[^}]*${name}:\\s*calc\\([^;]*var\\(--font-scale`,
+      );
+      expect(
+        shape.test(sourceCss),
+        `${name} 不再是「:root 里一条乘 --font-scale 的 calc」—— 住处或基准的来路变了`,
+      ).toBe(true);
+      expect(light.has(name), `产物里没有 ${name} —— .u-title* 读不到值`).toBe(
+        true,
+      );
+      expect(light.get(name), `${name} 解不出一个长度`).toMatch(/rem|px/);
+    }
+  });
+
+  it("@theme 块里不得再出现这三颗（出现即把坑搬回去）", () => {
+    const theme = braceBlock(sourceCss, "@theme");
+    for (const name of TITLE_TOKENS) {
+      expect(
+        theme,
+        `${name} 回到了 @theme：Tailwind 会顺带造出一个 JSX 可用的同名类，` +
+          "而 cn() 把它当颜色处理（实测产物里曾有 .text-page 等三条）",
+      ).not.toContain(`${name}:`);
+    }
+  });
+
+  it("反向：上面那条不是空转 —— 真搬回 @theme 时它必须看得见", () => {
+    /* 把 `--text-section` 塞进文件里**第一个** `@theme` 块（判据读的就是那一块）。
+       从前这里写成把 `:root {` 换成 `@theme {`，造出来的是第二个块，而 `braceBlock`
+       只读第一个 —— 断言看着在验、其实什么都没验到（正是本文件开头记着的
+       「覆盖面比措辞窄」那一类）。 */
+    const movedBack = sourceCss.replace(
+      "  --font-sans:",
+      "  --text-section: calc(0.875rem * var(--font-scale, 1));\n  --font-sans:",
+    );
+    expect(
+      movedBack,
+      "锚点漂了（--font-sans 不在第一个 @theme 里），这条反向验证已失效",
+    ).not.toBe(sourceCss);
+    expect(braceBlock(movedBack, "@theme")).toContain("--text-section:");
   });
 });

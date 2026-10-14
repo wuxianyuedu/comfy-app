@@ -19,6 +19,9 @@ const GLOBAL_IDS: WorkspaceView[] = [
   "models",
   "history",
   "queue",
+  /* ComfyUI（ISSUE #1900）：从设置页「创作后端」搬出来的运行态页。排在 queue
+     之后（同族：都在看本机后端现在在干什么），设置之前。 */
+  "comfyui",
   /* 设置从「workspace 内的全屏浮层」改成视图后进入全局项清单。排在 queue 之后、
      workflows 之前：尾部那一组（workflows + console）是「工作流库」链路的收尾，
      设置不属于那条链路，不该挤进去。 */

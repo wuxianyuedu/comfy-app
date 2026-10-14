@@ -74,8 +74,10 @@ beforeEach(() => {
   /* 判据走 `require("./gate-scan-read.cjs")` 取扫描面的共用读取器（容错遍历，
    * 口径见那份文件的文件头）—— 临时仓库只放被测那一份时，跑起来是
    * `MODULE_NOT_FOUND`，那条红长得像「判据坏了」，实际是夹具少带一个文件。
-   * 这份用例还没迁进 `defineGateRepo`（登记在 `.gate-repo-boilerplate-baseline.json`），
-   * 按 §11.16 的口径手搓的那几份自己调 `copyGateDeps` 补齐同目录依赖。 */
+   * 这份用例还没迁进 `defineGateRepo`（§11.16.1 的门禁只判「`tmpdir()` + 从
+   * `workdir` 拉脚本 + 没 import 共享件」三条同时成立；这份造的是「缓冲内容」而不是
+   * 临时仓库、也没从工作区拉脚本，所以不在那条判据的靶子里），自己调
+   * `copyGateDeps` 把同目录依赖补齐 —— 与夹具内那一层同一件事。 */
   copyGateDeps(join(workdir, "check-file-structure.cjs"));
   // 脚本无条件扫描 src/（R1-R6 规则），临时工作区必须存在该目录
   mkdirSync(join(workdir, "src"));

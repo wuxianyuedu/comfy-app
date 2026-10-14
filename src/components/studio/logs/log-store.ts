@@ -57,9 +57,12 @@ import {
   computeFiltered,
   computeOriginCounts,
   dropStaleEntries,
-  mergeTimeline,
+  indexOfTimeline,
+  mergeTimelineIndexed,
   nextId,
   nextSeq,
+  rememberTimelineIndex,
+  trimTimelineIndex,
 } from "./log-analysis";
 
 export * from "./log-types";
@@ -284,16 +287,27 @@ export interface LogPanelSlice {
  */
 export const LOG_STORE_MAX = 5000;
 
-/** 把合并后的时间线裁到上限；返回裁后数组与本次被折叠的条数。 */
+/**
+ * 把合并后的时间线裁到上限；返回裁后数组、本次被折叠的条数与被折叠那一段。
+ *
+ * 顺带把去重索引里**已出窗口**的键摘掉（{@link trimTimelineIndex}）—— 索引
+ * 按数组引用挂在 `log-analysis` 的进程内缓存上，而截断产出的是一个**新数组**，
+ * 于是这里必须把索引顺手搬到它名下；不搬的话面板一顶到上限，每轮都因缓存未命中
+ * 退回 O(n) 建表，索引最该省力的那一段反而全废。
+ *
+ * 摘键是 O(被折叠条数)，与「重建整张表」的 O(时间线) 差一个量级。
+ */
 function capTimeline(logs: LogEntry[]): {
   logs: LogEntry[];
   dropped: number;
 } {
   if (logs.length <= LOG_STORE_MAX) return { logs, dropped: 0 };
-  return {
-    logs: logs.slice(-LOG_STORE_MAX),
-    dropped: logs.length - LOG_STORE_MAX,
-  };
+  const cut = logs.length - LOG_STORE_MAX;
+  const droppedEntries = logs.slice(0, cut);
+  const kept = logs.slice(cut);
+  trimTimelineIndex(indexOfTimeline(logs), droppedEntries);
+  rememberTimelineIndex(kept, indexOfTimeline(logs));
+  return { logs: kept, dropped: cut };
 }
 
 function derive(logs: LogEntry[], search: string, revision: number) {
@@ -427,7 +441,16 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         seq: nextSeq(),
         time: Date.now(),
       };
-      const logs = mergeTimeline(state.logs, [full]);
+      /* 与 `appendFileLogs` 走**同一支**索引复用版合并：`addEntry` 是
+       * 控制台 / 系统行的入口，同样是「一条一条来」，同样不该每轮建两张全表
+       * Map（见 `appendFileLogs` 的说明）。 */
+      const merged = mergeTimelineIndexed(
+        state.logs,
+        [full],
+        indexOfTimeline(state.logs),
+      );
+      const logs = merged.logs;
+      rememberTimelineIndex(logs, merged.index);
       const capped = capTimeline(logs);
       return {
         ...applyView(
@@ -444,9 +467,19 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       /* 空批次直接原样返回：计数/过滤结果不变（setState 浅合并，不覆盖
        * counts），与「追加空数组时状态保持不变」的既有契约一致。 */
       if (fresh.length === 0) return { logs: state.logs };
-      const logs = mergeTimeline(state.logs, fresh);
+      /* 走**索引复用版**：面板每 2s 一轮、六路各写一次，而「这次送来的一两行
+       * 是不是新的」若靠就地建两张全表 Map 来判，实测 5000 条时每轮白花
+       * 2.27ms（占整次合并的 97%，排序只占 0.11ms）。索引按数组引用缓存在
+       * `log-analysis` 里，因此这里只取不建。 */
+      const merged = mergeTimelineIndexed(
+        state.logs,
+        fresh,
+        indexOfTimeline(state.logs),
+      );
+      const logs = merged.logs;
       /* 全批是重复行（或全被会话起点裁掉）→ 时间线没变，什么都不推进。 */
       if (logs === state.logs) return { logs: state.logs };
+      rememberTimelineIndex(logs, merged.index);
       /* mergeTimeline 返回新数组 ⟺ 至少一条新行真正落板 → 推进 revision。
        * 内存上限（LOG_STORE_MAX）的截断放在 mergeTimeline **之后**、独立于
        * revision 判据：revision 只因为「真有新行落板」推进，截断本身不算新内容

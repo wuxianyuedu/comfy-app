@@ -133,6 +133,43 @@ export function tailWindow<T>(items: readonly T[], size: number): T[] {
   return items.slice(items.length - n);
 }
 
+/**
+ * **尾部窗口的增量版**：把 `item` 追加进窗口，并保持「最多 `size` 条」。
+ *
+ * 为什么单独有这一支：日志窗口的写入是**每来一行调一次**（高频回调 + 定时器），
+ * 而调用处此前一律写成 `tailWindow([...prev, item], size)` —— 每次先整份复制、
+ * 再整份切片，都是 O(n)；`size = 2000` 时一条日志两遍 2000 元素复制，
+ * 成百上千行连打时是实打实的开销。它同时是**内存峰值**最高的一处：
+ * 复制出的中间数组恰好在窗口封顶那一刻最贵（每行多留一个引用）。
+ *
+ * 语义与 `tailWindow([...items, item], size)` 逐字等价（含 `size` 越界归一的
+ * 口径），差别只在这两条：
+ *   · **已达上限时原地 `shift()`，不复制** —— `shift` 每次搬 `size` 个引用，
+ *     与复制同价，但**不新分配数组**（峰值那一格省下来）；
+ *   · **放得下时返回新数组**（不原地改入参）—— 本仓的窗口值全是 React state /
+ *     store 字段，必须换引用才触发渲染，原地改会让调用处静默不更新。
+ *
+ * 只在放入得下时复制、只在放不下时原地搬，两条合起来就是「每次追加恰好一趟
+ * O(size) 搬移」的最小写法。
+ */
+export function tailWindowAppend<T>(
+  items: readonly T[],
+  item: T,
+  size: number,
+): T[] {
+  const n = safeSize(size);
+  /* 窗口未满：复制 + 追加（必须换引用，见上）。这一支就是
+   * `tailWindow([...items, item], n)` 本身 —— 归一口径不必在这里再算一遍，
+   * 直接借 `tailWindow` 的那一处定义。 */
+  if (items.length < n) return tailWindow([...items, item], n);
+  /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
+   * 不必再切片。 */
+  const next = items as T[];
+  next.shift();
+  next.push(item);
+  return next;
+}
+
 /** 分块遍历：第 `index` 块在原列表里的位置（左闭右开）。 */
 export interface ChunkRange {
   start: number;

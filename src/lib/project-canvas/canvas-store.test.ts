@@ -44,6 +44,7 @@ import {
   getActiveId,
   getProject,
   hydrateFromServer,
+  hydrateProjectFromServer,
   isEmptyDraftName,
   isProjectNameTaken,
   listProjects,
@@ -54,6 +55,11 @@ import {
   upsertProject,
 } from "./canvas-store";
 import { listSyncNotices } from "./sync-notice";
+
+/** 什么都不做的桩（`mockImplementation` 拒收不了 `() => {}` 那种空箭头）。 */
+function noop(): void {
+  void 0;
+}
 
 /** 等一轮宏任务：镜像是 fire-and-forget，登记发生在 promise 落定之后。 */
 async function settled(): Promise<void> {
@@ -571,5 +577,99 @@ describe("deleteProjectEverywhere（索引里没有那一行也删得掉）", ()
     deleteProjectEverywhere("proj_orphan", "未命名");
     await settled();
     expect(noticesFor("proj_orphan")[0]).toContain("没能从服务端删掉");
+  });
+});
+
+/* 打开一个**只在服务端**的项目（ISSUE #1874）。
+ *
+ * 现场：侧栏与「所有项目」那一屏读的是并集，所以「服务端有一行、本机索引里没有」
+ * 的项目看得见、点得着；而打开它这一跳读的是本地索引（`getProject(id)`）——
+ * 索引里没有 ⇒ 交回 null ⇒ 闸门照旧弹「先创建或选择一个项目」。用户对着一个
+ * 已经存在的项目，被要求**再建一个**。
+ *
+ * 所以这里判的是那一跳的前置：**把服务端这一行落进索引**，`getProject(id)`
+ * 之后必须能交回它。第一条对着现场写，反向验证过：去掉 `hydrateProjectFromServer`
+ * 里的落盘，它必红。
+ */
+describe("hydrateProjectFromServer（打开只在服务端的项目的前置）", () => {
+  it("索引里没有这一行 → 从服务端拉下来并写进索引", async () => {
+    projectListQuery.mockResolvedValue([
+      {
+        id: "proj_server",
+        name: "只在服务端的项目",
+        updatedAt: 7,
+        nodes: [],
+        edges: [],
+      },
+    ]);
+
+    expect(getProject("proj_server")).toBeNull();
+
+    const project = await hydrateProjectFromServer("proj_server");
+
+    expect(project?.name).toBe("只在服务端的项目");
+    /* 界面那一跳读的是这里 —— 落盘没做的话它仍然是 null，闸门就还会弹出来。 */
+    expect(getProject("proj_server")?.name).toBe("只在服务端的项目");
+  });
+
+  it("索引里已经有这一行 → 不碰网络（每次点开项目都发一次请求是另一码事）", async () => {
+    seed([
+      { id: "proj_local", name: "本地的", updatedAt: 3, nodes: [], edges: [] },
+    ]);
+
+    const project = await hydrateProjectFromServer("proj_local");
+
+    expect(project?.name).toBe("本地的");
+    expect(projectListQuery).not.toHaveBeenCalled();
+  });
+
+  it("服务端没有这一行 → 交回 null，且不往索引里塞任何东西（调用方照旧渲染闸门）", async () => {
+    projectListQuery.mockResolvedValue([
+      { id: "proj_other", name: "别人的", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+
+    await expect(hydrateProjectFromServer("proj_missing")).resolves.toBeNull();
+    /* 没拉到的这一行不该进索引，**别人的那一行也不该**：本函数回答的是
+     * 「怎么打开 `id`」，顺手把整表并进来是另一件事（对账那条路才做那个）。 */
+    expect(listProjects()).toHaveLength(0);
+  });
+
+  it("拉不到服务端 → 交回 null，不抛，且失败不是无声的（硬规则 4）", async () => {
+    projectListQuery.mockRejectedValue(new Error("ECONNREFUSED"));
+    /* 这一档走的是诊断口（应用日志面板），不是「服务端确定拒收」那张登记表
+     * ——「此刻拿不到」与「确定不收」是两件事，判据在 `sync-notice`。 */
+    const warn = vi.spyOn(console, "warn").mockImplementation(noop);
+
+    await expect(hydrateProjectFromServer("proj_server")).resolves.toBeNull();
+
+    expect(warn.mock.calls.flat().join(" ")).toContain("这一行没能拉到本机");
+  });
+
+  it("只并进新增的行：已有条目的 updatedAt 不被这一轮重写", async () => {
+    seed([
+      { id: "proj_keep", name: "已有的", updatedAt: 5, nodes: [], edges: [] },
+    ]);
+    projectListQuery.mockResolvedValue([
+      {
+        id: "proj_keep",
+        name: "服务端那份",
+        updatedAt: 1,
+        nodes: [],
+        edges: [],
+      },
+      {
+        id: "proj_server",
+        name: "新拉到的",
+        updatedAt: 7,
+        nodes: [],
+        edges: [],
+      },
+    ]);
+
+    await hydrateProjectFromServer("proj_server");
+
+    const kept = listProjects().find((project) => project.id === "proj_keep");
+    expect(kept?.name).toBe("已有的");
+    expect(kept?.updatedAt).toBe(5);
   });
 });

@@ -43,6 +43,18 @@ import { expectHomeReady } from "./support/home-anchors";
  *
  * 红了先读数是哪一档、再决定压回去还是走例外流程（例外流程写在规范 §13.5.4）。
  *
+ * ## 基线按平台各自一份（2026-10-13，ISSUE #1834 收尾的 win32 读数）
+ *
+ * win32 与 posix 的稳态读数差 **2.2×**（715.5ms vs 320ms，`/workspace`）。共用一个
+ * 基线的下场是两种宿主二选一恒红：posix 的数让 win32 每次都红（红的话术还在说
+ * 「性能退化」），win32 的数让 posix 的预算翻倍、判据形同虚设。所以按
+ * `process.platform` 读各自平台的基线 —— 与 ISSUE #1767「两个平台同一条形状」
+ * 同一条理由：**判据必须在它跑得到的那种宿主上自证**。倍数（×2）两平台相同，
+ * 相对灵敏度不因平台打折。
+ *
+ * darwin 未实测，落在 posix 档（macOS 与 Linux 同为本地 next + chromium）；
+ * 真在 macOS 上红了，按 §13.5.4 的例外流程补录那一档，别去动别的平台的数。
+ *
  * ## 边界
  *
  * 这条断言**不依赖任何业务数据**（只要首页渲染得出来），所以它的红只有一个含义：
@@ -52,14 +64,22 @@ import { expectHomeReady } from "./support/home-anchors";
 const RUNTIME_BUDGET = {
   /**
    * 基线读数（毫秒）—— **实测初值，不是估的**。唯一出处是
-   * `scripts/.runtime-budget-baseline.json`（与 `check-bundle-budget` 同构：
-   * 数字住在基线文件里，spec 只读口径）。
+   * `scripts/.runtime-budget-baseline.json` 的 `metric.byPlatform`（与
+   * `check-bundle-budget` 同构：数字住在基线文件里，spec 只读口径）。
+   *
+   * 两平台必须同源有判据（`tests/e2e-runtime-budget.test.ts` 核逐字一致）——
+   * 各写一份就会漂，而漂了不会红。
    */
-  loadEventEnd: 320,
-  firstContentfulPaint: 250,
+  byPlatform: {
+    win32: { loadEventEnd: 716, firstContentfulPaint: 344 },
+    posix: { loadEventEnd: 320, firstContentfulPaint: 250 },
+  },
   /** 阈值倍数：基线 × 这个数 = 上限（上面那段写了为什么是 2）。 */
   factor: 2,
 } as const;
+
+/** 本机跑在哪个平台的档上 —— 缺平台键时落 posix（见文件头「darwin 未实测」）。 */
+const PLATFORM = process.platform === "win32" ? "win32" : "posix";
 
 test.describe("页面级运行时读数在预算内", () => {
   /**
@@ -95,13 +115,15 @@ test.describe("页面级运行时读数在预算内", () => {
     ).not.toBeNull();
 
     const budget = RUNTIME_BUDGET.factor;
-    const loadBudget = RUNTIME_BUDGET.loadEventEnd * budget;
-    const fcpBudget = RUNTIME_BUDGET.firstContentfulPaint * budget;
+    const baseline = RUNTIME_BUDGET.byPlatform[PLATFORM];
+    const loadBudget = baseline.loadEventEnd * budget;
+    const fcpBudget = baseline.firstContentfulPaint * budget;
     /* 两档读数一起打进断言消息：红了要能一眼看出超了多少，而不是只看到一句
      * 「expected 640 to be greater than 700」还要回来读源码。 */
     const detail =
       `读数：loadEventEnd ${loadEventEnd?.toFixed(1)}ms / FCP ${firstContentfulPaint?.toFixed(1)}ms` +
-      `（${roundsNote} 取 min）；预算：${loadBudget}ms / ${fcpBudget}ms`;
+      `（${roundsNote} 取 min）；平台 ${PLATFORM} 的基线：${baseline.loadEventEnd}ms / ${baseline.firstContentfulPaint}ms` +
+      `（×${budget} ⇒ 预算 ${loadBudget}ms / ${fcpBudget}ms）`;
 
     expect(
       loadEventEnd,

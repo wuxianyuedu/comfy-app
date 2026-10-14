@@ -19,8 +19,10 @@ import { describe, expect, it } from "vitest";
 import {
   E2E_DIR,
   TRACK,
+  checkSchemaBeforeRun,
   parseSkip,
   planRun,
+  schemaPreflightDecision,
   shouldRecord,
 } from "../scripts/e2e-run.mjs";
 import {
@@ -107,6 +109,90 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
     ]);
     // 目录清单不在这里抄一份：`testMatch` 是 `playwright.config.ts` 的事。
     expect(planRun().args).not.toContain(E2E_DIR);
+  });
+});
+
+describe("开跑前的 schema 预检（#1834 收尾的现场）", () => {
+  /* 立案读数（win32 本机）：dev 库落后 schema 几个版本、pending 含
+   * `DROP TABLE loraTrainingJob`，启动链路按设计不应用 → task 表缺 6 列 →
+   * queue-monitor / main-journey 稳定红，报错说的却是「元素没出现」。
+   * 这一卡把「跑 8 分钟红一片」换成「开跑前告诉你要跑 pnpm db:push」。 */
+  const SAFE_BATCH = [
+    "ALTER TABLE `task` ADD `progressNode` text;",
+    "CREATE INDEX `task_claimed_by_idx` ON `task` (`status`,`claimedBy`);",
+  ];
+  const RISKY_BATCH = [
+    ...SAFE_BATCH,
+    "DROP TABLE `loraTrainingJob`;",
+    "DROP INDEX `task_project_idx`;",
+  ];
+
+  it("指纹一致 ⇒ 放行（正常机器的常态，且零成本——不起 drizzle）", () => {
+    const d = schemaPreflightDecision({
+      probe: "ready",
+      fingerprintMatch: true,
+      pending: [],
+      autoApplyable: false,
+    });
+    expect(d.verdict).toBe("proceed");
+  });
+
+  it("表还没建 / 读不到 ⇒ 放行（全新检出由启动链路自动建表）", () => {
+    for (const probe of ["missing", "unknown"] as const) {
+      expect(
+        schemaPreflightDecision({
+          probe,
+          fingerprintMatch: false,
+          pending: [],
+          autoApplyable: false,
+        }).verdict,
+      ).toBe("proceed");
+    }
+  });
+
+  it("指纹不一致但 dry-run 没有待执行语句 ⇒ 放行（指纹只是没登记）", () => {
+    const d = schemaPreflightDecision({
+      probe: "ready",
+      fingerprintMatch: false,
+      pending: [],
+      autoApplyable: false,
+    });
+    expect(d.verdict).toBe("proceed");
+    expect(d.reason).toContain("没有待执行语句");
+  });
+
+  it("待执行全是安全语句 ⇒ 放行（启动链路会后台应用，与不带这一卡时同行为）", () => {
+    const d = schemaPreflightDecision({
+      probe: "ready",
+      fingerprintMatch: false,
+      pending: SAFE_BATCH,
+      autoApplyable: true,
+    });
+    expect(d.verdict).toBe("proceed");
+  });
+
+  it("待执行含丢数据语句 ⇒ **阻断**，且逐条列出（只给条数等于让人闭眼 db:push）", () => {
+    const d = schemaPreflightDecision({
+      probe: "ready",
+      fingerprintMatch: false,
+      pending: RISKY_BATCH,
+      autoApplyable: false,
+    });
+    expect(d.verdict).toBe("abort");
+    expect(d.risky).toEqual([
+      "DROP TABLE `loraTrainingJob`;",
+      "DROP INDEX `task_project_idx`;",
+    ]);
+    expect(d.reason).toContain("丢数据");
+  });
+
+  it("取证层在真仓库上判得出形状（不写死本机当前红绿——那会随库状态漂）", () => {
+    /* 这一条只核「函数跑得通、返回的形状在判词里认得过来」：本机此刻红绿
+     * 取决于 db.sqlite 同不同步，而那不是判据能钉的事实。 */
+    const d = checkSchemaBeforeRun(ROOT);
+    expect(["proceed", "abort"]).toContain(d.verdict);
+    expect(typeof d.reason).toBe("string");
+    if (d.verdict === "abort") expect(d.risky?.length ?? 0).toBeGreaterThan(0);
   });
 });
 

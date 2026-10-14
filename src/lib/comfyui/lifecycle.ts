@@ -24,10 +24,8 @@
 // `~/lib/session-banner.server`（`.server` 后缀、内部无 server-only）、
 // `./lifecycle-launch` / `./lifecycle-derive` / `./lifecycle-exit`
 // （#1077 / #1080）、`./trace`（#1060）、`./status`（#1080）。
-// 下面第 561 行的 top-level `const COMFY_SESSION_MARK = \`${SERVICES_LOG_DIR}/…\``
-// 是**加载即求值**——它能否在纯 Node 里成功取决于 `log-paths` 已摘 server-only
-// （#1074）。这条正是 P3 §5 里之前停在 comfyui 边时点出的「lifecycle 卡在
-// log-paths」——本批随 lib 地基批收口。
+// 下面 top-level 的 `COMFY_SESSION_MARK` 是**加载即求值**——它能否在纯 Node 里
+// 成功取决于 `log-paths` 已摘 server-only（#1074）。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import type { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -64,6 +62,11 @@ import {
 import { formatLocalStamp } from "~/lib/time-format";
 import { COMFY_STOP_PROBE } from "../retry-policy";
 import { noteComfyExit } from "./liveness-signal";
+import {
+  noteComfyLaunchSettled,
+  noteComfyStartRequested,
+  noteComfyStopRequested,
+} from "./lifecycle-notice";
 import {
   decideEnsureLaunch,
   decideStop,
@@ -287,6 +290,10 @@ export async function stopComfyUiProcess(): Promise<{
   // 进程树刚被改动过：快照必须失效，否则状态行会继续沿用关闭前的结论。
   resetComfyRuntimeSnapshot();
   resetComfyUiStatus();
+  /* 告诉「运行态变化」那条通道：用户点了关闭。挂在 reset 之后 —— 顺序反了会
+   * 让设置页收到通知后**立刻**重问，而它读到的仍是关闭前那份缓存（一次白问，
+   * 而且答案还是旧的）。 */
+  noteComfyStopRequested(outcome.ok);
   if (outcome.ok) {
     appendRuntimeLog("[stop] ComfyUI 已关闭");
     markComfyNotRunningProven();
@@ -544,8 +551,8 @@ async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
  *      不是探针抖动）→ 记一笔，接下来 COMFY_NOT_RUNNING_HOLD_MS 内不因更弱的
  *      证据改口；
  *    · 结论是「运行中」→ 一切都已确认活着，两把标记都清掉；
- *    · 「进程在、端口未绑定」（正在启动）→ 启动窗口继续生效，但不动「未运行」
- *      标记。 */
+ *    · 「进程在、端口未绑定」→ 这就是「真的还在启动」：窗口跟着续期（好让紧随
+ *      其后的探针抖动不打回「未运行」），「未运行」标记不动。 */
 function deriveAndLatch(facts: {
   starting: boolean;
   stopping: boolean;
@@ -567,8 +574,18 @@ function deriveAndLatch(facts: {
   else if (status.probing) {
     /* 「检测中…」= 事实不可信：既不能坐实「未运行」，也不该让上一笔「探明没在跑」
      * 提前过期（那正是相邻两轮结论相反的来源）。 */
-  } else if (status.starting) st.startingAt = Date.now();
-  else if (snap.didQueryProcTable && !snap.unverified)
+  } else if (snap.running || facts.starting) {
+    /* 续期只认「真的还在启动」这两条证据：**快照探到活着的进程**（端口还没
+     * 绑定 = 正在启动），或**拉起流程在进行**（`facts.starting` = 启动单飞锁）。
+     *
+     * **不认本轮结论里的 `starting`**：那个布尔的来源之一正是「启动窗口本身」
+     * （见 deriveComfyUiStatus 第 4 步），拿它续期等于让窗口给自己续命 ——
+     * 5s 轮询每次都把 12s 窗口推后一轮，于是启动失败（保活拉起后进程未出现 /
+     * 进程秒退）之后，日志里已经写了失败，状态行却永久停在「ComfyUI 正在
+     * 启动…」，连「启动 ComfyUI」按钮都跟着一起锁死。窗口是给「拉起动作 →
+     * 就绪」那段空窗的缓冲，它的寿命只由真实时间与这两条证据决定。 */
+    st.startingAt = Date.now();
+  } else if (snap.didQueryProcTable && !snap.unverified)
     markComfyNotRunningProven();
   return status;
 }
@@ -709,6 +726,9 @@ export async function ensureComfyUiReady(
   if (opts.manual) {
     resetComfyRuntimeSnapshot();
     resetComfyUiStatus();
+    /* 用户明确要求拉起：运行态**从这一刻起**就在变，通知挂在 reset 之后才对
+     * （与关闭那条同一条顺序约束：先失效、再通知，收到通知的人重问时吃不到旧缓存）。 */
+    noteComfyStartRequested();
   }
 
   const host: LaunchHost = {
@@ -740,15 +760,6 @@ export async function ensureComfyUiReady(
     note("ComfyUI 正在启动中，等待就绪…");
     return st.starting;
   }
-
-  /* 从这里起就进入「启动流程进行中」：无论这次是不是走 bound/keepAlive 拉起，
-   * 事实都已经在变（进程即将/正在出现）。落一笔计时窗口，让设置页的 5s 轮询
-   * 在这段空窗里问出的「什么都没探到」不再被渲染成「未运行」（ISSUE #442）。
-   *
-   * 放在判决表**之前**：判决表可能给出「未开自动启动 / 未配路径」这类直接
-   * 返回，那种情况下窗口最多多显示十几秒「启动中…」，比在用户刚点过启动的
-   * 当口闪一句「未运行」更可接受。 */
-  markComfyStarting();
 
   // 手动启动＝用户明确要求拉起：先清掉两把「自动路径先别动」闩锁，否则上次
   // 手动关闭 / 上次启动失败的小尾巴会把这次明确启动也拦住。
@@ -811,6 +822,15 @@ export async function ensureComfyUiReady(
         "ComfyUI 未运行，且未配置安装路径——请到 设置 → 创作后端 填写 ComfyUI 路径",
     };
   }
+  /* 到这里才是「真的会拉起」：判决表摘掉 already-up / skip-* 后只剩「等已有
+   * 实例就绪」与「按路径拉起」，共同点是事实确实在变。窗口落在这里，状态轮询
+   * 才不会被空窗里的「什么都没探到」骗成「未运行」（ISSUE #442）。
+   *
+   * **位置是判据本身**（ISSUE #1899）：此前它在判决表之前，于是「未配路径 /
+   * 未开自动启动 / 手动关闭过 / 上次失败」这些根本不打算拉起的分支也点亮了窗口
+   * —— 用户看到「请填写 ComfyUI 路径」的同时屏幕上写着「正在启动…」。窗口的
+   * 语义是「有启动在推进」，只有真会推进的两条路配得上它。 */
+  markComfyStarting();
   /* HTTP 没探到 ≠ 没在跑：旧保活实例正忙（出图 / 事件循环饱和）时
    * /system_stats 那 1.5s 会超时，而上面的入口探测只认这一次 fetch。进程级
    * 快照不依赖 ComfyUI 的 HTTP 响应能力 —— 进程确实在跑就转「等待已有实例
@@ -845,6 +865,10 @@ export async function ensureComfyUiReady(
       st.autoStartFailed = true;
       st.autoStartFailureDetail = r.detail;
     }
+    /* 单飞锁**还没放开**时通知（写在 finally 之前）：收到通知的人会立刻重问
+     * 状态，而 `starting` 取的是那里的瞬时值 —— 锁放开之后再通知，那一问可能
+     * 刚好落在「锁没了、还没探到就绪」的空窗上（ISSUE #442 那条来回跳）。 */
+    noteComfyLaunchSettled(r.ok);
     return r;
   } finally {
     st.starting = undefined;

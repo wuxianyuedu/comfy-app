@@ -302,6 +302,60 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     } as never);
   });
 
+  /* 启动失败后状态行必须自己落回「未运行」。
+   *
+   * 现场（用户侧）：日志里已经写了「保活拉起后进程未出现」，设置页的状态行却
+   * 停在「ComfyUI 正在启动…」、「启动中…」按钮跟着锁死 —— 明明没有启动在跑。
+   * 根因是「启动窗口」给自己续命：续期判据原先用的是**本轮结论**的 `starting`，
+   * 而窗口正是这个结论的来源之一，于是 5s 轮询每一轮都把 12s 窗口推后一轮，
+   * 窗口永不过期（ISSUE #442 那两把标记里的另一面）。 */
+  it("启动流程已收尾后，启动窗口按真实时间过期，不被轮询续期", async () => {
+    // 先造一次「拉起过、随后失败收尾」的启动：保活路径 + 进程永远探不到 +
+    // 250ms 超时收尾（与上面「启动进行中」用例同一手法，不会真起进程）。
+    const { getExitPolicy } =
+      await import("../app-settings/app-settings.server");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
+    vi.mocked(getExitPolicy).mockReturnValue({
+      exitKillComfyui: false,
+    } as never);
+    vi.mocked(spawnManaged).mockReturnValue({
+      child: { pid: 98765 },
+      error: undefined,
+    } as never);
+    vi.mocked(findPidForMainPy).mockResolvedValue(null);
+    const failed = await ensureComfyUiReady({ manual: true, timeoutMs: 250 });
+    expect(failed.ok).toBe(false);
+
+    /* 之后按设置页的 5s 轮询推进时钟。基准取真实时间（启动流程已经在真实时间
+     * 里收尾），只 fake `Date`、不碰定时器，把三轮轮询挪到 +4s / +9s / +14s：
+     * 最后一轮已经越出 12s 窗口。 */
+    const base = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(base + 4_000);
+      expect((await getComfyUiStatus({ force: true })).starting).toBe(true);
+
+      // 第二轮正是旧实现给自己续命的那一轮：它把窗口推到 +9s 之后的 12s。
+      vi.setSystemTime(base + 9_000);
+      await getComfyUiStatus({ force: true });
+
+      vi.setSystemTime(base + 14_000);
+      const settled = await getComfyUiStatus({ force: true });
+      expect(settled.up).toBe(false);
+      /* 关键断言：窗口已按真实时间过期 ⇒ 结论落回「未运行」。旧实现在这里
+       * 返回 true，且此后每一轮都返回 true（状态行永久卡在「启动中」）。 */
+      expect(settled.starting).toBe(false);
+      expect(settled.probing).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      vi.mocked(getExitPolicy).mockReturnValue({
+        exitKillComfyui: true,
+      } as never);
+      clearComfyAutoStartFailure();
+      resetComfyUiStatus();
+    }
+  });
+
   /* ISSUE #344：ComfyUI 早就启动了，设置页却一直显示「启动中」。
    * 两条判据缺陷叠加：① `resolveComfyBase` 在配置了路径、进程表又查不到
    * `main.py`（Comfy Desktop 的实例由 standalone-env 启动）时抛错，
@@ -667,13 +721,22 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
     vi.mocked(findPidListeningPort).mockResolvedValue(null);
   });
 
-  it("手动点「启动 ComfyUI」：拉起判决走完后状态行不落「未运行」", async () => {
+  /* ISSUE #1899：**没配路径时点「启动 ComfyUI」，不许点亮启动窗口**。
+   *
+   * 现场（用户侧）：路径那一栏是空的，点一下「启动 ComfyUI」就得到
+   * 「ComfyUI 正在启动…」+ 锁死的「启动中…」按钮，而同一屏里那句提示写着
+   * 「未配置——请填写 ComfyUI 路径」。根因是 `markComfyStarting()` 写在判决表
+   * **之前**，于是 `skip-no-path` / `skip-autostart-off` / `skip-manual-stop` /
+   * 上次失败这些**根本不打算拉起**的分支也把 12s 窗口点亮了；窗口期内没有任何
+   * 新事件来纠正它，状态行就一直停在这句错的话上。
+   *
+   * 本用例此前断言的正是**错的那一侧**（「未配路径也算启动流程进行过，空窗不该
+   * 闪回未运行」）—— 那条前提就是 bug 本身，所以翻过来当回归判据。
+   * 窗口的语义是「有启动在推进」，只有真会推进的那两条路才配得上它。 */
+  it("未配路径点「启动 ComfyUI」：判决直接返回，不点亮启动窗口（ISSUE #1899）", async () => {
     resetComfyUiStatus();
     const { resetComfyRuntimeSnapshot } = await import("./status");
     resetComfyRuntimeSnapshot();
-    // 本用例只关心「启动窗口有没有落位」：路径判据直接返回「未配置路径」，
-    // 拉起动作不会真的发生（不起进程），但这已经算是「启动流程进行过」，
-    // 之后的空窗期不该闪回「未运行」。
     vi.mocked(getSettingsSync).mockReturnValue({
       comfyuiPath: "",
       comfyuiAutoStart: true,
@@ -682,11 +745,64 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
     } as never);
     const r = await ensureComfyUiReady({ manual: true });
     expect(r.ok).toBe(false);
+    expect(r.detail).toContain("未配置安装路径");
 
     vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
     const s = await getComfyUiStatus({ force: true });
+    /* 关键断言：状态行不得说「正在启动」—— 一个进程都没被拉起过。
+     * 它此刻该说的要么是「未运行」、要么是证据不足的「检测中…」
+     * （`probing` 只在「没真查过进程表 / 查过但失败」时为真），两者都不是
+     * 「启动中」。 */
     expect(s.up).toBe(false);
-    expect(s.starting).toBe(true);
+    expect(s.starting).toBe(false);
+  });
+
+  it("未开自动启动 / 用户手动关闭过：同样不点亮启动窗口（ISSUE #1899 的同族分支）", async () => {
+    for (const settings of [
+      { ...autoStartSettings, comfyuiAutoStart: false },
+      { ...autoStartSettings, comfyuiPath: "" },
+    ]) {
+      resetComfyUiStatus();
+      const { resetComfyRuntimeSnapshot } = await import("./status");
+      resetComfyRuntimeSnapshot();
+      vi.mocked(getSettingsSync).mockReturnValue(settings as never);
+      expect((await ensureComfyUiReady({})).ok).toBe(false);
+      /* 自动来源的两条 skip 分支都不该落窗口：窗口是给「拉起 → 就绪」那段
+       * 空窗的缓冲，而这些分支连拉起都不做。 */
+      expect((await getComfyUiStatus({ force: true })).starting).toBe(false);
+    }
+  });
+
+  it("真会拉起时窗口照旧落位：这条修的是位置，不是把窗口整个删掉", async () => {
+    resetComfyUiStatus();
+    const { resetComfyRuntimeSnapshot } = await import("./status");
+    resetComfyRuntimeSnapshot();
+    /* 路径存在、自动启动开着 → 判决是 launch，走进拉起后状态行在窗口内
+     * 不落「未运行」（ISSUE #442 的原始诉求不能被这次修正推翻）。
+     * 用「保活拉起 + 进程永远探不到 + 短超时」收尾，不会真起进程。 */
+    const { getExitPolicy } =
+      await import("../app-settings/app-settings.server");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
+    vi.mocked(getExitPolicy).mockReturnValue({
+      exitKillComfyui: false,
+    } as never);
+    vi.mocked(spawnManaged).mockReturnValue({
+      child: { pid: 98765 },
+      error: undefined,
+    } as never);
+    vi.mocked(findPidForMainPy).mockResolvedValue(null);
+    vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
+
+    const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
+    await expect
+      .poll(async () => (await getComfyUiStatus()).starting, {
+        message: "判决为 launch 后启动窗口应落位",
+      })
+      .toBe(true);
+    await pending;
+    vi.mocked(getExitPolicy).mockReturnValue({
+      exitKillComfyui: true,
+    } as never);
   });
 
   it("重置状态（启动/关闭动作）会清掉黏滞：新事实立刻说了算", async () => {

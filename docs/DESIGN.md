@@ -278,10 +278,10 @@ components:
 
 ### 三条体系的单向关系（先记方向，再记值）
 
-| 体系 | 名字形态 | 角色 | 谁写它 |
-| --- | --- | --- | --- |
-| **项目 token** | `--color-*`（`@theme`，93 条声明） | **唯一事实来源**，浅/深两态各自赋值 | 产品代码 |
-| **工具类桥** | `@theme inline` 的 `--color-*: var(--别名)`（28 条） | 让 `bg-card` 这类 shadcn 类名编得出来，**只是入口** | 不手写 |
+| 体系            | 名字形态                                              | 角色                                                              | 谁写它     |
+| --------------- | ----------------------------------------------------- | ----------------------------------------------------------------- | ---------- |
+| **项目 token**  | `--color-*`（`@theme`，93 条声明）                    | **唯一事实来源**，浅/深两态各自赋值                               | 产品代码   |
+| **工具类桥**    | `@theme inline` 的 `--color-*: var(--别名)`（28 条）  | 让 `bg-card` 这类 shadcn 类名编得出来，**只是入口**               | 不手写     |
 | **shadcn 别名** | `--card` / `--border` / `--muted` …（`:root`，47 条） | 只做 `var()` 转发，**不写字面量**（除 `--chart-*` 与 `--radius`） | `ui/` 基元 |
 
 四条硬判据由 `tests/theme-token-single-source.test.ts` 守着：**T1 别名不写字面量 / T2 `@theme inline` 不重名 / T3 var() 链无环 / T4 圆角只有「基数 × 系数表」一处**。
@@ -290,37 +290,37 @@ components:
 
 ### 语义角色表（浅色值取自 `@theme`，深色值取自 `.dark`）
 
-| 角色 | token | 浅色 | 深色 | 用在哪 |
-| --- | --- | --- | --- | --- |
-| 品牌主色（当**底**） | `--color-primary` | `#8557de` | 同值 | `bg-primary/15`、焦点环、`.btn-gradient` 起点 |
-| 品牌文字/图标档 | `--color-primary-strong` | `#6230cc` | `#b79bff` | 浅底上的品牌紫字（原 `violet-700/400`） |
-| 品牌实心档 | `--color-primary-500` / `-600` | `#8d50e2` / `#7a3fd0` | 同值 | 实心 CTA、spinner 描边 |
-| 品牌浅底 | `--color-primary-soft` | `#f2ecff` | `#251d40` | 图标托底、选中项底；**也是深底上的浅字档** |
-| 第二品牌 / 品红 | `--color-accent` / `--color-accent-soft` | `#ff5ca8` / `#ec4899` | 同值 / `#ff8ac4` | 指示条渐变终点、CTA 渐变终点 |
-| 品牌渐变中间档 | `--color-accent-deep` | `#c026d3` | 同值（刻意） | `.btn-gradient` 的 50% 那一段（起点 `--color-primary-600`、终点 `--color-accent-soft`，两端不另设 token） |
-| 品牌实心底上的字 | `--color-on-brand` | `#ffffff` | 同值 | **它由「底」决定，不是独立美术选择** |
-| 正文/前景 | `--color-ink` | `#1a1a1f` | `#ededf2` | `html/body` 前景 |
-| 弱文字 | `--color-ink-muted` | `#6b6b76` | `#9a9aad` | 副说明、`.u-chip` 常态字 |
-| 极弱文字 / 辅助说明 | `--color-ink-fainter` / `-faintest` | `#a1a1aa` / `#b6b6bf` | `#6b7088` / `#5a5f73` | 行号、placeholder、标签 |
-| 页面底 | `--color-bg` | `#ffffff` | `#0a0a0f` | `html, body` 背景 |
-| 卡片/浮层表面 | `--color-surface` / `--color-card` | `#ffffff` | `#16161c` | `bg-card`、`.u-card` |
-| 极浅通用表面 | `--color-subtle` | `#f7f8fa` | `#141419` | hover 底、`bg-subtle` 类名调用点（⚠️ `.u-input` / `.u-avatar` 虽然 CSS 里引用它，但那批 `.u-*` 类**全仓零消费者**，见 Known Gaps） |
-| 发丝边框 | `--color-border` | `#ececf1` | `#26262e` | 默认描边、`--input` 同源 |
-| 强边框/分隔 | `--color-border-strong` | `#d6d8dd` | `#26262e` | 控件描边、滚动条 thumb |
-| 画布底（编辑器） | `--color-canvas` | `#f6f7f9` | `#0a0a0f` | 工作流/项目画布 |
-| 深面板底 | `--color-canvas-deep` | `#eef0f4` | `#0f0f14` | 输入控件、深面板 |
-| 面板 / 侧栏底 | `--color-panel` / `--color-panel-deep` | `#ffffff` / `#f0f1f5` | `#14141a` / `#0f0f16` | 顶栏、浮层、侧栏/页脚 |
-| 节点表面 | `--color-node` | `#ffffff` | `#2b2b36` | 画布节点、`<option>` |
-| 危险（当底） | `--color-destructive` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `oklch(0.704 0.191 22.216)` ⇒ `#ff6467` | `bg-destructive`、实心危险按钮 |
-| 危险（浅底上的字） | `--color-danger-strong` | `#b91c1c` | `#fca5a5` | `text-danger-strong` |
-| 成功 | `--color-success` / `--color-success-strong` | `#0ea472` / `#10b981` | `#5be3c4` / `#10b981` | 状态绿 |
-| 状态点**光晕**（绿） | `--color-glow-success` | `#0ea472` | `#34d399` | 浅色档就是 `var(--color-success)` 本体；深色档换 400 档浅彩。**两态都必须有**，理由与对比读数见 Known Gaps 那条 |
-| 状态点**光晕**（琥珀） | `--color-glow-warning` | `#d97706` | `#fbbf24` | 同上，浅色 = `var(--color-warning)` |
-| 状态点**光晕**（红） | `--color-glow-danger` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `#fb7185` | 同上，浅色 = `var(--color-destructive)`（那颗是超色域 oklch，此格按换算读数写，判据会跳过它 —— 与上方 `--color-destructive` 那一行同格式） |
-| 品牌**光晕**（紫） | `--color-glow-brand` | `#8557de` | `#b79bff` | 画布设置按钮那颗小点；连线的光晕直接用 `var(--color-primary)`（它本来就是这个色） |
-| 警告 | `--color-warning` / `--color-warning-strong` | `#d97706` / `#b45309` | `#f59e0b` / `#fbbf24` | 待处理/排队 |
-| 信息 | `--color-info` / `--color-info-strong` | `#2563eb` / `#1d4ed8` | `#5bc6ff` / `#7dd3fc` | 链接/提示 |
-| 在线状态 | `--color-status-online` | `#047857` | `#33d499` | 「本机/在线」点与字 |
+| 角色                   | token                                        | 浅色                                    | 深色                                    | 用在哪                                                                                                                                     |
+| ---------------------- | -------------------------------------------- | --------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 品牌主色（当**底**）   | `--color-primary`                            | `#8557de`                               | 同值                                    | `bg-primary/15`、焦点环、`.btn-gradient` 起点                                                                                              |
+| 品牌文字/图标档        | `--color-primary-strong`                     | `#6230cc`                               | `#b79bff`                               | 浅底上的品牌紫字（原 `violet-700/400`）                                                                                                    |
+| 品牌实心档             | `--color-primary-500` / `-600`               | `#8d50e2` / `#7a3fd0`                   | 同值                                    | 实心 CTA、spinner 描边                                                                                                                     |
+| 品牌浅底               | `--color-primary-soft`                       | `#f2ecff`                               | `#251d40`                               | 图标托底、选中项底；**也是深底上的浅字档**                                                                                                 |
+| 第二品牌 / 品红        | `--color-accent` / `--color-accent-soft`     | `#ff5ca8` / `#ec4899`                   | 同值 / `#ff8ac4`                        | 指示条渐变终点、CTA 渐变终点                                                                                                               |
+| 品牌渐变中间档         | `--color-accent-deep`                        | `#c026d3`                               | 同值（刻意）                            | `.btn-gradient` 的 50% 那一段（起点 `--color-primary-600`、终点 `--color-accent-soft`，两端不另设 token）                                  |
+| 品牌实心底上的字       | `--color-on-brand`                           | `#ffffff`                               | 同值                                    | **它由「底」决定，不是独立美术选择**                                                                                                       |
+| 正文/前景              | `--color-ink`                                | `#1a1a1f`                               | `#ededf2`                               | `html/body` 前景                                                                                                                           |
+| 弱文字                 | `--color-ink-muted`                          | `#6b6b76`                               | `#9a9aad`                               | 副说明、`.u-chip` 常态字                                                                                                                   |
+| 极弱文字 / 辅助说明    | `--color-ink-fainter` / `-faintest`          | `#a1a1aa` / `#b6b6bf`                   | `#6b7088` / `#5a5f73`                   | 行号、placeholder、标签                                                                                                                    |
+| 页面底                 | `--color-bg`                                 | `#ffffff`                               | `#0a0a0f`                               | `html, body` 背景                                                                                                                          |
+| 卡片/浮层表面          | `--color-surface` / `--color-card`           | `#ffffff`                               | `#16161c`                               | `bg-card`、`.u-card`                                                                                                                       |
+| 极浅通用表面           | `--color-subtle`                             | `#f7f8fa`                               | `#141419`                               | hover 底、`bg-subtle` 类名调用点（⚠️ `.u-input` / `.u-avatar` 虽然 CSS 里引用它，但那批 `.u-*` 类**全仓零消费者**，见 Known Gaps）         |
+| 发丝边框               | `--color-border`                             | `#ececf1`                               | `#26262e`                               | 默认描边、`--input` 同源                                                                                                                   |
+| 强边框/分隔            | `--color-border-strong`                      | `#d6d8dd`                               | `#26262e`                               | 控件描边、滚动条 thumb                                                                                                                     |
+| 画布底（编辑器）       | `--color-canvas`                             | `#f6f7f9`                               | `#0a0a0f`                               | 工作流/项目画布                                                                                                                            |
+| 深面板底               | `--color-canvas-deep`                        | `#eef0f4`                               | `#0f0f14`                               | 输入控件、深面板                                                                                                                           |
+| 面板 / 侧栏底          | `--color-panel` / `--color-panel-deep`       | `#ffffff` / `#f0f1f5`                   | `#14141a` / `#0f0f16`                   | 顶栏、浮层、侧栏/页脚                                                                                                                      |
+| 节点表面               | `--color-node`                               | `#ffffff`                               | `#2b2b36`                               | 画布节点、`<option>`                                                                                                                       |
+| 危险（当底）           | `--color-destructive`                        | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `oklch(0.704 0.191 22.216)` ⇒ `#ff6467` | `bg-destructive`、实心危险按钮                                                                                                             |
+| 危险（浅底上的字）     | `--color-danger-strong`                      | `#b91c1c`                               | `#fca5a5`                               | `text-danger-strong`                                                                                                                       |
+| 成功                   | `--color-success` / `--color-success-strong` | `#0ea472` / `#10b981`                   | `#5be3c4` / `#10b981`                   | 状态绿                                                                                                                                     |
+| 状态点**光晕**（绿）   | `--color-glow-success`                       | `#0ea472`                               | `#34d399`                               | 浅色档就是 `var(--color-success)` 本体；深色档换 400 档浅彩。**两态都必须有**，理由与对比读数见 Known Gaps 那条                            |
+| 状态点**光晕**（琥珀） | `--color-glow-warning`                       | `#d97706`                               | `#fbbf24`                               | 同上，浅色 = `var(--color-warning)`                                                                                                        |
+| 状态点**光晕**（红）   | `--color-glow-danger`                        | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `#fb7185`                               | 同上，浅色 = `var(--color-destructive)`（那颗是超色域 oklch，此格按换算读数写，判据会跳过它 —— 与上方 `--color-destructive` 那一行同格式） |
+| 品牌**光晕**（紫）     | `--color-glow-brand`                         | `#8557de`                               | `#b79bff`                               | 画布设置按钮那颗小点；连线的光晕直接用 `var(--color-primary)`（它本来就是这个色）                                                          |
+| 警告                   | `--color-warning` / `--color-warning-strong` | `#d97706` / `#b45309`                   | `#f59e0b` / `#fbbf24`                   | 待处理/排队                                                                                                                                |
+| 信息                   | `--color-info` / `--color-info-strong`       | `#2563eb` / `#1d4ed8`                   | `#5bc6ff` / `#7dd3fc`                   | 链接/提示                                                                                                                                  |
+| 在线状态               | `--color-status-online`                      | `#047857`                               | `#33d499`                               | 「本机/在线」点与字                                                                                                                        |
 
 ### frontmatter 的色值是**压平**后的，压平规则要一起读
 
@@ -365,41 +365,84 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 **Latin 走 `next/font` 加载的 Geist，CJK 靠系统字体回退**（`src/app/layout.tsx:25-28` 只声明了 `--font-geist-sans`）。
 
-| token | 栈 | 备注 |
-| --- | --- | --- |
-| `--font-sans` | `var(--font-geist-sans)` → PingFang SC → Microsoft YaHei → Noto Sans SC → system-ui | `body` 挂 `font-sans antialiased` |
-| `--font-mono` | SF Mono → ui-monospace → SFMono-Regular → Menlo → Cascadia Mono → Consolas | 原先各处内联 `fontFamily`，已收口到此 |
-| `--font-title` | **Sarasa Gothic SC** → geist → PingFang → YaHei → system-ui | 见 Known Gaps：首选项未随包分发 |
+| token          | 栈                                                                                  | 备注                                  |
+| -------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
+| `--font-sans`  | `var(--font-geist-sans)` → PingFang SC → Microsoft YaHei → Noto Sans SC → system-ui | `body` 挂 `font-sans antialiased`     |
+| `--font-mono`  | SF Mono → ui-monospace → SFMono-Regular → Menlo → Cascadia Mono → Consolas          | 原先各处内联 `fontFamily`，已收口到此 |
+| `--font-title` | **Sarasa Gothic SC** → geist → PingFang → YaHei → system-ui                         | 见 Known Gaps：首选项未随包分发       |
 
-### 字阶只有三档具名，数值住在 `@theme`（规范 03 §3.10，机器强制 P83）
+### 字阶只有三档具名，数值住在 `:root`（规范 03 §3.10，机器强制 P83）
 
-| 档 | token | 值 | 类名 | 用在哪 |
-| --- | --- | --- | --- | --- |
-| page | `--text-page` | 1.5rem (24px) / 700 / -0.02em | `.u-title-page` | **每屏唯一的 h1** —— 载体件是 `ui/page-header`（见 §Components「屏级页头」），新屏别再手抄这一档 |
-| stage | `--text-stage` | 1.0625rem (17px) / 600 / -0.015em | `.u-title-stage` | 工坊六段当前段标题 |
-| section | `--text-section` | 0.875rem (14px) / 600 / -0.01em | `.u-title` | 卡片/区块小标题 |
+| 档      | token            | 值                                | 类名             | 用在哪                                                                                           |
+| ------- | ---------------- | --------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------ |
+| page    | `--text-page`    | 1.5rem (24px) / 700 / -0.02em     | `.u-title-page`  | **每屏唯一的 h1** —— 载体件是 `ui/page-header`（见 §Components「屏级页头」），新屏别再手抄这一档 |
+| stage   | `--text-stage`   | 1.0625rem (17px) / 600 / -0.015em | `.u-title-stage` | 工坊六段当前段标题                                                                               |
+| section | `--text-section` | 0.875rem (14px) / 600 / -0.01em   | `.u-title`       | 卡片/区块小标题                                                                                  |
 
 **标题之外，一屏里的说明文字只有三档**（规范 03 §3.10.1，ISSUE #1751）：**屏级副说明** `text-sm`(14px)（页头标题之下那一行，出口是 `ui/page-header` 的 `description`）/ **段级说明（含同行 hint）** `text-xs`(12px)（区块小标题右侧那半句、卡片里的整句中文解释，出口是 `ui/section-label` 的 `hint`）/ **记号** `text-2xs`(11px) / `text-3xs`(10px)（机器 id、`tabular-nums` 计数、胶囊标签 —— 不是给读的文案）。量出来的结论：「小字看不清」**不是字体、也不是对比度**（`--color-ink-muted` 在深色四种底上 6.24–7.15，早过 AA 的 4.5），是**档写低了** —— 同一个角色在自绘页头的两屏吃 `text-xs`、在走基元的九屏吃 `text-sm`。两条判据分工：**P86** 判形状（`.u-title-page` + `mt-1 text-sm` 同现，硬闸），`tests/design-md-contract-sync.test.ts` 的**归零等式**判档（`.u-title-page` 后 4 行内第一个 `<p>` 不许低于 `text-sm`，不看间距档）—— 单靠 P86 会因为「要 `text-sm` 才起跳」而被「把档写低」绕过，两条合起来才盖住那一格。**记号那三档不许动**：并到 12px 只会把密集容器的行挤开。剩余债（61 处 `<p>` 落在 11/10px）多数刻意、无判据、登记在规范 03 §3.10.1，**别开宽判据**。
 
 正文不是档，是 Tailwind 默认刻度：`text-sm`(14px) 是**应用默认正文**（`card`、`Button` 都落在这档），`text-xs`(12px) 是副说明。**不要在调用点写字面字号** —— 要更大的字先在 `@theme` 加具名档。曾经最大的一批字面字号是 13px（62 处，日志、控制台、属性表、确认框那一族）：**已并入 `text-sm`**，因为「应用默认正文 = 14px」本来就写着，那 62 处是偏离自己口径的漂移。注意这一并**不只是 +1px 字**：档位自带配对行高（`text-sm` 出 20px —— 依赖里 `--text-sm--line-height: calc(1.25 / 0.875)` × 14px，真 Chromium 读数；**从前这里写的是 16px，那是 `text-xs` 的值**），而字面量吃继承的 1.5（13px 下是 19.5px）⇒ 那一批的真实行盒变化是 **19.5 → 20（+0.5px）**。`log-virtual.ts` 那两个行高常量（`27` / 每行 `18` → `28` / `19`）走的是**显式 `leading-snug`**（14px 下 19.25，见该文件自己的注释），所以它跟着改的是**字号那一半**，与配对值无关 —— 但同一批改是必须的，**漏一侧就是滚动位置与内容错位**，这正是那文件头自己警告过的「改行内字号 / 行距要同时改这里」。**同一条口径现在有对称的机器执行者**：圆角那边早就写着「字面 px 等于某档的当前渲染值就红」，字号侧此前只归零了 12 / 13px，于是 17 处 14px 的字面量（逐字等于 `text-sm`）与 1 处 18px（等于 `text-lg`）长期合法 —— 已并入具名档，棘轮 140→122，判据与它的射程边界（乘 `--font-scale` 的三颗标题档不在内，两层理由）见 §Shapes ⑤。**10.5px 那 52 处同批处理**：它不是「第五个档」，而是比 `text-2xs` 小半像素的漂移值 —— t-shirt 刻度在 `3xs`(10) 与 `2xs`(11) 之间给不出名字，所以整批**并大**成 `text-2xs` 并签成归零等式；那句登记例外（「h2 / h3 保留 10.5–14px」）按实测订正，方向与逐处结构判见 §Shapes ⑥。
 
-### 微标签两档：`2xs` / `3xs`（低于 `text-xs` 的那一层，之前一直没名字）
+### 微标签三档：`2xs` / `3xs` / `4xs`（低于 `text-xs` 的那一层，之前一直没名字）
 
-| 档 | token | 值 | 类名 | 用在哪 |
-| --- | --- | --- | --- | --- |
-| meta | `--text-2xs` | 11px | `text-2xs` | 副说明下的元信息、chip 文字、密集列表行 |
-| micro | `--text-3xs` | 10px | `text-3xs` | 角标、极小徽标、画布节点上的第二行标签 |
+| 档    | token        | 值   | 类名       | 用在哪                                                      |
+| ----- | ------------ | ---- | ---------- | ----------------------------------------------------------- |
+| meta  | `--text-2xs` | 11px | `text-2xs` | 副说明下的元信息、chip 文字、密集列表行                     |
+| micro | `--text-3xs` | 10px | `text-3xs` | 角标、极小徽标、画布节点上的第二行标签                      |
+| nano  | `--text-4xs` | 9px  | `text-4xs` | 极窄行内小徽标（`Badge` 的 `xs` 档）、角标计数、mono 端点名 |
 
-这两档是**从调用点量出来的**，不是新设计：本轮实测 `text-[11px]` 350 处、`text-[10px]` 214 处散在 136 个业务文件里 —— 它们已经是事实标准，只是没有名字，于是「改一处全站跟手」对这两个尺寸根本不成立。
+这三档是**从调用点量出来的**，不是新设计：本轮实测 11px 350 处、10px 214 处散在 136 个业务文件里 —— 它们已经是事实标准，只是没有名字，于是「改一处全站跟手」对这两个尺寸根本不成立。
 
 三条刻意的不做，每条都是实测出来的原因：
 
-- **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **仓库里已有的 `text-section` / `text-page` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在 CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— **别在 JSX 里用这几个类名**，标题一律走 `.u-title-*`。（这里从前还列着 `--text-hero` 那一档的同名类，它随首页欢迎区一起退役了 —— 见上面「字阶只有三档具名」。）
+- **档名必须是 t-shirt 尺寸（`2xs` / `3xs` / `4xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **从前 `text-section` / `text-page` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），而 P83 还把 `text-page` 列为合规出口之二 —— 等于判据自己给这个坑开了扇门。**现在坑从根上没了**：那三颗 token 已从 `@theme` 移到 `:root`，Tailwind 不再为它们生成 utility（编译对账：产物里那三条从 3 → 0），挂 `text-page` 的 h1 只会拿到继承字号，所以 P83 也只剩 `.u-title-page` 一条出口。标题一律走 `.u-title-*`；判据两侧各钉一条（定义侧 T6「不得回 @theme」、调用侧「产品代码里不许出现这三个类名」）。（这里从前还列着 `--text-hero` 那一档的同名类，它随首页欢迎区一起退役了 —— 见上面「字阶只有三档具名」。）
 - **不乘 `--font-scale`**：设置页「标题字阶」那一档的作用域只有上面三档标题。微标签跟着标题缩放，会让密集列表在 125% 档下挤成一团 —— 与「正文不随字阶变」同一条口径，`e2e/appearance-steps.spec.ts` 按后者判。
-- **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）—— **同一个 12px 因此有过两种行高**（289 处 `text-xs` 在 16px、103 处字面量在 18px）。这一档已签字**归一到 `text-xs`**（12px / 16px），103 处字面量换完，并加一条「调用点不许再写 `text-[12px]`」的**归零判据**（不是棘轮）；要更松的行高就显式写 `leading-*`，别再造字号字面量。`text-2xs` / `text-3xs` 仍只出 font-size，与替换前的 `text-[11px]` / `text-[10px]` 逐像素相同。
+- **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）—— **同一个 12px 因此有过两种行高**（289 处 `text-xs` 在 16px、103 处字面量在 18px）。这一档已签字**归一到 `text-xs`**（12px / 16px），103 处字面量换完，并加一条「调用点不许再写 `text-[12px]`」的**归零判据**（不是棘轮）；要更松的行高就显式写 `leading-*`，别再造字号字面量。`text-2xs` / `text-3xs` / `text-4xs` 仍只出 font-size，与替换前的 11px / 10px / 9px 字面量逐像素相同（这三颗**没有**配对行高，实测行盒 16.5 / 15 / 13.5 全部来自继承的 1.5 —— 由 `tests/design-md-contract-sync.test.ts` 那条「档位的配对行高由这张表给」钉着）。
   **改前 / 改后的真浏览器抽样**（`/workspace` 的六个可点面，195 个 12px 实例）：改前那 18 个 `text-[12px]` 实例**全都自带 `leading-tight`**，计算行高 15px；改后同一批仍是 15px ⇒ 这一批**逐像素没动**（`leading-*` 走 `--tw-leading`，照样压过 `text-xs` 的默认档）。裁切数改前改后都是 12（既有状态，与本次无关）。**覆盖边界要说清**：剩下约 85 处分布在要数据才渲染的面（项目画布节点、结果卡、若干浮层），本轮量具进不去 —— 它们的预期是行盒 18→16px（收拢不引入裁切），这一句是**推理，不是读数**。
 
 **h2/h3 刻意不入判据**：区块级标题保留 11–14px 的几档微排版（画布节点标签、日志小节、属性表列名各一档），并成一档会**压平信息层次**。这句从前写的是「10.5–14px」，那是**把落点登记错了射程**：52 处 10.5px 里只有 1 处落在 `h3` 上，其余全是 `<p>` / `<span>` / `<div>` 的元信息行 —— 10.5px 因而不是「h2/h3 的例外档」，已整批并入 `text-2xs`（见 §Shapes ⑥）。**登记例外之前先量落点**，否则例外会变成第二条通路。要更严的约束就写成**该屏自己的守卫**（例：`src/components/workshop/workshop-heading-structure.test.ts`），别升成全局规则。
+
+### 内容尺寸：住在 `@theme` 之外的那一片（三处来路、一张词汇表）
+
+排版档只有上面那些（`4xs`…`lg` 加三档标题），但**产品里还有一整片字号根本不走它们**。三处来路的机制各不相同，所以「改一档全站跟手」这句话对它们**不成立**；而本文上一版只记了两条、把最大那一格漏了。下面按**判据同一个面**现数：产品文件、剥注释、`.stories.` 与 `.test.` 除外。
+
+**来路 ①：调用点的 arbitrary 字面量 —— 49 处 / 9 个值**（与 §Shapes ⑤ 那条 `TEXT_BASELINE = 49` 是同一本账，那条管处数，这一条管形状）
+
+| 值     | 处数 | 角色（以及为什么它不是某一档）                                                                                                                                                                                                                                                                                                                                       |
+| ------ | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 15px   | 14   | 面板 / 抽屉 / 日志框的**区块标题**（`text-ink-bright … font-semibold` 那一族，也用在 `size-9` 的序号圆里）。它卡在 `text-sm`(14) 与 `text-base`(16) 中间，两端都不是这一层要的重量                                                                                                                                                                                   |
+| 12.5px | 13   | 控制台与卡片的**行密度**：两处 `<pre>` 的等宽正文、表头行、面板条目标题、工坊侧栏的行                                                                                                                                                                                                                                                                                |
+| 11.5px | 8    | 面板里的**字段标签与次级说明行**（`FieldLabel`、元信息行、段标）                                                                                                                                                                                                                                                                                                     |
+| 9.5px  | 8    | **胶囊与角标内的文字**（pick chip、owner tag、参数注脚、错误列表里的 mono 片段）                                                                                                                                                                                                                                                                                     |
+| 8.5px  | 2    | 圆点徽标里的**计数**（`rounded-full px-1.5 py-px`）                                                                                                                                                                                                                                                                                                                  |
+| 7.5px  | 1    | uppercase 微标（`workflow-library/SettingsParts`）                                                                                                                                                                                                                                                                                                                   |
+| 13.5px | 1    | 工坊步骤条的标题（与 `size-9` 序号圆同排）                                                                                                                                                                                                                                                                                                                           |
+| 17px   | 1    | **`--text-stage` 那颗 17px 的字面量抄本**（`studio/HomePage.tsx` 的「最近项目」`h2`）。第 8 刀把三颗标题档移出 `@theme`、不再生成 utility，于是这一处既拿不到类名、也没走 `.u-title-*` —— 它是「档存在、调用点抄值」的形态。而 §Shapes ⑤ 那条对称判据**按档名来源分治**，`stage` 不是 t-shirt 形状，所以它今天在射程外（边界由那条判据自带的反向断言钉着，不是遗漏） |
+| 28px   | 1    | 水填图里的**百分比读数**（`ui/water-fill-progress`，`leading-none` + `tabular-nums`）—— 图形内的数字，不是排版                                                                                                                                                                                                                                                       |
+
+两条口径一起读：**① 里这 9 个值没有一个等于任何具名档的当前渲染值**（否则 §Shapes ⑤ 那条对称判据当场红 —— 那正是「同一个尺寸两个名字」）；它们**不跟设置页的字阶总闸**，理由与微标签那三档同一条（密集面跟手会挤成一团）。
+
+**来路 ②：`globals.css` 里 `@theme` 之外的裸声明 —— 2 处**
+
+| 选择器                      | font-size / line-height | 是什么                                              |
+| --------------------------- | ----------------------- | --------------------------------------------------- |
+| `.json-view.jv-theme-comfy` | 11px / 1.6              | JSON 树查看器那件组件的本库主题类                   |
+| `.cb-code-block`            | 11.5px / 1.65           | 代码块（等宽 + 1.65 是可读性下限，压到 1.5 就串行） |
+
+**来路 ③：markdown 渲染器拼的**内联样式串**（`src/lib/markdown/styles.ts`）** —— AI 回答里的 markdown 走这条路。样式是**字符串**：既不是 `@theme` 的 token，也不是 Tailwind 候选名，所以 §Typography 那句「10.5px 整批并入 `text-2xs`」**不覆盖它**，别把两句读成一句「仓里没有 10.5px 了」。
+
+| 标签           | font-size            | 行高 / 备注                                                  |
+| -------------- | -------------------- | ------------------------------------------------------------ |
+| h1 · h2 · h3   | 18px · 16px · 14px   | 段间距由渲染器自己给                                         |
+| h4 · h5 · h6   | 12.5px · 12px · 11px | 低三档与正文只差几分之一像素，是给**聊天气泡里的窄栏**压过的 |
+| `pre`          | 10.5px               | 1.45 —— 全库唯一还在用 10.5px 的地方                         |
+| `code`（行内） | 10px                 | 与 `text-3xs` 同值，但走的是内联串                           |
+| `table`        | 11px                 | 1.45                                                         |
+| `small`        | 0.85em               | 相对值，不在这个词汇表里                                     |
+
+**为什么整片都不落档**（三条，都是实测而不是审美）：① 来路 ③ 是内联串，落成 `--text-*` 也**不会**被那个渲染器读到；② 这些尺寸绑的是**元素自己的几何**（序号圆 `size-9`、胶囊的 `py-px`、代码块的行距），跟总闸走会把它们一起推离那个几何；③ 落档要新名字，而每多一颗「只有几处在用」的档，「改一档全站跟手」就多一个永远不会被维护的落点 —— 与 `--text-hero` 退役是同一条理由。
+
+**这一片现在有机器执行者**：`tests/design-md-contract-sync.test.ts` 里那条「住在 `@theme` 之外的字号是一张词汇表」。三处来路并成**一个值集合**，每个值都必须在本节登记过角色；本节里也不许留着已经不在用的值（还债把某一档消掉时，行要一起删 —— 否则文档就在描述一个不存在的东西）。它**不判处数**（那是 `TEXT_BASELINE` 棘轮的活），判的是**形状**：进来一个新值而不写它是干什么的，就红。
 
 ---
 
@@ -407,30 +450,30 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ### 间距
 
-`--spacing` 未被重定义 ⇒ **Tailwind v4 默认 0.25rem，根字号 16px**（`scripts/tw4-spacing-canonical.mjs:37` 自己断言这个前提，一旦项目重定义就直接报错退出）。所以 `p-4` = 16px、`gap-1.5` = 6px，`min-h-[22px]` 应写成 `min-h-5.5`。
+`--spacing` 未被重定义 ⇒ **Tailwind v4 默认 0.25rem，根字号 16px**（`scripts/tw4-spacing-canonical.mjs:37` 自己断言这个前提，一旦项目重定义就直接报错退出）。所以 `p-4` = 16px、`gap-1.5` = 6px，`min-h-[ 22px ]` 应写成 `min-h-5.5`。
 
 四条**布局决定**的具名刻度，与通用刻度同级（`--spacing-*` 命名空间顺带生成工具类）：
 
-| token | 值 | 为什么是布局量而非像素凑数 |
-| --- | --- | --- |
-| `--spacing-title-bar` | 2.25rem (36px) | 标题行高，`TitleBarTabs` 高度与全屏视图让位**同取这一处**（壳态下 `[data-shell] [data-slot="sidebar-container"]` 靠它让位） |
-| `--spacing-stage-rail` | 13rem (208px) | 工坊竖向阶段轨道列宽，要装下「徽章 + 阶段名 + 完成度小字」的最长一行 |
-| `--panel-right-width` | 360px | 右侧面板宽，动画走 `transition-all + w-(--panel-right-width)`（主规范 §4.4.3 的面板级例外） |
-| `--card-spacing` | `--spacing(4)`=16px / `data-[size=sm]` → `--spacing(3)`=12px | `ui/card` 的局部变量，一个开关换两档内距 |
+| token                  | 值                                                           | 为什么是布局量而非像素凑数                                                                                                  |
+| ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `--spacing-title-bar`  | 2.25rem (36px)                                               | 标题行高，`TitleBarTabs` 高度与全屏视图让位**同取这一处**（壳态下 `[data-shell] [data-slot="sidebar-container"]` 靠它让位） |
+| `--spacing-stage-rail` | 13rem (208px)                                                | 工坊竖向阶段轨道列宽，要装下「徽章 + 阶段名 + 完成度小字」的最长一行                                                        |
+| `--panel-right-width`  | 360px                                                        | 右侧面板宽，动画走 `transition-all + w-(--panel-right-width)`（主规范 §4.4.3 的面板级例外）                                 |
+| `--card-spacing`       | `--spacing(4)`=16px / `data-[size=sm]` → `--spacing(3)`=12px | `ui/card` 的局部变量，一个开关换两档内距                                                                                    |
 
 全局常驻的底栏/日志面板要求贴底内容**自己预留 24px（`pb-6`）**，不再逐页补挂（`src/app/layout.tsx:41-42`）。
 
 ### 层级是一张刻度表，不是「挑一个够大的数」
 
-| 档 | 值 | 谁在这一档 |
-| --- | --- | --- |
-| `base` | 10 | 画布节点内容 / 子图 / 卡片内遮罩（参照点是自己的定位祖先） |
-| `canvas-ui` | 20 | 画布 chrome：工具栏 / 侧栏 / 面板 / 角标 |
-| `canvas-max` | 30 | 画布最上层：IO 预览 / 底部工具栏 |
-| `modal` | 90 | 模态遮罩与抽屉（应用内的「顶」）；`overlay` 是它的旧名 |
-| `popup` | 100 | **挂在 body** 的下拉 / 气泡 / 节点 JSON 浮层 |
-| `toast` | 1000 | 全局提示 |
-| `chrome` | 2000 | 窗口标题行——恒在最上 |
+| 档           | 值   | 谁在这一档                                                 |
+| ------------ | ---- | ---------------------------------------------------------- |
+| `base`       | 10   | 画布节点内容 / 子图 / 卡片内遮罩（参照点是自己的定位祖先） |
+| `canvas-ui`  | 20   | 画布 chrome：工具栏 / 侧栏 / 面板 / 角标                   |
+| `canvas-max` | 30   | 画布最上层：IO 预览 / 底部工具栏                           |
+| `modal`      | 90   | 模态遮罩与抽屉（应用内的「顶」）；`overlay` 是它的旧名     |
+| `popup`      | 100  | **挂在 body** 的下拉 / 气泡 / 节点 JSON 浮层               |
+| `toast`      | 1000 | 全局提示                                                   |
+| `chrome`     | 2000 | 窗口标题行——恒在最上                                       |
 
 四条判据（`src/lib/shell/overlay-z.ts` + 规范 16 §16.2.5，`tests/overlay-z-scale.test.ts` 钉住两份数值一致）：
 
@@ -447,18 +490,18 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 **圆角只有一处定义**：`--radius`（`:root` 里的基数，`1rem`=16px）× 一张系数表（`@theme inline`）。默认档实测就是一串整数：
 
-| 类名 | 表达式 | 默认档 |
-| --- | --- | --- |
-| `rounded-sm` | `--radius × 0.5` | 8px |
-| `rounded-md` | `--radius × 0.75` | 12px |
-| `rounded-lg` | `--radius` | **16px** |
-| `rounded-xl` | `--radius × 1.25` | 20px |
-| `rounded-2xl` | `--radius × 1.5` | 24px |
-| `rounded-3xl` | `--radius × 1.75` | 28px |
-| `rounded-4xl` | `--radius × 2` | 32px |
-| `rounded-node` | `--radius − 2px` | 14px（画布节点卡自己的角） |
+| 类名           | 表达式            | 默认档                     |
+| -------------- | ----------------- | -------------------------- |
+| `rounded-sm`   | `--radius × 0.5`  | 8px                        |
+| `rounded-md`   | `--radius × 0.75` | 12px                       |
+| `rounded-lg`   | `--radius`        | **16px**                   |
+| `rounded-xl`   | `--radius × 1.25` | 20px                       |
+| `rounded-2xl`  | `--radius × 1.5`  | 24px                       |
+| `rounded-3xl`  | `--radius × 1.75` | 28px                       |
+| `rounded-4xl`  | `--radius × 2`    | 32px                       |
+| `rounded-node` | `--radius − 2px`  | 14px（画布节点卡自己的角） |
 
-- **`rounded-node` 不是第八档刻度，是「节点卡 = 比 lg 小 2px」这一条产品决定的名字**。它此前以 `rounded-[14px]` 抄在 4 个文件里（`CanvasNode` / `project-canvas/WorkflowNode` / `WorkflowNodeArdot` / `WorkflowNodeParts`，含 `rounded-b-[14px]` 共 8 处代码 + 3 处注释），于是设置页改圆角档时节点卡根本不跟手。改成 `calc(var(--radius) - 2px)` 后默认档仍是 14px（逐像素相同），但总闸能传到它 —— 与 `ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 同一族写法。
+- **`rounded-node` 不是第八档刻度，是「节点卡 = 比 lg 小 2px」这一条产品决定的名字**。它此前以 `rounded-[14px]` 抄在 4 个文件里（`CanvasNode` / `project-canvas/WorkflowNode` / `WorkflowNodeArdot` / `WorkflowNodeParts`，含 `rounded-b-[ 14px ]` 共 8 处代码 + 3 处注释），于是设置页改圆角档时节点卡根本不跟手。改成 `calc(var(--radius) - 2px)` 后默认档仍是 14px（逐像素相同），但总闸能传到它 —— 与 `ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 同一族写法。
 
 - **这张表描述的是「默认档」**：设置页 → 外观 → 圆角（`src/lib/appearance.ts` 的 `RADIUS_STEPS`）改的就是那颗基数，四档 12/16/20/24px，整条刻度跟着等比缩放。表里的 px 是**没设置过 / 选了默认档**时的读数，不是常量。
 - **系数必须是派生式，不许写回字面量**：`@theme inline` 才会把 `var(--radius)` 就地内插进工具类，写成 `border-radius: 16px` 的那一档就脱离了总闸（设置页改它不跟手）。这条由 `tests/theme-token-single-source.test.ts` 的 T4 守着（判 `@theme` 里不许再长出 `--radius-*`、七档必须由 `--radius` 派生、基数 × 系数必须等于上面那串整数）。
@@ -466,7 +509,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 现有 13 处方括号圆角，其中 **11 处是这种从 `--radius` 派生**的写法（`min()` / `calc()`），另两处不是档位问题：一处 `rounded-[inherit]`（本就该继承父级）、一处 checkbox 的 **4px 微角**（见下条）。
 - **微角（≤4px）走 `rounded-xs` 或不走档位，别硬并**：`rounded-xs` 是 Tailwind 默认档，实测产物里 `--radius-xs: 0.125rem` = 2px，且**刻意不参与本库的基数 × 系数** —— 它描述的是「这个元素自己有多小」，不是「这套 UI 有多圆」。据此把 2px 那两处（`ui/tooltip.tsx` 的箭头方块、`ui/segment-popover.tsx` 的色板小条）从字面量换成 `rounded-xs`（编译探针对过：两者逐字节同值 ⇒ 零像素）。**4px / 5px 没有对应的档名**（`rounded-xs`=2、`rounded-sm`=8 都会明显改形），它们留在字面量里是**判定过的结果**而不是漏网：checkbox 的 4px 随 `size-4` 自己定，`canvas/SubgraphWidgetRow.tsx` 的 5px 随缩略图/值框那两格自己定。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
-- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 **7** / **67**，只许降。剩下的 7 处**逐角色判定过**：`3px`×2 = `TypeChip` 的实现细节 + `ParamOwnerTag` 那枚异类、`11px`×2 = `WorkflowNodePill` 的实现细节 + `WorkshopStageItem` 的图标方块、`5px`×2 = 子图缩略图与值框、`4px` = checkbox —— 前四处随元素自身尺寸、不跟设置页基数，后几档没有对应的名字。原先那两处 2px 已并到 `rounded-xs`，`studio/HomePage.tsx` 的项目卡从 18px 并到 `rounded-xl`，见上两条）；**④ 12px / 13px 是归零等式而不是棘轮** —— 调用点出现 `text-[12px]` 或 13px 那一档的字面量就直接红（它们与 `text-xs` / `text-sm` 字号相同或相邻、只差在行高上：字面量吃继承的 1.5，档位自带配对值；留着就是重新分裂「同一个字号两种行高」那一档，见 §Typography。判据自己先验一次量具 —— 等式为 0 的判据若正则写漂会永远绿）；**⑤ 字号侧现在也有 ① 那条对称判据** —— 任何字号字面量只要**等于某个具名档的当前渲染值**就红（此前这条只有圆角有，字号只归零了 12 / 13px，于是 17 处 14px 的字面量与 1 处 18px 长期合法 —— 它们逐字等于 `text-sm` / `text-lg`，是「同一个尺寸两个名字」）。档表**现读、不抄进用例**：Tailwind 默认刻度来自依赖里的 `theme.css`，项目自加的档来自 `globals.css`，读法与圆角同构（`tests/helpers/text-tiers.ts`）。**射程按档名来源分治**：默认名字全收，项目自造的只收 t-shirt 形状 —— 因为 `cn()` 会把不认识的 `text-<名字>` 归进颜色组（见 §Typography），所以 `--text-stage` 那颗 17px 今天在射程外，判据里带一条**反向断言**钉着这个边界（要把它收进来，先把那三颗标题档改成 t-shirt 档名）。这一批和 13px 那批一样**带行高一起变**（字面量吃继承的 1.5 ⇒ 21px，档位自带 20px ⇒ 实际是 **−1px**，不是从前写的 −5px），改完按结构判过所在行会不会被文字定高；**⑥ 10.5px 也不是档，是「比 `text-2xs` 小半像素」的漂移值** —— 同一条归零等式（出现即红，不是棘轮）。规范 03 §3.10 曾把「10.5–14px 的微排版」登记成 `h2` / `h3` 的例外，量下来对不上：52 处里只有 **1 处**落在 `h3` 上，其余是 `<p>` / `<span>` / `<div>` 的元信息行，正是 `text-2xs`(11px) 登记的角色；而 t-shirt 刻度在 `3xs`(10) 与 `2xs`(11) 之间给不出名字，硬造一颗既过不了档名形状判据、又给「改一档全站跟手」多一个没人维护的落点。所以整批**并大**（ISSUE #1751 量出的结论是「档写低了」而不是「字太大」），+0.5px 逐处按结构判过：没有一处落在 `h-*` / `size-*` 固定高度里（6 处自带 `h-auto`、2 处 `max-h-32 overflow-y-auto` 可滚），宽度受限的那 10 处本来就带 `min-w-0 truncate` / `max-w-*` —— 收不下是截断，不是溢出。判据的反向那条钉住「`--text-2xs` 仍是 11px」，否则归一方向要重判；**⑦ 浮层上限与行内图标对齐各一条归零等式（按具名出处放行）** —— 浮层的 `max-h-[NNvh]` 只许出现在 `ui/overlay-max-height` 的两档常量里：**85vh** 是居中模态 / 图片看全 / 弹层面板那 6 处的事实档（另有 `78vh`、`90vh` 各一处，是同一角色上的漂移值 —— 差那 5–7 个百分点没有任何一处文档说过为什么，已并进来），**70vh** 是另一个角色（页面里自滚动的卡片区，上限要留呼吸）。两处**逐处判定过**的例外留在原地并登记：JSON 面板 positioner 的 60vh（只有它一个消费者，为它立一档就是「为以后可能用得上」留在库里，同 `--text-hero` 退役的理由）与 `ConsoleView` 左栏的 `max-h-[45%]`（百分比相对**父容器**而非视口，不是同一族，正则也刻意不收它）。**为什么是 class 串而不是 `@theme` 的 `--max-height-*`**：实测 `cn("max-h-[85vh]", "max-h-overlay")` **两条都留** —— tailwind-merge 认不出自定义名字属于哪一族，于是「谁覆写谁」交给 Tailwind 的输出顺序，与规范 16 §16.2.4.12 那次「加宽按钮点了没反应」是同一族事故；存 arbitrary 串则同族冲突照常生效（实测只留后一条）。行内图标那一族：`align-[-Npx]` 只许出现在真正处于 inline 文本流的 `EmptyCanvasHint` 那一枚，其余 10 处都坐在 `Button` / `flex` 容器里，而 `vertical-align` 对 flex item 零效果（真 Chromium 实测：带与不带，图标的行内偏移都是 4.5px；同一份声明放进文本流才把 12px 图标从 5px 抬到 6px）—— 那 10 处是抄来的零效果声明，已删。**这两条判据各带一条「owner 在册就必须扫得到」的正向断言**：`scanProduct` 只记**有捕获组**的命中，正则漏了捕获组时白名单与调用点会一起「扫不到」，判据就对着空集绿（本轮就是这么红的，那条正向断言正是抓它的量具）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`、面板里铺满居中的占位 → `ui/empty-state` 的 `panel` 档、段级小标题 → `ui/section-label`、节点底部那枚生成按钮 → `WorkflowNodeParts` 的 `WorkflowNodeActionButton`），**七族**共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行；第六族是段级小标题 → `ui/section-label`，ISSUE #1751；第七族是节点底部那枚「▶ 用此工作流生成」，收它的理由是**同一枚按钮在三处各写一套参数**：高度一枚写成 43px 的字面量、两枚 `h-10.75`（同为 43px，只有后者跟着 `--spacing` 走）、投影一枚进 class 一枚进 `style`、hover 一档 95 一档 90、variant 一枚 ghost 两枚 primary-solid —— 每一个都「看着无所谓」，合起来是四处漂移。它也是唯一一族**允许按宿主分叉**的：`corner="own"`（卡片不裁切，按钮自带下沿圆角、顶角收直角）与 `"clipped"`（卡片 `overflow-hidden`，四角交还卡片）—— 分叉那一档刻意不进标记集合，否则判据就去抓一个本该分叉的东西），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；**每一枚标记都常见的族可以收窄成 `scope: "line"`** —— 只在同一枚 class 字符串上全命中才算，实测整文件口径会误抓三处无关文件（见 §Components「空态四档」）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。**不在这张表里的**：屏级页头（`ui/page-header`）—— 它由 `tests/page-name-single-source.test.ts` 按形态守着，再开一族就是同一件事两个执行者（分工与「三处刻意不迁」见 §Components「屏级页头」）。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 **7** / **49**，只许降。剩下的 7 处**逐角色判定过**：`3px`×2 = `TypeChip` 的实现细节 + `ParamOwnerTag` 那枚异类、`11px`×2 = `WorkflowNodePill` 的实现细节 + `WorkshopStageItem` 的图标方块、`5px`×2 = 子图缩略图与值框、`4px` = checkbox —— 前四处随元素自身尺寸、不跟设置页基数，后几档没有对应的名字。原先那两处 2px 已并到 `rounded-xs`，`studio/HomePage.tsx` 的项目卡从 18px 并到 `rounded-xl`，见上两条）；**④ 12px / 13px 是归零等式而不是棘轮** —— 调用点出现 `text-[12px]` 或 13px 那一档的字面量就直接红（它们与 `text-xs` / `text-sm` 字号相同或相邻、只差在行高上：字面量吃继承的 1.5，档位自带配对值；留着就是重新分裂「同一个字号两种行高」那一档，见 §Typography。判据自己先验一次量具 —— 等式为 0 的判据若正则写漂会永远绿）；**⑤ 字号侧现在也有 ① 那条对称判据** —— 任何字号字面量只要**等于某个具名档的当前渲染值**就红（此前这条只有圆角有，字号只归零了 12 / 13px，于是 17 处 14px 的字面量与 1 处 18px 长期合法 —— 它们逐字等于 `text-sm` / `text-lg`，是「同一个尺寸两个名字」）。档表**现读、不抄进用例**：Tailwind 默认刻度来自依赖里的 `theme.css`，项目自加的档来自 `globals.css`，读法与圆角同构（`tests/helpers/text-tiers.ts`）。**射程按档名来源分治**：默认名字全收，项目自造的只收 t-shirt 形状 —— 因为 `cn()` 会把不认识的 `text-<名字>` 归进颜色组（见 §Typography），所以 `--text-stage` 那颗 17px 今天在射程外，判据里带一条**反向断言**钉着这个边界（要把它收进来，先把那三颗标题档改成 t-shirt 档名）。这一批和 13px 那批一样**带行高一起变**（字面量吃继承的 1.5 ⇒ 21px，档位自带 20px ⇒ 实际是 **−1px**，不是从前写的 −5px），改完按结构判过所在行会不会被文字定高；**⑥ 10.5px 也不是档，是「比 `text-2xs` 小半像素」的漂移值** —— 同一条归零等式（出现即红，不是棘轮）。规范 03 §3.10 曾把「10.5–14px 的微排版」登记成 `h2` / `h3` 的例外，量下来对不上：52 处里只有 **1 处**落在 `h3` 上，其余是 `<p>` / `<span>` / `<div>` 的元信息行，正是 `text-2xs`(11px) 登记的角色；而 t-shirt 刻度在 `3xs`(10) 与 `2xs`(11) 之间给不出名字，硬造一颗既过不了档名形状判据、又给「改一档全站跟手」多一个没人维护的落点。所以整批**并大**（ISSUE #1751 量出的结论是「档写低了」而不是「字太大」），+0.5px 逐处按结构判过：没有一处落在 `h-*` / `size-*` 固定高度里（6 处自带 `h-auto`、2 处 `max-h-32 overflow-y-auto` 可滚），宽度受限的那 10 处本来就带 `min-w-0 truncate` / `max-w-*` —— 收不下是截断，不是溢出。判据的反向那条钉住「`--text-2xs` 仍是 11px」，否则归一方向要重判；**⑦ 浮层上限与行内图标对齐各一条归零等式（按具名出处放行）** —— 浮层的 `max-h-[ NNvh ]` 只许出现在 `ui/overlay-max-height` 的两档常量里：**85vh** 是居中模态 / 图片看全 / 弹层面板那 6 处的事实档（另有 `78vh`、`90vh` 各一处，是同一角色上的漂移值 —— 差那 5–7 个百分点没有任何一处文档说过为什么，已并进来），**70vh** 是另一个角色（页面里自滚动的卡片区，上限要留呼吸）。两处**逐处判定过**的例外留在原地并登记：JSON 面板 positioner 的 60vh（只有它一个消费者，为它立一档就是「为以后可能用得上」留在库里，同 `--text-hero` 退役的理由）与 `ConsoleView` 左栏的 `max-h-[45%]`（百分比相对**父容器**而非视口，不是同一族，正则也刻意不收它）。**为什么是 class 串而不是 `@theme` 的 `--max-height-*`**：实测 `cn("max-h-[85vh]", "max-h-overlay")` **两条都留** —— tailwind-merge 认不出自定义名字属于哪一族，于是「谁覆写谁」交给 Tailwind 的输出顺序，与规范 16 §16.2.4.12 那次「加宽按钮点了没反应」是同一族事故；存 arbitrary 串则同族冲突照常生效（实测只留后一条）。行内图标那一族：`align-[ -Npx ]` 只许出现在真正处于 inline 文本流的 `EmptyCanvasHint` 那一枚，其余 10 处都坐在 `Button` / `flex` 容器里，而 `vertical-align` 对 flex item 零效果（真 Chromium 实测：带与不带，图标的行内偏移都是 4.5px；同一份声明放进文本流才把 12px 图标从 5px 抬到 6px）—— 那 10 处是抄来的零效果声明，已删。**这两条判据各带一条「owner 在册就必须扫得到」的正向断言**：`scanProduct` 只记**有捕获组**的命中，正则漏了捕获组时白名单与调用点会一起「扫不到」，判据就对着空集绿（本轮就是这么红的，那条正向断言正是抓它的量具）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`、面板里铺满居中的占位 → `ui/empty-state` 的 `panel` 档、段级小标题 → `ui/section-label`、节点底部那枚生成按钮 → `WorkflowNodeParts` 的 `WorkflowNodeActionButton`），**七族**共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行；第六族是段级小标题 → `ui/section-label`，ISSUE #1751；第七族是节点底部那枚「▶ 用此工作流生成」，收它的理由是**同一枚按钮在三处各写一套参数**：高度一枚写成 43px 的字面量、两枚 `h-10.75`（同为 43px，只有后者跟着 `--spacing` 走）、投影一枚进 class 一枚进 `style`、hover 一档 95 一档 90、variant 一枚 ghost 两枚 primary-solid —— 每一个都「看着无所谓」，合起来是四处漂移。它也是唯一一族**允许按宿主分叉**的：`corner="own"`（卡片不裁切，按钮自带下沿圆角、顶角收直角）与 `"clipped"`（卡片 `overflow-hidden`，四角交还卡片）—— 分叉那一档刻意不进标记集合，否则判据就去抓一个本该分叉的东西），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；**每一枚标记都常见的族可以收窄成 `scope: "line"`** —— 只在同一枚 class 字符串上全命中才算，实测整文件口径会误抓三处无关文件（见 §Components「空态四档」）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。**不在这张表里的**：屏级页头（`ui/page-header`）—— 它由 `tests/page-name-single-source.test.ts` 按形态守着，再开一族就是同一件事两个执行者（分工与「三处刻意不迁」见 §Components「屏级页头」）。
 
 ---
 
@@ -474,11 +517,11 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 扁平为主：**纯色、无阴影、无模糊、无渐变发光**（`globals.css` 的 flat-design utility layer）。投影只留给「浮起来的东西」：
 
-| token | 浅色 | 深色 | 用在 |
-| --- | --- | --- | --- |
-| `--shadow-card` | `0 4px 20px rgb(0 0 0 / 0.18)` | `… / 0.55`（**这一档到不了调用点，见下方警示**） | 浮层卡片 |
-| `--color-shadow-strong` | `rgb(0 0 0 / 0.18)` | `rgb(0 0 0 / 0.55)` | 画布浮层重投影——**要两态就引这颗** |
-| `--color-ring-shadow` | `rgb(0 0 0 / 0.08)` | `rgb(255 255 255 / 0.1)` | 浮层 1px ring——**浅色下用中性灰，不用前景色** |
+| token                   | 浅色                           | 深色                                             | 用在                                          |
+| ----------------------- | ------------------------------ | ------------------------------------------------ | --------------------------------------------- |
+| `--shadow-card`         | `0 4px 20px rgb(0 0 0 / 0.18)` | `… / 0.55`（**这一档到不了调用点，见下方警示**） | 浮层卡片                                      |
+| `--color-shadow-strong` | `rgb(0 0 0 / 0.18)`            | `rgb(0 0 0 / 0.55)`                              | 画布浮层重投影——**要两态就引这颗**            |
+| `--color-ring-shadow`   | `rgb(0 0 0 / 0.08)`            | `rgb(255 255 255 / 0.1)`                         | 浮层 1px ring——**浅色下用中性灰，不用前景色** |
 
 > ⚠️ **`shadow-card` 这条类名不跟主题**：Tailwind 把 `@theme` 的值**内联进 utility**，实测真编译下
 > `.shadow-card { --tw-shadow: 0 4px 20px var(--tw-shadow-color, rgb(0 0 0 / 0.18)) }` —— 浅色值被焊死，
@@ -539,19 +582,19 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ### 其余核心件的实现入口
 
-| 件 | 实现 | 关键约定 |
-| --- | --- | --- |
-| 输入 | `ui/input.tsx`（唯一形态；`.u-input` 工具类**零消费者**，别当第二套在用） | `bg-transparent` + `border-input` + `rounded-lg`(12px) + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`；focus 只换 border，**不出阴影**。它预设 `w-full min-w-0` 是**判过的保留**（不是与 §3.8.1.1 的张力）：件里走 `cn()` 合并 ⇒ 调用处的 `w-auto` / `w-56` 必赢，而单行输入框与 `shrink-0` 按钮并排时「`w-full`+`min-w-0`」正是「吃剩余宽、不撑破兄弟」那一格；拆它等于换默认值（所有不传宽度的调用点会一起退成 `<input>` 的固有宽度），要按排版变更处理。机制分野见 03 §3.8.1.1 的两行对照表 |
-| 卡片 | `ui/card.tsx` | `bg-card` + `ring-foreground/10` + `rounded-xl` + `--card-spacing` 两档 |
-| 状态徽标 | `ui/status-badge.tsx`（配色唯一出处）+ `ui/status-dot.tsx`（圆点） | **文案留在调用处**（同一状态在不同界面叫法不同，那是业务文案）。此前七个文件各写一份状态→配色表，同一个「已完成」有三种深浅 |
-| 侧栏导航 | `--color-nav-hover` / `--color-nav-selected`（别名 `--sidebar-accent` / `--sidebar-selected`） | **悬停与选中必须是两档**（浅 1.14:1 / 1.42:1，深 1.35:1 / 1.88:1，相对各自的 `--color-panel-deep` 底）。共用一档 = 结构上不可分辨 |
-| chip/药丸 | `ui/badge.tsx`（`size="pill-sm" / "pill-md"`） | **`.u-chip` 是死类**（零消费者，见 Known Gaps），别当规范用。胶囊徽标的形状与语义色都在 Badge 的三轴里；两档 pill 自带 `border-0`（tone 只给边框色不给宽度），调用点无需再写描边出口 |
-| 类型 chip（端口/参数的类型标签） | `studio/TypeChip.tsx`（`size="xs" / "sm" / "md"` × `tone="neutral" / "none"`） | 方角小片，不是胶囊徽标：`rounded-[3px]` 是这枚件自己的形状细节（3px 不在七档上，也不该成为第八档）。**`tone="none"` 是必需的**，因为四处的颜色由 `portChipStyle()` 的行内样式给全，见下节 |
-| 节点头部右侧胶囊 | `workflow-form/WorkflowNodeParts.tsx` 的 `WorkflowNodePill`（`h-5` + `rounded-[11px]` + `px-2` + `gap-1.25`） | **形状一处、底色两档**：库卡与 Ardot 还原件用 `--color-node-accent`（节点强调底），画布节点用 `--color-overlay-accent-surface`（浮层强调底）—— 两档浅色只差 1/255、暗色 `#1e1a2e` vs `#241f38` 差得明显，语义不同、**不借去重并成一颗**，差异走 `className`。该模块文件头本就写明「两侧只允许组合、不允许复刻」 |
-| 标题指示条 | `.detail-tab-trigger::after` | 品牌双色渐变 `linear-gradient(--color-primary → --color-accent)`；换基元后颜色只有一个出口 |
-| seed 模式图标 | `ui/seed-mode-button.tsx` + `--color-seed-*` | **类型色**：红=固定、绿=增减、骰子=随机。被 SVG `fill=`/`stroke=` 直接引用，变量缺失时 fill 退黑、stroke 退 none，箭头**整条消失且无报错** |
-| 骨架 | `ui/skeleton.tsx` | `bg-muted animate-pulse rounded-md` |
-| 装饰光晕 | `AuroraGlow`（`ui/aurora-background.tsx`） | 色相走 `--color-aurora-*`，**强度由调用处 `alpha` 决定**；`tone` 选色相、`alpha` 定强度，同一装饰不在多处内联重复 |
+| 件                               | 实现                                                                                                          | 关键约定                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 输入                             | `ui/input.tsx`（唯一形态；`.u-input` 工具类**零消费者**，别当第二套在用）                                     | `bg-transparent` + `border-input` + `rounded-lg`(12px) + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`；focus 只换 border，**不出阴影**。它预设 `w-full min-w-0` 是**判过的保留**（不是与 §3.8.1.1 的张力）：件里走 `cn()` 合并 ⇒ 调用处的 `w-auto` / `w-56` 必赢，而单行输入框与 `shrink-0` 按钮并排时「`w-full`+`min-w-0`」正是「吃剩余宽、不撑破兄弟」那一格；拆它等于换默认值（所有不传宽度的调用点会一起退成 `<input>` 的固有宽度），要按排版变更处理。机制分野见 03 §3.8.1.1 的两行对照表 |
+| 卡片                             | `ui/card.tsx`                                                                                                 | `bg-card` + `ring-foreground/10` + `rounded-xl` + `--card-spacing` 两档                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 状态徽标                         | `ui/status-badge.tsx`（配色唯一出处）+ `ui/status-dot.tsx`（圆点）                                            | **文案留在调用处**（同一状态在不同界面叫法不同，那是业务文案）。此前七个文件各写一份状态→配色表，同一个「已完成」有三种深浅                                                                                                                                                                                                                                                                                                                                                                      |
+| 侧栏导航                         | `--color-nav-hover` / `--color-nav-selected`（别名 `--sidebar-accent` / `--sidebar-selected`）                | **悬停与选中必须是两档**（浅 1.14:1 / 1.42:1，深 1.35:1 / 1.88:1，相对各自的 `--color-panel-deep` 底）。共用一档 = 结构上不可分辨                                                                                                                                                                                                                                                                                                                                                                |
+| chip/药丸                        | `ui/badge.tsx`（`size="pill-sm" / "pill-md"`）                                                                | **`.u-chip` 是死类**（零消费者，见 Known Gaps），别当规范用。胶囊徽标的形状与语义色都在 Badge 的三轴里；两档 pill 自带 `border-0`（tone 只给边框色不给宽度），调用点无需再写描边出口                                                                                                                                                                                                                                                                                                             |
+| 类型 chip（端口/参数的类型标签） | `studio/TypeChip.tsx`（`size="xs" / "sm" / "md"` × `tone="neutral" / "none"`）                                | 方角小片，不是胶囊徽标：`rounded-[3px]` 是这枚件自己的形状细节（3px 不在七档上，也不该成为第八档）。**`tone="none"` 是必需的**，因为四处的颜色由 `portChipStyle()` 的行内样式给全，见下节                                                                                                                                                                                                                                                                                                        |
+| 节点头部右侧胶囊                 | `workflow-form/WorkflowNodeParts.tsx` 的 `WorkflowNodePill`（`h-5` + `rounded-[11px]` + `px-2` + `gap-1.25`） | **形状一处、底色两档**：库卡与 Ardot 还原件用 `--color-node-accent`（节点强调底），画布节点用 `--color-overlay-accent-surface`（浮层强调底）—— 两档浅色只差 1/255、暗色 `#1e1a2e` vs `#241f38` 差得明显，语义不同、**不借去重并成一颗**，差异走 `className`。该模块文件头本就写明「两侧只允许组合、不允许复刻」                                                                                                                                                                                  |
+| 标题指示条                       | `.detail-tab-trigger::after`                                                                                  | 品牌双色渐变 `linear-gradient(--color-primary → --color-accent)`；换基元后颜色只有一个出口                                                                                                                                                                                                                                                                                                                                                                                                       |
+| seed 模式图标                    | `ui/seed-mode-button.tsx` + `--color-seed-*`                                                                  | **类型色**：红=固定、绿=增减、骰子=随机。被 SVG `fill=`/`stroke=` 直接引用，变量缺失时 fill 退黑、stroke 退 none，箭头**整条消失且无报错**                                                                                                                                                                                                                                                                                                                                                       |
+| 骨架                             | `ui/skeleton.tsx`                                                                                             | `bg-muted animate-pulse rounded-md`                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 装饰光晕                         | `AuroraGlow`（`ui/aurora-background.tsx`）                                                                    | 色相走 `--color-aurora-*`，**强度由调用处 `alpha` 决定**；`tone` 选色相、`alpha` 定强度，同一装饰不在多处内联重复                                                                                                                                                                                                                                                                                                                                                                                |
 
 ### 徽标家族：一个基座、三轴、两档胶囊，以及**不是徽标**的那几类
 
@@ -566,13 +609,13 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 **明确排除的五类**（分诊实测，别当「漏改」清掉）：
 
-| 类别 | 处数 | 为什么不是徽标 |
-| --- | --- | --- |
-| 纯数字角标（`{count}`、`{n}`、tabular-nums） | 7 | 是**计数器**，形状随容器（有的 `px-1` 无 `py`、有的 `min-w-3.5` 圆形）。其中曾报的一对孪生（`SectionHeader.tsx:23` / `GroupedControls.tsx:101`）**已收**，但收法不是新造基元：`GroupedControls` 手抄的是**整行区头**（圆点 + 大写标签 + 计数 + 虚线），而 `DynamicWorkflowForm/SectionHeader` 本就是那一行的具名件 —— 于是删抄、改成 import。剩下那枚 `WorkflowIOPreviewPanel.tsx:206` 与计数同形只差底色（`bg-subtle` vs `bg-surface-2`，它坐在 `bg-panel` 浮层上），是「同形状、不同表面」的合理分叉，不并 |
-| 序号圆 / 图标圆（`size-6`/`size-7` + `grid place-items-center`） | 6 | 等宽高圆形 + 单个字符或图标。**已抽成 `workshop/IndexDot`**（工坊 5 处逐字相同的迁完）；第 6 处是 `workshop/AttributeMultiSelect.tsx:182` 的**勾选方框**（`size-3.5 rounded` + `Check` 图标 + 选中态换整套底色），不是序号，不并 |
-| 媒体/画布上的浮层字幕（`bg-black/60 … backdrop-blur`、`pointer-events-none absolute`） | 3 | 是叠在图上的字幕条，不参与文档流 |
-| 可点 chip（带 `hover:` / `onClick` / `<Button>`） | 6 | 交互控件，归 Button/选择器家族 |
-| `avatar` 兜底圆形 | 1 | 组件内部实现 |
+| 类别                                                                                   | 处数 | 为什么不是徽标                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 纯数字角标（`{count}`、`{n}`、tabular-nums）                                           | 7    | 是**计数器**，形状随容器（有的 `px-1` 无 `py`、有的 `min-w-3.5` 圆形）。其中曾报的一对孪生（`SectionHeader.tsx:23` / `GroupedControls.tsx:101`）**已收**，但收法不是新造基元：`GroupedControls` 手抄的是**整行区头**（圆点 + 大写标签 + 计数 + 虚线），而 `DynamicWorkflowForm/SectionHeader` 本就是那一行的具名件 —— 于是删抄、改成 import。剩下那枚 `WorkflowIOPreviewPanel.tsx:206` 与计数同形只差底色（`bg-subtle` vs `bg-surface-2`，它坐在 `bg-panel` 浮层上），是「同形状、不同表面」的合理分叉，不并 |
+| 序号圆 / 图标圆（`size-6`/`size-7` + `grid place-items-center`）                       | 6    | 等宽高圆形 + 单个字符或图标。**已抽成 `workshop/IndexDot`**（工坊 5 处逐字相同的迁完）；第 6 处是 `workshop/AttributeMultiSelect.tsx:182` 的**勾选方框**（`size-3.5 rounded` + `Check` 图标 + 选中态换整套底色），不是序号，不并                                                                                                                                                                                                                                                                             |
+| 媒体/画布上的浮层字幕（`bg-black/60 … backdrop-blur`、`pointer-events-none absolute`） | 3    | 是叠在图上的字幕条，不参与文档流                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 可点 chip（带 `hover:` / `onClick` / `<Button>`）                                      | 6    | 交互控件，归 Button/选择器家族                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `avatar` 兜底圆形                                                                      | 1    | 组件内部实现                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 > 一处特别值得记的排除：`DetailHeader.tsx:147` 的标签用 `ring-1 ring-inset` 而不是 `border`，**代码注释写明是故意的**（「box-shadow 不参与布局，视觉上仍是那圈浅描边」）。Badge 的 tone 带真边框，迁过去会把它刻意避开的布局位移请回来 —— 这种站点看到「形状像徽标」就改就是错的。
 
@@ -625,11 +668,11 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 
 三处**刻意不迁**（照规范 16 §16.2.4.73 那张表；排除项不写进文档，下一轮就会被当漏网清掉）：
 
-| 不迁的落点 | 为什么 |
-| --- | --- |
+| 不迁的落点                                                                                               | 为什么                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 工具条形态页头：`WorkshopHeader` / `FilmStudioTopBar` / `WorkflowLibraryHeader` / `WorkflowEditorTopbar` | 标题与工具栏同处一条横杆、四周带边框与内距，套 `justify-between` 的文档型结构只会让每处逐个覆写。**但它们里面那两个「第二套名字」照样删了**（工坊顶栏的「工坊 · 全链路项目管线」、成片顶栏的「· 视频成片工作室」）—— 不迁的是形状，不是名字口径 |
-| 工作区型屏（`WorkspaceFrame` 那一族） | 它们自己管内部滚动，页头形态由各自顶栏承担 |
-| 页头即数据（`ProjectHomePage` / `ProjectOutputs` 用项目名当标题） | 标题是数据不是屏名，但**字阶档与副说明这两件仍走 `PageHeader`**，只是屏名不进标题（它已经在页签上了）—— 这正是「一屏一名」的推论 |
+| 工作区型屏（`WorkspaceFrame` 那一族）                                                                    | 它们自己管内部滚动，页头形态由各自顶栏承担                                                                                                                                                                                                      |
+| 页头即数据（`ProjectHomePage` / `ProjectOutputs` 用项目名当标题）                                        | 标题是数据不是屏名，但**字阶档与副说明这两件仍走 `PageHeader`**，只是屏名不进标题（它已经在页签上了）—— 这正是「一屏一名」的推论                                                                                                                |
 
 `as` 因此留了 `"h1" | "h2" | "p"` 三档：标题是数据、或屏级 `h1` 在别处时，再写 `h1` 会与所在屏的屏级标题撞成两个（一屏一 `h1` 是读屏跳转的前提）。
 
@@ -653,11 +696,17 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 - ❌ 不要写 `var(--color-ink, #EDEDF2)` 这种带兜底的引用。它是**装饰性 indirection**：谎称随主题，把单一事实来源悄悄换成局部常量，而且下一个人补上声明时这行会**静默改变外观**。需要两态就新增一颗 token 并两态赋值。
 - ❌ **禁止拼 token 名**：`var(--color-aurora-${tone})`、`"--color-" + name`。Tailwind v4 会 tree-shake `@theme` 里没被**字面引用**的变量，拼出来的名字在源码里从没出现过 ⇒ 产物里当场失色、没有任何报错。JS 里按当前主题取色的规定写法是 `useCssColorToken("--color-node-mix-base", "#ffffff")`，**整名写全**。
 - ❌ 不在源码里写 `violet-500` / `emerald-400` / `#rrggbb` 表达表面或文字语义（`pnpm theme:check` 棘轮 + 显式豁免清单）。
-- ⚠️ **文档里引用一个 arbitrary 类名时，别整串照抄 `shadow-[…]` / `text-[…]` 这种完整候选名**：Tailwind 的默认源扫描把 `.md` 也算进去，于是那一条规则**真的被生成进产物**（会让「按产物数硬编码 / 按产物数调用点」的自查读出源码里根本不存在的死类）。写值本身（`rgba(52,211,153,0.8)`）不成候选名，安全。
-  **扫描边界是实测划的**（放标记文件编译一次，看哪个进产物）：`src/**`、`docs/**`、**`changelog.d/**`**、**`tests/**`** 都被扫 ⇒ 碎片正文里写全一个候选名，它就在每次构建里生成一条死规则；`tests/**` 那一格是本轮补测的（一枚只在用例夹具里出现的字面字号，调用点清零之后产物里那条规则还在）；而 gitignored 的 `.workbuddy/`、`.next/` **不扫**（那两个目录里放标记都读不进产物 —— 别把「产物里有死类」甩锅给草稿或构建缓存）。
+- ✅ **扫描面是显式的两棵根，默认拒绝**（规范 03 §3.11）：`globals.css` 写的是 `@import "tailwindcss" source(none)` + `@source "../../src"` + `@source "../../.storybook"`。**改前**不写 `source()` 时 Tailwind 从项目根自动发现、只减掉 gitignored 的东西，于是规范正文与其生成物镜像、typedoc 的 HTML、`changelog.d/**` 的账本碎片、门禁与 codemod 脚本里的样本串、根 `CHANGELOG.md`、用例目录全都进产物 —— 实测同一份 CSS 只换扫描面：**自动全扫 2796 条选择器片段 / 382452 字节，两棵根 2558 条 / 349887 字节**，即 **238 条规则没有任何调用点**；反向为空（新根 − 旧根 = 0 条），这一步只做减法。真实产物也复核过：本轮 `next build` 出 4 份 CSS / 312121 字节 / 3621 条规则，探针点名的活类（`text-2xs` / `bg-card` / `rounded-node` / `z-canvas-ui` / `u-title-page`）全在，从前靠正文供给的死类（`text-[ 12px ]` 那族、`z-[99]`、`w-[360px]`、`min-h-[ 300px ]`、`duration-[0-9]`（那条是 grep 正则，逐字才读得对）、`h-[ 43px ]`）**一条都不在**。执行者 = `tests/tailwind-source-roots.test.ts`（名单逐条对得上、每根承重、判据自己的编译入口真的剥了生产根）。
+  ⚠️ **`.storybook` 是根，不是顺手加的**：`.storybook/preview.tsx` 引的就是同一份 `globals.css`，而工作台外壳自己写了两枚任意值高度 —— 实测「只认 src」与「两棵根」的差集正好是这两条。摘掉这棵不会省出什么，只会让工作台的取景高度消失。
+- ⚠️ **下面这套写作口径从「生产必须」降级为「纵深防御」，但没作废**：正文写全一枚 `prop-[值]` 现在已经进不了产物（因为正文不在根内）。留着它是因为**放宽根恰恰是本规格里最贵的动作**，而这条判据判的正是「假如放宽，代价是什么」。引擎层面的事实一个字没变：**只要方括号内侧不留空格，里面写什么都算一个候选名** —— 省略号、尖括号占位、字母都不例外；括号里塞零宽空格也挡不住（探针实测：`text-[ … ]` 这种内侧带空格的写法不进产物，把两个空格去掉就进）。该用的写法只有两种：**① 方括号内侧各留一个空格** —— `text-[ 22px ]`（本仓正文一律这么写，读者看到的仍是同一个类名）；**② 属性前缀与 `[` 之间放一个码 span 边界** —— `text-` 与 `[22px]` 分在两个 code span 里。
+  ⚠️ **别用「看不见但能躲过扫描」的字符**（非断字连字符 U+2011、零宽空格放在 `]` 之后等）：它们确实不进产物，但也会躲过 `grep` —— 下一个改文档或改判据的人搜不到它，那等于把一条规则变成一次考古。
+  **这条口径现在有机器执行者**：`tests/docs-candidate-hygiene.test.ts`。它不读文本、也不读现成产物，而是**拿引擎在两个钉死的扫描面上各编一遍**：一遍只把 `docs/**` + `tests/**` 当输入、一遍只把 `src/**` 当输入，两边的**候选名集合**做差 —— 只有正文/用例在供给、src 不供给的那些，逐条要么改写成内侧带空格的形状，要么进登记表（登记表在同一个文件里，每条必须写「为什么必须逐字」；条目若已经不被引擎解出来，反向判据把它判红 —— 那是「有豁免权、没有实物」的通道）。`changelog.d/**` **两侧都不在**：账本不参与对账，既不是豁免，也不用改写。两个入口都会先 `stripSourceDirectives` 把生产根剥掉，否则「钉成 docs 的那一遍」会连 src 一起扫，差集就在对一个混合面下结论。
+  另有两条配套判据：① **占位形状单独立一条**（方括号里是省略号、单独的字母 N、汉字占位）—— 这类写法在 `src` 的注释里**仍然**会进产物（`src` 是根），而它同时出现在供给侧与消费侧，那个差集看不见它；② **承重前提当场问引擎**（在系统临时目录放一份合成正文，把扫描面钉到那个目录）：「写全一枚 → 生成一条规则」「内侧各留一个空格 → 不生成」「值里没有数字的占位 → 照样生成」三条都是跑出来的，不是从本段抄来的。
+  实测耗时（同一台机器两次采样）：src 面 1.6–2.4s、docs+tests 面 4.0s、两棵生产根 1.8–3.5s、探针 0.2s；**自动全扫是 13.0–19.5s**（满载实测 70s 以上）—— 这既是判据钉扫描面而不放开它的原因，也是默认拒绝顺带把 CSS 编译从十秒级拉回两秒级的副作用。
+  ⚠️ **还有一种「恰好不成形」的形状，但别依赖它**：候选名紧贴汉字时（例：正文把一枚高度类直接写在「倍数」两个字后面），引擎的取值器抽不出这枚候选，于是产物里确实没有它。本轮就因此删掉了一条登记表条目 —— 但这是**分隔符位置的副产品**，不是可读写的规则：挪一个空格、把它放进 code span、或换一处标点，它就重新成形。要「写了不生成」，用上面那两种写法，别用这一种赌位置。
+  **扫描边界从来是实测划的**（放标记文件编译一次，看哪个进产物）：自动发现时代被扫到的是 `src/**`、`docs/**`、`changelog.d/**`、`tests/**`（`tests/**` 那一格是补测出来的 —— 一枚只在用例夹具里出现的字面字号，调用点清零之后产物里那条规则还在），而 gitignored 的 `.workbuddy/`、`.next/` 从来不进；**现在生产只认上面那两棵根**，其余目录一律不进。
   **量具的样本串不是账本**：下一条接受的是*碎片*里那些「写清楚当年收掉了哪些字面量」的账本（改写账本 = 伪造历史）。判据里的自验样本没有这个约束 —— 换一枚**调用点仍在用**的字面量、或把串拆开拼，信息代价为零，所以那种死规则该修。
-  **已接受的代价，别用改写账本的方式消除**：#1480 / #1536 两份碎片为了描述当时收掉了哪些字面量，把被收的类名写全了，因此产物里多几条谁都不用的规则。碎片是账本（硬规则 14 / §13.10.5：追溯改写 = 伪造证据），几条 20 字节的死规则是不值得毁账本可信度的代价。**要核对调用点存量，一律按 `src` 数**（本库所有相关判据都是这么实现的）。
-  **一个刻意留下的例外**：本文讲「12px 只许用 `text-xs`」这条禁令时必须点名被禁的写法，所以产物里会留着一条谁都不用的 12px 字面量规则。它不改渲染、也不在任何组件里，**别为了消掉它把禁令改写成读不懂的样子**；要核对调用点存量就按 `src` 数（判据正是这么做的），别按产物数。
+  **两笔「已接受的代价」已经被默认拒绝退掉了**：#1480 / #1536 两份碎片为了描述当时收掉了哪些字面量而把被收的类名写全；本文讲「12px 只许用 `text-xs`」这条禁令时也必须点名被禁的写法。这两批从前都在产物里各留着一条谁都不用的规则 —— **现在不再进产物**（账本与正文都不在根内），所以：**账本照旧不改写**（硬规则 14 / §13.10.5），但**别再拿「几条 20 字节的死规则换账本可信度」当决策依据**，那笔交易已经不发生了。要核对调用点存量，一律按 `src` 数（本库所有相关判据都是这么实现的）。
 
 **主题**
 
@@ -720,7 +769,11 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 
 `Sarasa Gothic SC` 既没有 `@font-face`、也不在 `next/font` 里（`layout.tsx` 只加载了 Geist）。⚠️ 本机复验把「开发机装了、装机才回退」这个直觉**否掉了**：`C:\Windows\Fonts`（563 个文件，可读）与用户级字体目录里**都没有 Sarasa** ⇒ 那 15 处 `font-title` 调用点一直渲染的是 Geist + 系统 CJK。
 
-**已落地（同批）**：只嵌 **Bold 一档**（`public/fonts/SarasaGothicSC-Bold.ttf`，23,892,196 字节）+ `@font-face`，`font-title` 的全部落点都是 700（`font-bold` 或 `.u-title-page`），没有 600 档在用，所以单档够用；许可 **SIL OFL 1.1**，全文随字体放在 `public/fonts/OFL-Sarasa-Gothic.txt`。文件走 **git-lfs**，接线两条：`.githooks/pre-push`（本仓库 `core.hooksPath=.githooks` 会整目录覆盖 `.git/hooks`，LFS 装在那里的钩子不会被调用）与 `scripts/install-git-hooks.mjs` 里的 `git lfs install --local --manual`（新克隆没有全局 `filter.lfs.*` ⇒ 规则落空、23 MB 按原字节进历史）。执行者 = `tests/embedded-title-font.test.ts`（在 C 组固定清单里），它判四环是否都还接得上，并核 index 里确实是指针、指针 `size` 与工作树字节数一致。
+**已落地（同批）**：只嵌 **Bold 一档**（`public/fonts/SarasaGothicSC-Bold.woff2`）+ `@font-face`，`font-title` 的全部落点都是 700（`font-bold` 或 `.u-title-page`），没有 600 档在用，所以单档够用；许可 **SIL OFL 1.1**，全文随字体放在 `public/fonts/OFL-Sarasa-Gothic.txt`。文件走 **git-lfs**，接线两条：`.githooks/pre-push`（本仓库 `core.hooksPath=.githooks` 会整目录覆盖 `.git/hooks`，LFS 装在那里的钩子不会被调用）与 `scripts/install-git-hooks.mjs` 里的 `git lfs install --local --manual`（新克隆没有全局 `filter.lfs.*` ⇒ 规则落空、字体按原字节进历史）。执行者 = `tests/embedded-title-font.test.ts`（在 C 组固定清单里），它判四环是否都还接得上，并核 index 里确实是指针、指针 `size` 与工作树字节数一致。
+
+> **载体：TTF 23,892,196 字节 → woff2 8,624,828 字节**（36.1%）。字形逐点无损（woff2 的 `glyf` 压缩是可逆的那一半），Chromium 里同一段中英混排文本两种载体各截一图，**逐字节相同**；反向对照也真跑过（故意改名后截图不同，回退栈的字面肉眼可辨）。代价只有一次：woff2 **解不回**原 TTF，重生成得从上游再转一次，所以仓库里不再保留那份 23 MB 源文件。`public/` 会被 `build-desktop` 整树内嵌进桌包 —— 这 15.3 MB 省的是**安装包**上的字节，不只是缓存。
+>
+> **同批补的一条**：`next.config.js` 的 `headers()` 给 `/fonts/:path*` 加了 `Cache-Control: public, max-age=31536000, immutable` —— Next 对 `/_next/static/**` 自带长缓存，`public/` 下**没有**，于是这 8.6 MB 此前每次进界面都重新协商一次。
 
 > ⚠️ 订正我先前的一句话：**「换成系统 Noto」不是一条已验证的零成本路**。`NotoSansSC-VF.ttf` 确实在本机字体目录里，但我没有区分它是 Windows 自带还是后来装的——若它是后者的话，「改用 Noto」等于把「从来没生效」换成「装机大概率也没生效」。中文 Windows 必然自带的是微软雅黑，而它**本来就在**回退栈里。结论：**只有内嵌才真正保证观感**。
 
@@ -740,13 +793,14 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 ## Known Gaps
 
 - **光晕（halo）已收口成一族，规则是「色相走 `--color-glow-*`（四颗、两态）、强度由调用处 `color-mix` 定」**：#1514 第一次收的时候把这档定成了**单值浅彩**（`#34d399` / `#fb7185`），理由是「它们与基准色不是同一个颜色，别并回去」。那句话只对了一半 —— 把两个候选各压到真实背景上算对比（α=0.8；bar 底 = `--color-panel`，浅色 `#ffffff` / 深色 `#14141a`）：
-  | 光晕色 | 浅色档 | 深色档 |
-  | --- | --- | --- |
-  | 基准 success / warning / danger | 2.53 / 2.51 / 4.11 | 4.07 / 4.09 / 2.78 |
-  | 400 档浅彩 | **1.71 / 1.51 / 2.23** | 6.47 / 7.37 / 4.74 |
-  ⇒ **单一取值在某一态必然偏弱**：浅彩压在白底上只有 1.5–2.2:1，光晕基本等于看不见，而被看见正是光晕唯一的作用。所以这四颗 token 必须两态，且浅色档**直接写成 `var(--color-…)`**（不是抄一份基准色的 hex —— 抄了就会和源头各自漂移），深色档才用 400 档浅彩。这也是对 #1514 那句「两态同值：原裸值本来没有 `.dark` 分叉」的订正：**把「旧代码只有一个值」当成「设计上不需要两个值」，是拿事故当设计**。
-  顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（收口那一刻 `#7c5cfc` 逐字节就是那个值 ⇒ 零像素；品牌深化后这颗跟着 token 变成 `#8557de` —— **是「跟手」的证据，不是漂移**）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[0_0_…rgba(…)]` 与任何 `shadow-[…#hex]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不判投影，投影走下面这条），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。
-  **带偏移的投影里那批裸 `rgba()` 曾一度对两层判据都不存在**（`0_0_` 那条按形状不收它，而 `theme:check` 因为正则里的 `\b` 也收不到它 —— Tailwind 候选名用 `_` 代替空格，`px_rgba(` 前面是单词字符、当场匹配不到；口径见规范 03 §3.6.2 末段「认的是源码里写了字面色值」）。修好判据后那批 6 处逐处定性：**5 处入 token**（画布节点与模型卡 hover 引 `var(--color-shadow-strong)`、两枚生成按钮的投影与库卡选中内描边改 `color-mix(… var(--color-primary*))` ⇒ 品牌一改就跟手），**1 处登记为固定暗色豁免**（`ui/water-fill-progress` 百分比白字压着预览内容的那道 `drop-shadow`，与它同文件已登记的「极小面积叠层」同判据）。其余裸值的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。
+
+  | 光晕色                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 浅色档                 | 深色档             |
+  | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------ |
+  | 基准 success / warning / danger                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 2.53 / 2.51 / 4.11     | 4.07 / 4.09 / 2.78 |
+  | 400 档浅彩                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | **1.71 / 1.51 / 2.23** | 6.47 / 7.37 / 4.74 |
+  | ⇒ **单一取值在某一态必然偏弱**：浅彩压在白底上只有 1.5–2.2:1，光晕基本等于看不见，而被看见正是光晕唯一的作用。所以这四颗 token 必须两态，且浅色档**直接写成 `var(--color-…)`**（不是抄一份基准色的 hex —— 抄了就会和源头各自漂移），深色档才用 400 档浅彩。这也是对 #1514 那句「两态同值：原裸值本来没有 `.dark` 分叉」的订正：**把「旧代码只有一个值」当成「设计上不需要两个值」，是拿事故当设计**。                                                                                                                                                                                                                                                                                                                 |
+  | 顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（收口那一刻 `#7c5cfc` 逐字节就是那个值 ⇒ 零像素；品牌深化后这颗跟着 token 变成 `#8557de` —— **是「跟手」的证据，不是漂移**）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[ 0_0_…rgba(…) ]` 与任何 `shadow-[ …#hex ]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不判投影，投影走下面这条），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。            |
+  | **带偏移的投影里那批裸 `rgba()` 曾一度对两层判据都不存在**（`0_0_` 那条按形状不收它，而 `theme:check` 因为正则里的 `\b` 也收不到它 —— Tailwind 候选名用 `_` 代替空格，`px_rgba(` 前面是单词字符、当场匹配不到；口径见规范 03 §3.6.2 末段「认的是源码里写了字面色值」）。修好判据后那批 6 处逐处定性：**5 处入 token**（画布节点与模型卡 hover 引 `var(--color-shadow-strong)`、两枚生成按钮的投影与库卡选中内描边改 `color-mix(… var(--color-primary*))` ⇒ 品牌一改就跟手），**1 处登记为固定暗色豁免**（`ui/water-fill-progress` 百分比白字压着预览内容的那道 `drop-shadow`，与它同文件已登记的「极小面积叠层」同判据）。其余裸值的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。 |
 
 - **故事面已经全覆盖，缺口挪到了单元层**（订正：本文件此前写「Storybook 覆盖 29/83、核心交互件里 input/dialog/select/card/… 无 story」—— 那组读数被 `331b38c2` → `b9cbd762` → `82480021` 三连补覆盖否掉了，`82480021` 那次就把理由表清成了 0 条）。现在 `node scripts/storybook-check.mjs` 报的是**覆盖率与它自己的基线同值、理由表 0 条**（缺 title 0 / 未接真组件 0 / 分组偏离 0）⇒ 「明暗两态长什么样」这一层契约在**每一个**组件上都可以在故事面被核验。**这里只留形状不留数字**：`x/y` 的分母随新增件变、故事份数随新增 story 变（上一批写下 89/89 与 122 份，同一轮落地后 3 小时就被 `ed881689` 推成 90/90 与 123 份），要读数就现跑那条命令 —— 有基线顶着的是「覆盖率 = 基线」这件事，不是某个具体数。
   剩下的洞不是「没 story」而是**没单测**。复算（列出还缺同名单测的组件）：
@@ -775,8 +829,7 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
   现在整档不存在，那批读数不再可复算（`node scripts/pixel-run.mjs` 已经不是一条命令了）。
 - **frontmatter 只能表达一态**，而本库的取值规则是两态。上面的 `colors` / `rounded` / `components` 全部取**浅色档**（因为 `@theme` 写的就是浅色），而**默认主题是 Dark**。任何人拿 frontmatter 当「应用现在的样子」会得出反的结论——两态对照请看 Colors 表。
 - **`var(--radius-*)` 在产物里是半个幽灵**：`@theme inline` 的语义是「值内插进工具类，变量本身只在被 `var()` 引用到时才发」，实测真编译下 `:root` 里只有 `--radius-md` / `--radius-lg` 两颗（它们被 `.u-input` / `.u-card` 引用着才存活），`sm` / `xl` / `2xl` / `3xl` / `4xl` **声明数为 0**。现在没有代码去读它们，所以还不出事；但**一旦有人在 `style={{}}` 里写 `var(--radius-xl)`，拿到的是空值** —— 圆角要用就走类名（`rounded-xl`），要写 `var()` 就只能引基数 `var(--radius)`。
-- **两条字面字号住在 `@theme` 之外**：`.json-view.jv-theme-comfy` 的 11px/1.6、`.cb-code-block` 的 11.5px/1.65。它们是**内容尺寸**（等宽代码/JSON 的密度决定可读性），不是排版档，但和 `--text-*` 一样都是「改档要改两处」的形态——本文件把它们记成 `code-md` / `code-json` 两档，落档与否待定。
-- **同一形态还有第三处，且不在调用点判据的射程内**：`src/lib/markdown/styles.ts` 里 `pre` 是 10.5px/1.45、行内 `code` 是 10px —— 那是渲染器拼的**内联样式串**，不是 Tailwind 候选名，所以 §Typography 那句「10.5px 整批并入 `text-2xs`」**不覆盖它**。别把两句读成一句「仓里没有 10.5px 了」。
+- **有一整片字号不走排版档**（三处来路：调用点的 arbitrary 字面量、`@theme` 之外的裸声明、markdown 渲染器拼的内联样式串）—— 它们**不跟设置页的字阶总闸**，这是已知边界而不是待修项；逐值与角色见 §Typography「内容尺寸：住在 `@theme` 之外的那一片」，那张词汇表有机器执行者。
 - **`--shimmer-` 那条白名单不是「死豁免」，是「读错了文件」**（订正上一版的说法）：`tests/theme-token-single-source.test.ts:146` 登记着 `--shimmer-` 前缀，而它读的是 `src/app/globals.css` 的**源码文本**——那里确实没有 `--shimmer-*`。但**编译产物里有** `--shimmer-angle`（在 `src-tauri/static/.next/static/chunks/*.css` 里可见），来源钉在 `node_modules/shadcn/dist/tailwind.css:620` —— 即 `globals.css:3` 那句 `@import "shadcn/tailwind.css"` 带进来的。所以那条登记**有真实出处、不该按「死豁免 = 负债」删掉**；真正要记的是判据的口径边界：**它只核本文件里的裸声明，看不见依赖带进来的同名变量**。
 
 ---

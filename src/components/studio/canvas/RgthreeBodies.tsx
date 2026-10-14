@@ -179,7 +179,7 @@ export function RgthreePowerLoraLoaderBody({
           Lora Stack
         </span>
         <span
-          className="inline-flex items-center gap-1.5 text-[9px]"
+          className="text-4xs inline-flex items-center gap-1.5"
           style={{ color: "var(--color-ink-muted)", letterSpacing: 0.6 }}
         >
           <span>model</span>

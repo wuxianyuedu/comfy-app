@@ -35,6 +35,7 @@ import { ProjectGate } from "~/components/studio/ProjectGate";
 import { isProjectTab } from "~/components/studio/NavItems";
 import type { ViewTab } from "./workspace-tabs";
 import type { WorkspaceView } from "./NavItems";
+import { ViewTabActiveProvider } from "./ViewActions";
 
 /* ── 懒加载视图组件，好让初始包体保持小 ── */
 /* 只有 HomePage / AuroraBackground / VideoQueueModal（在页面侧）是即时加载的。 */
@@ -90,6 +91,17 @@ const QueueMonitor = dynamic(
   { ssr: false },
 );
 
+/* ComfyUI 运行页（ISSUE #1900）：与历史 / 队列同族（「项目无关的全局视图」，
+ * 都在看本机后端现在在干什么）。它带着状态查询的事件订阅与启动日志轮询，
+ * 懒加载 —— 不该摊到别的视图首屏。 */
+const ComfyuiControl = dynamic(
+  () =>
+    import("~/components/studio/comfyui/ComfyuiControl").then(
+      (mod) => mod.ComfyuiControl,
+    ),
+  { ssr: false },
+);
+
 /* 控制台（ISSUE #1327）：与历史 / 队列同族（都是「项目无关的全局视图」）。 */
 const ConsoleView = dynamic(
   () => import("~/components/console/ConsoleView").then((m) => m.ConsoleView),
@@ -130,7 +142,8 @@ export interface WorkspaceViewStackProps {
   /** 首页入口卡的跳转 —— 与 `onNavigate` 分开：首页把「再点首页」当空操作。 */
   onHomeNavigate: (view: WorkspaceView) => void;
   onShowAllProjects: () => void;
-  onOpenSettings: () => void;
+  /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
+  onOpenComfyui: () => void;
   onUseWorkflow: (
     id: string,
     meta?: { name: string; taskType: string },
@@ -155,7 +168,7 @@ export function WorkspaceViewStack({
   onNavigate,
   onHomeNavigate,
   onShowAllProjects,
-  onOpenSettings,
+  onOpenComfyui,
   onUseWorkflow,
   canvasSeedNew,
   onConsumeCanvasSeed,
@@ -212,7 +225,10 @@ export function WorkspaceViewStack({
         return <HistoryList onOpenTask={onOpenProject} />;
 
       case "queue":
-        return <QueueMonitor onOpenSettings={onOpenSettings} />;
+        return <QueueMonitor onOpenComfyui={onOpenComfyui} />;
+
+      case "comfyui":
+        return <ComfyuiControl />;
 
       case "settings":
         return <SettingsView fillHeight />;
@@ -272,7 +288,12 @@ export function WorkspaceViewStack({
                 挂在各自的 wrapper 里（只有非 home 需要）——放在栈外层会让首页也多一层
                 随视图切换重挂的装饰层。 */}
             {isHome ? null : <AuroraBackground />}
-            {renderView(tab.view)}
+            {/* 「这一屏是不是当前页」：所有开过的屏都活着、也都会往顶栏的动作槽里
+                送按钮，不按页签过滤就会「四屏的按钮挤在同一条顶栏里」（见
+                `ViewActions` 里 `ViewTabActiveContext` 那段）。 */}
+            <ViewTabActiveProvider active={isActive}>
+              {renderView(tab.view)}
+            </ViewTabActiveProvider>
           </div>
         );
       })}

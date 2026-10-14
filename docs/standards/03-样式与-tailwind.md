@@ -51,8 +51,8 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > 全局替换不会撞上别的含义）。
 
 同族还有一类「任意值可写成 spacing scale 倍数」（编辑器同样会提示，如
-`min-h-[22px]` → `min-h-5.5`，`5.5 × 0.25rem = 22px`）。它**不进文本 codemod**：
-`text-[13px]` 与 `h-[22px]` 形态一模一样，但前者走 font-size、后者走 spacing，
+`min-h-[ 22px ]` → `min-h-5.5`，`5.5 × 0.25rem = 22px`）。它**不进文本 codemod**：
+`text-[ 13px ]` 与 `h-[ 22px ]` 形态一模一样，但前者走 font-size、后者走 spacing，
 按前缀猜必然改错量纲。判据交给 **Tailwind 引擎**，收在
 `scripts/tw4-spacing-canonical.mjs`（幂等，dry-run 默认）：
 
@@ -62,14 +62,14 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 
 三条同时成立才改写；换算前提（`--spacing` 仍是默认 0.25rem）由脚本自己断言，项目
 一旦重定义就直接报错退出、不会改出一批算着错的类名。它同时按 P80 把同值
-`w-K` / `h-K` 合并成 `size-K` —— 那是换算之后才暴露出来的形态（`w-[10px] h-[10px]`
+`w-K` / `h-K` 合并成 `size-K` —— 那是换算之后才暴露出来的形态（`w-[ 10px ] h-[ 10px ]`
 在方括号里时 P80 数不到）。存量已清零，新代码按编辑器提示写。
 
 > **这条不进钩子，但不再是一句谁都能忘的人为提醒**：`tw4-spacing-canonical.mjs` /
 > `tw4-canonical-report.mjs` 都**不在** `.githooks/pre-commit`（它们要起 Tailwind
 > 引擎、单次约 6s，且判断的是「CSS 等价改写」而非正确性，成本判据同 §13.5.4）。
 > **实测的教训（数字是当时那次事故的账）**：storybook 那批新 stories 一次性带进来
-> 「96 处」`w-[30rem]` / `h-[32rem]` 这类缩写候选（全仓现已各 0 处），直到手工跑
+> 「96 处」`w-[ 30rem ]` / `h-[ 32rem ]` 这类缩写候选（全仓现已各 0 处），直到手工跑
 > `pnpm theme:scan` 才浮出来 —— 那时它只是「没人跑就没人
 > 知道」。现在两者各带一个**硬闸判定档**（ISSUE #1451 要求 2 起步、ISSUE #1811 的
 > tw4 项翻成硬闸，规范 §13.5.12）：
@@ -97,15 +97,15 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > JS/TS 走它、`.css` / `.snap` 仍按字面量粗取。这不只是少一条误报 —— 剥之前那份
 > 正则还会被注释里的引号**打乱配对**，把注释之后**真的**类名字符串整段漏掉。
 >
-> ② 上面这件事修好之后 `WorkflowNode.tsx` 当场浮出 2 处**真**候选（`px-[14px]` → `px-3.5`、
-> `h-[43px]` → `h-10.75`）—— 它们一直合规地存在，只是被 ① 那句配对错位挡住了。
+> ② 上面这件事修好之后 `WorkflowNode.tsx` 当场浮出 2 处**真**候选（`px-[ 14px ]` → `px-3.5`、
+> `h-[ 43px ]` → `h-10.75`）—— 它们一直合规地存在，只是被 ① 那句配对错位挡住了。
 > **「判据报了不该报的」与「判据漏了该报的」常是同一个根因的两面。**
 
 **「更名 / 别名 / v3 遗留」那一类**（`!x`、`break-words`、`flex-shrink`、
 `overflow-ellipsis`、`bg-gradient-to-*` …）由 `scripts/tw4-canonical-report.mjs`
 汇总：它直接问 design system 的 `canonicalizeCandidates`「有没有另一种写法生成
 **完全相同**的 CSS」，与编辑器的 `suggestCanonicalClasses` 同源。正因为判据是
-「CSS 相同」而不是「长得像 spacing 工具类」，`text-[13px]` 不会被误报成
+「CSS 相同」而不是「长得像 spacing 工具类」，`text-[ 13px ]` 不会被误报成
 `text-3.25`（那不是等价替换，是改量纲）。它与上一条**互补**：各扫一类，互不重叠
 ——`canonicalizeCandidates` 不认 `[22px] ↔ 5.5`（一个是字面量、一个是
 `calc(var(--spacing) * …)`，不逐字相同），而上一条不认更名类。
@@ -300,7 +300,7 @@ import "@/styles/json-viewer.css";
 | `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                                                                                       | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                                                                                                                                                                                                                                                                                               |
 | `lib/markdown/styles.ts` 内联 style（便签 / 剧本 Markdown）                                                                                            | `--color-md-*` token                                                                                                                                                                                                                                                                                                                                                       |
 | 类型 chip 的载体底（`WorkflowNodeArdot` 与 `WorkflowPortHandle` 的 `portChipStyle` 都曾写死 `#1E1A2E` / `#331A28` / `#26262E`）                        | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（中性档用 `--color-border-strong`）；chip **文字**仍是类型色，**底色**是表面。同一形态在本仓库犯过两次（先只改了 `WorkflowNodeArdot`），改一处要同时扫 `portChipStyle`                                                                                                                                         |
-| 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                                                                                           | `--color-panel/85` + `--color-shadow-strong`                                                                                                                                                                                                                                                                                                                               |
+| 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[ #16121f ]/85`）                                                                                           | `--color-panel/85` + `--color-shadow-strong`                                                                                                                                                                                                                                                                                                                               |
 | 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）                                                                             | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`）                                                                                                                                                                                                                |
 | 「本机 / 在线」状态点与文字（写死 `#33D499`）                                                                                                          | `--color-status-online`（浅色 = `#047857`，与 `emerald-700` 同值）                                                                                                                                                                                                                                                                                                         |
 | 画布**网格线**三处各写一份：编辑器两处写死 `rgba(148,163,184, α)`、库预览一处写 `var(--color-canvas-grid-line, …)` 而那颗 token 从未定义（永远走兜底） | `--color-canvas-grid-line` **两档**（浅色 = 黑，与 `--color-canvas-grid-dot` 的浅档同约定；深色 = `rgb(148 163 184)` 原值 ⇒ 深色像素不变），α **留在调用处**经 `canvas/workflow-canvas-grid.ts` 的 `gridLineColor()` 用 `color-mix()` 现取。实测：细线默认档 α=0.22 时浅画布上从 **1.18:1 → 1.68:1**，主参考线 α=0.14 从 **1.11:1 → 1.38:1**（改前浅色反而比深色更看不见） |
@@ -339,7 +339,7 @@ import "@/styles/json-viewer.css";
 
 **边界（防止本条被滥用）**：只覆盖**成组集中的类型/类别/端口色常量表**。
 组件里写着**表面或文字语义**的 `#hex` / `rgba(255,255,255,…)` —— 例如
-`bg-[#16161E]` 的节点底、`rgba(255,255,255,0.18)` 的分隔点 —— **不属于**
+`bg-[ #16161E ]` 的节点底、`rgba(255,255,255,0.18)` 的分隔点 —— **不属于**
 本条，必须 token 化。判据一句话：**这行色值是「内容自己的颜色」还是「某个
 表面的颜色」？** 前者可留，后者必改。
 
@@ -842,18 +842,21 @@ flex 默认 `flex-shrink: 1`，宽度一紧张就从每个子项身上按比例�
 收内边距 → 降一档字号 → 整排换行（根容器 `flex-wrap`）→ 溢出滚动。
 
 > **换行触发的前提**：可缩容的兄弟块必须有**贴着按钮组实测宽度的最小宽度**
-> （如 `min-w-[170px]`）。带 `truncate` 的标题其 min-content 只有一两个字符宽，
+> （如 `min-w-[ 170px ]`）。带 `truncate` 的标题其 min-content 只有一两个字符宽，
 > 没有下限时 flex 会认为它「还能再压」，按钮组永远等不到换行、只能被压到与
 > 标题重叠；下限给太大（相对按钮组天然宽度）则会在明明排得下的时候过早换行。
 
-**同构的成排按钮抽一份判据**：同一个页面里形态相同的按钮排（典型是设置页的
-「状态行」：左侧状态文字 + 右侧一排动作按钮，ComfyUI / Drizzle Studio /
-Ollama 三处同构）不要再各自拼 class——抽成一个纯派生模块（常量 + 拼串函数，
-规范 17 §17.2 第①层），视图只消费返回值。理由是这三条规则漏掉任何一条都不会
-立刻报错，只会**在某个窗口宽度下**才显出「文字折行、按钮变高」的形态（ISSUE
-#423），而散落在 N 个 `<button>` 上的 class 改一处漏一片。可参考的落地：
-`src/app/(main)/settings/settings-status-row-config.ts` 与
+**同构的成排按钮抽一份判据**：同构的按钮排（典型是「状态行」：左侧状态文字 +
+右侧一排动作按钮，ComfyUI / Drizzle Studio / Ollama 三处同构）不要再各自拼
+class——抽成一份导出（常量 + 拼串函数 + 按钮原语），视图只消费返回值。理由是
+这三条规则漏掉任何一条都不会立刻报错，只会**在某个窗口宽度下**才显出「文字折行、
+按钮变高」的形态（ISSUE #423），而散落在 N 个 `<button>` 上的 class 改一处漏
+一片。可参考的落地：`src/components/ui/service-status-row.tsx` 与
 `src/components/studio/workflow-editor/workflow-editor-topbar-config.ts`。
+
+> 那一份落在 `ui/`（而不是某个屏的目录）是 ISSUE #1900 定的：ComfyUI 的状态行
+> 随「启动 / 关闭与日志」搬去侧栏单独一页之后，它的消费者跨了两个屏 ——
+> 留在任一侧都会让另一侧反向依赖某个屏的目录。
 
 #### 3.8.1.0 尺寸类只对「非行内盒」生效 —— 尺寸不能外包给调用处的布局
 
@@ -942,7 +945,15 @@ className="
 
 ### 3.10 屏级标题走字阶档，字号不在调用点写（机器强制）
 
-标题的**数值只住在 `@theme`**，调用点只挑档，不再叠尺寸：
+标题的**数值只住在一处 `:root`**，调用点只挑档，不再叠尺寸：
+
+> ⚠️ 从前这三颗住在 `@theme` 里，而 `@theme` 的 `--text-*` 命名空间会被 Tailwind
+> **顺带生成成工具类**（实测产物里有 `.text-page` / `.text-section` / `.text-stage` 三条，
+> JSX 侧零消费者）。留着它们等于留着两个坑：`cn()` 把不认识的 `text-<名字>` 归进**颜色**组、
+> 吃掉同一行真正的状态色；而调用点写下的是「一个会随设置页变的字号」。移到 `:root` 之后
+> 那个类不存在了，「别在 JSX 里用它们」从一句注释变成机器事实
+> （定义侧 `tests/theme-token-single-source.test.ts` T6、调用侧
+> `tests/design-md-contract-sync.test.ts` 各钉一条）。
 
 | 档位            | token                        | 类名             | 用在哪                                                  |
 | --------------- | ---------------------------- | ---------------- | ------------------------------------------------------- |
@@ -955,8 +966,9 @@ className="
 首页那块欢迎区（标题「灵感从这里开始」+ 副标题）后来整个删掉了 —— 它一个信息都不给，
 却占掉首屏上沿约 150px —— 于是这一档零消费者，连同 `@theme` 里的声明与
 `globals.css` 里的规则一起退役。**别为「以后可能用得上」留在库里**：留着的代价是
-「唯一档」这句话在后一个想写 `text-[34px]` 的人面前就不成立了（P83 现在只认
-`u-title-page` / `text-page`）。
+「唯一档」这句话在后一个想写 `text-[ 34px ]` 的人面前就不成立了（P83 现在只认
+`.u-title-page` 一条 —— 从前它还认 `text-page`，那颗 token 移出 `@theme` 之后
+那个类根本不再被生成，见上面那条 ⚠️）。
 
 **为什么要立这条**：`.u-title-page` 在 `globals.css` 里早就注明是「页面级标题（h1）
 统一规范」，可它引入至今**只有 1 处消费者**；屏级标题实际写在 11 个 `h1` 上，尺寸有
@@ -964,8 +976,9 @@ className="
 逐文件点名 —— 与 §3.6.2 治颜色前的问题是同一形态。
 
 **判据**：`scripts/check-ui-primitives.cjs` 的 **P83**（棘轮，基线 0）—— 扫视图层
-`<h1>` 的属性段，必须出现 `u-title-page` / `text-page`
-之一，且不得再叠 `text-lg` / `text-[34px]` 这类硬写字号。属性段走平衡扫描
+`<h1>` 的属性段，必须出现 `.u-title-page`（**唯一出口** —— `text-page` 那个同名类
+已经随 token 移出 `@theme` 而不存在了，挂它的 h1 字号会退回继承），
+且不得再叠 `text-lg` / `text-[ 34px ]` 这类硬写字号。属性段走平衡扫描
 （`readJsxAttrsPastTag`），因为 `className={cn("u-title-page", a > b ? … : …)}` 与
 `className={[…] .join(" ")}` 里都有 `>`，粗锚会在这两种形态上漏计（P82 的同一教训）。
 
@@ -977,7 +990,7 @@ className="
   第一条被抓出来的就是一枚本该走 `.u-title` 的卡片标题 —— 于是段级档 `.u-title-stage`
   （`--text-stage`，17px）只给「当前段标题」用，全屏结构约束由该屏自己的源码守卫
   `src/components/workshop/workshop-heading-structure.test.ts` 看住（全屏恰好一个 `h1`、
-  段级档恰好一处用点、标题上不出现 `text-[Npx]`）。**要更严的约束就写成该屏的守卫，
+  段级档恰好一处用点、标题上不出现 `text-[ Npx ]`）。**要更严的约束就写成该屏的守卫，
   别把它升成全局规则。**
   ⚠️ **这一句从前写的是「10.5–14px」，那是登记错了射程**：量下来 52 处 10.5px 里只有
   **1 处**落在 `h3` 上，其余全是 `<p>` / `<span>` / `<div>` 的元信息行（正是 `text-2xs`
@@ -992,7 +1005,7 @@ className="
 `.u-title-page` 的可见 `h1`。副说明按「读几次」分两种挂法：**每次进屏都要读**的写
 `description`（`.text-sm text-ink-muted` 那一行），**偶尔才需要读**的写 `help`
 （收成悬浮「说明」按钮，句子进 tooltip 那一档）。要更大的字就先在 `@theme` 加**具名档**，
-不要在调用点写 `text-[…]`。
+不要在调用点写 `text-[ … ]`。
 
 **这两个类名不再手写**：上面那一组（`h1` + 副说明 + 右侧动作组）已收进
 `~/components/ui/page-header` 的 `PageHeader`（规范 16 §16.2.4.73）——
@@ -1041,3 +1054,49 @@ className="
 （会误伤一片），把债登记在案。
 
 ---
+
+## 3.11 源扫描面是显式的两棵根，默认拒绝（机器强制）
+
+**Tailwind v4 不写 `source()` 时的默认行为是「从项目根自动发现源文件」，唯一的减法是「被 git
+跟踪」。** 这条默认在本仓的代价是实测出来的：自动全扫的产物有 **2796 条选择器片段 / 382452 字节**，
+而只认 `src` + `.storybook` 两棵根的产物是 **2558 条 / 349887 字节** —— **238 条规则没有任何调用点**，
+出处分布在规范正文与它的生成物镜像、typedoc 的 HTML、`changelog.d/**` 的账本碎片、门禁与 codemod
+脚本里的样本串、根 `CHANGELOG.md`、以及用例目录。反向也成立：**显式根的产物是自动全扫的子集**
+（新根 − 旧根 = 0 条），所以这一步只做减法、不会凭空造出样式。
+
+于是 `src/app/globals.css` 头部写成：
+
+```css
+@import "tailwindcss" source(none);
+@source "../../src";
+@source "../../.storybook";
+```
+
+路径**相对 CSS 文件所在目录**（`src/app`）解析 —— 写成 `docs` 会被解析成 `src/app/docs`，
+表现不是报错而是**静默扫空**（`tests/tailwind-source-roots.test.ts` 的空跑挡板兜的就是这一格）。
+
+**三件事必须一起知道：**
+
+1. **`.storybook` 为什么是根而不是「顺手加的」**：`.storybook/preview.tsx` 引的就是同一份
+   `globals.css`，而工作台外壳自己写了两枚任意值高度。实测「只认 `src`」与「认这两棵根」的
+   产物差集**正好是这两条** —— 漏掉这棵不是省字节，是把工作台的取景高度调没。这条差集由
+   判据第二格钉着：**摘掉任何一根必须真的丢样式，且丢的那些必须确实写在那一根的文本里**。
+2. **默认拒绝的代价**：根外的类名字面量不再进产物。唯一能变成真故障的形态是
+   **「运行期拼出来的类名，而完整字面量恰好只写在根外」** —— 它与 §3.6.2 末段那条
+   「禁止拼 token 名」是同一族事故，只是这里拼的是类名。落这一刀时逐条查过三条通路，
+   结论都写在 `globals.css` 的注释块里：根内「方括号里插值」0 处（唯一命中是一条说明这种
+   写法从来没生效过的注释）；`src/**` 运行期 `import` 的 4 份 `scripts/**` 模块里 0 条
+   Tailwind 类串；壳侧 HTML 是构建产物、不是扫描输入。
+   **新增一棵根之前要重新走一遍这三条**，并在 `tests/tailwind-source-roots.test.ts` 的
+   `SOURCE_ROOTS` 里写明它是谁 —— 名单多一棵、少一棵、登记了却不存在，三种都会红。
+3. **判据自己的编译入口要跟着剥生产根**：`tests/helpers/theme-tokens.ts` 的两个入口
+   （#1336 那份「固定输入源」与 `compiledCssPinnedTo`）都先走 `stripSourceDirectives`。
+   不剥的话，钉成 `docs` 的那一遍会连 `src` 一起扫进来，差集判据就在对一个混合面下结论；
+   而 theme 判据会顺带扫全 `src`，#1336 那笔「耗时 + 不可复现」的账以新形状回来。
+   这一条不是推演：判据第三格拿 `.text-2xs` 当探针正面认它。
+
+**与 §3.6.2 / 契约的分工**：本仓从前是靠「文档里别写全候选名」这条写作口径来防死规则的
+（内侧留空格的写法、码 span 边界，见 `docs/DESIGN.md` 的扫描边界那条）。**默认拒绝把它从
+「生产必须遵守」降级为「纵深防御」** —— 正文再写全一枚也不会进产物了。那条写作口径与它的
+判据（`tests/docs-candidate-hygiene.test.ts`）**保留**，理由不是怀旧：它判的是「假如有人把根
+放宽，代价是什么」，而放宽根恰恰是这条规格里最贵的那种动作。

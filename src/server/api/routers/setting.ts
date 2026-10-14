@@ -17,6 +17,7 @@ import {
   stopComfyUiProcess,
 } from "~/lib/comfyui/lifecycle";
 import { describeComfyInstance } from "~/lib/comfyui/instance-kind";
+import { noteComfyStateChange } from "~/lib/comfyui/state-watch";
 import { resolveDesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths.server";
 import {
   decideComfyTabOpen,
@@ -39,6 +40,17 @@ import {
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { revealPathInFileManager } from "~/lib/shell/reveal-path";
+
+/** `save` 入参里**影响运行态判据**的那几项：路径 / 端口 / 启动参数 / 解释器。
+ *
+ *  其余几项（自动启动、退出即杀、工作流自动同步）只改行为偏好，不动「此刻是不是
+ *  在跑、在哪跑」这条结论 —— 它们变了不需要通知任何人重问状态。 */
+const COMFY_CONFIG_KEYS = [
+  "comfyuiPort",
+  "comfyuiPath",
+  "comfyuiExtraArgs",
+  "comfyCliPython",
+] as const;
 
 export const settingRouter = createTRPCRouter({
   /* GET /api/settings —— 读 */
@@ -76,6 +88,13 @@ export const settingRouter = createTRPCRouter({
         input.comfyuiExtraArgs !== undefined
       ) {
         clearComfyAutoStartFailure();
+      }
+      /* ComfyUI 四项只要动过一样，运行态的**判据**就变了（可能换了实例、
+       * 换了端口、换了启动参数）：告诉「运行态变化」那条通道，设置页收到后
+       * 立刻重问一次状态，而不是等下一拍兜底轮询。写在 `saveSettings` 之后 ——
+       * 通知早于落盘的话，重问还是拿旧配置去探。 */
+      if (COMFY_CONFIG_KEYS.some((key) => input[key] !== undefined)) {
+        noteComfyStateChange("config", "ComfyUI 配置已更新");
       }
       const settings = await getSettings();
       return { settings };

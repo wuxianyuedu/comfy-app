@@ -15,6 +15,10 @@
  *   ③ **命令清单 / 红话里的旧旗标**：`node scripts/<已翻闸脚本> --update` 出现在
  *      钩子、规范门禁清单、或**用户可见的阻断输出**里。少了这一格 ⇒ #1845 那处
  *      「红话叫人跑一条自己会拒绝他的命令」原样复发，而那正是立案现场。
+ *   ④ **翻闸台账点名的脚本必须有执行者**（门禁链**或**按需召唤台账至少占一条）。
+ *      少了这一格 ⇒ 「已翻硬闸」这句话只兑现了一半：翻闸的语义是「命中即退 1」，
+ *      而**退 1 要有人跑**才发生 —— 把一条判据从棘轮翻成硬闸却不给它落点，
+ *      得到的是「账面写着硬闸、实际连棘轮都不如」（棘轮至少有钩子里的那一步）。
  *
  * 每格都**双向**验：该红的红（正面），当前真仓库绿（对照组）—— 只验正面的话，
  * 判据把**全仓**判红也是「红」。
@@ -229,16 +233,107 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
     try {
       writeScript(ws.dir, "check-fake.cjs", " * 用法：\n *   node scripts/check-fake.cjs");
       writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
+      /* ④ 那一格要求翻闸台账点名的脚本有落点；这条用例判的是 ③ 的豁免，
+       * 所以夹具必须把 ④ 喂绿 —— 否则它红的原因与 ③ 无关（判据是复合的，
+       * 夹具就要把无关的那几格都配平，同 `ratchet-update-guards` 的「第 ② 步
+       * 先配出基线=现状」那条口径）。 */
+      writeFileSync(
+        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        JSON.stringify({ onDemand: {} }),
+      );
+      writeFileSync(
+        join(ws.dir, ".githooks", "pre-commit"),
+        '  run "x" node scripts/check-fake.cjs\n  # 同族先例：`check-fake.cjs` 的 `--update`。\n',
+      );
       writeFileSync(
         join(ws.dir, "docs", "standards", "13-提交与-code-review.md"),
         "本判据**已删** `--update`（`node scripts/check-fake.cjs --update` 不再存在）。\n",
       );
-      writeFileSync(
-        join(ws.dir, ".githooks", "pre-commit"),
-        "  # 同族先例：`check-fake.cjs` 的 `--update`。\n",
-      );
       const { code, output } = run(ws.dir);
       expect(code, output).toBe(0);
+    } finally {
+      ws.dispose();
+    }
+  });
+
+  it("④ 翻闸台账点名了它、而它没有任何落点 → 红（「命中即退 1」要有人跑）", () => {
+    const ws = makeWorkspace();
+    try {
+      writeScript(ws.dir, "check-fake.cjs", " * 用法：\n *   node scripts/check-fake.cjs");
+      writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
+      /* 门禁链三处 + 聚合档都没有它、按需台账也没登记 ⇒ 谁都不会跑它。 */
+      writeFileSync(
+        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        JSON.stringify({ onDemand: {} }),
+      );
+      const { code, output } = run(ws.dir);
+      expect(code).toBe(1);
+      expect(output).toContain("一条落点都没有");
+      expect(output).toContain("check-fake.cjs");
+    } finally {
+      ws.dispose();
+    }
+  });
+
+  it("④ 落点是一条正当落点时 → 绿（钩子步骤行 / 聚合档表项 / 按需台账各试一格）", () => {
+    /* 三个落点各建一次工作区：只验一个的话，另外两个形态的解析坏了不会有反应 ——
+     * 而误报（把真有落点的判成没有）正是这一格最容易出的错（实测撞过一次：
+     * 经 `run-ast-gates.cjs` 聚合档真在跑的两条被误报）。 */
+    const cases: Array<[string, (dir: string) => void]> = [
+      [
+        "钩子步骤行",
+        (dir) =>
+          writeFileSync(
+            join(dir, ".githooks", "pre-commit"),
+            '  run "x" node scripts/check-fake.cjs\n',
+          ),
+      ],
+      [
+        "聚合档表项（裸 script: 形态，无 scripts/ 前缀）",
+        (dir) =>
+          writeFileSync(
+            join(dir, "scripts", "run-ast-gates.cjs"),
+            'const GATES = [\n  { script: "check-fake.cjs", tag: "[x]" },\n];\n',
+          ),
+      ],
+      [
+        "按需召唤台账",
+        (dir) =>
+          writeFileSync(
+            join(dir, "scripts", ".gate-executor-ledger.json"),
+            JSON.stringify({ onDemand: { "check-fake.cjs": { why: "w", who: "h" } } }),
+          ),
+      ],
+    ];
+    for (const [label, place] of cases) {
+      const ws = makeWorkspace();
+      try {
+        writeScript(ws.dir, "check-fake.cjs", " * 用法：\n *   node scripts/check-fake.cjs");
+        writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
+        place(ws.dir);
+        const { code, output } = run(ws.dir);
+        expect(code, `${label}：${output}`).toBe(0);
+      } finally {
+        ws.dispose();
+      }
+    }
+  });
+
+  it("④ 落点那两条**都要现读**（把假落点写死进判据就会被抓）", () => {
+    /* 这一格防的是「判据把落点抄成第二份清单」：门禁链与台账都从磁盘现读，
+     * 所以在临时工作区里**只写落点、不写别的**就能让它在场。反过来，如果判据
+     * 是拿真仓库的清单硬编的，这个干净工作区会照绿 —— 那它判的就不是当前仓库。
+     * 这里显式钉「干净工作区 + 一条落点 = 绿」（上面那三条已经覆盖），
+     * 以及「干净工作区 + 零落点 = 红」（上一条）—— 两侧都成立才说明它是现读的。 */
+    const ws = makeWorkspace();
+    try {
+      writeScript(ws.dir, "check-fake.cjs", " * 用法：\n *   node scripts/check-fake.cjs");
+      writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
+      writeFileSync(
+        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        JSON.stringify({ onDemand: {} }),
+      );
+      expect(run(ws.dir).code).toBe(1);
     } finally {
       ws.dispose();
     }
@@ -271,6 +366,11 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
     expect(Number(m?.[1] ?? 0)).toBeGreaterThan(50);
     const f = /(\d+) 条翻闸台账/.exec(output);
     expect(Number(f?.[1] ?? 0)).toBeGreaterThan(5);
+    /* ④ 那一格的读数：真仓库里落点缺失必须是 0 —— 它出现非零就是判据在报真问题，
+     * 而这条断言让「有人把两条 tw4 从按需台账里摘掉」在**这里**也能看见。 */
+    const miss = /落点缺失 (\d+)/.exec(output);
+    expect(miss, "输出里必须有「落点缺失」这个读数").not.toBeNull();
+    expect(Number(miss?.[1] ?? -1)).toBe(0);
   });
 
   it("判据自己的文件头不被自适应（它必然要点名脚本与旗标）", () => {

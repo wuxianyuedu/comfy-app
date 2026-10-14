@@ -1,7 +1,0 @@
-{
-  "total": 2,
-  "files": {
-    "tests/check-reformat-only.test.ts": true,
-    "tests/gate-executors.test.ts": true
-  }
-}

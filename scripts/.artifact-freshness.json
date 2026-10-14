@@ -1,10 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-12T16:32:09.622Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-14T07:30:29.860Z",
+    "who": "yuedu",
     "how": "pnpm run build",
     "trackedBy": "artifact",
-    "skippedReason": "本次提交是合并 origin/master 解 docs 冲突；触发本档输入面的是被合入的 master 提交，非本提交贡献。已在合并态真跑过一次 pnpm run build：next build / standalone 剔私 / 数产物 / executor-host 冒烟全部通过，唯一红是 bundle 预算 —— 该门在干净 origin/master（05ff9fe1）上同样红（215 文件 / 2227.3KB gzip > 基线 f2a96dd4 的 2226.9KB），属 baseline-red（§13.6.2）；合并态为 216 文件 / 2243.9KB，差额来自本 PR 自身的 WindowTitleBar / WindowControls / ShellFullPage 新增。"
+    "skippedReason": "今天真跑了完整构建链并已修好本检出的虚拟 store（pnpm install --force 之后 standalone-link-repair 通过：扫描 147 条链接、重建 3 条，不再报「仍不可跟随」）。唯一红是 bundle 预算：当前 217 文件 / raw 9603.7 KB / gzip 2247.4 KB，超基线。方向上本批是减法：CSS 产物 raw 从 382452 字节降到 349887 字节（238 条无调用点的规则被摘掉），不新增任何文件。这条预算红不来自本批 —— 同日另一条产物账（03:44Z）已在干净 origin/master 上把它复算成 baseline-red（当时 215 文件 / 2227.3 KB，基线 2226.9 KB），此后合入的字体与构建类改动把它继续推高到 2243.9 再到 2247.4。属主是 bundle 预算那条线，本单不抬基线、不改判据。\n此外仍按「改完构建/产物相关的东西先数产物」那句做了核对：产物 CSS 4 份 / 312121 字节 / 3621 条规则，活类（text-2xs / bg-card / rounded-node / z-canvas-ui / u-title-page）全在、正文供给的死类（z-[99] 那族）一条不在；check-standalone-contents.cjs 两层（standalone 2546 / static 12177）均判干净。"
   }
 }

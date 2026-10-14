@@ -8,6 +8,8 @@ import {
   WORKSPACE_VIEWS,
   useWorkspaceTabs,
 } from "~/components/studio/hooks/use-workspace-tabs";
+import { useSidebarProjects } from "~/components/studio/hooks/use-sidebar-projects";
+import { useOpenServerProject } from "~/components/studio/project-canvas/hooks/use-open-server-project";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkspaceViewStack } from "~/components/studio/WorkspaceViewStack";
 import { globalNavItems, projectTabs } from "~/components/studio/NavItems";
@@ -60,6 +62,9 @@ export default function WorkspacePage() {
   // 原先是 workspace 内的一层全屏浮层：它会盖住页签条，且「当前在设置里」这件事
   // 只存在于一个布尔值里 —— 既没有页签，也不能同时开着别处。
   const openSettings = useCallback(() => navigateTo("settings"), [navigateTo]);
+  /* 队列屏离线时的出口：送到侧栏「ComfyUI」页（启动 / 关闭与运行状态都在那里，
+   * ISSUE #1900）—— 不再送设置页，那一页只管路径。 */
+  const openComfyui = useCallback(() => navigateTo("comfyui"), [navigateTo]);
 
   // ── 画布：为 true 时，画布打开一个全新的命名项目
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
@@ -230,6 +235,17 @@ export default function WorkspacePage() {
     [recentProjects],
   );
 
+  /* 侧栏「项目」分组列出的项目 —— 与「所有项目」那一屏同一支取数（并集，
+   * 见 `useSidebarProjects`）。此前这里直接用 `recentProjects`，而它读的是
+   * 本地索引：画布页没打开过就没有 `hydrateFromServer` 那次对账，于是
+   * 「服务端有一行、索引里没有」的项目在侧栏**一条都不列**（ISSUE #1874）。 */
+  const sidebarProjects = useSidebarProjects();
+
+  /* 侧栏里点开某个项目那一跳 —— 「服务端有、本机还没有副本」的行要先拉回本机，
+   * 否则落点是闸门（ISSUE #1874，见 `useOpenServerProject`）。「所有项目」那一屏
+   * 走的是同一个回调，两处同一支。 */
+  const handleOpenServerProject = useOpenServerProject(navigateTo);
+
   const openableViews = useMemo(
     () => [
       ...globalNavItems().map((item) => ({ view: item.id, label: item.label })),
@@ -259,9 +275,9 @@ export default function WorkspacePage() {
           active={viewMode}
           onSelect={handleNavSelect}
           onOpenSettings={openSettings}
-          projects={recentProjects.map((p) => ({ id: p.id, name: p.name }))}
+          projects={sidebarProjects}
           activeProjectId={activeProjectId}
-          onOpenProject={handleOpenCanvasProject}
+          onOpenProject={handleOpenServerProject}
           onShowAllProjects={handleShowAllProjects}
           onNewProject={handleNewProject}
           viewTabs={viewTabs}
@@ -288,7 +304,7 @@ export default function WorkspacePage() {
             onNavigate={handleNavSelect}
             onHomeNavigate={handleHomeNavigate}
             onShowAllProjects={handleShowAllProjects}
-            onOpenSettings={openSettings}
+            onOpenComfyui={openComfyui}
             onUseWorkflow={handleUseWorkflow}
             canvasSeedNew={canvasSeedNew}
             onConsumeCanvasSeed={() => setCanvasSeedNew(false)}
