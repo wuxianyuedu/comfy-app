@@ -24,10 +24,8 @@
 // `~/lib/session-banner.server`（`.server` 后缀、内部无 server-only）、
 // `./lifecycle-launch` / `./lifecycle-derive` / `./lifecycle-exit`
 // （#1077 / #1080）、`./trace`（#1060）、`./status`（#1080）。
-// 下面第 561 行的 top-level `const COMFY_SESSION_MARK = \`${SERVICES_LOG_DIR}/…\``
-// 是**加载即求值**——它能否在纯 Node 里成功取决于 `log-paths` 已摘 server-only
-// （#1074）。这条正是 P3 §5 里之前停在 comfyui 边时点出的「lifecycle 卡在
-// log-paths」——本批随 lib 地基批收口。
+// 下面 top-level 的 `COMFY_SESSION_MARK` 是**加载即求值**——它能否在纯 Node 里
+// 成功取决于 `log-paths` 已摘 server-only（#1074）。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import type { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -763,15 +761,6 @@ export async function ensureComfyUiReady(
     return st.starting;
   }
 
-  /* 从这里起就进入「启动流程进行中」：无论这次是不是走 bound/keepAlive 拉起，
-   * 事实都已经在变（进程即将/正在出现）。落一笔计时窗口，让设置页的 5s 轮询
-   * 在这段空窗里问出的「什么都没探到」不再被渲染成「未运行」（ISSUE #442）。
-   *
-   * 放在判决表**之前**：判决表可能给出「未开自动启动 / 未配路径」这类直接
-   * 返回，那种情况下窗口最多多显示十几秒「启动中…」，比在用户刚点过启动的
-   * 当口闪一句「未运行」更可接受。 */
-  markComfyStarting();
-
   // 手动启动＝用户明确要求拉起：先清掉两把「自动路径先别动」闩锁，否则上次
   // 手动关闭 / 上次启动失败的小尾巴会把这次明确启动也拦住。
   if (opts.manual) {
@@ -833,6 +822,15 @@ export async function ensureComfyUiReady(
         "ComfyUI 未运行，且未配置安装路径——请到 设置 → 创作后端 填写 ComfyUI 路径",
     };
   }
+  /* 到这里才是「真的会拉起」：判决表摘掉 already-up / skip-* 后只剩「等已有
+   * 实例就绪」与「按路径拉起」，共同点是事实确实在变。窗口落在这里，状态轮询
+   * 才不会被空窗里的「什么都没探到」骗成「未运行」（ISSUE #442）。
+   *
+   * **位置是判据本身**（ISSUE #1899）：此前它在判决表之前，于是「未配路径 /
+   * 未开自动启动 / 手动关闭过 / 上次失败」这些根本不打算拉起的分支也点亮了窗口
+   * —— 用户看到「请填写 ComfyUI 路径」的同时屏幕上写着「正在启动…」。窗口的
+   * 语义是「有启动在推进」，只有真会推进的两条路配得上它。 */
+  markComfyStarting();
   /* HTTP 没探到 ≠ 没在跑：旧保活实例正忙（出图 / 事件循环饱和）时
    * /system_stats 那 1.5s 会超时，而上面的入口探测只认这一次 fetch。进程级
    * 快照不依赖 ComfyUI 的 HTTP 响应能力 —— 进程确实在跑就转「等待已有实例
