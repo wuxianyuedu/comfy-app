@@ -5461,7 +5461,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）差分回归 ──────
    * 判据见 scripts/check-ui-primitives.cjs 里 P83 的注释：只管 h1（屏级），
    * 属性段必须出现 u-title-page / text-page 之一，且不得再叠 text-lg /
-   * text-[34px] 这类硬写字号。
+   * text-[ 34px ] 这类硬写字号。
    *
    * 曾经还放行 `u-title-hero`：首页欢迎区那块大标题走的是它，ISSUE #1691 把那
    * 块欢迎区删掉之后这一档连同 `--text-hero` 一起退役（零消费者）。下面这条
@@ -5492,7 +5492,8 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "export function V() {",
         "  return (",
-        '    <h1 className="u-title-page text-[34px]">首页</h1>',
+        // 候选名运行期拼：本文件也在 Tailwind 的扫描面里，写全一枚就多一条没人用的规则。
+        `    <h1 className="u-title-page ${"text-" + "[34px]"}">首页</h1>`,
         "  );",
         "}",
       ].join("\n"),
