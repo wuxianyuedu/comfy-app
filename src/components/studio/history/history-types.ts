@@ -1,3 +1,4 @@
+import type { StatusDotState } from "~/components/ui/status-dot";
 import type { ValidationError } from "~/lib/comfyui/validation";
 import { type RouterOutputs } from "~/trpc/react";
 
@@ -29,18 +30,20 @@ export type TaskDetail = NonNullable<RouterOutputs["task"]["detail"]>;
 export interface FilterDef {
   key: FilterKey;
   label: string;
-  /** 颜色：violet/emerald/red/gray/cyan，影响 pill 上的状态点；ALL 没有点。
-   *  SUCCEEDED/RUNNING/FAILED 走项目「统一状态映射」的语义 token
-   *  （见 §3.6.2 / `globals.css` 与 `--color-success-strong` / `--color-primary`
-   *  / `--color-destructive`）；CANCELLED 仍留 `bg-gray-400`（语义上应映射到
-   *  warning，但灰→琥珀视觉跨档、下一批统一走查）。 */
-  dotCls: string;
+  /** 这一枚筛选对应的**状态语义**（`ALL` 不给圆点）。
+   *
+   * 此前这里存的是 Tailwind 类名的**字面量**（`"bg-success-strong"` /
+   * `"bg-primary"` / `"bg-destructive"` / `"bg-gray-400"`）—— 一个 `.ts`
+   * 配置模块直接持有样式字符串，于是「换个状态色」要在这里改、且 `bg-gray-400`
+   * 那一条绕过了全库的语义 token（规范 03 §3.6.2）。现在只给语义键，
+   * 由 `ui/status-dot` 的 `StatusDotState` 唯一一处翻译成颜色。 */
+  tone?: StatusDotState;
 }
 
 export const FILTERS: FilterDef[] = [
-  { key: "ALL", label: "全部", dotCls: "" },
-  { key: "SUCCEEDED", label: "已完成", dotCls: "bg-success-strong" },
-  { key: "RUNNING", label: "进行中", dotCls: "bg-primary" },
-  { key: "FAILED", label: "失败", dotCls: "bg-destructive" },
-  { key: "CANCELLED", label: "已取消", dotCls: "bg-gray-400" },
+  { key: "ALL", label: "全部" },
+  { key: "SUCCEEDED", label: "已完成", tone: "up" },
+  { key: "RUNNING", label: "进行中", tone: "probing" },
+  { key: "FAILED", label: "失败", tone: "down" },
+  { key: "CANCELLED", label: "已取消", tone: "busy" },
 ];
