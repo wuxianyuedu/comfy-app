@@ -103,6 +103,31 @@ describe("节点 JSON 浮层", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("两个页签里只有一个处于选中态（旧写法 `active` 恒真，两枚永远同时高亮）", () => {
+    renderPopover();
+
+    const view = screen.getByRole("tab", { name: "RAW · 节点视图" });
+    const saved = screen.getByRole("tab", { name: "执行 · 节点条目" });
+    /* 初始是 `view`（RAW），只有它选中。旧实现的 `const active = tab === tab`
+     * 是自比较恒真 ⇒ 两枚都 `aria-selected="true"`，用户看不出当前是哪个视图
+     * ——这正是 ISSUE #1925 复查时抓到的那个 bug（比「悬停翻色」更硬）。 */
+    expect(view).toHaveAttribute("aria-selected", "true");
+    expect(saved).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("切到另一半后选中态对调（一次只动一枚）", () => {
+    renderPopover();
+
+    fireEvent.click(screen.getByRole("tab", { name: "执行 · 节点条目" }));
+    expect(
+      screen.getByRole("tab", { name: "执行 · 节点条目" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "RAW · 节点视图" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+
   it("点关闭按钮关闭", () => {
     const { onDismiss } = renderPopover();
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));

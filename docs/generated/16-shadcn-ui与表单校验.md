@@ -6019,20 +6019,44 @@ type SettingsShellProps = { section; onSelect; className?; banner? } & (
 > 判完的结论是三类**不该换**的（开关 / 多选 / 卡片列表），已在上面的注里列清 ——
 > **把不该换的也换掉，正是 §16.2.4.75 开头那条取舍要防的「逼人把对的代码改错」**。
 
-| 落点                                                                                                | 形态                                  | 状态      |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------- | --------- |
-| `workshop/ModelAdaptersView`、`workshop/mode-contract/dialog/ContractInputCatalog`                  | `pill` / `compact`（#1423 首批）      | ✅ 已收口 |
-| `studio/history/HistoryList`                                                                        | `pill`（状态筛选，#1925 第一批）      | ✅ 已收口 |
-| `model/ModelLibrary`                                                                                | `pill`（类型筛选，#1925 第二批）      | ✅ 已收口 |
-| `studio/ModelLibrary`（原私有 `FilterChip`）                                                        | `pill`（类型筛选，#1925 第二批）      | ✅ 已收口 |
-| `studio/project-canvas/HistoryPanel` 类型筛选                                                       | `pill`（#1925 第二批）                | ✅ 已收口 |
-| `studio/project-canvas/HistoryPanel` 作用域切换                                                     | `ui/tabs` `line`（#1925 第二批）      | ✅ 已收口 |
-| `workshop/ShotStudio`、`workshop/VideoStudio.parts`、`workshop/CharacterPortraitStudio`「生成通道」 | `segment` / `compact`（#1925 第三批） | ✅ 已收口 |
-| `workshop/LLMContext` 提供方 + 模型清单                                                             | `segment` / `compact`（#1925 第三批） | ✅ 已收口 |
-| `app/login/page`（登录 / 创建账号）                                                                 | `segment`（#1925 第三批）             | ✅ 已收口 |
-| `studio/logs/TaskLogTimeline`、`studio/project-canvas/GlobalStepLogPanel` 级别筛选                  | `compact`（#1925 第三批）             | ✅ 已收口 |
-| `studio/project-canvas/MaterialLibraryPanel` 作用域切换                                             | `ui/tabs` `line`（#1925 第三批）      | ✅ 已收口 |
-| `studio/project-canvas/CanvasPanelToolbar`（面板开关）                                              | **就地钉悬停值**（#1925 第三批）      | ✅ 已收口 |
+| 落点                                                                                                | 形态                                        | 状态      |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------- |
+| `workshop/ModelAdaptersView`、`workshop/mode-contract/dialog/ContractInputCatalog`                  | `pill` / `compact`（#1423 首批）            | ✅ 已收口 |
+| `studio/history/HistoryList`                                                                        | `pill`（状态筛选，#1925 第一批）            | ✅ 已收口 |
+| `model/ModelLibrary`                                                                                | `pill`（类型筛选，#1925 第二批）            | ✅ 已收口 |
+| `studio/ModelLibrary`（原私有 `FilterChip`）                                                        | `pill`（类型筛选，#1925 第二批）            | ✅ 已收口 |
+| `studio/project-canvas/HistoryPanel` 类型筛选                                                       | `pill`（#1925 第二批）                      | ✅ 已收口 |
+| `studio/project-canvas/HistoryPanel` 作用域切换                                                     | `ui/tabs` `line`（#1925 第二批）            | ✅ 已收口 |
+| `workshop/ShotStudio`、`workshop/VideoStudio.parts`、`workshop/CharacterPortraitStudio`「生成通道」 | `segment` / `compact`（#1925 第三批）       | ✅ 已收口 |
+| `workshop/LLMContext` 提供方 + 模型清单                                                             | `segment` / `compact`（#1925 第三批）       | ✅ 已收口 |
+| `app/login/page`（登录 / 创建账号）                                                                 | `segment`（#1925 第三批）                   | ✅ 已收口 |
+| `studio/logs/TaskLogTimeline`、`studio/project-canvas/GlobalStepLogPanel` 级别筛选                  | `compact`（#1925 第三批）                   | ✅ 已收口 |
+| `studio/project-canvas/MaterialLibraryPanel` 作用域切换                                             | `ui/tabs` `line`（#1925 第三批）            | ✅ 已收口 |
+| `studio/project-canvas/CanvasPanelToolbar`（面板开关）                                              | **就地钉悬停值**（#1925 第三批）            | ✅ 已收口 |
+| `ui/image-viewer` 缩放档位（适应窗口 / 原始大小）                                                   | `compact`（#1925 第四批）                   | ✅ 已收口 |
+| `studio/VideoQueueModal`（生成队列 / 批量提交）                                                     | `segment`（#1925 第四批）                   | ✅ 已收口 |
+| `HistoryPanel` / `MaterialLibraryPanel` / `library/ResourceLibrary` 网格·列表切换                   | `ui/display-density-toggle`（#1925 第四批） | ✅ 已收口 |
+| `studio/WorkflowNodeJsonPopover`（RAW / 执行 视图）                                                 | 就地修：`active` 曾恒真（#1925 第四批）     | ✅ 已收口 |
+
+> **第四批（ISSUE #1925 复查）重推了一遍全库，抓到两种新形态。**
+>
+> ① **「网格 / 列表」图标密度切换 ×3**（画布历史抽屉 / 画布素材抽屉 / 素材库）：
+> 三处**逐字相同**（连 `Hint` 文案、`size="icon-xs"` 与三元里的 `bg-surface-2` 都
+> 一样）—— 又是 §12.12 的孪生对。坏法与 chip 同源：选中档只给底色、**没钉字色悬停**，
+> 于是 `ghost` 的 `hover:text-foreground` 划过已选中那枚时把字色翻掉；而
+> `bg-surface-2` 在浅色主题下与行头底色近值，本来就弱。出口是新基元
+> `~/components/ui/display-density-toggle`（`radiogroup` + `radio`，两枚由 `value`
+> 一处驱动）。**这一族是「图标按钮版」，不是 chip**，所以没有硬塞进 `SelectChip`。
+>
+> ② **`WorkflowNodeJsonPopover` 的页签曾整个失效**：`const active = tab === tab`
+> —— 自比较恒真，**两枚页签永远同时高亮**，用户看不出当前是哪个视图。这比「悬停
+> 翻色」硬得多：它不是样式弱，是**状态判据根本没接上**（内层 `tab` 参数遮蔽了
+> `useState` 的 `tab`）。修法是把 map 参数改名 `key` 并让 `active` 真判；这一处
+> **没有**改换基元 —— 它是带内联样式的浮层页签，换 `ui/tabs` 会连浮层的定位口径
+> 一起动（ISSUE #717 的现场）。
+>
+> **这一批也纠正了「已收口」的乐观估计**：三批之后仍有 4 类落点漏网，其中一类
+> 是真 bug。按批收口 + 每批重推全库（而不是只验上一批点过名的）是唯一靠谱的做法。
 
 > **第三批（ISSUE #1925 余量）多出一条口径：这一族不全都能换成 `SelectChip`。**
 > 下面几种形态**刻意**留在原地，只在调用点补那一半接缝：

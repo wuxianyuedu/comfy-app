@@ -6,6 +6,7 @@ import { Trash, X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { SelectChip } from "~/components/ui/select-chip";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { runAsyncAction } from "~/lib/async-action";
@@ -198,31 +199,31 @@ export function VideoQueueModal({
               </Hint>
             </div>
             <div className="flex items-center gap-2">
-              <div className="bg-subtle flex rounded-lg p-0.5">
-                <Button
-                  variant="ghost"
-                  size="xs"
+              {/* 「生成队列 / 批量提交」一排里选一个 —— 走 SelectChip
+                  （规范 16 §16.2.4.75）。旧形态钉了选中底色（`hover:bg-surface-2`
+                  与常态同值）却**没钉字色**：`ghost` 的 `hover:text-foreground`
+                  仍在，划过已选中那枚时只有字色被翻掉。 */}
+              <div
+                role="radiogroup"
+                aria-label="队列视图"
+                className="bg-subtle flex rounded-lg p-0.5"
+              >
+                <SelectChip
+                  shape="segment"
+                  className="px-3 py-1.5 text-xs"
+                  selected={tab === "queue"}
                   onClick={() => setTab("queue")}
-                  className={`h-auto rounded-md px-3 py-1.5 ${
-                    tab === "queue"
-                      ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
-                      : "text-ink-muted hover:text-ink-soft"
-                  }`}
                 >
                   生成队列
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
+                </SelectChip>
+                <SelectChip
+                  shape="segment"
+                  className="px-3 py-1.5 text-xs"
+                  selected={tab === "draft"}
                   onClick={() => setTab("draft")}
-                  className={`h-auto rounded-md px-3 py-1.5 ${
-                    tab === "draft"
-                      ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
-                      : "text-ink-muted hover:text-ink-soft"
-                  }`}
                 >
                   批量提交（{draft.length}）
-                </Button>
+                </SelectChip>
               </div>
               <Button
                 variant="ghost"

@@ -51,6 +51,7 @@ import {
   MediaThumbnail,
   type MediaFallback,
 } from "~/components/ui/media-thumbnail";
+import { SelectChip } from "~/components/ui/select-chip";
 import { useElementBox } from "~/components/ui/use-element-box";
 import {
   clampZoomScale,
@@ -344,33 +345,36 @@ export function ImageViewer({
               >
                 <Plus data-icon="inline-start" size={14} />
               </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={zoom.fit}
-                aria-pressed={zoom.mode === "fit"}
-                className={`text-2xs h-auto rounded-md px-2 py-1 ${
-                  zoom.mode === "fit"
-                    ? "bg-surface-2 text-ink"
-                    : "text-ink-muted hover:text-ink"
-                }`}
+              {/* 缩放档位「一排里选一个」——走 SelectChip（全库唯一实现，
+                  规范 16 §16.2.4.75）。旧形态是手搓三元 + `bg-surface-2`
+                  选中底色，且**没钉字色悬停**：`ghost` 的
+                  `hover:text-foreground` 会把已选中那枚的字色翻回未选中档。
+                  注意 `zoom.mode` 还有第三种 `manual`（滚轮 / ± 按钮缩出来的
+                  自由倍数）—— 那时两枚都不选中，正是单选组「可以都不选」的
+                  合法状态（双击画布的 toggle 会把它收回前两档）。 */}
+              <div
+                role="radiogroup"
+                aria-label="缩放档位"
+                className="flex items-center gap-0.5"
               >
-                适应窗口
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={zoom.actualSize}
-                aria-pressed={zoom.mode === "actual"}
-                className={`text-2xs h-auto gap-1 rounded-md px-2 py-1 ${
-                  zoom.mode === "actual"
-                    ? "bg-surface-2 text-ink"
-                    : "text-ink-muted hover:text-ink"
-                }`}
-              >
-                <Maximize2 data-icon="inline-start" size={11} />
-                原始大小
-              </Button>
+                <SelectChip
+                  shape="compact"
+                  className="gap-1 px-2 py-1"
+                  selected={zoom.mode === "fit"}
+                  onClick={zoom.fit}
+                >
+                  适应窗口
+                </SelectChip>
+                <SelectChip
+                  shape="compact"
+                  className="gap-1 px-2 py-1"
+                  selected={zoom.mode === "actual"}
+                  onClick={zoom.actualSize}
+                >
+                  <Maximize2 data-icon="inline-start" size={11} />
+                  原始大小
+                </SelectChip>
+              </div>
               <Button
                 variant="ghost"
                 size="icon-sm"
