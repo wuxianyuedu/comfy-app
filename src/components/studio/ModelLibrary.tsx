@@ -13,6 +13,7 @@ import { FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
+import { SelectChip } from "~/components/ui/select-chip";
 import { Skeleton } from "~/components/ui/skeleton";
 import { pageHeaderTitle } from "./NavItems";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
@@ -73,7 +74,11 @@ export function ModelLibrary() {
         />
       </ViewActions>
 
-      <div className="mb-5 flex flex-wrap items-center gap-2">
+      <div
+        role="radiogroup"
+        aria-label="按类型筛选模型"
+        className="mb-5 flex flex-wrap items-center gap-2"
+      >
         {c.loading ? (
           /* 首屏骨架的档位占位：与真实 chip 同高同圆角，避免「全部 (0)」
            * 先闪一秒再变成真 chips（数量从 0 跳上去比不显示更吵）。
@@ -85,20 +90,22 @@ export function ModelLibrary() {
           </>
         ) : (
           <>
-            <FilterChip
-              active={c.filter === ALL_TYPES}
+            <SelectChip
+              selected={c.filter === ALL_TYPES}
               onClick={() => c.setFilter(ALL_TYPES)}
-              label={`全部 (${c.models.length})`}
-            />
+            >
+              {`全部 (${c.models.length})`}
+            </SelectChip>
             {c.typeChips.map(([t, count]) => {
               const meta = folderMeta(t);
               return (
-                <FilterChip
+                <SelectChip
                   key={t}
-                  active={c.filter === t}
+                  selected={c.filter === t}
                   onClick={() => c.setFilter(t)}
-                  label={`${meta.label} (${count})`}
-                />
+                >
+                  {`${meta.label} (${count})`}
+                </SelectChip>
               );
             })}
           </>
@@ -301,31 +308,6 @@ function ModelRowLine({
         {fmtSize(model.fileSize)}
       </span>
     </div>
-  );
-}
-
-function FilterChip({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="xs"
-      onClick={onClick}
-      className={`h-auto rounded-full px-3 py-1.5 ${
-        active
-          ? "bg-primary-500/20 text-primary-strong hover:bg-primary-500/30"
-          : "bg-subtle text-ink-faint hover:text-ink-bright"
-      }`}
-    >
-      {label}
-    </Button>
   );
 }
 
