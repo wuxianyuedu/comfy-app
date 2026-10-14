@@ -428,7 +428,7 @@ export interface ModeContract {
   customInputs?: ModeContractCustomInput[];
 }
 
-/** 内置的必备口判定（未在注册表里配过时用它）。
+/** 内置的必备口判定（一份契约没显式列必备口时用它）。
  *
  *  提示词是所有生成模式的必备口：工坊的每条链路都是「一段提示词 → 一次生成」，
  *  没有承载提示词的端口，这条工作流在工坊里根本驱动不起来。其余口不预设必备
@@ -439,7 +439,7 @@ export function builtInRequiredInputs(
   return inputs.filter((id) => id === "prompt");
 }
 
-/** 某契约生效的必备口：配过用配过的，没配过用内置默认。
+/** 某契约生效的必备口：显式配过用配过的，没配过用内置默认。
  *
  *  入参收 `string[]`（不是 `ModeContractInputId[]`）：调用方拿到的口子清单常常
  *  来自展示派生（`ContractEntryDisplay[]` 的 `id: string`），为了一次判空去反向
@@ -463,8 +463,11 @@ export function requiredInputsFor(contract: {
   );
 }
 
-/** 内置默认契约（未在注册表里改过的模式用它）。 */
-export function builtInModeContract(mode: string): ModeContract {
+/** 某个模式**由推导得到**的那份契约（按模式的口子清单现算）。
+ *
+ *  这是成品配置（`configuredModeContracts`）与编辑器初值的共同来源：口清单只从
+ *  `exposedParamsForMode` 派生一次，别处不再抄一份。 */
+export function derivedModeContract(mode: string): ModeContract {
   const inputs = exposedParamsForMode(mode).map(
     (d) => d.id as ModeContractInputId,
   );
@@ -475,6 +478,61 @@ export function builtInModeContract(mode: string): ModeContract {
     required: builtInRequiredInputs(inputs),
   };
 }
+
+/** ── 成品配置：编译进源码的那份契约注册表 ────────────────────────────────
+ *
+ * 过去契约是**入库的文件**（`config/workshop-mode-contracts.json`）：每个检出
+ *  与每个桌包都读同一份，代价是「要改它得先找到那个文件」。现在它回到源码里 ——
+ *  每种模式的口清单与输出类别由 `derivedModeContract` 现算，这一份就是全部默认：
+ *  仓库里没有第二个地方定义「T2I 有哪些口」。
+ *
+ *  仍然保留的编辑入口（ISSUE #632 的「哪个口必备应该能配」）写的是**本机覆盖**
+ *  （`mode-contract.server.ts`），不改这一份 —— 成品配置跟着构建走，覆盖跟着这台
+ *  机器走，两者都在而不互相污染。
+ *
+ *  哪些模式进来：`ALL_MODES` 由调用方给（纯函数层不引工作流类型表，避免把
+ *  `workflow-types` 这张大表拖进每个读者）；调用点见
+ *  `mode-contract-config.ts` 的 `CONTRACT_MODES`（= 生成类模式）。 */
+export function configuredModeContracts(
+  modes: readonly string[] = ALL_CONTRACT_MODES,
+): ModeContract[] {
+  return modes.map((mode) => derivedModeContract(mode));
+}
+
+/** 成品配置覆盖的模式码（生成类模式全集）。
+ *
+ *  取值与 `~/lib/workflow/workflow-types` 的 `ALL_WORKFLOW_TYPES` 里
+ *  `isGenerative` 的那一批一致 —— 这份清单由 `configured-mode-contracts.test.ts`
+ *  与工作流类型表**双向比对**守住：漏一个模式 = 它在界面上静默消失，而界面上
+ *  没有任何地方会说这件事（导航树只在「没有任何地方列它」时才看得出来）。
+ *
+ *  这里写死而不是直接 import 类型表：`model-mode-contract` 是纯函数层，被契约
+ *  编辑器、封装视图、适配器多处读，引整张工作流类型表会把「口清单」这件事
+ *  与「工作流有哪些类型」耦合在一起（后者已经由 `outputKindForMode` 用到一次，
+ *  那处是**按模式查**、不是**摊平全集**）。 */
+export const ALL_CONTRACT_MODES: readonly string[] = [
+  "T2I",
+  "I2I",
+  "TI2I",
+  "R2I",
+  "E2I",
+  "D2I",
+  "P2I",
+  "S2I",
+  "M2I",
+  "T2V",
+  "I2V",
+  "TI2V",
+  "FLF2V",
+  "FMF2V",
+  "R2V",
+  "S2V",
+  "IA2V",
+  "A2V",
+  "T2A",
+  "T2M",
+  "T2S",
+];
 
 /** 校验并归一化一份注册表（去重、剔非法口、模式大写）。
  *

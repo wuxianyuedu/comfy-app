@@ -14,7 +14,7 @@
 <div class="tsd-signature"><span class="tsd-kind-variable">NEXTJS_PANEL_LOG_PREFIX</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;nextjs-panel-&quot;</span></div>
 <div class="tsd-comment tsd-typography"><p>「应用服务输出」转录文件（面板可见通道）的前缀与全局匹配式。</p>
 <p>应用服务（Next dev server）的 stdout / stderr 由
-<code>src/lib/capture-streams.server.ts</code> 额外转录一份到 <code>nextjs-panel-*.log</code>，
+<code>src/lib/log/capture-streams.server.ts</code> 额外转录一份到 <code>nextjs-panel-*.log</code>，
 供「应用日志」面板轮询展示——此前首屏编译错误 / Turbopack FATAL / 未捕获的
 服务端异常只落在 nextjs-stdout|stderr 文件里，面板完全看不到（ISSUE #360）。</p>
 <p>文件按进程启动标识命名（每次运行一份），与 dev-launcher 清理

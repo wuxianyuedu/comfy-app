@@ -14,7 +14,7 @@
  * 分层（规范 17 §17.2）：
  *  - 本组件是第③层「视图」：只渲染 props + 转发动作，不含 IO；
  *  - 窗口控制（拖拽/最小化/关闭）与最大化状态订阅都走
- *    `src/lib/window-controls-client.ts`（第②层），视图不直接 invoke。
+ *    `src/lib/shell/window-controls-client.ts`（第②层），视图不直接 invoke。
  *
  * 交互细节：
  *  - 拖拽区铺满标题栏，用 `data-no-drag` 标记排除页签与窗口按钮，

@@ -59,11 +59,9 @@
       位置)+ `asCanvasNodeData()` 单点收口;画布链路 `as unknown as` / `as never`
       清零;两处 Prisma Json 边界改为 Zod 校验。
 - [x] `errorSuggestion` 正则规则表外置为数据(**已过时项,已改判为完成**)。
-      规则表**已外置**到数据模块
-      `src/components/studio/project-canvas/CanvasNode/error-suggestions.ts`
-      (`ERROR_SUGGESTION_RULES` 数组 + `pattern` / `suggestion` 数据项),
-      `ErrorPanel.tsx` 只消费 `suggestForError()`。原条目按「未做」记录,
-      复核后改判为已完成。
+      规则表**已外置**到判据模块 `src/lib/comfyui/error-advice.ts`
+      (`suggestForError()` + 形态表),画布节点错误面板
+      (`ErrorPanel.tsx`) 只消费它。原条目按「未做」记录,复核后改判为已完成。
 - [ ] 注册表触发式采纳(仍开放):下次新增节点 kind 时按
       reviews/2026-08-30-canvasnode-review.md 第二节执行顺序走。
       **性质**:流程性约定(触发条件是「下次新增节点 kind」),无完成态,
@@ -277,7 +275,7 @@
       证据：`src/lib/llm/server.ts`（`getConfigForClient`）、`src/lib/llm/server.test.ts`。
 - [x] **A5 SSRF / 协议白名单（已修复；本批复算出「同一个口径漏了第四个落点」并补上）**：
       `llm.configSave` 的 `baseUrl` 与 `setting.comfyEmbeddable` 的 `base`/`hostOrigin` 输入层加
-      `^https?://` 校验（与 `trainerUrl` 同口径），挡 `file://` 等非 http 协议；
+      `^https?://` 校验（与已删的 `trainerUrl` 同口径），挡 `file://` 等非 http 协议；
       `comfy-embed.ts` 的 `probeComfyEmbeddable` 已有 `isHttpOrigin` 运行时防护。
       **复算照出两件事**：
       ① 同一句话在库里写了四遍（一份 `new URL()` 解析 + 三份前缀正则），而前缀正则实测**两个方向都错**
@@ -1173,7 +1171,7 @@
       把登记键换成 `/api/gone-already-fixed` → 主断言与陈旧断言各红一条。
       证据：`src/app/api/images/route.ts` + `route.test.ts`（11 条，四项门槛满档）、
       `src/lib/comfyui/client.ts`（`ComfyViewError`）+ `client.test.ts`（`getView` 三支）、
-      `src/lib/media/media-url.ts`、`src/components/studio/TrainingStudio.tsx`、
+      `src/lib/media/media-url.ts`、
       `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`、
       `git show ab12a551^:src/app/api/images/route.ts`。
 - [ ] **E3″ 端到端：80 条 spec（29 条 `@critical`）没有任何自动执行者，且没有真登录态**（E3 的 router 维度已收口；原记「3 spec / 31 用例」的体量早就过时）：
@@ -1374,7 +1372,8 @@
       （`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影 → SQL 语法错。
       实际后果：`train.cancel` 自那次迁移起每次 500，而这条 router 没有执行者，
       所以没有任何一条红过（`c7a77d19` 那刀补上判据、类型收紧成
-      `Record<string, AnySQLiteColumn>`，见 `repository-lora.ts` 的注释）。
+      `Record<string, AnySQLiteColumn>`；那处仓储 `repository-lora.ts` 已随后续
+      功能调整删除）。
       **本批把「类」变成有判据的东西**：`tests/f13-projection-shapes.test.ts`（进固定清单）判四件事 ——
       ① 非测试源码里每一处 `as never` 都要**逐处登记 + 写清为什么**（新增未登记 = 红；
       登记的那处不见了 = 红；按「文件 + 该文件内次数」记账，不按会漂的行号）；
@@ -1402,7 +1401,7 @@
       那一支已随 E3 收口成判据（`tests/trpc-surface-executors.test.ts`）。
       证据：`tests/f13-projection-shapes.test.ts`、`src/lib/core/repository-workflow-template.ts`、
       `src/lib/workshop/types.ts`（`SHOT_TYPES` / `normalizeShotType`）、
-      `src/lib/core/repository-lora.ts`、`changelog.d/0-router-gates-tranche2.md`。
+      `changelog.d/0-router-gates-tranche2.md`。
 - [x] **F13′ MCP 工具的写侧入参没有域内校验（本批修复；同族另一处另立 F13″）**：
       `src/server/mcp/workshop-mcp.ts` 的 `workshop_set_characters` / `workshop_set_storyboard`
       原本把 inputSchema 写成 `z.array(z.any())`，再 `as never` 压进 `Character[]` / `Shot[]`。

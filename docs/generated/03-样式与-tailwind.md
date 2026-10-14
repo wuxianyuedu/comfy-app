@@ -238,12 +238,12 @@ import { Home, Zap, FolderOpen, Search, X } from "lucide-react";
 **数据驱动的图标名**（API 返回字符串 key、配置项/数据模型选图标）走中央解析组件，不直接 import：
 
 ```tsx
-// ✅ 动态 key：中央 Icon 组件（src/components/ui/Icon.tsx，内部已带 aria-hidden）
+// ✅ 动态 key：中央 Icon 组件（src/components/ui/icon.tsx，内部已带 aria-hidden）
 import { Icon } from "@/components/ui/icon";
 <Icon name="plus" size={16} strokeWidth={2} />;
 ```
 
-新增图标时先在 `Icon.tsx` 的 lucide import 与 `ICON_MAP` 各加一行再使用；静态图标直接 import lucide，动态/可序列化 key 一律走 `<Icon name>`。
+新增图标时先在 `icon.tsx` 的 lucide import 与 `ICON_MAP` 各加一行再使用；静态图标直接 import lucide，动态/可序列化 key 一律走 `<Icon name>`。
 
 **例外**：项目品牌图标、复杂插画、需要精细控制的装饰性 SVG（如 Aurora 极光晕）可保留内联 SVG/组件。
 
@@ -521,7 +521,7 @@ pnpm theme:check    # 硬闸检查：豁免之外不得有未 token 化的写死
 
 实测抓到的那处是 `ui/aurora-background.tsx` 的 `AuroraGlow`：
 `var(--color-aurora-${tone})`。**它今天还在正常渲染，纯属侥幸** —— 那三颗的名字在
-同文件上半段与 `TrainingStudio` 的 `stroke=` 里恰好被整名写过，是**别人的代码**替它
+同文件上半段与另一处（已删的训练工作室）的 `stroke=` 里恰好被整名写过，是**别人的代码**替它
 保住了变量；哪天重构掉那几行，光晕当场失色、没有任何报错。已改成「整名 → 字面量」表
 （`AURORA_TONE_VAR`），并补了该组件的第一条用例（此前零覆盖；表化唯一可能引入的新错
 是抄错色相，而拼法与表法的运行时字符串**逐字相同**，所以「有没有拼」由静态判据守、
@@ -701,7 +701,7 @@ props 下的形态与明暗两态）与 `getComputedStyle` 类断言（§11.3，
 **相反** —— 借错了不报错，只是在浅色下看不清（同 §3.6.1 开头那段论证）。
 
 **装饰性渐变/光晕**：色相进 token，**强度（alpha）留在调用处**。同一个极光晕
-曾在登录页 / 首页 / `FilmStudio` / `TrainingStudio` 各抄一份、且值不同
+曾在登录页 / 首页 / `FilmStudio` 与训练工作室（已删）各抄一份、且值不同
 （0.48 / 0.42 / 0.40），现在统一走 `AuroraGlow`（`tone` 选色相、`alpha` 定强度）——
 与 §3.5 的「AuroraBackground 模式」是同一条要求：**同一个装饰不在多处内联重复**。
 

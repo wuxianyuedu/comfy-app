@@ -16,7 +16,7 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="builtinrequiredinputs"><span class="tsd-kind-call-signature">builtInRequiredInputs</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">inputs</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-keyword">readonly</span> <a href="../types/lib_workshop_model-mode-contract.ModeContractInputId.html" class="tsd-signature-type tsd-kind-type-alias">ModeContractInputId</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_workshop_model-mode-contract.ModeContractRequired.html" class="tsd-signature-type tsd-kind-type-alias">ModeContractRequired</a><a href="#builtinrequiredinputs" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>内置的必备口判定（未在注册表里配过时用它）。</p>
+<div class="tsd-comment tsd-typography"><p>内置的必备口判定（一份契约没显式列必备口时用它）。</p>
 <p>提示词是所有生成模式的必备口：工坊的每条链路都是「一段提示词 → 一次生成」，
 没有承载提示词的端口，这条工作流在工坊里根本驱动不起来。其余口不预设必备
 —— 它们是可选的补充（负向 / 首尾帧 / 参考图 / 尺寸由工作流默认值兜底）。</p>
