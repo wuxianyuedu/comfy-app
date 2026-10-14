@@ -21,6 +21,9 @@
  * （实测 21109ms → 121ms，且产物不再随无关源码变），也不是源码文本本身 —— 判据读的还是
  * Tailwind 真编出来的级联结果，口径不变。
  *
+ * 本文件另有**一个**入口不走这条加工：`compiledCssPinnedTo`，它按参数把扫描面钉回具体目录，
+ * 用来回答「这一批文件被扫进产物时会生成哪些类」（token 取值判据不需要它，正文卫生判据需要）。
+ *
  * 判据能覆盖本文件关心的全部失效模式：别名取错态（浅/深相同）、引用成环、
  * 引用到一个未定义的 token。
  */
@@ -85,6 +88,9 @@ export interface ThemeTokens {
 
 let compiled: Promise<string> | null = null;
 
+/** `compiledCssPinnedTo` 的缓存：键 = 扫描面（目录列表 + 点名的类）。 */
+const pinnedCompiles = new Map<string, Promise<string>>();
+
 /**
  * 这三条 utility 是**判据自己要读的**（`theme-dark-token-cascade.test.ts` 里那三条
  * `css` 正则的来源）。Tailwind v4 只把「在源码里被用到的」类编进产物，所以关掉自动扫描之后
@@ -101,6 +107,27 @@ const PINNED_UTILITY_CLASSES = [
      要读「遮罩压在本应用背景上之后还剩多少对比」，就得让这条 utility 真进产物。 */
   "bg-scrim",
 ] as const;
+
+/**
+ * 把「扫全仓」这一行换成「谁都不扫」，`withPinnedSources` 与下面的目录固定源编译共用同一步。
+ *
+ * 找不到那一行时**抛错而不是静默按全量扫描编一遍**：后者会让这条优化悄悄失效、
+ * 表现是「某天起 suite 又间歇红」，而那是最难归因的一类。
+ */
+function disableAutoScan(cssText: string): string {
+  const noAutoScan = cssText.replace(
+    /^@import\s+["']tailwindcss["'](?:\s+source\([^)]*\))?\s*;/m,
+    '@import "tailwindcss" source(none);',
+  );
+  if (noAutoScan === cssText) {
+    throw new Error(
+      'globals.css 里找不到 @import "tailwindcss" 那一行，无法关掉全仓源码扫描。' +
+        "本文件的编译特意依赖这一行（理由见 withPinnedSources 的注释）；" +
+        "要么把它改回可识别的形态，要么同步这里的匹配式 —— 别放开扫描凑合，那会把 #1336 的耗时请回来。",
+    );
+  }
+  return noAutoScan;
+}
 
 /**
  * 把「扫全仓找类名」换成「只认上面那几条」，两件事一起解决（ISSUE #1336）：
@@ -120,21 +147,12 @@ const PINNED_UTILITY_CLASSES = [
  * - **多**：项目自己 `@theme` 里的变量改成**无条件声明**（`@theme static`），产物不再随
  *   无关源码里的类用法变化 —— 判据读的是 token 的取值与级联，本来就不该依赖「谁用过了它」。
  *
- * 找不到 `@import "tailwindcss"` 那一行时**抛错而不是静默按全量扫描编一遍**：后者会让这条
- * 优化悄悄失效、表现是「某天起 suite 又间歇红」，而那是最难归因的一类。
+ * 需要「某个 arbitrary 到底有没有被编进产物」那一类判据走的是另一个入口
+ * `compiledCssPinnedTo`，它**不**做下面这两件事（`@theme static` 与 utility 钉名都会改变产物形状，
+ * 而那类判据要的正是「原样编一遍会出什么」）。
  */
 export function withPinnedSources(cssText: string): string {
-  const noAutoScan = cssText.replace(
-    /^@import\s+["']tailwindcss["'](?:\s+source\([^)]*\))?\s*;/m,
-    '@import "tailwindcss" source(none);',
-  );
-  if (noAutoScan === cssText) {
-    throw new Error(
-      'globals.css 里找不到 @import "tailwindcss" 那一行，无法关掉全仓源码扫描。' +
-        "本文件的编译特意依赖这一行（理由见 withPinnedSources 的注释）；" +
-        "要么把它改回可识别的形态，要么同步这里的匹配式 —— 别放开扫描凑合，那会把 #1336 的耗时请回来。",
-    );
-  }
+  const noAutoScan = disableAutoScan(cssText);
   const pins = PINNED_UTILITY_CLASSES.map(
     (cls) => `@source inline("${cls}");`,
   ).join("\n");
@@ -164,6 +182,56 @@ export function compiledGlobalsCss(): Promise<string> {
       .then((r) => r.css);
   }
   return compiled;
+}
+
+/**
+ * 只钉「扫描目录」、不做别的加工的编译 —— 回答「这一批源文件被扫进产物时会生成哪些类」。
+ *
+ * 只有一类判据需要它：**「某枚 arbitrary 候选名到底有没有被引擎解出来」**。
+ * `compiledGlobalsCss()` 那份把输入源收成 4 条 utility（#1336 的耗时与可复现），
+ * 因此它**结构上看不见**「文档正文里写全一枚会怎样」——那正是这类判据要问的事。
+ * 这里保留 `source(none)`（否则每次要 19.5s 全仓扫），但把扫描面按参数逐目录钉回去，
+ * 并且**不**加 `@theme static`、**不**钉 utility 名：那两个加工都会改变产物形状。
+ *
+ * 实测本机耗时（同一份 globals.css，只换扫描面）：src 2.4s、docs+tests 4.0s、
+ * 空扫描面 + 两条 inline 探针 <0.2s。缓存按扫描面键，同一次 vitest 里重复取是免费的。
+ *
+ * ⚠️ 传进来的目录路径是相对 **本 CSS 文件所在目录**（`src/app`）解析的，
+ * 所以仓库根要写成 `../../<dir>` —— 直接传 `docs` 会被解析成 `src/app/docs` 而静默扫空。
+ */
+export function compiledCssPinnedTo(
+  dirs: readonly string[],
+  inlineClasses: readonly string[] = [],
+): Promise<string> {
+  const key = `${dirs.join("|")}#${inlineClasses.join("|")}`;
+  let job = pinnedCompiles.get(key);
+  if (!job) {
+    const base = disableAutoScan(readFileSync(GLOBALS_CSS, "utf8"));
+    const pins = [
+      ...dirs.map((dir) => `@source "${dir}";`),
+      ...inlineClasses.map((cls) => `@source inline("${cls}");`),
+    ].join("\n");
+    job = postcss([tailwind()])
+      .process(`${base}\n${pins}\n`, { from: GLOBALS_CSS })
+      .then((r) => r.css);
+    pinnedCompiles.set(key, job);
+  }
+  return job;
+}
+
+/**
+ * 产物 CSS 里每条规则的**复合选择器**原样列出（一条规则一个字符串，逗号分组还在里面）。
+ *
+ * 为什么从 helper 出：本文件已经为 `themeTokens` 解析过同一份产物，判据再拿正则去啃选择器
+ * 就会有两套转义/分组口径。要「哪些类真的被编进产物」那一类判据一律走这里。
+ * ⚠️ 选择器里的 CSS 转义**没**还原（产物里怎么写就怎么给）—— 还原属于判据自己的口径。
+ */
+export function ruleSelectors(cssText: string): string[] {
+  const out: string[] = [];
+  postcss.parse(cssText).walkRules((rule: { selector: string }) => {
+    out.push(rule.selector);
+  });
+  return out;
 }
 
 /** 一次拿到浅色 / 深色两态的取值器（`beforeAll` 里 `await` 用）。 */

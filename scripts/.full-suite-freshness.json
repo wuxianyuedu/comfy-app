@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-13T16:04:17.086Z",
+    "verifiedAt": "2026-10-14T04:18:10.149Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "纯格式化批次：差异只有 prettier 自己写出的类名次序（11 个文件 15 行，零功能改动），且这 15 行在 src/tests 两侧都零断言覆盖（逐串 grep 过）；同批的实质改动在紧随的第 9 刀那个 PR 里，那一档由它自己跑一次全量绿来记"
+    "skippedReason": "今天全量档跑了三次（83c690ef / b179b669 两个 base 各一次，另一次在 #1890 之后）：9090/9121 通过，三次都只差同一份文件的同两条用例 —— src/app/(main)/settings/hooks/use-settings-page.test.ts 的 Ollama 轮询那两格。形状是负载型的：并发档下第一条报 Test timed out in 30000ms、第二条报 advanceTimers 时计时器已被收回（30s 预算与 fake timers 的 teardown 相撞）；同份文件 --no-file-parallelism 串行复跑 45 passed 两次。本批不改那份文件、也不改它的任何 import（改动面 = 文档正文 + 判据用例 + 3 处注释）。§11.13 的预算那一格是要单独收的债，不该由这条正文卫生的刀顺手抬超时。"
   }
 }

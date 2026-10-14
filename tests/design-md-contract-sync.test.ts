@@ -242,7 +242,7 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
 /* ── 调用侧：契约里的档位必须真的被用上 ──────────────────────────────
    上面两格判的是「文档说的值 = CSS 定义的值」。这一格补另一半：
    **调用点有没有真的用档位**。圆角这一刀落地后暴露出缺口 —— T4 只看
-   `globals.css` 的定义，看不见 `className="rounded-[16px]"` 这种「把档位
+   `globals.css` 的定义，看不见 `className="rounded-[ 16px ]"` 这种「把档位
    当前渲染值重抄一遍」的写法：它此刻像素正确，但设置页改基数时不跟手，
    等于在总闸旁边开了个旁通。字号同理（契约 §Typography 明写不要写
    字面字号，而调用点还有几百处存量）。 */
@@ -504,7 +504,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    *  字号 302→298 是同上的 `text-3xs` 归一；**298→201 是「同一个 12px 有两种行高」
    *  定档**：103 处 `text-[12px]`（12px + 继承的 1.5 ⇒ 18px）统一成 `text-xs`
    *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。
-   *  **201→140 是同一条口径的第二半**：62 处 `text-[13px]` 并入 `text-sm`（14px，
+   *  **201→140 是同一条口径的第二半**：62 处 `text-[ 13px ]` 并入 `text-sm`（14px，
    *  契约认的「应用默认正文」档）。这一批**带着行高一起变**（19.5 → 16px），
    *  所以 `log-virtual.ts` 的行高常量与它的两处用例是同批改的，不是两件事。 */
   const RADIUS_BASELINE = 7;
@@ -665,7 +665,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
 
   it("12px / 13px 只有一个名字：调用点不许再写字面量档", () => {
     /* 这一档不是棘轮、是**归零等式**：`text-xs`(12) 与 `text-sm`(14) 是已存在的两档，
-       而 `text-[12px]` / `text-[13px]` 字号贴着它们、行高却各走一套（字面量只出字号，
+       而 `text-[ 12px ]` / `text-[ 13px ]` 字号贴着它们、行高却各走一套（字面量只出字号，
        行高吃继承的 1.5 ⇒ 18px / 19.5px；档位自带的配对值是 16px / 20px —— 所以 13px 那批
        并入 `text-sm` 的真实行盒变化是 19.5 → 20，不是 19.5 → 16（见下面那条行高判据）。「同一个字号
        两种行高」= 同一把尺上两个名字，所以两批字面量都签字归一（12px→text-xs 289 处那档、
@@ -807,7 +807,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toEqual([]);
   });
 
-  it("浮层上限只许走那两档常量；行内图标的 align-[-Npx] 只许留在文本流那一处", () => {
+  it("浮层上限只许走那两档常量；行内图标的 align-[ -Npx ] 只许留在文本流那一处", () => {
     /* 两条都是**归零等式 + 具名出处白名单**（形状与光晕那条同：按 owner 放行）。
        浮层侧：85vh 是量出来的事实档（6 处：居中模态、图片看全、弹层面板），
        `78vh` / `90vh` 各 1 处是同一角色上的漂移值 —— 差那 5–7 个百分点没有任何一处
@@ -817,7 +817,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
        **两条都留** —— tailwind-merge 认不出自定义名字属于哪一族，于是「谁覆写谁」变成
        看 Tailwind 的输出顺序，正是 `dialog-width.ts` 文件头记着的那类静默失效；存 class
        串则同族冲突照常生效（实测两条 arbitrary 只留后一条）。
-       图标侧：11 处 `inline align-[-Npx]` 里有 10 处坐在 `Button` / `flex` 容器里，而
+       图标侧：11 处 `inline align-[ -Npx ]` 里有 10 处坐在 `Button` / `flex` 容器里，而
        `vertical-align` 对 flex item 不起作用 —— 真 Chromium 实测：带与不带，图标的行内
        偏移都是 4.5px；同一份声明放进 inline 文本流才有效（12px 图标 5px→6px）。
        那 10 处是抄来的零效果声明，删；只剩文本流那一枚，理由写在那一处的注释里。 */
@@ -877,7 +877,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const alignOffenders = alignHits.filter((h) => !ALIGN_OWNERS.has(h.file));
     expect(
       alignOffenders,
-      "这些调用点又抄了一枚 `align-[-Npx]` —— 先确认父级是不是 flex：是的话它零效果；" +
+      "这些调用点又抄了一枚 `align-[ -Npx ]` —— 先确认父级是不是 flex：是的话它零效果；" +
         "真要基线微调就写进 EmptyCanvasHint 那一处的形态并补理由：\n" +
         `${alignOffenders.map((o) => `  ${o.file}  align-[-${o.value}px]`).join("\n")}`,
     ).toEqual([]);
@@ -1141,7 +1141,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     );
     const biggest = Math.max(...tierPx);
     expect("border rounded-" + `[${biggest}px] h-5`).toMatch(RADIUS_LITERAL);
-    /* 样本串**拆开拼**：一整条 `text-[…]` 候选名出现在被扫正文里就会生成进产物，
+    /* 样本串**拆开拼**：一整条 `text-[ … ]` 形状的候选名出现在被扫正文里就会生成进产物，
      * 而 10.5px 这一档本轮已从调用点清零 —— 不拆开就等于由这条负控制替它保留一条
      * 「源码没有、产物却有」的死规则（口径见 03 §3.6.2）。 */
     expect("text-" + "[10.5px]").toMatch(TEXT_LITERAL);
@@ -1184,7 +1184,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       "正确的 token 形态被误判成裸色",
     ).not.toMatch(HALO_RAW);
     /* 范围钉两条：① 投影一定有偏移或扩散，`0_0_` 判据不能顺手把它们收了
-       （仓里现有 6 处 `shadow-[0_18px_40px_rgba(0,0,0,…)]` 一类）；
+       （仓里现有 6 处 `shadow-[ 0_18px_40px_rgba(0,0,0,…) ]` 一类）；
        ② 同一档浅彩在别处是合法的角色色（节点/项目类别色写 `#34D399`），
        上一版的判据就是这么误报了三个无关文件。 */
     expect(
