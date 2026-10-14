@@ -4,7 +4,8 @@
  * 起因是一次数据层迁移：仓储的投影参数被写成 `select?: unknown`，
  * 交给 Drizzle 时又写 `db.select(select as never)`。于是调用点留着迁移前的
  * 布尔投影（`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影
- * → SQL 语法错 —— `train.cancel` 从那次迁移起**每次都 500**，而那条 procedure
+ * → SQL 语法错 —— 一条 procedure（`train.cancel`，已随功能废弃删除）
+ * 从那次迁移起**每次都 500**，而那条 procedure
  * 当时零执行者，所以没有任何一条红过。
  *
  * 同一族的第二处（本批一起修）：`workflowTemplateRepository.findByIdForUserSelect(userId, id, _select?: unknown)`

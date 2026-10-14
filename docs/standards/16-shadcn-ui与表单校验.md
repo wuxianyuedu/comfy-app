@@ -1838,10 +1838,9 @@ dark:text-emerald-300` 这类写死值）。
 按钮**，字段级提示就永远出不来（用户只看到灰按钮，不知道该填哪）。现在按钮可用，
 点下去逐字段标红。
 
-**既有同类实现不用改。** `validateTrainForm`（`studio/training-studio-config.ts`）
-已经是「纯函数 + 返回第一条错误文案」的形态，与上表第①行同源；它返回单条文案
-而非逐字段映射，是**当时**视图只有一条提示位。这两条并存不算两套口径 ——
-判据是「规则是纯函数、住在 lib 的域模块里、视图不自己判定」，两者都满足。
+**为什么不是两套口径**：上面两条（字段级住 `*-schema.ts`、集合级住 controller）
+判的是同一件事 ——「规则是纯函数、住在 lib 的域模块里、视图不自己判定」，
+只是按「要不要看别的数据」切开落点。
 `WorkflowFormControls` / `DynamicWorkflowForm` 里的「Form」**仍与 `ui/form` 无关**
 （那是按 `workflowIO` 动态生成的工作流参数表单）。
 
@@ -1986,7 +1985,7 @@ dark:text-emerald-300` 这类写死值）。
 
 | 写法                              | 落点                                                                                                                                                                                                                           |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `useRef` + `ref.current?.click()` | `CanvasNode` 的 `use-file-upload`（**两个** ref / 两个 click）、`use-dynamic-workflow-form`、`MaterialLibraryPanel`、`WorkflowImportPanel`、`TrainingStudio`、`CharacterPortraitStudio`、`ExtractToolbar`、`WorkshopStageBody` |
+| `useRef` + `ref.current?.click()` | `CanvasNode` 的 `use-file-upload`（**两个** ref / 两个 click）、`use-dynamic-workflow-form`、`MaterialLibraryPanel`、`WorkflowImportPanel`、`CharacterPortraitStudio`、`ExtractToolbar`、`WorkshopStageBody` |
 | `<label htmlFor>` 隐式关联        | `UsageTestDialog`、`VideoQueueModal`（后者是全仓唯一靠 `id` 拼接触发的入口）                                                                                                                                                   |
 | input 直接露在界面上              | `FilmStudio` 的 BGM 选择器                                                                                                                                                                                                     |
 
@@ -2302,7 +2301,7 @@ ComfyUI 节点卡外观，与 disclosure 的「一行文字 + 折叠标记」不
 
 | 缺陷                                                         | 落点（收口前）                                                                                      |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| **不立刻跑一次**（挂载后先空一个间隔）                       | `use-training-studio`、`VideoQueueModal`、`use-history-panel`、`use-runtime-log-source`             |
+| **不立刻跑一次**（挂载后先空一个间隔）                       | `VideoQueueModal`、`use-history-panel`、`use-runtime-log-source`             |
 | **后台标签页空转**（浏览器把后台定时器降到 ≥1min，请求照发） | 上述 + `use-code-update-watch`；只有 `use-comfy-stats` / `use-update-check` 接了 `visibilitychange` |
 | **前后台开关被逐字抄两份**                                   | `use-comfy-stats` 与 `use-update-check` 的 `visibilitychange` 块完全同形                            |
 | **每次渲染重建定时器**（回调进依赖数组 → 计时反复重置）      | `use-history-panel`（`refreshRef` 手工保鲜）、`useSimulatedProgress`（`[tasks]` 依赖）              |
@@ -2333,7 +2332,7 @@ ComfyUI 节点卡外观，与 disclosure 的「一行文字 + 折叠标记」不
 
 #### 迁移落点（10 处）
 
-`use-comfy-stats` / `use-update-check` / `use-training-studio` /
+`use-comfy-stats` / `use-update-check` /
 `VideoQueueModal` / `use-history-panel` / `use-runtime-log-source` /
 `GlobalStepLogPanel` / `history-utils`（`useSimulatedProgress`）/
 `LogProvider` / `use-code-update-watch` / `use-dev-server-liveness` /
@@ -2561,7 +2560,7 @@ className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② �
 | `StoryboardPlanner.parts`                                                           | `p?.pct ?? 0`                               | 「还没报进度」被压成 0%      |
 | `HistoryTaskCard`                                                                   | 直接 `${progress}%` + `Math.floor` 另算一处 | 不夹取、算了两次             |
 | `CustomNodesSettings/SettingsParts`                                                 | `Math.min(100, (done / total) * 100)`       | 自己算比例、不确定态手写条纹 |
-| `FilmStudio` / `TrainingStudio` ×2 / `WorkflowCanvasNodePreview` / `WorkshopHeader` | 直接 `${x}%`                                | 不夹取                       |
+| `FilmStudio` / `WorkflowCanvasNodePreview` / `WorkshopHeader` | 直接 `${x}%`                                | 不夹取                       |
 
 四派都编译、都运行、类型都对 —— 差别只在几个**语义决定**上：
 
@@ -2632,7 +2631,7 @@ className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② �
 | `ProjectOutputs` 的参数表         | 行内左右分布 + 隔行底色 + 外层圆角边框                                 |
 | `HistoryDetailModal` 的生成参数卡 | 网格卡片 + 标签在值左侧 + 行下 `hint`                                  |
 | `HistoryDetailModal` 的参数表     | HTML `<table>` 两列（左列等宽截断，但用的是 `<td>` —— **语义是空的**） |
-| `TrainingStudio` 的 Metrics       | 网格 + 标签在值**上方**                                                |
+| `HistoryDetailModal` 的生成参数卡 | 网格 + 标签在值**上方**                                                |
 | `BrowserStatusBar` 的显存 / 内存  | 行内 `标签 + 值 + 尾注`（三份逐字同形）                                |
 
 `HistoryDetailModal` 两处还各写了一份**逐字相同**的「值怎么成文本」三元：
@@ -2650,7 +2649,7 @@ className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② �
   `striped` 加隔行底色。对应 `ProjectOutputs` 那张表。
 - `stacked`：标签在值**上方**，多列网格（`columns`）；`hint` 落在值下面一行。
   传 `itemClassName="flex-row items-baseline"` 可改回「标签在值左侧」
-  （`HistoryDetailModal` 的生成参数卡）。对应 `TrainingStudio` 的 Metrics。
+  （`HistoryDetailModal` 的生成参数卡）。
 - `table`：**真正的 `<table>`**，`<th scope="row">` 声明行表头（读屏器读得出
   「哪个标签对应哪个值」）。对应 `HistoryDetailModal` 的参数表。
 - `inline`：`label value` 挤在一行不换行的内联项。对应 `BrowserStatusBar`。
@@ -2689,7 +2688,7 @@ JSON 气泡 / 预览。窗口取 160 字符 —— 实测 400 字符会把环形
 | 落点                                   | 失败时怎么做                                 | 后果                                                                       |
 | -------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
 | `HomePage` 项目缩略图                  | `event.target.style.display = "none"`        | 直接改 DOM、绕过 React；失败那格**留下空洞**（`gap` 还在，缩略图条少一块） |
-| `TrainingStudio` 数据集缩略图          | `style.visibility = "hidden"`                | 同上，只是换了个属性名                                                     |
+| 已删的训练工作室数据集缩略图           | `style.visibility = "hidden"`                | 同上，只是换了个属性名                                                     |
 | `WorkflowImagePreview`                 | 自持 `useState(failed)` + 「图片不可用」方块 | 写法对，但这段状态机在每个落点重写一遍                                     |
 | `SettingsPrimitives.FieldImagePreview` | 同上，换成长文案                             | 同上                                                                       |
 
@@ -2715,7 +2714,7 @@ JSON 气泡 / 预览。窗口取 160 字符 —— 实测 400 字符会把环形
 - **`src` 变化重新给机会**：列表复用同一组件实例时，上一张图的失败不该传染
   给下一张（收口前各落点自己管这一条，漏掉的就会「换图仍是破图」）。
 
-迁 **18 个文件**：`HomePage` / `TrainingStudio` / `WorkflowImagePreview` /
+迁 **18 个文件**：`HomePage` / `WorkflowImagePreview` /
 `SettingsPrimitives` / `ModelCard`（失败落回与「没有封面」同一个渐变底）/
 `ResultCard` / `ProjectOutputs` / `ContentAssetNode`（×3）/ `FilmStudio` /
 `VideoStudio.parts`（×2）/ `ShotStudio` / `FinalComposer`（×2）/
@@ -2938,7 +2937,7 @@ TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌
 
 第三个问法：**「谁在写一行表单」**。全库 **15 处**各写一份「`<label>` + 控件」，
 三件套一样、**四套度量语言**：设置页 `text-ink/80 mb-1.5 block text-sm`、
-训练工作室 `text-[11px] text-ink-faint`、工作流导入 `text-xs`、
+工作流导入 `text-xs`、
 工坊适配器 `text-[10px]`。
 
 而**真正的病灶不是字号不一致**，是三件事在不同落点被漏掉：
@@ -2947,7 +2946,7 @@ TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `htmlFor` / `id` 关联               | 15 处里**没有一处**把 `<label>` 与控件关联（点标签不聚焦输入框；读屏器把标签读成孤立文本）                    |
 | `aria-invalid` + `aria-describedby` | 只有 **1/15** 处写了 `aria-invalid`、**没有一处**把错误文案关联给控件 —— 读屏器不知道「这个框是错的、错在哪」 |
-| 错误行的位置                        | 训练工作室只报**一句整表文案**（挂在提交按钮上方），改了下面某一行也**没有任何标记**指出是哪一行错            |
+| 错误行的位置                        | 当时有一处只报**一句整表文案**（挂在提交按钮上方），改了下面某一行也**没有任何标记**指出是哪一行错             |
 
 #### 出口：`~/components/ui/form-field` 的 `FormField`
 
@@ -3009,7 +3008,7 @@ items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**�
 - **不带 `label` 的站点不是靶子**：`label` 不给、或给成 `{null}` 时 `FormField`
   不渲染标签行（`label != null` 才渲染），没有箭头可悬空；
 - **「标签行只作小标题」是合法形态**：控件是**多个**按钮（工坊「提供方」的二选一）
-  或纯展示节点（训练工作室的只读「生成模式 / 转场效果」），没有一个能被 `htmlFor`
+  或纯展示节点（只读的枚举展示区），没有一个能被 `htmlFor`
   指到。这几处记在基线里，且 `FormField` 自己也兜住 —— 它**只在 `children`
   是函数时才给 `htmlFor`**，所以第二档不会留下悬空箭头；
 - **子节点是「函数调用返回的节点」也算站点**（`{renderControl()}`）——
@@ -3017,10 +3016,9 @@ items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**�
 
 #### 本批顺带修正的一条域判据
 
-`training-studio-config.ts` 的 `validateTrainForm` 此前返回**第一条错误的文案**
-（`string | null`），被挂在提交按钮上方。而逐字段判据本来就在这个函数里 ——
-只是被压成了一句。改成 `TrainFormErrors`（`字段 → 文案` 的映射）后，视图逐行
-标红；`TrainJobInput`-侧的 `error` 收窄为「上传 / 网络等**非字段**错误」。
+本批把一处「整表一句文案」的校验改成逐字段映射：校验函数里本来就有逐字段判据，
+只是被压成了一句、挂在提交按钮上方。改成「字段 → 文案」的映射后视图逐行标红；
+非字段错误（上传 / 网络等）单独收窄成一条通道。
 
 #### 判据：P23（硬闸）
 
@@ -3179,7 +3177,7 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 | 决定的             | 写法 A                                                            | 写法 B                                                                                                                                  |
 | ------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | **失败文案从哪来** | `errorMessage(e, "保存失败")`（设置页 12 处、工作流库、模型标签） | 一句写死的 `toast.error("删除失败")`（历史列表），或自己再抄一遍 `e instanceof Error ? e.message : String(e)`（另 **3 处**）            |
-| **反馈通道是谁**   | 整页提示条（设置页的 `showFlash`，带 `ok`/`err` 两态）            | toast（历史详情 / 工作流库）/ 行内 `setError`（模型标签 / 训练工作室）/ 工坊的 `setNotice` / 节点上的 `onFailed`（画布拖放）—— **五种** |
+| **反馈通道是谁**   | 整页提示条（设置页的 `showFlash`，带 `ok`/`err` 两态）            | toast（历史详情 / 工作流库）/ 行内 `setError`（模型标签）/ 工坊的 `setNotice` / 节点上的 `onFailed`（画布拖放）—— **四种** |
 | **成功要不要说**   | 给一句陈述（「已保存」「已删除任务」）                            | 给服务端返回的 `detail`（`result.ok ? "ok" : "err"` 配 `detail`）/ **成功静默**（列表刷新即结果）                                       |
 
 也就是说 —— **「这个动作失败了界面说不说、说什么」取决于它是哪一处写的**。
@@ -3342,7 +3340,7 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 ### 16.2.4.33 「同一块错误条服务多个条目」有两处写法（P30 硬闸）
 
-按形态扫描时撞出来的账：`use-model-tags` / `use-training-studio` 这类
+按形态扫描时撞出来的账：`use-model-tags` 这类
 **一屏多条目**的逻辑层，错误状态写的是 `useState<string | null>(null)` ——
 也就是「最近一次操作的草稿」：
 
@@ -3355,7 +3353,7 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 |                        | 语义                                                     | 文件                                                                                                                                                                                                                                             |
 | ---------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 「最近一次操作的草稿」 | 下一条消息必然把它盖掉（**时间维度的状态**）             | `use-model-tags`（新增 / 删除 / 重命名共用一个 `error`）、`use-training-studio`（上传 / 提交 / 取消共用）、`useStoryboardPlanner` 的 `polishError`（逐镜头润色）、`CharacterDesigner` 的 `aiError`（逐角色润色）、`ScriptGenerator` 的 `aiError` |
+| 「最近一次操作的草稿」 | 下一条消息必然把它盖掉（**时间维度的状态**）             | `use-model-tags`（新增 / 删除 / 重命名共用一个 `error`）、`useStoryboardPlanner` 的 `polishError`（逐镜头润色）、`CharacterDesigner` 的 `aiError`（逐角色润色）、`ScriptGenerator` 的 `aiError` |
 | 「按条目挂」           | 错误属于**那一条**，改别处不该动它（**对象维度的状态**） | 出口 `useItemErrors`                                                                                                                                                                                                                             |
 
 两者在代码上长得几乎一样（都是 `setError(string)` + 一块行内错误条），
