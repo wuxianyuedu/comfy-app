@@ -115,29 +115,6 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      /* 页面级性能档**不在这里跑** —— 它单独一个 project，理由见下面那条。 */
-      testIgnore: ["**/runtime-budget.spec.ts"],
-    },
-    {
-      /**
-       * 页面级性能档独立成 project，且**依赖主档跑完**（ISSUE #1834 的最后一格）。
-       *
-       * 为什么要隔开：这一档量的是「同一路径 12 轮导航取 min」，而其余 spec 在同一台
-       * dev server 上会不断触发**首帧现场编译**（本地默认就是 `pnpm dev`）。min 也扛不住
-       * 这种争抢 —— 每一轮都可能被同伴撕到。实测两向：
-       *   · 单跑：`1 passed (34.1s)`，在预算内；
-       *   · 全量里：`loadEventEnd 964.8ms` > 预算 `320 × 2 = 640ms`（基线 2026-10-12，
-       *     自带 `measuredSpread ±10.1%` —— 3.0 倍基线远在它自己的噪声带之外）。
-       *
-       * `dependencies` 让 Playwright 跑完 `chromium` 才起这个 project，于是那 12 轮
-       * 期间**没有别的用例在抢编译**。这是治因那一半；另一半是别拿判据换颜色 ——
-       * `timeout` / `factor` / 基线三处一个字节都不动（红线由
-       * `tests/e2e-runtime-budget.test.ts` 钉着）。
-       */
-      name: "chromium-perf",
-      use: { ...devices["Desktop Chrome"] },
-      dependencies: ["chromium"],
-      testMatch: ["**/runtime-budget.spec.ts"],
     },
   ],
   webServer: [

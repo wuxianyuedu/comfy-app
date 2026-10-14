@@ -38,21 +38,33 @@
   JSON 表现一致、控制台零报错」这件事写得很清楚），它不解决任何东西；② 先开一次「＋」菜单
   当作水合探针 —— 没有活跃项目时那个菜单压根不出现，探针自己成了新的红。
 
-## Added
+## Changed（让位：本批一度加上的「性能档隔离」已撤回）
 
-- **页面级性能档与功能档隔开跑**（`runtime-budget` 那 1 条）。它是**测量被争抢污染**，
-  不是性能退化：单跑 `1 passed (34.1s)`，全量里读到 `loadEventEnd 964.8ms` >
-  预算 `320 × 2 = 640ms`（基线 2026-10-12 自带 `measuredSpread ±10.1%` —— 3.0 倍远在噪声带外）。
-  `playwright.config.ts` 现在把它放成独立 project 并声明 `dependencies: ["chromium"]`，
-  于是那 12 轮取 min 期间没有同伴在抢首帧编译。
-  **`timeout` / `factor` / 基线三处一个字节都没动** —— 抬任何一个都是拿判据换颜色。
-  这个「隔开跑」的决定本身有反例可证的用例钉住（摘掉 `dependencies` 当场红）。
+- `runtime-budget` 那 1 条**不是本批改的，也不该由我改**。当时读到全量里
+  `loadEventEnd 964.8ms` > 预算 `320 × 2 = 640ms`，而单跑 `1 passed (34.1s)`，
+  我据此判成「同伴用例在抢首帧编译」，加了 `chromium-perf` 独立 project +
+  `dependencies: ["chromium"]`，并补一条用例钉住那个形状。
+- **合并 `origin/master` 之后这个推断被两条证据否证**：① 上游同期把基线改成按平台各一份
+  （`scripts/.runtime-budget-baseline.json` 的 `metric.byPlatform`：win32 `716`、posix `320`，
+  倍数同为 ×2），而它写明的 win32 校准读数是 **715.5ms，取于「两遍全量 e2e + 一遍单 worker
+  独跑」** —— 也就是**在全量并发下**拿到的同值，直接打掉「同伴抢编译」这条因果；
+  ② 我那次 964.8ms 的读数出自同机并行跑着门禁的时刻，压满的是宿主而不是页签。
+  在新基线下 `964.8 < 716 × 2`，那条红本来就不需要隔离来治。
+- 于是在合并后的树上**撤掉隔离**重跑全量：`81 passed / 0 failed (2.1m)`，
+  `runtime-budget` 就在主 `chromium` project 里跑、**11.7s 通过**。
+  隔离连同钉它的那条断言一起撤（`playwright.config.ts` 回到 master 的形状、
+  `tests/e2e-runtime-budget.test.ts` 删掉那条）—— 同一件事不留两套判据，
+  承重的那套是基线按平台分档。
+- 这一条的**红线没有移动过**：`timeout: 60_000`、`factor: 2`、基线数字三处
+  一个字节都没动（`git diff -- e2e/runtime-budget.spec.ts` 为空）。抬任何一个都是拿判据换颜色。
 
-## 相关但独立的一件事
+## 相关但独立的两件事
 
-跑这一档的过程中发现的「一条 `--help` 就能买到一天的绿账」是**另一个缺陷**（在记账侧，
-不在用例侧），已拆成同批的 `0-daily-ledger-passthrough-hole.md` 单独一笔提交 ——
-两件事各自可回滚，所以不写在同一篇里。
+- 跑这一档的过程中发现的「一条 `--help` 就能买到一天的绿账」是**另一个缺陷**（在记账侧，
+  不在用例侧），已拆成同批的 `0-daily-ledger-passthrough-hole.md` 单独一笔提交。
+- 合并 `origin/master` 之后冒出来的 3 条红是**上游 ISSUE #1900 的 e2e 尾巴**（`baseline-red`，
+  归因与两条静态证据在 `0-e2e-comfy-runtime-tab-stale-reds.md`），也单独一笔。
+  两件事各自可回滚，所以不写在同一篇里。
 
 ## 刻意没做的事（写清楚，别当成已完成）
 
@@ -64,11 +76,17 @@
 
 ## 验证
 
-- 全量 `pnpm test:e2e`：**78 passed / 0 failed（4.3m，性能档隔开之后串行了一档）**，
+- 全量 `pnpm test:e2e` 在 `44a533d7` 这一版基线上：**78 passed / 0 failed（4.3m）**，
   两档都跑（`--list` 计数一致），记账 `✓ 全量 e2e 通过`。
+- **合并 `origin/master`（`40b274d6`）之后重跑**：**81 passed / 0 failed（2.1m）** ——
+  上游新增的用例一起在内，且**撤掉性能档隔离之后** `runtime-budget` 仍在主 `chromium`
+  project 里通过（11.7s）。账上 `who=yuedu`、无 `skippedReason`；
+  `node scripts/freshness-gate.mjs` 三档退 0。
 - 定向复跑（改完前 5 条红时）：4 份受影响 spec `34 passed / 0 failed`。
 - 逐条隔离复跑取定性读数：`theme-token-consumers` 7 passed、`runtime-budget` 1 passed、
   `queue-monitor` 5 passed。
-- `tests/e2e-runtime-budget.test.ts` 15 条绿（含新加的隔离断言 + **反例**：
-  摘掉 `dependencies` 后该条当场红，还原后文件 md5 与备份逐字一致）。
+- `tests/e2e-runtime-budget.test.ts` 仍绿 —— 撤掉本批加的那条隔离断言之后 **14 条**，
+  上游按平台分档的那几条一条没动。
+- 这一批动了 `src/` 与 `tests/`，所以同批把**全量单测 + 覆盖率档**当场自证一次：
+  `node scripts/full-suite-run.mjs` 退 0，账记在 `who=yuedu` 上（随本笔一并提交）。
 - `tsc --noEmit` 绿；eslint 零警告；`pnpm doc:check` 绿。
