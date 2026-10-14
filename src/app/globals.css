@@ -230,7 +230,9 @@
   /* 便签（Note）身体色的混色基准：用户给的 note 颜色是内容语义色，
      基准必须跟主题走，否则浅色下便签仍是一块暗色。 */
   --color-note-tint-base: #ffffff; /* note 混色基准 (light default) */
-  --color-node-mix-base: var(--color-node); /* 子图标题栏混色基准：取本体，抄 hex 会与源头各自漂移 */
+  --color-node-mix-base: var(
+    --color-node
+  ); /* 子图标题栏混色基准：取本体，抄 hex 会与源头各自漂移 */
 
   /* Layout */
   --panel-right-width: 360px;
@@ -383,7 +385,9 @@
   --color-surface-0: #0a0a0f;
   --color-surface-1: #16161c;
   --color-surface-2: #1a1a24;
-  --color-scrim: rgb(0 0 0 / 0.7); /* 模态遮罩（见 @theme 里那颗 token 的说明）*/
+  --color-scrim: rgb(
+    0 0 0 / 0.7
+  ); /* 模态遮罩（见 @theme 里那颗 token 的说明）*/
   --color-subtle: #141419;
   --color-border: #26262e;
   --color-border-subtle: rgb(255 255 255 / 0.06);
@@ -475,7 +479,9 @@
   ); /* 浮层 1px ring（深色下用中性白） */
   --shadow-card: 0 4px 20px rgb(0 0 0 / 0.55); /* 浮层卡片投影（深色档） */
   --color-note-tint-base: #22222c; /* note 混色基准 */
-  --color-node-mix-base: var(--color-node); /* 子图标题栏混色基准：深色档由 --color-node 自己带 */
+  --color-node-mix-base: var(
+    --color-node
+  ); /* 子图标题栏混色基准：深色档由 --color-node 自己带 */
 }
 
 /* ── 内嵌的中文标题字面（`--font-title` 的首选）─────────────────────
@@ -486,18 +492,26 @@
    （而不是只在某个人的机器上成立 —— 那正是它一直没被发现的原因）。
 
    · 只嵌 **Bold 一档**：`font-title` 的全部落点都是 700（`font-bold` 或
-     `.u-title-page`，后者字面写着 `font-weight: 700`），没有 600 档在用；
-     单档完整 CJK TTF ≈23 MB，多嵌一档就是再搬 23 MB 进产物与安装包。
-   · 文件走 **git-lfs**（`.gitattributes` 的 `*.ttf`），否则每次克隆都背着它。
+     `.u-title-page`，后者字面写着 `font-weight: 700`），没有 600 档在用。
+   · 载体是 **woff2**（不是原始 TTF）：同一份字形，woff2 的 `glyf` 逐点无损压缩，
+     实测 23.9 MB → 8.6 MB（TTF 的 36%）。这一档收益不止缓存 —— `public/` 会被
+     `build-desktop` 整树内嵌进桌包，所以省下来的每一字节都是安装包上的字节。
+     代价只有一次：woff2 是**有损不可逆**的载体（解回 TTF 得不到原文件），
+     重生成得从上游 TTF 再转一次（`fontTools` 的 `flavor="woff2"`），
+     所以仓库里**不再保留**那份 23 MB 源文件。
+   · 文件走 **git-lfs**（`.gitattributes` 的 `*.woff2`），否则每次克隆都背着它。
      LFS 的两条接线见 `.githooks/pre-push` 与 `scripts/install-git-hooks.mjs`。
    · 许可 **SIL OFL 1.1**，全文随字体一起放在 `public/fonts/OFL-Sarasa-Gothic.txt`
      （OFL 要求再分发时附许可文本，这条不是可选项）。
    · `font-display: swap`：首帧先用回退栈画出标题、字面到货再换上。桌面壳是本地
      文件、没有网络往返，但 standalone 首启仍要走一次解压，`block` 会让标题短暂
-     空着 —— 那是可感知的空白，不是「更严谨」。 */
+     空着 —— 那是可感知的空白，不是「更严谨」。
+   · 换载体这件事**有渲染等价的判据**：Chromium 里同一段文本用 TTF 与 woff2 各画一遍，
+     截图逐字节相同（等价性的证明方式与「缺字体会落到回退栈」的反向对照见
+     `tests/embedded-title-font.test.ts` 的说明）。 */
 @font-face {
   font-family: "Sarasa Gothic SC";
-  src: url("/fonts/SarasaGothicSC-Bold.ttf") format("truetype");
+  src: url("/fonts/SarasaGothicSC-Bold.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
