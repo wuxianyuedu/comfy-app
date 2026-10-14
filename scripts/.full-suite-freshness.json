@@ -1,10 +1,9 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-14T05:42:10.927Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-14T06:59:21.201Z",
+    "who": "yuedu",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full",
-    "skippedReason": "本次提交是把上游 master 合进 PR 分支的解冲突提交，冲突面只落在 docs/api 生成物与两份新鲜度账上，本次不新增 src/ tests/ 改动；全量口径以合并进去的上游那条同日账为准，本工作区跑不了 25 分钟墙钟的全量档。"
+    "trackedBy": "full"
   }
 }

@@ -1,9 +1,31 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 /* Class-based dark mode toggle (.dark on <html>) */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* ── 源扫描面：默认拒绝，显式两棵根（规范 03 §3.11）───────────────────────────
+ * 不写 `source()` 时 Tailwind v4 从项目根**自动发现**源文件，唯一的减法是「被 git 跟踪」——
+ * 于是规范正文与它的生成物镜像、typedoc 的 HTML、账本碎片、门禁与 codemod 脚本里的样本串、
+ * 根 CHANGELOG.md、用例目录全都进了扫描面。
+ * 实测（同一份 globals.css，只换扫描面）：自动全扫 = 2796 条选择器片段 / 382452 字节；
+ * 只认下面两棵根 = 2558 条 / 349887 字节 ⇒ **238 条规则从来没有调用点**，逐条出处都在
+ * 正文 / 账本 / 门禁脚本里。反向也成立：显式根的产物是自动全扫的**子集**（新根 − 旧根 = 0），
+ * 所以这一步只做减法，不会凭空造出样式。
+ *
+ * `src` 那棵不需要解释；**`.storybook` 为什么必须也是**：`.storybook/preview.tsx` 引的
+ * 就是本文件（同一份 CSS 入口），而工作台外壳自己写了两枚任意值高度 —— 实测「只认 src」与
+ * 「认这两棵根」的差集正好是那两条。漏掉这棵不是省字节，是把工作台的取景高度调没。
+ *
+ * ⚠️ 加一棵根是**有意的动作**，要同批改 `tests/tailwind-source-roots.test.ts` 那张表。
+ * 默认拒绝的代价在这里：根外的类名字面量不再进产物。唯一的真风险是「运行期拼出来的类名，
+ * 完整字面量恰好写在根外」—— 落这一刀前逐条查过三条通路：根内「方括号里插值」的写法 0 处
+ * （只有 `studio/HomePage.tsx` 的一条注释说这种写法从来没生效过）；`src/**` 运行期 import 的
+ * 4 份 `scripts/**` 模块里 0 条 Tailwind 类串；壳侧 HTML 是构建产物、不是扫描输入。
+ */
+@source "../../src";
+@source "../../.storybook";
 
 @theme {
   /* Brand — violet，比旧档（#7c5cfc）深一档、艳一档。
