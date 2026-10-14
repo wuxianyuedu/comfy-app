@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-13T07:55:04.472Z",
+    "verifiedAt": "2026-10-14T12:00:00.000Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "今天只动 e2e 档位常数（playwright.config.ts / e2e-run.mjs / tests 的钉值注释），未动 src/；全量档墙钟 10 分钟量级，当日核时让给 ISSUE #1834 的三遍 e2e 读数，full 档顺延自证"
+    "skippedReason": "今天改 src/lib/comfyui（启动失败诊断 lifecycle-derive/launch）；组 C 已跑本次改动受影响的 188 个用例（含 lifecycle-derive.test.ts 新增诊断用例）。本机同时有 comfy-app-t3-branch / branch2 / Comfy-APP-T3 多个检出的 dev server 抢核，全量 test:coverage 墙钟 25.7 分钟叠加后不可行，故 full 档今日记 skip 顺延自证"
   }
 }

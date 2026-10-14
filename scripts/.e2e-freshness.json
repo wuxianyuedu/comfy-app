@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-13T07:55:03.590Z",
+    "verifiedAt": "2026-10-14T04:07:53.075Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "win32 全量 e2e 今日已跑三遍（读数与逐条归因在 ISSUE #1834 评论）：失败集是与本改动无关的稳定红（出图链路 / queue-monitor / runtime-budget 性能预算超）与已知红，绿账待这些红清掉后补跑记录"
+    "skippedReason": "今天改 src/lib/comfyui 启动失败诊断（lifecycle-derive/launch），与 e2e 断言无直接关联；本机同时有多个检出 dev server 抢核、全量 e2e 25.7 分钟叠加后不可行，今日 e2e 档记 skip 顺延自证"
   }
 }
