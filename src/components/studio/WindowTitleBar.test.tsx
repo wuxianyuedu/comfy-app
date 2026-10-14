@@ -9,7 +9,10 @@
  *
  *   1. **壳态渲染**：标题行在（`data-slot="title-bar"`，与 `TitleBarTabs` 同
  *      名标记，e2e 按它找 chrome），三个窗口按钮齐备且可访问名正确；
- *   2. **非壳态不渲染**：浏览器 / dev 由系统窗口提供标题行，再画一条既重复
+ *   2. **按钮落在右端**：拖拽空白区必须显式占位（`flex-1`）排在按钮之前 ——
+ *      少了它，三个按钮整排落在左上角（ISSUE #1918：404 / 错误页上「关闭按钮
+ *      跑到了左上角」），而「按钮在、名字对」这一档完全判不出来；
+ *   3. **非壳态不渲染**：浏览器 / dev 由系统窗口提供标题行，再画一条既重复
  *      又占纵向空间（与 `ShellTabs` 同判据）。
  *
  * 壳形态怎么摆：`useTitleBarTabsActive` 读的是 `isDesktopShell()` 读的那个全局
@@ -52,6 +55,25 @@ describe("WindowTitleBar", () => {
     /* 初始未最大化 → 按钮语义是「最大化」（不是「向下还原」）。 */
     expect(screen.getByRole("button", { name: "最大化" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "关闭" })).toBeTruthy();
+  });
+
+  it("按钮落在标题行右端：控件之前有一格 flex-1 拖拽空白区", () => {
+    setShellForm(true);
+    render(<WindowTitleBar />);
+    const bar = document.querySelector('[data-slot="title-bar"]');
+    expect(bar).toBeTruthy();
+    /* 标题行的直接子元素按顺序：先拖拽空白区（`flex-1`，把按钮顶到右端），
+       再是三个按钮所在的控件容器。少了前者，`items-stretch` 的 flex 行会把
+       `shrink-0` 的按钮放在 flex-start —— 就是用户看到的左上角。 */
+    const children = Array.from(bar?.children ?? []);
+    expect(children).toHaveLength(2);
+    const [spacer, controls] = children as [HTMLElement, HTMLElement];
+    expect(spacer.className).toContain("flex-1");
+    expect(spacer.getAttribute("aria-hidden")).toBe("true");
+    /* 按钮确实在**后**那一格里（顺序即位置：flex 行按 DOM 顺序摆放）。 */
+    expect(
+      controls.contains(screen.getByRole("button", { name: "关闭" })),
+    ).toBe(true);
   });
 
   it("点窗口按钮不炸（壳内降级路径静默，页面该干什么干什么）", () => {

@@ -59,15 +59,56 @@ describe("deriveDevServerStatus", () => {
     expect(s.title).toContain("需要重新执行");
   });
 
-  it("三态文案互不相同且非空（状态必须一眼可辨）", () => {
+  it("四态文案互不相同且非空（状态必须一眼可辨）", () => {
     const labels = [
       deriveDevServerStatus({ ...base, everOnline: false, reachable: false })
         .label,
       deriveDevServerStatus(base).label,
       deriveDevServerStatus({ ...base, reachable: false }).label,
+      deriveDevServerStatus({
+        ...base,
+        everOnline: false,
+        reachable: false,
+        routeTableStale: true,
+      }).label,
     ];
-    expect(new Set(labels).size).toBe(3);
+    expect(new Set(labels).size).toBe(4);
     labels.forEach((label) => expect(label.length).toBeGreaterThan(0));
+  });
+
+  it("探活端点答 404 → stale：不冒充「连接中」，并给出重启应用这个出口", () => {
+    const s = deriveDevServerStatus({
+      ...base,
+      /* 整场都探不通（`everOnline` 为假）——正是这一档此前会被 `starting`
+       * 吃掉、让状态栏永久停在「应用服务连接中」的那个现场。 */
+      everOnline: false,
+      reachable: false,
+      routeTableStale: true,
+    });
+    expect(s.state).toBe("stale");
+    expect(s.label).toBe("应用服务路由异常");
+    /* 文案必须同时给出「为什么」与「现在做什么」（规范 §10.3.1）：用户眼前的
+     * 页面还能打开，所以只说「服务有问题」不足以让他动手。 */
+    expect(s.title).toContain("404");
+    expect(s.title).toContain("重新启动");
+    expect(s.title).toContain(".next");
+  });
+
+  it("曾经通、现在 404，也走 stale（比「已断开」更具体：我们确实拿到了应答）", () => {
+    const s = deriveDevServerStatus({
+      ...base,
+      reachable: false,
+      routeTableStale: true,
+    });
+    expect(s.state).toBe("stale");
+  });
+
+  it("探测恢复了就不再说 stale（routeTableStale 只在拿不到应答时才作数）", () => {
+    const s = deriveDevServerStatus({
+      ...base,
+      routeTableStale: true,
+    });
+    expect(s.state).toBe("online");
   });
 
   it("断开且原因已知 → 状态栏 title 说出**为什么**与**怎么办**（规范 §10.3.1）", () => {
