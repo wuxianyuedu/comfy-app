@@ -22,8 +22,9 @@ import { expect, type Page } from "@playwright/test";
  *     「等一下就好」退化成「等一个可能永远不来的东西」）；
  *   · **用户可见**：是首页四张入口卡里的第一张，正是用户进首页第一眼要看的东西。
  *
- * 页面标题那一类不可用：`next dev` 与桌面壳的窗口标题都不稳定（前者是
- * `Create T3 App` 的默认值），而 `document.title` 也表达不了「某一块渲染完了」。
+ * 页面标题那一类不可用：`document.title` 是一条**静态字符串**（根布局的
+ * metadata，见 `src/app/layout.tsx`），它只说明「这份 HTML 是谁发出来的」，
+ * 表达不了「首页这一屏渲染完了」—— 页面还停在骨架 / 报错页时，标题一样是那个值。
  */
 export const HOME_ENTRY_CARD_LABEL = "新建画布";
 

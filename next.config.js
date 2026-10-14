@@ -6,6 +6,50 @@ import "./src/env.js";
 import path from "node:path";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 
+// ── 生产级安全响应头（OWASP 2025 A05/A08）────────────────────
+// 全站生效，同时覆盖 /api/*（tRPC、better-auth、文件流等）。
+// 本地开发保留 'unsafe-inline'：Next.js dev 模式需要内联脚本；
+// 严格 nonce 方案可在此基础上按需收紧（见 t3-fullstack 技能 security-hardening）。
+//
+// CSP 在这里**算一次**：它的输入只有 `NODE_ENV`（只两种取值：dev / prod），
+// 而 `next dev` 与 `next build` 都会在加载本配置之前把该变量定好 —— 模块级求值
+// 与原先「每次请求各求一次」的结果完全一致；省掉的是每个响应都重新拼一遍字符串
+//（`isDev` 那一行当初也确实只取一次环境变量，结果只有两种）。
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+/** dev 模式（Next 16 + Turbopack）依赖 eval() 做调试堆栈重构，需放行 'unsafe-eval'；
+生产环境保持严格策略不变。 */
+const SCRIPT_SRC = IS_DEV
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline'";
+
+const CSP = [
+  "default-src 'self'",
+  SCRIPT_SRC,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  // ComfyUI 本地服务 / SSE 流 / WebSocket（ws://127.0.0.1:8188）
+  //
+  // `ipc:` / `http://ipc.localhost` 是 **Tauri 事件系统（listen / emit）的
+  // IPC 通道**，不是业务网络请求：缺了它，`@tauri-apps/api/event` 的每一次
+  // `listen` 都会被这条 CSP 挡掉（控制台报 "violates ... connect-src"），
+  // 壳转发的日志进不了前端日志面板（LogProvider 的 log:emit）。
+  // `invoke` 不受影响 —— 它走 postMessage 通道、不经 fetch，**只有事件监听
+  // 受这条约束**，所以「命令能调通但监听静默失效」正是本条漏掉时的症状。
+  // 与 tauri.conf.json 的 connect-src 同口径（两处都要，形态不同各管一半：
+  // dev/prebuilt 走本条，standalone 走 tauri.conf.json 那条）。
+  "connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:* https:",
+  // 应用级「ComfyUI 页签」以 iframe 内嵌本地 ComfyUI（跨端口即跨源）：
+  // frame-src 不写就回退到 default-src 'self'，页签里只剩
+  // Edge 的「已阻止此内容」（WebView2 的 --disable-web-security 不豁免
+  // 嵌入方页面自己的 CSP）。与 tauri.conf.json 的 frame-src 同口径。
+  "frame-src 'self' http://127.0.0.1:* http://localhost:*",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 /** @type {import("next").NextConfig} */
 const config = {
   // Tauri 桌面壳生产链路：输出 standalone（server.js + 裁剪版 node_modules），
@@ -129,49 +173,12 @@ const config = {
     };
     return webpackConfig;
   },
-  // ── 生产级安全响应头（OWASP 2025 A05/A08）────────────────────
-  // 全站生效，同时覆盖 /api/*（tRPC、better-auth、文件流等）。
-  // 本地开发保留 'unsafe-inline'：Next.js dev 模式需要内联脚本；
-  // 严格 nonce 方案可在此基础上按需收紧（见 t3-fullstack 技能 security-hardening）。
   async headers() {
-    // 开发模式（Next 16 + Turbopack）依赖 eval() 做调试堆栈重构，
-    // CSP 需放行 'unsafe-eval'；生产环境保持严格策略不变。
-    const isDev = process.env.NODE_ENV !== "production";
-    const scriptSrc = isDev
-      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-      : "script-src 'self' 'unsafe-inline'";
-    const csp = [
-      "default-src 'self'",
-      scriptSrc,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
-      "font-src 'self' data:",
-      // ComfyUI 本地服务 / SSE 流 / WebSocket（ws://127.0.0.1:8188）
-      //
-      // `ipc:` / `http://ipc.localhost` 是 **Tauri 事件系统（listen / emit）的
-      // IPC 通道**，不是业务网络请求：缺了它，`@tauri-apps/api/event` 的每一次
-      // `listen` 都会被这条 CSP 挡掉（控制台报 "violates ... connect-src"），
-      // 壳转发的日志进不了前端日志面板（LogProvider 的 log:emit）。
-      // `invoke` 不受影响 —— 它走 postMessage 通道、不经 fetch，**只有事件监听
-      // 受这条约束**，所以「命令能调通但监听静默失效」正是本条漏掉时的症状。
-      // 与 tauri.conf.json 的 connect-src 同口径（两处都要，形态不同各管一半：
-      // dev/prebuilt 走本条，standalone 走 tauri.conf.json 那条）。
-      "connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:* https:",
-      // 应用级「ComfyUI 页签」以 iframe 内嵌本地 ComfyUI（跨端口即跨源）：
-      // frame-src 不写就回退到 default-src 'self'，页签里只剩
-      // Edge 的「已阻止此内容」（WebView2 的 --disable-web-security 不豁免
-      // 嵌入方页面自己的 CSP）。与 tauri.conf.json 的 frame-src 同口径。
-      "frame-src 'self' http://127.0.0.1:* http://localhost:*",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join("; ");
-
     return [
       {
         source: "/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: csp },
+          { key: "Content-Security-Policy", value: CSP },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
