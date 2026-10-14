@@ -1,10 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-14T07:02:02.380Z",
+    "verifiedAt": "2026-10-14T07:30:29.860Z",
     "who": "yuedu",
     "how": "pnpm run build",
     "trackedBy": "artifact",
-    "dirtyReason": "本批不动这一档声明的输入面（清单：next.config.js / src-tauri/ / build-desktop / standalone-private-inputs / standalone-runtime / build-executor-host —— 一个都没碰）。但仍按「改完构建/产物相关的东西先跑它」那句实跑了：next build 成功（Compiled successfully in 70s；产物 CSS 4 份 / 312121 字节 / 3621 条规则，活类 text-2xs / bg-card / rounded-node / z-canvas-ui / u-title-page 全在，正文与账本供给的死类一条不在），并跑了 executor-host 打包、私件剔除、check-standalone-contents.cjs 两层（standalone 2546 文件 / static 12177 文件，均判干净）。整链 pnpm run build 在本检出跑不完：断在 standalone-link-repair.mjs —— 16 条链接指向 libsql 的 darwin/linux 可选平台包，而 node_modules/.pnpm/@libsql+darwin-arm64@0.5.29 这类目录在 win32 上从来没被解出来（它自己打印的「目标存在=NO」），与该脚本文件头的前提「不可跟随的那批链接，目标全部 existsSync === true」相反。这与 CSS 无关，属主是 #1892 那条线，另报。"
+    "skippedReason": "今天真跑了完整构建链并已修好本检出的虚拟 store（pnpm install --force 之后 standalone-link-repair 通过：扫描 147 条链接、重建 3 条，不再报「仍不可跟随」）。唯一红是 bundle 预算：当前 217 文件 / raw 9603.7 KB / gzip 2247.4 KB，超基线。方向上本批是减法：CSS 产物 raw 从 382452 字节降到 349887 字节（238 条无调用点的规则被摘掉），不新增任何文件。这条预算红不来自本批 —— 同日另一条产物账（03:44Z）已在干净 origin/master 上把它复算成 baseline-red（当时 215 文件 / 2227.3 KB，基线 2226.9 KB），此后合入的字体与构建类改动把它继续推高到 2243.9 再到 2247.4。属主是 bundle 预算那条线，本单不抬基线、不改判据。\n此外仍按「改完构建/产物相关的东西先数产物」那句做了核对：产物 CSS 4 份 / 312121 字节 / 3621 条规则，活类（text-2xs / bg-card / rounded-node / z-canvas-ui / u-title-page）全在、正文供给的死类（z-[99] 那族）一条不在；check-standalone-contents.cjs 两层（standalone 2546 / static 12177）均判干净。"
   }
 }
