@@ -1,10 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-14T03:44:09.919Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-14T07:02:02.380Z",
+    "who": "yuedu",
     "how": "pnpm run build",
     "trackedBy": "artifact",
-    "skippedReason": "本次提交真跑过一次 pnpm run build：next build / standalone 剔私 / 数产物 / executor-host 冒烟全部通过；唯一红是 bundle 预算，已复算为 baseline-red —— 在干净 HEAD b179b669（= origin/master，本改动的基点）上无任何改动重跑同一构建，读数逐字相同（217 文件 / 2247.6 KB gzip > 基线 f03ccf0e 的 215 / 2227.3 KB，基线落后 52 次提交），本改动对 client 体积的贡献为 0。规范 §13.5.4 / §13.6.2。"
+    "dirtyReason": "本批不动这一档声明的输入面（清单：next.config.js / src-tauri/ / build-desktop / standalone-private-inputs / standalone-runtime / build-executor-host —— 一个都没碰）。但仍按「改完构建/产物相关的东西先跑它」那句实跑了：next build 成功（Compiled successfully in 70s；产物 CSS 4 份 / 312121 字节 / 3621 条规则，活类 text-2xs / bg-card / rounded-node / z-canvas-ui / u-title-page 全在，正文与账本供给的死类一条不在），并跑了 executor-host 打包、私件剔除、check-standalone-contents.cjs 两层（standalone 2546 文件 / static 12177 文件，均判干净）。整链 pnpm run build 在本检出跑不完：断在 standalone-link-repair.mjs —— 16 条链接指向 libsql 的 darwin/linux 可选平台包，而 node_modules/.pnpm/@libsql+darwin-arm64@0.5.29 这类目录在 win32 上从来没被解出来（它自己打印的「目标存在=NO」），与该脚本文件头的前提「不可跟随的那批链接，目标全部 existsSync === true」相反。这与 CSS 无关，属主是 #1892 那条线，另报。"
   }
 }
