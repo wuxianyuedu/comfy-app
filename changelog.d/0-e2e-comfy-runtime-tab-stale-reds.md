@@ -29,10 +29,15 @@
 
 ## 刻意没做的事（写清楚，别当成已完成）
 
-- **没有**把 `critical-flows.spec.ts` 里其余几处同形的旧信封 `page.route("**/api/trpc/**")` 一并改写。
-  本次只改这条红路上的那一处。其余几处是否真的依赖被桩住的数据，**没有逐处判过** ——
-  它们目前绿，而「绿」在这里只说明断言没用到那个槽位，不说明信封是对的。这是一张Known债，
-  收它应当各自按「哪条判据在依赖哪一格数据」来定，不该塞进一条修红的提交里。
+- **没有**把其余几处「形状喂不进 `httpBatchStreamLink`」的 `page.route("**/api/trpc/**")` 一并改写。
+  本次只改这条红路上的那一处。当场数过的存量（`grep -c 'page.route("\*\*/api/trpc' e2e/*.spec.ts`
+  与逐处读正文）：**3 处想注入数据而形状不可读** —— `critical-flows.spec.ts` 的 `stubBackend()`
+  回 `body: "[]"`、同文件任务详情那一处回 `JSON.stringify({ result: { data: … } })`、
+  `project-context-refresh.spec.ts` 的回 `{ json: [] }`；另有 **1 处是刻意不回应**
+  （60s 拖住 `workflow.list` 来造加载态，那是它的正确语义，不算债）。
+  这 3 处是否真的依赖被桩住的数据，**没有逐处判过** —— 它们目前绿，而「绿」在这里只说明
+  断言没用到那个槽位，**不说明信封是对的**。收它应当各自按「哪条判据在依赖哪一格数据」来定，
+  不该塞进一条修红的提交里。
 - 没有动 `setting.comfyStatus` 的服务端形状，也没有为桩补 `comfyInstance`：
   未登记的过程按 `stubTrpc` 的既有语义继续打到真实服务端（本档自带假 ComfyUI，端口由
   `fake-comfyui-endpoint.mjs` 给），这是设计而不是漏网。
