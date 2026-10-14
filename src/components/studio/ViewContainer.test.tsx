@@ -74,8 +74,9 @@ describe("DocumentFrame（文档型）", () => {
     ["narrow", "max-w-narrow"],
     ["medium", "max-w-medium"],
     ["wide", "max-w-wide"],
+    ["full", "max-w-none"],
   ] as const)(
-    "档位 %s ⇒ 只写 %s 这一个类（数值留在令牌里）",
+    "档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）",
     ([width, cls]) => {
       const { container } = render(
         <DocumentFrame width={width}>
@@ -87,15 +88,35 @@ describe("DocumentFrame（文档型）", () => {
       );
       if (!column) throw new Error("没找到居中列");
       expect(column.className).toContain(cls);
-      // 三个档位名互斥：同时出现两份就等于宽度又有了两个家。
-      const others = ["max-w-narrow", "max-w-medium", "max-w-wide"].filter(
-        (name) => name !== cls,
-      );
+      // 档位名互斥：同时出现两份就等于宽度又有了两个家。
+      const others = [
+        "max-w-narrow",
+        "max-w-medium",
+        "max-w-wide",
+        "max-w-none",
+      ].filter((name) => name !== cls);
       for (const name of others) {
         expect(column.className, `不该同时出现 ${name}`).not.toContain(name);
       }
     },
   );
+
+  it("full 档位不封顶：内容吃满滚动区，等于不给宽度上限", () => {
+    /* `max-w-none` 是这一档的**唯一**判据形态，别改成「干脆不写」：
+       不写时「有没有上限」在读代码时看不出来，且 `className` 里任何一条
+       内建 `max-w-*` 都会静默生效 —— 两份类并存正是文件头点名的未定义行为。 */
+    const { container } = render(
+      <DocumentFrame width="full">
+        <p>内容</p>
+      </DocumentFrame>,
+    );
+    const column = container.querySelector<HTMLElement>(
+      '[data-view-container="document"] [class*="overflow-y-auto"] > div',
+    );
+    if (!column) throw new Error("没找到居中列");
+    expect(column.className).toContain("max-w-none");
+    expect(column.className).toContain("w-full");
+  });
 
   it("调用处的 className 是追加，不是替换掉居中", () => {
     const { container } = render(

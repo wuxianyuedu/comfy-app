@@ -4,6 +4,7 @@ import {
   DocumentFrame,
   WorkspaceFrame,
 } from "~/components/studio/ViewContainer";
+import { cn } from "~/lib/utils";
 
 /**
  * 视图容器（`ViewContainer`）—— 两种框架形态，各屏按「怎么滚」选一种。
@@ -11,10 +12,10 @@ import {
  * 这两件没有数据依赖，但它们**几乎是纯布局**，所以「长得对」这件事在 story 里
  * 特别值得看：一屏用哪个框架决定了整屏会不会出现**双层滚动条**。
  *
- *   · **`DocumentFrame`**：整屏滚动 + 居中窄栏，`width` 三档（`narrow` / `wide` /
- *     `full`）。`backdrop` 挂在**外框**里、是滚动层的兄弟（铺底若塞进 `children`
- *     就成了居中列的第一个子节点，位置语义会变）——所以 story 里给了带 `backdrop`
- *     的那一档，它是唯一能看出那层关系的地方。
+ *   · **`DocumentFrame`**：整屏滚动 + 居中列，`width` 四档（`narrow` / `medium` /
+ *     `wide` 三档有宽度令牌，`full` 不封顶）。`backdrop` 挂在**外框**里、是滚动层的
+ *     兄弟（铺底若塞进 `children` 就成了居中列的第一个子节点，位置语义会变）——所以
+ *     story 里给了带 `backdrop` 的那一档，它是唯一能看出那层关系的地方。
  *   · **`WorkspaceFrame`**：吃满父级、**不**产生页面级滚动条（内部怎么分栏、哪一栏
  *     自己滚，是视图的事）。它写死 `overflow-hidden`，于是内部那层才会真的出滚动条
  *     —— 这正是「整屏滚 + 画布也滚」那条历史事故的形状。
@@ -45,7 +46,10 @@ const meta = {
   component: FrameSample,
   args: { width: "wide" },
   argTypes: {
-    width: { control: { type: "select" }, options: ["narrow", "wide", "full"] },
+    width: {
+      control: { type: "select" },
+      options: ["narrow", "medium", "wide", "full"],
+    },
   },
 } satisfies Meta<StoryArgs & { children?: React.ReactNode }>;
 
@@ -69,9 +73,23 @@ function Body({ rows = 24 }: { rows?: number }) {
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+/** 演示用的外框。宽度可调 —— 宽度档位**只有在比最窄的档还宽的框里才看得出区别**：
+ * 钉死 `w-160`（640px）时四个档位长得一模一样，story 说什么都行（这正是「文档写着
+ * 四档、实现只有三档」长期没人发现的原因）。 */
+function Shell({
+  wide = false,
+  children,
+}: {
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="border-border-strong h-72 w-160 overflow-hidden rounded-xl border">
+    <div
+      className={cn(
+        "border-border-strong h-72 overflow-hidden rounded-xl border",
+        wide ? "w-full" : "w-160",
+      )}
+    >
       {children}
     </div>
   );
@@ -80,7 +98,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 /** 文档型（宽栏）：整屏滚动，内容装在居中列里。 */
 export const DocumentWide: Story = {
   render: (args) => (
-    <Shell>
+    <Shell wide>
       <FrameSample width={args.width}>
         <Body />
       </FrameSample>
@@ -88,11 +106,24 @@ export const DocumentWide: Story = {
   ),
 };
 
-/** 窄栏：居中列只有 2xl 宽（设置页那一族用的是这一档）。 */
+/** 窄栏：居中列只有 `--container-narrow` 宽（设置页那一族用的是这一档）。 */
 export const DocumentNarrow: Story = {
   args: { width: "narrow" },
   render: (args) => (
-    <Shell>
+    <Shell wide>
+      <FrameSample width={args.width}>
+        <Body />
+      </FrameSample>
+    </Shell>
+  ),
+};
+
+/** 不限宽（`full`）：内容吃满滚动区，给工具型文档视图（控制台那类输出面板）用。
+ * 与上面两档对照着看 —— 只有框比 `--container-wide` 宽时，这一档才显出区别。 */
+export const DocumentFull: Story = {
+  args: { width: "full" },
+  render: (args) => (
+    <Shell wide>
       <FrameSample width={args.width}>
         <Body />
       </FrameSample>
