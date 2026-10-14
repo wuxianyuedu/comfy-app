@@ -24,13 +24,13 @@ const DOC = "docs/standards/16-shadcn-ui与表单校验.md";
 /** 台账小节（形状与真实文档一致：标题 + 四列表格）。 */
 function docWithLedger(rows: string[]): string {
   return [
-    "## 16.7 不碰 ui/ 的硬规则",
+    "### 16.7 不碰 ui/ 的硬规则",
     "",
     "| 文件 | 说明 | 为什么 | 怎么补 |",
     "| --- | --- | --- | --- |",
     "| `not-a-ledger-row.tsx` | 这一节里的表格**不算**登记 | —— | —— |",
     "",
-    "## 16.8 `ui/` 本地改动台账（覆盖前必读）",
+    "### 16.8 `ui/` 本地改动台账（覆盖前必读）",
     "",
     "| 文件 | 本仓库的定制 | 为什么 | 覆盖后怎么补 |",
     "| --- | --- | --- | --- |",
@@ -139,5 +139,29 @@ describe("ui/ 定制标记 ⟺ 台账", () => {
       "src/components/ui/button.test.tsx": `${MARKER}\n`,
     });
     expect(result.ok).toBe(true);
+  });
+
+  it("台账小节里的代码围栏内的 `# ` 注释不算节尾（否则表格整张读不到）", () => {
+    /* 现场：#1926 统一 16~18 章标题层级时才发现 —— §16.8 的「覆盖前的标准动作」
+     * 是个 bash 片段，里面 `# ③ 命中下表：…` 以 `# ` 开头，被当成标题，
+     * 台账于是被截在围栏中间、表格一行都读不到。表现是「所有标记文件台账里都没有」
+     * （判据像在乱报），根因却是解析把围栏内当正文。 */
+    const doc = docWithLedger([ledgerRow("button.tsx")]).replace(
+      "| 文件 | 本仓库的定制 | 为什么 | 覆盖后怎么补 |",
+      [
+        "```bash",
+        "# ③ 命中下表：不要直接 add —— 用 --view 只取需要的新文件",
+        "pnpm exec shadcn add <name> --dry-run -y",
+        "```",
+        "",
+        "| 文件 | 本仓库的定制 | 为什么 | 覆盖后怎么补 |",
+      ].join("\n"),
+    );
+    const result = gate({
+      [DOC]: doc,
+      "src/components/ui/button.tsx": `${MARKER}\n`,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain("与台账一致");
   });
 });
