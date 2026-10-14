@@ -16,7 +16,7 @@
  *
  * mock 边界：`~/server/db`（内存库，`as never` 那类形状错误会当场现形）、
  * `~/lib/llm/server`（会真发 LLM 请求）、`~/lib/workshop/mode-contract.server`（会读写
- * `config/workshop-mode-contracts.json`）、仓储的两个写口用 spy 记账但保留真实现、
+ * `data/workshop-mode-contracts.json` 那份本机覆盖）、仓储的两个写口用 spy 记账但保留真实现、
  * `~/server/better-auth`、`~/lib/core/logger`。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";

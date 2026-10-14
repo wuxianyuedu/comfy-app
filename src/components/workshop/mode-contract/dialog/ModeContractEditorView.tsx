@@ -47,7 +47,6 @@ import {
   customInputKindLabel,
   isModeContractCustomized,
 } from "../mode-contract-config";
-import { MODE_CONTRACTS_REL_PATH } from "~/lib/workshop/mode-contract-file";
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -251,11 +250,9 @@ function ModeContractDraftPanel({
       )}
       {saved && (
         <p className="bg-success/10 text-success-strong rounded-lg px-3 py-2 text-xs">
-          已保存到 <span className="font-mono">{MODE_CONTRACTS_REL_PATH}</span>
-          （项目配置，随 git 走）——
-          工坊与工作流库读的是同一份注册表，另一处刷新后即生效；
+          已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
           <span className="text-ink font-medium">
-            提交这个文件后，别的检出才拿得到同一份配置。
+            改动只落在这台机器上，不会跟着代码走。
           </span>
         </p>
       )}
