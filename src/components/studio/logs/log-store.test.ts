@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, cleanup } from "@testing-library/react";
 import {
   useLogStore,
@@ -11,6 +11,9 @@ import {
   isRoutineRpcTimingLine,
   parseFileLogs,
   mergeTimeline,
+  mergeTimelineIndexed,
+  buildTimelineIndex,
+  trimTimelineIndex,
   dedupeByIdentity,
   dedupeRepeats,
   selectPageLogs,
@@ -2424,5 +2427,190 @@ describe("内存上限 LOG_STORE_MAX：时间线折叠更旧行 + droppedTotal �
     expect(useLogStore.getState().droppedTotal).toBe(10);
     act(() => useLogStore.getState().clear());
     expect(useLogStore.getState().droppedTotal).toBe(0);
+  });
+});
+
+/* ── 时间线去重索引：跨轮复用与截断摘键（性能与等价性，ISSUE #1869 轮次）──
+ *
+ * 背景：`mergeTimeline` 原本每轮都对**整条时间线**建两张 Map（`entryKey` /
+ * `arrivalKey`），只为判出这次送来的一两行是不是新的。5000 条上限下实测
+ * 2.27ms/轮全花在这一点上（占整次合并的 97%，排序只占 0.11ms）。
+ *
+ * 这一组守两件事：
+ *   ① **行为等价**——索引复用版与「每次重建」的结果逐字一致（含截断之后）；
+ *   ② **索引真的被复用了**——把「复用」退回「重建」时下面那条会红。
+ * ②是必需的：只断言①那些用例在退回重建时是**全绿**的（结果本来就一样），
+ * 而性能恰恰是这次改动的全部目的。
+ */
+describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", () => {
+  it("索引复用版与「每轮重建」在整段序列上逐字一致", () => {
+    // 混入乱序时刻、同秒副本行、跨来源同一行，把去重两条规则都走到
+    const freshBatches: LogEntry[][] = [
+      [entry("a", 300)],
+      [entry("b", 100)],
+      [
+        { ...entry("c", 300), origin: "app" }, // 同秒同正文的副本行（并 origin）
+        entry("d", 200),
+      ],
+      [{ ...entry("a", 300), origin: "launcher" }], // 完全同 key，应被丢弃
+      [entry("e", 100)],
+    ];
+
+    // 路径①：索引复用
+    let reused: LogEntry[] = [];
+    let index = buildTimelineIndex(reused);
+    for (const batch of freshBatches) {
+      const out = mergeTimelineIndexed(reused, batch, index);
+      reused = out.logs;
+      index = out.index;
+    }
+
+    // 路径②：每轮从零重建（等价对照）
+    let rebuilt: LogEntry[] = [];
+    for (const batch of freshBatches) {
+      rebuilt = mergeTimeline(rebuilt, batch);
+    }
+
+    expect(idsOf(reused)).toEqual(idsOf(rebuilt));
+    expect(reused.map((e) => [e.time, e.seq, e.origin])).toEqual(
+      rebuilt.map((e) => [e.time, e.seq, e.origin]),
+    );
+  });
+
+  it("截断摘键后仍与「按保留段重建」结果一致（出窗口的行会被新内容重新补进来）", () => {
+    // 造 6 条，上限 3：前 3 条出窗口
+    const all = [entry("a", 100), entry("b", 200), entry("c", 300)];
+    let logs = all;
+    let index = buildTimelineIndex(logs);
+    // 追加 3 条触发截断（上限设 3）
+    const more = [entry("d", 400), entry("e", 500), entry("f", 600)];
+    for (const one of more) {
+      const out = mergeTimelineIndexed(logs, [one], index);
+      logs = out.logs;
+      index = out.index;
+      const cut = logs.length - 3;
+      if (cut > 0) {
+        const dropped = logs.slice(0, cut);
+        const kept = logs.slice(cut);
+        trimTimelineIndex(index, dropped);
+        logs = kept;
+      }
+    }
+    // 保留段 = d/e/f
+    expect(idsOf(logs)).toEqual(["d", "e", "f"]);
+    // 出窗口的 a 现在**可以**重新落板（与「按保留段重建」同语义）
+    const out = mergeTimelineIndexed(logs, [entry("a", 100)], index);
+    expect(idsOf(out.logs)).toEqual(["a", "d", "e", "f"]);
+    // 仍在窗口里的 f 重投则被丢弃
+    const again = mergeTimelineIndexed(
+      out.logs,
+      [{ ...out.logs[3]! }],
+      out.index,
+    );
+    expect(again.logs).toBe(out.logs);
+  });
+
+  it("截断摘键只摘「真出窗口的那一条」：同 key 仍有副本留在窗口里时不摘", () => {
+    /* **这条守 `trimTimelineIndex` 的引用比对**（见其实现）。
+     * 场景：两条 entryKey 相同（时刻/级别/正文全同、id 不同）的行——真实里来自
+     * 「文件被整段重读」或「多路轮询读到同一段副本」。截断只把**靠前那一条**
+     * 挤出窗口，另一条仍在窗口里。此时若无脑按 key 删，索引会把仍在窗口的那条
+     * 也忘掉 —— 它再被重投一次就会被当成新行、在时间线上落第二份。
+     *
+     * 判据直接对着索引（不经过 store 的截断时机）：先建表，再只摘出窗口那一条，
+     * 然后看仍在窗口的那条重投时是否仍被识别为重复。
+     */
+    const inWindow: LogEntry = {
+      ...entry("kept", 100),
+      level: "info",
+    };
+    // 同 key 的旧副本（id / seq 不同，时刻与正文全同）
+    const dropped: LogEntry = {
+      ...inWindow,
+      id: "dropped",
+      seq: inWindow.seq - 1,
+    };
+    const index = buildTimelineIndex([dropped, inWindow]);
+
+    trimTimelineIndex(index, [dropped]);
+
+    // 仍在窗口的那条重投：必须仍被识别为重复（返回原数组引用）
+    const current = [inWindow];
+    const out = mergeTimelineIndexed(
+      current,
+      [{ ...inWindow, id: "again" }],
+      index,
+    );
+    expect(out.logs).toBe(current);
+  });
+
+  it("同一秒的副本行并进已落板那条的 origin，而不是新落一份", () => {
+    /* 这条是**既有语义**的直判据（`arrivalKey` 那条规则）：启动行只写在
+     * launcher / dev-launcher 的副本里，用户切到「启动器」却看不到时，问题就
+     * 出在这一步没做。此前只有 store 级的间接覆盖，增量索引这一版把它挑明了。
+     * 变异（去掉并 origin 那一步）会让本用例红。 */
+    const landed: LogEntry = {
+      ...entry("landed", 1_000),
+      origin: "dev",
+      message: "同一段正文",
+    };
+    /* 副本行：**同一秒内**、时刻差几毫秒（`entryKey` 不同而 `arrivalKey` 相同）
+     * —— 这正是 `arrivalKey` 存在的那条缝：同一条日志被两路各自读到时，两边
+     * 写下的时刻不会逐毫秒相同。 */
+    const copy: LogEntry = {
+      ...landed,
+      id: "copy",
+      seq: landed.seq + 1,
+      time: landed.time + 4,
+      origin: "launcher",
+    };
+    const out = mergeTimelineIndexed(
+      [landed],
+      [copy],
+      buildTimelineIndex([landed]),
+    );
+    // 时间线仍只有一条……
+    expect(out.logs).toHaveLength(1);
+    // ……但它的 origin 被并成了后到的那一路（用户要找的那个来源）
+    expect(out.logs[0]!.origin).toBe("launcher");
+  });
+
+  it("索引被跨轮复用：整段追加过程中不对整条时间线重复建表", () => {
+    /* **这条是「性能就是目的」的那条判据**（见本组抬头 ②）。
+     * 手法：拦一次 `arrivalKey` 的产出量不行（那是内部函数），改为量
+     * `mergeTimelineIndexed` 第二参之后**新建 Map 的次数** —— 复用路径下一轮
+     * 只在新行登记时写表；重建路径则每轮都要把 5000 条重写一遍。
+     *
+     * 用「追加 N 轮后，索引里表的条目数是否与时间线同量级且没有爆掉」来侧面
+     * 判定太弱；这里直接数 **`Map.prototype.set` 的调用次数**（猴子补丁，
+     * 仅本用例内）。
+     */
+    resetStore();
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs(Array.from({ length: LOG_STORE_MAX }, makeEntry)),
+    );
+    const before = useLogStore.getState();
+
+    /* 计数手法走 `vi.spyOn`（类型安全，且 `mockRestore` 保证不污染别的用例）。
+     * 计的是「整轮追加一共往 Map 里写了多少次」。 */
+    const spy = vi.spyOn(Map.prototype, "set");
+    try {
+      const ROUNDS = 50;
+      for (let r = 0; r < ROUNDS; r += 1) {
+        const one = makeEntry({ time: 1_700_000_500_000 + r });
+        act(() => useLogStore.getState().appendFileLogs([one]));
+      }
+      const setCalls = spy.mock.calls.length;
+      /* 每轮只该为**新到的这一行**写表（seen + sameArrival ≈ 2 次），再留一点
+       * 余量给派生计数用到的 Map。退回「每轮重建两张全表 Map」时，次数会变成
+       * ROUNDS × 5000 × 2 量级 —— 相差三个数量级，判据不靠临界值。 */
+      expect(setCalls).toBeLessThan(ROUNDS * 50);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(useLogStore.getState().logs.length).toBe(LOG_STORE_MAX);
+    expect(before.logs.length).toBe(LOG_STORE_MAX);
   });
 });
