@@ -5,7 +5,7 @@ import { RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
 /**
  * 应用运行日志写入端点（客户端 → 服务端）。
  * =========================================================
- * `src/lib/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs/node:path），
+ * `src/lib/log/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs/node:path），
  * 只能由服务端代码 import。客户端逻辑层（如设置页 hook）需要把「静默失败」
  * 补记进 app-runtime.log 供日志面板轮询展示时，必须经此端点转交服务端写入，
  * 而非直接 import 该模块（否则 Turbopack 会把 node:fs 静态打进客户端 bundle，

@@ -62,11 +62,9 @@
       位置)+ `asCanvasNodeData()` 单点收口;画布链路 `as unknown as` / `as never`
       清零;两处 Prisma Json 边界改为 Zod 校验。
 - [x] `errorSuggestion` 正则规则表外置为数据(**已过时项,已改判为完成**)。
-      规则表**已外置**到数据模块
-      `src/components/studio/project-canvas/CanvasNode/error-suggestions.ts`
-      (`ERROR_SUGGESTION_RULES` 数组 + `pattern` / `suggestion` 数据项),
-      `ErrorPanel.tsx` 只消费 `suggestForError()`。原条目按「未做」记录,
-      复核后改判为已完成。
+      规则表**已外置**到判据模块 `src/lib/comfyui/error-advice.ts`
+      (`suggestForError()` + 形态表),画布节点错误面板
+      (`ErrorPanel.tsx`) 只消费它。原条目按「未做」记录,复核后改判为已完成。
 - [ ] 注册表触发式采纳(仍开放):下次新增节点 kind 时按
       reviews/2026-08-30-canvasnode-review.md 第二节执行顺序走。
       **性质**:流程性约定(触发条件是「下次新增节点 kind」),无完成态,

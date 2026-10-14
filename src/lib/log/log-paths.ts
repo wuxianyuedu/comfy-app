@@ -142,7 +142,7 @@ export const LOG_EXPORT_DIR = path.join(LOG_ROOT, "exports");
  * 「应用服务输出」转录文件（面板可见通道）的前缀与全局匹配式。
  *
  * 应用服务（Next dev server）的 stdout / stderr 由
- * `src/lib/capture-streams.server.ts` 额外转录一份到 `nextjs-panel-*.log`，
+ * `src/lib/log/capture-streams.server.ts` 额外转录一份到 `nextjs-panel-*.log`，
  * 供「应用日志」面板轮询展示——此前首屏编译错误 / Turbopack FATAL / 未捕获的
  * 服务端异常只落在 nextjs-stdout|stderr 文件里，面板完全看不到（ISSUE #360）。
  *
