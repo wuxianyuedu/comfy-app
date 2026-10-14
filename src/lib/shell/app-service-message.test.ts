@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveAppServiceEvent,
   describeAppServiceDisconnect,
+  describeAppServiceRouteStale,
   describeAppServiceStart,
   formatOfflineSpan,
   initialAppServiceCursor,
@@ -137,6 +138,51 @@ describe("deriveAppServiceEvent 边沿判据", () => {
     expect(cursor.offlineAt).toBeNull();
     expect(cursor.state).toBe("starting");
     expect(cursor.processIsNew).toBe(false);
+  });
+});
+
+describe("路由表不完整（stale）的边沿与文案", () => {
+  it("进入 stale 那一拍记一条 route-stale，持续期间不重复记", () => {
+    const first = deriveAppServiceEvent(
+      initialAppServiceCursor(),
+      { state: "stale", processIsNew: false },
+      1_000,
+    );
+    expect(first.event).toEqual({ type: "route-stale", at: 1_000 });
+    /* 下一拍仍是 stale：边沿不成立，不再记一条（否则每 2 秒刷一条）。 */
+    const second = deriveAppServiceEvent(
+      first.cursor,
+      { state: "stale", processIsNew: false },
+      3_000,
+    );
+    expect(second.event).toBeNull();
+  });
+
+  it("stale 不冒充断开：游标里不写下 offlineAt，转回 online 也不报「已恢复」", () => {
+    const stale = deriveAppServiceEvent(
+      initialAppServiceCursor(),
+      { state: "stale", processIsNew: false },
+      1_000,
+    );
+    expect(stale.cursor.offlineAt).toBeNull();
+    /* 路由修好后转 online：这是一次「服务一直都在」，不该报恢复。 */
+    const back = deriveAppServiceEvent(
+      stale.cursor,
+      { state: "online", processIsNew: false },
+      5_000,
+    );
+    expect(back.event).toBeNull();
+  });
+
+  it("文案说清「服务在应答、坏的是路由表」并给出两步出口", () => {
+    const { title, body } = describeAppServiceRouteStale(1_000);
+    expect(title).toBe("应用服务路由异常");
+    /* 「页面还能打开」这一句是这条消息存在的理由：它正是用户容易以为「再等等
+       就好」的地方，必须显式点出来，并紧跟「重启应用」这个出口。 */
+    expect(body).toContain("还能打开");
+    expect(body).toContain("404");
+    expect(body).toContain("重新启动");
+    expect(body).toContain(".next");
   });
 });
 

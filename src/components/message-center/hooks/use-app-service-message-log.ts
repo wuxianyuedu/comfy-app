@@ -1,9 +1,9 @@
 "use client";
 
-/* ── 把「应用服务断开 / 启动」写进消息中心（规范 17 §17.2 第②层）─────────
+/* ── 把「应用服务断开 / 启动 / 路由异常」写进消息中心（规范 17 §17.2 第②层）──
  *
- * 唯一职责：把 `useDevServerStatus()` 给的三态与进程标识，翻成消息中心里的
- * 「断开」与「启动 / 恢复」两条记录（**时间 + 原因**）。
+ * 唯一职责：把 `useDevServerStatus()` 给的四态与进程标识，翻成消息中心里的
+ * 「断开」「启动 / 恢复」与「路由异常」三条记录（**时间 + 原因 + 该做什么**）。
  *
  * ## 为什么需要它（此前这里什么出口都没有）
  *
@@ -59,6 +59,7 @@ import type { DevServerState } from "~/lib/shell/dev-server-status";
 import {
   deriveAppServiceEvent,
   describeAppServiceDisconnect,
+  describeAppServiceRouteStale,
   describeAppServiceStart,
   initialAppServiceCursor,
   type AppServiceEvent,
@@ -71,7 +72,7 @@ import {
 } from "../message-center-store";
 
 export interface AppServiceMessageLogInput {
-  /** 应用服务三态（`~/lib/shell/dev-server-status` 的判据结果）。 */
+  /** 应用服务四态（`~/lib/shell/dev-server-status` 的判据结果）。 */
   state: DevServerState;
   /** 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；刷新不算）。 */
   processIsNew: boolean;
@@ -154,6 +155,13 @@ export function useAppServiceMessageLog({
       const { title, body } = describeAppServiceDisconnect(event.at);
       /* 断开那一刻盖的是**旧一次启动**的 runId（服务已经死了、端点问不到，
        * 用的是探活链路留住的值）——它本来就发生在那一启动里。 */
+      push({ kind: "offline", title, body, runId: currentRunId });
+      return;
+    }
+    if (event.type === "route-stale") {
+      /* 服务还在应答，runId 是**当前这一次**的（端口答得了 404 就答得了它）——
+       * 与断开那条相反，不是刻意为之，是事实本来就不同。 */
+      const { title, body } = describeAppServiceRouteStale(event.at);
       push({ kind: "offline", title, body, runId: currentRunId });
       return;
     }

@@ -58,7 +58,7 @@ function stubExitEndpoint({
 }
 
 type Facts = {
-  state: "starting" | "online" | "offline";
+  state: "starting" | "online" | "offline" | "stale";
   processIsNew: boolean;
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
   currentRunId: string | null;
@@ -129,6 +129,30 @@ describe("useAppServiceMessageLog：断开", () => {
     rerender({ state: "offline", processIsNew: false });
     rerender({ state: "offline", processIsNew: false });
     expect(messages()).toHaveLength(1);
+  });
+});
+
+describe("useAppServiceMessageLog：路由表不完整", () => {
+  it("进入 stale 记一条「路由异常」，正文给出重启应用这个出口", () => {
+    stubExitEndpoint();
+    const { rerender } = mount({ state: "online", processIsNew: false });
+    rerender({ state: "stale", processIsNew: false });
+
+    const last = messages().at(-1)!;
+    expect(last.title).toBe("应用服务路由异常");
+    expect(last.body).toContain("重新启动");
+    /* 服务还在应答，所以这条挂的是**当前这次启动**的 runId（与断开那条相反）。 */
+    expect(last.runId).toBe(DEFAULT_RUN_ID);
+  });
+
+  it("持续 stale 不重复发，且不冒充「已断开」", () => {
+    stubExitEndpoint();
+    const { rerender } = mount({ state: "online", processIsNew: false });
+    rerender({ state: "stale", processIsNew: false });
+    rerender({ state: "stale", processIsNew: false });
+    const stale = messages().filter((m) => m.title === "应用服务路由异常");
+    expect(stale).toHaveLength(1);
+    expect(messages().some((m) => m.title === "应用服务已断开")).toBe(false);
   });
 });
 
