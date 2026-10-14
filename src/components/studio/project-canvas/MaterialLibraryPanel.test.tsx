@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { MaterialItem } from "./MaterialLibraryPanel";
 import { MaterialLibraryPanel } from "./MaterialLibraryPanel";
@@ -113,5 +119,31 @@ describe("MaterialLibraryPanel 作用域切换（ISSUE #1925）", () => {
         .join(" ");
     expect(shape(tabs[0]!)).toBe(shape(tabs[1]!));
     for (const tab of tabs) expect(tab.className).not.toContain("border-b-2");
+  });
+});
+
+describe("MaterialLibraryPanel 显示密度（ISSUE #1925）", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    mockFetch({ folders: [], items: [] });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("走共享基元（三处逐字相同的孪生对已收口），选中档钉住悬停", async () => {
+    render(<MaterialLibraryPanel onClose={vi.fn()} projectId="p-1" />);
+
+    const group = await screen.findByRole("radiogroup", { name: "显示密度" });
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    for (const radio of radios) {
+      expect(radio).not.toHaveAttribute("aria-pressed");
+    }
+    const grid = within(group).getByRole("radio", { name: "网格视图" });
+    expect(grid).toHaveAttribute("aria-checked", "true");
+    /* 旧形态只钉底色不钉字色 —— 这一条正是那个接缝的判据。 */
+    expect(grid.className).toContain("aria-checked:hover:text-primary-strong");
+    expect(grid.className).toContain("aria-checked:hover:bg-primary-soft");
   });
 });

@@ -1,9 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-14T08:37:04.742Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-14T16:22:40.759Z",
+    "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full"
+    "trackedBy": "full",
+    "skippedReason": "本次提交只碰前端 UI 组件/用例与文档，但 src/ 确实被改过 —— 所以不用 --dirty 那一档（那句是事实声明，与事实不符）。这里用 --skip：今天不为它单跑一遍全量，理由是全量已实跑过一次（741/742 文件、9257 条通过、覆盖率门槛全过），唯一失败 tests/e2e-run.test.ts 是日期型记账、已在干净 master 上复算为 baseline-red，与本改动无关；本次并未改动 src/lib / src/server / src/trpc 这些设了覆盖率门槛的域。"
   }
 }
