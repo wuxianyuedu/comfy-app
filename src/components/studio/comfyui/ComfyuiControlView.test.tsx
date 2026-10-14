@@ -6,7 +6,9 @@
 //   · 四态文案（运行中 / 正在启动 / 检测中 / 未运行）各自说得出；
 //   · 「启动 / 关闭」这对互斥主行动：当前这一态该按的那颗才实心，另一颗禁用；
 //   · 未配置路径时启动禁用，且**给出**去设置页配置的出口（不是一颗点不动的按钮）；
-//   · 启动日志框在页上（硬规则 4：失败路径必须有用户可见出口）。
+//   · 启动日志框在页上（硬规则 4：失败路径必须有用户可见出口）；
+//   · 页上写出「这一点下去会按哪条**已保存**路径启动」—— 它是「改了路径没保存」
+//     这个组合就地可见的那一份事实（本页无草稿，见 ComfyuiControlView 文件头）。
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -60,6 +62,7 @@ const running = {
   base: "http://127.0.0.1:8188",
   port: 8188,
   via: "配置路径的实例",
+  path: "D:\\ComfyUI",
 };
 
 describe("ComfyuiControlView", () => {
@@ -108,6 +111,7 @@ describe("ComfyuiControlView", () => {
             base: null,
             port: 0,
             via: null,
+            path: "D:\\ComfyUI",
           },
         })}
       />,
@@ -134,6 +138,29 @@ describe("ComfyuiControlView", () => {
     expect(
       screen.getByRole("button", { name: /去设置里配置/ }),
     ).toBeInTheDocument();
+  });
+
+  it("页上写明将按哪条已保存路径启动（本页无草稿，这条是唯一的事实出口）", () => {
+    render(<ComfyuiControlView c={controller({ status: running })} />);
+    const line = screen.getByTestId("comfyui-start-path");
+    expect(line.textContent).toContain("D:\\ComfyUI");
+    /* 明写「已保存」这一层语义：用户刚在设置页改了路径没保存时，这里显示的
+       仍是旧路径，那句「改完要点保存」就是给他看的。 */
+    expect(line.textContent).toContain("已保存");
+    expect(line.textContent).toContain("保存");
+  });
+
+  it("路径还没保存时不说「按空路径启动」，而是指出去哪配", () => {
+    render(
+      <ComfyuiControlView
+        c={controller({
+          status: { ...running, up: false, path: "" },
+        })}
+      />,
+    );
+    const line = screen.getByTestId("comfyui-start-path");
+    expect(line.textContent).toContain("尚未保存");
+    expect(line.textContent).not.toContain("将按这条已保存路径拉起");
   });
 
   it("启动日志框在页上（硬规则 4 的用户可见出口）", () => {

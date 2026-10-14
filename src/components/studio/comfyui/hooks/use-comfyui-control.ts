@@ -259,6 +259,9 @@ export function useComfyuiControl() {
           base: status.base ?? null,
           port: status.port ?? 0,
           via: status.via ?? null,
+          /* 库里已保存的路径（服务端 `comfyStatus` 一直有这一格，此前视图没收）：
+           * 它是启动动作**实际会用的那一条**，写在页上让「改了没保存」当场可见。 */
+          path: status.path ?? "",
         }
       : null,
     /** 安装形态（路径没配时为 null，视图据此给「去设置」出口）。 */

@@ -12,6 +12,10 @@
  * 「在设置页改了没保存，来这边启动发现跑的还是旧路径」。所以这里只说事实、
  * 只给出口。
  *
+ * 这一句还**只读地写出那条会生效的路径**（`comfyStartPathText`）：用户刚在设置页
+ * 改了路径却没保存时，这里显示的仍是库里那条旧路径，「这一点下去跑的是谁」当场
+ * 可见 —— 有了它，就不必为一句「配置有未保存改动」去跨屏共享草稿。
+ *
  * 屏名由页签给出（`PageHeader` 的 `srTitle` 只留给读屏），副说明挂在顶栏那枚问号
  * 上（`ViewHelp` 注册表）。
  */
@@ -40,6 +44,7 @@ import {
   comfyConfigHint,
   comfyDotState,
   comfyDotTitle,
+  comfyStartPathText,
   comfyStatusText,
   instanceKindLabel,
   isComfyBusy,
@@ -183,6 +188,15 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             : "安装形态判读中…"}
           {""}
           路径与启动参数在「设置 → 创作后端」里配置。
+        </p>
+        {/* 「这一点下去会按哪条路径启动」：写的是**库里已保存**的那条，所以用户
+            在设置页改了路径却没保存时，这里显示的仍是旧路径 —— 当场可见，不需要
+            为此跨屏共享草稿。 */}
+        <p
+          className="text-ink-muted mt-1 text-xs leading-relaxed break-all"
+          data-testid="comfyui-start-path"
+        >
+          {comfyStartPathText(c.status)}
         </p>
       </SettingsCard>
 

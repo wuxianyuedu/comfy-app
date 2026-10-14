@@ -103,6 +103,8 @@ interface Behavior {
   comfyStart?: { ok: boolean; detail: string };
   /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
   comfyBase?: string | null;
+  /** comfyui.status 返回的**已保存**路径（启动动作实际会用的那一条）。 */
+  comfyPath?: string;
   /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
   comfyEmbeddable?: { embeddable: boolean; reason: string };
   /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
@@ -136,6 +138,9 @@ const mockRouter = t.router({
         up: behavior.comfyBase != null,
         base: behavior.comfyBase ?? null,
         starting: false,
+        /* 库里已保存的路径：启动动作按它拉起，视图把它写在页上（ISSUE #1900
+         * 那条「改了路径没保存」的可见解）。 */
+        path: behavior.comfyPath ?? "D:\\ComfyUI",
       };
     }),
     /* 安装形态与运行态**分开取**（fs-only，与首屏配置同批）：这里给一份便携版默认。 */
@@ -320,6 +325,19 @@ describe("useComfyuiControl", () => {
     });
 
     await expect.poll(() => comfyStatusCalls).toBeGreaterThan(before);
+  });
+
+  /* 「这一点下去会按哪条路径启动」的事实来源：服务端 `comfyStatus` 里那一格
+   * 「库里已保存的路径」必须**投影到 controller**，否则视图写不出来 —— 而视图
+   * 写不出来时，「在设置页改了路径没保存、来这边点启动」就没人告诉用户跑的是谁
+   * （本页无草稿，这一格是唯一事实出口）。 */
+  it("已保存路径投影到 status.path（视图据此写明「会按哪条启动」）", async () => {
+    behavior = { comfyBase: "http://127.0.0.1:8188", comfyPath: "E:\\ComfyUI" };
+    const { result } = renderHook(() => useComfyuiControl(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.status).not.toBeNull();
+    expect(result.current.status?.path).toBe("E:\\ComfyUI");
   });
 
   /* 这一页是**独享**状态查询的屏：它一挂载就该订阅（不像设置页那一版要等首屏

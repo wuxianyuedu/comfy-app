@@ -24,6 +24,11 @@ export interface ComfyRuntimeStatus {
   base: string | null;
   port: number;
   via: string | null;
+  /** 库里**已保存**的 ComfyUI 路径（`setting.comfyuiPath`）——本页只读展示。
+   *
+   *  启动动作按这一行拉起，所以它必须写在页上：用户若刚在设置页改了路径**没保存**，
+   *  这一行仍是旧值，一眼就能看出「现在会按哪条路径启动」，不必跨屏共享草稿。 */
+  path: string;
 }
 
 /** 一个运行态快照里所有「正在过渡」的信号 —— 动作按钮的禁用判据只用它。 */
@@ -113,6 +118,24 @@ export function instanceKindLabel(
   kind: "desktop" | "portable" | "venv" | null,
 ): string {
   return INSTANCE_KIND_LABEL[kind ?? "unknown"];
+}
+
+/**
+ * 「这一点下去会按哪条路径启动」那句话（纯派生）。
+ *
+ * 为什么要明写：启动动作读的是**库里已保存**的 `settings.comfyuiPath`（本页没有
+ * 草稿）。用户若刚在「设置 → 创作后端」改了路径**却没点保存**，这一点下去跑的仍是
+ * 旧路径 —— 把那条旧路径写在页上，「改了没保存」就是一眼可见的事，不必为它跨屏
+ * 共享草稿（见本页文件头）。
+ *
+ * 空路径不给「按空路径启动」这种废话：那时 `comfyConfigHint` 已经给了出口，
+ * 这里明说「尚未保存路径」即可。
+ */
+export function comfyStartPathText(status: ComfyRuntimeStatus | null): string {
+  const path = status?.path?.trim() ?? "";
+  return path
+    ? `点「启动 ComfyUI」将按这条已保存路径拉起：${path}（在「设置 → 创作后端」里改，改完要点保存）`
+    : "尚未保存 ComfyUI 路径 —— 先在「设置 → 创作后端」里填好并保存，这里才有可启动的路径。";
 }
 
 /**
