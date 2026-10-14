@@ -973,13 +973,13 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 
 编排的 90% 本就与平台无关，现在按职责分成三层，**每层只有一个出处**：
 
-| 层         | 文件                                                                              | 内容                                                                                  |
-| ---------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 编排       | `scripts/dev-launcher.mjs`                                                        | 主流程的顺序与状态串联、常驻循环、收尾定性（**不摸 `process.platform`**）              |
-| 编排分段   | `scripts/launcher-core/{startup-gates,shell-stage,dev-boot,ready-wait}.mjs`        | 主流程按阶段拆出的四段：预检桥段 / 桌面壳阶段 / 起服务桥段 / 就绪等待（ISSUE #1811）    |
-| 编排件     | `scripts/launcher-core/**` 其余                                                     | 端口、缓存指纹、进度快照、会话锚点、壳产物名、日志布局、执行器模式判据                |
-| 平台机制   | `scripts/launcher-core/{procs,shell}.mjs`                                         | 进程与端口探测、进程组拉起、可执行文件解析                                            |
-| 进程树回收 | `src/lib/process/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                    |
+| 层         | 文件                                                                              | 内容                                                                                 |
+| ---------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 编排       | `scripts/dev-launcher.mjs`                                                        | 主流程的顺序与状态串联、常驻循环、收尾定性（**不摸 `process.platform`**）            |
+| 编排分段   | `scripts/launcher-core/{startup-gates,shell-stage,dev-boot,ready-wait}.mjs`       | 主流程按阶段拆出的四段：预检桥段 / 桌面壳阶段 / 起服务桥段 / 就绪等待（ISSUE #1811） |
+| 编排件     | `scripts/launcher-core/**` 其余                                                   | 端口、缓存指纹、进度快照、会话锚点、壳产物名、日志布局、执行器模式判据               |
+| 平台机制   | `scripts/launcher-core/{procs,shell}.mjs`                                         | 进程与端口探测、进程组拉起、可执行文件解析                                           |
+| 进程树回收 | `src/lib/process/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                   |
 
 > **编排分段为什么拆**：`dev-launcher.mjs` 一度 953 行、其中 `run()` 一个函数约 490 行
 > （「预检 → 端口 → 缓存 → 起服务 → 起壳 → 等就绪 → 常驻」全在一个函数体里），
@@ -1803,20 +1803,20 @@ components** 的分层约束下它对消息只要求 `id` / `runId` / `time` 三
 
 ## 7. 构建流程
 
-| 场景                                                                                      | 命令                                                                                                         | 说明                                                                                                                                                                                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目 |
-| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                                                                                                                                                                                                                                   |
+| 场景                                                                                      | 命令                                                                                                         | 说明                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目                 |
+| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                                                                                                                                                                                                                                                   |
 | 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   |
 | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 |
 | `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物                      |
 | `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听                         |
 | `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，      |
 | 可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。    |
-| 前端 bundle 体积预算（判定档，ISSUE #1781）                                               | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）   | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，评审确认后 `--allow-increase --update`。规范 §13.5.4。 |
-| 页面级运行时读数（e2e 档，ISSUE #1781 的右半边）                                          | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）    | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器） |
-| 重新打包双击启动器（**已废弃**）                                                          | —（Python 启动器与打包链已随 ISSUE #784 删除）                                                               | 现在双击的就是 `src-tauri\target\release\app.exe` 本身                                                                                                                                                                                                                                                                                                                        |
-| 开发者工具箱（逐条命令）                                                                  | 见 `tools/README.md` 的入口表                                                                                | 曾有 Python tkinter 的 `dev-tools.exe` 聚合面板（`scripts/dev_tools_launcher.py` + PyInstaller `dev-tools.spec`），已随 ISSUE #784 一并移除 —— 常用动作现在都有 `.ps1` 双击入口与等价的 `pnpm` 脚本，不需要第二个 exe                                                                                                                                                                   |
+| 前端 bundle 体积预算（判定档，ISSUE #1781）                                               | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）                      | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，评审确认后 `--allow-increase --update`。规范 §13.5.4。 |
+| 页面级运行时读数（e2e 档，ISSUE #1781 的右半边）                                          | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）         | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器）                                                                          |
+| 重新打包双击启动器（**已废弃**）                                                          | —（Python 启动器与打包链已随 ISSUE #784 删除）                                                               | 现在双击的就是 `src-tauri\target\release\app.exe` 本身                                                                                                                                                                                                                                                                                                                                        |
+| 开发者工具箱（逐条命令）                                                                  | 见 `tools/README.md` 的入口表                                                                                | 曾有 Python tkinter 的 `dev-tools.exe` 聚合面板（`scripts/dev_tools_launcher.py` + PyInstaller `dev-tools.spec`），已随 ISSUE #784 一并移除 —— 常用动作现在都有 `.ps1` 双击入口与等价的 `pnpm` 脚本，不需要第二个 exe                                                                                                                                                                                   |
 
 ### 7.0 构建耗时报告（`tools/scripts/Log-Common.ps1`）
 
@@ -2369,16 +2369,19 @@ devDependency（不随包分发），于是 boot 直接大声失败（`Cannot fi
 带进了 `.next/standalone`——也就是 §7.2 里被判定为噪声、要求清掉的那条告警。宿主能跑
 这件事等于押在一条**待清理**的通道上，谁去修 §7.2 都会把它静默弄断。
 
-**已签方向 = 构建期预编译**。`pnpm build` 现在是四步链，**顺序本身就是判据**：
+**已签方向 = 构建期预编译**。`pnpm build` 现在是七步链，**顺序本身就是判据**：
 
 | 步  | 脚本                                         | 为什么在这个位置                                                                                                                                                                                         |
 | --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `next build`                                 | 先有 standalone 根（`server.js` 在场）。产物化脚本以「目标目录里有没有 `server.js`」作前置断言，缺就直接抛，不在错的目录里写出半套文件                                                                   |
-| 2   | `scripts/build-executor-host.mjs`            | esbuild 把 `src/lib/comfyui/host-runtime.ts` 那张图打成一份 ESM 写进产物根（`scripts/executor-host.runtime.mjs`），并写构建清单 `scripts/executor-host.build.json`（entry / inputs / externals / bytes） |
-| 3   | `scripts/standalone-private-inputs.mjs`      | §7.3 的开发机私有输入剥离。预编译那两件已登记在 `RUNTIME_SCRIPTS` / `BUILT_RUNTIME_SCRIPTS`，剥离按白名单剪 `scripts/**` 时不会剪掉它们；顺序在 2 之后 = 剥离看到的是最终集合                            |
-| 4   | `scripts/smoke-executor-host-standalone.mjs` | **对最终产物**冒烟：宿主三件齐 → 清单里每个非内置 external 都能解析 → 真起一个宿主进程（`--once` + 临时空库）跑完 boot，要求出现 `runtime inject-ok` 且没有 `boot FAILED`                                |
+| 2   | `scripts/standalone-link-repair.mjs`         | §7.5.1：把产物里「目标在场而 `stat` 走不通」的 `node_modules` 链接按原文本重建。必须在**任何要读依赖的动作之前**——否则第 5 步数「必须有的」与第 7 步起进程都会报 `Cannot find package`，而包其实在场     |
+| 3   | `scripts/build-executor-host.mjs`            | esbuild 把 `src/lib/comfyui/host-runtime.ts` 那张图打成一份 ESM 写进产物根（`scripts/executor-host.runtime.mjs`），并写构建清单 `scripts/executor-host.build.json`（entry / inputs / externals / bytes） |
+| 4   | `scripts/standalone-private-inputs.mjs`      | §7.3 的开发机私有输入剥离。预编译那两件已登记在 `RUNTIME_SCRIPTS` / `BUILT_RUNTIME_SCRIPTS`，剥离按白名单剪 `scripts/**` 时不会剪掉它们；顺序在 3 之后 = 剥离看到的是最终集合                            |
+| 5   | `scripts/check-standalone-contents.cjs`      | 硬规则 17/18 的产物层判据：「不该有的」与「必须有的」两份清单真数一遍（见 §7.3、§7.4）                                                                                                                   |
+| 6   | `scripts/check-bundle-budget.cjs`            | 体积账（§7.2 的产物侧），放在数产物之后、冒烟之前：超预算时不该再花时间起进程                                                                                                                            |
+| 7   | `scripts/smoke-executor-host-standalone.mjs` | **对最终产物**冒烟：宿主三件齐 → 清单里每个非内置 external 都能解析 → 真起一个宿主进程（`--once` + 临时空库）跑完 boot，要求出现 `runtime inject-ok` 且没有 `boot FAILED`                                |
 
-冒烟必须排在 3 之后：「剥完之后还缺不缺件」只有这一步能定性。
+冒烟必须排在 4 之后：「剥完之后还缺不缺件」只有这一步能定性。
 
 **为什么 external 只有那三个包**（`@libsql/client` / `ws` / `pino`）：它们带原生绑定
 或可选加速模块，还有与服务端共享的进程级单例，打进 bundle 会坏。反过来，纯 JS 的
@@ -2423,6 +2426,55 @@ bundled 不靠人记。清单里还会混进 `fs` / `os` / `path` / `child_proce
 > 扫描」，**不等于**「能连 ComfyUI 出图」——桌包真出图还差 comfy-cli 的 Python 解释器
 > （ISSUE #1239）。分发口径与判据见
 > [执行器宿主指南](../guide-executor-host.md) 的「桌面包」段。
+
+#### 7.5.1 产物里的 pnpm 链接有一部分不可跟随 ⇒ 冒烟报「包找不到」而包其实在场
+
+**症状**：`pnpm run build` 的收尾冒烟（第 7 步）报
+
+```
+Cannot find package 'promise-limit' imported from …\.next\standalone\…
+```
+
+而 `promise-limit` **就在产物里**（`.next/standalone/node_modules/.pnpm/promise-limit@2.7.0/…` 是目录、
+`existsSync` 为真）。表现与硬规则 18 那一格（缺件 → 页面正常、接口全 500）几乎同形，
+所以第一反应会又去查一遍 tracing 清单 —— 这一节的存在就是为了省下那一遍。
+
+**量到的形状**（同一份 `.next/standalone/node_modules`，`node -e` 现场遍历，非推断）：
+
+| 量                    | 读数                                                                    |
+| --------------------- | ----------------------------------------------------------------------- |
+| 该层链接总数          | 68                                                                      |
+| `stat` 穿不过去的     | 16，错误码一律 `EPERM`（`lstat` 说是链接、`readlink` 拿得到文本）       |
+| 那些链接的目标        | **全部存在**（所以不是缺件）                                            |
+| 长路径                | 注册表 `LongPathsEnabled=1`，最长一条路径 145 字符（所以不是 MAX_PATH） |
+| 同目标两条链接        | 一条可跟随、一条 `EPERM`（目标逐字相同 ⇒ 病在链接自身，不在目标形状）   |
+| 开发树 `node_modules` | 2089 条链接，全部可跟随（同机同栈 ⇒ 不是 pnpm 的链接形状本身有问题）    |
+| 按原链接文本重建之后  | 16/16 可跟随，冒烟转绿                                                  |
+
+**结论**：建这些链接的是 `next build` 的追踪器（Rust 侧），它写出的 reparse 数据 Node 的
+`stat` 走不通；同一个文本经 `fs.symlinkSync` 重建就可跟随。**这是产物的形状问题，不是机器问题**
+—— 换一台机器只会换掉「哪几条」，不会换掉「有没有」。
+
+**修法（第 2 步 `scripts/standalone-link-repair.mjs`）**：遍历载荷的 `node_modules`，
+**不穿链接**（与 §7.3 的剔除侧、`check-standalone-contents.cjs` 的 `followLinks=false` 同口径），
+只对「`lstat` 说是链接而 `stat` 穿不过去」的那些，取其**原链接文本**重建一次。三条不可回退的取向：
+
+- **保留相对链接文本**，不 `resolve` 成绝对路径，也不用 `junction`（junction 存绝对目标，
+  载荷一搬走就断）；产物必须能整体搬走。
+- **可跟随的一条都不碰**：重建会换掉链接自身的 mtime，而 mtime 是壳产物时效判据
+  （`shell-gate.mjs` 复用 `dev-launcher.mjs` 的 `shellStaleWarning()`）的输入。
+- **先在临时名上建、验可跟随、再删旧换上**：`symlinkSync` 因权限失败（Windows 无开发者模式）时
+  原链接**还在**，这一步不会把产物改得比修之前更坏。
+
+**判据与出口**：重建后仍不可跟随 ⇒ 退 1 并逐条点名，话术里带两态区分
+（`目标存在=YES` = 这台机器建不成链接；`目标存在=NO` = 真的缺件）。没跑过 `next build`
+（`node_modules` 不在）时报「跳过」并退 0 —— 与同链上的 `standalone-private-inputs.mjs` 同口径。
+执行者两层：`tests/standalone-link-repair.test.ts`（决策面：谁该被修、按什么文本修、两态怎么报、
+链上顺序）+ 第 7 步冒烟（系统调用的真机执行者）。
+
+**桌包不受影响**：`build-desktop.mjs` 的 §载荷实体化（§7.6）会把 `.pnpm` 摊平成真实目录并删掉
+`.pnpm`，出厂件里本来就没有这些链接。这一层修的是 **web/standalone 形态真正会跑的那份产物**，
+以及「构建链自己在 Windows 上跑不跑得绿」——后者是产物日账（§11.8）的入口。
 
 ### 7.6 桌包 standalone 形态的装配与运行入口（ISSUE #1216 / 3-E2a）
 
@@ -2875,35 +2927,35 @@ sidecar」两种不同形态的失败。
 
 <!-- cross-platform-pairs -->
 
-| 目的                                                                  | Windows 双击入口                                                                                    | 跨平台入口（Linux / macOS / CI）                                                                                                                                               |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 启动开发环境（完整编排）                                              | `scripts/dev-launcher.ps1`                                                                          | `scripts/dev-launcher.mjs`（`pnpm dev`）                                                                                                                                       |
-| 质量门禁（typecheck / lint / test）                                   | `scripts/quality-gate.ps1`                                                                          | `scripts/quality-gate.mjs`（`pnpm check:all`）                                                                                                                                 |
-| 只跑测试（排除基线失败 / `-Full`）                                    | `scripts/run-tests.ps1`                                                                             | `scripts/run-tests.mjs`（`pnpm test:file` / `pnpm test:full`）                                                                                                                 |
-| 生成原文文档（doc:check + doc:render）                                | `scripts/generate-docs.ps1`                                                                         | `scripts/generate-docs.mjs`（`pnpm doc:gen`）                                                                                                                                  |
-| 重生成 API 文档（TypeDoc → `docs/api/**`，按产物判成败）             | `tools/docs/generate-api-docs.ps1`                                                                  | `scripts/generate-api-docs.mjs`（`pnpm run docs`；跑 + 验 + 重试的唯一实现 `scripts/typedoc-run.mjs`，`scripts/check-docs-api.cjs` 用的是同一份）                             |
-| 端口推导跨语言自检                                                    | `scripts/check-app-port-vectors.ps1`                                                                | `scripts/check-app-port-vectors.cjs`                                                                                                                                           |
-| 生成 / 补齐 `.env`                                                    | `scripts/prepare-local-run.ps1`（第 4 步）                                                          | `scripts/env-init.mjs`（`pnpm env:init`）                                                                                                                                      |
-| 建库（Drizzle 表结构同步）                                            | `scripts/prepare-local-run.ps1`（前置）/ 编排器预检                                                 | `scripts/db-push.mjs`（`pnpm db:push`）                                                                                                                                        |
-| `pnpm` 可用性自检与修复（工具链门禁的独立入口）                       | `scripts/prepare-local-run.ps1`（第 2/3 步）                                                        | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`）                                                                                                                   |
-| `src/lib` 的 Node-only 声明与可达性（规范 §18.4）                     | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`）                                                 |
-| UI 基元复用棘轮（规范 16 §16.2.3）                                    | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-ui-primitives.cjs`（`pnpm ui:primitives`，契约测试 `tests/check-ui-primitives.test.ts`）                                                                        |
-| 浮层层级刻度棘轮（规范 16 §16.2.5）                                   | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-overlay-z.cjs`（`pnpm ui:overlay-z`，契约测试 `tests/check-overlay-z.test.ts`）                                                                                 |
-| prettier 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项）                  | `scripts/quality-gate.ps1`（`-Mode format`）                                                        | `scripts/check-format.cjs`（`pnpm format:ratchet`，契约测试 `tests/check-format.test.ts`）                                                                                     |
-| 格式化提交与行为改动分离（规范 §13.5）                                | `scripts/quality-gate.ps1`（`-Mode format`）                                                        | `scripts/check-reformat-only.cjs`（`pnpm format:reformat-guard`，契约测试 `tests/check-reformat-only.test.ts`）                                                                |
-| 依赖漏洞扫描棘轮（规范 §13.5 / ISSUE #1331）                          | `scripts/quality-gate.ps1`（`-Mode dependencyAudit`）                                               | `scripts/check-dependency-audit.mjs`（`node scripts/check-dependency-audit.mjs`，契约测试 `tests/dependency-audit.test.ts`；刻意**不**进 pre-commit —— 它是网络请求）          |
-| `src/lib` 的零消费值导出硬闸（规范 §12.16）                           | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）                                                         |
-| pnpm 可执行形态的唯一出口（规范 §2.1.1 / §2.1.7）                     | `scripts/prepare-local-run.ps1`（第 2/3 步经它）                                                    | `scripts/launcher-core/shell.mjs`（`pnpmInvocation` / `runPnpmSync`，契约测试 `tests/dev-launcher-toolchain-gate.test.ts`）                                                    |
-| 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）                    | `scripts/dev-launcher.ps1`（schema 同步阶段）                                                       | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                                                      |
-| 「现在能不能安全地 `pnpm install`」—— 原生模块锁定前置检查（AGENTS 硬规则 9） | `scripts/sync-lint.ps1`（装之前的前置检查那一步）                                                    | `scripts/deps-install-guard.mjs`（`pnpm deps:guard`，契约测试 `tests/dev-launcher-dependency-sync.test.ts`；判据本体见 §3.2 的 `runningAppInstances`）                          |
-| 桌包 standalone 运行（不经编排器的内嵌 server 与宿主，ISSUE #1216）   | `src-tauri\target\release\app.exe`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；它再按 `COMFY_EXECUTOR` 起 `scripts/executor-host.mjs`。刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
-| 接上提交门槛（`core.hooksPath=.githooks`）                            | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |
-| 组件工作台 Storybook（开发期预览）                                    | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                                |
-| 故事枚举来源 + 组件覆盖率门禁（cva 返回值 / 漏档 / 覆盖率棘轮）       | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/storybook-check.mjs`（`node scripts/storybook-check.mjs`，契约测试 `tests/storybook-check-script.test.ts`、`tests/storybook-component-coverage.test.ts`）             |
-| 全量 E2E（跑绿即记新鲜度账，规范 §11.8）                              | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm test:e2e` 在两侧同形）             | `scripts/e2e-run.mjs`（`pnpm test:e2e` / `node scripts/e2e-run.mjs`，契约测试 `tests/e2e-run.test.ts`）                                                                        |
-| 全量单测 + 覆盖率（跑绿即记「改了就当天跑」账，规范 §11.8 / §13.5.4） | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm run test:coverage` 在两侧同形）    | `scripts/full-suite-run.mjs`（`pnpm run test:coverage:tracked` / `node scripts/full-suite-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                    |
-| 产物级护栏（build + 剥私有输入 + 数产物 + 冒烟，跑绿即记同一份账）    | `scripts/quality-gate.ps1`（暂无 Windows 入口：`pnpm run build` 在两侧同形）                        | `scripts/artifact-run.mjs`（`pnpm run build:tracked` / `node scripts/artifact-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                                |
-| 产品版本号三处同步（D7，规范 §7.1.1）                                 | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-app-version.cjs`（`pnpm check:app-version`，契约测试 `tests/check-app-version.test.ts`）                                                                        |
+| 目的                                                                          | Windows 双击入口                                                                                    | 跨平台入口（Linux / macOS / CI）                                                                                                                                               |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 启动开发环境（完整编排）                                                      | `scripts/dev-launcher.ps1`                                                                          | `scripts/dev-launcher.mjs`（`pnpm dev`）                                                                                                                                       |
+| 质量门禁（typecheck / lint / test）                                           | `scripts/quality-gate.ps1`                                                                          | `scripts/quality-gate.mjs`（`pnpm check:all`）                                                                                                                                 |
+| 只跑测试（排除基线失败 / `-Full`）                                            | `scripts/run-tests.ps1`                                                                             | `scripts/run-tests.mjs`（`pnpm test:file` / `pnpm test:full`）                                                                                                                 |
+| 生成原文文档（doc:check + doc:render）                                        | `scripts/generate-docs.ps1`                                                                         | `scripts/generate-docs.mjs`（`pnpm doc:gen`）                                                                                                                                  |
+| 重生成 API 文档（TypeDoc → `docs/api/**`，按产物判成败）                      | `tools/docs/generate-api-docs.ps1`                                                                  | `scripts/generate-api-docs.mjs`（`pnpm run docs`；跑 + 验 + 重试的唯一实现 `scripts/typedoc-run.mjs`，`scripts/check-docs-api.cjs` 用的是同一份）                              |
+| 端口推导跨语言自检                                                            | `scripts/check-app-port-vectors.ps1`                                                                | `scripts/check-app-port-vectors.cjs`                                                                                                                                           |
+| 生成 / 补齐 `.env`                                                            | `scripts/prepare-local-run.ps1`（第 4 步）                                                          | `scripts/env-init.mjs`（`pnpm env:init`）                                                                                                                                      |
+| 建库（Drizzle 表结构同步）                                                    | `scripts/prepare-local-run.ps1`（前置）/ 编排器预检                                                 | `scripts/db-push.mjs`（`pnpm db:push`）                                                                                                                                        |
+| `pnpm` 可用性自检与修复（工具链门禁的独立入口）                               | `scripts/prepare-local-run.ps1`（第 2/3 步）                                                        | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`）                                                                                                                   |
+| `src/lib` 的 Node-only 声明与可达性（规范 §18.4）                             | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`）                                                 |
+| UI 基元复用棘轮（规范 16 §16.2.3）                                            | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-ui-primitives.cjs`（`pnpm ui:primitives`，契约测试 `tests/check-ui-primitives.test.ts`）                                                                        |
+| 浮层层级刻度棘轮（规范 16 §16.2.5）                                           | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-overlay-z.cjs`（`pnpm ui:overlay-z`，契约测试 `tests/check-overlay-z.test.ts`）                                                                                 |
+| prettier 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项）                          | `scripts/quality-gate.ps1`（`-Mode format`）                                                        | `scripts/check-format.cjs`（`pnpm format:ratchet`，契约测试 `tests/check-format.test.ts`）                                                                                     |
+| 格式化提交与行为改动分离（规范 §13.5）                                        | `scripts/quality-gate.ps1`（`-Mode format`）                                                        | `scripts/check-reformat-only.cjs`（`pnpm format:reformat-guard`，契约测试 `tests/check-reformat-only.test.ts`）                                                                |
+| 依赖漏洞扫描棘轮（规范 §13.5 / ISSUE #1331）                                  | `scripts/quality-gate.ps1`（`-Mode dependencyAudit`）                                               | `scripts/check-dependency-audit.mjs`（`node scripts/check-dependency-audit.mjs`，契约测试 `tests/dependency-audit.test.ts`；刻意**不**进 pre-commit —— 它是网络请求）          |
+| `src/lib` 的零消费值导出硬闸（规范 §12.16）                                   | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）                                                         |
+| pnpm 可执行形态的唯一出口（规范 §2.1.1 / §2.1.7）                             | `scripts/prepare-local-run.ps1`（第 2/3 步经它）                                                    | `scripts/launcher-core/shell.mjs`（`pnpmInvocation` / `runPnpmSync`，契约测试 `tests/dev-launcher-toolchain-gate.test.ts`）                                                    |
+| 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）                            | `scripts/dev-launcher.ps1`（schema 同步阶段）                                                       | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                                                      |
+| 「现在能不能安全地 `pnpm install`」—— 原生模块锁定前置检查（AGENTS 硬规则 9） | `scripts/sync-lint.ps1`（装之前的前置检查那一步）                                                   | `scripts/deps-install-guard.mjs`（`pnpm deps:guard`，契约测试 `tests/dev-launcher-dependency-sync.test.ts`；判据本体见 §3.2 的 `runningAppInstances`）                         |
+| 桌包 standalone 运行（不经编排器的内嵌 server 与宿主，ISSUE #1216）           | `src-tauri\target\release\app.exe`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；它再按 `COMFY_EXECUTOR` 起 `scripts/executor-host.mjs`。刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
+| 接上提交门槛（`core.hooksPath=.githooks`）                                    | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |
+| 组件工作台 Storybook（开发期预览）                                            | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                                |
+| 故事枚举来源 + 组件覆盖率门禁（cva 返回值 / 漏档 / 覆盖率棘轮）               | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/storybook-check.mjs`（`node scripts/storybook-check.mjs`，契约测试 `tests/storybook-check-script.test.ts`、`tests/storybook-component-coverage.test.ts`）             |
+| 全量 E2E（跑绿即记新鲜度账，规范 §11.8）                                      | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm test:e2e` 在两侧同形）             | `scripts/e2e-run.mjs`（`pnpm test:e2e` / `node scripts/e2e-run.mjs`，契约测试 `tests/e2e-run.test.ts`）                                                                        |
+| 全量单测 + 覆盖率（跑绿即记「改了就当天跑」账，规范 §11.8 / §13.5.4）         | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm run test:coverage` 在两侧同形）    | `scripts/full-suite-run.mjs`（`pnpm run test:coverage:tracked` / `node scripts/full-suite-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                    |
+| 产物级护栏（build + 剥私有输入 + 数产物 + 冒烟，跑绿即记同一份账）            | `scripts/quality-gate.ps1`（暂无 Windows 入口：`pnpm run build` 在两侧同形）                        | `scripts/artifact-run.mjs`（`pnpm run build:tracked` / `node scripts/artifact-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                                |
+| 产品版本号三处同步（D7，规范 §7.1.1）                                         | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-app-version.cjs`（`pnpm check:app-version`，契约测试 `tests/check-app-version.test.ts`）                                                                        |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个
