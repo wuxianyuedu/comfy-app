@@ -2,10 +2,10 @@
 // 「应用服务断开 / 启动」记进消息中心这条链路的**接线**契约。
 //
 // 判据与文案在 `~/lib/shell/app-service-message` 的单测里逐分支钉死了；这里钉的是
-// 三件只有接线才出问题的��
+// 三件只有接线才出问题的事：
 //   ① 边沿是从**上一次渲染**推进的（游标必须跨渲染存活，否则每拍都像首帧）；
-//   ② 断开那一刻**不**发请求，原因要等「启动/恢复」那条现读再写（探活走的就是
-//      应用服务自己的 HTTP，断开时那条端点必然不通）；
+//   ② 断开那一刻的原因**走壳的 IPC** 读（`get_app_service_exit`，ISSUE #1915）——
+//      经 HTTP 那条端点由没了的那个服务自己应答，此刻必然不通；恢复那条才走 HTTP；
 //   ③ 写出去的消息**带时刻与原因**，且读不到原因时仍然发出去（时间本身已是事实）。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -57,6 +57,28 @@ function stubExitEndpoint({
   return calls;
 }
 
+/**
+ * 让壳那条存活通道（`~/lib/shell/desktop-shell-client` 的 `readAppServiceExitRecord`，
+ * 底层是壳命令 `get_app_service_exit`）回一份**记录原文**。
+ *
+ * 这个模块被 mock 掉是**为了能摆「壳内有这条通道」这一档**：jsdom 里
+ * `isDesktopShell()` 为假，真实实现自己会回 null（浏览器形态的真实样子），
+ * 那样就测不到「断开那一刻当场带上原因」。每个用例开始时它被重置回 null，
+ * 于是缺省形态仍是浏览器那一档。
+ */
+const shell = vi.hoisted(() => ({
+  readAppServiceExitRecord: vi.fn(async (): Promise<string | null> => null),
+}));
+vi.mock("~/lib/shell/desktop-shell-client", () => ({
+  readAppServiceExitRecord: shell.readAppServiceExitRecord,
+}));
+
+function stubShellExitRecord(record: unknown = EXIT_RECORD) {
+  shell.readAppServiceExitRecord.mockResolvedValue(
+    record === null ? null : JSON.stringify(record),
+  );
+}
+
 type Facts = {
   state: "starting" | "online" | "offline" | "stale";
   processIsNew: boolean;
@@ -106,6 +128,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  /* 壳通道默认「没有」（浏览器形态）：每个用例自己决定要不要 stub 成有。 */
+  shell.readAppServiceExitRecord.mockReset();
+  shell.readAppServiceExitRecord.mockResolvedValue(null);
 });
 
 describe("useAppServiceMessageLog：断开", () => {
@@ -114,21 +139,53 @@ describe("useAppServiceMessageLog：断开", () => {
     const { rerender } = mount({ state: "online", processIsNew: false });
     rerender({ state: "offline", processIsNew: false });
 
-    expect(messages()).toHaveLength(1);
+    await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.kind).toBe("offline");
     expect(messages()[0]!.title).toBe("应用服务已断开");
     expect(messages()[0]!.body).toContain("断开时间");
-    /* 断开那一刻不去问原因——问的是那个已经不在的服务自己的端点。 */
+    /* 断开那一刻**不走 HTTP**：那条端点由没了的那个服务自己应答，此刻必然不通。 */
     expect(calls.lastExit).toBe(0);
   });
 
-  it("持续断开不重复发（2 秒一拍，逐拍发就是刷屏）", () => {
+  it("壳内断开：当场把原因写进断开那条（ISSUE #1915——原因早就在盘上，别再等恢复）", async () => {
+    stubExitEndpoint();
+    stubShellExitRecord({ ...EXIT_RECORD, runId: DEFAULT_RUN_ID });
+    const { rerender } = mount({
+      state: "online",
+      processIsNew: false,
+      currentRunId: DEFAULT_RUN_ID,
+    });
+    rerender({ state: "offline", processIsNew: false });
+
+    await expect.poll(() => messages().length).toBe(1);
+    const m = messages()[0]!;
+    expect(m.title).toBe("应用服务已断开");
+    expect(m.body).toContain("原因：");
+    expect(m.body).toContain("137");
+    expect(m.body).toContain("建议：");
+  });
+
+  it("盘上留的是更早那一次的记录 → 不拿它当这一次断开的原因", async () => {
+    stubExitEndpoint();
+    stubShellExitRecord({ ...EXIT_RECORD, runId: "another-run" });
+    const { rerender } = mount({
+      state: "online",
+      processIsNew: false,
+      currentRunId: DEFAULT_RUN_ID,
+    });
+    rerender({ state: "offline", processIsNew: false });
+
+    await expect.poll(() => messages().length).toBe(1);
+    expect(messages()[0]!.body).not.toContain("原因：");
+  });
+
+  it("持续断开不重复发（2 秒一拍，逐拍发就是刷屏）", async () => {
     stubExitEndpoint();
     const { rerender } = mount({ state: "online", processIsNew: false });
     rerender({ state: "offline", processIsNew: false });
     rerender({ state: "offline", processIsNew: false });
     rerender({ state: "offline", processIsNew: false });
-    expect(messages()).toHaveLength(1);
+    await expect.poll(() => messages().length).toBe(1);
   });
 });
 
@@ -175,9 +232,16 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
 
   it("断开之后恢复：一条「已恢复」，同时带断开时间、恢复时间与持续时长", async () => {
     stubExitEndpoint();
+    /* 只 fake `Date`、不碰定时器：两条边沿必须落在**不同时刻**，否则「哪条在
+     * 前」测的就不是因果而是排序的稳定性（真实现场里两拍至少隔 4 秒）。 */
+    const base = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
     const { rerender } = mount({ state: "online", processIsNew: false });
+    vi.setSystemTime(base + 1_000);
     rerender({ state: "offline", processIsNew: false });
+    vi.setSystemTime(base + 10_000);
     rerender({ state: "online", processIsNew: false });
+    vi.useRealTimers();
 
     await expect.poll(() => messages().length).toBe(2);
     const recovered = messages()[0]!;
@@ -244,9 +308,14 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
    * 文案断言其中一种，对另一种就是错的 —— 而现场恰恰是后一种（双击 exe）。 */
   it("恢复时也读不到记录：不把成因说成「手工 pnpm dev」，只说这一次是恢复", async () => {
     stubExitEndpoint({ record: null });
+    const base = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
     const { rerender } = mount({ state: "online", processIsNew: false });
+    vi.setSystemTime(base + 1_000);
     rerender({ state: "offline", processIsNew: false });
+    vi.setSystemTime(base + 10_000);
     rerender({ state: "online", processIsNew: false });
+    vi.useRealTimers();
 
     await expect.poll(() => messages().length).toBe(2);
     /* store 最新一条在数组头部（这里断言的是「恢复」那条刚写进去）。 */
@@ -305,18 +374,24 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
 
   it("断开与恢复盖的是**各自那次启动**的 runId（断开在旧组、恢复在新组）", async () => {
     stubExitEndpoint({ record: null });
-    /* 旧启动里断 → 新启动起来（旧 runId 断，新 runId 恢复） */
+    /* 旧启动里断 → 新启动起来（旧 runId 断，新 runId 恢复）。两条边沿落在不同
+     * 时刻：面板的次序由**事件时刻**决定（断开那条要先读原因，push 天然更晚）。 */
+    const base = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
     const { rerender } = mount({
       state: "online",
       processIsNew: false,
       currentRunId: "old0001",
     });
+    vi.setSystemTime(base + 1_000);
     rerender({
       state: "offline",
       processIsNew: false,
       currentRunId: "old0001",
     });
+    vi.setSystemTime(base + 10_000);
     rerender({ state: "online", processIsNew: true, currentRunId: "new0002" });
+    vi.useRealTimers();
 
     await expect.poll(() => messages().length).toBe(2);
     expect(messages()[0]!.runId, "恢复属于新一次启动").toBe("new0002");
