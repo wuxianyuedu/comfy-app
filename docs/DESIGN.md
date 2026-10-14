@@ -347,8 +347,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 **禁止用「与 `--color-primary` 同值」这类句子给裸值背书**：token 一改它不会红
 （品牌紫深化那批就是这么让四处主张同时过期的，而 `pnpm theme:check` 当时全绿 ——
-它数裸值、不读理由）。现在它是该门禁的**第四条硬闸**，分治表、AA 读数与两条出路都在
-规范 03 §3.6.1.2。
+它数裸值、不读理由）。现在这条句子是该门禁的**硬闸之一**（判据名「跨面相等主张」），
+分治表、AA 读数与两条出路都在规范 03 §3.6.1.2。
 
 ### 固定暗色清单与类型色例外（判据在 `globals.css:364-488`，规范 03 §3.6.1）
 
@@ -691,11 +691,11 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 **颜色**
 
 - ✅ 语义色一律写**类名**：`bg-node-accent`、`text-ink-icon`、`border-primary/35`。
-- ❌ **禁止 `bg-(--color-node-accent)` 这种「属性前缀 + 内联变量」**（03 §3.1.1）。它**编得出来**、`hover:` 也生效，所以不是编译错误，而是**越过语义层**：拿不到语义名、拿不到兄弟 token、tsc/eslint/扫描器全绿。判据一句话——**能不能写成一个类名？能，就必须是类名**。
+- ❌ **禁止 `bg-(--color-node-accent)` 这种「属性前缀 + 内联变量」**（03 §3.1.1）。它**编得出来**、`hover:` 也生效，所以不是编译错误，而是**越过语义层**：拿不到语义名、拿不到兄弟 token，而 tsc / eslint 以及 `theme:check` 里「数裸值」「比对 token 名」那两条判据全绿（那颗变量是定义过的、这一行又没有字面色值）。判据一句话——**能不能写成一个类名？能，就必须是类名**。执行者 = `scripts/check-theme-colors.cjs`（`pnpm theme:check`，硬闸、存量 0）：只认 `-(` 紧邻 `--color-…)` 这一族；面是 `src/**` 的 `.ts` / `.tsx` 且只看代码行，所以本文讲它的那条散文不红（**正文不在面上**），而组件文件里写一句「原写法是这样」的说明注释也不红（**去注释在承重**，有用例钉）。
 - ✅ 只有两类允许 `style={{ var(--color-…) }}`：① 值运行时才知道（连线 stroke、节点 accent、`boxShadow` 色相）；② 非 Tailwind 属性承载（React Flow `maskColor`、`Handle.borderColor`）。这两类**也要给随主题的 token**。
-- ❌ 不要写 `var(--color-ink, #EDEDF2)` 这种带兜底的引用。它是**装饰性 indirection**：谎称随主题，把单一事实来源悄悄换成局部常量，而且下一个人补上声明时这行会**静默改变外观**。需要两态就新增一颗 token 并两态赋值。
+- ❌ 不要写 `var(--color-ink, #EDEDF2)` 这种带兜底的引用。它是**装饰性 indirection**：谎称随主题，把单一事实来源悄悄换成局部常量，而且下一个人补上声明时这行会**静默改变外观**。需要两态就新增一颗 token 并两态赋值。执行者 = `scripts/check-theme-colors.cjs`（`pnpm theme:check`，硬闸、存量 0），形态与三条边界（只认色值字面量兜底；`var(--color-x, currentColor)` 是已判定放行的防御性写法；规定的取色出口 `useCssColorToken(整名, 兜底)` 形态不同、不抓）见规范 03 §3.6.1.1。
 - ❌ **禁止拼 token 名**：`var(--color-aurora-${tone})`、`"--color-" + name`。Tailwind v4 会 tree-shake `@theme` 里没被**字面引用**的变量，拼出来的名字在源码里从没出现过 ⇒ 产物里当场失色、没有任何报错。JS 里按当前主题取色的规定写法是 `useCssColorToken("--color-node-mix-base", "#ffffff")`，**整名写全**。
-- ❌ 不在源码里写 `violet-500` / `emerald-400` / `#rrggbb` 表达表面或文字语义（`pnpm theme:check` 棘轮 + 显式豁免清单）。
+- ❌ 不在源码里写 `violet-500` / `emerald-400` / `#rrggbb` 表达表面或文字语义（`pnpm theme:check` **硬闸**：豁免之外须为 0，无基线、无 `--update`；出口只有就地 token 化或按 03 §3.6.1 逐条登记豁免）。
 - ✅ **扫描面是显式的两棵根，默认拒绝**（规范 03 §3.11）：`globals.css` 写的是 `@import "tailwindcss" source(none)` + `@source "../../src"` + `@source "../../.storybook"`。**改前**不写 `source()` 时 Tailwind 从项目根自动发现、只减掉 gitignored 的东西，于是规范正文与其生成物镜像、typedoc 的 HTML、`changelog.d/**` 的账本碎片、门禁与 codemod 脚本里的样本串、根 `CHANGELOG.md`、用例目录全都进产物 —— 实测同一份 CSS 只换扫描面：**自动全扫 2796 条选择器片段 / 382452 字节，两棵根 2558 条 / 349887 字节**，即 **238 条规则没有任何调用点**；反向为空（新根 − 旧根 = 0 条），这一步只做减法。真实产物也复核过：本轮 `next build` 出 4 份 CSS / 312121 字节 / 3621 条规则，探针点名的活类（`text-2xs` / `bg-card` / `rounded-node` / `z-canvas-ui` / `u-title-page`）全在，从前靠正文供给的死类（`text-[ 12px ]` 那族、`z-[99]`、`w-[360px]`、`min-h-[ 300px ]`、`duration-[0-9]`（那条是 grep 正则，逐字才读得对）、`h-[ 43px ]`）**一条都不在**。执行者 = `tests/tailwind-source-roots.test.ts`（名单逐条对得上、每根承重、判据自己的编译入口真的剥了生产根）。
   ⚠️ **`.storybook` 是根，不是顺手加的**：`.storybook/preview.tsx` 引的就是同一份 `globals.css`，而工作台外壳自己写了两枚任意值高度 —— 实测「只认 src」与「两棵根」的差集正好是这两条。摘掉这棵不会省出什么，只会让工作台的取景高度消失。
 - ⚠️ **下面这套写作口径从「生产必须」降级为「纵深防御」，但没作废**：正文写全一枚 `prop-[值]` 现在已经进不了产物（因为正文不在根内）。留着它是因为**放宽根恰恰是本规格里最贵的动作**，而这条判据判的正是「假如放宽，代价是什么」。引擎层面的事实一个字没变：**只要方括号内侧不留空格，里面写什么都算一个候选名** —— 省略号、尖括号占位、字母都不例外；括号里塞零宽空格也挡不住（探针实测：`text-[ … ]` 这种内侧带空格的写法不进产物，把两个空格去掉就进）。该用的写法只有两种：**① 方括号内侧各留一个空格** —— `text-[ 22px ]`（本仓正文一律这么写，读者看到的仍是同一个类名）；**② 属性前缀与 `[` 之间放一个码 span 边界** —— `text-` 与 `[22px]` 分在两个 code span 里。
@@ -711,7 +711,7 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 **主题**
 
 - ✅ 新增一个颜色：先在 `@theme` 加 `--color-*` 并**两态各取值**，再看 `ui/` 基元要不要别名转发。
-- ❌ 别给 token 挑「深色下大概能看」的浅色兜底值；别把相邻的两颗 token「顺手统一成一种写法」（`--color-canvas-grid-dot` 把 α 烤进 token，`--color-canvas-grid-line` 只给色相、α 留在调用处 `color-mix()`——因为前者强度是设计定死的、后者是**用户在画布设置里调的**，形态不同是有意的）。
+- ❌ 别给 token 挑「深色下大概能看」的浅色兜底值（这一条现在有机器执行者，见上面「颜色」那节的兜底条与规范 03 §3.6.1.1）；别把相邻的两颗 token「顺手统一成一种写法」（`--color-canvas-grid-dot` 把 α 烤进 token，`--color-canvas-grid-line` 只给色相、α 留在调用处 `color-mix()`——因为前者强度是设计定死的、后者是**用户在画布设置里调的**，形态不同是有意的）。
 - ❌ 浅色档不要用裸 `:root`（03 §3.6.3）。`:root` 与 `.dark` 特异性相同（0-1-0），**谁写在后面谁生效** ⇒ 裸 `:root` 的浅色档会在深色下恒定胜出。项目 token 用「浅色在 `@theme`、深色在 `.dark`」的源码顺序；别名只需转发一次、不按主题分叉。
 
 **布局与交互**

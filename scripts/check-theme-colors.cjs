@@ -20,7 +20,11 @@
  *      只剩一条「手改那份 JSON 就能把新色值登记成已知存量」的通道 ——
  *      而硬闸类**本来没有**这个中间态。真正的出口仍是豁免层（逐条写理由），
  *      不是放宽基线；
- *   ③ **反向四层**（同为硬闸）：
+ *   ③ **反向层**（同为硬闸）：
+ *      （下面这些 bullet 与正文注释里的 ③④⑤⑥⑦ 是**判据个体**的速记：③ 拼接 token 名、
+ *       ④ 幽灵 token、⑤ 跨面相等主张、⑥ 属性前缀 + 裸 CSS 变量、⑦ 已定义 token 上的
+ *       色值兜底 —— 与上面那套「层」的编号（①–④）不是一回事，也和规范 03 §3.6.1.1 里
+ *       那组小节内的「①②③」不同源。定位判据一律**按名字**。）
  *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
  *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
  *      · **幽灵 token**：字面 `var(--color-…)` 引用了从未定义的 token —— 不报错、只是
@@ -34,6 +38,17 @@
  *        `--color-accent` 同值 / 1:1」给一颗裸色值背书 —— 这是第二份账，token 改了
  *        句子不会红（品牌紫深化那批就是四处这样的主张同时过期而门禁全绿）。
  *        改法只有两条：该行归品牌管就写 `var(...)`，是独立内容色就把句子删掉；
+ *      · **属性前缀 + 裸 CSS 变量**（`bg-(--color-node-accent)` 这一族）：编得出来、hover 也生效，
+ *        所以**不是编译错误**，而是越过语义层 —— 拿不到语义名、拿不到兄弟 token，而写死色值
+ *        与幽灵两条判据都不会响（那颗变量是定义过的）。实测存量 0；扫描面与本脚本其余判据
+ *        同为 `src/**` 的 `.ts` / `.tsx`，面上只看代码行（去注释后），所以组件文件里**讲这种
+ *        写法的说明注释**不会把自己判红（有用例钉）。见规范 §3.1.1；
+ *      · **已定义 token 上的色值兜底**（`var(--color-ink, #EDEDF2)`）：幽灵判据只认「查无此名」，
+ *        而这一半**名字是有定义的** —— 那行永远取不到兜底，等于谎称随主题，且下一个人删掉声明时
+ *        外观**静默改变**。「未豁免写死色值」那条顺带能抓到那颗 hex，但它在**豁免文件**里
+ *        闭嘴、而这条不看豁免表；
+ *        只认色值字面量兜底，`var(--color-x, currentColor)` 那类关键字兜底是**已放行**的防御性
+ *        写法（有用例钉着）。规定写法 `useCssColorToken(整名, 兜底)` 形态不同、不抓它；见 §3.6.1.1。
  *   ④ **报告层**（`--report`）：只出清单不判失败，供盘点/排批次用。
  *
  * ⚠️ 豁免必须**显式**：清单里逐条列出「文件 + 该文件里被豁免的顶层标识符 + 理由」，
@@ -44,9 +59,10 @@
  * 判定口径：
  *   检查  = 遍历 `src/**`，统计每个文件的写死色值，减去显式豁免；
  *   通过  = 未豁免计数为 0，
- *           且「无死豁免」「无幽灵 token」「无拼接 token 名」「无跨面相等主张」四条硬闸都过；
+ *           且「无死豁免」「无幽灵 token」「无拼接 token 名」「无跨面相等主张」
+ *           「无属性前缀 + 裸 CSS 变量」「无已定义 token 的装饰性兜底」六条硬闸都过；
  *   失败  = 出现未豁免的写死色值 / 死豁免 / 幽灵 token / 拼接 token 名
- *           / 跨面相等主张（退出码 1），并列出行号。
+ *           / 跨面相等主张 / 裸变量类名 / 装饰性兜底（退出码 1），并列出行号。
  *
  * 用法：
  *   node scripts/check-theme-colors.cjs            # 检查（硬闸：命中即退 1）
@@ -290,7 +306,7 @@ function classifyFile(rel) {
  *     全是这一类 —— 静态硬判会误报一片，那部分交给 review。
  *     （`--color-*` 命名空间内**没有**运行期注入的正当用法：实测全仓 `setProperty`
  *     与 style 对象键里都不出现 `--color-` 名字，所以带前缀就足以排除噪声。）
- *   · **拼接出来的名字判不到**，交给下面第 ③ 条。
+ *   · **拼接出来的名字判不到**，交给下面「拼接 token 名」那条。
  *
  * 实测口径：非测试代码里字面 `var(--color-…)` **175 处，查无定义 0 处**；
  * 带兜底的 **0 处**（唯一那处就是刚被收掉的网格线）。早先只认属性形态时是 28 处 ——
@@ -351,6 +367,55 @@ const EQUALITY_CLAIM_RES = [
   /(?:与|跟)\s+globals\.css\s+token[^。\n）)]{0,12}(?:同值|相等|1:1)/,
 ];
 
+/**
+ * 「属性前缀 + 裸 CSS 变量」 —— `bg-(--color-node-accent)`、`text-(--color-ink)/35`
+ * 这一族 Tailwind v4 的裸变量写法（规范 §3.1.1 的 ❌ 条）。
+ *
+ * 为什么这条非有不可：它**编得出来**、`hover:` 也照常生效，所以不是编译错误，
+ * 而是**越过语义层** —— 拿不到语义名、拿不到兄弟 token，tsc / eslint / 本脚本的
+ * 写死色值判据全绿（那颗 token 是「定义过的」，所以连幽灵判据也不报）。文档里那句
+ * 「能不能写成一个类名？能，就必须是类名」是人读的口径，这条就是它的机器形。
+ *
+ * 判据形状只认**一个**：`-(` 紧邻 `--color-…)`。实测存量 **0**。
+ * 扫描面与本脚本其余判据同为 `src/**` 的 `.ts` / `.tsx`，且只看代码行（`codeLines`）。
+ * 两道都点名，别把因果安错地方：`src/**` 里这一族只剩一处字面形态，长在 `globals.css`
+ * 的**反例清单注释**里（讲「曾这样写、已 token 化、勿回退」），它不红是因为
+ * **CSS 不在这一条的面上**（本文与用例里那些讲它的散文同理）；
+ * 而「只看代码行」这一道靠的是用例 —— 夹具把同一句散文写进 `.tsx` 的块注释，必须绿
+ * （没有那道用例，`codeLines` 就是个没人验证的装饰）。
+ * 说清**不覆盖**什么：CSS 侧的 `@apply` 也能写出这一族，本条看不见它 ——
+ * 实测今天面上共 3 条 `@apply`、0 条带 `--color-`，所以这不是「已经在漏」，而是
+ * 「面划在这儿」。要扩这一面得先回答「CSS 的注释怎么剥」（`stripComments` 是按
+ * JS/TS 写的），别顺手加。
+ * 刻意**不**收成「任何 `-(--x)`」：非颜色那半（`w-(--panel-right-width)` 这类）目前没有
+ * 对应主张，扩它等于替别人立新规 —— 与「跨面相等主张」那条「宽形态会在注释里命中一片」
+ * 同一个教训。
+ */
+const BARE_VAR_CLASS_RES = [/-\(\s*--color-[\w-]+\s*\)/];
+
+/**
+ * 「已定义 token 上的装饰性兜底」 —— `var(--color-ink, #EDEDF2)`（规范 §3.6.1.1 / DESIGN 的 ❌ 条）。
+ *
+ * 与幽灵 token 判据**不重不漏**：那颗名字**没**定义时归幽灵那条（它已经在报
+ * 「带兜底 = 装饰性 indirection」并 `continue`），这里只收**有定义**的那一半 ——
+ * 也就是最容易骗过人的形态：看着完全合法、token 也真存在，但那行**永远取不到兜底**，
+ * 于是幽灵那条比对得到、当场放过；更糟的是下一个人删掉声明时这一行会**静默改变外观**。
+ * 需要两态就新增一颗 token 并两态赋值（`--color-port-surface` 就是这么来的）。
+ *
+ * 兜底只认**色值字面量**（`#hex` / `rgb()` / `hsl()` / `oklch()` / `color-mix(` 那一族）。
+ * 为什么不收成「任何兜底」：`var(--color-x, currentColor)` 这一族是**已判定放行**的防御性写法
+ * （SVG 的 stroke 拿 CSS 关键字兜底，不写「浅色下大概能看」的那个颜色），本仓库有一份
+ * 用例专门钉它必须通过 —— 收紧到「任何兜底」就会把那条决定翻掉，那是改口径、不是补执行者。
+ *
+ * 与「未豁免写死色值」的分工（也是这条闸存在的唯一理由）：`#hex` 兜底顺带会被那条抓到，
+ * 但**那条在豁免文件里闭嘴**（§3.6.1 的类型色表照样能写出这种兜底），而这一条**不看豁免表** ——
+ * 它判的是「这行是不是谎称随主题」，与那颗值归谁管无关。
+ * 规定写法 `useCssColorToken("--color-node-mix-base", "#ffffff")` 不会被这条命中 ——
+ * 它是函数实参、没有 `var(` 外壳；那两处调用点的 `#ffffff` 由豁免层放行（「混色种子值」）。
+ */
+const FALLBACK_ON_DEFINED_RES =
+  /var\(\s*(--color-[\w-]+)\s*,\s*(?:#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color-mix\()/g;
+
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -374,6 +439,8 @@ const exempted = [];
 const ghosts = [];
 const composed = [];
 const equalityClaims = [];
+const bareVarClasses = [];
+const decorativeFallbacks = [];
 
 /**
  * 全仓 CSS 里**真实声明过**的 `--color-*`（`@theme` 与 `.dark` 覆盖都算）。
@@ -443,6 +510,21 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
      * 只看代码行（`codeLines` 已去注释），所以 globals.css 那 103 处散文提及不会命中。 */
     if (COMPOSED_NAME_RES.some((re) => re.test(codeLines[i]))) {
       composed.push({ file: r, line: i + 1, text: lines[i].trim() });
+    }
+    /* ⑥ 属性前缀 + 裸 CSS 变量：只看代码行 —— 组件文件里「讲这种写法」的说明注释
+     * 不该被自己这条闸判红（同 ③ 的口径；CSS 侧的 @apply 不在这一条的面上，见上方注释）。 */
+    if (BARE_VAR_CLASS_RES.some((re) => re.test(codeLines[i]))) {
+      bareVarClasses.push({ file: r, line: i + 1, text: lines[i].trim() });
+    }
+    /* ⑦ 已定义 token 上的装饰性兜底：与 ④ 互补 —— 没定义的那半在幽灵循环里已经报了。 */
+    for (const m of codeLines[i].matchAll(FALLBACK_ON_DEFINED_RES)) {
+      if (!declaredColorVars.has(m[1])) continue;
+      decorativeFallbacks.push({
+        file: r,
+        line: i + 1,
+        name: m[1],
+        text: lines[i].trim(),
+      });
     }
     /* ⑤ 跨面相等主张：判据要读**注释**，所以这里用未去注释的原文行。 */
     if (EQUALITY_CLAIM_RES.some((re) => re.test(lines[i]))) {
@@ -550,6 +632,30 @@ function printEqualityClaims() {
   }
 }
 
+/** 打印「属性前缀 + 裸 CSS 变量」（⑥）。 */
+function printBareVarClasses() {
+  if (!bareVarClasses.length) return;
+  console.log(
+    "[theme-colors] Tailwind 里用属性前缀直接吃裸 CSS 变量（bg-(--color-…) 这一族）：",
+  );
+  for (const c of bareVarClasses) {
+    console.log(`  ✗ ${c.file}:${c.line} ｜${c.text}`);
+  }
+}
+
+/** 打印「已定义 token 上的装饰性兜底」（⑦）—— ④ 看不见这一半。 */
+function printDecorativeFallbacks() {
+  if (!decorativeFallbacks.length) return;
+  console.log(
+    "[theme-colors] var(--color-…) 带兜底、而那颗 token 其实有定义（兜底永远取不到）：",
+  );
+  for (const c of decorativeFallbacks) {
+    console.log(
+      `  ✗ ${c.file}:${c.line} — ${c.name} ｜${c.text}`,
+    );
+  }
+}
+
 /** 打印豁免清单（让人一眼看出「哪些是被有意放行的」）。 */
 function printExemptions() {
   if (!exemptByFile.size) return;
@@ -626,6 +732,34 @@ if (equalityClaims.length > 0 && !REPORT_ONLY) {
   process.exit(1);
 }
 
+/* ⑥ 属性前缀 + 裸 CSS 变量：编得出来、也不写死色值，只有这一条认得它。 */
+if (bareVarClasses.length > 0 && !REPORT_ONLY) {
+  printBareVarClasses();
+  console.error(
+    `[theme-colors] ${bareVarClasses.length} 处「属性前缀 + 裸 CSS 变量」。` +
+      "它**编得出来**、hover 也生效，所以不报编译错 —— 代价是越过语义层：\n" +
+      "  拿不到语义名、拿不到兄弟 token，而本门禁的写死色值与幽灵两条判据都不会响\n" +
+      "  （那颗变量是定义过的）。\n" +
+      "  改法：写成类名（bg-node-accent / text-ink-icon / border-primary/35）——\n" +
+      "  判据一句话：**能不能写成类名？能，就必须是类名**。见规范 §3.1.1。",
+  );
+  process.exit(1);
+}
+
+/* ⑦ 装饰性兜底：token 有定义时兜底永远不生效，等于「谎称随主题」的第二份来源。 */
+if (decorativeFallbacks.length > 0 && !REPORT_ONLY) {
+  printDecorativeFallbacks();
+  console.error(
+    `[theme-colors] ${decorativeFallbacks.length} 处给**已定义**的 token 写了色值兜底。\n` +
+      "  那行渲染时永远走 token（兜底根本取不到），它留下的唯一效果是：下一个人补上声明、\n" +
+      "  或换主题时，这一行的外观**静默改变**。要两态就新增一颗 token 并两态赋值\n" +
+      "  （--color-port-surface 就是这么来的），别挑一个「深色下大概能看」的兜底值。\n" +
+      '  注意与规定的 JS 出口区分：useCssColorToken("--color-完整名", "#ffffff")\n' +
+      "  是整名写全 + 真兜底，形态不同、本判据不抓它。见 §3.6.1.1。",
+  );
+  process.exit(1);
+}
+
 /* ── 模式一：只出报告（盘点） ── */
 if (REPORT_ONLY) {
   printExemptions();
@@ -633,6 +767,8 @@ if (REPORT_ONLY) {
   printGhosts();
   printComposed();
   printEqualityClaims();
+  printBareVarClasses();
+  printDecorativeFallbacks();
   console.log("[theme-colors] --report 模式：只出清单，不判失败 ✓");
   process.exit(0);
 }
