@@ -1,6 +1,8 @@
 import { ModelLibrary } from "~/components/model/ModelLibrary";
 
-export const metadata = { title: "模型库 · Comfy-APP" };
+// 只写本页那一段：根布局的 title.template 会把「· Comfy-APP」补上
+// （最终仍是「模型库 · Comfy-APP」），品牌统一在 `src/app/layout.tsx` 收口。
+export const metadata = { title: "模型库" };
 
 /**
  * 独立路由 `/models` —— 「模型库」这个界面的一个挂载点。
