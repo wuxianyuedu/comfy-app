@@ -3,8 +3,6 @@
 import {
   Download,
   Image as ImageIcon,
-  LayoutGrid,
-  List,
   Music,
   Plus,
   RefreshCw,
@@ -17,6 +15,7 @@ import { Hint } from "~/components/ui/hint";
 import { Skeleton } from "~/components/ui/skeleton";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { SelectChip } from "~/components/ui/select-chip";
+import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { useHistoryPanel } from "./hooks/use-history-panel";
@@ -89,29 +88,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             <RefreshCw data-icon="inline-start" size={13} />
           </Button>
         </Hint>
-        {/* 显示密度切换 */}
-        <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
-          <Hint label="网格视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("grid")}
-              className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            >
-              <LayoutGrid data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-          <Hint label="列表视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("list")}
-              className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            >
-              <List data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-        </div>
+        {/* 显示密度切换 —— 三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
+        <DisplayDensityToggle value={display} onChange={setDisplay} />
         <Hint label="关闭" accessibleName>
           <Button
             variant="ghost"
