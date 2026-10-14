@@ -522,4 +522,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // NaN）与该放的（斜坡段里的 null / 形状常量）每一条都得有人钉住，
   // 而它们是「下一次有人调这个口径」时才走得进的路径，所以必须进固定清单。
   "tests/e2e-runtime-budget.test.ts",
+  // 「台账这类**过程文档**的引用还指得着东西」（ISSUE #1811 收尾的最后一条遗留项）。
+  // `docs/audits/**` 不在 `doc:check` 的遍历面上（`doc-facts.cjs` 的 `SCOPED_DOC_DIRS`
+  // 只含 `docs/standards` 与 `docs/guides`），于是台账点名一份已删的棘轮基线**不会让
+  // 任何东西变红** —— 这正是那份台账自己写下、却没能变成红的那句话。它读的是
+  // `docs/audits/*.md` 的文本 + 一次 `git log`，import 图一概追不到（改台账不会把
+  // 它拉进受影响清单），跟改动走等于专挑它不在的时机跑，所以与本次暂存改动无关也照跑。
+  "tests/audits-doc-references.test.ts",
 ];

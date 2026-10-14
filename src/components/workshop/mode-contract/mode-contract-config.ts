@@ -30,6 +30,36 @@ export const CONTRACT_MODE_GROUPS: Array<{
   { category: "audio", label: "音频" },
 ];
 
+/**
+ * 导航树的**一棵树**：一个父行（输出类别）+ 挂在它下面的模式项。
+ *
+ * 与 `CONTRACT_MODE_GROUPS` 的关系是「同一件事的两种投影」——那个给的是**类别顺序
+ * 与名字**，这个把模式按类别挂上去、并顺手丢掉空组。模式的**顺序与内容**一律从
+ * `CONTRACT_MODES` 派生，不在这里重抄一遍（§12.18）。
+ *
+ * 为什么要有这一层：模式有二十多个，平铺成一排 chip 要占三四行；收成
+ * 「父行 = 类别 + 子行 = 模式」的树之后，纵向空间由子行自己的滚动条承担（与设置页
+ * 分区导航同一形态，ISSUE #1694 的结论）。
+ *
+ * 每一组**必须非空**（空父行没有意义），并集恰好等于 `CONTRACT_MODES` ——
+ * 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：
+ * 某个模式从导航上静默消失，界面其它地方都不会说）。
+ */
+export interface ContractModeTreeGroup {
+  category: "image" | "video" | "audio";
+  label: string;
+  /** 挂在这一组下的模式（顺序即渲染顺序）。 */
+  modes: typeof CONTRACT_MODES;
+}
+
+/** 导航树（按 `CONTRACT_MODE_GROUPS` 的顺序，跳过空组）。 */
+export function contractModeTree(): ContractModeTreeGroup[] {
+  return CONTRACT_MODE_GROUPS.map((group) => ({
+    ...group,
+    modes: CONTRACT_MODES.filter((t) => t.category === group.category),
+  })).filter((group) => group.modes.length > 0);
+}
+
 /** 模式码 → 展示名（工作流类型表里查得到就用它的中文名）。 */
 export function contractModeLabel(mode: string): string {
   return (

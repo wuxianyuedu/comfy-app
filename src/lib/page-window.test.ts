@@ -4,6 +4,7 @@ import {
   countAfterPage,
   tailPages,
   tailWindow,
+  tailWindowAppend,
 } from "./page-window";
 
 const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -112,6 +113,67 @@ describe("page-window —— 尾部窗口", () => {
     expect(tailWindow(items, 0)).toEqual([10]);
     expect(tailWindow(items, -2)).toEqual([10]);
     expect(tailWindow(items, NaN)).toEqual([10]);
+  });
+});
+
+describe("page-window —— 尾部窗口的增量追加", () => {
+  it("未满时追加到末尾", () => {
+    expect(tailWindowAppend([1, 2], 3, 5)).toEqual([1, 2, 3]);
+  });
+
+  it("已达上限时挤掉最旧的一条", () => {
+    expect(tailWindowAppend([1, 2, 3], 4, 3)).toEqual([2, 3, 4]);
+  });
+
+  it("未满时返回新数组（调用处靠换引用触发渲染）", () => {
+    const items = [1, 2];
+    const out = tailWindowAppend(items, 3, 5);
+    expect(out).not.toBe(items);
+    expect(items).toEqual([1, 2]);
+  });
+
+  it("同一形态：与「先展开再取尾部窗口」逐字等价", () => {
+    const size = 4;
+    let fast: number[] = [];
+    let slow: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      fast = tailWindowAppend(fast, i, size);
+      slow = tailWindow([...slow, i], size);
+      expect(fast).toEqual(slow);
+    }
+  });
+
+  it("size 归一成「至少 1 条」：窗口恒为 1，不会被当成「无上限」", () => {
+    /* 0 / 负数 / NaN 都落到 1 条 —— 调用处传错参数时宁可只留最后一条，
+     * 也不要把内存上限悄悄取消掉（`safeSize` 的口径，与 `tailWindow` 同源）。 */
+    expect(tailWindowAppend([], 3, 0)).toEqual([3]);
+    expect(tailWindowAppend([], 3, -5)).toEqual([3]);
+    expect(tailWindowAppend([], 3, NaN)).toEqual([3]);
+    /* `Infinity` 也落到 1 条（`Number.isFinite(Infinity)` 为 false）——「没有上限」
+     * 这个意图在本模块没有表达方式，调用处想留整表就别传 size。 */
+    expect(tailWindowAppend([], 3, Infinity)).toEqual([3]);
+  });
+
+  it("逐字对齐 tailWindow：整段追加序列与「每步先展开再切片」一致", () => {
+    /* 判据要按**整段序列**比，不能拿中途的窗口当起点：某一刻的 `[1,2]`
+     * 是「上限 2 时攒下来的」，而 `[1,2,3]` 是「上限 3 时攒下来的」——
+     * 两个窗口拿同一个 size 去追加，本就该得出不同结果。 */
+    for (const size of [0, -3, 1, 2, 5, NaN, Infinity]) {
+      let fast: number[] = [];
+      let slow: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        fast = tailWindowAppend(fast, i, size);
+        slow = tailWindow([...slow, i], size);
+        expect(fast, `size=${size} i=${i}`).toEqual(slow);
+      }
+    }
+  });
+
+  it("封顶后长度恒定（不会一边 shift 一边长胖）", () => {
+    let logs: number[] = [];
+    for (let i = 0; i < 100; i++) logs = tailWindowAppend(logs, i, 10);
+    expect(logs).toHaveLength(10);
+    expect(logs).toEqual([90, 91, 92, 93, 94, 95, 96, 97, 98, 99]);
   });
 });
 

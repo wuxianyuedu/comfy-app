@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { watchTask, type TaskLogEntry } from "~/lib/workshop/generation-client";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
-import { tailWindow } from "~/lib/page-window";
+import { tailWindowAppend } from "~/lib/page-window";
 
 /** 弹窗内存里最多留多少条：与 `LOG_MODAL_MAX_ROWS` 的展示上限同源，
  * 累积侧先截，长任务（几千条 progress 行）也不会把 state 撑大。 */
@@ -66,7 +66,7 @@ export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
     const closer = watchTask(taskId, {
       onLog: (entry) => {
         if (stoppedRef.current) return;
-        setLogs((prev) => tailWindow([...prev, entry], STREAM_MAX_LOGS));
+        setLogs((prev) => tailWindowAppend(prev, entry, STREAM_MAX_LOGS));
       },
       onProgress: () => {
         if (stoppedRef.current) return;

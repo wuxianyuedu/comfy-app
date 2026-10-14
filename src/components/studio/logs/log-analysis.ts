@@ -29,6 +29,11 @@ import type {
   LogOriginFilter,
 } from "./log-types";
 import { bucketOf, CONSOLE_ORIGIN } from "./log-types";
+import { logEntryKey } from "./log-timeline";
+
+/* 时间线的身份与合并判据拆到 `log-timeline`（文件行数硬闸）：这里 re-export，
+ * 既有 `from "./log-analysis"` 的 import 路径**完全不变**（§12.18 拆包不动契约）。 */
+export * from "./log-timeline";
 
 /** 每一页（面板显示窗口）里最多保留的连续重复行数（见 dedupeRepeats）。 */
 const REPEAT_FOLD_LIMIT = 5;
@@ -476,177 +481,6 @@ function isLogLine(line: string): boolean {
     LOG_LINE_RE.test(line) ||
     APP_RUNTIME_LOG_RE.test(line) ||
     LAUNCHER_LOG_RE.test(line)
-  );
-}
-
-/**
- * 行身份：同一行被多路读到（launcher 转写含 dev 输出）时据此去重。
- *
- * **刻意不含 `origin`**：面板有六个来源、各自从**自己那一份**文件里读，其中若干
- * 文件装的是同一段内容的副本（`dev-launcher.log` 转写 dev 的输出、`shell-launch.log`
- * 与 launcher 的两份互相重叠）。带上 `origin` 会让同一行在时间线上落成六份，
- * 界面上的「全部来源 4000 条」与「各分类之和 24000 条」指的是同一批事件。
- */
-function entryKey(entry: Pick<LogEntry, "time" | "level" | "message">): string {
-  return `${entry.time}\u0000${entry.level}\u0000${entry.message}`;
-}
-
-/**
- * 行身份（**跨来源无关**）：同一条日志不论被哪几路读到，身份都相同。
- *
- * 与 {@link entryKey} 是同一个构造、这里单独留一支具名函数，是为了让
- * 「按身份记账」这件事在调用处读起来是它自己的概念（计数 / 过滤 / 去重共用），
- * 而不是又一次内联模板字符串——三处各写一遍时，改一处忘两处的漂移必然发生。
- */
-export function logEntryKey(
-  entry: Pick<LogEntry, "time" | "level" | "message">,
-): string {
-  return entryKey(entry);
-}
-
-/**
- * 把新条目并进时间线：**按时刻排序 + 跨来源去重**，不设总数上限。
- *
- * - 排序键 `(time, seq)`：`time` 来自行内的写入时刻；`seq` 只在同一毫秒内决定
- *   先后（三路轮询并发到达，同毫秒内按到达顺序保持稳定即可）。
- * - 去重：与已有条目 key 相同的新条目直接丢弃。dev-launcher 转写会包含 dev
- *   输出、文件被整段重读也会重复送来同一批行，没有这一步面板条数与真实事件数
- *   就对不上（翻页还会翻出重复内容）。
- * - 不裁剪：时间线保留本面板生命周期内的全部条目（用户要求能往前翻完整段），
- *   「一次看多少」由分页（LOG_PAGE_SIZE）决定，与总量解耦。返回值 === current
- *   当且仅当 fresh 全是重复行——appendFileLogs 据此判断「有没有新行落板」。
- */
-export function mergeTimeline(
-  current: LogEntry[],
-  fresh: LogEntry[],
-): LogEntry[] {
-  if (fresh.length === 0) return current;
-  /* 同一条日志会被多路读到（六路轮询里若干文件装的是同一段内容的副本），
-   * 因此两件事都要做：
-   *   1. **已落板的种类不再落第二份**——按 `entryKey`（不含 origin）去重，
-   *      否则界面上的「全部来源」与「各分类之和」指的是同一批事件的两种口径；
-   *   2. **同一秒内后到的来源要并进已落板那一行**——它的 origin 可能正是用户
-   *      在找的那个（启动行只写在 launcher / dev-launcher 的副本里，用户切到
-   *      「启动器」却看不到时，问题就出在这一步没做）。 */
-  const seen = new Map<string, LogEntry>();
-  const sameArrival = new Map<string, LogEntry>();
-  for (const entry of current) {
-    const key = entryKey(entry);
-    seen.set(key, entry);
-    /* 同毫秒同正文的副本行（`seq` 只差几个数）视为同一条日志的另一次读取。 */
-    const near = arrivalKey(entry);
-    if (!sameArrival.has(near)) sameArrival.set(near, entry);
-  }
-  const added: LogEntry[] = [];
-  let changed = false;
-  for (const entry of fresh) {
-    const key = entryKey(entry);
-    if (seen.has(key)) continue;
-    /* 已经有一条「同一毫秒写下的同一段正文」在板上：并进它的 origin，
-     * 不再单独落一份。 */
-    const existing = sameArrival.get(arrivalKey(entry));
-    if (existing) {
-      if (existing.origin !== entry.origin) {
-        existing.origin = entry.origin;
-        changed = true;
-      }
-      continue;
-    }
-    seen.set(key, entry);
-    sameArrival.set(arrivalKey(entry), entry);
-    added.push(entry);
-  }
-  if (added.length === 0) return changed ? current.slice() : current;
-  const merged =
-    current.length === 0 || changed
-      ? [...current.map((e) => ({ ...e })), ...added]
-      : [...current, ...added];
-  merged.sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq));
-  return merged;
-}
-
-/** 同一秒内的副本判据：时刻取整到秒 + 级别 + 正文（`entryKey` 的毫秒容忍版）。 */
-function arrivalKey(
-  entry: Pick<LogEntry, "time" | "level" | "message">,
-): string {
-  return `${Math.floor(entry.time / 1000)}\u0000${entry.level}\u0000${entry.message}`;
-}
-
-/** 时间线的**真实**末条（最新一条）——「已读水位」「有无新内容」「跳最新」都用它。 */
-export function lastSeqOf(logs: LogEntry[]): number {
-  return logs[logs.length - 1]?.seq ?? 0;
-}
-
-/**
- * 哪些来源的文件**跨运行累积**，因此需要会话起点把它们裁到本次运行。
- *
- * 这是客户端与服务端共享的一条事实（服务端 `resumable` 分支从同一原则推导），
- * 所以单独列出来而不是散在判据里。四个来源现在**都不需要裁**：
- *   - `app-runtime`：**一次启动一份文件**（`app-runtime-<时刻>.log`，ISSUE #1326），
- *     文件内容天生只有本次；
- *   - `app`（nextjs-panel-<pid>-<ts>.log）：文件名按进程命名，服务端取「目录里最新
- *     的那一份」；本次进程还没落盘时确实可能读到上一个进程的文件，但那份文件里
- *     的行属于**上一次应用启动**、时刻早于本次会话起点这件事由 `bootId` 的重启
- *     判据（`/api/logs/current` 的 `mismatch`）处理，比行时刻更准；
- *   - `launcher`（dev-launcher-stderr.log）/ `dev`（dev-launcher.log）：
- *     每次运行**覆盖重建**，文件内容天然只有本次。
- *
- * ## ISSUE #1326 之后这个集合空了（机制保留）
- *
- * `app-runtime` 曾经是这里唯一的成员：它固定名追加不轮转，上一次运行的行全留在
- * 同一个文件里，只能靠「行时刻 ≥ 会话起点」把它挡在面板外。现在它**一次启动一份
- * 文件**（`app-runtime-<时刻>.log`），`app`（应用服务输出转录）也一直是按进程
- * 命名 —— 两个来源的文件天生只含本次，裁剪不再需要。
- *
- * 机制本身留着（`dropStaleEntries` 仍被 store 调用、`sessionStart` 仍在契约里）：
- * 它是「某个来源将来变成跨运行累积」时的**唯一**出口，删掉它会诱使下一个人
- * 在面板里再写一遍时间线比较。集合为空时函数恒真、零开销。
- *
- * 为什么必须逐来源判定、而不能拿一个全局 cutoff 往整条时间线上套：
- * 会话起点取自 `dev-launcher.log` 的 mtime，而**壳写下的头几行在它被创建
- * 之前**（exe 路径、项目根、探测结果…）。用一个全局 cutoff 一刀切，
- * 这些真·本次运行的行会被当成历史丢掉——用户读到的就是「启动和启动器日志
- * 丢失」（ISSUE #262 复审）。覆盖重建的来源不存在「历史行」，因此不参与裁剪。
- *
- * 壳侧两路（shell / shell-launch）**故意不进**这个集合：它们的文件虽然是追加
- * 写、跨运行累积，但同一条锚点晚于壳的启动报告——按会话裁剪会把「为什么起
- * 不来」的头几行裁掉（见 `/api/logs/current` 的 resolveSourceFile 注释）。
- */
-const SESSION_SCOPED_ORIGINS = new Set<NonNullable<LogEntry["origin"]>>([]);
-
-/**
- * 该来源的文件是否跨运行累积、需要会话起点裁剪（契约判据，可独立断言）。
- *
- * 留成导出函数是为了让「哪类来源该裁」这条契约有唯一事实来源：视图/store 与
- * 测试都问它，而不是各自抄一份字符串判断。
- */
-export function isSessionScopedOrigin(
-  origin: LogEntry["origin"] | undefined,
-): boolean {
-  return origin !== undefined && SESSION_SCOPED_ORIGINS.has(origin);
-}
-
-/**
- * 会话起点过滤：丢掉「上一次运行」残留的行。
- *
- * 只有 {@link isSessionScopedOrigin} 判为跨运行累积的来源才参与比较——文件每次
- * 运行覆盖重建的来源（launcher / dev / app）与运行期生成的条目（console / tauri /
- * system）一律保留：
- *   - 前者内容天然只有本次，拿起点去裁只会把「本次启动早期」的行误判成历史；
- *   - 后者的时刻是「现在」，永远不会早于起点。
- *
- * 行时刻早于会话起点即判为历史。读不出时刻的裸文本行（`time` 取解析当时的时刻）
- * 天然不会早于起点，保留。
- *
- * @param cutoffMs 会话起点（毫秒）；null/undefined = 不启用该过滤
- */
-export function dropStaleEntries(
-  entries: LogEntry[],
-  cutoffMs: number | null | undefined,
-): LogEntry[] {
-  if (cutoffMs === null || cutoffMs === undefined) return entries;
-  return entries.filter(
-    (entry) => !isSessionScopedOrigin(entry.origin) || entry.time >= cutoffMs,
   );
 }
 

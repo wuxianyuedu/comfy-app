@@ -199,6 +199,49 @@ describe("WorksGallery 卡片", () => {
     expect(screen.getByText("未命名项目")).toBeInTheDocument();
   });
 
+  /* 长名字 + 右上角悬停删除：这两块此前会**叠在一起**（删除按钮是绝对定位、
+   * 标题铺满整行），用户看到的就是两段字重着重着。
+   * 判据打在**类名契约**上，不是像素：jsdom 不做布局，量不出真实重叠 ——
+   * 所以这一层能守的是「标题是否声明了让位」这个必要条件，谁能拿到那一格
+   * 的几何（视觉回归 / 浏览器实测）不在本用例的射程内。 */
+  it("长名字要给右上角那颗悬停删除让位，不许压到「删除」底下", () => {
+    renderWith({
+      projects: [entry({ id: "long", name: "像素基线·城市夜景逐镜" })],
+    });
+    const title = screen.getByText("像素基线·城市夜景逐镜");
+    /* 让位那只手在**标题**上（右侧内边距），不是在容器上：容器加 padding 会
+     * 连图标与下面两行一起缩，标题仍是铺满的。 */
+    expect(
+      title.className,
+      "标题没给删除按钮留位置，长名字会与「删除」二字重叠（ISSUE #1876）",
+    ).toMatch(/\bpr-/);
+    // 同时仍需可截断：让位不能退化成「允许标题换行撑高卡片」。
+    expect(title.className).toContain("truncate");
+  });
+
+  it("删除按钮自己带不透明底并抬起层（让位是主防线，这是兜底）", () => {
+    renderWith({
+      projects: [entry({ id: "long", name: "像素基线·城市夜景逐镜" })],
+    });
+    const del = screen.getByRole("button", {
+      name: "删除项目「像素基线·城市夜景逐镜」",
+    });
+    const classes = del.className.split(/\s+/);
+    /* 判据按**类名 token 全等**取，不用 `\bbg-` 这类前缀正则：基类里那颗
+     * `bg-clip-padding` 也以 `bg-` 开头，前缀匹配会让这条断言永远绿。
+     * 底色要的是「有一档底色 token（`bg-card` / `bg-surface-*` …）」，
+     * 层级要的是 §16.2.5 刻度表里的 `z-base`（卡片内遮罩那一档），
+     * 不是裸数字 —— 裸数字由 `check-overlay-z.cjs` 硬闸拦下。 */
+    const hasBackground = classes.some((c) =>
+      /^bg-(card|surface|background)(\/|$)/.test(c),
+    );
+    expect(
+      hasBackground,
+      "删除按钮没有不透明底：长名字会从「删除」二字底下透出来",
+    ).toBe(true);
+    expect(classes).toContain("z-base");
+  });
+
   it("点卡片把这一行的 id 交给 controller（打开项目不是视图自己的事）", () => {
     const openProject = vi.fn();
     renderWith({

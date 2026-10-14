@@ -5461,7 +5461,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）差分回归 ──────
    * 判据见 scripts/check-ui-primitives.cjs 里 P83 的注释：只管 h1（屏级），
    * 属性段必须出现 u-title-page / text-page 之一，且不得再叠 text-lg /
-   * text-[34px] 这类硬写字号。
+   * text-[ 34px ] 这类硬写字号。
    *
    * 曾经还放行 `u-title-hero`：首页欢迎区那块大标题走的是它，ISSUE #1691 把那
    * 块欢迎区删掉之后这一档连同 `--text-hero` 一起退役（零消费者）。下面这条
@@ -5492,7 +5492,8 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "export function V() {",
         "  return (",
-        '    <h1 className="u-title-page text-[34px]">首页</h1>',
+        // 候选名运行期拼：本文件也在 Tailwind 的扫描面里，写全一枚就多一条没人用的规则。
+        `    <h1 className="u-title-page ${"text-" + "[34px]"}">首页</h1>`,
         "  );",
         "}",
       ].join("\n"),
@@ -5502,7 +5503,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P83");
   });
 
-  test("P83 合规出口：u-title-page / text-page 都不计", ({ repo }) => {
+  test("P83 合规出口只有 `.u-title-page` 一条", ({ repo }) => {
     repo.write(
       "src/components/studio/P83Ok.tsx",
       [
@@ -5510,7 +5511,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "  return (",
         "    <>",
         '      <h1 className="font-title u-title-page">模型库</h1>',
-        '      <h1 className="text-page">设置</h1>',
         "    </>",
         "  );",
         "}",
@@ -5518,6 +5518,28 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     );
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
+  });
+
+  test("P83 不再认 `text-page` 那个出口：h1 只挂它 → 仍计", ({ repo }) => {
+    /* 从前 P83 认两个出口（`.u-title-page` 与 `text-page`）。第二个是个坑的入口而不是一条
+     * 出路：那颗 token 乘 `--font-scale`、只该经 `.u-title-page` 使用，却因为住在 `@theme`
+     * 里被 Tailwind 顺带生成成 JSX 可用的类 —— 而 `cn()` 把不认识的 `text-<名字>` 归进
+     * 颜色组，吃掉同一行真正的状态色。token 移到 `:root` 之后那个类根本不存在了，
+     * 挂它的 h1 字号会退回继承（= 屏级标题没有档）。与上面 `u-title-hero` 那条同一口径：
+     * **档不再是出口之后，判据不许还放行它**。 */
+    repo.write(
+      "src/components/studio/P83NoLongerExit.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="text-page">设置</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
   });
 
   test("P83 退役档不再是出口：h1 只挂 u-title-hero → 仍计", ({ repo }) => {

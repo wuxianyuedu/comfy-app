@@ -24,7 +24,6 @@ const {
   isP81IconName,
 } = require("./ui-primitives-engine.cjs");
 
-
 module.exports = {
   P67: {
     label:
@@ -657,9 +656,16 @@ module.exports = {
    * 34px 四五种 —— 同一个角色在不同屏大小不一，而 `.u-title` / `.u-title-page`
    * 的数值本身也是工具类里的硬编码字面量（规范 03 §3.2 反对的那一类）。
    *
-   * 判据只管 **h1（屏级）**：属性段里必须出现屏级档
-   * （`u-title-page` / `text-page`），且不得再叠硬写字号（`text-lg`、`text-[34px]`
-   * 这类）。
+   * 判据只管 **h1（屏级）**：属性段里必须出现屏级档 `.u-title-page`，且不得再叠硬写字号
+   * （`text-lg`、`text-[34px]` 这类）。
+   *
+   * 从前这里还认第二个出口 `text-page`。**已经收掉了**：那颗 token 乘 `--font-scale`、
+   * 只该经 `.u-title-page` 使用，而它当时住在 `@theme` 里 ⇒ Tailwind 顺带生成了
+   * `.text-page` 这个 JSX 可用的类（实测产物里有，零消费者）。留着它同时踩两个坑 ——
+   * `cn()` 把不认识的 `text-<名字>` 归进**颜色**组、吃掉同行状态色；而调用点写下的
+   * 是「一个会随设置页变的字号」。token 移到 `:root` 之后那个 utility 根本不再存在，
+   * 这条出口也就没有东西可认了（同上面 `u-title-hero` 那条的口径：**档退役之后判据
+   * 不许还把它当合规出口**）。
    *
    * 曾经还放行一档 `u-title-hero`（首页欢迎区那块大标题）。ISSUE #1691 把首页
    * 那块欢迎区整个删了（标题是句口号、副标题把四张入口卡的说明重说一遍，两者占掉
@@ -667,8 +673,10 @@ module.exports = {
    * 这里只剩下唯一那一档。**别把这一档当「以后可能用得上」留着**：留着的代价是
    * 「唯一档」这句话在后一个想写 `text-[34px]` 的人面前就不成立了。
    *
-   * 区块级标题（h2 / h3）**不入本条**：那里刻意保留 10.5–14px 的多档微排版，
+   * 区块级标题（h2 / h3）**不入本条**：那里刻意保留 11–14px 的多档微排版，
    * 并成一档会压平信息层次，那是另一件事，不该由这条判据顺手管。
+   * （从前写的是「10.5–14px」—— 那是把 52 处元信息行的落点登记成了标题例外，
+   * 实测只有 1 处落在 `h3` 上；10.5px 已整批并入 `text-2xs`，见契约 §Shapes ⑥。）
    *
    * `sr-only` 的 h1 **也不入本条**（ISSUE #1847）：它不占视觉空间、不冒充可见
    * 标题，只是留给读屏的跳转锚点（`h1` 是屏幕之间导航的主要锚点，见规范 16
@@ -695,7 +703,7 @@ module.exports = {
         /* `sr-only` = 只给读屏的跳转锚点，不占视觉空间、不冒充可见标题 ——
          * 不是「屏级标题不走档」，而是根本不该有档。 */
         if (/\bsr-only\b/.test(attrs)) continue;
-        const hasTier = /\b(?:u-title-page|text-page)\b/.test(attrs);
+        const hasTier = /\bu-title-page\b/.test(attrs);
         const hardSize =
           /\btext-(?:xs|sm|base|md|lg|xl|2xl|3xl|4xl|5xl)\b|\btext-\[/.test(
             attrs,

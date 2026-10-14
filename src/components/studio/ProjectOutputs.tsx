@@ -158,7 +158,7 @@ export function ProjectOutputs() {
   return (
     <DocumentFrame
       width="medium"
-      className="px-4 py-6 sm:px-8"
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
     >
       {/* ── Header ──

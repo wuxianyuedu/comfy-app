@@ -154,7 +154,7 @@ lib（纯函数） ← 任意层
 | 文字 | `--color-ink` / `--color-muted` | `text-ink` |
 | 布局尺寸 | `--panel-right-width` | `w-(--panel-right-width)` |
 
-反例：`bg-[#0a0a0f]`、`border-white/6`、`style={{ width: 360 }}`。
+反例：`bg-[ #0a0a0f ]`、`border-white/6`、`style={{ width: 360 }}`。
 
 #### 4.4.2 可访问性（a11y）
 

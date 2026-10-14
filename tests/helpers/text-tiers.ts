@@ -7,20 +7,16 @@
  *     默认字阶（本仓库刻意**不覆盖** `xs` / `sm` / `base` / `lg` …，这一点由
  *     `tests/design-md-contract-sync.test.ts` 里那条「12px / 13px 只有一个名字」的
  *     反向断言钉着：默认档没了，归零判据会因为「这档不存在」而空绿）；
- *   · `src/app/globals.css` 的 `--text-*` —— 项目自己命名的档（`2xs` / `3xs`，
- *     以及 `section` / `page` / `stage` 三颗乘 `--font-scale` 的标题档）。
+ *   · `src/app/globals.css` 的 `--text-*` —— 项目自己命名的档（`2xs` / `3xs` / `4xs`）。
  *
- * **档名按来源分治**（见下方 `parseTextTiers`）：Tailwind 自带的名字全收，项目自加的
- * 只收 t-shirt 形状（调用方传 `TSHIRT_NAME` 那类正则）。后者那条限制的理由不是偷懒：
- * `cn()` 把不认识的 `text-<名字>` 归进**颜色**组，实测 `cn("text-ink-muted","text-stage")`
- * 会吃掉同行的状态色，所以 `section` / `page` / `stage` 这三颗**在 JSX 里根本不能用**
- * （`globals.css` 的注释自己写着「别在 JSX 里用它们」）。拿它们去要求调用点「改走类名」
- * 等于拿一条判据逼人去撞另一条已知的坑。它们该被治理的方式是先改成 t-shirt 档名，
- * 那一天到了，这条判据会自动把它们纳入射程。
- *
- * **只解常量形状的声明**：`--text-x: 11px` / `0.6875rem` 收，`calc(… * var(--font-scale))`
- * 那种**跳过** —— 乘了 `--font-scale` 的档没有单一渲染值，拿 scale=1 的读数当等式去要求
- * 调用点改类名是错的（今天被跳过的正是上面那三颗标题档，两条理由叠在同一批名字上）。
+ * **标题那三颗（`section` / `page` / `stage`）不在本表里，而且两层理由各管一段**：
+ * 它们乘 `--font-scale`，**没有单一渲染值**（14px 的 `section` 在 125% 档下是 17.5px ——
+ * 拿 scale=1 的读数当等式去要求调用点改类名是错的）；而它们已经从 `@theme` 移到 `:root`，
+ * 所以 Tailwind 根本不为它们生成 utility（`.u-title*` 是 components 层的类，不是工具类）。
+ * 从前这里写的是「因为名字不是 t-shirt 形状才被挡在外面」—— 那只是**第二道**闸，
+ * 第一道（`TEXT_DECL_RE` 不认 `calc()`）一直更有效；而「改名就入射程」那句是错的。
+ * 名字形状那道闸仍然留着，它管的是**项目自加的常量档**：`cn()` 把不认识的
+ * `text-<名字>` 归进颜色组，实测吃掉同行状态色，所以自造的名字必须是 t-shirt 形状。
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";

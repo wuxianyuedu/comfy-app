@@ -371,7 +371,7 @@ Popup 基类自带 `top-1/2 -translate-y-1/2`，调用处的 `top-24` 覆盖不�
 谁也说不清「它比谁高」，新增一层只能再编一个更大的数。
 
 P2 先把自搓浮层收进 `ui/` 原语、定下两条刻度；**P4 复查时余量里仍有 7 处
-自成一档**（`9998` / `z-[10000]` / `z-[10020]` / `z-80` / `z-60` / 全屏视图的
+自成一档**（`9998` / `z-[ 10000 ]` / `z-[ 10020 ]` / `z-80` / `z-60` / 全屏视图的
 `z-50` / `studio/logs` 的 `z-99`+`z-200`）。所以这里不再只定两条，而是**一张成体系
 的刻度表** —— 每一档都对得上一类真实存在的浮层关系，不是「把魔数换个名字」。
 
@@ -419,7 +419,7 @@ auto` 的遮罩压过。
 
 **两条硬约束（不在表里的写法一律阻断）**：
 
-- 行内数字 `zIndex: 7` 与任意值写法 `z-[10000]`（规范 03 §3.2 已禁 arbitrary）
+- 行内数字 `zIndex: 7` 与任意值写法 `z-[ 10000 ]`（规范 03 §3.2 已禁 arbitrary）
   **全库清零**，属硬闸；
 - 刻度之外的**裸数字具名档**（`z-9999` / `z-80` / `z-99` …）—— 写得出来就说明
   又编了一档，**存量已清零、同为硬闸**（ISSUE #1811 收尾时从棘轮翻上来：
@@ -1038,7 +1038,7 @@ React Flow 对这种边**静默丢弃**：不报错、控制台干净、`tsc` / 
 
 §16.2.3.12 把边画了出来，接着逐张看截图时发现另一件事：**框装不下内容**。
 
-`StorybookFlowCanvas` 的框高是**一个常量**（`CANVAS_FRAME_CLASS` = `h-[560px]`），
+`StorybookFlowCanvas` 的框高是**一个常量**（`CANVAS_FRAME_CLASS` = `h-[ 560px ]`），
 而节点渲染器的尺寸是**消费方**的事 —— 于是同一档场景在不同消费方下内容高度可以差
 一倍：`twoNodes` 摆十行端点的 `PortDemoNode` 是 399px 高，摆 React Flow 默认外观
 （`WorkflowCanvasDecorations` 的 `GridOff` 那档）只有 ~80px。
@@ -1431,7 +1431,7 @@ story 不经 store 读）。
    就是为此存在的），不是「配色都走变体」。
 10. **`role="switch"` / `role="tab"` 的按钮照换**：base-ui 的 `Button` 会把
     `role` / `aria-checked` / `aria-selected` / `tabIndex` / `onMouseDown`
-    原样透传（第 1、2 条同款），`h-[18px] w-[32px] p-0` 之类的尺寸类照旧由
+    原样透传（第 1、2 条同款），`h-[ 18px ] w-[32px] p-0` 之类的尺寸类照旧由
     调用处给。不要因为「它其实是开关」就留在手写形态 —— P1 判据不区分语义。
 11. **枚举状态圆点一律走 `StatusDot`**：本批把 `BrowserStatusBar` 的
     dev server 灯、`LibraryHostCard` 的节点相位点、`WorkflowRunLogButton`
@@ -1659,11 +1659,11 @@ utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类�
 | ----------------- | ---------------------------------------- | ------------------------------ |
 | `ui/status-dot`   | 一个圆点                                 | 状态行左侧                     |
 | `ui/status-badge` | 圆点 + 文字的胶囊（`text-xs` + 边框）    | 卡片头、详情头这类**独立徽标** |
-| `ui/list-badge`   | 纯文字的紧凑小块（`text-[9px]`，无边框） | 列表行里**紧跟标题**的元信息   |
+| `ui/list-badge`   | 纯文字的紧凑小块（9px 那一档，现走 `text-4xs`；无边框） | 列表行里**紧跟标题**的元信息   |
 
 **为什么不能复用一个**：列表行的高度是按「每行一行文字」定的，`text-xs` 胶囊
 比行内文字还高，一行里塞几个就把行撑成两倍高。工作流库列表曾因此每项挤进四枚
-手写 `text-[9px]` span（`对外参数未配置` / `本地` / 类型 / 模型标签），加上名称后
+手写 9px 字面量的 span（`对外参数未配置` / `本地` / 类型 / 模型标签），加上名称后
 总宽超过侧栏、被根容器的 `overflow-hidden` 裁掉。收口之后**尺寸不再由每处各写
 一遍**，`tone` 的取色也回到语义 token（此前是 `bg-emerald-500/12 text-emerald-700
 dark:text-emerald-300` 这类写死值）。
@@ -2103,7 +2103,7 @@ tsc / eslint 也都不看 —— 只能靠「同一件事只允许一处实现�
   「遮罩点击被阻断」，后者用 `pending` 把确认按钮置为 spinner）。已改成
   `ConfirmDialog` 的薄包装，那句阻断语义换成更准确的 `pending`。
 - **`ProjectOutputs` 的元数据抽屉**是 `ui/sheet` 的第二份实现
-  （`w-[380px]` 右锚定面板 + 手写遮罩 `onClick`）—— 与设置页两个抽屉
+  （`w-[ 380px ]` 右锚定面板 + 手写遮罩 `onClick`）—— 与设置页两个抽屉
   （已迁 `ui/sheet`）是同一件事的两套写法。已迁 `ui/sheet`（`side="right"`）。
 
 #### 迁移口径（可直接照抄）
@@ -2536,7 +2536,7 @@ className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② �
 
 「收起 → 窄条」这件事在画布侧栏**还没发生**：`ProjectCanvas` 的侧栏是
 `CanvasPanelToolbar` + 两个固定宽面板（`MaterialLibraryPanel` /
-`HistoryPanel` 都是 `w-[360px] shrink-0`），工具栏的「收起」是把它整体
+`HistoryPanel` 都是 `w-[ 360px ] shrink-0`），工具栏的「收起」是把它整体
 `activePanel === null` 掉（浮回画布左侧）。**没有宽度拖拽、也没有折叠态记忆**。
 
 所以这条的一半是**已经存在的重复**（上面三个日志面板的加宽档，本批已收口），
@@ -5501,7 +5501,7 @@ navigation-menu pagination radio-group scroll-area slider table
 
 **一处不迁，理由与 §16.2.4.6 的「应用级页签不接 `Tabs`」同类**：
 `WorkflowEditorTopbar` 那份虽也长成 `A / B / 当前 C`，但它是**页头标题本身** ——
-首段 18px 粗体（`font-title` + `text-[18px]`，与顶栏别的标题同档）、子图段 14px、
+首段 18px 粗体（`font-title` + `text-[ 18px ]`，与顶栏别的标题同档）、子图段 14px、
 **当前段带紫色选中药丸**（`border-primary-500/40` + `bg-primary-500/15`）、每段包
 `Hint` + `title=`。迁过去只会让这些外观全部让位给基元默认（§16.2.4.2 第 9 条：
 验收标准是**渲染结果不变**）。它在脚本的 `EXEMPT_FILES.P84` 里登记并写了理由。
@@ -6184,7 +6184,7 @@ pnpm exec shadcn add <name> --diff src/components/ui/<file>.tsx   # ② 看具�
 | `hover-card.tsx`      | `Positioner` 传 `collisionBoundary`（锚定浮层让出标题行，ISSUE #1377）                                                                                                                                                        | 锚定浮层的让位写不出固定的 `top-*`（位置由锚点决定），只能表达成「参与定位计算的可用区域不把标题行算进来」。漏了的表现：Base UI 的 `flip` 只对**视口**判溢出，气泡在 TopBar 那一排（y≈46）往上摆时顶部落在 y≈14，视口内绰绰有余 → 不翻转；而标题行 `z-chrome`(2000) 比气泡 `z-popup`(100) 高一个数量级 → 气泡上半截被盖掉，用户只看到一条白边加一个箭头。**不能靠抬气泡层级修**：那会吃掉页签与窗口按钮的可点区域（§16.2.5 判据 4）。  | 补回 `collisionBoundary={boundary ?? undefined}`（`boundary` 取自 `~/components/ui/use-overlay-boundary` 的 `useOverlayBoundary()`）                                                                                                  |
 | `navigation-menu.tsx` | `Positioner` 传 `collisionBoundary`（锚定浮层让出标题行，ISSUE #1377）                                                                                                                                                        | 锚定浮层的让位写不出固定的 `top-*`（位置由锚点决定），只能表达成「参与定位计算的可用区域不把标题行算进来」。漏了的表现：Base UI 的 `flip` 只对**视口**判溢出，气泡在 TopBar 那一排（y≈46）往上摆时顶部落在 y≈14，视口内绰绰有余 → 不翻转；而标题行 `z-chrome`(2000) 比气泡 `z-popup`(100) 高一个数量级 → 气泡上半截被盖掉，用户只看到一条白边加一个箭头。**不能靠抬气泡层级修**：那会吃掉页签与窗口按钮的可点区域（§16.2.5 判据 4）。  | 补回 `collisionBoundary={boundary ?? undefined}`（`boundary` 取自 `~/components/ui/use-overlay-boundary` 的 `useOverlayBoundary()`）                                                                                                  |
 | `select-menu.tsx`     | `Positioner` 传 `collisionBoundary`（锚定浮层让出标题行，ISSUE #1377）                                                                                                                                                        | 锚定浮层的让位写不出固定的 `top-*`（位置由锚点决定），只能表达成「参与定位计算的可用区域不把标题行算进来」。漏了的表现：Base UI 的 `flip` 只对**视口**判溢出，气泡在 TopBar 那一排（y≈46）往上摆时顶部落在 y≈14，视口内绰绰有余 → 不翻转；而标题行 `z-chrome`(2000) 比气泡 `z-popup`(100) 高一个数量级 → 气泡上半截被盖掉，用户只看到一条白边加一个箭头。**不能靠抬气泡层级修**：那会吃掉页签与窗口按钮的可点区域（§16.2.5 判据 4）。  | 补回 `collisionBoundary={boundary ?? undefined}`（`boundary` 取自 `~/components/ui/use-overlay-boundary` 的 `useOverlayBoundary()`）                                                                                                  |
-| `toggle-group.tsx`    | `ToggleGroupItem` 的选中档补 `data-[pressed]:ring-1 ring-primary/45` + `font-semibold` + `z-10`                                                                                                                               | 官方版只给 `bg-muted`，而 `toggleVariants()` 的**悬停档与选中档是同一个值** —— 划过未选中项时它立刻长得像「当前选中」，分段控件等于没有选中态。补的描边/字重基元不在 pressed 上设，不与悬停撞；`z-10` 保证 spacing=0 时描边不被邻项盖住。底色不在此处改，留给调用方按需叠（日志级别那排还要叠主色淡底，见 §16.2.4.5）                                                                                                                  | 补回选中档的三层（描边 / 字重 / 抬层），悬停档保持官方版                                                                                                                                                                              |
+| `toggle-group.tsx`    | `ToggleGroupItem` 的选中档补 `data-pressed:ring-1 ring-primary/45` + `font-semibold` + `z-10`                                                                                                                               | 官方版只给 `bg-muted`，而 `toggleVariants()` 的**悬停档与选中档是同一个值** —— 划过未选中项时它立刻长得像「当前选中」，分段控件等于没有选中态。补的描边/字重基元不在 pressed 上设，不与悬停撞；`z-10` 保证 spacing=0 时描边不被邻项盖住。底色不在此处改，留给调用方按需叠（日志级别那排还要叠主色淡底，见 §16.2.4.5）                                                                                                                  | 补回选中档的三层（描边 / 字重 / 抬层），悬停档保持官方版                                                                                                                                                                              |
 
 > **为什么不干脆"重来一遍、以官方为底"**：实测官方 registry 今天的内容已经与当初
 > 引入的那版不同（例如 `accordion` 今天带文档站自己的 `IconPlaceholder` shim、

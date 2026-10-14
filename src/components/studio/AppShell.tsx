@@ -30,6 +30,7 @@ import { TopBar } from "./TopBar";
 import { ViewTabStrip, type OpenableView } from "./ViewTabStrip";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
 import { type ViewTab } from "./workspace-tabs";
+import { ViewActionsProvider } from "./ViewActions";
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
 export interface SidebarProject {
@@ -173,161 +174,165 @@ export function AppShell({
   const insideProject = isProjectTab(active);
 
   return (
-    <SidebarProvider
-      defaultOpen={defaultSidebarOpen}
-      className="h-full min-h-0"
-    >
-      <Sidebar collapsible="icon">
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {navItems.map((item) => {
-                  const enabled = item.enabled !== false;
-                  return (
-                    <SidebarMenuItem key={item.id}>
-                      {/* 未上线的视图留在列表里但禁用：移除会让「以后有这个」这件事消失，
+    /* 视图动作槽的宿主在 `TopBar`、使用者是各视图（它的后代）—— 提供者因此
+       必须裹住两者。见 `ViewActions` 里那段「为什么是槽不是注册表」。 */
+    <ViewActionsProvider>
+      <SidebarProvider
+        defaultOpen={defaultSidebarOpen}
+        className="h-full min-h-0"
+      >
+        <Sidebar collapsible="icon">
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navItems.map((item) => {
+                    const enabled = item.enabled !== false;
+                    return (
+                      <SidebarMenuItem key={item.id}>
+                        {/* 未上线的视图留在列表里但禁用：移除会让「以后有这个」这件事消失，
                           禁用则给出「即将推出」（`tooltip` 里写明）。 */}
-                      <SidebarMenuButton
-                        isActive={active === item.id}
-                        disabled={!enabled}
-                        tooltip={
-                          enabled ? item.label : `${item.label}（即将推出）`
-                        }
-                        onClick={() => {
-                          if (enabled) onSelect(item.id);
-                        }}
-                      >
-                        {item.icon}
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                        <SidebarMenuButton
+                          isActive={active === item.id}
+                          disabled={!enabled}
+                          tooltip={
+                            enabled ? item.label : `${item.label}（即将推出）`
+                          }
+                          onClick={() => {
+                            if (enabled) onSelect(item.id);
+                          }}
+                        >
+                          {item.icon}
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-          {/* 「项目」分组：紧跟全局项之后（不再 `mt-auto` 顶到视口最下，避免中间一大片空白）。
+            {/* 「项目」分组：紧跟全局项之后（不再 `mt-auto` 顶到视口最下，避免中间一大片空白）。
               **图标档（缩略态）不再整组隐藏**（ISSUE #1691）：此前这里挂着
               `group-data-[collapsible=icon]:hidden`，窗口一窄到自动收起，用户就
               既看不见项目名、也切不了项目 —— 而「项目」恰恰是这一屏最需要按名字
               找到的东西。现在缩略态下每一项都落成**带缩略图标 + 名称 tooltip**
               的方块（与全局项同一套 `SidebarMenuButton` 机制）：名字仍够得着，
               展开侧栏则照旧是完整列表。 */}
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <Disclosure
-                    defaultOpen
-                    marker="chevron"
-                    trigger={
-                      <>
-                        {PROJECTS_ENTRY.icon}
-                        <span className="group-data-[collapsible=icon]:hidden">
-                          {PROJECTS_ENTRY.label}
-                        </span>
-                      </>
-                    }
-                    className={cn(
-                      "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                      "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
-                      /* 缩略态：整行落成与全局项同形的 48px 方块 —— 折叠标记
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <Disclosure
+                      defaultOpen
+                      marker="chevron"
+                      trigger={
+                        <>
+                          {PROJECTS_ENTRY.icon}
+                          <span className="group-data-[collapsible=icon]:hidden">
+                            {PROJECTS_ENTRY.label}
+                          </span>
+                        </>
+                      }
+                      className={cn(
+                        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
+                        /* 缩略态：整行落成与全局项同形的 48px 方块 —— 折叠标记
                          与文字都让位，只留分组图标（否则这一行宽过图标轨、
                          `overflow-hidden` 把它裁掉一半）。 */
-                      "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
-                      "group-data-[collapsible=icon]:**:data-[slot=disclosure-marker]:hidden",
-                    )}
-                    panelClassName="mt-1"
-                  >
-                    <SidebarMenu>
-                      {projects.map((project) => (
-                        <SidebarMenuItem key={project.id}>
+                        "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
+                        "group-data-[collapsible=icon]:**:data-[slot=disclosure-marker]:hidden",
+                      )}
+                      panelClassName="mt-1"
+                    >
+                      <SidebarMenu>
+                        {projects.map((project) => (
+                          <SidebarMenuItem key={project.id}>
+                            <SidebarMenuButton
+                              size="sm"
+                              isActive={
+                                insideProject && project.id === activeProjectId
+                              }
+                              tooltip={project.name}
+                              onClick={() => onOpenProject(project.id)}
+                            >
+                              {/* 缩略图标：展开态与缩略态都要有，否则收起后
+                                按钮里只剩一个空格子（名称被 `truncate` 掉）。 */}
+                              <ProjectGlyph />
+                              <span>{project.name}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                        <SidebarMenuItem>
                           <SidebarMenuButton
                             size="sm"
-                            isActive={
-                              insideProject && project.id === activeProjectId
-                            }
-                            tooltip={project.name}
-                            onClick={() => onOpenProject(project.id)}
+                            tooltip="查看全部"
+                            onClick={onShowAllProjects}
                           >
-                            {/* 缩略图标：展开态与缩略态都要有，否则收起后
-                                按钮里只剩一个空格子（名称被 `truncate` 掉）。 */}
-                            <ProjectGlyph />
-                            <span>{project.name}</span>
+                            <LayoutGrid />
+                            <span>查看全部</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                      ))}
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          size="sm"
-                          tooltip="查看全部"
-                          onClick={onShowAllProjects}
-                        >
-                          <LayoutGrid />
-                          <span>查看全部</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          size="sm"
-                          tooltip="新建项目"
-                          onClick={onNewProject}
-                        >
-                          <Plus />
-                          <span>新建项目</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    </SidebarMenu>
-                  </Disclosure>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            size="sm"
+                            tooltip="新建项目"
+                            onClick={onNewProject}
+                          >
+                            <Plus />
+                            <span>新建项目</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    </Disclosure>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
 
-        {/* 原先这里有一个侧栏底「设置」—— 与列表里那一项是同一个动作的两处入口，
+          {/* 原先这里有一个侧栏底「设置」—— 与列表里那一项是同一个动作的两处入口，
             而顶栏右上角的菜单本来就有一处的「设置」。三处收成一处后此处删除：
             一个动作只留一个入口，也顺带不再需要为底部状态栏 24px 让位的 `pb-6`。 */}
 
-        {/* 边缘热区：点击/拖拽也能开合，官方自带。 */}
-        <SidebarRail />
-      </Sidebar>
+          {/* 边缘热区：点击/拖拽也能开合，官方自带。 */}
+          <SidebarRail />
+        </Sidebar>
 
-      <SidebarInset className="bg-canvas text-ink min-w-0 overflow-hidden">
-        {/* 浏览器 / dev 形态的视图页签栏：放到内容列最顶端（TopBar 上方），
+        <SidebarInset className="bg-canvas text-ink min-w-0 overflow-hidden">
+          {/* 浏览器 / dev 形态的视图页签栏：放到内容列最顶端（TopBar 上方），
             而不是 TopBar 下方。桌面壳里这条栏由窗口标题行承载，这里按同一个判据让位。
             保留在 `SidebarInset` 内部是为了让 fixed 侧栏自然让位，避免被侧栏压住关闭按钮。 */}
-        {titleBarTabs ? null : (
-          <ViewTabStrip
-            tabs={viewTabs ?? []}
-            activeKey={activeViewKey ?? ""}
-            projectNameOf={projectNameOf}
-            onSelect={(key) => onSelectViewTab?.(key)}
-            onClose={(key) => onCloseViewTab?.(key)}
-            openableViews={openableViews}
-            onOpenView={onOpenView}
+          {titleBarTabs ? null : (
+            <ViewTabStrip
+              tabs={viewTabs ?? []}
+              activeKey={activeViewKey ?? ""}
+              projectNameOf={projectNameOf}
+              onSelect={(key) => onSelectViewTab?.(key)}
+              onClose={(key) => onCloseViewTab?.(key)}
+              openableViews={openableViews}
+              onOpenView={onOpenView}
+            />
+          )}
+
+          <TopBar
+            active={active}
+            onOpenSettings={onOpenSettings}
+            onOpenSearch={() => setCommandOpen(true)}
           />
-        )}
 
-        <TopBar
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            {children}
+          </div>
+        </SidebarInset>
+
+        <CommandPalette
+          open={commandOpen}
+          onOpenChange={setCommandOpen}
           active={active}
-          onOpenSettings={onOpenSettings}
-          onOpenSearch={() => setCommandOpen(true)}
+          onSelect={onSelect}
         />
-
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          {children}
-        </div>
-      </SidebarInset>
-
-      <CommandPalette
-        open={commandOpen}
-        onOpenChange={setCommandOpen}
-        active={active}
-        onSelect={onSelect}
-      />
-    </SidebarProvider>
+      </SidebarProvider>
+    </ViewActionsProvider>
   );
 }

@@ -242,7 +242,7 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
 /* ── 调用侧：契约里的档位必须真的被用上 ──────────────────────────────
    上面两格判的是「文档说的值 = CSS 定义的值」。这一格补另一半：
    **调用点有没有真的用档位**。圆角这一刀落地后暴露出缺口 —— T4 只看
-   `globals.css` 的定义，看不见 `className="rounded-[16px]"` 这种「把档位
+   `globals.css` 的定义，看不见 `className="rounded-[ 16px ]"` 这种「把档位
    当前渲染值重抄一遍」的写法：它此刻像素正确，但设置页改基数时不跟手，
    等于在总闸旁边开了个旁通。字号同理（契约 §Typography 明写不要写
    字面字号，而调用点还有几百处存量）。 */
@@ -504,7 +504,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    *  字号 302→298 是同上的 `text-3xs` 归一；**298→201 是「同一个 12px 有两种行高」
    *  定档**：103 处 `text-[12px]`（12px + 继承的 1.5 ⇒ 18px）统一成 `text-xs`
    *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。
-   *  **201→140 是同一条口径的第二半**：62 处 `text-[13px]` 并入 `text-sm`（14px，
+   *  **201→140 是同一条口径的第二半**：62 处 `text-[ 13px ]` 并入 `text-sm`（14px，
    *  契约认的「应用默认正文」档）。这一批**带着行高一起变**（19.5 → 16px），
    *  所以 `log-virtual.ts` 的行高常量与它的两处用例是同批改的，不是两件事。 */
   const RADIUS_BASELINE = 7;
@@ -515,15 +515,23 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    * 这一批**带着行高一起变**（字面量吃继承的 1.5 ⇒ 21px / 27px，档位自带 20px / 28px
    * ⇒ 实际 −1px / +1px；配对值由下面那条行高判据守着，别凭印象改这里），
    * 与 13px 那批同理：改动点所在行是否由文字定高，按结构判（同族最高兄弟元素 ≥ 新行盒），
-   * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而那三颗标题档的名字
-   * 不是 t-shirt 形状、在 JSX 里会被 `cn()` 归进颜色组吃掉同行状态色。
+   * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而标题那三颗
+   * **根本不是档位**：它们住在 `:root`（不在 `@theme`，因此不生成 utility）、乘
+   * `--font-scale` 所以没有单一渲染值，只经 `.u-title*` 使用（从前这里写的是
+   * 「改名成 t-shirt 形状就会自动纳入射程」—— 那句不成立：读法只解常量声明，
+   * `calc()` 形状它看不见；射程的真正边界是「有没有单一渲染值」，不是档名形状）。
    * 本注释刻意**不写完整的候选名**：被扫到的正文里每写全一枚，产物 CSS 就多一条
    * 没人用的规则（口径见规范 03 §3.6.2），而这一批刚被清零。
    * **122→67 是 10.5px 那一批**：52 处里只有 1 处落在 `h3` 上，其余全是 `<p>` / `<span>`
    * / `<div>` 的元信息行 —— 正是 `text-2xs`(11px) 登记的角色，所以整批并进去、并像
    * 12 / 13px 那样另签一条**归零等式**。方向取「并大」（ISSUE #1751 的结论是「档写低了」），
-   * 逐处结构判与 +0.5px 的代价都在下面那条 `it` 里。 */
-  const TEXT_BASELINE = 67;
+   * 逐处结构判与 +0.5px 的代价都在下面那条 `it` 里。
+   * **67→49 是 9px 立档**（`--text-4xs: 9px`，t-shirt 刻度往下、单调：4xs < 3xs=10 < 2xs=11）。
+   * 差的 4 枚是刻意的账：grep 层面这批 22 处里有 4 处在注释里（`ui/badge` 的 `xs` 档说明
+   * 与 `ui/list-badge` 的分工表），而棘轮走的是**剥注释**的扫描 —— 注释本来就不计数，
+   * 所以只降 18。改注释是为了让产物里那条 9px 规则真的没有出处（口径见契约 §Colors 的
+   * 扫描边界：`docs/**` 与 `tests/**` 也一起被扫）。 */
+  const TEXT_BASELINE = 49;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -550,8 +558,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       TSHIRT_NAME,
     );
     /* 先验量具：这条是「等式为 0」的判据，档表解空了会永远绿（比红更糟）。
-     * 五颗都是本仓真实在用、且**必须**能被类名表达的档。 */
+     * 六颗都是本仓真实在用、且**必须**能被类名表达的档。 */
     for (const [px, name] of [
+      [9, "4xs"],
       [10, "3xs"],
       [11, "2xs"],
       [12, "xs"],
@@ -654,9 +663,114 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBeLessThanOrEqual(TEXT_BASELINE);
   });
 
+
+  /**
+   * 词汇表：住在 `@theme` 之外的每一枚字号，都要有一句「它是干什么的」。
+   *
+   * 判的是**形状**而不是处数（处数归上面那条 `TEXT_BASELINE` 棘轮）。理由是三处来路的机制
+   * 各不相同 —— 调用点的 arbitrary、`globals.css` 里 `@theme` 之外的裸声明、markdown 渲染器
+   * 拼的内联样式串 —— 而只有第一处被 Tailwind 的类名机制看得见。缺了这张表，第二、第三处
+   * 就是「文档里两句旧话 + 没人数的剩下十几处」；本文上一版正是那个形状（只记了两条来路、
+   * 三枚值）。
+   *
+   * ⚠️ 这里的键是**值的字面形式**（`"12.5"` 而不是任何完整类名）：本文件也在 Tailwind 的
+   * 扫描面里，写全一枚就多一条死规则（口径见 `tests/docs-candidate-hygiene.test.ts`）。
+   */
+  const OUT_OF_THEME_SIZES: Record<string, string> = {
+    "7.5": "uppercase 微标（workflow-library/SettingsParts）",
+    "8.5": "圆点徽标里的计数（rounded-full 那种窄胶囊）",
+    "9.5": "胶囊与角标内的文字（pick chip / owner tag / 参数注脚 / 错误列表的 mono 片段）",
+    "10": "markdown 行内 code（与 text-3xs 同值，但走的是内联串）",
+    "10.5": "markdown pre —— 全库唯一还在用 10.5px 的地方",
+    "11": "json-view 主题类与 markdown 的 h6 / table（11px 本身是 text-2xs 的档值）",
+    "11.5": "面板字段标签与次级说明行；同一枚值也是 cb-code-block 的密度",
+    "12": "markdown h5",
+    "12.5": "控制台与卡片的行密度（两处 pre 的等宽正文、表头行、面板条目标题）；同一枚值也是 markdown h4",
+    "13.5": "工坊步骤条的标题（与 size-9 序号圆同排）",
+    "14": "markdown h3",
+    "15": "面板 / 抽屉 / 日志框的区块标题（也用在 size-9 的序号圆里）",
+    "16": "markdown h2",
+    "17": "--text-stage 的字面量抄本（HomePage 的「最近项目」h2）—— 第 8 刀后拿不到类名，而 stage 不是 t-shirt 形状，所以对称判据按来源分治不收它",
+    "18": "markdown h1",
+    "28": "水填图的百分比读数（leading-none + tabular-nums，图形内的数字不是排版）",
+  };
+
+  it("住在 `@theme` 之外的字号是一张词汇表：新值要先登记角色", () => {
+    const MD_STYLES_PATH = fileURLToPath(
+      new URL("../src/lib/markdown/styles.ts", import.meta.url),
+    );
+    /** 值 → 出现的来路（报错时要能指出「是谁把它带进来的」）。 */
+    const inUse = new Map<string, Set<string>>();
+    const add = (value: string, source: string) => {
+      if (!inUse.has(value)) inUse.set(value, new Set());
+      inUse.get(value)!.add(source);
+    };
+
+    /* 来路 ①：调用点的 arbitrary 字面量 —— 与棘轮同一个面（产品文件、剥注释）。 */
+    for (const hit of scanProduct(TEXT_LITERAL))
+      add(hit.value, `调用点（如 ${hit.file}）`);
+    /* 来路 ②：globals.css 里 `@theme` 之外的裸 font-size 声明。
+     * `@theme` 里那些是 `--text-*: 11px`，不带 `font-size:` 这个属性名，所以这条匹配
+     * 天然只收声明侧 —— 不必再去切块。 */
+    const css = readFileSync(GLOBALS_PATH, "utf8");
+    for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g))
+      add(m[1]!, "globals.css 的裸声明");
+    /* 来路 ③：markdown 渲染器拼的内联样式串（既不是 token 也不是候选名）。 */
+    const mdStyles = stripComments(readFileSync(MD_STYLES_PATH, "utf8"));
+    for (const m of mdStyles.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g))
+      add(m[1]!, "markdown 渲染器的内联串");
+
+    expect(
+      inUse.size,
+      "三处来路一枚字号都没收到 —— 判据在空跑（匹配式或路径写漂了）",
+    ).toBeGreaterThanOrEqual(12);
+
+    const unregistered = [...inUse.keys()]
+      .filter((v) => !OUT_OF_THEME_SIZES[v])
+      .sort((a, b) => Number(a) - Number(b));
+    expect(
+      unregistered,
+      "这些字号活在 `@theme` 之外却没登记角色：" +
+        unregistered.map((v) => `${v}px ← ${[...inUse.get(v)!].join(" / ")}`).join("；") +
+        " —— 先在 tests/design-md-contract-sync.test.ts 的 OUT_OF_THEME_SIZES 里写清它是干什么的，" +
+        "再把它加进 docs/DESIGN.md §Typography「内容尺寸：住在 @theme 之外的那一片」那张表。",
+    ).toEqual([]);
+
+    const stale = Object.keys(OUT_OF_THEME_SIZES)
+      .filter((v) => !inUse.has(v))
+      .sort((a, b) => Number(a) - Number(b));
+    expect(
+      stale,
+      "这些登记过的值在三处来路里都已经不存在（还债把某一档并掉了？）—— 表里的行与 " +
+        "docs/DESIGN.md 那一节要一起删，留着就是文档在描述一个不存在的东西：" +
+        stale.map((v) => `${v}px`).join("、"),
+    ).toEqual([]);
+
+    /* 文档侧：每个在册且仍在用的值，都要在那一节里以「Npx」的字面形式出现一次。
+     * 按**词边界**匹配，别让 10px 靠 10.5px 那一行蒙过去（那是本仓判据反复栽过的子串坑）。 */
+    const start = doc.indexOf("### 内容尺寸：住在 `@theme` 之外");
+    expect(
+      start,
+      "docs/DESIGN.md 里找不到「内容尺寸：住在 @theme 之外的那一片」那一节 —— 词汇表的读者没了",
+    ).toBeGreaterThan(-1);
+    const section = doc.slice(start, doc.indexOf("## Layout", start));
+    const undocumented = [...inUse.keys()]
+      .sort((a, b) => Number(a) - Number(b))
+      .filter((v) => !new RegExp(`(^|[^\d.])${v.replace(".", "\.")}px`).test(section));
+    expect(
+      undocumented,
+      "这些字号在代码里用着、却没写进那一节（或写了但没有角色）：" +
+        undocumented.map((v) => `${v}px`).join("、"),
+    ).toEqual([]);
+    expect(
+      section.length,
+      "那一节短得不像一张表 —— 读者侧空了，上面三条判据就只剩代码侧自说自话",
+    ).toBeGreaterThan(1200);
+  });
+
   it("12px / 13px 只有一个名字：调用点不许再写字面量档", () => {
     /* 这一档不是棘轮、是**归零等式**：`text-xs`(12) 与 `text-sm`(14) 是已存在的两档，
-       而 `text-[12px]` / `text-[13px]` 字号贴着它们、行高却各走一套（字面量只出字号，
+       而 `text-[ 12px ]` / `text-[ 13px ]` 字号贴着它们、行高却各走一套（字面量只出字号，
        行高吃继承的 1.5 ⇒ 18px / 19.5px；档位自带的配对值是 16px / 20px —— 所以 13px 那批
        并入 `text-sm` 的真实行盒变化是 19.5 → 20，不是 19.5 → 16（见下面那条行高判据）。「同一个字号
        两种行高」= 同一把尺上两个名字，所以两批字面量都签字归一（12px→text-xs 289 处那档、
@@ -774,7 +888,31 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBe(true);
   });
 
-  it("浮层上限只许走那两档常量；行内图标的 align-[-Npx] 只许留在文本流那一处", () => {
+  it("标题那三颗 token 不是工具类：产品代码里不许出现同名 class", () => {
+    /* 定义侧由 `tests/theme-token-single-source.test.ts` 的 T6 钉（不得住在 `@theme`）；
+     * 这一条钉调用侧。从前「别在 JSX 里用 text-section / text-page」只写在注释里，
+     * 而 P83 还把 `text-page` 列为合规出口之二 —— 等于判据自己给那个坑开了扇门：
+     * `cn()` 把不认识的 `text-<名字>` 归进颜色组，挂了它的元素会**静默丢掉同行状态色**。
+     * token 移到 `:root` 之后 Tailwind 不再为它们生成 utility（编译对账：产物里那三条
+     * 从 3 条变 0 条），所以这条归零判据现在只是防「有人把 token 搬回 @theme 之后
+     * 又照着旧写法调用点挂类名」。 */
+    const titleClass = /\btext-(?:section|page|stage)\b/g;
+    expect(
+      [...("text-" + "page 与 text-" + "section").matchAll(titleClass)].length,
+      "标题类名的正则漂了（这条归零判据会静默全绿）",
+    ).toBe(2);
+    const offenders = scanProduct(titleClass);
+    expect(
+      offenders,
+      "这些调用点挂了标题档的同名 class —— 屏级标题走 `.u-title-page`、段级走 " +
+        "`.u-title-stage`、卡片标题走 `.u-title`（它们不是 utility，是 components 层的类）：\n" +
+        `${[...new Set(offenders.map((o) => o.file))]
+          .map((f) => `  ${f}`)
+          .join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("浮层上限只许走那两档常量；行内图标的 align-[ -Npx ] 只许留在文本流那一处", () => {
     /* 两条都是**归零等式 + 具名出处白名单**（形状与光晕那条同：按 owner 放行）。
        浮层侧：85vh 是量出来的事实档（6 处：居中模态、图片看全、弹层面板），
        `78vh` / `90vh` 各 1 处是同一角色上的漂移值 —— 差那 5–7 个百分点没有任何一处
@@ -784,7 +922,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
        **两条都留** —— tailwind-merge 认不出自定义名字属于哪一族，于是「谁覆写谁」变成
        看 Tailwind 的输出顺序，正是 `dialog-width.ts` 文件头记着的那类静默失效；存 class
        串则同族冲突照常生效（实测两条 arbitrary 只留后一条）。
-       图标侧：11 处 `inline align-[-Npx]` 里有 10 处坐在 `Button` / `flex` 容器里，而
+       图标侧：11 处 `inline align-[ -Npx ]` 里有 10 处坐在 `Button` / `flex` 容器里，而
        `vertical-align` 对 flex item 不起作用 —— 真 Chromium 实测：带与不带，图标的行内
        偏移都是 4.5px；同一份声明放进 inline 文本流才有效（12px 图标 5px→6px）。
        那 10 处是抄来的零效果声明，删；只剩文本流那一枚，理由写在那一处的注释里。 */
@@ -844,7 +982,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const alignOffenders = alignHits.filter((h) => !ALIGN_OWNERS.has(h.file));
     expect(
       alignOffenders,
-      "这些调用点又抄了一枚 `align-[-Npx]` —— 先确认父级是不是 flex：是的话它零效果；" +
+      "这些调用点又抄了一枚 `align-[ -Npx ]` —— 先确认父级是不是 flex：是的话它零效果；" +
         "真要基线微调就写进 EmptyCanvasHint 那一处的形态并补理由：\n" +
         `${alignOffenders.map((o) => `  ${o.file}  align-[-${o.value}px]`).join("\n")}`,
     ).toEqual([]);
@@ -1108,7 +1246,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     );
     const biggest = Math.max(...tierPx);
     expect("border rounded-" + `[${biggest}px] h-5`).toMatch(RADIUS_LITERAL);
-    /* 样本串**拆开拼**：一整条 `text-[…]` 候选名出现在被扫正文里就会生成进产物，
+    /* 样本串**拆开拼**：一整条 `text-[ … ]` 形状的候选名出现在被扫正文里就会生成进产物，
      * 而 10.5px 这一档本轮已从调用点清零 —— 不拆开就等于由这条负控制替它保留一条
      * 「源码没有、产物却有」的死规则（口径见 03 §3.6.2）。 */
     expect("text-" + "[10.5px]").toMatch(TEXT_LITERAL);
@@ -1151,7 +1289,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       "正确的 token 形态被误判成裸色",
     ).not.toMatch(HALO_RAW);
     /* 范围钉两条：① 投影一定有偏移或扩散，`0_0_` 判据不能顺手把它们收了
-       （仓里现有 6 处 `shadow-[0_18px_40px_rgba(0,0,0,…)]` 一类）；
+       （仓里现有 6 处 `shadow-[ 0_18px_40px_rgba(0,0,0,…) ]` 一类）；
        ② 同一档浅彩在别处是合法的角色色（节点/项目类别色写 `#34D399`），
        上一版的判据就是这么误报了三个无关文件。 */
     expect(

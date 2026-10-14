@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-14T12:00:00.000Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-14T05:42:10.927Z",
+    "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "今天改 src/lib/comfyui（启动失败诊断 lifecycle-derive/launch）；组 C 已跑本次改动受影响的 188 个用例（含 lifecycle-derive.test.ts 新增诊断用例）。本机同时有 comfy-app-t3-branch / branch2 / Comfy-APP-T3 多个检出的 dev server 抢核，全量 test:coverage 墙钟 25.7 分钟叠加后不可行，故 full 档今日记 skip 顺延自证"
+    "skippedReason": "本次提交是把上游 master 合进 PR 分支的解冲突提交，冲突面只落在 docs/api 生成物与两份新鲜度账上，本次不新增 src/ tests/ 改动；全量口径以合并进去的上游那条同日账为准，本工作区跑不了 25 分钟墙钟的全量档。"
   }
 }

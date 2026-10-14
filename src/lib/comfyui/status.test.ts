@@ -381,6 +381,59 @@ describe("快照缓存 — 便宜但不失时效", () => {
     expect(second.running).toBe(true);
   });
 
+  it("在途查询挂起时，动作后的查询不再复用它（否则拿到动作前的事实）", async () => {
+    // 现场：动作前发出的那次进程表查询还没回来，用户点了启动 / 刷新。
+    // 只清缓存的写法挡不住它——复用的在途查询答的是动作前那一问。
+    let releasePrev: (v: {
+      pid: number | null;
+      failed: boolean;
+    }) => void = () => undefined;
+    const hanging = new Promise<{ pid: number | null; failed: boolean }>(
+      (resolve) => {
+        releasePrev = resolve;
+      },
+    );
+    vi.mocked(findPidForMainPyDetailed)
+      .mockReturnValueOnce(hanging)
+      .mockResolvedValue({ pid: 99, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+
+    const before = getComfyRuntimeSnapshot({ force: true });
+    // 动作侧：拉起 / 关闭 ComfyUI 后丢掉快照（不含在途那次）。
+    resetComfyRuntimeSnapshot();
+    const after = await getComfyRuntimeSnapshot({ force: true });
+
+    expect(after.running).toBe(true);
+    expect(after.pid).toBe(99);
+    // 旧那次随后落地：它只回答当初的调用者，不许回写缓存。
+    releasePrev({ pid: null, failed: false });
+    await before;
+    const third = await getComfyRuntimeSnapshot();
+    expect(third.running).toBe(true);
+    expect(third.pid).toBe(99);
+  });
+
+  it("动作后连查两次只发一次进程表查询（作废在途后仍保留去重）", async () => {
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+      pid: 7,
+      failed: false,
+    });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+    await getComfyRuntimeSnapshot({ force: true });
+    const before = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+
+    resetComfyRuntimeSnapshot();
+    const [a, b] = await Promise.all([
+      getComfyRuntimeSnapshot(),
+      getComfyRuntimeSnapshot(),
+    ]);
+    expect(a.pid).toBe(7);
+    expect(b.pid).toBe(7);
+    expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBe(
+      before + 1,
+    );
+  });
+
   it("TTL 很短（秒级）：不会长时间沿用旧结论", () => {
     expect(COMFY_SNAPSHOT_TTL_MS).toBeLessThanOrEqual(3_000);
   });

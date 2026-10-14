@@ -54,7 +54,7 @@ export function WorkflowModelFilterChip({
           title: tag.name,
           prefix: <span className="bg-accent-soft size-1.5 rounded-full" />,
           suffix: (
-            <span className="text-ink-muted text-[9px] tabular-nums">
+            <span className="text-ink-muted text-4xs tabular-nums">
               {tag.count}
             </span>
           ),

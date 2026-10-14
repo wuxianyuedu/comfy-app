@@ -349,7 +349,7 @@ function WorkflowListItem({
               </ListBadge>
             ))}
             {(workflow.modelTags?.length ?? 0) > 2 && (
-              <span className="text-ink-fainter shrink-0 text-[9px]">
+              <span className="text-ink-fainter text-4xs shrink-0">
                 +{(workflow.modelTags?.length ?? 0) - 2}
               </span>
             )}

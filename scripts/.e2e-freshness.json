@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-14T04:07:53.075Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-14T05:42:00.000Z",
+    "who": "月读",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "今天改 src/lib/comfyui 启动失败诊断（lifecycle-derive/launch），与 e2e 断言无直接关联；本机同时有多个检出 dev server 抢核、全量 e2e 25.7 分钟叠加后不可行，今日 e2e 档记 skip 顺延自证"
+    "skippedReason": "本次提交是把上游 master 合进 PR 分支的解冲突提交，零运行时改动（冲突只在 docs/api 生成物与两份新鲜度账上），e2e 侧对这些文件零断言；本工作区不具备跑 e2e 的条件（无浏览器运行时），故记一条豁免，理由与合并进去的源提交相同。"
   }
 }

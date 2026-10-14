@@ -18,7 +18,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useInterval } from "~/components/ui/use-interval";
-import { tailWindow } from "~/lib/page-window";
+import { tailWindowAppend } from "~/lib/page-window";
 import type { ValidationError } from "~/lib/comfyui/validation";
 import { isTerminalFailureTaskStatus } from "~/lib/task-state";
 import { fetchTaskStatus } from "~/lib/task-cancel-client";
@@ -162,7 +162,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
               prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)
             )
               return prev;
-            return tailWindow([...prev, entry], MAX_LOGS_PER_TASK);
+            return tailWindowAppend(prev, entry, MAX_LOGS_PER_TASK);
           });
         } else if (msg.type === "state") {
           if (Array.isArray(msg.validationErrors)) {
@@ -258,15 +258,13 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             now - last.t < 5000
           )
             return prev;
-          return tailWindow(
-            [
-              ...prev,
-              {
-                t: now,
-                level: "warn",
-                msg: "⏳ 已 20s 无新日志，任务可能卡住（详见后端 runner 日志）",
-              },
-            ],
+          return tailWindowAppend(
+            prev,
+            {
+              t: now,
+              level: "warn",
+              msg: "⏳ 已 20s 无新日志，任务可能卡住（详见后端 runner 日志）",
+            },
             MAX_LOGS_PER_TASK,
           );
         });

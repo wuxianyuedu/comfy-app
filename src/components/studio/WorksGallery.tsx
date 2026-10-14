@@ -81,7 +81,7 @@ export function WorksGallery({
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-8 sm:px-8 sm:py-10"
+      className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
       backdrop={<AuroraBackground />}
     >
       <PageHeader
@@ -180,7 +180,12 @@ export function WorksGallery({
                       </svg>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-ink-bright group-hover:text-ink truncate text-sm font-medium">
+                      {/* 标题要让出右上角那颗悬停删除按钮的宽度。
+                          删除按钮是**绝对定位**的，不参与 flex 分配 —— 标题若
+                          铺满整行，长名字会径直压到「删除」两个字底下（用户看到
+                          的是两段字叠在一起）。`pr-*` 在这里是给它的**让位**，
+                          不是内边距：宽度不够时标题先截断，按钮始终完整。 */}
+                      <p className="text-ink-bright group-hover:text-ink truncate pr-12 text-sm font-medium">
                         {displayName}
                       </p>
                       <p className="text-ink-muted text-2xs mt-1 truncate">
@@ -204,7 +209,10 @@ export function WorksGallery({
                   )}
 
                   {/* 逐卡片删除：仅悬停显示，右上角。
-                       阻断冒泡，好让父级卡片打开按钮不触发。 */}
+                       阻断冒泡，好让父级卡片打开按钮不触发。
+                       带不透明底 + `z-base`（规范 16 §16.2.5 刻度表里「卡片内
+                       遮罩」那一档）：标题靠 `pr-12` 让位是**主**防线，这里是
+                       **兜底** —— 万一别的文案更宽，按钮也不会被字透出来。 */}
                   <Button
                     variant="ghost"
                     size="xs"
@@ -213,7 +221,7 @@ export function WorksGallery({
                       event.stopPropagation();
                       requestDelete(project.id);
                     }}
-                    className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong text-2xs absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong text-2xs bg-card z-base absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   >
                     <Trash2 data-icon="inline-start" size={12} />
                     <span>删除</span>

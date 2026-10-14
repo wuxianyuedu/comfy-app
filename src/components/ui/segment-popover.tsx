@@ -238,7 +238,7 @@ const Section = React.memo(function Section({
         {grouped.map((group, gi) => (
           <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
             {group.label && (
-              <div className="text-ink-icon mb-1 text-[9px] tracking-wider uppercase">
+              <div className="text-ink-icon text-4xs mb-1 tracking-wider uppercase">
                 {group.label}
               </div>
             )}

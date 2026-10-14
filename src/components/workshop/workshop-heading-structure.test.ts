@@ -55,7 +55,7 @@ describe("工坊屏的标题结构", () => {
     expect(allText.match(/u-title-stage/g) ?? []).toHaveLength(1);
   });
 
-  it("标题元素上不再出现 text-[Npx] 这类硬写字号（档位化已生效）", () => {
+  it("标题元素上不再出现「text- 方括号硬写字号」这类写法（档位化已生效）", () => {
     const offenders = [
       ...allText.matchAll(
         /<h[1-6]\b[^>]*className="[^"]*text-\[[\d.]+px\][^"]*"/g,
