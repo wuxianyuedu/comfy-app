@@ -13,7 +13,7 @@
  * 「要不要 trim」这一条最要紧，因为**它决定匹配成败**：ComfyUI 的
  * `object_info` 里类型字段带尾随空白的形态真实存在，而模式码来自用户输入
  * （前后空格是手滑的常态）。收口前的实况是同一个文件里两种写法并存 ——
- * `model-mode-contract.ts` 的 `builtInModeContract` 用
+ * `model-mode-contract.ts` 的 `derivedModeContract` 用
  * `mode.trim().toUpperCase()`，`modeContractEntries` 用
  * `(mode ?? "").toUpperCase()`：**同一个模块码，经过前者匹配得上、经过后者
  * 匹配不上**，而两处都看不出来自己在做不同的事。

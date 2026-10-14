@@ -2207,18 +2207,18 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
   只有它对最终产物负责）。
 - **顶层改成默认拒绝**（同一条 issue），两层各一张顶层白名单：
 
-  | 层                 | 允许的顶层条目                                                                          | 清单                          |
-  | ------------------ | --------------------------------------------------------------------------------------- | ----------------------------- |
-  | `.next/standalone` | `.next` `config` `node_modules` `package.json` `public` `scripts` `server.js`            | `STANDALONE_ALLOWED_TOPLEVEL` |
-  | `src-tauri/static` | 上面这些 + `schema.sql` `{{shell.splash}}` `index.html`（装配步才产出的三件）           | `STATIC_ALLOWED_TOPLEVEL`     |
+  | 层                 | 允许的顶层条目                                                                | 清单                          |
+  | ------------------ | ----------------------------------------------------------------------------- | ----------------------------- |
+  | `.next/standalone` | `.next` `node_modules` `package.json` `public` `scripts` `server.js`          | `STANDALONE_ALLOWED_TOPLEVEL` |
+  | `src-tauri/static` | 上面这些 + `schema.sql` `{{shell.splash}}` `index.html`（装配步才产出的三件） | `STATIC_ALLOWED_TOPLEVEL`     |
 
-  `config/` 是**入库的项目配置**（现只有 `config/workshop-mode-contracts.json` = 模式契约
-  注册表），运行期由 `src/lib/workshop/mode-contract.server.ts` 按 `process.cwd()`（= 载荷根）
-  读它 —— 它属于与 `data/` 相反的那一类：`data/` 是本机私有输入（LLM 主密钥、整机设置），
-  刻意不入库也不得随包，而契约里没有任何凭据、每个检出本就该用同一份。装配步因此多一步
-  显式拷贝（`§入库配置`）+ 一条反向缺件判据（`REQUIRED_CONFIG_FILES`，两层都数）：
-  不随包的后果不是报错，而是**静默跑成内置默认** —— 桌包里的模式契约与检出里的不一致，
-  界面上看不出任何异常。
+  > 仓库根曾有一层 `config/`（只装模式契约注册表）、并随包分发。ISSUE #1917 之后
+  > **这一层不存在了**：模式契约的内置默认回到源码里（`model-mode-contract.ts` 的
+  > `configuredModeContracts`，编译进产物，不需要任何文件随包），机器上的改动是
+  > 本机覆盖（`data/workshop-mode-contracts.json`，`data/` 那条线照旧不入库、
+  > 不随包）。所以两层白名单里都不再有 `config`，`build-desktop.mjs` 的 `§入库配置`
+  > 与 `check-standalone-contents.cjs` 的 `REQUIRED_CONFIG_FILES` 同批删除 ——
+  > 「删掉随包的那一份」不会让契约跑丢：它本来就在构建产物里。
 
   `src` **不在任何一层**：它走「祖先放行、叶子逐文件判」——`scripts/reap-process.mjs` 与
   `scripts/dev-launcher.mjs` 都要 `await import("../src/lib/process/kill-process-tree.ts")`

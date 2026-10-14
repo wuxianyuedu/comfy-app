@@ -16,7 +16,7 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="requiredinputsfor"><span class="tsd-kind-call-signature">requiredInputsFor</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">contract</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">inputs</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-keyword">readonly</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">required</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-keyword">readonly</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_workshop_model-mode-contract.ModeContractRequired.html" class="tsd-signature-type tsd-kind-type-alias">ModeContractRequired</a><a href="#requiredinputsfor" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>某契约生效的必备口：配过用配过的，没配过用内置默认。</p>
+<div class="tsd-comment tsd-typography"><p>某契约生效的必备口：显式配过用配过的，没配过用内置默认。</p>
 <p>入参收 <code>string[]</code>（不是 <code>ModeContractInputId[]</code>）：调用方拿到的口子清单常常
 来自展示派生（<code>ContractEntryDisplay[]</code> 的 <code>id: string</code>），为了一次判空去反向
 断言类型没有意义 —— 非契约 id 本来就落不进必备判据（会被 <code>inputs</code> 过滤掉）。</p>

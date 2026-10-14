@@ -172,14 +172,9 @@ const RUNTIME_DIR = "node_modules/next/dist/compiled/next-server";
  * 放行整棵）；`src` 不在任何一层，只有 `RUNTIME_SRC` 逐文件放行的例外。
  * static 多出那三项是**装配步**才产出的（`schema.sql` 现生成 DDL、两份 HTML 是壳的
  * 启动页与根路径兜底）。
- * `config/` 是**入库的项目配置**（模式契约注册表），运行期由
- * `src/lib/workshop/mode-contract.server.ts` 按 `process.cwd()` 读 —— 谁在运行期读它、
- * 以及「不随包会静默跑成内置默认」的后果见剔除侧那段注释；这里只重复一条：它属于
- * 与 `data/` 相反的那一类（`data/` 是本机私有输入，含密钥，刻意不入库也不随包）。
  */
 const STANDALONE_ALLOWED_TOPLEVEL = [
   ".next",
-  "config",
   "node_modules",
   "package.json",
   "public",
@@ -190,7 +185,6 @@ const STANDALONE_ALLOWED_TOPLEVEL = [
 /** 桌包载荷层（`src-tauri/static`）的顶层白名单。 */
 const STATIC_ALLOWED_TOPLEVEL = [
   ".next",
-  "config",
   "index.html",
   "node_modules",
   "package.json",
@@ -261,17 +255,6 @@ const REQUIRED_PAYLOAD_FILES = [
   // 首启建表的 DDL：载荷里没有 drizzle-kit，建表只能靠这份随包的 SQL。
   "schema.sql",
 ];
-
-/**
- * **入库的项目配置**在产物里必须存在的那一份（两层都查）。
- *
- * 为什么值得单列一条反向检查：`config/` 这一格放行的是目录，而「放行」与「真在」
- * 是两件事 —— 装上安装包的用户拿到的是**复制过去的那一份**，如果装配步漏拷或剪枝
- * 名单里少了它，表现不是报错而是**静默跑成内置默认**（桌包里的模式契约与检出里的
- * 不一致，界面上看不出任何异常）。判据只点名文件，内容对不对不在这条（内容由
- * `src/lib/workshop/mode-contract.server.ts` 的解析与默认回落兜住）。
- */
-const REQUIRED_CONFIG_FILES = ["config/workshop-mode-contracts.json"];
 
 /**
  * 某条产物内相对路径在 `src/` 这一格里是否被允许（祖先放行、叶子逐文件判）。
@@ -443,23 +426,6 @@ function checkDir(dir, label) {
         "standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS）。",
     );
   }
-  // 入库项目配置的反向检查：**两层都查**（同 REQUIRED_HOST_FILES 的理由——装配
-  // 发生在 standalone 那一层之后，真正内嵌进 exe 的是 static 那一份，只查前者
-  // 推不出「出厂件也在」）。同样只在「这一层真的是个产物」时才报缺件。
-  const missingConfig = files.includes("server.js")
-    ? REQUIRED_CONFIG_FILES.filter((p) => !files.includes(p))
-    : [];
-  if (missingConfig.length > 0) {
-    failed = true;
-    console.error(
-      `[${label}] 入库项目配置缺件 ${missingConfig.length} 个：\n  ` +
-        missingConfig.join("\n  ") +
-        "\n  后果：模式契约（每种模式有哪些统一输入 / 输出）在产物里读不到 → " +
-        "静默回落内置默认，桌包与 dev 检出不是同一份配置，而界面上看不出异常。\n" +
-        "  修法：确认 config/ 已入库、且 build-desktop.mjs 的 §入库配置 把它拷进了 " +
-        "static，没被剪枝名单误删。",
-    );
-  }
   // 桌包载荷的必备件（ISSUE #1216）：**只查 static 这一层**——`schema.sql` 与运行入口
   // 都由装配步产出/从仓库显式拷贝，`.next/standalone` 那一层没有它们才是常态（入口是
   // 给壳用的，standalone 层由 pnpm build 的冒烟负责）。缺件的表现同样是「双击没反应 /
@@ -608,7 +574,6 @@ module.exports = {
   REQUIRED_RUNTIME_FILES,
   REQUIRED_HOST_FILES,
   REQUIRED_PAYLOAD_FILES,
-  REQUIRED_CONFIG_FILES,
   RUNTIME_DIR,
   collectFiles,
   missingRequiredRuntimeFiles,
