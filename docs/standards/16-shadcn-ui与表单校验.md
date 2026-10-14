@@ -341,7 +341,7 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
   撤掉的另一面是**目录不得复活**：归并完还得有个判据挡住「下一个人再
   `mkdir studio/ui` 起一套」，见 `tests/ui-kit-single-home.test.ts`。
 
-#### 16.2.3.1 浮层的「位置由谁定」：有锚点就必须交给 Positioner（ISSUE #717）
+#### 16.2.3.16 浮层的「位置由谁定」：有锚点就必须交给 Positioner（ISSUE #717）
 
 P2 把浮层收拢到 `ui/` 原语时踩过一个坑，值得单独立一条判据：**收拢容器不等于
 收拢定位**。
@@ -1324,15 +1324,15 @@ story 不经 store 读）。
 「手写 Esc、手写遮罩点击关闭、手写定位 + 滚动重定位、手写 z-index 魔数」。
 只换 ① 不删 ② 会留下两套关闭语义同时生效（例如 Esc 触发两次 dismiss）。
 
-| 形态                 | 原来自搓的位置                                                                                                         | 现在                                                                                      |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 确认对话框           | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点）                                                                | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留                     |
-| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                    | `ui/popover` + **锚点定位**；`workflow-utils.ts` 的 `computePos` 一并删除（见 §16.2.3.1） |
-| 源码查看弹窗         | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc）                                                                     | `ui/dialog`；载入态改 `ui/page-loading`                                                   |
-| 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                  | `ui/dialog`                                                                               |
-| 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                    | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）                            |
-| 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元            | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除                         |
-| 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/CanvasSettingsPanel.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`）                                                              |
+| 形态                 | 原来自搓的位置                                                                                                         | 现在                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 确认对话框           | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点）                                                                | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留                      |
+| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                    | `ui/popover` + **锚点定位**；`workflow-utils.ts` 的 `computePos` 一并删除（见 §16.2.3.16） |
+| 源码查看弹窗         | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc）                                                                     | `ui/dialog`；载入态改 `ui/page-loading`                                                    |
+| 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                  | `ui/dialog`                                                                                |
+| 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                    | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）                             |
+| 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元            | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除                          |
+| 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/CanvasSettingsPanel.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`）                                                               |
 
 ### 16.2.4.2 P1 按钮分批的进度与做法
 
@@ -5736,7 +5736,7 @@ navigation-menu pagination radio-group scroll-area slider table
 「页头写在哪一层」因此不是风格问题：**它得跟调用处同侧**。
 （`pages` / `consumers` 那份具名清单里，这一屏登记的是实现侧文件，不是壳。）
 
-#### 16.2.4.73.1 同一个 ISSUE 的另一半：设置页的「返回」按钮与竖栏导航（用户反馈「不好看」，ISSUE #1423）
+#### 16.2.4.73.3 同一个 ISSUE 的另一半：设置页的「返回」按钮与竖栏导航（用户反馈「不好看」，ISSUE #1423）
 
 用户那句「设置页的界面不好看，优化，后退按钮去掉」与上一节是同一次反馈下的两面。
 四条改动，每条都对应一个**没有判据会变红**的形态退化：
@@ -5755,7 +5755,7 @@ navigation-menu pagination radio-group scroll-area slider table
 
 #### 16.2.4.73.2 横排 chip 带被用户退回：分组与分区项**不能平权**（ISSUE #1694）
 
-`16.2.4.73.1` 把 192px 的竖栏换成一条横排 chip 带，理由是「分组层级没换来导航价值
+`16.2.4.73.3` 把 192px 的竖栏换成一条横排 chip 带，理由是「分组层级没换来导航价值
 却吃掉四分之一屏宽」。那条账只算了一半：**窄了，但层级也没了**。用户隔天就退回：
 
 > 「设置这里的还是树形结构显示标签吧，现在看着不舒服」（ISSUE #1694）
@@ -5793,7 +5793,7 @@ navigation-menu pagination radio-group scroll-area slider table
 - **「诊断」从「应用」里分出来**：日志不是应用配置，横排时它挤在「应用」段尾
   看不出来，成了父行之后语义立刻显形。
 - **代价是宽度恢复了**（左栏 `w-40` + `gap-6`）：这是用户**点名要的形状**，
-  和 `16.2.4.73.1` 的取舍反过来了 —— 那一条的教训因此不是「竖栏不好」，
+  和 `16.2.4.73.3` 的取舍反过来了 —— 那一条的教训因此不是「竖栏不好」，
   而是「别用一个装不下两层的形态去省宽度」。
 
 判据（`SettingsShell.test.tsx` 的第 3 条，随本次落地）：**分组名不在可点目标里**
@@ -6067,7 +6067,7 @@ pnpm dlx shadcn@latest add dialog form input select
 - 生成后校验：文件名 kebab；导入路径用 `~/components/ui/<name>`。
 - shadcn CLI 默认写 `@/` 别名（`components.json` 的 alias 是 `~/`，CLI 生成的
   组件仍可能带 `@/`）；本仓库用 `~`，生成后**顺手把 `@/` 改成 `~/`**，
-  保持 `~/components/ui/<name>` 一致。这条不再靠人记：`scripts/check-import-alias.cjs`（R13，见 [12 §12.8.0](12-代码组织与文件结构.md#1280-import-别名只有一种-issue-640机器强制)）
+  保持 `~/components/ui/<name>` 一致。这条不再靠人记：`scripts/check-import-alias.cjs`（R13，见 [12 §12.8.0](12-代码组织与文件结构.md#1280-import-别名只有一种issue-640机器强制)）
   会在提交阶段拦下 —— 而 `ui/` 是「工具生成、尽量不手改」的目录，正是漂移的高发区。
 - 不要从 radix 版 shadcn 仓库复制组件；遇到缺失原语用 `shadcn add` 生成 base-ui 版。
 
@@ -6239,7 +6239,7 @@ shadcn add @comfy-app-t3/form @comfy-app-t3/select
 
 **何时换 TanStack Form**：当表单出现"超复杂动态字段 + 极致类型推导"需求（如字段级条件联动、嵌套数组的严格推断），TanStack Form 的 headless + 编译期类型推断更省心（无 `Controller`/`ref` 心智负担）。其余情况保持 RHF + Zod。
 
-## 16.6 base-ui 注意事项
+## 16.6.1 base-ui 注意事项
 
 - 所有 shadcn 组件须为 **base-ui 版**（风格 `base-nova`）。
 - 若 `shadcn add form` 生成的 `form.tsx` 误引 `@radix-ui/*`，改回 `@base-ui/react` 对应导出（Label/Form 原语）。
