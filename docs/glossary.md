@@ -42,8 +42,8 @@
 3. 路径前缀？→ `project-canvas` = 项目画布；`studio/canvas` 或 `workflow-editor` = 工作流编辑器画布。
    （第三种「旧流程画布」已删除，路径前缀不存在了。）
 
-> **写文档时的硬约定**：涉及画布性能（[主规范 §6.1](../standards/Comfy-APP-T3-项目开发规范.md)、
-> [02 §2.11](../standards/02-性能规范.md)）默认指**项目画布**；涉及 ComfyUI 图结构 /
+> **写文档时的硬约定**：涉及画布性能（[主规范 §6.1](standards/Comfy-APP-T3-项目开发规范.md)、
+> [02 §2.11](standards/02-性能规范.md)）默认指**项目画布**；涉及 ComfyUI 图结构 /
 > `class_type` / 参数映射时默认指**工作流编辑器画布**。二者都涉及时一律写全名。
 
 > **旧流程画布删除后的归位去向**（曾经的「节点注册表与节点样式被复用」的那部分）：
@@ -69,9 +69,9 @@
 | **画布项目**（`CanvasProject`） | 项目画布里的一个可命名、可切换、可持久化的作品单位 | `src/lib/project-canvas/canvas-store.ts` 的 `CanvasProject`；id 前缀 `proj_*` | 「画布」「项目文件」（「项目」还被 `NAV_ITEMS` id `works`「项目」占用，指作品相册，见 §6） |
 | **画布节点**（项目画布节点） | 项目画布上的一个生成单元 | `CanvasNodeType`（`src/lib/project-canvas/canvas-types.ts`），id 由 `makeNodeId()` 生成（`n_*`），`data.kind` ∈ `image\|video\|script\|agent\|workflow\|text\|picture\|movie` | 「节点」（不加限定） |
 | **编辑器节点**（工作流节点） | 工作流编辑器画布上的一个 ComfyUI 节点 | `src/components/studio/workflow-types.ts` 的 `WorkflowNodeData`，字段 `nodeId`（ComfyUI 图里的 key）+ `classType` | 「ComfyUI 节点」以外的简称 |
-| **ComfyUI 节点 / 节点 id** | ComfyUI 图 JSON 里的键与 `class_type` | 图结构 `ComfyGraph = Record<string, ComfyGraphNode>`；编辑器显示的右上角编号是**真实节点 id**（如 `#1670`，见 [15 附录 §15.5](../standards/15-附录.md)） | 「编号」单独用 |
+| **ComfyUI 节点 / 节点 id** | ComfyUI 图 JSON 里的键与 `class_type` | 图结构 `ComfyGraph = Record<string, ComfyGraphNode>`；编辑器显示的右上角编号是**真实节点 id**（如 `#1670`，见 [15 附录 §15.5](standards/15-附录.md)） | 「编号」单独用 |
 | **子工作流节点** | 项目画布上代表「一份可展开工作流」的节点（折叠态是卡片，展开态下钻） | `src/components/studio/canvas/WorkflowSubgraphNode.tsx`、`SubgraphHeader.tsx` | 「嵌套节点」 |
-| **视口（viewport）** | 画布可见区域（pan/zoom 状态） | ReactFlow `useReactFlow()`；不进全局 store（[02 §2.11](../standards/02-性能规范.md)） | 「画布」 |
+| **视口（viewport）** | 画布可见区域（pan/zoom 状态） | ReactFlow `useReactFlow()`；不进全局 store（[02 §2.11](standards/02-性能规范.md)） | 「画布」 |
 
 ---
 
@@ -128,7 +128,7 @@
 | **启动编排** | 真正起 dev server / 壳 / 探端口的逻辑脚本 | `scripts/dev-launcher.ps1`（唯一编排者） |
 | **侧车**（sidecar） | 壳托管的 Node 运行时进程（跑 Next standalone） | `src-tauri/src/lib.rs`（sidecar 目录 `src-tauri/binaries/` 为构建产物，本地可能不存在） |
 | **启动页**（splash） | 冷启动加载页 | `public/splash.html`（`tauri.conf.json` 的 `windows[0].url`） |
-| **应用运行时日志** | 应用自身写盘的结构化日志（按子系统分目录） | `src/lib/app-runtime-log.ts`、`log/`（布局见 [主规范 §4](../standards/Comfy-APP-T3-项目开发规范.md)） |
+| **应用运行时日志** | 应用自身写盘的结构化日志（按子系统分目录） | `src/lib/app-runtime-log.ts`、`log/`（布局见 [主规范 §4](standards/Comfy-APP-T3-项目开发规范.md)） |
 | **日志面板** | 应用内查看日志/运行输出的 UI | `src/components/studio/logs/`（`LogProvider` / `LogPanel`） |
 
 ---
@@ -145,12 +145,12 @@
 5. **术语漂移即修文书**：发现代码改名导致本表失效时，随本次提交一起更新本表与
    [docs/README.md](README.md) 的索引，不留过期条目。
 6. **命名冲突就地隔离**：新增文件前先看本表所在分组，确认目录内没有语义撞车的
-   同族名词（既有约定见 [12 §12.8](../standards/12-代码组织与文件结构.md)「同名不同物就近隔离」）。
+   同族名词（既有约定见 [12 §12.8](standards/12-代码组织与文件结构.md)「同名不同物就近隔离」）。
 
 ---
 
 ## 9. 关联文档
 
-- 命名硬约束（文件/组件/变量/常量）：[主规范 §3](../standards/Comfy-APP-T3-项目开发规范.md)、[12 §12.6](../standards/12-代码组织与文件结构.md)
-- 目录与域划分（画布三体系的物理落点）：[12 §12.1](../standards/12-代码组织与文件结构.md)
+- 命名硬约束（文件/组件/变量/常量）：[主规范 §3](standards/Comfy-APP-T3-项目开发规范.md)、[12 §12.6](standards/12-代码组织与文件结构.md)
+- 目录与域划分（画布三体系的物理落点）：[12 §12.1](standards/12-代码组织与文件结构.md)
 - 文档体系统一索引与冲突裁决链：[docs/README.md](README.md)

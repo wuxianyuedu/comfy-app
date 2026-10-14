@@ -1,4 +1,4 @@
-﻿# 拉取更新后：本地环境同步指南
+# 拉取更新后：本地环境同步指南
 
 > 适用对象：所有在本地跑过本项目的人（开发人员 / 非开发人员通用）。
 > 回答一个常见问题：**远端提交改了 pnpm 相关配置，我本地 `git pull` 之后还要做什么？**
@@ -166,7 +166,7 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 判据的入口与触发时机：`pnpm check:deps-freshness`（**开工前 / 评审前**，AI 与人都该先跑
 这一条），`--offline` 只看本地这几层；pre-commit 的 `deps-freshness --staged` 那一档只在
 **本次提交动了依赖面**时才判。整条的判据口径见规范
-[13.5.13](../standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活-node-scriptscheck-deps-freshnessmjsissue-1569)。
+[13.5.13](../standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活node-scriptscheck-deps-freshnessmjsissue-1569)。
 
 > **为什么解析层只点名三个包，而不是扫全部 `package.json`**：判据的代价要付得起。
 > 这三条是跑门禁时**无论如何都会解析到**的包（`tsc` 编译需要 `typescript`、测试 / 构建

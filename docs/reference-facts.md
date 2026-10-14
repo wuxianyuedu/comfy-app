@@ -102,7 +102,7 @@
 > 这一档判的不是「装没装」，而是「**装上了、也解析得到吗**」—— 本地 `node_modules`
 > 停在装某个新直接依赖**之前**时，那个包只以传递依赖的旧版本落在**包自己的私有层**里，
 > 两份 lockfile 的文本可以逐字一致，而 `tsc` / `eslint` 报 `Cannot find module`。
-> 判据口径与出口见规范 [13.5.13](standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活-node-scriptscheck-deps-freshnessmjsissue-1569)、
+> 判据口径与出口见规范 [13.5.13](standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活node-scriptscheck-deps-freshnessmjsissue-1569)、
 > 用户侧现场见 [guides/sync-after-pull.md](guides/sync-after-pull.md#31-更安静的一种锁文件对得上而新加的包解析不到issue-1721)。
 >
 > **这一行的「探针清单」就是权威定义本身**（没有第二个事实源）：`scripts/doc-facts.cjs`
