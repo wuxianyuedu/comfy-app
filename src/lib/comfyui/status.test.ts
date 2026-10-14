@@ -235,6 +235,23 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
     const snap = await getComfyRuntimeSnapshot({ force: true });
     expect(snap.running).toBe(false);
     expect(snap.unverified).toBe(false);
+    /* 「没配路径」是一条**完整事实**（本应用不持有任何要管的实例），不是
+     * 「事实不可信」：端口也探过、没有可查的进程表候选，据此报「未运行」是
+     * 安全的。否则上层 `deriveComfyUiStatus` 会因 `didQueryProcTable=false`
+     * 把状态行永远按在「状态检测中…」上（ISSUE #1900）。 */
+    expect(snap.didQueryProcTable).toBe(true);
+  });
+
+  it("未配路径时仍探一次配置端口：外部实例在跑要认出来", async () => {
+    vi.mocked(getSettingsSync).mockReturnValue({
+      comfyuiPath: "",
+      comfyuiPort: 8188,
+    } as never);
+    vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(true);
+    expect(snap.source).toBe("port");
+    expect(snap.port).toBe(8188);
   });
 });
 
