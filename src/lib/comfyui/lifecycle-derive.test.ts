@@ -543,6 +543,30 @@ describe("deriveComfyUiStatus — 运行状态结论", () => {
     expect(v.starting).toBe(false);
   });
 
+  /* 「没配路径」不是「没得查」：那是配置给出的**完整事实**（本应用不持有任何
+   * 要管的实例），端口也已探过没人应答 ⇒ 结论就是「未运行」。这一格与上面
+   * 「0 候选」那一格的区别正是 ISSUE #1900 的现场：用户没配路径，状态行却
+   * 永远停在「ComfyUI 状态检测中…」。快照侧因此把这种情况标成
+   * `didQueryProcTable: true`（见 status.ts 的 no-path 早退），这里钉的是
+   * 那条事实投影出来的结论。 */
+  it("没配路径（探过端口、无候选可查）→ 未运行，不是「检测中」", () => {
+    const v = deriveComfyUiStatus(
+      statusFacts({
+        snap: {
+          running: false,
+          pid: null,
+          port: null,
+          via: null,
+          unverified: false,
+          didQueryProcTable: true,
+        },
+      }),
+    );
+    expect(v.starting).toBe(false);
+    expect(v.probing).toBe(false);
+    expect(v.up).toBe(false);
+  });
+
   it("探测失败（事实不可信）→ 检测中，不报未运行", () => {
     const v = deriveComfyUiStatus(
       statusFacts({
