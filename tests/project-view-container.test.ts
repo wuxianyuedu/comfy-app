@@ -41,13 +41,6 @@ const DOCUMENT_VIEWS = [
   // 约定（左右内边距）在这里第一次有了执行者。
   path.join("src", "components", "console", "ConsoleView.tsx"),
   path.join("src", "components", "workshop", "ModelAdaptersView.tsx"),
-  path.join(
-    "src",
-    "components",
-    "workshop",
-    "mode-contract",
-    "ModeContractView.tsx",
-  ),
 ];
 
 /** 已收口的工作区型视图。
@@ -63,6 +56,20 @@ const DOCUMENT_VIEWS = [
 const WORKSPACE_VIEWS = [
   path.join(STUDIO, "workflow-library", "WorkflowLibrary.tsx"),
   path.join("src", "components", "workshop", "WorkshopPipeline.tsx"),
+  /* 这一屏从文档型挪到工作区型：换壳是布局决定（模式清单收成左侧树形页签之后，
+     文档型那层「整屏一条滚动条 + 居中窄栏」会让树随正文一起被推走、且没有可依附的
+     定高边界），见 `ModeContractView.tsx` 文件头（ISSUE #1870 / #1871）。
+     于是上面那条「传给容器的 className 必须带无变体 `px-`」对它**不再适用**，而不是
+     「被豁免」—— 它判的是「居中列没封顶时留白归零」，这一屏没有居中列。留白的归属
+     下移到屏内那一层，实测在 `ModeContractEditorView.tsx` 的页眉与两栏容器上
+     （`px-4 sm:px-8`），那一层现在自己就是判据看得见的调用点。 */
+  path.join(
+    "src",
+    "components",
+    "workshop",
+    "mode-contract",
+    "ModeContractView.tsx",
+  ),
 ];
 
 /** 剥注释再判：说明文字里出现 `max-w-300` 不等于有人手写那一层。 */
