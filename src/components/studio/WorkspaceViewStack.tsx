@@ -91,6 +91,17 @@ const QueueMonitor = dynamic(
   { ssr: false },
 );
 
+/* ComfyUI 运行页（ISSUE #1900）：与历史 / 队列同族（「项目无关的全局视图」，
+ * 都在看本机后端现在在干什么）。它带着状态查询的事件订阅与启动日志轮询，
+ * 懒加载 —— 不该摊到别的视图首屏。 */
+const ComfyuiControl = dynamic(
+  () =>
+    import("~/components/studio/comfyui/ComfyuiControl").then(
+      (mod) => mod.ComfyuiControl,
+    ),
+  { ssr: false },
+);
+
 /* 控制台（ISSUE #1327）：与历史 / 队列同族（都是「项目无关的全局视图」）。 */
 const ConsoleView = dynamic(
   () => import("~/components/console/ConsoleView").then((m) => m.ConsoleView),
@@ -131,7 +142,8 @@ export interface WorkspaceViewStackProps {
   /** 首页入口卡的跳转 —— 与 `onNavigate` 分开：首页把「再点首页」当空操作。 */
   onHomeNavigate: (view: WorkspaceView) => void;
   onShowAllProjects: () => void;
-  onOpenSettings: () => void;
+  /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
+  onOpenComfyui: () => void;
   onUseWorkflow: (
     id: string,
     meta?: { name: string; taskType: string },
@@ -156,7 +168,7 @@ export function WorkspaceViewStack({
   onNavigate,
   onHomeNavigate,
   onShowAllProjects,
-  onOpenSettings,
+  onOpenComfyui,
   onUseWorkflow,
   canvasSeedNew,
   onConsumeCanvasSeed,
@@ -213,7 +225,10 @@ export function WorkspaceViewStack({
         return <HistoryList onOpenTask={onOpenProject} />;
 
       case "queue":
-        return <QueueMonitor onOpenSettings={onOpenSettings} />;
+        return <QueueMonitor onOpenComfyui={onOpenComfyui} />;
+
+      case "comfyui":
+        return <ComfyuiControl />;
 
       case "settings":
         return <SettingsView fillHeight />;

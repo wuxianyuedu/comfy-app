@@ -247,32 +247,17 @@ export function useSettingsPage(): SettingsPageController {
     showFlash,
   });
 
-  /* ── ComfyUI 启动 / 状态 / 打开（沉在 sub-hook）──────────────────
-   * 状态查询（comfyStatus 5s 轮询、enabled 门控）、启动（先把草稿里的
-   * ComfyUI 各项落库再拉起）、关闭、页签内嵌打开、系统浏览器打开、运行时
-   * 启动日志的 active 判据——全部收在 `./use-settings-page-comfy`。
-   * 返回形状与原 controller 逐字段一致。 */
+  /* ── ComfyUI 配置侧的两份只读派生（沉在 sub-hook）────────────────
+   * 自 ISSUE #1900 起这一分区**只剩配置**：安装形态（路径配没配、桌面版还是
+   * 便携版）与桌面实例的六个存储目录。运行态、启动 / 关闭 / 打开与启动日志
+   * 整块搬去了侧栏「ComfyUI」页（`~/components/studio/comfyui`）——两件事各有
+   * 自己的屏之后，改路径的人不必等秒级探测、看日志的人不必滚过一屏输入框。 */
   const {
-    comfyStatus,
     comfyInstance,
     comfyStorage,
-    comfyStarting,
-    comfyStopping,
-    comfyOpening,
-    comfyBrowserOpening,
-    startComfy,
-    stopComfy,
-    openComfy,
-    openComfyInBrowser,
-    comfyLog,
     refetchComfyInstance,
     refetchComfyStorage,
-  } = useSettingsComfy({
-    settingsDraft,
-    showFlash,
-    setSaving,
-    statusQueriesEnabled,
-  });
+  } = useSettingsComfy({ statusQueriesEnabled });
 
   /* ── Drizzle Studio：状态查询 + 启动 / 关闭 / 打开 + 运行时日志 ──
    * 状态与动作沉在 sub-hook；enabled 门控与 comfyStatus 同口径（首屏两份配置
@@ -415,17 +400,8 @@ export function useSettingsPage(): SettingsPageController {
     ollamaModels,
     ollamaStarting,
     startOllama,
-    comfyStatus,
     comfyInstance,
     comfyStorage,
-    comfyStarting,
-    comfyStopping,
-    comfyOpening,
-    comfyBrowserOpening,
-    startComfy,
-    stopComfy,
-    openComfy,
-    openComfyInBrowser,
     dbStudioStatus,
     dbStudioStarting,
     dbStudioStopping,
@@ -441,7 +417,6 @@ export function useSettingsPage(): SettingsPageController {
     createBackupNow,
     restoreFrom,
     openExternalUrl,
-    comfyLog,
     dbStudioLog,
     ollamaLog,
     ollamaStopping,

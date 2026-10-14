@@ -3,81 +3,21 @@
 /**
  * 设置页共用的展示原语（规范 17 §17.2 第③层）。
  *
- * 只做样式与结构，不含业务：卡片外壳、受控输入、主按钮、ANSI 日志文本、
- * 字段图片预览。原先内联在 `SettingsPageView.tsx` 底部（约 145 行），
- * 拆出后各分区视图共用同一份实现，避免复制样式类。
+ * 只做样式与结构，不含业务：卡片外壳、受控输入、主按钮、字段图片预览。
+ * 原先内联在 `SettingsPageView.tsx` 底部（约 145 行），拆出后各分区视图共用
+ * 同一份实现，避免复制样式类。
+ *
+ * ANSI 日志着色（`AnsiLogText`）刚从本模块搬走 —— 它的消费者是「运行日志框」
+ * 而那个部件现在被侧栏的 ComfyUI 页共用，留在设置页这一侧就成了一条
+ * 「共用部件 → 某个屏的展示原语」的反向依赖。新家：
+ * `~/components/studio/logs/AnsiLogText`。
  */
 
-import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
 import { textHandler } from "~/lib/form-props";
 import { isPreviewableUrl } from "~/lib/llm/usage-test-config";
-import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { FormField } from "~/components/ui/form-field";
-
-import { statusButtonClass } from "../settings-status-row-config";
-
-/* ── 启动日志 ANSI 颜色渲染 ─────────────────────────────────
- * 纯映射：lib/log-ansi 解析出的样式键 → tailwind class，无业务逻辑。
- * 未知样式键回退默认色，保证新增键不会渲染成透明文本。
- *
- * 表内 red/green/yellow/blue/magenta/cyan + 各自 bright 变体 + bg 变体的
- * palette 字面量代表 **ANSI SGR 终端颜色身份**（terminal color identity）、
- * 不是主题状态色——与 log-row-style.ts 的 TOKEN_CLASS 同一族。§3.6.1
- * 文档化例外，走 P71 `// p71-allow` 例外块。 */
-// p71-allow:start  ANSI SGR 终端 8 色 + bright/bg 变体——§3.6.1 例外：颜色代表 terminal color identity、不是主题状态色
-const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
-  bold: "font-bold",
-  dim: "opacity-60",
-  italic: "italic",
-  underline: "underline",
-  red: "text-red-600 dark:text-red-400",
-  green: "text-green-600 dark:text-green-400",
-  yellow: "text-yellow-600 dark:text-yellow-300",
-  blue: "text-blue-600 dark:text-blue-400",
-  magenta: "text-fuchsia-600 dark:text-fuchsia-400",
-  cyan: "text-cyan-700 dark:text-cyan-300",
-  white: "text-ink-bright",
-  gray: "text-ink-muted",
-  "red-bright": "text-red-700 dark:text-red-300",
-  "green-bright": "text-green-700 dark:text-green-300",
-  "yellow-bright": "text-yellow-700 dark:text-yellow-200",
-  "blue-bright": "text-blue-700 dark:text-blue-300",
-  "magenta-bright": "text-fuchsia-700 dark:text-fuchsia-300",
-  "cyan-bright": "text-cyan-800 dark:text-cyan-200",
-  "white-bright": "text-ink-bright",
-  "red-bg": "bg-red-500/15 dark:bg-red-900/60",
-  "green-bg": "bg-green-500/15 dark:bg-green-900/60",
-  "yellow-bg": "bg-yellow-500/15 dark:bg-yellow-800/60",
-  "blue-bg": "bg-blue-500/15 dark:bg-blue-900/60",
-  "magenta-bg": "bg-fuchsia-500/15 dark:bg-fuchsia-900/60",
-  "cyan-bg": "bg-cyan-500/15 dark:bg-cyan-900/60",
-  "white-bg": "bg-subtle",
-};
-// p71-allow:end
-
-export function AnsiLogText({ segments }: { segments: AnsiSegment[] }) {
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.styles && seg.styles.length > 0 ? (
-          <span
-            key={i}
-            className={seg.styles
-              .map((style) => ANSI_STYLE_CLASS[style])
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {seg.text}
-          </span>
-        ) : (
-          <span key={i}>{seg.text}</span>
-        ),
-      )}
-    </>
-  );
-}
 
 export function Field({
   label,
@@ -119,62 +59,6 @@ export function Field({
         />
       )}
     </FormField>
-  );
-}
-
-/**
- * 状态行动作按钮（**不是**「状态行主按钮」）—— `ui/button` 的基元 + 本页的
- * 排布契约（ISSUE #672 P1）。
- *
- * 这里此前是第二个 `<button>` 实现（自拼尺寸类 + 自拼配色）。现在底子是
- * `ui/button`：配色由 `variant` 决定，本模块只负责把状态行的**排布契约**
- *（`statusButtonClass`：不许换行 / 不许被 flex 压扁 / 行框归位，见 ISSUE #423）
- * 叠上去。
- *
- * 三条覆盖类与工作流编辑器顶栏同一口径（规范 §16.2.4.2 第 3、4 条）：
- *   · `h-auto px-4 py-2` —— 高度与横向内边距归还给本页（基元 `h-8 px-2.5`）；
- *   · `font-semibold`     —— 状态行动作的权重比基元默认高一档；
- *   · `rounded-lg`        —— 与状态行外框同一档圆角。
- * `cn()` 走 tailwind-merge，同一属性后面的类赢，因此覆盖串必须排在最后。
- *
- * ## 缺省档从 `primary-solid` 改成 `primary`（软底）
- *
- * 这三条状态行（ComfyUI / Drizzle Studio / Ollama）**各有三个动作**：打开 /
- * 启动 / 关闭。缺省实心时三个都是同一颗品牌紫实心按钮，一屏里没有主次：
- * 用户看不出「该点哪个」，而在「未运行」时那两个本就点不动的（打开 / 关闭）也
- * 长着可点的样子 —— 实心档置灰只是 50% 不透明度，仍是饱和紫，读起来像「可点但
- * 是浅一点」，而不是「现在不能点」。
- *
- * 改成软底之后三件事一起成立：① 真正的动作（启动 / 关闭）仍由调用处显式传
- * `primary-solid` 提为实心，一屏里只剩一颗实心；② 不构成动作的那些（打开 /
- * 在浏览器打开）走软底或 `outline`，层级立刻分得开；③ 置灰的软底按钮是「淡底淡
- * 字」，与可点状态一眼可分。**缺省值必须是「不需要强调的那一档」** —— 缺省
- * 实心会让每个新加的动作都自动变成主按钮，而「哪个是主要动作」是调用处的判断。
- */
-export function StatusButton({
-  onClick,
-  disabled,
-  children,
-  className,
-  variant = "primary",
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-  className?: string;
-  variant?: React.ComponentProps<typeof Button>["variant"];
-}) {
-  return (
-    <Button
-      variant={variant}
-      onClick={onClick}
-      disabled={disabled}
-      className={statusButtonClass(
-        `h-auto rounded-lg px-4 py-2 font-semibold ${className ?? ""}`,
-      )}
-    >
-      {children}
-    </Button>
   );
 }
 

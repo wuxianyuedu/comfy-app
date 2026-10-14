@@ -13,11 +13,11 @@ import {
   STATUS_ACTIONS_CLASS,
   STATUS_ROW_CLASS,
   STATUS_TEXT_CLASS,
-} from "../settings-status-row-config";
+  StatusButton,
+} from "~/components/ui/service-status-row";
 
 import { SettingsCard } from "~/components/ui/settings-card";
-import { StatusButton } from "./SettingsPrimitives";
-import { RuntimeLogBox } from "./RuntimeLogBox";
+import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */

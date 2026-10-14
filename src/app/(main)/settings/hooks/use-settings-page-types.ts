@@ -14,7 +14,7 @@
  * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端消费者
  * 也能安全引它。
  */
-import type { RuntimeLogController } from "./use-runtime-log-source";
+import type { RuntimeLogController } from "~/components/studio/logs/use-runtime-log-source";
 import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
@@ -147,22 +147,9 @@ export interface SettingsPageController {
   ollamaModels: OllamaModel[];
   ollamaStarting: boolean;
   startOllama: () => Promise<void>;
-  /* ComfyUI */
-  comfyStatus: {
-    up: boolean;
-    starting: boolean;
-    /** 服务端探测仍在进行 / 事实不可信：状态行显示「检测中…」而不是「未运行」，
-     *  避免外部已启动的实例被先误报一次未运行（ISSUE #339）。 */
-    probing: boolean;
-    /** 服务端「关闭中」窗口（globalThis 计时，可跨设置页挂载存活）：见 ISSUE #103 */
-    stopping: boolean;
-    base: string | null;
-    port: number;
-    /** 进程用什么起的（中文短语）：只有端口监听在、HTTP 未就绪时也非空，
-     *  状态行据此提示「接口未就绪，可能仍在启动」。 */
-    via: string | null;
-  } | null;
-  /** 安装形态：**只读文件系统的快速判据**，与 comfyStatus 分开取。
+  /* ComfyUI（**只剩配置侧**：运行态与启动日志在侧栏「ComfyUI」页，
+     见 `~/components/studio/comfyui/hooks/use-comfyui-control`） */
+  /** 安装形态：**只读文件系统的快速判据**。
    *
    * 为什么不合进 comfyStatus：comfyStatus 要付「进程表查询 + 端口探测」（秒级），
    * 而形态只需毫秒级 fs 判定；合在一起时徽标与「端口/启动参数是否隐藏」会被拖到
@@ -181,18 +168,8 @@ export interface SettingsPageController {
    *
    *  非桌面实例为 null：便携版 / venv 的目录只由启动参数逐次决定，界面拿它回答
    *  「模型在哪」会是另一套口径。数据来源同 `comfyInstance`（配置路径的函数），
-   *  因此同样在保存偏好 / 启动 ComfyUI 之后各重取一次，不进轮询。 */
+   *  因此同样在保存偏好之后重取一次，不进轮询。 */
   comfyStorage: DesktopStoragePaths | null;
-  comfyStarting: boolean;
-  comfyStopping: boolean;
-  comfyOpening: boolean;
-  /** 浏览器打开动作进行中（与页签打开各自独立，便于分别显示忙碌态）。 */
-  comfyBrowserOpening: boolean;
-  startComfy: () => Promise<void>;
-  stopComfy: () => Promise<void>;
-  openComfy: () => Promise<void>;
-  /** 用系统默认浏览器打开运行中的 ComfyUI（页签内嵌之外的并列出口）。 */
-  openComfyInBrowser: () => Promise<void>;
   /* Drizzle Studio（本地数据库可视化）：状态 + 启动/关闭/打开查看 */
   dbStudioStatus: {
     up: boolean;
@@ -217,9 +194,9 @@ export interface SettingsPageController {
   restoreFrom: (name: string) => Promise<void>;
   /** 用系统默认浏览器打开生成的远程资源（视频等），桌面壳内替代 target=_blank */
   openExternalUrl: (url: string) => Promise<void>;
-  /* 启动日志（log/services/*-runtime.log）：三个分区共用同一套「按会话切分 +
-     跟随 + 刷新」的状态，见 use-runtime-log-source（视图只渲染）。 */
-  comfyLog: RuntimeLogController;
+  /* 启动日志（log/services/*-runtime.log）：共用同一套「按会话切分 + 跟随 +
+     刷新」的状态，见 `~/components/studio/logs/use-runtime-log-source`
+     （视图只渲染）。ComfyUI 那一份随运行态一起搬去了侧栏「ComfyUI」页。 */
   dbStudioLog: RuntimeLogController;
   ollamaLog: RuntimeLogController;
   /* Ollama 关闭（启动已有 startOllama） */

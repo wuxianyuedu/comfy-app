@@ -5,7 +5,7 @@
  * 非空；jsdom 下同一段代码同步卸载。
  */
 /**
- * `RuntimeLogBox` 的交互契约（设置页「启动日志」框）。
+ * `RuntimeLogBox` 的交互契约（「启动日志」框 —— 设置页三段 + 侧栏「ComfyUI」页共用）。
  *
  * 对应三条用户反馈：
  *   1. 小窗口某些时候看着麻烦 → 要有**全屏查看**（且全屏里同样能切换启动）；
@@ -21,7 +21,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { RuntimeLogController } from "../hooks/use-runtime-log-source";
+import type { RuntimeLogController } from "./use-runtime-log-source";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 
 const FILE_NAME = "comfyui-runtime.log";

@@ -16,7 +16,7 @@ import { displayValue } from "~/lib/display-value";
 import { fmtBytes } from "~/lib/format-bytes";
 import { formatLocalStamp } from "~/lib/time-format";
 
-import { StatusButton } from "./SettingsPrimitives";
+import { StatusButton } from "~/components/ui/service-status-row";
 import type { BackupEntry } from "../hooks/use-settings-page-backup";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 

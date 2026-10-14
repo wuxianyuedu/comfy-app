@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -8,14 +9,14 @@ import {
   STATUS_ROW_CLASS,
   STATUS_TEXT_CLASS,
   statusButtonClass,
-} from "./settings-status-row-config";
+} from "./service-status-row";
 
 /** class 串按空格切词，便于断言「含有某个工具类」而不受顺序影响。 */
 function tokens(cls: string): string[] {
   return cls.split(/\s+/).filter(Boolean);
 }
 
-describe("设置页状态行按钮：不许换行变高（ISSUE #423）", () => {
+describe("服务状态行按钮：不许换行变高（ISSUE #423）", () => {
   it("基础类带全三条硬规则", () => {
     for (const rule of ["whitespace-nowrap", "shrink-0", "leading-none"]) {
       expect(tokens(STATUS_BUTTON_BASE)).toContain(rule);
@@ -37,7 +38,7 @@ describe("设置页状态行按钮：不许换行变高（ISSUE #423）", () => 
   });
 });
 
-describe("设置页状态行：窄了整排换行，不压扁控件", () => {
+describe("服务状态行：窄了整排换行，不压扁控件", () => {
   it("根容器允许换行，宽度不足时按钮整排落到第二行", () => {
     expect(tokens(STATUS_ROW_CLASS)).toContain("flex-wrap");
   });
@@ -53,26 +54,30 @@ describe("设置页状态行：窄了整排换行，不压扁控件", () => {
   });
 });
 
-describe("设置页视图：三条状态行都接上了这套判据", () => {
-  /* 视图已按分区拆到 components/（ISSUE #535 拆 SettingsPageView），三条状态行
-   * 分别在 LlmLocalSection（Ollama）/ ComfyuiSection / DatabaseSection 里，判据
-   * 扫这三份源码；主按钮原语 `StatusButton` 在 SettingsPrimitives
-   * （statusButtonClass 的唯一落点）。取 import 段之后的部分：否则「用了几次」
-   * 会把 import 名本身也算进去。 */
-  const readViewBody = (rel: string) =>
-    readFileSync(new URL(rel, import.meta.url), "utf8").split(
-      '} from "../settings-status-row-config";',
-    )[1] ?? "";
+describe("状态行视图：都接上了这套判据", () => {
+  /* 状态行分布在两个屏上（ISSUE #1900 把 ComfyUI 那一行搬去侧栏「ComfyUI」页）：
+   *   · 设置页：LlmLocalSection（Ollama）/ DatabaseSection（Drizzle Studio）；
+   *   · 侧栏「ComfyUI」页：`studio/comfyui/ComfyuiControlView`。
+   * 判据扫这几份源码。取 import 段之后的部分：否则「用了几次」会把 import 名本身
+   * 也算进去。 */
+  /* 只取 import 段之后的部分：否则「用了几次」会把 import 名本身也算进去
+   * （`import { STATUS_ROW_CLASS } from "…"` 就是一次匹配）。 */
+  const readViewBody = (rel: string) => {
+    const src = readFileSync(path.resolve(__dirname, rel), "utf8");
+    const end = src.lastIndexOf("\nimport ");
+    const body = end >= 0 ? src.slice(src.indexOf("\n", end + 1) + 1) : src;
+    return body;
+  };
   const viewBody = [
-    readViewBody("./components/LlmLocalSection.tsx"),
-    readViewBody("./components/ComfyuiSection.tsx"),
-    readViewBody("./components/DatabaseSection.tsx"),
+    readViewBody("../../app/(main)/settings/components/LlmLocalSection.tsx"),
+    readViewBody("../../app/(main)/settings/components/DatabaseSection.tsx"),
+    readViewBody("../studio/comfyui/ComfyuiControlView.tsx"),
   ].join("\n");
   /* StatusButton 原语单独取：只留 `StatusButton` 的函数体，避免把文档注释里
    * 「这里此前是第二个 `<button>` 实现」这类**说明**当成实现（判据自身的
    * 注释剥离教训见 check-ui-primitives.cjs 的 stripComments）。 */
   const primitivesSrc = readFileSync(
-    new URL("./components/SettingsPrimitives.tsx", import.meta.url),
+    path.resolve(__dirname, "service-status-row.tsx"),
     "utf8",
   );
   const primitivesBody =
@@ -90,14 +95,14 @@ describe("设置页视图：三条状态行都接上了这套判据", () => {
     );
   });
 
-  it("ComfyUI / Drizzle Studio / Ollama 三行都用状态行容器", () => {
+  it("三行都用状态行容器（Ollama / Drizzle Studio / ComfyUI）", () => {
     const rows = viewBody.match(/STATUS_ROW_CLASS/g) ?? [];
     expect(rows.length).toBe(3);
   });
 
   it("三行的按钮组都用 STATUS_ACTIONS_CLASS 或带 shrink-0", () => {
     const groups = viewBody.match(/STATUS_ACTIONS_CLASS/g) ?? [];
-    // ComfyUI 与 Drizzle Studio 两行是按钮组；Ollama 行单个按钮带 shrink-0
+    // Drizzle Studio 与 ComfyUI 两行是按钮组；Ollama 行单个按钮带 shrink-0
     expect(groups.length).toBe(2);
     /* Ollama 行只有一个动作按钮，它走 StatusButton —— 排布契约（含
      * `shrink-0`）由 statusButtonClass 提供，不再是视图里手写的一串类。 */

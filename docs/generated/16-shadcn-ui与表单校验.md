@@ -408,7 +408,7 @@ P2 先把自搓浮层收进 `ui/` 原语、定下两条刻度；**P4 复查时�
    而**第三方浮层不受本仓库让位规则约束**：base-ui 的 Dialog 在 modal 打开时往
    `body` 注入 `InternalBackdrop`（`div[data-base-ui-inert]`，
    `position: fixed; inset: 0; z-index: auto; pointer-events: auto`），它铺满整个
-   视口（含标题行）。实测现场：设置页「启动日志（comfyui-runtime.log）」点全屏后，
+   视口（含标题行）。实测现场：「启动日志（comfyui-runtime.log）」点全屏后，
    页签与右上角的最小化/最大化/关闭**整排点不动**（遮罩在 `elementFromPoint`
    里赢下了顶部 36px）。
    取层级一律走 `TITLE_BAR_CHROME_CLASS`（`~/lib/full-screen-layer`，= `relative
