@@ -10,7 +10,9 @@
  *   3) Rust / PowerShell 侧无法在此环境执行（需 cargo / pwsh），改为断言其
  *      实现与测试**确实引用同一份向量文件** —— 某侧被改回「自己写死值」时
  *      会被拦下，而不是等到 Windows 真机上才发现漂移。
- * 任一侧失败以退出码 1 阻断提交。
+ * 任一侧**给出回答而不一致** → 退出码 1 阻断提交。某一侧**没给出回答**（超时两遍 /
+ * 探测不到解释器）→ 记「未校验」、点名、放行：拿不到测量不等于测量结果是红的（§13.6.4.1），
+ * 而它也不是绿 —— 见下面 `unverified` 那一格与 `decidePythonVerdict`。
  *
  * Node 侧的逐条断言另见 tests/app-port-cross-language.test.ts（vitest 侧同源）；
  * 本脚本是「不装依赖也能跑」的门禁版本（pre-commit 里 tsc/lint 之前更快失败）。
@@ -35,8 +37,16 @@ const problems = [];
  * 而同一条判据钩子结束后就地复跑退 0 —— 那不是内容红，是没拿到测量。
  * 规范 §13.6.4.1（ISSUE #1747）对 C 组早已立了同一条口径：**拿不到测量 ≠ 测量结果是红的**。
  *
- * 本笔**只拆话术、不放宽判定**：`unverified` 非空时照样退 1（「要不要按未校验放行」是另一个口径，
- * 需要这条线拍），但标题与逐条内容必须说真话，并给出可执行的出口。
+ * 口径（本线已拍，与 C 组 §13.6.4.1 同形）：**第二遍测量自己说话**，不看 `os.loadavg()`（Windows 恒 0）。
+ *   · 第一遍是超时形态 ⇒ 当场再取证一次；
+ *   · 第二遍给出回答 ⇒ 按那一遍判（绿与真红照旧）；
+ *   · 第二遍**仍只是超时形态** ⇒ 记「未校验」并**放行**，逐条点名，标题不许说成一致性失败；
+ *   · 探测不到 Python（`missing`）同样记「未校验」并点名 —— 它此前是**静默跳过**，那一侧既不参与
+ *     比对也不报红，等于把「四侧一致」悄悄降级成「三侧一致」。
+ * 放行站得住的理由：放行的是**这一次取证**而不是这条判据 —— 其余三面（Node 真跑、Rust / PowerShell
+ * 锁引用）仍在同一趟里判，而 `missing` 与双超时都会被点名，不是无声通过。
+ * 代价与触发面：只有第一遍超时才多花一趟（最坏 `PROBE_TIMEOUT_MS × 2 + PY_TIMEOUT_MS`）；一切正常时
+ * 一次复跑都不跑。
  */
 const unverified = [];
 
@@ -73,6 +83,88 @@ function probeCommand(cmd, args) {
   } catch (e) {
     return isTimeoutLike(e) ? "timeout" : "missing";
   }
+}
+
+/**
+ * Python 侧取证**一次**：探测可用命令 → 跑自检脚本。
+ *
+ * `timeout` 与 `missing` 都是「没拿到测量」，但要说的话不同，所以分成两态：前者是
+ * 「这一刻没回答」，后者是「这台机器探测不到 Python」。旧实现把两者糊成一个布尔之后
+ * `missing` 走的是**静默跳过** —— 那一侧既不参与比对也不报红，等于把「四侧一致」
+ * 悄悄降级成「三侧一致」，而输出上一个字都没有。
+ *
+ * @param {string} pyChecker 自检脚本的仓库相对路径
+ * @returns {{state: "answered" | "timeout" | "missing", python: string | null, problems: string[]}}
+ */
+function measurePythonOnce(pyChecker) {
+  const probed = ["python3", "python"].map((c) => [
+    c,
+    probeCommand(c, ["--version"]),
+  ]);
+  const timedOut = probed.filter(([, s]) => s === "timeout").map(([c]) => c);
+  const found = probed.find(([, s]) => s === "ok");
+  if (!found) {
+    return {
+      state: timedOut.length > 0 ? "timeout" : "missing",
+      python: null,
+      problems: [],
+    };
+  }
+  const python = found[0];
+  try {
+    const out = execFileSync(python, [pyChecker], {
+      cwd: ROOT,
+      encoding: "utf8",
+      timeout: PY_TIMEOUT_MS,
+    });
+    return {
+      state: "answered",
+      python,
+      problems: out.includes("OK")
+        ? []
+        : [`Python 侧自检未通过：${out.trim()}`],
+    };
+  } catch (e) {
+    if (isTimeoutLike(e)) return { state: "timeout", python, problems: [] };
+    return {
+      state: "answered",
+      python,
+      problems: [
+        `Python 侧自检失败：${(e.stdout || e.message || "").toString().trim()}`,
+      ],
+    };
+  }
+}
+
+/**
+ * 两遍取证 → 这一侧到底算什么（**纯函数**，用例可以逐格钉住，不必真起 Python）。
+ *
+ * @param {{state: string, python: string | null, problems: string[]}} first 第一遍
+ * @param {{state: string, python: string | null, problems: string[]} | null} second 第二遍（第一遍有回答时为 null）
+ * @returns {{problems: string[], unverified: string[]}}
+ */
+function decidePythonVerdict(first, second) {
+  const sec = second ?? first;
+  if (sec.state === "answered")
+    return { problems: sec.problems, unverified: [] };
+  if (sec.state === "missing") {
+    return {
+      problems: [],
+      unverified: [
+        "这台机器探测不到 python3 / python（`--version` 非零退出，**不是**超时）—— " +
+          "Python 侧本轮**没有取证**，四侧比对实际只答了三侧。在装了 Python 的机器上这一侧会重新参与。",
+      ],
+    };
+  }
+  return {
+    problems: [],
+    unverified: [
+      `Python 侧自检（${sec.python ?? "python"} 跑 scripts/check-app-port-vectors.py）两遍` +
+        `都没有在 ${PY_TIMEOUT_MS / 1000} 秒预算内回答（超时形态）—— **拿不到测量**，` +
+        "不是「四侧推导不一致」。这一侧本轮未取证：已放行并点名（规范 §13.6.4.1），" +
+        "别去改四侧实现 —— 四侧根本没动过。",
+    ],
+  };
 }
 
 async function main() {
@@ -155,50 +247,24 @@ async function main() {
     problems.push(`Node 侧 .env 解析不可导入：${e.message}`);
   }
 
-  // ── ② Python 侧真跑（可用时）──
+  // ── ② Python 侧取证（两遍，形态说话）──
   const pyChecker = "scripts/check-app-port-vectors.py";
   if (!fs.existsSync(path.join(ROOT, pyChecker))) {
     problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
   } else {
-    const probed = ["python3", "python"].map((c) => [
-      c,
-      probeCommand(c, ["--version"]),
-    ]);
-    for (const [c, state] of probed) {
-      if (state === "timeout") {
-        unverified.push(
-          `探测 \`${c} --version\` 在 ${PROBE_TIMEOUT_MS / 1000} 秒预算内没有回答（超时形态）—— ` +
-            `这台机器到底有没有 Python **不知道**，这一侧本轮不参与比对。` +
-            `它与「四侧推导不一致」是两件事，别把这句读成后者。`,
-        );
-      }
+    const first = measurePythonOnce(pyChecker);
+    let second = null;
+    if (first.state === "timeout") {
+      // 与 C 组同形：不猜机器闲不闲（`os.loadavg()` 在 Windows 恒 0），直接再取一遍测量，
+      // 让**第二遍自己的形态**说话。这条日志不许省 —— 静默复跑读起来像卡住了。
+      console.log(
+        "[app-port-vectors] Python 侧第一遍只是超时形态 —— 当场复跑一次再定性（§13.6.4.1）",
+      );
+      second = measurePythonOnce(pyChecker);
     }
-    const found = probed.find(([, state]) => state === "ok");
-    const python = found ? found[0] : null;
-    if (python) {
-      try {
-        const out = execFileSync(python, [pyChecker], {
-          cwd: ROOT,
-          encoding: "utf8",
-          timeout: PY_TIMEOUT_MS,
-        });
-        if (!out.includes("OK"))
-          problems.push(`Python 侧自检未通过：${out.trim()}`);
-      } catch (e) {
-        if (isTimeoutLike(e)) {
-          unverified.push(
-            `${python} 跑 ${pyChecker} 没有在 ${PY_TIMEOUT_MS / 1000} 秒预算内回答（超时形态）—— ` +
-              `**没拿到测量**，不是「四侧推导不一致」。高负载下这条最容易假红：` +
-              `先隔离复跑 \`node scripts/check-app-port-vectors.cjs\` 再定性` +
-              `（规范 §13.6.4.1：拿不到测量 ≠ 测量结果是红的）。`,
-          );
-        } else {
-          problems.push(
-            `Python 侧自检失败：${(e.stdout || e.message || "").toString().trim()}`,
-          );
-        }
-      }
-    }
+    const verdict = decidePythonVerdict(first, second);
+    problems.push(...verdict.problems);
+    for (const note of verdict.unverified) unverified.push(note);
   }
 
   // ── ③ Rust / PowerShell 侧锁引用（无法在此环境执行）──
@@ -268,23 +334,20 @@ function report() {
     return;
   }
   if (problems.length === 0) {
-    /* 只有「取不到测量」这一类：仍然退 1 拦下这次提交（判定没有放宽），但标题不许说成
-     * 「一致性失败」—— 那会让人去改四侧实现，而四侧根本没动过。 */
-    console.error(
-      "[app-port-vectors] 未能完成取证（拦下，但**不是**四侧不一致）：",
+    /* 只有「没拿到测量」这一类：放行，但**当面点名**。
+     * 口径与 C 组 §13.6.4.1 同一条 —— 拿不到测量不等于测量结果是红的；而它也不是绿：
+     * 标题、逐条内容与「这一侧本轮没参与比对」都要说清，否则读者会以为四侧真比对过了。
+     * 已经复跑过一次是这一步的前提（见 main 里那趟 Python 二次取证），不是给人留的作业。 */
+    console.log("[app-port-vectors] 通过，但**未完全取证**（放行）：");
+    for (const u of unverified) console.log("  - [未校验] " + u);
+    console.log("");
+    console.log(
+      "  这一趟仍然判了的：Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用。",
     );
-    for (const u of unverified) console.error("  - [未校验] " + u);
-    console.error("");
-    console.error(
-      "  出口：先**隔离复跑**本脚本（`node scripts/check-app-port-vectors.cjs`）。",
+    console.log(
+      "        下次取证到之后 Python 侧会重新参与比对；本步以退出码 0 结束。",
     );
-    console.error(
-      "        复跑绿 ⇒ 刚才是负载造成的假红，重投即可；复跑仍只是超时形态 ⇒",
-    );
-    console.error(
-      "        这一侧确实没取证，按规范 §13.6.4.1 处置，别去改四侧实现。",
-    );
-    process.exit(1);
+    return;
   }
   console.error("[app-port-vectors] 四语言端口推导一致性失败：");
   for (const p of problems) console.error("  - " + p);
@@ -307,4 +370,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { isTimeoutLike, probeCommand };
+module.exports = { isTimeoutLike, probeCommand, decidePythonVerdict };
