@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { FILTER_TABS } from "~/lib/project-canvas/history-panel-types";
 import type { HistoryPanelController } from "./hooks/use-history-panel";
@@ -52,16 +52,24 @@ const { HistoryPanel } = await import("./HistoryPanel");
 describe("HistoryPanel 类型筛选（ISSUE #1925）", () => {
   it("是单选语义的 radiogroup，枚数与 FILTER_TABS 一致", () => {
     render(<HistoryPanel onClose={vi.fn()} projectId="p1" />);
-    expect(
-      screen.getByRole("radiogroup", { name: "按类型筛选生成记录" }),
-    ).toBeTruthy();
-    expect(screen.getAllByRole("radio")).toHaveLength(FILTER_TABS.length);
+    const group = screen.getByRole("radiogroup", {
+      name: "按类型筛选生成记录",
+    });
+    expect(group).toBeTruthy();
+    /* 作用域里查 —— 同一屏还有「显示密度」那一组 radio（ISSUE #1925 复查
+       收口），全局查会把它一起算进来。 */
+    expect(within(group).getAllByRole("radio")).toHaveLength(
+      FILTER_TABS.length,
+    );
   });
 
   it("选中项经 aria-checked 表达，且只有一枚被勾选", () => {
     render(<HistoryPanel onClose={vi.fn()} projectId="p1" />);
     // 快照里 filter = "all" —— 恰好「全部」这一枚被勾上。
-    const checked = screen
+    const group = screen.getByRole("radiogroup", {
+      name: "按类型筛选生成记录",
+    });
+    const checked = within(group)
       .getAllByRole("radio")
       .filter((el) => el.getAttribute("aria-checked") === "true");
     expect(checked).toHaveLength(1);
@@ -106,5 +114,23 @@ describe("HistoryPanel 作用域切换（ISSUE #1925）", () => {
     const [projectTab, allTab] = screen.getAllByRole("tab");
     expect(projectTab?.getAttribute("aria-selected")).toBe("true");
     expect(allTab?.getAttribute("aria-selected")).toBe("false");
+  });
+});
+
+describe("HistoryPanel 显示密度（ISSUE #1925）", () => {
+  it("走共享基元（三处逐字相同的孪生对已收口），选中档钉住悬停", () => {
+    render(<HistoryPanel onClose={vi.fn()} projectId="p1" />);
+
+    const group = screen.getByRole("radiogroup", { name: "显示密度" });
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    for (const radio of radios) {
+      expect(radio).not.toHaveAttribute("aria-pressed");
+    }
+    const list = within(group).getByRole("radio", { name: "列表视图" });
+    /* 这一屏的初始档是 `list`（见 use-history-panel 的初值）。 */
+    expect(list).toHaveAttribute("aria-checked", "true");
+    expect(list.className).toContain("aria-checked:hover:text-primary-strong");
+    expect(list.className).toContain("aria-checked:hover:bg-primary-soft");
   });
 });
