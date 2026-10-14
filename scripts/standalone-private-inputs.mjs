@@ -242,6 +242,11 @@ export const RUNTIME_SCRIPTS = [
  *     两处清单并写清「谁在运行期读它」。
  *   · `scripts/` —— 编排器与宿主的运行期脚本（清单见 `RUNTIME_SCRIPTS`）。
  *   · `splash.html` / `index.html` —— 启动页与根路径兜底页（壳与 sidecar 都读）。
+ *   · `config/` —— **入库的项目配置**（`config/workshop-mode-contracts.json` = 模式契约
+ *     注册表）。谁在运行期读它：`src/lib/workshop/mode-contract.server.ts` 按
+ *     `process.cwd()`（= 载荷根）读，与 dev 检出读的是仓库里同一份文件。不随包的
+ *     后果不是报错，而是**静默跑成内置默认**：桌包里的模式契约与检出里的不一致，
+ *     界面上看不出任何异常。
  *   · `schema.sql` —— 首启建表的 DDL，由 `build-desktop.mjs` 的 §首启建表 现生成
  *     （载荷里没 drizzle-kit，桌包首启只能靠它；只含结构、不许含数据）。
  *
@@ -253,6 +258,7 @@ export const RUNTIME_SCRIPTS = [
  */
 export const STATIC_ALLOWED_TOPLEVEL = [
   ".next",
+  "config",
   "index.html",
   "node_modules",
   "package.json",
@@ -310,6 +316,7 @@ export const RUNTIME_SRC = [
  */
 export const STANDALONE_ALLOWED_TOPLEVEL = [
   ".next",
+  "config",
   "node_modules",
   "package.json",
   "public",
