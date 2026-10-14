@@ -22,10 +22,9 @@ import { useState, type ReactNode } from "react";
 import { FileText } from "lucide-react";
 
 import { Checkbox } from "~/components/ui/checkbox";
-import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { SelectChip } from "~/components/ui/select-chip";
 import { FieldLabel } from "~/components/ui/field";
-import { Hint } from "~/components/ui/hint";
 import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
 import { formatClock } from "~/lib/time-format";
 import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
@@ -110,31 +109,35 @@ export function TaskLogTimeline({
 
   return (
     <>
-      {/* 级别筛选栏 */}
+      {/* 级别筛选栏 —— 一排里选一个，走 `ui/select-chip`（规范 16 §16.2.4.75）。
+          此前是手搓的 `variant="ghost"` + 选中三元：选中档只给了
+          `bg-surface-2 text-ink`，而 `ghost` 变体自带
+          `hover:bg-muted hover:text-foreground` 照旧生效 —— 划过**已选中**
+          的那一枚时底色/字色被悬停档改写，且 `bg-surface-2` 在浅色主题下与
+          行头底色同值（`log-row-style.ts` 记过同一件事），选中本来就弱。
+          整排交给基元后选中态四层俱在、悬停值钉回常态。 */}
       <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-        <div className="flex items-center gap-1">
+        <div
+          role="radiogroup"
+          aria-label="日志级别筛选"
+          className="flex items-center gap-1"
+        >
           {FILTER_LABELS.map((option) => {
             const count =
               option.value === "all"
                 ? visibleAll.length
                 : visibleAll.filter((l) => l.level === option.value).length;
             return (
-              <Hint label={`${option.label}（${count} 条）`} key={option.value}>
-                <Button
-                  variant="ghost"
-                  onClick={() => setFilter(option.value)}
-                  className={`h-auto rounded-md px-2.5 py-1 text-sm ${
-                    filter === option.value
-                      ? "bg-surface-2 text-ink"
-                      : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
-                  }`}
-                >
-                  {option.label}
-                  <span className="text-ink-fainter text-2xs ml-1">
-                    {count}
-                  </span>
-                </Button>
-              </Hint>
+              <SelectChip
+                key={option.value}
+                shape="compact"
+                selected={filter === option.value}
+                onClick={() => setFilter(option.value)}
+                className="px-2.5 py-1 text-sm"
+              >
+                {option.label}
+                <span className="text-ink-fainter text-2xs ml-1">{count}</span>
+              </SelectChip>
             );
           })}
         </div>

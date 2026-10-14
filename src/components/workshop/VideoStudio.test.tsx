@@ -117,7 +117,9 @@ function lastPatchedShot(mock: { mock: { calls: unknown[][] } }): Shot {
 }
 
 async function switchToApi(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /API 直连/ }));
+  /* 通道 chip 是 `role="radio"`（一排里选一个，规范 16 §16.2.4.75）——
+     不是 `role="button"`。改的是读法，不是它锁的那件事。 */
+  await user.click(screen.getByRole("radio", { name: /API 直连/ }));
 }
 
 beforeEach(() => {

@@ -134,7 +134,9 @@ async function trpcCall(
 
   const body = await res.text();
   if (!res.ok()) {
-    throw new Error(`${procedure} 失败：HTTP ${res.status()} ${body.slice(0, 400)}`);
+    throw new Error(
+      `${procedure} 失败：HTTP ${res.status()} ${body.slice(0, 400)}`,
+    );
   }
   const lines = body.split("\n").filter(Boolean);
   const last = lines.at(-1);
@@ -170,7 +172,9 @@ async function signUp(
   password: string,
 ): Promise<void> {
   await page.goto("/login");
-  await page.getByRole("button", { name: "创建账号" }).click();
+  await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
+     不是按钮。改的是读法，不是用例锁的那件事。 */
+  page.getByRole("radio", { name: "创建账号" }).click();
   /* 昵称那一格标着「（可选）」但**带着 required**（共用字段行 LoginFieldRow 给
    * 每个 input 都加了它）——留空会被浏览器的原生校验拦在提交之前，表现是
    * 「点了没反应、一个请求都不发」。填上它：本用例要测的是认证链路，
@@ -208,8 +212,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     /* 断言的是**库里有这一行**，不是「请求发出去了」：再读一次服务端，
      * 拿到的必须是我们刚写进去的那个 id / 名字。 */
     const listed = (await trpcQuery(page, "project.list")) as
-      | { id: string; name: string }[]
-      | undefined;
+      { id: string; name: string }[] | undefined;
     const project = (listed ?? []).find((item) => item.id === projectId);
     expect(
       project,
@@ -251,7 +254,9 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const terminal = await expect
       .poll(
         async () => {
-          const detail = (await trpcQuery(page, "task.detail", { id: taskId })) as
+          const detail = (await trpcQuery(page, "task.detail", {
+            id: taskId,
+          })) as
             | { status?: string; error?: string | null; images?: unknown[] }
             | undefined;
           /* 非终态一律回同一个哨兵：poll 据此**继续等**（`QUEUED` 也到不了
@@ -265,12 +270,14 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
         },
       )
       .not.toBeNull()
-      .then(() =>
-        trpcQuery(page, "task.detail", { id: taskId }),
-      )
+      .then(() => trpcQuery(page, "task.detail", { id: taskId }))
       .then(
         (detail) =>
-          detail as { status?: string; error?: string | null; images?: unknown[] },
+          detail as {
+            status?: string;
+            error?: string | null;
+            images?: unknown[];
+          },
       );
 
     /* 失败也要说清失败在哪一步（验收标准 3）：把 error 带进断言消息，
@@ -294,7 +301,11 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     test.slow();
 
     const stamp = Date.now();
-    await signUp(page, `e2e-journey-fail-${stamp}@example.com`, "e2e-journey-password");
+    await signUp(
+      page,
+      `e2e-journey-fail-${stamp}@example.com`,
+      "e2e-journey-password",
+    );
 
     const workflow = (await trpcMutation(page, "workflow.create", {
       name: `E2E 失败工作流 ${stamp}`,
@@ -318,9 +329,9 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const terminal = (await expect
       .poll(
         async () => {
-          const detail = (await trpcQuery(page, "task.detail", { id: taskId })) as
-            | { status?: string }
-            | undefined;
+          const detail = (await trpcQuery(page, "task.detail", {
+            id: taskId,
+          })) as { status?: string } | undefined;
           return isTerminalTaskStatus(detail?.status) ? detail : null;
         },
         {

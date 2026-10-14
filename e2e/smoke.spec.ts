@@ -28,15 +28,21 @@ test.describe("登录页冒烟", () => {
     await expect(submit).toHaveText("登录");
 
     // 切换到注册模式：出现昵称字段，提交按钮变为「创建并登录」
-    await page.getByRole("button", { name: "创建账号" }).click();
-    await expect(page.getByText("创建一个本地账号，开启你的 AI 创作")).toBeVisible();
+    await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
+     不是按钮。改的是读法，不是用例锁的那件事。 */
+    page.getByRole("radio", { name: "创建账号" }).click();
+    await expect(
+      page.getByText("创建一个本地账号，开启你的 AI 创作"),
+    ).toBeVisible();
     await expect(page.getByText("昵称（可选）")).toBeVisible();
     await expect(submit).toHaveText("创建并登录");
   });
 });
 
 test.describe("首页冒烟", () => {
-  test("@critical 首页重定向到 /workspace 且创作台正常渲染", async ({ page }) => {
+  test("@critical 首页重定向到 /workspace 且创作台正常渲染", async ({
+    page,
+  }) => {
     await page.goto("/");
 
     // src/app/page.tsx 服务端 redirect("/workspace")
