@@ -348,7 +348,21 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
   test("二次代入：经 --xy-background-pattern-color-props 取到的仍是同一个色", async ({
     page,
   }) => {
-    await page.goto("/workspace", { waitUntil: "domcontentloaded" });
+    /* ⚠️ 这里刻意**不写** `waitUntil: "domcontentloaded"`（原先有）。
+     *
+     * 立案读数：这一条在全量里必红、隔离单跑必绿，红在点「新建画布项目」之后
+     * 等不到 `[data-view="project"]` —— 而失败瞬间的无障碍快照显示页签**只有「首页」**、
+     * 那张卡也还在原位，即**点击根本没生效**（不是导航慢）。
+     *
+     * 为什么只有全量复现：本地这一档跑的是 `pnpm dev`（Turbopack 按需编译）。
+     * DCL 不要求 JS chunk 到位，而冷编译时 chunk 一定晚于 DCL —— 按钮「看得见、点得动、
+     * 也 enabled」，但 React 的 handler 还没挂上，`createProject()` 压根没被调用。
+     * 隔离复跑时编译是热的，chunk 赶得上 DCL，于是同一条代码路径过。
+     *
+     * 默认的 `load` 把「脚本都到位」当作前提，与同级
+     * `project-context-refresh.spec.ts` 同一口径（它点的是同一个按钮，一直没这问题）。
+     * 这不是「加等待绕过红」：`load` 才是这条用户路径成立的前提。 */
+    await page.goto("/workspace");
     /* 开画布那一屏 —— 这既是「CSS 进 DOM」的前提，也让它成为一个**真的**用户路径：
        真实用户看到网格线，正是因为他打开了画布。
        画布是**项目内页签**（`projectScoped`，见 `NavItems`）：没有活跃项目时
@@ -368,25 +382,34 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       timeout: 30_000,
     });
 
-    /* 反空转：真规则不在场就别往下断言 —— 否则「取到了默认灰」会被读成「token 生效」。 */
-    const ruleCount = await page.evaluate(() => {
-      let n = 0;
-      for (const sheet of Array.from(document.styleSheets)) {
-        let rules: CSSRuleList | null = null;
-        try {
-          rules = sheet.cssRules;
-        } catch {
-          continue;
-        }
-        for (const r of Array.from(rules ?? []))
-          if (r.cssText?.includes("--xy-background-pattern-color-props")) n++;
-      }
-      return n;
-    });
-    expect(
-      ruleCount,
-      "/workspace 没带上 xyflow 的 background-pattern 规则（这条用例的前提没了）",
-    ).toBeGreaterThanOrEqual(3);
+    /* 反空转：真规则不在场就别往下断言 —— 否则「取到了默认灰」会被读成「token 生效」。
+     *
+     * 必须**轮询**而不是取一次：`[data-view="canvas"]` 是 `WorkspaceViewStack.tsx:266`
+     * 那个 **wrapper**，它先挂上；带 `@xyflow/react/dist/style.css` 的是里面那个
+     * `dynamic(..., { ssr: false })` 的 chunk，晚一拍才落地。等 wrapper 可见后立刻数
+     * `document.styleSheets`，就是在自己的前提上抢跑 —— 实测单跑也是 `Received: 0`，
+     * 与并发无关（`style.css` 里那 3 处 token 一直好好在包里）。 */
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            let n = 0;
+            for (const sheet of Array.from(document.styleSheets)) {
+              let rules: CSSRuleList | null = null;
+              try {
+                rules = sheet.cssRules;
+              } catch {
+                continue;
+              }
+              for (const r of Array.from(rules ?? []))
+                if (r.cssText?.includes("--xy-background-pattern-color-props"))
+                  n++;
+            }
+            return n;
+          }),
+        "/workspace 没带上 xyflow 的 background-pattern 规则（这条用例的前提没了）",
+      )
+      .toBeGreaterThanOrEqual(3);
 
     const expr = gridLineColor(0.14);
     for (const dark of [false, true]) {

@@ -31,7 +31,7 @@ const PROJECT_VIEWS = [
 ] as const;
 
 /* 五个全局项 —— 用来证明「菜单里本来只有这些」，好让多出来的六个有对照。 */
-const GLOBAL_VIEWS = ["模型", "历史", "队列", "流程"] as const;
+const GLOBAL_VIEWS = ["模型", "历史", "队列", "工作流库"] as const;
 
 async function stubBackend(page: Page) {
   /* 后端交互不参与本用例的判据（项目上下文全在客户端），但它**会把界面卡住**
