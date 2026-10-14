@@ -3,9 +3,9 @@
  * 背景（ISSUE #571）：同一件事——「这个文件名/路径是图片、视频还是音频」——
  * 在本仓库里有三份互不相同的实现，而它们**互相矛盾**：
  *
- *   src/lib/media.ts:2                  /\.(mp4|webm|ogg|m4v|mov)$/i       （无 mkv/avi，有 ogg/m4v）
- *   src/lib/materials.ts:51             /\.(mp4|webm|mov|mkv|avi)$/i       （无 ogg/m4v，有 mkv/avi）
- *   src/server/api/routers/task.ts:6    /\.(mp4|webm|mov|mkv|avi|gif)$/i   （把 gif 算成视频）
+ *   src/lib/media/media.ts              /\.(mp4|webm|ogg|m4v|mov)$/i       （无 mkv/avi，有 ogg/m4v）
+ *   src/lib/media/materials.ts          /\.(mp4|webm|mov|mkv|avi)$/i       （无 ogg/m4v，有 mkv/avi）
+ *   src/server/api/routers/task.ts      /\.(mp4|webm|mov|mkv|avi|gif)$/i   （把 gif 算成视频）
  *
  * 表现是**静默的行为分叉**：同一个产出文件从历史面板看是图片、从素材库看是
  * 文档、从任务列表看是视频。`media.ts` 的注释明确写着「gif 不是视频——它必须
@@ -16,10 +16,11 @@
  * 「怎么用这个结论」的逻辑（渲染成 `<video>` / 归到哪个素材文件夹 / 过滤任务
  * 类型），不再各自维护一份扩展名清单。
  *
- * 为什么放 `src/lib/` 根、而不是 `src/lib/materials.ts`：本模块同时被浏览器
- * （历史面板、画布节点、视频队列）与服务端（tRPC router、素材库）读取，必须
- * **零依赖、零 `server-only`**——`materials.ts` 顶层 `import fs`，引它会把
- * Node 内建带进浏览器 chunk（ISSUE #282 / #317 的同族事故）。
+ * 为什么与 `media/materials.ts` 分开成两个模块：本模块同时被浏览器（历史面板、
+ * 画布节点、视频队列）与服务端（tRPC router、素材库）读取，必须**零依赖、
+ * 零 `server-only`**——`materials.ts` 顶层 `import fs`，引它会把 Node 内建带进
+ * 浏览器 chunk（ISSUE #282 / #317 的同族事故）。两者同属 `media/` 子域，
+ * 按「叶子判据 / 带 IO 的素材库」分层，不是目录归属问题。
  *
  * 分层约定（与 `src/lib/endpoints.ts` 一致）：本模块只回答「扩展名 → 种类」，
  * 不回答「用户配置 / 工作流模式码 → 种类」——后者是业务判断，留在各自领域。

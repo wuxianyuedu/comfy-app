@@ -24,7 +24,7 @@
 真实存在的浮层关系，而不是「再把魔数换个名字写进对象里」。</p>
 <p>数值同时定义在 <code>src/app/globals.css</code> 的 <code>@theme</code>（供 <code>z-overlay</code> /
 <code>z-popup</code> / <code>z-modal</code> / <code>z-canvas-ui</code> 等工具类使用），两处必须一致 ——
-由 <code>tests/overlay-z-scale.test.ts</code> 钉住。放在 <code>lib/shell</code>：它是<strong>客户端可达</strong>
+由 <code>src/lib/shell/overlay-z.test.ts</code> 钉住。放在 <code>lib/shell</code>：它是<strong>客户端可达</strong>
 的跨端定层常量，<code>lib/core</code> 在 eslint 的 boundaries 里是 element <code>server</code>，
 视图层引不得。</p>
 <p>── 刻度（越小越靠下）────────────────────────────────────────────</p>

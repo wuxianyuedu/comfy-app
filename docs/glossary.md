@@ -83,8 +83,8 @@
 | **工作流库** | 浏览/搜索/编辑/就地运行工作流的页面 | `src/components/studio/workflow-library/`；导航名「流程」(`NAV_ITEMS` id `workflows`) | ❌「流程库」「workflow 页面」；UI 标题与代码统一叫**工作流库** |
 | **工作流编辑器** | 打开单份工作流进行图编辑的全屏编辑器（承载「工作流编辑器画布」） | `workflow-editor/`（`WorkflowEditorInner.tsx` 等）+ `canvas/WorkflowCanvasEditor.tsx` | 与「工作流编辑器画布」区别：编辑器是**整个界面**，画布是其**图区** |
 | **工作流参数（paramMap）** | 工作流对外暴露的**可填参数**（提示词/尺寸/步数…） | `workflow-param-mapping.ts`；UI 为 `WorkflowParamCard`（卡片列在库详情「画布节点」页签） | ❌「变量」「字段」 |
-| **工作流 IO（workflowIO）** | 工作流的**输入/输出端口映射**（含节点内建 IO） | `src/lib/workflow-io-types.ts`、`io-exposure.ts` | ❌「接口」 |
-| **就地运行** | 在工作流库内直接运行选中工作流（不跳转画布） | `src/lib/workflow-run-store.ts` 注释头；`WorkflowRunLogModal.tsx` | ❌「快速运行」 |
+| **工作流 IO（workflowIO）** | 工作流的**输入/输出端口映射**（含节点内建 IO） | `src/lib/workflow/workflow-io-types.ts`、`io-exposure.ts` | ❌「接口」 |
+| **就地运行** | 在工作流库内直接运行选中工作流（不跳转画布） | `src/lib/workflow/workflow-run-store.ts` 注释头；`WorkflowRunLogModal.tsx` | ❌「快速运行」 |
 
 ---
 
@@ -93,10 +93,10 @@
 | 术语 | 唯一所指 | 代码落点 | 生命周期 |
 |---|---|---|---|
 | **任务**（task） | 服务端真值：一次生成请求的记录（状态/进度/日志/产物） | `task` / `taskImage` 表；`TaskLogEntry` | 持久（SQLite），客户端真值以服务端为准 |
-| **运行记录** | 客户端侧的会话观察态（跨页签/关窗后恢复「正在生成」视角） | `src/lib/workflow-run-store.ts` 的 `WorkflowRunMeta`（最多 32 条、日志最多 300 行，localStorage 写穿） | 会话级 + 本地缓存，可丢 |
+| **运行记录** | 客户端侧的会话观察态（跨页签/关窗后恢复「正在生成」视角） | `src/lib/workflow/workflow-run-store.ts` 的 `WorkflowRunMeta`（最多 32 条、日志最多 300 行，localStorage 写穿） | 会话级 + 本地缓存，可丢 |
 | **ComfyUI 执行** | ComfyUI 内部真正跑图的过程 | `src/lib/comfyui/**`（executor-ws / lifecycle） | 进程级 |
 | **生成模式**（mode） | 工作流按内容类别的分栏（图/视频等） | `generation-client.ts`；`workflowTemplate.modes` / `defaultMode` | 配置 |
-| **任务类型**（taskType） | 工作流类型分类码（`T2I`/`I2V`/`S2V`…） | `src/lib/workflow-types.ts` 的 `WorkflowTypeDefinition.code` | 配置 |
+| **任务类型**（taskType） | 工作流类型分类码（`T2I`/`I2V`/`S2V`…） | `src/lib/workflow/workflow-types.ts` 的 `WorkflowTypeDefinition.code` | 配置 |
 
 > **一句话**：说「运行」时补名词——服务端叫**任务**，前端叫**运行记录**，ComfyUI 内部叫**执行**。
 
@@ -109,11 +109,11 @@
 | **工作区**（workspace） | 主应用容器页面（左侧导航 + 视图切换 + 页签） | 路由 `src/app/workspace/page.tsx`；导航 `WorkspaceNav.tsx` | 与「工作流」缩写相撞，禁止把工作区写成 `workflow` |
 | **工作室**（studio） | **组件库命名空间**，不是产品名、不是页面 | `src/components/studio/` | ❌「Studio 页面」；页面叫工作区/工作流库等 |
 | **工坊**（workshop） | 剧本→分镜→成片的 LLM 流水线模块 | `src/components/workshop/`、`src/lib/workshop/` | 与「工作室」一字之差，指代完全不同，勿混用 |
-| **页签**（shell tab） | 窗口标题行上的内容页签（可挂内部浏览器页） | `src/lib/shell-tabs-store.ts`、`ShellTabs.tsx` | ❌「标签页」（那是 `Tag`/`Badge`） |
+| **页签**（shell tab） | 窗口标题行上的内容页签（可挂内部浏览器页） | `src/lib/shell/shell-tabs-store.ts`、`ShellTabs.tsx` | ❌「标签页」（那是 `Tag`/`Badge`） |
 | **视图**（view） | 工作区内切换的主内容区（home/project/canvas/workflows/…） | `WORKSPACE_VIEWS`（`src/app/workspace/page.tsx`）、`WorkspaceView` 类型 | ❌「页面」（页面特指 Next 路由） |
 | **应用首页**（`home`） | 工作区的顶层入口（侧栏 + 「灵感从这里开始」+ 最近项目） | `NAV_ITEMS` id `home`；`HomePage.tsx` | **与「项目主页」不是一回事**：那一个是**项目级**的（进入某个项目后的落点）。两者中英文都可叫「主页」，写文档时带上限定词 |
 | **项目主页**（`project`） | 进入项目后的落点：项目状态总览 + AI 自主成片操纵台 | `NAV_ITEMS` id `project`（项目页签第一项）；`src/components/studio/project-home/` | 见上一行；也叫「项目内主页」 |
-| **设置浮层**（SettingsOverlay） | 覆盖在工作区上的设置面板（不是独立路由） | `src/components/settings/SettingsOverlay.tsx` | 另有 `/settings` 路由页，两者别混 |
+| **设置视图**（settings） | 设置界面的**一份主体**（三态 + 外壳 + 分区导航），挂在两个点上：工作区的「设置」页签与独立路由 `/settings` | `src/components/settings/SettingsView.tsx`（+ 外壳 `SettingsShell.tsx`） | 它曾是全屏浮层 `SettingsOverlay`（已退役）；两者共用同一份内容，差别只剩「多高」 |
 | **项目**（`works`，「项目」导航） | 产出素材相册视图 | `NAV_ITEMS` id `works`；`WorksGallery` | **与「画布项目」不是一回事**（§3） |
 | **产出**（outputs） | 项目输出物汇总视图 | `ProjectOutputs.tsx` | 与「项目」视图区分 |
 
@@ -128,7 +128,7 @@
 | **启动编排** | 真正起 dev server / 壳 / 探端口的逻辑脚本 | `scripts/dev-launcher.ps1`（唯一编排者） |
 | **侧车**（sidecar） | 壳托管的 Node 运行时进程（跑 Next standalone） | `src-tauri/src/lib.rs`（sidecar 目录 `src-tauri/binaries/` 为构建产物，本地可能不存在） |
 | **启动页**（splash） | 冷启动加载页 | `public/splash.html`（`tauri.conf.json` 的 `windows[0].url`） |
-| **应用运行时日志** | 应用自身写盘的结构化日志（按子系统分目录） | `src/lib/app-runtime-log.ts`、`log/`（布局见 [主规范 §4](../standards/Comfy-APP-T3-项目开发规范.md)） |
+| **应用运行时日志** | 应用自身写盘的结构化日志（按子系统分目录） | `src/lib/log/app-runtime-log.ts`、`log/`（布局见 [主规范 §4](../standards/Comfy-APP-T3-项目开发规范.md)） |
 | **日志面板** | 应用内查看日志/运行输出的 UI | `src/components/studio/logs/`（`LogProvider` / `LogPanel`） |
 
 ---
