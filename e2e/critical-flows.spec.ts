@@ -10,6 +10,7 @@ import { LOG_ROW_SINGLE } from "../src/components/studio/logs/log-virtual";
 import { fakeComfyuiBaseUrl } from "./support/fake-comfyui-endpoint.mjs";
 import { expectHomeReady } from "./support/home-anchors";
 import { openSettingsView } from "./support/settings-entry";
+import { stubTrpc } from "./support/trpc-stub";
 
 /**
  * 关键链路 E2E（ISSUE #317）：把「登录 → 工作区 → 工作流库执行 → 工作台概览」
@@ -1634,70 +1635,76 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 假 ComfyUI 在替身端口上（playwright.config 的第二个 webServer；端口不是
    * 8188 —— 那个口留给本机真件，见 `fake-comfyui-endpoint.mjs`）。
    */
+  /**
+   * ComfyUI 那一屏的三个过程一次桩好，并数「在浏览器打开」真的发出了几次。
+   *
+   * **响应形状必须走 `support/trpc-stub.ts`**。客户端是 `httpBatchStreamLink`，
+   * 它按 JSON Lines 读响应；`route.fulfill` 一个 `{result:{data}}` 的旧信封进去时
+   * **不抛错**、只是解不出数据（#1442 记的那一族），表现是 `refetch()` 永远不 settle ——
+   * 按钮停在「打开中…」、`comfyOpen` 一次都没发出，红的形状与「功能坏了」逐字同形。
+   *
+   * 这里原本是旧信封，之所以一直没暴露：它命中的是**设置页那一条链路**的过程名
+   * （`comfyui.status`），而 ISSUE #1900 把运行态搬成独立页之后，这一屏走的是
+   * `setting.comfyStatus` —— 三条 `url.includes(...)` 对现在的请求一个都不再命中，
+   * 整个桩成了装饰，`comfyOpen` 反而被它的旧信封形状卡住。
+   */
   async function stubComfyTrpc(
     page: Page,
     options: { embeddable?: boolean } = {},
   ) {
     const calls = { open: 0 };
-    await page.route("**/api/trpc/**", async (route: Route) => {
-      const url = route.request().url();
-      /* 两种响应形状不能混：`comfyui.status` 的 `data` **就是**状态对象，
-         而 `comfyEmbeddable` / `comfyOpen` 的 `data` 外面还包一层 `json`
-         （与文件顶部 `stubBackend` 的用法一致）。包错层前端读到的是 undefined。 */
-      const fulfillRaw = (data: unknown) =>
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ result: { data } }),
-        });
-      const fulfillJson = (data: unknown) => fulfillRaw({ json: data });
-      if (url.includes("comfyui.status")) {
-        /* base 取替身自己的地址（`fake-comfyui-endpoint.mjs` 是唯一落点）：
-         * 写死 8188 时，本机真件与替身的地址会在这条桩里混成同一个 —— 而
-         * 「打开查看」弹出的页签地址正是拿它判的（ISSUE #1756）。 */
-        await fulfillRaw({
-          up: true,
-          base: fakeComfyuiBaseUrl(),
-          starting: false,
-          stopping: false,
-        });
-        return;
-      }
-      if (url.includes("comfyEmbeddable")) {
-        await fulfillJson({
-          embeddable: options.embeddable ?? true,
-          reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
-        });
-        return;
-      }
-      if (url.includes("comfyOpen")) {
-        calls.open += 1;
-        await fulfillJson({
-          ok: true,
-          detail: "已用系统默认浏览器打开 ComfyUI",
-        });
-        return;
-      }
-      await route.continue();
+    /* 计次与桩**分开挂**：同一个 URL 只能有一个处理器（后注册的先被调用，再挂一条
+       会把这条整个遮蔽 —— 实测计数恒 0），而路由位已经被 `stubTrpc` 占了。 */
+    page.on("request", (req) => {
+      if (req.url().includes("comfyOpen")) calls.open += 1;
+    });
+    await stubTrpc(page, {
+      /* base 取替身自己的地址（`fake-comfyui-endpoint.mjs` 是唯一落点）：写死 8188 时，
+         本机真件与替身的地址会在这条桩里混成同一个 —— 而「打开查看」弹出的页签地址
+         正是拿它判的（ISSUE #1756）。`path` 那一格是 #1900 新页要写在页面上的
+         「将按哪条已保存路径启动」，缺了它这一屏会显示「尚未保存」。 */
+      "setting.comfyStatus": {
+        up: true,
+        base: fakeComfyuiBaseUrl(),
+        starting: false,
+        stopping: false,
+        probing: false,
+        via: null,
+        port: Number(new URL(fakeComfyuiBaseUrl()).port),
+        autoStart: false,
+        path: "D:/comfy-stub/ComfyUI",
+      },
+      "setting.comfyEmbeddable": {
+        embeddable: options.embeddable ?? true,
+        reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
+      },
+      "setting.comfyOpen": {
+        ok: true,
+        detail: "已用系统默认浏览器打开 ComfyUI",
+      },
     });
     return calls;
   }
 
   /**
-   * 打开设置 → 创作后端（→ 可选地点「打开查看」）。
+   * 进入侧栏那一页「ComfyUI」（→ 可选地点「打开查看」）。
+   *
+   * 这里**不再走设置页**：ISSUE #1900 把运行态整块搬成了独立全局页签，设置 → 创作后端
+   * 只剩配置（`comfyStatusText` / `comfyDotTitle` 这两个「ComfyUI 运行中」的唯一产地，
+   * 现在只有 `ComfyuiControlView` 用）。旧写法在本仓 `origin/master` 上就已经红了 ——
+   * 它等的那句文案在设置那一屏根本渲染不出来，而「打开查看」那颗按钮也不在那一屏。
    *
    * `thenOpenView` 给 false 的场合：下一条用例要数「在浏览器打开」有没有额外开
    * 窗口，而「打开查看」本身就会开一个新浏览器页签 —— 顺手点上它，判据就被自己
-   * 的动作污染了。
+   * 的动作污染了。**它只关掉最后那一下点击，不关掉等状态落地那一句**：两颗
+   * 「打开」都只在明确未运行时禁用（`ComfyuiControlView.tsx:115` / `:126`），
+   * 状态没落到界面上就点 = 点在一颗禁用按钮上，动作压根不发出去，判据只剩超时
+   * （实测：`comfyOpen` 计数恒 0，红的形状与「功能坏了」逐字同形）。
    */
-  async function openComfyFromSettings(page: Page, thenOpenView = true) {
+  async function openComfyControlPage(page: Page, thenOpenView = true) {
     await page.goto("/workspace");
-    await openSettingsView(page);
-    await page.getByRole("button", { name: "创作后端", exact: true }).click();
-    if (!thenOpenView) {
-      return;
-    }
-    /* 先等状态真的落到界面上，再点「打开查看」。
+    await gotoWorkspaceView(page, "ComfyUI");
+    /* 先等状态真的落到界面上，再点任何一颗出口按钮。
        浏览器分支只有拿得到**已缓存的 base** 时才同步 `window.open`；缓存还空着会先
        `await` 一次 refetch，而 await 之后再 open 会被弹窗拦截器吞掉 —— 表现是「点了
        没反应」，用例等到超时（整批跑时实测复现，单跑因为缓存已热不复现）。这一句同时
@@ -1705,6 +1712,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await expect(page.getByText(/ComfyUI 运行中/).first()).toBeVisible({
       timeout: 20_000,
     });
+    if (!thenOpenView) {
+      return;
+    }
     await page
       .getByRole("button", { name: /打开查看/ })
       .first()
@@ -1718,7 +1728,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await stubComfyTrpc(page);
     const popupPromise = context.waitForEvent("page", { timeout: 20_000 });
 
-    await openComfyFromSettings(page);
+    await openComfyControlPage(page);
 
     // 真的开出一个新浏览器页签，地址就是 ComfyUI（假服务在替身端口上）。
     const popup = await popupPromise;
@@ -1751,7 +1761,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await stubComfyTrpc(page, { embeddable: false });
     const popupPromise = context.waitForEvent("page", { timeout: 20_000 });
 
-    await openComfyFromSettings(page);
+    await openComfyControlPage(page);
 
     const popup = await popupPromise;
     expect(popup.url()).toContain(new URL(fakeComfyuiBaseUrl()).host);
@@ -1782,9 +1792,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
        后注册者优先，另挂一条会把统一桩整个遮蔽（实测计数恒 0）。 */
     const comfyCalls = await stubComfyTrpc(page);
 
-    await openComfyFromSettings(page, false);
-    // 设置页停在创作后端那一屏（上面没离开设置），基线就是「仍在设置里」。
-    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+    await openComfyControlPage(page, false);
+    /* 停在「ComfyUI」那一页（上面没离开它），基线就是「仍在这一屏」——
+       页头那行可见标题按 ISSUE #1693 收掉了，所以认这一屏用的是它唯一的刷新出口。 */
+    await expect(
+      page.getByRole("button", { name: "刷新 ComfyUI 状态" }),
+    ).toBeVisible();
 
     await page
       .getByRole("button", { name: /在浏览器打开/ })
@@ -1795,11 +1808,13 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await expect
       .poll(() => comfyCalls.open, { timeout: 20_000 })
       .toBeGreaterThan(0);
-    /* 这条出口不与当前视图抢位置：点完还在设置里，且它不在应用内开新页签、
+    /* 这条出口不与当前视图抢位置：点完还在这屏，且它不在应用内开新页签、
        也不弹浏览器页签（走的是系统默认浏览器那条服务端出口）。
        壳内那条「不新增也不切换应用页签」在这里量不到 —— 浏览器形态本来就没有
        应用内页签栏，归 §11.10.4 壳冒烟。 */
-    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "刷新 ComfyUI 状态" }),
+    ).toBeVisible();
     await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
       0,
     );
