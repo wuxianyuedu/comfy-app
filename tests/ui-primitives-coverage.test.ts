@@ -84,8 +84,7 @@ const REQUIRED_CONSUMERS: Record<string, string> = {
    * 裸 `<label className=\"…block…\">` + 输入控件）。 */
   "use-scroll-follow":
     "设置页运行日志、画布步骤日志、工作流库运行日志、工坊 Agent 对话四处",
-  "form-field":
-    "设置页四个分区、训练工作室超参、工作流导入面板、工坊角色与适配器、登录页",
+  "form-field": "设置页四个分区、工作流导入面板、工坊角色与适配器、登录页",
   /* 本批三条（规范 16 §16.2.4.27 ~ §16.2.4.29）：判据同样按**形态**取锚点
    *（`readAs*` / `.text()` 调用、`localStorage.*Item` 调用、
    * `onKeyDown` 里判 `"Enter"`）。 */

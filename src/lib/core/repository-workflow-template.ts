@@ -76,7 +76,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
    *  布尔投影写法传 `{ id: true, sourcePath: true }` —— 类型层一声不响
    *  （`unknown` + 调用点不做校验），实际每次详情加载都把 `rawJson` 与
    *  `positions` 这两个大 JSON blob 拖出来一遍（台账 F13：同一个 `unknown`
-   *  签名让 `train.cancel` 从迁移起每次 500，这一处是它的性能版兄弟）。
+   *  签名曾让一条 procedure 从数据层迁移起每次 500，这一处是它的性能版兄弟）。
    *  现在投影是**真的**列清单，方法名也不再承诺一个它不做的能力。 */
   async findSourceMetaForUser(
     userId: string,
