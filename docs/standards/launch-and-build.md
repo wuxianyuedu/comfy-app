@@ -61,7 +61,7 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
   「起编排器 / 认亲 / 回收」进壳（`shell_launch.rs`），「双击入口与开发入口」进
   `.ps1`（`tools/start/start-tauri.ps1` / `start-tauri-dev.ps1`）。**不要再包第二层
   exe**：多一层就多一个「关掉它窗口并不让它退出」的常驻进程，也是历史上
-  「产物目录被锁住、提示指不出占用者」那类事故的温床（§7.1.1 的判据随之删除）；
+  「产物目录被锁住、提示指不出占用者」那类事故的温床（§7.1.2 的判据随之删除）；
 - **`scripts/dev-launcher.mjs`** 是唯一的进程编排者：启动、预检、清理都在这一层
   （**全平台同一份**，见 §3）。`scripts/dev-launcher.ps1` 只是它在 Windows 侧的
   **调用入口**（定位项目根 → 转交 → 透传退出码），不含任何编排逻辑；
@@ -1846,12 +1846,7 @@ components** 的分层约束下它对消息只要求 `id` / `runId` / `time` 三
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目                 |
 | 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                                                                                                                                                                                                                                                   |
-| 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   |
-| `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 |
-| `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物                      |
-| `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听                         |
-| `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，      |
-| 可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。    |
+| 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物 `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听 `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 前端 bundle 体积预算（判定档，ISSUE #1781）                                               | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）                      | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，评审确认后 `--allow-increase --update`。规范 §13.5.4。 |
 | 页面级运行时读数（e2e 档，ISSUE #1781 的右半边）                                          | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）         | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器）                                                                          |
 | 重新打包双击启动器（**已废弃**）                                                          | —（Python 启动器与打包链已随 ISSUE #784 删除）                                                               | 现在双击的就是 `src-tauri\target\release\{{shell.app.exe}}` 本身                                                                                                                                                                                                                                                                                                                                        |
@@ -1906,41 +1901,6 @@ components** 的分层约束下它对消息只要求 `id` / `runId` / `time` 三
 别处同名进程不命中 / 路径大小写差异命中」「陈旧壳被自动回收（发布什么 kill）」
 「非交互构建下自动回收」等规则（非 Windows 平台自动跳过）。
 
-#### 7.1.1 产物目录占用的通用出口（ISSUE #621 遗留能力）
-
-原先这一节讲的是「打包启动器前的占用检查」：`build-launcher*.ps1` 的产物是**整个目录**
-（onedir 布局），`Remove-Item -Recurse -Force` 删不掉被运行中进程映射的 `_internal\*.dll`。
-**那条链路已随 Python 启动器整体删除**（ISSUE #784），不再有「第二层 exe 的产物目录」，
-也就没有「打包前先查谁锁着它」这一步。
-
-留下的是一条通用能力：**判「目录删不掉时到底是谁占着」**，实现仍在
-`tools/scripts/Build-Guard.ps1` 的 `Get-ProductDirHolder` + `Write-ProductDirLockHint`。
-判据是「哪些进程把该目录下的文件**映射进了自己的地址空间**」——不能按 exe 名 / 路径判断：
-实测启动器拉起的 dev server（`node` → `pnpm` → `next`）会继承启动器的 DLL 搜索目录，
-把产物目录里的 `VCRUNTIME140.dll` 映射进自己进程，此时按进程名一个都查不到，
-而目录照样删不掉。清理失败时的出口因此是：**真实异常文案 + 占用者清单（PID / 进程名 /
-被映射的文件 + 命令行 / 父 PID）+ 逐条 `taskkill /PID <pid> /T /F`**，
-查不到持有者时才给「杀毒 / 索引服务正在扫描，或权限不足」的分流。
-
-#### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
-
-> 2026 接入（ISSUE #232）：设置页「应用更新」区可检测新版本、下载安装并重启。
-> `tauri-plugin-updater` 的检测/下载/安装命令与 `tauri-plugin-process` 的重启命令
-> 已在 `src-tauri/Cargo.toml` 注册、`src-tauri/src/lib.rs` 挂载，并在
-> `src-tauri/capabilities/remote.json` 授予远程源 `updater:default`、`process:default`。
-
-接入业务更新源需三步（否则「检测更新」只会提示未配置更新源）：
-
-1. 生成签名密钥对：`pnpm tauri signer generate -w ~/.tauri/comfyapp.key`
-   （私钥留作 CI 签名，公钥输出内容随 `-w` 到终端）。
-2. 把公钥填入 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`；
-   按更新宿主（GitHub Releases / 业务后端）填 `plugins.updater.endpoints`。
-3. 发布更新时用私钥对产物签名；`bundle.createUpdaterArtifacts` 置 `true`
-   才会让 `pnpm tauri build` 产出 `.sig` 签名与更新元数据（当前未开启，
-   因尚未配置公钥——避免无公钥时打包报错）。
-
-> 更新产物与签名、更新服务端部署不在本仓库范围内，属发布运维配置。
-
 #### 7.1.1 产品版本号：三处手工重复，靠判据守相等（ISSUE #1611 阶段三 D7）
 
 同一个「产品版本号」写在**三个文件**里，每一个都得由各自的工具读：
@@ -1978,6 +1938,41 @@ pre-commit D 组「产品版本号三处同步(D7)」每笔提交判一次（零
 改动 tauri.conf.json、src-tauri/src/**、splash-assets/** 之后**必须重编壳**
 （`cargo build --release --features custom-protocol`，**feature 不能省**），
 否则运行的是旧二进制（预检只会提醒，不会阻止——界面异常先想到这一条）。
+
+#### 7.1.2 产物目录占用的通用出口（ISSUE #621 遗留能力）
+
+原先这一节讲的是「打包启动器前的占用检查」：`build-launcher*.ps1` 的产物是**整个目录**
+（onedir 布局），`Remove-Item -Recurse -Force` 删不掉被运行中进程映射的 `_internal\*.dll`。
+**那条链路已随 Python 启动器整体删除**（ISSUE #784），不再有「第二层 exe 的产物目录」，
+也就没有「打包前先查谁锁着它」这一步。
+
+留下的是一条通用能力：**判「目录删不掉时到底是谁占着」**，实现仍在
+`tools/scripts/Build-Guard.ps1` 的 `Get-ProductDirHolder` + `Write-ProductDirLockHint`。
+判据是「哪些进程把该目录下的文件**映射进了自己的地址空间**」——不能按 exe 名 / 路径判断：
+实测启动器拉起的 dev server（`node` → `pnpm` → `next`）会继承启动器的 DLL 搜索目录，
+把产物目录里的 `VCRUNTIME140.dll` 映射进自己进程，此时按进程名一个都查不到，
+而目录照样删不掉。清理失败时的出口因此是：**真实异常文案 + 占用者清单（PID / 进程名 /
+被映射的文件 + 命令行 / 父 PID）+ 逐条 `taskkill /PID <pid> /T /F`**，
+查不到持有者时才给「杀毒 / 索引服务正在扫描，或权限不足」的分流。
+
+#### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
+
+> 2026 接入（ISSUE #232）：设置页「应用更新」区可检测新版本、下载安装并重启。
+> `tauri-plugin-updater` 的检测/下载/安装命令与 `tauri-plugin-process` 的重启命令
+> 已在 `src-tauri/Cargo.toml` 注册、`src-tauri/src/lib.rs` 挂载，并在
+> `src-tauri/capabilities/remote.json` 授予远程源 `updater:default`、`process:default`。
+
+接入业务更新源需三步（否则「检测更新」只会提示未配置更新源）：
+
+1. 生成签名密钥对：`pnpm tauri signer generate -w ~/.tauri/comfyapp.key`
+   （私钥留作 CI 签名，公钥输出内容随 `-w` 到终端）。
+2. 把公钥填入 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`；
+   按更新宿主（GitHub Releases / 业务后端）填 `plugins.updater.endpoints`。
+3. 发布更新时用私钥对产物签名；`bundle.createUpdaterArtifacts` 置 `true`
+   才会让 `pnpm tauri build` 产出 `.sig` 签名与更新元数据（当前未开启，
+   因尚未配置公钥——避免无公钥时打包报错）。
+
+> 更新产物与签名、更新服务端部署不在本仓库范围内，属发布运维配置。
 
 ### 7.2 Turbopack「全项目追踪」告警：怎么读、怎么真修（ISSUE #489）
 
