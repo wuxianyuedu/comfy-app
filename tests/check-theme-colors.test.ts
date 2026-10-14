@@ -607,3 +607,138 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
     expect(run().ok).toBe(true);
   });
 });
+
+describe("属性前缀 + 裸 CSS 变量（bg-(--color-…) 这一族，规范 §3.1.1）", () => {
+  it("代码行里写 bg-(--color-node) → 阻断并点出是哪一行", () => {
+    const { run } = scanner({
+      "src/components/studio/BareVar.tsx":
+        'export const cls = "flex bg-(--color-node) text-ink";\n',
+      "src/app/globals.css":
+        "@theme {\n  --color-node: #2b2b36;\n  --color-ink: #ededf2;\n}\n",
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("裸 CSS 变量");
+    expect(output).toContain("src/components/studio/BareVar.tsx:1");
+  });
+
+  it("对照：同一行改成类名便不再红（这条闸只挡「越过语义层」那一族写法）", () => {
+    const { run } = scanner({
+      "src/components/studio/BareVar.tsx":
+        'export const cls = "flex bg-node text-ink";\n',
+      "src/app/globals.css":
+        "@theme {\n  --color-node: #2b2b36;\n  --color-ink: #ededf2;\n}\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("不误伤 arbitrary 值里的 var() —— 那是 calc 的一部分，不是「属性前缀吃裸变量」", () => {
+    /* 夹具里的类名**运行期拼**：本文件在 Tailwind 的扫描语义里属于「正文侧」，
+     * 写全一枚 square-bracket 候选名就会被 docs-candidate-hygiene 那条差集判据点名。 */
+    const varName = "canvas";
+    const { run } = scanner({
+      "src/components/studio/Calcish.tsx":
+        `export const cls = "w-[calc(100%-var(--color-${varName}))]";\n`,
+      "src/app/globals.css": `@theme {\n  --color-${varName}: #0a0a0f;\n}\n`,
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("注释里讲这一族（globals.css 反例清单那种）不判 —— 「只看代码行」这条口径在承重", () => {
+    const { run } = scanner({
+      "src/components/studio/DocOnly.tsx":
+        "export const A = 1;\n" +
+        "/* 原写法是 `border-(--color-canvas)` 拿画布色当描边，已 token 化，勿回退。 */\n",
+      "src/app/globals.css":
+        "@theme {\n  --color-canvas: #0a0a0f;\n  --color-port-surface: #2b2b36;\n}\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("说清不覆盖：CSS 侧的 @apply 也写得出同一族，而这一条的面上没有 CSS", () => {
+    /* 这一格钉的是**射程**，不是修法：把它写成「应该红」等于替 CSS 扩面，而扩面要先回答
+     * `stripComments`（按 JS/TS 写的那份）在 CSS 上怎么算注释。所以今天它是**已知不覆盖**，
+     * 规范 03 §3.1.1 与脚本注释都点名了这一条 —— 真要补那一面，这条会红得正是时候：
+     * 那是改口径的动作，不是漏改。 */
+    const { run } = scanner({
+      "src/app/globals.css":
+        "@theme {\n  --color-node: #2b2b36;\n}\n" +
+        ".u-probe {\n  @apply bg-(--color-node);\n" +
+        "  color: var(--color-node, #ffffff);\n}\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+});
+
+describe("已定义 token 上的装饰性兜底（var(--color-x, #hex)，§3.6.1.1）", () => {
+  const FIXTURE_CSS =
+    "@theme {\n  --color-canvas: #0a0a0f;\n  --color-ink: #ededf2;\n}\n";
+
+  it("token 有定义却带色值兜底 → 阻断，且**豁免文件里也照判**（「未豁免写死色值」在那儿是闭嘴的）", () => {
+    /* 夹具挑一份**整文件豁免**的类型色表（model-cover）：第一行那颗裸 hex 由豁免层放行
+     * （顺带让这条豁免保持「活着」，否则先红的是死豁免负债），第二行的兜底那条写死色值
+     * 判据同样不看 —— 红的只可能是新闸，而这正是它相对那条判据的唯一覆盖。 */
+    const { run } = scanner({
+      "src/components/model/model-cover.ts":
+        'export const SEED = "#7C5CFC";\n' +
+        'export const S = { edge: "var(--color-ink, #EDEDF2)" };\n',
+      "src/app/globals.css": FIXTURE_CSS,
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("兜底永远取不到");
+    expect(output).toContain("src/components/model/model-cover.ts:2");
+    /* 同一条夹具不该 ALSO 报「未豁免写死色值」—— 报了就是这条闸与判定层的职责边界没守住，
+     * 而「不看豁免表」恰恰是它存在的理由。 */
+    expect(output).not.toContain("未豁免的写死色值");
+  });
+
+  it("不收紧到关键字兜底：currentColor 那类是已放行的防御性写法", () => {
+    /* 上面那条决定长在「幽灵 token」一节的用例里（stroke="var(--color-real, currentColor)"
+     * → 通过）。这一条把它钉在**新闸旁边**：把这条兜底闸收成「任何兜底」就会翻掉它，
+     * 那是改口径，不是补执行者。 */
+    const { run } = scanner({
+      "src/components/ui/KeywordFallback.tsx":
+        'export const I = () => <svg><path stroke="var(--color-ink, currentColor)" /></svg>;\n',
+      "src/app/globals.css": FIXTURE_CSS,
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("对照：删掉兜底就绿 —— 这条闸判的是那个取不到的第二来源，不是 var() 本身", () => {
+    const { run } = scanner({
+      "src/components/studio/Fallback.tsx":
+        'export const S = { color: "var(--color-ink)" };\n',
+      "src/app/globals.css": FIXTURE_CSS,
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("规定的 JS 出口不抓：useCssColorToken(整名, 兜底) 形态不同，那条要的就是兜底", () => {
+    const { run } = scanner({
+      "src/components/studio/Outlet.tsx":
+        "export function C() {\n" +
+        '  return useCssColorToken("--color-canvas", "#ffffff");\n' +
+        "}\n",
+      "src/app/globals.css": FIXTURE_CSS,
+    });
+    /* 这里**允许**整体不通过：那颗 `#ffffff` 属于「未豁免写死色值」那条的口径（真实调用点靠豁免层放行 ——
+     * 见 theme-color-exemptions 里「混色种子值，不参与渲染」那条）。本条断言的是兜底闸不抓它：
+     * 否则等于把规定的出口判成违规，而那条出口要的恰恰是一个兜底参数。 */
+    const { output } = run();
+    expect(output).not.toContain("兜底永远取不到");
+  });
+
+  it("与幽灵判据不重不漏：token **没**定义时红在幽灵那一条，不是这一条", () => {
+    const { run } = scanner({
+      "src/components/studio/BothRules.tsx":
+        'export const S = { color: "var(--color-nowhere, #EDEDF2)" };\n',
+      "src/app/globals.css": FIXTURE_CSS,
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("--color-nowhere");
+    expect(output).toContain("从未定义");
+    expect(output).not.toContain("兜底永远取不到");
+  });
+});
