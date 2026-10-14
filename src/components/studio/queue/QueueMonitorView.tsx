@@ -35,6 +35,9 @@ import {
  * 三段各答一件事，顺序就是读屏顺序 —— 跑动中（还要多久）→ 排队中（下一条是不是
  * 我的）→ 最近结果（失败的那条到底为什么失败）。
  *
+ * 离线出口指向侧栏「ComfyUI」页（ISSUE #1900）：启动动作与运行状态都在那一页，
+ * 这里不再把人送去设置页（设置页只管路径，去了也没有启动按钮）。
+ *
  * 离线不再整页替换成空态：列表数据来自本地库的 `task.list`，离线照样拿得到，
  * 整页消失正是「状态闪一下」观感的放大器。现在离线且有任务时只多一条 warning
  * 横幅（说清「不会开始 + 连上自动接上」），列表照常铺开；离线且一条任务都没有
@@ -42,10 +45,10 @@ import {
  */
 export function QueueMonitorView({
   c,
-  onOpenSettings,
+  onOpenComfyui,
 }: {
   c: QueueMonitorController;
-  onOpenSettings: () => void;
+  onOpenComfyui: () => void;
 }) {
   const hasRecent = c.recent.length > 0;
   /* 先收成局部常量：属性上的收窄在事件闭包里会失效，不收就得写
@@ -113,10 +116,10 @@ export function QueueMonitorView({
             <Button
               variant="outline"
               size="xs"
-              onClick={onOpenSettings}
+              onClick={onOpenComfyui}
               className="border-warning/40 text-warning-strong hover:bg-warning/10 h-auto gap-1 rounded-lg px-2.5 py-1"
             >
-              去设置里启动 ComfyUI
+              去「ComfyUI」页启动
             </Button>
           </AlertAction>
         </Alert>
@@ -129,8 +132,8 @@ export function QueueMonitorView({
           description={empty.description}
           icon={ListChecks}
           action={
-            <Button variant="outline" size="sm" onClick={onOpenSettings}>
-              去设置里启动 ComfyUI
+            <Button variant="outline" size="sm" onClick={onOpenComfyui}>
+              去「ComfyUI」页启动
             </Button>
           }
         />

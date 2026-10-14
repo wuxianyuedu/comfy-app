@@ -23,6 +23,8 @@ import type { WorkspaceView } from "./NavItems";
 const VIEW_HELP: Partial<Record<WorkspaceView, ReactNode>> = {
   history: "所有生成任务与执行日志，按时间倒序排列。",
   queue: "每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。",
+  comfyui:
+    "出图后端自己的屏：在不在跑、开起来 / 关下去、以及每一次启动的日志。路径与端口在「设置 → 创作后端」里配。",
   models:
     "本机 ComfyUI 能用哪些 —— 按扫描目录分类，每个目录即一种独立的模型类型。",
   library: "参考图、音效、成片片段 —— 按分类管，可直接拖进画布或工坊。",
@@ -30,7 +32,7 @@ const VIEW_HELP: Partial<Record<WorkspaceView, ReactNode>> = {
   "model-adapters":
     "为远端模型配置工坊各模式下的输入 / 输出：统一输入映射到该接口请求体的字段名，产物按字段路径提取。",
   settings:
-    "全部设置在同一页里：左侧是目录，点一项滚到那一节，右侧只有一根滚动条。",
+    "全部设置在同一页里：左侧是目录，点一项滚到那一节，右侧只有一根滚动条。ComfyUI 的启动 / 关闭与日志在侧栏「ComfyUI」页。",
   "mode-contract":
     "每种模式的统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器。契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。",
 };

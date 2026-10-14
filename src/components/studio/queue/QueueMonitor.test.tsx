@@ -89,7 +89,7 @@ describe("QueueMonitor", () => {
         ],
       }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     const lines = screen.getAllByText(/^工作流 (early|late)$/);
     expect(lines.map((el) => el.textContent)).toEqual([
       "工作流 early",
@@ -108,11 +108,11 @@ describe("QueueMonitor", () => {
         recent: [row({ id: "done1", status: "SUCCEEDED" })],
       }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     /* 横幅与启动出口都在，但不是整页空态那套「ComfyUI 未运行」标题。 */
     expect(screen.getByText("ComfyUI 未连接")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /启动 ComfyUI/ }),
+      screen.getByRole("button", { name: /去「ComfyUI」页启动/ }),
     ).toBeInTheDocument();
     expect(screen.queryByText("ComfyUI 未运行")).not.toBeInTheDocument();
     /* 三段列表都在：排队位次、跑动中段标题、最近结果行。 */
@@ -123,11 +123,14 @@ describe("QueueMonitor", () => {
 
   it("离线且一条任务都没有：退回整页空态并给启动出口", () => {
     monitorMock.mockReturnValue(controller({ online: false, waitingCount: 0 }));
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    const onOpenComfyui = vi.fn();
+    render(<QueueMonitor onOpenComfyui={onOpenComfyui} />);
     expect(screen.getByText("ComfyUI 未运行")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /启动 ComfyUI/ }),
-    ).toBeInTheDocument();
+    /* 出口的**落点**跟着 ISSUE #1900 改了：启动动作在侧栏「ComfyUI」页，
+       不把人送去设置页（那里现在只有路径）。 */
+    const go = screen.getByRole("button", { name: /去「ComfyUI」页启动/ });
+    go.click();
+    expect(onOpenComfyui).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("排队中")).not.toBeInTheDocument();
   });
 
@@ -139,7 +142,7 @@ describe("QueueMonitor", () => {
         runningRows: [row({ id: "r1", status: "RUNNING", progress: 42 })],
       }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText(/^工作流 r1$/)).toBeInTheDocument();
     expect(screen.getByText(/连接后显示耗时与节点明细/)).toBeInTheDocument();
   });
@@ -153,7 +156,7 @@ describe("QueueMonitor", () => {
         openLog,
       }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     const logButtons = screen.getAllByRole("button", {
       name: /查看这一条的执行日志/,
     });
@@ -177,7 +180,7 @@ describe("QueueMonitor", () => {
         closeLog,
       }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByTestId("queue-log-modal")).toBeInTheDocument();
     expect(watchTaskMock).toHaveBeenCalledTimes(1);
     expect(watchTaskMock).toHaveBeenCalledWith("t-1", expect.anything());
@@ -199,7 +202,7 @@ describe("QueueMonitor", () => {
         ],
       }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText("CUDA out of memory")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /复制这一条的提交内容/ }),
@@ -223,7 +226,7 @@ describe("QueueMonitor", () => {
         },
       }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText("估算中")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /正在跑的工作流/ }),
@@ -234,7 +237,7 @@ describe("QueueMonitor", () => {
     monitorMock.mockReturnValue(
       controller({ loadError: "读不到任务记录，后端可能刚重启" }),
     );
-    render(<QueueMonitor onOpenSettings={vi.fn()} />);
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText(/^读不到任务记录/)).toBeInTheDocument();
   });
 });
