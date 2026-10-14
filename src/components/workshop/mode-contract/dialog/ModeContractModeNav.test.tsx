@@ -7,20 +7,50 @@
  *   1. **一个模式都不漏**：按 `CONTRACT_MODES` 的 code 集合与渲染出的单选行
  *      **双向比对**（不写字面量清单）—— 分组表是视图里新增的一份映射，它的失效
  *      模式正是**静默漏项**（某个模式从导航上消失，而其它地方都不会说）；
- *   2. **两个层级都在**：类别是父行（不可点，`aria-hidden`），模式是可点的子行
- *      —— 这正是「树形」相对「一排 chip」的差别（chip 带上两者平权、读不出层级）；
+ *   2. **两个层级都在**：类别是父行，模式是挂在它下面的子行 —— 这正是「树形」
+ *      相对「一排 chip」的差别（chip 带上两者平权、读不出层级）；
  *   3. **单选语义**：`role="radiogroup"` / `role="radio"`，`aria-checked` 只落在
  *      当前模式上，点一枚把它的 code 上抛；
- *   4. **「已改」标记**跟着 `storedCustomized` 走（注册表里有该模式才出现）。
+ *   4. **「已改」标记**跟着 `storedCustomized` 走（注册表里有该模式才出现）；
+ *   5. **每个类别可折叠**（第二刀）：父行是 `Disclosure` 的开关、默认全部展开、
+ *      收起一类只影响那一类、收起态是「折叠的」而不是「消失的」（`hidden="until-found"`）
+ *      —— 最后这条同时保住了浏览器页内查找会自动展开命中内容那一档语义
+ *      （规范 16 §16.2.4.13）。
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CONTRACT_MODES, contractModeTree } from "../mode-contract-config";
 import { ModeContractModeNav } from "./ModeContractModeNav";
 
+/** 一个类别（父行）的开关按钮 —— 按 `data-category` 认身份，不按可访问名。 */
+function categoryTrigger(category: string): HTMLElement {
+  return screen.getByRole("button", {
+    name: new RegExp(`^${category}`),
+  });
+}
+
+/** 某类下的模式行（按 `data-mode` 认，`data-category` 是它的容器）。 */
+function modesOf(container: HTMLElement, category: string): Element[] {
+  const slot = container.querySelector(`[data-category="${category}"]`);
+  return Array.from(
+    slot
+      ?.closest('[data-slot="disclosure"]')
+      ?.querySelectorAll("[data-mode]") ?? [],
+  );
+}
+
 afterEach(cleanup);
+
+/** 一个「什么都不选、什么都不标已改」的最小 props（折叠用例只关心类别那一层）。 */
+function navProps() {
+  return {
+    activeMode: null,
+    storedCustomized: () => false,
+    onSelect: vi.fn(),
+  };
+}
 
 function renderNav(
   activeMode: string | null = null,
@@ -49,7 +79,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     expect(rendered.length).toBe(CONTRACT_MODES.length);
   });
 
-  it("每个类别都是一个父行 + 它的子行集合（父行不可点）", () => {
+  it("每个类别都是一个父行 + 它的子行集合", () => {
     const { container } = render(
       <ModeContractModeNav
         activeMode={null}
@@ -58,10 +88,13 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
       />,
     );
     const tree = contractModeTree();
-    /* 父行的可读名不进可访问树（`aria-hidden`）—— 它只回答「这几项属于一类」，
-       不是导航目标；模式的归属由子行自己的位置表达。 */
     for (const group of tree) {
-      expect(within(container).getByText(group.label)).toBeTruthy();
+      /* 父行按类别名可认（它的可读名就在触发按钮里）。 */
+      expect(screen.getByText(group.label)).toBeTruthy();
+      /* 挂在这一类下的模式数就是 `contractModeTree` 给的那几条 —— 不写字面量。 */
+      expect(modesOf(container, group.category).length).toBe(
+        group.modes.length,
+      );
     }
     expect(
       container.querySelectorAll('[data-slot="tree-children"]').length,
@@ -106,5 +139,65 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     expect(badges[0]!.closest("[data-mode]")?.getAttribute("data-mode")).toBe(
       only.code,
     );
+  });
+});
+
+/**
+ * 第二刀：**每一类可折叠**（用户反馈「每一类需要可折叠」）。
+ *
+ * 判据落在折叠这件事本身，不锁样式：
+ *
+ *   1. 每个类别都有一个**开关**（`aria-expanded` 在 `false` / `true` 之间变），
+ *      且默认是展开的 —— 默认折着等于把当前模式藏起来；
+ *   2. 收起一类**只动那一类**（另一类仍展开，它的模式行照旧在）；
+ *   3. 收起是**折叠**不是**移除**：面板留在 DOM 里带 `hidden="until-found"`
+ *      —— 丢掉它等于丢掉「浏览器页内查找自动展开命中内容」那一档语义。
+ */
+describe("每个类别可折叠（ISSUE #1870 第二刀）", () => {
+  it("默认每个类别都展开（开关 aria-expanded=true）", () => {
+    render(<ModeContractModeNav {...navProps()} />);
+    for (const group of contractModeTree()) {
+      expect(categoryTrigger(group.label).getAttribute("aria-expanded")).toBe(
+        "true",
+      );
+    }
+  });
+
+  it("点父行收起它，再点展开；另一类不受影响", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ModeContractModeNav {...navProps()} />);
+    const [first, second] = contractModeTree();
+    const firstTrigger = categoryTrigger(first!.label);
+
+    await user.click(firstTrigger);
+    expect(firstTrigger.getAttribute("aria-expanded")).toBe("false");
+    /* 只动这一类的**开关**：另一类的开关仍是展开，它的模式行也仍在。 */
+    expect(categoryTrigger(second!.label).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    expect(modesOf(container, second!.category).length).toBe(
+      second!.modes.length,
+    );
+
+    await user.click(firstTrigger);
+    expect(firstTrigger.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("收起后那一摞留在 DOM 里带 hidden=until-found（折叠不是移除）", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ModeContractModeNav {...navProps()} />);
+    const first = contractModeTree()[0]!;
+    const categorySlot = container.querySelector(
+      `[data-category="${first.category}"]`,
+    );
+    const panel = categorySlot
+      ?.closest('[data-slot="disclosure"]')
+      ?.querySelector('[data-slot="disclosure-panel"]');
+
+    expect(panel?.getAttribute("hidden")).toBeNull();
+    await user.click(categoryTrigger(first.label));
+    expect(panel?.getAttribute("hidden")).toBe("until-found");
+    /* 子行容器与模式行都还在（折叠，不是条件渲染掉）。 */
+    expect(modesOf(container, first.category).length).toBe(first.modes.length);
   });
 });
