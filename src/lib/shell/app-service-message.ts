@@ -56,7 +56,7 @@ export interface AppServiceMessageText {
 
 /** 边沿判据的游标：上一次看到的事实 + 尚未收尾的那一次断开。 */
 export interface AppServiceEventCursor {
-  /** 上一次看到的三态。 */
+  /** 上一次看到的四态。 */
   state: DevServerState;
   /** 上一次看到的「这份进程是新的吗」。 */
   processIsNew: boolean;
@@ -67,6 +67,9 @@ export interface AppServiceEventCursor {
 /** 一次待记录的事件。 */
 export type AppServiceEvent =
   | { type: "disconnect"; at: number }
+  /** 路由表不完整：服务在应答、但探活端点 404。用户此刻能做的是重启应用，
+   *  而这条消息就是那个出口（状态栏那格只有 24px，说不完整）。 */
+  | { type: "route-stale"; at: number }
   | {
       type: "start";
       at: number;
@@ -75,7 +78,7 @@ export type AppServiceEvent =
     };
 
 export interface AppServiceFacts {
-  /** 本次看到的三态。 */
+  /** 本次看到的四态。 */
   state: DevServerState;
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
@@ -106,6 +109,13 @@ export function deriveAppServiceEvent(
       cursor: { ...cursor, offlineAt: now },
       event: { type: "disconnect", at: now },
     };
+  }
+
+  /* ①′ 路由表不完整：同样是「此刻这件事就是坏的」，同样只在**进入**那一拍发
+   * 一条。不并入上面那一支，是因为用户能做的动作不同 —— 那边等它起来/恢复，
+   * 这边只能重启应用；混成同一条消息等于把出口写错。 */
+  if (facts.state === "stale" && prev.state !== "stale") {
+    return { cursor, event: { type: "route-stale", at: now } };
   }
 
   /* ② 进程换了一个（冷启动或真重启）：这一条同时覆盖「应用重启了」与「本次会话
@@ -198,6 +208,28 @@ export function describeAppServiceDisconnect(
       "这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，" +
       "浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。" +
       "服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。",
+  };
+}
+
+/**
+ * 路由表不完整那条：说清「服务在、坏的是路由表」与**怎么做**。
+ *
+ * 为什么不复述状态栏那句 tooltip：状态栏那格只有 24px、右下角位置窄，而这条消息
+ * 是「用户事后唯一能翻回来的一次完整说明」——它要把「为什么是我该重启、而不是继续
+ * 等」讲明白（页面还能打开，恰恰是最容易让人以为「再等等就好了」的地方）。
+ */
+export function describeAppServiceRouteStale(
+  at: number,
+): AppServiceMessageText {
+  return {
+    title: "应用服务路由异常",
+    body:
+      `发现时间 ${formatClock(at)}。` +
+      "应用服务在应答（页面还能打开），但它的探活端点返回 404 —— 说明这一次启动的路由表不完整，" +
+      "部分页面与接口会直接 404，状态栏会一直停在「应用服务路由异常」。\n" +
+      "这一步与你的代码无关，也不是数据丢了：它是 Turbopack 开发服务的会话级路由失效。" +
+      "关闭应用窗口、重新启动一次即可重建路由表。\n" +
+      "重启后仍如此，则删掉项目根目录下的 .next 目录再启动一次。",
   };
 }
 

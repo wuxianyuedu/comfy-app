@@ -18,7 +18,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { builtInModeContract } from "~/lib/workshop/model-mode-contract";
+import { derivedModeContract } from "~/lib/workshop/model-mode-contract";
 
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { ModeContractEditorView } from "./ModeContractEditorView";
@@ -27,7 +27,7 @@ afterEach(cleanup);
 
 /** 一个只填必要字段的控制器替身：本用例判的是**布局**，不是编辑行为。 */
 function stubController(mode: string | null): ModeContractEditorController {
-  const draft = mode ? builtInModeContract(mode) : null;
+  const draft = mode ? derivedModeContract(mode) : null;
   return {
     mode,
     draft,

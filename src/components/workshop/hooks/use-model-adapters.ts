@@ -11,7 +11,7 @@ import { errorMessage } from "~/lib/error-message";
 
 import {
   adapterInputsFromContract,
-  builtInModeContract,
+  derivedModeContract,
   defaultEndpointPathForMode,
   parseRemoteModeAdapters,
   type RemoteModeAdapter,
@@ -126,11 +126,11 @@ export function useModelAdapters(): ModelAdaptersController {
               {
                 mode,
                 endpointPath: defaultEndpointPathForMode(mode),
-                // 默认输入清单来自**模式契约注册表**（用户改过用改过的，
-                // 没改过用内置默认）—— 统一口在这里先定义、适配器只做翻译。
+                // 默认输入清单来自**生效的模式契约**（本机覆盖里有就用它，
+                // 否则按成品配置现算）—— 统一口在这里先定义、适配器只做翻译。
                 inputs: adapterInputsFromContract(
                   modeContracts.contracts.find((c) => c.mode === mode) ??
-                    builtInModeContract(mode),
+                    derivedModeContract(mode),
                 ),
                 outputField: "",
               },

@@ -274,3 +274,76 @@ describe("useDevServerLiveness：单拍抖动不算断开", () => {
     }
   });
 });
+
+describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
+  /* 现场（ISSUE #1918）：Turbopack 会话级路由失效，页面本身还在被同一个进程
+   * 正常渲染，而 `/api/dev/server-id` 返回 404。旧实现把任何非 2xx 都并进
+   * 「不可达」，于是 `everOnline` 永远为假、状态栏**永久**停在「应用服务连接
+   * 中」—— 用户眼前摆着一个能打开的页面，读到一句「正在连接」。 */
+  function stubNotFound() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (urlOf(input).includes("/api/dev/server-id")) {
+          return new Response("{}", { status: 404 });
+        }
+        return new Response(
+          JSON.stringify({ record: null, currentRunId: null }),
+          { status: 200 },
+        );
+      }),
+    );
+  }
+
+  it("404 与「没应答」分得开：routeTableStale 为真而 probeOk 仍为假", async () => {
+    stubNotFound();
+    const { result } = renderHook(() => useDevServerLiveness());
+    await expect.poll(() => result.current.routeTableStale).toBe(true);
+    /* 仍然不冒充在线：拿 404 当「探通」会把断开/恢复的边沿一起喂错。 */
+    expect(result.current.probeOk).toBe(false);
+    expect(result.current.everOnline).toBe(false);
+  });
+
+  it("恢复应答后 routeTableStale 归零（它不是一次性的事实，是每拍的状态）", async () => {
+    let notFound = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (urlOf(input).includes("/api/dev/server-id")) {
+          return notFound
+            ? new Response("{}", { status: 404 })
+            : new Response(JSON.stringify({ bootId: "b1" }), { status: 200 });
+        }
+        return new Response(
+          JSON.stringify({ record: null, currentRunId: null }),
+          { status: 200 },
+        );
+      }),
+    );
+    const { result } = renderHook(() => useDevServerLiveness());
+    await expect.poll(() => result.current.routeTableStale).toBe(true);
+    notFound = false;
+    await expect.poll(() => result.current.routeTableStale).toBe(false);
+    expect(result.current.probeOk).toBe(true);
+  });
+
+  it("网络层失败不设 routeTableStale（没拿到应答就谈不上「答的是 404」）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (urlOf(input).includes("/api/dev/server-id")) {
+          throw new Error("ECONNREFUSED");
+        }
+        return new Response(
+          JSON.stringify({ record: null, currentRunId: null }),
+          { status: 200 },
+        );
+      }),
+    );
+    const { result } = renderHook(() => useDevServerLiveness());
+    await expect
+      .poll(() => result.current.consecutiveFailures)
+      .toBeGreaterThan(0);
+    expect(result.current.routeTableStale).toBe(false);
+  });
+});

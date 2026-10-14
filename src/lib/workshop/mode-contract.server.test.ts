@@ -1,17 +1,22 @@
 /**
- * 模式契约注册表的落盘判据（ISSUE #1901）。
+ * 模式契约读取的判据（ISSUE #1901 / #1917）。
  *
- * 这一层的题目是**落点**：契约是项目配置（入库、随包、每个检出同一份），而不是
- * 某一台机器的运行期状态。三条用例各钉一件事——
+ * 这一层的题目是**两份来源怎么合**：成品配置（编译进源码的那份）给默认，
+ * 本机覆盖（`data/workshop-mode-contracts.json`）在这台机器上压过它。六条用例
+ * 各钉一件事——
  *
- *   ① 读写落在 `config/workshop-mode-contracts.json`，且**路径只有一处定义**
- *      （视图层给用户看的保存提示也用它）；
- *   ② 老检出（契约曾存在 `data/` 本机目录）升级后**不丢配置**：新文件不在时读老文件，
- *      且读路径只读不搬（不产生副作用）；
- *   ③ 坏文件 / 写不进去都不是静默的：坏 JSON 回落内置默认，写失败抛出带路径的错误
- *      （桌包安装目录不可写时就靠这一句，否则「保存了但没落盘」没有任何痕迹）。
+ *   ① 没有覆盖文件时读到的是成品配置（不是空数组 —— 「没配过」与「没有契约」
+ *      是两件事，混淆会让工坊对每个模式的对外口都变成空清单）；
+ *   ② 覆盖存在且非空时整份压过成品配置（含「成品配置里删掉的模式不许被覆盖
+ *      复活」这条方向）；
+ *   ③ 覆盖是**空数组**时回落成品配置：`[]` 是「这本机没改过」的状态本身；
+ *   ④ 老检出（契约曾存在入库的 `config/`）升级后不丢配置：老文件在、覆盖不在时
+ *      读它，且读路径只读不搬；
+ *   ⑤ 坏 JSON / 读不出来不是静默的：按「没有覆盖」处理，回落成品配置；
+ *   ⑥ 写失败抛出带路径的错误（「保存了但没落盘」是最坏的形态，它唯一的痕迹
+ *      就是这一句）。
  *
- * 这里**真读写临时目录**（不 mock fs）：这一层的全部价值就是「文件到底落在哪、
+ * 这里**真读写临时目录**（不 mock fs）：这一层的全部价值就是「读到了哪一份、
  * 内容有没有被归一化」——桩掉 fs 之后这两件都判不出来。`root` 参数就是为它留的。
  */
 import { promises as fs } from "node:fs";
@@ -21,7 +26,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { loadModeContracts, saveModeContracts } from "./mode-contract.server";
-import { MODE_CONTRACTS_REL_PATH } from "./mode-contract-file";
+import { MODE_CONTRACTS_REL_PATH } from "./mode-contract-write-path";
+import { configuredModeContracts } from "./model-mode-contract";
 
 let root: string;
 
@@ -33,7 +39,7 @@ afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true });
 });
 
-/** 读新落点那份文件的原始文本（不存在返回 null）。 */
+/** 读覆盖那份文件的原始文本（不存在返回 null）。 */
 async function readRaw(): Promise<string | null> {
   try {
     return await fs.readFile(path.join(root, MODE_CONTRACTS_REL_PATH), "utf8");
@@ -42,17 +48,35 @@ async function readRaw(): Promise<string | null> {
   }
 }
 
-describe("模式契约：落在入库的项目配置里", () => {
-  it("落点是 config 下的项目配置，不是 data/ 那条本机目录", () => {
-    expect(MODE_CONTRACTS_REL_PATH).toBe("config/workshop-mode-contracts.json");
-    expect(MODE_CONTRACTS_REL_PATH.startsWith("config/")).toBe(true);
-    // 这条是这次改动的**本意**：`data/` 被 .gitignore 忽略、且被分发产物剥离，
-    // 放在那里的契约到不了别的检出。
-    expect(MODE_CONTRACTS_REL_PATH.startsWith("data/")).toBe(false);
+/** 造一份「老检出」的文件（契约曾落在入库的 `config/` 里）。 */
+async function writeLegacy(contracts: unknown): Promise<string> {
+  const legacy = path.join(root, "config", "workshop-mode-contracts.json");
+  await fs.mkdir(path.dirname(legacy), { recursive: true });
+  await fs.writeFile(legacy, JSON.stringify(contracts), "utf8");
+  return legacy;
+}
+
+describe("模式契约：成品配置 + 本机覆盖", () => {
+  it("覆盖落在本机运行期目录 data/，不是入库的项目配置 config/", () => {
+    expect(MODE_CONTRACTS_REL_PATH).toBe("data/workshop-mode-contracts.json");
+    // 这条是这次改动的**本意**：`config/` 那一层已删（ISSUE #1917）——
+    // 内置默认改成源码里的成品配置，机器上的改动只落在本机。
+    expect(MODE_CONTRACTS_REL_PATH.startsWith("config/")).toBe(false);
+    expect(MODE_CONTRACTS_REL_PATH.startsWith("data/")).toBe(true);
   });
 
-  it("保存 → 读回：写进新落点，且内容是归一化之后的（含换行结尾）", async () => {
-    const saved = await saveModeContracts(
+  it("没有覆盖文件时读到的是成品配置（不是空数组）", async () => {
+    const contracts = await loadModeContracts(root);
+    expect(contracts).toEqual(configuredModeContracts());
+    // 反向对照：这一条不是恒真 —— 成品配置确实有内容，且覆盖文件确实没被建出来。
+    // 「读一次写一次」会把「看一眼」事故性地固化成这台机器的覆盖。
+    expect(contracts.length).toBeGreaterThan(0);
+    await expect(readRaw()).resolves.toBeNull();
+  });
+
+  it("覆盖存在且非空时整份压过成品配置（成品里删掉的模式不许被老覆盖复活）", async () => {
+    const only = [{ mode: "T2I", inputs: ["prompt", "size"], output: "image" }];
+    await saveModeContracts(
       [
         {
           mode: "t2i",
@@ -64,70 +88,54 @@ describe("模式契约：落在入库的项目配置里", () => {
       root,
     );
     // 归一化在小写模式码上也生效（存进去的键是大写口径）
-    expect(saved.map((c) => c.mode)).toEqual(["T2I"]);
-
-    const raw = await readRaw();
-    expect(raw, "没写进 config/workshop-mode-contracts.json").not.toBeNull();
-    expect(JSON.parse(raw ?? "[]")).toEqual([
-      {
-        mode: "T2I",
-        inputs: ["prompt", "size"],
-        output: "image",
-        required: ["prompt"],
-      },
+    await expect(loadModeContracts(root)).resolves.toEqual([
+      { ...only[0], required: ["prompt"] },
     ]);
-    // 文件以单个换行收尾（避免每次保存产生「无内容差异」的 diff 噪声）
-    expect(String(raw).endsWith("\n")).toBe(true);
-
-    await expect(loadModeContracts(root)).resolves.toEqual(saved);
+    // 成品配置里的其它模式**一条都不在**：覆盖是整份替换，不是按模式合并。
+    expect((await loadModeContracts(root)).length).toBe(1);
   });
 
-  it("坏 JSON 按「没配过」处理，不把工坊打成 500", async () => {
-    const file = path.join(root, MODE_CONTRACTS_REL_PATH);
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, "{ 这不是 JSON", "utf8");
-    await expect(loadModeContracts(root)).resolves.toEqual([]);
-  });
-
-  it("新落点不在时回落老检出那份（data/），且只读不搬", async () => {
-    const legacy = path.join(root, "data", "workshop-mode-contracts.json");
-    await fs.mkdir(path.dirname(legacy), { recursive: true });
-    await fs.writeFile(
-      legacy,
-      JSON.stringify([
-        { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
-      ]),
-      "utf8",
+  it("覆盖是空数组时回落成品配置（`[]` = 这本机没改过）", async () => {
+    await saveModeContracts([], root);
+    await expect(readRaw()).resolves.toBe("[]\n");
+    await expect(loadModeContracts(root)).resolves.toEqual(
+      configuredModeContracts(),
     );
+  });
+
+  it("老检出（曾落在 config/）升级后不丢配置，且读路径只读不搬", async () => {
+    const legacy = await writeLegacy([
+      { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
+    ]);
 
     await expect(loadModeContracts(root)).resolves.toEqual([
       { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
     ]);
-    // 读路径**不**产生副作用：老文件还在，新文件也不会被顺手建出来
-    // （「读一次写一次」会让一次查看事故性地把本机配置固化成入库文件）。
+    // 读路径**不**产生副作用：老文件还在，新覆盖也不会被顺手建出来
+    //（「读一次写一次」会让一次查看把内容钉进这台机器）。
+    await expect(fs.stat(legacy)).resolves.toBeTruthy();
     await expect(readRaw()).resolves.toBeNull();
   });
 
-  it("新落点一旦存在就只认它（老文件里更旧的副本不许复活）", async () => {
-    const legacy = path.join(root, "data", "workshop-mode-contracts.json");
-    await fs.mkdir(path.dirname(legacy), { recursive: true });
-    await fs.writeFile(
-      legacy,
-      JSON.stringify([
-        { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
-      ]),
-      "utf8",
+  it("老检出那份是空数组时回落成品配置（先前的空覆盖不该被后来者继承）", async () => {
+    await writeLegacy([]);
+    await expect(loadModeContracts(root)).resolves.toEqual(
+      configuredModeContracts(),
     );
-    // 空数组 = 用户把定制全清了。这不是「没配过」，必须原样读回空，
-    // 否则删掉的配置会被老文件复活。
-    await saveModeContracts([], root);
+  });
 
-    await expect(loadModeContracts(root)).resolves.toEqual([]);
+  it("坏 JSON 按「没有覆盖」处理，不把工坊打成 500", async () => {
+    const file = path.join(root, MODE_CONTRACTS_REL_PATH);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, "{ 这不是 JSON", "utf8");
+    await expect(loadModeContracts(root)).resolves.toEqual(
+      configuredModeContracts(),
+    );
   });
 
   it("写不进去时报错并带上路径（不静默吞掉）", async () => {
-    // 让 config 那一段是个**文件**：mkdir/写都必然失败，模拟只读 / 被占用的安装目录
-    await fs.writeFile(path.join(root, "config"), "占位", "utf8");
+    // 让 data 那一段是个**文件**：mkdir / 写都必然失败，模拟只读 / 被占用的目录
+    await fs.writeFile(path.join(root, "data"), "占位", "utf8");
 
     await expect(
       saveModeContracts(

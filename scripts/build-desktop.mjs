@@ -218,9 +218,7 @@ cpSync(nextOut, staticDir, {
  * （有人绕过 filter 往 static 里写文件、或将来改复制方式时仍然兜得住），
  * 命中与否都只是空操作。 */
 for (const name of pruneStaticToAllowList(staticDir)) {
-  console.log(
-    `[build-desktop]   §装配 已剔除桌包不带的顶层条目 static/${name}`,
-  );
+  console.log(`[build-desktop]   §装配 已剔除桌包不带的顶层条目 static/${name}`);
 }
 rmSync(join(staticDir, "node_modules", ".cache"), {
   recursive: true,
@@ -253,24 +251,6 @@ stripPrivateInputs(staticDir, (name) => {
 stripDevArtifacts(staticDir, (name) => {
   console.log(`[build-desktop]   §分发卫生 已剔除开发期文件 static/${name}`);
 });
-// ── 2.25 §入库配置：把项目配置随包带出去 ──
-// 为什么显式拷而不是赌 tracing：`config/workshop-mode-contracts.json`（模式契约注册表）
-// 是**入库的项目配置**，运行期由 `src/lib/workshop/mode-contract.server.ts` 按
-// `process.cwd()`（= 载荷根）读。它进不进 `.next/standalone` 取决于 Turbopack 这一轮
-// 的追踪粒度（本仓实测过整目录时有时无），而「没进」的表现不是构建报错，是**静默跑成
-// 内置默认**：桌包里的模式契约与检出里的不一致，界面上看不出异常。所以这里显式拷一份，
-// 并由 `check-standalone-contents.cjs` 的 REQUIRED_CONFIG_FILES 在两层都数一次。
-// 注意与 §分发卫生 的方向相反：`data/` 是本机私有输入（含密钥），刻意**不**随包。
-const configSrc = join(root, "config");
-if (!existsSync(configSrc)) {
-  fail(
-    "仓库根的 config/ 不存在：模式契约注册表（config/workshop-mode-contracts.json）" +
-      "是入库的项目配置，缺它只能跑内置默认。",
-  );
-}
-cpSync(configSrc, join(staticDir, "config"), { recursive: true });
-console.log("[build-desktop]   §入库配置 已同步 config/ → static/config/");
-
 // ── 2.3 §首启建表：把 schema 的 DDL 随包带出去 ──
 // 为什么需要（ISSUE #1216 实测）：载荷里的 node_modules 只有生产依赖，**drizzle-kit 不在
 // 其中**，桌包首启因此没有任何办法建表。把载荷跑起来后的现场是 `/workspace` 200、
@@ -287,11 +267,14 @@ console.log("[build-desktop]   §入库配置 已同步 config/ → static/confi
 // （手工副本迟早与 schema 漂开，而漂开的表现是首启建出一张缺列的表）。
 const schemaSqlPath = join(staticDir, "schema.sql");
 {
-  const invocation = pnpmInvocation(["exec", "drizzle-kit", "export", "--sql"]);
+  const invocation = pnpmInvocation([
+    "exec",
+    "drizzle-kit",
+    "export",
+    "--sql",
+  ]);
   if (!invocation) {
-    fail(
-      "PATH 上找不到可用的 pnpm，无法导出首启建表用的 DDL（先跑 pnpm check:toolchain）。",
-    );
+    fail("PATH 上找不到可用的 pnpm，无法导出首启建表用的 DDL（先跑 pnpm check:toolchain）。");
   }
   echoCommandLine(invocation.command, invocation.args);
   const exported = spawnSync(invocation.command, invocation.args, {
@@ -308,9 +291,7 @@ const schemaSqlPath = join(staticDir, "schema.sql");
   }
   // 判据两条：真有建表语句；且**没有任何数据语句**。
   if (!/CREATE TABLE/i.test(sql)) {
-    fail(
-      "drizzle-kit export 的输出里没有 CREATE TABLE——DDL 导出口径变了，请检查本步。",
-    );
+    fail("drizzle-kit export 的输出里没有 CREATE TABLE——DDL 导出口径变了，请检查本步。");
   }
   if (/INSERT INTO/i.test(sql)) {
     fail(
@@ -337,9 +318,6 @@ for (const payloadFile of [
   "scripts/launcher-core/standalone-runtime-env.mjs",
   // 首启建表的 DDL（上面 §首启建表 产出）：缺它 = 桌包首启建不出表，页面 200 接口全 500。
   "schema.sql",
-  // 入库的项目配置（§入库配置 显式拷贝）：缺它 = 桌包静默跑成内置默认，
-  // 与检出里的模式契约不一致而界面上看不出异常。
-  "config/workshop-mode-contracts.json",
 ]) {
   if (!existsSync(join(staticDir, payloadFile))) {
     fail(
