@@ -306,12 +306,12 @@
 
   /* Body / default — next/font 加载的 Latin 字体 + 系统 CJK 字体回退 */
   --font-sans:
-    var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
-    system-ui, -apple-system, sans-serif;
+    var(--font-geist-sans), "Sarasa UI SC", "PingFang SC", "Microsoft YaHei",
+    "Noto Sans SC", system-ui, -apple-system, sans-serif;
   /* Mono / code — unified stack（原先是各处内联 fontFamily，已收口到此） */
   --font-mono:
     "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas,
-    monospace;
+    "Sarasa Mono SC", monospace;
   /* 标题字阶三颗（`--text-section` / `--text-page` / `--text-stage`）**刻意不在本块里** ——
      它们住在下面的 `:root`。理由不是排版偏好：`@theme` 的 `--text-*` 命名空间会**顺带生成
      工具类**（实测产物里有 `.text-page { font-size: var(--text-page) }` 等三条，零消费者），
@@ -484,35 +484,69 @@
   ); /* 子图标题栏混色基准：深色档由 --color-node 自己带 */
 }
 
-/* ── 内嵌的中文标题字面（`--font-title` 的首选）─────────────────────
-   `--font-title` 首选 Sarasa Gothic SC 很多年，但它既没有 `@font-face` 也不在
-   `next/font` 里 —— 实测本机字体目录（系统级 + 用户级）**都没有**这个字面，
-   也就是说那一档**从来没有生效过**，15 处调用点一直渲染的是 Geist + 系统 CJK。
-   这里补上真正的字面，让「标题比正文重、字面宽不同」这件事在**任何机器**上都成立
-   （而不是只在某个人的机器上成立 —— 那正是它一直没被发现的原因）。
+/* ── 内嵌的三档中文字面（正文 / 标题 / 等宽）──────────────────────
+   这三档此前**全部**落回系统字体：
 
-   · 只嵌 **Bold 一档**：`font-title` 的全部落点都是 700（`font-bold` 或
-     `.u-title-page`，后者字面写着 `font-weight: 700`），没有 600 档在用。
+   · `--font-title` 首选 Sarasa Gothic SC 很多年，但它既没有 `@font-face` 也不在
+     `next/font` 里 —— 实测本机字体目录（系统级 + 用户级）**都没有**这个字面，
+     也就是说那一档**从来没有生效过**，15 处调用点一直渲染的是 Geist + 系统 CJK。
+   · `--font-sans` 的 CJK 段（PingFang SC / Microsoft YaHei / Noto Sans SC）全是
+     系统字体：Mac 上一种字面、Windows 上另一种、Linux 上大概率一种都没有。
+   · `--font-mono` 的 CJK 更是没着落 —— 日志与路径里的中文掉进系统 mono，
+     而绝大多数系统 mono **不含 CJK**，于是它按比例字面画出来（等宽外观当场失效）。
+
+   这里把三档都做成内嵌，让「同一段文字在任何机器上长得一样」这件事成立
+   （而不是只在某个人的机器上成立 —— 那正是它长期没被发现的原因）。
+
+   · **不做 subset**：这三份都是**完整 CJK**（各 4.6 万上下码位，含 CJK 基本区
+     20992 字 / 扩展 A 6582 字 / 谚文 11172 字）。subset 能把 8.6 MB 砍到
+     1.45 MB（GB2312 那 6763 字），但代价是**生僻字静默掉回系统字体** ——
+     而正文是用户输入（工作流名、项目名、提示词），生僻字是常态。
+     这条链的全部价值就是「观感在任何机器上都一致」，所以宁可按 25 MB 记账。
+     顺带一句实测：真正贵的是**汉字本身一字一份**（2 万个字形占 glyf 的 95%），
+     不是某一档用不到的字符块 —— 排掉全部谚文只回收 1 MB，排掉 BMP 之外只回收 0.9 MB。
    · 载体是 **woff2**（不是原始 TTF）：同一份字形，woff2 的 `glyf` 逐点无损压缩，
-     实测 23.9 MB → 8.6 MB（TTF 的 36%）。这一档收益不止缓存 —— `public/` 会被
-     `build-desktop` 整树内嵌进桌包，所以省下来的每一字节都是安装包上的字节。
+     实测每档 24 MB → 8.3~8.7 MB（TTF 的 35%）。这一档收益不止缓存 —— `public/`
+     会被 `build-desktop` 整树内嵌进桌包，所以省下来的每一字节都是安装包上的字节。
      代价只有一次：woff2 是**有损不可逆**的载体（解回 TTF 得不到原文件），
      重生成得从上游 TTF 再转一次（`fontTools` 的 `flavor="woff2"`），
-     所以仓库里**不再保留**那份 23 MB 源文件。
-   · 文件走 **git-lfs**（`.gitattributes` 的 `*.woff2`），否则每次克隆都背着它。
+     所以仓库里**不保留**那三份 24 MB 源文件。
+   · 文件走 **git-lfs**（`.gitattributes` 的 `*.woff2`），否则每次克隆都背着 25 MB。
      LFS 的两条接线见 `.githooks/pre-push` 与 `scripts/install-git-hooks.mjs`。
    · 许可 **SIL OFL 1.1**，全文随字体一起放在 `public/fonts/OFL-Sarasa-Gothic.txt`
      （OFL 要求再分发时附许可文本，这条不是可选项）。
-   · `font-display: swap`：首帧先用回退栈画出标题、字面到货再换上。桌面壳是本地
-     文件、没有网络往返，但 standalone 首启仍要走一次解压，`block` 会让标题短暂
+   · `font-display: swap`：首帧先用回退栈画出文字、字面到货再换上。桌面壳是本地
+     文件、没有网络往返，但 standalone 首启仍要走一次解压，`block` 会让文字短暂
      空着 —— 那是可感知的空白，不是「更严谨」。
    · 换载体这件事**有渲染等价的判据**：Chromium 里同一段文本用 TTF 与 woff2 各画一遍，
      截图逐字节相同（等价性的证明方式与「缺字体会落到回退栈」的反向对照见
-     `tests/embedded-title-font.test.ts` 的说明）。 */
+     `tests/embedded-title-font.test.ts` 的说明）。判定「这一档有没有真的接上」的
+     判据也在那里，口径是 `EMBEDDED_FACES` 那张表 —— **加一档就加一行**。 */
 @font-face {
   font-family: "Sarasa Gothic SC";
   src: url("/fonts/SarasaGothicSC-Bold.woff2") format("woff2");
   font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 正文 CJK：只嵌 **Regular 一档**（正文的常态字重是 400）。它排在
+   `var(--font-geist-sans)` **之后**——拉丁仍走 Geist（`next/font` 在构建期自托管，
+   字形与这份同源但不重复加载），CJK 才落到这里。 */
+@font-face {
+  font-family: "Sarasa UI SC";
+  src: url("/fonts/SarasaUiSC-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 等宽 CJK：同样只嵌 Regular 一档。它接的是「系统 mono 都没有 CJK」那个洞 ——
+   此前日志里的中文由 `ui-monospace` 一族按比例字面画出来，等宽外观当场失效。 */
+@font-face {
+  font-family: "Sarasa Mono SC";
+  src: url("/fonts/SarasaMonoSC-Regular.woff2") format("woff2");
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
