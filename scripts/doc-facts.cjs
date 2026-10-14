@@ -165,6 +165,15 @@ function extractRegistryPort() {
   if (!m) throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 Port");
   return m[1];
 }
+function extractRegistryDir() {
+  // shadcn 团队 Registry 的**内容目录**（在仓库外，本机自建），权威源同上脚本的
+  // $RegistryDir。它此前没有事实登记：文档里直接抄了开发机的绝对路径
+  // `D:/dev/Comfy-APP-T3/registry`，换机器 / 换用户即失真（ISSUE #1926）。
+  const t = readText("tools/scripts/start-shadcn-registry.ps1");
+  const m = t.match(/\$RegistryDir\s*=\s*"([^"]+)"/);
+  if (!m) throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 RegistryDir");
+  return m[1];
+}
 function extractMcpHttpPort() {
   // Workshop MCP HTTP 服务端口，权威源 tools/workshop-mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
   const t = readText("tools/workshop-mcp-http.ts");
@@ -335,6 +344,12 @@ const FACTS = [
     placeholder: "{{registry.port}}",
     kind: "placeholder",
     extract: extractRegistryPort,
+  },
+  {
+    key: "registry.dir",
+    placeholder: "{{registry.dir}}",
+    kind: "placeholder",
+    extract: extractRegistryDir,
   },
   // MCP / ComfyUI 端口是「独立单值」；MCP 默认端口已取在 dev 回落族之外（4300），
   // 但为明确语义仍用占位符，并限定仅在 workshop-mcp.md 校验避免跨文档误判。

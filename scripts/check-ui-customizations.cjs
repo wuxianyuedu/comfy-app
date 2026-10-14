@@ -33,8 +33,13 @@ const ROOT = path.resolve(__dirname, "..");
 const UI_DIR = "src/components/ui";
 /** 台账所在文档。 */
 const LEDGER_DOC = "docs/standards/16-shadcn-ui与表单校验.md";
-/** 台账小节标题 —— 解析范围是它到下一个同级(`## `)标题之间。 */
-const LEDGER_HEADING = "## 16.8";
+/** 台账小节标题 —— 解析范围是它到下一个**同级或更高级**标题之间。
+ *
+ * 章标题的层级是 `## 16.`(与 01~15 章一致),所以 §16.8 也是 `## ` 级,
+ * 判界要同时认 `##` 与 `#`(ISSUE #1926 把 16~18 章从 `# ` 归一过来的)。 */
+const LEDGER_HEADING = "### 16.8";
+/** 终止本节的标题:同级或更高级。 */
+const SECTION_BOUNDARY_RE = /^#{1,3}\s/;
 /**
  * 标记行必须落在文件头这几行之内。
  *
@@ -89,7 +94,23 @@ function parseLedger(markdown) {
   const start = lines.findIndex((l) => l.trim().startsWith(LEDGER_HEADING));
   if (start === -1) return null;
   const rest = lines.slice(start + 1);
-  const end = rest.findIndex((l) => /^##\s/.test(l));
+  /* 找节尾时必须跳过**代码围栏内部**的行:bash 片段里的注释也以 `# ` 开头,
+   * 会被当成标题 —— 实测 §16.8 的「覆盖前的标准动作」里就有一条
+   * `# ③ 命中下表:…`,台账于是被截在围栏中间,表格一行都读不到
+   * (表现是「13 个标记文件台账里没有」,而台账其实就在下面)。
+   * 判界的口径没变,只是不再把围栏内当正文。 */
+  let end = -1;
+  let fenced = false;
+  for (let i = 0; i < rest.length; i++) {
+    if (/^\s*```/.test(rest[i])) {
+      fenced = !fenced;
+      continue;
+    }
+    if (!fenced && SECTION_BOUNDARY_RE.test(rest[i])) {
+      end = i;
+      break;
+    }
+  }
   const section = end === -1 ? rest : rest.slice(0, end);
   const names = new Set();
   for (const line of section) {
