@@ -66,8 +66,11 @@ export function ConsoleView() {
   const enter = enterCommit({ onCommit: submit });
 
   return (
+    /* `width="full"`（不封顶）：这一屏是**工具型**文档视图 —— 主体是一个输出面板，
+       内容是等宽的日志行与命令，不是成篇的文字。压到 `wide`（1200px）意味着宽屏上
+       左右各留一大块空，而面板正需要那点宽度（ISSUE #1902）。 */
     <DocumentFrame
-      width="wide"
+      width="full"
       className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
       backdrop={<AuroraBackground />}
     >

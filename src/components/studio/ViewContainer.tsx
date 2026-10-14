@@ -5,11 +5,14 @@
  *
  * 为什么要收这一刀：八个文档型视图各自写一遍「外层滚动 + 居中列 + 宽度上限」，
  * 工作区型视图各自吃满父级，同一个形状重复了十几遍，而宽度数（960 / 1100 / 1200）
- * 散在三处。收口后形状只有一处、宽度只有三个档位名（`globals.css` 的 `--container-*`）。
+ * 散在三处。收口后形状只有一处、宽度只有四个档位名（`globals.css` 的 `--container-*`
+ * 加一档不限宽的 `full`）。
  *
  * 两类的分界判据不是「内容多不多」，而是**滚动归谁**：
  *   · 文档型：整屏一条纵向滚动条，内容由居中窄栏承载 —— 读的东西不许横向铺满，
- *     一行铺到 2560px 是没法读的；
+ *     一行铺到 2560px 是没法读的。`full` 是这一档的**例外**：给的是「工具型」文档视图
+ *     （控制台那类输出面板），它的内容本来就是等宽的短行与日志，宽屏上留白才是浪费
+ *     —— 判据是「内容是不是成篇的文字」，不是「是不是文档型」；
  *   · 工作区型：容器自己**不滚**（`overflow-hidden`），高度吃满父级，滚动与分栏由
  *     视图内部管（画布是无限平移、成片与工坊是三栏、工作流库是可拖分栏）。
  *     把这一类塞进文档型的窄栏等于直接砍掉一半工作面积，所以两类必须分开写。
@@ -26,13 +29,16 @@ import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 
-/** 内容列的宽度档位。数值只在 `globals.css` 一处（`--container-narrow/medium/wide`）。 */
-export type DocumentWidth = "narrow" | "medium" | "wide";
+/** 内容列的宽度档位。前三档的数值只在 `globals.css` 一处（`--container-narrow/medium/wide`）；
+ * `full` 是「不封顶」，没有数值可挂在令牌里，所以直接写 `max-w-none`
+ * （`none` 是 Tailwind 内建关键词，不是本仓的档位名）。 */
+export type DocumentWidth = "narrow" | "medium" | "wide" | "full";
 
 const WIDTH_CLASS: Record<DocumentWidth, string> = {
   narrow: "max-w-narrow",
   medium: "max-w-medium",
   wide: "max-w-wide",
+  full: "max-w-none",
 };
 
 /**
@@ -68,7 +74,10 @@ function ViewFrame({
 }
 
 /**
- * 文档型：整屏滚动 + 居中窄栏。
+ * 文档型：整屏滚动 + 居中列（宽度由 `width` 档位给）。
+ *
+ * `width="full"` 时不封顶、内容吃满滚动区 —— 它是给工具型文档视图（控制台那类）
+ * 开的例外，理由见文件头。调用处照旧只需传内边距。
  *
  * `className` 加在**居中列**上（各视图的内边距 / 列间距本来就不一样，那是它们的
  * 决定，不是容器的）。`backdrop` 挂在**外框**里、是滚动层的兄弟：铺底（如光斑）
