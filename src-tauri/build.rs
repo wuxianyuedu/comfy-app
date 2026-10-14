@@ -70,6 +70,10 @@ fn main() {
         "get_launch_status",
         "get_app_url",
         "get_launch_log",
+        // 断开那一刻读回「应用服务为什么结束」的那条记录（ISSUE #1915）。
+        // 消费方是**主窗口**的消息中心（远程源），因此必须在这里声明 ——
+        // 自 Tauri 2.11 起远程源调用应用自建命令一律走 ACL，未声明即被默认拒绝。
+        "get_app_service_exit",
         "set_splash_compact",
         // 启动页右上角的最小化 / 关闭（decorations: false 后唯一的窗口出口）：
         // 按钮走自己的两个命令，不把 core:window 的整面命令授权给启动页。

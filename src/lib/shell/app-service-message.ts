@@ -155,21 +155,49 @@ function pad2(n: number): string {
 }
 
 /**
- * 断开那条：给时刻 + 去向，**不给原因**。
+ * 断开那条：给时刻 + 去向，**能拿到原因就当场给**。
  *
- * 原因此刻不可知（见文件头），而写一句「原因未知」等于把规范 §10.3.1 要消灭的那种
- * 静默又请回来；所以这里明确说「原因会在恢复那条里给」，让用户知道去哪儿找。
+ * ## 原因为什么不再是「等恢复那条」
+ *
+ * 探活走的是应用服务自己的 HTTP，服务一不在那条通道必然不通——所以经 HTTP 读
+ * `run/app-service-exit.json` 的那条路（`GET /api/dev/last-exit`）在读的这一刻
+ * 确实不通。但记录**本身**已经在进程结束那一刻落在盘上了，读不到它纯粹是因为
+ * 选错了通道：壳进程活得好好的，它读这个文件不经过任何应用服务
+ * （`get_app_service_exit`，见 `~/lib/shell/app-service-exit` 的
+ * `fetchCurrentDisconnectExit`）。
+ *
+ * 所以现在的形态是：
+ *   · **拿得到**（壳内，且记录确实是这一次写的）→ 当场把原因与动作写进来；
+ *   · **拿不到**（非壳环境 / 旧壳 / 这次断开没留下记录）→ 说清「这一刻拿不到」，
+ *     并指向恢复那条。**不编一个「未知原因」**——那等于把规范 §10.3.1 要消灭的
+ *     静默又请回来。
+ *
+ * 旧行为（无论拿不拿得到都只说「原因写在 run/app-service-exit.json，恢复时给」）
+ * 是 ISSUE #1915 的现场：用户手里明明有原因（文件就在那儿），界面上却一个字都没有。
  */
 export function describeAppServiceDisconnect(
   at: number,
+  notice: AppServiceExitNotice | null = null,
 ): AppServiceMessageText {
+  const head =
+    `断开时间 ${formatClock(at)}。` +
+    "断开期间页面里的查询、保存与任务提交都会失败。\n";
+  if (notice) {
+    return {
+      title: "应用服务已断开",
+      body:
+        head +
+        `原因：${notice.why}。${notice.detail}。\n` +
+        `建议：${notice.action}。`,
+    };
+  }
   return {
     title: "应用服务已断开",
     body:
-      `断开时间 ${formatClock(at)}。` +
-      "断开期间页面里的查询、保存与任务提交都会失败。\n" +
-      "原因由启动编排在进程结束那一刻写入 run/app-service-exit.json，" +
-      "只能在服务恢复后读回——恢复时会作为「应用服务已恢复」记进本中心，原因与建议都在那条里。",
+      head +
+      "这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，" +
+      "浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。" +
+      "服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。",
   };
 }
 

@@ -154,13 +154,22 @@ describe("formatOfflineSpan 断开时长", () => {
 });
 
 describe("describeAppServiceDisconnect 断开文案", () => {
-  it("给时刻、给影响，并指明原因会在恢复那条里给（不给原因、不编「未知」）", () => {
+  it("拿不到原因：给时刻、给影响，并说清这一刻读不到 + 去哪找（不编「未知原因」）", () => {
     const m = describeAppServiceDisconnect(T1);
     expect(m.title).toBe("应用服务已断开");
     expect(m.body).toContain("断开时间");
     expect(m.body).toContain("会失败");
     expect(m.body).toContain("应用服务已恢复");
     expect(m.body).not.toContain("未知原因");
+  });
+
+  it("拿得到原因：当场把「为什么 + 这一次具体是什么 + 该做什么」写进断开那条（ISSUE #1915）", () => {
+    const m = describeAppServiceDisconnect(T1, exitNotice);
+    expect(m.title).toBe("应用服务已断开");
+    expect(m.body).toContain("断开时间");
+    expect(m.body).toContain(exitNotice.why);
+    expect(m.body).toContain(exitNotice.detail);
+    expect(m.body).toContain(exitNotice.action);
   });
 });
 
