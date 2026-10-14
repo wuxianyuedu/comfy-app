@@ -264,6 +264,94 @@ export function isPreviousRunExit(
 }
 
 /**
+ * 把壳读回来的**原文**解析成记录（ISSUE #1915）。
+ *
+ * 壳那条通道（`get_app_service_exit`，见 `./desktop-shell-client`）刻意只回文件
+ * 字面内容、不在 Rust 侧解析：形状只在上一处定义，两侧各解析一遍的漂开表现是
+ * 「记录写进去了、界面读不懂」。于是这里补齐 JSON 那一跳，并把坏字面（空串 /
+ * 半截 JSON）归到「没有原因可讲」。
+ */
+export function parseAppServiceExitRaw(
+  raw: string | null,
+): AppServiceExitRecord | null {
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  try {
+    return parseAppServiceExitRecord(JSON.parse(raw) as unknown);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 记录「是不是**这一次**断开留下的」——断开那一刻读回时用的判据。
+ *
+ * 与 {@link isPreviousRunExit} 恰好相反：那条判的是「记录说的是上一份进程」
+ * （服务恢复后读回时的语义），而**断开那一刻**要判的正是「记录说的是刚刚没了的
+ * 这一份」。所以：
+ *
+ *   · 两边 runId 都有值 → 相等才算（不等说明盘上留的是更早那一次的结论）；
+ *   · 任一方为 null（老启动链路 / 手工 `pnpm dev`）→ 退回**新鲜度**判据：
+ *     记录是多久以前写的。刚断的这一刻，旁证人写下它不过几秒；盘上那份若是一小时
+ *     前的，它描写的是更早的一次结束，拿它当「这一次的原因」就是编。
+ *
+ * 为什么必须有新鲜度这一档：这份文件是**单槽**的（每次结束覆盖写），所以「盘上有
+ * 一份记录」既可能是刚写的，也可能是几天前留下的。只判「存在」会把旧结论说成这一次
+ * 的原因——归因猜错比不归因更坏，它会把排查引向另一条路（同 `describeAppServiceStart`
+ * 的注释）。
+ */
+export function isCurrentDisconnectExit(
+  record: AppServiceExitRecord,
+  currentRunId: string | null,
+  now: number,
+): boolean {
+  if (record.runId !== null && currentRunId !== null) {
+    return record.runId === currentRunId;
+  }
+  const writtenAt = Date.parse(record.at);
+  if (!Number.isFinite(writtenAt)) return false;
+  const age = now - writtenAt;
+  /* 负值 = 时钟漂移 / 记录来自另一台机器写的文件，同样不可用作「刚刚」。 */
+  return age >= 0 && age <= RECENT_EXIT_WINDOW_MS;
+}
+
+/**
+ * 「刚刚这么写下的记录算不算这一次断开的」——{@link isCurrentDisconnectExit}
+ * 在没有 runId 可比时用的新鲜度窗口。
+ *
+ * 取 10 分钟：断开判定要连续失败两拍（≈4 秒）才成立，写侧也在那一刻前后落盘，
+ * 因此正常现场里这个差是**秒级**；窗口放大到分钟级只为容下「用户盯着不动的窗口
+ * 过了几分钟才被后台节流影响」这类延迟，同时仍能挡住「盘上留着昨天那份」。
+ */
+export const RECENT_EXIT_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * 断开那一刻读回「这一次为什么断」——优先走壳的 IPC。
+ *
+ * ## 为什么断开时读得到，而 HTTP 端点读不到
+ *
+ * `GET /api/dev/last-exit` 由**应用服务自己**应答，而断开这件事里没了的正是它，
+ * 端点必然不通。壳进程却活得好好的（用户看到的就是「窗口还在、页面连不上」），
+ * 它读同一个文件不经过任何应用服务——这就是 ISSUE #1915 要补的那条通道。
+ *
+ * ## 返回值
+ *
+ * 拿不到 / 记录属于更早的运行 / 浏览器（非壳）环境 → null：界面按「这一刻没有原因
+ * 可讲」处理，**不编一个**「未知原因」出来。判据见 {@link isCurrentDisconnectExit}。
+ */
+export async function fetchCurrentDisconnectExit(
+  currentRunId: string | null,
+  now: number,
+): Promise<AppServiceExitRecord | null> {
+  /* 动态 import：壳客户端要 `@tauri-apps/api`，而本模块也被服务端 / 浏览器链路
+   * 引用——静态 import 会把它拖进那些不该有壳依赖的打包图（与
+   * `desktop-shell-client` 里其它调用点同一取向）。非壳环境它自己回 null。 */
+  const { readAppServiceExitRecord } = await import("./desktop-shell-client");
+  const record = parseAppServiceExitRaw(await readAppServiceExitRecord());
+  if (record === null) return null;
+  return isCurrentDisconnectExit(record, currentRunId, now) ? record : null;
+}
+
+/**
  * 拉取上一次结束的记录。
  *
  * 全程不抛错：这条读取跑在「应用刚出过故障」的窗口里，任何异常都只会让现场更

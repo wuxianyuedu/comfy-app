@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveAppServiceEvent,
   describeAppServiceDisconnect,
+  describeAppServiceRouteStale,
   describeAppServiceStart,
   formatOfflineSpan,
   initialAppServiceCursor,
@@ -140,6 +141,51 @@ describe("deriveAppServiceEvent 边沿判据", () => {
   });
 });
 
+describe("路由表不完整（stale）的边沿与文案", () => {
+  it("进入 stale 那一拍记一条 route-stale，持续期间不重复记", () => {
+    const first = deriveAppServiceEvent(
+      initialAppServiceCursor(),
+      { state: "stale", processIsNew: false },
+      1_000,
+    );
+    expect(first.event).toEqual({ type: "route-stale", at: 1_000 });
+    /* 下一拍仍是 stale：边沿不成立，不再记一条（否则每 2 秒刷一条）。 */
+    const second = deriveAppServiceEvent(
+      first.cursor,
+      { state: "stale", processIsNew: false },
+      3_000,
+    );
+    expect(second.event).toBeNull();
+  });
+
+  it("stale 不冒充断开：游标里不写下 offlineAt，转回 online 也不报「已恢复」", () => {
+    const stale = deriveAppServiceEvent(
+      initialAppServiceCursor(),
+      { state: "stale", processIsNew: false },
+      1_000,
+    );
+    expect(stale.cursor.offlineAt).toBeNull();
+    /* 路由修好后转 online：这是一次「服务一直都在」，不该报恢复。 */
+    const back = deriveAppServiceEvent(
+      stale.cursor,
+      { state: "online", processIsNew: false },
+      5_000,
+    );
+    expect(back.event).toBeNull();
+  });
+
+  it("文案说清「服务在应答、坏的是路由表」并给出两步出口", () => {
+    const { title, body } = describeAppServiceRouteStale(1_000);
+    expect(title).toBe("应用服务路由异常");
+    /* 「页面还能打开」这一句是这条消息存在的理由：它正是用户容易以为「再等等
+       就好」的地方，必须显式点出来，并紧跟「重启应用」这个出口。 */
+    expect(body).toContain("还能打开");
+    expect(body).toContain("404");
+    expect(body).toContain("重新启动");
+    expect(body).toContain(".next");
+  });
+});
+
 describe("formatOfflineSpan 断开时长", () => {
   it("秒 / 分 / 小时三档都是人能读的写法", () => {
     expect(formatOfflineSpan(0, 5_000)).toBe("5 秒");
@@ -154,13 +200,22 @@ describe("formatOfflineSpan 断开时长", () => {
 });
 
 describe("describeAppServiceDisconnect 断开文案", () => {
-  it("给时刻、给影响，并指明原因会在恢复那条里给（不给原因、不编「未知」）", () => {
+  it("拿不到原因：给时刻、给影响，并说清这一刻读不到 + 去哪找（不编「未知原因」）", () => {
     const m = describeAppServiceDisconnect(T1);
     expect(m.title).toBe("应用服务已断开");
     expect(m.body).toContain("断开时间");
     expect(m.body).toContain("会失败");
     expect(m.body).toContain("应用服务已恢复");
     expect(m.body).not.toContain("未知原因");
+  });
+
+  it("拿得到原因：当场把「为什么 + 这一次具体是什么 + 该做什么」写进断开那条（ISSUE #1915）", () => {
+    const m = describeAppServiceDisconnect(T1, exitNotice);
+    expect(m.title).toBe("应用服务已断开");
+    expect(m.body).toContain("断开时间");
+    expect(m.body).toContain(exitNotice.why);
+    expect(m.body).toContain(exitNotice.detail);
+    expect(m.body).toContain(exitNotice.action);
   });
 });
 

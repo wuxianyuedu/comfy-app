@@ -78,7 +78,7 @@
 | 形态                   | 何时用                                                                           | 例                                                                         |
 | ---------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `import "server-only"` | 模块的**全部**出口都只能服务端用（浏览器图一旦可达即应报错）                     | `src/lib/core/repository*.ts`、`src/lib/llm/server.ts`                     |
-| `.server.ts` 后缀      | **同一领域**的「服务端拆件」：把 IO 从纯逻辑模块里切出去，让客户端只引纯函数那个 | `src/lib/log-session-scope.server.ts`（纯函数留在 `log-session-scope.ts`） |
+| `.server.ts` 后缀      | **同一领域**的「服务端拆件」：把 IO 从纯逻辑模块里切出去，让客户端只引纯函数那个 | `src/lib/log/log-session-scope.server.ts`（纯函数留在 `log-session-scope.ts`） |
 | 两者都不加             | **纯 Node 宿主**模块：不经 Next 打包，由 `scripts/*.mjs` 等高动态加载            | `src/lib/process/kill-process-tree.ts`                                     |
 
 > **为什么 `kill-process-tree.ts` 不能加 `server-only`**：它由 `scripts/reap-process.mjs`
@@ -98,7 +98,7 @@
 | **真进浏览器图** | 纯模块被 `"use client"` 入口引到且顶层有 Node 内建     | Turbopack 报 `does not support external modules`，**整页 500**   |
 
 扫到就要求 `server-only` 的纯文本判据**行不通**：`eslint-plugin-boundaries` 的 import
-图对服务端源码**完全不采样**（实测：给 `src/lib/log-paths.ts` 加
+图对服务端源码**完全不采样**（实测：给 `src/lib/log/log-paths.ts` 加
 `import "server-only"` 后 `pnpm lint` 仍绿），而第三类（纯 Node 宿主）本来就不该带
 `server-only` —— 它的入口是一句 `throw`，加上去 `scripts/*.mjs` 的启动编排直接崩。
 
@@ -465,7 +465,7 @@ Error: `headers` was called outside a request scope.
   不是边界；
 - `client-bundle-node-builtins.test.ts` 改为**消费** `scan.mjs --json`，不再自带
   解析器；保留 `log-session-scope` 分层那条历史回归，并新增两条**真注入**的反向验证：
-  ① 把 Node 内建注进 `src/lib/shell-tabs-store.ts`（app/components 外的入口）必须命中；
+  ① 把 Node 内建注进 `src/lib/shell/shell-tabs-store.ts`（app/components 外的入口）必须命中；
   ② 注进 `src/trpc/query-client.ts`（只从 `"use client"` 模块可达）必须命中。
 
 > 一句话：**判据的「入口集」与「边界」是两件事，别用一个实现名同时回答它们。**

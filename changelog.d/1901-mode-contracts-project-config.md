@@ -1,12 +1,11 @@
 ## Changed
 
-- **模式契约改成入库的项目配置**（`config/workshop-mode-contracts.json`）：此前登记在
-  `data/workshop-mode-contracts.json` —— 那是本机运行期目录（`.gitignore` 忽略、并被分发
-  产物按「私有输入」剥离），于是在一台机器上配好的契约到不了别的检出，桌包里更是静默跑成
-  内置默认。现在它落在仓库根的 `config/`（新增目录）：随 git 走、每个检出用同一份，桌包也
-  随包带出去（`build-desktop.mjs` 的 `§入库配置` 显式拷贝 + `check-standalone-contents.cjs`
-  的 `REQUIRED_CONFIG_FILES` 两层都数）。与含密钥的 `data/`（LLM 主密钥、整机设置、API
-  通道）划清：那一类**刻意**不入库、不随包。保存提示改为「已保存到 config/…（项目配置，
-  随 git 走）—— 提交这个文件后，别的检出才拿得到同一份配置」；老检出升级不丢配置
-  （新文件不在时回落读 `data/` 那份，读路径只读不搬）；写失败不再静默（抛出带路径的错误，
-  桌包安装目录不可写时就靠它）。
+- **模式契约不再随包分发**：内置默认回到源码里（`model-mode-contract.ts` 的
+  `configuredModeContracts`，编译进构建产物），机器上的改动是**本机覆盖**
+  （`data/workshop-mode-contracts.json`）。上一版把注册表放在入库的 `config/` 目录并显式
+  随包分发（`build-desktop.mjs` 的 `§入库配置` + `check-standalone-contents.cjs` 的
+  `REQUIRED_CONFIG_FILES`），代价是「要改默认就得去改那个 JSON」，且桌包里读到的与检出里
+  的并不总是同一份。现在：改默认口径 = 改代码 + 提 PR（走评审、有 diff）；只想在本机试
+  = 编辑器保存即可，不污染别人的检出。编辑器保存提示不再报出文件名（那是个会随部署形态
+  变的东西），改说「改动只落在这台机器上，不会跟着代码走」。两层产物白名单与装配断言同批
+  去掉 `config`（不存在了就不该放行它）。

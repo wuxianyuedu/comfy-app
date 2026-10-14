@@ -9,7 +9,9 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
+import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "../NavItems";
 import { ViewActions } from "../ViewActions";
 import { useHistoryList } from "./hooks/use-history-list";
@@ -116,46 +118,51 @@ export function HistoryList({
         </Button>
       </ViewActions>
 
-      {/* ── 状态筛选 pills ── */}
-      <div className="mb-6 flex flex-wrap gap-2">
+      {/* ── 状态筛选（分段 chip）──
+          这里此前是手搓的 `<Button variant="ghost">` 一排，选中档给的是
+          `bg-primary-solid text-primary-foreground` —— `bg-primary-solid`
+          **不是任何一级的 token**（`Button` 的变体叫 `primary-solid`，那是
+          `variant` 轴的取值，不是给 className 用的类名），样式表里根本没有
+          这条规则。于是选中项**没有底色**，`text-primary-foreground` 的纯白字
+          直接压在页面底色上：浅色主题下近乎消失、深色主题下只剩一团白字，
+          两套主题都读不出「哪一枚是选中的」（ISSUE #1925，用户截图）。
+          计数徽标 `bg-subtle5` 同源 —— 那个类同样不存在。
+          现在整排交给 `ui/select-chip`（「一排里选一个」的全库唯一实现，
+          规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，且自带
+          与常态同值的 `hover:`，不会被 `Button` 的默认悬停档吃掉。 */}
+      <div
+        role="radiogroup"
+        aria-label="按状态筛选任务"
+        className="mb-6 flex flex-wrap gap-2"
+      >
         {FILTERS.map((filterOption) => {
           const isActive = c.filter === filterOption.key;
           const count = c.counts[filterOption.key] ?? 0;
           return (
-            <Button
+            <SelectChip
               key={filterOption.key}
-              variant="ghost"
-              size="xs"
+              selected={isActive}
+              shape="pill"
               onClick={() => c.switchFilter(filterOption.key)}
-              className={
-                "h-auto gap-2 rounded-full px-3 py-1.5" +
-                (isActive
-                  ? "bg-primary-solid text-primary-foreground hover:bg-primary-600 shadow-primary-500/20 shadow-md"
-                  : "border-border bg-card text-ink-strong hover:bg-surface-2 border")
-              }
+              className="gap-2"
             >
-              {filterOption.dotCls && (
-                <span
-                  className={`size-1.5 rounded-full ${filterOption.dotCls}`}
-                />
+              {filterOption.tone && (
+                <StatusDot state={filterOption.tone} sizeClass="size-1.5" />
               )}
               <span>{filterOption.label}</span>
               <span
-                className={
-                  /* 选中态的计数徽标此前写的是`bg-subtle5 text-white` —— 那个
- 类**在样式表里不存在**（全库只此一处），背景因此是透明的，
- 白字直接压在浅色底的胶囊上（「全部 47」的 47 几乎看不见，
- 用户实测）。改成 pill 自身前景色的半透明底：深浅两套主题
- 都由语义 token 给出对比度。 */
-                  "text-3xs rounded-full px-1.5 py-0.5 font-bold" +
-                  (isActive
-                    ? "bg-primary-foreground/20 text-primary-foreground"
-                    : "bg-surface-2 text-ink-faint")
-                }
+                /* 计数徽标：底色取**当前字色**的淡底（`bg-current/N`），
+                   于是选中 / 未选中两态都由同一份语义 token 派生，
+                   深浅两套主题各自成立，不必再手写四组类名。
+                   α 取 8% 是**量出来的**：徽标底越接近字色、字压在它上面的
+                   对比度越低 —— 实测两套主题 × 两态四组读数，
+                   0.15 时浅色未选中档掉到 4.33（低于 WCAG AA 的 4.5），
+                   0.08 时四组分别是 6.56 / 4.75 / 6.91 / 5.15，全部达标。 */
+                className="text-3xs rounded-full bg-current/8 px-1.5 py-0.5 font-bold"
               >
                 {count}
               </span>
-            </Button>
+            </SelectChip>
           );
         })}
       </div>

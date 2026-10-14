@@ -294,7 +294,6 @@ interface CheckerExports {
   REQUIRED_RUNTIME_FILES: string[];
   REQUIRED_HOST_FILES: string[];
   REQUIRED_PAYLOAD_FILES: string[];
-  REQUIRED_CONFIG_FILES: string[];
   RUNTIME_DIR: string;
   STANDALONE_ALLOWED_TOPLEVEL: string[];
   STATIC_ALLOWED_TOPLEVEL: string[];
@@ -580,13 +579,10 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
     for (const rel of [
       ...mod.REQUIRED_HOST_FILES,
       ...mod.REQUIRED_PAYLOAD_FILES,
-      // 入库的项目配置（模式契约）：与宿主件同类的「必须有的」，缺件只在运行期
-      // 表现为「静默跑成内置默认」。夹具建模的是**一份齐全的产物**，所以它也要在。
-      ...mod.REQUIRED_CONFIG_FILES,
     ]) {
       const abs = join(dir, rel);
       mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, rel.endsWith(".json") ? "[]" : "// host");
+      writeFileSync(abs, "// host");
     }
     for (const name of present) {
       const abs = join(dir, mod.RUNTIME_DIR, name);
@@ -744,11 +740,6 @@ describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
       const abs = join(dir, mod.RUNTIME_DIR, name);
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, "runtime");
-    }
-    for (const rel of mod.REQUIRED_CONFIG_FILES) {
-      const abs = join(dir, rel);
-      mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, "[]");
     }
   }
 

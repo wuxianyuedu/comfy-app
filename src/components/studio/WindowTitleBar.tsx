@@ -66,7 +66,14 @@ export function WindowTitleBar() {
         onPointerDown={drag.onPointerDown}
         onDoubleClick={drag.onDoubleClick}
       >
-        {/* 拖拽空白区：没有页签可放，整条都是拖动区（按钮自带 data-no-drag）。 */}
+        {/* 拖拽空白区：没有页签可放，它在按钮左侧占满余量（按钮自带
+            data-no-drag，落在它上面的点击不会被拖拽吞掉）。
+            这一格必须显式占位（`flex-1`）—— 它是把 `WindowControls` 推到**右端**
+            的那只手。`TitleBarTabs` 里同样的位置有一份 `min-w-2 flex-1`，此前这一
+            条漏了它，于是在 404 / 错误页这类整屏页上三个窗口按钮整排落在左上角，
+            与别的页面（以及系统标题栏）相反；按钮本身还在、也点得动，所以门禁与
+            用例都判不出来（ISSUE #1918）。 */}
+        <div className="min-w-2 flex-1" aria-hidden />
         <WindowControls
           maximized={maximized}
           onMaximizedChange={setMaximized}

@@ -56,7 +56,7 @@ export interface AppServiceMessageText {
 
 /** 边沿判据的游标：上一次看到的事实 + 尚未收尾的那一次断开。 */
 export interface AppServiceEventCursor {
-  /** 上一次看到的三态。 */
+  /** 上一次看到的四态。 */
   state: DevServerState;
   /** 上一次看到的「这份进程是新的吗」。 */
   processIsNew: boolean;
@@ -67,6 +67,9 @@ export interface AppServiceEventCursor {
 /** 一次待记录的事件。 */
 export type AppServiceEvent =
   | { type: "disconnect"; at: number }
+  /** 路由表不完整：服务在应答、但探活端点 404。用户此刻能做的是重启应用，
+   *  而这条消息就是那个出口（状态栏那格只有 24px，说不完整）。 */
+  | { type: "route-stale"; at: number }
   | {
       type: "start";
       at: number;
@@ -75,7 +78,7 @@ export type AppServiceEvent =
     };
 
 export interface AppServiceFacts {
-  /** 本次看到的三态。 */
+  /** 本次看到的四态。 */
   state: DevServerState;
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
@@ -106,6 +109,13 @@ export function deriveAppServiceEvent(
       cursor: { ...cursor, offlineAt: now },
       event: { type: "disconnect", at: now },
     };
+  }
+
+  /* ①′ 路由表不完整：同样是「此刻这件事就是坏的」，同样只在**进入**那一拍发
+   * 一条。不并入上面那一支，是因为用户能做的动作不同 —— 那边等它起来/恢复，
+   * 这边只能重启应用；混成同一条消息等于把出口写错。 */
+  if (facts.state === "stale" && prev.state !== "stale") {
+    return { cursor, event: { type: "route-stale", at: now } };
   }
 
   /* ② 进程换了一个（冷启动或真重启）：这一条同时覆盖「应用重启了」与「本次会话
@@ -155,21 +165,71 @@ function pad2(n: number): string {
 }
 
 /**
- * 断开那条：给时刻 + 去向，**不给原因**。
+ * 断开那条：给时刻 + 去向，**能拿到原因就当场给**。
  *
- * 原因此刻不可知（见文件头），而写一句「原因未知」等于把规范 §10.3.1 要消灭的那种
- * 静默又请回来；所以这里明确说「原因会在恢复那条里给」，让用户知道去哪儿找。
+ * ## 原因为什么不再是「等恢复那条」
+ *
+ * 探活走的是应用服务自己的 HTTP，服务一不在那条通道必然不通——所以经 HTTP 读
+ * `run/app-service-exit.json` 的那条路（`GET /api/dev/last-exit`）在读的这一刻
+ * 确实不通。但记录**本身**已经在进程结束那一刻落在盘上了，读不到它纯粹是因为
+ * 选错了通道：壳进程活得好好的，它读这个文件不经过任何应用服务
+ * （`get_app_service_exit`，见 `~/lib/shell/app-service-exit` 的
+ * `fetchCurrentDisconnectExit`）。
+ *
+ * 所以现在的形态是：
+ *   · **拿得到**（壳内，且记录确实是这一次写的）→ 当场把原因与动作写进来；
+ *   · **拿不到**（非壳环境 / 旧壳 / 这次断开没留下记录）→ 说清「这一刻拿不到」，
+ *     并指向恢复那条。**不编一个「未知原因」**——那等于把规范 §10.3.1 要消灭的
+ *     静默又请回来。
+ *
+ * 旧行为（无论拿不拿得到都只说「原因写在 run/app-service-exit.json，恢复时给」）
+ * 是 ISSUE #1915 的现场：用户手里明明有原因（文件就在那儿），界面上却一个字都没有。
  */
 export function describeAppServiceDisconnect(
   at: number,
+  notice: AppServiceExitNotice | null = null,
 ): AppServiceMessageText {
+  const head =
+    `断开时间 ${formatClock(at)}。` +
+    "断开期间页面里的查询、保存与任务提交都会失败。\n";
+  if (notice) {
+    return {
+      title: "应用服务已断开",
+      body:
+        head +
+        `原因：${notice.why}。${notice.detail}。\n` +
+        `建议：${notice.action}。`,
+    };
+  }
   return {
     title: "应用服务已断开",
     body:
-      `断开时间 ${formatClock(at)}。` +
-      "断开期间页面里的查询、保存与任务提交都会失败。\n" +
-      "原因由启动编排在进程结束那一刻写入 run/app-service-exit.json，" +
-      "只能在服务恢复后读回——恢复时会作为「应用服务已恢复」记进本中心，原因与建议都在那条里。",
+      head +
+      "这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，" +
+      "浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。" +
+      "服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。",
+  };
+}
+
+/**
+ * 路由表不完整那条：说清「服务在、坏的是路由表」与**怎么做**。
+ *
+ * 为什么不复述状态栏那句 tooltip：状态栏那格只有 24px、右下角位置窄，而这条消息
+ * 是「用户事后唯一能翻回来的一次完整说明」——它要把「为什么是我该重启、而不是继续
+ * 等」讲明白（页面还能打开，恰恰是最容易让人以为「再等等就好了」的地方）。
+ */
+export function describeAppServiceRouteStale(
+  at: number,
+): AppServiceMessageText {
+  return {
+    title: "应用服务路由异常",
+    body:
+      `发现时间 ${formatClock(at)}。` +
+      "应用服务在应答（页面还能打开），但它的探活端点返回 404 —— 说明这一次启动的路由表不完整，" +
+      "部分页面与接口会直接 404，状态栏会一直停在「应用服务路由异常」。\n" +
+      "这一步与你的代码无关，也不是数据丢了：它是 Turbopack 开发服务的会话级路由失效。" +
+      "关闭应用窗口、重新启动一次即可重建路由表。\n" +
+      "重启后仍如此，则删掉项目根目录下的 .next 目录再启动一次。",
   };
 }
 

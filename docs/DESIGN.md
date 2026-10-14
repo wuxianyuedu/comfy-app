@@ -475,7 +475,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | `toast`      | 1000 | 全局提示                                                   |
 | `chrome`     | 2000 | 窗口标题行——恒在最上                                       |
 
-四条判据（`src/lib/shell/overlay-z.ts` + 规范 16 §16.2.5，`tests/overlay-z-scale.test.ts` 钉住两份数值一致）：
+四条判据（`src/lib/shell/overlay-z.ts` + 规范 16 §16.2.5，`src/lib/shell/overlay-z.test.ts` 钉住两份数值一致）：
 
 1. **`modal` 绝不进 1000~1200**——那是 React Flow 给节点选中态（约 1010）与悬浮态（1180）留的位。
 2. **`popup` > `modal`**——挂在 body 的下拉是由**模态内部**的控件打开的，低于模态就等于「点得开、点不中」。
@@ -720,7 +720,7 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 - ✅ 层级从刻度表挑档，不从 0 往上试。
 - ✅ 装饰层 `pointer-events-none` + `aria-hidden` + `fixed -z-10`。
 - ✅ CSS 走静态文件。❌ 渲染路径上注入 `<style>`（`scripts/check-inline-style.cjs` 硬闸，无按文件豁免——同一个形态本仓库犯过两次）。
-- ✅ 图标统一 `lucide-react`；静态直接 import，动态/可序列化 key 走 `<Icon name>`（新增图标先在 `ui/Icon.tsx` 的 `ICON_MAP` 登记）。
+- ✅ 图标统一 `lucide-react`；静态直接 import，动态/可序列化 key 走 `<Icon name>`（新增图标先在 `ui/icon.tsx` 的 `ICON_MAP` 登记）。
 
 **分层**
 

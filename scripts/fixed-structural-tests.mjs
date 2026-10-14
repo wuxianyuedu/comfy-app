@@ -180,7 +180,8 @@ export const FIXED_STRUCTURAL_TESTS = [
   //（那是一个「写了没人看」的位置）—— 与本次暂存改动无关也必须响，故进固定清单。
   "tests/storybook-data-sources.test.ts",
   // 「调用点的形状错误不许被咽掉」（台账 F13）：`as never` 逐处登记 + 投影参数不许是
-  // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是 `train.cancel`
+  // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是
+  // `train.cancel`（已随功能废弃删除）
   // 数据层迁移之后每次 500 而零红 —— 新增一处就是重新装上那个消音器，
   // 与本次暂存改动无关也必须响，所以进固定清单。
   "tests/f13-projection-shapes.test.ts",

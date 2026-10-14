@@ -14,19 +14,32 @@
 <section class="tsd-panel">
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="describeappservicedisconnect"><span class="tsd-kind-call-signature">describeAppServiceDisconnect</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">at</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_shell_app-service-message.AppServiceMessageText.html" class="tsd-signature-type tsd-kind-interface">AppServiceMessageText</a><a href="#describeappservicedisconnect" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="describeappservicedisconnect"><span class="tsd-kind-call-signature">describeAppServiceDisconnect</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">at</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">notice</span><span class="tsd-signature-symbol">?:</span> <a href="../interfaces/lib_shell_app-service-exit.AppServiceExitNotice.html" class="tsd-signature-type tsd-kind-interface">AppServiceExitNotice</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_shell_app-service-message.AppServiceMessageText.html" class="tsd-signature-type tsd-kind-interface">AppServiceMessageText</a><a href="#describeappservicedisconnect" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>断开那条：给时刻 + 去向，<strong>不给原因</strong>。</p>
-<p>原因此刻不可知（见文件头），而写一句「原因未知」等于把规范 §10.3.1 要消灭的那种
-静默又请回来；所以这里明确说「原因会在恢复那条里给」，让用户知道去哪儿找。</p>
+<div class="tsd-comment tsd-typography"><p>断开那条：给时刻 + 去向，<strong>能拿到原因就当场给</strong>。</p>
+<h2 id="原因为什么不再是「等恢复那条」" class="tsd-anchor-link">原因为什么不再是「等恢复那条」<a href="#原因为什么不再是「等恢复那条」" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>探活走的是应用服务自己的 HTTP，服务一不在那条通道必然不通——所以经 HTTP 读
+<code>run/app-service-exit.json</code> 的那条路（<code>GET /api/dev/last-exit</code>）在读的这一刻
+确实不通。但记录<strong>本身</strong>已经在进程结束那一刻落在盘上了，读不到它纯粹是因为
+选错了通道：壳进程活得好好的，它读这个文件不经过任何应用服务
+（<code>get_app_service_exit</code>，见 <code>~/lib/shell/app-service-exit</code> 的
+<code>fetchCurrentDisconnectExit</code>）。</p>
+<p>所以现在的形态是：
+· <strong>拿得到</strong>（壳内，且记录确实是这一次写的）→ 当场把原因与动作写进来；
+· <strong>拿不到</strong>（非壳环境 / 旧壳 / 这次断开没留下记录）→ 说清「这一刻拿不到」，
+并指向恢复那条。<strong>不编一个「未知原因」</strong>——那等于把规范 §10.3.1 要消灭的
+静默又请回来。</p>
+<p>旧行为（无论拿不拿得到都只说「原因写在 run/app-service-exit.json，恢复时给」）
+是 ISSUE #1915 的现场：用户手里明明有原因（文件就在那儿），界面上却一个字都没有。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
-<li><span><span class="tsd-kind-parameter">at</span>: <span class="tsd-signature-type">number</span></span></li></ul></div>
+<li><span><span class="tsd-kind-parameter">at</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">notice</span>: <a href="../interfaces/lib_shell_app-service-exit.AppServiceExitNotice.html" class="tsd-signature-type tsd-kind-interface">AppServiceExitNotice</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> = null</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="../interfaces/lib_shell_app-service-message.AppServiceMessageText.html" class="tsd-signature-type tsd-kind-interface">AppServiceMessageText</a></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/app-service-message.ts:163</li></ul></aside></div></li></ul></section></div>
+<li>Defined in src/lib/shell/app-service-message.ts:188</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -37,7 +50,10 @@
 <ul id="tsd-filter-options">
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
-<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#原因为什么不再是「等恢复那条」"><span>原因为什么不再是「等恢复那条」</span></a></div></details></div>
 <div class="site-menu">
 <nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">

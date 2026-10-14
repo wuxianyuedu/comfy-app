@@ -10,7 +10,7 @@
 import { upperToken } from "~/lib/upper-token";
 import {
   MODE_CONTRACT_INPUT_TYPES,
-  builtInModeContract,
+  derivedModeContract,
   type ModeContract,
   type ModeContractCustomKind,
   type ModeContractInputType,
@@ -67,10 +67,13 @@ export function contractModeLabel(mode: string): string {
   );
 }
 
-/** 某模式当前生效的契约：注册表里改过用改过的，没改过回落内置默认。
+/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置现算。
  *
  *  「改过 / 没改过」的判据收在这里一处：两个入口的「已改」徽标、编辑器初值、
- *  封装视图都读它，避免各自 `find` 一遍再各自判空。 */
+ *  封装视图都读它，避免各自 `find` 一遍再各自判空。
+ *
+ *  这里传进来的 `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是
+ *  成品配置 —— 成品配置由 `derivedModeContract` 现算，没有第二处需要查。 */
 export function effectiveModeContract(
   mode: string,
   stored: readonly ModeContract[],
@@ -78,7 +81,7 @@ export function effectiveModeContract(
   const code = upperToken(mode);
   const found = stored.find((c) => c.mode === code);
   if (found) return { contract: found, customized: true };
-  return { contract: builtInModeContract(code), customized: false };
+  return { contract: derivedModeContract(code), customized: false };
 }
 
 /** 某模式是否已被用户改过（「已改」徽标）。 */

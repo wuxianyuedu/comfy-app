@@ -68,8 +68,6 @@ Comfy-APP-T3/
 │  ├─ database-studio/      # 数据库工具 Drizzle Studio（start-database-studio.ps1）
 │  ├─ scripts/              # 上述入口对应的逻辑脚本（与入口同名不同层）
 │  └─ README.md             # 入口/逻辑对照与各脚本的详细说明
-├─ config/                  # 入库的项目配置（随 git 走、随包分发）
-│  └─ workshop-mode-contracts.json  # 模式契约注册表：每种模式有哪些统一输入 / 输出
 ├─ public/                  # 静态资源（含 splash.html 启动加载页、favicon.ico）
 ├─ docs/                    # API 文档（TypeDoc 生成，HTML）
 ├─ e2e/                     # Playwright e2e 测试
