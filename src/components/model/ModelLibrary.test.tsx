@@ -49,12 +49,15 @@ function controller(
 }
 
 describe("ModelLibrary 档位区", () => {
+  /* 档位那一排是**单选**（一次只看一个类型），所以走 `ui/select-chip` 的
+   * `radio` 语义而不是按钮。判据按 `radio` 取 —— 这也正是「整排交给全库
+   * 唯一实现」的可见后果（ISSUE #1925 的收口）。 */
   it("渲染的档位数与共享档位表一致（不多不少，不各写一份）", () => {
     controllerMock.mockReturnValue(controller());
     render(<ModelLibrary />);
     for (const filter of MODEL_TYPE_FILTERS) {
       expect(
-        screen.getByRole("button", { name: filter.label }),
+        screen.getByRole("radio", { name: filter.label }),
         `缺档位「${filter.label}」`,
       ).toBeTruthy();
     }
@@ -64,23 +67,41 @@ describe("ModelLibrary 档位区", () => {
     const setType = vi.fn();
     controllerMock.mockReturnValue(controller({ setType }));
     render(<ModelLibrary />);
-    fireEvent.click(screen.getByRole("button", { name: "放大" }));
+    fireEvent.click(screen.getByRole("radio", { name: "放大" }));
     expect(setType).toHaveBeenCalledWith("UPSCALE");
   });
 
-  it("当前档位有选中态（用户能看出现在看的是哪一档）", () => {
+  it("整排是 radiogroup，当前档位经 aria-checked 表达选中", () => {
     controllerMock.mockReturnValue(controller({ type: "LORA" }));
     render(<ModelLibrary />);
     expect(
-      screen
-        .getByRole("button", { name: "LoRA" })
-        .className.includes("bg-primary-soft"),
-    ).toBe(true);
+      screen.getByRole("radiogroup", { name: "按类型筛选模型" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("radio", { name: "LoRA" }).getAttribute("aria-checked"),
+    ).toBe("true");
     expect(
       screen
-        .getByRole("button", { name: "大模型" })
-        .className.includes("bg-primary-soft"),
-    ).toBe(false);
+        .getByRole("radio", { name: "大模型" })
+        .getAttribute("aria-checked"),
+    ).toBe("false");
+  });
+
+  /* 选中态必须自带四层（底色 / 字色 / 描边 / 字重），且悬停值钉回常态 ——
+   * 缺的正是「划过已选中项时会被 Button 默认悬停档改写」那一半。 */
+  it("选中档四层俱在且悬停值回钉常态（select-chip 的选中态契约）", () => {
+    controllerMock.mockReturnValue(controller({ type: "LORA" }));
+    render(<ModelLibrary />);
+    const checked = screen.getByRole("radio", { name: "LoRA" });
+    for (const layer of [
+      "aria-checked:bg-primary-soft",
+      "aria-checked:text-primary-strong",
+      "aria-checked:border-primary",
+      "aria-checked:font-semibold",
+      "aria-checked:hover:bg-primary-soft",
+    ]) {
+      expect(checked.className).toContain(layer);
+    }
   });
 
   it("取数中给骨架，不提前说「暂无模型」（首屏闪一句空态会把用户支去点同步）", () => {
@@ -156,7 +177,7 @@ describe("ModelLibrary 档位区", () => {
     expect(screen.getByText("Alpha")).toBeTruthy();
     /* 「放大」同时是筛选档位与那一类卡片的徽标 —— 两件事都要在，缺一件就是
        此前那个状态：徽标认得这一类，档位里却没有它。 */
-    expect(screen.getByRole("button", { name: "放大" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "放大" })).toBeTruthy();
     expect(screen.getAllByText("放大").length).toBeGreaterThanOrEqual(2);
 
     fireEvent.click(screen.getByRole("button", { name: /查看 Beta 详情/ }));

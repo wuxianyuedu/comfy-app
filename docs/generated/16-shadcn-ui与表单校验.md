@@ -338,7 +338,7 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
   撤掉的另一面是**目录不得复活**：归并完还得有个判据挡住「下一个人再
   `mkdir studio/ui` 起一套」，见 `tests/ui-kit-single-home.test.ts`。
 
-#### 16.2.3.1 浮层的「位置由谁定」：有锚点就必须交给 Positioner（ISSUE #717）
+#### 16.2.3.16 浮层的「位置由谁定」：有锚点就必须交给 Positioner（ISSUE #717）
 
 P2 把浮层收拢到 `ui/` 原语时踩过一个坑，值得单独立一条判据：**收拢容器不等于
 收拢定位**。
@@ -1312,6 +1312,7 @@ story 不经 store 读）。
 | 重入闸门                 | ~~**五族做法**：没有闸门（靠读 state 判 —— `setState` 是异步的，同一次事件循环里两次点击都读到旧值）、自建 ref 闸门 4 处（`use-copy-feedback` / `use-external-action` / `use-encapsulation-test-run` / `use-character-portrait`，同一段样板各写一份、复位位置还不一样）、store 里的布尔、读「忙标记不是 idle」。代价随动作变贵而放大 —— 「测试连接」双击 = **两次真实模型调用**，批处理双击 = 两轮串行批处理互相覆盖产物                                                                                                                                                                                                                                                                                              | `~/lib/reentrancy-lock` 的 `useReentrancyLock`（同步 `tryEnter` / `exit`）/ `createReentrancyLock`（跨组件实例、非 hook 场景）；**P66 硬闸**                                                                                                                              | ✅ **见 §16.2.4.69**                        |
 | 刷新票据                 | ~~四种表达：自增整数的 `useState` + `useCallback`（2 处）、**声明了票据却从不自增**（`workspace/page.tsx` 的 `recentsKey`，注释还写着「自增以重新读取」）、直接调取数函数、靠应用事件。差异全是静默的 —— 前者与「直接调」混用时同一个面板的刷新语义取决于它用哪支；后者点了没反应而构建与测试都不报~~                                                                                                                                                                                                                                                                                                                                                                                                                 | `~/lib/refresh-ticket` 的 `useRefreshTicket`（初值 0、每次 +1；不暴露 setter 与数值；不防抖不合并）；**不成判据**（见 §16.2.4.70 —— 机器分不出刷新票据与组件内的普通计数）                                                                                                | ✅ **见 §16.2.4.70**                        |
 | 异步动作的忙碌位         | ~~**45 处**「先置忙碌位、跑完再复位」，其中 **20 处**把复位写在 `await` **之后**的成功路径上 —— 动作抛错（`await` 之后那一行 `setXxx` / `load()` / NDJSON 回调里抛）就**永远停在 true**：界面从此显示「正在保存…」/「批量生成中…」，按钮再也点不动，只有刷新页面才恢复~~                                                                                                                                                                                                                                                                                                                                                                                                                                              | `~/components/ui/use-busy-action` 的 `useBusyAction`（复位绑在 `finally` 上、不吞错、卸载守卫、`set` 给跨多段 `await` 的落点）；store 级忙碌位见 `~/components/update-check/update-check-store` 的 `runChecking`；**P65 硬闸**                                            | ✅ **见 §16.2.4.71**                        |
+| 一排里选一个的 chip      | ~~**全库 20 处**「一排里选一个」的选中态是**逐字相同**的三元（`border-primary text-primary bg-primary/10`），另外还有手搓的「ghost + 下划线」「ghost + 近值底」几族。它们坏在同一个**看不见的接缝**：`Button variant="outline"` 自带 `hover:bg-muted hover:text-foreground`，而选中分支**没有钉住悬停值** —— 划过**已选中**的那一枚时 `hover:` 胜出，一枚紫色选中的 chip 悬停后变成白字灰底，看上去像「未选中」。逐个调用点**看不出来**（三元读起来是完整的，缺的那一半在 `buttonVariants.outline` 里）。下划线那一族另有布局缺陷：选中给 `border-b-2`、未选中**不给**，两枚不同高、切页签时基线上下跳~~ | `~/components/ui/select-chip` 的 `SelectChip`（本件**自有**、非 shadcn 生成）：选中态有**底色 / 字色 / 描边 / 字重四层**，任意一层失效仍读得出来；且**自带与常态同值的 `hover:`**（把「已选中」这一持久事实在悬停期间钉住）；语义是 `radiogroup` + `radio`（单选，不是 `aria-pressed`）；`shape` 轴给 pill / segment / compact / dashed 四档。下划线页签那一族走 `ui/tabs` 的 `line` 档。**不成机器判据**（见 §16.2.4.75） | ✅ **见 §16.2.4.75** |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -1323,7 +1324,7 @@ story 不经 store 读）。
 | 形态                 | 原来自搓的位置                                                                                                         | 现在                                                                                      |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | 确认对话框           | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点）                                                                | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留                     |
-| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                    | `ui/popover` + **锚点定位**；`workflow-utils.ts` 的 `computePos` 一并删除（见 §16.2.3.1） |
+| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                    | `ui/popover` + **锚点定位**；`workflow-utils.ts` 的 `computePos` 一并删除（见 §16.2.3.16） |
 | 源码查看弹窗         | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc）                                                                     | `ui/dialog`；载入态改 `ui/page-loading`                                                   |
 | 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                  | `ui/dialog`                                                                               |
 | 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                    | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）                            |
@@ -5731,7 +5732,7 @@ navigation-menu pagination radio-group scroll-area slider table
 `src/components/model/ModelLibrary.tsx`，壳只留 `metadata` + 挂载。
 「页头写在哪一层」因此不是风格问题：**它得跟调用处同侧**。
 （`pages` / `consumers` 那份具名清单里，这一屏登记的是实现侧文件，不是壳。）
-#### 16.2.4.73.1 同一个 ISSUE 的另一半：设置页的「返回」按钮与竖栏导航（用户反馈「不好看」，ISSUE #1423）
+#### 16.2.4.73.3 同一个 ISSUE 的另一半：设置页的「返回」按钮与竖栏导航（用户反馈「不好看」，ISSUE #1423）
 
 用户那句「设置页的界面不好看，优化，后退按钮去掉」与上一节是同一次反馈下的两面。
 四条改动，每条都对应一个**没有判据会变红**的形态退化：
@@ -5751,7 +5752,7 @@ navigation-menu pagination radio-group scroll-area slider table
 
 #### 16.2.4.73.2 横排 chip 带被用户退回：分组与分区项**不能平权**（ISSUE #1694）
 
-`16.2.4.73.1` 把 192px 的竖栏换成一条横排 chip 带，理由是「分组层级没换来导航价值
+`16.2.4.73.3` 把 192px 的竖栏换成一条横排 chip 带，理由是「分组层级没换来导航价值
 却吃掉四分之一屏宽」。那条账只算了一半：**窄了，但层级也没了**。用户隔天就退回：
 
 > 「设置这里的还是树形结构显示标签吧，现在看着不舒服」（ISSUE #1694）
@@ -5789,7 +5790,7 @@ navigation-menu pagination radio-group scroll-area slider table
 - **「诊断」从「应用」里分出来**：日志不是应用配置，横排时它挤在「应用」段尾
   看不出来，成了父行之后语义立刻显形。
 - **代价是宽度恢复了**（左栏 `w-40` + `gap-6`）：这是用户**点名要的形状**，
-  和 `16.2.4.73.1` 的取舍反过来了 —— 那一条的教训因此不是「竖栏不好」，
+  和 `16.2.4.73.3` 的取舍反过来了 —— 那一条的教训因此不是「竖栏不好」，
   而是「别用一个装不下两层的形态去省宽度」。
 
 判据（`SettingsShell.test.tsx` 的第 3 条，随本次落地）：**分组名不在可点目标里**
@@ -5938,6 +5939,87 @@ type SettingsShellProps = { section; onSelect; className?; banner? } & (
 /「没有一节越线时保留当前值」/「点导航立刻通知并滚到那一节」/「无观察器时退化」）。
 `SettingsShell.stories.tsx` 的 `Long`（每节撑高）与 `LoadingFallback` 两屏供人工复核。
 
+### 16.2.4.75 「一排里选一个」的 chip 有 20 处各写一遍（ISSUE #1423 / #1925）
+
+全库最密的一族「自实现」：**一排并列的选项，点一个切换当前选中项**。
+收口前是 **20 处**逐字相同的三元选中态：
+
+```tsx
+<Button variant="outline" className={selected
+  ? "border-primary text-primary bg-primary/10"   // ← 只写了「未选中之外」的那一半
+  : "border-border text-muted-foreground hover:bg-subtle"}>
+```
+
+#### 坏在一个看不见的接缝上
+
+`outline` 变体自带 `hover:bg-muted hover:text-foreground`（见 `ui/button.tsx`）。
+选中分支**没有钉住悬停值** ⇒ 鼠标划到**已选中**的那一枚上时 `hover:` 胜出：
+字色翻成 `foreground`、底色翻成 `muted` —— 一枚紫色选中的 chip 悬停后变成
+白字灰底，看上去像「未选中」甚至像「另一个控件」。用户原话是
+「按钮的选中状态悬浮和非悬浮一个紫色，一个白色」（ISSUE #1423）。
+
+**关键点是：这个 bug 逐个调用点看不出来。** 三元表达式读起来是完整的
+（选中给一套、未选中给一套），缺的那一半在 `buttonVariants.outline`
+里。所以修法不是「把 20 处一起改」（§12.12 孪生对的修法是抽共享，不是两边
+一起改），而是让**选中态拥有自己的悬停值**，把这条决定收进一处。
+
+#### 出口：`~/components/ui/select-chip` 的 `SelectChip`
+
+| 层   | 选中档（`aria-checked:`）  | 未选中档                            |
+| ---- | -------------------------- | ----------------------------------- |
+| 底色 | `bg-primary-soft`          | `bg-transparent`，悬停 `hover:bg-subtle` |
+| 字色 | `text-primary-strong`      | `text-muted-foreground`，悬停 `hover:text-ink` |
+| 描边 | `border-primary`           | `border-border`                      |
+| 字重 | `font-semibold`            | `font-normal`                        |
+
+**四层里任意一层失效，「选中」仍读得出来** —— 这是 §16.2.4.5「逐条定性」要求的
+「不是只差一个近乎同值的底色」。与 `ui/toggle-group` 在 P67 补的三层（描边 /
+字重 / 抬层）同一条口径。
+
+**选中档的悬停为什么必须写死**：刻意把 `hover:` 钉回选中值
+（`aria-checked:hover:bg-primary-soft`）而不是让它「自然叠加」。这不是为了好看，
+是为了让「已选中」这一事实**在悬停期间仍然成立** —— 悬停是瞬时的、选中是持久的，
+持久状态不该被瞬时状态改写。
+
+**语义**：这是**单选**，一排里只有一个能选中，所以落 `role="radio"` +
+`aria-checked`，不是 `Toggle` 的 `aria-pressed`（那是「这个开关开着吗」，可多项
+同时为真）。因此本件**不**复用 `ui/toggle`。排那一层的 `role="radiogroup"` +
+`aria-label` 由调用处给（一组 chip 的可访问名说的是**这一组在选什么**）。
+
+**`shape` 轴**四档：`pill`（筛选 / 选择 chip，胶囊）/ `segment`（分段控件、
+就近切换，方角）/ `compact`（编辑器里的次级 chip，`text-2xs` 上限）/
+`dashed`（虚线「＋ 添加」动作档，**不是选中态**）。
+
+#### 下划线页签那一族：走 `ui/tabs` 的 `line` 档
+
+同一件事还有一形态是**下划线页签**（本项目 / 全部）。它另有布局缺陷：
+选中给 `border-b-2 border-accent`、**未选中档根本没写那条边框** ⇒ 未选中的那枚
+整体比选中的矮 2px，切来切去文字基线上下跳。出口是 `ui/tabs` 的 `variant="line"`：
+选中态由 `data-active` 驱动（字色 + 下划线两层），两枚同高同基线。
+
+#### 判据：不成机器判据（ISSUE #1925 收口的明确取舍）
+
+**不新增扫描器。** 理由（§12.18 反面那条）：「一排里选一个」在文本上退化成
+**一个 `<Button>` + 一个三元表达式**，与「一排并列但各自独立动作」的普通工具条
+完全同形；「这一排是单选还是多动作」机器分不出。本件此前试过的一种写法是按
+`aria-pressed` / `variant="outline"` 加 `bg-primary` 出现在同一个 `className`
+字面量上找 —— 那会命中 `ui/option-list-popover` 的行、`StatusBadge` 与几处
+「本来就该有底色」的显示态 chip，等于**逼人为了过闸把正确的代码改成错的**。
+这一族的执行者留给人工评审（§13.1 自查清单）与既有台账：新增 / 修改
+「一排里选一个」时**先查本件**（硬规则 24：写之前先查）。
+
+已收口的落点见下表；**未收口**的同类落点若被发现，按 `SelectChip` 换过去，
+并在本节登记。
+
+| 落点                                                       | 形态                        | 状态                       |
+| ---------------------------------------------------------- | --------------------------- | -------------------------- |
+| `workshop/ModelAdaptersView`、`workshop/mode-contract/dialog/ContractInputCatalog` | `pill` / `compact`（#1423 首批） | ✅ 已收口            |
+| `studio/history/HistoryList`                               | `pill`（状态筛选，ISSUE #1925） | ✅ 已收口              |
+| `model/ModelLibrary`                                       | `pill`（类型筛选，ISSUE #1925） | ✅ 已收口              |
+| `studio/ModelLibrary`（原私有 `FilterChip`）               | `pill`（类型筛选，ISSUE #1925） | ✅ 已收口              |
+| `studio/project-canvas/HistoryPanel` 类型筛选               | `pill`（ISSUE #1925）       | ✅ 已收口                  |
+| `studio/project-canvas/HistoryPanel` 作用域切换             | `ui/tabs` `line`（ISSUE #1925） | ✅ 已收口              |
+
 ## 16.3 新增一个组件的标准动作
 
 ```bash
@@ -5950,7 +6032,7 @@ pnpm dlx shadcn@latest add dialog form input select
 - 生成后校验：文件名 kebab；导入路径用 `~/components/ui/<name>`。
 - shadcn CLI 默认写 `@/` 别名（`components.json` 的 alias 是 `~/`，CLI 生成的
   组件仍可能带 `@/`）；本仓库用 `~`，生成后**顺手把 `@/` 改成 `~/`**，
-  保持 `~/components/ui/<name>` 一致。这条不再靠人记：`scripts/check-import-alias.cjs`（R13，见 [12 §12.8.0](12-代码组织与文件结构.md#1280-import-别名只有一种-issue-640机器强制)）
+  保持 `~/components/ui/<name>` 一致。这条不再靠人记：`scripts/check-import-alias.cjs`（R13，见 [12 §12.8.0](12-代码组织与文件结构.md#1280-import-别名只有一种issue-640机器强制)）
   会在提交阶段拦下 —— 而 `ui/` 是「工具生成、尽量不手改」的目录，正是漂移的高发区。
 - 不要从 radix 版 shadcn 仓库复制组件；遇到缺失原语用 `shadcn add` 生成 base-ui 版。
 
@@ -6122,7 +6204,7 @@ shadcn add @comfy-app-t3/form @comfy-app-t3/select
 
 **何时换 TanStack Form**：当表单出现"超复杂动态字段 + 极致类型推导"需求（如字段级条件联动、嵌套数组的严格推断），TanStack Form 的 headless + 编译期类型推断更省心（无 `Controller`/`ref` 心智负担）。其余情况保持 RHF + Zod。
 
-## 16.6 base-ui 注意事项
+## 16.6.1 base-ui 注意事项
 
 - 所有 shadcn 组件须为 **base-ui 版**（风格 `base-nova`）。
 - 若 `shadcn add form` 生成的 `form.tsx` 误引 `@radix-ui/*`，改回 `@base-ui/react` 对应导出（Label/Form 原语）。
