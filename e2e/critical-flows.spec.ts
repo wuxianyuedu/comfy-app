@@ -129,13 +129,13 @@ test.describe("工作区链路 @critical", () => {
      * id 与顺序由 `src/components/studio/nav-items.test.ts` 钉死）。这里按用户可见的
      * 标签重复一份，而不是 import 那份常量：e2e 的断言应当只看屏幕上有无这些东西，
      * 拿 React 侧常量当数据源会让「常量与渲染不一致」这种真故障变成用例里的自洽。 */
-    for (const label of ["首页", "模型", "历史", "队列", "流程"]) {
+    for (const label of ["首页", "模型", "历史", "队列", "工作流库"]) {
       await expect(
         page.getByRole("button", { name: label, exact: true }).first(),
       ).toBeVisible();
     }
 
-    /* 「流程」下面那两项是**应用级浮层入口**（模型适配 / 模式契约）：它们不切视图、
+    /* 「工作流库」下面那两项是**应用级浮层入口**（模型适配 / 模式契约）：它们不切视图、
      * 只开弹窗，且与项目无关，所以留在侧栏而不进工坊那个项目内视图。 */
     for (const label of ["模型适配", "模式契约"]) {
       await expect(
@@ -159,7 +159,7 @@ test.describe("工作区链路 @critical", () => {
   test("@critical 可从工作区切到工作流库视图并看到库界面", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
-    await gotoWorkspaceView(page, "流程");
+    await gotoWorkspaceView(page, "工作流库");
 
     // 工作流库页头标题 + 导入入口（导入是对外可见的主要动作）
     await expect(page.getByRole("heading", { name: "工作流库" })).toBeVisible();
@@ -211,7 +211,7 @@ test.describe("工作区链路 @critical", () => {
     });
 
     await page.goto("/workspace");
-    await gotoWorkspaceView(page, "流程");
+    await gotoWorkspaceView(page, "工作流库");
     await expect(page.getByText(/正在加载工作流/)).toBeVisible({
       timeout: 15_000,
     });
@@ -283,7 +283,7 @@ test.describe("工作区链路 @critical", () => {
   test("@critical 工作流库空态给出可行动指引而不是空白", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
-    await gotoWorkspaceView(page, "流程");
+    await gotoWorkspaceView(page, "工作流库");
 
     // 空态必须告诉用户「现在没有」且给出下一步动作，不能是一片空白。
     // 三态都在断言范围内（ISSUE #369）：加载没回来时是「正在加载」/「还没返回」，
@@ -333,7 +333,7 @@ test.describe("工作流执行链路 @critical", () => {
 
     await page.goto("/workspace");
     await gotoWorkspaceView(page, "工作流库").catch(() => undefined);
-    await gotoWorkspaceView(page, "流程");
+    await gotoWorkspaceView(page, "工作流库");
 
     // 本用例的可断言部分：工作流库页在 stub 后端下仍可用（不白屏、不报错页）。
     // 真正的「执行 → 终态可见」由下面的任务详情用例承担（那里的 DOM 契约稳定）。

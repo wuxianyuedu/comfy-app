@@ -152,9 +152,9 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     const strip = stripOf(page);
     await expect(strip).toBeVisible({ timeout: 30_000 });
 
-    /* 先进工作流库（侧栏「流程」）。 */
+    /* 先进工作流库（侧栏那一项就叫「工作流库」）。 */
     await page
-      .getByRole("button", { name: "流程", exact: true })
+      .getByRole("button", { name: "工作流库", exact: true })
       .first()
       .click();
     await expect(strip.getByRole("tab")).toHaveCount(2);

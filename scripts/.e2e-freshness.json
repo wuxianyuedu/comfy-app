@@ -1,10 +1,9 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-13T07:55:03.590Z",
+    "verifiedAt": "2026-10-14T08:14:26.133Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
-    "trackedBy": "e2e",
-    "skippedReason": "win32 全量 e2e 今日已跑三遍（读数与逐条归因在 ISSUE #1834 评论）：失败集是与本改动无关的稳定红（出图链路 / queue-monitor / runtime-budget 性能预算超）与已知红，绿账待这些红清掉后补跑记录"
+    "trackedBy": "e2e"
   }
 }

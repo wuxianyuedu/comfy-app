@@ -244,4 +244,40 @@ describe("e2e 的并发档：现场编译 ⟺ 已构建（ISSUE #1834）", () =>
     ].map((m) => m[1]);
     expect(topLevelTimeouts).toEqual(["60_000"]);
   });
+
+  it("性能档隔开跑：不在主 project 里，且等主 project 跑完才跑", async () => {
+    /* 钉的是「单独一个 project」这个决定本身。少了这一条，把 `runtime-budget.spec.ts`
+     * 挪回 `chromium` 里**照样能跑**、却会在满载机器上给出「性能退化」的假读数 ——
+     * 而那正是本档最容易被误读的方向（红的是同伴在抢首帧编译，不是首页变慢）。
+     * 三条各判一个方向：主档必须排除它、性能档必须只收它、且必须声明依赖主档。 */
+    const { default: config } = await import("../playwright.config");
+    const projects = config.projects ?? [];
+    /* 这几项在配置里的合法形态是「字符串 | RegExp | 二者数组」；非字符串的形状
+     * （对象/数组本身）不当成命中项，也绝不 `String()` 它 —— 那会静默变成
+     * `[object Object]` 这种看着像断言、实际永远不匹配的字符串。 */
+    const one = (x: unknown): string | null => {
+      if (typeof x === "string") return x;
+      if (x instanceof RegExp) return x.source;
+      return null;
+    };
+    const asList = (v: unknown): string[] =>
+      Array.isArray(v)
+        ? v.map(one).filter((x): x is string => x !== null)
+        : [one(v)].filter((x): x is string => x !== null);
+    const main = projects.find((p) => p.name === "chromium");
+    const perf = projects.find((p) => p.name === "chromium-perf");
+
+    expect(
+      asList(main?.testIgnore),
+      "主 project 没收掉性能 spec —— 两条会在同一台机器上互相抢编译",
+    ).toContain("**/runtime-budget.spec.ts");
+    expect(
+      asList(perf?.testMatch),
+      "性能 project 的收录面漂了（会把全部 spec 再跑一遍）",
+    ).toContain("**/runtime-budget.spec.ts");
+    expect(
+      asList(perf?.dependencies),
+      "性能档没声明等主档跑完 —— 隔离不成立，它仍会与别的用例并发",
+    ).toEqual(["chromium"]);
+  });
 });

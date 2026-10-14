@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * 锚定浮层不许被应用级标题行吃掉（ISSUE #1377）。
@@ -34,15 +34,24 @@ async function openInShell(page: Page) {
   await expect(page.locator('[data-slot="title-bar"]')).toBeVisible();
 }
 
-/** 把鼠标从远处挪进来并停在目标上 —— Base UI 的 hover 要一次指针移动。 */
-async function hoverHint(page: Page, label: string) {
-  const trigger = page.locator(`header button[aria-label="${label}"]`).first();
+/** 把鼠标从远处挪进来并停在目标上 —— Base UI 的 hover 要一次指针移动。
+ *
+ * 传 **`Locator` 而不是标签字符串**：顶栏那排 `aria-label` 里有**动态**的
+ * （`MessageCenterButton.tsx:27` 在有未读时会变成「系统消息，N 条未读」）。
+ * 原先的写法是「先把属性值抓成字符串，再拿它精确重查」——两次动作之间只要落一条
+ * 系统消息，那个字符串就当场失效，locator 一直等到 60s 用例超时（实测红过两条）。
+ *
+ * 只认**当前打开的那一枚**气泡（`[data-open]`）：上一枚在退场动画里会以
+ * `data-closed` 继续挂在 DOM 上，全局 `[data-slot="tooltip-content"]` 会一次命中
+ * 两枚（strict mode violation），而探针的 `querySelector` 会拿到「上一入口的气泡」。 */
+async function hoverHint(page: Page, trigger: Locator) {
   await page.mouse.move(400, 700);
   const box = await trigger.boundingBox();
-  if (!box) throw new Error(`量不到「${label}」的位置`);
+  if (!box) throw new Error("量不到该入口的位置");
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.waitForTimeout(600);
-  await expect(page.locator('[data-slot="tooltip-content"]')).toBeVisible();
+  await expect(
+    page.locator('[data-slot="tooltip-content"][data-open]'),
+  ).toBeVisible();
 }
 
 test.describe("锚定浮层让出窗口标题行 @critical", () => {
@@ -52,19 +61,24 @@ test.describe("锚定浮层让出窗口标题行 @critical", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openInShell(page);
 
-    const labels = await page.evaluate(() =>
-      [...document.querySelectorAll("header button")]
-        .map((b) => b.getAttribute("aria-label"))
-        .filter((l): l is string => Boolean(l)),
-    );
+    /* 遍历**活的 locator**，不先把 `aria-label` 抓成字符串（那串值会变，见 hoverHint）。 */
+    const triggers = page.locator("header button[aria-label]");
+    const count = await triggers.count();
     /* 这一排是对外可见入口，不该是空集 —— 空集会让下面的循环一次都不跑、
      * 用例「绿」得毫无意义。 */
-    expect(labels.length).toBeGreaterThan(0);
+    expect(count, "顶栏没数到任何带 aria-label 的入口").toBeGreaterThan(0);
 
-    for (const label of labels) {
-      await hoverHint(page, label);
+    for (let i = 0; i < count; i += 1) {
+      const trigger = triggers.nth(i);
+      /* 标签逐轮重新读一次，只用于失败话术；判据本身不依赖它。 */
+      const label =
+        (await trigger.getAttribute("aria-label")) ?? `第 ${i + 1} 个入口`;
+      await hoverHint(page, trigger);
       const probe = await page.evaluate(() => {
-        const popup = document.querySelector('[data-slot="tooltip-content"]');
+        /* 只认当前打开的那一枚（`[data-open]`）——上一枚退场时仍挂在 DOM 里。 */
+        const popup = document.querySelector(
+          '[data-slot="tooltip-content"][data-open]',
+        );
         if (!popup) return null;
         const r = popup.getBoundingClientRect();
         const titleBar = document.querySelector('[data-slot="title-bar"]');
@@ -109,9 +123,14 @@ test.describe("锚定浮层让出窗口标题行 @critical", () => {
       "collapsed",
     );
 
-    await hoverHint(page, "切换深浅色");
+    await hoverHint(
+      page,
+      page.locator('header button[aria-label="切换深浅色"]').first(),
+    );
     const probe = await page.evaluate(() => {
-      const popup = document.querySelector('[data-slot="tooltip-content"]');
+      const popup = document.querySelector(
+        '[data-slot="tooltip-content"][data-open]',
+      );
       const titleBar = document.querySelector('[data-slot="title-bar"]')!;
       const r = popup!.getBoundingClientRect();
       const t = titleBar.getBoundingClientRect();
