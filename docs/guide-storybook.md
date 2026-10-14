@@ -366,7 +366,7 @@ hook（`use-*.ts`）不算（它们没有可看的东西，判据是单测）。
 **业务目录（`studio/` / `workshop/`）不在那张棘轮里**：它的分母只看 `ui/`。
 那两棵树的铺法是**按「数据从哪来」分档**（纯 props / 结构化入参 / 运行期环境），
 口径与「哪一档刻意不写」见规范
-[16 §16.2.3.9](standards/16-shadcn-ui与表单校验.md#16239-业务目录studioworkshop的-story按有没有数据依赖逐件分档)。
+[16 §16.2.3.9](standards/16-shadcn-ui与表单校验.md#16239-业务目录studio--workshop的-story按有没有数据依赖逐件分档)。
 无论哪一档，**派生量都不许在 story 里手抄**：百分比调 `stageProgressPct()`、
 尺寸摘要调 `shotSizeSummary()`、脏数据结论调 `auditDraftElements()` —— 手抄的数字
 在改了常量之后仍然「看着正常」，那是这一批最想消掉的假形态。
