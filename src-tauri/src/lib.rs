@@ -890,6 +890,27 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   Ok(sections.join("\n\n"))
 }
 
+/// 读回「应用服务为什么结束」这条记录（ISSUE #1915）。
+///
+/// ## 为什么这条读取必须走壳的 IPC
+///
+/// `GET /api/dev/last-exit` 由**应用服务自己**应答，而它正是「断开」这件事里没了的
+/// 那一方 —— 服务不在，端点必然不通。于是原先只有一条读法：等它**恢复应答之后**
+/// 再问（「断开时只给时刻、恢复时才给原因」），而恢复那条又常常因为「那次断开根本
+/// 没留下记录」而只能说一句读不到。原因在断开那一刻其实**已经落在**
+/// `run/app-service-exit.json` 里（由死的那一刻还活着的旁证人写下），读不到它
+/// 纯粹是选错了通道：壳进程活得好好的，读这个文件不经过任何应用服务。
+///
+/// 回**文件原文**（不在 Rust 侧解析）：记录形状、成因取值与文案全在
+/// `src/lib/shell/app-service-exit.ts` 一处，Rust 再解析一遍等于把同一份形状写两处。
+///
+/// 读不到（文件不存在 / 空的）回 `Ok(None)` 而不是 `Err`：这不是错误，而是
+/// 「没有原因可讲」这一正常状态。回 `Err` 会让界面把「没原因」显示成「接口挂了」。
+#[tauri::command]
+fn get_app_service_exit(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+  Ok(shell_launch::read_app_service_exit(&state.project_root()))
+}
+
 /// 关闭窗口（默认启动页）。
 ///
 /// 与最小化一组：启动页窗口关了原生装饰（`decorations: false`），窗口按钮是
@@ -1950,6 +1971,7 @@ pub fn run() {
       navigate_to_app,
       get_app_url,
       get_launch_log,
+      get_app_service_exit,
       set_splash_compact,
       win_close,
       win_minimize,

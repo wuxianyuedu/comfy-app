@@ -138,3 +138,36 @@ export async function openDevtools(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * 读回「应用服务为什么结束」这条记录的**原文**（`run/app-service-exit.json`）。
+ *
+ * ## 为什么这条路必须存在（ISSUE #1915）
+ *
+ * 探测「应用服务在不在」打的是 `GET /api/dev/server-id` —— 那是**应用服务自己**
+ * 的 HTTP。它一不在，这条通道必然不通，于是经 HTTP 读同一份记录的
+ * `GET /api/dev/last-exit` 也一并没了。原先只有这一条读法，结果就是「断开时只能
+ * 说时刻、恢复时才可能说出原因」，而恢复那条还常因「那次断开没留下记录」而只能说
+ * 读不到 —— 用户看到的是「原因明明已经写在 run/app-service-exit.json 里，界面上
+ * 却什么都没有」。
+ *
+ * 壳进程活得好好的（正是「窗口还在、页面连不上」那一档），它读这个文件不经过任何
+ * 应用服务。所以断开那一刻就该经这条通道把原因取回来。
+ *
+ * 返回**文件原文**而非解析后的对象：形状与文案只在 `./app-service-exit` 一处
+ * （走同一个 `parseAppServiceExitRecord`），Rust 那边不重复解析。
+ *
+ * 非壳环境（浏览器 / dev server）回 null —— 没有这条通道，界面维持原样，**不编
+ * 一个「未知原因」出来**。旧壳没有这个命令时同样回 null（降级路径，见
+ * `invoke` 的 catch）。
+ */
+export async function readAppServiceExitRecord(): Promise<string | null> {
+  if (!isDesktopShell()) return null;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const raw = await invoke<string | null>("get_app_service_exit");
+    return typeof raw === "string" && raw.trim() !== "" ? raw : null;
+  } catch {
+    return null;
+  }
+}

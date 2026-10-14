@@ -13,19 +13,28 @@ import type { AppServiceExitNotice } from "./app-service-exit";
  * 信息重复；真正会卡住整个界面的失败是**应用服务没起来**——那种情况下页面
  * 会白屏 / 打不开，而旧状态栏恰好没有任何一格在说这件事。
  *
- * 判据（三态，都由「能不能应答」这一个事实派生，不依赖任何业务接口）：
+ * 判据（四态，都由「探活那一次得到了什么」这一个事实派生，不依赖任何业务接口）：
  *   online   可达 → 应用服务在线（顺带说明「有没有真正重启」）；
  *   offline  已经探通过、而此刻抗抖动后不可达 → 进程不在了（服务停了 /
  *            窗口断开了）。**单拍失败不算**：冷编译 / 按需编译让某一拍超时是
  *            常态，抖动门槛见 `use-dev-server-liveness` 的
- *            `OFFLINE_CONFIRM_FAILURES`（取事实那一层滤，判据只管三态）；
- *   starting 尚未有过成功探测 → 首次探测还没回来，不冒充在线也不报故障。
+ *            `OFFLINE_CONFIRM_FAILURES`（取事实那一层滤，判据只管四态）；
+ *   stale    探活端点答了 **404** → 进程在应答，但这条端点不在编译图里
+ *            （陈旧路由表 / Turbopack 会话级路由失效）。它与「不可达」是两件事：
+ *            页面往往还被同一个进程正常服务着，而正解是重启应用；
+ *   starting 尚未有过成功探测、也没得到 404 → 首次探测还没回来，不冒充在线
+ *            也不报故障。
+ *
+ * `stale` 为什么必须单独成态（它此前被并进 `starting`）：`everOnline` 在整场都
+ * 探不通时会永远为假，于是状态栏**永久**停在「应用服务连接中」——而用户眼前正好
+ * 摆着一个由该进程正常渲染的页面。那句话在这个场景里是谎话，且它把唯一的出口
+ * （重启应用）藏了起来：用户只会继续等一个不会到来的转机。
  *
  * 纯函数、无 React、无 IO（规范 17 §17.2 第①层），可直接单测。
  */
 
-/** 应用服务三态：尚未探通 / 在线 / 不可达。 */
-export type DevServerState = "starting" | "online" | "offline";
+/** 应用服务四态：尚未探通 / 在线 / 不可达 / 探活端点 404。 */
+export type DevServerState = "starting" | "online" | "offline" | "stale";
 
 export interface DevServerStatusInput {
   /** 本次会话是否曾成功探测到进程标识。 */
@@ -42,6 +51,11 @@ export interface DevServerStatusInput {
   reachable: boolean;
   /** 是否检测到**真正**重启（进程标识变化，见 use-dev-server-liveness）。 */
   restarted: boolean;
+  /**
+   * 最近一次探测得到 404：进程在应答，但这条端点不在编译图里
+   * （见 `use-dev-server-liveness` 的 `routeTableStale`）。
+   */
+  routeTableStale?: boolean;
   /** 最近一次真正重启的时刻。 */
   lastRestartAt: number | null;
   /**
@@ -66,6 +80,22 @@ export function deriveDevServerStatus(
 ): DevServerStatus {
   const { everOnline, reachable, restarted, lastRestartAt } = input;
   const exitNotice = input.lastExit ?? null;
+
+  /* 探活端点答了 404：服务活着，坏的是路由表。**排在连通性两档之前**——它比
+   * 「不可达」更具体（我们确实拿到了一个应答），也比「连接中」更贴事实。 */
+  if (input.routeTableStale && !reachable) {
+    return {
+      state: "stale",
+      label: "应用服务路由异常",
+      /* 只说两件用户能做的：重启应用；重启不管用再删 .next。判据与措辞同
+       * `docs/standards/launch-and-build.md` §5 里那条 Turbopack 会话级路由失效
+       * —— 它是上游问题，本地唯一的解就是重建路由表。 */
+      title:
+        "应用服务在应答，但它的探活端点返回 404：这一次启动的路由表不完整（Turbopack 会话级路由失效）。" +
+        "关闭应用窗口重新启动即可重建路由表；仍不行则删掉项目根目录的 .next 再启动",
+      exitNotice,
+    };
+  }
 
   if (!reachable && everOnline) {
     return {

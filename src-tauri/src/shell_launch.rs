@@ -611,6 +611,39 @@ pub fn write_sidecar_exit_record(
   }
 }
 
+/// 读回「应用服务为什么结束」这条记录（壳侧存活通道，ISSUE #1915）。
+///
+/// ## 为什么这条读取必须走壳的 IPC，而不是那条 HTTP 端点
+///
+/// `GET /api/dev/last-exit` 由**应用服务自己**应答，而它正是「断开」这件事里没了
+/// 的那一方——服务不在，端点必然不通。于是原先只有一条读法：等它**恢复应答之后**
+/// 再问，也就是「断开时只给时刻、恢复时才给原因」。而原因其实在断开那一刻就已经
+/// 落在 `run/app-service-exit.json` 里了（由死的那一刻还活着的旁证人写下），
+/// 读不到它纯粹是因为**选错了通道**：壳进程活得好好的，它读这个文件不经过任何
+/// 应用服务。
+///
+/// ## 返回形态
+///
+/// 回**文件原文**（而不是在 Rust 侧解析成结构）：记录的形状、成因取值与「这句话
+/// 怎么说给用户听」全在 `src/lib/shell/app-service-exit.ts` 一处，Rust 再解析一遍
+/// 等于把同一份形状写两处（漂开的表现是「记录写进去了、界面读不懂」，而现场恰好
+/// 是最需要看清的那一次）。前端拿到原文走同一套 `parseAppServiceExitRecord`。
+///
+/// 读不到（文件不存在 / 还没写过）**回 `Ok(None)` 而不是 `Err`**：这不是错误，
+/// 而是「没有原因可讲」这一正常状态——服务好好跑着、或那次断开根本没留下记录。
+/// 回 `Err` 会让界面把「没原因」显示成「接口挂了」。
+pub fn read_app_service_exit(project_root: &str) -> Option<String> {
+  if project_root.is_empty() {
+    return None;
+  }
+  let raw = std::fs::read_to_string(app_service_exit_path(project_root)).ok()?;
+  let trimmed = raw.trim();
+  if trimmed.is_empty() {
+    return None;
+  }
+  Some(trimmed.to_string())
+}
+
 /// 把 sidecar 的终止事实翻译成给用户看的一句话（记录里的 `reason`）。
 ///
 /// 与 Node 侧 `describeDownstreamExit` 同一个取向：**只陈述这一次具体是什么结束的**，
@@ -1767,6 +1800,21 @@ mod tests {
     // 项目根空串（安装目录里没有检出）时**静默返回 false**：这条记录是排障体验，
     // 不是启动的必要条件，写不出去不该把壳带崩，也不该在别处留下一个半成品文件。
     assert!(!write_sidecar_exit_record("", Some(1), "x"));
+  }
+
+  #[test]
+  fn read_app_service_exit_returns_raw_text_and_none_when_absent() {
+    // 壳读回的是**文件原文**（形状只在 TS 那侧解析一处），因此这里必须逐字相等；
+    // 读不到（文件不存在 / 空的 / 项目根为空）回 None 而不是 Err —— 那是「没有原因
+    // 可讲」这一正常状态，回 Err 会让界面把「没原因」显示成「接口挂了」。
+    let dir = exit_record_fixture("read");
+    let root = dir.to_str().unwrap();
+    assert!(read_app_service_exit(root).is_none(), "还没写过时必须是 None");
+    assert!(write_sidecar_exit_record(root, Some(2), "内嵌服务已终止，退出码 2"));
+    let raw = std::fs::read_to_string(app_service_exit_path(root)).unwrap();
+    assert_eq!(read_app_service_exit(root).unwrap(), raw.trim());
+    assert!(read_app_service_exit("").is_none(), "项目根为空回 None");
+    let _ = std::fs::remove_dir_all(&dir);
   }
 
   #[test]
