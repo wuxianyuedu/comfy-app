@@ -309,7 +309,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 「内嵌字体这条链有没有静默降级」：LFS 过滤器、`.githooks/pre-push`、postinstall
   // 里那步 `git lfs install --local --manual`、`@font-face` 的 family 与
   // `--font-title` 首选是否同名 —— 四环每一环失效都**不报错**，最坏的一种是
-  // `*.ttf` 按原字节进历史（23 MB 摘不干净，只能重写共享远端）。它读的是配置文件
+  // 字体按原字节进历史（8.6 MB 摘不干净，只能重写共享远端）。它读的是配置文件
   // 与 index 形状，import 图一概追不到，所以与上面两条同因、必须无条件响。
   "tests/embedded-title-font.test.ts",
   // 「判据有没有执行者」这条纪律自己的执行者（ISSUE #1451 要求 2 / 规范 §13.5.12）。

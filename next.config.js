@@ -176,6 +176,22 @@ const config = {
   async headers() {
     return [
       {
+        // 静态字体：Next 对 `/_next/static/**` 自带长缓存，但 `public/` 下的资源
+        // 不在此列（默认走 `max-age=0`）—— 而 public 下正躺着一份 8.6 MB 的标题
+        // 字面（`/fonts/SarasaGothicSC-Bold.woff2`），每次进界面都重新协商一次。
+        //
+        // 敢标 `immutable` 的前提是**文件名即内容标识**：这一档字体是压缩产物，
+        // 换字面就是换文件名（`tests/embedded-title-font.test.ts` 把「CSS 指向的文件
+        // 必须真在磁盘上」钉住了，它同时也是「不许原地换内容」的间接约束）。
+        source: "/fonts/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
         source: "/:path*",
         headers: [
           { key: "Content-Security-Policy", value: CSP },
