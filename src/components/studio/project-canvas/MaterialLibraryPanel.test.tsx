@@ -80,3 +80,38 @@ describe("MaterialLibraryPanel", () => {
     expect(closeBtn).toBeInTheDocument();
   });
 });
+
+/**
+ * 作用域切换（本项目 / 跨项目）的形态回归（ISSUE #1925 第三批收口）。
+ *
+ * 它此前是手搓的 `Button variant="ghost"` + 下划线三元：选中给
+ * `border-b-2 border-accent`、**未选中档根本没写那条边框** —— 未选中的那一枚
+ * 整体比选中的矮 2px，切来切去文字基线上下跳。这与
+ * `project-canvas/HistoryPanel` 的作用域切换**逐字同形**（同一处缺陷的另一份），
+ * 现在同样交给 `ui/tabs` 的 `line` 档：两枚同高，选中由 `data-active` 驱动。
+ */
+describe("MaterialLibraryPanel 作用域切换（ISSUE #1925）", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    mockFetch({ folders: [], items: [] });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("两枚作用域是同一形态的 tab（不再一高一矮）", async () => {
+    render(<MaterialLibraryPanel onClose={vi.fn()} projectId="p-1" />);
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["本项目", "跨项目"]);
+    /* 形态类必须一致 —— 差别只在 `data-active`（由 ui/tabs 给），
+       不再靠「有没有那条 border-b-2」表达选中。 */
+    const shape = (el: HTMLElement) =>
+      el.className
+        .split(" ")
+        .filter((c) => !c.startsWith("data-") && c !== "aria-selected:bg-muted")
+        .sort()
+        .join(" ");
+    expect(shape(tabs[0]!)).toBe(shape(tabs[1]!));
+    for (const tab of tabs) expect(tab.className).not.toContain("border-b-2");
+  });
+});

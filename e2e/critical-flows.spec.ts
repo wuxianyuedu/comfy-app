@@ -84,7 +84,9 @@ test.describe("登录链路 @critical", () => {
     await page.goto("/login");
 
     // 切到注册模式：出现昵称字段、提交按钮变为「创建并登录」
-    await page.getByRole("button", { name: "创建账号" }).click();
+    await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
+     不是按钮。改的是读法，不是用例锁的那件事。 */
+    page.getByRole("radio", { name: "创建账号" }).click();
     await expect(page.getByText("昵称（可选）")).toBeVisible();
     await expect(page.locator('form button[type="submit"]')).toHaveText(
       "创建并登录",
