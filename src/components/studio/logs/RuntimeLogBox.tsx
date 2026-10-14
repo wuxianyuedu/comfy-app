@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * RuntimeLogBox —— 设置页「启动日志」框（ComfyUI / Drizzle Studio / Ollama 共用）。
+ * RuntimeLogBox —— 「启动日志」框（设置页 ComfyUI / Drizzle Studio / Ollama
+ * 三段 + 侧栏「ComfyUI」页共用）。
  *
  * 三个分区此前各自内联了一份 40 行的同款 JSX（标题 + 跟随中徽标 + 刷新按钮 +
  * 固定 `max-h-44` 的滚动框），改口径要改三处。这里收成一处，并把两件事补齐：
@@ -14,6 +15,10 @@
  *      下拉与刷新，因此「全屏看」不是另一套只读视图。
  *
  * 视图只渲染：正文 / 片段 / 会话列表 / 选中项都来自 controller（§17 UI 与逻辑分离）。
+ *
+ * 它住在 `studio/logs` 而不是某个屏的目录里：ComfyUI 的启动 / 关闭与启动日志从
+ * 设置页搬到侧栏那一页之后，这个部件就有了**两个屏**的消费者，留在任一侧都成
+ * 一条「共用部件 → 某个屏」的反向依赖。
  */
 
 import { useRef, useState, type ReactNode } from "react";
@@ -27,8 +32,8 @@ import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
 import { cn } from "~/lib/utils";
 
-import type { RuntimeLogController } from "../hooks/use-runtime-log-source";
-import { AnsiLogText } from "./SettingsPrimitives";
+import { AnsiLogText } from "./AnsiLogText";
+import type { RuntimeLogController } from "./use-runtime-log-source";
 
 export interface RuntimeLogBoxProps {
   /** 日志文件名（标题里显示，如 `comfyui-runtime.log`）。 */

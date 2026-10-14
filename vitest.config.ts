@@ -49,6 +49,8 @@ const DOM_TEST_GLOBS = [
   "src/components/studio/project-canvas/CanvasNode/hooks/**/*.test.{ts,tsx}",
   "src/components/studio/project-canvas/hooks/**/*.test.{ts,tsx}",
   "src/components/studio/project-home/**/*.test.{ts,tsx}",
+  "src/components/studio/comfyui/**/*.test.{ts,tsx}",
+  "src/components/studio/logs/**/*.test.{ts,tsx}",
   "src/components/studio/queue/hooks/**/*.test.{ts,tsx}",
   "src/components/studio/workflow-editor/hooks/**/*.test.{ts,tsx}",
   "src/components/studio/workflow-form/DynamicWorkflowForm/**/*.test.{ts,tsx}",

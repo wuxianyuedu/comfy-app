@@ -62,6 +62,9 @@ export default function WorkspacePage() {
   // 原先是 workspace 内的一层全屏浮层：它会盖住页签条，且「当前在设置里」这件事
   // 只存在于一个布尔值里 —— 既没有页签，也不能同时开着别处。
   const openSettings = useCallback(() => navigateTo("settings"), [navigateTo]);
+  /* 队列屏离线时的出口：送到侧栏「ComfyUI」页（启动 / 关闭与运行状态都在那里，
+   * ISSUE #1900）—— 不再送设置页，那一页只管路径。 */
+  const openComfyui = useCallback(() => navigateTo("comfyui"), [navigateTo]);
 
   // ── 画布：为 true 时，画布打开一个全新的命名项目
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
@@ -301,7 +304,7 @@ export default function WorkspacePage() {
             onNavigate={handleNavSelect}
             onHomeNavigate={handleHomeNavigate}
             onShowAllProjects={handleShowAllProjects}
-            onOpenSettings={openSettings}
+            onOpenComfyui={openComfyui}
             onUseWorkflow={handleUseWorkflow}
             canvasSeedNew={canvasSeedNew}
             onConsumeCanvasSeed={() => setCanvasSeedNew(false)}

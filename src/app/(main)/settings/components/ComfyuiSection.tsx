@@ -1,48 +1,30 @@
 "use client";
 
 /**
- * 创作后端（ComfyUI）分区（规范 17 §17.2 第③层）。
+ * 创作后端（ComfyUI）分区（规范 17 §17.2 第③层）—— **只配置路径**。
  *
- * 路径 / 端口 / 启动参数 / 自动拉起等配置与「启动 / 停止 / 打开」动作都来自
- * controller；安装形态（桌面版 / 便携版 / venv）是从 `comfyStatus` 派生的展示
- * 判据，也在 controller。视图自持的仅启动日志的滚动跟随（纯视觉偏好）。
+ * 自 ISSUE #1900 起这一分区只答一件事：ComfyUI 装在哪、用什么解释器提交、
+ * 端口与启动参数是什么、要不要自动拉起。**启动 / 关闭 / 打开与启动日志整块
+ * 搬去了侧栏「ComfyUI」页**（`~/components/studio/comfyui`）—— 两件事各有
+ * 自己的屏之后，改路径的人不必先等一遍秒级运行态探测，看日志的人不必滚过
+ * 一屏输入框。
+ *
+ * 因此本分区不再持任何运行态：controller 只给配置草稿与两份只读派生
+ *（安装形态 / 桌面实例的存储目录）。
  */
 
-import { StatusDot, type StatusDotState } from "~/components/ui/status-dot";
-import { Checkbox } from "~/components/ui/checkbox";
+import { ArrowRight } from "lucide-react";
 
-import {
-  STATUS_ACTIONS_CLASS,
-  STATUS_ROW_CLASS,
-  STATUS_TEXT_CLASS,
-} from "../settings-status-row-config";
+import { emitAppEvent } from "~/lib/app-events";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Button } from "~/components/ui/button";
+import { StatusButton } from "~/components/ui/service-status-row";
 
 import { SettingsCard } from "~/components/ui/settings-card";
-import { StatusButton, Field } from "./SettingsPrimitives";
+import { Field } from "./SettingsPrimitives";
 import { FieldLabel } from "~/components/ui/field";
-import { RuntimeLogBox } from "./RuntimeLogBox";
 import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
-
-/**
- * ComfyUI 运行状态 → 圆点语义（纯派生，无 React 状态）。
- *
- * 顺序是载荷：**「过渡态」优先于「探测中」**，因为启动/关闭过程中状态查询
- * 也会返回 probing 类似的形态；先把过渡态认下，圆点才不会是「未运行」的红。
- */
-function comfyDotState(c: ReadySettingsPageController): StatusDotState {
-  if (c.comfyStatus?.up) return "up";
-  if (
-    c.comfyStopping ||
-    c.comfyStatus?.stopping ||
-    c.comfyStarting ||
-    c.comfyStatus?.starting
-  ) {
-    return "busy";
-  }
-  if (c.comfyStatus?.probing) return "probing";
-  return "down";
-}
 
 /** 安装形态 → 设置页徽标文案。 */
 const INSTANCE_KIND_LABEL: Record<
@@ -75,8 +57,8 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         python_embeded / standalone-env / .venv
         解释器，多个环境并存时优先选用装了依赖（torch）的那个。
         {c.comfyInstance?.pathConfigured
-          ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
-          : "未配置——ComfyUI 未运行时任务会失败。"}
+          ? "已配置——这里只管路径；启动 / 关闭与启动日志在侧栏「ComfyUI」页。"
+          : "未配置——ComfyUI 未运行时任务会失败，侧栏「ComfyUI」页也启动不了它。"}
       </p>
       <Field
         label="comfy-cli 解释器（Python 绝对路径）"
@@ -177,114 +159,27 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         更新前内容不会变。开：进详情即把磁盘最新内容同步回库（相当于自动点一次「同步」）。
         仅对「绑定到本地文件」的工作流生效。
       </p>
-      <div
-        className={`border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-      >
-        <StatusDot state={comfyDotState(c)} />
-        <span
-          className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
-          title={
-            c.comfyStatus?.up
-              ? `ComfyUI 运行中${c.comfyStatus.base ? `（${c.comfyStatus.base}）` : ""}${
-                  c.comfyStatus.via ? `·${c.comfyStatus.via}` : ""
-                }`
-              : undefined
+      {/* 运行态与启动日志**不在这里**了：这一段此前是一整块「状态圆点 + 四颗
+          按钮 + 日志框」，它让「改路径」这件小事要穿过一屏运行操作。现在这里只
+          留一句指路 —— 它不是装饰，是这一分区撤掉四个动作之后**必须**给的出口
+          （用户按老位置找「启动 ComfyUI」时会先看到这句，而不是以为功能没了）。 */}
+      <div className="border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2">
+        <p className="text-ink-muted text-xs leading-relaxed">
+          路径配好并保存之后，到侧栏的「ComfyUI」页启动它 ——
+          那里有运行状态、启动 / 关闭、打开查看，以及每一次启动的日志。
+        </p>
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={() =>
+            emitAppEvent("workspace:navigate", { view: "comfyui" })
           }
+          className="border-border text-ink-muted hover:text-ink mt-2 h-auto gap-1 rounded-lg px-2.5 py-1"
         >
-          {c.comfyStatus?.up
-            ? `ComfyUI 运行中${c.comfyStatus.base ? `（${c.comfyStatus.base}）` : ""}${
-                c.comfyStatus.via ? `·${c.comfyStatus.via}` : ""
-              }`
-            : c.comfyStopping || c.comfyStatus?.stopping
-              ? "ComfyUI 关闭中…"
-              : c.comfyStarting || c.comfyStatus?.starting
-                ? "ComfyUI 正在启动…"
-                : c.comfyStatus?.probing
-                  ? "ComfyUI 状态检测中…"
-                  : "ComfyUI 未运行"}
-        </span>
-        <div className={STATUS_ACTIONS_CLASS}>
-          {/* 打开运行中的 ComfyUI 界面：桌面壳内在同一主窗口开一个「页签」
-              （iframe 内嵌）；浏览器/dev 模式同样落在应用内页签。
-              旁边的「在浏览器打开」是并列出口，不是替代（见该按钮注释）。 */}
-          <StatusButton
-            onClick={() => void c.openComfy()}
-            /* 「打开查看」是**看**，不是状态行这一态的主行动：它走软底，
-               主行动的实心档留给「启动 / 关闭」。 */
-            variant="primary"
-            /* 只在「明确未运行」时禁用：探测进行中（probing）也允许点一下，
-           openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */
-            disabled={
-              c.comfyOpening || (!c.comfyStatus?.up && !c.comfyStatus?.probing)
-            }
-          >
-            {c.comfyOpening ? "打开中…" : "打开查看"}
-          </StatusButton>
-          {/* 并列出口：同一个地址再交给系统默认浏览器（放大看 / 装插件 /
-              多屏）。页签内嵌照旧，这里不做替换。地址由服务端自己探
-              （comfyOpen），不采信界面里缓存的旧 base。禁用口径与
-              「打开查看」一致：只看「明确未运行」。 */}
-          <StatusButton
-            onClick={() => void c.openComfyInBrowser()}
-            variant="outline"
-            className="text-muted-foreground hover:text-ink"
-            disabled={
-              c.comfyBrowserOpening ||
-              (!c.comfyStatus?.up && !c.comfyStatus?.probing)
-            }
-          >
-            {c.comfyBrowserOpening ? "打开中…" : "在浏览器打开"}
-          </StatusButton>
-          {/* 「启动 / 关闭」是一组互斥的主行动：**当前这一态该按的那一颗**
-              才是实心（未运行时「启动」实心、运行时「关闭」实心），另一颗
-              此时本就被禁用。此前两颗都实心，一屏里两颗同款主按钮、用户
-              无从判断该点哪个。 */}
-          <StatusButton
-            onClick={() => void c.startComfy()}
-            variant={c.comfyStatus?.up ? "primary" : "primary-solid"}
-            disabled={
-              c.saving ||
-              c.comfyStarting ||
-              c.comfyStopping ||
-              !!c.comfyStatus?.stopping ||
-              !!c.comfyStatus?.starting ||
-              !!c.comfyStatus?.up
-            }
-          >
-            {c.comfyStarting || c.comfyStatus?.starting
-              ? "启动中…"
-              : "启动 ComfyUI"}
-          </StatusButton>
-          <StatusButton
-            onClick={() => void c.stopComfy()}
-            variant={c.comfyStatus?.up ? "primary-solid" : "primary"}
-            disabled={
-              c.saving ||
-              c.comfyStopping ||
-              !!c.comfyStatus?.stopping ||
-              !c.comfyStatus?.up
-            }
-          >
-            {c.comfyStopping || c.comfyStatus?.stopping
-              ? "关闭中…"
-              : "关闭 ComfyUI"}
-          </StatusButton>
-        </div>
+          去启动与查看日志
+          <ArrowRight data-icon="inline-end" className="size-3" aria-hidden />
+        </Button>
       </div>
-      {/* ComfyUI 启动日志：启动期间每秒跟随 log/services/comfyui-runtime.log，
-          让「正在启动…」不再是个黑盒（硬规则 4 的用户可见出口）。
-          右上角的下拉按「每次启动」切换（服务端按会话横幅切分），全屏按钮铺满
-          标题行下方的内容区 —— 多次启动不再混在一条时间线上。 */}
-      <RuntimeLogBox
-        fileName="comfyui-runtime.log"
-        log={c.comfyLog}
-        emptyHint={
-          <>
-            暂无日志 —— 点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
-            参数、模型加载与就绪状态）；也可点「刷新」查看最近一次运行日志。
-          </>
-        }
-      />
       <StatusButton
         onClick={() => void c.savePrefs()}
         variant="primary-solid"

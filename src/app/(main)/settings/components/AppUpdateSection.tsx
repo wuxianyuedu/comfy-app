@@ -12,7 +12,7 @@ import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 
 import { SettingsCard } from "~/components/ui/settings-card";
-import { StatusButton } from "./SettingsPrimitives";
+import { StatusButton } from "~/components/ui/service-status-row";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
@@ -63,7 +63,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             <StatusButton
               onClick={() => void c.checkAppUpdate()}
               /* 卡片的**主行动**：缺省档是软底，「保存 / 检测 / 立即备份」这一族
-                 显式提为实心（缺省不实心是有意的，见 SettingsPrimitives 注释）。 */
+                 显式提为实心（缺省不实心是有意的，见 service-status-row 的 StatusButton 注释）。 */
               variant="primary-solid"
               disabled={c.appUpdate.busy !== "idle"}
             >

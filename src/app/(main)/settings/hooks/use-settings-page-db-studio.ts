@@ -30,7 +30,7 @@ import type { ActionReport } from "~/lib/async-action";
 import {
   useRuntimeLogSource,
   type RuntimeLogController,
-} from "./use-runtime-log-source";
+} from "~/components/studio/logs/use-runtime-log-source";
 
 export interface DbStudioStatus {
   up: boolean;
