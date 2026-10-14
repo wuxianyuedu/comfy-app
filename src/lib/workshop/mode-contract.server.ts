@@ -22,8 +22,6 @@ import { errorText } from "~/lib/error-message";
 import { MODE_CONTRACTS_REL_PATH } from "./mode-contract-file";
 import { parseModeContracts, type ModeContract } from "./model-mode-contract";
 
-export { MODE_CONTRACTS_REL_PATH };
-
 /** 旧落点（`data/` 那条本机运行期目录）。只为「读过一次老配置」保留。 */
 const LEGACY_REL_PATH = path.join("data", "workshop-mode-contracts.json");
 
