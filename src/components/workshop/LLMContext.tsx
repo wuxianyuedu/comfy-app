@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
+import { SelectChip } from "~/components/ui/select-chip";
 
 interface LLMContextValue {
   config: LLMConfigView | null;
@@ -252,39 +253,36 @@ function LLMSettingsModal({
           {/* 提供方切换：本地 / 远程的启用从设置页挪到运行界面（与选模型同处） */}
           {/* 提供方是**二选一按钮组**而不是单个控件：标签行只作小标题。 */}
           <FormField label="提供方" className="mb-3">
-            <div className="grid grid-cols-2 gap-2">
-              {(["local", "remote"] as const).map((p) => {
-                const active = provider === p;
-                return (
-                  <Button
-                    key={p}
-                    variant="outline"
-                    onClick={() => setDraftProvider(p)}
-                    className={`h-auto rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      active
-                        ? "border-primary text-primary bg-primary/10"
-                        : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
-                    }`}
-                  >
-                    {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
-                  </Button>
-                );
-              })}
+            {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。 */}
+            <div role="radiogroup" aria-label="提供方" className="flex gap-2">
+              {(["local", "remote"] as const).map((p) => (
+                <SelectChip
+                  key={p}
+                  shape="segment"
+                  selected={provider === p}
+                  onClick={() => setDraftProvider(p)}
+                >
+                  {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                </SelectChip>
+              ))}
             </div>
           </FormField>
 
           {candidates.length > 0 ? (
-            <div className="flex flex-col gap-1.5">
+            /* 一列里选一个 —— 与上面那一排同一条单选契约（`radiogroup`），
+               只是排布成竖列（模型名长，横排会被截断）。 */
+            <div
+              role="radiogroup"
+              aria-label="选择模型"
+              className="flex flex-col gap-1.5"
+            >
               {candidates.map((name) => (
-                <Button
+                <SelectChip
                   key={name}
-                  variant="outline"
+                  shape="compact"
+                  selected={activeModel === name}
                   onClick={() => setDraftModel(name)}
-                  className={`flex h-auto w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal transition-colors ${
-                    activeModel === name
-                      ? "border-primary bg-primary-soft text-primary"
-                      : "border-border text-muted-foreground hover:bg-subtle"
-                  }`}
+                  className="w-full justify-start gap-2 px-3 py-2 text-left text-sm"
                 >
                   <span
                     className={`inline-block size-2 shrink-0 rounded-full ${
@@ -295,7 +293,7 @@ function LLMSettingsModal({
                   {provider === "local" && (
                     <span className="text-muted-foreground text-3xs">本地</span>
                   )}
-                </Button>
+                </SelectChip>
               ))}
             </div>
           ) : (
