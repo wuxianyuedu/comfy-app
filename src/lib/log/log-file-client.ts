@@ -186,7 +186,7 @@ export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
 }
 
 /* ── 应用运行日志写入（客户端 → 服务端）──────────────────────────────
- * `src/lib/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs），
+ * `src/lib/log/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs），
  * 客户端逻辑层（如设置页）需要把「静默失败」补记进 app-runtime.log 供日志
  * 面板轮询展示时，必须经 `POST /api/logs/app-runtime` 转交服务端写入，而非
  * 直接 import 该 Node 模块（否则 Turbopack 会把 node:fs 静态打进客户端

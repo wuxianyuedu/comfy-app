@@ -6,7 +6,7 @@
  * ① **内嵌能不能成**（ISSUE #310，原本唯一用途）：取决于**它自己**的响应头
  *    （未开 CORS 时对跨源请求返 403，开了才回 `Access-Control-Allow-Origin`）。
  *    这条行为无法在浏览器侧用 `route.fulfill` 伪造 —— 本应用是**服务端**探测的
- *    （`setting.comfyEmbeddable`，见 `src/lib/comfy-embed.ts`），必须真有一个
+ *    （`setting.comfyEmbeddable`，见 `src/lib/comfy/comfy-embed.ts`），必须真有一个
  *    「长得像 ComfyUI」的 HTTP 服务。
  * ② **出图能不能走完**（ISSUE #1621）：本应用的任务**只经 comfy-cli 执行**
  *    （`executor-cli.ts` 调 `python -m comfy_cli run …`），而收口那一刻会回来

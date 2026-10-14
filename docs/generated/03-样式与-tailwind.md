@@ -238,12 +238,12 @@ import { Home, Zap, FolderOpen, Search, X } from "lucide-react";
 **数据驱动的图标名**（API 返回字符串 key、配置项/数据模型选图标）走中央解析组件，不直接 import：
 
 ```tsx
-// ✅ 动态 key：中央 Icon 组件（src/components/ui/Icon.tsx，内部已带 aria-hidden）
+// ✅ 动态 key：中央 Icon 组件（src/components/ui/icon.tsx，内部已带 aria-hidden）
 import { Icon } from "@/components/ui/icon";
 <Icon name="plus" size={16} strokeWidth={2} />;
 ```
 
-新增图标时先在 `Icon.tsx` 的 lucide import 与 `ICON_MAP` 各加一行再使用；静态图标直接 import lucide，动态/可序列化 key 一律走 `<Icon name>`。
+新增图标时先在 `icon.tsx` 的 lucide import 与 `ICON_MAP` 各加一行再使用；静态图标直接 import lucide，动态/可序列化 key 一律走 `<Icon name>`。
 
 **例外**：项目品牌图标、复杂插画、需要精细控制的装饰性 SVG（如 Aurora 极光晕）可保留内联 SVG/组件。
 

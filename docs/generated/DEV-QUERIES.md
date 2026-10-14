@@ -43,14 +43,14 @@ grep -rn "AgentPanel" src --include="*.tsx" --include="*.ts" | grep -v "AgentPan
 
 2026-08-29 已完成主体迁移(127 处替换)。剩余 ~20 个文件的内联 `<svg>` 是规范豁免项(03 §3.4:非 24×24 viewBox、渐变/图表/特效、实心填充无对应变体、品牌图形),不要盲目替换。
 
-静态图标直接 import lucide;数据驱动/可序列化的 key 走中央组件 `<Icon name>`(`src/components/ui/Icon.tsx`,新图标先加 ICON_MAP)。
+静态图标直接 import lucide;数据驱动/可序列化的 key 走中央组件 `<Icon name>`(`src/components/ui/icon.tsx`,新图标先加 ICON_MAP)。
 
 ```bash
 # 回归监控:新增的内联 <svg> 清单(排除豁免文件后应保持为空增量)
 grep -rln "<svg" src --include="*.tsx"
 
 # 迁移前先确认图标是否已在中央映射里(走 Icon 组件时)
-grep -in "smile" src/components/ui/Icon.tsx
+grep -in "smile" src/components/ui/icon.tsx
 ```
 
 ## 5. Tailwind 检查
