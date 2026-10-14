@@ -435,6 +435,45 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
       expect(record({ exitCode: 0, dryRun: true })).toBe(false);
     }
   });
+
+  it("两档都不给**跑的不是整档**的一记（退 0 ≠ 整档绿；e2e 档实测被 `--help` 骗过一次）", () => {
+    /* 三档共用同一条形状判据（`freshness-ledger.mjs` 的 `isWholeTrackRun`）：
+     * `extra` 是按位置透传给底层命令的，所以 `--help` / `--list` 这类「打完字就退 0」
+     * 与「只跑一个子集」都可能满足旧的记账条件（退出码 0 且非 dry-run）。
+     * 这里逐档钉住，是因为这三份 `shouldRecord` 各自导出、各自被调用 ——
+     * 只修一档的话，另外两档的账照样能被一条参数骗出来。 */
+    for (const record of [suiteRecords, artifactRecords]) {
+      expect(record({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
+      expect(record({ exitCode: 0, dryRun: false, extra: ["--help"] })).toBe(
+        false,
+      );
+      expect(
+        record({ exitCode: 0, dryRun: false, extra: ["tests/x.test.ts"] }),
+      ).toBe(false);
+      /* 不带 `extra` 的旧形态保持原语义（默认整档）。 */
+      expect(record({ exitCode: 0, dryRun: false })).toBe(true);
+    }
+  });
+
+  it("「绿了但不记账」那一拍的话术三档共用一份 —— 不许拿红的话术打退 0", () => {
+    /* 接上形状判据之后多出来的一种形态：退出码 0，却因为透传了参数而不成账。
+     * 这一拍**不是红**，若继续走「✗ 未通过（退出码 0）」那句，输出自相矛盾 ——
+     * 下一个人会去查一条根本不存在的失败。所以它必须走 `notWholeTrackNotice`，
+     * 且那条分支要显式判「退出码 0」（否则红的形态会误用话术、把真红说成没跑整档）。 */
+    for (const rel of [
+      "scripts/e2e-run.mjs",
+      "scripts/full-suite-run.mjs",
+      "scripts/artifact-run.mjs",
+    ]) {
+      const text = readText(rel);
+      expect(text, `${rel} 没接上三档共用的话术`).toContain(
+        "notWholeTrackNotice",
+      );
+      expect(text, `${rel} 的话术分支没先判退出码 0`).toContain(
+        "exitCode === 0 && !shouldRecord(",
+      );
+    }
+  });
 });
 
 describe("墙钟预算：**测量没发生**与「判据红」必须分得开（ISSUE #1834）", () => {

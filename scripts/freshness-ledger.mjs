@@ -201,6 +201,51 @@ export function isUsableSkipReason(reason) {
   return !/^(稍后|待定|下次|回头|todo|tbd|na|n\/a)$/i.test(text);
 }
 
+/** 这一跑**是不是整档**——三档跑法（e2e / 全量单测 / 产物）共用的一条形状判据。
+ *
+ * 为什么需要它（实测踩到）：三档都支持把额外参数**透传**给底层命令，于是
+ * `node scripts/e2e-run.mjs --help` 会让 Playwright 打一段 usage 就**退 0** ——
+ * 而记账只看退出码的话，这一条 `--help` 就给「全量 e2e」买到了一整天的凭证。
+ * 同理 `--grep @critical`（只跑一档的子集）、`--list`（不执行）、
+ * 以及指到单个文件的过滤跑：它们退 0 只说明「那件较小的事成了」，
+ * 不构成「整档绿了」的事实。
+ *
+ * **账的价值全在它是事实**：`freshnessVerdict` 拿它替「今天有没有人自证过」作证，
+ * 所以任何「没跑整档却记上整档」的路径都必须堵在这里，而不是靠人事后心虚。
+ *
+ * @param {string[]} [extra] 将要透传给底层命令的参数（`--dry-run` 由调用方先摘掉）
+ * @returns {{ok: boolean, why: string | null}} `why` 给话术用，`ok` 给判决用
+ */
+export function isWholeTrackRun(extra = []) {
+  const passthrough = (Array.isArray(extra) ? extra : [])
+    .map((a) => String(a ?? "").trim())
+    .filter((a) => a !== "");
+  if (passthrough.length === 0) return { ok: true, why: null };
+  return {
+    ok: false,
+    why:
+      `本次透传了参数（${passthrough.join(" ")}）—— 跑的不是整档，` +
+      "拿不到整档的凭证（要记账就一次参数都不带地跑完它）",
+  };
+}
+
+/**
+ * 「退出码 0 但跑的不是整档」那一拍的话术 —— 三档共用一份，只差档名与记账入口。
+ *
+ * 为什么要单独一份而不是复用「✗ 未通过 … 不记账」那句：这一拍**不是红**。拿红的话术
+ * 打它，输出会自相矛盾（写着「未通过」、括号里却是退出码 0），而这三档各写一遍必然
+ * 分叉（§12.12），所以形状与措辞都留在这里。
+ *
+ * @param {{label: string, command: string, why: string | null}} input
+ * @returns {string} 一整段（以换行结尾），调用方只需再加 `[<runner>] ` 前缀
+ */
+export function notWholeTrackNotice({ label, command, why }) {
+  return (
+    `○ 这一跑退出码 0，但**不记账**：${why ?? "原因未记明"}。\n` +
+    `        要替「${label}」记一笔，就一次参数都不带地跑完它：${command}\n`
+  );
+}
+
 /**
  * 「同一个**日历日**」的判据 —— 「每天首次提交」按本地时区日界判，不按 24 小时窗口。
  *

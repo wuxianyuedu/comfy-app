@@ -63,6 +63,8 @@ import { resolveFakeComfyuiPort } from "../e2e/support/fake-comfyui-endpoint.mjs
 import {
   freshnessTrack,
   gitUser,
+  isWholeTrackRun,
+  notWholeTrackNotice,
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
@@ -183,11 +185,16 @@ export const COLD_COMPILE_WORKERS = 2;
 /**
  * 这一跑该不该记账 —— 抽成纯入口，好让「红了不记」这条边界能被真跑一次。
  *
- * @param {{exitCode: number, dryRun: boolean}} input
+ * 两个条件缺一不可：**绿** 且 **跑的是整档**。第二条是补上的（实测洞）：本档支持
+ * 透传参数，而 `--help` 会让 Playwright 打一段 usage 就退 0 —— 只看退出码时，
+ * 一条 `--help` 就能给「全量 e2e」买到一整天的凭证。形状判据与另两档共用一份
+ * （`freshness-ledger.mjs` 的 `isWholeTrackRun`，§12.12）。
+ *
+ * @param {{exitCode: number, dryRun: boolean, extra?: string[]}} input
  * @returns {boolean}
  */
-export function shouldRecord({ exitCode, dryRun }) {
-  return exitCode === 0 && !dryRun;
+export function shouldRecord({ exitCode, dryRun, extra = [] }) {
+  return exitCode === 0 && !dryRun && isWholeTrackRun(extra).ok;
 }
 
 /**
@@ -290,7 +297,22 @@ async function main(argv) {
     stdio: "inherit",
   });
   const exitCode = res.status ?? 1;
-  if (!shouldRecord({ exitCode, dryRun })) {
+  if (exitCode === 0 && !shouldRecord({ exitCode, dryRun, extra })) {
+    /* **绿了但不记账**：这一跑透传了参数（`--grep`、指到单个文件、甚至 `--help`），
+     * 跑的只是整档的一个子集或压根没跑用例。它退 0 是「那件较小的事成了」，
+     * 不是「全量 e2e 绿了」—— 混记会把账变成一句承诺，而这张账的价值全在它是事实。 */
+    const why = isWholeTrackRun(extra).why;
+    process.stderr.write(
+      `[e2e-run] ` +
+        notWholeTrackNotice({
+          label: "全量 e2e",
+          command: "pnpm test:e2e",
+          why,
+        }),
+    );
+    return 0;
+  }
+  if (!shouldRecord({ exitCode, dryRun, extra })) {
     process.stderr.write(
       `[e2e-run] ✗ 全量 e2e 未通过（退出码 ${res.status ?? "信号"}）—— **不记账**：\n` +
         "        这条账记的是「上一次真跑绿」，红着记一条「我跑过」会把两件事混成一件。\n" +
