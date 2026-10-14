@@ -151,6 +151,37 @@ describe("ConsolePresetList · 按分组折叠", () => {
     expect(panelOf(b!.items[0]!.id)?.hasAttribute("hidden")).toBe(true);
   });
 
+  it("`basis-full` 的面板必须配 `flex-wrap` 的行（ISSUE #1902）", () => {
+    renderList();
+    /* 这条是那次「组头被挤成一条竖线」的**类名侧**判据。
+     *
+     * 病因：`panelClassName` 给了 `basis-full`，而 Root 只有 `flex`、没有
+     * `flex-wrap`。`basis-full` 的语义依赖同一容器上有 `flex-wrap` —— 有它才是
+     * 「面板换到下一行」（向下展开），没有它就是「面板横着占满这一行」，于是
+     * 240px 的侧栏被面板吃掉、组名只剩几十像素按字竖排。
+     *
+     * 为什么类名判据也要留一条：宽度塌陷那件事只有真浏览器量得出来
+     * （`e2e/console-preset-layout.spec.ts`），但那条跑得慢、也不在单测档里，
+     * 而「两个类名有没有配对」在 jsdom 里就看得见 —— 它是**这条 bug 的最小
+     * 复现条件**，留着能在改这个文件时就近红。
+     *
+     * 不改基元（让 `Disclosure` 自己补 wrap）：`rootClassName` 是调用处的排布
+     * 决定，基元不替调用处猜「你要横向排还是换行排」。规范 16 §16.2.4.13 的
+     * 迁移口径本来就把这一对写在一起。 */
+    for (const group of CONSOLE_PRESETS) {
+      const trigger = groupTrigger(group.id);
+      const root = trigger.closest('[data-slot="disclosure"]');
+      const panel = panelOf(group.items[0]!.id)!;
+      const panelClass = panel.className;
+      if (panelClass.includes("basis-full")) {
+        expect(
+          root?.className,
+          `${group.id} 的面板用了 basis-full，Root 却没写 flex-wrap —— 面板会横着占满整行`,
+        ).toContain("flex-wrap");
+      }
+    }
+  });
+
   it("分组头上给出条数（折起时也知道这一组有几条）", () => {
     renderList();
     for (const group of CONSOLE_PRESETS) {

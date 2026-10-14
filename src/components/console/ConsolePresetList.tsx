@@ -92,8 +92,18 @@ export function ConsolePresetList({
              * 是 Root 的**并列**子元素，Root 不写 `flex` 它们就各自独占一行
              * （规范 16 §16.2.4.13 的迁移口径，与 `NodesTab` 的分组头同款）。
              * `className` 的宽档要与它配对（`w-auto flex-1`）—— 基元默认
-             * `w-full` 会把条数挤到下一行。面板若要独占一行配 `basis-full`。 */
-            rootClassName="flex items-center gap-2"
+             * `w-full` 会把条数挤到下一行。
+             *
+             * **`flex-wrap` 与 `basis-full` 是一对，缺了它就砸**（ISSUE #1902）：
+             * 面板的 `basis-full` 在**会换行**的行里等于「独占下一行」，
+             * 而不会换行的行里它等于「横着占满这一行」—— 于是它把 240px 的
+             * 侧栏几乎全吃掉，组名与分组说明只剩几十像素，中文按字竖排成一条
+             * 一条的（实测这里 7 组、每组头高 145~315px，整列滚动高度 1463px
+             * 对 698px 视口）。这是「面板要换行、行却不会换」的一处搭配错误，
+             * 不是样式细节：`basis-full` 的语义**依赖**同一容器上有 `flex-wrap`。
+             * 基元自己的用例（`ui/disclosure.test.tsx` 那条「面板不随内容收缩」）
+             * 用的正是 `flex flex-wrap` + `basis-full` 这对写法。 */
+            rootClassName="flex flex-wrap items-center gap-2"
             className="hover:text-ink w-auto flex-1 py-1"
             panelClassName="basis-full flex flex-col gap-0.5 pt-0.5"
             trigger={
