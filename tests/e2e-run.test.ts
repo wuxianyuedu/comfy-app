@@ -66,6 +66,40 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
     expect(shouldRecord({ exitCode: 0, dryRun: true })).toBe(false);
   });
 
+  it("绿了但**跑的不是整档**也不记 —— 一条 `--help` 曾买到过一天的自证", () => {
+    /* 这条是本档最坏的一种假：`extra` 按位置透传给 Playwright，而 `--help` / `--list`
+     * 打完字就**退 0** —— 只看退出码时记账条件全满足，账上留下一条「今天全量 e2e 绿了」，
+     * 而一次用例都没跑。实测本机就是这么写进去一条假绿的（`--help` 之后账面变成
+     * 当天、无 `skippedReason`），所以两个方向都要钉：
+     *   · 不带参数跑完整档且绿 ⇒ 记；
+     *   · 任何形式的子集 / 不执行 ⇒ 不记，哪怕退出码是 0。 */
+    expect(shouldRecord({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
+    expect(shouldRecord({ exitCode: 0, dryRun: false, extra: ["--help"] })).toBe(
+      false,
+    );
+    expect(
+      shouldRecord({
+        exitCode: 0,
+        dryRun: false,
+        extra: ["--grep", "@critical"],
+      }),
+    ).toBe(false);
+    expect(
+      shouldRecord({
+        exitCode: 0,
+        dryRun: false,
+        extra: ["e2e/queue-monitor.spec.ts"],
+      }),
+    ).toBe(false);
+    /* 既红又过滤：两个条件各拦各的，不许因为先撞上「红」就漏掉形状那一半。 */
+    expect(
+      shouldRecord({ exitCode: 1, dryRun: false, extra: ["--help"] }),
+    ).toBe(false);
+    /* 没给 `extra` 的旧调用形态（默认 `[]`）必须仍是「绿即记」—— 否则这条改动
+     * 会把 `tests/daily-tracks.test.ts` 里那两处同名断言一起改掉而没人发现。 */
+    expect(shouldRecord({ exitCode: 0, dryRun: false })).toBe(true);
+  });
+
   it("本次跑的是什么：一次 `playwright test`，且额外参数按位置透传", () => {
     expect(planRun().args).toEqual(["test"]);
     expect(planRun(["--grep", "@critical"]).args).toEqual([

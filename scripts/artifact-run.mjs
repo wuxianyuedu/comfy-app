@@ -37,6 +37,8 @@ import {
 import {
   freshnessTrack,
   gitUser,
+  isWholeTrackRun,
+  notWholeTrackNotice,
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
@@ -70,11 +72,14 @@ export function planRun(extra = []) {
 /**
  * 这一跑该不该记账 —— 抽成纯入口，好让「红了不记」这条边界能被真跑一次。
  *
- * @param {{exitCode: number, dryRun: boolean}} input
+ * 「绿」且「跑的是整档」才记：本档透传参数，退 0 只说明那件较小的事成了
+ * （形状判据三档共用一份，见 `freshness-ledger.mjs` 的 `isWholeTrackRun`）。
+ *
+ * @param {{exitCode: number, dryRun: boolean, extra?: string[]}} input
  * @returns {boolean}
  */
-export function shouldRecord({ exitCode, dryRun }) {
-  return exitCode === 0 && !dryRun;
+export function shouldRecord({ exitCode, dryRun, extra = [] }) {
+  return exitCode === 0 && !dryRun && isWholeTrackRun(extra).ok;
 }
 
 /**
@@ -139,7 +144,20 @@ function main(argv) {
     return 1;
   }
   const exitCode = res.status ?? 1;
-  if (!shouldRecord({ exitCode, dryRun })) {
+  if (exitCode === 0 && !shouldRecord({ exitCode, dryRun, extra })) {
+    /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个入口），跑的不是整档护栏。
+     * 下面那条「✗ 未通过（退出码 0）」是红的话术，拿它打这一拍会自相矛盾。 */
+    process.stderr.write(
+      `[artifact-run] ` +
+        notWholeTrackNotice({
+          label: "产物级护栏",
+          command: "pnpm build:tracked",
+          why: isWholeTrackRun(extra).why,
+        }),
+    );
+    return 0;
+  }
+  if (!shouldRecord({ exitCode, dryRun, extra })) {
     process.stderr.write(
       `[artifact-run] ✗ 产物级护栏未通过（退出码 ${res.status ?? "信号"}）—— **不记账**：\n` +
         "        这条账记的是「上一次真跑绿」，红着记一条「我跑过」会把两件事混成一件。\n" +

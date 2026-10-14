@@ -1,10 +1,9 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-14T07:02:02.966Z",
+    "verifiedAt": "2026-10-14T09:29:31.347Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
-    "trackedBy": "e2e",
-    "skippedReason": "本批改的是 CSS 的扫描输入面（globals.css 的 import 行 + @source 两棵根）+ 判据用例 + 文档。真流水线的 next build 已跑过并逐类核对：产物里活类全在，摘掉的 238 条全部是只有正文 / 账本 / 门禁脚本在拼写的类 —— 没有任何调用点，也就没有任何 e2e 断言能覆盖它们（grep 命中 0）。而本机 e2e 档今天的形态仍是 #1834 那格 win32 冷编译 + 8 worker 的 60s 首帧。全量单测档今天已跑绿记账（725 份文件 / 9110 条用例）。"
+    "trackedBy": "e2e"
   }
 }
