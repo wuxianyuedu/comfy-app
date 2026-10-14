@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-14T04:18:10.149Z",
+    "verifiedAt": "2026-10-14T04:40:20.847Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "今天全量档跑了三次（83c690ef / b179b669 两个 base 各一次，另一次在 #1890 之后）：9090/9121 通过，三次都只差同一份文件的同两条用例 —— src/app/(main)/settings/hooks/use-settings-page.test.ts 的 Ollama 轮询那两格。形状是负载型的：并发档下第一条报 Test timed out in 30000ms、第二条报 advanceTimers 时计时器已被收回（30s 预算与 fake timers 的 teardown 相撞）；同份文件 --no-file-parallelism 串行复跑 45 passed 两次。本批不改那份文件、也不改它的任何 import（改动面 = 文档正文 + 判据用例 + 3 处注释）。§11.13 的预算那一格是要单独收的债，不该由这条正文卫生的刀顺手抬超时。"
+    "skippedReason": "本批改动面 = docs/DESIGN.md + tests/design-md-contract-sync.test.ts + 一条碎片，零运行时。被改的那份判据单跑 21 passed，新加的词汇表判据另做三条变异复演（删一条在册值→红在未登记；加一条不在用的在册值→红在过期；把文档那行的值改成汉字→红在未记录）。全量档今天已经跑过三次（见第 9 刀那条账）：9090/9121，三次都只差 use-settings-page.test.ts 的同一对负载型用例（并发下 30s 预算与 fake timers teardown 相撞，串行复跑 45 passed）；本批不碰那份文件也不碰它的 import，不为它抬超时。"
   }
 }

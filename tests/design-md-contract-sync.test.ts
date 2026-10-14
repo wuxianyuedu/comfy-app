@@ -663,6 +663,111 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBeLessThanOrEqual(TEXT_BASELINE);
   });
 
+
+  /**
+   * 词汇表：住在 `@theme` 之外的每一枚字号，都要有一句「它是干什么的」。
+   *
+   * 判的是**形状**而不是处数（处数归上面那条 `TEXT_BASELINE` 棘轮）。理由是三处来路的机制
+   * 各不相同 —— 调用点的 arbitrary、`globals.css` 里 `@theme` 之外的裸声明、markdown 渲染器
+   * 拼的内联样式串 —— 而只有第一处被 Tailwind 的类名机制看得见。缺了这张表，第二、第三处
+   * 就是「文档里两句旧话 + 没人数的剩下十几处」；本文上一版正是那个形状（只记了两条来路、
+   * 三枚值）。
+   *
+   * ⚠️ 这里的键是**值的字面形式**（`"12.5"` 而不是任何完整类名）：本文件也在 Tailwind 的
+   * 扫描面里，写全一枚就多一条死规则（口径见 `tests/docs-candidate-hygiene.test.ts`）。
+   */
+  const OUT_OF_THEME_SIZES: Record<string, string> = {
+    "7.5": "uppercase 微标（workflow-library/SettingsParts）",
+    "8.5": "圆点徽标里的计数（rounded-full 那种窄胶囊）",
+    "9.5": "胶囊与角标内的文字（pick chip / owner tag / 参数注脚 / 错误列表的 mono 片段）",
+    "10": "markdown 行内 code（与 text-3xs 同值，但走的是内联串）",
+    "10.5": "markdown pre —— 全库唯一还在用 10.5px 的地方",
+    "11": "json-view 主题类与 markdown 的 h6 / table（11px 本身是 text-2xs 的档值）",
+    "11.5": "面板字段标签与次级说明行；同一枚值也是 cb-code-block 的密度",
+    "12": "markdown h5",
+    "12.5": "控制台与卡片的行密度（两处 pre 的等宽正文、表头行、面板条目标题）；同一枚值也是 markdown h4",
+    "13.5": "工坊步骤条的标题（与 size-9 序号圆同排）",
+    "14": "markdown h3",
+    "15": "面板 / 抽屉 / 日志框的区块标题（也用在 size-9 的序号圆里）",
+    "16": "markdown h2",
+    "17": "--text-stage 的字面量抄本（HomePage 的「最近项目」h2）—— 第 8 刀后拿不到类名，而 stage 不是 t-shirt 形状，所以对称判据按来源分治不收它",
+    "18": "markdown h1",
+    "28": "水填图的百分比读数（leading-none + tabular-nums，图形内的数字不是排版）",
+  };
+
+  it("住在 `@theme` 之外的字号是一张词汇表：新值要先登记角色", () => {
+    const MD_STYLES_PATH = fileURLToPath(
+      new URL("../src/lib/markdown/styles.ts", import.meta.url),
+    );
+    /** 值 → 出现的来路（报错时要能指出「是谁把它带进来的」）。 */
+    const inUse = new Map<string, Set<string>>();
+    const add = (value: string, source: string) => {
+      if (!inUse.has(value)) inUse.set(value, new Set());
+      inUse.get(value)!.add(source);
+    };
+
+    /* 来路 ①：调用点的 arbitrary 字面量 —— 与棘轮同一个面（产品文件、剥注释）。 */
+    for (const hit of scanProduct(TEXT_LITERAL))
+      add(hit.value, `调用点（如 ${hit.file}）`);
+    /* 来路 ②：globals.css 里 `@theme` 之外的裸 font-size 声明。
+     * `@theme` 里那些是 `--text-*: 11px`，不带 `font-size:` 这个属性名，所以这条匹配
+     * 天然只收声明侧 —— 不必再去切块。 */
+    const css = readFileSync(GLOBALS_PATH, "utf8");
+    for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g))
+      add(m[1]!, "globals.css 的裸声明");
+    /* 来路 ③：markdown 渲染器拼的内联样式串（既不是 token 也不是候选名）。 */
+    const mdStyles = stripComments(readFileSync(MD_STYLES_PATH, "utf8"));
+    for (const m of mdStyles.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g))
+      add(m[1]!, "markdown 渲染器的内联串");
+
+    expect(
+      inUse.size,
+      "三处来路一枚字号都没收到 —— 判据在空跑（匹配式或路径写漂了）",
+    ).toBeGreaterThanOrEqual(12);
+
+    const unregistered = [...inUse.keys()]
+      .filter((v) => !OUT_OF_THEME_SIZES[v])
+      .sort((a, b) => Number(a) - Number(b));
+    expect(
+      unregistered,
+      "这些字号活在 `@theme` 之外却没登记角色：" +
+        unregistered.map((v) => `${v}px ← ${[...inUse.get(v)!].join(" / ")}`).join("；") +
+        " —— 先在 tests/design-md-contract-sync.test.ts 的 OUT_OF_THEME_SIZES 里写清它是干什么的，" +
+        "再把它加进 docs/DESIGN.md §Typography「内容尺寸：住在 @theme 之外的那一片」那张表。",
+    ).toEqual([]);
+
+    const stale = Object.keys(OUT_OF_THEME_SIZES)
+      .filter((v) => !inUse.has(v))
+      .sort((a, b) => Number(a) - Number(b));
+    expect(
+      stale,
+      "这些登记过的值在三处来路里都已经不存在（还债把某一档并掉了？）—— 表里的行与 " +
+        "docs/DESIGN.md 那一节要一起删，留着就是文档在描述一个不存在的东西：" +
+        stale.map((v) => `${v}px`).join("、"),
+    ).toEqual([]);
+
+    /* 文档侧：每个在册且仍在用的值，都要在那一节里以「Npx」的字面形式出现一次。
+     * 按**词边界**匹配，别让 10px 靠 10.5px 那一行蒙过去（那是本仓判据反复栽过的子串坑）。 */
+    const start = doc.indexOf("### 内容尺寸：住在 `@theme` 之外");
+    expect(
+      start,
+      "docs/DESIGN.md 里找不到「内容尺寸：住在 @theme 之外的那一片」那一节 —— 词汇表的读者没了",
+    ).toBeGreaterThan(-1);
+    const section = doc.slice(start, doc.indexOf("## Layout", start));
+    const undocumented = [...inUse.keys()]
+      .sort((a, b) => Number(a) - Number(b))
+      .filter((v) => !new RegExp(`(^|[^\d.])${v.replace(".", "\.")}px`).test(section));
+    expect(
+      undocumented,
+      "这些字号在代码里用着、却没写进那一节（或写了但没有角色）：" +
+        undocumented.map((v) => `${v}px`).join("、"),
+    ).toEqual([]);
+    expect(
+      section.length,
+      "那一节短得不像一张表 —— 读者侧空了，上面三条判据就只剩代码侧自说自话",
+    ).toBeGreaterThan(1200);
+  });
+
   it("12px / 13px 只有一个名字：调用点不许再写字面量档", () => {
     /* 这一档不是棘轮、是**归零等式**：`text-xs`(12) 与 `text-sm`(14) 是已存在的两档，
        而 `text-[ 12px ]` / `text-[ 13px ]` 字号贴着它们、行高却各走一套（字面量只出字号，
