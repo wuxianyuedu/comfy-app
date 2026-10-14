@@ -19,6 +19,9 @@
  */
 
 import dynamic from "next/dynamic";
+import type { ComponentType } from "react";
+
+import { reloadOnceForChunkError } from "~/lib/shell/lazy-chunk-recovery";
 
 import {
   HomePage,
@@ -37,88 +40,103 @@ import type { ViewTab } from "./workspace-tabs";
 import type { WorkspaceView } from "./NavItems";
 import { ViewTabActiveProvider } from "./ViewActions";
 
+/**
+ * 懒加载视图的**统一出口**：所有 `next/dynamic` 声明都经它，好让「分块加载失败」
+ * 有唯一的自愈点（ISSUE #1900）。
+ *
+ * 为什么要收这一手：这一屏里十二份懒加载声明共用同一件事实 —— 页面首帧拿到的是
+ * 「该去哪个分块」的哈希，真正的 `import()` 在点开那一屏时才发出，而 dev server
+ * 重建之后那些哈希可能已指向被换掉的旧分块。撞上时整屏崩成「页面出错了」，
+ * 用户既不知道要刷新、也不觉得那是环境问题。修法见
+ * `~/lib/shell/lazy-chunk-recovery`（判定 + 本会话刷一次）；这里只负责把它接到
+ * **每一个** loader 上 —— 漏一个，那一屏就还是崩。
+ *
+ * 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，让它悬着比
+ * 立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）。没触发刷新
+ * （不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到 error boundary。
+ */
+function lazyView<P>(
+  loader: () => Promise<ComponentType<P>>,
+): ComponentType<P> {
+  return dynamic(
+    () =>
+      loader().catch((err: unknown) => {
+        /* 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，
+         * 让它悬着比立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）；
+         * 没触发刷新（不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到
+         * error boundary。 */
+        if (reloadOnceForChunkError(err)) return NEVER_SETTLES;
+        throw err;
+      }),
+    { ssr: false },
+  );
+}
+
+/** 一个永不 settle 的 promise（见 `lazyView` 里刷新的那一跳）。 */
+const NEVER_SETTLES = new Promise<never>(() => {
+  /* 故意不给 resolve / reject：页面正在被换掉，这个 promise 不该有任何结算。 */
+});
+
 /* ── 懒加载视图组件，好让初始包体保持小 ── */
 /* 只有 HomePage / AuroraBackground / VideoQueueModal（在页面侧）是即时加载的。 */
 /* 设置（与历史 / 队列 / 控制台同族，都是「项目无关的全局视图」）：只在进入该
  * 视图时才拉 —— 它带着全部配置查询与 Ollama 探测，不该摊到别的视图首屏。 */
-const SettingsView = dynamic(
-  () =>
-    import("~/components/settings/SettingsView").then((m) => m.SettingsView),
-  { ssr: false },
+const SettingsView = lazyView(() =>
+  import("~/components/settings/SettingsView").then((m) => m.SettingsView),
 );
 
 /* 模型适配 / 模式契约：与设置同一族（项目无关的全局配置视图）。 */
-const ModelAdaptersView = dynamic(
-  () =>
-    import("~/components/workshop/ModelAdaptersView").then(
-      (mod) => mod.ModelAdaptersView,
-    ),
-  { ssr: false },
+const ModelAdaptersView = lazyView(() =>
+  import("~/components/workshop/ModelAdaptersView").then(
+    (mod) => mod.ModelAdaptersView,
+  ),
 );
-const ModeContractView = dynamic(
-  () =>
-    import("~/components/workshop/mode-contract/ModeContractView").then(
-      (mod) => mod.ModeContractView,
-    ),
-  { ssr: false },
+const ModeContractView = lazyView(() =>
+  import("~/components/workshop/mode-contract/ModeContractView").then(
+    (mod) => mod.ModeContractView,
+  ),
 );
 
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
-const ResourceLibrary = dynamic(
-  () =>
-    import("~/components/studio/library/ResourceLibrary").then(
-      (mod) => mod.ResourceLibrary,
-    ),
-  { ssr: false },
+const ResourceLibrary = lazyView(() =>
+  import("~/components/studio/library/ResourceLibrary").then(
+    (mod) => mod.ResourceLibrary,
+  ),
 );
 
 /* 项目主页：进入项目后的落点。懒加载 —— 它与画布 / 工坊一样只在进项目后需要，
  * 放在应用首页的初始包里没有收益。 */
-const ProjectHomePage = dynamic(
-  () =>
-    import("~/components/studio/project-home").then(
-      (mod) => mod.ProjectHomePage,
-    ),
-  { ssr: false },
+const ProjectHomePage = lazyView(() =>
+  import("~/components/studio/project-home").then((mod) => mod.ProjectHomePage),
 );
 
 /* 队列与运行：与历史同族（都在看「机器现在在干什么」），只在进入该视图时才拉。 */
-const QueueMonitor = dynamic(
-  () =>
-    import("~/components/studio/queue/QueueMonitor").then(
-      (mod) => mod.QueueMonitor,
-    ),
-  { ssr: false },
+const QueueMonitor = lazyView(() =>
+  import("~/components/studio/queue/QueueMonitor").then(
+    (mod) => mod.QueueMonitor,
+  ),
 );
 
 /* ComfyUI 运行页（ISSUE #1900）：与历史 / 队列同族（「项目无关的全局视图」，
  * 都在看本机后端现在在干什么）。它带着状态查询的事件订阅与启动日志轮询，
  * 懒加载 —— 不该摊到别的视图首屏。 */
-const ComfyuiControl = dynamic(
-  () =>
-    import("~/components/studio/comfyui/ComfyuiControl").then(
-      (mod) => mod.ComfyuiControl,
-    ),
-  { ssr: false },
+const ComfyuiControl = lazyView(() =>
+  import("~/components/studio/comfyui/ComfyuiControl").then(
+    (mod) => mod.ComfyuiControl,
+  ),
 );
 
 /* 控制台（ISSUE #1327）：与历史 / 队列同族（都是「项目无关的全局视图」）。 */
-const ConsoleView = dynamic(
-  () => import("~/components/console/ConsoleView").then((m) => m.ConsoleView),
-  { ssr: false },
+const ConsoleView = lazyView(() =>
+  import("~/components/console/ConsoleView").then((m) => m.ConsoleView),
 );
 
 /* 客户端上懒加载更重的画布 / 影片编辑器（ReactFlow 等）。 */
-const FilmStudio = dynamic(
-  () => import("~/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
-  { ssr: false },
+const FilmStudio = lazyView(() =>
+  import("~/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
 );
-const ProjectCanvas = dynamic(
-  () =>
-    import("~/components/studio/ProjectCanvas").then(
-      (mod) => mod.ProjectCanvas,
-    ),
-  { ssr: false },
+const ProjectCanvas = lazyView(() =>
+  import("~/components/studio/ProjectCanvas").then((mod) => mod.ProjectCanvas),
 );
 
 /** 页面侧交给视图栈的全部接线 —— 每一屏要用什么都在这里，栈自己不取数。 */
