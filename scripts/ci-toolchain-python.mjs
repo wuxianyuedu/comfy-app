@@ -341,6 +341,7 @@ export function installPython({
         env,
         platform,
         findExe,
+        findExeUnder: findUnder,
         impl: installViaWinget,
         listDirs,
         existing,
@@ -370,12 +371,14 @@ export function installPython({
  *          env: Record<string, string | undefined>,
  *          platform: NodeJS.Platform,
  *          findExe: (env: Record<string, string | undefined>) => string | null,
+ *          findExeUnder: (root: string) => string | null,
  *          listDirs: (p: string) => string[],
  *          existing: (p: string) => boolean,
  *          impl: (input: {run: (cmd: string, args: string[]) => RunResult,
  *                          env: Record<string, string | undefined>,
  *                          platform: NodeJS.Platform,
  *                          findExe: (env: Record<string, string | undefined>) => string | null,
+ *                          findExeUnder: (root: string) => string | null,
  *                          listDirs: (p: string) => string[],
  *                          existing: (p: string) => boolean}) => {installed: boolean,
  *                                                            path: string | null,
@@ -386,11 +389,20 @@ function viaWinget({
   env,
   platform,
   findExe,
+  findExeUnder,
   impl,
   listDirs,
   existing,
 }) {
-  const r = impl({ run: runCmd, env, platform, findExe, listDirs, existing });
+  const r = impl({
+    run: runCmd,
+    env,
+    platform,
+    findExe,
+    findExeUnder,
+    listDirs,
+    existing,
+  });
   return {
     path: r.path,
     channel: "winget",
@@ -405,6 +417,7 @@ function viaWinget({
  * @param {{run: (cmd: string, args: string[]) => {ok: boolean, out: string},
  *          env: Record<string, string | undefined>,
  *          findExe: (env: Record<string, string | undefined>) => string | null,
+ *          findExeUnder: (root: string) => string | null,
  *          listDirs?: (p: string) => string[],
  *          existing?: (p: string) => boolean}} input
  * @returns {{installed: boolean, path: string | null, reason: string | null}}
@@ -413,6 +426,7 @@ function installViaWinget({
   run: runCmd,
   env,
   findExe,
+  findExeUnder,
   listDirs = listDirectories,
   existing = (/** @type {string} */ p) => fs.existsSync(p),
 }) {
@@ -468,7 +482,14 @@ function installViaWinget({
     const found =
       findExe(env) ??
       /* 机器级安装会把解释器放到 Program Files，而**这个进程的 PATH 是安装前的** ——
-       * 按安装根找不到时再按 winget 的链接目录找一次，别把刚装好的读成没装。 */
+       * 按安装根找不到时再按 winget 的链接目录找一次，别把刚装好的读成没装。
+       *
+       * ⚠️ **这一档走注入的 `findExeUnder`，不许直呼模块实现**：直呼等于在这条
+       * 路径上留了**第二个通到真 fs 的口** —— 前面刚补齐的两层接缝（`findExe` /
+       * `findExeUnder`）只堵住了各自的调用点，这一处漏掉的话，判据的结论仍然
+       * 取决于「跑判据那台机上碰巧有没有 Python」。实测复现：造一个 winget 链接
+       * 目录下**真有** `python.exe` 的形态，两个接缝**都**注入 `() => null` 之后
+       * 仍然是 `installed: true`（path 指向那个真文件）。 */
       findExeUnder(
         path.join(env.LOCALAPPDATA ?? "", "Microsoft", "WinGet", "Links"),
       );

@@ -24,6 +24,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -461,6 +462,32 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       },
     });
     expect(scopes).toEqual(["user", "machine"]);
+  });
+
+  it("winget 那条路**也**经过注入面：两个接缝都注入后，链接目录里真放着解释器也读不到", () => {
+    /* 这一格是「接缝齐了、但有一处直呼模块实现」的现场：`findExe`（扫全部安装根）
+     * 与 `findExeUnder`（某个 root 下）双层都已可注入，而 `winget` 分支在
+     * 「按 winget 链接目录再找一遍」那一档**直接调**了模块级的 `findExeUnder` ——
+     * 又是**第二个通到真 fs 的口**。实测复现（两个接缝都注入 `() => null`）：
+     * 链接目录下**真放**一个 `python.exe` 时，`installed` 仍然是 `true`，
+     * path 指向那个真文件 —— 判据的结论又变回取决于「跑判据的机器上碰巧有什么」。
+     *
+     * 用真文件而不是 mock `fs`：这一格判的正是「还有没有人去问真 fs」，
+     * mock 掉 fs 等于把判据自己关掉。 */
+    const localAppData = mkdtempSync(path.join(tmpdir(), "selfcheck-links-"));
+    try {
+      const links = path.join(localAppData, "Microsoft", "WinGet", "Links");
+      mkdirSync(links, { recursive: true });
+      writeFileSync(path.join(links, "python.exe"), "");
+      const r = installPython({
+        ...noExternalAction,
+        env: { LOCALAPPDATA: localAppData } as unknown as NodeJS.ProcessEnv,
+        run: () => ({ ok: true, out: "" }),
+      });
+      expect(r.installed).toBe(false);
+    } finally {
+      rmSync(localAppData, { recursive: true, force: true });
+    }
   });
 
   it("两条 scope 都试过仍拿不到解释器时，把「试过什么」写进 reason", () => {
