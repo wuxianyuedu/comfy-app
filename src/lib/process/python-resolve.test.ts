@@ -104,6 +104,42 @@ describe("resolvePython：在候选里挑出第一个真能跑的", () => {
     expect(hit?.args).toEqual(["-3"]);
   });
 
+  it("`py` 的**探测参数**也带 `-3`（不带的话 `py` 根本选不中，ISSUE #1961）", () => {
+    /* 这一格是上一版漏掉的：`resolvePython` 把 `probeArgs` 硬编码成 `["--version"]`，
+     * 于是 `whichCommand` 用**裸 `py --version`** 去判「这个候选可用吗」—— 而裸 `py`
+     * 是「列出已装版本」并退非零，`py` 当场被判成不可用、继续往后找，最后答「没有
+     * Python」。同一台节点上流水线的「工具链自证」用的是正确的 `py -3 --version`，
+     * 于是**两条探针在同一次构建里互相矛盾**（实测：自证 597ms 绿、E2E 前置
+     * 562ms 报 `PATH 上没有可用的 Python`）—— 与 #1959 第二轮「两处各判一次没有」
+     * 是同一个病。
+     *
+     * 上一版的用例为什么没照出来：那个探针只看**文件名**、把 `args` 整个丢掉了，
+     * 所以「选中了 py」这一条恒真。判据必须**记下真收到了什么参数**。 */
+    const dir = freshDir();
+    writeCandidate(path.join(dir, "py.EXE"));
+    /** 真收参数的那一档：只有拿到 `-3` 才算「这个候选可用」。 */
+    const seen: string[][] = [];
+    const hit = resolvePython({
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      platform: "win32",
+      probe: {
+        access: () => undefined,
+        spawn: (candidate, args) => {
+          if ((candidate.split(/[\\/]/).pop() ?? "") !== "py.EXE")
+            return "ENOEXEC";
+          seen.push(args);
+          // 只有带 `-3` 的探针才「起得来」—— 裸 `py` 的形态如实报非零。
+          return args.includes("-3") ? null : "ENOEXEC";
+        },
+      },
+    });
+    expect(
+      seen.some((args) => args.includes("-3")),
+      "`resolvePython` 探 `py` 时没带 `-3` —— 那等于用裸 `py` 判它可不可用，`py` 永远选不中",
+    ).toBe(true);
+    expect(hit?.command).toBe("py");
+  });
+
   it("在盘上但起不来的候选不算命中，继续往后找", () => {
     const dir = freshDir();
     // 形态正是 Microsoft Store 的占位别名 python.exe：文件在、起一次就退非零。

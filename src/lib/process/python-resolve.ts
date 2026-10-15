@@ -20,7 +20,7 @@ import {
   type UsabilityProbe,
   type WhichCommandOptions,
 } from "./executable-resolve.ts";
-import { pythonCandidates } from "./python-candidates.ts";
+import { pythonCandidates, pythonProbeArgs } from "./python-candidates.ts";
 
 /** 「先试哪个名字、`py` 要不要带 `-3`」的**一份**实现，供各宿主直接起进程。 */
 export interface PythonResolution {
@@ -63,7 +63,16 @@ export function resolvePython({
       env,
       platform,
       ...(probe ? { probe } : {}),
-      probeArgs: ["--version"],
+      /* **必须经 `pythonProbeArgs`，不能写裸的 `["--version"]`**：`py` 启动器上
+       * 裸 `py --version` 是「列出已装版本」并退非零 —— 那正是 `whichCommand`
+       * 会把它判成「不可用、继续往后找」的形态。硬编码的后果实测过（ISSUE #1961）：
+       * 同一台节点上自证那一步（用的是正确的 `py -3 --version`）判「有 Python」、
+       * 而这里判「没有」，两条探针在同一次构建里互相矛盾 —— 与 #1959 第二轮
+       * 「两处各探一次、各判一次没有」是同一个病。
+       *
+       * 下面 `return` 里那个 `args: ["-3"]` 只能管**选中之后怎么起它**，管不了
+       * 「选不选得中」：探针参数错了，`py` 在上一行就已经被跳过了。 */
+      probeArgs: pythonProbeArgs(name, ["--version"]),
     });
     if (found) {
       return {
