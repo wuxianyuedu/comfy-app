@@ -1,27 +1,38 @@
 /**
- * 平台侧自动触发的流水线配置**不得出现在仓库里**，且这条决策必须在规范里留痕。
+ * 平台侧自动触发的流水线配置：**要么没有，要么必须是「自托管 + 已登记」的那一份**。
  *
- * 动因（不是假想，是已经撞到的形态）：规范 §13.5.3 的结论是「本仓库用不起平台侧
- * 流水线（免费额度撑不起每次提交都跑），配置已删除」，§13.5.4 进一步写明**不要为它写
- * `.cnb.yml`** —— 但仓库根后来被重新加回过一份（ISSUE #1229 已删掉它并写明根因：顶层
- * 直接写 `stages:` / `jobs:`，没有分支键与事件键，而 CNB 的形态是 `分支: { 事件: [流水线] }`，
- * 于是匹配不到任何事件）。判据是构建历史：每一条事件的 `event` 都是
- * `issue.comment@npc` / `pull_request.comment@npc`，没有一次 `push` / `pull_request`。
- * 「有配置文件」与「配置在跑」是两件事，前者会被后来人读成后者 —— 那正是 §11.7 要避免的
- * 「绿灯变得不可信」。而这件事此前**只有文档口径、没有判据**：把配置加回仓库不会让任何
- * 现有门禁变红，本文件补的就是这一层。
+ * 这条判据经历过一次**决策反转**（ISSUE #623 → #1229 → #1959），反转的是结论、
+ * 不是「要不要有判据」这件事本身，所以本文件改名不改职责。
  *
- * 三条判据：
- *   1. **文件面**：仓库根不许存在任何自动触发型 CI 配置（按确切名字匹配，不用
- *      `*.yml` 通配 —— `pnpm-workspace.yaml` 会被通配误伤）；
- *   2. **反向锚点**：规范正文确实写着这条决策。所以判据是**一致性**而不是「禁止」：
- *      真要恢复平台侧，先改 §13.5.3 / §13.5.4 两节，改不动就说明还没想清楚；
- *   3. **不许登记成事实**：`scripts/doc-facts.cjs` 里 path 类事实的语义是「文档指向的
- *      文件必须存在」，登记一个刻意不存在的文件会让 `pnpm doc:check` 恒红。
+ * ── 三代形态（读这份文件前先看懂它为什么长这样）─────────────────────────
  *
- * 扫描面本身由「判据不是空转」那组用例复算：掏空清单或把匹配逻辑改坏时，前两条
- * 用例会一起变成恒绿，那是本文件最坏的失效形态。它守的是全库级不变量，因此登记在
- * `scripts/affected-tests.mjs` 的固定清单里，每次提交都跑。
+ * 1. **#623**：额度约束下删掉 `.cnb.yml`（160 核时/月，`cpus: 8` 一个月约二十次
+ *    PR 就吃光）→ 结论是「本仓不该有平台侧配置」；
+ * 2. **#1229**：一份新的 `.cnb.yml` 被加了回来，却因为顶层直接写 `stages:` /
+ *    `jobs:`（而非 CNB 的 `分支: { 事件: [流水线] }` 形态）**匹配不到任何事件**
+ *    —— 静默失效，比删掉还糟。于是本文件把「别再补回从不触发的 CI 配置」做成机器判据；
+ * 3. **#1959（当前）**：根组织接入了**自托管 Windows 构建节点**（标签 `win`）。
+ *    官方文档「限制」一节写明自托管 Runner **不参与核时计费**，于是 #623 的全部
+ *    推理（建立在计费上）**对这条件路径不再成立**，配置按完整流程回来了。
+ *
+ * ── 反转之后判据守什么（三类）─────────────────────────────────────────
+ *
+ * 反转不等于把守门拆掉 —— 恰恰因为 `.cnb.yml` 现在**真的在跑**，那份配置的形态
+ * 变成了一条需要被判据钉住的事实（写错了会静默失效或静默花回核时）：
+ *
+ * 1. **形态**：顶层必须是 `分支: { 事件: [流水线] }`（#1229 的根因）；
+ *    必须声明 `runner.namespace: group` + 非空 `tags`（漏掉 = 静默回落到计费的平台池）；
+ *    必须声明 `pull_request` 与 `push` 两个事件。
+ * 2. **反向注销**：`scripts/doc-facts.cjs` 现在**必须**把 `.cnb.yml` 登记成 path 类
+ *    事实（它真的存在了），而规范正文**必须**留下「为什么这次能回来」的锚点句 ——
+ *    缺了说明决策被悄悄推翻、文件面判据还没跟着变（与 #1229 那次同形，只是方向相反）。
+ * 3. **不许等于「平台侧没有兜底」的旧口径**：仓库里任何地方再写「本仓没有 CI」
+ *    都会与现状矛盾，所以那条旧锚点句必须已被改写（`scripts/check-doc-references.cjs`
+ *    与本文档引用判据各自覆盖一半，这里只钉住最容易被抄的一句）。
+ *
+ * 扫描面本身由「判据不是空转」那组用例复算：掏空清单或把匹配逻辑改坏时，
+ * 前面几条用例会一起变成恒绿，那是本文件最坏的失效形态。它守的是全库级不变量，
+ * 因此登记在 `scripts/affected-tests.mjs` 的固定清单里，每次提交都跑。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -32,8 +43,9 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 /**
  * 自动触发型 CI 配置的仓库相对路径（确切名字，文件形态）。
  *
- * 只收「平台一读就无条件跑」的那些；`.cnb.yml` 是本仓库的历史形态，其余是「顺手换个
- * 平台」的等价形态 —— 判据要拦的是**这件事**，不是某一个文件名。
+ * 只收「平台一读就无条件跑」的那些；`.cnb.yml` 是本仓库的当前形态，其余是
+ * 「顺手换个平台」的等价形态 —— 判据要拦的是**这件事**，不是某一个文件名。
+ * **本仓此刻允许存在的只有 `.cnb.yml` 一项**，多出来的任何一项仍是违规。
  */
 const CI_CONFIG_FILES = [
   ".cnb.yml",
@@ -47,6 +59,16 @@ const CI_CONFIG_FILES = [
 
 /** 目录形态的 CI 配置位。 */
 const CI_CONFIG_PATHS = [".github/workflows", ".buildkite/pipeline.yml"];
+
+/**
+ * 本仓当前**登记在册**的平台侧配置（其余任何 CI 形态都不许出现）。
+ *
+ * 收成具名常量而不是 `[0]` 下标：本文件在提交门槛的固定清单里、每次提交都跑，
+ * 而 `noUncheckedIndexedAccess` 下每个下标访问都是一次「可能 undefined」——
+ * 那会把「这份配置叫什么」这件事摊成满文件的可选链，反而看不出意图。
+ */
+const REGISTERED_CI_CONFIG = ".cnb.yml";
+const REGISTERED_CI_CONFIGS: readonly string[] = [REGISTERED_CI_CONFIG];
 
 const CI_NAMES = new Set([...CI_CONFIG_FILES, ...CI_CONFIG_PATHS]);
 
@@ -64,18 +86,79 @@ function repoTopLevel(): string[] {
   return [...top, ...nested];
 }
 
-/** 规范里必须留痕的口径；缺失 = 决策被悄悄推翻，而文件面判据还没跟着变。 */
+/**
+ * 平台侧配置的**形态契约** —— 每一条都是「写错了不报错、只是静默不干该干的事」
+ * 的那一类，所以必须由判据而不是由注释守。
+ *
+ * 以文本形态核对（不引 YAML 解析器：本文件在提交门槛的固定清单里，每次提交都跑，
+ * 加依赖的代价与收益不成比例；下面每条的匹配面都窄到不会误伤注释里的措辞）。
+ */
+const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
+  {
+    mustMatch: /^master:\s*$/m,
+    why: "顶层必须是「分支: { 事件: [流水线] }」形态（#1229 的根因是顶层直接写 stages:/jobs:，匹配不到任何事件）",
+  },
+  {
+    mustMatch: /namespace:\s*group\b/,
+    why: "必须声明 runner.namespace: group，否则会静默回落到计费的平台公共池",
+  },
+  {
+    mustMatch: /^\s*tags:\s*\n\s+-\s*\S+/m,
+    why: "必须声明非空 tags（「与」关系，每个 tag 都要出现在节点标签上）",
+  },
+  {
+    mustMatch: /^\s*pull_request:\s*$/m,
+    why: "必须挂 pull_request（质量门禁不合并就该拦住）",
+  },
+  {
+    mustMatch: /^\s*push:\s*$/m,
+    why: "必须挂 push（master 合并形态复核）",
+  },
+];
+
+/**
+ * **合并键解析**（`<<: *anchor`）：`runner` 挂在锚点里、由两个事件各引用一次。
+ *
+ * 这一层单独判，是因为上面那组文本判据**答不了它**：文本里有 `namespace: group`，
+ * 而 YAML 规范在 1.2 里把 `<<` 移出了核心（变成「可选类型」）——
+ * 一个**不认合并键**的解析器会把 `<<: *common` 静默丢掉，得到一份「有 runner 键的
+ * 文本、却解析不出 runner 的运行配置」。那正是本判据要拦的失效形态（配置看着对、
+ * 实际回落到计费的平台池），且它在文本层面完全看不出来。
+ *
+ * 判法：自己把那份文本解析一遍（带合并键语义），断言这**两条**流水线都真的解析出了
+ * `runner.namespace === "group"` 与非空 `tags`。不引第三方 YAML 解析器 ——
+ * 本文件在提交门槛的固定清单里，每次提交都跑，加依赖不划算；这里只需要回答
+ * 「锚点展开后那份配置里有没有 runner」这一个问题。
+ */
+export function resolveAnchoredRunner(
+  text: string,
+): Array<{ namespace?: string; tags?: string[] }> {
+  // 抽出 `.common` 锚点块里的 runner（缩进两层：`  runner:` 下跟两键）。
+  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S)/m.exec(text);
+  const body = anchor?.[1];
+  if (body === undefined) return [];
+  const runnerNS = /^\s+namespace:\s*(\S+)\s*$/m.exec(body);
+  const tagLines = body.match(/^\s+-\s*(\S+)\s*$/gm) ?? [];
+  return [
+    {
+      namespace: runnerNS?.[1],
+      tags: tagLines.map((l) => l.replace(/^\s*-\s*/, "").trim()),
+    },
+  ];
+}
+
+/** 规范里必须留痕的口径；缺失 = 决策被悄悄推翻、而文件面判据还没跟着变。 */
 const DOC_ANCHORS: Array<{ file: string; mustContain: string[] }> = [
   {
     file: "docs/standards/13-提交与-code-review.md",
     mustContain: [
-      "`.cnb.yml` 已删除，平台侧不跑任何流水线",
-      "不要为它写 `.cnb.yml`",
+      "`.cnb.yml` 重新启用（跑在根组织自托管节点上，不参与核时计费）",
+      "为什么这次不被 160 核时约束卡住",
     ],
   },
   {
     file: "docs/standards/11-测试与可观测性.md",
-    mustContain: ["质量门禁（平台侧**当前未启用**）"],
+    mustContain: ["质量门禁（平台侧**已重新启用**）"],
   },
 ];
 
@@ -90,13 +173,59 @@ export function missingAnchors(
   return needles.filter((needle) => !flat.includes(needle.replace(/\n/g, "")));
 }
 
-describe("平台侧自动触发的流水线配置不出现在仓库（§13.5.3 / §13.5.4）", () => {
-  it("仓库根没有自动触发型 CI 配置", () => {
+/**
+ * 读登记在册的平台侧配置原文。
+ *
+ * 它**不存在时直接抛**：本文件所有调用点都建立在「这份配置在」这个前提上，
+ * 回 `null` 只会把「文件没了」摊成每个调用点各自的一次 `!` 断言（那正是
+ * 让 `tsc` 与评审都看不出意图的写法）。抛出去的信息里带上文件名。
+ */
+function readRegisteredConfig(): string {
+  const rel = REGISTERED_CI_CONFIG;
+  const p = path.join(ROOT, rel);
+  if (!existsSync(p)) {
+    throw new Error(
+      `登记在册的平台侧配置不存在：${rel}（它缺席时这套判据全都无从谈起）`,
+    );
+  }
+  return readFileSync(p, "utf8");
+}
+
+describe("平台侧流水线配置：形态必须是「自托管 + 已登记」（§13.5.3 / §13.5.4）", () => {
+  it("仓库根只允许出现登记在册的那一份，别的 CI 形态一律不许", () => {
     const present = ciConfigsAmong(repoTopLevel());
-    expect(present).toEqual([]);
+    expect(present.filter((rel) => !REGISTERED_CI_CONFIGS.includes(rel))).toEqual(
+      [],
+    );
   });
 
-  it("规范正文确实写着这条决策（反向锚点）", () => {
+  it("登记在册的那一份必须满足形态契约（漏掉哪条都是静默失效）", () => {
+    const text = readRegisteredConfig();
+    const missing = CONFIG_SHAPE.filter((c) => !c.mustMatch.test(text));
+    expect(missing.map((c) => c.why)).toEqual([]);
+  });
+
+  it("runner 是**锚点展开后**真的落在流水线上的（文本里有 ≠ 解析得到）", () => {
+    const text = readRegisteredConfig();
+    const runners = resolveAnchoredRunner(text);
+    expect(
+      runners.length,
+      "没解析出 .common 锚点里的 runner —— 锚点被删了或换了形状",
+    ).toBe(1);
+    const runner = runners[0];
+    if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
+    expect(runner.namespace).toBe("group");
+    expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
+    // 两条流水线都必须引用那个锚点：只引用一条 = 另一条悄悄回落到平台池。
+    // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。
+    const refs = text.match(/^\s+-\s*<<:\s*\*\w+/gm) ?? [];
+    expect(
+      refs.length,
+      "锚点引用数与流水线数对不上（两个事件各要 <<: 一次）",
+    ).toBe(2);
+  });
+
+  it("规范正文确实写着这次的决策反转（反向锚点）", () => {
     const drifted: string[] = [];
     for (const { file, mustContain } of DOC_ANCHORS) {
       const missing = missingAnchors(file, mustContain);
@@ -106,19 +235,36 @@ describe("平台侧自动触发的流水线配置不出现在仓库（§13.5.3 /
     expect(drifted).toEqual([]);
   });
 
-  it("doc-facts 没把刻意不存在的 CI 配置登记成 path 类事实", () => {
+  it("doc-facts **必须**把 .cnb.yml 登记成 path 类事实（它真的存在了）", () => {
     const facts = readFileSync(
       path.join(ROOT, "scripts/doc-facts.cjs"),
       "utf8",
     );
-    // 只查事实表里的 `source:` 行；注释里叙述这段历史是有意为之。
+    /* `source:` 在文件里有两种排版（独占一行 / 跟在 `kind` 后面同一行），
+     * 所以扫的是「含 `source:` 的行」而不是「以 `source:` 开头的行」。 */
     const sourceLines = facts
       .split("\n")
-      .filter((line) => /^\s*source:/.test(line));
-    const ciSource = new RegExp(
-      CI_CONFIG_FILES.map((name) => name.replace(/[.]/g, "\\$&")).join("|"),
+      .filter((line) => /(^|[{,]\s*)source:\s*["']/.test(line));
+    // 先确认扫描面没跑偏（事实表里一定有 `source:` 行，否则下面的断言是空转）。
+    expect(sourceLines.length).toBeGreaterThan(0);
+    expect(
+      facts,
+      "scripts/doc-facts.cjs 里连事实表都没读出来，扫描面指错了地方",
+    ).toContain("kind:");
+    // path 类事实的语义是「文档指向的文件必须存在」——文件回来了，就该有登记。
+    const registered = sourceLines.some((line) =>
+      /source:\s*["']\.cnb\.yml["']/.test(line),
     );
-    const offenders = sourceLines.filter((line) => ciSource.test(line));
+    expect(
+      registered,
+      "scripts/doc-facts.cjs 没有把 .cnb.yml 登记成 path 类事实",
+    ).toBe(true);
+    // 反向：别的 CI 形态不许被登记（登记一个刻意不存在的文件会让 doc:check 恒红）。
+    const offenders = sourceLines.filter((line) =>
+      CI_CONFIG_FILES.filter((n) => n !== ".cnb.yml").some((n) =>
+        line.includes(n),
+      ),
+    );
     expect(offenders.map((line) => line.trim())).toEqual([]);
   });
 
@@ -140,10 +286,16 @@ describe("平台侧自动触发的流水线配置不出现在仓库（§13.5.3 /
     expect(missingAnchors("package.json", ["不可能出现的句子"])).toEqual([
       "不可能出现的句子",
     ]);
-    // ③ 扫描面清单本身不许被悄悄掏空 —— 掏空了上面两条用例就恒绿。
+    // ③ 形态契约真的会拒绝坏形态（#1229 那种顶层写 stages: 的）。
+    const bad = "stages:\n  - name: x\n    script: echo hi\n";
+    expect(CONFIG_SHAPE.filter((c) => c.mustMatch.test(bad)).length).toBe(0);
+    // ④ 扫描面清单本身不许被悄悄掏空 —— 掏空了上面几条用例就恒绿。
     expect(CI_CONFIG_FILES.length).toBeGreaterThanOrEqual(7);
     expect(CI_CONFIG_PATHS.length).toBeGreaterThanOrEqual(2);
     expect(DOC_ANCHORS.length).toBeGreaterThanOrEqual(2);
+    expect(CONFIG_SHAPE.length).toBeGreaterThanOrEqual(5);
+    // ⑤ 锚点解析器在锚点被删时要答「解析不出」，而不是给一个空壳蒙混过关。
+    expect(resolveAnchoredRunner("master:\n  push:\n    - x\n")).toEqual([]);
   });
 
   it("扫描面真的收到了仓库根（不是空数组假装通过）", () => {

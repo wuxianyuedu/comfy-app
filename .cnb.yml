@@ -1,0 +1,218 @@
+# CNB 云原生构建流水线 —— 跑在**根组织自托管 Windows 节点**上（ISSUE #1959）
+#
+# 这份配置是 ISSUE #623「平台侧用不起、配置删除」的**一次决策反转**，反转的
+# 依据是一条前提被推翻：自托管 Runner 走宿主机、不参与核时计费。官方文档
+# （docs.cnb.cool/zh/build/build-node.html「限制」一节）原文：
+#
+#   「自定义 Runner 默认不开启 Docker 能力，构建脚本直接运行在宿主机上，因此：
+#     runner.cpus 配置无效……不参与核时计费。」
+#
+# 而 #623 的全部推理都建立在计费上（160 核时/月 ÷ 8 核 = 一个月约二十次 PR）。
+# 计费项没了，那条结论对这条件路径不再成立。**但反转的不只是「能不能跑」**，
+# 还有下面这几条形态变化 —— 它们才是这份文件与旧版差别最大、也最容易踩的地方。
+#
+# ── 与旧版（Linux 平台池 + docker.image）的五条形态差异 ──────────────────
+#
+# 1. **没有 docker，工具链必须预装在宿主机上**。旧版靠 `docker.image: node:24`
+#    提供 Node，这条路在自托管上失效（`pipeline.docker.image` 不会生效）。
+#    因此本文件**不声明任何 docker / image / volumes**，而是把「宿主机该有什么」
+#    变成第一条流水线步骤去**验**（见下「工具链自证」）—— 环境要求写进配置里
+#    没人读，写成会红的断言才有人管。
+#
+# 2. **`runner.cpus` 无效，故不声明**。旧版写 `cpus: 8` 是为了「避免分配到的节点
+#    规格随扩缩容变化把耗时读成回归」，而自托管上整机资源直接可用、这个键被忽略；
+#    留着它只会让人以为核数被控制了。
+#
+# 3. **脚本语言是 PowerShell，不是 POSIX sh**。自托管 Windows 上 stage script
+#    默认走 PowerShell，旧的 `rm -rf` / `mkdir -p` / `diff -q` / `>/dev/null` 一律
+#    不成立（`rm` 是 Remove-Item 的别名，但没有 `-rf`；`mkdir -p` 会被当成字面参数）。
+#    本文件里凡涉及文件系统 / 分支流程的地方都写成 PowerShell 原生的样子。
+#
+# 4. **OverlayFS 不可用，秒级克隆降级为普通 git clone**。每一次构建都是全量 clone，
+#    这是这条件路径的固定成本，没有配置能省掉它。
+#
+# 5. **节点离线会静默改派**。文档原文：节点「离线、被临时禁用，或资源使用达到上限」
+#    时系统会自动尝试重新分配到其他可用节点，实在没有才失败。在自托管这一档上
+#    「其他可用节点」就是计费的平台池 —— 于是最坏情况是**悄悄花回核时**，而没有任何
+#    报错。诊断靠日志里那一行 `runner.namespace` / 实际标签，见 §13.5.3 的「怎么确认
+#    真的跑在自托管上」。
+#
+# ── 两条流水线：谁在什么事件上跑 ────────────────────────────────────────
+#
+#   质量门禁        pull_request（不合并就不该结束）
+#   master 合并复核  push（只复核「确实是 PR 合并进来的」，不重跑全套）
+#
+# push 不重跑全套的理由与旧版相同（合并提交由平台按**已验过的源分支 SHA** 生成、
+# 不引入新代码），但今天它不再是「省额度」，而是「省一遍没有新信息的运行时间」。
+#
+# ⚠️ **`&common` 锚点里刻意不含 stages**：`<<: *pipeline` 会把 stages 一起带过去，
+# 那正是「push 也跑整套门禁」的来源（详见 git 历史里 55bc9b36 的立案说明）。
+# 覆盖根键时锚点里的键会被整体替换，故每个事件都写出完整形态。
+
+.common: &common
+  runner:
+    # group = 当前仓库所属根组织下的自托管构建节点（不是平台公共池）。
+    # 漏掉这一行会退化成平台池 —— 那时核时重新开始计费，而配置看起来完全一样。
+    namespace: group
+    # 「与」关系：列出的每个 tag 都必须出现在节点标签上。当前节点声明的标签是 win。
+    tags:
+      - win
+  retries: 0
+  env:
+    # 与旧版对齐：构建机上没有真实密钥，用占位值过 src/env.js 的校验。
+    # BETTER_AUTH_SECRET 必须一并注入 —— SKIP_ENV_VALIDATION 只绕过 src/env.js，
+    # 绕过不了 better-auth 自己的生产校验（缺失 → 退回 DEFAULT_SECRET 抛错 →
+    # createTRPCContext() 抛错 → 所有 authedProcedure 全灭，设置页整页读不出来）。
+    # 该值只用于构建期冒烟，不参与任何真实部署。
+    SKIP_ENV_VALIDATION: "1"
+    BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+    # 避免 corepack 在非交互环境下为拉取 pnpm 版本而等待输入。
+    CI: "true"
+
+# 门禁清单：一条都不许丢（tests/cnb-pipeline-gates.test.ts 逐条核对）。
+.gates: &gates
+  # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
+  # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
+  # 后面每一步都会以看不懂的方式失败（`pnpm: not recognized`、corepack 拉版本超时），
+  # 排障成本远高于在这里花三秒正面回答。失败即非零退出 —— 它必须会红。
+  - name: 工具链自证
+    script: |
+      $ErrorActionPreference = "Stop"
+      Write-Host "== OS =="
+      cmd /c ver
+      Write-Host "== git =="
+      git -v
+      Write-Host "== node =="
+      node -v
+      # engines.node = ^22.22.2 || ^24.15.0 || >=26.0.0（与旧版同一口径）
+      Write-Host "== pnpm =="
+      pnpm -v
+
+  # ── 安装 ──
+  # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。
+  # --frozen-lockfile 保证装的就是锁文件里的版本。
+  # 刻意**不**开 corepack enable：自托管宿主机上 pnpm 是预装的，corepack 在
+  # 非交互环境里为解析 packageManager 去拉版本会挂住；裸 `pnpm -v` 的上一步
+  # 已经证明它可用。
+  - name: Install dependencies
+    script: |
+      $ErrorActionPreference = "Stop"
+      pnpm install --frozen-lockfile
+
+  # ── 分支保护 ──
+  # 守在最前：分支不对时后续检查的结果最后都会被丢弃（与 pre-commit 同序）。
+  # 与 .githooks/pre-commit 用的是**同一个** scripts/check-branch-guard.cjs，
+  # 不另写一份「CI 专用」的分支名判断（会漂移的判据只许定义一次）。
+  # --target master 由配置写死传入：判定要的是**分支名**，而流水线里的
+  # CNB_PULL_REQUEST_TARGET_SHA 是 sha —— 拿它当 branch 用会静默失效。
+  - name: 分支守卫
+    script: node scripts/check-branch-guard.cjs --pr-check --target master
+
+  # ── 建库 ──
+  # 走 scripts/db-push.mjs —— 它复核库里到底有没有表，失败即非零退出。
+  # 后面的 E2E 要真的读到库（见 e2e/smoke.spec.ts 的「数据库链路」一组），
+  # 故必须放在最前。
+  - name: 同步数据库表结构
+    script: node scripts/db-push.mjs
+
+  # ── 类型 / 静态检查 ──
+  - name: 类型检查
+    script: node_modules/.bin/tsc --noEmit
+
+  - name: ESLint 零警告
+    script: node_modules/.bin/eslint . --max-warnings 0
+
+  # ── 测试 ──
+  # 全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
+  # 判据强度不变，阈值仍由 vitest.config.ts 的目录阈值守着）。
+  - name: 单元测试
+    script: node_modules/.bin/vitest run --coverage
+
+  # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
+  - name: 标题行让位
+    script: node scripts/check-title-bar-clearance.cjs
+
+  - name: 文件结构硬规则
+    script: node scripts/check-file-structure.cjs
+
+  - name: 跨平台动作对照
+    script: node scripts/check-ps1-consistency.mjs
+
+  - name: import 别名统一
+    script: node scripts/check-import-alias.cjs
+
+  - name: ComfyUI 端口口径
+    script: node scripts/check-comfyui-port-contract.cjs
+
+  - name: 内联样式注入
+    script: node scripts/check-inline-style.cjs
+
+  - name: 跨文件重复块
+    script: node scripts/check-code-duplication.cjs
+
+  - name: 函数长度 TS
+    script: node scripts/check-function-length.cjs
+
+  - name: 函数长度 Rust
+    script: node scripts/check-rust-function-length.cjs
+
+  - name: 模块循环依赖
+    script: node scripts/check-circular-deps.cjs
+
+  - name: 端口推导跨语言一致性
+    script: node scripts/check-app-port-vectors.cjs
+
+  - name: CHANGELOG 碎片
+    script: node scripts/check-changelog-fragments.cjs
+
+  - name: 主题色扫描
+    script: node scripts/check-theme-colors.cjs
+
+  - name: UI/逻辑分离
+    script: node scripts/check-ui-logic-separation.cjs
+
+  - name: lib Node-only 声明
+    script: node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
+
+  - name: prettier 格式
+    script: node scripts/check-format.cjs
+
+  - name: 格式化提交分离
+    script: node scripts/check-reformat-only.cjs
+
+  - name: core 骨架单一事实源
+    script: node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+
+  - name: 零消费导出
+    script: node scripts/check-dead-exports.cjs
+
+  - name: core 出口纪律与基类纯度
+    script: node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+
+  # ── 构建与产物 ──
+  # `pnpm build` 内部已经串了 next build → 剥私有输入 → 数产物 → 冒烟，
+  # 不再另拼一遍（与 §13.5.3 那张表里记的同一入口）。
+  - name: 生产构建
+    script: pnpm run build
+
+  # ── E2E（仅 @critical 关键流程）──
+  - name: E2E 关键流程
+    script: node scripts/e2e-run.mjs --grep @critical
+
+master:
+  # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
+  pull_request:
+    - <<: *common
+      name: 质量门禁
+      stages: *gates
+
+  # 合并后的 push：不重跑全套。合并提交由平台按**已被门禁验过的源分支 SHA**
+  # 生成，不引入新代码；保留的这条是形态复核 —— 落到 master 的必须是 PR 合并
+  # 形态。若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了 PR
+  # 与门禁，那要拦下。
+  push:
+    - <<: *common
+      name: master 合并复核
+      stages:
+        - name: 合并形态复核
+          script: node scripts/check-branch-guard.cjs --merge-commit
