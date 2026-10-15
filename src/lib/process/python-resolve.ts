@@ -70,15 +70,15 @@ export function resolvePython({
        * 而这里判「没有」，两条探针在同一次构建里互相矛盾 —— 与 #1959 第二轮
        * 「两处各探一次、各判一次没有」是同一个病。
        *
-       * 下面 `return` 里那个 `args: ["-3"]` 只能管**选中之后怎么起它**，管不了
-       * 「选不选得中」：探针参数错了，`py` 在上一行就已经被跳过了。 */
+       * 本函数 `return` 的那个 `args`（同样走 `pythonProbeArgs`）只能管**选中之后
+       * 怎么起它**，管不了「选不选得中」：探针参数错了，`py` 在上一行就被跳过了。 */
       probeArgs: pythonProbeArgs(name, ["--version"]),
     });
     if (found) {
       return {
         command: name,
         path: found,
-        args: name === "py" ? ["-3"] : [],
+        args: pythonProbeArgs(name),
         tried,
       };
     }

@@ -41,7 +41,7 @@ export const PYTHON_PREFLIGHT_ENV_KEY = "E2E_PYTHON_PREFLIGHT";
  *   env?: Record<string, string | undefined>,
  *   platform?: NodeJS.Platform,
  *   resolve?: ((options: object) => {command: string, path: string, args: string[]} | null),
- *   which?: ((命令名: string, 选项: object) => string | null),
+ *   which?: ((命令名: string, 选项: { probeArgs?: string[], env?: Record<string, string | undefined>, platform?: NodeJS.Platform }) => string | null),
  * }} [options]
  * @returns {{verdict: "ready" | "missing", interpreter: string | null, detail: string}}
  */
@@ -65,8 +65,19 @@ export function checkPythonReady(options = {}) {
   /* 再问一次 PATH 要**绝对路径**：`resolvePython` 已经给了一个，但那一个是按「探针
    * 能起起来」选的；这里额外接受一个可注入的 `which`，好让「解析不到绝对路径」这一格
    * 在单测里能被钉住。解析不到时退回裸名字 —— 那总比没有强，也让话术里报的值与
-   * 应用真正拿到的一致（不编一条不存在的路径出来）。 */
-  const absolute = which(found.command, { env, platform }) ?? found.path;
+   * 应用真正拿到的一致（不编一条不存在的路径出来）。
+   *
+   * `probeArgs` **必须与 `resolvePython` 探它时同一组**（ISSUE #1961）：`py` 启动器
+   * 裸着跑退非零、只有 `py -3` 才是在选解释器。不给的话这里会按 `whichCommand` 的
+   * 缺省 `["--version"]` 重探一次 —— 命中的那台机靠 `whichCommand` 的记忆化（键
+   * 不含 `probeArgs`）碰巧读到上一条缓存才不出事，那是巧合不是判据。
+   * `found.args` 就是那组宿主参数（`py` 是 `-3`），补上 `--version` 即同形。 */
+  const absolute =
+    which(found.command, {
+      env,
+      platform,
+      probeArgs: [...(found.args ?? []), "--version"],
+    }) ?? found.path;
   const prefix = (found.args ?? []).join(" ");
   return {
     verdict: "ready",

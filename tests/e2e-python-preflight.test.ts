@@ -70,6 +70,24 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
     });
     expect(ready.interpreter).toBe(HIT.path);
   });
+
+  it("第二次问 PATH 时带上同一个 `-3`（`py` 裸着跑退非零）", () => {
+    /* 立案现场（ISSUE #1961）：`py` 的可用判据是 `py -3 --version`，裸 `py` 是
+     * 「列出已装版本」并退非零。第一处（`resolvePython`）修好而这里漏掉的话，
+     * 这第二次 `whichCommand` 会按缺省 `["--version"]` 重探 —— 那次能过全靠
+     * `whichCommand` 的记忆化键不含 `probeArgs`。判据不该建立在缓存顺序上。 */
+    const calls: Array<{ name: string; args: string[] }> = [];
+    const ready = checkPythonReady({
+      platform: "win32",
+      resolve: () => ({ command: "py", path: "C:\\Windows\\py.exe", args: ["-3"] }),
+      which: (name, options) => {
+        calls.push({ name, args: options?.probeArgs ?? [] });
+        return "C:\\Windows\\py.exe";
+      },
+    });
+    expect(ready.verdict).toBe("ready");
+    expect(calls).toEqual([{ name: "py", args: ["-3", "--version"] }]);
+  });
 });
 
 describe("e2e Python 前置：缺件时判红并给出出口", () => {
