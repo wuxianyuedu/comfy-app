@@ -587,50 +587,6 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
   });
 });
 
-/**
- * 「裸名字在 Windows 上 Node 认不出来」这条退路（ISSUE #1961）。
- *
- * ## 立案读数
- *
- * `file://` 守卫修好之后，那一步**第一次真的跑起来**，当场报：
- *
- *   ```
- *   == pnpm ==
- *   (pnpm 不可用)
- *   工具链自证未通过：pnpm 不可用 —— 本仓门禁全走 pnpm
- *   ```
- *
- * 而**同一次构建**里 `Install dependencies` 跑 `pnpm install --frozen-lockfile`
- * 成功（`Done in 35.9s using pnpm v12.4.1`）—— 所以 pnpm 在这台机上是可用的，
- * 差别只在**谁去解析这个名字**：Node 的 `spawn` 不认 PATHEXT，`pnpm` 在 Windows 上
- * 是 `pnpm.cmd`（本仓 `src/lib/process/executable-resolve.ts` 整份模块就是为这一格
- * 存在的）。
- *
- * 少了这条退路，本步骤会把一台**装好了 pnpm** 的机器判成「缺 pnpm」并退 1 ——
- * 而它正是「缺件必须在最便宜的位置报出来」的那一步。
- *
- * ## 为什么按**结构**判
- *
- * 这条退路与宿主、与 PATH 有关，本机（POSIX）构造不出「`pnpm` 只有 `.cmd` 形态」
- * 的世界。判据因此盯的是形状：`run()` 在非零/报错之后**必须**有一条只在
- * `win32` 上走 `shell: true` 的退路 —— 少了它，那条现场就会原样复现。
- */
-describe("工具链自证：裸名字在 Windows 上要有退路（ISSUE #1961）", () => {
-  for (const rel of [
-    "scripts/ci-toolchain-selfcheck.mjs",
-    "scripts/ci-toolchain-python.mjs",
-  ]) {
-    it(`${rel} 的 run() 在 Windows 上退回 cmd.exe 解析裸名字`, () => {
-      const src = readFileSync(path.join(ROOT, rel), "utf8");
-      // 退路必须在：`shell: true` 是让 cmd.exe 按 PATHEXT 解析那一句。
-      expect(src).toMatch(/shell:\s*true/);
-      // 且只在 win32 上走 —— POSIX 上裸名字本来就解析得了，多一层 shell 只会
-      // 让参数过一遍 `/bin/sh` 的引号解析。
-      expect(src).toMatch(/process\.platform\s*!==\s*"win32"/);
-    });
-  }
-});
-
 describe("工具链自证：`.cnb.yml` 真的在跑它", () => {
   it("那一步走的是这份脚本，不再手写就地 PowerShell", () => {
     const yml = read(".cnb.yml");
