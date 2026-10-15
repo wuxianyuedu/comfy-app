@@ -21,6 +21,8 @@
  * 落盘默认值，因此全新安装开箱可用。文件被 git 忽略（本机配置）。
  */
 
+import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
+
 export type AppSettings = {
   /**
    * ComfyUI 安装目录。
@@ -35,6 +37,15 @@ export type AppSettings = {
   comfyuiPath: string;
   /** 传给 ComfyUI main.py 的额外命令行参数（如 --input-directory ...）。 */
   comfyuiExtraArgs: string;
+  /**
+   * 出图进程的 CPU 占用档位（ISSUE #1959）。
+   *
+   * 出图是**可长跑的后台负载**，占满机器时用户手里的编辑器 / 浏览器 / 画布
+   * 拖拽都在抢同一批核。三档语义与平台手段见 `~/lib/comfyui/cpu-limit`。
+   * 留空（老设置文件里没有这个键）→ 桌面壳内默认 `yield`、浏览器形态默认
+   * `off`（那里没有「同一个窗口里干别的活」这回事）。
+   */
+  comfyuiCpuLimit?: CpuLimitMode;
   /**
    * 驱动 ComfyUI 的 **comfy-cli Python 解释器**（执行链用它跑 `-m comfy_cli run`）。
    *
@@ -99,6 +110,10 @@ export type AppSettings = {
 export const DEFAULTS: AppSettings = {
   comfyuiPath: process.env.COMFYUI_PATH ?? "",
   comfyuiExtraArgs: "",
+  /* 这里刻意**不写死**一个档位：默认值按「桌面壳 / 浏览器」分叉，判据在
+   * `~/lib/comfyui/cpu-limit` 的 `resolveCpuLimitMode`。写死一处会让
+   * 浏览器形态也跟着降速，而那里没有降速的理由。 */
+  comfyuiCpuLimit: undefined,
   // 环境变量只是这一项的**默认值**（与上面 comfyuiPath 同形）；设置页里填过的值优先。
   comfyCliPython: process.env.COMFY_CLI_PYTHON ?? "",
   comfyuiAutoStart: true,

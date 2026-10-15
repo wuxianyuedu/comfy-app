@@ -164,6 +164,17 @@ const PURE_NODE_HOSTS = [
   "src/lib/comfyui/status.ts",
   "src/lib/comfyui/lifecycle-launch.ts",
   "src/lib/process/process-launch.ts",
+  // `comfyui/cpu-limit-apply.ts`（ISSUE #1959）：把 CPU 档位施加到已拉起的
+  // ComfyUI 子进程上 —— 只有 `child_process.execFile` 一条 Node 内建 value
+  // import（调 `renice` / `taskset` / PowerShell 的 WMI 优先级），不引任何
+  // server-only 侧模块。形态与同目录的 `proc-detect.ts`（查进程表 / 监听端口）
+  // 逐字同族：都是「本机进程能力的薄封装」地基层，本就该被 Next server 与
+  // 未来的 `scripts/executor-host.mjs` 双宿主加载，所以按第三类登记 ——
+  // 加 `server-only` 会把「它属于执行链地基」这件事说反，且会让那条宿主路径
+  // 在加载它时直接 throw。
+  // 判据（档位 → 命令）在纯模块 `./cpu-limit`，它零 Node 内建 import，
+  // 按 scanner 视角是「无需声明的纯模块」，**刻意不登记在这里**。
+  "src/lib/comfyui/cpu-limit-apply.ts",
   // lifecycle.ts：P3 lib 层地基批·**最后一站**。comfyui 目录里最后一个还带
   // `import "server-only"` 的重模块。它自身只有一条 Node 内建 value import
   // （`fs`）+ 一条 type-only `import type { spawn } from "child_process"`
