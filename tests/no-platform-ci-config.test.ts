@@ -254,6 +254,70 @@ export function resolveAnchoredRunner(
   ];
 }
 
+/**
+ * `.cnb.yml` 的 stage 级 `timeout` 预算（stage 名 → 原文里的写法）。
+ *
+ * 为什么这件事必须有判据：`.cnb.yml` 里的**每一个 stage 默认都能跑满 2 小时**
+ * （平台默认 Job 上限），而自托管节点只有一台。实测（ISSUE #1961）同一台机上
+ * 三条流水线互相挤压时，`ESLint 零警告` 与 `单元测试` 各自挂到 **8640s（2h24m）**
+ * 才被掐断，留下的只有一句 `timeout of 8640000ms exceeded` —— **一条失败原因都
+ * 读不到**，人拿到的信息量是零，而成本是两小时机时。
+ *
+ * 所以「慢 stage 要有量级余量的预算」是一条真的会读错的约束（漏掉它，红法就从
+ * 「20 分钟拿到一句可读的超时」退化成「两小时后拿到一句看不懂的超时」），
+ * 且它是**增删 stage 时最容易忘**的那一条。
+ *
+ * 解析：只认 stage 列表项自己那一层（`  - name: X` 起、到下一个同级项为止），
+ * 因此 `env` 里的东西不会被误当成预算。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns stage 名 → timeout 写法（没写的不出现在结果里）
+ */
+export function stageTimeouts(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const lines = text.split("\n");
+  let current: string | null = null;
+  for (const raw of lines) {
+    // stage 列表项：恰好两空格缩进的 `- name: X`（`stages:` 的直接子项）。
+    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(raw);
+    if (item?.[1] !== undefined) {
+      current = item[1];
+      continue;
+    }
+    // 同级或更浅的键 = 这一项结束了（`env:`、顶层 `master:` 等）。
+    if (current !== null && /^\S/.test(raw)) current = null;
+    if (current === null) continue;
+    const t = /^\s{4}timeout:\s*(\S+)\s*$/.exec(raw);
+    if (t?.[1] !== undefined) out.set(current, t[1]);
+  }
+  return out;
+}
+
+/**
+ * `.cnb.yml` 的**流水线级 `lock`** 是否声明了 `cancel-in-progress: true`。
+ *
+ * 为什么这条也要判：自托管这一档是**一台**机器，而一次 PR 上连着推几个提交就会
+ * 起几条**全量**流水线，全落到同一台机上（实测 `cnb-jt3-1k5071kou` /
+ * `cnb-did-1k50659np` / `cnb-s61-1k50eo6p1` 三条并行，三条各自冻结）。
+ * `lock.cancel-in-progress` 是唯一能把这堆重复运行收成一条的开关，而它
+ * **漏掉时配置看起来与有它时一模一样** —— 典型的「写错了不报错」形态。
+ *
+ * 判法用锚点展开后的形态（与 `resolveAnchoredRunner` 同一层）：
+ * `.common` 锚点块里必须出现 `lock:` 与其下的 `cancel-in-progress: true`。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns 锚点块里有没有那两件
+ */
+export function hasPipelineLockCancelInProgress(text: string): boolean {
+  /* 收口到「下一个更浅缩进的键」或**文本末尾** —— 少了后半句，末尾没跟别的键的
+   * 夹具会解析不出来（真 `.cnb.yml` 里 `.common` 后面还有 `.gates`，看不出来）。 */
+  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
+  const body = anchor?.[1];
+  if (body === undefined) return false;
+  // `lock:` 块内出现 `cancel-in-progress: true`（同一块里的 `timeout`/`key` 不算）。
+  return /^\s+lock:\s*$[\s\S]*?^\s+cancel-in-progress:\s*true\s*$/m.test(body);
+}
+
 /** 规范里必须留痕的口径；缺失 = 决策被悄悄推翻、而文件面判据还没跟着变。 */
 const DOC_ANCHORS: Array<{ file: string; mustContain: string[] }> = [
   {
@@ -420,6 +484,47 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeLessThan(testAt);
   });
 
+  it("慢 stage 带着量级余量的 `timeout` 预算（不然卡死要等满 2h 才有人知道）", () => {
+    const timeouts = stageTimeouts(readRegisteredConfig());
+    /* 为什么是「点名这几个」而不是「所有 stage 都要有」：其余 stage 都是秒级
+     * （`node scripts/check-*.cjs` 一族），给它们加预算只是噪音；真正的成本
+     * 集中在下面这四个上，而它们恰好也是**实测挂过或最可能挂**的那几个。 */
+    const required = ["ESLint 零警告", "单元测试", "生产构建", "E2E 关键流程"];
+    const missing = required.filter((name) => !timeouts.has(name));
+    expect(
+      missing,
+      "这些 stage 没有 `timeout` 预算：平台默认 Job 上限是 2 小时，卡死时要等满才有人知道 " +
+        "（实测 cnb-jt3-1k5071kou 的 `ESLint 零警告` 与 cnb-did-1k50659np 的 `单元测试` " +
+        "各挂 8640s，只留下 `timeout of 8640000ms exceeded`）",
+    ).toEqual([]);
+    // 预算必须是**分钟量级**：写成 `2h` 等于没写（平台默认就是这个数）。
+    for (const name of required) {
+      const raw = timeouts.get(name) ?? "";
+      const m = /^(\d+)([smh])$/.exec(raw);
+      expect(m, `${name} 的 timeout 写法认不出：${raw}`).not.toBeNull();
+      if (!m) continue;
+      const minutes = Number(m[1]) * (m[2] === "h" ? 60 : m[2] === "s" ? 1 / 60 : 1);
+      expect(
+        minutes,
+        `${name} 的 timeout=${raw} 是小时量级 —— 那与平台默认的 2h 上限没有区别，` +
+          "起不到「卡死要早报」的作用",
+      ).toBeLessThanOrEqual(60);
+      expect(minutes, `${name} 的 timeout=${raw} 太紧（真跑得完的形态会被误杀）`).toBeGreaterThanOrEqual(
+        10,
+      );
+    }
+  });
+
+  it("流水线级 `lock` 声明了 `cancel-in-progress`（一台节点上别堆几条全量流水线）", () => {
+    expect(
+      hasPipelineLockCancelInProgress(readRegisteredConfig()),
+      "`.common` 锚点里没有 `lock.cancel-in-progress: true` —— 自托管只有一台节点，" +
+        "一次 PR 上连推几个提交就会把几条全量流水线堆到同一台机上互相挤压" +
+        "（实测 cnb-jt3-1k5071kou / cnb-did-1k50659np / cnb-s61-1k50eo6p1 三条一起冻结）。" +
+        "旧的那几条对应的是已被取代的修订号，它们的读数本来就没有意义",
+    ).toBe(true);
+  });
+
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
     // ① 匹配逻辑认得这批名字，且不误收别的。
     expect(
@@ -473,6 +578,37 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       badOrderParsed.indexOf("单元测试"),
     );
     expect(registeredGateOrder("master:\n  push:\n    - x\n")).toEqual([]);
+    /* ⑧ 预算与流水线锁两条判据都要能红：喂进不带 timeout 的 stage 块、
+     * 喂进不带 lock 的锚点，都必须答「没有」。 */
+    // 夹具按**真实缩进**写：`stages:` 的直接子项是 2 空格、键在 4 空格。
+    const noBudget =
+      "x:\n  stages:\n  - name: 单元测试\n    script: x\n";
+    expect(stageTimeouts(noBudget).has("单元测试")).toBe(false);
+    const withBudget =
+      "x:\n  stages:\n  - name: 单元测试\n    script: x\n    timeout: 45m\n";
+    expect(stageTimeouts(withBudget).get("单元测试")).toBe("45m");
+    // 同级下一项开始后，上一项的 timeout 不许被算到它头上。
+    expect(
+      stageTimeouts(
+        "x:\n  stages:\n  - name: a\n    timeout: 20m\n  - name: b\n    script: x\n",
+      ).has("b"),
+    ).toBe(false);
+    expect(
+      hasPipelineLockCancelInProgress(
+        ".common: &common\n  runner:\n    namespace: group\n",
+      ),
+    ).toBe(false);
+    expect(
+      hasPipelineLockCancelInProgress(
+        ".common: &common\n  lock:\n    cancel-in-progress: true\n  runner:\n    namespace: group\n",
+      ),
+    ).toBe(true);
+    // 只有 `lock:`、没有那一个键 ⇒ 仍判「没有」（漏掉它正是要拦的形态）。
+    expect(
+      hasPipelineLockCancelInProgress(
+        ".common: &common\n  lock:\n    key: something\n  runner:\n    namespace: group\n",
+      ),
+    ).toBe(false);
   });
 
   it("扫描面真的收到了仓库根（不是空数组假装通过）", () => {

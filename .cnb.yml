@@ -57,6 +57,25 @@
     # 「与」关系：列出的每个 tag 都必须出现在节点标签上。当前节点声明的标签是 win。
     tags:
       - win
+  # 同一分支上并发只留一条：**这条是节点侧的止血，不是省时间**。
+  #
+  # 实测（ISSUE #1961）自托管节点只有一台，而这一轮里连着推了好几个提交，每个
+  # `pull_request` 事件都起一条**全量**流水线，全落到同一台机上：
+  #
+  #   cnb-jt3-1k5071kou  ESLint 零警告  挂 8640s（同分支更早那跑 256s 跑过）
+  #   cnb-did-1k50659np  单元测试       挂 8640s（2h24m）
+  #   cnb-s61-1k50eo6p1  npc go         挂 start，整机不推进
+  #
+  # 几份 `--maxWorkers=4` 的 vitest + 几份 ESLint + 几份 `next build` 线性叠加，
+  # 这台 16 核机被吃干净，**最先被挤掉的恰好是排队早的那条**：它拿不到 CPU，
+  # 于是既不推进也不报错，直到撞上 2h 的 Job 上限。
+  #
+  # `cancel-in-progress: true` = 同 key 上新流水线到达时终止旧的。key 默认是
+  # `分支名-流水线名`，正是我们要的粒度：**同一分支**上只留最新的那一跑
+  # （旧的已经被新提交取代，它的读数本来就没有意义），不同分支之间互不影响。
+  # 这不是「跳过门禁」—— 被终止的那条对应的修订号已经不在分支上了。
+  lock:
+    cancel-in-progress: true
   retries: 0
   env:
     # 与旧版对齐：构建机上没有真实密钥，用占位值过 src/env.js 的校验。
@@ -179,6 +198,11 @@
 
   - name: ESLint 零警告
     script: node_modules/.bin/eslint . --max-warnings 0
+    # 实测 114s（本机 8 核）/ 256~274s（自托管节点）。而 `cnb-jt3-1k5071kou` 上它
+    # 挂到 **8640s**（2h24m）被 Job 上限掐掉 —— 那是节点被压死、这一步根本没在算。
+    # 给 20m 是「量级余量」：真跑得完的形态差两个数量级，而卡死的形态 20m 就能
+    # 报出来，不再白等两小时。**不是放宽判据**，判据本身一字未动。
+    timeout: 20m
 
   # ── 测试 ──
   # 全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
@@ -196,6 +220,11 @@
   # 「降负载的杠杆是并发，不是预算」）。代价是墙钟变长，这是这条路径上买得到的唯一交换。
   - name: 单元测试
     script: node_modules/.bin/vitest run --coverage --maxWorkers=4
+    # 实测 827s（`cnb-eus-1k5058g8l`，755 文件全量绿）；本机 `--maxWorkers=4` 实测
+    # 198s。而 `cnb-did-1k50659np` 上它挂到 **8640s**（2h24m）才被掐掉，留下的
+    # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
+    # 给 45m：真跑得完的形态差三倍余量，卡死的形态 45m 报出来。
+    timeout: 45m
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
   - name: 标题行让位
@@ -263,6 +292,10 @@
   # 不再另拼一遍（与 §13.5.3 那张表里记的同一入口）。
   - name: 生产构建
     script: pnpm run build
+    # 实测 118s（`cnb-eus-1k5058g8l`）。`pnpm run build` 内部串了
+    # `next build` → 剥私有输入 → 数产物 → 冒烟，给 30m 是因为 `next build` 在
+    # 冷节点上比实测读数慢得多，而不是因为它会挂。
+    timeout: 30m
 
   # ── E2E（仅 @critical 关键流程）──
   #
@@ -270,6 +303,10 @@
   # 本地 `pnpm test:e2e` 走 `scripts/e2e-run.mjs` 时的同一份判据），故这里不重判。
   - name: E2E 关键流程
     script: node scripts/e2e-run.mjs --grep @critical
+    # 这一档在自托管路径上**从来没有跑过**（前几跑都断在 `单元测试` 或 `生产构建`），
+    # 所以没有历史读数可依。它要起 `next start` + Playwright 浏览器、跑 `@critical`
+    # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
+    timeout: 30m
 
 master:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
