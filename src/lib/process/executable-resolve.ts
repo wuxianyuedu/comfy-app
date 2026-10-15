@@ -59,6 +59,40 @@ export interface UsabilityProbe {
  *  本来也不该被读成「命令不存在」。 */
 const USABILITY_PROBE_TIMEOUT_MS = 30_000;
 
+/** 「这一次没量到」的错误码 —— 它们说的是**机器当时的状态**，不是「这个命令不在」。 */
+const TRANSIENT_SPAWN_CODES: ReadonlySet<string> = new Set([
+  /* 撞上探针自己的 `timeout`（`spawnSync` 的 `error.code`）。 */
+  "ETIMEDOUT",
+  /* 资源类：探针那一刻起不了新进程（句柄 / 线程 / 内存被占满）。
+   * Windows 上还会以 `UNKNOWN` 的形态出现 —— libuv 认不出的错误码一律落到它。 */
+  "EAGAIN",
+  "EMFILE",
+  "ENFILE",
+  "ENOMEM",
+  "EBUSY",
+  "UNKNOWN",
+]);
+
+/**
+ * 这一次「起一次确认」的失败码算不算**结论**。
+ *
+ * 判据分两类（ISSUE #1961，`usableCommand` 里那一格）：
+ *   · **结论**（`ENOENT` / `EACCES` / `EINVAL` / `ENOEXEC` / …）—— 「起了一次、明确
+ *     失败」，说明这个候选**真的不可用**，该跳过；
+ *   · **没量到**（`TRANSIENT_SPAWN_CODES`）—— 机器当时起不来新进程。那不是这个命令
+ *     的属性，跳过它等于把「拿不到测量」读成「测量结果是它坏了」（§13.6.2 那条口径）。
+ *
+ * 为什么不能只判 `ETIMEDOUT` 一个：实测那台自托管节点上 `E2E 关键流程` 是**0.6 秒**
+ * 就报 null 的 —— 10s 的超时走不到 0.6s，所以那一次不是超时，而是资源类失败
+ * （满载节点上 `spawnSync` 直接给 `EAGAIN` / `UNKNOWN`）。两类都要按「没量到」办。
+ *
+ * @param {string | null} code `spawnSync` 给的错误码（`null` = 起得来）
+ * @returns {boolean} true = 这一次失败**不构成**「候选不可用」的结论
+ */
+function isTransientSpawnCode(code: string | null): boolean {
+  return code === null || TRANSIENT_SPAWN_CODES.has(code);
+}
+
 /** 默认探针：问这台真机器。 */
 const realUsabilityProbe: UsabilityProbe = {
   access: (candidate) => fs.accessSync(candidate, fs.constants.X_OK),
@@ -499,27 +533,29 @@ export function usableCommand(
     };
   }
   const code = probe.spawn(candidate, probeArgs);
-  /* **超时不等于「起不来」**（ISSUE #1961）。
+  /* **「没量到」不等于「起不来」**（ISSUE #1961）。
    *
-   * `spawnSync` 撞上自己的 `timeout` 时给的是 `error.code = "ETIMEDOUT"` —— 它是一个
-   * **非空**的 code，若照「非空即失败」读，这个候选会被跳过；候选全跳过 ⇒
-   * `whichCommand()` 返回 `null` ⇒ 上层读成「这个命令不存在」。而那是**假**的：
-   * 实测（`cnb-5fd-1k50s26f3`）同一次构建、同一台节点、同一个解释器，机器空着时
-   * `Python 可用性` / `Python 探针读数` 都答得出来（`ok python --version → 3.12.10`），
-   * 而排在 `单元测试`（723s）与 `生产构建` 之后的 `E2E 关键流程` 报
-   * 「PATH 上没有可用的 Python」—— 差别只有那一刻机器有多满。
+   * 照「非空 code 即失败」读的话，任何一次失败的起进程都会把这个候选跳过；候选全跳过
+   * ⇒ `whichCommand()` 返回 `null` ⇒ 上层读成「这个命令不存在」。而失败码里有一类说的
+   * 是**机器当时的状态**、不是这个命令的属性：撞上探针自己的 `timeout`（`ETIMEDOUT`），
+   * 以及满载节点上起不了新进程（`EAGAIN` / `EMFILE` / `ENOMEM` / … / libuv 认不出的
+   * `UNKNOWN`）。
    *
-   * 所以这一格按「拿不到测量 ≠ 测量结果是它坏了」办（同 AGENTS 里时间型判据在负载下
-   * 的处置口径）：**超时按可用返回**。代价是「真有挂死的命令」被当可用，而那个代价
-   * 远小于「一台满机上所有 `resolvePython` / `pnpmInvocation` 齐刷刷报不存在」——
-   * 后者会让人去装一个本就装好的东西，报错还完全指不到负载。
+   * 现场（`cnb-5fd-1k50s26f3`）：同一次构建、同一台节点、同一个解释器，机器空着时
+   * `Python 可用性` / `Python 探针读数` 都答得出来，而排在 `单元测试`（723s）与
+   * `生产构建` 之后的 `E2E 关键流程` **0.6 秒**就报「PATH 上没有可用的 Python」——
+   * 0.6s 走不到 10s 的超时，所以那一次是资源类失败，不是超时。两类都得按「没量到」办。
+   *
+   * 代价是「真有挂死的命令」被当可用，而那远小于「一台满机上所有 `resolvePython` /
+   * `pnpmInvocation` 齐刷刷报不存在」—— 后者会让人去装一个本就装好的东西，报错还
+   * 完全指不到负载（§13.6.2 那条「拿不到测量 ≠ 测量结果是红的」）。
    *
    * 其余 code（`ENOENT` / `EACCES` / `EINVAL` / `ENOEXEC`）照旧是结论：那是
    * 「起了一次、明确失败」，与「没来得及起」不是同一件事。
    *
    * 判据放这里而不是默认探针里：探针只负责**取事实**（libuv 给了什么 code），
    * 「这个 code 算不算不可用」是**判据**，对所有探针（含单测注入的那些）一视同仁。 */
-  if (!code || code === "ETIMEDOUT") {
+  if (isTransientSpawnCode(code)) {
     return { ok: true, command: candidate, prefixArgs: [], reason: null };
   }
 
