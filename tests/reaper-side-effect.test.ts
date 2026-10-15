@@ -14,11 +14,12 @@
  * 「模块自己有没有起」，现在问的是「两个宿主的启动点还在不在、有没有人偷偷多出
  * 第二处」。
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const REAPER_PATH = join(process.cwd(), "src", "lib", "comfyui", "reaper.ts");
+const ROOT = join(import.meta.dirname, "..");
+const REAPER_PATH = join(ROOT, "src", "lib", "comfyui", "reaper.ts");
 const ENQUEUE_PATH = join(process.cwd(), "src", "lib", "comfyui", "enqueue.ts");
 const INSTRUMENTATION_PATH = join(process.cwd(), "src", "instrumentation.ts");
 const HOST_PATH = join(process.cwd(), "scripts", "executor-host.mjs");
@@ -84,5 +85,70 @@ describe("ComfyUI reaper 启动路径（ADR §14 D3：宿主显式起、模块�
     // 首扫（Q2 对账）走 startReaper 内部的 sweepOnce：那里先过 isSchemaReady。
     // 裸调两条 sweeper 会在「表还没建」时抛错，正是硬规则 16 要挡的形态。
     expect(src).not.toMatch(/await reapStale(?:Queued|Running)Tasks\(\)/);
+  });
+
+  /**
+   * **起了就得收** —— 用例侧的对称义务（本护栏此前只钉住「谁起」，没钉住「谁收」）。
+   *
+   * `startReaper()` 的 handle 挂在 `globalThis` 上（HMR 单例），起了就活到整个
+   * worker 进程结束、每 `REAPER_MS` 真去查一次库。而 `vi.spyOn(taskRepository, …)`
+   * 断言「这一轮**不该**被调用」时，命中的可能是**上一条用例留下的那个实例**
+   * ——`vi.resetModules()` 换模块实例，换不掉已经跑起来的定时器。实测复现：
+   * 同文件里先跑起一个实例，后一条的 `not.toHaveBeenCalled()` 当场红成
+   * `called 1 times`；慢机 / 并行负载下它退化成 `Test timed out in 30000ms`
+   * （CI 读数就是这个），而真因与超时毫无关系。
+   *
+   * 判据的形式是「调用点与收尾点在**同一份文件**里」——按文件判而不是按调用点，
+   * 是因为收在哪一行属于实现自由；缺的是那一对**成对出现**这件事，而它此前靠人记得。
+   */
+  it("用例里 startReaper() 与 stopReaper() 成对出现（起了不收 = 跨用例泄漏）", () => {
+    /* 数之前先剥**注释与字符串字面量**：不带这一步，说明段落里正当出现的
+     * `startReaper()` 会被当成一次调用（实测：第一版把 `reaper.test.ts` 的文件头
+     * 与 `db-schema-ready.test.ts` 的收尾说明各数了一次；这一条判据自己的
+     * 报错文案里也写着同一个词，于是它把自己数成「起了没收」）。
+     * 剥字符串是必须的 —— 本判据的报错文案正是一个字符串字面量。 */
+    const strip = (src: string): string =>
+      src
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^[ \t]*\/\/.*$/gm, "")
+        .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+        .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+        .replace(/`(?:[^`\\]|\\.)*`/g, "``");
+    /* 两种真调用形态都算：成员调用（`m.startReaper()`）与解构后直呼
+     * （`const { stopReaper } = …; stopReaper()`）。注释里的同形文本靠上面
+     * `stripComments()` 挡掉 —— **不能**只认成员调用：解构那一形态正当存在，
+     * 漏掉它会把「已经收了」的用例报成没收（本判据第一版就是这样误报的）。 */
+    const count = (src: string, name: string): number =>
+      [
+        ...src.matchAll(
+          new RegExp(`(?:\\.\\s*|\\b)${name}\\(\\)`, "g"),
+        ),
+      ].length;
+
+    const files: string[] = [];
+    const stack = [join(ROOT, "src"), join(ROOT, "tests")];
+    while (stack.length) {
+      const dir = stack.pop()!;
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(full);
+          continue;
+        }
+        if (!/\.test\.tsx?$/.test(entry.name)) continue;
+        files.push(full);
+      }
+    }
+    const unbalanced = files.flatMap((full) => {
+      const code = strip(read(full));
+      const starts = count(code, "startReaper");
+      const stops = count(code, "stopReaper");
+      return starts > stops ? [`${full}（起 ${starts} / 收 ${stops}）`] : [];
+    });
+    expect(
+      unbalanced,
+      "这些用例起了 reaper 却没停：常驻定时器会活到 worker 结束，" +
+        "把下一条用例的「不该被调用」断言打红（真因看起来像超时）。加 `stopReaper()` 收尾",
+    ).toEqual([]);
   });
 });

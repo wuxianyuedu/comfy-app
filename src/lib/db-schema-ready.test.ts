@@ -186,6 +186,16 @@ describe("reaper 模块级副作用", () => {
   afterEach(async () => {
     cwd.restore();
     vi.unstubAllEnvs();
+    /* **必须收掉这一组起的常驻循环**：`startReaper()` 的 handle 挂在 `globalThis`
+     * 上（HMR 单例），一旦起了就活到整个 worker 进程结束，每 `REAPER_MS` 真去查一次库。
+     * 不收的后果不只是「多一个定时器」——`vi.spyOn(taskRepository, …)` 断言
+     * 「这一轮不许被调用」时，命中的会是一条**上一条用例留下的实例**
+     * （`vi.resetModules()` 换模块实例，换不掉已经跑起来的定时器）。实测复现：
+     * 同文件里先跑起一个实例，下面那条 `not.toHaveBeenCalled()` 当场红成
+     * `called 1 times`；而在慢机 / 并行负载下它退化成
+     * `Test timed out in 30000ms`（CI 读数就是这个），真因与超时毫无关系。 */
+    const { stopReaper } = await import("./comfyui/reaper");
+    stopReaper();
     /* 这一组真的打开了 `~/server/db` 的 libsql 连接（指向临时库）。不关的话
      * Windows 上文件句柄不释放，文件级 afterEach 的 `rmSync` 会 EPERM。 */
     const { closeDb } = await import("~/server/db");
