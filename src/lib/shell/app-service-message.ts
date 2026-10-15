@@ -10,7 +10,7 @@
  * 只是按了 Ctrl+R）、把「探活失败的第一拍」当成断开（那是抖动，不是断）。这类
  * 差异写进 hook 就只能靠 renderHook 覆盖，而它本身是纯的、可以直接逐分支断言。
  *
- * ## 两条事实的来源
+ * ## 三条事实的来源
  *
  * · `state` —— `deriveDevServerStatus` 的三态（见 `~/lib/shell/dev-server-status`）：
  *   `starting`（还没探通）/ `online` / `offline`（曾经通、现在不通）。
@@ -18,6 +18,10 @@
  *   `use-dev-server-liveness`）。**它是「进程换了一个」的唯一权威信号**：探活失败
  *   可能只是显示器关闭 / 后台节流 / 瞬时断网（那几条判据已明确排除「探测失败即
  *   重启」），而整页刷新**并没有**换进程。
+ * · `unprobedMs` —— 这一拍之前**没人在探测**的那一段（见
+ *   {@link AppServiceFacts.unprobedMs}）。它是「断开持续了多久」这个数字的**可信度
+ *   注脚**：探活停表期间墙钟照走，那一段里服务是否可达没人问过，恢复点也就不在
+ *   这两个时刻之间任何**可被观测**的位置上。
  *
  * ## 两条边沿各自产出什么
  *
@@ -75,6 +79,8 @@ export type AppServiceEvent =
       at: number;
       /** 这次启动之前的断开时刻；本次会话没观测到断开为 null（= 冷启动 / 刷新后才恢复）。 */
       offlineAt: number | null;
+      /** 上面那一段断开里**没人在探测**的毫秒数（0 = 每一拍都在探）。 */
+      unprobedMs: number;
     };
 
 export interface AppServiceFacts {
@@ -82,6 +88,17 @@ export interface AppServiceFacts {
   state: DevServerState;
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
+  /**
+   * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
+   *
+   * 探活会因窗口失焦 / 页面进后台而暂停（`useInterval` 的 `pauseWhenHidden`，
+   * 桌面壳里还有 `pauseWhenUnfocused`），后台被节流时定时器也可能拖到一分钟
+   * 以上——而暂停/拖拍期间**墙钟照走**。于是「断开 → 恢复」两个时刻相减得到的
+   * 那个时长里混着一段根本没人问过服务的时间：它可能早就恢复了，恢复点落在
+   * 这中间的哪一刻**无从知道**。这个数就是那段，由事实层带进来（判据
+   * `probeGapMs` 在探活那一侧，这里只消费）。
+   */
+  unprobedMs: number;
 }
 
 /** 初始游标：首帧还没有任何事实，因此不会产出边沿。 */
@@ -124,7 +141,12 @@ export function deriveAppServiceEvent(
   if (facts.processIsNew && !prev.processIsNew) {
     return {
       cursor: { ...cursor, processIsNew: true, offlineAt: null },
-      event: { type: "start", at: now, offlineAt: prev.offlineAt },
+      event: {
+        type: "start",
+        at: now,
+        offlineAt: prev.offlineAt,
+        unprobedMs: facts.unprobedMs,
+      },
     };
   }
 
@@ -134,7 +156,12 @@ export function deriveAppServiceEvent(
   if (facts.state === "online" && prev.offlineAt !== null) {
     return {
       cursor: { ...cursor, offlineAt: null },
-      event: { type: "start", at: now, offlineAt: prev.offlineAt },
+      event: {
+        type: "start",
+        at: now,
+        offlineAt: prev.offlineAt,
+        unprobedMs: facts.unprobedMs,
+      },
     };
   }
 
@@ -143,7 +170,18 @@ export function deriveAppServiceEvent(
 
 /* ── 文案：把事件与「读回来的原因」变成一条能照着做的消息 ──────────────────── */
 
-/** 断开时长 → 「2 分 05 秒」这类人能读的写法；拿不到时间戳时返回 null。 */
+/**
+ * 未探测的那一段到多长才值得单独标一行。
+ *
+ * 取 10 秒 = 正常连拍（2 秒一拍）的**五拍**：定时器迟到、单拍超时重来都在这以内，
+ * 只有真正停表（窗口失焦 / 页面进后台被节流到分钟级）才会超过这个量级。低于它
+ * 的那些间隔写成一句「其中 N 秒没有探测」只会给每条恢复消息都加一行噪声，而
+ * 它想说的那件事（这段时间的时长不可信）在那点量级上本来就不成立。
+ */
+export const UNPROBED_ANNOTATE_MS = 10_000;
+
+/**
+ * 断开时长 → 「2 分 05 秒」这类人能读的写法；拿不到时间戳时返回 null。 */
 export function formatOfflineSpan(
   offlineAt: number,
   at: number,
@@ -243,6 +281,15 @@ export interface AppServiceStartInput {
   exitAt: number | null;
   /** 上一份进程为什么结束；没有为 null。 */
   notice: AppServiceExitNotice | null;
+  /**
+   * 上面那一段断开里**没人在探测**的毫秒数（0 = 每一拍都在探）。
+   *
+   * 来源与语义见 {@link AppServiceFacts.unprobedMs}：探活停表期间墙钟照走，于是
+   * 「持续多久」里混着一段没人问过服务的时间。这一段到
+   * {@link UNPROBED_ANNOTATE_MS} 以上就单独标一行，而不是把它从时长里减掉——
+   * 减掉等于宣称「服务在那一刻已经回来了」，而恢复点无从知道。
+   */
+  unprobedMs: number;
 }
 
 /**
@@ -260,7 +307,7 @@ export interface AppServiceStartInput {
 export function describeAppServiceStart(
   input: AppServiceStartInput,
 ): AppServiceMessageText {
-  const { at, offlineAt, exitAt, notice } = input;
+  const { at, offlineAt, exitAt, notice, unprobedMs } = input;
   const recovered = offlineAt !== null;
   const span = recovered ? formatOfflineSpan(offlineAt, at) : null;
 
@@ -271,6 +318,17 @@ export function describeAppServiceStart(
         (span === null ? "" : `，持续 ${span}`) +
         "。",
     );
+    /* 探活停表那一段**如实标注**而不是从时长里减掉（手验现场：窗口失焦两分多钟，
+     * 恢复消息把「没人在问」的那整段算成了断开时长，看起来像服务真的死了两分多
+     * 钟，而窗口内的服务日志每一分钟都照常有输出）。为什么不减：那段时间里服务
+     * 可能早就恢复了，恢复点无从知道——减掉等于编一个「其实只断了 X 秒」出来。 */
+    const unprobedSpan = formatOfflineSpan(0, unprobedMs);
+    if (unprobedSpan !== null && unprobedMs >= UNPROBED_ANNOTATE_MS) {
+      lines.push(
+        `其中 ${unprobedSpan} 没有探测（页面不在前台 / 被后台节流时探活会暂停），` +
+          "这段时间服务是否可达无从得知。",
+      );
+    }
   } else {
     lines.push(
       notice === null
@@ -306,8 +364,16 @@ export function describeAppServiceStart(
         : "这是一次冷启动：本次运行里应用服务还没有结束过，因此没有「上一次结束」可读。",
     );
     lines.push(
-      "应用服务已可正常应答；若反复断开，请把 log/ 下的诊断包带上排查" +
-        "（其中 log/current/nextjs/ 是服务自己的输出，启动期看它最快）。",
+      /* 指**整包**而不是某个子目录（这一条此前指向 `log/current/nextjs/`）：
+       * 一次运行结束时它的输出会被归档进 `log/runs/<时间戳>-<runId>/`，所以
+       * 出故障的那一次往往已经不在 `log/current/` 里了 —— 按固定子路径找会
+       * 「按提示查了、还是没有」（同 `launch-diagnostics.ts` 的教训）。
+       * 打包入口是既有的那一个（面板工具条上的「打包诊断」→
+       * `POST /api/logs/diagnostics`），落点 `log/exports/`、含本次运行
+       * （`log/current/`）与最近几次归档。 */
+      "应用服务已可正常应答；若反复断开，把日志整包带上排查最省事：在「应用日志」" +
+        "面板点「打包诊断」，它会把 log/current/ 与最近几次 log/runs/ 打在 " +
+        "log/exports/ 下（diagnostics-<时刻>-<runId>.zip）。",
     );
   }
 
