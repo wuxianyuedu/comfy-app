@@ -493,7 +493,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | **git**              | 自托管机的基本依赖（官方文档原话「必装」）                                                                                 | 工具链自证           |
 | **Node**（在 `engines.node` 范围内） | 什么都跑不起来                                                                                              | 工具链自证           |
 | **pnpm**             | 同上（`corepack` 会在缺它时自己去下载 `packageManager` 指的那版，但那是每次构建的额外网络往返）                            | 工具链自证           |
-| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来 | **`scripts/ci-toolchain-selfcheck.mjs`：同口径探 `python3` / `python` / `py`，先试 `winget`（含不在 PATH 的标准落点）按用户当场装，两处入口都不在时非零退出并把它写成平台侧人工动作** |
+| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来 | **`scripts/ci-toolchain-selfcheck.mjs`：同口径探 `python3` / `python` / `py`，缺了就**按平台挑一个安装器当场装**（Windows 是 `winget`、**机器级**；Linux 在 apt-get / dnf / apk 里挑第一个存在的且**不替人 `sudo`**；macOS 只认 brew），装完**复验**，仍找不到时非零退出并按取证给出处置 |
 | **（说明）缺 Python 那一档在单元测试层是 `env` 档跳过** | 三条验包 / 真跑的用例没有它就跑不了 —— 它们跳过后**在 `tests/conditional-skip-registry.test.ts` 里看得见**（档位 `env`，与 `check-file-structure.test.ts` 的 `!python` 同处置）。机器缺工具是**环境**缺口，本仓的既有口径是「跳过 + 登记」，不是让流水线红 | 守卫是文件顶部的 `PYTHON_OK` 常量。**别写成 `it.skipIf(!hasPython())`**：登记表的扫描器按 `[^)]*` 取守卫文本，守卫里带一对括号会让它整个匹配不上，新增的 skip 站点于是在登记表里**隐形** —— 那正是登记表要防的失效形态 |
 | git 的可提交身份     | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败 | **夹具自己说话**，见下 |
 
@@ -550,6 +550,36 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > （探盘符时**不要按 `path.delimiter` 切**：它是**跑判据的宿主**的分隔符，开发机上是
 > `:`，而盘符自带 `:` —— 一按 `:` 切就把 `C:\` 切成 `C` 与 `\`，盘符一个都认不出来。
 > 在整串 PATH 上直接匹配「行首或 `;` 之后紧跟 `X:\`」即可。）
+
+> **第四轮：e2e 那一档也有了自己的 Python 前置。** 假 comfy-cli 是一个 Python 包，
+> 缺解释器时主链路那条 `@critical` 只会以「执行器收口失败」红 —— 一件事被报成两条
+> 功能红，而报错不指向真因。现在 `scripts/e2e-run.mjs` 在起 Playwright **之前**判一次
+> （`e2e/support/preflight-python.mjs`），判红**不放行**（与同批的浏览器预检同口径），
+> 出口指向 `scripts/ci-toolchain-selfcheck.mjs`。同批修掉一个真 bug：`fakeExecutorEnv()`
+> 交给应用的 `COMFY_CLI_PYTHON` 是个**裸名字**（`python` / `py`），而应用侧直接 `spawn`
+> 它 —— Windows 上 Node 不认 PATHEXT，裸名字必然 `ENOENT`。现在 pre-flight 把它解析成
+> **绝对路径**，经 `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`；读不到时退回裸
+> 名字（那一格是「不知道」而不是「没有」，别把手工 `pnpm exec playwright test` 弄崩）。
+
+> **「判」与「能跑」之间差着一步**（#1959 第五轮）。第三轮把失败话术改成自带下一动作，
+> 实测的收获是**一条更清楚的报错** —— 那台节点上确实没有 Python，于是流水线在**第一个
+> stage** 断掉、后面 28 个 stage 全 `skipped`，一条门禁判据都没跑到。所以那一步从
+> 「只判」变成「**判 + 装 + 复验**」，三条形态差异各有一个来源：
+>
+> - **Windows 上必须机器级**：Runner 是服务账号，而 python.org 安装包的默认选项
+>   「Install for me only」与 `--scope user` 都只写**安装者那个用户**的 PATH ——
+>   那正是「人在自己会话里 `python -V` 答得出来、构建步骤一个都探不到」的成因。
+>   机器级要管理员权限，本入口**不假设有**：没权限时把 `winget` 的原话原样打出来；
+> - **装完必须复验**：安装器退 0 不等于解释器已在 PATH 上（机器级安装要新会话才刷新）。
+>   复验拿不到就如实报「重跑一次即可」，**不把安装器的退出码当结论**；
+> - **POSIX 上不猜包管理器**：Linux 在 `apt-get` / `dnf` / `apk` 里挑**第一个真存在**的，
+>   且刻意**不调 `sudo`**（无人值守的流水线里一次权限提示 = 一次挂死，权限那一层归平台
+>   侧的人）；macOS 只认 `brew`，没有就给 python.org 这条出口。
+>
+> 同一份实现有两个调用形态：整机自证（流水线第一步，判 git / node / pnpm / Python 四件）
+> 与 `--python-only`（E2E 之前那一步，只答 Python 一格，且**每次都把用了哪个解释器打出来**
+> —— 第一步那段是成功即静默的）。两者调的是同一份 `findPython` / `installPython` /
+> `pythonForensics`，不造第二套判据（§12.18）。
 
 > **由此得到一条「装没装」的判读顺序**（同机上人机差异不是异常，是两种 PATH）：
 > 看失败分支打出的三样 —— **执行账号**（是 `NT AUTHORITY\SYSTEM` 这类服务账号、

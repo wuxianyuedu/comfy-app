@@ -151,3 +151,26 @@
   顺序：**位置命中而探测不到命令 ⇒ 装过、只是这个账号看不见（改 PATH，别重复装）**；
   位置也没命中 ⇒ 这台机真的没装。
 
+- **e2e 这一档有了 Python 前置，解释器定死成绝对路径**（第四轮）：假 comfy-cli 是一个
+  Python 包，缺解释器时主链路那条 `@critical` 此前只会以「执行器收口失败」红 ——
+  一件事被报成两条功能红，而报错不指向真因。新增 `e2e/support/preflight-python.mjs`，
+  由 `scripts/e2e-run.mjs` 在起 Playwright 之前判一次，判红**不放行**（与同批的浏览器
+  预检同口径），出口指向 `scripts/ci-toolchain-selfcheck.mjs`。同批修掉一个真 bug：
+  `fakeExecutorEnv()` 交给应用的 `COMFY_CLI_PYTHON` 是个**裸名字**，而应用侧直接
+  `spawn` 它 —— Windows 上 Node 不认 PATHEXT，裸名字必然 ENOENT（这一档只在
+  「生产构建 + start」上暴露）。现在 pre-flight 把它解析成**绝对路径**，经
+  `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`；读不出来时退回裸名字 ——
+  那一格是「不知道」而不是「没有」，别把手工 `pnpm exec playwright test` 弄崩。
+- **工具链自证从「只判」变成「判 + 装 + 复验」，且补上 POSIX 分支**（第五轮）：
+  第三轮把失败话术改成自带下一动作之后，实测的收获是**一条更清楚的报错** ——
+  那台节点上确实没有 Python，于是流水线在**第一个 stage** 就断掉、后面 28 个 stage
+  全 `skipped`，一条门禁判据都没跑到。现在 `installPython()` 覆盖三个平台：
+  Windows 走 `winget` 且是**机器级**（Runner 是服务账号，按用户装只写安装者的 PATH，
+  那正是「人看得见、构建步骤看不见」的成因）；Linux 在 `apt-get` / `dnf` / `apk` 里挑
+  第一个存在的、且**不替人 `sudo`**（无人值守里一次权限提示 = 一次挂死）；macOS 只认
+  `brew`，没有就给 python.org 这条出口。装完**复验**，拿不到就如实报「重跑一次即可」，
+  **不把安装器的退出码当结论**。
+- **`.cnb.yml` 的 E2E 之前新增一步「Python 可用性」**：走同一份实现的
+  `--python-only` 形态（不是第二套判据），把这档 E2E 依赖的解释器**每次都打出来** ——
+  第一步那段是成功即静默的，排查时没有可读读数。缺件时它退非零：那时后面那一步必然
+  以「两条 @critical 报成执行器收口失败」收场。

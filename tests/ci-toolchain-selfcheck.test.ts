@@ -269,10 +269,49 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     expect(wingetAtStandardLocation({})).toBeNull();
   });
 
-  it("非 Windows 上不进 winget 那条路，直接把处置交回给人", () => {
-    const r = installPython({ run: () => ({ ok: false, out: "" }) });
-    if (process.platform === "win32") return;
-    expect(r.reason).toContain("非 Windows");
+  it("POSIX 上按平台挑唯一一个包管理器；一个都不在时不猜、不动手", () => {
+    /* Linux：apt-get / dnf / apk 里挑**第一个 `--version` 答得上的**那一档
+     * （`apt-get` 排在最前，所以模拟「只有 dnf 在」时 apt-get 会先被问一次、
+     * 答不上来才轮到 dnf —— 顺序本身是判据）。 */
+    const ran: string[] = [];
+    const linux = installPython({
+      platform: "linux",
+      run: (cmd, args) => {
+        ran.push(`${cmd} ${args.join(" ")}`);
+        // 只有 dnf 在盘上：其余两个连 `--version` 都不答。
+        if (cmd === "dnf") return { ok: true, out: "" };
+        return { ok: false, out: "" };
+      },
+    });
+    expect(ran[0]).toBe("apt-get --version");
+    expect(ran).toContain("dnf --version");
+    expect(ran).toContain("dnf install -y python3");
+    // 刻意**不**替人 sudo：权限那一层归平台侧的人（无人值守里一次提示 = 一次挂死）。
+    expect(ran.some((c) => c.includes("sudo"))).toBe(false);
+    expect(linux.reason === null || typeof linux.reason === "string").toBe(true);
+
+    // 一个都不在 ⇒ 如实说「请自行安装」，而不是猜一个可能不存在的包管理器。
+    const none = installPython({ platform: "linux", run: () => ({ ok: false, out: "" }) });
+    expect(none.installed).toBe(false);
+    expect(none.reason).toContain("apt-get");
+
+    // macOS 只认 brew（没有它就给 python.org 这条出口）。
+    const mac = installPython({ platform: "darwin", run: () => ({ ok: false, out: "" }) });
+    expect(mac.installed).toBe(false);
+    expect(mac.reason).toContain("brew");
+
+    // 有 brew 就真去装（装成与否无所谓，判据只钉「跑了哪条」）。
+    const brewRan: string[] = [];
+    installPython({
+      platform: "darwin",
+      run: (cmd, args) => {
+        brewRan.push(`${cmd} ${args.join(" ")}`);
+        // `--version` 答得上 = 它在盘上；装那一趟让它退非零，走的正是失败分支。
+        return { ok: args[0] === "--version", out: "" };
+      },
+    });
+    expect(brewRan).toContain("brew --version");
+    expect(brewRan).toContain("brew install python@3.12");
   });
 });
 
