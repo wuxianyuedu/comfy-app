@@ -44,6 +44,7 @@
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 /* Python 那一层（候选探测 / 三条装通道 / 安装根 / winget 落点）在
  * `./ci-toolchain-python.mjs` —— 拆出去是按 §12.6 R5 的取向：本文件涨到 900 行以上，
@@ -286,10 +287,26 @@ export function main() {
   return 0;
 }
 
-/* 只在被直接执行时跑 —— 单测要 import 上面那几个函数，import 不该顺手退进程。 */
+/* 只在被直接执行时跑 —— 单测要 import 上面那几个函数，import 不该顺手退进程。
+ *
+ * **判「是不是直接执行」必须走 `path.resolve(进程参数) ⇄ path.resolve(fileURLToPath(import.meta.url))`，
+ * 不许拼 `file://${path.resolve(argv[1])}`**：`import.meta.url` 在 Windows 上是
+ * `file:///F:/…/x.mjs`（三斜杠 + 正斜杠 + 盘符），而拼出来的那份是
+ * `file://F:\…\x.mjs`（两斜杠 + 反斜杠）—— **两者恒不相等**，于是 `main()`
+ * 一次都不跑、**退出码恒 0 且一行输出都没有**。
+ *
+ * 这不是推演：`工具链自证` 与 `Python 可用性` 两步在自托管 Windows 节点上因此
+ * 双双变成空转（实测 runner 日志 `exit code: 0, duration: 544ms` 且零输出，
+ * 而它们各自的第一行 `== OS ==` / `== python ==` 本该无条件打出来）。
+ * 后果是**缺 Python 这件事在「最便宜的位置」报不出来**，一路滑到 18 分钟后的
+ * `E2E 关键流程` 才以「执行器起不来」的形态暴露。
+ *
+ * 本仓已有三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
+ * `check-pending-merge-loss.mjs`）为此写了同一条注释，这里按同一份写法对齐；
+ * `tests/script-main-guard.test.ts` 守着全仓不许再出现拼串的那一形态。 */
 if (
   process.argv[1] &&
-  import.meta.url === `file://${path.resolve(process.argv[1])}`
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
 ) {
   main();
 }

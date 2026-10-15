@@ -32,6 +32,7 @@
  * 退出码恒为 0：它是**打印**，不是判据。判据那一份只有 `--python-only` 一个。
  */
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { findPython, pythonForensics } from "./ci-toolchain-python.mjs";
 /* **第二条链的读数**（ISSUE #1961）。`findPython` 与 `resolvePython` 是「同一台机器上
@@ -119,9 +120,12 @@ export function probeLines({ run, resolve = resolvePython } = {}) {
   return lines;
 }
 
+/* 判「是不是直接执行」的写法与 `ci-toolchain-selfcheck.mjs` 同一条理由：
+ * 拼 `file://${path.resolve(argv[1])}` 在 Windows 上恒不相等，于是本脚本**一行都不打**
+ * 就退 0 —— 而它存在的意义正是「缺件时把论据打出来」。 */
 if (
   process.argv[1] &&
-  import.meta.url === `file://${path.resolve(process.argv[1])}`
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
 ) {
   for (const line of probeLines()) console.log(line);
   process.exit(0);

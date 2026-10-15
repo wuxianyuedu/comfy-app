@@ -567,4 +567,22 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 起真 Node，因为本判据的立案前提就是「vitest 内的 `import()` 与真 Node 不是同一条路」。
   // 回潮形态住在 `src/lib/process/**` 与宿主文件上，改动的 import 图追不到，故进固定清单。
   "tests/host-ts-loads-in-node.test.ts",
+  // 「是不是被直接执行」的守卫形态（ISSUE #1961 的最后一格：CI 红在 E2E，真因在第一步）。
+  // `scripts/ci-toolchain-selfcheck.mjs` 与 `scripts/python-probe.mjs` 曾用
+  // `import.meta.url === \`file://${path.resolve(process.argv[1])}\`` 判「自己有没有被
+  // 直接执行」—— 拼出来的是 `file://F:\…\x.mjs`（两斜杠 + 反斜杠），而 `import.meta.url`
+  // 是 `file:///F:/…/x.mjs`（三斜杠 + 正斜杠），**在 Windows 上恒不相等**：`main()`
+  // 一次都不跑、进程**正常退 0 且零输出**。
+  //
+  // 实测代价（自托管节点 `cnb-g36-1k50hvu52`）：`工具链自证` / `Python 可用性` 两步
+  // 双双空转（`exit code: 0, duration: 544ms` / `597ms`，各自的第一行 `== OS ==` /
+  // `== python ==` 一个字都没打），于是「缺 Python 在**最便宜的位置**报出来」这条设计
+  // 静默失效，缺件一路滑到 18 分钟后的 `E2E 关键流程` 才以「执行器收口失败」暴露 ——
+  // **是「这一步没跑」被读成了「这一步过了」**。
+  //
+  // 本仓另三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
+  // `check-pending-merge-loss.mjs`）早为这同一形态写过注释，但**注释传的约定下一次
+  // 新增脚本时必然再犯一次**（这一次就是）。进固定清单而不只挂在受影响面：新脚本是
+  // 「新增文件」，静态 import 图追不到它，而那正是这条判据要守的场景。
+  "tests/script-main-guard.test.ts",
 ];

@@ -150,12 +150,30 @@ export function sweepLegacyTimestamps(
 }
 
 /* 直接执行时按 `DATABASE_URL` 定位库（与 `db-push.mjs` / `src/server/db.ts`
- * 同一锚点：去 `file:` 前缀后相对项目根解析）。被 import 时不自动跑。 */
-if (import.meta.url === `file://${process.argv[1]}`) {
+ * 同一锚点：去 `file:` 前缀后相对项目根解析）。被 import 时不自动跑。
+ *
+ * 判「是不是直接执行」用**两侧都过 `path.resolve` 的比较**，不许拼
+ * `file://${argv[1]}`：`import.meta.url` 在 Windows 上是 `file:///F:/…/x.mjs`
+ * （三斜杠 + 正斜杠），拼出来的那份是 `file://F:\…\x.mjs` —— **恒不相等**，
+ * 于是这段一次都不跑、**退出码恒 0 且一行输出都没有**（`node scripts/ci-toolchain-selfcheck.mjs`
+ * 与 `scripts/python-probe.mjs` 在自托管节点上就栽在这上面：`工具链自证` /
+ * `Python 可用性` 两步双双空转，缺 Python 一路滑到 18 分钟后的 E2E 才暴露）。
+ * 本仓另三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
+ * `check-pending-merge-loss.mjs`）为此写了同一条注释，`tests/script-main-guard.test.ts`
+ * 守着全仓不许再出现拼串的那一形态。 */
+{
   const path = await import("node:path");
   const { fileURLToPath } = await import("node:url");
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const url = process.env.DATABASE_URL ?? "file:./db.sqlite";
-  const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  sweepLegacyTimestamps(path.resolve(root, raw));
+  const invokedDirectly =
+    process.argv[1] &&
+    path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+  if (invokedDirectly) {
+    const root = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+    );
+    const url = process.env.DATABASE_URL ?? "file:./db.sqlite";
+    const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
+    sweepLegacyTimestamps(path.resolve(root, raw));
+  }
 }
