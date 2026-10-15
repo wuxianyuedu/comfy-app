@@ -885,11 +885,19 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
      *
      * 两条路**最终落在同一处**（经 PowerShell 宿主起，见下面那两条断言），
      * 差别只是「先命中的是哪一个文件」。写死一侧就是这个文件反复踩过的形态 ——
-     * 把「跑判据那台宿主的样子」写成了恒真性质。 */
-    expect([
-      path.join(dir, "pnpm.CMD"),
-      path.join(dir, "pnpm.ps1"),
-    ]).toContain(inv!.candidate);
+     * 把「跑判据那台宿主的样子」写成了恒真性质。
+     *
+     * **按大小写不敏感比**：`whichCommand()` 交出来的是拿 `PATHEXT` 的写法拼出来的
+     * 候选（`.PS1`），只在 Windows 上才由 `onDiskName()` 回写成盘上的实际写法 ——
+     * 直接 `toContain` 大小写敏感的那两种拼法，等于又留了一格「宿主/盘上怎么写」
+     * 决定结论的断言，而那正是这条用例刚被修掉的形状。 */
+    const selected = inv!.candidate.toLowerCase();
+    expect(
+      [path.join(dir, "pnpm.CMD"), path.join(dir, "pnpm.ps1")].map((p) =>
+        p.toLowerCase(),
+      ),
+      `选中的不是那个目录里真有的形态：${inv!.candidate}`,
+    ).toContain(selected);
     expect(inv!.viaHost).toBe(true);
     expect(inv!.args.slice(-args.length)).toEqual(args);
     // 与既有判据同源：命令形态必须等于 commandInvocation 的结论
