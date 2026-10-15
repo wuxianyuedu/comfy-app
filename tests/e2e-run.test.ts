@@ -20,10 +20,12 @@ import {
   E2E_DIR,
   TRACK,
   checkSchemaBeforeRun,
+  ensureSchemaBeforeRun,
   parseSkip,
   planRun,
   schemaPreflightDecision,
   shouldRecord,
+  stripArgvSeparator,
 } from "../scripts/e2e-run.mjs";
 import {
   FRESHNESS_TRACKS,
@@ -74,9 +76,9 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
      *   · 不带参数跑完整档且绿 ⇒ 记；
      *   · 任何形式的子集 / 不执行 ⇒ 不记，哪怕退出码是 0。 */
     expect(shouldRecord({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
-    expect(shouldRecord({ exitCode: 0, dryRun: false, extra: ["--help"] })).toBe(
-      false,
-    );
+    expect(
+      shouldRecord({ exitCode: 0, dryRun: false, extra: ["--help"] }),
+    ).toBe(false);
     expect(
       shouldRecord({
         exitCode: 0,
@@ -137,16 +139,22 @@ describe("开跑前的 schema 预检（#1834 收尾的现场）", () => {
     expect(d.verdict).toBe("proceed");
   });
 
-  it("表还没建 / 读不到 ⇒ 放行（全新检出由启动链路自动建表）", () => {
+  it("表还没建 / 读不到 ⇒ **不是放行，是先建齐**（ISSUE #1948）", () => {
+    /* 立案现场：这一档此前对空库说「建表那一批启动链路会自动应用」然后放行，
+     * 而启动链路的同步是**后台 detached** 的（`spawnSchemaSync`），Playwright
+     * 等的又只是 webServer 的 URL 可访问 —— 于是冒烟档的健康检查在建表完成前
+     * 打过去，全新检出的现场是 `db: "empty"` ⇒ 503 ⇒ 那条 `@critical` 必红。
+     * 现在空库是一个**要等**的动作（`ensure`），由本档在起 Playwright 之前做掉。 */
     for (const probe of ["missing", "unknown"] as const) {
-      expect(
-        schemaPreflightDecision({
-          probe,
-          fingerprintMatch: false,
-          pending: [],
-          autoApplyable: false,
-        }).verdict,
-      ).toBe("proceed");
+      const d = schemaPreflightDecision({
+        probe,
+        fingerprintMatch: false,
+        pending: [],
+        autoApplyable: false,
+      });
+      expect(d.verdict).toBe("ensure");
+      // 话术要把「为什么不能交给启动链路」说出来，否则下一个人会把它改回 proceed。
+      expect(d.reason).toContain("后台");
     }
   });
 
@@ -188,9 +196,10 @@ describe("开跑前的 schema 预检（#1834 收尾的现场）", () => {
 
   it("取证层在真仓库上判得出形状（不写死本机当前红绿——那会随库状态漂）", () => {
     /* 这一条只核「函数跑得通、返回的形状在判词里认得过来」：本机此刻红绿
-     * 取决于 db.sqlite 同不同步，而那不是判据能钉的事实。 */
+     * 取决于 db.sqlite 同不同步，而那不是判据能钉的事实。
+     * 三档都要认得：`ensure` 是空库那一档（ISSUE #1948 之后新增的判决）。 */
     const d = checkSchemaBeforeRun(ROOT);
-    expect(["proceed", "abort"]).toContain(d.verdict);
+    expect(["proceed", "ensure", "abort"]).toContain(d.verdict);
     expect(typeof d.reason).toBe("string");
     if (d.verdict === "abort") expect(d.risky?.length ?? 0).toBeGreaterThan(0);
   });
@@ -216,7 +225,9 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
       run: "pnpm test:e2e",
     });
     // 另两档各有一份自己的账与键（不是同一个文件里的两个键）。
-    expect(freshnessTrack("full").ledger).toBe("scripts/.full-suite-freshness.json");
+    expect(freshnessTrack("full").ledger).toBe(
+      "scripts/.full-suite-freshness.json",
+    );
     expect(freshnessTrack("artifact").ledger).toBe(
       "scripts/.artifact-freshness.json",
     );
@@ -405,11 +416,11 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     // `cmd` 逐字相等而不是 `toContain`：把这一行注掉时行首锚定的解析已经不认它
     // ——「把这一步静音」正是这一族要拦的动作（§13.5.8）。
     const steps = [
-      ...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm),
+      ...readText(".githooks/pre-commit").matchAll(
+        /^ {2}run "([^"]+)" (.+)$/gm,
+      ),
     ].map((m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }));
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/freshness-gate.mjs"),
-    );
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
     expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
     // 标签要能让人从这一行读出「判的是哪几档」—— 只写其中一档时，
     // 另一档红出来会被读成别人的事。
@@ -433,5 +444,137 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     });
     expect(result.problems).toEqual([]);
     expect(result.exitCode).toBe(0);
+  });
+});
+
+/**
+ * ISSUE #1948：把「容器 / 全新检出里跑 e2e 会踩的三件事」变成三条机器判据。
+ *
+ * 三件事的共同形态是**红得看不出真因**：
+ *   · 浏览器缺一半 ⇒ 全档每一条都报同一个 launch 失败（看着像 81 个问题）；
+ *   · 空库 ⇒ 冒烟档的健康检查断言红，话术在说「数据库表还没建好」，
+ *     看起来像环境没准备好，实际是这一档把建表甩在了后台；
+ *   · `-- ` 吃掉位置参数 ⇒ 想跑 3 条跑成 81 条，而退出码与输出里没有一处说这件事。
+ */
+describe("开跑前的三档前置（ISSUE #1948）", () => {
+  it("`--` 分隔符被剥掉：位置参数不再被吃掉（想跑冒烟跑的就是冒烟）", () => {
+    /* 立案现场：`pnpm test:e2e -- e2e/smoke.spec.ts` 打出来的计划是
+     * `playwright test -- e2e/smoke.spec.ts`，而 Playwright 把 `--` 之后的
+     * 位置参数**当不了用例筛选** —— 实测 `--list` 列 81 条（本仓全档），
+     * 不带 `--` 时列 3 条。跑错档而账面看不出来，正是这一条要拦的形态。 */
+    expect(planRun(["--", "e2e/smoke.spec.ts"]).args).toEqual([
+      "test",
+      "e2e/smoke.spec.ts",
+    ]);
+    // 不带分隔符的旧写法不受影响。
+    expect(planRun(["--grep", "@critical"]).args).toEqual([
+      "test",
+      "--grep",
+      "@critical",
+    ]);
+    // 只丢恰好的那一项：别处出现的 `--` 不再是分隔符（参数名里带它不该被吞）。
+    expect(stripArgvSeparator(["--grep", "@critical", "--", "a.ts"])).toEqual([
+      "--grep",
+      "@critical",
+      "a.ts",
+    ]);
+    expect(stripArgvSeparator(["--", "--", "a.ts"])).toEqual(["--", "a.ts"]);
+    expect(stripArgvSeparator([])).toEqual([]);
+  });
+
+  it("空库 ⇒ `ensure`：本档自己建齐，且复核它真的落地了", () => {
+    /* 两个方向都要钉：建成了才放行；没建成（`missing` / `stale`）要**阻断**并
+     * 给出人的出口 —— 否则「空库」会退化成「跑下去，让冒烟档去红」。 */
+    const calls: string[] = [];
+    const synced = ensureSchemaBeforeRun({
+      root: ROOT,
+      ensure: () => {
+        calls.push("ensure");
+        return { state: "synced" };
+      },
+    });
+    expect(calls).toEqual(["ensure"]);
+    expect(synced.verdict).toBe("proceed");
+    expect(synced.state).toBe("synced");
+
+    // 已经是齐的（并发窗口里别人先做完了 / 本来就在）：放行，报 ready。
+    expect(
+      ensureSchemaBeforeRun({ root: ROOT, ensure: () => ({ state: "ready" }) })
+        .verdict,
+    ).toBe("proceed");
+
+    // 没建成 ⇒ 阻断，出口是 `pnpm db:push`（那是人的决定，别替它做）。
+    for (const state of ["missing", "stale"] as const) {
+      const blocked = ensureSchemaBeforeRun({
+        root: ROOT,
+        ensure: () => ({ state, detail: "现场原因" }),
+      });
+      expect(blocked.verdict, state).toBe("abort");
+      expect(blocked.reason, state).toContain("pnpm db:push");
+    }
+
+    /* `unknown` 不阻断：拿不到结论 ≠ 库是坏的（`checkSchemaBeforeRun` 那两处
+     * 判据失效也是同一条口径）。 */
+    expect(
+      ensureSchemaBeforeRun({
+        root: ROOT,
+        ensure: () => ({ state: "unknown" }),
+      }).verdict,
+    ).toBe("proceed");
+  });
+
+  it("浏览器缺件 ⇒ 判红并给出**它期望的那条路径**与补它的命令", async () => {
+    const {
+      checkBrowserReady,
+      parseMissingExecutable,
+      describeBrowserMissing,
+    } = await import("../e2e/support/preflight-browser.mjs");
+
+    /* 判据是「真起一次」而不是「按路径猜一下」：headless 档要的二进制由
+     * Playwright 内部决议，`chromium.executablePath()` 返回的是**另一个**
+     * （本机实测：它给 `…/chromium-1243/chrome-linux64/chrome`，而真缺的是
+     * `chromium_headless_shell-1243/…`）。所以这里喂一个真的会抛的 launch。 */
+    const missing = await checkBrowserReady({
+      launch: async () => ({
+        ok: false,
+        error: new Error(
+          "browserType.launch: Executable doesn't exist at /tmp/x/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell\nCall log: ...",
+        ),
+      }),
+    });
+    expect(missing.verdict).toBe("missing");
+    expect(missing.executablePath).toBe(
+      "/tmp/x/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell",
+    );
+    // 出口必须是一条**能直接跑**的命令，且点名 headless shell（只装 chromium 不够）。
+    expect(missing.installHint).toContain("playwright install");
+    expect(missing.installHint).toContain("chromium-headless-shell");
+    const text = describeBrowserMissing(missing);
+    expect(text).toContain(missing.executablePath);
+    expect(text).toContain(missing.installHint);
+
+    // 起得来 ⇒ ready，且不产生任何话术噪音（happy path 上不打扰）。
+    expect(
+      await checkBrowserReady({ launch: async () => ({ ok: true }) }),
+    ).toEqual({ verdict: "ready" });
+
+    // 不是缺文件（权限 / 缺系统库）也归这一档，但**不猜路径** —— 抠不出来就报原文。
+    const other = await checkBrowserReady({
+      launch: async () => ({
+        ok: false,
+        error: new Error(
+          "browserType.launch: Target page, context or browser has been closed",
+        ),
+      }),
+    });
+    expect(other.verdict).toBe("missing");
+    expect(other.executablePath).toBeUndefined();
+    expect(other.installHint).toBeTruthy();
+
+    // 抠路径那一层的边界：Playwright 换了话术就返回 null，而不是拼一条假的出来。
+    expect(parseMissingExecutable("something else entirely")).toBeNull();
+    expect(parseMissingExecutable("Executable doesn't exist at /a/b")).toBe(
+      "/a/b",
+    );
   });
 });
