@@ -111,7 +111,7 @@
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, core 骨架单一事实源,
-      零消费导出, core 出口纪律与基类纯度, 生产构建, E2E 关键流程
+      零消费导出, core 出口纪律与基类纯度, 生产构建, 浏览器安装, E2E 关键流程
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
@@ -311,10 +311,34 @@
     # 冷节点上比实测读数慢得多，而不是因为它会挂。
     timeout: 30m
 
+  # ── 浏览器安装（自托管节点是裸宿主机，没有镜像预装这一层）──
+  #
+  # `E2E 关键流程` 是这条流水线上**从来没有跑过**的一档（前几跑都断在 `单元测试`
+  # 或 `生产构建`）。它第一次真跑到就红在浏览器缺件上，读数（`cnb-0rd-1k50unpnn`）：
+  #
+  #   期望的路径：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
+  #
+  # 成因不是配置写错：**没有 docker 就没有「镜像里预装好浏览器」那层兜底**，而
+  # `pnpm install` 不会拉 Playwright 的浏览器二进制（那是 `playwright install` 的事）。
+  # 旧版 `docker.image: node:24` 那条路上这一格是白拿的，自托管把它还回来了。
+  #
+  # 为什么是「装」而不是「判红让人去装」：它与 Python 那一步的分工不同 —— 解释器可能
+  # 在盘上、只是执行账号的 PATH 看不见（那要人改 PATH，所以 `--python-only` 探到就放行、
+  # 探不到才红并给取证）；而浏览器二进制**只可能来自这一条命令**，机器上不存在
+  # 「装了但探不到」的分支。所以这一步直接装，装不上才红。
+  # 幂等：`playwright install` 对已存在的版本是 no-op。
+  - name: 浏览器安装
+    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
+    # 冷节点 + 慢链路够用，而卡死（CDN 不通）时也能在 20m 报出来，不必等满平台
+    # 默认的 2h 墙钟。**不是放宽判据** —— 判据是「装完退 0」，预算只管多久放弃。
+    timeout: 20m
+
   # ── E2E（仅 @critical 关键流程）──
   #
   # 解释器这一格已由前面那步「Python 可用性」在**整条流水线的最前**答过（它也是
   # 本地 `pnpm test:e2e` 走 `scripts/e2e-run.mjs` 时的同一份判据），故这里不重判。
+  # 浏览器那一格由上面那步「浏览器安装」答过（自托管没有镜像预装）。
   - name: E2E 关键流程
     script: node scripts/e2e-run.mjs --grep @critical
     # 这一档在自托管路径上**从来没有跑过**（前几跑都断在 `单元测试` 或 `生产构建`），

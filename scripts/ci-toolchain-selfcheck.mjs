@@ -531,9 +531,86 @@ export function pythonOnly() {
   return 1;
 }
 
+/**
+ * 只答「Playwright 要用的浏览器在不在」并据此退码 —— 给「E2E 之前」那一步用。
+ *
+ * ## 它修的那一格（ISSUE #1961，自托管节点的首次真跑）
+ *
+ * `E2E 关键流程` 是这条流水线上**从来没有跑过**的一档（前几跑都断在 `单元测试` 或
+ * `生产构建`）。它一跑到就红在浏览器缺件上：自托管节点是**裸宿主机**，没有
+ * `docker.image` 那种「镜像里预装好浏览器」的兜底，而 `pnpm install` 不会拉
+ * Playwright 的浏览器二进制（那是 `playwright install` 的事）。
+ *
+ * 那台机器上的读数（`cnb-0rd-1k50unpnn`）：
+ *
+ *     期望的路径：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
+ *
+ * ## 为什么是「装」而不是「判红让人去装」
+ *
+ * 与 Python 那一步的分工不同：解释器可能在盘上、只是这个执行账号的 PATH 看不见它
+ * （那一格要人改 PATH，所以 `--python-only` 探到就退 0、探不到才红并给出取证）；
+ * 而浏览器二进制**只可能来自这一条命令**，机器上不存在「装了但探不到」的分支。
+ * 所以这里直接装 —— 装完再探一次才算数（与 `installPython` 的复验同一条口径：
+ * 安装器退 0 不等于东西真在）。
+ *
+ * 幂等：`playwright install` 对已存在的版本是 no-op（实测秒级返回）。
+ *
+ * @returns {number}
+ */
+export function playwrightOnly() {
+  section("playwright");
+  /* 两件都要装：`chromium` 与 `chromium-headless-shell` 是 `browsers.json` 里的
+   * **两个条目**，而 headless 档用的是后者 —— 只装前者时 `executablePath()` 会给出
+   * 前者、看着像「装过了」，真起浏览器就报 `Executable doesn't exist`
+   * （`e2e/support/preflight-browser.mjs` 的头注写着这条）。 */
+  const install = runPlaywrightInstall();
+  console.log(install.out || "(playwright install 没有输出)");
+  if (!install.ok) {
+    console.error(
+      "\n浏览器装不上（`playwright install` 退非零）。它的出口与 Python 不同 ——" +
+        "浏览器二进制只可能来自这一条命令，机器上没有「装了但探不到」的分支，" +
+        "所以这里不是「取证给人看」，是这一步真的没做成功。" +
+        "常见成因：网络到 CDN 不通、或磁盘满。",
+    );
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * 装 Playwright 的两件浏览器（`chromium` + `chromium-headless-shell`）。
+ *
+ * 走 `findPnpm()` 的宿主形态而不是裸起 `pnpm`（同 `main()` 里那条理由：Windows 上
+ * 裸名字交给 CreateProcess 时 corepack 的三个形态一个都用不上），命令行与
+ * `e2e/support/preflight-browser.mjs` 的 `BROWSER_INSTALL_HINT` 逐字同源。
+ *
+ * @returns {{ok: boolean, out: string}}
+ */
+function runPlaywrightInstall() {
+  const pnpm = findPnpm();
+  if (!pnpm.ok) {
+    return {
+      ok: false,
+      out:
+        "pnpm 不可用，装不了浏览器 —— 先让上面「工具链自证」那一步过。" +
+        `（探到的原因：${pnpm.out || "无输出"}）`,
+    };
+  }
+  return run(pnpm.command, [
+    ...pnpm.args,
+    "exec",
+    "playwright",
+    "install",
+    "chromium",
+    "chromium-headless-shell",
+  ]);
+}
+
 export function main() {
   /* 只答 Python 那一格（`.cnb.yml` 里 E2E 之前那一步用它）。 */
   if (process.argv.includes("--python-only")) return pythonOnly();
+  /* 只答「Playwright 要用的浏览器在不在」（同一条链上更后面的那一格，见下）。 */
+  if (process.argv.includes("--playwright-only")) return playwrightOnly();
 
   section("OS");
   console.log(process.platform, process.arch, process.version);

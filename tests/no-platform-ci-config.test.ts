@@ -137,7 +137,8 @@ const PS7_ONLY: Array<{ pattern: RegExp; what: string; instead: string }> = [
   {
     pattern: /\?\./,
     what: "`?.` null 条件运算符（PS 7+）",
-    instead: "先 `$o = Get-Command X -ErrorAction SilentlyContinue` 再 `if ($o) { $o.Source }`",
+    instead:
+      "先 `$o = Get-Command X -ErrorAction SilentlyContinue` 再 `if ($o) { $o.Source }`",
   },
   {
     pattern: /\?\?/,
@@ -212,9 +213,10 @@ export function ps7OnlySyntaxIn(text: string): string[] {
  * @returns stage 名（已 trim）
  */
 export function registeredGateOrder(text: string): string[] {
-  const m = /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+\S[^\n]*\r?\n)+)/m.exec(
-    text,
-  );
+  const m =
+    /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+\S[^\n]*\r?\n)+)/m.exec(
+      text,
+    );
   const body = m?.[1];
   if (body === undefined) return [];
   return body
@@ -311,7 +313,9 @@ export function stageTimeouts(text: string): Map<string, string> {
 export function hasPipelineLockCancelInProgress(text: string): boolean {
   /* 收口到「下一个更浅缩进的键」或**文本末尾** —— 少了后半句，末尾没跟别的键的
    * 夹具会解析不出来（真 `.cnb.yml` 里 `.common` 后面还有 `.gates`，看不出来）。 */
-  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
+  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(
+    text,
+  );
   const body = anchor?.[1];
   if (body === undefined) return false;
   // `lock:` 块内出现 `cancel-in-progress: true`（同一块里的 `timeout`/`key` 不算）。
@@ -365,9 +369,9 @@ function readRegisteredConfig(): string {
 describe("平台侧流水线配置：形态必须是「自托管 + 已登记」（§13.5.3 / §13.5.4）", () => {
   it("仓库根只允许出现登记在册的那一份，别的 CI 形态一律不许", () => {
     const present = ciConfigsAmong(repoTopLevel());
-    expect(present.filter((rel) => !REGISTERED_CI_CONFIGS.includes(rel))).toEqual(
-      [],
-    );
+    expect(
+      present.filter((rel) => !REGISTERED_CI_CONFIGS.includes(rel)),
+    ).toEqual([]);
   });
 
   it("登记在册的那一份必须满足形态契约（漏掉哪条都是静默失效）", () => {
@@ -466,6 +470,49 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBe(true);
   });
 
+  it("`浏览器安装` 排在 `E2E 关键流程` 之前，且点名的入口在盘上", () => {
+    const text = readRegisteredConfig();
+    /* 这一格是自托管路径上**新暴露**的（ISSUE #1961）：旧版 `docker.image: node:24`
+     * 那条路里，Playwright 的浏览器是镜像白拿的；换成裸宿主机之后没了那层兜底，
+     * 而 `pnpm install` 不会拉浏览器二进制 —— `E2E 关键流程` 第一次真跑到就红在
+     * `Executable doesn't exist at …\ms-playwright\chromium_headless_shell-…` 上。
+     *
+     * 顺序约束与 Python 那条同源：装浏览器要下 ~100+ MiB（分钟级），而判「装没装成」
+     * 是零成本的；排在 E2E 之后 = 那个结论要么看不到、要么在最贵的位置才看到。 */
+    const order = registeredGateOrder(text);
+    const installAt = order.indexOf("浏览器安装");
+    const e2eAt = order.indexOf("E2E 关键流程");
+    expect(
+      installAt,
+      "`COMFYAPP_CI_GATES` 里没有「浏览器安装」—— 这一格因此没有任何执行者，",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      e2eAt,
+      "`COMFYAPP_CI_GATES` 里没有「E2E 关键流程」—— 清单被重排过？",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      installAt,
+      "`浏览器安装` 必须排在 `E2E 关键流程` 之前：缺件时那一步会以" +
+        "「全档每条都报同一个 launch 失败」的形态红，看不出真正要修的是什么",
+    ).toBeLessThan(e2eAt);
+
+    /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 那条口径：`script` 里的
+     * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。 */
+    const scriptLine =
+      /^\s*-\s*name:\s*浏览器安装\s*$\r?\n\s*script:\s*(\S.*)$/m.exec(text);
+    const command = scriptLine?.[1]?.trim();
+    expect(command, "解析不出「浏览器安装」那一步的 script").toBeTruthy();
+    const entry = /^(?:node\s+)?(scripts\/[^\s]+)/.exec(command ?? "")?.[1];
+    expect(
+      entry,
+      `「浏览器安装」那一步指向的不是 scripts/ 下的入口：${command}`,
+    ).toBeTruthy();
+    expect(
+      existsSync(path.join(ROOT, entry ?? "")),
+      `「浏览器安装」点名的入口不在盘上：${entry}`,
+    ).toBe(true);
+  });
+
   it("`单元测试` 排在 `Python 可用性` 之后（缺件要在最便宜的位置报出来）", () => {
     const order = registeredGateOrder(readRegisteredConfig());
     expect(
@@ -503,15 +550,17 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       const m = /^(\d+)([smh])$/.exec(raw);
       expect(m, `${name} 的 timeout 写法认不出：${raw}`).not.toBeNull();
       if (!m) continue;
-      const minutes = Number(m[1]) * (m[2] === "h" ? 60 : m[2] === "s" ? 1 / 60 : 1);
+      const minutes =
+        Number(m[1]) * (m[2] === "h" ? 60 : m[2] === "s" ? 1 / 60 : 1);
       expect(
         minutes,
         `${name} 的 timeout=${raw} 是小时量级 —— 那与平台默认的 2h 上限没有区别，` +
           "起不到「卡死要早报」的作用",
       ).toBeLessThanOrEqual(60);
-      expect(minutes, `${name} 的 timeout=${raw} 太紧（真跑得完的形态会被误杀）`).toBeGreaterThanOrEqual(
-        10,
-      );
+      expect(
+        minutes,
+        `${name} 的 timeout=${raw} 太紧（真跑得完的形态会被误杀）`,
+      ).toBeGreaterThanOrEqual(10);
     }
   });
 
@@ -557,7 +606,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 后者不是宽容 —— 判据的说明里正当地会写出这些形状（那条 ⚠️ 就是），
      * 把说明判成违规等于逼人删注释。 */
     expect(
-      ps7OnlySyntaxIn("master:\n  push:\n    - script: |\n        $x = $o?.Source\n"),
+      ps7OnlySyntaxIn(
+        "master:\n  push:\n    - script: |\n        $x = $o?.Source\n",
+      ),
     ).toHaveLength(1);
     expect(
       ps7OnlySyntaxIn(
@@ -566,7 +617,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toEqual([]);
     // 块外的同形文本不许被算进来（缩进收口真在起作用）。
     expect(
-      ps7OnlySyntaxIn("master:\n  name: a?.b\n    - script: |\n        $x = 1\n"),
+      ps7OnlySyntaxIn(
+        "master:\n  name: a?.b\n    - script: |\n        $x = 1\n",
+      ),
     ).toEqual([]);
     expect(PS7_ONLY.length).toBeGreaterThanOrEqual(4);
     /* ⑦ stage 顺序判据与探测入口判据都要能红：喂进一份「单元测试 排在 Python 后面」
@@ -581,8 +634,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* ⑧ 预算与流水线锁两条判据都要能红：喂进不带 timeout 的 stage 块、
      * 喂进不带 lock 的锚点，都必须答「没有」。 */
     // 夹具按**真实缩进**写：`stages:` 的直接子项是 2 空格、键在 4 空格。
-    const noBudget =
-      "x:\n  stages:\n  - name: 单元测试\n    script: x\n";
+    const noBudget = "x:\n  stages:\n  - name: 单元测试\n    script: x\n";
     expect(stageTimeouts(noBudget).has("单元测试")).toBe(false);
     const withBudget =
       "x:\n  stages:\n  - name: 单元测试\n    script: x\n    timeout: 45m\n";
