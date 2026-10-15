@@ -262,7 +262,24 @@ export default defineConfig({
       //                    日后重启上报时重新踩一遍「插件找不到报告文件」那个坑
       //                    ——当时的现场是插件 1.8s 就退出，而报错完全指不出是
       //                    reporter 少配了一项。
-      reporter: ["text", "json-summary", "lcov"],
+      /* ⚠️ **本档的输出量是有预算的**（ISSUE #1959）：`text` 这个 reporter 会把
+       * 报告里**每一个文件**打一行，450+ 行的表格本身就有 ~90KB —— 而平台侧
+       * （CNB）对单次构建日志的硬上限是 **102400 字节**，超过就只留一句
+       * `The log length exceeds the limit(102400)`、后面全部截断。现场实测：
+       * `pnpm test:coverage` 只跑三个目录（`src/lib/{comfyui,log,workshop}`）
+       * 就已经 **107256 字节**，全量更是数倍 —— 于是 CI 里看不到任何失败原因，
+       * 只有一句「日志超长」（正是 ISSUE #1959 截图里的第一行）。
+       *
+       * 出路是把「人读的那份」压成汇总档：`text-summary` 只打总计（几行），
+       * 而**逐文件的明细一个都没少** —— 它本来就在 `lcov` 与 `json-summary`
+       * 里（那两份是给机器与本地细读的，不受日志预算约束）。
+       *
+       * 由 `COMFYAPP_QUIET_COVERAGE` 控制而不是直接换掉默认值：本地人手动跑
+       * `pnpm test:coverage` 时**要看**那张表（那正是它的用处），把它删掉等于
+       * 为了 CI 砍掉本地的能力。判据见 `tests/coverage-reporter-budget.test.ts`。 */
+      reporter: process.env.COMFYAPP_QUIET_COVERAGE
+        ? ["text-summary", "json-summary", "lcov"]
+        : ["text", "json-summary", "lcov"],
       include: [
         "src/server/api/middleware/**",
         "src/server/film/**",

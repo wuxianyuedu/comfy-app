@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">LaunchHost</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#appendruntimelog">appendRuntimeLog</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">line</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#beginruntimesession">beginRuntimeSession</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#clearcomfystopping">clearComfyStopping</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#localtimestamp">localTimestamp</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#marksessionend">markSessionEnd</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">report</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_lifecycle-exit.ComfyExitReport.html" class="tsd-signature-type tsd-kind-interface">ComfyExitReport</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#marksessionstart">markSessionStart</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><br/>        <span class="tsd-kind-parameter">info</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">mode</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;bound&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;keepAlive&quot;</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">pid</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#probecomfyui">probeComfyUi</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">timeoutMs</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#st">st</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span><br/>        <span class="tsd-kind-property">child</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">ChildProcess</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">childDetached</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">stopRequested</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:75</li></ul></aside>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:84</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -42,7 +42,7 @@
 <div class="tsd-comment tsd-typography"><p>写本次启动的 runtime 日志一行。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:83</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:92</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="beginruntimesession"><span>begin<wbr/>Runtime<wbr/>Session</span><a href="#beginruntimesession" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">beginRuntimeSession</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span></div>
@@ -52,21 +52,21 @@
 分叉出 <code>-2</code> / <code>-3</code>，不会覆盖前一次的现场。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:91</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:100</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="clearcomfystopping"><span>clear<wbr/>Comfy<wbr/>Stopping</span><a href="#clearcomfystopping" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">clearComfyStopping</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>清掉「关闭中」标记（进程已确认退出 / 用户重新点了启动）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:93</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:102</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="localtimestamp"><span>local<wbr/>Timestamp</span><a href="#localtimestamp" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">localTimestamp</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>本地时间戳（保活重定向文件名用）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:95</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:104</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="marksessionend"><span>mark<wbr/>Session<wbr/>End</span><a href="#marksessionend" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">markSessionEnd</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">report</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_lifecycle-exit.ComfyExitReport.html" class="tsd-signature-type tsd-kind-interface">ComfyExitReport</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
@@ -74,28 +74,28 @@
 那正是下次启动要反推的情况。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:103</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:112</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="marksessionstart"><span>mark<wbr/>Session<wbr/>Start</span><a href="#marksessionstart" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">markSessionStart</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">info</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">mode</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;bound&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;keepAlive&quot;</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">pid</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>记下「本次会话开始了」（写 <code>log/services/comfyui-last-session.json</code>）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:97</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:106</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="probecomfyui"><span>probe<wbr/>Comfy<wbr/>Ui</span><a href="#probecomfyui" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">probeComfyUi</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">timeoutMs</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>探测 ComfyUI 是否可达（注入以避免 <code>本模块 → lifecycle.ts</code> 的循环依赖）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:105</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:114</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="st"><span>st</span><a href="#st" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">st</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">child</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">ChildProcess</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">childDetached</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">stopRequested</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">}</span></div>
 <div class="tsd-comment tsd-typography"><p>启动单飞锁与子进程句柄（HMR 单例）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/lifecycle-launch.ts:77</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/lifecycle-launch.ts:86</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

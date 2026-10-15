@@ -30,6 +30,7 @@ import {
   type RemoteModelKind,
   type TaskType,
 } from "~/lib/llm/types";
+import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
 export type Settings = {
   comfyuiPath: string;
@@ -37,6 +38,8 @@ export type Settings = {
   /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
   comfyCliPython: string;
   comfyuiAutoStart: boolean;
+  /** 出图进程的 CPU 档位（ISSUE #1959）；缺值按环境默认（见 `~/lib/comfyui/cpu-limit`）。 */
+  comfyuiCpuLimit?: CpuLimitMode;
   /** ComfyUI 监听端口；0 = 默认 8188（启动时按需显式传 --port）。 */
   comfyuiPort: number;
   /** 应用退出是否连带关闭自己拉起的 ComfyUI（默认 false=保活，退出后继续运行）。 */
