@@ -11,12 +11,16 @@
 // throw），也必须能被单测喂注入探针逐条断言两个平台的候选顺序。登记见
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 
+// **必须带 `.ts` 后缀**（同 `python-candidates.ts` 那条说明）：本模块被
+// `e2e/support/preflight-python.mjs` / `fake-comfyui-executor-env.mjs` 直接静态
+// import，Node 的 ESM 解析器不认无后缀的相对说明符 —— 少了它就是整条 `e2e` stage
+// 在加载期 `ERR_MODULE_NOT_FOUND` 退 1（平台侧实测 897ms 崩在 `executable-resolve`）。
 import {
   whichCommand,
   type UsabilityProbe,
   type WhichCommandOptions,
-} from "./executable-resolve";
-import { pythonCandidates } from "./python-candidates";
+} from "./executable-resolve.ts";
+import { pythonCandidates } from "./python-candidates.ts";
 
 /** 「先试哪个名字、`py` 要不要带 `-3`」的**一份**实现，供各宿主直接起进程。 */
 export interface PythonResolution {

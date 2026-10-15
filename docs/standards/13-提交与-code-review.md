@@ -787,6 +787,34 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > 在自己的用例里显式注入 `download` / `unzip` 并断言「下载了什么、解到哪儿」；
 > 后者一律注入死。
 
+**第五类：判据与被判的对象不是同一条解析链**（第七轮，`E2E 关键流程` 1 例，
+**崩溃在加载期**）。前四类都是用例内部的事，这一类是**判据本身从没走到那条路上**：
+
+- 现场：`node scripts/e2e-run.mjs --grep @critical` 在 **897ms** 退 1 ——
+  `ERR_MODULE_NOT_FOUND: Cannot find module '…/src/lib/process/executable-resolve'
+  imported from …/src/lib/process/python-resolve.ts`。而这一跑前面全绿：ESLint 196s、
+  `单元测试` 13.2m、27 条结构判据、`生产构建` 2.1m（bundle 在预算内、产物干净）。
+- 根因：`python-resolve.ts` / `python-candidates.ts` 里三条**无后缀**的相对 import，
+  而这两个模块被 `e2e/support/preflight-python.mjs` 与
+  `fake-comfyui-executor-env.mjs` **直接静态 import**（Node 24 类型擦除）——
+  **Node 的 ESM 解析器对相对说明符不做扩展名猜测**。
+- **为什么三道既有判据全都放过它**：`tsc`（`moduleResolution: Bundler`）、
+  `eslint`、**vitest**（Vite 解析）都认无后缀形态。于是
+  `tests/e2e-python-preflight.test.ts` 直接 import 那个 `.mjs` **一直是绿的**，
+  而真入口一跑就崩 —— **判据与被判的对象走的不是同一条解析链**。这与第一~四类是
+  同一个坑的不同入口：那四类错在用例内部，这一类错在**判据的解析器不是运行时的解析器**。
+- 处置：① 三条说明符补 `.ts`；② 新增 `tests/mjs-node-esm-resolution.test.ts` ——
+  从 `scripts/**` / `e2e/**` / `tools/**` 下的 `.mjs` / `.cjs` 入口做静态闭包，
+  凡「由 `.mjs` 这条链加载到的」模块，其相对说明符都必须显式带 `.ts`，
+  **按 Node 的口径复算**（不引 `import()`：那会执行入口的主流程）。
+- **自查手法**：凡是「判据 import 了 X，而线上是另一个东西按另一种解析规则加载 X」，
+  就要问一次**两者的解析器是不是同一个**。绕过写法是拿运行时的那个解析器复算一遍
+  （本条用静态复算，因为它要与运行时同一套规则、又不带副作用）。
+- ⚠️ **这条判据自己栽过一次**：第一版对 `.mjs` 直接 `continue`（「只扫 `.ts`」），
+  于是**入口那一跳根本没走出去** —— 把原始 bug `sed` 放回去它也不红。
+  现在那一格有**双向反向复算**：摘掉后缀 ⇒ 三条全点名；补回 ⇒ 绿。
+  凡「扫某种形态」的判据，都要能回答「把原始 bug 放回去，它红不红」。
+
 ##### 13.5.3.6 怎么确认真的跑在自托管上（这条路径唯一的诊断出口）
 
 自托管最坏的失效形态是**没有报错**：#1229 那种是静默不跑，节点离线那种是静默改派

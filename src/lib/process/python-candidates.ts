@@ -9,7 +9,13 @@
 // 判据只能有一处（硬规则 24）：本模块给出**候选名与顺序**，「它到底起不起得来」
 // 交给同域的 `executable-resolve.ts` —— 那两个问题是两件事，本模块不重复实现后者。
 
-import { isWindows } from "./executable-resolve";
+// **必须带 `.ts` 后缀**：本模块被 `e2e/support/preflight-python.mjs` /
+// `fake-comfyui-executor-env.mjs` 直接静态 import（Node 24 的类型擦除），
+// 而 Node 的 ESM 解析器**不认**无后缀的相对说明符 —— 少了它整条 `e2e` stage
+// 会在加载期就 `ERR_MODULE_NOT_FOUND` 退 1（平台侧实测 897ms 崩在
+// `src/lib/process/executable-resolve`）。`tsc` / vitest 走 bundler 解析，
+// 无后缀照样绿 —— 所以这一格只有真跑一次 `.mjs` 才照得出来。
+import { isWindows } from "./executable-resolve.ts";
 
 /**
  * 按平台给解释器候选名（**只给名字**，PATH 上找不找得到由 `whichCommand` 判）。

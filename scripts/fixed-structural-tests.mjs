@@ -26,6 +26,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
+  // 「`.mjs` 入口经 Node ESM 直接加载 `src/**`」这条路的说明符形态（ISSUE #1959 第七跑）：
+  // `e2e/support/preflight-python.mjs` 静态 import 两个 `.ts`，而它们内部的相对 import
+  // 缺了 `.ts` 后缀 —— `tsc` / eslint / **vitest** 三处走打包器解析、全都放过，于是
+  // 「用例全绿、`node scripts/e2e-run.mjs` 一跑就退 1」，红在 `E2E 关键流程` 那个
+  // 只有平台侧才会到的 stage 上（实测 897ms 崩在加载期）。这条判据按 **Node 的口径**
+  // 走一遍解析链，与既有三条不是同一条解析链 —— 列进固定清单是因为它守的是
+  // 「别的判据看不见的那条路」，只在受影响时才跑等于让它随下一次新增 `.mjs` 消费方过去。
+  "tests/mjs-node-esm-resolution.test.ts",
   // 条件性 skip 的登记表：全绿里的 `N skipped` 不说明「绿的是哪一种」，尤其产物级探针
   // （没构建过的检出上整块不判）。这条守住「每个暗掉的站点都有人登记它为什么暗」。
   "tests/conditional-skip-registry.test.ts",
