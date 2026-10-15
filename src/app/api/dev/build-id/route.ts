@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { getServerBootId } from "~/lib/shell/dev-server-id";
+import { readDepsFreshness } from "~/lib/shell/deps-freshness.server";
 import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 
 export const runtime = "nodejs";
@@ -57,13 +58,30 @@ function moduleFingerprints(): string {
  *   · `restartReason` 取启动器自愈重启 dev server 时注入的
  *     `COMFYAPP_RESTART_REASON`（如陈旧路由表清缓存重启），让重启通知能说清
  *     「为什么重启」，而不是只丢一句「服务重启了」。
+ *
+ * 再带上两件「为什么要重启」与「还需要做什么」的事实：
+ *   · `restartDetail` —— 启动器懒归因产出的人话短句（`COMFYAPP_RESTART_DETAIL`），
+ *     例「本次代码更新改了路由结构（新增 2 / 删除 1）」。归因失败时为 null，
+ *     文案退化为「已自动重启」而不是编一个成因；
+ *   · `depsStale` / `depsState` —— 依赖面（lockfile）是否已陈旧（见
+ *     `~/lib/shell/deps-freshness.server`）。这一条**不随重启变**，是给「拉了新
+ *     代码、需要停服务重装依赖」那个动作的通知源。非 dev / 无法判定时为 null。
  */
 export async function GET() {
   const bootId = getServerBootId();
   const buildId = `${bootId}|${moduleFingerprints()}`;
   const restartReason = process.env.COMFYAPP_RESTART_REASON ?? null;
+  const restartDetail = process.env.COMFYAPP_RESTART_DETAIL ?? null;
+  const deps = readDepsFreshness();
   return NextResponse.json(
-    { buildId, bootId, restartReason },
+    {
+      buildId,
+      bootId,
+      restartReason,
+      restartDetail,
+      depsStale: deps?.stale ?? null,
+      depsState: deps?.state ?? null,
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
