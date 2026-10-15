@@ -90,8 +90,10 @@ import {
  *   isFile?: (p: string) => boolean,
  *   probeRun?: (cmd: string, args: string[]) => {command: string, args: string[], out: string} | null,
  *   host?: () => string | null}} [options]
- * @returns {{command: string, args: string[], out: string, ok: boolean}}
- *          `command` / `args` 是**真正要 spawn 的形态**（宿主形态时 command 是宿主）
+ * @returns {{command: string, args: string[], out: string, ok: boolean, tried?: string[], hostFound?: boolean}}
+ *          `command` / `args` 是**真正要 spawn 的形态**（宿主形态时 command 是宿主）；
+ *          `ok: false` 时另带两条读数 —— `tried`（在盘上、但**没起起来**的候选，
+ *          按尝试顺序）与 `hostFound`（解释器宿主在不在），给 `pnpmForensics()` 打。
  */
 export function findPnpm({
   platform = process.platform,
@@ -110,6 +112,12 @@ export function findPnpm({
    * 而单测正是在 POSIX 上判 Windows 的形态。拿宿主那个 `:` 去切一串 `;` 分隔的
    * Windows PATH，会把整串当成**一条**目录 —— 每个候选都拼成不存在的路径，
    * 判据静默答「没有」（`ci-toolchain-python.mjs` 的 `pathDrives` 记过同一格）。 */
+  /* 逐候选的结论 —— **只为失败时的读数收集**（成功即丢）。
+   * 报「pnpm 不可用」时，日志里此前只有「PATH 上命中在哪几个目录」，回答不了
+   * **下一个**问题：那几处命中里有哪个真的被试过、各自怎么败的。没有这条读数，
+   * 下一个人只能再猜一轮修法 —— 而这条链上连着几轮的红都出在这条缝里，
+   * 「候选全对、败在探它的方式」那一轮（`.ps1` 少收了 `-v`）尤其只有它照得出来。 */
+  const tried = [];
   for (const dir of String(env.PATH ?? "")
     .split(platform === "win32" ? ";" : ":")
     .filter(Boolean)) {
@@ -123,9 +131,20 @@ export function findPnpm({
         isFile,
       });
       if (usable) return { ...usable, out: `${usable.out}`.trim(), ok: true };
+      tried.push(candidate);
     }
   }
-  return { command: "pnpm", args: ["-v"], out: "", ok: false };
+  return {
+    command: "pnpm",
+    args: ["-v"],
+    out: "",
+    ok: false,
+    /* 在盘上、但**一个都没起来**的候选（按尝试顺序）。 */
+    tried,
+    /* 解释器宿主在不在 —— `.ps1` 要 PowerShell 才起得来。它单独就能收口一整档猜测：
+     * 「宿主都不在 ⇒ 这几个形态谁也解释不了」，不必再回去翻候选表。 */
+    hostFound: Boolean(host()),
+  };
 }
 
 /**
@@ -147,6 +166,8 @@ export function findPnpm({
  *   platform?: NodeJS.Platform,
  *   env?: Record<string, string | undefined>,
  *   isFile?: (p: string) => boolean,
+ *   tried?: string[],
+ *   hostFound?: boolean,
  * }} [options]
  * @returns {string[]}
  */
@@ -154,6 +175,8 @@ export function pnpmForensics({
   platform = process.platform,
   env = process.env,
   isFile = isFileOnDisk,
+  tried = [],
+  hostFound = false,
 } = {}) {
   const lines = ["---- pnpm 探测现场（供定位，非报错）----"];
   lines.push(`platform: ${platform}`);
@@ -187,6 +210,22 @@ export function pnpmForensics({
       "  （一个都没命中 —— 这个执行账号的 PATH 上没有 pnpm 的任何形态）",
     );
   }
+  /* 后半段是**这一跑真正的读数**：命中的候选里有哪些真被试过、以及有没有
+   * 解释得了它们的宿主。没有它，「命中在盘上」与「起不来」之间那条缝就只能靠猜
+   * —— 这条链上连着几轮的红都出在这条缝里。 */
+  lines.push("在盘上但**没起起来**的候选（按尝试顺序）:");
+  if (tried.length === 0) {
+    lines.push("  （没有 —— 一个候选都没进到探测这一步）");
+  } else {
+    for (const c of tried) lines.push(`  ${c}`);
+  }
+  lines.push(
+    hostFound
+      ? "解释器宿主: 找到（PowerShell 在 PATH 上）"
+      : "解释器宿主: **没找到** —— `.ps1` 要 PowerShell 才起得来；" +
+          "它不在 PATH 上时，这几个形态谁也解释不了（这本身就是一条结论，" +
+          "不必再回去翻候选表）",
+  );
   lines.push("------------------------------------");
   return lines;
 }
@@ -523,7 +562,11 @@ export function main() {
   const pnpm = findPnpm();
   console.log(pnpm.out || "(pnpm 不可用)");
   if (!pnpm.ok) {
-    for (const line of pnpmForensics()) console.log(line);
+    for (const line of pnpmForensics({
+      tried: pnpm.tried,
+      hostFound: pnpm.hostFound,
+    }))
+      console.log(line);
     problems.push(
       "pnpm 不可用 —— 本仓门禁全走 pnpm（AGENTS 硬规则 1 禁 npm）。" +
         "探的是 PATH × 扩展名候选（含 .ps1 与同目录回退），不是裸起一个名字；" +

@@ -645,6 +645,59 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
     // 拆坏之后会留下孤立的 `C` 与 `\Windows` 两行。
     expect(text).not.toMatch(/^  C$/m);
   });
+
+  it("失败时按候选逐条报「在盘上但没起来」，并给宿主的结论", () => {
+    /* 这是后半段才补上的那一半读数。此前只有「命中在哪几个目录」，
+     * 回答不了下一个问题：命中的这几处里**有哪个真被试过、各自怎么败的**。
+     * 「候选全对、败在探它的方式」那一轮（`.ps1` 少收了 `-v`）恰好只在这条读数里显形。 */
+    const dir = "/bin";
+    const tried = [path.join(dir, "pnpm.PS1"), path.join(dir, "pnpm.CMD")];
+    const lines = pnpmForensics({
+      platform: "win32",
+      env: { PATH: dir },
+      isFile: (p: string) =>
+        p.toLowerCase() === path.join(dir, "pnpm.ps1").toLowerCase(),
+      tried,
+      hostFound: false,
+    });
+    const text = lines.join("\n");
+    for (const c of tried) expect(text).toContain(c);
+    expect(text).toContain("在盘上但**没起起来**的候选");
+    // 宿主不在时要把这条结论说全 —— 它是「不必再翻候选表」的那个出口。
+    expect(text).toContain("没找到");
+    expect(text).toContain("PowerShell");
+  });
+
+  it("没有候选进到探测这一步时如实说「没有」，不冒充读完", () => {
+    const text = pnpmForensics({
+      platform: "win32",
+      env: { PATH: "/bin" },
+      isFile: () => false,
+      tried: [],
+      hostFound: true,
+    }).join("\n");
+    expect(text).toContain("一个候选都没进到探测这一步");
+  });
+
+  it("`findPnpm()` 失败时把试过的候选与宿主结论一起交出来", () => {
+    /* 读数不能只活在取证函数里 —— 它得由**判据自己**在失败路径上产出，
+     * 否则 `main()` 拿不到「这一跑试了什么」。这条钉住那条数据链。 */
+    const dir = "/bin";
+    const r = findPnpm({
+      platform: "win32",
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      // 盘上有两个形态，而两个都起不来。
+      isFile: (p: string) =>
+        [".ps1", ".cmd"].some(
+          (e) => p.toLowerCase() === path.join(dir, `pnpm${e}`),
+        ),
+      host: () => null,
+      probeRun: () => null,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.tried ?? [], "试过的候选一条都没记下来").not.toHaveLength(0);
+    expect(r.hostFound, "宿主没有却报找到了").toBe(false);
+  });
 });
 
 describe("工具链自证：`.cnb.yml` 真的在跑它", () => {
