@@ -874,8 +874,22 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     const args = ["exec", "next", "dev", "--turbo", "-p", "3734"];
     const inv = pnpmInvocation(args, { env, platform: "win32" });
     expect(inv, "PATH 上有可用形态时必须给出调用方式").not.toBeNull();
-    // 选中的是 .CMD 旁的 .ps1（批处理 Node 起不了，直接走同胞回退）
-    expect(inv!.candidate).toBe(path.join(dir, "pnpm.CMD"));
+    /* **不钉「选中了哪一个文件」**，只钉「选中的是那个目录里真有的形态、且经宿主起」。
+     *
+     * 原先这里写死 `candidate === pnpm.CMD`，而那条断言**只在 POSIX 上成立**
+     * （平台侧第十一跑实测：Windows 上这条红）—— 因为
+     * `executableExts()` 把 `.PS1` 改成**无条件进候选**之后（ISSUE #1961），
+     * 顺序成了 `"" → .EXE → .PS1 → .CMD`，而 **Windows 的查找不区分大小写**：
+     * 目录里那个 `pnpm.ps1` 会被 `pnpm.PS1` 这个候选命中，于是轮不到 `.CMD`
+     * （`.CMD` 只在 `.ps1` 不在时才被选中、再由它走同胞回退）。
+     *
+     * 两条路**最终落在同一处**（经 PowerShell 宿主起，见下面那两条断言），
+     * 差别只是「先命中的是哪一个文件」。写死一侧就是这个文件反复踩过的形态 ——
+     * 把「跑判据那台宿主的样子」写成了恒真性质。 */
+    expect([
+      path.join(dir, "pnpm.CMD"),
+      path.join(dir, "pnpm.ps1"),
+    ]).toContain(inv!.candidate);
     expect(inv!.viaHost).toBe(true);
     expect(inv!.args.slice(-args.length)).toEqual(args);
     // 与既有判据同源：命令形态必须等于 commandInvocation 的结论
