@@ -43,6 +43,10 @@ export const HOOK = path.join(ROOT, ".githooks", "pre-commit");
  *   ③ 本地 `master`（浅检出 / 单机仓库）。
  * 取不到任何一个即判复算失败并给出口，而不是静默拿一个错的基。
  *
+ * ⚠️ 它**不再是「这条红是谁的」那一问的答案**：PR 分支的 `@{u}` 就是自己那条线，
+ * 刚把主干合进来时它不含主干改动，拿它当基线会把主干自带的红判成 `yours`。
+ * 那一问走 {@link resolveAttributionRef}；本函数只作候选表与它的退回分支。
+ *
  * @param {string} [cwd]
  * @returns {string | null}
  */
@@ -72,8 +76,9 @@ export function resolveUpstreamRef(cwd = ROOT) {
 /**
  * **合并前复算要拿哪条当基线** —— 与 `resolveUpstreamRef` 是**两个问题**。
  *
- * `resolveUpstreamRef()` 回答的是「我这份检出是从哪来的」（首选 `@{u}`），那对
- * 「被拦下时复算：这红是不是本来就有的」是对的 —— 与你对比的就是你这条线的上游。
+ * `resolveUpstreamRef()` 回答的是「我这份检出是从哪来的」（首选 `@{u}`）。它**曾经**
+ * 也被当作「这红是不是本来就有的」的答案，而那个前提在推送过的 PR 分支上是错的
+ * （见 {@link resolveAttributionRef} 那一段）—— 事后复算现在走后者。
  *
  * 但 `--base` 问的是**另一个**问题：「并进 `master` 之后会不会红」。在 PR 分支上
  * `@{u}` 是**你自己的分支**（推送时就设上了），拿它当基线等于「自己跟自己比」——
@@ -102,6 +107,54 @@ export function resolveMergeBaseRef(cwd = ROOT) {
   }
   if (tryRef("master")) return "master";
   return null;
+}
+
+/**
+ * 「被拦下时这条红是谁的」该拿哪条当基线 —— **优先主干，`@{u}` 只在它仍有意义时留下**。
+ *
+ * 旧口径那句「与你对比的就是你这条线的上游」在**推送过的 PR 分支**上不成立：
+ * `@{u}` 就是你自己的分支，而人在复算前往往刚把 `origin/master` 合进来。此时
+ * 「你这条线的上游」= 你上一次推送的那个提交 = **不含那批合并进来的主干改动**，于是：
+ *   · 主干早就有的红，在基线那一侧不复现 ⇒ 判成 `yours`，把别线的债算到复算的人头上；
+ *   · 极端形态是 `@{u}` 逐字等于 `HEAD`（合并还没推）⇒ 拿**自己跟自己比**。
+ * 实测（ISSUE #1913）就是前者：合并主干后 e2e 冒出的 3 条红属于 `baseline-red`，
+ * 而按旧口径会被算成我的 —— 当时是靠两条静态证据（失败行段与主干逐字一致 +
+ * 本分支改动面不覆盖那两个功能目录）绕开的，不该指望每个人都手搓一遍。
+ *
+ * 所以顺序是：**主干与 `HEAD` 不同 ⇒ 用主干**（那才是「不是我引入的」的对照面）；
+ * 主干与 `HEAD` 相同（直接在 `master` 上干活 / 刚快进过）⇒ 退回 `resolveUpstreamRef`
+ * 那套候选，此时它们与主干同义。都取不到 ⇒ `null`，由调用方判失败 ——
+ * 与这个模块通篇的「不许静默拿一个错的基」同一条口径。
+ *
+ * @param {string} [cwd]
+ * @returns {{ref: string | null, why: string | null}} `why` 是给报告说的一句话：
+ *   **取了哪条基线必须说出口** —— 一份写着 `up/<自己的分支>` 的输出读起来像「与主干比过」，
+ *   而它一个字都没比。
+ */
+export function resolveAttributionRef(cwd = ROOT) {
+  const upstream = resolveUpstreamRef(cwd);
+  const trunk = resolveMergeBaseRef(cwd);
+  const head = git(["rev-parse", "HEAD"], cwd);
+  const trunkSha = trunk ? git(["rev-parse", trunk], cwd).stdout : "";
+  if (trunk && head.ok && trunkSha && trunkSha !== head.stdout) {
+    return {
+      ref: trunk,
+      /* 话术里**不许断言原因**（「不含你刚合进来的主干改动」）：主干与 HEAD 不同也可能只是
+       * 本分支领先主干一笔常规提交 —— 那时 upstream 不含的是你自己的改动。这一行要说的是
+       * 可比的那件事：复算对照的是**主干上有没有**，不是「我上次推过什么」。 */
+      why:
+        `基线取的是主干 \`${trunk}\`（本分支的 upstream 是` +
+        (upstream && upstream !== trunk
+          ? ` \`${upstream}\`，两者不同 —— 判「这红是不是本来就有的」要比主干上有没有，` +
+            "不是比上次推过什么）"
+          : "，本次不按它取）"),
+    };
+  }
+  const ref = upstream ?? trunk;
+  return {
+    ref,
+    why: ref ? `基线取的是 \`${ref}\`（与主干同一份）` : null,
+  };
 }
 
 /**

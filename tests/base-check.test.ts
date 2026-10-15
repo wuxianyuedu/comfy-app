@@ -38,6 +38,7 @@ import {
   nextStepsMany,
   normalizeRun,
   readHookSteps,
+  resolveAttributionRef,
   resolveGateCommand,
   resolveMergeBaseRef,
   resolveMergeBatch,
@@ -645,6 +646,119 @@ describe("base-check —— 真仓库上的四态", () => {
       expect(stdout).toContain("changelog.d");
     } finally {
       dropRepo(r);
+    }
+  });
+
+  /**
+   * 「PR 分支 + 主干已推进 + 本地合过主干」那份夹具（ISSUE #1913 的现场形状）。
+   *
+   * 分支**推过一次** ⇒ `@{u}` 就是它自己那条线；随后主干带进一个违规，本地把主干
+   * 合了进来（还没推）。此时按旧口径拿 `@{u}` 当基线 = 拿**不含那批合并改动**的
+   * 自己跟自己比 ⇒ 主干自带的红会被判成 `yours`，把别线的债算到复算的人头上。
+   */
+  function makeMergedPrFixture(): { work: string; bare: string } {
+    const bare = mkdtempSync(join(tmpdir(), "base-check-pr-bare-"));
+    git(bare, "init", "-q", "--bare", "-b", "master", ".");
+    const work = mkdtempSync(join(tmpdir(), "base-check-pr-work-"));
+    git(work, "init", "-q", "-b", "master", ".");
+    git(work, "config", "user.email", "pr@example.com");
+    git(work, "config", "user.name", "pr");
+    git(work, "config", "commit.gpgsign", "false");
+    git(work, "remote", "add", "up", bare);
+    writeFileSync(
+      join(work, "gate.cjs"),
+      [
+        'const fs = require("node:fs");',
+        'const has = fs.existsSync("marker.txt");',
+        'process.stdout.write(has ? "[gate] 命中\\n" : "[gate] 干净\\n");',
+        "process.exit(has ? 1 : 0);",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(join(work, "seed.txt"), "seed\n");
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "chore: seed");
+    git(work, "push", "-q", "up", "master");
+    git(work, "checkout", "-q", "-b", "feat");
+    writeFileSync(join(work, "own.txt"), "mine\n");
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "feat: 自己的一笔");
+    git(work, "push", "-q", "-u", "up", "feat");
+    git(work, "checkout", "-q", "master");
+    writeFileSync(join(work, "marker.txt"), "x\n");
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "fix(other): 主干把违规带了进来");
+    git(work, "push", "-q", "up", "master");
+    git(work, "checkout", "-q", "feat");
+    git(work, "merge", "-q", "--no-edit", "up/master");
+    return { work, bare };
+  }
+
+  test("PR 分支合过主干 ⇒ 基线取主干，并把「取到哪条」说出口", () => {
+    /**
+     * 这一条判的是**基线选择 + 报告口径**（本次的回归本体），刻意不走建快照那一趟：
+     * 快照那一条命令要付 `git worktree add` + 两侧各跑一遍判据，配上这个夹具（比
+     * `makeRepo()` 多一次 push 与一次 merge）实测单条 **49s**（本机同时压着 4 个检出的
+     * vitest 时），会把 30s 预算吃光；改成走快路后同一台机器上复测 **27.3s** ——
+     * 余量仍然不宽，所以这里**不抬预算**，只把代价挪走（§11.13 的口径：预算的出处是实测，
+     * 不是为了让颜色变绿而调的旋钮）。
+     * 「红落在哪一侧」的判决早有 `judge()` 的单测与上面 `markerOnBase` 那条 CLI 用例在判，
+     * 这里重复判一遍只是把同一条链付两次代价。
+     *
+     * 快路怎么选：给一个**必绿**的门禁 ⇒ `current-green` ⇒ 脚本按设计不建快照，
+     * 但「取了哪条基线」那一行照打 —— 正是本回归要钉的东西。
+     */
+    const r = makeMergedPrFixture();
+    try {
+      // 前提必须成立：`@{u}` 确实是自己那条线（旧口径拿它当基线正是错的根源）。
+      expect(resolveUpstreamRef(r.work)).toBe("up/feat");
+      /* 纯函数那一层：主干与 HEAD 不同 ⇒ 取主干，且理由里点名「不是本分支的 upstream」。 */
+      const got = resolveAttributionRef(r.work);
+      expect(got.ref).toBe("up/master");
+      expect(got.why).toContain("基线取的是主干");
+      expect(got.why).toContain("up/feat");
+
+      writeFileSync(join(r.work, "green.cjs"), 'process.exit(0);\n');
+      const { code, stdout, stderr } = runBaseCheck(r.work, [
+        "node",
+        "green.cjs",
+      ]);
+      expect(code, `stderr=${stderr}`).toBe(0);
+      /* 取了哪条基线必须在**真实输出**里看得见：一份写着 `up/feat` 的报告读起来
+         像「与主干比过」，而它一个字都没比 —— 那就是本次误判的形态。 */
+      expect(stdout, `stdout=${stdout}`).toContain("基线取的是主干");
+      expect(stdout).toMatch(/up\/master/);
+    } finally {
+      dropRepo(r);
+    }
+  });
+
+  test("主干与 HEAD 是同一份时才退回 `@{u}`（在 master 上直接复算的那种检出）", () => {
+    /**
+     * 这一向**不复用** `makeMergedPrFixture()`：那个夹具要为「主干与 HEAD 不同」这件事
+     * 付一次 push + 一次 merge，而本用例只需要「HEAD 逐字等于主干」这一格 —— 用最少的
+     * git 动作造出来就行。判据文件在本仓是并发跑的（C 组与 A/B/D 挤同一台机器），
+     * 少造一半夹具就是少一分负载假红。
+     */
+    const bare = mkdtempSync(join(tmpdir(), "base-check-trunk-bare-"));
+    git(bare, "init", "-q", "--bare", "-b", "master", ".");
+    const work = mkdtempSync(join(tmpdir(), "base-check-trunk-work-"));
+    git(work, "init", "-q", "-b", "master", ".");
+    git(work, "config", "user.email", "trunk@example.com");
+    git(work, "config", "user.name", "trunk");
+    git(work, "config", "commit.gpgsign", "false");
+    git(work, "remote", "add", "up", bare);
+    writeFileSync(join(work, "seed.txt"), "seed\n");
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "chore: seed");
+    git(work, "push", "-q", "-u", "up", "master");
+    try {
+      const got = resolveAttributionRef(work);
+      expect(got.ref).toBe("up/master");
+      expect(got.why).toContain("与主干同一份");
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+      rmSync(bare, { recursive: true, force: true });
     }
   });
 
