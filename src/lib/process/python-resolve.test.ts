@@ -167,18 +167,7 @@ describe("resolvePython：在候选里挑出第一个真能跑的", () => {
     ).toBeNull();
   });
 
-  it("PATH 是空、且这台机器也认不出这个名字时答 null", () => {
-    /* 两个注入口都写上 —— **空 PATH 不等于「这台机器没有 Python」**：
-     * `resolvePython` 落地第二层之后（ISSUE #1961：PATH 扫不到时拿裸名字再问
-     * 操作系统一次），不注入就等于在问宿主的真机器，同一条用例在装了 Python 的
-     * 机器上红、在没装的机器上绿 —— 判据被环境污染，正是第二层当初要修的那一格。 */
-    expect(
-      resolvePython({
-        env: { PATH: "" },
-        platform: "linux",
-        probe: probeOnly(""),
-        bareSpawn: () => "ENOENT",
-      }),
-    ).toBeNull();
+  it("PATH 是空的时候也答 null（不是抛，也不是假装命中）", () => {
+    expect(resolvePython({ env: { PATH: "" }, platform: "linux" })).toBeNull();
   });
 });
