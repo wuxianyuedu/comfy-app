@@ -6037,6 +6037,8 @@ type SettingsShellProps = { section; onSelect; className?; banner? } & (
 | `studio/VideoQueueModal`（生成队列 / 批量提交）                                                     | `segment`（#1925 第四批）                   | ✅ 已收口 |
 | `HistoryPanel` / `MaterialLibraryPanel` / `library/ResourceLibrary` 网格·列表切换                   | `ui/display-density-toggle`（#1925 第四批） | ✅ 已收口 |
 | `studio/WorkflowNodeJsonPopover`（RAW / 执行 视图）                                                 | 就地修：`active` 曾恒真（#1925 第四批）     | ✅ 已收口 |
+| `library/ResourceLibrary` 作用域切换（本项目 / 跨项目）                                             | `ui/tabs` `line`（#1925 第五批）            | ✅ 已收口 |
+| `app/(main)/settings/components/AppearanceSection` 三组（主题卡 / 圆角 / 标题字阶）                 | 就地钉选中档悬停值（#1925 第五批）          | ✅ 已收口 |
 
 > **第四批（ISSUE #1925 复查）重推了一遍全库，抓到两种新形态。**
 >
@@ -6057,6 +6059,38 @@ type SettingsShellProps = { section; onSelect; className?; banner? } & (
 >
 > **这一批也纠正了「已收口」的乐观估计**：三批之后仍有 4 类落点漏网，其中一类
 > 是真 bug。按批收口 + 每批重推全库（而不是只验上一批点过名的）是唯一靠谱的做法。
+
+> **第五批（ISSUE #1925 再收一批）从零重推全库，结论是 2 处，并第一次把「为什么
+> 机器分不出这一族」从取舍说成了可验的性质。**
+>
+> ① **`library/ResourceLibrary` 的作用域切换（本项目 / 跨项目）是「下划线页签」
+> 那一族的第五处** —— 与 `HistoryPanel`、`MaterialLibraryPanel` 的作用域切换
+> **逐字同形**，只是它此前藏在 `ToggleGroup` 里、靠 `after:bottom-[-13px]` 硬凑
+> 对齐（未选中档不写下划线 ⇒ 两枚不同高、切来切去基线上下跳），所以沿「`Button` ＋
+> 选中三元」这个形状扫**扫不到它**。出口仍是 `ui/tabs` 的 `line` 档。
+> **教训**：这一族的形状判据要从「`Button` ＋ 三元」放宽到「**一排里选一个是
+> 隐藏的取值判据**」——`aria-pressed` / `data-pressed` / `after:` 下划线都是它的
+> 外衣，认外衣就会漏。
+>
+> ② **`AppearanceSection` 的三组（主题卡 / 圆角 / 标题字阶）选中档缺了那一半
+> 悬停值** —— 它们底是 `Button variant="ghost"`（无条件 `hover:bg-muted`
+> ＋ `hover:text-foreground`），选中档只钉了 `data-checked:bg-primary-soft`
+> ＋ `data-checked:text-*`、没钉悬停 ⇒ 划过**已选中**那枚时被改写回「未选中」。
+> 这一处**第一次把特异性算清了**，不再是「大概会被盖掉」：
+> `data-checked:*` 编译出的选择器是 `.data-checked\:bg-primary-soft:where([data-state=checked])`
+> —— `:where()` **零特异性**，整条 `(0,1,0)`；而 `hover:bg-muted` 是 `(0,2,0)`。
+> **悬停档稳赢，与两条规则在产物里的先后无关**。所以「选中档必须先钉住自己的
+> `hover:`」不是风格偏好，是被特异性强制的一条判据。
+> 修法是**就地钉**（`data-checked:hover:*`）而不是换 `SelectChip`：这三组的
+> 单选语义与方向键契约由 `RadioGroup` 基元给，换成 `SelectChip` 会把那条契约
+> 丢掉（与第三批 `CanvasPanelToolbar` 同一条取舍）。
+>
+> **这一批确认了 4 类刻意不换的新形态**（不是漏，是判过）：
+> `MessageCenterPanel` 之类的**浏览器式页签栏**（带关闭按钮、拖拽、`role="tablist"`，
+> 两形态共用 `.u-tab-active`）、`ui/multi-mode-select` 的**多选 checkbox 行**
+> （`role="checkbox"`，多项同时为真）、`ui/option-list-popover` / `ui/select-menu`
+> 的**下拉选项行**（`role="option"`，已有唯一实现）、以及已在 P77 收口的
+> `ToggleGroup`（`LogFilterBar` 那排日志级别就在这一档）。
 
 > **第三批（ISSUE #1925 余量）多出一条口径：这一族不全都能换成 `SelectChip`。**
 > 下面几种形态**刻意**留在原地，只在调用点补那一半接缝：

@@ -66,13 +66,36 @@ describe("ResourceLibrary", () => {
   it("两个作用域档都渲染，且初始停在「本项目」", async () => {
     mockFetch(BODY);
     render(<ResourceLibrary />);
-    const project = await screen.findByRole("button", { name: /^本项目/ });
-    expect(project.getAttribute("aria-pressed")).toBe("true");
+    const project = await screen.findByRole("tab", { name: /^本项目/ });
+    expect(project.getAttribute("aria-selected")).toBe("true");
     expect(
       screen
-        .getByRole("button", { name: /^跨项目/ })
-        .getAttribute("aria-pressed"),
+        .getByRole("tab", { name: /^跨项目/ })
+        .getAttribute("aria-selected"),
     ).toBe("false");
+  });
+
+  it("作用域档走 ui/tabs 的 line 档：选中态由 data-active 一处驱动（ISSUE #1925 收口）", async () => {
+    mockFetch(BODY);
+    render(<ResourceLibrary />);
+
+    const list = await screen.findByRole("tablist", { name: "素材作用域" });
+    /* 旧形态是手搓的 `ToggleGroup` + `after:` 下划线：未选中档**不写下划线**、
+       靠 `after:bottom-[-13px]` 硬凑对齐 —— 两枚不同高、切来切去基线上下跳；
+       语义也错了半格（`aria-pressed` 是「这开关开着吗」，可这一排只能选一个）。
+       这一族与 `MaterialLibraryPanel` / `HistoryPanel` 的作用域切换逐字同形。 */
+    const tabs = within(list).getAllByRole("tab");
+    expect(tabs).toHaveLength(2);
+    for (const tab of tabs) expect(tab).not.toHaveAttribute("aria-pressed");
+
+    /* 下划线由 `data-active` + `after:opacity-*` 两层驱动，两枚同高同基线：
+       选中档与未选中档的 `after:` 契约只在 `opacity` 上有差，没有任何
+       「选中才给的边框 / 负偏移」——那正是旧形态让两枚不同高的地方。 */
+    for (const tab of tabs) {
+      expect(tab.className).toContain("after:h-0.5");
+      expect(tab.className).not.toContain("after:bottom-[-13px]");
+    }
+    expect(tabs[0]?.className).toContain("data-active:after:opacity-100");
   });
 
   it("显示密度是单选一组，两枚由 value 一处驱动（ISSUE #1925 收口）", async () => {
