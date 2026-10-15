@@ -2,7 +2,7 @@
 
 > 版本：v1.0 ｜ 适用仓库：`F:\AI\Other\Comfy-APP-T3` ｜ 维护者：yuedu
 > 本规范是项目开发、评审、提交的强制性基准；与既有《Comfy-APP-T3-命名规范》《Comfy-APP-T3-命名审计报告》《docs/guides/TESTING.md》配套使用。
-> 前端工程深度细则见《前端工程规范文档集》（docs/standards/，README + 01~15 章）；与文档集的章节映射、冲突处理见统一索引 [docs/README.md](../README.md)。
+> 前端工程深度细则见《前端工程规范文档集》（docs/standards/，README + 01~18 章）；与文档集的章节映射、冲突处理见统一索引 [docs/README.md](../README.md)。
 
 ---
 
@@ -129,9 +129,10 @@ lib（纯函数） ← 任意层
   `components/**/hooks/`，不放 `components/<feature>/*-api.ts`**）。
   四层范式见文档集
   [16.2.1](16-shadcn-ui与表单校验.md#1621-落地范式controller-hook--纯展示视图)，
-  全库推进计划与棘轮护栏（已接入 pre-commit 与 CI）见
-  [第 17 章](17-UI与逻辑分离.md)。当前棘轮基线 **16 处 / 10 文件**
-  （P1–P4 已落地，104 → 16；剩余收尾项见 §17.4 批次表）。
+  全库推进计划与护栏（挂在 `.githooks/pre-commit`）见
+  [第 17 章](17-UI与逻辑分离.md)。这条护栏**已从棘轮翻成硬闸**（ISSUE #1811 收尾）：
+  存量归零、基线文件与 `--update` / `--strict` 一并删除，新写一处 IO 当场判红 —— 所以这里不再记
+  「当前基线几处」（那个数每次搬迁都会过期），完成态判定与数法见 §17.7。
 
 ### 4.3 样式
 
@@ -455,4 +456,4 @@ pnpm build && pnpm start   # 生产预览
 - 若日后启用平台侧流水线，构建镜像务必挑带编译工具的（`node:24` 的 Debian 骨架就自带
   make/gcc/g++），不必额外安装；缺工具链的表现是 `pnpm install --frozen-lockfile`
   当场失败，而不是「装完了但跑不起来」。详见
-  [15.6](standards/15-附录.md#156-疑难排查记录随问题归档对齐主规范-11) 对应条目。
+  [15.6](15-附录.md#156-疑难排查记录随问题归档对齐主规范-11) 对应条目。

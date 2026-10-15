@@ -11,9 +11,9 @@
 <li><a href="../modules/lib_shell_dev-server-status.html">lib/shell/dev-server-status</a></li>
 <li><a href="" aria-current="page">DevServerStatusInput</a></li></ul>
 <h1>Interface DevServerStatusInput</h1></div>
-<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">DevServerStatusInput</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#everonline">everOnline</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#lastexit">lastExit</a><span class="tsd-signature-symbol">?:</span> <a href="lib_shell_app-service-exit.AppServiceExitNotice.html" class="tsd-signature-type tsd-kind-interface">AppServiceExitNotice</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#lastrestartat">lastRestartAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#reachable">reachable</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#restarted">restarted</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">DevServerStatusInput</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#everonline">everOnline</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#lastexit">lastExit</a><span class="tsd-signature-symbol">?:</span> <a href="lib_shell_app-service-exit.AppServiceExitNotice.html" class="tsd-signature-type tsd-kind-interface">AppServiceExitNotice</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#lastrestartat">lastRestartAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#reachable">reachable</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#restarted">restarted</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#routetablestale">routeTableStale</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/dev-server-status.ts:30</li></ul></aside>
+<li>Defined in src/lib/shell/dev-server-status.ts:39</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -26,6 +26,7 @@
 <a href="#lastrestartat" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>last<wbr/>Restart<wbr/>At</span></a>
 <a href="#reachable" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>reachable</span></a>
 <a href="#restarted" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restarted</span></a>
+<a href="#routetablestale" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>route<wbr/>Table<wbr/>Stale?</span></a>
 </div></section></div></details></section></section>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="properties-1">Properties<a href="#properties-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
@@ -36,7 +37,7 @@
 <div class="tsd-comment tsd-typography"><p>本次会话是否曾成功探测到进程标识。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/dev-server-status.ts:32</li></ul></aside></section>
+<li>Defined in src/lib/shell/dev-server-status.ts:41</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="lastexit"><code class="tsd-tag">Optional</code><span>last<wbr/>Exit</span><a href="#lastexit" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">lastExit</span><span class="tsd-signature-symbol">?:</span> <a href="lib_shell_app-service-exit.AppServiceExitNotice.html" class="tsd-signature-type tsd-kind-interface">AppServiceExitNotice</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
@@ -44,14 +45,14 @@
 见 <code>~/lib/shell/app-service-exit</code>）。null = 没有原因可讲。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/dev-server-status.ts:51</li></ul></aside></section>
+<li>Defined in src/lib/shell/dev-server-status.ts:65</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="lastrestartat"><span>last<wbr/>Restart<wbr/>At</span><a href="#lastrestartat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">lastRestartAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>最近一次真正重启的时刻。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/dev-server-status.ts:46</li></ul></aside></section>
+<li>Defined in src/lib/shell/dev-server-status.ts:60</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="reachable"><span>reachable</span><a href="#reachable" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">reachable</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
@@ -63,14 +64,22 @@
 是取事实那一层的事，两边不互相知道。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/dev-server-status.ts:42</li></ul></aside></section>
+<li>Defined in src/lib/shell/dev-server-status.ts:51</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="restarted"><span>restarted</span><a href="#restarted" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">restarted</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>是否检测到<strong>真正</strong>重启（进程标识变化，见 use-dev-server-liveness）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/dev-server-status.ts:44</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/shell/dev-server-status.ts:53</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="routetablestale"><code class="tsd-tag">Optional</code><span>route<wbr/>Table<wbr/>Stale</span><a href="#routetablestale" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">routeTableStale</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>最近一次探测得到 404：进程在应答，但这条端点不在编译图里
+（见 <code>use-dev-server-liveness</code> 的 <code>routeTableStale</code>）。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in src/lib/shell/dev-server-status.ts:58</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -86,7 +95,7 @@
 <h3>On This Page</h3></summary>
 <div class="tsd-accordion-details">
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
-<div><a href="#everonline"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>ever<wbr/>Online</span></a><a href="#lastexit"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>last<wbr/>Exit</span></a><a href="#lastrestartat"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>last<wbr/>Restart<wbr/>At</span></a><a href="#reachable"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>reachable</span></a><a href="#restarted"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restarted</span></a></div></details></div></details></div>
+<div><a href="#everonline"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>ever<wbr/>Online</span></a><a href="#lastexit"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>last<wbr/>Exit</span></a><a href="#lastrestartat"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>last<wbr/>Restart<wbr/>At</span></a><a href="#reachable"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>reachable</span></a><a href="#restarted"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restarted</span></a><a href="#routetablestale"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>route<wbr/>Table<wbr/>Stale</span></a></div></details></div></details></div>
 <div class="site-menu">
 <nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">

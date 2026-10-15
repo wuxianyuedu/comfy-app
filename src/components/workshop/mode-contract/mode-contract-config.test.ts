@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { builtInModeContract } from "~/lib/workshop/model-mode-contract";
+import { derivedModeContract } from "~/lib/workshop/model-mode-contract";
 import {
   CONTRACT_MODES,
   CUSTOM_INPUT_KINDS,
@@ -48,7 +48,7 @@ describe("生效契约（改过的用改过的，未改过的回落内置默认�
   it("注册表里没有该模式时回落内置默认并标「未改」", () => {
     const { contract, customized } = effectiveModeContract("T2I", []);
     expect(customized).toBe(false);
-    expect(contract).toEqual(builtInModeContract("T2I"));
+    expect(contract).toEqual(derivedModeContract("T2I"));
     expect(isModeContractCustomized("T2I", [])).toBe(false);
   });
 

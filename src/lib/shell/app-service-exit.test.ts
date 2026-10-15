@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   describeAppServiceExit,
+  isCurrentDisconnectExit,
   isPreviousRunExit,
+  parseAppServiceExitRaw,
   parseAppServiceExitRecord,
   summarizeAppServiceExit,
   type AppServiceExitRecord,
@@ -166,5 +168,41 @@ describe("isPreviousRunExit", () => {
     expect(isPreviousRunExit(rec({ runId: null }), "run-new")).toBe(true);
     expect(isPreviousRunExit(rec({ runId: "run-old" }), null)).toBe(true);
     expect(isPreviousRunExit(rec({ runId: null }), null)).toBe(true);
+  });
+});
+
+describe("isCurrentDisconnectExit（断开那一刻：这份记录是不是这一次写的）", () => {
+  const NOW = Date.parse("2026-10-14T16:22:09.000Z");
+
+  it("两边 runId 都有值 → 相等才算（不等说明盘上留的是更早那一次的结论）", () => {
+    const same = rec({ runId: "run-now", at: "2026-10-14T16:22:05.000Z" });
+    expect(isCurrentDisconnectExit(same, "run-now", NOW)).toBe(true);
+    const older = rec({ runId: "run-old", at: "2026-10-14T16:22:05.000Z" });
+    expect(isCurrentDisconnectExit(older, "run-now", NOW)).toBe(false);
+  });
+
+  it("任一方拿不到 runId → 退回新鲜度：刚写下的算，陈旧的（单槽文件里留着的上一次）不算", () => {
+    const fresh = rec({ runId: null, at: "2026-10-14T16:22:05.000Z" });
+    expect(isCurrentDisconnectExit(fresh, "run-now", NOW)).toBe(true);
+    expect(isCurrentDisconnectExit(fresh, null, NOW)).toBe(true);
+    const stale = rec({ runId: null, at: "2026-10-13T16:22:05.000Z" });
+    expect(isCurrentDisconnectExit(stale, null, NOW)).toBe(false);
+  });
+
+  it("记录的时刻读不懂 / 在未来（时钟漂移）→ 不可当作「刚刚」", () => {
+    expect(
+      isCurrentDisconnectExit(rec({ runId: null, at: "坏时刻" }), null, NOW),
+    ).toBe(false);
+    const future = rec({ runId: null, at: "2026-10-14T17:00:00.000Z" });
+    expect(isCurrentDisconnectExit(future, null, NOW)).toBe(false);
+  });
+});
+
+describe("parseAppServiceExitRaw（壳回的是文件原文）", () => {
+  it("原文 → 记录；坏字面（空串 / 半截 JSON / 非对象）一律回 null", () => {
+    expect(parseAppServiceExitRaw(JSON.stringify(rec()))).toEqual(rec());
+    for (const bad of [null, "", "   ", "{", "[]", "42"]) {
+      expect(parseAppServiceExitRaw(bad)).toBeNull();
+    }
   });
 });

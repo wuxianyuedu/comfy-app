@@ -186,12 +186,18 @@ describe("useModelFolderConfig", () => {
    * `model.configList` 每 25ms 打一次（5 秒 194 次，ISSUE #1803）。 */
   it("重渲染不复发首屏加载：configList 只在挂载时取一次", async () => {
     behavior = { folders: [folder("checkpoints", true)] };
-    const { rerender } = renderHook(() => useModelFolderConfig(), {
+    const { result, rerender } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await expect.poll(() => configListCalls).toBeGreaterThan(0);
-    /* 挂载期的调用次数（可能是 1，也可能因 StrictMode 双挂载是 2）——
-     * 断言的是**重渲染之后不再增长**，不是某个具体基数。 */
+    /* 基数要等挂载链**彻底落定**之后再取。挂载期不止一个来源：`useQuery` 自己首发一次，
+     * 首次加载的 effect 又用 `setTimeout(0)` 排了一次 `refetch`（就是上面 #1803 那条修法
+     * 留下的形状）。只等「至少发过一次」就会把后面那一发算到重渲染之后 ⇒ 满载下实测正是
+     * `expected 2 to be 1` 的假红（本机 24 个忙等进程，3/3 复现）。这里用本文件既有的
+     * 落定信号：`loading` 回到 false —— 它只在 effect 那次 `refetch` 的 finally 里被写，
+     * 等到它就说「挂载期已经走完」。 */
+    await expect.poll(() => result.current.loading).toBe(false);
+    /* 基数按「落定之后的实际值」取，不写死数字，也不去猜挂载期该发几次 ——
+     * 断言的是**重渲染之后不再增长**这一条。 */
     const afterMount = configListCalls;
 
     for (let i = 0; i < 5; i++) {

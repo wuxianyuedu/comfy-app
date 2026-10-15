@@ -1,9 +1,9 @@
 "use client";
 
-/* ── 把「应用服务断开 / 启动」写进消息中心（规范 17 §17.2 第②层）─────────
+/* ── 把「应用服务断开 / 启动 / 路由异常」写进消息中心（规范 17 §17.2 第②层）──
  *
- * 唯一职责：把 `useDevServerStatus()` 给的三态与进程标识，翻成消息中心里的
- * 「断开」与「启动 / 恢复」两条记录（**时间 + 原因**）。
+ * 唯一职责：把 `useDevServerStatus()` 给的四态与进程标识，翻成消息中心里的
+ * 「断开」「启动 / 恢复」与「路由异常」三条记录（**时间 + 原因 + 该做什么**）。
  *
  * ## 为什么需要它（此前这里什么出口都没有）
  *
@@ -23,11 +23,19 @@
  *
  * ## 原因为什么在这里现读，而不是等上游送到
  *
- * 成因由启动编排在进程结束那一刻写进 `run/app-service-exit.json`，读它要问**已经
- * 起来的那个新进程**（`GET /api/dev/last-exit`）。这条读取正好发生在「边沿已判定、
- * 消息还没写」的当口，于是由本 hook 在 push 之前现取一次：判据（纯，见
- * `~/lib/shell/app-service-message`）与取数（IO）各自待在该待的层，两边不互相
- * 依赖，也就不存在「等上游把原因递下来，而上游也在等」的环。
+ * 成因由启动编排在进程结束那一刻写进 `run/app-service-exit.json`。这条读取正好发生
+ * 在「边沿已判定、消息还没写」的当口，于是由本 hook 在 push 之前现取一次：判据
+ * （纯，见 `~/lib/shell/app-service-message`）与取数（IO）各自待在该待的层，两边
+ * 不互相依赖，也就不存在「等上游把原因递下来，而上游也在等」的环。
+ *
+ * **两条边沿各走各的通道**（ISSUE #1915 把这一点补全）：
+ *
+ * · **断开**：这一刻应用服务已经不在了，经 HTTP 读（`GET /api/dev/last-exit`）必然
+ *   不通 —— 但记录早就在盘上，壳进程（用户看到的「窗口还在、页面连不上」里活着的
+ *   那一方）读它不经过任何应用服务。于是断开这条走壳的 IPC
+ *   （`fetchCurrentDisconnectExit`），**当场上原因**。
+ * · **启动 / 恢复**：服务已经能应答，两条通道都在，走 HTTP 那条把「上一次为什么
+ *   结束」读回来。
  *
  * 取不到就按「没有原因可讲」发（文案里说明为什么读不到）——**不编一个原因**，
  * 也不因为取不到就把这条消息整个吞掉：时间本身已经是事实。
@@ -53,12 +61,14 @@ import { useEffect, useRef } from "react";
 import {
   describeAppServiceExit,
   fetchAppServiceExit,
+  fetchCurrentDisconnectExit,
   isPreviousRunExit,
 } from "~/lib/shell/app-service-exit";
 import type { DevServerState } from "~/lib/shell/dev-server-status";
 import {
   deriveAppServiceEvent,
   describeAppServiceDisconnect,
+  describeAppServiceRouteStale,
   describeAppServiceStart,
   initialAppServiceCursor,
   type AppServiceEvent,
@@ -71,7 +81,7 @@ import {
 } from "../message-center-store";
 
 export interface AppServiceMessageLogInput {
-  /** 应用服务三态（`~/lib/shell/dev-server-status` 的判据结果）。 */
+  /** 应用服务四态（`~/lib/shell/dev-server-status` 的判据结果）。 */
   state: DevServerState;
   /** 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；刷新不算）。 */
   processIsNew: boolean;
@@ -87,6 +97,23 @@ type StoppedFlag = { readonly current: boolean };
  * 就是坏的」），启动/恢复走 `restart`（与 `CodeUpdateWatcher` 的重启提示同档）。 */
 function push(message: NewMessage): void {
   useMessageCenterStore.getState().push(message);
+}
+
+/** 断开那条：先在壳内把「这一次为什么断」读回来（读不到就照实说），再写成消息。 */
+async function recordDisconnect(
+  at: number,
+  stopped: StoppedFlag,
+  runId: string | null,
+): Promise<void> {
+  /* 全程不抛（`fetchCurrentDisconnectExit` 自带兜底）：这一刻刚出过一次故障，
+   * 任何异常都只会让现场更难查。 */
+  const record = await fetchCurrentDisconnectExit(runId, Date.now());
+  if (stopped.current) return;
+  const { title, body } = describeAppServiceDisconnect(
+    at,
+    record === null ? null : describeAppServiceExit(record),
+  );
+  push({ kind: "offline", title, body, runId, time: at });
 }
 
 /** 启动/恢复那条：先把原因读回来，再连同时间一起写成一条完整消息。 */
@@ -111,7 +138,9 @@ async function recordStart(
     exitAt: record === null ? null : Date.parse(record.at) || null,
     notice: record === null ? null : describeAppServiceExit(record),
   });
-  push({ kind: "restart", title, body, runId });
+  /* 带上**事件时刻**而不是让 store 记 push 时刻：这条要先把原因读回来，push 天然
+   * 比事件晚一个往返，而「断开 → 恢复」的先后必须由事情发生的顺序决定。 */
+  push({ kind: "restart", title, body, runId, time: event.at });
 }
 
 export function useAppServiceMessageLog({
@@ -151,9 +180,20 @@ export function useAppServiceMessageLog({
     cursorRef.current = cursor;
     if (event === null) return;
     if (event.type === "disconnect") {
-      const { title, body } = describeAppServiceDisconnect(event.at);
-      /* 断开那一刻盖的是**旧一次启动**的 runId（服务已经死了、端点问不到，
-       * 用的是探活链路留住的值）——它本来就发生在那一启动里。 */
+      /* 断开那一刻就**尽量**把原因带上（ISSUE #1915）：记录早就在进程结束那一刻
+       * 落在盘上了，只是经 HTTP 读不到（那条通道正是没了的服务自己在应答）。壳内
+       * 走 IPC 读同一个文件即可 —— 拿不到时 `describeAppServiceDisconnect` 会说
+       * 清「这一刻拿不到」，而不是编一个「未知原因」。
+       *
+       * 断开那一刻盖的是**本次启动**的 runId，判据也相应换成
+       * `isCurrentDisconnectExit`（记录说的正是刚刚没了的这一份）。 */
+      void recordDisconnect(event.at, stoppedRef, currentRunId);
+      return;
+    }
+    if (event.type === "route-stale") {
+      /* 服务还在应答，runId 是**当前这一次**的（端口答得了 404 就答得了它）——
+       * 与断开那条相反，不是刻意为之，是事实本来就不同。 */
+      const { title, body } = describeAppServiceRouteStale(event.at);
       push({ kind: "offline", title, body, runId: currentRunId });
       return;
     }

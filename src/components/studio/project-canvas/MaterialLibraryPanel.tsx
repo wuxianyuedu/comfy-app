@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  ChevronLeft,
-  CircleHelp,
-  LayoutGrid,
-  List,
-  Plus,
-  Search,
-  X,
-} from "lucide-react";
+import { ChevronLeft, CircleHelp, Plus, Search, X } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { textHandler } from "~/lib/form-props";
 import { ARTIFACT_ROOT_DIR } from "~/lib/media/output-layout";
@@ -20,6 +12,8 @@ import { useState } from "react";
 
 import { MaterialLibraryContent } from "./MaterialLibraryContent";
 import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
+import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
 import {
   useMaterialLibrary,
@@ -98,29 +92,8 @@ export function MaterialLibraryPanel({
             <CircleHelp data-icon="inline-start" size={14} />
           </Button>
         </Hint>
-        {/* 显示密度切换 */}
-        <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
-          <Hint label="网格视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("grid")}
-              className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            >
-              <LayoutGrid data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-          <Hint label="列表视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("list")}
-              className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            >
-              <List data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-        </div>
+        {/* 显示密度切换 —— 三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
+        <DisplayDensityToggle value={display} onChange={setDisplay} />
         <Hint label="关闭" accessibleName>
           <Button
             variant="ghost"
@@ -133,28 +106,37 @@ export function MaterialLibraryPanel({
         </Hint>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="border-border-strong flex gap-4 border-b px-4 pt-2">
-        {[
-          { id: "project" as MaterialScope, label: "本项目" },
-          { id: "cross" as MaterialScope, label: "跨项目" },
-        ].map((scopeItem) => (
-          <Button
-            key={scopeItem.id}
-            variant="ghost"
-            onClick={() => {
-              setScope(scopeItem.id);
-            }}
-            className={`h-auto rounded-none px-0 pb-2.5 text-sm font-medium hover:bg-transparent ${
-              scope === scopeItem.id
-                ? "border-accent text-ink-bright border-b-2"
-                : "text-ink-muted hover:text-ink-soft"
-            }`}
-          >
-            {scopeItem.label}
-          </Button>
-        ))}
-      </div>
+      {/* ── Tabs（下划线页签）──
+          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
+          `border-b-2 border-accent`，**未选中档根本没写那条边框** —— 未选中的
+          那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是「一排里选
+          一个」的又一处手搓，与 `project-canvas/HistoryPanel` 的作用域切换
+          **逐字同形**（规范 16 §16.2.4.75）。
+          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动（字色 +
+          下划线两层），两枚同高同基线。 */}
+      <Tabs
+        value={scope}
+        onValueChange={(value) => setScope(value as MaterialScope)}
+        className="gap-0"
+      >
+        <TabsList
+          variant="line"
+          className="border-border-strong h-auto w-full justify-start gap-4 rounded-none border-b px-4 pt-2"
+        >
+          {[
+            { id: "project" as MaterialScope, label: "本项目" },
+            { id: "cross" as MaterialScope, label: "跨项目" },
+          ].map((scopeItem) => (
+            <TabsTrigger
+              key={scopeItem.id}
+              value={scopeItem.id}
+              className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
+            >
+              {scopeItem.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* ── Search + upload ── */}
       <div className="flex items-center gap-2 px-4 py-3">

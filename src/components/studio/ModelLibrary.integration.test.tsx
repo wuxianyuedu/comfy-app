@@ -106,4 +106,42 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
     // 不再是此前那个裸字面量「模型库」—— ISSUE #1673）。
     expect(screen.getByText(pageHeaderTitle("models"))).toBeInTheDocument();
   });
+
+  /* 档位 chip 的形态（ISSUE #1925 收口）：此前是本文件里手搓的 `FilterChip`
+   * （`Button variant="ghost"` + 选中三元 `bg-primary-500/20 text-primary-strong
+   * hover:bg-primary-500/30`）—— 它把选中态写成了一条近乎同值的底 + 一个在
+   * 悬停时才变的字色，缺「与常态同值的 hover」那一半。现在整排交给
+   * `ui/select-chip`：选中态四层俱在、且悬停值回钉常态。 */
+  it("档位 chip 走 select-chip 的选中态契约（radiogroup + 四层 + 悬停回钉）", async () => {
+    setBehavior({ models: [ONE_MODEL] });
+    renderWithProviders(<ModelLibrary />);
+
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText("dreamshaper-xl.safetensors"),
+        ).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    expect(
+      screen.getByRole("radiogroup", { name: "按类型筛选模型" }),
+    ).toBeInTheDocument();
+
+    // 「全部」这一枚默认选中 —— 它必须自带四层（底色 / 字色 / 描边 / 字重），
+    // 且悬停值钉回常态，否则划过已选中项时会被 Button 的默认悬停档改写。
+    const checked = screen
+      .getAllByRole("radio")
+      .find((el) => el.getAttribute("aria-checked") === "true")!;
+    expect(checked).toBeTruthy();
+    for (const layer of [
+      "aria-checked:bg-primary-soft",
+      "aria-checked:text-primary-strong",
+      "aria-checked:border-primary",
+      "aria-checked:font-semibold",
+      "aria-checked:hover:bg-primary-soft",
+    ]) {
+      expect(checked.className).toContain(layer);
+    }
+  });
 });

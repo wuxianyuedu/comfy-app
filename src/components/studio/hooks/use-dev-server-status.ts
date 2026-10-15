@@ -47,11 +47,13 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     lastExit,
     lastExitAt,
     reachable,
+    routeTableStale,
     everOnline,
     currentRunId,
   } = useDevServerLiveness();
   const derived = deriveDevServerStatus({
     everOnline,
+    routeTableStale,
     /* 喂「抗抖动后」的可达性（`probeOk` 是单拍事实，冷编译超时那种抖动会在
      * 这里被滤掉），见 use-dev-server-liveness 的 OFFLINE_CONFIRM_FAILURES。 */
     reachable,

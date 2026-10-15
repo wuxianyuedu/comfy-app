@@ -25,6 +25,7 @@ import { listCachedTaskIds } from "./stepLogCache";
 import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/hooks/use-canvas-settings";
 import { EmptyState } from "~/components/ui/empty-state";
+import { SelectChip } from "~/components/ui/select-chip";
 import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { FieldLabel } from "~/components/ui/field";
@@ -252,9 +253,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               </div>
             </div>
 
-            {/* Level filter bar — 与应用日志同款单选按钮 */}
+            {/* 级别筛选栏 —— 一排里选一个，走 `ui/select-chip`
+                （规范 16 §16.2.4.75）。此前是手搓的 `variant="ghost"` + 选中
+                三元，选中档没钉悬停值：`ghost` 自带的
+                `hover:bg-muted hover:text-foreground` 会把「已选中」在悬停期间
+                改写成「未选中」的样子（与全局日志面板的级别筛选同源）。 */}
             <div className="border-border-strong bg-surface-1 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-              <div className="flex items-center gap-1">
+              <div
+                role="radiogroup"
+                aria-label="日志级别筛选"
+                className="flex items-center gap-1"
+              >
                 {FILTER_LABELS.map((option) => {
                   const count =
                     option.value === "all"
@@ -262,26 +271,19 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       : visibleAll.filter((l) => l.level === option.value)
                           .length;
                   return (
-                    <Hint
-                      label={`${option.label}（${count} 条）`}
+                    <SelectChip
                       key={option.value}
+                      shape="compact"
+                      selected={filter === option.value}
+                      onClick={() => setFilter(option.value)}
+                      data-testid={`log-filter-${option.value}`}
+                      className="px-2.5 py-1 text-sm"
                     >
-                      <Button
-                        variant="ghost"
-                        onClick={() => setFilter(option.value)}
-                        data-testid={`log-filter-${option.value}`}
-                        className={`h-auto rounded-md px-2.5 py-1 text-sm font-normal ${
-                          filter === option.value
-                            ? "bg-surface-2 text-ink-bright"
-                            : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
-                        }`}
-                      >
-                        {option.label}
-                        <span className="text-ink-fainter text-2xs ml-1">
-                          {count}
-                        </span>
-                      </Button>
-                    </Hint>
+                      {option.label}
+                      <span className="text-ink-fainter text-2xs ml-1">
+                        {count}
+                      </span>
+                    </SelectChip>
                   );
                 })}
               </div>

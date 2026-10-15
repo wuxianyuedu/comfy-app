@@ -18,13 +18,14 @@
 // 属于替用户做决定。条目仍带拖拽源（`mediaDragSourceProps`），需要时拖过去即可。
 
 import { useState } from "react";
-import { FolderOpen, LayoutGrid, List, Plus, Search, X } from "lucide-react";
+import { FolderOpen, Plus, Search, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { EmptyState } from "~/components/ui/empty-state";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
+import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { PageHeader } from "~/components/ui/page-header";
@@ -123,37 +124,13 @@ export function ResourceLibrary() {
           ))}
         </ToggleGroup>
 
-        {/* 显示密度：纯视觉偏好，与业务数据无关（与画布抽屉同一取舍）。 */}
-        <div className="bg-subtle ml-auto flex items-center gap-0.5 rounded-lg p-0.5">
-          <Hint label="网格视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("grid")}
-              className={`h-auto rounded-md p-1 ${
-                display === "grid"
-                  ? "bg-surface-2 text-ink-bright"
-                  : "text-ink-muted hover:text-ink-soft"
-              }`}
-            >
-              <LayoutGrid data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-          <Hint label="列表视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("list")}
-              className={`h-auto rounded-md p-1 ${
-                display === "list"
-                  ? "bg-surface-2 text-ink-bright"
-                  : "text-ink-muted hover:text-ink-soft"
-              }`}
-            >
-              <List data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-        </div>
+        {/* 显示密度：纯视觉偏好，与业务数据无关（与画布抽屉同一取舍）。
+            三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
+        <DisplayDensityToggle
+          value={display}
+          onChange={setDisplay}
+          className="ml-auto"
+        />
 
         <div className="border-border bg-subtle flex w-full items-center gap-2 rounded-lg border px-3 py-2 sm:w-72">
           <Search size={14} className="text-ink-muted shrink-0" />

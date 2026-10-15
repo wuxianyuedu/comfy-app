@@ -289,7 +289,6 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   }
 
   const comfyuiPath = settings.comfyuiPath?.trim() ?? "";
-  if (!comfyuiPath) return emptySnapshot();
 
   // 1.5) 配置端口已经有人应答 → 直接认「在跑」，跳过其余三次进程表查询。
   //
@@ -315,6 +314,20 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       source: "port",
     };
   }
+
+  /* 没配路径 → 没有任何按本应用配置起着的实例。
+   *
+   * 这条早退要落在**配置端口探测之后**：路径没配不等于本机没人在跑
+   * ComfyUI —— 用户可能自己开了桌面版、而它恰好监听在默认/配置端口上（上面
+   * 那条已经认下这种情形）。端口也没人应答时，事实就齐了：**没有可查的对象**
+   * （没有路径 ⇒ 没有 main.py / 解释器候选可枚举）。
+   *
+   * `didQueryProcTable: true` 是这里的关键，且它表达的正是「这次结论不是
+   * 『没得查』」——`unverified` 与本项都为假，上层 `deriveComfyUiStatus` 才会
+   * 把结论坐实成「未运行」。此前这里是 `return emptySnapshot()`（两项皆假但
+   * `didQueryProcTable` 为假），于是状态行被永远按在「ComfyUI 状态检测中…」
+   * 上：用户没配路径，却看着一个一直在转的探测（ISSUE #1900）。 */
+  if (!comfyuiPath) return { ...emptySnapshot(), didQueryProcTable: true };
 
   // 查询失败≠没在跑（高负载 / 冷启动时 PowerShell 常超时）：如实记下来，
   // 最终没命中任何判据时标 unverified，绝不在这里下「未运行」的结论。

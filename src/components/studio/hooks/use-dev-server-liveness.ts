@@ -91,6 +91,15 @@ export interface DevServerLiveness {
   /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
   probeOk: boolean;
   /**
+   * 最近一次探测**得到了 404**：进程在应答，但这条探活端点不在编译图里
+   * （陈旧路由表 / Turbopack 会话级路由失效）。
+   *
+   * 与 `probeOk` 的区别是「答了、只是答的是 404」与「没答」——用户能做的动作
+   * 因此不同（重启应用 vs 等它起来），状态栏必须分得开，不能再拿一句
+   * 「连接中」把两者盖成同一件事。
+   */
+  routeTableStale: boolean;
+  /**
    * **抗抖动后的可达性**（喂给 `deriveDevServerStatus` 的那个事实）。
    *
    * 与 `probeOk` 的差别正是 {@link OFFLINE_CONFIRM_FAILURES}：单拍失败不把
@@ -147,10 +156,24 @@ function writeSession(key: string, value: string): void {
 
 type ProbeResult =
   | { ok: true; bootId: string; runId: string | null }
-  | { ok: false; bootId: null; runId: null };
+  /** 服务**应答了**，但这条端点不在编译图里（404 = 陈旧路由表的签名，
+   *  与启动器 `classifyProbe` 的 `route-404` 同一判据）。 */
+  | { ok: false; bootId: null; runId: null; routeTableStale: true }
+  /** 网络层失败 / 非 404 的错误码：服务此刻不可达（或答不上来）。 */
+  | { ok: false; bootId: null; runId: null; routeTableStale: false };
 
-/** 单次探测：读取 dev server 当前 bootId 与**本次启动**的 runId。任何 HTTP 响应
- *  （含应用层错误码）说明进程在；仅网络层失败（reject）视为不可达。
+/** 单次探测：读取 dev server 当前 bootId 与**本次启动**的 runId。
+ *
+ *  三种结局分得开，因为用户能做的动作完全不同：
+ *  · 2xx —— 进程在，拿到 bootId / runId；
+ *  · **404** —— 进程在，但这条端点没进路由表（陈旧路由表 / Turbopack 会话级
+ *    路由失效）。此时用户看到的是一个被正常服务的页面配一句「连接中」，
+ *    而正解是重启应用，不是「再等等」；
+ *  · 抛异常 / 其它错误码 —— 进程不可达。
+ *
+ *  404 单独成一档而不是并进「不可达」：`everOnline` 永远为假会让状态栏**永久**
+ *  停在「连接中」，而那条文案在「页面明明被同一个进程服务着」时是一句谎话
+ *  （见 `dev-server-status` 的 stale 分支）。
  *
  *  `runId` 与 `bootId` 在同一次请求里回来是刻意的（见 `server-id` 路由的说明）：
  *  分成两次请求会在「服务刚恢复」那一刻还拿着旧 runId，把恢复那条消息盖错启动组。 */
@@ -160,7 +183,13 @@ async function probeBootId(): Promise<ProbeResult> {
       cache: "no-store",
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok) return { ok: false, bootId: null, runId: null };
+    if (!res.ok)
+      return {
+        ok: false,
+        bootId: null,
+        runId: null,
+        routeTableStale: res.status === 404,
+      };
     const data = (await res.json()) as { bootId?: unknown; runId?: unknown };
     const runId =
       typeof data.runId === "string" && data.runId.length > 0
@@ -168,9 +197,9 @@ async function probeBootId(): Promise<ProbeResult> {
         : null;
     return typeof data.bootId === "string" && data.bootId.length > 0
       ? { ok: true, bootId: data.bootId, runId }
-      : { ok: false, bootId: null, runId: null };
+      : { ok: false, bootId: null, runId: null, routeTableStale: false };
   } catch {
-    return { ok: false, bootId: null, runId: null };
+    return { ok: false, bootId: null, runId: null, routeTableStale: false };
   }
 }
 
@@ -185,6 +214,9 @@ export function useDevServerLiveness(): DevServerLiveness {
   /* 连续失败拍数：单拍失败不足以判「断开」（见 OFFLINE_CONFIRM_FAILURES），
    * 探通一次归零。 */
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
+  /* 「探活端点本身 404」这一档。与连通性分开存：它描述的不是「服务在不在」，
+   * 而是「服务答的这条路通不通」，两者可以同时为假、也可以各自单独为真。 */
+  const [routeTableStale, setRouteTableStale] = useState(false);
   const [everOnline, setEverOnline] = useState(false);
   /* 「这份进程对本次页面会话来说是新的」（见 `DevServerLiveness.processIsNew`）。
    * 初值 false：首帧还没探过，谈不上新旧。 */
@@ -222,6 +254,7 @@ export function useDevServerLiveness(): DevServerLiveness {
 
     /* 连通性先落：无论后续是否判定重启，视图都要知道此刻进程可不可达。 */
     setProbeOk(result.ok);
+    setRouteTableStale(!result.ok && result.routeTableStale);
     setConsecutiveFailures(result.ok ? 0 : (n) => n + 1);
     if (result.ok) setEverOnline(true);
     /* 启动标识只认成功那一拍：与 `setProbeOk` 同一批落，于是「服务刚恢复」的
@@ -307,6 +340,7 @@ export function useDevServerLiveness(): DevServerLiveness {
     lastExit,
     lastExitAt,
     probeOk,
+    routeTableStale,
     /* 抗抖动后的可达性：还没到门槛的失败仍算可达（单拍抖动不是断开）。
      * `consecutiveFailures` 达门槛那一刻这一项翻 false，状态栏与消息中心
      * 随之各记一条（断开 / 恢复），而抖动期间它们什么都不记。 */

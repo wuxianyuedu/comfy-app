@@ -14,7 +14,7 @@
  *
  * 数值同时定义在 `src/app/globals.css` 的 `@theme`（供 `z-overlay` /
  * `z-popup` / `z-modal` / `z-canvas-ui` 等工具类使用），两处必须一致 ——
- * 由 `tests/overlay-z-scale.test.ts` 钉住。放在 `lib/shell`：它是**客户端可达**
+ * 由 `src/lib/shell/overlay-z.test.ts` 钉住。放在 `lib/shell`：它是**客户端可达**
  * 的跨端定层常量，`lib/core` 在 eslint 的 boundaries 里是 element `server`，
  * 视图层引不得。
  *

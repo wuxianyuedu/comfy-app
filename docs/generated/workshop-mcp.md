@@ -51,7 +51,7 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
 { "mcpServers": { "comfy-workshop": { "command": "pnpm", "args": ["mcp:stdio"], "cwd": "<项目根>" } } }
 ```
 
-## 工具清单（15 个）
+## 工具清单（条数以 `src/server/mcp/workshop-mcp.ts` 的 `registerTool` 为准，下表逐条列全 —— 故意不写死数字）
 
 | 工具 | 作用 |
 |---|---|

@@ -123,7 +123,7 @@ const DOMAIN_EXEMPT = new Set([
    * 依赖它 —— 与 `format-bytes` / `display-value` / `time-format` 同款：
    * 「唯一持有者 + 任何域消费」的顶层单例。 */
   "src/lib/list-filter.ts",
-  /* 异步动作的进度的**数值口径**（ISSUE #672）：视图层（工坊镜头卡、训练页、
+  /* 异步动作的进度的**数值口径**（ISSUE #672）：视图层（工坊镜头卡、
    * 影片台、历史卡、自定义节点设置）与 `src/lib` 的服务端 / 客户端执行链
    *（`comfyui/executor-ws` 落库、`project-canvas/canvas-api` 透传、
    *  `workshop/generation-client` 转发）**都在用**，
@@ -159,13 +159,13 @@ const DOMAIN_EXEMPT = new Set([
    * 与 `format-bytes` / `display-value` / `progress` 同款：顶层单例。 */
   "src/lib/text-clamp.ts",
   /* 「把一段文本变成安全的文件名片段」的唯一出口（ISSUE #672）：
-   * `src/app/api`（三条上传路由）、`src/lib/comfyui`（Lora 训练产物名）、
-   * `src/server/workshop`（产出目录与文件名）**都在用**，且三侧对「保留哪些
+   * `src/app/api`（上传路由）、`src/lib/path-display`、
+   * `src/server/workshop`（产出目录与文件名）**都在用**，且两侧对「保留哪些
    * 字符」本来就该有各自的名字 —— 进任何子域都会让其余侧反向依赖它。
    * 与 `text-clamp` / `is-record` 同款：顶层单例。 */
   "src/lib/safe-name.ts",
   /* 「把一个数字按某档精度写成字符串」的唯一出口（ISSUE #672）：
-   * 视图层（节点值单元格、画布设置滑块读数、影片时长、训练 loss 曲线、
+   * 视图层（节点值单元格、画布设置滑块读数、影片时长、
    * 用量测试耗时、上传体积提示）与 `src/lib` / `src/server`
    *（`format-bytes` 的降档、ffmpeg 的 `-t` 与 fade 时刻、合成计划的时长）
    * **都在用**，且两侧必须同一口径（视图按两位小数去尾零、落盘按两位小数
@@ -222,7 +222,7 @@ const DOMAIN_EXEMPT = new Set([
    * —— 与 `browser-storage` / `next-frame` 同款：顶层单例。 */
   "src/lib/app-events.ts",
   /* 「把一组 props 转成另一个键的 props」的唯一出口（ISSUE #672）：视图层
-   *（设置页四个分区、工坊六处、工作流库、影片台、训练页、画布设置、三个
+   *（设置页四个分区、工坊六处、工作流库、影片台、画布设置、三个
    *  `ui/` 基元）与 `src/app/login` **都在用**，且「控件收值、抛值」这件事
    * 必须全库同一口径（一处取 `target.value`、一处取 `target.checked`，
    * 传错不会报错，只会在运行时静默拿到 `undefined`）。进任何子域都会让其余
@@ -316,7 +316,7 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/appearance.ts",
   /* 「把一次异步动作的结果接到反馈通道上」的唯一出口（ISSUE #672）：
    * 设置页（12 个动作）、工作流库（8 个）、历史列表与详情、模型标签、
-   * 训练工作室、影片工作室、画布拖放、工坊对话、模型目录配置
+   * 影片工作室、画布拖放、工坊对话、模型目录配置
    * —— 横跨 `app/**` 与六个视图域，且「失败文案怎么归一」必须同一口径。
    * 进任何子域都会让另一个域反向依赖它 —— 与 `browser-io` / `file-io` 同款。 */
   "src/lib/async-action.ts",

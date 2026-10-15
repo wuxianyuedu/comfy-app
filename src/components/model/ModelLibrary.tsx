@@ -7,6 +7,7 @@ import { textHandler } from "~/lib/form-props";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Input } from "~/components/ui/input";
 import { PageHeader } from "~/components/ui/page-header";
+import { SelectChip } from "~/components/ui/select-chip";
 import { Skeleton } from "~/components/ui/skeleton";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ModelCard, type ModelCardData } from "./ModelCard";
@@ -44,21 +45,19 @@ export function ModelLibrary() {
         srTitle={pageHeaderTitle("models")}
         help="直接调用本机 ComfyUI 已安装的模型，文件名即契约，所见即所得。"
       />
-      <div className="mb-5 flex flex-wrap items-center gap-2">
+      <div
+        role="radiogroup"
+        aria-label="按类型筛选模型"
+        className="mb-5 flex flex-wrap items-center gap-2"
+      >
         {MODEL_TYPE_FILTERS.map((filter) => (
-          <Button
+          <SelectChip
             key={filter.key}
-            variant="outline"
-            size="sm"
+            selected={c.type === filter.key}
             onClick={() => c.setType(filter.key)}
-            className={`h-auto rounded-full px-3 py-1.5 ${
-              c.type === filter.key
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
-            }`}
           >
             {filter.label}
-          </Button>
+          </SelectChip>
         ))}
         <Input
           value={c.q}

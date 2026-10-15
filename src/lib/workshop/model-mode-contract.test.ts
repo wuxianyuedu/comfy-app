@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import {
+  ALL_CONTRACT_MODES,
   adapterInputsFromContract,
-  builtInModeContract,
+  configuredModeContracts,
+  derivedModeContract,
   contractToStatusEntries,
   customInputKindOf,
   isCustomContractInputId,
@@ -33,7 +35,7 @@ describe("模式契约口 id 值域", () => {
     //   报错原文形如：expected one of "prompt" | "negative" | "aspect-ratio" …
     const seen = new Set<string>();
     for (const mode of GENERATIVE_MODES) {
-      for (const id of builtInModeContract(mode).inputs) {
+      for (const id of derivedModeContract(mode).inputs) {
         seen.add(id);
         expect(isModeContractInputId(id), `${mode} 的口 ${id}`).toBe(true);
       }
@@ -77,13 +79,13 @@ describe("模式契约口 id 值域", () => {
 
   it("时长口：视频模式内置契约带，生图模式不带", () => {
     expect(isModeContractInputId("duration")).toBe(true);
-    expect(builtInModeContract("I2V").inputs).toContain("duration");
-    expect(builtInModeContract("T2V").inputs).toContain("duration");
-    expect(builtInModeContract("T2I").inputs).not.toContain("duration");
+    expect(derivedModeContract("I2V").inputs).toContain("duration");
+    expect(derivedModeContract("T2V").inputs).toContain("duration");
+    expect(derivedModeContract("T2I").inputs).not.toContain("duration");
   });
 
   it("契约往返不丢口（含带序号的参考图）", () => {
-    const input = GENERATIVE_MODES.map((m) => builtInModeContract(m));
+    const input = GENERATIVE_MODES.map((m) => derivedModeContract(m));
     const round = parseModeContracts(JSON.parse(JSON.stringify(input)));
     expect(round).toEqual(input);
   });
@@ -302,5 +304,32 @@ describe("调序：顺序就是工坊对外的参数顺序", () => {
     const before = [...inputs];
     moveContractInput(inputs, "prompt", 1);
     expect(inputs).toEqual(before);
+  });
+});
+
+/* ── 成品配置（ISSUE #1917）──────────────────────────────────────────────
+ * 内置默认从「入库的文件」回到源码之后，`ALL_CONTRACT_MODES` 是一份**手写清单**
+ * —— 而手写清单的失效形态是安静的：工作流类型表新加一个生成类模式，这里没跟上，
+ * 那个模式在契约编辑器里就查不到，界面上也没有任何地方会说这件事。所以用工作流
+ * 类型表反向核对一遍（不是「抄一遍」：抄一遍不会红，核对会）。 */
+describe("成品配置覆盖全部生成类模式", () => {
+  it("ALL_CONTRACT_MODES 与工作流类型表的生成类模式逐项一致", () => {
+    expect([...ALL_CONTRACT_MODES].sort()).toEqual(
+      [...GENERATIVE_MODES].sort(),
+    );
+  });
+
+  it("每个模式都有一份口清单（空清单 = 该模式在工坊里没有任何对外参数）", () => {
+    for (const contract of configuredModeContracts()) {
+      expect(contract.inputs.length, contract.mode).toBeGreaterThan(0);
+      // 模式码一律大写存（注册表按大写匹配）
+      expect(contract.mode, contract.mode).toBe(contract.mode.toUpperCase());
+    }
+  });
+
+  it("传入自己的模式清单时按它算（调用方不必只能吃默认全集）", () => {
+    expect(configuredModeContracts(["t2i"]).map((c) => c.mode)).toEqual([
+      "T2I",
+    ]);
   });
 });

@@ -11,8 +11,8 @@ AIGC:
 
 # Comfy-APP-T3 文档中心（统一索引）
 
-> 仓库：`F:\AI\Other\Comfy-APP-T3` ｜ 索引维护日期：2026-08-27
-> 本文件是 `docs/` 目录的**统一索引入口**：从这里可导航至主规范《Comfy-APP-T3-项目开发规范》与《前端工程规范文档集》（standards，README + 01~15 章）全部章节，并标注两份文档的分工关系与冲突处理方式。
+> 索引维护日期：2026-08-27
+> 本文件是 `docs/` 目录的**统一索引入口**：从这里可导航至主规范《Comfy-APP-T3-项目开发规范》与《前端工程规范文档集》（standards，README + 01~18 章）全部章节，并标注两份文档的分工关系与冲突处理方式。
 
 ---
 
@@ -31,13 +31,18 @@ AIGC:
 | ComfyUI 执行器独立宿主指南           | [guide-executor-host.md](guide-executor-host.md)                                   | `COMFY_EXECUTOR=host` 灰度开关：怎么开（必须走 launcher）、怎么退、日志在哪、恢复语义与已知观察项                                               | 配套                                               |
 | 应用内控制台使用指南                 | [guide-console.md](guide-console.md)                                               | 左侧栏「控制台」怎么用：预设命令、输入框边界（不是 shell）、三道安全闸与本机边界、单条命令在跑时的回收语义                                        | 配套                                               |
 | 组件工作台 Storybook 使用指南        | [guide-storybook.md](guide-storybook.md)                                           | 怎么起组件工作台（`pnpm storybook`）、怎么加 story、明暗两态怎么切，以及它**不**做什么（不替代页面级视觉回归、不进构建产物）              | 配套                                               |
+| 启动与构建规范                       | [standards/launch-and-build.md](standards/launch-and-build.md)                     | 启动链路（编排 / 壳 / 端口两条链 / 日志分区）、构建与打包、分发产物卫生、跨平台动作对照表与**症状→根因排障手册**（本项目全部历史事故都在这里） | **强制细则**（改启动 / 构建 / 打包时以本章为准，AGENTS「强制先读」表点名） |
+| 启动方式与热更新详解                 | [startup-hotreload.md](startup-hotreload.md)                                       | 三种启动方式各自加载什么、改哪一类代码能不能热更新、重建 `src-tauri/static` 对哪种方式有实质影响                                        | 配套                                               |
+| 非开发人员本地运行上手指南           | [guide-non-developer.md](guide-non-developer.md)                                   | 不装开发环境也能把项目跑起来：一键初始化、双击启动、关掉与重启、出问题看哪里                                                            | 配套（面向非开发人员）                             |
+| 工坊 MCP 支持                        | [workshop-mcp.md](workshop-mcp.md)                                                 | 让外部 AI 客户端端到端指挥工坊创作全流程：stdio 与 HTTP 两种 transport、工具清单、连接方式                                              | 配套                                               |
+| 开发诊断命令速查                     | [guides/DEV-QUERIES.md](guides/DEV-QUERIES.md)                                     | 按症状找命令：类型 / lint / 测试 / 数据层 / 构建的逐条自查命令（Windows + Git Bash 实测）                                                | 配套                                               |
 | API 文档                             | [api/index.html](api/index.html)                                                   | typedoc 自动生成（`pnpm run docs`——**不是** `pnpm docs`，那是 pnpm 内建命令，会抢在脚本前），**提交进 git**；改了代码后须重生成并同提交，由 `check-docs-api.cjs` 在 pre-commit 核                                 | 自动生成                                           |
 | 设计规格                             | [superpowers/specs/](superpowers/specs/)                                           | 功能设计文档（如 wf-debug-mode 设计）                                                                                                          | 归档参考                                           |
 | 生成文档（原文）                     | [generated/](generated/)                                                           | 由 `pnpm doc:render` 从编辑文档自动生成，占位符已替换成真实值，供直接阅读；禁止手改。可双击 `tools/docs/generate-docs.ps1` 一键生成            | 自动生成                                           |
 | 文档引用事实登记表                   | [reference-facts.md](reference-facts.md)                                           | 文档里硬编码值/路径的单一事实映射：占位符语义 + 权威来源 + 提取规则；由 `pnpm doc:check` 动态核对                                              | 配套                                               |
 | 术语表                               | [glossary.md](glossary.md)                                                         | 全项目统一领域词汇：术语 → 唯一所指 → 代码落点（含「三种画布」判别口诀与歧义词限定规则）                                                       | **强制口径**（沟通/文档/命名发生歧义时以本表为准） |
 | 设计系统契约                         | [DESIGN.md](DESIGN.md)                                                             | 从 `src/app/globals.css` 的 Tailwind v4 主题 + `src/components/ui` 基元**实测**反推的机器可读设计契约（token 两态取值、组件形态、Do/Don't、实测出的冲突与未决项）；Design QA / 设计债 / a11y / 组件对齐这几类评审的基准。**它不是 token 的权威源**——取值冲突一律以 `globals.css` 为准，样式判据仍以 [03 章](standards/03-样式与-tailwind.md) 为准 | 配套（评审基准）                                    |
-| 审计整改报告                         | `docs/audits/`（现存两份：性能排查台账 + 架构风险审查，均带未闭环条目，按 §7 保留） | 规范/代码审计发现的整改跟踪（逐项记录违规、规则、严重度与状态）                                                                                | 过程跟踪（闭环后删除，见 §7）                      |
+| 审计整改报告                         | `docs/audits/`（性能排查台账 + 性能审计报告 + 架构风险审查，均带未闭环条目，按 §7 保留；份数以目录 `ls` 为准，本表不记数） | 规范/代码审计发现的整改跟踪（逐项记录违规、规则、严重度与状态）                                                                                | 过程跟踪（闭环后删除，见 §7）                      |
 
 > 本文档集成的范围为：**主规范 + standards 文档集（README + 01~18 章，共 19 篇）**。两者共同构成项目开发规范的"总纲 + 细则"双层体系，其余 docs/api、superpowers 等为配套产物。
 
@@ -58,9 +63,9 @@ AIGC:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | §1 项目总览与技术栈        | [15.1 技术栈速查](standards/15-附录.md#151-技术栈速查)                                                                                                                                                                                           | 主规范为选型总纲；附录为速查表（版本/约定一致）                                               |
 | §2.1 目录结构约定          | [12.1 顶层目录约定](standards/12-代码组织与文件结构.md#121-顶层目录约定与主规范-21-一致)                                                                                                                                                         | 文档集细化（含 `(studio)` 分组路由、`api/`、`HistoryList` 拆目录、`ui/`）                     |
-| §2.2 tRPC router 组织      | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证better-auth-会话与-trpc-context)、[1.7 tRPC/React Query/Zustand 分工](standards/01-架构与状态管理.md#17-trpc--react-query-与-zustand-的分工)                                              | 主规范总则；文档集提供 context 接入代码与数据流示例                                           |
-| §2.3 数据层规范（Drizzle） | [1.10 数据层规范](standards/01-架构与状态管理.md#110-数据层规范drizzle-对齐主规范-23)                                                                                                                                                            | 内容基本一致（历史重复）；主规范保留强制条款，文档集补充 `db:*` 命令与细节                    |
-| §2.4 better-auth 会话      | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证better-auth-会话与-trpc-context)                                                                                                                                                          | 内容基本一致（历史重复）；文档集补充受保护 procedure 示例                                     |
+| §2.2 tRPC router 组织      | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证与会话better-auth对齐主规范-24)、[1.7 tRPC/React Query/Zustand 分工](standards/01-架构与状态管理.md#17-trpc--react-query-与-zustand-的分工)                                              | 主规范总则；文档集提供 context 接入代码与数据流示例                                           |
+| §2.3 数据层规范（Drizzle） | [1.10 数据层规范](standards/01-架构与状态管理.md#110-数据层规范drizzle-orm--better-sqlite3对齐主规范-23)                                                                                                                                                            | 内容基本一致（历史重复）；主规范保留强制条款，文档集补充 `db:*` 命令与细节                    |
+| §2.4 better-auth 会话      | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证与会话better-auth对齐主规范-24)                                                                                                                                                          | 内容基本一致（历史重复）；文档集补充受保护 procedure 示例                                     |
 | §3 命名规范                | [12.6.1 变量命名硬约束](standards/12-代码组织与文件结构.md#1261-变量命名硬约束对齐主规范-3)、[14.4 C8](standards/14-反模式速查表.md#144-组件)                                                                                                    | 主规范为命名总表；文档集细化变量级硬约束（禁单字母、事件参数语义化）                          |
 | §4.1 TypeScript 规范       | [05 类型安全](standards/05-类型安全.md)                                                                                                                                                                                                          | 主规范硬约束（strict/禁 any）；文档集展开 any/unknown/as/Zod/类型守卫                         |
 | §4.2 React 组件模式        | [04 组件设计](standards/04-组件设计.md)、[1.1 状态归属](standards/01-架构与状态管理.md#11-全局高频状态禁止用-react-context)                                                                                                                      | 文档集全面展开拆分阈值、事件隔离、memo 准则                                                   |
@@ -73,7 +78,7 @@ AIGC:
 | §6 性能规范                | [02 性能规范](standards/02-性能规范.md)                                                                                                                                                                                                          | 主规范沉淀已落地模式（画布/列表）；文档集全面展开（虚拟滚动、分片、动画、memo）               |
 | §7 测试与质量规范          | [11 测试与可观测性](standards/11-测试与可观测性.md)                                                                                                                                                                                              | 文档集展开测试分层、行为测试、埋点、CI 门禁                                                   |
 | §8 安全规范                | [5.5 API 响应 Zod 校验](standards/05-类型安全.md#55-api-响应一律-zod-校验)、[10 错误处理与降级](standards/10-错误处理与降级.md)                                                                                                                  | 主规范为安全基线；文档集落实输入校验、降级、敏感信息防护                                      |
-| §9 文档规范                | [README 关系说明](standards/README.md)、[13.9 优化点归档](standards/13-提交与-code-review.md#139-优化点归档强制)                                                                                                                                 | 主规范为文档维护总则；文档集落实"代码+规范"原子更新                                           |
+| §9 文档规范                | [README 关系说明](standards/README.md)、[13.9 优化点归档](standards/13-提交与-code-review.md#139-优化点归档强制对齐主规范-64)                                                                                                                                 | 主规范为文档维护总则；文档集落实"代码+规范"原子更新                                           |
 | §10 构建与发布             | [15.4 常用命令速查](standards/15-附录.md#154-常用命令速查)                                                                                                                                                                                       | 配套                                                                                          |
 | §11 疑难排查记录           | [15.6 疑难排查记录](standards/15-附录.md#156-疑难排查记录随问题归档对齐主规范-11)                                                                                                                                                                | 主规范保留深度排查（子工作流卡死清单）；文档集 15.6 为索引与同步约定                          |
 
@@ -131,11 +136,10 @@ AIGC:
   按图确认流向与阶段边界，再看图后的判据表逐条核对实现落点；两篇都是
   `pnpm doc:check` 纳管文档，图里引用的路径与值不会静默过期。
 - **说术语/写 Issue/起 PR 标题**：先查 [术语表](glossary.md)——`画布`/`节点`/`运行`/`项目`/`视图` 这类一词多指的词必须带限定词（判别口诀见 glossary §2）。
-- **提交前自查**：按 [13.1 提交前自查清单](standards/13-提交与-code-review.md#131-提交前自查清单) 逐条对照；换行符 LF 与 git-lfs 参数见 [13.7/13.8](standards/13-提交与-code-review.md#137-换行符与提交噪声lf)。
+- **提交前自查**：按 [13.1 提交前自查清单](standards/13-提交与-code-review.md#131-提交前自查清单) 逐条对照；换行符 LF 与 git-lfs 参数见 [13.7/13.8](standards/13-提交与-code-review.md#137-换行符与提交噪声lf对齐主规范-112)。
 - **Code Review**：对照 [14 反模式速查表](standards/14-反模式速查表.md) + [13.4 Review 维度](standards/13-提交与-code-review.md#134-code-review-重点维度) 逐项检查。
 - **新成员**：按 [15.5 新成员 10 分钟速读路径](standards/15-附录.md#155-新成员-10-分钟速读路径) 建立全局认知。
 - **修订规范**：修改任一文档后，同步更新本索引（章节映射、冲突处理表），保持体系可索引、无矛盾。
-  _（内容由AI生成，仅供参考）_
 
 ---
 
@@ -143,14 +147,15 @@ AIGC:
 
 > 针对 `docs/audits/` 下的整改跟踪文件及类似过程产物，统一以下处理规则：
 > 台账的**周期性逐条复核**流程见 §8（季度巡检）。`docs/audits/` 目录可以**为空**
-> （2026-09-03 那两份整改文件已全部闭环并按其生命周期删除过；今天目录里的两份
-> —— 性能排查台账与 2026-10-12 架构风险审查 —— 都还有 ⬜ 未闭环条目，按 §7.2/§7.3 **不得删除**），
+> （2026-09-03 那两份整改文件已全部闭环并按其生命周期删除过；今天目录里的几份
+> —— 性能排查台账、性能审计报告与 2026-10-12 架构风险审查 —— 都还有 ⬜ 未闭环条目，
+> 按 §7.2/§7.3 **不得删除**），
 > 新增审计文件时再建目录，不需要为「占位」保留空目录。
 
 ### 7.1 文件归宿
 
 - **审计整改报告** → `docs/audits/`（单数复数统一用 **audits**）
-- **Code Review 归档**（涉及可复用改进模式）→ 更新到 `docs/standards/` 对应章节（见 [13.9 优化点归档](standards/13-提交与-code-review.md#139-优化点归档强制)），过程性文件不长期保留
+- **Code Review 归档**（涉及可复用改进模式）→ 更新到 `docs/standards/` 对应章节（见 [13.9 优化点归档](standards/13-提交与-code-review.md#139-优化点归档强制对齐主规范-64)），过程性文件不长期保留
 - **功能设计规格** → `docs/superpowers/specs/`
 
 ### 7.2 闭环判定
@@ -251,7 +256,7 @@ AIGC:
 | `pnpm doc:check`                                   | 文档里的硬编码值/路径与权威源（源码/配置）一致；新增规范文档未登记进 `SCOPED_DOCS` 或豁免名单即报错（ISSUE #316 守卫） | 每次提交（pre-commit D 组的「文档引用与权威源一致」，ISSUE #1371）；巡检收尾也可手跑           |
 | `node scripts/render-doc-placeholders.cjs --check` | 生成态 `docs/generated/**` 是否与编辑态源文档一致（落后 / 缺失 / 多余三个方向；pre-commit 的 D 组「生成态文档与源同步」，见 13.5.5）        | 改编辑态文档后；重渲染并提交的结果是否同步                |
 | `pnpm doc:render`                                  | 把编辑态的占位符渲染成原文，产出 `docs/generated/`                                                                     | 改含占位符文档后                                          |
-| `node scripts/check-file-structure.cjs`            | 结构/命名/注释流水硬规则（R1~R10），在 pre-commit 强制                                                                 | 每次提交                                                  |
+| `node scripts/check-file-structure.cjs`            | 结构/命名/注释流水硬规则（R1-R12 + R14，钩子标签见上），在 pre-commit 强制                                                                 | 每次提交                                                  |
 | `pnpm check`                                       | `pnpm run lint`（零警告，范围白名单见 `eslint.config.js`）+ `tsc --noEmit`                                             | 每次提交                                                  |
 
 > `doc:check` 的校验范围与豁免名单定义在 `scripts/doc-facts.cjs`

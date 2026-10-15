@@ -1,6 +1,12 @@
 // 资源库页：作用域档、分类渲染、无项目时的引导态。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { setActive } from "~/lib/project-canvas/canvas-store";
@@ -67,6 +73,29 @@ describe("ResourceLibrary", () => {
         .getByRole("button", { name: /^跨项目/ })
         .getAttribute("aria-pressed"),
     ).toBe("false");
+  });
+
+  it("显示密度是单选一组，两枚由 value 一处驱动（ISSUE #1925 收口）", async () => {
+    mockFetch(BODY);
+    render(<ResourceLibrary />);
+
+    const group = await screen.findByRole("radiogroup", { name: "显示密度" });
+    /* 旧形态是三处逐字相同的手搓实现（含这一处）：选中只给底色、
+       没钉字色悬停 —— `ghost` 的 `hover:text-foreground` 会把已选中那枚
+       的字色翻掉。现在走 `ui/display-density-toggle`。 */
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    for (const radio of radios)
+      expect(radio).not.toHaveAttribute("aria-pressed");
+
+    const grid = within(group).getByRole("radio", { name: "网格视图" });
+    expect(grid).toHaveAttribute("aria-checked", "true");
+    expect(grid.className).toContain("aria-checked:hover:text-primary-strong");
+
+    fireEvent.click(within(group).getByRole("radio", { name: "列表视图" }));
+    expect(
+      within(group).getByRole("radio", { name: "列表视图" }),
+    ).toHaveAttribute("aria-checked", "true");
   });
 
   it("没有活跃项目时给出引导，并可一键切到「跨项目」", async () => {
