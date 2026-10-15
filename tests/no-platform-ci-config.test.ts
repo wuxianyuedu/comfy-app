@@ -117,6 +117,83 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
 ];
 
 /**
+ * **stage script 用的 PowerShell 语法必须与宿主 5.1 兼容**。
+ *
+ * 为什么这条要有判据：`.cnb.yml` 的 stage script 在自托管 Windows 节点上默认由
+ * **Windows PowerShell 5.1** 执行（与 `scripts/entry-common.ps1` 的
+ * `#Requires -Version 5.1` 同一口径 —— 仓库两侧都支持，所以配置里不许只用 7 的语法）。
+ * 而 PS 7 的好几种写法在 5.1 里是**解析期错误**：整段脚本**一行都不执行**就非零退出，
+ * 报错还停在语法上，与这一步要回答的问题毫无关系。
+ *
+ * 实测栽过一次（#1959 第三次首跑）：`$winget = (Get-Command winget …)?.Source`
+ * 里的 `?.`（null 条件运算符，PS 7 才有）让这一步在 **0.9 秒**就红，读数
+ * `工具链自证 error [0.9s]`，连开头的 `== OS ==` 都没打出来 —— 形态与「宿主缺
+ * 工具链」逐字同形，而真因是运算符不属于这个语言版本。
+ *
+ * 判据按**码位**扫 script 块的代码行（先剥行内注释），只认那几种「7 有、5.1 没有」
+ * 的形状；每一条都是解析期错误、不会有「其实 5.1 也认」的中间态。
+ */
+const PS7_ONLY: Array<{ pattern: RegExp; what: string; instead: string }> = [
+  {
+    pattern: /\?\./,
+    what: "`?.` null 条件运算符（PS 7+）",
+    instead: "先 `$o = Get-Command X -ErrorAction SilentlyContinue` 再 `if ($o) { $o.Source }`",
+  },
+  {
+    pattern: /\?\?/,
+    what: "`??` null 合并运算符（PS 7+）",
+    instead: "`if ($null -eq $x) { … } else { $x }`",
+  },
+  {
+    pattern: /::new\(/,
+    what: "`::new()` 构造简写（PS 5 才有，5.1 无）",
+    instead: "`New-Object <类型>` 或 `[<类型>]::new()` 的 5.1 可用形态",
+  },
+  {
+    pattern: /-AsHashtable\b/,
+    what: "`ConvertFrom-Json -AsHashtable`（PS 7+）",
+    instead: "`ConvertFrom-Json` 后按 `PSCustomObject` 取属性",
+  },
+];
+
+/**
+ * 扫 `.cnb.yml` 的任务脚本块，回读「哪些行用了 PS 7 才有的语法」。
+ *
+ * `script: |` 之后的正文按**缩进**收口（回到同级或更浅的缩进即结束），
+ * 这样只扫代码、不碰同一文件里别的键。行内注释先剥掉 —— 本文件的判据说明里
+ * 正当地会写出这些形状（那条 ⚠️ 注释就是），把说明判成违规等于逼人删注释。
+ *
+ * @returns 每条违规的 `行号: 说明`
+ */
+export function ps7OnlySyntaxIn(text: string): string[] {
+  const lines = text.split("\n");
+  const found: string[] = [];
+  /* 正文缩进：`script: |` 自己的列 + 默认 2（块标量必须比键更深）。
+   * 键可能写成 `script: |` 也可能写成列表项 `- script: |`，两种都收。 */
+  let bodyIndent: number | null = null;
+  lines.forEach((raw, i) => {
+    const scriptStart = /^(\s*)(?:-\s+)?script:\s*\|\s*$/.exec(raw);
+    if (scriptStart) {
+      bodyIndent = (scriptStart[1] ?? "").length + 2;
+      return;
+    }
+    if (bodyIndent === null) return;
+    // 块结束：出现缩进不比正文深的非空行。
+    if (raw.trim() !== "" && raw.length - raw.trimStart().length < bodyIndent) {
+      bodyIndent = null;
+      return;
+    }
+    const code = raw.replace(/#.*$/, "");
+    for (const { pattern, what, instead } of PS7_ONLY) {
+      if (pattern.test(code)) {
+        found.push(`第 ${i + 1} 行：${what}（改用 ${instead}）`);
+      }
+    }
+  });
+  return found;
+}
+
+/**
  * **合并键解析**（`<<: *anchor`）：`runner` 挂在锚点里、由两个事件各引用一次。
  *
  * 这一层单独判，是因为上面那组文本判据**答不了它**：文本里有 `namespace: group`，
@@ -268,6 +345,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(offenders.map((line) => line.trim())).toEqual([]);
   });
 
+  it("stage script 只用宿主 Windows PowerShell 5.1 认的语法", () => {
+    const found = ps7OnlySyntaxIn(readRegisteredConfig());
+    expect(
+      found,
+      "`.cnb.yml` 的 script 块里用了 PS 7 才有的语法 —— 宿主是 PS 5.1，" +
+        "这类写法是**解析期**错误，整段脚本一行都不执行就退非零，#1959 实测红在 0.9s",
+    ).toEqual([]);
+  });
+
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
     // ① 匹配逻辑认得这批名字，且不误收别的。
     expect(
@@ -296,6 +382,22 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(CONFIG_SHAPE.length).toBeGreaterThanOrEqual(5);
     // ⑤ 锚点解析器在锚点被删时要答「解析不出」，而不是给一个空壳蒙混过关。
     expect(resolveAnchoredRunner("master:\n  push:\n    - x\n")).toEqual([]);
+    /* ⑥ PS 5.1 兼容判据：喂进真语法要红、喂进**注释里**的同形文本要放过。
+     * 后者不是宽容 —— 判据的说明里正当地会写出这些形状（那条 ⚠️ 就是），
+     * 把说明判成违规等于逼人删注释。 */
+    expect(
+      ps7OnlySyntaxIn("master:\n  push:\n    - script: |\n        $x = $o?.Source\n"),
+    ).toHaveLength(1);
+    expect(
+      ps7OnlySyntaxIn(
+        "master:\n  push:\n    - script: |\n        # 不许写 ?. （PS 7 only）\n        $x = 1\n",
+      ),
+    ).toEqual([]);
+    // 块外的同形文本不许被算进来（缩进收口真在起作用）。
+    expect(
+      ps7OnlySyntaxIn("master:\n  name: a?.b\n    - script: |\n        $x = 1\n"),
+    ).toEqual([]);
+    expect(PS7_ONLY.length).toBeGreaterThanOrEqual(4);
   });
 
   it("扫描面真的收到了仓库根（不是空数组假装通过）", () => {

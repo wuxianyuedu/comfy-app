@@ -85,6 +85,15 @@
   `winget` 的那一版写成 `(Get-Command winget …)?.Source`，报错「表达式或语句中包含
   意外的标记」指向 `?.Source` 那一行；本机 Linux 侧无从发现）。规范 §13.5.3.5 记下
   这条自查面：要判空就显式 `if ($x) { … }`。
+
+  **「自查」这件事现在有执行者，不再只靠人记得**（本地通常只有 `pwsh` 7，同一行在
+  那边完全正常 —— 「我这儿跑得通」在这条上不构成证据）：
+  `tests/no-platform-ci-config.test.ts` 的 `ps7OnlySyntaxIn()` 按行扫 `.cnb.yml` 的
+  `script: |` 块（按缩进收口，块外的同形文本不算；先剥行内注释），命中
+  `?.` / `??` / `::new(` / `-AsHashtable` 即红并**点名行号与替代写法**。
+  「不许空转」那组自证同时钉住两端：真语法要红（已用原始 bug 反向复算，报的正是那一行）、
+  **注释里**的同形文本要放过 —— 配置里那条 ⚠️ 说明正当地会写出 `?.`，把说明判成
+  违规等于逼人删注释。
 - **`check-app-port-vectors.cjs` 的 Python 候选补上 Windows `py` 启动器**：原来只探
   `python3` / `python`，宿主只有官方 `py` 时这一侧落进 `missing` 档、以「探测不到
   Python」的名义退出四向比对 —— 与 `e2e/support/fake-comfyui-executor-env.mjs` 的
