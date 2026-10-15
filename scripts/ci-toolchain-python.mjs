@@ -84,8 +84,40 @@ import path from "node:path";
  */
 function run(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
-  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
-  return { ok: r.status === 0 && !r.error, out };
+  if (!r.error && r.status === 0) {
+    return { ok: true, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
+  }
+  /* ── Windows：裸名字 Node 认不出来时，退回让 **cmd.exe** 去解析 ──────────
+   *
+   * 本仓的 `pnpm` 在 Windows 上是 `pnpm.cmd`（或 `.ps1`），**没有**无扩展名的
+   * 可执行形态。而 Node 的 `spawn` 不认 PATHEXT —— `spawnSync("pnpm")` 直接
+   * `ENOENT`（这正是 `src/lib/process/executable-resolve.ts` 存在的理由，
+   * 那边有一份完整的「PATH × PATHEXT 逐目录扫」实现）。
+   *
+   * 本脚本**刻意不 import 那份实现**（见文件头：这一步要在「Node 模块链还没被证明
+   * 可用」的机器上也能给出可读输出），所以这里用一条自足、只依赖 cmd.exe 的退路：
+   * `shell: true` 让 cmd.exe 按它自己的规则（PATHEXT）解析这个名字。
+   *
+   * 现场（ISSUE #1961 平台侧）：`.cnb.yml` 上 `Install dependencies` 用
+   * `pnpm install --frozen-lockfile` **跑得通**（PowerShell 解析得了 `pnpm`），
+   * 而同一次构建里这一步报「pnpm 不可用」—— 差别就在谁去解析这个名字。
+   * 少了这条退路，本步骤会把一台**装好了 pnpm** 的机器判成「缺 pnpm」并退 1，
+   * 而它正是「缺件必须在最便宜的位置报出来」的那一步（§13.5.3.9）。
+   *
+   * 只在 Windows 上试：POSIX 上 `shell: true` 会经 `/bin/sh`，那会让参数过一层
+   * 引号解析 —— 而 POSIX 的裸名字本来就解析得了（内核认执行位），不需要这条退路。 */
+  if (process.platform !== "win32") {
+    return { ok: false, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
+  }
+  const viaShell = spawnSync(cmd, args, {
+    encoding: "utf8",
+    windowsHide: true,
+    shell: true,
+  });
+  return {
+    ok: viaShell.status === 0 && !viaShell.error,
+    out: `${viaShell.stdout ?? ""}${viaShell.stderr ?? ""}`.trim(),
+  };
 }
 
 /**
@@ -430,7 +462,6 @@ function installViaWinget({
   listDirs = listDirectories,
   existing = (/** @type {string} */ p) => fs.existsSync(p),
 }) {
-
   /**
    * 判一个候选路径在不在盘上 —— 读不动（别人的 profile 常常权限不足）与不存在
    * 都当没有，不抛。落点是一串，这一步要逐个问。
@@ -453,7 +484,7 @@ function installViaWinget({
        * **落点是一串而不是一个**：winget 按用户装，而构建账号（实测是
        * `NT AUTHORITY\\SYSTEM`）的 profile 里结构上不可能有它 —— 只探本账号会把
        * 「找错 profile」报成「这台机没有 winget」。见 {@link wingetCandidates}。 */
-      wingetCandidates(env, listDirs).find((p) => existsOnDisk(p)) ?? null;
+      (wingetCandidates(env, listDirs).find((p) => existsOnDisk(p)) ?? null);
   if (!winget) {
     return {
       installed: false,

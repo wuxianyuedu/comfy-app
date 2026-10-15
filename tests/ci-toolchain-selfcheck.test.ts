@@ -39,7 +39,10 @@ import {
   wingetAtStandardLocation,
   wingetCandidates,
 } from "../scripts/ci-toolchain-python.mjs";
-import { nodeAllowed, parseVersion } from "../scripts/ci-toolchain-selfcheck.mjs";
+import {
+  nodeAllowed,
+  parseVersion,
+} from "../scripts/ci-toolchain-selfcheck.mjs";
 import {
   pythonCandidates,
   pythonProbeArgs,
@@ -71,7 +74,10 @@ function requireVersion(text: string) {
  * 统一按**归一后的正斜杠形态**比。
  */
 function norm(p: string): string {
-  return p.replace(/\\/g, "/").replace(/\/{2,}/g, "/").toLowerCase();
+  return p
+    .replace(/\\/g, "/")
+    .replace(/\/{2,}/g, "/")
+    .toLowerCase();
 }
 
 /** 从一段源码里抠出「按平台二选一」的候选表（两份文本，逐项对账）。 */
@@ -335,7 +341,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
      * 这里直判落点拼法（本机没有那个文件，所以 `installPython` 的分支由它决定）；
      * 真起 `winget` 那一档不可能在开发机上判 —— 由这段拼法本身承担。 */
     /* 被测实现用平台的 `path.join` 拼，所以落点身份按**归一形态**比。 */
-    const want = norm(path.join("/L", "Microsoft", "WindowsApps", "winget.exe"));
+    const want = norm(
+      path.join("/L", "Microsoft", "WindowsApps", "winget.exe"),
+    );
     const existing = (p: string) => norm(p) === want;
     expect(
       norm(wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, existing) ?? ""),
@@ -369,9 +377,11 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     );
     /* 其他账号那一条要补 `AppData\Local`（MSIX 按用户安装落在那儿）—— 少补这一段
      * 会拼成一条不存在的路径。 */
-    expect(has("C:\\Users\\other\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe")).toBe(
-      true,
-    );
+    expect(
+      has(
+        "C:\\Users\\other\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe",
+      ),
+    ).toBe(true);
     /* 盘符从 PATH 反推的 —— `D:` 盘上的程序目录也在候选里（写死 `C:` 就会漏）。 */
     expect(has("D:\\Program Files\\WindowsApps\\winget.exe")).toBe(true);
     expect(has("/PF/Microsoft/WindowsApps/winget.exe")).toBe(true);
@@ -552,7 +562,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
 
   it("embed 包固定版本号，不取 latest（同一提交在两台节点上要装出同一个 Python）", () => {
     expect(PYTHON_EMBED_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(read("scripts/ci-toolchain-selfcheck.mjs")).not.toContain("/latest/");
+    expect(read("scripts/ci-toolchain-selfcheck.mjs")).not.toContain(
+      "/latest/",
+    );
   });
 
   it("三条通道全断时，reason 逐条点名各自断在哪（不糊成一句「装不上」）", () => {
@@ -572,6 +584,50 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       expect(r.reason, `reason 里没点名 ${channel}`).toContain(channel);
     }
   });
+});
+
+/**
+ * 「裸名字在 Windows 上 Node 认不出来」这条退路（ISSUE #1961）。
+ *
+ * ## 立案读数
+ *
+ * `file://` 守卫修好之后，那一步**第一次真的跑起来**，当场报：
+ *
+ *   ```
+ *   == pnpm ==
+ *   (pnpm 不可用)
+ *   工具链自证未通过：pnpm 不可用 —— 本仓门禁全走 pnpm
+ *   ```
+ *
+ * 而**同一次构建**里 `Install dependencies` 跑 `pnpm install --frozen-lockfile`
+ * 成功（`Done in 35.9s using pnpm v12.4.1`）—— 所以 pnpm 在这台机上是可用的，
+ * 差别只在**谁去解析这个名字**：Node 的 `spawn` 不认 PATHEXT，`pnpm` 在 Windows 上
+ * 是 `pnpm.cmd`（本仓 `src/lib/process/executable-resolve.ts` 整份模块就是为这一格
+ * 存在的）。
+ *
+ * 少了这条退路，本步骤会把一台**装好了 pnpm** 的机器判成「缺 pnpm」并退 1 ——
+ * 而它正是「缺件必须在最便宜的位置报出来」的那一步。
+ *
+ * ## 为什么按**结构**判
+ *
+ * 这条退路与宿主、与 PATH 有关，本机（POSIX）构造不出「`pnpm` 只有 `.cmd` 形态」
+ * 的世界。判据因此盯的是形状：`run()` 在非零/报错之后**必须**有一条只在
+ * `win32` 上走 `shell: true` 的退路 —— 少了它，那条现场就会原样复现。
+ */
+describe("工具链自证：裸名字在 Windows 上要有退路（ISSUE #1961）", () => {
+  for (const rel of [
+    "scripts/ci-toolchain-selfcheck.mjs",
+    "scripts/ci-toolchain-python.mjs",
+  ]) {
+    it(`${rel} 的 run() 在 Windows 上退回 cmd.exe 解析裸名字`, () => {
+      const src = readFileSync(path.join(ROOT, rel), "utf8");
+      // 退路必须在：`shell: true` 是让 cmd.exe 按 PATHEXT 解析那一句。
+      expect(src).toMatch(/shell:\s*true/);
+      // 且只在 win32 上走 —— POSIX 上裸名字本来就解析得了，多一层 shell 只会
+      // 让参数过一遍 `/bin/sh` 的引号解析。
+      expect(src).toMatch(/process\.platform\s*!==\s*"win32"/);
+    });
+  }
 });
 
 describe("工具链自证：`.cnb.yml` 真的在跑它", () => {
@@ -630,9 +686,13 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
       script.indexOf("function viaScoop("),
       script.indexOf("function viaEmbed("),
     );
-    expect(scoop, "viaScoop 没有接 findExeUnder 注入面").toContain("findExeUnder");
+    expect(scoop, "viaScoop 没有接 findExeUnder 注入面").toContain(
+      "findExeUnder",
+    );
     expect(
-      /(?<![.\w])findExeUnder\s*\(/.test(scoop.replace(/findExeUnder:\s*findExe/, "")),
+      /(?<![.\w])findExeUnder\s*\(/.test(
+        scoop.replace(/findExeUnder:\s*findExe/, ""),
+      ),
       "viaScoop 又直接调了模块级的 findExeUnder（读真 fs）：注入面形同虚设",
     ).toBe(false);
 
@@ -654,8 +714,13 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
     const calls = [
       ...self.matchAll(/installPython\(\{([\s\S]*?)\n\s{0,6}\}\);/g),
     ].map((m) => m[1] ?? "");
-    const winCalls = calls.filter((args) => args.includes("...noExternalAction"));
-    expect(winCalls.length, "没扫到 Windows 分支的调用点，判据失效了").toBeGreaterThan(1);
+    const winCalls = calls.filter((args) =>
+      args.includes("...noExternalAction"),
+    );
+    expect(
+      winCalls.length,
+      "没扫到 Windows 分支的调用点，判据失效了",
+    ).toBeGreaterThan(1);
     expect(
       calls.some((args) => args.includes('platform: "linux"')),
       "POSIX 分支的调用点不见了（判据的另一半）",
