@@ -196,6 +196,69 @@ export function findPython({ run: runCmd = run } = {}) {
  * @param {Record<string, string | undefined>} env
  * @returns {string[]}
  */
+/**
+ * 本机 PATH 上真实出现过的盘符（`C:\\` / `D:\\`，去重）—— **一处定义、多处用**。
+ *
+ * 为什么不能写死 `C:`：那等于把「这台机怎么装」又假设了一遍，而 PATH 是这台机
+ * 自己的事实（现场那台就把用户数据与程序放在 `D:` 盘）。调用方目前有两处
+ * （Python 安装根、winget 落点），两处问的是同一个问题。
+ *
+ * ⚠️ **不要按分隔符切**：`path.delimiter` 是**跑这段的宿主**的分隔符（开发机是
+ * `:`），而盘符自带 `:` —— 一按 `:` 切就把 `C:\\` 切成 `C` 与 `\\`，盘符一个都
+ * 认不出来（实测踩过）。这里改成**在整串 PATH 上直接找盘符**：取「行首或 `;` 之后
+ * 紧跟 `X:\\` / `X:/`」的位置，与切分解耦。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {string[]} 形如 `["C:\\\\", "D:\\\\"]`
+ */
+function pathDrives(env) {
+  const drives = new Set();
+  for (const m of String(env.PATH ?? "").matchAll(/(^|;)([A-Za-z]:)[\\/]/g)) {
+    drives.add(`${m[2]}\\`);
+  }
+  return [...drives];
+}
+
+/**
+ * 机器上所有账号的 profile 根（`<盘>:\\Users`）—— **一处定义、多处用**。
+ *
+ * 另附 `C:\\Users`：PATH 里不一定有 `C:`，纯 PATH 反推会漏掉系统盘上的 profile。
+ * 「其他账号的 profile」正是这条路径最初的症状所在 —— `yuedu` 会话答得出来、
+ * `NT AUTHORITY\\SYSTEM` 构建账号答不出来。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {string[]}
+ */
+function userRoots(env) {
+  const roots = new Set(["C:\\Users"]);
+  for (const drive of pathDrives(env)) {
+    roots.add(path.join(drive, "Users"));
+  }
+  return [...roots];
+}
+
+/**
+ * Windows 上 Python 的常见安装根 —— **取证与安装共用一份**。
+ *
+ * 这份清单的教训是「**按这台机的实际布局问，不按我们指望它装在哪问**」
+ * （#1959 第三轮，取证第一次上线时当场订正的）：最初只列标准落点
+ * （`LOCALAPPDATA\\Programs\\Python` 一族），而现场那台机的读数是——标准落点
+ * **一族零命中**、PATH 里却带着 `D:\\Users\\<name>\\...` 与 `D:\\Program Files\\...`。
+ * 也就是说这台机把用户数据与程序放在 `D:` 盘，解释器（如果装了）根本不在标准落点上；
+ * 只查标准落点会**反向误导**成「这台机真的没装」。
+ *
+ * 所以清单扩成三类：**标准落点** + **本机 PATH 上真实出现过的盘符下的同类位置**
+ * + **其他账号 profile 里的按用户安装**（`<盘>:\\Users\\*\\AppData\\Local\\Programs\\Python`）
+ * —— 最后一类正是「`yuedu` 会话答得出来、`NT AUTHORITY\\SYSTEM` 构建账号答不出来」
+ * 的那一格，也是这一整条路径最初的症状。
+ *
+ * 盘符与用户根取自 {@link pathDrives} / {@link userRoots}（与 `wingetCandidates`
+ * 共用同一份证据 —— PATH 反推，不写死 `C:`）。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {(p: string) => string[]} [listDirs] 列目录（单测注入；默认真读 `fs`）
+ * @returns {string[]}
+ */
 function pythonInstallRoots(env, listDirs = listDirectories) {
   const roots = [
     path.join(env.LOCALAPPDATA ?? "", "Programs", "Python"),
@@ -203,27 +266,14 @@ function pythonInstallRoots(env, listDirs = listDirectories) {
     path.join(env["ProgramFiles(x86)"] ?? "", "Python"),
     path.join(env.ALLUSERSPROFILE ?? "", "Python"),
   ];
-  // 本机 PATH 上出现过的盘符（去重）——「这台机把东西装在哪」的现成证据，比假设
-  // `C:` 强。
-  //
-  // ⚠️ **不要按分隔符切**：`path.delimiter` 是**跑这段的宿主**的分隔符（开发机是
-  // `:`），而盘符自带 `:` —— 一按 `:` 切就把 `C:\` 切成 `C` 与 `\`，盘符一个都
-  // 认不出来（实测踩过）。这里改成**在整串 PATH 上直接找盘符**：取「行首或 `;` 之后
-  // 紧跟 `X:\` / `X:/`」的位置，与切分解耦。
-  const drives = new Set();
-  for (const m of String(env.PATH ?? "").matchAll(/(^|;)([A-Za-z]:)[\\/]/g)) {
-    drives.add(`${m[2]}\\`);
-  }
-  for (const drive of drives) {
+  // 本机 PATH 上出现过的盘符 ——「这台机把东西装在哪」的现成证据，比假设 `C:` 强。
+  for (const drive of pathDrives(env)) {
     roots.push(path.join(drive, "Program Files", "Python"));
     roots.push(path.join(drive, "Python"));
     roots.push(path.join(drive, "Programs", "Python"));
   }
-  // 展开 `<盘>:\Users\<账号>\AppData\Local\Programs\Python`；另附 `C:\Users`
-  // （PATH 里不一定有 C: —— 纯 PATH 反推会漏掉系统盘上的 profile）。
-  const userRoots = new Set(["C:\\Users"]);
-  for (const drive of drives) userRoots.add(path.join(drive, "Users"));
-  for (const usersRoot of userRoots) {
+  // 展开 `<盘>:\\Users\\<账号>\\AppData\\Local\\Programs\\Python`。
+  for (const usersRoot of userRoots(env)) {
     for (const profile of listDirs(usersRoot)) {
       roots.push(path.join(profile, "AppData", "Local", "Programs", "Python"));
     }
@@ -347,18 +397,33 @@ export function installPython({
     ? "winget"
     : /* `winget` 常年在盘上却**不在这个会话的 PATH 上** —— `WindowsApps` 那条
        * 按用户追加的路径要新会话才生效，而构建步骤是一个刚落地的会话。
-       * 所以除了 `Get-Command` 还要按标准落点再找一遍，找到就用绝对路径起它。
-       * 少了这一条，「机器上明明有 winget」在这里会被读成「没有」。 */
-      wingetAtStandardLocation(env);
+       * 所以除了 PATH 还要按落点再找一遍，找到就用绝对路径起它。
+       * **落点是一串而不是一个**：winget 按用户装，而构建账号（实测是
+       * `NT AUTHORITY\\SYSTEM`）的 profile 里结构上不可能有它 —— 只探本账号会把
+       * 「找错 profile」报成「这台机没有 winget」。见 {@link wingetCandidates}。 */
+      wingetCandidates(env).find((p) => existsOnDisk(p)) ?? null;
   if (!winget) {
     return {
       installed: false,
       path: null,
       reason:
-        "winget 不在 PATH 上，也不在标准落点（%LOCALAPPDATA%\\Microsoft\\WindowsApps）" +
-        " —— 这台节点没有可用的自动安装入口",
+        "winget 不在 PATH 上，也不在任何一个落点上（本账号 / 其他账号 / 各盘 " +
+        "%ProgramFiles% 的 WindowsApps）—— 这台节点没有可用的自动安装入口",
     };
   }
+  /**
+   * 判一个候选路径在不在盘上 —— 读不动（别人的 profile 常常权限不足）与不存在
+   * 都当没有，不抛。落点是一串，这一步要逐个问。
+   *
+   * @param {string} p
+   */
+  const existsOnDisk = (p) => {
+    try {
+      return fs.existsSync(p);
+    } catch {
+      return false;
+    }
+  };
   const tried = [];
   for (const scope of ["user", "machine"]) {
     const r = runCmd(winget, [
@@ -478,7 +543,66 @@ function findExeUnderAllRoots(env) {
 }
 
 /**
- * `winget` 在用户级标准落点上的绝对路径（不在盘上时返回 `null`）。
+ * `winget` 的候选绝对路径 —— **按「本账号 → 其他账号 → 机器级」排列**。
+ *
+ * 只探**当前账号**的 `%LOCALAPPDATA%` 是不够的，这一条**已被节点自己的日志证伪**
+ * （ISSUE #1959 第四轮）：那台机器的构建步骤跑在 `NT AUTHORITY\\SYSTEM` 下，而
+ * `winget` 是**按用户**安装的 MSIX 别名 —— 它的落点在**装它的那个用户**的 profile
+ * 下。`SYSTEM` 的 `%LOCALAPPDATA%` 是
+ * `C:\\Windows\\system32\\config\\systemprofile\\AppData\\Local`，
+ * 那里**结构上不可能**有它。于是「只探本账号」在日志上表现为「这台机没有 winget」，
+ * 真因却是「找错了账号的 profile」—— 与 `pythonInstallRoots` 那一格是**同一个错认**
+ * （见 {@link pythonForensics}），只是那次它红在**取证打印**上、这次红在
+ * **查找本身**上。
+ *
+ * 修法沿用上面那套证据（{@link pathDrives} / {@link userRoots}），**不另写第二份
+ * 落点清单** —— 两处问的是同一个问题，答案也该是同一份来源（现场那台把用户数据放在
+ * `D:` 盘，用 PATH 反推正好拿到它，写死 `C:` 就会漏）。
+ *
+ * 三种「基」的拼法**不同**，所以分开拼而不是拿一个 base 套通用后缀：本账号的
+ * `%LOCALAPPDATA%` 已经是 `…\\AppData\\Local`；其他账号还要补 `AppData\\Local`；
+ * 机器级直接就在 `WindowsApps\\` 下。套通用后缀会把用户 profile 那几条拼成不存在的
+ * 路径。找到谁的 `winget` 都能用：`--scope user` 装进的是**当前执行账号**的 profile，
+ * 与那个 `winget.exe` 属于谁无关。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {(p: string) => string[]} [listDirs] 列目录（单测注入；默认真读 `fs`）
+ * @returns {string[]} 候选路径（可能为空；调用方逐个判在不在盘上）
+ */
+export function wingetCandidates(env, listDirs = listDirectories) {
+  /* 列目录一步**按「少几个候选」处理**：别人的 profile 常常读不动（权限），
+   * 那不是这一步的失败 —— 本函数是导出的、注入的 `listDirs` 也可能自己抛，
+   * 都当空。 */
+  const profiles = userRoots(env).flatMap((root) => {
+    try {
+      return listDirs(root);
+    } catch {
+      return [];
+    }
+  });
+  const bases = [
+    // 本账号的 `%LOCALAPPDATA%` 本身就已经是 `…\\AppData\\Local`。
+    env.LOCALAPPDATA,
+    // 其他账号：`<盘>:\\Users\\<名>` 还要补 `AppData\\Local`。
+    ...profiles.map((profile) => path.join(profile, "AppData", "Local")),
+    // 机器级：`Program Files\\WindowsApps\\`。
+    ...pathDrives(env).map((drive) => path.join(drive, "Program Files")),
+    env.ProgramFiles,
+  ];
+  const out = [];
+  for (const base of bases) {
+    if (!base) continue;
+    out.push(path.join(base, "Microsoft", "WindowsApps", "winget.exe"));
+    out.push(path.join(base, "WindowsApps", "winget.exe"));
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * `winget` 在**本账号**用户级标准落点上的绝对路径（不在盘上时返回 `null`）。
+ *
+ * 保留这一条是因为「本账号的落点」仍然是最常见的那一档（人机同账号时它就是答案）；
+ * 找不到时的完整回退链见 {@link wingetCandidates}。
  *
  * @param {Record<string, string | undefined>} env
  * @param {(p: string) => boolean} [existing] 盘上有没有它（单测注入；默认真 `fs`）

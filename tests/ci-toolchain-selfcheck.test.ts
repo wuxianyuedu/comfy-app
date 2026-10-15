@@ -29,6 +29,7 @@ import {
   parseVersion,
   pythonForensics,
   wingetAtStandardLocation,
+  wingetCandidates,
 } from "../scripts/ci-toolchain-selfcheck.mjs";
 import {
   pythonCandidates,
@@ -272,6 +273,39 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     ).toBeNull();
     // 没有 LOCALAPPDATA 时不拼出一个相对路径来冒充绝对路径。
     expect(wingetAtStandardLocation({})).toBeNull();
+  });
+
+  it("落点是**一串**：本账号 → 其他账号的 profile → 各盘 Program Files（只探本账号会把「找错 profile」报成「没有 winget」）", () => {
+    /* 现场（ISSUE #1959 第四轮）：构建账号是 `NT AUTHORITY\SYSTEM`，而 winget 是
+     * **按用户**装的 MSIX 别名 —— 它的落点在**装它的那个用户**的 profile 下，SYSTEM
+     * 的 `%LOCALAPPDATA%` 里结构上不可能有它。只探本账号时，日志报的是「盘上也没
+     * 找到 winget」，而真因是「找错了账号的 profile」。 */
+    /* 列目录注入进来，断言与开发机上有没有 `C:\Users` **无关**（真实现读 `fs`，
+     * 在 Linux 上恒空 —— 那样这条用例会随环境静默变绿）。 */
+    const cands = wingetCandidates(
+      /* PATH 里带 `D:\` —— 盘符靠它反推，与 `pythonInstallRoots` 共用同一份证据。 */
+      { PATH: "D:\\x;", LOCALAPPDATA: "/L", ProgramFiles: "/PF" },
+      (root) => (root === "C:\\Users" ? ["C:\\Users\\other"] : []),
+    );
+    /* 顺序即语义：本账号在最前（人机同账号时它一次就中），机器级在最后兜底。 */
+    expect(cands[0]).toBe("/L/Microsoft/WindowsApps/winget.exe");
+    /* 其他账号那一条要补 `AppData\Local`（MSIX 按用户安装落在那儿）—— 少补这一段
+     * 会拼成一条不存在的路径。 */
+    expect(cands).toContain(
+      "C:\\Users\\other/AppData/Local/Microsoft/WindowsApps/winget.exe",
+    );
+    /* 盘符从 PATH 反推的 —— `D:` 盘上的程序目录也在候选里（写死 `C:` 就会漏）。 */
+    expect(cands).toContain("D:\\/Program Files/WindowsApps/winget.exe");
+    expect(cands).toContain("/PF/Microsoft/WindowsApps/winget.exe");
+  });
+
+  it("别的 profile 读不动时只是少几个候选，不抛", () => {
+    /* 真实现是 `fs.readdirSync`，别人 profile 权限不足时会抛 —— 而这一步的语义
+     * 只是「少几个候选」，不该让整步工具链自证炸掉。 */
+    const cands = wingetCandidates({ LOCALAPPDATA: "/L" }, () => {
+      throw new Error("权限不足");
+    });
+    expect(cands).toContain("/L/Microsoft/WindowsApps/winget.exe");
   });
 
   it("POSIX 上按平台挑唯一一个包管理器；一个都不在时不猜、不动手", () => {

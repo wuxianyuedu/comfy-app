@@ -166,3 +166,30 @@
   「既判也装」这一层在那一档其实从没成功过。现在两条都试过仍找不到才认输，并把
   「试过什么」写进失败原因。装后回找也补一条：机器级安装会把解释器放进 Program Files，
   而**这个进程的 PATH 是安装前的**，按安装根找不到时再按 winget 的链接目录找一次。
+- **`winget` 的落点补成「一串」，不再只探本账号的 `%LOCALAPPDATA%`**（第四轮）。
+  上一笔把**安装的 scope** 修对了（`--scope user` → 再试 `--scope machine`），但
+  **找 `winget.exe` 本身**那一步当时还只探**一个**位置 —— 本账号的
+  `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`。而 winget 是**按用户**装的
+  MSIX 别名，落点在**装它的那个用户**的 profile 下；实测构建账号是
+  `NT AUTHORITY\SYSTEM`，它的 `%LOCALAPPDATA%` 是
+  `C:\Windows\system32\config\systemprofile\AppData\Local` —— 那里**结构上不可能**
+  有 winget。于是「只探本账号」在日志上表现为「盘上也没找到 winget」，真因却是
+  「找错了账号的 profile」：**装 scope 错了、找入口也错了，两处是同一个错认**，
+  只修一处那一步仍会红在同一个位置。
+  **修法不是再写第二份落点清单**（那正是反模式里的「第二轮子」）：把上一笔为
+  Python 取证建的「盘符从 PATH 反推 + 其他账号 profile」那套证据抽成
+  `pathDrives()` / `userRoots()`，**一处定义、两处用** —— `pythonInstallRoots()`
+  与 `wingetCandidates()` 现在读同一份来源（现场那台把用户数据放在 `D:` 盘，用
+  PATH 反推正好拿到它，写死 `C:` 就会漏）。
+  `wingetCandidates()` 的候选串是「本账号 → 其他账号的 `AppData\Local` → 各盘
+  `Program Files` → `%ProgramFiles%`」，逐个判在不在盘上（别人的 profile 常常读不动，
+  读不动与不存在都当没有、不抛）。三种「基」的拼法**不同**，所以分开拼而不是套一个
+  通用后缀 —— 套后缀会把用户 profile 那几条拼成不存在的路径（这一笔实现时正是这么
+  错的，被用例当场照出来）。找到谁的 `winget` 都能用：`--scope user` 装进的是
+  **当前执行账号**的 profile，与那个 `winget.exe` 属于谁无关。
+  三条用例判它（列目录注入，开发机上 `C:\Users` 不存在也不影响）：候选里确含其他
+  账号 profile 与反推盘符下的位置、别的 profile 读不动时不抛、一个落点都不在时不编
+  路径也不发起安装（已用「把这两类来源去掉」反向复算会红）。
+  ⚠️ **这一笔不必然让流水线转绿** —— 若这台节点上确实一个 winget 都没有（连续几次
+  构建日志的读数指向这一档），仍需平台侧人工装 Python。本笔做的是让「找不到」这件事
+  **说得对**，不再把「找错账号」报成「这台机没有」。

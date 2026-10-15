@@ -493,7 +493,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | **git**                                                 | 自托管机的基本依赖（官方文档原话「必装」）                                                                                                                                                                                                                 | 工具链自证                                                                                                                                                                                                                                                                  |
 | **Node**（在 `engines.node` 范围内）                    | 什么都跑不起来                                                                                                                                                                                                                                             | 工具链自证                                                                                                                                                                                                                                                                  |
 | **pnpm**                                                | 同上（`corepack` 会在缺它时自己去下载 `packageManager` 指的那版，但那是每次构建的额外网络往返）                                                                                                                                                            | 工具链自证                                                                                                                                                                                                                                                                  |
-| **Python**                                              | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来                             | **`scripts/ci-toolchain-selfcheck.mjs`：同口径探 `python3` / `python` / `py`，先试 `winget`（含不在 PATH 的标准落点；**`--scope user` → `--scope machine` 两条都试** —— Runner 常以服务账号跑，用户级安装它看不见）当场装，两条都成不了时非零退出并把它写成平台侧人工动作** |
+| **Python**                                              | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来                             | **`scripts/ci-toolchain-selfcheck.mjs`：同口径探 `python3` / `python` / `py`，先试 `winget`（`winget.exe` 的入口按**一串落点**找：本账号 → 其他账号 profile → 各盘 `Program Files`，不只看本账号；安装**`--scope user` → `--scope machine` 两条都试** —— Runner 常以服务账号跑，用户级安装它看不见）当场装，两条都成不了时非零退出并把它写成平台侧人工动作** |
 | **（说明）缺 Python 那一档在单元测试层是 `env` 档跳过** | 三条验包 / 真跑的用例没有它就跑不了 —— 它们跳过后**在 `tests/conditional-skip-registry.test.ts` 里看得见**（档位 `env`，与 `check-file-structure.test.ts` 的 `!python` 同处置）。机器缺工具是**环境**缺口，本仓的既有口径是「跳过 + 登记」，不是让流水线红 | 守卫是文件顶部的 `PYTHON_OK` 常量。**别写成 `it.skipIf(!hasPython())`**：登记表的扫描器按 `[^)]*` 取守卫文本，守卫里带一对括号会让它整个匹配不上，新增的 skip 站点于是在登记表里**隐形** —— 那正是登记表要防的失效形态                                                      |
 | git 的可提交身份                                        | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败                                                                                                                                      | **夹具自己说话**，见下                                                                                                                                                                                                                                                      |
 
@@ -592,8 +592,43 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > **`winget` 那一步还有两个形态细节**（都从现场读出来，也都在那一步的实现里）：
 >
 > - **它常年在盘上却不在这个会话的 PATH 上** —— `%LOCALAPPDATA%\Microsoft\WindowsApps`
->   那条按用户追加的路径要新会话才生效，所以除了 `Get-Command` 还要**按标准落点再找
->   一遍**，找到就用绝对路径起它。少了这一条，「机器上明明有 winget」会被读成「没有」。
+>   那条按用户追加的路径要新会话才生效，所以除了 PATH 还要**按落点再找一遍**，找到就用
+>   绝对路径起它。少了这一条，「机器上明明有 winget」会被读成「没有」。
+>
+>   **而「按落点再找一遍」的落点是**一串**，不是本账号那一个**（#1959 第四轮）。
+>   这条与下面那条 scope 的教训**是同一个错认的两半**：`winget` 是**按用户**安装的
+>   MSIX 别名，落点在**装它的那个用户**的 profile 下；而我们实测的构建账号是
+>   `NT AUTHORITY\SYSTEM`，它的 `%LOCALAPPDATA%` 是
+>   `C:\Windows\system32\config\systemprofile\AppData\Local` —— 那里**结构上
+>   不可能**有 winget。所以只探本账号时，日志报的是「盘上也没找到 winget」，真因却是
+>   「找错了账号的 profile」：**装 scope 错了、找入口也错了，只修一处那一步仍会红在
+>   同一个位置**。
+>
+>   > **由此得到那条反复出现的推理**（第三轮写进取证打印、第四轮才写进查找本身）：
+>   > 凡按账号 / 路径判「有没有」，先问一句
+>   > **「我找的这条路径，这个账号结构上可能有吗」**。漏问这一句，红的位置就总与要
+>   > 回答的问题无关。
+>
+>   **修法不是再写第二份落点清单**（那正是反模式里的「第二轮子」）：把上一笔为 Python
+>   取证建的「盘符从 PATH 反推 + 其他账号 profile」那套证据抽成
+>   `pathDrives()` / `userRoots()`，**一处定义、两处用** —— `pythonInstallRoots()`
+>   与 `wingetCandidates()` 读同一份来源（现场那台把用户数据放在 `D:` 盘，用 PATH
+>   反推正好拿到它，写死 `C:` 就会漏）。
+>
+>   `wingetCandidates()` 的候选串是「**本账号 → 其他账号的 `AppData\Local` → 各盘
+>   `Program Files` → `%ProgramFiles%`**」。三种「基」的拼法**不同**，所以要分开拼
+>   而不是套一个通用后缀：本账号的 `%LOCALAPPDATA%` 已经是 `…\AppData\Local`；
+>   其他账号还要补 `AppData\Local`；机器级直接就在 `WindowsApps\` 下 —— 套后缀会把
+>   用户 profile 那几条拼成**不存在**的路径（这一笔实现时正是这么错的，被用例当场
+>   照出来）。逐个判在不在盘上（别人的 profile 常常读不动 —— 读不动与不存在都当没有，
+>   不抛）。找到谁的 `winget` 都能用：`--scope user` 装进的是**当前执行账号**的
+>   profile，与那个 `winget.exe` 属于谁无关。
+>
+>   判据：`tests/ci-toolchain-selfcheck.test.ts` 直接调 `wingetCandidates()`（列目录
+>   那一步可注入 —— 真实现读 `fs`，在 Linux 上恒空，不注入这条用例就随环境静默恒
+>   绿），三条钉住**候选里确含其他账号 profile 与反推盘符下的位置**、**别处 profile
+>   读不动时不抛**、**一个落点都不在时不编路径也不发起安装**；已用「把这两类来源
+>   去掉」反向复算会红。
 > - **`--scope user` 一个不够，要连机器级一起试**。`--scope user` 对
 >   `NT AUTHORITY\SYSTEM` 这种没有真用户配置目录的服务账号，要么装不上、要么装到一个
 >   **这次构建之后的会话也看不见**的地方 —— 结果与「压根没装」逐字同形。所以顺序是
