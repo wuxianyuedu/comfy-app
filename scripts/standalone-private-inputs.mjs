@@ -214,6 +214,12 @@ export const RUNTIME_SCRIPTS = [
   "launcher-core/shell-stage.mjs",
   "launcher-core/dev-boot.mjs",
   "launcher-core/ready-wait.mjs",
+  // 运行期「陈旧路由表」自愈与它的归因纯函数：`ready-wait.mjs` 与本模块都由
+  // `dev-launcher.mjs` 顶层静态 import（自愈只在这两份里，见
+  // `tests/dev-launcher-runtime-heal.test.ts` 的接线断言）—— 缺任一份同样是整个
+  // 编排器加载即 `ERR_MODULE_NOT_FOUND`，桌包重新编排一次的表现只是「双击没反应」。
+  "launcher-core/runtime-heal.mjs",
+  "launcher-core/sync-attribution.mjs",
   // 桌包 standalone 形态的运行入口与它的环境装配（ISSUE #1216）：壳把
   // `node server.js` 换成 `node scripts/standalone-runtime.mjs`，缺这份就是
   // standalone 桌包回到「起不来且没人知道为什么」。

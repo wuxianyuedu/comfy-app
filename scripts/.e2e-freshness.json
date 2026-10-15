@@ -1,9 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-14T09:29:31.347Z",
+    "verifiedAt": "2026-10-15T04:39:52.595Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
-    "trackedBy": "e2e"
+    "trackedBy": "e2e",
+    "skippedReason": "本次提交只改启动器对陈旧路由表的自愈与客户端通知文案，Playwright 场景与 e2e 配置零改动；本机同刻有其它检出在跑 premerge 重活，负载下起 e2e 得到的红不可归因"
   }
 }
