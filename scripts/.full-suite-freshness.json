@@ -1,7 +1,7 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-14T08:37:04.742Z",
+    "verifiedAt": "2026-10-15T01:17:17.657Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full"
