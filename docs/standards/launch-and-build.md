@@ -134,6 +134,21 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
 > 「带引号的 `"3100"` 算不算 3100」理解不同，用户写死的端口就只对一部分进程可见，
 > 又回到上面那条「两边永远对不上」。实测这条也很脆：PowerShell 的 `-split "=", 2`
 > 与 Node 的正则对「值里含 `=`」的处理就曾不同。
+>
+> **「值是不是一个整数」这一格同样脆，且两侧的判据形状不同**（ISSUE #1941）：
+> Node 侧 `readEnvPort` 曾直接用 `Number.parseInt(value, 10)`，而它**吃前缀**
+> （`"3100abc"` → 3100、`"3100.5"` → 3100）；另三侧是整串解析（Python `int()` /
+> Rust `parse::<u16>()` / PowerShell `[int]::TryParse`），给的是「未配置」。
+> 于是用户在 `.env` 里手滑写成 `COMFYAPP_PORT=3100abc` 时，Node 侧在 3100 起
+> dev server、壳按路径推导去等另一个端口 —— 与 ISSUE #821 同一个现象，入口不同。
+> 收口在 `parseDotEnvPortValue()`（`scripts/app-port.mjs`）：**trim 后整串必须匹配
+> `^\+?[0-9]+$`** 且落在 1..=65535。三处细节按另三侧的实测形状定，别凭直觉改：
+> 前导 `+` **要收**（三侧都收）、Unicode 数字位 **不收**（只有 Python 的 `int()` 收，
+> 收它等于把 Node 单独翘起来）、越界按「未配置」退回路径推导而不是兜底 3100
+> （否则多检出会撞同一个端口）。四处调用点（`readEnvPort` /
+> `check-app-port-vectors.cjs` / `tests/app-port-cross-language.test.ts`）一律走这
+> 一个出口，**不在门禁与用例里另抄一份 `/^\d+$/ + parseInt`** —— 实测那次就是抄件
+> 与实现漂了：`+3100` 三侧都收、抄件不收，于是抄件把实现判成红的。
 
 > **为什么 `pnpm start` 也要经脚本**：`next start` **不认 `COMFYAPP_PORT`**（只认 `PORT`）。
 > 默认端口由 3000 改成 3100 那次只改了 config 与文档，`pnpm start` 仍会回落到 Next 的

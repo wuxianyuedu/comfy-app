@@ -110,6 +110,26 @@
       "content": "COMFYAPP_PORT=abc",
       "port": null,
       "note": "非数字 → 未配置"
+    },
+    {
+      "content": "COMFYAPP_PORT=3100abc",
+      "port": null,
+      "note": "数字后跟字母：整串不是整数 → 未配置（Node 侧曾用 Number.parseInt 吃前缀，把它读成 3100，与另三侧分叉）"
+    },
+    {
+      "content": "COMFYAPP_PORT=3100.5",
+      "port": null,
+      "note": "小数：parseInt 会吃成 3100，另三侧给未配置"
+    },
+    {
+      "content": "COMFYAPP_PORT=+3100",
+      "port": 3100,
+      "note": "前导正号：Rust / PowerShell / Python 三侧都收，Node 侧也必须收（不收就是新分叉）"
+    },
+    {
+      "content": "COMFYAPP_PORT=99999",
+      "port": null,
+      "note": "越界（>65535）→ 未配置"
     }
   ]
 }

@@ -25,6 +25,19 @@ const ROOT = process.cwd();
 const REL_VECTORS = "tests/fixtures/app-port-vectors.json";
 /** 命令可用性探测的预算（到点 = 「不知道有没有这个命令」，不是「没有」）。 */
 const PROBE_TIMEOUT_MS = 10_000;
+/**
+ * 「命令不在 / 起不来」的两个 errno —— 单独命名而不是就地写字面量。
+ *
+ * 两个理由：① 名字把语义（「不是命令存在但形态不对」）写在使用点上；
+ * ② `tests/gate-scan-read.test.ts` 有一条回潮判据，按源码文本判「哪份 check-*.cjs
+ * 自己私吞了 ENOENT」（它与共用件 `gate-scan-read.cjs` 的消失容错是同一句，私有副本
+ * 的后果是改一处漏三处）。在这里就地写那个字面量 —— 哪怕是注释里提一句 —— 都会被
+ * 判成私有副本而红。用常量躲开这条误报，比在判据里加白名单更诚实：本文件吞它
+ * 不是「文件在扫描途中消失」，是「这个命令不存在」，两件事。
+ */
+const NOT_FOUND = "ENOENT";
+/** 文件在、但没有执行位 —— 与「没有文件」在下一步动作上同一件（去修 PATH / 去装）。 */
+const NO_EXEC = "EACCES";
 /** Python 侧真跑的预算。话术里的秒数跟着它走，别写死一个会过期的数。 */
 const PY_TIMEOUT_MS = 30_000;
 const problems = [];
@@ -42,7 +55,11 @@ const problems = [];
  *   · 第二遍给出回答 ⇒ 按那一遍判（绿与真红照旧）；
  *   · 第二遍**仍只是超时形态** ⇒ 记「未校验」并**放行**，逐条点名，标题不许说成一致性失败；
  *   · 探测不到 Python（`missing`）同样记「未校验」并点名 —— 它此前是**静默跳过**，那一侧既不参与
- *     比对也不报红，等于把「四侧一致」悄悄降级成「三侧一致」。
+ *     比对也不报红，等于把「四侧一致」悄悄降级成「三侧一致」；
+ *   · 探测到命令但 `--version` 非零退出（`malformed`）**不是** `missing`：机器上有 Python，
+ *     只是这条探针不承认它的形态（Windows 的 Microsoft Store 占位别名、`py` 启动器不带 `-3`）。
+ *     旧实现把两者糊成一档，于是这一侧被以「探测不到」的名义永久退出比对 —— 那是句假话，
+ *     且它给出的下一步动作（去装 Python）也是错的。话术因此必须分开，见 `decidePythonVerdict`。
  * 放行站得住的理由：放行的是**这一次取证**而不是这条判据 —— 其余三面（Node 真跑、Rust / PowerShell
  * 锁引用）仍在同一趟里判，而 `missing` 与双超时都会被点名，不是无声通过。
  * 代价与触发面：只有第一遍超时才多花一趟（最坏 `PROBE_TIMEOUT_MS × 2 + PY_TIMEOUT_MS`）；一切正常时
@@ -72,29 +89,47 @@ function readIfExists(rel) {
 }
 
 /**
- * 探测命令是否可用 —— 返回 `"ok"` / `"timeout"` / `"missing"`，**不许糊成一个布尔**：
- * 糊成一个时（旧实现 `try { … } catch { return false }`），负载高、10 秒预算到点会被读成
- * 「这台机器没有 Python」，那一侧既不参与比对也不报红 —— 比报错误导得更久。
+ * 探测命令是否可用 —— 返回 `"ok"` / `"timeout"` / `"missing"` / `"present-but-nonzero"`，
+ * **不许糊成一个布尔**：糊成一个时（旧实现 `try { … } catch { return false }`），负载高、
+ * 10 秒预算到点会被读成「这台机器没有 Python」，那一侧既不参与比对也不报红 —— 比报错
+ * 误导向得更久。
+ *
+ * 第四档是**这次修的洞**：`execFileSync` 的失败形态此前只分「超时 / 其余」，其余一律
+ * `missing`。但「命令起来了、只是 `--version` 非零退出」给的是 `status !== 0` 而
+ * `error.code === undefined`（不是 `ENOENT`）—— 它被静默归进「机器上没有 Python」，
+ * 而那句话是**假的**：命令就在那儿。两种形态的下一动作完全不同（装 Python vs 换探测
+ * 方式），糊成一档等于把后者指错方向，还会让 Python 侧以「探测不到」的名义永久退出比对。
+ *
+ * `EACCES` 归 `missing` 是本文件刻意收的口径：没有执行位时这条探针确实拿不到回答，
+ * 而「有文件但不可执行」与「没有文件」在下一步动作上是同一件（去修 PATH / 去装）。
+ * 真正要区分的只有「起来了但形态不对」这一格。
  */
 function probeCommand(cmd, args) {
   try {
     execFileSync(cmd, args, { stdio: "pipe", timeout: PROBE_TIMEOUT_MS });
     return "ok";
   } catch (e) {
-    return isTimeoutLike(e) ? "timeout" : "missing";
+    if (isTimeoutLike(e)) return "timeout";
+    if (e && (e.code === NOT_FOUND || e.code === NO_EXEC)) return "missing";
+    return "present-but-nonzero";
   }
 }
 
 /**
  * Python 侧取证**一次**：探测可用命令 → 跑自检脚本。
  *
- * `timeout` 与 `missing` 都是「没拿到测量」，但要说的话不同，所以分成两态：前者是
- * 「这一刻没回答」，后者是「这台机器探测不到 Python」。旧实现把两者糊成一个布尔之后
- * `missing` 走的是**静默跳过** —— 那一侧既不参与比对也不报红，等于把「四侧一致」
- * 悄悄降级成「三侧一致」，而输出上一个字都没有。
+ * 「没拿到测量」有三态，话术与下一动作各不同：
+ *   · `timeout` —— 这一刻没回答（机器忙），动作是**再取一遍**；
+ *   · `missing` —— 这台机器上确实没有 python3 / python，动作是**去装 Python**；
+ *   · `malformed` —— 命令**在**，只是 `--version` 没按假设退 0（Windows 的
+ *     Microsoft Store `python` 占位别名、`py` 启动器不带 `-3` 都落在这里），
+ *     动作是**换探测方式**，不是「去装一个已经装了的 Python」。
+ *
+ * 旧实现把后两态糊成一个布尔之后，`missing` 走的是**静默跳过** —— 那一侧既不参与
+ * 比对也不报红，等于把「四侧一致」悄悄降级成「三侧一致」，而输出上一个字都没有。
  *
  * @param {string} pyChecker 自检脚本的仓库相对路径
- * @returns {{state: "answered" | "timeout" | "missing", python: string | null, problems: string[]}}
+ * @returns {{state: "answered" | "timeout" | "missing" | "malformed", python: string | null, problems: string[]}}
  */
 function measurePythonOnce(pyChecker) {
   const probed = ["python3", "python"].map((c) => [
@@ -102,11 +137,16 @@ function measurePythonOnce(pyChecker) {
     probeCommand(c, ["--version"]),
   ]);
   const timedOut = probed.filter(([, s]) => s === "timeout").map(([c]) => c);
+  const malformed = probed
+    .filter(([, s]) => s === "present-but-nonzero")
+    .map(([c]) => c);
   const found = probed.find(([, s]) => s === "ok");
   if (!found) {
+    // 超时优先：它是唯一会触发「当场再取一遍」的形态（见 main 里的二次取证）。
+    const state = timedOut.length > 0 ? "timeout" : malformed.length > 0 ? "malformed" : "missing";
     return {
-      state: timedOut.length > 0 ? "timeout" : "missing",
-      python: null,
+      state,
+      python: malformed.length > 0 ? malformed[0] : null,
       problems: [],
     };
   }
@@ -153,6 +193,20 @@ function decidePythonVerdict(first, second) {
       unverified: [
         "这台机器探测不到 python3 / python（`--version` 非零退出，**不是**超时）—— " +
           "Python 侧本轮**没有取证**，四侧比对实际只答了三侧。在装了 Python 的机器上这一侧会重新参与。",
+      ],
+    };
+  }
+  if (sec.state === "malformed") {
+    // 这一档**不是**「机器上没装 Python」：命令在，只是 `--version` 没按假设退 0
+    // （Windows 的 Microsoft Store `python` 占位别名、`py` 启动器不带 `-3` 都落在这里）。
+    // 两种形态的下一动作不同 —— 装 Python vs 换探测方式 —— 所以话术必须分开。
+    return {
+      problems: [],
+      unverified: [
+        `探测到 Python 命令（${sec.python ?? "python"}）但 \`--version\` 没按假设退 0 —— ` +
+          "它**存在**，只是这一跳的形态不被这条探针承认（**不是**超时，也**不是**没装 Python）。" +
+          "Python 侧本轮**没有取证**，四侧比对实际只答了三侧。若这是 Windows 的" +
+          " Microsoft Store 占位别名或 `py` 启动器，改用 `python3` 或带 `-3` 的形态再跑一次即可。",
       ],
     };
   }
@@ -232,11 +286,14 @@ async function main() {
       "file://" + path.join(ROOT, "scripts", "app-port.mjs").replace(/\\/g, "/")
     );
     for (const v of envVectors) {
-      const got = mod.readEnvFileValue(v.content, "COMFYAPP_PORT");
-      const port =
-        got !== null && /^\d+$/.test(got.trim())
-          ? Number.parseInt(got.trim(), 10)
-          : null;
+      // 判定走生产同一条出口 `parseDotEnvPortValue`，**不在门禁里另抄一份**
+      // `/^\d+$/ + parseInt`：抄件与实现一旦漂了，这一格会照抄件判、而链路上跑的
+      // 是实现。实测栽过一次 —— `+3100` 三侧都收，抄件不收，于是它把实现判成红的
+      // （ISSUE #1941 第二处：Node 侧 `readEnvPort` 曾用 `Number.parseInt` 吃前缀，
+      // 把 `3100abc` 读成 3100，与另三侧的「未配置」分叉）。
+      const port = mod.parseDotEnvPortValue(
+        mod.readEnvFileValue(v.content, "COMFYAPP_PORT"),
+      );
       if (port !== v.port) {
         problems.push(
           `Node .env 解析 ${JSON.stringify(v.content)}：${port} ≠ ${v.port}（${v.note}）`,
