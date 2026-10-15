@@ -87,6 +87,14 @@
       # engines.node = ^22.22.2 || ^24.15.0 || >=26.0.0（与旧版同一口径）
       Write-Host "== pnpm =="
       pnpm -v
+      Write-Host "== python =="
+      # Python 是门禁链的真实依赖，不是可选件：scripts/check-app-port-vectors.cjs
+      # 要调 scripts/check-app-port-vectors.py 做四语言一致性比对，tests 里也有几处
+      # 用它验 zip 包（python3 的 zipfile 是最严格的解压端）。
+      # 缺了它，那些判据会以「这台机器探测不到 Python」的名义**退出比对**（
+      # check-app-port-vectors.cjs 的 missing 档），形态是**静默少判**而不是报错 ——
+      # 所以在这里正面回答，让它当场红，而不是等 vitest 跑完四十分钟才给几条看不懂的失败。
+      python -V
 
   # ── 安装 ──
   # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。

@@ -116,6 +116,13 @@ const REGISTERED: Registration[] = [
     why: "假 taskkill 得是 Node 能直接 spawn 的 shebang 脚本（Windows 上只能是 .cmd，而 Node 自 CVE-2024-27980 起禁止直接 spawn 批处理）—— 这两条在 Windows 上没有等价的可注入形态。守卫取 `tests/helpers/platform-fixtures` 的共享常量，档位与理由同源",
   },
   {
+    file: "tests/app-port-vectors-timeout-classification.test.ts",
+    guard: 'process.platform === "win32"',
+    count: 2,
+    tier: "platform",
+    why: "经 needsPosixExec 别名：两条要写 `#!/bin/sh` 的假命令再 chmod 出执行位，Windows 上 libuv 不解析 shebang、chmodSync 也不存执行位（ISSUE #1959 换到自托管 Windows 节点时当场照出来的）",
+  },
+  {
     file: "tests/standalone-runtime-completeness.test.ts",
     guard: "!artifactUsable",
     count: 1,

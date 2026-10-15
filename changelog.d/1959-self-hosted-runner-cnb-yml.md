@@ -26,3 +26,22 @@
   4. **本地那一层一条都不减**：平台侧取自源分支（「不可信事件」）且跑的是**另一份清单**
      （全量档 + 核心档，钩子走 `--staged` 增量），因此本地钩子与 §13.5.4 的按需召唤
      照旧——平台侧回来不取消它们，正如按需召唤也替代不了平台侧。
+
+## Fixed
+
+- **`tests/app-port-vectors-timeout-classification.test.ts` 有两条判据只在 POSIX 上成立、
+  却从来没有守卫**：它们要写一个 `#!/bin/sh` 的假命令再 `chmod` 出执行位，而 Windows 上
+  libuv 不解析 shebang、`chmodSync` 也不存执行位 —— 于是探到的是 `missing`，红的形状与
+  「判据写坏了」逐字同形。它们在 Linux 平台池上一直绿，所以没人发现；换成自托管 Windows
+  节点之后当场红了。加 `needsPosixExec` 别名并经 `tests/conditional-skip-registry.test.ts`
+  登记（档位 `platform`），把「这两条在 Windows 上其实没跑过」变成一句读得出来的事实。
+  判据本身跨平台（`probeCommand` 对「不存在」与「非零退出」的分支不依赖执行位），
+  Windows 侧缺的是可注入的等价形态。
+
+## Changed
+
+- **`.cnb.yml` 的「工具链自证」补上 `python -V`**：Python 是门禁链的真实依赖
+  （`check-app-port-vectors.cjs` 要调 `.py` 做四语言比对，几处用例用它验 zip 包），
+  而缺了它的表现是**静默少判**而不是报错 —— `check-app-port-vectors.cjs` 会把这一侧
+  归进 `missing` 档、「以这台机器探测不到 Python 的名义」退出比对。放在第一步正面回答，
+  代价是几秒，换来的是不必在 vitest 跑完四十分钟之后从几条看不懂的失败里反推。

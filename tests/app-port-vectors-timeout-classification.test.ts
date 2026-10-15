@@ -21,11 +21,29 @@
  * 「放行」不是把红灯藏起来：放行的是**这一次取证**，判据本身还在 —— Node 侧逐条真跑与
  * Rust / PowerShell 侧的锁引用仍在同一趟里判，而 `missing` / 双超时都会被打出来。
  * 代价与触发面：只有第一遍超时才多花一趟（最坏 `PROBE_TIMEOUT_MS × 2 + PY_TIMEOUT_MS`）。
+ *
+ * **另有一条平台分叉**（ISSUE #1959）：下面两条要写 `#!/bin/sh` 的假命令 + `chmod`
+ * 出执行位，这在 Windows 上不成立（libuv 不解析 shebang、`chmodSync` 不存执行位），
+ * 所以经 `needsPosixExec` 只在 POSIX 上跑。判据**本身**是跨平台的
+ * （`probeCommand` 对「不存在」「非零退出」的分支不依赖执行位），那两条判的是
+ * 「探针怎么归类」这件事的 POSIX 形态；Windows 侧的等价形态没有可注入的替身。
  */
 import { readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+
+/**
+ * 需要 POSIX 执行语义的用例开关：这两条要写一个 `#!/bin/sh` 的假命令、再 `chmod`
+ * 出执行位，而 Windows 上 libuv 不解析 shebang、`chmodSync` 也不存执行位 ——
+ * 于是它们探到的是 `missing`，红的形状与「判据写错了」逐字同形。
+ *
+ * 立案现场（ISSUE #1959）：这两条此前**没有**守卫，在 Linux 平台池上一直绿，
+ * 所以没人发现它们其实只在 POSIX 上成立。平台侧换成自托管 Windows 节点之后当场红了
+ * —— 而那一跑证明的是「这两条判据在 Windows 上从没被执行过」，不是「判据坏了」。
+ * 与 `tests/dev-launcher-toolchain-gate.test.ts` 用的是同一条别名约定。
+ */
+const needsPosixExec = it.skipIf(process.platform === "win32");
 
 const SCRIPT_SOURCE = readFileSync(
   path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"),
@@ -117,7 +135,7 @@ describe("命令探测分四态，不许糊成布尔", () => {
     ).toBe("missing");
   });
 
-  it("没有执行位的文件同样归 missing（拿不到回答，下一步动作与「没有文件」同一件）", () => {
+  needsPosixExec("没有执行位的文件同样归 missing（拿不到回答，下一步动作与「没有文件」同一件）", () => {
     const noexec = path.join(os.tmpdir(), `app-port-probe-noexec-${process.pid}`);
     writeFileSync(noexec, "#!/bin/sh\nexit 0\n");
     chmodSync(noexec, 0o644);
@@ -128,7 +146,7 @@ describe("命令探测分四态，不许糊成布尔", () => {
     }
   });
 
-  it("命令在、只是非零退出 ⇒ present-but-nonzero，**不许**糊成 missing（ISSUE #1941）", () => {
+  needsPosixExec("命令在、只是非零退出 ⇒ present-but-nonzero，**不许**糊成 missing（ISSUE #1941）", () => {
     // 真实形态：`execFileSync` 对这种失败给的是 `status !== 0` 而 `error.code === undefined`，
     // 与「命令不存在」的 `ENOENT` 完全不是一回事。旧实现只分「超时 / 其余」，
     // 于是这一格被读成「这台机器没有 Python」—— 一句假话，且给出的下一步动作也是错的。
