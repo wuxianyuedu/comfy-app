@@ -32,7 +32,9 @@ test.describe("模型库 @critical", () => {
      * `tests/page-name-single-source.test.ts` 守着（ISSUE #1423）。 */
     await expect(page.getByRole("heading", { name: "模型" })).toBeVisible();
 
-    /* 档位由类型标签表派生，逐档点名、少一档即红。
+    /* 「放大」此前只存在于类型标签表、筛选档位里没有它 —— 那一类模型看得见却筛不出来。
+       档位由标签表派生之后它才出现在界面上。逐档点名，少一档即红。
+
        锚的是**单选语义那一层**：一排里只能选一个，所以这排是
        `role="radiogroup"`（带 `aria-label`）+ 每枚 `role="radio"` + `aria-checked`，
        角色由 `ui/select-chip` 写死、不随外观档变。与 jsdom 那侧
