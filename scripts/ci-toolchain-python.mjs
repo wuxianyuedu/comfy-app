@@ -839,9 +839,16 @@ function walk(dir, wanted) {
 export function findPython({
   run: runCmd = run,
   notes = /** @type {string[]} */ ([]),
+  /* 探哪几个候选、每个带什么参数 —— 两个注入面，默认就是本模块那份唯一口径。
+   * 存在的理由有一个具体调用方：`scripts/python-probe.mjs` 要**逐个**候选问
+   * 「这个命令起不起得来」，而 `findPython` 的语义是「挑第一个能用的就停」。
+   * 与其在那边再写一份 spawnSync 包装（＝同一个问题两张候选表，正是 #1959
+   * 第二轮红过的形态），不如把「探谁、怎么探」提成入参，两点共用同一份实现。 */
+  candidates = PY_CANDIDATES,
+  probeArgs = PY_PROBE_ARGS,
 } = {}) {
-  for (const name of PY_CANDIDATES) {
-    const args = PY_PROBE_ARGS[name] ?? ["--version"];
+  for (const name of candidates) {
+    const args = probeArgs[name] ?? ["--version"];
     const r = runCmd(name, args);
     if (r.ok) return { command: name, path: null, version: r.out };
     // 「在盘上但起不来」只说一句：它与「压根没装」的处置不同（换探测方式 vs 去装）。

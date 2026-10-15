@@ -76,6 +76,23 @@
     # **逐文件明细一份没少**（它本来就在落盘的 `lcov` / `json-summary` 里）。
     # ⚠️ 这一行是本档唯一的执行者 —— 不在任何 `script` 里（见规范 11 §11.7）。
     COMFYAPP_QUIET_COVERAGE: "1"
+    # 本题解析器要用 `steps` 里**没有**的那几个东西（`steps` 会内联进工作区、
+    # 被 checkout 抹掉，而 `env` 是 HEAD 的事）。判据按本键解析 `.cnb.yml`：
+    #   · `PYTHON_PROBE` —— `scripts/python-probe.mjs`：逐个候选打印「这个命令起不起
+    #     得来」。缺件时那几条用例走 `env` 档跳过（不会红），跳过的是哪几条只有它答得出。
+    #   · `GATES` —— 本档的 stage 名有序清单：`单元测试` 必须排在 `Python 可用性` 之后。
+    #     理由不是风格 —— 实测 `cnb-jt3-1k5071kou` 上 `单元测试` 跑到 **2h24m** 被 8640s
+    #     墙钟掐断（只留下 `timeout of 8640000ms exceeded`），而那一步**照旧会往下跑**
+    #     （缺 Python 只让它少判几格）。排在后面 = 那个结论要么永远看不到、要么在最贵的
+    #     位置才看到。`tests/no-platform-ci-config.test.ts` 按它判序。
+    COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
+    COMFYAPP_CI_GATES: >-
+      工具链自证, Python 可用性, Install dependencies, 分支守卫, 同步数据库表结构,
+      类型检查, ESLint 零警告, 单元测试, 标题行让位, 文件结构硬规则, 跨平台动作对照,
+      import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
+      函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
+      UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, core 骨架单一事实源,
+      零消费导出, core 出口纪律与基类纯度, 生产构建, E2E 关键流程
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
@@ -106,6 +123,28 @@
       # 仍会红：缺 git / node（不在 engines.node 内）/ pnpm / Python 时非零退出。
       # 清单与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.5。
       node scripts/ci-toolchain-selfcheck.mjs
+
+  # ── Python 可用性（**必须排在「单元测试」之前**）──
+  #
+  # `单元测试` 里有一族用例（`tests/helpers/python-exe.ts` 的 `PYTHON_OK` 守卫、
+  # `e2e/support/fake-comfyui-executor-env.mjs`、`scripts/check-app-port-vectors.cjs`）
+  # 需要一个**真能起来**的解释器。缺件时它们按既有口径走 `env` 档跳过并登记 —— 也就是说
+  # 这一步**不会让那条 stage 变红**，只是少判几格。而「少判」在日志里是隐身的。
+  #
+  # 实测（`cnb-jt3-1k5071kou`）：这台节点上确实一个解释器都没有，而 `单元测试` 照样
+  # 往下跑、`Python 可用性` / `E2E 关键流程` 那两步排在**两小时之后** —— 于是
+  # 「缺 Python」这件事要么永远看不到，要么在最贵的位置才看到。第六次首跑就是后一种：
+  # 在 `ESLint` 之后排队两小时，`单元测试` 一步跑到 2h24m 被 8640s 的墙钟上限掐断，
+  # 整条流水线只留下 `timeout of 8640000ms exceeded`，一条失败原因都读不到。
+  #
+  # 所以把它从「E2E 之前那一步」提前到这里：判据是**同一个**（`--python-only` 调的是
+  # `findPython` / `installPython` / `pythonForensics` 那一份），只是让它在整条流水线上
+  # **最先**回答，代价几秒。它与第一步「工具链自证」不重复：那一步判的是**整机四件**
+  # 且缺件时非零退出（这一步在它绿了之后跑，说明四件齐），这一步只回答**解释器住哪**
+  # ——绿的时候打一行版本号（等于把「E2E 到底会用哪个解释器」变成可读读数），
+  # 缺件时打取证并**非零退出**（红在能指路的位置，而不是两小时后一串超时）。
+  - name: Python 可用性
+    script: node scripts/ci-toolchain-selfcheck.mjs --python-only
 
   # ── 安装 ──
   # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。
@@ -227,19 +266,8 @@
 
   # ── E2E（仅 @critical 关键流程）──
   #
-  # 这一步只是**把 E2E 依赖的解释器答出来**：装机那件事已经由第一步
-  # （`scripts/ci-toolchain-selfcheck.mjs`）判过也装过了，这里不再判一次。
-  #
-  # 那为什么还要单独一步：第一步那段的输出是**成功即静默**的（绿的时候只打三行
-  # 版本号），排查「E2E 到底用了哪个解释器」时没有可读的读数；而开头那段是
-  # PowerShell，本地看不见它。这一步跨平台（`scripts/ci-toolchain-selfcheck.mjs`
-  # 的 `--python-only`），本地跑 `pnpm test:e2e` 时它也是**同一个判据**给出的答案。
-  #
-  # 缺 Python 时它退非零 —— 那时后面那一步必然以「两条 @critical 报成执行器
-  # 收口失败」收场，报错指不到真因；在开跑前正面回答，代价是一次进程探测。
-  - name: Python 可用性
-    script: node scripts/ci-toolchain-selfcheck.mjs --python-only
-
+  # 解释器这一格已由前面那步「Python 可用性」在**整条流水线的最前**答过（它也是
+  # 本地 `pnpm test:e2e` 走 `scripts/e2e-run.mjs` 时的同一份判据），故这里不重判。
   - name: E2E 关键流程
     script: node scripts/e2e-run.mjs --grep @critical
 

@@ -194,6 +194,36 @@ export function ps7OnlySyntaxIn(text: string): string[] {
 }
 
 /**
+ * `.cnb.yml` 的 `env` 里登记的 **stage 名有序清单**（`COMFYAPP_CI_GATES`）。
+ *
+ * 为什么把顺序做成**事实**而不是留在注释里：这条序有一条真的读错了会出事的约束
+ * —— `单元测试` 必须排在 `Python 可用性` 之后。理由是实测出来的，
+ * 不是风格偏好：`cnb-jt3-1k5071kou` 上 `单元测试` 一步跑到 **2h24m** 被平台
+ * 8640s 的墙钟上限掐断（整条流水线只留下 `timeout of 8640000ms exceeded`，
+ * 一条失败原因都读不到）；而缺 Python 时那一步**照旧往下跑**（相关的用例按既有
+ * 口径走 `env` 档跳过并登记，不会红）—— 也就是说排在它后面的 stage 是
+ * 「要么永远看不到，要么在最贵的位置才看到」。
+ *
+ * 解析：`>-
+` 折叠标量，缩进正文按 `,` 切成名字。返回 `[]` = 键不在，
+ * 调用方据此判红（键被删掉同样属于「这条约束没人守了」）。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns stage 名（已 trim）
+ */
+export function registeredGateOrder(text: string): string[] {
+  const m = /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+\S[^\n]*\r?\n)+)/m.exec(
+    text,
+  );
+  const body = m?.[1];
+  if (body === undefined) return [];
+  return body
+    .split(",")
+    .map((n) => n.trim())
+    .filter(Boolean);
+}
+
+/**
  * **合并键解析**（`<<: *anchor`）：`runner` 挂在锚点里、由两个事件各引用一次。
  *
  * 这一层单独判，是因为上面那组文本判据**答不了它**：文本里有 `namespace: group`，
@@ -354,6 +384,42 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toEqual([]);
   });
 
+  it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
+    const text = readRegisteredConfig();
+    const m = /^\s*COMFYAPP_CI_PYTHON_PROBE:\s*(\S+)\s*$/m.exec(text);
+    const declared = m?.[1];
+    expect(
+      declared,
+      "`.cnb.yml` 的 env 里没有 COMFYAPP_CI_PYTHON_PROBE —— 缺 Python 时「跳过的是哪几条」" +
+        "又变成只能靠人自己拼（`scripts/python-probe.mjs` 因此没有调用方）",
+    ).toBeTruthy();
+    if (!declared) throw new Error("解析不出探测入口");
+    /* 它必须是**盘上真有的**文件：`env` 的值不经过 shell，写错了不会报任何错，
+     * 只会在真要用的那一刻答「文件不存在」—— 那时候人正在查「为什么少判了几格」。 */
+    expect(
+      existsSync(path.join(ROOT, declared)),
+      `env 点名的 Python 探测入口不在盘上：${declared}`,
+    ).toBe(true);
+  });
+
+  it("`单元测试` 排在 `Python 可用性` 之后（缺件要在最便宜的位置报出来）", () => {
+    const order = registeredGateOrder(readRegisteredConfig());
+    expect(
+      order.length,
+      "解析不出 COMFYAPP_CI_GATES —— 键被删了或换了形状，这条顺序约束就没有执行者了",
+    ).toBeGreaterThan(0);
+    const probeAt = order.indexOf("Python 可用性");
+    const testAt = order.indexOf("单元测试");
+    expect(probeAt).toBeGreaterThanOrEqual(0);
+    expect(testAt).toBeGreaterThanOrEqual(0);
+    expect(
+      probeAt,
+      "`Python 可用性` 必须排在 `单元测试` 之前：缺解释器时那一步照旧往下跑" +
+        "（相关用例走 env 档跳过、不会红），而它要跑到 2h24m 才可能被平台墙钟掐断" +
+        "（实测 cnb-jt3-1k5071kou）—— 排在后面 = 这个结论要么看不到、要么在最贵的位置才看到",
+    ).toBeLessThan(testAt);
+  });
+
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
     // ① 匹配逻辑认得这批名字，且不误收别的。
     expect(
@@ -398,6 +464,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ps7OnlySyntaxIn("master:\n  name: a?.b\n    - script: |\n        $x = 1\n"),
     ).toEqual([]);
     expect(PS7_ONLY.length).toBeGreaterThanOrEqual(4);
+    /* ⑦ stage 顺序判据与探测入口判据都要能红：喂进一份「单元测试 排在 Python 后面」
+     * 的配置时必须点名，喂进**没有那个键**的配置时必须答「解析不出」。 */
+    const badOrder =
+      "x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      单元测试, Python 可用性\n";
+    const badOrderParsed = registeredGateOrder(badOrder);
+    expect(badOrderParsed.indexOf("Python 可用性")).toBeGreaterThan(
+      badOrderParsed.indexOf("单元测试"),
+    );
+    expect(registeredGateOrder("master:\n  push:\n    - x\n")).toEqual([]);
   });
 
   it("扫描面真的收到了仓库根（不是空数组假装通过）", () => {
