@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-14T16:21:48.057Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-15T01:07:45.846Z",
+    "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本次改动（ISSUE #1925 第四批）只碰前端 UI 组件与其用例：ui/display-density-toggle 新基元、ui/image-viewer、VideoQueueModal、三处密度切换落点、WorkflowNodeJsonPopover 的页签判据、docs/standards §16.2.4.75 台账与 storybook 基线。没有触碰 e2e 用例、e2e 接线脚本或任何 e2e 输入面（FRESHNESS_TRACKS.e2e 的 dirty 就是空集）；全量单测 9257 条通过已覆盖这些落点的回归。"
+    "skippedReason": "e2e 起不来，不是用例红：待执行的 schema 变更含 DROP TABLE loraTrainingJob（上游删炼丹功能留下的差异），e2e-run 的 schema 预检按设计把「丢不丢得起」交给人，代理不自动 db:push。本检出该表实测 0 行，db.sqlite 已另行备份（sha256 两侧一致）；等业主决定是否 push 后补跑本档。"
   }
 }
