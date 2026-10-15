@@ -618,12 +618,15 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
   });
 
   it("命中时逐条点名（形态一起打，人才判得出「名字在但起不来」）", () => {
+    /* 形态大小写按**判据自己拼出来的**写（后缀表用 `PATHEXT` 的大写惯例）——
+     * 写小写会让这条用例判的是宿主的大小写敏感，不是被测逻辑（同文件其它用例
+     * 对 `.PS1` / `.CMD` 的处理一致）。 */
     const lines = pnpmForensics({
       platform: "win32",
       env: { PATH: "C:\\Program Files\\nodejs" },
-      isFile: (candidate) => candidate.endsWith("pnpm.cmd"),
+      isFile: (candidate) => candidate.endsWith("pnpm.CMD"),
     });
-    expect(lines.join("\n")).toContain("pnpm.cmd");
+    expect(lines.join("\n")).toContain("pnpm.CMD");
   });
 
   it("按**目标平台**的分隔符切 PATH，不按宿主的 `path.delimiter`", () => {

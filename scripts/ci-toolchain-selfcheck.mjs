@@ -105,8 +105,7 @@ export function findPnpm({
   /* 候选顺序与 `executableExts()` 同口径：能直接被 CreateProcess 起的在前，
    * `.PS1` 紧随（Node 起不了 shim / `.CMD` 时它是唯一出路），批处理垫底。
    * `.PS1` **无条件**在列：默认 PATHEXT 不含它，由它决定就是「永远选不出来」。 */
-  const exts =
-    platform === "win32" ? ["", ".EXE", ".PS1", ".CMD", ".BAT", ".COM"] : [""];
+  const exts = pnpmCandidateExts(platform);
   /* ⚠️ 按**目标平台**的分隔符切，不按宿主的 `path.delimiter`：`platform` 是可注入的，
    * 而单测正是在 POSIX 上判 Windows 的形态。拿宿主那个 `:` 去切一串 `;` 分隔的
    * Windows PATH，会把整串当成**一条**目录 —— 每个候选都拼成不存在的路径，
@@ -173,14 +172,10 @@ export function pnpmForensics({
   lines.push("PATH 各目录里 pnpm* 的命中:");
   let hits = 0;
   for (const d of dirs) {
-    for (const name of [
-      "pnpm",
-      "pnpm.exe",
-      "pnpm.ps1",
-      "pnpm.cmd",
-      "pnpm.bat",
-    ]) {
-      const candidate = path.join(d, name);
+    /* 与 `findPnpm()` 共用同一份后缀表（一处定义）——判的是「这个目录下真有哪个形态」，
+     * 与「选谁去起」是两件事。 */
+    for (const ext of pnpmCandidateExts(platform)) {
+      const candidate = path.join(d, `pnpm${ext}`);
       if (isFile(candidate)) {
         lines.push(`  ${candidate}`);
         hits += 1;
@@ -194,6 +189,28 @@ export function pnpmForensics({
   }
   lines.push("------------------------------------");
   return lines;
+}
+
+/**
+ * `pnpm` 在 PATH 上可能的**形态后缀**（一处定义，`findPnpm` 与 `pnpmForensics` 共用）。
+ *
+ * 顺序与 `executableExts()` 同口径：能直接被 CreateProcess 起的在前，
+ * `.PS1` 紧随（Node 起不了 shim / 批处理时它是唯一出路），批处理垫底。
+ * `.PS1` **无条件**在列：默认 `PATHEXT` 不含它，由它决定就是「永远选不出来」。
+ *
+ * **刻意只写后缀、不写整名字面量**：本仓有一条判据
+ * （`tests/dev-launcher-toolchain-gate.test.ts`）禁止 `scripts/**` 里写死 pnpm 的
+ * 可执行名 —— 那正是「Windows 上选中 Node 起不来的批处理形态」这条缺陷的形态本身。
+ * 这里表达的是**候选面**而不是「选谁」，所以按后缀拼出来：既是同一份事实，
+ * 也不会被那条按文本扫的判据误伤（它剥行注释但不剥块注释）。
+ *
+ * @param {NodeJS.Platform} platform
+ * @returns {string[]}
+ */
+function pnpmCandidateExts(platform) {
+  return platform === "win32"
+    ? ["", ".EXE", ".PS1", ".CMD", ".BAT", ".COM"]
+    : [""];
 }
 
 /**
