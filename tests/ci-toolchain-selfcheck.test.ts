@@ -41,6 +41,7 @@ import {
 } from "../scripts/ci-toolchain-python.mjs";
 import {
   findPnpm,
+  pnpmForensics,
   nodeAllowed,
   parseVersion,
 } from "../scripts/ci-toolchain-selfcheck.mjs";
@@ -584,6 +585,62 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     for (const channel of ["winget", "scoop", "embed"]) {
       expect(r.reason, `reason 里没点名 ${channel}`).toContain(channel);
     }
+  });
+});
+
+/**
+ * 「pnpm 不可用」时的取证（ISSUE #1961）。
+ *
+ * ## 为什么加的是取证，不是又一条候选规则
+ *
+ * 那一步报 `pnpm 不可用` 之后，**两次猜测**都没修好它：先以为是「谁解析这个名字」
+ * （加了 cmd.exe 退路，仍红），再以为是「扩展名候选不全」（`findPnpm` 补了 `.PS1`
+ * 与同目录回退，仍红）。而**历史上**同一次构建里 `Install dependencies` 用
+ * `pnpm install` 是跑得通的 —— 两条读数放在一起，「缺一条候选规则」解释不通。
+ *
+ * 缺的是一条**读数**：这一步看到的 `PATH` 是什么、逐条命中在哪些目录上。
+ * 人答得出来而这里答不出来，只可能是执行上下文不同（服务账号读机器 PATH、
+ * 子进程继承的 PATH 不是同一份）—— 取证把这件事变成可读的事实，而不是再猜一轮。
+ */
+describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () => {
+  it("逐条打印 PATH，并点名 pnpm* 在各目录的命中", () => {
+    const lines = pnpmForensics({
+      platform: "win32",
+      env: { PATH: "C:\\Windows;C:\\Program Files\\nodejs" },
+      isFile: () => false,
+    });
+    const text = lines.join("\n");
+    // PATH 的两条都要打出来（人是照它判「这个账号看得见什么」的）。
+    expect(text).toContain("C:\\Windows");
+    expect(text).toContain("C:\\Program Files\\nodejs");
+    // 零命中时要说清「是这个账号 PATH 上没有」，而不是留一片空白。
+    expect(text).toContain("一个都没命中");
+  });
+
+  it("命中时逐条点名（形态一起打，人才判得出「名字在但起不来」）", () => {
+    const lines = pnpmForensics({
+      platform: "win32",
+      env: { PATH: "C:\\Program Files\\nodejs" },
+      isFile: (candidate) => candidate.endsWith("pnpm.cmd"),
+    });
+    expect(lines.join("\n")).toContain("pnpm.cmd");
+  });
+
+  it("按**目标平台**的分隔符切 PATH，不按宿主的 `path.delimiter`", () => {
+    /* `ci-toolchain-python.mjs` 的 `pathDrives` 记过这一格：宿主的 `path.delimiter`
+     * 在 POSIX 上是 `:`，拿它切一串 Windows PATH 会把 `C:\Windows` 拆成
+     * `C` 与 `\Windows` —— 而这条判据的 `platform` 是可注入的，单测就是在 POSIX
+     * 上判 Windows 的形态。反向复算：改回 `path.delimiter`，这条当场点名。 */
+    const lines = pnpmForensics({
+      platform: "win32",
+      env: { PATH: "C:\\Windows;C:\\nodejs" },
+      isFile: () => false,
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("C:\\Windows");
+    expect(text).toContain("C:\\nodejs");
+    // 拆坏之后会留下孤立的 `C` 与 `\Windows` 两行。
+    expect(text).not.toMatch(/^  C$/m);
   });
 });
 

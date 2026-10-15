@@ -126,6 +126,73 @@ export function findPnpm({
 }
 
 /**
+ * 「pnpm 到底在哪」的取证（失败时打；成功即静默，与 `pythonForensics` 同形）。
+ *
+ * 为什么需要它（ISSUE #1961 平台侧）：`findPnpm()` 落地之后那一步**仍然**报
+ * `pnpm 不可用`，而**历史上**同一次构建里 `Install dependencies` 用
+ * `pnpm install --frozen-lockfile` 是跑得通的。两次猜测（「谁解析名字」、
+ * 「扩展名候选全不全」）都没修好它 —— 说明真正缺的不是又一条候选规则，而是
+ * **一条读数**：这一步看到的 `PATH` 是什么、逐条命中在哪些目录上。
+ *
+ * 那台机上人答得出来而这里答不出来的，只可能是**执行上下文不同**（服务账号读的是
+ * 机器 PATH、PowerShell 的 profile / node 进程的继承 PATH 不是同一份）。把 PATH
+ * 逐条打出来，下一个人一眼就能判「是真没有，还是这个账号看不见」，而不是再猜一轮。
+ *
+ * 与 `pythonForensics` 同口径：`PATH` 条目 + 每个候选落点的命中情况。
+ *
+ * @param {{
+ *   platform?: NodeJS.Platform,
+ *   env?: Record<string, string | undefined>,
+ *   isFile?: (p: string) => boolean,
+ * }} [options]
+ * @returns {string[]}
+ */
+export function pnpmForensics({
+  platform = process.platform,
+  env = process.env,
+  isFile = isFileOnDisk,
+} = {}) {
+  const lines = ["---- pnpm 探测现场（供定位，非报错）----"];
+  lines.push(`platform: ${platform}`);
+  lines.push("PATH 条目:");
+  /* ⚠️ 按**目标平台**的分隔符切，不按宿主的 `path.delimiter`
+   * （`ci-toolchain-python.mjs` 的 `pathDrives` 记过这一格：本机是 `:` 而 Windows
+   * 是 `;`，拿宿主的切会把 `C:\...` 拆成 `C` 与 `\...`）。这条判据的 `platform`
+   * 可注入 —— 单测正是在 POSIX 上判 Windows 的形态。 */
+  const dirs = String(env.PATH ?? "")
+    .split(platform === "win32" ? ";" : ":")
+    .filter(Boolean);
+  for (const d of dirs) lines.push(`  ${d}`);
+  /* 每个 PATH 目录里 `pnpm*` 的命中 —— 判的是「这个目录下真有这个名字吗」，
+   * 不判它起不起得起来（那是 `findPnpm` 的事）。两者分开，人才能判出
+   * 「名字在但起不来」与「名字根本不在」这一格分岔。 */
+  lines.push("PATH 各目录里 pnpm* 的命中:");
+  let hits = 0;
+  for (const d of dirs) {
+    for (const name of [
+      "pnpm",
+      "pnpm.exe",
+      "pnpm.ps1",
+      "pnpm.cmd",
+      "pnpm.bat",
+    ]) {
+      const candidate = path.join(d, name);
+      if (isFile(candidate)) {
+        lines.push(`  ${candidate}`);
+        hits += 1;
+      }
+    }
+  }
+  if (hits === 0) {
+    lines.push(
+      "  （一个都没命中 —— 这个执行账号的 PATH 上没有 pnpm 的任何形态）",
+    );
+  }
+  lines.push("------------------------------------");
+  return lines;
+}
+
+/**
  * 这个候选**现在**起不起得来（与 `usableCommand()` 同口径的简化版）。
  *
  * Windows 上的批处理**不真起**（只有 cmd.exe 解释它，Node 起它必然 `EINVAL`），
@@ -424,6 +491,7 @@ export function main() {
   const pnpm = findPnpm();
   console.log(pnpm.out || "(pnpm 不可用)");
   if (!pnpm.ok) {
+    for (const line of pnpmForensics()) console.log(line);
     problems.push(
       "pnpm 不可用 —— 本仓门禁全走 pnpm（AGENTS 硬规则 1 禁 npm）。" +
         "探的是 PATH × 扩展名候选（含 .ps1 与同目录回退），不是裸起一个名字；" +
