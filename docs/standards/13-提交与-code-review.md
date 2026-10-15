@@ -490,7 +490,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | **git**                                                 | 自托管机的基本依赖（官方文档原话「必装」）                                                                                                                                                                                                                 | 工具链自证                                                                                                                                                                                                                                                                  |
 | **Node**（在 `engines.node` 范围内）                    | 什么都跑不起来                                                                                                                                                                                                                                             | 工具链自证                                                                                                                                                                                                                                                                  |
 | **pnpm**                                                | 同上（`corepack` 会在缺它时自己去下载 `packageManager` 指的那版，但那是每次构建的额外网络往返）                                                                                                                                                            | 工具链自证                                                                                                                                                                                                                                                                  |
-| **Python**                                              | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来                             | **`scripts/ci-toolchain-selfcheck.mjs`：同口径探 `python3` / `python` / `py`，先试 `winget`（`winget.exe` 的入口按**一串落点**找：本账号 → 其他账号 profile → 各盘 `Program Files`，不只看本账号；安装**`--scope user` → `--scope machine` 两条都试** —— Runner 常以服务账号跑，用户级安装它看不见）当场装，两条都成不了时非零退出并把它写成平台侧人工动作** |
+| **Python**                                              | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来                             | **`scripts/ci-toolchain-selfcheck.mjs`（编排与打印）＋ `scripts/ci-toolchain-python.mjs`（Python 那一层的机制）**：候选表读 `src/lib/process/python-candidates.ts`（同口径探 `python` / `py` / `python3`，`py` 带 `-3`）。缺件时**按序三条真装通道** —— ① `winget`（入口按**一串落点**找：本账号 → 其他账号 profile → 各盘 `Program Files`；安装 **`--scope user` → `--scope machine` 两条都试** —— Runner 常以服务账号跑，用户级安装它看不见）② `scoop` ③ **官方 embed 包解到检出本地**（固定版本号，不碰系统 / 不需要管理员 / 不依赖包管理器）。**装完一律用同一个探针复验**（不采信安装器的退出码），三条都不成时非零退出并把它写成平台侧人工动作；详见 §13.5.3.5.1 |
 | **（说明）缺 Python 那一档在单元测试层是 `env` 档跳过** | 三条验包 / 真跑的用例没有它就跑不了 —— 它们跳过后**在 `tests/conditional-skip-registry.test.ts` 里看得见**（档位 `env`，与 `check-file-structure.test.ts` 的 `!python` 同处置）。机器缺工具是**环境**缺口，本仓的既有口径是「跳过 + 登记」，不是让流水线红 | 守卫是文件顶部的 `PYTHON_OK` 常量。**别写成 `it.skipIf(!hasPython())`**：登记表的扫描器按 `[^)]*` 取守卫文本，守卫里带一对括号会让它整个匹配不上，新增的 skip 站点于是在登记表里**隐形** —— 那正是登记表要防的失效形态                                                      |
 | git 的可提交身份                                        | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败                                                                                                                                      | **夹具自己说话**，见下                                                                                                                                                                                                                                                      |
 
@@ -633,6 +633,57 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 >   「试过什么」写进失败原因（下一步读到它的人不必再猜是「装不上」还是「装对了但
 >   看不见」）。
 
+##### 13.5.3.5.1 「既判也装」的三条通道，与「装完必须复验」（#1959 第三轮）
+
+上一条把 `winget --scope user` 写成「真的没装时的那条路」。**实测这条路在本节点上也走
+不通**，两次跑各照出一半：
+
+| 跑次 | 读数 | 为什么 |
+| --- | --- | --- |
+| 第二跑 | `（盘上也没找到 winget，跳过自动安装）` | `winget` 在 `%LOCALAPPDATA%\Microsoft\WindowsApps` 下确实**不在构建会话的 PATH 上**（按用户追加的路径要新会话生效）—— 所以先按标准落点找一遍是对的，**但那时脚本连落点也判成了不在** |
+| 第三跑（按落点找到 `winget` 之后） | `winget` 起得来，但**装不成** | 两条子原因：① 仓库没有与 `msstore` 源达成协议 ⇒ 交互式询问被非交互宿主读成「否」；② `--scope user` 走 `msstore` 源时要 `--accept-msstore-source-agreements`，而它**要管理员**，`--silent` 下起不来 |
+
+于是「既判也装」按**三条通道按序**收口，找到一条能用的就停：
+
+1. `winget install --scope user` —— 能过就走它，最省事（含按标准落点找 `winget`）；
+2. `scoop install python` —— 开发机常见，按用户、无管理员；
+3. **按需下载官方 embed 包解到检出本地**（`python-embeded/`，**固定版本号**）——
+   前两条都够不着时的兜底，也是这台节点上**唯一真跑通过**的一条：zip 解出来就在那儿，
+   不碰系统、不需要管理员、不依赖任何包管理器。本仓只需要解释器本身（`zipfile` /
+   `json` 都是标准库），所以 embed 包**不带 pip** 也不影响。
+
+固定版本号是刻意的：取 `latest` 会让同一个提交在两台节点上装出两个不同的 Python，
+而这一步的读数（`== python ==` 那行版本号）是要拿来比对的。
+
+**「装上了」不等于「能用了」——复验不许采信安装器的退出码。** 安装器报成功、而解释器
+仍然起不来（解压坏了、杀软拦了、PATH 还没生效）都是真有的形态；下一个人读的是
+`== python ==` 那一行有没有版本号。所以 `main()` 装完**一律回到 `findPython()` 再探
+一遍**，判据只有那一个。装与判分家的另一个好处是本地也能自查 ——
+`node scripts/ci-toolchain-selfcheck.mjs` 不装任何东西，只回答「这台机器够不够跑门禁链」。
+
+**这一层为什么与「自证」分开成一个文件**：`scripts/ci-toolchain-selfcheck.mjs` 一度涨到
+900 行以上，而 `check-infra-file-size.cjs` 的硬闸（§12.6 R5 的姊妹档）就在那儿 ——
+**没有基线可登记，出路只有拆**。拆的边界按职责，不按长度：`ci-toolchain-python.mjs`
+回答「哪个解释器能跑、弄不到时怎么弄到手」（候选探测 / 三条装通道 / 安装根 / 取证），
+`ci-toolchain-selfcheck.mjs` 回答「这台机器够不够跑门禁链」（四件工具链的判据与话术）。
+两份都只用 `node:child_process` / `node:fs` / `node:path`，都**不 import 任何仓库内模块**
+—— 这条约束对两份同样成立（这一步是流水线第一步，模块加载崩掉时报错会落在一句
+`Cannot find module` 上，而那时真正要回答的「这台机器上有什么」一个都没答）。
+
+**这一步为什么不进 §9.5 的「跨平台动作对照表」**：那张表每一行必须同时给出 `.ps1` 与
+跨平台侧脚本（判据是「同一件事在两个平台上各有一份实现」），而工具链自证**只有一份
+实现** —— `scripts/ci-toolchain-selfcheck.mjs`，`.cnb.yml` 那一步直接 `node` 它，本地
+自查也是同一个入口。它内部按平台分叉的只有「Python 那条探测与三条装通道」（Windows
+专属），那是**同一份脚本里的分支**，不是两份实现。登记进对照表反而会把「这里有两份要
+同步的东西」说过头 —— 而对照表的存在意义正是让「必须同步的那几对」看得见。
+
+**这一格最坏的样子是「装了个假的」**：`python.exe` 在盘上、`--version` 非零退出
+（Microsoft Store 的占位别名就是它）。它的下一动作是**换探测方式**，不是「去装一个
+已经装了的 Python」—— 与「压根没有」糊成一句「没有 Python」，就是把后者指错方向，
+而人照着做会白折腾一轮。本仓的四态口径
+（`ok` / `missing` / `present-but-nonzero` / `timeout`，见
+`check-app-port-vectors.cjs` 的 `probeCommand`）就是为这一格立的。
+
 > **还有一条硬约束：写进 `.cnb.yml` 的就地脚本跑在 Windows PowerShell 5.1 上，不是
 > PowerShell 7**。宿主是自托管节点上的默认 `powershell`，所以 `?.`（空条件运算符）、
 > `??`（空合并）这类 pwsh 7 才有的语法**整段当场报错**（实测：第一版按标准落点找
@@ -682,7 +733,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
   「跑在 Windows 宿主机上」绑定的证据，平台池（Linux）上会直接是 `linux`。
   这也是那一步不只是「打印版本」的原因。它同时打出 `== python ==` 那一行：
   自托管节点**不预装 Python**，而三处判据与 E2E 主链路都需要它，所以那一步会在
-  缺失时用 `winget` 当场装（按用户、不需要管理员），装完再复验一次；
+  缺失时按序试三条真装通道（见 §13.5.3.5.1），装完**用同一个探针复验**；
   **四个小节都在、最后一行是「工具链自证通过 ✓」**才说明环境是配齐的。
 
 > 立案现场（#1959 反转时对账出的读数，供日后比对）：本仓全部构建历史 1267 条里，

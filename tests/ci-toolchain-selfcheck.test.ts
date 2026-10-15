@@ -19,18 +19,25 @@
  *   ③ **`.cnb.yml` 真的在跑它**、且那段就地 PowerShell 已经撤掉（脚本存在而配置
  *      没接上 = 那一步又回到手写形态，本文件判的链就断了）。
  */
-import { readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
   installPython,
-  nodeAllowed,
-  parseVersion,
+  PYTHON_EMBED_VERSION,
   pythonForensics,
   wingetAtStandardLocation,
   wingetCandidates,
-} from "../scripts/ci-toolchain-selfcheck.mjs";
+} from "../scripts/ci-toolchain-python.mjs";
+import { nodeAllowed, parseVersion } from "../scripts/ci-toolchain-selfcheck.mjs";
 import {
   pythonCandidates,
   pythonProbeArgs,
@@ -66,7 +73,9 @@ function candidatesInSource(text: string, constName: string): string[] {
 
 describe("工具链自证：Python 候选表只有一份答案", () => {
   it("脚本里的候选与共享件逐项相同（含顺序）", () => {
-    const text = read("scripts/ci-toolchain-selfcheck.mjs");
+    /* 候选表随 Python 那一层拆到了 `ci-toolchain-python.mjs`（selfcheck 的 900 行
+     * 硬闸要求把「机制」与「编排」分开）—— 扫描面跟着走，别指到已经搬走的地方。 */
+    const text = read("scripts/ci-toolchain-python.mjs");
     /* 扫描面先自证：抠不到表说明下面几条是空转。 */
     const found = candidatesInSource(text, "PY_CANDIDATES");
     expect(found, "抠不到 PY_CANDIDATES —— 扫描面指错了地方").not.toEqual([]);
@@ -79,7 +88,7 @@ describe("工具链自证：Python 候选表只有一份答案", () => {
   it("`py` 的 `-3` 在脚本里也没丢（裸 py 是「列出已装版本」并退非零）", () => {
     /* 只判「那份表里有 `py: ["-3"` 这一条」这**一件事**，不判它外面套了什么
      * （`/** @type … *\/ ({...})` 这种 JSDoc 归 TS 类型，与判据无关）。 */
-    const text = read("scripts/ci-toolchain-selfcheck.mjs");
+    const text = read("scripts/ci-toolchain-python.mjs");
     const block = /PY_PROBE_ARGS[\s\S]{0,120}?\n\n/.exec(text)?.[0] ?? "";
     expect(block, "抠不到 PY_PROBE_ARGS —— 扫描面指错了地方").not.toBe("");
     expect(block).toContain('py: ["-3"');
@@ -392,6 +401,72 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     expect(r.installed).toBe(false);
     expect(r.reason).toContain("user");
     expect(r.reason).toContain("machine");
+  });
+
+  /* 「既判也装」是**三条按序**的通道（#1959 第三轮）：`winget --scope user` 在本节点上
+   * 两条路都不通（msstore 源没达成协议 / `--accept-msstore-source-agreements` 要管理员），
+   * 所以最后那条「官方 embed 包解到检出本地」才是这里唯一真跑通过的一条。
+   * 下面用注入的 run 把三条各自的**断点**逐条照亮。 */
+  const win = {
+    platform: "win32" as NodeJS.Platform,
+    env: {
+      LOCALAPPDATA: "/L",
+      USERPROFILE: "/U",
+      TEMP: "/T",
+    } as unknown as NodeJS.ProcessEnv,
+    existing: () => false,
+  };
+
+  it("winget 与 scoop 都不在盘上时，落到官方 embed 包（下载 → 解压 → 复判都走过）", () => {
+    const downloaded: string[] = [];
+    const unzipped: string[] = [];
+    const r = installPython({
+      ...win,
+      /* 一个干净的 cwd：embed 包解在 `<cwd>/python-embeded`，指到仓库根会让这条
+       * 用例读到**上一跑真装出来的**那个目录、于是下载这一步根本不会发生。 */
+      cwd: mkdtempSync(path.join(tmpdir(), "selfcheck-embed-")),
+      run: () => ({ ok: false, out: "" }),
+      /* `mkdir` 必须是真的：`unzip` 要在里面落一个 `python.exe`，而判据读的正是它。 */
+      mkdir: (p: string) => {
+        mkdirSync(p, { recursive: true });
+      },
+      download: (url: string) => {
+        downloaded.push(url);
+      },
+      unzip: (_zip: string, dest: string) => {
+        unzipped.push(dest);
+        writeFileSync(path.join(dest, "python.exe"), "");
+      },
+      existing: (p: string) => existsSync(p),
+    });
+    expect(r.channel).toBe("embed");
+    expect(downloaded[0]).toContain("python.org/ftp/python/");
+    expect(unzipped[0]).toContain("python-embeded");
+    expect(r.installed).toBe(true);
+    expect(r.path).toMatch(/python-embeded.*python\.exe$/);
+  });
+
+  it("embed 包固定版本号，不取 latest（同一提交在两台节点上要装出同一个 Python）", () => {
+    expect(PYTHON_EMBED_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(read("scripts/ci-toolchain-selfcheck.mjs")).not.toContain("/latest/");
+  });
+
+  it("三条通道全断时，reason 逐条点名各自断在哪（不糊成一句「装不上」）", () => {
+    const r = installPython({
+      ...win,
+      cwd: mkdtempSync(path.join(tmpdir(), "selfcheck-dead-")),
+      run: () => ({ ok: false, out: "" }),
+      existing: () => false,
+      mkdir: () => undefined,
+      download: () => {
+        throw new Error("网络不可达");
+      },
+      unzip: () => undefined,
+    });
+    expect(r.installed).toBe(false);
+    for (const channel of ["winget", "scoop", "embed"]) {
+      expect(r.reason, `reason 里没点名 ${channel}`).toContain(channel);
+    }
   });
 });
 
