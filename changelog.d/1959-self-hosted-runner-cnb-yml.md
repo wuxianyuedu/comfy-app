@@ -127,6 +127,15 @@
   > `scripts/ci-toolchain-selfcheck.mjs`（Node 侧，本地能跑、能被单测跑），配置里剩下的
   > PowerShell 只有 `pnpm install` 那几行。判据留着 —— 它守的是「**配置里**别写 5.1
   > 解析不了的语法」这件事本身，而那几行以后也可能长。
+
+- **缺 Python 时的自动安装改成两个 scope 都试**（`--scope user` → `--scope machine`）。
+  取证那一行是 `执行账号: NT AUTHORITY\SYSTEM`：Runner 用的是一份**机器** PATH，而
+  `--scope user` 把包装进**当前用户**的配置目录 —— 对 SYSTEM 这种没有真用户配置目录的
+  账号，那条路要么装不上、要么装到一个**这次构建之后的会话也看不见**的地方，结果与
+  「压根没装、自动安装也没成」逐字同形。两条都试过仍找不到才认输，并把「试过什么」
+  写进失败原因。`winget` 本身还常常在盘上却不在会话的 PATH 上
+  （`%LOCALAPPDATA%\Microsoft\WindowsApps` 那条要新会话才生效），所以按标准落点
+  再找一遍。这些都在 `scripts/ci-toolchain-selfcheck.mjs` 里，本地能跑。
 - **「工具链自证」的判据是 `engines.node` 的闭区间**：`^22.22.2 || ^24.15.0 || >=26.0.0`
   的上界是要紧的，只比下界会放过 `24.14.9` 这类版本 —— 而那正是「不报错、只让某几条
   用例以奇怪方式红」的形态。边界与 `package.json` 由用例对账。
@@ -151,26 +160,9 @@
   顺序：**位置命中而探测不到命令 ⇒ 装过、只是这个账号看不见（改 PATH，别重复装）**；
   位置也没命中 ⇒ 这台机真的没装。
 
-- **e2e 这一档有了 Python 前置，解释器定死成绝对路径**（第四轮）：假 comfy-cli 是一个
-  Python 包，缺解释器时主链路那条 `@critical` 此前只会以「执行器收口失败」红 ——
-  一件事被报成两条功能红，而报错不指向真因。新增 `e2e/support/preflight-python.mjs`，
-  由 `scripts/e2e-run.mjs` 在起 Playwright 之前判一次，判红**不放行**（与同批的浏览器
-  预检同口径），出口指向 `scripts/ci-toolchain-selfcheck.mjs`。同批修掉一个真 bug：
-  `fakeExecutorEnv()` 交给应用的 `COMFY_CLI_PYTHON` 是个**裸名字**，而应用侧直接
-  `spawn` 它 —— Windows 上 Node 不认 PATHEXT，裸名字必然 ENOENT（这一档只在
-  「生产构建 + start」上暴露）。现在 pre-flight 把它解析成**绝对路径**，经
-  `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`；读不出来时退回裸名字 ——
-  那一格是「不知道」而不是「没有」，别把手工 `pnpm exec playwright test` 弄崩。
-- **工具链自证从「只判」变成「判 + 装 + 复验」，且补上 POSIX 分支**（第五轮）：
-  第三轮把失败话术改成自带下一动作之后，实测的收获是**一条更清楚的报错** ——
-  那台节点上确实没有 Python，于是流水线在**第一个 stage** 就断掉、后面 28 个 stage
-  全 `skipped`，一条门禁判据都没跑到。现在 `installPython()` 覆盖三个平台：
-  Windows 走 `winget` 且是**机器级**（Runner 是服务账号，按用户装只写安装者的 PATH，
-  那正是「人看得见、构建步骤看不见」的成因）；Linux 在 `apt-get` / `dnf` / `apk` 里挑
-  第一个存在的、且**不替人 `sudo`**（无人值守里一次权限提示 = 一次挂死）；macOS 只认
-  `brew`，没有就给 python.org 这条出口。装完**复验**，拿不到就如实报「重跑一次即可」，
-  **不把安装器的退出码当结论**。
-- **`.cnb.yml` 的 E2E 之前新增一步「Python 可用性」**：走同一份实现的
-  `--python-only` 形态（不是第二套判据），把这档 E2E 依赖的解释器**每次都打出来** ——
-  第一步那段是成功即静默的，排查时没有可读读数。缺件时它退非零：那时后面那一步必然
-  以「两条 @critical 报成执行器收口失败」收场。
+- **`winget` 安装改成两个 scope 都试**（`--scope user` → `--scope machine`）。
+  `--scope user` 对 `NT AUTHORITY\SYSTEM` 这种服务账号要么装不上、要么装到一个
+  **这次构建之后的会话也看不见**的地方 —— 结果与「压根没装」逐字同形，于是
+  「既判也装」这一层在那一档其实从没成功过。现在两条都试过仍找不到才认输，并把
+  「试过什么」写进失败原因。装后回找也补一条：机器级安装会把解释器放进 Program Files，
+  而**这个进程的 PATH 是安装前的**，按安装根找不到时再按 winget 的链接目录找一次。

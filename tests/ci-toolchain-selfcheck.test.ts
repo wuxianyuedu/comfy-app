@@ -213,10 +213,15 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
      * POSIX 宿主上会出现 `D:\/...` 这类混种分隔符；判的是「探了哪个落点」，
      * 不是「分隔符长什么样」。 */
     const norm = (x: string) =>
-      x.replace(/\\/g, "/").replace(/\/{2,}/g, "/").toLowerCase();
+      x
+        .replace(/\\/g, "/")
+        .replace(/\/{2,}/g, "/")
+        .toLowerCase();
     const set = new Set(probed.map(norm));
     // 标准落点仍在（不能为了新形态把既有的四个丢了）。
-    expect(set.has(norm("C:\\srv\\AppData\\Local\\Programs\\Python"))).toBe(true);
+    expect(set.has(norm("C:\\srv\\AppData\\Local\\Programs\\Python"))).toBe(
+      true,
+    );
     // 这台机 PATH 上出现过的盘符下的同类位置也探了（不是只探 C:）。
     expect(set.has("d:/program files/python")).toBe(true);
     expect(set.has("d:/python")).toBe(true);
@@ -288,15 +293,23 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     expect(ran).toContain("dnf install -y python3");
     // 刻意**不**替人 sudo：权限那一层归平台侧的人（无人值守里一次提示 = 一次挂死）。
     expect(ran.some((c) => c.includes("sudo"))).toBe(false);
-    expect(linux.reason === null || typeof linux.reason === "string").toBe(true);
+    expect(linux.reason === null || typeof linux.reason === "string").toBe(
+      true,
+    );
 
     // 一个都不在 ⇒ 如实说「请自行安装」，而不是猜一个可能不存在的包管理器。
-    const none = installPython({ platform: "linux", run: () => ({ ok: false, out: "" }) });
+    const none = installPython({
+      platform: "linux",
+      run: () => ({ ok: false, out: "" }),
+    });
     expect(none.installed).toBe(false);
     expect(none.reason).toContain("apt-get");
 
     // macOS 只认 brew（没有它就给 python.org 这条出口）。
-    const mac = installPython({ platform: "darwin", run: () => ({ ok: false, out: "" }) });
+    const mac = installPython({
+      platform: "darwin",
+      run: () => ({ ok: false, out: "" }),
+    });
     expect(mac.installed).toBe(false);
     expect(mac.reason).toContain("brew");
 
@@ -312,6 +325,39 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     });
     expect(brewRan).toContain("brew --version");
     expect(brewRan).toContain("brew install python@3.12");
+  });
+
+  it("`--scope user` 不成时再试机器级 —— SYSTEM 账号看不见用户级安装", () => {
+    /* 现场（#1959 第三轮）：Runner 以 `NT AUTHORITY\SYSTEM` 跑、用的是机器 PATH，
+     * 而 `--scope user` 把包装进当前用户的配置目录 —— 那条路对 SYSTEM 要么装不上、
+     * 要么装到一个这次构建之后的会话也看不见的地方。所以两个 scope 都要试。 */
+    const scopes: string[] = [];
+    installPython({
+      platform: "win32",
+      env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+      // `winget --version` 答得上（用 PATH 上那个名字）；两条 install 都报成功。
+      run: (_cmd, args) => {
+        if (args.includes("--scope")) {
+          scopes.push(args[args.indexOf("--scope") + 1] ?? "");
+        }
+        return { ok: true, out: "" };
+      },
+    });
+    expect(scopes).toEqual(["user", "machine"]);
+  });
+
+  it("两条 scope 都试过仍拿不到解释器时，把「试过什么」写进 reason", () => {
+    const r = installPython({
+      platform: "win32",
+      env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+      run: (_cmd, args) =>
+        args.includes("--scope")
+          ? { ok: false, out: "boom" }
+          : { ok: true, out: "" },
+    });
+    expect(r.installed).toBe(false);
+    expect(r.reason).toContain("user");
+    expect(r.reason).toContain("machine");
   });
 });
 

@@ -312,12 +312,23 @@ function listDirectories(root) {
 }
 
 /**
- * 缺 Python 时按默认安装根再找一遍并**就地装**（Windows / `winget`，按用户，
- * 不需要管理员）。
+ * 缺 Python 时按默认安装根再找一遍并**就地装**（Windows / `winget`）。
  *
  * 自托管最大的成本是「这台机器要自己维护」，而它**不会因为少装了什么就报错**
  * （表现是某几条判据以「探测不到」的名义静默退出比对）。所以这里既判也装 ——
  * 但装完仍找不到就非零退出：**红是对的**，让机器自己修好它只是省一遍人工。
+ *
+ * ## 为什么两个 scope 都要试（`--scope user` 一个不够）
+ *
+ * 现场读数（#1959 第三轮）：Runner 以 **`NT AUTHORITY\SYSTEM`** 跑，用的是一份
+ * **机器** PATH。而 `winget install --scope user` 把包装进**当前用户**的
+ * 配置目录 —— 对 SYSTEM 这种「没有真用户配置目录」的账号，那条路要么装不上、
+ * 要么装到一个**这次构建之后的会话也看不见**的地方。这与「节点上压根没装」
+ * 在日志里逐字同形，而处置是两件事。
+ *
+ * 所以先试 `--scope user`，不行就再试**机器级**（`--scope machine`：需要管理员，
+ * 而自托管 Runner 通常就是以高权限服务账号跑的）。两条都试过仍找不到才认输，
+ * 并把「试过什么」写进 `reason`。
  *
  * 本进程的环境早于安装，所以装完要按安装根直接找可执行文件，不指望 PATH 自己刷新。
  */
@@ -344,34 +355,40 @@ export function installPython({
       installed: false,
       path: null,
       reason:
-        "winget 不在 PATH 上，也不在标准落点（%LOCALAPPDATA%\\Microsoft\\WindowsApps）",
+        "winget 不在 PATH 上，也不在标准落点（%LOCALAPPDATA%\\Microsoft\\WindowsApps）" +
+        " —— 这台节点没有可用的自动安装入口",
     };
   }
-  const r = runCmd(winget, [
-    "install",
-    "--id",
-    "Python.Python.3.12",
-    "--scope",
-    "user",
-    "--silent",
-    "--accept-package-agreements",
-    "--accept-source-agreements",
-  ]);
-  if (!r.ok) {
-    return {
-      installed: false,
-      path: null,
-      reason: `winget 安装失败：${r.out}`,
-    };
-  }
-  for (const root of pythonInstallRoots(env)) {
-    const found = findExeUnder(root);
+  const tried = [];
+  for (const scope of ["user", "machine"]) {
+    const r = runCmd(winget, [
+      "install",
+      "--id",
+      "Python.Python.3.12",
+      "--scope",
+      scope,
+      "--silent",
+      "--accept-package-agreements",
+      "--accept-source-agreements",
+    ]);
+    if (!r.ok) {
+      tried.push(`--scope ${scope} 失败（${firstLine(r.out)}）`);
+      continue;
+    }
+    const found =
+      findExeUnderAllRoots(env) ??
+      /* 机器级安装会把解释器放到 Program Files，而**这个进程的 PATH 是安装前的** ——
+       * 按安装根找不到时再按 winget 的链接目录找一次，别把刚装好的读成没装。 */
+      findExeUnder(
+        path.join(env.LOCALAPPDATA ?? "", "Microsoft", "WinGet", "Links"),
+      );
     if (found) return { installed: true, path: found, reason: null };
+    tried.push(`--scope ${scope} 报成功，但安装根下找不到解释器`);
   }
   return {
-    installed: true,
+    installed: false,
     path: null,
-    reason: "winget 报安装成功，但默认安装根下找不到解释器",
+    reason: `winget 两条 scope 都试过，仍没拿到可用解释器：${tried.join("；")}`,
   };
 }
 
@@ -429,6 +446,35 @@ function installPythonPosix({ run: runCmd, platform }) {
         ? "找不到 brew —— 请用 python.org 的安装包装 Python 3"
         : "apt-get / dnf / apk 都不在 —— 请用发行版的包管理器或 python.org 装 Python 3",
   };
+}
+
+/**
+ * 第一条非空输出行（winget 的报错常常多行，取出最能说明问题的那一行）。
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function firstLine(text) {
+  return (
+    String(text ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)[0] ?? "(无输出)"
+  );
+}
+
+/**
+ * 在所有常见安装根下找一个解释器（找第一个命中）。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {string | null}
+ */
+function findExeUnderAllRoots(env) {
+  for (const root of pythonInstallRoots(env)) {
+    const found = findExeUnder(root);
+    if (found) return found;
+  }
+  return null;
 }
 
 /**
@@ -558,7 +604,9 @@ export function main() {
   /** @type {{command: string, path: string | null, version: string} | null} */
   let python = findPython();
   if (!python) {
-    console.log("未发现可用解释器，尝试按平台挑一个安装器当场装（找不到就如实报）");
+    console.log(
+      "未发现可用解释器，尝试按平台挑一个安装器当场装（找不到就如实报）",
+    );
     const attempt = installPython();
     if (attempt.path) {
       python = { command: attempt.path, path: attempt.path, version: "" };
