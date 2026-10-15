@@ -107,8 +107,12 @@ export function findPnpm({
    * `.PS1` **无条件**在列：默认 PATHEXT 不含它，由它决定就是「永远选不出来」。 */
   const exts =
     platform === "win32" ? ["", ".EXE", ".PS1", ".CMD", ".BAT", ".COM"] : [""];
+  /* ⚠️ 按**目标平台**的分隔符切，不按宿主的 `path.delimiter`：`platform` 是可注入的，
+   * 而单测正是在 POSIX 上判 Windows 的形态。拿宿主那个 `:` 去切一串 `;` 分隔的
+   * Windows PATH，会把整串当成**一条**目录 —— 每个候选都拼成不存在的路径，
+   * 判据静默答「没有」（`ci-toolchain-python.mjs` 的 `pathDrives` 记过同一格）。 */
   for (const dir of String(env.PATH ?? "")
-    .split(path.delimiter)
+    .split(platform === "win32" ? ";" : ":")
     .filter(Boolean)) {
     for (const ext of exts) {
       const candidate = path.join(dir, `pnpm${ext}`);

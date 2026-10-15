@@ -782,6 +782,46 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
     PATHEXT: ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC",
   });
 
+  it("多条目的 PATH 按**目标平台**的分隔符切（宿主是 POSIX 也要判对 Windows）", () => {
+    /* `findPnpm()` 的 `platform` 是可注入的，而单测正是在 POSIX 上判 Windows 的形态。
+     * 拿宿主的 `path.delimiter`（POSIX 是 `:`）去切一串 `;` 分隔的 Windows PATH，
+     * 会把整串当成**一条**目录 —— 每个候选都拼成不存在的路径、判据静默答「没有」。
+     * 现场那台机的 PATH 是几十条 `;` 分隔的条目，所以这不是假想形态。 */
+    const firstDir = String.raw`C:\Windows\system32`;
+    const nodeDir = String.raw`D:\Program Files\nodejs`;
+    const hostExe = String.raw`C:\Program Files\PowerShell\7\pwsh.EXE`;
+    // 真正的 pnpm 在**第二条**上：分隔符切错就整串都命中不了。
+    /* `findPnpm()` 用宿主（POSIX）的 `path.join` 拼候选，分隔符会是 `/`；
+     * 而这里判的是 Windows 的**形态**。把两侧的分隔符归一，判据才不依赖宿主 ——
+     * 与上面那条「大小写按 NTFS 不敏感处理」是同一条理由。 */
+    const norm = (p: string) => p.replace(/[\\/]+/g, "\\").toLowerCase();
+    const onDisk = new Set(
+      [
+        nodeDir + String.raw`\pnpm`,
+        nodeDir + String.raw`\pnpm.ps1`,
+        hostExe,
+      ].map(norm),
+    );
+    const r = findPnpm({
+      platform: "win32",
+      env: { PATH: `${firstDir};${nodeDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      isFile: (p: string) => onDisk.has(norm(p)),
+      host: () => hostExe,
+      probeRun: (cmd, args) => {
+        // 真垫片语义：`pwsh -File pnpm.ps1 -v` 答版本；少了 `-v` 退非零。
+        if (cmd === hostExe && args.includes("-v")) {
+          return { command: cmd, args, out: "12.4.1" };
+        }
+        return null;
+      },
+    });
+    expect(
+      r.ok,
+      "第二条 PATH 上的 pnpm 必须被找到（切错分隔符会整串当成一条）",
+    ).toBe(true);
+    expect(r.out).toBe("12.4.1");
+  });
+
   it("只有 `.ps1` 在盘上时也被找到，且给出「宿主 + -File」的形态", () => {
     /* 盘上只有 `pnpm.PS1`（corepack 三个形态里唯一能被 Node 起的那一个）。
      * 大小写按判据拼出来的形态写：Windows 不敏感，而 CI 跑在 POSIX 上 ——
