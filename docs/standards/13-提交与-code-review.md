@@ -490,7 +490,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | **git**              | 自托管机的基本依赖（官方文档原话「必装」）                                                                                 | 工具链自证           |
 | **Node**（在 `engines.node` 范围内） | 什么都跑不起来                                                                                              | 工具链自证           |
 | **pnpm**             | 同上（`corepack` 会在缺它时自己去下载 `packageManager` 指的那版，但那是每次构建的额外网络往返）                            | 工具链自证           |
-| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来 | **工具链自证：同口径探 `python3` / `python` / `py`，先试 `winget`（含不在 PATH 的标准落点）按用户当场装，两处入口都不在时非零退出并把它写成平台侧人工动作** |
+| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来 | **`scripts/ci-toolchain-selfcheck.mjs`：同口径探 `python3` / `python` / `py`，先试 `winget`（含不在 PATH 的标准落点）按用户当场装，两处入口都不在时非零退出并把它写成平台侧人工动作** |
 | **（说明）缺 Python 那一档在单元测试层是 `env` 档跳过** | 三条验包 / 真跑的用例没有它就跑不了 —— 它们跳过后**在 `tests/conditional-skip-registry.test.ts` 里看得见**（档位 `env`，与 `check-file-structure.test.ts` 的 `!python` 同处置）。机器缺工具是**环境**缺口，本仓的既有口径是「跳过 + 登记」，不是让流水线红 | 守卫是文件顶部的 `PYTHON_OK` 常量。**别写成 `it.skipIf(!hasPython())`**：登记表的扫描器按 `[^)]*` 取守卫文本，守卫里带一对括号会让它整个匹配不上，新增的 skip 站点于是在登记表里**隐形** —— 那正是登记表要防的失效形态 |
 | git 的可提交身份     | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败 | **夹具自己说话**，见下 |
 
@@ -503,23 +503,34 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > **「工具链自证」这一条有一段自己的教训**（#1959 第二轮）。它最初对 Python 写的是
 > 裸的一行 `python -V`，而门禁那边探的是 `["python3", "python"]` —— 于是这一步在
 > 「宿主机只有 `python3`」的机器上**红得与「压根没装」逐字同形**，而它本来要回答的
-> 恰恰是「门禁要的那个解释器在不在」。两处修正同批：
+> 恰恰是「门禁要的那个解释器在不在」。
 >
-> - **探测面与门禁同口径**：依次试 `python3` / `python` / `py`，哪个答得上就过。
->   **两处同批改的**：`check-app-port-vectors.cjs` 原先也只探 `["python3", "python"]`，
->   宿主只有官方 `py` 启动器时那一侧同样落进 `missing` 档、静默少判 —— 现在它的候选
->   与 `e2e/support/fake-comfyui-executor-env.mjs` 的 `pythonCandidates()` 对齐
->   （Windows 上加 `py -3`；**必须带 `-3`**，裸 `py` 是「列出已装版本」并退非零）；
-> - **红的时候必须给下一动作**：PowerShell 的 `CommandNotFoundException` 分不出
->   「装了 Python 但没进 PATH」与「压根没装」，而处置不同（改 PATH vs 去装一个）。
->   失败分支现在把这两条处置直接打印出来，并指向本节；
+**根因不是「探错了一个名字」，而是同一件事有四份写法在漂**：门禁脚本、
+> `.cnb.yml` 的就地 PowerShell、E2E 假 comfy-cli 夹具、`tests/helpers/python-exe.ts`。
+> 把它们改成同一串字符串不解决问题（第四份仍会漂），所以**收成一处事实源**：
+>
+> - **候选名 / 顺序 / `py` 要带 `-3` 只有一处**：`src/lib/process/python-candidates.ts`；
+>   「真起一次确认」连同候选遍历收在 `src/lib/process/python-resolve.ts`，由 E2E 夹具
+>   与 `tests/helpers/python-exe.ts` 直接取用。
+> - **跨宿主的两处保留文本副本、由用例对账**：`scripts/check-app-port-vectors.cjs`
+>   是 `.cjs`（`require` 不到那份 `.ts`），`scripts/ci-toolchain-selfcheck.mjs` 刻意不
+>   `import` 它（这一步要在「Node 模块链还没被证明可用」的机器上也能给出可读输出）。
+>   两份副本由 `tests/ci-toolchain-selfcheck.test.ts` 逐项对账 —— **漂了就红**。
+> - **逻辑从配置里搬进脚本**：那一步原先是一段 ~70 行就地 PowerShell（探 Python、
+>   `winget` 当场装、打印取证），而**配置里的逻辑一条判据都测不到它**
+>   （`.cnb.yml` 只在平台上跑，本地一个执行者都没有）。现在它是
+>   `scripts/ci-toolchain-selfcheck.mjs`，能被单测直接跑；判的是 git / node
+>   （含 `engines.node` 的 caret **上界**）/ pnpm / Python 四件。
+> - **红的时候必须给下一动作**：`CommandNotFoundException` 分不出「装了 Python 但没进
+>   PATH」与「压根没装」，而处置不同（改 PATH vs 去装一个）。失败分支把这两条处置
+>   直接打印出来，并指向本节；
 > - **红的时候还要把「这个执行账号到底看得见什么」打出来**（#1959 第三轮）。现场是
 >   同一台机器上**人机读数相反**：有人在**自己的会话**里跑出 `python -V` →
 >   `Python 3.12.2`，而构建步骤报「`python3` / `python` / `py` 一个都没有」。两者
 >   不矛盾，是**执行身份不同** —— 自托管 Runner 以服务 / 代理账号跑、用的是**机器
 >   PATH**（或它自己那份环境），而 python.org 安装包的默认选项
 >   「Install for me only」只写进**安装者那个用户的** PATH。两种情形在日志里逐字
->   同形，而处置相反。所以失败分支现在连**执行账号名、PATH 逐条、四个常见安装位置
+>   同形，而处置相反。所以脚本的失败分支连**执行账号名、PATH 逐条、四个常见安装位置
 >   （`LOCALAPPDATA\Programs\Python` / `ProgramFiles\Python` / `ProgramFiles(x86)\Python` /
 >   `ALLUSERSPROFILE\Python`）的命中情况**一起打印 —— 取证不需要有人远程登进那台
 >   机器，下一跑自己会说。
@@ -529,12 +540,21 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > ⇒ 装过、只是这个账号看不见（改 PATH 或机器级重装，**别重复装**）；**位置也没命中**
 > ⇒ 这台机真的没装。缺了这份打印，两种情形都只能靠猜。
 
-**还有一条硬约束：这些脚本跑在 Windows PowerShell 5.1 上，不是 PowerShell 7**。
-宿主是自托管节点上的默认 `powershell`，所以 `?.`（空条件运算符）、`??`（空合并）
-这类 pwsh 7 才有的语法**整段当场报错**（实测：第一版按标准落点找 `winget` 时写了
-`(Get-Command winget -ErrorAction SilentlyContinue)?.Source`，报错是「表达式或语句中
-包含意外的标记」，指向 `?.Source` 那一行 —— 而本机 Linux 侧无从发现）。
-写这一份时按 **5.1 的语法面**自查：要判空就显式 `if ($x) { … }`，不要用 `?.`。
+> **「既判也装」那条路仍要留着，但要先按上面的顺序分岔**：真的没装（位置也没命中）
+> 时用 `winget --scope user` 当场装（不需要管理员）。**`winget` 常年在盘上却不在这个
+> 会话的 PATH 上** —— `%LOCALAPPDATA%\Microsoft\WindowsApps` 那条按用户追加的路径要
+> 新会话才生效，所以除了 `Get-Command` 还要**按标准落点再找一遍**，找到就用绝对路径
+> 起它。少了这一条，「机器上明明有 winget」会被读成「没有」。
+
+> **还有一条硬约束：写进 `.cnb.yml` 的就地脚本跑在 Windows PowerShell 5.1 上，不是
+> PowerShell 7**。宿主是自托管节点上的默认 `powershell`，所以 `?.`（空条件运算符）、
+> `??`（空合并）这类 pwsh 7 才有的语法**整段当场报错**（实测：第一版按标准落点找
+> `winget` 时写了 `(Get-Command winget -ErrorAction SilentlyContinue)?.Source`，报错是
+> 「表达式或语句中包含意外的标记」，指向 `?.Source` 那一行 —— 而本机 Linux 侧无从发现）。
+> 写那一份时按 **5.1 的语法面**自查：要判空就显式 `if ($x) { … }`，不要用 `?.`。
+>
+> （同一件事的另一半理由：正因为这类**只有推上台才照得出来**的坑，工具链自证的逻辑
+> 现在整体搬进了 `scripts/ci-toolchain-selfcheck.mjs` —— Node 侧，本地能跑、能被单测跑。）
 
 > **「自查」这件事现在有执行者**（只靠人记得是不够的：开发机通常只有 `pwsh` 7，
 > 同一行在那边完全正常 —— **「我这儿跑得通」在这条上不构成证据**）。
@@ -570,12 +590,13 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
   对照命令：`cnb build get-build-logs --repo <slug> --page-size 100 --page <n>`，
   看返回里 `pipelines[].labels`（**平台池与自托管在同一个字段上就能区分**，
   不需要别的通道）。
-- **看第一步的「工具链自证」输出**：`cmd /c ver` 那句是本配置里唯一与
-  「跑在 Windows 宿主机上」绑定的证据 —— 它在平台池（Linux）上会直接失败。
-  这也是那一步不只是「打印版本」的原因。这一步同时会打出 `== Python ==` 那一行：
+- **看第一步的「工具链自证」输出**（`scripts/ci-toolchain-selfcheck.mjs`）：
+  `== OS ==` 那一段打出的是 `win32` / 宿主 arch —— 它是这条流水线里唯一与
+  「跑在 Windows 宿主机上」绑定的证据，平台池（Linux）上会直接是 `linux`。
+  这也是那一步不只是「打印版本」的原因。它同时打出 `== python ==` 那一行：
   自托管节点**不预装 Python**，而三处判据与 E2E 主链路都需要它，所以那一步会在
   缺失时用 `winget` 当场装（按用户、不需要管理员），装完再复验一次；
-  **两条版本行都在**才说明环境是配齐的。
+  **四个小节都在、最后一行是「工具链自证通过 ✓」**才说明环境是配齐的。
 
 > 立案现场（#1959 反转时对账出的读数，供日后比对）：本仓全部构建历史 1267 条里，
 > 事件侧 `push` / `pull_request` 最后一次出现在 **2026-09-16**（`748f1c3d` 删配置那天），

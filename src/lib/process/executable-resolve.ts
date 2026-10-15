@@ -86,6 +86,18 @@ export interface WhichCommandOptions {
    *   同一个 PATH 上换探针又指望换结论，会读到上一条的缓存 —— 换探针的用例先 `clearWhichCommandCache()`。
    */
   probe?: UsabilityProbe;
+  /**
+   * `whichCommand` 在「真起一次确认」时喂给候选的参数（默认 `["--version"]`）。
+   *
+   * 为什么要有它：**同一个命令的可用判据不是统一的**。`python` 那类解释器要的是
+   * 「能不能答 `--version`」，而 `py` 启动器裸着跑是「列出已装版本」并退非零 ——
+   * 候选名一样、判据不一样。此前 `whichCommand` 把这一格写死成 `--version`，
+   * 于是带宿主参数的候选（`py -3`）只能由调用方自己再包一层，或者干脆漏掉这一档
+   * （ISSUE #1959 第二轮：门禁探的面与流水线自证探的面因此漂成两份）。
+   * 记忆化键里**也不含它** —— 同一条 PATH 上「`py --version` 不成立、`py -3 --version`
+   * 成立」会被读成同一条缓存，换 probeArgs 的用例请先 `clearWhichCommandCache()`。
+   */
+  probeArgs?: string[];
 }
 
 /** 「这个候选能不能被 spawn」的结论。`prefixArgs` 是启动它所需的宿主参数
@@ -149,6 +161,7 @@ export function whichCommand(
     env = process.env,
     platform = process.platform,
     probe = realUsabilityProbe,
+    probeArgs = ["--version"],
   }: WhichCommandOptions = {},
 ): string | null {
   const key = `${name} ${env.PATH ?? ""} ${env.PATHEXT ?? ""} ${platform}`;
@@ -163,7 +176,7 @@ export function whichCommand(
     for (const ext of exts) {
       const candidate = path.join(dir, name + ext);
       if (!isFile(candidate)) continue;
-      const usable = usableCommand(candidate, undefined, {
+      const usable = usableCommand(candidate, probeArgs, {
         env,
         platform,
         probe,

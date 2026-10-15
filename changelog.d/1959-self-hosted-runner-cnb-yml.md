@@ -66,13 +66,21 @@
 
 ## Changed
 
-- **`.cnb.yml` 的「工具链自证」补 Python，且探测面与门禁同口径**：Python 是门禁链的
-  真实依赖（`check-app-port-vectors.cjs` 要跑 `.py` 做四语言比对、几处用例用它验 zip
-  包），而缺了它的表现是**静默少判**而不是报错。第二轮首跑又照出：原先写的是裸的一行
-  `python -V`，只在宿主机恰好有这个裸名时才过，而这台机器上 `python3` / `python` 都
-  没有 —— 于是第 8 秒就在这一步红掉、排在后面的 27 个 stage 一个都没跑。现在依次试
-  `python3` / `python` / `py`（Windows 上 `py` 带 `-3`），并让失败分支**打印下一动作**
-  （`CommandNotFoundException` 分不出「装了但没进 PATH」与「没装」，而处置不同）。
+- **Python 解释器的候选表收成一处事实源**（`src/lib/process/python-candidates.ts`）。
+  同一件事此前有**四份**写法在漂：门禁脚本、`.cnb.yml` 的就地 PowerShell、e2e 假
+  comfy-cli 夹具、`tests/helpers/python-exe.ts`。第二轮首跑之所以「红在第一步、红得
+  与『压根没装』逐字同形」，根因就是这一格 —— 流水线探的面与门禁探的面不是同一份。
+  现在候选名 / 顺序 / `py` 要带 `-3` 都只定义一次，其余各处以它为准（`resolvePython()`
+  连同「真起一次确认」一起收在 `src/lib/process/python-resolve.ts`）；跨 `.cjs` 与
+  「刻意不 import」的纯 Node 宿主那两处保留文本副本，由用例逐项对账，漂了就红。
+- **流水线的「工具链自证」从就地 PowerShell 收成 `scripts/ci-toolchain-selfcheck.mjs`**。
+  那一段此前长在 `.cnb.yml` 里（探 Python、`winget` 当场装、打印「这个账号看得见
+  什么」的取证），而**配置里的逻辑一条判据都测不到它** —— `.cnb.yml` 只在平台上跑，
+  本地一个执行者都没有，于是它只能靠「推上去看看红不红」验，第二、三轮各红过一次。
+  收进脚本之后：候选表回到唯一一处；这一步**能被单测直接跑**；失败时的取证（执行
+  账号 / PATH / 四个安装位置的命中）一并搬进来，并据此给出「位置命中而命令探不到 ⇒
+  改这个账号 PATH，**别重复装**；位置也没命中 ⇒ 才是真没装」这条分岔。判的是
+  git / node（含 `engines.node` 的 caret **上界**）/ pnpm / Python 四件。
 - **`.cnb.yml` 的工具链自证**找不到解释器时先**尝试当场装**：`winget` 常年在盘上却不在
   构建会话的 PATH 上（`WindowsApps` 那条按用户追加的路径要新会话才生效），所以除了
   `Get-Command` 还按标准落点 `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe` 再找一遍，
@@ -94,10 +102,18 @@
   「不许空转」那组自证同时钉住两端：真语法要红（已用原始 bug 反向复算，报的正是那一行）、
   **注释里**的同形文本要放过 —— 配置里那条 ⚠️ 说明正当地会写出 `?.`，把说明判成
   违规等于逼人删注释。
-- **`check-app-port-vectors.cjs` 的 Python 候选补上 Windows `py` 启动器**：原来只探
+
+  > 本笔之后这条判据的射程**变小了**：`.cnb.yml` 里那段就地 PowerShell 已整体搬进
+  > `scripts/ci-toolchain-selfcheck.mjs`（Node 侧，本地能跑、能被单测跑），配置里剩下的
+  > PowerShell 只有 `pnpm install` 那几行。判据留着 —— 它守的是「**配置里**别写 5.1
+  > 解析不了的语法」这件事本身，而那几行以后也可能长。
+- **「工具链自证」的判据是 `engines.node` 的闭区间**：`^22.22.2 || ^24.15.0 || >=26.0.0`
+  的上界是要紧的，只比下界会放过 `24.14.9` 这类版本 —— 而那正是「不报错、只让某几条
+  用例以奇怪方式红」的形态。边界与 `package.json` 由用例对账。
+- **`check-app-port-vectors.cjs` 的 Python 候选表改从共享件对账**：原来只探
   `python3` / `python`，宿主只有官方 `py` 时这一侧落进 `missing` 档、以「探测不到
-  Python」的名义退出四向比对 —— 与 `e2e/support/fake-comfyui-executor-env.mjs` 的
-  `pythonCandidates()`（`win32: ["python", "py", "python3"]`）口径不一致。
+  Python」的名义退出四向比对。现在它的候选与 `src/lib/process/python-candidates.ts`
+  同口径，`py` 带 `-3`，两份文本由用例逐项对账。
 - **`.cnb.yml` 的门禁清单注释不再指向已删文件**：它还在说要
   `tests/cnb-pipeline-gates.test.ts` 逐条核对，而那份文件随旧版配置一起删于 #623，
   本 PR 不复活它（它锁的是旧版那三十步与上报插件，两样在自托管上都不成立）——

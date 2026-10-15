@@ -1,0 +1,137 @@
+/**
+ * 「哪个 Python 真能跑」的单测。
+ *
+ * 起点是 ISSUE #1959 第二轮的首跑现场：流水线的「工具链自证」写成裸的一行
+ * `python -V`，而门禁 `check-app-port-vectors.cjs` 探的是 `["python3","python"]`
+ * —— 自托管节点上官方安装器落的是 `python.exe` / `py.exe`，于是这一步在第 8 秒
+ * 红掉、排在后面的 27 个 stage 一个没跑，而红的理由与它要回答的问题无关。
+ *
+ * 判据分两层，本文件两层都钉：候选名与顺序（纯函数）、在候选里挑出第一个
+ * **真起得来**的（用真临时文件 + 注入探针，两个平台的顺序在本机都能判）。
+ */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+
+import {
+  clearWhichCommandCache,
+  type UsabilityProbe,
+} from "./executable-resolve";
+import { pythonCandidates, pythonProbeArgs } from "./python-candidates";
+import { resolvePython } from "./python-resolve";
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "python-resolve-"));
+let seq = 0;
+/** 每个用例一个独立目录：同名文件被覆写重造会让 `whichCommand` 的记忆化缓存说谎。 */
+function freshDir(): string {
+  const dir = path.join(tmp, `case-${seq++}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+beforeEach(() => {
+  clearWhichCommandCache();
+});
+
+afterAll(() => {
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+/** 造一个「形态上能被 Node 起」的候选（POSIX 要执行位；Windows 上 X_OK 恒通过）。 */
+function writeCandidate(file: string) {
+  fs.writeFileSync(file, "#!/bin/sh\nexit 0\n");
+  fs.chmodSync(file, 0o755);
+}
+
+/**
+ * 探针：只认 `wanted` 这一个候选跑得起来，其余一律 `ENOEXEC`。
+ *
+ * 为什么必须注入而不是真起进程：本文件要判的是「**两个平台**的候选顺序」，
+ * 而 Windows 开发机上造不出另一套 PATH 布局。真起进程那一档由
+ * `executable-resolve.test.ts` 与它在平台 fixture 下的用例覆盖。
+ */
+function probeOnly(wanted: string): UsabilityProbe {
+  return {
+    access: () => undefined,
+    spawn: (candidate) =>
+      (candidate.split(/[\\/]/).pop() ?? "") === wanted ? null : "ENOEXEC",
+  };
+}
+
+describe("pythonCandidates：候选名与顺序即判据", () => {
+  it("Windows 先试 python，再 py，最后 python3", () => {
+    // 官方安装器落 python.exe；装了 Store 版时常常只有 py；python3 多半只是个别名。
+    expect(pythonCandidates("win32")).toEqual(["python", "py", "python3"]);
+  });
+
+  it("POSIX 反过来：python3 才是规范名", () => {
+    expect(pythonCandidates("linux")).toEqual(["python3", "python"]);
+    expect(pythonCandidates("darwin")).toEqual(["python3", "python"]);
+  });
+
+  it("`py` 必须带 `-3`（裸 `py` 是「列出已装版本」并退非零）", () => {
+    expect(pythonProbeArgs("py")).toEqual(["-3"]);
+    expect(pythonProbeArgs("py", ["--version"])).toEqual(["-3", "--version"]);
+    expect(pythonProbeArgs("python", ["--version"])).toEqual(["--version"]);
+  });
+});
+
+describe("resolvePython：在候选里挑出第一个真能跑的", () => {
+  it("POSIX 上命中 python3，且不带宿主参数", () => {
+    const dir = freshDir();
+    writeCandidate(path.join(dir, "python3"));
+    const hit = resolvePython({
+      env: { PATH: dir },
+      platform: "linux",
+      probe: probeOnly("python3"),
+    });
+    expect(hit?.command).toBe("python3");
+    expect(hit?.path).toBe(path.join(dir, "python3"));
+    expect(hit?.args).toEqual([]);
+  });
+
+  it("Windows 上只有 py 时命中它，并把 `-3` 一起交出来", () => {
+    const dir = freshDir();
+    writeCandidate(path.join(dir, "py.EXE"));
+    const hit = resolvePython({
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      platform: "win32",
+      probe: probeOnly("py.EXE"),
+    });
+    expect(hit?.command).toBe("py");
+    // 「选中了 py」与「怎么起它」是同一件事的两半，必须一起给出。
+    expect(hit?.args).toEqual(["-3"]);
+  });
+
+  it("在盘上但起不来的候选不算命中，继续往后找", () => {
+    const dir = freshDir();
+    // 形态正是 Microsoft Store 的占位别名 python.exe：文件在、起一次就退非零。
+    writeCandidate(path.join(dir, "python"));
+    writeCandidate(path.join(dir, "py"));
+    const hit = resolvePython({
+      env: { PATH: dir },
+      platform: "linux",
+      // linux 的候选是 python3 / python —— 这里把顺序改成 python 打头，
+      // 断言「先把 python 试掉，起不来就落到下一个」而不是当场认输。
+      candidates: ["python", "py"],
+      probe: probeOnly("py"),
+    });
+    expect(hit?.command).toBe("py");
+  });
+
+  it("一个都没有时返回 null，并把试过的候选一并说清", () => {
+    const dir = freshDir();
+    expect(
+      resolvePython({
+        env: { PATH: dir },
+        platform: "linux",
+        probe: probeOnly(""),
+      }),
+    ).toBeNull();
+  });
+
+  it("PATH 是空的时候也答 null（不是抛，也不是假装命中）", () => {
+    expect(resolvePython({ env: { PATH: "" }, platform: "linux" })).toBeNull();
+  });
+});

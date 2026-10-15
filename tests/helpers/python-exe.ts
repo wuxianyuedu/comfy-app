@@ -8,18 +8,30 @@
  * `spawnSync python3 ENOENT` 把 `log-run-layout` 与 `logs/diagnostics/route` 两组用例
  * 整组红掉，而报错一个字都不指向「这台机器上的解释器不叫 python3」。
  *
+ * ## 候选表与「真起一次」都不在这里定义了
+ *
+ * 这一份原先自己写死了一份 `CANDIDATES = ["python3","python","py"]` —— 而
+ * `src/lib/process/python-candidates.ts` 是同一个问题的**唯一**答案（门禁脚本、
+ * 流水线的工具链自证、e2e 夹具都从那儿取）。候选表与 `py -3` 的形态在四处各写一遍
+ * 就必然漂移，而漂移的后果已经发生过一次（ISSUE #1959 第二轮首跑：流水线第一步
+ * 探的面与门禁不是同一份）。所以这里只保留「测试视角」的那一层：给出**可直接
+ * spawn 的调用形状**，并缓存它。
+ *
  * 判据只有一条：**真起一次进程**（`<解释器> -c "import sys; sys.exit(0)"` 退出 0），
  * 而不是看 PATH 上有没有这个文件名 —— 同 `scripts/check-app-port-vectors.cjs` 的四态
  * 口径：命令**在**、只是非零退出（Windows 的 Store 占位别名 `python.exe` 就是它）与
  * 「压根没有」的下一动作完全不同，两者都不能算「可用」。
  *
- * 返回的是**可直接 spawn 的调用形状**（命令 + 前缀参数）而不是光秃秃一个名字：Windows 的
- * `py` 启动器不带 `-3` 时可能选到 Python 2，补 `-3` 这件事必须在**解析这一处**定下来，
- * 不能指望每个调用点自己记得（`scripts/setup-comfy-cli-venv.ps1` 的 `$venvArgs` 同理）。
- *
- * 解析结果按进程缓存：一次 `execFileSync` 约几十毫秒，而调用它的用例往往每条都要用。
+ * 返回的是**调用形状**（命令 + 前缀参数）而不是光秃秃一个名字：`py` 启动器不带 `-3`
+ * 时可能选到 Python 2，补 `-3` 这件事必须在**解析这一处**定下来，不能指望每个调用点
+ * 自己记得（`scripts/setup-comfy-cli-venv.ps1` 的 `$venvArgs` 同理）。
  */
 import { execFileSync } from "node:child_process";
+
+import {
+  pythonCandidates,
+  pythonProbeArgs,
+} from "../../src/lib/process/python-candidates";
 
 /** 一次可用的 Python 调用：`command` + 必须前置的参数。 */
 export interface PythonInvocation {
@@ -28,21 +40,6 @@ export interface PythonInvocation {
   /** 必须前置的参数（`py` 启动器是 `-3`；其余为空）。 */
   prefixArgs: string[];
 }
-
-/**
- * 候选顺序：POSIX 惯例优先，再回落 Windows 官方安装器的两个落点。
- *
- * `py` 是 Windows 官方启动器（装了 Store 版 Python 时常只有它），排最后是因为它
- * **不带 `-3` 时可能选到 Python 2** —— 由 `PREFIX_ARGS` 补上这一条。
- */
-const CANDIDATES = ["python3", "python", "py"] as const;
-
-/** 各候选必须前置的参数。 */
-const PREFIX_ARGS: Record<(typeof CANDIDATES)[number], string[]> = {
-  python3: [],
-  python: [],
-  py: ["-3"],
-};
 
 let resolved: PythonInvocation | null | undefined;
 
@@ -54,12 +51,16 @@ let resolved: PythonInvocation | null | undefined;
  */
 export function resolvePython(): PythonInvocation | null {
   if (resolved !== undefined) return resolved;
-  for (const candidate of CANDIDATES) {
-    const prefixArgs = PREFIX_ARGS[candidate];
+  for (const candidate of pythonCandidates()) {
+    const prefixArgs = pythonProbeArgs(candidate);
     try {
-      execFileSync(candidate, [...prefixArgs, "-c", "import sys; sys.exit(0)"], {
-        stdio: "ignore",
-      });
+      execFileSync(
+        candidate,
+        [...prefixArgs, "-c", "import sys; sys.exit(0)"],
+        {
+          stdio: "ignore",
+        },
+      );
       resolved = { command: candidate, prefixArgs };
       return resolved;
     } catch {
@@ -94,7 +95,10 @@ export function hasPython(): boolean {
  */
 export function runPython(code: string, args: string[] = []): string {
   const py = resolvePython();
-  if (!py) throw new Error("PATH 上没有可用的 Python（试过 python3 / python / py）");
+  if (!py)
+    throw new Error(
+      `PATH 上没有可用的 Python（试过 ${pythonCandidates().join(" / ")}）`,
+    );
   return execFileSync(py.command, [...py.prefixArgs, "-c", code, ...args], {
     encoding: "utf8",
   }).trim();
