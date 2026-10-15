@@ -181,6 +181,49 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
     expect(text).toContain("一个都没找到 —— 更像「这台机真的没装」");
   });
 
+  it("落点按「这台机的实际布局」问：PATH 上的盘符与别人的 profile 都算", () => {
+    /* 现场教的一课（#1959 第三轮第二跑）：那台机把用户数据与程序放在 `D:` 盘，
+     * 而标准落点（`%LOCALAPPDATA%\Programs\Python` 一族）**零命中** —— 只查标准
+     * 落点会得出「这台机真的没装」，可 PATH 里明明带着 `D:\...`。判据是
+     * 「取证必须覆盖这台机实际用的盘符，以及**其他账号** profile 里的按用户安装」
+     * （`D:\Users\yuedu\...` 正是「yuedu 会话有、SYSTEM 构建账号没有」的那一格）。 */
+    const probed: string[] = [];
+    pythonForensics({
+      env: {
+        // 只用分号当分隔符（Windows 形态）—— 这里的 env 是合成的 PATH，不是本机的。
+        PATH: "C:\\Windows\\system32;D:\\Program Files\\nodejs",
+        LOCALAPPDATA: "C:\\srv\\AppData\\Local",
+        ProgramFiles: "C:\\Program Files",
+      },
+      account: "NT AUTHORITY\\SYSTEM",
+      existing: (p) => {
+        probed.push(p);
+        return false;
+      },
+      /* 只让 `D:` 盘那根 Users 列举出一个 profile —— 其余 Users 根返回空。
+       * 判「是不是 D: 盘的 Users 根」按**归一后的正斜杠形态**，不写字面量：
+       * 脚本用平台的 `path.join` 拼，POSIX 宿主上会得到 `D:\/Users` 这种混种形态，
+       * 写死会漂（这是判据自身的可移植性，不是被测逻辑的形态）。 */
+      listDirs: (p) =>
+        /^d:\/+users\/?$/i.test(p.replace(/\\/g, "/"))
+          ? ["D:\\Users\\yuedu"]
+          : [],
+    });
+    /* 一律按**归一后的正斜杠形态**断言落点身份 —— 脚本用平台 `path.join` 拼，
+     * POSIX 宿主上会出现 `D:\/...` 这类混种分隔符；判的是「探了哪个落点」，
+     * 不是「分隔符长什么样」。 */
+    const norm = (x: string) =>
+      x.replace(/\\/g, "/").replace(/\/{2,}/g, "/").toLowerCase();
+    const set = new Set(probed.map(norm));
+    // 标准落点仍在（不能为了新形态把既有的四个丢了）。
+    expect(set.has(norm("C:\\srv\\AppData\\Local\\Programs\\Python"))).toBe(true);
+    // 这台机 PATH 上出现过的盘符下的同类位置也探了（不是只探 C:）。
+    expect(set.has("d:/program files/python")).toBe(true);
+    expect(set.has("d:/python")).toBe(true);
+    // 别人的按用户安装 —— 最初的症状就在这一格。
+    expect(set.has("d:/users/yuedu/appdata/local/programs/python")).toBe(true);
+  });
+
   it("四个安装根都覆盖（含别人装的那两个），不只是「我们指望它装在哪」", () => {
     const roots: string[] = [];
     pythonForensics({

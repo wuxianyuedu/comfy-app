@@ -164,20 +164,59 @@ export function findPython({ run: runCmd = run } = {}) {
 /**
  * Windows 上 Python 的常见安装根 —— **取证与安装共用一份**。
  *
- * 比「我们指望它装在哪」多两个：`ProgramFiles(x86)` 与 machine-wide 的
- * `ProgramData\Python`。取证要覆盖「**别人**装在了哪」，而不只是我们自己去装的那个位置
- * —— 见下面的 {@link pythonForensics}。
+ * 这份清单的教训是「**按这台机的实际布局问，不按我们指望它装在哪问**」
+ * （#1959 第三轮，取证第一次上线时当场订正的）：最初只列标准落点
+ * （`LOCALAPPDATA\Programs\Python` 一族），而现场那台机的读数是——标准落点
+ * **一族零命中**、PATH 里却带着 `D:\Users\<name>\...` 与 `D:\Program Files\...`。
+ * 也就是说这台机把用户数据与程序放在 `D:` 盘，解释器（如果装了）根本不在标准落点上；
+ * 只查标准落点会**反向误导**成「这台机真的没装」。
+ *
+ * 所以清单扩成三类：**标准落点** + **本机 PATH 上真实出现过的盘符下的同类位置**
+ * + **其他账号 profile 里的按用户安装**（`<盘>:\Users\*\AppData\Local\Programs\Python`）
+ * —— 最后一类正是「`yuedu` 会话答得出来、`NT AUTHORITY\SYSTEM` 构建账号答不出来」
+ * 的那一格，也是这一整条路径最初的症状。
+ *
+ * 盘符**从 PATH 里反推**而不是写死 `C:` / `D:`：写死等于把「这台机怎么装」又假设
+ * 了一遍，而 PATH 是现成的、这台机自己的事实。
  *
  * @param {Record<string, string | undefined>} env
  * @returns {string[]}
  */
-function pythonInstallRoots(env) {
-  return [
+function pythonInstallRoots(env, listDirs = listDirectories) {
+  const roots = [
     path.join(env.LOCALAPPDATA ?? "", "Programs", "Python"),
     path.join(env.ProgramFiles ?? "", "Python"),
     path.join(env["ProgramFiles(x86)"] ?? "", "Python"),
     path.join(env.ALLUSERSPROFILE ?? "", "Python"),
-  ].filter((p) => p.length > 0 && path.dirname(p) !== p);
+  ];
+  // 本机 PATH 上出现过的盘符（去重）——「这台机把东西装在哪」的现成证据，比假设
+  // `C:` 强。
+  //
+  // ⚠️ **不要按分隔符切**：`path.delimiter` 是**跑这段的宿主**的分隔符（开发机是
+  // `:`），而盘符自带 `:` —— 一按 `:` 切就把 `C:\` 切成 `C` 与 `\`，盘符一个都
+  // 认不出来（实测踩过）。这里改成**在整串 PATH 上直接找盘符**：取「行首或 `;` 之后
+  // 紧跟 `X:\` / `X:/`」的位置，与切分解耦。
+  const drives = new Set();
+  for (const m of String(env.PATH ?? "").matchAll(/(^|;)([A-Za-z]:)[\\/]/g)) {
+    drives.add(`${m[2]}\\`);
+  }
+  for (const drive of drives) {
+    roots.push(path.join(drive, "Program Files", "Python"));
+    roots.push(path.join(drive, "Python"));
+    roots.push(path.join(drive, "Programs", "Python"));
+  }
+  // 展开 `<盘>:\Users\<账号>\AppData\Local\Programs\Python`；另附 `C:\Users`
+  // （PATH 里不一定有 C: —— 纯 PATH 反推会漏掉系统盘上的 profile）。
+  const userRoots = new Set(["C:\\Users"]);
+  for (const drive of drives) userRoots.add(path.join(drive, "Users"));
+  for (const usersRoot of userRoots) {
+    for (const profile of listDirs(usersRoot)) {
+      roots.push(path.join(profile, "AppData", "Local", "Programs", "Python"));
+    }
+  }
+  return [...new Set(roots)].filter(
+    (p) => p.length > 0 && path.dirname(p) !== p,
+  );
 }
 
 /**
@@ -211,7 +250,7 @@ export function pythonForensics({
     lines.push(`  ${entry}`);
   }
   const hits = [];
-  for (const root of pythonInstallRoots(env)) {
+  for (const root of pythonInstallRoots(env, listDirs)) {
     if (existing(root)) hits.push(...listDirs(root));
   }
   lines.push("常见安装位置在盘上的（有则说明装过、只是这个账号 PATH 里没有）:");
