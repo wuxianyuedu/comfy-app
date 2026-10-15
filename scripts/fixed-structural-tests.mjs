@@ -547,4 +547,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `docs/audits/*.md` 的文本 + 一次 `git log`，import 图一概追不到（改台账不会把
   // 它拉进受影响清单），跟改动走等于专挑它不在的时机跑，所以与本次暂存改动无关也照跑。
   "tests/audits-doc-references.test.ts",
+  // 「跨宿主 import 的扩展名形态」（ISSUE #1961）。它判的是「`.mjs` 静态 import 一份
+  // `.ts` 时说明符必须是带 `.ts` 的形态」，而**回潮形态**是「有人给那条链上的模块
+  // 加一个新依赖」—— 那种改动住在 `src/lib/process/` 下、判据自己住在 `tests/`，
+  // 改动的 import 图追不到它；而且它红的那一格本地**跑不出来**（`tsc` 与 Vite 都会
+  // 替调用方补扩展名，只有平台侧「生产构建 + 真跑 e2e」那条路上 Node 的 ESM 解析器
+  // 会把这条链加载一遍 —— 实测 30 个 stage 全绿、唯独 `E2E 关键流程` 1 秒退）。
+  // 判据本身也带门禁自测（清单里的模块真在盘上、真被某个 `.mjs` 引用、`.mjs` 宿主
+  // 真加载得起来），所以它与本次暂存改动无关也照跑。
+  "tests/esm-cross-host-imports.test.ts",
 ];

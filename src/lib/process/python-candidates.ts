@@ -15,7 +15,11 @@
 // 会在加载期就 `ERR_MODULE_NOT_FOUND` 退 1（平台侧实测 897ms 崩在
 // `src/lib/process/executable-resolve`）。`tsc` / vitest 走 bundler 解析，
 // 无后缀照样绿 —— 所以这一格只有真跑一次 `.mjs` 才照得出来。
-import { isWindows } from "./executable-resolve.ts";
+//
+// 判据本身搬去了**叶子模块** `./platform.ts`（它零 import）：这样这条链上
+// 就没有需要跨「TS 侧省略扩展名 / `.mjs` 侧必须带」这条惯例边界的边 ——
+// 那正是上面那格反复踩的形态（ISSUE #1961）。
+import { isWindows } from "./platform.ts";
 
 /**
  * 按平台给解释器候选名（**只给名字**，PATH 上找不找得到由 `whichCommand` 判）。

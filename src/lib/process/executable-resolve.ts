@@ -38,6 +38,8 @@
 // import 上写着它，改 Node 版本时先看那里。
 
 import { spawnSync } from "node:child_process";
+
+import { isWindows } from "./platform.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -109,12 +111,25 @@ export interface CommandUsability {
   reason: string | null;
 }
 
-/** 是否是 Windows（与 `src/lib/process/kill-process-tree.ts` 同一判据）。 */
-export function isWindows(
-  platform: NodeJS.Platform = process.platform,
-): boolean {
-  return platform === "win32";
-}
+/* 是否是 Windows —— 定义搬到 `./platform.ts`，这里只 **re-export**（既有调用点
+ * 一个都不用动）。
+ *
+ * 为什么必须搬（ISSUE #1961，实测红在平台侧 E2E 上）：`python-candidates.ts` 与
+ * `python-resolve.ts` 只需要这一个判断，却**静态 import 本文件** —— 而本模块是
+ * `.ts`，一个 `.mjs` 静态 import 它时 import 说明符**必须带 `.ts` 扩展名**才能被
+ * Node 的 ESM 解析器找到。于是那条链（`e2e/support/preflight-python.mjs` →
+ * `python-candidates.ts` → `./executable-resolve`）上就出现了同一份文件被
+ * **两种形态**引用：本仓 TS 侧的惯例是省略扩展名，而 `.mjs` 侧只能用带扩展名的形态
+ * —— 两种形态在「代码里 grep 字符串」这一层能对账，在**运行时**不能：`.mjs` 那条
+ * 一旦真的走进去就是 `ERR_MODULE_NOT_FOUND`（实测报的那句是「找不到模块
+ * `…/src/lib/process/executable-resolve`，它由 `python-candidates.ts` import」，
+ * 1 秒就退 —— 平台侧 E2E 那一步的完整读数见规范 13 §13.5.3.10）。
+ *
+ * 所以判据躲进一个**叶子模块**：两边都 import 它（TS 侧照旧省略扩展名，
+ * `.mjs` 侧写 `./platform.ts`），而 `python-candidates` 那条链上再没有需要
+ * 跨「扩展名惯例」边界的边。这也让「哪个模块能被纯宿主直接加载」这件事有个
+ * 可判的形状（见 `tests/esm-cross-host-imports.test.ts`）。 */
+export { isWindows };
 
 /* 探测结果的进程内记忆化。
  *
