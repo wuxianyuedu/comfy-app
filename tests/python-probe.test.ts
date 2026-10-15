@@ -26,6 +26,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { probeLines } from "../scripts/python-probe.mjs";
+import { resolvePython } from "../src/lib/process/python-resolve";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -34,9 +35,7 @@ function fakeRun(ok: Record<string, string>) {
   return (cmd: string, args: string[]) => {
     const key = [cmd, ...args].join(" ");
     const out = ok[key];
-    return out === undefined
-      ? { ok: false, out: "" }
-      : { ok: true, out };
+    return out === undefined ? { ok: false, out: "" } : { ok: true, out };
   };
 }
 
@@ -121,6 +120,51 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
     /* 反向：它自己**不许**起子进程（那等于绕过 `findPython`，在同一台机器上问出
      * 第二次答案）。`spawnSync` / `execFileSync` 出现在这里就是回潮形态。 */
     expect(src).not.toMatch(/from "node:child_process"/);
+  });
+
+  it("结论与自证那一侧一致：PATH 扫不到、但 OS 认得这个名字时必须答「有」", () => {
+    /* 立案现场（ISSUE #1961 平台侧第八跑）：**同一台机器、相邻两个 stage 结论相反**
+     * —— `Python 可用性`（自证侧 `findPython`，拿裸名字真起一次）退 0，而紧接着的
+     * `E2E 关键流程`（`resolvePython` → `whichCommand`）说「PATH 上没有可用的
+     * Python」并退 1，红在整条流水线的**最后一个** stage 上。
+     *
+     * 两个答案都说得通，分歧在两个探针看的不是同一个世界：Windows 上 `python.exe`
+     * 常常**只**经「应用执行别名」或注册表 `App Paths` 被认得，而 `whichCommand`
+     * 是本仓自己写的「PATH × PATHEXT 逐目录扫文件」，它不看这两个机制。
+     *
+     * 真实机型上造不出这两个机制，所以这里把「OS 认不认」注入进来判**第二层在不在**
+     * ——少了它，`resolvePython` 就又一次只认自己那份扫描结果。 */
+    const aliasOnly = (cmd: string, args: string[]): string | null => {
+      void args;
+      // 模拟「别名：拿这个名字真起一次起得来」，而 PATH 目录里一个文件都没有。
+      return cmd === "python" ? null : "ENOENT";
+    };
+    expect(
+      resolvePython({ candidates: ["python"], bareSpawn: aliasOnly }),
+    ).toMatchObject({ command: "python", path: "python" });
+    // 反方向：OS 也不认时必须是 null（否则判据会逼人把「没有」读成「有」）。
+    expect(
+      resolvePython({ candidates: ["python"], bareSpawn: () => "ENOENT" }),
+    ).toBeNull();
+  });
+
+  it("第二层不许被「注入探针」穿透 —— 那是单测在模拟这台机器", () => {
+    /* 判据自己踩过一次：第二层接上后，`e2e-fake-comfyui-executor-env` 两条
+     * 「PATH 上一个都没有 ⇒ null」在 Linux 上当场翻红 —— 宿主真有 `python3`，
+     * 而用例注入的是一个空目录 + 替身探针。判据被自己的宿主环境污染，比不判更坏：
+     * 它在别的机器上会给出不一样的结论。所以「注入了 probe」= 不碰宿主。 */
+    expect(
+      resolvePython({
+        candidates: ["python"],
+        probe: {
+          // 「这条路根本不该被走到」：走到就抛，比空实现更能证明判据在拦它。
+          access: () => {
+            throw new Error("注入了 probe 时不许再碰宿主");
+          },
+          spawn: () => null,
+        },
+      }),
+    ).toBeNull();
   });
 
   it("探「哪些候选」是可注入的 —— `findPython` 的候选表因此没有第二份", () => {
