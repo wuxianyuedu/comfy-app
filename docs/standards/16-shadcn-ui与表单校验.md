@@ -1945,7 +1945,7 @@ dark:text-emerald-300` 这类写死值）。
 - `src/lib/browser-io.ts`：`copyText`（返回 `boolean`，两条通道 + `navigator`
   存在性判定）、`downloadText`、`downloadJson`。这是 `src/lib/` 的**顶层单例**
   （同 `format-bytes.ts` / `error-message.ts`），已登记进 `check-file-structure.cjs`
-  的 `DOMAIN_EXEMPT` 并设覆盖率门槛（§18.14 三件事同批做完）。
+  的 `DOMAIN_EXEMPT` 并设覆盖率门槛（§18.12 三件事同批做完）。
 - `src/lib/time-format.ts`：`timeAgo`（`maxDays` / `suffix` 两个**显式**选项承载
   调用处的差异，不做「统一成一种」）、`formatClock`。
 

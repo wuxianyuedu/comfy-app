@@ -1,5 +1,5 @@
 /**
- * `lib` 与 `server` 的跨层依赖**逐个登记**（ISSUE #569 第 6 项 / 规范 §18.10）。
+ * `lib` 与 `server` 的跨层依赖**逐个登记**（ISSUE #569 第 6 项 / 规范 §18.9）。
  *
  * 背景（实测）：`eslint-plugin-boundaries` 声明 `src/lib/**` 为 element `lib`
  * 之后，「lib 不得 import components」由机器拦住，**但「lib 不得 import server」
