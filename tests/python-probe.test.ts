@@ -30,6 +30,13 @@ import { resolvePython } from "../src/lib/process/python-resolve";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
+/**
+ * 第二条链（`resolvePython`）的替身 —— **必须注入**：不注入时它会去问真机器，
+ * 于是同一条用例在不同宿主上给出不同结论（这台机有 python3、那台机没有）。
+ * 注入一个「永远答不到」的版本是本文件多数用例的基线。
+ */
+const noResolve = () => null;
+
 /** 造一个「只有这些命令答得上」的世界（键是 `命令 + 参数` 的拼接）。 */
 function fakeRun(ok: Record<string, string>) {
   return (cmd: string, args: string[]) => {
@@ -59,7 +66,7 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
         "Python 3.12.2",
       ]),
     );
-    const lines = probeLines({ run: fakeRun(ok) });
+    const lines = probeLines({ run: fakeRun(ok), resolve: noResolve });
     for (const name of CANDIDATES) {
       // 每个候选都有一行结论 —— 「哪个不在」正是下一动作的一半。
       expect(
@@ -75,7 +82,7 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
   });
 
   it("一个答得上的都没有时，逐个都记成不可用", () => {
-    const lines = probeLines({ run: fakeRun({}) });
+    const lines = probeLines({ run: fakeRun({}), resolve: noResolve });
     const text = lines.join("\n");
     for (const name of CANDIDATES) {
       expect(
@@ -91,7 +98,7 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
      * 这一条在 Windows 上是它的存在理由；在 POSIX 上候选里没有 `py`，
      * 于是「裸 py 不算可用」这一条断言必然成立 —— 期望值取「不可用」，
      * 两个平台上都真。 */
-    const lines = probeLines({ run: fakeRun({ py: "Installed Pythons:" }) });
+    const lines = probeLines({ run: fakeRun({ py: "Installed Pythons:" }), resolve: noResolve });
     expect(
       lines.some((l) => l.startsWith("ok") && l.includes("py")),
       "裸 `py` 答得上不该被算成可用解释器",
@@ -99,7 +106,7 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
   });
 
   it("一个都没有时接上取证（下一动作靠它，不靠猜）", () => {
-    const lines = probeLines({ run: fakeRun({}) });
+    const lines = probeLines({ run: fakeRun({}), resolve: noResolve });
     const text = lines.join("\n");
     expect(text).toContain("一个可用解释器都没有");
     // 取证那份开头就在这句话上（`pythonForensics` 的唯一出处）。
@@ -165,6 +172,40 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  it("两条链的结论**并列**打出来 —— 只看一边分不出是哪一边错", () => {
+    /* 立案现场（ISSUE #1961）：`Python 可用性`（裸名字那条链）绿、`E2E 关键流程`
+     * （`resolvePython` 那条链）报「没有 Python」。只看一边的日志，人根本不知道
+     * 还有另一条链、更不知道哪边对。所以这一节必须**总是**打出来。 */
+    const lines = probeLines({ run: fakeRun({}), resolve: noResolve });
+    const text = lines.join("\n");
+    expect(text).toContain("resolvePython（手工扫 PATH × PATHEXT）:");
+    // 第二条链落空时，逐候选点名「手工扫不到 / 起不来」。
+    for (const name of CANDIDATES) {
+      expect(
+        lines.some((l) => l.startsWith("--") && l.includes(name)),
+        `${name} 在第二条链上没有结论`,
+      ).toBe(true);
+    }
+    // 两条链可能给出**相反**结论，这一句就是那一格的指路牌。
+    expect(text).toContain("两条链对同一台机器给了相反结论");
+  });
+
+  it("第二条链命中时打出它的命令与绝对路径", () => {
+    const lines = probeLines({
+      run: fakeRun({}),
+      resolve: () => ({
+        command: "py",
+        path: "C:\\Windows\\py.exe",
+        args: ["-3"],
+      }),
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("py -3");
+    expect(text).toContain("C:\\Windows\\py.exe");
+    // 命中了就不该再打「相反结论」那句 —— 否则它会变成一句恒真的噪音。
+    expect(text).not.toContain("两条链对同一台机器给了相反结论");
   });
 
   it("探「哪些候选」是可注入的 —— `findPython` 的候选表因此没有第二份", () => {

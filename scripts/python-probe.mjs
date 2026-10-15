@@ -34,6 +34,14 @@
 import path from "node:path";
 
 import { findPython, pythonForensics } from "./ci-toolchain-python.mjs";
+/* **第二条链的读数**（ISSUE #1961）。`findPython` 与 `resolvePython` 是「同一台机器上
+ * 哪个解释器能跑」的两个不同实现：前者起**裸名字**（Windows 上交给 CreateProcess 按
+ * PATH 解析），后者手工扫 PATH × PATHEXT 再对**绝对路径**起一次。两者在同一次构建里
+ * 出过相反的结论（`Python 可用性` 绿、`E2E 关键流程` 报「没有 Python」），而**只看一边
+ * 的读数分不出是哪一边错**。所以这里两边的读数都打 —— 它回答「两条链是不是答同一件事」，
+ * 而不只是「这台机器上有什么」。 */
+import { pythonCandidates, pythonProbeArgs } from "../src/lib/process/python-candidates.ts";
+import { resolvePython } from "../src/lib/process/python-resolve.ts";
 
 /** 与 `ci-toolchain-python.mjs` 的 `PY_CANDIDATES` 同口径（那里是唯一出处）。 */
 const CANDIDATES =
@@ -48,10 +56,15 @@ const PROBE_ARGS = /** @type {Record<string, string[]>} */ ({
 /**
  * 逐个候选问一次「这个**命令**起不起得来」，**不提前返回**（与 `findPython` 的唯一区别）。
  *
- * @param {{run?: (cmd: string, args: string[]) => {ok: boolean, out: string}}} [io]
+ * 两个探针都可注入：`run` 给第一条链（`findPython` 起的裸名字），`resolve` 给第二条链
+ * （`resolvePython` 手工扫 PATH）。**第二个不是可选的** —— 不给的话跑判据时它会去问
+ * 真机器，同一份用例在不同宿主上给出不同结论（那正是「把宿主长什么样写成恒真性质」）。
+ *
+ * @param {{run?: (cmd: string, args: string[]) => {ok: boolean, out: string},
+ *          resolve?: (options: object) => {command: string, path: string, args: string[]} | null}} [io]
  * @returns {string[]} 要逐行打印的内容
  */
-export function probeLines({ run } = {}) {
+export function probeLines({ run, resolve = resolvePython } = {}) {
   const lines = [`running: node ${process.version} on ${process.platform}`];
   const usable = [];
   for (const name of CANDIDATES) {
@@ -80,6 +93,27 @@ export function probeLines({ run } = {}) {
     lines.push(...pythonForensics());
     lines.push(
       `装好后重跑本命令即可。需要自动安装时：node scripts/ci-toolchain-selfcheck.mjs --python-only`,
+    );
+  }
+  /* ── 第二条链：`resolvePython`（手工扫 PATH + 对绝对路径起一次）────────────────
+   * 它与上面那条**对同一件事各答一次**（原因见文件头）。两边结论不一致时，这一节就是
+   * 定位那件事的唯一出口：`--` 而上面 `ok` ⇒ 手工扫的那一侧漏了（本仓实测过的形态：
+   * 命中了一个「盘上有、按绝对路径起不来」的别名 / shim）。 */
+  lines.push("");
+  lines.push("resolvePython（手工扫 PATH × PATHEXT）:");
+  const res = resolve({});
+  if (res) {
+    lines.push(
+      `ok   ${res.command} ${res.args.join(" ")}  →  ${res.path}`.trim(),
+    );
+  } else {
+    for (const name of pythonCandidates()) {
+      const args = pythonProbeArgs(name, ["--version"]);
+      lines.push(`--   ${name} ${args.join(" ")}  →  手工扫不到 / 起不来`);
+    }
+    lines.push(
+      "⚠ 上面「ok」而这里「--」= 两条链对同一台机器给了相反结论，" +
+        "E2E 会按「没有 Python」在开跑前退（ISSUE #1961）",
     );
   }
   return lines;

@@ -106,7 +106,7 @@
     #     位置才看到。`tests/no-platform-ci-config.test.ts` 按它判序。
     COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
     COMFYAPP_CI_GATES: >-
-      工具链自证, Python 可用性, Install dependencies, 分支守卫, 同步数据库表结构,
+      工具链自证, Python 可用性, Python 探针读数, Install dependencies, 分支守卫, 同步数据库表结构,
       类型检查, ESLint 零警告, 单元测试, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -164,6 +164,20 @@
   # 缺件时打取证并**非零退出**（红在能指路的位置，而不是两小时后一串超时）。
   - name: Python 可用性
     script: node scripts/ci-toolchain-selfcheck.mjs --python-only
+
+  # ── Python 探针读数（两条链各自的结论，**只打印、不阻断**）──
+  #
+  # `Python 可用性` 用的那条链（`findPython` 起**裸名字**，Windows 交给 CreateProcess
+  # 按 PATH 解析）与 E2E 前置用的那条链（`resolvePython` 手工扫 PATH × PATHEXT、再对
+  # **绝对路径**起一次）是「同一台机器上哪个解释器能跑」的两个不同实现。实测出过
+  # 相反结论（`cnb-g36-1k50hvu52`：`Python 可用性` 绿、`E2E 关键流程` 报
+  # 「PATH 上没有可用的 Python」）—— 而**只看一边的日志分不出是哪一边错**。
+  #
+  # `scripts/python-probe.mjs` 把两边的读数都打，退出码恒为 0：它是**打印**、
+  # 不是判据（判据那一份只有 `--python-only` 一个）。放在这里是因为它会跟着
+  # `Python 可用性` 一起在最便宜的位置跑，而 E2E 那一步要等十几分钟。
+  - name: Python 探针读数
+    script: node scripts/python-probe.mjs
 
   # ── 安装 ──
   # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。

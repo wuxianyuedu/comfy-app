@@ -101,6 +101,10 @@ export function describePythonMissing(preflight) {
   return [
     `[e2e] ✗ ${preflight.detail}`,
     "[e2e]   补它：node scripts/ci-toolchain-selfcheck.mjs   （缺 Python 的机器上跑一次，缺什么它自己装）",
+    "[e2e]   排障：node scripts/python-probe.mjs   （打印**两条链各自**的结论 —— 本行判的是",
+    "[e2e]         `resolvePython` 手工扫 PATH 那条，而「工具链自证 / Python 可用性」走的是",
+    "[e2e]         起裸名字那条；两边不一致时它就是定位那件事的出口，流水线里挂在",
+    "[e2e]         「Python 探针读数」那一步）",
     "[e2e]   跑下去的下场：两条 @critical 主链路用例各报一遍「执行器收口失败」，",
     "[e2e]   而真因是解释器不在 —— 一件事被报成了两条功能红。",
   ].join("\n");
