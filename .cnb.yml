@@ -69,7 +69,12 @@
     # 避免 corepack 在非交互环境下为拉取 pnpm 版本而等待输入。
     CI: "true"
 
-# 门禁清单：一条都不许丢（tests/cnb-pipeline-gates.test.ts 逐条核对）。
+# 门禁清单。
+# ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
+# 旧版 `.cnb.yml` 一并删除（#623），本 PR 不复活它（它锁的是旧版那三十步与上报插件，
+# 两样在自托管上都不成立）。守着这份文件的现有判据只有 `tests/no-platform-ci-config.test.ts`
+# 那一条**形态**判据（分支键 / `namespace: group` / 非空 `tags` / 两个事件键），
+# **条目本身的增删不报错** —— 所以这里的每一步都要靠人逐条核对，别指望它会红。
 .gates: &gates
   # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
   # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
@@ -89,43 +94,101 @@
       pnpm -v
       Write-Host "== python =="
       # Python 是门禁链的真实依赖，不是可选件：scripts/check-app-port-vectors.cjs
-      # 要调 scripts/check-app-port-vectors.py 做四语言一致性比对，tests 里也有几处
-      # 用它验 zip 包（python3 的 zipfile 是最严格的解压端）。
-      # 缺了它，那些判据会以「这台机器探测不到 Python」的名义**退出比对**（
-      # check-app-port-vectors.cjs 的 missing 档），形态是**静默少判**而不是报错 ——
-      # 所以在这里正面回答，让它当场红，而不是等 vitest 跑完四十分钟才给几条看不懂的失败。
+      # 要调 scripts/check-app-port-vectors.py 做四语言一致性比对，几处用例拿它验
+      # zip 包（python 的 zipfile 是最严格的解压端）。缺了它的形态是**静默少判**
+      # 而不是报错 —— 那一侧会被 check-app-port-vectors.cjs 归进 `missing` 档、
+      # 「以这台机器探测不到 Python 的名义」退出四向比对；`log-run-layout` 与
+      # `logs/diagnostics/route` 则直接 `spawnSync python3 ENOENT`；
+      # E2E `@critical` 的假 comfy-cli 就是一个 Python 包，没有解释器时执行器起不来。
       #
-      # **探测面必须与门禁同口径**（#1959 首跑现场）：门禁那边探的是
-      # `["python3", "python"]`（scripts/check-app-port-vectors.cjs 的 `probed`），
-      # 而 PowerShell 里裸写一行 `python -V` 只在宿主机恰好有这个裸名时才过 ——
-      # 于是这台机器上它不是「验了门禁要的东西」，而是「验了另一个东西」。
-      # 三者依次试、第一个答得上的就算过（与门禁的「找到第一个能跑的」同义）。
-      $pyOk = $false
+      # **探测面必须与门禁同口径**（#1959 第二轮首跑现场：这一步曾写成裸的一行
+      # `python -V`，而这台机器上 `python3` / `python` 都没有 —— 于是第 8 秒就在这里
+      # 红掉、排在后面的 27 个 stage 一个都没跑，红的位置与门禁要回答的问题无关）。
+      # 依次试 `python3` / `python` / `py`，第一个答得上的算过；Windows 上 `py` 带
+      # `-3`（裸 `py` 是「列出已装版本」并退非零）。
+      $python = $null
       foreach ($cand in @("python3", "python", "py")) {
         if (-not (Get-Command $cand -ErrorAction SilentlyContinue)) { continue }
-        # 真起一次进程取版本 —— `python`（Microsoft Store 占位别名）会在这一步退出
-        # 非零，那正是要判的形态（探测到命令、但 `--version` 不按假设退 0）。
-        # `2>&1` 与 `try` 都要：`$ErrorActionPreference = "Stop"` 会把原生命令的
+        # 真起一次进程取版本 —— Microsoft Store 的占位别名 `python.exe` 在盘上、
+        # 但 `--version` 退非零，那正是要判的形态（命令在、不是可用解释器）。
+        # `try` 与 `2>&1` 都要：`$ErrorActionPreference = "Stop"` 会把原生命令的
         # 非零退出不当地抬成终止错误，这里必须按「退出码」判而不是按异常判。
+        $pyArgs = if ($cand -eq "py") { @("-3", "--version") } else { @("--version") }
         try {
-          $out = & $cand --version 2>&1
+          $out = & $cand @pyArgs 2>&1
           $code = $LASTEXITCODE
         } catch { $out = $_.Exception.Message; $code = 1 }
-        if ($code -eq 0) { Write-Host "$cand : $out"; $pyOk = $true; break }
+        if ($code -eq 0) { $python = $cand; Write-Host "$cand : $out"; break }
         Write-Host "$cand 在盘上但 --version 退 $code（不是可用解释器）" -ForegroundColor Yellow
       }
-      if (-not $pyOk) {
+
+      # 找不到就**当场装**（自托管最大的成本是「这台机器要自己维护」，而它不会因为
+      # 少装了什么就报错 —— 只好把「既判也装」写在这里）。winget 是 Windows 11 自带的，
+      # 按用户安装不需要管理员权限。
+      if (-not $python) {
+        Write-Host "== Python：未发现，尝试用 winget 安装（按用户，无需管理员）=="
+        # winget 本身不在（老版本 / 精简镜像）或装失败都不该在这里抛 —— 失败要让下面
+        # 那条「装完仍找不到」的判定去说，而不是让一个 `CommandNotFoundException`
+        # 把话术顶掉（`$ErrorActionPreference = "Stop"` 下它照样会终止脚本）。
+        # winget 常常在盘上但**不在这个会话的 PATH 上**（`WindowsApps` 那条按用户
+        # 追加的路径要新会话才生效，而构建用户往往是非交互的）。先按标准落点再找一遍 ——
+        # 实测这台节点就是这一档（`Get-Command winget` 找不到，可 `WindowsApps` 里有）。
+        # ⚠️ **不许用空条件运算符**（问号接点号，C# 7 / PowerShell 7 才有）——
+        # 自托管默认宿主是 Windows PowerShell 5.1，它不认这个语法，整段会以
+        # 「表达式或语句中包含意外的标记」当场报错（实测：这一跑就是这么红的）。
+        # `Get-Command` 找不到时会返回 $null 并把错误吞在 `-ErrorAction` 里，
+        # 取 `.Source` 因此要先判空。
+        $found = Get-Command winget -ErrorAction SilentlyContinue
+        $winget = $null
+        if ($found) { $winget = $found.Source }
+        if (-not $winget) {
+          $cand = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winget.exe"
+          if (Test-Path $cand) { $winget = $cand }
+        }
+        try {
+          if ($winget) {
+            Write-Host "（用 $winget 安装）"
+            & $winget install --id Python.Python.3.12 --scope user --silent `
+              --accept-package-agreements --accept-source-agreements
+          } else {
+            Write-Host "（盘上也没找到 winget，跳过自动安装）"
+          }
+        } catch {
+          Write-Host "（winget 安装失败：$($_.Exception.Message)）"
+        }
+        # 新装的可执行文件会落进用户 PATH，而**本进程的环境早于安装**：
+        # 按默认安装根各再找一遍，不要指望当前会话的 PATH 自己刷新。
+        $roots = @(
+          (Join-Path $env:LOCALAPPDATA "Programs\Python"),
+          (Join-Path $env:ProgramFiles "Python")
+        )
+        foreach ($root in $roots) {
+          if (-not (Test-Path $root)) { continue }
+          foreach ($name in @("python", "python3")) {
+            $hit = Get-ChildItem -Path $root -Filter "$name.exe" -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($hit) { $python = $hit.FullName; break }
+          }
+          if ($python) { break }
+        }
+      }
+
+      if (-not $python) {
         # 失败即非零退出 —— 这一步的全部意义就是「会红」，见文件头第 1 条。
-        # 但红的同时必须给出**下一动作**：这台机器上「装了 Python 却没进 PATH」
-        # 与「压根没装」在 PowerShell 的 CommandNotFoundException 里长得一模一样，
-        # 而两者的处置不同（把解释器加进 PATH vs 去装一个）。
-        Write-Host "!! 宿主机上没有可用的 Python（试过 python3 / python / py）" -ForegroundColor Red
-        Write-Host "   门禁链需要它：check-app-port-vectors.cjs 要跑 .py 做四语言比对、"
-        Write-Host "   几处用例用它验 zip 包（python3 的 zipfile 是最严格的解压端）。"
-        Write-Host "   处置：在这台自托管节点上装 Python 3，并确认它在 PATH 上 ——"
+        # 红的同时必须给出**下一动作**：这台机器上「装了 Python 却没进 PATH」
+        # 与「压根没装」在 PowerShell 里长得一模一样，而两者的处置不同。
+        Write-Host "!! 宿主机上没有可用的 Python（试过 python3 / python / py，自动安装也没成）" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "   **平台侧人工动作**（与「节点标签要对得上 runner.tags」同一类）：" -ForegroundColor Yellow
+        Write-Host "   在这台自托管节点上装 Python 3（≥3.10），并确认它在这个构建用户的 PATH 上。"
         Write-Host "   用 python.org 安装包时勾选「Add python.exe to PATH」；"
-        Write-Host "   只有 py 启动器（Store 版 / 无 PATH）时同样算通过，本步会认它。"
-        Write-Host "   清单与背景见 docs/standards/13-提交与-code-review.md §13.5.3.5。"
+        Write-Host "   只有 py 启动器（Store 版）也算 —— 本步会认它（带 -3）。"
+        Write-Host "   装完重跑本流水线即可，其余步骤都不需要再动。"
+        Write-Host ""
+        Write-Host "   为什么不让它「少判就算了」：E2E @critical 的主链路（登录 → 建项目 →"
+        Write-Host "   出图）走的就是一个 Python 包（假 comfy-cli），没有解释器时那几条用例"
+        Write-Host "   只会以「执行器起不来」失败 —— 与其让它们以看不懂的方式红，不如在这里"
+        Write-Host "   正面回答。清单与背景见 docs/standards/13-提交与-code-review.md §13.5.3.5。"
         exit 1
       }
 
@@ -166,8 +229,19 @@
   # ── 测试 ──
   # 全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
   # 判据强度不变，阈值仍由 vitest.config.ts 的目录阈值守着）。
+  #
+  # **显式 `--maxWorkers=4`，不是配置里那个 8**：这条件路径与本地跑不是同一种负载。
+  # ① 宿主机 16 逻辑核（无 docker、整机可用），vitest 若照默认铺开就有 ~15 个 worker；
+  # ② `--coverage` 给每个文件都加一层插桩（本机实测同样两文件 6.2s → 9.2s，约 +50% CPU）；
+  # ③ 这一套里有大量**真起子进程**的用例（git / node / prettier / PowerShell），超订的
+  #    那一份直接从「等 CPU」变成「等子进程」—— 表现是 `Test timed out in 30000ms`，
+  #    而单跑全绿。**这正是本仓已经量过的那一格**（规范 §11.13）：同一套、同一台机器，
+  #    `maxWorkers=8` 在负载下仍出争用形态的红，`--maxWorkers=4` 才拿到「560 文件全绿」。
+  # 取 4 是**降负载**，不是放宽判据 —— 用例、预算、覆盖率阈值一个字不动；
+  # 与 `.githooks/pre-commit` 的 C 组同一个数、同一条理由（AGENTS 硬规则里那句
+  # 「降负载的杠杆是并发，不是预算」）。代价是墙钟变长，这是这条路径上买得到的唯一交换。
   - name: 单元测试
-    script: node_modules/.bin/vitest run --coverage
+    script: node_modules/.bin/vitest run --coverage --maxWorkers=4
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
   - name: 标题行让位

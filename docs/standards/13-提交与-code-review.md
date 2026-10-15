@@ -477,6 +477,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 「`runner.cpus` 配置无效」                                 | 旧版 `cpus: 8` 那套「核数写死避免耗时读数漂移」的口径在自托管上不成立，配置里**不再声明它**（声明了只会让人以为核数被控制）                                                     |
 | 「OverlayFS 不可用，秒级克隆会自动降级为普通 git clone」   | 每次构建都是全量 clone。仓里是 3000+ 用例 + `next build` + Playwright，这是这条路径的固定成本，没有配置能省                                                            |
 | 节点离线 / 被禁用 / 达上限时「自动尝试重新分配到其他可用节点」 | **最坏情况是悄悄花回核时且不报错**（这一档的「其他节点」就是计费平台池）。所以 `push` 侧复核**仍然只留一条**，不重跑全套                                    |
+| 宿主机**只预装 Node / pnpm / git** | Python 不在预装清单里，而本仓有三处判据真需要它（`log-run-layout` 与 `logs/diagnostics/route` 拿 `zipfile` 验包、`e2e-fake-comfyui-executor-env` 与 E2E `@critical` 的假 comfy-cli 就是一个 Python 包）。所以「工具链自证」那一步**既判也装**（`winget` 按用户装，装完仍找不到即非零退出）——**这是配置第一步会红而不是只打印的第二个理由**（第一个是 `cmd /c ver`） |
 
 ##### 13.5.3.5 构建机要准备什么（从首跑读数里反推出来的清单）
 
@@ -489,7 +490,8 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | **git**              | 自托管机的基本依赖（官方文档原话「必装」）                                                                                 | 工具链自证           |
 | **Node**（在 `engines.node` 范围内） | 什么都跑不起来                                                                                              | 工具链自证           |
 | **pnpm**             | 同上（`corepack` 会在缺它时自己去下载 `packageManager` 指的那版，但那是每次构建的额外网络往返）                            | 工具链自证           |
-| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT` | **工具链自证（同口径探 `python3` / `python` / `py`）** |
+| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT`；E2E `@critical` 的假 comfy-cli 是一个 Python 包，没有解释器时执行器起不来 | **工具链自证：同口径探 `python3` / `python` / `py`，先试 `winget`（含不在 PATH 的标准落点）按用户当场装，两处入口都不在时非零退出并把它写成平台侧人工动作** |
+| **（说明）缺 Python 那一档在单元测试层是 `env` 档跳过** | 三条验包 / 真跑的用例没有它就跑不了 —— 它们跳过后**在 `tests/conditional-skip-registry.test.ts` 里看得见**（档位 `env`，与 `check-file-structure.test.ts` 的 `!python` 同处置）。机器缺工具是**环境**缺口，本仓的既有口径是「跳过 + 登记」，不是让流水线红 | 守卫是文件顶部的 `PYTHON_OK` 常量。**别写成 `it.skipIf(!hasPython())`**：登记表的扫描器按 `[^)]*` 取守卫文本，守卫里带一对括号会让它整个匹配不上，新增的 skip 站点于是在登记表里**隐形** —— 那正是登记表要防的失效形态 |
 | git 的可提交身份     | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败 | **夹具自己说话**，见下 |
 
 > **最后一行后来收口了**：夹具那个 `git()` 原先用 `stdio: "ignore"` 把真正的 git
@@ -512,10 +514,27 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 >   「装了 Python 但没进 PATH」与「压根没装」，而处置不同（改 PATH vs 去装一个）。
 >   失败分支现在把这两条处置直接打印出来，并指向本节。
 
+**还有一条硬约束：这些脚本跑在 Windows PowerShell 5.1 上，不是 PowerShell 7**。
+宿主是自托管节点上的默认 `powershell`，所以 `?.`（空条件运算符）、`??`（空合并）
+这类 pwsh 7 才有的语法**整段当场报错**（实测：第一版按标准落点找 `winget` 时写了
+`(Get-Command winget -ErrorAction SilentlyContinue)?.Source`，报错是「表达式或语句中
+包含意外的标记」，指向 `?.Source` 那一行 —— 而本机 Linux 侧无从发现）。
+写这一份时按 **5.1 的语法面**自查：要判空就显式 `if ($x) { … }`，不要用 `?.`。
+
 **另一类不是宿主的缺口**：有几条用例本身只在 POSIX 上成立（写 `#!/bin/sh` 再 `chmod`），
 在 Linux 平台池上恒绿所以从没暴露。这类**是仓库的 bug**，处置是补 `skipIf` 并登记进
-`tests/conditional-skip-registry.test.ts`（首跑照出来的 `app-port-vectors` 那两条已按此修）；
-**不要**靠「换台机器就没事了」了事 —— 那等于让一条判据在某个平台上静默不存在。
+`tests/conditional-skip-registry.test.ts`；**不要**靠「换台机器就没事了」了事 ——
+那等于让一条判据在某个平台上静默不存在。
+
+首跑照出来的 `app-port-vectors` 那两条按**两种**处置分开收了（判据是「这一格在 Windows
+上到底成不成立」，不是「夹具跑不跑得动」）：
+
+- 「**没有执行位 ⇒ missing**」—— 执行位是 POSIX 语义（Windows 上 `chmodSync` 是空操作），
+  Windows 没有等价的可注入形态 ⇒ 补 `needsPosixExec` 别名并登记（档位 `platform`）；
+- 「**命令在、只是非零退出 ⇒ present-but-nonzero**」—— 那一格在 Windows 上**照样成立**，
+  红的只是夹具（写 `#!/bin/sh` 的临时脚本）⇒ 换成两个平台都真能起的
+  `process.execPath` + `-e process.exit(3)`，**不 skip**。拿「平台」当借口 skip 掉它，
+  等于把一条本来跨平台的判据在 Windows 上永久关掉。
 
 ##### 13.5.3.6 怎么确认真的跑在自托管上（这条路径唯一的诊断出口）
 
@@ -529,7 +548,10 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
   不需要别的通道）。
 - **看第一步的「工具链自证」输出**：`cmd /c ver` 那句是本配置里唯一与
   「跑在 Windows 宿主机上」绑定的证据 —— 它在平台池（Linux）上会直接失败。
-  这也是那一步不只是「打印版本」的原因。
+  这也是那一步不只是「打印版本」的原因。这一步同时会打出 `== Python ==` 那一行：
+  自托管节点**不预装 Python**，而三处判据与 E2E 主链路都需要它，所以那一步会在
+  缺失时用 `winget` 当场装（按用户、不需要管理员），装完再复验一次；
+  **两条版本行都在**才说明环境是配齐的。
 
 > 立案现场（#1959 反转时对账出的读数，供日后比对）：本仓全部构建历史 1267 条里，
 > 事件侧 `push` / `pull_request` 最后一次出现在 **2026-09-16**（`748f1c3d` 删配置那天），
@@ -585,6 +607,25 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > 本地钩子仍然**有意不接**全量档：把 3000+ 用例塞进每次 commit 会让提交慢到没人愿意用。
 > 那与「平台侧有没有执行者」是两件事 —— 平台侧现在有（#1959），本地的「按需召唤」
 > （13.5.4）照旧，因为它管的是**提交那一刻的快慢**。
+
+##### 13.5.3.8 平台侧并发为什么写死 4（不是配置里那个 8）
+
+`.cnb.yml` 的「单元测试」一步是 `vitest run --coverage --maxWorkers=4`，
+**显式传 4 而不是吃 `vitest.config.ts` 的 `maxWorkers: 8`** —— 这三个量叠在一起
+才让这一格与本地跑不是同一种负载：
+
+1. 宿主机是 16 逻辑核的整机（没有 docker 隔离、也没有别的租户），vitest 若照默认
+   铺开就是 ~15 个 worker；
+2. `--coverage` 给每个文件都加一层插桩（本机实测同样两份文件 6.2s → 9.2s，约 +50% CPU）；
+3. 这一套里有大量**真起子进程**的用例（git / node / prettier / PowerShell），
+   超订的那一份直接从「等 CPU」变成「等子进程」。
+
+表现就是 §11.13 反复量到的那一格：`Test timed out in 30000ms`，隔离重跑全绿。
+**杠杆是并发不是预算**（用户侧同一句写在 `vitest.config.ts` 的 `maxWorkers` 注释里），
+所以这里降并发：用例、预算、覆盖率阈值一个字不动，只把排队的宽度收窄。
+代价是墙钟变长（§11.13 那张表里 `--maxWorkers=4` 的全量实测就是 32m35s 量级），
+这是这条路径上唯一买得到的交换 —— **别再往上抬预算**，那等于把「真挂死」的检出
+时间一起放大（§13.6.4 同一句）。
 
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 

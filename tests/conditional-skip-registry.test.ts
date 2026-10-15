@@ -81,6 +81,27 @@ const REGISTERED: Registration[] = [
     why: "PATH 上没有 PowerShell 时，进程枚举那组判据跑不了（Windows 侧专属机制）",
   },
   {
+    file: "tests/log-run-layout.test.ts",
+    guard: "!PYTHON_OK",
+    count: 2,
+    tier: "env",
+    why: "两条拿 Python 的 zipfile 验包的用例（最严格的解压端：Bad CRC-32 当场报）在没有 Python 的机器上跳不过去 —— 它在这里是独立验证端，缺了它只该让这两条「没跑」，不该让流水线红。缺件的真实后果由 `.cnb.yml` 的工具链自证正面回答（E2E @critical 的主链路会以「执行器起不来」失败）",
+  },
+  {
+    file: "src/app/api/logs/diagnostics/route.test.ts",
+    guard: "!PYTHON_OK",
+    count: 1,
+    tier: "env",
+    why: "同 log-run-layout：`/api/logs/diagnostics` 的打包契约拿 Python 的 zipfile 解开产物验（不靠「文件存在」），没有 Python 时这一条跳不起",
+  },
+  {
+    file: "tests/e2e-fake-comfyui-executor-env.test.ts",
+    guard: "!PYTHON_OK",
+    count: 1,
+    tier: "env",
+    why: "「在本机真跑一次」要真的解析出一个解释器；机器上一个都没有时它无从判起。纯断言的其余各条（候选顺序 / env 形状 / 接线在位）不分环境，始终在判",
+  },
+  {
     file: "tests/check-file-structure.test.ts",
     guard: "!python",
     count: 4,
@@ -118,9 +139,10 @@ const REGISTERED: Registration[] = [
   {
     file: "tests/app-port-vectors-timeout-classification.test.ts",
     guard: 'process.platform === "win32"',
-    count: 2,
+    count: 1,
     tier: "platform",
-    why: "经 needsPosixExec 别名：两条要写 `#!/bin/sh` 的假命令再 chmod 出执行位，Windows 上 libuv 不解析 shebang、chmodSync 也不存执行位（ISSUE #1959 换到自托管 Windows 节点时当场照出来的）",
+    why: "经 needsPosixExec 别名：「没有执行位 ⇒ missing」那条要写一个 `#!/bin/sh` 的假命令再 `chmod` 出执行位，而 Windows 上 libuv 不解析 shebang、`chmodSync` 也不存执行位（ISSUE #1959 换到自托管 Windows 节点时当场照出来的）。同一组里的 `present-but-nonzero` 那条原先用同一份夹具，现已改用两个平台都真能起的 `process.execPath`，**不再 skip** —— 计数从 2 降到 1 就是这件事的读数",
+
   },
   {
     file: "tests/standalone-runtime-completeness.test.ts",

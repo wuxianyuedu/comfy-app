@@ -69,7 +69,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test as base, expect } from "vitest";
 
-import { gitSandboxEnv } from "./git-sandbox-env";
+import { gitSandboxEnv, withSandboxGitConfig } from "./git-sandbox-env";
 
 export { afterAll, afterEach, beforeAll, beforeEach, describe } from "vitest";
 
@@ -298,6 +298,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     git: (...args) => {
       /* 显式传 `gitSandboxEnv()`：共享夹具要自带隔离，不假定调用它之前有人做过
        * 全局清理（`tests/setup.ts` 那一档覆盖用例，这里覆盖夹具的直接使用者）。
+       * 「禁签名 + 身份」也在这份环境里（`withSandboxGitConfig`）—— 于是
+       * `git("commit", …)` 这条直路与 `commit()` 走的是**同一处**判据，
+       * 不再一处靠环境、一处靠 `-c` 三连。
        *
        * **失败时必须带上 git 自己的那句话**：此前这里是 `stdio: "ignore"`，
        * 于是「宿主没配 git 身份」「git 不在 PATH 上」这类**环境**故障在日志里
@@ -321,24 +324,15 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
       }
     },
     commit: (message) => {
-      /* `-c` 就地给身份与禁签名：宿主可能全局开了 `commit.gpgsign`，
-       * 临时仓库里没有可用密钥 —— 那一档失败信息指不到夹具（同
-       * `symlink-dir.ts` 那一族：环境噪声不该被读成被测行为）。 */
-      execFileSync(
-        "git",
-        [
-          "-c",
-          "commit.gpgsign=false",
-          "-c",
-          "user.email=gate@example.com",
-          "-c",
-          "user.name=gate",
-          "commit",
-          "-qm",
-          message,
-        ],
-        { cwd: root, stdio: "ignore", env: gitSandboxEnv() },
-      );
+      /* 只做 commit，**不**替调用点 `git add` —— `git add` 的粒度是用例的被测形状
+       * 之一（`check-reformat-only` 与 `check-commit-claims` 都按暂存区判）。
+       * 身份与禁签名由 `gitSandboxEnv()` 统一注入（见 `withSandboxGitConfig`），
+       * 这里不再自己拼 `-c` 那三连。 */
+      execFileSync("git", ["commit", "-qm", message], {
+        cwd: root,
+        stdio: "ignore",
+        env: gitSandboxEnv(),
+      });
     },
     run: (args = [], overrides) => {
       /* 基座环境先过 `gitSandboxEnv()`：被测判据自己也常调 git
@@ -351,6 +345,10 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
       for (const [k, v] of Object.entries(overrides?.env ?? {})) {
         if (v === undefined) delete callEnv[k];
       }
+      /* 沙箱 git 配置**最后**再落一次：调用方的 `overrides.env` 里若恰好也有
+       * `GIT_CONFIG_*`（合法用法），不能把这一层挤掉 —— 少了它被测判据脚本内部
+       * 自己起的 git 就又回到「宿主开了签名 ⇒ 提交失败」那一档。 */
+      withSandboxGitConfig(callEnv);
       try {
         const output = execFileSync(
           process.execPath,
