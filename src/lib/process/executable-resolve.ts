@@ -51,6 +51,14 @@ export interface UsabilityProbe {
   spawn(candidate: string, args: string[]): string | null;
 }
 
+/** 探针这一次「起一次确认」的超时预算（毫秒）。
+ *
+ *  它不是一个性能参数，而是**判据会不会误报**的边界（见 `usableCommand` 里
+ *  `ETIMEDOUT` 那一段）。取 30s 是「量级余量」：正常 `python --version` /
+ *  `pnpm -v` 是几十毫秒，满载机器上也就几百毫秒；而撞上它的形态（节点被压死）
+ *  本来也不该被读成「命令不存在」。 */
+const USABILITY_PROBE_TIMEOUT_MS = 30_000;
+
 /** 默认探针：问这台真机器。 */
 const realUsabilityProbe: UsabilityProbe = {
   access: (candidate) => fs.accessSync(candidate, fs.constants.X_OK),
@@ -58,9 +66,10 @@ const realUsabilityProbe: UsabilityProbe = {
     const probe = spawnSync(candidate, args, {
       stdio: "ignore",
       windowsHide: true,
-      timeout: 10_000,
+      timeout: USABILITY_PROBE_TIMEOUT_MS,
     });
-    /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
+    /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。
+     *  怎么读这个 code（尤其 `ETIMEDOUT`）是**判据**的事，在 `usableCommand` 里。 */
     return (
       (probe.error as NodeJS.ErrnoException | null | undefined)?.code ?? null
     );
@@ -447,7 +456,27 @@ export function usableCommand(
     };
   }
   const code = probe.spawn(candidate, probeArgs);
-  if (!code) {
+  /* **超时不等于「起不来」**（ISSUE #1961）。
+   *
+   * `spawnSync` 撞上自己的 `timeout` 时给的是 `error.code = "ETIMEDOUT"` —— 它是一个
+   * **非空**的 code，若照「非空即失败」读，这个候选会被跳过；候选全跳过 ⇒
+   * `whichCommand()` 返回 `null` ⇒ 上层读成「这个命令不存在」。而那是**假**的：
+   * 实测（`cnb-5fd-1k50s26f3`）同一次构建、同一台节点、同一个解释器，机器空着时
+   * `Python 可用性` / `Python 探针读数` 都答得出来（`ok python --version → 3.12.10`），
+   * 而排在 `单元测试`（723s）与 `生产构建` 之后的 `E2E 关键流程` 报
+   * 「PATH 上没有可用的 Python」—— 差别只有那一刻机器有多满。
+   *
+   * 所以这一格按「拿不到测量 ≠ 测量结果是它坏了」办（同 AGENTS 里时间型判据在负载下
+   * 的处置口径）：**超时按可用返回**。代价是「真有挂死的命令」被当可用，而那个代价
+   * 远小于「一台满机上所有 `resolvePython` / `pnpmInvocation` 齐刷刷报不存在」——
+   * 后者会让人去装一个本就装好的东西，报错还完全指不到负载。
+   *
+   * 其余 code（`ENOENT` / `EACCES` / `EINVAL` / `ENOEXEC`）照旧是结论：那是
+   * 「起了一次、明确失败」，与「没来得及起」不是同一件事。
+   *
+   * 判据放这里而不是默认探针里：探针只负责**取事实**（libuv 给了什么 code），
+   * 「这个 code 算不算不可用」是**判据**，对所有探针（含单测注入的那些）一视同仁。 */
+  if (!code || code === "ETIMEDOUT") {
     return { ok: true, command: candidate, prefixArgs: [], reason: null };
   }
 

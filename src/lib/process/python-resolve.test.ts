@@ -171,3 +171,39 @@ describe("resolvePython：在候选里挑出第一个真能跑的", () => {
     expect(resolvePython({ env: { PATH: "" }, platform: "linux" })).toBeNull();
   });
 });
+
+describe("探针超时 ≠ 「这个命令不存在」（ISSUE #1961）", () => {
+  /* 现场：同一台自托管节点、同一次构建里，机器空着时「Python 可用性」答得出来
+   * （`ok python --version → Python 3.12.10`），而排在 `单元测试`（723s）与
+   * `生产构建` 之后的 `E2E 关键流程` 报「PATH 上没有可用的 Python」——
+   * 三次探的是同一台机、同一个解释器，差别只有那一刻机器有多满。
+   *
+   * 机制在默认探针里：`spawnSync` 撞上自己的 `timeout` 会给
+   * `error.code = "ETIMEDOUT"`，那是一个**非空** code，于是 `usableCommand`
+   * 按「不可用」处理、候选被跳过，全跳过 ⇒ `whichCommand()` 返回 `null` ⇒
+   * 上层读成「这个命令不存在」。**拿不到测量被当成了测量结果**。
+   *
+   * 这一组把「起了一次、明确失败」与「没来得及起」分开钉住：前者照旧算不可用，
+   * 后者必须当可用（否则一台满机上的判据会齐刷刷误报「工具没装」）。 */
+  it("超时的候选按**可用**算，不再被跳过", () => {
+    const dir = freshDir();
+    writeCandidate(path.join(dir, "python3"));
+    const hit = resolvePython({
+      env: { PATH: dir },
+      platform: "linux",
+      probe: { access: () => undefined, spawn: () => "ETIMEDOUT" },
+    });
+    expect(hit?.command).toBe("python3");
+  });
+
+  it("同一条链上「明确起不来」照旧算不可用 —— 别把两件事混成一件", () => {
+    const dir = freshDir();
+    writeCandidate(path.join(dir, "python3"));
+    const hit = resolvePython({
+      env: { PATH: dir },
+      platform: "linux",
+      probe: { access: () => undefined, spawn: () => "ENOEXEC" },
+    });
+    expect(hit).toBeNull();
+  });
+});
