@@ -292,6 +292,34 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
 });
 
 describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）", () => {
+  /**
+   * 把**三条通道的接缝全注入死**的公共夹具（#1959 第六轮）。
+   *
+   * 两个「判到哪一步」的用例此前只注入了 `findExe` —— 而 `installPython` 在一个
+   * `run` 全报成功的世界里会**继续往下走三条通道**，最后那条 embed 通道默认是
+   * **真去 python.org 下载、真解压、真写盘**：
+   *
+   *   · 自托管节点上它跑成了真动作 ⇒ `python-embeded/python.exe` 落进检出，
+   *     于是「两条 scope 都失败 ⇒ `installed === false`」这条断言在下一次运行里
+   *     读到**上一跑留下的目录**，实测红成 `expected true to be false`；
+   *   · 同一次运行里另一条只是慢：下载 + 解压墙钟随网络走，冷节点上一次跨过
+   *     全局 30s，红出来的形态是 `Test timed out in 30000ms` —— 与上一条是
+   *     同一个病（判据的动作泄漏到真网络 / 真盘），只是话术不同。
+   *
+   * 所以接缝按「会不会碰外部世界」列全：`run` / `findExe`（命令与查找）、
+   * `existing`（盘）、`download` / `unzip` / `mkdir` / `cwd`（第三条通道的落点）。
+   * 判据的结论从此只取决于用例自己造的东西。
+   */
+  const noExternalAction = {
+    platform: "win32" as NodeJS.Platform,
+    env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+    existing: () => false,
+    mkdir: () => undefined,
+    download: () => undefined,
+    unzip: () => undefined,
+    cwd: mkdtempSync(path.join(tmpdir(), "selfcheck-inert-")),
+  };
+
   it("winget 不在 PATH 上时，仍按用户级标准落点再找一遍", () => {
     /* 现场：`winget` 常年在盘上却不在构建会话的 PATH 上（`WindowsApps` 那条按用户
      * 追加的路径要新会话才生效）。少了这一条，「机器上有 winget」会被读成「没有」。
@@ -410,8 +438,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
      * 要么装到一个这次构建之后的会话也看不见的地方。所以两个 scope 都要试。 */
     const scopes: string[] = [];
     installPython({
-      platform: "win32",
-      env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+      ...noExternalAction,
       /* 「装完找解释器」必须注入成**一定找不到**：真实现扫安装根读真 fs，
        * 而跑判据的那台机器上若碰巧装着 Python，第一条 scope 就会提前成功返回、
        * 第二条根本不会跑 —— 一条判「两条都试」的用例于是随环境变成恒假
@@ -430,8 +457,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
 
   it("两条 scope 都试过仍拿不到解释器时，把「试过什么」写进 reason", () => {
     const r = installPython({
-      platform: "win32",
-      env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+      ...noExternalAction,
+      /* `run` 对 `--scope` 那两条报失败，对其余（`winget --version`、`scoop …`）
+       * 报成功 —— 后面两条通道因此仍会被走到，它们的接缝同样由夹具注入死。 */
       run: (_cmd, args) =>
         args.includes("--scope")
           ? { ok: false, out: "boom" }

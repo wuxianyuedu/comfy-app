@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-15T04:39:52.616Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-15T16:09:07.017Z",
+    "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "本次提交只改启动器自愈与客户端通知（scripts/launcher-core、src/lib/shell、src/components/code-update），改动面已由 C 组受影响用例 + 固定结构清单覆盖；本机同刻有其它检出在跑重活，全量+覆盖率档留待低负载时再跑"
+    "skippedReason": "本笔只改两份用例文件的接缝与一份规范文档：全量档已真跑过一轮（755 文件 / 9408 通过），仅有的两条红经隔离复算都是本分支既有的（e2e 新鲜度账那条已随本笔的 skip 记账消掉；trpc-surface-executors 是全局 setup 探针文件被扫到一半删除的竞态，隔离复跑 8/8 绿），不在本笔引入"
   }
 }

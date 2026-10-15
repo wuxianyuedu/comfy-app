@@ -15,7 +15,12 @@
  *      端点事实（哪一处自写一份就会漂），且 globalSetup 真的挂上了。
  */
 import { readFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -257,28 +262,52 @@ describe("跑前那一探的判决（四态各归各的出口）", () => {
 });
 
 describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）", () => {
-  let server: Server | null = null;
+  /**
+   * 本档起的临时服务（可能是**几个**，见 `serve()` 的注）。
+   *
+   * 这里刻意是清单而不是单个句柄：一条用例里要两种形状各喂一次时，旧写法是
+   * 「关掉上一个、再起下一个」，而那次关闭与再绑定之间没有任何东西保证新的
+   * 监听已经生效 —— 自托管节点上它实测红成 `expected 'free' to be 'real'`
+   * （`free` 就是 `status: 0`，也就是**探针那一下没连上**）。形状不是被测逻辑错，
+   * 是用例自己造了一个竞态：判「探到的东西是什么」不需要先把上一个探针目标拆掉。
+   */
+  let servers: Server[] = [];
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => {
-      if (!server) return resolve();
-      server.close(() => resolve());
-      server = null;
-    });
+    const closing = servers;
+    servers = [];
+    await Promise.all(
+      closing.map(
+        (s) =>
+          new Promise<void>((resolve) => {
+            s.close(() => resolve());
+          }),
+      ),
+    );
   });
 
-  /** 起一个只回一个固定 `/system_stats` 体的临时服务。 */
+  /** 起一个只回一个固定 `/system_stats` 体的临时服务，**并让它一直活着到用例结束**。 */
   async function serve(payload: unknown): Promise<string> {
-    server = createServer((_req, res) => {
+    const srv = createServer((_req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(payload));
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
-    const addr = server.address();
+    servers.push(srv);
+    await new Promise<void>((resolve) => srv.listen(0, "127.0.0.1", resolve));
+    const addr = srv.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
     return `http://127.0.0.1:${port}/system_stats`;
+  }
+
+  /** 起一个**只占端口、不答 HTTP**（或答别的形状）的服务，同样活到用例结束。 */
+  async function serveRaw(
+    handler: (req: IncomingMessage, res: ServerResponse) => void,
+  ): Promise<number> {
+    const srv = createServer(handler);
+    servers.push(srv);
+    await new Promise<void>((resolve) => srv.listen(0, "127.0.0.1", resolve));
+    const addr = srv.address();
+    return typeof addr === "object" && addr ? addr.port : 0;
   }
 
   it("空端口：连不上 ⇒ status 0（是 free，不是 unknown）", async () => {
@@ -291,13 +320,11 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
   });
 
   it("替身形状 ⇒ fake；真件形状 ⇒ real（端到端一次）", async () => {
+    /* 两个服务**同时**活着：判「探到的形状归哪一档」不需要腾出端口来，
+     * 而「关掉再起」会引入一次没人守的再绑定竞态（见 `servers` 的注）。 */
     const fakeUrl = await serve(FAKE_PAYLOAD);
     const fakeObserved = await probeFakeComfySlot({ url: fakeUrl });
     expect(classifyFakeSlot(fakeObserved).verdict).toBe("fake");
-    await new Promise<void>((resolve) => {
-      server?.close(() => resolve());
-      server = null;
-    });
 
     const realUrl = await serve(REAL_PAYLOAD);
     const realObserved = await probeFakeComfySlot({ url: realUrl });
@@ -311,27 +338,18 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
   });
 
   it("pre-flight：端口有人 ⇒ 占用（这一格必须在起 Playwright 之前探）", async () => {
-    server = createServer((_req, res) => {
+    /* 这一格判的是「端口上有没有人答话」，答什么无所谓 —— 但服务要活到用例结束。 */
+    const port = await serveRaw((_req, res) => {
       res.writeHead(200, { "content-type": "text/html" });
       res.end("<html></html>");
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
-    const addr = server.address();
-    const port = typeof addr === "object" && addr ? addr.port : 0;
     expect(await probePortOccupied(port)).toBe(true);
   });
 
   it("pre-flight 一次探两个端口，两栏各说各的", async () => {
-    server = createServer((_req, res) => {
+    const port = await serveRaw((_req, res) => {
       res.writeHead(200).end("ok");
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
-    const addr = server.address();
-    const port = typeof addr === "object" && addr ? addr.port : 0;
     const result = await runPreflight({
       appPort: port,
       fakePort: 1,
@@ -387,15 +405,10 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
   });
 
   it("非 JSON 应答不抛：形状两边都不像 ⇒ unknown", async () => {
-    server = createServer((_req, res) => {
+    const port = await serveRaw((_req, res) => {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("not json");
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
-    const addr = server.address();
-    const port = typeof addr === "object" && addr ? addr.port : 0;
     const observed = await probeFakeComfySlot({
       url: `http://127.0.0.1:${port}/system_stats`,
     });
