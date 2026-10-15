@@ -230,7 +230,7 @@ await reapStaleRunningTasks();
 
 ## 9. 验证计划
 
-- 单测：Phase 2-A driver 层用内存 SQLite 真库夹具（沿用 §18.11 那套）。
+- 单测：Phase 2-A driver 层用内存 SQLite 真库夹具（沿用 §18.10 那套）。
 - 契约测：Phase 3-A `claimedBy` 加一列，`tests/comfyui-port-contract` 那族风格核 Next/host 两侧对 `task` 状态机口径一致。
 - 手工端到端：`COMFY_EXECUTOR=host` 下起一批任务 → 中途重启 Next（任务应继续跑）→ 取消（host 应回收）→ 杀 host 整树（launcher 重启 host、DB 恢复扫描接管）。
 - 崩溃注入：kill host 进程树；观察 Next SSE 侧「updatedAt 陈旧」提示 + host 重启后扫表回收 RUNNING 孤儿。
@@ -412,7 +412,7 @@ configureExecutorCli({
 
 ### 单测覆盖（Phase 2-A 独立锁）
 
-**新增** `src/lib/core/repository-task-impl.test.ts`：用**内存 SQLite 真库夹具**（沿用 §18.11 里 `repository.test.ts` 的 `drizzle(createClient({url:":memory:"}))` 那套），12 方法各至少一条正/反用例：
+**新增** `src/lib/core/repository-task-impl.test.ts`：用**内存 SQLite 真库夹具**（沿用 §18.10 里 `repository.test.ts` 的 `drizzle(createClient({url:":memory:"}))` 那套），12 方法各至少一条正/反用例：
 
 - `updateProgress` / `markRunning` 的「终态行不生效」判据（compare-and-set 语义）
 - `finalizeSuccess` 有 / 无 `workflowSnapshot` 两分支
