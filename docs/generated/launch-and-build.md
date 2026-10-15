@@ -59,7 +59,7 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
   「起编排器 / 认亲 / 回收」进壳（`shell_launch.rs`），「双击入口与开发入口」进
   `.ps1`（`tools/start/start-tauri.ps1` / `start-tauri-dev.ps1`）。**不要再包第二层
   exe**：多一层就多一个「关掉它窗口并不让它退出」的常驻进程，也是历史上
-  「产物目录被锁住、提示指不出占用者」那类事故的温床（§7.1.1 的判据随之删除）；
+  「产物目录被锁住、提示指不出占用者」那类事故的温床（§7.1.2 的判据随之删除）；
 - **`scripts/dev-launcher.mjs`** 是唯一的进程编排者：启动、预检、清理都在这一层
   （**全平台同一份**，见 §3）。`scripts/dev-launcher.ps1` 只是它在 Windows 侧的
   **调用入口**（定位项目根 → 转交 → 透传退出码），不含任何编排逻辑；
@@ -1667,7 +1667,7 @@ components** 的分层约束下它对消息只要求 `id` / `runId` / `time` 三
 | **「应用服务已断开」那条只说「原因等恢复再给」，而恢复那条又说「这次断开没有留下结束记录」——原因明明已经写在 `run/app-service-exit.json` 里，界面上却一个字都没有**（ISSUE #1915）                                                                                                                                  | **读记录用的通道选错了**：`GET /api/dev/last-exit` 由**应用服务自己**应答，而它正是断开这件事里没了的那一方——服务不在，端点必然不通，于是只有「等恢复再问」这一条读法（而恢复那条又常因各种原因拿不到）。记录其实早在断开那一刻就落盘了（写入排在回收整棵树之前）；壳进程一直活着（用户看到的就是「窗口还在、页面连不上」），读同一个文件根本不经过应用服务——这条存活通道此前只写在设计说明里，**代码从没实现过**                                                                                                                                                                                                                                                                                                                                                       | 已修（§4.5.5）：壳新增 `get_app_service_exit` → `shell_launch::read_app_service_exit`（回文件原文，形状只在 TS 一侧解析）；断开那条消息当场上原因（`fetchCurrentDisconnectExit`），判据换成 `isCurrentDisconnectExit`（runId 相等才算，拿不到 runId 时退回 10 分钟新鲜度窗口）；非壳环境没有这条通道，界面维持原样并说清「这一刻读不到」，**不编「未知原因」**。回归 `app-service-exit.test.ts` + `use-app-service-message-log.test.ts` + `shell_launch` 单测                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **启动日志里看不到服务在干什么**（面板只有 `[launcher]` / `[orchestrator]` 两段，没有 `▲ Next.js`、编译与路由日志）                                                                                                                                                                                                 | dev server 的 stdout/stderr 被 `spawnInGroup` **直接重定向成文件描述符**（没有 pipe、没有 tee），因此既不进编排器 stdout、也不在 `shell-launch.log` 的 `[orchestrator] …` 那一路；而 `get_launch_log` 只拼编排器的四段                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 已修（§4.5.1）：面板加两段服务自己的输出（`log/current/nextjs/` 下前缀匹配 + **mtime 最新**的 stdout / stderr；按 mtime 而非名字序是 ISSUE #576 的回归点）。路径收在 Rust 侧 `nextjs_log_dir()` / `latest_prefixed_log()`，不在别处拼字面量                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **启动日志里有一段没解释的 2~3 秒空档**（用户框出「端口检查」到「pnpm 版本匹配」之间，ISSUE #1516）                                                                                                                                                                                                                 | **同一次启动里 `pnpm -v` 被问了两遍**：§2.1 工具链门禁（`orchestratePnpm`）问过 pnpm 的版本，两秒后 §9.2 第 4 步的版本一致性对齐（`reconcilePnpmVersion`）又原样问一遍。两次都是 `spawnSync` 冷启 pnpm shim，Windows 上 corepack shim 要经 node 中转到 pnpm，单次 1~3s ⇒ 白付一遍                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 已修：`probePnpm()` 带进程内记忆化（`probeMemo`，键 = 平台 + root + PATH，见 §9.2 第 4 步）。唯一能让结论作废的 `preparePnpm()` 在 spawn 之前 `clearPnpmProbeCache()`。**新增任何「问 pnpm 版本」的步骤都走 `probePnpm()`，不要自己 `spawnSync`**。回归 `tests/dev-launcher-toolchain-gate.test.ts` 的「pnpm 探测的记忆化」一组                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **「配置了 ComfyUI 端口却像没配」**：设置里 `comfyuiPort` 留空 / 填了一个值，应用却连到了**另一个** ComfyUI 实例上——现象是上传素材失败、任务「未找到生成结果」、端口在日志里漂移，而地址栏/探测看起来一切正常（ISSUE #534 P1）                                                                                      | **同一个事实（默认端口）有多份实现**：连接侧 `resolveComfyBase()` 把 `comfyuiPort: 0` 判为「未配置」并用**硬编码**的 8188 作为探测起点；拉起侧 `resolveEffectiveLaunch()` → `buildSpawnArgs()` 同样把 `0` 当「未配置」，**不传 `--port`**，于是 ComfyUI 以它自己的默认端口启动；`lib/core/config.ts` 的 schema 默认值与错误文案里又各写了一遍 8188。四处都写 8188 看着一致，但**没有任何断言把它们绑在一起** —— 单独改一处不会有测试变红。「连错实例」比「连不上」难查得多：8188 上往往真有个别的实例在应答（Comfy Desktop 常驻），`client.ts` 的兜底探测链最后一项正是窗口地址 :8000                                                                                                                                                                                   | 已修（门禁 + 收口）：① 默认端口单点定义在 `src/lib/app-settings/index.ts` 的 `COMFYUI_DEFAULT_PORT`，连接侧与拉起侧一律 import；② `lib/core/config.ts` 的 ComfyUI 兜底地址改由 `endpoints.ts` 的 `comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)` 拼出，不再写裸地址；③ 设置页 placeholder / 说明文案与错误建议里的端口改为运行时取值（不再各写一遍数字）；④ 新增可失败断言 `scripts/check-comfyui-port-contract.cjs`（pre-commit 与 CI）+ `tests/comfyui-port-contract.test.ts`、`tests/check-comfyui-port-contract.test.ts`。口径见 §9.2 第 5 条                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **「配置了 ComfyUI 端口却像没配」**：设置里 `comfyuiPort` 留空 / 填了一个值，应用却连到了**另一个** ComfyUI 实例上——现象是上传素材失败、任务「未找到生成结果」、端口在日志里漂移，而地址栏/探测看起来一切正常（ISSUE #534 P1）                                                                                      | **同一个事实（默认端口）有多份实现**：连接侧 `resolveComfyBase()` 把 `comfyuiPort: 0` 判为「未配置」并用**硬编码**的 8188 作为探测起点；拉起侧 `resolveEffectiveLaunch()` → `buildSpawnArgs()` 同样把 `0` 当「未配置」，**不传 `--port`**，于是 ComfyUI 以它自己的默认端口启动；`lib/core/config.ts` 的 schema 默认值与错误文案里又各写了一遍 8188。四处都写 8188 看着一致，但**没有任何断言把它们绑在一起** —— 单独改一处不会有测试变红。「连错实例」比「连不上」难查得多：8188 上往往真有个别的实例在应答（Comfy Desktop 常驻），`client.ts` 的兜底探测链最后一项正是窗口地址 :8000                                                                                                                                                                                   | 已修（门禁 + 收口）：① 默认端口单点定义在 `src/lib/app-settings/index.ts` 的 `COMFYUI_DEFAULT_PORT`，连接侧与拉起侧一律 import；② `lib/core/config.ts` 的 ComfyUI 兜底地址改由 `endpoints.ts` 的 `comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)` 拼出，不再写裸地址；③ 设置页 placeholder / 说明文案与错误建议里的端口改为运行时取值（不再各写一遍数字）；④ 新增可失败断言 `scripts/check-comfyui-port-contract.cjs`（挂在 `.githooks/pre-commit`）+ `tests/comfyui-port-contract.test.ts`、`tests/check-comfyui-port-contract.test.ts`。口径见 §9.2 第 5 条|
 | **Linux / macOS 上 `cargo build --release --features custom-protocol` 报 `error[E0425]: cannot find type IMarshal in module windows_core::imp`（×12）**                                                                                                                                                             | `Cargo.toml` 的 `windows` crate 是**无条件依赖**，`mod single_instance` 也没 `#[cfg(windows)]` 门控 —— 非 Windows 上整棵 windows 树都会参与编译，而 `windows-future` 子 crate 在那边没有该 COM 接口实现。跨平台构建立刻死在编译期，看不出与「壳的单实例保护」有关（ISSUE #489）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 已修：`windows` 挪进 `[target.'cfg(windows)'.dependencies]`；`single_instance.rs` 拆 `#[cfg(windows)]` / `#[cfg(not(windows))]` 双实现（POSIX 用检出内锁文件 + `kill(pid,0)` 存活探测 + `SIGUSR1` 唤起），模块声明不做 cfg、调用点因此不分叉。见 §9.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Linux（含容器版 CI）上改 `src-tauri/src/*.rs` 提交被 `shell-gate` 拦下，提示写「找不到 cargo —— 装了 rustup」**（ISSUE #1555）                                                                                                                                                                                    | 门禁的探针是 `whichCommand("cargo")`，**只问 PATH**；而 CI / 容器镜像的 PATH 是**精修过**的，`~/.cargo/bin` 常常不在 —— 实测本仓开发容器里 `which cargo` 为空，同一台机器上 `~/.cargo/bin/cargo` 与 `~/.rustup/toolchains/<版本>/bin/cargo` 都在。表现是「编不了」，真因是「探针比 cargo 装得更苛刻」                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 已修（ISSUE #1555）：`scripts/shell-gate.mjs` 的 `findCargo()` **PATH 优先、工具链默认安装位兜底**（`CARGO_HOME/bin` → `~/.cargo/bin` → `~/.rustup/toolchains/`，多工具链取版本号最大的）；回退面刻意只收这三处、不许退化成递归磁盘。文案补上「已装却探不到」的指路（PATH 里加上 `$CARGO_HOME/bin`）。见 11 §11.10.4 第 3 项，回归 `tests/shell-gate.test.ts` 的「cargo 寻址」一组                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **`cargo build` 报 ``resource path `binaries/node-x86_64-unknown-linux-gnu` doesn't exist``**                                                                                                                                                                                                                       | `bundle.externalBin` 声明的是「无后缀 basename」，打包器按目标三元组找 `node-<triple>[.exe]`，而 `build-desktop.mjs` 只产出 `.exe`（历史实现按 Windows 单一平台写的）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 已修：`scripts/build-desktop.mjs` 的 `sidecarFileName()` 与 Rust 侧 `sidecar_binary_name()` 同一平台判据（非 Windows 无后缀 + 补可执行位）。见 §9.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1844,12 +1844,7 @@ components** 的分层约束下它对消息只要求 `id` / `runId` / `time` 三
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目                 |
 | 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                                                                                                                                                                                                                                                   |
-| 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   |
-| `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 |
-| `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物                      |
-| `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听                         |
-| `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，      |
-| 可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。    |
+| 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物 `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听 `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 前端 bundle 体积预算（判定档，ISSUE #1781）                                               | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）                      | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，评审确认后 `--allow-increase --update`。规范 §13.5.4。 |
 | 页面级运行时读数（e2e 档，ISSUE #1781 的右半边）                                          | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）         | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器）                                                                          |
 | 重新打包双击启动器（**已废弃**）                                                          | —（Python 启动器与打包链已随 ISSUE #784 删除）                                                               | 现在双击的就是 `src-tauri\target\release\app.exe` 本身                                                                                                                                                                                                                                                                                                                                        |
@@ -1904,41 +1899,6 @@ components** 的分层约束下它对消息只要求 `id` / `runId` / `time` 三
 别处同名进程不命中 / 路径大小写差异命中」「陈旧壳被自动回收（发布什么 kill）」
 「非交互构建下自动回收」等规则（非 Windows 平台自动跳过）。
 
-#### 7.1.1 产物目录占用的通用出口（ISSUE #621 遗留能力）
-
-原先这一节讲的是「打包启动器前的占用检查」：`build-launcher*.ps1` 的产物是**整个目录**
-（onedir 布局），`Remove-Item -Recurse -Force` 删不掉被运行中进程映射的 `_internal\*.dll`。
-**那条链路已随 Python 启动器整体删除**（ISSUE #784），不再有「第二层 exe 的产物目录」，
-也就没有「打包前先查谁锁着它」这一步。
-
-留下的是一条通用能力：**判「目录删不掉时到底是谁占着」**，实现仍在
-`tools/scripts/Build-Guard.ps1` 的 `Get-ProductDirHolder` + `Write-ProductDirLockHint`。
-判据是「哪些进程把该目录下的文件**映射进了自己的地址空间**」——不能按 exe 名 / 路径判断：
-实测启动器拉起的 dev server（`node` → `pnpm` → `next`）会继承启动器的 DLL 搜索目录，
-把产物目录里的 `VCRUNTIME140.dll` 映射进自己进程，此时按进程名一个都查不到，
-而目录照样删不掉。清理失败时的出口因此是：**真实异常文案 + 占用者清单（PID / 进程名 /
-被映射的文件 + 命令行 / 父 PID）+ 逐条 `taskkill /PID <pid> /T /F`**，
-查不到持有者时才给「杀毒 / 索引服务正在扫描，或权限不足」的分流。
-
-#### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
-
-> 2026 接入（ISSUE #232）：设置页「应用更新」区可检测新版本、下载安装并重启。
-> `tauri-plugin-updater` 的检测/下载/安装命令与 `tauri-plugin-process` 的重启命令
-> 已在 `src-tauri/Cargo.toml` 注册、`src-tauri/src/lib.rs` 挂载，并在
-> `src-tauri/capabilities/remote.json` 授予远程源 `updater:default`、`process:default`。
-
-接入业务更新源需三步（否则「检测更新」只会提示未配置更新源）：
-
-1. 生成签名密钥对：`pnpm tauri signer generate -w ~/.tauri/comfyapp.key`
-   （私钥留作 CI 签名，公钥输出内容随 `-w` 到终端）。
-2. 把公钥填入 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`；
-   按更新宿主（GitHub Releases / 业务后端）填 `plugins.updater.endpoints`。
-3. 发布更新时用私钥对产物签名；`bundle.createUpdaterArtifacts` 置 `true`
-   才会让 `pnpm tauri build` 产出 `.sig` 签名与更新元数据（当前未开启，
-   因尚未配置公钥——避免无公钥时打包报错）。
-
-> 更新产物与签名、更新服务端部署不在本仓库范围内，属发布运维配置。
-
 #### 7.1.1 产品版本号：三处手工重复，靠判据守相等（ISSUE #1611 阶段三 D7）
 
 同一个「产品版本号」写在**三个文件**里，每一个都得由各自的工具读：
@@ -1976,6 +1936,41 @@ pre-commit D 组「产品版本号三处同步(D7)」每笔提交判一次（零
 改动 tauri.conf.json、src-tauri/src/**、splash-assets/** 之后**必须重编壳**
 （`cargo build --release --features custom-protocol`，**feature 不能省**），
 否则运行的是旧二进制（预检只会提醒，不会阻止——界面异常先想到这一条）。
+
+#### 7.1.2 产物目录占用的通用出口（ISSUE #621 遗留能力）
+
+原先这一节讲的是「打包启动器前的占用检查」：`build-launcher*.ps1` 的产物是**整个目录**
+（onedir 布局），`Remove-Item -Recurse -Force` 删不掉被运行中进程映射的 `_internal\*.dll`。
+**那条链路已随 Python 启动器整体删除**（ISSUE #784），不再有「第二层 exe 的产物目录」，
+也就没有「打包前先查谁锁着它」这一步。
+
+留下的是一条通用能力：**判「目录删不掉时到底是谁占着」**，实现仍在
+`tools/scripts/Build-Guard.ps1` 的 `Get-ProductDirHolder` + `Write-ProductDirLockHint`。
+判据是「哪些进程把该目录下的文件**映射进了自己的地址空间**」——不能按 exe 名 / 路径判断：
+实测启动器拉起的 dev server（`node` → `pnpm` → `next`）会继承启动器的 DLL 搜索目录，
+把产物目录里的 `VCRUNTIME140.dll` 映射进自己进程，此时按进程名一个都查不到，
+而目录照样删不掉。清理失败时的出口因此是：**真实异常文案 + 占用者清单（PID / 进程名 /
+被映射的文件 + 命令行 / 父 PID）+ 逐条 `taskkill /PID <pid> /T /F`**，
+查不到持有者时才给「杀毒 / 索引服务正在扫描，或权限不足」的分流。
+
+#### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
+
+> 2026 接入（ISSUE #232）：设置页「应用更新」区可检测新版本、下载安装并重启。
+> `tauri-plugin-updater` 的检测/下载/安装命令与 `tauri-plugin-process` 的重启命令
+> 已在 `src-tauri/Cargo.toml` 注册、`src-tauri/src/lib.rs` 挂载，并在
+> `src-tauri/capabilities/remote.json` 授予远程源 `updater:default`、`process:default`。
+
+接入业务更新源需三步（否则「检测更新」只会提示未配置更新源）：
+
+1. 生成签名密钥对：`pnpm tauri signer generate -w ~/.tauri/comfyapp.key`
+   （私钥留作 CI 签名，公钥输出内容随 `-w` 到终端）。
+2. 把公钥填入 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`；
+   按更新宿主（GitHub Releases / 业务后端）填 `plugins.updater.endpoints`。
+3. 发布更新时用私钥对产物签名；`bundle.createUpdaterArtifacts` 置 `true`
+   才会让 `pnpm tauri build` 产出 `.sig` 签名与更新元数据（当前未开启，
+   因尚未配置公钥——避免无公钥时打包报错）。
+
+> 更新产物与签名、更新服务端部署不在本仓库范围内，属发布运维配置。
 
 ### 7.2 Turbopack「全项目追踪」告警：怎么读、怎么真修（ISSUE #489）
 
@@ -2876,7 +2871,7 @@ Next」，用户要盯着空窗等半分钟才看到页面；现在等待时间�
    8188、`lib/core/config.ts` 的 schema 默认值又写了一遍裸地址，几处从未对过——
    单看每一处都「没毛病」，这正是它能潜伏的原因，而分叉的表现是**静默连到另一个
    实例**（用户读到的是上传失败 / 端口漂移）。门禁
-   `scripts/check-comfyui-port-contract.cjs`（pre-commit 与 CI）把这条变成可失败
+   `scripts/check-comfyui-port-contract.cjs`（挂在 `.githooks/pre-commit`）把这条变成可失败
    的断言：常量单点、两侧共用、`buildSpawnArgs` 的 `>0` 口径、源码无裸端口字面量。
    回归测试见 `tests/comfyui-port-contract.test.ts`（契约）与
    `tests/check-comfyui-port-contract.test.ts`（门禁自身）。
@@ -3007,7 +3002,7 @@ sidecar」两种不同形态的失败。
 `next build` 被带走（AGENTS 硬规则 15 / §5）。因此 `scripts/*.mjs` 的错误文案用
 `[ERROR] …` 的英文短句，中文提示放在 `.ps1` 入口与文档里。
 
-**门禁**：`scripts/check-ps1-consistency.mjs`（pre-commit 与 CI，规范 §12.8 的
+**门禁**：`scripts/check-ps1-consistency.mjs`（挂在 `.githooks/pre-commit`，规范 §12.8 的
 提交防线）核三件事：
 
 1. 本表登记的每个脚本**真实存在**（表被删空、或登记了不存在的路径 → 失败）；

@@ -18,7 +18,13 @@
  * 自然尺寸也不会真的读出来 —— 用例自己把 `naturalWidth/Height` 打上去，
  * 这正是真实浏览器里 `onLoad` 那一刻读到的两个数。
  */
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageViewer, ViewableImage } from "./image-viewer";
@@ -107,6 +113,41 @@ describe("ImageViewer", () => {
 
     fireEvent.click(viewer.getByText("适应窗口"));
     expect(viewer.mode()).toBe("适应窗口");
+  });
+
+  it("两个缩放档位落成单选一组（不是 aria-pressed 开关），且选中档钉住悬停", () => {
+    const viewer = renderViewer();
+
+    const group = screen.getByRole("radiogroup", { name: "缩放档位" });
+    const fit = within(group).getByRole("radio", { name: "适应窗口" });
+    const actual = within(group).getByRole("radio", { name: "原始大小" });
+    /* 旧形态是两枚 `aria-pressed` 的 `ghost` 按钮 —— 那是「这个开关开着吗」，
+       而这一排本来就只能选一个（规范 16 §16.2.4.75）。 */
+    expect(fit).not.toHaveAttribute("aria-pressed");
+    expect(viewer.mode()).toBe("适应窗口");
+    expect(fit).toHaveAttribute("aria-checked", "true");
+    expect(actual).toHaveAttribute("aria-checked", "false");
+
+    /* 选中档自带与常态同值的悬停 —— 旧形态没钉字色，`ghost` 的
+       `hover:text-foreground` 会在划过已选中那枚时翻掉它。 */
+    expect(fit.className).toContain("aria-checked:hover:text-primary-strong");
+    expect(fit.className).toContain("aria-checked:hover:bg-primary-soft");
+
+    fireEvent.click(actual);
+    expect(viewer.mode()).toBe("原始大小");
+    expect(actual).toHaveAttribute("aria-checked", "true");
+    expect(fit).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("自由倍数（第三档 `manual`）时两枚都不选中", () => {
+    renderViewer();
+    /* 「放大」按钮会切到 `manual` 档（比滚轮少一层自然尺寸的前置条件）。 */
+    fireEvent.click(screen.getByLabelText("放大"));
+
+    const group = screen.getByRole("radiogroup", { name: "缩放档位" });
+    for (const radio of within(group).getAllByRole("radio")) {
+      expect(radio).toHaveAttribute("aria-checked", "false");
+    }
   });
 
   it("双击画布在适应窗口与原始大小之间切换", () => {

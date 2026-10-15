@@ -62,9 +62,16 @@ export function CanvasPanelToolbar({
             <Button
               variant="ghost"
               onClick={() => onSelect(isActive ? null : item.id)}
+              /* 选中档**钉住悬停值**（`hover:bg-primary/20` / `hover:text-primary-strong`）：
+                 `ghost` 变体自带 `hover:bg-muted hover:text-foreground`，而选中
+                 分支原本没写 `hover:` —— 划过**当前打开**的那一枚时悬停档胜出，
+                 紫色高亮翻成灰底黑字，看上去像「未选中」（用户原话「悬浮和非
+                 悬浮一个紫一个白」那一族，ISSUE #1423 / 规范 16 §16.2.4.75）。
+                 这一枚是**开关**（再点一次关闭面板）而非单选 radio，所以不走
+                 `SelectChip`，就地钉住悬停值。 */
               className={`group relative flex size-10 items-center justify-center rounded-xl transition-all duration-150 ${
                 isActive
-                  ? "bg-primary/20 text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
+                  ? "bg-primary/20 text-primary-strong hover:bg-primary/20 hover:text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
                   : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
               }`}
             >

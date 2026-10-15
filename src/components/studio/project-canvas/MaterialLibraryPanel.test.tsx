@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { MaterialItem } from "./MaterialLibraryPanel";
 import { MaterialLibraryPanel } from "./MaterialLibraryPanel";
@@ -78,5 +84,66 @@ describe("MaterialLibraryPanel", () => {
     render(<MaterialLibraryPanel onClose={onClose} />);
     const closeBtn = await screen.findByRole("button", { name: "关闭" });
     expect(closeBtn).toBeInTheDocument();
+  });
+});
+
+/**
+ * 作用域切换（本项目 / 跨项目）的形态回归（ISSUE #1925 第三批收口）。
+ *
+ * 它此前是手搓的 `Button variant="ghost"` + 下划线三元：选中给
+ * `border-b-2 border-accent`、**未选中档根本没写那条边框** —— 未选中的那一枚
+ * 整体比选中的矮 2px，切来切去文字基线上下跳。这与
+ * `project-canvas/HistoryPanel` 的作用域切换**逐字同形**（同一处缺陷的另一份），
+ * 现在同样交给 `ui/tabs` 的 `line` 档：两枚同高，选中由 `data-active` 驱动。
+ */
+describe("MaterialLibraryPanel 作用域切换（ISSUE #1925）", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    mockFetch({ folders: [], items: [] });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("两枚作用域是同一形态的 tab（不再一高一矮）", async () => {
+    render(<MaterialLibraryPanel onClose={vi.fn()} projectId="p-1" />);
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["本项目", "跨项目"]);
+    /* 形态类必须一致 —— 差别只在 `data-active`（由 ui/tabs 给），
+       不再靠「有没有那条 border-b-2」表达选中。 */
+    const shape = (el: HTMLElement) =>
+      el.className
+        .split(" ")
+        .filter((c) => !c.startsWith("data-") && c !== "aria-selected:bg-muted")
+        .sort()
+        .join(" ");
+    expect(shape(tabs[0]!)).toBe(shape(tabs[1]!));
+    for (const tab of tabs) expect(tab.className).not.toContain("border-b-2");
+  });
+});
+
+describe("MaterialLibraryPanel 显示密度（ISSUE #1925）", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    mockFetch({ folders: [], items: [] });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("走共享基元（三处逐字相同的孪生对已收口），选中档钉住悬停", async () => {
+    render(<MaterialLibraryPanel onClose={vi.fn()} projectId="p-1" />);
+
+    const group = await screen.findByRole("radiogroup", { name: "显示密度" });
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    for (const radio of radios) {
+      expect(radio).not.toHaveAttribute("aria-pressed");
+    }
+    const grid = within(group).getByRole("radio", { name: "网格视图" });
+    expect(grid).toHaveAttribute("aria-checked", "true");
+    /* 旧形态只钉底色不钉字色 —— 这一条正是那个接缝的判据。 */
+    expect(grid.className).toContain("aria-checked:hover:text-primary-strong");
+    expect(grid.className).toContain("aria-checked:hover:bg-primary-soft");
   });
 });

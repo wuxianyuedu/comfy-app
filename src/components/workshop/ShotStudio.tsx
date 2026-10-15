@@ -7,6 +7,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
+import { SelectChip } from "~/components/ui/select-chip";
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
@@ -334,31 +335,26 @@ export function ShotStudio({
       {/* 通道切换（本地 ComfyUI / 配置的 API） */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-xs">生成通道</span>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            size="xs"
+        {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。
+            此前是手搓的 `variant="outline"` + 选中三元：选中分支只写了
+            「未选中之外」的那一半，而 `outline` 自带
+            `hover:bg-muted hover:text-foreground` —— 划过**已选中**的那一枚
+            时悬停档胜出，紫色选中翻成白字灰底。 */}
+        <div role="radiogroup" aria-label="生成通道" className="flex gap-2">
+          <SelectChip
+            shape="segment"
+            selected={channel === "local"}
             onClick={() => setChannel("local")}
-            className={`h-auto rounded-lg px-3 py-1.5 ${
-              channel === "local"
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted-foreground hover:bg-subtle"
-            }`}
           >
             本地 · ComfyUI 工作流
-          </Button>
-          <Button
-            variant="outline"
-            size="xs"
+          </SelectChip>
+          <SelectChip
+            shape="segment"
+            selected={channel === "api"}
             onClick={() => setChannel("api")}
-            className={`h-auto rounded-lg px-3 py-1.5 ${
-              channel === "api"
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted-foreground hover:bg-subtle"
-            }`}
           >
             API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
-          </Button>
+          </SelectChip>
         </div>
         <Button
           variant="ghost"
