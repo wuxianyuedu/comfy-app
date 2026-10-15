@@ -77,3 +77,49 @@ describe("AppearanceSection 的单选组键盘契约", () => {
     expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
   });
 });
+
+/**
+ * 三组的选中档都缺过同一半「悬停值」（ISSUE #1925 第五批）。
+ *
+ * 底是 `Button variant="ghost"`，它自带**无条件**的 `hover:bg-muted
+ * hover:text-foreground`；而 `data-checked:*` 编译出的选择器带 `:where()`、
+ * 特异性只有 `(0,1,0)`，`hover:` 是 `(0,2,0)` —— 悬停档稳赢。于是划过
+ * **已选中**的那一枚时，「选中」被改写回「未选中」。修法是就地钉
+ * `data-checked:hover:*`（与 `ui/select-chip` 的 `aria-checked:hover:*` 同款）。
+ *
+ * 判的是**裸 token 的存在**，不是「读起来像不像」——上一批那几处正是
+ * 因为「三元读起来是完整的」才漏过去的。
+ */
+describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
+  /** 从 className 里切出类名 token 集合：`a:hover:b` 是一整个 token。 */
+  function tokensOf(el: HTMLElement): Set<string> {
+    return new Set(el.className.split(/\s+/).filter(Boolean));
+  }
+
+  it("主题卡（含 `data-unchecked:bg-surface-1` 那一组）钉住了选中档的悬停值", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    const cls = radioAt(0).className;
+    /* 选中档三层（描边 / 底色 / 字色）在悬停期间都必须成立 —— 少任何一层，
+       悬停就会把「选中」改写成另一副样子。 */
+    expect(cls).toContain("data-checked:hover:bg-primary-soft");
+    expect(cls).toContain("data-checked:hover:text-ink");
+    expect(cls).toContain("data-checked:hover:border-primary");
+  });
+
+  it("「圆角」「标题字阶」两排 chip 同样钉住了选中档的悬停值", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    for (const label of ["圆角", "标题字阶"]) {
+      const group = screen.getByRole("radiogroup", { name: label });
+      for (const radio of within(group).getAllByRole("radio")) {
+        const cls = radio.className;
+        expect(cls).toContain("data-checked:hover:bg-primary-soft");
+        expect(cls).toContain("data-checked:hover:text-primary");
+        expect(cls).toContain("data-checked:hover:border-primary");
+        /* 未选中档的悬停也仍在，且**不含**选中档的底色 —— 两档不能互相串。 */
+        expect(tokensOf(radio).has("data-checked:hover:bg-primary-soft")).toBe(
+          true,
+        );
+      }
+    }
+  });
+});
