@@ -160,6 +160,47 @@ export function clearWhichCommandCache(): void {
 }
 
 /**
+ * 读一个环境变量，**按平台的大小写语义**（windows 上不敏感）。
+ *
+ * ## 为什么非要有这一层（ISSUE #1961，平台侧 E2E 的最后一格）
+ *
+ * Windows 上 `process.env` 是一个**大小写不敏感**的代理，而 `{ ...process.env }`
+ * 出来的是**普通对象** —— 键名按系统存的写法来（Windows 常把 `PATH` 存成 `Path`）。
+ * 于是同一份环境「直接读」与「复制一份再读」会得到不同答案：
+ *
+ *   · `resolvePython()` 默认读 `process.env`（代理）⇒ `env.PATH` 拿得到；
+ *   · `checkPythonReady({ env: { ...process.env } })` 传下来的是复制品 ⇒
+ *     `env.PATH` 是 `undefined` ⇒ 这里扫一个**空 PATH** ⇒ 判「这台机没有 Python」。
+ *
+ * 现场：同一个 stage 里 `Python 探针读数` 报 `ok python → D:\Program Files\Python312\python.exe`，
+ * 而 `E2E 关键流程` 报 `PATH 上没有可用的 Python` —— 差的正是「读的是代理还是复制品」。
+ * 判据在 `tests/preflight-python-env-case.test.ts`。
+ *
+ * POSIX 上环境变量**大小写敏感**（`Path` 与 `PATH` 是两个变量），所以那一边只认
+ * 精确写法 —— 这一层不改变 POSIX 的任何行为。
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ * @param {string} name 变量名（大写形式）
+ * @returns {string | undefined}
+ */
+export function envVar(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  name: string,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  const exact = env[name];
+  if (exact !== undefined) return exact;
+  /* 大小写不敏感**只按目标平台**（与 `executableExts()` 同口径）：判据在 POSIX 上
+   * 判 win32 形态时也要复现这一格，所以不能读宿主的 `process.platform`。 */
+  if (!isWindows(platform)) return undefined;
+  const wanted = name.toUpperCase();
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === wanted) return env[key];
+  }
+  return undefined;
+}
+
+/**
  * 在 PATH 上解析可执行文件，返回可直接 spawn 的**绝对路径**。
  *
  * 为什么必须自己解析：Windows 上 Node 的 `spawn` 不认 PATHEXT —— `spawn("pnpm")`
@@ -188,12 +229,12 @@ export function whichCommand(
     probeArgs = ["--version"],
   }: WhichCommandOptions = {},
 ): string | null {
-  const key = `${name} ${env.PATH ?? ""} ${env.PATHEXT ?? ""} ${platform}`;
+  const pathValue = envVar(env, "PATH", platform) ?? "";
+  const pathextValue = envVar(env, "PATHEXT", platform);
+  const key = `${name} ${pathValue} ${pathextValue ?? ""} ${platform}`;
   const hit = whichCache.get(key);
   if (hit !== undefined) return hit;
-  const dirs = String(env.PATH ?? "")
-    .split(path.delimiter)
-    .filter(Boolean);
+  const dirs = pathValue.split(path.delimiter).filter(Boolean);
   const exts = executableExts(env, platform);
   let result: string | null = null;
   for (const dir of dirs) {
@@ -259,7 +300,9 @@ export function executableExts(
   platform: NodeJS.Platform = process.platform,
 ): string[] {
   if (!isWindows(platform)) return [""];
-  const declared = String(env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+  const declared = String(
+    envVar(env, "PATHEXT", platform) ?? ".COM;.EXE;.BAT;.CMD",
+  )
     .split(";")
     .map((e) => e.trim())
     .filter(Boolean);
@@ -531,7 +574,9 @@ export function powershellHost({
   if (!isWindows(platform)) return null;
   for (const name of ["pwsh", "powershell"]) {
     const exts = executableExts(env, platform).map((ext) => ext || ".EXE");
-    for (const dir of String(env.PATH ?? "")
+    /* 与 `whichCommand` 同源：env 可能是 `{ ...process.env }` 的复制品，而 Windows
+     * 的键常写成 `Path` —— 直接读 `env.PATH` 会扫一个空 PATH（ISSUE #1961）。 */
+    for (const dir of String(envVar(env, "PATH", platform) ?? "")
       .split(path.delimiter)
       .filter(Boolean)) {
       for (const ext of exts) {

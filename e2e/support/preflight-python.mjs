@@ -24,8 +24,13 @@
  * —— Windows 上 Node 不认 PATHEXT，裸名字必然 ENOENT。那一档只在「生产构建 + start」
  * 上暴露，而平台侧 E2E 正是那一档。
  */
+import { spawnSync } from "node:child_process";
+
 import { whichCommand } from "../../src/lib/process/executable-resolve.ts";
-import { pythonCandidates } from "../../src/lib/process/python-candidates.ts";
+import {
+  pythonCandidates,
+  pythonProbeArgs,
+} from "../../src/lib/process/python-candidates.ts";
 import { resolvePython } from "../../src/lib/process/python-resolve.ts";
 
 /** 承载这一份判决的环境变量键（`e2e-run.mjs` 写、`playwright.config.ts` 读）。 */
@@ -42,8 +47,10 @@ export const PYTHON_PREFLIGHT_ENV_KEY = "E2E_PYTHON_PREFLIGHT";
  *   platform?: NodeJS.Platform,
  *   resolve?: ((options: object) => {command: string, path: string, args: string[]} | null),
  *   which?: ((命令名: string, 选项: { probeArgs?: string[], env?: Record<string, string | undefined>, platform?: NodeJS.Platform }) => string | null),
+ *   bareSpawn?: ((command: string, args: string[]) => string | null),
  * }} [options]
- * @returns {{verdict: "ready" | "missing", interpreter: string | null, detail: string}}
+ * @returns {{verdict: "ready" | "missing", interpreter: string | null, detail: string,
+ *            evidence?: string[]}}
  */
 export function checkPythonReady(options = {}) {
   const {
@@ -51,6 +58,7 @@ export function checkPythonReady(options = {}) {
     platform = process.platform,
     resolve = resolvePython,
     which = whichCommand,
+    bareSpawn = bareSpawnDefault,
   } = options;
   const found = resolve({ env, platform });
   if (!found) {
@@ -60,6 +68,15 @@ export function checkPythonReady(options = {}) {
       detail:
         `PATH 上没有可用的 Python（试过 ${pythonCandidates(platform).join(" / ")}）` +
         "—— 主链路的出图用例会按「执行器起不来」失败，而报错不会指向这一行",
+      /* **两条链各自的结论**（ISSUE #1961）：`resolvePython`（手工扫 PATH × PATHEXT）
+       * 说「没有」时，问题常常不在「这台机真没有」，而在**两个探针看的不是同一个世界**
+       * —— 自证那侧起**裸名字**（Windows 交给 CreateProcess 按 PATH 解析），
+       * 而这一侧是本仓自己写的逐目录扫。两边的答案摆在一起，人一眼就分得出
+       * 「真没有」与「扫的那一侧漏了」。
+       *
+       * 这一步**只读不判**：它不改变 verdict，只让失败时的话能从一句断言变成一份论据
+       * （`python-probe.mjs` 是同一件事的全量版，在流水线最便宜的位置跑）。 */
+      evidence: pythonEvidence({ env, platform, bareSpawn }),
     };
   }
   /* 再问一次 PATH 要**绝对路径**：`resolvePython` 已经给了一个，但那一个是按「探针
@@ -94,17 +111,19 @@ export function checkPythonReady(options = {}) {
  * 与判决同源，改一处就够（§12.12）。出口写成一条**能直接跑**的命令 ——
  * `scripts/ci-toolchain-selfcheck.mjs` 会按平台挑安装器（Windows 是 `winget`）。
  *
- * @param {{detail: string}} preflight
+ * @param {{detail: string, evidence?: string[]}} preflight
  * @returns {string}
  */
 export function describePythonMissing(preflight) {
   return [
     `[e2e] ✗ ${preflight.detail}`,
+    /* 判决同源的**论据**（`checkPythonReady` 算好的）排在最前面：缺件时这一行通常是
+     * 排障的全部线索，而「真没有」与「扫的那一侧漏了」在断言里同形。 */
+    ...(preflight.evidence ?? []),
     "[e2e]   补它：node scripts/ci-toolchain-selfcheck.mjs   （缺 Python 的机器上跑一次，缺什么它自己装）",
-    "[e2e]   排障：node scripts/python-probe.mjs   （打印**两条链各自**的结论 —— 本行判的是",
+    "[e2e]   全量读数：node scripts/python-probe.mjs   （两条链逐候选并列；本行判的是",
     "[e2e]         `resolvePython` 手工扫 PATH 那条，而「工具链自证 / Python 可用性」走的是",
-    "[e2e]         起裸名字那条；两边不一致时它就是定位那件事的出口，流水线里挂在",
-    "[e2e]         「Python 探针读数」那一步）",
+    "[e2e]         起裸名字那条）",
     "[e2e]   跑下去的下场：两条 @critical 主链路用例各报一遍「执行器收口失败」，",
     "[e2e]   而真因是解释器不在 —— 一件事被报成了两条功能红。",
   ].join("\n");
@@ -146,4 +165,53 @@ export function decodePythonPreflight(raw) {
   } catch {
     return null;
   }
+}
+
+/**
+ * 「拿裸名字真起一次」——与 `ci-toolchain-python.mjs` 的 `findPython` 同一条语义
+ * （Windows 上交给 CreateProcess 解析名字），但**只回答起没起得来**、不选候选。
+ *
+ * 它是「第二条链」（`resolvePython` 手工扫）的对照组：一边说「没有」而这边说「有」，
+ * 就是「两个探针看的不是同一个世界」的现场（ISSUE #1961）。
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @returns {string | null} 起得来返回 `null`，否则返回错误码
+ */
+function bareSpawnDefault(command, args) {
+  const r = spawnSync(command, args, { stdio: "ignore", windowsHide: true });
+  /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
+  const code = /** @type {NodeJS.ErrnoException | null | undefined} */ (r.error)
+    ?.code;
+  return code ?? null;
+}
+
+/**
+ * 逐候选把**两条链**的结论各打一行（只读，供失败话术用）。
+ *
+ * @param {{env?: Record<string, string | undefined>, platform?: NodeJS.Platform,
+ *          bareSpawn?: (command: string, args: string[]) => string | null}} input
+ * @returns {string[]}
+ */
+export function pythonEvidence({ env = process.env, platform = process.platform, bareSpawn = bareSpawnDefault } = {}) {
+  const lines = ["[e2e]   两条链的结论（排障用）："];
+  /* ① 裸名字那一链（`findPython` 的语义）。
+   *
+   * Windows 上 `process.env.PATH` 是**大小写不敏感的代理**，而 `{ ...process.env }`
+   * 出来的是普通对象 —— 键名按 OS 存的写法来（Windows 常存成 `Path`）。
+   * 于是「把 env 复制一份再传下去」会让 `env.PATH` 变成 `undefined`，逐目录扫于是
+   * 扫一个空 PATH。这一行就是那一格的读数：**PATH 条目几条 / 见到的键是什么写法**。 */
+  const pathEntries = String(env.PATH ?? "").split(platform === "win32" ? ";" : ":").filter(Boolean);
+  lines.push(
+    `[e2e]     env 里的 PATH：${pathEntries.length} 条` +
+      (pathEntries.length === 0
+        ? `（键写成 ${Object.keys(env).filter((k) => k.toLowerCase() === "path").join(" / ") || "一个都没有"}）`
+        : ""),
+  );
+  for (const name of pythonCandidates(platform)) {
+    const args = pythonProbeArgs(name, ["--version"]);
+    const bare = bareSpawn(name, args) === null ? "裸名字起得来" : "裸名字起不来";
+    lines.push(`[e2e]     ${name} ${args.join(" ")}：${bare}`);
+  }
+  return lines;
 }
