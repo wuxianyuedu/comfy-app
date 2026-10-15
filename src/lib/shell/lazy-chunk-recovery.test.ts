@@ -32,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   window.localStorage.clear();
+  vi.useRealTimers();
   vi.unstubAllEnvs();
 });
 
@@ -84,15 +85,33 @@ describe("reloadOnceForChunkError — 命中时整页刷新一次", () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it("没有第二次：刷过之后再来一条分块失败不再刷（防刷新死循环）", () => {
+  it("同一轮里没有第二次：刷过之后再来一条分块失败不再刷（防刷新死循环）", () => {
+    vi.useFakeTimers();
     const reload = stubReload();
     expect(
       reloadOnceForChunkError(new Error("Failed to load chunk /a.js")),
     ).toBe(true);
+    vi.advanceTimersByTime(59_000);
     expect(
       reloadOnceForChunkError(new Error("Failed to load chunk /b.js")),
     ).toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  /* 这条钉的是「自愈不是一次性的」：标记只写不清时，第一次故障之后就永久
+   * 失去自愈能力 —— 而 dev server 每重建一次都会换一批分块，那是**新的一轮**
+   * 故障，该给的机会必须还给（现场症状就是「点开某一屏整屏崩、怎么点都不恢复」）。 */
+  it("冷却窗口之外是新的一轮：隔得更久再撞一次仍会刷", () => {
+    vi.useFakeTimers();
+    const reload = stubReload();
+    expect(
+      reloadOnceForChunkError(new Error("Failed to load chunk /a.js")),
+    ).toBe(true);
+    vi.advanceTimersByTime(61_000);
+    expect(
+      reloadOnceForChunkError(new Error("Failed to load chunk /c.js")),
+    ).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(2);
   });
 
   it("非分块失败不刷（返回 false，错误照旧抛给 error boundary）", () => {
