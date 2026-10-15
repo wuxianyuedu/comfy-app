@@ -132,10 +132,25 @@ function probeCommand(cmd, args) {
  * @returns {{state: "answered" | "timeout" | "missing" | "malformed", python: string | null, problems: string[]}}
  */
 function measurePythonOnce(pyChecker) {
-  const probed = ["python3", "python"].map((c) => [
-    c,
-    probeCommand(c, ["--version"]),
-  ]);
+  /* 候选**按平台给顺序**，与 `e2e/support/fake-comfyui-executor-env.mjs` 的
+   * `pythonCandidates()` 同一口径（POSIX 主 `python3`；Windows 上 `python` 是
+   * 多数安装器的落点、`py` 是官方启动器 —— 只有它时裸 `python3`/`python` 探不到）。
+   * **`py` 必须带 `-3`**：裸 `py` 与 `py -0` 都是「列出已装版本」并退非零，
+   * 不带 `-3` 会被归进 `present-but-nonzero` ⇒ `malformed`，而机器上其实有个能跑的
+   * Python 3 —— 那一格此前正是「有一条 Python 却被判成需要换探测方式」的来源。
+   * 只有在宿主没有 `python3` / `python` 时 `py` 才有机会成为第一个答得上来的候选。 */
+  const candidates =
+    process.platform === "win32"
+      ? [
+          ["python3", ["--version"]],
+          ["python", ["--version"]],
+          ["py", ["-3", "--version"]],
+        ]
+      : [
+          ["python3", ["--version"]],
+          ["python", ["--version"]],
+        ];
+  const probed = candidates.map(([c, args]) => [c, probeCommand(c, args)]);
   const timedOut = probed.filter(([, s]) => s === "timeout").map(([c]) => c);
   const malformed = probed
     .filter(([, s]) => s === "present-but-nonzero")
@@ -191,7 +206,8 @@ function decidePythonVerdict(first, second) {
     return {
       problems: [],
       unverified: [
-        "这台机器探测不到 python3 / python（`--version` 非零退出，**不是**超时）—— " +
+        "这台机器探测不到 python3 / python（Windows 上还包括 `py -3`）" +
+          "（`--version` 非零退出，**不是**超时）—— " +
           "Python 侧本轮**没有取证**，四侧比对实际只答了三侧。在装了 Python 的机器上这一侧会重新参与。",
       ],
     };

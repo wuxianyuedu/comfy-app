@@ -94,7 +94,40 @@
       # 缺了它，那些判据会以「这台机器探测不到 Python」的名义**退出比对**（
       # check-app-port-vectors.cjs 的 missing 档），形态是**静默少判**而不是报错 ——
       # 所以在这里正面回答，让它当场红，而不是等 vitest 跑完四十分钟才给几条看不懂的失败。
-      python -V
+      #
+      # **探测面必须与门禁同口径**（#1959 首跑现场）：门禁那边探的是
+      # `["python3", "python"]`（scripts/check-app-port-vectors.cjs 的 `probed`），
+      # 而 PowerShell 里裸写一行 `python -V` 只在宿主机恰好有这个裸名时才过 ——
+      # 于是这台机器上它不是「验了门禁要的东西」，而是「验了另一个东西」。
+      # 三者依次试、第一个答得上的就算过（与门禁的「找到第一个能跑的」同义）。
+      $pyOk = $false
+      foreach ($cand in @("python3", "python", "py")) {
+        if (-not (Get-Command $cand -ErrorAction SilentlyContinue)) { continue }
+        # 真起一次进程取版本 —— `python`（Microsoft Store 占位别名）会在这一步退出
+        # 非零，那正是要判的形态（探测到命令、但 `--version` 不按假设退 0）。
+        # `2>&1` 与 `try` 都要：`$ErrorActionPreference = "Stop"` 会把原生命令的
+        # 非零退出不当地抬成终止错误，这里必须按「退出码」判而不是按异常判。
+        try {
+          $out = & $cand --version 2>&1
+          $code = $LASTEXITCODE
+        } catch { $out = $_.Exception.Message; $code = 1 }
+        if ($code -eq 0) { Write-Host "$cand : $out"; $pyOk = $true; break }
+        Write-Host "$cand 在盘上但 --version 退 $code（不是可用解释器）" -ForegroundColor Yellow
+      }
+      if (-not $pyOk) {
+        # 失败即非零退出 —— 这一步的全部意义就是「会红」，见文件头第 1 条。
+        # 但红的同时必须给出**下一动作**：这台机器上「装了 Python 却没进 PATH」
+        # 与「压根没装」在 PowerShell 的 CommandNotFoundException 里长得一模一样，
+        # 而两者的处置不同（把解释器加进 PATH vs 去装一个）。
+        Write-Host "!! 宿主机上没有可用的 Python（试过 python3 / python / py）" -ForegroundColor Red
+        Write-Host "   门禁链需要它：check-app-port-vectors.cjs 要跑 .py 做四语言比对、"
+        Write-Host "   几处用例用它验 zip 包（python3 的 zipfile 是最严格的解压端）。"
+        Write-Host "   处置：在这台自托管节点上装 Python 3，并确认它在 PATH 上 ——"
+        Write-Host "   用 python.org 安装包时勾选「Add python.exe to PATH」；"
+        Write-Host "   只有 py 启动器（Store 版 / 无 PATH）时同样算通过，本步会认它。"
+        Write-Host "   清单与背景见 docs/standards/13-提交与-code-review.md §13.5.3.5。"
+        exit 1
+      }
 
   # ── 安装 ──
   # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。

@@ -45,3 +45,22 @@
   而缺了它的表现是**静默少判**而不是报错 —— `check-app-port-vectors.cjs` 会把这一侧
   归进 `missing` 档、「以这台机器探测不到 Python 的名义」退出比对。放在第一步正面回答，
   代价是几秒，换来的是不必在 vitest 跑完四十分钟之后从几条看不懂的失败里反推。
+
+- **`.cnb.yml` 的「工具链自证」探错了东西**（第二轮：首跑红的另一半）：它对 Python 写的是裸的一行 `python -V`，
+  而门禁那边探的是 `["python3", "python"]`（`check-app-port-vectors.cjs`）—— 这台自托管
+  节点上两个裸名都没有，于是第 8 秒就在这一步红掉，**排在后面的 27 个 stage 一个都没跑**
+  （读数：`工具链自证 error [8.3s]`，其余全 `skipped`）。它本来要回答的是「门禁要的那个
+  解释器在不在」，而写成一个裸名之后，红与「压根没装」逐字同形、且红的位置指向了一个
+  与门禁无关的形态。现在**探测面与门禁同口径**（依次试 `python3` / `python` / `py`，
+  Windows 上 `py` 带 `-3` —— 裸 `py` 是「列出已装版本」并退非零），并让失败分支
+  **打印下一动作**（PowerShell 的 `CommandNotFoundException` 分不出「装了但没进 PATH」
+  与「没装」，而处置不同）。
+- **`check-app-port-vectors.cjs` 的 Python 候选补上 Windows 的 `py` 启动器**：
+  原来只探 `python3` / `python`，宿主只有官方 `py` 启动器时这一侧落进 `missing` 档、
+  「以这台机器探测不到 Python 的名义」退出四向比对 —— 与 `e2e/support/fake-comfyui-executor-env.mjs`
+  的 `pythonCandidates()`（`win32: ["python", "py", "python3"]`）口径不一致。
+- **`tests/helpers/gate-repo.ts` 的 `git()` 不再吞掉 git 自己的话**：它此前是
+  `stdio: "ignore"`，于是「宿主没配 git 身份」「git 不在 PATH 上」这类**环境**故障在日志里
+  只剩一句 vitest 的「命令失败」，读起来像夹具坏了。首跑那 7 条超时/失败里最像「宿主没配
+  git 身份」的那一族因此**拿不到那句报错**，当时只能登记成已知开口。现在把 `stderr`
+  拼进抛出的消息里 —— 不需要先有一台能复现的机器，下一台机器上它自己会把话说出来。

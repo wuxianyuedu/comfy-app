@@ -492,13 +492,28 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | **git**              | 自托管机的基本依赖（官方文档原话「必装」）                                                                                 | 工具链自证           |
 | **Node**（在 `engines.node` 范围内） | 什么都跑不起来                                                                                              | 工具链自证           |
 | **pnpm**             | 同上（`corepack` 会在缺它时自己去下载 `packageManager` 指的那版，但那是每次构建的额外网络往返）                            | 工具链自证           |
-| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT` | **工具链自证（`python -V`）** |
-| git 的可提交身份     | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败 —— 而它 `stdio: "ignore"`，日志里只剩「命令失败」 | **无。** 见下         |
+| **Python**           | `check-app-port-vectors.cjs` 把这一侧归进 `missing` 档、**退出四侧比对**；`log-run-layout` / `api/logs/diagnostics` 直接 `spawnSync python3 ENOENT` | **工具链自证（同口径探 `python3` / `python` / `py`）** |
+| git 的可提交身份     | `tests/helpers/gate-repo.ts` 那一族（`base-check` / `merged-side-loss` / `deps-freshness`）里夹具的 `git commit` 失败 | **夹具自己说话**，见下 |
 
-> **最后一行值得单独说**：夹具那个 `git()` 用 `stdio: "ignore"` 把真正的 git 报错
-> 吞了 —— 那正是本仓反模式表里「报错指不到夹具」的形态，只不过这次它藏的是**宿主**。
-> 它没有被「修」是因为当时拿不到那句报错（复现要先有一台能复现的 Windows 机）；
-> 这一格留作**已知开口**，而不是「已经处理好了」。
+> **最后一行后来收口了**：夹具那个 `git()` 原先用 `stdio: "ignore"` 把真正的 git
+> 报错吞了 —— 那正是本仓反模式表里「报错指不到夹具」的形态，只不过它藏的常常是
+> **宿主**。当时留作已知开口是因为「拿不到那句报错」（复现要先有一台能复现的
+> Windows 机）。现在改成把 `stderr` 拼进抛出的消息里 —— **不需要先有那台机器**：
+> 下一台机器上它自己会把那句话打出来，这一格才第一次可诊断。
+
+> **「工具链自证」这一条有一段自己的教训**（#1959 第二轮）。它最初对 Python 写的是
+> 裸的一行 `python -V`，而门禁那边探的是 `["python3", "python"]` —— 于是这一步在
+> 「宿主机只有 `python3`」的机器上**红得与「压根没装」逐字同形**，而它本来要回答的
+> 恰恰是「门禁要的那个解释器在不在」。两处修正同批：
+>
+> - **探测面与门禁同口径**：依次试 `python3` / `python` / `py`，哪个答得上就过。
+>   **两处同批改的**：`check-app-port-vectors.cjs` 原先也只探 `["python3", "python"]`，
+>   宿主只有官方 `py` 启动器时那一侧同样落进 `missing` 档、静默少判 —— 现在它的候选
+>   与 `e2e/support/fake-comfyui-executor-env.mjs` 的 `pythonCandidates()` 对齐
+>   （Windows 上加 `py -3`；**必须带 `-3`**，裸 `py` 是「列出已装版本」并退非零）；
+> - **红的时候必须给下一动作**：PowerShell 的 `CommandNotFoundException` 分不出
+>   「装了 Python 但没进 PATH」与「压根没装」，而处置不同（改 PATH vs 去装一个）。
+>   失败分支现在把这两条处置直接打印出来，并指向本节。
 
 **另一类不是宿主的缺口**：有几条用例本身只在 POSIX 上成立（写 `#!/bin/sh` 再 `chmod`），
 在 Linux 平台池上恒绿所以从没暴露。这类**是仓库的 bug**，处置是补 `skipIf` 并登记进

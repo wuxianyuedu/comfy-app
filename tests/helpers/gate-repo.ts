@@ -297,12 +297,28 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     exists: (rel) => existsSync(abs(rel)),
     git: (...args) => {
       /* 显式传 `gitSandboxEnv()`：共享夹具要自带隔离，不假定调用它之前有人做过
-       * 全局清理（`tests/setup.ts` 那一档覆盖用例，这里覆盖夹具的直接使用者）。 */
-      execFileSync("git", args, {
-        cwd: root,
-        stdio: "ignore",
-        env: gitSandboxEnv(),
-      });
+       * 全局清理（`tests/setup.ts` 那一档覆盖用例，这里覆盖夹具的直接使用者）。
+       *
+       * **失败时必须带上 git 自己的那句话**：此前这里是 `stdio: "ignore"`，
+       * 于是「宿主没配 git 身份」「git 不在 PATH 上」这类**环境**故障在日志里
+       * 只剩一句 vitest 的「命令失败」，读起来像夹具坏了 —— 正是本仓反模式表里
+       * 「报错指不到夹具」的形态，只不过它藏的常常是**宿主机**（#1959 自托管节点
+       * 首跑时，7 条超时/失败里有 5 条长得就是这样，而当时拿不到那句话，
+       * 只能留作已知开口）。现在把 stderr 拼进抛出的消息里，让它当场可读。 */
+      try {
+        execFileSync("git", args, {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          env: gitSandboxEnv(),
+        });
+      } catch (error) {
+        const e = error as { stderr?: string; stdout?: string; status?: number };
+        throw new Error(
+          `夹具里 git ${args.join(" ")} 失败（cwd=${root}，退出码 ${e.status ?? "?"}）：` +
+            `${(e.stderr ?? e.stdout ?? "").trim() || "git 没有输出"}`,
+        );
+      }
     },
     commit: (message) => {
       /* `-c` 就地给身份与禁签名：宿主可能全局开了 `commit.gpgsign`，
