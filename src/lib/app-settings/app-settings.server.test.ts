@@ -76,9 +76,18 @@ describe("getSettingsSync 的跨进程失效", () => {
     expect(first.comfyCliPython).toBe("A");
     expect(getSettingsSync()).toBe(first);
 
-    writeSettings({ comfyCliPython: "B" });
+    /* ⚠️ 第二次写盘的**长度必须与第一次不同**（`"A"` → `"BB"`，不是 `"B"`）。
+     *
+     * 指纹是 `mtimeMs:size` 二元组，而两次 `writeFileSync` 连着跑时**可能落在同一个
+     * mtime 刻度上** —— 那时若 size 也一样，指纹就真的没变，缓存**正确地**返回旧值，
+     * 而这行读取被读成「缓存没失效」。
+     *
+     * 实测：平台侧 `cnb-60n-1k50qev62` 上这条红（`expected 'A' to be 'B'`），
+     * 而本机（ext4，纳秒 mtime）恒绿 —— 判据把「这台宿主的时钟/文件系统刻度」
+     * 写成了恒真性质。长度不同则 size 必然不同，与刻度无关。 */
+    writeSettings({ comfyCliPython: "BB" });
     const second = getSettingsSync();
-    expect(second.comfyCliPython).toBe("B");
+    expect(second.comfyCliPython).toBe("BB");
     expect(second).not.toBe(first);
   });
 
