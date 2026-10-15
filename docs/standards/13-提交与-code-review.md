@@ -215,6 +215,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
 ✅ node scripts/check-test-sleep.cjs        # 测试层裸 sleep 硬闸：`await new Promise(r => setTimeout(r, N))` 一处即阻断（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
+✅ node scripts/check-test-single-clock.cjs # 测试层「一个用例一把时钟」硬闸：同一用例体内先真实时钟等待（`expect.poll` / `await waitFor`）再 `vi.useFakeTimers()`，或 `expect.poll` 落在假时钟窗口内 —— 命中即阻断（**硬闸**：两条规则实测存量 0，无基线、无 `--update`；不判挂载位置、不判跨 `describe` 的窗口归属；见 11 §11.14）
 ✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each`（**硬闸**：站点须为 0）；`it/test/describe.each` 一视同仁（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
