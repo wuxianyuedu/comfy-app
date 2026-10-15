@@ -55,7 +55,22 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           手写只给了「读屏知道这是个单选组」，**方向键契约没人给**（本批之前
           这两处正是「能聚焦、Tab 进得来、但组内方向键没反应」）。基元同时
           负责 roving tabindex（组内只有选中项 `tabIndex=0`）与
-          ArrowUp/Down/Left/Right 的「移动 + 选中」。 */}
+          ArrowUp/Down/Left/Right 的「移动 + 选中」。
+
+          **选中档必须自带与常态同值的 `data-checked:hover:`**（规范 16
+          §16.2.4.75）。这三组（主题卡 + 圆角 + 标题字阶）底部都是
+          `Button variant="ghost"`，而 `ghost` 自带 `hover:bg-muted
+          hover:text-foreground` —— 它是**无条件的**。选中档此前只钉了
+          `data-checked:bg-primary-soft` / `data-checked:text-*`，**没钉悬停值**，
+          于是划过**已选中**的那一枚时被 `hover:` 改写：「选中」在悬停期间变回
+          「未选中」。这不是特异性问题里的偶然 —— `data-checked:*` 编译出的选择器
+          是 `.data-checked\:bg-primary-soft:where([data-state=checked])`，
+          `:where()` **零特异性** ⇒ `(0,1,0)`，而 `hover:bg-muted` 是 `(0,2,0)`，
+          悬停档稳赢。`ui/select-chip` 当初就是为这件事把
+          `aria-checked:hover:bg-primary-soft` 写死的。
+          修法**就地钉**而不是换 `SelectChip`：这三组的单选语义与方向键契约由
+          `RadioGroup` 基元给，换成 `SelectChip`（自有 `role="radio"` + 手搓
+          roving）会把这条契约丢掉。 */}
       <RadioGroup
         aria-label="主题外观"
         value={c.theme}
@@ -92,7 +107,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
             render={
               <Button
                 variant="ghost"
-                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink data-unchecked:border-border aspect-auto! size-auto! flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors **:data-[slot=radio-group-indicator]:hidden"
+                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-checked:hover:border-primary data-checked:hover:bg-primary-soft data-checked:hover:text-ink data-unchecked:border-border data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors **:data-[slot=radio-group-indicator]:hidden"
               />
             }
           >
@@ -167,7 +182,7 @@ function StepRow({
                 variant="ghost"
                 size="sm"
                 /* 同主题卡：小圆点选中指示器在药丸形态只会叠在文字上，隐藏。 */
-                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-primary data-unchecked:text-muted-foreground data-unchecked:border-border data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! rounded-lg border px-3 py-1.5 text-xs **:data-[slot=radio-group-indicator]:hidden"
+                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-primary data-checked:hover:border-primary data-checked:hover:bg-primary-soft data-checked:hover:text-primary data-unchecked:border-border data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! rounded-lg border px-3 py-1.5 text-xs **:data-[slot=radio-group-indicator]:hidden"
               />
             }
           >

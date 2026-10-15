@@ -468,14 +468,25 @@ describe("useSettingsPage", () => {
       .mockResolvedValueOnce({ up: false })
       .mockResolvedValueOnce({ up: false })
       .mockResolvedValue({ up: true, models: [] });
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.ollamaStatus).toBe("down");
-    expect(result.current.ollamaStarting).toBe(false);
-
+    /* **一个用例一把时钟**：换时钟必须在挂载之前。旧形状是「先用真实时钟
+     * `expect.poll` 等首探落定 → 再 `useFakeTimers()`」，那中间挂载链（查询 + 首探 +
+     * react-query 的调度）还挂在真实时钟上，要多久由机器给多少墙钟 —— 而 `testTimeout` 有上界：
+     * 一旦越过，被抛下的 continuation 落进下一条用例的假时钟窗口，症状就成对出现
+     * （先超时红，再 `Timer APIs are not mocked`）。
+     * 口径与实测读数见规范 11 §11.14「一个用例一把时钟，而且要在挂载之前换」。 */
     vi.useFakeTimers();
     try {
+      const { result } = renderHook(() => useSettingsPage(), {
+        wrapper: makeWrapper(),
+      });
+      /* 挂载链在假时钟上跑到落定：首探排在 `setTimeout(…, 0)`，推进 1s 一定跨过它，
+       * 而这一秒是**虚拟的**（不占墙钟预算）。 */
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      expect(result.current.ollamaStatus).toBe("down");
+      expect(result.current.ollamaStarting).toBe(false);
+
       let starting: Promise<void> = Promise.resolve();
       await act(async () => {
         starting = result.current.startOllama();
@@ -497,13 +508,17 @@ describe("useSettingsPage", () => {
     /* 启动后前几轮探测都 down，模拟 ollama 冷启动窗口：轮询里探测失败
      * 不得把状态行打回「未运行」，也不得发「检测中」抢屏幕。 */
     probeMock.mockResolvedValue({ up: false });
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.ollamaStatus).toBe("down");
-
+    /* 同上一条：整条链只在假时钟上跑（挂载前就换时钟）。 */
     vi.useFakeTimers();
     try {
+      const { result } = renderHook(() => useSettingsPage(), {
+        wrapper: makeWrapper(),
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      expect(result.current.ollamaStatus).toBe("down");
+
       let starting: Promise<void> = Promise.resolve();
       await act(async () => {
         starting = result.current.startOllama();

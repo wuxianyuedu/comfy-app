@@ -11,9 +11,9 @@ import { startPollTimer } from "~/lib/poll-timer";
  * 为什么收口：全库有 **9 处**各自 `setInterval(onDone, N)` + 在清理函数里
  * `clearInterval`，写法分成几族、缺陷也各不相同：
  *
- *  - **不立刻跑一次**（只等第一个间隔到点）：`use-training-studio`、
- *    `VideoQueueModal`、`use-history-panel`、`use-runtime-log-source` ——
- *    用户要等一个完整间隔才看到内容（挂载后先空着）；
+ *  - **不立刻跑一次**（只等第一个间隔到点）：`VideoQueueModal`、
+ *    `use-history-panel`、`use-runtime-log-source` —— 用户要等一个完整
+ *    间隔才看到内容（挂载后先空着）；
  *  - **在后台标签页里空转**：浏览器把后台定时器降到 ≥1min 一次，但请求仍然
  *    发出，白白占着服务端；只有 `use-comfy-stats` 与 `use-update-check`
  *    接了 `visibilitychange` 暂停 —— 而**同一段「前后台开关」被逐字抄了两份**；

@@ -36,7 +36,7 @@ const LIB_SCANNED_RULES = new Set([
   /* 本批三条（规范 16 §16.2.4.51 ~ §16.2.4.53）：MIME 表 / 宽松对象视图 /
    * 文件名安全化 —— 三条的落点**横跨两侧**（MIME 表在 `lib/workshop` 与
    * 两条 REST 路由、宽松视图在 `lib/comfyui` 与 `lib/workshop`、文件名
-   * 安全化在 `lib/comfyui/trainer` 与 `server/workshop`）。 */
+   * 安全化在 `lib/safe-name` 与 `server/workshop`）。 */
   "P47",
   "P48",
   "P49",
@@ -142,8 +142,8 @@ const EXEMPT_DIRS = [
  * 但这几条**在逻辑层同样成立**，而且收口前的存量恰恰大部分在 `hooks/` 里
  * （P27 收口前 21 处里 19 处在 hooks）：
 
- *   · **P27**（异步动作的结果接到反馈通道）：设置页、工作流库、模型标签、
- *     训练工作室的逻辑层各自写一遍「置忙 → 调用 → catch → report」——
+ *   · **P27**（异步动作的结果接到反馈通道）：设置页、工作流库、模型标签
+ *     的逻辑层各自写一遍「置忙 → 调用 → catch → report」——
  *     它们**本来就不在视图里**，不扫 hooks 等于对这条账视而不见；
  *   · **P29**（手拼查询串）：网络客户端全在 `lib/**`，但域内的取数也常在
  *     `hooks/` 里拼串；

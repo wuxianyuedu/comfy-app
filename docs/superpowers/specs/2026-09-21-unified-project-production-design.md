@@ -40,7 +40,7 @@
 - 不迁移存量数据（当前基本无数据，见决策 D2）。
 - 不改生成链路本身（`generate.generate` + task + SSE 与工作流库口径不动）。
 - Phase 0 只交付本设计 + 模型草案，不落地代码；代码在 Phase 1–5 分 PR 推进。
-- 不引入新的顶层 `src/hooks` / 杂物目录（遵循 §12.5、§18.14）。
+- 不引入新的顶层 `src/hooks` / 杂物目录（遵循 §12.5、§18.12）。
 
 ## 4. 决策（ADR）
 
@@ -70,7 +70,7 @@
 
 ## 5. 统一生产模型（草案）
 
-> 落地位置拟定为 `src/lib/production/`（新子域）。**实现时按 §18.14 同批登记 `check-file-structure.cjs` 的 `DOMAINS`/`DOMAIN_EXEMPT`（R14）并按 §18.6 在 `vitest.config.ts` 设实测门槛**；纯函数、无 React（§18.2）。类型从工坊 `src/lib/workshop/types.ts` 提升为画布/工坊/成片共用，工坊侧改为 re-export 以免两份漂移（§12.12）。
+> 落地位置拟定为 `src/lib/production/`（新子域）。**实现时按 §18.12 同批登记 `check-file-structure.cjs` 的 `DOMAINS`/`DOMAIN_EXEMPT`（R14）并按 §18.6 在 `vitest.config.ts` 设实测门槛**；纯函数、无 React（§18.2）。类型从工坊 `src/lib/workshop/types.ts` 提升为画布/工坊/成片共用，工坊侧改为 re-export 以免两份漂移（§12.12）。
 
 ```ts
 // src/lib/production/types.ts（拟定）
@@ -163,7 +163,7 @@ export interface ProductionProgress {
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- | ---------------- |
 | **P1 启动先建项目**    | 工作区无当前项目时先走"新建/选择项目"闸门；统一"新建项目"同时初始化画布+工坊所需                                                                  | `app/workspace/page.tsx`、`lib/project-canvas/canvas-store.ts`、`use-workshop-pipeline.ts` 初始化 | 是          | 低               |
 | **P2 统一项目实体**    | 工坊面向 `proj_*` 读写；`workshopDraft` 键从 `wsp_*` 改 `proj_*`；归属列对齐（userId NOT NULL）                                                   | `use-workshop-pipeline.ts`、`draft-sync-*`、`workshopDraft` schema                                | 是          | 中（键规则变更） |
-| **P3 shot 级双向同步** | 落地 `lib/production/`（types + sync reducer，按 §18.14 登记子域 + §18.6 门槛）；画布节点 ↔ Shot 物化/回写                                        | 新增 `lib/production/`、`canvas-types.ts` 加 `shotId`、`ProjectCanvas` 投影、工坊阶段视图         | 可拆 2 PR   | 高（核心）       |
+| **P3 shot 级双向同步** | 落地 `lib/production/`（types + sync reducer，按 §18.12 登记子域 + §18.6 门槛）；画布节点 ↔ Shot 物化/回写                                        | 新增 `lib/production/`、`canvas-types.ts` 加 `shotId`、`ProjectCanvas` 投影、工坊阶段视图         | 可拆 2 PR   | 高（核心）       |
 | **P4 完成状态统一**    | 三处状态源收敛为 `ProductionProgress` 持久化；两侧一致展示                                                                                        | `lib/production/`、`project` 行、工坊 `stage-config` 派生、画布顶栏                               | 是          | 中               |
 | **P5 AI 一键出片接入** | `server/film/orchestrator.ts` 改读统一项目 `Shot[]`；`filmProject.projectId` 关联；补 agent 视频/合成工具（`lib/agent/tools.ts`）；两侧实时看进度 | `server/film/`、`lib/agent/`、工坊/画布进度展示                                                   | 是          | 中               |
 | **P6 项目主页**        | 进入项目后落到**项目主页**（项目页签第一项）：六个阶段的完成状态 + 素材计数 + `RunControlBar`；阶段完成由**内容**派生（不靠阶段游标，回退不误报）；画布去掉 `RunControlBar` 浮层 | 新增 `lib/production/project-home.ts`、`components/studio/project-home/`、`NavItems.tsx`、`workspace/page.tsx` | 是 | 低 |
@@ -172,7 +172,7 @@ export interface ProductionProgress {
 
 ## 9. 风险与约束
 
-- **lib 子域纪律**：新增 `src/lib/production/**` 必须同批登记 `DOMAINS`/`DOMAIN_EXEMPT`（R14）并按实测设 `vitest.config.ts` 门槛（§18.6/§18.14），否则门槛挂在判据不认识的目录上。
+- **lib 子域纪律**：新增 `src/lib/production/**` 必须同批登记 `DOMAINS`/`DOMAIN_EXEMPT`（R14）并按实测设 `vitest.config.ts` 门槛（§18.6/§18.12），否则门槛挂在判据不认识的目录上。
 - **视图层 IO**：同步/取数一律进 `hooks/` 与 `lib/production/`，视图不新增 `fetch`/tRPC（§17、硬规则 10）。
 - **类型单一来源**：`Shot`/`Scene`/`Character` 提升到 `lib/production` 后，工坊 `lib/workshop/types.ts` 改为 re-export，避免孪生（§12.12）。
 - **task.projectId 无 FK**：成片/工坊任务此前不打 projectId；统一后生成打点应一致带 `proj_*`（`use-generate.ts` 已如此，工坊侧需补齐）。

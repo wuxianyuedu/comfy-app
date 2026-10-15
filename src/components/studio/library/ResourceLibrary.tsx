@@ -18,13 +18,14 @@
 // 属于替用户做决定。条目仍带拖拽源（`mediaDragSourceProps`），需要时拖过去即可。
 
 import { useState } from "react";
-import { FolderOpen, LayoutGrid, List, Plus, Search, X } from "lucide-react";
+import { FolderOpen, Plus, Search, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EmptyState } from "~/components/ui/empty-state";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
+import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { PageHeader } from "~/components/ui/page-header";
@@ -92,68 +93,49 @@ export function ResourceLibrary() {
 
       {/* ── 作用域档 + 搜索 ── */}
       <div className="border-border mb-5 flex flex-wrap items-center gap-3 border-b pb-3">
-        {/* 作用域档走 `ToggleGroup`（P77）：2–7 项的「哪一项选中」由基元自己
-              打 `aria-pressed` / `data-state`，视图不再手写一份 toggle 契约。
-              每档的说明走 `<Hint>`（P82：原生 `title=` 读屏器支持不一致、
-              样式也脱离主题 token）。 */}
-        <ToggleGroup
-          multiple={false}
-          value={[library.scope]}
-          onValueChange={(values) => {
-            const next = values[0];
-            if (next === "project" || next === "cross") c.setScope(next);
+        {/* 作用域档走 `ui/tabs` 的 `line` 档（规范 16 §16.2.4.75）——
+            与 `project-canvas/MaterialLibraryPanel`、`HistoryPanel` 那两处
+            **逐字同形**，是同一族「下划线页签」的第五处。
+            此前是手搓的 `ToggleGroup` + `after:` 下划线：**未选中档不写下划线、
+            靠 `after:bottom-[-13px]` 硬凑对齐**，于是两枚不同高、切来切去基线
+            上下跳；语义也错了半格（`aria-pressed` 是「这开关开着吗」，可这一排
+            只能选一个）。现在由 `data-active` 一处驱动（字色 + 下划线两层），
+            两枚同高同基线。 */}
+        <Tabs
+          value={library.scope}
+          onValueChange={(value: unknown) => {
+            /* 基元的 `onValueChange` 出参是 `any`：收窄放在这里，
+               别拿 `as MaterialScope` 把判据抹掉（§16.2.4.68 的同一取向）。 */
+            if (value === "project" || value === "cross") c.setScope(value);
           }}
-          aria-label="素材作用域"
           className="gap-0"
         >
-          {SCOPES.map((scope) => (
-            <Hint key={scope.id} label={scope.hint} wrap>
-              <ToggleGroupItem
-                value={scope.id}
-                className="text-ink-muted hover:text-ink-soft data-pressed:text-ink-bright after:bg-primary relative h-auto gap-1.5 rounded-none px-0 pb-2.5 text-sm font-medium after:absolute after:inset-x-0 after:bottom-[-13px] after:h-0.5 after:opacity-0 after:transition-opacity after:content-[''] data-pressed:bg-transparent data-pressed:after:opacity-100"
-              >
-                {scope.label}
-                {library.scope === scope.id && c.totalCount > 0 ? (
-                  <span className="text-ink-fainter text-2xs tabular-nums">
-                    {c.totalCount}
-                  </span>
-                ) : null}
-              </ToggleGroupItem>
-            </Hint>
-          ))}
-        </ToggleGroup>
+          <TabsList variant="line" aria-label="素材作用域" className="gap-3">
+            {SCOPES.map((scope) => (
+              <Hint key={scope.id} label={scope.hint} wrap>
+                <TabsTrigger
+                  value={scope.id}
+                  className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
+                >
+                  {scope.label}
+                  {library.scope === scope.id && c.totalCount > 0 ? (
+                    <span className="text-ink-fainter text-2xs tabular-nums">
+                      {c.totalCount}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
+              </Hint>
+            ))}
+          </TabsList>
+        </Tabs>
 
-        {/* 显示密度：纯视觉偏好，与业务数据无关（与画布抽屉同一取舍）。 */}
-        <div className="bg-subtle ml-auto flex items-center gap-0.5 rounded-lg p-0.5">
-          <Hint label="网格视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("grid")}
-              className={`h-auto rounded-md p-1 ${
-                display === "grid"
-                  ? "bg-surface-2 text-ink-bright"
-                  : "text-ink-muted hover:text-ink-soft"
-              }`}
-            >
-              <LayoutGrid data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-          <Hint label="列表视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("list")}
-              className={`h-auto rounded-md p-1 ${
-                display === "list"
-                  ? "bg-surface-2 text-ink-bright"
-                  : "text-ink-muted hover:text-ink-soft"
-              }`}
-            >
-              <List data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-        </div>
+        {/* 显示密度：纯视觉偏好，与业务数据无关（与画布抽屉同一取舍）。
+            三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
+        <DisplayDensityToggle
+          value={display}
+          onChange={setDisplay}
+          className="ml-auto"
+        />
 
         <div className="border-border bg-subtle flex w-full items-center gap-2 rounded-lg border px-3 py-2 sm:w-72">
           <Search size={14} className="text-ink-muted shrink-0" />

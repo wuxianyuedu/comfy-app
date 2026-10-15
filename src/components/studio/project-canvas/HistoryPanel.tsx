@@ -3,8 +3,6 @@
 import {
   Download,
   Image as ImageIcon,
-  LayoutGrid,
-  List,
   Music,
   Plus,
   RefreshCw,
@@ -16,6 +14,9 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { Skeleton } from "~/components/ui/skeleton";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { SelectChip } from "~/components/ui/select-chip";
+import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { useHistoryPanel } from "./hooks/use-history-panel";
 import {
@@ -87,29 +88,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             <RefreshCw data-icon="inline-start" size={13} />
           </Button>
         </Hint>
-        {/* 显示密度切换 */}
-        <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
-          <Hint label="网格视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("grid")}
-              className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            >
-              <LayoutGrid data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-          <Hint label="列表视图" accessibleName>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setDisplay("list")}
-              className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            >
-              <List data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-        </div>
+        {/* 显示密度切换 —— 三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
+        <DisplayDensityToggle value={display} onChange={setDisplay} />
         <Hint label="关闭" accessibleName>
           <Button
             variant="ghost"
@@ -122,44 +102,62 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         </Hint>
       </div>
 
-      {/* ── 作用域切换（仅在有项目时出现）── */}
+      {/* ── 作用域切换（仅在有项目时出现）──
+          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
+          `border-b-2 border-accent`，**未选中档根本没有那条边框** —— 于是
+          未选中的那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是
+          「一排里选一个」的又一处手搓（与上面类型筛选、以及 `model/` 与
+          `studio/` 的两个 ModelLibrary 同源）。
+          改用 `ui/tabs` 的 `line` 档：它就是这一类「下划线页签」的全库实现，
+          选中态由 `data-active` 驱动（字色 / 下划线两层），两枚同高同基线。 */}
       {projectId && (
-        <div className="border-border-strong flex gap-4 border-b px-4 pt-2">
-          {[
-            { id: "project" as HistoryScope, label: "本项目" },
-            { id: "all" as HistoryScope, label: "全部" },
-          ].map((scopeItem) => (
-            <Button
-              key={scopeItem.id}
-              variant="ghost"
-              onClick={() => setScope(scopeItem.id)}
-              className={`h-auto rounded-none px-0 pb-2.5 text-sm font-medium hover:bg-transparent ${
-                scope === scopeItem.id
-                  ? "border-accent text-ink-bright border-b-2"
-                  : "text-ink-muted hover:text-ink-soft"
-              }`}
-            >
-              {scopeItem.label}
-            </Button>
-          ))}
-        </div>
+        <Tabs
+          value={scope}
+          onValueChange={(value) => setScope(value as HistoryScope)}
+          className="gap-0"
+        >
+          <TabsList
+            variant="line"
+            className="border-border-strong h-auto w-full justify-start gap-4 rounded-none border-b px-4 pt-2"
+          >
+            {[
+              { id: "project" as HistoryScope, label: "本项目" },
+              { id: "all" as HistoryScope, label: "全部" },
+            ].map((scopeItem) => (
+              <TabsTrigger
+                key={scopeItem.id}
+                value={scopeItem.id}
+                className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
+              >
+                {scopeItem.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       )}
 
-      {/* ── 类型筛选（pill）── */}
-      <div className="flex gap-1.5 px-4 py-3">
+      {/* ── 类型筛选（pill）──
+          此前是手搓的 `<Button variant="ghost">` + 选中分支：选中档只写了
+          `bg-surface-2 text-ink-bright ring-border-strong`，字重与悬停都没钉
+          —— 划过**已选中**的那一枚时，`ghost` 变体的 `hover:bg-muted` 会把它
+          改成「未选中」的样子（用户原话「悬浮和非悬浮一个紫一个白」那一族，
+          ISSUE #1423）。整排交给 `ui/select-chip`（「一排里选一个」的全库
+          唯一实现，规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，
+          且自带与常态同值的 `hover:`。语义也从 `aria-pressed` 回到
+          `radiogroup` + `radio`（这一排本来就只能选一个）。 */}
+      <div
+        role="radiogroup"
+        aria-label="按类型筛选生成记录"
+        className="flex gap-1.5 px-4 py-3"
+      >
         {FILTER_TABS.map((filterTab) => (
-          <Button
+          <SelectChip
             key={filterTab.id}
-            variant="ghost"
+            selected={filter === filterTab.id}
             onClick={() => setFilter(filterTab.id)}
-            className={`h-auto rounded-full px-3 py-1.5 text-xs font-medium ${
-              filter === filterTab.id
-                ? "bg-surface-2 text-ink-bright ring-border-strong ring-1"
-                : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
-            }`}
           >
             {filterTab.label}
-          </Button>
+          </SelectChip>
         ))}
       </div>
 

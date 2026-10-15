@@ -141,7 +141,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(53 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(54 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -502,6 +502,21 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 只认从 `@testing-library/react` 导入的 waitFor，本地同名 helper 不在此列。
   # 成本实测：纯文本扫描 624 份用例约 0.3s、零网络、零子进程。
   run "测试层 waitFor 边界（§11.14.3）" node scripts/check-test-waitfor.cjs
+  # 测试层「一个用例一把时钟」（规范 §11.14）。上一条管的是「等落定用哪个 API」，
+  # 这一条管的是**同一个用例里别混两把时钟** —— 先拿真实时钟 `expect.poll` / `await waitFor`
+  # 等一段、再 `vi.useFakeTimers()`，那条用例的耗时就是「机器当下给多少算多少」，而
+  # `testTimeout` 有上界。越过之后被抛下的 continuation 落进**下一条**用例的假时钟窗口，
+  # 于是负载下症状成对：先 `Test timed out in 30000ms`、再 `Timer APIs are not mocked`
+  # （实测就发生在设置页那两条 Ollama 轮询用例上；改成挂载之前换时钟之后，同一负载下
+  # 墙钟耗时从 1301/2419/3895ms 降到 568/768/769ms）。
+  # 另一半更直接：`expect.poll` 落在已经开好的假时钟窗口里 —— 它不推进假定时器
+  # （`vi.waitFor` 才会，见上一条那张表），那种组合只能等到自己的预算用尽。
+  # **不判挂载位置**（挂载不挂起东西，挂起的是等待；全仓还剩 1 处那种形状且是正当的），
+  # 也不判跨 `describe` 的窗口归属（假时钟只盖它自己那个作用域）—— 这两条边界都有反向
+  # 样本钉着，防止判据长成误报机（§12.18）。
+  # 硬闸：两条规则实测存量都是 0，无基线、无 --update。
+  # 成本实测：纯文本扫描 735 份用例约 0.8s、零网络、零子进程。
+  run "测试层一个用例一把时钟（§11.14）" node scripts/check-test-single-clock.cjs
   # 参数化用例 `it.for` ⇄ `it.each`（规范 §11.15）。§11.15 那句
   # 「本仓库已全部转换完」此前**没有任何东西在守**（grep -c each scripts/check-*.cjs = 0、
   # CI 又随 ISSUE #623 删除），于是它只是规范里的一句话、不会自己响：

@@ -92,7 +92,8 @@ Comfy-APP-T3/
 | `typedoc.json`                            | API 文档生成配置                                                                                                                                                    |
 | `public/splash.html`                      | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示）                                                                                                               |
 | `CHANGELOG.md`                            | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
-| `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突                                                                                                |
+| `CHANGELOG-archive.md`                    | 历史条目归档：`changelog.d/` 建成至 2026-10 的全部碎片原文（逐份收录、一字未改），供检索历史变更                                                                     |
+| `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突；**只放尚未并入的条目**                                                                        |
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
@@ -190,7 +191,8 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 生成原文文档                            | `pnpm doc:gen`              | `tools/docs/generate-docs.ps1`    |
 | 起组件工作台                            | `pnpm storybook`            | `tools/start/storybook.ps1`       |
 
-> 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI
+> 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`（本地钩子；平台侧 CI 已随 ISSUE #623 删除，
+> 没有那一层兜底 —— 口径见 `docs/standards/13-提交与-code-review.md` §13.5）
 > 核对它们与磁盘 / `package.json` 三向对齐 —— 表里的路径与 `pnpm` 命令都真实存在、
 > `tools/**` 下的双击入口至少出现在**这里或 `tools/README.md`**（后者是完整清单，
 > 本表只收日常动作）—— **新入口没登记、或新增动作却只写了一侧，都会提交失败**。

@@ -52,7 +52,7 @@ const FORBIDDEN = [
   // 注意：都锚在**产物根**（`^`），不匹配 node_modules 里的同名文件 —— 第三方包
   // 自带 README / tsconfig.json / eslint.config.js 是正常且必需的，把它们算违规
   // 会让这条护栏变成噪声，进而被当成「反正都红」而忽略。
-  ["开发期文件", /^(AGENTS|CHANGELOG|README)\.md$/],
+  ["开发期文件", /^(AGENTS|CHANGELOG|CHANGELOG-archive|README)\.md$/],
   [
     "开发期配置",
     /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/,

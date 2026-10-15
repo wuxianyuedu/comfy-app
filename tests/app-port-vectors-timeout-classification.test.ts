@@ -13,13 +13,17 @@
  *   · 第一遍超时 ⇒ 当场再取证一次；第二遍答上了就按第二遍判（绿或真红照旧）；
  *   · 两遍都只是超时形态 ⇒ 「未校验」，**放行但点名**；
  *   · 探测不到 Python（`missing`）⇒ 同样「未校验」并点名，明说「四侧实际只答了三侧」——
- *     这一格以前是静默跳过，本文件把它变成会说话的。
+ *     这一格以前是静默跳过，本文件把它变成会说话的；
+ *   · 探测到命令但 `--version` 非零退出（`malformed`）⇒ **不是** `missing`：机器上有
+ *     Python，只是这条探针不承认它的形态。第三刀补的正是这一格 —— 旧实现 `execFileSync`
+ *     的失败只分「超时 / 其余」，其余一律 `missing`，于是这一侧被一句假话永久退出比对。
  *
  * 「放行」不是把红灯藏起来：放行的是**这一次取证**，判据本身还在 —— Node 侧逐条真跑与
  * Rust / PowerShell 侧的锁引用仍在同一趟里判，而 `missing` / 双超时都会被打出来。
  * 代价与触发面：只有第一遍超时才多花一趟（最坏 `PROBE_TIMEOUT_MS × 2 + PY_TIMEOUT_MS`）。
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -31,16 +35,25 @@ const SCRIPT_SOURCE = readFileSync(
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const judge = require("../scripts/check-app-port-vectors.cjs") as {
   isTimeoutLike: (e: unknown) => boolean;
-  probeCommand: (cmd: string, args: string[]) => string;
+  probeCommand: (cmd: string, args: string[]) => ProbeState;
   decidePythonVerdict: (
     first: Measure,
     second: Measure | null,
   ) => { problems: string[]; unverified: string[] };
 };
 
+/**
+ * 命令探测的四态（`probeCommand` 的返回）。
+ *
+ * 第四档 `present-but-nonzero` 是这次补上的：旧实现只有三档，把「命令起来了、只是
+ * `--version` 非零退出」静默归进 `missing`，于是 Python 侧被以「这台机器探测不到
+ * Python」的名义退出四侧比对 —— 而那句话是假的。
+ */
+type ProbeState = "ok" | "timeout" | "missing" | "present-but-nonzero";
+
 /** 一趟取证的返回形状（`measurePythonOnce` 的结果，也是本文件的输入夹具）。 */
 interface Measure {
-  state: "answered" | "timeout" | "missing";
+  state: "answered" | "timeout" | "missing" | "malformed";
   python: string | null;
   problems: string[];
 }
@@ -58,6 +71,11 @@ const timeout = (): Measure => ({
 const missing = (): Measure => ({
   state: "missing",
   python: null,
+  problems: [],
+});
+const malformed = (): Measure => ({
+  state: "malformed",
+  python: "python",
   problems: [],
 });
 
@@ -92,11 +110,43 @@ describe("超时形状识别（execFileSync 带 timeout 的两种落法都要认
   });
 });
 
-describe("命令探测分三态，不许糊成布尔", () => {
+describe("命令探测分四态，不许糊成布尔", () => {
   it("不存在的命令报 missing（而不是 timeout）", () => {
     expect(
       judge.probeCommand("definitely-not-a-real-binary-xyz", ["--version"]),
     ).toBe("missing");
+  });
+
+  it("没有执行位的文件同样归 missing（拿不到回答，下一步动作与「没有文件」同一件）", () => {
+    const noexec = path.join(os.tmpdir(), `app-port-probe-noexec-${process.pid}`);
+    writeFileSync(noexec, "#!/bin/sh\nexit 0\n");
+    chmodSync(noexec, 0o644);
+    try {
+      expect(judge.probeCommand(noexec, ["--version"])).toBe("missing");
+    } finally {
+      rmSync(noexec, { force: true });
+    }
+  });
+
+  it("命令在、只是非零退出 ⇒ present-but-nonzero，**不许**糊成 missing（ISSUE #1941）", () => {
+    // 真实形态：`execFileSync` 对这种失败给的是 `status !== 0` 而 `error.code === undefined`，
+    // 与「命令不存在」的 `ENOENT` 完全不是一回事。旧实现只分「超时 / 其余」，
+    // 于是这一格被读成「这台机器没有 Python」—— 一句假话，且给出的下一步动作也是错的。
+    const fake = path.join(os.tmpdir(), `app-port-probe-nonzero-${process.pid}`);
+    writeFileSync(fake, "#!/bin/sh\nexit 3\n");
+    chmodSync(fake, 0o755);
+    try {
+      expect(judge.probeCommand(fake, ["--version"])).toBe("present-but-nonzero");
+    } finally {
+      rmSync(fake, { force: true });
+    }
+  });
+
+  it("真的存在的解释器仍是 ok（四态没有把正常路径收窄）", () => {
+    // python3 不在 PATH 上时这一格不成立 —— 那是机器的形状，不是判据的形状，
+    // 所以只在探到 ok 时断言，没探到就跳过。
+    if (judge.probeCommand("python3", ["--version"]) !== "ok") return;
+    expect(judge.probeCommand("python3", ["--version"])).toBe("ok");
   });
 });
 
@@ -152,6 +202,32 @@ describe("两遍取证的判决（decidePythonVerdict 全网格）", () => {
     const out = judge.decidePythonVerdict(timeout(), missing());
     expect(out.unverified[0]).toContain("探测不到");
     expect(out.unverified[0]).not.toContain("两遍都没有");
+  });
+
+  it("malformed ⇒ 未校验一条，且话术**不许**说成「机器上没装 Python」（ISSUE #1941）", () => {
+    const out = judge.decidePythonVerdict(malformed(), null);
+    expect(out.problems).toEqual([]);
+    expect(out.unverified).toHaveLength(1);
+    expect(out.unverified[0]).toContain("存在");
+    // 两种形态的下一动作不同（装 Python vs 换探测方式），糊成一档等于把后者指错方向。
+    expect(out.unverified[0]).toContain("**不是**没装 Python");
+    expect(out.unverified[0]).toContain("三侧");
+    // 也不许把它读成超时：那会触发「再取一遍」这条不该走的路径。
+    expect(out.unverified[0]).toContain("**不是**超时");
+    expect(out.unverified[0]).not.toContain("两遍都没有");
+  });
+
+  it("malformed 与 missing 必须给出不同的话术（同一句 = 又一次糊档）", () => {
+    expect(judge.decidePythonVerdict(malformed(), null).unverified[0]).not.toBe(
+      judge.decidePythonVerdict(missing(), null).unverified[0],
+    );
+  });
+
+  it("第二遍从 malformed 变成答上了 ⇒ 照第二遍判，不留未校验（放行只放行没取到证的那一格）", () => {
+    expect(judge.decidePythonVerdict(malformed(), answered())).toEqual({
+      problems: [],
+      unverified: [],
+    });
   });
 });
 

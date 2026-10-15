@@ -317,22 +317,25 @@ export function NodeJsonPopover({
               borderBottom: "1px solid var(--color-border-subtle)",
             }}
           >
-            {(["view", "saved"] as const).map((tab) => {
-              const active = tab === tab;
+            {(["view", "saved"] as const).map((key) => {
+              /* 参数名**不能**叫 `tab`：它会遮蔽上面那个 `tab` state，使
+                 `active` 恒真 —— 两个页签于是永远同时高亮（旧写法是
+                 `const active = tab === tab`，自比较恒真）。 */
+              const active = tab === key;
               return (
                 <Hint
                   label={
-                    tab === "saved"
+                    key === "saved"
                       ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
                       : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
                   }
-                  key={tab}
+                  key={key}
                 >
                   <Button
                     variant="ghost"
                     role="tab"
                     aria-selected={active}
-                    onClick={() => setTab(tab)}
+                    onClick={() => setTab(key)}
                     style={{
                       fontFamily: "var(--font-mono)",
                       fontSize: 11,
@@ -351,7 +354,7 @@ export function NodeJsonPopover({
                     }}
                     className="h-auto font-normal"
                   >
-                    {tab === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
+                    {key === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
                   </Button>
                 </Hint>
               );

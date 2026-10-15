@@ -81,6 +81,19 @@
 | `app.version`   | `{{app.version}}`   | 产品版本号（D7）                  | `package.json` 的 `version`                           | 读 `package.json` 的 `version`；**另两处**（`src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` 的 `[package]`）由 `scripts/check-app-version.cjs` 守着与它逐字相等（规范 launch-and-build §7.1.1）。本行管的是**第四种抄法**：在文档里再写一遍具体版本号 —— 那会在下一次升版本时静默过期。校验范围刻意只在「引用产品版本」的两篇（`PRODUCTION-GAPS.md` / 主规范），不放开全量：被扫描文档里允许出现**别的**版本号（依赖 / Node / Rust），判「提到 `0.1.0` 就红」会误报一片 |
 | `comfyui.port`  | `{{comfyui.port}}`  | ComfyUI 默认监听端口              | `src/lib/endpoints.ts` 的 `COMFYUI_DEFAULT_PORT` 常量 | 读常量的值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行）。**权威源换过两次**：#536 P3 之前这个端口散落在 5 个文件里（`client.ts` 只是其中一处），先收敛成 `app-settings.ts` 的常量；#534 P1 再把**定义**搬到零依赖的 `endpoints.ts`（设置页视图也要读它，而 `app-settings.ts` 顶层 `import fs`，浏览器图一 import 就整页 500），`app-settings.ts` 只再导出同名。因此提取规则指向 `endpoints.ts` 的定义处（迁移原因与门禁见规范 launch-and-build §9.2 第 5 条） |
 
+### 1.4.1 团队 shadcn Registry 的内容目录（非本仓库）
+
+> 这一项是**本仓库里唯一一个不在仓库内的路径**：registry 的内容（`index.json` /
+> `r/*.json` / `serve.mjs` / `gen.mjs`）由使用者在**本机任意目录**自建，脚本里的路径
+> 是**权威定义**，文档里不得再抄一遍（抄了就是第二事实，换机器 / 换用户必然失真）。
+>
+> 文档里的正确形态是占位符 `{{registry.dir}}`，`pnpm doc:render` 会把它替换成
+> 提取到的真实路径；反向（文档里写死绝对路径）由 `doc:check` 的裸值规则拦下。
+
+| key              | placeholder         | meaning（可读语义）       | source（权威定义文件）                                       | extract                                        |
+| ---------------- | ------------------- | ------------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| `registry.dir`   | `{{registry.dir}}`  | 团队 shadcn Registry 的**内容目录**（仓库外，本机自建） | `tools/scripts/start-shadcn-registry.ps1` 的 `$RegistryDir` | 读 `$RegistryDir` 的值；`serve.mjs` / `gen.mjs` 都落在这个目录下，文档只引用占位符 |
+
 ### 1.5 注释语言的「纯 ASCII 模块」白名单（ISSUE #678）
 
 > 注释一律中文（AGENTS 硬规则 23 / 规范 12 §12.4.6），**唯一例外**是「会被
@@ -102,7 +115,7 @@
 > 这一档判的不是「装没装」，而是「**装上了、也解析得到吗**」—— 本地 `node_modules`
 > 停在装某个新直接依赖**之前**时，那个包只以传递依赖的旧版本落在**包自己的私有层**里，
 > 两份 lockfile 的文本可以逐字一致，而 `tsc` / `eslint` 报 `Cannot find module`。
-> 判据口径与出口见规范 [13.5.13](standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活-node-scriptscheck-deps-freshnessmjsissue-1569)、
+> 判据口径与出口见规范 [13.5.13](standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活node-scriptscheck-deps-freshnessmjsissue-1569)、
 > 用户侧现场见 [guides/sync-after-pull.md](guides/sync-after-pull.md#31-更安静的一种锁文件对得上而新加的包解析不到issue-1721)。
 >
 > **这一行的「探针清单」就是权威定义本身**（没有第二个事实源）：`scripts/doc-facts.cjs`
@@ -183,7 +196,7 @@
 >
 > 这些文档以**路径类引用与规范描述**为主，不含值类裸值。值类引用由登记表 FACTS
 > 动态核对；关键基础设施路径由第 2 节 path 类 FACTS 核对存在性。文档正文的细粒度
-> 路径（如 `src/env.ts`）因大量为**占位、否定性说明、目录约定示例**，不自动扫描，
+> 路径（如 `src/env.js`）因大量为**占位、否定性说明、目录约定示例**，不自动扫描，
 > 以免误报；如需将某个具体路径纳入存在性核对，按第 4 节把它补登为 `path` 类 FACTS
 > 即可。文档删除或新增路径时，同步维护本表与 `docs/README.md` 的文档体系索引。
 

@@ -101,6 +101,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // helper / 夹具文件）每一条都得有人钉住，都是「下一次有人写等待」时才走得进的路径，
   // 所以必须进固定清单（与本次改动无关也照跑）。
   "tests/test-waitfor-gate.test.ts",
+  // 「一个用例一把时钟」（规范 §11.14）：上一条管「等落定用哪个 API」，这一条管
+  // 「同一格里别混两把时钟」。先拿真实时钟 `expect.poll` / `await waitFor` 等一段、再
+  // `vi.useFakeTimers()`，那条用例的耗时就成了「机器当下给多少算多少」，而 `testTimeout`
+  // 有上界 —— 越过之后被抛下的 continuation 落进下一条用例的假时钟窗口，负载下症状成对
+  // （先超时、再 `Timer APIs are not mocked`）。另一半是 `expect.poll` 落在已开好的假时钟
+  // 窗口内（它不推进假定时器）。该拦的两条与该放的四条（挂载位置 / 隔壁 describe 的窗口 /
+  // 注释 / `it.each` 两段式）逐格钉着 —— 判据把自己的规则静默判死过一次（共享 `g` 正则的
+  // `lastIndex` 残留），就是靠这些反向样本抓回来的。
+  "tests/test-single-clock-gate.test.ts",
   // 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮（规范 §11.15）：§11.15 那句
   // 「本仓库已全部转换完」此前没有执行者，实测又长出 2 处 —— 同 check-test-sleep 的病。
   // 它同时是判据自己的门禁自测 —— 该拦的（`it.each` / `describe.each` / `test.each` /
@@ -180,7 +189,8 @@ export const FIXED_STRUCTURAL_TESTS = [
   //（那是一个「写了没人看」的位置）—— 与本次暂存改动无关也必须响，故进固定清单。
   "tests/storybook-data-sources.test.ts",
   // 「调用点的形状错误不许被咽掉」（台账 F13）：`as never` 逐处登记 + 投影参数不许是
-  // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是 `train.cancel`
+  // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是
+  // `train.cancel`（已随功能废弃删除）
   // 数据层迁移之后每次 500 而零红 —— 新增一处就是重新装上那个消音器，
   // 与本次暂存改动无关也必须响，所以进固定清单。
   "tests/f13-projection-shapes.test.ts",

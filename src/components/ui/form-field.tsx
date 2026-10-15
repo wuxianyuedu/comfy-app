@@ -15,13 +15,12 @@ import { cn } from "~/lib/utils";
  * （规范 16 §16.2.4.26；本次 PR-2 起改为 `~/components/ui/field`
  * 官方基元的薄封装）。
  *
- * 为什么收口：全库有 **15 处**各写一份「一行表单」，三件套一样、**四套度量
- * 语言**：
+ * 为什么收口：收口时全库有 **15 处**各写一份「一行表单」，三件套一样、**四套
+ * 度量语言**：
  *
  * | 落点 | 标签类 | 错误行 |
  * | --- | --- | --- |
  * | 设置页（`UsageTestDialog` / `RemoteModelDialog` / `LlmLocalSection` / `SettingsPrimitives`） | `text-ink/80 mb-1.5 block text-sm font-medium` | 字段错误挂在控件下方 |
- * | 训练工作室 | `mb-1.5 block text-2xs font-medium text-ink-faint` | **只有一条整表错误**，不落字段 |
  * | 工作流导入面板 | `text-ink-soft mb-1 block text-xs font-medium` | 无 |
  * | 工坊模型适配弹窗 | `text-muted-foreground mb-1 block text-3xs` | 无 |
  *
@@ -34,9 +33,9 @@ import { cn } from "~/lib/utils";
  *    一处**把控件标记成无效、也没有一处把错误文案的 id 关联给控件：读屏器
  *    完全不知道「这个输入框现在是错的、错在哪」。设置页只有
  *    `RemoteModelDialog` 的模型名一栏写了 `aria-invalid`（占全部字段的 1/15）。
- * 3. **错误行必须给用户看得见的位置**（硬规则 4）—— 训练工作室那条整表错误
- *    挂在提交按钮上方，用户改了下面某一行也**没有任何标记**指出是哪一行错
- *    （`validateTrainForm` 明明返回的是逐字段判据，却只在末尾报一句）。
+ * 3. **错误行必须给用户看得见的位置**（硬规则 4）—— 有一处把整表错误挂在
+ *    提交按钮上方，用户改了下面某一行也**没有任何标记**指出是哪一行错（校验函数
+ *    明明返回的是逐字段判据，却只在末尾报一句）。
  *
  * ## 三件本组件一次给全的事
  *

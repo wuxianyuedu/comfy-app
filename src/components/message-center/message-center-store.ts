@@ -50,6 +50,16 @@ export type NewMessage = Omit<
 > & {
   /** 缺省时由 store 用「当前是哪一次启动」盖上，于是各生产方不必各自去取。 */
   runId?: string | null;
+  /**
+   * **事件发生的时刻**（Unix 毫秒）；缺省取 push 那一刻。
+   *
+   * 生产方知道得比 store 准：应用服务断开那条要先把原因从盘上读回来（壳的 IPC），
+   * push 因此比事件晚一个往返；恢复那条则可能几乎同时写进去。若 `time` 一律取
+   * push 时刻，两条消息的先后就取决于「哪个往返先回来」而不是「哪件事先发生」
+   * —— 消息中心按 `time` 倒序摆放与分组（`~/lib/shell/message-run-groups` 判的
+   * 也是「连续同一 runId」），次序一翻，用户读到的因果就反了。
+   */
+  time?: number;
 };
 
 export interface MessageCenterState {
@@ -115,11 +125,15 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
            * 事实，而面板据此分组，断言错了就是分错批次。 */
           runId: m.runId === undefined ? s.currentRunId : m.runId,
           id: makeId(),
-          time: Date.now(),
+          time: m.time ?? Date.now(),
           read: false,
         },
         ...s.messages,
-      ].slice(0, MAX_MESSAGES),
+      ]
+        /* 最新在前**按事件时刻排**（而不是「谁先 push 完」）：断开那条要先读原因，
+         * 它的 push 天然比事件晚，靠插入次序摆放会把「断开 → 恢复」翻成反的。 */
+        .sort((a, b) => b.time - a.time)
+        .slice(0, MAX_MESSAGES),
     })),
   setCurrentRunId: (runId) => set({ currentRunId: runId }),
   markRead: (id) =>

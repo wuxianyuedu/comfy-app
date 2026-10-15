@@ -11,6 +11,7 @@ import React from "react";
 
 import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { SelectChip } from "~/components/ui/select-chip";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { useFilePicker } from "~/components/ui/file-picker";
@@ -118,22 +119,24 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
     <div className="bg-subtle mt-3 rounded-lg p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-xs font-medium">定妆照</p>
-        <div className="flex gap-1">
+        {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。
+            与镜头台 / 影片台的「生成通道」是同一族：手搓的
+            `variant="outline"` + 选中三元，缺「已选中时的悬停值」那一半。 */}
+        <div
+          role="radiogroup"
+          aria-label="定妆照生成通道"
+          className="flex gap-2"
+        >
           {(["local", "remote"] as const).map((channel) => (
-            <Button
+            <SelectChip
               key={channel}
-              variant="outline"
-              size="xs"
+              shape="compact"
+              selected={session.channel === channel}
               onClick={() => actions.patch({ channel })}
               disabled={session.busy || session.importing}
-              className={`h-auto rounded-md px-2 py-1 ${
-                session.channel === channel
-                  ? "border-primary bg-primary-soft text-primary"
-                  : "border-border text-muted-foreground hover:bg-surface"
-              }`}
             >
               {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
-            </Button>
+            </SelectChip>
           ))}
         </div>
         {session.channel === "local" && (
