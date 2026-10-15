@@ -1,10 +1,9 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-15T01:07:45.846Z",
+    "verifiedAt": "2026-10-15T06:58:54.701Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
-    "trackedBy": "e2e",
-    "skippedReason": "e2e 起不来，不是用例红：待执行的 schema 变更含 DROP TABLE loraTrainingJob（上游删炼丹功能留下的差异），e2e-run 的 schema 预检按设计把「丢不丢得起」交给人，代理不自动 db:push。本检出该表实测 0 行，db.sqlite 已另行备份（sha256 两侧一致）；等业主决定是否 push 后补跑本档。"
+    "trackedBy": "e2e"
   }
 }

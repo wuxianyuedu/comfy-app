@@ -35,13 +35,12 @@ test.describe("模型库 @critical", () => {
     /* 「放大」此前只存在于类型标签表、筛选档位里没有它 —— 那一类模型看得见却筛不出来。
        档位由标签表派生之后它才出现在界面上。逐档点名，少一档即红。
 
-       档位是**一排里选一个**（`role="radio"`，规范 16 §16.2.4.75）——
-       `studio/ModelLibrary` 收口到 `~/components/ui/select-chip` 之后，
-       语义从 `aria-pressed` 按钮换成 `radiogroup` + `radio`，
-       所以这里按 radio 点名，且限定在那一组里（同名按钮别处还有）。 */
-    const filterGroup = page.getByRole("radiogroup", {
-      name: "按类型筛选模型",
-    });
+       锚的是**单选语义那一层**：一排里只能选一个，所以这排是
+       `role="radiogroup"`（带 `aria-label`）+ 每枚 `role="radio"` + `aria-checked`，
+       角色由 `ui/select-chip` 写死、不随外观档变。与 jsdom 那侧
+       `ModelLibrary.test.tsx` 用的是同一个口径 —— 两侧都锚角色，样式换档不会假红，
+       而语义真的掉了会红。默认选中档必须是「全部」，否则进屏就看不全列表。 */
+    const filters = page.getByRole("radiogroup", { name: "按类型筛选模型" });
     for (const label of [
       "全部",
       "大模型",
@@ -52,10 +51,11 @@ test.describe("模型库 @critical", () => {
       "放大",
     ]) {
       await expect(
-        filterGroup.getByRole("radio", { name: label }),
+        filters.getByRole("radio", { name: label }),
         `缺筛选档位「${label}」`,
       ).toBeVisible();
     }
+    await expect(filters.getByRole("radio", { name: "全部" })).toBeChecked();
   });
 
   test("页面上不存在指向 /models/xxx 的链接（那条路由不存在）", async ({

@@ -16,10 +16,10 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="reloadonceforchunkerror"><span class="tsd-kind-call-signature">reloadOnceForChunkError</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">err</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#reloadonceforchunkerror" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>命中分块加载失败时整页刷新一次（本会话至多一次）。</p>
+<div class="tsd-comment tsd-typography"><p>命中分块加载失败时整页刷新一次（同一轮故障至多一次）。</p>
 <p>返回值表示「这次调用是否真的触发了刷新」——调用方据此决定还要不要把错误
-继续抛出去：刷了就让它随导航自然消失，没刷（已经刷过 / 不是分块问题）就照常
-抛，用户至少看得到 error boundary 的「重试」。</p>
+继续抛出去：刷了就让它随导航自然消失，没刷（同一轮已刷过 / 不是分块问题）
+就照常抛，用户至少看得到 error boundary 的「重试」。</p>
 <p>非浏览器环境（SSR / 单测）与生产构建一律不刷，直接返回 false。</p>
 </div>
 <div class="tsd-parameters">
@@ -28,7 +28,7 @@
 <li><span><span class="tsd-kind-parameter">err</span>: <span class="tsd-signature-type">unknown</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/lazy-chunk-recovery.ts:72</li></ul></aside></div></li></ul></section></div>
+<li>Defined in src/lib/shell/lazy-chunk-recovery.ts:92</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
