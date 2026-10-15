@@ -29,6 +29,39 @@
 
 ## Fixed
 
+- **三条判据只在 POSIX 宿主上成立，在自托管 Windows 节点上假红**（7 例：
+  `ci-toolchain-selfcheck` 6 + `base-check` 1）。两种病，都不是被测逻辑错：
+
+  ① **期望值写死了正斜杠字面量**（`ci-toolchain-selfcheck` 6 例）。被测脚本用平台的
+  `path.join` 拼落点（POSIX 给 `/L/Programs/Python`、Windows 给 `\L\Programs\Python`），
+  而判据把期望值写成 POSIX 字面量、`PATH` 又用 `:` 分隔（`path.delimiter` 在 Windows 上
+  是 `;`）—— 于是「探了哪个落点」这条结论变成了「跑判据的宿主是不是 Windows」。
+  修法是在本文件里加一个 `norm()`（分隔符归一 + 折叠重复 + 小写）统一比较，`PATH`
+  用 `path.delimiter` 拼；**不 skip** —— 这一格在 Windows 上照样成立，只是断言写错了
+  形态（同 §13.5.3.5 那条「平台当借口的 skip 等于把判据在某平台上永久关掉」）。
+
+  ② **一条判「两条 scope 都试」的用例随宿主的真 `fs` 变绿变红**：`--scope user` 报成功
+  后会去扫安装根找解释器，那一步读**真 fs**；跑判据的机器上若碰巧装着 Python，第一条
+  scope 就提前成功返回、第二条根本不跑。修法不是改断言，而是给这一步补一个**注入面**
+  （`installPython({ findExe })`，默认仍是真实现），判据注入一个「一定找不到」的替身 ——
+  结论从此只取决于用例自己造的东西（同该模块既有的 `run` / `existing` / `listDirs` 接缝）。
+
+  ③ **`base-check` 把「本检出取得到上游」当成了恒真性质**：平台侧克隆是
+  `git init -b master` → `fetch refs/pull/N/merge` → `checkout -f FETCH_HEAD`，
+  结果是 HEAD **detached**、`refs/heads/*` 一个都没有、`@{u}` 更不存在 ——
+  `resolveUpstreamRef()` 三条候选全落空、如实回 `null`，也就是说**「取不到上游」
+  在 CI 上是正常状态**。原断言只在开发机的检出上成立 ⇒ 只在 CI 红。改成在临时仓库上
+  判这一格的**本意**（只有本地 `master`、没有任何 remote ⇒ 第三条候选够得着），
+  夹具与结论都不再依赖「跑判据的那台机器长什么样」。
+
+- **`db-schema-ready.test.ts` 的一条用例在自托管节点上超时**：它是本文件唯一一条
+  `vi.resetModules()` 之后把整张服务端模块图重新求值的用例（`~/server/db` →
+  drizzle / better-sqlite3 → `comfyui/reaper`），冷求值的墙钟与宿主原生模块加载成正比。
+  本机串行隔离实测 **775ms**，而 Windows 节点上（`--maxWorkers=4` + `--coverage`）
+  越过了全局 30s，同一次运行里本文件其余 5 条都是 20~643ms。**不去抬全局预算**
+  （§11.13 / §13.6.4：那是把「真挂死」的检出时间一起放大），只给**这一条**一个写明
+  实测出处的天花板 —— 与仓里既有的 `vi.setConfig` 那几处同一形态。
+
 - **夹具的 `git commit` 挡不住宿主全局签名 → `git` 的失败消息被吞掉**（8 例：
   `merged-side-loss-gate`）。两件同批：
   ① 构建机全局 `.gitconfig` 带着 `commit.gpgsign = true` + 平台专属 `gpg.program`，

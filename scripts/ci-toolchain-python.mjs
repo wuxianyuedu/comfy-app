@@ -291,6 +291,7 @@ function listDirectories(/** @type {string} */ root) {
  *          env?: Record<string, string | undefined>,
  *          platform?: NodeJS.Platform,
  *          existing?: (p: string) => boolean,
+ *          findExe?: (env: Record<string, string | undefined>) => string | null,
  *          mkdir?: (p: string) => void,
  *          download?: (url: string, dest: string) => void,
  *          unzip?: (zip: string, dest: string) => void,
@@ -303,6 +304,10 @@ export function installPython({
   env = process.env,
   platform = process.platform,
   existing = (/** @type {string} */ p) => fs.existsSync(p),
+  /* 「装完找解释器」这一步读真 fs。给它一个注入面：真实现扫安装根，
+   * 判据里注入一个**确定**的替身 —— 否则「探过哪两条 scope」会取决于
+   * 跑判据的那台机器上碰巧有没有装 Python（本文件最初就踩了这格）。 */
+  findExe = findExeUnderAllRoots,
   mkdir = (/** @type {string} */ p) => fs.mkdirSync(p, { recursive: true }),
   download = downloadFile,
   unzip = unzipArchive,
@@ -321,7 +326,8 @@ export function installPython({
    * `attempts` 逐条打印，不糊成一句「装不上」。 */
   const attempts = [];
   for (const channel of [
-    () => viaWinget({ run: runCmd, env, platform, impl: installViaWinget }),
+    () =>
+      viaWinget({ run: runCmd, env, platform, findExe, impl: installViaWinget }),
     () => viaScoop({ run: runCmd, env, existing }),
     () => viaEmbed({ env, existing, mkdir, download, unzip, cwd }),
   ]) {
@@ -346,14 +352,16 @@ export function installPython({
  * @param {{run: (cmd: string, args: string[]) => {ok: boolean, out: string},
  *          env: Record<string, string | undefined>,
  *          platform: NodeJS.Platform,
+ *          findExe: (env: Record<string, string | undefined>) => string | null,
  *          impl: (input: {run: (cmd: string, args: string[]) => RunResult,
  *                          env: Record<string, string | undefined>,
- *                          platform: NodeJS.Platform}) => {installed: boolean,
+ *                          platform: NodeJS.Platform,
+ *                          findExe: (env: Record<string, string | undefined>) => string | null}) => {installed: boolean,
  *                                                            path: string | null,
  *                                                            reason: string | null}}} ctx
  */
-function viaWinget({ run: runCmd, env, platform, impl }) {
-  const r = impl({ run: runCmd, env, platform });
+function viaWinget({ run: runCmd, env, platform, findExe, impl }) {
+  const r = impl({ run: runCmd, env, platform, findExe });
   return {
     path: r.path,
     channel: "winget",
@@ -366,10 +374,11 @@ function viaWinget({ run: runCmd, env, platform, impl }) {
  * 的关系在调用点一眼看得出来（`installPython` 的 `impl: installViaWinget`）。
  *
  * @param {{run: (cmd: string, args: string[]) => {ok: boolean, out: string},
- *          env: Record<string, string | undefined>}} input
+ *          env: Record<string, string | undefined>,
+ *          findExe: (env: Record<string, string | undefined>) => string | null}} input
  * @returns {{installed: boolean, path: string | null, reason: string | null}}
  */
-function installViaWinget({ run: runCmd, env }) {
+function installViaWinget({ run: runCmd, env, findExe }) {
 
   /**
    * 判一个候选路径在不在盘上 —— 读不动（别人的 profile 常常权限不足）与不存在
@@ -420,7 +429,7 @@ function installViaWinget({ run: runCmd, env }) {
       continue;
     }
     const found =
-      findExeUnderAllRoots(env) ??
+      findExe(env) ??
       /* 机器级安装会把解释器放到 Program Files，而**这个进程的 PATH 是安装前的** ——
        * 按安装根找不到时再按 winget 的链接目录找一次，别把刚装好的读成没装。 */
       findExeUnder(

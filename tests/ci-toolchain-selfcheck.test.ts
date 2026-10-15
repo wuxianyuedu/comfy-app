@@ -56,6 +56,22 @@ function requireVersion(text: string) {
   return v;
 }
 
+/**
+ * 断言「探了哪条路径」时用的**归一形态** —— 分隔符归一 + 折叠重复 + 小写。
+ *
+ * 被测脚本用平台的 `path.join` 拼落点，所以期望值**不能写成 POSIX 字面量**：
+ * POSIX 宿主上 `path.join("/L", "Programs")` 给 `/L/Programs`，而 Windows 节点上
+ * 给 `\\L\\Programs`（正斜杠被当成普通字符保留、反斜杠成了分隔符）。
+ * 判的是「探了哪个落点」，不是「分隔符长什么样」—— 写死一侧等于让这条判据只在
+ * 那一侧的宿主上成立（本文件最初就是这么写的，在自托管 Windows 节点上红了 6 条）。
+ *
+ * 用 `path.join` 拼期望值只是把问题挪了个位置（跨宿主跑时就对不上），所以这里
+ * 统一按**归一后的正斜杠形态**比。
+ */
+function norm(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/{2,}/g, "/").toLowerCase();
+}
+
 /** 从一段源码里抠出「按平台二选一」的候选表（两份文本，逐项对账）。 */
 function candidatesInSource(text: string, constName: string): string[] {
   const block = new RegExp(`const ${constName}\\s*=\\s*([\\s\\S]*?);\\n`).exec(
@@ -161,23 +177,28 @@ describe("工具链自证：engines.node 的区间", () => {
 
 describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
   it("探到「一个都没有」时，把执行账号 / PATH / 安装位置命中一并打出来", () => {
+    /* 落点由脚本用**平台的** `path.join` 拼（POSIX 给 `/L/Programs/Python`、
+     * Windows 给 `\\L\\Programs\\Python`），所以注入的两个判据也按同一形态拼 ——
+     * 写死正斜杠字面量只在 POSIX 宿主上命中（本文件最初就这么写，在自托管节点上红）。 */
+    const lRoot = path.join("/home/u/AppData/Local", "Programs", "Python");
     const lines = pythonForensics({
       env: {
-        PATH: "/a:/b",
+        // 用**宿主的分隔符**拼两条目：`/a:/b` 在 Windows 上是一整条，
+        // 那两条断言就会红在「宿主分隔符」而不是被测逻辑上。
+        PATH: ["/a", "/b"].join(path.delimiter),
         LOCALAPPDATA: "/home/u/AppData/Local",
         ProgramFiles: "/Program Files",
       },
       account: "RUNNER\\svc",
-      existing: (p) => p === "/home/u/AppData/Local/Programs/Python",
-      listDirs: (p) =>
-        p === "/home/u/AppData/Local/Programs/Python" ? [`${p}/Python312`] : [],
+      existing: (p) => p === lRoot,
+      listDirs: (p) => (p === lRoot ? [path.join(p, "Python312")] : []),
     });
     const text = lines.join("\n");
     expect(text).toContain("执行账号: RUNNER\\svc");
     expect(text).toContain("  /a");
     expect(text).toContain("  /b");
     // 位置命中 → 说明「装过、只是这个账号 PATH 里没有」，与「真没装」分开。
-    expect(text).toContain("/home/u/AppData/Local/Programs/Python/Python312");
+    expect(norm(text)).toContain(norm(path.join(lRoot, "Python312")));
     expect(text).not.toContain("一个都没找到");
   });
 
@@ -256,13 +277,17 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
       },
       listDirs: () => [],
     });
-    /* `existing` 收到的就是逐条探过的根 —— 断言的是「探了哪四个」。 */
-    expect(roots).toEqual([
-      "/L/Programs/Python",
-      "/PF/Python",
-      "/PFx86/Python",
-      "/ALL/Python",
-    ]);
+    /* `existing` 收到的就是逐条探过的根 —— 断言的是「探了哪四个」。
+     * 期望值同样按**平台的 `path.join`** 拼（脚本就是这么拼的）：写死正斜杠
+     * 字面量会让这条判据只在 POSIX 宿主上成立。 */
+    expect(roots.map(norm)).toEqual(
+      [
+        path.join("/L", "Programs", "Python"),
+        path.join("/PF", "Python"),
+        path.join("/PFx86", "Python"),
+        path.join("/ALL", "Python"),
+      ].map(norm),
+    );
   });
 });
 
@@ -272,10 +297,12 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
      * 追加的路径要新会话才生效）。少了这一条，「机器上有 winget」会被读成「没有」。
      * 这里直判落点拼法（本机没有那个文件，所以 `installPython` 的分支由它决定）；
      * 真起 `winget` 那一档不可能在开发机上判 —— 由这段拼法本身承担。 */
-    const existing = (p: string) => p === "/L/Microsoft/WindowsApps/winget.exe";
-    expect(wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, existing)).toBe(
-      "/L/Microsoft/WindowsApps/winget.exe",
-    );
+    /* 被测实现用平台的 `path.join` 拼，所以落点身份按**归一形态**比。 */
+    const want = norm(path.join("/L", "Microsoft", "WindowsApps", "winget.exe"));
+    const existing = (p: string) => norm(p) === want;
+    expect(
+      norm(wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, existing) ?? ""),
+    ).toBe(want);
     // 盘上真没有时不编一个路径出来（那会让下面的 `winget install` 以 ENOENT 失败）。
     expect(
       wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, () => false),
@@ -296,16 +323,21 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       { PATH: "D:\\x;", LOCALAPPDATA: "/L", ProgramFiles: "/PF" },
       (root) => (root === "C:\\Users" ? ["C:\\Users\\other"] : []),
     );
+    /* 一律按**归一形态**比：被测实现用平台的 `path.join` 拼，写死分隔符
+     * 只在某一侧的宿主上成立（本文件最初写死了，Windows 节点上红）。 */
+    const has = (x: string) => cands.map(norm).includes(norm(x));
     /* 顺序即语义：本账号在最前（人机同账号时它一次就中），机器级在最后兜底。 */
-    expect(cands[0]).toBe("/L/Microsoft/WindowsApps/winget.exe");
+    expect(norm(cands[0] ?? "")).toBe(
+      norm(path.join("/L", "Microsoft", "WindowsApps", "winget.exe")),
+    );
     /* 其他账号那一条要补 `AppData\Local`（MSIX 按用户安装落在那儿）—— 少补这一段
      * 会拼成一条不存在的路径。 */
-    expect(cands).toContain(
-      "C:\\Users\\other/AppData/Local/Microsoft/WindowsApps/winget.exe",
+    expect(has("C:\\Users\\other\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe")).toBe(
+      true,
     );
     /* 盘符从 PATH 反推的 —— `D:` 盘上的程序目录也在候选里（写死 `C:` 就会漏）。 */
-    expect(cands).toContain("D:\\/Program Files/WindowsApps/winget.exe");
-    expect(cands).toContain("/PF/Microsoft/WindowsApps/winget.exe");
+    expect(has("D:\\Program Files\\WindowsApps\\winget.exe")).toBe(true);
+    expect(has("/PF/Microsoft/WindowsApps/winget.exe")).toBe(true);
   });
 
   it("别的 profile 读不动时只是少几个候选，不抛", () => {
@@ -314,7 +346,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     const cands = wingetCandidates({ LOCALAPPDATA: "/L" }, () => {
       throw new Error("权限不足");
     });
-    expect(cands).toContain("/L/Microsoft/WindowsApps/winget.exe");
+    expect(cands.map(norm)).toContain(
+      norm(path.join("/L", "Microsoft", "WindowsApps", "winget.exe")),
+    );
   });
 
   it("POSIX 上按平台挑唯一一个包管理器；一个都不在时不猜、不动手", () => {
@@ -378,6 +412,11 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     installPython({
       platform: "win32",
       env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+      /* 「装完找解释器」必须注入成**一定找不到**：真实现扫安装根读真 fs，
+       * 而跑判据的那台机器上若碰巧装着 Python，第一条 scope 就会提前成功返回、
+       * 第二条根本不会跑 —— 一条判「两条都试」的用例于是随环境变成恒假
+       * （本文件最初漏了这个注入面，在自托管 Windows 节点上红了 1 条）。 */
+      findExe: () => null,
       // `winget --version` 答得上（用 PATH 上那个名字）；两条 install 都报成功。
       run: (_cmd, args) => {
         if (args.includes("--scope")) {
@@ -415,6 +454,8 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       TEMP: "/T",
     } as unknown as NodeJS.ProcessEnv,
     existing: () => false,
+    /* 「装完找解释器」读真 fs —— 注入成一定找不到，结论才只取决于下面注入的 run。 */
+    findExe: () => null,
   };
 
   it("winget 与 scoop 都不在盘上时，落到官方 embed 包（下载 → 解压 → 复判都走过）", () => {
