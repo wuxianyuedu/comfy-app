@@ -33,7 +33,15 @@ test.describe("模型库 @critical", () => {
     await expect(page.getByRole("heading", { name: "模型" })).toBeVisible();
 
     /* 「放大」此前只存在于类型标签表、筛选档位里没有它 —— 那一类模型看得见却筛不出来。
-       档位由标签表派生之后它才出现在界面上。逐档点名，少一档即红。 */
+       档位由标签表派生之后它才出现在界面上。逐档点名，少一档即红。
+
+       档位是**一排里选一个**（`role="radio"`，规范 16 §16.2.4.75）——
+       `studio/ModelLibrary` 收口到 `~/components/ui/select-chip` 之后，
+       语义从 `aria-pressed` 按钮换成 `radiogroup` + `radio`，
+       所以这里按 radio 点名，且限定在那一组里（同名按钮别处还有）。 */
+    const filterGroup = page.getByRole("radiogroup", {
+      name: "按类型筛选模型",
+    });
     for (const label of [
       "全部",
       "大模型",
@@ -44,7 +52,7 @@ test.describe("模型库 @critical", () => {
       "放大",
     ]) {
       await expect(
-        page.getByRole("button", { name: label }),
+        filterGroup.getByRole("radio", { name: label }),
         `缺筛选档位「${label}」`,
       ).toBeVisible();
     }
