@@ -40,6 +40,7 @@ import {
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { revealPathInFileManager } from "~/lib/shell/reveal-path";
+import { CPU_LIMIT_MODES } from "~/lib/comfyui/cpu-limit";
 
 /** `save` 入参里**影响运行态判据**的那几项：路径 / 端口 / 启动参数 / 解释器。
  *
@@ -68,6 +69,10 @@ export const settingRouter = createTRPCRouter({
         comfyuiExtraArgs: z.string().optional(),
         /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
         comfyCliPython: z.string().optional(),
+        /** 出图进程的 CPU 档位（ISSUE #1959）：off / yield / throttle。
+         *  取值集合由 `~/lib/comfyui/cpu-limit` 的 `CPU_LIMIT_MODES` 单点持有，
+         *  这里用 `z.enum` 跟着它 —— 别在路由里手抄一份字面量清单。 */
+        comfyuiCpuLimit: z.enum(CPU_LIMIT_MODES).optional(),
         comfyuiAutoStart: z.boolean().optional(),
         exitKillComfyui: z.boolean().optional(),
         exitKillOllama: z.boolean().optional(),

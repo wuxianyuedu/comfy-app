@@ -24,6 +24,7 @@ import { SettingsCard } from "~/components/ui/settings-card";
 import { Field } from "./SettingsPrimitives";
 import { FieldLabel } from "~/components/ui/field";
 import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
+import { CpuLimitPicker } from "./CpuLimitPicker";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** 安装形态 → 设置页徽标文案。 */
@@ -123,6 +124,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           />
         </>
       )}
+      {/* CPU 档位（ISSUE #1959）：出图是可长跑的后台负载，占满机器时用户在
+          同一个窗口里的编辑器 / 浏览器 / 画布拖拽都在抢核。三档语义与「用
+          什么系统手段实现」见 `~/lib/comfyui/cpu-limit`；这里只让人选。
+          放在端口 / 启动参数之后、自动启动之前 —— 它是运行偏好，不是安装配置。 */}
+      <CpuLimitPicker c={c} />
       {/* 实例目录：只有桌面实例有「实例根 + 共享目录」这套布局可读（服务端对
           其它形态返回 null）。只读，不提供编辑 —— 改目录属于 ComfyUI Desktop
           自己的配置面，写回那边的文件会与本应用下次启动用的参数打架。 */}

@@ -56,6 +56,15 @@ import {
   type ComfyExitReport,
 } from "./lifecycle-exit";
 import { getComfyRuntimeSnapshot } from "./status";
+import { applyComfyCpuLimit } from "./cpu-limit-apply";
+import {
+  CPU_LIMIT_LABELS,
+  resolveCpuLimitMode,
+  type CpuLimitMode,
+} from "./cpu-limit";
+import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
+import { decodeIncremental } from "~/lib/log/utf8-incremental";
+import { fireAndForget } from "~/lib/async-action";
 
 export type EnsureResult = {
   ok: boolean;
@@ -121,7 +130,87 @@ type EnsureCtx = {
   deadline: number | null;
   /** 超时未就绪文案（**唯一一处**，两条路径共用）。 */
   timeoutDetail: string;
+  /** 生效的 CPU 档位（ISSUE #1959）。在拉起前解析一次、两条路径共用 ——
+   *  「哪一档」是用户设置，与「怎么起」无关，不该在两条路径里各判一遍。 */
+  cpuLimitMode: CpuLimitMode;
 };
+
+/**
+ * 给刚拉起的 ComfyUI 施加 CPU 档位，并把结论写进运行日志。
+ *
+ * **fire-and-forget 是有意的**：调优先级 / 亲和性要等系统命令回来，而启动
+ * 路径此刻正在等端口就绪 —— 一个可选的性能开关不该有把启动拖慢的权力。
+ * 失败也不抛出，只留一行可读的原因（硬规则 4：失败路径必须有用户可见出口）。
+ *
+ * `pid` 为 null（keepAlive 的孙进程此刻还查不到）时什么都不做：
+ * 那条路径由退出监督器随后按 main.py 反查到 PID，本函数在 `onLaunched`
+ * 时机被再调一次（见 `launchKeepAliveMode` 的 `isDead` 分支之外那条）。
+ */
+function applyCpuLimitAsync(input: {
+  pid: number | null;
+  mode: CpuLimitMode;
+  note: (msg: string) => void;
+}): void {
+  if (input.mode === "off") return;
+  fireAndForget(
+    applyComfyCpuLimit({ pid: input.pid, mode: input.mode }).then((outcome) => {
+      for (const r of outcome.results) {
+        input.note(
+          r.ok
+            ? `CPU 档位已生效：${r.describe}`
+            : `CPU 档位未生效（${r.describe}）：${r.detail}——出图仍按默认优先级运行`,
+        );
+      }
+    }),
+    (err) => {
+      /* 施加层的 `runCommand` 已经把命令失败收进 results，落到这里的是
+       * 意料外的异常（拼命令时的 bug）。静默会让「设置页说限了、实际没限」
+       * 变成查不出来的形态，所以如实记一条。 */
+      input.note(
+        `CPU 档位施加抛出异常（不影响启动）：${err instanceof Error ? err.message : String(err)}`,
+      );
+    },
+  );
+}
+
+/** 保活路径的 PID 反查重试：初查 + 最多几次复查（间隔见下）。 */
+const KEEPALIVE_CPU_PID_ATTEMPTS = 6;
+const KEEPALIVE_CPU_PID_INTERVAL_MS = 2_000;
+
+/**
+ * 保活路径专属：按 `main.py` 反查到 ComfyUI 进程 PID，再施加 CPU 档位。
+ *
+ * 为什么要有界重试而不是查一次：解释器冷启动（`import torch` + 读权重）在慢盘上
+ * 要好几秒，第一次查必然落空 —— 查一次就放弃等于这一档在保活路径上**恒不生效**。
+ * 又为什么不是「一直重试到查到为止」：那会在「用户配的解释器根本起不来」的场景里
+ * 变成一个永不收手的后台循环。故取 6 次 × 2s（12s 窗口，覆盖冷启动），
+ * 用尽后如实记一条，让用户知道这一档没生效、而不是以为它生效了。
+ */
+async function resolveAndApplyCpuLimitForKeepAlive(input: {
+  mainPy: string;
+  mode: CpuLimitMode;
+  note: (msg: string) => void;
+}): Promise<void> {
+  if (input.mode === "off") return;
+  for (let attempt = 0; attempt < KEEPALIVE_CPU_PID_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, KEEPALIVE_CPU_PID_INTERVAL_MS));
+    }
+    let pid: number | null = null;
+    try {
+      pid = (await findPidForMainPyDetailed(input.mainPy)).pid;
+    } catch {
+      /* 查询本身抛错（极罕见）：当作这一轮没查到，下一轮再试。 */
+      continue;
+    }
+    if (!pid) continue;
+    applyCpuLimitAsync({ pid, mode: input.mode, note: input.note });
+    return;
+  }
+  input.note(
+    `CPU 档位未能施加：启动后 ${(KEEPALIVE_CPU_PID_ATTEMPTS * KEEPALIVE_CPU_PID_INTERVAL_MS) / 1000}s 内没查到 ComfyUI 进程（出图仍按默认优先级运行）`,
+  );
+}
 
 /**
  * 拉起后的编排入口：按退出策略选 keepAlive 或 bound，两者共用同一套等待原语。
@@ -187,7 +276,17 @@ export async function runEnsureLaunch(input: {
     },
     deadline: input.timeoutMs != null ? Date.now() + input.timeoutMs : null,
     timeoutDetail: `ComfyUI 启动超过 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`,
+    cpuLimitMode: resolveCpuLimitMode({
+      mode: settings.comfyuiCpuLimit,
+      platform: process.platform,
+      desktopShell: isDesktopShell(),
+    }),
   };
+  /* 档位说清楚（含「当前不限制」这一档）：用户改了设置之后，唯一能确认
+   * 「它真的按我选的来了」的地方就是这一行。 */
+  if (ctx.cpuLimitMode !== "off") {
+    note(`CPU 档位：${CPU_LIMIT_LABELS[ctx.cpuLimitMode]}（启动后施加）`);
+  }
   const result = keepAlive
     ? await launchKeepAliveMode(host, ctx)
     : await launchBoundMode(host, ctx);
@@ -343,6 +442,28 @@ async function launchKeepAliveMode(
     return { ok: false, base: null, detail };
   }
 
+  /* CPU 档位（ISSUE #1959）：keepAlive 路径**拿不到**子进程句柄（Windows 上是
+   * Start-Process 的孙进程、POSIX 上已 unref），PID 只能按 `main.py` 反查。
+   * 而反查要等进程真的出现在进程表里（解释器冷启动要几秒），所以这里起一条
+   * **有界重试**：查到就施加、施加完即停；始终查不到就如实说一句。
+   *
+   * 为什么不做成「等就绪后施加」：就绪可能要几分钟（加载大模型），而优先级
+   * 越早调上越好 —— 冷启动那一段本身就是 CPU 密集型（import torch / 读权重）。 */
+  fireAndForget(
+    resolveAndApplyCpuLimitForKeepAlive({
+      mainPy: plan.mainPy,
+      mode: ctx.cpuLimitMode,
+      note,
+    }),
+    /* 失败通道：这条链内部已把「查不到 PID」收成一行 note，落到这里的只有
+     * 意料外的异常（改判据时的 bug），所以只需要让它**有**一条出口、
+     * 不静默消失（硬规则 4）。 */
+    (err) =>
+      note(
+        `CPU 档位施加链路异常（不影响启动）：${err instanceof Error ? err.message : String(err)}`,
+      ),
+  );
+
   const spawnAt = Date.now();
   let everSeenProcess = false;
   let missCount = 0;
@@ -350,8 +471,18 @@ async function launchKeepAliveMode(
   /* 重定向 stderr 里出现「端口被占」即置位：本次拉起的进程绑定失败已死，
    * 继续等只会被占端口的那个实例「冒领」就绪（实测现场）。 */
   let portConflict = false;
-  /* 重定向文件的增量跟随游标：把新字节按行带进 comfyui-runtime.log */
+  /* 重定向文件的增量跟随游标：把新字节按行带进 comfyui-runtime.log。
+   *
+   * `kaCarry` 是**字符级**的残余（ISSUE #1959 的乱码根因）：按字节游标读一段
+   * 区间时，区间两端完全可能落在某个中文字符的中间，而那段中文字符占 3 字节
+   * —— 各自 `toString("utf-8")` 会得到两串 U+FFFD（面板上就是「乱码」）。
+   * ComfyUI 的刷屏频率远高于本循环的 1s 节拍，所以这不是罕见情形。
+   * 解码与留存交给 `~/lib/log/utf8-incremental`（纯函数、穷举切点验过）。 */
   const kaOffsets = { out: 0, err: 0 };
+  const kaCarry: { out: Uint8Array; err: Uint8Array } = {
+    out: new Uint8Array(0),
+    err: new Uint8Array(0),
+  };
   const tailKeepAliveLog = (file: string, key: "out" | "err") => {
     try {
       if (!fs.existsSync(file)) return;
@@ -364,7 +495,12 @@ async function launchKeepAliveMode(
       fs.readSync(fd, buf, 0, len, kaOffsets[key]);
       fs.closeSync(fd);
       kaOffsets[key] = stat.size;
-      for (const line of buf.toString("utf-8").split(/\r?\n/)) {
+      /* 拼回上一轮的残余再解：切在多字节字符中间时，那个字符整个留到下一轮
+       * （见文件头）。**先取新残余再切片** —— 改回 `buf.toString("utf-8")`
+       * 就是把这条修复撤掉。 */
+      const decoded = decodeIncremental(kaCarry[key], buf);
+      kaCarry[key] = decoded.carry;
+      for (const line of decoded.text.split(/\r?\n/)) {
         const trimmed = line.trimEnd();
         if (isPortConflictLine(trimmed)) portConflict = true;
         if (trimmed.trim())
@@ -649,6 +785,13 @@ async function launchBoundMode(
     `[spawn] pid=${child.pid} cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`,
   );
   host.markSessionStart({ pid: child.pid ?? null, mode: "bound" });
+  /* CPU 档位（ISSUE #1959）：bound 路径亲手持有子进程，PID 直接可信 ——
+   * 起进程后立刻施加，不等就绪（理由见 applyCpuLimitAsync）。 */
+  applyCpuLimitAsync({
+    pid: child.pid ?? null,
+    mode: ctx.cpuLimitMode,
+    note,
+  });
 
   // 最近输出留底：进程秒退时从里面提取「No module named 'X'」给出可行动的报错
   const ledger = createRecentOutputLedger();
