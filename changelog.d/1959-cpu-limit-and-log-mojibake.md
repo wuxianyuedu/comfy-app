@@ -33,3 +33,19 @@
   残缺尾巴留到下一轮。它的用例穷举了「两刀三段的全部切点」并断言逐字复原 ——
   这条判据在旧的 `buf.toString("utf-8")` 形态下会红。同一函数也钉住「真正的非法
   字节照旧如实报坏」：本模块只负责**不自己制造**乱码。
+
+## Fixed（续）
+
+- **覆盖率报告的 `text` reporter 会把构建日志顶穿 100KB 上限**（ISSUE #1959 的截图里那句
+  `The log length exceeds the limit(102400)`）：`text` 把报告里**每一个文件**打一行，
+  而本仓有 450+ 个文件落在覆盖率面上，那张表本身就有 ~90KB。现场实测
+  `pnpm test:coverage` 只跑三个目录（`src/lib/{comfyui,log,workshop}`）就已经
+  **107456 字节**，全量数倍 —— 于是 CI 里看不到任何失败原因，只剩那句「日志超长」。
+
+  出路是给输出量分档而不是删掉明细：`vitest.config.ts` 的 reporter 由
+  `COMFYAPP_QUIET_COVERAGE` 切换 —— 默认 `["text", "json-summary", "lcov"]`（本地
+  人手动跑时要看那张表），置位则 `["text-summary", "json-summary", "lcov"]`（只打
+  总计）。**逐文件明细一份没少**：它本来就在 `json-summary` / `lcov` 里，那两份是
+  落盘文件、不吃日志预算。实测同一子集：94.6KB → 58.8KB / 107.4KB → 71.6KB。
+  判据 `tests/coverage-reporter-budget.test.ts`（三条：默认档不变、安静档明细不缺、
+  安静档不是靠收窄用例面换来的）。
