@@ -7,6 +7,7 @@ import {
   FALLBACK_PORT,
   fnv1a32,
   normalizeRootForPort,
+  parseDotEnvPortValue,
   readEnvFileValue,
   readEnvPort,
   resolveAppPort,
@@ -143,6 +144,34 @@ describe("app-port 端口解析", () => {
     }
   });
 
+  it("端口值必须整串是整数：Number.parseInt 吃前缀的那几格与另三侧同判「未配置」（ISSUE #1941）", () => {
+    // 根因：`Number.parseInt("3100abc")` === 3100（它只吃到第一个非数字就停），
+    // 于是 Node 侧把 `COMFYAPP_PORT=3100abc` 当成用户写死了 3100，而 Python
+    // `int()` / Rust `parse::<u16>()` / PowerShell `[int]::TryParse` 对同一个值
+    // 给的是「未配置」。两边按不同端口启动：Node 在 3100 起 dev server，壳按路径
+    // 推导去等另一个端口 —— ISSUE #821 那个「启动页一直等 dev server」的同一个失效。
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "app-port-prefix-"));
+    try {
+      for (const bad of ["3100abc", "3100.5", "0x0C4C", "3100abc3100"]) {
+        fs.writeFileSync(tmp + "/.env", `COMFYAPP_PORT=${bad}\n`, "utf8");
+        expect(readEnvPort(tmp), `COMFYAPP_PORT=${bad}`).toBeNull();
+        // 「未配置」的落点是退回路径推导，不是兜底 3100 —— 否则多检出会撞同一个端口。
+        expect(resolveAppPort(tmp)).toBe(derivePortFromPath(tmp));
+      }
+      // 前导 `+` 必须**收**：Rust / PowerShell / Python 三侧都认（ISSUE #1941）。
+      // 这一格以前 Node 侧也是 null —— 不收就是新的一处四侧分叉。
+      for (const ok of ["+3100", "  +3100  ", "  3100  "]) {
+        fs.writeFileSync(tmp + "/.env", `COMFYAPP_PORT=${ok}\n`, "utf8");
+        expect(readEnvPort(tmp), `COMFYAPP_PORT=${ok}`).toBe(3100);
+      }
+      // Unicode 数字位不算：只有 Python 的 `int()` 会收，另三侧都不收。
+      fs.writeFileSync(tmp + "/.env", "COMFYAPP_PORT=\u0663\u0661\u0660\u0660\n", "utf8");
+      expect(readEnvPort(tmp)).toBeNull();
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it(".env 缺失时按路径推导而不是撞默认端口（多检出并行的前提）", () => {
     const missing = path.join(os.tmpdir(), "definitely-not-existing-checkout");
     expect(readEnvPort(missing)).toBeNull();
@@ -257,5 +286,37 @@ describe("仓库根收口（resolveRepoRoot）", () => {
         /resolveAppPort(?:WithSource)?\(\s*process\.cwd\(\)/,
       );
     }
+  });
+});
+
+describe("parseDotEnvPortValue：整串是十进制整数才算端口（四侧同口径）", () => {
+  it("吃前缀的几格全部判 null（Node 侧曾是唯一把它们读成端口的那一侧）", () => {
+    expect(parseDotEnvPortValue("3100abc")).toBeNull();
+    expect(parseDotEnvPortValue("3100.5")).toBeNull();
+    expect(parseDotEnvPortValue("0x0C4C")).toBeNull();
+    expect(parseDotEnvPortValue("3100abc3100")).toBeNull();
+    expect(parseDotEnvPortValue("")).toBeNull();
+    expect(parseDotEnvPortValue(null)).toBeNull();
+    // Unicode 数字位：`\\d` 在 JS 里不含它们，正好与 Rust / PowerShell 一致
+    // （Python 的 `int()` 是唯一收的那一侧，由向量与它的自检负责）。
+    expect(parseDotEnvPortValue("\u0663\u0661\u0660\u0660")).toBeNull();
+  });
+
+  it("前导 `+` 与前尾空白都收（Rust / PowerShell / Python 三侧同判）", () => {
+    expect(parseDotEnvPortValue("+3100")).toBe(3100);
+    expect(parseDotEnvPortValue("  +3100  ")).toBe(3100);
+    expect(parseDotEnvPortValue("  3100  ")).toBe(3100);
+    // 但「两个加号」与「加号后有空白」不是数字。
+    expect(parseDotEnvPortValue("++3100")).toBeNull();
+    expect(parseDotEnvPortValue("+ 3100")).toBeNull();
+  });
+
+  it("落点 1..=65535，越界按未配置", () => {
+    expect(parseDotEnvPortValue("1")).toBe(1);
+    expect(parseDotEnvPortValue("65535")).toBe(65535);
+    expect(parseDotEnvPortValue("0")).toBeNull();
+    expect(parseDotEnvPortValue("-1")).toBeNull();
+    expect(parseDotEnvPortValue("65536")).toBeNull();
+    expect(parseDotEnvPortValue("99999")).toBeNull();
   });
 });

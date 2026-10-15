@@ -104,6 +104,35 @@ export function readEnvFileValue(content, key) {
   return value;
 }
 
+/**
+ * `.env` 端口值 → 端口号：**整串就是一个十进制整数**才算数。
+ *
+ * 为什么不能直接用 `Number.parseInt`：它**吃前缀**—— `"3100abc"` → 3100、
+ * `"3100.5"` → 3100。于是 Node 侧会把 `COMFYAPP_PORT=3100abc` 当成用户写死了
+ * 3100，而另三侧（Python `re.fullmatch` / Rust `parse::<u16>()` /
+ * PowerShell `[int]::TryParse`）对同一个值给的是「未配置」—— 两边于是按**不同
+ * 端口**启动：Node 侧在 3100 起 dev server，壳按路径推导去等另一个端口。这正是
+ * ISSUE #821 那个「启动页一直等 dev server」的同一种失效，只是入口从「壳不读
+ * .env」换成了「四侧对同一个值的理解不一致」。
+ *
+ * 形状与另三侧逐字对齐（`tests/fixtures/app-port-vectors.json` 的 `envVectors`
+ * 是唯一事实源，四侧各有一份同型实现读它）：
+ *   · 允许前导 `+`（Rust / PowerShell / Python 三侧都收，Node 不收就是新分叉）；
+ *   · 只认 ASCII 十进制位（`٣١٠٠` 这类 Unicode 数字只有 Python 的 `int()` 收，
+ *     另三侧都不收，所以这里也不收）；
+ *   · 落点 1..=65535，越界按「未配置」退回路径推导。
+ *
+ * @param {string | null} value `readEnvFileValue` 的返回值
+ * @returns {number | null}
+ */
+export function parseDotEnvPortValue(value) {
+  if (value === null) return null;
+  const trimmed = value.trim();
+  if (!/^\+?[0-9]+$/.test(trimmed)) return null;
+  const port = Number.parseInt(trimmed, 10);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
 /** 读 `.env` 的 `COMFYAPP_PORT`；未配置 / 非法 / 文件缺失时返回 null。
  *  @param {string} root @returns {number | null} */
 export function readEnvPort(root) {
@@ -115,11 +144,7 @@ export function readEnvPort(root) {
   } catch {
     return null;
   }
-  const value = readEnvFileValue(raw, APP_PORT_ENV_KEY);
-  if (value === null) return null;
-  const port = Number.parseInt(value, 10);
-  if (Number.isInteger(port) && port >= 1 && port <= 65535) return port;
-  return null;
+  return parseDotEnvPortValue(readEnvFileValue(raw, APP_PORT_ENV_KEY));
 }
 
 /**

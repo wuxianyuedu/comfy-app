@@ -107,6 +107,11 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     const checker = readIfExists("scripts/check-app-port-vectors.ps1");
     expect(checker).not.toBeNull();
     expect(checker!).toContain("app-port-vectors.json");
+    // `envVectors` 也必须真跑：此前 PowerShell 侧只跑 `vectors`，「四侧读同一份
+    // .env」实际只有三侧在判，而 PowerShell 恰是历史上最容易漂的那一侧（规范
+    // §1.1.1 记着 `-split "=", 2` 与另三侧正则的分叉）。ISSUE #1941 补齐。
+    expect(checker!).toContain("envVectors");
+    expect(checker!).toContain("Get-DotEnvAppPort");
   });
 
   it("② Python 侧算法在可导入模块里（不内联进任何 Windows-only 宿主）", () => {
@@ -130,13 +135,18 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // 四侧读的**同一份** envVectors —— 任一侧对「带引号 / 行尾注释 / 注释行 /
     // 空值」的理解不一致，用户写死的端口就只对一部分进程可见，剩下的按路径
     // 推导去等另一个端口（现象是启动页卡在「等 dev server」，ISSUE #821）。
-    const { readEnvFileValue } = await import("../scripts/app-port.mjs");
+    //
+    // 这里走 `parseDotEnvPortValue`（生产同一条出口），**不再在用例里另抄一份
+    // `/^\d+$/ + parseInt` 判定**：那份抄件与生产实现的判据一旦漂了，这一格会
+    // 照着抄件判、而链路上跑的是实现 —— 实测就栽过一次（`+3100` 三侧都收，
+    // 用例里那份抄件不收，于是它把实现判成红的）。
+    const { parseDotEnvPortValue, readEnvFileValue } = await import(
+      "../scripts/app-port.mjs"
+    );
     for (const v of fixture.envVectors) {
-      const raw = readEnvFileValue(v.content, "COMFYAPP_PORT");
-      const port =
-        raw !== null && /^\d+$/.test(raw.trim())
-          ? Number.parseInt(raw.trim(), 10)
-          : null;
+      const port = parseDotEnvPortValue(
+        readEnvFileValue(v.content, "COMFYAPP_PORT"),
+      );
       expect(port, `.env 解析：${JSON.stringify(v.content)}（${v.note}）`).toBe(
         v.port,
       );
