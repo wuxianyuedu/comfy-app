@@ -812,6 +812,56 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
     expect(started.length).toBe(1);
   });
 
+  it("探 `.ps1` 时**把 `-v` 一并交给垫片**（少了它，唯一能用的形态会被判成起不来）", () => {
+    /* ── 这一格是「修完候选表、红的形状原地复现」的现场 ────────────────────────
+     *
+     * `findPnpm()` 把 `.ps1` 找出来之后，`usablePnpm` 会**真起一次**它 ——
+     * 而第一次写这段时只把宿主前缀（`-NoProfile … -File <shim>`）交了过去，
+     * **忘了把探针的 `-v` 接在后面**。于是垫片收到的是**空参数**：
+     * corepack 的 `pnpm.ps1` 裸跑会打 usage 并**退非零**（实测无参数 `pnpm` 退
+     * 非零、`pnpm -v` 退 0），而 `runProbe` 正是以退出码判「起没起来」——
+     * 唯一能用的那个形态被否掉，最后照旧报「pnpm 不可用」。
+     *
+     * 单测当时全绿，因为注入的 `probeRun` 一律返回成功 —— **探针参数对不上**这件事
+     * 只有真机看得见。所以这一条判的就是那串参数本身：`.ps1` 那一支必须带着 `-v`。 */
+    const dir = "/bin";
+    const ps1 = path.join(dir, "pnpm.PS1");
+    const hostExe = path.join("/host", "pwsh.EXE");
+    const onDisk = new Set([ps1.toLowerCase(), hostExe.toLowerCase()]);
+    const calls: Array<[string, string[]]> = [];
+    const r = findPnpm({
+      platform: "win32",
+      env: winEnv(dir),
+      isFile: (p: string) => onDisk.has(p.toLowerCase()),
+      host: () => hostExe,
+      /* 复刻真垫片的语义：**没收到 `-v` 就退非零**（`pnpm` 裸跑打 usage）。
+       * 少了这条模拟，探针参数丢了也照绿 —— 那正是这次漏网的原因。 */
+      probeRun: (cmd: string, args: string[]) => {
+        calls.push([cmd, args]);
+        return args.includes("-v")
+          ? { command: cmd, args, out: "12.4.1" }
+          : null;
+      },
+    });
+    expect(r.ok, "垫片没收到 -v ⇒ 被当成起不来 ⇒ 又报「pnpm 不可用」").toBe(
+      true,
+    );
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [, args] of calls) {
+      expect(args, "探 `.ps1` 时 `-v` 没接在宿主前缀后面").toContain("-v");
+      // 宿主前缀本身不许丢（丢了就变成「拿 .ps1 当可执行文件起」）。
+      expect(args).toEqual(
+        expect.arrayContaining([
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          ps1,
+        ]),
+      );
+    }
+  });
+
   it("`.CMD` 不被当成可用形态（它在 Windows 上只有 cmd.exe 解释得了）", () => {
     /* corepack 只剩 `.cmd` 的形态：判据必须**不**认它，改报「没有可用形态」——
      * 认了就等于把「起不来的命令」交给上层，失败推迟到下一个 stage、且报错不指真因。 */

@@ -219,7 +219,12 @@ function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
   if (platform === "win32" && ext === ".ps1") {
     const exe = host();
     if (!exe) return null;
-    return probeRun(exe, ps1Invocation(candidate));
+    /* **探的参数必须带上**（`-v`）：`.ps1` 那一档判的是「这个垫片起了之后真能答出
+     * 版本」，而不是「PowerShell 能加载它」。少了它，corepack 的 `pnpm.ps1` 收到
+     * 空参数会打 usage 并**退非零**（实测 `pnpm` 裸跑 exit≠0、`pnpm -v` exit=0），
+     * 于是 `runProbe` 判它「起不来」、唯一可用的形态被否掉，最后仍报
+     * 「pnpm 不可用」—— 修完候选表却漏了探针参数，红的形状原地复现。 */
+    return probeRun(exe, ps1Invocation(candidate, ["-v"]));
   }
   const direct = probeRun(candidate, ["-v"]);
   if (direct) return direct;
@@ -242,7 +247,8 @@ function viaSiblingPs1(candidate, { host, probeRun, isFile }) {
   if (!isFile(script)) return null;
   const exe = host();
   if (!exe) return null;
-  return probeRun(exe, ps1Invocation(script));
+  /* 同一条：探的参数一并交给垫片（见上面 `.ps1` 那一支的注释）。 */
+  return probeRun(exe, ps1Invocation(script, ["-v"]));
 }
 
 /**
@@ -263,16 +269,21 @@ function runProbe(cmd, args) {
 }
 
 /**
- * `.ps1` 经宿主的完整参数。
+ * `.ps1` 经宿主的完整参数（宿主前缀 + **探针要传的参数**）。
  *
- * 刻意**不接宿主参数**：本脚本只负责给出「宿主 + 这串参数」，宿主由 `powershellHost()`
- * 单独答（与 `src/lib/process/executable-resolve.ts` 的 `prefixArgs` 同形）。
+ * 刻意**不接宿主可执行文件**：宿主由 `powershellHost()` 单独答，这里只给「宿主接什么」
+ * （与 `src/lib/process/executable-resolve.ts` 的 `prefixArgs` 同形）。
+ *
+ * `args` 是**要紧的**那一半：`.ps1` 垫片的退出码取决于它收到什么参数
+ * （`pnpm.ps1` 裸跑打 usage 并退非零、带 `-v` 才退 0），而 `runProbe` 以退出码判
+ * 「起没起来」。只给宿主前缀、忘了把 `-v` 接上去，等于把唯一能用的形态判成起不来。
  *
  * @param {string} script
+ * @param {string[]} [args] 垫片自己要收的参数（`-v`）
  * @returns {string[]}
  */
-function ps1Invocation(script) {
-  return ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script];
+function ps1Invocation(script, args = []) {
+  return ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, ...args];
 }
 
 /**
