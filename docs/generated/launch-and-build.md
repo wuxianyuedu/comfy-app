@@ -581,9 +581,9 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
 
 | 层           | 位置               | 做什么                                                                                                                                                                                                                                                                                                     |
 | ------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 候选**顺序** | `executableExts()` | 无扩展名 / `.EXE`（CreateProcess 能直接起）→ `.PS1`（经 PowerShell 宿主）→ `.CMD` / `.BAT`（Node 起不了，只能垫底）→ PATHEXT 其余项                                                                                                                                                                        |
-| 候选**形态** | `executableKind()` | `shebang`（`#!` 起头）/ **`batch`**（`@echo` / `@setlocal` 起头，即 `.cmd` / `.bat`）/ `script` / `binary` / `unknown`。**批处理单列一类**，不与 `.ps1` 混                                                                                                                                                 |
-| 候选**确认** | `usableCommand()`  | `fs.accessSync(X_OK)`；**Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`）；其余形态**真起一次**（`stdio: "ignore"`）。起不来 / 属 `batch` 时在**同目录**取 `<去掉自身扩展名>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
+| 候选**顺序** | `executableExts()` | 无扩展名 / `.EXE`（CreateProcess 能直接起）→ `.PS1`（经 PowerShell 宿主）→ `.CMD` / `.BAT`（Node 起不了，只能垫底）→ PATHEXT 其余项。**`.PS1` 与无扩展名 shim 一样无条件在列**（见下「`.PS1` 不看 `PATHEXT`」） |
+| 候选**形态** | `executableKind()` | `shebang`（`#!` 起头）/ **`batch`**（`@echo` / `@setlocal` 起头，即 `.cmd` / `.bat`）/ `script` / `binary` / `unknown`。**批处理单列一类**，不与 `.ps1` 混 |
+| 候选**确认** | `usableCommand()`  | `fs.accessSync(X_OK)`；**Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`）；**Windows 上的 `.ps1` 同样不真起，直接交 `powershellHost()` 给 `-File`**（见下）；其余形态**真起一次**（`stdio: "ignore"`）。起不来 / 属 `batch` 时在**同目录**取 `<去掉自身扩展名>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
 
 > 为什么是「真起一次」而不是「看扩展名」：扩展名只说明「谁解释它」，不说明
 > 「这台机器上现在能不能跑」。探针的退出码无关紧要（`--version` 报错也算起得来），
@@ -592,6 +592,37 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
 > 文件关联时它仍可用，所以留给「真起一次」去发现；起不来自然落到回退。
 > POSIX 上只有一种形态（无扩展名），且内核自己解析 shebang，整条判据退化为原来的行为
 > ——「批处理专属」的短路**只在 Windows 生效**。
+
+> **`.PS1` 不看 `PATHEXT`，而且必须交宿主起**（ISSUE #1961）。这两条是同一次立案的两半，
+> 少任一半都会让同一格红：
+>
+> ① **候选表里无条件有 `.PS1`**。它此前与 `.CMD` / `.BAT` / `.COM` 一样要 `PATHEXT`
+> 声明才进得来，而 Windows 系统的默认 `PATHEXT`（`.COM;.EXE;.BAT;.CMD;.VBS;…`）
+> **从不含 `.PS1`** —— `PowerShell.exe` 不是靠文件关联启的，`.ps1` 也不在「cmd.exe 敲
+> 名字就会跑」的那一类里。于是 corepack 摆在盘上的三个形态（无扩展名 shim / `.cmd` /
+> `.ps1`）里**唯一能被 Node 起起来的那一个，一个候选都命中不了**，`whichCommand()`
+> 返回 `null` ⇒ 上层报「PATH 上没有任何可用的 pnpm 形态」，而能跑的那个就摆在旁边。
+> 判据改成按「**Node 能起得来哪些形态**」问，而不是按「cmd.exe 会试哪些后缀」问 ——
+> 两个问题不同，答案也就不能共用一份 `PATHEXT`。
+>
+> ② **`.ps1` 不交给「真起一次」判**。它与 `.cmd` 是同一类「Node 自己起不来、要别人
+> 解释」的形态（只是解释器是 PowerShell 而不是 cmd.exe）。落在「真起一次」那一档时，
+> `usableCommand()` 会返回 `{ok: true, command: <那个 .ps1>, prefixArgs: []}` ——
+> 上层拿去 spawn 就是「拿 `.ps1` 当可执行文件起」，在 Windows 上必失败，而这一步的
+> 结论却是「可用」。**这一档在开发机上判不出来**（POSIX 宿主的探针会把「起一个
+> `.ps1`」报成功，那边它不过是个普通文本文件），所以判据按形态分派：Windows 上的
+> `.ps1` 直接交 `powershellHost()` 给 `-File`；**没有宿主时判 `no-powershell-host`**
+> （不能把起不来的东西报成可用）。
+>
+> 现场（自托管 Windows 节点 `cnb-t62-1k50merp0`，流水线第 1 步）：
+> `== git ==` / `== node ==` / `== python ==` 都答得出读数，只有 `== pnpm ==` 空着
+> ⇒ 整条流水线第 1 秒停下、后面 30 个 stage 全 skipped，而那台机器上 `pnpm install`
+> 本来跑得好好的。**同一个 `run()` 探四件工具，只有 pnpm 红** —— 因为 git / node /
+> python 都是 `.exe`，裸名字能直接命中；pnpm 唯一可用的形态是那个最「绕」的 `.ps1`。
+> 于是工装自证里那一步也一并改成按 `PATH × 扩展名` 解析（`findPnpm()`，
+> 见 `scripts/ci-toolchain-selfcheck.mjs`），不再裸起一个名字。
+> 回归：`tests/dev-launcher-toolchain-gate.test.ts` 与 `tests/ci-toolchain-selfcheck.test.ts`
+> 各一组（修复前 9 条全红）。
 
 > **回退同胞名按「去掉自身扩展名再拼 `.ps1`」求**：无扩展名 shim 是 `pnpm` → `pnpm.ps1`，
 > 批处理是 `pnpm.CMD` → `pnpm.ps1`（**不是** `pnpm.CMD.ps1`）。只做字符串拼接会让

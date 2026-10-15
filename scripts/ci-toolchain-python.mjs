@@ -90,7 +90,7 @@ function run(cmd, args) {
   /* ── Windows：裸名字 Node 认不出来时，退回让 **cmd.exe** 去解析 ──────────
    *
    * 本仓的 `pnpm` 在 Windows 上是 `pnpm.cmd`（或 `.ps1`），**没有**无扩展名的
-   * 可执行形态。而 Node 的 `spawn` 不认 PATHEXT —— `spawnSync("pnpm")` 直接
+   * 可执行形态。而 Node 的 `spawn` 不认 PATHEXT —— 裸起一个 pnpm 名字直接
    * `ENOENT`（这正是 `src/lib/process/executable-resolve.ts` 存在的理由，
    * 那边有一份完整的「PATH × PATHEXT 逐目录扫」实现）。
    *

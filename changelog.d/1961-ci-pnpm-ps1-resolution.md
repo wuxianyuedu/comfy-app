@@ -1,0 +1,25 @@
+## Fixed
+
+- **`pnpm` 的唯一可用形态（`.ps1`）被候选表漏掉，而 `.ps1` 被选中时又拿不到宿主**
+  —— 与同批的「裸名字退 `shell: true`」互为补充的两处（ISSUE #1961）。
+  上一条修的是「裸名字在 Windows 上 Node 认不出来」（让 cmd.exe 去解析），能覆盖
+  `pnpm` 是 `pnpm.cmd` 的机器；而**这台节点上能跑的那个形态是 `.ps1`**，cmd.exe
+  的解析面（`PATHEXT`）同样够不着它（Windows 默认 `PATHEXT` 从不含 `.PS1`）。
+  两处判据：
+
+  - `executableExts()` 里 `.PS1` 与 `.CMD` / `.BAT` 一样**要 `PATHEXT` 声明才进候选**，
+    而默认 `PATHEXT` 从不声明它 ⇒ corepack 三个形态里唯一能被 Node 起起来的那一个
+    **一个候选都命中不了**，`whichCommand()` 返回 `null`。现在 `.PS1` **无条件**在列
+    —— 判据按「**Node 能起得来哪些形态**」问，而不是按「cmd.exe 会试哪些后缀」问；
+  - `usableCommand()` 对**直接命中的 `.ps1`** 返回 `{ok: true, prefixArgs: []}`
+    （＝拿 `.ps1` 自己当可执行文件起）。它与 `.cmd` 是同一类「Node 起不来、要别人
+    解释」的形态，现在同样交 `powershellHost()` 给 `-File <那个 .ps1>`，
+    没有宿主时判 `no-powershell-host`。**这一档在开发机上判不出来**（POSIX 的探针
+    会把「起一个 `.ps1`」报成功），所以按形态分派。
+
+  同批把自证那一步的 pnpm 探测换成按 `PATH × 扩展名` 解析（`findPnpm()`，
+  与上面两条同口径、可注入、有单测），不再依赖「裸名字 + shell 退路」能碰对形态。
+
+  反向验证：9 条新用例在修复前**全红**、修复后全绿。文档同步
+  `launch-and-build.md` §2.1.1（候选表三行 + 「`.PS1` 不看 `PATHEXT`」那两段）
+  与 13 §13.5.3.5（**同一份 `run()` 探四件工具，只有 pnpm 那一格会红**的成因）。

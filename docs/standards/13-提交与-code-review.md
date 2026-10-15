@@ -559,6 +559,31 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > **绝对路径**，经 `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`；读不到时退回裸
 > 名字（那一格是「不知道」而不是「没有」，别把手工 `pnpm exec playwright test` 弄崩）。
 
+> **同一份 `run()` 探四件工具，只有 pnpm 那一格会红 —— 因为它唯一可用的形态最「绕」**
+> （ISSUE #1961）。首跑读数：`== git ==` / `== node ==` / `== python ==` 都答得出来，
+> 只有 `== pnpm ==` 空着 ⇒ 流水线第 1 秒停下、后面 30 个 stage 全 `skipped`，
+> 而那台机器上 `pnpm install` 本来跑得好好的（**一条不成立的结论比没有结论更贵**）。
+>
+> 差别的来源是**可得形态**：git / node / python 都是 `.exe`，裸名字交给 CreateProcess
+> 就能命中；而 corepack 摆在盘上的 pnpm 是三个形态（无扩展名 shim / `.cmd` / `.ps1`），
+> **Node 一个都起不来** —— shim 是 `#!/usr/bin/env node`（libuv 不解析 shebang）、
+> `.cmd` 只有 cmd.exe 解释（实测 `EINVAL`）、唯一能用的 `.ps1` 要 PowerShell 宿主。
+>
+> 于是这一格有三处同批修（缺任一处那一格仍然红）：
+>
+> 1. **`.ps1` 无条件进候选表**：它此前要 `PATHEXT` 声明才进得来，而 Windows 默认的
+>    `PATHEXT` **从不含 `.PS1`** ⇒ 唯一能跑的形态一个候选都命中不了，
+>    `whichCommand()` 返回 `null`、上层报「没有任何可用的 pnpm 形态」；
+> 2. **`.ps1` 交宿主起**：直接命中的 `.ps1` 此前落在「真起一次」那档、返回
+>    `prefixArgs: []` —— 即「拿 `.ps1` 当可执行文件起」。这一档**在开发机上判不出来**
+>    （POSIX 的探针会把「起一个 `.ps1`」报成功），所以按形态分派：Windows 上的 `.ps1`
+>    直接交 `powershellHost()` 给 `-File`，没有宿主时判 `no-powershell-host`；
+> 3. **自证那一步按 `PATH × 扩展名` 解析**（`findPnpm()`），不再裸起一个名字。
+>
+> 判据与回归见 `launch-and-build.md` §2.1.1、
+> `tests/dev-launcher-toolchain-gate.test.ts`、`tests/ci-toolchain-selfcheck.test.ts`
+> （修复前 9 条全红）。
+
 > **「判」与「能跑」之间差着一步**（#1959 第五轮）。第三轮把失败话术改成自带下一动作，
 > 实测的收获是**一条更清楚的报错** —— 那台节点上确实没有 Python，于是流水线在**第一个
 > stage** 断掉、后面 28 个 stage 全 `skipped`，一条门禁判据都没跑到。所以那一步从

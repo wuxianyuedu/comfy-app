@@ -43,6 +43,7 @@
  * `./ci-toolchain-python.mjs`，那边同样不 import 仓库内模块。
  */
 import { spawnSync } from "node:child_process";
+import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,6 +56,191 @@ import {
   installPython,
   pythonForensics,
 } from "./ci-toolchain-python.mjs";
+
+/**
+ * `pnpm -v` 探到了什么 —— **不是**一句裸起名字的 `spawnSync` 能回答的（ISSUE #1961）。
+ *
+ * ## 为什么裸起一个名字在这里必然不够
+ *
+ * 本脚本刻意不 import 仓库内模块（见文件头），所以这里也得自己走一遍解析。
+ * 而「自己走一遍」的形态**不能**是 `run("pnpm", ["-v"])` —— 那在 Windows 上
+ * 与 `whichCommand()` 判的根本不是同一件事：
+ *
+ *   · Node 的 `spawn` **不认 PATHEXT**，也不解析 shebang：裸名字 `pnpm` 交给
+ *     CreateProcess 时，corepack 摆在盘上那三个形态里**一个都用不上**
+ *     —— 无扩展名 shim 是 `#!/usr/bin/env node`、`.CMD` 只有 cmd.exe 解释
+ *     （Node 起它实测 `EINVAL`）、`.ps1` 要宿主；
+ *   · 而**能被 Node 起起来的那一个恰好是 `.ps1`**，且它多半**不在 PATH 上**
+ *     （corepack 装在 `%LOCALAPPDATA%\node\corepack\…`），
+ *     连 `PATHEXT` 都不含 `.PS1`（Windows 默认值从不含它）。
+ *
+ * 实测（自托管 Windows 节点 `cnb-t62-1k50merp0`）：这一步打的是
+ * `== pnpm == (pnpm 不可用)` 而**同一台机器上 `pnpm install` 后来跑得好好的**
+ * —— 于是一整条流水线在第 1 秒就停在一个**不成立的结论**上。
+ *
+ * 所以探测按 `whichCommand()` 的同一套判据走一遍（PATH × 扩展名候选 → 取第一个
+ * **真的能起**的；`.CMD` 这类批处理在 Windows 上直接跳过，改用它旁边的 `.ps1`
+ * 经宿主起）。这与 `src/lib/process/executable-resolve.ts` 是**两份实现**，
+ * 理由与 Python 那边逐字相同（本脚本要能在「Node 模块链还没被证明可用」的机器上
+ * 加载）；一致性由 `tests/ci-toolchain-selfcheck.test.ts` 对账。
+ *
+ * @param {{
+ *   platform?: NodeJS.Platform,
+ *   env?: Record<string, string | undefined>,
+ *   isFile?: (p: string) => boolean,
+ *   probeRun?: (cmd: string, args: string[]) => {command: string, args: string[], out: string} | null,
+ *   host?: () => string | null}} [options]
+ * @returns {{command: string, args: string[], out: string, ok: boolean}}
+ *          `command` / `args` 是**真正要 spawn 的形态**（宿主形态时 command 是宿主）
+ */
+export function findPnpm({
+  platform = process.platform,
+  env = process.env,
+  /* 落盘与起进程两个注入面 —— 单测要在 POSIX 上判 **Windows** 的形态
+   * （`whichCommand` 那套判据同样是可注入的，理由见其 `probe` 注释）。 */
+  isFile = isFileOnDisk,
+  probeRun = runProbe,
+  host = powershellHost,
+} = {}) {
+  /* 候选顺序与 `executableExts()` 同口径：能直接被 CreateProcess 起的在前，
+   * `.PS1` 紧随（Node 起不了 shim / `.CMD` 时它是唯一出路），批处理垫底。
+   * `.PS1` **无条件**在列：默认 PATHEXT 不含它，由它决定就是「永远选不出来」。 */
+  const exts =
+    platform === "win32" ? ["", ".EXE", ".PS1", ".CMD", ".BAT", ".COM"] : [""];
+  for (const dir of String(env.PATH ?? "")
+    .split(path.delimiter)
+    .filter(Boolean)) {
+    for (const ext of exts) {
+      const candidate = path.join(dir, `pnpm${ext}`);
+      if (!isFile(candidate)) continue;
+      const usable = usablePnpm(candidate, {
+        platform,
+        probeRun,
+        host,
+        isFile,
+      });
+      if (usable) return { ...usable, out: `${usable.out}`.trim(), ok: true };
+    }
+  }
+  return { command: "pnpm", args: ["-v"], out: "", ok: false };
+}
+
+/**
+ * 这个候选**现在**起不起得来（与 `usableCommand()` 同口径的简化版）。
+ *
+ * Windows 上的批处理**不真起**（只有 cmd.exe 解释它，Node 起它必然 `EINVAL`），
+ * 直接改用它旁边的 `.ps1` 经 PowerShell 宿主 —— 那正是 `siblingFallback()` 的形态。
+ * `.ps1` 本身也要宿主，同样经 `powershellHost()` 找。
+ *
+ * @param {string} candidate
+ * @param {{platform: NodeJS.Platform,
+ *          probeRun: (cmd: string, args: string[]) => {command: string, args: string[], out: string} | null,
+ *          host: () => string | null,
+ *          isFile: (p: string) => boolean}} ctx
+ * @returns {{command: string, args: string[], out: string} | null}
+ */
+function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
+  const ext = path.extname(candidate).toLowerCase();
+  /* Windows 上「Node 起不起来」与形态强相关：
+   *   · `.cmd` / `.bat` —— 批处理，Node 起不了（实测 EINVAL），**不真试**；
+   *   · `.ps1` —— 要宿主，交给 `powershellHost()`；
+   *   · 无扩展名 shim —— 是 `#!/usr/bin/env node`，libuv 不解析 shebang；
+   *     起不来会自然落到下面的「真起一次」把它否掉。 */
+  if (platform === "win32" && (ext === ".cmd" || ext === ".bat")) {
+    return viaSiblingPs1(candidate, { host, probeRun, isFile });
+  }
+  if (platform === "win32" && ext === ".ps1") {
+    const exe = host();
+    if (!exe) return null;
+    return probeRun(exe, ps1Invocation(candidate));
+  }
+  const direct = probeRun(candidate, ["-v"]);
+  if (direct) return direct;
+  /* 真起不来（无扩展名 shim 在 Windows 上就是这一档）时，同目录的 `.ps1` 是出路。 */
+  return viaSiblingPs1(candidate, { host, probeRun, isFile });
+}
+
+/**
+ * 同目录的 `<名字>.ps1`（去扩展名再拼，不是 `pnpm.CMD.ps1`）经宿主起。
+ *
+ * @param {string} candidate
+ * @param {{probeRun: (cmd: string, args: string[]) => {command: string, args: string[], out: string} | null,
+ *          host: () => string | null,
+ *          isFile: (p: string) => boolean}} ctx
+ * @returns {{command: string, args: string[], out: string} | null}
+ */
+function viaSiblingPs1(candidate, { host, probeRun, isFile }) {
+  const ext = path.extname(candidate);
+  const script = (ext ? candidate.slice(0, -ext.length) : candidate) + ".ps1";
+  if (!isFile(script)) return null;
+  const exe = host();
+  if (!exe) return null;
+  return probeRun(exe, ps1Invocation(script));
+}
+
+/**
+ * 起一次并收 stdout/stderr —— 退出码非零也算「起得来」不算（`-v` 报错即有输出）。
+ *
+ * 与上面 `run()` 的差别只有一个：这里的 `ok` 同时要求**真的起来了**
+ * （`error` 为空），而不只是「退出码是 0」—— 这个函数要回答的正是「能不能起」。
+ *
+ * @param {string} cmd
+ * @param {string[]} args
+ * @returns {{command: string, args: string[], out: string} | null}
+ */
+function runProbe(cmd, args) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+  if (r.error || r.status !== 0) return null;
+  return { command: cmd, args, out };
+}
+
+/**
+ * `.ps1` 经宿主的完整参数。
+ *
+ * 刻意**不接宿主参数**：本脚本只负责给出「宿主 + 这串参数」，宿主由 `powershellHost()`
+ * 单独答（与 `src/lib/process/executable-resolve.ts` 的 `prefixArgs` 同形）。
+ *
+ * @param {string} script
+ * @returns {string[]}
+ */
+function ps1Invocation(script) {
+  return ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script];
+}
+
+/**
+ * PowerShell 宿主（优先 pwsh 7，回退 Windows PowerShell）——`powershellHost()` 同口径。
+ *
+ * @returns {string | null}
+ */
+function powershellHost() {
+  if (process.platform !== "win32") return null;
+  for (const name of ["pwsh", "powershell"]) {
+    for (const ext of [".EXE", ""]) {
+      for (const dir of String(process.env.PATH ?? "")
+        .split(path.delimiter)
+        .filter(Boolean)) {
+        const candidate = path.join(dir, name + ext);
+        if (isFileOnDisk(candidate)) return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 这个路径是不是一个**在盘上的普通文件**（读不动 / 是目录都当没有）。
+ *
+ * @param {string} p
+ * @returns {boolean}
+ */
+function isFileOnDisk(p) {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * `engines.node` 的区间 —— `package.json` 里写的是
@@ -111,7 +297,7 @@ function run(cmd, args) {
   /* ── Windows：裸名字 Node 认不出来时，退回让 **cmd.exe** 去解析 ──────────
    *
    * 本仓的 `pnpm` 在 Windows 上是 `pnpm.cmd`（或 `.ps1`），**没有**无扩展名的
-   * 可执行形态。而 Node 的 `spawn` 不认 PATHEXT —— `spawnSync("pnpm")` 直接
+   * 可执行形态。而 Node 的 `spawn` 不认 PATHEXT —— 裸起一个 pnpm 名字直接
    * `ENOENT`（这正是 `src/lib/process/executable-resolve.ts` 存在的理由，
    * 那边有一份完整的「PATH × PATHEXT 逐目录扫」实现）。
    *
@@ -264,10 +450,18 @@ export function main() {
   }
 
   section("pnpm");
-  const pnpm = run("pnpm", ["-v"]);
+  /* 走 `findPnpm()` 而**不是**裸 `run("pnpm", …)`：后者在 Windows 上问的
+   * 不是同一个问题（见 `findPnpm` 的头注）—— 实测它会把一台 `pnpm install`
+   * 跑得好好的机器判成「pnpm 不可用」，流水线于是停在一个不成立的结论上。 */
+  const pnpm = findPnpm();
   console.log(pnpm.out || "(pnpm 不可用)");
   if (!pnpm.ok) {
-    problems.push("pnpm 不可用 —— 本仓门禁全走 pnpm（AGENTS 硬规则 1 禁 npm）");
+    problems.push(
+      "pnpm 不可用 —— 本仓门禁全走 pnpm（AGENTS 硬规则 1 禁 npm）。" +
+        "探的是 PATH × 扩展名候选（含 .ps1 与同目录回退），不是裸起一个名字；" +
+        "若机器上确有 pnpm 而这里报没有，先在同一个执行账号下跑 " +
+        "`pnpm -v` 与 `pnpm check:toolchain` 对比（两处判据不同源，见规范 §2.1.1）。",
+    );
   }
 
   section("python");

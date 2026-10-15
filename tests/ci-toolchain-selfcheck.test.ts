@@ -40,6 +40,7 @@ import {
   wingetCandidates,
 } from "../scripts/ci-toolchain-python.mjs";
 import {
+  findPnpm,
   nodeAllowed,
   parseVersion,
 } from "../scripts/ci-toolchain-selfcheck.mjs";
@@ -725,5 +726,173 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
       calls.some((args) => args.includes('platform: "linux"')),
       "POSIX 分支的调用点不见了（判据的另一半）",
     ).toBe(true);
+  });
+});
+
+/**
+ * 「工具链自证」的 pnpm 那一格（ISSUE #1961）。
+ *
+ * ## 现场
+ *
+ * 自托管 Windows 节点上第一步就红：
+ *
+ * ```
+ * == OS ==    win32 x64 v24.20.0
+ * == git ==   git version 2.53.0.windows.2
+ * == node ==  v24.20.0
+ * == pnpm ==  (pnpm 不可用)          ← 而同一台机器上 `pnpm install` 跑得好好的
+ * == python == python : python Python 3.12.10
+ * ```
+ *
+ * `git` / `node` / `python` 都答得出来，只有 `pnpm` 说没有 —— 于是整条流水线在
+ * 第 1 秒停在一个**不成立的结论**上（后面 30 个 stage 全部 skipped）。
+ *
+ * ## 根因：裸起一个名字在 Windows 上问的不是同一个问题
+ *
+ * `run("pnpm", ["-v"])` 是把裸名字交给 CreateProcess —— 而 corepack 摆在盘上的
+ * 形态里，Node **一个都起不来**：无扩展名 shim 是 `#!/usr/bin/env node`（libuv
+ * 不解析 shebang）、`.cmd` 只有 cmd.exe 解释（实测 `EINVAL`）、唯一能用的 `.ps1`
+ * 要 PowerShell 宿主。三个形态里能跑的那一个，恰好是最「绕」的那一个。
+ *
+ * 对照：`git` / `node` / `python` 都是 `.exe`，裸名字直接命中 —— 这也解释了
+ * 为什么只有 pnpm 这一格红（同一个 `run()`，不同的可得形态）。
+ *
+ * 所以判据是「**按 PATH × 扩展名解析**，取第一个真的能起的形态」，与
+ * `whichCommand()` 同一套；下判的是「`.ps1` 这一形态能不能被它找到并给出
+ * 可 spawn 的命令」。
+ */
+describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
+  /** 造一个「只有某个候选在盘上」的注入现场。 */
+  const winEnv = (dir: string): Record<string, string | undefined> => ({
+    PATH: dir,
+    // 真实 Windows 默认 PATHEXT —— **不含 `.PS1`**，这正是现场的关键。
+    PATHEXT: ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC",
+  });
+
+  it("只有 `.ps1` 在盘上时也被找到，且给出「宿主 + -File」的形态", () => {
+    /* 盘上只有 `pnpm.PS1`（corepack 三个形态里唯一能被 Node 起的那一个）。
+     * 大小写按判据拼出来的形态写：Windows 不敏感，而 CI 跑在 POSIX 上 ——
+     * 写小写会让这条用例判的是宿主的大小写敏感，不是被测逻辑。 */
+    const dir = "/bin";
+    const ps1 = path.join(dir, "pnpm.PS1");
+    const hostExe = path.join("/host", "pwsh.EXE");
+    const onDisk = new Set([ps1.toLowerCase(), hostExe.toLowerCase()]);
+    // 模拟 NTFS：不敏感大小写。
+    const isFile = (p: string): boolean => onDisk.has(p.toLowerCase());
+    const started: Array<[string, string[]]> = [];
+    const r = findPnpm({
+      platform: "win32",
+      env: winEnv(dir),
+      isFile,
+      host: () => hostExe,
+      probeRun: (cmd: string, args: string[]) => {
+        started.push([cmd, args]);
+        return { command: cmd, args, out: "12.4.1" };
+      },
+    });
+    expect(r.ok, "`.ps1` 在盘上却没被解析出来").toBe(true);
+    expect(r.out).toBe("12.4.1");
+    // 真正要 spawn 的是宿主，不是那个 `.ps1` 自己。
+    expect(r.command.toLowerCase()).toBe(hostExe.toLowerCase());
+    expect(r.args).toContain("-File");
+    expect(r.args).toContain(ps1);
+    expect(started.length).toBe(1);
+  });
+
+  it("`.CMD` 不被当成可用形态（它在 Windows 上只有 cmd.exe 解释得了）", () => {
+    /* corepack 只剩 `.cmd` 的形态：判据必须**不**认它，改报「没有可用形态」——
+     * 认了就等于把「起不来的命令」交给上层，失败推迟到下一个 stage、且报错不指真因。 */
+    const dir = "/bin";
+    const onDisk = new Set([path.join(dir, "pnpm.CMD").toLowerCase()]);
+    const r = findPnpm({
+      platform: "win32",
+      env: winEnv(dir),
+      isFile: (/** @type {string} */ p) => onDisk.has(p.toLowerCase()),
+      host: () => null,
+      /**
+       * @param {string} cmd
+       * @param {string[]} args
+       */
+      probeRun: (cmd, args) => ({ command: cmd, args, out: "should-not-run" }),
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it("`.CMD` + `.ps1` 并排时走 `.ps1`（同目录回退），不经 cmd.exe", () => {
+    const dir = "/bin";
+    const ps1 = path.join(dir, "pnpm.PS1");
+    const hostExe = path.join("/host", "pwsh.EXE");
+    const onDisk = new Set([
+      path.join(dir, "pnpm.CMD").toLowerCase(),
+      ps1.toLowerCase(),
+      hostExe.toLowerCase(),
+    ]);
+    const probed: string[] = [];
+    const r = findPnpm({
+      platform: "win32",
+      env: winEnv(dir),
+      isFile: (p: string) => onDisk.has(p.toLowerCase()),
+      host: () => hostExe,
+      probeRun: (cmd: string, args: string[]) => {
+        probed.push(cmd);
+        return { command: cmd, args, out: "12.4.1" };
+      },
+    });
+    expect(r.ok).toBe(true);
+    // 一次都没往 `.CMD` 上真起过（起了也起不来）。
+    expect(probed.some((c) => /\.cmd$/i.test(c))).toBe(false);
+    expect(r.args).toContain(ps1);
+  });
+
+  it("盘上什么都没有时报不可用（这一档要红，不许静默放过）", () => {
+    const r = findPnpm({
+      platform: "win32",
+      env: winEnv("/bin"),
+      isFile: () => false,
+      host: () => null,
+      /**
+       * @param {string} cmd
+       * @param {string[]} args
+       */
+      probeRun: (cmd, args) => ({ command: cmd, args, out: "x" }),
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it("POSIX 上仍认无扩展名形态（判据不按平台之外的东西分叉）", () => {
+    const dir = "/bin";
+    const shim = path.join(dir, "pnpm");
+    const r = findPnpm({
+      platform: "linux",
+      env: { PATH: dir },
+      isFile: (p: string) => p === shim,
+      host: () => null,
+      probeRun: (cmd: string, args: string[]) => ({
+        command: cmd,
+        args,
+        out: "12.4.1",
+      }),
+    });
+    expect(r.ok).toBe(true);
+    expect(r.command).toBe(shim);
+    expect(r.args).toEqual(["-v"]);
+  });
+
+  it("`.cnb.yml` 那一步走的是它 —— 不是裸起 pnpm 名字的旧写法", () => {
+    const yml = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
+    expect(yml).toContain("node scripts/ci-toolchain-selfcheck.mjs");
+    /* 脚本自己也不许退回裸名字（那正是这一格红掉的形态）。 */
+    const scriptSrc = readFileSync(
+      path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"),
+      "utf8",
+    );
+    const code = scriptSrc
+      .split("\n")
+      .map((line) => line.replace(/^\s*\/\/.*$/, ""))
+      .join("\n");
+    expect(
+      /(?:spawn|spawnSync|exec|execFile)\s*\(\s*["'`]pnpm["'`]/.test(code),
+      "又退回「裸起一个 pnpm 名字」的写法了",
+    ).toBe(false);
   });
 });
