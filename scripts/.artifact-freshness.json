@@ -1,10 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-14T07:30:29.860Z",
+    "verifiedAt": "2026-10-15T04:55:36.934Z",
     "who": "yuedu",
     "how": "pnpm run build",
     "trackedBy": "artifact",
-    "skippedReason": "今天真跑了完整构建链并已修好本检出的虚拟 store（pnpm install --force 之后 standalone-link-repair 通过：扫描 147 条链接、重建 3 条，不再报「仍不可跟随」）。唯一红是 bundle 预算：当前 217 文件 / raw 9603.7 KB / gzip 2247.4 KB，超基线。方向上本批是减法：CSS 产物 raw 从 382452 字节降到 349887 字节（238 条无调用点的规则被摘掉），不新增任何文件。这条预算红不来自本批 —— 同日另一条产物账（03:44Z）已在干净 origin/master 上把它复算成 baseline-red（当时 215 文件 / 2227.3 KB，基线 2226.9 KB），此后合入的字体与构建类改动把它继续推高到 2243.9 再到 2247.4。属主是 bundle 预算那条线，本单不抬基线、不改判据。\n此外仍按「改完构建/产物相关的东西先数产物」那句做了核对：产物 CSS 4 份 / 312121 字节 / 3621 条规则，活类（text-2xs / bg-card / rounded-node / z-canvas-ui / u-title-page）全在、正文供给的死类（z-[99] 那族）一条不在；check-standalone-contents.cjs 两层（standalone 2546 / static 12177）均判干净。"
+    "skippedReason": "已实跑 pnpm build 全链：产物剔除与数产物两段通过（本次登记的 launcher-core/runtime-heal.mjs 与 sync-attribution.mjs 已在两份白名单同源）；被拦的是收尾的 client chunk 预算 —— 基线 generatedAt 2026-10-12 之后已有 72 次提交的累积涨幅（+45.6 KB gzip / +6 chunk），与本次改动无关，本次不新增路由或入口 chunk，预算基线留待单独按 §13.5.4 例外流程（PR 贴 before/after + --allow-increase --update）处理"
   }
 }

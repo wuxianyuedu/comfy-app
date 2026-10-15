@@ -20,6 +20,7 @@
  * | ------ | ------------- | ---------- |
  * | `UpdateCheckProvider` | 依赖检查发现本地更新 | `onDirty` 里的字面量 |
  * | `CodeUpdateWatcher` | 启动器**自愈**重启（带 `restartReason`） | **导出函数** `describeDevServerRestart()` |
+ * | `CodeUpdateWatcher` | **依赖面陈旧**（需停服务 + `pnpm install`） | **导出函数** `describeDepsStale()` |
  * | `CodeUpdateWatcher` | 陈旧实例（`registerStaleStoreDeliver` 回调） | 同上文件里的回调体 |
  * | `useAppServiceMessageLog` | **应用服务断开 / 启动 / 恢复** | `~/lib/shell/app-service-message` 的两个描述函数 |
  *
@@ -56,7 +57,10 @@
 
 import type { Decorator } from "@storybook/nextjs";
 
-import { describeDevServerRestart } from "~/components/code-update/CodeUpdateWatcher";
+import {
+  describeDevServerRestart,
+  describeDepsStale,
+} from "~/components/code-update/CodeUpdateWatcher";
 import {
   useMessageCenterStore,
   type MessageKind,
@@ -138,6 +142,19 @@ function restartNotice(): { title: string; body: string } {
   return describeDevServerRestart("restart");
 }
 
+/** 运行期自愈重启那一处（带启动器懒归因给出的人话短句）。 */
+function healRestartNotice(): { title: string; body: string } {
+  return describeDevServerRestart(
+    "route-404-heal",
+    "本次代码更新改了路由结构（新增 2 / 删除 1，如 api/foo/route.ts）",
+  );
+}
+
+/** 依赖面陈旧那一处的文案 —— 取生产方的导出函数（`drift` 是最常见那一档）。 */
+function depsStaleNotice(): { title: string; body: string } {
+  return describeDepsStale("drift");
+}
+
 /* 「应用服务断开 / 启动」那一处的文案 —— 取自生产方那两个描述函数。
  *
  * 时刻是**算出来的**而不是手抄的：这两条消息的主体就是时间与时长，抄一份
@@ -203,6 +220,22 @@ export const MESSAGE_SCENES = {
     produced: [
       { kind: "offline", make: serviceDisconnectNotice },
       { kind: "restart", make: serviceRecoveredNotice },
+    ],
+  },
+  /**
+   * 运行期自愈正式形态：**一条**合并后的可行动消息 + 依赖面陈旧那一条。
+   *
+   * 自愈重启会同时触发探活（2s）与构建标识（30s）两条链路，生产侧把它们合并成
+   * 一条（见 `CodeUpdateWatcher` 的 `dropHealPairFromCenter`）—— 这一档摆的就是
+   * 合并之后用户实际会看到的样子（而不是「断开 / 恢复 / 重启」三条并排）。
+   */
+  runtimeSelfHeal: {
+    about:
+      "接口层 404 自愈重启（带归因的那一条）+ 依赖面陈旧（需停服务重装依赖）",
+    open: true,
+    produced: [
+      { kind: "update", make: healRestartNotice },
+      { kind: "update", make: depsStaleNotice },
     ],
   },
   /** 一条未读：底部铃铛的角标为 `1`，面板头部显示「1 条 · 1 条未读」。 */

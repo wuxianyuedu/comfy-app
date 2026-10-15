@@ -14,9 +14,9 @@
 <section class="tsd-panel tsd-comment">
 <div class="tsd-comment tsd-typography"><p>构建标识的读取结果：字段为 null = 这一次没读到（服务端未就绪 / 接口不可达）。</p>
 </div></section>
-<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">BuildIdProbe</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#bootid">bootId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#buildid">buildId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#restartreason">restartReason</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">BuildIdProbe</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#bootid">bootId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#buildid">buildId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#depsstale">depsStale</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#depsstate">depsState</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_shell_code-update-since-load.DepsFreshnessState.html" class="tsd-signature-type tsd-kind-type-alias">DepsFreshnessState</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#restartdetail">restartDetail</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#restartreason">restartReason</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/code-update-since-load.ts:87</li></ul></aside>
+<li>Defined in src/lib/shell/code-update-since-load.ts:98</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -26,6 +26,9 @@
 <h3 class="tsd-index-heading tsd-anchor-link" id="properties">Properties<a href="#properties" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-index-list"><a href="#bootid" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>boot<wbr/>Id</span></a>
 <a href="#buildid" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>build<wbr/>Id</span></a>
+<a href="#depsstale" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>deps<wbr/>Stale</span></a>
+<a href="#depsstate" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>deps<wbr/>State</span></a>
+<a href="#restartdetail" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restart<wbr/>Detail</span></a>
 <a href="#restartreason" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restart<wbr/>Reason</span></a>
 </div></section></div></details></section></section>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -37,19 +40,41 @@
 <div class="tsd-comment tsd-typography"><p>进程启动标识；单独解析出来用于区分「重启」与「仅源码变」。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/code-update-since-load.ts:90</li></ul></aside></section>
+<li>Defined in src/lib/shell/code-update-since-load.ts:101</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="buildid"><span>build<wbr/>Id</span><a href="#buildid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">buildId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/code-update-since-load.ts:88</li></ul></aside></section>
+<li>Defined in src/lib/shell/code-update-since-load.ts:99</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="depsstale"><span>deps<wbr/>Stale</span><a href="#depsstale" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">depsStale</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
+<div class="tsd-comment tsd-typography"><p>依赖面是否陈旧（需要「停服务 + <code>pnpm install</code>」）。<strong>无法判定为 null</strong>，
+与 <code>false</code>（判定为新鲜）是不同事实，消费方据此决定提示与否。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in src/lib/shell/code-update-since-load.ts:108</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="depsstate"><span>deps<wbr/>State</span><a href="#depsstate" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">depsState</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_shell_code-update-since-load.DepsFreshnessState.html" class="tsd-signature-type tsd-kind-type-alias">DepsFreshnessState</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
+<div class="tsd-comment tsd-typography"><p>依赖面陈旧的形态（供文案分流）；无法判定为 null。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in src/lib/shell/code-update-since-load.ts:110</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="restartdetail"><span>restart<wbr/>Detail</span><a href="#restartdetail" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">restartDetail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
+<div class="tsd-comment tsd-typography"><p>启动器给的「为什么重启」人话短句（懒归因的产物）；无则 null。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in src/lib/shell/code-update-since-load.ts:105</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="restartreason"><span>restart<wbr/>Reason</span><a href="#restartreason" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">restartReason</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
-<div class="tsd-comment tsd-typography"><p>启动器自愈重启 dev server 时注入的原因（如 stale-route-table）；无则 null。</p>
+<div class="tsd-comment tsd-typography"><p>启动器自愈重启 dev server 时注入的原因（如 route-404-heal）；无则 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/shell/code-update-since-load.ts:92</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/shell/code-update-since-load.ts:103</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -65,7 +90,7 @@
 <h3>On This Page</h3></summary>
 <div class="tsd-accordion-details">
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
-<div><a href="#bootid"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>boot<wbr/>Id</span></a><a href="#buildid"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>build<wbr/>Id</span></a><a href="#restartreason"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restart<wbr/>Reason</span></a></div></details></div></details></div>
+<div><a href="#bootid"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>boot<wbr/>Id</span></a><a href="#buildid"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>build<wbr/>Id</span></a><a href="#depsstale"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>deps<wbr/>Stale</span></a><a href="#depsstate"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>deps<wbr/>State</span></a><a href="#restartdetail"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restart<wbr/>Detail</span></a><a href="#restartreason"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>restart<wbr/>Reason</span></a></div></details></div></details></div>
 <div class="site-menu">
 <nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">

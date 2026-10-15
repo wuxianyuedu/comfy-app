@@ -83,13 +83,31 @@ export function isBootIdChange(
  * 「拿到标识没有、变了没有」，不发裸 fetch。
  */
 
+/** 依赖面新鲜度的形态（产出方是 `~/lib/shell/deps-freshness.server`）。 */
+export type DepsFreshnessState =
+  /** 依赖面与仓库 lockfile 一致（或已确认无缺件）。 */
+  | "fresh"
+  /** 安装时的 lockfile 与仓库那份实质不一致 ⇒ 拉了新代码没重装。 */
+  | "drift"
+  /** 依赖从未装好 / 装残。 */
+  | "no-install"
+  /** lockfile 一致、但个别声明依赖解析不到。 */
+  | "unresolved";
+
 /** 构建标识的读取结果：字段为 null = 这一次没读到（服务端未就绪 / 接口不可达）。 */
 export interface BuildIdProbe {
   buildId: string | null;
   /** 进程启动标识；单独解析出来用于区分「重启」与「仅源码变」。 */
   bootId: string | null;
-  /** 启动器自愈重启 dev server 时注入的原因（如 stale-route-table）；无则 null。 */
+  /** 启动器自愈重启 dev server 时注入的原因（如 route-404-heal）；无则 null。 */
   restartReason: string | null;
+  /** 启动器给的「为什么重启」人话短句（懒归因的产物）；无则 null。 */
+  restartDetail: string | null;
+  /** 依赖面是否陈旧（需要「停服务 + `pnpm install`」）。**无法判定为 null**，
+   *  与 `false`（判定为新鲜）是不同事实，消费方据此决定提示与否。 */
+  depsStale: boolean | null;
+  /** 依赖面陈旧的形态（供文案分流）；无法判定为 null。 */
+  depsState: DepsFreshnessState | null;
 }
 
 /** 读一次构建标识；任何失败都退化为全 null，绝不抛出、绝不阻塞交互。 */
@@ -98,6 +116,9 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
     buildId: null,
     bootId: null,
     restartReason: null,
+    restartDetail: null,
+    depsStale: null,
+    depsState: null,
   };
   try {
     const res = await fetch(BUILD_ID_ENDPOINT, {
@@ -109,6 +130,9 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       buildId?: unknown;
       bootId?: unknown;
       restartReason?: unknown;
+      restartDetail?: unknown;
+      depsStale?: unknown;
+      depsState?: unknown;
     };
     return {
       buildId:
@@ -119,8 +143,27 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
         typeof data.restartReason === "string" && data.restartReason
           ? data.restartReason
           : null,
+      restartDetail:
+        typeof data.restartDetail === "string" && data.restartDetail
+          ? data.restartDetail
+          : null,
+      depsStale: typeof data.depsStale === "boolean" ? data.depsStale : null,
+      depsState: asDepsFreshnessState(data.depsState),
     };
   } catch {
     return empty;
+  }
+}
+
+/** 把端点回的值收成 {@link DepsFreshnessState}；不认识（含 null）一律 null。 */
+function asDepsFreshnessState(value: unknown): DepsFreshnessState | null {
+  switch (value) {
+    case "fresh":
+    case "drift":
+    case "no-install":
+    case "unresolved":
+      return value;
+    default:
+      return null;
   }
 }

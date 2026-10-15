@@ -46,6 +46,7 @@ import {
   startRun,
 } from "./launcher-core/run.mjs";
 import {
+  classifyProbe,
   usesExplicitPort,
   writeLaunchStatus,
 } from "./launcher-core/orchestrator.mjs";
@@ -101,6 +102,11 @@ import {
   pruneTimestampedLogs,
   syncNextCache,
 } from "./launcher-core/worktree.mjs";
+import {
+  createRuntimeRouteWatch,
+  describeRuntimeHealCause,
+  readGitHead,
+} from "./launcher-core/runtime-heal.mjs";
 import {
   touchHeartbeat,
   writeSession,
@@ -427,6 +433,10 @@ export function parseArgs(argv) {
 export async function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const startedAt = Date.now();
+  /* 归因用的「起点」：启动那一刻的 HEAD。只存内存、只为通知文案服务 —— 运行期
+   * 自愈时拿它比一次 `git diff`（懒归因，见 launcher-core/runtime-heal.mjs）。
+   * git 不可用 / 非检出 → null（文案退化为「无法归因」，自愈照常）。 */
+  const headAtBoot = readGitHead(ROOT);
   const explicitPort = Number.parseInt(args.port ?? "", 10);
   const portOrNull =
     Number.isInteger(explicitPort) && explicitPort > 0 ? explicitPort : null;
@@ -582,10 +592,46 @@ export async function run(argv = process.argv.slice(2)) {
   });
   const devExited = () => dev.exitCode !== null || dev.signalCode !== null;
 
+  /* 常驻退出监听的接线：`dev` 会被轻量重启**换成新对象**，因此监听器必须跟着
+   * 换 —— 否则「重启后 dev 崩了」不会被收尾。旧对象被我们主动回收时先摘掉监听，
+   * 不然「自己回收自己」会当场被当成意外退出，把整棵进程树一起收走。 */
+  /** @type {{ child: import("node:child_process").ChildProcess,
+   *           listener: (code: number | null) => void } | null} */
+  let devWatch = null;
+  /** 常驻收尾的解析器（step 11 填进来；dev 退出时由 watchDevChild 的监听器调它）。 */
+  /** @type {((end: { who: string, code: number }) => void) | null} */
+  let resolveLaunchEnd = null;
+
+  /** 把「dev 退出」接到常驻收尾的解析器上（每次换 dev 都要重新接一次）。
+   * @param {import("node:child_process").ChildProcess} child */
+  function watchDevChild(child) {
+    if (devWatch) devWatch.child.off("exit", devWatch.listener);
+    /** @type {(code: number | null) => void} */
+    const listener = (code) =>
+      resolveLaunchEnd?.({ who: "dev", code: code ?? 0 });
+    devWatch = { child, listener };
+    child.once("exit", listener);
+  }
+
+  /** 摘掉旧 dev 的退出监听（回收它**之前**调，避免把「主动重启」判成意外退出）。 */
+  function detachDevWatch() {
+    if (devWatch) {
+      devWatch.child.off("exit", devWatch.listener);
+      devWatch = null;
+    }
+  }
+
   /** 只重启 dev 子进程（保住壳）：回收 dev 整棵子树 → 清 .next → 带重启原因
-   *  重新拉起 → 刷新会话锚点（新 dev 的 pid 要落进去，否则进程被杀后的孤儿回收
-   *  漏掉它）。这是「陈旧路由表」自愈的唯一动作，被上层限制为只跑一次。 */
-  async function restartDevForStaleRoutes() {
+   *  （+ 可选的人话归因）重新拉起 → 重新武装退出监听 → 刷新会话锚点（新 dev 的
+   *  pid 要落进去，否则进程被杀后的孤儿回收会漏掉它）。
+   *
+   *  `reason` 经 `COMFYAPP_RESTART_REASON` 透传给新 dev（界面据此弹通知）；
+   *  `detail` 非空时另注入 `COMFYAPP_RESTART_DETAIL`，作为通知里「为什么」那句人话。
+   *  这是「陈旧路由表」自愈的唯一动作，被调用方限制为有界（冷却 + 上限）。
+   * @param {string} reason
+   * @param {string | null} [detail] */
+  async function restartDevForReason(reason, detail = null) {
+    detachDevWatch();
     if (dev.pid) {
       try {
         await reapProcessTree({
@@ -601,9 +647,11 @@ export async function run(argv = process.argv.slice(2)) {
       }
     }
     syncNextCache(ROOT, { FORCE_CLEAN: "1" });
-    dev = spawnDevServer(port, args.host, nextOut, nextErr, {
-      COMFYAPP_RESTART_REASON: "stale-route-table",
-    });
+    /** @type {Record<string, string>} */
+    const extraEnv = { COMFYAPP_RESTART_REASON: reason };
+    if (detail) extraEnv.COMFYAPP_RESTART_DETAIL = detail;
+    dev = spawnDevServer(port, args.host, nextOut, nextErr, extraEnv);
+    watchDevChild(dev);
     writeSession(ROOT, {
       launcher_pid: process.pid,
       child_pids: spawned
@@ -620,8 +668,10 @@ export async function run(argv = process.argv.slice(2)) {
       log,
       status,
       devExited,
-      respawnDev: async () => {
-        await restartDevForStaleRoutes();
+      respawnDev: async (reason) => {
+        /* 启动就绪期的自愈不带归因（headAtBoot 刚记下、此刻 diff 必为空）：这句
+         * 「为什么」由既有文案给出，无需多跑一次 git。 */
+        await restartDevForReason(reason, null);
         log(`dev server 已重启（PID ${dev.pid}）`, "OK");
       },
     },
@@ -665,6 +715,27 @@ export async function run(argv = process.argv.slice(2)) {
     staleShell,
   });
 
+  // 9.5) 运行期自愈：常驻探测「接口层是不是整体 404」。
+  //
+  // **症状驱动，不看代码**：与 HMR 零重叠 —— HMR 已吸收的 pull 下 `/api/health`
+  // 仍是 200，探测毫不知情、零动作；真坏了（页面 200 而 `/api/health` 404）才
+  // 轻量重启 dev server。归因（为什么改坏）在这一刻才懒跑一次 git（见 runtime-heal.mjs），
+  // 拿不到就退化为「无法归因」，不影响自愈。`armedInitially` 为真：本行只在就绪
+  // 之后才走到。
+  const runtimeWatch = createRuntimeRouteWatch({
+    log,
+    armedInitially: true,
+    probeHealth: () => classifyProbe({ port, host: args.host }),
+    probeRoot: async () =>
+      (await classifyProbe({ port, host: args.host, path: "/" })) === "ready",
+    onHeal: async () => {
+      const detail = describeRuntimeHealCause(ROOT, headAtBoot);
+      log(`陈旧路由表自愈归因：${detail ?? "（无法归因）"}`, detail ? "INFO" : "WARN");
+      await restartDevForReason("route-404-heal", detail);
+      log(`dev server 已重启（PID ${dev.pid}）`, "OK");
+    },
+  });
+
   // 10) 打开浏览器（仅纯 Web 模式；桌面模式界面就是壳窗口）
   if (args.open && process.env.NO_OPEN !== "1" && args.mode === "web") {
     openBrowser(`http://localhost:${port}`);
@@ -675,11 +746,15 @@ export async function run(argv = process.argv.slice(2)) {
   // **要记住是谁退出的**：写侧只在「dev 先走」时才有一件事可做（见下），而
   // 「等任一退出」这个语义本身不回答是谁。
   const ended = await new Promise((resolve) => {
-    dev?.once("exit", (code) => resolve({ who: "dev", code: code ?? 0 }));
+    /* dev 的监听由 watchDevChild 接（它随每次轻量重启重新武装）；这里只把解析器
+     * 交出去 + 接壳与信号这两条一轮会话内不会变的边。 */
+    resolveLaunchEnd = resolve;
     shell?.once("exit", (code) => resolve({ who: "shell", code: code ?? 0 }));
     process.once("SIGINT", () => resolve({ who: "signal", code: 0 }));
     process.once("SIGTERM", () => resolve({ who: "signal", code: 0 }));
+    watchDevChild(dev);
   });
+  runtimeWatch.stop();
   clearInterval(heartbeat);
   /* 运行期退出的落盘（ISSUE #1692 的第二半）。判据与措辞在
    * {@link runtimeExitRecord}（可单测），这里只负责把它写下去。 */

@@ -1,9 +1,9 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-15T06:58:54.701Z",
-    "who": "yuedu",
-    "how": "pnpm test:e2e",
+    "verifiedAt": "2026-10-15T09:34:52.253Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "PNPM_START=1 pnpm test:e2e",
     "trackedBy": "e2e"
   }
 }
