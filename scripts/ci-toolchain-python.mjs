@@ -295,7 +295,9 @@ function listDirectories(/** @type {string} */ root) {
  *          mkdir?: (p: string) => void,
  *          download?: (url: string, dest: string) => void,
  *          unzip?: (zip: string, dest: string) => void,
- *          cwd?: string}} [options]
+ *          cwd?: string,
+ *          listDirs?: (p: string) => string[],
+ *          findExeUnder?: (root: string) => string | null}} [options]
  * @returns {{installed: boolean, path: string | null, reason: string | null,
  *            channel?: string | null, attempts?: string[]}}
  */
@@ -308,6 +310,13 @@ export function installPython({
    * 判据里注入一个**确定**的替身 —— 否则「探过哪两条 scope」会取决于
    * 跑判据的那台机器上碰巧有没有装 Python（本文件最初就踩了这格）。 */
   findExe = findExeUnderAllRoots,
+  /* 「在某个 root 下找一个解释器」—— 与上面那个是**两层**：`findExe` 回答
+   * 「这台机器上有没有」（扫全部安装根），这个回答「这个目录下有没有」。
+   * `scoop` 通道按落点逐个问它，所以它**必须**是一个独立注入面：
+   * 少了它，那一半会绕过 `findExe` 直取模块实现去读真 fs，判据的结论于是
+   * 又变成「跑判据那台机器上碰巧有什么」。 */
+  findExeUnder: findUnder = findExeUnder,
+  listDirs = listDirectories,
   mkdir = (/** @type {string} */ p) => fs.mkdirSync(p, { recursive: true }),
   download = downloadFile,
   unzip = unzipArchive,
@@ -327,8 +336,16 @@ export function installPython({
   const attempts = [];
   for (const channel of [
     () =>
-      viaWinget({ run: runCmd, env, platform, findExe, impl: installViaWinget }),
-    () => viaScoop({ run: runCmd, env, existing }),
+      viaWinget({
+        run: runCmd,
+        env,
+        platform,
+        findExe,
+        impl: installViaWinget,
+        listDirs,
+        existing,
+      }),
+    () => viaScoop({ run: runCmd, env, existing, findExeUnder: findUnder }),
     () => viaEmbed({ env, existing, mkdir, download, unzip, cwd }),
   ]) {
     const result = channel();
@@ -353,15 +370,27 @@ export function installPython({
  *          env: Record<string, string | undefined>,
  *          platform: NodeJS.Platform,
  *          findExe: (env: Record<string, string | undefined>) => string | null,
+ *          listDirs: (p: string) => string[],
+ *          existing: (p: string) => boolean,
  *          impl: (input: {run: (cmd: string, args: string[]) => RunResult,
  *                          env: Record<string, string | undefined>,
  *                          platform: NodeJS.Platform,
- *                          findExe: (env: Record<string, string | undefined>) => string | null}) => {installed: boolean,
+ *                          findExe: (env: Record<string, string | undefined>) => string | null,
+ *                          listDirs: (p: string) => string[],
+ *                          existing: (p: string) => boolean}) => {installed: boolean,
  *                                                            path: string | null,
  *                                                            reason: string | null}}} ctx
  */
-function viaWinget({ run: runCmd, env, platform, findExe, impl }) {
-  const r = impl({ run: runCmd, env, platform, findExe });
+function viaWinget({
+  run: runCmd,
+  env,
+  platform,
+  findExe,
+  impl,
+  listDirs,
+  existing,
+}) {
+  const r = impl({ run: runCmd, env, platform, findExe, listDirs, existing });
   return {
     path: r.path,
     channel: "winget",
@@ -375,10 +404,18 @@ function viaWinget({ run: runCmd, env, platform, findExe, impl }) {
  *
  * @param {{run: (cmd: string, args: string[]) => {ok: boolean, out: string},
  *          env: Record<string, string | undefined>,
- *          findExe: (env: Record<string, string | undefined>) => string | null}} input
+ *          findExe: (env: Record<string, string | undefined>) => string | null,
+ *          listDirs?: (p: string) => string[],
+ *          existing?: (p: string) => boolean}} input
  * @returns {{installed: boolean, path: string | null, reason: string | null}}
  */
-function installViaWinget({ run: runCmd, env, findExe }) {
+function installViaWinget({
+  run: runCmd,
+  env,
+  findExe,
+  listDirs = listDirectories,
+  existing = (/** @type {string} */ p) => fs.existsSync(p),
+}) {
 
   /**
    * 判一个候选路径在不在盘上 —— 读不动（别人的 profile 常常权限不足）与不存在
@@ -388,7 +425,7 @@ function installViaWinget({ run: runCmd, env, findExe }) {
    */
   const existsOnDisk = (p) => {
     try {
-      return fs.existsSync(p);
+      return existing(p);
     } catch {
       return false;
     }
@@ -402,7 +439,7 @@ function installViaWinget({ run: runCmd, env, findExe }) {
        * **落点是一串而不是一个**：winget 按用户装，而构建账号（实测是
        * `NT AUTHORITY\\SYSTEM`）的 profile 里结构上不可能有它 —— 只探本账号会把
        * 「找错 profile」报成「这台机没有 winget」。见 {@link wingetCandidates}。 */
-      wingetCandidates(env).find((p) => existsOnDisk(p)) ?? null;
+      wingetCandidates(env, listDirs).find((p) => existsOnDisk(p)) ?? null;
   if (!winget) {
     return {
       installed: false,
@@ -458,10 +495,11 @@ export const PYTHON_EMBED_VERSION = "3.12.8";
  *
  * @param {{run: (cmd: string, args: string[]) => {ok: boolean, out: string},
  *          env: Record<string, string | undefined>,
- *          existing: (p: string) => boolean}} ctx
+ *          existing: (p: string) => boolean,
+ *          findExeUnder: (root: string) => string | null}} ctx
  * @returns {{path: string | null, channel: string, reason: string | null}}
  */
-function viaScoop({ run: runCmd, env, existing }) {
+function viaScoop({ run: runCmd, env, existing, findExeUnder: findExe }) {
   if (!runCmd("scoop", ["--version"]).ok) {
     return { path: null, channel: "scoop", reason: "盘上没有 scoop" };
   }
@@ -483,7 +521,7 @@ function viaScoop({ run: runCmd, env, existing }) {
     if (existing(candidate)) {
       return { path: candidate, channel: "scoop", reason: null };
     }
-    const found = findExeUnder(root);
+    const found = findExe(root);
     if (found) return { path: found, channel: "scoop", reason: null };
   }
   return {

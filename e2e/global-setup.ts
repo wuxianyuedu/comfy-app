@@ -77,13 +77,28 @@ export interface FakeSlotObservation {
  * 抽成导出函数是为了让判决能被真跑一次（`tests/e2e-fake-comfyui-endpoint.test.ts`
  * 拿一个临时 HTTP 服务喂它），而不是只在 Playwright 起得来时才被执行。
  *
- * 连接被拒（服务不在）**不是错误**：那正是「替身会由 webServer 正常起来」的
- * 前提，`fetch` 抛出的那一下翻成 `status: 0`。
+ * ## 「端口空着」与「没来得及答」必须分开（ISSUE #1961）
+ *
+ * 它们此前都落进 `status: 0` ⇒ `classifyFakeSlot` 判 `free`。而在 CPU 争用下
+ * （平台侧 `--coverage` + 多 worker 一起跑）一个**已经监听**的本地服务也可能
+ * 在预算内答不上来，于是探针把「有人、但我没等到」当成「没人」—— 实测复现：
+ * 8 核机上把 CPU 占满，同一个已监听的临时服务探出来是
+ * `status 0 / The operation was aborted due to timeout`，判 `free`。
+ *
+ * 这一格的代价不对称：`free` 会让 `assertFakeSlotFree()` 放行，而「真件坐在
+ * 替身端口上」那一格本意是要**当场阻断**的（见本文件头）—— 判成 `free` 等于
+ * 把这条判据在负载高的时候静默关掉。所以这里按 `err.cause` 分岔：
+ * 只有**连接层确实被拒**（`ECONNREFUSED` / `ENOTFOUND` / `EHOSTUNREACH`）才是
+ * 「空着」，预算耗尽的 `TimeoutError` 归 `unknown`（判据会拦，并说清是「没等到
+ * 应答」而不是「端口上有人」）。
  */
 export async function probeFakeComfySlot(
   options: { url?: string; timeoutMs?: number } = {},
 ): Promise<FakeSlotObservation> {
   const url = options.url ?? fakeComfyuiStatsUrl();
+  /* 1500ms 是**本地回环**上探一个已经起来的服务，本机实测 13ms —— 给两个数量级
+   * 的余量。但它不是为高负载准备的：争用下真正要的是「别把超时读成没人」，
+   * 那件事由上面的分岔判，不是靠把这个数抬高（抬它只会让真挂死晚 1.5s 被看见）。 */
   const timeoutMs = options.timeoutMs ?? 1500;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
@@ -96,12 +111,43 @@ export async function probeFakeComfySlot(
     }
     return { status: res.status, payload };
   } catch (err) {
-    /* 连不上 = 端口空着（替身待起）；这是**最常见**的一格，不进 unknown。 */
-    return {
-      status: 0,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    const text = err instanceof Error ? err.message : String(err);
+    return connectionRefused(err)
+      ? /* 连不上 = 端口空着（替身待起）；这是**最常见**的一格，不进 unknown。 */
+        { status: 0, error: text }
+      : /* 不是「没人」而是「没等到」：归 unknown，让判据拦下并说清。
+         * `status: 0` 在这里会**静默放行**，正是本 ISSUE 要收的那一格。 */
+        { status: -1, error: `探针没在预算内拿到应答：${text}` };
   }
+}
+
+/**
+ * 这一下 `fetch` 失败是不是「连接层确实被拒」？
+ *
+ * Node 的 `fetch`（undici）把底层的 `ECONNREFUSED` 一族包在 `err.cause` 里，
+ * 而把预算耗尽报成 `TimeoutError`（`DOMException`，`name` 是 `TimeoutError`）。
+ * 两者此前都只是「抛了」，于是同一个 `status: 0` 同时表示「没人」与「没等到」。
+ *
+ * @param {unknown} err
+ */
+function connectionRefused(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  /* 预算耗尽（含手动 abort）一律**不算**「空着」—— 它回答不了那个问题。 */
+  const name = (err as { name?: unknown }).name;
+  if (name === "TimeoutError" || name === "AbortError") return false;
+  const code = (err as { cause?: { code?: unknown } }).cause?.code;
+  if (typeof code === "string") {
+    return ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"].includes(
+      code,
+    );
+  }
+  /* 拿不到 `cause.code` 时退回文本：Node 在部分路径上把码并进 message
+   * （`connect ECONNREFUSED 127.0.0.1:18188`）。**认不出就按「没等到」处理** ——
+   * 反过来的默认值会让「未知故障」静默放行，而那一格的代价见本函数上方。
+   * 非 `Error` 的抛出物没有可读文本（`String({})` 是 `[object Object]`），
+   * 它同样落进「认不出」那一档 —— 这不需要单独分支，只是别把它当字符串拼。 */
+  const text = err instanceof Error ? err.message : "";
+  return /ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ENETUNREACH/.test(text);
 }
 
 /**

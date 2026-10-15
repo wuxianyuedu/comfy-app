@@ -28,6 +28,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -318,6 +319,13 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     download: () => undefined,
     unzip: () => undefined,
     cwd: mkdtempSync(path.join(tmpdir(), "selfcheck-inert-")),
+    /* ⚠️ 上面这一串是按「**用例传了什么**」列的，而漏掉一个就仍然会真去读盘。
+     * 这一条是**两个**查找面（ISSUE #1961）：`findExe` 回答「这台机器上有没有」，
+     * `findExeUnder` 回答「这个目录下有没有」—— `scoop` 通道按落点逐个问的是后者。
+     * 只给前者时那一半会绕过它直取模块实现读真 fs（下面那条结构判据钉住这件事）。 */
+    findExe: () => null,
+    findExeUnder: () => null,
+    listDirs: () => [],
   };
 
   it("winget 不在 PATH 上时，仍按用户级标准落点再找一遍", () => {
@@ -546,5 +554,84 @@ describe("工具链自证：`.cnb.yml` 真的在跑它", () => {
     // 老形态的两件特征：就地 winget、就地递归找安装根。
     expect(yml).not.toContain("winget install");
     expect(yml).not.toContain("Get-ChildItem");
+  });
+});
+
+/**
+ * 「注入面只堵了一半」的结构判据（ISSUE #1961）。
+ *
+ * ## 它挡的是什么
+ *
+ * `installPython` 是**三条按序**的通道，而「注入面」此前是按「用例传了什么」攒出来的
+ * —— 攒漏一个，那一半就直取模块实现去读真 fs / 真网络。实测：只注入 `run` 时，
+ * `viaScoop` 自己起 `spawnSync("scoop", …)` 并用**模块内**的 `findExeUnder` 读真 fs
+ * （注入的 `findExe` 管不到它）。这类红的形态与「用例写慢了」逐字同形，所以缺的不是
+ * 纪律。
+ *
+ * ## 为什么按**源码结构**判，而不是按用例数它传没传
+ *
+ * 后者要维护一张会过期的名单（「还有哪个接缝没堵」这件事本身没人看着），前者跟着
+ * 实现走：只要通道内部出现了直取模块级实现，它就红。
+ */
+describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961）", () => {
+  const script = readFileSync(
+    path.join(ROOT, "scripts", "ci-toolchain-python.mjs"),
+    "utf8",
+  );
+
+  it("`installPython` 的注入面覆盖每条通道会伸出去的东西", () => {
+    for (const one of [
+      "run: runCmd = run",
+      "env = process.env",
+      "existing =",
+      "findExe =",
+      "findExeUnder: findUnder =",
+      "listDirs =",
+      "mkdir =",
+      "download =",
+      "unzip =",
+      "cwd = process.cwd()",
+    ]) {
+      expect(script, `installPython 的参数表里没有 \`${one}\``).toContain(one);
+    }
+  });
+
+  it("通道壳把注入面透传下去，而不是在内部直取模块级实现", () => {
+    /* `viaScoop` 曾经直接用模块内的 `findExeUnder` —— 注入的 `findExe` 管不到它，
+     * 于是「scoop 报成功」那条结论随宿主上有没有 Python 而变。 */
+    const scoop = script.slice(
+      script.indexOf("function viaScoop("),
+      script.indexOf("function viaEmbed("),
+    );
+    expect(scoop, "viaScoop 没有接 findExeUnder 注入面").toContain("findExeUnder");
+    expect(
+      /(?<![.\w])findExeUnder\s*\(/.test(scoop.replace(/findExeUnder:\s*findExe/, "")),
+      "viaScoop 又直接调了模块级的 findExeUnder（读真 fs）：注入面形同虚设",
+    ).toBe(false);
+
+    /* `listDirs` 是 `wingetCandidates` 的第二个参数：漏传它，那一步会真去列盘上目录。 */
+    const shell = script.slice(
+      script.indexOf("function viaWinget("),
+      script.indexOf("function installViaWinget("),
+    );
+    expect(shell, "viaWinget 没把 listDirs / existing 透传给实现").toContain(
+      "listDirs",
+    );
+    expect(shell).toContain("existing");
+  });
+
+  it("Windows 分支的每个调用点都带 noExternalAction()", () => {
+    /* 只判 **Windows** 分支：POSIX 那条只经 `run` 起包管理器，没有网络与解压
+     * 那两截 —— 只注入 `run` 在那里是真的够，判它等于误报。 */
+    const self = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    const calls = [
+      ...self.matchAll(/installPython\(\{([\s\S]*?)\n\s{0,6}\}\);/g),
+    ].map((m) => m[1] ?? "");
+    const winCalls = calls.filter((args) => args.includes("...noExternalAction"));
+    expect(winCalls.length, "没扫到 Windows 分支的调用点，判据失效了").toBeGreaterThan(1);
+    expect(
+      calls.some((args) => args.includes('platform: "linux"')),
+      "POSIX 分支的调用点不见了（判据的另一半）",
+    ).toBe(true);
   });
 });
