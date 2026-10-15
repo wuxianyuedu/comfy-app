@@ -226,6 +226,20 @@
     script: pnpm run build
 
   # ── E2E（仅 @critical 关键流程）──
+  #
+  # 这一步只是**把 E2E 依赖的解释器答出来**：装机那件事已经由第一步
+  # （`scripts/ci-toolchain-selfcheck.mjs`）判过也装过了，这里不再判一次。
+  #
+  # 那为什么还要单独一步：第一步那段的输出是**成功即静默**的（绿的时候只打三行
+  # 版本号），排查「E2E 到底用了哪个解释器」时没有可读的读数；而开头那段是
+  # PowerShell，本地看不见它。这一步跨平台（`scripts/ci-toolchain-selfcheck.mjs`
+  # 的 `--python-only`），本地跑 `pnpm test:e2e` 时它也是**同一个判据**给出的答案。
+  #
+  # 缺 Python 时它退非零 —— 那时后面那一步必然以「两条 @critical 报成执行器
+  # 收口失败」收场，报错指不到真因；在开跑前正面回答，代价是一次进程探测。
+  - name: Python 可用性
+    script: node scripts/ci-toolchain-selfcheck.mjs --python-only
+
   - name: E2E 关键流程
     script: node scripts/e2e-run.mjs --grep @critical
 

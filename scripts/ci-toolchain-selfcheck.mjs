@@ -19,6 +19,20 @@
  * / pnpm / Python（三处判据 + e2e 主链路都要它）。缺失时**非零退出**，并把
  * 「下一动作」打出来 —— 红要红在能指路的位置，不能只打几个版本号。
  *
+ * 缺 Python 时它会**按平台挑一个安装器当场装**（Windows 是 `winget`，**机器级**
+ * —— Runner 是服务账号，按用户装只写安装者的 PATH，那正是「人在自己会话里看得见、
+ * 构建步骤一个都探不到」的成因；Linux 在 apt-get / dnf / apk 里挑第一个存在的，
+ * 且**不替人 sudo**；macOS 只认 brew），装完**复验**：安装器退 0 不等于解释器已在
+ * PATH 上。**装完仍找不到就非零退出 —— 红是对的**，让机器自己修好它只是省一遍人工。
+ *
+ * ## 两种调用形态
+ *
+ *   node scripts/ci-toolchain-selfcheck.mjs               整机自证（流水线第一步）
+ *   node scripts/ci-toolchain-selfcheck.mjs --python-only 只答 Python 那一格（E2E 之前那一步）
+ *
+ * 后者不是第二套判据：它调的是同一份 `findPython` / `installPython` / `pythonForensics`，
+ * 只是把「整机」那几格让给已经答过它的第一步（§12.18）。
+ *
  * ## 它为什么自己起子进程而不是 import `executable-resolve.ts`
  *
  * 可以 import（Node 24 默认类型擦除，本仓多处就是这么干的）。但这一步是**流水线第
@@ -298,22 +312,36 @@ function listDirectories(root) {
 }
 
 /**
- * 缺 Python 时按默认安装根再找一遍并**就地装**（Windows / `winget`，按用户，
- * 不需要管理员）。
+ * 缺 Python 时按默认安装根再找一遍并**就地装**（Windows / `winget`）。
  *
  * 自托管最大的成本是「这台机器要自己维护」，而它**不会因为少装了什么就报错**
  * （表现是某几条判据以「探测不到」的名义静默退出比对）。所以这里既判也装 ——
  * 但装完仍找不到就非零退出：**红是对的**，让机器自己修好它只是省一遍人工。
  *
+ * ## 为什么两个 scope 都要试（`--scope user` 一个不够）
+ *
+ * 现场读数（#1959 第三轮）：Runner 以 **`NT AUTHORITY\SYSTEM`** 跑，用的是一份
+ * **机器** PATH。而 `winget install --scope user` 把包装进**当前用户**的
+ * 配置目录 —— 对 SYSTEM 这种「没有真用户配置目录」的账号，那条路要么装不上、
+ * 要么装到一个**这次构建之后的会话也看不见**的地方。这与「节点上压根没装」
+ * 在日志里逐字同形，而处置是两件事。
+ *
+ * 所以先试 `--scope user`，不行就再试**机器级**（`--scope machine`：需要管理员，
+ * 而自托管 Runner 通常就是以高权限服务账号跑的）。两条都试过仍找不到才认输，
+ * 并把「试过什么」写进 `reason`。
+ *
  * 本进程的环境早于安装，所以装完要按安装根直接找可执行文件，不指望 PATH 自己刷新。
  */
-export function installPython({ run: runCmd = run, env = process.env } = {}) {
-  if (process.platform !== "win32") {
-    return {
-      installed: false,
-      path: null,
-      reason: "非 Windows：请自行安装 Python 3",
-    };
+export function installPython({
+  run: runCmd = run,
+  env = process.env,
+  platform = process.platform,
+} = {}) {
+  /* 非 Windows：只有**认得出**包管理器时才动手，认不出就如实说「请自行安装」——
+   * 猜一个可能不存在的包管理器（或替人 `sudo`）比不打这一枪更糟：无人值守的流水线里
+   * 一次权限提示就是一次挂死，而本地开发机上「装一个系统 Python」不该由测试入口替人决定。 */
+  if (platform !== "win32") {
+    return installPythonPosix({ run: runCmd, platform });
   }
   const winget = runCmd("winget", ["--version"]).ok
     ? "winget"
@@ -327,35 +355,126 @@ export function installPython({ run: runCmd = run, env = process.env } = {}) {
       installed: false,
       path: null,
       reason:
-        "winget 不在 PATH 上，也不在标准落点（%LOCALAPPDATA%\\Microsoft\\WindowsApps）",
+        "winget 不在 PATH 上，也不在标准落点（%LOCALAPPDATA%\\Microsoft\\WindowsApps）" +
+        " —— 这台节点没有可用的自动安装入口",
     };
   }
-  const r = runCmd(winget, [
-    "install",
-    "--id",
-    "Python.Python.3.12",
-    "--scope",
-    "user",
-    "--silent",
-    "--accept-package-agreements",
-    "--accept-source-agreements",
-  ]);
-  if (!r.ok) {
-    return {
-      installed: false,
-      path: null,
-      reason: `winget 安装失败：${r.out}`,
-    };
-  }
-  for (const root of pythonInstallRoots(env)) {
-    const found = findExeUnder(root);
+  const tried = [];
+  for (const scope of ["user", "machine"]) {
+    const r = runCmd(winget, [
+      "install",
+      "--id",
+      "Python.Python.3.12",
+      "--scope",
+      scope,
+      "--silent",
+      "--accept-package-agreements",
+      "--accept-source-agreements",
+    ]);
+    if (!r.ok) {
+      tried.push(`--scope ${scope} 失败（${firstLine(r.out)}）`);
+      continue;
+    }
+    const found =
+      findExeUnderAllRoots(env) ??
+      /* 机器级安装会把解释器放到 Program Files，而**这个进程的 PATH 是安装前的** ——
+       * 按安装根找不到时再按 winget 的链接目录找一次，别把刚装好的读成没装。 */
+      findExeUnder(
+        path.join(env.LOCALAPPDATA ?? "", "Microsoft", "WinGet", "Links"),
+      );
     if (found) return { installed: true, path: found, reason: null };
+    tried.push(`--scope ${scope} 报成功，但安装根下找不到解释器`);
   }
   return {
-    installed: true,
+    installed: false,
     path: null,
-    reason: "winget 报安装成功，但默认安装根下找不到解释器",
+    reason: `winget 两条 scope 都试过，仍没拿到可用解释器：${tried.join("；")}`,
   };
+}
+
+/**
+ * POSIX 上的安装分支：macOS 只认 `brew`，Linux 在 `apt-get` / `dnf` / `apk` 里挑
+ * **第一个真存在**的；一个都没有就返回「请自行安装」而不是去猜。
+ *
+ * 刻意**不调 `sudo`**：本入口有两个消费方 —— 自托管节点（无人值守）与本地开发机
+ * （人的会话）。前者遇到权限提示就是挂死，后者不该被测试入口替它做系统级决定；
+ * 权限那一层归平台侧的人（规范 §13.5.3.5）。
+ *
+ * @param {{run: (cmd: string, args: string[]) => {ok: boolean, out: string}, platform: NodeJS.Platform}} input
+ * @returns {{installed: boolean, path: string | null, reason: string | null}}
+ */
+function installPythonPosix({ run: runCmd, platform }) {
+  /** 元组是 `[命令, 判断它在不在时带的参数, 真要装时带的参数]` ——
+   *  `apt-get --version` 与 `apt-get install -y python3` 是两件事，别糊成一个数组。 */
+  /** @type {Array<[string, string[], string[]]>} */
+  const plans =
+    platform === "darwin"
+      ? [["brew", ["--version"], ["install", "python@3.12"]]]
+      : [
+          ["apt-get", ["--version"], ["install", "-y", "python3"]],
+          ["dnf", ["--version"], ["install", "-y", "python3"]],
+          ["apk", ["--version"], ["add", "python3"]],
+        ];
+  for (const [cmd, probeArgs, args] of plans) {
+    /* 用 `--version` 判它在不在，而不是 `shutil.which`：本脚本刻意只用
+     * `node:child_process`（见文件头），少一层平台差异。 */
+    if (!runCmd(cmd, probeArgs).ok) continue;
+    const r = runCmd(cmd, args);
+    if (!r.ok) {
+      return {
+        installed: false,
+        path: null,
+        reason: `${cmd} 安装失败（多半是没有权限 —— 本步刻意不替你 sudo）：${r.out}`,
+      };
+    }
+    /* 装完**复验**：本进程的环境早于安装，PATH 不一定会自己刷新（Windows 上
+     * 机器级安装要新会话才生效；POSIX 上包管理器装的多半已在 PATH 上）。 */
+    const after = findPython({ run: runCmd });
+    return after
+      ? { installed: true, path: after.path, reason: null }
+      : {
+          installed: true,
+          path: null,
+          reason: `${cmd} 退 0，但装完仍解析不到解释器（PATH 要新会话才刷新时属正常，重跑一次即可）`,
+        };
+  }
+  return {
+    installed: false,
+    path: null,
+    reason:
+      platform === "darwin"
+        ? "找不到 brew —— 请用 python.org 的安装包装 Python 3"
+        : "apt-get / dnf / apk 都不在 —— 请用发行版的包管理器或 python.org 装 Python 3",
+  };
+}
+
+/**
+ * 第一条非空输出行（winget 的报错常常多行，取出最能说明问题的那一行）。
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function firstLine(text) {
+  return (
+    String(text ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)[0] ?? "(无输出)"
+  );
+}
+
+/**
+ * 在所有常见安装根下找一个解释器（找第一个命中）。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {string | null}
+ */
+function findExeUnderAllRoots(env) {
+  for (const root of pythonInstallRoots(env)) {
+    const found = findExeUnder(root);
+    if (found) return found;
+  }
+  return null;
 }
 
 /**
@@ -413,7 +532,47 @@ function walk(dir, wanted) {
   return null;
 }
 
+/**
+ * 只答「Python 这一格」并据此退码 —— 给「E2E 依赖的解释器在不在」那一步用。
+ *
+ * 为什么不复用 `main()`：`main()` 判的是**整机**（git / node / pnpm / python 四件），
+ * 那四件在流水线里已经由第一步答过；E2E 前那一步只关心一件事，重答一遍别的是噪音。
+ * 两处的**判据本身**是同一份（`findPython` / `installPython` / `pythonForensics`），
+ * 这里只是换一层壳（§12.18：不造第二套判据）。
+ *
+ * @returns {number}
+ */
+export function pythonOnly() {
+  section("python");
+  /** @type {{command: string, path: string | null, version: string} | null} */
+  let python = findPython();
+  if (!python) {
+    const attempt = installPython();
+    if (attempt.path) {
+      python = { command: attempt.path, path: attempt.path, version: "" };
+    } else {
+      notes.push(`自动安装未生效：${attempt.reason}`);
+    }
+  }
+  if (python) {
+    console.log(
+      `python : ${python.path ?? python.command} ${python.version}`.trim(),
+    );
+    return 0;
+  }
+  for (const line of pythonForensics()) console.log(line);
+  console.error(
+    "\n这一档要用的解释器不在：假 comfy-cli 是一个 Python 包，主链路的两条 " +
+      "@critical 用例会各报一遍「执行器收口失败」，而报错不指向这一行。" +
+      "下一动作见上面那份取证（§13.5.3.5）。",
+  );
+  return 1;
+}
+
 export function main() {
+  /* 只答 Python 那一格（`.cnb.yml` 里 E2E 之前那一步用它）。 */
+  if (process.argv.includes("--python-only")) return pythonOnly();
+
   section("OS");
   console.log(process.platform, process.arch, process.version);
 
@@ -445,7 +604,9 @@ export function main() {
   /** @type {{command: string, path: string | null, version: string} | null} */
   let python = findPython();
   if (!python) {
-    console.log("未发现可用解释器，尝试用 winget 当场装（按用户，无需管理员）");
+    console.log(
+      "未发现可用解释器，尝试按平台挑一个安装器当场装（找不到就如实报）",
+    );
     const attempt = installPython();
     if (attempt.path) {
       python = { command: attempt.path, path: attempt.path, version: "" };
