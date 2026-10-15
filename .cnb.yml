@@ -177,6 +177,36 @@
         # 失败即非零退出 —— 这一步的全部意义就是「会红」，见文件头第 1 条。
         # 红的同时必须给出**下一动作**：这台机器上「装了 Python 却没进 PATH」
         # 与「压根没装」在 PowerShell 里长得一模一样，而两者的处置不同。
+        #
+        # 所以先把**这个执行账号到底看得见什么**打出来 —— 这一跑就是取证现场。
+        # 触发它的现场（#1959 第三轮）：同一台机器上有人在自己的会话里跑出
+        # `python -V` → `Python 3.12.2`，而这里报「一个都没有」。两者不矛盾，
+        # 是**执行身份不同** —— Runner 以服务/代理账号跑、用的是机器 PATH，而
+        # python.org 安装包的默认选项「Install for me only」只写进**安装者那个
+        # 用户的** PATH。两种情形（装过但这个账号看不见 / 真的没装）在日志里逐字
+        # 同形，处置却相反：位置命中而探测不到命令 ⇒ 改这个账号的 PATH，**别重复装**；
+        # 位置也没命中 ⇒ 才是这台机真没装。少了这份打印，两者都只能猜。
+        Write-Host "---- python 探测现场（供定位，非报错）----"
+        Write-Host "执行账号: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+        Write-Host "PATH 条目:"
+        $env:PATH -split ";" | Where-Object { $_ } | ForEach-Object { Write-Host "  $_" }
+        Write-Host "常见安装位置在盘上的（有则说明装过、只是这个账号 PATH 里没有）:"
+        # 比上面那次回找多两个根（ProgramFiles(x86) 与 machine-wide 的 ProgramData）——
+        # 取证要覆盖「别人装在了哪」，而不只是「我们指望它装在哪」。
+        $hits = @()
+        foreach ($p in @(
+          (Join-Path $env:LOCALAPPDATA "Programs\Python"),
+          (Join-Path $env:ProgramFiles "Python"),
+          "${env:ProgramFiles(x86)}\Python",
+          "$env:ALLUSERSPROFILE\Python"
+        )) {
+          $found = Get-ChildItem -Path $p -ErrorAction SilentlyContinue -Directory |
+            Select-Object -ExpandProperty FullName
+          if ($found) { $hits += $found }
+        }
+        if ($hits.Count -eq 0) { Write-Host "  （一个都没找到 —— 更像「这台机真的没装」）" }
+        else { $hits | ForEach-Object { Write-Host "  $_" } }
+        Write-Host "----------------------------------------"
         Write-Host "!! 宿主机上没有可用的 Python（试过 python3 / python / py，自动安装也没成）" -ForegroundColor Red
         Write-Host ""
         Write-Host "   **平台侧人工动作**（与「节点标签要对得上 runner.tags」同一类）：" -ForegroundColor Yellow
