@@ -60,6 +60,7 @@ import {
   riskyStatements,
 } from "./db-push-core.mjs";
 import {
+  ensureSchemaCurrent,
   probeSchemaSync,
   readSchemaFingerprint,
   schemaFingerprint,
@@ -71,6 +72,10 @@ import {
   runPreflight,
 } from "../e2e/support/preflight-ports.mjs";
 import { resolveFakeComfyuiPort } from "../e2e/support/fake-comfyui-endpoint.mjs";
+import {
+  checkBrowserReady,
+  describeBrowserMissing,
+} from "../e2e/support/preflight-browser.mjs";
 import {
   freshnessTrack,
   gitUser,
@@ -161,8 +166,46 @@ export function resolvePlaywrightFile(rel, cwd = ROOT) {
 export function planRun(extra = []) {
   return {
     label: "全量 e2e（Playwright）",
-    args: ["test", ...extra],
+    args: ["test", ...stripArgvSeparator(extra)],
   };
+}
+
+/**
+ * 丢掉 `--` 这个**参数分隔符**本身 —— 它此前被原样透传，代价是一整档的判据静默失效。
+ *
+ * ## 它修的那一格（ISSUE #1948 现场）
+ *
+ * `pnpm test:e2e -- e2e/smoke.spec.ts` 是本档文档里给的姿势（`--` 之后是「传给
+ * Playwright 的额外参数」）。而 pnpm 对**简写调用**（`pnpm <脚本> -- args`）**不**剥
+ * 那个分隔符 —— 实测 `pnpm test:e2e:dry -- e2e/smoke.spec.ts` 打出来的计划是
+ * `playwright test -- e2e/smoke.spec.ts`，于是 `--` 一路到了 Playwright。
+ *
+ * Playwright 把 `--` 之后的**位置参数**当「不是选项、也不是要跑的用例」：实测
+ * `playwright test --list -- e2e/smoke.spec.ts` 列 **81 条**，而
+ * `playwright test --list e2e/smoke.spec.ts` 列 **3 条**。也就是说，一条
+ * 「只跑冒烟档」的命令跑掉了整档，而它的退出码与输出里没有任何东西在说这件事
+ * ——用户以为跑了 3 条、实际跑了 81 条（更坏的方向：以为跑过了关键路径，
+ * 其实那一条根本没在筛选集里）。
+ *
+ * ## 为什么剥掉是安全的
+ *
+ * `--` 在本档的语义就是「后面的都是给 Playwright 的」—— 它没有第二个用途，
+ * 也没有哪条 Playwright 参数需要靠它才不被当成选项（Playwright 的参数表里没有
+ * 与用例路径同形的开关）。所以「剥掉分隔符、其余按位置透传」与调用方的本意
+ * **逐字相同**，且它把这个坑收在一处：`--grep @critical` 这类不带分隔符的旧写法
+ * 不受影响。
+ *
+ * 只剥**第一个**恰好等于 `--` 的那一项：分隔符的语义就是「第一个之后都是参数」，
+ * 后面的 `--`（真想去表达一个叫 `--` 的值时）不该被一起吞掉 —— 全删会把
+ * `-- -- x` 变成 `x`，而人写的是「分隔符 + 参数 `--` + 参数 `x`」。
+ *
+ * @param {string[]} argv
+ * @returns {string[]} 剥掉分隔符之后的参数
+ */
+export function stripArgvSeparator(argv) {
+  const at = argv.indexOf("--");
+  if (at === -1) return argv;
+  return [...argv.slice(0, at), ...argv.slice(at + 1)];
 }
 
 /**
@@ -222,11 +265,29 @@ export function shouldRecord({ exitCode, dryRun, extra = [] }) {
  *
  * 这一卡不修库（那是人的决定），它只把「跑 8 分钟产出一片看不懂的红」
  * 换成「开跑前 30 秒告诉你要跑什么」：
+ *   · 库还是空的（没表 / 读不到）⇒ **建齐它**（`ensure`，见下）；
  *   · 指纹一致 ⇒ 放行（正常机器，零成本，毫秒级）；
  *   · 不一致但 dry-run 没有待执行语句 ⇒ 放行（指纹只是没登记，库本来就对）；
  *   · 不一致且全是安全语句（建表 / 建索引 / 加列）⇒ 放行（启动链路会后台应用，
  *     与不带这一卡时的行为一致）；
  *   · 不一致且**含丢数据语句** ⇒ **阻断**：给出逐条语句与 `pnpm db:push` 出口。
+ *
+ * ## 空库为什么必须在这里**建齐**，而不是「交给启动链路」（ISSUE #1948）
+ *
+ * 这一档此前对空库说的是「建表那一批启动链路会自动应用」，然后**放行**。那句话
+ * 本身没错，错在**时机**：webServer 是 `pnpm dev` / `pnpm start`，两者起
+ * schema 同步的方式都是 `spawnSchemaSync` —— **detached、不等待**（那正是它的
+ * 设计：把 15~30 秒还给人）。而 Playwright 等的是 `webServer.url` **可访问**，
+ * Next 一 up 就满足，于是冒烟档的健康检查断言在**建表还没跑完**时就打过去：
+ * 全新检出的现场是 `db: "empty"` ⇒ 503 ⇒ 冒烟那条 `@critical` 必红；用户以为
+ * 「跑 `pnpm db:push` 才好」，实际是**这一档的启动顺序**把同步甩在了后面。
+ *
+ * 所以空库不进「放行」那一档，它是一个**要等**的动作：本档自己在 spawn Playwright
+ * 之前把它建齐（`ensureSchemaCurrent`，与 `pnpm db:push` / 启动链路同一个出口，
+ * 不另造一份实现）。只有它真建好了才放行 —— 那时冒烟探到的就是一张齐的库。
+ *
+ * 判据只对**空库**加这一步：`probe === "ready"` 的机器（绝大多数）零成本，
+ * 不会因为这条改动多付一次 drizzle。
  *
  * @param {{
  *   probe: "ready" | "missing" | "unknown",
@@ -234,7 +295,7 @@ export function shouldRecord({ exitCode, dryRun, extra = [] }) {
  *   pending: string[],
  *   autoApplyable: boolean,
  * }} input
- * @returns {{verdict: "proceed" | "abort", reason: string, risky?: string[]}}
+ * @returns {{verdict: "proceed" | "ensure" | "abort", reason: string, risky?: string[]}}
  */
 export function schemaPreflightDecision({
   probe,
@@ -244,9 +305,10 @@ export function schemaPreflightDecision({
 }) {
   if (probe !== "ready") {
     return {
-      verdict: "proceed",
+      verdict: "ensure",
       reason:
-        "库里还没有表或读不到（全新检出 / 空库）—— 建表那一批启动链路会自动应用",
+        "库里还没有表或读不到（全新检出 / 空库）—— 起 Playwright 之前先按 schema 建齐" +
+        "（启动链路的同步是后台的、不等它，冒烟档会在建表完成前打健康检查）",
     };
   }
   if (fingerprintMatch) {
@@ -255,7 +317,8 @@ export function schemaPreflightDecision({
   if (pending.length === 0) {
     return {
       verdict: "proceed",
-      reason: "指纹不一致但 dry-run 没有待执行语句（指纹只是没登记，库本来就对）",
+      reason:
+        "指纹不一致但 dry-run 没有待执行语句（指纹只是没登记，库本来就对）",
     };
   }
   if (autoApplyable) {
@@ -278,11 +341,12 @@ export function schemaPreflightDecision({
  *
  * 与 `db-schema-state.mjs` 的 `ensureSchemaCurrent` **同源不同职**：那个是
  * 启动链路的唯一出口（会真的去同步），这个只回答「该不该放行 e2e 这一趟」，
- * 永远不写库。指纹一致时零成本（不启动 drizzle）；只有不一致才付一次
+ * 本函数**自己也不写库** —— 它只在空库那一档回 `ensure`，由 `main` 调那份唯一
+ * 实现去建（见下）。指纹一致时零成本（不启动 drizzle）；只有不一致才付一次
  * dry-run（本机约 17 秒）—— 而那一刻本来就该被拦下。
  *
  * @param {string} [root]
- * @returns {{verdict: "proceed" | "abort", reason: string, risky?: string[]}}
+ * @returns {{verdict: "proceed" | "ensure" | "abort", reason: string, risky?: string[]}}
  */
 export function checkSchemaBeforeRun(root = ROOT) {
   const probe = probeSchemaSync(root);
@@ -299,11 +363,17 @@ export function checkSchemaBeforeRun(root = ROOT) {
    * 没有结论可用，而「拿不到结论」不等于「库是旧的」—— 与 `ensureSchemaCurrent`
    * 报 `unknown` 的同一条口径。 */
   if (want === null) {
-    return { verdict: "proceed", reason: "读不到 schema 源文件（判据失效，不阻断）" };
+    return {
+      verdict: "proceed",
+      reason: "读不到 schema 源文件（判据失效，不阻断）",
+    };
   }
   const have = readSchemaFingerprint(root);
   if (have === null) {
-    return { verdict: "proceed", reason: "读不到库里的指纹（判据失效，不阻断）" };
+    return {
+      verdict: "proceed",
+      reason: "读不到库里的指纹（判据失效，不阻断）",
+    };
   }
   if (have === want) {
     return schemaPreflightDecision({
@@ -324,6 +394,74 @@ export function checkSchemaBeforeRun(root = ROOT) {
     pending,
     autoApplyable: canAutoApply(pending),
   });
+}
+
+/**
+ * 空库那一档：**起 Playwright 之前**把表建齐，并复核它真的落地了。
+ *
+ * 与 `checkSchemaBeforeRun` 是同一趟的两步：那个只**判**（永远不写库），这个在
+ * 判成 `ensure` 时才**做**。做的那一步调的是 `ensureSchemaCurrent` —— 与
+ * `pnpm db:push` / 启动链路 / 状态栏「立即同步」**同一份实现**（§12.18：缺能力
+ * 补地基，不在调用点重抄一份建表逻辑）。
+ *
+ * ## 为什么必须等它，而不是「启动链路会后台应用」（ISSUE #1948 的根因）
+ *
+ * `spawnSchemaSync` 是 detached 且不等待的（那是它的设计：把 15~30 秒还给人），
+ * 而 Playwright 要等的只是 webServer 的 URL **可访问**。于是全新检出时冒烟档的
+ * 健康检查一定在建表完成之前打过去 —— 现场是 `db: "empty"` ⇒ 503 ⇒ 那条
+ * `@critical` 必红，而话术说的是「数据库表还没建好」，看起来像环境没准备好，
+ * 实际是这一档的启动顺序把同步甩在了后面。这里把它等回来。
+ *
+ * ## 判据只认「这一趟做完之后库是不是齐的」
+ *
+ * `ensureSchemaCurrent` 会按自己的白名单决定做不做（含丢数据语句时它不自动应用、
+ * 报 `stale`）—— 本函数不越权，只把它的结论翻成本档的放行/阻断：
+ *   · `ready` / `synced` ⇒ 放行（齐了）；
+ *   · `missing` / `stale` ⇒ 阻断，出口是 `pnpm db:push`（那是人的决定）；
+ *   · `unknown` ⇒ **不阻断**（拿不到结论不等于库是坏的，与另两处 `unknown`
+ *     同一条口径），交给随后的用例如实报。
+ *
+ * 每次调用最多起一轮 drizzle（建表那一档本机实测 2~4 秒，空库一次建齐 23 张表）；
+ * 非空库根本到不了这里（`checkSchemaBeforeRun` 已经放行）。
+ *
+ * @param {{root?: string, forward?: (chunk: string) => void,
+ *          ensure?: typeof ensureSchemaCurrent}} [options]
+ *   `ensure` 可注入，让两个方向都能被真跑一次。
+ * @returns {{verdict: "proceed" | "abort", state: string, reason: string}}
+ */
+export function ensureSchemaBeforeRun(options = {}) {
+  const { root = ROOT, forward, ensure = ensureSchemaCurrent } = options;
+  const result = ensure(root, forward ? { forward } : {});
+  switch (result.state) {
+    case "ready":
+      return {
+        verdict: "proceed",
+        state: result.state,
+        reason: "库结构与当前 schema 一致",
+      };
+    case "synced":
+      return {
+        verdict: "proceed",
+        state: result.state,
+        reason: "空库已按 schema 建齐（起 Playwright 之前完成）",
+      };
+    case "unknown":
+      /* 判据失效不阻断：拿不到结论 ≠ 库坏了（同 `checkSchemaBeforeRun` 那两处）。 */
+      return {
+        verdict: "proceed",
+        state: result.state,
+        reason: `库结构核对拿不到结论（${result.detail ?? "原因未知"}）—— 不阻断`,
+      };
+    default:
+      /* `missing`（没建成）/ `stale`（含丢数据语句、启动链路不替你做那个决定）。 */
+      return {
+        verdict: "abort",
+        state: result.state,
+        reason:
+          `数据库没建齐（${result.state}）：${result.detail ?? "原因未知"}。` +
+          "这是需要人决定的一步，先执行：pnpm db:push   然后重跑本档。",
+      };
+  }
 }
 
 /**
@@ -437,7 +575,41 @@ async function main(argv) {
     );
     return 2;
   }
+  /* 开跑前先问一句「这一档要用的浏览器在不在」（ISSUE #1948）。
+   *
+   * 缺件时的形态是**全档每一条都报同一个 launch 失败**，而 Playwright 给的那句
+   * `Executable doesn't exist at …` 会被埋在 81 份堆栈里 —— 看着像 81 个问题，
+   * 实际是一件事。这一探把它变成开跑前一行 + 一条可执行的命令。
+   *
+   * **放在 schema 预检之前**：探浏览器是毫秒级（判完即关），而空库那一档要付
+   * 一轮 drizzle 建表（秒级）—— 缺浏览器时没必要先花那个时间。 */
+  const browser = await checkBrowserReady();
+  if (browser.verdict === "missing") {
+    process.stderr.write(`${describeBrowserMissing(browser)}\n`);
+    return 2;
+  }
+  process.stdout.write(
+    `[e2e-run] 浏览器预检：${
+      browser.verdict === "ready"
+        ? "这一档要用的浏览器能起来"
+        : `拿不到结论（${browser.detail ?? "原因未知"}）—— 不阻断`
+    }\n`,
+  );
   process.stdout.write(`[e2e-run] schema 预检：${schema.reason}\n`);
+  /* 空库那一档**在这里等它建齐**（ISSUE #1948）：启动链路的同步是后台的
+   * （`spawnSchemaSync` detached、不等待），而 Playwright 等的是 webServer 的
+   * URL 可访问 —— Next 一 up 就满足，于是冒烟档的健康检查会在建表还没跑完时打
+   * 过去，全新检出的现场是 `db: "empty"` ⇒ 503 ⇒ 那条 `@critical` 必红。 */
+  if (schema.verdict === "ensure") {
+    const ensured = ensureSchemaBeforeRun({
+      root: ROOT,
+      forward: (chunk) => process.stdout.write(`[e2e-run]   ${chunk}`),
+    });
+    if (ensured.verdict === "abort") {
+      process.stderr.write(`[e2e-run] ✗ ${ensured.reason}\n`);
+      return 2;
+    }
+  }
   const res = spawnSync(process.execPath, [entry, ...run.args], {
     cwd: ROOT,
     env,

@@ -126,6 +126,36 @@ export interface DevServerLiveness {
   /** 本会话是否曾成功探到过该进程：用于把「还没探通」与「曾经通、现在断」
    *  区分开——只有后者才是「应用服务已断开」。 */
   everOnline: boolean;
+  /**
+   * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
+   *
+   * 为什么要有这个事实：探活会因窗口失焦 / 页面进后台而**暂停**（本 hook 用
+   * `useInterval` 的默认值：`pauseWhenHidden` 为真，桌面壳里 `pauseWhenUnfocused`
+   * 也为真），后台被节流时定时器还可能拖到分钟级才响一次 —— 而停表期间墙钟照走。
+   * 于是「断开 → 恢复」两个时刻相减得到的时长里混着一段**根本没人问过服务**的
+   * 时间（那段时间服务可能早就恢复了，恢复点无从知道）。消息中心拿这个数把那段
+   * 如实标注出来，判据与文案在 `~/lib/shell/app-service-message` —— 本 hook 只供
+   * 事实，不替它决定「多长才值得说」。
+   */
+  unprobedMs: number;
+}
+
+/**
+ * 「上一拍发起 → 这一拍发起」之间有多少毫秒是**没人在探测**的。
+ *
+ * 扣掉 {@link DEV_SERVER_PROBE_MS}：那一拍本来就该走完（正常连拍算下来是 0），
+ * 只有**超出**它的部分才是停表。clamp 到 ≥0 —— 首拍（`previousStartedAt` 为 null）
+ * 与时钟回拨都不该算出「负的停表时间」。
+ *
+ * 用**发起**时刻而不是应答时刻做基准：探活有 2.5s 超时，拿应答时刻算会把「这一拍
+ * 慢了」记成停表（超时那一拍尤其明显）。发起时刻与定时器的节拍是同一件事。
+ */
+export function probeGapMs(
+  previousStartedAt: number | null,
+  startedAt: number,
+): number {
+  if (previousStartedAt === null) return 0;
+  return Math.max(0, startedAt - previousStartedAt - DEV_SERVER_PROBE_MS);
 }
 
 function readSessionNumber(key: string): number | null {
@@ -230,6 +260,12 @@ export function useDevServerLiveness(): DevServerLiveness {
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   /* 已就哪个 bootId 取过原因：轮询每 2s 一次，没有它就等于每拍都打一次这个端点。 */
   const exitFetchedForBootIdRef = useRef<string | null>(null);
+  /* 「这一拍之前没人在探测的那一段」（见 DevServerLiveness.unprobedMs）。存的是
+   * 事实，因此进 state 而不是 ref —— 它要沿 view model 递到消息中心去。 */
+  const [unprobedMs, setUnprobedMs] = useState(0);
+  /* 上一拍**发起**时刻（基准）。ref 而非 state：它在探测回调里被读写、不参与渲染，
+   * 推进它本身不该触发一次渲染。 */
+  const lastProbeStartedAtRef = useRef<number | null>(null);
 
   /* 上次已知 bootId（对比基准）。ref 而非 state：探测回调里读取即可，
    * 无需触发渲染。初值置 null：SSR 阶段读不到 sessionStorage（也不应与
@@ -249,6 +285,12 @@ export function useDevServerLiveness(): DevServerLiveness {
     /* 首次探测前补读持久化的上次 bootId，作为真正重启的对比基准。
      * （hydrate 阶段 sessionStorage 读不到，此处手动恢复。） */
     lastBootIdRef.current ??= readSessionString(LAST_BOOT_ID_KEY);
+    /* 停表多久了：按**发起**时刻算，而且必须在 `await` 之前落（基准也要先推进，
+     * 否则同一拍里再读到的「上一拍」还是它自己，下一拍就会算成没停过表）。
+     * 见 `probeGapMs`。 */
+    const startedAt = Date.now();
+    setUnprobedMs(probeGapMs(lastProbeStartedAtRef.current, startedAt));
+    lastProbeStartedAtRef.current = startedAt;
     const result = await probeBootId();
     if (stoppedRef.current) return;
 
@@ -348,5 +390,6 @@ export function useDevServerLiveness(): DevServerLiveness {
     consecutiveFailures,
     everOnline,
     currentRunId,
+    unprobedMs,
   };
 }

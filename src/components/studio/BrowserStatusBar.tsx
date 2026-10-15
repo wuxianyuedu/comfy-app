@@ -294,6 +294,9 @@ export function BrowserStatusBar() {
     /* 当前是哪一次启动：消息中心按它把历史消息分成「每一次启动」一组，
      * 并标出哪一组是用户此刻身处的这一次。 */
     currentRunId: devServer.currentRunId,
+    /* 探活停表的那一段（窗口失焦 / 后台节流）：恢复那条要拿它标注「断开持续
+     * 了多久」里有多少时间根本没人探测（见 `~/lib/shell/app-service-message`）。 */
+    unprobedMs: devServer.unprobedMs,
   });
   const schemaSync = useSchemaSyncStatus();
   const comfyQueue = useComfyQueue();

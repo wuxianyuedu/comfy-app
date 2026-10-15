@@ -37,6 +37,14 @@ export interface DevServerStatusViewModel extends DevServerStatus {
    * 一条 2 秒一拍的探活循环。
    */
   processIsNew: boolean;
+  /**
+   * 最后一拍之前**没人在探测**的那一段（毫秒，0 = 紧接上一拍）。
+   *
+   * 状态栏自己不画它，但「应用服务已恢复」那条消息要它：那一段里服务是否可达
+   * 没人问过，于是「断开持续了多久」这个数字必须带着这个注脚（见
+   * `~/lib/shell/app-service-message` 的 `describeAppServiceStart`）。
+   */
+  unprobedMs: number;
 }
 
 export function useDevServerStatus(): DevServerStatusViewModel {
@@ -50,6 +58,7 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     routeTableStale,
     everOnline,
     currentRunId,
+    unprobedMs,
   } = useDevServerLiveness();
   const derived = deriveDevServerStatus({
     everOnline,
@@ -61,5 +70,12 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     lastRestartAt,
     lastExit,
   });
-  return { ...derived, lastRestartAt, lastExitAt, processIsNew, currentRunId };
+  return {
+    ...derived,
+    lastRestartAt,
+    lastExitAt,
+    processIsNew,
+    currentRunId,
+    unprobedMs,
+  };
 }

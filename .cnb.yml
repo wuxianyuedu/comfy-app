@@ -68,6 +68,14 @@
     BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
     # 避免 corepack 在非交互环境下为拉取 pnpm 版本而等待输入。
     CI: "true"
+    # 覆盖率 reporter 的安静档（ISSUE #1959）：`vitest` 的 `text` reporter 会把报告里
+    # **每一个文件**打一行，450+ 行的表本身就有 ~90KB，而平台对单次构建日志的硬上限是
+    # 102400 字节 —— 超了就只留一句 `The log length exceeds the limit(102400)`、
+    # 后面全部截断，于是这一步看起来「跑完了」而失败原因一个字都看不到。
+    # 置位后由 `vitest.config.ts` 切成 `text-summary`（几行汇总）：
+    # **逐文件明细一份没少**（它本来就在落盘的 `lcov` / `json-summary` 里）。
+    # ⚠️ 这一行是本档唯一的执行者 —— 不在任何 `script` 里（见规范 11 §11.7）。
+    COMFYAPP_QUIET_COVERAGE: "1"
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随

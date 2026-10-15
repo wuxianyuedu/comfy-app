@@ -84,6 +84,8 @@ type Facts = {
   processIsNew: boolean;
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
   currentRunId: string | null;
+  /** 最后一拍之前**没人在探测**的那一段（毫秒）；省缺 0（每一拍都在探）。 */
+  unprobedMs: number;
 };
 
 /** 缺省启动标识：绝大多数用例不关心它，而它又是必填的——不填就等于「拿不到启动
@@ -101,6 +103,7 @@ function mount(initial: Partial<Facts> = {}) {
     state: "starting",
     processIsNew: false,
     currentRunId: DEFAULT_RUN_ID,
+    unprobedMs: 0,
     ...initial,
   };
   const r = renderHook((props: Facts) => useAppServiceMessageLog(props), {
@@ -252,6 +255,28 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
     expect(recovered.body).toContain("自身退出");
     /* 断开那条仍在（两条是同一件事的两个时刻，不是重复）。 */
     expect(messages()[1]!.title).toBe("应用服务已断开");
+  });
+
+  it("恢复那条把「停表那一段」如实标注出来（A：探活暂停期间墙钟照走）", async () => {
+    stubExitEndpoint({ record: null });
+    /* 只 fake `Date`：两条边沿要落在不同时刻，「持续」才有内容；停表那一段由
+     * `unprobedMs` 单独给（它来自探活那一侧），这里只验接线把它递到文案。 */
+    const base = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { rerender } = mount({ state: "online", processIsNew: false });
+    vi.setSystemTime(base + 1_000);
+    rerender({ state: "offline", processIsNew: false });
+    vi.setSystemTime(base + 130_000);
+    rerender({ state: "online", processIsNew: false, unprobedMs: 60_000 });
+    vi.useRealTimers();
+
+    await expect.poll(() => messages().length).toBe(2);
+    const recovered = messages()[0]!;
+    expect(recovered.title).toBe("应用服务已恢复");
+    /* 时长照给（不减掉），另加一行说清那段没有探测。 */
+    expect(recovered.body).toContain("持续 2 分 09 秒");
+    expect(recovered.body).toContain("其中 1 分 00 秒 没有探测");
+    expect(recovered.body).toContain("无从得知");
   });
 
   it("整页刷新（进程没换新）不发任何消息", () => {
