@@ -556,4 +556,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 判据本身也带门禁自测（清单里的模块真在盘上、真被某个 `.mjs` 引用、`.mjs` 宿主
   // 真加载得起来），所以它与本次暂存改动无关也照跑。
   "tests/esm-cross-host-imports.test.ts",
+  // 上一条的互补件：它按**源码形状**判（叶子性 + 说明符形态）并在 vitest 里
+  // `import()` 一次；这一条只判「跨宿主地基层模块**自己**在真 Node 进程里加载得起来」。
+  // 分工是实测定下来的，不是分工的美学：给 `python-candidates.ts` 加一行
+  // `import "server-only"`（§18.4 第二类，入口就是一句 throw）时，真 Node 抛
+  // `This module cannot be imported from a Client Component module`，而
+  // `esm-cross-host-imports` 与 `lib-node-only-declarations` **双双照绿** ——
+  // 本仓好几位作者在头注释里专门解释过「这里加 server-only 会让启动编排直接崩」，
+  // 一句靠人记得的注释正是要变成机器判据的那类东西。它走 `spawnSync(process.execPath…)`
+  // 起真 Node，因为本判据的立案前提就是「vitest 内的 `import()` 与真 Node 不是同一条路」。
+  // 回潮形态住在 `src/lib/process/**` 与宿主文件上，改动的 import 图追不到，故进固定清单。
+  "tests/host-ts-loads-in-node.test.ts",
 ];
