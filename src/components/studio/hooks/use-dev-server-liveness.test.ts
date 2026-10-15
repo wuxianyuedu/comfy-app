@@ -13,7 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 
 import {
+  DEV_SERVER_PROBE_MS,
   OFFLINE_CONFIRM_FAILURES,
+  probeGapMs,
   useDevServerLiveness,
 } from "./use-dev-server-liveness";
 
@@ -345,5 +347,86 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
       .poll(() => result.current.consecutiveFailures)
       .toBeGreaterThan(0);
     expect(result.current.routeTableStale).toBe(false);
+  });
+});
+
+describe("probeGapMs：这一拍之前没人在探测的那一段", () => {
+  /* 这一格的用途（见 `DevServerLiveness.unprobedMs`）：探活会因窗口失焦 / 页面
+   * 进后台而**暂停**，停表期间墙钟照走，于是「断开持续了多久」里混着一段没人
+   * 问过服务的时间。`unprobedMs` 就不让那段时长冒充「服务真的死了这么久」。 */
+
+  it("连拍（间隔正好是一拍）算 0：那一拍本来就该走完，不算停表", () => {
+    expect(probeGapMs(1_000, 1_000 + DEV_SERVER_PROBE_MS)).toBe(0);
+    /* 定时器略早 / 略晚落都在正常范围里，不能算出「负数停表」。 */
+    expect(probeGapMs(1_000, 1_000 + DEV_SERVER_PROBE_MS - 50)).toBe(0);
+  });
+
+  it("首拍（没有上一拍）算 0，不编一段停表", () => {
+    expect(probeGapMs(null, 5_000)).toBe(0);
+  });
+
+  it("停表 = 实际间隔扣掉本该走的那一拍（失焦两分钟就很明显）", () => {
+    expect(probeGapMs(1_000, 1_000 + 120_000)).toBe(
+      120_000 - DEV_SERVER_PROBE_MS,
+    );
+  });
+
+  it("时钟回拨不产生负值", () => {
+    expect(probeGapMs(10_000, 5_000)).toBe(0);
+  });
+});
+
+describe("useDevServerLiveness：停表那一段供成事实（A 的可信度注脚）", () => {
+  /* 停表机制在共享轮询内核（`~/lib/poll-timer`）：页面进后台**暂停**探活、回前台
+   * **立即补跑**一次。本 hook 不碰那套判据，只把「这一段没人问过服务」算出来供出去。 */
+
+  /** 在 jsdom 里把页面翻成「进后台 / 回前台」，触发内核那套 `visibilitychange`。
+   *  用完在 `afterEach` 里还原 —— 下一用例必须看到初始的 visible。 */
+  function setVisibility(state: "visible" | "hidden"): void {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => state,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }
+
+  afterEach(() => {
+    /* 去掉这一份自有属性，露出 jsdom 原型上的原始 getter（恢复 visible）。 */
+    Reflect.deleteProperty(document, "visibilityState");
+  });
+
+  it("进后台暂停、回前台补跑，并把停表那一段算成 unprobedMs（不是 0）", async () => {
+    const calls = stubFetch();
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useDevServerLiveness());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100);
+      });
+      const beforeHide = calls.serverId;
+      expect(beforeHide).toBeGreaterThan(0);
+      /* 连拍之间没有停表。 */
+      expect(result.current.unprobedMs).toBeLessThan(DEV_SERVER_PROBE_MS);
+
+      /* 进后台两分钟：探活暂停，一拍都不发（否则就是「后台空转」）。 */
+      act(() => {
+        setVisibility("hidden");
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120_000);
+      });
+      expect(calls.serverId).toBe(beforeHide);
+
+      /* 回前台：立即补跑一次，并把这 120 秒里**没探测**的那一段算出来。 */
+      await act(async () => {
+        setVisibility("visible");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(calls.serverId).toBe(beforeHide + 1);
+      /* ≈120 秒减去本该走的那一拍（2 秒）。 */
+      expect(result.current.unprobedMs).toBeGreaterThan(100_000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

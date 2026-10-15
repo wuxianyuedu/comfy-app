@@ -174,6 +174,8 @@ function serviceRecoveredNotice(): { title: string; body: string } {
     at: SERVICE_UP_AT,
     offlineAt: SERVICE_DOWN_AT,
     exitAt: SERVICE_DOWN_AT,
+    /* 这个示例摆的是「每一拍都在探」的一次干净恢复（停表那一段为 0，不标注）。 */
+    unprobedMs: 0,
     notice: {
       why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
       action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",

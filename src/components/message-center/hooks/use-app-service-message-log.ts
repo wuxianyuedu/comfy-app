@@ -87,6 +87,15 @@ export interface AppServiceMessageLogInput {
   processIsNew: boolean;
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
   currentRunId: string | null;
+  /**
+   * 最后一拍之前**没人在探测**的那一段（毫秒，0 = 紧接上一拍）。
+   *
+   * 从 `useDevServerStatus()` 递进来（它是探活循环的唯一消费方）：探活因窗口
+   * 失焦 / 页面进后台而暂停时墙钟照走，于是「断开持续了多久」里混着一段没人
+   * 问过服务的时间。本 hook 只把它作为事实转给判据，**不在这一层算**（见
+   * `~/lib/shell/app-service-message` 的 `unprobedMs`）。
+   */
+  unprobedMs: number;
 }
 
 /** 卸载守卫：`fetchAppServiceExit` 是异步的，卸载后它仍可能回来。 */
@@ -137,6 +146,8 @@ async function recordStart(
     offlineAt: event.offlineAt,
     exitAt: record === null ? null : Date.parse(record.at) || null,
     notice: record === null ? null : describeAppServiceExit(record),
+    /* 停表那一段随事件走（判据在纯函数层决定「多长才值得标一行」）。 */
+    unprobedMs: event.unprobedMs,
   });
   /* 带上**事件时刻**而不是让 store 记 push 时刻：这条要先把原因读回来，push 天然
    * 比事件晚一个往返，而「断开 → 恢复」的先后必须由事情发生的顺序决定。 */
@@ -147,6 +158,7 @@ export function useAppServiceMessageLog({
   state,
   processIsNew,
   currentRunId,
+  unprobedMs,
 }: AppServiceMessageLogInput): void {
   /* 边沿判据的游标放 ref：它只参与判定、不驱动渲染，而它必须**跨渲染存活**——
    * 边沿判据的整个要点就是「和上一拍比」，每渲染重建一份就没有「上一拍」了。 */
@@ -174,7 +186,7 @@ export function useAppServiceMessageLog({
   useEffect(() => {
     const { cursor, event } = deriveAppServiceEvent(
       cursorRef.current,
-      { state, processIsNew },
+      { state, processIsNew, unprobedMs },
       Date.now(),
     );
     cursorRef.current = cursor;
@@ -198,5 +210,5 @@ export function useAppServiceMessageLog({
       return;
     }
     void recordStart(event, stoppedRef, currentRunId);
-  }, [state, processIsNew, currentRunId]);
+  }, [state, processIsNew, currentRunId, unprobedMs]);
 }
