@@ -1337,7 +1337,10 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
      * 会命中前面那个，于是这条判据答的是「跳过那一支在装之前」，
      * 与它要守的「复验在装之后」是两件事 —— 而它**照样会绿**。
      * 这类「判据指到了同形的邻居上」正是本仓反复记的那一格（判据在，但判错了对象）。 */
-    const verifyAt = body.indexOf("browserExecutableExists({ env })", installAt);
+    const verifyAt = body.indexOf(
+      "browserExecutableExists({ env })",
+      installAt,
+    );
     expect(installAt).toBeGreaterThan(0);
     expect(
       verifyAt,
@@ -1644,9 +1647,9 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
  */
 describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #1961）", () => {
   it("设了就只用它；没设就回退到 Playwright 的默认（不发明第二个镜像）", () => {
-    expect(playwrightHostsToTry({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" })).toEqual(
-      ["https://m/x"],
-    );
+    expect(
+      playwrightHostsToTry({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" }),
+    ).toEqual(["https://m/x"]);
     expect(playwrightHostsToTry({})).toEqual([undefined]);
   });
 
@@ -1753,14 +1756,25 @@ describe("工具链自证：下载失败时当场量「到得了哪」（ISSUE #
           : url.includes("slow")
             ? "超时（8000ms 内没有响应）"
             : "ENOTFOUND：getaddrinfo",
+      /* 量的是**真资源 URL**（`builds/cft/<版本>/<档>/<包>`）不是裸根 ——
+       * 根对这几个地址都回 4xx（ISSUE #1966），所以这里把「根 → 真资源 URL」
+       * 那一步钉成固定值，读数才可断言、且不依赖盘上的 `browsers.json`。 */
+      probeUrlOf: (root: string) =>
+        `${root}/builds/cft/TESTV/win64/chrome-headless-shell-win64.zip`,
       updateHost: "https://ok/x",
     }).join("\n");
     // 每个候选都要在读数里 —— 少一条，「哪条路走不通」就答不全。
-    expect(lines).toContain("https://ok/x → HTTP 200");
-    expect(lines).toContain("https://slow/x → 超时");
+    expect(lines).toContain(
+      "https://ok/x/builds/cft/TESTV/win64/chrome-headless-shell-win64.zip → HTTP 200",
+    );
+    expect(lines).toContain(
+      "https://slow/x/builds/cft/TESTV/win64/chrome-headless-shell-win64.zip → 超时",
+    );
     /* 「连上了但不说话」与「域名都解析不了」是两件事（链路慢 / 被拦 vs DNS 被切），
      * 处置不同 —— 糊成一句「不通」等于把这一格又还回去。 */
-    expect(lines).toContain("https://nxdomain/x → ENOTFOUND");
+    expect(lines).toContain(
+      "https://nxdomain/x/builds/cft/TESTV/win64/chrome-headless-shell-win64.zip → ENOTFOUND",
+    );
     // 当前值也打出来：它是「人配的那个」与「真能通的那个」对账的锚。
     expect(lines).toContain("当前 PLAYWRIGHT_DOWNLOAD_HOST: https://ok/x");
     // 判读那几句要说清「全都超时 ⇒ 换镜像也不会变」——不然人只会再换一个域名。

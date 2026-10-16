@@ -150,7 +150,10 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
         version: "Python 3.12.2",
       }),
       runImpl: () => ({ ok: true, out: "12.4.1" }),
-      browserPresentImpl: () => ({ ok: true, out: "/落点/.../chrome-headless-shell" }),
+      browserPresentImpl: () => ({
+        ok: true,
+        out: "/落点/.../chrome-headless-shell",
+      }),
       reachabilityImpl: () => [],
       ...silentPorts(),
       ...overrides,
@@ -246,7 +249,10 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
     const lines: string[] = [];
     envProbe(
       greenPorts({
-        readEncodingImpl: () => ({ codePage: 65001, chcpRaw: "Active code page: 65001" }),
+        readEncodingImpl: () => ({
+          codePage: 65001,
+          chcpRaw: "Active code page: 65001",
+        }),
         log: (l: string) => lines.push(l),
       }),
     );
@@ -299,7 +305,10 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
     let probed = 0;
     const code = envProbe(
       basePorts({
-        browserPresentImpl: () => ({ ok: true, out: "/pw/.../chrome-headless-shell" }),
+        browserPresentImpl: () => ({
+          ok: true,
+          out: "/pw/.../chrome-headless-shell",
+        }),
         reachabilityImpl: () => {
           probed += 1;
           return [];
@@ -309,7 +318,10 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
     expect(code).toBe(0);
     /* 这一条不是「省流量」——它是**这一格在断网时仍然绿**的依据：长期存在的机器上，
      * 浏览器一旦落地就一直在那儿，而这一趟根本不需要网络。 */
-    expect(probed, "已有落点时不该去碰网（那会让它白红在一条本来不缺的链路上）").toBe(0);
+    expect(
+      probed,
+      "已有落点时不该去碰网（那会让它白红在一条本来不缺的链路上）",
+    ).toBe(0);
   });
 
   it("落点空 + 全部下载根不可达 ⇒ 非零退出（这就是「别等三十分钟」那一格）", () => {
@@ -317,9 +329,22 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
     const code = envProbe(
       basePorts({
         browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
+        /* 三态的形状是 `{url, root, verdict, ok}`：`root` 是**配置面**（人会照着它配
+         * `PLAYWRIGHT_DOWNLOAD_HOST`），`url` 是**实测面**（拼了真资源路径的那个）——
+         * 话术里点的是 `root`，因为「改哪一行」只有它答得出（ISSUE #1966）。 */
         reachabilityImpl: () => [
-          { url: "https://cdn.playwright.dev", verdict: "超时（8000ms 内没有响应）", ok: false },
-          { url: "https://cdn.npmmirror.com/binaries/playwright", verdict: "超时（8000ms 内没有响应）", ok: false },
+          {
+            root: "https://cdn.playwright.dev",
+            url: "https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+            verdict: "超时（8000ms 内没有响应）",
+            ok: false,
+          },
+          {
+            root: "https://cdn.npmmirror.com/binaries/playwright",
+            url: "https://cdn.npmmirror.com/binaries/playwright/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+            verdict: "超时（8000ms 内没有响应）",
+            ok: false,
+          },
         ],
         logError: (l: string) => lines.push(l),
       }),
@@ -340,8 +365,18 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
       basePorts({
         browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
         reachabilityImpl: () => [
-          { url: "https://cdn.playwright.dev", verdict: "超时（8000ms 内没有响应）", ok: false },
-          { url: "https://registry.npmmirror.com/-/binary/playwright", verdict: "HTTP 200", ok: true },
+          {
+            root: "https://cdn.playwright.dev",
+            url: "https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+            verdict: "超时（8000ms 内没有响应）",
+            ok: false,
+          },
+          {
+            root: "https://registry.npmmirror.com/-/binary/playwright",
+            url: "https://registry.npmmirror.com/-/binary/playwright/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+            verdict: "HTTP 200",
+            ok: true,
+          },
         ],
       }),
     );
@@ -353,12 +388,20 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
     envProbe(
       basePorts({
         env: {
-          PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright",
+          PLAYWRIGHT_DOWNLOAD_HOST:
+            "https://cdn.npmmirror.com/binaries/playwright",
         },
         browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
         reachabilityImpl: ({ candidates }: { candidates?: string[] } = {}) => {
           seen.push(candidates);
-          return [{ url: "x", verdict: "HTTP 200", ok: true }];
+          return [
+            {
+              root: "x",
+              url: "x/builds/cft/T/win64/p.zip",
+              verdict: "HTTP 200",
+              ok: true,
+            },
+          ];
         },
       }),
     );
@@ -392,22 +435,73 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
     expect(isReachableVerdict("HTTP 404")).toBe(false);
     expect(isReachableVerdict("HTTP 403")).toBe(false);
     expect(isReachableVerdict("超时（8000ms 内没有响应）")).toBe(false);
-    expect(isReachableVerdict("ENOTFOUND：getaddrinfo ENOTFOUND x")).toBe(false);
+    expect(isReachableVerdict("ENOTFOUND：getaddrinfo ENOTFOUND x")).toBe(
+      false,
+    );
     expect(isReachableVerdict("（子进程没有输出）")).toBe(false);
   });
 
   it("打印那一份与三态那一份**同源**（同一次探测的两种形态）", () => {
     /* 一次注入的探测喂进两边，断言「打印出来的行」与「三态的 url/结论」逐项对得上
      * —— 这条是防「两份实现会漂」的那一天（§12.12）。 */
-    const probe = (url: string) => (url.endsWith("ok") ? "HTTP 200" : "超时（1ms）");
+    const probe = (url: string) =>
+      url.includes("ok") ? "HTTP 200" : "超时（1ms）";
+    const probeUrlOf = (root: string) => `${root}/builds/cft/T/win64/p.zip`;
     const candidates = ["https://a/ok", "https://b/dead"];
-    const verdicts = playwrightReachabilityVerdicts({ candidates, probe });
-    const lines = playwrightReachability({ candidates, probe });
+    const verdicts = playwrightReachabilityVerdicts({
+      candidates,
+      probe,
+      probeUrlOf,
+    });
+    const lines = playwrightReachability({ candidates, probe, probeUrlOf });
     expect(verdicts.map((v) => v.ok)).toEqual([true, false]);
     for (const v of verdicts) {
       expect(lines.join("\n")).toContain(`${v.url} → ${v.verdict}`);
     }
-    expect(playwrightReachabilityVerdicts({ candidates, probe })).toEqual(verdicts);
+    expect(
+      playwrightReachabilityVerdicts({ candidates, probe, probeUrlOf }),
+    ).toEqual(verdicts);
+  });
+
+  it("量的是**真资源**不是裸根：根回 4xx 而资源 2xx/3xx ⇒ 判通（ISSUE #1966）", () => {
+    /* 这一条是那次误报的**回归判据**。现场：`环境前提` 在 41 秒处当场红说
+     * 「一个下载根都到不了」，而 `.cnb.yml` 里配着的那个根好着 —— 整条流水线
+     * 后 30 步全 skipped。
+     *
+     * 根因是探测拿**裸根**去 HEAD：实测 `https://cdn.npmmirror.com/binaries/playwright`
+     * （配置里那个根）回 **404**，而它下面真资源的路径回 **200**；
+     * `https://cdn.playwright.dev` 同理（裸根 400 / 真资源 307）。
+     * 所以这里钉住两件事：探测打到的是**带资源路径**的 URL，且**根自己的结论
+     * 不参与 `ok`**。 */
+    const asked: string[] = [];
+    const root = "https://cdn.npmmirror.com/binaries/playwright";
+    const verdicts = playwrightReachabilityVerdicts({
+      candidates: [root],
+      probeUrlOf: (r) =>
+        `${r}/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip`,
+      probe: (url) => {
+        asked.push(url);
+        /* 裸根 404（现场读数），带资源路径 200 —— 判据只看后者。 */
+        return url === root ? "HTTP 404" : "HTTP 200";
+      },
+    });
+    expect(asked, "探测必须打到真资源 URL 上，不能打裸根").toHaveLength(1);
+    const askedUrl = asked[0] ?? "";
+    expect(askedUrl).not.toBe(root);
+    expect(askedUrl.startsWith(root), "真资源 URL 必须建在这个根上").toBe(true);
+    expect(
+      askedUrl.includes("builds/cft/"),
+      "真资源 URL 里要有 Playwright 的 CDN 路径形状（builds/cft/<版本>/<档>/<包>）",
+    ).toBe(true);
+    const first = verdicts[0];
+    expect(first, "三态里必须有一条").toBeDefined();
+    expect(
+      first?.ok,
+      "真资源通 ⇒ 这一格必须判通（这正是那次误报反过来的一格）",
+    ).toBe(true);
+    /* 两个面都要留：`root` 是配置面（人会照着配 PLAYWRIGHT_DOWNLOAD_HOST），
+     * `url` 是实测面 —— 缺了 `root`，人对着一个资源路径不知道该改哪一行。 */
+    expect(first?.root).toBe(root);
   });
 });
 
