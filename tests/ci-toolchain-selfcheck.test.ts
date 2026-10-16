@@ -19,6 +19,7 @@
  *   ③ **`.cnb.yml` 真的在跑它**、且那段就地 PowerShell 已经撤掉（脚本存在而配置
  *      没接上 = 那一步又回到手写形态，本文件判的链就断了）。
  */
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -1171,5 +1172,213 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
       /(?:spawn|spawnSync|exec|execFile)\s*\(\s*["'`]pnpm["'`]/.test(code),
       "又退回「裸起一个 pnpm 名字」的写法了",
     ).toBe(false);
+  });
+});
+
+/**
+ * 「装完必须复验」那一层（ISSUE #1961）。
+ *
+ * `playwright install` 是一条**下载**命令，而下载有三种「退 0 但东西没落地」的形态：
+ * 传输被截断、落点不可写、CDN 回了一份错误页（HTTP 200 的 HTML，Playwright 不解析它
+ * ——既没报错也没装上）。自托管节点是台长期存在的机器，盘满与代理拦都不是稀奇事。
+ *
+ * 所以装完有一条**活判据**（按落点找 headless shell），与 `installAndReverify()` 的
+ * 「装完回到 `findPython()` 再探一遍」逐字同一条口径：**装与判是两件事**。
+ * 这一组把两个方向都真跑一次，并钉住「复验那一行永远到得了」（`return 0` 提前返回
+ * 是这类守卫最常见的失效形态）。
+ */
+describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
+  it("落点里有 headless shell ⇒ 判过；没有 / 读不到 ⇒ 判不过", async () => {
+    const { browserExecutableExists } = await import(
+      "../scripts/ci-toolchain-selfcheck.mjs"
+    );
+    const root = process.platform === "win32" ? "C:\\x\\ms-playwright" : "/x/ms-playwright";
+    const exe =
+      process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+
+    /* 「齐」那一半边用**真临时目录**跑：判据是**活的**（`findFileUnder` 真去读 fs），
+     * 只喂目录名不算数 —— 而「真读盘」恰好是这一条要与实现同源的形态。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "pw-"));
+    try {
+      const rev = path.join(dir, "chromium_headless_shell-1243");
+      const nested = path.join(rev, "chrome-headless-shell-linux64");
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(path.join(nested, exe), "");
+      const hit = browserExecutableExists({
+        platform: process.platform,
+        env: { PLAYWRIGHT_BROWSERS_PATH: dir },
+      });
+      expect(hit.ok, hit.out).toBe(true);
+      expect(hit.out).toContain(exe);
+
+      // 目录在、文件不在 ⇒ 判不过（**这一格就是「退 0 但没落地」**）。
+      rmSync(path.join(nested, exe));
+      const miss = browserExecutableExists({
+        platform: process.platform,
+        env: { PLAYWRIGHT_BROWSERS_PATH: dir },
+      });
+      expect(miss.ok).toBe(false);
+      expect(miss.out).toContain(exe);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+
+    // 一个 `chromium_headless_shell-*` 都没有（只装了完整 chromium 的机器）⇒ 判不过。
+    const none = browserExecutableExists({
+      platform: process.platform,
+      env: { PLAYWRIGHT_BROWSERS_PATH: root },
+      list: () => ["chromium-1243", "ffmpeg-1011"],
+    });
+    expect(none.ok).toBe(false);
+    expect(none.out).toContain("chromium_headless_shell-");
+
+    // 落点根读不到（盘符不在这台机上 / 权限）⇒ 判不过，且把根打出来。
+    const unreadable = browserExecutableExists({
+      platform: process.platform,
+      env: { PLAYWRIGHT_BROWSERS_PATH: "/definitely/not/here" },
+      list: () => {
+        throw new Error("ENOENT");
+      },
+    });
+    expect(unreadable.ok).toBe(false);
+    expect(unreadable.out).toContain("/definitely/not/here");
+  });
+
+  it("落点根按平台推（不写死盘符 / 认环境变量）", async () => {
+    const { playwrightBrowsersRoot } = await import(
+      "../scripts/ci-toolchain-selfcheck.mjs"
+    );
+    expect(
+      playwrightBrowsersRoot({
+        platform: "win32",
+        env: { LOCALAPPDATA: "D:\\Users\\ci\\AppData\\Local" },
+      }),
+    ).toBe(path.join("D:\\Users\\ci\\AppData\\Local", "ms-playwright"));
+    expect(
+      playwrightBrowsersRoot({
+        platform: "darwin",
+        env: { HOME: "/h" },
+      }),
+    ).toBe("/h/Library/Caches/ms-playwright");
+    expect(playwrightBrowsersRoot({ platform: "linux", env: { HOME: "/h" } })).toBe(
+      "/h/.cache/ms-playwright",
+    );
+    // 显式指定就听它的（自托管那台机把用户数据放在 D: 盘）。
+    expect(
+      playwrightBrowsersRoot({
+        platform: "win32",
+        env: { PLAYWRIGHT_BROWSERS_PATH: "E:\\pw" },
+      }),
+    ).toBe("E:\\pw");
+  });
+
+  it("复验真的排在「装」之后，且不过要非零退出（不许提前 return 0）", () => {
+    /* 浏览器那一层的实现住在 `scripts/ci-toolchain-browser.mjs`（§12.6 R5 的 900 行
+     * 硬闸下拆出来的，与 `ci-toolchain-python.mjs` 同一条边界）。 */
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"),
+      "utf8",
+    );
+    const body = src.slice(
+      src.indexOf("export function playwrightOnly("),
+      src.indexOf("export function browserExecutableExists("),
+    );
+    const installAt = body.indexOf("runPlaywrightInstall({ find, exec })");
+    const verifyAt = body.indexOf("browserExecutableExists()");
+    expect(installAt).toBeGreaterThan(0);
+    expect(
+      verifyAt,
+      "复验那一行不见了 —— `playwright install` 退 0 就成了唯一判据，而它有三种「退 0 但没落地」的形态",
+    ).toBeGreaterThan(installAt);
+    // 复验不过的分支里必须退非零（只是打印一句不算）。
+    const after = body.slice(verifyAt);
+    expect(after).toContain("if (!present.ok)");
+    expect(after).toContain("return 1");
+  });
+});
+
+/**
+ * 「退出码真的转出去了」（ISSUE #1961，本文件自己的第二个坑）。
+ *
+ * 守卫此前是裸 `main();`，而 `main()` 的返回值就是退出码 —— 于是
+ * `--python-only` / `--playwright-only` 里那些 `return 1` **全部被吞掉**，进程恒退 0。
+ * 实测：把 `浏览器安装` 的复验指到一个空落点，它明明打了「报了成功，但那一件二进制
+ * 不在盘上」并 `return 1`，**退出码仍是 0** —— 那一段话是给人看的，判据读的是退出码。
+ *
+ * 这与本文件反复在修的形态**是同一个**：`Python 可用性` 与 `浏览器安装` 这两步
+ * 存在的全部意义就是「缺件时红」，而它们**从来红不了**。
+ */
+describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
+  it("守卫把 `main()` 的返回值交给 `process.exit()`", () => {
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"),
+      "utf8",
+    );
+    /* 按源码形状钉：末尾那一段里必须有 `process.exit(main())`。
+     * 裸 `main();` 正是被吞码的形态 —— 它的表现是「打了未通过、退出码 0」。 */
+    const guard = src.slice(src.indexOf("fileURLToPath(import.meta.url)"));
+    expect(
+      /process\.exit\(\s*main\(\)\s*\)/.test(guard),
+      "守卫又写成裸 `main();` 了 —— `--python-only` / `--playwright-only` 的 `return 1` 会被吞掉，进程恒退 0",
+    ).toBe(true);
+  });
+
+  it("真起一次进程：`--playwright-only` 判不过时**退出码是 1**", () => {
+    /* 真起子进程跑一次（不 import）：退出码只在**进程**那一层看得见，
+     * 而这正是本组要判的东西。用「落点指到一个空目录」造出「install 报成功、
+     * 二进制不在盘上」那一态 —— 判据是复验，不动真落点。
+     *
+     * 判的是**两条**：装那一步假成功、复验指到一个空落点，然后看进程的退出码。
+     * 补丁只打在 `ci-toolchain-browser.mjs` 上（那两句都在那一份里）；而
+     * `ci-toolchain-selfcheck.mjs` 的守卫（`process.exit(main())`）走**真实现**
+     * —— 这正是本组要验的那一段。 */
+    const empty = mkdtempSync(path.join(tmpdir(), "pw-empty-"));
+    const browserProbe = path.join(ROOT, "scripts", "ci-toolchain-browser.mjs");
+    const probe = path.join(ROOT, "scripts", ".tmp-exitcode-probe.mjs");
+    const backup = path.join(tmpdir(), `browser-backup-${Date.now()}.mjs`);
+    const browserSrc = readFileSync(browserProbe, "utf8");
+    writeFileSync(backup, browserSrc);
+    try {
+      writeFileSync(
+        browserProbe,
+        browserSrc
+          // ① 装那一步假装成功（不动真落点、不下 100MB）
+          .replace(
+            "  const install = runPlaywrightInstall({ find, exec });",
+            '  const install = { ok: true, out: "(probe: 假装 install 退 0)" };',
+          )
+          // ② 复验指向一个空落点 ⇒ 「退 0 但没落地」那一态
+          .replace(
+            "  const present = browserExecutableExists();",
+            `  const present = browserExecutableExists({ env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: ${JSON.stringify(
+              empty,
+            )} } });`,
+          ),
+      );
+      /* 子进程跑**真**的那个入口（它 import 的是补过的那份 browser 模块）。 */
+      writeFileSync(
+        probe,
+        readFileSync(path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"), "utf8"),
+      );
+      const r = spawnSync(process.execPath, [probe, "--playwright-only"], {
+        encoding: "utf8",
+      });
+      expect(
+        r.status,
+        "复验判不过时退出码仍是 0 —— 守卫把 `main()` 的返回值吞了，" +
+          "而这一步存在全部意义就是「缺件时红」",
+      ).toBe(1);
+      expect(
+        `${r.stdout ?? ""}${r.stderr ?? ""}`,
+        "判不过时得把那句话打出来（退出码与话术两件都要有）",
+      ).toContain("不在盘上");
+    } finally {
+      /* 把真实现还原回去 —— 这一条**改的是盘上的实现文件**（判据必须在真进程里跑），
+       * 所以还原进 `finally`，任何一条断言失败都不许把它留在改过的状态上。 */
+      writeFileSync(browserProbe, readFileSync(backup, "utf8"));
+      rmSync(backup, { force: true });
+      rmSync(probe, { force: true });
+      rmSync(empty, { recursive: true, force: true });
+    }
   });
 });

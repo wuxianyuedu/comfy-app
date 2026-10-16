@@ -56,6 +56,16 @@ import {
   installPython,
   pythonForensics,
 } from "./ci-toolchain-python.mjs";
+/* 浏览器那一层（落点 / 复验 / 装）在 `./ci-toolchain-browser.mjs` —— 拆出去的边界与
+ * `ci-toolchain-python.mjs` 相同：本文件回答「这台机器够不够跑门禁链」，
+ * 那份回答「浏览器在不在、弄不到时怎么弄到手」。两件注入面（`find` / `exec`）
+ * 由这里传进去 —— 「怎么探 pnpm」那份判据本来就在本文件里（§12.18：不造第二轮子）。 */
+import {
+  browserExecutableExists,
+  playwrightBrowsersRoot,
+  playwrightOnly as playwrightOnlyImpl,
+  runPlaywrightInstall,
+} from "./ci-toolchain-browser.mjs";
 
 /**
  * `pnpm -v` 探到了什么 —— **不是**一句裸起名字的 `spawnSync` 能回答的（ISSUE #1961）。
@@ -575,96 +585,16 @@ export function pythonOnly() {
   return 1;
 }
 
-/**
- * 只答「Playwright 要用的浏览器在不在」并据此退码 —— 给「E2E 之前」那一步用。
- *
- * ## 它修的那一格（ISSUE #1961，自托管节点的首次真跑）
- *
- * `E2E 关键流程` 是这条流水线上**从来没有跑过**的一档（前几跑都断在 `单元测试` 或
- * `生产构建`）。它一跑到就红在浏览器缺件上：自托管节点是**裸宿主机**，没有
- * `docker.image` 那种「镜像里预装好浏览器」的兜底，而 `pnpm install` 不会拉
- * Playwright 的浏览器二进制（那是 `playwright install` 的事）。
- *
- * 那台机器上的读数（`cnb-0rd-1k50unpnn`）：
- *
- *     期望的路径：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
- *
- * ## 为什么是「装」而不是「判红让人去装」
- *
- * 与 Python 那一步的分工不同：解释器可能在盘上、只是这个执行账号的 PATH 看不见它
- * （那一格要人改 PATH，所以 `--python-only` 探到就退 0、探不到才红并给出取证）；
- * 而浏览器二进制**只可能来自这一条命令**，机器上不存在「装了但探不到」的分支。
- * 所以这里直接装 —— 装完再探一次才算数（与 `installPython` 的复验同一条口径：
- * 安装器退 0 不等于东西真在）。
- *
- * 幂等：`playwright install` 对已存在的版本是 no-op（实测秒级返回）。
- *
- * @returns {number}
- */
-export function playwrightOnly() {
-  section("playwright");
-  /* 两件都要装：`chromium` 与 `chromium-headless-shell` 是 `browsers.json` 里的
-   * **两个条目**，而 headless 档用的是后者 —— 只装前者时 `executablePath()` 会给出
-   * 前者、看着像「装过了」，真起浏览器就报 `Executable doesn't exist`
-   * （`e2e/support/preflight-browser.mjs` 的头注写着这条）。 */
-  const install = runPlaywrightInstall();
-  console.log(install.out || "(playwright install 没有输出)");
-  if (!install.ok) {
-    console.error(
-      "\n浏览器装不上（`playwright install` 退非零）。它的出口与 Python 不同 ——" +
-        "浏览器二进制只可能来自这一条命令，机器上没有「装了但探不到」的分支，" +
-        "所以这里不是「取证给人看」，是这一步真的没做成功。" +
-        "常见成因：网络到 CDN 不通、或磁盘满。",
-    );
-    return 1;
-  }
-  return 0;
-}
-
-/**
- * 装 Playwright 的两件浏览器（`chromium` + `chromium-headless-shell`）。
- *
- * 走 `findPnpm()` 的宿主形态而不是裸起 `pnpm`（同 `main()` 里那条理由：Windows 上
- * 裸名字交给 CreateProcess 时 corepack 的三个形态一个都用不上），命令行与
- * `e2e/support/preflight-browser.mjs` 的 `BROWSER_INSTALL_HINT` 逐字同源。
- *
- * ⚠️ 拼的是 `prefixArgs`（宿主前缀）而**不是** `args`：`args` 里带着探针参数 `-v`，
- * 拿它拼出来的是 `pnpm -v exec playwright install …` —— 实测那只会打印版本并
- * **退 0**，于是这一步「成功」而浏览器一个都没装（E2E 照旧报缺件，而日志里这条
- * stage 是绿的，比直接红更难查）。`prefixArgs` 就是为这件事单独留的。
- *
- * @param {{find?: typeof findPnpm, exec?: (cmd: string, args: string[]) => {ok: boolean, out: string}}} [ports]
- *   两个接缝：`find` 给 pnpm 形态、`exec` 起进程。判据里注入它们，结论才不取决于
- *   跑判据那台机器上有没有 pnpm、也不真去下 100MB 浏览器。
- * @returns {{ok: boolean, out: string, command?: string, args?: string[]}}
- */
-export function runPlaywrightInstall({ find = findPnpm, exec = run } = {}) {
-  const pnpm = find();
-  if (!pnpm.ok) {
-    return {
-      ok: false,
-      out:
-        "pnpm 不可用，装不了浏览器 —— 先让上面「工具链自证」那一步过。" +
-        `（探到的原因：${pnpm.out || "无输出"}）`,
-    };
-  }
-  const args = [
-    ...pnpm.prefixArgs,
-    "exec",
-    "playwright",
-    "install",
-    "chromium",
-    "chromium-headless-shell",
-  ];
-  const r = exec(pnpm.command, args);
-  return { ok: r.ok, out: r.out, command: pnpm.command, args };
-}
-
 export function main() {
   /* 只答 Python 那一格（`.cnb.yml` 里 E2E 之前那一步用它）。 */
   if (process.argv.includes("--python-only")) return pythonOnly();
   /* 只答「Playwright 要用的浏览器在不在」（同一条链上更后面的那一格，见下）。 */
-  if (process.argv.includes("--playwright-only")) return playwrightOnly();
+  if (process.argv.includes("--playwright-only")) {
+    /* 两件注入面是本文件本来就有的判据与起进程那一步 —— 那份模块自己不 import
+     * 仓库内任何东西（它的头注写着为什么）。 `--playwright-only` 那一步没有分节
+     * 标题以外的输出需要，`section` 照常传下去。 */
+    return playwrightOnlyImpl({ find: findPnpm, exec: run, section });
+  }
 
   section("OS");
   console.log(process.platform, process.arch, process.version);
@@ -768,10 +698,34 @@ export function main() {
  *
  * 本仓已有三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
  * `check-pending-merge-loss.mjs`）为此写了同一条注释，这里按同一份写法对齐；
- * `tests/script-main-guard.test.ts` 守着全仓不许再出现拼串的那一形态。 */
+ * `tests/script-main-guard.test.ts` 守着全仓不许再出现拼串的那一形态。
+ *
+ * ## ⚠️ 退出码必须**转出去**（ISSUE #1961，本文件自己的第二个坑）
+ *
+ * 这里此前是裸 `main();`，而 `main()` 的返回值就是退出码 —— 于是
+ * `--python-only` / `--playwright-only` 里那些 `return 1` **全部被吞掉**，
+ * 进程恒退 0。实测（本机）：把 `浏览器安装` 的复验指到一个空落点，它明明打了
+ * 「`playwright install` 报了成功，但那一件二进制不在盘上」并 `return 1`，
+ * **退出码仍是 0** —— 那一段话是给人看的，判据读的是退出码。
+ *
+ * 这与本文件反复在修的形态**是同一个**：「这一步报了绿」与「这一步做成了那件事」
+ * 之间差的正是这一层。整机自证那条路侥幸避开了它（`main()` 内部用的是
+ * `process.exit(1)`，见上面那段），而两个 `--xxx-only` 档走的就是 `return` ——
+ * 也就是说 `Python 可用性` / `浏览器安装` 这两步**从来不会红**，恰好是它们存在
+ * 的全部意义。修法只有一处：把返回值交给 `process.exit()`。
+ *
+ * 判据见 `tests/ci-toolchain-selfcheck.test.ts` 的「退出码真的转出去了」那一条。 */
+/* 浏览器那一层原样转出去，保持既有调用方与用例的导入路径不变（与
+ * `launcher-core/shell.mjs` 转出 `executable-resolve.ts` 那几个同形）。 */
+export {
+  browserExecutableExists,
+  playwrightBrowsersRoot,
+  runPlaywrightInstall,
+};
+
 if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
 ) {
-  main();
+  process.exit(main());
 }
