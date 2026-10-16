@@ -44,6 +44,7 @@ import {
   pnpmForensics,
   nodeAllowed,
   parseVersion,
+  runPlaywrightInstall,
 } from "../scripts/ci-toolchain-selfcheck.mjs";
 import {
   pythonCandidates,
@@ -697,6 +698,123 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
     expect(r.ok).toBe(false);
     expect(r.tried ?? [], "试过的候选一条都没记下来").not.toHaveLength(0);
     expect(r.hostFound, "宿主没有却报找到了").toBe(false);
+  });
+});
+
+/**
+ * 「浏览器安装」那一步的命令行（ISSUE #1961，自托管节点首次真跑到 E2E）。
+ *
+ * ## 这一格红过一次，而且红得最坏：**绿着不干活**
+ *
+ * `findPnpm()` 交出来的 `args` 是「**探一趟** pnpm」的完整形态 —— 宿主形态时它是
+ * `[…] -File pnpm.ps1 -v`，直接命中时是 `["-v"]`。装浏览器那一步照着 `args` 拼，
+ * 于是真跑的是：
+ *
+ *     pnpm -v exec playwright install chromium chromium-headless-shell
+ *
+ * 实测：那句只**打印版本号并退 0**（`12.11.2`），浏览器一个都没装。后果是这条 stage
+ * 报绿、E2E 照旧报「浏览器二进制不在」—— 看日志的人会以为浏览器装好了，
+ * 比让它直接红难查得多。
+ *
+ * 所以 `findPnpm()` 另外交一份 `prefixArgs`（**去掉探针参数**的宿主前缀），
+ * 真命令一律用它拼。下面两条钉住这件事：一条判命令行里没有 `-v`，一条判宿主前缀
+ * 一件不少（少了就变成「拿 .ps1 当可执行文件起」）。
+ */
+describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () => {
+  const hostPrefix = [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    "/bin/pnpm.PS1",
+  ];
+
+  it("真命令里**不带**探针参数 `-v`（带上就变成「只打版本、什么都不装」）", () => {
+    const calls: string[][] = [];
+    const r = runPlaywrightInstall({
+      find: () => ({
+        command: "/host/pwsh.EXE",
+        prefixArgs: hostPrefix,
+        args: [...hostPrefix, "-v"],
+        out: "12.4.1",
+        ok: true,
+      }),
+      exec: (_cmd, args) => {
+        calls.push(args);
+        return { ok: true, out: "installed" };
+      },
+    });
+    expect(r.ok).toBe(true);
+    expect(calls.length).toBe(1);
+    const args = calls[0] ?? [];
+    /* 这一条是**反向复算**的那一半：把 `prefixArgs` 换回 `args`，这里当场红。 */
+    expect(args, "命令行里混进了探针参数 -v").not.toContain("-v");
+    expect(args).toEqual([
+      ...hostPrefix,
+      "exec",
+      "playwright",
+      "install",
+      "chromium",
+      "chromium-headless-shell",
+    ]);
+  });
+
+  it("宿主前缀一件不少（少了就变成「拿 .ps1 当可执行文件起」）", () => {
+    const seen: Array<[string, string[]]> = [];
+    runPlaywrightInstall({
+      find: () => ({
+        command: "/host/pwsh.EXE",
+        prefixArgs: hostPrefix,
+        args: [...hostPrefix, "-v"],
+        out: "12.4.1",
+        ok: true,
+      }),
+      exec: (cmd, args) => {
+        seen.push([cmd, args]);
+        return { ok: true, out: "" };
+      },
+    });
+    expect(seen[0]?.[0]).toBe("/host/pwsh.EXE");
+    for (const one of hostPrefix) expect(seen[0]?.[1]).toContain(one);
+  });
+
+  it("pnpm 不可用时如实说，且**不去起**任何进程", () => {
+    let ran = false;
+    const r = runPlaywrightInstall({
+      find: () => ({
+        command: "pnpm",
+        prefixArgs: [],
+        args: ["-v"],
+        out: "",
+        ok: false,
+      }),
+      exec: () => {
+        ran = true;
+        return { ok: true, out: "" };
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.out).toContain("pnpm 不可用");
+    expect(ran, "pnpm 都没探到还去起进程").toBe(false);
+  });
+
+  it("两件浏览器都要装（只装 chromium 时 headless 档会报 Executable doesn't exist）", () => {
+    let args: string[] = [];
+    runPlaywrightInstall({
+      find: () => ({
+        command: "pnpm",
+        prefixArgs: [],
+        args: ["-v"],
+        out: "",
+        ok: true,
+      }),
+      exec: (_cmd, a) => {
+        args = a;
+        return { ok: true, out: "" };
+      },
+    });
+    expect(args).toContain("chromium");
+    expect(args).toContain("chromium-headless-shell");
   });
 });
 

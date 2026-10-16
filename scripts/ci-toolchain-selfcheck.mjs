@@ -90,10 +90,17 @@ import {
  *   isFile?: (p: string) => boolean,
  *   probeRun?: (cmd: string, args: string[]) => {command: string, args: string[], out: string} | null,
  *   host?: () => string | null}} [options]
- * @returns {{command: string, args: string[], out: string, ok: boolean, tried?: string[], hostFound?: boolean}}
- *          `command` / `args` 是**真正要 spawn 的形态**（宿主形态时 command 是宿主）；
+ * @returns {{command: string, prefixArgs: string[], args: string[], out: string,
+ *            ok: boolean, tried?: string[], hostFound?: boolean}}
+ *          `command` / `args` 是**探测**（`pnpm -v`）那一趟真正要 spawn 的形态
+ *          （宿主形态时 command 是宿主）；`prefixArgs` 是**去掉探针参数之后**的宿主前缀。
  *          `ok: false` 时另带两条读数 —— `tried`（在盘上、但**没起起来**的候选，
  *          按尝试顺序）与 `hostFound`（解释器宿主在不在），给 `pnpmForensics()` 打。
+ *
+ *          ⚠️ **`args` 里带着探针参数 `-v`，不要拿它去跑真命令**：`pnpm -v exec …`
+ *          会只打印版本并**退 0**（实测），于是「装浏览器」那一步看起来成功、实际什么
+ *          都没干 —— 比直接红更难查。要跑别的子命令请用 `prefixArgs` 拼
+ *          （`[...prefixArgs, "exec", "playwright", …]`）。
  */
 export function findPnpm({
   platform = process.platform,
@@ -130,12 +137,22 @@ export function findPnpm({
         host,
         isFile,
       });
-      if (usable) return { ...usable, out: `${usable.out}`.trim(), ok: true };
+      if (usable) {
+        return {
+          command: usable.command,
+          /* 探测那一趟 = 宿主前缀 + 探针参数；`prefixArgs` 单独留一份给真命令用。 */
+          prefixArgs: usable.prefixArgs,
+          args: [...usable.prefixArgs, ...usable.probeArgs],
+          out: `${usable.out}`.trim(),
+          ok: true,
+        };
+      }
       tried.push(candidate);
     }
   }
   return {
     command: "pnpm",
+    prefixArgs: [],
     args: ["-v"],
     out: "",
     ok: false,
@@ -264,7 +281,9 @@ function pnpmCandidateExts(platform) {
  *          probeRun: (cmd: string, args: string[]) => {command: string, args: string[], out: string} | null,
  *          host: () => string | null,
  *          isFile: (p: string) => boolean}} ctx
- * @returns {{command: string, args: string[], out: string} | null}
+ * @returns {{command: string, prefixArgs: string[], probeArgs: string[], out: string} | null}
+ *          `prefixArgs` 是宿主前缀（直接起时为空）、`probeArgs` 是探针参数 —— 分开给，
+ *          调用方跑**别的**子命令时用 `prefixArgs`（见 `findPnpm` 的 `@returns`）。
  */
 function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
   const ext = path.extname(candidate).toLowerCase();
@@ -284,10 +303,12 @@ function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
      * 空参数会打 usage 并**退非零**（实测 `pnpm` 裸跑 exit≠0、`pnpm -v` exit=0），
      * 于是 `runProbe` 判它「起不来」、唯一可用的形态被否掉，最后仍报
      * 「pnpm 不可用」—— 修完候选表却漏了探针参数，红的形状原地复现。 */
-    return probeRun(exe, ps1Invocation(candidate, ["-v"]));
+    return viaHost(exe, ps1Invocation(candidate), probeRun);
   }
   const direct = probeRun(candidate, ["-v"]);
-  if (direct) return direct;
+  if (direct) {
+    return { ...direct, prefixArgs: [], probeArgs: ["-v"] };
+  }
   /* 真起不来（无扩展名 shim 在 Windows 上就是这一档）时，同目录的 `.ps1` 是出路。 */
   return viaSiblingPs1(candidate, { host, probeRun, isFile });
 }
@@ -299,7 +320,7 @@ function usablePnpm(candidate, { platform, probeRun, host, isFile }) {
  * @param {{probeRun: (cmd: string, args: string[]) => {command: string, args: string[], out: string} | null,
  *          host: () => string | null,
  *          isFile: (p: string) => boolean}} ctx
- * @returns {{command: string, args: string[], out: string} | null}
+ * @returns {{command: string, prefixArgs: string[], probeArgs: string[], out: string} | null}
  */
 function viaSiblingPs1(candidate, { host, probeRun, isFile }) {
   const ext = path.extname(candidate);
@@ -308,7 +329,32 @@ function viaSiblingPs1(candidate, { host, probeRun, isFile }) {
   const exe = host();
   if (!exe) return null;
   /* 同一条：探的参数一并交给垫片（见上面 `.ps1` 那一支的注释）。 */
-  return probeRun(exe, ps1Invocation(script, ["-v"]));
+  return viaHost(exe, ps1Invocation(script), probeRun);
+}
+
+/**
+ * 经宿主起一次并收场 —— 把「宿主前缀」与「探针参数」分开留着。
+ *
+ * 两者分开是**调用方的需要**，不是为了好看：`findPnpm()` 的 `args` 给的是
+ * 「探一趟 pnpm」的完整形态（`… -File pnpm.ps1 -v`），而**拿它去跑真命令是错的**
+ * —— 实测 `pnpm -v exec playwright install …` 只打印版本并**退 0**，于是
+ * 「装浏览器」那一步看着成功、实际什么都没干。所以这里把前缀留一份出来，
+ * 真命令用 `[...prefixArgs, "exec", "playwright", …]` 拼。
+ *
+ * `probeRun` **必须从调用方透传**，不许在这里直取模块级的 `runProbe`：那个口是
+ * 单测「在 POSIX 上判 Windows 形态」的唯一接缝，绕过去等于让结论取决于跑判据那台
+ * 机器上碰巧有什么（`tests/ci-toolchain-selfcheck.test.ts` 有一条结构判据盯着这件事）。
+ *
+ * @param {string} exe 宿主可执行文件
+ * @param {string[]} prefix 宿主前缀（`-NoProfile … -File <shim>`）
+ * @param {(cmd: string, args: string[]) => {command: string, args: string[], out: string} | null} probeRun
+ * @returns {{command: string, prefixArgs: string[], probeArgs: string[], out: string} | null}
+ */
+function viaHost(exe, prefix, probeRun) {
+  const probeArgs = ["-v"];
+  const probed = probeRun(exe, [...prefix, ...probeArgs]);
+  if (!probed) return null;
+  return { ...probed, prefixArgs: prefix, probeArgs };
 }
 
 /**
@@ -329,21 +375,19 @@ function runProbe(cmd, args) {
 }
 
 /**
- * `.ps1` 经宿主的完整参数（宿主前缀 + **探针要传的参数**）。
+ * `.ps1` 经宿主的**宿主前缀**（不含探针参数 —— 探针参数由 {@link viaHost} 接）。
  *
- * 刻意**不接宿主可执行文件**：宿主由 `powershellHost()` 单独答，这里只给「宿主接什么」
- * （与 `src/lib/process/executable-resolve.ts` 的 `prefixArgs` 同形）。
+ * 刻意**不接宿主可执行文件**：宿主由 `powershellHost()` 单独答，这里只给
+ * 「宿主怎么起它」（与 `src/lib/process/executable-resolve.ts` 的 `prefixArgs` 同形）。
  *
- * `args` 是**要紧的**那一半：`.ps1` 垫片的退出码取决于它收到什么参数
- * （`pnpm.ps1` 裸跑打 usage 并退非零、带 `-v` 才退 0），而 `runProbe` 以退出码判
- * 「起没起来」。只给宿主前缀、忘了把 `-v` 接上去，等于把唯一能用的形态判成起不来。
+ * `-NoProfile` 要紧：宿主账号上若有 profile，它可能往 stdout 打字，而探针把整块
+ * stdout 当版本号读。`-ExecutionPolicy Bypass` 是无人值守里唯一稳的档。
  *
  * @param {string} script
- * @param {string[]} [args] 垫片自己要收的参数（`-v`）
  * @returns {string[]}
  */
-function ps1Invocation(script, args = []) {
-  return ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, ...args];
+function ps1Invocation(script) {
+  return ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script];
 }
 
 /**
@@ -584,10 +628,18 @@ export function playwrightOnly() {
  * 裸名字交给 CreateProcess 时 corepack 的三个形态一个都用不上），命令行与
  * `e2e/support/preflight-browser.mjs` 的 `BROWSER_INSTALL_HINT` 逐字同源。
  *
- * @returns {{ok: boolean, out: string}}
+ * ⚠️ 拼的是 `prefixArgs`（宿主前缀）而**不是** `args`：`args` 里带着探针参数 `-v`，
+ * 拿它拼出来的是 `pnpm -v exec playwright install …` —— 实测那只会打印版本并
+ * **退 0**，于是这一步「成功」而浏览器一个都没装（E2E 照旧报缺件，而日志里这条
+ * stage 是绿的，比直接红更难查）。`prefixArgs` 就是为这件事单独留的。
+ *
+ * @param {{find?: typeof findPnpm, exec?: (cmd: string, args: string[]) => {ok: boolean, out: string}}} [ports]
+ *   两个接缝：`find` 给 pnpm 形态、`exec` 起进程。判据里注入它们，结论才不取决于
+ *   跑判据那台机器上有没有 pnpm、也不真去下 100MB 浏览器。
+ * @returns {{ok: boolean, out: string, command?: string, args?: string[]}}
  */
-function runPlaywrightInstall() {
-  const pnpm = findPnpm();
+export function runPlaywrightInstall({ find = findPnpm, exec = run } = {}) {
+  const pnpm = find();
   if (!pnpm.ok) {
     return {
       ok: false,
@@ -596,14 +648,16 @@ function runPlaywrightInstall() {
         `（探到的原因：${pnpm.out || "无输出"}）`,
     };
   }
-  return run(pnpm.command, [
-    ...pnpm.args,
+  const args = [
+    ...pnpm.prefixArgs,
     "exec",
     "playwright",
     "install",
     "chromium",
     "chromium-headless-shell",
-  ]);
+  ];
+  const r = exec(pnpm.command, args);
+  return { ok: r.ok, out: r.out, command: pnpm.command, args };
 }
 
 export function main() {
