@@ -2596,9 +2596,79 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     }
   });
 
+  it("自取成功 + 落点复验通过 ⇒ **不再交给老路**（它会顺手拉 ffmpeg，而那件取不回）", () => {
+    /* 现场（`cnb-7oo-1k51r518b`，恢复那一格之后的第一跑）：自取**成功了** ——
+     * 119 MiB 的 headless shell 落到落点、标记也写了 —— 而 `playwright install`
+     * 照旧要碰网去拉 **ffmpeg**（chromium 的依赖，~2.5 MB），那一件在同一条链路上
+     * 5 次 `timed out after 120000ms`、0 字节 ⇒ 这一格红在一件**已经装好的浏览器**
+     * 旁边，读起来像「浏览器没装成」。
+     *
+     * 所以判据是「自取成功了**且**落点复验通过（同一个 `browserExecutableExists()`）
+     * ⇒ 直接放行」——本档真正要的是 headless shell，而 ffmpeg 只有录视频才用得上
+     * （`playwright.config.ts` 没开 `video`）。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "pw-seeded-"));
+    try {
+      const exe =
+        process.platform === "win32"
+          ? "chrome-headless-shell.exe"
+          : "chrome-headless-shell";
+      /** @type {string[]} */
+      const printed: string[] = [];
+      /** @type {boolean} */
+      let installCalled = false;
+      const code = playwrightOnly({
+        env: {
+          PLAYWRIGHT_BROWSERS_PATH: dir,
+          PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x",
+        },
+        find: () => ({
+          ok: true,
+          command: "pnpm",
+          prefixArgs: [],
+          args: ["-v"],
+          out: "12.4.1",
+        }),
+        /* 自取这一条**真把那件放到落点上**（那一层的判据就是「东西在不在」）。 */
+        seed: () => {
+          const exePath = path.join(
+            dir,
+            "chromium_headless_shell-1243",
+            "chrome-headless-shell-win64",
+            exe,
+          );
+          mkdirSync(path.dirname(exePath), { recursive: true });
+          writeFileSync(exePath, "");
+          return { ok: true, out: exePath };
+        },
+        exec: () => {
+          installCalled = true;
+          return { ok: false, out: "模拟：老路死在 ffmpeg 上" };
+        },
+        probe: () => "超时（8000ms 内没有响应）",
+        pickRoots: () => ({
+          roots: ["https://m/x"],
+          verdicts: [],
+          probed: false,
+          switched: false,
+        }),
+        log: (/** @type {string} */ line: string) => printed.push(line),
+      });
+      expect(
+        installCalled,
+        "自取已经把那一件装好了，却还让 `playwright install` 去碰网 —— 它顺手要拉的 " +
+          "ffmpeg 会把这一格判红（实测 cnb-7oo-1k51r518b：浏览器装好了、红在 ffmpeg 上）",
+      ).toBe(false);
+      expect(code, "落点上已经有那一件，这一步却报红").toBe(0);
+      expect(printed.join("\n")).toContain("自取成功");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("`.cnb.yml` 那一步仍然只调这一条入口（没有另起一步手写逻辑）", () => {
     const yml = read(".cnb.yml");
     expect(yml).toContain("--playwright-only");
+
     /* 自取是那一步**内部**多出来的一条路，不是新 stage：多一个 stage 就多一处
      * 只在平台上跑、本地一条判据都测不到它的逻辑（§13.5.3.5 记过这一格）。 */
     expect(yml.match(/ci-toolchain-browser-fetch/g) ?? []).toHaveLength(0);

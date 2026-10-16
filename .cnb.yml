@@ -451,10 +451,25 @@
   # （分片取字节 + 编排：片长自适应、断了从已落盘的字节接着来；实现与判据见规范
   # §13.5.3.5「第七跑」那一小节），不另起 stage。
   #
-  # 所以恢复的依据**不是**「节点网络修好了」，而是**取法换掉了**：同一条链路在本机
-  # 实测能取完（119809080 字节、18.5s）。⚠️ 而**这台节点上的完整读数还没出现过** ——
-  # 恢复后第一次真跑到这一格时，把「构建号 + 它走的是哪条通道 + 结果」补进这段；
-  # 在那之前，下面那句「装不上会说话」是**预言**，不是读数。
+  # 所以恢复的依据**不是**「节点网络修好了」，而是**取法换掉了**。
+  #
+  # ⚠️ **恢复后的第一跑读数已经到了**（`cnb-7oo-1k51r518b`，2026-10-16）：
+  #
+  #   自取：从 https://cdn.npmmirror.com/binaries/playwright 分片取这一件（可续传）
+  #   自取成功：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
+  #   playwright install → Downloading FFmpeg (playwright ffmpeg v1011) × 5 次
+  #                        → timed out after 120000ms → Download failure
+  #   浏览器装不上（`playwright install` 退非零）…   ← 而浏览器**已经装好了**
+  #
+  # 两件事各是一半：「取法换掉了」成立（119 MiB 的自取在这台节点上真走完了），
+  # 而红的是**另一件** —— 老路不只装浏览器，还会顺手拉 **ffmpeg**（chromium 的依赖，
+  # ~2.5 MB），那件在同一条链路上照旧 0 字节。所以这一步现在在自取成功之后**按落点
+  # 复验一次**（同一个 `browserExecutableExists()`），通过就直接放行、不再交给老路：
+  # 本档真正要的是 headless shell（复验找的就是它），而 ffmpeg 只有录视频才用得上
+  # （`playwright.config.ts` 没开 `video`）。理由与判据在 `ci-toolchain-browser-seed.mjs`
+  # 的头注（`ci-toolchain-browser.mjs` 正卡在 900 行的硬闸上，那段只有一行 + 指路）。
+  #
+  # 下一笔账：`E2E 关键流程` 的首跑读数（它在自托管路径上仍然一次都没有跑到过）。
   - name: 浏览器安装
     script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
     env:
