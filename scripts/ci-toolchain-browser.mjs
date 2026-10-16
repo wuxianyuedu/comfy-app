@@ -418,12 +418,13 @@ export function runPlaywrightInstall({
     "chromium",
     "chromium-headless-shell",
   ];
-  /* 逐个宿主试过去（`playwrightHostsToTry()`）：Playwright 自己的三个内置镜像
-   * **全是 `*.playwright.dev` / `*.microsoft.com`**，一台出不了这两个域的网络里
-   * 三个一起不通 —— 换哪个都一样。所以「不通」这一档的出路只有**外面给一个能通的
-   * 镜像根**，而那不是它能自己推出来的事（见 `playwrightHostsToTry` 的头注）。 */
+  /* 试哪几个根由 `playwrightDownloadRoots()` 说了算 —— 设了外面给的那个就**只用它**，
+   * 没设就回落到 Playwright 的内置族（那一族的三档由它自己挨个试）。
+   * Playwright 的三个内置镜像**全是 `*.playwright.dev` / `*.microsoft.com`**，
+   * 一台出不了这两个域的网络里三个一起不通 —— 换哪个都一样，所以「不通」这一档的
+   * 出路只有**外面给一个能通的镜像根**，而那不是它能自己推出来的事。 */
   let out = "";
-  for (const host of playwrightHostsToTry(env)) {
+  for (const host of playwrightDownloadRoots(env)) {
     const r = exec(pnpm.command, args, host);
     out += `${r.out ?? ""}\n`;
     if (r.ok) return { ok: true, out, command: pnpm.command, args, host };
@@ -432,29 +433,61 @@ export function runPlaywrightInstall({
 }
 
 /**
- * 装浏览器时按序要试的**镜像根** —— 头一个是 `PLAYWRIGHT_DOWNLOAD_HOST`（若设了）。
+ * 装浏览器时**一个下载根都不额外给** —— 走 Playwright 的内置镜像族。
  *
- * ## 为什么必须有一条「外面给的镜像」这条路
- *
- * Playwright 自己有一份 `PLAYWRIGHT_CDN_MIRRORS`（三档），而三档**都是
- * `cdn.playwright.dev` 与 `playwright.download.prss.microsoft.com`** 的排列。
- * 在这台自托管节点上实测（`cnb-gt1-1k513ill4`）：`Downloading Chrome for Testing …`
- * 逐字打了 **5 次**、每次都是 `cdn.playwright.dev`（Playwright 的重试是
- * `retryCount = 5`，换镜像但不换域名族），然后 `Download failure, code=1`。
- * 也就是说**它自己的回退在同一张网里等于没有**：三个域名要么一起通、要么一起不通。
- *
- * 所以「不通」这一档唯一的出路是外面给一个能通的根 —— `PLAYWRIGHT_DOWNLOAD_HOST`
- * 正是 Playwright 留给这件事的键（本仓不发明第二套，§12.18）。设了就用它，
- * 而且**只用它**：那说明人已经知道该走哪儿，不必再陪 Playwright 挨个试一遍不通的。
- *
- * 没设时返回一条空宿主 = 走 Playwright 的默认行为（内置那三档），
- * **不替它挑一个第三方镜像写进代码** —— 那等于把「哪面墙怎么过」写死在仓里，
- * 换台机器就静默失效，而这里判据是「装完能起才放行」，它会绿着把错的东西放过去。
+ * ⚠️ **这不是「只有一个根」的意思**：Playwright 自己的 `PLAYWRIGHT_CDN_MIRRORS`
+ * 有三档，全在 `cdn.playwright.dev` / `playwright.download.prss.microsoft.com`
+ * 这一族里，它自己会挨个试（`retryCount = 5`）。本函数返回一条空宿主，
+ * 就是「这一趟不覆盖它」——**本仓不替它挑一个第三方镜像写进代码**，
+ * 那等于把「哪面墙怎么过」写死在仓里，换台机器就静默失效。
  *
  * @param {Record<string, string | undefined>} env
  * @returns {Array<string | undefined>}
  */
 export function playwrightHostsToTry(env) {
+  const configured = env.PLAYWRIGHT_DOWNLOAD_HOST;
+  return configured ? [configured] : [undefined];
+}
+
+/**
+ * 装浏览器时**真去试的**那些下载根 —— 这一趟要起几次进程，由它说了算。
+ *
+ * ## 它与 `playwrightHostsToTry()` 为什么分成两个问题
+ *
+ * 原先只有一个函数，于是「外面给的那个 + 内置那族」被表达成了「按序试两个根」。
+ * 而**这一族是同一个东西的两个名字**，逐次去试它不是「多一条出路」，是：
+ *
+ *   · 把**同一次不通**再花同样的时间重试一遍（镜像站不常见 4xx 时尤其亏：
+ *     Playwright 自己的 `retryCount = 5` 在一个根上已经试够了）；
+ *   · 让**读数撒谎** —— `playwrightInstallHints()` 分「同族被反复试」与「慢链路上
+ *     没量完」两档，靠的是试过的根里有没有非 Playwright 族的。带上第三个根之后，
+ *     实测那一档**再也不成立**（`cnb-g9d-1k515kvrq` 的真实形态被读成后者，
+ *     而它要的下一动作恰恰相反）。
+ *
+ * ## 现场（`cnb-g9d-1k515kvrq`，本仓这一档的第四次红）
+ *
+ * 日志的形态逐字是这两行（原文见平台那次构建的 `浏览器安装` stage）：
+ *
+ *   1. 第一行：下载根由 `PLAYWRIGHT_DOWNLOAD_HOST` 指定，
+ *      值就是 `.cnb.yml` 里那个 npmmirror 的根；
+ *   2. 之后是**两条**「正在从 <同一个根> 下载 chromium 的 win64 zip」——
+ *      同一段 URL 逐字重复；收尾是「装浏览器失败」+ 那件包
+ *      `timed out after 120000ms`。
+ *
+ * 也就是说：**同一个根被拆成了两条**，而下一句「30s 是默认套接字超时」
+ * 与逐次 120s 的实测直接矛盾 —— 人照它去改超时，而真正发生的事（这条链路对这一族
+ * 就是不通）一个字都没读到。
+ *
+ * ## 「给上了就只用它」是一条判据，不是一句注释
+ *
+ * `PLAYWRIGHT_DOWNLOAD_HOST` 写进 `.cnb.yml` 的语义是「人已经知道该走哪儿」
+ * （见 `tests/ci-toolchain-selfcheck.test.ts` 的「下载根由外面给」那组）。
+ * 给上了还去试它替不掉的那一族，等于把那条判据降级成「多试一个根」。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {Array<string | undefined>}
+ */
+export function playwrightDownloadRoots(env) {
   const configured = env.PLAYWRIGHT_DOWNLOAD_HOST;
   return configured ? [configured] : [undefined];
 }

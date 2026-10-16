@@ -53,10 +53,9 @@ import {
   pythonProbeArgs,
 } from "../src/lib/process/python-candidates";
 
-/** 浏览器那一层的直接导出（新加的两个：镜像档 / 「已装就不装」那一支）。 */
-const { playwrightHostsToTry, playwrightOnly } = await import(
-  "../scripts/ci-toolchain-browser.mjs"
-);
+/** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」那一支）。 */
+const { playwrightDownloadRoots, playwrightHostsToTry, playwrightOnly } =
+  await import("../scripts/ci-toolchain-browser.mjs");
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -1621,6 +1620,59 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
       ["https://m/x"],
     );
     expect(playwrightHostsToTry({})).toEqual([undefined]);
+  });
+
+  /**
+   * **「只用它」是一条判据，不是一句注释**（ISSUE #1961，这一格的第四次红）。
+   *
+   * 现场（`cnb-g9d-1k515kvrq`）：日志里逐字两条「正在从同一个根下载 chromium 的
+   * win64 zip」（就是外面给的那个 npmmirror 根），然后 `timed out after 120000ms`
+   * —— **同一个根被拆成两条**。而外面给的那个根替不掉的正是它自己那一族，
+   * 所以「再接着试内置族」既不是多一条出路，还把 `playwrightInstallHints()`
+   * 那两档读数搅坏（实测那一档再也不成立，下一动作被指反）。
+   *
+   * 上面那条用例只钉两个函数的返回值，**钉不住 `runPlaywrightInstall()` 怎么用它们**
+   * —— 把 `playwrightHostsToTry(env)` 换回循环里，两个函数照旧各自正确、行为却回去了。
+   * 这一条改判**真响了几次**：设了根就恰好一次，且那次就是它。
+   */
+  it("设了根，`playwright install` 就**只起一次**、且用的就是它", () => {
+    /** @type {Array<string | undefined>} */
+    const hosts: Array<string | undefined> = [];
+    const r = runPlaywrightInstall({
+      env: { PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" },
+      find: () => ({
+        ok: true,
+        command: "pnpm",
+        prefixArgs: [],
+        args: ["-v"],
+        out: "12.4.1",
+      }),
+      exec: (
+        /** @type {string} */ _cmd,
+        /** @type {string[]} */ _args,
+        /** @type {string | undefined} */ host,
+      ) => {
+        hosts.push(host);
+        return { ok: false, out: "Download failure, code=1" };
+      },
+    });
+    expect(
+      hosts,
+      "给上了下载根却还去试它替不掉的那一族 —— 同一次不通再花一遍时间，" +
+        "而且试过的根一多，「同族被反复试」那档读数就再也不成立（实测被读成另一个方向）",
+    ).toEqual(["https://m/x"]);
+    expect(r.ok).toBe(false);
+  });
+
+  it("没设根时不许替它挑一个镜像（源码里不写死任何根）", () => {
+    expect(
+      playwrightDownloadRoots({}),
+      "没设 `PLAYWRIGHT_DOWNLOAD_HOST` 时本仓自己给了一个根 —— 那等于把" +
+        "「哪面墙怎么过」写死在仓里，换台机器就静默失效",
+    ).toEqual([undefined]);
+    expect(
+      playwrightDownloadRoots({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" }),
+    ).toEqual(["https://m/x"]);
   });
 
   it("`runPlaywrightInstall` 把根逐次交给子进程（不是设一次全局）", () => {

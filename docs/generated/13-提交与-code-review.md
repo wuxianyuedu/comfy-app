@@ -1367,6 +1367,31 @@ E2E 关键流程                 562ms  ❌  [e2e] ✗ PATH 上没有可用的 P
 > 设了根就**只用它**、拼出来的命令行里**不许有探针参数 `-v`**（那是 `findPnpm().args`
 > 的形态，拼进去只会打印版本并退 0），以及 `.cnb.yml` 那一步必须带这两个键。
 
+> **⑥ 第六件（第四次红）：上了下载根却还去试它替不掉的那一族。**「给上了就只用它」
+> 此前只是实现里的一句意图，**没有任何判据钉住**。现场 `cnb-g9d-1k515kvrq`：
+>
+>     下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：https://cdn.npmmirror.com/binaries/playwright
+>     Downloading … from https://cdn.npmmirror.com/binaries/playwright/…/chrome-win64.zip   ← 同一个根逐字两条
+>     Downloading … from https://cdn.npmmirror.com/binaries/playwright/…/chrome-win64.zip
+>     Failed to install browsers | … timed out after 120000ms
+>
+> 同一个根被拆成两条，然后逐次超时。**代价不在那一跑白花的时间上，在两处读数被搅坏**：
+>
+> - 外面给的那个根**替不掉 Playwright 自己那一族**（实测 `5 × 120s` 全落在 `*.playwright.dev`），
+>   所以「再接着试内置族」不是多一条出路，是把同一次不通再花一遍时间；
+> - `playwrightInstallHints()` 分「同族被反复试」与「慢链路上没量完」两档，靠的正是**试过的根里
+>   有没有非 Playwright 族的**。多出一个 `undefined` 之后前者的判据再也不成立，日志把人引回
+>   「把超时再改大一点」那条错路上 —— 而这一步的处置恰恰相反：**这条路对这个根不通**，
+>   出口在宿主机 / 网络侧，不在那个数字上（这正是 §13.5.3.5.1 那条「读数必须指向下一动作」的反面）。
+>
+> 修法是把「试哪几个根」与「没设时回落到谁」分成两个问题：
+> `playwrightDownloadRoots()` 说**这一趟起几次进程**（设了就恰好一次；没设就一条空宿主 =
+> 交给 Playwright 自己的三档），`playwrightHostsToTry()` 保留原不变量（设了就 `[configured]`、
+> 没设就 `[undefined]`，**本仓不替它挑第三方镜像**）。
+> 判据在 `tests/ci-toolchain-selfcheck.test.ts`：设了根就**恰好起一次**、且用的就是它
+> （反向复算过：把循环换回「总去试」，判据当场点名）。⚠️ 只钉两个函数的返回值**不够** ——
+> 钉不住 `runPlaywrightInstall()` 怎么用它们，所以这一条判的是**真响了几次**。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的

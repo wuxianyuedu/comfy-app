@@ -63,6 +63,7 @@ import {
 import {
   browserExecutableExists,
   playwrightBrowsersRoot,
+  playwrightDownloadRoots,
   playwrightInstallHints,
   playwrightOnly as playwrightOnlyImpl,
   runPlaywrightInstall,
@@ -739,6 +740,7 @@ export function main() {
 export {
   browserExecutableExists,
   playwrightBrowsersRoot,
+  playwrightDownloadRoots,
   playwrightInstallHints,
   runPlaywrightInstall,
 };
