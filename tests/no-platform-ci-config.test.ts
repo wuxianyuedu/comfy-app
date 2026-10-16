@@ -269,9 +269,10 @@ export function registeredDisabledGates(text: string): string[] {
  */
 export function stageKeptAsComment(text: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`, "m").test(
-    text,
-  );
+  return new RegExp(
+    `^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`,
+    "m",
+  ).test(text);
 }
 
 /**
@@ -620,13 +621,18 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 那条口径：`script` 里的
      * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。
-     * **停用时从注释块里读**（`# ` 前缀让 `- name:` 那一行不再是 stage 项）——
-     * 停用不该把这条保证一起丢掉：恢复时照抄的那段原文指的是同一个入口。
+     * **两种形态都要读得出来**：活的（`.gates` 里那一项，`script:` 缩进 4 空格）
+     * 与被注释掉的（`# ` 前缀让 `- name:` 那一行不再是 stage 项，剥掉前缀后顶格）。
+     * ⚠️ 正则**必须容忍前导空白** —— ISSUE #1966 恢复这一格时，只认顶格的
+     * `^(?:#\s*)?script:` 把活的形态判成「解析不出 script」，而它要判的是
+     * 「入口在不在盘上」，不是那一行在第几列。
      * 不从原文里做「紧邻下一行」的匹配：停用块在 `- name:` 与 `script:` 之间插了
-     * 一段说明，紧邻匹配会当场落空（而它要判的是「入口在不在盘上」，不是排版）。 */
+     * 一段说明，紧邻匹配会当场落空。 */
     const blockText =
       stageBlock(text, "浏览器安装") ?? commentedStageBlock(text, "浏览器安装");
-    const scriptLine = /^(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(blockText ?? "");
+    const scriptLine = /^[ \t]*(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(
+      blockText ?? "",
+    );
     const command = scriptLine?.[1]?.trim();
     expect(command, "解析不出「浏览器安装」那一步的 script").toBeTruthy();
     const entry = /^(?:node\s+)?(scripts\/[^\s]+)/.exec(command ?? "")?.[1];
@@ -779,9 +785,12 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 于是这里也不要求它有预算 —— 预算跟着 stage 走。它一旦被加回来（不再出现在
      * 停用清单里），这条要求**自动恢复**，不需要有人记得改回来。 */
     const disabled = registeredDisabledGates(text);
-    const required = ["ESLint 零警告", "单元测试", "生产构建", "E2E 关键流程"].filter(
-      (name) => !disabled.includes(name),
-    );
+    const required = [
+      "ESLint 零警告",
+      "单元测试",
+      "生产构建",
+      "E2E 关键流程",
+    ].filter((name) => !disabled.includes(name));
     const missing = required.filter((name) => !timeouts.has(name));
     expect(
       missing,
@@ -905,7 +914,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ),
     ).toBe(true);
     expect(
-      stageKeptAsComment("x:\n  stages:\n  - name: 单元测试\n    script: x\n", "单元测试"),
+      stageKeptAsComment(
+        "x:\n  stages:\n  - name: 单元测试\n    script: x\n",
+        "单元测试",
+      ),
     ).toBe(false);
     expect(
       stageKeptAsComment("x:\n  stages:\n  #   - name: 别的\n", "单元测试"),

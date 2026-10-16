@@ -591,19 +591,40 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     expect(stageBlockIn(YML, "不存在的那一步")).toBeNull();
   });
 
-  it("**停用形态**下两份解析也同一份答案（现役 `.cnb.yml` 上对账）", () => {
-    /* `stageBlockIn()` 从 ISSUE #1966 起**活的没有就看注释态** —— 那一支是新加的，
-     * 与 `.ts` 侧 `commentedStageBlock()` 必须同口径（与上一条同源：两份文本副本 +
-     * 一条对账判据）。⚠️ 拿**现役配置**对账而不是夹具：这一步真正要回答的是
-     * 「现役 `.cnb.yml` 里那一项长什么样」，而它此刻正处在停用形态上。 */
+  it("两份解析同一份答案：现役配置按**活的**形态对账，注释态回退拿夹具对账", () => {
+    /* `stageBlockIn()` 从 ISSUE #1966 起**活的没有就看注释态**，那一支与 `.ts` 侧
+     * `commentedStageBlock()` 必须同口径（与上一条同源：两份文本副本 + 一条对账判据）。
+     *
+     * ⚠️ 现役 `.cnb.yml` 上**题在 2026-10-16 换了**：那两段以顶格注释留着的原文
+     * 被取消失效（`浏览器安装` / `E2E 关键流程` 恢复成 active），所以现在要对账的
+     * 是**活的**形态 —— 活的那一支（`stageBlockIn` 的 `^ {2}-`）同样是「两份文本
+     * 副本」的一半，一样会漂。
+     * 注释态那一支改拿**夹具**对账：它判的是「两份实现同口径」，与「现役配置里还有
+     * 没有停用项」无关 —— 靠现役配置出题会让这条用例随停用清单一起失效。 */
     const live = readPipelineConfig(ROOT) ?? "";
     for (const name of ["浏览器安装", "E2E 关键流程"]) {
-      expect(
-        stageBlockIn(live, name),
-        `停用形态下两份解析漂了（${name}）—— 「配置里那个根」会量错对象`,
-      ).toBe(commentedStageBlock(live, name));
-      expect(stageBlockIn(live, name), `${name} 解析不出内容`).toBeTruthy();
+      const active = stageBlockIn(live, name);
+      expect(active, `${name} 解析不出内容`).toBeTruthy();
+      expect(active, `活的形态下两份解析漂了（${name}）`).toBe(
+        stageBlockGate(live, name),
+      );
     }
+    const disabledFixture = [
+      ".gates: &gates",
+      "# - name: 浏览器安装",
+      "# script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "# env:",
+      '# PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
+      "",
+    ].join("\n");
+    expect(
+      stageBlockIn(disabledFixture, "浏览器安装"),
+      "停用形态下两份解析漂了 —— 「配置里那个根」会量错对象",
+    ).toBe(commentedStageBlock(disabledFixture, "浏览器安装"));
+    expect(
+      stageBlockIn(disabledFixture, "浏览器安装"),
+      "停用形态解析不出内容（这一支是「停用期间也答得出配置里那个根」的全部依据）",
+    ).toBeTruthy();
   });
 
   it("`env` 的取值去引号；找不到的键 / stage 回 `null`（那是「不知道」，不判红）", () => {
@@ -611,10 +632,16 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
       "https://m/root",
     );
     expect(
-      stageEnvValue(YML, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT"),
+      stageEnvValue(
+        YML,
+        "浏览器安装",
+        "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT",
+      ),
     ).toBe("120000");
     expect(stageEnvValue(YML, "浏览器安装", "没有这个键")).toBeNull();
-    expect(stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
+    expect(
+      stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST"),
+    ).toBeNull();
     /* 现役 `.cnb.yml` 里那一步真的配了它 —— 判据指着的那一行必须是**真的存在**的。 */
     const live = readPipelineConfig(ROOT) ?? "";
     expect(
