@@ -131,8 +131,8 @@
     #        装不成」的前提，排在后面等于把结论推到自己要解释的那一步后面。
     #     两条都不是风格。判据分别在 `tests/no-platform-ci-config.test.ts` 与
     #     `tests/ci-env-probe.test.ts`。
-    #   · `DISABLED_GATES` —— **临时停用**的 stage 名清单（此刻是 `单元测试` /
-    #     `ESLint 零警告` / `prettier 格式`，理由逐条写在那个键旁边）。
+    #   · `DISABLED_GATES` —— **临时停用**的 stage 名清单（此刻只剩 `单元测试`，
+    #     理由写在那条键旁边；另外四格的历史写在同处）。
     #
     # **`COMFYAPP_CI_DISABLED_GATES` 是「停用」这件事的执行者，不是备注。**
     # 屏蔽一个 stage 的两半（注释掉 `.gates` 里的条目 + 从 `GATES` 摘名）**都不报错**：
@@ -145,23 +145,26 @@
     # 判据见 `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条。
     COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
     COMFYAPP_CI_DISABLED_GATES: >-
-      单元测试, ESLint 零警告, prettier 格式
-    # ⚠️ 这份清单里的三项各有各的理由，共同点是**名字在这儿 = 停用**（不是删掉）：
-    #   · `单元测试` —— 宿主侧测试环境未就绪（ISSUE #1959），等环境好了再加回来；
-    #   · `ESLint 零警告` / `prettier 格式` —— **2026-10-16 临时让位**：两项都跑得通，
-    #     但在「把 E2E 那两格调绿」的每一轮里都要白重跑一遍（节点侧 ESLint 256~274s）。
-    #     E2E 一绿就取消注释加回来；判据本身一字未动（本地 pre-commit 照旧跑它们）。
-    # ⚠️ `浏览器安装` / `E2E 关键流程` 也曾在这份清单里（ISSUE #1966：这台节点一次
-    # 取不回那 120 MiB），**2026-10-16 按恢复动作加回来了** —— 取消注释 → 名字挪回
-    # 下面那一行 → 从本清单删掉，三件事同批做完。恢复的依据不是「节点网络修好了」，
-    # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
-    # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
+      单元测试
+    # ⚠️ 共同点是**名字在这儿 = 停用**（不是删掉）：
+    #   · `单元测试` —— 宿主侧测试环境未就绪（ISSUE #1959），等环境好了再加回来。
+    # ⚠️ 另外四格都曾在这份清单里，且**都在 2026-10-16 按恢复动作加回去了**
+    # （取消注释 → 名字挪回「下面那一行」→ 从本清单删掉，三件事同批做完）：
+    #   · `浏览器安装` / `E2E 关键流程` —— 依据**不是**「节点网络修好了」，而是
+    #     **取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来）；
+    #   · `ESLint 零警告` / `prettier 格式` —— 它们是**让位**，不是坏了：两项都跑得通，
+    #     只是在「把 E2E 那两格调绿」的每一轮里都要白重跑一遍（节点侧 ESLint 256~274s），
+    #     于是当天先摘掉、条件写成「E2E 一绿就加回来」。那一跑是 `cnb-h80-1k51ukj26`
+    #     （整条流水线 success，34 个 stage：`浏览器安装` 0.7s / `E2E 关键流程` 51.3s），
+    #     **同日加回**。
+    #     停用期间判据一字未动（本地 pre-commit 照旧跑它们）。
+    # 四格的读数与判读见 §13.5.3.5 ⑩、§13.5.3.9 第三件与 `.gates` 里那几段注释。
     COMFYAPP_CI_GATES: >-
       工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 同步数据库表结构,
-      类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
+      类型检查, ESLint 零警告, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, 格式化提交分离, core 骨架单一事实源,
+      UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, core 骨架单一事实源,
       零消费导出, core 出口纪律与基类纯度, 生产构建, 浏览器安装, E2E 关键流程
     # ⚠️ 末尾那两条的**顺序有意**：`浏览器安装` 要下 ~120 MiB（分钟级），而判「装没装成」
     # 是零成本的 —— 排在 `E2E 关键流程` 之前，缺件才会在便宜的位置报出来（判据判这条序）。
@@ -329,18 +332,21 @@
   - name: 类型检查
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/tsc --noEmit
 
-  # ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，2026-10-16）：这一步**已经跑得通**，
-  # 只是正在把 E2E 那两格调绿的每一轮里它都要重跑一遍（实测 256~274s 节点侧）而没有
-  # 新信息 —— 属于「耗时项，先让位」。**不是判据被放宽**：本地 `.githooks/pre-commit`
-  # 里那条 `eslint --max-warnings 0` 一个字没动，这一步的判据也一字未改。
-  # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从停用清单删掉。
-  # - name: ESLint 零警告
-  #   script: node_modules/.bin/eslint . --max-warnings 0
-  # 实测 114s（本机 8 核）/ 256~274s（自托管节点）。而 `cnb-jt3-1k5071kou` 上它
-  # 挂到 **8640s**（2h24m）被 Job 上限掐掉 —— 那是节点被压死、这一步根本没在算。
-  # 给 20m 是「量级余量」：真跑得完的形态差两个数量级，而卡死的形态 20m 就能
-  # 报出来，不再白等两小时。**不是放宽判据**，判据本身一字未动。
-  # timeout: 20m
+  # ⚠️ 这一步 2026-10-16 **同日两度易位**（`COMFYAPP_CI_DISABLED_GATES`）：先按
+  # 「耗时项，先让位」停用 —— 它**已经跑得通**，只是在「把 E2E 那两格调绿」的每一轮里
+  # 都要重跑一遍（实测 256~274s 节点侧）而没有新信息；条件写成「E2E 一绿就加回来」。
+  # 那一跑就是 `cnb-h80-1k51ukj26`（整条流水线 success，34 个 stage：`浏览器安装` 0.7s /
+  # `E2E 关键流程` 51.3s），**同日加回**。
+  # **停用期间不是判据被放宽**：本地 `.githooks/pre-commit` 里那条
+  # `eslint --max-warnings 0` 一个字没动，这一步的脚本也一字未改（只补了各 stage 都有的
+  # 那句编码设置 —— 它的中文输出在平台侧同样要按 UTF-8 出口，见头注第 6 条）。
+  - name: ESLint 零警告
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/eslint . --max-warnings 0
+    # 实测 114s（本机 8 核）/ 256~274s（自托管节点）。而 `cnb-jt3-1k5071kou` 上它
+    # 挂到 **8640s**（2h24m）被 Job 上限掐掉 —— 那是节点被压死、这一步根本没在算。
+    # 给 20m 是「量级余量」：真跑得完的形态差两个数量级，而卡死的形态 20m 就能
+    # 报出来，不再白等两小时。**不是放宽判据**，判据本身一字未动。
+    timeout: 20m
 
   # ── 测试（**临时停用**，ISSUE #1959）──
   #
@@ -424,10 +430,11 @@
   - name: lib Node-only 声明
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
 
-  # ⚠️ **临时停用**（同 `ESLint 零警告`：跑得通，但在调 E2E 的每一轮里白重跑一遍；
-  # 本地 pre-commit 的 prettier 棘轮照旧跑，判据一字未动）。恢复动作同上。
-  # - name: prettier 格式
-  #   script: node scripts/check-format.cjs
+  # ⚠️ 与 `ESLint 零警告` **同批停用、同批恢复**（2026-10-16，理由与恢复读数见那一段的
+  # 注释）：它是「跑得通但每轮白重跑」的让位项，不是坏了 —— 本地 pre-commit 的 prettier
+  # 棘轮在停用期间照旧跑，判据一字未动。
+  - name: prettier 格式
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-format.cjs
 
   - name: 格式化提交分离
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-reformat-only.cjs
