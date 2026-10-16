@@ -38,6 +38,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+/* 每个 stage 现在外面都包着 `ci-cp936-exit.mjs`（ISSUE #1977 的 CP936 出口），
+ * 下面那两条「命令调用行」的判据要剥掉它才认得出被包的那条命令。 */
+import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 import {
   applyConsoleEncoding,
   codePageIsUtf8,
@@ -165,12 +168,16 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
     const invoked = yml
       .slice(stageAt)
       .split("\n")
-      .findIndex((l) => l.trim().startsWith("node scripts/ci-toolchain-selfcheck.mjs"));
+      .findIndex((l) =>
+        unwrapCp936(l.trim()).startsWith("node scripts/ci-toolchain-selfcheck.mjs"),
+      );
     expect(invoked, "同一步里找不到工具链自证的命令调用行").toBeGreaterThan(-1);
     const applyLine = yml
       .slice(stageAt)
       .split("\n")
-      .findIndex((l) => l.trim().startsWith("node scripts/ci-console-encoding.mjs"));
+      .findIndex((l) =>
+        unwrapCp936(l.trim()).startsWith("node scripts/ci-console-encoding.mjs"),
+      );
     expect(applyLine, "同一步里找不到纠编码的命令调用行").toBeGreaterThan(-1);
     expect(
       applyLine < invoked,
