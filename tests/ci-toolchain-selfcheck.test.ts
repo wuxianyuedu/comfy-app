@@ -1330,7 +1330,7 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
       src.indexOf("export function playwrightOnly("),
       src.indexOf("export function browserExecutableExists("),
     );
-    const installAt = body.indexOf("runPlaywrightInstall({ find, exec, env })");
+    const installAt = body.indexOf("runPlaywrightInstall({");
     /* ⚠️ **从 `installAt` 之后找**，别从函数头找：函数里现在有**两处**
      * `browserExecutableExists` —— 一处是装**之前**「已装就跳过下载」那一支
      * （它排在 `installAt` **前面**），一处才是装完的复验。从函数头 `indexOf`
@@ -1400,7 +1400,7 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
         browserSrc
           // ① 装那一步假装成功（不动真落点、不下 100MB）
           .replace(
-            "  const install = runPlaywrightInstall({ find, exec, env });",
+            "  const install = runPlaywrightInstall({ find, exec, env, probe, pickRoots });",
             '  const install = { ok: true, out: "(probe: 假装 install 退 0)" };',
           )
           // ①′ 「已装就跳过下载」那一支也要让开：它按**真落点**判，而这一条的现场
@@ -1664,9 +1664,16 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
    *
    * 上面那条用例只钉两个函数的返回值，**钉不住 `runPlaywrightInstall()` 怎么用它们**
    * —— 把 `playwrightHostsToTry(env)` 换回循环里，两个函数照旧各自正确、行为却回去了。
-   * 这一条改判**真响了几次**：设了根就恰好一次，且那次就是它。
+   * 这一条改判**真响了几次**：设了根、且那个根量不到时，就恰好一次，且那次就是它。
+   *
+   * ## 这一组有**两个**分支，两条都要判（`pickPlaywrightRoots()` 那一层）
+   *
+   * 本笔给这一步补了「先量一次再挑根」之后，上面那句话的**前提**变细了：
+   * 只试一个根的形态从「配了根」变成「配了根**且它量得到**」。两条分支的处置相反，
+   * 所以各判一条 —— 少了下面那条，把「量得到也去试候选」写回来不会红；
+   * 少了这条，把「量不到就把候选铺开」写回去也不会红。
    */
-  it("设了根，`playwright install` 就**只起一次**、且用的就是它", () => {
+  it("配着的根量得到 ⇒ 仍然只起一次、且用的就是它（别去试那些不通的）", () => {
     /** @type {Array<string | undefined>} */
     const hosts: Array<string | undefined> = [];
     const r = runPlaywrightInstall({
@@ -1678,6 +1685,9 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
         args: ["-v"],
         out: "12.4.1",
       }),
+      /* 判据一律注入探测面：**这条用例不许出网**（缺省会真去量一圈候选，
+       * 结论还取决于跑判据那台机器连不连得上 CDN —— 那种判据只会在别人机器上红）。 */
+      probe: () => "HTTP 200",
       exec: (
         /** @type {string} */ _cmd,
         /** @type {string[]} */ _args,
@@ -1688,11 +1698,72 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
       },
     });
     expect(
-      hosts,
-      "给上了下载根却还去试它替不掉的那一族 —— 同一次不通再花一遍时间，" +
+      hosts[0],
+      "配着的根本来就量得到，却还去试它替不掉的那一族 —— 同一次不通再花一遍时间，" +
         "而且试过的根一多，「同族被反复试」那档读数就再也不成立（实测被读成另一个方向）",
-    ).toEqual(["https://m/x"]);
+    ).toBe("https://m/x");
     expect(r.ok).toBe(false);
+  });
+
+  /**
+   * 另一半：**配着的那个根量不到时，候选表接过去**（ISSUE #1959 第六跑，本格的
+   * 第六次红）。
+   *
+   * 现场（`cnb-t3f-1k51ho0k2`）逐字是这两句，中间隔了四十秒：
+   *
+   *     环境前提 ✓（它量到 cdn.npmmirror.com → HTTP 200、cdn.playwright.dev → HTTP 307）
+   *     浏览器安装 ✗ timed out after 120000ms（同一个根、同一台机器、同一分钟）
+   *
+   * 也就是说：**「哪个根到得了」这条读数早就有了，而它与「装」那一步之间没有任何
+   * 执行者** —— 探测的结论只落在一行会随日志滚过去的读数里，装照旧去试配着的那个根。
+   * 于是同一句 `timed out after 120000ms` 连着红了三次（`cnb-gt1-1k513ill4` /
+   * `cnb-g9d-1k515kvrq` / `cnb-t3f-1k51ho0k2`）。
+   *
+   * 这与「给上了就只用它」并不冲突：那条反对的是**盲目重试同族**，而这里试的根
+   * 是**量出来的**（先 HEAD 一次，2xx 才进候选）。
+   */
+  it("配着的根量不到 ⇒ 量得到的那个接过去（这一步从「配一次」变成「量一次」）", () => {
+    /** @type {Array<string | undefined>} */
+    const hosts: Array<string | undefined> = [];
+    const r = runPlaywrightInstall({
+      env: { PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" },
+      find: () => ({
+        ok: true,
+        command: "pnpm",
+        prefixArgs: [],
+        args: ["-v"],
+        out: "12.4.1",
+      }),
+      /* 只有 npmmirror 那一个根量得到（现场就是这样：配着的那个超时、别的根 200）。 */
+      probe: (url) =>
+        url.includes("npmmirror.com/binaries")
+          ? "HTTP 200"
+          : "超时（8000ms 内没有响应）",
+      exec: (
+        /** @type {string} */ _cmd,
+        /** @type {string[]} */ _args,
+        /** @type {string | undefined} */ host,
+      ) => {
+        hosts.push(host);
+        return { ok: true, out: "ok" };
+      },
+    });
+    expect(r.ok).toBe(true);
+    /* 配着的那个根（判为超时）**不再打头**：改从量得到的那个开始。
+     * 断言的是「第一个换人了」，不是「恰好几次」—— 后面还能试几个由候选表说了算，
+     * 写死次数等于把这张表的长度也钉进判据里（它本来就会随新增镜像变）。 */
+    expect(
+      hosts[0],
+      "配着的根量不到、而别的根量得到 —— 装那一步却还是从配着的那个开始，它必然再红一次",
+    ).toContain("npmmirror.com/binaries");
+    /* 换根之后那一次就成功了 ⇒ 配着的那个根**一次都没被试过**（不是「试了两次」）。
+     * 这正是与旧行为的分界：旧行为里 `hosts[0]` 恒是配着的那个。 */
+    expect(hosts).not.toContain("https://m/x");
+    expect(
+      r.probes?.join("\n"),
+      "换根这件事必须在读数里留痕（哪几个量到了、用的哪个）—— 否则下一次核对配置与日志时" +
+        "会以为配置被吃掉了",
+    ).toContain("https://m/x");
   });
 
   it("没设根时不许替它挑一个镜像（源码里不写死任何根）", () => {
@@ -1726,9 +1797,12 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
         hosts.push(host);
         return { ok: true, out: "ok" };
       },
+      /* 同上：注入探测面（配着的根量得到 ⇒ 只试它），这条用例**不出网**。 */
+      probe: () => "HTTP 200",
     });
     expect(r.ok).toBe(true);
-    expect(hosts).toEqual(["https://m/x"]);
+    expect(hosts[0]).toBe("https://m/x");
+    expect(hosts).toHaveLength(1);
     // 命令行里**不许**出现探针参数（那是 `findPnpm().args` 的形态，拼进去只会打印版本）。
     expect(r.args).not.toContain("-v");
   });

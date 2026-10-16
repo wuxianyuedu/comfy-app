@@ -46,6 +46,7 @@ import path from "node:path";
  * （`环境前提`）本来就只用它。这里转出同一批名字，旧调用点不必跟着改。 */
 import {
   httpHeadStatus,
+  pickPlaywrightRoots,
   playwrightReachability,
 } from "./ci-toolchain-browser-reach.mjs";
 
@@ -54,6 +55,8 @@ export {
   PLAYWRIGHT_HOST_CANDIDATES,
   httpHeadStatus,
   isReachableVerdict,
+  pickPlaywrightRoots,
+  probeGrade,
   playwrightProbeUrl,
   playwrightReachability,
   playwrightReachabilityVerdicts,
@@ -78,13 +81,18 @@ export {
  *   exec?: (cmd: string, args: string[], downloadHost?: string) => {ok: boolean, out: string},
  *   env?: Record<string, string | undefined>,
  *   probe?: (url: string) => string,
+ *   pickRoots?: typeof pickPlaywrightRoots,
  *   log?: (line: string) => void,
  *   logError?: (line: string) => void,
  *   section?: (title: string) => void,
  * }} [ports]
  *   `exec` 的第三个参数是**这一次要用的下载根**（`PLAYWRIGHT_DOWNLOAD_HOST`），
  *   只有装浏览器那一步会带 —— 调用方要把它转交到子进程的 env 上。
- *   `probe` 只在失败分支里用（`playwrightReachability`），判据里换掉它就不出网。
+ *   `probe` 有两个消费点（都在「量一次根」这条路上）：装之前 `pickRoots` 用它挑根、
+ *   装失败之后 `playwrightReachability` 用它出取证读数。判据里换掉它就不出网。
+ *   `pickRoots` 是「先量一次再决定试哪个根」那一层（见 {@link pickPlaywrightRoots}），
+ *   同样给注入面。⚠️ 缺省时本函数自己把 `probe` 绑进去（见下面那行注释）——
+ *   少了这一绑，「先量一次再挑根」那条路会**永远不走**而看起来一切正常。
  * @returns {number} 退出码
  */
 export function playwrightOnly({
@@ -92,6 +100,7 @@ export function playwrightOnly({
   exec = required("exec"),
   env = process.env,
   probe = httpHeadStatus,
+  pickRoots = undefined,
   log = console.log,
   logError = console.error,
   section = noopSection,
@@ -121,7 +130,31 @@ export function playwrightOnly({
       `下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：${env.PLAYWRIGHT_DOWNLOAD_HOST}`,
     );
   }
-  const install = runPlaywrightInstall({ find, exec, env });
+  /* ⚠️ `pickRoots` 缺省是**活的**：把 `probe` 绑进去（`pickPlaywrightRoots` 自己的
+   * `probe` 缺省是「一个都不量」，那是给判据用的安静档 —— 见它的头注）。少了这一行，
+   * 「先量一次再挑根」那条路**永远不会走**，而装这一步看起来一切正常。 */
+  const install = runPlaywrightInstall({
+    find,
+    exec,
+    env,
+    probe,
+    pickRoots:
+      pickRoots ??
+      ((ports = {}) => pickPlaywrightRoots({ probe, ...ports })),
+  });
+  /* 换根这件事要**留痕**：`env` 里配着的那个与真用上的那个不是同一个时，人必须
+   * 在日志里看得到（否则下一次核对配置与日志时会以为配置被吃掉了）。 */
+  if (install.probes?.length) {
+    log("---- 下载根（装之前现场量的）----");
+    for (const line of install.probes) log(line);
+    log("---------------------------------");
+  }
+  if (install.host && env.PLAYWRIGHT_DOWNLOAD_HOST !== install.host) {
+    log(
+      `⚠️ 配着的根（${env.PLAYWRIGHT_DOWNLOAD_HOST ?? "(未设)"}）这一趟量不到，` +
+        `改用 ${install.host} —— 这只是「先试哪个」，配置本身没被改。`,
+    );
+  }
   log(install.out || "(playwright install 没有输出)");
   if (!install.ok) {
     logError(
@@ -466,17 +499,29 @@ export const BROWSER_PACKAGES = ["chromium-headless-shell"];
  *   find?: () => {ok: boolean, command: string, prefixArgs: string[], args: string[], out: string},
  *   exec?: (cmd: string, args: string[], downloadHost?: string) => {ok: boolean, out: string},
  *   env?: Record<string, string | undefined>,
+ *   probe?: (url: string) => string,
+ *   pickRoots?: typeof pickPlaywrightRoots,
  * }} [ports]
  *   三个接缝（**必传**，见 `playwrightOnly` 的说明）：`find` 给 pnpm 形态、`exec`
  *   起进程（第三个参数是这一次要用的下载根）、`env` 决定试哪个根
  *   （见 `playwrightHostsToTry`）。判据里注入它们，结论才不取决于跑判据那台机器上
  *   有没有 pnpm、也不真去下 100MB 浏览器。
- * @returns {{ok: boolean, out: string, command?: string, args?: string[], host?: string}}
+ *   `pickRoots` 是「先量一次再决定试哪个根」那一层（见 {@link pickPlaywrightRoots}），
+ *   同样给注入面：判据里换掉它就不出网、也不去量真 CDN。
+ * @returns {{ok: boolean, out: string, command?: string, args?: string[], host?: string,
+ *            probes?: string[]}}
  */
 export function runPlaywrightInstall({
   find = required("find"),
   exec = required("exec"),
   env = process.env,
+  probe = httpHeadStatus,
+  /* ⚠️ 缺省 `undefined`、由下面绑上 `probe`。直接把 `pickPlaywrightRoots` 本身放这里
+   * 是**接错线的静默降级**：函数缺省参数只在「参数是 `undefined`」时才取值，所以传进来的
+   * `probe` 永远不会到达挑根那一层，而 `pickPlaywrightRoots` 的 `probe` 缺省是
+   * 「一个都不量」—— 于是这条新路看起来接好了、其实一次都没走（实测：
+   * 判据里的假根被真出网的探测判成 ENOTFOUND，于是开始挨个试真 CDN）。 */
+  pickRoots = undefined,
 } = {}) {
   const pnpm = find();
   if (!pnpm.ok) {
@@ -494,18 +539,41 @@ export function runPlaywrightInstall({
     "install",
     ...BROWSER_PACKAGES,
   ];
-  /* 试哪几个根由 `playwrightDownloadRoots()` 说了算 —— 设了外面给的那个就**只用它**，
-   * 没设就回落到 Playwright 的内置族（那一族的三档由它自己挨个试）。
-   * Playwright 的三个内置镜像**全是 `*.playwright.dev` / `*.microsoft.com`**，
-   * 一台出不了这两个域的网络里三个一起不通 —— 换哪个都一样，所以「不通」这一档的
-   * 出路只有**外面给一个能通的镜像根**，而那不是它能自己推出来的事。 */
+  /* 试哪几个根 —— **先量一次再决定**（`pickPlaywrightRoots()` 的头注写了它与
+   * `playwrightDownloadRoots()` 那条「给上了就只用它」怎么并存）。
+   *
+   * 「外面给了根就只用它」反对的是**盲目重试同族**：Playwright 的三个内置镜像
+   * 全是 `*.playwright.dev` / `*.microsoft.com`，一台出不了这一族的网络里换哪个都一样。
+   * 而实测反复出的是另一种形态（`cnb-t3f-1k51ho0k2` 等三次）：配着的那个根**也不通**
+   * —— 那时日志里早已量到「别的根 2xx」，可**没有任何执行者**把它接到这一步上，
+   * 于是同一句 `timed out after 120000ms` 连着红了三次。
+   *
+   * 所以：量得到的排前面，量不到的按原序兜底。没给根时 `roots` 只有 `undefined`
+   * 一项（走 Playwright 自己的内置族）—— 那时**不量**、也不多余地起进程，
+   * 与改动前的行为逐字相同。
+   *
+   * 这不是「放宽判据」：放行那条判据仍是文件尾那一条「装完能起才放行」，
+   * 这里只决定**先试哪个根**。 */
+  /* **必须把 `probe` 一起交给挑根那一层**：`pickPlaywrightRoots` 自己的 `probe`
+   * 缺省是「一个都不量」（那是给判据用的安静档），传 `probe` 进来才算真的量。
+   * 它的返回值也不再是「一个个去试」——它排序后的第一个就是「先试哪个」。 */
+  const resolvedPickRoots =
+    pickRoots ??
+    ((ports = {}) => pickPlaywrightRoots({ ...ports, probe: ports.probe ?? probe }));
+  const picked = env.PLAYWRIGHT_DOWNLOAD_HOST
+    ? resolvedPickRoots({ roots: playwrightDownloadRoots(env), probe })
+    : { roots: playwrightDownloadRoots(env), verdicts: [] };
+  const probes = picked.verdicts.map(
+    (v) => `  ${v.root} → ${v.verdict}（${v.grade}）`,
+  );
   let out = "";
-  for (const host of playwrightDownloadRoots(env)) {
+  for (const host of picked.roots) {
     const r = exec(pnpm.command, args, host);
     out += `${r.out ?? ""}\n`;
-    if (r.ok) return { ok: true, out, command: pnpm.command, args, host };
+    if (r.ok)
+      return { ok: true, out, command: pnpm.command, args, host, probes };
   }
-  return { ok: false, out, command: pnpm.command, args };
+  return { ok: false, out, command: pnpm.command, args, probes };
 }
 
 /**

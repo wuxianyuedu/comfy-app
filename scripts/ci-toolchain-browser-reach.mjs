@@ -391,3 +391,129 @@ export function httpHeadStatus(url, { timeoutMs = 8000 } = {}) {
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return out || "（子进程没有输出）";
 }
+
+/**
+ * 一个探测结论的**三态**：到得了（`ok`）/ 没量完（`timeout`）/ 到不了（`worse`）。
+ *
+ * 这一层是「选哪个根」的判据本体，与 {@link isReachableVerdict} 是**两个问题**：
+ * 后者答「装得成吗」（放行那条判据），本函数答「这几个里先试哪个」。
+ * 两者的**红法不一样**：
+ *
+ *   · `ok: false` 三种形态都不放行 —— 那是 `环境前提` 那条判据的事；
+ *   · 而在「都不到 2xx」的机器上，`timeout` 是**唯一值得再试一次**的那一种：
+ *     `超时（8000ms 内没有响应）` 的意思是「连上了但不说话」（大包在慢链路上正常），
+ *     而 `ENOTFOUND` / 4xx 是「这条链路不通」，再试一次不会变。
+ *
+ * ## 现场（`cnb-t3f-1k51ho0k2`，本格的第六次红）
+ *
+ * 探测量到 `cdn.playwright.dev` → `HTTP 307`、npmmirror → `HTTP 200`，
+ * 百毫秒级；而**装**那一步在同一个根上拿到 `timed out after 120000ms`
+ * （Playwright 走的是 GET 拉包，120 MiB）。同一台机器、同一分钟、两个相反结论
+ * —— 差别在「一次 HEAD」与「拉完整个包」不是同一次测量。
+ *
+ * 所以 `HTTP 2xx` 只是**首选**，不是**唯一**：2xx 排在前面（它就是「这一趟量得完」
+ * 的那一档），4xx 与超时按原序跟在后面。这不是「放宽判据」—— 放行那条判据仍是
+ * 「装完能起才放行」，这里只决定**先试哪个根**。
+ *
+ * @param {string} verdict {@link httpHeadStatus} 那一句
+ * @returns {"ok" | "timeout" | "worse"}
+ */
+export function probeGrade(verdict) {
+  const text = String(verdict ?? "").trim();
+  if (/^超时/.test(text)) return "timeout";
+  const m = /^HTTP\s+(\d{3})\b/.exec(text);
+  if (!m) return "worse";
+  const code = Number(m[1]);
+  /* 3xx 也算「量得完」：`cdn.playwright.dev` 那一族回的就是 307（它自己再跟一跳）。
+   * 与 {@link isReachableVerdict} 同一条口径 —— 两处判「什么算到得了」必须一致。 */
+  return code >= 200 && code < 400 ? "ok" : "worse";
+}
+
+/**
+ * 从实测读数里挑出**这一趟该用哪个下载根**（挑不出回 `candidates[0]`，宿主默认）。
+ *
+ * ## 它修的那一格：一条探测读数与一次装之间从来没有过执行者
+ *
+ * `环境前提` 早就在量「这台机器到得了哪个下载根」，`.cnb.yml` 也早就配了一个根
+ * —— 而**这两者之间没有任何东西把它们连起来**：探测发现配着的那个根不通时，
+ * 结论只落在一行会随日志滚过去的读数里，装那一步照旧去试那个根，然后红。
+ *
+ * 实测形态（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq` / `cnb-t3f-1k51ho0k2`）：
+ * 同一句 `timed out after 120000ms`、同一个根，连着三次。
+ *
+ * ## 与 `playwrightDownloadRoots()` 的分工（**「给上了就只用它」没有被推翻**）
+ *
+ * 那条判据说的是「外面给了一个根时**别再陪 Playwright 挨个试它那一族内置镜像**」
+ * —— 它反对的是**盲目重试同族**（实测 5 次全落在同一个域名上、`retryCount = 5`
+ * 的回退等于没有）。本函数做的是另一件事：**先量一次，再决定先试哪个**。
+ * 量出来的结论要能被 `点名的那个根不通 ⇒ 试一个量得到的根` 用掉，
+ * 否则这条判据就成了「配错一行要改配置 + 重推」。
+ *
+ * 因此两支的判据仍然分得开，都判：
+ *
+ *   · 没过量 ⇒ 只起一次、只试 `roots[0]`（老判据，`playwrightDownloadRoots` 那组用例守着）；
+ *   · 量过、且 `roots[0]` 到得了 ⇒ 也**只试它**（别去试那些不通的）；
+ *   · 量过、且 `roots[0]` 不通 ⇒ 把量得到的排前面，原序兜底。
+ *
+ * ## 为什么排在前面的是**候选表**而不是「探测到的那个」
+ *
+ * 因为探测在**另一个进程**里（`环境前提` stage 的 env 看不到 `浏览器安装` stage 的
+ * `env`，反向也一样）。要落地就得把结论写进 env 或落盘一份 —— 前者要改配置
+ * （「配错一行要改配置重推」正是要治的那件事）、后者多一份会过期的状态。
+ * 所以在装这一步**现量一次**：几秒、无副作用，且用的就是与 `环境前提` 同一份探测
+ * （§12.18：打印与判据共用同一次结论，不造第二轮子）。
+ *
+ * @param {{roots?: Array<string | undefined>, candidates?: string[],
+ *          probe?: (url: string) => string,
+ *          probeUrlOf?: (root: string) => string}} [options]
+ * @returns {{roots: Array<string | undefined>, verdicts: Array<{root: string, verdict: string, grade: string}>, probed: boolean, switched: boolean}}
+ */
+export function pickPlaywrightRoots({
+  roots = [undefined],
+  candidates = PLAYWRIGHT_HOST_CANDIDATES,
+  probe = undefined,
+  probeUrlOf = playwrightProbeUrl,
+} = {}) {
+  const preferred = roots[0];
+  /* **没给探测面就什么都不量**（这一支是有意的，不是省事）。
+   *
+   * 探测是要**出网**的（每个候选一次 HEAD）—— 而本函数是装浏览器那一步的缺省路径。
+   * 让缺省路径在“没接线”时静默去量真 CDN，等于给判据留一个「跑一次用例就发几次
+   * 外网请求」的副作用（本仓反复记的那一格：判据不该依赖跑它的那台机器的网络）。
+   * 所以量不量这件事由**调用方是否传它自己的探针**决定：
+   *
+   *   · 调用方传了 ⇒ 用它的（盘上的实现是 `httpHeadStatus`），且只量它会用的根；
+   *   · 没传 ⇒ 一个字都不量，回落到老行为（只试 `roots[0]`）。
+   *
+   * 判据里因此可以「换掉它就不出网」，而平台侧那条路一定传（见
+   * `runPlaywrightInstall` 的 `probe` 缺省）。 */
+  if (typeof probe !== "function") {
+    return { roots, verdicts: [], probed: false, switched: false };
+  }
+  /* 外部给的根要参与探测，但**不塞进候选表** —— 候选表是「除了它还能试哪儿」，
+   * 而 `undefined` 那一档是「什么都不给，走 Playwright 自己的内置族」，
+   * 它没有地址可量（那一族由 Playwright 自己挨个试）。 */
+  const extra = preferred ? [preferred] : [];
+  const list = [...new Set([...extra, ...candidates])];
+  const verdicts = list.map((root) => {
+    let verdict;
+    try {
+      verdict = probe(probeUrlOf(root));
+    } catch (error) {
+      verdict = `探测本身出错：${/** @type {Error} */ (error).message}`;
+    }
+    return { root, verdict, grade: probeGrade(verdict) };
+  });
+  /* 稳定排序：2xx 那一档在前，其余**保持原序**（`Array#sort` 在 V8 上稳定，
+   * 而这里的 `ok` 权重只有两档 —— 不去造一个会让读数顺序漂的复杂排序）。 */
+  const ok = verdicts.filter((v) => v.grade === "ok").map((v) => v.root);
+  const rest = list.filter((root) => !ok.includes(root));
+  const ordered = [...ok, ...rest];
+  const first = ordered[0];
+  return {
+    roots: ordered.length > 0 ? ordered : roots,
+    verdicts,
+    probed: true,
+    switched: Boolean(preferred && first !== preferred),
+  };
+}
