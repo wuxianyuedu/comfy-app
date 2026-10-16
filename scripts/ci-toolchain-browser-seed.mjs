@@ -13,9 +13,23 @@
  * ## 它与 `playwright install` 的分工
  *
  * 它是**尝试**，不是判据：成功就等于那一件装好了（并写好上游那份
- * `INSTALLATION_COMPLETE` 标记，于是 `playwright install` 变成 no-op）；失败则
- * 一个字都不改，原样交给 Playwright 的老路。放行判据始终是
- * `browserExecutableExists()`（按落点看东西在不在）—— 这里不新增第二个判据。
+ * `INSTALLATION_COMPLETE` 标记）；失败则一个字都不改，原样交给 Playwright 的老路。
+ * 放行判据始终是 `browserExecutableExists()`（按落点看东西在不在）—— 这里不新增
+ * 第二个判据。
+ *
+ * ## ⚠️ 「写好标记 ⇒ `playwright install` 是 no-op」这句**被实测订正过**
+ *
+ * `cnb-7oo-1k51r518b`（恢复那一格之后的第一跑）里自取**成功了** —— 119 MiB 的
+ * headless shell 落到落点、`INSTALLATION_COMPLETE` 也写了，而 `playwright install`
+ * 照旧要碰网：它不只装浏览器，还会顺手拉 **ffmpeg**（chromium 的依赖，~2.5 MB），
+ * 那一件在同一条链路上 5 次 `timed out after 120000ms`、0 字节 ⇒ 整格红在一件
+ * **已经装好的浏览器**旁边，读起来像「浏览器没装成」。
+ *
+ * 所以调用方在看到 `ok: true` 之后**再按落点复验一次**（同一个判据），通过就跳过
+ * 老路 —— 本档真正要的是 headless shell（`browserExecutableExists()` 找的就是它），
+ * 而 ffmpeg 只有录视频才用得上（本仓 `playwright.config.ts` 没开 `video`）。
+ * 这条口径在 `.cnb.yml` 那一步的实现里只有一行，理由与读数都在这里与规范
+ * §13.5.3.5 最后一节（那一处文件正卡在 900 行的硬闸上，写不下第二段注释）。
  *
  * ## 为什么需要它：Playwright 那条路**没有续传**
  *

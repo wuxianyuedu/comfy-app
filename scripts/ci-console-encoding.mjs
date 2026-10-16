@@ -11,6 +11,27 @@
  *   · **Node / pnpm / drizzle-kit** 打的字**全是乱码** —— 它们无条件写 UTF-8，
  *     抓取端按 CP936 解，于是 `工具链自证通过 ✓` 变成 `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`。
  *
+ * ⚠️ **上面这条模型 2026-10-16 被探针读数的后一半否掉了**（`cnb-rrl-1k51u7hov`
+ * 的 `工具链自证`，那一步里固定吐三行中文：PS 原生 / cmd / node）：
+ *
+ *   编码探针·PS 原生：中文一二三  → 缂栫爜鎺㈤拡路PS 鍘熺敓锛氫腑鏂囦竴浜屼笁
+ *   编码探针·CMD：中文一二三      → 缂栫爜鎺㈤拡路CMD锛氫腑鏂囦竴浜屼笁
+ *   编码探针·NODE：中文一二三     → 缂栫爜鎺㈤拡路NODE锛氫腑鏂囦竴浜屼笁
+ *
+ * 三行**同一种乱法**，而它们是在**控制台已被钉成 65001 之后**打的（本文件
+ * `--apply` 就在它们前面跑）。也就是说：**抓取端不是按「当前控制台代码页」解码的**
+ * —— 它按**宿主 ANSI 代码页**（这台机器上是 CP936，本文件的读数行自己就打着
+ * `宿主输出代码页：936（非 UTF-8 …）`）解，而**改控制台对象上的设置动不了它**。
+ *
+ * 所以本文件的纠正动作是**必要不充分**：
+ *   · 它让「Node 那半」与「抓取端」在**宿主 ANSI CP 是 UTF-8 时**对齐（那时全优）；
+ *   · 而宿主 ANSI CP 还是 936 时，它反而把**原本唯一可读的那半**（PS 原生文本，
+ *     原来按 936 写、抓取端按 936 解 ⇒ 可读）一起变成了乱码。
+ * 真正的入口因此是**机器侧的 ANSI 代码页**（开「使用 Unicode UTF-8 提供全球语言支持」，
+ * 或把 runner 的代码页设成 65001）；不改它时，唯一能读的写法是**让每个字节都以
+ * CP936 出口**（那需要逐 stage 转码，代价见规范 §13.5.3.5 最后一节）。
+ * 读数与处置记在 `docs/standards/13-提交与-code-review.md` §13.5.3.5。
+ *
  * 这条不是猜的：把 `宸ュ叿閾捐嚜璇侀€氳繃` 按 UTF-8 取字节再按 GBK 解，正好回到
  * `工具链自证通过`；末尾那个 `?` 是 `✓`（U+2713，UTF-8 三字节 `E2 9C 93`）被
  * CP936 解出 `鉁` 之后剩下的孤字节 —— 同一份日志里 `Set-Variable : 缺少参数…`
@@ -107,9 +128,15 @@ export function readConsoleEncoding(ports) {
  * @param {{runImpl?: (cmd: string, args: string[]) => RunResult, platform?: NodeJS.Platform}} [ports]
  * @returns {{applied: boolean, detail: string}}
  */
-export function applyConsoleEncoding({ runImpl, platform = process.platform } = {}) {
+export function applyConsoleEncoding({
+  runImpl,
+  platform = process.platform,
+} = {}) {
   if (platform !== "win32") {
-    return { applied: false, detail: "非 Windows 宿主：控制台输出编码无处可设" };
+    return {
+      applied: false,
+      detail: "非 Windows 宿主：控制台输出编码无处可设",
+    };
   }
   const run = runImpl ?? defaultRun;
   const script =
@@ -117,10 +144,18 @@ export function applyConsoleEncoding({ runImpl, platform = process.platform } = 
     `[Console]::OutputEncoding = [Console]::InputEncoding = ` +
     `[Text.UTF8Encoding]::new($false); ` +
     `[Console]::OutputEncoding.CodePage`;
-  const r = run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
+  const r = run("powershell", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    script,
+  ]);
   const after = Number(/(\d{3,5})/.exec(r.out ?? "")?.[1] ?? NaN);
   if (after === UTF8_CODE_PAGE) {
-    return { applied: true, detail: `控制台输出编码已钉成 ${UTF8_CODE_PAGE}（UTF-8）` };
+    return {
+      applied: true,
+      detail: `控制台输出编码已钉成 ${UTF8_CODE_PAGE}（UTF-8）`,
+    };
   }
   return {
     applied: false,

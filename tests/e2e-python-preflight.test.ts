@@ -39,7 +39,11 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
   it("解释器定死成绝对路径（应用侧 spawn 的是它，不是一个裸名字）", () => {
     const ready = checkPythonReady({
       platform: "win32",
-      resolve: () => ({ command: "python", path: "C:\\Py\\python.exe", args: [] }),
+      resolve: () => ({
+        command: "python",
+        path: "C:\\Py\\python.exe",
+        args: [],
+      }),
       which: (name) => `C:\\Python312\\${name}.exe`,
     });
     expect(ready.verdict).toBe("ready");
@@ -79,7 +83,11 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
     const calls: Array<{ name: string; args: string[] }> = [];
     const ready = checkPythonReady({
       platform: "win32",
-      resolve: () => ({ command: "py", path: "C:\\Windows\\py.exe", args: ["-3"] }),
+      resolve: () => ({
+        command: "py",
+        path: "C:\\Windows\\py.exe",
+        args: ["-3"],
+      }),
       which: (name, options) => {
         calls.push({ name, args: options?.probeArgs ?? [] });
         return "C:\\Windows\\py.exe";
@@ -92,7 +100,10 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
 
 describe("e2e Python 前置：缺件时判红并给出出口", () => {
   it("判红，且话术里点出「试过哪些候选」", () => {
-    const missing = checkPythonReady({ platform: "win32", resolve: () => null });
+    const missing = checkPythonReady({
+      platform: "win32",
+      resolve: () => null,
+    });
     expect(missing.verdict).toBe("missing");
     expect(missing.interpreter).toBeNull();
     // 这一格唯一能排障的信息就是「试过哪些」——那台机器上的名字可能只是不一样。
@@ -102,7 +113,8 @@ describe("e2e Python 前置：缺件时判红并给出出口", () => {
 
   it("出口是一条能直接跑的命令，并说清跑下去的下场", () => {
     const text = describePythonMissing({
-      detail: checkPythonReady({ platform: "linux", resolve: () => null }).detail,
+      detail: checkPythonReady({ platform: "linux", resolve: () => null })
+        .detail,
     });
     expect(text).toContain("scripts/ci-toolchain-selfcheck.mjs");
     expect(text).toContain("@critical");
@@ -120,7 +132,9 @@ describe("e2e Python 前置：结论怎么带下去", () => {
       ),
     ).toEqual({ verdict: "ready", interpreter: "/usr/bin/python3" });
     expect(
-      decodePythonPreflight(encodePythonPreflight({ verdict: "missing", interpreter: null })),
+      decodePythonPreflight(
+        encodePythonPreflight({ verdict: "missing", interpreter: null }),
+      ),
     ).toEqual({ verdict: "missing", interpreter: null });
   });
 
@@ -149,16 +163,32 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`playwright.config.ts` 真用上了那个绝对路径", () => {
     const text = readFileSync(path.join(ROOT, "playwright.config.ts"), "utf8");
     expect(text).toContain("decodePythonPreflight");
-    expect(text).toMatch(/COMFY_CLI_PYTHON_KEY\]\s*=\s*pythonPreflight\.interpreter/);
+    expect(text).toMatch(
+      /COMFY_CLI_PYTHON_KEY\]\s*=\s*pythonPreflight\.interpreter/,
+    );
   });
 
   it("`.cnb.yml` 里 E2E 之前那一步答的就是 Python 这一格", () => {
     const yml = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    expect(yml).toContain("node scripts/ci-toolchain-selfcheck.mjs --python-only");
+    expect(yml).toContain(
+      "node scripts/ci-toolchain-selfcheck.mjs --python-only",
+    );
     // 顺序是判据的一部分：它必须排在 E2E 那一步**之前**。
     expect(yml.indexOf("--python-only")).toBeLessThan(
-      yml.indexOf("node scripts/e2e-run.mjs --grep @critical"),
+      yml.indexOf("node scripts/e2e-run.mjs --grep=@critical"),
     );
+    /* ⚠️ 顺带钉住**命令形态**：`--grep` 的值必须与开关连成一个 token（`=`）。
+     * 写成空格那版（`--grep @critical`）时，平台 runner 的命令行会把 `@` 开头的
+     * 裸 token 吃掉，Playwright 只收到没有值的 `--grep` —— 现场 `cnb-cdt-1k51s6mf1`：
+     *
+     *     error: option '-g, --grep <grep>' argument missing
+     *
+     * 这条只在**平台**上红：本地 bash / PowerShell 里两种写法都传得进去，所以它是
+     * 「停用期间看不见」那一类（`E2E 关键流程` 此前从没在那台节点上执行过）。 */
+    expect(
+      yml,
+      "`.cnb.yml` 里又写回了 `--grep @critical`（空格那版）—— 平台命令行会吃掉那个 token",
+    ).not.toContain("script: node scripts/e2e-run.mjs --grep @critical");
   });
 
   it("本机真跑一次（这台机器上有没有 Python 都合法，判的是形状不空转）", () => {

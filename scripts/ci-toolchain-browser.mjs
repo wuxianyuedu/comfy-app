@@ -173,6 +173,7 @@ export function playwrightOnly({
       ? `自取成功：${seeded.out}`
       : `自取没成（交给 playwright install 的老路）：${seeded.out}`,
   );
+  if (seeded.ok && browserExecutableExists({ env }).ok) return 0; // 见 seed 模块头注：老路会拉 ffmpeg
 
   const install = runPlaywrightInstall({
     find,

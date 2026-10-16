@@ -37,6 +37,30 @@
 #    报错。诊断靠日志里那一行 `runner.namespace` / 实际标签，见 §13.5.3 的「怎么确认
 #    真的跑在自托管上」。
 #
+# 6. **stage shell 是 PowerShell，而它的输出编码默认是 CP936**（2026-10-16 补）。
+#    Node 往管道里写的是 UTF-8 字节，PowerShell 拿 `[Console]::OutputEncoding`
+#    （中文 Windows 上 = CP936）去解，再按同一个编码吐回给平台 —— 于是**所有中文
+#    日志在平台侧都是乱码**：现场 `[e2e-run] 璧� Playwright 鍓嶏細搴旂敤绔彛 绌�`
+#    就是「UTF-8 被当 GBK 读了一遍」。平台自己那条错误行（`任务执行失败，返回码：1`）
+#    是好好的，所以病不在平台解码侧，在 stage shell 这一层。
+#    故**每个 stage 的脚本都以
+#    `$enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;` 开头**
+#    （单行脚本用 `;` 接，块脚本写成第一行）；本地不受影响（本地直接调 node，
+#    没有这一层转发）。⚠️ 这一句不是装饰：**红的时候最该读的那些行正好是中文**。
+#
+#    ⚠️⚠️ **但它不是全部**（`cnb-rrl-1k51u7hov` 的三行探针读数）：把控制台钉成
+#    65001 之后，PS 原生 / cmd / node **三层的中文仍然同一种乱法** ⇒ 抓取端**不是**
+#    按当前控制台代码页解码的，它按**宿主 ANSI 代码页**（这台机器上是 936）解，
+#    而控制台对象上的设置动不了它。所以：
+#      · 机器侧把 ANSI 代码页改成 UTF-8 ⇒ 这套设置才对得起来（**首选**，改一处全好）；
+#      · 不改它时，唯一能读的写法是**让每个字节都以 CP936 出口**（要逐 stage 转码）。
+#    `scripts/ci-console-encoding.mjs` 头注与规范 §13.5.3.5 记着这条读数与它的推论。
+#    ⚠️ 写成 `$enc=…` 而不是直接 `[Console]::OutputEncoding=…` 是**被咬过**：
+#    YAML 里 `[` 开头的纯量是**流式序列**，那样写整份文件解析不过
+#    （prettier 的 YAML 解析器当场报 `SyntaxError: Unexpected scalar at node end`，
+#    而平台侧只会表现为「流水线起不来」）。判 `.cnb.yml` 的语法用
+#    `pnpm exec prettier --check .cnb.yml` —— 它带 YAML 解析器。
+#
 # ── 两条流水线：谁在什么事件上跑 ────────────────────────────────────────
 #
 #   质量门禁        pull_request（不合并就不该结束）
@@ -107,7 +131,8 @@
     #        装不成」的前提，排在后面等于把结论推到自己要解释的那一步后面。
     #     两条都不是风格。判据分别在 `tests/no-platform-ci-config.test.ts` 与
     #     `tests/ci-env-probe.test.ts`。
-    #   · `DISABLED_GATES` —— **临时停用**的 stage 名清单（当前只有 `单元测试`）。
+    #   · `DISABLED_GATES` —— **临时停用**的 stage 名清单（此刻是 `单元测试` /
+    #     `ESLint 零警告` / `prettier 格式`，理由逐条写在那个键旁边）。
     #
     # **`COMFYAPP_CI_DISABLED_GATES` 是「停用」这件事的执行者，不是备注。**
     # 屏蔽一个 stage 的两半（注释掉 `.gates` 里的条目 + 从 `GATES` 摘名）**都不报错**：
@@ -120,23 +145,26 @@
     # 判据见 `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条。
     COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
     COMFYAPP_CI_DISABLED_GATES: >-
-      单元测试, 浏览器安装, E2E 关键流程
-    # ⚠️ 上面这三个都不在下面那一行里 —— 它们被**临时停用**，见 `DISABLED_GATES` 与
-    # `.gates` 里各自那段被注释掉的条目（ISSUE #1959：宿主侧环境未就绪，先屏蔽，
-    # 等环境好了再加回来）：
-    #   · `单元测试` —— 宿主侧测试环境未就绪；
-    #   · `浏览器安装` / `E2E 关键流程` —— 这台节点下不回那 120 MiB（读数与判读见
-    #     规范 §13.5.3.5 ⑩与该 stage 的注释），而 E2E 依赖它、留着只是把红挪一格。
+      单元测试, ESLint 零警告, prettier 格式
+    # ⚠️ 这份清单里的三项各有各的理由，共同点是**名字在这儿 = 停用**（不是删掉）：
+    #   · `单元测试` —— 宿主侧测试环境未就绪（ISSUE #1959），等环境好了再加回来；
+    #   · `ESLint 零警告` / `prettier 格式` —— **2026-10-16 临时让位**：两项都跑得通，
+    #     但在「把 E2E 那两格调绿」的每一轮里都要白重跑一遍（节点侧 ESLint 256~274s）。
+    #     E2E 一绿就取消注释加回来；判据本身一字未动（本地 pre-commit 照旧跑它们）。
+    # ⚠️ `浏览器安装` / `E2E 关键流程` 也曾在这份清单里（ISSUE #1966：这台节点一次
+    # 取不回那 120 MiB），**2026-10-16 按恢复动作加回来了** —— 取消注释 → 名字挪回
+    # 下面那一行 → 从本清单删掉，三件事同批做完。恢复的依据不是「节点网络修好了」，
+    # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
+    # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
       工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 同步数据库表结构,
-      类型检查, ESLint 零警告, 标题行让位, 文件结构硬规则, 跨平台动作对照,
+      类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, core 骨架单一事实源,
-      零消费导出, core 出口纪律与基类纯度, 生产构建
-    # ⚠️ `浏览器安装` 与 `E2E 关键流程` 不在上面这一行里 —— 它们被**临时停用**，
-    # 见 `DISABLED_GATES` 与 `.gates` 里各自那段以注释形态留着的原文（恢复动作 =
-    # 取消注释 → 把名字挪回本行 → 从 `DISABLED_GATES` 删掉）。
+      UI/逻辑分离, lib Node-only 声明, 格式化提交分离, core 骨架单一事实源,
+      零消费导出, core 出口纪律与基类纯度, 生产构建, 浏览器安装, E2E 关键流程
+    # ⚠️ 末尾那两条的**顺序有意**：`浏览器安装` 要下 ~120 MiB（分钟级），而判「装没装成」
+    # 是零成本的 —— 排在 `E2E 关键流程` 之前，缺件才会在便宜的位置报出来（判据判这条序）。
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
@@ -151,6 +179,14 @@
   # 排障成本远高于在这里花三秒正面回答。失败即非零退出 —— 它必须会红。
   - name: 工具链自证
     script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      # ── 编码探针（头注第 6 条那件事的**常读读数**）──
+      # 三行中文分别由三层吐出：PS 自己（写它自己的编码）、cmd（console CP，默认
+      # CP936）、node（UTF-8）。哪一行在平台侧可读，就说明**平台在那一层用的是什么
+      # 编码** —— 乱码是「多层里哪一层断的」这件事，只看一行日志永远分不开。
+      Write-Output "编码探针·PS 原生：中文一二三"
+      cmd /c "echo 编码探针·CMD：中文一二三"
+      node -e "console.log('编码探针·NODE：中文一二三')"
       # 逻辑在 scripts/ci-toolchain-selfcheck.mjs —— **不在这里就地写 PowerShell**。
       #
       # 这一步原先是一段 ~70 行就地 PowerShell（探 Python、用 winget 当场装、
@@ -199,7 +235,7 @@
   # ——绿的时候打一行版本号（等于把「E2E 到底会用哪个解释器」变成可读读数），
   # 缺件时打取证并**非零退出**（红在能指路的位置，而不是两小时后一串超时）。
   - name: Python 可用性
-    script: node scripts/ci-toolchain-selfcheck.mjs --python-only
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-toolchain-selfcheck.mjs --python-only
 
   # ── Python 探针读数（两条链各自的结论，**只打印、不阻断**）──
   #
@@ -213,7 +249,7 @@
   # 不是判据（判据那一份只有 `--python-only` 一个）。放在这里是因为它会跟着
   # `Python 可用性` 一起在最便宜的位置跑，而 E2E 那一步要等十几分钟。
   - name: Python 探针读数
-    script: node scripts/python-probe.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/python-probe.mjs
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
   #
@@ -247,7 +283,7 @@
   # 也**不**在这里替 `浏览器安装` 去装：探测到「都不通」时的出路在人不在仓
   # （换根 / 配代理 / 预装进落点），这一步的作用是把结论提前，不是代办。
   - name: 环境前提
-    script: node scripts/ci-env-probe.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-env-probe.mjs
 
   # ── 安装 ──
   # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。
@@ -257,6 +293,7 @@
   # 已经证明它可用。
   - name: Install dependencies
     script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
       # 动依赖面前先自证一件事：**这个宿主真的起得来 pnpm** —— 而它正好是这一步
       # 的全部动作。放在这里而不是更早的 stage，是因为这条判据**在更早的位置上做不
@@ -279,26 +316,31 @@
   # --target master 由配置写死传入：判定要的是**分支名**，而流水线里的
   # CNB_PULL_REQUEST_TARGET_SHA 是 sha —— 拿它当 branch 用会静默失效。
   - name: 分支守卫
-    script: node scripts/check-branch-guard.cjs --pr-check --target master
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-branch-guard.cjs --pr-check --target master
 
   # ── 建库 ──
   # 走 scripts/db-push.mjs —— 它复核库里到底有没有表，失败即非零退出。
   # 后面的 E2E 要真的读到库（见 e2e/smoke.spec.ts 的「数据库链路」一组），
   # 故必须放在最前。
   - name: 同步数据库表结构
-    script: node scripts/db-push.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/db-push.mjs
 
   # ── 类型 / 静态检查 ──
   - name: 类型检查
-    script: node_modules/.bin/tsc --noEmit
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/tsc --noEmit
 
-  - name: ESLint 零警告
-    script: node_modules/.bin/eslint . --max-warnings 0
-    # 实测 114s（本机 8 核）/ 256~274s（自托管节点）。而 `cnb-jt3-1k5071kou` 上它
-    # 挂到 **8640s**（2h24m）被 Job 上限掐掉 —— 那是节点被压死、这一步根本没在算。
-    # 给 20m 是「量级余量」：真跑得完的形态差两个数量级，而卡死的形态 20m 就能
-    # 报出来，不再白等两小时。**不是放宽判据**，判据本身一字未动。
-    timeout: 20m
+  # ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，2026-10-16）：这一步**已经跑得通**，
+  # 只是正在把 E2E 那两格调绿的每一轮里它都要重跑一遍（实测 256~274s 节点侧）而没有
+  # 新信息 —— 属于「耗时项，先让位」。**不是判据被放宽**：本地 `.githooks/pre-commit`
+  # 里那条 `eslint --max-warnings 0` 一个字没动，这一步的判据也一字未改。
+  # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从停用清单删掉。
+  # - name: ESLint 零警告
+  #   script: node_modules/.bin/eslint . --max-warnings 0
+  # 实测 114s（本机 8 核）/ 256~274s（自托管节点）。而 `cnb-jt3-1k5071kou` 上它
+  # 挂到 **8640s**（2h24m）被 Job 上限掐掉 —— 那是节点被压死、这一步根本没在算。
+  # 给 20m 是「量级余量」：真跑得完的形态差两个数量级，而卡死的形态 20m 就能
+  # 报出来，不再白等两小时。**不是放宽判据**，判据本身一字未动。
+  # timeout: 20m
 
   # ── 测试（**临时停用**，ISSUE #1959）──
   #
@@ -338,70 +380,72 @@
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
   - name: 标题行让位
-    script: node scripts/check-title-bar-clearance.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-title-bar-clearance.cjs
 
   - name: 文件结构硬规则
-    script: node scripts/check-file-structure.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-file-structure.cjs
 
   - name: 跨平台动作对照
-    script: node scripts/check-ps1-consistency.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-ps1-consistency.mjs
 
   - name: import 别名统一
-    script: node scripts/check-import-alias.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-import-alias.cjs
 
   - name: ComfyUI 端口口径
-    script: node scripts/check-comfyui-port-contract.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-comfyui-port-contract.cjs
 
   - name: 内联样式注入
-    script: node scripts/check-inline-style.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-inline-style.cjs
 
   - name: 跨文件重复块
-    script: node scripts/check-code-duplication.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-code-duplication.cjs
 
   - name: 函数长度 TS
-    script: node scripts/check-function-length.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-function-length.cjs
 
   - name: 函数长度 Rust
-    script: node scripts/check-rust-function-length.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-rust-function-length.cjs
 
   - name: 模块循环依赖
-    script: node scripts/check-circular-deps.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-circular-deps.cjs
 
   - name: 端口推导跨语言一致性
-    script: node scripts/check-app-port-vectors.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-app-port-vectors.cjs
 
   - name: CHANGELOG 碎片
-    script: node scripts/check-changelog-fragments.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-changelog-fragments.cjs
 
   - name: 主题色扫描
-    script: node scripts/check-theme-colors.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-theme-colors.cjs
 
   - name: UI/逻辑分离
-    script: node scripts/check-ui-logic-separation.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-ui-logic-separation.cjs
 
   - name: lib Node-only 声明
-    script: node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
 
-  - name: prettier 格式
-    script: node scripts/check-format.cjs
+  # ⚠️ **临时停用**（同 `ESLint 零警告`：跑得通，但在调 E2E 的每一轮里白重跑一遍；
+  # 本地 pre-commit 的 prettier 棘轮照旧跑，判据一字未动）。恢复动作同上。
+  # - name: prettier 格式
+  #   script: node scripts/check-format.cjs
 
   - name: 格式化提交分离
-    script: node scripts/check-reformat-only.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-reformat-only.cjs
 
   - name: core 骨架单一事实源
-    script: node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
 
   - name: 零消费导出
-    script: node scripts/check-dead-exports.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-dead-exports.cjs
 
   - name: core 出口纪律与基类纯度
-    script: node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
 
   # ── 构建与产物 ──
   # `pnpm build` 内部已经串了 next build → 剥私有输入 → 数产物 → 冒烟，
   # 不再另拼一遍（与 §13.5.3 那张表里记的同一入口）。
   - name: 生产构建
-    script: pnpm run build
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; pnpm run build
     # 实测 118s（`cnb-eus-1k5058g8l`）。`pnpm run build` 内部串了
     # `next build` → 剥私有输入 → 数产物 → 冒烟，给 30m 是因为 `next build` 在
     # 冷节点上比实测读数慢得多，而不是因为它会挂。
@@ -434,78 +478,104 @@
   #
   # 三个面各自修掉了（退码转出去 / 装完按落点复验 / 下载失败给读数），口径见
   # 规范 §13.5.3.5–§13.5.3.6。
-# - name: 浏览器安装
-# ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，ISSUE #1959 / #1966）—— 这块原文
-# 留着是为了「取消注释」能恢复。停用的读数（`cnb-ve6-1k51jaudm`，取证跑）：
-#
-#   内置族（cdn.playwright.dev）+ 30s  → 5 次 `timed out after 30000ms`、0 字节
-#   配着的 npmmirror 根 + 120s        → `timed out after 120000ms`、0 字节（`cnb-oqf-...`）
-#   失败分支的逐候选探测             → 三条都只取回**小段**字节（582 / 1889 / 442），
-#                                      即「连得上、也收得到开头」，而大 body 停住
-#
-# 结论：**这台节点一次取不回那 120 MiB**（规范 §13.5.3.5 ⑩ 记着这条的推论）。
-#
-# ⚠️ **上面那句「这一格要绿只有这一个条件」已经被订正**（规范 §13.5.3.5
-# 「订正 ⑩ 的那句推论」）：条件确实在链路上，但「怎么取」是仓库能改的那一半 ——
-# 现在这一步自己多了一条通道（分片取字节 + 编排，片长自适应、断了从已落盘的字节接着来；
-# 实现与判据见规范 §13.5.3.5「第七跑」那一小节），它是这一步**内部**的路，不另起 stage。
-# 所以「这台节点取不回那 120 MiB」**不等于**「这一格永远不会绿」——
-# 它现在只说明「一次取不完」。
-#
-# 是否恢复这一格**由读到这条读数的人决定**（取消注释 → 名字挪回 `GATES`）：
-# 分段那条通道在本机实测能取完（119809080 字节、18.5s），而它在**这台节点**上还没有
-# 跑过一次读数 —— 所以这里刻意**保留停用**，等那一次读数出来再决定，而不是拿
-# 本机的结论替这台机器作保。恢复后若仍红，读数会同时给两条通道的现场。
-# 恢复动作：取消本块注释 → 把 `浏览器安装` 从 `DISABLED_GATES` 挪回 `GATES`。
-# script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
-# env:
-# **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
-#
-# 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
-# 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
-# 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
-# 这样一条链路上无论等多久都不会到。
-#
-# 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
-# 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
-# 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
-#
-# **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
-# （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
-# 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
-# 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
-# 也就是说这一档**推不出来**，只能由这里给：给上之后
-# `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
-#
-# ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
-# 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
-# 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
-# 真要换（内网代理、别的镜像站）改这一行即可。
-#
-# ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
-# 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
-# PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
-# PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-# 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
-# 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
-# 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
-# timeout: 20m
+  #
+  # ⚠️ **这一格 2026-10-16 从停用清单恢复**（ISSUE #1966）。它此前被登记进
+  # `COMFYAPP_CI_DISABLED_GATES`，依据是下面这条取证读数（`cnb-ve6-1k51jaudm`）：
+  #
+  #   内置族（cdn.playwright.dev）+ 30s  → 5 次 `timed out after 30000ms`、0 字节
+  #   配着的 npmmirror 根 + 120s        → `timed out after 120000ms`、0 字节（`cnb-oqf-...`）
+  #   失败分支的逐候选探测             → 三条都只取回**小段**字节（582 / 1889 / 442），
+  #                                      即「连得上、也收得到开头」，而大 body 停住
+  #
+  # 当时的结论写成「这台节点一次取不回那 120 MiB ⇒ 这一格要绿只有这一个条件」，
+  # 而规范 §13.5.3.5「订正 ⑩ 的那句推论」把它订正成**「一次取不完」**：条件确实在
+  # 链路上，但「怎么取」是仓库能改的那一半 —— 这一步**内部**现在多了一条通道
+  # （分片取字节 + 编排：片长自适应、断了从已落盘的字节接着来；实现与判据见规范
+  # §13.5.3.5「第七跑」那一小节），不另起 stage。
+  #
+  # 所以恢复的依据**不是**「节点网络修好了」，而是**取法换掉了**。
+  #
+  # ⚠️ **恢复后的第一跑读数已经到了**（`cnb-7oo-1k51r518b`，2026-10-16）：
+  #
+  #   自取：从 https://cdn.npmmirror.com/binaries/playwright 分片取这一件（可续传）
+  #   自取成功：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
+  #   playwright install → Downloading FFmpeg (playwright ffmpeg v1011) × 5 次
+  #                        → timed out after 120000ms → Download failure
+  #   浏览器装不上（`playwright install` 退非零）…   ← 而浏览器**已经装好了**
+  #
+  # 两件事各是一半：「取法换掉了」成立（119 MiB 的自取在这台节点上真走完了），
+  # 而红的是**另一件** —— 老路不只装浏览器，还会顺手拉 **ffmpeg**（chromium 的依赖，
+  # ~2.5 MB），那件在同一条链路上照旧 0 字节。所以这一步现在在自取成功之后**按落点
+  # 复验一次**（同一个 `browserExecutableExists()`），通过就直接放行、不再交给老路：
+  # 本档真正要的是 headless shell（复验找的就是它），而 ffmpeg 只有录视频才用得上
+  # （`playwright.config.ts` 没开 `video`）。理由与判据在 `ci-toolchain-browser-seed.mjs`
+  # 的头注（`ci-toolchain-browser.mjs` 正卡在 900 行的硬闸上，那段只有一行 + 指路）。
+  #
+  # 下一笔账：`E2E 关键流程` 的首跑读数（它在自托管路径上仍然一次都没有跑到过）。
+  - name: 浏览器安装
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    env:
+      # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
+      #
+      # 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
+      # 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
+      # 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
+      # 这样一条链路上无论等多久都不会到。
+      #
+      # 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
+      # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
+      # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
+      #
+      # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
+      # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+      # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
+      # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
+      # 也就是说这一档**推不出来**，只能由这里给：给上之后
+      # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
+      #
+      # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
+      # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
+      # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
+      # 真要换（内网代理、别的镜像站）改这一行即可。
+      #
+      # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
+      # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
+      # 而恢复之后这一步有**两条**通道：先自己分片取（不依赖这个根到得了大 body），
+      # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
+      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+    # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
+    # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
+    # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
+    timeout: 20m
 
   # ── E2E（仅 @critical 关键流程）──
   #
   # 解释器这一格已由前面那步「Python 可用性」在**整条流水线的最前**答过（它也是
   # 本地 `pnpm test:e2e` 走 `scripts/e2e-run.mjs` 时的同一份判据），故这里不重判。
   # 浏览器那一格由上面那步「浏览器安装」答过（自托管没有镜像预装）。
-# - name: E2E 关键流程
-# ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，ISSUE #1959 / #1966）—— 同 `浏览器安装`：
-# 它依赖那一格的浏览器二进制，浏览器装不上时它只会在 `next start` + Playwright 启动处
-# 报**同一个** launch 失败，也就是说留着它只是把红从倒数第三步挪到倒数第二步，
-# 判据强度一点没变。恢复动作与 `浏览器安装` 逐字相同。
-# script: node scripts/e2e-run.mjs --grep @critical
-# 这一档在自托管路径上**从来没有跑过**（前几跑都断在 `单元测试` 或 `生产构建`），
-# 所以没有历史读数可依。它要起 `next start` + Playwright 浏览器、跑 `@critical`
-# （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
-# timeout: 30m
+  #
+  # ⚠️ 这一格与 `浏览器安装` **同批恢复**（2026-10-16，ISSUE #1966）：它依赖那一格的
+  # 浏览器二进制，浏览器装不上时它只会在 `next start` + Playwright 启动处报**同一个**
+  # launch 失败 —— 停用它只是把红从倒数第三步挪到倒数第二步，判据强度一点没变。
+  #
+  # ⚠️ **第一跑读数**（`cnb-cdt-1k51s6mf1`，8.5s 红）：`--grep @critical` 里的那个
+  # `@critical` **在命令行那一层就没了** —— Playwright 收到的是没有值的 `--grep`：
+  #
+  #     error: option '-g, --grep <grep>' argument missing
+  #
+  # 这不是本仓判据的事，是**命令形态**的事（同一行里 `node scripts/e2e-run.mjs`
+  # 照常跑起来了）：`@` 开头的裸 token 在 Windows runner 的命令行上会被吃掉。
+  # 所以这里写成 `--grep=@critical` —— `@` 不再是某个 token 的第一个字符，三种
+  # shell（bash / cmd / PowerShell）下都原样传过去；本机怎么打不受影响。
+  # 顺带记一笔：「停用期间看不见的东西」又多一类 —— 这一行此前从没被执行过，
+  # 而它在本地是**永远绿的**（本地是 bash/PowerShell 直接调用，`@critical` 传得进去）。
+  - name: E2E 关键流程
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/e2e-run.mjs --grep=@critical
+    # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
+    # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
+    # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
+    timeout: 30m
 
 master:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
