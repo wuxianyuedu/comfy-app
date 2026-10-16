@@ -214,7 +214,7 @@ export function ps7OnlySyntaxIn(text: string): string[] {
  */
 export function registeredGateOrder(text: string): string[] {
   const m =
-    /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+\S[^\n]*\r?\n)+)/m.exec(
+    /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
       text,
     );
   const body = m?.[1];
@@ -223,6 +223,55 @@ export function registeredGateOrder(text: string): string[] {
     .split(",")
     .map((n) => n.trim())
     .filter(Boolean);
+}
+
+/**
+ * `.cnb.yml` 的 `env` 里登记的**临时停用** stage 清单（`COMFYAPP_CI_DISABLED_GATES`）。
+ *
+ * 为什么它非有不可：屏蔽一个 stage 的两半 —— `.gates` 里把条目注释掉、从
+ * `COMFYAPP_CI_GATES` 摘掉名字 —— **两半都不报错**（前者是 YAML 注释、后者只是数组
+ * 少一项），于是「临时停用」与「永久删除」在配置里长得一模一样，而下一次评审的人
+ * 只能靠猜。这一键把停用变成一句读得出来的事实：名字在这儿 = 它是**被停用的**，
+ * 不在 `GATES` 也不在这儿 = 它是**被删掉的**（那条判据当场点名）。
+ *
+ * 与 `registeredGateOrder` 同一份解析形态（同一种折叠标量），只是键名不同。
+ * 返回 `[]` = 键不在或为空 —— 调用方不能据此推断「没有停用的」（键被删掉本身就
+ * 是要判的形态，见「停用登记」那两条用例）。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns 被停用的 stage 名（已 trim）
+ */
+export function registeredDisabledGates(text: string): string[] {
+  /* 正文行不许是注释（YAML 折叠标量的正文里不会出现 `#` 开头的行），
+   * 否则后面紧跟的说明注释会被一起吞进来 —— 那个坑 `registeredGateOrder` 侥幸没踩到
+   * 只是因为它的 `GATES` 后面没有注释而已。 */
+  const m =
+    /^[ \t]*COMFYAPP_CI_DISABLED_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
+      text,
+    );
+  const body = m?.[1];
+  if (body === undefined) return [];
+  return body
+    .split(",")
+    .map((n) => n.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 一个 stage 名在 `.gates` 里是否**以注释形态**留着（停用的可恢复性依据）。
+ *
+ * 停用不等于删除 —— 恢复动作是「取消注释」而不是「重写一遍」。所以判据要求被停用的
+ * 条目仍能在配置里 grep 回原文（`- name: <stage>` 那一行，允许被 `#` 注释掉）。
+ * 少了这一条，「等测试流程好了再加回来」就只剩下一句注释里的话。
+ *
+ * @param text `.cnb.yml` 原文
+ * @param name stage 名
+ */
+export function stageKeptAsComment(text: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`, "m").test(
+    text,
+  );
 }
 
 /**
@@ -594,9 +643,19 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "解析不出 COMFYAPP_CI_GATES —— 键被删了或换了形状，这条顺序约束就没有执行者了",
     ).toBeGreaterThan(0);
     const probeAt = order.indexOf("Python 可用性");
-    const testAt = order.indexOf("单元测试");
     expect(probeAt).toBeGreaterThanOrEqual(0);
-    expect(testAt).toBeGreaterThanOrEqual(0);
+    /* **停用时这条顺序约束无从谈起**（条目不在清单里，indexOf 回 -1）。
+     * 停用与否不是这里判的 —— 那是下面「停用登记」两条的事；这里只判
+     * 「在它真排进清单时必须排在 Python 之后」，而不是把它当成永久删除。 */
+    const testAt = order.indexOf("单元测试");
+    if (testAt < 0) {
+      expect(
+        registeredDisabledGates(readRegisteredConfig()),
+        "`单元测试` 既不在 COMFYAPP_CI_GATES 里、也没在 COMFYAPP_CI_DISABLED_GATES " +
+          "里登记 —— 这是「删除」而不是「停用」，判据拦的就是这个静默形态",
+      ).toContain("单元测试");
+      return;
+    }
     expect(
       probeAt,
       "`Python 可用性` 必须排在 `单元测试` 之前：缺解释器时那一步照旧往下跑" +
@@ -605,12 +664,66 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeLessThan(testAt);
   });
 
+  it("被停用的 stage 在 `COMFYAPP_CI_DISABLED_GATES` 里登记了，且原文以注释形态留着", () => {
+    const text = readRegisteredConfig();
+    const disabled = registeredDisabledGates(text);
+    /* 反向：`DISABLED_GATES` 里登记了的名字，`GATES` 里就不许再有它 ——
+     * 两边同时挂着等于「既跑又停」，两个判据各说各话（本仓反模式表那条）。 */
+    const order = registeredGateOrder(text);
+    const both = disabled.filter((n) => order.includes(n));
+    expect(
+      both,
+      "这些 stage 同时出现在 COMFYAPP_CI_GATES 与 COMFYAPP_CI_DISABLED_GATES 里 —— " +
+        "既跑又停，清单自己就矛盾了",
+    ).toEqual([]);
+    /* 停用 ≠ 删除：原文要 grep 得回来，恢复动作才是「取消注释」。 */
+    for (const name of disabled) {
+      expect(
+        stageKeptAsComment(text, name),
+        `\`${name}\` 被停用了，但 .gates 里找不到它以注释形态留着的 \`- name: ${name}\` ` +
+          "—— 那就没有原文可恢复，停用退化成删除",
+      ).toBe(true);
+    }
+  });
+
+  it("`单元测试` 仍是**停用**而不是被删掉（ISSUE #1959 的临时屏蔽）", () => {
+    /* 这条把「本仓此刻真的把单元测试停用了」钉成事实，并给出恢复判据的入口。
+     * 它**故意不判**「永远停用」—— 停用是临时的，加回来时这条用例会因
+     * `单元测试` 回到 GATES 而走另一支（此时它必须不再出现在 DISABLED 里）。 */
+    const text = readRegisteredConfig();
+    const order = registeredGateOrder(text);
+    const disabled = registeredDisabledGates(text);
+    const inGates = order.includes("单元测试");
+    const inDisabled = disabled.includes("单元测试");
+    expect(
+      inGates !== inDisabled,
+      inGates
+        ? "`单元测试` 回到了 COMFYAPP_CI_GATES，但还在 COMFYAPP_CI_DISABLED_GATES 里 —— " +
+            "恢复时要把它从停用清单里删掉"
+        : "`单元测试` 既不在 GATES、也不在 DISABLED_GATES 里 —— 停用必须留痕（见上一条）",
+    ).toBe(true);
+    if (inDisabled) {
+      expect(
+        stageKeptAsComment(text, "单元测试"),
+        "`单元测试` 被停用了，但 .gates 里没有它的注释原文 —— 恢复时无原文可依",
+      ).toBe(true);
+    }
+  });
+
   it("慢 stage 带着量级余量的 `timeout` 预算（不然卡死要等满 2h 才有人知道）", () => {
-    const timeouts = stageTimeouts(readRegisteredConfig());
+    const text = readRegisteredConfig();
+    const timeouts = stageTimeouts(text);
     /* 为什么是「点名这几个」而不是「所有 stage 都要有」：其余 stage 都是秒级
      * （`node scripts/check-*.cjs` 一族），给它们加预算只是噪音；真正的成本
-     * 集中在下面这四个上，而它们恰好也是**实测挂过或最可能挂**的那几个。 */
-    const required = ["ESLint 零警告", "单元测试", "生产构建", "E2E 关键流程"];
+     * 集中在下面这四个上，而它们恰好也是**实测挂过或最可能挂**的那几个。
+     *
+     * `单元测试` 被**临时停用**（`DISABLED_GATES`，ISSUE #1959）时它不在清单里，
+     * 于是这里也不要求它有预算 —— 预算跟着 stage 走。它一旦被加回来（不再出现在
+     * 停用清单里），这条要求**自动恢复**，不需要有人记得改回来。 */
+    const disabled = registeredDisabledGates(text);
+    const required = ["ESLint 零警告", "单元测试", "生产构建", "E2E 关键流程"].filter(
+      (name) => !disabled.includes(name),
+    );
     const missing = required.filter((name) => !timeouts.has(name));
     expect(
       missing,
@@ -705,6 +818,40 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       badOrderParsed.indexOf("单元测试"),
     );
     expect(registeredGateOrder("master:\n  push:\n    - x\n")).toEqual([]);
+    /* ⑦′ **停用清单**的解析器与两条新判据都要能真红（不然「停用 ≠ 删除」是空话）：
+     *  · 解析器认得那份折叠标量、键不在时答空、不误收 `GATES` 的内容；
+     *  · 注释形态那条对**行内 `#`** 与**行尾注释**都判得出来。 */
+    const disabledFixture =
+      "x:\n  env:\n    COMFYAPP_CI_DISABLED_GATES: >-\n      单元测试, 别的东西\n";
+    expect(registeredDisabledGates(disabledFixture)).toEqual([
+      "单元测试",
+      "别的东西",
+    ]);
+    expect(registeredDisabledGates("master:\n  push:\n    - x\n")).toEqual([]);
+    // `GATES` 的内容不许被 `DISABLED_GATES` 的解析器收走（两个键的正则不能互相命中）。
+    expect(
+      registeredDisabledGates(
+        "x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      单元测试\n",
+      ),
+    ).toEqual([]);
+    expect(
+      registeredGateOrder(
+        "x:\n  env:\n    COMFYAPP_CI_DISABLED_GATES: >-\n      单元测试\n",
+      ),
+    ).toEqual([]);
+    // 注释形态：整行被 `#` 注释掉才算「留了原文」；没注释的不算、名字不同的不算。
+    expect(
+      stageKeptAsComment(
+        "x:\n  stages:\n  #   - name: 单元测试\n  #     script: x\n",
+        "单元测试",
+      ),
+    ).toBe(true);
+    expect(
+      stageKeptAsComment("x:\n  stages:\n  - name: 单元测试\n    script: x\n", "单元测试"),
+    ).toBe(false);
+    expect(
+      stageKeptAsComment("x:\n  stages:\n  #   - name: 别的\n", "单元测试"),
+    ).toBe(false);
     /* ⑧ 预算与流水线锁两条判据都要能红：喂进不带 timeout 的 stage 块、
      * 喂进不带 lock 的锚点，都必须答「没有」。 */
     // 夹具按**真实缩进**写：`stages:` 的直接子项是 2 空格、键在 4 空格。

@@ -107,10 +107,26 @@
     #        装不成」的前提，排在后面等于把结论推到自己要解释的那一步后面。
     #     两条都不是风格。判据分别在 `tests/no-platform-ci-config.test.ts` 与
     #     `tests/ci-env-probe.test.ts`。
+    #   · `DISABLED_GATES` —— **临时停用**的 stage 名清单（当前只有 `单元测试`）。
+    #
+    # **`COMFYAPP_CI_DISABLED_GATES` 是「停用」这件事的执行者，不是备注。**
+    # 屏蔽一个 stage 的两半（注释掉 `.gates` 里的条目 + 从 `GATES` 摘名）**都不报错**：
+    # 前者是 YAML 注释、后者只是数组少一项，于是「暂时屏蔽」与「永久删除」在配置里
+    # 长得一模一样。这一键把它变回一句读得出来的事实，判据据此把两件事分开：
+    #   · 不在 `GATES` 里、**也**不在本清单里 ⇒ 那是删除，判据当场点名；
+    #   · 不在 `GATES` 里、但在本清单里 ⇒ 停用，判据放行、并要求条目仍在 `.gates`
+    #     里以**注释形态**留着（可 grep 回原文），否则「加回来」就没有原文可依。
+    # 恢复动作：`.gates` 里取消注释 → 把名字挪回 `GATES` → 从本清单删掉。
+    # 判据见 `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条。
     COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
+    COMFYAPP_CI_DISABLED_GATES: >-
+      单元测试
+    # ⚠️ `单元测试` 不在下面这一行里 —— 它被**临时停用**，见 `DISABLED_GATES` 与
+    # `.gates` 里那段被注释掉的条目（ISSUE #1959：宿主侧测试环境未就绪，
+    # 先屏蔽，等测试流程好了再加回来）。
     COMFYAPP_CI_GATES: >-
       工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 同步数据库表结构,
-      类型检查, ESLint 零警告, 单元测试, 标题行让位, 文件结构硬规则, 跨平台动作对照,
+      类型检查, ESLint 零警告, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, core 骨架单一事实源,
@@ -267,27 +283,41 @@
     # 报出来，不再白等两小时。**不是放宽判据**，判据本身一字未动。
     timeout: 20m
 
-  # ── 测试 ──
-  # 全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
-  # 判据强度不变，阈值仍由 vitest.config.ts 的目录阈值守着）。
+  # ── 测试（**临时停用**，ISSUE #1959）──
   #
-  # **显式 `--maxWorkers=4`，不是配置里那个 8**：这条件路径与本地跑不是同一种负载。
-  # ① 宿主机 16 逻辑核（无 docker、整机可用），vitest 若照默认铺开就有 ~15 个 worker；
-  # ② `--coverage` 给每个文件都加一层插桩（本机实测同样两文件 6.2s → 9.2s，约 +50% CPU）；
-  # ③ 这一套里有大量**真起子进程**的用例（git / node / prettier / PowerShell），超订的
-  #    那一份直接从「等 CPU」变成「等子进程」—— 表现是 `Test timed out in 30000ms`，
-  #    而单跑全绿。**这正是本仓已经量过的那一格**（规范 §11.13）：同一套、同一台机器，
-  #    `maxWorkers=8` 在负载下仍出争用形态的红，`--maxWorkers=4` 才拿到「560 文件全绿」。
-  # 取 4 是**降负载**，不是放宽判据 —— 用例、预算、覆盖率阈值一个字不动；
-  # 与 `.githooks/pre-commit` 的 C 组同一个数、同一条理由（AGENTS 硬规则里那句
-  # 「降负载的杠杆是并发，不是预算」）。代价是墙钟变长，这是这条路径上买得到的唯一交换。
-  - name: 单元测试
-    script: node_modules/.bin/vitest run --coverage --maxWorkers=4
-    # 实测 827s（`cnb-eus-1k5058g8l`，755 文件全量绿）；本机 `--maxWorkers=4` 实测
-    # 198s。而 `cnb-did-1k50659np` 上它挂到 **8640s**（2h24m）才被掐掉，留下的
-    # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
-    # 给 45m：真跑得完的形态差三倍余量，卡死的形态 45m 报出来。
-    timeout: 45m
+  # ⚠️ 这一步现在是**注释掉的**：宿主侧测试环境还没就绪（Windows 自托管节点上
+  # Python 只进了 `yuedu` 会话、构建用的 `SYSTEM` 账号够不着；另有一批跑真子进程的
+  # 用例在慢宿主上超预算），先把它摘掉让流水线能往下走，**等测试流程好了再加回来**。
+  #
+  # 停用这件事有两半、缺一半就会变成「静默删除」：
+  #   · 本条目按注释形态留在这里（**别删** —— 恢复动作就是取消注释）；
+  #   · 名字从 `env.COMFYAPP_CI_GATES` 摘掉、挪进 `env.COMFYAPP_CI_DISABLED_GATES`。
+  # 判据 `tests/no-platform-ci-config.test.ts` 会把「停用」与「删除」分开判：
+  # 只在 `DISABLED_GATES` 里登记、且这段注释仍在，才算停用；否则当场点名。
+  #
+  # 原来的形态（恢复时照抄下面这块，并把名字挪回 `GATES`、从 `DISABLED_GATES` 删掉）：
+  #
+  #   全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
+  #   判据强度不变，阈值仍由 vitest.config.ts 的目录阈值守着）。
+  #
+  #   **显式 `--maxWorkers=4`，不是配置里那个 8**：这条件路径与本地跑不是同一种负载。
+  #   ① 宿主机 16 逻辑核（无 docker、整机可用），vitest 若照默认铺开就有 ~15 个 worker；
+  #   ② `--coverage` 给每个文件都加一层插桩（本机实测同样两文件 6.2s → 9.2s，约 +50% CPU）；
+  #   ③ 这一套里有大量**真起子进程**的用例（git / node / prettier / PowerShell），超订的
+  #      那一份直接从「等 CPU」变成「等子进程」—— 表现是 `Test timed out in 30000ms`，
+  #      而单跑全绿。**这正是本仓已经量过的那一格**（规范 §11.13）：同一套、同一台机器，
+  #      `maxWorkers=8` 在负载下仍出争用形态的红，`--maxWorkers=4` 才拿到「560 文件全绿」。
+  #   取 4 是**降负载**，不是放宽判据 —— 用例、预算、覆盖率阈值一个字不动；
+  #   与 `.githooks/pre-commit` 的 C 组同一个数、同一条理由（AGENTS 硬规则里那句
+  #   「降负载的杠杆是并发，不是预算」）。代价是墙钟变长，这是这条路径上买得到的唯一交换。
+  #
+  #   - name: 单元测试
+  #     script: node_modules/.bin/vitest run --coverage --maxWorkers=4
+  #     # 实测 827s（`cnb-eus-1k5058g8l`，755 文件全量绿）；本机 `--maxWorkers=4` 实测
+  #     # 198s。而 `cnb-did-1k50659np` 上它挂到 **8640s**（2h24m）才被掐掉，留下的
+  #     # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
+  #     # 给 45m：真跑得完的形态差三倍余量，卡死的形态 45m 报出来。
+  #     timeout: 45m
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
   - name: 标题行让位
