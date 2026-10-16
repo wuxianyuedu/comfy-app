@@ -60,6 +60,7 @@ import {
   parseInvocation,
   resolveShellInvocation,
   runWithCp936Exit,
+  splitStreamChunk,
   writeCp936,
 } from "../scripts/ci-cp936-exit.mjs";
 
@@ -760,5 +761,168 @@ describe("CP936 出口：编排与退出码", () => {
     /* 数据**真的走 stdin 进去了**（stdout 被 inherit 接走，所以这里只判 status ——
      * 回显那半由上面那句人工读数与 `input` 这一路共同说明）。 */
     expect(child.stdout).toBeNull();
+  });
+});
+
+describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日志不再随 kill 一起消失）", () => {
+  /** 解析口的「原样放行」形态 —— 与上面那一组同形（`{command, args, resolved}`）。
+   *  这些用例判的是「什么时候发」，不想让「这条命令在不在 PATH 上」掺进来。 */
+  const passthroughResolve = (cmd: string, args: string[]) => ({
+    command: cmd,
+    args,
+    resolved: true,
+  });
+
+  /**
+   * 假子进程：数据分几次推、`close` 可以**永远不来**（真实场景里被平台 kill 掉）。
+   *
+   * 与上面那个 `fakeChild` 的差别只有一处 —— 这里把 `data` 回调**留着**，
+   * 由用例自己决定什么时候送、送几块（判「送出去的时刻」必须能控制时刻）。
+   */
+  const streamingChild = () => {
+    const dataHandlers: Array<(d: unknown) => void> = [];
+    const closeHandlers: Array<(code: number | null) => void> = [];
+    /* `stderr` **必须是另一条流**（不是同一个对象）：两条流各注册一次 `data`
+     * 回调，共用对象会让同一块被处理两遍（`carry` 也被两个回调共享），判出来的
+     * 「什么时候发」就不是真实形状了。 */
+    const mkStream = () => {
+      const s = {
+        setEncoding: () => s,
+        on: (ev: string, fn: (d: unknown) => void) => {
+          if (ev === "data") dataHandlers.push(fn);
+          return s;
+        },
+      };
+      return s;
+    };
+    return {
+      stdout: mkStream(),
+      stderr: mkStream(),
+      on: (ev: string, fn: (arg: unknown) => void) => {
+        if (ev === "close") closeHandlers.push(fn);
+        return undefined;
+      },
+      /* 只喂 **stdout** 那条（`dataHandlers[0]`）：两条流各注册一次，随手全都喂
+       * 会让同一块处理两遍 —— 本组判「发的时机与切法」，重复一块会把结论搅浑。 */
+      push: (chunk: string) => dataHandlers[0]?.(chunk),
+      close: (code: number | null) => closeHandlers.forEach((fn) => fn(code)),
+    };
+  };
+
+  it("`splitStreamChunk` 只切**整行**，行尾残余留在 carry 里", () => {
+    expect(splitStreamChunk("", "甲\n乙\n")).toEqual({ text: "甲\n乙\n", carry: "" });
+    /* 关键那一格：`乙` 还没有换行符收尾 ⇒ **不许**当成一整行发出去（发早了会把
+     * 下一块拼上来的那半截丢在日志里断成两行）。 */
+    expect(splitStreamChunk("", "甲\n乙")).toEqual({ text: "甲\n", carry: "乙" });
+    /* 上一块留下的残余与这一块拼起来才成行。 */
+    expect(splitStreamChunk("乙", "丙\n")).toEqual({ text: "乙丙\n", carry: "" });
+    /* 一块里一行都没有（长行被截成多块）—— 一个字都不发。 */
+    expect(splitStreamChunk("很长的一", "行还在继续")).toEqual({
+      text: "",
+      carry: "很长的一行还在继续",
+    });
+  });
+
+  it("**第一块到就发出去** —— 不必等 `close`（长跑 stage 被 kill 时 `close` 不会来）", async () => {
+    /* 这就是 `E2E 关键流程` 那 36 分钟零行的判据：旧写法把整轮输出攒到 `close`
+     * 才发一次，而平台按 stage 超时 kill 掉的进程**永远不会触发 `close`** ——
+     * 攒了多少就丢多少。
+     *
+     * 这条用例**刻意不触发 `close`**：只要第一块到了，日志里就必须已经有它。 */
+    const printed: string[] = [];
+    const child = streamingChild();
+    const done = runWithCp936Exit(["--", "长跑"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      spawnProc: (() => child) as never,
+      out: (chunk) => printed.push(chunk),
+    });
+    child.push("第一行\n");
+    /* **此刻**（还没有 close）就该看得见那一行。 */
+    expect(printed.join("")).toContain("第一行");
+    /* 收尾（避免这条 Promise 悬着），但上面那条断言与它无关。 */
+    child.close(0);
+    await done;
+  });
+
+  it("一块里**半行**不算一行 —— 剩下那半截留到下一块，拼齐了才发", async () => {
+    const printed: string[] = [];
+    const child = streamingChild();
+    const done = runWithCp936Exit(["--", "长跑"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      spawnProc: (() => child) as never,
+      out: (chunk) => printed.push(chunk),
+    });
+    child.push("完整的一行\n半个");
+    expect(printed.join("")).toBe("完整的一行\n");
+    child.push("字补上\n");
+    expect(printed.join("")).toBe("完整的一行\n半个字补上\n");
+    child.close(0);
+    await done;
+  });
+
+  it("`close` 时**补发**行尾残余（最后一行常常没有换行符收尾）", async () => {
+    const printed: string[] = [];
+    const child = streamingChild();
+    const done = runWithCp936Exit(["--", "长跑"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      spawnProc: (() => child) as never,
+      out: (chunk) => printed.push(chunk),
+    });
+    child.push("有换行的一行\n没有换行的尾巴");
+    child.close(0);
+    await done;
+    expect(printed.join("")).toBe("有换行的一行\n没有换行的尾巴");
+  });
+
+  it("Windows：**每一整行各转一次**，且 `stdio` 仍然是 `inherit`", async () => {
+    /* 转码仍然按**整行**为单位过 PowerShell：按块转会在多字节字符中间截断
+     * （GBK 变长），`splitStreamChunk` 正是为此而存在。 */
+    const seen: Array<{ text: string; stdio: unknown }> = [];
+    const child = streamingChild();
+    const done = runWithCp936Exit(["--", "长跑"], {
+      platform: "win32",
+      resolve: passthroughResolve,
+      spawnProc: (() => child) as never,
+      write: ((text: string, opts: { stdio?: unknown }) => {
+        seen.push({ text, stdio: opts?.stdio });
+        return { ok: true };
+      }) as never,
+      out: () => undefined,
+    });
+    /* 一块 = 一次转码调用（`splitStreamChunk` 的粒度是「这一块里切出来的整行」），
+     * 两块各带一整行 ⇒ 两次调用。粒度是**块**、不是行：真起一条 PowerShell 逐行
+     * 转码会把分钟级 stage 拖成小时级，而这一步要买的只是「别攒到最后」。 */
+    child.push("甲\n");
+    child.push("乙\n");
+    expect(seen).toEqual([
+      { text: "甲\n", stdio: "inherit" },
+      { text: "乙\n", stdio: "inherit" },
+    ]);
+    child.close(0);
+    await done;
+  });
+
+  it("Windows：转码失败那条提示**只说一次**，但每一行的原文都照打", async () => {
+    /* 提示原来是「跑完收尾一句」，现在按行发 —— 每行重复一遍会把真输出埋掉。
+     * 而**原文**照打这件事不能省：它是转码没做成时唯一还能读的东西。 */
+    const printed: string[] = [];
+    const child = streamingChild();
+    const done = runWithCp936Exit(["--", "长跑"], {
+      platform: "win32",
+      resolve: passthroughResolve,
+      spawnProc: (() => child) as never,
+      write: () => ({ ok: false }),
+      out: (chunk) => printed.push(chunk),
+    });
+    child.push("第一行\n第二行\n");
+    child.close(0);
+    await done;
+    const text = printed.join("");
+    expect(text.split("没做成")).toHaveLength(2);
+    expect(text).toContain("第一行");
+    expect(text).toContain("第二行");
   });
 });

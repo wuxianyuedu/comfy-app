@@ -102,6 +102,18 @@
  *     `err.code`（`ENOENT` 与 `EACCES` / `EINVAL` 要做的处置完全不同）、解析口
  *     交回的**绝对路径**、以及**当前目录 + 调用方的原文**（相对路径是相对谁的，
  *     不写出来只能猜；`cwd` 由调用方注入，见 `process.cwd()`）。
+ *   · **输出攒到 `close` 才发**（第六次上平台，2026-10-16）：`close` 那个回调在
+ *     **被平台按 stage 超时 kill** 的进程上**永远不会来**，而它原来是把整轮
+ *     `chunks.join("")` 一次性发出的那次调用 —— 于是 `E2E 关键流程` 跑了 36 分钟、
+ *     平台日志**零行**，读到的唯一结论是平台那句
+ *     `timeout of 2160000ms exceeded`（与真因无关）。
+ *     「输出被吞」在长跑这一格上的形态**不是「发不出去」，是「发得太晚」**：
+ *     秒级 stage 上完全看不出来（命令退出了，输出就发出去了），分钟级 stage 上
+ *     代价是**整轮日志**。处置是**边到边发**（`splitStreamChunk()` 按 `\n` 切整行、
+ *     行尾残余留到下一块）—— 按块发会在多字节字符中间截断，GBK 是变长的，编出来
+ *     就是乱码字节。
+ *     ⚠️ 判据（`tests/ci-cp936-exit.test.ts`）**只能判「第一块到的时候有没有发出去」**：
+ *     「被 kill 之后还能不能读到」在单测里没有对应的时刻，那件事由流式本身保证。
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -296,6 +308,42 @@ export function unwrapCp936(command) {
 }
 
 /**
+ * 把一块刚到的字节切成「整行 + 行尾残余」——**流式转码的那一半**（ISSUE #1977 第六跑）。
+ *
+ * ## 为什么需要它：外壳此前把整段输出攒到 `close` 才发
+ *
+ * 前几跑每一次都是「退出码转了、日志一个字都没有」，而当时代码是对的（`stdio`
+ * 三路已修）。真因在**时序**上：`runWithCp936Exit` 原来的写法是
+ * `chunks.push(...)` → `close` 时 `chunks.join("")` → 一次 `write()`。对**秒级**
+ * 的 stage（`类型检查` / `文件结构硬规则`…）那是看不出差别的：命令退出了，输出就发出去了。
+ * 对**分钟级**的 stage 则是灾难 —— `E2E 关键流程` 那一步跑到 36 分钟被平台按 stage
+ * 超时 **kill**（`timeout of 2160000ms exceeded`），`close` 那个回调**再也不会来**，
+ * 攒了一整轮的 `chunks` 随进程一起消失：日志**零行**，而唯一能读到的错误是平台那句
+ * 与真因无关的「超时」。
+ *
+ * ⇒ 「输出被吞」在**长跑 + 被 kill** 这一格上的形态不是「发不出去」，是「发得太晚」。
+ * 处置是**边到边发**：每来一块就切出**整行**立刻转码 / 落盘，行尾那份可能被截断的
+ * 残余留在 `carry` 里等下一块（**不能**把半个字符按 CP936 编出去 —— GBK 是变长的，
+ * 截断在多字节序列中间会编出乱码字节；按 `\n` 切天然避开这一格）。
+ *
+ * 纯函数 + 显式出入参：本文件的两条出口（转码、退出码）各有注入面，而「怎么切」这件事
+ * 与它们正交，单独判得动。
+ *
+ * @param {string} carry 上一块没切完的行尾残余（首块传空串）
+ * @param {string} chunk 这一块新到的文本
+ * @returns {{text: string, carry: string}}  `text` 是要立刻发出去的**整行**（含换行符）
+ */
+export function splitStreamChunk(carry, chunk) {
+  const joined = carry + chunk;
+  const lastBreak = joined.lastIndexOf("\n");
+  if (lastBreak === -1) return { text: "", carry: joined };
+  return {
+    text: joined.slice(0, lastBreak + 1),
+    carry: joined.slice(lastBreak + 1),
+  };
+}
+
+/**
  * 这一 token 是**路径**还是**名字**？
  *
  * 判据只影响「解析口说找不到时算不算失败」，而不是「怎么起」：
@@ -474,8 +522,45 @@ export function runWithCp936Exit(
       stdio: ["inherit", "pipe", "pipe"],
       windowsHide: true,
     });
-    /** @type {string[]} */
-    const chunks = [];
+    /* **边到边发**，不是攒到 `close` 再发一次（见 `splitStreamChunk()` 的文件头）：
+     * 攒着的那一版在**分钟级 + 被平台按 stage 超时 kill** 的 stage 上会把整轮日志
+     * 一起带走（`close` 不再来）—— `E2E 关键流程` 那 36 分钟零行就是这么来的。
+     *
+     * `carry` 是**行尾那半截**：按 `\n` 切而不是按块切，是因为一块可能正好截在
+     * 多字节字符中间，按 CP936 编出去就是乱码字节（GBK 变长）。
+     *
+     * `warnedTranscodeFailure` 的作用是**让「转码没做成」那条提示只说一次**：
+     * 它原来是每跑收尾一句，现在成了按行发，每行都重复一遍会把真输出埋掉。 */
+    let carry = "";
+    let warnedTranscodeFailure = false;
+    /**
+     * 发一批**整行**文本：Windows 上过 PowerShell 转码、其余平台原样。
+     *
+     * `ok: false` 时原文照打（转码是外壳、不是判据），退出码不受影响。
+     *
+     * @param {string} text
+     */
+    const flush = (text) => {
+      if (!text) return;
+      if (platform !== "win32") {
+        /* 非 Windows：CP936 这一跳不存在，原样转出（不假装转过了）。 */
+        emit(text);
+        return;
+      }
+      /* 转码成功时**不必再 emit** —— `write()` 已经把 PowerShell 那份 936 字节
+       * 直接接到本进程的 stdout 上了（`stdio: "inherit"`）。这里只在没做成时
+       * 兜底把原文照打一遍。 */
+      const { ok } = write(text, { stdio: "inherit" });
+      if (ok) return;
+      if (!warnedTranscodeFailure) {
+        warnedTranscodeFailure = true;
+        emit(
+          "[cp936-exit] 转码这一步没做成（PowerShell 起不来？）—— 原文照打，" +
+            "日志可能仍是乱码；退出码不受影响\n",
+        );
+      }
+      emit(text);
+    };
     for (const stream of [child.stdout, child.stderr]) {
       /* **显式钉 UTF-8**：`String(buffer)` 走 `buf.toString()`，其默认编码取自
        * `process.stdout` 的 `writableEncoding` —— Windows 上那是**宿主代码页
@@ -484,7 +569,11 @@ export function runWithCp936Exit(
        * 编码存下来（「先解对、再编回」两段里的第一段，`ci-console-encoding.mjs`
        * 钉的是控制台那一半，这里钉的是抓子进程这一半）。 */
       stream?.setEncoding?.("utf8");
-      stream?.on("data", (d) => chunks.push(String(d)));
+      stream?.on("data", (d) => {
+        const split = splitStreamChunk(carry, String(d));
+        carry = split.carry;
+        flush(split.text);
+      });
     }
     child.on("error", (err) => {
       /* 起不来（命令不存在）也是「这条命令的结论」，走同一个复核出口：
@@ -507,24 +596,11 @@ export function runWithCp936Exit(
       settle(127);
     });
     child.on("close", (code) => {
-      const text = chunks.join("");
-      if (platform !== "win32") {
-        /* 非 Windows：CP936 这一跳不存在，原样转出（不假装转过了）。 */
-        emit(text);
-        settle(code ?? 0);
-        return;
-      }
-      /* 转码成功时**不必再 emit** —— `write()` 已经把 PowerShell 那份 936 字节
-       * 直接接到本进程的 stdout 上了（`stdio: "inherit"`）。这里只在没做成时
-       * 兜底把原文照打一遍。 */
-      const { ok } = write(text, { stdio: "inherit" });
-      if (!ok) {
-        emit(
-          "[cp936-exit] 转码这一步没做成（PowerShell 起不来？）—— 原文照打，" +
-            "日志可能仍是乱码；退出码不受影响\n",
-        );
-        emit(text);
-      }
+      /* 行尾那份残余（**没有换行符收尾的最后一个片段**）在这里补发：正常结束时
+       * `close` 一定会来，它是那一行的终点。被 kill 时来不了 —— 但那时前面每一行
+       * 都已经发出去了，这正是流式要买的东西。 */
+      flush(carry);
+      carry = "";
       settle(code ?? 0);
     });
   });

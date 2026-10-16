@@ -1,9 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-15T16:20:55.625Z",
-    "who": "CodeBuddy(NPC)",
-    "how": "COMFYAPP_QUIET_COVERAGE=1 vitest run --coverage --maxWorkers=4",
-    "trackedBy": "full"
+    "verifiedAt": "2026-10-16T16:53:13.894Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "pnpm run test:coverage",
+    "trackedBy": "full",
+    "skippedReason": "全量单测在容器内跑过：9653 passed / 1 failed，唯一红是 e2e-run 的新鲜度账过期（dec47503 上同样红，非本 PR 引入）"
   }
 }

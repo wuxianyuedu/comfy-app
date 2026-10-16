@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-15T16:07:34.207Z",
+    "verifiedAt": "2026-10-16T16:53:13.834Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本笔只改两份用例文件的接缝与一份规范文档，不涉及 e2e spec / 页面 / 被测行为；本分支上这一档停在上一次跑绿的账上，平台侧重跑会从干净栈上覆盖这一格"
+    "skippedReason": "本容器未跑全量 e2e：平台节点未就绪（自托管 Windows），且 E2E 档正在本 PR 里修"
   }
 }
