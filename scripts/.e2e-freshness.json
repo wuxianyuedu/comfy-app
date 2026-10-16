@@ -1,10 +1,9 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-16T16:53:13.834Z",
+    "verifiedAt": "2026-10-16T17:17:05.923Z",
     "who": "cnb.dQh7kaCfAPA",
-    "how": "pnpm test:e2e",
-    "trackedBy": "e2e",
-    "skippedReason": "本容器未跑全量 e2e：平台节点未就绪（自托管 Windows），且 E2E 档正在本 PR 里修"
+    "how": "PNPM_START=1 pnpm test:e2e",
+    "trackedBy": "e2e"
   }
 }

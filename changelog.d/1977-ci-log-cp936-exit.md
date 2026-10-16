@@ -146,26 +146,44 @@
 
   一句话：**注入面能盖住「实现写错了」，盖不住「接错线了」与「只覆盖了一半形状」。**
 
-  ## 三之八、`pnpm start` 与 `output: standalone` 不兼容 —— 前面九处修出来的**真因**
+  ## 三之八、一句**警告**被读成了「拒绝」—— 换入口那一改反而把 E2E 全档弄红
 
-  外壳那几处修完，日志终于有内容了，于是 E2E 那一格第一次把真因说出来：
+  外壳那几处修完，日志终于有内容了，于是 E2E 那一格把它的**第一行**输出说出来了：
 
       [WebServer] ? "next start" does not work with "output: standalone" configuration.
                    Use "node .next/standalone/server.js" instead.
 
-  `next.config.js` 是 `output: "standalone"`，而 `scripts/start.mjs` 一律跑
-  `pnpm exec next start` —— Next 16 对这对组合是**明确拒绝**的。CI 档 webServer
-  用的正是 `pnpm start`，所以 E2E 起不来。
+  当时把它读成「Next 16 对这对组合是**明确拒绝**的」，于是给 `scripts/start.mjs`
+  加了「盘上有 `.next/standalone/server.js` 就走它」的分支。**那是一句 `⚠` 警告，
+  不是拒绝** —— 实测 `next start` 照常起（`✓ Ready in 119ms`）、静态资源 200、
+  `/api/health` 报 `db: "up"`；那句话之后 E2E 的红也不是它（见下一条）。
 
-  这一处与前面几处**性质不同**：它不是 CP936 外壳里的坑，而是**一条从来没跑到过的
-  链**上本来就有的缺陷（E2E 那一档在自托管路径上一直断在更早的 stage）。
-  它的可见性正是前面几处修出来的 —— 日志能读了、解析对了，真因才浮上来。
+  而换到 standalone 入口之后，E2E **几乎全档红**、每条都在 5s 超时 —— 因为
+  **仓库检出里的 standalone 载荷是不完整的**（它只由 `build-desktop.mjs` 组装成
+  可分发的形态）：
 
-  修法：盘上有 `.next/standalone/server.js` 就走它（环境由
-  `buildStandaloneRuntimeEnv()` 整份给，与桌包链同一份），没有就保留
-  `next start` 的身份（让 Next 报它自己那句「先 build」——那正是这台机器该做的事）。
-  判据落在 `tests/standalone-runtime-completeness.test.ts`，而那个文件的头注里
-  早就写着「**没有任何常规门禁会去启动 standalone 服务**」。
+  - `.next/standalone/.next/static` **不存在** ⇒ `/_next/static/chunks/*` 全 404、
+    MIME 是 `text/plain` ⇒ 浏览器拒绝执行 ⇒ **整个前端不 hydrate**，
+    交互类断言全线超时（实测：`打开应用日志面板可看到面板标题` 报「element(s) not found」，
+    而页面 HTML 是好的 —— 那是 SSR 出来了、JS 没跑）；
+  - `server.js` 启动即 `chdir(__dirname)` ⇒ `DATABASE_URL` 的 `./db.sqlite` 落到
+    `.next/standalone/db.sqlite` —— 一个**空库**（实测 0 张表），而 23 张表在检出根
+    （`pnpm db:push` / `dev.mjs` / CI 的建库那一步建的）⇒ `/api/health` 报 `db: "empty"`。
+
+  **这条链上真正要守的是「别把检出当桌包」**：`next start` 是仓库检出里唯一的正确
+  取值；standalone 入口是**桌包链**（`standalone-runtime.mjs`）的事 —— 那边有完整
+  载荷，静态资源与数据锚点也由它自己给。
+
+  `scripts/start.mjs` 已退回 `next start`（并就地写明这段来历），
+  `tests/standalone-runtime-completeness.test.ts` 那一组**反向**钉住：
+  不许出现 `useStandalone` / `[standaloneServer]` / `buildStandaloneRuntimeEnv(`
+  这三样。实测 `CI=1 node scripts/e2e-run.mjs --grep=@critical` ⇒ **73 passed（36.7s）**。
+
+  > 这一处与前九处同源，但方向相反：前面几处都是「结论到不了人手里」，而这一处是
+  > **结论到了、被误读了** —— 一句 `⚠` 与一句 `Error:` 在日志里只差一个符号，
+  > 而按错的那一个改下去，代价是整档 e2e 从「能跑」变成「全红」。
+  > 判据因此钉在**「不许换入口」**上，而不是「换入口之后要补齐产物」——
+  > 后者等于把桌包链的组装搬进检出，那是另一件工程。
 
   ## 三之三、这三条判据的**边界**
 

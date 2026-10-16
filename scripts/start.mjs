@@ -9,8 +9,6 @@
 // 与 `scripts/dev.mjs` 对称：同一套端口解析（scripts/app-port.mjs），
 // 保证「一处配置、两条链路一致」，多份检出并行时也各得其所。
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
 import {
   APP_PORT_ENV_KEY,
   resolveAppPortWithSource,
@@ -23,7 +21,6 @@ import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo
 import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
 import { runStamp } from "./launcher-core/log.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
-import { buildStandaloneRuntimeEnv } from "./launcher-core/standalone-runtime-env.mjs";
 
 const root = resolveRepoRoot();
 
@@ -58,50 +55,35 @@ if (!schema.started) {
   );
 }
 
-/* **构建是 standalone 时不能跑 `next start`**（ISSUE #1977）。
+/* **这里刻意用 `next start`，不换 `.next/standalone/server.js`**（ISSUE #1977 第十一处）。
  *
- * `next.config.js` 里 `output: "standalone"`，而 Next 16 明确拒绝这对组合：
+ * 有过一次改动把它换成 standalone 入口，依据是启动时这句输出：
  *
- *   `Error: "next start" does not work with "output: standalone" configuration.`
- *   `       Use "node .next/standalone/server.js" instead.`
+ *   `"next start" does not work with "output: standalone" configuration.`
  *
- * （这三行是**报错原文**，按 §12.4.6 的「错误原文保留英文」处置，用反引号包住 ——
- * `check-comment-language.cjs` 的启发式只把**反引号外的**英文成句算进来。）
+ * 那是一句 **`⚠` 警告，不是拒绝** —— 实测 `next start` 照常起（`✓ Ready in 119ms`）、
+ * 静态资源 200、`/api/health` 报 `db: "up"`。而换成 standalone 入口之后 E2E
+ * **几乎全档红**，因为**仓库检出里的 standalone 载荷是不完整的**（它只由
+ * `build-desktop.mjs` 组装成可分发的形态）：
  *
- * 这条链此前**从来没跑到过**（E2E 那一档在自托管路径上一直断在更早的 stage），
- * 于是「README 里的 `pnpm start`」与「配置里的 standalone」这对矛盾一直没露出来。
- * 平台侧第一次真跑到 E2E 时，它就是那条红（CI 档 webServer 正是 `pnpm start`）。
+ *   · `.next/standalone/.next/static` **不存在** —— 页面 HTML 照出（SSR），而
+ *     `/_next/static/chunks/*` 全 404、MIME 是 `text/plain`，脚本与样式被浏览器拒绝
+ *     执行 ⇒ **整个前端不 hydrate**，交互类断言全部 5s 超时；
+ *   · `server.js` 启动即 `chdir(__dirname)`，于是 `DATABASE_URL` 的 `./db.sqlite`
+ *     落到 `.next/standalone/db.sqlite` —— 一个**空库**，而 23 张表在检出根
+ *     （`pnpm db:push` / `dev.mjs` / CI 的建库那一步建的）。现场是
+ *     `/api/health` 报 `db: "empty"`。
  *
- * 两个形态的正确性都不是新知识，仓里都已有出处：
- *   · **产物在**（`pnpm build` 之后）→ 起 `.next/standalone/server.js`，环境由
- *     `buildStandaloneRuntimeEnv()` 给（桌包链用的是同一份，见 standalone-runtime.mjs
- *     ——`NODE_ENV` / `PORT` / `HOSTNAME` / `DATABASE_URL` / 那对 OAuth 占位符一项
- *     都不能少，少一项是运行期某条路由 500）；
- *   · **产物不在**（没构建过）→ 保留 `next start` 的身份，让 Next 自己报那句
- *     「先 next build」——那正是**这台机器该做的事**，替它换个错的入口只会把
- *     真因藏起来。
- *
- * 判据只看「盘上有没有 server.js」这一件事：它由 `next build` 决定，不看环境变量，
- * 也就不可能两处说法不一致。 */
-const standaloneServer = path.join(root, ".next", "standalone", "server.js");
-const useStandalone = existsSync(standaloneServer);
-
-// 与 dev.mjs 同一口径：pnpm 的可执行形态由 shell.mjs 判定（规范 §2.1.1）。
-// 写死 `pnpm.cmd` 在 Windows 上会选中 Node 起不来的批处理，`status` 为 null
-// 会被 `?? 0` 读成成功退出，服务静默消失（ISSUE #576）。
-const invocation = useStandalone
-  ? {
-      command: process.execPath,
-      args: [standaloneServer],
-      /* standalone server.js 启动即 `process.chdir(__dirname)`（实测
-       * `.next/standalone/server.js:12`），运行期锚点是**那一层**而不是检出根 ——
-       * 所以 `appRoot` 要给 `.next/standalone`，与桌包链同口径。 */
-      env: buildStandaloneRuntimeEnv({
-        appRoot: path.join(root, ".next", "standalone"),
-        port,
-      }),
-    }
-  : pnpmInvocation(["exec", "next", "start", "-p", String(port)]);
+ * 所以「谁在起这份产物」这件事在**仓库检出**里只有 `next start` 一个正确取值；
+ * standalone 入口是**桌包链**的事（`standalone-runtime.mjs`，那边有完整载荷、
+ * 静态资源与数据锚点都由它自己给）。 */
+const invocation = pnpmInvocation([
+  "exec",
+  "next",
+  "start",
+  "-p",
+  String(port),
+]);
 if (!invocation) {
   process.stderr.write(
     "[start.mjs] ✗ PATH 上找不到可用的 pnpm，无法启动 Next.js server。\n" +
@@ -136,10 +118,7 @@ maybeSpawnExecutorHost({
 echoCommandLine(invocation.command, invocation.args);
 const result = spawnSync(invocation.command, invocation.args, {
   stdio: "inherit",
-  /* standalone 那条路的环境由 `buildStandaloneRuntimeEnv()` 一整套给（少一项
-   * 就是运行期 500，理由见那个函数的头注）；`next start` 那条路只需要 PORT
-   * （它自己读 config 与 .env）。 */
-  env: invocation.env ?? { ...process.env, PORT: String(port) },
+  env: { ...process.env, PORT: String(port) },
 });
 if (result.error) {
   process.stderr.write(
