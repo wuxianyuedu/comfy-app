@@ -45,9 +45,48 @@
   - **不做第二份「有没有乱码」的判据**：抓取端怎么解码本进程看不到，能判的只有
     「字节是 936 编出来的」（`encodeCp936Plan()`）与「退出码转出去了」。
 
-  用例在 `tests/ci-cp936-exit.test.ts`（16 条，含**反算**：Node 的 `TextDecoder("gbk")`
+  用例在 `tests/ci-cp936-exit.test.ts`（22 条，含**反算**：Node 的 `TextDecoder("gbk")`
   解 936 字节回到原文，而同一批字节不转码时正好解出截图里那种 `鈫` 形态）。
-  口径与三轮读数在规范 §13.5.3.5 最后一节。
+  口径、三轮读数、以及「这个外壳自己第一次上平台炸的那两处」在规范 §13.5.3.5 最后两节。
+
+  ## 三之二、第一次上平台：这条路自己先炸了两处（**本地全绿**）
+
+  外壳落地后平台侧 `工具链自证` 直接红，报的是本文件里的一处**只在 Windows 分支里**、
+  因而 Linux 检出一辈子执行不到的语句：
+
+      TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer
+          at Buffer.from (node:buffer:339:12)
+          at spawnSync (node:child_process:916:29)
+
+  `spawnSync` 的 `encoding` 要的是**编码名字符串**（或 `null` = 要 Buffer），
+  `"buffer"` 不是编码名。**被拒之后自然会改成 `Buffer`，同样被拒** —— 它与字符串
+  一样进 `Buffer.isEncoding` 查表，查不到就在 `Buffer.from(input, encoding)` 那里抛。
+  要 Buffer 输出的唯一写法是 `encoding: null`。两处都已在用例里反向复算
+  （`Buffer.isEncoding("buffer")` / `(Buffer)` 均为 false，且两条在真 `spawnSync`
+  上**都**炸 —— 探针必须真的打一行字，`-e "0"` 是炸不出来的）。
+
+  同一次把这条链上**第二个同类隐患**一并收掉：抓子进程输出那一跳写的是
+  `String(d)`（`d` 是 `Buffer`），而 `buf.toString()` 的默认编码取自
+  `process.stdout` 的 `writableEncoding` —— **在 Windows 上那是宿主代码页
+  （CP936）**。转码链是「先解对、再编回」两段，这里断的是**第一段**：子进程的 UTF-8
+  字节在**进 PowerShell 之前**就已经被解错，后面按 936 编回去只是把乱码换个编码存下来。
+  Linux 的 `process.stdout` 是 UTF-8，**这个 bug 在本机永远不会显形**，所以现在显式
+  `setEncoding("utf8")`，判据钉在「两条流各以 `utf8` 钉过一次」这个形状上。
+
+  第三处是**本地就能踩到、但只在某种调用形态下踩到**的：`runWithCp936Exit` 的
+  production 解析口 `resolve` 的默认值是 `undefined`，靠 `?? commandInvocation`
+  回退；而 Promise executor 的形参**也叫 `resolve`**。一旦取默认值那一句落进
+  executor 里，它就是**恒真的 Promise resolve 函数**，回退整段消失、
+  `spawn(undefined, …)` 当场抛。现在走模块级别名 `resolveCommandInvocation`，
+  并校验解析口交出的形状（报错点不再离真因一整层）。
+
+  ## 三之三、这三条判据的**边界**
+
+  · **判不到**「平台侧读出来可不可读」—— 解码在本进程之外；
+  · **判得到**的因此是「字节对不对」与「编排对不对」，两者都靠**形状 + 真跑一次**
+    落地：`String(d)` / `encoding: "buffer"` 这两处在 Linux 上执行不到，所以
+    `writeCp936` 开了第三个注入面 `spawnImpl`（前两个是 `platform` / `run`），
+    让「真实现起的是什么、传了什么值」在本地就能判；
 
   ## 四、顺带修掉一条**已空转的判据**（它的绿不是「判过了」）
 

@@ -2154,6 +2154,44 @@ UTF-8 **解对**，那正是「以 CP936 出口」这一步的前提 —— 不�
 接上 `unwrapCp936()`：不剥外壳，它们抓到的就是**外壳自己**（它当然在盘上），判据从
 「接线对不对」退化成「外壳在不在」。
 
+###### 这个外壳第一次上平台，自己先炸了两处（**本地全绿**，ISSUE #1977 后续）
+
+落地后平台侧 `工具链自证` 直接红，报的是 `ci-cp936-exit.mjs` 里的一行 —— 而它在本地
+**一辈子执行不到**：
+
+    TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer
+        at Buffer.from (node:buffer:339:12)
+        at spawnSync (node:child_process:916:29)
+        at scripts/ci-cp936-exit.mjs:121
+
+`spawnSync` 的 `encoding` 收的是**编码名字符串**（或 `null`，表示 stdout/stderr 给
+`Buffer`），`"buffer"` **不是**编码名。这条错法有个连体的第二形态：被拒之后自然会改成
+`Buffer` —— **同样被拒**（两者都进 `Buffer.isEncoding` 查表，查不到就在
+`Buffer.from(input, encoding)` 那里抛）。**要 Buffer 输出的唯一写法是 `encoding: null`。**
+之所以本地判不到，是因为这一句在 `writeCp936` 的 Windows 分支里，而它在非 Windows
+**直接 return**；而且它只在子进程**有输出**时才走到 `Buffer.from`（拿 `-e "0"` 当探针
+是炸不出来的 —— 这一点让「写个本地探针试试」也不成立）。
+
+同批收掉这条链上**第二个同类隐患**：抓子进程输出那一跳写的是 `String(d)`（`d` 是
+`Buffer`），而 `buf.toString()` 的默认编码取自 `process.stdout` 的 `writableEncoding` ——
+**在 Windows 上那是宿主代码页（CP936）**。转码链是「先解对、再编回」两段，这里断的是
+**第一段**：子进程的 UTF-8 字节在**进 PowerShell 之前**就已经被解错，后面按 936 编回去
+只是把乱码换个编码存下来（即上面第 1 条那个顺序，前半段自己先塌了）。Linux 的
+`process.stdout` 是 UTF-8，**这个 bug 在本机永远不会显形**。
+
+> 两条边界因此要写清：**「本地绿」对这条链不是证据** —— 它跑在 Windows 上，
+> 而本仓的 Linux 检出（含 NPC 工作区、自托管节点的开发壳）走的是另一条分支。
+> 判据只能靠**形状**：`writeCp936` 因此开了第三个注入面 `spawnImpl`（前两个是
+> `platform` / `run`），让「真实现起的是什么、传了什么值」在本地就能判；
+> 抓输出那一跳则判「两条流各以 `utf8` 钉过一次」。
+
+第三处**本地就能踩到、但只在某种调用形态下踩到**：`runWithCp936Exit` production 解析口
+`resolve` 的默认值是 `undefined`、靠 `?? commandInvocation` 回退，而 Promise executor 的
+形参**也叫 `resolve`**。一旦取默认值那一句落进 executor 里，它就是**恒真的 Promise
+resolve 函数**，回退整段消失、`spawn(undefined, …)` 当场抛（离真因一整层）。现在走
+模块级别名 `resolveCommandInvocation`，并校验解析口交出的形状。**这三条都已反向复算**
+（把任一处改回去，对应用例当场点名）。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的

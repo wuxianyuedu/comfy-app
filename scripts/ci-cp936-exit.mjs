@@ -47,6 +47,20 @@
  *     （日志继续乱，但那是对的现象），退出码仍是子进程的。
  *   · **不做第二份「有没有乱码」的判据**：抓取端怎么解码本进程看不到，能判的只有
  *     「字节是 936 编出来的」这一件事 —— 那由 `encodeCp936Plan()` 的可测面判。
+ *
+ * ## 这一层自己踩过的两个坑（都在 Windows 那条路上，Linux 检出判不到）
+ *
+ *   · **抓输出那一跳没钉编码**：`"data"` 事件的入参是 `Buffer`，`String(d)` 走的是
+ *     「按 `process.stdout` 的编码解字节」那条路 —— 在 Windows 上那是**宿主代码页
+ *     （CP936）**，于是子进程的 UTF-8 字节在进 PowerShell 之前就已经被解错一遍，
+ *     再按 936 编回去只是把乱码换个编码存下来（转码链条在**第一跳**就断了）。
+ *     现在显式 `setEncoding("utf8")`（与 `ci-console-encoding.mjs` 同一条口径）。
+ *   · **`resolve` 注入面被自己的 Promise executor 遮蔽**：executor 的形参恰好叫
+ *     `resolve`，而 production 的 `resolve` 是 `undefined` 要回退到
+ *     `commandInvocation` —— `undefined ?? commandInvocation` 本该走后者，可一旦
+ *     有人把这一句挪进 executor 里，`resolve` 就变成 **Promise 的 resolve 函数**
+ *     （一个恒真的值），解析直接消失、`invocation.command` 是 `undefined`，
+ *     `spawn(undefined, …)` 当场 `ERR_INVALID_ARG_TYPE`。模块级取好别名再进 Promise。
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -63,6 +77,15 @@ import { fileURLToPath } from "node:url";
  * 解析器不替你补扩展名（ISSUE #1961 实测的 `ERR_MODULE_NOT_FOUND` 就是这个形态的
  * 反面教材），口径见 `src/lib/process/platform.ts` 的文件头注。 */
 import { commandInvocation } from "../src/lib/process/executable-resolve.ts";
+
+/* 这个别名**不是**风格：`runWithCp936Exit` 的 Promise executor 有个形参也叫 `resolve`
+ * （那是 Promise 的 settle 函数），production 的注入面默认值是 `undefined`、靠
+ * `??` 回退到 `commandInvocation`。一旦取默认值的那一句落进 executor 里，`resolve`
+ * 就会被那个**恒真的 Promise resolve 函数**顶掉 —— `undefined ?? x` 本来是回退，
+ * 换成「恒真有值」之后解析整段消失，`spawn(undefined, …)` 直接抛。
+ * 模块级别名让这条回退不依赖「那两句写在 executor 外面」（`electron-package.mjs`
+ * 用同一处置避开同名遮蔽）。 */
+const resolveCommandInvocation = commandInvocation;
 
 /** 中文 Windows 的 ANSI 代码页 —— 平台那一跳读的就是它。 */
 export const CP936_CODE_PAGE = 936;
@@ -107,18 +130,36 @@ export function encodeCp936Plan(codePage = CP936_CODE_PAGE) {
  * 失败时**不抛**：返回 `{ok:false}`，由调用方决定「原文照打」——转码是外壳，
  * 它不是判据，把流水线弄红于它无关。
  *
+ * `spawnImpl` 是**第三**个注入面，专为一件在 Linux 上够不到的事存在：默认实现
+ * 里那句 `spawnSync` 只会在 Windows 分支跑到，而平台侧第一次红正是它（见下）。
+ * 有了它，这条链的**真实现**（起什么、`encoding` 是什么）在本地就能判。
+ *
  * @param {string} text UTF-8 文本（子进程的原始输出）
  * @param {{platform?: NodeJS.Platform,
- *          run?: (cmd: string, args: string[], input: string) => {status: number|null}}} [ports]
+ *          run?: (cmd: string, args: string[], input: string) => {status: number|null},
+ *          spawnImpl?: typeof spawnSync}} [ports]
  * @returns {{ok: boolean}}
  */
-export function writeCp936(text, { platform = process.platform, run } = {}) {
+export function writeCp936(
+  text,
+  { platform = process.platform, run, spawnImpl = spawnSync } = {},
+) {
   if (platform !== "win32") return { ok: false };
   const { script } = encodeCp936Plan();
   const exec =
     run ??
     ((cmd, args, input) => {
-      const r = spawnSync(cmd, args, { input, encoding: "buffer" });
+      /* `encoding` 要么是**编码名字符串**（如 `"utf8"`）、要么是 `null` 表示
+       * 「stdout/stderr 给 Buffer」。`"buffer"` 与 `Buffer` **两者都不行** ——
+       * 它们都会被当编码名去 `Buffer.isEncoding` 查表，而查不到时 `spawnSync`
+       * 在 `Buffer.from(input, encoding)` 那里当场抛 `ERR_UNKNOWN_ENCODING`。
+       * 这一句本是本文件第一次上平台唯一真炸的那一处（`工具链自证` stage 直接红），
+       * 而本地全绿：`writeCp936` 在非 Windows **直接 return**，那条语句在 Linux
+       * 检出一辈子都执行不到。
+       *
+       * 要的是 Buffer 输出，所以写 `null`（等价于省掉这个键）—— 不是 `Buffer`。
+       * 判据见 `tests/ci-cp936-exit.test.ts` 的 `spawnImpl` 那一组。 */
+      const r = spawnImpl(cmd, args, { input, encoding: null });
       return { status: r.status };
     });
   const r = exec(
@@ -208,7 +249,17 @@ export function runWithCp936Exit(
   /* 解析成「这台机器上真被执行的那条命令」——判据是**仓里那一份**（`resolve` 是它的
    * 注入面）。解析不出来时退回原样：`commandInvocation` 对探不通的候选正是这么做的
    * （`{command: candidate, prefixArgs: []}`），所以这里也只是「把结论抄一遍」。 */
-  const invocation = (resolve ?? commandInvocation)(command);
+  const invocation = (resolve ?? resolveCommandInvocation)(command);
+  /* 解析口必须交出 `{command, prefixArgs}`：`undefined` 悄悄流下去只会变成
+   * `spawn(undefined, …)` 的 `ERR_INVALID_ARG_TYPE`（报错点离真因一整层）。
+   * 生产路径另有护栏 —— `spawn` 传函数会抛，于是「拿 Promise resolve 当注入面」
+   * 这条错法在**真跑一次**时就红，而不是等到 Windows 上才炸（见对应用例）。 */
+  if (!invocation?.command || !Array.isArray(invocation.prefixArgs)) {
+    throw new TypeError(
+      "[cp936-exit] 命令解析口没有交出 {command, prefixArgs} —— " +
+        "它该是 commandInvocation 或一个同形状的注入面",
+    );
+  }
   const realCommand = invocation.command;
   const realArgs = [...invocation.prefixArgs, ...args];
   return new Promise((resolve) => {
@@ -222,6 +273,13 @@ export function runWithCp936Exit(
     /** @type {string[]} */
     const chunks = [];
     for (const stream of [child.stdout, child.stderr]) {
+      /* **显式钉 UTF-8**：`String(buffer)` 走 `buf.toString()`，其默认编码取自
+       * `process.stdout` 的 `writableEncoding` —— Windows 上那是**宿主代码页
+       * （CP936）**。看着等价，实则这条链的**第一跳**就在这里断：子进程的 UTF-8
+       * 字节被按 936 解成乱码串，后面拿 PowerShell 再按 936 编回去只是把乱码换个
+       * 编码存下来（「先解对、再编回」两段里的第一段，`ci-console-encoding.mjs`
+       * 钉的是控制台那一半，这里钉的是抓子进程这一半）。 */
+      stream?.setEncoding?.("utf8");
       stream?.on("data", (d) => chunks.push(String(d)));
     }
     child.on("error", () => {

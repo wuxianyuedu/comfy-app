@@ -20,7 +20,24 @@
  *     那句话的可行基础）；
  *   · **退出码转出去了**（外壳吞退出码是本仓踩过的坑：`ci-toolchain-selfcheck.mjs`
  *     的 `main()` 返回值被丢，那两步从来红不了）。
+ *
+ * ## 「Linux 检出上判不到」不是「不用判」—— 两条靠**形状**判
+ *
+ * ISSUE #1977 的第一次上平台在这条链上连红两次、而本地全绿，两处都是
+ * 「只有 Windows 会走到、Linux 一次都到不了」的语句：
+ *
+ *   · `spawnSync(…, {encoding: "buffer"})` —— `encoding` 要的是**值 `Buffer`**；
+ *     字符串 `"buffer"` 是 `ERR_UNKNOWN_ENCODING`。它在 `writeCp936` 的 Windows 分支里，
+ *     而那一句在 Linux 上**直接 return 之前就出不去**（本文件在 Linux 跑不了真 PS）。
+ *     ⇒ 这里判**注入面收到的那个 `encoding` 值**（`runImpl` 是它的注入面）。
+ *   · 抓输出那一跳 `String(buffer)` —— 在 Windows 上按**宿主代码页（CP936）**解，
+ *     于是子进程的 UTF-8 在进 PowerShell **之前**就已经乱了一遍，后面的转码只是
+ *     把乱码换个编码存下来。Linux 的 `process.stdout` 是 UTF-8，这个 bug 在本机
+ *     **永远不会显形**。⇒ 这里判「有显式 `setEncoding("utf8")` 那一跳」这个形状
+ *     （能在地板上真起子进程的那条路同样判，见「真起一条子进程」那一组）。
  */
+import { spawnSync } from "node:child_process";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -106,6 +123,76 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
     });
     expect(r.ok).toBe(false);
   });
+
+  it("`encoding` 要的是**编码名或 `null`** —— `\"buffer\"` 与 `Buffer` **两者都会被拒**", () => {
+    /* 这条判据的根据是本仓第一次上平台的现场（`工具链自证` 直接红），报错原文：
+     *
+     *   `TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer`
+     *   `    at Buffer.from (node:buffer:339:12)`
+     *   `    at spawnSync (node:child_process:916:29)`
+     *   `    at scripts/ci-cp936-exit.mjs:121`
+     *
+     * （这几行按判据 §12.4.6 的「错误原文保留英文」处置，用反引号包住 ——
+     * `check-comment-language.cjs` 的启发式只把**反引号外的**英文成句算进来。）
+     *
+     * 这两笔是**同一个误解的两种写法**：想「拿到 Buffer」，于是写 `"buffer"`；
+     * 被拒之后自然会改成 `Buffer` —— **同样被拒**。这个位置只认
+     * 「编码名字符串」或 `null`（= 给我 Buffer），不认 `Buffer` 这个构造器。
+     * 两种错法都是**运行时**才炸（`spawnSync` 拿到 `input` 才走
+     * `Buffer.from(input, encoding)`），所以判据只能在「值传下去」这一层设。 */
+    /* 两种写法都不是编码名 —— 查表就是查不到。 */
+    expect(Buffer.isEncoding("buffer")).toBe(false);
+    expect(Buffer.isEncoding(Buffer as never)).toBe(false);
+    /* 而且**两条都在真 `spawnSync` 上炸**（子进程有输出时才走 `Buffer.from`，
+     * 所以探针必须真的打一行字 —— 写 `-e "0"` 是炸不出来的）。 */
+    for (const bad of ["buffer", Buffer]) {
+      expect(() =>
+        spawnSync(
+          process.execPath,
+          ["-e", 'process.stdout.write("hi")'],
+          { input: "x", encoding: bad as never },
+        ),
+      ).toThrow(/ERR_UNKNOWN_ENCODING|Unknown encoding/);
+    }
+  });
+
+  it("默认实现把 `encoding` 传成 `null`（要 Buffer 输出的唯一正确写法）", () => {
+    /* 判**注入面收到的那个值本身** —— 不需要 Windows：这一句在 Linux 检出
+     * 一辈子都执行不到（`writeCp936` 非 Windows 直接 return），而它正是平台侧
+     * 那次红的现场。`spawnImpl` 就是为这件在本地够不到的事开的第三个注入面。 */
+    const calls: Array<{ cmd: string; encoding: unknown; input: unknown }> = [];
+    writeCp936("中文一二三", {
+      platform: "win32",
+      spawnImpl: ((cmd: string, _args: string[], opts: never) => {
+        const o = opts as { encoding: unknown; input: unknown };
+        calls.push({ cmd, encoding: o.encoding, input: o.input });
+        return { status: 0 };
+      }) as never,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.cmd).toBe("powershell");
+    expect(calls[0]?.encoding).toBeNull();
+    /* 文本走 `input`（stdin），不走命令行 —— 与 `runImpl` 那一组同一条口径。 */
+    expect(calls[0]?.input).toBe("中文一二三");
+  });
+
+  it("这一句真的能跑：**真起一条子进程**，`null` 那个值确实产出 Buffer 且字节是 UTF-8", () => {
+    /* 上一条判「传了什么」，这条判「传的那个值真的可用」—— 拿真实 `spawnSync`
+     * 起一条本机一定有的命令（`process.execPath`），中文输入原样回来。
+     * 这是本条用例组**唯一**在 Linux 上真碰到 `spawnSync` 的地方。 */
+    const probe = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        "let b='';process.stdin.setEncoding('utf8');" +
+          "process.stdin.on('data',(d)=>b+=d).on('end',()=>process.stdout.write(b))",
+      ],
+      { input: "中文一二三", encoding: null },
+    );
+    expect(probe.status).toBe(0);
+    expect(Buffer.isBuffer(probe.stdout)).toBe(true);
+    expect(probe.stdout.toString("utf8")).toBe("中文一二三");
+  });
 });
 
 describe("CP936 出口：参数解析（`--` 是分界，不是可选）", () => {
@@ -153,6 +240,49 @@ describe("CP936 出口：编排与退出码", () => {
       emitClose: () => handlers.close?.(code),
     };
   };
+
+  it("抓子进程输出的那一跳**显式钉 `utf8`**（Linux 上永远看不见的那个 bug）", async () => {
+    /* `String(buffer)` 走 `buf.toString()`，默认编码取自 `process.stdout` 的
+     * `writableEncoding` —— 在 Windows 上那是**宿主代码页（CP936）**。于是子进程的
+     * UTF-8 字节在**进 PowerShell 之前**就被解错一遍，再按 936 编回去只是把乱码换个
+     * 编码存下来：转码链「先解对、再编回」两段，第一段在这里断。
+     *
+     * Linux 的 `process.stdout` 是 UTF-8，所以这个 bug 在本机**永远不会显形** ——
+     * 判据只能落在「这一跳有没有被显式钉住」这个形状上：真 `spawn` 出来的流有
+     * `setEncoding`，判它被以 `"utf8"` 调过（`ci-console-encoding.mjs` 钉的是
+     * 控制台那一半，这里钉的是抓子进程这一半）。 */
+    const pinned: string[] = [];
+    const mkStream = (out: string) => ({
+      setEncoding(enc: string) {
+        pinned.push(enc);
+        return this;
+      },
+      on(ev: string, fn: (d: unknown) => void) {
+        if (ev === "data") fn(out);
+        return this;
+      },
+    });
+    const handlers: Record<string, (arg: unknown) => void> = {};
+    const child = {
+      stdout: mkStream("中文一二三\n"),
+      stderr: mkStream(""),
+      on: (ev: string, fn: (arg: unknown) => void) => {
+        handlers[ev] = fn;
+        return undefined;
+      },
+    };
+    await runWithCp936Exit(["--", "echo"], {
+      platform: "linux",
+      spawnProc: (() => {
+        queueMicrotask(() => handlers.close?.(0));
+        return child;
+      }) as never,
+      out: () => undefined,
+    });
+    /* **两条流各钉一次**，值必须是 `utf8`：漏掉任何一条，那一半的输出就按宿主
+     * 代码页解（stdout / stderr 合并抓，所以两条都在这条链上）。 */
+    expect(pinned).toEqual(["utf8", "utf8"]);
+  });
 
   it("**退出码原样转出去** —— 外壳吞掉它等于把那条命令的结论一起吞掉", async () => {
     const child = fakeChild("ok\n", 3);
