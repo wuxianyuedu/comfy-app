@@ -229,21 +229,48 @@ export function readTextFile(file) {
  */
 export function stageBlockIn(text, name) {
   const lines = String(text ?? "").split("\n");
+  /* **活的 stage 优先；没有就看它是不是被注释掉了**（`COMFYAPP_CI_DISABLED_GATES`
+   * 的停用形态）。停用不等于删除：那一项的 `env:` 仍是配置里一条**真的事实**
+   * （人改的就是那一行），所以「这一步会拿到哪个下载根」在停用期间同样要答得出。
+   * ⚠️ 这与 `tests/no-platform-ci-config.test.ts` 的 `stageBlock()` **同一口径** ——
+   * 那份 `.ts` 侧的停用读取在 `commentedStageBlock()`（下面这一支是它的对等物）。 */
+  const live = /^ {2}-\s+name:\s*(\S.*?)\s*$/;
+  const commented = /^#\s+-\s+name:\s*(\S.*?)\s*$/;
   let start = -1;
+  /** @type {(l: string) => string} */
+  let strip = (l) => l;
   for (let i = 0; i < lines.length; i += 1) {
-    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
+    const raw = lines[i] ?? "";
+    const item = live.exec(raw);
     if (item?.[1] === name) {
       start = i;
       break;
     }
   }
+  if (start < 0) {
+    for (let i = 0; i < lines.length; i += 1) {
+      const item = commented.exec(lines[i] ?? "");
+      if (item?.[1] === name) {
+        start = i;
+        strip = (l) => l.replace(/^#\s?/, "");
+        break;
+      }
+    }
+  }
   if (start < 0) return null;
-  const out = [lines[start] ?? ""];
+  const out = [strip(lines[start] ?? "")];
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
-    /* 下一个同级 stage 项 / 更浅的键都算收尾（空行不算 —— 配置里正文之间有空行）。 */
-    if (/^ {2}-\s+name:/.test(raw) || /^\S/.test(raw)) break;
-    out.push(raw);
+    /* 下一个同级 stage 项（活的或注释态）/ 回到**未注释**的更浅键都算收尾
+     * （空行不算 —— 配置里正文之间有空行）。⚠️ 判据不能写成「`^\S` 就收尾」：
+     * 注释块里每一行都以 `#` 开头，那也是 `\S`。 */
+    if (
+      live.test(raw) ||
+      commented.test(raw) ||
+      (/^\S/.test(raw) && !raw.startsWith("#"))
+    )
+      break;
+    out.push(strip(raw));
   }
   return out.join("\n");
 }
@@ -263,8 +290,10 @@ export function stageBlockIn(text, name) {
 export function stageEnvValue(text, stage, key) {
   const block = stageBlockIn(text, stage);
   if (block === null) return null;
+  /* `\s*` 而不是 `\s+`：**停用形态**里那一项的缩进已被压平（注释块按第 0 列读），
+   * 键因此可能顶格出现。匹配面仍限在这一项自己的块内，不会串到别的 stage。 */
   const re = new RegExp(
-    `^\\s+${key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}:\\s*(.+?)\\s*$`,
+    `^\\s*${key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}:\\s*(.+?)\\s*$`,
     "m",
   );
   const m = re.exec(block);

@@ -43,6 +43,7 @@ import {
   stageEnvValue,
 } from "../scripts/ci-env-probe.mjs";
 import {
+  commentedStageBlock,
   ps7OnlySyntaxIn as ps7OnlySyntaxInGate,
   registeredGateOrder,
   stageBlock as stageBlockGate,
@@ -588,6 +589,21 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     /* 两边都得**真的命中**（不然这条用例是空转）。 */
     expect(stageBlockIn(YML, "浏览器安装")).not.toBeNull();
     expect(stageBlockIn(YML, "不存在的那一步")).toBeNull();
+  });
+
+  it("**停用形态**下两份解析也同一份答案（现役 `.cnb.yml` 上对账）", () => {
+    /* `stageBlockIn()` 从 ISSUE #1966 起**活的没有就看注释态** —— 那一支是新加的，
+     * 与 `.ts` 侧 `commentedStageBlock()` 必须同口径（与上一条同源：两份文本副本 +
+     * 一条对账判据）。⚠️ 拿**现役配置**对账而不是夹具：这一步真正要回答的是
+     * 「现役 `.cnb.yml` 里那一项长什么样」，而它此刻正处在停用形态上。 */
+    const live = readPipelineConfig(ROOT) ?? "";
+    for (const name of ["浏览器安装", "E2E 关键流程"]) {
+      expect(
+        stageBlockIn(live, name),
+        `停用形态下两份解析漂了（${name}）—— 「配置里那个根」会量错对象`,
+      ).toBe(commentedStageBlock(live, name));
+      expect(stageBlockIn(live, name), `${name} 解析不出内容`).toBeTruthy();
+    }
   });
 
   it("`env` 的取值去引号；找不到的键 / stage 回 `null`（那是「不知道」，不判红）", () => {
