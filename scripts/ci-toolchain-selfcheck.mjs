@@ -62,6 +62,8 @@ import {
  * 由这里传进去 —— 「怎么探 pnpm」那份判据本来就在本文件里（§12.18：不造第二轮子）。 */
 import {
   browserExecutableExists,
+  httpDownloadProbe,
+  pickPlaywrightRoots,
   playwrightBrowsersRoot,
   playwrightDownloadRoots,
   playwrightInstallHints,
@@ -612,8 +614,20 @@ export function main() {
   if (process.argv.includes("--playwright-only")) {
     /* 两件注入面是本文件本来就有的判据与起进程那一步 —— 那份模块自己不 import
      * 仓库内任何东西（它的头注写着为什么）。 `--playwright-only` 那一步没有分节
-     * 标题以外的输出需要，`section` 照常传下去。 */
-    return playwrightOnlyImpl({ find: findPnpm, exec: run, section });
+     * 标题以外的输出需要，`section` 照常传下去。
+     *
+     * ⚠️ **`probe` 与 `pickRoots` 一个都不能省**（ISSUE #1959 第六跑）：这两件正对着
+     * 「配着的下载根这台节点到不了、而日志里早就量到别的根是通的」那条缝 ——
+     * 装那一步要**先量一次再决定试哪个根**。缺省值在 `playwrightOnly` 里是活的
+     * （它自己会把 `probe` 绑进 `pickRoots`），但这两行**必须显式**写出来：
+     * 让平台侧那条路上「量一次」这件事在源码里看得见，而不是靠缺省值猜。 */
+    return playwrightOnlyImpl({
+      find: findPnpm,
+      exec: run,
+      section,
+      probe: httpDownloadProbe,
+      pickRoots: pickPlaywrightRoots,
+    });
   }
 
   section("OS");

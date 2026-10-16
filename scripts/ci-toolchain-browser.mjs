@@ -46,14 +46,32 @@ import path from "node:path";
  * （`环境前提`）本来就只用它。这里转出同一批名字，旧调用点不必跟着改。 */
 import {
   httpDownloadProbe,
+  pickPlaywrightRoots,
   playwrightReachability,
 } from "./ci-toolchain-browser-reach.mjs";
+/* 「自己把包拉下来」那一层（分片 + 续传），见它的文件头：它不是 `playwright install`
+ * 的替代，是它**前面**的一次尝试 —— 它成功，那一步就变成 no-op。 */
+import { fetchPlaywrightBrowser } from "./ci-toolchain-browser-fetch.mjs";
+/* 「自取」那一步的**编排**（取哪个地址 / 落到哪个目录 / 要不要续传）单独一份
+ * —— 理由见它的文件头（本文件是 900 行硬闸守着的，那一段接进来就超了）。 */
+import { seedBrowserOnOwn } from "./ci-toolchain-browser-seed.mjs";
+
+export {
+  FETCH_CHUNK_BYTES,
+  FETCH_CHUNK_TIMEOUT_MS,
+  FETCH_MAX_CHUNKS,
+  FETCH_MIN_CHUNK_BYTES,
+  fetchPlaywrightBrowser,
+  fetchUrlResumable,
+} from "./ci-toolchain-browser-fetch.mjs";
 
 export {
   PLAYWRIGHT_FALLBACK_BROWSER_VERSION,
   PLAYWRIGHT_HOST_CANDIDATES,
   httpDownloadProbe,
   isReachableVerdict,
+  pickPlaywrightRoots,
+  probeGrade,
   playwrightProbeUrl,
   playwrightReachability,
   playwrightReachabilityVerdicts,
@@ -78,13 +96,19 @@ export {
  *   exec?: (cmd: string, args: string[], downloadHost?: string) => {ok: boolean, out: string},
  *   env?: Record<string, string | undefined>,
  *   probe?: (url: string) => string,
+ *   pickRoots?: typeof pickPlaywrightRoots,
+ *   seed?: typeof fetchPlaywrightBrowser,
  *   log?: (line: string) => void,
  *   logError?: (line: string) => void,
  *   section?: (title: string) => void,
  * }} [ports]
  *   `exec` 的第三个参数是**这一次要用的下载根**（`PLAYWRIGHT_DOWNLOAD_HOST`），
  *   只有装浏览器那一步会带 —— 调用方要把它转交到子进程的 env 上。
- *   `probe` 只在失败分支里用（`playwrightReachability`），判据里换掉它就不出网。
+ *   `probe` 有两个消费点（都在「量一次根」这条路上）：装之前 `pickRoots` 用它挑根、
+ *   装失败之后 `playwrightReachability` 用它出取证读数。判据里换掉它就不出网。
+ *   `pickRoots` 是「先量一次再决定试哪个根」那一层（见 {@link pickPlaywrightRoots}），
+ *   同样给注入面。⚠️ 缺省时本函数自己把 `probe` 绑进去（见下面那行注释）——
+ *   少了这一绑，「先量一次再挑根」那条路会**永远不走**而看起来一切正常。
  * @returns {number} 退出码
  */
 export function playwrightOnly({
@@ -92,6 +116,8 @@ export function playwrightOnly({
   exec = required("exec"),
   env = process.env,
   probe = httpDownloadProbe,
+  pickRoots = undefined,
+  seed = fetchPlaywrightBrowser,
   log = console.log,
   logError = console.error,
   section = noopSection,
@@ -121,7 +147,54 @@ export function playwrightOnly({
       `下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：${env.PLAYWRIGHT_DOWNLOAD_HOST}`,
     );
   }
-  const install = runPlaywrightInstall({ find, exec, env });
+  /* ⚠️ `pickRoots` 缺省是**活的**：把 `probe` 绑进去（`pickPlaywrightRoots` 自己的
+   * `probe` 缺省是「一个都不量」，那是给判据用的安静档 —— 见它的头注）。少了这一行，
+   * 「先量一次再挑根」那条路**永远不会走**，而装这一步看起来一切正常。 */
+  /* ── **先试一次「自己拉」**（ISSUE #1959 第七跑）──
+   *
+   * 上面那一支只在**那一件齐了**时提前返回；不齐时此前直接交给 `playwright install`，
+   * 而它这条路上有一个结构性的短板：**它的重试没有续传**（`browserFetcher.ts` 每次
+   * 失败都 `unlink(zipPath)` + `removeFolders(browserDirectory)`，从第 0 字节重来）。
+   * 于是一条「能握上手、能吐前几 KB、然后在大 body 上停住」的链路 —— 那正是这台节点
+   * 七跑以来的形态 —— 无论重试几次、换几个根，都到不了 114 MiB 的尽头。
+   *
+   * 所以在这里多给一条路：**分片取字节、每片一次独立请求、已落盘的不重下**
+   * （`fetchUrlResumable()`）。它成功就等于把那一件装好了（还写好上游那份
+   * `INSTALLATION_COMPLETE` 标记），`playwright install` 随即变成 no-op。
+   * 它失败则一个字都不改，原样交给 Playwright 的老路 —— 放行判据仍是下面那条
+   * 「装完复验」，不是这里多出来的第二个判据。
+   *
+   * ⚠️ **不许因为它失败就把这一步判红**：它是一次**尝试**，不是判据。老路仍然
+   * 有机会成功（比如落点里其实已经有了、或 Playwright 那个根恰好是通的）。 */
+  const seedRoot = playwrightBrowsersRoot({ env });
+  const seeded = seedBrowserOnOwn({ seed, env, root: seedRoot, log });
+  log(
+    seeded.ok
+      ? `自取成功：${seeded.out}`
+      : `自取没成（交给 playwright install 的老路）：${seeded.out}`,
+  );
+
+  const install = runPlaywrightInstall({
+    find,
+    exec,
+    env,
+    probe,
+    pickRoots:
+      pickRoots ?? ((ports = {}) => pickPlaywrightRoots({ probe, ...ports })),
+  });
+  /* 换根这件事要**留痕**：`env` 里配着的那个与真用上的那个不是同一个时，人必须
+   * 在日志里看得到（否则下一次核对配置与日志时会以为配置被吃掉了）。 */
+  if (install.probes?.length) {
+    log("---- 下载根（装之前现场量的）----");
+    for (const line of install.probes) log(line);
+    log("---------------------------------");
+  }
+  if (install.host && env.PLAYWRIGHT_DOWNLOAD_HOST !== install.host) {
+    log(
+      `⚠️ 配着的根（${env.PLAYWRIGHT_DOWNLOAD_HOST ?? "(未设)"}）这一趟量不到，` +
+        `改用 ${install.host} —— 这只是「先试哪个」，配置本身没被改。`,
+    );
+  }
   log(install.out || "(playwright install 没有输出)");
   if (!install.ok) {
     logError(
@@ -175,6 +248,24 @@ export function playwrightOnly({
   log(`复验：${present.out}`);
   return 0;
 }
+
+/**
+ * 落点里那一版的目录名（`chromium_headless_shell-<revision>`）。
+ *
+ * ⚠️ **目录名里用的是 `revision`，不是 `browserVersion`**：前者是 `1243`、后者是
+ * `153.0.8010.12`（CDN 路径里用的才是后者）。拿错一个号的后果不是「报错」，
+ * 而是**两个方向都像成功**：包解到一个没人会看的目录，Playwright 随即
+ * `Removing unused browser` 把整包重下一遍 —— 自取白做、日志里却各说各的成功。
+ * 两个号都由 `readPlaywrightBrowserTarget()` 一处读出来（**不抄第二遍**）。
+ *
+ * 形状逐字照抄上游 `browserDirectoryToMarkerFilePath()` 那一半：
+ * `name.replace(/-/g, "_") + "-" + revision`（`chromium-headless-shell` →
+ * `chromium_headless_shell`）。
+ *
+ * @param {{revision: string} | null} target 读不到 `browsers.json` 时给 `null`
+ * @param {string} [fallbackRevision] 缺省那一档（探测那条路同一个）
+ * @returns {string}
+ */
 
 /**
  * 没接线就当场说清楚 —— 比让调用方拿到一个 `undefined is not a function` 强。
@@ -270,7 +361,8 @@ export function playwrightInstallHints(out, facts = {}) {
   /* 「试过的根全是 Playwright 内置那一族」——现场那次正是它：5 条
    * `Downloading … from cdn.playwright.dev` 之后 `Download failure, code=1`。
    * 判的是**试过的根**（摘不到时退回「配着的那个根」，再退回「没有」）。 */
-  const triedForFamily = triedRoots.length > 0 ? triedRoots : host ? [host] : [];
+  const triedForFamily =
+    triedRoots.length > 0 ? triedRoots : host ? [host] : [];
   const sameFamily =
     triedForFamily.length > 0 && triedForFamily.every(isPlaywrightFamilyRoot);
   /* 配了一个根、而它正是被反复试的那一个 —— 这一档下「配一个根」这条出口已经是
@@ -667,17 +759,29 @@ export const BROWSER_PACKAGES = ["chromium-headless-shell"];
  *   find?: () => {ok: boolean, command: string, prefixArgs: string[], args: string[], out: string},
  *   exec?: (cmd: string, args: string[], downloadHost?: string) => {ok: boolean, out: string},
  *   env?: Record<string, string | undefined>,
+ *   probe?: (url: string) => string,
+ *   pickRoots?: typeof pickPlaywrightRoots,
  * }} [ports]
  *   三个接缝（**必传**，见 `playwrightOnly` 的说明）：`find` 给 pnpm 形态、`exec`
  *   起进程（第三个参数是这一次要用的下载根）、`env` 决定试哪个根
  *   （见 `playwrightHostsToTry`）。判据里注入它们，结论才不取决于跑判据那台机器上
  *   有没有 pnpm、也不真去下 100MB 浏览器。
- * @returns {{ok: boolean, out: string, command?: string, args?: string[], host?: string}}
+ *   `pickRoots` 是「先量一次再决定试哪个根」那一层（见 {@link pickPlaywrightRoots}），
+ *   同样给注入面：判据里换掉它就不出网、也不去量真 CDN。
+ * @returns {{ok: boolean, out: string, command?: string, args?: string[], host?: string,
+ *            probes?: string[]}}
  */
 export function runPlaywrightInstall({
   find = required("find"),
   exec = required("exec"),
   env = process.env,
+  probe = httpDownloadProbe,
+  /* ⚠️ 缺省 `undefined`、由下面绑上 `probe`。直接把 `pickPlaywrightRoots` 本身放这里
+   * 是**接错线的静默降级**：函数缺省参数只在「参数是 `undefined`」时才取值，所以传进来的
+   * `probe` 永远不会到达挑根那一层，而 `pickPlaywrightRoots` 的 `probe` 缺省是
+   * 「一个都不量」—— 于是这条新路看起来接好了、其实一次都没走（实测：
+   * 判据里的假根被真出网的探测判成 ENOTFOUND，于是开始挨个试真 CDN）。 */
+  pickRoots = undefined,
 } = {}) {
   const pnpm = find();
   if (!pnpm.ok) {
@@ -695,18 +799,42 @@ export function runPlaywrightInstall({
     "install",
     ...BROWSER_PACKAGES,
   ];
-  /* 试哪几个根由 `playwrightDownloadRoots()` 说了算 —— 设了外面给的那个就**只用它**，
-   * 没设就回落到 Playwright 的内置族（那一族的三档由它自己挨个试）。
-   * Playwright 的三个内置镜像**全是 `*.playwright.dev` / `*.microsoft.com`**，
-   * 一台出不了这两个域的网络里三个一起不通 —— 换哪个都一样，所以「不通」这一档的
-   * 出路只有**外面给一个能通的镜像根**，而那不是它能自己推出来的事。 */
+  /* 试哪几个根 —— **先量一次再决定**（`pickPlaywrightRoots()` 的头注写了它与
+   * `playwrightDownloadRoots()` 那条「给上了就只用它」怎么并存）。
+   *
+   * 「外面给了根就只用它」反对的是**盲目重试同族**：Playwright 的三个内置镜像
+   * 全是 `*.playwright.dev` / `*.microsoft.com`，一台出不了这一族的网络里换哪个都一样。
+   * 而实测反复出的是另一种形态（`cnb-t3f-1k51ho0k2` 等三次）：配着的那个根**也不通**
+   * —— 那时日志里早已量到「别的根 2xx」，可**没有任何执行者**把它接到这一步上，
+   * 于是同一句 `timed out after 120000ms` 连着红了三次。
+   *
+   * 所以：量得到的排前面，量不到的按原序兜底。没给根时 `roots` 只有 `undefined`
+   * 一项（走 Playwright 自己的内置族）—— 那时**不量**、也不多余地起进程，
+   * 与改动前的行为逐字相同。
+   *
+   * 这不是「放宽判据」：放行那条判据仍是文件尾那一条「装完能起才放行」，
+   * 这里只决定**先试哪个根**。 */
+  /* **必须把 `probe` 一起交给挑根那一层**：`pickPlaywrightRoots` 自己的 `probe`
+   * 缺省是「一个都不量」（那是给判据用的安静档），传 `probe` 进来才算真的量。
+   * 它的返回值也不再是「一个个去试」——它排序后的第一个就是「先试哪个」。 */
+  const resolvedPickRoots =
+    pickRoots ??
+    ((ports = {}) =>
+      pickPlaywrightRoots({ ...ports, probe: ports.probe ?? probe }));
+  const picked = env.PLAYWRIGHT_DOWNLOAD_HOST
+    ? resolvedPickRoots({ roots: playwrightDownloadRoots(env), probe })
+    : { roots: playwrightDownloadRoots(env), verdicts: [] };
+  const probes = picked.verdicts.map(
+    (v) => `  ${v.root} → ${v.verdict}（${v.grade}）`,
+  );
   let out = "";
-  for (const host of playwrightDownloadRoots(env)) {
+  for (const host of picked.roots) {
     const r = exec(pnpm.command, args, host);
     out += `${r.out ?? ""}\n`;
-    if (r.ok) return { ok: true, out, command: pnpm.command, args, host };
+    if (r.ok)
+      return { ok: true, out, command: pnpm.command, args, host, probes };
   }
-  return { ok: false, out, command: pnpm.command, args };
+  return { ok: false, out, command: pnpm.command, args, probes };
 }
 
 /**
