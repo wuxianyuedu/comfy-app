@@ -56,6 +56,7 @@ import { commandInvocation } from "../src/lib/process/executable-resolve.ts";
 import {
   CP936_CODE_PAGE,
   encodeCp936Plan,
+  formatSpawnFailure,
   parseInvocation,
   resolveShellInvocation,
   runWithCp936Exit,
@@ -604,5 +605,78 @@ describe("CP936 出口：编排与退出码", () => {
     });
     expect(code).not.toBe(0);
     expect(printed.join("")).toContain("不存在的命令");
+  });
+
+  it("**起不了那条出口要给真因**：失败码 + 解析后的路径 + 当前目录，一个都不能少", async () => {
+    /* 现场（ISSUE #1977 第四次上平台）：外壳只回一句
+     *
+     *   [cp936-exit] 起不了这条命令：node_modules/.bin/npx tsc --noEmit
+     *
+     * 而真因是那次调用把**两条命令**当成了一条 —— 盘上没有那个文件。
+     * 报错点与真因隔着一整层，读日志的人只能去猜。三样东西各回答一个问题：
+     *
+     *   · `err.code` —— `ENOENT`（盘上没有）与 `EACCES` / `EINVAL`（有，但起不来）
+     *     要做的处置完全不同（后者在 Windows 上就是「形态不对」，见 §2.1.1）；
+     *   · 解析口交回的**绝对路径** —— 一行 `module.exports` 的 shim 还是真可执行
+     *     文件，看路径一眼就知道；
+     *   · **当前目录 + 调用方的原文** —— 相对路径是相对谁的（stage 的工作目录由
+     *     平台给，本壳看不到），不写出来就只能猜。
+     *
+     * 这条判的是**这条出口本身**（纯函数，直接喂假错误码）：Linux 检出上
+     * `spawnSync` 起一条不存在的路径同样是 ENOENT，所以这里也能有一条端到端的。 */
+    const enoent = formatSpawnFailure({
+      err: Object.assign(new Error("spawn x ENOENT"), { code: "ENOENT" }),
+      command: "node_modules/.bin/npx tsc --noEmit",
+      realCommand: "node_modules/.bin/npx tsc --noEmit",
+      cwd: "/root/comfy-app-t3",
+    });
+    expect(enoent).toContain("node_modules/.bin/npx tsc --noEmit");
+    expect(enoent).toContain("ENOENT");
+    /* 「盘上没有」要说出来 —— 这一句才是读日志的人真正需要的结论。 */
+    expect(enoent).toMatch(/盘上没有|不存在|没这件东西/);
+    /* 当前目录写出来了（相对路径的基准）。 */
+    expect(enoent).toContain("/root/comfy-app-t3");
+
+    /* `EACCES` / `EINVAL` 是另一类结论（有，但起不来），措辞必须与 ENOENT 分开。 */
+    const eacces = formatSpawnFailure({
+      err: Object.assign(new Error("spawn x EACCES"), { code: "EACCES" }),
+      command: "node_modules/.bin/eslint",
+      cwd: "/root/comfy-app-t3",
+    });
+    expect(eacces).toContain("EACCES");
+    expect(eacces).not.toBe(enoent);
+    expect(eacces).toMatch(/起不来|形态/);
+
+    /* 真解析过时才多打一行「通过解析口起的」——路径原样交出去时那句只是噪音
+     * （`realCommand === command`）。 */
+    const withResolved = formatSpawnFailure({
+      err: Object.assign(new Error("x"), { code: "ENOENT" }),
+      command: "pnpm",
+      realCommand: "C:\\tools\\pnpm.EXE",
+      cwd: "/root/comfy-app-t3",
+    });
+    expect(withResolved).toContain("C:\\tools\\pnpm.EXE");
+    expect(enoent).not.toContain("通过解析口起的");
+  });
+
+  it("**真的起一条不存在的路径** ⇒ 出口里带 ENOENT 与那条原文（不是只回命令名）", async () => {
+    /* 上一条判「措辞」，这条判「这条出口在真 spawn 上真的走得到」——
+     * `spawnSync` 在 Linux 上起一条不存在的**相对路径**同样是 `ENOENT`
+     * （与 Windows 上的现场同一个错误码），所以这一格本地判得动。 */
+    const printed: string[] = [];
+    const code = await runWithCp936Exit(
+      ["--", "node_modules/.bin/npx-根本没有这个文件", "tsc"],
+      {
+        platform: "linux",
+        resolve: passthroughResolve,
+        out: (chunk) => printed.push(chunk),
+      },
+    );
+    expect(code).toBe(127);
+    const text = printed.join("");
+    expect(text).toContain("ENOENT");
+    expect(text).toContain("node_modules/.bin/npx-根本没有这个文件");
+    /* 当前目录也打出来了（相对路径的基准）。 */
+    expect(text).toContain(process.cwd());
   });
 });

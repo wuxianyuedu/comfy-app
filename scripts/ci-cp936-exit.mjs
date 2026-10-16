@@ -48,7 +48,7 @@
  *   · **不做第二份「有没有乱码」的判据**：抓取端怎么解码本进程看不到，能判的只有
  *     「字节是 936 编出来的」这一件事 —— 那由 `encodeCp936Plan()` 的可测面判。
  *
- * ## 这一层自己踩过的两个坑（都在 Windows 那条路上，Linux 检出判不到）
+ * ## 这一层自己踩过的坑（都在 Windows 那条路上，Linux 检出判不到）
  *
  *   · **抓输出那一跳没钉编码**：`"data"` 事件的入参是 `Buffer`，`String(d)` 走的是
  *     「按 `process.stdout` 的编码解字节」那条路 —— 在 Windows 上那是**宿主代码页
@@ -79,6 +79,15 @@
  *     都起不了。两半都要：路径**不问 PATH**（`isPathLike()`），但**要过形态判据**
  *     （`commandInvocation`，它会把同目录的 `.ps1` 回退找出来）。
  *     ⇒ 这就是 `resolveShellInvocation()` 按 token 形状分两条的由来。
+ *   · **「起不了」那条出口不给真因**（第四次上平台）：报的是
+ *     `起不了这条命令：node_modules/.bin/npx tsc --noEmit`，而真因是那次调用把
+ *     **两条命令**当成了一条 —— 盘上没有那个文件。`resolved: true` 只表示
+ *     「调用方写的是**路径**」、**不表示它在盘上**（这是上一处刻意选的方向：路径不进
+ *     PATH 查找，让盘自己回答）—— 于是「盘说没有」这一格全靠 spawn 的结论，而它
+ *     原来的出口只有命令名。现在 `formatSpawnFailure()` 把三样东西一起打出来：
+ *     `err.code`（`ENOENT` 与 `EACCES` / `EINVAL` 要做的处置完全不同）、解析口
+ *     交回的**绝对路径**、以及**当前目录 + 调用方的原文**（相对路径是相对谁的，
+ *     不写出来只能猜；`cwd` 由调用方注入，见 `process.cwd()`）。
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -295,6 +304,53 @@ export function resolveShellInvocation(command, args) {
 }
 
 /**
+ * 「这条命令为什么起不来」的可读出口 —— 一句，带真因。
+ *
+ * 它存在的理由是一次**明明有结论、却指不出真因**的现场（ISSUE #1977 第四次上平台）：
+ * 外壳只回 `起不了这条命令：node_modules/.bin/npx tsc --noEmit`，而真因是那次调用
+ * 把**两条命令**当成了一条（盘上根本没有 `node_modules/.bin/npx tsc` 这个文件）
+ * —— 报错点与真因隔着一整层，读日志的人只能去猜。
+ *
+ * 三件东西都摆出来，各自回答一个不同的问题，一个都不能省：
+ *
+ *   · `code`（`err.code`）—— **判据**：`ENOENT` 是「盘上没这件东西」（多半是名字 /
+ *     入参写错），`EACCES` / `EINVAL` 是「有，但起不来」（Windows 上那是批处理 /
+ *     shim 形态，处置是走 `resolveCommandInvocation`，见 §2.1.1）。两者混在一句
+ *     「起不了」里，人就只能靠试；
+ *   · 解析口交回的**绝对路径**（`通过解析口` 那一行，只在解析发生时才打）—— 这条路径
+ *     是不是一行 `module.exports` 的 shim，看它一眼就知道；
+ *   · **当前目录 + 原文**（`命令` 那一行）—— 相对路径是相对**谁**的，不写出来就得猜
+ *     （stage 的工作目录由平台给，本壳看不到）。
+ *
+ * 参数都显式传（不用 `process.*` 兜底）：**不写代码进 spawn 事件里**是 §11.8 那条
+ * 「代码要不要进代码」的默认答案，也是让这条出口能被单测直接喂假错误码的原因。
+ *
+ * @param {{err: unknown, command: string, realCommand?: string,
+ *          cwd?: string}} input
+ * @returns {string}
+ */
+export function formatSpawnFailure({ err, command, realCommand, cwd }) {
+  /** `spawn` 的 error 是 Error 的运行时子类，`code` 由 libuv 填
+   *  （与 `executable-resolve.ts` 里读它那一处同一形状）。 */
+  const spawnError = /** @type {NodeJS.ErrnoException | undefined} */ (err);
+  const code = spawnError?.code ?? "未知";
+  const where = cwd ? `（当前目录 ${cwd}）` : "";
+  const lines = [
+    `[cp936-exit] 起不了这条命令：${command}${where}`,
+    `  失败码 ${code} —— ` +
+      (code === "ENOENT"
+        ? "盘上没有这个文件（名字 / 入参对不上？）"
+        : "文件在、但起不来（形态不对？见 resolveCommandInvocation）"),
+  ];
+  /* 解析口交回的那一份只在**解析真的发生过**时才有意义：路径原样交出去时
+   * `realCommand` 就是原文，再打一遍只是噪音。 */
+  if (realCommand && realCommand !== command) {
+    lines.push(`  通过解析口起的：${realCommand}`);
+  }
+  return lines.join("\n");
+}
+
+/**
  * 起命令、抓输出、以 CP936 重发、转出退出码 —— 编排那一层（`main()` 调它）。
  *
  * **退出码走 `resolve` / `reject` 的第二个值**：`main()` 里那句 `process.exit(code)`
@@ -382,10 +438,24 @@ export function runWithCp936Exit(
       stream?.setEncoding?.("utf8");
       stream?.on("data", (d) => chunks.push(String(d)));
     }
-    child.on("error", () => {
+    child.on("error", (err) => {
       /* 起不来（命令不存在）也是「这条命令的结论」，走同一个复核出口：
-       * 原文照打 + 非零退出码（127 是壳里「命令没找到」的常规形态）。 */
-      emit(`[cp936-exit] 起不了这条命令：${command}\n`);
+       * 原文照打 + 非零退出码（127 是壳里「命令没找到」的常规形态）。
+       *
+       * 但**「结论在」不等于「结论够用」**：这条出口此前只回一句
+       * `起不了这条命令：<command>`，而真因的每一条线索都在手里 —— `err.code`
+       * （`ENOENT` 是「盘上没这件东西」，`EACCES` / `EINVAL` 是「有，但起不来」，
+       * 两者要做的处置完全不同）、解析口交回来的**绝对路径**（这条是一行
+       * `module.exports` 的 shim 还是真的可执行文件，看路径就看得出）、以及
+       * 调用方自己写的那份原文（相对路径与绝对路径在这里长得一样，分不开）。 */
+      emit(
+        formatSpawnFailure({
+          err,
+          command,
+          realCommand,
+          cwd: process.cwd(),
+        }) + "\n",
+      );
       settle(127);
     });
     child.on("close", (code) => {
