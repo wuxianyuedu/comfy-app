@@ -69,11 +69,11 @@ import { fileURLToPath } from "node:url";
 export const PLAYWRIGHT_HOST_CANDIDATES = [
   /* Playwright 对**本档这一件**（Chromium 的 CfT 包）真正会用的那个镜像。
    *
-   * 这一行是拿上游源码核出来的，不是抄那张「内置镜像」表抄来的：
-   * `cftUrl()`（`playwright-core/lib/coreBundle.js`）对 `chromium` /
-   * `chromium-headless-shell` 返回的是 `{ mirrors: ["https://cdn.playwright.dev"] }`
-   * —— CfT 包**只有这一个**内置镜像，与那张 `PLAYWRIGHT_CDN_MIRRORS` 三档是**两回事**
-   * （那三档服务的是老的 `builds/chromium/<revision>/…` 路径形状）。
+   * 这一行是拿上游源码核出来的，不是抄那张「内置镜像」表抄来的：`cftUrl()`
+   * （`playwright-core/lib/coreBundle.js`）对 `chromium` / `chromium-headless-shell`
+   * 返回的是 `{ mirrors: ["https://cdn.playwright.dev"] }` —— CfT 包**只有这一个**
+   * 内置镜像，与那张 `PLAYWRIGHT_CDN_MIRRORS` 三档是**两回事**（那三档服务的是老的
+   * `builds/chromium/<revision>/…` 路径形状）。
    *
    * ⚠️ 正因为是两回事，原来表里那两条 `…/dbazure/download/playwright` 在这里是
    * **结构性错的**：给它们接上 `builds/cft/<版本>/<档>/<包>`，`cdn.playwright.dev`
@@ -85,9 +85,10 @@ export const PLAYWRIGHT_HOST_CANDIDATES = [
    *     https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/cft/…/…zip
    *       → 400
    *
-   * 也就是说这两条**永远不可能供上这一件**。留在表里只有一个后果：读数里多两条
-   * 恒假的「到不了」，而人照它去「换一个能通的根」会换到一个保证 400 的地址
-   * （现场 `cnb-oqf-1k51ifhis` 那两条逐字就是 400）。 */
+   * 也就是说这两条**永远不可能供上这一件**。留在表里有两个后果，第二个更贵：
+   * ① 读数里多两条恒假的「到不了」；② 而 `pickPlaywrightRoots()` 会把它们当
+   * 候选参与挑根 —— 人（或那段挑根逻辑）照它去「换一个能通的根」就换到一个保证 400
+   * 的地址（现场 `cnb-oqf-1k51ifhis` 那两条逐字就是 400）。 */
   "https://cdn.playwright.dev",
   /* 常见 npm 镜像里放 Playwright 二进制的那两段路径（第三方，**不替它选**，
    * 只量一下「能不能到」）。 */
@@ -181,8 +182,14 @@ function playwrightBrowserJsonCandidates(base) {
  * 因此**不用** `createRequire` / `import()` 去解析（那会真去装 / 真去加载依赖），
  * 只做几次 `readFileSync` —— 本文件「只 import `node:*`」那条约束的另一形态。
  *
+ * 回**两个**号：`version`（`browserVersion`，CDN 路径里用的那一段）与
+ * `revision`（落点目录名里用的那一段）。两者**不是同一个数**，一开始只回了前者，
+ * 后果是「自取」把包解到了 `chromium_headless_shell-<browserVersion>`、
+ * 而 Playwright 找的是 `chromium_headless_shell-<revision>` —— 它随即报
+ * `Removing unused browser` 并整包重下一遍（自取白做了，而日志两个方向都像成功）。
+ *
  * @param {{root?: string}} [options]
- * @returns {{version: string, target: string} | null}
+ * @returns {{version: string, revision: string, target: string} | null}
  */
 export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
   const base =
@@ -201,12 +208,14 @@ export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
   try {
     const parsed = JSON.parse(text);
     const entry = (parsed?.browsers ?? []).find(
-      (/** @type {{name?: string, browserVersion?: string}} */ b) =>
-        b?.name === "chromium-headless-shell",
+      (
+        /** @type {{name?: string, browserVersion?: string, revision?: string}} */ b,
+      ) => b?.name === "chromium-headless-shell",
     );
-    if (!entry?.browserVersion) return null;
+    if (!entry?.browserVersion || entry.revision === undefined) return null;
     return {
       version: String(entry.browserVersion),
+      revision: String(entry.revision),
       target: platformTargetSuffix(),
     };
   } catch {
@@ -382,7 +391,7 @@ export function isReachableVerdict(verdict) {
 /**
  * 对**真资源**发一次带 `Range` 的 GET，回一句可读的结论（不回抛 —— 失败是一种读数）。
  *
- * ## 为什么不是 HEAD（这一步错过一次，代价是整条流水线）
+ * ## 为什么不是 HEAD（`pickPlaywrightRoots()` 全建在这条读数上，HEAD 会骗它）
  *
  * 这一层此前是 `httpHeadStatus()` —— 发一个 HEAD，看状态码。而 HEAD 答的是
  * 「这个 URL **允不允许**被取」，不是「**取得下来吗**」。两者的分岔在一次现场里
@@ -391,10 +400,11 @@ export function isReachableVerdict(verdict) {
  *     （HEAD 读数）https://cdn.npmmirror.com/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
  *     （真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
  *
- * 于是 `环境前提` 报绿（「下载根有 5/5 条到得了」），把 30 分钟后的
- * `浏览器安装` 失败**原样放行** —— 而「别等几十分钟才发现」恰恰是那一步存在的全部理由。
- * 一台能做 TLS 握手、能回小响应头、却在**大 body 上停住**的链路（代理 / 深度包检测 /
- * MTU 黑洞）在 HEAD 面前与好链路逐字同形，所以判据必须**真的把字节取回来**。
+ * 也就是说：**HEAD 会把一条取不下字节的链路判成好链路**。这条读数现在有两个消费者，
+ * 而它对两个都致命 —— `环境前提` 会拿它报绿（把 30 分钟后的失败原样放行）；
+ * `pickPlaywrightRoots()` 会拿它把那条**卡死在大 body 上**的根排到第一位、
+ * 于是「机器自己挑一条真能通的根」挑中的恰好是那条走不动的
+ * （现场 `cnb-t3f-1k51ho0k2` 就是它：HEAD 量得到、装 120 MiB 时 0 字节）。
  *
  * ## 判据的形状
  *
@@ -408,14 +418,18 @@ export function isReachableVerdict(verdict) {
  *   · **按 URL 的协议挑模块**：候选根全是 https，但这一层不该只认一种（用例正是拿
  *     本地 http 服务判它的四种现场）。
  *
+ * ⚠️ 它**仍然不是**「拉完整个包」那一次测量（那是 120 MiB，本步不做）。它把
+ * 「响应头能回」推进到「**字节真流过**」，而现场那一档（连上了但 0 字节）正好被它分开。
+ *
  * ## 「超时」这一档要分得开两种
  *
  *   · `超时（连上了但 0 字节，Nms 内没有响应）` —— 现场那一档：TCP / TLS 都成了，
  *     响应头也可能来了，**body 一个字节都没有**。处置在宿主机 / 网络侧；
  *   · `超时（Nms 内没有响应）` —— 连都没连上 / 响应头都没来。
  *
- * 两种在 `ok` 那一层同属「这一次到不了」（{@link isReachableVerdict}），但打印里
- * 必须分开 —— 处置不同，糊成一句「不通」等于把下一动作留给人猜。
+ * 两种在 `ok` 那一层同属「这一次到不了」（{@link isReachableVerdict}），在
+ * {@link probeGrade} 那一层同属 `timeout`；但打印里必须分开 —— 处置不同，
+ * 糊成一句「不通」等于把下一动作留给人猜。
  *
  * 走 `spawnSync` 起一个短命 node 子进程，而不是在本进程里用回调：**这一步是在失败
  * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:http(s)`
@@ -541,3 +555,128 @@ const DOWNLOAD_PROBE_SCRIPT = `
   };
   attempt(url, maxRedirects);
 `;
+/**
+ * 一个探测结论的**三态**：到得了（`ok`）/ 没量完（`timeout`）/ 到不了（`worse`）。
+ *
+ * 这一层是「选哪个根」的判据本体，与 {@link isReachableVerdict} 是**两个问题**：
+ * 后者答「装得成吗」（放行那条判据），本函数答「这几个里先试哪个」。
+ * 两者的**红法不一样**：
+ *
+ *   · `ok: false` 三种形态都不放行 —— 那是 `环境前提` 那条判据的事；
+ *   · 而在「都不到 2xx」的机器上，`timeout` 是**唯一值得再试一次**的那一种：
+ *     `超时（8000ms 内没有响应）` 的意思是「连上了但不说话」（大包在慢链路上正常），
+ *     而 `ENOTFOUND` / 4xx 是「这条链路不通」，再试一次不会变。
+ *
+ * ## 现场（`cnb-t3f-1k51ho0k2`，本格的第六次红）
+ *
+ * 探测量到 `cdn.playwright.dev` → `HTTP 307`、npmmirror → `HTTP 200`，
+ * 百毫秒级；而**装**那一步在同一个根上拿到 `timed out after 120000ms`
+ * （Playwright 走的是 GET 拉包，120 MiB）。同一台机器、同一分钟、两个相反结论
+ * —— 差别在「一次 HEAD」与「拉完整个包」不是同一次测量。
+ *
+ * 所以 `HTTP 2xx` 只是**首选**，不是**唯一**：2xx 排在前面（它就是「这一趟量得完」
+ * 的那一档），4xx 与超时按原序跟在后面。这不是「放宽判据」—— 放行那条判据仍是
+ * 「装完能起才放行」，这里只决定**先试哪个根**。
+ *
+ * @param {string} verdict {@link httpDownloadProbe} 那一句
+ * @returns {"ok" | "timeout" | "worse"}
+ */
+export function probeGrade(verdict) {
+  const text = String(verdict ?? "").trim();
+  if (/^超时/.test(text)) return "timeout";
+  const m = /^HTTP\s+(\d{3})\b/.exec(text);
+  if (!m) return "worse";
+  const code = Number(m[1]);
+  /* 3xx 也算「量得完」：`cdn.playwright.dev` 那一族回的就是 307（它自己再跟一跳）。
+   * 与 {@link isReachableVerdict} 同一条口径 —— 两处判「什么算到得了」必须一致。 */
+  return code >= 200 && code < 400 ? "ok" : "worse";
+}
+
+/**
+ * 从实测读数里挑出**这一趟该用哪个下载根**（挑不出回 `candidates[0]`，宿主默认）。
+ *
+ * ## 它修的那一格：一条探测读数与一次装之间从来没有过执行者
+ *
+ * `环境前提` 早就在量「这台机器到得了哪个下载根」，`.cnb.yml` 也早就配了一个根
+ * —— 而**这两者之间没有任何东西把它们连起来**：探测发现配着的那个根不通时，
+ * 结论只落在一行会随日志滚过去的读数里，装那一步照旧去试那个根，然后红。
+ *
+ * 实测形态（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq` / `cnb-t3f-1k51ho0k2`）：
+ * 同一句 `timed out after 120000ms`、同一个根，连着三次。
+ *
+ * ## 与 `playwrightDownloadRoots()` 的分工（**「给上了就只用它」没有被推翻**）
+ *
+ * 那条判据说的是「外面给了一个根时**别再陪 Playwright 挨个试它那一族内置镜像**」
+ * —— 它反对的是**盲目重试同族**（实测 5 次全落在同一个域名上、`retryCount = 5`
+ * 的回退等于没有）。本函数做的是另一件事：**先量一次，再决定先试哪个**。
+ * 量出来的结论要能被 `点名的那个根不通 ⇒ 试一个量得到的根` 用掉，
+ * 否则这条判据就成了「配错一行要改配置 + 重推」。
+ *
+ * 因此两支的判据仍然分得开，都判：
+ *
+ *   · 没过量 ⇒ 只起一次、只试 `roots[0]`（老判据，`playwrightDownloadRoots` 那组用例守着）；
+ *   · 量过、且 `roots[0]` 到得了 ⇒ 也**只试它**（别去试那些不通的）；
+ *   · 量过、且 `roots[0]` 不通 ⇒ 把量得到的排前面，原序兜底。
+ *
+ * ## 为什么排在前面的是**候选表**而不是「探测到的那个」
+ *
+ * 因为探测在**另一个进程**里（`环境前提` stage 的 env 看不到 `浏览器安装` stage 的
+ * `env`，反向也一样）。要落地就得把结论写进 env 或落盘一份 —— 前者要改配置
+ * （「配错一行要改配置重推」正是要治的那件事）、后者多一份会过期的状态。
+ * 所以在装这一步**现量一次**：几秒、无副作用，且用的就是与 `环境前提` 同一份探测
+ * （§12.18：打印与判据共用同一次结论，不造第二轮子）。
+ *
+ * @param {{roots?: Array<string | undefined>, candidates?: string[],
+ *          probe?: (url: string) => string,
+ *          probeUrlOf?: (root: string) => string}} [options]
+ * @returns {{roots: Array<string | undefined>, verdicts: Array<{root: string, verdict: string, grade: string}>, probed: boolean, switched: boolean}}
+ */
+export function pickPlaywrightRoots({
+  roots = [undefined],
+  candidates = PLAYWRIGHT_HOST_CANDIDATES,
+  probe = undefined,
+  probeUrlOf = playwrightProbeUrl,
+} = {}) {
+  const preferred = roots[0];
+  /* **没给探测面就什么都不量**（这一支是有意的，不是省事）。
+   *
+   * 探测是要**出网**的（每个候选一次真取一小段字节）—— 而本函数是装浏览器那一步的缺省路径。
+   * 让缺省路径在“没接线”时静默去量真 CDN，等于给判据留一个「跑一次用例就发几次
+   * 外网请求」的副作用（本仓反复记的那一格：判据不该依赖跑它的那台机器的网络）。
+   * 所以量不量这件事由**调用方是否传它自己的探针**决定：
+   *
+   *   · 调用方传了 ⇒ 用它的（盘上的实现是 `httpDownloadProbe`），且只量它会用的根；
+   *   · 没传 ⇒ 一个字都不量，回落到老行为（只试 `roots[0]`）。
+   *
+   * 判据里因此可以「换掉它就不出网」，而平台侧那条路一定传（见
+   * `runPlaywrightInstall` 的 `probe` 缺省）。 */
+  if (typeof probe !== "function") {
+    return { roots, verdicts: [], probed: false, switched: false };
+  }
+  /* 外部给的根要参与探测，但**不塞进候选表** —— 候选表是「除了它还能试哪儿」，
+   * 而 `undefined` 那一档是「什么都不给，走 Playwright 自己的内置族」，
+   * 它没有地址可量（那一族由 Playwright 自己挨个试）。 */
+  const extra = preferred ? [preferred] : [];
+  const list = [...new Set([...extra, ...candidates])];
+  const verdicts = list.map((root) => {
+    let verdict;
+    try {
+      verdict = probe(probeUrlOf(root));
+    } catch (error) {
+      verdict = `探测本身出错：${/** @type {Error} */ (error).message}`;
+    }
+    return { root, verdict, grade: probeGrade(verdict) };
+  });
+  /* 稳定排序：2xx 那一档在前，其余**保持原序**（`Array#sort` 在 V8 上稳定，
+   * 而这里的 `ok` 权重只有两档 —— 不去造一个会让读数顺序漂的复杂排序）。 */
+  const ok = verdicts.filter((v) => v.grade === "ok").map((v) => v.root);
+  const rest = list.filter((root) => !ok.includes(root));
+  const ordered = [...ok, ...rest];
+  const first = ordered[0];
+  return {
+    roots: ordered.length > 0 ? ordered : roots,
+    verdicts,
+    probed: true,
+    switched: Boolean(preferred && first !== preferred),
+  };
+}
