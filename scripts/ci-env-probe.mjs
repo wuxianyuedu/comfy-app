@@ -208,6 +208,101 @@ export function readTextFile(file) {
 }
 
 /**
+ * `.cnb.yml` 里某个 stage 那一项的原文（从它的 `- name:` 到下一项 / 更浅的键）。
+ *
+ * ## 为什么要有这份**文本副本**
+ *
+ * 这一段与 `tests/no-platform-ci-config.test.ts` 导出的 `stageBlock()` 是**同一个
+ * 解析**，两份文本副本的理由与 `ps7OnlySyntaxIn` 逐字相同：那一条是 `.ts`，而本步跑在
+ * `Install dependencies` **之前**（`node_modules` 那时还没有），import 不到。
+ * 处置照旧 —— 两份文本 + 一条对账判据（`tests/ci-env-probe.test.ts` 逐项比命中面，
+ * 漂了就红）。**报告面**刻意不同：那一条跑在开发机上（给人改配置用），这一份在
+ * 构建机上（给这一步的判据用）。
+ *
+ * 按**缩进收口**而不是正则一次到底：stage 项里嵌着 `script: |` 块（里面是缩进更深的
+ * 任意文本）与 `env:` 子映射，一次匹配很容易多吃或少吃 —— `stageBlock()` 的头注记过
+ * 同一格。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @param {string} name stage 名
+ * @returns {string | null} 找不到回 `null`（调用方据此只记读数，不判红）
+ */
+export function stageBlockIn(text, name) {
+  const lines = String(text ?? "").split("\n");
+  /* **活的 stage 优先；没有就看它是不是被注释掉了**（`COMFYAPP_CI_DISABLED_GATES`
+   * 的停用形态）。停用不等于删除：那一项的 `env:` 仍是配置里一条**真的事实**
+   * （人改的就是那一行），所以「这一步会拿到哪个下载根」在停用期间同样要答得出。
+   * ⚠️ 这与 `tests/no-platform-ci-config.test.ts` 的 `stageBlock()` **同一口径** ——
+   * 那份 `.ts` 侧的停用读取在 `commentedStageBlock()`（下面这一支是它的对等物）。 */
+  const live = /^ {2}-\s+name:\s*(\S.*?)\s*$/;
+  const commented = /^#\s+-\s+name:\s*(\S.*?)\s*$/;
+  let start = -1;
+  /** @type {(l: string) => string} */
+  let strip = (l) => l;
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i] ?? "";
+    const item = live.exec(raw);
+    if (item?.[1] === name) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) {
+    for (let i = 0; i < lines.length; i += 1) {
+      const item = commented.exec(lines[i] ?? "");
+      if (item?.[1] === name) {
+        start = i;
+        strip = (l) => l.replace(/^#\s?/, "");
+        break;
+      }
+    }
+  }
+  if (start < 0) return null;
+  const out = [strip(lines[start] ?? "")];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const raw = lines[i] ?? "";
+    /* 下一个同级 stage 项（活的或注释态）/ 回到**未注释**的更浅键都算收尾
+     * （空行不算 —— 配置里正文之间有空行）。⚠️ 判据不能写成「`^\S` 就收尾」：
+     * 注释块里每一行都以 `#` 开头，那也是 `\S`。 */
+    if (
+      live.test(raw) ||
+      commented.test(raw) ||
+      (/^\S/.test(raw) && !raw.startsWith("#"))
+    )
+      break;
+    out.push(strip(raw));
+  }
+  return out.join("\n");
+}
+
+/**
+ * 某个 stage 的 `env:` 里某个键的**字面值**（去引号；找不到回 `null`）。
+ *
+ * 只看那一项自己的块（`stageBlockIn` 收的口），**不解析继承 / 锚点**：这一步要回答的
+ * 是「`浏览器安装` 那一步会拿到哪个下载根」，而那一步的键就写在它自己的 `env:` 上
+ * （`.cnb.yml` 里逐字如此，`tests/no-platform-ci-config.test.ts` 也判着它必须在）。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @param {string} stage stage 名
+ * @param {string} key `env` 里的键
+ * @returns {string | null}
+ */
+export function stageEnvValue(text, stage, key) {
+  const block = stageBlockIn(text, stage);
+  if (block === null) return null;
+  /* `\s*` 而不是 `\s+`：**停用形态**里那一项的缩进已被压平（注释块按第 0 列读），
+   * 键因此可能顶格出现。匹配面仍限在这一项自己的块内，不会串到别的 stage。 */
+  const re = new RegExp(
+    `^\\s*${key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}:\\s*(.+?)\\s*$`,
+    "m",
+  );
+  const m = re.exec(block);
+  if (!m?.[1]) return null;
+  const raw = m[1].trim().replace(/^["']|["']$/g, "");
+  return raw === "" ? null : raw;
+}
+
+/**
  * 跑一条命令拿输出（`ok` 判退出码为 0）。
  *
  * @param {string} cmd
@@ -397,22 +492,31 @@ export function envProbe({
    *   ② **落点上是空的** ⇒ **现在**量一次「下载根通不通」。全都不通就**当场红** ——
    *      因为那意味着第 31 步**必然**失败，而它在前面白花掉三十分钟之后才告诉你。
    *
-   * ## 为什么量的是「外面给的那个根」而不是每次都铺开四个候选
+   * ## 量的是**这一步会真用的那个根**，不是「某个还算通的根」（ISSUE #1966 的续集）
    *
    * `PLAYWRIGHT_DOWNLOAD_HOST` 设在 `.cnb.yml` 的 `浏览器安装` stage 上，本步的
-   * stage 看不到它 —— 所以传进来的是**本步自己进程的 env**。这两种情况下铺开全量
-   * 候选是对的：没有那个变量时，「这台机器出得去哪个域」正是要回答的问题。
-   * 一旦 `.cnb.yml` 真给了一个根，判据就变成「**那个根**通不通」（`playwrightDownloadRoots`
-   * 已经收口了这条语义：给上了就只用它，见 `ci-toolchain-browser.mjs` 的头注）。
+   * stage 看不到它 —— 但本步**读得到那份配置**（上面判语法面时已经读了），所以这里
+   * 先把那一行摘出来，再去量**它**。这条分岔是 `cnb-ald-1k51g8dt9` 那一跑买来的：
    *
-   * ⚠️ 与 `浏览器安装` 的失败分支**刻意不同**：那里是「装都装失败了，把四个域都量一遍
+   *     （这一步）下载根探测：…/binaries/playwright → HTTP 200   ← 裸 HEAD，报绿
+   *     （30 分钟后）浏览器安装：从**同一个根**下载 … timed out after 120000ms（0 字节）
+   *
+   * 「某个根通」与「我们要用的那个根通」是**两个结论**，而这一步存在是为了回答后者
+   * —— 前者绿着放行，正是它要防的那件事。所以配置里给了根时，判据是**那一个根**：
+   * 它到不了就当场红，并把下一动作点成「换 `.cnb.yml` 里那一行」。
+   *
+   * 没给根时照旧铺开候选那一族 —— 那时「这台机器出得去这类域吗」正是要回答的问题。
+   *
+   * ⚠️ 与 `浏览器安装` 的失败分支**刻意不同**：那里是「装都装失败了，把五个域都量一遍
    * 供人定位」；这里是**前置判定**，只量真正会被用到的那一个（或候选那一族），
    * 因为它是判据、要快。
    *
-   * ## 为什么它**不**在探测出「不通」时直接去装
+   * ## 为什么它**不**在探测出「不通」时直接去装、也不替人换根
    *
    * 「不通」这件事不是这步骤能修的（网络在仓外），所以它的作用是**把结论提前**，
-   * 而不是替 `浏览器安装` 做那一步 —— 职责边界与 `工链自证` ⇄ `Python 可用性` 同形。 */
+   * 而不是替 `浏览器安装` 做那一步 —— 职责边界与 `工具链自证` ⇄ `Python 可用性` 同形。
+   * 也**不**自动改写配置：那等于把一次探测结论冒充成长期决定（这一节反复写过的边界）。
+   * 它只回答「按现在的配置这一趟装得成吗」，并把能到的根列出来给人挑。 */
   try {
     const already = browserPresentImpl({ env });
     if (already.ok) {
@@ -421,15 +525,23 @@ export function envProbe({
           `\`浏览器安装\` 会走「已装，跳过下载」，这一格不依赖网络`,
       );
     } else {
-      const roots = playwrightDownloadRoots(env);
-      /* 没给根时用候选那一族（这就是「这台机器出得去这类域吗」）；给了根就只量它。
+      /* 配置里那一步会用的根（读不到那条配置 / 那个键时退回「按本步 env」的老口径
+       * —— 那是「不知道」，不是「不达标」，见下面 catch 与 `problems` 那两条）。 */
+      const configuredHost = configText
+        ? stageEnvValue(configText, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_HOST")
+        : null;
+      const roots = configuredHost
+        ? [configuredHost]
+        : playwrightDownloadRoots(env);
+      /* 没给根时用候选那一族；给了根就只量它（配置给的那一个优先于本步 env ——
+       * 那才是这一步真正要回答的对象）。
        *
-       * ⚠️ 量的是**真资源 URL**不是裸根（`playwrightReachabilityVerdicts` 的头注，
-       * ISSUE #1966）：根对这几个地址都回 4xx，而包在 2xx/3xx —— 拿裸根判
-       * 「通不通」得到的是反过来的结论，这正是本步上一跑当场红的原因。
+       * ⚠️ 量的是**真资源**且**真取一小段字节**（`httpDownloadProbe` 的头注，ISSUE #1966
+       * 与它的续集）：裸根对这几个地址都回 4xx，而 HEAD 又会把「大 body 取不下来」的
+       * 链路判成好链路 —— 两次都让这一步**假绿**，把 30 分钟后的失败原样放行。
        * 三态里 `root` 是配置面（人会照着配 `PLAYWRIGHT_DOWNLOAD_HOST`），
-       * `url` 是实测面，两个都打出来 —— 缺了 `root`，人对着一个 404 的
-       * 资源路径不知道该改哪一行。 */
+       * `url` 是实测面，两个都打出来 —— 缺了 `root`，人对着一个 404 的资源路径
+       * 不知道该改哪一行。 */
       const verdicts = reachabilityImpl(
         roots[0] ? { candidates: [roots[0]] } : { candidates: undefined },
       );
@@ -439,22 +551,37 @@ export function envProbe({
       }
       if (reachable.length === 0) {
         problems.push(
-          "浏览器落点是空的，而**一个下载根都到不了** —— " +
+          (configuredHost
+            ? "浏览器落点是空的，而 `.cnb.yml` 给 `浏览器安装` 配的那个下载根" +
+              `（${configuredHost}）**取不回字节** —— `
+            : "浏览器落点是空的，而**一个下载根都到不了** —— ") +
             "`浏览器安装` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在" +
             "那里失败，而那时前面三十步的预算已经花掉了。\n" +
             `      实测过的现场：${verdicts[0]?.root ?? "（没有候选）"} → ` +
             `${verdicts[0]?.verdict ?? "?"}\n` +
-            "      下一动作（三选一，前两条在人不在仓）：\n" +
-            "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 " +
-            "`浏览器安装` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；\n" +
+            "      下一动作（前两条在人不在仓）：\n" +
+            (configuredHost
+              ? "        · 把这台节点**真能到**的镜像根换到 `.cnb.yml` 的 " +
+                "`浏览器安装` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上 —— 就是上面" +
+                "「下载根探测」那几行里判通的那一个；\n"
+              : "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 " +
+                "`浏览器安装` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；\n") +
             "        · 或给节点配内网代理 / 放行镜像域；\n" +
             "        · 或**预先把 `chromium-headless-shell` 装进节点的落点** —— " +
             "装过一次之后这一格就再也不碰网络（长期存在的机器上这是最省事的一条）。",
         );
       } else {
         notes.push(
-          `浏览器落点是空的，但下载根有 ${reachable.length}/${verdicts.length} 条到得了` +
+          `浏览器落点是空的，而${configuredHost ? "配置里那个根" : "下载根"}` +
+            `有 ${reachable.length}/${verdicts.length} 条真取回了字节` +
             "（`浏览器安装` 那一步应该装得成）",
+        );
+      }
+      if (configuredHost) {
+        /* 配置里那一行只在「确实量了它」时点出来 —— 它是这一步与 `浏览器安装` 之间
+         * 唯一的事实对齐点，人改的就是这一行。 */
+        notes.push(
+          `上面量的是 \`.cnb.yml\` 给 \`浏览器安装\` 配的那个根：${configuredHost}`,
         );
       }
     }

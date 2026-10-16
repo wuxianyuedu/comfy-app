@@ -39,10 +39,14 @@ import {
   PYTHON_MIN_TEXT,
   pythonVersionMeetsFloor,
   readPipelineConfig,
+  stageBlockIn,
+  stageEnvValue,
 } from "../scripts/ci-env-probe.mjs";
 import {
+  commentedStageBlock,
   ps7OnlySyntaxIn as ps7OnlySyntaxInGate,
   registeredGateOrder,
+  stageBlock as stageBlockGate,
 } from "./no-platform-ci-config.test";
 import {
   isReachableVerdict,
@@ -539,5 +543,180 @@ describe("环境前提：流水线上真的在跑它，且排在装依赖之前"
       read(entry).length,
       "「环境前提」点名的入口不在盘上",
     ).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * 「量的是**这一步会真用的那个根**」—— ISSUE #1966 之后那一跑买来的（`cnb-ald-1k51g8dt9`）。
+ *
+ * 那一次 `环境前提` 报绿（「下载根有 5/5 条到得了」），30 分钟后 `浏览器安装` 从
+ * **同一个根**下载、`timed out after 120000ms`（0 字节）。病在这两步问的不是同一个
+ * 问题：前者问「**某个**根通不通」，而它存在的理由是回答「**这一趟**装得成吗」。
+ *
+ * `PLAYWRIGHT_DOWNLOAD_HOST` 设在 `浏览器安装` 那一步的 `env` 上，本步的 stage 看不到
+ * 它 —— 但本步**读得到那份配置**（判语法面时已经读了），所以判据是**配置里那一个根**。
+ *
+ * ## 两处解析不许各写一份答案
+ *
+ * 从 `.cnb.yml` 摘 stage 块的那一段与 `tests/no-platform-ci-config.test.ts` 的
+ * `stageBlock()` 是**同一个解析**的两份文本副本（那一份是 `.ts`，本步跑在装依赖之前，
+ * import 不到 —— 处置与 `ps7OnlySyntaxIn` 逐字相同）。这一组第一条就是对账它。
+ */
+describe("环境前提：浏览器那一格量的是「配置里那个根」（ISSUE #1966）", () => {
+  /* 形状按**现役 `.cnb.yml`**：stage 项是**顶格锚点列表的直接子项**（恰好两空格），
+   * 再由 `stages: *gates` 引用过去 —— 两份 `stageBlock` 都是按这个口径收口的，
+   * 夹具换个缩进就变成在判另一件事（那已经不是这份配置的形状了）。 */
+  const YML = [
+    ".gates: &gates",
+    "  - name: 环境前提",
+    "    script: node scripts/ci-env-probe.mjs",
+    "  - name: 浏览器安装",
+    "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+    "    env:",
+    '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
+    '      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"',
+    "    timeout: 20m",
+    "",
+  ].join("\n");
+
+  it("摘 stage 块那一段与门禁判据**逐项同一份答案**", () => {
+    for (const name of ["环境前提", "浏览器安装"]) {
+      expect(
+        stageBlockIn(YML, name),
+        `两份 stageBlock 的文本副本漂了（${name}）`,
+      ).toBe(stageBlockGate(YML, name));
+    }
+    /* 两边都得**真的命中**（不然这条用例是空转）。 */
+    expect(stageBlockIn(YML, "浏览器安装")).not.toBeNull();
+    expect(stageBlockIn(YML, "不存在的那一步")).toBeNull();
+  });
+
+  it("**停用形态**下两份解析也同一份答案（现役 `.cnb.yml` 上对账）", () => {
+    /* `stageBlockIn()` 从 ISSUE #1966 起**活的没有就看注释态** —— 那一支是新加的，
+     * 与 `.ts` 侧 `commentedStageBlock()` 必须同口径（与上一条同源：两份文本副本 +
+     * 一条对账判据）。⚠️ 拿**现役配置**对账而不是夹具：这一步真正要回答的是
+     * 「现役 `.cnb.yml` 里那一项长什么样」，而它此刻正处在停用形态上。 */
+    const live = readPipelineConfig(ROOT) ?? "";
+    for (const name of ["浏览器安装", "E2E 关键流程"]) {
+      expect(
+        stageBlockIn(live, name),
+        `停用形态下两份解析漂了（${name}）—— 「配置里那个根」会量错对象`,
+      ).toBe(commentedStageBlock(live, name));
+      expect(stageBlockIn(live, name), `${name} 解析不出内容`).toBeTruthy();
+    }
+  });
+
+  it("`env` 的取值去引号；找不到的键 / stage 回 `null`（那是「不知道」，不判红）", () => {
+    expect(stageEnvValue(YML, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_HOST")).toBe(
+      "https://m/root",
+    );
+    expect(
+      stageEnvValue(YML, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT"),
+    ).toBe("120000");
+    expect(stageEnvValue(YML, "浏览器安装", "没有这个键")).toBeNull();
+    expect(stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
+    /* 现役 `.cnb.yml` 里那一步真的配了它 —— 判据指着的那一行必须是**真的存在**的。 */
+    const live = readPipelineConfig(ROOT) ?? "";
+    expect(
+      stageEnvValue(live, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_HOST"),
+      "现役 `.cnb.yml` 的 `浏览器安装` 没有 `PLAYWRIGHT_DOWNLOAD_HOST` —— 这一组判据" +
+        "量不到任何东西",
+    ).toMatch(/^https:\/\//);
+  });
+
+  it("配置里那个根取不回字节 ⇒ **当场红**，并点名该换哪一行", () => {
+    const lines: string[] = [];
+    const asked: Array<string[] | undefined> = [];
+    const code = envProbe({
+      root: ROOT,
+      config: YML,
+      findPythonImpl: () => ({
+        command: "python",
+        path: null,
+        version: "Python 3.12.2",
+      }),
+      runImpl: () => ({ ok: true, out: "12.4.1" }),
+      browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
+      reachabilityImpl: ({ candidates }: { candidates?: string[] } = {}) => {
+        asked.push(candidates);
+        return [
+          {
+            root: "https://m/root",
+            url: "https://m/root/builds/cft/T/win64/p.zip",
+            verdict: "超时（连上了但 0 字节，8000ms 内没有响应）",
+            ok: false,
+          },
+        ];
+      },
+      log: String,
+      logError: (l: string) => lines.push(l),
+    });
+    expect(
+      asked[0],
+      "量的不是配置里那一个根 —— 那这一步答的就是另一个问题（现场就是它绿的）",
+    ).toEqual(["https://m/root"]);
+    expect(code, "配置里那个根取不回字节，这一步却没红").toBe(1);
+    const said = lines.join("\n");
+    /* 话术要能指路：点名那个根、点名要改的那一行、点名剩下的出路。 */
+    expect(said).toContain("https://m/root");
+    expect(said).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
+    expect(said).toContain("chromium-headless-shell");
+  });
+
+  it("配置里那个根真取回了字节 ⇒ 退 0（绿要绿得住，不然这一步会天天挡人）", () => {
+    const code = envProbe({
+      root: ROOT,
+      config: YML,
+      findPythonImpl: () => ({
+        command: "python",
+        path: null,
+        version: "Python 3.12.2",
+      }),
+      runImpl: () => ({ ok: true, out: "12.4.1" }),
+      browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
+      reachabilityImpl: () => [
+        {
+          root: "https://m/root",
+          url: "https://m/root/builds/cft/T/win64/p.zip",
+          verdict: "HTTP 206（实收 15425 字节）",
+          ok: true,
+        },
+      ],
+      ...silentPorts(),
+    });
+    expect(code).toBe(0);
+  });
+
+  it("配置里**没**给根时照旧铺开候选那一族（那时「出得去这类域吗」才是要答的问题）", () => {
+    const asked: Array<string[] | undefined> = [];
+    envProbe({
+      root: ROOT,
+      config: [
+        ".gates: &gates",
+        "  - name: 浏览器安装",
+        "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+        "",
+      ].join("\n"),
+      findPythonImpl: () => ({
+        command: "python",
+        path: null,
+        version: "Python 3.12.2",
+      }),
+      runImpl: () => ({ ok: true, out: "12.4.1" }),
+      browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
+      reachabilityImpl: ({ candidates }: { candidates?: string[] } = {}) => {
+        asked.push(candidates);
+        return [
+          {
+            root: "https://x",
+            url: "https://x/builds/cft/T/win64/p.zip",
+            verdict: "HTTP 206（实收 1 字节）",
+            ok: true,
+          },
+        ];
+      },
+      ...silentPorts(),
+    });
+    expect(asked[0], "没配根时反而把候选面收窄了").toBeUndefined();
   });
 });
