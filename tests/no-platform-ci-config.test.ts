@@ -635,7 +635,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     );
     const command = scriptLine?.[1]?.trim();
     expect(command, "解析不出「浏览器安装」那一步的 script").toBeTruthy();
-    const entry = /^(?:node\s+)?(scripts\/[^\s]+)/.exec(command ?? "")?.[1];
+    /* ⚠️ 入口**不一定在第一个字符上**：每个 stage 的脚本现在都以一句
+     * `[Console]::OutputEncoding=…;` 开头（平台 stage shell 是 PowerShell，
+     * 不设它平台侧的中文日志全是乱码，见 `.cnb.yml` 头注第 6 条）。这里判的是
+     * 「这一段命令点到的是哪个入口」，不是「它排在第几个词」。 */
+    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(
+      command ?? "",
+    )?.[1];
     expect(
       entry,
       `「浏览器安装」那一步指向的不是 scripts/ 下的入口：${command}`,

@@ -535,12 +535,22 @@ describe("环境前提：流水线上真的在跑它，且排在装依赖之前"
       read(".cnb.yml"),
     )?.[1];
     expect(block, "解析不出「环境前提」那一步的 script").toBeTruthy();
-    const entry = String(block)
-      .trim()
-      .replace(/^node\s+/, "");
-    expect(entry).toBe("scripts/ci-env-probe.mjs");
+    const command = String(block).trim();
+    /* ⚠️ 脚本那一行的开头**已经不一定**是 `node …`（2026-10-16 起每个 stage 都在
+     * 前面挂一句 `[Console]::OutputEncoding=…`，见 `.cnb.yml` 头注第 6 条）：
+     * 平台的 stage shell 是 PowerShell，它默认按 CP936 解子进程的 UTF-8 输出，
+     * 于是所有中文日志在平台侧都是乱码。所以这里判「这一段命令里点到的是哪个入口」，
+     * 而不是「它是不是从第一个字符就开始」（那是排版，不是接线）。 */
     expect(
-      read(entry).length,
+      command,
+      "「环境前提」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会全是乱码",
+    ).toContain("[Console]::OutputEncoding");
+    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(command)?.[1];
+    expect(entry, `解析不出「环境前提」点名的入口：${command}`).toBe(
+      "scripts/ci-env-probe.mjs",
+    );
+    expect(
+      read(entry ?? "").length,
       "「环境前提」点名的入口不在盘上",
     ).toBeGreaterThan(0);
   });
