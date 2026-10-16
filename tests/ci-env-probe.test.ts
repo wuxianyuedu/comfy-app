@@ -44,6 +44,11 @@ import {
   ps7OnlySyntaxIn as ps7OnlySyntaxInGate,
   registeredGateOrder,
 } from "./no-platform-ci-config.test";
+import {
+  isReachableVerdict,
+  playwrightReachability,
+  playwrightReachabilityVerdicts,
+} from "../scripts/ci-toolchain-browser.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -129,7 +134,13 @@ describe("环境前提：解释器版本下限（低于下限时没有任何一�
 });
 
 describe("环境前提：判定面的两个方向（红了要红在「几秒就能问出来」的位置）", () => {
-  /** 一份「解释器达标、pnpm 起得来、配置干净」的注入面。 */
+  /**
+   * 一份「解释器达标、pnpm 起得来、配置干净、浏览器落点已就位」的注入面。
+   *
+   * ⚠️ **浏览器那两格必须显式注入**（不是可选的省事）：缺省实现会去读真落点、
+   * 真发 HEAD 请求 —— 那会让这一组用例的结论取决于「跑它的这台机器出不出得去外网」，
+   * 也就是一条**看着绿、实际什么都没判**的判据（本仓最反对的那一类）。
+   */
   function greenPorts(overrides: Record<string, unknown> = {}) {
     return {
       root: ROOT,
@@ -139,6 +150,8 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
         version: "Python 3.12.2",
       }),
       runImpl: () => ({ ok: true, out: "12.4.1" }),
+      browserPresentImpl: () => ({ ok: true, out: "/落点/.../chrome-headless-shell" }),
+      reachabilityImpl: () => [],
       ...silentPorts(),
       ...overrides,
     };
@@ -263,6 +276,138 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
       envProbe(greenPorts({ runImpl: () => ({ ok: false, out: "" }) })),
       "裸名字起不来 pnpm 是「读数」（形态解析那一份归工具链自证）",
     ).toBe(0);
+  });
+});
+
+describe("环境前提：浏览器那一格的前提（晚红的最后一格要提前问）", () => {
+  /** 上面那一份的语义别名（浏览器落点已就位）。 */
+  function basePorts(overrides: Record<string, unknown> = {}) {
+    return {
+      root: ROOT,
+      findPythonImpl: () => ({
+        command: "python",
+        path: null,
+        version: "Python 3.12.2",
+      }),
+      runImpl: () => ({ ok: true, out: "12.4.1" }),
+      ...silentPorts(),
+      ...overrides,
+    };
+  }
+
+  it("落点上已经有那一件 ⇒ 退 0，且**一次网络探测都不发**", () => {
+    let probed = 0;
+    const code = envProbe(
+      basePorts({
+        browserPresentImpl: () => ({ ok: true, out: "/pw/.../chrome-headless-shell" }),
+        reachabilityImpl: () => {
+          probed += 1;
+          return [];
+        },
+      }),
+    );
+    expect(code).toBe(0);
+    /* 这一条不是「省流量」——它是**这一格在断网时仍然绿**的依据：长期存在的机器上，
+     * 浏览器一旦落地就一直在那儿，而这一趟根本不需要网络。 */
+    expect(probed, "已有落点时不该去碰网（那会让它白红在一条本来不缺的链路上）").toBe(0);
+  });
+
+  it("落点空 + 全部下载根不可达 ⇒ 非零退出（这就是「别等三十分钟」那一格）", () => {
+    const lines: string[] = [];
+    const code = envProbe(
+      basePorts({
+        browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
+        reachabilityImpl: () => [
+          { url: "https://cdn.playwright.dev", verdict: "超时（8000ms 内没有响应）", ok: false },
+          { url: "https://cdn.npmmirror.com/binaries/playwright", verdict: "超时（8000ms 内没有响应）", ok: false },
+        ],
+        logError: (l: string) => lines.push(l),
+      }),
+    );
+    expect(code).toBe(1);
+    const said = lines.join("\n");
+    /* 话术要带上**实测读数**（哪个根、什么结论），而不是又一句「网络不通」。 */
+    expect(said).toContain("cdn.playwright.dev");
+    expect(said).toContain("超时");
+    /* 三条下一动作必须都在（前两条在人不在仓，第三条最省事）。 */
+    expect(said).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
+    expect(said).toContain("代理");
+    expect(said).toContain("chromium-headless-shell");
+  });
+
+  it("落点空 + 至少一条根到得了 ⇒ 退 0（装得成就不该拦）", () => {
+    const code = envProbe(
+      basePorts({
+        browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
+        reachabilityImpl: () => [
+          { url: "https://cdn.playwright.dev", verdict: "超时（8000ms 内没有响应）", ok: false },
+          { url: "https://registry.npmmirror.com/-/binary/playwright", verdict: "HTTP 200", ok: true },
+        ],
+      }),
+    );
+    expect(code).toBe(0);
+  });
+
+  it("给了 `PLAYWRIGHT_DOWNLOAD_HOST` 就**只量它**（与 `浏览器安装` 同一条语义）", () => {
+    const seen: Array<string[] | undefined> = [];
+    envProbe(
+      basePorts({
+        env: {
+          PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright",
+        },
+        browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
+        reachabilityImpl: ({ candidates }: { candidates?: string[] } = {}) => {
+          seen.push(candidates);
+          return [{ url: "x", verdict: "HTTP 200", ok: true }];
+        },
+      }),
+    );
+    expect(seen).toHaveLength(1);
+    /* 给上了还去铺开四个候选 = 把 `playwrightDownloadRoots()` 那条判据降级成
+     * 「多试一个根」，实测那会让读数撒谎（`cnb-g9d-1k515kvrq`）。 */
+    expect(seen[0]).toEqual(["https://cdn.npmmirror.com/binaries/playwright"]);
+  });
+
+  it("探测本身出错 ⇒ **不**退非零（「不知道」不是「不达标」）", () => {
+    const lines: string[] = [];
+    const code = envProbe(
+      basePorts({
+        browserPresentImpl: () => {
+          throw new Error("读落点炸了");
+        },
+        log: (l: string) => lines.push(l),
+      }),
+    );
+    expect(code).toBe(0);
+    expect(lines.join("\n")).toContain("读落点炸了");
+  });
+});
+
+describe("环境前提：浏览器那一格的两个消费者不许各写一份答案", () => {
+  it("`ok` 的判据只认 HTTP 2xx/3xx（超时与 ENOTFOUND 都不算通）", () => {
+    /* 这两档在打印里刻意分开（「连上了但不说话」vs「域名都解析不了」），
+     * 但在**判**这一层它们同属「这一次到不了」—— 混进 `ok` 只会让判据骗人。 */
+    expect(isReachableVerdict("HTTP 200")).toBe(true);
+    expect(isReachableVerdict("HTTP 302")).toBe(true);
+    expect(isReachableVerdict("HTTP 404")).toBe(false);
+    expect(isReachableVerdict("HTTP 403")).toBe(false);
+    expect(isReachableVerdict("超时（8000ms 内没有响应）")).toBe(false);
+    expect(isReachableVerdict("ENOTFOUND：getaddrinfo ENOTFOUND x")).toBe(false);
+    expect(isReachableVerdict("（子进程没有输出）")).toBe(false);
+  });
+
+  it("打印那一份与三态那一份**同源**（同一次探测的两种形态）", () => {
+    /* 一次注入的探测喂进两边，断言「打印出来的行」与「三态的 url/结论」逐项对得上
+     * —— 这条是防「两份实现会漂」的那一天（§12.12）。 */
+    const probe = (url: string) => (url.endsWith("ok") ? "HTTP 200" : "超时（1ms）");
+    const candidates = ["https://a/ok", "https://b/dead"];
+    const verdicts = playwrightReachabilityVerdicts({ candidates, probe });
+    const lines = playwrightReachability({ candidates, probe });
+    expect(verdicts.map((v) => v.ok)).toEqual([true, false]);
+    for (const v of verdicts) {
+      expect(lines.join("\n")).toContain(`${v.url} → ${v.verdict}`);
+    }
+    expect(playwrightReachabilityVerdicts({ candidates, probe })).toEqual(verdicts);
   });
 });
 
