@@ -1,0 +1,176 @@
+/**
+ * 构建机**控制台输出编码**的自证与纠正（ISSUE #1959）。
+ *
+ * ## 它存在的理由：一条实测出来的、会让整份 CI 日志读不懂的链路
+ *
+ * 自托管 Windows 节点上，平台侧抓取 stage 输出用的是**宿主的 ANSI 代码页**
+ * （中文 Windows 上是 CP936）。这在日志里留下的形态是：
+ *
+ *   · **PowerShell 自己**打的字**是好的** —— 它按 `[Console]::OutputEncoding`
+ *     写字节，与抓取端同编码；
+ *   · **Node / pnpm / drizzle-kit** 打的字**全是乱码** —— 它们无条件写 UTF-8，
+ *     抓取端按 CP936 解，于是 `工具链自证通过 ✓` 变成 `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`。
+ *
+ * 这条不是猜的：把 `宸ュ叿閾捐嚜璇侀€氳繃` 按 UTF-8 取字节再按 GBK 解，正好回到
+ * `工具链自证通过`；末尾那个 `?` 是 `✓`（U+2713，UTF-8 三字节 `E2 9C 93`）被
+ * CP936 解出 `鉁` 之后剩下的孤字节 —— 同一份日志里 `Set-Variable : 缺少参数…`
+ * （PowerShell 打的）却是完好中文，两者互为对照。
+ *
+ * ## 所以纠正动作就是把控制台输出编码钉成 UTF-8
+ *
+ * `[Console]::OutputEncoding` 与 `chcp` 改的是**控制台对象**上的设置，同一个控制台
+ * 里的进程共享它 —— 而平台按它解码。钉成 UTF-8 之后：Node 写的本来就是 UTF-8、
+ * PowerShell 也跟着改成 UTF-8，两边与抓取端重新对齐。
+ *
+ * ## 边界（刻意不做的事）
+ *
+ *   · **不改磁盘上的文件编码**（源码仍是 UTF-8，那是另一回事，由仓库门禁守着）；
+ *   · **不吞失败**：这些命令在非 Windows 上本就无处可设，`applyConsoleEncoding()`
+ *     如实返回「没做 / 做了什么」，由调用方打印，不静默；
+ *   · **不做第二份「有没有乱码」的判据**：抓取端怎么解码，本进程看不到 ——
+ *     能被机器判的只有**宿主当前的代码页**这一个读数（`readConsoleEncoding()`）。
+ */
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+/**
+ * 想钉上的目标代码页 —— UTF-8。
+ *
+ * 它同时是判断读数「对不对」的基准，所以两处不许各写一个数字。
+ */
+export const UTF8_CODE_PAGE = 65001;
+
+/**
+ * 一条子进程的读数 —— `applyConsoleEncoding` / `readConsoleEncoding` 共用的形状。
+ *
+ * @typedef {{status: number | null, out: string}} RunResult
+ */
+
+/**
+ * 走一条子进程并取回「退出码 + 合并输出」—— 两个函数共用的唯一一份。
+ *
+ * 测试的注入面就是它（`runImpl`）：真实实现 `spawnSync`，用例给假的。
+ *
+ * @param {string} cmd
+ * @param {string[]} args
+ * @returns {RunResult}
+ */
+function defaultRun(cmd, args) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
+}
+
+/**
+ * 读宿主当前的输出编码读数（**只读、不改任何东西**）。
+ *
+ * 走 PowerShell 问两件事：
+ *   · `[Console]::OutputEncoding.CodePage` —— 抓取端按它解码（这就是乱码的成因）；
+ *   · `chcp` 的原始输出 —— 人眼熟悉的那一行，排障时对数用。
+ *
+ * 非 Windows / 探测失败时返回 `null` 字段而不是抛错：**「没量到」不等于「量到的是错的」**
+ * （与 `ci-toolchain-python.mjs` 的 `findPython` 同一口径）。
+ *
+ * @param {{platform?: NodeJS.Platform, runImpl?: (cmd: string, args: string[]) => RunResult}} [ports]
+ * @returns {{codePage: number | null, chcpRaw: string | null}}
+ */
+export function readConsoleEncoding(ports) {
+  const { platform = process.platform, runImpl } = ports ?? {};
+  if (platform !== "win32") return { codePage: null, chcpRaw: null };
+  const run = runImpl ?? defaultRun;
+  const r = run("powershell", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    "[Console]::OutputEncoding.CodePage; chcp",
+  ]);
+  const out = String(r.out ?? "").trim();
+  if (r.status !== 0 && out === "") return { codePage: null, chcpRaw: null };
+  const codePage = Number(/(\d{3,5})/.exec(out)?.[1] ?? NaN);
+  return {
+    codePage: Number.isFinite(codePage) ? codePage : null,
+    chcpRaw: out.split("\n").pop()?.trim() ?? null,
+  };
+}
+
+/**
+ * 把当前控制台的输出编码钉成 UTF-8。
+ *
+ * `chcp` 与 `[Console]::OutputEncoding` 都设：前者改控制台的输出代码页（抓取端按它
+ * 解码），后者改 PowerShell 自己写字节时用的编码 —— 两个都设上，Node 与 PowerShell
+ * 的输出才会重新落在同一个编码上。
+ *
+ * 失败时**不抛**，返回一条人能读的读数：这一步是纠正动作，不是判据；它没做成时
+ * 合理的处置是「日志里继续是乱码」，而不是把流水线弄红。
+ *
+ * @param {{runImpl?: (cmd: string, args: string[]) => RunResult, platform?: NodeJS.Platform}} [ports]
+ * @returns {{applied: boolean, detail: string}}
+ */
+export function applyConsoleEncoding({ runImpl, platform = process.platform } = {}) {
+  if (platform !== "win32") {
+    return { applied: false, detail: "非 Windows 宿主：控制台输出编码无处可设" };
+  }
+  const run = runImpl ?? defaultRun;
+  const script =
+    `chcp ${UTF8_CODE_PAGE} > $null; ` +
+    `[Console]::OutputEncoding = [Console]::InputEncoding = ` +
+    `[Text.UTF8Encoding]::new($false); ` +
+    `[Console]::OutputEncoding.CodePage`;
+  const r = run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
+  const after = Number(/(\d{3,5})/.exec(r.out ?? "")?.[1] ?? NaN);
+  if (after === UTF8_CODE_PAGE) {
+    return { applied: true, detail: `控制台输出编码已钉成 ${UTF8_CODE_PAGE}（UTF-8）` };
+  }
+  return {
+    applied: false,
+    detail:
+      `没能把控制台输出编码钉成 ${UTF8_CODE_PAGE}` +
+      `（原样返回：${r.out === "" ? "无输出" : r.out}）`,
+  };
+}
+
+/**
+ * 某个代码页读数**是否就是我们要的 UTF-8**。
+ *
+ * `null`（没量到）回 `null` —— 调用方据此说「不知道」，不许当成「对」或「错」。
+ *
+ * @param {number | null} codePage
+ * @returns {boolean | null}
+ */
+export function codePageIsUtf8(codePage) {
+  if (codePage === null || !Number.isFinite(codePage)) return null;
+  return codePage === UTF8_CODE_PAGE;
+}
+
+/* 只在被直接执行时跑 —— 判「是不是直接执行」用**两侧都过 `path.resolve` 的比较**，
+ * 与 `ci-env-probe.mjs` / `ci-toolchain-selfcheck.mjs` 同一处置（拼
+ * `file://${argv[1]}` 在 Windows 上恒不相等，那段就一次都不跑）。
+ *
+ * 形态：
+ *   node scripts/ci-console-encoding.mjs          只打读数（不碰任何设置）
+ *   node scripts/ci-console-encoding.mjs --apply  先把控制台输出编码钉成 UTF-8，再打读数
+ *
+ * 两种形态都**恒退 0**：它是纠正动作与读数，不是判据。真要说「乱码还没解决」，
+ * 那是日志读的人看得见的事，把它变成红只会拦住与之无关的变更。
+ */
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+) {
+  const apply = process.argv.includes("--apply");
+  if (apply) {
+    const r = applyConsoleEncoding();
+    console.log(`[console-encoding] ${r.detail}`);
+  }
+  const now = readConsoleEncoding();
+  const ok = codePageIsUtf8(now.codePage);
+  console.log(
+    ok === null
+      ? "[console-encoding] 宿主输出代码页：没量到（非 Windows 或探测失败）"
+      : `[console-encoding] 宿主输出代码页：${now.codePage}` +
+          `（${ok ? "UTF-8，与 Node 的输出对齐" : "非 UTF-8 —— 本机所有非 ASCII 日志都会被平台按这个代码页解码，读起来是乱码"}）`,
+  );
+  if (now.chcpRaw) console.log(`[console-encoding] chcp 读数：${now.chcpRaw}`);
+  process.exit(0);
+}

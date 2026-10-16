@@ -144,6 +144,17 @@
       #     并给出「位置命中而命令探不到 ⇒ 改账号 PATH，别重复装」这条分岔。
       # 仍会红：缺 git / node（不在 engines.node 内）/ pnpm / Python 时非零退出。
       # 清单与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.5。
+      #
+      # **第一件事是把控制台输出编码钉成 UTF-8**（ISSUE #1959 的日志乱码）。
+      # 平台抓取 stage 输出用的是宿主 ANSI 代码页（中文 Windows 上是 CP936），
+      # 而 Node / pnpm 无条件写 UTF-8 —— 于是本机打的每一个非 ASCII 字符在日志里
+      # 都是乱码（`工具链自证通过 ✓` → `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`），而 PowerShell
+      # 自己打的字是好的（它按控制台的编码写字节）。这一句把那两边重新对齐。
+      # 放在**最前**：后面的每一步都在打这种字，先把编码钉住再说话。
+      # `chcp` / `[Console]::OutputEncoding` 改的是**控制台对象**上的设置，
+      # 同一控制台里的进程共享它 —— 所以它在第一步设、后面的 stage 都受益。
+      # 它恒退 0（纠正动作与读数，不是判据），机制见 scripts/ci-console-encoding.mjs。
+      node scripts/ci-console-encoding.mjs --apply
       node scripts/ci-toolchain-selfcheck.mjs
 
   # ── Python 可用性（**必须排在「单元测试」之前**）──

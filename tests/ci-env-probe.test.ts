@@ -214,6 +214,47 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
     expect(lines.join("\n")).toContain(".cnb.yml");
   });
 
+  it("读数：控制台输出编码非 UTF-8 时**只记读数**、点出下一动作，不退非零", () => {
+    const lines: string[] = [];
+    const code = envProbe(
+      greenPorts({
+        readEncodingImpl: () => ({ codePage: 936, chcpRaw: "活动代码页: 936" }),
+        log: (l: string) => lines.push(l),
+      }),
+    );
+    expect(code, "编码不对只是日志难读，不是这一步的判据").toBe(0);
+    const said = lines.join("\n");
+    expect(said, "读数里没有代码页本身").toContain("936");
+    /* 话术里必须给**下一动作**（与 §13.5.3.5.1「红了要红在能指路的位置」同口径）：
+     * 只说「有乱码」等于把下一动作又留给人猜。 */
+    expect(said).toContain("--apply");
+  });
+
+  it("读数：量不到代码页时也**不**退非零，且不当成「不合格」", () => {
+    const lines: string[] = [];
+    const code = envProbe(
+      greenPorts({
+        readEncodingImpl: () => ({ codePage: null, chcpRaw: null }),
+        log: (l: string) => lines.push(l),
+      }),
+    );
+    expect(code).toBe(0);
+    expect(lines.join("\n")).toContain("没量到");
+  });
+
+  it("读数：已经是 UTF-8 时说的是「对齐」，不给下一动作（免得话术自相矛盾）", () => {
+    const lines: string[] = [];
+    envProbe(
+      greenPorts({
+        readEncodingImpl: () => ({ codePage: 65001, chcpRaw: "Active code page: 65001" }),
+        log: (l: string) => lines.push(l),
+      }),
+    );
+    const said = lines.join("\n");
+    expect(said).toContain("65001");
+    expect(said).not.toContain("--apply");
+  });
+
   it("读数与判据分得开：探测失败 / 版本解析不出 / pnpm 探不到都**不**退非零", () => {
     expect(
       envProbe(greenPorts({ findPythonImpl: () => null })),

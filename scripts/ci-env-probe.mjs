@@ -49,6 +49,7 @@ import {
   playwrightReachabilityVerdicts,
   playwrightDownloadRoots,
 } from "./ci-toolchain-browser.mjs";
+import { codePageIsUtf8, readConsoleEncoding } from "./ci-console-encoding.mjs";
 import { findPython } from "./ci-toolchain-python.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -232,6 +233,7 @@ function run(cmd, args) {
  *   root?: string,
  *   config?: string | null,
  *   findPythonImpl?: typeof findPython,
+ *   readEncodingImpl?: typeof readConsoleEncoding,
  *   runImpl?: (cmd: string, args: string[]) => {ok: boolean, out: string},
  *   browserPresentImpl?: typeof browserExecutableExists,
  *   reachabilityImpl?: typeof playwrightReachabilityVerdicts,
@@ -247,6 +249,8 @@ export function envProbe({
    * 不必造一个真仓库（与 `findPythonImpl` / `runImpl` 同一处置）。 */
   config = undefined,
   findPythonImpl = findPython,
+  /* 编码读数的**注入面**（缺省问宿主；用例据此判「读到 936 会说什么」）。 */
+  readEncodingImpl = readConsoleEncoding,
   runImpl = run,
   /* 浏览器那两格的注入面：缺省是那份**真**实现（与 `浏览器安装` 同源，
    * §12.18 不造第二轮子）。用例换掉它们 ⇒ 不出网、不碰真落点。 */
@@ -336,6 +340,38 @@ export function envProbe({
    * 它是**为了这一步自己的第二条判据**：`.cnb.yml` 在脚本调用点写的是裸 `node`
    * （`node scripts/…`），而 `engines.node` 的范围由「工具链自证」判 —— 这一条不
    * 去重判它，只把 pnpm 交给它的那句「起不来」**在装依赖之前**问出来。 */
+  /* ── ④ 控制台的**输出编码**（ISSUE #1959：日志乱码的成因）──
+   *
+   * 平台抓取 stage 输出用的是宿主 ANSI 代码页（中文 Windows 上是 CP936），而 Node /
+   * pnpm 无条件写 UTF-8 —— 两个编码不一致时，日志里本机打的每一个非 ASCII 字符都会
+   * 变成乱码（`工具链自证通过 ✓` → `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`）。同一条链上
+   * PowerShell 打的那几行是好的，正好互为对照 —— 机制见 `ci-console-encoding.mjs`。
+   *
+   * **它是读数不是判据**：编码不对只让日志难读，不会让哪一步算错；把它判红等于
+   * 拦住与之无关的变更。但它是**可机器读的**，所以放在这里随每一跑打出来 ——
+   * 「这一跑的日志能不能读」不该靠人去猜。 */
+  const encoding = readEncodingImpl();
+  const encodingOk = codePageIsUtf8(encoding.codePage);
+  if (encodingOk === null) {
+    notes.push(
+      "宿主输出代码页没量到（非 Windows 或探测失败）—— 不据此判任何东西",
+    );
+  } else if (encodingOk) {
+    notes.push(
+      `宿主输出代码页 ${encoding.codePage}（UTF-8）：与 Node 的输出对齐，日志可读`,
+    );
+  } else {
+    notes.push(
+      `宿主输出代码页 ${encoding.codePage}（**非 UTF-8**）—— 本机所有非 ASCII 日志` +
+        "都会被平台按这个代码页解码，读起来是乱码（Node 写的永远是 UTF-8）。\n" +
+        `      下一动作：让流水线第一步先跑 \`node scripts/ci-console-encoding.mjs --apply\`，` +
+        "把控制台输出编码钉成 UTF-8；那正是「工具链自证」那一步现在做的第一件事。\n" +
+        "      若已钉上而这里仍读到非 UTF-8，说明这台节点的控制台设置没有传递到后续 stage —— " +
+        "在那台机上把系统区域设成「Beta: 使用 Unicode UTF-8 提供全球语言支持」，" +
+        "或让 Runner 服务以 UTF-8 控制台启动（宿主侧动作）。",
+    );
+  }
+
   const pnpmProbe = runImpl("pnpm", ["--version"]);
   if (pnpmProbe.ok) {
     notes.push(`pnpm 报版本：${pnpmProbe.out.split("\n")[0]}`);
@@ -347,7 +383,7 @@ export function envProbe({
     );
   }
 
-  /* ── ④ 浏览器那一格的**前提**（ISSUE #1959 用户诉求的落点）──
+  /* ── ⑤ 浏览器那一格的**前提**（ISSUE #1959 用户诉求的落点）──
    *
    * 这一步是整条流水线上**最晚**才红的一格（`浏览器安装` 排在倒数第二步、E2E 之前），
    * 而它的前提只要几秒就能问出来。实测四跑都是这个形态：跑了十几到二十几分钟、
