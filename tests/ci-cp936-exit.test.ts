@@ -424,6 +424,70 @@ describe("CP936 出口：编排与退出码", () => {
     expect(seen[0]).toEqual({ cmd: "C:\\tools\\some-thing.EXE", args: ["x"] });
   });
 
+  it("**路径不进 PATH 查找**：`node_modules/.bin/tsc` 不是名字，别拿 PATH 去问它", async () => {
+    /* 这一格是外壳第二次上平台的现场（ISSUE #1977）：
+     *
+     *   [cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc
+     *
+     * `.cnb.yml` 的 stage 里**两种都真实存在** —— `node_modules/.bin/tsc` /
+     * `scripts/check-*.cjs` 是**路径**（相对检出根），`pnpm` / `node` 是**名字**。
+     * 而 `resolveCommandInvocation()` 是**纯 PATH 查找**，对一条相对路径它当然报
+     * `resolved: false` —— 那不是「找不到」，是「这条不该问 PATH」。把两者混作
+     * 一谈，就会在类型检查那一格上**误红**（判据把该保守的方向用反了）。
+     *
+     * 判据只影响「解析口说找不到时算不算失败」，不影响「怎么起」：路径原样交给
+     * spawn，让它的结论回答（不存在则是 ENOENT，同样是可见出口）。 */
+    const seen: Array<{ cmd: string; args: string[] }> = [];
+    const child = fakeChild("ok\n", 0);
+    let asked = false;
+    const code = await runWithCp936Exit(
+      ["--", "node_modules/.bin/tsc", "--noEmit"],
+      {
+        platform: "win32",
+        /* 解析口被问到就该记一笔 —— 真实现是纯 PATH 查找，路径**不该**走到它。 */
+        resolve: (cmd: string, args: string[]) => {
+          asked = true;
+          return { command: cmd, args, resolved: false };
+        },
+        spawnProc: ((cmd: string, args: string[]) => {
+          seen.push({ cmd, args });
+          queueMicrotask(() => child.emitClose());
+          return child;
+        }) as never,
+        write: () => ({ ok: true }),
+        out: () => undefined,
+      },
+    );
+    expect(asked).toBe(false);
+    expect(seen[0]).toEqual({
+      cmd: "node_modules/.bin/tsc",
+      args: ["--noEmit"],
+    });
+    expect(code).toBe(0);
+  });
+
+  it("Windows 的反斜杠路径同判「是路径」（两种分隔符都认）", async () => {
+    const seen: Array<{ cmd: string; args: string[] }> = [];
+    const child = fakeChild("ok\n", 0);
+    let asked = false;
+    await runWithCp936Exit(["--", "node_modules\\.bin\\tsc", "--noEmit"], {
+      platform: "win32",
+      resolve: (cmd: string, args: string[]) => {
+        asked = true;
+        return { command: cmd, args, resolved: false };
+      },
+      spawnProc: ((cmd: string, args: string[]) => {
+        seen.push({ cmd, args });
+        queueMicrotask(() => child.emitClose());
+        return child;
+      }) as never,
+      write: () => ({ ok: true }),
+      out: () => undefined,
+    });
+    expect(asked).toBe(false);
+    expect(seen[0]?.cmd).toBe("node_modules\\.bin\\tsc");
+  });
+
   it("PATH 上查无此命令 ⇒ **可读出口 + 127**，不是把裸名字丢给 spawn", async () => {
     /* `resolved: false` 是「找不到」，不是「再试一次」。裸名字丢给 spawn 只会拿回
      * 一句信息量很低的 ENOENT（那正是平台上那一格的形态），而用户需要知道的是

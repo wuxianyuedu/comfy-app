@@ -224,6 +224,30 @@ export function unwrapCp936(command) {
 }
 
 /**
+ * 这一 token 是**路径**还是**名字**？
+ *
+ * 判据只影响「解析口说找不到时算不算失败」，而不是「怎么起」：
+ *
+ *   · `.cnb.yml` 的 stage 里两种都真实存在 —— `node_modules/.bin/tsc`、
+ *     `scripts/check-import-alias.cjs` 是**路径**（相对检出根），`pnpm` / `node`
+ *     是**名字**（要靠 PATH + PATHEXT 解析，Windows 上这才是那条会踩坑的）；
+ *   · `resolveCommandInvocation()` 是**纯 PATH 查找**，对一条相对路径它当然
+ *     报 `resolved: false` —— 那不是「找不到」，是「这条不是名字、不该问 PATH」。
+ *     把两者混作一谈，就会在类型检查那一格上误红（本文件第一次上平台之后的现场：
+ *     `PATH 上找不到这条命令：node_modules/.bin/tsc`）。
+ *
+ * 含分隔符即按路径处理（Windows 两种分隔符都认），**不判它存不存在** ——
+ * 起不起来由 spawn 自己的结论回答（ENOENT 照样是可见出口），这里只回答
+ * 「该不该拿 PATH 去找它」。
+ *
+ * @param {string} token
+ * @returns {boolean}
+ */
+function isPathLike(token) {
+  return token.includes("/") || token.includes("\\");
+}
+
+/**
  * 起命令、抓输出、以 CP936 重发、转出退出码 —— 编排那一层（`main()` 调它）。
  *
  * **退出码走 `resolve` / `reject` 的第二个值**：`main()` 里那句 `process.exit(code)`
@@ -259,7 +283,12 @@ export function runWithCp936Exit(
    * `commandInvocation()` 收的是**候选路径**，解析不出来时**原样退回候选** ——
    * 那个「回退」对一条盘上的路径是忠实的，对 `pnpm` 这种名字却是把 `spawn("pnpm")`
    * 扔给 Windows（ENOENT，见头注第三个坑）。 */
-  const invocation = (resolve ?? defaultResolver)(command, args);
+  const lookup = resolve ?? defaultResolver;
+  /* 路径不进 PATH 查找（`resolveCommandInvocation` 是纯 PATH 查找，对相对路径
+   * 恒报「找不到」）—— 原样交给 spawn，让它的结论来回答（ENOENT 是可见出口）。 */
+  const invocation = isPathLike(command)
+    ? { command, args, resolved: true }
+    : lookup(command, args);
   /* 解析口必须交出 `{command, args, resolved}`：`undefined` 悄悄流下去只会变成
    * `spawn(undefined, …)` 的 `ERR_INVALID_ARG_TYPE`（报错点离真因一整层）。
    * 生产路径另有护栏 —— `spawn` 传函数会抛，于是「拿 Promise resolve 当注入面」
