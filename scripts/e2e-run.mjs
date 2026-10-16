@@ -72,7 +72,10 @@ import {
   runPreflight,
 } from "../e2e/support/preflight-ports.mjs";
 import { resolveFakeComfyuiPort } from "../e2e/support/fake-comfyui-endpoint.mjs";
-import { reclaimOwnFakePort } from "../e2e/support/reclaim-ports.mjs";
+import {
+  reclaimOwnAppPort,
+  reclaimOwnFakePort,
+} from "../e2e/support/reclaim-ports.mjs";
 import {
   checkBrowserReady,
   describeBrowserMissing,
@@ -585,6 +588,29 @@ async function main(argv) {
       process.stdout.write(
         `[e2e-run] 替身端口 ${fakePort} 上坐着**别的东西**（PID ${reclaimed.foreign.join(", ")}）` +
           "—— 按多检出 / 别人的进程处理，不回收（出口见下面的话术）\n",
+      );
+    }
+  }
+
+  /* **应用端口**上坐着我们上一跑漏下的应用服务时，同一条处置（ISSUE #1977 第十三处）：
+   * 替身那一格修好之后，红就落到这一格 —— 同一个成因（webServer 是 `shell: true`
+   * 下面的孙子进程，上一跑被 stage 墙钟 kill 时收不到 teardown），只是对象从
+   * 「第二个 webServer」换成了「第一个」。判据与边界见
+   * `e2e/support/reclaim-ports.mjs` 里 `reclaimOwnAppPort()` 的头注（两条证据：
+   * 命令行是本检出应用服务 + `/api/health` 是本应用形状）。 */
+  if (env.CI && preflight.appOccupied) {
+    const reclaimed = await reclaimOwnAppPort(appPort, ROOT);
+    if (reclaimed.reclaimed.length > 0) {
+      process.stdout.write(
+        `[e2e-run] 应用端口 ${appPort} 上坐着本检出上一跑漏下的应用服务` +
+          `（PID ${reclaimed.reclaimed.join(", ")}），已回收整棵树\n`,
+      );
+      preflight = await runPreflight({ appPort, fakePort });
+    }
+    if (reclaimed.reclaimed.length === 0 && !reclaimed.free) {
+      process.stdout.write(
+        `[e2e-run] 应用端口 ${appPort} 上坐着**别的东西**（PID ${reclaimed.foreign.join(", ")}）` +
+          "—— 按多检出 / 别人的进程处理，不回收（Playwright 会用它自己那句话报出来）\n",
       );
     }
   }

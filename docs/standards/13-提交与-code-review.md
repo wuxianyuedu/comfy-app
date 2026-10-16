@@ -2603,6 +2603,47 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
 > 「日志怎么发」，而是「**在起那条命令之前，外壳先起过它一次**」—— 一个取证工具自己
 > 制造孤儿进程、并且把每一格都跑两遍的缺陷。
 
+###### 第十四处：替身那一格修好之后，红落到**同一个成因的另一个对象**上（ISSUE #1977）
+
+`reclaimOwnFakePort`（第十一处）把「上一跑漏下的替身」收掉之后，`E2E 关键流程` 又红在
+**同一句话**上，只是这次占的是**应用端口**（`cnb-p0k-1k52srtjv`）：
+
+    [e2e-run] 起 Playwright 前：应用端口 有人 / 替身端口 有人
+    [e2e-run] 替身端口 18188 上坐着本检出上一跑漏下的替身（PID …），已回收整棵树
+    …
+    Error: http://localhost:3989 is already used, make sure that nothing is
+           running on the port/url or set reuseExistingServer:true
+
+成因与替身那一格**逐字相同**：两个 webServer（应用 + 替身）都是 Playwright 在
+`shell: true` 下面起的，父进程被 stage 墙钟 kill 时（第十二处那次 36 分钟超时）
+teardown 那条路没走 —— 于是**第一个和第二个** webServer 都会漏下。第十一处只收第二个。
+
+处置与第十一处同构，**换两条证据**：
+
+| 证据 | 替身那一格 | 应用这一格 |
+| ---- | ---------- | ---------- |
+| ① 「是我们这一类进程」 | 命令行点名本仓的 `e2e/support/fake-comfyui-server.mjs` | `isAppDevServerCmdline`（含检出根 + 本仓 `dev.mjs` / `start.mjs` / `next dev\|start`）**或** `pidBelongsToRoot`（工作目录在检出根下） |
+| ② 「此刻它真是那个东西」 | `/system_stats` 是替身形状 | `/api/health` 是本应用形状（`status` / `db` / `t`） |
+
+⚠️ **① 必须是「两条并列」而不是只有命令行** —— 这是实测逼出来的：监听端口的那个进程
+是 Next 起的 **`next-server`**，而它**改写自己的进程标题**，命令行与 `/proc/<pid>/cmdline`
+两头都只剩 `next-server (v16.3.8)`。工作目录是它身上唯一还留着的线索（两个平台都拿得到：
+`procs.mjs` 的 `processCwd`，正是 `reconcilePort` 用的那一条）。两条判据都不是新写的，
+是编排器回收残留实例用的同一对。
+
+② 是**端口级**的事实（不是逐 PID）：判据问的是「那个口上坐着的是不是一个在应答的
+本应用」，而端口上可能同时有好几层进程；所以探一次，且只在 ① 命中过时才探。
+
+实测（本地真起服务 + 真收）：端口上留着一个本检出的 `next-server` ⇒
+`应用端口 3311 上坐着本检出上一跑漏下的应用服务（PID …），已回收整棵树`，
+端口当场空出来，随后 `E2E 关键流程` 的 `@critical` **73 passed（36.3s）**。
+
+判据在 `tests/e2e-reclaim-own-fake-port.test.ts` 的应用那一组（新增 13 条）：两条证据
+各自的反面（命令行像但答不出形状、形状像但归属不对）都不收、**标题被改写的
+`next-server`** 靠工作目录认得出、别的检出的应用服务（命令行命中脚本名但检出根不是我们的）
+不收、端口空着零代价、① 未命中时**一次 HTTP 都不发**、② 是端口级的一次、以及接线三条
+（在 `spawn` 之前 / 有 CI 档守卫 / 收完重算，按相对位置判）。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的
