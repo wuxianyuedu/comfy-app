@@ -1317,6 +1317,21 @@ E2E 关键流程                 562ms  ❌  [e2e] ✗ PATH 上没有可用的 P
 > `tests/no-platform-ci-config.test.ts`（那一步必须带这个键 —— `env` 的写法错了
 > 不会有任何解析期报错，只会在下一次下载时以同一个形态再红一次）。
 >
+> **④ 的续集：把「多久放弃」放宽之后照旧超时，结论就变了 —— 换成镜像。**
+> 实测（`cnb-gt1-1k513ill4`）：30s 放宽到 120s 之后，原文变成
+> `timed out after 120000ms`。于是「这一次没量完」不再是解释 —— 这台节点**真的
+> 到不了** `cdn.playwright.dev`，180 MiB 在这样一条链路上等多久都不会到。
+>
+> 所以 `.cnb.yml` 的 `浏览器安装` 那一步同批给
+> `PLAYWRIGHT_DOWNLOAD_HOST: https://cdn.npmmirror.com/binaries/playwright`
+> （Playwright 自己的键）。选这个镜像是因为**它真能供上这一件**：按同一段路径实测
+> 回 HTTP 200，15s 内收到 99 MiB —— 「换个镜像」这句话没有读数撑着就只是猜测。
+>
+> 判据补在 `tests/no-platform-ci-config.test.ts`：那一步的块里**必须同时有**
+> `PLAYWRIGHT_DOWNLOAD_HOST` 与 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`。
+> 少了镜像那一行，这一步会以「超时」的形态一直红下去，而人只会不断去调那个超时数字
+> —— 调它对「到不了」这件事一点用都没有。
+>
 > **这一格的第五个面（口径收成一句）**：`playwright install` / `python -V` /
 > `which pnpm` **退 0，都只是「那条命令」的属性**；要判的是**下一格** ——
 > 二进制落没落地、解释器在不在 PATH 上、pnpm 的哪种形态真能被起。判据必须长在

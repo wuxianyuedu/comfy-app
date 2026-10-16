@@ -568,6 +568,17 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(stage).toMatch(
       /PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT:\s*"[1-9]\d*"/,
     );
+
+    /* 光放宽预算不够 —— 放宽到 120s 之后**照旧超时**（`cnb-gt1-1k513ill4` 的原文是
+     * `timed out after 120000ms`），那时结论就变了：这台节点真的到不了
+     * `cdn.playwright.dev`。所以镜像那一行也要在块里 —— 它才是让下载**到得了**的那一件，
+     * 少了它，这一步会以「超时」的形态一直红下去，而人只会不断去调那个超时数字。 */
+    expect(
+      stage,
+      "「浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_HOST` —— 自托管节点到不了 " +
+        "`cdn.playwright.dev`（120s 也超时），只放宽那个超时数字是没用的",
+    ).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
+    expect(stage).toMatch(/PLAYWRIGHT_DOWNLOAD_HOST:\s*"https:\/\/[^"]+"/);
   });
 
   it("`单元测试` 排在 `Python 可用性` 之后（缺件要在最便宜的位置报出来）", () => {
