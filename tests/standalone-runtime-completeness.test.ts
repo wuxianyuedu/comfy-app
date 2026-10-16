@@ -167,3 +167,65 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
     );
   });
 });
+
+/**
+ * `pnpm start` 与 `output: standalone` 的**入口那一边**（ISSUE #1977）。
+ *
+ * 上面那组管的是「产物里有没有那几份运行时脚本」，而这一组管**谁来起这份产物** ——
+ * 上面头注里那句「没有任何常规门禁会去启动 standalone 服务」说的就是这一格：
+ *
+ *   · `next.config.js` 是 `output: "standalone"`；
+ *   · 而 `scripts/start.mjs` 此前一律跑 `pnpm exec next start` —— Next 16 对这对
+ *     组合是**明确拒绝**的：
+ *
+ *       `Error: "next start" does not work with "output: standalone" configuration.`
+ *       `       Use "node .next/standalone/server.js" instead.`
+ *
+ *       （报错原文，按 §12.4.6 用反引号包住。）
+ *
+ * 这条链此前从来没跑到过（E2E 那一档在自托管路径上一直断在更早的 stage），
+ * 于是「`pnpm start`」与「standalone」这对矛盾一直没露出来 —— 直到 E2E 第一次
+ * 真跑到，日志里那条红就是它（CI 档 webServer 正是 `pnpm start`）。
+ *
+ * ⚠️ **判据只能判「入口怎么选」，判不了「服务真的起来了」** —— 起来要一份完整产物
+ * （`pnpm build` + 库结构），而那正是本文件上半那些产物探针的活。这里钉的是那句
+ * 「选了哪个入口」：盘上有 `.next/standalone/server.js` ⇒ 必须走它；没有 ⇒ 保留
+ * `next start` 的身份（让 Next 报它自己那句「先 build」，而不是换成一个错的入口）。
+ */
+describe("`pnpm start` 的入口选择：standalone 产物在就必须走 server.js", () => {
+  const source = readFileSync(
+    join(process.cwd(), "scripts", "start.mjs"),
+    "utf8",
+  );
+
+  it("判据是**盘上有没有 server.js**（由 build 决定，不看环境变量）", () => {
+    expect(source).toMatch(
+      /standaloneServer\s*=\s*path\.join\([^)]*"\.next"[\s\S]{0,40}"standalone"[\s\S]{0,40}"server\.js"/,
+    );
+    expect(source).toMatch(/useStandalone\s*=\s*existsSync\(standaloneServer\)/);
+  });
+
+  it("两个分支都在：standalone 用 `node server.js`，没产物才退回 `next start`", () => {
+    expect(source).toMatch(/command:\s*process\.execPath/);
+    expect(source).toMatch(/args:\s*\[standaloneServer\]/);
+    /* 退回那一支仍要 `next start` —— 那是「这台机器该先 build」的正确表达。 */
+    expect(source).toMatch(/"next",\s*"start"/);
+  });
+
+  it("standalone 那支的环境由 `buildStandaloneRuntimeEnv()` 整份给（不是只给 PORT）", () => {
+    /* 少一项就是运行期某条路由 500（理由在那个函数的头注里）。两件事分开判：
+     *   · `appRoot` 给**检出根**、由它自己拼 `.next/standalone` —— 那个值要与
+     *     `server.js` 启动时的 `chdir(__dirname)` 对齐；
+     *   · `env` 取的是**解析口交回来的那一份**（`invocation.env`），不是现拼的
+     *     `{ ...process.env, PORT }`（那正是 `next start` 那支的写法，两者混了
+     *     就等于把整份运行期环境换成只有一个 PORT）。 */
+    expect(source).toMatch(/env:\s*buildStandaloneRuntimeEnv\(\{/);
+    expect(source).toMatch(/appRoot:\s*path\.join\(root,\s*"\.next",\s*"standalone"\)/);
+    /* 取值的**那一边**：两个分支必须分开，不许一律 `{ ...process.env, PORT }`。 */
+    expect(source).toMatch(/env:\s*invocation\.env\s*\?\?\s*\{\s*\.\.\.process\.env,/);
+    /* 反向：不许出现「invocation.env 被无视、一律现拼」的形态。 */
+    expect(source).not.toMatch(
+      /spawnSync\(invocation\.command,\s*invocation\.args,\s*\{\s*stdio:\s*"inherit",\s*env:\s*\{\s*\.\.\.process\.env,\s*PORT/,
+    );
+  });
+});

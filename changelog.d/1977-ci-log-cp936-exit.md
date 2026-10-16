@@ -146,6 +146,27 @@
 
   一句话：**注入面能盖住「实现写错了」，盖不住「接错线了」与「只覆盖了一半形状」。**
 
+  ## 三之八、`pnpm start` 与 `output: standalone` 不兼容 —— 前面九处修出来的**真因**
+
+  外壳那几处修完，日志终于有内容了，于是 E2E 那一格第一次把真因说出来：
+
+      [WebServer] ? "next start" does not work with "output: standalone" configuration.
+                   Use "node .next/standalone/server.js" instead.
+
+  `next.config.js` 是 `output: "standalone"`，而 `scripts/start.mjs` 一律跑
+  `pnpm exec next start` —— Next 16 对这对组合是**明确拒绝**的。CI 档 webServer
+  用的正是 `pnpm start`，所以 E2E 起不来。
+
+  这一处与前面几处**性质不同**：它不是 CP936 外壳里的坑，而是**一条从来没跑到过的
+  链**上本来就有的缺陷（E2E 那一档在自托管路径上一直断在更早的 stage）。
+  它的可见性正是前面几处修出来的 —— 日志能读了、解析对了，真因才浮上来。
+
+  修法：盘上有 `.next/standalone/server.js` 就走它（环境由
+  `buildStandaloneRuntimeEnv()` 整份给，与桌包链同一份），没有就保留
+  `next start` 的身份（让 Next 报它自己那句「先 build」——那正是这台机器该做的事）。
+  判据落在 `tests/standalone-runtime-completeness.test.ts`，而那个文件的头注里
+  早就写着「**没有任何常规门禁会去启动 standalone 服务**」。
+
   ## 三之三、这三条判据的**边界**
 
   · **判不到**「平台侧读出来可不可读」—— 解码在本进程之外；
