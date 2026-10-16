@@ -355,6 +355,43 @@ export function stageBlock(text: string, name: string): string | null {
   return out.join("\n");
 }
 
+/**
+ * 摘出**被注释掉的** stage 那一项的原文（停用形态：`# - name: X` 起）。
+ *
+ * 停用的恢复动作是「取消注释」，所以原文必须还 grep 得回来；而 `stageBlock()` 只认
+ * 活的 `  - name: X`，停用之后它回 `null` —— 于是「那一项里写了什么」在停用期间没有
+ * 任何判据看得见。这个辅助把 `# ` 前缀剥掉之后按同一套缩进口径收口，
+ * 让「停用期间那两个键还在不在」仍然判得出来（与 `stageBlock` 同一口径，不造第二轮子）。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @param {string} name stage 名
+ * @returns {string | null}
+ */
+export function commentedStageBlock(text: string, name: string): string | null {
+  const lines = text.split("\n");
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    const item = /^#\s+-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
+    if (item?.[1] === name) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  const strip = (l: string) => l.replace(/^#\s?/, "");
+  const out: string[] = [strip(lines[start] ?? "")];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const raw = lines[i] ?? "";
+    /* 收尾：下一个同级（注释态）stage 项，或**回到未注释的顶格键**（`master:` 那一层）。
+     * ⚠️ 判据不能写成「`^\S` 就收尾」—— 注释块里的每一行都以 `#` 开头，那也是 `\S`，
+     * 于是块内容会被切在第一行之后（`- name: X` 一行）。 */
+    if (/^#\s+-\s+name:/.test(raw) || (/^\S/.test(raw) && !raw.startsWith("#")))
+      break;
+    out.push(strip(raw));
+  }
+  return out.join("\n");
+}
+
 export function stageTimeouts(text: string): Map<string, string> {
   const out = new Map<string, string>();
   const lines = text.split("\n");
@@ -558,28 +595,38 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * `Executable doesn't exist at …\ms-playwright\chromium_headless_shell-…` 上。
      *
      * 顺序约束与 Python 那条同源：装浏览器要下 ~100+ MiB（分钟级），而判「装没装成」
-     * 是零成本的；排在 E2E 之后 = 那个结论要么看不到、要么在最贵的位置才看到。 */
+     * 是零成本的；排在 E2E 之后 = 那个结论要么看不到、要么在最贵的位置才看到。
+     *
+     * **停用时这条顺序约束无从谈起**（两条都不在清单里，`indexOf` 回 -1）——
+     * 处置与 `单元测试` 那条逐字相同：停用与否不是这里判的（那是「停用登记」两条的事），
+     * 这里只判「在它们真排进清单时必须一前一后」，并要求停用必须留痕。 */
     const order = registeredGateOrder(text);
+    const disabled = registeredDisabledGates(text);
     const installAt = order.indexOf("浏览器安装");
     const e2eAt = order.indexOf("E2E 关键流程");
-    expect(
-      installAt,
-      "`COMFYAPP_CI_GATES` 里没有「浏览器安装」—— 这一格因此没有任何执行者，",
-    ).toBeGreaterThanOrEqual(0);
-    expect(
-      e2eAt,
-      "`COMFYAPP_CI_GATES` 里没有「E2E 关键流程」—— 清单被重排过？",
-    ).toBeGreaterThanOrEqual(0);
-    expect(
-      installAt,
-      "`浏览器安装` 必须排在 `E2E 关键流程` 之前：缺件时那一步会以" +
-        "「全档每条都报同一个 launch 失败」的形态红，看不出真正要修的是什么",
-    ).toBeLessThan(e2eAt);
+    if (installAt < 0 || e2eAt < 0) {
+      expect(
+        disabled,
+        "「浏览器安装」/「E2E 关键流程」既不在 `COMFYAPP_CI_GATES` 里、也没在 " +
+          "`COMFYAPP_CI_DISABLED_GATES` 里登记 —— 这是「删除」而不是「停用」",
+      ).toEqual(expect.arrayContaining(["浏览器安装", "E2E 关键流程"]));
+    } else {
+      expect(
+        installAt,
+        "`浏览器安装` 必须排在 `E2E 关键流程` 之前：缺件时那一步会以" +
+          "「全档每条都报同一个 launch 失败」的形态红，看不出真正要修的是什么",
+      ).toBeLessThan(e2eAt);
+    }
 
     /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 那条口径：`script` 里的
-     * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。 */
-    const scriptLine =
-      /^\s*-\s*name:\s*浏览器安装\s*$\r?\n\s*script:\s*(\S.*)$/m.exec(text);
+     * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。
+     * **停用时从注释块里读**（`# ` 前缀让 `- name:` 那一行不再是 stage 项）——
+     * 停用不该把这条保证一起丢掉：恢复时照抄的那段原文指的是同一个入口。
+     * 不从原文里做「紧邻下一行」的匹配：停用块在 `- name:` 与 `script:` 之间插了
+     * 一段说明，紧邻匹配会当场落空（而它要判的是「入口在不在盘上」，不是排版）。 */
+    const blockText =
+      stageBlock(text, "浏览器安装") ?? commentedStageBlock(text, "浏览器安装");
+    const scriptLine = /^(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(blockText ?? "");
     const command = scriptLine?.[1]?.trim();
     expect(command, "解析不出「浏览器安装」那一步的 script").toBeTruthy();
     const entry = /^(?:node\s+)?(scripts\/[^\s]+)/.exec(command ?? "")?.[1];
@@ -607,7 +654,18 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 这个键是本档**唯一**能碰到「下载」这件事的地方，而 `env` 的键写错了不会在配置
      * 解析期报任何错，只会在下一次下载时以同一个形态再红一次 —— 所以这里按「块内必须
      * 有这个键」判，而不是靠人记得。顺序/入口那一条在上面，这条只管下载预算。 */
-    const stage = stageBlock(text, "浏览器安装");
+    /* **停用时读注释块**（`commentedStageBlock`）：那两个键仍在原文里，恢复时照抄
+     * 的就是它们。停用不该让「下载预算配置得对不对」这件事失去判据 —— 否则停用
+     * 期间有人把镜像那一行删掉，谁也不会知道，恢复时又回到「只调超时数字」那条错路。 */
+    const active = stageBlock(text, "浏览器安装");
+    const stage = active ?? commentedStageBlock(text, "浏览器安装");
+    if (active === null) {
+      expect(
+        registeredDisabledGates(text),
+        "「浏览器安装」既不在 `GATES` 里、也没在 `DISABLED_GATES` 里登记 —— " +
+          "这一段判据会失去扫描对象，先补登记",
+      ).toContain("浏览器安装");
+    }
     expect(stage, "解析不出「浏览器安装」这一步 —— 名字被改了？").toBeTruthy();
     expect(
       stage,
