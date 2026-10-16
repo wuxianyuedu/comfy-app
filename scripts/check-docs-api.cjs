@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 提交门槛脚本:API 文档生成物与源同步(供 .githooks/pre-commit 调用)
+// @ts-nocheck -- 提交门槛脚本:API 文档生成物与源同步(由平台侧 .cnb.yml 调用,ISSUE #1975 起)
 /**
  * check-docs-api.cjs — `docs/api/**` 生成物与当前源同步（规范 §13.5.5 的同族判据）。
  *
@@ -43,9 +43,21 @@
  *      提交加那 31s（实测 `pnpm exec typedoc` 冷 31s）。
  *
  * 用法：
- *   `node scripts/check-docs-api.cjs`            全量比对（手动入口 / 按需召唤）
- *   `node scripts/check-docs-api.cjs --staged`   仅当暂存改动命中输入面才比对（钩子用）
+ *   `node scripts/check-docs-api.cjs`            全量比对（**平台侧那一步用的就是这个**）
+ *   `node scripts/check-docs-api.cjs --staged`   仅当暂存改动命中输入面才比对（本地手跑用）
  * 退出码：0 通过（或未触发）；1 漂移 / 重生成失败。
+ *
+ * ── 执行者在哪（ISSUE #1975 改了，别照着旧注释去找）────────────────────────
+ *
+ * 它原先挂在 `.githooks/pre-commit` 的 D 组、带 `--staged`。而那个跳过的输入面是
+ * `src/lib|server|trpc` —— 本仓最常见的提交类别正落在里面，于是「跳过」在真实提交上
+ * 几乎不生效：实测**改一个 `src/lib` 文件**（加一行注释都算）这一档照旧走满 **31s**，
+ * 是 D 组最贵的一步。改挂 `.cnb.yml`（平台侧、全量档）之后：判据一个字没改，
+ * 而它判的是「产物与源码同不同步」—— 挡不住任何代码回归，正该放在合并前那一层。
+ *
+ * ⚠️ 平台侧那一步**不带** `--staged`：平台侧的工作区就是这次要判的那份源码，
+ * 传 `--staged` 会让它在那边读到空暂存区、恒跳过（挂了等于没挂）。
+ * 口径与逐条实测见规范 §13.5.17。
  */
 const fs = require("node:fs");
 const os = require("node:os");

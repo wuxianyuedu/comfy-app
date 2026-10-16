@@ -193,7 +193,8 @@
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, 格式化提交分离, core 骨架单一事实源,
+      UI/逻辑分离, lib Node-only 声明, 格式化提交分离, 生成态文档与源同步,
+      API 文档生成物与源同步, 文档引用与权威源一致, core 骨架单一事实源,
       零消费导出, core 出口纪律与基类纯度, 生产构建, 浏览器安装, E2E 关键流程
     # ⚠️ 末尾那两条的**顺序有意**：`浏览器安装` 要下 ~120 MiB（分钟级），而判「装没装成」
     # 是零成本的 —— 排在 `E2E 关键流程` 之前，缺件才会在便宜的位置报出来（判据判这条序）。
@@ -473,6 +474,34 @@
 
   - name: 格式化提交分离
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-reformat-only.cjs
+
+  # ── 文档面三条（ISSUE #1975：从 `.githooks/pre-commit` 的 D 组挪到这里）──
+  #
+  # 它们原本在钩子里（`生成态文档与源同步` / `API 文档生成物与源同步` /
+  # `文档引用与权威源一致`），2026-10-16 撤到平台侧。判据**一个字没改**，
+  # 挪的只是执行者 —— 三条判的都是**文档与文档生成物**，漂了不会有任何运行时症状，
+  # 只会在下一次有人读文档时误导他，因此挡不住任何一次代码回归，不该占用「提交那一刻」
+  # 这份最贵的预算。口径与逐条实测见规范 §13.5.17。
+  #
+  # ⚠️ 三条在平台侧是**全量档**（不带 `--staged`）：平台侧的工作区就是这次要判的那份
+  # 源码，而本地那一档对着的是「工作区里半成品状态的暂存区」—— 全量档更接近要守的
+  # 那件事（「合并后的源码与产物一致」）。
+  #
+  # ⚠️ `pnpm run docs` **不要写成 `pnpm docs`**：后者是 pnpm 的内建命令
+  # （`pnpm docs <PACKAGE>`），会抢在脚本前面、typedoc 根本不跑。`check-docs-api.cjs`
+  # 内部调的是 `scripts/typedoc-run.mjs`，与本步无关；这里只跑比对档。
+  - name: 生成态文档与源同步
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/render-doc-placeholders.cjs --check
+
+  - name: API 文档生成物与源同步
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-docs-api.cjs
+    # 全量档实测 32s（本机 8 核，热缓存；与钩子里那一档同量级）。平台侧冷节点上
+    # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个
+    # 数量级，卡死的形态 20m 报出来，不必等满平台默认的 2h 墙钟）。
+    timeout: 20m
+
+  - name: 文档引用与权威源一致
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-doc-references.cjs
 
   - name: core 骨架单一事实源
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts

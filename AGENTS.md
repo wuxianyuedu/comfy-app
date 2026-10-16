@@ -97,9 +97,13 @@
    `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
 6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，并随 ISSUE #1959 由仓库根 `.cnb.yml` 重新调用（跑在根组织自托管节点上、不参与核时计费，§13.5.3）——**平台侧这一层又有兜底了，但它取自源分支、且跑的是另一份清单**，不能替代本地这一层。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**合并那一跳现在有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（分钟级，实测数据与为什么不在这里写数见 §13.6.2.1；证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。
 7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + 结构检查 + tsc + eslint +
-   UI/逻辑分离硬闸 + 结构守护与受影响用例 + CHANGELOG 碎片 + 两份生成物同步
-   （`docs/generated/**` 见 §13.5.5、`docs/api/**` 见 §13.5.5.1 —— **后者提交进 git 却
-   长达数十次提交没有任何判据**，是 ISSUE #1329 收尾时翻出来的过期面），全部走 `pnpm exec`）。
+   UI/逻辑分离硬闸 + 结构守护与受影响用例 + CHANGELOG 碎片），全部走 `pnpm exec`。
+   **两份生成物同步（`docs/generated/**` 见 §13.5.5、`docs/api/**` 见 §13.5.5.1）
+   2026-10-16 起已挪到平台侧 `.cnb.yml`**（ISSUE #1975，连同「文档引用与权威源一致」共三条）：
+   它们判的是**读者面**的一致性、挡不住任何一次代码回归，而 `check-docs-api.cjs`
+   **触发即 31s**（`--staged` 的输入面是 `src/lib` / `src/server` / `src/trpc`，最常见的提交类别正落在里面）。
+   判据一字未改，改的只是执行者；本地出口照旧（`pnpm run docs` / `pnpm doc:render` /
+   `pnpm doc:check`），口径与逐条实测见 §13.5.17。
    测试那一层是「改到哪、测到哪」的增量层（固定清单 + 暂存改动沿**静态 import 图**
    追溯到的用例，判据与**已知边界**见 §13.5.8）——运行时拼出来的路径抓不到、也不是
    全量，全量仍由 `pnpm test` / `pnpm check:all` 负责。钩子失败先修代码，
@@ -208,7 +212,7 @@
 `pnpm install --frozen-lockfile`（冷装约 8 分钟）再跑。不要把它当成「本机不支持校验」
 的结论，也不要把这个理由写进提交信息（硬规则 26 / §13.6.3）。前置判断：`pnpm check:toolchain`。
 
-**改了 `src/lib` / `src/server` / `src/trpc` 就会触发 `docs/api/**` 同步判据**（`pnpm run docs` 的产物提交进 git，AGENTS 与主规范 §9 都承诺它「随构建链更新」，而实测此前构建链里没有任何一处跑 typedoc —— 产物停在最初两次提交上、留着指向已删模块的 `lib_comfyui_markdown.html`）：报「落后 / 缺失 / 多余」时 `pnpm run docs` 重生成并把 `docs/api/**` 一并提交，**不要手改生成物**。⚠️ **别写 `pnpm docs`**：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的文档），会抢在脚本前面、typedoc 根本不跑（实测报 `the following required arguments were not provided: <PACKAGE>`）—— 带脚本名的动词要用 `pnpm run <脚本>`。`pnpm run docs` 现在**按产物判成败**：typedoc 写出失败时照样退 0、日志照样收在 `[info] html generated at …` 上（「退出码 0 + 说生成了 + 产物一个没更新」三件套），所以那一层验的是 `index.html` 是不是这一轮写的、失败会重试，全失败才退非零（唯一实现 `scripts/typedoc-run.mjs`，`docs:check` 用的是同一份）。
+**改了 `src/lib` / `src/server` / `src/trpc` 就会触发 `docs/api/**` 同步判据**（它由**平台侧流水线**跑，ISSUE #1975 起不再进 pre-commit，见 §13.5.17；`pnpm run docs` 的产物提交进 git，AGENTS 与主规范 §9 都承诺它「随构建链更新」，而实测此前构建链里没有任何一处跑 typedoc —— 产物停在最初两次提交上、留着指向已删模块的 `lib_comfyui_markdown.html`）：报「落后 / 缺失 / 多余」时 `pnpm run docs` 重生成并把 `docs/api/**` 一并提交，**不要手改生成物**。⚠️ **别写 `pnpm docs`**：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的文档），会抢在脚本前面、typedoc 根本不跑（实测报 `the following required arguments were not provided: <PACKAGE>`）—— 带脚本名的动词要用 `pnpm run <脚本>`。`pnpm run docs` 现在**按产物判成败**：typedoc 写出失败时照样退 0、日志照样收在 `[info] html generated at …` 上（「退出码 0 + 说生成了 + 产物一个没更新」三件套），所以那一层验的是 `index.html` 是不是这一轮写的、失败会重试，全失败才退非零（唯一实现 `scripts/typedoc-run.mjs`，`docs:check` 用的是同一份）。
 
 **报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而平台侧那条流水线（#1959 起）取自源分支、跑的是另一份清单，所以硬闸违规仍可能落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。**复算有执行者了**：`node scripts/base-check.mjs <拦住你的那条>`（整条命令 / 钩子标签 / 裸脚本名都认；`--fetch` 先拉、`--json` 给机器可读）——它把那条门禁在干净的上游提交上重跑一遍，给你 `baseline-red`（别线的红，就地修或登记）/ `yours`（你自己的）/ `current-green` / `inconclusive`（**没跑起来，不构成证据**：最典型是那条判据只存在你未提交的改动里）/ `load-flake`（**两侧都红且两侧输出都是超时形态** ⇒ 疑似负载假红，先隔离复跑，**不许**照 `baseline-red` 登记、**不许**抬 `testTimeout`）。五态的下一动作与**不许**为它放宽判据的口径见 §13.6.2；时间型判据在 CPU 高负载下的完整处置见 §13.6.4（**C 组已经把「隔离复跑」这一步接进钩子**：带超时指纹的失败会等机器喘口气、再 `--no-file-parallelism` 复跑一次 —— 第二遍绿 ⇒ 负载假红放过；第二遍指纹消失 ⇒ 真红照拦；第二遍**仍只是超时形态** ⇒ 记为「未校验」放行并逐条点名（**拿不到测量 ≠ 测量结果是红的**，ISSUE #1747），全程不抬预算、也不看 `os.loadavg()` —— 见 §13.6.4.1）。
 

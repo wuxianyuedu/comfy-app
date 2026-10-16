@@ -28,6 +28,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { registeredGateOrder, stageBlock } from "./no-platform-ci-config.test";
+
 const REPO_ROOT = resolve(".");
 const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
@@ -45,6 +47,30 @@ function dGroupSteps(hookText: string) {
   return [...hookText.matchAll(re)].map((m) => ({
     label: m[1] ?? "",
     cmd: m[2] ?? "",
+  }));
+}
+
+/**
+ * 平台侧 `.cnb.yml` 的 stage 清单（**名字 + 该 stage 的原文块**）。
+ *
+ * 名字取自 `COMFYAPP_CI_GATES`（那份有序清单是既有事实源，见 `.cnb.yml` 的 `env`），
+ * 原文块复用 `no-platform-ci-config.test.ts` 的 `stageBlock()` —— **不在这里抄第二份
+ * 解析器**（§12.12 / §12.18：抄一份就会漂，而漂的形态是静默的）。
+ *
+ * ⚠️ 用「清单里的名字 → 原文块」而不是「扫全文找 `- name:`」：被 `#` 注释掉的 stage
+ * （临时停用那一档）**不在清单里**，扫全文会把停用的那几步当成「在跑」—— 那正是
+ * ISSUE #1975 要判的那件事的反面。
+ *
+ * `stage === null` 的条目表示「清单里点了名、`.gates` 里却找不到那一项」，
+ * 调用方据此判红（名字被删 / 改名 = 平台侧这一步没了）。
+ *
+ * @returns {{name: string, stage: string | null}[]}
+ */
+function platformStages(): { name: string; stage: string | null }[] {
+  const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
+  return registeredGateOrder(text).map((name) => ({
+    name,
+    stage: stageBlock(text, name),
   }));
 }
 
@@ -77,18 +103,33 @@ function readChecklistCommands() {
   );
 }
 
-describe("doc:check 接进 pre-commit（ISSUE #1371 翻档的在位判据）", () => {
+describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSUE #1975 挪执行者）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = dGroupSteps(hook);
 
-  it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
+  /* 这一条守的动作**变过一次**，两半都要留着：
+   *   · ISSUE #1371 翻档：它原来自称「不接 pre-commit」，翻档是把它**接进**钩子；
+   *   · ISSUE #1975：它从钩子**挪到平台侧**（理由见规范 §13.5.17 —— 判的是文档面，
+   *     挡不住任何一次代码回归，而平台侧回来之后这一档有了第二个执行者）。
+   * 于是现在判的是**两半**：钩子里不再有它、平台侧那一步在。只判一半的话，
+   * 「钩子撤掉 + 平台侧也忘了加」会全绿，而它的失效形态正是「谁都没跑它」。 */
+  it("钩子 D 组**不再**执行这一步（它已在平台侧，见 §13.5.17）", () => {
     const hit = steps.find((s) =>
       s.cmd.includes("scripts/check-doc-references.cjs"),
     );
-    expect(hit, `D 组 ${steps.length} 步里没有 doc:check`).toEqual({
-      label: "文档引用与权威源一致",
-      cmd: "node scripts/check-doc-references.cjs",
-    });
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里又有 doc:check 了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
+        "（`.cnb.yml` 的「文档引用与权威源一致」）。要么把它从钩子里去掉，要么同步改本判据",
+    ).toBeUndefined();
+  });
+
+  it("平台侧 `.cnb.yml` 真的有这一步（挪走 ≠ 没人跑）", () => {
+    expect(
+      platformStages().some((x) => x.name === "文档引用与权威源一致"),
+      "`.cnb.yml` 里没有「文档引用与权威源一致」这一步 —— 钩子撤掉 + 平台侧没加 = " +
+        "这条判据一个执行者都没有，而它正是本判据要拦的形态（§13.5.17）",
+    ).toBe(true);
   });
 
   it("脚本头不许回到「不接 pre-commit（避免过度打扰提交）」那句旧签字", () => {
@@ -195,33 +236,51 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
 });
 
 /**
- * API 文档生成物与源同步接进 D 组（ISSUE #1329 收尾）。
+ * API 文档生成物与源同步：**已从 D 组挪到平台侧**（ISSUE #1329 收尾 → ISSUE #1975）。
  *
- * 这条与前三条同族但**多一个必须钉住的东西**：它带 `--staged`。这一步的重生成实测
- * 31s，无条件挂上会给每个前端提交加那 31s（然后所有人开始 `--no-verify`，判据归零）。
- * 所以「条件触发」不是优化、是这一步能存在的前提 —— 抹掉 `--staged` 这行在本文件里
- * 与「删掉整步」等价，而同族里没有别的判据会看见这个差异。
+ * 它进钩子时带的是 `--staged`（输入面跳过），而那个跳过的**输入面是 `src/lib|server|trpc`**
+ * —— 本仓最常见的提交类别正好全落在它里面，于是「跳过」在真实提交上几乎不生效：
+ * 实测改一个 `src/lib` 文件（一行注释都算）这一档照旧走满 **31s**，是 D 组最贵的一步。
+ * 规范 §13.5.17 记了判据面（「结论挡不住任何一次代码回归」）与逐条实测。
+ *
+ * 判两半：钩子里不再有它、平台侧那一步在（且**不带 `--staged`** —— 平台侧是全量档，
+ * 传 `--staged` 会让它在平台侧恒跳过，等于白挂）。
  */
 const DOCS_API = join(REPO_ROOT, "scripts", "check-docs-api.cjs");
 /** 生成物目录（提交进 git，判据对象是它）。 */
 const DOCS_API_OUT = join(REPO_ROOT, "docs", "api");
 
-describe("API 文档生成物与源同步在钩子里（ISSUE #1329 收尾）", () => {
+describe("API 文档生成物与源同步（ISSUE #1329 收尾 → ISSUE #1975 挪执行者）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = dGroupSteps(hook);
 
-  it("钩子 D 组真的执行这一步，且带 --staged 条件触发", () => {
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/check-docs-api.cjs"),
+  it("钩子 D 组**不再**执行这一步（它已在平台侧，见 §13.5.17）", () => {
+    const hit = steps.find((s) => s.cmd.includes("scripts/check-docs-api.cjs"));
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里又有 docs-api 同步了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
+        "（`.cnb.yml` 的「API 文档生成物与源同步」）。要么把它从钩子里去掉，要么同步改本判据",
+    ).toBeUndefined();
+  });
+
+  it("平台侧那一步在，且是**全量档**（`--staged` 在平台侧恒跳过 = 白挂）", () => {
+    const hit = platformStages().find(
+      (x) => x.name === "API 文档生成物与源同步",
     );
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有 docs-api 同步 —— 那 docs/api/** 又回到` +
-        "「进 git + 零判据」的过期面（ISSUE #1329 收尾翻出的真残留）",
-    ).toEqual({
-      label: "API 文档生成物与源同步",
-      cmd: "node scripts/check-docs-api.cjs --staged",
-    });
+      "`.cnb.yml` 里没有「API 文档生成物与源同步」这一步 —— 钩子撤掉 + 平台侧没加 = " +
+        "docs/api/** 又回到「进 git + 零判据」的过期面（§13.5.17）",
+    ).toBeDefined();
+    expect(
+      hit?.stage,
+      "平台侧那一步的原文块解析不出来（名字被改了？）",
+    ).toBeTruthy();
+    expect(
+      hit?.stage,
+      "平台侧那一步带了 `--staged`：平台侧的工作区就是这次要判的那份源码，" +
+        "`--staged` 在那里读的是「本次暂存」，恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
+    ).not.toContain("--staged");
   });
 
   it("生成物仍然提交进 git（判据对象没被 .gitignore 摘掉）", () => {
@@ -236,9 +295,17 @@ describe("API 文档生成物与源同步在钩子里（ISSUE #1329 收尾）", 
     expect(ignore).not.toContain("docs/api");
   });
 
-  it("脚本头承诺「供 .githooks/pre-commit 调用」，与钩子里的在场一致", () => {
+  it("脚本头写明它现在由**平台侧**调用（挪了执行者，承诺要跟着改）", () => {
+    /* 反向要求：这句话**现在**是真的（`.cnb.yml` 里有那一步）。脚本头原先写的是
+     * 「供 .githooks/pre-commit 调用」—— 挪到平台侧之后那句就成了假承诺，而
+     * 「脚自称在哪跑」与「它真在哪跑」不一致正是本文件立案的那族形态（§13.5.12）。
+     * 判据只要求**指向平台侧那一份**，不钉具体措辞。 */
     const script = readFileSync(DOCS_API, "utf8");
-    expect(script).toContain("供 .githooks/pre-commit");
+    expect(
+      script,
+      "check-docs-api.cjs 的头部没写明它由平台侧 `.cnb.yml` 调用 —— " +
+        "脚本自称的执行者与实际不一致时，读的人（与下一个人）会被指到钩子里去找一步不存在的步骤",
+    ).toContain(".cnb.yml");
   });
 });
 
