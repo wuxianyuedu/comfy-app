@@ -1675,6 +1675,69 @@ https://playwright.download.prss.microsoft.com/dbazure/download/playwright/build
 只把没做过的给出去；生效的那个数**优先取输出里那句 `timed out after <N>ms`**
 （它比 env 更贴现场 —— env 可能没传进子进程、也可能用的是 Playwright 自己的缺省）。
 
+###### 第七跑：根因不在「挑哪个根」，在 Playwright 那条路**没有续传**
+
+上一小节把「先量一次再挑根」接上了，可第七跑里那条路**根本没有更好的根可挑** ——
+三个候选根全部量得到（现场 `cnb-vnu-1k51kes4k`）：
+
+```
+装之前的探测  cdn.npmmirror.com → HTTP 206（实收 1901 字节）      （ok）
+              cdn.playwright.dev → HTTP 206（实收 589 字节）       （ok）
+              registry.npmmirror.com → HTTP 206（实收 15435 字节）（ok）
+playwright install  同一个根 → timed out after 120000ms，Download failure
+                    （三个根 × 每个 5 次，逐字同一句）
+```
+
+真因在上游 `browserFetcher.ts`：每个 URL 重试 `retryCount = 5` 次，而**每次失败都
+`unlink(zipPath)` + `removeFolders(browserDirectory)`，从第 0 字节重来**。所以一条
+「能握手、能吐前几 KB、然后在大 body 上停住」的链路（这台节点七跑以来的形态）
+永远到不了 114 MiB 的尽头 —— 换多少个根、放宽多久，都不改变这件事。
+
+**修法是多给一条路，不是换一个根**：自己分片取字节（`ci-toolchain-browser-fetch.mjs`
+的 `fetchUrlResumable()`，编排在 `ci-toolchain-browser-seed.mjs`）：
+
+| 这一层做的事        | 为什么它是这个形态                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| 整包切固定大小的片  | 把「不确定长短的一次大传输」换成「一串**有界**的传输」—— 单片的代价上限就是超时值 |
+| 片长**自适应**退档  | 链路能稳吐多少字节是量不出来的；从大往小退（下限 16 KiB），而不是赌一个片长       |
+| 片先落 `<dest>.part` | 整片走完才接到 `dest` 上 —— 失败那一片的半成品不会留在文件里（否则重试会与它重叠）|
+| 已落盘的不重下      | 这正是与 Playwright 那条路的**唯一**、也是关键差别                                |
+| 写好 `INSTALLATION_COMPLETE` | 上游那份标记：它在了，`playwright install` 就是 no-op（不是本仓发明的第二套状态） |
+
+两条边界要说清：
+
+- **它是尝试，不是判据**。成功就等于那一件到手；失败一个字都不改，原样交给
+  `playwright install` 的老路。放行始终是 `browserExecutableExists()`（按落点看
+  东西在不在），这里**不新增第二个判据**；
+- **不许因为它失败就把这一步判红**。老路仍有机会成功（比如落点其实已经有了、
+  或 Playwright 那个根恰好通）。
+
+⚠️ **落点目录名用的是 `revision`，不是 `browserVersion`**（`chromium_headless_shell-1243`
+里的 `1243`，而 CDN 路径里用的是 `153.0.8010.12`）。拿错一个号**不会报错**：包解到一个
+没人会看的目录，Playwright 随即 `Removing unused browser` 把整包重下一遍 —— 自取白做，
+而日志两个方向都像成功。两个号都由 `readPlaywrightBrowserTarget()` 一处读出来。
+
+⚠️ **解压不再押 Windows 自带的 `tar`**。`ci-toolchain-python.mjs` 的 `unzipArchive()`
+押的是「Windows 10 起自带的 `tar` 是 bsdtar、bsdtar 认 zip」—— 那两件事都真，但
+**只在那一个平台上**：GNU tar 对同一个包直接报
+`This does not look like a tar archive`，而这一步是全平台的。所以自己读 zip 的
+central directory（只认 `0` 原样 / `8` deflate 两档、无 zip64 —— 上游那个包实测就是
+这两档），并按 `external_attr` 复原权限位（headless shell 缺了它会在 POSIX 上以
+EACCES 收场，而报错指不到这一步）。
+
+判据在 `tests/ci-toolchain-selfcheck.test.ts`（7 条）。分片那一条起一个**只吐固定
+字节数就挂起**的假链路 —— 它的形状就是现场那条：
+
+- **服务必须起在子进程里**：分片取字节走的是 `spawnSync` 起的另一个进程，而
+  `spawnSync` 会**阻塞父进程的事件循环**，在同一个进程里起服务必然连不上
+  （第一版就是这么写错的，形态是一句看着像「链路不通」的超时）；
+- 断言的是「**逐字节**等于声明长度」两向都判：少了说明收尾没接上，多了说明失败那一片
+  的半成品被留在了文件里；
+- 另判「片长真的退档了」「已落盘的前缀没有被重下」（后者靠注入面记偏移）。
+
+同批按 §12.6 R5 的 900 行硬闸拆出编排层 `ci-toolchain-browser-seed.mjs`
+（`ci-toolchain-browser.mjs` 接进去当场超闸）。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的

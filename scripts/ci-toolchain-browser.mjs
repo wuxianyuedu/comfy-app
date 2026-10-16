@@ -49,6 +49,21 @@ import {
   pickPlaywrightRoots,
   playwrightReachability,
 } from "./ci-toolchain-browser-reach.mjs";
+/* 「自己把包拉下来」那一层（分片 + 续传），见它的文件头：它不是 `playwright install`
+ * 的替代，是它**前面**的一次尝试 —— 它成功，那一步就变成 no-op。 */
+import { fetchPlaywrightBrowser } from "./ci-toolchain-browser-fetch.mjs";
+/* 「自取」那一步的**编排**（取哪个地址 / 落到哪个目录 / 要不要续传）单独一份
+ * —— 理由见它的文件头（本文件是 900 行硬闸守着的，那一段接进来就超了）。 */
+import { seedBrowserOnOwn } from "./ci-toolchain-browser-seed.mjs";
+
+export {
+  FETCH_CHUNK_BYTES,
+  FETCH_CHUNK_TIMEOUT_MS,
+  FETCH_MAX_CHUNKS,
+  FETCH_MIN_CHUNK_BYTES,
+  fetchPlaywrightBrowser,
+  fetchUrlResumable,
+} from "./ci-toolchain-browser-fetch.mjs";
 
 export {
   PLAYWRIGHT_FALLBACK_BROWSER_VERSION,
@@ -82,6 +97,7 @@ export {
  *   env?: Record<string, string | undefined>,
  *   probe?: (url: string) => string,
  *   pickRoots?: typeof pickPlaywrightRoots,
+ *   seed?: typeof fetchPlaywrightBrowser,
  *   log?: (line: string) => void,
  *   logError?: (line: string) => void,
  *   section?: (title: string) => void,
@@ -101,6 +117,7 @@ export function playwrightOnly({
   env = process.env,
   probe = httpDownloadProbe,
   pickRoots = undefined,
+  seed = fetchPlaywrightBrowser,
   log = console.log,
   logError = console.error,
   section = noopSection,
@@ -133,14 +150,37 @@ export function playwrightOnly({
   /* ⚠️ `pickRoots` 缺省是**活的**：把 `probe` 绑进去（`pickPlaywrightRoots` 自己的
    * `probe` 缺省是「一个都不量」，那是给判据用的安静档 —— 见它的头注）。少了这一行，
    * 「先量一次再挑根」那条路**永远不会走**，而装这一步看起来一切正常。 */
+  /* ── **先试一次「自己拉」**（ISSUE #1959 第七跑）──
+   *
+   * 上面那一支只在**那一件齐了**时提前返回；不齐时此前直接交给 `playwright install`，
+   * 而它这条路上有一个结构性的短板：**它的重试没有续传**（`browserFetcher.ts` 每次
+   * 失败都 `unlink(zipPath)` + `removeFolders(browserDirectory)`，从第 0 字节重来）。
+   * 于是一条「能握上手、能吐前几 KB、然后在大 body 上停住」的链路 —— 那正是这台节点
+   * 七跑以来的形态 —— 无论重试几次、换几个根，都到不了 114 MiB 的尽头。
+   *
+   * 所以在这里多给一条路：**分片取字节、每片一次独立请求、已落盘的不重下**
+   * （`fetchUrlResumable()`）。它成功就等于把那一件装好了（还写好上游那份
+   * `INSTALLATION_COMPLETE` 标记），`playwright install` 随即变成 no-op。
+   * 它失败则一个字都不改，原样交给 Playwright 的老路 —— 放行判据仍是下面那条
+   * 「装完复验」，不是这里多出来的第二个判据。
+   *
+   * ⚠️ **不许因为它失败就把这一步判红**：它是一次**尝试**，不是判据。老路仍然
+   * 有机会成功（比如落点里其实已经有了、或 Playwright 那个根恰好是通的）。 */
+  const seedRoot = playwrightBrowsersRoot({ env });
+  const seeded = seedBrowserOnOwn({ seed, env, root: seedRoot, log });
+  log(
+    seeded.ok
+      ? `自取成功：${seeded.out}`
+      : `自取没成（交给 playwright install 的老路）：${seeded.out}`,
+  );
+
   const install = runPlaywrightInstall({
     find,
     exec,
     env,
     probe,
     pickRoots:
-      pickRoots ??
-      ((ports = {}) => pickPlaywrightRoots({ probe, ...ports })),
+      pickRoots ?? ((ports = {}) => pickPlaywrightRoots({ probe, ...ports })),
   });
   /* 换根这件事要**留痕**：`env` 里配着的那个与真用上的那个不是同一个时，人必须
    * 在日志里看得到（否则下一次核对配置与日志时会以为配置被吃掉了）。 */
@@ -208,6 +248,24 @@ export function playwrightOnly({
   log(`复验：${present.out}`);
   return 0;
 }
+
+/**
+ * 落点里那一版的目录名（`chromium_headless_shell-<revision>`）。
+ *
+ * ⚠️ **目录名里用的是 `revision`，不是 `browserVersion`**：前者是 `1243`、后者是
+ * `153.0.8010.12`（CDN 路径里用的才是后者）。拿错一个号的后果不是「报错」，
+ * 而是**两个方向都像成功**：包解到一个没人会看的目录，Playwright 随即
+ * `Removing unused browser` 把整包重下一遍 —— 自取白做、日志里却各说各的成功。
+ * 两个号都由 `readPlaywrightBrowserTarget()` 一处读出来（**不抄第二遍**）。
+ *
+ * 形状逐字照抄上游 `browserDirectoryToMarkerFilePath()` 那一半：
+ * `name.replace(/-/g, "_") + "-" + revision`（`chromium-headless-shell` →
+ * `chromium_headless_shell`）。
+ *
+ * @param {{revision: string} | null} target 读不到 `browsers.json` 时给 `null`
+ * @param {string} [fallbackRevision] 缺省那一档（探测那条路同一个）
+ * @returns {string}
+ */
 
 /**
  * 没接线就当场说清楚 —— 比让调用方拿到一个 `undefined is not a function` 强。
@@ -303,7 +361,8 @@ export function playwrightInstallHints(out, facts = {}) {
   /* 「试过的根全是 Playwright 内置那一族」——现场那次正是它：5 条
    * `Downloading … from cdn.playwright.dev` 之后 `Download failure, code=1`。
    * 判的是**试过的根**（摘不到时退回「配着的那个根」，再退回「没有」）。 */
-  const triedForFamily = triedRoots.length > 0 ? triedRoots : host ? [host] : [];
+  const triedForFamily =
+    triedRoots.length > 0 ? triedRoots : host ? [host] : [];
   const sameFamily =
     triedForFamily.length > 0 && triedForFamily.every(isPlaywrightFamilyRoot);
   /* 配了一个根、而它正是被反复试的那一个 —— 这一档下「配一个根」这条出口已经是
@@ -760,7 +819,8 @@ export function runPlaywrightInstall({
    * 它的返回值也不再是「一个个去试」——它排序后的第一个就是「先试哪个」。 */
   const resolvedPickRoots =
     pickRoots ??
-    ((ports = {}) => pickPlaywrightRoots({ ...ports, probe: ports.probe ?? probe }));
+    ((ports = {}) =>
+      pickPlaywrightRoots({ ...ports, probe: ports.probe ?? probe }));
   const picked = env.PLAYWRIGHT_DOWNLOAD_HOST
     ? resolvedPickRoots({ roots: playwrightDownloadRoots(env), probe })
     : { roots: playwrightDownloadRoots(env), verdicts: [] };

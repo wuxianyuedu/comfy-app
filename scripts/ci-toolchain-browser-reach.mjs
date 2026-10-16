@@ -182,8 +182,14 @@ function playwrightBrowserJsonCandidates(base) {
  * 因此**不用** `createRequire` / `import()` 去解析（那会真去装 / 真去加载依赖），
  * 只做几次 `readFileSync` —— 本文件「只 import `node:*`」那条约束的另一形态。
  *
+ * 回**两个**号：`version`（`browserVersion`，CDN 路径里用的那一段）与
+ * `revision`（落点目录名里用的那一段）。两者**不是同一个数**，一开始只回了前者，
+ * 后果是「自取」把包解到了 `chromium_headless_shell-<browserVersion>`、
+ * 而 Playwright 找的是 `chromium_headless_shell-<revision>` —— 它随即报
+ * `Removing unused browser` 并整包重下一遍（自取白做了，而日志两个方向都像成功）。
+ *
  * @param {{root?: string}} [options]
- * @returns {{version: string, target: string} | null}
+ * @returns {{version: string, revision: string, target: string} | null}
  */
 export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
   const base =
@@ -202,12 +208,14 @@ export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
   try {
     const parsed = JSON.parse(text);
     const entry = (parsed?.browsers ?? []).find(
-      (/** @type {{name?: string, browserVersion?: string}} */ b) =>
-        b?.name === "chromium-headless-shell",
+      (
+        /** @type {{name?: string, browserVersion?: string, revision?: string}} */ b,
+      ) => b?.name === "chromium-headless-shell",
     );
-    if (!entry?.browserVersion) return null;
+    if (!entry?.browserVersion || entry.revision === undefined) return null;
     return {
       version: String(entry.browserVersion),
+      revision: String(entry.revision),
       target: platformTargetSuffix(),
     };
   } catch {

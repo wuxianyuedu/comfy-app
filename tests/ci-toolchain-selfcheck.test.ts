@@ -31,6 +31,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -55,9 +56,8 @@ import {
 } from "../src/lib/process/python-candidates";
 
 /** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」/ 「到得了哪」）。 */
-const { PLAYWRIGHT_HOST_CANDIDATES: browserCandidates } = await import(
-  "../scripts/ci-toolchain-browser-reach.mjs"
-);
+const { PLAYWRIGHT_HOST_CANDIDATES: browserCandidates } =
+  await import("../scripts/ci-toolchain-browser-reach.mjs");
 const {
   httpDownloadProbe,
   isReachableVerdict,
@@ -68,6 +68,9 @@ const {
   playwrightProbeUrl,
   playwrightReachability,
 } = await import("../scripts/ci-toolchain-browser.mjs");
+/** 自取那一层（分片 + 续传 + 自己读 zip），见 `ci-toolchain-browser-fetch.mjs`。 */
+const { browserDirName, extractZipTo, fetchRangeToFile, fetchUrlResumable } =
+  await import("../scripts/ci-toolchain-browser-fetch.mjs");
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -99,6 +102,82 @@ function norm(p: string): string {
     .replace(/\\/g, "/")
     .replace(/\/{2,}/g, "/")
     .toLowerCase();
+}
+
+/**
+ * 造一个**最小可用**的 zip（只带一个条目），给「自己读 zip」那条判据当夹具。
+ *
+ * 走 `node:zlib` 的 `deflateRawSync`：与实现读的那一档（`inflateRawSync`）对得上，
+ * 且不必落一个二进制夹具进仓。local header 与 central directory 两段都写全
+ * —— 实现走的是 central directory，而**数据偏移**那一列必须落在真 local header 上。
+ *
+ * @param {Array<{name: string, data: Buffer}>} files
+ * @returns {Buffer}
+ */
+function makeZip(files: Array<{ name: string; data: Buffer }>): Buffer {
+  const locals: Buffer[] = [];
+  const centrals: Buffer[] = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = Buffer.from(f.name, "utf8");
+    const comp = deflateRawSync(f.data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4); // 需要的版本
+    local.writeUInt16LE(0, 6); // 旗标
+    local.writeUInt16LE(8, 8); // deflate
+    local.writeUInt16LE(0, 10); // 时间
+    local.writeUInt16LE(0, 12); // 日期
+    local.writeUInt32LE(crc32(f.data), 14);
+    local.writeUInt32LE(comp.length, 18);
+    local.writeUInt32LE(f.data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28); // extra 长度
+    locals.push(local, name, comp);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(0x031e, 4); // made by Unix
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 8);
+    central.writeUInt16LE(8, 10); // deflate
+    central.writeUInt16LE(0, 12);
+    central.writeUInt16LE(0, 14);
+    central.writeUInt32LE(crc32(f.data), 16);
+    central.writeUInt32LE(comp.length, 20);
+    central.writeUInt32LE(f.data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(0, 30);
+    central.writeUInt16LE(0, 32);
+    central.writeUInt16LE(0, 34);
+    central.writeUInt16LE(0, 36);
+    central.writeUInt32LE((0o100644 << 16) >>> 0, 38); // 外部属性（权限位在高 16 位）
+    central.writeUInt32LE(offset, 42);
+    centrals.push(central, name);
+
+    offset += local.length + name.length + comp.length;
+  }
+  const centralBuf = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(files.length, 8);
+  eocd.writeUInt16LE(files.length, 10);
+  eocd.writeUInt32LE(centralBuf.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  eocd.writeUInt16LE(0, 20);
+  return Buffer.concat([...locals, centralBuf, eocd]);
+}
+
+/** 标准的 CRC-32（zip 用它校验每个条目）—— 只服务上面那个夹具。 */
+function crc32(buf: Buffer): number {
+  let c = ~0;
+  for (const b of buf) {
+    c ^= b;
+    for (let k = 0; k < 8; k += 1) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
 }
 
 /** 从一段源码里抠出「按平台二选一」的候选表（两份文本，逐项对账）。 */
@@ -1577,7 +1656,8 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
     const notRaised = playwrightInstallHints(
       out,
       playwrightInstallHintFacts({
-        PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright",
+        PLAYWRIGHT_DOWNLOAD_HOST:
+          "https://cdn.npmmirror.com/binaries/playwright",
       }),
     ).join("\n");
     expect(
@@ -2030,7 +2110,12 @@ function firstStdoutMatch(
   // 定时器只当「子进程压根没起来」的失败上限，命中即 clear。
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`)),
+      () =>
+        reject(
+          new Error(
+            `${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`,
+          ),
+        ),
       timeoutMs,
     );
     let buffered = "";
@@ -2107,7 +2192,9 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
     /* 现场那一档：TLS 握手能成、响应头也能回，**大 body 停住**。HEAD 在这一档上
      * 与好链路逐字同形 —— 这正是它被换掉的原因。 */
     await withServer("stall", (base) => {
-      const verdict = httpDownloadProbe(`${base}/stall.zip`, { timeoutMs: 400 });
+      const verdict = httpDownloadProbe(`${base}/stall.zip`, {
+        timeoutMs: 400,
+      });
       expect(isReachableVerdict(verdict), "0 字节被判成了「通」").toBe(false);
       expect(
         verdict,
@@ -2118,7 +2205,9 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
 
   it("3xx ⇒ 跟随（Playwright 自己也跟随，裸看会把 302 读成「没量到」）", async () => {
     await withServer("redirect", (base) => {
-      const verdict = httpDownloadProbe(`${base}/root/builds/cft/1/win64/x.zip`);
+      const verdict = httpDownloadProbe(
+        `${base}/root/builds/cft/1/win64/x.zip`,
+      );
       expect(
         verdict,
         "没跟随重定向 —— 候选根里 `registry.npmmirror.com/-/binary/playwright` 就回 302，" +
@@ -2196,9 +2285,8 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
      * `builds/chromium/<revision>/…` 形状。给后两条接上 `builds/cft/…` 得到的地址
      * 永远供不上这一件（实测跟到最后是 400）—— 而人照读数「换一个能通的根」就会
      * 换到那里去（现场 `cnb-oqf-1k51ifhis` 那两条逐字是 400）。 */
-    const candidates = /** @type {string[]} */ (
-      /** @type {unknown} */ (browserCandidates)
-    );
+    const candidates /** @type {string[]} */ =
+      /** @type {unknown} */ browserCandidates;
     for (const legacy of [
       "https://cdn.playwright.dev/dbazure/download/playwright",
       "https://playwright.download.prss.microsoft.com/dbazure/download/playwright",
@@ -2231,5 +2319,288 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
       src,
       "函数头里没了「为什么不发 HEAD」那条理由 —— 下一个人会把它改回去",
     ).toContain("为什么不是 HEAD");
+  });
+});
+
+/**
+ * 「自取那一件浏览器（分片 + 续传）」那一层（ISSUE #1959 第七跑）。
+ *
+ * ## 立案现场
+ *
+ * `浏览器安装` 在这一格上红了七跑，形态逐字相同：
+ *
+ *     环境前提 / 装之前的探测 → 三个候选根**全部** HTTP 206（实收几千~一万五字节）
+ *     playwright install      → 同一个根，timed out after 120000ms，Download failure
+ *
+ * 也就是说「先量一次再挑根」那条路（上一笔）在这一跑上**根本没有更好的根可挑** ——
+ * 三个都量得到。根因不在挑根上，在 Playwright 自己那份下载**没有续传**：
+ * `browserFetcher.ts` 每个 URL 重试 `retryCount = 5` 次，而每次失败都
+ * `unlink(zipPath)` + `removeFolders(browserDirectory)`，**从第 0 字节重来**。
+ * 一条「能握手、能吐前几 KB、然后在大 body 上停住」的链路因此永远到不了 114 MiB 的尽头。
+ *
+ * ## 判据的形状
+ *
+ * 分片那一条用一个**只吐固定字节数就挂起**的假链路判（它的形状就是现场那条）：
+ * 片长必须能自适应地退到最小档，且**已落盘的字节一个都不丢** —— 整包最终要**逐字节**
+ * 等于声明长度（少一片或多一片都要红）。**服务起在子进程里**：分片取字节是
+ * `spawnSync` 起的另一个进程，`spawnSync` 会阻塞父进程的事件循环，
+ * 在同一个进程里起服务**必然**连不上（第一版就是这么写错的）。
+ *
+ * zip 那一层判的是**可移植性**：不再押「Windows 自带的 tar 认 zip」
+ * （GNU tar 对同一个包直接报 This does not look like a tar archive）。
+ */
+describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑）", () => {
+  /**
+   * 起一个「每次请求只稳吐 `burst` 字节、其余挂起」的假链路（**子进程**里）。
+   *
+   * 这就是现场那条链路的形状：小响应老老实实发完，大响应吐一小段就停住。
+   * `burst` 小于片长时，只有**片长退到 burst 以下**才可能整片走完 —— 自适应那一档
+   * 因此被这条夹具真的量到，而不是靠注入假装。
+   */
+  async function withStallingLink(
+    total: number,
+    burst: number,
+    body: (base: string) => Promise<void> | void,
+  ) {
+    const script = `
+      const { createServer } = require("node:http");
+      const TOTAL = ${total}, BURST = ${burst};
+      const blob = Buffer.alloc(TOTAL, 7);
+      const s = createServer((req, res) => {
+        const m = /bytes=(\\d+)-(\\d*)/.exec(req.headers.range || "");
+        const start = m ? Number(m[1]) : 0;
+        const end = m && m[2] ? Number(m[2]) : TOTAL - 1;
+        const len = end - start + 1;
+        res.writeHead(206, {
+          "content-range": "bytes " + start + "-" + end + "/" + TOTAL,
+          "content-length": String(len),
+        });
+        if (len <= BURST) { res.end(blob.subarray(start, start + len)); return; }
+        res.write(blob.subarray(start, start + BURST));
+        setTimeout(() => { try { res.destroy(); } catch {} }, 120000);
+      });
+      s.listen(0, "127.0.0.1", () => { process.stdout.write("PORT " + s.address().port + String.fromCharCode(10)); });
+    `;
+    const child = spawn(process.execPath, ["-e", script], {
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    try {
+      const port = await firstStdoutMatch(child, /^\s*PORT (\d+)\s*$/m, {
+        what: "假链路的端口",
+      });
+      await body(`http://127.0.0.1:${port}`);
+    } finally {
+      child.kill();
+    }
+  }
+
+  it("**片长自适应地退档**：一条每次只吐 20 KB 的链路也能走完整包（逐字节对上）", async () => {
+    const TOTAL = 256 * 1024;
+    await withStallingLink(TOTAL, 20 * 1024, async (base) => {
+      const dest = path.join(
+        mkdtempSync(path.join(tmpdir(), "cnb-fetch-")),
+        "x.bin",
+      );
+      try {
+        const res = fetchUrlResumable(`${base}/x.zip`, dest, {
+          chunkBytes: 128 * 1024,
+          chunkTimeoutMs: 700,
+          retries: 2,
+        });
+        expect(
+          res.ok,
+          "一条「每次只吐 20 KB」的链路把整包判成了取不到 —— 片长没有退档，或者退档之后" +
+            "已落盘的部分被丢掉了（这正是 Playwright 那条路做不到的那一格）",
+        ).toBe(true);
+        expect(
+          readFileSync(dest).length,
+          "取回来的字节数**必须逐字节等于**声明长度：多了说明失败那一片的半成品被留在了" +
+            "文件里（下一次重试与它重叠），少了说明收尾没接上",
+        ).toBe(TOTAL);
+        expect(
+          readFileSync(dest).every((b) => b === 7),
+          "内容不对 —— 说明片与片之间接错了位置（偏移算错）",
+        ).toBe(true);
+        expect(
+          res.chunks,
+          "一片都没记到 —— 这条用例没量到东西",
+        ).toBeGreaterThan(1);
+      } finally {
+        rmSync(path.dirname(dest), { recursive: true, force: true });
+      }
+    });
+  });
+
+  it("**断了接着来**：已落盘的前缀不被重下（第二次调用从半路接）", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-resume-"));
+    const dest = path.join(dir, "x.bin");
+    try {
+      /* 第一次：只在盘上放前 64 KiB（模拟「上一次走到一半就被掐了」）。 */
+      writeFileSync(dest, Buffer.alloc(64 * 1024, 5));
+      const TOTAL = 128 * 1024;
+      await withStallingLink(TOTAL, 16 * 1024, async (base) => {
+        /** @type {number[]} */
+        const offsets: number[] = [];
+        const res = fetchUrlResumable(`${base}/x.zip`, dest, {
+          chunkBytes: 64 * 1024,
+          chunkTimeoutMs: 700,
+          retries: 2,
+          fetchChunk: (
+            /** @type {string} */ url,
+            /** @type {string} */ d,
+            /** @type {number} */ offset,
+            /** @type {number} */ size,
+            /** @type {number} */ timeoutMs,
+            /** @type {{probeOnly?: boolean}} */ opts = {},
+          ) => {
+            /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
+             * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
+            if (!opts.probeOnly) offsets.push(offset);
+            return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);
+          },
+        });
+        expect(res.ok, "接不上").toBe(true);
+        expect(readFileSync(dest).length).toBe(TOTAL);
+        expect(
+          Math.min(...offsets),
+          "第一次请求的偏移回到了 0 —— 已落盘的那 64 KiB 被重下了（那就不是「续传」）",
+        ).toBeGreaterThanOrEqual(64 * 1024);
+        expect(
+          readFileSync(dest)
+            .subarray(0, 64 * 1024)
+            .every((b) => b === 5),
+          "已落盘的前缀被后下的字节覆盖了",
+        ).toBe(true);
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("取不到总长时如实说「交给老路」，且一个字节都不落盘", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-nolen-"));
+    const dest = path.join(dir, "x.bin");
+    try {
+      const res = fetchUrlResumable("https://nope.invalid/x.zip", dest, {
+        /* 注入面：这一次**一点网都不出**。 */
+        fetchChunk: () => ({ bytes: -1, total: null, out: "ERR 连不上" }),
+      });
+      expect(res.ok).toBe(false);
+      expect(
+        res.out,
+        "取不到总长时没说清「这一档交给老路」—— 人读到会以为整条路都断了",
+      ).toContain("老路");
+      expect(existsSync(dest), "总长都没取到却建了文件").toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("zip 解压**不押 Windows 的 tar**（GNU tar 不读 zip，实测就是这个错）", async () => {
+    /* `ci-toolchain-python.mjs` 那条路走 `tar -xf`（押的是 Windows 10 自带的 bsdtar
+     * 认 zip）。而这一步是**全平台**的，GNU tar 对同一个包直接报
+     * `This does not look like a tar archive`。所以这里自己读 zip 的 central directory。 */
+    const src = read("scripts/ci-toolchain-browser-fetch.mjs");
+    expect(
+      src,
+      "解压又回到 `tar -xf` 了 —— 那条路只在 bsdtar 上成立，Linux / macOS 上必红",
+    ).not.toContain('spawnSync("tar"');
+    expect(src, "没有读 zip 的 central directory").toContain("inflateRawSync");
+
+    /* 行为那一条：造一个真 zip（deflate + store 两档），解出来逐字节对上。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "cnb-unzip-"));
+    try {
+      const zip = path.join(dir, "t.zip");
+      const payload = Buffer.from("hello-续传".repeat(500), "utf8");
+      writeFileSync(zip, makeZip([{ name: "a/b.txt", data: payload }]));
+      const out = path.join(dir, "out");
+      mkdirSync(out, { recursive: true });
+      const failure = extractZipTo(zip, out);
+      expect(failure, `解压失败：${failure}`).toBeNull();
+      expect(readFileSync(path.join(out, "a", "b.txt"))).toEqual(payload);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("落点目录名用 `revision` 而不是 `browserVersion`（拿错号的后果是两边都像成功）", () => {
+    /* 上游的目录名是 `chromium_headless_shell-<revision>`（`1243`），而 CDN 路径里用的是
+     * `<browserVersion>`（`153.0.8010.12`）。拿错一个号不会报错：包解到一个没人会看的
+     * 目录，Playwright 随即 `Removing unused browser` 把整包重下一遍 —— 自取白做，
+     * 而日志两个方向都像成功。 */
+    expect(browserDirName({ revision: "1243" })).toBe(
+      "chromium_headless_shell-1243",
+    );
+    expect(
+      browserDirName({ revision: "1243" }),
+      "目录名里出现了 browserVersion —— 那一位不是目录名用的号",
+    ).not.toContain("153");
+    expect(
+      browserDirName(null, "1243"),
+      "读不到 browsers.json 时没用那档缺省",
+    ).toBe("chromium_headless_shell-1243");
+    expect(
+      browserDirName(null),
+      "两个号都读不到时给了一个**猜的**目录名 —— 那会装出一份没人会用的东西，而它看起来与成功同形",
+    ).toBe("");
+  });
+
+  it("自取失败**不阻断**：它是一条尝试，不是判据（老路照走）", () => {
+    /* 落点是一个**空目录**：自取这一条明确失败之后，老路必须照走（它有机会成功），
+     * 而那一次成功之后复验才放行 —— 判据仍然只有「装完复验」这一条。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "pw-seedfail-"));
+    try {
+      /** @type {string[]} */
+      const printed: string[] = [];
+      /** @type {boolean} */
+      let installCalled = false;
+      const code = playwrightOnly({
+        env: {
+          PLAYWRIGHT_BROWSERS_PATH: dir,
+          PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x",
+        },
+        find: () => ({
+          ok: true,
+          command: "pnpm",
+          prefixArgs: [],
+          args: ["-v"],
+          out: "12.4.1",
+        }),
+        /* 自取这一条**明确失败**。 */
+        seed: () => ({ ok: false, out: "模拟：分片取不下来" }),
+        exec: () => {
+          installCalled = true;
+          /* 老路也失败 —— 这一步该红，而红的原因是「复验没过」，不是「自取抛了」。 */
+          return { ok: false, out: "模拟：老路也没成" };
+        },
+        probe: () => "超时（8000ms 内没有响应）",
+        pickRoots: () => ({
+          roots: ["https://m/x"],
+          verdicts: [],
+          probed: false,
+          switched: false,
+        }),
+        log: (/** @type {string} */ line: string) => printed.push(line),
+      });
+      expect(
+        installCalled,
+        "自取失败之后没有交给 playwright install 的老路 —— 那等于把一条尝试当成了判据",
+      ).toBe(true);
+      expect(
+        code,
+        "自取失败时这一步应当由「装完复验」决定收场（这一跑老路也没成 ⇒ 红）",
+      ).toBe(1);
+      expect(printed.join("\n")).toContain("模拟：分片取不下来");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("`.cnb.yml` 那一步仍然只调这一条入口（没有另起一步手写逻辑）", () => {
+    const yml = read(".cnb.yml");
+    expect(yml).toContain("--playwright-only");
+    /* 自取是那一步**内部**多出来的一条路，不是新 stage：多一个 stage 就多一处
+     * 只在平台上跑、本地一条判据都测不到它的逻辑（§13.5.3.5 记过这一格）。 */
+    expect(yml.match(/ci-toolchain-browser-fetch/g) ?? []).toHaveLength(0);
   });
 });
