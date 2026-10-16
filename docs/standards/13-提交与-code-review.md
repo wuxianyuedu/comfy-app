@@ -1616,7 +1616,66 @@ E2E 关键流程                 562ms  ❌  [e2e] ✗ PATH 上没有可用的 P
 > 形态是判据里的假根被**真出网**的探测判成 `ENOTFOUND`，然后开始挨个试真 CDN。
 > 这与本文件反复记的那句同源：**「接上了」与「那次接线真的生效」是两件事。**
 
-##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
+###### 那「一次 HEAD」其实是错的一格：它把取不下字节的链路判成好链路
+
+上面那张表按「一次 HEAD 的结论」排序 —— 而 HEAD 答的是「这个 URL **允不允许**被取」，
+不是「**取得下来吗**」。一台能做 TLS 握手、能回小响应头、却在**大 body 上停住**的链路
+（代理 / 深度包检测 / MTU 黑洞）在 HEAD 面前与好链路**逐字同形**，于是：
+
+- `环境前提` 拿它报绿（把 30 分钟后的失败原样放行 —— 它要防的就是这个）；
+- `pickPlaywrightRoots()` 拿它把那条**卡死在大 body 上**的根排到**第一位** ——
+  于是「机器自己挑一条真能通的根」挑中的恰好是那条走不动的。
+
+现场 `cnb-ald-1k51g8dt9` 把两句话并排放在一起：
+
+```
+（HEAD 读数）…/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
+（真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
+```
+
+所以探测从 HEAD 换成 `httpDownloadProbe()`：**带 `Range` 的 GET**、跟随 3xx、
+**收到第一批字节就收手**（它是判通不通，不是下载），读数里带上**实收字节数**；
+超时那一档还分「连上了但 0 字节」（现场那一档）与「压根没连上」——两者处置不同
+（前者在宿主机 / 网络侧，后者是 DNS / 路由）。`probeGrade()` 的两条口径因此仍然成立
+（`^HTTP\s+(\d{3})` 与 `^超时` 都还认得出），只是它排的序这回量的是**字节流没流过**。
+
+⚠️ 它**仍然不是**「拉完整个包」那一次测量（那是 120 MiB，本步不做）。所以上面那句
+「`ok` 只是首选、不是唯一」**一个字没改** —— 这次改的是那三态的**证据强度**。
+真要说「这一趟装得成」，只有把包拉完才算；而这一步的职责是**几秒内给出排序**。
+
+###### 候选表里那两条 `…/dbazure/download/playwright` 对本档这一件是结构性错的
+
+它们是拿 `PLAYWRIGHT_CDN_MIRRORS`（**三档**内置镜像）那张表抄进来的，可那张表服务的是
+老的 `builds/chromium/<revision>/…` 形状；本档要下的 `chromium-headless-shell` 走
+`cftUrl()`，它对这一件返回的 `mirrors` **只有一条**：`https://cdn.playwright.dev`
+（见 `playwright-core/lib/coreBundle.js`）。给前两条接上 `builds/cft/…` 得到的地址
+**永远**供不上这一件 —— 实测跟到最后一跳是 400：
+
+```
+https://cdn.playwright.dev/dbazure/download/playwright/builds/cft/…/…zip
+  → 307 → https://playwright.download.prss.microsoft.com/dbazure/download/playwright/… → 400
+https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/cft/…/…zip
+  → 400
+```
+
+留在表里的后果不止「读数里两条噪音」：`pickPlaywrightRoots()` 会把它们**当候选参与
+挑根**，于是「换一个能通的根」可能换到一个保证 400 的地址（现场 `cnb-oqf-1k51ifhis`
+那两条逐字就是 400）。判据在 `tests/ci-toolchain-selfcheck.test.ts`：候选表里不许再有
+那两条，正的那一条必须在，且每一条都要能拼出 `builds/cft/…` 的地址。
+
+###### 失败话术把两件**已经做过**的事当成建议给了出来
+
+同一跑里还有第三处：`.cnb.yml` **已经**配了 `PLAYWRIGHT_DOWNLOAD_HOST`、**已经**把
+套接字超时放宽到 120000，而失败的那一趟用的**就是**那个根、超时**就是** 120000ms ——
+话术却照旧说「30s 是默认套接字超时」并建议「放宽到 `120000`」。**照它做一遍，形状逐字
+不变地再红一次**（§13.5.3.5.1 那条「读数必须指向下一动作」的反面）。
+
+现在 `playwrightInstallHints(out, facts)` 收 `playwrightInstallHintFacts(env)`
+（**生效**的套接字超时 + 配着的根），按**已做的动作**分岔：做过的不再当建议给，
+只把没做过的给出去；生效的那个数**优先取输出里那句 `timed out after <N>ms`**
+（它比 env 更贴现场 —— env 可能没传进子进程、也可能用的是 Playwright 自己的缺省）。
+
+##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的
 `runPnpmSync()` 起子进程，而它的 **`timeoutMs` 缺省是 600_000**。那个数是

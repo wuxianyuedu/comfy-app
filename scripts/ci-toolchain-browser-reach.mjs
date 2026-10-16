@@ -40,15 +40,16 @@ import { fileURLToPath } from "node:url";
  *
  * 这几个不是「本仓推荐的镜像」，是「值得先量一下的几个地址」：
  *
- *   · Playwright 自己的三个内置 CDN 根（`PLAYWRIGHT_CDN_MIRRORS`，它自己按序试）；
+ *   · Playwright 对**本档这一件**真正会用的那一个镜像（`cftUrl()` 的 `mirrors`，
+ *     只有一条 —— 与那张三档的 `PLAYWRIGHT_CDN_MIRRORS` 不是一回事，见下）；
  *   · 常见的 npm 二进制镜像里放 Playwright 的那两段路径。
  *
- * ## ⚠️ 它们是**根**（base），不是可以直接 HEAD 的地址
+ * ## ⚠️ 它们是**根**（base），不是可以直接探测的地址
  *
  * 这一条是本表最容易读错的地方，也是 `环境前提` 那一步误报的唯一根因（ISSUE #1966）。
  * 这几行从来就是「下载根」——`runPlaywrightInstall()` 把它们当 `PLAYWRIGHT_DOWNLOAD_HOST`
  * 传给 Playwright，而 Playwright 会在后面**再接上 `builds/cft/<版本>/<平台>/<包>` 那段路径**。
- * 裸着去 HEAD 它们问「通不通」是另一次探测，答的也不是同一个问题：
+ * 裸着拿它们去问「通不通」是另一次探测，答的也不是同一个问题：
  *
  * 实测（本机，同一时刻）：
  *
@@ -66,9 +67,31 @@ import { fileURLToPath } from "node:url";
  * @returns {string[]}
  */
 export const PLAYWRIGHT_HOST_CANDIDATES = [
-  "https://cdn.playwright.dev/dbazure/download/playwright",
-  "https://playwright.download.prss.microsoft.com/dbazure/download/playwright",
+  /* Playwright 对**本档这一件**（Chromium 的 CfT 包）真正会用的那个镜像。
+   *
+   * 这一行是拿上游源码核出来的，不是抄那张「内置镜像」表抄来的：`cftUrl()`
+   * （`playwright-core/lib/coreBundle.js`）对 `chromium` / `chromium-headless-shell`
+   * 返回的是 `{ mirrors: ["https://cdn.playwright.dev"] }` —— CfT 包**只有这一个**
+   * 内置镜像，与那张 `PLAYWRIGHT_CDN_MIRRORS` 三档是**两回事**（那三档服务的是老的
+   * `builds/chromium/<revision>/…` 路径形状）。
+   *
+   * ⚠️ 正因为是两回事，原来表里那两条 `…/dbazure/download/playwright` 在这里是
+   * **结构性错的**：给它们接上 `builds/cft/<版本>/<档>/<包>`，`cdn.playwright.dev`
+   * 那条会 307 跳到 `playwright.download.prss.microsoft.com/dbazure/download/playwright/…`
+   * 然后 **400**，另一条直接 400。实测（本机，两条都跟着跳）：
+   *
+   *     https://cdn.playwright.dev/dbazure/download/playwright/builds/cft/…/…zip
+   *       → 307 → https://playwright.download.prss.microsoft.com/dbazure/download/playwright/… → 400
+   *     https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/cft/…/…zip
+   *       → 400
+   *
+   * 也就是说这两条**永远不可能供上这一件**。留在表里有两个后果，第二个更贵：
+   * ① 读数里多两条恒假的「到不了」；② 而 `pickPlaywrightRoots()` 会把它们当
+   * 候选参与挑根 —— 人（或那段挑根逻辑）照它去「换一个能通的根」就换到一个保证 400
+   * 的地址（现场 `cnb-oqf-1k51ifhis` 那两条逐字就是 400）。 */
   "https://cdn.playwright.dev",
+  /* 常见 npm 镜像里放 Playwright 二进制的那两段路径（第三方，**不替它选**，
+   * 只量一下「能不能到」）。 */
   "https://registry.npmmirror.com/-/binary/playwright",
   "https://cdn.npmmirror.com/binaries/playwright",
 ];
@@ -252,14 +275,14 @@ export function playwrightProbeUrl(root, overrides = {}) {
  * @param {{candidates?: string[], probe?: (url: string) => string,
  *          probeUrlOf?: (root: string) => string,
  *          updateHost?: string | undefined}} [options]
- *   `probe` 是注入面（默认 {@link httpHeadStatus}），判据里换掉它就不出网。
+ *   `probe` 是注入面（默认 {@link httpDownloadProbe}），判据里换掉它就不出网。
  *   `probeUrlOf` 是「根 → 真资源 URL」那一步的注入面（见
  *   {@link playwrightReachabilityVerdicts}：量的是真资源不是裸根）。
  * @returns {string[]}
  */
 export function playwrightReachability({
   candidates = PLAYWRIGHT_HOST_CANDIDATES,
-  probe = httpHeadStatus,
+  probe = httpDownloadProbe,
   probeUrlOf = playwrightProbeUrl,
   updateHost = undefined,
 } = {}) {
@@ -322,14 +345,14 @@ export function playwrightReachability({
  *
  * @param {{candidates?: string[], probe?: (url: string) => string,
  *          probeUrlOf?: (root: string) => string}} [options]
- *   `probe` 是注入面（默认 {@link httpHeadStatus}），判据里换掉它就不出网。
+ *   `probe` 是注入面（默认 {@link httpDownloadProbe}），判据里换掉它就不出网。
  *   `probeUrlOf` 是「根 → 真资源 URL」那一步的注入面（用例据此不必依赖真
  *   `browsers.json` 的读数）。
  * @returns {Array<{url: string, root: string, verdict: string, ok: boolean}>}
  */
 export function playwrightReachabilityVerdicts({
   candidates = PLAYWRIGHT_HOST_CANDIDATES,
-  probe = httpHeadStatus,
+  probe = httpDownloadProbe,
   probeUrlOf = playwrightProbeUrl,
 } = {}) {
   return candidates.map((root) => {
@@ -358,40 +381,172 @@ export function isReachableVerdict(verdict) {
 }
 
 /**
- * 对一个 URL 发一次 HEAD，回一句可读的结论（不回抛 —— 失败是一种读数）。
+ * 对**真资源**发一次带 `Range` 的 GET，回一句可读的结论（不回抛 —— 失败是一种读数）。
+ *
+ * ## 为什么不是 HEAD（`pickPlaywrightRoots()` 全建在这条读数上，HEAD 会骗它）
+ *
+ * 这一层此前是 `httpHeadStatus()` —— 发一个 HEAD，看状态码。而 HEAD 答的是
+ * 「这个 URL **允不允许**被取」，不是「**取得下来吗**」。两者的分岔在一次现场里
+ * 正好落到反面（`cnb-ald-1k51g8dt9`）：
+ *
+ *     （HEAD 读数）https://cdn.npmmirror.com/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
+ *     （真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
+ *
+ * 也就是说：**HEAD 会把一条取不下字节的链路判成好链路**。这条读数现在有两个消费者，
+ * 而它对两个都致命 —— `环境前提` 会拿它报绿（把 30 分钟后的失败原样放行）；
+ * `pickPlaywrightRoots()` 会拿它把那条**卡死在大 body 上**的根排到第一位、
+ * 于是「机器自己挑一条真能通的根」挑中的恰好是那条走不动的
+ * （现场 `cnb-t3f-1k51ho0k2` 就是它：HEAD 量得到、装 120 MiB 时 0 字节）。
+ *
+ * ## 判据的形状
+ *
+ *   · `GET` + `Range: bytes=0-<chunkBytes-1>` —— 只取开头一段，够证明「字节流得过」；
+ *   · `Accept-Encoding: identity` —— 别让 gzip 把「多少字节算到」搅浑；
+ *   · **跟随最多 3 次 3xx**（与 Playwright 自己的 `httpRequest` 同口径）：候选根里
+ *     `registry.npmmirror.com/-/binary/playwright` 就回 302，裸看不跟随会把它读成
+ *     「HTTP 302，没量到东西」；
+ *   · **收到第一批字节就收手**（`res.destroy()`）：这一步是**判通不通**，不是下载
+ *     —— 早停让它几秒内出结论，也让它与「真下载」量的是同一件事（字节到底流不流）；
+ *   · **按 URL 的协议挑模块**：候选根全是 https，但这一层不该只认一种（用例正是拿
+ *     本地 http 服务判它的四种现场）。
+ *
+ * ⚠️ 它**仍然不是**「拉完整个包」那一次测量（那是 120 MiB，本步不做）。它把
+ * 「响应头能回」推进到「**字节真流过**」，而现场那一档（连上了但 0 字节）正好被它分开。
+ *
+ * ## 「超时」这一档要分得开两种
+ *
+ *   · `超时（连上了但 0 字节，Nms 内没有响应）` —— 现场那一档：TCP / TLS 都成了，
+ *     响应头也可能来了，**body 一个字节都没有**。处置在宿主机 / 网络侧；
+ *   · `超时（Nms 内没有响应）` —— 连都没连上 / 响应头都没来。
+ *
+ * 两种在 `ok` 那一层同属「这一次到不了」（{@link isReachableVerdict}），在
+ * {@link probeGrade} 那一层同属 `timeout`；但打印里必须分开 —— 处置不同，
+ * 糊成一句「不通」等于把下一动作留给人猜。
  *
  * 走 `spawnSync` 起一个短命 node 子进程，而不是在本进程里用回调：**这一步是在失败
- * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:https`
+ * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:http(s)`
  * —— 本文件「只 import `node:*`」的同一条约束（见文件头）。
  *
- * 「超时」与「`ENOTFOUND`」刻意分开：前者是「连上了但不说话」（链路慢 / 被拦），
- * 后者是「域名都解析不了」（DNS 被切）。处置不同，日志里不能糊成一句「不通」。
+ * 子进程的输入走 `process.argv`（URL、超时、分片大小、重定向上限四件），不拼进
+ * `-e` 的源码里：拼串会把引号与转义交给运气，而这里比原先多了一个 `Range` 头与
+ * 一个重定向计数，风险随参数一起长。
  *
  * @param {string} url
- * @param {{timeoutMs?: number}} [options]
+ * @param {{timeoutMs?: number, chunkBytes?: number, maxRedirects?: number}} [options]
  * @returns {string}
  */
-export function httpHeadStatus(url, { timeoutMs = 8000 } = {}) {
-  const script = `
-    const { request } = require("node:https");
-    const req = request(${JSON.stringify(url)}, { method: "HEAD", timeout: ${timeoutMs} }, (res) => {
-      res.resume();
-      process.stdout.write("HTTP " + (res.statusCode ?? "?"));
-      process.exit(0);
-    });
-    req.on("timeout", () => { req.destroy(); process.stdout.write("超时（${timeoutMs}ms 内没有响应）"); process.exit(0); });
-    req.on("error", (e) => { process.stdout.write((e.code ?? "ERROR") + "：" + e.message); process.exit(0); });
-    req.end();
-  `;
-  const r = spawnSync(process.execPath, ["-e", script], {
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: timeoutMs + 4000,
-  });
+export function httpDownloadProbe(
+  url,
+  { timeoutMs = 8000, chunkBytes = 65536, maxRedirects = 3 } = {},
+) {
+  const r = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      DOWNLOAD_PROBE_SCRIPT,
+      url,
+      String(timeoutMs),
+      String(chunkBytes),
+      String(maxRedirects),
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 4000 },
+  );
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return out || "（子进程没有输出）";
 }
 
+/**
+ * {@link httpDownloadProbe} 在子进程里跑的载荷 —— 独立成常量（不是拼进函数体的
+ * 字符串）只有一个理由：它太长，留在函数里会把「做什么」压过「怎么做」，
+ * 而它读起来本来就是一段自足的小程序。
+ *
+ * 四件输入按 argv 顺序读：`[1]` URL、`[2]` 超时、`[3]` 分片大小、`[4]` 重定向上限。
+ */
+const DOWNLOAD_PROBE_SCRIPT = `
+  const { request } = require("node:https");
+  const { request: httpRequest } = require("node:http");
+  const url = process.argv[1];
+  const timeoutMs = Number(process.argv[2]);
+  const chunkBytes = Number(process.argv[3]);
+  const maxRedirects = Number(process.argv[4]);
+  // 「连上了吗」与「字节到了吗」是两件事，超时那一档要靠它们分开。
+  let connected = false;
+  let gotBytes = false;
+  let settled = false;
+  const done = (text) => {
+    if (settled) return;
+    settled = true;
+    process.stdout.write(text);
+    process.exit(0);
+  };
+  const attempt = (target, redirectsLeft) => {
+    // 按 URL 的协议挑模块（候选根全是 https，但这一层不该只认一种 ——
+    // 用例正是拿本地 http 服务判它的四种现场）。
+    const send = target.startsWith("http:") ? httpRequest : request;
+    const req = send(
+      target,
+      {
+        method: "GET",
+        headers: {
+          Range: "bytes=0-" + (chunkBytes - 1),
+          "Accept-Encoding": "identity",
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        connected = true;
+        const code = res.statusCode ?? 0;
+        if (code >= 300 && code < 400 && res.headers.location && redirectsLeft > 0) {
+          res.resume();
+          attempt(new URL(res.headers.location, target).toString(), redirectsLeft - 1);
+          return;
+        }
+        if (code >= 400) {
+          res.resume();
+          done("HTTP " + code);
+          return;
+        }
+        res.on("data", (chunk) => {
+          gotBytes = true;
+          const seen = chunk.length;
+          // 收到第一批字节就够了 —— 这一步判的是「字节流得过」，不是下载。
+          res.destroy();
+          req.destroy();
+          done("HTTP " + code + "（实收 " + seen + " 字节）");
+        });
+        res.on("end", () => {
+          done("HTTP " + code + "（**没量到 body**）");
+        });
+        res.on("error", () => {
+          done("HTTP " + code + "（已收到字节后就断了）");
+        });
+      },
+    );
+    req.on("socket", (socket) => {
+      if (socket.connecting === false) connected = true;
+      else socket.on("connect", () => { connected = true; });
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      done(
+        "超时（" +
+          (gotBytes
+            ? "已收到字节但没量完，"
+            : connected
+              ? "连上了但 0 字节，"
+              : "") +
+          timeoutMs +
+          "ms 内没有响应）",
+      );
+    });
+    req.on("error", (e) => {
+      if (gotBytes) return done("HTTP（已收到字节后就断了）");
+      done((e.code ?? "ERROR") + "：" + e.message);
+    });
+    req.end();
+  };
+  attempt(url, maxRedirects);
+`;
 /**
  * 一个探测结论的**三态**：到得了（`ok`）/ 没量完（`timeout`）/ 到不了（`worse`）。
  *
@@ -415,7 +570,7 @@ export function httpHeadStatus(url, { timeoutMs = 8000 } = {}) {
  * 的那一档），4xx 与超时按原序跟在后面。这不是「放宽判据」—— 放行那条判据仍是
  * 「装完能起才放行」，这里只决定**先试哪个根**。
  *
- * @param {string} verdict {@link httpHeadStatus} 那一句
+ * @param {string} verdict {@link httpDownloadProbe} 那一句
  * @returns {"ok" | "timeout" | "worse"}
  */
 export function probeGrade(verdict) {
@@ -477,12 +632,12 @@ export function pickPlaywrightRoots({
   const preferred = roots[0];
   /* **没给探测面就什么都不量**（这一支是有意的，不是省事）。
    *
-   * 探测是要**出网**的（每个候选一次 HEAD）—— 而本函数是装浏览器那一步的缺省路径。
+   * 探测是要**出网**的（每个候选一次真取一小段字节）—— 而本函数是装浏览器那一步的缺省路径。
    * 让缺省路径在“没接线”时静默去量真 CDN，等于给判据留一个「跑一次用例就发几次
    * 外网请求」的副作用（本仓反复记的那一格：判据不该依赖跑它的那台机器的网络）。
    * 所以量不量这件事由**调用方是否传它自己的探针**决定：
    *
-   *   · 调用方传了 ⇒ 用它的（盘上的实现是 `httpHeadStatus`），且只量它会用的根；
+   *   · 调用方传了 ⇒ 用它的（盘上的实现是 `httpDownloadProbe`），且只量它会用的根；
    *   · 没传 ⇒ 一个字都不量，回落到老行为（只试 `roots[0]`）。
    *
    * 判据里因此可以「换掉它就不出网」，而平台侧那条路一定传（见

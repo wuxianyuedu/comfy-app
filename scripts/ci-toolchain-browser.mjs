@@ -45,7 +45,7 @@ import path from "node:path";
  * —— 本文件 900 行的硬闸（§12.6 R5）不容许它继续长在这里，而那一段的**消费者**
  * （`环境前提`）本来就只用它。这里转出同一批名字，旧调用点不必跟着改。 */
 import {
-  httpHeadStatus,
+  httpDownloadProbe,
   pickPlaywrightRoots,
   playwrightReachability,
 } from "./ci-toolchain-browser-reach.mjs";
@@ -53,7 +53,7 @@ import {
 export {
   PLAYWRIGHT_FALLBACK_BROWSER_VERSION,
   PLAYWRIGHT_HOST_CANDIDATES,
-  httpHeadStatus,
+  httpDownloadProbe,
   isReachableVerdict,
   pickPlaywrightRoots,
   probeGrade,
@@ -99,7 +99,7 @@ export function playwrightOnly({
   find = required("find"),
   exec = required("exec"),
   env = process.env,
-  probe = httpHeadStatus,
+  probe = httpDownloadProbe,
   pickRoots = undefined,
   log = console.log,
   logError = console.error,
@@ -165,7 +165,11 @@ export function playwrightOnly({
     /* 失败话术后面跟**读数**，而不是又一句「常见成因：网络不通或磁盘满」——
      * 那两种成因的处置完全相反（一个是放宽多久算超时、一个是清盘），
      * 而日志里此前一个字都分不开它们。见 `playwrightInstallHints()`。 */
-    for (const line of playwrightInstallHints(install.out)) log(line);
+    for (const line of playwrightInstallHints(
+      install.out,
+      playwrightInstallHintFacts(env),
+    ))
+      log(line);
     /* 失败之后**当场量一次**「这台机器到底出得去哪些域名」。
      *
      * 这是本格最贵的一次教训（ISSUE #1961 第四跑）：镜像那一行是**在别处**量出来能用的
@@ -240,78 +244,275 @@ function noopSection() {}
  * 的结论，是「这一次没量完」。两者的处置相反：
  *
  *   · 换镜像：`PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>`；
- *   · 放宽多久算超时：`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000`。
+ *   · 放宽多久算超时：`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=<更大的数>`。
  *
  * 两个都是 Playwright 自己的环境变量，本仓不发明第二套（§12.18）。
  * 只有真撞上「下载失败」字样时才打 —— 别的失败形态（pnpm 不可用、盘满）不需要
  * 这两条建议，凑上去只会让人往错的方向看。
  *
  * ⚠️ 到第四跑之后这两条建议只是**兜底的**：真要说下一步，看的是
- * {@link playwrightReachability} 那份现场实测 —— 「哪个根到得了」只有从这台机器上
+ * `playwrightReachability()` 那份现场实测 —— 「哪个根到得了」只有从这台机器上
  * 量出来才算数（`cdn.npmmirror.com` 在别处量得到、在这台节点上照旧超时）。
  *
+ * ## ⚠️ 读数必须知道**哪些动作已经做过了**（ISSUE #1966 的续集）
+ *
+ * `out` 只是 Playwright 打的字，它答不出「这个出口是不是早就走过了」。于是这里
+ * 曾对着**已经配好的** `.cnb.yml` 逐字建议「配 `PLAYWRIGHT_DOWNLOAD_HOST`」与
+ * 「放宽到 `120000`」—— 而现场那一跑两个都配了、失败的**正是**那个根、
+ * 超时**就是** 120000ms：
+ *
+ *     （现场 `cnb-ald-1k51g8dt9`）下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：
+ *     https://cdn.npmmirror.com/binaries/playwright ……
+ *     Error: Request to <同一个 URL> timed out after 120000ms
+ *     读数：30s 是默认套接字超时（**错的，这次是 120s**）
+ *     读数：放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000（**已经就是它**）
+ *
+ * 「读数指向下一动作」是这一格反复栽的那条（§13.5.3.5.1）：把人指回一个**做过的**
+ * 动作，比不给建议更贵 —— 他会照着做一遍、形状逐字不变地再红一次。所以调用方把
+ * 「这一次生效的值」传进来（{@link playwrightInstallHintFacts}），话术按**已做的
+ * 动作**分岔：做过的点名为「已经做过了」，只剩没做过的那些才给出去。
+ *
  * @param {string} out `playwright install` 的输出
+ * @param {{timeoutMs?: number | null, host?: string | null}} [facts]
+ *   见 {@link playwrightInstallHintFacts}。`timeoutMs` 是 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`
+ *   解析出的**生效值**（`null` = 它没生效 / 解析不出，**不是**「等于缺省」），
+ *   `host` 是配着的 `PLAYWRIGHT_DOWNLOAD_HOST`（`null` / 缺席 = 没配）。
  * @returns {string[]}
  */
-export function playwrightInstallHints(out) {
+export function playwrightInstallHints(out, facts = {}) {
   const text = out ?? "";
   if (!/Failed to download|Download failure|timed out after/.test(text))
     return [];
+  const observed = observedTimeoutMs(text) ?? facts.timeoutMs ?? null;
+  const host = stringOrNull(facts.host);
   const urls = [
     ...new Set(
       [...text.matchAll(/Request to (\S+?) timed out/g)].map((m) => m[1]),
     ),
   ];
-  const headers = [
+  /* `Downloading … from <url>` 里给的是**真资源 URL**（根 + `builds/cft/<版本>/<档>/<包>`），
+   * 而配置面给的是**根** —— 拿前者去和 `PLAYWRIGHT_DOWNLOAD_HOST` 比逐字比对恒不相等
+   * （这个形态真的错过一次：话术于是把「配了根、且正是它失败」读成了「还没配」）。 */
+  const triedRoots = [
     ...new Set(
-      [...text.matchAll(/Downloading ([^\n]+?) from (\S+)/g)].map((m) => m[2]),
+      [...text.matchAll(/Downloading ([^\n]+?) from (\S+)/g)]
+        .map((m) => downloadRootOf(m[2]))
+        .filter((h) => typeof h === "string"),
     ),
   ];
-  /* 「同一族域名被反复试」这一档要单独说出来 —— 现场那一次正是它：5 条
+  /* 「试过的根全是 Playwright 内置那一族」——现场那次正是它：5 条
    * `Downloading … from cdn.playwright.dev` 之后 `Download failure, code=1`。
-   * 只说「超时」会把人引到「再放宽一点」那条错路上：**Playwright 的三个内置镜像
-   * 全是同一族**，换域名没用、加时间也没用（5 × 120s 试完照样不通），
-   * 缺的是一条能通的根。 */
+   * 判的是**试过的根**（摘不到时退回「配着的那个根」，再退回「没有」）。 */
+  const triedForFamily = triedRoots.length > 0 ? triedRoots : host ? [host] : [];
   const sameFamily =
-    headers.length > 0 &&
-    headers.every((h) => {
-      /* `h` 来自正则捕获组，TS 只保证是 `string | undefined` —— 抠不到时
-       * 直接不认这一档（与下面那支 catch 同一条：猜错方向比不猜更贵）。 */
-      if (!h) return false;
-      try {
-        return /(^|\.)(playwright\.dev|prss\.microsoft\.com)$/.test(
-          new URL(h).hostname,
-        );
-      } catch {
-        /* 摘出来的不是一个能解析的 URL（Playwright 换了话术 / 输出被截断）⇒
-         * 不认这一档，退到下面那两条通用出口。**猜错方向比不猜更贵**。 */
-        return false;
-      }
-    });
+    triedForFamily.length > 0 && triedForFamily.every(isPlaywrightFamilyRoot);
+  /* 配了一个根、而它正是被反复试的那一个 —— 这一档下「配一个根」这条出口已经是
+   * 既成事实，话术不许再把它当建议给出去。 */
+  const configuredRootFailed = host !== null && triedForFamily.includes(host);
   return [
     "---- 下载现场（供定位，非报错）----",
     ...(urls.length > 0
       ? urls.map((u) => `  超时的地址: ${u}`)
       : ["  （没有摘到 'Request to … timed out' 那一行，见上面的原文）"]),
-    ...(sameFamily
+    ...(observed !== null
       ? [
-          `  试过的根全是 ` +
-            `cdn.playwright.dev / playwright.download.prss.microsoft.com 这一族` +
-            `（Playwright 的 ${headers.length} 个内置镜像**同族**）——`,
-          "  这一族一起不通时，它自己的重试等于没有回退（实测 5 次全落在同一个域名族上）。",
-          "  这一档的出路是**从外面给一个能通的镜像根**，而不是再放宽多久算超时：",
-          "    · PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上，本仓会优先用它）",
+          `  这一次生效的套接字超时是 ${observed}ms（Playwright 的 ` +
+            "`NET_DEFAULT_TIMEOUT` 缺省 30000ms）——",
+          "  它只关「多久放弃」，不是「这个地址不通」的结论：大包在慢链路上会被它按时掐断。",
         ]
       : [
-          "  30s 是 Playwright 的默认**套接字**超时（`NET_DEFAULT_TIMEOUT`），",
-          "  不是「这个地址不通」的结论：大包在慢链路上会被它按时掐断。",
-          "  两条出口（都是 Playwright 自己的环境变量，本仓不发明第二套）：",
-          "    · 换镜像：PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上）",
-          "    · 放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000",
+          "  超时值没有从输出里摘到（Playwright 换了话术 / 输出被截断）——",
+          "  别按缺省的 30s 去读这一跑：`.cnb.yml` 给过的值以它为准。",
         ]),
-    "  两条都只关「多久放弃 / 走哪条链路」，不改「装完能起才放行」那条判据。",
+    ...hintActions({
+      sameFamily,
+      configuredRootFailed,
+      host,
+      triedRoots,
+      timeoutRaised:
+        observed !== null && observed > DEFAULT_DOWNLOAD_TIMEOUT_MS,
+    }),
+    "  所有出口都只关「走哪条链路 / 多久放弃」，不改「装完能起才放行」那条判据。",
     "------------------------------------",
   ];
+}
+
+/**
+ * Playwright 下载时的**缺省**套接字超时（`NET_DEFAULT_TIMEOUT`）。
+ *
+ * 抄它只为**读话术**：判断「放宽超时」那一条出口是不是已经走过了。真正的超时算法
+ * 在 Playwright 里（`+(PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT || "0") ||
+ * NET_DEFAULT_TIMEOUT`），本仓不重实现它 —— 这里只拿它当那条线的位置。
+ */
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30000;
+
+/**
+ * 「这一跑里已经做过的动作」—— {@link playwrightInstallHints} 的话术据此分岔。
+ *
+ * ## 两条出口各自判一次「做过了没有」
+ *
+ *   · **换镜像**（`PLAYWRIGHT_DOWNLOAD_HOST`）—— 已配上时不再建议配，改说「要换就换
+ *     这一行」（现场 `cnb-ald-1k51g8dt9` 就是配着的那个根失败了）；
+ *   · **放宽超时**（`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`）—— 已经高于缺省
+ *     （`DEFAULT_DOWNLOAD_TIMEOUT_MS`）时不再建议放宽：那正是现场那一跑「照它做、
+ *     形状逐字不变地再红一次」的来源（它建议 `=120000`，而当时**就是** 120000）。
+ *
+ * 两档都不做时（没配根、超时还是缺省）照旧给全 —— 那才是真的还没走过。
+ *
+ * ⚠️ `configuredRootFailed` 压过其余两档：配着的根就是失败的那一个时，「换镜像」这条
+ * 已不是「配一个根」而是「换掉它」，而剩下的出路在宿主机 / 网络侧
+ * （换根 / 代理 / 预装进落点）。
+ *
+ * @param {{sameFamily: boolean, configuredRootFailed: boolean, host: string | null,
+ *          triedRoots: string[], timeoutRaised: boolean}} ctx
+ * @returns {string[]}
+ */
+function hintActions({
+  sameFamily,
+  configuredRootFailed,
+  host,
+  triedRoots,
+  timeoutRaised,
+}) {
+  if (configuredRootFailed) {
+    return [
+      `  配着的下载根就是失败的那一个（${host}）—— 这一跑里那两条常用出口${
+        timeoutRaised ? "**都已经做过了**" : "**已经做过一条**"
+      }：`,
+      "    · PLAYWRIGHT_DOWNLOAD_HOST **已经配了**（就是上面那一个）—— 要换只换这一行；",
+      ...(timeoutRaised
+        ? [
+            "    · 放宽套接字超时（`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`）**也做过了**",
+            "      （现场那一次就是放宽之后的读数），照它再做一遍不会有任何变化 ——",
+            "      它只关「多久放弃」，不改「字节能不能流」这件事。",
+          ]
+        : [
+            "    · 放宽套接字超时（`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`）**还没做过**",
+            "      （上面那个数还是缺省档）—— 可以先试一档，但别指望它：它只关「多久放弃」，",
+            "      不改「字节能不能流」这件事。",
+          ]),
+      "  这一档的成因是**连上了但 0 字节**（握手能成、大 body 停住，典型是代理 / MTU），",
+      "  所以剩下的出路在宿主机 / 网络侧，不在仓库里（下一步只有人能做）：",
+      "    · **换一个这台节点真能到的根** —— 用上面那份「下载根探测」里判通的那一个，",
+      "      写到 `.cnb.yml` 的 `浏览器安装` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；",
+      "    · 或给这台节点配内网代理 / 放行镜像域；",
+      "    · 或**预先把 chromium-headless-shell 装进落点** —— 装过一次之后这一格就",
+      "      再也不碰网络（长期存在的机器上这是最省事的一条，",
+      "      落点见 `playwrightBrowsersRoot()`）。",
+    ];
+  }
+  if (sameFamily) {
+    return [
+      "  试过的根全是 " +
+        "cdn.playwright.dev / playwright.download.prss.microsoft.com 这一族" +
+        `（Playwright 的内置镜像**同族**，共试了 ${triedRoots.length} 条）——`,
+      "  这一族一起不通时，它自己的重试等于没有回退（实测 5 次全落在同一个域名族上）。",
+      "  这一档的出路是**从外面给一个能通的镜像根**，而不是再放宽多久算超时：",
+      "    · PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上，本仓会优先用它）",
+    ];
+  }
+  return [
+    host
+      ? `  下载根**已经配了**（${host}）；要换只换这一行，别去动超时那个数字。`
+      : "  下载根 还没配 —— 这一档的出路是**从外面给一个能通的镜像根**。",
+    "  两条出口（都是 Playwright 自己的环境变量，本仓不发明第二套）：",
+    ...(host
+      ? [
+          "    · 换一个能到的根：改 `PLAYWRIGHT_DOWNLOAD_HOST`（`浏览器安装` stage 的 env）",
+        ]
+      : [
+          "    · 配镜像：PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上）",
+        ]),
+    ...(timeoutRaised
+      ? [
+          "    · 放宽超时**这一跑已经做过了**（上面那个数比缺省的 30000ms 大）——" +
+            " 照它再做一遍不会有任何变化",
+        ]
+      : [
+          "    · 放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=<更大的数>（缺省 30000ms 是套接字超时）",
+        ]),
+  ];
+}
+
+/**
+ * 「这次失败时，那几个相关的值各是多少」—— 从 env 里取，唯一一处。
+ *
+ * `timeoutMs` 只认**解析得出的正数**：与 Playwright 自己的算法逐字同口径
+ * （`+(v || "0") || NET_DEFAULT_TIMEOUT`）—— 拿 `0` / 空 / 非数字当真值会让话术
+ * 报一个 Playwright 根本没用的数，而话术里那个数字必须与现场对得上。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {{timeoutMs: number | null, host: string | undefined}}
+ */
+export function playwrightInstallHintFacts(env = {}) {
+  const raw = env.PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT;
+  const parsed = Number(raw ?? "");
+  return {
+    timeoutMs: Number.isFinite(parsed) && parsed > 0 ? parsed : null,
+    host: env.PLAYWRIGHT_DOWNLOAD_HOST,
+  };
+}
+
+/**
+ * 输出里那条 `timed out after <N>ms` 的 N —— 摘不到回 `null`。
+ *
+ * 它比 env 里的值**更权威**：它说的是这一跑**实际**用上的那个数（env 可能没传进
+ * 子进程、也可能是 Playwright 自己的缺省），而话术里那个数字必须与现场对得上。
+ *
+ * @param {string} text
+ * @returns {number | null}
+ */
+function observedTimeoutMs(text) {
+  const m = /timed out after (\d+)ms/.exec(text ?? "");
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 这个根是不是 Playwright **自己那一族**（三个内置 CDN 的域名）。
+ *
+ * 判它只有一个用途：把「缺的是一条能通的**镜像**根」与「这条镜像也到不了」分开 ——
+ * 两档的下一动作完全不同（前者配一行，后者在宿主机侧）。
+ *
+ * @param {string} root
+ * @returns {boolean}
+ */
+function isPlaywrightFamilyRoot(root) {
+  try {
+    return /(^|\.)(playwright\.dev|prss\.microsoft\.com)$/.test(
+      new URL(root).hostname,
+    );
+  } catch {
+    /* 不是一个能解析的 URL（Playwright 换了话术 / 输出被截断）⇒ 不认这一档，
+     * 退到通用出口。**猜错方向比不猜更贵**。 */
+    return false;
+  }
+}
+
+/**
+ * 真资源 URL 里「根」那一段 —— 砍掉 `builds/` 起的尾巴。
+ *
+ * `https://h/a/builds/cft/1/win64/x.zip` → `https://h/a`。摘不出（换过形状 / 被截断）
+ * 就原样回传：这一处只服务**话术**，错的方向比不猜更贵，所以宁可回一个比不中的值。
+ *
+ * @param {string | undefined} url
+ * @returns {string | undefined}
+ */
+function downloadRootOf(url) {
+  if (typeof url !== "string") return undefined;
+  const i = url.indexOf("/builds/");
+  return i === -1 ? url : url.slice(0, i);
+}
+
+/**
+ * 去空白后的字符串，空 / 非字符串回 `null`。
+ *
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function stringOrNull(value) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
 /**
@@ -515,7 +716,7 @@ export function runPlaywrightInstall({
   find = required("find"),
   exec = required("exec"),
   env = process.env,
-  probe = httpHeadStatus,
+  probe = httpDownloadProbe,
   /* ⚠️ 缺省 `undefined`、由下面绑上 `probe`。直接把 `pickPlaywrightRoots` 本身放这里
    * 是**接错线的静默降级**：函数缺省参数只在「参数是 `undefined`」时才取值，所以传进来的
    * `probe` 永远不会到达挑根那一层，而 `pickPlaywrightRoots` 的 `probe` 缺省是

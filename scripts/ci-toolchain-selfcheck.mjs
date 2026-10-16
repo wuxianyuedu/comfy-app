@@ -62,7 +62,7 @@ import {
  * 由这里传进去 —— 「怎么探 pnpm」那份判据本来就在本文件里（§12.18：不造第二轮子）。 */
 import {
   browserExecutableExists,
-  httpHeadStatus,
+  httpDownloadProbe,
   pickPlaywrightRoots,
   playwrightBrowsersRoot,
   playwrightDownloadRoots,
@@ -625,7 +625,7 @@ export function main() {
       find: findPnpm,
       exec: run,
       section,
-      probe: httpHeadStatus,
+      probe: httpDownloadProbe,
       pickRoots: pickPlaywrightRoots,
     });
   }
