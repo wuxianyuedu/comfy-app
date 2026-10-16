@@ -85,9 +85,14 @@
  *     仍是默认的 `pipe`：PowerShell 编对的那批 936 字节落进 `r.stdout` 这个 Buffer，
  *     然后**整份丢掉**。于是平台侧那条 stage 的日志**一个字都没有**（连成功时也是），
  *     而退出码照转 —— 「输出被吞」与「命令没输出」在日志上同形，读的人只能去猜。
- *     正确取值是 `stdio: "inherit"`：要的是「原样落到日志」，不是「取回来再加工」。
+ *     正确取值是 `stdio: ["pipe", "inherit", "inherit"]`：**只把 stdout / stderr
+ *     接出去**，stdin 必须留在管道上 —— 那份原文就是从 stdin 递给 PowerShell 的
+ *     （`input`），而 `stdio: "inherit"` 配 `input` 用时会把 `input` **静默丢掉**
+ *     （stdin 变成真终端），PowerShell 的 `[Console]::In.ReadToEnd()` 读到空串 ⇒
+ *     **修完第一次仍然全空**（`E2E 关键流程` 那一格：退出 1、日志零行）。
+ *     「标准输出落日志」与「整个 stdio 都别管」是两句话。
  *     ⚠️ 这一格**Linux 上永远判不到**（非 Windows 直接 return），所以判据钉在
- *     「默认实现交出去的 `stdio` 是 `"inherit"`」这个形状上（`spawnImpl` 注入面）。
+ *     「默认实现交出去的那三路是什么」这个形状上（`spawnImpl` 注入面）。
  *   · **「起不了」那条出口不给真因**（第四次上平台）：报的是
  *     `起不了这条命令：node_modules/.bin/npx tsc --noEmit`，而真因是那次调用把
  *     **两条命令**当成了一条 —— 盘上没有那个文件。`resolved: true` 只表示
@@ -174,21 +179,28 @@ export function encodeCp936Plan(codePage = CP936_CODE_PAGE) {
  * 里那句 `spawnSync` 只会在 Windows 分支跑到，而平台侧第一次红正是它（见下）。
  * 有了它，这条链的**真实现**（起什么、`encoding` / `stdio` 是什么）在本地就能判。
  *
- * `stdio` 默认 `"pipe"`、**由调用方在 Windows 那条路上传 `"inherit"`**：把
- * PowerShell 编好的那批 936 字节直接接到本进程的 stdout。默认留 `"pipe"` 是为了
- * 让「取回来再判」（用例）与「原样落日志」（生产）都能表达 —— 但生产**必须**用
- * `"inherit"`，否则字节收进 `r.stdout` 就没了（见文件头那条坑）。
+ * `stdio` **只作用于 stdout / stderr**（stdin 恒留在管道上）：它默认 `"inherit"`，
+ * 由调用方在 Windows 那条路上显式传同一个值。生产**必须**是 `"inherit"` —— 否则
+ * PowerShell 编好的那批 936 字节收进 `r.stdout` 就没了（见文件头那条坑）。
+ * 而 stdin 不能跟着 `"inherit"`：那份 UTF-8 原文就是从 stdin 递给 PowerShell 的
+ * （`input`），两者配在一起时 `input` 会被**静默丢掉**（stdin 变成真终端），
+ * PowerShell 的 `[Console]::In.ReadToEnd()` 读到空串 ⇒ 日志仍然一个字都没有。
  *
  * @param {string} text UTF-8 文本（子进程的原始输出）
  * @param {{platform?: NodeJS.Platform,
  *          run?: (cmd: string, args: string[], input: string) => {status: number|null},
  *          spawnImpl?: typeof spawnSync,
- *          stdio?: "inherit" | "pipe"}} [ports]
+ *          stdio?: "inherit" | "pipe"}} [ports]  `stdio` 只作用于 stdout / stderr
  * @returns {{ok: boolean}}
  */
 export function writeCp936(
   text,
-  { platform = process.platform, run, spawnImpl = spawnSync, stdio = "inherit" } = {},
+  {
+    platform = process.platform,
+    run,
+    spawnImpl = spawnSync,
+    stdio = "inherit",
+  } = {},
 ) {
   if (platform !== "win32") return { ok: false };
   const { script } = encodeCp936Plan();
@@ -218,7 +230,14 @@ export function writeCp936(
          * 我们要的是「原样落到日志」，不是「取回来再加工」。
          *
          * 判据钉在「默认实现交出去的 stdio 是 inherit」（`spawnImpl` 注入面）。 */
-        stdio,
+        /* **只把 stdout / stderr 接出去，stdin 必须留在管道上** —— 那份 UTF-8
+         * 原文就是从 stdin 递给 PowerShell 的（`input`），而 `stdio: "inherit"`
+         * 是一句「三路都别再管」的话：配 `input` 用时它会**静默丢掉** `input`
+         * （stdin 变成真终端），PowerShell 的 `[Console]::In.ReadToEnd()` 于是
+         * 读到空串、一个字节都不发。那就是本条出口第一次修完之后**依然全空**的
+         * 原因（平台侧 `E2E 关键流程` 那一格：退出 1、日志零行）。
+         * ⇒ 要表达的是「标准输出那两路落日志」，不是「整个 stdio 都别管」。 */
+        stdio: ["pipe", stdio, stdio],
       });
       return { status: r.status };
     });

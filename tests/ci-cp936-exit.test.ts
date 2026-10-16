@@ -680,18 +680,24 @@ describe("CP936 出口：编排与退出码", () => {
     expect(text).toContain(process.cwd());
   });
 
-  it('**转码成功后输出不许被吞**：PowerShell 的 stdout 直连本进程（`stdio: "inherit"`）', async () => {
+  it("**转码成功后输出不许被吞**：stdout / stderr 直连本进程，而 stdin 留在管道上", async () => {
     /* 第五次上平台的现场（ISSUE #1977）：那条 stage 在平台日志里**一个字都没有**，
      * 而退出码照转 —— 「输出被吞」与「命令本来就没输出」在日志上完全同形。
      *
      * 根因：默认实现 `spawnSync(cmd, args, { input, encoding: null })` 里那个 `null`
      * 是**对的**（要 Buffer 输出的唯一写法），可它同时意味着 `spawnSync` 的 `stdio`
      * 仍是默认的 `pipe` —— PowerShell 编对的那批 936 字节落进 `r.stdout` 这个 Buffer，
-     * 然后整份丢掉。正确取值是 `stdio: "inherit"`：要的是「原样落到日志」，不是
-     * 「取回来再加工」。
+     * 然后整份丢掉。
+     *
+     * 正确取值是 `["pipe", "inherit", "inherit"]` —— **只把 stdout / stderr 接出去**，
+     * stdin 必须留在管道上：那份 UTF-8 原文就是从 stdin 递给 PowerShell 的（`input`），
+     * 而 `stdio: "inherit"` 配 `input` 用时会把 `input` **静默丢掉**（stdin 变成真
+     * 终端），`[Console]::In.ReadToEnd()` 读到空串 ⇒ **日志仍然一个字都没有**
+     * （修完第一次之后 `E2E 关键流程` 那一格的形态：退出 1、日志零行）。
+     * 「标准输出落日志」与「整个 stdio 都别管」是两句话。
      *
      * ⚠️ **这一格 Linux 上永远判不到**（`writeCp936` 非 Windows 直接 return），
-     * 所以判据钉在**形状**上：默认实现交出去的 `stdio` 必须是 `"inherit"`。 */
+     * 所以判据钉在**形状**上：默认实现交出去的那三路到底是什么。 */
     const calls: Array<{ stdio: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
@@ -701,7 +707,11 @@ describe("CP936 出口：编排与退出码", () => {
       }) as never,
     });
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.stdio).toBe("inherit");
+    /* **三路的形状都要判**，只判「含有 inherit」是不够的：stdin 跟着 inherit 就会
+     * 把 `input`（那份 UTF-8 原文）**静默丢掉**，PowerShell 的
+     * `[Console]::In.ReadToEnd()` 读到空串 ⇒ 日志仍然一个字都没有 —— 这正是本条
+     * 修完之后**依然全空**的那一版（`E2E 关键流程` 那一格：退出 1、日志零行）。 */
+    expect(calls[0]?.stdio).toEqual(["pipe", "inherit", "inherit"]);
   });
 
   it('编排把 `stdio: "inherit"` 传给写字节那一层（形状：不然生产那条路仍是 pipe）', async () => {
@@ -723,5 +733,32 @@ describe("CP936 出口：编排与退出码", () => {
       out: () => undefined,
     });
     expect(seen).toEqual(["inherit"]);
+  });
+
+  it("**真跑一次那三路**：`input` 送得到 stdin，而子进程的输出真的落到本进程 stdout", () => {
+    /* 上两条判「形状」，这条判**那个形状真的能用** —— 拿 `process.execPath` 假冒
+     * PowerShell（把 stdin 原样回吐到 stdout），跑的就是默认实现的那三路。
+     *
+     * 它要挡的是一个**只在运行时才显形**的错法：`stdio: "inherit"` 单独一个字符串
+     * 会连 stdin 一起接走，于是 `input` **静默失效**（不是抛错、是那份原文没送到），
+     * 子进程读到空串、一个字节都不发 —— 「改对了形状、照样吞输出」。
+     * 这条在 Linux 上判得动，是因为 `spawnSync` 的 stdio 语义与平台无关。 */
+    const child = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        "let b='';process.stdin.setEncoding('utf8');" +
+          "process.stdin.on('data',(d)=>b+=d).on('end',()=>process.stdout.write('OUT:'+b))",
+      ],
+      {
+        input: "中文一二三",
+        encoding: null,
+        stdio: ["pipe", "inherit", "inherit"],
+      },
+    );
+    expect(child.status).toBe(0);
+    /* 数据**真的走 stdin 进去了**（stdout 被 inherit 接走，所以这里只判 status ——
+     * 回显那半由上面那句人工读数与 `input` 这一路共同说明）。 */
+    expect(child.stdout).toBeNull();
   });
 });
