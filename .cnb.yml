@@ -172,6 +172,13 @@
   - name: 工具链自证
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      # ── 编码探针（头注第 6 条那件事的**常读读数**）──
+      # 三行中文分别由三层吐出：PS 自己（写它自己的编码）、cmd（console CP，默认
+      # CP936）、node（UTF-8）。哪一行在平台侧可读，就说明**平台在那一层用的是什么
+      # 编码** —— 乱码是「多层里哪一层断的」这件事，只看一行日志永远分不开。
+      Write-Output "编码探针·PS 原生：中文一二三"
+      cmd /c "echo 编码探针·CMD：中文一二三"
+      node -e "console.log('编码探针·NODE：中文一二三')"
       # 逻辑在 scripts/ci-toolchain-selfcheck.mjs —— **不在这里就地写 PowerShell**。
       #
       # 这一步原先是一段 ~70 行就地 PowerShell（探 Python、用 winget 当场装、
