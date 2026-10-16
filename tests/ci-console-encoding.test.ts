@@ -1,0 +1,157 @@
+/**
+ * 「构建日志乱码」那一格的判断面（ISSUE #1959）。
+ *
+ * ## 它守的是什么
+ *
+ * 自托管 Windows 节点上，平台抓取 stage 输出用的是**宿主 ANSI 代码页**
+ * （中文 Windows 上是 CP936），而 Node / pnpm 无条件写 UTF-8 ——
+ * 于是本机打的每一个非 ASCII 字符在日志里都是乱码。这不是推断，是从构建产物里
+ * 逐字节复算出来的：下载那一跑的 runner 日志，把 `宸ュ叿閾捐嚜璇侀€氳繃` 按 UTF-8
+ * 取字节再按 GBK 解，正好回到 `工具链自证通过`；末尾那个 `?` 是 `✓`（U+2713，
+ * UTF-8 三字节 `E2 9C 93`）被 CP936 解出 `鉁` 之后剩下的孤字节。
+ * 同一份日志里 PowerShell 自己打的 `Set-Variable : 缺少参数…` 却是完好中文 ——
+ * 两个方向的对照都在，所以「谁按什么编码解码」是可判的。
+ *
+ * ## 这里能判什么、不能判什么
+ *
+ * **不能**判「日志里到底有没有乱码」—— 抓取端的解码发生在本进程之外，本进程看不到
+ * 自己的字节被怎么解。能被机器判的只有**宿主当前的代码页读数**，以及纠正动作
+ * （`applyConsoleEncoding`）有没有真的把读数改到 UTF-8。本文件判的就是这两件。
+ *
+ * ## 三条边界（与实现同口径）
+ *
+ *   · **非 Windows 不是失败**：那里控制台输出编码无处可设，读数是 `null`；
+ *   · **「没量到」不是「量到的是错的」**：`null` 回 `null`，不许当成 false；
+ *   · **纠正失败不阻断**：编码不对只让日志难读，不会让哪一步算错，
+ *     所以 `applyConsoleEncoding()` 如实返回结论、调用方只打印。
+ */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+import {
+  applyConsoleEncoding,
+  codePageIsUtf8,
+  readConsoleEncoding,
+  UTF8_CODE_PAGE,
+} from "../scripts/ci-console-encoding.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
+
+describe("控制台输出编码：读数（只读，不改任何东西）", () => {
+  it("非 Windows 宿主回「没量到」而不是假装量到了", () => {
+    expect(readConsoleEncoding({ platform: "linux" })).toEqual({
+      codePage: null,
+      chcpRaw: null,
+    });
+  });
+
+  it("中文 Windows 的读数：CP936 —— 判成「非 UTF-8」（这就是乱码的成因）", () => {
+    const now = readConsoleEncoding({
+      platform: "win32",
+      runImpl: () => ({ status: 0, out: "936\n活动代码页: 936" }),
+    });
+    expect(now.codePage).toBe(936);
+    expect(now.chcpRaw).toBe("活动代码页: 936");
+    expect(codePageIsUtf8(now.codePage)).toBe(false);
+  });
+
+  it("已钉成 UTF-8 时判成「对」", () => {
+    const now = readConsoleEncoding({
+      platform: "win32",
+      runImpl: () => ({ status: 0, out: "65001\nActive code page: 65001" }),
+    });
+    expect(codePageIsUtf8(now.codePage)).toBe(true);
+  });
+
+  it("探测失败 / 输出里没有数字 ⇒ codePage 为 null（不知道 ≠ 不合格）", () => {
+    expect(
+      readConsoleEncoding({
+        platform: "win32",
+        runImpl: () => ({ status: 1, out: "" }),
+      }).codePage,
+    ).toBeNull();
+    expect(
+      readConsoleEncoding({
+        platform: "win32",
+        runImpl: () => ({ status: 0, out: "无法识别的命令" }),
+      }).codePage,
+    ).toBeNull();
+    /* 三档取值分得开：`null` 既不等于 true 也不等于 false。 */
+    expect(codePageIsUtf8(null)).toBeNull();
+  });
+});
+
+describe("控制台输出编码：纠正动作", () => {
+  it("目标代码页只有一处定义，且它就是 UTF-8", () => {
+    expect(UTF8_CODE_PAGE).toBe(65001);
+  });
+
+  it("钉成功时如实报成功（按**复核后的读数**判，不采信命令退出码）", () => {
+    const applied = applyConsoleEncoding({
+      platform: "win32",
+      runImpl: () => ({ status: 0, out: "65001" }),
+    });
+    expect(applied.applied).toBe(true);
+    expect(applied.detail).toContain("65001");
+  });
+
+  it("命令退 0 但读数没变 ⇒ **不**报成功（复验与执行是两件事）", () => {
+    const applied = applyConsoleEncoding({
+      platform: "win32",
+      /* 这一档是实测过的形态：安装 / 设置类命令退 0 不等于结果落地。 */
+      runImpl: () => ({ status: 0, out: "936" }),
+    });
+    expect(applied.applied).toBe(false);
+    expect(applied.detail).toContain("936");
+  });
+
+  it("非 Windows 只说「无处可设」，不当成失败", () => {
+    const applied = applyConsoleEncoding({ platform: "darwin" });
+    expect(applied.applied).toBe(false);
+    expect(applied.detail).toContain("非 Windows");
+  });
+});
+
+describe("控制台输出编码：流水线上真的在纠它", () => {
+  it("第一步（工具链自证）在**打印任何中文之前**先纠编码", () => {
+    const yml = read(".cnb.yml");
+    const stageAt = yml.indexOf("- name: 工具链自证");
+    expect(stageAt, "`.cnb.yml` 里找不到「工具链自证」那一步").toBeGreaterThan(-1);
+    const applyAt = yml.indexOf("ci-console-encoding.mjs --apply");
+    expect(
+      applyAt,
+      "没有人纠控制台输出编码 —— 日志乱码那一格因此没有任何执行者",
+    ).toBeGreaterThan(stageAt);
+    /* 顺序要紧：纠编码必须在**同一步里**、且在这一步第一次打印中文**之前**。
+     *
+     * 找的是**命令调用行**（行首就是 `node …`），不是「这个文件名的任意一次出现」——
+     * 那一步的说明注释里正当地写着同一个文件名，按 `indexOf` 找会把注释算成调用，
+     * 于是这条顺序判据自己判错方向。 */
+    const invoked = yml
+      .slice(stageAt)
+      .split("\n")
+      .findIndex((l) => l.trim().startsWith("node scripts/ci-toolchain-selfcheck.mjs"));
+    expect(invoked, "同一步里找不到工具链自证的命令调用行").toBeGreaterThan(-1);
+    const applyLine = yml
+      .slice(stageAt)
+      .split("\n")
+      .findIndex((l) => l.trim().startsWith("node scripts/ci-console-encoding.mjs"));
+    expect(applyLine, "同一步里找不到纠编码的命令调用行").toBeGreaterThan(-1);
+    expect(
+      applyLine < invoked,
+      "纠编码排在了第一次中文输出之后 —— 那一段照着乱码打出来",
+    ).toBe(true);
+  });
+
+  it("「环境前提」把读数打出来（每一跑都能读到代码页，不靠人去猜）", () => {
+    const probe = read("scripts/ci-env-probe.mjs");
+    expect(probe).toContain("readConsoleEncoding");
+    expect(probe).toContain("codePageIsUtf8");
+    /* 话术里必须给**下一动作**（与 §13.5.3.5.1「红了要红在能指路的位置」同口径）。 */
+    expect(probe).toContain("--apply");
+    expect(probe).toContain("UTF-8");
+  });
+});
