@@ -44,6 +44,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import {
+  browserExecutableExists,
+  playwrightReachabilityVerdicts,
+  playwrightDownloadRoots,
+} from "./ci-toolchain-browser.mjs";
 import { codePageIsUtf8, readConsoleEncoding } from "./ci-console-encoding.mjs";
 import { findPython } from "./ci-toolchain-python.mjs";
 
@@ -229,7 +234,10 @@ function run(cmd, args) {
  *   config?: string | null,
  *   findPythonImpl?: typeof findPython,
  *   readEncodingImpl?: typeof readConsoleEncoding,
-   runImpl?: (cmd: string, args: string[]) => {ok: boolean, out: string},
+ *   runImpl?: (cmd: string, args: string[]) => {ok: boolean, out: string},
+ *   browserPresentImpl?: typeof browserExecutableExists,
+ *   reachabilityImpl?: typeof playwrightReachabilityVerdicts,
+ *   env?: Record<string, string | undefined>,
  *   log?: (line: string) => void,
  *   logError?: (line: string) => void,
  * }} [ports]
@@ -244,6 +252,11 @@ export function envProbe({
   /* 编码读数的**注入面**（缺省问宿主；用例据此判「读到 936 会说什么」）。 */
   readEncodingImpl = readConsoleEncoding,
   runImpl = run,
+  /* 浏览器那两格的注入面：缺省是那份**真**实现（与 `浏览器安装` 同源，
+   * §12.18 不造第二轮子）。用例换掉它们 ⇒ 不出网、不碰真落点。 */
+  browserPresentImpl = browserExecutableExists,
+  reachabilityImpl = playwrightReachabilityVerdicts,
+  env = process.env,
   log = console.log,
   logError = console.error,
 } = {}) {
@@ -367,6 +380,83 @@ export function envProbe({
       "pnpm 在这一步下起不来（裸名字，Node 不认 PATHEXT）—— " +
         "它是**读数**不是本步的判据：`工具链自证` 用的是按形态解析的那份探针，" +
         "两者结论不一致时以那一步为准。",
+    );
+  }
+
+  /* ── ⑤ 浏览器那一格的**前提**（ISSUE #1959 用户诉求的落点）──
+   *
+   * 这一步是整条流水线上**最晚**才红的一格（`浏览器安装` 排在倒数第二步、E2E 之前），
+   * 而它的前提只要几秒就能问出来。实测四跑都是这个形态：跑了十几到二十几分钟、
+   * 前面三十步全绿，最后卡在下载上（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq`）。
+   *
+   * 它答的**不是**「浏览器在不在」（那一格归 `浏览器安装`：缺件会去装、装完复验），
+   * 而是**「这一趟装得成吗」**——判读分两支：
+   *
+   *   ① **落点上已经有那一件** ⇒ 无需网络（`--playwright-only` 会走「已装，跳过下载」），
+   *      这一步给一条读数就放行；
+   *   ② **落点上是空的** ⇒ **现在**量一次「下载根通不通」。全都不通就**当场红** ——
+   *      因为那意味着第 31 步**必然**失败，而它在前面白花掉三十分钟之后才告诉你。
+   *
+   * ## 为什么量的是「外面给的那个根」而不是每次都铺开四个候选
+   *
+   * `PLAYWRIGHT_DOWNLOAD_HOST` 设在 `.cnb.yml` 的 `浏览器安装` stage 上，本步的
+   * stage 看不到它 —— 所以传进来的是**本步自己进程的 env**。这两种情况下铺开全量
+   * 候选是对的：没有那个变量时，「这台机器出得去哪个域」正是要回答的问题。
+   * 一旦 `.cnb.yml` 真给了一个根，判据就变成「**那个根**通不通」（`playwrightDownloadRoots`
+   * 已经收口了这条语义：给上了就只用它，见 `ci-toolchain-browser.mjs` 的头注）。
+   *
+   * ⚠️ 与 `浏览器安装` 的失败分支**刻意不同**：那里是「装都装失败了，把四个域都量一遍
+   * 供人定位」；这里是**前置判定**，只量真正会被用到的那一个（或候选那一族），
+   * 因为它是判据、要快。
+   *
+   * ## 为什么它**不**在探测出「不通」时直接去装
+   *
+   * 「不通」这件事不是这步骤能修的（网络在仓外），所以它的作用是**把结论提前**，
+   * 而不是替 `浏览器安装` 做那一步 —— 职责边界与 `工链自证` ⇄ `Python 可用性` 同形。 */
+  try {
+    const already = browserPresentImpl({ env });
+    if (already.ok) {
+      notes.push(
+        `浏览器落点上已经有那一件（${already.out}）—— ` +
+          `\`浏览器安装\` 会走「已装，跳过下载」，这一格不依赖网络`,
+      );
+    } else {
+      const roots = playwrightDownloadRoots(env);
+      /* 没给根时用候选那一族（这就是「这台机器出得去这类域吗」）；给了根就只量它。 */
+      const verdicts = reachabilityImpl(
+        roots[0]
+          ? { candidates: [roots[0]] }
+          : { candidates: undefined },
+      );
+      const reachable = verdicts.filter((v) => v.ok);
+      for (const v of verdicts) notes.push(`下载根探测：${v.url} → ${v.verdict}`);
+      if (reachable.length === 0) {
+        problems.push(
+          "浏览器落点是空的，而**一个下载根都到不了** —— " +
+            "`浏览器安装` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在" +
+            "那里失败，而那时前面三十步的预算已经花掉了。\n" +
+            `      实测过的现场：${verdicts[0]?.url ?? "（没有候选）"} → ` +
+            `${verdicts[0]?.verdict ?? "?"}\n` +
+            "      下一动作（三选一，前两条在人不在仓）：\n" +
+            "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 " +
+            "`浏览器安装` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；\n" +
+            "        · 或给节点配内网代理 / 放行镜像域；\n" +
+            "        · 或**预先把 `chromium-headless-shell` 装进节点的落点** —— " +
+            "装过一次之后这一格就再也不碰网络（长期存在的机器上这是最省事的一条）。",
+        );
+      } else {
+        notes.push(
+          `浏览器落点是空的，但下载根有 ${reachable.length}/${verdicts.length} 条到得了` +
+            "（`浏览器安装` 那一步应该装得成）",
+        );
+      }
+    }
+  } catch (error) {
+    /* 探测本身出错时**不判红**（同 Python 那条：那是「不知道」，不是「不达标」）——
+     * 但它要留一条读数，否则这一步会看起来像「浏览器那一格没在判」。 */
+    notes.push(
+      `浏览器前提探测本身出错：${/** @type {Error} */ (error).message} —— ` +
+        "本步不据此判红（那一格仍归 `浏览器安装`）",
     );
   }
 

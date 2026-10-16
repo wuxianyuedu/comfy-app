@@ -245,14 +245,8 @@ export function playwrightReachability({
 } = {}) {
   const lines = ["---- 这台机器出得去哪些下载域（现场实测，供定位）----"];
   if (updateHost) lines.push(`  当前 PLAYWRIGHT_DOWNLOAD_HOST: ${updateHost}`);
-  for (const url of candidates) {
-    let verdict;
-    try {
-      verdict = probe(url);
-    } catch (error) {
-      verdict = `探测本身出错：${/** @type {Error} */ (error).message}`;
-    }
-    lines.push(`  ${url} → ${verdict}`);
+  for (const r of playwrightReachabilityVerdicts({ candidates, probe })) {
+    lines.push(`  ${r.url} → ${r.verdict}`);
   }
   lines.push(
     "  （判读：全都超时 ⇒ 这台机器出不去这一类 CDN，换镜像也不会变；",
@@ -261,6 +255,59 @@ export function playwrightReachability({
   );
   lines.push("------------------------------------");
   return lines;
+}
+
+/**
+ * 上面那份读数的**机器可读形态** —— 逐个候选一个 `{url, verdict, ok}` 三态。
+ *
+ * ## 为什么它必须与打印那一份同源
+ *
+ * 「环境前提」那一步要在**装依赖之前**回答「浏览器这一格这回装得成吗」，
+ * 而它只能靠**判**（不是打印）来做结论。于是同一个探测会有两个消费者：
+ * 一个要人读的字符串、一个要机器判的三态。
+ *
+ * 这两种消费者各写一份探测定理上没错、工程上是本仓栽过的那一跤
+ * （§12.12：跨文件复制实现 ≥75% 重合即孪生）：**两次探测的结论会漂**，
+ * 而漂的那一天恰好是它们该互相印证的那一天。所以把「怎么算通」收在这一处，
+ * 上面那份打印从它派生 —— 打印与判据共用同一次结论。
+ *
+ * ## `ok` 的判据
+ *
+ * 只认 `HTTP <code>` 且**码在 2xx/3xx**（回 200/302 都算这条链路到得了）。
+ * 刻意**不**认「超时」与 `ENOTFOUND` —— 那两者在打印里刻意分开
+ * （「连上了但不说话」vs「域名都解析不了」），但在**判**这一层它们同属
+ * 「这一次到不了」，把它们混进 `ok` 只会让判据骗人。
+ *
+ * @param {{candidates?: string[], probe?: (url: string) => string}} [options]
+ *   `probe` 是注入面（默认 {@link httpHeadStatus}），判据里换掉它就不出网。
+ * @returns {Array<{url: string, verdict: string, ok: boolean}>}
+ */
+export function playwrightReachabilityVerdicts({
+  candidates = PLAYWRIGHT_HOST_CANDIDATES,
+  probe = httpHeadStatus,
+} = {}) {
+  return candidates.map((url) => {
+    let verdict;
+    try {
+      verdict = probe(url);
+    } catch (error) {
+      verdict = `探测本身出错：${/** @type {Error} */ (error).message}`;
+    }
+    return { url, verdict, ok: isReachableVerdict(verdict) };
+  });
+}
+
+/**
+ * 「这次的探测结论算不算到得了」—— {@link playwrightReachabilityVerdicts} 的判据本体。
+ *
+ * @param {string} verdict
+ * @returns {boolean}
+ */
+export function isReachableVerdict(verdict) {
+  const m = /^HTTP\s+(\d{3})\b/.exec(String(verdict ?? "").trim());
+  if (!m) return false;
+  const code = Number(m[1]);
+  return code >= 200 && code < 400;
 }
 
 /**
