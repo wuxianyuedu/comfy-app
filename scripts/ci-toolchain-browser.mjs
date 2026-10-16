@@ -56,26 +56,47 @@ import path from "node:path";
  *
  * @param {{
  *   find?: () => {ok: boolean, command: string, prefixArgs: string[], args: string[], out: string},
- *   exec?: (cmd: string, args: string[]) => {ok: boolean, out: string},
+ *   exec?: (cmd: string, args: string[], downloadHost?: string) => {ok: boolean, out: string},
+ *   env?: Record<string, string | undefined>,
  *   log?: (line: string) => void,
  *   logError?: (line: string) => void,
  *   section?: (title: string) => void,
  * }} [ports]
+ *   `exec` 的第三个参数是**这一次要用的下载根**（`PLAYWRIGHT_DOWNLOAD_HOST`），
+ *   只有装浏览器那一步会带 —— 调用方要把它转交到子进程的 env 上。
  * @returns {number} 退出码
  */
 export function playwrightOnly({
   find = required("find"),
   exec = required("exec"),
+  env = process.env,
   log = console.log,
   logError = console.error,
   section = noopSection,
 } = {}) {
   section("playwright");
+  /* **先按落点判一次，装过的就不装**（ISSUE #1961 第三跑）。
+   *
+   * 这不是省时间，是**让这一格在「网络不通」时仍然是绿的**：自托管节点是台长期存在的
+   * 机器，浏览器一旦落地就一直在那儿，而下一次跑并不需要重新下载。原先是无条件
+   * `playwright install` —— 于是链路一抖，一条**本来什么都不缺**的流水线也会红在
+   * 这里（`cnb-gt1-1k513ill4`：1732s 的门禁全绿，最后红在这一步的下载上）。
+   *
+   * 判据仍然是「东西落地了」（与下面那条复验同一份实现），所以这一支不会把
+   * 「装了一半」放过去 —— 它只在**两件都齐**时才提前返回。 */
+  const already = browserExecutableExists({ env });
+  if (already.ok) {
+    log(`已装，跳过下载：${already.out}`);
+    return 0;
+  }
   /* 两件都要装：`chromium` 与 `chromium-headless-shell` 是 `browsers.json` 里的
    * **两个条目**，而 headless 档用的是后者 —— 只装前者时 `executablePath()` 会给出
    * 前者、看着像「装过了」，真起浏览器就报 `Executable doesn't exist`
    * （`e2e/support/preflight-browser.mjs` 的头注写着这条）。 */
-  const install = runPlaywrightInstall({ find, exec });
+  if (env.PLAYWRIGHT_DOWNLOAD_HOST) {
+    log(`下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：${env.PLAYWRIGHT_DOWNLOAD_HOST}`);
+  }
+  const install = runPlaywrightInstall({ find, exec, env });
   log(install.out || "(playwright install 没有输出)");
   if (!install.ok) {
     logError(
@@ -91,7 +112,7 @@ export function playwrightOnly({
   }
   /* **装完必须复验**（与 `installAndReverify` 的「装完回到 `findPython()` 再探一遍」
    * 同一条口径）：`playwright install` 退 0 **不等于**二进制落地了。理由与判据见下。 */
-  const present = browserExecutableExists();
+  const present = browserExecutableExists({ env });
   if (!present.ok) {
     logError(
       "\n`playwright install` 报了成功，但**那一件二进制不在盘上**。" +
@@ -160,17 +181,50 @@ export function playwrightInstallHints(out) {
   const urls = [
     ...new Set([...text.matchAll(/Request to (\S+?) timed out/g)].map((m) => m[1])),
   ];
+  const headers = [...new Set([...text.matchAll(/Downloading ([^\n]+?) from (\S+)/g)].map((m) => m[2]))];
+  /* 「同一族域名被反复试」这一档要单独说出来 —— 现场那一次正是它：5 条
+   * `Downloading … from cdn.playwright.dev` 之后 `Download failure, code=1`。
+   * 只说「超时」会把人引到「再放宽一点」那条错路上：**Playwright 的三个内置镜像
+   * 全是同一族**，换域名没用、加时间也没用（5 × 120s 试完照样不通），
+   * 缺的是一条能通的根。 */
+  const sameFamily =
+    headers.length > 0 &&
+    headers.every((h) => {
+      /* `h` 来自正则捕获组，TS 只保证是 `string | undefined` —— 抠不到时
+       * 直接不认这一档（与下面那支 catch 同一条：猜错方向比不猜更贵）。 */
+      if (!h) return false;
+      try {
+        return /(^|\.)(playwright\.dev|prss\.microsoft\.com)$/.test(
+          new URL(h).hostname,
+        );
+      } catch {
+        /* 摘出来的不是一个能解析的 URL（Playwright 换了话术 / 输出被截断）⇒
+         * 不认这一档，退到下面那两条通用出口。**猜错方向比不猜更贵**。 */
+        return false;
+      }
+    });
   return [
     "---- 下载现场（供定位，非报错）----",
     ...(urls.length > 0
       ? urls.map((u) => `  超时的地址: ${u}`)
       : ["  （没有摘到 'Request to … timed out' 那一行，见上面的原文）"]),
-    "  30s 是 Playwright 的默认**套接字**超时（`NET_DEFAULT_TIMEOUT`），",
-    "  不是「这个地址不通」的结论：大包在慢链路上会被它按时掐断。",
-    "  两条出口（都是 Playwright 自己的环境变量，本仓不发明第二套）：",
-    "    · 换镜像：PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上）",
-    "    · 放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000",
-    "  两条都只关「多久放弃」，不改「装完能起才放行」那条判据。",
+    ...(sameFamily
+      ? [
+          `  试过的根全是 ` +
+            `cdn.playwright.dev / playwright.download.prss.microsoft.com 这一族` +
+            `（Playwright 的 ${headers.length} 个内置镜像**同族**）——`,
+          "  这一族一起不通时，它自己的重试等于没有回退（实测 5 次全落在同一个域名族上）。",
+          "  这一档的出路是**从外面给一个能通的镜像根**，而不是再放宽多久算超时：",
+          "    · PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上，本仓会优先用它）",
+        ]
+      : [
+          "  30s 是 Playwright 的默认**套接字**超时（`NET_DEFAULT_TIMEOUT`），",
+          "  不是「这个地址不通」的结论：大包在慢链路上会被它按时掐断。",
+          "  两条出口（都是 Playwright 自己的环境变量，本仓不发明第二套）：",
+          "    · 换镜像：PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上）",
+          "    · 放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000",
+        ]),
+    "  两条都只关「多久放弃 / 走哪条链路」，不改「装完能起才放行」那条判据。",
     "------------------------------------",
   ];
 }
@@ -333,16 +387,19 @@ function findFileUnder(dir, name, depth, join = path.join) {
  *
  * @param {{
  *   find?: () => {ok: boolean, command: string, prefixArgs: string[], args: string[], out: string},
- *   exec?: (cmd: string, args: string[]) => {ok: boolean, out: string},
+ *   exec?: (cmd: string, args: string[], downloadHost?: string) => {ok: boolean, out: string},
+ *   env?: Record<string, string | undefined>,
  * }} [ports]
- *   两个接缝（**必传**，见 `playwrightOnly` 的说明）：`find` 给 pnpm 形态、`exec`
- *   起进程。判据里注入它们，结论才不取决于跑判据那台机器上有没有 pnpm、
- *   也不真去下 100MB 浏览器。
- * @returns {{ok: boolean, out: string, command?: string, args?: string[]}}
+ *   三个接缝（**必传**，见 `playwrightOnly` 的说明）：`find` 给 pnpm 形态、`exec`
+ *   起进程（第三个参数是这一次要用的下载根）、`env` 决定试哪个根
+ *   （见 `playwrightHostsToTry`）。判据里注入它们，结论才不取决于跑判据那台机器上
+ *   有没有 pnpm、也不真去下 100MB 浏览器。
+ * @returns {{ok: boolean, out: string, command?: string, args?: string[], host?: string}}
  */
 export function runPlaywrightInstall({
   find = required("find"),
   exec = required("exec"),
+  env = process.env,
 } = {}) {
   const pnpm = find();
   if (!pnpm.ok) {
@@ -361,6 +418,43 @@ export function runPlaywrightInstall({
     "chromium",
     "chromium-headless-shell",
   ];
-  const r = exec(pnpm.command, args);
-  return { ok: r.ok, out: r.out, command: pnpm.command, args };
+  /* 逐个宿主试过去（`playwrightHostsToTry()`）：Playwright 自己的三个内置镜像
+   * **全是 `*.playwright.dev` / `*.microsoft.com`**，一台出不了这两个域的网络里
+   * 三个一起不通 —— 换哪个都一样。所以「不通」这一档的出路只有**外面给一个能通的
+   * 镜像根**，而那不是它能自己推出来的事（见 `playwrightHostsToTry` 的头注）。 */
+  let out = "";
+  for (const host of playwrightHostsToTry(env)) {
+    const r = exec(pnpm.command, args, host);
+    out += `${r.out ?? ""}\n`;
+    if (r.ok) return { ok: true, out, command: pnpm.command, args, host };
+  }
+  return { ok: false, out, command: pnpm.command, args };
+}
+
+/**
+ * 装浏览器时按序要试的**镜像根** —— 头一个是 `PLAYWRIGHT_DOWNLOAD_HOST`（若设了）。
+ *
+ * ## 为什么必须有一条「外面给的镜像」这条路
+ *
+ * Playwright 自己有一份 `PLAYWRIGHT_CDN_MIRRORS`（三档），而三档**都是
+ * `cdn.playwright.dev` 与 `playwright.download.prss.microsoft.com`** 的排列。
+ * 在这台自托管节点上实测（`cnb-gt1-1k513ill4`）：`Downloading Chrome for Testing …`
+ * 逐字打了 **5 次**、每次都是 `cdn.playwright.dev`（Playwright 的重试是
+ * `retryCount = 5`，换镜像但不换域名族），然后 `Download failure, code=1`。
+ * 也就是说**它自己的回退在同一张网里等于没有**：三个域名要么一起通、要么一起不通。
+ *
+ * 所以「不通」这一档唯一的出路是外面给一个能通的根 —— `PLAYWRIGHT_DOWNLOAD_HOST`
+ * 正是 Playwright 留给这件事的键（本仓不发明第二套，§12.18）。设了就用它，
+ * 而且**只用它**：那说明人已经知道该走哪儿，不必再陪 Playwright 挨个试一遍不通的。
+ *
+ * 没设时返回一条空宿主 = 走 Playwright 的默认行为（内置那三档），
+ * **不替它挑一个第三方镜像写进代码** —— 那等于把「哪面墙怎么过」写死在仓里，
+ * 换台机器就静默失效，而这里判据是「装完能起才放行」，它会绿着把错的东西放过去。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {Array<string | undefined>}
+ */
+export function playwrightHostsToTry(env) {
+  const configured = env.PLAYWRIGHT_DOWNLOAD_HOST;
+  return configured ? [configured] : [undefined];
 }

@@ -572,7 +572,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 光放宽预算不够 —— 放宽到 120s 之后**照旧超时**（`cnb-gt1-1k513ill4` 的原文是
      * `timed out after 120000ms`），那时结论就变了：这台节点真的到不了
      * `cdn.playwright.dev`。所以镜像那一行也要在块里 —— 它才是让下载**到得了**的那一件，
-     * 少了它，这一步会以「超时」的形态一直红下去，而人只会不断去调那个超时数字。 */
+     * 少了它，这一步会以「超时」的形态一直红下去，而人只会不断去调那个超时数字。
+     *
+     * 而这一行之所以**推不出来、只能由这里给**：Playwright 自己那三个内置镜像
+     * **全是同一族**（`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+     * 它 `retryCount = 5` 的「回退」在同一张网里等于没有 —— 实测逐字打了 5 次同一个
+     * 域名，然后 `Download failure, code=1`（`runPlaywrightInstall` 侧对应的读数与
+     * 判据见 `tests/ci-toolchain-selfcheck.test.ts` 的「下载根由外面给」那一组）。 */
     expect(
       stage,
       "「浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_HOST` —— 自托管节点到不了 " +

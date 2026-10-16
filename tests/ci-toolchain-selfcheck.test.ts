@@ -53,6 +53,11 @@ import {
   pythonProbeArgs,
 } from "../src/lib/process/python-candidates";
 
+/** 浏览器那一层的直接导出（新加的两个：镜像档 / 「已装就不装」那一支）。 */
+const { playwrightHostsToTry, playwrightOnly } = await import(
+  "../scripts/ci-toolchain-browser.mjs"
+);
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 function read(rel: string): string {
@@ -1298,8 +1303,14 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
       src.indexOf("export function playwrightOnly("),
       src.indexOf("export function browserExecutableExists("),
     );
-    const installAt = body.indexOf("runPlaywrightInstall({ find, exec })");
-    const verifyAt = body.indexOf("browserExecutableExists()");
+    const installAt = body.indexOf("runPlaywrightInstall({ find, exec, env })");
+    /* ⚠️ **从 `installAt` 之后找**，别从函数头找：函数里现在有**两处**
+     * `browserExecutableExists` —— 一处是装**之前**「已装就跳过下载」那一支
+     * （它排在 `installAt` **前面**），一处才是装完的复验。从函数头 `indexOf`
+     * 会命中前面那个，于是这条判据答的是「跳过那一支在装之前」，
+     * 与它要守的「复验在装之后」是两件事 —— 而它**照样会绿**。
+     * 这类「判据指到了同形的邻居上」正是本仓反复记的那一格（判据在，但判错了对象）。 */
+    const verifyAt = body.indexOf("browserExecutableExists({ env })", installAt);
     expect(installAt).toBeGreaterThan(0);
     expect(
       verifyAt,
@@ -1359,12 +1370,18 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
         browserSrc
           // ① 装那一步假装成功（不动真落点、不下 100MB）
           .replace(
-            "  const install = runPlaywrightInstall({ find, exec });",
+            "  const install = runPlaywrightInstall({ find, exec, env });",
             '  const install = { ok: true, out: "(probe: 假装 install 退 0)" };',
+          )
+          // ①′ 「已装就跳过下载」那一支也要让开：它按**真落点**判，而这一条的现场
+          //     恰恰是「install 报成功、二进制不在盘上」—— 不让开的话它会先返回 0。
+          .replace(
+            "  const already = browserExecutableExists({ env });",
+            "  const already = { ok: false, out: '(probe: 不跳过)' };",
           )
           // ② 复验指向一个空落点 ⇒ 「退 0 但没落地」那一态
           .replace(
-            "  const present = browserExecutableExists();",
+            "  const present = browserExecutableExists({ env });",
             `  const present = browserExecutableExists({ env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: ${JSON.stringify(
               empty,
             )} } });`,
@@ -1451,5 +1468,185 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
       "`浏览器安装` 没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— 默认的 30s 是" +
         "**套接字**超时，180 MiB 的包在慢链路上会被它按时掐断",
     ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
+  });
+
+  it("同族域名被反复试时，出口是「给一个能通的根」而不是「再放宽一点」", () => {
+    /* 第三次红（`cnb-gt1-1k513ill4`）的形态：日志里 5 条 `Downloading … from
+     * cdn.playwright.dev`，然后 `Download failure, code=1`。Playwright 自己的三个内置
+     * 镜像**全同族**（`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+     * 这一族一起不通时它 `retryCount = 5` 的回退等于没有 —— 所以那一段读数必须点名
+     * 「缺的是一条能通的根」，而不是把人引到「超时再改大一点」那条错路上。 */
+    const text = playwrightInstallHints(
+      [
+        "Downloading Chrome for Testing 153.0.8010.12 (playwright chromium v1243) from https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-win64.zip",
+        "Downloading Chrome for Testing 153.0.8010.12 (playwright chromium v1243) from https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-win64.zip",
+        "Failed to install browsers",
+        "Error: Request to https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-win64.zip timed out after 120000ms",
+      ].join("\n"),
+    ).join("\n");
+    expect(text).toContain("同族");
+    expect(text).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
+    // 同族那一档**不许**再给「放宽超时」那条建议 —— 它在这里没用（试过了）。
+    expect(text).not.toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000");
+  });
+
+  it("`.cnb.yml` 给了一个下载根 —— 同一族不通的节点上这是唯一的出路", () => {
+    const yml = read(".cnb.yml");
+    expect(
+      yml,
+      "`浏览器安装` 没给 `PLAYWRIGHT_DOWNLOAD_HOST`：Playwright 的三个内置镜像**同族**，" +
+        "这一族不通时它自己的重试等于没有（实测 5 次全落在同一个域名上）",
+    ).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
+  });
+});
+
+/**
+ * 「已装就不下载」那一支（ISSUE #1961 第三次红）。
+ *
+ * 第三次红的性质与前两次不同：**它不是配置写错，也不是判据缺失** —— 1732s 的门禁
+ * 全绿，最后红在这一步的下载上，而那时机器上**什么都不缺**（浏览器早就在盘上，
+ * 只是这一步无条件又去下了一遍）。
+ *
+ * 所以判据要钉两层：装过的**不装**（跳过而不是重下），且跳过这一支判的仍然是
+ * 「东西落地了」那一条 —— 它不许把「只装了一半」放过去。
+ */
+/**
+ * 静音的打印三件套 —— 只判行为、不判话术的那些用例用。
+ *
+ * 收成一个函数而不是各处写 `() => {}`：空箭头会被 `no-empty-function` 判红，
+ * 而这几条用例关心的是**起没起进程**，不是打了什么。
+ *
+ * @returns {{log: (line: string) => void, logError: (line: string) => void,
+ *            section: (title: string) => void}}
+ */
+function silentPorts() {
+  /* 用 `String` 当实现：它是**真调用**（不是空函数体），所以
+   * `no-empty-function` 不会红，而这几条用例本来也不看打印。 */
+  return { log: String, logError: String, section: String };
+}
+
+describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
+  /** 造一份「headless shell 已在落点」的假 env + 假落点。 */
+  function readyEnv() {
+    const dir = mkdtempSync(path.join(tmpdir(), "pw-ready-"));
+    const exe =
+      process.platform === "win32"
+        ? "chrome-headless-shell.exe"
+        : "chrome-headless-shell";
+    const nested = path.join(
+      dir,
+      "chromium_headless_shell-1243",
+      "chrome-headless-shell-linux64",
+    );
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(path.join(nested, exe), "");
+    return dir;
+  }
+
+  it("落点里两件都齐 ⇒ 一次下载都不发起（`playwright install` 根本没被起过）", () => {
+    const dir = readyEnv();
+    try {
+      /** @type {string[][]} */
+      const spawned: string[][] = [];
+      const code = playwrightOnly({
+        env: { PLAYWRIGHT_BROWSERS_PATH: dir },
+        find: () => ({
+          ok: true,
+          command: "pnpm",
+          prefixArgs: [],
+          args: ["-v"],
+          out: "12.4.1",
+        }),
+        exec: (/** @type {string} */ _cmd, /** @type {string[]} */ args) => {
+          spawned.push(args);
+          return { ok: false, out: "(不该被调到)" };
+        },
+        ...silentPorts(),
+      });
+      expect(code).toBe(0);
+      expect(
+        spawned,
+        "装过的机器上仍然去下了 —— 链路一抖，一条什么都不缺的流水线也会红在这里",
+      ).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("只装了完整 chromium（没有 headless shell）⇒ 仍然要装，不许跳过", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "pw-half-"));
+    try {
+      // 只有 `chromium-1243`：这是 headless 档**真正要用的那一件不在**的形态。
+      mkdirSync(path.join(dir, "chromium-1243"), { recursive: true });
+      /** @type {string[][]} */
+      const spawned = [];
+      const code = playwrightOnly({
+        env: { PLAYWRIGHT_BROWSERS_PATH: dir },
+        find: () => ({
+          ok: true,
+          command: "pnpm",
+          prefixArgs: [],
+          args: ["-v"],
+          out: "12.4.1",
+        }),
+        exec: (/** @type {string} */ _cmd, /** @type {string[]} */ args) => {
+          spawned.push(args);
+          return { ok: false, out: "boom" };
+        },
+        ...silentPorts(),
+      });
+      expect(
+        spawned.length,
+        "只装了完整 chromium 就跳过了 —— headless 档用的是 chromium_headless_shell，" +
+          "两者是 browsers.json 里的两个条目",
+      ).toBeGreaterThan(0);
+      expect(code).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * 「下载根从哪来」那一档（ISSUE #1961）。
+ *
+ * `PLAYWRIGHT_DOWNLOAD_HOST` 设了就**只用它**：那说明人已经知道该走哪儿，不必再陪
+ * Playwright 挨个试三档不通的内置镜像。没设时回一条空宿主 = 走它的默认行为，
+ * **不替它挑一个第三方镜像写进代码** —— 那等于把「哪面墙怎么过」写死在仓里，
+ * 换台机器就静默失效。
+ */
+describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #1961）", () => {
+  it("设了就只用它；没设就回退到 Playwright 的默认（不发明第二个镜像）", () => {
+    expect(playwrightHostsToTry({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" })).toEqual(
+      ["https://m/x"],
+    );
+    expect(playwrightHostsToTry({})).toEqual([undefined]);
+  });
+
+  it("`runPlaywrightInstall` 把根逐次交给子进程（不是设一次全局）", () => {
+    /** @type {Array<string | undefined>} */
+    const hosts: Array<string | undefined> = [];
+    const r = runPlaywrightInstall({
+      env: { PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" },
+      find: () => ({
+        ok: true,
+        command: "pnpm",
+        prefixArgs: [],
+        args: ["-v"],
+        out: "12.4.1",
+      }),
+      exec: (
+        /** @type {string} */ _cmd,
+        /** @type {string[]} */ _args,
+        /** @type {string | undefined} */ host,
+      ) => {
+        hosts.push(host);
+        return { ok: true, out: "ok" };
+      },
+    });
+    expect(r.ok).toBe(true);
+    expect(hosts).toEqual(["https://m/x"]);
+    // 命令行里**不许**出现探针参数（那是 `findPnpm().args` 的形态，拼进去只会打印版本）。
+    expect(r.args).not.toContain("-v");
   });
 });

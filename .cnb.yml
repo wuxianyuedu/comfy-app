@@ -352,6 +352,18 @@
       # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
       # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
       #
+      # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
+      # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+      # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
+      # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
+      # 也就是说这一档**推不出来**，只能由这里给：给上之后
+      # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
+      #
+      # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
+      # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
+      # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
+      # 真要换（内网代理、别的镜像站）改这一行即可。
+      #
       # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
       # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
       PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"

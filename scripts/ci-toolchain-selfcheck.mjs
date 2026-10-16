@@ -482,8 +482,26 @@ const notes = [];
  * @param {string[]} args
  * @returns {{ok: boolean, out: string}}
  */
-function run(cmd, args) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+/**
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {string} [downloadHost] 浏览器那一层的镜像根，只有那一步会带
+ * @returns {{ok: boolean, out: string}}
+ */
+function run(cmd, args, downloadHost) {
+  /* `downloadHost` 是浏览器那一层的镜像根（`PLAYWRIGHT_DOWNLOAD_HOST`），只有
+   * 「装浏览器」那一步会带 —— 它必须**逐次**给到子进程的 env 上，而不是在这里
+   * 设一次全局：`playwrightInstallHints()` 要能报出「这一次试的是哪个根」，
+   * 而 Playwright 读的正是子进程的 `PLAYWRIGHT_DOWNLOAD_HOST`（见
+   * `ci-toolchain-browser.mjs` 的 `playwrightHostsToTry`）。 */
+  const env = downloadHost
+    ? { ...process.env, PLAYWRIGHT_DOWNLOAD_HOST: downloadHost }
+    : process.env;
+  const r = spawnSync(cmd, args, {
+    encoding: "utf8",
+    windowsHide: true,
+    env,
+  });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };
 }
