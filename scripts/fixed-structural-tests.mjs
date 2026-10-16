@@ -26,6 +26,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
+  // 那条判据的姊妹件：「环境前提」那一步（`scripts/ci-env-probe.mjs`）在**任何依赖
+  // 安装之前**回答「在的那几件版本够不够」与「`.cnb.yml` 配错了没有」。它的回潮形态
+  // 恰好**不在改动面上**：`ps7OnlySyntaxIn` 那两份副本住在 `scripts/` 与 `tests/` 两边，
+  // 改任意一侧都不会把另一侧拉进受影响清单（一份是 `.mjs`、一份是 `.ts`，import 图
+  // 追不到），而漂了的表现是「副本照着旧的判、配置里新写法一路放过」——正是 ISSUE #1959
+  // 那一整族「两份答案各自漂移」的形态。列进固定清单：它对账的是**两处文本**。
+  "tests/ci-env-probe.test.ts",
   // 「`.mjs` 入口经 Node ESM 直接加载 `src/**`」这条路的说明符形态（ISSUE #1959 第七跑）：
   // `e2e/support/preflight-python.mjs` 静态 import 两个 `.ts`，而它们内部的相对 import
   // 缺了 `.ts` 后缀 —— `tsc` / eslint / **vitest** 三处走打包器解析、全都放过，于是
