@@ -435,35 +435,43 @@ export function envProbe({
    * 它是**为了这一步自己的第二条判据**：`.cnb.yml` 在脚本调用点写的是裸 `node`
    * （`node scripts/…`），而 `engines.node` 的范围由「工具链自证」判 —— 这一条不
    * 去重判它，只把 pnpm 交给它的那句「起不来」**在装依赖之前**问出来。 */
-  /* ── ④ 控制台的**输出编码**（ISSUE #1959：日志乱码的成因）──
+  /* ── ④ 编码读数（ISSUE #1959 / #1966：日志乱码那一格）──
    *
-   * 平台抓取 stage 输出用的是宿主 ANSI 代码页（中文 Windows 上是 CP936），而 Node /
-   * pnpm 无条件写 UTF-8 —— 两个编码不一致时，日志里本机打的每一个非 ASCII 字符都会
-   * 变成乱码（`工具链自证通过 ✓` → `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`）。同一条链上
-   * PowerShell 打的那几行是好的，正好互为对照 —— 机制见 `ci-console-encoding.mjs`。
+   * 这里打的是**两个代码页**：控制台输出代码页与宿主 ANSI 代码页（外加 `chcp` 原文）。
+   * ⚠️ 它们**都不是「平台按什么解码」的答案** —— 2026-10-16 的两轮探针把前两个嫌疑人
+   * 都否掉了（控制台换成 65001、ANSI 也换成 UTF-8，四行探针逐字未变），判读见
+   * `ci-console-encoding.mjs` 头注与规范 §13.5.3.5。留着这两个读数是为了
+   * **下一次不必再靠推断**：要否掉一个嫌疑人，先得量到它。
    *
    * **它是读数不是判据**：编码不对只让日志难读，不会让哪一步算错；把它判红等于
    * 拦住与之无关的变更。但它是**可机器读的**，所以放在这里随每一跑打出来 ——
    * 「这一跑的日志能不能读」不该靠人去猜。 */
   const encoding = readEncodingImpl();
   const encodingOk = codePageIsUtf8(encoding.codePage);
+  const acp =
+    encoding.ansiCodePage === null || encoding.ansiCodePage === undefined
+      ? "没量到"
+      : `${encoding.ansiCodePage}`;
+  /* 「给不给下一动作」按读数分三档：**已经对了就不给**（否则话术自相矛盾 —— 一边说
+   * 对齐、一边叫人去改），没量到也不给（不知道的东西不该配动作）。 */
+  const codes =
+    `控制台输出代码页 ${encodingOk === null ? "没量到（非 Windows 或探测失败）" : encoding.codePage}` +
+    `（${encodingOk === null ? "不据此判任何东西" : encodingOk ? "UTF-8，与子进程的输出对齐" : "**非 UTF-8**"}）` +
+    `；宿主 ANSI 代码页 ${acp}`;
+  /* 那两条读数都**不是**平台侧解码的开关 —— 两样都换过一轮，日志一字未变好。 */
+  const notTheSwitch =
+    "\n      ⚠️ 上面这两个读数**都不是平台侧解码的开关**：控制台代码页与宿主 ANSI 代码页" +
+    "都已经换过一轮，日志一个字没变好 —— 解码发生在**子进程输出那一跳**，判读见 §13.5.3.5。";
   if (encodingOk === null) {
-    notes.push(
-      "宿主输出代码页没量到（非 Windows 或探测失败）—— 不据此判任何东西",
-    );
-  } else if (encodingOk) {
-    notes.push(
-      `宿主输出代码页 ${encoding.codePage}（UTF-8）：与 Node 的输出对齐，日志可读`,
-    );
+    notes.push(`${codes}${notTheSwitch}`);
   } else {
     notes.push(
-      `宿主输出代码页 ${encoding.codePage}（**非 UTF-8**）—— 本机所有非 ASCII 日志` +
-        "都会被平台按这个代码页解码，读起来是乱码（Node 写的永远是 UTF-8）。\n" +
-        `      下一动作：让流水线第一步先跑 \`node scripts/ci-console-encoding.mjs --apply\`，` +
-        "把控制台输出编码钉成 UTF-8；那正是「工具链自证」那一步现在做的第一件事。\n" +
-        "      若已钉上而这里仍读到非 UTF-8，说明这台节点的控制台设置没有传递到后续 stage —— " +
-        "在那台机上把系统区域设成「Beta: 使用 Unicode UTF-8 提供全球语言支持」，" +
-        "或让 Runner 服务以 UTF-8 控制台启动（宿主侧动作）。",
+      `${codes}；chcp 读数 ${encoding.chcpRaw ?? "没量到"}` +
+        (encodingOk
+          ? notTheSwitch
+          : "\n      下一动作：让流水线第一步先跑 " +
+            "`node scripts/ci-console-encoding.mjs --apply`（「工具链自证」的第一步就是它）。" +
+            notTheSwitch),
     );
   }
 
