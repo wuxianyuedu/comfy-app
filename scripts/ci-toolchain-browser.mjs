@@ -83,16 +83,17 @@ export function playwrightOnly({
    * 这里（`cnb-gt1-1k513ill4`：1732s 的门禁全绿，最后红在这一步的下载上）。
    *
    * 判据仍然是「东西落地了」（与下面那条复验同一份实现），所以这一支不会把
-   * 「装了一半」放过去 —— 它只在**两件都齐**时才提前返回。 */
+   * 「装了一半」放过去 —— 它只在**那一件齐了**时才提前返回。 */
   const already = browserExecutableExists({ env });
   if (already.ok) {
     log(`已装，跳过下载：${already.out}`);
     return 0;
   }
-  /* 两件都要装：`chromium` 与 `chromium-headless-shell` 是 `browsers.json` 里的
-   * **两个条目**，而 headless 档用的是后者 —— 只装前者时 `executablePath()` 会给出
-   * 前者、看着像「装过了」，真起浏览器就报 `Executable doesn't exist`
-   * （`e2e/support/preflight-browser.mjs` 的头注写着这条）。 */
+  /* **只装这一档真正要的那一件**（`BROWSER_PACKAGES`，见它的头注）：本仓只有
+   * **一个** headless project，真被启动的是 `chromium-headless-shell`，而
+   * `chromium` 那一件是 `chrome-win64.zip` **205 MB** —— 实测这台节点把前者拉到
+   * 120s 超时收场（同一镜像上 120 MB 那件是好的）。少装它**不改判据**（复验找的
+   * 本来就是 headless shell），而它是「多下一件以防万一」变成红的唯一原因。 */
   if (env.PLAYWRIGHT_DOWNLOAD_HOST) {
     log(`下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：${env.PLAYWRIGHT_DOWNLOAD_HOST}`);
   }
@@ -374,7 +375,32 @@ function findFileUnder(dir, name, depth, join = path.join) {
 }
 
 /**
- * 装 Playwright 的两件浏览器（`chromium` + `chromium-headless-shell`）。
+ * 这一步要装的那几件 —— **只有 headless shell**，不是 `playwright install` 的默认一套。
+ *
+ * ## 为什么不是 `chromium chromium-headless-shell` 两件都下（实测换来的）
+ *
+ * `@playwright/test` 的 `browsers.json` 里 `chromium` 与 `chromium-headless-shell`
+ * 是**两个条目**，headless 档用的是后者。此前照「两件都点名」写，理由是「只装前者会
+ * 看着像装过了」—— 那个担心是对的，但**反过来多下前者是纯浪费，而且它会真出事**：
+ *
+ *   · 本仓 `playwright.config.ts` 只有**一个** project（`chromium` + 设备档
+ *     `Desktop Chrome`），CI 上恒 headless，所以真被启动的是 headless shell；
+ *   · `chromium` 那一件是 `chrome-win64.zip` **205 MB**，headless shell 是 **120 MB**；
+ *   · 实测（`cnb-g9d-1k515kvrq`）：这台节点把 205 MB 那件拉到 **120s 超时**收场
+ *     —— 而同一镜像上 120 MB 那件是好的。
+ *
+ * 于是「多下一件以防万一」变成了**这一步红、后面 `E2E 关键流程` 一步都跑不到**的唯一原因。
+ * 判据仍是「装完复验」（按落点找 headless shell），所以少装那一件**不改判据**；
+ * 真要 headed 浏览器的路径不在本档（`preflight-browser.mjs` 的出口命令里仍两件都写，
+ * 那是**给人**的手工出口，不是流水线这一步）。
+ *
+ * ⚠️ 换这一串要跟着看的：`browserExecutableExists()` 判的那一件必须仍在里面，
+ * 否则「装上」与「判过」会指向两件不同的东西（判据会一直红，而东西其实装了）。
+ */
+export const BROWSER_PACKAGES = ["chromium-headless-shell"];
+
+/**
+ * 装这一步要用的那几件浏览器（见 `BROWSER_PACKAGES`）。
  *
  * 走 `findPnpm()` 的宿主形态而不是裸起 `pnpm`（同 `main()` 里那条理由：Windows 上
  * 裸名字交给 CreateProcess 时 corepack 的三个形态一个都用不上），命令行与
@@ -415,8 +441,7 @@ export function runPlaywrightInstall({
     "exec",
     "playwright",
     "install",
-    "chromium",
-    "chromium-headless-shell",
+    ...BROWSER_PACKAGES,
   ];
   /* 试哪几个根由 `playwrightDownloadRoots()` 说了算 —— 设了外面给的那个就**只用它**，
    * 没设就回落到 Playwright 的内置族（那一族的三档由它自己挨个试）。

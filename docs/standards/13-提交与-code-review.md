@@ -1257,10 +1257,19 @@ E2E 关键流程                 562ms  ❌  [e2e] ✗ PATH 上没有可用的 P
 
 同批两条约束：
 
-- **顺序**：`浏览器安装` 排在 `E2E 关键流程` 之前。要下 ~100+ MiB（`chromium` 与
-  `chromium-headless-shell` 两件，后者是 headless 档真正用的那个 —— 只装前者时
-  `executablePath()` 会给出前者、看着像装过了）；而判「装没装成」是零成本的。
-  排在后面 = 那个结论要么看不到、要么在最贵的位置才看到（与 `Python 可用性` 同源）。
+- **顺序**：`浏览器安装` 排在 `E2E 关键流程` 之前。要下 ~120 MiB（见下面那条
+  「只装 headless shell」）；而判「装没装成」是零成本的。排在后面 = 那个结论要么
+  看不到、要么在最贵的位置才看到（与 `Python 可用性` 同源）。
+- **装的是哪几件**：**只有 `chromium-headless-shell`**，不是
+  `playwright install chromium chromium-headless-shell` 那两件。本仓
+  `playwright.config.ts` 只有**一个** project（`chromium` + 设备档 `Desktop Chrome`），
+  CI 上恒 headless ⇒ 真被启动的是 headless shell。而 `chromium` 那一件是
+  `chrome-win64.zip` **205 MB**、headless shell 是 **120 MB** ——
+  实测（`cnb-g9d-1k515kvrq`）这台节点把前者拉到 **120s 超时**收场（同一镜像上
+  后者是好的），于是「多下一件以防万一」变成了这一步红、`E2E 关键流程` 一步都
+  跑不到的唯一原因。判据仍是「装完复验」（按落点找 headless shell），所以少装那件
+  **不改判据**；`preflight-browser.mjs` 里那条两件的出口命令是**给人**的手工出口，
+  与流水线这一步不是同一件事。台账在 `BROWSER_PACKAGES`（一处定义，装与判都从它取）。
 - **预算**：给 `20m`。冷节点 + 慢链路够用，而卡死（CDN 不通）时也能在 20m 报出来，
   不必等满平台默认的 2h 墙钟。判据是「装完退 0」，预算只管多久放弃 —— **不是放宽判据**。
 

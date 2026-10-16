@@ -48,6 +48,7 @@ import {
   playwrightInstallHints,
   runPlaywrightInstall,
 } from "../scripts/ci-toolchain-selfcheck.mjs";
+import { BROWSER_PACKAGES } from "../scripts/ci-toolchain-browser.mjs";
 import {
   pythonCandidates,
   pythonProbeArgs,
@@ -755,13 +756,15 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
     const args = calls[0] ?? [];
     /* 这一条是**反向复算**的那一半：把 `prefixArgs` 换回 `args`，这里当场红。 */
     expect(args, "命令行里混进了探针参数 -v").not.toContain("-v");
+    /* 装哪几件从 `BROWSER_PACKAGES` 取，**不在这里抄一份** —— 抄一份就成了第二处
+     * 「这一步装什么」的定义，换成只装 headless shell 时它不会跟着变（本笔正是这么
+     * 改的，而这一条当场红了一次）。 */
     expect(args).toEqual([
       ...hostPrefix,
       "exec",
       "playwright",
       "install",
-      "chromium",
-      "chromium-headless-shell",
+      ...BROWSER_PACKAGES,
     ]);
   });
 
@@ -804,7 +807,13 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
     expect(ran, "pnpm 都没探到还去起进程").toBe(false);
   });
 
-  it("两件浏览器都要装（只装 chromium 时 headless 档会报 Executable doesn't exist）", () => {
+  it("装的是这一档真正要的那一件（多下的那件 205 MB 正是超时的那个）", () => {
+    /* 判的是「装了哪几件」，而这一串的**两个方向**都必须钉住：
+     *   · 少了 `chromium-headless-shell` ⇒ headless 档起不来（报 `Executable doesn't exist`）；
+     *   · 多了 `chromium` ⇒ 下的是 `chrome-win64.zip` **205 MB**，而 headless shell 是
+     *     120 MB —— 实测这台节点把前者拉到 120s 超时收场（`cnb-g9d-1k515kvrq`），
+     *     于是「多下一件以防万一」变成了这一步红、`E2E 关键流程` 一步都跑不到的唯一原因。
+     * 本仓 `playwright.config.ts` 只有一个 headless project，所以只需要后者。 */
     let args: string[] = [];
     runPlaywrightInstall({
       find: () => ({
@@ -819,8 +828,23 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
         return { ok: true, out: "" };
       },
     });
-    expect(args).toContain("chromium");
     expect(args).toContain("chromium-headless-shell");
+    expect(
+      args,
+      "又把 `chromium`（205 MB 那件）加回来了 —— 本档只有一个 headless project，用不到它，" +
+        "而它正是这台节点上超时的那一件",
+    ).not.toContain("chromium");
+    /* 复验判的那一件必须在装的那一串里 —— 否则「装上」与「判过」指着两件不同的东西
+     * （判据会一直红，而东西其实装了）。 */
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"),
+      "utf8",
+    );
+    for (const pkg of BROWSER_PACKAGES) {
+      expect(src, `复验找的形状与 BROWSER_PACKAGES 对不上：${pkg}`).toContain(
+        pkg.replace(/-/g, "_"),
+      );
+    }
   });
 });
 
