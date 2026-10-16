@@ -2425,6 +2425,68 @@ standalone 服务**」。这一处补的恰好就是那半句话的执行者。
 > 比上一处更接近业务（编码 → 解析 → 入口 → 端口占用）。这不是修得不对，
 > 是这条流水线的 E2E 档此前**从来没有被跑到过** —— 前面积压的每一格都排在它前面。
 
+###### 第十一处：同一份日志的**另一条**线索 —— 上一跑漏下的替身占着端口（ISSUE #1977）
+
+**这一处与乱码、也与上一处无关**，是同一次红（`cnb-ooc-1k52laqqh`）里**并排**摆着的
+另一行。CP936 修好之前这一步是「退出 1、日志零行」（输出被吞），修好之后日志第一次
+露出来，而**它自己那一栏**红在 Playwright 的一句话上：
+
+    [e2e-run] 起 Playwright 前：应用端口 空 / 替身端口 有人
+    Error: http://127.0.0.1:18188/system_stats is already used, make sure that
+           nothing is running on the port/url or set reuseExistingServer:true
+
+⚠️ **它与上一处是两件事，别把后者当成前者的症状**：那一份 pre-flight（`e2e-run.mjs`
+在 spawn Playwright **之前**跑的 `runPreflight`）读的是**本轮之前**的真实世界状态，
+它说的是「**起 Playwright 之前**替身端口就有人」—— 与 `pnpm start` 起不起得来无关
+（应用端口那一栏同时报的是「空」）。替换掉 `start.mjs` 的入口不会让那个占位者消失。
+
+两件事并排摆着，读法没有第二种：
+
+- pre-flight（`e2e/support/preflight-ports.mjs`）已经说了「**起 Playwright 之前**替身
+  端口就有人」—— **不是本轮自己起的**；
+- 而 CI 档 `reuseExistingServer` 是 `false` ⇒ Playwright 在探测到「这个 URL 已有人应答」
+  时**直接抛**，连会说清「谁在那儿」的 `globalSetup`（`describeSlotConflict` 的两条出口）
+  都到不了。
+
+占位者是**同一台自托管节点上上一跑漏下的替身**：它在 Playwright 的 webServer 里挂在
+`shell: true` 那一层下面（是孙子进程），流水线被取消 / 被杀时收不到 teardown 信号，而
+节点是复用的。那一跑的 15 分钟前是同一条命令、同一节点（`cnb-02o-1k52kenip`，23s 即红，
+日志零行），中间还夹着两条 `cancel` 的构建。
+
+**处置：认出「是我们自己的上次留下的」才收，收完把 pre-flight 结论重算一遍。**
+
+- 新增 `e2e/support/reclaim-ports.mjs`；`scripts/e2e-run.mjs` 在 `spawn` Playwright
+  **之前**调它（`if (env.CI && preflight.fakeOccupied)`）。位置只有一个正确取值：
+  Playwright 抛在探测那一步，收它只能在 `spawn` 之前。
+- 判据是**两条证据、缺一不可**：命令行点名本仓的 `e2e/support/fake-comfyui-server.mjs`
+  （回答「它**是什么**」）**且** 它此刻答出来的 `/system_stats` 是替身形状
+  （`isFakeComfyuiPayload`，回答「它此刻**真是**那个东西」）。
+  - 只判命令行 ⇒ 会把**别的检出**正在跑的替身当成残留杀掉（§1.4 多检出并行保护要求
+    「拿不准就不动别人的进程」）；
+  - 只判形状 ⇒ 收不了一个**半死**的替身（它答不出形状，而端口照样占着）；
+  - **两条都不满足时一个进程都不动**，退回原来那条话术（让人看一眼，不替人杀进程）。
+- 回收走 AGENTS 硬规则 3 的**唯一出口**（`launcher-core/port-reap.mjs` 的
+  `reapProcessTree` → `killProcessTree`）。**必须杀整棵树**：单杀 leader 会把
+  `shell: true` 下面那层 node 留下，端口照样占着 —— 那正是历史反复出现的形态。
+- 端口空着时**零代价**（一条子进程都不起、一次 fetch 都不发）；`/system_stats` 也只对
+  「命令行走形的那几个 PID」才探，不相关的占位者不被访问。
+- **只在 CI 档生效**：本地 `reuseExistingServer` 为真，Playwright 会**复用**那个替身
+  （`globalSetup` 会如实说「已在运行（复用）；它的 history 带着上一轮的产物」）——
+  那是本地刻意留的方便，不该被这一步悄悄改成「杀掉重启」。
+
+判据在 `tests/e2e-reclaim-own-fake-port.test.ts`（14 条）：两条证据各自的**反面**
+（命令行像但 payload 不像、payload 像但命令行不像）都不收、端口空着不收、认不出时
+如实报出是哪几个 PID、`/system_stats` 只对走形的那几个才探、回收交出去的契约
+（`pid` + `force` + `detached`），以及**接线在位**三条 —— 在 `spawn` 之前、有 CI 档守卫、
+收完重算 pre-flight。最后那条按**相对位置**判（从回收那一句截一段、在那一段里找重算），
+「两句都在文件里」这种判法在删掉重算那一行时照样绿 —— 已反向复算过。
+
+> 这一处值得记的是**「拿不准」的默认方向**：这一步的代价是**杀进程**，而两条证据里
+> 任何一条拿不到（进程半死、payload 不是 JSON、命令行走形而应答超时）都落到「否」。
+> 与 §13.6.2 那条「拿不到结论 ≠ 结论是坏的」**不矛盾**：那里默认放行是因为代价是
+> 「少报一条红」，这里默认不碰是因为代价是「杀错别人的进程」—— 两条都按「拿不准时，
+> 哪个方向不可挽回」来定。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的

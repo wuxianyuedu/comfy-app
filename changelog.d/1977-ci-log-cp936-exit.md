@@ -281,3 +281,52 @@
   > 这一处与第四轮那次「两条命令被当成一条」是**同一类病的两面**：那一处的出口
   > **说得太少**（读不出真因），这一处的出口**一个字都不说**（输出整份被吞）。
   > 两次都不是「判据错了」，而是**判据的结论到不了读日志的人手里**。
+
+  ## 三之十、同一份日志的**另一条线索** —— 上一跑漏下的替身占着端口
+
+  **这一处与乱码、也与上一处（`standalone` 那个入口）无关**，是同一次红里**并排**摆着的
+  另一行。pre-flight 读的是**本轮之前**的真实世界状态，它说的是「起 Playwright 之前替身
+  端口就有人」—— 与 `pnpm start` 起不起得来无关（应用端口那一栏同时报的是「空」）；
+  替换 `start.mjs` 的入口不会让那个占位者消失。
+
+  它是那一格第一次真跑到最后一步时暴露出来的（`cnb-ooc-1k52laqqh`）—— CP936 修好之前，
+  这一步是「退出 1、日志零行」（输出被吞），修好之后日志第一次露出来：
+
+      [e2e-run] 起 Playwright 前：应用端口 空 / 替身端口 有人
+      Error: http://127.0.0.1:18188/system_stats is already used, make sure that
+             nothing is running on the port/url or set reuseExistingServer:true
+
+  两件事并排摆着，读法没有第二种：pre-flight 已经说了「**起 Playwright 之前**替身端口
+  就有人」（不是本轮自己起的），而 CI 档 `reuseExistingServer` 是 `false` ⇒ Playwright
+  在探测到「这个 URL 已有人应答」时**直接抛**，连会说清「谁在那儿」的 `globalSetup`
+  （`describeSlotConflict` 的两条出口）都到不了。
+
+  占位者是**同一台自托管节点上上一跑漏下的替身**：它在 Playwright 的 webServer 里挂在
+  `shell: true` 那一层下面（是孙子进程），流水线被取消 / 被杀时收不到 teardown 信号，
+  而节点是复用的 —— 那一跑的 15 分钟前是同一条命令、同一节点（`cnb-02o-1k52kenip`，
+  23s 即红），中间还夹着两条 `cancel` 的构建。
+
+  处置：**认出「是我们自己的上次留下的」才收**，收完把 pre-flight 结论重算一遍。
+
+  - 新增 `e2e/support/reclaim-ports.mjs`，`scripts/e2e-run.mjs` 在 `spawn` Playwright
+    **之前**调它（`if (env.CI && preflight.fakeOccupied)`）；
+  - 判据是**两条证据、缺一不可**：命令行点名本仓的 `e2e/support/fake-comfyui-server.mjs`
+    （它**是什么**）**且** 它此刻答出来的 `/system_stats` 是替身形状
+    （`isFakeComfyuiPayload`，即 **它此刻真是那个东西**）。只判命令行会把**别的检出**正在
+    跑的替身误当成残留并杀掉（§1.4 多检出并行保护）；只判形状则收不了一个半死的替身
+    （它照样占着端口）。**两条都不满足时一个进程都不动**，退回原来的话术；
+  - 回收走 AGENTS 硬规则 3 的**唯一出口** `killProcessTree`（`launcher-core/port-reap.mjs`
+    的 `reapProcessTree`，杀**整棵树**）—— 单杀 leader 会把 `shell: true` 下面那层 node
+    留下、端口照样占着；
+  - 端口空着时**零代价**（一条子进程都不起、一次 fetch 都不发）；`/system_stats` 也只对
+    「命令行走形的那几个」才探。
+
+  ⚠️ **只在 CI 档生效**：本地 `reuseExistingServer` 为真，Playwright 会**复用**那个替身
+  （`globalSetup` 会如实说「已在运行（复用）；它的 history 带着上一轮的产物」）—— 那是本地
+  刻意留的方便，不该被这一步悄悄改成「杀掉重启」。
+
+  判据在 `tests/e2e-reclaim-own-fake-port.test.ts`（14 条）：两条证据各自的**反面**
+  （命令行像但 payload 不像、payload 像但命令行不像）都不收、端口空着不收、
+  认不出时如实报出 PID、`/system_stats` 只对走形的那几个才探、回收交出去的契约
+  （`pid` + `force` + `detached`）、以及**接线在位**三条（在 `spawn` 之前、有 CI 档守卫、
+  收完重算 pre-flight —— 最后那条按**相对位置**判，删掉重算那一行当场红）。
