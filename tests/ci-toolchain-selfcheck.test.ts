@@ -54,9 +54,13 @@ import {
   pythonProbeArgs,
 } from "../src/lib/process/python-candidates";
 
-/** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」那一支）。 */
-const { playwrightDownloadRoots, playwrightHostsToTry, playwrightOnly } =
-  await import("../scripts/ci-toolchain-browser.mjs");
+/** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」/ 「到得了哪」）。 */
+const {
+  playwrightDownloadRoots,
+  playwrightHostsToTry,
+  playwrightOnly,
+  playwrightReachability,
+} = await import("../scripts/ci-toolchain-browser.mjs");
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -1724,5 +1728,77 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
     expect(hosts).toEqual(["https://m/x"]);
     // 命令行里**不许**出现探针参数（那是 `findPnpm().args` 的形态，拼进去只会打印版本）。
     expect(r.args).not.toContain("-v");
+  });
+});
+
+/**
+ * 失败后**当场量一次**「这台机器出得去哪些下载域」（ISSUE #1961 第四跑）。
+ *
+ * 这一条治的是**本格最贵的那次教训**：镜像那一行是**在别处**量出来能用的
+ * （`cdn.npmmirror.com` 回 200、15s 收到 99 MiB），而它在平台节点上照旧
+ * `timed out after 120000ms` —— 于是「换个镜像」这个动作**看起来做了、实际没解决**，
+ * 下一次红的形态与前一次逐字相同、只换了个域名。
+ *
+ * 所以缺的不是「再猜一个镜像」，而是一条**关于这台机器的事实**。判据三条：
+ * 每个候选都出一条结论（不吞）、三条结论分得开（超时 / 解析不了）、
+ * 且它**只打印不阻断**（真正的判据仍是「装完能起才放行」那一条）。
+ */
+describe("工具链自证：下载失败时当场量「到得了哪」（ISSUE #1961）", () => {
+  it("逐个候选都出一条结论，且「超时」与「解析不了」分得开", () => {
+    const lines = playwrightReachability({
+      candidates: ["https://ok/x", "https://slow/x", "https://nxdomain/x"],
+      probe: (url) =>
+        url.includes("ok")
+          ? "HTTP 200"
+          : url.includes("slow")
+            ? "超时（8000ms 内没有响应）"
+            : "ENOTFOUND：getaddrinfo",
+      updateHost: "https://ok/x",
+    }).join("\n");
+    // 每个候选都要在读数里 —— 少一条，「哪条路走不通」就答不全。
+    expect(lines).toContain("https://ok/x → HTTP 200");
+    expect(lines).toContain("https://slow/x → 超时");
+    /* 「连上了但不说话」与「域名都解析不了」是两件事（链路慢 / 被拦 vs DNS 被切），
+     * 处置不同 —— 糊成一句「不通」等于把这一格又还回去。 */
+    expect(lines).toContain("https://nxdomain/x → ENOTFOUND");
+    // 当前值也打出来：它是「人配的那个」与「真能通的那个」对账的锚。
+    expect(lines).toContain("当前 PLAYWRIGHT_DOWNLOAD_HOST: https://ok/x");
+    // 判读那几句要说清「全都超时 ⇒ 换镜像也不会变」——不然人只会再换一个域名。
+    expect(lines).toContain("换镜像也不会变");
+  });
+
+  it("探测本身出错也当成一条读数（不抛、不吞）", () => {
+    const lines = playwrightReachability({
+      candidates: ["https://x/y"],
+      probe: () => {
+        throw new Error("boom");
+      },
+    }).join("\n");
+    expect(lines).toContain("探测本身出错");
+    expect(lines).toContain("boom");
+  });
+
+  it("装失败时它真的被打印（不是写了没人调）", () => {
+    /** @type {string[]} */
+    const printed: string[] = [];
+    const code = playwrightOnly({
+      env: { PLAYWRIGHT_DOWNLOAD_HOST: "https://x" },
+      find: () => ({
+        ok: true,
+        command: "pnpm",
+        prefixArgs: [],
+        args: ["-v"],
+        out: "12.4.1",
+      }),
+      exec: () => ({ ok: false, out: "Download failure, code=1" }),
+      probe: () => "超时（8000ms 内没有响应）",
+      ...silentPorts(),
+      log: (/** @type {string} */ line: string) => printed.push(line),
+    });
+    expect(code).toBe(1);
+    expect(
+      printed.join("\n"),
+      "装失败时没有打「到得了哪」那份现场 —— 下一个动作就只能靠猜",
+    ).toContain("这台机器出得去哪些下载域");
   });
 });

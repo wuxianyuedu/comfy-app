@@ -38,6 +38,7 @@
  *
  * 幂等：`playwright install` 对已存在的版本是 no-op（实测秒级返回）。
  */
+import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
@@ -58,18 +59,21 @@ import path from "node:path";
  *   find?: () => {ok: boolean, command: string, prefixArgs: string[], args: string[], out: string},
  *   exec?: (cmd: string, args: string[], downloadHost?: string) => {ok: boolean, out: string},
  *   env?: Record<string, string | undefined>,
+ *   probe?: (url: string) => string,
  *   log?: (line: string) => void,
  *   logError?: (line: string) => void,
  *   section?: (title: string) => void,
  * }} [ports]
  *   `exec` 的第三个参数是**这一次要用的下载根**（`PLAYWRIGHT_DOWNLOAD_HOST`），
  *   只有装浏览器那一步会带 —— 调用方要把它转交到子进程的 env 上。
+ *   `probe` 只在失败分支里用（`playwrightReachability`），判据里换掉它就不出网。
  * @returns {number} 退出码
  */
 export function playwrightOnly({
   find = required("find"),
   exec = required("exec"),
   env = process.env,
+  probe = httpHeadStatus,
   log = console.log,
   logError = console.error,
   section = noopSection,
@@ -109,6 +113,22 @@ export function playwrightOnly({
      * 那两种成因的处置完全相反（一个是放宽多久算超时、一个是清盘），
      * 而日志里此前一个字都分不开它们。见 `playwrightInstallHints()`。 */
     for (const line of playwrightInstallHints(install.out)) log(line);
+    /* 失败之后**当场量一次**「这台机器到底出得去哪些域名」。
+     *
+     * 这是本格最贵的一次教训（ISSUE #1961 第四跑）：镜像那一行是**在别处**量出来能用的
+     * （`cdn.npmmirror.com` 回 200、15s 收到 99 MiB），而它在**这台节点**上照旧
+     * `timed out after 120000ms` —— 于是「换个镜像」这个动作**看起来做了、实际没解决**，
+     * 下一次红的形态与前一次逐字相同，只换了个域名。
+     *
+     * 所以缺的不是「再猜一个镜像」，是**一条关于这台机器的事实**：它出得去哪些域名。
+     * 那一条只能在这儿量 —— 探测很便宜（每个地址一次 HEAD），而它把「下一动作」
+     * 从猜测变成读数。 */
+    for (const line of playwrightReachability({
+      probe,
+      updateHost: env.PLAYWRIGHT_DOWNLOAD_HOST,
+    })) {
+      log(line);
+    }
     return 1;
   }
   /* **装完必须复验**（与 `installAndReverify` 的「装完回到 `findPython()` 再探一遍」
@@ -172,6 +192,141 @@ function noopSection() {}
  * 两个都是 Playwright 自己的环境变量，本仓不发明第二套（§12.18）。
  * 只有真撞上「下载失败」字样时才打 —— 别的失败形态（pnpm 不可用、盘满）不需要
  * 这两条建议，凑上去只会让人往错的方向看。
+ *
+ * @param {string} out `playwright install` 的输出
+ * @returns {string[]}
+ */
+/**
+ * 候选下载根 —— **只用来探测**（不参与「装」那一步的选择）。
+ *
+ * 这几个不是「本仓推荐的镜像」，是「值得先量一下的几个地址」：
+ *
+ *   · Playwright 的三个内置 CDN（它自己会试的那几个）；
+ *   · 常见的 npm 二进制镜像里放 Playwright 的那两段路径。
+ *
+ * 探测结论只打印、不阻断，也**不**自动改 `PLAYWRIGHT_DOWNLOAD_HOST` ——
+ * 「哪个地址能通」是这台机器的事实，写死的值是给别人那台机器用的
+ * （第四次红就是这么来的：镜像在别处量得通，在这台节点上照旧超时）。
+ *
+ * @returns {string[]}
+ */
+export const PLAYWRIGHT_HOST_CANDIDATES = [
+  "https://cdn.playwright.dev",
+  "https://playwright.download.prss.microsoft.com",
+  "https://registry.npmmirror.com/-/binary/playwright",
+  "https://cdn.npmmirror.com/binaries/playwright",
+];
+
+/**
+ * 逐个量「这台机器出不出得去」并打成读数 —— **只打印、不阻断**。
+ *
+ * 与 `pythonForensics` / `pnpmForensics` 同一条口径：失败时给的不是又一句
+ * 「网络不通」，而是**这份现场**。它回答的是这一格真正缺的那条事实 ——
+ * 「哪条链路走不通」，而那正是「再猜一个镜像」永远回答不了的。
+ *
+ * 三条边界：
+ *
+ *   · **它是读数、不是判据** —— 探测要几秒且依赖外网，真正的判据仍是
+ *     「装完能起才放行」那一条；
+ *   · **它不改配置** —— `PLAYWRIGHT_DOWNLOAD_HOST` 是这台机器的事实
+ *     （镜像站在 `.cnb.yml`）。自动改写 = 把一次探测结论冒充成长期决定；
+ *   · **它逐个串行、不并发** —— 这几个域在同一张网上，并发只会让慢的那条把
+ *     快的一起拖到同一个超时上，读数反而分不开。
+ *
+ * @param {{candidates?: string[], probe?: (url: string) => string,
+ *          updateHost?: string | undefined}} [options]
+ *   `probe` 是注入面（默认 {@link httpHeadStatus}），判据里换掉它就不出网。
+ * @returns {string[]}
+ */
+export function playwrightReachability({
+  candidates = PLAYWRIGHT_HOST_CANDIDATES,
+  probe = httpHeadStatus,
+  updateHost = undefined,
+} = {}) {
+  const lines = ["---- 这台机器出得去哪些下载域（现场实测，供定位）----"];
+  if (updateHost) lines.push(`  当前 PLAYWRIGHT_DOWNLOAD_HOST: ${updateHost}`);
+  for (const url of candidates) {
+    let verdict;
+    try {
+      verdict = probe(url);
+    } catch (error) {
+      verdict = `探测本身出错：${/** @type {Error} */ (error).message}`;
+    }
+    lines.push(`  ${url} → ${verdict}`);
+  }
+  lines.push(
+    "  （判读：全都超时 ⇒ 这台机器出不去这一类 CDN，换镜像也不会变；",
+    "    只有某一个通 ⇒ 把它配到 PLAYWRIGHT_DOWNLOAD_HOST 上；",
+    "    这一行**不改**配置，它只回答「到得了哪」）",
+  );
+  lines.push("------------------------------------");
+  return lines;
+}
+
+/**
+ * 对一个 URL 发一次 HEAD，回一句可读的结论（不回抛 —— 失败是一种读数）。
+ *
+ * 走 `spawnSync` 起一个短命 node 子进程，而不是在本进程里用回调：**这一步是在失败
+ * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:https`
+ * —— 本文件「只 import `node:*`」的同一条约束（见文件头）。
+ *
+ * 「超时」与「`ENOTFOUND`」刻意分开：前者是「连上了但不说话」（链路慢 / 被拦），
+ * 后者是「域名都解析不了」（DNS 被切）。处置不同，日志里不能糊成一句「不通」。
+ *
+ * @param {string} url
+ * @param {{timeoutMs?: number}} [options]
+ * @returns {string}
+ */
+export function httpHeadStatus(url, { timeoutMs = 8000 } = {}) {
+  const script = `
+    const { request } = require("node:https");
+    const req = request(${JSON.stringify(url)}, { method: "HEAD", timeout: ${timeoutMs} }, (res) => {
+      res.resume();
+      process.stdout.write("HTTP " + (res.statusCode ?? "?"));
+      process.exit(0);
+    });
+    req.on("timeout", () => { req.destroy(); process.stdout.write("超时（${timeoutMs}ms 内没有响应）"); process.exit(0); });
+    req.on("error", (e) => { process.stdout.write((e.code ?? "ERROR") + "：" + e.message); process.exit(0); });
+    req.end();
+  `;
+  const r = spawnSync(process.execPath, ["-e", script], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: timeoutMs + 4000,
+  });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+  return out || "（子进程没有输出）";
+}
+
+/**
+ * 装浏览器失败时那几条**读数**（而不是又一句「网络不通或磁盘满」）。
+ *
+ * ## 现场（`cnb-rkr-1k510rsgg` 的 `浏览器安装` stage）
+ *
+ * 下载卡在这一句上：
+ *
+ *     （原文）Error: Request to https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/
+ *     （原文）chrome-win64.zip timed out after 30000ms
+ *
+ * 那时这一步还退 0（退出码被守卫吞掉，见本笔的姐妹修法），所以「为什么没装上」
+ * 在整条构建日志里一个字都读不到 —— 而 E2E 会照旧报缺件，两个读数互相矛盾。
+ *
+ * ## 为什么这两个成因必须分开
+ *
+ * `timed out after 30000ms` 里的 30s 是 Playwright 的默认**套接字**超时
+ * （`NET_DEFAULT_TIMEOUT`），而包是 180 MiB —— 在慢链路上它不是「这个地址不通」
+ * 的结论，是「这一次没量完」。两者的处置相反：
+ *
+ *   · 换镜像：`PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>`；
+ *   · 放宽多久算超时：`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000`。
+ *
+ * 两个都是 Playwright 自己的环境变量，本仓不发明第二套（§12.18）。
+ * 只有真撞上「下载失败」字样时才打 —— 别的失败形态（pnpm 不可用、盘满）不需要
+ * 这两条建议，凑上去只会让人往错的方向看。
+ *
+ * ⚠️ 到第四跑之后这两条建议只是**兜底的**：真要说下一步，看的是
+ * {@link playwrightReachability} 那份现场实测 —— 「哪个根到得了」只有从这台机器上
+ * 量出来才算数（`cdn.npmmirror.com` 在别处量得到、在这台节点上照旧超时）。
  *
  * @param {string} out `playwright install` 的输出
  * @returns {string[]}
