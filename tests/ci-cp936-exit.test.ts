@@ -679,4 +679,49 @@ describe("CP936 出口：编排与退出码", () => {
     /* 当前目录也打出来了（相对路径的基准）。 */
     expect(text).toContain(process.cwd());
   });
+
+  it('**转码成功后输出不许被吞**：PowerShell 的 stdout 直连本进程（`stdio: "inherit"`）', async () => {
+    /* 第五次上平台的现场（ISSUE #1977）：那条 stage 在平台日志里**一个字都没有**，
+     * 而退出码照转 —— 「输出被吞」与「命令本来就没输出」在日志上完全同形。
+     *
+     * 根因：默认实现 `spawnSync(cmd, args, { input, encoding: null })` 里那个 `null`
+     * 是**对的**（要 Buffer 输出的唯一写法），可它同时意味着 `spawnSync` 的 `stdio`
+     * 仍是默认的 `pipe` —— PowerShell 编对的那批 936 字节落进 `r.stdout` 这个 Buffer，
+     * 然后整份丢掉。正确取值是 `stdio: "inherit"`：要的是「原样落到日志」，不是
+     * 「取回来再加工」。
+     *
+     * ⚠️ **这一格 Linux 上永远判不到**（`writeCp936` 非 Windows 直接 return），
+     * 所以判据钉在**形状**上：默认实现交出去的 `stdio` 必须是 `"inherit"`。 */
+    const calls: Array<{ stdio: unknown }> = [];
+    writeCp936("中文一二三", {
+      platform: "win32",
+      spawnImpl: ((_cmd: string, _args: string[], opts: never) => {
+        calls.push({ stdio: (opts as { stdio: unknown }).stdio });
+        return { status: 0 };
+      }) as never,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.stdio).toBe("inherit");
+  });
+
+  it('编排把 `stdio: "inherit"` 传给写字节那一层（形状：不然生产那条路仍是 pipe）', async () => {
+    /* 上一条判「默认值对不对」，这条判「编排有没有把它带上」——
+     * 少了这一句，`writeCp936` 又退回默认的 `pipe`，输出照旧进 Buffer 丢掉。 */
+    const seen: unknown[] = [];
+    const child = fakeChild("中文一二三\n", 0);
+    await runWithCp936Exit(["--", "echo"], {
+      platform: "win32",
+      resolve: passthroughResolve,
+      spawnProc: (() => {
+        queueMicrotask(() => child.emitClose());
+        return child;
+      }) as never,
+      write: ((_text: string, opts: { stdio?: unknown }) => {
+        seen.push(opts?.stdio);
+        return { ok: true };
+      }) as never,
+      out: () => undefined,
+    });
+    expect(seen).toEqual(["inherit"]);
+  });
 });

@@ -79,6 +79,15 @@
  *     都起不了。两半都要：路径**不问 PATH**（`isPathLike()`），但**要过形态判据**
  *     （`commandInvocation`，它会把同目录的 `.ps1` 回退找出来）。
  *     ⇒ 这就是 `resolveShellInvocation()` 按 token 形状分两条的由来。
+ *   · **转码「成功」时输出被吞掉**（第五次上平台，2026-10-16）：`writeCp936` 的默认
+ *     实现是 `spawnSync(..., { input, encoding: null })` —— 那个 `null` 是**对的**
+ *     （要 Buffer 输出的唯一写法，见下），可它同时意味着 `spawnSync` 的 `stdio`
+ *     仍是默认的 `pipe`：PowerShell 编对的那批 936 字节落进 `r.stdout` 这个 Buffer，
+ *     然后**整份丢掉**。于是平台侧那条 stage 的日志**一个字都没有**（连成功时也是），
+ *     而退出码照转 —— 「输出被吞」与「命令没输出」在日志上同形，读的人只能去猜。
+ *     正确取值是 `stdio: "inherit"`：要的是「原样落到日志」，不是「取回来再加工」。
+ *     ⚠️ 这一格**Linux 上永远判不到**（非 Windows 直接 return），所以判据钉在
+ *     「默认实现交出去的 `stdio` 是 `"inherit"`」这个形状上（`spawnImpl` 注入面）。
  *   · **「起不了」那条出口不给真因**（第四次上平台）：报的是
  *     `起不了这条命令：node_modules/.bin/npx tsc --noEmit`，而真因是那次调用把
  *     **两条命令**当成了一条 —— 盘上没有那个文件。`resolved: true` 只表示
@@ -163,17 +172,23 @@ export function encodeCp936Plan(codePage = CP936_CODE_PAGE) {
  *
  * `spawnImpl` 是**第三**个注入面，专为一件在 Linux 上够不到的事存在：默认实现
  * 里那句 `spawnSync` 只会在 Windows 分支跑到，而平台侧第一次红正是它（见下）。
- * 有了它，这条链的**真实现**（起什么、`encoding` 是什么）在本地就能判。
+ * 有了它，这条链的**真实现**（起什么、`encoding` / `stdio` 是什么）在本地就能判。
+ *
+ * `stdio` 默认 `"pipe"`、**由调用方在 Windows 那条路上传 `"inherit"`**：把
+ * PowerShell 编好的那批 936 字节直接接到本进程的 stdout。默认留 `"pipe"` 是为了
+ * 让「取回来再判」（用例）与「原样落日志」（生产）都能表达 —— 但生产**必须**用
+ * `"inherit"`，否则字节收进 `r.stdout` 就没了（见文件头那条坑）。
  *
  * @param {string} text UTF-8 文本（子进程的原始输出）
  * @param {{platform?: NodeJS.Platform,
  *          run?: (cmd: string, args: string[], input: string) => {status: number|null},
- *          spawnImpl?: typeof spawnSync}} [ports]
+ *          spawnImpl?: typeof spawnSync,
+ *          stdio?: "inherit" | "pipe"}} [ports]
  * @returns {{ok: boolean}}
  */
 export function writeCp936(
   text,
-  { platform = process.platform, run, spawnImpl = spawnSync } = {},
+  { platform = process.platform, run, spawnImpl = spawnSync, stdio = "inherit" } = {},
 ) {
   if (platform !== "win32") return { ok: false };
   const { script } = encodeCp936Plan();
@@ -190,7 +205,21 @@ export function writeCp936(
        *
        * 要的是 Buffer 输出，所以写 `null`（等价于省掉这个键）—— 不是 `Buffer`。
        * 判据见 `tests/ci-cp936-exit.test.ts` 的 `spawnImpl` 那一组。 */
-      const r = spawnImpl(cmd, args, { input, encoding: null });
+      const r = spawnImpl(cmd, args, {
+        input,
+        encoding: null,
+        /* **PowerShell 的 stdout 已经就是那批 936 字节** —— 让它直接落到本进程的
+         * stdout，不要再经我们手里过一道。
+         *
+         * 这一格此前是 `pipe`（`spawnSync` 的默认）+ `encoding: null`：字节确实
+         * 编对了，却被收进 `r.stdout` 这个 Buffer，然后**整份丢掉** —— 平台的
+         * stage 日志里因此**一个字都没有**（外壳把子进程的输出吞了，正是「退出码
+         * 转了、输出没转」那种形态）。`"inherit"` 是这一格的正确取值：
+         * 我们要的是「原样落到日志」，不是「取回来再加工」。
+         *
+         * 判据钉在「默认实现交出去的 stdio 是 inherit」（`spawnImpl` 注入面）。 */
+        stdio,
+      });
       return { status: r.status };
     });
   const r = exec(
@@ -466,7 +495,10 @@ export function runWithCp936Exit(
         settle(code ?? 0);
         return;
       }
-      const { ok } = write(text);
+      /* 转码成功时**不必再 emit** —— `write()` 已经把 PowerShell 那份 936 字节
+       * 直接接到本进程的 stdout 上了（`stdio: "inherit"`）。这里只在没做成时
+       * 兜底把原文照打一遍。 */
+      const { ok } = write(text, { stdio: "inherit" });
       if (!ok) {
         emit(
           "[cp936-exit] 转码这一步没做成（PowerShell 起不来？）—— 原文照打，" +
