@@ -44,32 +44,6 @@ import path from "node:path";
 /**
  * 只答「Playwright 要用的浏览器在不在」并据此退码 —— 给「E2E 之前」那一步用。
  *
- * ## 它修的那一格（ISSUE #1961，自托管节点的首次真跑）
- *
- * `E2E 关键流程` 是这条流水线上**从来没有跑过**的一档（前几跑都断在 `单元测试` 或
- * `生产构建`）。它一跑到就红在浏览器缺件上：自托管节点是**裸宿主机**，没有
- * `docker.image` 那种「镜像里预装好浏览器」的兜底，而 `pnpm install` 不会拉
- * Playwright 的浏览器二进制（那是 `playwright install` 的事）。
- *
- * 那台机器上的读数（`cnb-0rd-1k50unpnn`）：
- *
- *     期望的路径：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
- *
- * ## 为什么是「装」而不是「判红让人去装」
- *
- * 与 Python 那一步的分工不同：解释器可能在盘上、只是这个执行账号的 PATH 看不见它
- * （那一格要人改 PATH，所以 `--python-only` 探到就退 0、探不到才红并给出取证）；
- * 而浏览器二进制**只可能来自这一条命令**，机器上不存在「装了但探不到」的分支。
- * 所以这里直接装 —— 装完再探一次才算数（与 `installPython` 的复验同一条口径：
- * 安装器退 0 不等于东西真在）。
- *
- * 幂等：`playwright install` 对已存在的版本是 no-op（实测秒级返回）。
- *
- * @returns {number}
- */
-/**
- * 只答「Playwright 要用的浏览器在不在」并据此退码 —— 给「E2E 之前」那一步用。
- *
  * ## 注入面（本文件不 import 仓库内任何东西，见文件头）
  *
  *   · `find`  —— 「pnpm 在哪、怎么起」那份判据（`.cnb.yml` 那条流水线上传的是
@@ -89,7 +63,13 @@ import path from "node:path";
  * }} [ports]
  * @returns {number} 退出码
  */
-export function playwrightOnly({ find = required("find"), exec = required("exec"), log = console.log, logError = console.error, section = noopSection } = {}) {
+export function playwrightOnly({
+  find = required("find"),
+  exec = required("exec"),
+  log = console.log,
+  logError = console.error,
+  section = noopSection,
+} = {}) {
   section("playwright");
   /* 两件都要装：`chromium` 与 `chromium-headless-shell` 是 `browsers.json` 里的
    * **两个条目**，而 headless 档用的是后者 —— 只装前者时 `executablePath()` 会给出
@@ -137,7 +117,9 @@ export function playwrightOnly({ find = required("find"), exec = required("exec"
  * @returns {never}
  */
 function required(what) {
-  throw new Error(`ci-toolchain-browser：缺 ${what} 注入面（由调用方传入，见文件头）`);
+  throw new Error(
+    `ci-toolchain-browser：缺 ${what} 注入面（由调用方传入，见文件头）`,
+  );
 }
 
 /** 默认什么都不打的分节 —— 调用方不关心分节时就别硬塞一行。 */
@@ -218,7 +200,8 @@ export function playwrightInstallHints(out) {
  * 本步在流水线上排在 `Install dependencies` **之后**，但那不是这里能赖的前提
  * （顺序会变）。而这一条只回答「文件落没落地」——「能不能真起来」那一层由
  * `e2e/support/preflight-browser.mjs`（`e2e-run.mjs` 起 Playwright 之前那一探，
- * 判据是**真 launch**）与 `tests/ci-browser-selfcheck.test.ts` 守着，不在这里重判。
+ * 判据是**真 launch**）与这份文件的用例（`tests/ci-toolchain-selfcheck.test.ts`
+ * 的「装完必须复验」那一组）守着，不在这里重判。
  *
  * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>,
  *          list?: (dir: string) => string[]}} [options]
@@ -252,11 +235,16 @@ export function browserExecutableExists({
     };
   }
   const exe =
-    platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
-  const found = findFileUnder(path.join(root, dir), exe, 3);
+    platform === "win32"
+      ? "chrome-headless-shell.exe"
+      : "chrome-headless-shell";
+  /* 拼路径按**目标平台**的分隔符（同 `playwrightBrowsersRoot` 那条口径）。 */
+  const p = platform === "win32" ? path.win32 : path.posix;
+  const under = p.join(root, dir);
+  const found = findFileUnder(under, exe, 3, p.join);
   return found
     ? { ok: true, out: found }
-    : { ok: false, out: `${path.join(root, dir)} 下找不到 ${exe}` };
+    : { ok: false, out: `${under} 下找不到 ${exe}` };
 }
 
 /**
@@ -277,18 +265,30 @@ export function playwrightBrowsersRoot({
 } = {}) {
   const override = env.PLAYWRIGHT_BROWSERS_PATH;
   if (override) return override;
+  /* **按目标平台取分隔符**，不用宿主的 `path`（`node:path` 是宿主那一份）。
+   *
+   * 判据是可注入的 `platform`，所以本函数会**在一种平台上判另一种平台**（单测正是
+   * 这么用的）。用宿主 `path.join` 时：在 Linux 上判 `win32` 会得到
+   * `D:/Users/ci/ms-playwright`（应为反斜杠），在 Windows 上判 `darwin` 会得到
+   * `\h\Library\Caches\ms-playwright`（应为正斜杠）—— 平台侧实测报的正是后一种，
+   * 断言原文是「`expected` 一个反斜杠路径、`to be` 一个正斜杠路径」那句。
+   *
+   * 这与 `executable-resolve.ts` 那句「大小写不敏感只按目标平台」是同一条口径，
+   * 也与 `ci-toolchain-python.mjs` 的 `pathDrives` 记过的「按目标平台的分隔符切 PATH，
+   * 不按宿主的」同源。 */
+  const p = platform === "win32" ? path.win32 : path.posix;
   const home = env.USERPROFILE ?? env.HOME ?? "";
   if (platform === "win32") {
     const local =
-      env.LOCALAPPDATA ?? (home ? path.join(home, "AppData", "Local") : "");
-    return local ? path.join(local, "ms-playwright") : "ms-playwright";
+      env.LOCALAPPDATA ?? (home ? p.join(home, "AppData", "Local") : "");
+    return local ? p.join(local, "ms-playwright") : "ms-playwright";
   }
   if (platform === "darwin") {
     return home
-      ? path.join(home, "Library", "Caches", "ms-playwright")
+      ? p.join(home, "Library", "Caches", "ms-playwright")
       : "ms-playwright";
   }
-  return home ? path.join(home, ".cache", "ms-playwright") : "ms-playwright";
+  return home ? p.join(home, ".cache", "ms-playwright") : "ms-playwright";
 }
 
 /**
@@ -299,7 +299,7 @@ export function playwrightBrowsersRoot({
  * @param {number} depth
  * @returns {string | null}
  */
-function findFileUnder(dir, name, depth) {
+function findFileUnder(dir, name, depth, join = path.join) {
   if (depth < 0) return null;
   let entries;
   try {
@@ -309,10 +309,10 @@ function findFileUnder(dir, name, depth) {
   }
   for (const e of entries) {
     if (e.isSymbolicLink()) continue;
-    const full = path.join(dir, e.name);
+    const full = join(dir, e.name);
     if (e.isFile() && e.name === name) return full;
     if (e.isDirectory()) {
-      const hit = findFileUnder(full, name, depth - 1);
+      const hit = findFileUnder(full, name, depth - 1, join);
       if (hit) return hit;
     }
   }
@@ -340,7 +340,10 @@ function findFileUnder(dir, name, depth) {
  *   也不真去下 100MB 浏览器。
  * @returns {{ok: boolean, out: string, command?: string, args?: string[]}}
  */
-export function runPlaywrightInstall({ find = required("find"), exec = required("exec") } = {}) {
+export function runPlaywrightInstall({
+  find = required("find"),
+  exec = required("exec"),
+} = {}) {
   const pnpm = find();
   if (!pnpm.ok) {
     return {
@@ -361,4 +364,3 @@ export function runPlaywrightInstall({ find = required("find"), exec = required(
   const r = exec(pnpm.command, args);
   return { ok: r.ok, out: r.out, command: pnpm.command, args };
 }
-

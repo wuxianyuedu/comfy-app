@@ -1190,12 +1190,16 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
  */
 describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   it("落点里有 headless shell ⇒ 判过；没有 / 读不到 ⇒ 判不过", async () => {
-    const { browserExecutableExists } = await import(
-      "../scripts/ci-toolchain-selfcheck.mjs"
-    );
-    const root = process.platform === "win32" ? "C:\\x\\ms-playwright" : "/x/ms-playwright";
+    const { browserExecutableExists } =
+      await import("../scripts/ci-toolchain-selfcheck.mjs");
+    const root =
+      process.platform === "win32"
+        ? "C:\\x\\ms-playwright"
+        : "/x/ms-playwright";
     const exe =
-      process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+      process.platform === "win32"
+        ? "chrome-headless-shell.exe"
+        : "chrome-headless-shell";
 
     /* 「齐」那一半边用**真临时目录**跑：判据是**活的**（`findFileUnder` 真去读 fs），
      * 只喂目录名不算数 —— 而「真读盘」恰好是这一条要与实现同源的形态。 */
@@ -1246,24 +1250,34 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   });
 
   it("落点根按平台推（不写死盘符 / 认环境变量）", async () => {
-    const { playwrightBrowsersRoot } = await import(
-      "../scripts/ci-toolchain-selfcheck.mjs"
-    );
+    const { playwrightBrowsersRoot } =
+      await import("../scripts/ci-toolchain-selfcheck.mjs");
+    /* ⚠️ 期望值一律用**目标平台**的 join 拼，不用宿主的 `path.join`（`node:path`
+     * 是宿主那一份）。判据是可注入的 `platform`，所以这组会**在一种平台上判另一种
+     * 平台** —— 拿宿主 `path.join` 去拼会跟着跑判据的那台机器变：平台侧实测报过
+     *
+     * 断言原文是「`expected` 一个反斜杠路径、`to be` 一个正斜杠路径」那句。
+     * （Windows 节点上拼 `darwin` 得到的全反斜杠），而那与被判的实现无关。
+     * 这与 `executable-resolve.ts` 那句「大小写不敏感只按目标平台」是同一条口径。 */
+    /* 包成箭头函数：直接传 `path.win32.join` 会被 `unbound-method` 判为「方法与
+     * 自己的对象分了家」（`path.join` 本身不读 `this`，但规则看不出来）。 */
+    const win = (...parts: string[]) => path.win32.join(...parts);
+    const posix = (...parts: string[]) => path.posix.join(...parts);
     expect(
       playwrightBrowsersRoot({
         platform: "win32",
         env: { LOCALAPPDATA: "D:\\Users\\ci\\AppData\\Local" },
       }),
-    ).toBe(path.join("D:\\Users\\ci\\AppData\\Local", "ms-playwright"));
+    ).toBe(win("D:\\Users\\ci\\AppData\\Local", "ms-playwright"));
     expect(
       playwrightBrowsersRoot({
         platform: "darwin",
         env: { HOME: "/h" },
       }),
-    ).toBe("/h/Library/Caches/ms-playwright");
-    expect(playwrightBrowsersRoot({ platform: "linux", env: { HOME: "/h" } })).toBe(
-      "/h/.cache/ms-playwright",
-    );
+    ).toBe(posix("/h", "Library", "Caches", "ms-playwright"));
+    expect(
+      playwrightBrowsersRoot({ platform: "linux", env: { HOME: "/h" } }),
+    ).toBe(posix("/h", ".cache", "ms-playwright"));
     // 显式指定就听它的（自托管那台机把用户数据放在 D: 盘）。
     expect(
       playwrightBrowsersRoot({
@@ -1359,7 +1373,10 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
       /* 子进程跑**真**的那个入口（它 import 的是补过的那份 browser 模块）。 */
       writeFileSync(
         probe,
-        readFileSync(path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"), "utf8"),
+        readFileSync(
+          path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"),
+          "utf8",
+        ),
       );
       const r = spawnSync(process.execPath, [probe, "--playwright-only"], {
         encoding: "utf8",
