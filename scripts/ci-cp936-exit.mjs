@@ -148,6 +148,17 @@ const resolveByPath = commandInvocation;
 export const CP936_CODE_PAGE = 936;
 
 /**
+ * 转码那一步（起 PowerShell 把一批字节按 936 重发）的**墙钟预算**（毫秒）。
+ *
+ * 它不是一个性能旋钮，是**外壳不会把流水线停住**的边界：`writeCp936` 用的是
+ * `spawnSync`（同步），而它跑在子进程 `data` 回调里 —— 挂住一次就等于把整条链
+ * 停在那里（子进程的管道随即填满、它也卡住，`close` 永不到来）。正常形态是
+ * 「PowerShell 冷启动 + 编一批字节」，本机实测几十到几百毫秒；给两个数量级的余量，
+ * 撞上它只会退化成「原文照打 + 说明」那条既有出口（转码失败不是判据）。
+ */
+export const TRANSCODE_TIMEOUT_MS = 30_000;
+
+/**
  * 一步转码的**计划**（纯函数，可测）：把「怎么把这批 UTF-8 文本以 936 写出去」
  * 表达成一条 PowerShell 脚本 + 它的入参。
  *
@@ -250,6 +261,13 @@ export function writeCp936(
          * 原因（平台侧 `E2E 关键流程` 那一格：退出 1、日志零行）。
          * ⇒ 要表达的是「标准输出那两路落日志」，不是「整个 stdio 都别管」。 */
         stdio: ["pipe", stdio, stdio],
+        /* **转码这一步必须有预算**（ISSUE #1977 第八轮）：`spawnSync` 无 `timeout`
+         * 就是「挂住就一直挂」—— 而它是**同步**的，挂在 `data` 回调里等于把整条链
+         * 停住：子进程那一侧的管道很快填满、它卡在 `write()` 上，`close` 永不到来，
+         * 平台那 36 分钟读到的就是**零行**（与「攒到 `close` 才发」那一处同形、
+         * 但坏在更早的一跳）。判到预算即放弃转码：调用方会走「原文照打 + 说明」
+         * 那条路 —— 转码是外壳、不是判据，退出码不受影响。 */
+        timeout: TRANSCODE_TIMEOUT_MS,
       });
       return { status: r.status };
     });

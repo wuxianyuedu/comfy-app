@@ -2553,6 +2553,59 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
 > 是「日志本身在长跑上会消失」。它不是业务缺陷，是**取证工具自己的缺陷** —— 而它恰好
 > 出现在最需要取证的那一格上（36 分钟的 stage 红了、却一个字都读不到）。
 
+###### 第十三处：探针**把真命令跑了一遍** —— 外壳在起那条命令之前先起了它一次（ISSUE #1977 第八轮）
+
+第七跑（`cnb-6r3-1k52q61ul`，构建的 sha 就是当时的 tip）的 `E2E 关键流程` 与上一跑
+**同一个形态**：36 分钟、零行输出。⇒ 第十二处那一条（边到边发）修的不是这一格的红，
+真因在**解析口**上，不在时序上。
+
+外壳起那条命令之前会先问一句「这个候选在这台机器上起得来吗」，而那次确认
+（`usableCommand` 的「真起一次」）喂的参数**正是那条命令自己的真实参数**：
+
+    resolveShellInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])
+      → resolveCommandInvocation("node", <同一份真实参数>)
+      → usableCommand(<node 的绝对路径>, <同一份真实参数>)   ← 探针在这里**起了它**
+
+于是 `.cnb.yml` 里每一格 `node scripts/…` 都被**执行了两遍**。E2E 那一格最贵：
+
+- 探针真起了一次 `node scripts/e2e-run.mjs --grep=@critical` —— 它把 Playwright 的
+  webServer（`pnpm start` = standalone server + 假 ComfyUI）**拉起来**；
+- `spawnSync` 的超时**只收直接子进程**，那些服务器是孙子进程、留在端口上继续跑
+  （本机真跑一次量过：`spawnSync(…, {timeout: 3000})` 退 `ETIMEDOUT`，孙子 `listening`
+  的痕迹还在）；
+- `ETIMEDOUT` 被 `usableCommand` 读成「没量到」⇒ 判**可用**（§13.6.2 那条口径的本意）
+  ⇒ 真那一跑照常起来，**两套 E2E 抢同一个端口**。
+
+这也是第十一处（上一跑漏下的替身占着端口）**反复出现**的供给侧：制造孤儿进程的不是
+上一跑，是**本跑的探针**。代价不止 E2E —— `pnpm install --frozen-lockfile` 那一格被
+探针砍在半路是**残缺的 `node_modules`**。
+
+修法在**地基**上（`src/lib/process/executable-resolve.ts` 的 `resolveCommandInvocation`）：
+**探针参数与调用参数解耦**。第二入参在语义上只剩一件事 —— 拼进最终命令行、一个字节都
+不改写；探针恒用一条**廉价、无副作用**的参数（默认 `["--version"]`；`usableCommand`
+只读 `error.code`，非零退出也算「起得来」，所以 `--version` 退非零的形态不会被误判）。
+需要**带宿主参数才能应答**的候选（`py` 启动器那种）走 `probeArgs` 显式给 —— 那是
+`python-resolve.ts` 那条链的事，它直接调 `whichCommand()`，不经过本函数。
+
+同一处还有一条**同源但次要**的加固：第五章那一步的 `spawnSync`（起 PowerShell 按 936
+重发）**补上墙钟预算**（`TRANSCODE_TIMEOUT_MS`）。它是同步的、跑在子进程 `data` 回调里
+—— 无 `timeout` 就是「挂住就一直挂」：子进程那一侧的管道随即填满、它卡在 `write()`
+上，`close` 永不到来。**与第十二处同形，但坏在更早的一跳**；撞上预算只会退化成既有的
+「原文照打 + 说明」出口（转码是外壳、不是判据）。
+
+判据：
+
+- `src/lib/process/executable-resolve.test.ts` 新增一条**不注入探针**的用例（注入面
+  自己会把这条缺陷抹平）：真起一次，拿一个「跑起来会留下痕迹」的脚本当那条命令 ——
+  解析照旧成立、`args` 一个字节不改写，而**痕迹文件不存在**。反向复算：把探针参数换回
+  `args`（旧写法）当场红；
+- `tests/ci-cp936-exit.test.ts` 新增一条判「转码那一步带墙钟预算」—— 形状判据，
+  理由与该文件既有的 `spawnImpl` 那一组同源（落字节那一跳在 Linux 上判不到）。
+
+> 八轮下来的形状再记一笔：**每一处修完都只是把红往下推一格**。这一格推出来的不是
+> 「日志怎么发」，而是「**在起那条命令之前，外壳先起过它一次**」—— 一个取证工具自己
+> 制造孤儿进程、并且把每一格都跑两遍的缺陷。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的

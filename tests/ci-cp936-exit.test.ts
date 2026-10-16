@@ -61,6 +61,7 @@ import {
   resolveShellInvocation,
   runWithCp936Exit,
   splitStreamChunk,
+  TRANSCODE_TIMEOUT_MS,
   writeCp936,
 } from "../scripts/ci-cp936-exit.mjs";
 
@@ -713,6 +714,28 @@ describe("CP936 出口：编排与退出码", () => {
      * `[Console]::In.ReadToEnd()` 读到空串 ⇒ 日志仍然一个字都没有 —— 这正是本条
      * 修完之后**依然全空**的那一版（`E2E 关键流程` 那一格：退出 1、日志零行）。 */
     expect(calls[0]?.stdio).toEqual(["pipe", "inherit", "inherit"]);
+  });
+
+  it("转码那一步**带墙钟预算** —— `spawnSync` 挂住不能把整条链停在那里", () => {
+    /* ISSUE #1977 第八轮。`writeCp936` 用的是 `spawnSync`（同步），而它跑在子进程
+     * `data` 回调里 —— 无 `timeout` 就是「挂住就一直挂」：子进程那一侧的管道很快
+     * 填满、它卡在 `write()` 上，`close` 永不到来，平台读到的就是**零行**
+     * （与「攒到 `close` 才发」那一处同形，但坏在更早的一跳）。
+     *
+     * ⚠️ 同样**在 Linux 上判不到落字节**，所以判据钉在形状上：默认实现交出去的
+     * `timeout` 是不是一个**有界**的值。反向复算：去掉那一行即红。
+     */
+    const calls: Array<{ timeout: unknown }> = [];
+    writeCp936("中文一二三", {
+      platform: "win32",
+      spawnImpl: ((_cmd: string, _args: string[], opts: never) => {
+        calls.push({ timeout: (opts as { timeout: unknown }).timeout });
+        return { status: 0 };
+      }) as never,
+    });
+    expect(calls).toHaveLength(1);
+    expect(typeof calls[0]?.timeout).toBe("number");
+    expect(calls[0]?.timeout).toBe(TRANSCODE_TIMEOUT_MS);
   });
 
   it('编排把 `stdio: "inherit"` 传给写字节那一层（形状：不然生产那条路仍是 pipe）', async () => {
