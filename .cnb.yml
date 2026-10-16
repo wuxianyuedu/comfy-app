@@ -456,8 +456,8 @@
       #
       # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
       # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
-      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
-      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.playwright.dev"
+      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "30000"
     # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
     # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
     # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
