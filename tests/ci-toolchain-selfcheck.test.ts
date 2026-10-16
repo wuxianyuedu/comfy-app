@@ -45,6 +45,7 @@ import {
   pnpmForensics,
   nodeAllowed,
   parseVersion,
+  playwrightInstallHints,
   runPlaywrightInstall,
 } from "../scripts/ci-toolchain-selfcheck.mjs";
 import {
@@ -1380,5 +1381,58 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
       rmSync(probe, { force: true });
       rmSync(empty, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * 装浏览器失败时给的是**读数**（ISSUE #1961，同一格上的第五个面）。
+ *
+ * 上面那组把「退码转不转得出去」收干净之后，`浏览器安装` 这一格就**会红**了 ——
+ * 而红的时候日志里得能读出**为什么**。此前那句话只有「常见成因：网络到 CDN 不通、
+ * 或磁盘满」，而那两种成因的处置完全相反：
+ *
+ *   · 「不通」要换镜像（`PLAYWRIGHT_DOWNLOAD_HOST`）；
+ *   · 「没量完」要放宽多久算超时（`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT`）。
+ *
+ * 现场那一跑（`cnb-rkr-1k510rsgg`）正是后一种 —— 180 MiB 的包撞上 Playwright 默认
+ * 的 30s **套接字**超时（`NET_DEFAULT_TIMEOUT`）：
+ *
+ *     （原文）Error: Request to https://cdn.playwright.dev/…/win64/chrome-win64.zip timed out after 30000ms
+ *
+ * 判据两条：真撞上「下载失败」时逐条点出试过的地址 + 两个出口；别的失败形态
+ * （pnpm 不可用、盘满）不许被塞这两条建议 —— 凑上去只会让人往错的方向看。
+ */
+describe("工具链自证：下载失败的读数是读数，不是又一句「装不上」（ISSUE #1961）", () => {
+  it("下载超时的现场：逐条地址 + 两个环境变量出口", () => {
+    const text = playwrightInstallHints(
+      [
+        "Downloading Chrome for Testing …",
+        "Failed to install browsers",
+        "Error: Request to https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-win64.zip timed out after 30000ms",
+      ].join("\n"),
+    ).join("\n");
+    // 试着下过哪一件 —— 没有它，下一个人只能再猜一轮。
+    expect(text).toContain("chrome-win64.zip");
+    // 两个出口都是 Playwright 自己的键（本仓不发明第二套）。
+    expect(text).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
+    expect(text).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
+    // 「不是结论」这一层要说出来：30s 是套接字超时，不是「这个地址不通」。
+    expect(text).toContain("套接字");
+  });
+
+  it("别的失败形态不给这两条建议（读数只跟着它对得上的那一档）", () => {
+    expect(playwrightInstallHints("pnpm 不可用，装不了浏览器")).toEqual([]);
+    expect(playwrightInstallHints("")).toEqual([]);
+  });
+
+  it("`.cnb.yml` 把套接字超时放宽了（只关「多久放弃」，不改任何判据）", () => {
+    const yml = read(".cnb.yml");
+    /* 这一步是本档**唯一**能碰到「下载」这件事的地方：`env` 的键写错了不会有任何
+     * 解析期报错，只会在下一次下载时以同一个形态（180 MiB 撞 30s）再红一次。 */
+    expect(
+      yml,
+      "`浏览器安装` 没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— 默认的 30s 是" +
+        "**套接字**超时，180 MiB 的包在慢链路上会被它按时掐断",
+    ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
   });
 });

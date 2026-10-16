@@ -101,9 +101,12 @@ export function playwrightOnly({ find = required("find"), exec = required("exec"
     logError(
       "\n浏览器装不上（`playwright install` 退非零）。它的出口与 Python 不同 ——" +
         "浏览器二进制只可能来自这一条命令，机器上没有「装了但探不到」的分支，" +
-        "所以这里不是「取证给人看」，是这一步真的没做成功。" +
-        "常见成因：网络到 CDN 不通、或磁盘满。",
+        "所以这里不是「取证给人看」，是这一步真的没做成功。",
     );
+    /* 失败话术后面跟**读数**，而不是又一句「常见成因：网络不通或磁盘满」——
+     * 那两种成因的处置完全相反（一个是放宽多久算超时、一个是清盘），
+     * 而日志里此前一个字都分不开它们。见 `playwrightInstallHints()`。 */
+    for (const line of playwrightInstallHints(install.out)) log(line);
     return 1;
   }
   /* **装完必须复验**（与 `installAndReverify` 的「装完回到 `findPython()` 再探一遍」
@@ -139,6 +142,56 @@ function required(what) {
 
 /** 默认什么都不打的分节 —— 调用方不关心分节时就别硬塞一行。 */
 function noopSection() {}
+
+/**
+ * 装浏览器失败时那几条**读数**（而不是又一句「网络不通或磁盘满」）。
+ *
+ * ## 现场（`cnb-rkr-1k510rsgg` 的 `浏览器安装` stage）
+ *
+ * 下载卡在这一句上：
+ *
+ *     （原文）Error: Request to https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/
+ *     （原文）chrome-win64.zip timed out after 30000ms
+ *
+ * 那时这一步还退 0（退出码被守卫吞掉，见本笔的姐妹修法），所以「为什么没装上」
+ * 在整条构建日志里一个字都读不到 —— 而 E2E 会照旧报缺件，两个读数互相矛盾。
+ *
+ * ## 为什么这两个成因必须分开
+ *
+ * `timed out after 30000ms` 里的 30s 是 Playwright 的默认**套接字**超时
+ * （`NET_DEFAULT_TIMEOUT`），而包是 180 MiB —— 在慢链路上它不是「这个地址不通」
+ * 的结论，是「这一次没量完」。两者的处置相反：
+ *
+ *   · 换镜像：`PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>`；
+ *   · 放宽多久算超时：`PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000`。
+ *
+ * 两个都是 Playwright 自己的环境变量，本仓不发明第二套（§12.18）。
+ * 只有真撞上「下载失败」字样时才打 —— 别的失败形态（pnpm 不可用、盘满）不需要
+ * 这两条建议，凑上去只会让人往错的方向看。
+ *
+ * @param {string} out `playwright install` 的输出
+ * @returns {string[]}
+ */
+export function playwrightInstallHints(out) {
+  const text = out ?? "";
+  if (!/Failed to download|Download failure|timed out after/.test(text)) return [];
+  const urls = [
+    ...new Set([...text.matchAll(/Request to (\S+?) timed out/g)].map((m) => m[1])),
+  ];
+  return [
+    "---- 下载现场（供定位，非报错）----",
+    ...(urls.length > 0
+      ? urls.map((u) => `  超时的地址: ${u}`)
+      : ["  （没有摘到 'Request to … timed out' 那一行，见上面的原文）"]),
+    "  30s 是 Playwright 的默认**套接字**超时（`NET_DEFAULT_TIMEOUT`），",
+    "  不是「这个地址不通」的结论：大包在慢链路上会被它按时掐断。",
+    "  两条出口（都是 Playwright 自己的环境变量，本仓不发明第二套）：",
+    "    · 换镜像：PLAYWRIGHT_DOWNLOAD_HOST=<镜像根>（配到 stage 的 env 上）",
+    "    · 放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000",
+    "  两条都只关「多久放弃」，不改「装完能起才放行」那条判据。",
+    "------------------------------------",
+  ];
+}
 
 /**
  * **装完复验**：按落点找这一档真正会用到的那一件（headless shell）在不在。

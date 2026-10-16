@@ -275,6 +275,37 @@ export function resolveAnchoredRunner(
  * @param text `.cnb.yml` 原文
  * @returns stage 名 → timeout 写法（没写的不出现在结果里）
  */
+/**
+ * 摘出某个 stage 那一项的原文（从它的 `- name:` 到下一项 / 下一个更浅的键）。
+ *
+ * 按**缩进收口**而不是正则一次匹配到底：stage 项里嵌着 `script: |` 块（里面有缩进
+ * 更深的任意文本）与 `env:` 子映射，一次匹配很容易多吃或少吃。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @param {string} name stage 名
+ * @returns {string | null}
+ */
+export function stageBlock(text: string, name: string): string | null {
+  const lines = text.split("\n");
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
+    if (item?.[1] === name) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  const out: string[] = [lines[start] ?? ""];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const raw = lines[i] ?? "";
+    /* 下一个同级 stage 项 / 更浅的键都算收尾（空行不算 —— 配置里正文之间有空行）。 */
+    if (/^ {2}-\s+name:/.test(raw) || /^\S/.test(raw)) break;
+    out.push(raw);
+  }
+  return out.join("\n");
+}
+
 export function stageTimeouts(text: string): Map<string, string> {
   const out = new Map<string, string>();
   const lines = text.split("\n");
@@ -511,6 +542,32 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       existsSync(path.join(ROOT, entry ?? "")),
       `「浏览器安装」点名的入口不在盘上：${entry}`,
     ).toBe(true);
+  });
+
+  it("`浏览器安装` 那一步把下载的套接字超时放宽了（180 MiB 撞 30s 是「没量完」）", () => {
+    const text = readRegisteredConfig();
+    /* 现场（`cnb-rkr-1k510rsgg` 的 `浏览器安装` stage）：180 MiB 的包撞上 Playwright
+     * 默认的 30s **套接字**超时（`NET_DEFAULT_TIMEOUT`）被按时掐断：
+     *
+     *     （原文）Request to https://cdn.playwright.dev/…/win64/chrome-win64.zip
+     *     （原文）timed out after 30000ms
+     *
+     * 那不是「CDN 不通」的结论，是「这一次没量完」—— 两者的处置相反（换镜像 vs 放宽），
+     * 而日志里此前一个字都分不开它们。
+     *
+     * 这个键是本档**唯一**能碰到「下载」这件事的地方，而 `env` 的键写错了不会在配置
+     * 解析期报任何错，只会在下一次下载时以同一个形态再红一次 —— 所以这里按「块内必须
+     * 有这个键」判，而不是靠人记得。顺序/入口那一条在上面，这条只管下载预算。 */
+    const stage = stageBlock(text, "浏览器安装");
+    expect(stage, "解析不出「浏览器安装」这一步 —— 名字被改了？").toBeTruthy();
+    expect(
+      stage,
+      "「浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— 默认的 30s 是" +
+        "**套接字**超时，180 MiB 的包在慢链路上会被它按时掐断",
+    ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
+    expect(stage).toMatch(
+      /PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT:\s*"[1-9]\d*"/,
+    );
   });
 
   it("`单元测试` 排在 `Python 可用性` 之后（缺件要在最便宜的位置报出来）", () => {

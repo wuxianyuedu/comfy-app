@@ -63,6 +63,7 @@ import {
 import {
   browserExecutableExists,
   playwrightBrowsersRoot,
+  playwrightInstallHints,
   playwrightOnly as playwrightOnlyImpl,
   runPlaywrightInstall,
 } from "./ci-toolchain-browser.mjs";
@@ -720,6 +721,7 @@ export function main() {
 export {
   browserExecutableExists,
   playwrightBrowsersRoot,
+  playwrightInstallHints,
   runPlaywrightInstall,
 };
 

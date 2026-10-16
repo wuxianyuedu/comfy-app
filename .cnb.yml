@@ -325,13 +325,30 @@
   # 为什么是「装」而不是「判红让人去装」：它与 Python 那一步的分工不同 —— 解释器可能
   # 在盘上、只是执行账号的 PATH 看不见（那要人改 PATH，所以 `--python-only` 探到就放行、
   # 探不到才红并给取证）；而浏览器二进制**只可能来自这一条命令**，机器上不存在
-  # 「装了但探不到」的分支。所以这一步直接装，装不上才红。
+  # 「装了但探不到」的分支。所以这一步直接装。
   # 幂等：`playwright install` 对已存在的版本是 no-op。
+  #
+  # ⚠️ **判据是「东西落地了」，不是「这条命令退 0」**（ISSUE #1961）—— 这一步红过一次
+  # 而**没人看得出来**，形态是这句：
+  #
+  #   （原文）Failed to install browsers
+  #   （原文）Error: Request to https://cdn.playwright.dev/…/chrome-win64.zip timed out after 30000ms
+  #   浏览器装不上（`playwright install` 退非零）…      ← 话术自己打出来了
+  #   Finished, code: 0, duration: 31.1s                ← 而 stage 报绿（`main()` 的返回码被丢）
+  #
+  # 三个面各自修掉了（退码转出去 / 装完按落点复验 / 下载失败给读数），口径见
+  # 规范 §13.5.3.5–§13.5.3.6。
   - name: 浏览器安装
     script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    env:
+      # **上面那次红的直接成因**：180 MiB 的包撞上 Playwright 默认的 30s **套接字**超时
+      # （`NET_DEFAULT_TIMEOUT`）被按时掐断 —— 那不是「CDN 不通」的结论，是
+      # 「这一次没量完」。120s 只关「多久放弃」，不改任何判据。
+      # 逐条地址与两个出口由脚本在失败时打出来（`playwrightInstallHints`）。
+      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
     # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
-    # 冷节点 + 慢链路够用，而卡死（CDN 不通）时也能在 20m 报出来，不必等满平台
-    # 默认的 2h 墙钟。**不是放宽判据** —— 判据是「装完退 0」，预算只管多久放弃。
+    # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
+    # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
     timeout: 20m
 
   # ── E2E（仅 @critical 关键流程）──
