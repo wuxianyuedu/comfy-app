@@ -61,6 +61,14 @@
  *     有人把这一句挪进 executor 里，`resolve` 就变成 **Promise 的 resolve 函数**
  *     （一个恒真的值），解析直接消失、`invocation.command` 是 `undefined`，
  *     `spawn(undefined, …)` 当场 `ERR_INVALID_ARG_TYPE`。模块级取好别名再进 Promise。
+ *   · **解析口选错了一层，于是回退成了「裸名字交给 spawn」**：`commandInvocation`
+ *     的契约是「**候选** → spawn 形态」，解析不出来时它**原样退回候选**
+ *     （`{command: candidate}`）—— 对一条已经在盘上的路径那是忠实的，对
+ *     `pnpm` 这种**名字**却是把 `spawn("pnpm")` 直接扔给 Windows（ENOENT）。
+ *     `.cnb.yml` 里那条 `-- pnpm install --frozen-lockfile` 踩的就是这一格：
+ *     解析退化 ⇒ 起不来 ⇒ `[cp936-exit] 起不了这条命令：pnpm`。正确的那一层是
+ *     `resolveCommandInvocation()`（它收**名字**、交 `{command, args, resolved}`，
+ *     并用 `resolved: false` 把「查无此命令」变成一个可读出口）。
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -76,16 +84,15 @@ import { fileURLToPath } from "node:url";
  * 说明符**带 `.ts` 扩展名**是硬要求：`.mjs` 静态 import 一份 `.ts` 时 Node 的 ESM
  * 解析器不替你补扩展名（ISSUE #1961 实测的 `ERR_MODULE_NOT_FOUND` 就是这个形态的
  * 反面教材），口径见 `src/lib/process/platform.ts` 的文件头注。 */
-import { commandInvocation } from "../src/lib/process/executable-resolve.ts";
+import { resolveCommandInvocation } from "../src/lib/process/executable-resolve.ts";
 
 /* 这个别名**不是**风格：`runWithCp936Exit` 的 Promise executor 有个形参也叫 `resolve`
  * （那是 Promise 的 settle 函数），production 的注入面默认值是 `undefined`、靠
- * `??` 回退到 `commandInvocation`。一旦取默认值的那一句落进 executor 里，`resolve`
- * 就会被那个**恒真的 Promise resolve 函数**顶掉 —— `undefined ?? x` 本来是回退，
- * 换成「恒真有值」之后解析整段消失，`spawn(undefined, …)` 直接抛。
- * 模块级别名让这条回退不依赖「那两句写在 executor 外面」（`electron-package.mjs`
- * 用同一处置避开同名遮蔽）。 */
-const resolveCommandInvocation = commandInvocation;
+ * `??` 回退到真解析口。一旦取默认值的那一句落进 executor 里，`resolve` 就会被那个
+ * **恒真的 Promise resolve 函数**顶掉 —— `undefined ?? x` 本来是回退，换成「恒真有值」
+ * 之后解析整段消失，`spawn(undefined, …)` 直接抛。模块级别名让这条回退不依赖
+ * 「那两句写在 executor 外面」（`electron-package.mjs` 用同一处置避开同名遮蔽）。 */
+const defaultResolver = resolveCommandInvocation;
 
 /** 中文 Windows 的 ANSI 代码页 —— 平台那一跳读的就是它。 */
 export const CP936_CODE_PAGE = 936;
@@ -226,7 +233,8 @@ export function unwrapCp936(command) {
  * @param {{platform?: NodeJS.Platform,
  *          spawnProc?: typeof spawn,
  *          write?: typeof writeCp936,
- *          resolve?: (cmd: string) => {command: string, prefixArgs: string[]},
+ *          resolve?: (cmd: string, args: string[]) =>
+ *            {command: string, args: string[], resolved: boolean},
  *          out?: (chunk: string) => void}} [ports]
  * @returns {Promise<number>} 该转出去的退出码
  */
@@ -247,21 +255,38 @@ export function runWithCp936Exit(
     return Promise.resolve(2);
   }
   /* 解析成「这台机器上真被执行的那条命令」——判据是**仓里那一份**（`resolve` 是它的
-   * 注入面）。解析不出来时退回原样：`commandInvocation` 对探不通的候选正是这么做的
-   * （`{command: candidate, prefixArgs: []}`），所以这里也只是「把结论抄一遍」。 */
-  const invocation = (resolve ?? resolveCommandInvocation)(command);
-  /* 解析口必须交出 `{command, prefixArgs}`：`undefined` 悄悄流下去只会变成
+   * 注入面）。用的必须是**收名字**的那一层 `resolveCommandInvocation()`：它的兄弟
+   * `commandInvocation()` 收的是**候选路径**，解析不出来时**原样退回候选** ——
+   * 那个「回退」对一条盘上的路径是忠实的，对 `pnpm` 这种名字却是把 `spawn("pnpm")`
+   * 扔给 Windows（ENOENT，见头注第三个坑）。 */
+  const invocation = (resolve ?? defaultResolver)(command, args);
+  /* 解析口必须交出 `{command, args, resolved}`：`undefined` 悄悄流下去只会变成
    * `spawn(undefined, …)` 的 `ERR_INVALID_ARG_TYPE`（报错点离真因一整层）。
    * 生产路径另有护栏 —— `spawn` 传函数会抛，于是「拿 Promise resolve 当注入面」
    * 这条错法在**真跑一次**时就红，而不是等到 Windows 上才炸（见对应用例）。 */
-  if (!invocation?.command || !Array.isArray(invocation.prefixArgs)) {
+  if (
+    !invocation?.command ||
+    !Array.isArray(invocation.args) ||
+    typeof invocation.resolved !== "boolean"
+  ) {
     throw new TypeError(
-      "[cp936-exit] 命令解析口没有交出 {command, prefixArgs} —— " +
-        "它该是 commandInvocation 或一个同形状的注入面",
+      "[cp936-exit] 命令解析口没有交出 {command, args, resolved} —— " +
+        "它该是 resolveCommandInvocation 或一个同形状的注入面",
     );
   }
+  /* PATH 上查无此命令 ⇒ **给出可读出口**（同一条处置：`resolved: false` 是「找不到」，
+   * 不是「用裸名字再试一次」）。裸名字丢给 spawn 只会拿回一句信息量很低的 ENOENT，
+   * 而那正是 `Install dependencies` 那一格上看到的形态。 */
+  if (!invocation.resolved) {
+    emit(
+      `[cp936-exit] PATH 上找不到这条命令：${command} —— ` +
+        "已按 PATH（含 PATHEXT）找过，它不在盘上\n",
+    );
+    return Promise.resolve(127);
+  }
   const realCommand = invocation.command;
-  const realArgs = [...invocation.prefixArgs, ...args];
+  /* 参数用**解析口交回来的那一份**（宿主前缀 + 原参数都由它拼好）。 */
+  const realArgs = invocation.args;
   return new Promise((resolve) => {
     /* `shell: false` 是默认 —— 本文件**不**替调用方解释命令行。stage 里那条命令
      * 本身可能是 `pnpm run build` 这种带子命令的形态，但它的解析归它自己的宿主

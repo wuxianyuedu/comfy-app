@@ -80,6 +80,28 @@
   `spawn(undefined, …)` 当场抛。现在走模块级别名 `resolveCommandInvocation`，
   并校验解析口交出的形状（报错点不再离真因一整层）。
 
+  ## 三之四、第四次：解析口选错一层，「回退」把裸名字交给了 `spawn`
+
+  修掉上面几条之后 `工具链自证` 转绿（**中文日志已经可读** —— CP936 出口那一步成立），
+  红的位置往下走到 `Install dependencies`：
+
+      [cp936-exit] 起不了这条命令：pnpm
+
+  `.cnb.yml` 那一行包的是**一个名字**（`-- pnpm install --frozen-lockfile`），而外壳用的
+  是 `commandInvocation()` —— 那一层的契约是「**候选路径** → spawn 形态」，解析不出来时
+  **原样退回候选**。对盘上的一条路径那是忠实的，对 `pnpm` 这种名字却等于把
+  `spawn("pnpm")` 扔给 Windows（`ENOENT`）。**「回退」在这里不是保守，是把判据的对象
+  换成了注定失败的那一个。**
+
+  改用同文件的兄弟 `resolveCommandInvocation()`：收**名字**、交
+  `{command, args, resolved}`，并用 `resolved: false` 把「PATH 上查无此命令」变成
+  **可读出口 + 127**（一条进程都不起），而不是丢一句信息量很低的 ENOENT。
+
+  实测对照（假 PATH + corepack 三形态 + `EACCES` 判无扩展名 shim）：
+  `commandInvocation` 回 `"pnpm"`（裸名字，必 ENOENT），
+  `resolveCommandInvocation` 回一个真路径。这也是「本地绿不是证据」的第二个样本 ——
+  Linux 上两条解析口结论一样，差别只在 Windows 的候选表上显形。
+
   ## 三之三、这三条判据的**边界**
 
   · **判不到**「平台侧读出来可不可读」—— 解码在本进程之外；

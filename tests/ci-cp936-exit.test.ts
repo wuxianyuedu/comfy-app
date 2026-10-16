@@ -220,6 +220,14 @@ describe("CP936 出口：参数解析（`--` 是分界，不是可选）", () =>
 });
 
 describe("CP936 出口：编排与退出码", () => {
+  /** 解析口的「原样放行」形态：不关心解析的那几条用它，免得去碰真 PATH。
+   *  形状必须与 production 同（`{command, args, resolved}`）。 */
+  const passthroughResolve = (cmd: string, args: string[]) => ({
+    command: cmd,
+    args,
+    resolved: true,
+  });
+
   /** 一条只发数据、不落盘的假子进程 —— `runWithCp936Exit` 的注入面。 */
   const fakeChild = (out: string, code: number | null) => {
     const handlers: Record<string, (arg: unknown) => void> = {};
@@ -288,6 +296,7 @@ describe("CP936 出口：编排与退出码", () => {
     const child = fakeChild("ok\n", 3);
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
+      resolve: passthroughResolve,
       spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
@@ -343,19 +352,28 @@ describe("CP936 出口：编排与退出码", () => {
     expect(printed.join("")).not.toContain("中文一二三");
   });
 
-  it("**可执行形态走仓里那一份判据**：bare `pnpm` 交给 `commandInvocation` 解析", async () => {
+  it("**可执行形态走仓里那一份判据**：bare `pnpm` 交给解析口，起的是宿主形态", async () => {
     /* 这条是本外壳最容易踩的坑：它是「包着别的命令起进程」的那一层，而 Windows 上
      * `pnpm` 是 `.cmd` / `.ps1` 垫片 —— Node 直接 `spawn("pnpm")` 给 `EINVAL`
      * （`spawn("pnpm.cmd")` 同样，因为 `.cmd` 只有 cmd.exe 会解释）。§2.1.1 已经为
-     * 这件事收了一个唯一出口（`pnpmInvocation` / `commandInvocation`），所以本外壳
-     * **必须**过它，而不是自己写一个「Windows 用 pnpm.cmd」——那正是第四次踩同一个坑。 */
+     * 这件事收了一个唯一出口，所以本外壳**必须**过它，而不是自己写一个
+     * 「Windows 用 pnpm.cmd」——那正是第四次踩同一个坑。 */
     const seen: Array<{ cmd: string; args: string[] }> = [];
     const child = fakeChild("ok\n", 0);
     await runWithCp936Exit(["--", "pnpm", "install", "--frozen-lockfile"], {
       platform: "win32",
       resolve: () => ({
         command: "powershell.exe",
-        prefixArgs: ["-NoProfile", "-File", "pnpm.ps1"],
+        args: [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "pnpm.ps1",
+          "install",
+          "--frozen-lockfile",
+        ],
+        resolved: true,
       }),
       spawnProc: ((cmd: string, args: string[]) => {
         seen.push({ cmd, args });
@@ -366,21 +384,34 @@ describe("CP936 出口：编排与退出码", () => {
       out: () => undefined,
     });
     expect(seen[0]?.cmd).toBe("powershell.exe");
-    /* 前缀参数在前、原参数在后（顺序反了等于把 `pnpm.ps1` 当子命令传）。 */
+    /* 宿主前缀参数在前、原参数在后（顺序反了等于把 `pnpm.ps1` 当子命令传）。 */
     expect(seen[0]?.args.slice(0, 3)).toEqual([
       "-NoProfile",
-      "-File",
-      "pnpm.ps1",
+      "-ExecutionPolicy",
+      "Bypass",
     ]);
-    expect(seen[0]?.args.slice(3)).toEqual(["install", "--frozen-lockfile"]);
+    expect(seen[0]?.args.slice(-2)).toEqual(["install", "--frozen-lockfile"]);
   });
 
-  it("解析不出形态时**原样**起那条命令（不因为探不通就把它换掉）", async () => {
+  it("**解析口收的是「名字」，不是「候选路径」** —— 原样退回候选就是把裸名字扔给 spawn", async () => {
+    /* 这是 `Install dependencies` 那一格真红的根因（ISSUE #1977 第三次上平台）：
+     * `commandInvocation()` 的契约是「**候选** → spawn 形态」，解析不出来时它
+     * **原样退回候选** —— 对一条盘上的路径是忠实的，对 `pnpm` 这种名字却等于
+     * `spawn("pnpm")`，在 Windows 上是 `ENOENT`（现场：
+     * `[cp936-exit] 起不了这条命令：pnpm`）。
+     *
+     * 正确的那一层是 `resolveCommandInvocation()`：收名字、交 `{command, args,
+     * resolved}`。这条用例把那个口径钉住 —— 生产解析口必须是后者，注入面也必须
+     * 交出这个形状。 */
     const seen: Array<{ cmd: string; args: string[] }> = [];
     const child = fakeChild("ok\n", 0);
     await runWithCp936Exit(["--", "some-thing", "x"], {
-      platform: "linux",
-      resolve: (cmd) => ({ command: cmd, prefixArgs: [] }),
+      platform: "win32",
+      resolve: () => ({
+        command: "C:\\tools\\some-thing.EXE",
+        args: ["x"],
+        resolved: true,
+      }),
       spawnProc: ((cmd: string, args: string[]) => {
         seen.push({ cmd, args });
         queueMicrotask(() => child.emitClose());
@@ -389,7 +420,34 @@ describe("CP936 出口：编排与退出码", () => {
       write: () => ({ ok: true }),
       out: () => undefined,
     });
-    expect(seen[0]).toEqual({ cmd: "some-thing", args: ["x"] });
+    /* 起的是**解析出来的绝对路径**，不是调用方写的那个名字。 */
+    expect(seen[0]).toEqual({ cmd: "C:\\tools\\some-thing.EXE", args: ["x"] });
+  });
+
+  it("PATH 上查无此命令 ⇒ **可读出口 + 127**，不是把裸名字丢给 spawn", async () => {
+    /* `resolved: false` 是「找不到」，不是「再试一次」。裸名字丢给 spawn 只会拿回
+     * 一句信息量很低的 ENOENT（那正是平台上那一格的形态），而用户需要知道的是
+     * 「找过了、它不在盘上」。 */
+    const printed: string[] = [];
+    const child = fakeChild("", 0);
+    let spawned = false;
+    const code = await runWithCp936Exit(["--", "不存在的命令", "x"], {
+      platform: "win32",
+      resolve: () => ({ command: "不存在的命令", args: ["x"], resolved: false }),
+      spawnProc: (() => {
+        spawned = true;
+        queueMicrotask(() => child.emitClose());
+        return child;
+      }) as never,
+      out: (chunk) => printed.push(chunk),
+    });
+    expect(code).toBe(127);
+    /* **一条进程都没起** —— 找不到就不该起。 */
+    expect(spawned).toBe(false);
+    const text = printed.join("");
+    expect(text).toContain("找不到");
+    expect(text).toContain("不存在的命令");
+    expect(text).toContain("PATH");
   });
 
   it("命令起不来 ⇒ 非零退出码 + 一条能读的说明（不是静默退 0）", async () => {

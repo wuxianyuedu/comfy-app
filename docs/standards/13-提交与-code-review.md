@@ -2192,6 +2192,30 @@ resolve 函数**，回退整段消失、`spawn(undefined, …)` 当场抛（离�
 模块级别名 `resolveCommandInvocation`，并校验解析口交出的形状。**这三条都已反向复算**
 （把任一处改回去，对应用例当场点名）。
 
+###### 第四处：解析口选错了一层，「回退」把裸名字交给了 `spawn`（同一次上平台）
+
+修掉上面三条之后 `工具链自证` 转绿（**那一 stage 的中文现在是可读的** —— 这正说明
+CP936 出口这一步成立），红的位置往下走到 `Install dependencies`：
+
+    [cp936-exit] 起不了这条命令：pnpm
+
+`.cnb.yml` 那一行是 `node scripts/ci-cp936-exit.mjs -- pnpm install --frozen-lockfile`
+—— 包的是**一个名字**，而外壳当时用的是 `commandInvocation()`。那一层的契约是
+「**候选路径** → spawn 形态」：它解析不出来时**原样退回候选**（`{command: candidate}`），
+对一条已经在盘上的路径是忠实的，对 `pnpm` 这种名字却等于把 `spawn("pnpm")` 直接扔给
+Windows（`ENOENT`；Windows 上 Node 不认 PATHEXT，也不解析 corepack 那只无扩展名 shim 的
+shebang）。**「回退」在这里不是保守，是把判据的对象换成了注定失败的那一个。**
+
+正确的那一层是**同文件的兄弟 `resolveCommandInvocation()`**：它收的是**名字**、交的是
+`{command, args, resolved}`，并用 `resolved: false` 把「PATH 上查无此命令」变成一个
+**可读出口**（说清找过了、它不在盘上，退出 127），而不是丢一句信息量很低的 ENOENT。
+收它与收 `commandInvocation()` 的差别有实测对照（造一份 corepack 三形态并存的假 PATH、
+按 `EACCES` 判无扩展名 shim）：前者回 `"pnpm"`（裸名字，必 ENOENT），后者回一个真路径。
+
+**这就是「本地绿对这条链不是证据」的第二个样本**：Linux 上两条解析口给出的结论一样，
+差别只在 Windows 的候选表上显形 —— 而判据现在钉在**形状**上（注入面必须交出
+`{command, args, resolved}`），另加一条专判 `resolved: false` 的可读出口（**一条进程都不许起**）。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的
