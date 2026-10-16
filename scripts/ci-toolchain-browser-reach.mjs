@@ -43,12 +43,12 @@ import { fileURLToPath } from "node:url";
  *   · Playwright 自己的三个内置 CDN 根（`PLAYWRIGHT_CDN_MIRRORS`，它自己按序试）；
  *   · 常见的 npm 二进制镜像里放 Playwright 的那两段路径。
  *
- * ## ⚠️ 它们是**根**（base），不是可以直接 HEAD 的地址
+ * ## ⚠️ 它们是**根**（base），不是可以直接探测的地址
  *
  * 这一条是本表最容易读错的地方，也是 `环境前提` 那一步误报的唯一根因（ISSUE #1966）。
  * 这几行从来就是「下载根」——`runPlaywrightInstall()` 把它们当 `PLAYWRIGHT_DOWNLOAD_HOST`
  * 传给 Playwright，而 Playwright 会在后面**再接上 `builds/cft/<版本>/<平台>/<包>` 那段路径**。
- * 裸着去 HEAD 它们问「通不通」是另一次探测，答的也不是同一个问题：
+ * 裸着拿它们去问「通不通」是另一次探测，答的也不是同一个问题：
  *
  * 实测（本机，同一时刻）：
  *
@@ -252,14 +252,14 @@ export function playwrightProbeUrl(root, overrides = {}) {
  * @param {{candidates?: string[], probe?: (url: string) => string,
  *          probeUrlOf?: (root: string) => string,
  *          updateHost?: string | undefined}} [options]
- *   `probe` 是注入面（默认 {@link httpHeadStatus}），判据里换掉它就不出网。
+ *   `probe` 是注入面（默认 {@link httpDownloadProbe}），判据里换掉它就不出网。
  *   `probeUrlOf` 是「根 → 真资源 URL」那一步的注入面（见
  *   {@link playwrightReachabilityVerdicts}：量的是真资源不是裸根）。
  * @returns {string[]}
  */
 export function playwrightReachability({
   candidates = PLAYWRIGHT_HOST_CANDIDATES,
-  probe = httpHeadStatus,
+  probe = httpDownloadProbe,
   probeUrlOf = playwrightProbeUrl,
   updateHost = undefined,
 } = {}) {
@@ -322,14 +322,14 @@ export function playwrightReachability({
  *
  * @param {{candidates?: string[], probe?: (url: string) => string,
  *          probeUrlOf?: (root: string) => string}} [options]
- *   `probe` 是注入面（默认 {@link httpHeadStatus}），判据里换掉它就不出网。
+ *   `probe` 是注入面（默认 {@link httpDownloadProbe}），判据里换掉它就不出网。
  *   `probeUrlOf` 是「根 → 真资源 URL」那一步的注入面（用例据此不必依赖真
  *   `browsers.json` 的读数）。
  * @returns {Array<{url: string, root: string, verdict: string, ok: boolean}>}
  */
 export function playwrightReachabilityVerdicts({
   candidates = PLAYWRIGHT_HOST_CANDIDATES,
-  probe = httpHeadStatus,
+  probe = httpDownloadProbe,
   probeUrlOf = playwrightProbeUrl,
 } = {}) {
   return candidates.map((root) => {
@@ -358,36 +358,164 @@ export function isReachableVerdict(verdict) {
 }
 
 /**
- * 对一个 URL 发一次 HEAD，回一句可读的结论（不回抛 —— 失败是一种读数）。
+ * 对**真资源**发一次带 `Range` 的 GET，回一句可读的结论（不回抛 —— 失败是一种读数）。
+ *
+ * ## 为什么不是 HEAD（这一步错过一次，代价是整条流水线）
+ *
+ * 这一层此前是 `httpHeadStatus()` —— 发一个 HEAD，看状态码。而 HEAD 答的是
+ * 「这个 URL **允不允许**被取」，不是「**取得下来吗**」。两者的分岔在一次现场里
+ * 正好落到反面（`cnb-ald-1k51g8dt9`）：
+ *
+ *     （HEAD 读数）https://cdn.npmmirror.com/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
+ *     （真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
+ *
+ * 于是 `环境前提` 报绿（「下载根有 5/5 条到得了」），把 30 分钟后的
+ * `浏览器安装` 失败**原样放行** —— 而「别等几十分钟才发现」恰恰是那一步存在的全部理由。
+ * 一台能做 TLS 握手、能回小响应头、却在**大 body 上停住**的链路（代理 / 深度包检测 /
+ * MTU 黑洞）在 HEAD 面前与好链路逐字同形，所以判据必须**真的把字节取回来**。
+ *
+ * ## 判据的形状
+ *
+ *   · `GET` + `Range: bytes=0-<chunkBytes-1>` —— 只取开头一段，够证明「字节流得过」；
+ *   · `Accept-Encoding: identity` —— 别让 gzip 把「多少字节算到」搅浑；
+ *   · **跟随最多 3 次 3xx**（与 Playwright 自己的 `httpRequest` 同口径）：候选根里
+ *     `registry.npmmirror.com/-/binary/playwright` 就回 302，裸看不跟随会把它读成
+ *     「HTTP 302，没量到东西」；
+ *   · **收到第一批字节就收手**（`res.destroy()`）：这一步是**判通不通**，不是下载
+ *     —— 早停让它几秒内出结论，也让它与「真下载」量的是同一件事（字节到底流不流）；
+ *   · **按 URL 的协议挑模块**：候选根全是 https，但这一层不该只认一种（用例正是拿
+ *     本地 http 服务判它的四种现场）。
+ *
+ * ## 「超时」这一档要分得开两种
+ *
+ *   · `超时（连上了但 0 字节，Nms 内没有响应）` —— 现场那一档：TCP / TLS 都成了，
+ *     响应头也可能来了，**body 一个字节都没有**。处置在宿主机 / 网络侧；
+ *   · `超时（Nms 内没有响应）` —— 连都没连上 / 响应头都没来。
+ *
+ * 两种在 `ok` 那一层同属「这一次到不了」（{@link isReachableVerdict}），但打印里
+ * 必须分开 —— 处置不同，糊成一句「不通」等于把下一动作留给人猜。
  *
  * 走 `spawnSync` 起一个短命 node 子进程，而不是在本进程里用回调：**这一步是在失败
- * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:https`
+ * 分支里同步跑的**（`playwrightOnly` 的退出码要立刻返回）。子进程里只碰 `node:http(s)`
  * —— 本文件「只 import `node:*`」的同一条约束（见文件头）。
  *
- * 「超时」与「`ENOTFOUND`」刻意分开：前者是「连上了但不说话」（链路慢 / 被拦），
- * 后者是「域名都解析不了」（DNS 被切）。处置不同，日志里不能糊成一句「不通」。
+ * 子进程的输入走 `process.argv`（URL、超时、分片大小、重定向上限四件），不拼进
+ * `-e` 的源码里：拼串会把引号与转义交给运气，而这里比原先多了一个 `Range` 头与
+ * 一个重定向计数，风险随参数一起长。
  *
  * @param {string} url
- * @param {{timeoutMs?: number}} [options]
+ * @param {{timeoutMs?: number, chunkBytes?: number, maxRedirects?: number}} [options]
  * @returns {string}
  */
-export function httpHeadStatus(url, { timeoutMs = 8000 } = {}) {
-  const script = `
-    const { request } = require("node:https");
-    const req = request(${JSON.stringify(url)}, { method: "HEAD", timeout: ${timeoutMs} }, (res) => {
-      res.resume();
-      process.stdout.write("HTTP " + (res.statusCode ?? "?"));
-      process.exit(0);
-    });
-    req.on("timeout", () => { req.destroy(); process.stdout.write("超时（${timeoutMs}ms 内没有响应）"); process.exit(0); });
-    req.on("error", (e) => { process.stdout.write((e.code ?? "ERROR") + "：" + e.message); process.exit(0); });
-    req.end();
-  `;
-  const r = spawnSync(process.execPath, ["-e", script], {
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: timeoutMs + 4000,
-  });
+export function httpDownloadProbe(
+  url,
+  { timeoutMs = 8000, chunkBytes = 65536, maxRedirects = 3 } = {},
+) {
+  const r = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      DOWNLOAD_PROBE_SCRIPT,
+      url,
+      String(timeoutMs),
+      String(chunkBytes),
+      String(maxRedirects),
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 4000 },
+  );
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return out || "（子进程没有输出）";
 }
+
+/**
+ * {@link httpDownloadProbe} 在子进程里跑的载荷 —— 独立成常量（不是拼进函数体的
+ * 字符串）只有一个理由：它太长，留在函数里会把「做什么」压过「怎么做」，
+ * 而它读起来本来就是一段自足的小程序。
+ *
+ * 四件输入按 argv 顺序读：`[1]` URL、`[2]` 超时、`[3]` 分片大小、`[4]` 重定向上限。
+ */
+const DOWNLOAD_PROBE_SCRIPT = `
+  const { request } = require("node:https");
+  const { request: httpRequest } = require("node:http");
+  const url = process.argv[1];
+  const timeoutMs = Number(process.argv[2]);
+  const chunkBytes = Number(process.argv[3]);
+  const maxRedirects = Number(process.argv[4]);
+  // 「连上了吗」与「字节到了吗」是两件事，超时那一档要靠它们分开。
+  let connected = false;
+  let gotBytes = false;
+  let settled = false;
+  const done = (text) => {
+    if (settled) return;
+    settled = true;
+    process.stdout.write(text);
+    process.exit(0);
+  };
+  const attempt = (target, redirectsLeft) => {
+    // 按 URL 的协议挑模块（候选根全是 https，但这一层不该只认一种 ——
+    // 用例正是拿本地 http 服务判它的四种现场）。
+    const send = target.startsWith("http:") ? httpRequest : request;
+    const req = send(
+      target,
+      {
+        method: "GET",
+        headers: {
+          Range: "bytes=0-" + (chunkBytes - 1),
+          "Accept-Encoding": "identity",
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        connected = true;
+        const code = res.statusCode ?? 0;
+        if (code >= 300 && code < 400 && res.headers.location && redirectsLeft > 0) {
+          res.resume();
+          attempt(new URL(res.headers.location, target).toString(), redirectsLeft - 1);
+          return;
+        }
+        if (code >= 400) {
+          res.resume();
+          done("HTTP " + code);
+          return;
+        }
+        res.on("data", (chunk) => {
+          gotBytes = true;
+          const seen = chunk.length;
+          // 收到第一批字节就够了 —— 这一步判的是「字节流得过」，不是下载。
+          res.destroy();
+          req.destroy();
+          done("HTTP " + code + "（实收 " + seen + " 字节）");
+        });
+        res.on("end", () => {
+          done("HTTP " + code + "（**没量到 body**）");
+        });
+        res.on("error", () => {
+          done("HTTP " + code + "（已收到字节后就断了）");
+        });
+      },
+    );
+    req.on("socket", (socket) => {
+      if (socket.connecting === false) connected = true;
+      else socket.on("connect", () => { connected = true; });
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      done(
+        "超时（" +
+          (gotBytes
+            ? "已收到字节但没量完，"
+            : connected
+              ? "连上了但 0 字节，"
+              : "") +
+          timeoutMs +
+          "ms 内没有响应）",
+      );
+    });
+    req.on("error", (e) => {
+      if (gotBytes) return done("HTTP（已收到字节后就断了）");
+      done((e.code ?? "ERROR") + "：" + e.message);
+    });
+    req.end();
+  };
+  attempt(url, maxRedirects);
+`;

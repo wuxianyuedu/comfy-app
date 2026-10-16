@@ -19,7 +19,7 @@
  *   ③ **`.cnb.yml` 真的在跑它**、且那段就地 PowerShell 已经撤掉（脚本存在而配置
  *      没接上 = 那一步又回到手写形态，本文件判的链就断了）。
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -56,8 +56,11 @@ import {
 
 /** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」/ 「到得了哪」）。 */
 const {
+  httpDownloadProbe,
+  isReachableVerdict,
   playwrightDownloadRoots,
   playwrightHostsToTry,
+  playwrightInstallHintFacts,
   playwrightOnly,
   playwrightReachability,
 } = await import("../scripts/ci-toolchain-browser.mjs");
@@ -1520,6 +1523,83 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
     expect(text).not.toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000");
   });
 
+  /**
+   * **读数不许推荐已经做过的动作**（ISSUE #1966 的续集，现场 `cnb-ald-1k51g8dt9`）。
+   *
+   * 那一次：`.cnb.yml` **已经**配了 `PLAYWRIGHT_DOWNLOAD_HOST`、**已经**把套接字超时
+   * 放宽到 120000，而失败的那一趟用的**就是**那个根、超时**就是** 120000ms。旧话术
+   * 却照旧说「30s 是默认套接字超时」并建议「放宽到 120000」—— 两句话各自都指回一个
+   * **做过的**动作。照它做一遍，形状逐字不变地再红一次（本仓对「读数必须指向下一动作」
+   * 已有明账：§13.5.3.5.1）。
+   */
+  it("配着的第三方根失败了 ⇒ 那两条常用出口点名为「已经做过」，并给出剩下的出路", () => {
+    const out = [
+      "下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：https://cdn.npmmirror.com/binaries/playwright",
+      "Downloading Chrome Headless Shell 153.0.8010.12 from https://cdn.npmmirror.com/binaries/playwright/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+      "Downloading Chrome Headless Shell 153.0.8010.12 from https://cdn.npmmirror.com/binaries/playwright/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+      "Failed to install browsers",
+      "Error: Download failure, code=1",
+      "Error: Request to https://cdn.npmmirror.com/binaries/playwright/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip timed out after 120000ms",
+    ].join("\n");
+    const facts = playwrightInstallHintFacts({
+      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright",
+      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000",
+    });
+    const text = playwrightInstallHints(out, facts).join("\n");
+    /* ① 生效的超时值必须与现场对得上（旧话术在这里说的是「30s」）。 */
+    expect(text, "读数里的超时值与现场对不上 —— 人照它改会改错方向").toContain(
+      "120000ms",
+    );
+    expect(text).not.toContain("30s 是 Playwright 的默认");
+    /* ② 那两条出口要**点名为已经做过**，而不是再建议一遍。 */
+    expect(text).toContain("都已经做过了");
+    expect(
+      text,
+      "又把「放宽到 120000」当建议给出来了 —— 那正是现场已经配着的值",
+    ).not.toContain("放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000");
+    /* ③ 剩下的出路必须给出来（在宿主机 / 网络侧，不是仓库里）。 */
+    expect(text).toContain("预先把 chromium-headless-shell 装进落点");
+  });
+
+  it("**实测那个数**才算数：超时还是缺省时，「放宽」那一条照旧给（反向复算）", () => {
+    /* 现场是 30s（缺省）那一档 ⇒ 「放宽」是真的还没走过。
+     * ⚠️ 判据按**实测的那个数**分岔，不按「env 里有没有提过这个键」：
+     * 输出里那句 `timed out after <N>ms` 比 env 更贴现场（env 可能没传进子进程）。 */
+    const out = [
+      "Downloading Chrome Headless Shell 153.0.8010.12 from https://cdn.npmmirror.com/binaries/playwright/builds/cft/153.0.8010.12/win64/x.zip",
+      "Failed to install browsers",
+      "Error: Request to https://cdn.npmmirror.com/binaries/playwright/builds/cft/153.0.8010.12/win64/x.zip timed out after 30000ms",
+    ].join("\n");
+    const notRaised = playwrightInstallHints(
+      out,
+      playwrightInstallHintFacts({
+        PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright",
+      }),
+    ).join("\n");
+    expect(
+      notRaised,
+      "缺省超时那一档把「放宽」也吞掉了 —— 那是还没走过的出口",
+    ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
+  });
+
+  it("`playwrightInstallHintFacts()` 读的是**生效值**：0 / 空 / 非数字不算放宽", () => {
+    expect(
+      playwrightInstallHintFacts({
+        PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000",
+      }).timeoutMs,
+    ).toBe(120000);
+    /* 与 Playwright 自己的算法同口径（`+(v || "0") || NET_DEFAULT_TIMEOUT`）：
+     * 这类值会被它当成「没设」，读数里点它们只会把人指错。 */
+    for (const raw of ["", "0", "abc"]) {
+      expect(
+        playwrightInstallHintFacts({
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: raw,
+        }).timeoutMs,
+        `把 ${JSON.stringify(raw)} 当成了生效的超时值`,
+      ).toBe(null);
+    }
+  });
+
   it("`.cnb.yml` 给了一个下载根 —— 同一族不通的节点上这是唯一的出路", () => {
     const yml = read(".cnb.yml");
     expect(
@@ -1814,5 +1894,237 @@ describe("工具链自证：下载失败时当场量「到得了哪」（ISSUE #
       printed.join("\n"),
       "装失败时没有打「到得了哪」那份现场 —— 下一个动作就只能靠猜",
     ).toContain("这台机器出得去哪些下载域");
+  });
+});
+
+/**
+ * 「这个下载根**到不到得了**」那一层：判据必须**真把字节取回来**（ISSUE #1966 的续集）。
+ *
+ * ## 立案现场（`cnb-ald-1k51g8dt9`）
+ *
+ * 这一步此前是 `httpHeadStatus()` —— 一个 HEAD。而 HEAD 答的是「这个 URL
+ * **允不允许**被取」，不是「**取得下来吗**」。两者的分岔在那一次落到反面：
+ *
+ *     （HEAD 读数）…/binaries/playwright/builds/cft/…/chrome-headless-shell-win64.zip → HTTP 200
+ *     （真实下载）Downloading … from 同一个 URL …… 然后 timed out after 120000ms（**0 字节**）
+ *
+ * 于是 `环境前提` 报绿、把 30 分钟后的 `浏览器安装` 失败**原样放行** —— 而那一步
+ * 存在的全部理由就是「别等几十分钟才发现」。
+ *
+ * ## 为什么在**真 HTTP 服务**上判（不用注入）
+ *
+ * 这一层唯一的产出就是「对真协议栈发什么、怎么读回结论」，注入掉 `probe` 就把要判的
+ * 东西整个换掉了（本仓对「探针必须真起一次」有先例：`--playwright-only` 的退出码
+ * 那一组）。四种现场都造出来：
+ *
+ *   · 206 + 一段 body       ⇒ 判通，且**只取一小段**就收手；
+ *   · 302 → 真资源          ⇒ 跟随（Playwright 自己也跟随，裸看会把 302 读成「没量到」）；
+ *   · 响应头给了、body 不给 ⇒ 现场那一档：「连上了但 0 字节」，必须与「连不上」分开；
+ *   · 404                   ⇒ 不通，且**不许**因为「拿到了响应头」就当通。
+ *
+ * ⚠️ **服务必须起在子进程里**，不能起在跑用例的这个进程里：探测本身是
+ * `spawnSync(node, ["-e", …])` 起的**另一个进程**，而在本仓的沙箱 / CI 容器里
+ * 子进程够不到父进程监听的 localhost 端口（实测：同一进程里 `fetch` 通、`spawnSync`
+ * 起来的那个进程 `ECONNRESET`）。两个**兄弟**子进程之间是通的 —— 所以服务由
+ * `spawn` 起、探测由 `spawnSync` 起，判的仍是真协议栈。
+ */
+/**
+ * **等一条来自子进程 stdout 的读数，并给它一个失败上限** —— 这一组夹具共用的一处。
+ *
+ * ## 为什么它是一条 `sleep-ok` 声明而不是「等条件收敛」
+ *
+ * `expect.poll` 那套等的是「**同一进程里**某个值变成真」；这里等的东西根本不在本进程
+ * 里（父亲够不到子进程的 stdout，只能收它推进来的那一行）。所以真时间在这里不是
+ * 「赌多久能成」，而是**失败上限**：`match` 一旦命中就立刻 `clearTimeout` 返回，
+ * 上限只负责让「子进程压根没起来」这件事有一个可读的失败、不把用例挂死。
+ *
+ * @param {import("node:child_process").ChildProcess} child
+ * @param {RegExp} match 命中哪一行（`1` 号捕获组当结果）
+ * @param {{timeoutMs?: number, what: string}} options `what` 进失败话术
+ * @returns {Promise<string>}
+ */
+function firstStdoutMatch(
+  child: ChildProcess,
+  match: RegExp,
+  { timeoutMs = 5000, what }: { timeoutMs?: number; what: string },
+): Promise<string> {
+  // sleep-ok: 等的是**子进程 stdout 推上来的那一行**（父亲够不到，`expect.poll` 也够不着跨进程的流），
+  // 定时器只当「子进程压根没起来」的失败上限，命中即 clear。
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`)),
+      timeoutMs,
+    );
+    let buffered = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      buffered += String(chunk);
+      const m = match.exec(buffered);
+      if (!m) return;
+      clearTimeout(timer);
+      resolve(m[1] ?? "");
+    });
+    child.on("error", (error: Error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
+describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取字节（ISSUE #1966）", () => {
+  /** 现场类型 → 起在子进程里的那个握手服务。 */
+  const SERVER_CASES: Record<string, string> = {
+    /** 206 + 一段 body。 */
+    ok: `res.writeHead(206, { "content-length": "4096" }); res.end(Buffer.alloc(4096, 7));`,
+    /** 302 → 真资源（Playwright 自己也跟随）。 */
+    redirect: `if (req.url === "/root/builds/cft/1/win64/x.zip") { res.writeHead(302, { location: "/real/x.zip" }); res.end(); return; } res.writeHead(200); res.end(Buffer.alloc(1024, 1));`,
+    /** 响应头给了、body 一个字节都不给 —— 现场那一档。 */
+    stall: `res.writeHead(200, { "content-length": "1048576" }); res.flushHeaders();`,
+    /** 404。 */
+    missing: `res.writeHead(404); res.end("nope");`,
+  };
+
+  /**
+   * 起一个**子进程**服务，把它的端口交给 `body`，一定收掉。
+   *
+   * 端口由服务自己选（`listen(0)`）再打在 stdout 上，用例不猜端口 —— 猜端口会在
+   * 并行 / 端口被占时变成一条**看起来像判据红**的假红（本仓对这类形态有先例）。
+   */
+  async function withServer(
+    kind: keyof typeof SERVER_CASES,
+    body: (base: string) => void,
+  ) {
+    const script = `
+      const { createServer } = require("node:http");
+      const kind = ${JSON.stringify(SERVER_CASES[kind])};
+      const s = createServer((req, res) => { ${SERVER_CASES[kind]} });
+      s.listen(0, "0.0.0.0", () => { process.stdout.write(String(s.address().port) + "\\n"); });
+    `;
+    const child = spawn(process.execPath, ["-e", script], {
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    try {
+      const port = await firstStdoutMatch(child, /^\s*(\d+)\s*$/m, {
+        what: "本地服务的端口",
+      });
+      body(`http://127.0.0.1:${port}`);
+    } finally {
+      child.kill();
+    }
+    void kind;
+  }
+
+  it("206 + 一段 body ⇒ 判通，并把实收字节数报出来", async () => {
+    await withServer("ok", (base) => {
+      const verdict = httpDownloadProbe(`${base}/a.zip`);
+      expect(verdict, "真取回字节却没判通").toMatch(/^HTTP 206/);
+      expect(
+        verdict,
+        "读数里没有实收字节数 —— 人判不出「到底有没有量到东西」",
+      ).toContain("字节");
+      expect(isReachableVerdict(verdict)).toBe(true);
+    });
+  });
+
+  it("**响应头来了、body 一个字节都不给** ⇒ 不通，且与「连不上」分得开", async () => {
+    /* 现场那一档：TLS 握手能成、响应头也能回，**大 body 停住**。HEAD 在这一档上
+     * 与好链路逐字同形 —— 这正是它被换掉的原因。 */
+    await withServer("stall", (base) => {
+      const verdict = httpDownloadProbe(`${base}/stall.zip`, { timeoutMs: 400 });
+      expect(isReachableVerdict(verdict), "0 字节被判成了「通」").toBe(false);
+      expect(
+        verdict,
+        "「连上了但 0 字节」与「压根没连上」必须分得开 —— 处置不同",
+      ).toContain("连上了但 0 字节");
+    });
+  });
+
+  it("3xx ⇒ 跟随（Playwright 自己也跟随，裸看会把 302 读成「没量到」）", async () => {
+    await withServer("redirect", (base) => {
+      const verdict = httpDownloadProbe(`${base}/root/builds/cft/1/win64/x.zip`);
+      expect(
+        verdict,
+        "没跟随重定向 —— 候选根里 `registry.npmmirror.com/-/binary/playwright` 就回 302，" +
+          "裸看会把它读成一个到不了的根",
+      ).toMatch(/^HTTP 200/);
+      expect(isReachableVerdict(verdict)).toBe(true);
+    });
+  });
+
+  it("4xx ⇒ 不通（拿到了响应头不等于量到了东西）", async () => {
+    await withServer("missing", (base) => {
+      const verdict = httpDownloadProbe(`${base}/missing.zip`);
+      expect(verdict).toContain("404");
+      expect(isReachableVerdict(verdict)).toBe(false);
+    });
+  });
+
+  it("**收到第一批字节就收手** —— 它是判通不通，不是下载", async () => {
+    /* 一个 8 MiB 的资源：探测若把 body 读完，这一步就从「几秒的前置判定」退化成
+     * 一次真下载（而它跑在流水线最前）。服务端把「到底写了多少」报回来。 */
+    const script = `
+      const { createServer } = require("node:http");
+      let written = 0;
+      const chunk = Buffer.alloc(64 * 1024, 3);
+      const s = createServer((req, res) => {
+        res.writeHead(200);
+        const timer = setInterval(() => {
+          if (res.writableEnded || res.destroyed) { clearInterval(timer); return; }
+          written += chunk.length;
+          res.write(chunk);
+        }, 0);
+        res.on("close", () => clearInterval(timer));
+        req.on("close", () => {
+          clearInterval(timer);
+          process.stdout.write("WRITTEN " + written + String.fromCharCode(10));
+          process.exit(0);
+        });
+      });
+      s.listen(0, "0.0.0.0", () => { process.stdout.write("PORT " + s.address().port + String.fromCharCode(10)); });
+    `;
+    const child = spawn(process.execPath, ["-e", script], {
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    try {
+      const port = await firstStdoutMatch(child, /^PORT (\d+)/m, {
+        what: "本地服务的端口",
+      });
+      const verdict = httpDownloadProbe(`http://127.0.0.1:${port}/big.zip`, {
+        timeoutMs: 5000,
+      });
+      expect(isReachableVerdict(verdict), "8 MiB 的流没判通").toBe(true);
+      /* 服务端在连接被切断时把它写了多少报回来（探测必须**先**把它切断）。 */
+      const written = Number(
+        await firstStdoutMatch(child, /WRITTEN (\d+)/m, {
+          what: "服务端写出的字节数",
+        }),
+      );
+      expect(
+        written,
+        "服务端没报回写入量 —— 这条用例量不到东西（夹具问题，不是判据问题）",
+      ).toBeGreaterThan(0);
+      expect(
+        written,
+        "探测把整个 body 读完了 —— 它不是下载，收到第一批字节就该收手",
+      ).toBeLessThan(8 * 1024 * 1024);
+    } finally {
+      child.kill();
+    }
+  });
+
+  it("不发 HEAD：载荷里没有 `HEAD` 这个动词，且带上了 `Range`", () => {
+    /* 结构性一条：上面几条判的是行为，这条判的是「它没被改回去」——
+     * HEAD 与 GET 在本地服务上可能都回 206，但真链路上完全不同。 */
+    const src = read("scripts/ci-toolchain-browser-reach.mjs");
+    expect(
+      src,
+      "浏览器探测又回到 HEAD 了 —— HEAD 答不了「取得下来吗」",
+    ).not.toContain('method: "HEAD"');
+    expect(src, "探测里没有 `Range` —— 那就不是「取一小段」的判法").toContain(
+      "Range",
+    );
+    expect(
+      src,
+      "函数头里没了「为什么不发 HEAD」那条理由 —— 下一个人会把它改回去",
+    ).toContain("为什么不是 HEAD");
   });
 });
