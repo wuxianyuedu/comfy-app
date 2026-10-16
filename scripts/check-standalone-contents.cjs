@@ -207,10 +207,15 @@ const STATIC_ALLOWED_TOPLEVEL = [
  * `scripts/launcher-core/shell.mjs` **静态** import
  * `../../src/lib/process/executable-resolve.ts`（ISSUE #1327，可执行形态判据的唯一实现）。
  * 与剔除侧同源，由用例核对（`tests/dist-artifact-hygiene.test.ts`）。
+ *
+ * ⚠️ 它是那条链的**闭包**，不是「被点名的那一份」：第二项自己还 import 第三项
+ * （`platform.ts`，判据的叶子）。少一份不是「那一格跳过」，是编排器加载即断
+ * （ISSUE #1961 实测）。逐文件放行的语义就是「一个都不能少」。
  */
 const ALLOWED_SRC_FILES = [
   "lib/process/kill-process-tree.ts",
   "lib/process/executable-resolve.ts",
+  "lib/process/platform.ts",
 ];
 
 /** 该层允许的顶层条目。 */

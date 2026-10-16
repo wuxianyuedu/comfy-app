@@ -1,10 +1,9 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-15T04:55:36.934Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-15T16:37:57.449Z",
+    "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run build",
-    "trackedBy": "artifact",
-    "skippedReason": "已实跑 pnpm build 全链：产物剔除与数产物两段通过（本次登记的 launcher-core/runtime-heal.mjs 与 sync-attribution.mjs 已在两份白名单同源）；被拦的是收尾的 client chunk 预算 —— 基线 generatedAt 2026-10-12 之后已有 72 次提交的累积涨幅（+45.6 KB gzip / +6 chunk），与本次改动无关，本次不新增路由或入口 chunk，预算基线留待单独按 §13.5.4 例外流程（PR 贴 before/after + --allow-increase --update）处理"
+    "trackedBy": "artifact"
   }
 }

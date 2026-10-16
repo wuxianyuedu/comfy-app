@@ -5,11 +5,12 @@
  * 仍在、崩溃标记、保留策略、zip 包结构、根目录只许那几样。改布局前先读
  * 规范 §4 —— 它们红了就是布局变了。
  */
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { hasPython, runPython } from "./helpers/python-exe";
 
 import {
   LOG_LAYOUT,
@@ -106,26 +107,34 @@ function alignMtimeToName(run: { name: string; dir: string }): void {
   fs.utimesSync(run.dir, ts, ts);
 }
 
-/** 用 python3 的 zipfile 验包（它是最严格的那个解压端：Bad CRC-32 当场报）。 */
+/** 用 Python 的 zipfile 验包（它是最严格的那个解压端：Bad CRC-32 当场报）。
+ *
+ * 解释器走共享的 `runPython()`：Windows 上官方安装器落的是 `python.exe`，
+ * 硬编码 `"python3"` 在自托管 Windows 构建节点上直接 ENOENT（见该 helper 的文件头）。 */
 function unzip(paths: string[]): string[] {
-  return execFileSync(
-    "python3",
-    [
-      "-c",
-      `
+  return runPython(
+    `
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
 bad = z.testzip()
 print("BAD" if bad else "OK")
 print(",".join(sorted(z.namelist())))
 `,
-      ...paths,
-    ],
-    { encoding: "utf8" },
-  )
-    .trim()
-    .split(/\r?\n/);
+    paths,
+  ).split(/\r?\n/);
 }
+
+/* Python 缺失时下面两条验包的用例跳过并登记（`env` 档，与
+ * `tests/check-file-structure.test.ts` 的 `!python` 那一族同处置）—— 本仓对
+ * 「机器缺 Python」的既有口径是「跳过 + 在登记表里看得见」，不是让流水线红。
+ * 守卫在**文件顶部求值一次**：`resolvePython()` 自带进程级缓存。 */
+/** Python 可用性（在文件顶部求值一次；`resolvePython()` 自带进程级缓存）。
+ *
+ * 写成**局部常量**而不是 `it.skipIf(!hasPython())`：登记表的扫描器按 `[^)]*`
+ * 取守卫文本，守卫里带一对括号会让它的正则整个匹配不上 —— 于是新增的 skip 站点
+ * 在登记表里**隐形**（那正是登记表要防的失效形态）。常量名不带括号，扫得到。 */
+const PYTHON_OK = hasPython();
+const itWithPython = it.skipIf(!PYTHON_OK);
 
 describe("目录名与路径", () => {
   it("归档目录名不带冒号（Windows 非法字符），且排序即时间序", () => {
@@ -302,7 +311,7 @@ describe("保留策略", () => {
 });
 
 describe("zip 写入器与诊断包", () => {
-  it("打出来的包能被系统解压工具读（compress_size 与 uncompressed_size 分开写）", async () => {
+  itWithPython("打出来的包能被系统解压工具读（compress_size 与 uncompressed_size 分开写）", async () => {
     const dir = path.join(root, "src");
     fs.mkdirSync(dir, { recursive: true });
     // 高可压缩内容：store 模式下两个 size 字段恰好相等，**只有这条路径会露馅**
@@ -315,23 +324,18 @@ describe("zip 写入器与诊断包", () => {
     expect(listing[0]).toBe("OK");
     expect(listing[1]).toBe("a.log,b.bin");
     // 内容长度对：压坏 / 截断都会在这里露馅
-    const sizes = execFileSync(
-      "python3",
-      [
-        "-c",
-        `
+    const sizes = runPython(
+      `
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
 print(len(z.read("a.log")), len(z.read("b.bin")))
 `,
-        out,
-      ],
-      { encoding: "utf8" },
-    ).trim();
+      [out],
+    );
     expect(sizes).toBe("5000 5");
   });
 
-  it("诊断包 = current/ + 最近 3 次 runs/，落在 exports/ 而不是 current/ 下", async () => {
+  itWithPython("诊断包 = current/ + 最近 3 次 runs/，落在 exports/ 而不是 current/ 下", async () => {
     startRun(root, { runId: "a1b2c3" });
     writeCurrentLog("launcher.log", "本次\n");
     for (let i = 0; i < 5; i++) {

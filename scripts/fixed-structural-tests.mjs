@@ -26,6 +26,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
+  // 「`.mjs` 入口经 Node ESM 直接加载 `src/**`」这条路的说明符形态（ISSUE #1959 第七跑）：
+  // `e2e/support/preflight-python.mjs` 静态 import 两个 `.ts`，而它们内部的相对 import
+  // 缺了 `.ts` 后缀 —— `tsc` / eslint / **vitest** 三处走打包器解析、全都放过，于是
+  // 「用例全绿、`node scripts/e2e-run.mjs` 一跑就退 1」，红在 `E2E 关键流程` 那个
+  // 只有平台侧才会到的 stage 上（实测 897ms 崩在加载期）。这条判据按 **Node 的口径**
+  // 走一遍解析链，与既有三条不是同一条解析链 —— 列进固定清单是因为它守的是
+  // 「别的判据看不见的那条路」，只在受影响时才跑等于让它随下一次新增 `.mjs` 消费方过去。
+  "tests/mjs-node-esm-resolution.test.ts",
   // 条件性 skip 的登记表：全绿里的 `N skipped` 不说明「绿的是哪一种」，尤其产物级探针
   // （没构建过的检出上整块不判）。这条守住「每个暗掉的站点都有人登记它为什么暗」。
   "tests/conditional-skip-registry.test.ts",
@@ -539,4 +547,42 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `docs/audits/*.md` 的文本 + 一次 `git log`，import 图一概追不到（改台账不会把
   // 它拉进受影响清单），跟改动走等于专挑它不在的时机跑，所以与本次暂存改动无关也照跑。
   "tests/audits-doc-references.test.ts",
+  // 「跨宿主 import 的扩展名形态」（ISSUE #1961）。它判的是「`.mjs` 静态 import 一份
+  // `.ts` 时说明符必须是带 `.ts` 的形态」，而**回潮形态**是「有人给那条链上的模块
+  // 加一个新依赖」—— 那种改动住在 `src/lib/process/` 下、判据自己住在 `tests/`，
+  // 改动的 import 图追不到它；而且它红的那一格本地**跑不出来**（`tsc` 与 Vite 都会
+  // 替调用方补扩展名，只有平台侧「生产构建 + 真跑 e2e」那条路上 Node 的 ESM 解析器
+  // 会把这条链加载一遍 —— 实测 30 个 stage 全绿、唯独 `E2E 关键流程` 1 秒退）。
+  // 判据本身也带门禁自测（清单里的模块真在盘上、真被某个 `.mjs` 引用、`.mjs` 宿主
+  // 真加载得起来），所以它与本次暂存改动无关也照跑。
+  "tests/esm-cross-host-imports.test.ts",
+  // 上一条的互补件：它按**源码形状**判（叶子性 + 说明符形态）并在 vitest 里
+  // `import()` 一次；这一条只判「跨宿主地基层模块**自己**在真 Node 进程里加载得起来」。
+  // 分工是实测定下来的，不是分工的美学：给 `python-candidates.ts` 加一行
+  // `import "server-only"`（§18.4 第二类，入口就是一句 throw）时，真 Node 抛
+  // `This module cannot be imported from a Client Component module`，而
+  // `esm-cross-host-imports` 与 `lib-node-only-declarations` **双双照绿** ——
+  // 本仓好几位作者在头注释里专门解释过「这里加 server-only 会让启动编排直接崩」，
+  // 一句靠人记得的注释正是要变成机器判据的那类东西。它走 `spawnSync(process.execPath…)`
+  // 起真 Node，因为本判据的立案前提就是「vitest 内的 `import()` 与真 Node 不是同一条路」。
+  // 回潮形态住在 `src/lib/process/**` 与宿主文件上，改动的 import 图追不到，故进固定清单。
+  "tests/host-ts-loads-in-node.test.ts",
+  // 「是不是被直接执行」的守卫形态（ISSUE #1961 的最后一格：CI 红在 E2E，真因在第一步）。
+  // `scripts/ci-toolchain-selfcheck.mjs` 与 `scripts/python-probe.mjs` 曾用
+  // `import.meta.url === \`file://${path.resolve(process.argv[1])}\`` 判「自己有没有被
+  // 直接执行」—— 拼出来的是 `file://F:\…\x.mjs`（两斜杠 + 反斜杠），而 `import.meta.url`
+  // 是 `file:///F:/…/x.mjs`（三斜杠 + 正斜杠），**在 Windows 上恒不相等**：`main()`
+  // 一次都不跑、进程**正常退 0 且零输出**。
+  //
+  // 实测代价（自托管节点 `cnb-g36-1k50hvu52`）：`工具链自证` / `Python 可用性` 两步
+  // 双双空转（`exit code: 0, duration: 544ms` / `597ms`，各自的第一行 `== OS ==` /
+  // `== python ==` 一个字都没打），于是「缺 Python 在**最便宜的位置**报出来」这条设计
+  // 静默失效，缺件一路滑到 18 分钟后的 `E2E 关键流程` 才以「执行器收口失败」暴露 ——
+  // **是「这一步没跑」被读成了「这一步过了」**。
+  //
+  // 本仓另三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
+  // `check-pending-merge-loss.mjs`）早为这同一形态写过注释，但**注释传的约定下一次
+  // 新增脚本时必然再犯一次**（这一次就是）。进固定清单而不只挂在受影响面：新脚本是
+  // 「新增文件」，静态 import 图追不到它，而那正是这条判据要守的场景。
+  "tests/script-main-guard.test.ts",
 ];

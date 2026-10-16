@@ -16,6 +16,7 @@
  */
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { createServer as createTcpServer } from "node:net";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -281,15 +282,6 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     return `http://127.0.0.1:${port}/system_stats`;
   }
 
-  it("空端口：连不上 ⇒ status 0（是 free，不是 unknown）", async () => {
-    const observed = await probeFakeComfySlot({
-      url: "http://127.0.0.1:1/system_stats",
-      timeoutMs: 500,
-    });
-    expect(observed.status).toBe(0);
-    expect(classifyFakeSlot(observed).verdict).toBe("free");
-  });
-
   it("替身形状 ⇒ fake；真件形状 ⇒ real（端到端一次）", async () => {
     const fakeUrl = await serve(FAKE_PAYLOAD);
     const fakeObserved = await probeFakeComfySlot({ url: fakeUrl });
@@ -303,6 +295,68 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     const realObserved = await probeFakeComfySlot({ url: realUrl });
     expect(classifyFakeSlot(realObserved).verdict).toBe("real");
   });
+
+  /**
+   * 「没人」与「没等到」必须分开（ISSUE #1961）。
+   *
+   * CI 实测：这一步在自托管节点上判出 `free`（`status 0`），而端口上明明坐着服务 ——
+   * 它是**超时**，不是「连接被拒」。两者此前都翻成 `status: 0` ⇒ `free` ⇒
+   * `assertFakeSlotFree()` 放行，于是「真件坐在替身端口上」这条判据在负载高的时候
+   * **静默关掉**。代价不对称，所以这一格按 `err.cause.code` 分岔。
+   */
+  it("连接被拒 ⇒ free（端口真的空着）", async () => {
+    /* 拿一个**刚刚关掉**的真端口：连接会被拒，而不是「非法端口」那类别的错
+     * （`http://127.0.0.1:1/` 是 `bad port`，两条路径的 `cause.code` 不一样）。 */
+    const port = await closedPort();
+    const observed = await probeFakeComfySlot({
+      url: `http://127.0.0.1:${port}/system_stats`,
+      timeoutMs: 800,
+    });
+    expect(observed.status).toBe(0);
+    expect(classifyFakeSlot(observed).verdict).toBe("free");
+  });
+
+  it("有人应答但慢过预算 ⇒ unknown（不是 free —— 那是「没等到」不是「没人」）", async () => {
+    /* 一台**真在监听**、但故意不答的服务：探针会耗尽预算。
+     * 判成 `free` 就等于把「端口上有人」这条结论在负载高时静默放行。 */
+    const slow = createServer(() => {
+      /* 什么都不回，把预算耗光 */
+    });
+    await new Promise<void>((resolve) => slow.listen(0, "127.0.0.1", resolve));
+    const addr = slow.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    try {
+      const observed = await probeFakeComfySlot({
+        url: `http://127.0.0.1:${port}/system_stats`,
+        timeoutMs: 300,
+      });
+      expect(classifyFakeSlot(observed).verdict).toBe("unknown");
+      expect(observed.error).toContain("没在预算内");
+    } finally {
+      slow.closeAllConnections();
+      await new Promise<void>((resolve) => slow.close(() => resolve()));
+    }
+  });
+
+  it("探针预算没被「抬到看不出问题」（预算不是这一格的修法）", () => {
+    /* 修的是**分岔**，不是把 1500ms 抬高 —— 抬它只会让「真挂死」晚一点被看见，
+     * 而 `free` 那半边的静默放行一字未变。 */
+    const src = readText("e2e/global-setup.ts");
+    expect(src).toContain("timeoutMs ?? 1500");
+    /* 分岔判据必须在：认不出 `cause.code` 时按「没等到」处理，不许按「空着」。 */
+    expect(src).toContain("connectionRefused");
+    expect(src).toContain("TimeoutError");
+  });
+
+  /** 一个**刚刚关闭**的真 TCP 端口：连接会被拒（`ECONNREFUSED`）。 */
+  async function closedPort(): Promise<number> {
+    const s = createTcpServer();
+    await new Promise<void>((resolve) => s.listen(0, "127.0.0.1", resolve));
+    const addr = s.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    await new Promise<void>((resolve) => s.close(() => resolve()));
+    return port;
+  }
 
   it("pre-flight：端口空着 ⇒ 不占用（起之前没人）", async () => {
     /* 只判「有没有人在」。`probePortOccupied` 走 TCP 而不是 HTTP：占了端口却不答

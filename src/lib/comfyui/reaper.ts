@@ -604,3 +604,31 @@ export function startReaper(): void {
    * 常驻的 HTTP server 仍持有事件循环，unref 不会让进程提前退出。 */
   reaperState.handle.unref?.();
 }
+
+/**
+ * 停掉常驻循环 —— **只给用例用**（生产路径没有任何调用点）。
+ *
+ * 为什么必须有它：`startReaper()` 的状态挂在 `globalThis` 上（HMR 单例，见
+ * `ReaperGlobal`），而那是**进程级**的 —— 一份用例文件里 `startReaper()` 之后，
+ * 那个 `setInterval` 会活到**整个 worker 进程结束**。它的每一轮都会真去查库，
+ * 于是：
+ *
+ *   · 用例用 `vi.spyOn(repository.taskRepository, …)` 断言「这一轮**不该**被调用」时，
+ *     命中的可能是**上一条用例留下的那个实例**（`vi.resetModules()` 换掉的是模块
+ *     实例，换不掉已经跑起来的定时器）—— 实测复现：同一文件里前一条先起了 reaper，
+ *     后一条的 `expect(spy).not.toHaveBeenCalled()` 当场红成「called 1 times」。
+ *   · 挂在负载高的跑法下更隐蔽：越过 30s 才会落地的那一轮，恰好只在慢机上出现
+ *     （CI 上表现为 `Test timed out in 30000ms`，而真因与超时无关）。
+ *
+ * 所以用例的卫生要求是「起了就必须收」——收的那一端此前不存在，这不是用例忘了写，
+ * 是**缺地基**（硬规则 24）。幂等：没起过就什么都不做。
+ */
+export function stopReaper(): void {
+  if (!reaperState.handle) return;
+  clearInterval(reaperState.handle);
+  reaperState.handle = null;
+  /* 在途守卫一并清掉：下一个实例不该继承上一轮的「正在回收」标记，
+   * 否则它会把那一轮永远不会落地的任务**永久跳过**。 */
+  reaperState.reaping.clear();
+  reaperState.noPromptSeen.clear();
+}

@@ -77,6 +77,12 @@ import {
   describeBrowserMissing,
 } from "../e2e/support/preflight-browser.mjs";
 import {
+  checkPythonReady,
+  describePythonMissing,
+  encodePythonPreflight,
+  PYTHON_PREFLIGHT_ENV_KEY,
+} from "../e2e/support/preflight-python.mjs";
+import {
   freshnessTrack,
   gitUser,
   isWholeTrackRun,
@@ -550,6 +556,23 @@ async function main(argv) {
     `[e2e-run] 起 Playwright 前：应用端口 ${preflight.appOccupied ? "有人" : "空"} / ` +
       `替身端口 ${preflight.fakeOccupied ? "有人" : "空"}\n`,
   );
+
+  /* **这一档要用的 Python 在吗**（ISSUE #1959 第四轮，e2e 侧）。
+   *
+   * 假 comfy-cli 是一个 Python 包，主链路那条 `@critical` 用例要由它起执行器 ——
+   * 缺解释器时此前只有 Playwright 的 worker stdout 里那一行 `⚠ 假 comfy-cli 未注入`，
+   * 而人看到的是两条「执行器收口失败」的功能红（一件事报成两条）。
+   *
+   * 判红**不放行**：跑下去那两条必然红，而报错指不到真因。出口写在话术里。
+   * 这一档不是为了「让流水线红得好看」，而是让「一台没装 Python 的机器上跑 e2e」
+   * 的结论在开跑前就成立（同批的浏览器预检同口径）。 */
+  const python = checkPythonReady({ env });
+  env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(python);
+  if (python.verdict === "missing") {
+    process.stderr.write(`${describePythonMissing(python)}\n`);
+    return 2;
+  }
+  process.stdout.write(`[e2e-run] Python 预检：${python.detail}\n`);
   process.stdout.write(
     `[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`,
   );

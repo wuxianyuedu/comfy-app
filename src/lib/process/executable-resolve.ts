@@ -38,6 +38,8 @@
 // import 上写着它，改 Node 版本时先看那里。
 
 import { spawnSync } from "node:child_process";
+
+import { isWindows } from "./platform.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -49,6 +51,48 @@ export interface UsabilityProbe {
   spawn(candidate: string, args: string[]): string | null;
 }
 
+/** 探针这一次「起一次确认」的超时预算（毫秒）。
+ *
+ *  它不是一个性能参数，而是**判据会不会误报**的边界（见 `usableCommand` 里
+ *  `ETIMEDOUT` 那一段）。取 30s 是「量级余量」：正常 `python --version` /
+ *  `pnpm -v` 是几十毫秒，满载机器上也就几百毫秒；而撞上它的形态（节点被压死）
+ *  本来也不该被读成「命令不存在」。 */
+const USABILITY_PROBE_TIMEOUT_MS = 30_000;
+
+/** 「这一次没量到」的错误码 —— 它们说的是**机器当时的状态**，不是「这个命令不在」。 */
+const TRANSIENT_SPAWN_CODES: ReadonlySet<string> = new Set([
+  /* 撞上探针自己的 `timeout`（`spawnSync` 的 `error.code`）。 */
+  "ETIMEDOUT",
+  /* 资源类：探针那一刻起不了新进程（句柄 / 线程 / 内存被占满）。
+   * Windows 上还会以 `UNKNOWN` 的形态出现 —— libuv 认不出的错误码一律落到它。 */
+  "EAGAIN",
+  "EMFILE",
+  "ENFILE",
+  "ENOMEM",
+  "EBUSY",
+  "UNKNOWN",
+]);
+
+/**
+ * 这一次「起一次确认」的失败码算不算**结论**。
+ *
+ * 判据分两类（ISSUE #1961，`usableCommand` 里那一格）：
+ *   · **结论**（`ENOENT` / `EACCES` / `EINVAL` / `ENOEXEC` / …）—— 「起了一次、明确
+ *     失败」，说明这个候选**真的不可用**，该跳过；
+ *   · **没量到**（`TRANSIENT_SPAWN_CODES`）—— 机器当时起不来新进程。那不是这个命令
+ *     的属性，跳过它等于把「拿不到测量」读成「测量结果是它坏了」（§13.6.2 那条口径）。
+ *
+ * 为什么不能只判 `ETIMEDOUT` 一个：实测那台自托管节点上 `E2E 关键流程` 是**0.6 秒**
+ * 就报 null 的 —— 10s 的超时走不到 0.6s，所以那一次不是超时，而是资源类失败
+ * （满载节点上 `spawnSync` 直接给 `EAGAIN` / `UNKNOWN`）。两类都要按「没量到」办。
+ *
+ * @param {string | null} code `spawnSync` 给的错误码（`null` = 起得来）
+ * @returns {boolean} true = 这一次失败**不构成**「候选不可用」的结论
+ */
+function isTransientSpawnCode(code: string | null): boolean {
+  return code === null || TRANSIENT_SPAWN_CODES.has(code);
+}
+
 /** 默认探针：问这台真机器。 */
 const realUsabilityProbe: UsabilityProbe = {
   access: (candidate) => fs.accessSync(candidate, fs.constants.X_OK),
@@ -56,9 +100,10 @@ const realUsabilityProbe: UsabilityProbe = {
     const probe = spawnSync(candidate, args, {
       stdio: "ignore",
       windowsHide: true,
-      timeout: 10_000,
+      timeout: USABILITY_PROBE_TIMEOUT_MS,
     });
-    /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
+    /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。
+     *  怎么读这个 code（尤其 `ETIMEDOUT`）是**判据**的事，在 `usableCommand` 里。 */
     return (
       (probe.error as NodeJS.ErrnoException | null | undefined)?.code ?? null
     );
@@ -86,6 +131,18 @@ export interface WhichCommandOptions {
    *   同一个 PATH 上换探针又指望换结论，会读到上一条的缓存 —— 换探针的用例先 `clearWhichCommandCache()`。
    */
   probe?: UsabilityProbe;
+  /**
+   * `whichCommand` 在「真起一次确认」时喂给候选的参数（默认 `["--version"]`）。
+   *
+   * 为什么要有它：**同一个命令的可用判据不是统一的**。`python` 那类解释器要的是
+   * 「能不能答 `--version`」，而 `py` 启动器裸着跑是「列出已装版本」并退非零 ——
+   * 候选名一样、判据不一样。此前 `whichCommand` 把这一格写死成 `--version`，
+   * 于是带宿主参数的候选（`py -3`）只能由调用方自己再包一层，或者干脆漏掉这一档
+   * （ISSUE #1959 第二轮：门禁探的面与流水线自证探的面因此漂成两份）。
+   * 记忆化键里**也不含它** —— 同一条 PATH 上「`py --version` 不成立、`py -3 --version`
+   * 成立」会被读成同一条缓存，换 probeArgs 的用例请先 `clearWhichCommandCache()`。
+   */
+  probeArgs?: string[];
 }
 
 /** 「这个候选能不能被 spawn」的结论。`prefixArgs` 是启动它所需的宿主参数
@@ -97,12 +154,25 @@ export interface CommandUsability {
   reason: string | null;
 }
 
-/** 是否是 Windows（与 `src/lib/process/kill-process-tree.ts` 同一判据）。 */
-export function isWindows(
-  platform: NodeJS.Platform = process.platform,
-): boolean {
-  return platform === "win32";
-}
+/* 是否是 Windows —— 定义搬到 `./platform.ts`，这里只 **re-export**（既有调用点
+ * 一个都不用动）。
+ *
+ * 为什么必须搬（ISSUE #1961，实测红在平台侧 E2E 上）：`python-candidates.ts` 与
+ * `python-resolve.ts` 只需要这一个判断，却**静态 import 本文件** —— 而本模块是
+ * `.ts`，一个 `.mjs` 静态 import 它时 import 说明符**必须带 `.ts` 扩展名**才能被
+ * Node 的 ESM 解析器找到。于是那条链（`e2e/support/preflight-python.mjs` →
+ * `python-candidates.ts` → `./executable-resolve`）上就出现了同一份文件被
+ * **两种形态**引用：本仓 TS 侧的惯例是省略扩展名，而 `.mjs` 侧只能用带扩展名的形态
+ * —— 两种形态在「代码里 grep 字符串」这一层能对账，在**运行时**不能：`.mjs` 那条
+ * 一旦真的走进去就是 `ERR_MODULE_NOT_FOUND`（实测报的那句是「找不到模块
+ * `…/src/lib/process/executable-resolve`，它由 `python-candidates.ts` import」，
+ * 1 秒就退 —— 平台侧 E2E 那一步的完整读数见规范 13 §13.5.3.10）。
+ *
+ * 所以判据躲进一个**叶子模块**：两边都 import 它（TS 侧照旧省略扩展名，
+ * `.mjs` 侧写 `./platform.ts`），而 `python-candidates` 那条链上再没有需要
+ * 跨「扩展名惯例」边界的边。这也让「哪个模块能被纯宿主直接加载」这件事有个
+ * 可判的形状（见 `tests/esm-cross-host-imports.test.ts`）。 */
+export { isWindows };
 
 /* 探测结果的进程内记忆化。
  *
@@ -121,6 +191,47 @@ const whichCache = new Map<string, string | null>();
  *  的场景（测试、装完依赖再探测）需要显式调用。 */
 export function clearWhichCommandCache(): void {
   whichCache.clear();
+}
+
+/**
+ * 读一个环境变量，**按平台的大小写语义**（windows 上不敏感）。
+ *
+ * ## 为什么非要有这一层（ISSUE #1961，平台侧 E2E 的最后一格）
+ *
+ * Windows 上 `process.env` 是一个**大小写不敏感**的代理，而 `{ ...process.env }`
+ * 出来的是**普通对象** —— 键名按系统存的写法来（Windows 常把 `PATH` 存成 `Path`）。
+ * 于是同一份环境「直接读」与「复制一份再读」会得到不同答案：
+ *
+ *   · `resolvePython()` 默认读 `process.env`（代理）⇒ `env.PATH` 拿得到；
+ *   · `checkPythonReady({ env: { ...process.env } })` 传下来的是复制品 ⇒
+ *     `env.PATH` 是 `undefined` ⇒ 这里扫一个**空 PATH** ⇒ 判「这台机没有 Python」。
+ *
+ * 现场：同一个 stage 里 `Python 探针读数` 报 `ok python → D:\Program Files\Python312\python.exe`，
+ * 而 `E2E 关键流程` 报 `PATH 上没有可用的 Python` —— 差的正是「读的是代理还是复制品」。
+ * 判据在 `tests/preflight-python-env-case.test.ts`。
+ *
+ * POSIX 上环境变量**大小写敏感**（`Path` 与 `PATH` 是两个变量），所以那一边只认
+ * 精确写法 —— 这一层不改变 POSIX 的任何行为。
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ * @param {string} name 变量名（大写形式）
+ * @returns {string | undefined}
+ */
+export function envVar(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  name: string,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  const exact = env[name];
+  if (exact !== undefined) return exact;
+  /* 大小写不敏感**只按目标平台**（与 `executableExts()` 同口径）：判据在 POSIX 上
+   * 判 win32 形态时也要复现这一格，所以不能读宿主的 `process.platform`。 */
+  if (!isWindows(platform)) return undefined;
+  const wanted = name.toUpperCase();
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === wanted) return env[key];
+  }
+  return undefined;
 }
 
 /**
@@ -149,21 +260,22 @@ export function whichCommand(
     env = process.env,
     platform = process.platform,
     probe = realUsabilityProbe,
+    probeArgs = ["--version"],
   }: WhichCommandOptions = {},
 ): string | null {
-  const key = `${name} ${env.PATH ?? ""} ${env.PATHEXT ?? ""} ${platform}`;
+  const pathValue = envVar(env, "PATH", platform) ?? "";
+  const pathextValue = envVar(env, "PATHEXT", platform);
+  const key = `${name} ${pathValue} ${pathextValue ?? ""} ${platform}`;
   const hit = whichCache.get(key);
   if (hit !== undefined) return hit;
-  const dirs = String(env.PATH ?? "")
-    .split(path.delimiter)
-    .filter(Boolean);
+  const dirs = pathValue.split(path.delimiter).filter(Boolean);
   const exts = executableExts(env, platform);
   let result: string | null = null;
   for (const dir of dirs) {
     for (const ext of exts) {
       const candidate = path.join(dir, name + ext);
       if (!isFile(candidate)) continue;
-      const usable = usableCommand(candidate, undefined, {
+      const usable = usableCommand(candidate, probeArgs, {
         env,
         platform,
         probe,
@@ -194,6 +306,27 @@ export function whichCommand(
  *     同一个目录里既有 `pnpm.cmd` 又有可用的 `pnpm` 时，选前者必然 EACCES；
  *   · PATHEXT 里其它扩展名（`.COM` / `.VBS` / 自定义）排最后，保持「用户配了就用」。
  *
+ * ## `.PS1` 是**无条件**候选，不看 `PATHEXT`（ISSUE #1961）
+ *
+ * 上面那三步里，`.PS1` 此前与 `.CMD` / `.BAT` / `.COM` 一样要 `PATHEXT` 声明才进得来
+ * —— 而 Windows 系统的默认 `PATHEXT` **从不含 `.PS1`**（`PowerShell.exe` 不是靠
+ * 文件关联启动的，`.ps1` 也不在「敲名字就能跑」的那一类里）。于是：
+ *
+ *   · corepack 摆在 `.tools\pnpm\<ver>\bin` 的那三个形态里，**只有 `.ps1` 能被
+ *     Node 起得来**（无扩展名 shim 是 shebang、libuv 不解析；`.CMD` 是批处理、
+ *     只有 cmd.exe 解释）；
+ *   · 候选表里却没有 `.ps1` ⇒ `whichCommand()` 一个都选不出 ⇒ 返回 `null`
+ *     ⇒ 上层报「PATH 上没有任何可用的 pnpm 形态」，而**能跑的那个就摆在旁边**。
+ *
+ * 实测（自托管 Windows 节点，`PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;…`）：
+ * `pnpmInvocation()` 返回 `null`，而同目录的 `pnpm.ps1` 一直在盘上 ——
+ * 「工具链自证」因此报 `pnpm 不可用`，整条流水线在第 1 秒就停。
+ *
+ * 判据因此改成：**`.PS1` 与无扩展名 shim 一样，是本仓自己要找的形态，不由 PATHEXT
+ * 决定**。理由与「为什么必须自己解析 PATH」同源（见 `whichCommand` 的注释）：
+ * `PATHEXT` 描述的是「cmd.exe 敲名字会试哪些后缀」，而这里问的是
+ * 「Node 能起得来哪些形态」—— 两个问题不同，答案也就不能共用一份。
+ *
  * POSIX 只有一种形态（无扩展名），此函数退化为 `[""]`。
  */
 export function executableExts(
@@ -201,7 +334,9 @@ export function executableExts(
   platform: NodeJS.Platform = process.platform,
 ): string[] {
   if (!isWindows(platform)) return [""];
-  const declared = String(env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+  const declared = String(
+    envVar(env, "PATHEXT", platform) ?? ".COM;.EXE;.BAT;.CMD",
+  )
     .split(";")
     .map((e) => e.trim())
     .filter(Boolean);
@@ -211,7 +346,9 @@ export function executableExts(
   const ordered: string[] = [];
   if (declaredHas(".EXE") || declared.length === 0) ordered.push("");
   for (const ext of [".EXE", ".PS1", ".CMD", ".BAT", ".COM"]) {
-    if (declaredHas(ext)) ordered.push(ext);
+    /* `.PS1` 不看 `PATHEXT`（理由见头注）：它是本仓唯一能被 Node 起的 corepack 形态，
+     * 而默认 `PATHEXT` 从不声明它 —— 由它决定就是「能跑的那个永远选不出来」。 */
+    if (ext === ".PS1" || declaredHas(ext)) ordered.push(ext);
   }
   for (const ext of declared) {
     const upper = ext.toUpperCase();
@@ -342,6 +479,42 @@ export function usableCommand(
       reason: "no-exec-permission",
     };
   }
+  // **`.ps1` 在 Windows 上必须交宿主起**（ISSUE #1961）：它与 `.cmd` 是同一类
+  // 「Node 自己起不来、要别人解释」的形态，只是解释器不同（PowerShell 而不是
+  // cmd.exe）。此前它落在「其余形态真起一次」那一档 —— 而**真起一次在开发机上
+  // 判不出来**：POSIX 宿主的探针会把「起一个 .ps1」报成功（那边 `.ps1` 不过是个
+  // 普通文本文件，压根不是本判据要问的问题），于是 `usableCommand` 返回
+  // `{ok: true, command: <那个 .ps1>, prefixArgs: []}` —— 上层拿去 spawn 就是
+  // 「拿 .ps1 当可执行文件起」，在 Windows 上必失败，而这一步的结论是「可用」。
+  //
+  // 修法与批处理同路：**不真起**，直接把该 `.ps1` 交 `powershellHost()`，给出
+  // `-File <那个 .ps1>` 的完整形态。这也是「`.PS1` 进入候选表」之后必须同批补上的
+  // 另一半 —— 只让它被找到、却给不出能 spawn 的形态，等于把缺陷从
+  // 「找不到」挪成「找到了但起不来」。
+  if (isWindows(platform) && isPs1(candidate)) {
+    const host = powershellHost({ env, platform });
+    if (host) {
+      return {
+        ok: true,
+        command: host,
+        prefixArgs: [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          candidate,
+        ],
+        reason: null,
+      };
+    }
+    // 没有宿主就**不能**把这个 `.ps1` 当作可用 —— 它起不来。
+    return {
+      ok: false,
+      command: candidate,
+      prefixArgs: [],
+      reason: "no-powershell-host",
+    };
+  }
   // **批处理（`.cmd` / `.bat`）在 Windows 上不由「真起一次」来判**：它只有 cmd.exe
   // 会解释，Node 起它必然失败（实测 `EINVAL`）。此前把它与 `.ps1` 混成同一种
   // `script` 形态、直接认作「可用」，于是选中 `pnpm.CMD` → 探测 EINVAL、
@@ -360,7 +533,29 @@ export function usableCommand(
     };
   }
   const code = probe.spawn(candidate, probeArgs);
-  if (!code) {
+  /* **「没量到」不等于「起不来」**（ISSUE #1961）。
+   *
+   * 照「非空 code 即失败」读的话，任何一次失败的起进程都会把这个候选跳过；候选全跳过
+   * ⇒ `whichCommand()` 返回 `null` ⇒ 上层读成「这个命令不存在」。而失败码里有一类说的
+   * 是**机器当时的状态**、不是这个命令的属性：撞上探针自己的 `timeout`（`ETIMEDOUT`），
+   * 以及满载节点上起不了新进程（`EAGAIN` / `EMFILE` / `ENOMEM` / … / libuv 认不出的
+   * `UNKNOWN`）。
+   *
+   * 现场（`cnb-5fd-1k50s26f3`）：同一次构建、同一台节点、同一个解释器，机器空着时
+   * `Python 可用性` / `Python 探针读数` 都答得出来，而排在 `单元测试`（723s）与
+   * `生产构建` 之后的 `E2E 关键流程` **0.6 秒**就报「PATH 上没有可用的 Python」——
+   * 0.6s 走不到 10s 的超时，所以那一次是资源类失败，不是超时。两类都得按「没量到」办。
+   *
+   * 代价是「真有挂死的命令」被当可用，而那远小于「一台满机上所有 `resolvePython` /
+   * `pnpmInvocation` 齐刷刷报不存在」—— 后者会让人去装一个本就装好的东西，报错还
+   * 完全指不到负载（§13.6.2 那条「拿不到测量 ≠ 测量结果是红的」）。
+   *
+   * 其余 code（`ENOENT` / `EACCES` / `EINVAL` / `ENOEXEC`）照旧是结论：那是
+   * 「起了一次、明确失败」，与「没来得及起」不是同一件事。
+   *
+   * 判据放这里而不是默认探针里：探针只负责**取事实**（libuv 给了什么 code），
+   * 「这个 code 算不算不可用」是**判据**，对所有探针（含单测注入的那些）一视同仁。 */
+  if (isTransientSpawnCode(code)) {
     return { ok: true, command: candidate, prefixArgs: [], reason: null };
   }
 
@@ -372,6 +567,11 @@ export function usableCommand(
     prefixArgs: [],
     reason: String(code),
   };
+}
+
+/** 这个路径是不是一个 `.ps1`（大小写不敏感 —— Windows 上两者是同一个文件）。 */
+function isPs1(candidate: string): boolean {
+  return path.extname(candidate).toLowerCase() === ".ps1";
 }
 
 /** 同目录回退形态：**同名的 `.ps1`**（经 PowerShell 宿主）。
@@ -410,7 +610,9 @@ export function powershellHost({
   if (!isWindows(platform)) return null;
   for (const name of ["pwsh", "powershell"]) {
     const exts = executableExts(env, platform).map((ext) => ext || ".EXE");
-    for (const dir of String(env.PATH ?? "")
+    /* 与 `whichCommand` 同源：env 可能是 `{ ...process.env }` 的复制品，而 Windows
+     * 的键常写成 `Path` —— 直接读 `env.PATH` 会扫一个空 PATH（ISSUE #1961）。 */
+    for (const dir of String(envVar(env, "PATH", platform) ?? "")
       .split(path.delimiter)
       .filter(Boolean)) {
       for (const ext of exts) {

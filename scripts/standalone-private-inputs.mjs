@@ -293,6 +293,12 @@ export const RUNTIME_SRC = [
    * （与 `kill-process-tree.ts` 同一个理由）。它也走 Node 24 的类型擦除，
    * 因此同样受「只许可擦除语法」约束（由 tests/dist-artifact-hygiene.test.ts 钉住）。 */
   "lib/process/executable-resolve.ts",
+  /* platform.ts：判据的**叶子**（`isWindows`），从 `executable-resolve.ts` 拆出来
+   * 的唯一理由是「`.mjs` 静态 import 一份 `.ts` 时说明符必须带 `.ts` 扩展名，而 TS
+   * 侧惯例是省略」（ISSUE #1961，见那份文件头）。它不是可选件：上面那份现在 import
+   * 它，缺了同样让整个编排器**加载即断** —— 逐文件放行的语义是「一个都不能少」，
+   * 不是「放行了它的父模块就够」。 */
+  "lib/process/platform.ts",
 ];
 
 /**

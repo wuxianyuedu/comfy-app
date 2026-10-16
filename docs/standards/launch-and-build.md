@@ -583,9 +583,9 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
 
 | 层           | 位置               | 做什么                                                                                                                                                                                                                                                                                                     |
 | ------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 候选**顺序** | `executableExts()` | 无扩展名 / `.EXE`（CreateProcess 能直接起）→ `.PS1`（经 PowerShell 宿主）→ `.CMD` / `.BAT`（Node 起不了，只能垫底）→ PATHEXT 其余项                                                                                                                                                                        |
-| 候选**形态** | `executableKind()` | `shebang`（`#!` 起头）/ **`batch`**（`@echo` / `@setlocal` 起头，即 `.cmd` / `.bat`）/ `script` / `binary` / `unknown`。**批处理单列一类**，不与 `.ps1` 混                                                                                                                                                 |
-| 候选**确认** | `usableCommand()`  | `fs.accessSync(X_OK)`；**Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`）；其余形态**真起一次**（`stdio: "ignore"`）。起不来 / 属 `batch` 时在**同目录**取 `<去掉自身扩展名>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
+| 候选**顺序** | `executableExts()` | 无扩展名 / `.EXE`（CreateProcess 能直接起）→ `.PS1`（经 PowerShell 宿主）→ `.CMD` / `.BAT`（Node 起不了，只能垫底）→ PATHEXT 其余项。**`.PS1` 与无扩展名 shim 一样无条件在列**（见下「`.PS1` 不看 `PATHEXT`」） |
+| 候选**形态** | `executableKind()` | `shebang`（`#!` 起头）/ **`batch`**（`@echo` / `@setlocal` 起头，即 `.cmd` / `.bat`）/ `script` / `binary` / `unknown`。**批处理单列一类**，不与 `.ps1` 混 |
+| 候选**确认** | `usableCommand()`  | `fs.accessSync(X_OK)`；**Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`）；**Windows 上的 `.ps1` 同样不真起，直接交 `powershellHost()` 给 `-File`**（见下）；其余形态**真起一次**（`stdio: "ignore"`）。起不来 / 属 `batch` 时在**同目录**取 `<去掉自身扩展名>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
 
 > 为什么是「真起一次」而不是「看扩展名」：扩展名只说明「谁解释它」，不说明
 > 「这台机器上现在能不能跑」。探针的退出码无关紧要（`--version` 报错也算起得来），
@@ -594,6 +594,37 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
 > 文件关联时它仍可用，所以留给「真起一次」去发现；起不来自然落到回退。
 > POSIX 上只有一种形态（无扩展名），且内核自己解析 shebang，整条判据退化为原来的行为
 > ——「批处理专属」的短路**只在 Windows 生效**。
+
+> **`.PS1` 不看 `PATHEXT`，而且必须交宿主起**（ISSUE #1961）。这两条是同一次立案的两半，
+> 少任一半都会让同一格红：
+>
+> ① **候选表里无条件有 `.PS1`**。它此前与 `.CMD` / `.BAT` / `.COM` 一样要 `PATHEXT`
+> 声明才进得来，而 Windows 系统的默认 `PATHEXT`（`.COM;.EXE;.BAT;.CMD;.VBS;…`）
+> **从不含 `.PS1`** —— `PowerShell.exe` 不是靠文件关联启的，`.ps1` 也不在「cmd.exe 敲
+> 名字就会跑」的那一类里。于是 corepack 摆在盘上的三个形态（无扩展名 shim / `.cmd` /
+> `.ps1`）里**唯一能被 Node 起起来的那一个，一个候选都命中不了**，`whichCommand()`
+> 返回 `null` ⇒ 上层报「PATH 上没有任何可用的 pnpm 形态」，而能跑的那个就摆在旁边。
+> 判据改成按「**Node 能起得来哪些形态**」问，而不是按「cmd.exe 会试哪些后缀」问 ——
+> 两个问题不同，答案也就不能共用一份 `PATHEXT`。
+>
+> ② **`.ps1` 不交给「真起一次」判**。它与 `.cmd` 是同一类「Node 自己起不来、要别人
+> 解释」的形态（只是解释器是 PowerShell 而不是 cmd.exe）。落在「真起一次」那一档时，
+> `usableCommand()` 会返回 `{ok: true, command: <那个 .ps1>, prefixArgs: []}` ——
+> 上层拿去 spawn 就是「拿 `.ps1` 当可执行文件起」，在 Windows 上必失败，而这一步的
+> 结论却是「可用」。**这一档在开发机上判不出来**（POSIX 宿主的探针会把「起一个
+> `.ps1`」报成功，那边它不过是个普通文本文件），所以判据按形态分派：Windows 上的
+> `.ps1` 直接交 `powershellHost()` 给 `-File`；**没有宿主时判 `no-powershell-host`**
+> （不能把起不来的东西报成可用）。
+>
+> 现场（自托管 Windows 节点 `cnb-t62-1k50merp0`，流水线第 1 步）：
+> `== git ==` / `== node ==` / `== python ==` 都答得出读数，只有 `== pnpm ==` 空着
+> ⇒ 整条流水线第 1 秒停下、后面 30 个 stage 全 skipped，而那台机器上 `pnpm install`
+> 本来跑得好好的。**同一个 `run()` 探四件工具，只有 pnpm 红** —— 因为 git / node /
+> python 都是 `.exe`，裸名字能直接命中；pnpm 唯一可用的形态是那个最「绕」的 `.ps1`。
+> 于是工装自证里那一步也一并改成按 `PATH × 扩展名` 解析（`findPnpm()`，
+> 见 `scripts/ci-toolchain-selfcheck.mjs`），不再裸起一个名字。
+> 回归：`tests/dev-launcher-toolchain-gate.test.ts` 与 `tests/ci-toolchain-selfcheck.test.ts`
+> 各一组（修复前 9 条全红）。
 
 > **回退同胞名按「去掉自身扩展名再拼 `.ps1`」求**：无扩展名 shim 是 `pnpm` → `pnpm.ps1`，
 > 批处理是 `pnpm.CMD` → `pnpm.ps1`（**不是** `pnpm.CMD.ps1`）。只做字符串拼接会让
@@ -1808,7 +1839,7 @@ components** 的分层约束下它对消息只要求 `id` / `runId` / `time` 三
 
 | **安装包里带着开发机的密钥与数据库**（用户/评审都看不出来：构建不报错、CI 全绿、体积护栏也只挡 GB 级） | **产物卫生靠「剔除目录名」的清单，而这两样是文件**（ISSUE #489）：`next build` 把仓库根的 `.env`（Next standalone 的环境加载是**无条件复制**，`outputFileTracingExcludes` 实测删不掉）与 `db.sqlite`（动态路径 tracing）复制进 `.next/standalone`，`scripts/build-desktop.mjs` 的噪声清单只剔目录名 → 随 static 被编译期内嵌进 exe。**CI 不跑 `build-desktop`（也不该跑）**，而触发条件是「开发机有真实 `.env`」——正是 `run-local.ps1` 自动生成 `.env` 的那些机器 | 已修（§7.3）：`outputFileTracingExcludes` 补 `./db.sqlite*`（实测有效）与 `./.env*`（尽力而为）；新增 `scripts/standalone-private-inputs.mjs` 作剔除清单的单一实现，`pnpm build` 收尾与 `build-desktop` 组装后各剥一次；`scripts/check-standalone-contents.cjs` 的禁忌清单补「开发机私有输入 / 开发库文件」并把范围扩到 `src-tauri/static`；门禁见 `tests/dist-artifact-hygiene.test.ts` |
 | 想修 `src-tauri/static` 那条红，却发现**从任何一侧都进不去**：`pnpm build` 直接 exit 1（`[static] 顶层出现白名单外的条目 N 个` + 必备件缺若干），而 `node scripts/build-desktop.mjs` 的 1/4 第一步就是跑 `pnpm build` | **卡的是装配顺序，不是产物坏了**：`check-standalone-contents.cjs` 只要 `static/server.js` 在，就把那一层当**真产物**逐条判——半截装配必然红；而唯一能把这层装对的 `build-desktop.mjs` 又先跑这道正红的判据 ⇒ 两侧互为前提、互相拦死。**那道判据没有错**，错在拿上一轮留下的半截目录当基线 | 走 sanctioned 入口 `tools/build/rebuild-static.ps1`（逻辑层 `tools/scripts/rebuild-static.ps1` 就两步：先 `Remove-Item -Recurse -Force $STATIC_DIR`、再 `node scripts/build-desktop.mjs`）——**先清再建**是唯一出口。禁止为了让 1/4 变绿去删/放宽那道判据，也别手跑 `build-desktop` 却不清理。`/src-tauri/static/` 是忽略项、`git ls-files` 为 0，删掉不丢任何入库内容；跑完 `git status` 应当仍然是干净的（自定义 `distDir` 才会让 `next build` 去改写 `tsconfig.json`，默认链路不会） |
-| **`pnpm build` 走到收尾几步停住**：报 `[standalone] 顶层出现白名单外的条目 N 个`（或「src/ 下出现未逐文件登记的条目」），而代码与依赖都没动（ISSUE #1217） | **不是构建新坏了，是那道判据开始真跑了**：#1217 之前 `scripts/check-standalone-contents.cjs` 只在人手与 `build-desktop` 里出现，而 #623 之后没有 CI 兜底 —— 于是「一条早就写好的产物判据在 master 上红了很久没人看见」本身就是这条 issue 的症状。同时 Turbopack 这条链上 `outputFileTracingExcludes` 的整目录条目**实测一条都不减**（第三件事之二的 A/B：同一份清单在 webpack 下把 40 个顶层条目砍到 10 个、在 Turbopack 一条都不减；那句旧机制表述「Turbopack 不读这份键」已在同节订正——两个键在 Rust 侧按路由实现，只是本仓这批杂质不走路由 trace 那一路），所以产物层换成**顶层默认拒绝**之后，以前「没人把它列进黑名单就静默出去」的目录必然被点名 | 先读红话点名的条目，再按它给的两条路走：① 那东西**确实**是运行期要读的 → 同批改两处（剔除侧 `STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL` 与判据侧同名清单，两份逐字同源由 `tests/dist-artifact-hygiene.test.ts` 核对）并写清「谁在运行期读它」；② 不该出去（绝大多数）→ 什么都不用改，跑一次 `node scripts/standalone-private-inputs.mjs` 看它被剔掉即可。**别为了变绿往判据那侧加一项**，也别去补 excludes —— 实测它在这条链上不做减法。口径见 §7.3 |
+| **`pnpm build` 走到收尾几步停住**：报 `[standalone] 顶层出现白名单外的条目 N 个`（或「src/ 下出现未逐文件登记的条目」），而代码与依赖都没动（ISSUE #1217） | **不是构建新坏了，是那道判据开始真跑了**：#1217 之前 `scripts/check-standalone-contents.cjs` 只在人手与 `build-desktop` 里出现，而那些入口都没人在按时的位置跑它 —— 于是「一条早就写好的产物判据在 master 上红了很久没人看见」本身就是这条 issue 的症状。同时 Turbopack 这条链上 `outputFileTracingExcludes` 的整目录条目**实测一条都不减**（第三件事之二的 A/B：同一份清单在 webpack 下把 40 个顶层条目砍到 10 个、在 Turbopack 一条都不减；那句旧机制表述「Turbopack 不读这份键」已在同节订正——两个键在 Rust 侧按路由实现，只是本仓这批杂质不走路由 trace 那一路），所以产物层换成**顶层默认拒绝**之后，以前「没人把它列进黑名单就静默出去」的目录必然被点名 | 先读红话点名的条目，再按它给的两条路走：① 那东西**确实**是运行期要读的 → 同批改两处（剔除侧 `STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL` 与判据侧同名清单，两份逐字同源由 `tests/dist-artifact-hygiene.test.ts` 核对）并写清「谁在运行期读它」；② 不该出去（绝大多数）→ 什么都不用改，跑一次 `node scripts/standalone-private-inputs.mjs` 看它被剔掉即可。**别为了变绿往判据那侧加一项**，也别去补 excludes —— 实测它在这条链上不做减法。口径见 §7.3 |
 
 | **面板里的错误日志带着密钥原文**（pino 流里明明是 `[Redacted]`，落盘的 `app-runtime.log` 里却是明文） | **ERROR 镜像是一条独立落盘通道，不受 pino `redact` 保护**（ISSUE #489）：`src/server/lib/logger.ts` 的镜像在取不到 `msg`/`err.message` 时用 `JSON.stringify(payload)` 整包兜底；而 `REDACT_PATHS` 的 `*.secret` 只匹配「属性名恰好叫 `secret`」，`BETTER_AUTH_GITHUB_CLIENT_SECRET` 这类 `*_SECRET` 命名一条都不命中——pino 的通配语义也表达不了「名字含 secret」（`*secret`/`*_SECRET`/`*secret*` 实测全无效，`*` 会把整条记录连 `msg` 打成 `[Redacted]`） | 已修（规范 07 §7.18.2.1）：镜像不再整包透传（无可读文案时只输出键名清单），并新增**值形状守卫** `redactSecretShaped()`——在日志写入边界擦掉 PEM 私钥块 / JWT / 高熵串，不问字段名因而覆盖「名字无法穷举」的密钥；`Error` 保形 |
 | **照文档 `cp .env.example .env` 走完，`pnpm dev` / `pnpm start` 仍然起不来** —— 输出里先出现 `- Local: http://localhost:<port>` 与 `✓ Ready in 77ms`，**之后**才抛 `Failed to load next.config.js` + `Invalid environment variables`（或 `MissingEnvFileError`）；提示里的小贴士还让去「双击 `tools/start/run-local.ps1`」（Linux / macOS 上不存在） | **两层叠加，且失败时机误导**（ISSUE #489）：① `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*` 就是**空串**，而 createEnv 配了 `emptyStringAsUndefined: true` —— 空串等价于「没给」，于是照文档 cp 出来仍是 `Invalid environment variables`，看不出是「值留空」；Windows 侧一直有 `prepare-local-run.ps1` 第 4 步自动补齐，**Linux / macOS 没有任何等价物**。② `src/env.js` 的校验发生在 Next 加载 `next.config.js` 的阶段，而 Next 会**先**打印 Local 地址与 `✓ Ready` —— 用户读到的是「起来了但报错」，真相是端口无人监听。**只探首页会误判**：同族形态里「服务其实没起」比「起来后 500」更难分辨 | 已修（§9.1 / §9.2 第 6 条）：新增 `scripts/env-init.mjs`（`pnpm env:init`，与 `.ps1` 同口径生成随机密钥 + OAuth 占位值，幂等、不覆盖既有配置）与 `scripts/env-preflight.mjs`（`dev.mjs` / `start.mjs` 共用，**在起 Next 之前**判「文件在 + 三项非空」，失败即打印可行动作并非零退出 —— 不再出现「先 ✓ Ready 再崩」）；**同族还有 `scripts/db-schema-state.mjs` 在起 Next 之前探哨兵表**（`.env` 就绪后，schema 未推时同样早退并打印可行动作，两条预检各查各的、并列挂在 `dev.mjs` / `start.mjs`）；缺文件提示里不再夹带任何 `.ps1` 入口。回归测试见 `tests/linux-env-bootstrap.test.ts`（真跑两个脚本；反向验证：还原旧入口 / 去掉预检，对应用例必失败） |
@@ -2246,7 +2277,7 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
 - `tests/dist-artifact-hygiene.test.ts`：锁「清单条目还在」「build-desktop 复用同一
   实现而不是各写一套」「`pnpm build` 自身收尾就剥离」。
 - **数产物这道判据现在自己会跑**（ISSUE #1217）：它以前只在人手与 `build-desktop` 的
-  断言里出现，而 #623 之后没有 CI 兜底 —— 于是「master 上一道早就写好的判据红了很久没人看见」
+  断言里出现，而当时没有一条按时的执行链在跑它 —— 于是「master 上一道早就写好的判据红了很久没人看见」
   本身就是这条 issue 的症状。现在 `pnpm build` 的顺序是判据：
   `next build` → 预编译宿主 → **减法** → **数产物** → 冒烟（减法必须在数之前，冒烟在最后，
   只有它对最终产物负责）。

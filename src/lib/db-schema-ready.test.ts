@@ -186,38 +186,65 @@ describe("reaper 模块级副作用", () => {
   afterEach(async () => {
     cwd.restore();
     vi.unstubAllEnvs();
+    /* **必须收掉这一组起的常驻循环**：`startReaper()` 的 handle 挂在 `globalThis`
+     * 上（HMR 单例），一旦起了就活到整个 worker 进程结束，每 `REAPER_MS` 真去查一次库。
+     * 不收的后果不只是「多一个定时器」——`vi.spyOn(taskRepository, …)` 断言
+     * 「这一轮不许被调用」时，命中的会是一条**上一条用例留下的实例**
+     * （`vi.resetModules()` 换模块实例，换不掉已经跑起来的定时器）。实测复现：
+     * 同文件里先跑起一个实例，下面那条 `not.toHaveBeenCalled()` 当场红成
+     * `called 1 times`；而在慢机 / 并行负载下它退化成
+     * `Test timed out in 30000ms`（CI 读数就是这个），真因与超时毫无关系。 */
+    const { stopReaper } = await import("./comfyui/reaper");
+    stopReaper();
     /* 这一组真的打开了 `~/server/db` 的 libsql 连接（指向临时库）。不关的话
      * Windows 上文件句柄不释放，文件级 afterEach 的 `rmSync` 会 EPERM。 */
     const { closeDb } = await import("~/server/db");
     closeDb();
   });
 
-  it("表未就绪时启动 reaper 不读库（旧实现在此处抛 no such table）", async () => {
-    vi.resetModules();
-    // `env.js` 由 `vi.stubEnv` 的 SKIP_ENV_VALIDATION 放行后，仍会校验必填项；
-    // 两处密钥按「占位值」给出，等价于 CI 里 `pnpm test` 的真实条件。
-    vi.stubEnv("BETTER_AUTH_GITHUB_CLIENT_ID", "test-client-id");
-    vi.stubEnv("BETTER_AUTH_GITHUB_CLIENT_SECRET", "test-client-secret");
-    vi.stubEnv("DATABASE_URL", `file:${dbFile}`);
+  /* 这一条**自带预算**，理由必须写出来（规范 §11.13：预算的出处是实测，不是旋钮）。
+   *
+   * 它是本文件唯一一条 `vi.resetModules()` 之后把**整张服务端模块图**重新求值的用例
+   * （`./core/repository` → `~/server/db` → drizzle / better-sqlite3，再 `./comfyui/reaper`），
+   * 而冷求值那一步的墙钟与宿主的 IO / 原生模块加载**成正比**、与判据本身无关：
+   *   · 本机（Linux，串行隔离）实测 **775ms**（三次复测 772 / 785 / 772）；
+   *   · 自托管 Windows 节点（`--maxWorkers=4` + `--coverage`）实测 **越过全局 30s**，
+   *     同一次运行里本文件其余 5 条都是 20~643ms —— 争用落在**冷求值**这一段上。
+   * 全局 `testTimeout: 30_000` 是按「最慢实测 ×3.6」给的（见 `vitest.config.ts`），
+   * 而这里的 ×40 倍差来自节点负载，不是用例变慢，所以**不去动全局那个数**
+   * （规范 §11.13 / §13.6.4：抬全局预算等于把「真挂死」的检出时间一起放大）。
+   * 给出的是**这一条**的天花板：同样按实测 ×宽裕系数，够 Windows 冷求值用，
+   * 又仍然会在真挂死（例如那次冷求值真的卡住）时把这一步拦下。 */
+  it(
+    "表未就绪时启动 reaper 不读库（旧实现在此处抛 no such table）",
+    { timeout: 120_000 },
+    async () => {
+      vi.resetModules();
+      // `env.js` 由 `vi.stubEnv` 的 SKIP_ENV_VALIDATION 放行后，仍会校验必填项；
+      // 两处密钥按「占位值」给出，等价于 CI 里 `pnpm test` 的真实条件。
+      vi.stubEnv("BETTER_AUTH_GITHUB_CLIENT_ID", "test-client-id");
+      vi.stubEnv("BETTER_AUTH_GITHUB_CLIENT_SECRET", "test-client-secret");
+      vi.stubEnv("DATABASE_URL", `file:${dbFile}`);
 
-    const repository = await import("./core/repository");
-    const listStaleUnownedQueued = vi.spyOn(
-      repository.taskRepository,
-      "listStaleUnownedQueued",
-    );
+      const repository = await import("./core/repository");
+      const listStaleUnownedQueued = vi.spyOn(
+        repository.taskRepository,
+        "listStaleUnownedQueued",
+      );
 
-    /* 加载模块本身已不再起回收器（ADR §14 D3），所以这里必须**显式**起一次：
-     * 否则本用例只验了「什么都没发生」，判据会静默失效——要验的是「起了表、
-     * 而表还没就绪时不读库」。 */
-    const reaper = await import("./comfyui/reaper");
-    reaper.startReaper();
-    /* 首扫是 fire-and-forget，而本用例判的是**它一次都没读库** ——
-     * 「等一个不会发生的事」，条件轮询表达不了（§11.14 的合法逃逸口）。
-     * 给够一拍让异步 sweeper 有机会真去读，没读才算这条结论成立。 */
-    // sleep-ok: 等一个「不会发生的事」——表未就绪时首扫不得读库。
-    await new Promise((r) => setTimeout(r, 50));
+      /* 加载模块本身已不再起回收器（ADR §14 D3），所以这里必须**显式**起一次：
+       * 否则本用例只验了「什么都没发生」，判据会静默失效——要验的是「起了表、
+       * 而表还没就绪时不读库」。 */
+      const reaper = await import("./comfyui/reaper");
+      reaper.startReaper();
+      /* 首扫是 fire-and-forget，而本用例判的是**它一次都没读库** ——
+       * 「等一个不会发生的事」，条件轮询表达不了（§11.14 的合法逃逸口）。
+       * 给够一拍让异步 sweeper 有机会真去读，没读才算这条结论成立。 */
+      // sleep-ok: 等一个「不会发生的事」——表未就绪时首扫不得读库。
+      await new Promise((r) => setTimeout(r, 50));
 
-    expect(listStaleUnownedQueued).not.toHaveBeenCalled();
-    listStaleUnownedQueued.mockRestore();
-  });
+      expect(listStaleUnownedQueued).not.toHaveBeenCalled();
+      listStaleUnownedQueued.mockRestore();
+    },
+  );
 });

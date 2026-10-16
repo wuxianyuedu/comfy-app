@@ -1,10 +1,9 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-15T04:39:52.616Z",
-    "who": "yuedu",
-    "how": "pnpm run test:coverage",
-    "trackedBy": "full",
-    "skippedReason": "本次提交只改启动器自愈与客户端通知（scripts/launcher-core、src/lib/shell、src/components/code-update），改动面已由 C 组受影响用例 + 固定结构清单覆盖；本机同刻有其它检出在跑重活，全量+覆盖率档留待低负载时再跑"
+    "verifiedAt": "2026-10-15T16:20:55.625Z",
+    "who": "CodeBuddy(NPC)",
+    "how": "COMFYAPP_QUIET_COVERAGE=1 vitest run --coverage --maxWorkers=4",
+    "trackedBy": "full"
   }
 }

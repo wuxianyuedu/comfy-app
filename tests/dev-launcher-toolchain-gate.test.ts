@@ -158,10 +158,145 @@ describe("可执行形态的候选顺序（executableExts）", () => {
     expect(executableExts({ PATH: "/usr/bin" }, "linux")).toEqual([""]);
   });
 
-  it("PATHEXT 里没声明的扩展名不会被硬塞进来", () => {
+  it("PATHEXT 里没声明的扩展名不会被硬塞进来（`.PS1` 除外，见下条）", () => {
     const exts = executableExts({ PATH: "/x", PATHEXT: ".EXE;.CMD" }, "win32");
     expect(exts).not.toContain(".BAT");
-    expect(exts).not.toContain(".PS1");
+  });
+
+  /**
+   * `.PS1` **不看 `PATHEXT`**（ISSUE #1961）。
+   *
+   * 这条此前是**反向**的 —— 老用例断言 `.PS1` 必须「没声明就不出现」，而
+   * Windows 系统的默认 `PATHEXT`（`.COM;.EXE;.BAT;.CMD;.VBS;…`）**从不含 `.PS1`**
+   * （PowerShell 脚本不在「cmd.exe 敲名字就会跑」的那一类里）。于是：
+   *
+   *   · corepack 摆在 `.tools\pnpm\<ver>\bin` 的三个形态里，只有 `.ps1` 能被 Node 起；
+   *   · 候选表里却没有它 ⇒ `whichCommand()` 一个都选不出 ⇒ 返回 `null`
+   *     ⇒ 上层报「PATH 上没有任何可用的 pnpm 形态」，而能跑的那个就在旁边。
+   *
+   * 现场（自托管 Windows 节点，流水线第 1 步）：
+   *   `== pnpm ==` → `(pnpm 不可用)`，而同一台机器上 `pnpm install` 跑得好好的
+   *   —— 整条流水线停在一个**不成立的结论**上。
+   */
+  it("`.PS1` 无条件在候选里 —— 默认 PATHEXT 从不声明它，由它决定就是永远选不出来", () => {
+    // Windows 的默认 PATHEXT（实测形态：没有 .PS1）。
+    const DEFAULT_PATHEXT =
+      ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC";
+    const exts = executableExts(
+      { PATH: "/x", PATHEXT: DEFAULT_PATHEXT },
+      "win32",
+    );
+    expect(exts).toContain(".PS1");
+    // 顺序仍按「Node 能不能直接起」：`.PS1` 在 `.CMD` / `.BAT` **之前**
+    // （`.CMD` 只有 cmd.exe 解释，Node 起它实测 EINVAL）。
+    expect(exts.indexOf(".PS1")).toBeLessThan(exts.indexOf(".CMD"));
+    expect(exts.indexOf(".PS1")).toBeLessThan(exts.indexOf(".BAT"));
+    // PATHEXT 里声明的其它项照旧保留（保持「用户配了就用」）。
+    expect(exts).toContain(".VBS");
+  });
+
+  it("没给 PATHEXT 时也含 `.PS1`（不能靠「有没有那份环境变量」决定形态）", () => {
+    expect(executableExts({ PATH: "/x" }, "win32")).toContain(".PS1");
+  });
+
+  it("POSIX 上不出现 `.PS1`（判据不按平台之外的东西分叉）", () => {
+    expect(executableExts({ PATH: "/usr/bin" }, "linux")).toEqual([""]);
+  });
+});
+
+/**
+ * `.PS1` 是候选里的一员 —— 这一格此前**没有任何判据**（ISSUE #1961）。
+ *
+ * `executableExts` 那份候选表在 `PATHEXT` 不含 `.PS1` 时**根本不摆出 `pnpm.ps1`**，
+ * 而 Windows 默认的 `PATHEXT` 从不含它。于是「`.ps1` 回退」那条判据虽然齐备，
+ * 却只在「先撞上 `.CMD`」的路径上被走到过 —— **直接摆着一个 `pnpm.ps1` 的目录**
+ * （corepack 装出来的形态）在修复前一个候选都命中不了。
+ *
+ * 现场代价：自托管 Windows 节点上 `pnpmInvocation()` 返回 `null`，工具链自证
+ * 报「pnpm 不可用」，整条流水线第 1 秒就停 —— 而那台机器上 `pnpm install`
+ * 本来跑得好好的（一条不成立的结论比没有结论更贵）。
+ */
+describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）", () => {
+  /**
+   * 只摆一个 `pnpm.PS1`（无扩展名 shim 与 `.CMD` 都不在）的目录。
+   *
+   * **文件名写大写**是刻意的：候选是按 `PATHEXT` 的写法拼的（`.PS1`），而判据
+   * 走到「这个文件在不在盘上」这一步。Windows 的 NTFS 不敏感、大小写随便写都命中；
+   * 而 CI 跑在 POSIX 上，那里 `pnpm.ps1` 与 `pnpm.PS1` 是**两个不同的文件** ——
+   * 写小写会让这条用例在 Linux 上恒假（判的是宿主的大小写敏感，不是被测逻辑）。
+   * 现场那台 Windows 节点上两者等价，所以这里按判据拼出来的形态造。
+   */
+  const ps1OnlyDir = () => {
+    const dir = path.join(tmp, "ps1-only");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const ps1 = path.join(dir, "pnpm.PS1");
+    fs.writeFileSync(ps1, "#!/usr/bin/env pwsh\nWrite-Output '12.4.1'\n");
+    fs.chmodSync(ps1, 0o755);
+    return dir;
+  };
+
+  it("默认 PATHEXT 下，摆在 PATH 上的 `pnpm.ps1` 被选中（经宿主起）", () => {
+    const dir = ps1OnlyDir();
+    const hostDir = makePowerShellHost(path.join(tmp, "host-ps1"));
+    /* 真实 Windows 默认 `PATHEXT` —— 关键就是它**没有** `.PS1`。 */
+    const env = {
+      PATH: `${dir}${path.delimiter}${hostDir}`,
+      PATHEXT: ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC",
+    };
+    clearWhichCommandCache();
+    /* 反向验证：把 `executableExts` 里那句 `.PS1` 无条件放行去掉，这一格立刻
+     * 从 `pnpm.ps1` 变回 `null` —— 这正是修复前的实测读数。 */
+    const found = whichCommand("pnpm", {
+      env,
+      platform: "win32",
+      probeArgs: ["-v"],
+    });
+    expect(found, "`.ps1` 在盘上却一个候选都没命中").not.toBeNull();
+    expect(found!.toLowerCase()).toBe(path.join(dir, "pnpm.PS1").toLowerCase());
+
+    /* 「找到」不够，上层要的是**能 spawn 的形态**：`.ps1` 与 `.cmd` 一样，
+     * Node 自己起不来，必须交 PowerShell 宿主 + `-File`。 */
+    const usable = usableCommand(found!, ["-v"], { env, platform: "win32" });
+    expect(usable.ok).toBe(true);
+    expect(usable.command.toLowerCase()).toBe(
+      path.join(hostDir, "pwsh.EXE").toLowerCase(),
+    );
+    expect(usable.prefixArgs).toContain("-File");
+    expect(usable.prefixArgs).toContain(found);
+  });
+
+  /**
+   * 反向：`.ps1` 被摆上 PATH 时，**没有宿主就不能算「可用」**。
+   *
+   * 这一格判的是「`.PS1` 进候选表」之后必须同批补上的另一半：只让它被找到、
+   * 却给出一个 `prefixArgs: []` 的形态，等于把缺陷从「找不到」挪成
+   * 「找到了但起不来」—— 后者更贵（上层会拿着它去 spawn，然后拿到一个
+   * 说不清成因的失败）。`.
+   */
+  it("`.ps1` 的形态是「宿主 + `-File`」，不是把 `.ps1` 自己当可执行文件", () => {
+    const dir = ps1OnlyDir();
+    const ps1 = path.join(dir, "pnpm.PS1");
+    /* 只给 `.ps1` 所在的目录、不给宿主 —— `powershellHost()` 找不到可用的宿主。 */
+    const noHost = { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const usable = usableCommand(ps1, ["-v"], {
+      env: noHost,
+      platform: "win32",
+    });
+    expect(usable.ok, "没有宿主时 `.ps1` 不许被认作可用").toBe(false);
+    expect(usable.reason).toBe("no-powershell-host");
+  });
+
+  it("POSIX 上同一条判据不生效（`.PS1` 不是那儿的形态）", () => {
+    const dir = ps1OnlyDir();
+    clearWhichCommandCache();
+    expect(
+      whichCommand("pnpm", {
+        env: { PATH: dir },
+        platform: "linux",
+        probeArgs: ["-v"],
+      }),
+    ).toBeNull();
   });
 });
 
@@ -418,12 +553,7 @@ describe("编排器与启动页的接线契约", () => {
      * 「多行提示进 stale_shell 横幅、message 只放一行结论」，不是「这段写在哪」。
      * 判据落在**产出**上：`statusMessage` 是首行、`staleShell` 是全文。 */
     const gates = fs.readFileSync(
-      path.join(
-        ROOT,
-        "scripts",
-        "launcher-core",
-        "startup-gates.mjs",
-      ),
+      path.join(ROOT, "scripts", "launcher-core", "startup-gates.mjs"),
       "utf8",
     );
     expect(gates).toContain('gateProblem.split("\\n")[0]');
@@ -744,8 +874,30 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     const args = ["exec", "next", "dev", "--turbo", "-p", "3734"];
     const inv = pnpmInvocation(args, { env, platform: "win32" });
     expect(inv, "PATH 上有可用形态时必须给出调用方式").not.toBeNull();
-    // 选中的是 .CMD 旁的 .ps1（批处理 Node 起不了，直接走同胞回退）
-    expect(inv!.candidate).toBe(path.join(dir, "pnpm.CMD"));
+    /* **不钉「选中了哪一个文件」**，只钉「选中的是那个目录里真有的形态、且经宿主起」。
+     *
+     * 原先这里写死 `candidate === pnpm.CMD`，而那条断言**只在 POSIX 上成立**
+     * （平台侧第十一跑实测：Windows 上这条红）—— 因为
+     * `executableExts()` 把 `.PS1` 改成**无条件进候选**之后（ISSUE #1961），
+     * 顺序成了 `"" → .EXE → .PS1 → .CMD`，而 **Windows 的查找不区分大小写**：
+     * 目录里那个 `pnpm.ps1` 会被 `pnpm.PS1` 这个候选命中，于是轮不到 `.CMD`
+     * （`.CMD` 只在 `.ps1` 不在时才被选中、再由它走同胞回退）。
+     *
+     * 两条路**最终落在同一处**（经 PowerShell 宿主起，见下面那两条断言），
+     * 差别只是「先命中的是哪一个文件」。写死一侧就是这个文件反复踩过的形态 ——
+     * 把「跑判据那台宿主的样子」写成了恒真性质。
+     *
+     * **按大小写不敏感比**：`whichCommand()` 交出来的是拿 `PATHEXT` 的写法拼出来的
+     * 候选（`.PS1`），只在 Windows 上才由 `onDiskName()` 回写成盘上的实际写法 ——
+     * 直接 `toContain` 大小写敏感的那两种拼法，等于又留了一格「宿主/盘上怎么写」
+     * 决定结论的断言，而那正是这条用例刚被修掉的形状。 */
+    const selected = inv!.candidate.toLowerCase();
+    expect(
+      [path.join(dir, "pnpm.CMD"), path.join(dir, "pnpm.ps1")].map((p) =>
+        p.toLowerCase(),
+      ),
+      `选中的不是那个目录里真有的形态：${inv!.candidate}`,
+    ).toContain(selected);
     expect(inv!.viaHost).toBe(true);
     expect(inv!.args.slice(-args.length)).toEqual(args);
     // 与既有判据同源：命令形态必须等于 commandInvocation 的结论
@@ -1044,7 +1196,9 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
      * 返回形状的 `ok: true` 是本次拆刀补上的（与另一支的 `{ ok: true, shell, staleShell }`
      * 对齐），断言按**实际形态**写，不按记忆里的旧形态。 */
     const skipStart = launcher.indexOf("if (launchedByShell) {");
-    expect(skipStart, "找不到自编排分支（拆刀后别断了接线）").toBeGreaterThan(-1);
+    expect(skipStart, "找不到自编排分支（拆刀后别断了接线）").toBeGreaterThan(
+      -1,
+    );
     const skipEnd = launcher.indexOf(
       "return { ok: true, shell: null, staleShell };",
       skipStart,
