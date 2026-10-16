@@ -1543,7 +1543,8 @@ E2E 关键流程                 562ms  ❌  [e2e] ✗ PATH 上没有可用的 P
 > **⑥ 第六件（第四次红）：上了下载根却还去试它替不掉的那一族。**「给上了就只用它」
 > 此前只是实现里的一句意图，**没有任何判据钉住**。现场 `cnb-g9d-1k515kvrq`：
 >
->     下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：https://cdn.npmmirror.com/binaries/playwright
+>     下载根由 PLAYWRIGHT_DOWNLOAD_HOST 指定：
+>     https://cdn.npmmirror.com/binaries/playwright
 >     Downloading … from https://cdn.npmmirror.com/binaries/playwright/…/chrome-win64.zip   ← 同一个根逐字两条
 >     Downloading … from https://cdn.npmmirror.com/binaries/playwright/…/chrome-win64.zip
 >     Failed to install browsers | … timed out after 120000ms
