@@ -194,3 +194,32 @@
   EACCES 的结论必须分开、cwd 要在、没解析时不打「通过解析口起的」），一条判**这条出口
   真的走得到**（起一条不存在的相对路径，断言回 `ENOENT` 与那段原文 —— 这一格在 Linux
   上判得动，错误码与 Windows 上的现场同形）。
+
+  ## 三之七、判据本身的一处**误报**：块注释里的反面举例被读成「真写了这句」
+
+  `tests/dev-launcher-toolchain-gate.test.ts` 那条「由 Node 起 pnpm 一律经形态判据」
+  的扫描器只剥 `//` 行注释、**不剥块注释**：
+
+      const code = raw
+        .split("\n")
+        .map((line) =>
+          line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"),
+        )
+        .join("\n");
+
+  而 `scripts/ci-cp936-exit.mjs` 的头注（`/** … */`）里正好拿 `spawn("pnpm")` 当**反面
+  举例** —— 块注释的每一行都以 `*` 起头，上面的剥法一条都匹配不上，于是判据把一个
+  注释里的引文读成「这个文件真写了这句」，点名 `scripts/ci-cp936-exit.mjs: 直接起 pnpm`。
+
+  这一条此前一直没露出来，有两个各自独立的原因：平台侧停在 `类型检查` 前面几步；
+  而 `scripts/base-check/hook-steps.mjs` 里同形态的引文，则被「该文件**别处**用了
+  `runPnpmSync`」这一巧合遮住（判据是「有没有裸起 pnpm」**且**「有没有走共享判据」，
+  后者为真就整体放行）。
+
+  修法是把剥注释补齐 —— 先剥 `/* … */` 再剥行注释，与仓里已有的同类实现
+  （`scripts/lib-node-only-scan.mjs` / `check-dead-exports.cjs` 的 `stripComments`）
+  同口径。**不动 `ci-cp936-exit.mjs`**：它确实复用了同一处形态判据，判据该改的是
+  自己的读法，不是把正确代码改成判据认得的形状。
+
+  反向复算：在真代码里写一句 `spawnSync("pnpm", …)`，这条判据照旧当场点名 ——
+  剥掉的只是注释，不是判据本身。
