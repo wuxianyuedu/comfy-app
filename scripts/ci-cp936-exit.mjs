@@ -60,7 +60,10 @@
  *     `commandInvocation` —— `undefined ?? commandInvocation` 本该走后者，可一旦
  *     有人把这一句挪进 executor 里，`resolve` 就变成 **Promise 的 resolve 函数**
  *     （一个恒真的值），解析直接消失、`invocation.command` 是 `undefined`，
- *     `spawn(undefined, …)` 当场 `ERR_INVALID_ARG_TYPE`。模块级取好别名再进 Promise。
+ *     `spawn(undefined, …)` 当场 `ERR_INVALID_ARG_TYPE`。**根因是重名**，所以处置是
+ *     把 executor 的形参改名为 `settle`（解析口在 executor 之外就已经调完，改完这条
+ *     遮蔽不可能再发生），而不是靠「模块级别名 + 那两句写在 executor 外面」这种得
+ *     有人记得住的约定。
  *   · **解析口选错了一层，于是回退成了「裸名字交给 spawn」**：`commandInvocation`
  *     的契约是「**候选** → spawn 形态」，解析不出来时它**原样退回候选**
  *     （`{command: candidate}`）—— 对一条已经在盘上的路径那是忠实的，对
@@ -69,6 +72,13 @@
  *     解析退化 ⇒ 起不来 ⇒ `[cp936-exit] 起不了这条命令：pnpm`。正确的那一层是
  *     `resolveCommandInvocation()`（它收**名字**、交 `{command, args, resolved}`，
  *     并用 `resolved: false` 把「查无此命令」变成一个可读出口）。
+ *   · **「该不该问 PATH」与「怎么起」是两件事，只做前一半会漏掉后半**：
+ *     `node_modules/.bin/tsc` 是**相对路径**，拿它去问 PATH 当然「找不到」（那不是
+ *     找不到、是问错了对象）；而把它**原样**交给 `spawn` 在 Windows 上照样起不来 ——
+ *     pnpm 给 `.bin/<工具>` 摆的三个垫片（`.cmd` / `.ps1` / 无扩展名 shim）Node 一个
+ *     都起不了。两半都要：路径**不问 PATH**（`isPathLike()`），但**要过形态判据**
+ *     （`commandInvocation`，它会把同目录的 `.ps1` 回退找出来）。
+ *     ⇒ 这就是 `resolveShellInvocation()` 按 token 形状分两条的由来。
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -84,15 +94,20 @@ import { fileURLToPath } from "node:url";
  * 说明符**带 `.ts` 扩展名**是硬要求：`.mjs` 静态 import 一份 `.ts` 时 Node 的 ESM
  * 解析器不替你补扩展名（ISSUE #1961 实测的 `ERR_MODULE_NOT_FOUND` 就是这个形态的
  * 反面教材），口径见 `src/lib/process/platform.ts` 的文件头注。 */
-import { resolveCommandInvocation } from "../src/lib/process/executable-resolve.ts";
+import {
+  commandInvocation,
+  resolveCommandInvocation,
+} from "../src/lib/process/executable-resolve.ts";
 
-/* 这个别名**不是**风格：`runWithCp936Exit` 的 Promise executor 有个形参也叫 `resolve`
- * （那是 Promise 的 settle 函数），production 的注入面默认值是 `undefined`、靠
- * `??` 回退到真解析口。一旦取默认值的那一句落进 executor 里，`resolve` 就会被那个
- * **恒真的 Promise resolve 函数**顶掉 —— `undefined ?? x` 本来是回退，换成「恒真有值」
- * 之后解析整段消失，`spawn(undefined, …)` 直接抛。模块级别名让这条回退不依赖
- * 「那两句写在 executor 外面」（`electron-package.mjs` 用同一处置避开同名遮蔽）。 */
-const defaultResolver = resolveCommandInvocation;
+/* 这两个别名只为一件事：模块里那两兄弟的名字都长，而它们各自要表达的是**收什么**——
+ * `resolveCommandInvocation` 收**名字**（PATH 查找 + 形态），`commandInvocation`
+ * 收**已定位的候选路径**（只问形态）。职责不同、不可互换，用在哪见
+ * `resolveShellInvocation()`。
+ *
+ * ⚠️ 别名**不承担**「避开同名遮蔽」的职责：那件事已由 executor 的形参改名解决
+ * （`settle`，见头注第三个坑），不再依赖读者记住「某两句必须写在 executor 外面」。 */
+const resolveByName = resolveCommandInvocation;
+const resolveByPath = commandInvocation;
 
 /** 中文 Windows 的 ANSI 代码页 —— 平台那一跳读的就是它。 */
 export const CP936_CODE_PAGE = 936;
@@ -240,11 +255,43 @@ export function unwrapCp936(command) {
  * 起不起来由 spawn 自己的结论回答（ENOENT 照样是可见出口），这里只回答
  * 「该不该拿 PATH 去找它」。
  *
+ * ⚠️ **「不问 PATH」只是这一半**：一条**盘上确实存在的**路径在 Windows 上同样可能
+ * 起不来 —— `node_modules/.bin/<工具>` 是 pnpm 摆的三个垫片（`.cmd` / `.ps1` /
+ * 无扩展名 shim），Node 一个都起不来（`.cmd` 只有 cmd.exe 解释、shim 是 shebang）。
+ * 所以路径这一步还要交给**形态判据**（`commandInvocation`）把 `.ps1` 回退找出来，
+ * 否则「不问 PATH」换来的只是「不误报」，命令照样起不来。见 `resolveShellInvocation()`。
+ *
  * @param {string} token
  * @returns {boolean}
  */
 function isPathLike(token) {
   return token.includes("/") || token.includes("\\");
+}
+
+/**
+ * 「这条命令在这台机器上怎么起」—— 本文件唯一一次解析。按 token 形状分两条：
+ *
+ *   · **名字**（`pnpm` / `node`）→ `resolveByName()`：PATH 查找 + 形态。
+ *   · **路径**（`node_modules/.bin/tsc` / `scripts/check-*.cjs`）→ 先 `path.resolve`
+ *     绝对化，再交 `resolveByPath()` 问形态。这一层**必须**在，不能把路径原样丢给
+ *     `spawn`：同目录的 `.ps1` 回退（`siblingFallback`）才是 Windows 上唯一能起的
+ *     形态（见 `isPathLike()` 的注释）。绝对化那一步在 POSIX 上是恒等的 —— 它的
+ *     用处是让形态判据的同目录查找与 cwd 解耦。
+ *
+ * 探针参数刻意用 `["--version"]` 而**不是**那条命令的真实参数：形态判据判「这个候选
+ * 起不起来」的方式是**真起一次**，拿 `pnpm install --frozen-lockfile` 当探针等于把
+ * 整个安装跑两遍。这里要的只是「起不起来」，非零退出也算起得来。
+ *
+ * @param {string} command `.cnb.yml` 里写的那条命令
+ * @param {string[]} args 那条命令自己的参数（原样转交，本函数不改写）
+ * @returns {{command: string, args: string[], resolved: boolean}}
+ */
+export function resolveShellInvocation(command, args) {
+  if (!isPathLike(command)) return resolveByName(command, args);
+  const { command: c, prefixArgs } = resolveByPath(path.resolve(command), [
+    "--version",
+  ]);
+  return { command: c, args: [...prefixArgs, ...args], resolved: true };
 }
 
 /**
@@ -268,7 +315,7 @@ export function runWithCp936Exit(
     platform = process.platform,
     spawnProc = spawn,
     write = writeCp936,
-    resolve,
+    resolve = resolveShellInvocation,
     out,
   } = {},
 ) {
@@ -283,12 +330,9 @@ export function runWithCp936Exit(
    * `commandInvocation()` 收的是**候选路径**，解析不出来时**原样退回候选** ——
    * 那个「回退」对一条盘上的路径是忠实的，对 `pnpm` 这种名字却是把 `spawn("pnpm")`
    * 扔给 Windows（ENOENT，见头注第三个坑）。 */
-  const lookup = resolve ?? defaultResolver;
-  /* 路径不进 PATH 查找（`resolveCommandInvocation` 是纯 PATH 查找，对相对路径
-   * 恒报「找不到」）—— 原样交给 spawn，让它的结论来回答（ENOENT 是可见出口）。 */
-  const invocation = isPathLike(command)
-    ? { command, args, resolved: true }
-    : lookup(command, args);
+  /* 解析口自己就是那位执行者（默认值 `resolveShellInvocation`：名字查 PATH、路径过
+   * 形态判据）。这里只负责把它交出的形状校验一遍。 */
+  const invocation = resolve(command, args);
   /* 解析口必须交出 `{command, args, resolved}`：`undefined` 悄悄流下去只会变成
    * `spawn(undefined, …)` 的 `ERR_INVALID_ARG_TYPE`（报错点离真因一整层）。
    * 生产路径另有护栏 —— `spawn` 传函数会抛，于是「拿 Promise resolve 当注入面」
@@ -316,7 +360,9 @@ export function runWithCp936Exit(
   const realCommand = invocation.command;
   /* 参数用**解析口交回来的那一份**（宿主前缀 + 原参数都由它拼好）。 */
   const realArgs = invocation.args;
-  return new Promise((resolve) => {
+  /* 形参叫 `settle` 而**不是** `resolve`：上面那个 `resolve` 是解析口的名字，同名会
+   * 让「谁在调谁」变成读者要推的事（这条遮蔽本文件真踩过，见头注第三个坑）。 */
+  return new Promise((settle) => {
     /* `shell: false` 是默认 —— 本文件**不**替调用方解释命令行。stage 里那条命令
      * 本身可能是 `pnpm run build` 这种带子命令的形态，但它的解析归它自己的宿主
      * （`.cnb.yml` 的 stage shell），这里只管把 token 原样递过去。 */
@@ -340,14 +386,14 @@ export function runWithCp936Exit(
       /* 起不来（命令不存在）也是「这条命令的结论」，走同一个复核出口：
        * 原文照打 + 非零退出码（127 是壳里「命令没找到」的常规形态）。 */
       emit(`[cp936-exit] 起不了这条命令：${command}\n`);
-      resolve(127);
+      settle(127);
     });
     child.on("close", (code) => {
       const text = chunks.join("");
       if (platform !== "win32") {
         /* 非 Windows：CP936 这一跳不存在，原样转出（不假装转过了）。 */
         emit(text);
-        resolve(code ?? 0);
+        settle(code ?? 0);
         return;
       }
       const { ok } = write(text);
@@ -358,7 +404,7 @@ export function runWithCp936Exit(
         );
         emit(text);
       }
-      resolve(code ?? 0);
+      settle(code ?? 0);
     });
   });
 }

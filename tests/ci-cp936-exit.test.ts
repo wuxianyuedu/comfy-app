@@ -35,15 +35,29 @@
  *     把乱码换个编码存下来。Linux 的 `process.stdout` 是 UTF-8，这个 bug 在本机
  *     **永远不会显形**。⇒ 这里判「有显式 `setEncoding("utf8")` 那一跳」这个形状
  *     （能在地板上真起子进程的那条路同样判，见「真起一条子进程」那一组）。
+ *   · **「该不该问 PATH」与「怎么起」被混成了一件**：`node_modules/.bin/tsc` 是
+ *     **相对路径**，拿它问 PATH 当然「找不到」（问错了对象）；而把它**原样**交
+ *     `spawn` 在 Windows 上照样起不来 —— pnpm 给 `.bin/<工具>` 摆的三个垫片
+ *     （`.cmd` / `.ps1` / 无扩展名 shim）Node 一个都起不了。两半都要判：
+ *     路径**不问 PATH**，但**要过形态判据**（`.ps1` 回退）。
+ *   · **注入面能盖住「实现写错了」，盖不住「接错线了」**：判定「解析口改对了」的
+ *     用例全都注入 `resolve`，而注入面是「输入什么就交回什么」的假实现 ——
+ *     「默认值写错 / 只覆盖了一半形状」这两类在它下面全看不出来。⇒ 这里有两组
+ *     **不注入 `resolve`** 的判据（默认解析口真的接在编排上、路径真的过分态判据）。
  */
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { commandInvocation } from "../src/lib/process/executable-resolve.ts";
 import {
   CP936_CODE_PAGE,
   encodeCp936Plan,
   parseInvocation,
+  resolveShellInvocation,
   runWithCp936Exit,
   writeCp936,
 } from "../scripts/ci-cp936-exit.mjs";
@@ -124,7 +138,7 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
     expect(r.ok).toBe(false);
   });
 
-  it("`encoding` 要的是**编码名或 `null`** —— `\"buffer\"` 与 `Buffer` **两者都会被拒**", () => {
+  it('`encoding` 要的是**编码名或 `null`** —— `"buffer"` 与 `Buffer` **两者都会被拒**', () => {
     /* 这条判据的根据是本仓第一次上平台的现场（`工具链自证` 直接红），报错原文：
      *
      *   `TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer`
@@ -147,11 +161,10 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
      * 所以探针必须真的打一行字 —— 写 `-e "0"` 是炸不出来的）。 */
     for (const bad of ["buffer", Buffer]) {
       expect(() =>
-        spawnSync(
-          process.execPath,
-          ["-e", 'process.stdout.write("hi")'],
-          { input: "x", encoding: bad as never },
-        ),
+        spawnSync(process.execPath, ["-e", 'process.stdout.write("hi")'], {
+          input: "x",
+          encoding: bad as never,
+        }),
       ).toThrow(/ERR_UNKNOWN_ENCODING|Unknown encoding/);
     }
   });
@@ -424,7 +437,7 @@ describe("CP936 出口：编排与退出码", () => {
     expect(seen[0]).toEqual({ cmd: "C:\\tools\\some-thing.EXE", args: ["x"] });
   });
 
-  it("**路径不进 PATH 查找**：`node_modules/.bin/tsc` 不是名字，别拿 PATH 去问它", async () => {
+  it("**路径不进 PATH 查找**：`node_modules/.bin/tsc` 不是名字，别拿 PATH 去问它", () => {
     /* 这一格是外壳第二次上平台的现场（ISSUE #1977）：
      *
      *   [cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc
@@ -435,57 +448,109 @@ describe("CP936 出口：编排与退出码", () => {
      * `resolved: false` —— 那不是「找不到」，是「这条不该问 PATH」。把两者混作
      * 一谈，就会在类型检查那一格上**误红**（判据把该保守的方向用反了）。
      *
-     * 判据只影响「解析口说找不到时算不算失败」，不影响「怎么起」：路径原样交给
-     * spawn，让它的结论回答（不存在则是 ENOENT，同样是可见出口）。 */
-    const seen: Array<{ cmd: string; args: string[] }> = [];
-    const child = fakeChild("ok\n", 0);
-    let asked = false;
-    const code = await runWithCp936Exit(
-      ["--", "node_modules/.bin/tsc", "--noEmit"],
-      {
-        platform: "win32",
-        /* 解析口被问到就该记一笔 —— 真实现是纯 PATH 查找，路径**不该**走到它。 */
-        resolve: (cmd: string, args: string[]) => {
-          asked = true;
-          return { command: cmd, args, resolved: false };
-        },
-        spawnProc: ((cmd: string, args: string[]) => {
-          seen.push({ cmd, args });
-          queueMicrotask(() => child.emitClose());
-          return child;
-        }) as never,
-        write: () => ({ ok: true }),
-        out: () => undefined,
-      },
+     * 两条判据：
+     *   · 路径的命令**不产出**「PATH 上找不到」（`resolved` 恒真）；
+     *   · 但它**仍要过形态判据** —— 「不问 PATH」只解决误报，命令本身在 Windows 上
+     *     照样要落 `.ps1` 回退才起得来（下一个用例判那一半）。 */
+    const resolved = resolveShellInvocation(
+      path.join("node_modules", ".bin", "tsc"),
+      ["--noEmit"],
     );
-    expect(asked).toBe(false);
-    expect(seen[0]).toEqual({
-      cmd: "node_modules/.bin/tsc",
-      args: ["--noEmit"],
-    });
-    expect(code).toBe(0);
+    expect(resolved.resolved).toBe(true);
+    /* 绝对化过 —— 证明它走的是「形态」那条路，不是原样透传。 */
+    expect(path.isAbsolute(resolved.command)).toBe(true);
+    /* 参数原样转交，一个都不改写。 */
+    expect(resolved.args).toEqual(["--noEmit"]);
   });
 
-  it("Windows 的反斜杠路径同判「是路径」（两种分隔符都认）", async () => {
-    const seen: Array<{ cmd: string; args: string[] }> = [];
-    const child = fakeChild("ok\n", 0);
-    let asked = false;
-    await runWithCp936Exit(["--", "node_modules\\.bin\\tsc", "--noEmit"], {
-      platform: "win32",
-      resolve: (cmd: string, args: string[]) => {
-        asked = true;
-        return { command: cmd, args, resolved: false };
+  it("Windows 的反斜杠路径同判「是路径」（两种分隔符都认）", () => {
+    /* `.cnb.yml` 现在的写法是正斜杠，但 Windows 上两种分隔符都得认 ——
+     * 只认 `/` 的判据在下一次有人写成 `\` 时就会把一条合法命令送去问 PATH。 */
+    const resolved = resolveShellInvocation("node_modules\\.bin\\tsc", [
+      "--noEmit",
+    ]);
+    expect(resolved.resolved).toBe(true);
+    expect(path.isAbsolute(resolved.command)).toBe(true);
+  });
+
+  it("路径**仍要过形态判据**：Windows 上落同目录的 `.ps1`（`.bin/<工具>` 那一类垫片）", () => {
+    /* 「不问 PATH」只解决**误报**，不解决**起不来** —— pnpm 在 Windows 上给
+     * `node_modules/.bin/<工具>` 摆三个垫片（`.cmd` / `.ps1` / 无扩展名 shim），
+     * Node 一个都起不了（`.cmd` 只有 cmd.exe 解释、shim 是 shebang）。所以路径这一支
+     * 必须再走一次形态判据，让同目录的 `.ps1` 回退被找出来。
+     *
+     * 判据落在「落到了 PowerShell 宿主 + 同目录 `.ps1`」这个形状上，而不是「选中了
+     * 哪个文件」（后者由 `executable-resolve.ts` 那一侧的用例守）。 */
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cp936-bin-"));
+    fs.writeFileSync(path.join(dir, "tsc"), "#!/bin/sh\necho hi\n", {
+      mode: 0o755,
+    });
+    fs.writeFileSync(path.join(dir, "tsc.ps1"), "Write-Output hi\r\n");
+    /* 宿主必须是**二进制**形态（`powershellHost` 只认 `binary`）—— 一个 2 字节的
+     * `MZ` 会被 `executableKind` 读成可打印文本（2 字符全落在 `\x20-\x7e` 里），
+     * 于是这一格静默判不出宿主。真 exe 的头长这样。 */
+    const host = path.join(dir, "pwsh.EXE");
+    fs.writeFileSync(
+      host,
+      Buffer.from([
+        0x4d, 0x5a, 0x00, 0x03, 0x91, 0x00, 0x40, 0x00, 0x00, 0x01, 0x02, 0x03,
+        0xff, 0xfe, 0xfd, 0xfc,
+      ]),
+      { mode: 0o755 },
+    );
+    const env = { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const probe = {
+      /* 权限探针在这条路上不参与结论（Windows 上 X_OK 只是存在性检查），
+       * 但它是 `UsabilityProbe` 的形状之一，得给一个不动的实现。 */
+      access: () => undefined,
+      /* 模拟 Windows：只有那个 `pwsh.EXE` 起得来，shim（shebang）给 ENOENT。 */
+      spawn: (candidate: string) => (candidate === host ? null : "ENOENT"),
+    };
+    /* 这一格得注入 `probe` 才判得出来，而 `resolveShellInvocation` 的入参里没有
+     * `probe`，所以直接判它的下一层（`commandInvocation`）：本仓在 POSIX 上造不出
+     * 「shebang 起不来」（那是内核解析的），上面那条 `probe` 就是这句话。 */
+    const resolved = commandInvocation(
+      path.resolve(path.join(dir, "tsc")),
+      ["--version"],
+      { platform: "win32", env, probe },
+    );
+    expect(resolved.command).toBe(host);
+    expect(resolved.prefixArgs).toContain(path.join(dir, "tsc.ps1"));
+  });
+
+  it("**默认解析口真的接在编排上** —— 不注入 `resolve` 时裸名字也走 PATH 查找", async () => {
+    /* 上面几条都注入 `resolve`，而注入面能盖住「实现写错了」，**盖不住「接错线了」**
+     * —— 默认值写错、或压根没接上时，注入面自己把缺陷抹平、那几条照样绿。
+     * 这一条因此**不注入 `resolve`**，判的就是那条线接上了没有。 */
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cp936-bin-"));
+    fs.writeFileSync(path.join(dir, "pnpm"), "#!/bin/sh\necho 1\n", {
+      mode: 0o755,
+    });
+    const seen: string[] = [];
+    const handlers: Record<string, (arg: unknown) => void> = {};
+    const child = {
+      stdout: { on: () => child.stdout },
+      stderr: { on: () => child.stderr },
+      on: (ev: string, fn: (arg: unknown) => void) => {
+        handlers[ev] = fn;
+        return undefined;
       },
-      spawnProc: ((cmd: string, args: string[]) => {
-        seen.push({ cmd, args });
-        queueMicrotask(() => child.emitClose());
+    };
+    await runWithCp936Exit(["--", "pnpm", "install"], {
+      platform: "linux",
+      spawnProc: ((cmd: string) => {
+        seen.push(cmd);
+        queueMicrotask(() => handlers.close?.(0));
         return child;
       }) as never,
-      write: () => ({ ok: true }),
       out: () => undefined,
     });
-    expect(asked).toBe(false);
-    expect(seen[0]?.cmd).toBe("node_modules\\.bin\\tsc");
+    /* 起的是**PATH 上那条绝对路径** —— 默认值若退回「裸名字透传」，这里拿到的是
+     * `"pnpm"`（反向复算过：改回去当场报 `expected [ 'pnpm' ] to deeply equal
+     * [ '/tmp/…/pnpm' ]`）。 */
+    expect(seen[0]).not.toBe("pnpm");
+    expect(path.isAbsolute(seen[0] ?? "")).toBe(true);
+    expect(path.basename(seen[0] ?? "")).toBe("pnpm");
   });
 
   it("PATH 上查无此命令 ⇒ **可读出口 + 127**，不是把裸名字丢给 spawn", async () => {
@@ -497,7 +562,11 @@ describe("CP936 出口：编排与退出码", () => {
     let spawned = false;
     const code = await runWithCp936Exit(["--", "不存在的命令", "x"], {
       platform: "win32",
-      resolve: () => ({ command: "不存在的命令", args: ["x"], resolved: false }),
+      resolve: () => ({
+        command: "不存在的命令",
+        args: ["x"],
+        resolved: false,
+      }),
       spawnProc: (() => {
         spawned = true;
         queueMicrotask(() => child.emitClose());

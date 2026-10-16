@@ -2157,6 +2157,110 @@ UTF-8 **解对**，那正是「以 CP936 出口」这一步的前提 —— 不�
 接上 `unwrapCp936()`：不剥外壳，它们抓到的就是**外壳自己**（它当然在盘上），判据从
 「接线对不对」退化成「外壳在不在」。
 
+###### 这个外壳第一次上平台，自己先炸了两处（**本地全绿**，ISSUE #1977 后续）
+
+落地后平台侧 `工具链自证` 直接红，报的是 `ci-cp936-exit.mjs` 里的一行 —— 而它在本地
+**一辈子执行不到**：
+
+    TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer
+        at Buffer.from (node:buffer:339:12)
+        at spawnSync (node:child_process:916:29)
+        at scripts/ci-cp936-exit.mjs:121
+
+`spawnSync` 的 `encoding` 收的是**编码名字符串**（或 `null`，表示 stdout/stderr 给
+`Buffer`），`"buffer"` **不是**编码名。这条错法有个连体的第二形态：被拒之后自然会改成
+`Buffer` —— **同样被拒**（两者都进 `Buffer.isEncoding` 查表，查不到就在
+`Buffer.from(input, encoding)` 那里抛）。**要 Buffer 输出的唯一写法是 `encoding: null`。**
+之所以本地判不到，是因为这一句在 `writeCp936` 的 Windows 分支里，而它在非 Windows
+**直接 return**；而且它只在子进程**有输出**时才走到 `Buffer.from`（拿 `-e "0"` 当探针
+是炸不出来的 —— 这一点让「写个本地探针试试」也不成立）。
+
+同批收掉这条链上**第二个同类隐患**：抓子进程输出那一跳写的是 `String(d)`（`d` 是
+`Buffer`），而 `buf.toString()` 的默认编码取自 `process.stdout` 的 `writableEncoding` ——
+**在 Windows 上那是宿主代码页（CP936）**。转码链是「先解对、再编回」两段，这里断的是
+**第一段**：子进程的 UTF-8 字节在**进 PowerShell 之前**就已经被解错，后面按 936 编回去
+只是把乱码换个编码存下来（即上面第 1 条那个顺序，前半段自己先塌了）。Linux 的
+`process.stdout` 是 UTF-8，**这个 bug 在本机永远不会显形**。
+
+> 两条边界因此要写清：**「本地绿」对这条链不是证据** —— 它跑在 Windows 上，
+> 而本仓的 Linux 检出（含 NPC 工作区、自托管节点的开发壳）走的是另一条分支。
+> 判据只能靠**形状**：`writeCp936` 因此开了第三个注入面 `spawnImpl`（前两个是
+> `platform` / `run`），让「真实现起的是什么、传了什么值」在本地就能判；
+> 抓输出那一跳则判「两条流各以 `utf8` 钉过一次」。
+
+第三处**本地就能踩到、但只在某种调用形态下踩到**：`runWithCp936Exit` production 解析口
+`resolve` 的默认值是 `undefined`、靠 `?? commandInvocation` 回退，而 Promise executor 的
+形参**也叫 `resolve`**。一旦取默认值那一句落进 executor 里，它就是**恒真的 Promise
+resolve 函数**，回退整段消失、`spawn(undefined, …)` 当场抛（离真因一整层）。现在走
+模块级别名 `resolveCommandInvocation`，并校验解析口交出的形状。**这三条都已反向复算**
+（把任一处改回去，对应用例当场点名）。
+
+###### 第四处：解析口选错了一层，「回退」把裸名字交给了 `spawn`（同一次上平台）
+
+修掉上面三条之后 `工具链自证` 转绿（**那一 stage 的中文现在是可读的** —— 这正说明
+CP936 出口这一步成立），红的位置往下走到 `Install dependencies`：
+
+    [cp936-exit] 起不了这条命令：pnpm
+
+`.cnb.yml` 那一行是 `node scripts/ci-cp936-exit.mjs -- pnpm install --frozen-lockfile`
+—— 包的是**一个名字**，而外壳当时用的是 `commandInvocation()`。那一层的契约是
+「**候选路径** → spawn 形态」：它解析不出来时**原样退回候选**（`{command: candidate}`），
+对一条已经在盘上的路径是忠实的，对 `pnpm` 这种名字却等于把 `spawn("pnpm")` 直接扔给
+Windows（`ENOENT`；Windows 上 Node 不认 PATHEXT，也不解析 corepack 那只无扩展名 shim 的
+shebang）。**「回退」在这里不是保守，是把判据的对象换成了注定失败的那一个。**
+
+正确的那一层是**同文件的兄弟 `resolveCommandInvocation()`**：它收的是**名字**、交的是
+`{command, args, resolved}`，并用 `resolved: false` 把「PATH 上查无此命令」变成一个
+**可读出口**（说清找过了、它不在盘上，退出 127），而不是丢一句信息量很低的 ENOENT。
+收它与收 `commandInvocation()` 的差别有实测对照（造一份 corepack 三形态并存的假 PATH、
+按 `EACCES` 判无扩展名 shim）：前者回 `"pnpm"`（裸名字，必 ENOENT），后者回一个真路径。
+
+**这就是「本地绿对这条链不是证据」的第二个样本**：Linux 上两条解析口给出的结论一样，
+差别只在 Windows 的候选表上显形 —— 而判据现在钉在**形状**上（注入面必须交出
+`{command, args, resolved}`），另加一条专判 `resolved: false` 的可读出口（**一条进程都不许起**）。
+
+###### 第五处：同一处理，但**对象有两类** —— 路径不该拿去问 PATH（同一次上平台）
+
+`Install dependencies` 转绿之后，红又走到 `类型检查`：
+
+    [cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc
+
+`resolveCommandInvocation()` 是**纯 PATH 查找**。而 `.cnb.yml` 的 stage 里**两种都真实
+存在**：`node_modules/.bin/tsc` / `scripts/check-*.cjs` 是**路径**（相对检出根），
+`pnpm` / `node` 是**名字**。对一条相对路径，PATH 查找当然回答 `resolved: false` ——
+那不是「找不到」，是**这条不该问 PATH**。把两者混作一谈，第四处刚补上的那条
+「查无此命令即拒」就把**该保守的方向用反了**（判据从「不许把裸名字丢给 spawn」退化成
+「不许用路径」）。
+
+修法**是两半，缺一不可**：外壳自己判「路径 or 名字」（含 `/` 或 `\` 即路径，
+**不判它存不存在**），然后按对象分派 ——
+
+- **名字** → PATH 查找 + 形态（`resolveCommandInvocation()`）；
+- **路径** → **不查 PATH**（`isPathLike()`），但仍要**过分态判据**
+  （`commandInvocation()`）：先 `path.resolve` 绝对化，再由它把同目录的 `.ps1`
+  回退（`siblingFallback`）找出来。
+
+⚠️ **第二半不是可有可无的锦上添花**：只做第一半（「路径原样交给 `spawn`」）只解决了
+**误报**，命令在 Windows 上**照样起不来** —— pnpm 给 `node_modules/.bin/<工具>` 摆的三个
+垫片（`.cmd` / `.ps1` / 无扩展名 shim），Node 一个都起不了（`.cmd` 只有 cmd.exe 解释、
+shim 是 shebang），而这三个正是 `.cnb.yml` 里那条 `node_modules/.bin/tsc` 与三条
+`vitest` 要用的形态。**「不问 PATH」回答的是「该问谁」，「过形态判据」回答的是「怎么起」
+—— 这是两个问题。**
+
+> 这一处与第四处合起来是同一句话的两面：**「回退」和「拒绝」都要先认清对象是谁。**
+> 收名字的那一层不能拿「原样退回候选」当保守（那会把裸名字交给 spawn），
+> 而「查无此命令」这条戒律也不能套到路径上（那会把合法的 stage 命令拦下）；
+> 而认清了对象之后**还得回答「怎么起」**，否则只是不误报、命令照样起不来。
+
+> **第六处（也是这一串里最值钱的一条边界）：注入面能盖住「实现写错了」，盖不住
+> 「接错线了」。** 前五处都是实现写错，而判「解析口改对了」的用例**全都注入 `resolve`**
+> —— 注入面是个「输入什么就交回什么」的假实现，于是三类错法在它下面**全部看不出来**：
+> 接错线了（默认值写错 / 压根没接上）、只覆盖了一半形状（第五处的路径那一半，而上一处
+> 的用例全拿裸名字当输入）。所以新增的判据里有两条**不注入 `resolve`**：「默认解析口
+> 真的接在编排上」（反向复算：换回裸名字透传当场报
+> `expected [ 'pnpm' ] to deeply equal [ '/tmp/…/pnpm' ]`）与「路径真的过形态判据」
+> （反向复算：退回「原样透传」当场点名两条）。用例 25 → 27 条。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的
