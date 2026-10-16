@@ -99,14 +99,17 @@
     # 被 checkout 抹掉，而 `env` 是 HEAD 的事）。判据按本键解析 `.cnb.yml`：
     #   · `PYTHON_PROBE` —— `scripts/python-probe.mjs`：逐个候选打印「这个命令起不起
     #     得来」。缺件时那几条用例走 `env` 档跳过（不会红），跳过的是哪几条只有它答得出。
-    #   · `GATES` —— 本档的 stage 名有序清单：`单元测试` 必须排在 `Python 可用性` 之后。
-    #     理由不是风格 —— 实测 `cnb-jt3-1k5071kou` 上 `单元测试` 跑到 **2h24m** 被 8640s
-    #     墙钟掐断（只留下 `timeout of 8640000ms exceeded`），而那一步**照旧会往下跑**
-    #     （缺 Python 只让它少判几格）。排在后面 = 那个结论要么永远看不到、要么在最贵的
-    #     位置才看到。`tests/no-platform-ci-config.test.ts` 按它判序。
+    #   · `GATES` —— 本档的 stage 名有序清单。两条被判的约束都是实测出来的：
+    #     ① `单元测试` 必须排在 `Python 可用性` 之后 —— `cnb-jt3-1k5071kou` 上它跑到
+    #        **2h24m** 被 8640s 墙钟掐断（只留下 `timeout of 8640000ms exceeded`），
+    #        而那一步**照旧会往下跑**（缺 Python 只让它少判几格）；
+    #     ② `环境前提` 必须排在 `Install dependencies` 之前 —— 它答的就是「这次装得成
+    #        装不成」的前提，排在后面等于把结论推到自己要解释的那一步后面。
+    #     两条都不是风格。判据分别在 `tests/no-platform-ci-config.test.ts` 与
+    #     `tests/ci-env-probe.test.ts`。
     COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
     COMFYAPP_CI_GATES: >-
-      工具链自证, Python 可用性, Python 探针读数, Install dependencies, 分支守卫, 同步数据库表结构,
+      工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 同步数据库表结构,
       类型检查, ESLint 零警告, 单元测试, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -179,6 +182,29 @@
   - name: Python 探针读数
     script: node scripts/python-probe.mjs
 
+  # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
+  #
+  # 上面三步答的是「四件工具在不在」「解释器住哪」，这一步答的是它旁边那两格：
+  #
+  #   ① **在，但版本不够** —— 解释器低于本仓写明的下限 Python 3.10；
+  #   ② **配置配错了** —— `.cnb.yml` 里有 host 侧 PowerShell（5.1）认不了的语法面。
+  #
+  # 两格的共同形态正是 ISSUE #1959 里那句「别等到执行几十分钟后才发现环境不行」：
+  # 第 ① 格**不会让哪一步变红**（门禁的 Python 侧以「探测不到」的名义退出比对、
+  # 几条真跑的用例走 `env` 档跳过并登记 —— 与「装好了」在日志里逐字同形），
+  # 第 ② 格红在**几十步之后**（`Install dependencies` 那段 PowerShell 自己），
+  # 而它在跑到那一步之前会先把预算是花掉。
+  #
+  # 判据不重写：解释器怎么找走 `ci-toolchain-python.mjs` 的 `findPython()`（与
+  # `Python 可用性` 同一份候选表、同一个探针），`.cnb.yml` 的语法面复用
+  # `tests/no-platform-ci-config.test.ts` 导出那一份（本地钩子与平台侧同一条判据）。
+  # 逻辑在 `scripts/ci-env-probe.mjs` —— **不在这里就地写 PowerShell**，理由与
+  # `工具链自证` 逐字相同：配置里的逻辑一条判据都测不到它。
+  # 代价几秒，跑在**任何依赖安装之前**（它只 import `node:*`，那时 `node_modules`
+  # 还没有）。
+  - name: 环境前提
+    script: node scripts/ci-env-probe.mjs
+
   # ── 安装 ──
   # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。
   # --frozen-lockfile 保证装的就是锁文件里的版本。
@@ -188,6 +214,18 @@
   - name: Install dependencies
     script: |
       $ErrorActionPreference = "Stop"
+      # 动依赖面前先自证一件事：**这个宿主真的起得来 pnpm** —— 而它正好是这一步
+      # 的全部动作。放在这里而不是更早的 stage，是因为这条判据**在更早的位置上做不
+      # 出来**：`工具链自证` 那份探针刻意按形态解析（corepack 摆在盘上的 pnpm 有三个
+      # 形态，Node 只起得来其中一个，见 §2.1.1），而这一句走的是 host 自己的解析面 ——
+      # 两者不是同一条链，也不该被压成一条（脚本自己写着理由：判据全在
+      # `scripts/launcher-core/corepack.mjs`，它是薄壳）。
+      #
+      # 顺序要紧：**判在装之前**。装失败之后再判，红的位置就与原因分开了 —— 而
+      # 「pnpm 起不来」这条链上此前每一轮都是这个形态（第一步绿、几十步之后才以一个
+      # 看不懂的错收场，实测见 §13.5.3.6）。这里 1 秒就能问出来，且它跑在
+      # `Install dependencies` 本来的位置上，代价是零。
+      node scripts/check-pnpm-available.mjs
       pnpm install --frozen-lockfile
 
   # ── 分支保护 ──
