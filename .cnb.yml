@@ -120,17 +120,23 @@
     # 判据见 `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条。
     COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
     COMFYAPP_CI_DISABLED_GATES: >-
-      单元测试
-    # ⚠️ `单元测试` 不在下面这一行里 —— 它被**临时停用**，见 `DISABLED_GATES` 与
-    # `.gates` 里那段被注释掉的条目（ISSUE #1959：宿主侧测试环境未就绪，
-    # 先屏蔽，等测试流程好了再加回来）。
+      单元测试, 浏览器安装, E2E 关键流程
+    # ⚠️ 上面这三个都不在下面那一行里 —— 它们被**临时停用**，见 `DISABLED_GATES` 与
+    # `.gates` 里各自那段被注释掉的条目（ISSUE #1959：宿主侧环境未就绪，先屏蔽，
+    # 等环境好了再加回来）：
+    #   · `单元测试` —— 宿主侧测试环境未就绪；
+    #   · `浏览器安装` / `E2E 关键流程` —— 这台节点下不回那 120 MiB（读数与判读见
+    #     规范 §13.5.3.5 ⑩与该 stage 的注释），而 E2E 依赖它、留着只是把红挪一格。
     COMFYAPP_CI_GATES: >-
       工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 同步数据库表结构,
       类型检查, ESLint 零警告, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, core 骨架单一事实源,
-      零消费导出, core 出口纪律与基类纯度, 生产构建, 浏览器安装, E2E 关键流程
+      零消费导出, core 出口纪律与基类纯度, 生产构建
+    # ⚠️ `浏览器安装` 与 `E2E 关键流程` 不在上面这一行里 —— 它们被**临时停用**，
+    # 见 `DISABLED_GATES` 与 `.gates` 里各自那段以注释形态留着的原文（恢复动作 =
+    # 取消注释 → 把名字挪回本行 → 从 `DISABLED_GATES` 删掉）。
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
@@ -428,52 +434,69 @@
   #
   # 三个面各自修掉了（退码转出去 / 装完按落点复验 / 下载失败给读数），口径见
   # 规范 §13.5.3.5–§13.5.3.6。
-  - name: 浏览器安装
-    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
-    env:
-      # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
-      #
-      # 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
-      # 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
-      # 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
-      # 这样一条链路上无论等多久都不会到。
-      #
-      # 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
-      # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
-      # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
-      #
-      # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
-      # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
-      # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
-      # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
-      # 也就是说这一档**推不出来**，只能由这里给：给上之后
-      # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
-      #
-      # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
-      # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
-      # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
-      # 真要换（内网代理、别的镜像站）改这一行即可。
-      #
-      # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
-      # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
-      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
-      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-    # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
-    # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
-    # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
-    timeout: 20m
+# - name: 浏览器安装
+# ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，ISSUE #1959 / #1966）—— 这块原文
+# 留着是为了「取消注释」能恢复。停用的读数（`cnb-ve6-1k51jaudm`，取证跑）：
+#
+#   内置族（cdn.playwright.dev）+ 30s  → 5 次 `timed out after 30000ms`、0 字节
+#   配着的 npmmirror 根 + 120s        → `timed out after 120000ms`、0 字节（`cnb-oqf-...`）
+#   失败分支的逐候选探测             → 三条都只取回**小段**字节（582 / 1889 / 442），
+#                                      即「连得上、也收得到开头」，而大 body 停住
+#
+# 结论：**这台节点取不回那 120 MiB**，而这一格要绿只有这一个条件（规范 §13.5.3.5 ⑩）。
+# 三条出路（换一条大 body 也走得动的根 / 配代理 / 预装进落点）全在宿主机侧，不在仓里。
+# 停用不是「放行这一格」—— 它是把「环境动作的代价」与「代码判据」分开：这台机器上
+# 这一格**永远不会绿**，留着它等于让每一个 PR 都卡在一个仓库改不动的地方。
+# 恢复动作：取消本块注释 → 把 `浏览器安装` 从 `DISABLED_GATES` 挪回 `GATES`。
+# script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+# env:
+# **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
+#
+# 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
+# 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
+# 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
+# 这样一条链路上无论等多久都不会到。
+#
+# 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
+# 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
+# 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
+#
+# **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
+# （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+# 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
+# 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
+# 也就是说这一档**推不出来**，只能由这里给：给上之后
+# `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
+#
+# ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
+# 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
+# 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
+# 真要换（内网代理、别的镜像站）改这一行即可。
+#
+# ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
+# 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
+# PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+# PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+# 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
+# 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
+# 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
+# timeout: 20m
 
   # ── E2E（仅 @critical 关键流程）──
   #
   # 解释器这一格已由前面那步「Python 可用性」在**整条流水线的最前**答过（它也是
   # 本地 `pnpm test:e2e` 走 `scripts/e2e-run.mjs` 时的同一份判据），故这里不重判。
   # 浏览器那一格由上面那步「浏览器安装」答过（自托管没有镜像预装）。
-  - name: E2E 关键流程
-    script: node scripts/e2e-run.mjs --grep @critical
-    # 这一档在自托管路径上**从来没有跑过**（前几跑都断在 `单元测试` 或 `生产构建`），
-    # 所以没有历史读数可依。它要起 `next start` + Playwright 浏览器、跑 `@critical`
-    # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
-    timeout: 30m
+# - name: E2E 关键流程
+# ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，ISSUE #1959 / #1966）—— 同 `浏览器安装`：
+# 它依赖那一格的浏览器二进制，浏览器装不上时它只会在 `next start` + Playwright 启动处
+# 报**同一个** launch 失败，也就是说留着它只是把红从倒数第三步挪到倒数第二步，
+# 判据强度一点没变。恢复动作与 `浏览器安装` 逐字相同。
+# script: node scripts/e2e-run.mjs --grep @critical
+# 这一档在自托管路径上**从来没有跑过**（前几跑都断在 `单元测试` 或 `生产构建`），
+# 所以没有历史读数可依。它要起 `next start` + Playwright 浏览器、跑 `@critical`
+# （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
+# timeout: 30m
 
 master:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
