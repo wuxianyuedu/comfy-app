@@ -32,7 +32,9 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { whichCommand } from "../../src/lib/process/executable-resolve.ts";
+import { clearWhichCommandCache } from "../../src/lib/process/executable-resolve.ts";
+import { pythonCandidates as sharedPythonCandidates } from "../../src/lib/process/python-candidates.ts";
+import { resolvePython } from "../../src/lib/process/python-resolve.ts";
 
 /** 替身包所在目录：它的子目录 `comfy_cli/` 就是 `python -m comfy_cli` 要找的包。 */
 export const FAKE_CLI_MODULE_ROOT = path.resolve(
@@ -51,7 +53,7 @@ export const FAKE_CLI_FAIL_SENTINEL_VALUE = "E2E_FAKE_CLI_FAIL_SENTINEL";
 /**
  * 可注入的可用性探针（`seed` 那几个用例要用它把「选中了谁」与「真起一次」分开）。
  * 形状取自 `executable-resolve.ts` 的 `UsabilityProbe`——这里不 import 那个类型，
- * 因为 `.mjs` 侧只需要它的结构（判据仍由 `whichCommand` 一处持有）。
+ * 因为 `.mjs` 侧只需要它的结构（判据仍由 `whichCommand` 与 `resolvePython` 持有）。
  *
  * @typedef {{ access(candidate: string): void, spawn(candidate: string, args: string[]): string | null }} PythonProbe
  */
@@ -60,25 +62,26 @@ export const FAKE_CLI_FAIL_SENTINEL_VALUE = "E2E_FAKE_CLI_FAIL_SENTINEL";
 export const COMFY_CLI_PYTHON_KEY = "COMFY_CLI_PYTHON";
 
 /**
- * 按平台给解释器候选名（**只给名字，PATH 上找不找得到由 `whichCommand` 判**）。
+ * 按平台给解释器候选名 —— **转发** `src/lib/process/python-candidates.ts`。
  *
- * 顺序即判据：Windows 上 `python` 是绝大多数安装器的落点（`python3` 往往根本
- * 没有），`py` 是官方启动器（装了 Store 版 Python 时常只有它）；POSIX 上反过来
- * `python3` 才是规范名（很多发行版没有裸 `python`）。这与
- * `src/lib/comfyui/launch-path.ts` 的 `POSIX`/`WIN32` 解释器候选同口径。
+ * 这里此前自己写了一份，而门禁脚本与流水线的「工具链自证」各又写一份；三份在
+ * 「Windows 先试 `python` 还是先试 `python3`」「`py` 要不要带 `-3`」这两件事上
+ * 必然漂移（ISSUE #1959 第二轮首跑现场就是它）。复用在先（硬规则 24）：候选表
+ * 与启动参数都只有那一处，本模块只保留「e2e 视角」的转发与文档。
  *
  * @param {NodeJS.Platform} [platform]
  * @returns {string[]}
  */
 export function pythonCandidates(platform = process.platform) {
-  return platform === "win32" ? ["python", "py", "python3"] : ["python3", "python"];
+  return sharedPythonCandidates(platform);
 }
 
 /**
  * 挑一个**真能跑**的解释器（绝对路径）；PATH 上一个都没有时返回 `null`。
  *
- * 抽成可注入 `platform` / `env` / `probe` 的纯函数，好让两个平台的候选顺序都能
- * 被逐条断言（开发机上造不出另一个平台的 PATH）。
+ * 转发 `src/lib/process/python-resolve.ts` —— 候选顺序、`py` 的 `-3`、以及
+ * 「真起一次确认」这三件事都在那一份里。本模块只保留 e2e 需要的形状
+ * （`probe` 可注入，好让两个平台的候选顺序在本机被逐条断言）。
  *
  * @param {{
  *   env?: Record<string, string | undefined>,
@@ -92,11 +95,16 @@ export function resolveFakeCliPython({
   platform = process.platform,
   probe,
 } = {}) {
-  for (const name of pythonCandidates(platform)) {
-    const found = whichCommand(name, { env, platform, ...(probe ? { probe } : {}) });
-    if (found) return found;
-  }
-  return null;
+  /* 记忆化键不含探针（见 `executable-resolve.ts` 的 `probeArgs` 注释），
+   * 而这里的调用方会拿不同的假探针问同一条 PATH —— 不先清就会读到上一条的结论。 */
+  clearWhichCommandCache();
+  const hit = resolvePython({
+    env,
+    platform,
+    ...(probe ? { probe } : {}),
+  });
+  clearWhichCommandCache();
+  return hit?.path ?? null;
 }
 
 /**
@@ -138,7 +146,11 @@ export function fakeExecutorEnv({
       python: null,
     };
   }
-  const python = resolveFakeCliPython({ env, platform, ...(probe ? { probe } : {}) });
+  const python = resolveFakeCliPython({
+    env,
+    platform,
+    ...(probe ? { probe } : {}),
+  });
   if (!python) {
     return {
       env: {},

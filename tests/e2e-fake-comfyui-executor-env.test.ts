@@ -30,6 +30,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { hasPython } from "./helpers/python-exe";
+
 import {
   COMFY_CLI_PYTHON_KEY,
   FAKE_CLI_FAIL_SENTINEL_KEY,
@@ -39,6 +41,11 @@ import {
   pythonCandidates,
   resolveFakeCliPython,
 } from "../e2e/support/fake-comfyui-executor-env.mjs";
+
+/** Python 可用性。写成常量而不是 `it.skipIf(!hasPython())`：登记表的扫描器按
+ * `[^)]*` 取守卫文本，守卫里带括号会让它匹配不上 —— 新增的 skip 站点于是在登记表里
+ * **隐形**。 */
+const PYTHON_OK = hasPython();
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -184,7 +191,11 @@ describe("fakeExecutorEnv：两个平台同一条形状", () => {
     expect(missingPython.reason).toContain("Python");
   });
 
-  it("在本机真跑一次：确实能解析出一个解释器与真实的替身目录", () => {
+  /* 没有 Python 时跳过并登记（`env` 档，与 `tests/check-file-structure.test.ts` 的
+   * `!python` 那一族同处置）—— 这一条判的是「本机能解析出解释器」，机器上根本没有时
+   * 它无从判起；缺件的**真实后果**由流水线第一步正面回答（E2E @critical 的主链路会以
+   * 「执行器起不来」失败），不靠这一条兜。 */
+  it.skipIf(!PYTHON_OK)("在本机真跑一次：确实能解析出一个解释器与真实的替身目录", () => {
     /* env 里**只摘掉宿主的 PYTHONPATH**：`PYTHONPATH` 按前缀语义拼进结果
      * （上面那条纯断言守着它），于是「精确等于替身目录」只在宿主 shell 干净时
      * 成立 —— CodeBuddy 宿主的 agent shell 就把它设成了自己的 `vendor\shim`，
@@ -193,8 +204,7 @@ describe("fakeExecutorEnv：两个平台同一条形状", () => {
     const env = { ...process.env };
     delete env.PYTHONPATH;
     const result = fakeExecutorEnv({ env });
-    /* 开发机 / CI 上应当都有 Python（本仓库的 e2e 前提就是它）。
-     * 真没有时这一条会红，那是**该红**的：主链路用例同样会红。 */
+    /* 能走到这里就说明本机有可用的 Python（守卫在上面那条 skipIf 上）。 */
     expect(result.reason).toBeNull();
     expect(result.python).toBeTruthy();
     expect(existsSync(path.join(FAKE_CLI_MODULE_ROOT, "comfy_cli", "__main__.py"))).toBe(

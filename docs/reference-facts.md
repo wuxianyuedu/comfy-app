@@ -155,6 +155,7 @@
 | `path.rebuild-static`       | 重建 static 入口          | `tools/build/rebuild-static.ps1`      | 入口薄壳（逻辑在 tools/scripts/）                                                  |
 | `path.build-tauri-release`  | 重编壳 + 打包             | `tools/build/build-tauri-release.ps1` | 重编壳入口                                                                         |
 | `path.nvmrc`                | Node 版本                 | `.nvmrc`                              | Node LTS 约定                                                                      |
+| `path.cnb-yml`              | 平台侧流水线配置          | `.cnb.yml`                            | 跑在根组织自托管节点（标签 `win`）上的门禁；两次取向反转见规范 §13.5.3            |
 
 ---
 

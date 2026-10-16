@@ -4,7 +4,14 @@ import {
   fakeComfyuiEnv,
   fakeComfyuiStatsUrl,
 } from "./e2e/support/fake-comfyui-endpoint.mjs";
-import { fakeExecutorEnv } from "./e2e/support/fake-comfyui-executor-env.mjs";
+import {
+  COMFY_CLI_PYTHON_KEY,
+  fakeExecutorEnv,
+} from "./e2e/support/fake-comfyui-executor-env.mjs";
+import {
+  decodePythonPreflight,
+  PYTHON_PREFLIGHT_ENV_KEY,
+} from "./e2e/support/preflight-python.mjs";
 
 /**
  * Playwright E2E 配置（AGENTS 硬规则：本仓库只用 pnpm，webServer 用 `pnpm dev`）。
@@ -39,7 +46,23 @@ const appOrigin = `http://localhost:${appPort}`;
  *
  * 只在替身包与解释器都在时才注入：**没有它也不该让全套 e2e 起不来**（视觉档、
  * 冒烟档都不碰执行链路）。缺件时主链路用例会按「执行器起不来」失败，`reason`
- * 会打在开始时的提示里。 */
+ * 会打在开始时的提示里。
+ *
+ * ── 解释器**定死成绝对路径**（ISSUE #1959 第四轮）
+ *
+ * `fakeExecutorEnv()` 交给应用的 `COMFY_CLI_PYTHON` 是一个**裸名字**，而应用侧把它
+ * 直接 `spawn`（`executor-cli.ts` → `spawn(comfyCliPython, ["-m", "comfy_cli", …])`）
+ * —— Windows 上 Node 不认 PATHEXT，裸名字必然 `ENOENT`。那一档只在「生产构建 +
+ * start」上暴露，而平台侧 E2E 正是那一档。
+ *
+ * 解析这件事的判据不在这里（它在 `src/lib/process/python-*` + `whichCommand`），
+ * 本文件只**读** `scripts/e2e-run.mjs` 起 Playwright 之前算好的那份判决 —— 同
+ * `globalSetup` 读 pre-flight 端口结论的口径（ISSUE #1766）。读不到时退回裸名字：
+ * 那一格是「不知道」而不是「没有」，别把手工 `pnpm exec playwright test` 弄崩。 */
+const pythonPreflight = decodePythonPreflight(
+  process.env[PYTHON_PREFLIGHT_ENV_KEY],
+);
+
 const fakeExecutor = fakeExecutorEnv();
 if (fakeExecutor.reason) {
   process.stdout.write(
@@ -47,6 +70,9 @@ if (fakeExecutor.reason) {
   );
 }
 const executorEnv: Record<string, string> = fakeExecutor.env;
+if (pythonPreflight?.interpreter && executorEnv[COMFY_CLI_PYTHON_KEY]) {
+  executorEnv[COMFY_CLI_PYTHON_KEY] = pythonPreflight.interpreter;
+}
 
 /**
  * 现场编译档的并发 —— **不是**「慢机器降并发」那种旋钮，是「首帧要现场编译」这一格的取值。

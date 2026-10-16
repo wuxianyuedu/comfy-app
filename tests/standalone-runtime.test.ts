@@ -156,21 +156,52 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     //   · `launcher-core/shell.mjs`（**静态** import `../../src/lib/process/executable-resolve.ts`，
     //     ISSUE #1327：判据下沉到 src/lib 后两侧共用同一份，见那份文件头）。
     // 相对深度两种写法都要认（`../` 与 `../../`）。
+    //
+    // **链要跟着走**（ISSUE #1961）：只数「脚本直接 import 的那一层」会漏掉被它
+    // import 的模块自己再 import 的东西 —— 而逐文件放行的语义是「一个都不能少」：
+    // 漏了不是「那一步跳过」，是整个编排器加载即 `ERR_MODULE_NOT_FOUND`。
+    // 实测踩过：`executable-resolve.ts` 多了个叶子 `platform.ts`，上面那层数字一个
+    // 没变，而产物里少一份就等于桌包启动即断（这条用例当场红了才看见）。
     const entries = [
       "scripts/reap-process.mjs",
       "scripts/dev-launcher.mjs",
       "scripts/launcher-core/shell.mjs",
     ];
-    const specifiers = entries
+    /** 一份 TS 里 `./x.ts` / `./x` 两种写法都要认（本仓 TS 侧惯例是省略扩展名，
+     *  而 `.mjs` 侧必须带 —— 那正是 `platform.ts` 被拆出来的理由）。 */
+    const relativeSpecifiers = (abs: string): string[] => {
+      const src = readFileSync(abs, "utf8");
+      return [...src.matchAll(/from "((?:\.\.\/)*\.\.?\/[^"]+)"/g)]
+        .map((m) => m[1])
+        .filter((spec): spec is string => spec !== undefined)
+        .filter((spec) => spec.startsWith("."));
+    };
+    const seen = new Set<string>();
+    const queue = entries
       .flatMap((file) =>
-        [
-          ...read(file).matchAll(
-            /"\.\.(?:\/\.\.)?\/src\/(lib\/[^"]+\.ts)"/g,
-          ),
-        ].map((m) => m[1]),
+        [...read(file).matchAll(/"\.\.(?:\/\.\.)?\/src\/(lib\/[^"]+)\.ts?"/g)]
+          .map((m) => m[1])
+          .filter((v): v is string => v !== undefined),
       )
-      .filter((v, i, arr) => arr.indexOf(v) === i)
-      .sort();
+      .filter((v) => !seen.has(v) && (seen.add(v), true));
+    while (queue.length > 0) {
+      const rel = queue.shift();
+      if (rel === undefined) break;
+      const abs = path.join(ROOT, "src", `${rel}.ts`);
+      if (!existsSync(abs)) continue;
+      for (const spec of relativeSpecifiers(abs)) {
+        const resolved = path.posix.normalize(
+          path.posix.join(path.posix.dirname(rel), spec.replace(/\.ts$/, "")),
+        );
+        if (resolved === "." || resolved.startsWith("../")) continue;
+        if (seen.has(resolved)) continue;
+        seen.add(resolved);
+        queue.push(resolved);
+      }
+    }
+    /* 走链时剥过 `.ts`（为了把 `./x.ts` 与 `./x` 两种写法归一），这里要把它还回来：
+     * `RUNTIME_SRC` 的条目形态带扩展名（它就是 4 处脚本里 import 说明符的原文）。 */
+    const specifiers = [...seen].map((rel) => `${rel}.ts`).sort();
     expect(specifiers.length).toBeGreaterThan(0);
     const { RUNTIME_SRC } = await loadStatic();
     expect([...RUNTIME_SRC].sort()).toEqual(specifiers);
@@ -505,7 +536,9 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(out.status, text).toBe(0);
     expect(text).toMatch(/executor mode=inline/);
     expect(text).not.toMatch(/host pid=/);
-    expect(existsSync(path.join(workdir, "log", "current", "services"))).toBe(false);
+    expect(existsSync(path.join(workdir, "log", "current", "services"))).toBe(
+      false,
+    );
   });
 
   it("设了 host 而载荷里没有宿主入口 ⇒ 大声说明并留在 host 归属，不偷偷降级", () => {

@@ -442,9 +442,11 @@ const FACTS = [
     source: "tools/build/build-tauri-release.ps1",
   },
   { key: "path.nvmrc", kind: "path", source: ".nvmrc" },
-  // 平台侧 CI 配置（.cnb.yml）**已删除**（ISSUE #623：免费额度 160 核时/月，
-  // 跑不起）。这里不再登记它的路径——path 类事实的语义是「文档里指向的文件必须
-  // 存在」，登记一个刻意不存在的文件只会让 doc:check 恒红。
+  // 平台侧 CI 配置（.cnb.yml）**重新启用**（ISSUE #1959：跑在根组织自托管节点上，
+  // 不参与核时计费，故 #623 那条「用不起」的前提不再成立）。path 类事实的语义是
+  // 「文档里指向的文件必须存在」，它现在真的存在，所以**必须**登记——否则文档里
+  // 引用它会被判成指向不存在的文件。形态由 tests/no-platform-ci-config.test.ts 守。
+  { key: "path.cnb-yml", kind: "path", source: ".cnb.yml" },
 ];
 
 /* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────

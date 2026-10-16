@@ -282,3 +282,61 @@ describe("whichCommand：只认「真的能跑」的候选", () => {
     },
   );
 });
+
+/**
+ * `env` 可能是 `{ ...process.env }` 的**复制品**，而 Windows 的键常写成 `Path`
+ * （ISSUE #1961，平台侧 E2E 的最后一格）。
+ *
+ * 现场：同一次构建里 `Python 探针读数` 报
+ * `ok python → D:\Program Files\Python312\python.exe`（它读的是 `process.env`
+ * 这个**大小写不敏感的代理**），而 `E2E 关键流程` 报「PATH 上没有可用的 Python」
+ * —— 它的 `env` 来自 `{ ...process.env }`（普通对象、键是 `Path`）。
+ * 差的正是「读的是代理还是复制品」，而不是「这台机有没有 Python」。
+ *
+ * 判据按**目标平台**判（`platform: "win32"`），与 `executableExts()` 同口径：
+ * 它跑在 POSIX 上，`process.platform` 不是被测的那一个。
+ */
+describe("whichCommand：环境变量的键大小写（Windows 的 `Path`）", () => {
+  /** 只看候选名、不真起进程 —— `access` 与 `spawn` 都放行。 */
+  function passthrough(): UsabilityProbe {
+    return { access: () => undefined, spawn: () => null };
+  }
+
+  it("win32：键写成 `Path` 时也找得到（复制品的形态）", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool.EXE");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    expect(
+      whichCommand("tool", {
+        env: { Path: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+        platform: "win32",
+        probe: passthrough(),
+      }),
+    ).toBe(exe);
+  });
+
+  it("win32：键写成 `PATH` 时同样找得到（对照组，不许反过来红）", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool.EXE");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    expect(
+      whichCommand("tool", {
+        env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+        platform: "win32",
+        probe: passthrough(),
+      }),
+    ).toBe(exe);
+  });
+
+  it("POSIX 上大小写**是**要紧的：`Path` 不算 `PATH`（这一层不改 POSIX 行为）", () => {
+    const dir = freshDir();
+    writeExec(path.join(dir, "tool"), "#!/bin/sh\nexit 0\n");
+    expect(
+      whichCommand("tool", {
+        env: { Path: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+        platform: "linux",
+        probe: passthrough(),
+      }),
+    ).toBeNull();
+  });
+});

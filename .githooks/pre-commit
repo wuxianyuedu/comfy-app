@@ -147,6 +147,15 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
 # D 组步骤数一致，新增判据时必须同步这个数字。
 run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
+  # 先答一格「这台机器上解释器在哪」：几条用到 Python 的用例缺件时按**既有口径**
+  # 走 `env` 档跳过并登记（`tests/helpers/python-exe.ts` 的 `hasPython()`），
+  # 也就是说它们**不会让本组变红** —— 缺件在日志里是隐身的。
+  # 这正是 `check-affected-tests` 报「本次改动牵扯到的 N 个用例里有 X 条被跳过」
+  # 时缺的那一半：跳过是事实（C 组照实报），但「跳过的是哪几条、因为什么」此前
+  # 只能靠人自己拼。**只打印、不阻断**（判据那一份只有
+  # `scripts/ci-toolchain-selfcheck.mjs --python-only` 一个 —— 本钩子不该因为开发机上
+  # 没装 Python 而拦住提交，那会把环境缺口变成提交门槛）。
+  node scripts/python-probe.mjs || true
   node scripts/run-affected-tests.mjs'
 
 # ── D：其余静态判据（互不依赖；组内串行以控内存，但整体与 A/B/C 并行）──────

@@ -139,3 +139,8 @@ _tmp_*/
 /src-tauri/Cargo.lock
 # build.rs 声明 AppManifest 命令后由 tauri-build 自动生成的 ACL 权限文件
 /src-tauri/permissions/
+
+# 工具链自证在本机装出来的 Python（embed 包解压的落点，见 scripts/ci-toolchain-python.mjs
+# 的 viaEmbed）——它是**这台机器**的产物，不是仓库内容：进了 git 就等于把「谁在哪台机上
+# 装过什么」当成事实分发出去。装了就不再下第二遍的判据读的是盘上有没有它，与 git 无关。
+/python-embeded/

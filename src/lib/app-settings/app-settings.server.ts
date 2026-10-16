@@ -8,6 +8,7 @@
  * `~/lib/endpoints`（零依赖常量层），而不是走这条会拖进 `node:fs` 的路。
  */
 
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -87,28 +88,49 @@ let cache: AppSettings | null = null;
  * 桌包拓扑里这两件事发生在两个进程：设置由内嵌 server 写盘，解释器路径由执行宿主
  * 取值。宿主只在第一次取值时读盘 → 用户在「设置」页填完解释器再点「重试」，宿主
  * 拿到的仍是空值，同一个 FAILED 复现（实测：宿主不重启就永远读不到新值）。
- * 判据取 `mtimeMs` + `size` 二元组，与 `comfyui/localWorkflows.ts` 的校验和备忘同口径。 */
+ *
+ * ## 判据为什么是**内容**而不是 `mtimeMs + size`（ISSUE #1961）
+ *
+ * 原先是 `mtimeMs:size` 二元组 —— 它**分不出「同一时间刻度内、等长的两次改写」**：
+ * `writeFileSync` 连着写两遍同样长度的内容时，`mtimeMs` 完全可能一模一样
+ * （本机实测：200 次背靠背等长改写里 **66 次**撞上同一个 `mtimeMs:size`），
+ * 而线上那台机器负载更高、只会更容易撞。撞上时指纹没变 ⇒ **缓存照旧命中** ⇒
+ * 读到的还是旧值，而那正是这条缓存要防的事（跨进程失效）。
+ *
+ * 实测形态（平台侧 `单元测试`，只在这一格红、本地恒绿 —— 因为它是概率的）：
+ * 「跨进程失效」那一组里、断言「指纹没变时走的是同一份缓存对象」那条报
+ * `AssertionError expected 'A' toBe 'B'`（读到的是旧值 `"A"`）。
+ *
+ * 所以判据换成**内容摘要**：`sha1` 文件字节。设置文件是几百字节的本机配置，
+ * 每次取值哈希一遍的代价远小于「读到旧设置」的代价；而它与
+ * `comfyui/localWorkflows.ts` 那套**按内容寻址**（`importSource.checksum`）同源 ——
+ * 那边 `mtime+size` 只是「跳过重算」的加速键，结论始终取自内容，这里早先只取了加速键。 */
 let cacheFingerprint = "";
 
-/** 设置文件的指纹；文件缺失 / 不可读时返回空串 —— 「缺失」本身也只需触发一次重读。 */
-function settingsFileFingerprint(): string {
+/** 读盘并给出「内容摘要 + 原文」；读不到时给 `{fingerprint:"", raw:null}` ——
+ *  「文件缺失 / 不可读」本身也只需触发一次重读。
+ *
+ *  一次读盘同时得到两者：早先实现是「先 `statSync` 取指纹、再 `readFileSync` 取内容」
+ *  两趟，于是必须靠「指纹先取」的次序去躲「新指纹 + 旧内容」那一格；现在摘要就是
+ *  那一次的字节算出来的，中间没有可被插进来的窗口，那条次序约定连同它的注释一起撤掉了。 */
+function readSettingsFile(): { fingerprint: string; raw: string | null } {
   try {
-    const stat = fs.statSync(/*turbopackIgnore: true*/ SETTINGS_FILE);
-    return `${stat.mtimeMs}:${stat.size}`;
+    const raw = fs.readFileSync(/*turbopackIgnore: true*/ SETTINGS_FILE);
+    return {
+      fingerprint: createHash("sha1").update(raw).digest("hex"),
+      raw: raw.toString("utf-8"),
+    };
   } catch {
-    return "";
+    return { fingerprint: "", raw: null };
   }
 }
 
 /* 同步读取，带进程内缓存（磁盘上的设置一变就重读）。从请求处理器里调用是安全的。 */
 export function getSettingsSync(): AppSettings {
-  const fingerprint = settingsFileFingerprint();
+  const { fingerprint, raw } = readSettingsFile();
   if (cache && fingerprint === cacheFingerprint) return cache;
   try {
-    const raw = fs.readFileSync(
-      /*turbopackIgnore: true*/ SETTINGS_FILE,
-      "utf-8",
-    );
+    if (raw === null) throw new Error("设置文件读不到");
     const parsed = JSON.parse(raw) as Partial<AppSettings> & {
       comfyuiUrl?: string;
     };
@@ -119,8 +141,6 @@ export function getSettingsSync(): AppSettings {
   } catch {
     cache = migrateExitDefaults({ ...DEFAULTS });
   }
-  /* 指纹先取、内容后读：中间若有人写了盘，下一次调用会因为指纹对不上而重读，
-   * 最坏是多重读一次；反过来（先读再取指纹）会把「新指纹 + 旧内容」钉住，永久读到旧值。 */
   cacheFingerprint = fingerprint;
   return cache;
 }
@@ -142,9 +162,11 @@ export async function saveSettings(
     "utf-8",
   );
   /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
-   * mtime」判成外部改动、白白重读一遍。别的进程（执行宿主）不受这里影响，
-   * 它自己按文件指纹重读。 */
-  cacheFingerprint = settingsFileFingerprint();
+   * 内容」判成外部改动、白白重读一遍（读出来还是同一份，只是白花一次 IO）。
+   * 别的进程（执行宿主）不受这里影响，它自己按文件指纹重读。 */
+  cacheFingerprint = createHash("sha1")
+    .update(JSON.stringify(next, null, 2))
+    .digest("hex");
   return next;
 }
 

@@ -30,7 +30,6 @@ import {
   didNotRunSide,
   groupSteps,
   isDidNotRunShaped,
-  isGitCheckout,
   isTimeoutShaped,
   judge,
   mayDecideOnCleanSnapshot,
@@ -836,9 +835,34 @@ describe("base-check —— 真仓库上的四态", () => {
   });
 
   test("取不到上游时 resolveUpstreamRef 若能看到本地 master 也应认得它", () => {
-    /* 本仓库自己的检出就满足这条（`@{u}` 或某 remote 的 master 至少有一个可解析）。 */
-    expect(isGitCheckout(REPO_ROOT)).toBe(true);
-    expect(typeof resolveUpstreamRef(REPO_ROOT)).toBe("string");
+    /* **先在临时仓库上判**（下一条的由来就在这段注释里）：这一格要验的是候选表
+     * **第三条**（本地 `master`）够得着，所以夹具就该只有「本地 `master`、既没有
+     * `@{u}` 也没有任何 remote」这一种形态 —— 拿「本仓库自己的检出」当夹具是错的，
+     * 它只在**开发机的检出**上成立。
+     *
+     * 实测（自托管 CI 的克隆方式）：平台侧是
+     * `git init -b master` → `git remote add origin …` → `git fetch … refs/pull/N/merge`
+     * → `git checkout -f FETCH_HEAD` —— HEAD **detached**、`refs/heads/*` 一个都没有
+     * （`master` 是未诞生的分支）、`@{u}` 更不存在，于是 `resolveUpstreamRef()` 三条
+     * 候选全落空、如实回 `null`。也就是说**「取不到上游」在 CI 上是正常状态**，
+     * 而原来那条断言把「取得到」写成了本检出的恒真性质 ⇒ 只在 CI 上假红。
+     * 出处与克隆形态见规范 §13.5.3（平台侧取自「不可信事件」的源分支）。 */
+    const dir = mkdtempSync(join(tmpdir(), "base-check-localmaster-"));
+    try {
+      git(dir, "init", "-q", "-b", "master", ".");
+      git(dir, "config", "user.email", "gate@example.com");
+      git(dir, "config", "user.name", "gate");
+      git(dir, "config", "commit.gpgsign", "false");
+      writeFileSync(join(dir, "a.txt"), "a\n");
+      git(dir, "add", ".");
+      git(dir, "commit", "-qm", "chore: seed");
+      /* 前提必须成立：既没有 `@{u}`、也没有任何 remote —— 否则这条用例验的
+       * 就不是「第三条候选够得着」，而是「前两条先兜住了」。 */
+      expect(git(dir, "remote").trim()).toBe("");
+      expect(resolveUpstreamRef(dir)).toBe("master");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -27,6 +27,28 @@
  *
  * 正常跑 `pnpm test`（不在钩子里）时这些变量本就不存在，两处都是无操作 ——
  * 所以这一手在两个方向上都安全：不在钩子里无差别，在钩子里是唯一正确行为。
+ *
+ * ## 第二件事：宿主全局开了签名时，临时仓库要造得出提交
+ *
+ * 构建机（以及本仓的 CNB 构建容器）全局 `.gitconfig` 里常带着
+ * `commit.gpgsign = true` + `gpg.program = <平台专属签名器>`。临时仓库里既没有可用
+ * 密钥、那个签名器也往往不在 PATH 上，于是 `git commit` **直接失败**，报的是签名器
+ * 缺失的标准三联：`fatal: cannot run <signer>: …` / `error: gpg failed to sign the data` /
+ * `fatal: failed to write commit object`。
+ *
+ * 报错一个字都不指向夹具 —— 实测在自托管 Windows 构建节点上，`merged-side-loss-gate`
+ * 的 8 条用例就是这样整组红成「git commit 失败」，而同一份代码在本机全绿（本机那份
+ * 签名器恰好在 PATH 上）。
+ *
+ * 修法不是在每个调用点补 `git -c commit.gpgsign=false`（**那是抄第二遍**，本仓已经
+ * 抄出过三种写法：`git config commit.gpgsign false` / `-c` / `repo.commit` 的 `-c`
+ * 三连，而 `repo.git("commit", …)` 那条直路一直漏着），而是用 git 自己的
+ * `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` 机制把「禁签名 +
+ * 身份」注入**环境**：凡经本函数起的 git 进程都拿得到，包括夹具起的那一次、被测判据
+ * 脚本内部自己起的那些 —— 一处生效、无处可漏，且不占用任何配置文件的写权限。
+ *
+ * 身份同理：`user.name` / `user.email` 也一并注入，于是「宿主没配 git 身份」这一类
+ * 噪声（容器里 HOME 指向不存在的目录时就是它）同样不必每个调用点各兜一遍。
  */
 
 /** 必须剥掉的继承变量：全部是 `git` 给自己的子进程（含钩子）导出的「仓库定位」线索。 */
@@ -40,7 +62,36 @@ export const GIT_INHERITED_ENV_KEYS = [
   "GIT_PREFIX",
 ] as const;
 
-/** 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量的环境。
+/**
+ * 临时仓库里的 git 身份（`GIT_CONFIG_*` 注入的 `user.email` / `user.name`）。
+ *
+ * 值是**常量**而不是 `process.env` 里那一份：这些提交只活在测试自己造的临时仓库里、
+ * 用例结束后连目录一起删，不需要、也不该继承调用方的身份（真身份写进 dump 只会泄密）。
+ */
+export const SANDBOX_GIT_IDENTITY = {
+  email: "gate@example.com",
+  name: "gate",
+} as const;
+
+/**
+ * 注入给**所有**沙箱内 git 进程的配置项（键 → 值）。
+ *
+ * `commit.gpgsign` / `tag.gpgsign` 关掉：宿主全局开了签名时，临时仓库里没有可用密钥
+ * 与签名器，`git commit` 会当场失败（失败信息指不到夹具，见文件头）。
+ * `user.*` 一并给：容器里 HOME 指向不存在的目录时，宿主的全局身份也读不到。
+ *
+ * ⚠️ 不要往这里加「会被被测判据读到」的项 —— 这一层是**环境隔离**，不是判据输入。
+ */
+export function sandboxGitConfig(): Record<string, string> {
+  return {
+    "user.email": SANDBOX_GIT_IDENTITY.email,
+    "user.name": SANDBOX_GIT_IDENTITY.name,
+    "commit.gpgsign": "false",
+    "tag.gpgsign": "false",
+  };
+}
+
+/** 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量、并注入沙箱 git 配置的环境。
  * @param extra 追加的变量（在同名键处最后覆盖）
  * @returns 可直接交给子进程的 `env` */
 export function gitSandboxEnv(
@@ -48,6 +99,32 @@ export function gitSandboxEnv(
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
   for (const key of GIT_INHERITED_ENV_KEYS) delete env[key];
+  return withSandboxGitConfig(env);
+}
+
+/**
+ * 把 `sandboxGitConfig()` 以 git 的 `GIT_CONFIG_COUNT` 机制挂进一份环境（原地改并返回）。
+ *
+ * 为什么不是 `git -c`：那要写在**每一个** `git` 调用点上，而调用点既有夹具的
+ * `git()` / `commit()`，也有被测判据脚本内部自己起的 git —— 环境这一层才是全都能盖住的
+ * 那一处。`GIT_CONFIG_COUNT` 是 git 2.31 起的稳定接口，键值同 `git -c`（命令行级优先级，
+ * 压得住全局 `.gitconfig`）。
+ *
+ * 已有的 `GIT_CONFIG_COUNT`（调用方自己注入的）会被**排在其后**保留：不覆盖、不丢。
+ *
+ * @param env 目标环境（会被原地改写）
+ * @returns 同一份 `env`，方便链式使用
+ */
+export function withSandboxGitConfig(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const injected = sandboxGitConfig();
+  const base = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10) || 0;
+  let index = base;
+  for (const [key, value] of Object.entries(injected)) {
+    env[`GIT_CONFIG_KEY_${index}`] = key;
+    env[`GIT_CONFIG_VALUE_${index}`] = value;
+    index += 1;
+  }
+  env.GIT_CONFIG_COUNT = String(index);
   return env;
 }
 

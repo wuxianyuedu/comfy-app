@@ -80,9 +80,12 @@ afterEach(() => {
  *     `import()`（`launcher-core/shell.mjs`），缺了脚本以 exit 2 结束；
  *     递归拷整个目录而不是软链单文件（`shell.mjs` 还依赖同目录的 `command-echo.mjs`，
  *     且 Windows 下 `fs.symlink(文件)` 普通用户 100% EPERM）。
- *   · `src/lib/process/executable-resolve.ts` —— `shell.mjs` 静态 import 它
- *     （ISSUE #1327）：少了这份，临时仓库里的 `shell.mjs` 在**加载阶段**就
- *     `ERR_MODULE_NOT_FOUND`。
+ *   · `src/lib/process/executable-resolve.ts` 与它自己的依赖
+ *     `src/lib/process/platform.ts` —— `shell.mjs` 静态 import 前者
+ *     （ISSUE #1327），而前者又 import 后者：**链上的每一份都要在**
+ *     （只抄第一份等于把「链」抄成「一个点」，漏的那一份同样让临时仓库里的
+ *     `shell.mjs` 在**加载阶段**就 `ERR_MODULE_NOT_FOUND` —— 实测踩过，见
+ *     ISSUE #1961）。
  */
 const { test, expect } = defineGateRepo({
   script: "check-reformat-only.cjs",
@@ -93,6 +96,10 @@ const { test, expect } = defineGateRepo({
     {
       from: "src/lib/process/executable-resolve.ts",
       to: "src/lib/process/executable-resolve.ts",
+    },
+    {
+      from: "src/lib/process/platform.ts",
+      to: "src/lib/process/platform.ts",
     },
   ],
   setup: (repo) => {

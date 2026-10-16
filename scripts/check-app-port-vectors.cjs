@@ -38,6 +38,25 @@ const PROBE_TIMEOUT_MS = 10_000;
 const NOT_FOUND = "ENOENT";
 /** 文件在、但没有执行位 —— 与「没有文件」在下一步动作上同一件（去修 PATH / 去装）。 */
 const NO_EXEC = "EACCES";
+/**
+ * Python 解释器的候选名与启动参数 —— 按平台取，与
+ * `src/lib/process/python-candidates.ts` **同口径**。
+ *
+ * 为什么要在这里**抄一份**：本文件是 `.cjs`、且这条判据要能「不装依赖也跑」
+ * （pre-commit 里排在 tsc / lint 之前，见文件头）。`src/lib/process/python-candidates.ts`
+ * 是 TS，Node 的类型擦除不覆盖 `require`。所以候选表是**两份文本、一条判据** ——
+ * `tests/ci-toolchain-selfcheck.test.ts` 与 `tests/app-port-cross-language.test.ts`
+ * 那侧逐项对账，任何一侧漂了当场红。
+ *
+ * 排在 `py` 前面的理由与那份 TS 逐字相同：Windows 官方安装器落 `python.exe`，
+ * 而 `python3` 在 Windows 上多半只是 Store 的占位别名（`--version` 退非零）。
+ */
+const PYTHON_CANDIDATES =
+  process.platform === "win32"
+    ? ["python", "py", "python3"]
+    : ["python3", "python"];
+/** 每个候选的启动参数：裸 `py` 是「列出已装版本」并退非零，必须带 `-3`。 */
+const PYTHON_PROBE_ARGS = { py: ["-3", "--version"] };
 /** Python 侧真跑的预算。话术里的秒数跟着它走，别写死一个会过期的数。 */
 const PY_TIMEOUT_MS = 30_000;
 const problems = [];
@@ -132,9 +151,22 @@ function probeCommand(cmd, args) {
  * @returns {{state: "answered" | "timeout" | "missing" | "malformed", python: string | null, problems: string[]}}
  */
 function measurePythonOnce(pyChecker) {
-  const probed = ["python3", "python"].map((c) => [
+  /* 候选名、顺序与启动参数**只有一处事实源**：`src/lib/process/python-candidates.ts`。
+   * 这里此前自己写死 `["python3","python"]`（后来又就地补过一份带 `py` 的表），
+   * 而流水线的「工具链自证」写成裸的 `python -V` —— 三份探的面在同一条链上漂成
+   * 三样（ISSUE #1959 第二轮首跑：一台只有官方 `python.exe` / `py.exe` 的 Windows
+   * 节点被各判一次「没有」，一边静默少判、另一边红得与「压根没装」逐字同形）。
+   *
+   * 本文件是 `.cjs`，`require` 不到那份 `.ts`（Node 的类型擦除不覆盖 `require`），
+   * 所以这里是**两份文本 + 一条判据**：候选表由 `tests/ci-toolchain-selfcheck.test.ts`
+   * 与 `src/lib/process/python-candidates.ts` 逐项对账，任一侧漂了当场红。
+   *
+   * `py` 必须带 `-3`：裸 `py` 与 `py -0` 都是「列出已装版本」并退非零，不带 `-3`
+   * 会被归进 `present-but-nonzero` ⇒ `malformed`，而机器上其实有个能跑的 Python 3。
+   */
+  const probed = PYTHON_CANDIDATES.map((c) => [
     c,
-    probeCommand(c, ["--version"]),
+    probeCommand(c, PYTHON_PROBE_ARGS[c] ?? ["--version"]),
   ]);
   const timedOut = probed.filter(([, s]) => s === "timeout").map(([c]) => c);
   const malformed = probed
@@ -143,7 +175,12 @@ function measurePythonOnce(pyChecker) {
   const found = probed.find(([, s]) => s === "ok");
   if (!found) {
     // 超时优先：它是唯一会触发「当场再取一遍」的形态（见 main 里的二次取证）。
-    const state = timedOut.length > 0 ? "timeout" : malformed.length > 0 ? "malformed" : "missing";
+    const state =
+      timedOut.length > 0
+        ? "timeout"
+        : malformed.length > 0
+          ? "malformed"
+          : "missing";
     return {
       state,
       python: malformed.length > 0 ? malformed[0] : null,
@@ -191,7 +228,8 @@ function decidePythonVerdict(first, second) {
     return {
       problems: [],
       unverified: [
-        "这台机器探测不到 python3 / python（`--version` 非零退出，**不是**超时）—— " +
+        "这台机器探测不到 python3 / python（Windows 上还包括 `py -3`）" +
+          "（`--version` 非零退出，**不是**超时）—— " +
           "Python 侧本轮**没有取证**，四侧比对实际只答了三侧。在装了 Python 的机器上这一侧会重新参与。",
       ],
     };

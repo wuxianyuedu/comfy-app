@@ -329,16 +329,17 @@ describe("dev/start 在起 Next 之前预检", () => {
     // `shell.mjs` 静态 import `src/lib/process/executable-resolve.ts`（ISSUE #1327：
     // 可执行形态判据的唯一实现）。副本里少这份，`dev.mjs` 在**加载阶段**就
     // ERR_MODULE_NOT_FOUND，红出来的样子与本门禁无关（同上面那条注释）。
-    const resolveSrc = path.join(
-      ROOT,
-      "src",
-      "lib",
-      "process",
-      "executable-resolve.ts",
-    );
+    //
+    // **按链抄，不按一份文件抄**（ISSUE #1961）：那一份自己的依赖（现在有个叶子
+    // `platform.ts`）少一份同样在加载阶段就断 —— 而报错会指向与本门禁无关的地方
+    // （实测：`Cannot find module '…/src/lib/process/platform.ts'`）。
+    // 与 `tests/standalone-runtime.test.ts` 的判据同一条教训：逐份手抄必然漂。
+    const processDir = path.join(ROOT, "src", "lib", "process");
     const resolveTo = path.join(tmp, "src", "lib", "process");
     fs.mkdirSync(resolveTo, { recursive: true });
-    fs.copyFileSync(resolveSrc, path.join(resolveTo, "executable-resolve.ts"));
+    for (const name of ["executable-resolve.ts", "platform.ts"]) {
+      fs.copyFileSync(path.join(processDir, name), path.join(resolveTo, name));
+    }
     const r = spawnSync(process.execPath, [path.join(scriptsDir, "dev.mjs")], {
       encoding: "utf8",
       cwd: tmp,
