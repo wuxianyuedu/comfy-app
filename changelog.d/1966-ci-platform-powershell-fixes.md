@@ -45,10 +45,19 @@
 
 ## Changed
 
-- **`ESLint 零警告` 与 `prettier 格式` 临时停用**（`COMFYAPP_CI_DISABLED_GATES`）：
-  两项都跑得通，但在「把 E2E 那两格调绿」的每一轮里都要白重跑一遍（节点侧 ESLint
-  256~274s）。**判据本身一字未动**（本地 pre-commit 照旧跑它们），E2E 一绿就按
-  `.cnb.yml` 里写着的恢复动作取消注释加回来。
+- **`ESLint 零警告` 与 `prettier 格式` 让位了一轮，当天就收回来了**：两项都跑得通，
+  只是在「把 E2E 那两格调绿」的每一轮里都要白重跑一遍（节点侧 ESLint 256~274s），
+  于是先按 `.cnb.yml` 里写着的恢复动作的反面登记进 `COMFYAPP_CI_DISABLED_GATES`，
+  并把恢复条件写成一句话「**E2E 一绿就取消注释加回来**」。触发条件的那一跑是
+  `cnb-h80-1k51ukj26`（整条流水线 success，34 个 stage：`浏览器安装` 0.7s /
+  `E2E 关键流程` 51.3s），
+  **同日按同一套动作恢复**：`.gates` 两段注释取消 → 名字挪回 `COMFYAPP_CI_GATES` →
+  从停用清单删掉（那份清单现在只剩 `单元测试`）。**判据本身一字未动**：停用期间本地
+  `.githooks/pre-commit` 的 `eslint --max-warnings 0` 与 prettier 棘轮照旧跑。
+
+  记它的理由不是「改了两下」：一个 stage 被停用时**唯一**留下的痕迹就是这类条目
+  （`.gates` 里的注释与 `DISABLED_GATES` 里的名字都不报错），所以两半都要写清楚，
+  否则下一个人读到的是一份「既跑又停」的配置。
 
   注：`生产构建` **没有跟着停** —— 它是 `E2E 关键流程` 的前提（CI 下 webServer 走
   `pnpm start`，要 `.next` 产物），停掉它只会把那 133s 搬进 E2E 里，一轮不会变快。
