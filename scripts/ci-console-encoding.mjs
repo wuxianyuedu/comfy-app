@@ -3,45 +3,53 @@
  *
  * ## 它存在的理由：一条实测出来的、会让整份 CI 日志读不懂的链路
  *
- * 自托管 Windows 节点上，平台侧抓取 stage 输出用的是**宿主的 ANSI 代码页**
- * （中文 Windows 上是 CP936）。这在日志里留下的形态是：
+ * **原始模型**（#1959 那次的逐字节复算）：自托管 Windows 节点上，平台侧抓取 stage
+ * 输出用的是**宿主的 ANSI 代码页**（中文 Windows 上是 CP936）。它在日志里留下的形态是：
  *
  *   · **PowerShell 自己**打的字**是好的** —— 它按 `[Console]::OutputEncoding`
  *     写字节，与抓取端同编码；
  *   · **Node / pnpm / drizzle-kit** 打的字**全是乱码** —— 它们无条件写 UTF-8，
  *     抓取端按 CP936 解，于是 `工具链自证通过 ✓` 变成 `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`。
  *
- * ⚠️ **上面这条模型 2026-10-16 被探针读数的后一半否掉了**（`cnb-rrl-1k51u7hov`
- * 的 `工具链自证`，那一步里固定吐三行中文：PS 原生 / cmd / node）：
+ * ⚠️⚠️ **那条模型的病因，2026-10-16 被两轮探针读数改写了**（`工具链自证` 里固定吐中文，
+ * 分别由 PS 原生 / cmd / node 三层产出；本文件 `--apply` 就跑在它们前面）：
  *
  *   编码探针·PS 原生：中文一二三  → 缂栫爜鎺㈤拡路PS 鍘熺敓锛氫腑鏂囦竴浜屼笁
  *   编码探针·CMD：中文一二三      → 缂栫爜鎺㈤拡路CMD锛氫腑鏂囦竴浜屼笁
  *   编码探针·NODE：中文一二三     → 缂栫爜鎺㈤拡路NODE锛氫腑鏂囦竴浜屼笁
  *
- * 三行**同一种乱法**，而它们是在**控制台已被钉成 65001 之后**打的（本文件
- * `--apply` 就在它们前面跑）。也就是说：**抓取端不是按「当前控制台代码页」解码的**
- * —— 它按**宿主 ANSI 代码页**（这台机器上是 CP936，本文件的读数行自己就打着
- * `宿主输出代码页：936（非 UTF-8 …）`）解，而**改控制台对象上的设置动不了它**。
+ * **两轮逐字相同**，而两轮之间这台机器换过两样东西：
+ *
+ *   · **控制台输出代码页** 936 → 65001（本文件的读数行自己打着这个值）；
+ *   · **宿主 ANSI 代码页**也换成了 UTF-8（系统区域设置里勾了「使用 Unicode UTF-8 提供
+ *     全球语言支持」并重启过，读数行里那个值同步变成 65001）。
+ *
+ * 换了两次、乱码一个字没变 ⇒ **抓取端的解码与这两个设置都不是同一件事**。
+ * 同一份日志里还有一组更硬的对照：**runner 自己打的行（`script` 原文回显）是完好
+ * 中文**，而**子进程输出的每一行**都是「UTF-8 字节按 CP936 解」⇒ 解码发生在
+ * **子进程输出那一跳**，用的是**不与宿主设置联动的 CP936**。
  *
  * 所以本文件的纠正动作是**必要不充分**：
- *   · 它让「Node 那半」与「抓取端」在**宿主 ANSI CP 是 UTF-8 时**对齐（那时全优）；
- *   · 而宿主 ANSI CP 还是 936 时，它反而把**原本唯一可读的那半**（PS 原生文本，
- *     原来按 936 写、抓取端按 936 解 ⇒ 可读）一起变成了乱码。
- * 真正的入口因此是**机器侧的 ANSI 代码页**（开「使用 Unicode UTF-8 提供全球语言支持」，
- * 或把 runner 的代码页设成 65001）；不改它时，唯一能读的写法是**让每个字节都以
- * CP936 出口**（那需要逐 stage 转码，代价见规范 §13.5.3.5 最后一节）。
- * 读数与处置记在 `docs/standards/13-提交与-code-review.md` §13.5.3.5。
+ *   · 它让控制台里那三层**自洽**（PS 与子进程写同一种字节），这是**下一步的前提**；
+ *   · 但**它救不了平台侧的日志** —— 那一跳读什么，不由控制台代码页、也不由 ANSI 代码页决定。
+ * 剩下的仓库侧出路是**让每个字节以 CP936 出口**（逐 stage 转码；Node 没有 GBK 编码器，
+ * 得靠 PowerShell 的 `GetEncoding(936)` 包一层），代价见规范 §13.5.3.5 最后一节。
+ * 为此 `工具链自证` 里加了**第 4 行探针**：绕过控制台对象、**直接以 CP936 字节写
+ * stdout** —— 它可读就等于把「解码端是 CP936」钉死，上面那条出路才作数。
+ * 读数与判读记在 `docs/standards/13-提交与-code-review.md` §13.5.3.5。
  *
  * 这条不是猜的：把 `宸ュ叿閾捐嚜璇侀€氳繃` 按 UTF-8 取字节再按 GBK 解，正好回到
  * `工具链自证通过`；末尾那个 `?` 是 `✓`（U+2713，UTF-8 三字节 `E2 9C 93`）被
  * CP936 解出 `鉁` 之后剩下的孤字节 —— 同一份日志里 `Set-Variable : 缺少参数…`
  * （PowerShell 打的）却是完好中文，两者互为对照。
  *
- * ## 所以纠正动作就是把控制台输出编码钉成 UTF-8
+ * ## 那纠正动作为什么还是「把控制台输出编码钉成 UTF-8」
  *
  * `[Console]::OutputEncoding` 与 `chcp` 改的是**控制台对象**上的设置，同一个控制台
- * 里的进程共享它 —— 而平台按它解码。钉成 UTF-8 之后：Node 写的本来就是 UTF-8、
- * PowerShell 也跟着改成 UTF-8，两边与抓取端重新对齐。
+ * 里的进程共享它。钉成 UTF-8 之后，控制台里的 PS 与子进程写的是同一种字节、
+ * 与源码和 Node 的默认行为一致 —— 而**这正是「以 CP936 出口」那一步能成立的前提**：
+ * 不先让 PS 把 Node 的 UTF-8 解对，转码那一步手里拿到的**已经是乱码串**了，
+ * 再转一次只是把乱码换个编码存下来。
  *
  * ## 边界（刻意不做的事）
  *
@@ -84,34 +92,49 @@ function defaultRun(cmd, args) {
 }
 
 /**
- * 读宿主当前的输出编码读数（**只读、不改任何东西**）。
+ * 读宿主当前的编码读数（**只读、不改任何东西**）。
  *
- * 走 PowerShell 问两件事：
- *   · `[Console]::OutputEncoding.CodePage` —— 抓取端按它解码（这就是乱码的成因）；
+ * 走 PowerShell 问三件事：
+ *   · `[Console]::OutputEncoding.CodePage` —— **控制台输出代码页**（决定控制台里
+ *     PS 与子进程写的字节是否同编码）；
+ *   · 注册表 `…\Nls\CodePage\ACP` —— **宿主 ANSI 代码页**（`GetACP()` 的那个值，
+ *     本模块以前只量控制台代码页，这一项是 2026-10-16 补的）；
  *   · `chcp` 的原始输出 —— 人眼熟悉的那一行，排障时对数用。
+ *
+ * ⚠️ **这三项都不是「平台按什么解码」的答案**（两轮探针把前两个嫌疑人都否掉了，
+ * 见文件头注）。留着它们是因为：**下次不必再靠推断**——要否掉一个嫌疑人，先得量到它。
  *
  * 非 Windows / 探测失败时返回 `null` 字段而不是抛错：**「没量到」不等于「量到的是错的」**
  * （与 `ci-toolchain-python.mjs` 的 `findPython` 同一口径）。
  *
  * @param {{platform?: NodeJS.Platform, runImpl?: (cmd: string, args: string[]) => RunResult}} [ports]
- * @returns {{codePage: number | null, chcpRaw: string | null}}
+ * @returns {{codePage: number | null, chcpRaw: string | null, ansiCodePage: number | null}}
  */
 export function readConsoleEncoding(ports) {
   const { platform = process.platform, runImpl } = ports ?? {};
-  if (platform !== "win32") return { codePage: null, chcpRaw: null };
+  if (platform !== "win32")
+    return { codePage: null, chcpRaw: null, ansiCodePage: null };
   const run = runImpl ?? defaultRun;
+  const nls = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage";
   const r = run("powershell", [
     "-NoProfile",
     "-NonInteractive",
     "-Command",
-    "[Console]::OutputEncoding.CodePage; chcp",
+    "[Console]::OutputEncoding.CodePage; " +
+      `'ACP=' + (Get-ItemProperty '${nls}').ACP; ` +
+      "chcp",
   ]);
   const out = String(r.out ?? "").trim();
-  if (r.status !== 0 && out === "") return { codePage: null, chcpRaw: null };
+  const empty = { codePage: null, chcpRaw: null, ansiCodePage: null };
+  if (r.status !== 0 && out === "") return empty;
+  /* 取**第一处**数字 = 第一行那个控制台代码页；`chcp` 排最后，故取最后一行当原文。
+   * ACP 单独带标签，免得与 `chcp` 那行里的数字撞车。 */
   const codePage = Number(/(\d{3,5})/.exec(out)?.[1] ?? NaN);
+  const acp = Number(/ACP=(\d{3,5})/.exec(out)?.[1] ?? NaN);
   return {
     codePage: Number.isFinite(codePage) ? codePage : null,
     chcpRaw: out.split("\n").pop()?.trim() ?? null,
+    ansiCodePage: Number.isFinite(acp) ? acp : null,
   };
 }
 
@@ -202,10 +225,20 @@ if (
   const ok = codePageIsUtf8(now.codePage);
   console.log(
     ok === null
-      ? "[console-encoding] 宿主输出代码页：没量到（非 Windows 或探测失败）"
-      : `[console-encoding] 宿主输出代码页：${now.codePage}` +
-          `（${ok ? "UTF-8，与 Node 的输出对齐" : "非 UTF-8 —— 本机所有非 ASCII 日志都会被平台按这个代码页解码，读起来是乱码"}）`,
+      ? "[console-encoding] 控制台输出代码页：没量到（非 Windows 或探测失败）"
+      : `[console-encoding] 控制台输出代码页：${now.codePage}` +
+          `（${ok ? "UTF-8，与 Node 的输出对齐" : "非 UTF-8 —— 控制台里 PS 与子进程写的不是同一种字节，至少有一层会乱"}）`,
   );
+  if (now.ansiCodePage !== null) {
+    console.log(
+      `[console-encoding] 宿主 ANSI 代码页（注册表 Nls\\CodePage\\ACP）：${now.ansiCodePage}`,
+    );
+  }
   if (now.chcpRaw) console.log(`[console-encoding] chcp 读数：${now.chcpRaw}`);
+  console.log(
+    "[console-encoding] 平台侧解码读的**不是**上面这两个读数（2026-10-16 两轮探针都" +
+      "否掉了：控制台换 65001 与 ANSI 换 UTF-8 之后，四行探针逐字未变）——" +
+      " 怎么读这一页见本文件头注与规范 §13.5.3.5",
+  );
   process.exit(0);
 }
