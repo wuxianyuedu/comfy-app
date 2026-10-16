@@ -1,10 +1,9 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-15T16:07:34.207Z",
+    "verifiedAt": "2026-10-16T18:04:05.254Z",
     "who": "cnb.dQh7kaCfAPA",
-    "how": "pnpm test:e2e",
-    "trackedBy": "e2e",
-    "skippedReason": "本笔只改两份用例文件的接缝与一份规范文档，不涉及 e2e spec / 页面 / 被测行为；本分支上这一档停在上一次跑绿的账上，平台侧重跑会从干净栈上覆盖这一格"
+    "how": "PNPM_START=1 pnpm test:e2e",
+    "trackedBy": "e2e"
   }
 }

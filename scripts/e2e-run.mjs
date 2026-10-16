@@ -73,6 +73,10 @@ import {
 } from "../e2e/support/preflight-ports.mjs";
 import { resolveFakeComfyuiPort } from "../e2e/support/fake-comfyui-endpoint.mjs";
 import {
+  reclaimOwnAppPort,
+  reclaimOwnFakePort,
+} from "../e2e/support/reclaim-ports.mjs";
+import {
   checkBrowserReady,
   describeBrowserMissing,
 } from "../e2e/support/preflight-browser.mjs";
@@ -547,15 +551,70 @@ async function main(argv) {
    *
    * 探测**不阻断**任何事：冲突与否要看「谁在应答」（形状判据在 `globalSetup`），
    * 这里只回答「有没有人在」。 */
-  const preflight = await runPreflight({
-    appPort: resolveAppPort(ROOT),
-    fakePort: resolveFakeComfyuiPort(env),
-  });
-  env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight);
+  const appPort = resolveAppPort(ROOT);
+  const fakePort = resolveFakeComfyuiPort(env);
+  let preflight = await runPreflight({ appPort, fakePort });
   process.stdout.write(
     `[e2e-run] 起 Playwright 前：应用端口 ${preflight.appOccupied ? "有人" : "空"} / ` +
       `替身端口 ${preflight.fakeOccupied ? "有人" : "空"}\n`,
   );
+
+  /* 替身端口上坐着**我们上一跑漏下的替身**时，把它收掉（平台的 `E2E 关键流程`
+   * 第二次真跑到最后一步就是这么红的，见 `e2e/support/reclaim-ports.mjs` 的文件头）。
+   *
+   * 为什么只能在**这里**做：Playwright 探测到「这个 URL 已有人应答」而 CI 档
+   * `reuseExistingServer` 又是 false 时**直接抛**，连会说清「谁在那儿」的 `globalSetup`
+   * 都到不了 —— 收它必须在 `spawn` Playwright 之前。
+   *
+   * 为什么只认「我们自己的」（两条证据、缺一不可）而**不动别人的进程**：别的东西
+   * 占着这个口是**另一件事**，处置是让人看一眼（`describeSlotConflict` 的两条出口），
+   * 不是替他把进程杀了（§1.4 多检出并行保护）。
+   *
+   * ⚠️ **只在 CI 档生效**：本地 `reuseExistingServer` 为真，Playwright 会复用那个替身，
+   * 而那是本地刻意留的方便（`globalSetup` 会如实说「已在运行（复用）」），不该被这一步
+   * 悄悄改成「杀掉重启」。 */
+  if (env.CI && preflight.fakeOccupied) {
+    const reclaimed = await reclaimOwnFakePort(fakePort);
+    if (reclaimed.reclaimed.length > 0) {
+      process.stdout.write(
+        `[e2e-run] 替身端口 ${fakePort} 上坐着本检出上一跑漏下的替身` +
+          `（PID ${reclaimed.reclaimed.join(", ")}），已回收整棵树\n`,
+      );
+      /* 收完**重算一遍**：带进 `globalSetup` 的那份结论必须是「起 Playwright 之前」的
+       * 事实，而收掉之后的事实已经变了（不再是「有人」）。 */
+      preflight = await runPreflight({ appPort, fakePort });
+    }
+    if (reclaimed.reclaimed.length === 0 && !reclaimed.free) {
+      process.stdout.write(
+        `[e2e-run] 替身端口 ${fakePort} 上坐着**别的东西**（PID ${reclaimed.foreign.join(", ")}）` +
+          "—— 按多检出 / 别人的进程处理，不回收（出口见下面的话术）\n",
+      );
+    }
+  }
+
+  /* **应用端口**上坐着我们上一跑漏下的应用服务时，同一条处置（ISSUE #1977 第十三处）：
+   * 替身那一格修好之后，红就落到这一格 —— 同一个成因（webServer 是 `shell: true`
+   * 下面的孙子进程，上一跑被 stage 墙钟 kill 时收不到 teardown），只是对象从
+   * 「第二个 webServer」换成了「第一个」。判据与边界见
+   * `e2e/support/reclaim-ports.mjs` 里 `reclaimOwnAppPort()` 的头注（两条证据：
+   * 命令行是本检出应用服务 + `/api/health` 是本应用形状）。 */
+  if (env.CI && preflight.appOccupied) {
+    const reclaimed = await reclaimOwnAppPort(appPort, ROOT);
+    if (reclaimed.reclaimed.length > 0) {
+      process.stdout.write(
+        `[e2e-run] 应用端口 ${appPort} 上坐着本检出上一跑漏下的应用服务` +
+          `（PID ${reclaimed.reclaimed.join(", ")}），已回收整棵树\n`,
+      );
+      preflight = await runPreflight({ appPort, fakePort });
+    }
+    if (reclaimed.reclaimed.length === 0 && !reclaimed.free) {
+      process.stdout.write(
+        `[e2e-run] 应用端口 ${appPort} 上坐着**别的东西**（PID ${reclaimed.foreign.join(", ")}）` +
+          "—— 按多检出 / 别人的进程处理，不回收（Playwright 会用它自己那句话报出来）\n",
+      );
+    }
+  }
+  env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight);
 
   /* **这一档要用的 Python 在吗**（ISSUE #1959 第四轮，e2e 侧）。
    *

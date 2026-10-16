@@ -182,6 +182,39 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
     ]);
   });
 
+  it("⚠️ 探针**不拿调用方的 `args` 去起** —— 解析不等于把这条命令先跑一遍", () => {
+    /* ISSUE #1977 第八轮。上一层判「这个候选起不起得来」的方式是**真起一次**，而它
+     * 喂的参数此前正是本函数的第二入参 —— 于是「调用方要跑什么」与「探针喂什么」
+     * 被合成了一件东西，**探针把真命令整条跑了一遍**：
+     *
+     *   `resolveCommandInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])`
+     *   ⇒ 探针真的起了一次 e2e-run（拉 Playwright 的 webServer、假 ComfyUI），
+     *   而 `spawnSync` 超时**只收直接子进程** —— 孙子进程留在端口上接着跑。
+     *   `.cnb.yml` 里每条 `node scripts/…` / `pnpm run build` 因此都被执行两遍。
+     *
+     * 这一条**不注入 `probe`**（注入面自己会把这条缺陷抹平）：真起一次，拿一个
+     * 「跑起来会留下痕迹」的脚本当那条命令 —— 痕迹在 = 探针真跑了它。
+     */
+    const dir = freshDir();
+    const marker = path.join(dir, "ran.log");
+    const script = path.join(dir, "commands.mjs");
+    fs.writeFileSync(
+      script,
+      "import fs from 'node:fs';\n" +
+        `fs.appendFileSync(${JSON.stringify(marker)}, "EXECUTED\\n");\n`,
+    );
+    const r = resolveCommandInvocation("node", [script, "--some-real-flag"], {
+      env: { PATH: process.env.PATH ?? "" },
+      platform: process.platform,
+    });
+    /* 解析本身照旧成立，参数一个字节不改写。 */
+    expect(r.resolved).toBe(true);
+    expect(r.args).toEqual([script, "--some-real-flag"]);
+    /* **判据**：真命令没有被执行过。反向复算：把探针参数换回 `args`（旧写法）时
+     * 这个文件立刻出现。 */
+    expect(fs.existsSync(marker)).toBe(false);
+  });
+
   it("Windows：`.cmd` 没有 `.ps1` 回退也没有宿主 → 判「PATH 上没有可用形态」", () => {
     const dir = freshDir();
     makeWindowsToolchain(dir, "pnpm", { shim: false, ps1: false, host: false });

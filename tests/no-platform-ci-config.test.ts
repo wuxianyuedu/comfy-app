@@ -36,6 +36,11 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+
+/* 每个 stage 现在都以 `node scripts/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
+ * 而下面那条「这一步点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
+ * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
+import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -637,10 +642,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(command, "解析不出「浏览器安装」那一步的 script").toBeTruthy();
     /* ⚠️ 入口**不一定在第一个字符上**：每个 stage 的脚本现在都以一句
      * `[Console]::OutputEncoding=…;` 开头（平台 stage shell 是 PowerShell，
-     * 不设它平台侧的中文日志全是乱码，见 `.cnb.yml` 头注第 6 条）。这里判的是
-     * 「这一段命令点到的是哪个入口」，不是「它排在第几个词」。 */
+     * 不设它平台侧的中文日志全是乱码，见 `.cnb.yml` 头注第 6 条），外面还包着
+     * `ci-cp936-exit.mjs`（ISSUE #1977 的 CP936 出口）。`unwrapCp936()` 剥掉后者 ——
+     * 判的是「这一段命令点到的是哪个入口」，不是「中间隔了几层壳」。 */
     const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(
-      command ?? "",
+      unwrapCp936(command ?? ""),
     )?.[1];
     expect(
       entry,
