@@ -149,8 +149,27 @@
     # ⚠️ 这份清单里的三项各有各的理由，共同点是**名字在这儿 = 停用**（不是删掉）：
     #   · `单元测试` —— 宿主侧测试环境未就绪（ISSUE #1959），等环境好了再加回来；
     #   · `ESLint 零警告` / `prettier 格式` —— **2026-10-16 临时让位**：两项都跑得通，
-    #     但在「把 E2E 那两格调绿」的每一轮里都要白重跑一遍（节点侧 ESLint 256~274s）。
-    #     E2E 一绿就取消注释加回来；判据本身一字未动（本地 pre-commit 照旧跑它们）。
+    #     但在「把 E2E 那两格调绿」的每一轮里都要白重跑一遍（节点侧 ESLint 256~274s），
+    #     而**平台日志的乱码**会把它们真红时最该读的那几行一起吃掉。
+    #
+    # ⚠️⚠️ **恢复条件是两条，缺一不可**（同日曾只按第一条恢复过一次，当天退回）：
+    #
+    #   ① `E2E 关键流程` 一绿 —— **已成立**（2026-10-16，`cnb-h80-1k51ukj26`：整条
+    #      流水线 success，34 个 stage，`浏览器安装` 0.7s / `E2E 关键流程` 51.3s）；
+    #   ② **平台日志的中文可读** —— **尚未成立**（读数见下）。
+    #
+    #   ② 为什么也算一条：耗时项真红时人能拿到的只有日志，而抓取端按**宿主 ANSI
+    #   代码页**解码（这台机器上是 936），Node 打的每一个非 ASCII 字符都是乱码 ⇒
+    #   恢复它们等于把「每轮多花 5 分钟」换成一个**读不出原因的红**。
+    #
+    #   ② 的现状与唯一剩下的开关（`cnb-qub-1k524q0o1` 的 `工具链自证`，2026-10-16）：
+    #   三行探针（PS 原生 / cmd / node）**仍是同一种乱**，而同一个 stage 里
+    #   `[console-encoding]` 已经报「宿主输出代码页：65001」—— 也就是说**「以 65001
+    #   启动 runner / `chcp` 改控制台代码页」那条路已经被探针否掉了**（它从 936 变成
+    #   65001，日志一个字没变好）。剩下的是**宿主 ANSI 代码页**（`GetACP()`）本身：
+    #   系统区域设置里的「使用 Unicode UTF-8 提供全球语言支持」（或给 runner 可执行
+    #   文件加 `activeCodePage=UTF-8` 清单）。口径与两次读数见 §13.5.3.5 最后一节。
+    #
     # ⚠️ `浏览器安装` / `E2E 关键流程` 也曾在这份清单里（ISSUE #1966：这台节点一次
     # 取不回那 120 MiB），**2026-10-16 按恢复动作加回来了** —— 取消注释 → 名字挪回
     # 下面那一行 → 从本清单删掉，三件事同批做完。恢复的依据不是「节点网络修好了」，
@@ -334,6 +353,9 @@
   # 新信息 —— 属于「耗时项，先让位」。**不是判据被放宽**：本地 `.githooks/pre-commit`
   # 里那条 `eslint --max-warnings 0` 一个字没动，这一步的判据也一字未改。
   # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从停用清单删掉。
+  # ⚠️ **但恢复条件有两条**（`E2E` 一绿 **且** 平台日志的中文可读）：第二条还没成立，
+  # 依据与「唯一剩下的那一个开关」写在 `env.COMFYAPP_CI_DISABLED_GATES` 旁边那一段。
+  # 2026-10-16 曾只按第一条恢复过一次，当天退回 —— 耗时项真红时日志读不出原因。
   # - name: ESLint 零警告
   #   script: node_modules/.bin/eslint . --max-warnings 0
   # 实测 114s（本机 8 核）/ 256~274s（自托管节点）。而 `cnb-jt3-1k5071kou` 上它
@@ -425,7 +447,8 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
 
   # ⚠️ **临时停用**（同 `ESLint 零警告`：跑得通，但在调 E2E 的每一轮里白重跑一遍；
-  # 本地 pre-commit 的 prettier 棘轮照旧跑，判据一字未动）。恢复动作同上。
+  # 本地 pre-commit 的 prettier 棘轮照旧跑，判据一字未动）。恢复动作同上，
+  # **恢复条件也同上那两条**（`E2E` 一绿 **且** 平台日志的中文可读）。
   # - name: prettier 格式
   #   script: node scripts/check-format.cjs
 
@@ -593,4 +616,9 @@ master:
       name: master 合并复核
       stages:
         - name: 合并形态复核
-          script: node scripts/check-branch-guard.cjs --merge-commit
+          # ⚠️ 这一格是**唯一**没钉控制台编码的 stage（其余每个 `script` 都以
+          # `$enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;` 开头）。
+          # 补上它**不改变今天的读数**（抓取端按宿主 ANSI 代码页解，钉什么都被它按
+          # 936 读一遍），但它让这一步不再依赖「控制台代码页恰好是多少」这个**继承
+          # 来的**状态 —— 那正是这台机器上刚刚变过一次的东西（936 → 65001）。
+          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-branch-guard.cjs --merge-commit
