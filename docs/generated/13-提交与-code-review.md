@@ -1171,6 +1171,33 @@ stage 变红** —— 用到解释器的那几条用例按既有口径走 `env` 
 它**也不**替 `浏览器安装` 去装：探测到「都不通」时的出路在人不在仓（换一个这台节点真能到的
 镜像根 / 配内网代理 / 预先把 `chromium-headless-shell` 装进落点），这一步只负责把结论提前。
 
+> ⚠️ **这一格自己误报过一次，形态是「最便宜的位置报了一个反过来的结论」**（ISSUE #1966）。
+> 现场：`环境前提` 在第 41 秒退非零，说「一个下载根都到不了」，而 `.cnb.yml` 里配着的那个
+> 根**好着** —— 于是整条流水线停在第一步、后面 30 步全 `skipped`，看起来比原来更糟。
+>
+> 根因是探测拿**裸根**去 HEAD，而根与真资源是两个不同的地址（同一时刻实测）：
+>
+> | 地址                                                    | 裸根 | 真资源（`builds/cft/<版本>/<档>/<包>`） |
+> | ------------------------------------------------------- | ---- | --------------------------------------- |
+> | `https://cdn.npmmirror.com/binaries/playwright`（配置里那个） | 404  | 200                                     |
+> | `https://cdn.playwright.dev`                            | 400  | 307                                     |
+>
+> 「通不通」这件事只有**真资源**答得了 —— 判据量的地址与它要说明的那件事（这一趟装得成吗）
+> 必须是同一个。所以现在一律经 `playwrightProbeUrl()` 拼上本档真要下的那件包的路径再量
+> （路径的版本号与平台档**现读** `playwright-core` 的 `browsers.json`，读不到才退缺省；
+> 写死会让判据在上游升版之后**永远绿**，那比红更坏）。
+> 三态因此从 `{url, verdict, ok}` 变成 `{url, root, verdict, ok}`：`root` 是**配置面**
+> （人照着它配 `PLAYWRIGHT_DOWNLOAD_HOST`），`url` 是**实测面** —— 话术里点 `root`，
+> 因为「改哪一行」只有它答得出。
+>
+> 同一族的第二个坑：`playwright-core` 在 pnpm 的严格布局下**不在 `node_modules/` 根**
+> （`createRequire().resolve("playwright-core/browsers.json")` 在仓库根回
+> `MODULE_NOT_FOUND`），`browsers.json` 实际落在 `node_modules/.pnpm/playwright-core@<版本>/`
+> 下面 —— 解析要走那份**可能位置表**，只按根目录找等于这条读数恒为缺省。
+>
+> 回归判据是 `tests/ci-env-probe.test.ts` 的「量的是真资源不是裸根」那一条：注入一份
+> 「裸根 404 / 真资源 200」的探测，断言**打到的是真资源 URL** 且这一格**判通**。
+
 **顺序**：`环境前提` 排在 `Python 探针读数` 之后、`Install dependencies` **之前**
 （`COMFYAPP_CI_GATES` 里登记，`tests/ci-env-probe.test.ts` 判序）。
 它跑在**任何依赖安装之前** —— 所以它只 import `node:*`（`node_modules` 那时还没有），
@@ -1184,8 +1211,9 @@ stage 变红** —— 用到解释器的那几条用例按既有口径走 `env` 
 - **判据不重写**：「解释器在哪」走 `ci-toolchain-python.mjs` 的 `findPython()`
   （与 `Python 可用性` 同一份候选表、同一个探针）；浏览器那一格走
   `ci-toolchain-browser.mjs` 的 `browserExecutableExists()` /
-  `playwrightReachabilityVerdicts()`（与 `浏览器安装` 同源 —— 打印与判据共用**同一次**
-  探测结论，所以「人读的那份」与「机器判的那份」不会漂）；`.cnb.yml` 的语法面**复用**
+  `ci-toolchain-browser-reach.mjs` 的 `playwrightReachabilityVerdicts()`（与 `浏览器安装`
+  同源 —— 打印与判据共用**同一次**探测结论，所以「人读的那份」与「机器判的那份」不会漂；
+  探测那一层按职责独立成文件，理由见 §13.5.3.9 那条误报的注）；`.cnb.yml` 的语法面**复用**
   `tests/no-platform-ci-config.test.ts` 导出那一份而留一份**文本副本** —— 那一条是
   `.ts`、本步跑在装依赖之前，import 不到，处置与 `check-app-port-vectors.cjs`
   ⇄ `python-candidates.ts` 那一对逐字相同（两份文本 + 一条对账判据：
