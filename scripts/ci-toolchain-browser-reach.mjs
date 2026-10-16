@@ -40,7 +40,8 @@ import { fileURLToPath } from "node:url";
  *
  * 这几个不是「本仓推荐的镜像」，是「值得先量一下的几个地址」：
  *
- *   · Playwright 自己的三个内置 CDN 根（`PLAYWRIGHT_CDN_MIRRORS`，它自己按序试）；
+ *   · Playwright 对**本档这一件**真正会用的那一个镜像（`cftUrl()` 的 `mirrors`，
+ *     只有一条 —— 与那张三档的 `PLAYWRIGHT_CDN_MIRRORS` 不是一回事，见下）；
  *   · 常见的 npm 二进制镜像里放 Playwright 的那两段路径。
  *
  * ## ⚠️ 它们是**根**（base），不是可以直接探测的地址
@@ -66,9 +67,30 @@ import { fileURLToPath } from "node:url";
  * @returns {string[]}
  */
 export const PLAYWRIGHT_HOST_CANDIDATES = [
-  "https://cdn.playwright.dev/dbazure/download/playwright",
-  "https://playwright.download.prss.microsoft.com/dbazure/download/playwright",
+  /* Playwright 对**本档这一件**（Chromium 的 CfT 包）真正会用的那个镜像。
+   *
+   * 这一行是拿上游源码核出来的，不是抄那张「内置镜像」表抄来的：
+   * `cftUrl()`（`playwright-core/lib/coreBundle.js`）对 `chromium` /
+   * `chromium-headless-shell` 返回的是 `{ mirrors: ["https://cdn.playwright.dev"] }`
+   * —— CfT 包**只有这一个**内置镜像，与那张 `PLAYWRIGHT_CDN_MIRRORS` 三档是**两回事**
+   * （那三档服务的是老的 `builds/chromium/<revision>/…` 路径形状）。
+   *
+   * ⚠️ 正因为是两回事，原来表里那两条 `…/dbazure/download/playwright` 在这里是
+   * **结构性错的**：给它们接上 `builds/cft/<版本>/<档>/<包>`，`cdn.playwright.dev`
+   * 那条会 307 跳到 `playwright.download.prss.microsoft.com/dbazure/download/playwright/…`
+   * 然后 **400**，另一条直接 400。实测（本机，两条都跟着跳）：
+   *
+   *     https://cdn.playwright.dev/dbazure/download/playwright/builds/cft/…/…zip
+   *       → 307 → https://playwright.download.prss.microsoft.com/dbazure/download/playwright/… → 400
+   *     https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/cft/…/…zip
+   *       → 400
+   *
+   * 也就是说这两条**永远不可能供上这一件**。留在表里只有一个后果：读数里多两条
+   * 恒假的「到不了」，而人照它去「换一个能通的根」会换到一个保证 400 的地址
+   * （现场 `cnb-oqf-1k51ifhis` 那两条逐字就是 400）。 */
   "https://cdn.playwright.dev",
+  /* 常见 npm 镜像里放 Playwright 二进制的那两段路径（第三方，**不替它选**，
+   * 只量一下「能不能到」）。 */
   "https://registry.npmmirror.com/-/binary/playwright",
   "https://cdn.npmmirror.com/binaries/playwright",
 ];

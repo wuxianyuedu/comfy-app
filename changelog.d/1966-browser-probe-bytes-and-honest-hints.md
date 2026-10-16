@@ -35,7 +35,19 @@
   只把没做过的给出去；生效的那个数**优先取输出里那句 `timed out after <N>ms`**
   （它比 env 更贴现场）。
 
-  ⚠️ **这一笔没有让那一格变绿**：它把「30 分钟后一句不成立的话」变成「5 秒钟一句指向
+- **候选表里那两条 `…/dbazure/download/playwright` 对本档这一件是结构性错的。**
+  它们是拿 `PLAYWRIGHT_CDN_MIRRORS`（三档内置镜像）那张表抄来的，而那张表服务的是老的
+  `builds/chromium/<revision>/…` 形状；本档要下的 `chromium-headless-shell` 走
+  `cftUrl()`，它对这一件返回的 `mirrors` **只有 `https://cdn.playwright.dev` 一条**。
+  给前两条接上 `builds/cft/…` 得到的地址永远供不上这一件（实测跟到最后是 400：
+  `cdn.playwright.dev/dbazure/download/playwright/…` → 307 →
+  `playwright.download.prss.microsoft.com/dbazure/download/playwright/…` → 400）。
+
+  代价不只是两条噪音：**人照读数「换一个能通的根」会换到一个保证 400 的地址**
+  （现场 `cnb-oqf-1k51ifhis` 那两条逐字就是 400）。候选表现在按 `cftUrl()` 的
+  `mirrors` 那一条来，加上 npm 镜像那两段路径。
+
+  ⚠️ **这笔也没有让那一格变绿**：它把「30 分钟后一句不成立的话」变成「5 秒钟一句指向
   下一动作的话」。那一格要绿只有一个条件 —— 这台节点能取回那 120 MiB（换一条到得了的根 /
   配代理 / 预先把 `chromium-headless-shell` 装进落点）。这是「不替人做那个决定」那条
   边界的代价，写在这里免得下一个人以为漏修了什么。

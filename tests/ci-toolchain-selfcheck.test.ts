@@ -55,6 +55,9 @@ import {
 } from "../src/lib/process/python-candidates";
 
 /** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」/ 「到得了哪」）。 */
+const { PLAYWRIGHT_HOST_CANDIDATES: browserCandidates } = await import(
+  "../scripts/ci-toolchain-browser-reach.mjs"
+);
 const {
   httpDownloadProbe,
   isReachableVerdict,
@@ -62,6 +65,7 @@ const {
   playwrightHostsToTry,
   playwrightInstallHintFacts,
   playwrightOnly,
+  playwrightProbeUrl,
   playwrightReachability,
 } = await import("../scripts/ci-toolchain-browser.mjs");
 
@@ -2108,6 +2112,33 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
       ).toBeLessThan(8 * 1024 * 1024);
     } finally {
       child.kill();
+    }
+  });
+
+  it("候选表按本档那一件的 `mirrors` 来，不许抄三档内置镜像那张表（否则恒 400）", () => {
+    /* 上游对本档（Chromium 的 CfT 包）走的是 `cftUrl()`，它的 `mirrors` **只有
+     * `https://cdn.playwright.dev` 一条**；那张三档的 `PLAYWRIGHT_CDN_MIRRORS`
+     * （含两条 `…/dbazure/download/playwright`）服务的是老的
+     * `builds/chromium/<revision>/…` 形状。给后两条接上 `builds/cft/…` 得到的地址
+     * 永远供不上这一件（实测跟到最后是 400）—— 而人照读数「换一个能通的根」就会
+     * 换到那里去（现场 `cnb-oqf-1k51ifhis` 那两条逐字是 400）。 */
+    const candidates = /** @type {string[]} */ (
+      /** @type {unknown} */ (browserCandidates)
+    );
+    for (const legacy of [
+      "https://cdn.playwright.dev/dbazure/download/playwright",
+      "https://playwright.download.prss.microsoft.com/dbazure/download/playwright",
+    ]) {
+      expect(
+        candidates,
+        `候选表里还有 \`${legacy}\` —— 它是老路径形状那一族，接上 \`builds/cft/…\` 恒 400`,
+      ).not.toContain(legacy);
+    }
+    /* 正的那一条必须在（它就是这一件真正的内置镜像）。 */
+    expect(candidates).toContain("https://cdn.playwright.dev");
+    /* 与「量的是真资源」那条呼应：每一条都要能拼出 `builds/cft/…` 的地址。 */
+    for (const c of candidates) {
+      expect(playwrightProbeUrl(c)).toContain("/builds/cft/");
     }
   });
 
