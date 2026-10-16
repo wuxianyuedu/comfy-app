@@ -422,20 +422,27 @@ export function envProbe({
       );
     } else {
       const roots = playwrightDownloadRoots(env);
-      /* 没给根时用候选那一族（这就是「这台机器出得去这类域吗」）；给了根就只量它。 */
+      /* 没给根时用候选那一族（这就是「这台机器出得去这类域吗」）；给了根就只量它。
+       *
+       * ⚠️ 量的是**真资源 URL**不是裸根（`playwrightReachabilityVerdicts` 的头注，
+       * ISSUE #1966）：根对这几个地址都回 4xx，而包在 2xx/3xx —— 拿裸根判
+       * 「通不通」得到的是反过来的结论，这正是本步上一跑当场红的原因。
+       * 三态里 `root` 是配置面（人会照着配 `PLAYWRIGHT_DOWNLOAD_HOST`），
+       * `url` 是实测面，两个都打出来 —— 缺了 `root`，人对着一个 404 的
+       * 资源路径不知道该改哪一行。 */
       const verdicts = reachabilityImpl(
-        roots[0]
-          ? { candidates: [roots[0]] }
-          : { candidates: undefined },
+        roots[0] ? { candidates: [roots[0]] } : { candidates: undefined },
       );
       const reachable = verdicts.filter((v) => v.ok);
-      for (const v of verdicts) notes.push(`下载根探测：${v.url} → ${v.verdict}`);
+      for (const v of verdicts) {
+        notes.push(`下载根探测：${v.root ?? v.url} → ${v.verdict}`);
+      }
       if (reachable.length === 0) {
         problems.push(
           "浏览器落点是空的，而**一个下载根都到不了** —— " +
             "`浏览器安装` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在" +
             "那里失败，而那时前面三十步的预算已经花掉了。\n" +
-            `      实测过的现场：${verdicts[0]?.url ?? "（没有候选）"} → ` +
+            `      实测过的现场：${verdicts[0]?.root ?? "（没有候选）"} → ` +
             `${verdicts[0]?.verdict ?? "?"}\n` +
             "      下一动作（三选一，前两条在人不在仓）：\n" +
             "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 " +
