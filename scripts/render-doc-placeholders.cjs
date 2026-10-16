@@ -13,7 +13,8 @@
  * 单一事实：真实值只存在于源码/配置（FACTS 提取，见 scripts/doc-facts.cjs），
  * 本脚本运行时动态提取并替换，不硬编码任何值。
  *
- * 用法：`pnpm doc:render`（写入）。`--check` 只比对不写入（pre-commit 第 26 步）：
+ * 用法：`pnpm doc:render`（写入）。`--check` 只比对不写入（**平台侧 `.cnb.yml` 调它**，
+ * ISSUE #1975 起；此前挂在 `.githooks/pre-commit` 的 D 组）：
  * 生成态是**提交进 git** 的原文文档，改编辑态却忘了重渲染时，读者看到的就是过期原文
  * （实测：5 份生成物落后于源、缺整节内容），因此需要一个判据。判据与写入模式共用
  * `renderDocContent()` 这一份「源 → 生成物」计算，不另写一套比对逻辑。

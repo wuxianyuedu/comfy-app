@@ -141,7 +141,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(54 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(51 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -286,20 +286,18 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   run "翻闸旗标的散文承诺(硬闸)" node scripts/check-gate-flag-claims.cjs
   # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：硬闸 —— 存量已清零。
   run "地基层零消费导出(硬闸)" node scripts/check-dead-exports.cjs --staged
-  # 生成态文档与源同步（规范 §13.5.5）：docs/generated/** 是提交进 git 的原文文档，
-  # 改了编辑文档却不重渲染，生成物就静默过期，而读者看的正是生成物。这里用与
-  # doc:render 同一份计算做「只比对不写入」，漂了就阻断并给出修法。
-  run "生成态文档与源同步" node scripts/render-doc-placeholders.cjs --check
-  # API 文档生成物与源同步（AGENTS 硬规则 15 / 规范 §13.5.5 同族）：docs/api/** 是
-  # 提交进 git 的 TypeDoc 产物，而 AGENTS 与主规范 §9 都承诺它「随构建链更新」——
-  # 实测构建链里没有任何一处调用 `pnpm docs`，产物停在最开始那两次提交上，`#1329`
-  # 迁走 markdown 渲染器后仍留着指向已删模块的 `lib_comfyui_markdown.html`（ISSUE #1329
-  # 收尾时翻出来的真残留）。这里用与写入模式同一份「源 → 产物」重生成 + 逐文件比对，
-  # 报落后 / 缺失 / 多余三个方向。
-  # ⚠️ 只比对不写入，且**按输入面条件触发**：`--staged` 下暂存改动没碰
-  # src/lib|server|trpc / typedoc.json / 依赖声明时立刻返回 0（重生成实测 31s，
-  # 不能给每个前端提交都挂上）。触发面是 typedoc entryPoints 的直接映射，不是启发式。
-  run "API 文档生成物与源同步" node scripts/check-docs-api.cjs --staged
+  # 生成态文档与源同步（`render-doc-placeholders.cjs --check`，规范 §13.5.5）**已挪到
+  # 平台侧**（`.cnb.yml` 的「生成态文档与源同步」，见 §13.5.17）：它判的是「文档生成物
+  # 有没有跟着源重渲染」，而**改了文档却忘了重渲染**这件事在本地跑一次就知道
+  # （`pnpm doc:render`），没必要让每次提交都为它付一遍重渲染的钱。本地出口：
+  # `pnpm doc:render` 后把 `docs/generated/**` 一并提交。
+  # API 文档生成物与源同步（`check-docs-api.cjs --staged`，规范 §13.5.5.1）**已挪到
+  # 平台侧**（`.cnb.yml` 的「API 文档生成物与源同步」，见 §13.5.17）。挪它的理由与
+  # 上面那条同款，但这一条更硬：它的**输入面跳过是必要条件、不是优化** —— 重生成实测
+  # **31s**，而 `--staged` 只在「本次暂存碰了 typedoc 输入面」时才做事，于是绝大多数
+  # 提交在这上面付的是「读一次暂存清单」的钱，而**它只要真做事就一定是 31s**。
+  # 平台侧是全量档：产物形态直接对着「合并后的源码」判，比本地那一档更贴切。
+  # 本地出口：`pnpm run docs` 后把 `docs/api/**` 一并提交。
   # 浮层层级刻度（规范 §16.2.5）：Z1/Z2/Z3 三条同为硬闸（刻度之外的裸数字档存量也已
   # 清零，ISSUE #1811 收尾时从棘轮翻上来）。z-index 写错的表现是「时灵时不灵」
   # ——jsdom 不做层叠与命中测试，单测全绿也照样复现，所以判据只能落在源码形态上。
@@ -317,16 +315,18 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # button/input/textarea/dialog 四个。这条把「改过的地方留痕」机器化:标记与
   # docs/standards/16 §16.8 的台账双向一致,零网络(不判断差异内容,只保证两边不脱节)。
   run "ui/ 定制标记与台账（§16.8）" node scripts/check-ui-customizations.cjs
-  # 文档引用与权威源一致（占位符裸值 / 端口与地址 / 文档里的路径存在性 / 台账里的
-  # npm-npx 命令 / AGENTS.md ↔ standards 漂移 / 未登记的 scoped 文档）。
-  # 它长期是「手动档」（脚本头与 §13 表都写着「不接 pre-commit，避免过度打扰提交」），
-  # 而 §13.5.4 把「不进钩子」的理由记在**网络与耗时**上 —— 这条实测 0.64s、零网络、纯本地文本，
-  # 那个理由撑不住。真正的空档是：AGENTS 规定的必跑口令是 `pnpm doc:render`，而它只做
-  # 「源 → 生成物」、不跑这条校验，所以按规范走的人一路绿灯，历史上要靠事后单独一刀清存量
-  # （`c4d414d5`）。签字口径与读数见 ISSUE #1371。
-  # ⚠️ 追加在末尾是有意的：文档里有「pre-commit 第 N 步」这种按序号的引用（本身已与钩子对不上，
-  # 另账处理），插在中间会让那些数字一次性全部错位。
-  run "文档引用与权威源一致" node scripts/check-doc-references.cjs
+  # ⚠️ 「文档引用与权威源一致」（`check-doc-references.cjs`）**已挪到平台侧**
+  # （`.cnb.yml` 的「文档引用与权威源一致」，见 §13.5.17）。判据本身一字未改，
+  # 挪的只是**执行者**：它判的是「文档里的裸值 / 路径 / 命令与权威源一致」，
+  # 而这类漂移的代价只有「读者照着一份错的文档去做」—— 它挡不住任何一次**代码**回归，
+  # 因此不必占用「提交那一刻」这份最贵的预算。本地出口照旧是 `pnpm doc:check`。
+  #
+  # 它接进钩子的那段沿革（ISSUE #1371）仍然成立、只是换了个执行者：脚本头与 §13
+  # 曾写着「不接 pre-commit，避免过度打扰提交」，而那个理由记的是**网络与耗时** ——
+  # 实测 0.64s、零网络、纯本地文本，撑不住；真正的空档是 AGENTS 规定的必跑口令
+  # `pnpm doc:render` 只做「源 → 生成物」、不跑这条校验，按规范走的人一路绿灯。
+  # 这半句现在由平台侧那一步接着守（原先「⚠️ 追加在末尾」那句同理作废：
+  # 它讲的是钩子内部的序号错位，而不是「把它留在钩子里」的理由）。
   # 故事文件的枚举来源（规范 16 §16.2.3.2 / §11.8）：`cva()` 返回的是函数，
   # 运行时没有 `.variants` —— 写成 `Object.keys(xVariants.variants.轴)` 时 tsc 会红，
   # 而 Storybook 在**加载期**抛 `Cannot read properties of undefined`（侧栏有故事、
