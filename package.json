@@ -43,6 +43,7 @@
     "check:freshness": "node scripts/freshness-gate.mjs --ledger",
     "check:app-version": "node scripts/check-app-version.cjs",
     "check:ci-incremental": "node scripts/ci-incremental-gates.mjs --check",
+    "ci:image-plan": "node scripts/ci-image-plan.mjs",
     "check:base": "node scripts/base-check.mjs",
     "check:base:batch": "node scripts/base-check.mjs --base",
     "check:premerge": "node scripts/premerge-check.mjs",
