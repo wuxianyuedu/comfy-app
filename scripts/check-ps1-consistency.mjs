@@ -333,7 +333,9 @@ function checkReadmeEntryList() {
   }
   // `pnpm install` 是包管理器的内建命令，不在 `scripts` 里；它出现在依赖同步
   // 那一格是正当的（`pnpm install && pnpm lint`）。
-  const PNPM_BUILTIN = new Set(["install", "dlx", "exec", "run"]);
+  // `docs` 也是内建命令（`pnpm docs <PACKAGE>` 打开某包的文档）—— 它**不是**
+  // 本仓的脚本名，照脚本名核会误报（本仓要跑 TypeDoc 时写的是 `pnpm run docs`）。
+  const PNPM_BUILTIN = new Set(["install", "dlx", "exec", "run", "docs"]);
   for (const name of pathsIn(cross, /`pnpm\s+([\w:@.-]+)/g)) {
     if (PNPM_BUILTIN.has(name)) continue;
     // `pnpm run test:coverage` 这类带 `run` 的形态由上面那个 token 吃掉 `run`，
