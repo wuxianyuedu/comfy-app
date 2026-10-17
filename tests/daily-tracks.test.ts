@@ -45,6 +45,7 @@ import {
 } from "../scripts/launcher-core/shell.mjs";
 import {
   FRESHNESS_TRACKS,
+  dirtiesTrack,
   freshnessRecord,
   freshnessTrack,
   freshnessVerdict,
@@ -212,7 +213,38 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
     ).toBe(0);
   });
 
-  it("全量 e2e 那一档**不看** dirty：它的结论与改了哪几个文件无关，按日历日判", () => {
+  /**
+   * 全量 e2e 现在也吃输入面（钩子重构 4）。
+   *
+   * 立案现场：本检出最近 17 次提交里 6 次红，有 **3 次**是这条判据拦下的，而那三次改的
+   * 都不是 `src/`（一笔只动 `.githooks/` 的编排改动、两笔文档/账）。旧口径「按本地日历日、
+   * 不看面」让那些提交也欠一次全量 e2e 凭证，而**那次跑与不跑，被测链路的结论都不变** ——
+   * 「同一份 spec 在任何改动上都该绿」这句话对改动本身成立，对「这一笔是不是那个改动」不成立。
+   * 现在它与另两档同形：动了面 ⇒ 当天证；没动 ⇒ 7 天宽限。
+   */
+  it("`--ledger`（= `pnpm check:freshness`）把「欠不欠」一起打出来，但**不阻断**", () => {
+    /* 这一档改过一次用途：它原本只印账面（时刻 / 距今 / 谁 + 命令）就 `continue`，
+     * 于是「开工先看一眼」的人看得到上次是谁什么时候跑的，却看不到
+     * **按今天这笔要提交的改动，我欠不欠一次自证** —— 而那正是这一眼要看的东西。
+     * 现在它把同一份判决作为**待办**打出来（措辞是「欠」不是「✗」），退出码仍为 0：
+     * 阻断的那一份在钩子里，两个读者各有各的出口（§13.5.12：别让一条读数线变成必经之路）。 */
+    const src = readText("scripts/freshness-gate.mjs");
+    const ledgerBranch =
+      /if \(ledgerOnly\) \{[\s\S]*?\n    \}/.exec(src)?.[0] ?? "";
+    expect(ledgerBranch, "读不出 --ledger 那一支").not.toBe("");
+    // ① 判决要进去（`result.exitCode` 或 `problems` 被读出来才算「欠不欠」）
+    expect(ledgerBranch).toContain("result.exitCode");
+    expect(ledgerBranch).toContain("result.problems");
+    expect(ledgerBranch).toContain("欠");
+    // ② 反向：这一支**不许**碰 `failed`（那是钩子那一份的退出码来源）
+    expect(ledgerBranch).not.toContain("failed");
+    // ③ 入口要在 package.json 里挂着，否则这句话没人能找到
+    expect(readText("package.json")).toMatch(
+      /"check:freshness":\s*"node scripts\/freshness-gate\.mjs --ledger"/,
+    );
+  });
+
+  it("e2e 吃了面之后：只动治理文件不欠凭证，动过 `src/` 就欠（两种顺序都判）", () => {
     const yesterday = {
       ...GOOD,
       key: "e2e",
@@ -220,13 +252,98 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
       trackedBy: "e2e",
       verifiedAt: "2026-10-08T00:30:00.000Z",
     };
-    const result = gate("e2e", { e2e: yesterday });
-    expect(result.exitCode).toBe(1);
-    expect(result.problems.join("\n")).toContain("今天还没有自证");
-    // 传了 dirtySince 也不改变结论（它不读那个输入）。
+    // 今天没动过这一档的面 ⇒ 1 天前的自证在 7 天宽限内，放行。
+    expect(gate("e2e", { e2e: yesterday }, { dirtySince: null }).exitCode).toBe(
+      0,
+    );
+    // 今天动过面而账停在改动之前 ⇒ 拦，且话说清是哪一面。
+    const owed = gate(
+      "e2e",
+      { e2e: yesterday },
+      {
+        dirtySince: new Date("2026-10-09T05:00:00.000Z"),
+      },
+    );
+    expect(owed.exitCode).toBe(1);
+    expect(owed.problems.join("\n")).toContain("输入面");
+    expect(owed.problems.join("\n")).toContain("src/");
+    // 先跑后改同样放行（自证时刻晚于当天第一次改动）。
     expect(
-      gate("e2e", { e2e: yesterday }, { dirtySince: new Date(0) }).exitCode,
-    ).toBe(1);
+      gate(
+        "e2e",
+        { e2e: { ...yesterday, verifiedAt: "2026-10-09T06:00:00.000Z" } },
+        { dirtySince: new Date("2026-10-09T05:00:00.000Z") },
+      ).exitCode,
+    ).toBe(0);
+  });
+
+  it("e2e 的面**不许被悄悄放宽成一切文件**，也不许收窄成只剩 spec", () => {
+    /* 这一条钉的是清单的**内容**。放宽成 `[""]`（= 任何文件都命中）与收窄成都不会让
+     * 任何别的判据红，只会让这条判据悄悄退回「按日历日」或「永远不拦」—— 而这两种
+     * 都在账面留下完全正常的读数。正反两向各列具体路径：正 = 每一条都得真能命中
+     *（前缀不是 glob，写错了是静默的），反 = 治理/文档/单测那一类必须不命中。 */
+    const track = freshnessTrack("e2e");
+    expect(track.dirty).toEqual([
+      "src/",
+      "e2e/",
+      "playwright.config.ts",
+      "next.config.js",
+      "pnpm-lock.yaml",
+    ]);
+    for (const hit of [
+      "src/app/(main)/page.tsx",
+      "e2e/critical-flows.spec.ts",
+      "playwright.config.ts",
+      "next.config.js",
+      "pnpm-lock.yaml",
+    ]) {
+      expect(dirtiesTrack(track, [hit]), hit).toBe(true);
+    }
+    for (const miss of [
+      "docs/standards/13-提交与-code-review.md",
+      "tests/hook-affected-launch.test.ts",
+      "scripts/freshness-gate.mjs",
+      ".githooks/pre-commit",
+      "AGENTS.md",
+      "changelog.d/0-x.md",
+    ]) {
+      expect(dirtiesTrack(track, [miss]), miss).toBe(false);
+    }
+  });
+
+  it("`dirty` 为空的档**必须忽略** `dirtySince`（三档都吃面之后，机制由合成档判）", () => {
+    /* 这条守的是机制而不是某一档的当前形状：若哪天新增一档忘了填 `dirty`，而判决照旧读
+     * `dirtySince`，「今天动过一次任何文件」就会被读成「这一档已被自证」，日历日那条判据
+     * 在有人动过代码的日子里**整个失效而账面一切正常**（`freshnessVerdict` 里那句注释）。
+     * e2e 改成吃面之后登记表里没有现成的空面档，所以合成一份 —— 判据要能对被删掉的
+     * 那一格继续响，否则它只是「此刻恰好没人这样填」的截图。 */
+    const noFace = {
+      ...freshnessTrack("e2e"),
+      dirty: [],
+      dirtyHow: null,
+      graceMs: 0,
+    };
+    const at = new Date("2026-10-08T00:30:00.000Z");
+    const problem = freshnessVerdict({
+      track: noFace,
+      at,
+      now: SAME_DAY,
+      dirtySince: new Date(0),
+    });
+    expect(
+      problem,
+      "空面档被 dirtySince 免掉了 —— 日历日那条判据已经失效",
+    ).not.toBeNull();
+    expect(problem).toContain("今天还没有自证");
+    // 同一份 at / 同一个 dirtySince，换成吃面的档就走宽限那一支（放行）。
+    expect(
+      freshnessVerdict({
+        track: freshnessTrack("e2e"),
+        at,
+        now: SAME_DAY,
+        dirtySince: new Date(0),
+      }),
+    ).toBeNull();
   });
 
   it("`freshnessVerdict` 三种形态各自可被执行（判决抽成纯入口的意义）", () => {
@@ -357,11 +474,20 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
       trackedBy: "e2e",
       skippedReason: "那次只解决合并冲突与文档同步，未动功能链路",
     });
-    const result = gate("e2e", { e2e: yesterdayWaiver });
+    const result = gate(
+      "e2e",
+      { e2e: yesterdayWaiver },
+      {
+        /* 钩子重构 4 之后 e2e 吃输入面，所以这一格要的是「今天确实动过它的面」——
+         * 日历日那一支（没动面、昨天豁免 ⇒ 今天回到自己的口径）由上面那条合成档用例守着，
+         * 两边都留着才看得出「豁免只替当天作证」这条纪律没跟着口径一起被换掉。 */
+        dirtySince: new Date("2026-10-09T01:00:00.000Z"),
+      },
+    );
     expect(result.exitCode, result.problems.join("\n")).toBe(1);
     const text = result.problems.join("\n");
     // 话术要同时给出「回到自己的口径」与「那是豁免不是凭证」，否则读起来像跑绿过。
-    expect(text).toContain("今天还没有自证");
+    expect(text).toContain("输入面");
     expect(text).toContain("上一条是豁免");
     expect(text).toContain("不是跑绿的凭证");
   });
@@ -633,8 +759,13 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
 });
 
 describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
-  it("不吃输入面的档恒为 null（不白起一次 git）", () => {
-    expect(dirtySinceToday(freshnessTrack("e2e"))).toBeNull();
+  it("面清单为空的**合成**档恒为 null（判据不许为它白起一次 git）", () => {
+    /* 三档现在都吃输入面，所以「不吃面的档」在登记表里已经不存在了 —— 这一格改判合成档：
+     * 它守的是 `dirtySinceToday` 那一侧的成本与语义（`dirty` 为空 ⇒ 连问都不问 git，
+     * 更不许把「问不出来」当成「没动过」）。下一轮若真加了一档不吃面，这条照样管用。 */
+    expect(dirtySinceToday({ ...freshnessTrack("e2e"), dirty: [] })).toBeNull();
+    // 反过来：e2e 现在吃面，所以它**不**走那条早退（真仓库里返回 Date 或 null 都算走过 git）。
+    expect(freshnessTrack("e2e").dirty.length).toBeGreaterThan(0);
   });
 
   it("**空行分隔的是「时刻与它的文件清单」**，不是两次提交（实测撞出来的一个静默失效）", () => {

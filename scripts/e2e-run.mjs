@@ -475,22 +475,31 @@ export function ensureSchemaBeforeRun(options = {}) {
 }
 
 /**
- * 从 argv 里读出「这次是不是记一条豁免」—— 「给定开关 → 读理由 → 判合不合用」那三步
+ * 从 argv 里读出「这次是不是记一条不跑的账」——「给定开关 → 读理由 → 判合不合用」那三步
  * 收在 `scripts/daily-run.mjs` 的 `parseLedgerFlag`（四档共用一份，§12.12）。
  *
- * 这一层只是**把返回值映射回本档历史的形状**（`{skipped, reason}`）：`parseSkip` 自
- * ISSUE #1282 起被 `tests/e2e-run.test.ts` 直接断言，而形状变了没有任何东西会红 ——
- * 那条边界（缺理由 / 占位理由 / 没给）值得留着。
+ * 这一层只是把那份共用解析的返回值**按本档的形状再包一层**：`skipped` 让调用点一句
+ * `if (exit.skipped)` 就走掉，而「缺理由 / 占位理由 / 开关后面什么都没给」这三条边界
+ * 自 ISSUE #1282 起由 `tests/e2e-run.test.ts` 直接断言 —— 它们是「豁免不是绕过」这句话
+ * 的机器形态，形状变了不会有任何东西红，所以留着用例。
  *
- * 参数收 `unknown[]` 而不是 `string[]`：「`--skip` 后面什么都没给」时那一格读出来就是
+ * 现在它管**两条**出路：`--skip`（今天故意不跑）与 `--dirty`（这次改动不吃这一档）。
+ * 两条共用一份解析（`parseLedgerFlag`，四档同一份）与同一套理由下限，差别只在落账时
+ * 写哪一栏（`skippedReason` / `dirtyReason`）—— 那一栏的分工在 `daily-run.mjs` 里，
+ * 本函数不复制它。`mode` 原样带出去就是为了那个分工能由调用点照搬，不再判一次旗标。
+ *
+ * 参数收 `unknown[]` 而不是 `string[]`：「开关后面什么都没给」时那一格读出来就是
  * `undefined`，正是本判据要覆盖的形状。声明成 `string[]` 会把这条边界挪到调用方去绕。
  *
  * @param {unknown[]} argv
- * @returns {{skipped: boolean, reason: string | null}}
+ * @param {"--skip" | "--dirty"} [flag]
+ * @returns {{skipped: true, mode: "skip" | "dirty", reason: string | null} | {skipped: false, mode: "run", reason: null}}
  */
-export function parseSkip(argv) {
-  const { mode, reason } = parseLedgerFlag(argv, "--skip");
-  return { skipped: mode === "skip", reason };
+export function parseSkip(argv, flag = "--skip") {
+  const { mode, reason } = parseLedgerFlag(argv, flag);
+  return mode === "run"
+    ? { skipped: false, mode: "run", reason: null }
+    : { skipped: true, mode, reason };
 }
 
 /**
@@ -502,26 +511,32 @@ async function main(argv) {
   /* `--skip "<理由>"` 是**另一条出路**，不是绕过：它写的是一条有人回答过的账
    * （理由要能被复核），判据照样放行。两者都不是「什么都不做」。
    * 与 `--dry-run` 互斥地先处理：给了 `--skip` 就不该再去起 Playwright。 */
-  const skip = parseSkip(argv);
-  if (skip.skipped) {
-    if (skip.reason === null) {
-      const raw = argv[argv.indexOf("--skip") + 1];
+  /* 两条「不跑」的出路互斥地先处理：给了它们就不该再去起 Playwright。
+   * `--skip` 写「今天故意不跑」、`--dirty` 写「这次改动不吃这一档」—— 落哪一栏由
+   * `writeLedgerNote` 分（与另两档 runner 同一个形状），本处只把 `mode` 原样传下去。 */
+  for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
+    const exit = parseSkip(argv, flag);
+    if (!exit.skipped) continue;
+    if (exit.reason === null) {
+      const raw = argv[argv.indexOf(flag) + 1];
       process.stderr.write(
-        `[e2e-run] ✗ 豁免理由（"${String(raw ?? "").trim()}"）不算「有人回答过」—— ` +
-          "写清这次为什么不跑（占位词与过短的理由都被拦）。\n" +
-          '        用法：node scripts/e2e-run.mjs --skip "本次只改文档，不动功能链路"\n',
+        `[e2e-run] ✗ 理由（"${String(raw ?? "").trim()}"）不算「有人回答过」—— ` +
+          "写清这次为什么不跑 / 为什么不吃这一档（占位词与过短的理由都被拦）。\n" +
+          `        用法：node scripts/e2e-run.mjs ${flag} "本次只改文档，不动功能链路"\n`,
       );
       return 2;
     }
     if (dryRun) {
-      process.stdout.write(`[e2e-run] 本次不跑、只记豁免：${skip.reason}\n`);
+      process.stdout.write(
+        `[e2e-run] 本次不跑、只记一条（${exit.mode}）：${exit.reason}\n`,
+      );
       return 0;
     }
     return writeLedgerNote({
       root: ROOT,
       kind: "e2e",
-      mode: "skip",
-      reason: skip.reason,
+      mode: exit.mode,
+      reason: exit.reason,
     });
   }
   const extra = argv.filter((a) => a !== "--dry-run");

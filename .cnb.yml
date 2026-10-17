@@ -235,7 +235,7 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
+      工具链自证, 镜像身份, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -334,6 +334,30 @@
       # UTF-8 **解对**），再由外壳把它以 **CP936** 写回给平台（ISSUE #1977）。
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-console-encoding.mjs --apply
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs
+
+  # ── 镜像身份（**读数，恒不退非零**；ISSUE #1993）──
+  #
+  # 这一步回答的是上一版答不出的那一格：**这台机器长自哪张镜像、哪一版**。
+  #
+  # 自托管这条路上「镜像」没有被声明的地方（`pipeline.docker.image` 不生效，
+  # 见头注第 1 条），所以镜像的用法是**宿主侧**的：装机时 `docker pull` 一张钉了
+  # 版本标签的节点镜像、按它装好，再把身份钉进两个机器级环境变量。缺了这一步，
+  # 「这台节点跑的是哪一版工具链」只能靠翻上一次的红色日志反推 —— 而工具链清单
+  # 反复红，根因正是**环境是隐形的**（§13.5.3.5）。
+  #
+  # ⚠️ 它是**读数**、不是判据，三条理由：
+  #   · 本仓的工具链靠**断言**守（`工具链自证` 判四件、`环境前提` 判版本下限）——
+  #     那些是实际能力，镜像是期望身份，两者不一致时以能力为准；
+  #   · **没有标识不等于这台机器不对**：裸装机是本路径的历史形态，第一次接进节点
+  #     的一跑不该被一条与新事实无关的红拦住；
+  #   · 「标签 / digest 对不对得上镜像库」本进程判不了 —— 构建容器里没有 docker。
+  #
+  # 所以它只做三件事：把磁盘上真有什么（OS / 内核）与声明的身份一起打出来、
+  # 把「标签没钉版本 / digest 拼错」写成读数、以及**没有标识时给出下一动作**。
+  # 逻辑在 `scripts/ci-image-identity.mjs` —— 不在配置里就地写 PowerShell，
+  # 理由与 `工具链自证` 逐字相同（配置里的逻辑一条判据都测不到它）。
+  - name: 镜像身份
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-image-identity.mjs
 
   # ── Python 可用性（**必须排在「单元测试」之前**）──
   #

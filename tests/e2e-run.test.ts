@@ -245,14 +245,19 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     expect(freshnessTrack("e2e").skipHow).toBe(
       'node scripts/e2e-run.mjs --skip "<理由>"',
     );
-    // e2e 不吃输入面：它的结论与改了哪几个文件无关。
-    expect(freshnessTrack("e2e").dirty).toEqual([]);
-    expect(freshnessTrack("e2e").dirtyHow).toBeNull();
-    // 吃输入面的那两档反过来：有 dirty 清单，也有「不吃这一档」那条出路。
-    for (const kind of ["full", "artifact"]) {
+    // e2e 现在也吃输入面（钩子重构 4），于是它也有「这次改动不吃这一档」那条出路。
+    expect(freshnessTrack("e2e").dirty.length).toBeGreaterThan(0);
+    expect(freshnessTrack("e2e").dirtyHow).toBe(
+      'node scripts/e2e-run.mjs --dirty "<理由>"',
+    );
+    /* 三档**都**要有出路：没有 `skipHow` / `dirtyHow` 就等于拦人而指不出退路，
+     * 而下一个人做的事会是 `--no-verify`（§13.5.4 那条边界）。逐档一起判，
+     * 只有一侧变了就说明「同形」这句话已经不成立了。 */
+    for (const kind of ["e2e", "full", "artifact"]) {
       const track = freshnessTrack(kind);
       expect(track.dirty.length, kind).toBeGreaterThan(0);
       expect(track.dirtyHow, kind).toBeTruthy();
+      expect(track.skipHow, kind).toBeTruthy();
     }
   });
 
@@ -357,18 +362,47 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
   });
 });
 
-describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带一次凭证）", () => {
+describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子重构 4 改成吃输入面）", () => {
   const yesterday = { ...GOOD, verifiedAt: "2026-10-08T00:30:00.000Z" };
 
-  it("昨天跑过 ⇒ **今天仍然要拦**（这正是「每天首次」的意思）", () => {
+  it("昨天跑过 + 今天动过这一档的面 ⇒ **仍然要拦**（欠的就是欠的）", () => {
     const result = runGate({
       ledger: { e2e: yesterday },
       kind: "e2e",
       keys: ["e2e"],
       now: SAME_DAY,
+      dirtySince: new Date("2026-10-09T01:00:00.000Z"),
     });
     expect(result.exitCode).toBe(1);
-    expect(result.problems.join("\n")).toContain("今天还没有自证");
+    expect(result.problems.join("\n")).toContain("输入面");
+  });
+
+  it("昨天跑过 + 今天没动面 ⇒ **放行**（钩子重构 4 要的那一格：一笔只动 `.githooks/` 的提交不再欠全量 e2e）", () => {
+    /* 立案现场：本检出最近 17 次提交里 6 次红，3 次由这条判据拦下，而那三次改的都不是
+     * `src/`。旧口径按本地日历日判，于是「跑与不跑结论都不变」的那一次也要人付十几分钟。
+     * 这一格正面钉住新语义 —— 没有它，「吃输入面」这件事随时可以被悄悄改回去，
+     * 而账面读数完全正常。 */
+    const result = runGate({
+      ledger: { e2e: yesterday },
+      kind: "e2e",
+      keys: ["e2e"],
+      now: SAME_DAY,
+      dirtySince: null,
+    });
+    expect(result.exitCode, result.problems.join("\n")).toBe(0);
+  });
+
+  it("超出宽限（14 天没跑，且今天没动面）⇒ 照样拦 —— 放宽的是触发面，不是时限", () => {
+    const stale = { ...yesterday, verifiedAt: "2026-09-25T00:30:00.000Z" };
+    const result = runGate({
+      ledger: { e2e: stale },
+      kind: "e2e",
+      keys: ["e2e"],
+      now: SAME_DAY,
+      dirtySince: null,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.problems.join("\n")).toContain("宽限");
   });
 
   it("今天记了「写明理由的豁免」⇒ 放行（豁免是另一条出路，不是绕过）", () => {
@@ -410,26 +444,60 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
     expect(result.problems.join("\n")).toContain("有人回答过");
   });
 
-  it("`--skip` 的三种形状：没给 / 给了可用理由 / 给了不合用的理由", () => {
-    /* 这一段判的是**命令行契约**：`--skip` 是「今天不跑」的唯一出路，它的判定
-     * 抽成了纯入口（`parseSkip`）就是为了让「缺理由 / 占位理由」这两条边界
-     * 能被真跑一次 —— 它们是「豁免不是绕过」这句话的机器形态。 */
+  it("两条出路的三种形状：没给 / 可用理由 / 不合用的理由（`--skip` 与 `--dirty` 同形）", () => {
+    /* 这一段判的是**命令行契约**：`--skip`（今天故意不跑）与 `--dirty`（这次改动不吃这一档）
+     * 是这个入口仅有的两条出路，判定抽成纯入口就是为了让「缺理由 / 占位理由」这两条边界
+     * 能被真跑一次 —— 它们是「豁免不是绕过」这句话的机器形态。
+     * `mode` 现在跟着返回：落账要按它分栏（`skippedReason` / `dirtyReason`），而两栏读的
+     * 是两件不同的事 —— 混成一片之后「这一档三个月没跑」与「三个月每次都声明不吃它」
+     * 在账面上长得一模一样。 */
     expect(parseSkip(["node", "e2e-run"])).toEqual({
       skipped: false,
+      mode: "run",
       reason: null,
     });
     expect(parseSkip(["--skip", "本周只解决合并冲突，未动功能链路"])).toEqual({
       skipped: true,
+      mode: "skip",
       reason: "本周只解决合并冲突，未动功能链路",
     });
+    expect(
+      parseSkip(["--dirty", "本次只改编排钩子，没碰 src/ 与 spec"], "--dirty"),
+    ).toEqual({
+      skipped: true,
+      mode: "dirty",
+      reason: "本次只改编排钩子，没碰 src/ 与 spec",
+    });
+    // 两个开关互不串档：只给了 `--dirty` 时按 `--skip` 读就是「没给」。
+    expect(parseSkip(["--dirty", "本次只改编排钩子"], "--skip").skipped).toBe(
+      false,
+    );
     /* `--skip` 后面什么都没有是**另一种 argv 形状**：`["--skip"]` 里 `argv[i + 1]` 是
      * `undefined`。它不能靠往 argv 数组里塞一个 `undefined` 来构造 —— 真实 argv 里
      * 不存在这种元素（`process.argv` 每一项都是 string），那样的用例判的是一份
      * 不可能出现的输入。 */
     expect(parseSkip(["--skip"]).reason).toBe(null);
+    expect(parseSkip(["--dirty"], "--dirty").reason).toBe(null);
     for (const bad of ["", "稍后", "TBD", "待定"]) {
       expect(parseSkip(["--skip", bad]).reason).toBe(null);
+      expect(parseSkip(["--dirty", bad], "--dirty").reason).toBe(null);
     }
+  });
+
+  it("main 在起 Playwright **之前**认两条出路（`--dirty` 不许被悄悄丢掉）", () => {
+    /* 解析层认得 `--dirty` 与调用点走到它是两件事：本档历史上只有一次 `--skip`，
+     * 于是「补了 `parseSkip` 的能力、main 里仍只传 --skip」会长成一个完全安静的形状
+     * —— 出路少一条不会红，只会让人在钩子里被拦之后自己去找命令（那就是 §13.5.12
+     * 那一族：判据在场、没人敲）。顺手钉住「出路先于起跑」：给了出路还去起 webServer，
+     * 既白付十几分钟，又会把「不跑」那一条账记成跑绿的。 */
+    const src = readText("scripts/e2e-run.mjs");
+    const loopAt = src.indexOf('["--skip", "--dirty"]');
+    expect(loopAt, "main 里那两条出路只剩一条了？").toBeGreaterThan(-1);
+    const launchAt = src.indexOf("= planRun(");
+    expect(launchAt, "读不出 main 里那一步起跑").toBeGreaterThan(-1);
+    expect(loopAt, "出路那一支必须排在起跑之前").toBeLessThan(launchAt);
+    // 落账时把 mode 原样传下去（不许在调用点再判一次旗标 —— 那是第二份口径）。
+    expect(src).toContain("mode: exit.mode");
   });
 
   it("「每天首次」按本地日历日判，不是滚动 24 小时", () => {

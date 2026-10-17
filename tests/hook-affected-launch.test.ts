@@ -36,6 +36,7 @@ import {
   loadPerCore,
   planLaunches,
   remainingWaitMs,
+  rerunReport,
   resolveMaxWorkers,
   resolveVitestEntry,
   runChunk,
@@ -480,6 +481,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     settle?: () => Promise<{ settled: boolean; load: number; waitedMs: number }>;
     waitBudget?: { deadline: number };
     onUnverified?: (files: string[]) => void;
+    onAttempt?: (record: { outcome: string; waitedMs?: number; settled?: boolean }) => void;
   }): Promise<{ code: number; text: string }> {
     const chunks: string[] = [];
     const realWrite = process.stderr.write.bind(process.stderr);
@@ -616,6 +618,143 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
       settle: settledLow,
     });
     expect(calls).toHaveLength(2);
+  });
+
+  /**
+   * 「等了多久」必须说出口。这一格是**唯一**能区分
+   * 「机器空了 ⇒ 第二遍与第一遍不同条件」与「一点没等 ⇒ 第二遍与第一遍同条件」的读数，
+   * 而后者意味着这次复跑只证伪了「真断言红」、**没有**排除负载。
+   * `waitForLoadToSettle` 一直在算 `waitedMs`，只是从没打印过 —— 算了不说，
+   * 与没算在读数上等价（同 §11.23「写了没有读者等于没写」）。
+   */
+  it("等了 ⇒ 报「等了 42.0s」；一点没等 ⇒ 说「没等」并明说它不能证明负载已散", async () => {
+    const waited = await runCapturing({
+      entry: "vitest.mjs",
+      spawn: fakeSpawn([TIMEOUT, GREEN]).spawn,
+      settle: () =>
+        Promise.resolve({ settled: true, load: 0.4, waitedMs: 42_000 }),
+    });
+    expect(waited.text).toContain("等了 42.0s");
+    expect(waited.text).toContain("每核负载回落到 0.40");
+    expect(waited.text).toContain("起第 2 遍");
+
+    const noWait = await runCapturing({
+      entry: "vitest.mjs",
+      spawn: fakeSpawn([TIMEOUT, GREEN]).spawn,
+      settle: settledLow,
+    });
+    expect(noWait.text).toContain("没等");
+    expect(noWait.text).toContain("不能证明负载已散");
+    // 两格必须是**读得出区别**的两种形状：等了的那格不许说「没等」，反之亦然
+    // —— 否则「等了多久」这一格在日志里就等于没有。
+    expect(waited.text).not.toContain("没等");
+    expect(noWait.text).not.toContain("等了 ");
+  });
+
+  it("每一块的判决都进收尾那份账：五种结局各记一条，且不影响退出码", async () => {
+    const seen: string[] = [];
+    const onAttempt = (r: { outcome: string }) => seen.push(r.outcome);
+    const once = async (results: SpawnResult[], settle = settledLow) =>
+      runCapturing({
+        entry: "vitest.mjs",
+        spawn: fakeSpawn(results).spawn,
+        settle,
+        onAttempt,
+      });
+    await once([GREEN]);
+    await once([TIMEOUT, GREEN]);
+    await once([TIMEOUT, TIMEOUT]);
+    await once([REAL_RED]);
+    await once([TIMEOUT, REAL_RED]);
+    expect(seen).toEqual([
+      "first-green",
+      "rerun-green",
+      "rerun-unverified",
+      "red-no-fingerprint",
+      "real-red",
+    ]);
+    // 记账只喂读数：未校验那两块照样放行（0），真红那两块照样阻断（非 0）。
+    const codes: number[] = [];
+    const cases: SpawnResult[][] = [
+      [GREEN],
+      [TIMEOUT, GREEN],
+      [TIMEOUT, TIMEOUT],
+      [REAL_RED],
+      [TIMEOUT, REAL_RED],
+    ];
+    for (const results of cases) {
+      codes.push((await once(results)).code);
+    }
+    expect(codes).toEqual([0, 0, 0, 1, 1]);
+  });
+});
+
+/**
+ * 收尾那份「等待与复跑账」（钩子重构 3）。
+ *
+ * 立案现场：判决链把「重测一次」机器化之后，**这次总共等了多久、放行的是第几遍测出来的、
+ * 放行时它到底是绿还是「未校验」**这三格只剩在散落行里 —— 人被放行（或被拦下）之后
+ * 答不出这三问，而「负载假红」与「真回归」在人嘴里的分界就是这三问。
+ * 更要紧的是账本里那条实测：C 组中位 207s 对地板 141s，多出来的那一段就是等待 + 复跑，
+ * 而钩子从没把它单独报出来过 ⇒ 看账的人只能把「慢」归给判据。
+ */
+describe("受影响用例的启动器 —— 收尾的等待与复跑账", () => {
+  const BUDGET = { budgetMs: 5 * 60_000 };
+
+  it("一块都没复跑 ⇒ **空串**（绿的那一大半不该为这段账付输出）", () => {
+    expect(
+      rerunReport(
+        [{ outcome: "first-green" }, { outcome: "red-no-fingerprint" }],
+        BUDGET,
+      ),
+    ).toBe("");
+  });
+
+  it("复跑过 ⇒ 报「累计/预算、第几遍、绿还是未校验」，且不许把放行写成通过", () => {
+    const text = rerunReport(
+      [
+        { outcome: "first-green" },
+        { outcome: "red-no-fingerprint" },
+        { outcome: "rerun-green", waitedMs: 42_000, settled: true },
+        { outcome: "rerun-unverified", waitedMs: 180_000, settled: false },
+      ],
+      BUDGET,
+    );
+    expect(text).toContain("第 1 遍直接绿 1 块");
+    expect(text).toContain("红而不带超时指纹（真红，一次都不复跑）1 块");
+    expect(text).toContain("带指纹复跑 2 块");
+    /* 预算报的是**整次提交一份**那个数（逐块计就是 5 分钟 × N，实测 8 块压到 31 分钟）。 */
+    expect(text).toContain(
+      "等待累计 222.0s / 预算 300.0s（**整次提交一份**，不是每块一份）",
+    );
+    expect(text).toContain("没等到回落 1 块");
+    expect(text).toContain("**第 2 遍**的结果：负载假红放行 1 块");
+    expect(text).toContain("**未校验**（仍然只是超时形态）1 块");
+    expect(text).toContain("「放行」不等于「通过」");
+    expect(text).not.toMatch(/已通过|全部通过|测试通过/);
+  });
+
+  it("真红那一格在账里也是**阻断**，不许被前面两格的「放行」语气盖掉", () => {
+    const text = rerunReport(
+      [{ outcome: "real-red", waitedMs: 5_000, settled: true }],
+      BUDGET,
+    );
+    expect(text).toContain("真红 1 块");
+    expect(text).toContain("等待累计 5.0s");
+  });
+
+  it("main 在**真红那条提前返回之前**也打这份账（否则被拦下的那次恰好没有账）", () => {
+    /* 与上面 `scopeAdvice`「在起 vitest 之前打」是同一条教训：把账挂在正常收尾那一行，
+     * 真红时 `return code` 会把它整段跳过 —— 而那一次正是最需要知道
+     * 「等了多久、哪几块没被校验」的时候。实测形态：账上只有绿的记录，红的没有。 */
+    const src = readFileSync(LAUNCHER_PATH, "utf8");
+    expect(src).toContain("const flush = () =>");
+    const early = /if \(code !== 0\) \{([\s\S]*?)return code;/.exec(src);
+    expect(early, "main 里那条提前返回的形状变了？").toBeTruthy();
+    expect(early?.[1]).toContain("flush()");
+    // 正常收尾那一侧也要打（两块都缺一段就退化成「只在红的时候有账」）。
+    const tail = src.slice(src.lastIndexOf("flush();"));
+    expect(tail).toContain("return 0;");
   });
 });
 
