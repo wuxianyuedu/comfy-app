@@ -1,3 +1,5 @@
+import { availableParallelism } from "node:os";
+
 import { defineConfig, devices } from "@playwright/test";
 import { resolveAppPort, resolveRepoRoot } from "./scripts/app-port.mjs";
 import {
@@ -85,6 +87,29 @@ if (pythonPreflight?.interpreter && executorEnv[COMFY_CLI_PYTHON_KEY]) {
  * 同时抢核。降到 2 后复测，60s 超时形态 33 → 3 → 1（剩下那条在 runtime-budget 的
  * `/workspace`，该 spec 本机**单跑也是真红** —— 性能预算 715.5ms > 640ms，与负载无关）。
  * 与钩子 C 组那个 `--maxWorkers=4` 同一条理由（并发只调负载、不碰判据）。
+ *
+ * ## 它为什么**不只**在本地生效（ISSUE #1993 收尾）
+ *
+ * 这一档此前写成「`CI` 给了就不覆盖」（`if (env.CI) return undefined`），理由是
+ * 「CI 档是生产构建、首屏零编译，并发不是这一格的自由度」。那条理由只说了一半：
+ * **并发不是编译的问题，是「这台机同时开几个浏览器 + 几个 worker」的问题**。实测
+ * （`cnb-m0t-1k54oljem`，PR #1998）：生产构建那一档在这台 16 核机上没写 `workers`
+ * ⇒ Playwright 按默认铺开（`cpus - 1` = 15），叠上 `fullyParallel` + 两条 webServer
+ * ⇒ `E2E 关键流程` 跑到 **36 分钟**被平台按 stage 墙钟 kill。
+ *
+ * 所以判据改成「**跑生产构建时并发按现场核数算，且不高于 2**」：
+ *
+ *   · 核数是**事实**（`CNB_CPUS` → `os.availableParallelism()`，与 `scripts/ci-load.mjs`
+ *     同一条口径，唯一出处不在这里）—— 小机器上不该开 2；
+ *   · 上界 2 是**实测档**（#1834 的同一批读数：4 仍有争用形态的红）—— 大机器上不该
+ *     因为核多就铺开，e2e 的用例里有大量**真起子进程**的环节（假 comfy-cli、Next 的
+ *     服务端执行器），超订的代价是「等子进程」而不是「等 CPU」。
+ *
+ * 与 `.cnb.yml` 里 `生产构建` 那一格的 `scripts/ci-load.mjs` 是同一条取向（#1993）：
+ * **降负载的杠杆是并发，不是预算**。`timeout: 60_000` 一个字不动。
+ *
+ * 取 `cpus - 1` 而不是 `cpus` 是 Playwright 自己的默认算法，这里沿用 —— 把那一块
+ * 留给 `next start` 与替身那两个服务。
  */
 const COLD_COMPILE_WORKERS = 2;
 
@@ -102,19 +127,59 @@ const COLD_COMPILE_WORKERS = 2;
  * 是「拿预算换绿」，它把真挂死的检出时间一起放大；降并发是**改负载**，不碰任何
  * 判据（同 §13.6.4 那句「降负载的杠杆是并发，不是预算」）。
  *
- * 所以这里只做**降并发**这一半：现场编译时收敛到 {@link COLD_COMPILE_WORKERS} 个
- * worker（排在后面的那批不再与首帧编译抢核），`PNPM_START` 给了（= 生产构建，
- * 首屏零编译）就照旧用 Playwright 的默认并行。
+ * 于是两条档**都要收敛**，只是理由不同：
  *
- * **为什么纯函数**：这一格要能被用例两向钉住（冷编译 ⇒ 收敛、已构建 ⇒ 不收敛），
- * 而「判据自己的取值」没法只在注释里自证（§11.13）。
+ *   · 现场编译档（本地默认）⇒ {@link COLD_COMPILE_WORKERS}：首帧编译不能与同伴抢核；
+ *   · 生产构建档（`CI` / `PNPM_START`）⇒ 同样收敛到 {@link COLD_COMPILE_WORKERS}，
+ *     但上界性质不同：那一档没有编译，红的是「这台机上同时开着的浏览器与服务太多」
+ *     （`cnb-m0t-1k54oljem` 的 36 分钟，见文件头那段）。
+ *
+ * 既然两档都收敛，这个函数还成立的理由只剩一条：**核数要按现场算**（小机器上不该
+ * 开 2）。所以它读 `CNB_CPUS` / `os.availableParallelism()` —— 与 `scripts/ci-load.mjs`
+ * 同一条口径，但**刻意不 import 它**：那份模块是 `.mjs`（给 CI 脚本用的），本文件由
+ * Playwright 自己加载，两边一致由 `tests/e2e-runtime-budget.test.ts` 钉住（它读两侧
+ * 源码比对），而不是靠一条跨模块的 import 把配置图拉长。
+ *
+ * **为什么纯函数**：这一格要能被用例两向钉住（小机器 ⇒ 1、大机器 ⇒ 2），而
+ * 「判据自己的取值」没法只在注释里自证（§11.13）。
  *
  * @param env
- * @returns `undefined` = 不覆盖 Playwright 的默认并行度
+ * @param cpus 现场逻辑核数（缺省按环境读；`0` / 非整数 ⇒ 只用上界）
+ * @returns 覆盖 Playwright 默认并行度的 worker 数（**恒有值**：不写这个键就等于让
+ *   Playwright 按核数铺开 —— `cpus - 1`，16 核上是 15 —— 而那正是本条要治的形态）
  */
-export function resolveE2eWorkers(env: NodeJS.ProcessEnv): number | undefined {
-  if (env.CI) return undefined;
-  return env.PNPM_START ? undefined : COLD_COMPILE_WORKERS;
+export function resolveE2eWorkers(
+  env: NodeJS.ProcessEnv,
+  cpus = resolveLocalCpus(env),
+): number {
+  /* 两档都收敛（见函数头注），所以 `CI` / `PNPM_START` 不再分流 —— 入参留着是为了
+   * 让「同一对键」这条口径在签名上仍然只有一处（调用点与跑法脚本共用）。 */
+  void env;
+  /* `cpus - 1` 是 Playwright 自己的默认算法（留一块给 `next start` 与替身两个服务），
+   * 单核那档**不能**算成 0 —— `Math.max(1, …)` 兜住它，而不是让它退化成上界。 */
+  const usable =
+    Number.isInteger(cpus) && cpus >= 1 ? Math.max(1, cpus - 1) : null;
+  const byCores = usable ?? COLD_COMPILE_WORKERS;
+  return Math.max(1, Math.min(COLD_COMPILE_WORKERS, byCores));
+}
+
+/**
+ * 现场逻辑核数 —— `CNB_CPUS`（平台读数）优先，读不到落本机。
+ *
+ * 与 `scripts/ci-load.mjs` 的 `resolveCores()` 同序、同一条理由（平台池 / cgroup
+ * 限额下 `availableParallelism` 会照宿主机报）。**不合法值不静默变成 0**：
+ * 非正整数就往后落，两条都拿不到才回 `0`（`resolveE2eWorkers` 把它当「不知道」，
+ * 只用上界 —— 猜核数比不猜更危险）。
+ *
+ * @param env
+ * @returns 逻辑核数；读不到回 `0`
+ */
+export function resolveLocalCpus(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = String(env.CNB_CPUS ?? "").trim();
+  const parsed = Number(raw);
+  if (raw !== "" && Number.isInteger(parsed) && parsed >= 1) return parsed;
+  const local = availableParallelism();
+  return Number.isInteger(local) && local >= 1 ? local : 0;
 }
 
 export default defineConfig({
@@ -125,8 +190,10 @@ export default defineConfig({
    * command **不会被执行**，而那正是最需要探测的一条路径。 */
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
-  /* 现场编译档收敛并发（见 `resolveE2eWorkers`）：它改的是**负载**，不是任何判据的
-   * 预算。`undefined`（已构建 / CI）时不写这个键 —— Playwright 用它自己的默认。 */
+  /* 两档都收敛（见 `resolveE2eWorkers`）：它改的是**负载**，不是任何判据的预算。
+   * 此前 `CI` 档刻意不写这个键、让 Playwright 用它自己的默认（`cpus - 1`）——
+   * 那在 16 核节点上等于 15 个 worker + 两条 webServer，`E2E 关键流程` 因此跑到
+   * 36 分钟被墙钟 kill（`cnb-m0t-1k54oljem`）。 */
   workers: resolveE2eWorkers(process.env),
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

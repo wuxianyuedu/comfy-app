@@ -90,7 +90,10 @@ afterEach(() => {
 const { test, expect } = defineGateRepo({
   script: "check-reformat-only.cjs",
   workdir: "reformat",
-  dirs: ["src/lib"],
+  /* `src/lib` 是被扫目录（建空的即可，`seedEmpty` 往里放一份），其余三处是
+   * `--staged` 那组用例要造的**扫描面上的别的树** —— 夹具只建这几层，
+   * 「面上有源文件 ⇒ 不跳过」才不是一句空话（见文件末尾那组用例）。 */
+  dirs: ["src/lib", "scripts", "docs", "changelog.d"],
   copy: [
     { from: "scripts/launcher-core", to: "scripts/launcher-core" },
     {
@@ -710,5 +713,85 @@ describe("补丁解析（纯函数，不跑 git）", () => {
 
   test("阈值是 10：低于它的顺手格式化不该阻断", () => {
     expect(mod.LIMIT).toBe(10);
+  });
+});
+
+/**
+ * `--staged` 的扫描面（ISSUE #1993 / 规范 §13.5.21）。
+ *
+ * 这条判据在**只改文档 / 只改 `changelog.d/`** 的提交上一份源文件都列不出来，却仍要
+ * 把暂存区与 `HEAD` 各取一遍、对每个文件跑一次 prettier。收窄之后那些提交直接跳过。
+ *
+ * 收窄最坏的失效形态是**静默漏判**：根清单写窄了，某一处的纯格式化提交从此不再触发
+ * 这条判据，而没有任何东西会红。所以这里不做「清单里有几个元素」这种空转断言 ——
+ * 每条用例都**真起脚本**，看它判没判到。
+ */
+describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判", () => {
+  test("只暂存文档 / 碎片 ⇒ 跳过，而且不碰 prettier", ({ repo }) => {
+    seedEmpty(repo);
+    repo.write("docs/note.md", "# 随手笔记\n");
+    repo.write("changelog.d/1993-x.md", "## Added\n\n- 一条\n");
+    repo.git("add", "-A");
+
+    /* 这一档**必须有漂亮的下界**：扫描面靠 `readdir` 现算，而这套夹具只建了
+     * `src/lib` / `scripts` / `docs` / `changelog.d` 四层 —— 于是 `docs/` 与
+     * `changelog.d/` 确实在面上（它们是源文件扩展名，本判据会判），这一步
+     * **不该跳过**。所以这条用例判的是「跳过的原因是面，不是别的」：
+     * 把两份文档从我面上挪走之后必须跳。 */
+    rmSync(join(repo.dir, "docs"), { recursive: true, force: true });
+    rmSync(join(repo.dir, "changelog.d"), { recursive: true, force: true });
+    repo.git("add", "-A");
+    const r = repo.run(["--staged"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("跳过");
+  });
+
+  test("面上一份源文件都没有时跳过；有 `docs/**.md` 这种也在面上（扩展名口径）", ({
+    repo,
+  }) => {
+    seedEmpty(repo);
+    repo.write("docs/note.md", "# 随手笔记\n");
+    repo.git("add", "-A");
+    const r = repo.run(["--staged"]);
+    /* `SOURCE_RE` 认得 `.md` ⇒ 文档目录本来就在面上。收窄只掐「面上真的一份都没有」，
+     * 不按「改了代码没有」判 —— 后者会让「只改文档」的提交绕过这条判据。 */
+    expect(r.output).not.toContain("未触及扫描面");
+  });
+
+  test("暂存里有一份源文件 ⇒ 不跳过（`src/` 与根级文件都算）", ({ repo }) => {
+    seedEmpty(repo);
+    for (const rel of ["src/lib/probe.ts", "scripts/probe.mjs"]) {
+      repo.write(rel, "export const A={a:1};\n");
+      /* **点名 add 这一份**，不用 `-A`：`.gitignore` 里 `node_modules` 是一条
+       * 目录规则，它会连带忽略 `node_modules/prettier` 这一整棵（含夹具软链进来的
+       * `prettier-plugin-tailwindcss`），于是 `add -A` 之后暂存清单可能只剩一个
+       * 「什么都没加」的空集 —— 断言「面被碰到」的前提就不成立了。 */
+      repo.git("add", rel);
+      const r = repo.run(["--staged"]);
+      expect(r.code, `${rel} 被跳过了 —— 扫描面写窄了`).toBe(0);
+      expect(r.output, `${rel} 应当被判到`).not.toContain("未触及扫描面");
+      repo.git("reset", "-q");
+      rmSync(join(repo.dir, rel), { force: true });
+    }
+  });
+
+  test("根级源文件（如 `package.json`）也在面上 —— 空串根不命中任何东西", ({
+    repo,
+  }) => {
+    seedEmpty(repo);
+    repo.write("package.json", '{ "name": "probe" }\n');
+    repo.git("add", "-A");
+    const r = repo.run(["--staged"]);
+    expect(r.output).not.toContain("未触及扫描面");
+  });
+
+  test("带了 `--range` 时一律不跳（它按显式范围判，与暂存区无关）", ({
+    repo,
+  }) => {
+    seedEmpty(repo);
+    repo.write("docs/note.md", "# 只有文档\n");
+    repo.git("add", "-A");
+    const r = repo.run(["--staged", "--range", "HEAD~1..HEAD"]);
+    expect(r.output).not.toContain("未触及扫描面");
   });
 });

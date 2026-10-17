@@ -231,6 +231,52 @@ export const INCREMENTAL_GATES = [
       "所以「本不该跑却跑了」与「该跑没跑」都不会改变任何代码结论。",
   },
   {
+    name: "端口推导跨语言一致性",
+    globs: [
+      "scripts/app-port.mjs",
+      "scripts/app-port.ps1",
+      "scripts/app_port.py",
+      "scripts/check-app-port-vectors.cjs",
+      "scripts/check-app-port-vectors.py",
+      "scripts/check-app-port-vectors.ps1",
+      "src-tauri/src/single_instance.rs",
+      "tests/fixtures/app-port-vectors.json",
+    ],
+    script: "scripts/check-app-port-vectors.cjs",
+    why:
+      "它判的是「同一份共享向量 ⇄ 四侧实现」的一致性，四侧实现各只有一个落点" +
+      "（Node 的 `app-port.mjs`、Python 的 `app_port.py`、PowerShell 的 `app-port.ps1`、" +
+      "Rust 的 `src-tauri/src/single_instance.rs`），向量只有一份" +
+      "（`tests/fixtures/app-port-vectors.json`）。这几处一个都没碰时，「四侧对同一路径给出" +
+      "同一端口」这件事不可能变 —— 它不读 `src/**` 的其余部分（判据脚本自己的读取点已逐条核过）。" +
+      "⚠️ 新增第五侧实现或换向量文件时**必须同批回来看这一行**，否则那一侧的漂移不再被这条闸看见。",
+  },
+  {
+    name: "格式化提交分离",
+    globs: [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.mjs",
+      "**/*.cjs",
+      "**/*.css",
+      "**/*.scss",
+      "**/*.json",
+      "**/*.md",
+      "**/*.mdx",
+    ],
+    script: "scripts/check-reformat-only.cjs",
+    why:
+      "它的判据本体是**逐文件跑一次 prettier**（`classifyReformatOnly()`），所以面就是" +
+      "`check-reformat-only.cjs` 的 `SOURCE_RE`（那些扩展名）与这些 glob 是同一件事 —— " +
+      "这份清单由 `stagedRoots()` 的现算上界反推（顶层目录与根级文件的并集），不是手抄的目录名单。" +
+      "收窄安全的方向：本次改动**一个源文件都没有**时（例如只改图 / 只改 yaml），它本来也只会得出" +
+      "「没有文件改动，跳过」；而「面上有源文件」时照旧全跑，判据强度一点没动。" +
+      "⚠️ 代价写在明处：`SOURCE_RE` 新增一种扩展名时**必须同批回来看这一行**。" +
+      "本地钩子里那一步也接了 `--staged`（同一份 `gate-scan-read.cjs` 的 `discernRoots`）。",
+  },
+  {
     name: "生成态文档与源同步",
     globs: [
       "docs/**",
