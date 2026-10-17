@@ -1,0 +1,377 @@
+/**
+ * 「节点镜像」那一份计划与打包的判据（ISSUE #1993 的续：用 docker 提速）。
+ *
+ * 被测的是 `scripts/ci-image-plan.mjs` —— 它**不碰 docker**（构建容器里没有 daemon），
+ * 只算命令与打包。所以这一组判据全部落在能在本机判的形状上：版本**现读**（不写死）、
+ * 层序（提交点写偏一层是这一层唯一不报错的错误）、tarball 的三种字节语义、
+ * 以及「四件的清单只有一处出处」。
+ *
+ * 每条判据都配了**反向复算**：把缺陷形态放回去，对应的断言当场点名。
+ */
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { afterAll, describe, expect, it } from "vitest";
+
+import {
+  buildTarStream,
+  checkCommands,
+  diskFacts,
+  fetchNodePlan,
+  imagePlan,
+  imagePlanLayersAreOrdered,
+  IMAGE_CHECKS,
+  main,
+  nodeFloor,
+  pickNodeVersion,
+  selfCheckRunLines,
+  tarballDigest,
+  toolingVersionsFromLock,
+} from "../scripts/ci-image-plan.mjs";
+
+const ROOT = path.resolve(__dirname, "..");
+const TMP = mkdtempSync(path.join(tmpdir(), "ci-image-plan-"));
+
+afterAll(() => {
+  rmSync(TMP, { recursive: true, force: true });
+});
+
+describe("engines.node 的下限与版本挑选", () => {
+  it("取三段范围里最小的那一个下限", () => {
+    expect(nodeFloor("^22.22.2 || ^24.15.0 || >=26.0.0")).toEqual({
+      major: 22,
+      minor: 22,
+      patch: 2,
+    });
+    expect(nodeFloor(">=26.0.0")).toEqual({ major: 26, minor: 0, patch: 0 });
+    expect(nodeFloor("^24.15.0")).toEqual({ major: 24, minor: 15, patch: 0 });
+  });
+
+  it("认不出的范围当场抛，不退回猜出来的版本", () => {
+    /* 反向复算：这一档退回 `{major: 24}` 之类的缺省值时，镜像与 `engines.node`
+     * 各走各的，而两者都在盘上、谁也没报错。 */
+    expect(() => nodeFloor("~24.0.0")).toThrow(/认不出下限/);
+    expect(() => nodeFloor("")).toThrow(/认不出下限/);
+  });
+
+  it("只挑 linux-x64 有产物的那一版，且必须满足下限", () => {
+    const index = [
+      { version: "v24.1.0", files: ["linux-x64"] },
+      { version: "v24.20.0", files: ["linux-x64"] },
+      { version: "v26.0.0", files: ["linux-arm64"] },
+      { version: "v22.23.3", files: ["linux-x64"] },
+    ];
+    expect(pickNodeVersion(index, { major: 24, minor: 15, patch: 0 })).toBe(
+      "v24.20.0",
+    );
+    /* 有更新的 major、但它没有 `linux-x64` 产物 ⇒ 不许被挑中：镜像里下不下来取决于
+     * `files`，不取决于版本号；一个都没有满足下限时如实抛，而不是挑个「最接近」的。 */
+    expect(() =>
+      pickNodeVersion(index, { major: 26, minor: 0, patch: 0 }),
+    ).toThrow(/没有满足下限/);
+    /* 下限再抬一点点就一个都不满足了 —— 同一份清单，结论跟着下限走。 */
+    expect(() =>
+      pickNodeVersion(index, { major: 24, minor: 21, patch: 0 }),
+    ).toThrow(/没有满足下限/);
+    expect(pickNodeVersion(index, { major: 22, minor: 0, patch: 0 })).toBe(
+      "v24.20.0",
+    );
+  });
+
+  it("清单里一个都不满足时抛（而不是挑个最近的）", () => {
+    expect(() =>
+      pickNodeVersion([{ version: "v20.0.0", files: ["linux-x64"] }], {
+        major: 24,
+        minor: 0,
+        patch: 0,
+      }),
+    ).toThrow(/没有满足下限/);
+  });
+});
+
+describe("版本号现读：锁文件里只认根 importer", () => {
+  const lock = [
+    "---",
+    "lockfileVersion: '9.0'",
+    "importers:",
+    "",
+    "  .:",
+    "    configDependencies: {}",
+    "    packageManagerDependencies:",
+    "      pnpm:",
+    "        specifier: 12.4.1",
+    "        version: 12.4.1",
+    "",
+    "packages:",
+    "",
+    "  playwright@9.9.9:",
+    "    resolution: {integrity: sha512-x}",
+    "",
+    "importers:",
+    "",
+    "  .:",
+    "    devDependencies:",
+    "      '@playwright/test':",
+    "        specifier: ^1.63.0",
+    "        version: 1.63.0",
+    "      drizzle-kit:",
+    "        specifier: ^0.31.11",
+    "        version: 0.31.11(esbuild@0.28.2)",
+    "",
+  ].join("\n");
+
+  it("带 scope 的包名与带 peer 后缀的版本都读得对", () => {
+    expect(
+      toolingVersionsFromLock(lock, ["@playwright/test", "drizzle-kit"]),
+    ).toEqual({ "@playwright/test": "1.63.0", "drizzle-kit": "0.31.11" });
+  });
+
+  it("取的是**最后**那一段 importers（本仓锁文件里它出现两次）", () => {
+    /* 反向复算：改成「第一段」会得到「找不到这两件」—— 而那句话与
+     * 「本仓真的没有这两个依赖」逐字同形。 */
+    const onlyFirst = lock.slice(0, lock.indexOf("packages:"));
+    expect(toolingVersionsFromLock(onlyFirst, ["@playwright/test"])).toEqual({});
+  });
+
+  it("不会串到 packages: 那一段里的同名包", () => {
+    const text = toolingVersionsFromLock(lock, ["playwright", "@playwright/test"]);
+    expect(text.playwright).toBeUndefined();
+  });
+
+  it("本仓真锁文件里那两件都读得到（判据别只在假数据上绿）", () => {
+    const facts = diskFacts({ root: ROOT });
+    expect(facts.missingNpm).toEqual([]);
+    expect(facts.pnpmVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(facts.enginesRange).toContain("^24.15.0");
+  });
+});
+
+describe("Dockerfile 的形状", () => {
+  const plan = imagePlan({ nodeVersion: "v24.22.0", pnpmVersion: "12.4.1" });
+
+  it("版本号来自入参，不写死", () => {
+    expect(plan.dockerfile).toContain("ARG NODE_VERSION=v24.22.0");
+    expect(plan.dockerfile).toContain("pnpm@12.4.1");
+    const other = imagePlan({ nodeVersion: "v26.12.0", pnpmVersion: "12.5.0" });
+    expect(other.dockerfile).toContain("ARG NODE_VERSION=v26.12.0");
+    expect(other.dockerfile).toContain("pnpm@12.5.0");
+  });
+
+  it("拒绝形状不对的版本（别让 git tag 那种东西混进去）", () => {
+    expect(() =>
+      imagePlan({ nodeVersion: "24.22.0", pnpmVersion: "12.4.1" }),
+    ).toThrow(/精确号/);
+    expect(() =>
+      imagePlan({ nodeVersion: "v24.22.0", pnpmVersion: "latest" }),
+    ).toThrow(/pnpm 版本形状/);
+  });
+
+  it("层序：清单 COPY → 安装 → 源码 COPY", () => {
+    expect(imagePlanLayersAreOrdered(plan.dockerfile).ok).toBe(true);
+  });
+
+  it("层序写偏一层时判据当场点名（反向复算）", () => {
+    /* 把 `COPY . .` 提到安装之前 —— 改一行业务代码就会让依赖层失效（丢掉层缓存）。
+     * 注意**不能**用「先删后插」那种改写：`COPY package.json …` 那一行同时满足
+     * `^COPY package\.json` 与 `^COPY \.`，删一行会连带把清单 COPY 一起吃掉，
+     * 于是变异体其实「合规」了 —— 判据在原地照旧绿，而那是变异写错了。 */
+    const insertBefore = (text: string, before: RegExp, line: string) =>
+      text.replace(before, (m) => `${line}\n${m}`);
+
+    const copyAllEarly = imagePlanLayersAreOrdered(
+      insertBefore(plan.dockerfile, /^RUN pnpm install/m, "COPY . ."),
+    );
+    expect(copyAllEarly.ok).toBe(false);
+    expect(copyAllEarly.problems.join("\n")).toMatch(
+      /`COPY \. \.` 排在 `pnpm install` 之前/,
+    );
+
+    /* 把清单 COPY 挪到安装之后再插入 —— 依赖层于是永远拿不到输入（缓存恒失效），
+     * 而这份 Dockerfile 仍然能构建成功：这正是它要靠判据发现的原因。
+     *
+     * 落点是 `COPY . .` 的**前**一行（后一行会把两行融成 `COPY . .COPY …`，那既不是
+     * 合法的 Dockerfile，也不是这条判据要判的形态 —— 变异要长得像人真会写错的样子）。 */
+    const manifestLine =
+      /^COPY package\.json[^\n]*$/m.exec(plan.dockerfile)?.[0] ?? "";
+    const withoutManifest = plan.dockerfile.replace(`${manifestLine}\n`, "");
+    expect(withoutManifest).not.toBe(plan.dockerfile);
+    const late = imagePlanLayersAreOrdered(
+      withoutManifest.replace(/^COPY \. \.$/m, (m) => `${manifestLine}\n${m}`),
+    );
+    expect(late.ok).toBe(false);
+    expect(late.problems.join("\n")).toMatch(/排在 `pnpm install` 之后/);
+  });
+
+  it("构建期自证与安装后核对读的是**同一份**四件清单", () => {
+    const selfCheck = selfCheckRunLines().join("\n");
+    const checks = checkCommands().join("\n");
+    for (const item of IMAGE_CHECKS) {
+      expect(selfCheck).toContain(item.name === "chrome-headless-shell" ? "test -x" : item.name);
+      expect(checks).toContain(item.name === "chrome-headless-shell" ? "test -x" : item.name);
+    }
+    /* 浏览器那一件**不在 PATH 上**：写成 `command -v` 会永远找不到，而那种红
+     * 读起来像「镜像里没装浏览器」。 */
+    expect(selfCheck).not.toMatch(/command -v chrome-headless-shell/);
+    expect(selfCheck).toContain("test -x /root/.cache/ms-playwright/");
+  });
+
+  it("镜像自己带上身份标识（与 `镜像身份` 那一档读的是同一个变量名）", () => {
+    expect(plan.dockerfile).toContain("ENV COMFYAPP_NODE_IMAGE=comfyapp-ci:");
+  });
+});
+
+describe("fetchNodePlan：现取而不是猜", () => {
+  it("从 index.json 里挑出满足下限的那一版", async () => {
+    const res = await fetchNodePlan({
+      enginesRange: "^24.15.0",
+      /* 只喂这一层真正会读的两格（`ok` / `json()`）：造一个完整的 `Response`
+       * 会让这条判据测到 `fetch` 的形状而不是本层的解析。 */
+      fetchImpl: (async () => ({
+        ok: true,
+        json: async () => [
+          { version: "v24.22.0", files: ["linux-x64"] },
+          { version: "v24.1.0", files: ["linux-x64"] },
+        ],
+      })) as unknown as typeof fetch,
+    });
+    expect(res.version).toBe("v24.22.0");
+    expect(res.floor).toEqual({ major: 24, minor: 15, patch: 0 });
+  });
+
+  it("取不到清单时说清是哪里、什么状态（别丢一句 undefined）", async () => {
+    await expect(
+      fetchNodePlan({
+        enginesRange: "^24.15.0",
+        fetchImpl: (async () => ({
+          ok: false,
+          status: 404,
+        })) as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow(/HTTP 404/);
+  });
+});
+
+describe("tarball：权限位、符号链接、可复现", () => {
+  const src = path.join(TMP, "src");
+  mkdirSync(path.join(src, "bin"), { recursive: true });
+  mkdirSync(path.join(src, "sub"), { recursive: true });
+  writeFileSync(path.join(src, "a.txt"), "hello");
+  writeFileSync(path.join(src, "bin", "run.sh"), "#!/bin/sh\n");
+  spawnSync("chmod", ["755", path.join(src, "bin", "run.sh")]);
+  symlinkSync("../a.txt", path.join(src, "sub", "link"));
+
+  const buf = buildTarStream({ root: src });
+  const tarFile = path.join(TMP, "out.tar");
+  writeFileSync(tarFile, buf);
+
+  it("512 字节对齐，且两份输入打出来的字节完全相同", () => {
+    expect(buf.length % 512).toBe(0);
+    expect(tarballDigest(buildTarStream({ root: src }))).toBe(tarballDigest(buf));
+  });
+
+  it("宿主 tar 认得它（权限位与符号链接都在）", () => {
+    const list = spawnSync("tar", ["-tvf", tarFile], { encoding: "utf8" });
+    if (list.status !== 0) return; // 没有 tar 的环境（极简容器）不在这里红
+    const text = list.stdout;
+    expect(text).toMatch(/^-rwxr-xr-x .*bin\/run\.sh$/m);
+    expect(text).toMatch(/^lrwxrwxrwx .*sub\/link -> \.\.\/a\.txt$/m);
+    /* 反向复算：少了 `mode` 那一段，可执行文件在容器里 EACCES，而报错指不到这一层。 */
+    expect(text).not.toMatch(/^-rw-r--r-- .*bin\/run\.sh$/m);
+  });
+
+  it("不穿符号链接（链接的目标不被打成第二份内容）", () => {
+    const list = spawnSync("tar", ["-tvf", tarFile], { encoding: "utf8" });
+    if (list.status !== 0) return;
+    const names = list.stdout
+      .trim()
+      .split("\n")
+      .map((l) => l.split(/\s+/).slice(5).join(" "));
+    /* `sub/link` 可能显示成 `sub/link -> ../a.txt`，所以按「以它开头」认。 */
+    expect(names.filter((n) => n.startsWith("sub/link")).length).toBe(1);
+    expect(names.some((n) => n === "a.txt")).toBe(true);
+  });
+});
+
+describe("main：缺版本时不猜", () => {
+  it("没给 node 版本就抛（而不是退回一个缺省值）", () => {
+    const silent = () => undefined;
+    expect(() => main({ log: silent })).toThrow(/没有拿到精确的 Node 补丁号/);
+  });
+
+  it("给了版本时把三条命令都打出来（造镜像 / 装机 / 钉身份）", () => {
+    const lines: string[] = [];
+    const out = main({
+      log: (l) => lines.push(l),
+      nodeVersion: "v24.22.0",
+      facts: {
+        enginesRange: "^24.15.0",
+        pnpmVersion: "12.4.1",
+        npmVersions: {},
+        missingNpm: [],
+        pythonTooling: [],
+      },
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("docker build");
+    expect(text).toContain("docker save");
+    expect(text).toContain("docker cp");
+    expect(text).toContain("COMFYAPP_NODE_IMAGE");
+    expect(out.dockerfile).toContain("FROM node:24-bookworm");
+  });
+});
+
+describe("接线：入口在盘上、被直接执行时退非零会传出去", () => {
+  it("缺 node 版本时 CLI 退非零并说得出原因", () => {
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "ci-image-plan.mjs")],
+      { encoding: "utf8", env: { ...process.env, NODE_ENV: "test" } },
+    );
+    /* 不带 `--node-version` 且不联网时，它必须**红**：一声不吭地猜一个版本，
+     * 会让镜像与 `engines.node` 各走各的而谁也没报错。 */
+    if (r.status === 0) {
+      /* 例外只有一条：能联网时它现取了一版（那是设计内的另一条路）。 */
+      expect(r.stdout).toContain("docker build");
+      return;
+    }
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/ci-image-plan/);
+  });
+
+  it("`--dockerfile --node-version` 只打正文（供 `docker build -f -`）", () => {
+    const r = spawnSync(
+      process.execPath,
+      [
+        path.join(ROOT, "scripts", "ci-image-plan.mjs"),
+        "--dockerfile",
+        "--node-version",
+        "v24.22.0",
+      ],
+      { encoding: "utf8" },
+    );
+    expect(r.status).toBe(0);
+    expect(r.stdout.startsWith("#")).toBe(true);
+    expect(r.stdout).toContain("FROM node:24-bookworm");
+    expect(r.stdout).not.toContain("docker build");
+  });
+
+  it("本文件不在 `src/**` 里，也不该 import 任何仓库内模块（构建期第一步要能跑）", () => {
+    const text = readFileSync(
+      path.join(ROOT, "scripts", "ci-image-plan.mjs"),
+      "utf8",
+    );
+    const imports = [...text.matchAll(/^import .* from "([^"]+)";$/gm)].map(
+      (m) => String(m[1] ?? ""),
+    );
+    expect(imports.every((s) => s.startsWith("node:"))).toBe(true);
+  });
+});

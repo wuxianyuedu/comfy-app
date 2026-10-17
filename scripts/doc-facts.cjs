@@ -51,6 +51,9 @@ const SCOPED_DOCS = [
   "docs/guides/PRODUCTION-GAPS.md",
   "docs/guides/TESTING.md",
   "docs/guides/sync-after-pull.md",
+  /* 节点镜像的操作指南：它引用的四件落点（Playwright 的浏览器路径）与两条环境变量名
+   * 都来自源码，漂了就会指着一个不存在的位置 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/ci-node-image.md",
 ];
 function readJson(p) {
   return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));

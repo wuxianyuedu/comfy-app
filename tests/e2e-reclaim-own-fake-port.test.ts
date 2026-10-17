@@ -109,8 +109,7 @@ describe("收的方式与边界", () => {
     const reap = vi.fn(async () => ({ ok: true }));
     const result = await reclaimOwnFakePort(18188, {
       listeningPids: async () => [4242],
-      readCmdlines: async (pids) =>
-        new Map(pids.map((p) => [p, OUR_CMDLINE])),
+      readCmdlines: async (pids) => new Map(pids.map((p) => [p, OUR_CMDLINE])),
       answersFake: async () => true,
       reap,
     });
@@ -182,7 +181,7 @@ describe("接线在位：这一步真的挂在起 Playwright 之前（§13.5.12�
      * 那条边界）。这一步的位置只有一个正确取值：Playwright 探测到 URL 已有人应答、
      * 而 CI 档 `reuseExistingServer` 是 false 时**直接抛** —— 收它只能在那之前。 */
     const reclaimAt = run.indexOf("await reclaimOwnFakePort(");
-    const spawnAt = run.indexOf("const res = spawnSync(process.execPath");
+    const spawnAt = run.indexOf("await runChild(invocation)");
     expect(reclaimAt).toBeGreaterThan(-1);
     expect(spawnAt).toBeGreaterThan(-1);
     expect(reclaimAt).toBeLessThan(spawnAt);
@@ -216,13 +215,15 @@ describe("接线在位：这一步真的挂在起 Playwright 之前（§13.5.12�
     /* 两处各写一份就会漂：这边按「命令行点名了哪个脚本」认自己的残留，那边按
      * 同一个名字起服务。漂了的表现是「认不出自己的残留」——而那正是本 ISSUE 的病。 */
     const config = readFileSync(
-      path.join(path.resolve(import.meta.dirname, ".."), "playwright.config.ts"),
+      path.join(
+        path.resolve(import.meta.dirname, ".."),
+        "playwright.config.ts",
+      ),
       "utf8",
     );
     expect(config).toContain(FAKE_SERVER_SCRIPT);
   });
 });
-
 
 /* ── 应用端口那一格（ISSUE #1977 第十三处）────────────────────────────────
  *
@@ -252,9 +253,9 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
       true,
     );
     /* 反斜杠形态在 Windows 上是常见的。 */
-    expect(isAppDevServerCmdline("node F:\\repo\\scripts\\start.mjs", "F:/repo")).toBe(
-      true,
-    );
+    expect(
+      isAppDevServerCmdline("node F:\\repo\\scripts\\start.mjs", "F:/repo"),
+    ).toBe(true);
   });
 
   it("**别的检出**的应用服务 ⇒ 不收（命令行里的检出根不是我们的，§1.4）", () => {
@@ -402,7 +403,7 @@ describe("接线在位：应用端口那一格也挂在起 Playwright 之前（�
 
   it("`e2e-run.mjs` 在 spawn Playwright **之前**调了 `reclaimOwnAppPort`", () => {
     const reclaimAt = run.indexOf("await reclaimOwnAppPort(");
-    const spawnAt = run.indexOf("const res = spawnSync(process.execPath");
+    const spawnAt = run.indexOf("await runChild(invocation)");
     expect(reclaimAt).toBeGreaterThan(-1);
     expect(spawnAt).toBeGreaterThan(-1);
     expect(reclaimAt).toBeLessThan(spawnAt);

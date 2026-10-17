@@ -155,9 +155,19 @@ describe("e2e Python 前置：结论怎么带下去", () => {
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`pnpm test:e2e` 在起 Playwright 之前判这一格，且判红不放行", () => {
     const text = readFileSync(path.join(ROOT, "scripts/e2e-run.mjs"), "utf8");
-    expect(text).toContain("checkPythonReady({ env })");
-    expect(text).toContain("PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight");
-    expect(text).toContain("describePythonMissing(python)");
+    /* 三处**判据本身**没搬（仍由 `checkPythonReady` / `encodePythonPreflight` /
+     * `describePythonMissing` 各答一格），只是从 `main` 里三段就地 `await + return`
+     * 收成了 `makePreflightCollectors().python()` 一步（ISSUE #1998：那三段此前
+     * 排在短路之后，平台侧 36 分钟零行时连它们说没说话都读不出来）。
+     * 所以判据认的是这三句**还在**，不是它们还写在 `main` 里。 */
+    expect(text).toContain("const verdict = python({ env });");
+    expect(text).toContain(
+      "env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(verdict)",
+    );
+    expect(text).toContain("describePythonMissing(verdict)");
+    // 而且要真的被 `main` 编排上（写了不接等于没有）。
+    expect(text).toContain("makePreflightCollectors({ env, cwd: ROOT })");
+    expect(text).toContain("await runPreflightReadings(");
   });
 
   it("`playwright.config.ts` 真用上了那个绝对路径", () => {
