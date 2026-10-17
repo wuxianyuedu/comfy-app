@@ -602,4 +602,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 判据变红 —— 只会让下一次构建在没人审过的情况下改写工作区。触发面同样是 `.cnb.yml`，
   // 改配置在静态 import 图里追不到任何用例，故进固定清单。
   "tests/ci-autofix-duties.test.ts",
+  // 平台侧「装依赖那一跳什么时候可以跳过」（ISSUE #1981 收尾，规范 §13.5.20）。
+  // 这一步的逻辑住在 `.cnb.yml` 之外的 `scripts/ci-install-deps.mjs` 里，可它的
+  // **判定输入**（本次变更清单、`node_modules` 在不在）只有平台上才真实 —— 判反一边
+  // 的代价都不对等：判宽了少省几秒，判窄了是拿一个陈旧的 `node_modules` 去跑后面
+  // 三十步门禁（红法全在别处）。触发面是那个脚本与 `.cnb.yml`，静态 import 图里
+  // 只有它自己 —— 故进固定清单。
+  "tests/ci-install-deps.test.ts",
 ];

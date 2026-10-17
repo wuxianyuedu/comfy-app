@@ -183,13 +183,13 @@ story 要的正好相反 ——「有后端 / 没后端分别长什么样」。�
 
 所以 `.storybook/` 下另有五份注入层，story 只声明**场景名**：
 
-| 注入层       | 文件                                      | story 怎么用                                                                |
-| ------------ | ----------------------------------------- | --------------------------------------------------------------------------- |
-| store        | `.storybook/store-sources.tsx`            | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）                       |
-| React Flow   | `.storybook/flow-canvas.tsx`              | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>`              |
-| 整屏容器     | `.storybook/screen-frame.tsx`             | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备               |
-| 消息中心     | `.storybook/message-center-sources.tsx`   | `parameters.messageScene: "<场景名>"`（装饰器已全局挂）                     |
-| 工作流运行   | `.storybook/workflow-run-sources.tsx`     | `parameters.runScene: "<场景名>"`（装饰器已全局挂；执行日志时间线那一族）   |
+| 注入层     | 文件                                    | story 怎么用                                                              |
+| ---------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| store      | `.storybook/store-sources.tsx`          | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）                     |
+| React Flow | `.storybook/flow-canvas.tsx`            | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>`            |
+| 整屏容器   | `.storybook/screen-frame.tsx`           | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备             |
+| 消息中心   | `.storybook/message-center-sources.tsx` | `parameters.messageScene: "<场景名>"`（装饰器已全局挂）                   |
+| 工作流运行 | `.storybook/workflow-run-sources.tsx`   | `parameters.runScene: "<场景名>"`（装饰器已全局挂；执行日志时间线那一族） |
 
 ```tsx
 /* store：一段真格式的日志原文进 store 自己的解析入口 */
@@ -300,9 +300,9 @@ const meta = {
 
 - **不是像素基线**。组件覆盖率再高也不等于「页面没变样」—— 页面级视觉回归这一层
   **已经整档撤掉**（见 11 §11.8）：曾经有过 5 份 `e2e/visual/*.visual.spec.ts`
-  + 两档平台基线，理由不成立所以删掉了。⇒ **不要**因为「页面级没人管了」就把截图断言写进
-  story —— 那是给同一件事造第二套基线，而两套基线的维护成本正是当初撤掉它的理由之一。
-  真要看像素时，人的动作是**把页面跑起来看**，不是加一层基线。
+  - 两档平台基线，理由不成立所以删掉了。⇒ **不要**因为「页面级没人管了」就把截图断言写进
+    story —— 那是给同一件事造第二套基线，而两套基线的维护成本正是当初撤掉它的理由之一。
+    真要看像素时，人的动作是**把页面跑起来看**，不是加一层基线。
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
   story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
   `storybook-static/`、`.storybook/assets/`、`.storybook/generated/` 都在
@@ -314,7 +314,7 @@ const meta = {
   ——`docs/guides/PRODUCTION-GAPS.md` 的 F6 挂着这条账的全貌。
 - **不改业务目录**。`ui/` 之外的 story 是**加**在业务组件旁边的，不动组件本身的
   职责划分（规范 16 §16.2.3.9 记了「哪一档怎么写、哪一档刻意不写」）。
-- **组件覆盖率满了也不等于「页面没变样」**。`ui/` 现在是 **88/88**，而那只说明
+- **组件覆盖率满了也不等于「页面没变样」**。`ui/` 现在是 **99/99**，而那只说明
   「每个组件都被单独看过一眼」—— 真实页面在真实栈上的布局与配色**现在没有自动判据**
   （页面级像素基线已整档撤掉，见规范 11 §11.8），靠 review 看图。组件覆盖率补不了那一格。
 

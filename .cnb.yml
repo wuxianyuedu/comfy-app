@@ -267,6 +267,13 @@
 #   · **没有 `ifModify` 的 stage 就是默认档 = 任何改动都跑** —— 本文件里绝大多数
 #     stage 都在这一档，包括每一条全库级不变量与全部前提步骤。
 #
+# ⚠️ 还有**两种**收窄不在 `ifModify` 这一档（它们的前半是前提，跳不得）：
+#   · `Install dependencies` 的**装的那一跳** —— 依赖面（锁文件 / `package.json` /
+#     `pnpm-workspace.yaml` / `next.config.js`）一项都没碰就不装，判定在
+#     `scripts/ci-install-deps.mjs`（`pnpm` 自证照旧每次都跑，判据见 §13.5.20）；
+#   · 判据脚本**自己的触发面** —— `API 文档生成物与源同步` 的 globs 由
+#     `check-docs-api.cjs` 的 `INPUT_RES` 机械反推，不手抄第二份。
+#
 # ⚠️ **「哪几条被收窄了」只有一处出处**：`scripts/ci-incremental-gates.mjs` 的
 # `INCREMENTAL_GATES`（每条都写着它守的是哪份脚本、为什么这条收窄安全）。
 # 两个方向都由 `tests/ci-incremental-gates.test.ts` 判（登记表里每条 ⇒ 配置里必须
@@ -404,6 +411,14 @@
   # 刻意**不**开 corepack enable：自托管宿主机上 pnpm 是预装的，corepack 在
   # 非交互环境里为解析 packageManager 去拉版本会挂住；裸 `pnpm -v` 的上一步
   # 已经证明它可用。
+  #
+  # ⚠️ **依赖面没动就跳过「装」那一跳**（ISSUE #1981 收尾）：
+  # `ifModify` 只能整步跳过，而本步前一半（`check-pnpm-available.mjs`）是**前提**
+  # 步骤（跳过它 = 后面几十步都建立在一个没验过的解析面上）。所以收窄放在**步内**：
+  # 锁文件与依赖面（`pnpm-workspace.yaml` / `next.config.js` / 补丁目录）一个都没碰时，
+  # `node_modules` 本来就在、`--frozen-lockfile` 是一次空操作 —— 这一跳省掉的是
+  # pnpm 自己那几秒（实测 59~61s 的绝大部分是后面的 `postinstall` 里那几条
+  # node 脚本与缓存刷新，见 §13.5.20）。`pnpm` 自证照旧每次都跑。
   - name: Install dependencies
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -420,7 +435,9 @@
       # 看不懂的错收场，实测见 §13.5.3.6）。这里 1 秒就能问出来，且它跑在
       # `Install dependencies` 本来的位置上，代价是零。
       node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
-      node scripts/ci-cp936-exit.mjs -- pnpm install --frozen-lockfile
+      # 这一跳按语义判，不按「有没有 ifModify」判：空转的安装不该被跑，
+      # 而前提步骤不该被跳。判定口径与理由全在脚本头注（唯一实现）。
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
 
   # ── 分支保护 ──
   # 守在最前：分支不对时后续检查的结果最后都会被丢弃（与 pre-commit 同序）。
@@ -662,7 +679,24 @@
     # 真跑得完的形态差一两个数量级）。**不是放宽判据** —— 预算只管多久放弃。
     timeout: 10m
 
+  # ⚠️ 这一档也收窄了（ISSUE #1981 收尾），而且它的 globs **不是手抄的**：
+  # 由 `scripts/check-docs-api.cjs` 的 `INPUT_RES` 机械反推（登记在
+  # `scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`）。理由是那份常量
+  # 本来就是这条判据自己的触发面声明（文件头第 4 条：「触发面 = typedoc 的输入面」），
+  # 再手写一份等价的 glob 只会多一处会漂的副本。
+  # 它是本档**最贵的一格**：实测 201.8s（`cnb-ln5-1k540cfn1`），占整条流水线 12m14s
+  # 的 27.5% —— 而绝大多数 PR 一行 `src/lib|server|trpc` 都没碰，此前每次都要为它
+  # 付一次全量 typedoc 重生成 + 2618 个文件的比对。
   - name: API 文档生成物与源同步
+    ifModify:
+      - src/lib/**
+      - src/server/**
+      - src/trpc/**
+      - typedoc.json
+      - package.json
+      - pnpm-lock.yaml
+      - scripts/check-docs-api.cjs
+      - scripts/typedoc-run.mjs
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
     # 全量档实测 32s（本机 8 核，热缓存；与钩子里那一档同量级）。平台侧冷节点上
     # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个

@@ -40,6 +40,7 @@ import {
   parseStageIfModify,
   readCnbConfig,
 } from "../scripts/ci-incremental-gates.mjs";
+import { matchedInputs } from "../scripts/check-docs-api.cjs";
 
 const CONFIG = readCnbConfig();
 
@@ -100,14 +101,17 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "UI/逻辑分离",
       "lib Node-only 声明",
       "格式化提交分离",
-      /* ⚠️ `生成态文档与源同步` 曾经在这一列、ISSUE #1981 起**不在了**：它的两侧输入面
-       * 都能点清（`SCOPED_DOCS` 全在 `docs/**`，`FACTS` 的提取源是 `src/**` 与三份配置），
-       * 而且它现在带 `--autofix`（红了就地重渲染再判一次，见 §13.5.19）——
-       * 「改一行 README 也要为它付一次全量扫描」正是要收掉的那笔钱。
-       * 剩下的「文档面」两条仍在这一列：`API 文档生成物与源同步` 的输入面是
-       * typedoc 的入口 glob（`src/lib|server|trpc`，域不是「改了 docs」），
-       * `文档引用与权威源一致` 判的是**全库**文档里的引用与权威源一致。 */
-      "API 文档生成物与源同步",
+      /* ⚠️ 文档面三条里**只剩一条**在这一列（ISSUE #1981）：
+       *
+       *   · `生成态文档与源同步` —— 两侧输入面都能点清（`SCOPED_DOCS` 全在 `docs/**`，
+       *     `FACTS` 的提取源是 `src/**` 与三份配置），且它带 `--autofix`（§13.5.19）；
+       *   · `API 文档生成物与源同步` —— 它**自己**就声明了触发面（`check-docs-api.cjs`
+       *     的 `INPUT_RES`，文件头第 4 条：「触发面 = typedoc 的输入面」），所以那一档的
+       *     globs 由那份常量机械反推，不是第二份会漂的副本。它是本档最贵的一格
+       *     （实测 201.8s / 整条 12m14s 的 27.5%），而绝大多数 PR 一行
+       *     `src/lib|server|trpc` 都没碰。
+       *   · `文档引用与权威源一致` —— 这一条判的是**全库**文档里的引用与权威源，
+       *     域不是某几个目录，收窄成任何子集都是漏判。 */
       "文档引用与权威源一致",
       "core 骨架单一事实源",
       "零消费导出",
@@ -130,6 +134,48 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       inRegistry,
       `登记表里混进了全仓级 stage：${inRegistry.join(", ")}`,
     ).toEqual([]);
+  });
+
+  it("`API 文档生成物与源同步` 的 globs 与判据自己的输入面同源（不是手抄的副本）", () => {
+    /* 这一档的 globs 由 `check-docs-api.cjs` 的 `INPUT_RES` 反推（`globFromInputRe`）。
+     * 抓的是一种很难被看见的漂：有人改了判据的输入面（比如 typedoc 多了一条
+     * entryPoint），而配置那边**看起来一切正常** —— 新的入口目录一次都不会触发这一步，
+     * 于是产物漂了、判据没跑、没有任何信号。
+     *
+     * 全部用注入样本复算，不靠「读实现」：配置里每一条 glob 都要能找到一个样本，
+     * 而那个样本确实被判据自己认作输入面。 */
+    const gate = INCREMENTAL_GATES.find(
+      (g) => g.name === "API 文档生成物与源同步",
+    );
+    expect(gate, "登记表里没有这一档").toBeDefined();
+    const globs = gate?.globs ?? [];
+    expect(globs.length).toBeGreaterThan(0);
+    /* 判据认的每一类输入面（三条 entryPoint 目录 + 两份配置 + 锁文件），配置里都得覆盖。
+     * 这里点名而不是遍历 `INPUT_RES`：遍历会让「判据删掉一条输入面、配置也跟着少一条」
+     * 恒绿 —— 那正是本判据要拦的那种漂。 */
+    for (const f of [
+      "src/lib/a.ts",
+      "src/server/a.ts",
+      "src/trpc/a.ts",
+      "typedoc.json",
+      "package.json",
+      "pnpm-lock.yaml",
+      "scripts/check-docs-api.cjs",
+      "scripts/typedoc-run.mjs",
+    ]) {
+      expect(
+        matchedInputs([f]),
+        `判据不认 ${f}，这条用例的样本已经过期`,
+      ).toEqual([f]);
+      const dir =
+        f.includes("/") && f.endsWith(".ts") && !f.startsWith("scripts/")
+          ? `${f.slice(0, f.lastIndexOf("/"))}/**`
+          : f;
+      expect(
+        globs,
+        `判据认 ${f}，但 .cnb.yml 那一档的 ifModify 里没有 ${dir}`,
+      ).toContain(dir);
+    }
   });
 
   it("每条被收窄的 stage 在 .cnb.yml 里都真实存在且能跑（不是登记了一条不存在的）", () => {
