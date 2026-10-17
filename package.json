@@ -40,6 +40,7 @@
     "typecheck": "tsc --noEmit",
     "check:all": "node scripts/quality-gate.mjs",
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",
+    "check:freshness": "node scripts/freshness-gate.mjs --ledger",
     "check:app-version": "node scripts/check-app-version.cjs",
     "check:ci-incremental": "node scripts/ci-incremental-gates.mjs --check",
     "check:base": "node scripts/base-check.mjs",

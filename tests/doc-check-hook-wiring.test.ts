@@ -623,7 +623,8 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
  * 新鲜度账判决的**第二个执行者**（ISSUE #1979）。
  *
  * 立案现场：三档「每天首次自证」（全量 e2e / 全量单测 + 覆盖率 / 产物级护栏）的
- * **判决**一直只在本地钩子 D 组跑（`scripts/freshness-gate.mjs`），而**执行**那三档的
+ * **判决**一直只在本地钩子里跑（`scripts/freshness-gate.mjs`；那一档后来进了 D0 前置档），
+ * 而**执行**那三档的
  * 跑法脚本在平台侧从来没被调用过 —— `.cnb.yml` 的「生产构建」跑的是裸
  * `pnpm run build`（而不是 `artifact-run.mjs`），于是「这一步绿了」只落在日志里、
  * 账面上一个字不变。判据与账是两件事，两个执行者要读到同一份事实。
@@ -690,7 +691,7 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
     expect(stage).toContain("scripts/artifact-run.mjs");
   });
 
-  it("本地那一半仍在钩子 D 组里（平台侧 squash 合并不跑本地钩子，不能只剩它）", () => {
+  it("本地那一半仍在钩子门禁链里（平台侧 squash 合并不跑本地钩子，不能只剩它）", () => {
     const hit = steps.find((s) =>
       s.cmd.includes("scripts/freshness-gate.mjs"),
     );
