@@ -101,9 +101,13 @@
     # group = 当前仓库所属根组织下的自托管构建节点（不是平台公共池）。
     # 漏掉这一行会退化成平台池 —— 那时核时重新开始计费，而配置看起来完全一样。
     namespace: group
-    # 「与」关系：列出的每个 tag 都必须出现在节点标签上。当前节点声明的标签是 win。
-    tags:
-      - win
+    # 「与」关系：列出的每个 tag 都必须出现在节点标签上。
+    # ⚠️ **`tags` 不在这一层、而是在两条链路各自那一层**（ISSUE #1993）：`win:` 要一台
+    # 标签带 `win` 的节点、`linux:` 要一台带 `linux` 的 —— 标签不再是「所有流水线
+    # 共用的那一个」，而是**每条链路唯一的差异**。留在这里会让 Linux 那条也去要一台
+    # `win` 节点，而那种失配的表现是**排队**、不是红（§13.5.3.4 第 5 条：「自动尝试
+    # 重新分配到其他可用节点」，最坏情况是悄悄花回核时且不报错）。
+    # 判据：`tests/ci-lanes.test.ts` 要求两条链路各自声明非空 `tags`。
   # 同一分支上并发只留一条：**这条是节点侧的止血，不是省时间**。
   #
   # 实测（ISSUE #1961）自托管节点只有一台，而这一轮里连着推了好几个提交，每个
@@ -284,6 +288,50 @@
 #
 # 判定门槛（哪类能进登记表、哪类绝对不行）逐条写在 `scripts/ci-incremental-gates.mjs`
 # 的文件头；口径与边界见规范 §13.5.18。
+# ── 两条构建机上的同一批门禁（ISSUE #1993）──────────────────────────────
+#
+# 用户的原话是两半：「在 WSL2 里重建一条 Linux 门禁链 —— **跑的不是同一套判据**，
+# 绿了为什么也不算证据」与「能否一个机器跑 2 套 CI，一个处理 Linux 的（利用 WSL2 的
+# 高速），一个处理 Windows 独有的内容」。
+#
+# 前一半的分量要读准：WSL2 上那条**本地**链（`.githooks/pre-commit`）跑的已经是
+# **同一批判据脚本**（AGENTS 硬规则 7 / §13.5.8 的分工表），所以「在 WSL2 里再跑一遍
+# 平台侧那三十档」买到的是**速度**（ext4 比跨 9p/DrvFs 快得多），不是覆盖面 ——
+# 而「另造一条只跑一部分判据的链」正是那条硬约束要挡的东西：缺的那几档不会红，
+# 那样的绿确实不算证据。
+#
+# 后一半在这台机器上**已经全在 Windows 侧**：入口层是 `.ps1`、壳是 Rust + WebView2、
+# 打包是 MSI/NSIS。所以这里加的不是「第二条流水线」，而是**同一条流水线的第二台执行机**：
+#
+#   · `win:`   —— 现行的全套门禁（`tags: [win]`，stage shell 是 Windows PowerShell 5.1，
+#                日志要走 CP936 那一跳）。
+#   · `linux:` —— **同一批 stage、逐字相同的判据与参数**，跑在 `tags: [linux]` 上
+#                （WSL2 那条路径要买的就是它的 I/O）。差别只有两处：外层外壳换成
+#                `scripts/ci-sh-exit.mjs`（POSIX 上不转码，只转发 + 转退出码，含
+#                `128 + 信号号`），以及多了 `scripts/ci-toolchain-posix.mjs` 那一步
+#                宿主自证。
+#
+# ⚠️ **三处刻意不「各写一份」**：
+#   ① stage 列表共用同一个 `&gates` 锚点 —— 「判据是同一批」这件事必须由**结构**保证，
+#      而不是靠人记得两边一起改（复制一份 YAML 的漂是静默的：两侧都绿，只是判据不同）；
+#   ② 「哪条 stage 在哪几台机上跑、为什么跑得起来 / 跑不起来」的唯一出处是
+#      `scripts/ci-lane-duties.mjs` 的 `LANE_DUTIES`（`tests/ci-lanes.test.ts` 双向核对，
+#      配置与本表漂了就红）。**别在 YAML 里就地加一条只属于某一侧的 stage 而不登记**；
+#   ③ 平台侧「哪些 stage 允许跳过」与「哪几档会自己改工作区」仍归 §13.5.18 / §13.5.19
+#      那两张登记表，本条只回答「在哪跑」，不重叠也不替代。
+#
+# ⚠️ **两个分支键都是本仓的真实分支名**（`master`，以及同一仓并行检出的 `linux`）。
+#   这不是「按平台分叉」：`master` 那张单是 §1.1「多检出并行」的同一件事，与「谁在
+#   哪台机器上跑」是两条互不相干的约定。
+#
+# ── 还没有装的东西（写在这里，因为「配了没人跑」比没配更难查）──
+#
+# `linux:` 这一支要真跑起来，**根组织里得有一台标签带 `linux` 的自托管节点**
+# （WSL2 那条路径接进来即可）。没有那台节点时平台的表现不是红、是**等**（或按官方
+# 文档「自动尝试重新分配到其他可用节点」落到计费平台池）—— 两种都不报错。所以这一支
+# 的第一次真跑读数必须有人看一眼：`docs/standards/13-提交与-code-review.md` §13.5.21
+# 写着该看哪几个读数。
+
 .gates: &gates
   # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
   # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
@@ -896,11 +944,16 @@
     # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
     # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
     timeout: 30m
-
-master:
+win:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
   pull_request:
     - <<: *common
+      # 这条链路要一台**标签带 `win`** 的自托管节点：stage shell 是 Windows PowerShell
+      # 5.1、日志要走 CP936 那一跳（`ci-cp936-exit.mjs`）、工具链在宿主机上是
+      # `.exe` / `.cmd` / `.ps1` 三个形态（§2.1.1）。
+      runner:
+        tags:
+          - win
       name: 质量门禁
       stages: *gates
 
@@ -910,6 +963,9 @@ master:
   # 与门禁，那要拦下。
   push:
     - <<: *common
+      runner:
+        tags:
+          - win
       name: master 合并复核
       stages:
         - name: 合并形态复核
@@ -919,3 +975,590 @@ master:
           # 936 读一遍），但它让这一步不再依赖「控制台代码页恰好是多少」这个**继承
           # 来的**状态 —— 那正是这台机器上刚刚变过一次的东西（936 → 65001）。
           script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
+
+linux:
+  pull_request:
+    - <<: *common
+      runner:
+        tags:
+          - linux
+      name: 质量门禁（Linux）
+      stages:
+        # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
+        # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
+        # 后面每一步都会以看不懂的方式失败（`pnpm: not recognized`、corepack 拉版本超时），
+        # 排障成本远高于在这里花三秒正面回答。失败即非零退出 —— 它必须会红。
+        - name: 工具链自证
+          # POSIX 侧**先跑宿主自证**（`ci-toolchain-posix.mjs`）：Windows 那半件（corepack 三个
+          # 形态、`winget` 装解释器）在这里一行都不成立，而「答不出来」与「没有装」在日志里
+          # 逐字同形。所以第一步先正面回答这一侧独有的前两格：**bash 在不在**（stage shell
+          # 本身就是它，缺了后面三十步的失败都与判据无关）与 coreutils / python3 在不在。
+          # 它只对 `bash` 判红，其余全是读数 —— 处置归下一档的 Python 安装。
+          script: |
+            node scripts/ci-sh-exit.mjs -- node scripts/ci-toolchain-posix.mjs
+            # 然后是**同一份** `ci-toolchain-selfcheck.mjs`（git / node / pnpm / Python 四件）。
+            # ⚠️ 它内部两格按 `process.platform` 分派（PATHEXT / 安装根 / `py` 的 `-3`），
+            # 两侧共用一份而不是各写一份 —— 那正是 §13.5.3.5「同一件事四份写法在漂」的教训。
+            node scripts/ci-sh-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs
+
+        # ── Python 可用性（**必须排在「单元测试」之前**）──
+        #
+        # `单元测试` 里有一族用例（`tests/helpers/python-exe.ts` 的 `PYTHON_OK` 守卫、
+        # `e2e/support/fake-comfyui-executor-env.mjs`、`scripts/check-app-port-vectors.cjs`）
+        # 需要一个**真能起来**的解释器。缺件时它们按既有口径走 `env` 档跳过并登记 —— 也就是说
+        # 这一步**不会让那条 stage 变红**，只是少判几格。而「少判」在日志里是隐身的。
+        #
+        # 实测（`cnb-jt3-1k5071kou`）：这台节点上确实一个解释器都没有，而 `单元测试` 照样
+        # 往下跑、`Python 可用性` / `E2E 关键流程` 那两步排在**两小时之后** —— 于是
+        # 「缺 Python」这件事要么永远看不到，要么在最贵的位置才看到。第六次首跑就是后一种：
+        # 在 `ESLint` 之后排队两小时，`单元测试` 一步跑到 2h24m 被 8640s 的墙钟上限掐断，
+        # 整条流水线只留下 `timeout of 8640000ms exceeded`，一条失败原因都读不到。
+        #
+        # 所以把它从「E2E 之前那一步」提前到这里：判据是**同一个**（`--python-only` 调的是
+        # `findPython` / `installPython` / `pythonForensics` 那一份），只是让它在整条流水线上
+        # **最先**回答，代价几秒。它与第一步「工具链自证」不重复：那一步判的是**整机四件**
+        # 且缺件时非零退出（这一步在它绿了之后跑，说明四件齐），这一步只回答**解释器住哪**
+        # ——绿的时候打一行版本号（等于把「E2E 到底会用哪个解释器」变成可读读数），
+        # 缺件时打取证并**非零退出**（红在能指路的位置，而不是两小时后一串超时）。
+        - name: Python 可用性
+          # 与 Windows 侧**同一份**判据（`--python-only` 调的是 `findPython` / `installPython` /
+          # `pythonForensics`），只是它内部有一条 POSIX 分支：只认 apt / dnf / apk / brew，
+          # 认不出包管理器时如实说「请自行安装」——**不替人 sudo**（无人值守的流水线里一次
+          # 权限提示就是一次挂死）。
+          script: node scripts/ci-sh-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --python-only
+
+        # ── Python 探针读数（两条链各自的结论，**只打印、不阻断**）──
+        #
+        # `Python 可用性` 用的那条链（`findPython` 起**裸名字**，Windows 交给 CreateProcess
+        # 按 PATH 解析）与 E2E 前置用的那条链（`resolvePython` 手工扫 PATH × PATHEXT、再对
+        # **绝对路径**起一次）是「同一台机器上哪个解释器能跑」的两个不同实现。实测出过
+        # 相反结论（`cnb-g36-1k50hvu52`：`Python 可用性` 绿、`E2E 关键流程` 报
+        # 「PATH 上没有可用的 Python」）—— 而**只看一边的日志分不出是哪一边错**。
+        #
+        # `scripts/python-probe.mjs` 把两边的读数都打，退出码恒为 0：它是**打印**、
+        # 不是判据（判据那一份只有 `--python-only` 一个）。放在这里是因为它会跟着
+        # `Python 可用性` 一起在最便宜的位置跑，而 E2E 那一步要等十几分钟。
+        - name: Python 探针读数
+          script: node scripts/ci-sh-exit.mjs -- node scripts/python-probe.mjs
+
+        # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
+        #
+        # 上面三步答的是「四件工具在不在」「解释器住哪」，这一步答的是它们旁边那**三格**：
+        #
+        #   ① **在，但版本不够** —— 解释器低于本仓写明的下限 Python 3.10；
+        #   ② **配置配错了** —— `.cnb.yml` 里有 host 侧 PowerShell（5.1）认不了的语法面；
+        #   ③ **浏览器那一格的前提** —— 落点上有没有那一件；没有的话，**下载根通不通**。
+        #
+        # 三格的共同形态正是 ISSUE #1959 里那句「别等到执行几十分钟后才发现环境不行」：
+        # 第 ① 格**不会让哪一步变红**（门禁的 Python 侧以「探测不到」的名义退出比对、
+        # 几条真跑的用例走 `env` 档跳过并登记 —— 与「装好了」在日志里逐字同形），
+        # 第 ② 格红在**几十步之后**（`Install dependencies` 那段 PowerShell 自己），
+        # 第 ③ 格红在**整条流水线的倒数第二步**（`浏览器安装`）；
+        # 而第 ②③ 格在跑到那一步之前会先把预算是花掉 —— 实测第 ③ 格就是「前面三十步
+        # 全绿、二十几分钟之后卡在下载上」（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq`）。
+        #
+        # 判据不重写：解释器怎么找走 `ci-toolchain-python.mjs` 的 `findPython()`（与
+        # `Python 可用性` 同一份候选表、同一个探针），`.cnb.yml` 的语法面复用
+        # `tests/no-platform-ci-config.test.ts` 导出那一份（本地钩子与平台侧同一条判据），
+        # 浏览器那一格复用 `ci-toolchain-browser.mjs` 的 `browserExecutableExists()` /
+        # `playwrightReachabilityVerdicts()`（与 `浏览器安装` 同源 —— 打印与判据共用
+        # 同一次结论，不造第二轮子）。
+        # 逻辑在 `scripts/ci-env-probe.mjs` —— **不在这里就地写 PowerShell**，理由与
+        # `工具链自证` 逐字相同：配置里的逻辑一条判据都测不到它。
+        # 代价几秒（浏览器那格最坏是 4 个候选 × 8s 的 HEAD 串行），跑在**任何依赖安装
+        # 之前**（它只 import `node:*`，那时 `node_modules` 还没有）。
+        #
+        # ⚠️ 第 ③ 格**只在前置判定**（它是判据、要快），与 `浏览器安装` 失败分支那份
+        # 「四个域全量一遍供人定位」的取证刻意不同 —— 后者是失败之后给人看的现场。
+        # 也**不**在这里替 `浏览器安装` 去装：探测到「都不通」时的出路在人不在仓
+        # （换根 / 配代理 / 预装进落点），这一步的作用是把结论提前，不是代办。
+        - name: 环境前提
+          script: node scripts/ci-sh-exit.mjs -- node scripts/ci-env-probe.mjs
+
+        # ── 安装 ──
+        # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。
+        # --frozen-lockfile 保证装的就是锁文件里的版本。
+        # 刻意**不**开 corepack enable：自托管宿主机上 pnpm 是预装的，corepack 在
+        # 非交互环境里为解析 packageManager 去拉版本会挂住；裸 `pnpm -v` 的上一步
+        # 已经证明它可用。
+        #
+        # ⚠️ **依赖面没动就跳过「装」那一跳**（ISSUE #1981 收尾）：
+        # `ifModify` 只能整步跳过，而本步前一半（`check-pnpm-available.mjs`）是**前提**
+        # 步骤（跳过它 = 后面几十步都建立在一个没验过的解析面上）。所以收窄放在**步内**：
+        # 锁文件与依赖面（`pnpm-workspace.yaml` / `next.config.js` / 补丁目录）一个都没碰时，
+        # `node_modules` 本来就在、`--frozen-lockfile` 是一次空操作 —— 这一跳省掉的是
+        # pnpm 自己那几秒（实测 59~61s 的绝大部分是后面的 `postinstall` 里那几条
+        # node 脚本与缓存刷新，见 §13.5.20）。`pnpm` 自证照旧每次都跑。
+        - name: Install dependencies
+          script: |
+            # 动依赖面前先自证一件事：**这个宿主真的起得来 pnpm** —— 而它正好是这一步
+            # 的全部动作。放在这里而不是更早的 stage，是因为这条判据**在更早的位置上做不
+            # 出来**：`工具链自证` 那份探针刻意按形态解析（corepack 摆在盘上的 pnpm 有三个
+            # 形态，Node 只起得来其中一个，见 §2.1.1），而这一句走的是 host 自己的解析面 ——
+            # 两者不是同一条链，也不该被压成一条（脚本自己写着理由：判据全在
+            # `scripts/launcher-core/corepack.mjs`，它是薄壳）。
+            #
+            # 顺序要紧：**判在装之前**。装失败之后再判，红的位置就与原因分开了 —— 而
+            # 「pnpm 起不来」这条链上此前每一轮都是这个形态（第一步绿、几十步之后才以一个
+            # 看不懂的错收场，实测见 §13.5.3.6）。这里 1 秒就能问出来，且它跑在
+            # `Install dependencies` 本来的位置上，代价是零。
+            node scripts/ci-sh-exit.mjs -- node scripts/check-pnpm-available.mjs
+            # 这一跳按语义判，不按「有没有 ifModify」判：空转的安装不该被跑，
+            # 而前提步骤不该被跳。判定口径与理由全在脚本头注（唯一实现）。
+            node scripts/ci-sh-exit.mjs -- node scripts/ci-install-deps.mjs
+        # ── 分支保护 ──
+        # 守在最前：分支不对时后续检查的结果最后都会被丢弃（与 pre-commit 同序）。
+        # 与 .githooks/pre-commit 用的是**同一个** scripts/check-branch-guard.cjs，
+        # 不另写一份「CI 专用」的分支名判断（会漂移的判据只许定义一次）。
+        # --target master 由配置写死传入：判定要的是**分支名**，而流水线里的
+        # CNB_PULL_REQUEST_TARGET_SHA 是 sha —— 拿它当 branch 用会静默失效。
+        - name: 分支守卫
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-branch-guard.cjs --pr-check --target master
+
+        # ── 新鲜度账判决（平台侧的第二个执行者，ISSUE #1979）──
+        #
+        # 与本仓 `.githooks/pre-commit` 的 D 组「每档都有主」跑的是**同一份**判据
+        # （`scripts/freshness-gate.mjs`，判据一字未改，只是多了一个执行者，§13.5.17 同款）。
+        #
+        # 为什么值得在平台侧再判一次：本地那一步只有在「提交那一刻」才会响，而平台侧是
+        # **每条 PR** 都过一遍 —— 于是「这个 PR 的源分支上账是旧的」会在合并之前被机器说出来，
+        # 而不是等到某个人下一次本地提交才被拦（那一次对应的修订号已经不是这个 PR 的了）。
+        #
+        # ⚠️ **位置必须在这条流水线的「跑法脚本」之前**（本步在 `分支守卫` 之后、
+        # `生产构建` 之前），而且不是风格问题：`生产构建` 用的 `artifact-run.mjs` 跑绿之后
+        # **会刷新 `scripts/.artifact-freshness.json`**，而同一分支的 stage 共享同一个工作区 ——
+        # 排在它后面时这一步读到的是**刚被这一次构建改过的账**，于是「源分支上账是旧的」
+        # 这件事**永远判不出来**（判据在场、结论恒放行，正是本仓最不能有的形态）。
+        # 纯文本 + 几次 git 调用、零依赖，放在这个位置代价是零。
+        - name: 新鲜度账
+          script: node scripts/ci-sh-exit.mjs -- node scripts/freshness-gate.mjs
+          # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
+          timeout: 5m
+
+        # ── 建库 ──
+        # 走 scripts/db-push.mjs —— 它复核库里到底有没有表，失败即非零退出。
+        # 后面的 E2E 要真的读到库（见 e2e/smoke.spec.ts 的「数据库链路」一组），
+        # 故必须放在最前。
+        - name: 同步数据库表结构
+          script: node scripts/ci-sh-exit.mjs -- node scripts/db-push.mjs
+
+        # ── 类型 / 静态检查 ──
+        - name: 类型检查
+          script: node scripts/ci-sh-exit.mjs -- node_modules/.bin/tsc --noEmit
+
+        # ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，2026-10-16）：这一步**已经跑得通**，
+        # 只是正在把 E2E 那两格调绿的每一轮里它都要重跑一遍（实测 256~274s 节点侧）而没有
+        # 新信息 —— 属于「耗时项，先让位」。**不是判据被放宽**：本地 `.githooks/pre-commit`
+        # 里那条 `eslint --max-warnings 0` 一个字没动，这一步的判据也一字未改。
+        # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从停用清单删掉。
+        # ⚠️ **但恢复条件有两条**（`E2E` 一绿 **且** 平台日志的中文可读）：第二条还没成立，
+        # 依据与「唯一剩下的那一个开关」写在 `env.COMFYAPP_CI_DISABLED_GATES` 旁边那一段。
+        # 2026-10-16 曾只按第一条恢复过一次，当天退回 —— 耗时项真红时日志读不出原因。
+        # - name: ESLint 零警告
+        #   script: node_modules/.bin/eslint . --max-warnings 0
+        # 实测 114s（本机 8 核）/ 256~274s（自托管节点）。而 `cnb-jt3-1k5071kou` 上它
+        # 挂到 **8640s**（2h24m）被 Job 上限掐掉 —— 那是节点被压死、这一步根本没在算。
+        # 给 20m 是「量级余量」：真跑得完的形态差两个数量级，而卡死的形态 20m 就能
+        # 报出来，不再白等两小时。**不是放宽判据**，判据本身一字未动。
+        # timeout: 20m
+
+        # ── 测试（**临时停用**，ISSUE #1959）──
+        #
+        # ⚠️ 这一步现在是**注释掉的**：宿主侧测试环境还没就绪（Windows 自托管节点上
+        # Python 只进了 `yuedu` 会话、构建用的 `SYSTEM` 账号够不着；另有一批跑真子进程的
+        # 用例在慢宿主上超预算），先把它摘掉让流水线能往下走，**等测试流程好了再加回来**。
+        #
+        # 停用这件事有两半、缺一半就会变成「静默删除」：
+        #   · 本条目按注释形态留在这里（**别删** —— 恢复动作就是取消注释）；
+        #   · 名字从 `env.COMFYAPP_CI_GATES` 摘掉、挪进 `env.COMFYAPP_CI_DISABLED_GATES`。
+        # 判据 `tests/no-platform-ci-config.test.ts` 会把「停用」与「删除」分开判：
+        # 只在 `DISABLED_GATES` 里登记、且这段注释仍在，才算停用；否则当场点名。
+        #
+        # 原来的形态（恢复时照抄下面这块，并把名字挪回 `GATES`、从 `DISABLED_GATES` 删掉）：
+        #
+        #   全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
+        #   判据强度不变，阈值仍由 vitest.config.ts 的目录阈值守着）。
+        #
+        #   **显式 `--maxWorkers=4`，不是配置里那个 8**：这条件路径与本地跑不是同一种负载。
+        #   ① 宿主机 16 逻辑核（无 docker、整机可用），vitest 若照默认铺开就有 ~15 个 worker；
+        #   ② `--coverage` 给每个文件都加一层插桩（本机实测同样两文件 6.2s → 9.2s，约 +50% CPU）；
+        #   ③ 这一套里有大量**真起子进程**的用例（git / node / prettier / PowerShell），超订的
+        #      那一份直接从「等 CPU」变成「等子进程」—— 表现是 `Test timed out in 30000ms`，
+        #      而单跑全绿。**这正是本仓已经量过的那一格**（规范 §11.13）：同一套、同一台机器，
+        #      `maxWorkers=8` 在负载下仍出争用形态的红，`--maxWorkers=4` 才拿到「560 文件全绿」。
+        #   取 4 是**降负载**，不是放宽判据 —— 用例、预算、覆盖率阈值一个字不动；
+        #   与 `.githooks/pre-commit` 的 C 组同一个数、同一条理由（AGENTS 硬规则里那句
+        #   「降负载的杠杆是并发，不是预算」）。代价是墙钟变长，这是这条路径上买得到的唯一交换。
+        #
+        #   ⚠️ **恢复时入口写 `scripts/full-suite-run.mjs`，不是裸 vitest**（ISSUE #1979）：
+        #   它内部是 `pnpm run test:coverage`（= `vitest run --coverage`，见 `planRun()`），
+        #   而外面多出来的那一跳是**记账** —— 跑绿即刷新 `scripts/.full-suite-freshness.json`。
+        #   裸写 vitest 时这一步的绿只落在日志里、账面上一个字不变，本地「改了就当天跑」
+        #   那条判据照旧拦人（判据与账是两件事，两个执行者要读到同一份事实）。
+        #   本档在平台侧**必须整档跑**（不带 `--grep` / 不指单个文件）：`isWholeTrackRun`
+        #   会把「透传了参数的绿」判成**不构成整档凭证**、当场不记账。
+        #   用法与边界见 scripts/full-suite-run.mjs 头注与规范 §13.5.4。
+        #
+        #   - name: 单元测试
+        #     script: node scripts/full-suite-run.mjs
+        #     # 实测 827s（`cnb-eus-1k5058g8l`，755 文件全量绿）；本机 `--maxWorkers=4` 实测
+        #     # 198s。而 `cnb-did-1k50659np` 上它挂到 **8640s**（2h24m）才被掐掉，留下的
+        #     # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
+        #     # 给 45m：真跑得完的形态差三倍余量，卡死的形态 45m 报出来。
+        #     timeout: 45m
+
+        # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
+        # ⚠️ `ifModify` 的第一处示例（本档共 11 处，全部登记在
+        # `scripts/ci-incremental-gates.mjs`）：它只扫 `src/components` + `src/app`，
+        # 本次改动一个文件都没落在这两处时跳过。**每加一处都必须同批登记** ——
+        # 判据 `tests/ci-incremental-gates.test.ts` 双向核对，机制见上面 `.gates` 头注。
+        - name: 标题行让位
+          ifModify:
+            - src/components/**
+            - src/app/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-title-bar-clearance.cjs
+
+        - name: 文件结构硬规则
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-file-structure.cjs
+
+        - name: 跨平台动作对照
+          ifModify:
+            - package.json
+            - tools/**
+            - scripts/**
+            - src-tauri/**
+            - README.md
+            - docs/standards/launch-and-build.md
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-ps1-consistency.mjs
+
+        - name: import 别名统一
+          ifModify:
+            - src/**
+            - e2e/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-import-alias.cjs
+
+        - name: ComfyUI 端口口径
+          ifModify:
+            - src/lib/comfyui/**
+            - src/lib/app-settings/**
+            - src/lib/endpoints.ts
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-comfyui-port-contract.cjs
+
+        - name: 内联样式注入
+          ifModify:
+            - src/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-inline-style.cjs
+
+        - name: 跨文件重复块
+          ifModify:
+            - src/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-code-duplication.cjs
+
+        - name: 函数长度 TS
+          ifModify:
+            - src/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-function-length.cjs
+
+        - name: 函数长度 Rust
+          ifModify:
+            - src-tauri/src/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-rust-function-length.cjs
+
+        - name: 模块循环依赖
+          ifModify:
+            - src/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-circular-deps.cjs
+
+        - name: 端口推导跨语言一致性
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-app-port-vectors.cjs
+
+        - name: CHANGELOG 碎片
+          ifModify:
+            - changelog.d/**
+            - CHANGELOG.md
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-changelog-fragments.cjs
+
+        - name: 主题色扫描
+          ifModify:
+            - src/**
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-theme-colors.cjs
+
+        - name: UI/逻辑分离
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-ui-logic-separation.cjs
+
+        - name: lib Node-only 声明
+          script: node scripts/ci-sh-exit.mjs -- node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
+
+        # ⚠️ **临时停用**（同 `ESLint 零警告`：跑得通，但在调 E2E 的每一轮里白重跑一遍；
+        # 本地 pre-commit 的 prettier 棘轮照旧跑，判据一字未动）。恢复动作同上，
+        # **恢复条件也同上那两条**（`E2E` 一绿 **且** 平台日志的中文可读）。
+        # - name: prettier 格式
+        #   script: node scripts/check-format.cjs
+
+        - name: 格式化提交分离
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-reformat-only.cjs
+
+        # ── 文档面三条（ISSUE #1975：从 `.githooks/pre-commit` 的 D 组挪到这里）──
+        #
+        # 它们原本在钩子里（`生成态文档与源同步` / `API 文档生成物与源同步` /
+        # `文档引用与权威源一致`），2026-10-16 撤到平台侧。判据**一个字没改**，
+        # 挪的只是执行者 —— 三条判的都是**文档与文档生成物**，漂了不会有任何运行时症状，
+        # 只会在下一次有人读文档时误导他，因此挡不住任何一次代码回归，不该占用「提交那一刻」
+        # 这份最贵的预算。口径与逐条实测见规范 §13.5.17。
+        #
+        # ⚠️ 三条在平台侧是**全量档**（不带 `--staged`）：平台侧的工作区就是这次要判的那份
+        # 源码，而本地那一档对着的是「工作区里半成品状态的暂存区」—— 全量档更接近要守的
+        # 那件事（「合并后的源码与产物一致」）。
+        #
+        # ⚠️ `pnpm run docs` **不要写成 `pnpm docs`**：后者是 pnpm 的内建命令
+        # （`pnpm docs <PACKAGE>`），会抢在脚本前面、typedoc 根本不跑。`check-docs-api.cjs`
+        # 内部调的是 `scripts/typedoc-run.mjs`，与本步无关；这里只跑比对档。
+        # ⚠️ 这一档是 `--check --autofix`，不是裸 `--check`（ISSUE #1981）：判据红了**就地重渲染
+        # 一遍、再判一次**，而不是先红一轮让人本地跑 `pnpm doc:render` 再来。红了才花那笔钱
+        # （绿的时候一次都不多跑），而红的时候省掉的是一整轮流水线加一个人的机械动作。
+        #
+        # 三步各自的分工别混：`ifModify`（若有人登记）管「改没改到」，`--check` 管判定，
+        # `--autofix` 只管「红了之后怎么写」—— 结论**永远来自第二次 `--check`**，只跑写入模式
+        # 就退 0 等于把未经复核的写入报成通过。凭什么这一档可以自动修、以及为什么**不**顺便
+        # `git commit` / `git push`（平台侧能否回写分支是一条单独的决策，PR 源分支可能来自 fork），
+        # 两条都写在 `scripts/ci-autofix-duties.mjs` 的文件头。
+        #
+        # 自动修之后**红的那一轮仍然是红的**：修好的是工作区，提交与重跑仍由人 / 代理那一侧做。
+        # 这也是 `--autofix` 只出现在这一档的原因 —— 它要求「产物是纯确定的重新生成」且
+        # 「红了没有第二种成因」，两条同时成立才敢自动写（登记表 `AUTOFIX_DUTIES` 逐条写理由，
+        # `tests/ci-autofix-duties.test.ts` 双向核对它 ⇄ 本文件）。
+        # 收窄（`ifModify`）：本次改动一个文件都没落在「编辑态文档 / 提取源 / 生成面配置」里时
+        # 跳过这一步 —— `docs/generated/**` 只由这几处决定（三条方向都只读它们）。
+        # README.md / AGENTS.md 不在清单里，因为它们不在 `SCOPED_DOCS` 里（AGENTS.md 刻意不进
+        # 生成面，否则会复制出一份没有占位符要替换的副本、反而误导读者去改产物）。
+        # ⚠️ 新增一条 FACTS 事实读了别的文件时，要同批回来补这一行 —— 漏补的形态是
+        # 「改了那个文件，这一步却不跑」。登记与理由的唯一出处：scripts/ci-incremental-gates.mjs。
+        - name: 生成态文档与源同步
+          ifModify:
+            - docs/**
+            - src/**
+            - package.json
+            - pnpm-workspace.yaml
+            - next.config.js
+          script: node scripts/ci-sh-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
+          # 绿的时候是秒级（30 份文档的比对），红的时候多一次重渲染 —— 仍是秒级。
+          # 给 10m 是「卡死要早报」那条量级（与 `API 文档生成物与源同步` 的 20m 同款理由：
+          # 真跑得完的形态差一两个数量级）。**不是放宽判据** —— 预算只管多久放弃。
+          timeout: 10m
+
+        # ⚠️ 这一档也收窄了（ISSUE #1981 收尾），而且它的 globs **不是手抄的**：
+        # 由 `scripts/check-docs-api.cjs` 的 `INPUT_RES` 机械反推（登记在
+        # `scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`）。理由是那份常量
+        # 本来就是这条判据自己的触发面声明（文件头第 4 条：「触发面 = typedoc 的输入面」），
+        # 再手写一份等价的 glob 只会多一处会漂的副本。
+        # 它是本档**最贵的一格**：实测 201.8s（`cnb-ln5-1k540cfn1`），占整条流水线 12m14s
+        # 的 27.5% —— 而绝大多数 PR 一行 `src/lib|server|trpc` 都没碰，此前每次都要为它
+        # 付一次全量 typedoc 重生成 + 2618 个文件的比对。
+        - name: API 文档生成物与源同步
+          ifModify:
+            - src/lib/**
+            - src/server/**
+            - src/trpc/**
+            - typedoc.json
+            - package.json
+            - pnpm-lock.yaml
+            - scripts/check-docs-api.cjs
+            - scripts/typedoc-run.mjs
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-docs-api.cjs
+          # 全量档实测 32s（本机 8 核，热缓存；与钩子里那一档同量级）。平台侧冷节点上
+          # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个
+          # 数量级，卡死的形态 20m 报出来，不必等满平台默认的 2h 墙钟）。
+          timeout: 20m
+
+        # ── 覆盖率上报（ISSUE #1990）──
+        #
+        # 「洞察 → 单元测试覆盖率」页此前**一条数据都没有**：那个页面读的是 `testing:coverage`
+        # 插件上报的读数，而这个插件在 #623 删旧版流水线时被一起拿走了，#1959 按完整流程
+        # 重建时没被带回来 —— 于是前端永远停在「无 / 无」，看起来像平台坏了，实际是**没人上报**。
+        #
+        # 这一档是**纯从属**的，两件事别搞混：
+        #   · 它**判不了任何东西**：真正的覆盖率门槛在 `vitest.config.ts` 的 `thresholds` 里，
+        #     由 `单元测试`（`scripts/full-suite-run.mjs` → `vitest run --coverage`）判。
+        #     本档只把那份产物**报出去**，阈值一个字不设（平台阈值是绝对百分比，与本仓
+        #     「按目录记门槛 + 棘轮」的口径冲突：填低了形同虚设、填高了把正常 PR 拦死）；
+        #   · 所以 `单元测试` 被临时停用（见 `COMFYAPP_CI_DISABLED_GATES`）期间，
+        #     `coverage/lcov.info` **不存在** —— 此时本档只跳过并留一行话，**不许判红**：
+        #     一个「测都没跑」的绿没法靠它变出来，把它判红等于让「停用」这件事
+        #     连带把整条流水线拦死（那正是停用要避免的形态）。
+        #   ⚠️ 恢复 `单元测试` 时**顺手删掉**这一档：上报器用平台的 coverage 类型时，
+        #   报告文件是它的必需输入（官方 build/plugin/testing.md 的「覆盖率上报」一节：
+        #   `breakIfNoCoverage` 缺省即报错退出 —— 旧版 #623 之前那一跑就是这么红的）。
+        #   现在所以能留，是因为做成了命令行形态、自己判「有没有文件」。
+        - name: 覆盖率上报
+          # 只跟着 `单元测试` 走：它不跑，这里就没有报告可报。
+          ifModify:
+            - src/**
+            - tests/**
+            - vitest.config.ts
+          script: >-
+            if [ -f coverage/lcov.info ]; then
+              node scripts/ci-sh-exit.mjs -- node scripts/ci-coverage-report.mjs;
+            else echo "[coverage-report] 没有 coverage/lcov.info（单元测试这一档此刻未产出报告），跳过上报"; fi
+
+        - name: 文档引用与权威源一致
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-doc-references.cjs
+
+        - name: core 骨架单一事实源
+          script: node scripts/ci-sh-exit.mjs -- node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+
+        - name: 零消费导出
+          script: node scripts/ci-sh-exit.mjs -- node scripts/check-dead-exports.cjs
+
+        - name: core 出口纪律与基类纯度
+          script: node scripts/ci-sh-exit.mjs -- node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+
+        # ── 构建与产物 ──
+        #
+        # ⚠️ **入口是「跑法脚本」，不是裸 `pnpm run build`**（ISSUE #1979）——
+        # `scripts/artifact-run.mjs` 内部就是 `pnpm run build`（那条命令串了
+        # next build → 剥私有输入 → 数产物 → 冒烟，不另拼一遍），外面多出来的那一跳是
+        # **记账**：跑绿之后它刷新 `scripts/.artifact-freshness.json`，
+        # 于是「这一档上一次被实证跑绿是什么时候、谁跑的、按哪条命令」在平台侧也有人回答。
+        #
+        # **为什么不直接裸跑 `pnpm run build`**（旧形态）：那样这一步的绿只落在日志里，
+        # 而账面上一个字都不变 —— 本地钩子明天照旧拦人（「改了就当天跑」这条判据问的是账，
+        # 不是「平台侧跑没跑」）。判据与账是两件事，两个执行者要读到的是同一份事实。
+        #
+        # ⚠️ **平台侧跑绿 ≠ 本地那笔账被更新**：CI 的工作区是只读检出，`writeFreshness`
+        # 写下的那份账留在这个一次性的检出里、不会落回任何分支。把它落回去要动
+        # 「CI 能不能回写分支」（`repo-code:rw` 在 push / PR 这类可信事件上确实有，
+        # 但 master 走分支保护、PR 源分支可能来自 fork），是一条**单独的决策**——
+        # 见规范 §13.5.4 那段。在此之前，这一步的价值是「这一档在平台侧真的有人跑、
+        # 且这一次跑的是什么写得出来」，而不是「本地那笔账可以不管了」。
+        #
+        # 实测 118s（`cnb-eus-1k5058g8l`）。给 30m 是因为 `next build` 在冷节点上比实测
+        # 读数慢得多，而不是因为它会挂（与 `artifact-run.mjs` 的 `ARTIFACT_TIMEOUT_MS` 同量级）。
+        - name: 生产构建
+          script: node scripts/ci-sh-exit.mjs -- node scripts/artifact-run.mjs
+          timeout: 30m
+
+        # ── 浏览器安装（自托管节点是裸宿主机，没有镜像预装这一层）──
+        #
+        # `E2E 关键流程` 是这条流水线上**从来没有跑过**的一档（前几跑都断在 `单元测试`
+        # 或 `生产构建`）。它第一次真跑到就红在浏览器缺件上，读数（`cnb-0rd-1k50unpnn`）：
+        #
+        #   期望的路径：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
+        #
+        # 成因不是配置写错：**没有 docker 就没有「镜像里预装好浏览器」那层兜底**，而
+        # `pnpm install` 不会拉 Playwright 的浏览器二进制（那是 `playwright install` 的事）。
+        # 旧版 `docker.image: node:24` 那条路上这一格是白拿的，自托管把它还回来了。
+        #
+        # 为什么是「装」而不是「判红让人去装」：它与 Python 那一步的分工不同 —— 解释器可能
+        # 在盘上、只是执行账号的 PATH 看不见（那要人改 PATH，所以 `--python-only` 探到就放行、
+        # 探不到才红并给取证）；而浏览器二进制**只可能来自这一条命令**，机器上不存在
+        # 「装了但探不到」的分支。所以这一步直接装。
+        # 幂等：`playwright install` 对已存在的版本是 no-op。
+        #
+        # ⚠️ **判据是「东西落地了」，不是「这条命令退 0」**（ISSUE #1961）—— 这一步红过一次
+        # 而**没人看得出来**，形态是这句：
+        #
+        #   （原文）Failed to install browsers
+        #   （原文）Error: Request to https://cdn.playwright.dev/…/chrome-win64.zip timed out after 30000ms
+        #   浏览器装不上（`playwright install` 退非零）…      ← 话术自己打出来了
+        #   Finished, code: 0, duration: 31.1s                ← 而 stage 报绿（`main()` 的返回码被丢）
+        #
+        # 三个面各自修掉了（退码转出去 / 装完按落点复验 / 下载失败给读数），口径见
+        # 规范 §13.5.3.5–§13.5.3.6。
+        #
+        # ⚠️ **这一格 2026-10-16 从停用清单恢复**（ISSUE #1966）。它此前被登记进
+        # `COMFYAPP_CI_DISABLED_GATES`，依据是下面这条取证读数（`cnb-ve6-1k51jaudm`）：
+        #
+        #   内置族（cdn.playwright.dev）+ 30s  → 5 次 `timed out after 30000ms`、0 字节
+        #   配着的 npmmirror 根 + 120s        → `timed out after 120000ms`、0 字节（`cnb-oqf-...`）
+        #   失败分支的逐候选探测             → 三条都只取回**小段**字节（582 / 1889 / 442），
+        #                                      即「连得上、也收得到开头」，而大 body 停住
+        #
+        # 当时的结论写成「这台节点一次取不回那 120 MiB ⇒ 这一格要绿只有这一个条件」，
+        # 而规范 §13.5.3.5「订正 ⑩ 的那句推论」把它订正成**「一次取不完」**：条件确实在
+        # 链路上，但「怎么取」是仓库能改的那一半 —— 这一步**内部**现在多了一条通道
+        # （分片取字节 + 编排：片长自适应、断了从已落盘的字节接着来；实现与判据见规范
+        # §13.5.3.5「第七跑」那一小节），不另起 stage。
+        #
+        # 所以恢复的依据**不是**「节点网络修好了」，而是**取法换掉了**。
+        #
+        # ⚠️ **恢复后的第一跑读数已经到了**（`cnb-7oo-1k51r518b`，2026-10-16）：
+        #
+        #   自取：从 https://cdn.npmmirror.com/binaries/playwright 分片取这一件（可续传）
+        #   自取成功：…\ms-playwright\chromium_headless_shell-1243\…\chrome-headless-shell.exe
+        #   playwright install → Downloading FFmpeg (playwright ffmpeg v1011) × 5 次
+        #                        → timed out after 120000ms → Download failure
+        #   浏览器装不上（`playwright install` 退非零）…   ← 而浏览器**已经装好了**
+        #
+        # 两件事各是一半：「取法换掉了」成立（119 MiB 的自取在这台节点上真走完了），
+        # 而红的是**另一件** —— 老路不只装浏览器，还会顺手拉 **ffmpeg**（chromium 的依赖，
+        # ~2.5 MB），那件在同一条链路上照旧 0 字节。所以这一步现在在自取成功之后**按落点
+        # 复验一次**（同一个 `browserExecutableExists()`），通过就直接放行、不再交给老路：
+        # 本档真正要的是 headless shell（复验找的就是它），而 ffmpeg 只有录视频才用得上
+        # （`playwright.config.ts` 没开 `video`）。理由与判据在 `ci-toolchain-browser-seed.mjs`
+        # 的头注（`ci-toolchain-browser.mjs` 正卡在 900 行的硬闸上，那段只有一行 + 指路）。
+        #
+        # 下一笔账：`E2E 关键流程` 的首跑读数（它在自托管路径上仍然一次都没有跑到过）。
+        - name: 浏览器安装
+          script: node scripts/ci-sh-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+          env:
+            # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
+            #
+            # 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
+            # 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
+            # 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
+            # 这样一条链路上无论等多久都不会到。
+            #
+            # 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
+            # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
+            # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
+            #
+            # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
+            # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+            # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
+            # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
+            # 也就是说这一档**推不出来**，只能由这里给：给上之后
+            # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
+            #
+            # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
+            # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
+            # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
+            # 真要换（内网代理、别的镜像站）改这一行即可。
+            #
+            # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
+            # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
+            # 而恢复之后这一步有**两条**通道：先自己分片取（不依赖这个根到得了大 body），
+            # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
+            PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+            PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+          # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
+          # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
+          # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
+          timeout: 20m
+
+        # ── E2E（仅 @critical 关键流程）──
+        #
+        # 解释器这一格已由前面那步「Python 可用性」在**整条流水线的最前**答过（它也是
+        # 本地 `pnpm test:e2e` 走 `scripts/e2e-run.mjs` 时的同一份判据），故这里不重判。
+        # 浏览器那一格由上面那步「浏览器安装」答过（自托管没有镜像预装）。
+        #
+        # ⚠️ 这一格与 `浏览器安装` **同批恢复**（2026-10-16，ISSUE #1966）：它依赖那一格的
+        # 浏览器二进制，浏览器装不上时它只会在 `next start` + Playwright 启动处报**同一个**
+        # launch 失败 —— 停用它只是把红从倒数第三步挪到倒数第二步，判据强度一点没变。
+        #
+        # ⚠️ **第一跑读数**（`cnb-cdt-1k51s6mf1`，8.5s 红）：`--grep @critical` 里的那个
+        # `@critical` **在命令行那一层就没了** —— Playwright 收到的是没有值的 `--grep`：
+        #
+        #     error: option '-g, --grep <grep>' argument missing
+        #
+        # 这不是本仓判据的事，是**命令形态**的事（同一行里 `node scripts/e2e-run.mjs`
+        # 照常跑起来了）：`@` 开头的裸 token 在 Windows runner 的命令行上会被吃掉。
+        # 所以这里写成 `--grep=@critical` —— `@` 不再是某个 token 的第一个字符，三种
+        # shell（bash / cmd / PowerShell）下都原样传过去；本机怎么打不受影响。
+        # 顺带记一笔：「停用期间看不见的东西」又多一类 —— 这一行此前从没被执行过，
+        # 而它在本地是**永远绿的**（本地是 bash/PowerShell 直接调用，`@critical` 传得进去）。
+        - name: E2E 关键流程
+          script: node scripts/ci-sh-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
+          # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
+          # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
+          # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
+          timeout: 30m
