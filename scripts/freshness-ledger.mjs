@@ -101,13 +101,29 @@ export const FRESHNESS_TRACKS = {
     run: "pnpm test:e2e",
     daily: true,
     skipHow: 'node scripts/e2e-run.mjs --skip "<理由>"',
-    /* 这一档**不吃输入面**（`dirty` 为空）：它的结论与改了哪几个文件无关 ——
-     * 同一份 spec 在任何改动上都该绿。所以它没有「这次改动不吃这一档」那条出路
-     * （`dirtyHow` 即 null），也不需要宽限（按日历日判）。 */
-    dirty: [],
-    dirtyHow: null,
-    graceMs: 0,
-    /* 这一档**不吃输入面**（`dirty` 为空）：它的结论与改了哪几个文件无关。 */
+    /* 这一档从前 `dirty` 为空，理由是「同一份 spec 在任何改动上都该绿」。那句话对
+     * **改动本身**成立，对**这一笔提交是不是那个改动**不成立：按日历日判的结果是
+     * 一笔只动 `.githooks/` 或文档的提交也欠一次全量 e2e 凭证，而它跑与不跑，
+     * 被测链路的结论都不变（本检出最近 17 次提交里 6 次红，有 3 次就是这条拦下的，
+     * 而那三次改的都不是 `src/`）。
+     * 现在与另两档**同形**：动了这一档吃得着的输入面 ⇒ 今天必须证一次；没动 ⇒ 以
+     * `graceMs` 为宽限。面收的是「e2e 观察得到的运行时输入」—— 应用代码、spec 自己、
+     * 起 spec 的那两个配置，以及会让运行时换版本的 lockfile。
+     * ⚠️ 刻意**不含** `docs/` `tests/` `scripts/` `.githooks/`：那些改动不改变被测链路，
+     *   含进来等于把「按日历日」换个名字保留下来。 */
+    dirty: [
+      "src/",
+      "e2e/",
+      "playwright.config.ts",
+      "next.config.js",
+      "pnpm-lock.yaml",
+    ],
+    dirtyHow: 'node scripts/e2e-run.mjs --dirty "<理由>"',
+    /* 宽限与另两档同为 7 天。为什么敢比「每天」松：「app 端到端是不是坏了」这个问题
+     * 在**每个 PR** 上都有人答 —— 平台侧 `E2E 关键流程`（`e2e-run.mjs --grep=@critical`）。
+     * 它是子集、不构成整档凭证（因此**不记账**，见 `isWholeTrackRun`），但「功能链路坏了
+     * 还无人知晓」那一格由它守着；整档那一层由「动了面 ⇒ 当天证」与 7 天宽限两道夹住。 */
+    graceMs: 7 * 86_400_000,
   },
   full: {
     ledger: "scripts/.full-suite-freshness.json",
@@ -329,10 +345,11 @@ export function dirtiesTrack(track, changed) {
  * @returns {string | null} 拦下时给一句问题；放行时 null
  */
 export function freshnessVerdict({ track, at, now, dirtySince }) {
-  /* `dirtySince` 只对**吃输入面**的那几档有意义（`track.dirty` 非空）。不吃的那一档
-   * （全量 e2e）收到一个非 null 的 `dirtySince` 时**必须忽略它** —— 否则「今天动过一次
-   * 任何文件」会被读成「这一档已经被自证了」，于是「每天首次」那条判据在有人动过代码的
-   * 日子里**整个失效**（而账面上看不出任何异常）。 */
+  /* `dirtySince` 只对**吃输入面**的那几档有意义（`track.dirty` 非空）。哪一天新增一档
+   * 忘了填 `dirty`，它收到一个非 null 的 `dirtySince` 时**必须忽略它** —— 否则「今天动过
+   * 一次任何文件」会被读成「这一档已经被自证了」，于是「每天首次」那条判据在有人动过代码的
+   * 日子里**整个失效**（而账面上看不出任何异常）。三档现在都吃面，所以这一格只能由
+   * `tests/daily-tracks.test.ts` 的合成档来判 —— 它判的是机制，不是某一档的当前形状。 */
   const since = (track.dirty ?? []).length > 0 ? dirtySince : null;
   const dirtyHows = [
     `跑一次 \`${track.run}\`（跑绿即记）`,
