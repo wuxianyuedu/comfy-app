@@ -596,8 +596,38 @@
   # ⚠️ `pnpm run docs` **不要写成 `pnpm docs`**：后者是 pnpm 的内建命令
   # （`pnpm docs <PACKAGE>`），会抢在脚本前面、typedoc 根本不跑。`check-docs-api.cjs`
   # 内部调的是 `scripts/typedoc-run.mjs`，与本步无关；这里只跑比对档。
+  # ⚠️ 这一档是 `--check --autofix`，不是裸 `--check`（ISSUE #1981）：判据红了**就地重渲染
+  # 一遍、再判一次**，而不是先红一轮让人本地跑 `pnpm doc:render` 再来。红了才花那笔钱
+  # （绿的时候一次都不多跑），而红的时候省掉的是一整轮流水线加一个人的机械动作。
+  #
+  # 三步各自的分工别混：`ifModify`（若有人登记）管「改没改到」，`--check` 管判定，
+  # `--autofix` 只管「红了之后怎么写」—— 结论**永远来自第二次 `--check`**，只跑写入模式
+  # 就退 0 等于把未经复核的写入报成通过。凭什么这一档可以自动修、以及为什么**不**顺便
+  # `git commit` / `git push`（平台侧能否回写分支是一条单独的决策，PR 源分支可能来自 fork），
+  # 两条都写在 `scripts/ci-autofix-duties.mjs` 的文件头。
+  #
+  # 自动修之后**红的那一轮仍然是红的**：修好的是工作区，提交与重跑仍由人 / 代理那一侧做。
+  # 这也是 `--autofix` 只出现在这一档的原因 —— 它要求「产物是纯确定的重新生成」且
+  # 「红了没有第二种成因」，两条同时成立才敢自动写（登记表 `AUTOFIX_DUTIES` 逐条写理由，
+  # `tests/ci-autofix-duties.test.ts` 双向核对它 ⇄ 本文件）。
+  # 收窄（`ifModify`）：本次改动一个文件都没落在「编辑态文档 / 提取源 / 生成面配置」里时
+  # 跳过这一步 —— `docs/generated/**` 只由这几处决定（三条方向都只读它们）。
+  # README.md / AGENTS.md 不在清单里，因为它们不在 `SCOPED_DOCS` 里（AGENTS.md 刻意不进
+  # 生成面，否则会复制出一份没有占位符要替换的副本、反而误导读者去改产物）。
+  # ⚠️ 新增一条 FACTS 事实读了别的文件时，要同批回来补这一行 —— 漏补的形态是
+  # 「改了那个文件，这一步却不跑」。登记与理由的唯一出处：scripts/ci-incremental-gates.mjs。
   - name: 生成态文档与源同步
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check
+    ifModify:
+      - docs/**
+      - src/**
+      - package.json
+      - pnpm-workspace.yaml
+      - next.config.js
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
+    # 绿的时候是秒级（30 份文档的比对），红的时候多一次重渲染 —— 仍是秒级。
+    # 给 10m 是「卡死要早报」那条量级（与 `API 文档生成物与源同步` 的 20m 同款理由：
+    # 真跑得完的形态差一两个数量级）。**不是放宽判据** —— 预算只管多久放弃。
+    timeout: 10m
 
   - name: API 文档生成物与源同步
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
