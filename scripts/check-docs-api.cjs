@@ -41,6 +41,12 @@
  *      这**不是启发式收窄**，是「产物只由这些输入决定」的直接映射：输入没变，产物
  *      不可能漂。改这几个以外的文件时本步立刻返回 0（`--staged` 模式），不给普通
  *      提交加那 31s（实测 `pnpm exec typedoc` 冷 31s）。
+ *   5. **平台侧的触发面与这份清单同源**（ISSUE #1981）：`.cnb.yml` 的
+ *      `API 文档生成物与源同步` 带着由 `INPUT_RES` 机械导出的 `ifModify`
+ *      （`scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`），
+ *      判据 `tests/ci-incremental-gates.test.ts` 双向核对 —— 于是「产物由哪些输入决定」
+ *      写在**一处**。实测这一步在自托管节点上是**全流水线最贵的一格**（201.8s，
+ *      占 12m14s 的 27.5%），而绝大多数 PR 一行 `src/lib|server|trpc` 都没碰。
  *
  * 用法：
  *   `node scripts/check-docs-api.cjs`            全量比对（**平台侧那一步用的就是这个**）
@@ -80,6 +86,10 @@ const INPUT_RES = [
   /^typedoc\.json$/,
   /^package\.json$/,
   /^pnpm-lock\.yaml$/,
+  /* 判据自身（ISSUE #1981）：改这份脚本或它共用的跑法，同样能改变「本步红不红」——
+   * 此前它改了自己不触发，于是「改了判据 → 推上去 → 没跑」是这类改动的默认形状。 */
+  /^scripts\/check-docs-api\.cjs$/,
+  /^scripts\/typedoc-run\.mjs$/,
 ];
 
 /**

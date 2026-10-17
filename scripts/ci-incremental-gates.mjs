@@ -56,14 +56,65 @@
  * 顺带一个后果值得写清楚：**`.cnb.yml` 里没有 `ifModify` 的 stage 就是「任何改动都跑」**，
  * 这是默认档，也是这份表存在的意义 —— 它让「哪几条被收窄了」变成一份读得出来的清单，
  * 而不是散在 500 行 YAML 里的 10 处 `ifModify`。
+ *
+ * ── 能机械导出的就**不手抄**（ISSUE #1981 收尾）────────────────────────────
+ *
+ * 环境类的 globs 由上面的条件手写（「脚本里有 `SCAN_DIR`」正是它们的判据）；而
+ * `API 文档生成物与源同步` 那一档**有**一份更硬的事实源：判据自己的 `INPUT_RES`
+ * （`scripts/check-docs-api.cjs`，第 4 条写着「触发面 = typedoc 的输入面」）。
+ * 手抄一份 glob 与它逐字等价，只会多一处会漂的副本 —— 所以那一档的 globs 由
+ * `INPUT_RES` **反推**（`globFromInputRe`），改判据的触发面时配置跟着变，
+ * 不需要有人记得改两份。
  */
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
+
+/* `API 文档生成物与源同步` 的触发面**不手抄**：判据自己的 `INPUT_RES` 才是它的事实源
+ * （文件头第 4 条：「触发面 = typedoc 的输入面」）。`.cjs` 用 `require` 拿 —— 本文件是
+ * `.mjs`，`createRequire` 是跨模块系统唯一不靠 `.default` 猜测的那条路。 */
+const { INPUT_RES: DOCS_API_INPUT_RES } = createRequire(import.meta.url)(
+  "./check-docs-api.cjs",
+);
+
+/**
+ * 把一条「锚定到仓库根的输入面正则」反推成 `ifModify` glob。
+ *
+ * 只认本表实际出现过的两种形状，认不出的**直接抛**（比返回一个猜出来的 glob 强：
+ * 猜窄了 = 静默漏跑，猜宽了 = 静默白跑，两种都没有任何信号）。两条与
+ * `check-docs-api.cjs` 的 `INPUT_RES` 逐条对应：
+ *
+ *   /^src\/lib\/.*\.ts$/   ⇒ `src/lib/**`   —— 「目录 + 任意文件」那一支；
+ *   /^typedoc\.json$/        ⇒ `typedoc.json` —— 单个文件那一支。
+ *
+ * 做法是**先去掉正则的转义再按字面读**：`INPUT_RES` 里的 `\\/` 与 `\\.` 是正则意义上的
+ * 斜杠与点，转义留着会把它们读成「目录分隔符以外的什么东西」，反推出来的 glob 全是怪的。
+ *
+ * ⚠️ 单文件那支刻意返回**带扩展名的全名**：`package.json` 若写成 `package.*`，
+ * glob 语义会把 `package-lock.json` 一起收进来，而它不是这一档的输入面。
+ *
+ * @param {RegExp} re 锚定到仓库根的输入面正则
+ * @returns {string}
+ */
+function globFromInputRe(re) {
+  const src = re.source
+    .replace(/^\^/, "")
+    .replace(/\$$/, "")
+    /* 去掉正则的转义前缀（`\\/` → `/`、`\\.` → `.`）：留下的是它**要匹配的字面文本**。 */
+    .split(String.fromCharCode(92))
+    .join("");
+  const dir = /^([^*]+)\/\.\*\.\w+$/.exec(src);
+  if (dir?.[1] !== undefined) return `${dir[1]}/**`;
+  if (!src.includes("*")) return src;
+  throw new Error(
+    `ci-incremental-gates: 认不出这条输入面正则的形状（反推不出 ifModify glob）：${re}`,
+  );
+}
 
 /**
  * stage 名 → 它的扫描面（`ifModify` glob 列表）。
@@ -152,6 +203,19 @@ export const INCREMENTAL_GATES = [
     globs: ["changelog.d/**", "CHANGELOG.md"],
     script: "scripts/check-changelog-fragments.cjs",
     why: "只看 changelog.d/** 的碎片形态与 CHANGELOG.md 有没有被直接改（`[Unreleased]` 段落）。与本次代码改动无关时不该重跑。",
+  },
+  {
+    name: "API 文档生成物与源同步",
+    /* ⚠️ 这一档的 globs **不手抄** —— 由判据自己的 `INPUT_RES` 反推（见文件头
+     * 「能机械导出的就不手抄」）。于是「产物由哪些输入决定」只有一处出处：
+     * `scripts/check-docs-api.cjs` 的 `INPUT_RES`。 */
+    globs: DOCS_API_INPUT_RES.map(globFromInputRe),
+    script: "scripts/check-docs-api.cjs",
+    why:
+      "它的触发面本来就是判据自己声明的那一份：`check-docs-api.cjs` 的 `INPUT_RES`（typedoc 的 entryPoints 三条 glob + `typedoc.json` + 依赖声明），文件头第 4 条写的就是「触发面 = typedoc 的输入面」。" +
+      "本条的 globs 由那份常量机械反推（`globFromInputRe`），所以它不是第二份会漂的副本 —— 改判据的输入面时配置跟着变。" +
+      "收窄安不安全：输入没变，typedoc 的产物不可能漂（判据比的是「重生成结果 ⇄ docs/api」），所以「一行 src 都没碰的 PR」不该为它付那 200 秒 ——" +
+      "它是本档在自托管节点上最贵的一格（实测 201.8s，占整条流水线 12m14s 的 27.5%）。",
   },
   {
     name: "生成态文档与源同步",

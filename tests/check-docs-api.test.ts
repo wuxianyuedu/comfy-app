@@ -15,7 +15,13 @@
  *
  * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
  */
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -37,8 +43,7 @@ function tempDir(prefix: string): string {
 
 afterEach(() => {
   // `temps.pop()` 在 `while (temps.length)` 下必然有值，用 `!` 比 `as` 更短且不撒谎
-  while (temps.length)
-    rmSync(temps.pop()!, { recursive: true, force: true });
+  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
 });
 
 describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
@@ -65,10 +70,18 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
       "src/app/page.tsx",
       "docs/standards/13-提交与-code-review.md",
       "tests/check-docs-api.test.ts",
-      "scripts/check-docs-api.cjs",
+      "scripts/check-file-structure.cjs",
       "README.md",
     ]) {
       expect(matchedInputs([f]), `${f} 不该触发`).toEqual([]);
+    }
+  });
+
+  it("判据自身与它共用的跑法也算输入面（ISSUE #1981）", () => {
+    /* 此前改这份脚本**不触发它自己** —— 于是「改了判据 → 推上去 → 它没跑」是这类
+     * 改动的默认形状，而这恰恰是「产物与源同不同步」这件事被改动的那一刻。 */
+    for (const f of ["scripts/check-docs-api.cjs", "scripts/typedoc-run.mjs"]) {
+      expect(matchedInputs([f]), `${f} 应触发`).toEqual([f]);
     }
   });
 
@@ -84,7 +97,12 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
 
   it("多文件清单只回命中项，顺序保持", () => {
     expect(
-      matchedInputs(["README.md", "src/lib/a.ts", "pnpm-lock.yaml", "src/app/x.tsx"]),
+      matchedInputs([
+        "README.md",
+        "src/lib/a.ts",
+        "pnpm-lock.yaml",
+        "src/app/x.tsx",
+      ]),
     ).toEqual(["src/lib/a.ts", "pnpm-lock.yaml"]);
   });
 });
