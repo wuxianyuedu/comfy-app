@@ -163,6 +163,18 @@ describe("ComfyuiControlView", () => {
     expect(line.textContent).not.toContain("将按这条已保存路径拉起");
   });
 
+  /* 状态那句是**活区**（`role="status"` + `aria-live="polite"`）：状态变了自己
+     会刷，读屏得跟着播报。顺带它给了 E2E 一个不读文案的稳定锚点 —— 那条链路此前
+     拿文案本身当判据，文案里的地址一变长度就落到「匹配到但没量到可见」的补间窗口里
+     （`e2e/critical-flows.spec.ts` 的 `comfyStatusRow` 头注）。属性一掉，那条链路
+     就会退回不稳定的形态，所以在这里钉住。 */
+  it("状态那句是活区：读屏跟着播报，且句子以「ComfyUI」开头（E2E 的锚点靠它）", () => {
+    render(<ComfyuiControlView c={controller({ status: running })} />);
+    const line = screen.getByRole("status");
+    expect(line).toHaveAttribute("aria-live", "polite");
+    expect(line.textContent).toMatch(/^ComfyUI /);
+  });
+
   it("启动日志框在页上（硬规则 4 的用户可见出口）", () => {
     render(<ComfyuiControlView c={controller()} />);
     expect(

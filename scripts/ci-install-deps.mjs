@@ -43,6 +43,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -134,17 +135,24 @@ export function decideInstall({ files, installed, depFiles = DEP_FILES }) {
   };
 }
 
-/** 真跑一次 `pnpm install --frozen-lockfile`，退出码原样转出去。 */
+/**
+ * 真跑一次 `pnpm install --frozen-lockfile`，退出码原样转出去。
+ *
+ * 形态**不在这里判定**：走 `runPnpmSync`（`scripts/launcher-core/shell.mjs`）那唯一一条出口。
+ * 自己拼 `spawnSync("pnpm", …, { shell: true })` 是错的形态 —— 它绕开了
+ * `pnpmInvocation()`（Windows 上批处理形态在 Node 下起不来，见 §2.1.1），
+ * 而这条流水线**只跑在 Windows 自托管节点上**，正是那一档。
+ */
 function runInstall() {
-  /* `shell: true` 只在 Windows 上必要（`pnpm` 是 `.cmd`，不经 shell 起不来）；
-   * 而这条流水线**只跑在 Windows 自托管节点上**（`.common.runner.tags: [win]`）。 */
-  const res = spawnSync("pnpm", ["install", "--frozen-lockfile"], {
+  const res = runPnpmSync(["install", "--frozen-lockfile"], {
     cwd: ROOT,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
   if (res.error) {
-    process.stderr.write(`[ci-install-deps] ✗ 起不来：${res.error.message}\n`);
+    /* 「命令没起来」与「跑完但非零」是两档：前者 stderr 通常是空的（见 runPnpmSync 契约）。 */
+    process.stderr.write(
+      `[ci-install-deps] ✗ 起不来（${res.command} ${res.args.join(" ")}）：${res.error.message}\n`,
+    );
     return 1;
   }
   return res.status ?? 1;

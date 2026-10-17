@@ -99,7 +99,13 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
           className={`border-border bg-surface-2 mb-3 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
         >
           <StatusDot state={comfyDotState(c.status, flags)} />
+          {/* 状态行是**活区**（规范 16 §16.2.4）：状态变了自己会刷，读屏得跟着播报，
+              否则「我点了启动、它到底起没起」只能靠肉眼盯。这也让「这一行在不在、
+              落没落定」有了一个**不读文案**的稳定锚点 —— 文案里的地址长度会变、
+              跨元素分布会给量可见性带来补间窗口（E2E 侧据此等状态落地）。 */}
           <span
+            role="status"
+            aria-live="polite"
             className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
             title={comfyDotTitle(c.status)}
           >
