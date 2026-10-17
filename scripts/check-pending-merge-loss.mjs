@@ -46,18 +46,33 @@
  *   node scripts/check-pending-merge-loss.mjs --status   # 只体检，不阻断
  */
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import { parseArgs } from "node:util";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
 import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
 
+/** 仓库根：本条判据是本仓的钩子件，扫描面就是本检出（`scripts/` 的上一级）。 */
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+
 /** 在仓库内跑一条 git 命令；失败回 `null`（取不到 ≠ 空值，据此保守放行）。 */
 function git(args, input) {
   try {
     return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
+      /* `cwd` 必须指仓库根：判据是从**别的目录**被起起来的（钩子里 git 把 cwd 放在
+       * 仓库根的上一级或子目录都发生过），而 `git diff` / `merge-base` 靠继承来的
+       * cwd 解析 —— 那会变成「在另一个路径上问同一个问题」，答出来的东西没法用。 */
+      cwd: REPO_ROOT,
       encoding: "utf8",
-      stdio: input === undefined ? ["ignore", "pipe", "ignore"] : ["pipe", "pipe", "ignore"],
+      stdio:
+        input === undefined
+          ? ["ignore", "pipe", "ignore"]
+          : ["pipe", "pipe", "ignore"],
       input,
       maxBuffer: 1 << 28,
     }).trim();
@@ -90,17 +105,22 @@ export function mergeHeads() {
 export function scanPendingMerge({ source = "" } = {}) {
   // ① amend / cherry-pick / revert：父提交不从 MERGE_HEAD 来，不判。
   if (source === "commit") {
-    return { ok: false, reason: `source=${source}（父提交不从 MERGE_HEAD 来，不判）` };
+    return {
+      ok: false,
+      reason: `source=${source}（父提交不从 MERGE_HEAD 来，不判）`,
+    };
   }
   if (!inGitRepo()) return { ok: false, reason: "不在 git 检出里" };
 
   const heads = mergeHeads();
-  if (heads.length === 0) return { ok: false, reason: "不是合并提交（MERGE_HEAD 不在）" };
+  if (heads.length === 0)
+    return { ok: false, reason: "不是合并提交（MERGE_HEAD 不在）" };
 
   // ② 三条事实的公共前提：merge-base 必须取得到（浅克隆里取不到 → 保守放行）。
   const head = git(["rev-parse", "HEAD"]);
   const base = git(["merge-base", "HEAD", "MERGE_HEAD"]);
-  if (!head || !base) return { ok: false, reason: "取不到 merge-base（浅克隆？）" };
+  if (!head || !base)
+    return { ok: false, reason: "取不到 merge-base（浅克隆？）" };
 
   /* HEAD 与索引之间改动的路径 —— 合并结果相对本侧动了哪些文件。
    * 用 `--name-only -z` 一次取完。 */
@@ -118,7 +138,11 @@ export function scanPendingMerge({ source = "" } = {}) {
   const perHead = [];
   for (const mh of heads) {
     const hist = historyByFile(git, { ref: mh, files });
-    if (!hist) return { ok: false, reason: `批量取 ${mh} 的候选历史没跑起来（浅克隆？）` };
+    if (!hist)
+      return {
+        ok: false,
+        reason: `批量取 ${mh} 的候选历史没跑起来（浅克隆？）`,
+      };
     perHead.push(hist);
   }
 
@@ -135,7 +159,11 @@ export function scanPendingMerge({ source = "" } = {}) {
     for (const s of older) specs.push(`${s}:${f}`);
   }
   const blob = resolveBlobs(git, specs);
-  if (!blob) return { ok: false, reason: "批量解析 blob 没跑起来（`cat-file --batch-check`）" };
+  if (!blob)
+    return {
+      ok: false,
+      reason: "批量解析 blob 没跑起来（`cat-file --batch-check`）",
+    };
 
   const lost = [];
   for (const f of files) {
@@ -159,6 +187,62 @@ export function scanPendingMerge({ source = "" } = {}) {
     if (hit) lost.push(f);
   }
   return { ok: true, lost };
+}
+
+/**
+ * 阻断时在**提交信息**里找认账声明（「为什么取对方那一版」）。
+ *
+ * 为什么要有这一格（ISSUE #1981 的现场）：判据的出口写着「逐份确认后按原样提交，
+ * 并在提交信息里写清为什么取对方那一版」—— 而此前那句话**没有任何执行者**：
+ * 无论消息怎么写都照拦，于是唯一的出路退化成 `--no-verify`（**正好绕过整条钩子**，
+ * 连带分支守卫与全部结构判据）。那不是「严格的判据」，那是把判据教成「难用就关掉」。
+ *
+ * 判据（三件都要，且要**指名**被拦的那一份）：
+ *   ① 消息里出现本案的落款「整份取一侧」—— 凭空一句「我确认了」不算，它得先说明
+ *      自己在认哪一档账；
+ *   ② 被点的**每一份**文件路径都出现在消息里（认的是这一份、不是「某些文件」）；
+ *   ③ 消息里**真的有一条理由**：路径出现的那一行里，文件路径前后还有其他内容。
+ *      只有路径、没有理由的那一行不算 —— 「写清为什么」是这条出口的全部内容。
+ *
+ * 取证拿不到（不在合并里 / 消息文件读不到）回 `null`，调用方维持原判 —— 这一档的
+ * 边界口径是保守放行，但**不许**把「没读到消息」说成「已经认过账」。
+ *
+ * @param {string} message 提交信息全文
+ * @param {string[]} lost 被拦下的文件
+ * @returns {{ok: true} | {ok: false, why: string}}
+ */
+export function acknowledgeReason(message, lost) {
+  const text = String(message ?? "");
+  if (!text.includes("整份取一侧")) {
+    return {
+      ok: false,
+      why: "提交信息里没有认账落款（要写明这是「整份取一侧」的用例）",
+    };
+  }
+  const lines = text.split(/\r?\n/);
+  const missing = [];
+  for (const file of lost) {
+    const hit = lines.some((line) => {
+      const at = line.indexOf(file);
+      if (at < 0) return false;
+      /* ③ 理由：路径前后还得有别的字（只有一条 `  · <路径>` 的清单行不算理由）。 */
+      const before = line
+        .slice(0, at)
+        .replace(/[-*·\s:：、,，()（）「」"']/g, "");
+      const after = line
+        .slice(at + file.length)
+        .replace(/[-*·\s:：、,，()（）「」"']/g, "");
+      return before.length > 0 || after.length > 0;
+    });
+    if (!hit) missing.push(file);
+  }
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      why: `提交信息里没写清为什么取这几份的对方那一版：${missing.join(", ")}`,
+    };
+  }
+  return { ok: true };
 }
 
 /** 阻断时打印人类可读的出口（怎么改），不只报错。 */
@@ -193,9 +277,28 @@ function printBlockedTip(lost) {
 
 function main() {
   const argv = process.argv.slice(2);
-  const statusOnly = argv.includes("--status");
-  /* source 是位置参数（git 的 `$2`）；`--status` 这类选项不参与。 */
-  const source = argv.find((a) => !a.startsWith("--")) || "";
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: { status: { type: "boolean", default: false } },
+    allowPositionals: true,
+  });
+  const statusOnly = values.status;
+  /* 位置参数 `$1` / `$2`（提交信息文件、source）都可以从**任意一侧**透传：
+   * 不加 `allowPositionals` 时 Node 把它们塞进 `process.argv.slice(2)`，加了之后才进
+   * `parseArgs` 的 `positionals` —— 而调用方（钩子 / 用例 / 人）按 git 的语义就只写
+   * `… commit-msg.txt merge`。所以两处都收，按 git 的顺序（文件、source）认。
+   * ⚠️ 这个入口已经因为「参数位置不对」静默失效过一次（`$2` 落到 `$1` 的位置、
+   * source 恒空 ⇒ `--amend` 永远认不出来），别再让它靠某一个 flag 是否被解析来分叉。 */
+  /* git 给的是 `"$1" = 消息文件、"$2" = source`；而 `--status` 体检、以及**只有 source**
+   * 的调用（`… check-pending-merge-loss.mjs commit`）都不带 `$1`。所以按**形状**认：
+   * 第一个位置参数长得像 source（`message` / `template` / `merge` / `squash` / `commit`）
+   * 就说明它落在 `$1` 的位置上（`$1` 缺省），否则它是消息文件、下一个才是 source。
+   * 光看位置分不出来 —— 这个入口此前就因为「`$2` 落进 `$1`」而让 `--amend` 的排除
+   * 静默失效过，于是这里宁可显式判形状，也不赌调用方总带齐两个参数。 */
+  const SOURCES = new Set(["message", "template", "merge", "squash", "commit"]);
+  const sourceFirst = SOURCES.has(positionals[0] ?? "");
+  const messagePath = sourceFirst ? "" : (positionals[0] ?? "");
+  const source = sourceFirst ? positionals[0] : (positionals[1] ?? "");
 
   const result = scanPendingMerge({ source });
 
@@ -221,7 +324,27 @@ function main() {
     return;
   }
 
+  /* 认账出口：消息里指名 + 给出理由就放行（见 `acknowledgeReason`）。
+   * 消息读不到 ≠ 认过账 —— 那一档维持原判。 */
+  let message = null;
+  try {
+    if (messagePath) message = fs.readFileSync(messagePath, "utf8");
+  } catch {
+    message = null;
+  }
+  /* 先算认账结论、再打印：被拦时那句提示若也走 stderr，会排在阻断话术**前面**，
+   * 读者先看到的是「为什么不行」而不是「拦了什么」——顺序反了就等于没说。 */
+  const acked =
+    message === null ? null : acknowledgeReason(message, result.lost);
+  if (acked?.ok) {
+    console.log(
+      `[pending-merge-loss] 放行（提交信息已逐份认账：${result.lost.join(", ")}）`,
+    );
+    return;
+  }
+
   printBlockedTip(result.lost);
+  if (acked) console.error(`[pending-merge-loss] 认账不成：${acked.why}`);
   process.exit(1);
 }
 

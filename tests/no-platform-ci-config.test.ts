@@ -445,6 +445,66 @@ export function hasPipelineLockCancelInProgress(text: string): boolean {
   return /^\s+lock:\s*$[\s\S]*?^\s+cancel-in-progress:\s*true\s*$/m.test(body);
 }
 
+/**
+ * `.cnb.yml` 的流水线级 `lock.key` 原文（`null` = 没写，即吃平台默认值）。
+ *
+ * ⚠️ 这一格**不是风格**：平台默认 key 是 `分支名-流水线名`，而 `pull_request` 事件下
+ * `CNB_BRANCH` 取的是**目标分支名**（官方 `build-in-env.md` §CNB_BRANCH）—— 于是
+ * 「分支名」这一半在 PR 上恒等于 `master`，全仓所有 PR 共用一把锁。
+ * `cancel-in-progress: true` 于是从「同分支只留最新那一跑」退化成
+ * 「全仓只留最新那一跑」：任意两条并行 PR 互相掐停（现场：PR #1980 掐了 #1982）。
+ * 代价不是「慢」，是**白跑一整条**。
+ *
+ * 判法用锚点展开后的形态（与 `hasPipelineLockCancelInProgress` 同一层）。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns key 原文（未做变量替换）；没写 `key` 时回 `null`
+ */
+export function pipelineLockKeyTemplate(text: string): string | null {
+  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(
+    text,
+  );
+  const body = anchor?.[1];
+  if (body === undefined) return null;
+  const lock = /^(\s+)lock:[ \t]*\r?\n([\s\S]*?)(?=^\1\S|\s*$(?![\s\S]))/m.exec(
+    body,
+  );
+  const block = lock?.[2];
+  if (block === undefined) return null;
+  const key = /^\s+key:[ \t]*(\S.*?)[ \t]*$/m.exec(block);
+  return key?.[1] ?? null;
+}
+
+/**
+ * `lock.key` 里允许出现的内置变量（**白名单**，缺一个就判红）。
+ *
+ * 收成白名单而不是黑名单，是因为这一格的失效形态是「代入了一个看起来对、实际被
+ * 平台解析成别的东西的变量」—— 黑名单只能拦住已知的那一个。
+ */
+const LOCK_KEY_ALLOWED_VARS = ["CNB_PULL_REQUEST_IID"] as const;
+
+/**
+ * 把 `lock.key` 原文按一次「事件 + 上下文」跑出**平台会算出来的那个 key**。
+ *
+ * 这是本条判据的核心：只看原文判不出「两条 PR 会不会撞」，必须把变量代进去。
+ * 替换规则与官方 `build/env.md` §变量替换逐字同义 —— `$NAME` 与 `${NAME}` 都会替换，
+ * 变量无值时替换成空字符串；**查不到的变量按空串算**，这样「用了一个平台不认识的
+ * 变量」会表现为「key 退化成两档共用一个」，判据当场点名。
+ *
+ * @param template `pipelineLockKeyTemplate()` 的返回值
+ * @param vars 这次构建里哪些变量有值（没列出的 = 无值）
+ * @returns 平台算出来的锁键
+ */
+export function resolveLockKey(
+  template: string,
+  vars: Record<string, string | undefined>,
+): string {
+  return template.replace(
+    /\$\{?([A-Za-z0-9_]+)\}?/g,
+    (_whole, name: string) => vars[name] ?? "",
+  );
+}
+
 /** 规范里必须留痕的口径；缺失 = 决策被悄悄推翻、而文件面判据还没跟着变。 */
 const DOC_ANCHORS: Array<{ file: string; mustContain: string[] }> = [
   {
@@ -846,6 +906,92 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBe(true);
   });
 
+  it("流水线级 `lock.key` 显式写了，且**不按目标分支**分锁（并行 PR 会互相掐停）", () => {
+    const text = readRegisteredConfig();
+    const template = pipelineLockKeyTemplate(text);
+    expect(
+      template,
+      "`.common` 锚点里没有 `lock.key` —— 平台默认 key 是 `分支名-流水线名`，" +
+        "而 `pull_request` 下 `CNB_BRANCH` 是**目标分支名**，于是全仓所有 PR " +
+        "共用一把锁、`cancel-in-progress` 退化成「全仓只留最新那一跑」：" +
+        "任意两条并行 PR 互相掐停（现场：PR #1980 掐了 #1982）。" +
+        "代价不是「慢」，是白跑一整条",
+    ).not.toBeNull();
+    if (template === null) return;
+    // ① 代入的变量必须在白名单里 —— `CNB_BRANCH` 正是那个会退化成目标分支的。
+    const used = [...template.matchAll(/\$\{?([A-Za-z0-9_]+)\}?/g)].map(
+      (m) => m[1] ?? "",
+    );
+    const stray = used.filter(
+      (name) => !LOCK_KEY_ALLOWED_VARS.includes(name as never),
+    );
+    expect(
+      stray,
+      `\`lock.key\` 用了白名单外的变量 ${stray.join(" / ")}：` +
+        "`CNB_BRANCH` 在合并类事件下是**目标分支名**（全仓 PR 撞同一把锁），" +
+        "`CNB_PULL_REQUEST_ID` 是跨仓全局 ID（粒度比这里需要的粗），" +
+        "两者的取舍写在 .cnb.yml 那段注释里",
+    ).toEqual([]);
+    // ② 语义：把变量真代进去，两条不同 PR 的 key 必须不同。
+    const prKey = (iid: string) =>
+      resolveLockKey(template, {
+        CNB_PULL_REQUEST_IID: iid,
+        CNB_PULL_REQUEST: "true",
+      });
+    expect(
+      prKey("1982"),
+      "两条并行 PR 解析出同一把锁 —— 后到的那条会把先跑的掐掉（正是要修的形态）",
+    ).not.toBe(prKey("1980"));
+    // ③ 同一 PR 内连着推提交仍要落回同一把锁（否则「只留最新那一跑」就没了）。
+    expect(prKey("1982")).toBe(prKey("1982"));
+    /* ④ 非 PR 事件（`push`）不能与任何一条 PR 撞锁：那里 `CNB_PULL_REQUEST_IID`
+     * 无值，代进去之后必须与 `prKey()` 的结果不同。 */
+    const pushKey = resolveLockKey(template, {
+      CNB_PULL_REQUEST_IID: undefined,
+    });
+    expect(pushKey).not.toBe(prKey("1982"));
+    /* ⑤ 未替换的原文不许留下裸 `$`（平台不认的写法会**原样**进 key，看起来像
+     * 「生效了」而实际是所有人共用一把名字里带 `$` 的锁）。 */
+    expect(template).not.toMatch(/\$[^{A-Za-z0-9_]/);
+  });
+
+  it("覆盖率上报那一档接回了上报链，且**没报告时不判红**（ISSUE #1990）", () => {
+    /* 这一条守的是一个已经发生过两次的形态：上报是 #623 删旧版流水线时被一起拿走的，
+     * #1959 按完整流程重建时没被带回来 —— 于是「洞察 → 单元测试覆盖率」永远是
+     * 「无 / 无」，而没有任何一步会红（页面读的是平台侧读数，配置里少一条 stage
+     * 与「还没跑过」长得一模一样）。
+     *
+     * 两半分开判：
+     *   ① `覆盖率上报` 必须在清单里、点名的入口在盘上（不然接回去也只是一句注释）；
+     *   ② 它**必须**自己判「有没有报告」—— 缺 `coverage/lcov.info` 时只跳过。
+     *      理由不是「宽容」：`单元测试` 此刻是临时停用的，报告本来就不存在，
+     *      把它判红等于让停用这件事连带把整条流水线拦死。 */
+    const text = readRegisteredConfig();
+    const order = registeredGateOrder(text);
+    expect(
+      order,
+      "`覆盖率上报` 不在 COMFYAPP_CI_GATES 里 —— 平台侧的覆盖率读数又没人写了" +
+        "（「洞察 → 单元测试覆盖率」会退回「无 / 无」）",
+    ).toContain("覆盖率上报");
+    const stage = stageBlock(text, "覆盖率上报");
+    expect(stage, "`.cnb.yml` 里找不到 `覆盖率上报` 那一项").not.toBeNull();
+    if (stage === null) return;
+    const entry = "scripts/ci-coverage-report.mjs";
+    expect(stage, `\`覆盖率上报\` 没有点名 ${entry}`).toContain(entry);
+    expect(
+      existsSync(path.join(ROOT, entry)),
+      `${entry} 不在盘上 —— 这一档会静默什么都不做（cnb 自己不存在时同理，` +
+        "但那条至少会在日志里说出来）",
+    ).toBe(true);
+    /* ② 「有没有报告」这件事必须由这一步自己答，不能交给平台插件的缺省值
+     * （`breakIfNoCoverage` 缺省即报错退出 —— 那正是旧版在 1~2s 内红掉的那一格）。 */
+    expect(
+      stage,
+      "`覆盖率上报` 必须自己判报告在不在（`coverage/lcov.info` 缺席时跳过而不是判红）——" +
+        "`单元测试` 此刻被临时停用，报告本来就不存在",
+    ).toMatch(/Test-Path[^]*coverage\/lcov\.info/);
+  });
+
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
     // ① 匹配逻辑认得这批名字，且不误收别的。
     expect(
@@ -970,6 +1116,38 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         ".common: &common\n  lock:\n    key: something\n  runner:\n    namespace: group\n",
       ),
     ).toBe(false);
+    /* ⑨ `lock.key` 这一族：解析器认得出原文、没写时回 null、`lock` 块内
+     * `key` 不会从别的键里误收；而替换语义要能真把「两条 PR 撞锁」照出来。 */
+    expect(
+      pipelineLockKeyTemplate(
+        ".common: &common\n  lock:\n    cancel-in-progress: true\n  runner:\n    namespace: group\n",
+      ),
+    ).toBeNull();
+    const keyFixture =
+      ".common: &common\n  lock:\n    key: pr-$CNB_PULL_REQUEST_IID\n    cancel-in-progress: true\n";
+    expect(pipelineLockKeyTemplate(keyFixture)).toBe(
+      "pr-$CNB_PULL_REQUEST_IID",
+    );
+    // 默认口径的那种写法（`$CNB_BRANCH`）也能被解析出来 —— 由调用方判它违规，
+    // 不是靠「解析不出来」蒙过去。
+    expect(
+      pipelineLockKeyTemplate(
+        ".common: &common\n  lock:\n    key: $CNB_BRANCH-质量门禁\n",
+      ),
+    ).toBe("$CNB_BRANCH-质量门禁");
+    // 替换：两种花括号都认、无值替换成空串、不认识的变量按空串算。
+    expect(resolveLockKey("a-$X-${Y}-$Z", { X: "1", Y: "2" })).toBe("a-1-2-");
+    // 撞锁的形态必须能被照出来：只按目标分支写的 key，两条 PR 代入后逐字相同。
+    const branchKey = resolveLockKey("$CNB_BRANCH-质量门禁", {
+      CNB_BRANCH: "master",
+      CNB_PULL_REQUEST_IID: "1982",
+    });
+    expect(branchKey).toBe(
+      resolveLockKey("$CNB_BRANCH-质量门禁", {
+        CNB_BRANCH: "master",
+        CNB_PULL_REQUEST_IID: "1980",
+      }),
+    );
   });
 
   it("扫描面真的收到了仓库根（不是空数组假装通过）", () => {

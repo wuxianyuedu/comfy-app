@@ -6,6 +6,7 @@ import {
 } from "~/lib/core/repository";
 import { syncModels, modelCountsByFolder } from "~/lib/models";
 import { listModelFolders, comfyBase } from "~/lib/comfyui/client";
+import { probeBaseOnce } from "~/lib/comfyui/probe";
 import { folderMeta } from "~/lib/model-types";
 
 export const modelRouter = createTRPCRouter({
@@ -49,11 +50,12 @@ export const modelRouter = createTRPCRouter({
           count: counts[folder] ?? 0,
         };
       });
-    const comfyReachable = await fetch(comfyBase(), {
-      signal: AbortSignal.timeout(3000),
-    })
-      .then((res) => res.ok)
-      .catch(() => false);
+    /* 可达性走全库唯一口径 `probeBaseOnce`（**连上即存活**）。这里原本另搓了一份：
+     * `fetch(comfyBase()).then(res => res.ok)` —— 探的是根路径、且把 HTTP 500 判成「没起」，
+     * 正是 #685 收口掉的形态（显存爆掉的实例会被这里假报「未连接」，而设置页状态行判它
+     * 「活着」，两屏互相矛盾）。地址仍取 `comfyBase()`，与上面 `listModelFolders()` 问的是
+     * 同一个地址 ⇒ 两个答案不可能指向不同端口。 */
+    const comfyReachable = (await probeBaseOnce(comfyBase())) !== null;
     return { folders, rows, comfyReachable };
   }),
 

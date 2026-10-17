@@ -1703,6 +1703,38 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 状态没落到界面上就点 = 点在一颗禁用按钮上，动作压根不发出去，判据只剩超时
    * （实测：`comfyOpen` 计数恒 0，红的形状与「功能坏了」逐字同形）。
    */
+
+  /**
+   * 这一屏「状态落到界面上」的那份事实 —— 判据读的是**运行态那个值**，不是文案本身，
+   * 也不是「状态行在不在」。
+   *
+   * 两次踩坑都记在这里，因为它们长得像同一个红，成因完全不同：
+   *
+   * ① `getByText(/ComfyUI 运行中/)`（本轮 CI 那条红）：匹配集**首帧是空的**（内容是
+   *    客户端查回来的），空集上 `toBeVisible()` 每一拍都落空；文案一出现，`.first()`
+   *    指到的是**跨元素**分布的那个节点（`ComfyUI 运行中（<base>）·<via>`，地址那段
+   *    可能单独成盒），于是「匹配到」与「整体可见」之间隔着一次补间 —— 实测那一拍读到
+   *    `visible=false`，再取句柄时撞上
+   *    `Protocol error: Runtime.callFunctionOn: … session closed`。现场是「文案明明在
+   *    屏幕上，用例却红在等文案」。
+   * ② 换成「状态行节点可见」：它是**首帧就在**的容器（内容还没回来时写的是
+   *    「ComfyUI 未运行」），于是它一次都不会落空、判据当场成立 —— 可那会儿状态还没
+   *    落地，「打开查看」仍是 `disabled`（`ComfyuiControlView` 只在明确未运行时禁用它），
+   *    后面那一击就点在被禁用的按钮上，红的形态变成 `locator.click: element is not enabled`
+   *    （与本文件 1690 行那段「点在一颗禁用按钮上，判据只剩超时」逐字同源）。
+   *
+   * 所以判据落在**活区节点的文本**上（`role="status"` + `aria-live="polite"`，视图侧
+   * 同批加的那个语义）：文案出现即挂载、状态一落地文本就变，`toHaveText` 自己会重试到
+   * 它成立为止。**文案内容一个字没改**，仍由 `comfyui-control-config` 的单元用例与这一
+   * 屏的组件用例钉着 —— 这条只借它当「状态已落地」的读数。
+   */
+  function comfyStatusRow(page: Page): Locator {
+    return page
+      .getByRole("status")
+      .filter({ hasText: /^ComfyUI / })
+      .first();
+  }
+
   async function openComfyControlPage(page: Page, thenOpenView = true) {
     await page.goto("/workspace");
     await gotoWorkspaceView(page, "ComfyUI");
@@ -1710,8 +1742,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
        浏览器分支只有拿得到**已缓存的 base** 时才同步 `window.open`；缓存还空着会先
        `await` 一次 refetch，而 await 之后再 open 会被弹窗拦截器吞掉 —— 表现是「点了
        没反应」，用例等到超时（整批跑时实测复现，单跑因为缓存已热不复现）。这一句同时
-       也是「用户看得见 ComfyUI 在跑、地址就在按钮旁边」的断言。 */
-    await expect(page.getByText(/ComfyUI 运行中/).first()).toBeVisible({
+       也是「用户看得见 ComfyUI 在跑、地址就在按钮旁边」的断言 —— 判据看
+       `comfyStatusRow()`（为什么不是那句文案，见它的头注）。 */
+    await expect(comfyStatusRow(page)).toHaveText(/ComfyUI 运行中/, {
       timeout: 20_000,
     });
     if (!thenOpenView) {

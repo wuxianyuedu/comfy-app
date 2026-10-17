@@ -370,7 +370,11 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           {/* status + scan */}
           <div className="border-border-subtle flex items-center justify-between gap-3 border-b px-5 py-3">
             <div className="flex items-center gap-3 text-xs">
-              {c.comfyReachable ? (
+              {c.loading ? (
+                /* 还没拿到答案时不许报「已连接」，也不许报「未连接」——那一格既不是
+                 * 绿也不是红，只是没测到（与 §13.6.4.1 同一条口径）。 */
+                <span className="text-ink-muted">● 正在检测 ComfyUI…</span>
+              ) : c.comfyReachable ? (
                 <span className="text-success-strong">
                   ● ComfyUI 已连接 · 共 {c.totalCount} 个目录
                 </span>
