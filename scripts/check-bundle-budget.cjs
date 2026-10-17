@@ -315,6 +315,24 @@ function main() {
   }
 
   if (UPDATE) {
+    /* 修订号取不到时**不许写基线**（ISSUE #1988 的现场）。
+     *
+     * 失效形态是静默的：`headRev()` 在非 git 检出里返回 `null`，写出来的基线
+     * 于是 `baselineRev: null` —— 判据不再报错，但那条归因**永久失效**，而它正是
+     * 判红时唯一能把「涨的这点是不是那几次改动换来的」说清楚的东西（见
+     * `commitsSinceBaseline` 的说明）。本仓 master 上就躺着一份这样的基线
+     * （生成于 2026-10-15，修订号 `b6c3c353`，而那个提交在检出里根本不存在），
+     * 此后每一跑 CI 都只报「基线修订号：取不到」—— 一条看起来在守、实际什么都没守的账。
+     *
+     * 所以把「写不下去」提前成一条当场能看见的拒绝：--update 只在真 git 检出里跑。 */
+    if (headRev() === null) {
+      console.error(
+        "[bundle-budget] 拒绝写入基线：取不到当前修订号（不在 git 检出里 / git 不可用）。\n" +
+          "  基线的 baselineRev 是判红时唯一能把上涨归因到「哪几次改动」的东西，" +
+          "写成 null 等于把这笔账静默掏空。请在完整 git 检出里重跑 --update。",
+      );
+      return 1;
+    }
     const before = base?.metric;
     const grew = before && now.gzip > before.gzip;
     const moreFiles = before && now.files > before.files;

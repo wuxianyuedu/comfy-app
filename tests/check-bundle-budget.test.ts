@@ -28,9 +28,26 @@
  */
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
+/**
+ * 主夹具是**真 git 检出**（一次 seed 提交）。
+ *
+ * 判据的 `--update` 会拒绝在「取不到修订号」的工作区里写基线（ISSUE #1988），
+ * 所以「落一份基线、检查放行」这条主路径必须先有一个 HEAD。需要「不是 git 检出」
+ * 那一档的用例自己 `repo.remove(".git")` —— 常态与反常各自显式，而不是让常态
+ * 靠一份取不到修订号的基线撑着。
+ */
 const { test, expect } = defineGateRepo({
   script: "check-bundle-budget.cjs",
   dirs: [".next/static/chunks"],
+  setup: (repo) => {
+    repo.git("init", "-q");
+    repo.git("config", "commit.gpgsign", "false");
+    repo.git("config", "user.email", "gate@example.com");
+    repo.git("config", "user.name", "gate");
+    repo.write("README.md", "seed\n");
+    repo.git("add", "-A");
+    repo.commit("seed");
+  },
 });
 
 /**
@@ -189,6 +206,26 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     expect(report.output).not.toContain("新增内容");
   });
 
+  test("--update 在非 git 检出里拒绝写基线（不许把 baselineRev 写成 null）", ({
+    repo,
+  }) => {
+    /* 常态夹具已经 `git init` 过（`--update` 要真 HEAD 才肯写），这里把 .git 摘掉
+     * 造出「不是 git 检出」那一档 —— 与 `merged-side-loss-gate` 同一手法。 */
+    repo.remove(".git");
+    seedChunks(repo);
+    /* 主夹具不是 git 检出 ⇒ `headRev()` 取不到修订号。此时写出来的基线会带着
+     * `baselineRev: null`：判据照旧跑、照旧绿，但判红时那句归因**永久失效**
+     * （ISSUE #1988 的现场 —— master 上就躺着这样一份基线，此后每一跑都只报
+     * 「基线修订号：取不到」）。失效形态是静默的，所以这里钉住它的反面：
+     * 写不下去就当场拒绝，而不是安静地落一份掏空了的账。 */
+    const { code, output } = repo.run(["--update"]);
+    expect(code, output).toBe(1);
+    expect(output).toContain("拒绝写入基线");
+    expect(output).toContain("baselineRev");
+    /* 一个字都没落盘 —— 拒绝不能是「先写再喊」。 */
+    expect(repo.exists("scripts/.bundle-budget-baseline.json")).toBe(false);
+  });
+
   test("跨环境/跨时间的改名不吃账：基线里存的是指纹，不是文件名", ({ repo }) => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
@@ -251,6 +288,10 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
   test("基线取不到修订号时，判红输出明说取不到（不拿猜测顶替）", ({ repo }) => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
+    /* 先落一份**带得住修订号**的基线，再把 .git 摘掉：这一档要测的是
+     * **读**基线时的输出（旧格式 / 不在 git 检出里 / 修订号不可达三形态之一），
+     * 不是新加的那条「写不下去就拒绝」。 */
+    repo.remove(".git");
 
     /* 造一次真实上涨：往一个已有 chunk 追加不可压内容。 */
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
@@ -266,6 +307,16 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
 });
 
 describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 / §12.13.3）", () => {
+  testWithGit("--update 在真 git 检出里把修订号写进基线（归因不是摆设）", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+    const baseline = JSON.parse(
+      repo.read("scripts/.bundle-budget-baseline.json"),
+    ) as { baselineRev?: string | null };
+    /* 与上一条互为反面：能取到就必须真的写进去。 */
+    expect(baseline.baselineRev).toMatch(/^[0-9a-f]{40}$/);
+  });
+
   testWithGit("基线之后有提交时，判红输出点名「其后有 N 次提交」", ({ repo }) => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
