@@ -454,7 +454,12 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   run "prettier 格式硬闸" node scripts/check-format.cjs --staged
   # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种
   # 写法」的文件 ≥ 10 个就阻断，要求拆成两次提交。
-  run "格式化提交与行为改动分离" node scripts/check-reformat-only.cjs
+  # `--staged` 是**输入面跳过**（ISSUE #1993）：它的面 = 仓库里真实存在的顶层目录与根级
+  # 文件名（由 `gate-scan-read.cjs` 的 `discernRoots` 现算，不手抄一份会漂的名单）。
+  # 面上真的一份源文件都没有时（典型的 `git commit --allow-empty` 一类「什么都没 staged」），
+  # 它本来也只会得出「没有文件改动，跳过」—— 那就不必先把暂存区与 HEAD 各取一遍。
+  # 有 `--range` 时脚本自己一律不跳（那档按显式范围判，与暂存区无关）。
+  run "格式化提交与行为改动分离" node scripts/check-reformat-only.cjs --staged
   # 翻闸删掉的旗标（`--update` / `--strict`）不许还在被人教着跑（规范 §13.5.16）：
   # 翻硬闸会删掉那两个旗标与基线，而「谁还在说跑那条命令」此前**没有任何判据**——
   # #1845 是人工 grep 一遍清掉 8 处，并把「翻闸时顺手 grep 旧旗标」写成一个**动作**，

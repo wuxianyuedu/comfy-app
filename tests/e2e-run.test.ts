@@ -16,13 +16,18 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { PYTHON_PREFLIGHT_ENV_KEY } from "../e2e/support/preflight-python.mjs";
 import {
   E2E_DIR,
   TRACK,
   checkSchemaBeforeRun,
   ensureSchemaBeforeRun,
+  makePreflightCollectors,
   parseSkip,
   planRun,
+  resolvePlaywrightInvocation,
+  runChild,
+  runPreflightReadings,
   schemaPreflightDecision,
   shouldRecord,
   stripArgvSeparator,
@@ -688,5 +693,192 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
     expect(parseMissingExecutable("Executable doesn't exist at /a/b")).toBe(
       "/a/b",
     );
+  });
+});
+
+/**
+ * 起 Playwright 那一跳：**不带缓冲**、且 env 是「本档算好的那一份」（ISSUE #1998）。
+ *
+ * ## 立案现场
+ *
+ * `E2E 关键流程` 在平台侧 36 分钟被 stage 墙钟 kill（`cnb-m0t-1k54oljem`，
+ * `timeout of 2160000ms exceeded`），日志**零行** —— 连前置那几条读数都没有。
+ * 真因不在判据：这一档此前用 `spawnSync(process.execPath, [entry, …], { stdio:
+ * "inherit" })` 起 Playwright，而 `spawnSync` **照样**把子进程整段输出攒进
+ * `res.stdout`（它要在串行调用里交回结论），本文件从不读那个字段 —— 于是被 kill
+ * 时那一整段随进程一起消失。与 §13.5.3「第十二处」（外壳攒到 `close` 才发）是同一
+ * 形态的第二处：修完外壳的时序，缓存落在调用方这一层。
+ *
+ * ## 判据为什么判形状而不是「跑一遍看日志」
+ *
+ * 这一格在 Linux 上跑一遍**是看不见的**：缓存不影响退出码，本地终端里输出照旧。
+ * 能判的只有「起的是什么、`stdio` 是什么」—— 所以判据钉在
+ * `resolvePlaywrightInvocation()` 交出的那一份上，外加一条真跑（`runChild`）
+ * 保证「等到了结论」这半条没有退化成空壳。
+ */
+describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () => {
+  const ENV = {
+    E2E_PREFLIGHT: "{}",
+    E2E_PYTHON_PREFLIGHT: "{}",
+  } as unknown as NodeJS.ProcessEnv;
+
+  it("形态：`spawn` 那一份里 `stdio` 是 inherit —— 缓存掉了就是零行日志", () => {
+    const inv = resolvePlaywrightInvocation({
+      entry: "/pw/cli.js",
+      argv: ["test", "--grep=@critical"],
+      env: ENV,
+      execPath: "/usr/bin/node",
+    });
+    expect(inv.command).toBe("/usr/bin/node");
+    expect(inv.args).toEqual(["/pw/cli.js", "test", "--grep=@critical"]);
+    // 这一条就是本条全部的意义：不是 "pipe"（那会把输出收进 Buffer）。
+    expect(inv.options.stdio).toBe("inherit");
+    expect(inv.options.cwd).toBe(ROOT);
+  });
+
+  it("env 是**拷一份**：本档那两条 preflight 结论跟着进子进程，且不改原对象", () => {
+    const env = { ...ENV };
+    const inv = resolvePlaywrightInvocation({
+      entry: "/pw/cli.js",
+      argv: [],
+      env,
+    });
+    expect(inv.options.env).toEqual(ENV);
+    // 拷贝而不是同一个对象：子进程环境里的后续改动不该回写调用方的 env。
+    expect(inv.options.env).not.toBe(env);
+  });
+
+  it("`runChild` 真等到了结论（不是空壳）：退出码原样带出来", async () => {
+    const res = await runChild({
+      command: process.execPath,
+      args: ["-e", "process.exit(3)"],
+      options: { stdio: "ignore" },
+    });
+    expect(res.status).toBe(3);
+  });
+
+  it("起不来（ENOENT）交 `status: null` 而不是抛 —— 调用方转非零退出码", async () => {
+    const res = await runChild({
+      command: path.join(ROOT, "no-such-playwright-runner"),
+      args: [],
+      options: { stdio: "ignore" },
+    });
+    expect(res.status).toBeNull();
+  });
+
+  it("跑法脚本里不再有 `spawnSync` 起 Playwright 的那一行（缓存就藏在它身上）", () => {
+    /* 按**调用形态**判而不是按字面：要拦的形态是「某一行里真的调了 spawnSync」，
+     * 而函数头注里那句来历（`` * ## 为什么不是 `spawnSync(process.execPath, …)``` ）
+     * 与 `--dry-run` 的用法说明都会被字面判据误伤。 */
+    const src = readText("scripts/e2e-run.mjs");
+    expect(src).toContain("await runChild(invocation)");
+    const calls = src
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("*") && !line.startsWith("//"))
+      .filter((line) => line.includes("spawnSync("));
+    expect(
+      calls,
+      "起 Playwright 那一跳不许再有 spawnSync（它会把输出攒进 res.stdout）",
+    ).toEqual([]);
+  });
+});
+
+/**
+ * 开跑前的读数**按序全部说出来**（ISSUE #1998）。
+ *
+ * 判据是「顺序」与「第一条阻断生效」两件事，而真去起一遍浏览器 / drizzle 的形态
+ * 不适合每条用例都跑 —— 所以 `runPreflightReadings` 收一个 `collect`，
+ * `makePreflightCollectors` 的三份判决用注入的假判决喂进来。
+ */
+describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () => {
+  const touched: string[] = [];
+
+  it("三步各说一句；全绿时一条都不拦", async () => {
+    touched.length = 0;
+    const { abort } = await runPreflightReadings({
+      collect: async (step) => {
+        touched.push(step);
+        return { say: `[${step}]\n` };
+      },
+    });
+    expect(abort).toBeNull();
+    expect(touched).toEqual(["ports", "python", "schema", "browser"]);
+  });
+
+  it("第一条阻断就停，且它之前那几步的读数**已经说过了**", async () => {
+    touched.length = 0;
+    const { abort } = await runPreflightReadings({
+      collect: async (step) => {
+        touched.push(step);
+        if (step === "schema") return { abort: "库没建齐" };
+        return { say: `[${step}]\n` };
+      },
+    });
+    expect(abort).toBe("库没建齐");
+    // 浏览器那一步**没有**被执行（短路生效），而它前面三步都执行过。
+    expect(touched).toEqual(["ports", "python", "schema"]);
+  });
+
+  it("`collect` 回 null 的步骤被跳过（端口那条已在别处算过，不重复探）", async () => {
+    touched.length = 0;
+    await runPreflightReadings({
+      collect: async (step) => {
+        touched.push(step);
+        return step === "ports" ? null : { say: "x\n" };
+      },
+    });
+    expect(touched).toContain("ports");
+  });
+
+  it("Python 缺件 ⇒ 拦，且**结论已经写进 env**（`playwright.config.ts` 读它）", async () => {
+    const env = {} as NodeJS.ProcessEnv;
+    const collectors = makePreflightCollectors({
+      env,
+      cwd: ROOT,
+      python: () => ({
+        verdict: "missing" as const,
+        interpreter: null,
+        detail: "没有解释器",
+      }),
+    });
+    const { abort } = await runPreflightReadings({
+      collect: async (step) => (step === "python" ? collectors.python() : null),
+    });
+    expect(abort).toContain("没有解释器");
+    // 缺件那一档也要把结论带过去：否则 `playwright.config.ts` 退回「不知道」。
+    expect(env[PYTHON_PREFLIGHT_ENV_KEY]).toBeTruthy();
+  });
+
+  it("schema 判成 abort ⇒ 拦下，且逐条列出丢数据的语句", async () => {
+    const collectors = makePreflightCollectors({
+      env: {} as NodeJS.ProcessEnv,
+      cwd: ROOT,
+      schema: () => ({
+        verdict: "abort" as const,
+        reason: "含丢数据语句",
+        risky: ["DROP TABLE loraTrainingJob"],
+      }),
+    });
+    const result = await collectors.schema();
+    expect(result?.abort).toContain("含丢数据语句");
+    expect(result?.abort).toContain("DROP TABLE loraTrainingJob");
+    // 出口是可执行的：`pnpm db:push`（不是一句「请同步数据库」）。
+    expect(result?.abort).toContain("pnpm db:push");
+  });
+
+  it("浏览器 ready / 拿不到结论都只是读数，不拦", async () => {
+    for (const verdict of [
+      { verdict: "ready" as const },
+      { verdict: "unknown" as const, detail: "探不动" },
+    ]) {
+      const collectors = makePreflightCollectors({
+        env: {} as NodeJS.ProcessEnv,
+        cwd: ROOT,
+        browser: async () => verdict,
+      });
+      const result = await collectors.browser();
+      expect(result?.abort).toBeUndefined();
+      expect(result?.say).toContain("浏览器预检");
+    }
   });
 });

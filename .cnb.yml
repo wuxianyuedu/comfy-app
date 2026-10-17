@@ -536,16 +536,25 @@
   #   全量 vitest 只跑**一遍**（`test:coverage` 一次运行即产出覆盖率报告，
   #   判据强度不变，阈值仍由 vitest.config.ts 的目录阈值守着）。
   #
-  #   **显式 `--maxWorkers=4`，不是配置里那个 8**：这条件路径与本地跑不是同一种负载。
+  #   **并发由 `scripts/ci-load.mjs` 按**现场核数**算（ISSUE #1993 / 规范 §13.5.21），
+  #   不是写死的 4，也不吃配置里那个 8**：这条件路径与本地跑不是同一种负载。
   #   ① 宿主机 16 逻辑核（无 docker、整机可用），vitest 若照默认铺开就有 ~15 个 worker；
   #   ② `--coverage` 给每个文件都加一层插桩（本机实测同样两文件 6.2s → 9.2s，约 +50% CPU）；
   #   ③ 这一套里有大量**真起子进程**的用例（git / node / prettier / PowerShell），超订的
   #      那一份直接从「等 CPU」变成「等子进程」—— 表现是 `Test timed out in 30000ms`，
   #      而单跑全绿。**这正是本仓已经量过的那一格**（规范 §11.13）：同一套、同一台机器，
   #      `maxWorkers=8` 在负载下仍出争用形态的红，`--maxWorkers=4` 才拿到「560 文件全绿」。
-  #   取 4 是**降负载**，不是放宽判据 —— 用例、预算、覆盖率阈值一个字不动；
-  #   与 `.githooks/pre-commit` 的 C 组同一个数、同一条理由（AGENTS 硬规则里那句
+  #   降并发是**降负载**，不是放宽判据 —— 用例、预算、覆盖率阈值一个字不动；
+  #   与 `.githooks/pre-commit` 的 C 组同一条理由（AGENTS 硬规则里那句
   #   「降负载的杠杆是并发，不是预算」）。代价是墙钟变长，这是这条路径上买得到的唯一交换。
+  #
+  #   ⚠️ **为什么不再写死 4**：`runner.cpus` 在自托管上是无效旋钮（官方文档原文见文件头
+  #   第 2 条），平台也不给「同时跑几条」的旋钮 —— 那么配置里那个常数就与「这台机现在
+  #   几个核」**没有任何联系**。节点换规格、或同一台机上多了第二条流水线时，它照旧按
+  #   16 核铺开，现场形态是「既不推进也不报错」。现在由 `scripts/ci-load.mjs` 从
+  #   `CNB_CPUS` 与 `os.availableParallelism()` 读现场核数、按「一个 worker 至少 4 核」
+  #   折算（唯一出处，判据见 `tests/ci-load.test.ts`；人还能用
+  #   `COMFY_CI_MAX_WORKERS=1` 再压一档）。
   #
   #   ⚠️ **恢复时入口写 `scripts/full-suite-run.mjs`，不是裸 vitest**（ISSUE #1979）：
   #   它内部是 `pnpm run test:coverage`（= `vitest run --coverage`，见 `planRun()`），
@@ -565,7 +574,7 @@
   #     timeout: 45m
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
-  # ⚠️ `ifModify` 的第一处示例（本档共 11 处，全部登记在
+  # ⚠️ `ifModify` 的第一处示例（本档共 16 处，全部登记在
   # `scripts/ci-incremental-gates.mjs`）：它只扫 `src/components` + `src/app`，
   # 本次改动一个文件都没落在这两处时跳过。**每加一处都必须同批登记** ——
   # 判据 `tests/ci-incremental-gates.test.ts` 双向核对，机制见上面 `.gates` 头注。
@@ -626,7 +635,20 @@
       - src/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-circular-deps.cjs
 
+  # 收窄（ISSUE #1993）：它判的是「同一份向量 ⇄ 四侧实现」的一致性，四侧实现各有落点
+  # （`scripts/app-port.mjs` / `app_port.py` / `app-port.ps1` / `src-tauri/src/single_instance.rs`），
+  # 而向量只有一份（`tests/fixtures/app-port-vectors.json`）。这几处一个都没碰时，
+  # 「四侧对同一路径给出同一端口」这件事不可能变 —— 它不读 `src/**` 的其余部分。
   - name: 端口推导跨语言一致性
+    ifModify:
+      - scripts/app-port.mjs
+      - scripts/app-port.ps1
+      - scripts/app_port.py
+      - scripts/check-app-port-vectors.cjs
+      - scripts/check-app-port-vectors.py
+      - scripts/check-app-port-vectors.ps1
+      - src-tauri/src/single_instance.rs
+      - tests/fixtures/app-port-vectors.json
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-app-port-vectors.cjs
 
   - name: CHANGELOG 碎片
@@ -652,7 +674,23 @@
   # - name: prettier 格式
   #   script: node scripts/check-format.cjs
 
+  # 收窄（ISSUE #1993）：它判的是「这次提交里有多少个文件只是被 prettier 重排过」，
+  # 而判据本体是**逐文件跑 prettier**（每个改动过的源文件一次）。所以面就是
+  # 「`SOURCE_RE` 认的扩展名在仓库里可能出现的那几棵树」—— 由 `stagedRoots()` 现算，
+  # 这里写的是它现算的**上界**（顶层目录 + 根级配置名）；判宽只会少省几秒，判窄是漏判。
   - name: 格式化提交分离
+    ifModify:
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.css"
+      - "**/*.scss"
+      - "**/*.json"
+      - "**/*.md"
+      - "**/*.mdx"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
 
   # ── 文档面三条（ISSUE #1975：从 `.githooks/pre-commit` 的 D 组挪到这里）──
@@ -791,6 +829,12 @@
   #
   # 实测 118s（`cnb-eus-1k5058g8l`）。给 30m 是因为 `next build` 在冷节点上比实测
   # 读数慢得多，而不是因为它会挂（与 `artifact-run.mjs` 的 `ARTIFACT_TIMEOUT_MS` 同量级）。
+  #
+  # ⚠️ **它没有并发旋钮，这是刻意的**（ISSUE #1993 / 规范 §13.5.21）：`next build` 的
+  # worker 数由构建器自己按机器定，没有一个「按核数收敛」的键；`NODE_OPTIONS` 那类改的是
+  # 内存上限、不是并发 —— 拿它冒充降载就是换一个东西。这条路径上**唯一真能控负载**的手段
+  # 是「别让两条流水线同时压同一台机」（`lock.cancel-in-progress` + 按 PR 分锁，见
+  # §13.5.3.10），以及本条前面那些 stage 按现场核数自己收敛。
   - name: 生产构建
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/artifact-run.mjs
     timeout: 30m
