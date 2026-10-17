@@ -215,9 +215,35 @@
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
 # 旧版 `.cnb.yml` 一并删除（#623），本 PR 不复活它（它锁的是旧版那三十步与上报插件，
-# 两样在自托管上都不成立）。守着这份文件的现有判据只有 `tests/no-platform-ci-config.test.ts`
-# 那一条**形态**判据（分支键 / `namespace: group` / 非空 `tags` / 两个事件键），
-# **条目本身的增删不报错** —— 所以这里的每一步都要靠人逐条核对，别指望它会红。
+# 两样在自托管上都不成立）。守着这份文件的现有判据是 `tests/no-platform-ci-config.test.ts`
+# 那一条**形态**判据（分支键 / `namespace: group` / 非空 `tags` / 两个事件键 /
+# lock.cancel-in-progress / 停用登记）—— **条目本身的增删仍不报错**，
+# 所以这里的每一步都要靠人逐条核对。
+#
+# ── 增量：哪些 stage 可以在「本次改动没碰到它的扫描面」时跳过（ISSUE #1981）──
+#
+# 用户的质疑是「CI 里的检查能否增量，而不是没有改动也重跑」。答案是 stage 级的
+# `ifModify`（CNB 官方语法手册 `zh/build/grammar.md` 的 `#stage-ifmodify`）：
+# 变更文件一个都不落在给定 glob 内 ⇒ 这一步不执行。它**支持 PR 触发的事件**
+# （官方原文：「PR 触发的事件，统计 PR 中的变更文件」），正是本流水线要跑的那一类。
+# 语义与本地钩子那一层（`scripts/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()`）
+# **逐字同义** —— 也就是说，平台侧终于和本地用同一套扫描面在说话。
+#
+# 两条安全边界（都是「宁可多跑」的方向）：
+#   · **新建分支的 push 事件忽略 `ifModify`**（没有对比基准）⇒ 全部照跑；
+#   · **没有 `ifModify` 的 stage 就是默认档 = 任何改动都跑** —— 本文件里绝大多数
+#     stage 都在这一档，包括每一条全库级不变量与全部前提步骤。
+#
+# ⚠️ **「哪几条被收窄了」只有一处出处**：`scripts/ci-incremental-gates.mjs` 的
+# `INCREMENTAL_GATES`（每条都写着它守的是哪份脚本、为什么这条收窄安全）。
+# 两个方向都由 `tests/ci-incremental-gates.test.ts` 判（登记表里每条 ⇒ 配置里必须
+# 逐字带着那组 `ifModify`；配置里带 `ifModify` 的 ⇒ 必须在登记表里），
+# 该判据在固定清单里、每次提交都跑。**别在这里直接给一个 stage 加 `ifModify`** ——
+# 那会在两处各写一份「收窄名单」，而漂了之后「哪一份是真的」没有判据能回答。
+# 随手自查：`pnpm run check:ci-incremental`（= `node scripts/ci-incremental-gates.mjs --check`）。
+#
+# 判定门槛（哪类能进登记表、哪类绝对不行）逐条写在 `scripts/ci-incremental-gates.mjs`
+# 的文件头；口径与边界见规范 §13.5.18。
 .gates: &gates
   # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
   # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
@@ -436,43 +462,79 @@
   #     timeout: 45m
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
+  # ⚠️ `ifModify` 的第一处示例（本档共 11 处，全部登记在
+  # `scripts/ci-incremental-gates.mjs`）：它只扫 `src/components` + `src/app`，
+  # 本次改动一个文件都没落在这两处时跳过。**每加一处都必须同批登记** ——
+  # 判据 `tests/ci-incremental-gates.test.ts` 双向核对，机制见上面 `.gates` 头注。
   - name: 标题行让位
+    ifModify:
+      - src/components/**
+      - src/app/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-title-bar-clearance.cjs
 
   - name: 文件结构硬规则
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-file-structure.cjs
 
   - name: 跨平台动作对照
+    ifModify:
+      - package.json
+      - tools/**
+      - scripts/**
+      - src-tauri/**
+      - README.md
+      - docs/standards/launch-and-build.md
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-ps1-consistency.mjs
 
   - name: import 别名统一
+    ifModify:
+      - src/**
+      - e2e/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-import-alias.cjs
 
   - name: ComfyUI 端口口径
+    ifModify:
+      - src/lib/comfyui/**
+      - src/lib/app-settings/**
+      - src/lib/endpoints.ts
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-comfyui-port-contract.cjs
 
   - name: 内联样式注入
+    ifModify:
+      - src/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-inline-style.cjs
 
   - name: 跨文件重复块
+    ifModify:
+      - src/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-code-duplication.cjs
 
   - name: 函数长度 TS
+    ifModify:
+      - src/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-function-length.cjs
 
   - name: 函数长度 Rust
+    ifModify:
+      - src-tauri/src/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-rust-function-length.cjs
 
   - name: 模块循环依赖
+    ifModify:
+      - src/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-circular-deps.cjs
 
   - name: 端口推导跨语言一致性
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-app-port-vectors.cjs
 
   - name: CHANGELOG 碎片
+    ifModify:
+      - changelog.d/**
+      - CHANGELOG.md
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-changelog-fragments.cjs
 
   - name: 主题色扫描
+    ifModify:
+      - src/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-theme-colors.cjs
 
   - name: UI/逻辑分离
