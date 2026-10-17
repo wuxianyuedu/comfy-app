@@ -946,11 +946,50 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(prKey("1982")).toBe(prKey("1982"));
     /* ④ 非 PR 事件（`push`）不能与任何一条 PR 撞锁：那里 `CNB_PULL_REQUEST_IID`
      * 无值，代进去之后必须与 `prKey()` 的结果不同。 */
-    const pushKey = resolveLockKey(template, { CNB_PULL_REQUEST_IID: undefined });
+    const pushKey = resolveLockKey(template, {
+      CNB_PULL_REQUEST_IID: undefined,
+    });
     expect(pushKey).not.toBe(prKey("1982"));
     /* ⑤ 未替换的原文不许留下裸 `$`（平台不认的写法会**原样**进 key，看起来像
      * 「生效了」而实际是所有人共用一把名字里带 `$` 的锁）。 */
     expect(template).not.toMatch(/\$[^{A-Za-z0-9_]/);
+  });
+
+  it("覆盖率上报那一档接回了上报链，且**没报告时不判红**（ISSUE #1990）", () => {
+    /* 这一条守的是一个已经发生过两次的形态：上报是 #623 删旧版流水线时被一起拿走的，
+     * #1959 按完整流程重建时没被带回来 —— 于是「洞察 → 单元测试覆盖率」永远是
+     * 「无 / 无」，而没有任何一步会红（页面读的是平台侧读数，配置里少一条 stage
+     * 与「还没跑过」长得一模一样）。
+     *
+     * 两半分开判：
+     *   ① `覆盖率上报` 必须在清单里、点名的入口在盘上（不然接回去也只是一句注释）；
+     *   ② 它**必须**自己判「有没有报告」—— 缺 `coverage/lcov.info` 时只跳过。
+     *      理由不是「宽容」：`单元测试` 此刻是临时停用的，报告本来就不存在，
+     *      把它判红等于让停用这件事连带把整条流水线拦死。 */
+    const text = readRegisteredConfig();
+    const order = registeredGateOrder(text);
+    expect(
+      order,
+      "`覆盖率上报` 不在 COMFYAPP_CI_GATES 里 —— 平台侧的覆盖率读数又没人写了" +
+        "（「洞察 → 单元测试覆盖率」会退回「无 / 无」）",
+    ).toContain("覆盖率上报");
+    const stage = stageBlock(text, "覆盖率上报");
+    expect(stage, "`.cnb.yml` 里找不到 `覆盖率上报` 那一项").not.toBeNull();
+    if (stage === null) return;
+    const entry = "scripts/ci-coverage-report.mjs";
+    expect(stage, `\`覆盖率上报\` 没有点名 ${entry}`).toContain(entry);
+    expect(
+      existsSync(path.join(ROOT, entry)),
+      `${entry} 不在盘上 —— 这一档会静默什么都不做（cnb 自己不存在时同理，` +
+        "但那条至少会在日志里说出来）",
+    ).toBe(true);
+    /* ② 「有没有报告」这件事必须由这一步自己答，不能交给平台插件的缺省值
+     * （`breakIfNoCoverage` 缺省即报错退出 —— 那正是旧版在 1~2s 内红掉的那一格）。 */
+    expect(
+      stage,
+      "`覆盖率上报` 必须自己判报告在不在（`coverage/lcov.info` 缺席时跳过而不是判红）——" +
+        "`单元测试` 此刻被临时停用，报告本来就不存在",
+    ).toMatch(/Test-Path[^]*coverage\/lcov\.info/);
   });
 
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
@@ -1086,7 +1125,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeNull();
     const keyFixture =
       ".common: &common\n  lock:\n    key: pr-$CNB_PULL_REQUEST_IID\n    cancel-in-progress: true\n";
-    expect(pipelineLockKeyTemplate(keyFixture)).toBe("pr-$CNB_PULL_REQUEST_IID");
+    expect(pipelineLockKeyTemplate(keyFixture)).toBe(
+      "pr-$CNB_PULL_REQUEST_IID",
+    );
     // 默认口径的那种写法（`$CNB_BRANCH`）也能被解析出来 —— 由调用方判它违规，
     // 不是靠「解析不出来」蒙过去。
     expect(

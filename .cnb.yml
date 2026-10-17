@@ -240,7 +240,7 @@
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, 格式化提交分离, 生成态文档与源同步,
-      API 文档生成物与源同步, 文档引用与权威源一致, core 骨架单一事实源,
+      API 文档生成物与源同步, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
       零消费导出, core 出口纪律与基类纯度, 生产构建, 浏览器安装, E2E 关键流程
     # ⚠️ 末尾那两条的**顺序有意**：`浏览器安装` 要下 ~120 MiB（分钟级），而判「装没装成」
     # 是零成本的 —— 排在 `E2E 关键流程` 之前，缺件才会在便宜的位置报出来（判据判这条序）。
@@ -702,6 +702,37 @@
     # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个
     # 数量级，卡死的形态 20m 报出来，不必等满平台默认的 2h 墙钟）。
     timeout: 20m
+
+  # ── 覆盖率上报（ISSUE #1990）──
+  #
+  # 「洞察 → 单元测试覆盖率」页此前**一条数据都没有**：那个页面读的是 `testing:coverage`
+  # 插件上报的读数，而这个插件在 #623 删旧版流水线时被一起拿走了，#1959 按完整流程
+  # 重建时没被带回来 —— 于是前端永远停在「无 / 无」，看起来像平台坏了，实际是**没人上报**。
+  #
+  # 这一档是**纯从属**的，两件事别搞混：
+  #   · 它**判不了任何东西**：真正的覆盖率门槛在 `vitest.config.ts` 的 `thresholds` 里，
+  #     由 `单元测试`（`scripts/full-suite-run.mjs` → `vitest run --coverage`）判。
+  #     本档只把那份产物**报出去**，阈值一个字不设（平台阈值是绝对百分比，与本仓
+  #     「按目录记门槛 + 棘轮」的口径冲突：填低了形同虚设、填高了把正常 PR 拦死）；
+  #   · 所以 `单元测试` 被临时停用（见 `COMFYAPP_CI_DISABLED_GATES`）期间，
+  #     `coverage/lcov.info` **不存在** —— 此时本档只跳过并留一行话，**不许判红**：
+  #     一个「测都没跑」的绿没法靠它变出来，把它判红等于让「停用」这件事
+  #     连带把整条流水线拦死（那正是停用要避免的形态）。
+  #   ⚠️ 恢复 `单元测试` 时**顺手删掉**这一档：上报器用平台的 coverage 类型时，
+  #   报告文件是它的必需输入（官方 build/plugin/testing.md 的「覆盖率上报」一节：
+  #   `breakIfNoCoverage` 缺省即报错退出 —— 旧版 #623 之前那一跑就是这么红的）。
+  #   现在所以能留，是因为做成了命令行形态、自己判「有没有文件」。
+  - name: 覆盖率上报
+    # 只跟着 `单元测试` 走：它不跑，这里就没有报告可报。
+    ifModify:
+      - src/**
+      - tests/**
+      - vitest.config.ts
+    script: >-
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;
+      if (Test-Path -LiteralPath coverage/lcov.info) {
+        node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
+      } else { Write-Host "[coverage-report] 没有 coverage/lcov.info（单元测试这一档此刻未产出报告），跳过上报" }
 
   - name: 文档引用与权威源一致
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
