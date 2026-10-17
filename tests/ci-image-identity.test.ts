@@ -255,20 +255,27 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
 });
 
 /**
- * 「哪几格换了环境」必须是**一份读得出来的名单**（ISSUE #1993 续）。
+ * 「哪几格换了环境」必须是**一份读得出来的名单**（ISSUE #1993 续 → 2026-10-17 订正）。
  *
- * 这条守的是一句很容易被读反的话：自托管上「没有 docker」不等于「没有容器」——
- * 失效的只是 `pipeline.docker.image` / `volumes`（声明构建环境那两把旋钮），
- * 而**任务级 `image:`** 与插件任务仍在独立容器里跑（官方 `script-vs-plugin.md`
- * 「执行环境」）。于是本仓的真实形态是「宿主机直跑 + 少数几格进容器」。
+ * ## 现役答案是**零格**，而这条判据守的是那个「零」
  *
- * 为什么要有判据而不是只留注释：**多一格少一格都不会报错**。有人顺手给「类型检查」
- * 也加个 `image:`，配置照跑、日志照绿 —— 而那一格要拉镜像、要重装依赖，正是这份
- * 配置当初把「装一次」放在宿主机上的理由。名单在这里逐格点名，加一格就得先过这一条。
+ * 上一版这条判据钉的是「进容器的正好是 `浏览器安装` / `E2E 关键流程` 两格」，依据是
+ * 官方 `script-vs-plugin.md` 的一句「指定 `image` 的脚本任务在独立容器中执行」。那句话
+ * 本身没错，但它讲的是**平台池**那种形态；自托管节点上**没有 docker daemon**，
+ * 平台连「起容器」都做不到。实测（`cnb-cqk-1k550gpp2`，PR #2003 首跑）：
+ *
+ *     浏览器安装  error [70ms]  →  Runner does not enable Docker.
+ *
+ * 70 毫秒、脚本一行都没执行、前面三十三步全绿。所以 `.cnb.yml` 里那两行 `image:` 撤了，
+ * 这条判据把允许的名单钉成**空** —— 与上一版是同一条判据、只换了答案：名单仍在这里
+ * **逐格点名**，加一格就必须先过这一条，而它会指着下面这段读数说话。
+ *
+ * 解析器与「多一格少一格都红」的形状都保留：那次事故里最难读出来的正是「哪一格带了
+ * `image:`」。留着它，下次有人加一格时这条会当场把名字打出来，不必等 70ms 的那句红。
  */
 describe("容器格：哪几格进容器是**决定**，不是随手写的（ISSUE #1993 续）", () => {
-  /** 本仓**允许**换环境的两格（理由逐条写在 `.cnb.yml` 它们的注释里）。 */
-  const CONTAINER_STAGES = ["浏览器安装", "E2E 关键流程"];
+  /** 本仓**允许**带 `image:` 的 stage —— **空**：这台节点上没有 docker daemon。 */
+  const CONTAINER_STAGES: string[] = [];
 
   it("解析器认得 stage 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
     const fixture = [
@@ -291,54 +298,48 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
     ]);
   });
 
-  it("现役 `.cnb.yml`：进容器的正好是那两格（多一格少一格都红）", () => {
-    const got = platformImageStages(read(".cnb.yml")).map((s) => s.name);
+  it("现役 `.cnb.yml`：**一格都不带** `image:`（带一格就是 70ms 的 `Runner does not enable Docker`）", () => {
+    const got = platformImageStages(read(".cnb.yml"));
     expect(
       got,
-      "进容器的 stage 与决定不一致 —— 改名单要同批改这条判据，并写成「为什么」",
+      "有 stage 带了 `image:` —— 自托管节点上没有 docker daemon，这一格会在 70ms 内红在 " +
+        "`Runner does not enable Docker` 上（实测 cnb-cqk-1k550gpp2，脚本一行都没执行）。" +
+        "真要换环境，先解决「这台节点起不起得来容器」这件事，别只加一行 image:；" +
+        "改这份名单要同批改这条判据，并写成「为什么」",
     ).toEqual(CONTAINER_STAGES);
   });
 
-  it("两格用同一张镜像，且标签钉到版本（不是 `latest`）", () => {
-    const stages = platformImageStages(read(".cnb.yml"));
-    const refs = stages.map((s) => s.image);
-    expect(
-      new Set(refs).size,
-      "两格的镜像不是同一张 —— 浏览器落点会分成两处",
-    ).toBe(1);
-    /* `latest` 会让「这份日志是哪一版环境跑出来的」不可追（与 `imageTagVerdict`
-     * 对 `COMFYAPP_NODE_IMAGE` 的口径同源）。 */
-    expect(imageTagVerdict(refs[0]).verdict).toBe("pinned");
-    expect(refs[0], "Playwright 镜像要带官方的那套浏览器").toMatch(
-      /playwright:v\d+\.\d+\.\d+-(jammy|noble)$/,
-    );
+  it("这条判据不是空转：名单非空时它真的会红（喂一份带 `image:` 的配置）", () => {
+    /* 名单是空数组时，`toEqual([])` 与「解析器永远返回空」在结果上无法区分 ——
+     * 那正是「恒绿的空转」这一失效形态（`tests/ci-image-identity.test.ts` 的头注
+     * 把它列为三条要堵的形态之一）。所以这里给解析器喂一份**真的带 image** 的配置，
+     * 断言它会红，也就证明上面那条对现役配置的绿不是解析器瞎了。 */
+    const withImage = [
+      "master:",
+      "  pull_request:",
+      "    - stages:",
+      "    - name: 浏览器安装",
+      "      image: mcr.microsoft.com/playwright:v1.63.0-noble",
+      "      script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "",
+    ].join("\n");
+    const names = platformImageStages(withImage).map((s) => s.name);
+    expect(names).toEqual(["浏览器安装"]);
+    expect(names).not.toEqual(CONTAINER_STAGES);
   });
 
-  it("镜像标签里的 Playwright 版本 == 仓库依赖解析到的版本（升级只改一半 = 装错版本的浏览器）", () => {
-    /* 官方镜像按**它自己那一版** Playwright 的 `browsers.json` 装浏览器：跨版本时
-     * 它要的 browser revision 与仓库里跑的 Playwright 不同，等价于「装了一份错版本的
-     * 浏览器」—— 而症状是 `Executable doesn't exist at …`，读起来像缺件。 */
-    const ref = platformImageStages(read(".cnb.yml"))[0]?.image ?? "";
-    const inImage = /playwright:v(\d+\.\d+\.\d+)-/.exec(ref)?.[1];
-    const declared = (
-      JSON.parse(read("package.json")) as {
-        devDependencies?: Record<string, string>;
-      }
-    ).devDependencies?.["@playwright/test"];
-    expect(inImage, `镜像标签里读不出 Playwright 版本：${ref}`).toBeTruthy();
-    expect(declared, "package.json 里没有 @playwright/test").toBeTruthy();
-    expect(
-      String(declared).replace(/^[^0-9]*/, ""),
-      "镜像标签的 Playwright 版本与 package.json 声明的不是同一个 —— 升级要同批改 .cnb.yml 这一行",
-    ).toBe(inImage);
-  });
-
-  it("镜像把浏览器装在哪，就告诉判据装在哪（`PLAYWRIGHT_BROWSERS_PATH` 与镜像同源）", () => {
-    /* 官方 Playwright 镜像的落点是 `/ms-playwright`。不给这一行，落点判据在 Windows
-     * 宿主上按 `%LOCALAPPDATA%` 推 —— 于是「镜像里明明有」与「一件都没有」在日志里
-     * 逐字同形（本仓最贵的那类红）。这一行只写**一处**（流水线的 `env`），两格共享。 */
+  it("浏览器落点：不给 `PLAYWRIGHT_BROWSERS_PATH` 覆盖（覆盖那一版是给容器用的，随它一起撤掉）", () => {
+    /* 官方 Playwright 镜像把浏览器装在 `/ms-playwright`，那一行当初是**给容器**配的：
+     * 判据得去镜像里那个目录找。带 `image:` 的 stage 在这台节点上必然红（见上），
+     * 于是这一行剩下的唯一效果是**把落点判据指到一个宿主上不存在的目录** ——
+     * 「明明装过」与「一件都没有」在日志里逐字同形（本仓最贵的那类红）。
+     * 现在这一格跑在宿主机上，落点就按 `playwrightBrowsersRoot()` 自己推，别给覆盖。 */
     const text = read(".cnb.yml");
-    const path = /PLAYWRIGHT_BROWSERS_PATH:\s*(\S+)/.exec(text)?.[1];
-    expect(path, "`浏览器安装` 没有指定浏览器落点").toBe("/ms-playwright");
+    const override = /^\s*PLAYWRIGHT_BROWSERS_PATH:/m.exec(text);
+    expect(
+      override?.[0] ?? null,
+      "`.cnb.yml` 里还有 `PLAYWRIGHT_BROWSERS_PATH` —— 那是给容器用的覆盖；" +
+        "宿主机上它会把落点判据指到一个空目录（`浏览器安装` 因此永远重新下载）",
+    ).toBeNull();
   });
 });
