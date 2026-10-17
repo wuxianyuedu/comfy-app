@@ -30,6 +30,7 @@ import {
 import {
   FRESHNESS_TRACKS,
   freshnessRecord,
+  freshnessStamp,
   freshnessTrack,
   isSameLocalDay,
   readFreshnessLedgerAt,
@@ -286,7 +287,7 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     expect(crossed.problems.join("\n")).toContain("e2e");
   });
 
-  it("写全的记录 ⇒ 放行，并报出「上次自证距今多久」", () => {
+  it("写全的记录 ⇒ 放行，并报出「上次自证距今多久」+ 具体时刻", () => {
     const result = runGate({
       ledger: { e2e: GOOD },
       kind: "e2e",
@@ -296,7 +297,50 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     expect(result.exitCode).toBe(0);
     /* 记录与 `SAME_DAY` 同在 2026-10-09（记录在 00:30Z、时钟在 06:00Z）：age 按整天向下取整
      * 所以是「今天」—— 也正是「每天首次」那条判据放行所需的形状。 */
-    expect(result.ages).toEqual(["e2e：今天"]);
+    /*
+     * ⚠️ **时刻那一半不写死字面量**（ISSUE #1979）：它是**本地时间**（判据判的是本地
+     * 日历日，用 UTC 打时刻在东八区会把 00:30 的提交显示成昨天），而这一档在别的
+     * 时区里跑出来的字符串逐字不同 —— 写死 `2026-10-09 08:30 (+08:00)` 就等于把用例
+     * 绑在「跑它的那台机器的 TZ」上（本机实测 +08:00、CI 容器可能是 UTC）。
+     * 所以断言的是**形状与内容**：这一句里带着那个时间点、且带上显式偏移。
+     */
+    expect(result.ages).toEqual([`e2e：今天（${freshnessStamp(GOOD)}）`]);
+    expect(result.ages[0]).toMatch(
+      /^e2e：今天（\d{4}-\d{2}-\d{2} \d{2}:\d{2} \([+-]\d{2}:\d{2}\)）$/,
+    );
+    // `stamps` 是同一件事的机器可读那一栏 —— 没有时刻时它是 null，不是空串。
+    expect(result.stamps).toEqual([freshnessStamp(GOOD)]);
+  });
+
+  it("「上次自证」那一句必须带具体时刻，不能只有天数", () => {
+    /* 这一条守的是 ISSUE #1979 的诉求本身：账面此前只打 `今天` / `1 天前`，
+     * 而「今天 08:45 跑过」与「今天 23:50 才跑过」在那种读数下**同形** ——
+     * 排障时最需要的那一格（哪一小时）恰好被抹掉了。 */
+    const result = runGate({
+      ledger: { e2e: GOOD },
+      kind: "e2e",
+      keys: ["e2e"],
+      now: SAME_DAY,
+    });
+    // 天数那一半还在（扫一眼就知道新不新），时刻接在它后面。
+    expect(result.ages[0]).toContain("今天");
+    expect(result.ages[0]).toContain(freshnessStamp(GOOD));
+    // 时刻里要带上偏移量：只写 `2026-10-09 08:30` 在时区不同的两个人眼里是两个瞬间。
+    expect(result.ages[0]).toMatch(/\([+-]\d{2}:\d{2}\)/);
+  });
+
+  it("`who` / `how` 一并给出去 —— 账面三栏都要能被看见", () => {
+    /* 账存在的全部意义是「谁、什么时候、按哪条命令复核的」。此前输出只打第三栏的
+     * 半句，要核另外两栏就得自己开 JSON —— 「账面被看见」只成了一半。 */
+    const result = runGate({
+      ledger: { e2e: GOOD },
+      kind: "e2e",
+      keys: ["e2e"],
+      now: SAME_DAY,
+    });
+    expect(result.records).toEqual([
+      { key: "e2e", who: "月读", how: "pnpm test:e2e" },
+    ]);
   });
 
   it("缺记录 ⇒ 阻断，话术里给出这条账自己的账文件与命令", () => {

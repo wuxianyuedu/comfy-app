@@ -33,7 +33,8 @@ import {
   FRESHNESS_TRACKS,
   checkFreshnessLedger,
   dirtiesTrack,
-  freshnessAge,
+  freshnessReading,
+  freshnessStamp,
   freshnessTrack,
   readFreshnessLedgerAt,
 } from "./freshness-ledger.mjs";
@@ -84,8 +85,13 @@ export function trackScopes() {
  * 抽成纯入口是为了让**判决可被执行**（同 `shell-gate.mjs` 的 `runGate` 先例）：
  * 不接输入的话，「永远说没问题」这一层静默退化不会有任何东西红。
  *
+ * 返回值里**给人读的那一栏是三件一起给的**（ISSUE #1979）：`ages` 是拼好的
+ * 「键：距今多久（具体时刻）」，`stamps` 是纯时刻（没有则 null），`records` 是
+ * 「谁 / 按哪条命令」。拆开是因为消费方不同 —— 人读 `ages`，要核另外两栏的（或要判
+ * 「这条到底有没有时刻」的用例）读 `stamps` / `records`，不去正则拆一句中文。
+ *
  * @param {{ledger: Record<string, unknown>, kind?: string, keys?: string[], now?: Date, dirtySince?: Date | null}} input
- * @returns {{exitCode: number, problems: string[], ages: string[]}}
+ * @returns {{exitCode: number, problems: string[], ages: string[], stamps: (string | null)[], records: {key: string, who: string, how: string}[]}}
  */
 export function runGate({
   ledger,
@@ -108,10 +114,37 @@ export function runGate({
     now,
     dirtySince,
   });
+  /* 「上次自证」这一栏给的是**具体时刻 + 距今多久**（`freshnessReading`），
+   * 不是只有一句「今天 / N 天前」：日期是判据要的，时刻是人和排障要的 ——
+   * 只给天数时「今天 08:45 跑过」与「今天 23:50 才跑过」在账面上同形（ISSUE #1979）。
+   * 拆成 `at` / `age` 两栏给出去，是因为**消费方要的东西不同**：人要读拼好的那一句，
+   * 而机器（`--ledger` 的补栏、用例）要得出「这一条到底有没有时刻」。 */
   const ages = required.map(
-    (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,
+    (p) => `${p}：${freshnessReading(ledger[p], now) ?? "无记录"}`,
   );
-  return { exitCode: problems.length === 0 ? 0 : 1, problems, ages };
+  const stamps = required.map((p) => freshnessStamp(ledger[p]));
+  /* `who` / `how` 一并带出去（ISSUE #1979）：账存在的全部意义是
+   * 「谁、什么时候、按哪条命令复核的」，此前输出只打第三栏的半句 ——
+   * 要核另外两栏就得自己开 JSON，于是「账面被看见」这件事只成了一半。 */
+  const records = required.map((p) => {
+    const entry = ledger[p];
+    const rec =
+      entry && typeof entry === "object"
+        ? /** @type {Record<string, unknown>} */ (entry)
+        : {};
+    return {
+      key: p,
+      who: String(rec.who ?? "").trim(),
+      how: String(rec.how ?? "").trim(),
+    };
+  });
+  return {
+    exitCode: problems.length === 0 ? 0 : 1,
+    problems,
+    ages,
+    stamps,
+    records,
+  };
 }
 
 /**
@@ -285,9 +318,20 @@ function main() {
       now,
       dirtySince: dirtySinceToday(track, now),
     });
-    const stamp = `上次自证 —— ${result.ages.join("；")}`;
+    const reading = `上次自证 —— ${result.ages.join("；")}`;
+    /* `--ledger` 是「给人读当下账面」的那一档，所以它打**三栏全的**那一条
+     * （时刻 / 距今多久 / 谁 + 按哪条命令）—— 与钩子里 `[ok]` 那一行刻意不同：
+     * 钩子里每一屏都要出现，时刻已经够用；这里是人主动要看，少一栏就得去开 JSON。 */
     if (ledgerOnly) {
-      process.stdout.write(`[freshness] ${track.label}：${stamp}\n`);
+      process.stdout.write(
+        `[freshness] ${track.label}：${reading}\n` +
+          result.records
+            .map(
+              (r) =>
+                `            ${r.key}：who=${r.who || "(未写)"}；how=${r.how || "(未写)"}\n`,
+            )
+            .join(""),
+      );
       continue;
     }
     /* 宽限期：账文件**还没入库**时只提醒、不阻断。这份账是随提交进来的（平台侧 squash
@@ -318,7 +362,7 @@ function main() {
       );
       continue;
     }
-    process.stdout.write(`  [ok] ${track.label}：每档都有主（${stamp}）\n`);
+    process.stdout.write(`  [ok] ${track.label}：每档都有主（${reading}）\n`);
   }
   return failed;
 }
