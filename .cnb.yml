@@ -110,6 +110,16 @@
   runner:
     # group = 当前仓库所属根组织下的自托管构建节点（不是平台公共池）。
     # 漏掉这一行会退化成平台池 —— 那时核时重新开始计费，而配置看起来完全一样。
+    #
+    # ⚠️ **用户的决定（ISSUE #1993）：「永远不用平台池，容器用自托管节点上的」**。
+    # 所以这一段**不是**可调项，而是两道必须同时在场的门：
+    #   ① `namespace: group` —— 派到根组织的自托管节点，而不是公共池；
+    #   ② `tags` 非空、且**不含** `cnb:arch:*` 那一族 —— 节点离线 / 满载时平台会
+    #      **自动改派到其他可用节点**，而在这一档上「其他可用节点」就是平台池
+    #      （头注第 5 条）。只写 ① 不够，改派发生时配置一个字都不会变。
+    # 「用容器」的那一半落在**任务级 `image:`**（`pipeline.docker.image` 在这条路径上
+    # 不生效，头注第 1 条）—— 池子是「跑在哪台机器」，容器是「这一格跑在什么环境里」，
+    # 两件事，别混。判据：`tests/ci-container-plan.test.ts` 把这段形态与容器计划一起钉住。
     namespace: group
     # 「与」关系：列出的每个 tag 都必须出现在节点标签上。当前节点声明的标签是 win。
     tags:
@@ -937,6 +947,21 @@
   - name: 浏览器安装
     image: mcr.microsoft.com/playwright:v1.63.0-noble
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    # ── 跨容器存活的落点（ISSUE #1993，用户决定：**永远不用平台池，只用自托管节点上的容器**）──
+    #
+    # 任务级 `image:` 每一格都是**一个新容器**：不挂卷，这一格下的 120 MiB 到了下一格
+    # （`E2E 关键流程`，同一张镜像、同一个落点）就不存在了 —— 于是每跑一遍都要重取一遍，
+    # 而那正是**这一档七跑以来的全部卡点**。挂一份命名卷，落点就跨容器存活。
+    #
+    # 卷名不带流水线唯一后缀：同一台节点上的多条流水线共用这一份浏览器（同版本二进制，
+    # 共享安全），代价是它们不再各下一遍。**版本必须与镜像标签同批升**（下条边界同源）。
+    #
+    # ⚠️ 卷是**节点级**的（任务级容器没有别的作用域），所以平台池上跑时它也有一份 ——
+    # 而「跑不跑池子」由 `runner` 决定（见 `.common.runner` 那段），不由本卷决定。
+    # 判据：`tests/ci-container-plan.test.ts` 判「每一格容器格都挂同一份落点」，
+    # 断桥那一档**点名**是哪一格（不报错、只是每格重下 120 MiB）。
+    volumes:
+      - comfyapp-ms-playwright:/ms-playwright
     env:
       # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
       #
@@ -1009,6 +1034,10 @@
   - name: E2E 关键流程
     image: mcr.microsoft.com/playwright:v1.63.0-noble
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
+    # 与上一格**同一份卷、同一个落点** —— 它依赖的浏览器来自那一格。两格的卷一旦分叉，
+    # 「上一格绿、这一格报 `Executable doesn't exist at …`」就会回来（红在别处）。
+    volumes:
+      - comfyapp-ms-playwright:/ms-playwright
     # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
     # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
     # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。

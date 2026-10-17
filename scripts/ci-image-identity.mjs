@@ -48,6 +48,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+/* 容器计划的读数与**同一个事实**的另一个出口（ISSUE #1993）：哪几格进容器、它们挂的
+ * 卷能不能让浏览器落点跨容器存活、runner 是不是自托管。本档只**打**它，判据在
+ * `tests/ci-container-plan.test.ts` —— 分工与 `platformImageStages()` 一致。 */
+import { describePlan } from "./ci-container-plan.mjs";
+
 /** `.cnb.yml` 里本仓认得的那一档「任务级镜像」—— 宿主机没 docker 之后容器仍从这一格来。 */
 const CNB_CONFIG = ".cnb.yml";
 
@@ -238,6 +243,11 @@ export function imageIdentity({
           .map((s) => `${s.name} → ${s.image}`)
           .join("；")}`,
   );
+  /* 上面那一行只说「哪几格换了环境」，说不出「换了环境之后**什么留下来了**」。
+   * 而这一档最贵的失效形态恰恰在那一半：不挂卷 ⇒ 每一格都重下 120 MiB，
+   * 不报错、只是慢。runner 那一行同理 —— 漏掉 `namespace: group` 会**静默**
+   * 回落计费的平台池，而配置看起来一模一样。 */
+  for (const line of describePlan(readConfig())) lines.push(line);
 
   if (tag.verdict === "pinned") {
     lines.push(
