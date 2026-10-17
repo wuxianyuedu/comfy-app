@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { TRPCError } from "@trpc/server";
 import { setupTrpcServer } from "../../../tests/helpers/trpc-msw";
 import { createTestTRPC } from "../../../tests/helpers/test-trpc";
@@ -24,6 +24,8 @@ interface Behavior {
   models: ModelRow[];
   /** 非空时 list 抛错 → 覆盖组件错误态 */
   listError?: string;
+  /** 弹层里那条连接状态行的数据源（缺省 true = 历史行为）。 */
+  comfyReachable?: boolean;
 }
 
 /** 由调用方在 beforeAll 里替换，各用例通过 setBehavior 改值。 */
@@ -48,7 +50,7 @@ const mockRouter = t.router({
     configList: t.procedure.query(() => ({
       folders: [],
       rows: [],
-      comfyReachable: true,
+      comfyReachable: behavior.comfyReachable ?? true,
     })),
     configSave: t.procedure.mutation(() => ({ ok: true })),
     configDelete: t.procedure.mutation(() => ({ ok: true })),
@@ -143,5 +145,23 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
     ]) {
       expect(checked.className).toContain(layer);
     }
+  });
+
+  /**
+   * 现场（业主截图）：一台**没配 ComfyUI 路径**的机器上，弹层写着
+   * 「● ComfyUI 已连接 · 共 0 个目录」，而服务端那次探测必然落空（`comfyBase()`
+   * 指向没人监听的 8188 ⇒ `fetch` 抛错 ⇒ `comfyReachable:false`）。
+   * 视图这一侧只钉一条：服务端说不可达时，「已连接」三个字不许出现在屏上。
+   */
+  it("连接状态行：服务端报不可达时不许出现「已连接」", async () => {
+    setBehavior({ comfyReachable: false });
+    renderWithProviders(<ModelLibrary />);
+
+    fireEvent.click(screen.getByRole("button", { name: "模型目录配置" }));
+    await waitFor(
+      () => expect(screen.getByText("● ComfyUI 未连接")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(screen.queryByText(/ComfyUI 已连接/)).toBeNull();
   });
 });
