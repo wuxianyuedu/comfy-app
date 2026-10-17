@@ -167,3 +167,54 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
     );
   });
 });
+
+/**
+ * `pnpm start` 的**入口那一边**：仓库检出里只有 `next start` 一个正确取值（ISSUE #1977）。
+ *
+ * 这里曾经反着写 —— 依据是启动时那句输出：
+ *
+ *   `"next start" does not work with "output: standalone" configuration.`
+ *
+ * 把它读成「Next 拒绝这对组合」，于是加了「盘上有 `.next/standalone/server.js` 就走它」
+ * 的分支。**那是一句 `⚠` 警告**：实测 `next start` 照常起（`✓ Ready in 119ms`）、
+ * 静态资源 200、`/api/health` 报 `db: "up"`。而换到 standalone 入口之后 E2E
+ * **几乎全档红**，因为**仓库检出里的 standalone 载荷是不完整的**（它只由
+ * `build-desktop.mjs` 组装成可分发的形态）：
+ *
+ *   · `.next/standalone/.next/static` 不存在 ⇒ `/_next/static/chunks/*` 全 404、
+ *     MIME 是 `text/plain` ⇒ 浏览器拒绝执行 ⇒ **整个前端不 hydrate**，
+ *     交互类断言全部 5s 超时；
+ *   · `server.js` 启动即 `chdir(__dirname)` ⇒ `DATABASE_URL` 的 `./db.sqlite`
+ *     落到 `.next/standalone/db.sqlite`（**空库**），而 23 张表在检出根
+ *     ⇒ `/api/health` 报 `db: "empty"`。
+ *
+ * 所以这一组钉的是**反向**：`scripts/start.mjs` 不许带 standalone 入口那一支。
+ * 两条各挡一个方向：换入口（`useStandalone` / `standaloneServer` 那套决策）与
+ * 半途把环境交给桌包那份装配（`buildStandaloneRuntimeEnv`）—— 后者是**桌包链**
+ * （`standalone-runtime.mjs`）的事，检出里它会把数据锚点指到空库那一侧。
+ *
+ * ⚠️ 判不了「服务真的起来了」（那要一份完整产物 + 库结构，是本文件上半的活）；
+ * 也判不了「`next start` 与 standalone 只警告不拒绝」（那是 Next 的行为，
+ * 上面那段实测读数与 `scripts/start.mjs` 里那条注释记着它）。
+ */
+describe("`pnpm start` 的入口：仓库检出里必须走 `next start`（不换 standalone 入口）", () => {
+  const source = readFileSync(
+    join(process.cwd(), "scripts", "start.mjs"),
+    "utf8",
+  );
+
+  it("用的是 `next start`（经 pnpm 可执行形态判据，不是裸名字）", () => {
+    expect(source).toMatch(/"next",\s*\n?\s*"start"/);
+    expect(source).toMatch(/pnpmInvocation\(\[/);
+  });
+
+  it("**不许**出现「盘上有 server.js 就走 standalone 入口」那套决策", () => {
+    /* 反向复算：把 `7b2ce3a5` 那一段贴回去，这条当场点名。 */
+    expect(source).not.toMatch(/useStandalone\s*=\s*existsSync\(/);
+    expect(source).not.toMatch(/args:\s*\[standaloneServer\]/);
+  });
+
+  it("**不许**把运行期环境交给桌包那份装配（那是 standalone 载荷才成立的口径）", () => {
+    expect(source).not.toMatch(/buildStandaloneRuntimeEnv\(/);
+  });
+});

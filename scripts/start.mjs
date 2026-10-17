@@ -55,9 +55,28 @@ if (!schema.started) {
   );
 }
 
-// 与 dev.mjs 同一口径：pnpm 的可执行形态由 shell.mjs 判定（规范 §2.1.1）。
-// 写死 `pnpm.cmd` 在 Windows 上会选中 Node 起不来的批处理，`status` 为 null
-// 会被 `?? 0` 读成成功退出，服务静默消失（ISSUE #576）。
+/* **这里刻意用 `next start`，不换 `.next/standalone/server.js`**（ISSUE #1977 第十一处）。
+ *
+ * 有过一次改动把它换成 standalone 入口，依据是启动时这句输出：
+ *
+ *   `"next start" does not work with "output: standalone" configuration.`
+ *
+ * 那是一句 **`⚠` 警告，不是拒绝** —— 实测 `next start` 照常起（`✓ Ready in 119ms`）、
+ * 静态资源 200、`/api/health` 报 `db: "up"`。而换成 standalone 入口之后 E2E
+ * **几乎全档红**，因为**仓库检出里的 standalone 载荷是不完整的**（它只由
+ * `build-desktop.mjs` 组装成可分发的形态）：
+ *
+ *   · `.next/standalone/.next/static` **不存在** —— 页面 HTML 照出（SSR），而
+ *     `/_next/static/chunks/*` 全 404、MIME 是 `text/plain`，脚本与样式被浏览器拒绝
+ *     执行 ⇒ **整个前端不 hydrate**，交互类断言全部 5s 超时；
+ *   · `server.js` 启动即 `chdir(__dirname)`，于是 `DATABASE_URL` 的 `./db.sqlite`
+ *     落到 `.next/standalone/db.sqlite` —— 一个**空库**，而 23 张表在检出根
+ *     （`pnpm db:push` / `dev.mjs` / CI 的建库那一步建的）。现场是
+ *     `/api/health` 报 `db: "empty"`。
+ *
+ * 所以「谁在起这份产物」这件事在**仓库检出**里只有 `next start` 一个正确取值；
+ * standalone 入口是**桌包链**的事（`standalone-runtime.mjs`，那边有完整载荷、
+ * 静态资源与数据锚点都由它自己给）。 */
 const invocation = pnpmInvocation([
   "exec",
   "next",

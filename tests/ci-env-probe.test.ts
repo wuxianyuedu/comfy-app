@@ -42,6 +42,10 @@ import {
   stageBlockIn,
   stageEnvValue,
 } from "../scripts/ci-env-probe.mjs";
+/* 每个 stage 现在都以 `node scripts/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
+ * 而下面那条「环境前提点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
+ * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
+import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 import {
   commentedStageBlock,
   ps7OnlySyntaxIn as ps7OnlySyntaxInGate,
@@ -537,7 +541,8 @@ describe("环境前提：流水线上真的在跑它，且排在装依赖之前"
     expect(block, "解析不出「环境前提」那一步的 script").toBeTruthy();
     const command = String(block).trim();
     /* ⚠️ 脚本那一行的开头**已经不一定**是 `node …`（2026-10-16 起每个 stage 都在
-     * 前面挂一句 `[Console]::OutputEncoding=…`，见 `.cnb.yml` 头注第 6 条）：
+     * 前面挂一句 `[Console]::OutputEncoding=…`，外面还包着 `ci-cp936-exit.mjs`
+     * —— ISSUE #1977 的 CP936 出口；`unwrapCp936()` 剥掉最后那一层）：
      * 平台的 stage shell 是 PowerShell，它默认按 CP936 解子进程的 UTF-8 输出，
      * 于是所有中文日志在平台侧都是乱码。所以这里判「这一段命令里点到的是哪个入口」，
      * 而不是「它是不是从第一个字符就开始」（那是排版，不是接线）。 */
@@ -545,7 +550,9 @@ describe("环境前提：流水线上真的在跑它，且排在装依赖之前"
       command,
       "「环境前提」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会全是乱码",
     ).toContain("[Console]::OutputEncoding");
-    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(command)?.[1];
+    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(
+      unwrapCp936(command),
+    )?.[1];
     expect(entry, `解析不出「环境前提」点名的入口：${command}`).toBe(
       "scripts/ci-env-probe.mjs",
     );

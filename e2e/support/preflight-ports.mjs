@@ -137,3 +137,98 @@ export function decodePreflight(raw) {
     return null;
   }
 }
+
+/* ── 上一轮留下的替身：**认出来、收掉**，而不是让 Playwright 抛一句看不懂的错 ──
+ *
+ * ## 它修的那一格（平台的 `E2E 关键流程` 第二次真跑到最后一步时的现场）
+ *
+ * `cnb-ooc-1k52laqqh` 那一跑，E2E 的日志**第一次露出来**（CP936 外壳修好了），
+ * 而它红在一句 Playwright 自己的话上：
+ *
+ *     [e2e-run] 起 Playwright 前：应用端口 空 / 替身端口 有人
+ *     Error: http://127.0.0.1:18188/system_stats …（Playwright 报的「已有人应答」）
+ *
+ * （后半句是 Playwright 给的两条出路：确认那个口上没人在跑，或把
+ * `reuseExistingServer` 设成 true —— 本档两条都不能采纳，见下。）
+ *
+ * 两件事并排摆着，读法没有第二种：
+ *   · pre-flight 探到**替身端口在起 Playwright 之前就有人**（不是本轮自己起的）；
+ *   · 而 CI 档 `reuseExistingServer` 是 **false**，于是 Playwright 在探测到「这个 URL
+ *     已有人应答」时**直接抛**，连 `globalSetup`（那条会说清「谁在那儿」的路）都到不了。
+ *
+ * 占位者是从哪来的？同一台自托管节点（`orange-connector`）上**上一跑**的替身 ——
+ * 替身进程在 Playwright 的 webServer 里是**孙子进程**（`shell: true` 让它挂在
+ * 一层 shell 下面），流水线被取消 / 被杀时那一跳收不到 teardown 信号，节点是复用的，
+ * 下一个 build 就撞在它上面。实测那一跑的 15 分钟前是 `cnb-02o-1k52kenip`（同一节点、
+ * 同一条命令、23s 即红），中间还夹着两条 `cancel` 的构建。
+ *
+ * ## 处置：**认出「是我们自己的上次留下的」才收**，收完把结论重算一遍
+ *
+ * 「替身端口被占」有两种完全不同的情形，而它们的正确动作相反：
+ *   · **我们自己的残留**（上一跑漏下的 `fake-comfyui-server.mjs`）⇒ 收掉它、继续跑；
+ *   · **别人的东西**（另一份检出正在跑 e2e、或有人把 ComfyUI 配到了这个口）⇒ 绝不碰，
+ *     话术照旧把出口给出来（`describeSlotConflict`）。
+ *
+ * 所以判据是**两条互不兜底的证据**，缺一不可：
+ *   ① **命令行点名了本仓的替身脚本**（`e2e/support/fake-comfyui-server.mjs`）——
+ *      这是「它是什么」；
+ *   ② **它答出来的 `/system_stats` 是替身的形状**（`ram_total === 1`、`devices: []`，
+ *      见 `isFakeComfyuiPayload`）—— 这是「它此刻真是那个东西」。
+ *
+ * ⚠️ 只判 ①（命令行）不够：`sh -c "node e2e/support/fake-comfyui-server.mjs"` 这种
+ * 形态在**别的检出**里长得一样，而 §1.4 的多检出并行保护要求「拿不准就不动别人的进程」。
+ * 只判 ②（形状）也不够：一个**已经半死**的替身可能答不出形状，而它照样占着端口。
+ * 两条一起才是「这就是我们上一跑漏下的那个」。
+ *
+ * **只在 CI 档生效**：本地跑 e2e 时 `reuseExistingServer` 为真，Playwright 会**复用**
+ * 那个替身（`globalSetup` 会如实说「已在运行（复用）；它的 history 带着上一轮的产物」）
+ * —— 那是本地刻意留的方便，不该被这一步悄悄改成「杀掉重启」。平台上不存在「复用」
+ * 这条路（`reuseExistingServer: false`），残留只会让整格红，所以那里才需要收。
+ */
+
+/** 本仓替身脚本的路径片段（命令行判据 ①）—— 与 `playwright.config.ts` 的 webServer
+ *  `command` 同一处落点，改那一行时这一行跟着改（`tests/e2e-fake-comfyui-endpoint.test.ts`
+ *  判两处一致）。 */
+export const FAKE_SERVER_SCRIPT = "e2e/support/fake-comfyui-server.mjs";
+
+/** 命令行是不是**本仓的替身服务**（判据 ①；只答「它是什么」，不答「能不能收」）。
+ *
+ * 归一化反斜杠并小写：Windows 上那条命令行是 `node e2e/support/…` 或
+ * `node e2e\support\…` 两种都真实存在。
+ *
+ * @param {string} cmdline
+ * @returns {boolean}
+ */
+export function isFakeServerCmdline(cmdline) {
+  const text = String(cmdline ?? "")
+    .replace(/\\/g, "/")
+    .toLowerCase();
+  return text.includes(FAKE_SERVER_SCRIPT.toLowerCase());
+}
+
+/** 这一档的收尾结论。
+ *
+ * @typedef {{reclaimed: number[], foreign: number[], free: boolean}} ReclaimResult
+ */
+
+/**
+ * 端口上那些占位者里，哪几个是**我们自己的替身**（两条证据都要）。
+ *
+ * 纯函数：两条证据都**已经取好**再喂进来（`cmdlineOf` 查表、`answersFake` 查表），
+ * 所以这条判据能被直接断言，不必真起一个进程、也不必把它做成异步（同
+ * `classifyFakeSlot` 的处置：怎么取是调用方的事，判什么在这里）。
+ *
+ * @param {number[]} pids
+ * @param {{
+ *   cmdlineOf: (pid: number) => string,
+ *   answersFake: (pid: number) => boolean,
+ * }} evidence
+ * @returns {number[]}
+ */
+export function pickOwnFakePids(pids, evidence) {
+  return pids.filter(
+    (pid) =>
+      isFakeServerCmdline(evidence.cmdlineOf(pid)) &&
+      evidence.answersFake(pid),
+  );
+}

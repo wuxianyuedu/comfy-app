@@ -713,6 +713,30 @@ export interface ResolvedInvocation {
  * `resolved: false` 表示「PATH 上查无此命令」——**不改写 `command`**，调用方
  * 据此给出可读出口（说清「找不到这个命令」与去过 PATH 找过），而不是把一个
  * 裸名字丢给 spawn、拿回一句信息量很低的 ENOENT。
+ *
+ * ## ⚠️ 探针**不拿 `args` 去起**（ISSUE #1977 第八轮）
+ *
+ * 上一层（`usableCommand` / `commandInvocation`）判「这个候选起不起得来」的方式是
+ * **真起一次**，而它喂的参数就是这里的第二入参。于是「调用方要跑什么」与「探针喂什么」
+ * 被合成了一件东西 —— 后果是**探针把真命令整条跑了一遍**：
+ *
+ *   · `resolveCommandInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])`
+ *     ⇒ 探针真的起了一次 `node scripts/e2e-run.mjs --grep=@critical`（`stdio: "ignore"`、
+ *     30s 上限），Playwright 的 webServer（`pnpm start` + 假 ComfyUI）随之被拉起来；
+ *   · `spawnSync` 超时**只收直接子进程**，那些孙子进程留在端口上接着跑 —— 真那一跑
+ *     再起来时撞见「端口已有人应答」，而这一步的结论被读成「解析成功」；
+ *   · 更大的形态：`.cnb.yml` 里每一条 `node scripts/…` / `pnpm run build` 都在
+ *     **被执行两遍**（一遍探针、一遍真跑），`pnpm install` 那一格尤其危险
+ *     （探针把安装砍在半路，留下残缺的 `node_modules`）。
+ *
+ * 判据是**探针参数与调用参数解耦**：探针恒用一条**廉价、无副作用**的参数
+ * （默认 `["--version"]`；`usableCommand` 只读 `error.code`，非零退出也算「起得来」，
+ * 所以 `--version` 退非零的形态不会被误判）。第二入参因此在语义上只剩一件事 ——
+ * **拼进最终命令行**，一个字节都不改写。
+ *
+ * 需要**带宿主参数**才能应答的候选（`py` 启动器那种：裸 `py --version` 是「列出
+ * 已装版本」并退非零）走 `probeArgs` 显式给 —— 那是 `python-resolve.ts` 那条链的
+ * 事，它直接调 `whichCommand()`，不经过本函数。
  */
 export function resolveCommandInvocation(
   file: string,
@@ -721,11 +745,12 @@ export function resolveCommandInvocation(
     env = process.env,
     platform = process.platform,
     probe = realUsabilityProbe,
+    probeArgs = ["--version"],
   }: WhichCommandOptions = {},
 ): ResolvedInvocation {
-  const candidate = whichCommand(file, { env, platform, probe });
+  const candidate = whichCommand(file, { env, platform, probe, probeArgs });
   if (!candidate) return { command: file, args, resolved: false };
-  const usable = usableCommand(candidate, args, { env, platform, probe });
+  const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
   // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
   // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
   return usable.ok

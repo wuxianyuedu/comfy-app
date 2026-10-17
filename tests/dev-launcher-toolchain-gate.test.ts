@@ -984,7 +984,11 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       if (rel === "scripts/launcher-core/shell.mjs") continue;
       const raw = fs.readFileSync(abs, "utf8");
       // 注释里会**引用**旧写法作反面说明，判据只看代码（与 dev.mjs 那条同口径）。
+      // **块注释也要剥**：`/** … */` 里的举例会被逐行扫成「真写了这句」
+      // （`scripts/ci-cp936-exit.mjs` 头注里就有 `spawn("pnpm")` 这种反面举例，
+      // 只剥 `//` 会让本判据把它判成违规）。先剥 `/* … */` 再剥行注释。
       const code = raw
+        .replace(/\/\*[\s\S]*?\*\//g, "")
         .split("\n")
         .map((line) =>
           line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"),

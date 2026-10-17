@@ -1481,19 +1481,34 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
     const browserSrc = readFileSync(browserProbe, "utf8");
     writeFileSync(backup, browserSrc);
     try {
+      /* ⚠️ 三处补丁都是按源码**原文**替换的（`String.replace` 不匹配时**静默
+       * no-op**），而 `ci-toolchain-browser.mjs` 会变 —— 实测过一次：`install` 那处
+       * 在 `runPlaywrightInstall({` 多行化之后就没再匹配上，于是这一条不再判
+       * 「退出码转没转出去」，退化成「这台机器装没装浏览器」（多数机器装得上 ⇒
+       * **照样绿**）。所以三处各自判一次「真的改了」，缺一即红。 */
       writeFileSync(
         browserProbe,
         browserSrc
-          // ① 装那一步假装成功（不动真落点、不下 100MB）
+          // ① 装那一步假装成功（不动真落点、不下 100MB）。
+          //    ⚠️ 锚点取**调用开头那半句**（后面是换行的参数列表），
+          //    把 `runPlaywrightInstall({` 到它闭合的那一段整块换掉。
           .replace(
-            "  const install = runPlaywrightInstall({ find, exec, env, probe, pickRoots });",
-            '  const install = { ok: true, out: "(probe: 假装 install 退 0)" };',
+            /  const install = runPlaywrightInstall\(\{[\s\S]*?^  \}\);\n/m,
+            '  const install = { ok: true, out: "(probe: 假装 install 退 0)" };\n',
           )
           // ①′ 「已装就跳过下载」那一支也要让开：它按**真落点**判，而这一条的现场
           //     恰恰是「install 报成功、二进制不在盘上」—— 不让开的话它会先返回 0。
           .replace(
             "  const already = browserExecutableExists({ env });",
             "  const already = { ok: false, out: '(probe: 不跳过)' };",
+          )
+          // ①″ **自取成功那一支的提前返回**同病、更隐蔽：它同样按**真落点**判。
+          //     本仓的 Linux 检出与自托管节点都可能**预装**了那一件，于是自取一「成」
+          //     它就当场返回 0 —— 补丁只打在 `already` 上时，这一条的现场被它顶掉
+          //     （实测：`STATUS: 0`，而输出停在「自取成功：已就位」）。
+          .replace(
+            "  if (seeded.ok && browserExecutableExists({ env }).ok) return 0;",
+            "  if (false && seeded.ok && browserExecutableExists({ env }).ok) return 0;",
           )
           // ② 复验指向一个空落点 ⇒ 「退 0 但没落地」那一态
           .replace(
@@ -1503,6 +1518,32 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
             )} } });`,
           ),
       );
+      /* **反向复算**：三处（installation / 两处早退）都必须真的落到盘上。
+       * 少了任何一处，这一条就变成在测「这台机器装没装浏览器」——那是**恒真**的。 */
+      const patchedSrc = readFileSync(browserProbe, "utf8");
+      const planted: Array<[string, (s: string) => boolean]> = [
+        [
+          "安装那一步（①）",
+          (t) => t.includes('const install = { ok: true, out: "(probe'),
+        ],
+        [
+          "「已装就跳过」（①′）",
+          (t) =>
+            t.includes("const already = { ok: false, out: '(probe: 不跳过)' }"),
+        ],
+        [
+          "自取成功那条早退（①″）",
+          (t) =>
+            t.includes("if (false && seeded.ok && browserExecutableExists"),
+        ],
+      ];
+      for (const [label, hit] of planted) {
+        expect(
+          hit(patchedSrc),
+          `补丁「${label}」没落到盘上 —— 这一条会退回成「这台机器装没装浏览器」` +
+            "（那多半是装得上的，于是它**照样绿**）",
+        ).toBe(true);
+      }
       /* 子进程跑**真**的那个入口（它 import 的是补过的那份 browser 模块）。 */
       writeFileSync(
         probe,

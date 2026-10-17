@@ -1,0 +1,457 @@
+## Fixed
+
+- **平台侧日志的中文乱码：把「子进程那一跳」按 CP936 出口，而不是继续钉控制台设置**
+  （ISSUE #1977，用户截图那一行是 `Python 探针读数` 的 `ok  python --version  →  …`）。
+
+  ## 一、为什么不是「再钉一次控制台编码」
+
+  #1959 起每个 stage 都以 `$enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;`
+  开头（`scripts/ci-console-encoding.mjs`），而乱码一个字没少。三轮读数把机器侧的两个
+  嫌疑人**依次否掉**：控制台输出代码页 936 → 65001（探针三行逐字未变）、宿主 ANSI
+  代码页也换成 UTF-8 并重启过（探针四行仍然逐字未变）。同一份日志里还有一组硬对照：
+
+  - **runner 自己打的行**（`script` 原文回显）**是完好中文**；
+  - **子进程输出的每一行**都是「UTF-8 字节按 CP936 解」。
+
+  ⇒ 解码发生在**子进程输出那一跳**，用的是**不与宿主设置联动的 CP936**。
+  仓侧只剩一条路：**让每个字节以 CP936 出口**。
+
+  ## 二、出口怎么走：`scripts/ci-cp936-exit.mjs`
+
+  新增一个**一层包壳**：起那条命令、把它的输出交给 PowerShell 以 936 重发、再把它
+  的退出码原样转出去。
+
+      node scripts/ci-cp936-exit.mjs -- <命令> [参数...]
+
+  三个要点都不是风格：
+
+  - **顺序是两段，不是一段**：PowerShell 先按 **UTF-8 读对**子进程的输出（这一半由已
+    钉的 65001 保证），再按 **CP936 写回**。直接 `chcp 936` 会先毁掉解码 —— 拿到的
+    已经是乱码串，再转一次只是把乱码换个编码存下来（规范 §13.5.3.5 那句话）；
+  - **转码必须借 PowerShell**：实测 `new TextEncoder("gbk")` 不抛错但**静默落到
+    UTF-8**，Node 侧编码不出 GBK 字节；而 `TextDecoder("gbk")` 是好的（带全 ICU）——
+    所以「借 PS 编码、用 Node 复核」是这条链能同时成立与被判的原因；
+  - **退出码必须转出去**：外壳吞退出码是本仓踩过的坑
+    （`ci-toolchain-selfcheck.mjs` 的 `main()` 返回值被丢，那两步从来红不了）；
+  - **可执行形态走仓里那一份判据**：本外壳是「包着别的命令起进程」的那一层，而
+    Windows 上 `pnpm` 是 `.cmd` / `.ps1` 垫片 —— Node 直接 `spawn("pnpm")` 给
+    `EINVAL`。§2.1.1 已经为此收了口（`commandInvocation`），所以这里**必须**过它，
+    而不是自己写「Windows 用 pnpm.cmd」（那是第四次踩同一个坑）。
+
+  ## 三、刻意做的边界
+  - **非 Windows 直通**：CP936 是中文 Windows 的事，别处没有这一跳；
+  - **转码失败不假报成功**：PowerShell 起不来时原文照打并说明「日志可能仍是乱码」，
+    退出码仍是子进程的 —— 转码是外壳，它不是判据；
+  - **不做第二份「有没有乱码」的判据**：抓取端怎么解码本进程看不到，能判的只有
+    「字节是 936 编出来的」（`encodeCp936Plan()`）与「退出码转出去了」。
+
+  用例在 `tests/ci-cp936-exit.test.ts`（22 条，含**反算**：Node 的 `TextDecoder("gbk")`
+  解 936 字节回到原文，而同一批字节不转码时正好解出截图里那种 `鈫` 形态）。
+  口径、三轮读数、以及「这个外壳自己第一次上平台炸的那两处」在规范 §13.5.3.5 最后两节。
+
+  ## 三之二、第一次上平台：这条路自己先炸了两处（**本地全绿**）
+
+  外壳落地后平台侧 `工具链自证` 直接红，报的是本文件里的一处**只在 Windows 分支里**、
+  因而 Linux 检出一辈子执行不到的语句：
+
+      TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: buffer
+          at Buffer.from (node:buffer:339:12)
+          at spawnSync (node:child_process:916:29)
+
+  `spawnSync` 的 `encoding` 要的是**编码名字符串**（或 `null` = 要 Buffer），
+  `"buffer"` 不是编码名。**被拒之后自然会改成 `Buffer`，同样被拒** —— 它与字符串
+  一样进 `Buffer.isEncoding` 查表，查不到就在 `Buffer.from(input, encoding)` 那里抛。
+  要 Buffer 输出的唯一写法是 `encoding: null`。两处都已在用例里反向复算
+  （`Buffer.isEncoding("buffer")` / `(Buffer)` 均为 false，且两条在真 `spawnSync`
+  上**都**炸 —— 探针必须真的打一行字，`-e "0"` 是炸不出来的）。
+
+  同一次把这条链上**第二个同类隐患**一并收掉：抓子进程输出那一跳写的是
+  `String(d)`（`d` 是 `Buffer`），而 `buf.toString()` 的默认编码取自
+  `process.stdout` 的 `writableEncoding` —— **在 Windows 上那是宿主代码页
+  （CP936）**。转码链是「先解对、再编回」两段，这里断的是**第一段**：子进程的 UTF-8
+  字节在**进 PowerShell 之前**就已经被解错，后面按 936 编回去只是把乱码换个编码存下来。
+  Linux 的 `process.stdout` 是 UTF-8，**这个 bug 在本机永远不会显形**，所以现在显式
+  `setEncoding("utf8")`，判据钉在「两条流各以 `utf8` 钉过一次」这个形状上。
+
+  第三处是**本地就能踩到、但只在某种调用形态下踩到**的：`runWithCp936Exit` 的
+  production 解析口 `resolve` 的默认值是 `undefined`，靠 `?? commandInvocation`
+  回退；而 Promise executor 的形参**也叫 `resolve`**。一旦取默认值那一句落进
+  executor 里，它就是**恒真的 Promise resolve 函数**，回退整段消失、
+  `spawn(undefined, …)` 当场抛。现在走模块级别名 `resolveCommandInvocation`，
+  并校验解析口交出的形状（报错点不再离真因一整层）。
+
+  ## 三之四、第四次：解析口选错一层，「回退」把裸名字交给了 `spawn`
+
+  修掉上面几条之后 `工具链自证` 转绿（**中文日志已经可读** —— CP936 出口那一步成立），
+  红的位置往下走到 `Install dependencies`：
+
+      [cp936-exit] 起不了这条命令：pnpm
+
+  `.cnb.yml` 那一行包的是**一个名字**（`-- pnpm install --frozen-lockfile`），而外壳用的
+  是 `commandInvocation()` —— 那一层的契约是「**候选路径** → spawn 形态」，解析不出来时
+  **原样退回候选**。对盘上的一条路径那是忠实的，对 `pnpm` 这种名字却等于把
+  `spawn("pnpm")` 扔给 Windows（`ENOENT`）。**「回退」在这里不是保守，是把判据的对象
+  换成了注定失败的那一个。**
+
+  改用同文件的兄弟 `resolveCommandInvocation()`：收**名字**、交
+  `{command, args, resolved}`，并用 `resolved: false` 把「PATH 上查无此命令」变成
+  **可读出口 + 127**（一条进程都不起），而不是丢一句信息量很低的 ENOENT。
+
+  实测对照（假 PATH + corepack 三形态 + `EACCES` 判无扩展名 shim）：
+  `commandInvocation` 回 `"pnpm"`（裸名字，必 ENOENT），
+  `resolveCommandInvocation` 回一个真路径。这也是「本地绿不是证据」的第二个样本 ——
+  Linux 上两条解析口结论一样，差别只在 Windows 的候选表上显形。
+
+  ## 三之五、第五处：同一处理但**对象有两类** —— 路径不该拿去问 PATH
+
+  `Install dependencies` 转绿后，红走到 `类型检查`：
+
+      [cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc
+
+  `resolveCommandInvocation()` 是**纯 PATH 查找**，而 `.cnb.yml` 的 stage 里
+  **两种都真实存在**：`node_modules/.bin/tsc` / `scripts/check-*.cjs` 是**路径**，
+  `pnpm` / `node` 是**名字**。对一条相对路径，PATH 查找当然答 `resolved: false` ——
+  那不是「找不到」，是**这条不该问 PATH**。把两者混作一谈，上一处刚补的
+  「查无此命令即拒」就把**该保守的方向用反了**（判据从「不许把裸名字丢给 spawn」
+  退化成「不许用路径」）。
+
+  修法（**两半**，缺一不可）：外壳自己判「路径 or 名字」（含 `/` 或 `\` 即路径，
+  **不判它存不存在**），然后按对象分派 ——
+
+  - **名字** → PATH 查找 + 形态（`resolveCommandInvocation()`）；
+  - **路径** → **不查 PATH**，但仍要**过分态判据**（`commandInvocation()`）：先
+    `path.resolve` 绝对化，再由它把同目录的 `.ps1` 回退找出来。
+
+  ⚠️ 第二半不是可有可无的锦上添花：只做第一半（「路径原样交给 `spawn`」）只解决了
+  **误报**，命令在 Windows 上**照样起不来** —— pnpm 给 `node_modules/.bin/<工具>`
+  摆的三个垫片（`.cmd` / `.ps1` / 无扩展名 shim），Node 一个都起不了（`.cmd` 只有
+  cmd.exe 解释、shim 是 shebang），而这三个是 `.cnb.yml` 里 `node_modules/.bin/tsc`
+  与三条 `vitest` 真实要用的形态。**「不问 PATH」回答的是「该问谁」，「过形态判据」
+  回答的是「怎么起」—— 两个问题。**
+
+  与上一处合起来是同一句话的两面：**「回退」与「拒绝」都要先认清对象是谁。**
+
+  ## 三之六、第六处（判据的边界）：**注入面能盖住「实现写错了」，盖不住「接错线了」**
+
+  前五处都是「实现写错了」，而判「解析口改对了」的那些用例**全都注入 `resolve`** ——
+  注入面是个「输入什么就交回什么」的假实现，于是下面三类错法在它下面**全部看不出来**：
+
+  - **接错线了**（默认值写错、或压根没接上）；
+  - **只覆盖了一半形状**（第五处的路径那一半——上一处的用例全用裸名字当输入）。
+
+  所以新增的判据里有两条**不注入 `resolve`**，判的就是那两件注入面看不见的事：
+  「默认解析口真的接在编排上」（反向复算：换回裸名字透传，当场报
+  `expected [ 'pnpm' ] to deeply equal [ '/tmp/…/pnpm' ]`）与「路径真的过分态判据」
+  （反向复算：退回「原样透传」，两条当场点名）。用例 25 → 27 条。
+
+  一句话：**注入面能盖住「实现写错了」，盖不住「接错线了」与「只覆盖了一半形状」。**
+
+  ## 三之八、一句**警告**被读成了「拒绝」—— 换入口那一改反而把 E2E 全档弄红
+
+  外壳那几处修完，日志终于有内容了，于是 E2E 那一格把它的**第一行**输出说出来了：
+
+      [WebServer] ? "next start" does not work with "output: standalone" configuration.
+                   Use "node .next/standalone/server.js" instead.
+
+  当时把它读成「Next 16 对这对组合是**明确拒绝**的」，于是给 `scripts/start.mjs`
+  加了「盘上有 `.next/standalone/server.js` 就走它」的分支。**那是一句 `⚠` 警告，
+  不是拒绝** —— 实测 `next start` 照常起（`✓ Ready in 119ms`）、静态资源 200、
+  `/api/health` 报 `db: "up"`；那句话之后 E2E 的红也不是它（见下一条）。
+
+  而换到 standalone 入口之后，E2E **几乎全档红**、每条都在 5s 超时 —— 因为
+  **仓库检出里的 standalone 载荷是不完整的**（它只由 `build-desktop.mjs` 组装成
+  可分发的形态）：
+
+  - `.next/standalone/.next/static` **不存在** ⇒ `/_next/static/chunks/*` 全 404、
+    MIME 是 `text/plain` ⇒ 浏览器拒绝执行 ⇒ **整个前端不 hydrate**，
+    交互类断言全线超时（实测：`打开应用日志面板可看到面板标题` 报「element(s) not found」，
+    而页面 HTML 是好的 —— 那是 SSR 出来了、JS 没跑）；
+  - `server.js` 启动即 `chdir(__dirname)` ⇒ `DATABASE_URL` 的 `./db.sqlite` 落到
+    `.next/standalone/db.sqlite` —— 一个**空库**（实测 0 张表），而 23 张表在检出根
+    （`pnpm db:push` / `dev.mjs` / CI 的建库那一步建的）⇒ `/api/health` 报 `db: "empty"`。
+
+  **这条链上真正要守的是「别把检出当桌包」**：`next start` 是仓库检出里唯一的正确
+  取值；standalone 入口是**桌包链**（`standalone-runtime.mjs`）的事 —— 那边有完整
+  载荷，静态资源与数据锚点也由它自己给。
+
+  `scripts/start.mjs` 已退回 `next start`（并就地写明这段来历），
+  `tests/standalone-runtime-completeness.test.ts` 那一组**反向**钉住：
+  不许出现 `useStandalone` / `[standaloneServer]` / `buildStandaloneRuntimeEnv(`
+  这三样。实测 `CI=1 node scripts/e2e-run.mjs --grep=@critical` ⇒ **73 passed（36.7s）**。
+
+  > 这一处与前九处同源，但方向相反：前面几处都是「结论到不了人手里」，而这一处是
+  > **结论到了、被误读了** —— 一句 `⚠` 与一句 `Error:` 在日志里只差一个符号，
+  > 而按错的那一个改下去，代价是整档 e2e 从「能跑」变成「全红」。
+  > 判据因此钉在**「不许换入口」**上，而不是「换入口之后要补齐产物」——
+  > 后者等于把桌包链的组装搬进检出，那是另一件工程。
+
+  ## 三之三、这三条判据的**边界**
+
+  · **判不到**「平台侧读出来可不可读」—— 解码在本进程之外；
+  · **判得到**的因此是「字节对不对」与「编排对不对」，两者都靠**形状 + 真跑一次**
+  落地：`String(d)` / `encoding: "buffer"` 这两处在 Linux 上执行不到，所以
+  `writeCp936` 开了第三个注入面 `spawnImpl`（前两个是 `platform` / `run`），
+  让「真实现起的是什么、传了什么值」在本地就能判；
+
+  ## 四、顺带修掉一条**已空转的判据**（它的绿不是「判过了」）
+
+  `tests/ci-toolchain-selfcheck.test.ts` 的「`--playwright-only` 判不过时退出码是 1」
+  用**按源码原文 `String.replace` 打补丁**的方式造现场，而那份源码会变：`install`
+  那处在 `runPlaywrightInstall({` 多行化之后就没再匹配上（`replace` 不匹配时**静默
+  no-op**）。剩下的两处补丁指不回**自取成功那条早退**（它也按**真落点**判），于是
+  在**预装了那件浏览器的机器上**（本仓 Linux 检出、自托管节点都算）自取一「成」就
+  当场 `return 0` —— 这一条不再判「退出码转没转出去」，退化成「这台机器装没装浏览器」，
+  而它**照样绿**。CI 上之所以没露出来，只是因为那台节点没预装。
+
+  修法两步：补上第三处补丁（那条早退），并加一条**反向复算** —— 三处补丁各自判一次
+  「真的落到盘上了吗」，缺一即红（已按「把补丁摘掉」复算过，当场点名）。
+
+  ## 三之七、第七处：起不来那条出口**没有真因**（第四轮的现场）
+
+  第四轮外壳把命令起成了一条**拼错的两段命令**（`npx tsc` 当成一个文件名），平台侧
+  只拿到一句：
+
+      [cp936-exit] 起不了这条命令：node_modules/.bin/npx tsc --noEmit
+
+  「两条命令被当成了一条、盘上没有那个文件」这件事，**从这个出口上读不出来**。
+  而它本来就不该读不出来 —— 前一处刻意选的方向是「路径不进 PATH 查找，让盘自己回答」，
+  于是 `resolved: true` 只表示「调用方写的是路径」，**不表示它在盘上**；「盘说没有」
+  这一格的结论全在 `child.on("error")` 的 `err` 上，而那条出口把 `err` 整个丢掉了。
+
+  现在 `formatSpawnFailure()` 把三样东西一起打出来，各自回答一个问题：
+
+  - **`err.code`** —— `ENOENT` 是「盘上没有这件东西」（名字 / 入参对不上），
+    `EACCES` / `EINVAL` 是「有，但起不来」（Windows 上那是批处理 / shim 形态，
+    处置见 §2.1.1）。两类要做的动作完全不同，压成一句「起不了」就只能靠试；
+  - **解析口交回的绝对路径**（只在解析真的发生过时才多打一行）—— 一行
+    `module.exports` 的 shim 与真可执行文件，看路径一眼就知道；
+  - **当前目录 + 调用方的原文** —— 相对路径是相对**谁**的（stage 的工作目录由平台给，
+    本壳看不到），不写出来只能猜。
+
+  判据两条（`tests/ci-cp936-exit.test.ts` 27 条，**三处都反向复算过**：退回旧出口、
+  把两类失败码的措辞压成一句、去掉当前目录，各自当场红）：一条判**措辞**（ENOENT 与
+  EACCES 的结论必须分开、cwd 要在、没解析时不打「通过解析口起的」），一条判**这条出口
+  真的走得到**（起一条不存在的相对路径，断言回 `ENOENT` 与那段原文 —— 这一格在 Linux
+  上判得动，错误码与 Windows 上的现场同形）。
+
+  ## 三之八、判据本身的一处**误报**：块注释里的反面举例被读成「真写了这句」
+
+  `tests/dev-launcher-toolchain-gate.test.ts` 那条「由 Node 起 pnpm 一律经形态判据」
+  的扫描器只剥 `//` 行注释、**不剥块注释**：
+
+      const code = raw
+        .split("\n")
+        .map((line) =>
+          line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"),
+        )
+        .join("\n");
+
+  而 `scripts/ci-cp936-exit.mjs` 的头注（`/** … */`）里正好拿 `spawn("pnpm")` 当**反面
+  举例** —— 块注释的每一行都以 `*` 起头，上面的剥法一条都匹配不上，于是判据把一个
+  注释里的引文读成「这个文件真写了这句」，点名 `scripts/ci-cp936-exit.mjs: 直接起 pnpm`。
+
+  这一条此前一直没露出来，有两个各自独立的原因：平台侧停在 `类型检查` 前面几步；
+  而 `scripts/base-check/hook-steps.mjs` 里同形态的引文，则被「该文件**别处**用了
+  `runPnpmSync`」这一巧合遮住（判据是「有没有裸起 pnpm」**且**「有没有走共享判据」，
+  后者为真就整体放行）。
+
+  修法是把剥注释补齐 —— 先剥 `/* … */` 再剥行注释，与仓里已有的同类实现
+  （`scripts/lib-node-only-scan.mjs` / `check-dead-exports.cjs` 的 `stripComments`）
+  同口径。**不动 `ci-cp936-exit.mjs`**：它确实复用了同一处形态判据，判据该改的是
+  自己的读法，不是把正确代码改成判据认得的形状。
+
+  反向复算：在真代码里写一句 `spawnSync("pnpm", …)`，这条判据照旧当场点名 ——
+  剥掉的只是注释，不是判据本身。
+
+  ## 三之九、第九处：转码「成功」时**输出被吞了**（第五轮的现场）
+
+  第五轮 `类型检查` 已在 21s 内转绿（**前两处修的那两半都成立**），红往下走到
+  `生成态文档与源同步` —— 而这一步的日志里**一个字都没有**：
+
+      Runner[…]$ node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check
+      Finished, code: 1, duration: 4.5s
+
+  **「输出被吞」与「这条命令本来就不打字」在日志上完全同形**，读的人连它红在哪一步都
+  分不出来，而本地那一档是绿的。根因在 `writeCp936` 的默认实现：
+
+      spawnSync(cmd, args, { input, encoding: null })
+
+  那个 `null` **是对的**（要 Buffer 输出的唯一写法），可它同时意味着 `spawnSync` 的
+  `stdio` 仍是默认的 `pipe`：PowerShell 编好的那批 **936 字节确实是对的**，却落进
+  `r.stdout` 这个 Buffer，然后**整份丢掉**。「转码是外壳」这句话在这里被执行成了
+  **吞掉被包命令的输出** —— 而它本来要保证的恰好是「原文能到日志里」。
+
+  修法：`stdio: ["pipe", "inherit", "inherit"]` —— **只把 stdout / stderr 接出去，
+  stdin 必须留在管道上**（默认值与编排那一侧显式传的那一句同改；只改一边就是
+  「默认对了而编排没带上」）。
+
+  ⚠️ 第一版修成了 `stdio: "inherit"`（一个字符串），结果是**平台日志仍然一个字都没有**
+  （`E2E 关键流程`：退出 1、日志零行）：它是一句「三路都别再管」的话，配 `input` 用时
+  会把那份 UTF-8 原文**静默丢掉**（stdin 变成真终端），PowerShell 的
+  `[Console]::In.ReadToEnd()` 读到空串。**「标准输出落日志」与「整个 stdio 都别管」
+  是两句话，而后者在形状上与前者长得几乎一样。**
+
+  ⚠️ 这一格**Linux 上永远判不到**（非 Windows 直接 return，Windows 分支本地跑不了真
+  PowerShell），所以判据钉在**形状**上、三条互补：默认实现交出去的那三路、编排真的把
+  它带上了、以及**这个形状真能用**（拿 `process.execPath` 假冒 PowerShell 跑一遍 ——
+  `spawnSync` 的 stdio 语义与平台无关，这条在 Linux 上判得动）。用例 29 → 32 条。
+
+  > 这一处与第四轮那次「两条命令被当成一条」是**同一类病的两面**：那一处的出口
+  > **说得太少**（读不出真因），这一处的出口**一个字都不说**（输出整份被吞）。
+  > 两次都不是「判据错了」，而是**判据的结论到不了读日志的人手里**。
+
+  ## 三之十、同一份日志的**另一条线索** —— 上一跑漏下的替身占着端口
+
+  **这一处与乱码、也与上一处（`standalone` 那个入口）无关**，是同一次红里**并排**摆着的
+  另一行。pre-flight 读的是**本轮之前**的真实世界状态，它说的是「起 Playwright 之前替身
+  端口就有人」—— 与 `pnpm start` 起不起得来无关（应用端口那一栏同时报的是「空」）；
+  替换 `start.mjs` 的入口不会让那个占位者消失。
+
+  它是那一格第一次真跑到最后一步时暴露出来的（`cnb-ooc-1k52laqqh`）—— CP936 修好之前，
+  这一步是「退出 1、日志零行」（输出被吞），修好之后日志第一次露出来：
+
+      [e2e-run] 起 Playwright 前：应用端口 空 / 替身端口 有人
+      Error: http://127.0.0.1:18188/system_stats is already used, make sure that
+             nothing is running on the port/url or set reuseExistingServer:true
+
+  两件事并排摆着，读法没有第二种：pre-flight 已经说了「**起 Playwright 之前**替身端口
+  就有人」（不是本轮自己起的），而 CI 档 `reuseExistingServer` 是 `false` ⇒ Playwright
+  在探测到「这个 URL 已有人应答」时**直接抛**，连会说清「谁在那儿」的 `globalSetup`
+  （`describeSlotConflict` 的两条出口）都到不了。
+
+  占位者是**同一台自托管节点上上一跑漏下的替身**：它在 Playwright 的 webServer 里挂在
+  `shell: true` 那一层下面（是孙子进程），流水线被取消 / 被杀时收不到 teardown 信号，
+  而节点是复用的 —— 那一跑的 15 分钟前是同一条命令、同一节点（`cnb-02o-1k52kenip`，
+  23s 即红），中间还夹着两条 `cancel` 的构建。
+
+  处置：**认出「是我们自己的上次留下的」才收**，收完把 pre-flight 结论重算一遍。
+
+  - 新增 `e2e/support/reclaim-ports.mjs`，`scripts/e2e-run.mjs` 在 `spawn` Playwright
+    **之前**调它（`if (env.CI && preflight.fakeOccupied)`）；
+  - 判据是**两条证据、缺一不可**：命令行点名本仓的 `e2e/support/fake-comfyui-server.mjs`
+    （它**是什么**）**且** 它此刻答出来的 `/system_stats` 是替身形状
+    （`isFakeComfyuiPayload`，即 **它此刻真是那个东西**）。只判命令行会把**别的检出**正在
+    跑的替身误当成残留并杀掉（§1.4 多检出并行保护）；只判形状则收不了一个半死的替身
+    （它照样占着端口）。**两条都不满足时一个进程都不动**，退回原来的话术；
+  - 回收走 AGENTS 硬规则 3 的**唯一出口** `killProcessTree`（`launcher-core/port-reap.mjs`
+    的 `reapProcessTree`，杀**整棵树**）—— 单杀 leader 会把 `shell: true` 下面那层 node
+    留下、端口照样占着；
+  - 端口空着时**零代价**（一条子进程都不起、一次 fetch 都不发）；`/system_stats` 也只对
+    「命令行走形的那几个」才探。
+
+  ⚠️ **只在 CI 档生效**：本地 `reuseExistingServer` 为真，Playwright 会**复用**那个替身
+  （`globalSetup` 会如实说「已在运行（复用）；它的 history 带着上一轮的产物」）—— 那是本地
+  刻意留的方便，不该被这一步悄悄改成「杀掉重启」。
+
+  判据在 `tests/e2e-reclaim-own-fake-port.test.ts`（14 条）：两条证据各自的**反面**
+  （命令行像但 payload 不像、payload 像但命令行不像）都不收、端口空着不收、
+  认不出时如实报出 PID、`/system_stats` 只对走形的那几个才探、回收交出去的契约
+  （`pid` + `force` + `detached`）、以及**接线在位**三条（在 `spawn` 之前、有 CI 档守卫、
+  收完重算 pre-flight —— 最后那条按**相对位置**判，删掉重算那一行当场红）。
+
+  ## 三之十一、日志**攒到 `close` 才发** —— 长跑 stage 被 kill 时**整轮日志一起消失**
+
+  这一处是「三之九」（转码成功但输出被吞）的**邻居**，同一条出口、不同的失效时刻：
+  第七跑 `E2E 关键流程` 跑了 **36 分钟**（`timeout of 2160000ms exceeded`），
+  平台日志里**只有平台自己那一句超时**，`e2e-run` 打的前置读数一行都没有。
+
+  读法没有第二种：`runWithCp936Exit` 原来是把子进程的输出 `chunks.push(...)` 攒起来、
+  在 **`close`** 那个回调里 `chunks.join("")` 发一次。前几跑的 stage 都是**秒级**的
+  —— 命令退出了、`close` 来了、输出就发出去了，看不出任何差别。而长跑的 stage 落到
+  **平台按 stage 墙钟 kill** 时，`close` **再也不会来**：攒了 36 分钟的那份 `chunks`
+  随进程一起消失。**「输出被吞」在长跑这一格上的形态不是「发不出去」，是「发得太晚」。**
+
+  处置：**边到边发**。`splitStreamChunk(carry, chunk)` 把每一块切出**整行**立刻转码 /
+  落盘，行尾那份可能被截断的残余留到下一块 —— 按 `\n` 切而不是按块切，是因为一块可能
+  正好截在多字节字符中间，GBK 是变长的，编出去就是乱码字节。`close` 时补发最后那半行
+  （正常退出时它一定来，它是那一行的终点）。
+
+  - 粒度是**块 / 整行**，不是逐行起 PowerShell：分钟级 stage 上逐行转码会把耗时拖成
+    另一个量级，而这一步要买的只是「别攒到最后」。`flush()` 因此也是「一批整行一次
+    `write()`」；
+  - 转码失败那条提示**只说一次**（`warnedTranscodeFailure`）：它原来是跑完收尾一句，
+    按行发时每行重复一遍会把真输出埋掉；而**每一行的原文照打**不能省 —— 那是转码没做成
+    时唯一还能读的东西；
+  - 判据在 `tests/ci-cp936-exit.test.ts` 新增的一组（6 条，32 → 38）：`splitStreamChunk`
+    的四种切法（整行 / 半行 / 拼接 / 一块里一行都没有）、**第一块到就发出去**（刻意
+    **不触发 `close`**）、半行不算一行、`close` 补发行尾残余、Windows 每块各转一次且
+    `stdio` 仍是 `inherit`、转码失败提示只说一次而原文照打。反向复算做过：把 `data`
+    回调退回「只累加不 flush」，其中 3 条当场红。
+
+  真实现也真跑过一次（Linux，`process.execPath` 起一条子进程，打一行、睡 3 秒、再打一行）：
+  第一行 **+27ms** 到、第二行 **+3030ms** 到 —— 旧写法两行都会在 +3030ms 一起出现。
+
+  ## 三之十二、第八处：探针**把真命令跑了一遍** —— 外壳的解析口在起 _那条命令_ 之前先起了它一次
+
+  第七跑（`cnb-6r3-1k52q61ul`）的 E2E 与上一跑**同一个形态**：36 分钟、零行输出。
+  而那一跑**已经带了「边到边发」那一版**（构建的 sha 就是分支 tip `4f21e2dd`）——
+  ⇒ 前一处修的不是这一格的红。继续往下挖，根因不在 CP936 外壳的**时序**上，在它的
+  **解析口**上：外壳起那条命令之前，会先「确认这个候选在这台机器上起得来」，而那次
+  确认（`usableCommand` 的「真起一次」）喂的参数，**正是那条命令自己的真实参数**。
+
+  于是 `.cnb.yml` 里每一格 `node scripts/…` 都被**执行了两遍**。E2E 那一格最贵：
+
+  - 探针真起了一次 `node scripts/e2e-run.mjs --grep=@critical` —— 它会把 Playwright 的
+    webServer（`pnpm start` = standalone server + 假 ComfyUI）**拉起来**；
+  - `spawnSync` 的超时**只收直接子进程**，那些服务器是孙子进程、留在端口上继续跑
+    （本机真跑一次量过：`spawnSync(…, {timeout: 3000})` 退 `ETIMEDOUT`，而孙子
+    `listening` 的痕迹还在）；
+  - 探针把 `ETIMEDOUT` 读成「没量到」⇒ `usableCommand` 判**可用**（那是 §13.6.2 那条
+    口径的本意）⇒ 真那一跑照常起来，于是**两套 E2E 抢同一个端口**。
+
+  这也是「三之十」那处（上一跑漏下的替身占着端口）**反复出现**的供给侧：制造孤儿进程的
+  不是上一跑，是**本跑的探针**。而它影响的不止 E2E —— `pnpm install --frozen-lockfile`
+  那一格被探针砍在半路是**残缺的 `node_modules`**。
+
+  修法在**地基**上（`src/lib/process/executable-resolve.ts` 的 `resolveCommandInvocation`）：
+  **探针参数与调用参数解耦**。第二入参在语义上只剩一件事 —— 拼进最终命令行，一个字节都
+  不改写；探针恒用一条廉价、无副作用的参数（默认 `["--version"]`，`usableCommand` 只读
+  `error.code`，非零退出也算「起得来」）。需要带宿主参数才能应答的候选（`py -3`）走
+  `probeArgs` 显式给 —— 那是 `python-resolve.ts` 那条链的事，它直接调 `whichCommand()`。
+
+  同一处还有一条**次要但同源**的加固：转码那一步的 `spawnSync` **补上墙钟预算**
+  （`TRANSCODE_TIMEOUT_MS`）。它是同步的、跑在子进程 `data` 回调里 —— 无 `timeout` 就是
+  「挂住就一直挂」，子进程那一侧的管道随即填满、它也卡在 `write()` 上，`close` 永不到来：
+  与「三之十一」同形，但坏在更早的一跳。撞上预算只会退化成既有的「原文照打 + 说明」出口。
+
+  - 判据 `src/lib/process/executable-resolve.test.ts` 新增一条**不注入探针**的用例
+    （真起一次，拿一个「跑起来会留下痕迹」的脚本当那条命令）：解析照旧成立、`args` 原样，
+    而**痕迹文件不存在**。反向复算：把探针参数换回 `args`（旧写法）当场红；
+  - `tests/ci-cp936-exit.test.ts` 新增一条判「转码那一步带墙钟预算」（形状判据 ——
+    落字节那一跳在 Linux 上判不到，理由与该文件既有的 `spawnImpl` 那一组同源）。
+
+  > 八轮下来的形状再记一笔：**每一处修完都只是把红往下推一格**。这一格推出来的不是
+  > 「日志怎么发」，而是「**在起那条命令之前，外壳先起过它一次**」—— 一个取证工具
+  > 自己制造孤儿进程、并且把每一格都跑两遍的缺陷。
+
+  ## 三之十三、替身那一格修好之后，红落到**同一个成因的另一个对象**上
+
+  第十一处（`reclaimOwnFakePort`）把「上一跑漏下的替身」收掉之后，`E2E 关键流程` 又红在
+  同一句话上 —— 这次占的是**应用端口**：
+
+      [e2e-run] 起 Playwright 前：应用端口 有人 / 替身端口 有人
+      [e2e-run] 替身端口 18188 上坐着本检出上一跑漏下的替身（PID …），已回收整棵树
+      Error: http://localhost:3989 is already used, make sure that nothing is
+             running on the port/url or set reuseExistingServer:true
+
+  成因与替身那一格**逐字相同**：两个 webServer（应用 + 替身）都是 Playwright 在
+  `shell: true` 下面起的，父进程被 stage 墙钟 kill 时（那次 36 分钟超时）teardown 没走，
+  于是**第一个和第二个** webServer 都会漏下；第十一处只收了第二个。
+
+  处置同构、**换两条证据**：① 「是我们这一类进程」取 `isAppDevServerCmdline`
+  （含检出根 + 本仓启动脚本）**或** `pidBelongsToRoot`（工作目录）；② 「此刻它真是那个
+  东西」取 `/api/health` 是本应用形状（`status` / `db` / `t`）。
+
+  ⚠️ ① 必须是**两条并列**，这是实测逼出来的：监听端口的是 Next 起的 **`next-server`**，
+  它**改写自己的进程标题** —— 命令行与 `/proc/<pid>/cmdline` 两头都只剩
+  `next-server (v16.3.8)`，「含检出根 + 本仓脚本」那条判据对它自然为假；工作目录是它
+  身上唯一还留着的线索。两条都不是新判据，是编排器回收残留实例用的同一对。
+
+  ② 是**端口级**的一次探测（不是逐 PID）：判据问的是「那个口上坐着的是不是一个在应答的
+  本应用」，而端口上可能同时有好几层进程。
+
+  实测（本地真起服务 + 真收）：留一个本检出的 `next-server` ⇒
+  `应用端口 3311 上坐着本检出上一跑漏下的应用服务（PID …），已回收整棵树`，
+  端口当场空出来，紧接着 `@critical` **73 passed（36.3s）**。
+  判据在 `tests/e2e-reclaim-own-fake-port.test.ts` 新增 13 条（两条证据各自的反面、
+  标题被改写的 `next-server`、别的检出的服务、① 未命中时一次 HTTP 都不发、接线三条）。

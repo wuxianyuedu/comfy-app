@@ -65,6 +65,19 @@
 #    仓库侧只剩一条：**让每个字节以 CP936 出口**（逐 stage 转码）。本 stage 第 4 行探针
 #    就是用来一次定死这件事的（直接以 CP936 字节写 stdout）。
 #    `scripts/ci-console-encoding.mjs` 头注与规范 §13.5.3.5 记着读数与判读。
+#
+#    ⚠️⚠️ **那条出路 2026-10-16 晚已经有执行者了**（ISSUE #1977）：每个 stage 的命令
+#    现在都包在 `scripts/ci-cp936-exit.mjs` 外面 ——
+#
+#      node scripts/ci-cp936-exit.mjs -- <真命令>
+#
+#    它起那条命令、把输出交给 PowerShell **按 936 重发**、再把退出码原样转出去。
+#    两件事别搞混：**钉 65001 照旧要留**（它让 PS 把 Node 的 UTF-8 **读对**，是转码能
+#    拿对字节的前提 —— 直接 `chcp 936` 会先毁掉解码，转出来的只是乱码换了个编码），
+#    新增的只是「读对了之后再按 CP936 写回」那一跳。Node 没有 GBK 编码器
+#    （`TextEncoder("gbk")` 静默落到 UTF-8），所以转码这一步只能是 PowerShell 的
+#    `GetEncoding(936)`；判据由 Node 的 `TextDecoder("gbk")` 反向复算
+#    （`tests/ci-cp936-exit.test.ts`）。
 #    ⚠️ 写成 `$enc=…` 而不是直接 `[Console]::OutputEncoding=…` 是**被咬过**：
 #    YAML 里 `[` 开头的纯量是**流式序列**，那样写整份文件解析不过
 #    （prettier 的 YAML 解析器当场报 `SyntaxError: Unexpected scalar at node end`，
@@ -251,8 +264,10 @@
       # `chcp` / `[Console]::OutputEncoding` 改的是**控制台对象**上的设置，
       # 同一控制台里的进程共享它 —— 所以它在第一步设、后面的 stage 都受益。
       # 它恒退 0（纠正动作与读数，不是判据），机制见 scripts/ci-console-encoding.mjs。
-      node scripts/ci-console-encoding.mjs --apply
-      node scripts/ci-toolchain-selfcheck.mjs
+      # ⚠️ 两条各包一层 `ci-cp936-exit`：先钉住控制台编码（让 PowerShell 把 Node 的
+      # UTF-8 **解对**），再由外壳把它以 **CP936** 写回给平台（ISSUE #1977）。
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-console-encoding.mjs --apply
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs
 
   # ── Python 可用性（**必须排在「单元测试」之前**）──
   #
@@ -274,7 +289,7 @@
   # ——绿的时候打一行版本号（等于把「E2E 到底会用哪个解释器」变成可读读数），
   # 缺件时打取证并**非零退出**（红在能指路的位置，而不是两小时后一串超时）。
   - name: Python 可用性
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-toolchain-selfcheck.mjs --python-only
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --python-only
 
   # ── Python 探针读数（两条链各自的结论，**只打印、不阻断**）──
   #
@@ -288,7 +303,7 @@
   # 不是判据（判据那一份只有 `--python-only` 一个）。放在这里是因为它会跟着
   # `Python 可用性` 一起在最便宜的位置跑，而 E2E 那一步要等十几分钟。
   - name: Python 探针读数
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/python-probe.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/python-probe.mjs
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
   #
@@ -322,7 +337,7 @@
   # 也**不**在这里替 `浏览器安装` 去装：探测到「都不通」时的出路在人不在仓
   # （换根 / 配代理 / 预装进落点），这一步的作用是把结论提前，不是代办。
   - name: 环境前提
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-env-probe.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-env-probe.mjs
 
   # ── 安装 ──
   # 门禁用 pnpm（AGENTS 硬规则 1：npm 11 在本项目解析 typescript 别名链会崩）。
@@ -345,8 +360,8 @@
       # 「pnpm 起不来」这条链上此前每一轮都是这个形态（第一步绿、几十步之后才以一个
       # 看不懂的错收场，实测见 §13.5.3.6）。这里 1 秒就能问出来，且它跑在
       # `Install dependencies` 本来的位置上，代价是零。
-      node scripts/check-pnpm-available.mjs
-      pnpm install --frozen-lockfile
+      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+      node scripts/ci-cp936-exit.mjs -- pnpm install --frozen-lockfile
 
   # ── 分支保护 ──
   # 守在最前：分支不对时后续检查的结果最后都会被丢弃（与 pre-commit 同序）。
@@ -355,18 +370,18 @@
   # --target master 由配置写死传入：判定要的是**分支名**，而流水线里的
   # CNB_PULL_REQUEST_TARGET_SHA 是 sha —— 拿它当 branch 用会静默失效。
   - name: 分支守卫
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-branch-guard.cjs --pr-check --target master
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --pr-check --target master
 
   # ── 建库 ──
   # 走 scripts/db-push.mjs —— 它复核库里到底有没有表，失败即非零退出。
   # 后面的 E2E 要真的读到库（见 e2e/smoke.spec.ts 的「数据库链路」一组），
   # 故必须放在最前。
   - name: 同步数据库表结构
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/db-push.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
 
   # ── 类型 / 静态检查 ──
   - name: 类型检查
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/tsc --noEmit
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/tsc --noEmit
 
   # ⚠️ **临时停用**（`COMFYAPP_CI_DISABLED_GATES`，2026-10-16）：这一步**已经跑得通**，
   # 只是正在把 E2E 那两格调绿的每一轮里它都要重跑一遍（实测 256~274s 节点侧）而没有
@@ -422,49 +437,49 @@
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
   - name: 标题行让位
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-title-bar-clearance.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-title-bar-clearance.cjs
 
   - name: 文件结构硬规则
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-file-structure.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-file-structure.cjs
 
   - name: 跨平台动作对照
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-ps1-consistency.mjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-ps1-consistency.mjs
 
   - name: import 别名统一
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-import-alias.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-import-alias.cjs
 
   - name: ComfyUI 端口口径
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-comfyui-port-contract.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-comfyui-port-contract.cjs
 
   - name: 内联样式注入
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-inline-style.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-inline-style.cjs
 
   - name: 跨文件重复块
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-code-duplication.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-code-duplication.cjs
 
   - name: 函数长度 TS
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-function-length.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-function-length.cjs
 
   - name: 函数长度 Rust
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-rust-function-length.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-rust-function-length.cjs
 
   - name: 模块循环依赖
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-circular-deps.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-circular-deps.cjs
 
   - name: 端口推导跨语言一致性
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-app-port-vectors.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-app-port-vectors.cjs
 
   - name: CHANGELOG 碎片
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-changelog-fragments.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-changelog-fragments.cjs
 
   - name: 主题色扫描
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-theme-colors.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-theme-colors.cjs
 
   - name: UI/逻辑分离
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-ui-logic-separation.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-ui-logic-separation.cjs
 
   - name: lib Node-only 声明
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
 
   # ⚠️ **临时停用**（同 `ESLint 零警告`：跑得通，但在调 E2E 的每一轮里白重跑一遍；
   # 本地 pre-commit 的 prettier 棘轮照旧跑，判据一字未动）。恢复动作同上，
@@ -473,7 +488,7 @@
   #   script: node scripts/check-format.cjs
 
   - name: 格式化提交分离
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-reformat-only.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
 
   # ── 文档面三条（ISSUE #1975：从 `.githooks/pre-commit` 的 D 组挪到这里）──
   #
@@ -491,32 +506,32 @@
   # （`pnpm docs <PACKAGE>`），会抢在脚本前面、typedoc 根本不跑。`check-docs-api.cjs`
   # 内部调的是 `scripts/typedoc-run.mjs`，与本步无关；这里只跑比对档。
   - name: 生成态文档与源同步
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/render-doc-placeholders.cjs --check
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check
 
   - name: API 文档生成物与源同步
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-docs-api.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
     # 全量档实测 32s（本机 8 核，热缓存；与钩子里那一档同量级）。平台侧冷节点上
     # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个
     # 数量级，卡死的形态 20m 报出来，不必等满平台默认的 2h 墙钟）。
     timeout: 20m
 
   - name: 文档引用与权威源一致
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-doc-references.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
 
   - name: core 骨架单一事实源
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
 
   - name: 零消费导出
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-dead-exports.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
 
   - name: core 出口纪律与基类纯度
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
 
   # ── 构建与产物 ──
   # `pnpm build` 内部已经串了 next build → 剥私有输入 → 数产物 → 冒烟，
   # 不再另拼一遍（与 §13.5.3 那张表里记的同一入口）。
   - name: 生产构建
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; pnpm run build
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- pnpm run build
     # 实测 118s（`cnb-eus-1k5058g8l`）。`pnpm run build` 内部串了
     # `next build` → 剥私有输入 → 数产物 → 冒烟，给 30m 是因为 `next build` 在
     # 冷节点上比实测读数慢得多，而不是因为它会挂。
@@ -584,7 +599,7 @@
   #
   # 下一笔账：`E2E 关键流程` 的首跑读数（它在自托管路径上仍然一次都没有跑到过）。
   - name: 浏览器安装
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
     env:
       # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
       #
@@ -642,7 +657,7 @@
   # 顺带记一笔：「停用期间看不见的东西」又多一类 —— 这一行此前从没被执行过，
   # 而它在本地是**永远绿的**（本地是 bash/PowerShell 直接调用，`@critical` 传得进去）。
   - name: E2E 关键流程
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/e2e-run.mjs --grep=@critical
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
     # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
     # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
     # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
@@ -669,4 +684,4 @@ master:
           # 补上它**不改变今天的读数**（抓取端按宿主 ANSI 代码页解，钉什么都被它按
           # 936 读一遍），但它让这一步不再依赖「控制台代码页恰好是多少」这个**继承
           # 来的**状态 —— 那正是这台机器上刚刚变过一次的东西（936 → 65001）。
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/check-branch-guard.cjs --merge-commit
+          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
