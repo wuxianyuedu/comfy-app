@@ -1082,6 +1082,18 @@ imported from …/src/lib/process/python-resolve.ts`。而这一跑前面全绿�
   **仓库自己的脚本**（`vitest run --coverage` / `pnpm run build` / `e2e-run.mjs`），
   不依赖平台插件。
 
+**唯一一处例外，而且它是「上报」不是「判据」**（ISSUE #1990）：覆盖率读数
+（洞察 → 单元测试覆盖率 那一页）只能由平台侧的 `cnb insight ut report` 写进去，
+没有仓库自己的等价通道 —— 那一页在 #623 删旧版流水线后一直显示「无 / 无」，因为
+写它的 `testing:coverage` 插件随旧配置一起没了、#1959 重建时没被带回来。现在它是
+一条**后置**的普通 step（`scripts/ci-coverage-report.mjs`），三处与旧插件不同：
+① 自己判 `coverage/lcov.info` 在不在，缺了只跳过、**不判红**（`单元测试` 此刻被
+临时停用时报告本来就不存在，判红等于让停用连带把整条流水线拦死）；
+② **不设任何阈值**（平台阈值是绝对百分比，与本仓「按目录记门槛 + 棘轮」的口径冲突）；
+③ 上报失败照实打出来但不判红 —— 它推不出代码有问题，而它一红就是整条流水线红。
+判据在 `tests/ci-coverage-report.test.ts` 与 `tests/no-platform-ci-config.test.ts`
+（「`覆盖率上报` 那一档接回了上报链」）。
+
 **反转之后谁来守门禁**：两处**都要**，且不是同一份判据的两个副本。
 
 1. `.githooks/pre-commit` —— 判据清单见 13.5。它**只保护「启用了钩子、且没加
