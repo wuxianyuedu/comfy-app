@@ -273,8 +273,19 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
  * 配置当初把「装一次」放在宿主机上的理由。名单在这里逐格点名，加一格就得先过这一条。
  */
 describe("容器格：哪几格进容器是**决定**，不是随手写的（ISSUE #1993 续）", () => {
-  /** 本仓**允许**换环境的两格（理由逐条写在 `.cnb.yml` 它们的注释里）。 */
-  const CONTAINER_STAGES = ["浏览器安装", "E2E 关键流程"];
+  /**
+   * 本仓**允许**换环境的那几格 —— 此刻是**零格**。
+   *
+   * 前一版这里是 `["浏览器安装", "E2E 关键流程"]`：那两格写着任务级 `image:`，想让官方
+   * Playwright 镜像里预装好的 headless shell 绕开「120 MiB 取不回来」。平台两次回同一句
+   * `Runner does not enable Docker.`（70ms / 109ms，容器都没起）—— 自托管节点没有开容器
+   * 能力，这与「写在 stage 上还是 Job 上」无关（§13.5.3.4.1.3 的反例与 §13.5.3.4.1.5）。
+   *
+   * 所以名单收成空数组不是「放宽判据」，而是**这一档此刻的形态就是宿主机直跑**：名单仍在
+   * 这里逐格点名（多一格少一格都红），只是没有格子在名单里。要加回去的前提写在 `.cnb.yml`
+   * 那一段注释里，且必须与下面几条判据同批改。
+   */
+  const CONTAINER_STAGES: string[] = [];
 
   it("解析器只认 Job 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
     const fixture = [
@@ -314,7 +325,7 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
     ]);
   });
 
-  it("现役 `.cnb.yml`：进容器的正好是那两格（多一格少一格都红）", () => {
+  it("现役 `.cnb.yml`：进容器的正好是名单里那几格（多一格少一格都红）", () => {
     const got = platformImageStages(read(".cnb.yml")).map((s) => s.name);
     expect(
       got,
@@ -322,46 +333,43 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
     ).toEqual(CONTAINER_STAGES);
   });
 
-  it("两格用同一张镜像，且标签钉到版本（不是 `latest`）", () => {
+  it("名单里每一格都用同一张钉了版本的 Playwright 镜像（`latest` 等于没有身份）", () => {
     const stages = platformImageStages(read(".cnb.yml"));
+    if (stages.length === 0) {
+      /* 空名单是**此刻的真形态**（节点没有容器能力），不是「这条判据不管了」：
+       * 下面几条对夹具的复算仍然跑，名单一非空它们就自动生效。 */
+      expect(CONTAINER_STAGES).toEqual([]);
+      return;
+    }
     const refs = stages.map((s) => s.image);
     expect(
       new Set(refs).size,
-      "两格的镜像不是同一张 —— 浏览器落点会分成两处",
+      "几格的镜像不是同一张 —— 浏览器落点会分成两处",
     ).toBe(1);
-    /* `latest` 会让「这份日志是哪一版环境跑出来的」不可追（与 `imageTagVerdict`
-     * 对 `COMFYAPP_NODE_IMAGE` 的口径同源）。 */
     expect(imageTagVerdict(refs[0]).verdict).toBe("pinned");
     expect(refs[0], "Playwright 镜像要带官方的那套浏览器").toMatch(
       /playwright:v\d+\.\d+\.\d+-(jammy|noble)$/,
     );
   });
 
-  it("镜像标签里的 Playwright 版本 == 仓库依赖解析到的版本（升级只改一半 = 装错版本的浏览器）", () => {
-    /* 官方镜像按**它自己那一版** Playwright 的 `browsers.json` 装浏览器：跨版本时
-     * 它要的 browser revision 与仓库里跑的 Playwright 不同，等价于「装了一份错版本的
-     * 浏览器」—— 而症状是 `Executable doesn't exist at …`，读起来像缺件。 */
-    const ref = platformImageStages(read(".cnb.yml"))[0]?.image ?? "";
-    const inImage = /playwright:v(\d+\.\d+\.\d+)-/.exec(ref)?.[1];
-    const declared = (
-      JSON.parse(read("package.json")) as {
-        devDependencies?: Record<string, string>;
-      }
-    ).devDependencies?.["@playwright/test"];
-    expect(inImage, `镜像标签里读不出 Playwright 版本：${ref}`).toBeTruthy();
-    expect(declared, "package.json 里没有 @playwright/test").toBeTruthy();
+  it("没有容器格时不许声明 `PLAYWRIGHT_BROWSERS_PATH: /ms-playwright`（宿主上没有那个路径）", () => {
+    /* 那一行只在「浏览器装在镜像里」时成立。节点没有容器能力时写它 = 让落点判据
+     * （`playwrightBrowsersRoot()` 优先读它）去一个不存在的目录找东西，于是「装好了」与
+     * 「一件都没有」在日志里逐字同形 —— 本仓最贵的那类红。
+     *
+     * 名单非空时反过来：那两格**必须**指向镜像里的落点，否则同样红。两个方向由同一个
+     * 事实（这一跑有没有容器格）驱动，所以它们排在同一条用例里。 */
+    /* 按**行首的键**判，不按「文件里出现过这个词」：`.cnb.yml` 的注释里正当会写它
+     * （那两段注释正是在解释「为什么现在不写它」）。 */
+    const declared = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:/m.test(read(".cnb.yml"));
+    const containers = platformImageStages(read(".cnb.yml")).length;
     expect(
-      String(declared).replace(/^[^0-9]*/, ""),
-      "镜像标签的 Playwright 版本与 package.json 声明的不是同一个 —— 升级要同批改 .cnb.yml 这一行",
-    ).toBe(inImage);
-  });
-
-  it("镜像把浏览器装在哪，就告诉判据装在哪（`PLAYWRIGHT_BROWSERS_PATH` 与镜像同源）", () => {
-    /* 官方 Playwright 镜像的落点是 `/ms-playwright`。不给这一行，落点判据在 Windows
-     * 宿主上按 `%LOCALAPPDATA%` 推 —— 于是「镜像里明明有」与「一件都没有」在日志里
-     * 逐字同形（本仓最贵的那类红）。这一行只写**一处**（流水线的 `env`），两格共享。 */
-    const text = read(".cnb.yml");
-    const path = /PLAYWRIGHT_BROWSERS_PATH:\s*(\S+)/.exec(text)?.[1];
-    expect(path, "`浏览器安装` 没有指定浏览器落点").toBe("/ms-playwright");
+      declared,
+      containers === 0
+        ? "没有容器格却声明了 `PLAYWRIGHT_BROWSERS_PATH` —— 宿主上 `/ms-playwright` 不存在，" +
+            "落点判据会去空目录找东西（「装好了」与「一件都没有」逐字同形）"
+        : "有容器格却没声明 `PLAYWRIGHT_BROWSERS_PATH` —— 镜像里的浏览器在 `/ms-playwright`，" +
+            "落点判据会去宿主那个空目录找",
+    ).toBe(containers > 0);
   });
 });

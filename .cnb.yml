@@ -921,110 +921,76 @@
   #
   # 下一笔账：`E2E 关键流程` 的首跑读数（它在自托管路径上仍然一次都没有跑到过）。
   #
-  # ── Job 级 `image:`（ISSUE #1993 续；从 stage 级改过来，理由见下）──
+  # ── 为什么这一格**不写** `image:`（ISSUE #1993 续；两次实测推翻了前一版）──
   #
-  # 这一格与下面 `E2E 关键流程` 是本档**唯一两格进容器**的（默认档是宿主机直跑，
-  # 头注第 1 条那条 ⚠️ 写的就是这个分界）。选它们的理由只有一条：**它们在等网络，
-  # 不在算 CPU** —— 而这一档恰恰卡在这里卡了七跑。
+  # 前一版这一格（与下面 `E2E 关键流程`）写着任务级 `image: mcr.microsoft.com/
+  # playwright:v1.63.0-noble`，想用官方镜像里**已经装好**的 headless shell 绕开
+  # 「120 MiB 取不回来」那条链路问题。现场读了两次，两次都是同一个回话：
   #
-  # ⚠️⚠️ **`image:` 只能写在 Job 上，不能写在 Stage 上**（这一条是一跑实测换来的）：
-  # 上一版把两格的 `image:` / `volumes:` 写在 **stage 级**，平台当场报
+  #     （原文）Runner does not enable Docker.      ← 70~109ms 就退出，容器都没起
   #
-  #     （原文）Runner does not enable Docker.
+  # 平台文档（本文件头注第 1 条抄的就是它）：「自定义 Runner **默认不开启 Docker
+  # 能力**，构建脚本直接运行在宿主机上」。这句话对**任何**要求平台起容器的东西都成立，
+  # 与「写在 stage 上还是 Job 上」无关 —— 前一版按「Job 级是另一种机制」去读，两跑
+  # 各用一种写法，各红一次，答案都是同一句。
   #
-  # 99ms 就退出了 —— 连容器都没起。原因是平台的两层语义在这条路径上不一样：
-  #   · **stage 级 `image:`**（`Stage.image`，「当前 Stage 下的所有任务默认都在这个
-  #     镜像环境中执行」）= 给**整条流水线容器**换镜像 —— 那正是自托管 Runner 明确
-  #     不具备的能力（「不能使用基于 Docker 镜像的构建环境」），所以配置解析期就被挡；
-  #   · **Job 级 `image:`**（脚本任务「指定 `image` 时在独立容器中执行」）= 平台为
-  #     **这一个任务**起一个容器 —— 与 `pipeline.docker.*` 无关，自托管上照常可用。
-  # 换句话说：「用容器」这件事在这一档上**只能挂在 Job 上**，挂错层不是「不生效」，
-  # 而是整格起不来。所以本项与下面 `E2E 关键流程` 的那一项都写成
-  # `- name: <名字>` + `jobs:` + 一个同名 Job —— stage 名不变（账里、判据里都是它），
-  # 换来的是 Job 那一层的 `image:`。
+  # 于是这里回到**宿主机直跑**（不写 `image:` = 默认档，见头注第 1 条那条 ⚠️）：
+  # 这一格照旧走它已经量过很多次的链路 —— 分片自取 + 落点复验（§13.5.3.5「第七跑」），
+  # 那条链路在这台机上真的把 119 MiB 取完过。
   #
-  # ⚠️ 与之配套的两处形态变化（都不是风格）：
-  #   · `env` / `timeout` 跟着**下移到 Job**（Job 级才有 `image` 的语义，同层的其余
-  #     键也归它），stage 那一层只剩 `name` 与 `jobs:`；
-  #   · 卷仍写在 **Job 的 `volumes:`** 上（那一层的 `<卷名>:<容器内路径>`），与 `image`
-  #     同一层 —— 一个容器的镜像与它的挂载是同一件事的两半。
+  # ⚠️ **「怎样才允许写回去」也写在这里**，因为判据只能判形态、判不了那台机器：
+  # 当天花板上出现「节点开了容器能力」这件事实（平台侧开、或换了台开了容器的机器），
+  # 两格可以一起改回 `image:`（**同批**改 `tests/ci-image-identity.test.ts` 的名单、
+  # `tests/ci-container-plan.test.ts` 的落点判据、本节注释与 §13.5.3.4.1.3/§13.5.3.4.1.5）。
+  # 在那之前写它是**确定会红**的一条，不是「待补读数」。
   #
-  #   · 这一格的形状一直是「下载 ~120 MiB，链路一次取不完 ⇒ 分片自取 + 续传」；
-  #     宿主机上没有 docker，也就没有任何一层现成的浏览器兜底；
-  #   · 官方 Playwright 镜像里**已经装好**了 headless shell —— 于是「取不回来」
-  #     这条链路问题在容器那一层就不存在了，本步只剩「在不在」那一次复验。
-  #
-  # 三条边界（都不是风格）：
-  #   ① **`PLAYWRIGHT_BROWSERS_PATH` 必须一并给**（见 stage 的 `env`）：镜像把浏览器
-  #      装在 `/ms-playwright`，而本仓的落点判据（`playwrightBrowsersRoot()`）在
-  #      Windows 宿主上按 `%LOCALAPPDATA%` 推 —— 不给这一行就成了「东西在镜像里、
-  #      判据找的是宿主那个空目录」，红得与「没装」逐字同形；
-  #   ② **镜像标签钉到 `-noble`**（不写 `latest`）：Ubuntu 24.04 那一条才带 Node 24
-  #      ——本仓 `engines.node` 是 `^22.22.2 || ^24.15.0 || >=26.0.0`，而 22.04 那条
-  #      镜像里是 Node 22.x 的早期版本，`工具链自证` 那一格会红在版本号上；
-  #   ③ **只在「判得出装过」时省事**：落点里已有那一件 ⇒ 本步照旧秒级返回（函数开头
-  #      那条快路），不会因为换了环境就重下一遍 —— 容器的落点是一个**新建的数据卷**
-  #      （见下 `PLAYWRIGHT_BROWSERS_PATH` 那一段），跑完就没了，所以「省事」这件事
-  #      这一格不再依赖宿主机上有没有留下东西。
+  # 三条随之作废的边界（留着它们是为了下一次别再走一遍弯路）：
+  #   ① `PLAYWRIGHT_BROWSERS_PATH: /ms-playwright` 只在镜像里成立（宿主上没有那个
+  #      路径）—— 现在**不写**，落点判据回到它自己的口径（`playwrightBrowsersRoot()`
+  #      在 Windows 宿主上按 `%LOCALAPPDATA%` 推）；
+  #   ② 镜像标签（`-noble` 与 Playwright 版本同批升）随 `image:` 一起撤掉；
+  #   ③ 「容器格共用一份命名卷」那条桥（`volumes:`）**没有容器就没有跨容器这回事**，
+  #      一并撤掉 —— 它原本要治的「每格重下 120 MiB」在宿主机上不成立（同一块盘）。
   - name: 浏览器安装
-    jobs:
-      - name: 浏览器安装
-        image: mcr.microsoft.com/playwright:v1.63.0-noble
-        script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
-        # ── 跨容器存活的落点（ISSUE #1993，用户决定：**永远不用平台池，只用自托管节点上的容器**）──
-        #
-        # Job 级 `image:` 每一格都是**一个新容器**：不挂卷，这一格下的 120 MiB 到了下一格
-        # （`E2E 关键流程`，同一张镜像、同一个落点）就不存在了 —— 于是每跑一遍都要重取一遍，
-        # 而那正是**这一档七跑以来的全部卡点**。挂一份命名卷，落点就跨容器存活。
-        #
-        # 卷名不带流水线唯一后缀：同一台节点上的多条流水线共用这一份浏览器（同版本二进制，
-        # 共享安全），代价是它们不再各下一遍。**版本必须与镜像标签同批升**（下条边界同源）。
-        #
-        # ⚠️ 卷是**节点级**的（Job 容器没有别的作用域），所以平台池上跑时它也有一份 ——
-        # 而「跑不跑池子」由 `runner` 决定（见 `.common.runner` 那段），不由本卷决定。
-        # 判据：`tests/ci-container-plan.test.ts` 判「每一格容器格都挂同一份落点」，
-        # 断桥那一档**点名**是哪一格（不报错、只是每格重下 120 MiB）。
-        volumes:
-          - comfyapp-ms-playwright:/ms-playwright
-        env:
-          # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
-          #
-          # 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
-          # 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
-          # 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
-          # 这样一条链路上无论等多久都不会到。
-          #
-          # 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
-          # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
-          # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
-          #
-          # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
-          # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
-          # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
-          # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
-          # 也就是说这一档**推不出来**，只能由这里给：给上之后
-          # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
-          #
-          # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
-          # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
-          # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
-          # 真要换（内网代理、别的镜像站）改这一行即可。
-          #
-          # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
-          # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
-          # 而恢复之后这一步有**两条**通道：先自己分片取（不依赖这个根到得了大 body），
-          # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
-          PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
-          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-          # **镜像里浏览器装在哪，就告诉判据装在哪**（上面 ① 那条边界）。
-          # 官方镜像把它放在 `/ms-playwright`；不给这一行，落点判据在 Windows 宿主上
-          # 会去 `%LOCALAPPDATA%\ms-playwright` 找 —— 一个空目录，于是「镜像里明明有」
-          # 与「一件都没有」在日志里逐字同形。
-          PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-          # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
-          # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
-          # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
-        timeout: 20m
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    env:
+      # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
+      #
+      # 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
+      # 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
+      # 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
+      # 这样一条链路上无论等多久都不会到。
+      #
+      # 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
+      # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
+      # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
+      #
+      # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
+      # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+      # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
+      # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
+      # 也就是说这一档**推不出来**，只能由这里给：给上之后
+      # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
+      #
+      # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
+      # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
+      # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
+      # 真要换（内网代理、别的镜像站）改这一行即可。
+      #
+      # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
+      # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
+      # 而恢复之后这一步有**两条**通道：先自己分片取（不依赖这个根到得了大 body），
+      # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
+      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+      # ⚠️ **这里不写 `PLAYWRIGHT_BROWSERS_PATH`**：它只在「浏览器装在镜像里」那一档
+      # 成立（`/ms-playwright` 在 Windows 宿主上不存在）。宿主机直跑时落点判据按
+      # `%LOCALAPPDATA%` 推 —— 写了它等于让判据去一个空目录找东西，「装好了」与
+      # 「一件都没有」在日志里逐字同形。
+      # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
+      # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
+      # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
+    timeout: 20m
 
   # ── E2E（仅 @critical 关键流程）──
   #
@@ -1048,30 +1014,22 @@
   # 顺带记一笔：「停用期间看不见的东西」又多一类 —— 这一行此前从没被执行过，
   # 而它在本地是**永远绿的**（本地是 bash/PowerShell 直接调用，`@critical` 传得进去）。
   #
-  # ── Job 级 `image:`（ISSUE #1993 续，与上面 `浏览器安装` 同一格环境）──
+  # ── 与上面 `浏览器安装` 逐字同形：不写 `image:`（ISSUE #1993 续）──
   #
-  # 为什么它也要进容器：它**依赖**上面那一格的浏览器落点，两格环境不一致时，
-  # 上一格绿、这一格报 `Executable doesn't exist at …` —— 一类「红在别处」的形态，
-  # 而这正是前几跑真实出现过的样子。同一张镜像 ⇒ 落点、Node 版本、系统库三件同源。
-  # **`PLAYWRIGHT_BROWSERS_PATH` 两格必须一样**（这一格已经继承了 `env` 里那份，
-  # 下面不再写第二遍 —— 两份会漂，而漂了以后「哪一份是真的」没有判据能回答）。
+  # 它**依赖**上面那一格的浏览器落点，两格环境不一致时上一格绿、这一格报
+  # `Executable doesn't exist at …`（「红在别处」，本仓真实出现过）。现在的形态是
+  # **两格都在宿主机上**，落点是同一个 `%LOCALAPPDATA%\ms-playwright` —— 「一致」
+  # 这件事不再靠声明维持，而是两格本来就跑在同一台机器的同一个账号下。
   #
-  # ⚠️ 与上面那一格**逐字同形**：`image:` 在 **Job** 上，不在 stage 上（写错层平台会
-  # 直接答 `Runner does not enable Docker.`，见上面那一段）。两格的 stage 名照旧是
-  # 判据与账里用的那一个。
+  # ⚠️ 与上面那一格同一句话：这一格写 `image:` 也会在起格之前被平台答
+  # `Runner does not enable Docker.`（两跑各红一次）。改回去的前提与判据同批动作
+  # 写在上面那一段里。
   - name: E2E 关键流程
-    jobs:
-      - name: E2E 关键流程
-        image: mcr.microsoft.com/playwright:v1.63.0-noble
-        script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
-        # 与上一格**同一份卷、同一个落点** —— 它依赖的浏览器来自那一格。两格的卷一旦分叉，
-        # 「上一格绿、这一格报 `Executable doesn't exist at …`」就会回来（红在别处）。
-        volumes:
-          - comfyapp-ms-playwright:/ms-playwright
-        # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
-        # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
-        # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
-        timeout: 30m
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
+    # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
+    # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
+    # （登录 → 建项目 → 出图），给的是与本地那一档同量级的预算。
+    timeout: 30m
 
 master:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。

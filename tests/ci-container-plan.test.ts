@@ -118,10 +118,56 @@ describe("runner 形态：自托管与平台池只差一行，而那一行会静
   });
 });
 
+/**
+ * 两格**容器格**的夹具（`- name:` + `jobs:` + 同名 Job，Job 那一层挂 `image:`）。
+ *
+ * 它替的是「现役 `.cnb.yml` 里那两格」这个角色：现役配置此刻**没有**容器格
+ * （节点没开 Docker，写 `image:` 会在起格之前被平台答 `Runner does not enable
+ * Docker.`，见 §13.5.3.4.1.5），而「桥通不通」这条判据仍然要有执行对象 —— 否则
+ * 它会在配置变得没有容器格那天，悄悄变成一条恒绿的空转判据。
+ *
+ * @param {{ bridge?: string[] }} [over] 哪几格挂卷（缺省 = 两格都挂同一份落点）
+ * @returns {string}
+ */
+const containerFixture = ({ bridge }: { bridge?: string[] } = {}) => {
+  const vols = bridge ?? ["A", "B"];
+  const one = (name: string) => [
+    `        - name: ${name}`,
+    "          script: echo " + name,
+    "          jobs:",
+    `            - name: ${name}`,
+    "              image: mcr.microsoft.com/playwright:v1.63.0-noble",
+    ...(vols.includes(name)
+      ? [
+          "              volumes:",
+          `                - comfyapp-ms-playwright:${BROWSERS_VOLUME}`,
+        ]
+      : []),
+    "",
+  ];
+  return [
+    "master:",
+    "  pull_request:",
+    "    - stages:",
+    ...one("A"),
+    ...one("B"),
+  ].join("\n");
+};
+
 describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行者", () => {
-  it("现役 `.cnb.yml`：每一格容器格都挂着同一个浏览器落点（桥是通的）", () => {
+  it("现役 `.cnb.yml`：有容器格时每一格都挂着同一个浏览器落点（此刻没有容器格 ⇒ `none`）", () => {
+    /* 两态都由**同一份现役配置**判出来：有容器格 ⇒ 桥必须通（`complete` 且 `missing`
+     * 为空）；没有容器格 ⇒ `none`（不是 `broken`，也不是「桥修好了」）。后者是这一档
+     * 此刻的真形态 —— 两格都跑在宿主机上，同一块盘，没有「跨容器」这回事。 */
     const p = plan(CNB);
-    expect(p.containers.length).toBeGreaterThan(0);
+    if (p.containers.length === 0) {
+      expect(
+        p.bridge,
+        "没有容器格时 `bridge` 必须是 `none` —— `complete` 会让人以为桥在起作用",
+      ).toBe("none");
+      expect(p.missing).toEqual([]);
+      return;
+    }
     expect(
       p.bridge,
       `没挂 ${BROWSERS_VOLUME} 的格：${p.missing.join(" / ")}`,
@@ -129,28 +175,18 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
     expect(p.missing).toEqual([]);
   });
 
-  it("删掉某一格的 `volumes:` ⇒ 桥断，且点名是哪一格（反向复算）", () => {
-    const broken = CNB.replace(
-      /        volumes:\n          - comfyapp-ms-playwright:\/ms-playwright\n/g,
-      "",
-    );
-    expect(broken).not.toBe(CNB);
-    const p = plan(broken);
+  it("两格挂同一份落点 ⇒ 桥通；一格都不挂 ⇒ 断，且点名是哪几格（反向复算）", () => {
+    expect(plan(containerFixture()).bridge).toBe("complete");
+    const p = plan(containerFixture({ bridge: [] }));
+    expect(p.containers.length).toBe(2);
     expect(p.bridge).toBe("broken");
-    expect(p.missing.length).toBe(p.containers.length);
+    expect(p.missing).toEqual(["A", "B"]);
   });
 
   it("只给一格挂卷 ⇒ 另一格仍点名（半通不算通）", () => {
-    const lines = CNB.split("\n");
-    const first = lines.findIndex((l) => l.includes("comfyapp-ms-playwright"));
-    expect(first).toBeGreaterThan(0);
-    /* 删掉第二处卷声明（从它往前找到那个 `volumes:` 起删三行）。 */
-    const second = lines.findIndex(
-      (l, i) => i > first + 2 && l.includes("comfyapp-ms-playwright"),
-    );
-    expect(second).toBeGreaterThan(first);
-    lines.splice(second - 1, 2);
-    expect(plan(lines.join("\n")).bridge).toBe("broken");
+    const p = plan(containerFixture({ bridge: ["A"] }));
+    expect(p.bridge).toBe("broken");
+    expect(p.missing).toEqual(["B"]);
   });
 
   it("容器格与 `镜像身份` 那份读数是同一批格（两个出口，一份事实）", () => {
@@ -313,11 +349,21 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
   });
 
   it("写错层时读数把它排在**最前**（更重的结论不许排在更轻的后面）", () => {
-    const wrong = CNB.replace(
-      /  - name: 浏览器安装\n    jobs:\n      - name: 浏览器安装\n        image:/,
-      "  - name: 浏览器安装\n    image:",
-    );
-    expect(wrong).not.toBe(CNB);
+    /* 夹具而不是现役配置：现役配置此刻**没有**容器格，从它身上摘 `jobs:` 什么都摘不到。
+     * 而这一条判的是「一个更重的结论排在更轻的前面」这条顺序，与配置有没有容器格无关。 */
+    const wrong = [
+      "master:",
+      "  pull_request:",
+      "    - runner:",
+      "        namespace: group",
+      "        tags:",
+      `          - ${SELF_HOSTED_TAG}`,
+      "      stages:",
+      "        - name: 浏览器安装",
+      "          image: node:24",
+      "          script: echo x",
+      "",
+    ].join("\n");
     const lines = describePlan(wrong);
     expect(lines[1]).toContain("stage");
     expect(lines[1]).toContain("浏览器安装");
@@ -345,14 +391,12 @@ describe("解析器的两处细节：注释与卷写法", () => {
   it("读数是人读的三行，且断桥那一档**点名**（不是一句「有问题」）", () => {
     const lines = describePlan(CNB);
     expect(lines[0]).toContain("self-hosted");
-    expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
-    const broken = describePlan(
-      CNB.replace(
-        /        volumes:\n          - comfyapp-ms-playwright:\/ms-playwright\n/g,
-        "",
-      ),
-    );
+    if (plan(CNB).containers.length > 0)
+      expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
+    const broken = describePlan(containerFixture({ bridge: [] }));
     expect(broken.join("\n")).toContain("重下");
-    expect(broken.join("\n")).toContain("浏览器安装");
+    /* 点名到格：两格都要出现，不是一句「有格没挂卷」。 */
+    expect(broken.join("\n")).toContain("A");
+    expect(broken.join("\n")).toContain("B");
   });
 });
