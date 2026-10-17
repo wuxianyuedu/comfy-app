@@ -49,8 +49,12 @@
  *      占 12m14s 的 27.5%），而绝大多数 PR 一行 `src/lib|server|trpc` 都没碰。
  *
  * 用法：
- *   `node scripts/check-docs-api.cjs`            全量比对（**平台侧那一步用的就是这个**）
+ *   `node scripts/check-docs-api.cjs`            全量比对（默认档）
  *   `node scripts/check-docs-api.cjs --staged`   仅当暂存改动命中输入面才比对（本地手跑用）
+ *   `node scripts/check-docs-api.cjs --check --autofix`
+ *                                                平台侧那一档（`.cnb.yml` 的
+ *                                                `API 文档生成物与源同步`）：先判一次，红了
+ *                                                就地重生成 `docs/api/`、**再判一次**
  * 退出码：0 通过（或未触发）；1 漂移 / 重生成失败。
  *
  * ── 执行者在哪（ISSUE #1975 改了，别照着旧注释去找）────────────────────────
@@ -204,6 +208,144 @@ function brief(list, limit = 12) {
   return head.join("\n");
 }
 
+/**
+ * 把重生成结果落到 `docs/api/`（**写入模式**，只有 `--autofix` 走得到这里）。
+ *
+ * 三个方向各写一条，别只写「落后」那一半：判据报的是「不一致」，而「怎么才一致」是
+ * **产物集合完全等于重生成结果** —— 只覆盖不删孤儿的话，第二轮判定照旧红（`多余`
+ * 那一类永远留着），于是这一步会变成「每次都重跑一遍 typedoc 然后再红」。
+ *
+ * `copyFile` / `rm` 用 Node 原生而不是 shell 命令：平台侧是 Windows（没有 `rm -rf`），
+ * 本地是 POSIX，同一份实现两处都对（规范 §9.5 的跨平台动作口径）。
+ *
+ * @param {string} generatedDir 重生成输出目录（绝对路径）
+ * @param {{drifted: string[], missing: string[], extra: string[]}} diff 第一轮判定
+ * @param {string} [currentDir] 当前产物目录；默认仓库的 `docs/api`（单测传夹具）
+ * @returns {{written: number, removed: number}}
+ */
+function applyGenerated(generatedDir, diff, currentDir = OUT_ABS) {
+  const want = walk(generatedDir);
+  let written = 0;
+  let removed = 0;
+  for (const rel of [...diff.drifted, ...diff.missing]) {
+    const from = want.get(rel);
+    if (!from) continue;
+    const to = path.join(currentDir, rel);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+    written += 1;
+  }
+  for (const rel of diff.extra) {
+    const abs = path.join(currentDir, rel);
+    if (!fs.existsSync(abs)) continue;
+    fs.rmSync(abs, { force: true });
+    removed += 1;
+  }
+  return { written, removed };
+}
+
+/** 三个方向的总处数（判定绿不绿只看这一个数）。 */
+function tally(diff) {
+  return diff.drifted.length + diff.missing.length + diff.extra.length;
+}
+
+/**
+ * 把一轮判定按三个方向打印。`log` 由调用方给：第一遍读数走 stdout（`--autofix` 的读者
+ * 最需要的是「本次自动修改动了哪几份」），判红那一遍走 stderr。
+ */
+function reportDiff(diff, log) {
+  const { drifted, missing, extra } = diff;
+  log(`${TAG} ✗ ${OUT_REL} 与当前源不一致（共 ${tally(diff)} 处）：`);
+  if (drifted.length) {
+    log(`  ▸ 落后于源（${drifted.length}）—— 源改了没重生成：`);
+    log(brief(drifted));
+  }
+  if (missing.length) {
+    log(`  ▸ 缺失（${missing.length}）—— 重生成有、仓库里没有：`);
+    log(brief(missing));
+  }
+  if (extra.length) {
+    log(`  ▸ 多余（${extra.length}）—— 仓库里有、源已不再产出：`);
+    log(brief(extra));
+  }
+}
+
+/** typedoc 重生成失败时的取证与修法（两条路径共用一份，免得两处话术漂开）。 */
+function reportTypedocFailure(reason, log) {
+  console.error(`${TAG} ✗ typedoc 重生成失败（产物无法核对）：${reason}`);
+  console.error(
+    `${TAG} 注：typedoc 的退出码不可信 —— 「退出 0 + 日志写 html generated +` +
+      ` 产物一个没更新」是见过的现场，所以这里按产物判、失败自动重试。`,
+  );
+  if (log) console.error(log);
+  console.error(
+    `${TAG} 修法：先 node scripts/generate-api-docs.mjs 单独跑一遍看原因` +
+      `（占用类失败等一等就过；别拿这次的空产物去删 ${OUT_REL}/）。`,
+  );
+}
+
+/**
+ * `--check --autofix`：**先判一次，红了就地重生成、再判一次**（ISSUE #1981）。
+ *
+ * 为什么第二次判定不能省：自动修的价值全在「修完真的对了」这一句上。只跑一遍写入模式
+ * 就退 0，等于把一次未经复核的写入报成「通过」—— 写入模式本身不判任何东西。所以结论
+ * **永远来自第二轮的 `compare()`**，重生成只是它中间那一步（与
+ * `render-doc-placeholders.cjs --check --autofix` 同形，登记表是
+ * `scripts/ci-autofix-duties.mjs`）。
+ *
+ * ⚠️ **它不改动 git**：提交与重跑 CI 仍由人 / 代理那一侧做（平台侧能否回写分支是另一条
+ * 决策，见 `scripts/ci-autofix-duties.mjs` 头注第 1 条）。
+ *
+ * @returns {Promise<number>} 退出码
+ */
+async function checkOrAutofix() {
+  const tag = `[docs-api --autofix]`;
+  if (!fs.existsSync(OUT_ABS)) {
+    console.error(`${TAG} ✗ ${OUT_REL}/ 不存在 —— 生成物本应提交进 git。`);
+    console.error(`${TAG} 修法：pnpm run docs 后把结果一并提交。`);
+    return 1;
+  }
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "docs-api-autofix-"));
+  try {
+    const first = await runTypedoc(tmp);
+    if (!first.ok) {
+      reportTypedocFailure(first.reason, first.log);
+      return 1;
+    }
+    const diff = compare(tmp);
+    /* 绿的时候一次都不多写：自动修档的常态是「本来就一致」。 */
+    if (!tally(diff)) {
+      console.log(
+        `${TAG} ✓ ${OUT_REL} 与当前源一致（${walk(OUT_ABS).size} 个文件），无需重生成。`,
+      );
+      return 0;
+    }
+    reportDiff(diff, console.log);
+    const { written, removed } = applyGenerated(tmp, diff);
+    console.log(
+      `${tag} 上面那份不一致 —— 就地重生成：写入 ${written} 个、删除 ${removed} 个孤儿，再判一次。`,
+    );
+    const after = compare(tmp);
+    if (!tally(after)) {
+      console.log(
+        `${tag} ✓ 自动修完成。工作区里的 ${OUT_REL}/ 已经与源同步，` +
+          `把它一并提交即可（不要手改生成物）。`,
+      );
+      return 0;
+    }
+    /* 「修不好」要说清是哪一种：自动修只写「源 → 产物」这一条路，重生成过还是不一致，
+     * 说明差异不在这次渲染决定的那一侧（源本身有问题 / 两份源映射到同一个产物名）。 */
+    reportDiff(after, console.error);
+    console.error(
+      `${tag} ✗ 重生成之后仍不一致 —— 这不是「忘了重渲染」，别再重试同一件事。`,
+    );
+    return 1;
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const staged = process.argv.includes("--staged");
   if (staged) {
@@ -219,6 +361,12 @@ async function main() {
     );
   }
 
+  if (process.argv.includes("--autofix")) {
+    // 用 exitCode 而不是 process.exit：后者会把还没 flush 的 stdout 截掉（Windows 管道上实测）。
+    process.exitCode = await checkOrAutofix();
+    return;
+  }
+
   if (!fs.existsSync(OUT_ABS)) {
     console.error(`${TAG} ✗ ${OUT_REL}/ 不存在 —— 生成物本应提交进 git。`);
     console.error(`${TAG} 修法：pnpm run docs 后把结果一并提交。`);
@@ -229,43 +377,18 @@ async function main() {
   try {
     const res = await runTypedoc(tmp);
     if (!res.ok) {
-      console.error(
-        `${TAG} ✗ typedoc 重生成失败（产物无法核对）：${res.reason}`,
-      );
-      console.error(
-        `${TAG} 注：typedoc 的退出码不可信 —— 「退出 0 + 日志写 html generated +` +
-          ` 产物一个没更新」是见过的现场，所以这里按产物判、失败自动重试。`,
-      );
-      if (res.log) console.error(res.log);
-      console.error(
-        `${TAG} 修法：先 node scripts/generate-api-docs.mjs 单独跑一遍看原因` +
-          `（占用类失败等一等就过；别拿这次的空产物去删 ${OUT_REL}/）。`,
-      );
+      reportTypedocFailure(res.reason, res.log);
       process.exit(1);
     }
 
-    const { drifted, missing, extra } = compare(tmp);
-    const total = drifted.length + missing.length + extra.length;
-    if (!total) {
+    const diff = compare(tmp);
+    if (!tally(diff)) {
       console.log(
         `${TAG} ✓ ${OUT_REL} 与当前源一致（${walk(OUT_ABS).size} 个文件）。`,
       );
       return;
     }
-
-    console.error(`${TAG} ✗ ${OUT_REL} 与当前源不一致（共 ${total} 处）：`);
-    if (drifted.length) {
-      console.error(`  ▸ 落后于源（${drifted.length}）—— 源改了没重生成：`);
-      console.error(brief(drifted));
-    }
-    if (missing.length) {
-      console.error(`  ▸ 缺失（${missing.length}）—— 重生成有、仓库里没有：`);
-      console.error(brief(missing));
-    }
-    if (extra.length) {
-      console.error(`  ▸ 多余（${extra.length}）—— 仓库里有、源已不再产出：`);
-      console.error(brief(extra));
-    }
+    reportDiff(diff, console.error);
     console.error(
       `${TAG} 修法：pnpm run docs 后把 docs/api/** 的重生成结果一并提交（不要手改生成物）。`,
     );
@@ -282,4 +405,11 @@ if (require.main === module) {
   });
 }
 
-module.exports = { INPUT_RES, matchedInputs, walk, compare, OUT_REL };
+module.exports = {
+  INPUT_RES,
+  matchedInputs,
+  walk,
+  compare,
+  applyGenerated,
+  OUT_REL,
+};

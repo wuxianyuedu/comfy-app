@@ -12,6 +12,9 @@
  *   2. **三个方向**：落后 / 缺失 / 多余 —— 少报任何一个，漏掉的那类都会静默留在
  *      产物目录里（与 `render-doc-placeholders --check` 同口径，理由同 §13.5.5）。
  *   3. **比对口径**：CRLF 检出不许报两千处假红；不穿符号链接（同 §7.3 的减法口径）。
+ *   4. **自动修的落法**（ISSUE #2001）：`--check --autofix` 红了就地重生成再判一次，
+ *      而重生成必须**三个方向都写** —— 只覆盖「落后 / 缺失」不删「多余」时，第二轮判定
+ *      照旧红，于是这一档会退化成「每次都重跑一遍 typedoc 然后再红」。
  *
  * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
  */
@@ -28,6 +31,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   INPUT_RES,
+  applyGenerated,
   compare,
   matchedInputs,
   walk,
@@ -184,5 +188,58 @@ describe("compare：三个方向都报", () => {
       { "a.html": "line1\nCHANGED\n" },
     );
     expect(compare(gen, cur).drifted).toEqual(["a.html"]);
+  });
+});
+
+describe("applyGenerated：自动修的写入模式（三个方向都写）", () => {
+  it("落后覆盖、缺失补上、多余删掉 —— 第二轮判定必须是绿的", () => {
+    const gen = tempDir("docs-api-gen-");
+    const cur = tempDir("docs-api-cur-");
+    for (const [rel, body] of Object.entries({
+      "same.html": "x",
+      "drift.html": "new",
+      "sub/missing.html": "m",
+    })) {
+      mkdirSync(path.dirname(path.join(gen, rel)), { recursive: true });
+      writeFileSync(path.join(gen, rel), body);
+    }
+    for (const [rel, body] of Object.entries({
+      "same.html": "x",
+      "drift.html": "old",
+      "extra.html": "e",
+    })) {
+      mkdirSync(path.dirname(path.join(cur, rel)), { recursive: true });
+      writeFileSync(path.join(cur, rel), body);
+    }
+
+    const diff = compare(gen, cur);
+    expect(applyGenerated(gen, diff, cur)).toEqual({ written: 2, removed: 1 });
+    /* 这一条是整组的意义：写入之后**再判一次**必须一致。少了它，「写了一半」
+     * （比如只覆盖不删孤儿）在断言上看起来同样是「写了 N 个」。 */
+    expect(compare(gen, cur)).toEqual({
+      drifted: [],
+      missing: [],
+      extra: [],
+    });
+  });
+
+  it("一致时一个都不写（自动修档的常态是「本来就绿」，不该产生 diff）", () => {
+    const gen = tempDir("docs-api-gen-");
+    const cur = tempDir("docs-api-cur-");
+    writeFileSync(path.join(gen, "a.html"), "1");
+    writeFileSync(path.join(cur, "a.html"), "1");
+    expect(applyGenerated(gen, compare(gen, cur), cur)).toEqual({
+      written: 0,
+      removed: 0,
+    });
+  });
+
+  it("缺失项的父目录不存在时自己建（产物有子目录）", () => {
+    const gen = tempDir("docs-api-gen-");
+    const cur = tempDir("docs-api-cur-");
+    mkdirSync(path.join(gen, "classes/deep"), { recursive: true });
+    writeFileSync(path.join(gen, "classes/deep/C.html"), "c");
+    expect(applyGenerated(gen, compare(gen, cur), cur).written).toBe(1);
+    expect(walk(cur).has("classes/deep/C.html")).toBe(true);
   });
 });
