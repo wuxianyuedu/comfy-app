@@ -12,10 +12,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { runAsyncAction } from "~/lib/async-action";
+import { errorMessage } from "~/lib/error-message";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { useTRPC } from "~/trpc/react";
 
 import { type FolderConfigRow, splitFolders } from "../model-library-config";
+
+/** 「还没有答案」时复用的空列表 —— 引用必须稳定，理由见 hook 内那一行。 */
+const EMPTY_FOLDERS: FolderConfigRow[] = [];
 
 export interface ModelFolderConfigController {
   folders: FolderConfigRow[];
@@ -43,8 +47,6 @@ export interface ModelFolderConfigController {
 
 export function useModelFolderConfig(): ModelFolderConfigController {
   const trpc = useTRPC();
-  const [folders, setFolders] = useState<FolderConfigRow[]>([]);
-  const [comfyReachable, setComfyReachable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
@@ -62,17 +64,18 @@ export function useModelFolderConfig(): ModelFolderConfigController {
    * 原实现在 load() 开头 `setErr(null)`，而每个写操作（toggle/add/remove）都是
    * 「失败 → setErr → await load()」——错误刚写进去就被随后的 load 清掉了，
    * 用户看到的提示条闪一下就没（与 §17.5.4 素材库那条同源）。
-   * 现改为：err 由**发起动作的一方**在开始时清除，刷新只负责更新数据。
+   * 现改为：err 由**发起动作的一方**在开始时清除；load 只在**这一次请求真失败**时写 err，
+   * 成功路径不碰它。
    */
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      await configQ.refetch();
-    } catch {
-      setErr("网络错误");
-    } finally {
-      setLoading(false);
-    }
+    /* `refetch()` 失败时**不 reject**，它 resolve 一个带 `isError` 的结果（v5 语义）。
+     * 原来这里写成 `try { await refetch() } catch { setErr("网络错误") }` —— 那个 catch
+     * 永远进不来，列表拉不下来时既不报错、也不改连接状态，于是「没拿到答案」被显示成
+     * 「已连接 + 一个目录都没有」两条假结论。成败要看返回值，不能等异常。 */
+    const result = await configQ.refetch();
+    if (result.isError) setErr(errorMessage(result.error, "网络错误"));
+    setLoading(false);
   }, [configQ]);
 
   /* 首次加载只跑一次。依赖 `load` 会失效 —— 它依赖 `configQ`，而 `useQuery`
@@ -90,13 +93,23 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     return () => clearTimeout(t);
   }, []);
 
-  // react-query config data -> local folders state（渲染期调整，React 19 模式）
-  const [prevCfgData, setPrevCfgData] = useState(configQ.data);
-  if (configQ.data && configQ.data !== prevCfgData) {
-    setPrevCfgData(configQ.data);
-    setFolders(configQ.data.folders ?? []);
-    setComfyReachable(Boolean(configQ.data.comfyReachable));
-  }
+  /* 列表与连接状态**直接从查询派生**，不再镜像进 local state。
+   *
+   * 原来是一段「渲染期同步」：`if (configQ.data && configQ.data !== prevCfgData)` 才把
+   * `folders` / `comfyReachable` 写回状态。而弹层随开随卸载（`{c.configOpen && <ModelConfigModal/>}`）、
+   * QueryClient 是模块级单例（`src/trpc/query-client.ts`：staleTime 30s、gcTime 默认 5min）
+   * ⇒ **第二次挂载的首帧就带着缓存数据**，`prevCfgData` 的初值即那份数据 ⇒ 同步永不发生；
+   * 随后 `refetch()` 拿回逐字相同的载荷，react-query 的结构共享（`replaceEqualDeep`）连引用都不换
+   * ⇒ 仍然不同步。实测后果：第二次打开弹层显示「● ComfyUI 已连接 · 共 0 个目录」，
+   * 而 `comfyReachable` 停在 `useState(true)` 那个乐观默认值上 —— 没配 ComfyUI 路径的机器上
+   * 服务端明确回了不可达，界面仍报已连接；同一格还会把真有目录的实例显示成空列表。
+   *
+   * 派生之后没有「答案到了却没落到状态」这一格：`comfyReachable` 只在服务端说可达时才为真，
+   * 「还没拿到答案」表现为 false（视图用 `loading` 把它与「确认不可达」分开说）。
+   * 空列表走模块级常量 `EMPTY_FOLDERS`：字面量 `[]` 每次渲染都是新引用，会把下面
+   * `splitFolders` 的 useMemo 打成「每渲染必算」（exhaustive-deps 当场警告）。 */
+  const folders = configQ.data?.folders ?? EMPTY_FOLDERS;
+  const comfyReachable = Boolean(configQ.data?.comfyReachable);
 
   /** 写操作统一包装：失败落 err，结束后必刷新。 */
   const runMutate = useCallback(

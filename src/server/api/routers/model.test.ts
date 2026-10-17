@@ -149,6 +149,20 @@ describe("model.configList —— 读侧只看自己的 override", () => {
     expect(res.comfyReachable).toBe(false);
     expect(res.folders.length).toBeGreaterThan(0);
   });
+
+  /**
+   * 可达性必须走全库唯一口径 `probeBaseOnce`，而不是这里原本那份 `fetch(根路径) + res.ok`：
+   * 后者把 HTTP 500 读成「进程没起」，而显存爆掉的 ComfyUI 仍然活着（ISSUE #685 就是收这个）。
+   * 两条断言各钉一半 —— 只钉「500 算活」的话，改回探根路径 + `catch(()=>false)` 也能过。
+   */
+  it("存活判据走 /system_stats 且「连上即存活」（500 不算未连接）", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response("", { status: 500 }));
+    const res = await caller().configList();
+    expect(res.comfyReachable).toBe(true);
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe(
+      "http://127.0.0.1:8188/system_stats",
+    );
+  });
 });
 
 describe("model.list / sync —— 上下文与透传", () => {
