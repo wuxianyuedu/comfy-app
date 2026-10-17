@@ -9,7 +9,7 @@
         "kind": "freshness-track",
         "key": "e2e"
       },
-      "executor": "钩子 D 组「每档都有主」判**每天首次自证**（track.daily，dirty 为空）。**页面级运行时读数**（ISSUE #1781 的右半边 / §11.8.1）搭这一档跑（`e2e/runtime-budget.spec.ts`）—— 它不另开档、不另记账、不另加入口，因为与全量 e2e 是同一笔开销（起 webServer + 浏览器）"
+      "executor": "钩子 D0 形态前置档「每档都有主」判自证账（三档同形：`track.daily` + `dirty` 非空 ⇒ 当天动过输入面就要证一次，没动过以 `graceMs` 为宽限）。**页面级运行时读数**（ISSUE #1781 的右半边 / §11.8.1）搭这一档跑（`e2e/runtime-budget.spec.ts`）—— 它不另开档、不另记账、不另加入口，因为与全量 e2e 是同一笔开销（起 webServer + 浏览器）"
     },
     {
       "id": "full-suite-freshness",
