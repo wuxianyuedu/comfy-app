@@ -2757,6 +2757,63 @@ teardown 那条路没走 —— 于是**第一个和第二个** webServer 都会
 不收、端口空着零代价、① 未命中时**一次 HTTP 都不发**、② 是端口级的一次、以及接线三条
 （在 `spawn` 之前 / 有 CI 档守卫 / 收完重算，按相对位置判）。
 
+###### 第十五处：`spawnSync` 的 `inherit` **不落日志** —— 输出攒在调用方的 Buffer 里（ISSUE #1998）
+
+第十四处（应用端口那一格）修完之后，`E2E 关键流程` 走到了**生产者自己那一层**：它跑满
+30 分钟被 stage 墙钟 kill（`cnb-m0t-1k54oljem`），而日志**零行** —— 连 `e2e-run` 那几条
+「起 Playwright 前：应用端口 空 / 替身端口 空」都没有：
+
+    ❌ E2E 关键流程: 2160137ms (error)
+       错误信息: timeout of 2160000ms exceeded
+       ─── 日志 ───
+       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
+       Finished, code: ECONNABORTED, duration: 36m 0s
+
+第十二处修的是**外壳**（`ci-cp936-exit.mjs` 攒到 `close` 才发），这一处的缓存落在
+**调用方**那一层：`e2e-run.mjs` 用 `spawnSync(process.execPath, [entry, …],
+{ stdio: "inherit" })` 起 Playwright，而 `spawnSync` 的「同步」意味着它**必须**自己收着
+子进程的输出才能把结论交回去 —— `inherit` 只继承 fd，`res.stdout` 照旧攒着一整份，而
+本文件从不读那个字段。被 kill 时那份缓冲随进程一起消失。
+
+⇒ 与第十二处**同形、不同层**。处置只有一条：
+
+| 写法                                     | 秒级 stage | 分钟级 stage 被 kill         |
+| ---------------------------------------- | ---------- | ---------------------------- |
+| `spawnSync(…, { stdio: "inherit" })`（旧） | 看不出差别 | 缓冲随进程消失 ⇒ **日志零行** |
+| `spawn` + `{ stdio: "inherit" }`（现在）   | 一样       | 每一行**都已经发出去了**      |
+
+起法现在由 `scripts/e2e-run-playwright.mjs` 的 `resolvePlaywrightInvocation()` 一处给出
+（**不缓存**：这是它与旧写法唯一的实质差别），`runChild()` 负责真起一次并把退出码 /
+被信号打死 / `ENOENT` 三条收场分开交出。
+
+**同批的第二半**：开跑前那几条读数（端口 / Python / schema / 浏览器）此前是「算一条、
+打一条」夹在几条短路 `return 2` 之间，于是它们**一旦排在短路之后就不再说**。现在由
+`runPreflightReadings()` 编排成一步（`makePreflightCollectors()` 把三份判决翻成
+「一句读数 / 一句阻断话术」，判据一个字没搬）：**拦之前先把已算出来的说出口**。
+
+**为什么这一格要拆文件**：`scripts/e2e-run.mjs` 加上这两半之后越过了
+`check-infra-file-size.cjs` 的 900 行硬闸（存量已清零、无基线可登记），出口只有拆。
+拆的边界是「怎么起 Playwright」这一族（入口解析 + 起法 + 等结论 + 读上游源码），
+`e2e-run.mjs` 留住「这一跑算不算跑绿了、要不要记账」。
+
+判据（`tests/e2e-run.test.ts` 新增 10 条，其中 5 条判起法、5 条判编排）：
+
+- 起法那一组的**第一格在 Linux 上是看不见的**（缓冲不影响退出码，本地终端里输出照旧），
+  所以它判形状：`options.stdio === "inherit"`、`env` 是拷一份（`E2E_PREFLIGHT` /
+  `E2E_PYTHON_PREFLIGHT` 两条结论不能丢）、`args` 不改写；
+- 真跑一次 `node -e "process.exit(3)"` 拿回 `status: 3`（`runChild` 不是空壳），
+  再拿一个不存在的路径拿回 `status: null`（起不来不抛，转非零退出码）；
+- 「跑法脚本里不再有 `spawnSync(` 调用行」按**调用形态**判（注释里写着它的来历不算）；
+- 编排那一组：三步各说一句、第一条 `abort` 就停且它之前那几步**已经说过**、`null` 步跳过、
+  Python 缺件时结论仍写进 `env`、schema 的阻断话术逐条列出丢数据语句并给 `pnpm db:push`。
+
+**同批收掉的另一个供给侧**（`playwright.config.ts` 的 `resolveE2eWorkers()`）：它此前在
+`CI` / `PNPM_START` 那一档回 `undefined`（= Playwright 默认），而默认是 `cpus - 1` ——
+16 核节点上 15 个 worker + 两条 webServer + `fullyParallel`，这正是那 36 分钟的另一半。
+现在**两档都收敛**（上界仍是 2，来自 #1834 的实测档），且按现场核数
+（`CNB_CPUS` → `os.availableParallelism()`）取 `max(1, min(2, cpus - 1))`：小机器上
+不开 2，大机器上不铺开。`timeout: 60_000` 一个字节没动 —— **降的是负载，不是预算**。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的

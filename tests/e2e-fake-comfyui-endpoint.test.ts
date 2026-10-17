@@ -422,9 +422,9 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
       null,
     );
     // 两栏都在且是布尔 ⇒ 认。
-    expect(decodePreflight('{"appOccupied":true,"fakeOccupied":false}')).toEqual(
-      { appOccupied: true, fakeOccupied: false },
-    );
+    expect(
+      decodePreflight('{"appOccupied":true,"fakeOccupied":false}'),
+    ).toEqual({ appOccupied: true, fakeOccupied: false });
   });
 
   it("`globalSetup` 侧的读法：拿不到结论一律 null（不阻断、也不误报复用）", () => {
@@ -466,7 +466,10 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
      *
      * 判据拿的是真实源码（不是一份抄过来的顺序表）——上游改了这个顺序时，
      * 「探测为什么不能挂在 globalSetup 上」这个前提就要重新量，这条会红。 */
-    const runner = readFileSync(resolvePlaywrightFile("lib/runner/index.js"), "utf8");
+    const runner = readFileSync(
+      resolvePlaywrightFile("lib/runner/index.js"),
+      "utf8",
+    );
     /* 取整个函数体：靠**配平花括号**而不是找第一个 `}` —— 后者会切在数组元素
      * 的花括号上（`createRemoveOutputDirsTask()` 后面并没有 `}`），于是
      * 「plugin 在 globalSetup 之前」这句话压根没被检查。 */
@@ -547,17 +550,22 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
 
   it("pre-flight 真的在 `spawn` Playwright **之前**跑（时机是全部意义）", async () => {
     /* 判据判「接线在不在」：`scripts/e2e-run.mjs` 里 `runPreflight(...)` 必须出现在
-     * `spawnSync(...)` 之前 —— 反过来的话它探到的就是本轮自己起的服务，
+     * 起 Playwright 那一跳之前 —— 反过来的话它探到的就是本轮自己起的服务，
      * 与挂在 `globalSetup` 上没有区别。 */
     const run = readText("scripts/e2e-run.mjs");
     const preflightAt = run.indexOf("await runPreflight(");
-    const spawnAt = run.indexOf("spawnSync(process.execPath");
+    /* 「起 Playwright」那一跳的落点：ISSUE #1998 起是 `runChild(invocation)`
+     * （`spawnSync` 会把输出攒进 `res.stdout`，见 `resolvePlaywrightInvocation` 的
+     * 头注）—— 判据认的是**那一跳**，不是它当年叫什么。 */
+    const spawnAt = run.indexOf("await runChild(invocation)");
     expect(preflightAt, "e2e-run 没有跑 pre-flight").toBeGreaterThan(0);
-    expect(spawnAt, "e2e-run 没有 spawn Playwright").toBeGreaterThan(0);
+    expect(spawnAt, "e2e-run 没有起 Playwright").toBeGreaterThan(0);
     expect(preflightAt).toBeLessThan(spawnAt);
     // 结论要随 env 带下去（不带的话 globalSetup 那侧的读法恒 null，
     // 「复用」话术永远不出现 = 一次静默降级）。
-    expect(run).toContain("env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)");
+    expect(run).toContain(
+      "env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)",
+    );
   });
 });
 
