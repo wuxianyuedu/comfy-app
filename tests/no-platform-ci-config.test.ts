@@ -402,18 +402,44 @@ export function stageTimeouts(text: string): Map<string, string> {
   const out = new Map<string, string>();
   const lines = text.split("\n");
   let current: string | null = null;
+  /** 当前 stage 项的缩进；`null` = 还没遇到 stage 项。 */
+  let currentIndent: number | null = null;
+  /** 当前子 Job 的缩进；`null` = 这一项没有 `jobs:`（键直接挂在 stage 上）。 */
+  let jobIndent: number | null = null;
   for (const raw of lines) {
-    // stage 列表项：恰好两空格缩进的 `- name: X`（`stages:` 的直接子项）。
-    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(raw);
-    if (item?.[1] !== undefined) {
-      current = item[1];
+    if (raw.trim() === "") continue;
+    const indent = raw.length - raw.trimStart().length;
+    const body = raw.trim();
+    // stage 列表项：`- name: X`（`stages:` 的直接子项，缩进按原文计 —— 不在正则里
+    // 写死空格数：`^ {n}` 那一族在这台机的 V8 上会漏回溯，本仓已有多处记着）。
+    if (body.startsWith("- name:")) {
+      const name = body.slice("- name:".length).trim();
+      if (currentIndent === null || indent <= currentIndent) {
+        /* 新的 stage 项。 */
+        current = name;
+        currentIndent = indent;
+        jobIndent = null;
+      } else {
+        /* 子 Job（`jobs:` 下）：预算的**唯一**有效位置是 Job 那一层 ——
+         * Job 级 `image:` 的容器格里，`env` / `timeout` 跟着 `image` 一起下移，
+         * stage 那一层只剩 `name` 与 `jobs:`（见 `.cnb.yml` 那两段的注释）。 */
+        jobIndent = indent;
+      }
       continue;
     }
-    // 同级或更浅的键 = 这一项结束了（`env:`、顶层 `master:` 等）。
-    if (current !== null && /^\S/.test(raw)) current = null;
-    if (current === null) continue;
-    const t = /^\s{4}timeout:\s*(\S+)\s*$/.exec(raw);
-    if (t?.[1] !== undefined) out.set(current, t[1]);
+    // 回到顶层键（`master:` 等）= 这一族结束了。
+    if (indent === 0) {
+      current = null;
+      currentIndent = null;
+      jobIndent = null;
+      continue;
+    }
+    if (current === null || currentIndent === null) continue;
+    const ownIndent = jobIndent ?? currentIndent;
+    /* 这一项自己的键：比它自己那一层深一层（Job 项深一层；没有 `jobs:` 的项就是
+     * stage 项深一层）。更深的是 `env:` 里的同名键，不算。 */
+    if (indent !== ownIndent + 2 || !body.startsWith("timeout:")) continue;
+    out.set(current, body.slice("timeout:".length).trim());
   }
   return out;
 }
@@ -1094,6 +1120,19 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const withBudget =
       "x:\n  stages:\n  - name: 单元测试\n    script: x\n    timeout: 45m\n";
     expect(stageTimeouts(withBudget).get("单元测试")).toBe("45m");
+    /* 子 Job 那一层（Job 级 `image:` 的容器格）：预算跟着 `image` 一起下移，
+     * 而 stage 名照旧取**外层**那一个 —— 判据与账里用的都是它。 */
+    expect(
+      stageTimeouts(
+        "x:\n  stages:\n  - name: E2E\n    jobs:\n      - name: E2E\n        image: node:24\n        timeout: 30m\n",
+      ).get("E2E"),
+    ).toBe("30m");
+    /* 更深的 `env:` 里出现 `timeout:` 不算（那是另一个东西）。 */
+    expect(
+      stageTimeouts(
+        "x:\n  stages:\n  - name: a\n    env:\n      timeout: 99m\n",
+      ).has("a"),
+    ).toBe(false);
     // 同级下一项开始后，上一项的 timeout 不许被算到它头上。
     expect(
       stageTimeouts(
