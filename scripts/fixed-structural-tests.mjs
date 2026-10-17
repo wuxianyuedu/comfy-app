@@ -609,4 +609,29 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 三十步门禁（红法全在别处）。触发面是那个脚本与 `.cnb.yml`，静态 import 图里
   // 只有它自己 —— 故进固定清单。
   "tests/ci-install-deps.test.ts",
+  // 平台侧「同一批 stage 站在两台执行机上」（ISSUE #1993，规范 §13.5.21）。
+  // 用户的原话是「能否一个机器跑 2 套 CI，一个处理 Linux 的、一个处理 Windows 独有的」——
+  // 而「两套 CI」如果落成**两份判据清单**，缺的那几档不会红，那样的绿不算证据。
+  // 所以落地的是**同一条流水线的两台执行机**（`win:` / `linux:` 共用 `.gates` 锚点），
+  // 这条判据钉三件事：两条链路的 stage 名单逐字相同、各自声明 `runner.tags`、
+  // 以及「哪条 stage 在哪几台机上跑」只有一处出处（`scripts/ci-lane-duties.mjs`）。
+  // 一次误挪（把只该在 Windows 上跑的东西搬到 Linux）不会让任何别的判据变红，只会让
+  // 那一条在某台机上以「命令不存在」的形态红、或者最坏情况**从不执行**；而触发它的
+  // 改动面恰好是 `.cnb.yml` —— 只改它在静态 import 图里追不到任何用例，故进固定清单。
+  "tests/ci-lanes.test.ts",
+  // POSIX 侧的外壳（`scripts/ci-sh-exit.mjs`，ISSUE #1993）：Linux 那条链路里每个
+  // stage 都包在它外面，所以它坏掉时**每一步都会以看不懂的方式坏**。三类失效都不说话：
+  // 退出码被吞（被信号打死时 `code` 是 `null`，`?? 0` = 「没跑完」被报成「通过了」）、
+  // 输出攒到 `close` 才发（分钟级 stage 被 kill 时 `close` 永不到来 ⇒ 整轮日志零行，
+  // `ci-cp936-exit.mjs` 第六次上平台就是这么红的，而它与编码无关、POSIX 上同样成立）、
+  // 以及「顺手把 CP936 那一半件加回来」（POSIX 上转码是把 UTF-8 变乱码）。
+  // 三者都只在平台侧真跑时才暴露，本地钩子一条都跑不到，故进固定清单。
+  "tests/ci-sh-exit.test.ts",
+  // Linux 侧宿主自证（`scripts/ci-toolchain-posix.mjs`，ISSUE #1993）：它答的是 Windows
+  // 那两条（`工具链自证` + `Install dependencies`）在 POSIX 上答不出来的三格
+  // （`bash` / coreutils / `python3`）。失效形态全是「不说」—— 整步空转（退 0 且零输出，
+  // `file://${argv[1]}` 那格真栽过）、把读数当判据（`python3` 不在时就红，而处置归
+  // `Python 可用性`）、以及 `bash` 不在时不红（stage shell 本身就是它，后面每一步的失败
+  // 都与判据无关）。它同样只在平台侧真跑，故进固定清单。
+  "tests/ci-toolchain-posix.test.ts",
 ];

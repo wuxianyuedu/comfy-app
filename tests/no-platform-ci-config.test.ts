@@ -100,7 +100,22 @@ function repoTopLevel(): string[] {
  */
 const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
   {
-    mustMatch: /^master:\s*$/m,
+    /* 顶层必须是「分支: { 事件: [流水线] }」形态（#1229 的根因是顶层直接写
+     * `stages:` / `jobs:`，匹配不到任何事件）。
+     *
+     * ⚠️ 这一格从「**必须**有 `master:`」放宽成「**至少**有一个这样的分支键」
+     * （ISSUE #1993）：`.cnb.yml` 现在有**两个**分支键（`win:` / `linux:`，同一批
+     * stage 站在两台执行机上，见 `scripts/ci-lane-duties.mjs`），而 `master:` 这个名字
+     * 在这份文件里从来只是**目标分支**的意思 —— 它的分支键名字与「哪台机器上跑」
+     * 那件事没有关系。写成「必须有 master:」会让 #1993 那样的一次改名把一个
+     * 完全正确的配置判红，而判据当时想拦的东西（#1229 那种顶层直接写 stages）一点
+     * 没变。**收窄回来的那一半在下面第三条**：分支键底下的 `pull_request:` 必须在。 */
+    /* 认的是「名字: 下面跟着事件键」这个**形状**，不是「名字恰好叫 master」：
+     * `#1229` 那种顶层直接写 `stages:` / `jobs:` 的，下面跟的不是事件键 ——
+     * 所以「紧跟一行 `  pull_request:` 或 `  push:`」才是这条判据的靶子。
+     * 放宽到「任意分支键」是 #1993 的要求（`win:` / `linux:` 各一条），
+     * 收紧到「紧跟事件键」是**不许它变成空判据**的要求。 */
+    mustMatch: /^[A-Za-z_][\w.-]*:\s*\n {2}(?:pull_request|push):\s*$/m,
     why: "顶层必须是「分支: { 事件: [流水线] }」形态（#1229 的根因是顶层直接写 stages:/jobs:，匹配不到任何事件）",
   },
   {
@@ -573,14 +588,36 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const runner = runners[0];
     if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
     expect(runner.namespace).toBe("group");
-    expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
+    /* ⚠️ **`tags` 不在锚点里了**（ISSUE #1993）：`win:` 要一台标签带 `win` 的节点、
+     * `linux:` 要一台带 `linux` 的 —— 标签不再是「所有流水线共用的那一个」，而是
+     * **每条链路唯一的差异**。留在锚点里会让 Linux 那条也去要一台 `win` 节点，
+     * 而那种失配的表现是**排队**、不是红（§13.5.3.4 第 5 条）。
+     *
+     * 所以「非空 tags」这一格改由 `tests/ci-lanes.test.ts` 逐条判（它按链路解析），
+     * 本文件只钉住「锚点里确实不再有它」—— 两处同时写等于「哪一份是真的」没人答得出。 */
+    expect(
+      runner.tags?.length ?? 0,
+      "`.common` 锚点里出现了 `tags` —— 它该在每条链路各自那一层（win / linux 各一个标签）",
+    ).toBe(0);
     // 两条流水线都必须引用那个锚点：只引用一条 = 另一条悄悄回落到平台池。
     // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。
     const refs = text.match(/^\s+-\s*<<:\s*\*\w+/gm) ?? [];
+    /* 引用数 = 流水线条数：`win:` 有两条（`pull_request` / `push`）与 `linux:` 一条。
+     * 直接数「配置里所有 `- <<: *anchor`」而不是写死 3 —— 换一台执行机进来时这个
+     * 数字会变，而每个分支键下「至少挂一条流水线、且都引用了那个锚点」才是判据。 */
+    const branchKeys = (text.match(/^[A-Za-z_][\w.-]*:\s*$/gm) ?? []).filter(
+      (k) => !k.startsWith("."),
+    );
+    const eventKeys = (text.match(/^ {2}(pull_request|push):\s*$/gm) ?? []).length;
     expect(
       refs.length,
-      "锚点引用数与流水线数对不上（两个事件各要 <<: 一次）",
-    ).toBe(2);
+      `锚点引用数（${refs.length}）与事件数（${eventKeys}）对不上 —— ` +
+        "每个事件下的每条流水线都要 `<<: *common`，漏一条那一跑就回落到计费平台池",
+    ).toBe(eventKeys);
+    expect(
+      branchKeys.length,
+      "顶层分支键少于 2 个 —— 两条执行机（win / linux）各要一个（ISSUE #1993）",
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it("规范正文确实写着这次的决策反转（反向锚点）", () => {
