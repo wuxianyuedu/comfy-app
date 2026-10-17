@@ -41,6 +41,7 @@
     "check:all": "node scripts/quality-gate.mjs",
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",
     "check:app-version": "node scripts/check-app-version.cjs",
+    "check:ci-incremental": "node scripts/ci-incremental-gates.mjs --check",
     "check:base": "node scripts/base-check.mjs",
     "check:base:batch": "node scripts/base-check.mjs --base",
     "check:premerge": "node scripts/premerge-check.mjs",
