@@ -220,7 +220,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖硬闸（见 12 §12.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
 ✅ node scripts/check-format.cjs --staged    # prettier 格式硬闸（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
-✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
+✅ node scripts/check-reformat-only.cjs --staged  # 格式化提交与行为改动分离（见下 13.5.2；`--staged` = 面上没有源文件时跳过，ISSUE #1993）
 ✅ node scripts/check-gate-flag-claims.cjs  # 翻闸删掉的 `--update` / `--strict` 不许还在被人教着跑（见下 13.5.16）
 ✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出硬闸（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
@@ -534,6 +534,62 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 （§13.5.3.5 / §13.5.3.9）；而「本仓到底还需要不需要 docker」是**人**的问题，机器判据
 答不了它 —— 与 §13.5.3.8 那条「不要靠调 `runner.cpus` 调优」同族：都在说「别去动那个
 不生效的旋钮」。
+
+##### 13.5.3.4.1.1 宿主侧怎么「用起来」那张镜像：`docker pull` + 标签钉版本（ISSUE #1993）
+
+上一条把「自托管上没有声明镜像的地方」写死了。剩下的问题只有一句：**那张镜像在
+宿主机上到底怎么被用**。答案是三类用法里只有一类是「真按镜像跑」，另外两类与
+「这台机有没有 docker」无关：
+
+| 用法                                        | 它做什么                                                             | 要宿主机有 docker 吗 | 本仓判据                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------- |
+| **① 当拉取源**（`docker pull`，钉版本标签） | 装机时按那张镜像装出一台机器 —— 这是唯一「真按镜像跑」的一档         | **要**               | 读数 `镜像身份`                                            |
+| ② 当参考与自证基线                          | Dockerfile 是「该有什么」的声明，`工具链自证` 是它在宿主机上的执行者 | 不要                 | `tests/ci-image-identity.test.ts` 判「同一份清单两个出口」 |
+| ③ 当跨节点缓存（`docker:cache`）            | 平台把缓存**构建成镜像**走制品库（OverlayFS 不可用的替身）           | 不要（平台侧任务）   | 无（本仓未启用）                                           |
+
+**① 的操作顺序**（人做，机器不代劳 —— 构建容器里没有 docker）：
+
+```powershell
+# 1. 拉。标签**必须钉版本** —— latest 等于「环境每换一次都没有记录」
+docker pull <registry>/<namespace>/<repo>:<版本标签>
+
+# 2. 取 digest（标签可以被移动，digest 不会）—— 下面这条命令是唯一出处
+docker image inspect --format "{{index .RepoDigests 0}}" <同样的引用>
+
+# 3. 按它装好后，把身份钉成**机器级**环境变量（Runner 以服务账号跑，用户级它看不见
+#    —— 与 Python 那一格同一条教训，见 §13.5.3.5.1）
+[Environment]::SetEnvironmentVariable("COMFYAPP_NODE_IMAGE", "<registry>/<namespace>/<repo>:<版本标签>", "Machine")
+[Environment]::SetEnvironmentVariable("COMFYAPP_NODE_IMAGE_DIGEST", "sha256:…", "Machine")
+```
+
+**两个变量名与它们的判读**（实现与取值只有一处：`scripts/ci-image-identity.mjs`）：
+
+- `COMFYAPP_NODE_IMAGE` —— `pinned`（有版本标签）/ `floating`（`latest` 或无标签）/
+  `missing`（没声明）。后两档都只说一件事：**「哪一版」不可追**，下一动作一样是钉个标签；
+- `COMFYAPP_NODE_IMAGE_DIGEST` —— 只判**形态**（`sha256:` + 64 位十六进制）。
+  它**不是**真伪判据：那个 digest 是不是那张镜像只有镜像库答得出，本进程查不到。
+
+**这一步是读数、不是判据**，`镜像身份` 那一档**恒退 0**，三条理由：
+
+1. 工具链靠**断言**守（`工具链自证` 判四件、`环境前提` 判版本下限）—— 那些是**实际
+   能力**，镜像是**期望身份**。不一致时以能力为准，再加一条镜像判据就是第二个判据源
+   （§12.18）；
+2. **没有标识不等于这台机器不对**：裸装机是本路径的历史形态（#1959 之前全部时间都是
+   它），把第一次接进节点的一跑判红，等于用一条与新事实无关的红挡住所有变更；
+3. 「标签 / digest 对不对得上镜像库」本进程**判不了**（构建容器里没有 docker daemon）。
+   与日志乱码那一格同形：能判的只有宿主读数。
+
+它换来的是那条一直缺的读数：**这一跑的机器长自哪一版**。缺了它，`工具链自证` 红一次
+就要靠翻上一次的红色日志反推「这台机到底有什么」—— 那正是 §13.5.3.5 那张清单反复
+被重写的成因。所以它排在 `工具链自证` 之后、一切安装之前：**跟着那台机器的身份，
+贴着那台机器的自证**。
+
+⚠️ 两条容易走偏的：
+
+- **别把它当成「流水线跑在镜像里」的证据**：`.cnb.yml` 里没有、也不该有 `image:`。
+  这一档记的是「人按哪张镜像装了这台机」，不是「平台给它起了容器」；
+- **别用 `latest` 换「方便」**：这是它唯一会主动劝退你的地方 —— `latest` 下「回滚」
+  与「诊断」都退化成「再拉一次，看会不会不一样」。
 
 ##### 13.5.3.4.2 「秒级克隆」与 `runner.cpus` 是同一条限制的两个后果（ISSUE #1959）
 
@@ -2704,6 +2760,63 @@ teardown 那条路没走 —— 于是**第一个和第二个** webServer 都会
 不收、端口空着零代价、① 未命中时**一次 HTTP 都不发**、② 是端口级的一次、以及接线三条
 （在 `spawn` 之前 / 有 CI 档守卫 / 收完重算，按相对位置判）。
 
+###### 第十五处：`spawnSync` 的 `inherit` **不落日志** —— 输出攒在调用方的 Buffer 里（ISSUE #1998）
+
+第十四处（应用端口那一格）修完之后，`E2E 关键流程` 走到了**生产者自己那一层**：它跑满
+30 分钟被 stage 墙钟 kill（`cnb-m0t-1k54oljem`），而日志**零行** —— 连 `e2e-run` 那几条
+「起 Playwright 前：应用端口 空 / 替身端口 空」都没有：
+
+    ❌ E2E 关键流程: 2160137ms (error)
+       错误信息: timeout of 2160000ms exceeded
+       ─── 日志 ───
+       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
+       Finished, code: ECONNABORTED, duration: 36m 0s
+
+第十二处修的是**外壳**（`ci-cp936-exit.mjs` 攒到 `close` 才发），这一处的缓存落在
+**调用方**那一层：`e2e-run.mjs` 用 `spawnSync(process.execPath, [entry, …],
+{ stdio: "inherit" })` 起 Playwright，而 `spawnSync` 的「同步」意味着它**必须**自己收着
+子进程的输出才能把结论交回去 —— `inherit` 只继承 fd，`res.stdout` 照旧攒着一整份，而
+本文件从不读那个字段。被 kill 时那份缓冲随进程一起消失。
+
+⇒ 与第十二处**同形、不同层**。处置只有一条：
+
+| 写法                                     | 秒级 stage | 分钟级 stage 被 kill         |
+| ---------------------------------------- | ---------- | ---------------------------- |
+| `spawnSync(…, { stdio: "inherit" })`（旧） | 看不出差别 | 缓冲随进程消失 ⇒ **日志零行** |
+| `spawn` + `{ stdio: "inherit" }`（现在）   | 一样       | 每一行**都已经发出去了**      |
+
+起法现在由 `scripts/e2e-run-playwright.mjs` 的 `resolvePlaywrightInvocation()` 一处给出
+（**不缓存**：这是它与旧写法唯一的实质差别），`runChild()` 负责真起一次并把退出码 /
+被信号打死 / `ENOENT` 三条收场分开交出。
+
+**同批的第二半**：开跑前那几条读数（端口 / Python / schema / 浏览器）此前是「算一条、
+打一条」夹在几条短路 `return 2` 之间，于是它们**一旦排在短路之后就不再说**。现在由
+`runPreflightReadings()` 编排成一步（`makePreflightCollectors()` 把三份判决翻成
+「一句读数 / 一句阻断话术」，判据一个字没搬）：**拦之前先把已算出来的说出口**。
+
+**为什么这一格要拆文件**：`scripts/e2e-run.mjs` 加上这两半之后越过了
+`check-infra-file-size.cjs` 的 900 行硬闸（存量已清零、无基线可登记），出口只有拆。
+拆的边界是「怎么起 Playwright」这一族（入口解析 + 起法 + 等结论 + 读上游源码），
+`e2e-run.mjs` 留住「这一跑算不算跑绿了、要不要记账」。
+
+判据（`tests/e2e-run.test.ts` 新增 10 条，其中 5 条判起法、5 条判编排）：
+
+- 起法那一组的**第一格在 Linux 上是看不见的**（缓冲不影响退出码，本地终端里输出照旧），
+  所以它判形状：`options.stdio === "inherit"`、`env` 是拷一份（`E2E_PREFLIGHT` /
+  `E2E_PYTHON_PREFLIGHT` 两条结论不能丢）、`args` 不改写；
+- 真跑一次 `node -e "process.exit(3)"` 拿回 `status: 3`（`runChild` 不是空壳），
+  再拿一个不存在的路径拿回 `status: null`（起不来不抛，转非零退出码）；
+- 「跑法脚本里不再有 `spawnSync(` 调用行」按**调用形态**判（注释里写着它的来历不算）；
+- 编排那一组：三步各说一句、第一条 `abort` 就停且它之前那几步**已经说过**、`null` 步跳过、
+  Python 缺件时结论仍写进 `env`、schema 的阻断话术逐条列出丢数据语句并给 `pnpm db:push`。
+
+**同批收掉的另一个供给侧**（`playwright.config.ts` 的 `resolveE2eWorkers()`）：它此前在
+`CI` / `PNPM_START` 那一档回 `undefined`（= Playwright 默认），而默认是 `cpus - 1` ——
+16 核节点上 15 个 worker + 两条 webServer + `fullyParallel`，这正是那 36 分钟的另一半。
+现在**两档都收敛**（上界仍是 2，来自 #1834 的实测档），且按现场核数
+（`CNB_CPUS` → `os.availableParallelism()`）取 `max(1, min(2, cpus - 1))`：小机器上
+不开 2，大机器上不铺开。`timeout: 60_000` 一个字节没动 —— **降的是负载，不是预算**。
+
 ##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
 
 按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的
@@ -4764,8 +4877,12 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
   `Install dependencies` / `分支守卫` / `同步数据库表结构`）—— 后面每一步都依赖它们，
   跳过等于让「没跑」看起来像「过了」；
 - **全库级不变量**（`类型检查` / `文件结构硬规则` / `UI/逻辑分离` / `lib Node-only 声明` /
-  `零消费导出` / `core` 那三条 / `格式化提交分离`）—— 扫描面是整个 `src/**` + `scripts/**` +
-  `tests/**`；
+  `零消费导出` / `core` 那三条）—— 扫描面是整个 `src/**` + `scripts/**` + `tests/**`；
+  > ⚠️ **`格式化提交分离` 2026-10-17 从这一列挪进登记表了**（ISSUE #1993，口径见 §13.5.21）：
+  > 它判的是「这次提交里有多少个文件只是被 prettier 重排过」，判据本体是**逐文件跑一次
+  > prettier**（实测每份文件一次子进程）—— 面是「源文件扩展名」，不是「全仓任何一处改动」。
+  > 一份图 / 一个 yaml 的提交连文件都列不出来，所以它属于「扫描面封闭」那一档；
+  > 它同时是 §13.5.18 那三条必要条件的第 3 条的反例检验：**判全库不变量 ≠ 判全仓**。
 - **文档面三条里的另两条** —— `API 文档生成物与源同步` 的输入面是 typedoc 的入口 glob
   （`src/lib|server|trpc`，域不是「改了 docs」），`文档引用与权威源一致` 判的是**全库**文档
   里的引用与权威源一致；
@@ -4944,6 +5061,76 @@ typedoc 的入口 glob」。那句话对，结论错 —— **入口 glob 是能
 **这一轮买到的**：这两档在「只改文档 / 只改 `changelog.d/` / 只改 `src-tauri` / 只改组件」
 这几类 PR 上不再付费，而**代价仍是 0 条判据被放宽**。买不到的：`生产构建` 与 `E2E` 的
 时间一分没省 —— 它们判的正是「整仓」，那笔钱省不得。
+
+#### 13.5.21 「runner 配置能不能控负载」—— 不能，所以改成让每一档按现场核数收敛（ISSUE #1993）
+
+**问题原话**：用户想把上一条建议（按车道切职责 + 分 `lock.key` + 重算并发预算）
+**先做一半**，并问「runner 配置可以控制负载吗」。
+
+**先答问题，因为答案决定了另一半该怎么做。**
+
+| 想控的东西                | 平台给的旋钮                              | 本仓的结论                       |
+| ------------------------- | ----------------------------------------- | -------------------------------- |
+| 一个 runner 分到几核      | `runner.cpus`                             | **无效**（自托管上官方明写「配置无效」，见 §13.5.3.4） |
+| 构建环境 / 镜像           | `docker.image` / `services` / `volumes`   | **无效**（同上：不开启 Docker 能力） |
+| 同一 key 上的并发流水线   | `lock.key` + `cancel-in-progress`         | **有效**，但只掐「同一个 key」   |
+| 同一台上接几个 runner     | 不在仓库的声明面里                        | 平台不限制，仓库也管不到         |
+| **一次构建内部开几个 worker** | 没有平台旋钮                          | **只能在脚本里按事实收敛**（本条） |
+
+前三行是「平台侧」的事实，第四行是「仓库侧唯一还兑现得了的动作」。所以
+**「用 runner 配置控负载」这条路不存在**：`runner.cpus` 写上去只会让人以为核数被控住了
+（`.cnb.yml` 因此刻意不声明它，头注第 2 条）。
+
+**落地的这一半**：把「几个并发」从**常数**变成**按现场核数算出来的值**。
+
+- 唯一出处 `scripts/ci-load.mjs`：`resolveCores()`（`CNB_CPUS` → `os.availableParallelism()`
+  → 兜底）、`workersForCores()`（`ceil(cores / 4)`，即「一个 worker 至少 4 核」）、
+  `resolveCiWorkers()`（叠一层人的出口 `COMFY_CI_MAX_WORKERS`）。
+- 消费者是 `scripts/full-suite-run.mjs` 的 `planRun()`：`--maxWorkers` 由它拼进
+  `pnpm run test:coverage`。**并发不进 `extra`** —— 进了 `isWholeTrackRun()` 会把每一次跑
+  判成「跑的不是整档」、于是记账通道整个失效（那比不加并发严重得多）。
+- 人还能再压一档：`COMFY_CI_MAX_WORKERS=1`（只调并发、不动任何判据，与
+  `.githooks` 的 `COMFY_PRECOMMIT_MAX_WORKERS` 同一句口径）。
+
+**为什么这一半值得先做**：`单元测试` 与 `生产构建` 的耗时是**变量**（§11.13 那张表：
+同一套、同一台机，负载不同墙钟差 3~10 倍），而配置里那个常数与「这台机现在几个核」
+没有任何联系。节点换规格、或同一台机上多了第二条流水线（平台不限制并发数）时，
+写死的 4 与配置里的 8 都会照旧铺开 —— 现场形态是**既不推进也不报错**
+（`cnb-jt3-1k5071kou` 的 `ESLint 零警告` 挂 8640s、`cnb-did-1k50659np` 的 `单元测试`
+挂 2h24m，都只留下 `timeout of … exceeded`）。
+
+**刻意没做的（以及为什么）**：
+
+- **不给 `生产构建` 造旋钮**：`next build` 的 worker 数由构建器自己定，没有「按核数
+  收敛」的键；`NODE_OPTIONS=--max-old-space-size` 改的是内存上限、不是并发。拿它冒充
+  降载就是换一个东西 —— `.cnb.yml` 那一步的注释里写明了这条边界。
+- **不按标签切职责**：那是「接第二个 runner」的前置，而本仓此刻**只有一台机**
+  （同一台机上两条全量流水线并行 = 直接复现 §13.5.3.9 那张表），先做等于先制造问题。
+- **不动 `lock.key`**：它已经是「按 PR 分锁」（§13.5.3.10），粒度正确；再按车道分锁
+  的前提是「先有车道」。
+
+**同批收掉的两处空转**（都属 §13.5.18 的收窄，判据一字未改）：
+
+- `格式化提交分离`：判据本体是逐文件跑 prettier，而「这次一个源文件都没改」的提交
+  （只改图 / 只改 yaml）连文件都列不出来。登记进 `INCREMENTAL_GATES`，本地钩子那一步
+  同批接 `--staged`（面 = `discernRoots()` 现算的顶层目录 + 根级文件名，见下一条）。
+- `端口推导跨语言一致性`：它判「同一份向量 ⇄ 四侧实现」，域是五个点（四侧实现 + 向量），
+  一个都没碰时不可能变 —— 登记进 `INCREMENTAL_GATES`。
+
+> ⚠️ **一个刚踩到的坑，值得留在这里**：`discernRoots()` 返回的名字**不带尾斜杠**，
+> 而 `isUnderAny()` 判的是 `rel.startsWith(dir + "/")`。写成 `src/` 会变成 `"src//"`、
+> 永不命中 —— 于是「面上明明有源文件」也被跳过，读数还写着「0 个落在 N 条根内」，
+> 看着像真的没有。所以 `check-reformat-only.cjs` 的 `stagedRoots()` 只做
+> 「现算 → 原样转根」这一步，尾斜杠一律不加；`tests/check-reformat-only.test.ts`
+> 那组用例**真起脚本**判「面上有源文件时不许跳过」（不是数清单里有几个元素）。
+
+**判据**：`tests/ci-load.test.ts`（核数读取顺序 / 换算方向 / 人给的出口）、
+`tests/daily-tracks.test.ts`（`planRun()` 钉形状不钉数字 + 并发不进 `extra`）、
+`tests/ci-incremental-gates.test.ts`（双向同源 + 「必跑集合」里 `格式化提交分离` 已挪出）、
+`tests/check-reformat-only.test.ts`（`--staged` 的真起脚本的反向判据）。
+
+**买不到的**：`生产构建` 的时间一分没省（它没有旋钮，见上）；两条并行流水线压同一台机
+时，「谁先谁后」仍然没有平台侧的旋钮（只能靠 `lock` 的粒度与 PR 的节奏）。
 
 ### 13.6 分支与合并策略
 

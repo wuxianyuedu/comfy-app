@@ -163,7 +163,9 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
         ["loadEventEnd", new RegExp(`${platform}: \\{ loadEventEnd: (\\d+)`)],
         [
           "firstContentfulPaint",
-          new RegExp(`loadEventEnd: ${inBaseline?.loadEventEnd}, firstContentfulPaint: (\\d+)`),
+          new RegExp(
+            `loadEventEnd: ${inBaseline?.loadEventEnd}, firstContentfulPaint: (\\d+)`,
+          ),
         ],
       ] as const) {
         const inSpec = Number(re.exec(spec)?.[1]);
@@ -209,7 +211,7 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
  * 换绿，会把真挂死的检出时间一起放大 —— §11.13 那句「看到 60s 都超时不要改成 120s」）。
  * 所以这条用例要钉住的是：**判据一个字没动，动的只有负载**。
  */
-describe("e2e 的并发档：现场编译 ⟺ 已构建（ISSUE #1834）", () => {
+describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 / #1998）", () => {
   const configSrc = readFileSync(
     join(process.cwd(), "playwright.config.ts"),
     "utf8",
@@ -222,39 +224,57 @@ describe("e2e 的并发档：现场编译 ⟺ 已构建（ISSUE #1834）", () =>
     expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv)).toBe(2);
   });
 
-  it("已构建（CI 或 PNPM_START）⇒ 不覆盖 Playwright 的默认并行", async () => {
+  it("已构建（CI 或 PNPM_START）⇒ 同样收敛（#1998：15 worker 跑成 36 分钟）", async () => {
     const { resolveE2eWorkers } = await import("../playwright.config");
-    /* `undefined` 是「不写 `workers` 这个键」——工厂函数不许在这里发明一个数：
-     * 生产构建下首屏零编译，并发不是这一格的自由度。 */
-    expect(
-      resolveE2eWorkers({ CI: "1" } as unknown as NodeJS.ProcessEnv),
-    ).toBeUndefined();
+    /* 这一格在 #1834 时是 `undefined`（「生产构建下并发不是自由度」），而实测把那条
+     * 理由推翻了一半：并发不是**编译**的问题，是「这台机同时开几个浏览器 + 几个
+     * worker」的问题。`cnb-m0t-1k54oljem`（PR #1998）：生产构建那一档没写这个键 ⇒
+     * Playwright 按 `cpus - 1` 铺开 15 个 ⇒ `E2E 关键流程` 跑到 36 分钟被墙钟 kill。 */
+    expect(resolveE2eWorkers({ CI: "1" } as unknown as NodeJS.ProcessEnv)).toBe(
+      2,
+    );
     expect(
       resolveE2eWorkers({ PNPM_START: "1" } as unknown as NodeJS.ProcessEnv),
-    ).toBeUndefined();
+    ).toBe(2);
   });
 
-  it("两档判的是同一对键：`scripts/e2e-run.mjs` 的读数与配置不分叉", async () => {
-    /* 跑法脚本要在输出里说清「这一趟是哪一档」（否则 8.7 分钟 / 43 failed 这个读数
-     * 读不出是哪种负载），所以它自己也算一遍 —— 两处各写一份就有漂的可能，这条用例
-     * 把它们钉在一起。两边**刻意不互相 import**：`playwright.config.ts` 是 Playwright
-     * 的入口文件，拿它当纯函数库引进来会让跑法脚本依赖整个配置图的求值。 */
+  it("核数是事实：小机器上不开 2（`CNB_CPUS` 优先，读不到落本机）", async () => {
+    const { resolveE2eWorkers, resolveLocalCpus } =
+      await import("../playwright.config");
+    const env = (cnbCpus: string) =>
+      ({ CNB_CPUS: cnbCpus }) as unknown as NodeJS.ProcessEnv;
+    expect(resolveE2eWorkers(env("2"))).toBe(1); // cpus - 1 = 1
+    expect(resolveE2eWorkers(env("1"))).toBe(1); // 单核不收敛成 0
+    expect(resolveE2eWorkers(env("16"))).toBe(2); // 16 核算出 15，取上界 2
+    /* 不合法值**不静默变成 0**（那会让 `min(2, cpus-1)` 退化成 1，看着像「小机器」）：
+     * 往后落到本机读数，两条都拿不到才回 0（= 只用上界）。 */
+    expect(resolveLocalCpus(env("abc"))).toBeGreaterThanOrEqual(1);
+    expect(resolveE2eWorkers(env("abc"))).toBeGreaterThanOrEqual(1);
+    expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv, 0)).toBe(2);
+  });
+
+  it("跑法脚本的读数与配置不再分叉：两档都说清并发", async () => {
+    /* 跑法脚本要在输出里说清「这一趟是哪一档、开几个并发」（否则 36 分钟这个读数
+     * 读不出是哪种负载）—— 两边**刻意不互相 import**（`playwright.config.ts` 是
+     * Playwright 的入口文件，拿它当纯函数库引进来会让跑法脚本依赖整个配置图的求值），
+     * 所以这一条钉的是「同一个 webServer 档 + 两侧都报得出 worker 数」。 */
     const { resolveServerMode } = (await import("../scripts/e2e-run.mjs")) as {
       resolveServerMode: (env: NodeJS.ProcessEnv) => {
         start: boolean;
         workers: number | null;
       };
     };
-    for (const env of [{}, { CI: "1" }, { PNPM_START: "1" }]) {
-      const viaConfig = (
-        await import("../playwright.config")
-      ).resolveE2eWorkers(env as unknown as NodeJS.ProcessEnv);
+    const local = resolveServerMode({} as unknown as NodeJS.ProcessEnv);
+    expect(local.start).toBe(false);
+    expect(local.workers).toBe(2);
+    for (const env of [{ CI: "1" }, { PNPM_START: "1" }]) {
       const viaRunner = resolveServerMode(env as unknown as NodeJS.ProcessEnv);
+      expect(viaRunner.start, "生产构建那一档").toBe(true);
+      // `null` = 「Playwright 默认」—— 而 `CI` 档的默认正是本条要治的那一格。
       expect(
-        viaRunner.start,
-        "`start` 档与配置里 webServer 那条命令读的是同一对键",
-      ).toBe(viaConfig === undefined);
-      expect(viaRunner.workers).toBe(viaConfig ?? null);
+        viaRunner.workers,
+        "生产构建那一档也必须说得出并发（它此前是 `Playwright 默认` = 15）",
+      ).not.toBeNull();
     }
   });
 

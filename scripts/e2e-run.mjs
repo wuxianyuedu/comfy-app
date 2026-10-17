@@ -45,14 +45,27 @@
  * —— 「按哪条命令复核的」这一栏必须写清是哪一档，否则下一个人按名义命令复跑、
  * 遇到的是另一种负载，却看不出差别在哪。
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
+/* 「怎么起 Playwright」那一族在 `e2e-run-playwright.mjs`（拆件理由见它的文件头：
+ * 本文件受 900 行硬闸约束，而那一族本来就自成一体）。这里**再导出**一过，
+ * 既有调用方（`tests/e2e-fake-comfyui-endpoint.test.ts` 的 `resolvePlaywrightFile`）
+ * 不用改。 */
+import {
+  resolvePlaywrightCli,
+  resolvePlaywrightInvocation,
+  runChild,
+} from "./e2e-run-playwright.mjs";
+
+export {
+  resolvePlaywrightCli,
+  resolvePlaywrightFile,
+  resolvePlaywrightInvocation,
+  runChild,
+} from "./e2e-run-playwright.mjs";
 import {
   canAutoApply,
   pendingStatements,
@@ -103,64 +116,125 @@ export const TRACK = freshnessTrack("e2e");
 export const E2E_DIR = "e2e";
 
 /**
- * 解析 Playwright 的 CLI 入口。
+ * 起 Playwright 之前的**三条短路判据**，各交一句「要么说话、要么拦下」（ISSUE #1998）。
  *
- * 与其余几个跑法脚本同一条理由（§12.12：两处各写一份就会漂）：不写死
- * `node_modules/@playwright/test/cli.js`（pnpm 布局下顶层那个是链接），也不
- * `spawn` 裸 `pnpm exec playwright`（Windows 上那经 `.cmd` shim，Node 直接起会
- * `EINVAL`，规范 §2.1.1 判定过的形态）。
+ * 收在一处的理由与 `runPreflightReadings` 同源：这三条此前是 `main` 里三段就地 `await`
+ * + 短路 `return`，于是「它们说了什么」只有在那一跑真跑到那里时才看得见 —— 而平台侧
+ * 那一跑 36 分钟零行，连它们说没说话都读不出来。现在由 `main` 一次编排（见
+ * `runPreflightReadings`），每一步的结论形状统一成 `{say?, abort?}`。
  *
- * ⚠️ 它只解决「入口在哪」这一件事，而几条跑法真正共享的东西（记账读写、账的形状、
- * 档的登记）都在 `freshness-ledger.mjs`。
+ * ⚠️ **判据一个字没搬**：Python / schema / 浏览器三份判决仍由
+ * `checkPythonReady` / `checkSchemaBeforeRun` / `checkBrowserReady` 各自给出，
+ * 这里只把它们翻成「一句读数 / 一句阻断话术」。阻断时的话术与退出码（`2`）与
+ * 改动前逐字相同。
  *
- * @param {string} cwd
- * @returns {string}
+ * @param {{
+ *   env?: NodeJS.ProcessEnv,
+ *   cwd: string,
+ *   schema?: typeof checkSchemaBeforeRun,
+ *   python?: typeof checkPythonReady,
+ *   browser?: typeof checkBrowserReady,
+ * }} input
+ * @returns {{
+ *   python: () => Promise<{say?: string, abort?: string}>,
+ *   schema: () => Promise<{say?: string, abort?: string}>,
+ *   browser: () => Promise<{say?: string, abort?: string}>,
+ * }}
  */
-export function resolvePlaywrightCli(cwd = ROOT) {
-  const require = createRequire(path.join(cwd, "noop.js"));
-  const pkgPath = require.resolve("@playwright/test/package.json");
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-  const bin = pkg?.bin?.playwright;
-  if (typeof bin !== "string") {
-    throw new Error(
-      `[e2e-run] @playwright/test 没有 bin.playwright：${pkgPath}`,
-    );
-  }
-  const entry = path.resolve(path.dirname(pkgPath), bin.replace(/^\.\//, ""));
-  if (!existsSync(entry)) {
-    throw new Error(`[e2e-run] Playwright CLI 入口不存在：${entry}`);
-  }
-  return entry;
+export function makePreflightCollectors({
+  env = /** @type {NodeJS.ProcessEnv} */ ({}),
+  cwd,
+  schema = checkSchemaBeforeRun,
+  python = checkPythonReady,
+  browser = checkBrowserReady,
+}) {
+  return {
+    async python() {
+      const verdict = python({ env });
+      env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(verdict);
+      if (verdict.verdict === "missing") {
+        return { abort: `${describePythonMissing(verdict)}\n` };
+      }
+      return { say: `[e2e-run] Python 预检：${verdict.detail}\n` };
+    },
+    async schema() {
+      const verdict = schema(cwd);
+      if (verdict.verdict === "abort") {
+        const risky = (verdict.risky ?? [])
+          .map((statement) => `[e2e-run]   ${statement}\n`)
+          .join("");
+        return {
+          abort:
+            `[e2e-run] ✗ ${verdict.reason}\n` +
+            risky +
+            "[e2e-run] 跑下去的下场：task 表缺列 → queue-status 500 → " +
+            "queue-monitor / main-journey 一批红，报错说的是「元素没出现」。\n" +
+            "[e2e-run] 这是要人做「丢不丢得起」决定的变更。先执行：pnpm db:push   然后重跑本档。\n",
+        };
+      }
+      return { say: `[e2e-run] schema 预检：${verdict.reason}\n` };
+    },
+    async browser() {
+      const verdict = await browser();
+      if (verdict.verdict === "missing") {
+        return { abort: `${describeBrowserMissing(verdict)}\n` };
+      }
+      return {
+        say:
+          "[e2e-run] 浏览器预检：" +
+          (verdict.verdict === "ready"
+            ? "这一档要用的浏览器能起来"
+            : `拿不到结论（${verdict.detail ?? "原因未知"}）—— 不阻断`) +
+          "\n",
+      };
+    },
+  };
 }
 
 /**
- * 解析 `playwright` 包里的一个文件（相对包根）。
+ * 开跑前那几条读数，**一次交出去**（ISSUE #1998）。
  *
- * 为什么不能直接 `require.resolve("playwright/…")`：本仓库**不直接依赖**
- * `playwright` —— 它是 `@playwright/test` 的依赖，pnpm 的布局下没有顶层软链，
- * 从仓库根解析必然 `MODULE_NOT_FOUND`。所以只能**从 `@playwright/test` 那里**
- * 借一个 require 去解析（与 `resolvePlaywrightCli` 同一条思路：不写死 pnpm 的
- * `.pnpm/<name>@<version>/` 路径 —— 那会随版本漂）。
+ * ## 它修的是「为什么顺序本身是判据」
  *
- * 存在它的理由是**判据侧也要读上游源码**：`tests/e2e-fake-comfyui-endpoint.test.ts`
- * 要拿「webServer 作为 plugin 排在 globalSetup 之前」这条真实顺序来立断言，
- * 而那条断言不能自己拼路径（拼法与版本耦合，换布局就静默找不到文件）。
+ * 本文件此前是「算一条、打一条」：`起 Playwright 前：应用端口 …` / `Python 预检：…` /
+ * `webServer：…` 分散在十来处，中间隔着几条短路 `return 2`。那些读数本身没问题 ——
+ * 问题是它们**一旦排在短路之后就不再说**，而 `E2E 关键流程` 在平台侧 36 分钟被 kill
+ * 时日志零行（`cnb-m0t-1k54oljem`），事后能复原「这一跑在干什么」的一条都没有。
  *
- * @param {string} rel 相对 `playwright` 包根的路径（如 `lib/runner/index.js`）
- * @param {string} [cwd]
- * @returns {string} 绝对路径
+ * 所以两件事同批做（缺一条另一半就白做）：
+ *
+ *   ① **起 Playwright 那一跳不带缓冲**（`e2e-run-playwright.mjs` 的 `spawn` +
+ *      `inherit` —— 那一整段在此之前攒进 `spawnSync` 的 `res.stdout`、从不被读）；
+ *   ② **开跑前的读数按序全部说出来再动手** —— 编排成一步，顺序因此不会在后续改动里
+ *      变回「一条在短路之前、一条在短路之后」。短路的判据照旧短路（该拦还是要拦），
+ *      只是**拦之前先把已算出来的说出口**。
+ *
+ * ## 为什么是纯函数（收 `collect` 而不是就地 `await`）
+ *
+ * 「顺序」与「第一条阻断结论生效」这两件事都是判据（`tests/e2e-run.test.ts`），而真去
+ * 起一遍浏览器 / drizzle 才判得动的形状不适合每条用例都跑。所以这里只编排、不执行：
+ * `collect` 交回每一步的结论，本函数负责**按序说话**并把第一条 `abort` 交出去。
+ *
+ * @param {{collect: (step: "ports" | "python" | "schema" | "browser") =>
+ *            Promise<{say?: string, abort?: string} | null>}} deps
+ * @returns {Promise<{abort: string | null}>}
  */
-export function resolvePlaywrightFile(rel, cwd = ROOT) {
-  const require = createRequire(path.join(cwd, "noop.js"));
-  const testPkg = require.resolve("@playwright/test/package.json");
-  /* 借 `@playwright/test` 的位置再解析一次 —— 它的依赖 `playwright` 就在那一层。 */
-  const viaTest = createRequire(testPkg);
-  const pwPkg = viaTest.resolve("playwright/package.json");
-  const target = path.resolve(path.dirname(pwPkg), rel);
-  if (!existsSync(target)) {
-    throw new Error(`[e2e-run] playwright 里没有这个文件：${target}`);
+export async function runPreflightReadings({ collect }) {
+  /* 顺序有理由，且与 `main` 里短路的顺序**必须一致**（否则「说出来的」与「拦下来的」
+   * 不是同一件事）：端口（毫秒）→ Python（毫秒）→ schema（秒级，空库那档要付一轮
+   * drizzle）→ 浏览器（毫秒，但缺件才是要早报的那一格）。 */
+  for (const step of /** @type {const} */ ([
+    "ports",
+    "python",
+    "schema",
+    "browser",
+  ])) {
+    const result = await collect(step);
+    if (!result) continue;
+    if (result.say) process.stdout.write(result.say);
+    if (result.abort) return { abort: result.abort };
   }
-  return target;
+  return { abort: null };
 }
 
 /**
@@ -225,18 +299,29 @@ export function stripArgvSeparator(argv) {
  * 而它们的差别在输出里一个字都看不见 —— 下一个人看到「8.7 分钟 / 43 failed」时无法
  * 判断那是哪一种，只能重新量一遍。
  *
- * ⚠️ 与 `playwright.config.ts` 的 `resolveE2eWorkers()` **判的是同一件事**（`CI` 或
- * `PNPM_START`），但两处**刻意不互相 import**：那份配置是 Playwright 的入口文件，
- * 由 Playwright 自己加载（会连带拉起整个配置图的求值），拿它当纯函数库引进来等于
- * 让跑法脚本依赖一个它本来不认识的模块。两处的一致性由
- * `tests/e2e-runtime-budget.test.ts` 钉住（它读两侧源码比对）。
+ * ## `workers` 现在**两档都有值**（ISSUE #1998）
+ *
+ * 它此前在 `CI` / `PNPM_START` 那一档回 `null`（= 「Playwright 默认」），而那正是
+ * `E2E 关键流程` 跑到 36 分钟的那一格：`CI` 档的默认是 `cpus - 1`（16 核上 15 个
+ * worker + 两条 webServer），叠起来把 30 分钟预算吃光。所以这一档现在同样收敛到
+ * {@link COLD_COMPILE_WORKERS}，`null` 只剩「拿不到核数、连上界都用不上」这一种理论情形。
+ *
+ * ⚠️ 与 `playwright.config.ts` 的 `resolveE2eWorkers()` **判的是同一件事**，但两处
+ * **刻意不互相 import**：那份配置是 Playwright 的入口文件，由 Playwright 自己加载
+ * （会连带拉起整个配置图的求值），拿它当纯函数库引进来等于让跑法脚本依赖一个它本来
+ * 不认识的模块。两处的一致性由 `tests/e2e-runtime-budget.test.ts` 钉住。
  *
  * @param {NodeJS.ProcessEnv} env
  * @returns {{start: boolean, workers: number | null}}
- *   `workers === null` = 用 Playwright 的默认并行度
+ *   `workers === null` = 用 Playwright 的默认并行度（只在算不出上界时出现）
  */
 export function resolveServerMode(env) {
-  if (env.CI || env.PNPM_START) return { start: true, workers: null };
+  /* **两档同一个并发**（上界见 `COLD_COMPILE_WORKERS`）：现场编译档的理由是首帧
+   * 编译不抢核，生产构建档的理由是这台机上同时开着的浏览器与服务太多 —— 两条都不是
+   * 「核多就铺开」那种自由度，所以档位只影响 webServer 命令，不影响 worker 数。 */
+  if (env.CI || env.PNPM_START) {
+    return { start: true, workers: COLD_COMPILE_WORKERS };
+  }
   return { start: false, workers: COLD_COMPILE_WORKERS };
 }
 
@@ -631,22 +716,6 @@ async function main(argv) {
   }
   env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight);
 
-  /* **这一档要用的 Python 在吗**（ISSUE #1959 第四轮，e2e 侧）。
-   *
-   * 假 comfy-cli 是一个 Python 包，主链路那条 `@critical` 用例要由它起执行器 ——
-   * 缺解释器时此前只有 Playwright 的 worker stdout 里那一行 `⚠ 假 comfy-cli 未注入`，
-   * 而人看到的是两条「执行器收口失败」的功能红（一件事报成两条）。
-   *
-   * 判红**不放行**：跑下去那两条必然红，而报错指不到真因。出口写在话术里。
-   * 这一档不是为了「让流水线红得好看」，而是让「一台没装 Python 的机器上跑 e2e」
-   * 的结论在开跑前就成立（同批的浏览器预检同口径）。 */
-  const python = checkPythonReady({ env });
-  env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(python);
-  if (python.verdict === "missing") {
-    process.stderr.write(`${describePythonMissing(python)}\n`);
-    return 2;
-  }
-  process.stdout.write(`[e2e-run] Python 预检：${python.detail}\n`);
   process.stdout.write(
     `[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`,
   );
@@ -655,49 +724,28 @@ async function main(argv) {
     `[e2e-run] webServer：${mode.start ? "pnpm start（生产构建，首屏零编译）" : "pnpm dev（Turbopack，首帧现场编译）"}` +
       ` / 并发：${mode.workers ?? "Playwright 默认"}\n`,
   );
-  /* 开跑前的 schema 预检（#1834 收尾的现场）：库结构带「会丢数据」的未应用变更时，
-   * webServer 会带着一张缺列的 task 表跑完全程，红成一片且每条都指向错的地方。
-   * 这里把它变成开跑前一条可执行的出口。`--dry-run` / `--skip` 已在上面返回，
-   * 到不了这一步。 */
-  const schema = checkSchemaBeforeRun(ROOT);
-  if (schema.verdict === "abort") {
-    process.stderr.write(`[e2e-run] ✗ ${schema.reason}\n`);
-    for (const statement of schema.risky ?? []) {
-      process.stderr.write(`[e2e-run]   ${statement}\n`);
-    }
-    process.stderr.write(
-      "[e2e-run] 跑下去的下场：task 表缺列 → queue-status 500 → " +
-        "queue-monitor / main-journey 一批红，报错说的是「元素没出现」。\n" +
-        "[e2e-run] 这是要人做「丢不丢得起」决定的变更。先执行：pnpm db:push   然后重跑本档。\n",
-    );
+
+  /* **开跑前的三条短路判据**（Python / schema / 浏览器），一次编排、按序说话
+   * （ISSUE #1998）：它们的判决一个字没变，变的是「结论先说出来再动手」——
+   * 平台侧那一跑 36 分钟零行时，连它们说没说话都读不出来。 */
+  const collectors = makePreflightCollectors({ env, cwd: ROOT });
+  const { abort } = await runPreflightReadings({
+    /* `ports` 那一步的读数在上面（它要**在**回收替身 / 应用端口之前算，见前一段），
+     * 这里不重复算 —— 少一条不必要的探针，少一次端口上「谁在」的时刻。 */
+    collect: async (step) => (step === "ports" ? null : collectors[step]()),
+  });
+  if (abort !== null) {
+    process.stderr.write(abort);
     return 2;
   }
-  /* 开跑前先问一句「这一档要用的浏览器在不在」（ISSUE #1948）。
-   *
-   * 缺件时的形态是**全档每一条都报同一个 launch 失败**，而 Playwright 给的那句
-   * `Executable doesn't exist at …` 会被埋在 81 份堆栈里 —— 看着像 81 个问题，
-   * 实际是一件事。这一探把它变成开跑前一行 + 一条可执行的命令。
-   *
-   * **放在 schema 预检之前**：探浏览器是毫秒级（判完即关），而空库那一档要付
-   * 一轮 drizzle 建表（秒级）—— 缺浏览器时没必要先花那个时间。 */
-  const browser = await checkBrowserReady();
-  if (browser.verdict === "missing") {
-    process.stderr.write(`${describeBrowserMissing(browser)}\n`);
-    return 2;
-  }
-  process.stdout.write(
-    `[e2e-run] 浏览器预检：${
-      browser.verdict === "ready"
-        ? "这一档要用的浏览器能起来"
-        : `拿不到结论（${browser.detail ?? "原因未知"}）—— 不阻断`
-    }\n`,
-  );
-  process.stdout.write(`[e2e-run] schema 预检：${schema.reason}\n`);
   /* 空库那一档**在这里等它建齐**（ISSUE #1948）：启动链路的同步是后台的
    * （`spawnSchemaSync` detached、不等待），而 Playwright 等的是 webServer 的
    * URL 可访问 —— Next 一 up 就满足，于是冒烟档的健康检查会在建表还没跑完时打
-   * 过去，全新检出的现场是 `db: "empty"` ⇒ 503 ⇒ 那条 `@critical` 必红。 */
-  if (schema.verdict === "ensure") {
+   * 过去，全新检出的现场是 `db: "empty"` ⇒ 503 ⇒ 那条 `@critical` 必红。
+   *
+   * **判决只算一次**：`ensure` 那一档才要建齐，而「是不是这一档」由上面那条
+   * schema 判据给出（`makePreflightCollectors` 已经把阻断那一档拦在门外）。 */
+  if (checkSchemaBeforeRun(ROOT).verdict === "ensure") {
     const ensured = ensureSchemaBeforeRun({
       root: ROOT,
       forward: (chunk) => process.stdout.write(`[e2e-run]   ${chunk}`),
@@ -707,12 +755,27 @@ async function main(argv) {
       return 2;
     }
   }
-  const res = spawnSync(process.execPath, [entry, ...run.args], {
-    cwd: ROOT,
+  /* 起法走 `resolvePlaywrightInvocation()`（唯一出处）：**不缓存子进程输出**。
+   * `spawnSync` + `stdio: "inherit"` 会把 Playwright 那一整段攒进 `res.stdout`，
+   * 而这个文件从不读它 —— 被 stage 墙钟 kill 时那一段随进程一起消失，日志零行
+   * （ISSUE #1998，`cnb-m0t-1k54oljem` 的 36 分钟）。`spawn` + `inherit` 才是真落
+   * 日志（与 `ci-cp936-exit.mjs` 第十二处同一个口径，只是缓存落在调用方这一层）。 */
+  const invocation = resolvePlaywrightInvocation({
+    entry,
+    argv: run.args,
     env,
-    stdio: "inherit",
   });
-  const exitCode = res.status ?? 1;
+  const res = await runChild(invocation);
+  /* `status === null` 涵盖「被信号打死」与「起不来」两种收场（`runChild` 三条出口
+   * 各打一句话）—— 两者都不是判据红，别让下一个人去查用例。 */
+  if (res.status === null) {
+    process.stderr.write(
+      "[e2e-run] ✗ Playwright 没能跑完（被信号终止 / 起不来）—— **不记账**：\n" +
+        "        这一跑没有结论，不是「用例红了」。先看上一行那句失败码。\n",
+    );
+    return 1;
+  }
+  const exitCode = res.status;
   if (exitCode === 0 && !shouldRecord({ exitCode, dryRun, extra })) {
     /* **绿了但不记账**：这一跑透传了参数（`--grep`、指到单个文件、甚至 `--help`），
      * 跑的只是整档的一个子集或压根没跑用例。它退 0 是「那件较小的事成了」，
@@ -730,7 +793,7 @@ async function main(argv) {
   }
   if (!shouldRecord({ exitCode, dryRun, extra })) {
     process.stderr.write(
-      `[e2e-run] ✗ 全量 e2e 未通过（退出码 ${res.status ?? "信号"}）—— **不记账**：\n` +
+      `[e2e-run] ✗ 全量 e2e 未通过（退出码 ${exitCode}）—— **不记账**：\n` +
         "        这条账记的是「上一次真跑绿」，红着记一条「我跑过」会把两件事混成一件。\n" +
         "        红的定性先按 §11.13 隔离重跑那条走，别把红当成「账没记上」。\n" +
         `        规范：docs/standards/11-测试与可观测性.md §11.8 / ` +

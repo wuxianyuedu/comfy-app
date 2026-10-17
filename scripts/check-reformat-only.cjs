@@ -77,9 +77,26 @@ async function loadShell() {
   return runPnpmSync;
 }
 
+const { discernRoots } = require("./gate-scan-read.cjs");
+
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
 const ROOT = process.cwd();
+
+/**
+ * `--staged`：暂存改动一点都没落在判据要看的面上时跳过（ISSUE #1993）。
+ *
+ * 这条判据看的是「本次提交改了哪些源文件」，而它在**只改文档 / 只改 `changelog.d/`** 的
+ * 提交上一份源文件都列不出来 —— 于是它每次都在那里把暂存区与 `HEAD` 各取一遍、
+ * 对每个文件跑一次 prettier，得到的结论恒为「没有文件改动，跳过」。
+ *
+ * 收窄的判据与其它门禁**共用同一份**（`gate-scan-read.cjs` 的 `skipUnlessStagedTouches`）：
+ * 扫描面 = `SOURCE_RE` 认的那些扩展名，也就是这条判据真正会判的那批文件。
+ * 口径三条：**有 `--range` 时一律不跳**（它按显式范围判，与暂存区无关）；
+ * **拿不到暂存清单 ⇒ 不跳**（`skipUnlessStagedTouches` 走 fail-closed，exit 2）；
+ * **「面上有源文件」照旧全跑** —— 收窄的只是「一份都不可能判」的那几类提交。
+ */
+const STAGED_GATE = process.argv.includes("--staged");
 
 /** 脚本自身所在仓库根:用来定位 prettier 依赖(与「被检查的仓库」可以是两个)。 */
 const HERE = path.resolve(__dirname, "..");
@@ -89,6 +106,31 @@ const LIMIT = 10;
 
 /** 只看这些扩展名:其余(图片、锁文件)不参与格式判定。 */
 const SOURCE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|css|scss|json|md|mdx)$/;
+
+/**
+ * `--staged` 的扫描面（仓库根相对）。
+ *
+ * 本判据按**扩展名**筛文件（`SOURCE_RE`），而 `skipUnlessStagedTouches()` 按**根前缀**
+ * 筛暂存清单（`isUnderAny()` 的语义是 `rel === root || rel.startsWith(root + "/")`，
+ * 空串根**不命中任何东西**）—— 所以：
+ *
+ *   · 顶层**目录**转成 `<dir>/` 根（`src/`、`docs/`、`scripts/` …）；
+ *   · 根级**文件名**原样作为根（`package.json`、`README.md` …）—— 只给目录会让它们
+ *     落在面外，而它们确实是本判据会判的源文件。
+ *
+ * ⚠️ 取「宁宽勿窄」：判宽只是少省几秒（多扫一遍 prettier），判窄是**静默漏判**
+ * （那一处的纯格式化提交从此不再触发这条判据）。「根清单由仓库现算」也收在一处
+ * （`gate-scan-read.cjs` 的 `discernRoots`），不在这里再写一遍 `readdir`。
+ *
+ * @param {string} [root]
+ * @returns {string[]}
+ */
+function stagedRoots(root = ROOT) {
+  /* 尾斜杠**去掉**：`isUnderAny()` 判的是 `rel.startsWith(dir + "/")`，留着 `src/`
+   * 会变成 `"src//"`（永不命中）。这一句是整条收窄的对错分界 —— 写错了它，
+   * 面上明明有源文件也会被跳过，而读数是「0 个落在 N 条根内」，看着像真的没有。 */
+  return discernRoots(root).map((name) => name);
+}
 
 function git(args) {
   // 必须显式给 cwd：不给的话 git 会沿「脚本所在进程」的 cwd 向上找仓库，
@@ -422,6 +464,16 @@ async function main() {
   const rangeIdx = args.indexOf("--range");
   const range = rangeIdx >= 0 ? args[rangeIdx + 1] : null;
 
+  /* 收窄（`--staged`，见 `STAGED_GATE` 的注释）：暂存里一份源文件都没有时，
+   * 下面的每一支都只会得出「没有文件改动，跳过」—— 那就不必先跑一遍 prettier。
+   * 显式 `--range` 与合并提交豁免都在它前面判过，不走这条。 */
+  if (STAGED_GATE && !range) {
+    require("./gate-scan-read.cjs").skipUnlessStagedTouches({
+      roots: stagedRoots(),
+      tag: "[reformat]",
+    });
+  }
+
   /* 默认口径(无 --range):**优先判暂存区**。
    * pre-commit 在提交对象生成之前运行,`HEAD~1..HEAD` 指向的是上一次提交 ——
    * 判它等于本次提交完全没被检查(见文件头)。`git diff --cached` 正是「本次将要
@@ -555,4 +607,5 @@ module.exports = {
   classifyReformatOnly,
   LIMIT,
   SOURCE_RE,
+  stagedRoots,
 };
