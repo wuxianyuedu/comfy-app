@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-10-15",
+  "generatedAt": "2026-10-17",
   "note": "client chunk 体积预算（规范 §13.5.4，ISSUE #1781）。判定看 gzip 与文件数两个总量（raw 一并量、一并打，但不判）；逐文件账是诊断输出，按 sha256 对齐，不进基线。棘轮只许下降，抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
-  "baselineRev": "b6c3c353bcfb3c4109f5ceebeaac629731ad221b",
+  "baselineRev": "cdf6768cff65662c200f1b97118ffda5f5d72c64",
   "metric": {
     "scope": ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
-    "raw": 9901344,
-    "gzip": 2330008,
+    "raw": 9901379,
+    "gzip": 2330028,
     "files": 221
   },
   "entries": [
@@ -134,6 +134,12 @@
       "sha": "e091b8a4f742b2f97a209a26836eec9036edbed9822f15e4f19715fecf962ee8",
       "raw": 3241,
       "gzip": 881
+    },
+    {
+      "name": "0dlfs0_5ig1-5.js",
+      "sha": "a0725140d2cf9137c4709603470f656259ad5e43ef92618d295a092aaf1588f2",
+      "raw": 3280,
+      "gzip": 876
     },
     {
       "name": "0dwopt6kgk40m.js",
@@ -494,6 +500,12 @@
       "sha": "196590459152400ff2b803545f63926ed2b6d09282d12cf3c75732e2c9410243",
       "raw": 55627,
       "gzip": 13277
+    },
+    {
+      "name": "1oaocfaefrb19.js",
+      "sha": "c302c83f7735af65abbef21edd748a608965358e69081ea81fc0525d37782c05",
+      "raw": 18560,
+      "gzip": 7252
     },
     {
       "name": "1p-gw7g_tbqb6.js",
@@ -874,12 +886,6 @@
       "gzip": 23239
     },
     {
-      "name": "2qp2a7j_3o-2_.js",
-      "sha": "a0f947983a0e2e19d8f0b18b732e5d786dd015ca22c90c9eae8880b9fb58d2d2",
-      "raw": 18525,
-      "gzip": 7231
-    },
-    {
       "name": "2sjqxs48tqu0e.js",
       "sha": "f966670eef550bba431812ad4c4920bba3ab10c0d27298137acbb7e24073b1bd",
       "raw": 8923,
@@ -944,12 +950,6 @@
       "sha": "bc355c1dcd9b2fb304a331a897b1c3133d71e33848cdabfa7e47a264be1f07ce",
       "raw": 21955,
       "gzip": 8775
-    },
-    {
-      "name": "2xl7atfwscxpp.js",
-      "sha": "1ba340e0b090c3ca083a3610bbc64eca39f7de7581afb6f310a5df05257ab957",
-      "raw": 3280,
-      "gzip": 877
     },
     {
       "name": "2ybvl40w9d-po.js",
