@@ -36,6 +36,7 @@ import {
   imageTagVerdict,
   osRelease,
   platformImageStages,
+  readImageDeclarations,
   ROOT,
 } from "../scripts/ci-image-identity.mjs";
 import { registeredGateOrder } from "./no-platform-ci-config.test";
@@ -261,23 +262,28 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
  *
  * 上一版这条判据钉的是「进容器的正好是 `浏览器安装` / `E2E 关键流程` 两格」，依据是
  * 官方 `script-vs-plugin.md` 的一句「指定 `image` 的脚本任务在独立容器中执行」。那句话
- * 本身没错，但它讲的是**平台池**那种形态；自托管节点上**没有 docker daemon**，
- * 平台连「起容器」都做不到。实测（`cnb-cqk-1k550gpp2`，PR #2003 首跑）：
+ * 本身没错，但它讲的是**平台池**那种形态；自托管节点上**没有 docker daemon**，平台连
+ * 「起容器」都做不到 —— 而且这与「写在 stage 上还是 Job 上」无关，两跑各用一种写法，
+ * 各红一次，答案都是同一句（`cnb-cqk-1k550gpp2`，PR #2003 首跑）：
  *
  *     浏览器安装  error [70ms]  →  Runner does not enable Docker.
  *
  * 70 毫秒、脚本一行都没执行、前面三十三步全绿。所以 `.cnb.yml` 里那两行 `image:` 撤了，
  * 这条判据把允许的名单钉成**空** —— 与上一版是同一条判据、只换了答案：名单仍在这里
- * **逐格点名**，加一格就必须先过这一条，而它会指着下面这段读数说话。
+ * **逐格点名**，加一格就必须先过这一条，而它会指着上面这段读数说话。
  *
- * 解析器与「多一格少一格都红」的形状都保留：那次事故里最难读出来的正是「哪一格带了
- * `image:`」。留着它，下次有人加一格时这条会当场把名字打出来，不必等 70ms 的那句红。
+ * ## 名单是空的，所以「不空转」由下面另几条担着
+ *
+ * `toEqual([])` 与「解析器永远返回空」在结果上无法区分 —— 那是本文件头注列为要堵的
+ * 失效形态之一。喂夹具的那两条（Job 级认得出来 / stage 级进另一个出口）就是这一档的
+ * 非空转证明：解析器还活着，绿的只是配置本身。要改回去的前提写在 `.cnb.yml` 那一段
+ * 注释里，且必须与这里的判据**同批**改。
  */
 describe("容器格：哪几格进容器是**决定**，不是随手写的（ISSUE #1993 续）", () => {
   /** 本仓**允许**带 `image:` 的 stage —— **空**：这台节点上没有 docker daemon。 */
   const CONTAINER_STAGES: string[] = [];
 
-  it("解析器认得 stage 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
+  it("解析器只认 Job 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
     const fixture = [
       "master:",
       "  pull_request:",
@@ -287,8 +293,10 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
       "      env:",
       "        image: not-an-image-key",
       "    - name: B",
-      "      image: node:24",
-      "      script: echo b",
+      "      jobs:",
+      "        - name: B",
+      "          image: node:24",
+      "          script: echo b",
       "    # - name: C",
       "    #   image: node:24",
       "",
@@ -296,10 +304,25 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
     expect(platformImageStages(fixture)).toEqual([
       { name: "B", image: "node:24" },
     ]);
+    /* 写错层的那一格**不进**这份名单，而进另一个出口 —— 它压根跑不起来，
+     * 与「某一格进了容器」是两件事（`readImageDeclarations()` 两个出口）。 */
+    const wrongLevel = [
+      "master:",
+      "  pull_request:",
+      "    - stages:",
+      "    - name: D",
+      "      image: node:24",
+      "      script: echo d",
+      "",
+    ].join("\n");
+    expect(platformImageStages(wrongLevel)).toEqual([]);
+    expect(readImageDeclarations(wrongLevel).stageLevelImages).toEqual([
+      { name: "D", image: "node:24" },
+    ]);
   });
 
   it("现役 `.cnb.yml`：**一格都不带** `image:`（带一格就是 70ms 的 `Runner does not enable Docker`）", () => {
-    const got = platformImageStages(read(".cnb.yml"));
+    const got = platformImageStages(read(".cnb.yml")).map((s) => s.name);
     expect(
       got,
       "有 stage 带了 `image:` —— 自托管节点上没有 docker daemon，这一格会在 70ms 内红在 " +
@@ -309,18 +332,18 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
     ).toEqual(CONTAINER_STAGES);
   });
 
-  it("这条判据不是空转：名单非空时它真的会红（喂一份带 `image:` 的配置）", () => {
-    /* 名单是空数组时，`toEqual([])` 与「解析器永远返回空」在结果上无法区分 ——
-     * 那正是「恒绿的空转」这一失效形态（`tests/ci-image-identity.test.ts` 的头注
-     * 把它列为三条要堵的形态之一）。所以这里给解析器喂一份**真的带 image** 的配置，
-     * 断言它会红，也就证明上面那条对现役配置的绿不是解析器瞎了。 */
+  it("这条判据不是空转：喂一份真带 `image:` 的配置，它认得出来且与空名单不等", () => {
+    /* 名单是空数组时，上面那条的绿与「解析器瞎了」在结果上无法区分 —— 那正是「恒绿的
+     * 空转」。所以这里给解析器喂一份**真的带 image** 的配置，断言它认得出来。 */
     const withImage = [
       "master:",
       "  pull_request:",
       "    - stages:",
       "    - name: 浏览器安装",
-      "      image: mcr.microsoft.com/playwright:v1.63.0-noble",
-      "      script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "      jobs:",
+      "        - name: 浏览器安装",
+      "          image: mcr.microsoft.com/playwright:v1.63.0-noble",
+      "          script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
       "",
     ].join("\n");
     const names = platformImageStages(withImage).map((s) => s.name);
@@ -333,9 +356,12 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
      * 判据得去镜像里那个目录找。带 `image:` 的 stage 在这台节点上必然红（见上），
      * 于是这一行剩下的唯一效果是**把落点判据指到一个宿主上不存在的目录** ——
      * 「明明装过」与「一件都没有」在日志里逐字同形（本仓最贵的那类红）。
-     * 现在这一格跑在宿主机上，落点就按 `playwrightBrowsersRoot()` 自己推，别给覆盖。 */
+     * 现在这一格跑在宿主机上，落点就按 `playwrightBrowsersRoot()` 自己推，别给覆盖。
+     *
+     * 按**行首的键**判，不按「文件里出现过这个词」：`.cnb.yml` 的注释里正当会写它
+     * （那几段注释正是在解释「为什么现在不写它」）。 */
     const text = read(".cnb.yml");
-    const override = /^\s*PLAYWRIGHT_BROWSERS_PATH:/m.exec(text);
+    const override = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:/m.exec(text);
     expect(
       override?.[0] ?? null,
       "`.cnb.yml` 里还有 `PLAYWRIGHT_BROWSERS_PATH` —— 那是给容器用的覆盖；" +

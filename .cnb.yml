@@ -116,6 +116,16 @@
   runner:
     # group = 当前仓库所属根组织下的自托管构建节点（不是平台公共池）。
     # 漏掉这一行会退化成平台池 —— 那时核时重新开始计费，而配置看起来完全一样。
+    #
+    # ⚠️ **用户的决定（ISSUE #1993）：「永远不用平台池，容器用自托管节点上的」**。
+    # 所以这一段**不是**可调项，而是两道必须同时在场的门：
+    #   ① `namespace: group` —— 派到根组织的自托管节点，而不是公共池；
+    #   ② `tags` 非空、且**不含** `cnb:arch:*` 那一族 —— 节点离线 / 满载时平台会
+    #      **自动改派到其他可用节点**，而在这一档上「其他可用节点」就是平台池
+    #      （头注第 5 条）。只写 ① 不够，改派发生时配置一个字都不会变。
+    # 「用容器」的那一半落在**任务级 `image:`**（`pipeline.docker.image` 在这条路径上
+    # 不生效，头注第 1 条）—— 池子是「跑在哪台机器」，容器是「这一格跑在什么环境里」，
+    # 两件事，别混。判据：`tests/ci-container-plan.test.ts` 把这段形态与容器计划一起钉住。
     namespace: group
     # 「与」关系：列出的每个 tag 都必须出现在节点标签上。当前节点声明的标签是 win。
     tags:
@@ -757,6 +767,15 @@
     # 真跑得完的形态差一两个数量级）。**不是放宽判据** —— 预算只管多久放弃。
     timeout: 10m
 
+  # ⚠️ 这一档**同批加了自动修**（`--check --autofix`，ISSUE #2001）：判据红了不是直接
+  # 收场，而是就地重生成 `docs/api/`、**再判一次**。理由与 `生成态文档与源同步` 那条
+  # 逐字同源（两条前提都满足：typedoc 对同一份源产出逐字节相同，判据自己每次都在复核
+  # 这个前提；而它的三个方向都只说明「产物与源不一致」，源码写错由 `类型检查` / 单测 /
+  # 生产构建各自去红）。实测这一格在自托管节点上是**全流水线最贵的一格**（201.8s），
+  # 而它的红几乎总是「改了 `src/lib` 忘了 `pnpm run docs`」—— 让人本地再跑一遍，
+  # 付的是**又一整轮流水线**，省下的只是一个机械动作。
+  # 修好之后**这一跑仍然是红的**（自动修只写工作区，提交与重跑由人 / 代理那一侧做）——
+  # 这是刻意的边界，见 `scripts/ci-autofix-duties.mjs` 头注第 1 条。
   # ⚠️ 这一档也收窄了（ISSUE #1981 收尾），而且它的 globs **不是手抄的**：
   # 由 `scripts/check-docs-api.cjs` 的 `INPUT_RES` 机械反推（登记在
   # `scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`）。理由是那份常量
@@ -775,10 +794,15 @@
       - pnpm-lock.yaml
       - scripts/check-docs-api.cjs
       - scripts/typedoc-run.mjs
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
+    # ⚠️ `--check` 与 `--autofix` **两个都要**（`tests/ci-autofix-duties.test.ts` 判这一条）：
+    # 只有 `--autofix` 而没有 `--check` 是最坏的形态 —— 脚本会走写入模式、不判任何东西、
+    # 恒退 0，于是判据在配置里而结论恒放行。
+    #
     # 全量档实测 32s（本机 8 核，热缓存；与钩子里那一档同量级）。平台侧冷节点上
     # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个
     # 数量级，卡死的形态 20m 报出来，不必等满平台默认的 2h 墙钟）。
+    # 红的时候多一次重生成 + 一轮比对（仍在同一量级），所以预算不动。
     timeout: 20m
 
   # ── 覆盖率上报（ISSUE #1990）──
@@ -917,27 +941,40 @@
   #
   # 下一笔账：`E2E 关键流程` 的首跑读数（它在自托管路径上仍然一次都没有跑到过）。
   #
-  # ── 为什么这一格**不能**进容器（ISSUE #1993 续 → 2026-10-17 读数否掉）──
+  # ── 为什么这一格**不写** `image:`（ISSUE #1993 续；两次实测推翻了前一版）──
   #
-  # 上一版给这一格与下面 `E2E 关键流程` 各加了一行 `image:`（理由写得挺顺：它们在
-  # **等网络**不在算 CPU，而官方 Playwright 镜像里已经装好 headless shell）。那版
-  # 合进 master 之后，PR #2003 的第一跑当场把它判死 —— `cnb-cqk-1k550gpp2`：
+  # 前一版这一格（与下面 `E2E 关键流程`）写着任务级 `image: mcr.microsoft.com/
+  # playwright:v1.63.0-noble`，想用官方镜像里**已经装好**的 headless shell 绕开
+  # 「120 MiB 取不回来」那条链路问题。现场读了两次，两次都是同一个回话：
   #
-  #   （原文）浏览器安装  error [70ms]  →  Runner does not enable Docker.
+  #     （原文）Runner does not enable Docker.      ← 70~109ms 就退出，容器都没起
   #
-  # 70 毫秒、脚本一行都没执行、前面三十三步全绿。**「无需重下浏览器」这个好处一次都
-  # 没兑现，代价是整条流水线在倒数第二步红。**
+  # 平台文档（本文件头注第 1 条抄的就是它）：「自定义 Runner **默认不开启 Docker
+  # 能力**，构建脚本直接运行在宿主机上」。这句话对**任何**要求平台起容器的东西都成立，
+  # 与「写在 stage 上还是 Job 上」无关 —— 前一版按「Job 级是另一种机制」去读，两跑
+  # 各用一种写法，各红一次，答案都是同一句。
   #
-  # 所以这一格回到**宿主机直跑**，浏览器靠本步自己的三条通道（顺序即优先级）：
-  #
-  #   ① 落点上已有那一件 ⇒ 秒级返回（`browserExecutableExists()`，函数开头那条快路）；
-  #   ② **分片自取 + 续传**（`seedBrowserOnOwn()`；这台节点的链路能握手、能吐前几 KB、
-  #      在大 body 上停住 —— 七跑读数，续传是当时唯一走完 119 MiB 的路）；
-  #   ③ 才交给 `playwright install`（用下面 `env` 里那个 `PLAYWRIGHT_DOWNLOAD_HOST`）。
+  # 于是这里回到**宿主机直跑**（不写 `image:` = 默认档，见头注第 1 条那条 ⚠️）：
+  # 这一格照旧走它已经量过很多次的链路 —— 分片自取 + 落点复验（§13.5.3.5「第七跑」），
+  # 那条链路在这台机上真的把 119 MiB 取完过。
   #
   # 长期看，这一格最省事的一条仍然是「**把浏览器预装进节点的落点**」：装过一次之后
   # 它再也不碰网络（`环境前提` 会打一行「落点已有那一件」，那也是这一档现在的常态）。
   # `scripts/ci-image-plan.mjs` 那份节点镜像计划里已经带着这一步。
+  #
+  # ⚠️ **「怎样才允许写回去」也写在这里**，因为判据只能判形态、判不了那台机器：
+  # 当天花板上出现「节点开了容器能力」这件事实（平台侧开、或换了台开了容器的机器），
+  # 两格可以一起改回 `image:`（**同批**改 `tests/ci-image-identity.test.ts` 的名单、
+  # `tests/ci-container-plan.test.ts` 的落点判据、本节注释与 §13.5.3.4.1.3/§13.5.3.4.1.5）。
+  # 在那之前写它是**确定会红**的一条，不是「待补读数」。
+  #
+  # 三条随之作废的边界（留着它们是为了下一次别再走一遍弯路）：
+  #   ① `PLAYWRIGHT_BROWSERS_PATH: /ms-playwright` 只在镜像里成立（宿主上没有那个
+  #      路径）—— 现在**不写**，落点判据回到它自己的口径（`playwrightBrowsersRoot()`
+  #      在 Windows 宿主上按 `%LOCALAPPDATA%` 推）；
+  #   ② 镜像标签（`-noble` 与 Playwright 版本同批升）随 `image:` 一起撤掉；
+  #   ③ 「容器格共用一份命名卷」那条桥（`volumes:`）**没有容器就没有跨容器这回事**，
+  #      一并撤掉 —— 它原本要治的「每格重下 120 MiB」在宿主机上不成立（同一块盘）。
   - name: 浏览器安装
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
     env:
@@ -970,16 +1007,13 @@
       # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
       PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
       PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-      # ⚠️ **`PLAYWRIGHT_BROWSERS_PATH` 这一行 2026-10-17 删掉了**（ISSUE #1993 续的
-      # 那版回滚）。它当初是给**容器**用的：镜像把浏览器装在 `/ms-playwright`，判据得
-      # 去那儿找。而带 `image:` 的 stage 在这条节点上直接 `Runner does not enable
-      # Docker`（70ms，见上面那一节），于是这一行剩下的唯一效果是**把落点判据指到一个
-      # 宿主上不存在的目录** —— 「明明装过」与「一件都没有」在日志里逐字同形。
-      # 现在这一格跑在宿主机上，落点就按 `playwrightBrowsersRoot()` 自己推
-      # （`%LOCALAPPDATA%\ms-playwright`），不给覆盖 = 用那份唯一出处。
-    # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
-    # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
-    # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
+      # ⚠️ **这里不写 `PLAYWRIGHT_BROWSERS_PATH`**：它只在「浏览器装在镜像里」那一档
+      # 成立（`/ms-playwright` 在 Windows 宿主上不存在）。宿主机直跑时落点判据按
+      # `%LOCALAPPDATA%` 推 —— 写了它等于让判据去一个空目录找东西，「装好了」与
+      # 「一件都没有」在日志里逐字同形。
+      # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
+      # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
+      # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
     timeout: 20m
 
   # ── E2E（仅 @critical 关键流程）──
@@ -1004,9 +1038,16 @@
   # 顺带记一笔：「停用期间看不见的东西」又多一类 —— 这一行此前从没被执行过，
   # 而它在本地是**永远绿的**（本地是 bash/PowerShell 直接调用，`@critical` 传得进去）。
   #
-  # ⚠️ **这一格同样不写 `image:`**（与上面 `浏览器安装` 同一条读数：带 `image:` 的
-  # stage 在这台节点上 70ms 就红在 `Runner does not enable Docker`）。两格环境保持
-  # 一致的办法回到原来的那一档：都在宿主机上跑，浏览器落点因此是**同一个目录**。
+  # ── 与上面 `浏览器安装` 逐字同形：不写 `image:`（ISSUE #1993 续）──
+  #
+  # 它**依赖**上面那一格的浏览器落点，两格环境不一致时上一格绿、这一格报
+  # `Executable doesn't exist at …`（「红在别处」，本仓真实出现过）。现在的形态是
+  # **两格都在宿主机上**，落点是同一个 `%LOCALAPPDATA%\ms-playwright` —— 「一致」
+  # 这件事不再靠声明维持，而是两格本来就跑在同一台机器的同一个账号下。
+  #
+  # ⚠️ 与上面那一格同一句话：这一格写 `image:` 也会在起格之前被平台答
+  # `Runner does not enable Docker.`（两跑各红一次）。改回去的前提与判据同批动作
+  # 写在上面那一段里。
   - name: E2E 关键流程
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
     # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
