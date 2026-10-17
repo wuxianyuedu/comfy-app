@@ -26,6 +26,7 @@
  *    且**不能**出现「新增内容」；
  * 2. 「raw 涨、gzip 不涨」被判红 ⇒ 那是可压缩冗余、不是用户可感知的劣化。
  */
+import { execFileSync } from "node:child_process";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 /**
@@ -368,12 +369,67 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
   );
 
   testWithGit("基线就是 HEAD 时，说清上涨来自未提交的改动", ({ repo }) => {
+    /* 造「基线记的就是 HEAD」那一档：先提交一次、让 `--update` 把基线落在这次提交上，
+     * 之后**不再提交** —— 上涨只发生在工作区（§12.13.3：数不出来时不许拿猜顶替，
+     * 而这一档是数得出来的那种「取自未提交的改动」）。 */
     seedChunks(repo);
+    repo.git("add", "-A");
+    repo.commit("artifacts");
     expect(repo.run(["--update"]).code).toBe(0);
+
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
     const { code, output } = repo.run();
     expect(code, output).toBe(1);
     expect(output).toContain("就是本检出的 HEAD");
     expect(output).toContain("未提交的改动");
   });
+
+  /**
+   * 合并提交那一档（§13.5.4 / §11.23.6）。
+   *
+   * `baselineRev` 恰是 HEAD 这件事**在合并里没有解释力**：HEAD 是两侧祖先里都没有的
+   * 提交，索引里那份基线是「合并前某一侧」的读数，而产物是合并后源码的输出 —— 两者
+   * 本就不可比。守住的是输出不许滑向「上涨来自未提交的改动」那句：它有依据的样子，
+   * 实际是把「量不出」说成了一句结论。
+   */
+  testWithGit(
+    "合并提交上基线恰是 HEAD 时不冒充「未提交的改动」",
+    ({ repo }) => {
+      seedChunks(repo);
+      expect(repo.run(["--update"]).code).toBe(0);
+
+      /* 造一个真合并：侧枝上改一个与产物无关的文件，主线上再追加一次提交，
+       * 然后 `--no-ff` 合进来 —— HEAD 于是有两个父。 */
+      repo.git("checkout", "-q", "-b", "side");
+      repo.write("side.txt", "side\n");
+      repo.git("add", "-A");
+      repo.git("commit", "-qm", "side");
+      repo.git("checkout", "-q", "-");
+      repo.write("main.txt", "main\n");
+      repo.git("add", "-A");
+      repo.git("commit", "-qm", "main");
+      repo.git("merge", "-q", "--no-ff", "--no-edit", "side");
+
+      /* 合并后把基线改成「就记 HEAD」：这正是解冲突时取一侧/重记的形态。 */
+      const baseline = JSON.parse(
+        repo.read("scripts/.bundle-budget-baseline.json"),
+      ) as Record<string, unknown>;
+      /* 夹具的 `git()` 不回显 stdout，所以经过一次读文件 + 一次写回把修订号换成 HEAD。 */
+      baseline.baselineRev = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      repo.write(
+        "scripts/.bundle-budget-baseline.json",
+        `${JSON.stringify(baseline, null, 2)}\n`,
+      );
+
+      chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+      const { code, output } = repo.run();
+      expect(code, output).toBe(1);
+      expect(output).toContain("HEAD 是合并提交");
+      expect(output).toContain("合并后的完整产物链");
+      expect(output).not.toContain("未提交的改动");
+    },
+  );
 });

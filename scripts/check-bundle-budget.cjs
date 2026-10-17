@@ -106,7 +106,10 @@ const MIN_CHUNKS = 20;
  * git 不可用 / 不在检出里时返回 `null`：那不构成判据，只是少一句归因。
  */
 function headRev() {
-  const res = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+  const res = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
   if (res.status !== 0 || typeof res.stdout !== "string") return null;
   return res.stdout.trim() || null;
 }
@@ -136,6 +139,32 @@ function baselineRevState(rev) {
   return res.status === 0
     ? { kind: "recorded", rev: String(rev) }
     : { kind: "stale" };
+}
+
+/**
+ * 本检出的 HEAD 是不是一个**合并提交**（父提交 > 1）。
+ *
+ * 为什么要单开这一档：合并提交的 `HEAD` 是**这一版的祖先里没有**的提交 —— 索引里那份
+ * 基线是哪一侧的数、还是解冲突时手写的，判据读不出来。此时若再套用「就是本检出的
+ * HEAD」那句，归因会从「量不出」滑成「这批读数取自未提交的改动」—— 一句**看起来
+ * 有依据、实际是编的**结论（§12.13.3 对棘轮的第二条：数不出来就说数不出来）。
+ *
+ * 取不到（不在 git 检出 / git 不可用）同样回 `null`：这一档与「只有一个父」必须分开，
+ * 调用方据此决定说哪句话，而不是拿 `false` 顶替。
+ *
+ * @returns {boolean|null}
+ */
+function headIsMergeCommit() {
+  /* `cwd` 必须显式给：判据自己也是被从别的目录起起来的（`pnpm build` 收尾 /
+   * 子进程跑门禁自检），靠继承来的 cwd 得到的是**另一个仓库**的 HEAD。 */
+  const res = spawnSync("git", ["rev-list", "--parents", "-n", "1", "HEAD"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  const fields = res.stdout.trim().split(/\s+/).filter(Boolean);
+  if (fields.length < 2) return null;
+  return fields.length > 2;
 }
 
 /**
@@ -473,6 +502,22 @@ function main() {
           `  基线修订号：${String(base.baselineRev).slice(0, 8)}（其后本检出上有 ${since} 次提交）——\n` +
             "    这批读数取自**基线之后的源码**，涨幅可能正是那几次改动换来的：" +
             "先分清「它是不是想要的」再决定压回去还是认账（§13.5.4 例外流程）。",
+        );
+      } else if (headIsMergeCommit() === true) {
+        /* 合并提交：`baselineRev` 恰是 HEAD 这件事在合并里**没有解释力**（见
+         * `headIsMergeCommit` 的说明）。别把两档混成「取自未提交的改动」那一句。
+         * 措辞**不重复**「就是本检出的 HEAD」这半句：文件头已经写明归因是「相对 HEAD」
+         * 量的，这里要说的是它为什么推不出结论，而不是再念一遍前提。 */
+        console.error(
+          `  基线修订号：${String(base.baselineRev).slice(0, 8)}（就是本检出的 HEAD，而 HEAD 是合并提交）——\n` +
+            "    记的是**合并前某一侧**的读数，而产物是合并后源码的输出，两者本就不可比。" +
+            "别拿这一档判「谁涨了」：先在合并后的完整产物链上重跑一次 --update，" +
+            "读数与归因同时才可信（§13.5.4 例外流程）。",
+        );
+      } else if (headIsMergeCommit() === null) {
+        console.error(
+          "  基线修订号：取不到 ——\n" +
+            "    判断不出本检出的 HEAD 是不是合并提交，先看下面逐文件诊断，或重跑一次 --update。",
         );
       } else {
         console.error(
