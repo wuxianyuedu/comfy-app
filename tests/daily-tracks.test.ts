@@ -49,6 +49,7 @@ import {
   freshnessTrack,
   freshnessVerdict,
   gitUser,
+  gitUserCandidates,
 } from "../scripts/freshness-ledger.mjs";
 import {
   dirtySinceToday,
@@ -580,6 +581,45 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     ]) {
       expect(readText(rel), rel).toContain("gitUser");
     }
+  });
+
+  it("`who` 那栏在平台侧有人名可读 —— CNB 的内置变量排在 `git config` **之前**", () => {
+    /* 平台侧的工作区是只读检出，`git config user.name` 要么是空的、要么是检出器留下的
+     * 占位 —— 而 `who` 是这条账存在的意义（「谁、什么时候、按哪条命令」里那个「谁」），
+     * 记成占位等于没记。所以平台侧那三个内置变量（官方「默认环境变量」文档：
+     * `CNB_BUILD_USER_NICKNAME` / `CNB_BUILD_USER` / `CNB_COMMITTER`）必须排在
+     * `git config user.name` **之前**，而 `GIT_AUTHOR_NAME` 仍排在最前
+     * （它是「这一次是谁在写」这句话本身，不是从环境里猜的）。
+     *
+     * 用**注入环境**真跑一遍而不是读文本：候选清单是一份有序数组，而「顺序」正是
+     * 这条判据要守的东西 —— 只 grep 有没有那几个名字，顺序反了照样绿。 */
+    const saved = { ...process.env };
+    try {
+      process.env.GIT_AUTHOR_NAME = "显式身份";
+      process.env.CNB_BUILD_USER_NICKNAME = "月读";
+      process.env.CNB_BUILD_USER = "cnb.dQh7kaCfAPA";
+      expect(gitUserCandidates().map((v) => String(v ?? "").trim())[0]).toBe(
+        "显式身份",
+      );
+      delete process.env.GIT_AUTHOR_NAME;
+      expect(gitUser(SUITE_TRACK.key)).toBe("月读");
+      delete process.env.CNB_BUILD_USER_NICKNAME;
+      expect(gitUser(SUITE_TRACK.key)).toBe("cnb.dQh7kaCfAPA");
+    } finally {
+      for (const k of [
+        "GIT_AUTHOR_NAME",
+        "CNB_BUILD_USER_NICKNAME",
+        "CNB_BUILD_USER",
+      ]) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    }
+    /* 兜底那一格仍要能答出一个说得清来路的字符串（环境全空时不许回空串 ——
+     * 空串会被 `checkFreshnessLedger` 的 `who` 下限判红，而那条红读起来像
+     * 「记录写不全」，不像「环境里没有身份」）。 */
+    expect(typeof gitUser("full")).toBe("string");
+    expect(gitUser("full").length).toBeGreaterThan(0);
   });
 });
 

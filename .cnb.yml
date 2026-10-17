@@ -202,7 +202,7 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 同步数据库表结构,
+      工具链自证, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -372,6 +372,26 @@
   - name: 分支守卫
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --pr-check --target master
 
+  # ── 新鲜度账判决（平台侧的第二个执行者，ISSUE #1979）──
+  #
+  # 与本仓 `.githooks/pre-commit` 的 D 组「每档都有主」跑的是**同一份**判据
+  # （`scripts/freshness-gate.mjs`，判据一字未改，只是多了一个执行者，§13.5.17 同款）。
+  #
+  # 为什么值得在平台侧再判一次：本地那一步只有在「提交那一刻」才会响，而平台侧是
+  # **每条 PR** 都过一遍 —— 于是「这个 PR 的源分支上账是旧的」会在合并之前被机器说出来，
+  # 而不是等到某个人下一次本地提交才被拦（那一次对应的修订号已经不是这个 PR 的了）。
+  #
+  # ⚠️ **位置必须在这条流水线的「跑法脚本」之前**（本步在 `分支守卫` 之后、
+  # `生产构建` 之前），而且不是风格问题：`生产构建` 用的 `artifact-run.mjs` 跑绿之后
+  # **会刷新 `scripts/.artifact-freshness.json`**，而同一分支的 stage 共享同一个工作区 ——
+  # 排在它后面时这一步读到的是**刚被这一次构建改过的账**，于是「源分支上账是旧的」
+  # 这件事**永远判不出来**（判据在场、结论恒放行，正是本仓最不能有的形态）。
+  # 纯文本 + 几次 git 调用、零依赖，放在这个位置代价是零。
+  - name: 新鲜度账
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
+    # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
+    timeout: 5m
+
   # ── 建库 ──
   # 走 scripts/db-push.mjs —— 它复核库里到底有没有表，失败即非零退出。
   # 后面的 E2E 要真的读到库（见 e2e/smoke.spec.ts 的「数据库链路」一组），
@@ -427,8 +447,17 @@
   #   与 `.githooks/pre-commit` 的 C 组同一个数、同一条理由（AGENTS 硬规则里那句
   #   「降负载的杠杆是并发，不是预算」）。代价是墙钟变长，这是这条路径上买得到的唯一交换。
   #
+  #   ⚠️ **恢复时入口写 `scripts/full-suite-run.mjs`，不是裸 vitest**（ISSUE #1979）：
+  #   它内部是 `pnpm run test:coverage`（= `vitest run --coverage`，见 `planRun()`），
+  #   而外面多出来的那一跳是**记账** —— 跑绿即刷新 `scripts/.full-suite-freshness.json`。
+  #   裸写 vitest 时这一步的绿只落在日志里、账面上一个字不变，本地「改了就当天跑」
+  #   那条判据照旧拦人（判据与账是两件事，两个执行者要读到同一份事实）。
+  #   本档在平台侧**必须整档跑**（不带 `--grep` / 不指单个文件）：`isWholeTrackRun`
+  #   会把「透传了参数的绿」判成**不构成整档凭证**、当场不记账。
+  #   用法与边界见 scripts/full-suite-run.mjs 头注与规范 §13.5.4。
+  #
   #   - name: 单元测试
-  #     script: node_modules/.bin/vitest run --coverage --maxWorkers=4
+  #     script: node scripts/full-suite-run.mjs
   #     # 实测 827s（`cnb-eus-1k5058g8l`，755 文件全量绿）；本机 `--maxWorkers=4` 实测
   #     # 198s。而 `cnb-did-1k50659np` 上它挂到 **8640s**（2h24m）才被掐掉，留下的
   #     # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。
@@ -528,13 +557,28 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
 
   # ── 构建与产物 ──
-  # `pnpm build` 内部已经串了 next build → 剥私有输入 → 数产物 → 冒烟，
-  # 不再另拼一遍（与 §13.5.3 那张表里记的同一入口）。
+  #
+  # ⚠️ **入口是「跑法脚本」，不是裸 `pnpm run build`**（ISSUE #1979）——
+  # `scripts/artifact-run.mjs` 内部就是 `pnpm run build`（那条命令串了
+  # next build → 剥私有输入 → 数产物 → 冒烟，不另拼一遍），外面多出来的那一跳是
+  # **记账**：跑绿之后它刷新 `scripts/.artifact-freshness.json`，
+  # 于是「这一档上一次被实证跑绿是什么时候、谁跑的、按哪条命令」在平台侧也有人回答。
+  #
+  # **为什么不直接裸跑 `pnpm run build`**（旧形态）：那样这一步的绿只落在日志里，
+  # 而账面上一个字都不变 —— 本地钩子明天照旧拦人（「改了就当天跑」这条判据问的是账，
+  # 不是「平台侧跑没跑」）。判据与账是两件事，两个执行者要读到的是同一份事实。
+  #
+  # ⚠️ **平台侧跑绿 ≠ 本地那笔账被更新**：CI 的工作区是只读检出，`writeFreshness`
+  # 写下的那份账留在这个一次性的检出里、不会落回任何分支。把它落回去要动
+  # 「CI 能不能回写分支」（`repo-code:rw` 在 push / PR 这类可信事件上确实有，
+  # 但 master 走分支保护、PR 源分支可能来自 fork），是一条**单独的决策**——
+  # 见规范 §13.5.4 那段。在此之前，这一步的价值是「这一档在平台侧真的有人跑、
+  # 且这一次跑的是什么写得出来」，而不是「本地那笔账可以不管了」。
+  #
+  # 实测 118s（`cnb-eus-1k5058g8l`）。给 30m 是因为 `next build` 在冷节点上比实测
+  # 读数慢得多，而不是因为它会挂（与 `artifact-run.mjs` 的 `ARTIFACT_TIMEOUT_MS` 同量级）。
   - name: 生产构建
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- pnpm run build
-    # 实测 118s（`cnb-eus-1k5058g8l`）。`pnpm run build` 内部串了
-    # `next build` → 剥私有输入 → 数产物 → 冒烟，给 30m 是因为 `next build` 在
-    # 冷节点上比实测读数慢得多，而不是因为它会挂。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/artifact-run.mjs
     timeout: 30m
 
   # ── 浏览器安装（自托管节点是裸宿主机，没有镜像预装这一层）──

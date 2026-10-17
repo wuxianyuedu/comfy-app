@@ -613,3 +613,87 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
     },
   );
 });
+
+/**
+ * 新鲜度账判决的**第二个执行者**（ISSUE #1979）。
+ *
+ * 立案现场：三档「每天首次自证」（全量 e2e / 全量单测 + 覆盖率 / 产物级护栏）的
+ * **判决**一直只在本地钩子 D 组跑（`scripts/freshness-gate.mjs`），而**执行**那三档的
+ * 跑法脚本在平台侧从来没被调用过 —— `.cnb.yml` 的「生产构建」跑的是裸
+ * `pnpm run build`（而不是 `artifact-run.mjs`），于是「这一步绿了」只落在日志里、
+ * 账面上一个字不变。判据与账是两件事，两个执行者要读到同一份事实。
+ *
+ * 判四层（缺一层这条「挪」就退化成一句好看的话）：
+ *   ① 平台侧那一步在（`.cnb.yml` 的「新鲜度账」，跑的是与钩子**同一份**脚本）；
+ *   ② 它排在「生产构建」**之前** —— 跑法脚本跑绿会刷新账，同一分支的 stage 共享
+ *      工作区，排在后面时读到的是「刚被本次构建证过的账」，恒放行；
+ *   ③ 「生产构建」的入口是**跑法脚本**而不是裸 `pnpm run build`（裸跑 = 跑了不记账）；
+ *   ④ 本地那一半**不许撤**：平台侧是 squash 合并、**不跑本地钩子**（硬规则 6），
+ *      而 CI 只在 PR 事件上跑 —— PR 之间、以及本地迭代时，钩子那一步是唯一的能见度。
+ */
+describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+  const config = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
+
+  it("平台侧有「新鲜度账」这一步，且跑的是与钩子同一份脚本", () => {
+    const hit = platformStages().find((x) => x.name === "新鲜度账");
+    expect(
+      hit,
+      "`.cnb.yml` 里没有「新鲜度账」这一步 —— 判据在平台侧没有执行者，而它要拦的" +
+        "正是「谁都没跑它」这个静默形态（§13.5.17 同款两半判法）",
+    ).toBeDefined();
+    expect(hit?.stage, "那一步的原文块解析不出来（名字被改了？）").toBeTruthy();
+    expect(
+      hit?.stage,
+      "平台侧那一步跑的不是 scripts/freshness-gate.mjs —— 两处各写一份判据必然分叉，" +
+        "而分叉之后「本地绿、平台红」（或反过来）读起来像环境差异，不像判据不一致",
+    ).toContain("scripts/freshness-gate.mjs");
+    expect(
+      registeredGateOrder(config),
+      "`新鲜度账` 不在 COMFYAPP_CI_GATES 里（在跑但不登记 = 顺序与在场都没有执行者）",
+    ).toContain("新鲜度账");
+  });
+
+  it("「新鲜度账」排在「生产构建」**之前**（否则读的是本次构建刚改过的账 = 恒放行）", () => {
+    /* 这条不是风格：`生产构建` 用的 `artifact-run.mjs` 跑绿之后会刷新
+     * `scripts/.artifact-freshness.json`，而同一分支的 stage **共享同一个工作区** ——
+     * 排在它后面时这一步读到的是刚被这一次构建改过的账，于是「源分支上账是旧的」
+     * 永远判不出来（判据在场、结论恒放行，正是本仓最不能有的静默形态）。
+     * 判据用 `COMFYAPP_CI_GATES` 的顺序（那份有序清单是既有事实源）。 */
+    const order = registeredGateOrder(config);
+    const freshAt = order.indexOf("新鲜度账");
+    const buildAt = order.indexOf("生产构建");
+    expect(freshAt, "`新鲜度账` 不在 GATES 清单里").toBeGreaterThanOrEqual(0);
+    expect(buildAt, "`生产构建` 不在 GATES 清单里").toBeGreaterThanOrEqual(0);
+    expect(
+      freshAt,
+      "`新鲜度账` 排在 `生产构建` 之后 —— 那一步的跑法脚本会先把账刷新，" +
+        "于是这条判据读到的是「刚被本次构建证过的账」，恒放行",
+    ).toBeLessThan(buildAt);
+  });
+
+  it("「生产构建」的入口是跑法脚本，不是裸 `pnpm run build`（裸跑 = 跑了不记账）", () => {
+    const stage = platformStages().find((x) => x.name === "生产构建")?.stage;
+    expect(stage, "`.cnb.yml` 里解析不出「生产构建」这一步").toBeTruthy();
+    expect(
+      stage,
+      "「生产构建」跑的还是裸 `pnpm run build` —— 那样这一步的绿只落在日志里、" +
+        "`scripts/.artifact-freshness.json` 一个字不变，本地「改了就当天跑」照旧拦人。" +
+        "入口要写 `node scripts/artifact-run.mjs`（它内部就是 `pnpm run build`）",
+    ).not.toContain("pnpm run build");
+    expect(stage).toContain("scripts/artifact-run.mjs");
+  });
+
+  it("本地那一半仍在钩子 D 组里（平台侧 squash 合并不跑本地钩子，不能只剩它）", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/freshness-gate.mjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有新鲜度账判决 —— 平台侧只在 PR 事件上跑，` +
+        "本地迭代与 PR 之间的那些提交会整段失去能见度",
+    ).toBeDefined();
+    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+  });
+});

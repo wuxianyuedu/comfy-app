@@ -35,23 +35,47 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
 /**
- * 「这条账是谁写的」—— 环境变量优先，其次 `git config user.name`，最后回退到入参。
+ * 「这条账是谁写的」的候选来源，**按可信度排序**（第一个非空者胜出）。
  *
- * 顺序是有理由的：CI / NPC 工作区里 `git config user.name` 常常是空的或是个占位，
- * 而那一格是这条账存在的意义（「谁、什么时候、按哪条命令复核的」里那个「谁」）。
+ * 顺序是有理由的，而且是**实测逼出来的**（不是风格）：
+ *
+ *   ① `GIT_AUTHOR_NAME` —— 显式的身份声明，本地与别的 CI 都认。放在最前因为它是
+ *      「这一次是谁在写」这句话本身，而不是从环境里猜出来的。
+ *   ② `CNB_BUILD_USER_NICKNAME` / `CNB_BUILD_USER` / `CNB_COMMITTER` —— **平台侧
+ *      那三个**（CNB 内置环境变量，见官方「默认环境变量」文档）。它们必须在
+ *      `git config user.name` **之前**：平台侧的工作区是只读检出，`git config user.name`
+ *      要么是空的、要么是检出器留下的占位 —— 而这一格是这条账存在的意义
+ *      （「谁、什么时候、按哪条命令复核的」里那个「谁」），记成占位等于没记。
+ *      昵称优先于用户名：账是给人读的（同 `who` 那一栏的用例：两个字的人名完全够用）。
+ *   ③ `git config user.name` —— 本地常态。
+ *   ④ 入参 `fallback`（各档的键名）—— 一个说得清来路的兜底。
+ *
+ * @returns {(string | undefined)[]} 候选清单（可能有空串 / undefined，由 `gitUser` 过滤）
+ */
+export function gitUserCandidates() {
+  return /** @type {(string | undefined)[]} */ ([
+    process.env.GIT_AUTHOR_NAME,
+    process.env.CNB_BUILD_USER_NICKNAME,
+    process.env.CNB_BUILD_USER,
+    process.env.CNB_COMMITTER,
+    spawnSync("git", ["config", "user.name"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    }).stdout,
+  ]);
+}
+
+/**
+ * 「这条账是谁写的」—— 按 `gitUserCandidates()` 的顺序取第一个非空者，都没有则回退到入参。
  *
  * @param {string} fallback
  * @returns {string}
  */
 export function gitUser(fallback) {
-  return (
-    process.env.GIT_AUTHOR_NAME ||
-    spawnSync("git", ["config", "user.name"], {
-      cwd: ROOT,
-      encoding: "utf8",
-    }).stdout?.trim() ||
-    fallback
-  );
+  const picked = gitUserCandidates()
+    .map((v) => String(v ?? "").trim())
+    .find((v) => v !== "");
+  return picked || fallback;
 }
 
 /**
@@ -370,14 +394,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
  */
 export function checkFreshnessLedger(
   ledger,
-  {
-    required,
-    registered,
-    track,
-    kind,
-    now = new Date(),
-    dirtySince = null,
-  },
+  { required, registered, track, kind, now = new Date(), dirtySince = null },
 ) {
   /** @type {string[]} */
   const problems = [];

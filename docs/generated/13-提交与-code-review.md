@@ -2767,15 +2767,41 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
 
 | 档                                               | 不进钩子的理由（代价）                                                                                                                                                                             | 谁在什么时候跑它                                                                                                     | 机器事实的出处                                                                       |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 全量 e2e（`pnpm test:e2e`）                      | 起 webServer + 浏览器，十几分钟量级                                                                                                                                                                | 钩子 D 组「每档都有主」判**每天首次自证**（`track.daily` + `dirty` 为空）                                            | `FRESHNESS_TRACKS.e2e`                                                               |
-| 全量单测 + 覆盖率（`pnpm run test:coverage`）    | 十分钟量级；覆盖率门槛只在全量档判（§11.7）                                                                                                                                                        | 同上，判**改了就当天跑**（吃 `src/`+`tests/`，`graceMs` 兜底）                                                       | `FRESHNESS_TRACKS.full`                                                              |
-| 产物级护栏（`pnpm run build`）                   | 分钟量级（`next build` + 起 sidecar 冒烟）                                                                                                                                                         | 同上，判**改了就当天跑**（吃产物链那几个文件）                                                                       | `FRESHNESS_TRACKS.artifact`                                                          |
+| 全量 e2e（`pnpm test:e2e`）                      | 起 webServer + 浏览器，十几分钟量级                                                                                                                                                                | 钩子 D 组「每档都有主」判**每天首次自证**（`track.daily` + `dirty` 为空）；平台侧另有 `E2E 关键流程`（**只跑 `@critical` 子集、不构成整档凭证**，故它不记账） | `FRESHNESS_TRACKS.e2e`                                                               |
+| 全量单测 + 覆盖率（`pnpm run test:coverage`）    | 十分钟量级；覆盖率门槛只在全量档判（§11.7）                                                                                                                                                        | 钩子 D 组判**改了就当天跑**（吃 `src/`+`tests/`，`graceMs` 兜底）；平台侧在 `单元测试` 恢复之后走 `full-suite-run.mjs`（**恢复时入口写它，不是裸 vitest** —— 见 `.gates` 里那段注释） | `FRESHNESS_TRACKS.full`                                                              |
+| 产物级护栏（`pnpm run build`）                   | 分钟量级（`next build` + 起 sidecar 冒烟）                                                                                                                                                         | 钩子 D 组判**改了就当天跑**（吃产物链那几个文件）；平台侧「生产构建」**已**改走 `artifact-run.mjs`（ISSUE #1979）      | `FRESHNESS_TRACKS.artifact`                                                          |
 | 依赖漏洞扫描（`check-dependency-audit.mjs`）     | 网络请求（离线 / registry 抖动不该变成提交失败）                                                                                                                                                   | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`）                                                 | `quality-gate.mjs` 的 `dependencyAudit`                                              |
 | `tw4-canonical-report` / `tw4-spacing-canonical` | 起 Tailwind 引擎（~6s），判的是 CSS 等价改写而非正确性                                                                                                                                             | 按需召唤 + `--check` 棘轮                                                                                            | `.gate-executor-ledger.json` 的 `onDemand`                                           |
 | 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）                                                                                                                                              | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次）                                            | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`                                    |
 | **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并；单次分钟级（钩子内三次实测 116 / 84 / 83 秒、单独跑 336 秒，见 §13.6.2.1），挂进每次提交是拿它换一个不会天天变的结论（§13.6.2 / §11.23.5） | `.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑（§13.6.2.1）；人仍可手工敲一次，或在 PR 里 `@` 评审 NPC 唤起一轮 | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）+ `scripts/premerge-proof.mjs` |
 
 | **bundle 体积预算**（`pnpm check:bundle`） | 测量对象是 `next build` 的产物（`.next/static/chunks`），判据在一次构建之后才有结论，而构建是半分钟级（实测 26–33s）—— 把它塞进每次提交是拿半分钟换一个不会天天变的结论（成本判据同本节，另见 §13.5.3）。**注意**：ISSUE #1781 原稿把 `next build` 记成「分钟级」，实测是半分钟级；这条**不影响**「不该进每次提交」的取向 | 按需召唤（`pnpm check:bundle`）+ 棘轮（`scripts/.bundle-budget-baseline.json`）；同一脚本也挂在 `pnpm build` 收尾（形态 C 兜底，见 §13.5.3 欠账条目 2） | `quality-gate.mjs` 的 `GATES.bundleBudget`（`run: false`，+ 本节下面「测量口径」那四条） |
+
+**平台侧从 ISSUE #1979 起是第二个执行者，两件事各是一半**（判据一字未改，多的是执行者）：
+
+1. **「生产构建」的入口换成跑法脚本** —— `.cnb.yml` 里写 `node scripts/artifact-run.mjs`
+   （它内部就是 `pnpm run build`，外面多出来的那一跳是记账）。旧形态是裸 `pnpm run build`，
+   于是这一步的绿只落在日志里、`scripts/.artifact-freshness.json` 一个字不变；
+   `单元测试` 恢复时的入口同理写 `node scripts/full-suite-run.mjs`。
+2. **新增一步「新鲜度账」**（`.gates` 里紧跟 `分支守卫`）跑 `scripts/freshness-gate.mjs` ——
+   与钩子 D 组那份**同一个脚本、同一个档**。**它必须排在「生产构建」之前**：跑法脚本跑绿
+   会刷新账，而同一分支的 stage 共享工作区，排在后面时它读到的是「刚被本次构建证过的账」，
+   于是「源分支上账是旧的」**永远判不出来**（判据在场、结论恒放行）。
+
+两条边界说清「它不做什么」：
+
+- **平台侧跑绿 ≠ 本地那笔账被更新**。CI 的工作区是只读检出，`writeFreshness` 写下的账
+  留在这个一次性检出里、**不落回任何分支** —— 本地钩子读的仍是它自己那份账。
+  这一步的价值是「**源分支上账是旧的**这件事会在合并之前被机器说出来」，不是
+  「本地那笔账可以不管了」。
+- **回写仓库是一条单独的决策，本档不动它**。把它落回去要动「CI 能不能回写分支」这条平台
+  能力：`repo-code:rw` 在 push / PR 这类**可信事件**上确实有（官方「默认环境变量」文档的
+  权限表），但 `master` 走**分支保护**（直接推被拦，见 §13.6.1）、PR 源分支可能来自 **fork**
+  （那时只有 `repo-code:r`）。而且回写会产生新提交、进而再触发一轮流水线 ——
+  回环与「谁的身份」两件事都要先设计。**在此之前不许把这笔账的权利从本地钩子移走**：
+  两处判的是同一个事实，账只有一个作者（本地的提交），平台侧读它。
+  判据见 `tests/doc-check-hook-wiring.test.ts` 的「新鲜度账：平台侧的第二个执行者」一组
+  （三半都判：平台侧那一步在、入口是跑法脚本、**本地那一半不许撤**）。
 
 三档「每天首次自证」的口径不同、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：全量 e2e 按本地日历日；另两档按「当天动过输入面没有」。**理由**：前者人人
