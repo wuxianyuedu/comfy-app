@@ -18,7 +18,53 @@
 #   完整结论与「隔离跑可以并发、为什么真钩子里不行」见规范 §13.5.8.1。
 #   wall ≈ max(各组) 而非求和；内存仍受控在 ~4 个并发。任一非零仍阻断提交（口径不变）。
 #
-# 新增判据的落点：与既有静态判据互不依赖 → 追加进 D 组（组内串行，顺序即执行序）；
+# ── 后来又加了一档 D0：形态前置档（串行，在 A/B/C/D 启动之前跑完）─────────────
+# 上面那笔「D 组不该并发」的账反过来还有一层意思，这里把它说明白，因为两件事读起来
+# 像互相矛盾：**D 组内部把便宜的挪到前面，也不会让任何一次提交变快**。理由是收尾那个
+# `for id in A B C D; do wait` —— 四组并行且**全部等完**，所以墙钟 = max(各组) = C 组，
+# 与 D 内部的顺序无关：结论早到了，人还是站在同一堵墙前面。
+#
+# 真正被浪费的是**红的那几次**（本机账：`.git/comfy-precommit-timing.jsonl` 最近 17 次
+# 提交，6 次红）。D 组带 `set -e`，所以一次红的记录里「记到哪一条」就是**拦下你的那一条**
+# （后面的没有跑）。⚠️ 读这份账时先记住一件事：**失败那一条自己以前不进账** ——
+# `set -e` 在 `timed_step` 的 printf 之前就把组截断了，于是「最后一条」其实是拦下者
+# **前面**那一条。本轮已修（见 `.githooks/timing.sh` 里 `"$@" || _ts_rc=$?` 那处），
+# 下面这份归属是按修好之后的口径念的。
+#   · 三次是「每档都有主（新鲜度账）」—— 跨过一个 00:00 之后的第一次提交，而它在 D 里排得很后；
+#   · 两次是「生成态文档与源同步」—— 它已随 ISSUE #1975 挪到平台侧，本地不再付这笔；
+#   · 一次是「CHANGELOG 碎片」：**D 跑到 14.2s 就已判红，而整条钩子照旧付满 C 的 156.6s
+#     才退出**（账里那条：exit 1、D=14.2s、C=156.6s、总 157.6s）。
+#   ⇒ 能省钱的形状只有一个：**在启动 A/B/C 之前**先拿到这一档结论。也就是串行前置，
+#     不是并发编排、也不是组内重排。D0 就是为此存在的。
+#
+# 谁进 D0（两条都满足，缺一条就留在 D 的并行档里）：
+#   ① 判的是**这次提交自身的形态** —— 暂存的内容 / 提交元数据 / 登记台账；违例的修法是
+#      「改你刚 stage 的东西」，不依赖其它组的结论，也不是「等测试告诉你为什么」；
+#   ② 落在**整组预算**里。这一档是串行的 ⇒ 它的墙钟就是全部入选判据之和（并行档不是），
+#      所以预算按**组**算而不是按条算：一次真实绿提交的读数是 **D0 组 16.1s（步之和 15.4s）**。
+#      按条筛会把「一条就吃掉整份预算」的判据放进来 —— 逐条的耗时基线见
+#      `docs/audits/2026-10-16-hook-baseline-map.md`（那份快照的中位与本钩子文件的账跨着
+#      不同的负载窗口，差几倍是常态）：`文件结构硬规则(R1-R12，R5 硬闸)` 9.4s、
+#      `jsx-a11y 规则开关⇄判据（§6.12）` **31.3s —— 单它一条就超过整份预算**。
+#      这两条**明知同属「形态」这一族**也刻意留在 D 里：贵的判据放在并行档里是**免费**的
+#      （反正墙钟由 C 决定），挪进串行前置档就是给每一次绿提交加税。
+#
+# 「墙钟其实由 C 组决定」这件事不是本档的新发现，那份基线快照已经用 9 个样本量过并写成
+# 结论（含「动 D 组省不了墙钟」那句推论）—— 本档新增的只有**红的那几次**那一格：
+# 并行档里迟到 87–233s 的形态错，仍然要付满 C 组的墙钟。
+#
+# 这一档的代价与收益都是实测的，不是「显然更快」：一次真实绿提交里 **D0 组 16.1s**
+# （步之和 15.4s）⇒ 绿提交的墙钟 141s 变 ≈157s（约 +11%），换来那 6/17 的形态红
+# 从 157–3630s 变 ≈16s。**这是拿绿档换红档的取舍**，写下它是因为它会被人当成免费午餐而
+# 继续往里加东西。
+# ⚠️ 这个数字原本有一多半是**取时钟的钱**（每步两次 `$(date +%s%3N)`，MSYS 上每次 fork 约
+# 467ms）—— 那是记账开销、不是判据成本，已按 `timing.sh` 新增的 `set_now_ms` 收掉。
+# 同一方法的对照（把本档正文抽出来单跑，落在负载更重的那个窗口）：修前整组 54.0s / 步之和
+# 41.1s，修后 25.0s / 26.2s ⇒ **组墙钟与步之和从此基本重合**（差 <1s），剩下的才是判据自己。
+# **读数口径因此变了**：本轮之前的逐步账每条都含着 ≈0.5–0.9s 的取钟开销，跨这条线对比要记得。
+#
+# 新增判据的落点：判「这次提交自身的形态」且落在上面那份整组预算里 → 进 D0（顺序按实测命中率排）；
+# 其余与既有静态判据互不依赖的 → 追加进 D 组（组内串行，顺序即执行序）；
 # 需要另起 vite 的测试 → 并入 C 组的同一行 vitest run（别新起一次，那正是本次要消掉的
 # 开销）。基线与旧版的步号已无意义，脚本自身的注释与规范章节才是指路牌。
 #
@@ -59,7 +105,7 @@ LOGD="$(mktemp -d "${TMPDIR:-/tmp}/comfy-precommit.XXXXXX")" || exit 1
 export LOGD
 
 # 总计时起点。记在 `$LOGD` 外面只有一处用途：**记账**（见 record_timing）。
-_T0_MS="$(now_ms)"
+set_now_ms _T0_MS
 
 # 记账：把本次的墙钟交给 `scripts/precommit-timing.mjs`（它只写 `.git/`、不入库）。
 # 放在 trap 里而不是收尾那一行 —— **被拦下的那次提交恰恰是最该被记的**
@@ -68,10 +114,12 @@ _T0_MS="$(now_ms)"
 record_timing() {
   [ -n "${_RECORDED:-}" ] && return 0
   _RECORDED=1
-  _end="$(now_ms)"
+  set_now_ms _end
   _total=$(( _end - _T0_MS ))
   set -- --total-ms "$_total" --exit "${rc:-0}" --staged "${_STAGED_N:-0}"
-  for id in A B C D; do
+  # `D0` 排在最后而不是按字母序：账本按这个顺序打表，而 D0 是「先跑完的那一档」，
+  # 把它摆在四组之后读起来正好是「前置档 + 四个并行档」的形状。
+  for id in A B C D D0; do
     [ -f "$LOGD/$id.ms" ] && set -- "$@" --group "$id=$(cat "$LOGD/$id.ms")"
   done
   if [ -f "$LOGD/steps.ms" ]; then
@@ -91,15 +139,172 @@ _STAGED_N="$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d " ")"
 run_group() {
   id="$1"; desc="$2"; shift 2
   (
-    _g0="$(now_ms)"
+    set_now_ms _g0
     echo "── 组 $id：$desc"
     "$@"
     _grc=$?
-    echo "$(( $(now_ms) - _g0 ))" >"$LOGD/$id.ms"
+    set_now_ms _g1
+    echo "$(( _g1 - _g0 ))" >"$LOGD/$id.ms"
     echo "$_grc" >"$LOGD/$id.rc"
   ) >"$LOGD/$id.log" 2>&1 &
   eval "${id}_pid=\$!"
 }
+
+# ── D0：形态前置档（串行，先于 A/B/C/D 启动）──────────────────────────────
+# 入选口径（「判这次提交自身的形态」且落在**整组**预算里）、这笔税换来了什么，都记在文件头
+# 那段「后来又加了一档 D0」。这里只留一条与顺序有关的口径：**本机账里真拦下过提交的
+# 那两条排最前**（CHANGELOG 碎片 → 新鲜度账），其余按代价升序排。组内重排在**这一档**里
+# 确实有用，而在 D 组里没有 —— 差别就是这一档的墙钟等于本组之和（串行），
+# D 组的墙钟等于 max(四组)（并行）。
+# `run()` 与 `timed_step` 都来自 `.githooks/timing.sh`，只定义一次：本钩子现在有两个
+# 这种 `sh -c` 块，抄两份 `run()` 的漂移形态与那份文件头里「两份时钟必然漂成两个刻度」
+# 同款（例如后来有人给其中一处加「跳过时不打标签」，两组的账就再也不能并排读）。
+# 本组同样是 `sh -c` 起的新 shell ⇒ 必须自己 source 时钟，否则逐步读数静默消失。
+run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
+  set -e
+  . "$COMFY_TIMING_SH"
+  # CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
+  # 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的文件名与
+  # 段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
+  run "CHANGELOG 碎片" node scripts/check-changelog-fragments.cjs
+  # 待发段落([Unreleased])的**来源锚** ⇄ 条目归属(规范 §13.10.6)。
+  # 上一行只管碎片**形态**(文件名 / 段落标题),不管它们被并到哪儿 —— 于是「并入没
+  # 走完」是一种静默形态:被后一条推翻的旧条目留在 [Unreleased] 里(实测还在),
+  # 而推翻它的碎片躺在 changelog.d/ 里没有东西提醒该并了。本步判三件:锚写了没有、
+  # 锚解析不解析得开(**写歪比不写更贵**:歪锚会让识别正则回 null、整条判据静默放过)、
+  # 同一 ISSUE 号有没有**跨锚分裂**(既在待发段落里、又在它之前的已发布段落里 ——
+  # 那才是这条账最贵的失效形态:归属被切成两半而两端都没写错)。
+  # 成本实测:纯文本 + 只读 git,零网络,< 0.3s。
+  run "待发段落的来源锚 ⇄ 条目归属" node scripts/check-changelog-versions.cjs
+  # 为什么它在这一档而不是 D：本机那份账里 6 次红有 **3 次**是这一条拦下的（它判的是
+  # 「这次提交欠哪一档的账」，读的正是暂存面，不依赖任何别的组的结论），而它在 D 组排得
+  # 很后面 —— 付满 C 组的墙钟之后才知道自己今天还欠一次 e2e。
+  # 每一档按需档都要**有主**（规范 §11.8 / §13.5.4）。本步判「每一登记档都有一条新鲜度
+  # 记录，且写清谁 / 什么时候 / 按哪条命令复核的」（`scripts/.<档>-freshness.json`）——
+  # 它**不跑**那些档（起 webServer / 全量单测 / next build 会与钩子里的 A/B/C/D 抢资源），
+  # 只判「这一档上次被实证跑绿是什么时候」这件事有人回答过。
+  # 「每天首次自证」那一层有**三档**（ISSUE #1282 起逐档接上）：平台流水线删掉（ISSUE #623）
+  # 之后一直没有执行者的两条判定档 —— **全量单测 + 覆盖率**与**产物级护栏**，
+  # 以及**全量 e2e**。它们此前只写在 §13.5.3 的欠账表里（「按需手动跑」），
+  # 而那句话没有任何东西在守。
+  #   三档的形状由 `FRESHNESS_TRACKS` 的数据决定，判据一份实现：
+  #   · 全量 e2e —— 按**本地日历日**判：当天第一次提交要带一次凭证。
+  #     两条出路：跑绿即记（`pnpm test:e2e`），或 `node scripts/e2e-run.mjs --skip "<理由>"`。
+  #   · 全量单测 + 覆盖率 / 产物级护栏 —— 十分钟量级、**没必要每天都跑**，按「**改了就当天跑**」
+  #     判（吃 `src/`+`tests/` / 产物链那几个文件）：当天动过输入面就必须今天自证；没动过以
+  #     七天为宽限。出路同样是两条：跑一次，或 `--dirty "<理由>"` 声明「这次改动不吃这一档」。
+  # 占位理由一律被拦（豁免不是绕过）；账文件还没入库时只提醒、不阻断（平台侧 squash 合并
+  # 不跑本地钩子，硬规则 6）。
+  run "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）" node scripts/freshness-gate.mjs
+  # UI 与逻辑分离硬闸(规范 17)。S* 存量已清零(ISSUE #1811 收尾时从棘轮翻上来):
+  # 视图层出现裸 fetch / vanillaApi.* / tRPC hook 即阻断 —— 没有基线、没有
+  # `--update`，也就不存在「借余量偷偷新增」那条路。H1/H2 本来就是硬规则。
+  run "UI/逻辑分离硬闸" node scripts/check-ui-logic-separation.cjs
+  # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：硬闸 —— 存量已清零。
+  run "地基层零消费导出(硬闸)" node scripts/check-dead-exports.cjs --staged
+  # 故事文件的枚举来源（规范 16 §16.2.3.2 / §11.8）：`cva()` 返回的是函数，
+  # 运行时没有 `.variants` —— 写成 `Object.keys(xVariants.variants.轴)` 时 tsc 会红，
+  # 而 Storybook 在**加载期**抛 `Cannot read properties of undefined`（侧栏有故事、
+  # 画布一片空白）。判据还顺带核「手写清单没漏档」——首轮就这么漏了
+  # `icon-sm` / `icon-lg` 两档（实测 46 处调用）。
+  # 故事面的三件事（规范 16 §16.2.3.8）：`title` 缺了 Storybook 按路径自动生成条目
+  # （落在侧栏哪个分组取决于推导规则）、真组件没接上（画布上摆的是适配件或别的
+  # 东西）与同目录两套分组前缀（分组靠人写 title 维系，没有任何东西会告诉你漂了）。
+  # 第四件「必填 props 没给 args」只判 `--changed`（本次暂存的故事文件）—— 存量里
+  # 有一批正当形态（值在 render 里给 / 受控开关由 story 持有 / 注入层的 sourceName
+  # 就是它的 args），逐条白名单会变成第二份赦免名单，所以口径是「只挡新增」。
+  run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）" node scripts/storybook-check.mjs --changed
+  # 产品版本号三处同步（ISSUE #1611 阶段三 D7）。同一个版本号手抄在 package.json /
+  # src-tauri/tauri.conf.json / src-tauri/Cargo.toml 三处，而这**不是**「改名麻烦」——
+  # tauri.conf.json 的版本在**编译期**内嵌进壳，也是 tauri-plugin-updater 判「更新新旧」
+  # 的基准：只升 package.json 时安装包与更新判定还停在旧版本，用户看到「已是最新」，
+  # 而三处今天恰好相等 ⇒ 第一次忘记升某处的那一刻起错位永久静默（没有任何东西会红）。
+  # 这也是 P0-4（Sentry release）刻意**不取** package.json version 的同一个理由。
+  # 判据只判「三处逐字相等 + 形态合法」，刻意不判「该不该升」（那是发布判断）。
+  # 成本实测：读三个文件、零网络、零子进程，与 check-app-port-vectors 同档。
+  run "产品版本号三处同步(D7)" node scripts/check-app-version.cjs
+  # ui/ 定制标记 ⟺ 台账（规范 16 §16.8）：`ui/` 是工具生成目录,但本仓库在若干基元上
+  # 做过有意改动(button 的语义变体与 ButtonLink、dialog 的 backdrop 与 popupClassName…),
+  # 此前没有任何地方记着哪个不能覆盖 —— 实测 `shadcn add command` 会顺手覆盖
+  # button/input/textarea/dialog 四个。这条把「改过的地方留痕」机器化:标记与
+  # docs/standards/16 §16.8 的台账双向一致,零网络(不判断差异内容,只保证两边不脱节)。
+  run "ui/ 定制标记与台账（§16.8）" node scripts/check-ui-customizations.cjs
+  # 跨平台动作对照表（规范 §9.5）。Windows 入口是 .ps1（§8），Linux / macOS 跑不了
+  # .ps1 —— 同一个动作因此在两侧各有一份实现。启动编排已经栽过一次（Windows 一条
+  # .ps1 链、POSIX 一条 .mjs 链各自演进，四项行为静默分叉），所以「新增动作必须两侧
+  # 都在」与「会失效的清单只许定义一次」都机器化：新增 .mjs 忘了登记、或在 .ps1 里又
+  # 抄一份 KNOWN_FAILED_FILES，都在这里被拦下。
+  run "跨平台动作对照(.ps1⇄.mjs)" node scripts/check-ps1-consistency.mjs
+  # 端口推导的跨语言一致性（规范 §1.1）：四侧（Node / PowerShell / Python / Rust）读
+  # 同一份共享校验向量 tests/fixtures/app-port-vectors.json，任一侧漂移即在此拦下。
+  run "端口推导跨语言一致性" node scripts/check-app-port-vectors.cjs
+  # import 别名统一（规范 §12.2 / §16.2）：本仓库的别名约定是 `~` 前缀，但
+  # tsconfig.json 的 paths 里同时留着 `@/*`（脚手架的历史项）—— 于是 `@/` 也能编译、
+  # 也能跑，没有任何反馈，漂移面积自己变大。`shadcn add` 生成的组件默认写 `@/`
+  # （§16.3 已点名），src/components/ui/ 因此是重灾区。
+  run "import 别名统一(~ 前缀)" node scripts/check-import-alias.cjs --staged
+  # 依赖新鲜度（§13.5.13）：只在**你动了依赖面**时判（`--staged`）——
+  # 「远端改了库、你还在旧的上面干活」这一档此前没有任何执行者，本轮补上。
+  # 全量判会天天红（远端引用普遍陈旧，而刷新人 fetch 是人的动作），每次提交都拿它拦人
+  # = 一条天天红的闸，人只会去 skip 它；而「你自己刚改过依赖」这一档不一样 ——
+  # 那时「我的基线是不是旧的」必须回答，否则会在旧依赖上解冲突、或把基于旧基线的
+  # lockfile 推上去。判据自身**不做网络请求**（远端引用陈旧只打 [未校验]、不阻断）。
+  run "依赖新鲜度（只判动了依赖面的提交，§13.5.13）" node scripts/check-deps-freshness.mjs --staged
+  # 依赖构建脚本 ⇄ `allowBuilds` 对账（§13.5.15 / AGENTS 硬规则 8）。这条此前**一个执行者
+  # 都没有**，而它要防的故障形状是「改动点与故障点不同人、中间还隔一次安装」：
+  # 漏登记的人当场看不出来（他自己的 `node_modules` 早装好了，增量 install 甚至
+  # short-circuit），第一次复现是下一个人（或另一台检出、另一个容器）跑非交互
+  # `pnpm install --frozen-lockfile` 那一刻的 `ERR_PNPM_IGNORED_BUILDS` —— 表现是
+  # 「这个仓库装不上依赖」，按硬规则 26 的口径还会被误读成「本机跑不了门禁」。
+  # 判据口径照 pnpm 自己那条抄：它按**包名**批准、对名单里没有的构建脚本直接失败而非警告。
+  # 所以这里只判「带 preinstall/install/postinstall 的已安装包必须有显式条目」，
+  # `true`（批准）与 `false`（显式拒绝）都算回答过；反向（名单里有无脚本的条目）
+  # **刻意不判** —— 现状 11 条里 8 条是那种正当形态，判它等于误报一片。
+  # 缺 `node_modules/.pnpm` 判红而不是跳过：读不到输入时报绿是 §13.5.12 那一族里最坏的一种。
+  # **`--staged` 是输入面跳过**（ISSUE #1747 同族）：能让「带构建脚本的依赖」变化的输入只有
+  # 那三个文件（`package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml`，清单的出处是
+  # `dependency-face.mjs`，与 check-deps-freshness 共用同一份、不在这里抄第二份），
+  # 只改文档或只动 `src/` 的提交
+  # 扫多少遍结论都一样 —— 全树扫描实测 4.5s（与 check-non-null-assertions 同档），
+  # 无条件挂上就是给每个提交白付这笔钱，然后所有人开始 `--no-verify`、判据归零。
+  # 跳过时打印「未触及依赖面」，与真扫过的 OK 可分辨；读不到暂存清单走 exit 2 而不是冒充跳过。
+  run "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）" node scripts/check-allow-builds.cjs --staged
+  # 基础设施层的文件长度棘轮（§12.6 R5 的姊妹档）：R5 / 函数长度 / 非空断言 / 孪生对
+  # 四类债务判据的扫描根**都只有 `src`**（`check-file-structure.cjs` 的 R5 定义就写着
+  # 「src/ 下超 900 行」，另三份是 `SCAN_DIR = "src"`）。于是判据自己那一层
+  # （`scripts/**` 152 份 `.cjs/.mjs` + `tools/**` 26 份 `.ps1`，约 43k 行，与它管的
+  # `src` 非测试代码同量级）落在自己立的硬闸之外：`src` 侧超 900 行的基线今天为 0，
+  # 同一把尺子在判据层上是 6 个文件、最大一份 4,820 行。
+  # 为什么这条值得在提交时响：判据是**被执行的那部分代码** —— 它长到没人读得动的表现
+  # 不是报错，而是「这条判据从此恒绿」。同族先例：Rust 壳的函数长度也是「另立脚本」
+  # （阈值 120 而不是 400，因为两侧自然长度不同）。
+  # 存量已在 ISSUE #1811 第五刀清零，这一档**翻成硬闸**：基线文件与 `--update` 一并
+  # 删除，命中即退 1，出口只有一个 —— 拆（§12.6 R5 姊妹档）。
+  # 成本实测：读 196 个文件、零网络、零子进程，与 check-app-version / check-a11y-rules 同档。
+  # `--staged` 见下 13.5.8.2：暂存改动没碰扫描面时按输入面跳过。
+  run "基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)" node scripts/check-infra-file-size.cjs --staged
+'
+
+# 立刻等这一组 —— 它存在的全部意义就是「在 A/B/C 启动之前先拿到结论」；往下继续并行
+# 等于把这一档白拆成第六个后台组（结论照样迟到，只是早几十秒写进一个没人看的日志）。
+wait "$D0_pid"
+if [ ! -f "$LOGD/D0.rc" ]; then
+  # 读不到退出码 ⇒ **拦下**而不是放行：这一档是后面四组的唯一前置，
+  # 「判据没跑完」不等于「判据通过」（同 §13.5.15 对「读不到输入时报绿是最坏的一种」的口径）。
+  echo "[pre-commit] ✗ 组 D0 没留下退出码（被杀 / 子 shell 没起来？）—— 判据没跑完不等于通过"
+  [ -f "$LOGD/D0.log" ] && cat "$LOGD/D0.log"
+  echo "[pre-commit] 提交被门槛拦下"
+  exit 1
+fi
+_d0_rc="$(cat "$LOGD/D0.rc")"
+if [ "$_d0_rc" != 0 ]; then
+  echo "[pre-commit] ✗ 组 D0（形态前置档）失败（退出码 $_d0_rc）—— 其余四组未启动"
+  cat "$LOGD/D0.log"
+  echo "[pre-commit] 提交被门槛拦下"
+  exit 1
+fi
+# 过了只打一行摘要，与收尾那四组同款（失败才展开整段日志）。
+grep -E '^── ' "$LOGD/D0.log" | sed 's/^/  [ok] /'
 
 # ── A/B：类型 + lint（判据独立，并行；沿用 package.json 的 lint 白名单与零警告口径）──
 # eslint 的**扫描范围（白名单目录）与参数**收在 package.json 的 `lint` 脚本里 ——
@@ -144,8 +349,11 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # D(51 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
-# ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
-# D 组步骤数一致，新增判据时必须同步这个数字。
+# ⚠️ 上面那句「D(51 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
+# `run` 步骤的**总数**一致（D0 那 14 条 + D 那 37 条 = 51），新增判据时必须同步这个数字。
+# 严格说与本组**并行**的只有 D 那 37 条：D0 的 14 条在本组启动之前就串行跑完了（见文件头
+# 那一档）。拿 51 说并发面积是**偏保守**的那一侧 —— 它高估争抢，而低估争抢才会诱人去抬
+# `--maxWorkers`，那正是这一族事故（`Failed to start forks worker`）的方向。
 run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
   # 先答一格「这台机器上解释器在哪」：几条用到 Python 的用例缺件时按**既有口径**
   # 走 `env` 档跳过并登记（`tests/helpers/python-exe.ts` 的 `hasPython()`），
@@ -165,27 +373,18 @@ run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
 run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   set -e
   # 每一步的墙钟落 `$LOGD/steps.ms`（一行 `<标签>=<ms>`，标签原样）—— 「哪一步最贵」
-  # 的答案只有逐步骤才有；组级只回答「哪一组最贵」。时钟与追加规则收在
-  # `.githooks/timing.sh`：本组是 `sh -c` 起的**新 shell**，外层的函数一个都看不到，
+  # 的答案只有逐步骤才有；组级只回答「哪一组最贵」。时钟、追加规则**以及 `run()` 本身**
+  # 都收在 `.githooks/timing.sh`：本组是 `sh -c` 起的**新 shell**，外层的函数一个都看不到，
   # 只能 source 同一份（两份时钟必然漂成两个刻度，而账本会把它们并排摆出来）。
+  # `run()` 从这一份来而不是在本块里再写一遍：钩子现在有两个这样的块（D0 与 D），
+  # 两块的读数必须仍是同一个约定，否则两份账再也不能并排读。
   . "$COMFY_TIMING_SH"
-  run() {
-    _label="$1"; shift
-    echo "── check: $_label"
-    timed_step "$_label" "$LOGD/steps.ms" "$@"
-  }
   # R5（超 900 行文件）已是**硬闸**：不带任何 flag，超限即阻断。沿革 = 「只提醒」→
   # ISSUE #1404 加 --strict 棘轮 → ISSUE #1811 基线归零后收成硬闸（`--strict` /
   # `--update` 连同基线一并删除，规范 §12.13.3）。
   # 平台侧流水线删除（ISSUE #623）之后，这一步是它唯一的自动执行者：`check:all`
   # 同样没有自动执行者，§13.5.4 的「按需召唤」只另给一次运行机会、不是判据。
   run "文件结构硬规则(R1-R12，R5 硬闸)" node scripts/check-file-structure.cjs
-  # 跨平台动作对照表（规范 §9.5）。Windows 入口是 .ps1（§8），Linux / macOS 跑不了
-  # .ps1 —— 同一个动作因此在两侧各有一份实现。启动编排已经栽过一次（Windows 一条
-  # .ps1 链、POSIX 一条 .mjs 链各自演进，四项行为静默分叉），所以「新增动作必须两侧
-  # 都在」与「会失效的清单只许定义一次」都机器化：新增 .mjs 忘了登记、或在 .ps1 里又
-  # 抄一份 KNOWN_FAILED_FILES，都在这里被拦下。
-  run "跨平台动作对照(.ps1⇄.mjs)" node scripts/check-ps1-consistency.mjs
   # ── AST 判据聚合档（规范 §13.5.8.2「第四笔账」，ISSUE #1747 续）──────────
   # 下面这 6 条判据判的是**同一批文件**（src/** 的 .ts/.tsx，实测 1082 份），此前各自
   # require("typescript") + walk + createSourceFile 全量走一遍。实测 6 个独立进程
@@ -205,31 +404,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 标题行(页签栏)让位：页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会
   # 把页签和右上角窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。
   run "标题行让位硬规则" node scripts/check-title-bar-clearance.cjs --staged
-  # UI 与逻辑分离硬闸(规范 17)。S* 存量已清零(ISSUE #1811 收尾时从棘轮翻上来):
-  # 视图层出现裸 fetch / vanillaApi.* / tRPC hook 即阻断 —— 没有基线、没有
-  # `--update`，也就不存在「借余量偷偷新增」那条路。H1/H2 本来就是硬规则。
-  run "UI/逻辑分离硬闸" node scripts/check-ui-logic-separation.cjs
-  # CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
-  # 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的文件名与
-  # 段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
-  run "CHANGELOG 碎片" node scripts/check-changelog-fragments.cjs
-  # 待发段落([Unreleased])的**来源锚** ⇄ 条目归属(规范 §13.10.6)。
-  # 上一行只管碎片**形态**(文件名 / 段落标题),不管它们被并到哪儿 —— 于是「并入没
-  # 走完」是一种静默形态:被后一条推翻的旧条目留在 [Unreleased] 里(实测还在),
-  # 而推翻它的碎片躺在 changelog.d/ 里没有东西提醒该并了。本步判三件:锚写了没有、
-  # 锚解析不解析得开(**写歪比不写更贵**:歪锚会让识别正则回 null、整条判据静默放过)、
-  # 同一 ISSUE 号有没有**跨锚分裂**(既在待发段落里、又在它之前的已发布段落里 ——
-  # 那才是这条账最贵的失效形态:归属被切成两半而两端都没写错)。
-  # 成本实测:纯文本 + 只读 git,零网络,< 0.3s。
-  run "待发段落的来源锚 ⇄ 条目归属" node scripts/check-changelog-versions.cjs
-  # import 别名统一（规范 §12.2 / §16.2）：本仓库的别名约定是 `~` 前缀，但
-  # tsconfig.json 的 paths 里同时留着 `@/*`（脚手架的历史项）—— 于是 `@/` 也能编译、
-  # 也能跑，没有任何反馈，漂移面积自己变大。`shadcn add` 生成的组件默认写 `@/`
-  # （§16.3 已点名），src/components/ui/ 因此是重灾区。
-  run "import 别名统一(~ 前缀)" node scripts/check-import-alias.cjs --staged
-  # 端口推导的跨语言一致性（规范 §1.1）：四侧（Node / PowerShell / Python / Rust）读
-  # 同一份共享校验向量 tests/fixtures/app-port-vectors.json，任一侧漂移即在此拦下。
-  run "端口推导跨语言一致性" node scripts/check-app-port-vectors.cjs
   # UI 基元复用棘轮（规范 16 §16.2.3）：存量冻结在基线，只许降不许升。
   # `--staged` 同上（ISSUE #1747）：五条扫描根全在 `src/` 下，全库扫描实测 3.6s（热缓存，
   # D 组单项最贵）。未触及扫描面的提交跳过并打印理由。
@@ -284,8 +458,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 命令清单与红话字面量里 `node scripts/<已翻闸脚本> --update`。沿革叙述（「曾经带
   # --update，已删」）**刻意不判** —— 判它会误报一片，而会误报的判据活不过一次评审。
   run "翻闸旗标的散文承诺(硬闸)" node scripts/check-gate-flag-claims.cjs
-  # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：硬闸 —— 存量已清零。
-  run "地基层零消费导出(硬闸)" node scripts/check-dead-exports.cjs --staged
   # 生成态文档与源同步（`render-doc-placeholders.cjs --check`，规范 §13.5.5）**已挪到
   # 平台侧**（`.cnb.yml` 的「生成态文档与源同步」，见 §13.5.17）：它判的是「文档生成物
   # 有没有跟着源重渲染」，而**改了文档却忘了重渲染**这件事在本地跑一次就知道
@@ -309,12 +481,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # src/lib `void someFn(...)` 悬空棘轮：只认「整条语句就是 `void 一个函数调用`」这一
   # 形态;`void someFn().catch(...)` 链尾显式接管 rejection 的跳过。修法:改用
   # `fireAndForget(someFn(), onError)`,或 `--update` 时说明「被调方内部已 catch」。
-  # ui/ 定制标记 ⟺ 台账（规范 16 §16.8）：`ui/` 是工具生成目录,但本仓库在若干基元上
-  # 做过有意改动(button 的语义变体与 ButtonLink、dialog 的 backdrop 与 popupClassName…),
-  # 此前没有任何地方记着哪个不能覆盖 —— 实测 `shadcn add command` 会顺手覆盖
-  # button/input/textarea/dialog 四个。这条把「改过的地方留痕」机器化:标记与
-  # docs/standards/16 §16.8 的台账双向一致,零网络(不判断差异内容,只保证两边不脱节)。
-  run "ui/ 定制标记与台账（§16.8）" node scripts/check-ui-customizations.cjs
   # ⚠️ 「文档引用与权威源一致」（`check-doc-references.cjs`）**已挪到平台侧**
   # （`.cnb.yml` 的「文档引用与权威源一致」，见 §13.5.17）。判据本身一字未改，
   # 挪的只是**执行者**：它判的是「文档里的裸值 / 路径 / 命令与权威源一致」，
@@ -327,35 +493,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # `pnpm doc:render` 只做「源 → 生成物」、不跑这条校验，按规范走的人一路绿灯。
   # 这半句现在由平台侧那一步接着守（原先「⚠️ 追加在末尾」那句同理作废：
   # 它讲的是钩子内部的序号错位，而不是「把它留在钩子里」的理由）。
-  # 故事文件的枚举来源（规范 16 §16.2.3.2 / §11.8）：`cva()` 返回的是函数，
-  # 运行时没有 `.variants` —— 写成 `Object.keys(xVariants.variants.轴)` 时 tsc 会红，
-  # 而 Storybook 在**加载期**抛 `Cannot read properties of undefined`（侧栏有故事、
-  # 画布一片空白）。判据还顺带核「手写清单没漏档」——首轮就这么漏了
-  # `icon-sm` / `icon-lg` 两档（实测 46 处调用）。
-  # 故事面的三件事（规范 16 §16.2.3.8）：`title` 缺了 Storybook 按路径自动生成条目
-  # （落在侧栏哪个分组取决于推导规则）、真组件没接上（画布上摆的是适配件或别的
-  # 东西）与同目录两套分组前缀（分组靠人写 title 维系，没有任何东西会告诉你漂了）。
-  # 第四件「必填 props 没给 args」只判 `--changed`（本次暂存的故事文件）—— 存量里
-  # 有一批正当形态（值在 render 里给 / 受控开关由 story 持有 / 注入层的 sourceName
-  # 就是它的 args），逐条白名单会变成第二份赦免名单，所以口径是「只挡新增」。
-  run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）" node scripts/storybook-check.mjs --changed
-  # 每一档按需档都要**有主**（规范 §11.8 / §13.5.4）。本步判「每一登记档都有一条新鲜度
-  # 记录，且写清谁 / 什么时候 / 按哪条命令复核的」（`scripts/.<档>-freshness.json`）——
-  # 它**不跑**那些档（起 webServer / 全量单测 / next build 会与钩子里的 A/B/C/D 抢资源），
-  # 只判「这一档上次被实证跑绿是什么时候」这件事有人回答过。
-  # 「每天首次自证」那一层有**三档**（ISSUE #1282 起逐档接上）：平台流水线删掉（ISSUE #623）
-  # 之后一直没有执行者的两条判定档 —— **全量单测 + 覆盖率**与**产物级护栏**，
-  # 以及**全量 e2e**。它们此前只写在 §13.5.3 的欠账表里（「按需手动跑」），
-  # 而那句话没有任何东西在守。
-  #   三档的形状由 `FRESHNESS_TRACKS` 的数据决定，判据一份实现：
-  #   · 全量 e2e —— 按**本地日历日**判：当天第一次提交要带一次凭证。
-  #     两条出路：跑绿即记（`pnpm test:e2e`），或 `node scripts/e2e-run.mjs --skip "<理由>"`。
-  #   · 全量单测 + 覆盖率 / 产物级护栏 —— 十分钟量级、**没必要每天都跑**，按「**改了就当天跑**」
-  #     判（吃 `src/`+`tests/` / 产物链那几个文件）：当天动过输入面就必须今天自证；没动过以
-  #     七天为宽限。出路同样是两条：跑一次，或 `--dirty "<理由>"` 声明「这次改动不吃这一档」。
-  # 占位理由一律被拦（豁免不是绕过）；账文件还没入库时只提醒、不阻断（平台侧 squash 合并
-  # 不跑本地钩子，硬规则 6）。
-  run "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）" node scripts/freshness-gate.mjs
   # 注释语言硬闸（规范 §12.4.6）：注释一律中文，只有「会被 next-code-frame 渲染到」
   # 的构建期模块例外（Next 的 code frame 按字节切串，命中多字节字符内部时 Rust 侧
   # 直接 panic 把 `next build` 打死，偏移敏感、报错指不出业务原因）。判据本身一直是对的，
@@ -558,32 +695,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # `FormField` 自己也兜住（只在 `children` 是函数时才给 `htmlFor`）。
   # 走 TypeScript AST（JSX 结构用正则判不准），与 check-non-null-assertions 同档。
 
-  # 依赖新鲜度（§13.5.13）：只在**你动了依赖面**时判（`--staged`）——
-  # 「远端改了库、你还在旧的上面干活」这一档此前没有任何执行者，本轮补上。
-  # 全量判会天天红（远端引用普遍陈旧，而刷新人 fetch 是人的动作），每次提交都拿它拦人
-  # = 一条天天红的闸，人只会去 skip 它；而「你自己刚改过依赖」这一档不一样 ——
-  # 那时「我的基线是不是旧的」必须回答，否则会在旧依赖上解冲突、或把基于旧基线的
-  # lockfile 推上去。判据自身**不做网络请求**（远端引用陈旧只打 [未校验]、不阻断）。
-  run "依赖新鲜度（只判动了依赖面的提交，§13.5.13）" node scripts/check-deps-freshness.mjs --staged
-  # 依赖构建脚本 ⇄ `allowBuilds` 对账（§13.5.15 / AGENTS 硬规则 8）。这条此前**一个执行者
-  # 都没有**，而它要防的故障形状是「改动点与故障点不同人、中间还隔一次安装」：
-  # 漏登记的人当场看不出来（他自己的 `node_modules` 早装好了，增量 install 甚至
-  # short-circuit），第一次复现是下一个人（或另一台检出、另一个容器）跑非交互
-  # `pnpm install --frozen-lockfile` 那一刻的 `ERR_PNPM_IGNORED_BUILDS` —— 表现是
-  # 「这个仓库装不上依赖」，按硬规则 26 的口径还会被误读成「本机跑不了门禁」。
-  # 判据口径照 pnpm 自己那条抄：它按**包名**批准、对名单里没有的构建脚本直接失败而非警告。
-  # 所以这里只判「带 preinstall/install/postinstall 的已安装包必须有显式条目」，
-  # `true`（批准）与 `false`（显式拒绝）都算回答过；反向（名单里有无脚本的条目）
-  # **刻意不判** —— 现状 11 条里 8 条是那种正当形态，判它等于误报一片。
-  # 缺 `node_modules/.pnpm` 判红而不是跳过：读不到输入时报绿是 §13.5.12 那一族里最坏的一种。
-  # **`--staged` 是输入面跳过**（ISSUE #1747 同族）：能让「带构建脚本的依赖」变化的输入只有
-  # 那三个文件（`package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml`，清单的出处是
-  # `dependency-face.mjs`，与 check-deps-freshness 共用同一份、不在这里抄第二份），
-  # 只改文档或只动 `src/` 的提交
-  # 扫多少遍结论都一样 —— 全树扫描实测 4.5s（与 check-non-null-assertions 同档），
-  # 无条件挂上就是给每个提交白付这笔钱，然后所有人开始 `--no-verify`、判据归零。
-  # 跳过时打印「未触及依赖面」，与真扫过的 OK 可分辨；读不到暂存清单走 exit 2 而不是冒充跳过。
-  run "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）" node scripts/check-allow-builds.cjs --staged
   # jsx-a11y 的规则开关 ⇄ 判据（规范 06 §6.12）。这个插件装着 39 条规则，而
   # `eslint-config-next` 只启用 6 条、全是 warn —— **「半开」这件事此前没有
   # 任何东西在数**：`grep -c jsx-a11y eslint.config.js` 是 0（配置在 next 里）、
@@ -611,29 +722,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #   ③ 登记项与事实脱钩即红（落点没了 / 关键词找不到了）。
   # 判据自己不许静默降级（台账读不出 / 空表 / 对侧读不到 ⇒ 判失败，不是「没有站点要查」）。
   run "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）" node scripts/check-tsc-diagnostic-executors.cjs
-  # 产品版本号三处同步（ISSUE #1611 阶段三 D7）。同一个版本号手抄在 package.json /
-  # src-tauri/tauri.conf.json / src-tauri/Cargo.toml 三处，而这**不是**「改名麻烦」——
-  # tauri.conf.json 的版本在**编译期**内嵌进壳，也是 tauri-plugin-updater 判「更新新旧」
-  # 的基准：只升 package.json 时安装包与更新判定还停在旧版本，用户看到「已是最新」，
-  # 而三处今天恰好相等 ⇒ 第一次忘记升某处的那一刻起错位永久静默（没有任何东西会红）。
-  # 这也是 P0-4（Sentry release）刻意**不取** package.json version 的同一个理由。
-  # 判据只判「三处逐字相等 + 形态合法」，刻意不判「该不该升」（那是发布判断）。
-  # 成本实测：读三个文件、零网络、零子进程，与 check-app-port-vectors 同档。
-  run "产品版本号三处同步(D7)" node scripts/check-app-version.cjs
-  # 基础设施层的文件长度棘轮（§12.6 R5 的姊妹档）：R5 / 函数长度 / 非空断言 / 孪生对
-  # 四类债务判据的扫描根**都只有 `src`**（`check-file-structure.cjs` 的 R5 定义就写着
-  # 「src/ 下超 900 行」，另三份是 `SCAN_DIR = "src"`）。于是判据自己那一层
-  # （`scripts/**` 152 份 `.cjs/.mjs` + `tools/**` 26 份 `.ps1`，约 43k 行，与它管的
-  # `src` 非测试代码同量级）落在自己立的硬闸之外：`src` 侧超 900 行的基线今天为 0，
-  # 同一把尺子在判据层上是 6 个文件、最大一份 4,820 行。
-  # 为什么这条值得在提交时响：判据是**被执行的那部分代码** —— 它长到没人读得动的表现
-  # 不是报错，而是「这条判据从此恒绿」。同族先例：Rust 壳的函数长度也是「另立脚本」
-  # （阈值 120 而不是 400，因为两侧自然长度不同）。
-  # 存量已在 ISSUE #1811 第五刀清零，这一档**翻成硬闸**：基线文件与 `--update` 一并
-  # 删除，命中即退 1，出口只有一个 —— 拆（§12.6 R5 姊妹档）。
-  # 成本实测：读 196 个文件、零网络、零子进程，与 check-app-version / check-a11y-rules 同档。
-  # `--staged` 见下 13.5.8.2：暂存改动没碰扫描面时按输入面跳过。
-  run "基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)" node scripts/check-infra-file-size.cjs --staged
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
@@ -641,8 +729,18 @@ rc=0
 for id in A B C D; do
   eval "pid=\$${id}_pid"
   wait "$pid"
-  code=0
-  [ -f "$LOGD/$id.rc" ] && code="$(cat "$LOGD/$id.rc")"
+  if [ ! -f "$LOGD/$id.rc" ]; then
+    # 读不到退出码 = 那一组的子 shell 没走到写 rc 那一行（被杀 / OOM / 机器把并发压死）。
+    # 这里以前是 `code=0` 默认放行 ⇒「tsc 与 vitest 一个都没判完」会表现成一次**绿提交**，
+    # 而那是本文件最坏的一类失效（判据在场、结论是空的）。口径与 D0 那一档一致：
+    # **判据没跑完不等于通过**（同 §13.6.2 的 `inconclusive` 不是证据）。
+    rc=1
+    echo ""
+    echo "[pre-commit] ✗ 组 $id 没留下退出码（被杀 / 子 shell 没起来？）—— 判据没跑完不等于通过"
+    [ -f "$LOGD/$id.log" ] && cat "$LOGD/$id.log"
+    continue
+  fi
+  code="$(cat "$LOGD/$id.rc")"
   if [ "$code" -ne 0 ]; then
     rc=1
     echo ""

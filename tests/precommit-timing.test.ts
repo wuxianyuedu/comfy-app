@@ -6,7 +6,8 @@
  *
  *   ① 记账/读账的往返（写进去什么、读出来什么、渲染成什么样）；
  *   ② 账本落点（`.git/`、不入库 —— 写进版本库会让同仓并行检出互相污染）；
- *   ③ 钩子的接线（`timing.sh` 两处 source、`run()` 走 `timed_step`、`LOGD` 导出）；
+ *   ③ 钩子的接线（`timing.sh` 被三处 source、`run()` **只定义一份**且走 `timed_step`、
+ *      `LOGD` 导出）；
  *   ④ **记账不改变退出码**（这是这一族最该守住的一条：一条记账线路变成提交的必经
  *      之路，迟早有人为它 `--no-verify`）。
  *
@@ -18,6 +19,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+
+import { groupShBody, stepsInGroup } from "./helpers/hook-groups";
 
 const REPO_ROOT = resolve(".");
 const SCRIPT = join(REPO_ROOT, "scripts", "precommit-timing.mjs");
@@ -241,22 +244,75 @@ describe("pre-commit 耗时账：记账与读账", () => {
 describe("pre-commit 耗时账：钩子的接线", () => {
   const hook = readFileSync(HOOK, "utf8");
 
-  it("钩子两处都 source 同一份 timing.sh（否则 D 组会拿到另一套时钟）", () => {
+  it("钩子三处都 source 同一份 timing.sh（外层 + D0 与 D 两个 `sh -c` 块）", () => {
     expect(hook).toContain('. "$COMFY_TIMING_SH"');
-    /* D 组那一处：`sh -c` 起的新 shell，函数与外层不共享，必须自己再 source 一次。 */
-    const dGroup = hook.slice(hook.indexOf('run_group D "'));
-    expect(dGroup).toContain('. "$COMFY_TIMING_SH"');
+    /* 每个 `sh -c` 块都要自己 source 一次：新 shell 看不到外层函数，少了那一行就是
+     * 「逐步读数落到一个空路径」，静默丢掉整组的账。D0 是新加的那个块。 */
+    for (const id of ["D0", "D"]) {
+      expect(
+        groupShBody(hook, id),
+        `组 ${id} 没有 source 时钟，或那个块解析不出来（组名 / 引号形状变了）`,
+      ).toContain('. "$COMFY_TIMING_SH"');
+    }
     /* 时钟与计时函数只在 timing.sh 里定义一次（抄两份的漂移是静默的）。 */
-    expect(readFileSync(TIMING_SH, "utf8")).toContain("now_ms()");
-    expect(readFileSync(TIMING_SH, "utf8")).toContain("timed_step()");
+    const timing = readFileSync(TIMING_SH, "utf8");
+    expect(timing).toContain("now_ms()");
+    expect(timing).toContain("timed_step()");
+    expect(timing).toContain("run()");
     expect(hook).not.toMatch(/^now_ms\(\)/m);
   });
 
-  it("D 组的 run() 走 timed_step（逐步的账只有它给得出）", () => {
-    const dGroup = hook.slice(hook.indexOf('run_group D "'));
-    expect(dGroup).toMatch(/run\(\) \{[^}]*timed_step/s);
+  it("`run()` 只在 timing.sh 里定义一份，且走 timed_step 落 steps.ms", () => {
+    /* 从「D 组里那份」改成「只在共享件里那一份」：钩子现在有两个这样的块（D0 前置档与
+     * D 并行档），各写一份 `run()` 的漂移形态与那份文件头里「两份时钟必然漂成两个刻度」
+     * 同款 —— 比如后来有人只给其中一处加「跳过时不打标签」，两组的逐步账就再也不能并排读，
+     * 而账本自己不会报错。所以这里连**反向**一起钉：钩子里不许再长出第二份定义。 */
+    const timing = readFileSync(TIMING_SH, "utf8");
+    expect(timing).toMatch(/run\(\) \{[^}]*timed_step/s);
     /* 逐步读数必须落到 `$LOGD/steps.ms` 这个与 record_timing 约定的位置。 */
-    expect(dGroup).toContain("$LOGD/steps.ms");
+    expect(timing).toContain('"$LOGD/steps.ms"');
+    expect(hook, "钩子里又出现了一份 `run()` 定义").not.toMatch(/^\s*run\(\)/m);
+    // 两个块都真的经 `run` 逐步记账：调用点在，读数才在（解析不出块时这里会零命中）。
+    for (const id of ["D0", "D"]) {
+      expect(
+        stepsInGroup(hook, id).length,
+        `组 ${id} 里一条 ` + "`run`" + " 步骤都没有 —— 该组的逐步账从此消失",
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("失败那一条自己也进账（`set -e` 不许在 printf 之前把组截掉）", () => {
+    /* 立案现场：本轮第一次拿这份账当证据时，一份坏 changelog 碎片的红里只有它**前面**三步
+     * 的读数 —— `timed_step` 里裸跑 `"$@"`，`set -e` 在那一行就把整个组截断了，下面的
+     * printf 根本没执行。于是「哪一步把我拦下了」这个账本唯一要回答的问题，正好落在缺失的
+     * 那一行上，而组的墙钟与步之和也对不上（差的就是那一条）。
+     * 修法是把命令放进 `||` 的右侧：那里不触发 `set -e`，退出码照旧由 `return` 带出去
+     * ⇒ **阻断语义一字未变**，只是失败那一条也留下读数。
+     * 这里判源码形态而不是真起一次 sh：起 sh 要依赖 `sh` 在 PATH 上（CI 的 PowerShell
+     * stage 不保证），而「拿环境早退换一条会绿的用例」正是 §11.17 明令禁止的那种绿。 */
+    const timing = readFileSync(TIMING_SH, "utf8");
+    expect(
+      timing.includes('"$@" || _ts_rc=$?'),
+      "timed_step 又回到裸跑 `\"$@\"` —— 失败那一条会在 printf 之前被 `set -e` 截掉，" +
+        "于是账本里的「最后一步」成了拦下者**前面**那一步，而「哪一步拦的我」这个问题没有答案",
+    ).toBe(true);
+  });
+
+  it("每步的两次读数走零 fork 的时钟（`timed_step` 里不许再有 `$(now_ms)`）", () => {
+    /* 这条守的是**代价**，而代价不会让任何人报错：`$(date +%s%3N)` 在 MSYS 上每次 fork 约
+     * 467ms，每步两次 ⇒ 一组 51 步就是 15–45s 的纯记账开销，且它**算在每条步的读数里**
+     * （现场：一份 14 条的组墙钟 54.0s 而步之和 41.1s；换成 `set_now_ms` 之后 25.0s / 26.2s）。
+     * 退回 `$(now_ms)` 的形态不是红，是每个人每次提交多等几十秒、并多一份对不上的账。 */
+    const timing = readFileSync(TIMING_SH, "utf8");
+    const body = /timed_step\(\) \{[\s\S]*?\n\}/.exec(timing)?.[0] ?? "";
+    expect(body, "解析不出 timed_step 的函数体").not.toBe("");
+    expect(
+      body.includes("$(now_ms)"),
+      "timed_step 又用命令替换取时钟 —— 那一步的钱会记进判据的读数里",
+    ).toBe(false);
+    expect(body.includes("set_now_ms _ts_start") && body.includes("set_now_ms _ts_now")).toBe(
+      true,
+    );
   });
 
   it("`LOGD` 与 `COMFY_TIMING_SH` 都导出（D 组是新 shell，未导出就读不到）", () => {

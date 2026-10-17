@@ -1,7 +1,9 @@
 /**
- * pre-commit D 组里三条「接线本身」的在位判据：
- * `doc:check` 那一步（ISSUE #1371）、R5 棘轮的 `--strict` 硬闸（ISSUE #1404）
- * 与注释语言棘轮（ISSUE #1451）。
+ * pre-commit 里「接线本身」的在位判据：`doc:check` 那一步的执行者（ISSUE #1371 立档 →
+ * ISSUE #1975 挪平台侧）、R5 棘轮的 `--strict` 硬闸（ISSUE #1404 / #1811）、注释语言棘轮
+ * （ISSUE #1451）、桌面壳（ISSUE #1597）、全库扫描的输入面跳过与 AST 聚合档（ISSUE #1747）、
+ * 新鲜度账的第二执行者（ISSUE #1979），以及 **D0 形态前置档**（钩子重构 1：哪几条判据在
+ * 「启动其余四组之前」串行跑完、按什么顺序）。
  *
  * 第三条的立案现场：`scripts/check-comment-language.cjs` 头部自称
  * 「供 `.githooks/pre-commit` 与 CI 调用」、§12.4.6 也写着它在钩子里报红，
@@ -17,9 +19,11 @@
  * 那次改动（有人把某一步摘回手动档 / 抹掉 flag / 改了计数陈述）上一条都不跑，
  * 判据存在但没有执行者，与没有等价。这里只读几份文本、不起子进程，成本可忽略。
  *
- * 为什么解析 D 组步骤而不是 `toContain(那一行)`：变异实测把那行前面加 `# ` 注掉后，
+ * 为什么解析步骤行而不是 `toContain(那一行)`：变异实测把那行前面加 `# ` 注掉后，
  * `toContain` 仍然命中（注释行里也含同一段字面），只有计数那条会红。
  * 「把这一步静音」正是这一族要拦的动作（同台账 F13「对编译器按下静音键」）。
+ * 解析器收在 `tests/helpers/hook-groups.ts`，与另外两处消费者共用一份 —— 各写一份的
+ * 漂移形态是「同一份钩子在三条判据里长成三个形状」（§12.12 / §12.18）。
  *
  * 同一格先例：`tests/shell-gate.test.ts` 的「新增门禁脚本必须同时接进 pre-commit」、
  * `tests/no-platform-ci-config.test.ts` 的「平台侧兜底在不在」。
@@ -30,6 +34,8 @@ import { describe, expect, it } from "vitest";
 
 import { registeredGateOrder, stageBlock } from "./no-platform-ci-config.test";
 
+import { groupShBody, runSteps, stepsInGroup } from "./helpers/hook-groups";
+
 const REPO_ROOT = resolve(".");
 const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
@@ -37,17 +43,16 @@ const STRUCTURE = join(REPO_ROOT, "scripts", "check-file-structure.cjs");
 const R5_BASELINE = join(REPO_ROOT, "scripts", ".file-size-baseline.json");
 
 /**
- * D 组步骤 = 钩子里 `  run "<标签>" <命令>` 那些行（两空格缩进是组内 shell 的形态）。
- * 行首锚定只认真调用：`run() { … }` 的函数定义、被 `#` 注掉的行都不算。
- * @param {string} hookText
- * @returns {{label: string, cmd: string}[]}
+ * 钩子里**全部** `run "<标签>" <命令>` 步骤行（D0 形态前置档 + D 静态判据档，不分组）。
+ *
+ * 在场判据要的正是这个并集：一条判据「在不在门禁链里」与它在哪个组无关 —— 把它从并行档
+ * 挪进前置档，**不该**让任何一条在场判据变红（那会把「编排」误判成「拆掉了判据」）。
+ * 解析而不是 `toContain(那一行)`：把那行前面加 `# ` 注掉，`toContain` 仍然命中（注释行里
+ * 也含同一段字面），只有计数与逐字命令那两条会红 —— 「把这一步静音」正是这一族要拦的动作。
+ * 解析器本体在 `tests/helpers/hook-groups.ts`（三处判据共用一份，不在这里各写一遍）。
  */
-function dGroupSteps(hookText: string) {
-  const re = /^ {2}run "([^"]+)" (.+)$/gm;
-  return [...hookText.matchAll(re)].map((m) => ({
-    label: m[1] ?? "",
-    cmd: m[2] ?? "",
-  }));
+function hookGateSteps(hookText: string) {
+  return runSteps(hookText);
 }
 
 /**
@@ -105,7 +110,7 @@ function readChecklistCommands() {
 
 describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSUE #1975 挪执行者）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   /* 这一条守的动作**变过一次**，两半都要留着：
    *   · ISSUE #1371 翻档：它原来自称「不接 pre-commit」，翻档是把它**接进**钩子；
@@ -119,7 +124,7 @@ describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSU
     );
     expect(
       hit,
-      `D 组 ${steps.length} 步里又有 doc:check 了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
+      `门禁链 ${steps.length} 步里又有 doc:check 了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
         "（`.cnb.yml` 的「文档引用与权威源一致」）。要么把它从钩子里去掉，要么同步改本判据",
     ).toBeUndefined();
   });
@@ -149,7 +154,7 @@ describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSU
 
 describe("R5 的硬闸在钩子里（ISSUE #1404 立档 / ISSUE #1811 收成硬闸）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   it("结构那一步真的在跑，且不带任何 flag（R5 已是硬闸，没有 --strict 可加）", () => {
     const hit = steps.find((s) =>
@@ -205,7 +210,7 @@ const COMMENT_LANGUAGE = join(
 
 describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
     const hit = steps.find((s) =>
@@ -216,7 +221,7 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
     // 在基线已是 total: 0 时属另一类动作 —— 三者都不许混进钩子。
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有注释语言棘轮 —— §12.4.6 写着它在钩子里报红，` +
+      `门禁链 ${steps.length} 步里没有注释语言棘轮 —— §12.4.6 写着它在钩子里报红，` +
         "而拆掉这一步之后它一个执行者都没有（平台流水线已随 ISSUE #623 删除）",
     ).toEqual({
       label: "注释语言硬闸",
@@ -252,13 +257,13 @@ const DOCS_API_OUT = join(REPO_ROOT, "docs", "api");
 
 describe("API 文档生成物与源同步（ISSUE #1329 收尾 → ISSUE #1975 挪执行者）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   it("钩子 D 组**不再**执行这一步（它已在平台侧，见 §13.5.17）", () => {
     const hit = steps.find((s) => s.cmd.includes("scripts/check-docs-api.cjs"));
     expect(
       hit,
-      `D 组 ${steps.length} 步里又有 docs-api 同步了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
+      `门禁链 ${steps.length} 步里又有 docs-api 同步了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
         "（`.cnb.yml` 的「API 文档生成物与源同步」）。要么把它从钩子里去掉，要么同步改本判据",
     ).toBeUndefined();
   });
@@ -329,7 +334,7 @@ const SHELL_GATE = join(REPO_ROOT, "scripts", "shell-gate.mjs");
 
 describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
     const hit = steps.find((s) =>
@@ -337,7 +342,7 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
     );
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有桌面壳门禁 —— AGENTS 硬规则 5「改了壳必须重编」` +
+      `门禁链 ${steps.length} 步里没有桌面壳门禁 —— AGENTS 硬规则 5「改了壳必须重编」` +
         "与壳里那批 #[test] 都没有别的执行者",
     ).toEqual({
       label: "桌面壳（改了 src-tauri 才跑）",
@@ -386,7 +391,7 @@ const UI_PRIMITIVES = join(REPO_ROOT, "scripts", "check-ui-primitives.cjs");
 
 describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   it("prettier 格式棘轮在钩子里带 --staged 条件触发", () => {
     const hit = steps.find((s) =>
@@ -394,7 +399,7 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
     );
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有 prettier 格式棘轮，或它丢了 --staged —— ` +
+      `门禁链 ${steps.length} 步里没有 prettier 格式棘轮，或它丢了 --staged —— ` +
         "后者会让全库扫描回到无条件执行（每次提交白付 2.9s 热缓存 / 17.6s 冷缓存）",
     ).toEqual({
       label: "prettier 格式硬闸",
@@ -408,7 +413,7 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
     );
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有 UI 基元复用棘轮，或它丢了 --staged —— ` +
+      `门禁链 ${steps.length} 步里没有 UI 基元复用棘轮，或它丢了 --staged —— ` +
         "后者会让全库扫描回到无条件执行（每次提交白付 3.6s，D 组单项最贵）",
     ).toEqual({
       label: "UI 基元复用棘轮",
@@ -503,13 +508,13 @@ const AGGREGATED_AST_GATES: readonly string[] = [
 
 describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 续）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   it.for(SECOND_TIER)("%s 在钩子里带 --staged 条件触发", ([label, , expected]) => {
     const hit = steps.find((s) => s.label === label);
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有「${label}」—— 判据从门禁链里被摘掉了`,
+      `门禁链 ${steps.length} 步里没有「${label}」—— 判据从门禁链里被摘掉了`,
     ).toBeDefined();
     expect(
       hit?.cmd,
@@ -562,7 +567,7 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
 
 describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔账）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
 
   it("聚合档那一行在钩子里带 --staged 条件触发", () => {
     const hit = steps.find((s) =>
@@ -570,7 +575,7 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
     );
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有 AST 判据聚合档 —— 6 条判据一个执行者都没有了`,
+      `门禁链 ${steps.length} 步里没有 AST 判据聚合档 —— 6 条判据一个执行者都没有了`,
     ).toBeDefined();
     expect(hit?.cmd).toBe("node scripts/run-ast-gates.cjs --staged");
   });
@@ -633,7 +638,7 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
  */
 describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () => {
   const hook = readFileSync(HOOK, "utf8");
-  const steps = dGroupSteps(hook);
+  const steps = hookGateSteps(hook);
   const config = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
 
   it("平台侧有「新鲜度账」这一步，且跑的是与钩子同一份脚本", () => {
@@ -691,9 +696,145 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
     );
     expect(
       hit,
-      `D 组 ${steps.length} 步里没有新鲜度账判决 —— 平台侧只在 PR 事件上跑，` +
+      `门禁链 ${steps.length} 步里没有新鲜度账判决 —— 平台侧只在 PR 事件上跑，` +
         "本地迭代与 PR 之间的那些提交会整段失去能见度",
     ).toBeDefined();
     expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+  });
+});
+
+/**
+ * D0 形态前置档（钩子重构 1）。
+ *
+ * 立案现场（本机账 `.git/comfy-precommit-timing.jsonl`，最近 17 次提交里 6 次红）：
+ * D 组带 `set -e`，一次红的记录里「记到哪一条」就是拦下你的那一条（后面的没有跑）。
+ * 那六次读出来是：**新鲜度账 ×3**（跨过一个 00:00 之后的第一次提交）、
+ * **生成态文档与源同步 ×2**（这条已随 ISSUE #1975 挪到平台侧，本地不再付）、
+ * **CHANGELOG 碎片 ×1** —— 而那一次 **D 组跑到 14.2s 就已判红，整条钩子照旧付满 C 组的
+ * 156.6s 才退出**（exit 1、D=14.2s、C=156.6s、总 157.6s）。
+ * 四组是「并行且**全部等完**」的（墙钟 = max(各组) = C），所以在 D 组内部重排不会让任何
+ * 一次提交变快 —— 能省的形状只有一个：在 A/B/C 启动之前先拿到这一档结论。
+ *
+ * 为什么要一条判据守着这一档：它是**编排决定**，会被「顺手加一条」「顺手挪回 D」改掉，
+ * 而改掉的表现为「红的那几次又慢回去了」—— 慢不会让任何人报错。与 SECOND_TIER 那两条
+ * 同一条立案理由（「抹掉一个 `--staged` 与让全库扫描回到无条件执行等价，而没有任何别的
+ * 判据会看见这个差异」）。
+ *
+ * 判五件事：① D0 块解析得出来（解析不出时下面每条都会「没有站点要查」地绿）；
+ * ② 名单里每条确实在 D0 块里、命令逐字一致；③ 名单不许无声变长或换序（往**串行**档里
+ * 加东西 = 给每一次绿提交加税，这条决定必须过人的眼）；④ D0 与 D 不相交、且 D0 的等待点
+ * 排在 `run_group A` **之前**（否则这一档退化成第六个并行组，本档存在的理由就没了）；
+ * ⑤ 读不到 D0 退出码时是拦下而不是放行。
+ *
+ * 三条都只读文本、不起子进程。
+ */
+const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
+  ["CHANGELOG 碎片", "node scripts/check-changelog-fragments.cjs"],
+  ["待发段落的来源锚 ⇄ 条目归属", "node scripts/check-changelog-versions.cjs"],
+  ["每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）", "node scripts/freshness-gate.mjs"],
+  ["UI/逻辑分离硬闸", "node scripts/check-ui-logic-separation.cjs"],
+  ["地基层零消费导出(硬闸)", "node scripts/check-dead-exports.cjs --staged"],
+  ["故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）", "node scripts/storybook-check.mjs --changed"],
+  ["产品版本号三处同步(D7)", "node scripts/check-app-version.cjs"],
+  ["ui/ 定制标记与台账（§16.8）", "node scripts/check-ui-customizations.cjs"],
+  ["跨平台动作对照(.ps1⇄.mjs)", "node scripts/check-ps1-consistency.mjs"],
+  ["端口推导跨语言一致性", "node scripts/check-app-port-vectors.cjs"],
+  ["import 别名统一(~ 前缀)", "node scripts/check-import-alias.cjs --staged"],
+  ["依赖新鲜度（只判动了依赖面的提交，§13.5.13）", "node scripts/check-deps-freshness.mjs --staged"],
+  ["依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）", "node scripts/check-allow-builds.cjs --staged"],
+  ["基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)", "node scripts/check-infra-file-size.cjs --staged"],
+];
+
+describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const d0 = stepsInGroup(hook, "D0");
+  const d = stepsInGroup(hook, "D");
+
+  it("两个块都解析得出来（解析不出时其余各条会空转）", () => {
+    // 「读不到块」与「块里没有那一步」在两处都长成同样的绿，所以先正面钉扫描面非空。
+    expect(d0.length, "读不到 D0 块的 `run` 步骤 —— 组名或 `sh -c` 的引号形状变了").toBeGreaterThan(0);
+    expect(d.length, "读不到 D 块的 `run` 步骤").toBeGreaterThan(0);
+  });
+
+  it.for(FORM_PREPASS)("%s 在 D0 块里且命令逐字一致", ([label, cmd]) => {
+    const hit = d0.find((s) => s.label === label);
+    expect(hit, `D0 块里没有「${label}」—— 前置档被摘掉了这一条`).toBeDefined();
+    expect(
+      hit?.cmd,
+      `「${label}」的命令与名单登记的不一致 —— flag 就是判据的档位（` +
+        "钩子档 / `--report` 盘点档 / `--update` 收紧档不是同一件事）",
+    ).toBe(cmd);
+  });
+
+  it("D0 的成员与顺序都不许无声变化", () => {
+    /* 用 `toEqual` 而不是 `toEqual(expect.arrayContaining(...))`：成员之外，**顺序**也是
+     * 这一档的决定（本机账里真拦下过提交的那两条排最前，让最可能用到的结论最早到）。
+     * 换序在账本上只表现为「某一步的读数变了」，不会有人来改这份名单。 */
+    expect(
+      d0.map((s) => s.label),
+      "D0 块的步骤与这份名单不一致 —— 往串行档里加一条就是给每一次绿提交加税，" +
+        "挪走一条就是让那一类红重新等满 C 组的墙钟；两种都要过人的眼",
+    ).toEqual(FORM_PREPASS.map(([label]) => label));
+  });
+
+  it("同一条判据不许在 D0 与 D 里各跑一遍", () => {
+    const both = d0.filter((s) => d.some((x) => x.label === s.label));
+    expect(
+      both.map((s) => s.label),
+      "两个组里都有这一步 ⇒ 白付一遍，而 `$LOGD/steps.ms` 里会出现两个同名标签，" +
+        "账本上那一步的读数是两次之和（读起来像「这条判据变慢了」）",
+    ).toEqual([]);
+  });
+
+  it("D0 的等待点排在 `run_group A` 之前（这一档存在的全部理由）", () => {
+    const waitAt = hook.indexOf('wait "$D0_pid"');
+    const aAt = hook.indexOf("run_group A ");
+    expect(waitAt, "钩子里找不到 D0 的等待点").toBeGreaterThanOrEqual(0);
+    expect(aAt, "钩子里找不到 A 组的启动点").toBeGreaterThanOrEqual(0);
+    expect(
+      waitAt,
+      "D0 的等待点排在 A/B/C 之后 ⇒ 前置档退化成第六个**并行**组：结论照样迟到，" +
+        "而被形态判据拦下的那几次仍然付满 C 组的墙钟 —— 那正是本档要消掉的东西",
+    ).toBeLessThan(aAt);
+  });
+
+  it("读不到 D0 的退出码时拦下，不是放行", () => {
+    const seg = hook.slice(hook.indexOf('wait "$D0_pid"'), hook.indexOf("run_group A "));
+    const guardAt = seg.indexOf('[ ! -f "$LOGD/D0.rc" ]');
+    expect(guardAt, "D0 之后没有「读不到退出码」那一支 —— 缺退出码就成了「默认 0 = 通过」").toBeGreaterThanOrEqual(0);
+    expect(
+      seg.slice(guardAt, seg.indexOf('_d0_rc=', guardAt)),
+      "读不到退出码那一支没有 exit 1 —— 这一档是后面四组的唯一前置，" +
+        "「判据没跑完」不等于「判据通过」（§13.5.15 同款口径）",
+    ).toContain("exit 1");
+  });
+
+  it("D0 与 D 的步骤数之和等于门禁链总数（块边界完好）", () => {
+    /* 这条不是形式检查。本轮重排 D0 时，组收尾的那个单引号被并进了最后一条步骤行的行尾
+     * （`… check-infra-file-size.cjs --staged'`）：`sh -n` **照样过**（它确实闭合了本组的
+     * `sh -c`），但四个解析器看到的命令就多了一个 `'`，而「取 D0 块」的切片会一路吞到 D 组
+     * 的收尾 —— 于是 D0 读出来是 51 步。现场靠人读文件才发现，所以把它收成两条判据：
+     * 两组的并 == 全文步骤总数（块边界被吞时左边会大于右边），且没有一条命令以 `'` 结尾。 */
+    expect(
+      d0.length + d.length,
+      `D0(${d0.length}) + D(${d.length}) 与门禁链总数 ${hookGateSteps(hook).length} 对不上 ⇒ 某一组的` +
+        "边界被吞了（收尾引号并进了行内），此时按组解析出来的步骤是假的",
+    ).toBe(hookGateSteps(hook).length);
+    const glued = [...d0, ...d].filter((s) => s.cmd.endsWith("'"));
+    expect(
+      glued.map((s) => s.label),
+      "有步骤的命令以单引号结尾 ⇒ 组的收尾引号并进了那一行，四个解析器都会读到带引号的命令",
+    ).toEqual([]);
+  });
+
+  it("D0 与 D 都 source 同一份计时（否则前置档的逐步读数会静默消失）", () => {
+    // 两个块都是 `sh -c` 起的新 shell：外层函数看不见它们，未 source 时形态是
+    // 「读数落到一个空路径」，丢掉的是整组逐步的账（第一版就是这么错的）。
+    for (const id of ["D0", "D"]) {
+      expect(
+        groupShBody(hook, id),
+        `组 ${id} 没有 source 时钟，或那个块解析不出来`,
+      ).toContain('. "$COMFY_TIMING_SH"');
+    }
   });
 });
