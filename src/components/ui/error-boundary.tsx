@@ -13,8 +13,12 @@ import React from "react";
 export class ErrorBoundary extends React.Component<
   {
     children: React.ReactNode;
-    /** 降级 UI：可传 ReactNode，也可传 (error) => ReactNode 函数以拿到真实错误对象 */
-    fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode);
+    /** 降级 UI：可传 ReactNode，也可传 (error) => ReactNode 函数以拿到真实错误对象。
+     * 函数形态返回 `null` / `undefined` 表示「这次不接管」，退回本组件的默认降级 UI —
+     * 让调用点只处理它认得的那一类错误，其余照旧（见 `useLazyChunkFallback`）。 */
+    fallback?:
+      | React.ReactNode
+      | ((error: Error | null) => React.ReactNode | null | undefined);
     onError?: (error: Error, info: React.ErrorInfo) => void;
   },
   { hasError: boolean; error: Error | null }
@@ -38,12 +42,17 @@ export class ErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return typeof this.props.fallback === "function"
-          ? (this.props.fallback as (error: Error | null) => React.ReactNode)(
-              this.state.error,
-            )
-          : this.props.fallback;
+      /* 函数形态可能对某一类错误说「我不接管」（返回 `null`）：那时必须继续走到
+       * 下面的默认降级 UI，而不是把它当成降级的全部内容 —— 后者渲染出来是**整块
+       * 空白**，用户既看不到出了什么事、也没有「重试」。 */
+      const custom = this.props.fallback;
+      if (typeof custom === "function") {
+        const node = (custom as (error: Error | null) => React.ReactNode)(
+          this.state.error,
+        );
+        if (node !== null && node !== undefined) return node;
+      } else if (custom) {
+        return custom;
       }
       return (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-6 py-12 text-center">

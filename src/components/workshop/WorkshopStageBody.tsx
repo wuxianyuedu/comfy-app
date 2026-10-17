@@ -6,6 +6,12 @@
 // 性能治理：把各 stage 的重型子组件改为按 stage 懒加载，仅在对应 tab
 // 激活时拉进模块图。Turbopack 的模块图被切成独立小块后，保存枢纽文件或
 // 单个 stage 组件时，热更新的重编范围不再横跨整条工坊链路。
+//
+// 代价：懒加载的 `import()` 在 dev server 重建后可能撞上「分块已被换掉」——
+// 剩下的 Promise 只能 reject，而 React 会让它冒到最近的上层边界去。若这一屏
+// 外面只有一个路由级边界，工坊整屏会一起崩（ISSUE #1900 的同族故障）。
+// 所以每段都套一层 `<StageBoundary>`：卡片内局部隔离 + 分块失败时给
+// 「重新加载页面」这个真能出去的动作。
 
 import React from "react";
 import { Button } from "~/components/ui/button";
@@ -13,6 +19,8 @@ import { useFilePicker } from "~/components/ui/file-picker";
 import { readFileAsText } from "~/lib/file-io";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
+import { ErrorBoundary } from "~/components/ui/error-boundary";
+import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
 import { StageHint } from "~/components/workshop/StageHint";
@@ -61,6 +69,30 @@ const LazyFinalComposer = React.lazy(() =>
 function StageFallback() {
   return (
     <Skeleton className="border-border bg-surface min-h-65 rounded-2xl border p-5" />
+  );
+}
+
+/**
+ * 一段 stage 的懒加载外壳：局部边界 + 「分块没加载上」的用户出口。
+ *
+ * 边界必须落在**每一段各自**身上（而不是工坊外面套一个）：套在外面时，任何
+ * 一段的 `import()` 失败都会把另外五段、连同标题与阶段轨道一起打成错误页。
+ *
+ * `label` 是用户能认出来的那一段的名字 —— 只说「加载失败」等于让用户自己在
+ * 六个卡片里找哪块坏了。
+ */
+function StageBoundary({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  const fallback = useLazyChunkFallback(label);
+  return (
+    <ErrorBoundary fallback={fallback}>
+      <React.Suspense fallback={<StageFallback />}>{children}</React.Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -247,13 +279,13 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               {/* ── 剧本工具（智能辅助）── */}
               <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
                 <h3 className="text-ink u-title mb-3">剧本工具</h3>
-                <React.Suspense fallback={<StageFallback />}>
+                <StageBoundary label="剧本工具">
                   <LazyScriptGenerator
                     meta={meta}
                     onMetaChange={setMeta}
                     onScriptChange={setScriptMarkdown}
                   />
-                </React.Suspense>
+                </StageBoundary>
               </section>
             </>
           )}
@@ -268,7 +300,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           )}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <h3 className="text-ink u-title mb-3">角色工具</h3>
-            <React.Suspense fallback={<StageFallback />}>
+            <StageBoundary label="角色工具">
               <LazyCharacterDesigner
                 characters={characters}
                 styles={styles}
@@ -286,7 +318,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   onOpenModelAdapters: openModelAdapters,
                 }}
               />
-            </React.Suspense>
+            </StageBoundary>
           </section>
         </>
       )}
@@ -310,7 +342,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
 
           <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
             <h3 className="text-ink u-title mb-3">分镜工具</h3>
-            <React.Suspense fallback={<StageFallback />}>
+            <StageBoundary label="分镜工具">
               <LazyStoryboardPlanner
                 scenes={scenes}
                 characters={characters}
@@ -327,7 +359,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   actions: storyboardExtractActions,
                 }}
               />
-            </React.Suspense>
+            </StageBoundary>
           </section>
         </>
       )}
@@ -345,7 +377,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 图 {imageDoneCount}/{shots.length}
               </span>
             </div>
-            <React.Suspense fallback={<StageFallback />}>
+            <StageBoundary label="生图工具">
               <LazyShotStudio
                 shots={shots}
                 scenes={scenes}
@@ -360,7 +392,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 onCancelShot={(shot) => void cancelShotTask(shot, "image")}
                 onNextStage={() => setTab("video")}
               />
-            </React.Suspense>
+            </StageBoundary>
           </section>
         </>
       )}
@@ -378,7 +410,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 片段 {clipDoneCount}/{shots.length}
               </span>
             </div>
-            <React.Suspense fallback={<StageFallback />}>
+            <StageBoundary label="视频工具">
               <LazyVideoStudio
                 shots={shots}
                 workflowId={videoWorkflowId}
@@ -391,7 +423,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 onPrevStage={() => setTab("shots")}
                 onNextStage={() => setTab("render")}
               />
-            </React.Suspense>
+            </StageBoundary>
           </section>
         </>
       )}
@@ -403,7 +435,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
           )}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
-            <React.Suspense fallback={<StageFallback />}>
+            <StageBoundary label="成片合成">
               <LazyFinalComposer
                 shots={shots}
                 title={meta.title || "未命名项目"}
@@ -411,14 +443,14 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 rendered={rendered}
                 onRendered={markRendered}
               />
-            </React.Suspense>
+            </StageBoundary>
           </section>
         </>
       )}
 
       {/* 全屏 markdown 剧本编辑器 */}
       {isScriptEditorOpen && (
-        <React.Suspense fallback={<StageFallback />}>
+        <StageBoundary label="剧本编辑器">
           <LazyScriptMarkdownEditor
             title={meta.title || "编辑剧本"}
             value={scriptMarkdown}
@@ -426,7 +458,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             onSave={saveScriptEditor}
             onCancel={closeScriptEditor}
           />
-        </React.Suspense>
+        </StageBoundary>
       )}
     </div>
   );

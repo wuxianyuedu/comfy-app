@@ -12,6 +12,8 @@ import { Button } from "~/components/ui/button";
 import type { DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
+import { ErrorBoundary } from "~/components/ui/error-boundary";
+import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
 
@@ -77,6 +79,8 @@ export function DetailBody({
   onSeedModeChange,
   onPatchParamMap,
 }: DetailBodyProps) {
+  /* 懒加载的画布预览撞上「分块已被换掉」时，这一块自己给出路（见下方边界）。 */
+  const chunkFallback = useLazyChunkFallback("画布预览");
   /* 换工作流 / 首次打开时详情查询尚未排空：此时表单拿不到 IO，预览会先渲染
    * 一遍无参卡片再被真实 IO 顶掉（整块高度改变 → 页面跳一下），参数页签同
    * 理。统一的处理是「还没就绪就不渲染页签内容」——container 用 min-h-0 撑满
@@ -120,27 +124,32 @@ export function DetailBody({
             <div className="flex min-h-0 w-full min-w-0 flex-1 justify-center overflow-x-auto overflow-y-hidden">
               {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
                 运行结果/状态/表单残留（详情区复用的是同一 DOM 位置）。 */}
-              <LazyWorkflowCanvasNodePreview
-                key={workflow.id}
-                workflowId={workflow.id}
-                workflowName={workflow.name}
-                taskType={workflow.taskType}
-                workflowIO={workflowIO}
-                paramMap={paramMap}
-                usable={usable}
-                /* 页签即视图模式：「实际使用」页签可生成、可看结果，
-                 * 「编辑对外参数」页签是参数落点编辑画布。 */
-                viewMode={tab === "use" ? "use" : "edit"}
-                modes={meta?.modes}
-                /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
-                 * 作为「未切过时的初值」与卡片上的默认标记。 */
-                defaultMode={activeMode ?? meta?.defaultMode}
-                onModeChange={(code) => {
-                  meta?.onModeChange(code);
-                }}
-                onSeedModeChange={onSeedModeChange}
-                onPatchParamMap={onPatchParamMap}
-              />
+              {/* 画布预览是懒加载的（下面挂着画布引擎）：dev server 重建后它的分块
+                  可能已被换掉，`import()` 只剩 reject。没有这层边界时错误会冒到路由级
+                  边界、把整个工作流库打成错误页。 */}
+              <ErrorBoundary fallback={chunkFallback}>
+                <LazyWorkflowCanvasNodePreview
+                  key={workflow.id}
+                  workflowId={workflow.id}
+                  workflowName={workflow.name}
+                  taskType={workflow.taskType}
+                  workflowIO={workflowIO}
+                  paramMap={paramMap}
+                  usable={usable}
+                  /* 页签即视图模式：「实际使用」页签可生成、可看结果，
+                   * 「编辑对外参数」页签是参数落点编辑画布。 */
+                  viewMode={tab === "use" ? "use" : "edit"}
+                  modes={meta?.modes}
+                  /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
+                   * 作为「未切过时的初值」与卡片上的默认标记。 */
+                  defaultMode={activeMode ?? meta?.defaultMode}
+                  onModeChange={(code) => {
+                    meta?.onModeChange(code);
+                  }}
+                  onSeedModeChange={onSeedModeChange}
+                  onPatchParamMap={onPatchParamMap}
+                />
+              </ErrorBoundary>
             </div>
           </div>
         </div>
