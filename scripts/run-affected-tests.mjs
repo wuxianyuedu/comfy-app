@@ -101,6 +101,11 @@
  *     拿得到**的证据；`loadavg` 拿不到（Windows 恒 0、容器里是宿主读数）。
  *   · **等待降级成优化**：`waitForLoadToSettle` 仍然在（让机器喘口气能提高第二遍
  *     出可信读数的概率），但它的结论**不再决定退出码**；预算也收成**全局一份**。
+ *   · **每一遍的结论与等待都要落账**（`rerunReport`）：收尾打「第 1 遍直接绿几块 /
+ *     带指纹复跑几块 / 等待累计与整次提交那份预算 / 第 2 遍里放行、未校验、真红各几块」，
+ *     而且**两条路径都打** —— 真红那次提前 `return` 也要有账，被拦下的人最需要知道的
+ *     正是「这次等了多久、哪几块没被校验」。等待的秒数以前**只算不印**（`waitedMs`
+ *     一直在返回里），算了不说，在读数上等价于没算。
  *
  * ⚠️ 这一档**不是放行**：真断言红一次都不复跑、照旧阻断；只有「隔离复跑之后仍然
  * 拿不到可信读数」才放行，且必须把「哪几份没校验」印在脸上。
@@ -426,7 +431,7 @@ export function scopeAdvice(input) {
     `[affected-launch] 改动面这件事：本次 ${total} 份用例（固定 ${fixed} + 受影响 ${affected}）` +
       (elapsedMs === undefined
         ? "。"
-        : `，这一档实测墙钟 ${(elapsedMs / 1000).toFixed(1)}s` +
+        : `，这一档实测墙钟 ${fmtSec(elapsedMs)}` +
           " —— 「不改代码」那一档（只加一个 changelog 碎片）约 28s。"),
     "  受影响面是按**反向 import 闭包**算的，所以一个被广泛 import 的文件会把面撑得很大；",
     "  这件事与「这次改动本身难不难」无关 —— 它是**代价**，不是判据，本行不阻断提交。",
@@ -599,6 +604,16 @@ async function main(argv) {
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
   /** 这一档「没拿到可信读数」的文件（未校验 ≠ 绿，结束时要点名）。 */
   const unverified = [];
+  /** 每一块一条判决记录，收尾那份账（`rerunReport`）读它。 */
+  const attempts = [];
+  /* 收尾两格合成一个函数，因为**两条路径都要打**：真红那次提前 return，而那一屏
+   * 恰恰最需要「这次等了多久、哪几块没被校验过」（同上面 scopeAdvice 那条
+   * 「真红时更该看到这个数」—— 放在 return 之后就是永不打字的死账）。 */
+  const flush = () => {
+    if (unverified.length > 0)
+      process.stderr.write(unverifiedReport(unverified));
+    process.stderr.write(rerunReport(attempts, { budgetMs: RETRY_BUDGET_MS }));
+  };
   for (const [index, chunk] of chunks.entries()) {
     if (chunks.length > 1) {
       process.stderr.write(
@@ -614,10 +629,14 @@ async function main(argv) {
       workers,
       waitBudget,
       onUnverified: (files) => unverified.push(...files),
+      onAttempt: (record) => attempts.push(record),
     });
-    if (code !== 0) return code;
+    if (code !== 0) {
+      flush();
+      return code;
+    }
   }
-  if (unverified.length > 0) process.stderr.write(unverifiedReport(unverified));
+  flush();
   return 0;
 }
 
@@ -657,17 +676,23 @@ export function unverifiedReport(files) {
  * 第二遍指纹消失（真断言 / 真挂死）也照旧阻断。
  *
  * @param {string[]} chunk 本块的用例路径
- * @param {{entry: string, workers?: number, spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, onUnverified?: (files: string[]) => void}} deps
+ * @param {{entry: string, workers?: number, spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
  *   `workers` 默认 `DEFAULT_MAX_WORKERS`（调用点由 `resolveMaxWorkers` 给出）——
  *   这一层**只读它当首跑的并发**，复跑一律 `--no-file-parallelism`（降负载那一半）。
  *   `waitBudget` 是多块之间**共享**的等待截止时刻（默认单块自己一份，供调用点收成一份）。
+ *   `onAttempt` 每块一条判决记录，只喂收尾那份账（`rerunReport`），**不参与退出码**。
  * @returns {Promise<number>}
  */
 export async function runChunk(chunk, deps) {
   const spawn = deps.spawn ?? spawnVitest;
+  // 每一块都往收尾那份账里记一条（`rerunReport`）；调用点不给就不记，判决本身不受影响。
+  const report = deps.onAttempt ?? (() => {});
   const { entry, workers = DEFAULT_MAX_WORKERS } = deps;
   const res = spawn(entry, ["run", `--maxWorkers=${workers}`, ...chunk]);
-  if (res.status === 0) return 0;
+  if (res.status === 0) {
+    report({ outcome: "first-green" });
+    return 0;
+  }
 
   /* 失败分两档（口径见文件头那节）：
    *   · **带超时指纹** ⇒ 这个红首先是一个负载读数（§13.6.4）。换更隔离的条件
@@ -680,6 +705,7 @@ export async function runChunk(chunk, deps) {
       }（入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ` +
         `${chunk.join(" ").length} 字符）\n`,
     );
+    report({ outcome: "red-no-fingerprint" });
     return res.status ?? 1;
   }
 
@@ -694,13 +720,32 @@ export async function runChunk(chunk, deps) {
     deps.settle ??
     (() => waitForLoadToSettle({ budgetMs: remainingWaitMs(deps.waitBudget) }));
   const settled = await settle();
+  /* 「等了多久」要说出口，而不是只说「在等」：它是**唯一**能区分
+   * 「机器空了，所以第二遍与第一遍不同条件」与「一点没等，第二遍和第一遍同条件」的读数
+   * —— 后者的复跑只证伪了「真断言红」，并没有排除负载。放在这里（而不只在收尾账里）
+   * 是因为被拦下的那次往往只剩这一屏（同 §13.5.8.2 那条「真红时恰恰更该看到这个数」）。 */
+  process.stderr.write(
+    settled.waitedMs === 0
+      ? `[affected-launch] 没等（第一读数就已回落：每核 ${settled.load.toFixed(2)}）` +
+          " ⇒ 第二遍与第一遍几乎是同一条件，它只能证伪「真断言红」，不能证明负载已散\n"
+      : `[affected-launch] 等了 ${fmtSec(settled.waitedMs)}${
+          settled.settled
+            ? `（每核负载回落到 ${settled.load.toFixed(2)}）`
+            : " 没等到回落"
+        } —— 起第 2 遍：同一份 ${chunk.length} 条清单、--no-file-parallelism\n`,
+  );
   const retry = spawn(entry, ["run", "--no-file-parallelism", ...chunk]);
   if (retry.status === 0) {
     process.stderr.write(
-      "[affected-launch] 隔离复跑全绿 ⇒ 刚才那次是**负载假红**（这一步不构成放行依据，\n" +
+      "[affected-launch] **第 2 遍**全绿 ⇒ 刚才那次是**负载假红**（这一步不构成放行依据，\n" +
         "  是同一批用例在更隔离的条件下重测的结果）。提交继续，\n" +
         "  但建议在提交说明里点名这次是负载假红（降负载的杠杆是并发，不是预算）。\n",
     );
+    report({
+      outcome: "rerun-green",
+      waitedMs: settled.waitedMs,
+      settled: settled.settled,
+    });
     return 0;
   }
   /* 串行仍红、**不再复跑**（第三次只会把钩子变长，不改变结论）。这时唯一的
@@ -712,7 +757,7 @@ export async function runChunk(chunk, deps) {
    *   · 第二遍指纹消失了（真断言 / 真挂死）⇒ 真红，照旧阻断。 */
   if (isTimeoutShaped(retry.output)) {
     process.stderr.write(
-      "[affected-launch] 隔离复跑**仍然只是超时形态**（连单进程串行都排不上）——\n" +
+      "[affected-launch] **第 2 遍仍然只是超时形态**（连单进程串行都排不上）——\n" +
         "  这一遍给不出可信读数，所以这批用例本次记为**未校验**：\n" +
         "    · 它**不是绿**：没有证据说它通过；\n" +
         "    · 它**也不是红**：失败的是调度，没有任何一条断言报错。\n" +
@@ -725,13 +770,23 @@ export async function runChunk(chunk, deps) {
         "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
     );
     deps.onUnverified?.(chunk);
+    report({
+      outcome: "rerun-unverified",
+      waitedMs: settled.waitedMs,
+      settled: settled.settled,
+    });
     return 0;
   }
   process.stderr.write(
-    "[affected-launch] 隔离复跑指纹已消失（不再是调度形态）⇒ 这不是负载假红，按真红处置：\n" +
+    "[affected-launch] **第 2 遍**指纹已消失（不再是调度形态）⇒ 这不是负载假红，按真红处置：\n" +
       "  用 `node scripts/base-check.mjs <这条>` 复算归属（你的 / 别线的），\n" +
       "  再决定修代码还是登记 —— 不要抬 testTimeout。\n",
   );
+  report({
+    outcome: "real-red",
+    waitedMs: settled.waitedMs,
+    settled: settled.settled,
+  });
   return retry.status ?? 1;
 }
 
@@ -747,6 +802,55 @@ export async function runChunk(chunk, deps) {
 export function remainingWaitMs(waitBudget) {
   if (!waitBudget) return RETRY_BUDGET_MS;
   return Math.max(0, waitBudget.deadline - Date.now());
+}
+
+/** 毫秒收成「12.3s」这一档的人读时长（本文件内两处以上要这个形状，所以收成一函数）。 */
+function fmtSec(ms) {
+  return `${(Number(ms) / 1000).toFixed(1)}s`;
+}
+
+/**
+ * 一次判决链走完之后的**账**：这一次总共等了多久、放行的是第几遍测出来的、
+ * 放行时它到底是绿还是「未校验」（纯函数，可被用例逐字钉住）。
+ *
+ * 为什么要有这一段：把「重测」机器化之后，读数只剩在 stderr 的散落行里 —— 被放行（或被
+ * 拦下）的人回答不出那三个问题，而**「负载假红」与「真回归」在人嘴里的分界就是这三个问题**。
+ * 放行的一档如果只有散落行，等于这一档没有结论（同 §11.23「写了没有读者等于没写」）。
+ *
+ * 三条口径：
+ *   ① **一块都没复跑时返回空串** —— 绿的那一大半不该为这段账付输出
+ *      （同 §13.5.8「面小时连归因都不去算」）；
+ *   ② 「放行」与「通过」不许混写：负载假红那一格是「同一批用例在更隔离条件下重测的结果」，
+ *      未校验那一格是「这次没测到」；
+ *   ③ 等待预算是**整次提交一份**（逐块计就是 5 分钟 × N，实测 8 块 31 分钟，ISSUE #1747），
+ *      所以报「累计 / 预算」两个数，而不是只报累计。
+ *
+ * @param {Array<{outcome: string, waitedMs?: number, settled?: boolean}>} attempts 每一块一条
+ * @param {{budgetMs: number}} budget 整次提交那份等待预算
+ * @returns {string} 要打到 stderr 的正文；一块都没复跑时是空串
+ */
+export function rerunReport(attempts, budget) {
+  const reran = attempts.filter(
+    (a) => a.outcome !== "first-green" && a.outcome !== "red-no-fingerprint",
+  );
+  if (reran.length === 0) return "";
+  const count = (o) => attempts.filter((a) => a.outcome === o).length;
+  const waitedMs = reran.reduce((a, r) => a + (r.waitedMs ?? 0), 0);
+  const noSettle = reran.filter((r) => r.settled === false).length;
+  return (
+    "[affected-launch] 本次的等待与复跑账：\n" +
+    `  共 ${attempts.length} 块：第 1 遍直接绿 ${count("first-green")} 块，` +
+    `红而不带超时指纹（真红，一次都不复跑）${count("red-no-fingerprint")} 块，` +
+    `带指纹复跑 ${reran.length} 块。\n` +
+    `  等待累计 ${fmtSec(waitedMs)} / 预算 ${fmtSec(budget.budgetMs)}` +
+    `（**整次提交一份**，不是每块一份）；没等到回落 ${noSettle} 块` +
+    "（等待只是优化，不改变结论）。\n" +
+    `  **第 2 遍**的结果：负载假红放行 ${count("rerun-green")} 块、` +
+    `**未校验**（仍然只是超时形态）${count("rerun-unverified")} 块、` +
+    `真红 ${count("real-red")} 块。\n` +
+    "  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果，" +
+    "后者是这次**没测到**（已逐条点名哪几份）。\n"
+  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
