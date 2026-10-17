@@ -873,3 +873,113 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
     expect(slice).not.toContain("本地提交前必须通过（.githooks/pre-commit，");
   });
 });
+
+/**
+ * `pnpm doc:render` 的**自动修档**（`--check --autofix`，ISSUE #1981）。
+ *
+ * 这一档是平台侧「生成态文档与源同步」那一步在跑的形态：先判一次，红了就地重渲染、
+ * 再判一次。它要守的是**三件各不相同的事**，缺一件都会让它变成一个假的绿：
+ *
+ *   ① **绿的时候不多写**：判定通过时它一次都不许写（否则每次 PR 都在改工作区）；
+ *   ② **红了真能修好**：改一份编辑态文档、不动生成物 → 这一档应当自己把它修回来，
+ *      并且**结论来自第二次 `--check`**（不是「写入模式退 0 就算通过」）；
+ *   ③ **修不好时必须红**：产物被手改（内容与重渲染结果不同）时重渲染能修，
+ *      但如果产物**多余**（源已不在 `SCOPED_DOCS` 里），重渲染并不会删它 ——
+ *      这一档必须如实报红，而不是「跑过写入模式就当我赢了」。
+ *
+ * 用子进程跑真脚本（与 `runCheck` 同一条口径）：它按 `__dirname` 定位仓库根，
+ * 只有真起一次才是那一步在平台侧会走的路径。探针一律用 try/finally 还原 ——
+ * 这些用例会临时改真实文件，残留一次就会把整个仓库的文档面写脏。
+ */
+describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () => {
+  const RENDER = join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs");
+  const EDIT = "docs/guides/DEV-QUERIES.md";
+  const GENERATED = "docs/generated/DEV-QUERIES.md";
+
+  function runRender(args: string[]): { code: number; output: string } {
+    try {
+      const output = execFileSync(process.execPath, [RENDER, ...args], {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return { code: 0, output };
+    } catch (err) {
+      const e = err as { status?: number; stdout?: string; stderr?: string };
+      return {
+        code: typeof e.status === "number" ? e.status : 1,
+        output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      };
+    }
+  }
+
+  /** 在还原保护下改一处文件、跑一次自动修档，再把两份文件都还原。 */
+  function withDrift<T>(fn: () => T): T {
+    const editAbs = join(REPO_ROOT, EDIT);
+    const genAbs = join(REPO_ROOT, GENERATED);
+    const editText = readFileSync(editAbs, "utf8");
+    const genText = readFileSync(genAbs, "utf8");
+    try {
+      return fn();
+    } finally {
+      restoreText(editAbs, editText);
+      restoreText(genAbs, genText);
+    }
+  }
+
+  it("绿的时候不多写：判定通过时一句「重新生成」都不打", () => {
+    const { code, output } = runRender(["--check", "--autofix"]);
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:render --check] ✓");
+    /* 这条是关键：没有这一格，「自动修」退化成「每次都跑一遍写入模式」也照样全绿，
+     * 而那意味着每个 PR 都在改工作区（并且掩盖了「它到底修了什么」）。 */
+    expect(output).not.toContain("重渲染");
+  });
+
+  it("编辑态改了、生成物没跟着 → 自动重渲染修好，并如实说明修了什么", () => {
+    /* 探针插在标题行紧后面，而不是文末：`renderDocContent()` 会先剥掉编辑文档里
+     * 那段「占位符约定」引用块，文末追加的文本会落在它的匹配范围里、被一起剥掉 ——
+     * 那样「源改了」这件事根本传不到生成物，这一格就测不到它要测的东西。 */
+    withDrift(() => {
+      const editAbs = join(REPO_ROOT, EDIT);
+      const original = readFileSync(editAbs, "utf8");
+      const [head, ...rest] = original.split("\n");
+      writeText(
+        editAbs,
+        `${head}\n\n自动修探针：这一行只在编辑态。\n${rest.join("\n")}`,
+      );
+      const { code, output } = runRender(["--check", "--autofix"]);
+      expect(output).toContain("落后于源");
+      expect(output).toContain("重渲染");
+      expect(code).toBe(0);
+      /* 修的是生成物：探针文本应当出现在产物里（它就是「源 → 生成物」那一份计算的
+       * 结果），而**源那一份不许被改**（判据的红话里那句「不要手改生成物」在这里的
+       * 镜像：自动修也不许反过来改源）。 */
+      expect(readFileSync(join(REPO_ROOT, GENERATED), "utf8")).toContain(
+        "自动修探针：这一行只在编辑态。",
+      );
+    });
+  });
+
+  it("修不好时必须红：多余产物（源已不在 SCOPED_DOCS 里）不由重渲染收拾", () => {
+    withDrift(() => {
+      /* 「多余」的成因不是「忘了重渲染」，写入模式也不会删文件 —— 这一档必须把它
+       * 如实报回来，而不是「跑过写入模式就当我赢了」。 */
+      const orphan = join(
+        REPO_ROOT,
+        "docs",
+        "generated",
+        "99-不存在于-SCOPED_DOCS.md",
+      );
+      writeText(orphan, "# 自动修探针\n");
+      try {
+        const { code, output } = runRender(["--check", "--autofix"]);
+        expect(code).toBe(1);
+        expect(output).toContain("重渲染之后仍不一致");
+        expect(output).toContain("多余");
+      } finally {
+        rmSync(orphan, { force: true });
+      }
+    });
+  });
+});

@@ -57,13 +57,16 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      * 「判据不是空转」的同一形态（见 tests/no-platform-ci-config.test.ts 的头注）。 */
     expect(INCREMENTAL_GATES.length).toBeGreaterThan(0);
     for (const gate of INCREMENTAL_GATES) {
-      expect(gate.globs.length, `${gate.name} 的 globs 是空的`).toBeGreaterThan(0);
+      expect(gate.globs.length, `${gate.name} 的 globs 是空的`).toBeGreaterThan(
+        0,
+      );
       expect(gate.script, `${gate.name} 没写它守的是哪份脚本`).toMatch(
         /^scripts\/.+\.(cjs|mjs)$/,
       );
-      expect(gate.why.length, `${gate.name} 没写「为什么这条收窄安全」`).toBeGreaterThan(
-        20,
-      );
+      expect(
+        gate.why.length,
+        `${gate.name} 没写「为什么这条收窄安全」`,
+      ).toBeGreaterThan(20);
     }
   });
 
@@ -97,7 +100,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "UI/逻辑分离",
       "lib Node-only 声明",
       "格式化提交分离",
-      "生成态文档与源同步",
+      /* ⚠️ `生成态文档与源同步` 曾经在这一列、ISSUE #1981 起**不在了**：它的两侧输入面
+       * 都能点清（`SCOPED_DOCS` 全在 `docs/**`，`FACTS` 的提取源是 `src/**` 与三份配置），
+       * 而且它现在带 `--autofix`（红了就地重渲染再判一次，见 §13.5.19）——
+       * 「改一行 README 也要为它付一次全量扫描」正是要收掉的那笔钱。
+       * 剩下的「文档面」两条仍在这一列：`API 文档生成物与源同步` 的输入面是
+       * typedoc 的入口 glob（`src/lib|server|trpc`，域不是「改了 docs」），
+       * `文档引用与权威源一致` 判的是**全库**文档里的引用与权威源一致。 */
       "API 文档生成物与源同步",
       "文档引用与权威源一致",
       "core 骨架单一事实源",
@@ -114,10 +123,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       `这些 stage 被判为「任何改动都要跑」，不许挂 ifModify：${wronglyGated.join(", ")}`,
     ).toEqual([]);
     // 反过来：登记表里也不许出现它们（两个方向都堵住）。
-    const inRegistry = MUST_ALWAYS_RUN.filter((n) => INCREMENTAL_GATE_NAMES.has(n));
-    expect(inRegistry, `登记表里混进了全仓级 stage：${inRegistry.join(", ")}`).toEqual(
-      [],
+    const inRegistry = MUST_ALWAYS_RUN.filter((n) =>
+      INCREMENTAL_GATE_NAMES.has(n),
     );
+    expect(
+      inRegistry,
+      `登记表里混进了全仓级 stage：${inRegistry.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("每条被收窄的 stage 在 .cnb.yml 里都真实存在且能跑（不是登记了一条不存在的）", () => {
@@ -128,9 +140,10 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      * 那里是它的**唯一权威**（本判据只借这份读数核对一行事实，不另立第二份清单定义）。
      * 写成显式两段而不是可选链连写：`?.[1].split()` 在 `noUncheckedIndexedAccess` 下
      * 会被判成「$1 可能是 undefined」，而它在正则命中时必然存在（tsc 抓不到这层语义）。 */
-    const gateListBody = /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
-      CONFIG,
-    )?.[1];
+    const gateListBody =
+      /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
+        CONFIG,
+      )?.[1];
     const order =
       gateListBody === undefined
         ? []

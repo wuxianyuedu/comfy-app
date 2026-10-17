@@ -57,6 +57,17 @@
       "section": "11.12"
     },
     {
+      "id": "ci-autofix-duty",
+      "name": "平台侧自动修档登记（哪几个 stage 红了会自己改工作区）",
+      "declaredAt": "scripts/ci-autofix-duties.mjs 的 AUTOFIX_DUTIES",
+      "reader": "scripts/ci-autofix-duties.mjs",
+      "executor": {
+        "kind": "fixed-test",
+        "file": "tests/ci-autofix-duties.test.ts"
+      },
+      "section": "13.5.19"
+    },
+    {
       "id": "known-failed",
       "name": "已知基线失败登记",
       "declaredAt": "KNOWN_FAILED_FILES（scripts/quality-gate-shared.mjs）",

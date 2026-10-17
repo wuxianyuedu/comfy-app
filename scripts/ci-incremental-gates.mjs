@@ -80,17 +80,21 @@ export const INCREMENTAL_GATES = [
     name: "标题行让位",
     globs: ["src/components/**", "src/app/**"],
     script: "scripts/check-title-bar-clearance.cjs",
-    why: "扫描面是 SCAN_DIRS = [\"src/components\", \"src/app\"]（本档唯一入口 full-screen-layer 的消费方也只能在这两处）。它判的是「顶层浮层必须让出标题行」，而浮层只可能写在视图层。",
+    why: '扫描面是 SCAN_DIRS = ["src/components", "src/app"]（本档唯一入口 full-screen-layer 的消费方也只能在这两处）。它判的是「顶层浮层必须让出标题行」，而浮层只可能写在视图层。',
   },
   {
     name: "import 别名统一",
     globs: ["src/**", "e2e/**"],
     script: "scripts/check-import-alias.cjs",
-    why: "扫描面是 SCAN_DIRS = [\"src\", \"e2e\"]（只看静态模块说明符，只可能出现在这两个目录的 .ts/.tsx 里）。",
+    why: '扫描面是 SCAN_DIRS = ["src", "e2e"]（只看静态模块说明符，只可能出现在这两个目录的 .ts/.tsx 里）。',
   },
   {
     name: "ComfyUI 端口口径",
-    globs: ["src/lib/comfyui/**", "src/lib/app-settings/**", "src/lib/endpoints.ts"],
+    globs: [
+      "src/lib/comfyui/**",
+      "src/lib/app-settings/**",
+      "src/lib/endpoints.ts",
+    ],
     script: "scripts/check-comfyui-port-contract.cjs",
     why: "读的是 CLIENT / LIFECYCLE / DERIVE / DESKTOP 四份 comfyui 文件与 SETTINGS_PURE / SETTINGS_IO / ENDPOINTS 三处端口来源 —— 域就是这几个点，故 globs 列出它们所在的目录与文件。",
   },
@@ -98,19 +102,19 @@ export const INCREMENTAL_GATES = [
     name: "内联样式注入",
     globs: ["src/**"],
     script: "scripts/check-inline-style.cjs",
-    why: "扫描面是 SCAN_DIR = \"src\"（渲染出的 <style> 只可能写在 src 下的 .ts/.tsx 里）。",
+    why: '扫描面是 SCAN_DIR = "src"（渲染出的 <style> 只可能写在 src 下的 .ts/.tsx 里）。',
   },
   {
     name: "跨文件重复块",
     globs: ["src/**"],
     script: "scripts/check-code-duplication.cjs",
-    why: "扫描面是 SCAN_DIR = \"src\"（孪生对只在 src 的应用代码里找，测试与快照被排除）。",
+    why: '扫描面是 SCAN_DIR = "src"（孪生对只在 src 的应用代码里找，测试与快照被排除）。',
   },
   {
     name: "函数长度 TS",
     globs: ["src/**"],
     script: "scripts/check-function-length.cjs",
-    why: "扫描面是 SCAN_DIR = \"src\"（脚本与用例的自查由 check-infra-file-size.cjs 另管，不在本判据里）。",
+    why: '扫描面是 SCAN_DIR = "src"（脚本与用例的自查由 check-infra-file-size.cjs 另管，不在本判据里）。',
   },
   {
     name: "函数长度 Rust",
@@ -122,17 +126,24 @@ export const INCREMENTAL_GATES = [
     name: "模块循环依赖",
     globs: ["src/**"],
     script: "scripts/check-circular-deps.cjs",
-    why: "扫描面是 SCAN_DIRS = [\"src\"]（import 图只在 src 内求强连通分量）。",
+    why: '扫描面是 SCAN_DIRS = ["src"]（import 图只在 src 内求强连通分量）。',
   },
   {
     name: "主题色扫描",
     globs: ["src/**"],
     script: "scripts/check-theme-colors.cjs",
-    why: "扫描面是 SCAN_DIR = \"src\"（写死的色值只可能出现在 src 下的 .ts/.tsx）。",
+    why: '扫描面是 SCAN_DIR = "src"（写死的色值只可能出现在 src 下的 .ts/.tsx）。',
   },
   {
     name: "跨平台动作对照",
-    globs: ["package.json", "tools/**", "scripts/**", "src-tauri/**", "README.md", "docs/standards/launch-and-build.md"],
+    globs: [
+      "package.json",
+      "tools/**",
+      "scripts/**",
+      "src-tauri/**",
+      "README.md",
+      "docs/standards/launch-and-build.md",
+    ],
     script: "scripts/check-ps1-consistency.mjs",
     why: "它核对的是「§9.5 对照表（住在 docs/standards/launch-and-build.md）⇄ 盘上的 .ps1 / .mjs 入口 / package.json 脚本 / tools 索引 / README 速查节」这几边，故域含那份文档与 README —— 少列一处就会在「只改 README 那一节」时漏跑。",
   },
@@ -141,6 +152,22 @@ export const INCREMENTAL_GATES = [
     globs: ["changelog.d/**", "CHANGELOG.md"],
     script: "scripts/check-changelog-fragments.cjs",
     why: "只看 changelog.d/** 的碎片形态与 CHANGELOG.md 有没有被直接改（`[Unreleased]` 段落）。与本次代码改动无关时不该重跑。",
+  },
+  {
+    name: "生成态文档与源同步",
+    globs: [
+      "docs/**",
+      "src/**",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "next.config.js",
+    ],
+    script: "scripts/render-doc-placeholders.cjs",
+    why:
+      "它判的是「编辑态文档 ⇄ docs/generated/** 产物」，而两侧的输入面都能点清：产物只由 SCOPED_DOCS（都在 docs/**）与 FACTS 的提取源决定，后者是源码 / 配置里的真实值（src/**、package.json、pnpm-workspace.yaml、next.config.js）。" +
+      "README.md / AGENTS.md 刻意**不在** globs 里：它们不在 SCOPED_DOCS 中（AGENTS.md 不进生成面，见 §13.5.5 那条注释），改了它们不可能让这一步红。" +
+      "⚠️ 代价写在明处：FACTS 新增一条读别的文件的事实、而那个文件不在这份 globs 里时，改它不会触发本步 —— 所以新增事实要同批回来看这一行（`doc-facts.cjs` 的提取源就是这份清单的权威）。" +
+      "这一步同时是 `--autofix` 档（ISSUE #1981），收窄之后「只改了代码、一次都没碰文档」的那类 PR 也不再为它付钱。",
   },
 ];
 
