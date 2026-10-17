@@ -35,23 +35,47 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
 /**
- * 「这条账是谁写的」—— 环境变量优先，其次 `git config user.name`，最后回退到入参。
+ * 「这条账是谁写的」的候选来源，**按可信度排序**（第一个非空者胜出）。
  *
- * 顺序是有理由的：CI / NPC 工作区里 `git config user.name` 常常是空的或是个占位，
- * 而那一格是这条账存在的意义（「谁、什么时候、按哪条命令复核的」里那个「谁」）。
+ * 顺序是有理由的，而且是**实测逼出来的**（不是风格）：
+ *
+ *   ① `GIT_AUTHOR_NAME` —— 显式的身份声明，本地与别的 CI 都认。放在最前因为它是
+ *      「这一次是谁在写」这句话本身，而不是从环境里猜出来的。
+ *   ② `CNB_BUILD_USER_NICKNAME` / `CNB_BUILD_USER` / `CNB_COMMITTER` —— **平台侧
+ *      那三个**（CNB 内置环境变量，见官方「默认环境变量」文档）。它们必须在
+ *      `git config user.name` **之前**：平台侧的工作区是只读检出，`git config user.name`
+ *      要么是空的、要么是检出器留下的占位 —— 而这一格是这条账存在的意义
+ *      （「谁、什么时候、按哪条命令复核的」里那个「谁」），记成占位等于没记。
+ *      昵称优先于用户名：账是给人读的（同 `who` 那一栏的用例：两个字的人名完全够用）。
+ *   ③ `git config user.name` —— 本地常态。
+ *   ④ 入参 `fallback`（各档的键名）—— 一个说得清来路的兜底。
+ *
+ * @returns {(string | undefined)[]} 候选清单（可能有空串 / undefined，由 `gitUser` 过滤）
+ */
+export function gitUserCandidates() {
+  return /** @type {(string | undefined)[]} */ ([
+    process.env.GIT_AUTHOR_NAME,
+    process.env.CNB_BUILD_USER_NICKNAME,
+    process.env.CNB_BUILD_USER,
+    process.env.CNB_COMMITTER,
+    spawnSync("git", ["config", "user.name"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    }).stdout,
+  ]);
+}
+
+/**
+ * 「这条账是谁写的」—— 按 `gitUserCandidates()` 的顺序取第一个非空者，都没有则回退到入参。
  *
  * @param {string} fallback
  * @returns {string}
  */
 export function gitUser(fallback) {
-  return (
-    process.env.GIT_AUTHOR_NAME ||
-    spawnSync("git", ["config", "user.name"], {
-      cwd: ROOT,
-      encoding: "utf8",
-    }).stdout?.trim() ||
-    fallback
-  );
+  const picked = gitUserCandidates()
+    .map((v) => String(v ?? "").trim())
+    .find((v) => v !== "");
+  return picked || fallback;
 }
 
 /**
@@ -370,14 +394,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
  */
 export function checkFreshnessLedger(
   ledger,
-  {
-    required,
-    registered,
-    track,
-    kind,
-    now = new Date(),
-    dirtySince = null,
-  },
+  { required, registered, track, kind, now = new Date(), dirtySince = null },
 ) {
   /** @type {string[]} */
   const problems = [];
@@ -600,7 +617,7 @@ export function writeFreshness({ root, kind, who, key, how }) {
   const writeKey = key ?? track.key;
   const file = path.join(root, track.ledger);
   const ledger = readFreshnessLedgerAt(root, track.ledger);
-  const previous = freshnessAge(ledger[writeKey]);
+  const previous = freshnessReading(ledger[writeKey]);
   ledger[writeKey] = freshnessRecord({
     key: writeKey,
     verifiedAt: new Date().toISOString(),
@@ -658,7 +675,7 @@ export function writeSkipRecord({ root, kind, who, reason, field }) {
   }
   const file = path.join(root, track.ledger);
   const ledger = readFreshnessLedgerAt(root, track.ledger);
-  const previous = freshnessAge(ledger[track.key]);
+  const previous = freshnessReading(ledger[track.key]);
   ledger[track.key] = freshnessRecord({
     key: track.key,
     verifiedAt: new Date().toISOString(),
@@ -691,18 +708,90 @@ export function writeSkipRecord({ root, kind, who, reason, field }) {
  * 只在记录写得全、日期解得开时给；否则返回 null（缺日期时算一个天数毫无意义，
  * 而把 null 当 0 天读会把「没记」显示成「刚刚跑过」）。
  *
+ * ⚠️ **这一句是给人扫的近似值，不是给人核的读数**（ISSUE #1979）：`今天` / `1 天前`
+ * 分不出「今天 08:45 刚跑过」与「今天 23:50 才跑过」——而这正是「这一档还新不新」
+ * 唯一能拿来判断的粒度。要核的时候必须看**具体时刻**，那一半由
+ * `freshnessStamp` 给（`freshnessReading` 把两者拼成一句）。
+ *
  * @param {unknown} entry
  * @param {Date} [now] 便于用例喂固定时钟
  * @returns {string | null}
  */
 export function freshnessAge(entry, now = new Date()) {
+  const ms = freshnessTime(entry);
+  if (ms === null) return null;
+  const days = Math.floor((now.getTime() - ms) / 86_400_000);
+  if (days < 0) return null;
+  return days === 0 ? "今天" : `${days} 天前`;
+}
+
+/**
+ * 「这一档上次跑绿的确切时刻」—— `verifiedAt` 解出来的毫秒数（解不开则 null）。
+ *
+ * 与 `freshnessAge` 同源：两处各自 `Date.parse` 一次时，「算得出生龄、却拼不出时刻」
+ * 这种自相矛盾的输出就有了存在的余地（§12.12 拦的就是这一对）。
+ *
+ * @param {unknown} entry
+ * @returns {number | null}
+ */
+export function freshnessTime(entry) {
   if (entry === null || typeof entry !== "object") return null;
   const at = String(
     /** @type {Record<string, unknown>} */ (entry).verifiedAt ?? "",
   ).trim();
   const ms = Date.parse(at);
-  if (Number.isNaN(ms)) return null;
-  const days = Math.floor((now.getTime() - ms) / 86_400_000);
-  if (days < 0) return null;
-  return days === 0 ? "今天" : `${days} 天前`;
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * 「这一档上次跑绿在什么时候」——**具体时刻**那一半（给输出用，不是判据）。
+ *
+ * 为什么要有它（ISSUE #1979）：账面此前只打 `今天` / `1 天前`，而**日期是判据要的、
+ * 时刻是人要的**。「上一次自证到今天几点」这件事在排障时决定性的 —— 例如「账上写着
+ * 今天、而这台机器今天的提交在 08:45 之后」时，能不能算覆盖就取决于那个小时。
+ * 只给天数等于把「读得出」降级成「猜得出」。
+ *
+ * **口径：本地时间 + 显式时区偏移**，不是 UTC。
+ *   · 账里存的 `verifiedAt` 是 ISO UTC（跨机器可比、无歧义），这一栏**不动它**；
+ *   · 但给人读的那一句必须是**本地时间**：判据判的是「本地日历日」
+ *     （`isSameLocalDay`），用 UTC 打时刻会在东八区把 00:30 的提交显示成昨天；
+ *   · 偏移一并带上（`+08:00`），使这一句在任何机器上都能被还原回绝对时刻 ——
+ *     只写 `2026-10-17 08:45` 的话，它在时区不同的两个人眼里是两个瞬间。
+ *
+ * @param {unknown} entry
+ * @returns {string | null} 形如 `2026-10-17 08:45 (+08:00)`
+ */
+export function freshnessStamp(entry) {
+  const ms = freshnessTime(entry);
+  if (ms === null) return null;
+  const d = new Date(ms);
+  /** @param {number} n */
+  const p = (n) => String(n).padStart(2, "0");
+  /* 偏移量由 `Date` 自己算（`getTimezoneOffset` 给的是「本地比 UTC 早多少分钟」，
+   * 符号与 ISO 的偏移相反）—— 手写 +8 会在切换夏令时的机器上写错。 */
+  const offMin = -d.getTimezoneOffset();
+  const sign = offMin < 0 ? "-" : "+";
+  const abs = Math.abs(offMin);
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())} ` +
+    `(${sign}${p(Math.floor(abs / 60))}:${p(abs % 60)})`
+  );
+}
+
+/**
+ * 「这一档上次自证」的**完整读数**：具体时刻 + 距今多久（没有记录则 null）。
+ *
+ * 两者必须一起给 —— 只给天数读不出「今天什么时候」，只给时刻在「三个月前」这种
+ * 量级上又要人去心算。`[ok]` 那一行与 `--ledger` 都读这一份，不各拼一次。
+ *
+ * @param {unknown} entry
+ * @param {Date} [now]
+ * @returns {string | null} 形如 `今天（2026-10-17 08:45 (+08:00)）`
+ */
+export function freshnessReading(entry, now = new Date()) {
+  const age = freshnessAge(entry, now);
+  const stamp = freshnessStamp(entry);
+  if (age === null) return null;
+  return stamp === null ? age : `${age}（${stamp}）`;
 }

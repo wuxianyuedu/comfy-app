@@ -32,6 +32,16 @@ async function openInShell(page: Page) {
   await page.waitForSelector('[data-slot="sidebar-trigger"]');
   /* 标题行确实在（它是本用例的让位对象；不在就没得验）。 */
   await expect(page.locator('[data-slot="title-bar"]')).toBeVisible();
+  /* ⚠️ **还要等测点自己到位**：上面那两枚锚点在**服务端 HTML 里就有**
+   * （`data-shell` 与 `title-bar` 都由 `useTitleBarTabsActive()` 的 SSR 首帧
+   * 决定），而顶栏那排入口是客户端树水合之后才挂上的。只等前两枚就把「导航回来了」
+   * 读成「页面就绪」，在并发高的时候会读到一个**半截水合**的页面：
+   * `header` 与 `main` 都还没有、`header button[aria-label]` 数出来是 0，
+   * 于是下面那条 `count > 0` 当场红（实测 8 并发下 ~25% ~40% 命中，
+   * 平台侧 3 次重试全红 —— 自愈只是水合慢，不是水合失败：等一等入口就回来了）。
+   * 这条等待是**测点的前提**而不是判据：它不改变任何断言的取值，只是把
+   * 「还没渲染完」与「渲染出来是空的」分开 —— 后者才是本用例要拦的那件事。 */
+  await expect(page.locator("header button[aria-label]").first()).toBeVisible();
 }
 
 /** 把鼠标从远处挪进来并停在目标上 —— Base UI 的 hover 要一次指针移动。
