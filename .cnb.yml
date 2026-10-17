@@ -741,6 +741,15 @@
     # 真跑得完的形态差一两个数量级）。**不是放宽判据** —— 预算只管多久放弃。
     timeout: 10m
 
+  # ⚠️ 这一档**同批加了自动修**（`--check --autofix`，ISSUE #2001）：判据红了不是直接
+  # 收场，而是就地重生成 `docs/api/`、**再判一次**。理由与 `生成态文档与源同步` 那条
+  # 逐字同源（两条前提都满足：typedoc 对同一份源产出逐字节相同，判据自己每次都在复核
+  # 这个前提；而它的三个方向都只说明「产物与源不一致」，源码写错由 `类型检查` / 单测 /
+  # 生产构建各自去红）。实测这一格在自托管节点上是**全流水线最贵的一格**（201.8s），
+  # 而它的红几乎总是「改了 `src/lib` 忘了 `pnpm run docs`」—— 让人本地再跑一遍，
+  # 付的是**又一整轮流水线**，省下的只是一个机械动作。
+  # 修好之后**这一跑仍然是红的**（自动修只写工作区，提交与重跑由人 / 代理那一侧做）——
+  # 这是刻意的边界，见 `scripts/ci-autofix-duties.mjs` 头注第 1 条。
   # ⚠️ 这一档也收窄了（ISSUE #1981 收尾），而且它的 globs **不是手抄的**：
   # 由 `scripts/check-docs-api.cjs` 的 `INPUT_RES` 机械反推（登记在
   # `scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`）。理由是那份常量
@@ -759,10 +768,15 @@
       - pnpm-lock.yaml
       - scripts/check-docs-api.cjs
       - scripts/typedoc-run.mjs
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
+    # ⚠️ `--check` 与 `--autofix` **两个都要**（`tests/ci-autofix-duties.test.ts` 判这一条）：
+    # 只有 `--autofix` 而没有 `--check` 是最坏的形态 —— 脚本会走写入模式、不判任何东西、
+    # 恒退 0，于是判据在配置里而结论恒放行。
+    #
     # 全量档实测 32s（本机 8 核，热缓存；与钩子里那一档同量级）。平台侧冷节点上
     # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个
     # 数量级，卡死的形态 20m 报出来，不必等满平台默认的 2h 墙钟）。
+    # 红的时候多一次重生成 + 一轮比对（仍在同一量级），所以预算不动。
     timeout: 20m
 
   # ── 覆盖率上报（ISSUE #1990）──
