@@ -5,7 +5,7 @@
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
@@ -123,8 +123,8 @@ const mockRouter = t.router({
 
 const server = setupTrpcServer(mockRouter);
 
-function makeWrapper() {
-  const qc = createTestQueryClient();
+function makeWrapper(explicitClient?: QueryClient) {
+  const qc = explicitClient ?? createTestQueryClient();
   const client = createTrpcClient({
     links: [
       httpBatchStreamLink({
@@ -177,6 +177,60 @@ describe("useModelFolderConfig", () => {
     expect(result.current.availableRows.map((r) => r.folder)).toEqual([
       "loras",
     ]);
+    expect(result.current.comfyReachable).toBe(false);
+  });
+
+  /**
+   * 复现（现场：没配 ComfyUI 路径的机器上，弹层仍写「● ComfyUI 已连接 · 共 0 个目录」）：
+   * 服务端那次探测必然落空（`comfyBase()` 指向没人监听的 8188 ⇒ `fetch` 抛错 ⇒ false），
+   * 所以「已连接」只能来自**客户端的乐观默认值** `useState(true)`。
+   *
+   * 为什么第一次打开是对的、第二次开始骗人：`ModelConfigModal` 随开随卸载
+   * （`{c.configOpen && <ModelConfigModal/>}`），而 QueryClient 是模块级单例
+   * （`src/trpc/query-client.ts`：staleTime 30s、gcTime 默认 5min）⇒ 第二次挂载时
+   * `useQuery` 首帧就带着缓存数据，于是「渲染期同步」那句 `data !== prevCfgData`
+   * 的初值就是这份数据 ⇒ 同步永不发生；随后 `refetch()` 拿回**逐字相同**的载荷，
+   * react-query 的结构共享（`replaceEqualDeep`）让 `data` 的引用也没变 ⇒ 仍然不同步。
+   * 结论：`comfyReachable` 会一直停在 `true`。
+   */
+  it("缓存已热的第二次挂载：comfyReachable 不许停在乐观默认值上", async () => {
+    behavior = {
+      folders: [folder("checkpoints", true), folder("loras")],
+      comfyReachable: false,
+    };
+    // 与真实应用同档：缓存跨挂载存活（createTestQueryClient 的 gcTime:0 会抹掉这一格）。
+    const warm = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+    });
+    const wrapper = makeWrapper(warm);
+
+    const first = renderHook(() => useModelFolderConfig(), { wrapper });
+    await expect.poll(() => first.result.current.loading).toBe(false);
+    expect(first.result.current.comfyReachable).toBe(false);
+    expect(first.result.current.totalCount).toBe(2);
+    first.unmount();
+
+    const second = renderHook(() => useModelFolderConfig(), { wrapper });
+    await expect.poll(() => second.result.current.loading).toBe(false);
+    expect(second.result.current.totalCount).toBe(2);
+    expect(second.result.current.comfyReachable).toBe(false);
+    second.unmount();
+    warm.clear();
+  });
+
+  /**
+   * 同一条链上的第二格：`load()` 里那句 `catch { setErr("网络错误") }` 是**死代码**。
+   * react-query v5 的 `refetch()` 失败时不 reject，而是 resolve 一个 `isError` 结果
+   * ⇒ 列表拉不下来时既不落 err、也不改 comfyReachable，界面于是把「没拿到答案」
+   * 显示成「已连接 + 没有目录」两条假结论。
+   */
+  it("configList 失败：错误必须可见，且不许冒充「已连接」", async () => {
+    behavior = { folders: [], comfyReachable: false, listError: "boom" };
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.loading).toBe(false);
+    expect(result.current.err).toBe("boom");
     expect(result.current.comfyReachable).toBe(false);
   });
 
