@@ -27,6 +27,15 @@
  * 一起打出来、把「声明与磁盘对不上」的那几档写成读数、以及**没有标识时给出下一动作**。
  * 它恒退 0。
  *
+ * ## 第四件事（ISSUE #1993 续）：它也报「本仓的容器格是哪几格」
+ *
+ * 「宿主机直跑」与「这一格跑在容器里」不是二选一 —— 平台侧**任务级** `image:`
+ * 与插件任务仍然在容器里跑（`.cnb.yml` 里 `浏览器安装` / `E2E 关键流程` 两格就是）。
+ * 那句话此前只写在文档里，于是「到底哪几格在容器里」只能靠人翻 900 行 YAML。
+ * 现在它由 `platformImageStages()` 从 `.cnb.yml` 里**读出来**，跟着这条读数每跑一次
+ * 打一遍 —— 判据面仍在 `tests/ci-image-identity.test.ts`（哪几格该有 `image:` 由它钉住），
+ * 这里只负责「让这一跑的形态可见」。
+ *
  * ## 两个标识只有一份出处
  *
  * `COMFYAPP_NODE_IMAGE`（钉版本标签的镜像引用）与 `COMFYAPP_NODE_IMAGE_DIGEST`
@@ -39,6 +48,9 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+/** `.cnb.yml` 里本仓认得的那一档「任务级镜像」—— 宿主机没 docker 之后容器仍从这一格来。 */
+const CNB_CONFIG = ".cnb.yml";
+
 /** 镜像引用（**必须钉版本标签**，`latest` 会让「哪一版」这件事彻底不可追）。 */
 export const IMAGE_ENV = "COMFYAPP_NODE_IMAGE";
 /** 那一次的 digest（`sha256:…`）—— 标签可以被移动，digest 不会。 */
@@ -47,6 +59,66 @@ export const DIGEST_ENV = "COMFYAPP_NODE_IMAGE_DIGEST";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** 仓库根 —— 本脚本住在 `scripts/` 下。 */
 export const ROOT = path.resolve(HERE, "..");
+
+/**
+ * 从 `.cnb.yml` 原文里读出**哪几格在容器里跑**（任务级 `image:`）。
+ *
+ * ## 为什么这件事要有执行者
+ *
+ * 自托管这条路上「镜像」一度被读成「没有」（§13.5.3.4.1 那张表的第一条：`pipeline
+ * .docker.image` 不生效）。可失效的只是**声明构建环境**那一层 —— 平台侧**任务级**
+ * `image:` 与插件任务仍在独立容器里执行（官方 `script-vs-plugin.md`「执行环境」：
+ * 指定 `image` 的脚本任务在独立容器中执行）。于是本仓的真实形态是
+ * **宿主机直跑 + 少数几格进容器**，而不是「整条没有镜像」。
+ *
+ * 那句话此前只写在文档里；写进读数之后，「这一跑是哪几格换了环境」跟着每次构建
+ * 落进日志 —— 与这条读数存在的理由逐字相同（环境是隐形的）。
+ *
+ * 只认两种形状，且**都只认 stage 那一层**：
+ *
+ *   · `  - name: X` 起的一项里，缩进 4 空格的 `image: <ref>`（脚本任务级）；
+ *   · 插件任务写成 `image:` + `settings:`（同名键，形态一样）。
+ *
+ * 缩进判据是有意的：`.env` / `env:` 里同名键不会撞上（它们的缩进更深），而
+ * `# ` 注释掉的那一行也不匹配（`^` 之后要求空格 + 非 `#`）。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @returns {Array<{name: string, image: string}>} 有序，与配置里出现的顺序一致
+ */
+export function platformImageStages(text) {
+  /* ⚠️ **不写 `^ {n}` 那一族正则**：这台机（Node 24 的 V8）在「锚 + 定长量词 +
+   * 后续字面量」上会漏回溯 —— `^ {2}a` 对 `"    a"` 判 false（`^a{2}b` 对 `"aaab"`
+   * 同样判 false）。本函数要判的是缩进层级，按字符计数比量词直白得多，也顺手绕开
+   * 那个坑；**别为了迁就引擎去改用例的期望值**。 */
+  /** @type {Array<{name: string, image: string}>} */
+  const out = [];
+  /** @type {{name: string, indent: number} | null} */
+  let current = null;
+  for (const raw of text.split("\n")) {
+    const indent = raw.length - raw.trimStart().length;
+    const body = raw.trim();
+    /* 列表项：`- name: X`（缩进多少层都认 —— `stages:` 可能嵌在 pipeline 里）。 */
+    if (body.startsWith("- name:")) {
+      current = { name: body.slice("- name:".length).trim(), indent };
+      continue;
+    }
+    /* 回到顶层键（`master:` 等）：本项结束了。`stages:` 那一层不结束 —— 后面还有项。 */
+    if (indent === 0 && body !== "") {
+      current = null;
+      continue;
+    }
+    if (current === null) continue;
+    /* 项自己的键：比 `- name:` 深一层。更深的是 `env:` 里的同名键，不算。 */
+    if (indent === current.indent + 2 && body.startsWith("image:")) {
+      const value = body
+        .slice("image:".length)
+        .trim()
+        .replace(/^["']|["']$/g, "");
+      if (value !== "") out.push({ name: current.name, image: value });
+    }
+  }
+  return out;
+}
 
 /**
  * 标签的三种形态，**读数分三档**（判读只有一处：`tests/ci-image-identity.test.ts`
@@ -122,6 +194,7 @@ export function osRelease({
  *   env?: Record<string, string | undefined>,
  *   osReleaseImpl?: () => string,
  *   kernelImpl?: () => string,
+ *   readConfig?: () => string,
  *   log?: (line: string) => void,
  * }} [options]
  * @returns {{lines: string[], verdict: "pinned" | "floating" | "missing",
@@ -131,6 +204,9 @@ export function imageIdentity({
   env = process.env,
   osReleaseImpl = () => osRelease(),
   kernelImpl = () => `${os.type()} ${os.release()}`,
+  /* 配置原文的读法可注入：判据要能喂夹具，而**缺省读的就是盘上那一份**
+   * ——「哪几格在容器里」这件事只许有一个事实源（`.cnb.yml`）。 */
+  readConfig = () => readFileSync(path.join(ROOT, CNB_CONFIG), "utf8"),
   log = console.log,
 } = {}) {
   const image = env[IMAGE_ENV];
@@ -149,6 +225,18 @@ export function imageIdentity({
   );
   lines.push(
     `${DIGEST_ENV}：${dig === "missing" ? "（没有声明）" : String(digest).trim()}`,
+  );
+
+  /* 本仓的容器格（任务级 `image:`）—— 与上面「这台机长自哪版」是**两件事**：
+   * 前者是宿主身份，后者是「这一跑哪几格换了环境」。放在同一处打，是因为它们
+   * 回答的是同一个问题：**这一次跑在什么环境上**（见文件头第四件事）。 */
+  const containerStages = platformImageStages(readConfig());
+  lines.push(
+    containerStages.length === 0
+      ? `容器格（任务级 image:）：没有 —— 每一步都跑在宿主机上`
+      : `容器格（任务级 image:）：${containerStages
+          .map((s) => `${s.name} → ${s.image}`)
+          .join("；")}`,
   );
 
   if (tag.verdict === "pinned") {

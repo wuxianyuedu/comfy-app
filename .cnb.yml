@@ -15,9 +15,19 @@
 #
 # 1. **没有 docker，工具链必须预装在宿主机上**。旧版靠 `docker.image: node:24`
 #    提供 Node，这条路在自托管上失效（`pipeline.docker.image` 不会生效）。
-#    因此本文件**不声明任何 docker / image / volumes**，而是把「宿主机该有什么」
+#    因此本文件**不声明 `docker:` 与 `volumes:`**，而是把「宿主机该有什么」
 #    变成第一条流水线步骤去**验**（见下「工具链自证」）—— 环境要求写进配置里
 #    没人读，写成会红的断言才有人管。
+#
+#    ⚠️ **「没有 docker」不等于「没有容器」（ISSUE #1993 续）**：失效的是
+#    `pipeline.docker.image` / `volumes` 这两把**声明构建环境**的旋钮；平台侧
+#    **任务级 `image:`** 与插件任务照旧在独立容器里执行（官方 `script-vs-plugin.md`
+#    「执行环境」：指定 `image` 的脚本任务在独立容器中执行）。所以本仓的形态是
+#    **宿主机直跑 + 少数几格进容器**，不是「整条没有镜像」：
+#      · 默认档 = 不写 `image` = 宿主机直跑（工具链、安装、静态检查、构建都在这档）；
+#      · 例外档 = 写 `image` = 任务级容器，**只给「换环境最贵」的两格**（见它们的注释）。
+#    判据在 `tests/ci-image-identity.test.ts`：哪几格该有 `image:` 被逐格点名，
+#    多一格少一格都红 —— 否则「哪几格换了环境」会变成一件没人读得出来的事。
 #
 # 2. **`runner.cpus` 无效，故不声明**。旧版写 `cpus: 8` 是为了「避免分配到的节点
 #    规格随扩缩容变化把耗时读成回归」，而自托管上整机资源直接可用、这个键被忽略；
@@ -856,7 +866,32 @@
   # 的头注（`ci-toolchain-browser.mjs` 正卡在 900 行的硬闸上，那段只有一行 + 指路）。
   #
   # 下一笔账：`E2E 关键流程` 的首跑读数（它在自托管路径上仍然一次都没有跑到过）。
+  #
+  # ── 任务级 `image:`（ISSUE #1993 续）──
+  #
+  # 这一格与下面 `E2E 关键流程` 是本档**唯一两格进容器**的（默认档是宿主机直跑，
+  # 头注第 1 条那条 ⚠️ 写的就是这个分界）。选它们的理由只有一条：**它们在等网络，
+  # 不在算 CPU** —— 而这一档恰恰卡在这里卡了七跑。
+  #
+  #   · 这一格的形状一直是「下载 ~120 MiB，链路一次取不完 ⇒ 分片自取 + 续传」；
+  #     宿主机上没有 docker，也就没有任何一层现成的浏览器兜底；
+  #   · 官方 Playwright 镜像里**已经装好**了 headless shell —— 于是「取不回来」
+  #     这条链路问题在容器那一层就不存在了，本步只剩「在不在」那一次复验。
+  #
+  # 三条边界（都不是风格）：
+  #   ① **`PLAYWRIGHT_BROWSERS_PATH` 必须一并给**（见 stage 的 `env`）：镜像把浏览器
+  #      装在 `/ms-playwright`，而本仓的落点判据（`playwrightBrowsersRoot()`）在
+  #      Windows 宿主上按 `%LOCALAPPDATA%` 推 —— 不给这一行就成了「东西在镜像里、
+  #      判据找的是宿主那个空目录」，红得与「没装」逐字同形；
+  #   ② **镜像标签钉到 `-noble`**（不写 `latest`）：Ubuntu 24.04 那一条才带 Node 24
+  #      ——本仓 `engines.node` 是 `^22.22.2 || ^24.15.0 || >=26.0.0`，而 22.04 那条
+  #      镜像里是 Node 22.x 的早期版本，`工具链自证` 那一格会红在版本号上；
+  #   ③ **只在「判得出装过」时省事**：落点里已有那一件 ⇒ 本步照旧秒级返回（函数开头
+  #      那条快路），不会因为换了环境就重下一遍 —— 容器的落点是一个**新建的数据卷**
+  #      （见下 `PLAYWRIGHT_BROWSERS_PATH` 那一段），跑完就没了，所以「省事」这件事
+  #      这一格不再依赖宿主机上有没有留下东西。
   - name: 浏览器安装
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
     env:
       # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
@@ -888,6 +923,11 @@
       # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
       PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
       PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+      # **镜像里浏览器装在哪，就告诉判据装在哪**（上面 ① 那条边界）。
+      # 官方镜像把它放在 `/ms-playwright`；不给这一行，落点判据在 Windows 宿主上
+      # 会去 `%LOCALAPPDATA%\ms-playwright` 找 —— 一个空目录，于是「镜像里明明有」
+      # 与「一件都没有」在日志里逐字同形。
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
     # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
     # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
@@ -914,7 +954,16 @@
   # shell（bash / cmd / PowerShell）下都原样传过去；本机怎么打不受影响。
   # 顺带记一笔：「停用期间看不见的东西」又多一类 —— 这一行此前从没被执行过，
   # 而它在本地是**永远绿的**（本地是 bash/PowerShell 直接调用，`@critical` 传得进去）。
+  #
+  # ── 任务级 `image:`（ISSUE #1993 续，与上面 `浏览器安装` 同一格环境）──
+  #
+  # 为什么它也要进容器：它**依赖**上面那一格的浏览器落点，两格环境不一致时，
+  # 上一格绿、这一格报 `Executable doesn't exist at …` —— 一类「红在别处」的形态，
+  # 而这正是前几跑真实出现过的样子。同一张镜像 ⇒ 落点、Node 版本、系统库三件同源。
+  # **`PLAYWRIGHT_BROWSERS_PATH` 两格必须一样**（这一格已经继承了 `env` 里那份，
+  # 下面不再写第二遍 —— 两份会漂，而漂了以后「哪一份是真的」没有判据能回答）。
   - name: E2E 关键流程
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
     # 这一档在自托管路径上此前**从来没有跑过**（前几跑都断在 `单元测试` 或
     # `生产构建`）。它要起 `next start` + Playwright 浏览器、跑 `@critical`
