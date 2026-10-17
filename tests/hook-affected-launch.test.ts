@@ -43,6 +43,7 @@ import {
   unverifiedReport,
   waitForLoadToSettle as waitForLoadToSettleRaw,
 } from "../scripts/run-affected-tests.mjs";
+import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 
 /* `run-affected-tests.mjs` 是 `.mjs` + `@ts-nocheck`（提交门槛脚本，tsc 面在 `src/**`），
  * 所以 import 出来的每一个符号在类型层都是 `any` —— 直接 `await` 会撞
@@ -78,14 +79,9 @@ function syntheticFiles(count: number): string[] {
  * （「在场判据要解析、不要 toContain」，规范 §13.5.8）。
  */
 function cGroupBody(hookText: string): string {
-  const block = /run_group C\s+"[^"]*"\s+sh\s+-c\s+'([\s\S]*?)'/.exec(hookText);
-  const raw = block?.[1];
-  if (raw === undefined) return "";
-  return raw
-    .split("\n")
-    .filter((line) => !/^\s*#/.test(line))
-    .join("\n")
-    .trim();
+  // 解析器本体在 `tests/helpers/hook-groups.ts`（与本目录下另外两处消费者共用一份；
+  // 各写一份就会漂成「同一份钩子在三条判据里长成三个形状」，§12.12 / §12.18）。
+  return withoutCommentLines(groupShBody(hookText, "C"));
 }
 
 describe("受影响用例的启动器", () => {
