@@ -22,5 +22,4 @@ node "$HOOK_DIR/../scripts/check-merge-parents.mjs" "$1" "$2" || exit 1
 # ② 双亲在、内容丢了一侧（内容档）。非合并提交时它零输出、零耗时。
 # 两个参数都要透传：`$1` 是提交信息文件（判据要靠它读「逐份认账」那一段，少了它
 # 那条出口永远认不了账、只剩 `--no-verify` 一条路），`$2` 是 source（`--amend` 的排除）。
-echo "DBG args=[$1][$2]" >&2
 node "$HOOK_DIR/../scripts/check-pending-merge-loss.mjs" "$1" "$2"
