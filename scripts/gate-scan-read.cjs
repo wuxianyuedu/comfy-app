@@ -67,6 +67,34 @@ function dirExists(dir) {
 }
 
 /**
+ * 一个仓库根目录下**当前真实存在**的顶层目录名（按字母序）与根级文件名。
+ *
+ * 「根清单由仓库现算」这件事对两种判据都是同一件：一种按**目录**定面
+ * （`--recursive` 一类），一种按**扩展名**定面（于是根级单文件也得算进来）。
+ * 各判据各写一遍 `readdir` 的漂法很脏 —— 有人给其中一份加了
+ * `!name.startsWith(".")`、另一份没加，两边的「面上有没有文件」从此不是同一句话。
+ *
+ * 三条口径：
+ *   · **不递归**：只回答顶层 —— 调用方要的是「前缀根」，深一层由它自己展开；
+ *   · **跳过依赖与隐藏目录**（`node_modules` / `.git` / `.workbuddy` 一类）：它们里
+ *     不会有判据要看的站点，列进来只是让读数变长；
+ *   · **根级文件也返回**：调用方要的是「哪些路径算在面上」，`.md` / `package.json`
+ *     这些就住在根上，只返回目录会让它们落在面外（`isUnderAny()` 的 `rel === root`
+ *     匹配不到根级文件）。
+ *
+ * @param {string} root 仓库根（绝对路径）
+ * @returns {string[]} 顶层目录名（不带尾斜杠）与根级文件名，按名称排序
+ */
+function discernRoots(root) {
+  return fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((e) => !e.name.startsWith("."))
+    .filter((e) => !(e.isDirectory() && DEFAULT_SKIP_DIRS.has(e.name)))
+    .map((e) => e.name)
+    .sort();
+}
+
+/**
  * 读一份扫描面上的文件；它在「列目录 → 读内容」之间消失时返回 `null`。
  *
  * @param {string} abs 绝对路径
@@ -272,6 +300,7 @@ function skipUnlessStagedTouches({
 module.exports = {
   DEFAULT_SKIP_DIRS,
   dirExists,
+  discernRoots,
   isUnderAny,
   readBytesForScan,
   readForScan,

@@ -217,7 +217,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖硬闸（见 12 §12.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
 ✅ node scripts/check-format.cjs --staged    # prettier 格式硬闸（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
-✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
+✅ node scripts/check-reformat-only.cjs --staged  # 格式化提交与行为改动分离（见下 13.5.2；`--staged` = 面上没有源文件时跳过，ISSUE #1993）
 ✅ node scripts/check-gate-flag-claims.cjs  # 翻闸删掉的 `--update` / `--strict` 不许还在被人教着跑（见下 13.5.16）
 ✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出硬闸（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
@@ -4759,8 +4759,12 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
   `Install dependencies` / `分支守卫` / `同步数据库表结构`）—— 后面每一步都依赖它们，
   跳过等于让「没跑」看起来像「过了」；
 - **全库级不变量**（`类型检查` / `文件结构硬规则` / `UI/逻辑分离` / `lib Node-only 声明` /
-  `零消费导出` / `core` 那三条 / `格式化提交分离`）—— 扫描面是整个 `src/**` + `scripts/**` +
-  `tests/**`；
+  `零消费导出` / `core` 那三条）—— 扫描面是整个 `src/**` + `scripts/**` + `tests/**`；
+  > ⚠️ **`格式化提交分离` 2026-10-17 从这一列挪进登记表了**（ISSUE #1993，口径见 §13.5.21）：
+  > 它判的是「这次提交里有多少个文件只是被 prettier 重排过」，判据本体是**逐文件跑一次
+  > prettier**（实测每份文件一次子进程）—— 面是「源文件扩展名」，不是「全仓任何一处改动」。
+  > 一份图 / 一个 yaml 的提交连文件都列不出来，所以它属于「扫描面封闭」那一档；
+  > 它同时是 §13.5.18 那三条必要条件的第 3 条的反例检验：**判全库不变量 ≠ 判全仓**。
 - **文档面三条里的另两条** —— `API 文档生成物与源同步` 的输入面是 typedoc 的入口 glob
   （`src/lib|server|trpc`，域不是「改了 docs」），`文档引用与权威源一致` 判的是**全库**文档
   里的引用与权威源一致；
@@ -4939,6 +4943,76 @@ typedoc 的入口 glob」。那句话对，结论错 —— **入口 glob 是能
 **这一轮买到的**：这两档在「只改文档 / 只改 `changelog.d/` / 只改 `src-tauri` / 只改组件」
 这几类 PR 上不再付费，而**代价仍是 0 条判据被放宽**。买不到的：`生产构建` 与 `E2E` 的
 时间一分没省 —— 它们判的正是「整仓」，那笔钱省不得。
+
+#### 13.5.21 「runner 配置能不能控负载」—— 不能，所以改成让每一档按现场核数收敛（ISSUE #1993）
+
+**问题原话**：用户想把上一条建议（按车道切职责 + 分 `lock.key` + 重算并发预算）
+**先做一半**，并问「runner 配置可以控制负载吗」。
+
+**先答问题，因为答案决定了另一半该怎么做。**
+
+| 想控的东西                | 平台给的旋钮                              | 本仓的结论                       |
+| ------------------------- | ----------------------------------------- | -------------------------------- |
+| 一个 runner 分到几核      | `runner.cpus`                             | **无效**（自托管上官方明写「配置无效」，见 §13.5.3.4） |
+| 构建环境 / 镜像           | `docker.image` / `services` / `volumes`   | **无效**（同上：不开启 Docker 能力） |
+| 同一 key 上的并发流水线   | `lock.key` + `cancel-in-progress`         | **有效**，但只掐「同一个 key」   |
+| 同一台上接几个 runner     | 不在仓库的声明面里                        | 平台不限制，仓库也管不到         |
+| **一次构建内部开几个 worker** | 没有平台旋钮                          | **只能在脚本里按事实收敛**（本条） |
+
+前三行是「平台侧」的事实，第四行是「仓库侧唯一还兑现得了的动作」。所以
+**「用 runner 配置控负载」这条路不存在**：`runner.cpus` 写上去只会让人以为核数被控住了
+（`.cnb.yml` 因此刻意不声明它，头注第 2 条）。
+
+**落地的这一半**：把「几个并发」从**常数**变成**按现场核数算出来的值**。
+
+- 唯一出处 `scripts/ci-load.mjs`：`resolveCores()`（`CNB_CPUS` → `os.availableParallelism()`
+  → 兜底）、`workersForCores()`（`ceil(cores / 4)`，即「一个 worker 至少 4 核」）、
+  `resolveCiWorkers()`（叠一层人的出口 `COMFY_CI_MAX_WORKERS`）。
+- 消费者是 `scripts/full-suite-run.mjs` 的 `planRun()`：`--maxWorkers` 由它拼进
+  `pnpm run test:coverage`。**并发不进 `extra`** —— 进了 `isWholeTrackRun()` 会把每一次跑
+  判成「跑的不是整档」、于是记账通道整个失效（那比不加并发严重得多）。
+- 人还能再压一档：`COMFY_CI_MAX_WORKERS=1`（只调并发、不动任何判据，与
+  `.githooks` 的 `COMFY_PRECOMMIT_MAX_WORKERS` 同一句口径）。
+
+**为什么这一半值得先做**：`单元测试` 与 `生产构建` 的耗时是**变量**（§11.13 那张表：
+同一套、同一台机，负载不同墙钟差 3~10 倍），而配置里那个常数与「这台机现在几个核」
+没有任何联系。节点换规格、或同一台机上多了第二条流水线（平台不限制并发数）时，
+写死的 4 与配置里的 8 都会照旧铺开 —— 现场形态是**既不推进也不报错**
+（`cnb-jt3-1k5071kou` 的 `ESLint 零警告` 挂 8640s、`cnb-did-1k50659np` 的 `单元测试`
+挂 2h24m，都只留下 `timeout of … exceeded`）。
+
+**刻意没做的（以及为什么）**：
+
+- **不给 `生产构建` 造旋钮**：`next build` 的 worker 数由构建器自己定，没有「按核数
+  收敛」的键；`NODE_OPTIONS=--max-old-space-size` 改的是内存上限、不是并发。拿它冒充
+  降载就是换一个东西 —— `.cnb.yml` 那一步的注释里写明了这条边界。
+- **不按标签切职责**：那是「接第二个 runner」的前置，而本仓此刻**只有一台机**
+  （同一台机上两条全量流水线并行 = 直接复现 §13.5.3.9 那张表），先做等于先制造问题。
+- **不动 `lock.key`**：它已经是「按 PR 分锁」（§13.5.3.10），粒度正确；再按车道分锁
+  的前提是「先有车道」。
+
+**同批收掉的两处空转**（都属 §13.5.18 的收窄，判据一字未改）：
+
+- `格式化提交分离`：判据本体是逐文件跑 prettier，而「这次一个源文件都没改」的提交
+  （只改图 / 只改 yaml）连文件都列不出来。登记进 `INCREMENTAL_GATES`，本地钩子那一步
+  同批接 `--staged`（面 = `discernRoots()` 现算的顶层目录 + 根级文件名，见下一条）。
+- `端口推导跨语言一致性`：它判「同一份向量 ⇄ 四侧实现」，域是五个点（四侧实现 + 向量），
+  一个都没碰时不可能变 —— 登记进 `INCREMENTAL_GATES`。
+
+> ⚠️ **一个刚踩到的坑，值得留在这里**：`discernRoots()` 返回的名字**不带尾斜杠**，
+> 而 `isUnderAny()` 判的是 `rel.startsWith(dir + "/")`。写成 `src/` 会变成 `"src//"`、
+> 永不命中 —— 于是「面上明明有源文件」也被跳过，读数还写着「0 个落在 N 条根内」，
+> 看着像真的没有。所以 `check-reformat-only.cjs` 的 `stagedRoots()` 只做
+> 「现算 → 原样转根」这一步，尾斜杠一律不加；`tests/check-reformat-only.test.ts`
+> 那组用例**真起脚本**判「面上有源文件时不许跳过」（不是数清单里有几个元素）。
+
+**判据**：`tests/ci-load.test.ts`（核数读取顺序 / 换算方向 / 人给的出口）、
+`tests/daily-tracks.test.ts`（`planRun()` 钉形状不钉数字 + 并发不进 `extra`）、
+`tests/ci-incremental-gates.test.ts`（双向同源 + 「必跑集合」里 `格式化提交分离` 已挪出）、
+`tests/check-reformat-only.test.ts`（`--staged` 的真起脚本的反向判据）。
+
+**买不到的**：`生产构建` 的时间一分没省（它没有旋钮，见上）；两条并行流水线压同一台机
+时，「谁先谁后」仍然没有平台侧的旋钮（只能靠 `lock` 的粒度与 PR 的节奏）。
 
 ### 13.6 分支与合并策略
 

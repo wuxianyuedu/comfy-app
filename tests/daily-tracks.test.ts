@@ -406,7 +406,15 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
 
 describe("跑法各自的命令核（§12.12：同形而不同命令）", () => {
   it("全量单测那一档跑的是 `test:coverage`（覆盖率门槛只在这一档判，§11.7）", () => {
-    expect(suitePlan().args).toEqual(["run", "test:coverage"]);
+    /* 并发是本档**自己**加的（`--maxWorkers`，ISSUE #1993 / §13.5.21）：
+     * 位置固定在第 3 个参数、值由 `scripts/ci-load.mjs` 按现场核数给 —— 这里钉形状，
+     * 不钉数字（核数会变，钉死它等于把「按事实降载」又写回一个常数）。 */
+    const args = suitePlan().args;
+    expect(args.slice(0, 2)).toEqual(["run", "test:coverage"]);
+    expect(args[2]).toMatch(/^--maxWorkers=[1-9]\d*$/);
+    /* 并发**不进** `extra`：进去了 `isWholeTrackRun` 会把每一次跑都判成「不是整档」，
+     * 于是记账通道整个失效（那比不加并发严重得多）。 */
+    expect(suiteRecords({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
     expect(SUITE_TRACK.run).toBe("pnpm run test:coverage");
     // 红的定性那句必须给出「跑过 ≠ 跑绿过」—— 记账语义靠它有据可依。
     expect(readText("scripts/full-suite-run.mjs")).toContain("不记账");
@@ -444,6 +452,7 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
      * 这里逐档钉住，是因为这三份 `shouldRecord` 各自导出、各自被调用 ——
      * 只修一档的话，另外两档的账照样能被一条参数骗出来。 */
     for (const record of [suiteRecords, artifactRecords]) {
+      expect(record({ exitCode: 0, dryRun: false })).toBe(true);
       expect(record({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
       expect(record({ exitCode: 0, dryRun: false, extra: ["--help"] })).toBe(
         false,

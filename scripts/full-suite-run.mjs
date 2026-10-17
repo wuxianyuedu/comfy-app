@@ -31,6 +31,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { resolveCiWorkers } from "./ci-load.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
   abortedAdvice,
@@ -57,14 +58,38 @@ export const TRACK = freshnessTrack("full");
  * 与 `pnpm run test:coverage` 逐字同形（`package.json` 里那一行是这条命令的历史入口）：
  * 覆盖率门槛**只在这一档判**，单文件跑 `--coverage` 会把其余路径按 0% 算（§11.7）。
  *
+ * ⚠️ **并发跟现场核数走，不写死**（ISSUE #1993 / 规范 §13.5.21）：旧形态是在
+ * `.cnb.yml` 里裸跑 `node scripts/full-suite-run.mjs`，并发吃 `vitest.config.ts` 给的
+ * `maxWorkers: 8`，而那个 8 是**本机 8 核检出**的实测值 —— 平台节点换规格、或同一台机上
+ * 多了一条流水线时它照旧按 8 铺开。核数由 `scripts/ci-load.mjs` 从 `CNB_CPUS` 与
+ * `os.availableParallelism()` 读（唯一出处），这里只把结论拼进参数。
+ * 这不是放宽判据：用例、预算、覆盖率阈值一个字不动，动的只有排队的宽度。
+ *
  * @param {string[]} [extra] 透传的额外参数
+ * @param {number} [workers] `--maxWorkers`（缺省由 `resolveCiWorkers()` 给）
  * @returns {{label: string, args: string[]}}
  */
-export function planRun(extra = []) {
+export function planRun(extra = [], workers = resolveCiWorkers().workers) {
   return {
     label: "全量单测 + 覆盖率棘轮（vitest run --coverage）",
-    args: ["run", "test:coverage", ...extra],
+    args: ["run", "test:coverage", `--maxWorkers=${workers}`, ...extra],
   };
+}
+
+/**
+ * 剔掉本脚本自己的开关，剩下的才是**人给的**透传参数。
+ *
+ * 为什么并发**不**进 `extra`：`isWholeTrackRun(extra)` 把「透传了任何参数」判成
+ * 「跑的不是整档、不构成记账凭证」，而 `--maxWorkers` 是本档自己给 vitest 的、
+ * 不是调用方在收窄范围。塞进 `extra` 会让每一次跑都「绿了但不记账」—— 那是把记账
+ * 通道整个关掉，比不加并发严重得多。所以 `extra` 只装人给的参数，并发走
+ * `planRun` 的第二个入参。
+ *
+ * @param {string[]} argv 原始参数
+ * @returns {string[]}
+ */
+function passthrough(argv) {
+  return argv.filter((a) => a !== "--dry-run");
 }
 
 /**
@@ -132,11 +157,14 @@ function main(argv) {
       reason: parsed.reason,
     });
   }
-  const extra = argv.filter((a) => a !== "--dry-run");
-  const run = planRun(extra);
+  const extra = passthrough(argv);
+  const load = resolveCiWorkers();
+  const run = planRun(extra, load.workers);
+  if (load.note) process.stderr.write(`[full-suite-run] ${load.note}\n`);
   if (dryRun) {
     process.stdout.write(
-      `[full-suite-run] ${run.label} → pnpm ${run.args.join(" ")}\n`,
+      `[full-suite-run] ${run.label} → pnpm ${run.args.join(" ")}` +
+        `（并发 ${load.workers}，按 ${load.cores} 逻辑核 / ${load.source}）\n`,
     );
     process.stdout.write(
       `[full-suite-run] 记账文件：${TRACK.ledger}（键 \`${TRACK.key}\`，跑法 \`${TRACK.run}\`）\n`,
