@@ -29,7 +29,7 @@
  *
  * ## 第四件事（ISSUE #1993 续）：它也报「本仓的容器格是哪几格」
  *
- * 「宿主机直跑」与「这一格跑在容器里」不是二选一 —— 平台侧**任务级** `image:`
+ * 「宿主机直跑」与「这一格跑在容器里」不是二选一 —— 平台侧**Job 级** `image:`
  * 与插件任务仍然在容器里跑（`.cnb.yml` 里 `浏览器安装` / `E2E 关键流程` 两格就是）。
  * 那句话此前只写在文档里，于是「到底哪几格在容器里」只能靠人翻 900 行 YAML。
  * 现在它由 `platformImageStages()` 从 `.cnb.yml` 里**读出来**，跟着这条读数每跑一次
@@ -53,7 +53,7 @@ import { fileURLToPath } from "node:url";
  * `tests/ci-container-plan.test.ts` —— 分工与 `platformImageStages()` 一致。 */
 import { describePlan } from "./ci-container-plan.mjs";
 
-/** `.cnb.yml` 里本仓认得的那一档「任务级镜像」—— 宿主机没 docker 之后容器仍从这一格来。 */
+/** `.cnb.yml` 里本仓认得的那一档「Job 级镜像」—— 宿主机没 docker 之后容器仍从这一格来。 */
 const CNB_CONFIG = ".cnb.yml";
 
 /** 镜像引用（**必须钉版本标签**，`latest` 会让「哪一版」这件事彻底不可追）。 */
@@ -66,12 +66,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, "..");
 
 /**
- * 从 `.cnb.yml` 原文里读出**哪几格在容器里跑**（任务级 `image:`）。
+ * 从 `.cnb.yml` 原文里读出**哪几格在容器里跑**（Job 级 `image:`）。
  *
  * ## 为什么这件事要有执行者
  *
  * 自托管这条路上「镜像」一度被读成「没有」（§13.5.3.4.1 那张表的第一条：`pipeline
- * .docker.image` 不生效）。可失效的只是**声明构建环境**那一层 —— 平台侧**任务级**
+ * .docker.image` 不生效）。可失效的只是**声明构建环境**那一层 —— 平台侧**Job 级**
  * `image:` 与插件任务仍在独立容器里执行（官方 `script-vs-plugin.md`「执行环境」：
  * 指定 `image` 的脚本任务在独立容器中执行）。于是本仓的真实形态是
  * **宿主机直跑 + 少数几格进容器**，而不是「整条没有镜像」。
@@ -79,50 +79,88 @@ export const ROOT = path.resolve(HERE, "..");
  * 那句话此前只写在文档里；写进读数之后，「这一跑是哪几格换了环境」跟着每次构建
  * 落进日志 —— 与这条读数存在的理由逐字相同（环境是隐形的）。
  *
- * 只认两种形状，且**都只认 stage 那一层**：
+ * ## 认的是 **Job** 那一层，而且只认那一层
  *
- *   · `  - name: X` 起的一项里，缩进 4 空格的 `image: <ref>`（脚本任务级）；
- *   · 插件任务写成 `image:` + `settings:`（同名键，形态一样）。
+ * 平台有两层镜像语义，在这条路径上**一层能用、一层不能**（实测：写错那一层，整格
+ * 99ms 就答 `Runner does not enable Docker.`）：
  *
- * 缩进判据是有意的：`.env` / `env:` 里同名键不会撞上（它们的缩进更深），而
- * `# ` 注释掉的那一行也不匹配（`^` 之后要求空格 + 非 `#`）。
+ *   · **Job 级**（脚本任务「指定 `image` 时在独立容器中执行」）= 平台为这一个任务起
+ *     一个容器 —— 自托管上照常可用，**本仓用这一层**；
+ *   · **Stage 级**（`Stage.image`「当前 Stage 下的所有任务默认都在这个镜像环境中执行」）
+ *     = 给整条流水线容器换镜像 —— 那正是自托管 Runner 不具备的能力。
+ *
+ * 所以本函数对两者**分开报**：Job 级的 `image:` 进 `stages`，Stage 级的进
+ * `stageLevelImages`（后者不是「另一份名单」，而是**一级不该出现的声明** ——
+ * 判据要求它为空，理由见 `tests/ci-container-plan.test.ts`）。
+ *
+ * 缩进判据是有意的：`env:` 里的同名键不会撞上（它们的缩进更深），而 `# ` 注释掉的
+ * 那一行也不匹配。stage 名取**外层**那个（`- name: X` + `jobs:`）—— 判据与账里
+ * 一直用外层名，Job 层的同名只是为了让那一层有名字。
  *
  * @param {string} text `.cnb.yml` 原文
  * @returns {Array<{name: string, image: string}>} 有序，与配置里出现的顺序一致
  */
 export function platformImageStages(text) {
+  return readImageDeclarations(text).stages;
+}
+
+/**
+ * 两级 `image:` 的**一次扫描、两个出口**（Job 级 / Stage 级）。
+ *
+ * 分开成两个出口而不是一个「合并后的名单」，是因为两边的**下一动作相反**：
+ * Job 级多一格是「有人多花了一次安装」，Stage 级出现一格是「这一格在这条路径上
+ * 根本起不来」。合成一份名单会让后者读起来像前者。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @returns {{stages: Array<{name: string, image: string}>, stageLevelImages: Array<{name: string, image: string}>}}
+ */
+export function readImageDeclarations(text) {
   /* ⚠️ **不写 `^ {n}` 那一族正则**：这台机（Node 24 的 V8）在「锚 + 定长量词 +
    * 后续字面量」上会漏回溯 —— `^ {2}a` 对 `"    a"` 判 false（`^a{2}b` 对 `"aaab"`
    * 同样判 false）。本函数要判的是缩进层级，按字符计数比量词直白得多，也顺手绕开
    * 那个坑；**别为了迁就引擎去改用例的期望值**。 */
   /** @type {Array<{name: string, image: string}>} */
-  const out = [];
+  const stages = [];
+  /** @type {Array<{name: string, image: string}>} */
+  const stageLevelImages = [];
   /** @type {{name: string, indent: number} | null} */
-  let current = null;
+  let stage = null;
+  /** @type {{name: string, indent: number} | null} */
+  let job = null;
   for (const raw of text.split("\n")) {
     const indent = raw.length - raw.trimStart().length;
     const body = raw.trim();
-    /* 列表项：`- name: X`（缩进多少层都认 —— `stages:` 可能嵌在 pipeline 里）。 */
-    if (body.startsWith("- name:")) {
-      current = { name: body.slice("- name:".length).trim(), indent };
-      continue;
-    }
-    /* 回到顶层键（`master:` 等）：本项结束了。`stages:` 那一层不结束 —— 后面还有项。 */
+    /* 回到顶层键（`master:` 等）：这一族结束了。`stages:` 那一层不结束 —— 后面还有项。 */
     if (indent === 0 && body !== "") {
-      current = null;
+      stage = null;
+      job = null;
       continue;
     }
-    if (current === null) continue;
-    /* 项自己的键：比 `- name:` 深一层。更深的是 `env:` 里的同名键，不算。 */
-    if (indent === current.indent + 2 && body.startsWith("image:")) {
-      const value = body
-        .slice("image:".length)
-        .trim()
-        .replace(/^["']|["']$/g, "");
-      if (value !== "") out.push({ name: current.name, image: value });
+    /* 列表项：`- name: X`（缩进多少层都认 —— `stages:` 可能嵌在 pipeline 里）。
+     * 比当前 stage 更深的那一项是**子 Job**（`jobs:` 下），否则它就是一个新 stage。 */
+    if (body.startsWith("- name:")) {
+      const item = { name: body.slice("- name:".length).trim(), indent };
+      if (stage !== null && indent > stage.indent) job = item;
+      else {
+        stage = item;
+        job = null;
+      }
+      continue;
     }
+    /* 这一项自己的键：比它的 `- name:` 深一层。更深的是 `env:` / `volumes:` 里的
+     * 同名键或条目，不算声明。 */
+    if (!body.startsWith("image:")) continue;
+    const value = body
+      .slice("image:".length)
+      .trim()
+      .replace(/^["']|["']$/g, "");
+    if (value === "") continue;
+    if (job !== null && indent === job.indent + 2)
+      stages.push({ name: stage?.name ?? job.name, image: value });
+    else if (stage !== null && indent === stage.indent + 2)
+      stageLevelImages.push({ name: stage.name, image: value });
   }
-  return out;
+  return { stages, stageLevelImages };
 }
 
 /**
@@ -232,14 +270,14 @@ export function imageIdentity({
     `${DIGEST_ENV}：${dig === "missing" ? "（没有声明）" : String(digest).trim()}`,
   );
 
-  /* 本仓的容器格（任务级 `image:`）—— 与上面「这台机长自哪版」是**两件事**：
+  /* 本仓的容器格（Job 级 `image:`）—— 与上面「这台机长自哪版」是**两件事**：
    * 前者是宿主身份，后者是「这一跑哪几格换了环境」。放在同一处打，是因为它们
    * 回答的是同一个问题：**这一次跑在什么环境上**（见文件头第四件事）。 */
   const containerStages = platformImageStages(readConfig());
   lines.push(
     containerStages.length === 0
-      ? `容器格（任务级 image:）：没有 —— 每一步都跑在宿主机上`
-      : `容器格（任务级 image:）：${containerStages
+      ? `容器格（Job 级 image:）：没有 —— 每一步都跑在宿主机上`
+      : `容器格（Job 级 image:）：${containerStages
           .map((s) => `${s.name} → ${s.image}`)
           .join("；")}`,
   );

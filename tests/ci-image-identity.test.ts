@@ -36,6 +36,7 @@ import {
   imageTagVerdict,
   osRelease,
   platformImageStages,
+  readImageDeclarations,
   ROOT,
 } from "../scripts/ci-image-identity.mjs";
 import { registeredGateOrder } from "./no-platform-ci-config.test";
@@ -259,8 +260,13 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
  *
  * 这条守的是一句很容易被读反的话：自托管上「没有 docker」不等于「没有容器」——
  * 失效的只是 `pipeline.docker.image` / `volumes`（声明构建环境那两把旋钮），
- * 而**任务级 `image:`** 与插件任务仍在独立容器里跑（官方 `script-vs-plugin.md`
+ * 而**Job 级 `image:`** 与插件任务仍在独立容器里跑（官方 `script-vs-plugin.md`
  * 「执行环境」）。于是本仓的真实形态是「宿主机直跑 + 少数几格进容器」。
+ *
+ * ⚠️ 写的是 **Job 级**、不是 stage 级 —— 这两层在这条路径上**结果相反**：stage 级
+ * `image:` 换的是整条流水线的构建环境（自托管 Runner 不具备），实测整格 99ms 就答
+ * `Runner does not enable Docker.`；Job 级只给这一个任务起容器，照常可用。
+ * 所以下面的用例同时判「Job 级有那两格」与「stage 级一格都没有」。
  *
  * 为什么要有判据而不是只留注释：**多一格少一格都不会报错**。有人顺手给「类型检查」
  * 也加个 `image:`，配置照跑、日志照绿 —— 而那一格要拉镜像、要重装依赖，正是这份
@@ -270,7 +276,7 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
   /** 本仓**允许**换环境的两格（理由逐条写在 `.cnb.yml` 它们的注释里）。 */
   const CONTAINER_STAGES = ["浏览器安装", "E2E 关键流程"];
 
-  it("解析器认得 stage 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
+  it("解析器只认 Job 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
     const fixture = [
       "master:",
       "  pull_request:",
@@ -280,14 +286,31 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
       "      env:",
       "        image: not-an-image-key",
       "    - name: B",
-      "      image: node:24",
-      "      script: echo b",
+      "      jobs:",
+      "        - name: B",
+      "          image: node:24",
+      "          script: echo b",
       "    # - name: C",
       "    #   image: node:24",
       "",
     ].join("\n");
     expect(platformImageStages(fixture)).toEqual([
       { name: "B", image: "node:24" },
+    ]);
+    /* 写错层的那一格**不进**这份名单，而进另一个出口 —— 它压根跑不起来，
+     * 与「某一格进了容器」是两件事（`readImageDeclarations()` 一次扫描两个出口）。 */
+    const wrongLevel = [
+      "master:",
+      "  pull_request:",
+      "    - stages:",
+      "    - name: D",
+      "      image: node:24",
+      "      script: echo d",
+      "",
+    ].join("\n");
+    expect(platformImageStages(wrongLevel)).toEqual([]);
+    expect(readImageDeclarations(wrongLevel).stageLevelImages).toEqual([
+      { name: "D", image: "node:24" },
     ]);
   });
 

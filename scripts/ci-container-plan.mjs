@@ -12,15 +12,16 @@
  * 2. 自托管节点离线 / 满载时平台会**自动改派到其他可用节点**，而「其他可用节点」
  *    在这条路径上就是平台池（`.cnb.yml` 头注第 5 条）。所以只写 namespace 不够，
  *    还必须写 **`runner.tags` 里那个只有自托管节点才有的标签**；
- * 3. 「用容器」落在**任务级 `image:`**（`pipeline.docker.image` 在自托管上不生效，
- *    见 §13.5.3.4.1）。
+ * 3. 「用容器」落在 **Job 级 `image:`**（`pipeline.docker.image` 在自托管上不生效，
+ *    而 **stage 级 `image:`** 也不生效 —— 它不是「被忽略」，是整格 99ms 就答
+ *    `Runner does not enable Docker.`；见 §13.5.3.4.1 与 `imageLevelOf()`）
  *
  * ## 两级模型（本文件的全部内容）
  *
  * | 档 | 谁 | 为什么 |
  * | --- | --- | --- |
  * | **宿主直跑** | 静态判据、构建、单测 | 它们的输入就是这份检出；逐个进容器 = 每格一份新环境、一次新安装，而隔离换不到任何东西 |
- * | **任务级容器** | 「在等网络」的那几格 | 宿主机没有 docker 就没有镜像兜底，而这台节点的链路一次取不完一个大响应 |
+ * | **Job 级容器** | 「在等网络」的那几格 | 宿主机没有 docker 就没有镜像兜底，而这台节点的链路一次取不完一个大响应 |
  *
  * **两档之间只有一条桥**：宿主必须给容器留下一份**跨容器存活**的落点（Playwright
  * 浏览器），否则每一格都重下 120 MiB —— 那正是要买的东西被悄悄退回去的形态，
@@ -152,7 +153,17 @@ export function runnerShape(text) {
 }
 
 /**
- * 任务级容器格的**两级**清单：`image:` 写了的，以及它挂的卷。
+ * 容器格的清单：Job 级 `image:` 写了的，以及它挂的卷。
+ *
+ * ⚠️ 认的是 **Job** 那一层的 `image:` / `volumes:`（`- name: X` + `jobs:` + 同名 Job）。
+ * 原因不是风格：stage 级 `image:` 在自托管上会让整格**起不来**（平台答
+ * `Runner does not enable Docker.`，因为两层语义不同 —— stage 级换的是整条流水线的
+ * 构建环境，Job 级只给这一个任务起容器）。所以这里读的是 Job 那两行，stage 名取外层
+ * （判据与账里一直用外层名；Job 层的同名只是为了让那一层有名字）。
+ *
+ * 只给 stage 写了 `image:` 而没拆 `jobs:` 的那一形态，本函数**不会**把它算成容器格
+ * —— 它压根跑不起来，那是 `stageLevelImages()` 那条判据的事（下一动作是「拆成 Job」，
+ * 不是「补卷」）。两件事混成一份名单，读起来就像两种失效形态是同一种。
  *
  * 与 `ci-image-identity.mjs` 的 `platformImageStages()` 是**同一个事实的两个读数**：
  * 那边只取「哪几格有 `image:`」（一行读数），这边多取「挂在哪、缺什么」（判据面）。
@@ -167,6 +178,10 @@ export function containerStages(text) {
   const out = [];
   /* 每一项先收齐自己的键（`image:` 与 `volumes:` 的**先后不定**，所以必须等这一项
    * 结束再判定），再决定它是不是容器格。 */
+  /** @type {string | null} */
+  let stageName = null;
+  /** @type {number | null} */
+  let stageIndent = null;
   /** @type {{ name: string, image: string, volumes: string[] } | null} */
   let current = null;
   let volumesMode = false;
@@ -188,16 +203,25 @@ export function containerStages(text) {
     if (indent === 0 && body !== "") {
       flush();
       itemIndent = null;
+      stageName = null;
+      stageIndent = null;
       continue;
     }
     if (body.startsWith("- name:")) {
       flush();
       itemIndent = indent;
-      current = {
-        name: body.slice("- name:".length).trim(),
-        image: "",
-        volumes: [],
-      };
+      const name = body.slice("- name:".length).trim();
+      /* 比当前 stage 更深的那一项是**子 Job**（`jobs:` 下），否则它就是一个新 stage。 */
+      if (stageIndent === null || indent <= stageIndent) {
+        stageName = name;
+        stageIndent = indent;
+      }
+      /* 只有 Job 那一层才有 `image:` 的语义 —— stage 那一层收到的东西由
+       * `stageLevelImages()` 那条判据点名（见上）。 */
+      current =
+        stageIndent !== null && indent > stageIndent
+          ? { name: stageName ?? name, image: "", volumes: [] }
+          : null;
       continue;
     }
     if (current === null || itemIndent === null) continue;
@@ -246,6 +270,48 @@ export function parseVolume(spec) {
 }
 
 /**
+ * **写错层**的那一格：`image:` 挂在 **stage** 上而不是 Job 上。
+ *
+ * 这不是「另一个可选写法」，是这一条路径上**整格起不来**的形态 —— 实测
+ * （`Runner does not enable Docker.`，99ms，容器都没起）。两层语义不同：stage 级
+ * 换的是**整条流水线**的构建环境（自托管 Runner 不具备的能力），Job 级只给**这一个
+ * 任务**起容器（照常可用）。所以它单列一个出口 —— 与 `containerStages()` 合成一份
+ * 名单会让它读起来像「多挂了个卷」那种可容忍的毛病。
+ *
+ * @param {string} text
+ * @returns {Array<{ name: string, image: string }>}
+ */
+export function stageLevelImages(text) {
+  /** @type {Array<{ name: string, image: string }>} */
+  const out = [];
+  /** @type {{ name: string, indent: number } | null} */
+  let stage = null;
+  for (const raw of blankComments(text).split("\n")) {
+    const body = raw.trim();
+    const indent = raw.length - raw.trimStart().length;
+    if (indent === 0 && body !== "") {
+      stage = null;
+      continue;
+    }
+    if (body.startsWith("- name:")) {
+      const item = { name: body.slice("- name:".length).trim(), indent };
+      /* 比当前 stage 更深的是子 Job —— stage 那一层（同一个缩进）不换主。 */
+      if (stage === null || indent <= stage.indent) stage = item;
+      continue;
+    }
+    if (stage === null || !body.startsWith("image:")) continue;
+    const value = body
+      .slice("image:".length)
+      .trim()
+      .replace(/^["']|["']$/g, "");
+    /* 只认 stage 项自己那一层（更深的是 Job 的 `image:`，那是**对**的那一层）。 */
+    if (value !== "" && indent === stage.indent + 2)
+      out.push({ name: stage.name, image: value });
+  }
+  return out;
+}
+
+/**
  * 一句话的计划读数：宿主直跑几格、容器几格、桥断在哪。
  *
  * `bridge` 是本文件真正想说的话：
@@ -255,7 +321,7 @@ export function parseVolume(spec) {
  *   （不报错，只是慢 —— 那正是最贵的失效形态）。
  *
  * @param {string} text
- * @returns {{ runner: ReturnType<typeof runnerShape>, hosts: string[], containers: Array<{name: string, image: string, volumes: string[]}>, bridge: "none" | "complete" | "broken", missing: string[] }}
+ * @returns {{ runner: ReturnType<typeof runnerShape>, hosts: string[], containers: Array<{name: string, image: string, volumes: string[]}>, bridge: "none" | "complete" | "broken", missing: string[], stageLevel: Array<{name: string, image: string}> }}
  */
 export function plan(text) {
   const runner = runnerShape(text);
@@ -271,7 +337,16 @@ export function plan(text) {
       : missing.length === 0
         ? "complete"
         : "broken";
-  return { runner, hosts: [], containers, bridge, missing };
+  return {
+    runner,
+    hosts: [],
+    containers,
+    bridge,
+    missing,
+    /* 写错层的那一格（见 `stageLevelImages()`）—— 它不在 `containers` 里，
+     * 因为那一格压根跑不起来，没有「挂没挂卷」可判。 */
+    stageLevel: stageLevelImages(text),
+  };
 }
 
 /**
@@ -286,8 +361,17 @@ export function describePlan(text) {
   lines.push(
     `容器计划：runner ${p.runner.verdict}（namespace=${p.runner.namespace ?? "（没写）"}，tags=[${p.runner.tags.join(", ")}]）`,
   );
+  if (p.stageLevel.length > 0) {
+    /* 这一行必须排在最前：写错层时整格起不来，此时再报「几格进容器」是把
+     * 一个更重的结论排在更轻的那个后面。 */
+    lines.push(
+      `容器计划：⚠️ 这些格的 \`image:\` 写在 **stage** 上 —— 自托管上整格会以「Runner does not enable Docker.」失败，要拆成 \`jobs:\` + Job 级 \`image:\`：${p.stageLevel
+        .map((s) => s.name)
+        .join(" / ")}`,
+    );
+  }
   if (p.containers.length === 0) {
-    lines.push("容器计划：没有任务级 `image:` 格 —— 整条跑在宿主机上");
+    lines.push("容器计划：没有 Job 级 `image:` 格 —— 整条跑在宿主机上");
     return lines;
   }
   lines.push(

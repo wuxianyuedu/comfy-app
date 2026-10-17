@@ -10,11 +10,13 @@
  * 1. `runner.namespace: group`（自托管）—— 漏掉会**静默回落计费的平台池**；
  * 2. `runner.tags` 非空、且**不含平台池标签** —— 自托管节点离线/满载时平台会自动改派，
  *    而「其他可用节点」就是平台池（`.cnb.yml` 头注第 5 条）；
- * 3. 「用容器」落在**任务级 `image:`**（`pipeline.docker.image` 在自托管上不生效）。
+ * 3. 「用容器」落在 **Job 级 `image:`**（`pipeline.docker.image` 在自托管上不生效；
+ *    而 **stage 级 `image:`** 不是「被忽略」，是整格 99ms 就答
+ *    `Runner does not enable Docker.` —— 见下面「写错层」那一组用例）。
  *
  * ## 还有一件比上面三件更容易漏的：桥
  *
- * 任务级 `image:` 每一格都是**一个新容器**。不挂卷，「上一格下的 120 MiB」到下一格
+ * Job 级 `image:` 每一格都是**一个新容器**。不挂卷，「上一格下的 120 MiB」到下一格
  * 就不存在了 ⇒ 每跑一遍重取一遍。那是**不报错、只是慢**的形态 —— 与本仓最贵的那类
  * 红同族（环境是隐形的）。所以本文件判的第二件事是：**每一格容器格都挂着同一份
  * 浏览器落点**。
@@ -37,9 +39,11 @@ import {
   PLATFORM_POOL_TAG_PREFIX,
   runnerShape,
   SELF_HOSTED_TAG,
+  stageLevelImages,
   stripYamlComments,
 } from "../scripts/ci-container-plan.mjs";
 import { platformImageStages, ROOT } from "../scripts/ci-image-identity.mjs";
+import { stageBlock } from "./no-platform-ci-config.test";
 
 const CNB = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
 
@@ -55,9 +59,14 @@ const fixture = (over: { namespace?: string; tags?: string[] } = {}) =>
     "      stages:",
     "        - name: A",
     "          script: echo a",
+    /* B 那一格是**容器格的标准形态**：stage 项只留 `name` + `jobs:`，`image:` /
+     * `volumes:` / `timeout` 全在 Job 那一层（ISSUE #1993 的实测形态，见
+     * `.cnb.yml` 里那两格的注释）。 */
     "        - name: B",
-    "          image: node:24",
-    "          script: echo b",
+    "          jobs:",
+    "            - name: B",
+    "              image: node:24",
+    "              script: echo b",
     "",
   ].join("\n");
 
@@ -122,7 +131,7 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
 
   it("删掉某一格的 `volumes:` ⇒ 桥断，且点名是哪一格（反向复算）", () => {
     const broken = CNB.replace(
-      /    volumes:\n      - comfyapp-ms-playwright:\/ms-playwright\n/g,
+      /        volumes:\n          - comfyapp-ms-playwright:\/ms-playwright\n/g,
       "",
     );
     expect(broken).not.toBe(CNB);
@@ -161,11 +170,13 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
       "            image: not-an-image-key",
       "            volumes: not-a-volume-key",
       "        - name: Y",
-      "          image: node:24",
-      "          env:",
-      "            image: still-not",
-      "          volumes:",
-      "            - v:/data",
+      "          jobs:",
+      "            - name: Y",
+      "              image: node:24",
+      "              env:",
+      "                image: still-not",
+      "              volumes:",
+      "                - v:/data",
       "",
     ].join("\n");
     expect(containerStages(text)).toEqual([
@@ -179,14 +190,137 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
       "  push:",
       "    - stages:",
       "        - name: X",
-      "          volumes:",
-      "            - vol:/ms-playwright",
-      "          image: node:24",
+      "          jobs:",
+      "            - name: X",
+      "              volumes:",
+      "                - vol:/ms-playwright",
+      "              image: node:24",
       "",
     ].join("\n");
     expect(containerStages(text)).toEqual([
       { name: "X", image: "node:24", volumes: ["vol:/ms-playwright"] },
     ]);
+  });
+
+  it("`image:` 写在 **stage** 上 ⇒ 那不是容器格，而是**写错层**（整格起不来）", () => {
+    /* 现场（`cnb-0ka-1k5517hk3`）：上一版把 `image:` 写在 stage 级，平台 99ms
+     * 就答 `Runner does not enable Docker.` —— 容器都没起。两层语义不同，所以
+     * 两件事**分两个出口**：`containerStages()` 不认它，`stageLevelImages()` 点名它。 */
+    const text = [
+      "master:",
+      "  push:",
+      "    - stages:",
+      "        - name: X",
+      "          image: node:24",
+      "          volumes:",
+      "            - vol:/ms-playwright",
+      "          script: echo x",
+      "",
+    ].join("\n");
+    expect(containerStages(text)).toEqual([]);
+    expect(stageLevelImages(text)).toEqual([{ name: "X", image: "node:24" }]);
+  });
+
+  it("现役 `.cnb.yml` 没有写错层的 `image:`（这一条是那次 99ms 红的回归判据）", () => {
+    /* 这条判据的存在理由只有一个：**写错层不报错，整格起不来**。它是本仓唯一
+     * 一次「配置解析期就被平台挡下」的形态，而本地任何一条判据此前都看不见它。 */
+    expect(
+      stageLevelImages(CNB),
+      "这些格的 `image:` 写在 stage 上 —— 自托管上整格会以「Runner does not enable Docker.」失败，" +
+        "要拆成 `jobs:` + Job 级 `image:`（见 .cnb.yml 那两格的注释）",
+    ).toEqual([]);
+  });
+
+  it("容器格的 `env` / `timeout` 真的在 Job 那一层（不是「看着缩进对、其实挂在 stage 上」）", () => {
+    /* 这条判据是一次**真踩到的坑**：把 `image:` 下移到 Job 时，`env:` 下面的键与
+     * `timeout:` 的缩进没跟着走 —— YAML 于是把 `PLAYWRIGHT_DOWNLOAD_HOST` 之类读成
+     * **stage 项自己的键**（`env:` 变成 `null`），配置仍然合法、`env` 却空了。
+     *
+     * 而 `.cnb.yml` 里没有任何 YAML 解析器跑（判据全按行读原文），所以这种「缩进
+     * 半途而废」在本地可以全绿。这里按**层级**判：`timeout` 必须是项自己的键
+     * （`- name:` 深一层），`env` 的键必须与项自己的键**同层**（`env:` 深一层、它的键
+     * 再深一层，正好落在那里）—— 更浅的都在 stage 那一层，YAML 会把 `env` 读成 null。 */
+    /** @type {string[]} */
+    const offenders = [];
+    for (const name of ["浏览器安装", "E2E 关键流程"]) {
+      const block = stageBlock(CNB, name);
+      expect(block, `找不到 stage 项：${name}`).toBeTruthy();
+      /** 当前项的键应该在的缩进（`- name:` 缩进 + 2）。 */
+      /** @type {number | null} */
+      let keyIndent = null;
+      /** `env:` 的键应该在的缩进；`null` = 不在 `env` 里。 */
+      /** @type {number | null} */
+      let envKeyIndent = null;
+      for (const raw of String(block).split("\n")) {
+        if (raw.trim() === "") continue;
+        const indent = raw.length - raw.trimStart().length;
+        const body = raw.trim();
+        /* stage 块尾会带上**下一个 stage 之前那一段注释**（`stageBlock()` 只按缩进与
+         * 顶格键收尾），它不属于本项的任何一层 —— 跳过，否则深度判据会对着注释开火。 */
+        if (body.startsWith("#")) continue;
+        if (body.startsWith("- name:")) {
+          keyIndent = indent + 2;
+          envKeyIndent = null;
+          continue;
+        }
+        if (keyIndent === null) continue;
+        /* 列表项（`volumes:` 的 `- <卷名>:<路径>`）：它比 `volumes:` 深一层，
+         * 是**合法**的更深层键 —— 只有当 `env` 正在收键时越过它才算挂错层。 */
+        if (body.startsWith("- ")) {
+          if (envKeyIndent !== null && indent <= envKeyIndent) {
+            offenders.push(`${name}：${body}`);
+            envKeyIndent = null;
+          }
+          continue;
+        }
+        /* `env:` 正在收键：比 `env:` 还浅（`indent < envKeyIndent`）就是跑到了项上面
+         * —— `env` 会被读成 null，那几个键挂到 stage 那一层，而本判据要抓的就是这一次。
+         * ⚠️ 这一支必须排在「比项自己的键更浅 ⇒ 结束」**之前**：挂错层时它们的缩进
+         * 恰好等于项自己那一层，先判「结束」会悄悄放过去。 */
+        if (envKeyIndent !== null) {
+          if (indent >= envKeyIndent) continue;
+          offenders.push(
+            `${name}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`,
+          );
+          envKeyIndent = null;
+          continue;
+        }
+        /* 比项自己的键更浅 ⇒ 这一项结束了。 */
+        if (indent < keyIndent) {
+          keyIndent = null;
+          continue;
+        }
+        if (body.startsWith("env:")) {
+          /* `env:` 的键与项自己的键**同一层**（这是 YAML 的形态：`env:` 深一层，
+           * 它的键再深一层 —— 正好落在项自己的键那一层上）。 */
+          envKeyIndent = keyIndent;
+          if (indent !== keyIndent)
+            offenders.push(
+              `${name}：env:（缩进 ${indent}，该在 ${keyIndent}）`,
+            );
+          continue;
+        }
+        /* 不在 `env` 里：`timeout` 该在 `keyIndent` 那一层。 */
+        if (body.startsWith("timeout:") && indent !== keyIndent)
+          offenders.push(`${name}：${body}`);
+      }
+    }
+    expect(
+      offenders,
+      "这些键没挂在它那一项的正确层级上 —— YAML 会把它们读成 stage 项自己的键（`env` 变 null），" +
+        "而配置文件仍然合法、本地判据（按行读）也全绿",
+    ).toEqual([]);
+  });
+
+  it("写错层时读数把它排在**最前**（更重的结论不许排在更轻的后面）", () => {
+    const wrong = CNB.replace(
+      /  - name: 浏览器安装\n    jobs:\n      - name: 浏览器安装\n        image:/,
+      "  - name: 浏览器安装\n    image:",
+    );
+    expect(wrong).not.toBe(CNB);
+    const lines = describePlan(wrong);
+    expect(lines[1]).toContain("stage");
+    expect(lines[1]).toContain("浏览器安装");
   });
 });
 
@@ -214,7 +348,7 @@ describe("解析器的两处细节：注释与卷写法", () => {
     expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
     const broken = describePlan(
       CNB.replace(
-        /    volumes:\n      - comfyapp-ms-playwright:\/ms-playwright\n/g,
+        /        volumes:\n          - comfyapp-ms-playwright:\/ms-playwright\n/g,
         "",
       ),
     );
