@@ -111,6 +111,33 @@ function headRev() {
   return res.stdout.trim() || null;
 }
 
+/** 修订号的形状 —— 归因与校验都只认这一种（`--update` 写进去的必须是 40 位十六进制）。 */
+const REV_SHAPE = /^[0-9a-f]{40}$/;
+
+/**
+ * 基线里那条 `baselineRev` 到底能不能用来归因（**三档，不许合并**）。
+ *
+ * 为什么要把「取不到」拆成两句话（ISSUE #1988 的现场，也是 §12.13.3 留给
+ * 「下一个做按行数记账的棘轮的人」那条的第二句）：`null` 与「记了一个检出里
+ * 不存在的提交」都只说成「取不到」，于是读者拿到的动作是一句
+ * 「重跑一次 --update」—— 而对**基线过期**那一档，那恰恰是最容易做错的动作：
+ * 不先分清涨的这点体积该不该认就重记基线，等于把一次劣化记账放行。
+ * 两档的下一步完全不同，所以输出也必须不同。
+ *
+ * @returns {{kind: "recorded", rev: string} | {kind: "missing"} | {kind: "stale"}}
+ */
+function baselineRevState(rev) {
+  if (!rev || !REV_SHAPE.test(String(rev))) return { kind: "missing" };
+  const res = spawnSync("git", ["cat-file", "-e", `${rev}^{commit}`], {
+    encoding: "utf8",
+  });
+  /* 不可达 / 不是本检出的仓库 ⇒ 这一档是「基线过期」（ISSUE #653 的原话：
+   * 修订号通常是分支提交，合入后不再有 ref 指向，`git gc` 之后一律查不到）。 */
+  return res.status === 0
+    ? { kind: "recorded", rev: String(rev) }
+    : { kind: "stale" };
+}
+
 /**
  * 基线之后有多少次提交动过源码 —— 「基线过期」这个事实的**证据**。
  *
@@ -120,9 +147,9 @@ function headRev() {
  * 反应是「是不是抖动 / 是不是量错了」，而不是「这是那几次改动换来的」。归因不是
  * 锦上添花：**它决定下一步是压回去还是认账**（§13.5.4 的例外流程第一步）。
  *
- * 取不到修订号（旧基线 / git 不可用 / 修订号已不可达）时返回 `null` ——
- * 报告里说清「取不到」，而不是拿一个猜的数顶上去（口径的来历是一次真事故，
- * 见规范 §12.13.3 的 ISSUE #653 那一段）。
+ * 数不出来时返回 `null`：调用方说清是哪一档，而不是拿一个猜的数顶上去（口径的来历是
+ * 一次真事故，见规范 §12.13.3 的 ISSUE #653 那一段）。**分档不在这一层做** ——
+ * 「压根没记」与「记了但不可达」都由 `baselineRevState()` 先认，只把认得的那一种交进来。
  *
  * @param {string|null|undefined} rev
  * @returns {number|null}
@@ -201,7 +228,12 @@ function writeBaseline(m, note) {
     },
     /* 逐文件内容指纹：**只服务诊断**（哪个 chunk 变大了 / 哪个只是换了名），判定不读它。
      * 存指纹而不存名字：名字就是内容哈希，存名字等于把「同一份内容的两种显示形态」记成两笔账。 */
-    entries: m.entries.map((e) => ({ name: e.name, sha: e.sha, raw: e.raw, gzip: e.gzip })),
+    entries: m.entries.map((e) => ({
+      name: e.name,
+      sha: e.sha,
+      raw: e.raw,
+      gzip: e.gzip,
+    })),
   };
   fs.writeFileSync(BASELINE, `${JSON.stringify(payload, null, 2)}\n`);
 }
@@ -218,7 +250,9 @@ function kb(n) {
 function delta(n) {
   const sign = n > 0 ? "+" : n < 0 ? "-" : "±";
   const abs = Math.abs(n);
-  return abs < 1024 ? `${sign}${abs} B` : `${sign}${(abs / 1024).toFixed(1)} KB`;
+  return abs < 1024
+    ? `${sign}${abs} B`
+    : `${sign}${(abs / 1024).toFixed(1)} KB`;
 }
 
 /**
@@ -293,28 +327,55 @@ function main() {
       if (d.renamed.length) {
         console.log(
           `    · 同内容换名 ${d.renamed.length} 个（不计变化）：` +
-            d.renamed.slice(0, 3).map(([a, b]) => `${a} → ${b}`).join("、") +
+            d.renamed
+              .slice(0, 3)
+              .map(([a, b]) => `${a} → ${b}`)
+              .join("、") +
             (d.renamed.length > 3 ? " 等" : ""),
         );
       }
       if (d.added.length) {
         console.log(
           `    · 新增内容 ${d.added.length} 个，最大的 3 个：` +
-            d.added.slice().sort((a, b) => b.gzip - a.gzip).slice(0, 3)
-              .map((e) => `${e.name}（${kb(e.gzip)}）`).join("、"),
+            d.added
+              .slice()
+              .sort((a, b) => b.gzip - a.gzip)
+              .slice(0, 3)
+              .map((e) => `${e.name}（${kb(e.gzip)}）`)
+              .join("、"),
         );
       }
       if (d.grown.length) {
         console.log(`    · 同名且变大 ${d.grown.length} 个`);
       }
     } else if (base && !d) {
-      console.log("  （基线是旧格式、没有逐文件指纹：判定不受影响，只影响这段诊断）");
+      console.log(
+        "  （基线是旧格式、没有逐文件指纹：判定不受影响，只影响这段诊断）",
+      );
     }
     console.log("[bundle-budget] --report 模式：只出清单，不判失败 ✓");
     return 0;
   }
 
   if (UPDATE) {
+    /* 修订号取不到时**不许写基线**（ISSUE #1988 的现场）。
+     *
+     * 失效形态是静默的：`headRev()` 在非 git 检出里返回 `null`，写出来的基线
+     * 于是 `baselineRev: null` —— 判据不再报错，但那条归因**永久失效**，而它正是
+     * 判红时唯一能把「涨的这点是不是那几次改动换来的」说清楚的东西（见
+     * `commitsSinceBaseline` 的说明）。本仓 master 上就躺着一份这样的基线
+     * （生成于 2026-10-15，修订号 `b6c3c353`，而那个提交在检出里根本不存在），
+     * 此后每一跑 CI 都只报「基线修订号：取不到」—— 一条看起来在守、实际什么都没守的账。
+     *
+     * 所以把「写不下去」提前成一条当场能看见的拒绝：--update 只在真 git 检出里跑。 */
+    if (headRev() === null) {
+      console.error(
+        "[bundle-budget] 拒绝写入基线：取不到当前修订号（不在 git 检出里 / git 不可用）。\n" +
+          "  基线的 baselineRev 是判红时唯一能把上涨归因到「哪几次改动」的东西，" +
+          "写成 null 等于把这笔账静默掏空。请在完整 git 检出里重跑 --update。",
+      );
+      return 1;
+    }
     const before = base?.metric;
     const grew = before && now.gzip > before.gzip;
     const moreFiles = before && now.files > before.files;
@@ -327,6 +388,18 @@ function main() {
           `文件数 ${before.files} → ${now.files}（棘轮只许下降）。\n` +
           "  新增依赖若确实是想要的，请在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积，" +
           "评审确认后带 --allow-increase 重跑（规范 §13.5.4 的例外流程）。",
+      );
+      return 1;
+    }
+    /* 写盘前先校验形状：`--update` 落下去的必须是 40 位十六进制。只判「不是 null」不够 ——
+     * 读那一侧要拿它 `git cat-file -e` 去认「基线之后源码动过几次」，写成短哈希 / ref
+     * 这类形态在那边同样是查不到，只是把失效挪到了下一步。 */
+    const rev = headRev();
+    if (!REV_SHAPE.test(String(rev))) {
+      console.error(
+        "[bundle-budget] 拒绝写入基线：取不到可用的当前修订号（不在 git 检出里 / git 不可用）。\n" +
+          "  基线的 baselineRev 是判红时唯一能把上涨归因到「哪几次改动」的东西，" +
+          "写成 null（或别的形态）等于把这笔账静默掏空。请在完整 git 检出里重跑 --update。",
       );
       return 1;
     }
@@ -363,48 +436,73 @@ function main() {
   }
 
   console.log(line);
-  console.log(
-    `  基线：${fmt(base.metric)}（生成于 ${base.generatedAt}）`,
-  );
+  console.log(`  基线：${fmt(base.metric)}（生成于 ${base.generatedAt}）`);
 
   if (problems.length) {
     console.error("[bundle-budget] 违规（阻断）：\n  " + problems.join("\n  "));
     /* 归因先说：判红那一刻读者最该知道的是「这个读数取自哪一版源码」。
      * 缺了它，「涨了 493 字节」的第一反应必然落在「是不是抖动 / 是不是量错了」上，
      * 而不是「这是不是基线之后那几次改动换来的」—— 而后者才是下一步该回答的问题。
-     * 取不到修订号时**说清取不到**，不拿猜测顶替（同 §12.13.3.1）。 */
-    const since = commitsSinceBaseline(base.baselineRev);
-    if (since === null) {
+     * 修订号取不到 / 不可达时**说清是哪一档**：不拿猜测顶替，也不把两档混成一句
+     * 「取不到」—— 两档的下一步不同（§12.13.3 留给下一个按行数记账的棘轮的第二条）。 */
+    const state = baselineRevState(base.baselineRev);
+    if (state.kind === "missing") {
       console.error(
-        "  基线修订号：取不到（旧格式基线 / 不在 git 检出里 / 修订号已不可达）——\n" +
+        "  基线修订号：取不到（旧格式基线 / 不在 git 检出里）——\n" +
           "    无法判断这批读数与基线之间源码动过几次，先看下面逐文件诊断，或重跑一次 --update。",
       );
-    } else if (since > 0) {
+    } else if (state.kind === "stale") {
+      /* 「记了、但那个提交在本检出里不存在」与「没记」是两档（ISSUE #1988）：
+       * 后者的下一步是重记一次；前者是**基线过期**，重记之前必须先分清涨的这点体积
+       * 该不该认 —— 这正是 §13.5.4 例外流程的第一步，反过来做就是把劣化记账放行。 */
       console.error(
-        `  基线修订号：${String(base.baselineRev).slice(0, 8)}（其后本检出上有 ${since} 次提交）——\n` +
-          "    这批读数取自**基线之后的源码**，涨幅可能正是那几次改动换来的：" +
-          "先分清「它是不是想要的」再决定压回去还是认账（§13.5.4 例外流程）。",
+        `  基线修订号：${String(base.baselineRev).slice(0, 8)} 在本检出里不可达（基线过期 / 浅克隆）——\n` +
+          "    无法判断这批读数与基线之间源码动过几次。**别直接 --update 重记**：" +
+          "先按下面逐文件诊断分清「涨了」与「换了名」，确认这点体积该不该认账；" +
+          "确认之后再带 --allow-increase 重记基线（§13.5.4 例外流程）。",
       );
     } else {
-      console.error(
-        `  基线修订号：${String(base.baselineRev).slice(0, 8)}（就是本检出的 HEAD）——\n` +
-          "    基线取自同一版源码，那么这次上涨来自**未提交的改动**。",
-      );
+      const since = commitsSinceBaseline(state.rev);
+      if (since === null) {
+        console.error(
+          "  基线修订号：取不到 ——\n" +
+            "    无法判断这批读数与基线之间源码动过几次，先看下面逐文件诊断，或重跑一次 --update。",
+        );
+      } else if (since > 0) {
+        console.error(
+          `  基线修订号：${String(base.baselineRev).slice(0, 8)}（其后本检出上有 ${since} 次提交）——\n` +
+            "    这批读数取自**基线之后的源码**，涨幅可能正是那几次改动换来的：" +
+            "先分清「它是不是想要的」再决定压回去还是认账（§13.5.4 例外流程）。",
+        );
+      } else {
+        console.error(
+          `  基线修订号：${String(base.baselineRev).slice(0, 8)}（就是本检出的 HEAD）——\n` +
+            "    基线取自同一版源码，那么这次上涨来自**未提交的改动**。",
+        );
+      }
     }
     const d = diagnose(now, base);
     if (d) {
       /* 诊断是**给人看的**、不参与判定：比的是内容指纹，名字换了不算变化。 */
       const lines = [];
       if (d.added.length) {
-        lines.push(`  新增内容 ${d.added.length} 个（指纹在基线里找不到），最大的 5 个：`);
-        for (const e of d.added.slice().sort((a, b) => b.gzip - a.gzip).slice(0, 5)) {
+        lines.push(
+          `  新增内容 ${d.added.length} 个（指纹在基线里找不到），最大的 5 个：`,
+        );
+        for (const e of d.added
+          .slice()
+          .sort((a, b) => b.gzip - a.gzip)
+          .slice(0, 5)) {
           lines.push(`    · ${e.name}（gzip ${kb(e.gzip)}）`);
         }
       }
       if (d.renamed.length) {
         lines.push(
           `  同内容换名 ${d.renamed.length} 个（不计变化）：` +
-            d.renamed.slice(0, 3).map(([a, b]) => `${a} → ${b}`).join("、") +
+            d.renamed
+              .slice(0, 3)
+              .map(([a, b]) => `${a} → ${b}`)
+              .join("、") +
             (d.renamed.length > 3 ? " 等" : ""),
         );
       }
