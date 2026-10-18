@@ -47,10 +47,57 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+/**
+ * 读目录时用到的那两个 fs 动作（薄壳，不是 `typeof fs`）。
+ *
+ * 为什么本模块**没有**因为多了一个 import 就突然要补这几处类型：`noUncheckedIndexedAccess`
+ * 开着，而下标取值的 `| undefined` 在「只被 node 直接执行」的文件里从不进 tsc 的图 ——
+ * 现在 `run-affected-tests.mjs` import 了本模块（布局常量只许有一份），它就跟其余
+ * 提交门槛脚本一样进了判决面，那几处**一直存在**的空位当场显形。修法按语义补，
+ * 不是 `@ts-nocheck` 蒙过去。
+ *
+ * @typedef {{
+ *   readdirSync: (dir: string) => string[],
+ *   readFileSync: (file: string, encoding?: string) => string,
+ * }} FsView
+ */
+
+/** @type {FsView} */
+const realFs = {
+  readdirSync: (dir) => fs.readdirSync(dir).map(String),
+  /* 编码**固定 utf8**，不跟着入参走：`fs.readFileSync` 的重载要的是 `BufferEncoding`
+   * 而不是任意 string（接缝上收的是「读文本」这件事，不是编码开关）。 */
+  readFileSync: (file) => fs.readFileSync(file, "utf8"),
+};
+
 const LEDGER_NAME = "comfy-precommit-timing.jsonl";
 
 /** 默认看最近多少次。与钩子的节奏（一天几十次提交）比，10 次是「一眼能读完」的一屏。 */
 const DEFAULT_LAST = 10;
+
+/**
+ * 组 C 分文件读数的**落盘布局**（本模块是账本布局的所有者，写的一侧 import 这里）。
+ *
+ * 为什么要有出处：清单文件名与 junit 前缀各有两个读者/写者（`run-affected-tests.mjs`
+ * 写、本模块读），抄成两份字面量的漂移形态是静默的 —— 改名那一侧照常跑、另一侧
+ * 从此读不到，而「读不到」在这里长得和「这次没有读数」一模一样（§13.5.8.3 那句
+ * 「判据只落形态」讲的正是这种）。
+ */
+export const C_FILES_PREFIX = "comfy-c-";
+/** 这次真正要跑的清单（一行一个路径）—— 分文件读数的**分母**，缺它就没有对账。 */
+export const C_MANIFEST_NAME = "comfy-c-files.txt";
+
+/**
+ * 一块 / 一遍的 junit 落点名。`attempt`：1 = 首跑（与三个组抢核），2 = 隔离复跑。
+ *
+ * @param {string} dir
+ * @param {number} chunkId
+ * @param {number} attempt
+ * @returns {string}
+ */
+export function cFileXmlName(dir, chunkId, attempt) {
+  return path.join(dir, `${C_FILES_PREFIX}${chunkId}-${attempt}.xml`);
+}
 
 // ── 账本位置 ────────────────────────────────────────────────────────────
 
@@ -170,10 +217,12 @@ export function readRuns(gitDir) {
 function stepsOf(run) {
   const steps = run.steps;
   return Array.isArray(steps)
-    ? steps.filter((s) => s && typeof s.name === "string").map((s) => ({
-        name: String(s.name),
-        ms: Number(s.ms) || 0,
-      }))
+    ? steps
+        .filter((s) => s && typeof s.name === "string")
+        .map((s) => ({
+          name: String(s.name),
+          ms: Number(s.ms) || 0,
+        }))
     : [];
 }
 
@@ -184,11 +233,103 @@ function stepsOf(run) {
 function groupsOf(run) {
   const groups = run.groups;
   return Array.isArray(groups)
-    ? groups.filter((g) => g && typeof g.name === "string").map((g) => ({
-        name: String(g.name),
-        ms: Number(g.ms) || 0,
-      }))
+    ? groups
+        .filter((g) => g && typeof g.name === "string")
+        .map((g) => ({
+          name: String(g.name),
+          ms: Number(g.ms) || 0,
+        }))
     : [];
+}
+
+/**
+ * 一份 vitest junit XML → 每个用例文件的耗时。
+ *
+ * 形状是按 vitest 5.0.3 的实际输出定的，不是猜的：外层 `<testsuites name="vitest tests">`
+ * 是汇总（它的 `time` 是各 suite 之和，**不是墙钟**），每个文件是一个内层
+ * `<testsuite name="tests/x.test.ts" … time="0.33">`。所以这里只取内层，且
+ * `<testsuite\b` 这个词边界恰好挡掉外层那个 `testsuites`（少一个 `\b` 就会把汇总当文件）。
+ *
+ * `time` 的单位是**秒**（浮点），转成 ms 与账本里其它读数同刻度 —— 两份刻度并排摆出来
+ * 就是「哪个数是什么单位」重新变成一个问题（§13.5.8.3 里时钟那一段的同一条理由）。
+ *
+ * @param {string} xml
+ * @returns {{name: string, ms: number}[]} 解析不出的 suite 跳过（调用方计数）
+ */
+export function parseJunitXml(xml) {
+  /** @type {{name: string, ms: number}[]} */
+  const out = [];
+  for (const m of String(xml).matchAll(/<testsuite\b[^>]*>/g)) {
+    const tag = m[0];
+    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+    const time = /\btime="([^"]*)"/.exec(tag)?.[1];
+    if (!name || time === undefined) continue;
+    const secs = Number(time);
+    if (!Number.isFinite(secs) || secs < 0) continue;
+    out.push({ name, ms: Math.round(secs * 1000) });
+  }
+  return out;
+}
+
+/**
+ * 把账本目录里的分文件读数收成一份。
+ *
+ * 合并规则按 **(块, 遍) 升序**，后写的覆盖先写的 —— 于是第 2 遍（`--no-file-parallelism`
+ * 的隔离复跑）赢。这不是排版偏好：首跑那组数是在「与三个组抢核」的条件下测的，
+ * 拿它冒充「这个文件有多贵」会把负载读成文件自己的成本（§13.6.4 那一族）。
+ *
+ * 对账那一格（`expected` / `missing`）是这份读数**能不能被拿来砍线**的前提：
+ * junit 里少一份，与「这次清单就是少一份」在数字上逐字同形，而前者是那两份文件
+ * **一次都没被计时**。所以缺多少必须说出来，不能只打表。
+ *
+ * @param {{dir: string, fsLike?: FsView}} input
+ * @returns {{files: {name: string, ms: number}[], expected: number, missing: number, dropped: number}}
+ */
+export function collectFileTimings({ dir, fsLike = realFs }) {
+  /** @type {Map<string, number>} */
+  const byName = new Map();
+  let dropped = 0;
+  let names = [];
+  try {
+    names = fsLike.readdirSync(dir);
+  } catch {
+    return { files: [], expected: 0, missing: 0, dropped: 0 };
+  }
+  const xmls = names
+    .filter((n) => n.startsWith(C_FILES_PREFIX) && n.endsWith(".xml"))
+    .sort((a, b) => {
+      const pa = new RegExp(`^${C_FILES_PREFIX}(\\d+)-(\\d+)\\.xml$`).exec(a);
+      const pb = new RegExp(`^${C_FILES_PREFIX}(\\d+)-(\\d+)\\.xml$`).exec(b);
+      if (!pa || !pb) return a < b ? -1 : 1;
+      return Number(pa[1]) - Number(pb[1]) || Number(pa[2]) - Number(pb[2]);
+    });
+  for (const file of xmls) {
+    let text = "";
+    try {
+      text = fsLike.readFileSync(path.join(dir, file), "utf8");
+    } catch {
+      dropped += 1;
+      continue;
+    }
+    const entries = parseJunitXml(text);
+    if (entries.length === 0) dropped += 1;
+    for (const e of entries) byName.set(e.name, e.ms);
+  }
+  const files = [...byName.entries()].map(([name, ms]) => ({ name, ms }));
+  /* 清单读不到 ⇒ `expected = 0`，而**不是**「等于取到读数的份数」。
+   * 「拿不到结论」与「结论是一致」必须分开（§13.5.20 那条空清单同口径）。 */
+  let expected = 0;
+  try {
+    expected = fsLike
+      .readFileSync(path.join(dir, C_MANIFEST_NAME), "utf8")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean).length;
+  } catch {
+    expected = 0;
+  }
+  const missing = expected > 0 ? Math.max(0, expected - byName.size) : 0;
+  return { files, expected, missing, dropped };
 }
 
 /**
@@ -203,9 +344,12 @@ export function median(values) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1
-    ? sorted[mid]
-    : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  /* 下标取值在这里会是 `number | undefined`（`noUncheckedIndexedAccess`）—— 上面那条
+   * `length === 0` 早退保证了 `mid < length`，但类型看不出来。收成 0 而不是断言：
+   * 真取空时中位数退化成一个可读的 0，比在记账线路里抛出来好（记账不阻断）。 */
+  const upper = sorted[mid] ?? 0;
+  const lower = sorted[mid - 1] ?? upper;
+  return sorted.length % 2 === 1 ? upper : Math.round((lower + upper) / 2);
 }
 
 /**
@@ -227,9 +371,7 @@ function secs(ms) {
 export function formatReport(runs, opts = {}) {
   const last = opts.last ?? DEFAULT_LAST;
   if (runs.length === 0) {
-    return (
-      "[precommit-timing] 还没有记录 —— 提交一次就会有一条（账本在 .git/，本机、不入库）。\n"
-    );
+    return "[precommit-timing] 还没有记录 —— 提交一次就会有一条（账本在 .git/，本机、不入库）。\n";
   }
   const shown = runs.slice(-last);
   const lines = [
@@ -244,7 +386,9 @@ export function formatReport(runs, opts = {}) {
   lines.push("");
   lines.push("  逐次（新 → 旧）：");
   for (const run of [...shown].reverse()) {
-    const at = String(run.at ?? "?").replace("T", " ").slice(0, 19);
+    const at = String(run.at ?? "?")
+      .replace("T", " ")
+      .slice(0, 19);
     const staged = Number(run.stagedFiles) || 0;
     const code = Number(run.exitCode) || 0;
     const groups = groupsOf(run)
@@ -288,7 +432,58 @@ export function formatReport(runs, opts = {}) {
     for (const step of ranked.slice(0, 10)) {
       lines.push(
         `    ${secs(step.ms).padStart(7)}  ${step.name}` +
-          (step.n < shown.length ? `（${step.n}/${shown.length} 次有记录）` : ""),
+          (step.n < shown.length
+            ? `（${step.n}/${shown.length} 次有记录）`
+            : ""),
+      );
+    }
+  }
+  /* ── 组 C 的分文件读数 ────────────────────────────────────────────────
+   * 这张表是**砍线的依据**，所以它必须自带分母与对账，否则它就是另一个「看起来有数
+   * 其实没法比」的中位数表（§13.5.8.2.1 那句「记账自己的开销也要量，它会冒充判据的
+   * 成本」是同一条纪律的另一半）。 */
+  /** @type {Map<string, number[]>} */
+  const byFile = new Map();
+  let filesSeen = 0;
+  for (const run of shown) {
+    const arr = Array.isArray(run.files) ? run.files : [];
+    filesSeen = Math.max(filesSeen, arr.length);
+    for (const f of arr) {
+      if (!f || typeof f.name !== "string") continue;
+      byFile.set(f.name, [...(byFile.get(f.name) ?? []), Number(f.ms) || 0]);
+    }
+  }
+  if (byFile.size > 0) {
+    const ranked = [...byFile.entries()]
+      .map(([name, values]) => ({ name, ms: median(values), n: values.length }))
+      .sort((a, b) => b.ms - a.ms);
+    const lastRun = shown[shown.length - 1] ?? {};
+    const expected = Number(lastRun.filesExpected) || 0;
+    const missing = Number(lastRun.filesMissing) || 0;
+    const cGroup = groupsOf(lastRun).find((g) => g.name === "C");
+    const sumMs = ranked.reduce(
+      (s, r) => s + median(byFile.get(r.name) ?? []),
+      0,
+    );
+    lines.push("");
+    lines.push(
+      `  组 C 各文件（中位数，前 ${Math.min(10, ranked.length)} 名；` +
+        `共 ${ranked.length} 份有读数` +
+        (expected > 0 ? ` / 清单 ${expected} 份` : "") +
+        (missing > 0 ? `，缺 ${missing} 份**没有读数 —— 不是 0 秒**` : "") +
+        "）：",
+    );
+    for (const f of ranked.slice(0, 10)) {
+      lines.push(
+        `    ${secs(f.ms).padStart(7)}  ${f.name}` +
+          (f.n < shown.length ? `（${f.n}/${shown.length} 次有记录）` : ""),
+      );
+    }
+    if (cGroup) {
+      lines.push(
+        `    对账（最近一次）：分文件之和 ${secs(sumMs)} ⇄ 组 C 墙钟 ${secs(cGroup.ms)} —— ` +
+          `差 ${secs(Math.max(0, cGroup.ms - sumMs))} 是 vitest 启动 + 收集/transform + ` +
+          "worker 拉起（junit 的 time 只算测试阶段），所以这张表用来**排序**，不能当墙钟",
       );
     }
   }
@@ -309,9 +504,14 @@ function collect(argv, name) {
   /** @type {string[]} */
   const out = [];
   for (let i = 0; i < argv.length; i += 1) {
+    /* 下标取值在 `noUncheckedIndexedAccess` 下是 `string | undefined`。这里按「取不到
+     * 就当没有这一格」处理而不是断言 —— 与文件头那条同口径：记账线路**不阻断**提交，
+     * 参数形状读不出只是少一格账，抛出来才是把记账变成了必经之路。 */
     const arg = argv[i];
+    if (arg === undefined) continue;
     if (arg === name) {
-      if (i + 1 < argv.length) out.push(argv[i + 1]);
+      const next = argv[i + 1];
+      if (next !== undefined) out.push(next);
       i += 1;
     } else if (arg.startsWith(`${name}=`)) {
       out.push(arg.slice(name.length + 1));
@@ -353,8 +553,16 @@ export function recordRun(argv, cwd = process.cwd()) {
   const gitDir = resolveGitDir(cwd);
   const groups = parseTimings(collect(argv, "--group"));
   const steps = parseTimings(collect(argv, "--step"));
-  const declared = collect(argv, "--group").length + collect(argv, "--step").length;
+  const declared =
+    collect(argv, "--group").length + collect(argv, "--step").length;
   const dropped = declared - groups.length - steps.length;
+  /* 组 C 的分文件读数：钩子只把**目录**递过来（shell 里解析 XML 会变成第二份实现，
+   * 而那正是本钩子刻意不写的东西）。没递目录时这一格是空数组 —— 与「这次跑了但没有
+   * 明细」不同形，因为 `filesExpected` 会是 0，报表那一侧照实说「没有清单」。 */
+  const junitDir = value(argv, "--junit-dir") || "";
+  const cRead = junitDir
+    ? collectFileTimings({ dir: junitDir })
+    : { files: [], expected: 0, missing: 0, dropped: 0 };
 
   const record = {
     at: new Date().toISOString(),
@@ -363,6 +571,9 @@ export function recordRun(argv, cwd = process.cwd()) {
     stagedFiles: Math.round(Number(value(argv, "--staged")) || 0),
     groups,
     steps,
+    files: cRead.files,
+    filesExpected: cRead.expected,
+    filesMissing: cRead.missing,
   };
   const { ok, reason } = appendRun({ gitDir, record });
   if (!ok) {
@@ -374,8 +585,21 @@ export function recordRun(argv, cwd = process.cwd()) {
   }
   process.stdout.write(
     `[precommit-timing] 已记录本次耗时：总 ${secs(record.totalMs)}` +
-      `（${groups.length} 组 / ${steps.length} 步）\n` +
-      (dropped > 0 ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n` : ""),
+      `（${groups.length} 组 / ${steps.length} 步` +
+      (cRead.files.length > 0
+        ? ` / 组 C 分文件 ${cRead.files.length} 份`
+        : "") +
+      "）\n" +
+      (cRead.missing > 0
+        ? `[precommit-timing] 组 C 清单 ${cRead.expected} 份里有 ${cRead.missing} 份没给出读数` +
+          "（加载即炸 / 被跳过 / reporter 没记上）—— 它们**不是 0 秒**，别按 0 算进砍线\n"
+        : "") +
+      (cRead.dropped > 0
+        ? `[precommit-timing] 有 ${cRead.dropped} 个 junit 读数解析不出，已跳过\n`
+        : "") +
+      (dropped > 0
+        ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n`
+        : ""),
   );
   return 0;
 }
@@ -389,7 +613,9 @@ function viewRun(argv) {
   if (flag(argv, "--clear")) {
     const file = ledgerPath(gitDir);
     if (!file) {
-      process.stderr.write("[precommit-timing] 不在 git 检出里，没有账本可清。\n");
+      process.stderr.write(
+        "[precommit-timing] 不在 git 检出里，没有账本可清。\n",
+      );
       return 0;
     }
     try {

@@ -15,7 +15,13 @@
  * 账本」的输入端判 —— 记账失败时退出码仍是 0。
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -58,6 +64,10 @@ type LedgerRun = {
   stagedFiles: number;
   groups: { name: string; ms: number }[];
   steps: { name: string; ms: number }[];
+  /** 组 C 的分文件读数（后加的一格，旧记录里没有 —— 报表那侧不许为它打空表）。 */
+  files?: { name: string; ms: number }[];
+  filesExpected?: number;
+  filesMissing?: number;
 };
 
 /**
@@ -108,21 +118,24 @@ function makeRepo() {
 describe("pre-commit 耗时账：记账与读账", () => {
   it("record 写一条、读账能读回同样的数", () => {
     const repo = makeRepo();
-    const wrote = run([
-      "record",
-      "--total-ms",
-      "69400",
-      "--exit",
-      "0",
-      "--staged",
-      "3",
-      "--group",
-      "A=3500",
-      "--group",
-      "C=23400",
-      "--step",
-      "文件结构硬规则=820",
-    ], repo);
+    const wrote = run(
+      [
+        "record",
+        "--total-ms",
+        "69400",
+        "--exit",
+        "0",
+        "--staged",
+        "3",
+        "--group",
+        "A=3500",
+        "--group",
+        "C=23400",
+        "--step",
+        "文件结构硬规则=820",
+      ],
+      repo,
+    );
     expect(wrote.code).toBe(0);
     expect(wrote.out).toContain("已记录本次耗时");
     /* 账本**在 `.git/` 下**，不是仓库根 —— 这是「不入库 + 不跨检出污染」的落点判据。 */
@@ -149,24 +162,25 @@ describe("pre-commit 耗时账：记账与读账", () => {
       run(["record", "--total-ms", String(total), "--exit", "0"], repo);
     }
     const runs = readLedger(run(["--json"], repo));
-    expect(runs.map((r) => r.totalMs)).toEqual([
-      10000, 20000, 30000,
-    ]);
+    expect(runs.map((r) => r.totalMs)).toEqual([10000, 20000, 30000]);
   });
 
   it("解析不出的耗时读数被丢掉并计数，但整条记录仍然落盘", () => {
     const repo = makeRepo();
-    const wrote = run([
-      "record",
-      "--total-ms",
-      "1000",
-      "--group",
-      "A=not-a-number",
-      "--step",
-      "没有等号",
-      "--group",
-      "B=200",
-    ], repo);
+    const wrote = run(
+      [
+        "record",
+        "--total-ms",
+        "1000",
+        "--group",
+        "A=not-a-number",
+        "--step",
+        "没有等号",
+        "--group",
+        "B=200",
+      ],
+      repo,
+    );
     expect(wrote.code).toBe(0);
     expect(wrote.out).toContain("2 条耗时读数解析不出");
     expect(firstRun(run(["--json"], repo)).groups).toEqual([
@@ -193,17 +207,20 @@ describe("pre-commit 耗时账：记账与读账", () => {
   it("报告里有中位数、各组、逐步骤（人看的那一档不能只是原始 dump）", () => {
     const repo = makeRepo();
     for (const total of [20000, 40000]) {
-      run([
-        "record",
-        "--total-ms",
-        String(total),
-        "--exit",
-        "0",
-        "--group",
-        "C=10000",
-        "--step",
-        "prettier 格式硬闸=2900",
-      ], repo);
+      run(
+        [
+          "record",
+          "--total-ms",
+          String(total),
+          "--exit",
+          "0",
+          "--group",
+          "C=10000",
+          "--step",
+          "prettier 格式硬闸=2900",
+        ],
+        repo,
+      );
     }
     const view = run([], repo);
     expect(view.code).toBe(0);
@@ -224,7 +241,9 @@ describe("pre-commit 耗时账：记账与读账", () => {
   it("--clear 清空账本（且裸开关不带值时也认）", () => {
     const repo = makeRepo();
     run(["record", "--total-ms", "1000", "--exit", "0"], repo);
-    expect(existsSync(join(repo, ".git", "comfy-precommit-timing.jsonl"))).toBe(true);
+    expect(existsSync(join(repo, ".git", "comfy-precommit-timing.jsonl"))).toBe(
+      true,
+    );
     const cleared = run(["--clear"], repo);
     expect(cleared.code).toBe(0);
     expect(cleared.out).toContain("已清空");
@@ -235,7 +254,11 @@ describe("pre-commit 耗时账：记账与读账", () => {
     const repo = makeRepo();
     run(["record", "--total-ms", "1000", "--exit", "0"], repo);
     const ledger = join(repo, ".git", "comfy-precommit-timing.jsonl");
-    writeFileSync(ledger, `${readFileSync(ledger, "utf8")}{"totalMs": 4242`, "utf8");
+    writeFileSync(
+      ledger,
+      `${readFileSync(ledger, "utf8")}{"totalMs": 4242`,
+      "utf8",
+    );
     const runs = readLedger(run(["--json"], repo));
     expect(runs).toHaveLength(1);
   });
@@ -293,7 +316,7 @@ describe("pre-commit 耗时账：钩子的接线", () => {
     const timing = readFileSync(TIMING_SH, "utf8");
     expect(
       timing.includes('"$@" || _ts_rc=$?'),
-      "timed_step 又回到裸跑 `\"$@\"` —— 失败那一条会在 printf 之前被 `set -e` 截掉，" +
+      'timed_step 又回到裸跑 `"$@"` —— 失败那一条会在 printf 之前被 `set -e` 截掉，' +
         "于是账本里的「最后一步」成了拦下者**前面**那一步，而「哪一步拦的我」这个问题没有答案",
     ).toBe(true);
   });
@@ -310,9 +333,10 @@ describe("pre-commit 耗时账：钩子的接线", () => {
       body.includes("$(now_ms)"),
       "timed_step 又用命令替换取时钟 —— 那一步的钱会记进判据的读数里",
     ).toBe(false);
-    expect(body.includes("set_now_ms _ts_start") && body.includes("set_now_ms _ts_now")).toBe(
-      true,
-    );
+    expect(
+      body.includes("set_now_ms _ts_start") &&
+        body.includes("set_now_ms _ts_now"),
+    ).toBe(true);
   });
 
   it("`LOGD` 与 `COMFY_TIMING_SH` 都导出（D 组是新 shell，未导出就读不到）", () => {
@@ -333,6 +357,184 @@ describe("pre-commit 耗时账：钩子的接线", () => {
     /* 记账侧唯一允许的非零退出路径是「参数错」，落盘失败一律 return 0。 */
     expect(timing).toMatch(/不影响提交/);
     /* 钩子侧对 recorder 的调用不许把它的退出码带进提交的退出码。 */
-    expect(hook).toMatch(/precommit-timing\.mjs record "\$@" \|\| true|precommit-timing\.mjs record/);
+    expect(hook).toMatch(
+      /precommit-timing\.mjs record "\$@" \|\| true|precommit-timing\.mjs record/,
+    );
+  });
+});
+
+/**
+ * 一份最小可用的 vitest junit 输出。
+ *
+ * 形状按实测写：外层 `<testsuites name="vitest tests">` 是**汇总**（它的 `time` 是各
+ * suite 之和，不是墙钟、更不是某个文件），每个文件是一个内层
+ * `<testsuite name="tests/x.test.ts" time="0.33">`。判据若只喂「一个 testsuite」的简化
+ * 形状，就正好漏掉这条坑：把汇总当成一个文件，读数凭空多一份。
+ *
+ * @param {[string, number][]} rows `[文件, 秒]`
+ */
+function junitXml(rows: [string, number][]) {
+  const suites = rows
+    .map(
+      ([name, secs]) =>
+        `    <testsuite name="${name}" timestamp="2026-10-18T00:00:00.000Z" ` +
+        `hostname="H" tests="1" failures="0" errors="0" skipped="0" time="${secs}">` +
+        `\n        <testcase classname="${name}" name="t" time="${secs}"></testcase>` +
+        `\n    </testsuite>`,
+    )
+    .join("\n");
+  return (
+    `<?xml version="1.0" encoding="UTF-8" ?>\n` +
+    `<testsuites name="vitest tests" tests="${rows.length}" failures="0" errors="0" time="9">\n` +
+    `${suites}\n</testsuites>\n`
+  );
+}
+
+/**
+ * 落一个「组 C 读数」目录：清单（分母）+ 每块每遍各一个 XML。
+ *
+ * @param {string[]} files 这次要跑的清单
+ * @param {Record<string, [string, number][]>} xmls 文件名 → 该文件里的 suite
+ */
+function makeCDir(
+  files: string[],
+  xmls: Record<string, [string, number][]>,
+): string {
+  const dir = mkdtempSync(join(tmpdir(), "precommit-c-"));
+  tmpDirs.push(dir);
+  writeFileSync(
+    join(dir, "comfy-c-files.txt"),
+    `${files.join("\n")}\n`,
+    "utf8",
+  );
+  for (const [name, rows] of Object.entries(xmls)) {
+    writeFileSync(join(dir, name), junitXml(rows), "utf8");
+  }
+  return dir;
+}
+
+describe("组 C 的分文件读数：自带分母与对账，否则它只是另一张没法比的表", () => {
+  it("清单 3 份而 junit 只给出 2 份 ⇒ 缺的那份被点名，不许当成 0 秒", () => {
+    const repo = makeRepo();
+    const dir = makeCDir(
+      ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"],
+      {
+        "comfy-c-0-1.xml": [
+          ["tests/a.test.ts", 1.5],
+          ["tests/b.test.ts", 0.25],
+        ],
+      },
+    );
+    const wrote = run(
+      ["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir],
+      repo,
+    );
+    expect(wrote.code).toBe(0);
+    expect(wrote.out).toContain("组 C 分文件 2 份");
+    expect(wrote.out).toContain("1 份没给出读数");
+    const record = firstRun(run(["--json"], repo));
+    expect(record.files).toEqual([
+      { name: "tests/a.test.ts", ms: 1500 },
+      { name: "tests/b.test.ts", ms: 250 },
+    ]);
+    expect(record.filesExpected).toBe(3);
+    expect(record.filesMissing).toBe(1);
+  });
+
+  it("同一文件在首跑与隔离复跑里都有读数 ⇒ 取复跑那一个", () => {
+    const repo = makeRepo();
+    /* 首跑与 A/B/D 抢核 ⇒ 6s；隔离复跑 ⇒ 1s。拿 6s 排序会把**负载**读成**文件的成本**
+     * （§13.6.4 那一族），所以合并规则必须让第二遍赢，而不是「谁后读到谁赢」。 */
+    const dir = makeCDir(["tests/a.test.ts"], {
+      "comfy-c-0-1.xml": [["tests/a.test.ts", 6]],
+      "comfy-c-0-2.xml": [["tests/a.test.ts", 1]],
+    });
+    run(
+      ["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir],
+      repo,
+    );
+    expect(firstRun(run(["--json"], repo)).files).toEqual([
+      { name: "tests/a.test.ts", ms: 1000 },
+    ]);
+  });
+
+  it("没有清单 ⇒ 不许把「取到读数的份数」冒充分母", () => {
+    const dir = mkdtempSync(join(tmpdir(), "precommit-c-nomanifest-"));
+    tmpDirs.push(dir);
+    writeFileSync(
+      join(dir, "comfy-c-0-1.xml"),
+      junitXml([["tests/a.test.ts", 2]]),
+      "utf8",
+    );
+    const repo = makeRepo();
+    run(
+      ["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir],
+      repo,
+    );
+    const record = firstRun(run(["--json"], repo));
+    expect(record.files).toHaveLength(1);
+    expect(record.filesExpected).toBe(0);
+    expect(record.filesMissing).toBe(0);
+  });
+
+  it("报表：降序只打前 10、汇总不当文件，并给「分文件之和 ⇄ 组 C 墙钟」的对账", () => {
+    const repo = makeRepo();
+    const many = Array.from(
+      { length: 12 },
+      (_unused, i) => `tests/f${String(i).padStart(2, "0")}.test.ts`,
+    );
+    const dir = makeCDir(many, {
+      "comfy-c-0-1.xml": many.map(
+        (name, i) => [name, i + 1] as [string, number],
+      ),
+    });
+    run(
+      [
+        "record",
+        "--total-ms",
+        "30000",
+        "--exit",
+        "0",
+        "--group",
+        "C=20000",
+        "--junit-dir",
+        dir,
+      ],
+      repo,
+    );
+    const report = run([], repo).out;
+    expect(report).toContain(
+      "组 C 各文件（中位数，前 10 名；共 12 份有读数 / 清单 12 份）",
+    );
+    expect(report).toContain("tests/f11.test.ts");
+    /* 12 行只留最贵 10 行 —— 一屏读不完的表等于没人读（§13.5.8.3）。 */
+    expect(report).not.toContain("tests/f01.test.ts");
+    /* 外层 `<testsuites>` 不是文件；把它算进去就凭空多一份，而那份的时长是各 suite 之和。 */
+    expect(report).not.toContain("vitest tests");
+    expect(report).toContain("分文件之和 78.0s ⇄ 组 C 墙钟 20.0s");
+    expect(report).toContain("不能当墙钟");
+  });
+
+  it("旧记录（没有 files 那一格）⇒ 不打这一节，也不打一张空表冒充读过", () => {
+    const repo = makeRepo();
+    run(
+      ["record", "--total-ms", "9000", "--exit", "0", "--group", "C=8000"],
+      repo,
+    );
+    const report = run([], repo).out;
+    expect(report).not.toContain("组 C 各文件");
+    expect(report).not.toContain("分文件之和");
+  });
+
+  it("接线：钩子把 `--junit-dir` 递进 record 的参数里，且 shell 不自己解析 XML", () => {
+    const hook = readFileSync(HOOK, "utf8");
+    const atDir = hook.indexOf('--junit-dir "$LOGD"');
+    const atCall = hook.indexOf('precommit-timing.mjs record "$@"');
+    expect(atDir).toBeGreaterThan(-1);
+    /* 顺序要紧：`$@` 是在 record 那一行之前拼完的 —— 写在后面就永远传不进去，
+     * 而这一族的失效形态从来都是「判据在场、结论恒空」。 */
+    expect(atDir).toBeLessThan(atCall);
+    /* shell 里不许长出第二份 XML 解析（与本模块各解一遍，漂了没人看见）。 */
+    expect(hook).not.toContain("testsuite");
   });
 });
