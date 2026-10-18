@@ -83,10 +83,13 @@ export function shouldRecord({ exitCode, dryRun, extra = [] }) {
 }
 
 /**
+ * 跑一次产物级护栏（**导出**：定时那一跑的入口 `ci-daily-build.mjs` 用它，
+ * 判据与记账仍是这一份 —— 两处各写一遍就是两条产物链，§12.12）。
+ *
  * @param {string[]} argv
  * @returns {number}
  */
-function main(argv) {
+export function main(argv) {
   const dryRun = argv.includes("--dry-run");
   for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const parsed = parseLedgerFlag(argv, flag);
