@@ -26,6 +26,7 @@ import {
   buildTarStream,
   checkCommands,
   diskFacts,
+  dockerfileHint,
   fetchNodePlan,
   imagePlan,
   imagePlanLayersAreOrdered,
@@ -326,6 +327,83 @@ describe("main：缺版本时不猜", () => {
     expect(text).toContain("docker cp");
     expect(text).toContain("COMFYAPP_NODE_IMAGE");
     expect(out.dockerfile).toContain("FROM node:24-bookworm");
+  });
+});
+
+describe("造镜像那条命令：`-f -` 而不是 `-f <(...)`", () => {
+  /* 进程替换是 POSIX shell 的语法：PowerShell / cmd 上 `-f <(...)` 会被当成一个叫
+   * `<` 的文件，报「The system cannot find the file specified」—— 那条红读起来像
+   * 「脚本没产出文件」，于是人回头去查脚本。判断据只看命令的**形状**。 */
+  const plan = imagePlan({ nodeVersion: "v24.22.0", pnpmVersion: "12.4.1" });
+
+  it("不吃进程替换（`<(` 在 Windows 的两个 shell 里都不是语法）", () => {
+    expect(plan.build).not.toContain("<(");
+    expect(plan.build).not.toContain(">(");
+  });
+
+  it("用管道把 stdin 交给 `-f -`（POSIX shell 与 PowerShell 7 同一个写法）", () => {
+    expect(plan.build).toMatch(/-f - /);
+    expect(plan.build).toContain("ci-image-plan.mjs --dockerfile");
+  });
+
+  it("正文与管道给的必须是同一份（口径别在命令里漂）", () => {
+    /* 命令里现读的 Node 版本要出现两次：给生成器一次、给 `--build-arg` 一次 ——
+     * 少一处就会出现「镜像里是 A、声明是 B」而日志两边都像成功。 */
+    expect(plan.build.match(/v24\.22\.0/g)).toHaveLength(2);
+  });
+});
+
+describe("`--dockerfile` 的正文里自带一条「落盘版是 --write」", () => {
+  /* 那一格是人真撞上过的：敲完 `--dockerfile` 去 `ls docker`，得到「没有这个文件」，
+   * 然后怀疑脚本坏了。提示放在**正文的 `#` 注释**里 —— Dockerfile 自己的注释语法，
+   * 于是 `| docker build -f -` 当注释忽略它、`> docker/ci-node.Dockerfile` 让它成为
+   * 文件头的一条说明，两种消费方式都不受伤。 */
+  const plan = imagePlan({ nodeVersion: "v24.22.0", pnpmVersion: "12.4.1" });
+
+  it("点得出 `--write` 与「管道别用 <(...)」两条出路", () => {
+    const hint = dockerfileHint().join("\n");
+    expect(hint).toContain("--write");
+    expect(hint).toContain("stdin");
+    expect(hint).toContain("<(");
+  });
+
+  it("明说它只打 stdout、不写文件（这是人撞上的那一格）", () => {
+    expect(plan.dockerfile).toContain("不写文件");
+  });
+
+  it("提示是 `#` 注释行，`docker build -f -` 吃下去不会当成指令", () => {
+    const lines = plan.dockerfile.split("\n");
+    const hintAt = lines.findIndex((l) => l.includes("不写文件"));
+    expect(hintAt).toBeGreaterThan(-1);
+    for (const line of lines.slice(0, hintAt + 4)) {
+      if (line === "") continue;
+      expect(line.startsWith("#")).toBe(true);
+    }
+  });
+
+  it("提示排在第一条指令之前（`FROM` 之前不许有非注释行）", () => {
+    const lines = plan.dockerfile.split("\n");
+    const fromAt = lines.findIndex((l) => l.startsWith("FROM "));
+    const hintAt = lines.findIndex((l) => l.includes("不写文件"));
+    expect(fromAt).toBeGreaterThan(hintAt);
+  });
+
+  it("`--dockerfile` 的 stdout 就是这份正文（提示别跑去看 stderr）", () => {
+    const r = spawnSync(
+      process.execPath,
+      [
+        path.join(ROOT, "scripts", "ci-image-plan.mjs"),
+        "--dockerfile",
+        "--node-version",
+        "v24.22.0",
+      ],
+      { encoding: "utf8" },
+    );
+    expect(r.status).toBe(0);
+    expect(r.stdout.startsWith("#")).toBe(true);
+    expect(r.stdout).toContain("FROM node:24-bookworm");
+    expect(r.stdout).toContain("--write");
+    expect(r.stderr).toBe("");
   });
 });
 

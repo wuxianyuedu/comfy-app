@@ -40,9 +40,15 @@ import { fileURLToPath } from "node:url";
  *
  * 这几个不是「本仓推荐的镜像」，是「值得先量一下的几个地址」：
  *
- *   · Playwright 对**本档这一件**真正会用的那一个镜像（`cftUrl()` 的 `mirrors`，
- *     只有一条 —— 与那张三档的 `PLAYWRIGHT_CDN_MIRRORS` 不是一回事，见下）；
- *   · 常见的 npm 二进制镜像里放 Playwright 的那两段路径。
+ *   · 常见的 npm 二进制镜像里放 Playwright 的那两段路径（**排在前面**：用户那句
+ *     「`playwright install` 很慢」要的就是「先试离得近的源」，而 Playwright 自己
+ *     那一族在境内常常是慢的那一条）；
+ *   · Playwright 对**本档这一件**真正会用的那一个内置镜像（`cftUrl()` 的 `mirrors`，
+ *     只有一条 —— 与那张三档的 `PLAYWRIGHT_CDN_MIRRORS` 不是一回事，见下）。
+ *
+ * ⚠️ 表里的**顺序**就是「都没量到 / 都不配根」时依次试的顺序
+ * （`pickPlaywrightRoots()` 保留原序兜底），所以把镜像排前面是有行为后果的；
+ * 而「配了根就只用它」那条判据不受影响 —— 它压过这张表。
  *
  * ## ⚠️ 它们是**根**（base），不是可以直接探测的地址
  *
@@ -89,11 +95,9 @@ export const PLAYWRIGHT_HOST_CANDIDATES = [
    * ① 读数里多两条恒假的「到不了」；② 而 `pickPlaywrightRoots()` 会把它们当
    * 候选参与挑根 —— 人（或那段挑根逻辑）照它去「换一个能通的根」就换到一个保证 400
    * 的地址（现场 `cnb-oqf-1k51ifhis` 那两条逐字就是 400）。 */
-  "https://cdn.playwright.dev",
-  /* 常见 npm 镜像里放 Playwright 二进制的那两段路径（第三方，**不替它选**，
-   * 只量一下「能不能到」）。 */
-  "https://registry.npmmirror.com/-/binary/playwright",
   "https://cdn.npmmirror.com/binaries/playwright",
+  "https://registry.npmmirror.com/-/binary/playwright",
+  "https://cdn.playwright.dev",
 ];
 
 /**
@@ -421,6 +425,13 @@ export function isReachableVerdict(verdict) {
  * ⚠️ 它**仍然不是**「拉完整个包」那一次测量（那是 120 MiB，本步不做）。它把
  * 「响应头能回」推进到「**字节真流过**」，而现场那一档（连上了但 0 字节）正好被它分开。
  *
+ * ## 用户那一句「`playwright install` 很慢」：慢的是**装**，不是**量**
+ *
+ * 本文件只回答「这个根到不到得了、先试哪个」—— 它取 64 KiB 就走，几秒内出结论。
+ * 真正慢的那一段（~120 MiB 的包）在两条通道里：`playwright install`（没有续传）
+ * 与 `ci-toolchain-browser-fetch.mjs` 的分片自取。`PLAYWRIGHT_DOWNLOAD_HOST`
+ * 换的是**从哪儿取**，换不动「怎么取」—— 所以换源之后仍慢，要看的是后者。
+ *
  * ## 「超时」这一档要分得开两种
  *
  *   · `超时（连上了但 0 字节，Nms 内没有响应）` —— 现场那一档：TCP / TLS 都成了，
@@ -473,10 +484,12 @@ export function httpDownloadProbe(
 const DOWNLOAD_PROBE_SCRIPT = `
   const { request } = require("node:https");
   const { request: httpRequest } = require("node:http");
-  const url = process.argv[1];
+  const target0 = process.argv[1];
   const timeoutMs = Number(process.argv[2]);
   const chunkBytes = Number(process.argv[3]);
   const maxRedirects = Number(process.argv[4]);
+  // 一档探测的最长时限：按「要跨几次重定向」算，而不是给每一次一个满额超时。
+  const deadlineMs = timeoutMs * (maxRedirects + 1);
   // 「连上了吗」与「字节到了吗」是两件事，超时那一档要靠它们分开。
   let connected = false;
   let gotBytes = false;
@@ -487,6 +500,23 @@ const DOWNLOAD_PROBE_SCRIPT = `
     process.stdout.write(text);
     process.exit(0);
   };
+  // 整档的总闸：任何一跳卡住都不许把这一步拖过它（父进程那边还有一圈自己的超时）。
+  setTimeout(() => {
+    done(
+      "超时（" +
+        (gotBytes ? "已收到字节但没量完，" : connected ? "连上了但 0 字节，" : "") +
+        deadlineMs +
+        "ms 内没有响应）",
+    );
+  }, deadlineMs);
+  /**
+   * 起一跳，把结论交给调用方（本函数**不**定结论 —— 结论只出在 \`done()\` 里）。
+   *
+   * ⚠️ 起新请求之前必须先把上一跳放掉：一条 302 的响应自己也可能带 body
+   * （本机实测 \`res.end("x")\` 就够了），不 \`destroy()\` 的话它会与下一跳抢同一个
+   * 结论，于是整个探测判成「HTTP 200（已收到字节后就断了）」—— 而那一跳只是
+   * 一个重定向，真资源一个字节都没到。**结论只允许由真资源那一跳给出。**
+   */
   const attempt = (target, redirectsLeft) => {
     // 按 URL 的协议挑模块（候选根全是 https，但这一层不该只认一种 ——
     // 用例正是拿本地 http 服务判它的四种现场）。
@@ -496,6 +526,8 @@ const DOWNLOAD_PROBE_SCRIPT = `
       {
         method: "GET",
         headers: {
+          // \`Range\` 是本层的**唯一一次取字节**：回 206 就说明「字节流得过」；
+          // 镜像不认它、直接回整包 200 也一样能拿到第一块数据。
           Range: "bytes=0-" + (chunkBytes - 1),
           "Accept-Encoding": "identity",
         },
@@ -504,9 +536,16 @@ const DOWNLOAD_PROBE_SCRIPT = `
       (res) => {
         connected = true;
         const code = res.statusCode ?? 0;
-        if (code >= 300 && code < 400 && res.headers.location && redirectsLeft > 0) {
-          res.resume();
-          attempt(new URL(res.headers.location, target).toString(), redirectsLeft - 1);
+        /** 这一跳是不是「还要再走一跳」（是的话它自己的 body 一律不算数）。 */
+        const isRedirect =
+          code >= 300 && code < 400 && res.headers.location && redirectsLeft > 0;
+        if (isRedirect) {
+          res.destroy();
+          req.destroy();
+          attempt(
+            new URL(res.headers.location, target).toString(),
+            redirectsLeft - 1,
+          );
           return;
         }
         if (code >= 400) {
@@ -518,15 +557,27 @@ const DOWNLOAD_PROBE_SCRIPT = `
           gotBytes = true;
           const seen = chunk.length;
           // 收到第一批字节就够了 —— 这一步判的是「字节流得过」，不是下载。
+          done("HTTP " + code + "（实收 " + seen + " 字节）");
           res.destroy();
           req.destroy();
           done("HTTP " + code + "（实收 " + seen + " 字节）");
         });
+        // 响应结束了而一个字节都没到 —— 这一档**不算到得了**（它只是「响应头能回」，
+        // 正是 HEAD 那个坑的翻版）。所以结论必须让 isReachableVerdict() 判否：
+        // 不写 HTTP 2xx 那几个字，否则一条取不下字节的链路会在这里被判成好链路。
         res.on("end", () => {
-          done("HTTP " + code + "（**没量到 body**）");
+          done("响应结束了但 **0 字节**（只回了响应头）");
         });
         res.on("error", () => {
-          done("HTTP " + code + "（已收到字节后就断了）");
+          // ⚠️ 只有**真收到过字节**才算「断在途中」。镜像根回 302/307、或者服务器
+          // 对 \`Range\` 直接结束响应（实测 flushHeaders 之后立刻结束就是这一档）
+          // 都会在这个回调上冒一句「已收到字节后就断了」—— 而那时一个字节都没到，
+          // 判进 ok 那一档就等于把一条取不下字节的链路读成好链路（HEAD 那个坑的翻版）。
+          done(
+            gotBytes
+              ? "HTTP " + code + "（已收到字节后就断了）"
+              : "响应出错了但 **0 字节**（" + code + "）",
+          );
         });
       },
     );
@@ -536,16 +587,19 @@ const DOWNLOAD_PROBE_SCRIPT = `
     });
     req.on("timeout", () => {
       req.destroy();
-      done(
-        "超时（" +
-          (gotBytes
-            ? "已收到字节但没量完，"
-            : connected
-              ? "连上了但 0 字节，"
-              : "") +
-          timeoutMs +
-          "ms 内没有响应）",
-      );
+      // 这一跳没响应 —— 交给总闸与下一跳，别在中途就把结论定死（镜像首跳常是重定向）。
+      if (redirectsLeft === maxRedirects) {
+        done(
+          "超时（" +
+            (gotBytes
+              ? "已收到字节但没量完，"
+              : connected
+                ? "连上了但 0 字节，"
+                : "") +
+            timeoutMs +
+            "ms 内没有响应）",
+        );
+      }
     });
     req.on("error", (e) => {
       if (gotBytes) return done("HTTP（已收到字节后就断了）");
@@ -553,26 +607,24 @@ const DOWNLOAD_PROBE_SCRIPT = `
     });
     req.end();
   };
-  attempt(url, maxRedirects);
+  attempt(target0, maxRedirects);
 `;
+
 /**
  * 一个探测结论的**三态**：到得了（`ok`）/ 没量完（`timeout`）/ 到不了（`worse`）。
  *
  * 这一层是「选哪个根」的判据本体，与 {@link isReachableVerdict} 是**两个问题**：
- * 后者答「装得成吗」（放行那条判据），本函数答「这几个里先试哪个」。
- * 两者的**红法不一样**：
+ * 后者答「装得成吗」（放行那条判据），本函数答「这几个里先试哪个」。两者的**红法不一样**：
  *
  *   · `ok: false` 三种形态都不放行 —— 那是 `环境前提` 那条判据的事；
  *   · 而在「都不到 2xx」的机器上，`timeout` 是**唯一值得再试一次**的那一种：
- *     `超时（8000ms 内没有响应）` 的意思是「连上了但不说话」（大包在慢链路上正常），
+ *     `超时（…）` 的意思是「连上了但不说话」（大包在慢链路上正常），
  *     而 `ENOTFOUND` / 4xx 是「这条链路不通」，再试一次不会变。
  *
- * ## 现场（`cnb-t3f-1k51ho0k2`，本格的第六次红）
- *
- * 探测量到 `cdn.playwright.dev` → `HTTP 307`、npmmirror → `HTTP 200`，
- * 百毫秒级；而**装**那一步在同一个根上拿到 `timed out after 120000ms`
- * （Playwright 走的是 GET 拉包，120 MiB）。同一台机器、同一分钟、两个相反结论
- * —— 差别在「一次 HEAD」与「拉完整个包」不是同一次测量。
+ * 现场（`cnb-t3f-1k51ho0k2`，这一格的第六次红）：探测量到 `cdn.playwright.dev` →
+ * `HTTP 307`、npmmirror → `HTTP 200`，百毫秒级；而**装**那一步在同一个根上拿到
+ * `timed out after 120000ms`。同一台机器、同一分钟、两个相反结论 —— 差别在
+ * 「一次探测」与「拉完整个包」不是同一次测量。
  *
  * 所以 `HTTP 2xx` 只是**首选**，不是**唯一**：2xx 排在前面（它就是「这一趟量得完」
  * 的那一档），4xx 与超时按原序跟在后面。这不是「放宽判据」—— 放行那条判据仍是
@@ -600,21 +652,16 @@ export function probeGrade(verdict) {
  * `环境前提` 早就在量「这台机器到得了哪个下载根」，`.cnb.yml` 也早就配了一个根
  * —— 而**这两者之间没有任何东西把它们连起来**：探测发现配着的那个根不通时，
  * 结论只落在一行会随日志滚过去的读数里，装那一步照旧去试那个根，然后红。
- *
  * 实测形态（`cnb-gt1-1k513ill4` / `cnb-g9d-1k515kvrq` / `cnb-t3f-1k51ho0k2`）：
  * 同一句 `timed out after 120000ms`、同一个根，连着三次。
  *
  * ## 与 `playwrightDownloadRoots()` 的分工（**「给上了就只用它」没有被推翻**）
  *
  * 那条判据说的是「外面给了一个根时**别再陪 Playwright 挨个试它那一族内置镜像**」
- * —— 它反对的是**盲目重试同族**（实测 5 次全落在同一个域名上、`retryCount = 5`
- * 的回退等于没有）。本函数做的是另一件事：**先量一次，再决定先试哪个**。
- * 量出来的结论要能被 `点名的那个根不通 ⇒ 试一个量得到的根` 用掉，
- * 否则这条判据就成了「配错一行要改配置 + 重推」。
+ * —— 它反对的是**盲目重试同族**。本函数做的是另一件事：**先量一次，再决定先试哪个**。
+ * 因此三支都判（与它的用例一一对应）：
  *
- * 因此两支的判据仍然分得开，都判：
- *
- *   · 没过量 ⇒ 只起一次、只试 `roots[0]`（老判据，`playwrightDownloadRoots` 那组用例守着）；
+ *   · 没过量 ⇒ 只试 `roots[0]`（老判据）；
  *   · 量过、且 `roots[0]` 到得了 ⇒ 也**只试它**（别去试那些不通的）；
  *   · 量过、且 `roots[0]` 不通 ⇒ 把量得到的排前面，原序兜底。
  *
@@ -640,13 +687,10 @@ export function pickPlaywrightRoots({
   const preferred = roots[0];
   /* **没给探测面就什么都不量**（这一支是有意的，不是省事）。
    *
-   * 探测是要**出网**的（每个候选一次真取一小段字节）—— 而本函数是装浏览器那一步的缺省路径。
-   * 让缺省路径在“没接线”时静默去量真 CDN，等于给判据留一个「跑一次用例就发几次
-   * 外网请求」的副作用（本仓反复记的那一格：判据不该依赖跑它的那台机器的网络）。
-   * 所以量不量这件事由**调用方是否传它自己的探针**决定：
-   *
-   *   · 调用方传了 ⇒ 用它的（盘上的实现是 `httpDownloadProbe`），且只量它会用的根；
-   *   · 没传 ⇒ 一个字都不量，回落到老行为（只试 `roots[0]`）。
+   * 探测是要**出网**的（每个候选一次真取一小段字节）—— 而本函数是装浏览器那一步的
+   * 缺省路径。让缺省路径在「没接线」时静默去量真 CDN，等于给判据留一个「跑一次用例
+   * 就发几次外网请求」的副作用（本仓反复记的那一格：判据不该依赖跑它的那台机器的网络）。
+   * 所以量不量这件事由**调用方是否传它自己的探针**决定。
    *
    * 判据里因此可以「换掉它就不出网」，而平台侧那条路一定传（见
    * `runPlaywrightInstall` 的 `probe` 缺省）。 */

@@ -305,6 +305,7 @@ export function imagePlan({
     `# 由 node scripts/ci-image-plan.mjs 生成 —— 别手改这份文件：`,
     `# 版本号全部现读（engines.node / packageManager / pnpm-lock.yaml），改哪一件都回这里重跑。`,
     `# 文档：docs/guides/ci-node-image.md（口径见规范 §13.5.3.4.1.2）`,
+    ...[...dockerfileHint(), ""],
   ];
   const lines = [
     ...header,
@@ -354,7 +355,12 @@ export function imagePlan({
   return {
     tag: image,
     dockerfile: lines.join("\n") + "\n",
-    build: `docker build --build-arg NODE_VERSION=${nodeVersion} -t ${image} -f <(node scripts/ci-image-plan.mjs --dockerfile) .`,
+    /* `-f -` 而不是 `-f <(...)`：进程替换是 POSIX shell 的语法，PowerShell 里
+     * `-f <(...)` 会被当成一个叫 `<` 的文件、报「The system cannot find the file
+     * specified」—— 那条红读起来像「脚本没产出文件」，实际是这两句根本不是同一件事。
+     * 管道喂 stdin 在 POSIX shell 与 PowerShell 7 里同一个写法，而 Windows 上的
+     * `docker build … .` 照抄就能跑（本仓三台构建节点里 Windows 是主战场）。 */
+    build: `node scripts/ci-image-plan.mjs --dockerfile --node-version ${nodeVersion} | docker build --build-arg NODE_VERSION=${nodeVersion} -t ${image} -f - .`,
     cp: cpCommand(tag),
     verify: `node scripts/ci-image-plan.mjs --verify`,
   };
@@ -404,6 +410,38 @@ export function cpCommand(tag) {
   return `docker create --name comfyapp-ci-${tag} comfyapp-ci:${tag} true \\
  && docker cp comfyapp-ci-${tag}:/ — > /tmp/comfyapp-ci-rootfs.tar \\
  && docker rm -f comfyapp-ci-${tag}`;
+}
+
+/**
+ * 人手动敲 `--dockerfile` 时**往 stdout 的注释行**里提一句「落盘版是另一个 flag」。
+ *
+ * 为什么是 stdout 的 `#` 注释而不是 stderr：Dockerfile 自己的注释语法就是 `# 一行`，
+ * 所以**两种消费方式都不受伤** —— `| docker build -f -` 把它当注释忽略、`> docker/
+ * ci-node.Dockerfile` 让它成为文件头的一条说明。而 stderr 有两个坑：不重定向时
+ * 它会和 `|` 那半个管道抢终端（PowerShell 5.1 的表现是人的输出变乱），
+ * 而 `2>` 了它的人什么也看不到 —— 提示跑去看 who 的 stderr，等于换了个地方继续缺。
+ *
+ * 它补的那一格：`--dockerfile` 只把正文打到 stdout（给管道用），不写文件。而「只看
+ * 一眼」与「想要一份文件」在人脑子里是同一件事 —— 照文档敲完 `ls docker` 的人会得到
+ * 一句「没有这个文件」，然后怀疑脚本坏了（这条弯路已经有人走过一次）。
+ *
+ * 两个边界都是刻意的：
+ *
+ *   · **只用 `#` 注释、只排在第一条指令之前**：`FROM` 之前出现一行非注释，Dockerfile
+ *     就废了 —— 而那份红会指到 `docker build`，不会指到这里（`tests/ci-image-plan.test.ts`
+ *     有一条专门判这个形状）。
+ *   · **它不改变任何行为**：提示不是判据，也不替代 `--write`。
+ *
+ * @returns {string[]}
+ */
+export function dockerfileHint() {
+  return [
+    "# ── 这份正文只打到 stdout、**不写文件** ──",
+    "# 想落盘：node scripts/ci-image-plan.mjs --write --node-version <vX.Y.Z>",
+    "#   （写出 docker/ci-node.Dockerfile；它是一次性构建输入，别提交进仓库）",
+    "# 想造镜像：本命令加 --dockerfile 后整条喂给 docker 的 stdin 构建（指南 §2 有整行）",
+    "#   （别写 -f <(...)：进程替换是 POSIX shell 的语法，Windows 上会报「找不到文件」）",
+  ];
 }
 
 /**
