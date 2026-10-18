@@ -119,6 +119,13 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
     mustMatch: /^\s*push:\s*$/m,
     why: "必须挂 push（master 合并形态复核）",
   },
+  {
+    mustMatch:
+      /^ {2}"crontab: [0-9*,\/-]+ [0-9*,\/-]+ [0-9*,\/-]+ [0-9*,\/-]+ [0-9*,\/-]+":\s*$/m,
+    why:
+      "必须挂一条 crontab（生产构建每天一次，ISSUE #2010）：定时任务的分支键只认**明确的单一分支名**，" +
+      '而事件键必须写成 `"crontab: <5 段 POSIX cron>"` —— 写成 `crontab:` 映射或 `schedule` 都不会报错，只是永远不触发',
+  },
 ];
 
 /**
@@ -263,6 +270,131 @@ export function registeredDisabledGates(text: string): string[] {
 }
 
 /**
+ * `.cnb.yml` 里的**定时任务事件键**（`"crontab: 0 4 * * *"`）原文清单。
+ *
+ * 为什么它要有判据：定时任务的键与 `push:` / `pull_request:` 不同 —— 它是**带引号的
+ * 字符串键**，而且必须包含完整的五段 cron。写成 `crontab:`（映射）、`schedule:`、
+ * 或段数不对时，平台侧**不会报任何错**，只是这条流水线永远不触发；
+ * 而它在本地唯一的痕迹就是这份 YAML，没有任何一步会跑它（同 `pull_request` 键那一族
+ * 的失效形态：写错了不报错、只是静默不干该干的事）。
+ *
+ * 同时把**分支键**带出去：官方 `zh/build/crontab.md` 明写定时任务不支持 glob、
+ * 必须挂明确的单一分支名 —— 父键是 `master:` 才成立，挂在 `**` / `$` 下是配置错误。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns {{branch: string, event: string, cron: string}[]} 顶层分支键 + 事件键 + cron 表达式
+ */
+export function crontabEvents(
+  text: string,
+): Array<{ branch: string; event: string; cron: string }> {
+  const out: Array<{ branch: string; event: string; cron: string }> = [];
+  let branch = "";
+  for (const line of text.split("\n")) {
+    /* 顶层分支键：顶格、以 `:` 结尾（`master:` / `"dev/*":` / `$:`）。 */
+    const top = /^([^\s#][^:]*):\s*$/.exec(line);
+    if (top?.[1] !== undefined && !top[1].includes(":")) {
+      branch = top[1].replace(/^["']|["']$/g, "").trim();
+      continue;
+    }
+    /* 事件键：两格缩进、带引号。**只有**引号形态能被平台当成 crontab 事件 ——
+     * 裸的 `crontab:` 是映射键，不是事件名。 */
+    const ev = /^ {2}"(crontab: [^"]*)":\s*$/.exec(line);
+    if (ev?.[1] === undefined) continue;
+    out.push({
+      branch,
+      event: ev[1],
+      cron: ev[1].slice("crontab:".length).trim(),
+    });
+  }
+  return out;
+}
+
+/**
+ * `.cnb.yml` 的 `env` 里登记的**定时那一跑的 stage 名有序清单**
+ * （`COMFYAPP_CI_DAILY_GATES`）。
+ *
+ * 为什么两条流水线的清单要分开登记：`COMFYAPP_CI_GATES` 答的是「PR 上跑什么」，
+ * 而定时那一跑答的是「每天跑什么」—— 两者的差别正是 ISSUE #2010 要的答案
+ * （生产构建每天一次）。混成一份之后，「今天这一跑该跑哪几格」就再也读不出来：
+ * 把定时那格写进 PR 清单会让每个 PR 多跑一次构建，反过来则让每天那一跑跑满全套。
+ *
+ * 与 `registeredGateOrder()` 同一份折叠标量解析（同一个坑、同一种写法），只是键名不同。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns stage 名（已 trim）；`[]` = 键不在（调用方据此判红）
+ */
+export function registeredDailyGateOrder(text: string): string[] {
+  const m =
+    /^[ \t]*COMFYAPP_CI_DAILY_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
+      text,
+    );
+  const body = m?.[1];
+  if (body === undefined) return [];
+  return body
+    .split(",")
+    .map((n) => n.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 某个**流水线**块里 `stages:` 的直接子项名字（按出现顺序）。
+ *
+ * 为什么要单独一个解析器：`registeredGateOrder()` 读的是 `env` 里那份**声明**，
+ * 而「这一条流水线真的跑哪几格」是配置里的**事实**。两者需要双向核对 ——
+ * 只读声明时，有人把 stage 从流水线里删掉、却把名字留在清单里，判据会全绿，
+ * 而那一格其实没跑（正是本仓最不能有的形态：清单看着完整、执行面是空的）。
+ *
+ * 只在给定流水线名之后找（`- <<: *common` 那一行之后的 `name:` 与 `stages:`），
+ * 且不接受注释行 —— 停用的条目是 `#` 形态，扫全文会把它当成在跑。
+ *
+ * @param text `.cnb.yml` 原文
+ * @param pipelineName 流水线的 `name:` 值（如「每日生产构建」）
+ * @returns stage 名；`[]` = 那条流水线没找到 / 没有 stages
+ */
+export function pipelineStageNames(
+  text: string,
+  pipelineName: string,
+): string[] {
+  const lines = text.split("\n");
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    /* 只认**流水线项**的 `name:`（`- <<: *anchor` 之后那一行），不认 stage 自己的
+     * `- name:` —— 两边同名时（定时那条的流水线与它唯一那格就叫同一个名字）挑错了
+     * 起点，解析会从「stage 的 name 行」往下走，结论变成「这条流水线一格都没有」。 */
+    const m = /^\s+name:[ \t]*(\S.*?)[ \t]*$/.exec(lines[i] ?? "");
+    if (m?.[1] === pipelineName && (lines[i - 1] ?? "").includes("<<")) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return [];
+  /* 流水线项的缩进 = 它 `name:` 那一行的缩进；`stages:` 的键在它**下一层**。 */
+  const itemIndent =
+    (lines[start] ?? "").length - (lines[start] ?? "").trimStart().length;
+  const out: string[] = [];
+  let stageIndent: number | null = null;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const raw = lines[i] ?? "";
+    if (raw.trim() === "" || raw.trim().startsWith("#")) continue;
+    const indent = raw.length - raw.trimStart().length;
+    const body = raw.trim();
+    if (stageIndent === null) {
+      /* 还没见到 `stages:`：缩进**比流水线项更浅** ⇒ 这一条结束了。
+       * 同级的 `- <<: *anchor` / `name:` 仍在同一条里，不能当成收尾（`push` 那条的
+       * `- <<:` 就在这一层）。 */
+      if (indent < itemIndent) break;
+      if (body.startsWith("stages:")) stageIndent = indent;
+      continue;
+    }
+    /* 已在 `stages:` 里：更浅或同级的键 ⇒ 这一条流水线结束了。 */
+    if (indent <= stageIndent && !body.startsWith("- ")) break;
+    const item = /^- name:[ \t]*(\S.*?)[ \t]*$/.exec(body);
+    if (item?.[1] !== undefined) out.push(item[1]);
+  }
+  return out;
+}
+
+/**
  * 一个 stage 名在 `.gates` 里是否**以注释形态**留着（停用的可恢复性依据）。
  *
  * 停用不等于删除 —— 恢复动作是「取消注释」而不是「重写一遍」。所以判据要求被停用的
@@ -343,10 +475,14 @@ export function resolveAnchoredRunner(
 export function stageBlock(text: string, name: string): string | null {
   const lines = text.split("\n");
   let start = -1;
+  /** 命中那一项的列表项缩进 —— 收尾按它判（`push` 那条的 stage 在外层 `stages:` 下是
+   *  8 空格、锚点那条直接挂在流水线下是 4 空格，两种都得收得住）。 */
+  let itemIndent = 0;
   for (let i = 0; i < lines.length; i += 1) {
-    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
-    if (item?.[1] === name) {
+    const item = /^( *)-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
+    if (item?.[2] === name) {
       start = i;
+      itemIndent = (item[1] ?? "").length;
       break;
     }
   }
@@ -354,8 +490,11 @@ export function stageBlock(text: string, name: string): string | null {
   const out: string[] = [lines[start] ?? ""];
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
-    /* 下一个同级 stage 项 / 更浅的键都算收尾（空行不算 —— 配置里正文之间有空行）。 */
-    if (/^ {2}-\s+name:/.test(raw) || /^\S/.test(raw)) break;
+    /* 下一个**同级或更浅**的列表项 / 更浅的键都算收尾（空行不算 —— 配置里正文之间有空行）。 */
+    const nextItem = /^( *)-\s/.exec(raw);
+    if (nextItem && (nextItem[1] ?? "").length <= itemIndent) break;
+    const key = /^( *)\S/.exec(raw);
+    if (key && (key[1] ?? "").length < itemIndent) break;
     out.push(raw);
   }
   return out.join("\n");
@@ -600,13 +739,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
     expect(runner.namespace).toBe("group");
     expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
-    // 两条流水线都必须引用那个锚点：只引用一条 = 另一条悄悄回落到平台池。
+    // 三条流水线都必须引用那个锚点：只引用一条 = 另一条悄悄回落到平台池。
     // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。
+    // 三个事件：`pull_request` / `push` / `crontab`（ISSUE #2010 加了最后一条）。
     const refs = text.match(/^\s+-\s*<<:\s*\*\w+/gm) ?? [];
     expect(
       refs.length,
-      "锚点引用数与流水线数对不上（两个事件各要 <<: 一次）",
-    ).toBe(2);
+      "锚点引用数与流水线数对不上（三个事件各要 <<: 一次）",
+    ).toBe(3);
   });
 
   it("规范正文确实写着这次的决策反转（反向锚点）", () => {
@@ -1044,6 +1184,89 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toMatch(/Test-Path[^]*coverage\/lcov\.info/);
   });
 
+  it("定时那一跑（crontab）挂在 master 下、每天一次，且只跑「每日生产构建」那一格（ISSUE #2010）", () => {
+    /* 用户的要求是「生产构建改为定时任务，每天 1 次」。这句话在配置里落成三件
+     * 互相独立的事实，缺任一件都会**静默失效**（不会报错，只是那条流水线不按
+     * 人想的那样跑）：
+     *
+     *   ① 事件键的形态：定时任务只认 `"crontab: <五段 cron>"` 这种**带引号的字符串键**
+     *      （官方 `zh/build/crontab.md`）。写成 `crontab:` 映射 / `schedule:` 时平台
+     *      不会报错，只是永远不触发 —— 与 #1229 那次「顶层写 stages: 匹配不到事件」同形。
+     *   ② 分支键：定时任务**不支持 glob**，必须挂明确的单一分支名。这里要求 `master`：
+     *      每天要证的是「master 的 HEAD 今天能不能构建出来」，挂到别的分支上是另一件事
+     *      （而且别的分支不会有这条配置被解析的机会）。
+     *   ③ 频率：**每天 1 次**。cron 的第 3 段是「日」、第 2 段是「时」—— 第 2 段一旦写成
+     *      `*`（每小时）或列表（`0 4,16 * * *`），「每天一次」就变成了「每天 N 次」，
+     *      而配置看起来仍然像一条正常的定时任务。判据只认「单一小时 + 单一分钟」。 */
+    const text = readRegisteredConfig();
+    const events = crontabEvents(text);
+    expect(
+      events.length,
+      '`.cnb.yml` 里没有 `"crontab: …"` 事件键 —— 生产构建又只剩 PR 那一条了' +
+        "（`pull_request` 上那条答的是「这次改动能不能构建」，「今天能不能构建」没人答）",
+    ).toBe(1);
+    const event = events[0];
+    if (!event) throw new Error("解析不出 crontab 事件键");
+    expect(
+      event.branch,
+      "定时任务的分支键必须是明确的单一分支名（官方：不支持 glob）—— 这里要的是 master",
+    ).toBe("master");
+    const cron = event.cron.split(/\s+/);
+    expect(cron, `cron 表达式不是五段：${event.cron}`).toHaveLength(5);
+    const [minute, hour, dom, month, dow] = cron;
+    /* 每天一次 = 分钟固定、小时固定，日 / 月 / 周都是通配。 */
+    for (const [field, name] of [
+      [minute, "分钟"],
+      [hour, "小时"],
+    ] as const) {
+      expect(
+        /^\d+$/.test(field ?? ""),
+        `cron 的${name}段（"${field}"）不是单值 —— 「每天 1 次」要求它固定到一个点上；` +
+          `写成 \`*\` / 列表 / 区间都意味着一天跑多次`,
+      ).toBe(true);
+    }
+    for (const [field, name] of [
+      [dom, "日"],
+      [month, "月"],
+      [dow, "周"],
+    ] as const) {
+      expect(field, `cron 的${name}段应当是 \`*\`：${event.cron}`).toBe("*");
+    }
+
+    /* ③ 那一跑只跑一格，且是**跑法脚本**（不是裸 `pnpm run build`）。
+     * 全跑门禁不是定时任务要做的事（那是 `pull_request` 那条流水线的差事），
+     * 而裸跑 = 跑了不记账（`scripts/.artifact-freshness.json` 一个字不变）。 */
+    const daily = pipelineStageNames(text, "每日生产构建");
+    expect(
+      daily,
+      "crontab 那条流水线里解析不出 stage —— 名字被改了，或者 stages 的形状变了",
+    ).toEqual(registeredDailyGateOrder(text));
+    expect(
+      registeredDailyGateOrder(text),
+      "`COMFYAPP_CI_DAILY_GATES` 没有登记「每日生产构建」—— 定时那一跑跑什么就没有事实源了",
+    ).toEqual(["每日生产构建"]);
+    const stage = stageBlock(text, "每日生产构建");
+    expect(stage, "`.cnb.yml` 里找不到「每日生产构建」那一项").toBeTruthy();
+    expect(
+      stage,
+      "「每日生产构建」跑的还是裸 `pnpm run build` —— 那样这一次的绿只落在日志里、" +
+        "账面上一个字不变。入口要写 `node scripts/ci-daily-build.mjs`",
+    ).not.toContain("pnpm run build");
+    const entry = "scripts/ci-daily-build.mjs";
+    expect(stage, `「每日生产构建」没有点名 ${entry}`).toContain(entry);
+    expect(
+      existsSync(path.join(ROOT, entry)),
+      `${entry} 不在盘上 —— 那一步会在平台侧以「文件不存在」的形态红`,
+    ).toBe(true);
+    /* 预算：一天的预算只有这一条，卡满 2h 墙钟等于当天这一跑没有结论。
+     * 判据用的是 `stageTimeouts()`（与 PR 那条同一份解析），不在这里另抄一份 glob。 */
+    const budget = stageTimeouts(text).get("每日生产构建");
+    expect(
+      budget,
+      "「每日生产构建」没有 `timeout` 预算 —— 平台默认 Job 上限是 2 小时，卡死要等满才有人知道",
+    ).toBeTruthy();
+  });
+
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
     // ① 匹配逻辑认得这批名字，且不误收别的。
     expect(
@@ -1213,6 +1436,75 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         CNB_PULL_REQUEST_IID: "1980",
       }),
     );
+  });
+
+  it("crontab 那几条判据不是空转：坏形态必须被它们判出来", () => {
+    /* 反向自检（同 `判据不是空转` 那一组的第 ④ 条）：上面那条判据的三半各喂一组坏样本，
+     * 每一组都必须真的被拦下 —— 否则「每天一次」这件事就只剩注释里的一句话。 */
+    // ① 事件键的形态：`crontab:` 裸映射 / `schedule:` / 段数不对，都解析不出事件。
+    expect(crontabEvents("master:\n  crontab:\n    - x\n")).toEqual([]);
+    expect(crontabEvents("master:\n  schedule: 0 4 * * *\n")).toEqual([]);
+    // 正确的形态认得出来，且把父分支键带出来（定时任务只认单一分支名）。
+    expect(
+      crontabEvents('master:\n  "crontab: 0 4 * * *":\n    - x\n'),
+    ).toEqual([
+      { branch: "master", event: "crontab: 0 4 * * *", cron: "0 4 * * *" },
+    ]);
+    // ② 频率那三段的判据：每小时 / 一天多次 / 分钟也散开的形态，判定都必须是「不是单值」。
+    for (const cron of ["0 * * * *", "0 4,16 * * *", "*/30 4 * * *"]) {
+      const [minute, hour] = cron.split(" ");
+      expect(/^\d+$/.test(minute ?? ""), `${cron} 的分钟段应当不是单值`).toBe(
+        cron === "0 * * * *" ? true : cron === "0 4,16 * * *" ? true : false,
+      );
+      expect(/^\d+$/.test(hour ?? ""), `${cron} 的小时段应当不是单值`).toBe(
+        cron === "0 4,16 * * *"
+          ? false
+          : cron === "*"
+            ? false
+            : cron === "0 * * * *"
+              ? false
+              : true,
+      );
+    }
+    // ③ 清单解析器：键在 / 键不在 / 不误收 `GATES`（两个键的正则不能互相命中）。
+    expect(
+      registeredDailyGateOrder(
+        "x:\n  env:\n    COMFYAPP_CI_DAILY_GATES: >-\n      每日生产构建\n",
+      ),
+    ).toEqual(["每日生产构建"]);
+    expect(registeredDailyGateOrder("master:\n  push:\n    - x\n")).toEqual([]);
+    expect(
+      registeredDailyGateOrder(
+        "x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      每日生产构建\n",
+      ),
+    ).toEqual([]);
+    expect(
+      registeredGateOrder(
+        "x:\n  env:\n    COMFYAPP_CI_DAILY_GATES: >-\n      每日生产构建\n",
+      ),
+    ).toEqual([]);
+    /* ④ 「流水线里真的跑哪几格」：从 `name:` 之后按缩进收，别把停用行算进来。 */
+    const fixture = [
+      "master:",
+      '  "crontab: 0 4 * * *":',
+      "    - <<: *common",
+      "      name: 每日生产构建",
+      "      stages:",
+      "        # - name: 注释掉的",
+      "        - name: 每日生产构建",
+      "          script: x",
+      "  push:",
+      "    - <<: *common",
+      "      name: 别的流水线",
+      "      stages:",
+      "        - name: 别的格",
+      "",
+    ].join("\n");
+    expect(pipelineStageNames(fixture, "每日生产构建")).toEqual([
+      "每日生产构建",
+    ]);
+    expect(pipelineStageNames(fixture, "别的流水线")).toEqual(["别的格"]);
+    expect(pipelineStageNames(fixture, "不存在的流水线")).toEqual([]);
   });
 
   it("扫描面真的收到了仓库根（不是空数组假装通过）", () => {
