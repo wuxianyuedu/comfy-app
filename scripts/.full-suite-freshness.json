@@ -1,9 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-16T17:36:25.898Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-18T05:22:05.688Z",
+    "who": "月读",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full"
+    "trackedBy": "full",
+    "skippedReason": "本次只改 scripts/ci-image-plan.mjs 的提示文案与 build 命令形状 + 契约测试 tests/ci-image-plan.test.ts；已单独跑绿该契约文件(32 例)，全量覆盖率另择时补自证"
   }
 }
