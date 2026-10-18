@@ -14,7 +14,8 @@
 # ── 与旧版（Linux 平台池 + docker.image）的五条形态差异 ──────────────────
 #
 # 1. **没有 docker，工具链必须预装在宿主机上**。旧版靠 `docker.image: node:24`
-#    提供 Node，这条路在自托管上失效（`pipeline.docker.image` 不会生效）。
+#    提供 Node，这条路在自托管上不能当构建环境用（官方写「`pipeline.docker.image` 不会
+#    生效」；探针的读数更准一句：**会**被执行，只是起不来 —— 见 §13.5.3.4.1.6）。
 #    因此本文件**不声明 `docker:` 与 `volumes:`**，而是把「宿主机该有什么」
 #    变成第一条流水线步骤去**验**（见下「工具链自证」）—— 环境要求写进配置里
 #    没人读，写成会红的断言才有人管。
@@ -25,9 +26,12 @@
 #
 #      （原文）浏览器安装  error [70ms]  →  Runner does not enable Docker.
 #
-#    70 毫秒、脚本一行都没执行。也就是说「没有 docker」是**整条执行面**的，
-#    并不分「声明构建环境」与「任务级容器」两档：自托管节点上没有 docker daemon，
-#    平台连起容器这第一步都做不到，于是带 `image:` 的 stage **必然**红。
+#    70 毫秒、脚本一行都没执行，于是带 `image:` 的 stage **必然**红 —— 但红的原因是
+#    **平台没给这台 runner 开容器能力**，不是「这台机器上没有 docker daemon」。后半句
+#    是上一版写错的因果：探针（`pipeline.docker.image` 那条码路）里 runner 真的执行了
+#    `docker info`（退 0）与 `docker pull node:24`（退 0），死在它把 `docker run` 拼成了
+#    Windows 容器形态（`-w c:\workspace`）。读数为啥与本仓结论同向、以及要谁做什么才能
+#    改写回 `image:`，见规范 §13.5.3.4.1.6。
 #    所以本仓的形态只有一档：**整条宿主机直跑，一格都不写 `image:`**。
 #    判据在 `tests/ci-image-identity.test.ts`：进容器的 stage 名单必须是**空**的
 #    —— 多一格就红，理由与那次读数一起写在 `scripts/ci-image-identity.mjs` 的头注。
