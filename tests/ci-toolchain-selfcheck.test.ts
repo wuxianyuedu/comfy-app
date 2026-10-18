@@ -1792,6 +1792,7 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
           args: ["-v"],
           out: "12.4.1",
         }),
+        seed: () => ({ ok: false, out: "（判据里不真取）" }),
         exec: (/** @type {string} */ _cmd, /** @type {string[]} */ args) => {
           spawned.push(args);
           return { ok: false, out: "(不该被调到)" };
@@ -1823,6 +1824,16 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
           prefixArgs: [],
           args: ["-v"],
           out: "12.4.1",
+        }),
+        /* ⚠️ **自取那条通道必须一起注入成「不装」**：它的缺省实现会去 CDN 真取 120 MiB
+         * （分片那条路在这台机器上 23 秒就能取完、把 headless shell 装进这个临时落点），
+         * 于是这条用例量到的是「自取成功 ⇒ 跳过老路」，与它要判的
+         * 「只装了完整 chromium 时**不许跳过**」是两件事 —— 而它照样会红/绿。
+         * 这类「判据指到了同形的邻居上」本仓已记过好几次（见上面「复验在装之后」那条）。
+         * 判据里也不许出网：`pnpm test` 在离线容器里要绿。 */
+        seed: () => ({
+          ok: false,
+          out: "（判据里不真取：这一条判的是老路会不会被跳过）",
         }),
         exec: (/** @type {string} */ _cmd, /** @type {string[]} */ args) => {
           spawned.push(args);
@@ -2183,6 +2194,8 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
     redirect: `if (req.url === "/root/builds/cft/1/win64/x.zip") { res.writeHead(302, { location: "/real/x.zip" }); res.end(); return; } res.writeHead(200); res.end(Buffer.alloc(1024, 1));`,
     /** 响应头给了、body 一个字节都不给 —— 现场那一档。 */
     stall: `res.writeHead(200, { "content-length": "1048576" }); res.flushHeaders();`,
+    /** 首跳 302 到一个**永不给 body** 的真资源 —— 「重定向那一跳卡住」的形态。 */
+    redirectStall: `if (req.url === "/root/builds/cft/1/win64/x.zip") { res.writeHead(302, { location: "/stall/x.zip" }); res.end(); return; } res.writeHead(200, { "content-length": "1048576" }); res.flushHeaders();`,
     /** 404。 */
     missing: `res.writeHead(404); res.end("nope");`,
   };
@@ -2255,6 +2268,38 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
           "裸看会把它读成一个到不了的根",
       ).toMatch(/^HTTP 200/);
       expect(isReachableVerdict(verdict)).toBe(true);
+    });
+  });
+
+  it("首跳重定向后面那一段卡住 ⇒ 仍然判得出「连上了但 0 字节」，且不拖过下一档的总时限", async () => {
+    /* 这一条治的是**重定向之后**那一跳：镜像根常常先回 302/307（`registry.npmmirror.com`
+     * 实测就是 302），真资源在下一跳。如果超时只看「第一跳有没有响应」，
+     * 卡在第二跳的那条链路要么被读成「第一跳超时」（指错方向），要么把这一步拖到
+     * 每跳一个满额超时 × 重定向次数。
+     *
+     * 判据两条：结论**不算到得了**（`isReachableVerdict` 为假）；总耗时不超过
+     * `timeoutMs × (maxRedirects + 1)` —— 那是这一档的**总闸**，不是每跳各给一份。
+     *
+     * ⚠️ 这里刻意**不**断言那句话术长什么样：本机实测这一档会走到 `res` 的 `error`
+     * 回调上（而不是 `end`），读数形如「响应出错了但 0 字节（200）」。要守的是
+     * 「一个字节都没到 ⇒ 不许判通」，而**话术随时间会变**（上一版就把「已收到字节后
+     * 就断了」印在了一条 0 字节的链路上）。 */
+    await withServer("redirectStall", (base) => {
+      const started = Date.now();
+      const verdict = httpDownloadProbe(
+        `${base}/root/builds/cft/1/win64/x.zip`,
+        { timeoutMs: 400, maxRedirects: 3 },
+      );
+      const elapsed = Date.now() - started;
+      expect(
+        isReachableVerdict(verdict),
+        `0 字节被判成了「通」（读数：${verdict}）—— 那一跳只是重定向，` +
+          "真资源一个字节都没到",
+      ).toBe(false);
+      expect(
+        elapsed,
+        `这一档拖了 ${elapsed}ms —— 总闸应是 timeoutMs ×(重定向次数+1) 而不是每跳各给一份`,
+      ).toBeLessThan(400 * 4 + 2500);
     });
   });
 
