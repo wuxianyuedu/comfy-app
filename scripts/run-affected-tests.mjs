@@ -113,11 +113,82 @@
 
 import { spawnSync } from "node:child_process";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
+/* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威）。
+ * import 而不是各抄一份文件名：抄两份的漂移形态是静默的 —— 改名那侧照常跑、
+ * 这侧读不到，而「读不到」在这一格长得和「这次没有读数」一模一样。 */
+import { C_MANIFEST_NAME, cFileXmlName } from "./precommit-timing.mjs";
+/* 收尾那两份账与「毫秒→秒」的格式住在**话术层**：本文件是机制层（清单 / 分块 / 起进程 /
+ * 判超时指纹 / 定不退不退），那三段只把已经定完的结论排成给人读的账。拆开的理由不是「长」
+ * 而是 §12.6 R5 那句 —— 读不动的那一层的失效形态是「判据恒绿」，不是报错。 */
+import {
+  fmtSec,
+  rerunReport,
+  unverifiedReport,
+} from "./affected-launch-rerun-report.mjs";
 import os from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createRequire } from "node:module";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+
+/**
+ * 组 C 的**分文件耗时**读数出口（vitest 的 junit reporter）。
+ *
+ * 为什么要有它：`precommit-timing` 记的是「五个组各自的墙钟 + D 组 51 步的分步账」，
+ * 而**组 C（固定清单 90 份 + 受影响用例）在账本里只有一个数** —— 偏偏那一个数就是
+ * 整次提交的几乎全部（本机 13 次：总中位 1110s，组 C 中位 1108s）。于是「90 份里谁最贵」
+ * 这句要砍线的话，从来没有数据可答，只能靠印象 —— 那正是 §13.5.8.2.1 那条
+ * 「代价一律取稳态读数」反对的形态。这一档**只补读数，不改任何判定**。
+ *
+ * 三个形状都是实测钉住的，不是风格：
+ *  · **`--reporter=default` 必须显式保留** —— 只给 junit 会把人类可读的输出顶掉，
+ *    而真红那一屏是唯一能读的东西（本档不替代它，只加一层）；
+ *  · 明细**走文件不走 stdout** —— 钩子与平台的日志预算都不是给 90 行明细留的位
+ *    （同一动机见 `vitest.config.ts` 里覆盖率 reporter 那格：102400 字节的硬上限）；
+ *  · **每块、每遍各一个文件** —— 复跑是「更隔离条件下的另一组读数」，与首跑叠进同一个
+ *    文件就变成「谁后写谁冒充整体」。读账侧按 `(块, 遍)` 升序合并，第二遍覆盖第一遍。
+ *
+ * @param {string | undefined} dir 落点目录（钩子里就是导出的 `$LOGD`：每次新建、随 trap
+ *   删除、**不在检出内** —— 落进检出就会被 checkout 与结构门禁牵着）
+ * @param {number} chunkId 第几块（从 0 起）
+ * @param {number} attempt 第几遍（1 = 首跑，2 = `--no-file-parallelism` 隔离复跑）
+ * @returns {string[]} 追加给 vitest 的参数；`dir` 为空时**回空数组**（= 今天的形状不变，
+ *   人自己跑 `node scripts/run-affected-tests.mjs --full` 时没有 `$LOGD`，不该被塞读数）
+ */
+export function junitReportArgs(dir, chunkId, attempt) {
+  if (!dir) return [];
+  return [
+    "--reporter=default",
+    "--reporter=junit",
+    `--outputFile.junit=${cFileXmlName(dir, chunkId, attempt)}`,
+  ];
+}
+
+/**
+ * 把这次真正要跑的清单落一份到账本目录里 —— 读账侧拿它做**对账**。
+ *
+ * 没有它，「junit 里只有 88 份」与「这次清单就是 88 份」在账本里**逐字同形**，
+ * 而前者意味着有两份用例根本没跑出读数（加载即炸 / 被跳过 / reporter 没记上）。
+ * 「少跑几条没有任何判据会看见」是本仓立案的那一族（§13.5.8.2、§13.5.12），
+ * 所以读数必须自带分母。写不进去只少一条对账，不拦提交（与记账同口径）。
+ *
+ * @param {string} dir
+ * @param {string[]} files
+ * @returns {boolean} 是否落盘成功
+ */
+export function writeFilesManifest(dir, files) {
+  if (!dir) return false;
+  try {
+    writeFileSync(
+      path.join(dir, C_MANIFEST_NAME),
+      `${files.join("\n")}\n`,
+      "utf8",
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * 一次 spawn 的命令行长预算（字符）。
@@ -176,7 +247,8 @@ export function resolveMaxWorkers(raw) {
   }
   return {
     workers: parsed,
-    note: `按 COMFY_PRECOMMIT_MAX_WORKERS 用 --maxWorkers=${parsed}` +
+    note:
+      `按 COMFY_PRECOMMIT_MAX_WORKERS 用 --maxWorkers=${parsed}` +
       `（默认 ${DEFAULT_MAX_WORKERS}；这只调并发，不动任何判据）`,
   };
 }
@@ -462,7 +534,6 @@ export function scopeAdvice(input) {
   return lines.join("\n") + "\n";
 }
 
-
 /**
  * 调 `affected-tests.mjs --attribute` 拿「每个改动文件各自影响多少份」。
  *
@@ -474,10 +545,7 @@ export function scopeAdvice(input) {
 function collectAttribute() {
   const res = spawnSync(
     process.execPath,
-    [
-      path.join(process.cwd(), "scripts", "affected-tests.mjs"),
-      "--attribute",
-    ],
+    [path.join(process.cwd(), "scripts", "affected-tests.mjs"), "--attribute"],
     { encoding: "utf8" },
   );
   if (res.status !== 0) {
@@ -543,7 +611,9 @@ async function main(argv) {
     );
     if (note) process.stderr.write(`[affected-launch] ${note}\n`);
     if (dryRun) {
-      process.stdout.write("[affected-launch] --full：会跑全部用例（vitest 自行收集）\n");
+      process.stdout.write(
+        "[affected-launch] --full：会跑全部用例（vitest 自行收集）\n",
+      );
       return 0;
     }
     // 空清单在这里是**明确意图**（全量），所以复用同一条判决链（超时形态仍会隔离复跑）。
@@ -579,6 +649,24 @@ async function main(argv) {
     process.env.COMFY_PRECOMMIT_MAX_WORKERS,
   );
   if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+  /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`（每次新建、随 trap 删除、不在检出里）。
+   * 没有它（人自己跑这一档 / 不在钩子里）就一个字都不加 —— 这一档是**读数**，
+   * 不是这条命令的必经部分；落不进账本目录时宁可不记，也不要往检出里写文件。
+   *
+   * ⚠️ 路径要**当场 resolve 并说出口**：钩子由 sh 起，`$LOGD` 在 MSYS 下可能是
+   * `/tmp/…` 这种「shell 与 Windows Node 各解各的」写法。两个 Node 进程（这里与
+   * 读账的 `precommit-timing.mjs`）解出的结果一致 ⇒ 读数仍对得上，但 shell 那句
+   * `rm -rf "$LOGD"` 清的是它自己那一份 ⇒ 这里印出真实落点，读数在不在一眼可见，
+   * 而不是「读不到 ⇒ 静默没有这一格」。`existsSync` 为假时直接不加参数（退化成
+   * 今天的形状），不会写出半个读数冒充整体。 */
+  const rawLogd = process.env.LOGD || "";
+  const junitDir = rawLogd && existsSync(rawLogd) ? path.resolve(rawLogd) : "";
+  if (junitDir) {
+    writeFilesManifest(junitDir, files);
+    process.stderr.write(
+      `[affected-launch] 分文件耗时读数落在 ${junitDir}（组 C 账本，随钩子结束清理）\n`,
+    );
+  }
   /* 改动面归因只在**面大到值得说**时才去算：它是给「拆小」用的（见 `scopeAdvice`），
    * 而面小的时候那句话没有任何信息 —— 白算一次还会让每次提交多付约 220ms。
    * 判断用**已经拿到**的清单份数（`files.length - 固定清单份数`），不额外读一次 git。 */
@@ -627,6 +715,8 @@ async function main(argv) {
     const code = await runChunk(chunk, {
       entry,
       workers,
+      junitDir,
+      chunkId: index,
       waitBudget,
       onUnverified: (files) => unverified.push(...files),
       onAttempt: (record) => attempts.push(record),
@@ -638,28 +728,6 @@ async function main(argv) {
   }
   flush();
   return 0;
-}
-
-/**
- * 「未校验」那一档的收尾报告（纯函数，可被用例逐字钉住）。
- *
- * 为什么单独抽出来：这一档**放行**，所以它的唯一产物就是**这段话**。
- * 如果它没印出来（或印得含糊），放行就退化成「静默通过」—— 那正是这一档最坏的
- * 失效形态（同 §11.23「声明与读者」那一族：写了没有读者等于没写）。
- *
- * @param {string[]} files 这次没被校验到的用例路径
- * @returns {string}
- */
-export function unverifiedReport(files) {
-  return (
-    `[affected-launch] **未校验**：${files.length} 份用例在隔离复跑之后仍然只是\n` +
-    "  「机器太满、给不出可信读数」—— 这一档**既不是绿也不是红**，本次提交放行，\n" +
-    "  但下面这些文件这次没有被验证过：\n" +
-    files.map((f) => `    · ${f}\n`).join("") +
-    "  机器空下来后请自己复验一次：\n" +
-    "    node scripts/run-affected-tests.mjs --full\n" +
-    "  （或直接跑 vitest 入口、带上 `--no-file-parallelism` 与那几份文件。）\n"
-  );
 }
 
 /**
@@ -676,9 +744,12 @@ export function unverifiedReport(files) {
  * 第二遍指纹消失（真断言 / 真挂死）也照旧阻断。
  *
  * @param {string[]} chunk 本块的用例路径
- * @param {{entry: string, workers?: number, spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
+ * @param {{entry: string, workers?: number, junitDir?: string, chunkId?: number,
+ *          spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
  *   `workers` 默认 `DEFAULT_MAX_WORKERS`（调用点由 `resolveMaxWorkers` 给出）——
  *   这一层**只读它当首跑的并发**，复跑一律 `--no-file-parallelism`（降负载那一半）。
+ *   `junitDir` + `chunkId` 是分文件耗时的落点（钩子里传 `$LOGD`；不给就一个字都不加，
+ *   见 `junitReportArgs` 那三个被实测钉住的形状）。
  *   `waitBudget` 是多块之间**共享**的等待截止时刻（默认单块自己一份，供调用点收成一份）。
  *   `onAttempt` 每块一条判决记录，只喂收尾那份账（`rerunReport`），**不参与退出码**。
  * @returns {Promise<number>}
@@ -687,8 +758,13 @@ export async function runChunk(chunk, deps) {
   const spawn = deps.spawn ?? spawnVitest;
   // 每一块都往收尾那份账里记一条（`rerunReport`）；调用点不给就不记，判决本身不受影响。
   const report = deps.onAttempt ?? (() => {});
-  const { entry, workers = DEFAULT_MAX_WORKERS } = deps;
-  const res = spawn(entry, ["run", `--maxWorkers=${workers}`, ...chunk]);
+  const { entry, workers = DEFAULT_MAX_WORKERS, junitDir, chunkId = 0 } = deps;
+  const res = spawn(entry, [
+    "run",
+    ...junitReportArgs(junitDir, chunkId, 1),
+    `--maxWorkers=${workers}`,
+    ...chunk,
+  ]);
   if (res.status === 0) {
     report({ outcome: "first-green" });
     return 0;
@@ -734,7 +810,12 @@ export async function runChunk(chunk, deps) {
             : " 没等到回落"
         } —— 起第 2 遍：同一份 ${chunk.length} 条清单、--no-file-parallelism\n`,
   );
-  const retry = spawn(entry, ["run", "--no-file-parallelism", ...chunk]);
+  const retry = spawn(entry, [
+    "run",
+    ...junitReportArgs(junitDir, chunkId, 2),
+    "--no-file-parallelism",
+    ...chunk,
+  ]);
   if (retry.status === 0) {
     process.stderr.write(
       "[affected-launch] **第 2 遍**全绿 ⇒ 刚才那次是**负载假红**（这一步不构成放行依据，\n" +
@@ -802,55 +883,6 @@ export async function runChunk(chunk, deps) {
 export function remainingWaitMs(waitBudget) {
   if (!waitBudget) return RETRY_BUDGET_MS;
   return Math.max(0, waitBudget.deadline - Date.now());
-}
-
-/** 毫秒收成「12.3s」这一档的人读时长（本文件内两处以上要这个形状，所以收成一函数）。 */
-function fmtSec(ms) {
-  return `${(Number(ms) / 1000).toFixed(1)}s`;
-}
-
-/**
- * 一次判决链走完之后的**账**：这一次总共等了多久、放行的是第几遍测出来的、
- * 放行时它到底是绿还是「未校验」（纯函数，可被用例逐字钉住）。
- *
- * 为什么要有这一段：把「重测」机器化之后，读数只剩在 stderr 的散落行里 —— 被放行（或被
- * 拦下）的人回答不出那三个问题，而**「负载假红」与「真回归」在人嘴里的分界就是这三个问题**。
- * 放行的一档如果只有散落行，等于这一档没有结论（同 §11.23「写了没有读者等于没写」）。
- *
- * 三条口径：
- *   ① **一块都没复跑时返回空串** —— 绿的那一大半不该为这段账付输出
- *      （同 §13.5.8「面小时连归因都不去算」）；
- *   ② 「放行」与「通过」不许混写：负载假红那一格是「同一批用例在更隔离条件下重测的结果」，
- *      未校验那一格是「这次没测到」；
- *   ③ 等待预算是**整次提交一份**（逐块计就是 5 分钟 × N，实测 8 块 31 分钟，ISSUE #1747），
- *      所以报「累计 / 预算」两个数，而不是只报累计。
- *
- * @param {Array<{outcome: string, waitedMs?: number, settled?: boolean}>} attempts 每一块一条
- * @param {{budgetMs: number}} budget 整次提交那份等待预算
- * @returns {string} 要打到 stderr 的正文；一块都没复跑时是空串
- */
-export function rerunReport(attempts, budget) {
-  const reran = attempts.filter(
-    (a) => a.outcome !== "first-green" && a.outcome !== "red-no-fingerprint",
-  );
-  if (reran.length === 0) return "";
-  const count = (o) => attempts.filter((a) => a.outcome === o).length;
-  const waitedMs = reran.reduce((a, r) => a + (r.waitedMs ?? 0), 0);
-  const noSettle = reran.filter((r) => r.settled === false).length;
-  return (
-    "[affected-launch] 本次的等待与复跑账：\n" +
-    `  共 ${attempts.length} 块：第 1 遍直接绿 ${count("first-green")} 块，` +
-    `红而不带超时指纹（真红，一次都不复跑）${count("red-no-fingerprint")} 块，` +
-    `带指纹复跑 ${reran.length} 块。\n` +
-    `  等待累计 ${fmtSec(waitedMs)} / 预算 ${fmtSec(budget.budgetMs)}` +
-    `（**整次提交一份**，不是每块一份）；没等到回落 ${noSettle} 块` +
-    "（等待只是优化，不改变结论）。\n" +
-    `  **第 2 遍**的结果：负载假红放行 ${count("rerun-green")} 块、` +
-    `**未校验**（仍然只是超时形态）${count("rerun-unverified")} 块、` +
-    `真红 ${count("real-red")} 块。\n` +
-    "  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果，" +
-    "后者是这次**没测到**（已逐条点名哪几份）。\n"
-  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
