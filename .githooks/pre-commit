@@ -351,13 +351,13 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(51 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(50 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
-# ⚠️ 上面那句「D(51 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
-# `run` 步骤的**总数**一致（D0 那 14 条 + D 那 37 条 = 51），新增判据时必须同步这个数字。
-# 严格说与本组**并行**的只有 D 那 37 条：D0 的 14 条在本组启动之前就串行跑完了（见文件头
-# 那一档）。拿 51 说并发面积是**偏保守**的那一侧 —— 它高估争抢，而低估争抢才会诱人去抬
+# ⚠️ 上面那句「D(50 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
+# `run` 步骤的**总数**一致（D0 那 14 条 + D 那 36 条 = 50），新增判据时必须同步这个数字。
+# 严格说与本组**并行**的只有 D 那 36 条：D0 的 14 条在本组启动之前就串行跑完了（见文件头
+# 那一档）。拿 50 说并发面积是**偏保守**的那一侧 —— 它高估争抢，而低估争抢才会诱人去抬
 # `--maxWorkers`，那正是这一族事故（`Failed to start forks worker`）的方向。
 run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
   # 先答一格「这台机器上解释器在哪」：几条用到 Python 的用例缺件时按**既有口径**
@@ -443,15 +443,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 44 处牵着 `@xyflow/react`）。这条把「入口的静态图上不该有重依赖」机器化，并打印
   # 整条链（红得能直接改）。修法是把 barrel 那一跳换成深路径 + `dynamic()`。
   run "入口重依赖静态可达性" node scripts/check-barrel-heavy-deps.cjs
-  # prettier 格式硬闸（规范 13.5）：未过 prettier 的文件一个都不许有（存量清零后翻闸）。
-  # `--staged` 是**输入面跳过**（ISSUE #1747）：它的扫描面实测只有 `src/**` 与
-  # `.storybook/**`（1596 / 5940 份被跟踪文件 —— `GLOBS` 连 `.md` 都不收，`IGNORE_GLOBS`
-  # 又剔掉 `scripts/` `tests/` `tools/` `e2e/` `public/` `docs/{api,generated}` 与根级配置），
-  # 而全库扫描实测 2.9s（热缓存）—— 那是 D 组里最贵两步之一。只加 changelog 碎片 /
-  # 只改文档 / 只动 `scripts/` `tests/` 这一大类提交根本不在靶子里，扫多少遍结论都一样。
-  # 跳过时打印「未触及扫描面」，与扫过之后的 OK 可分辨（不伪造绿）。口径见 §13.5.8.2
-  # 与脚本文件头；判据面由 `IGNORE_GLOBS` 自己现算，没有第二份目录清单。
-  run "prettier 格式硬闸" node scripts/check-format.cjs --staged
+  # ── prettier 格式硬闸**已挪到平台侧**（`.cnb.yml` 的「prettier 格式」，ISSUE #2010）──
+  # 判据一个字没改（`check-format.cjs`），挪的只是执行者。理由与 §13.5.17 那三条文档面
+  # 判据同一条口径：**它的结论挡不住任何一次代码回归** —— prettier 只格式化，格式漂了
+  # 没有任何运行时症状，最坏后果是下一次 `--write` 产出一份与本次改动无关的全文件
+  # diff（§13.7，评审一眼可见、改回来也只是再跑一次格式化）。而它留在**每一次提交**里
+  # 的成本是实测的：冷缓存 ~21s、热缓存 ~4.5s（`--staged` 只在「没碰到扫描面」时跳过，
+  # 而 `src/**` 是最高频的提交类别，命中即扫全库）。
+  # 本地出口照旧在：`pnpm check:all`（`scripts/quality-gate.mjs` 的 `format` 项，全量档）。
+  # ⚠️ 紧邻的这一步（`check-reformat-only.cjs`）**必须留着**，两件事别混：那条判的是
+  # 「这次提交有没有把真实改动埋进几百个文件的重排里」，后果不可逆（blame 永久失真、
+  # squash 合并后本地再没有拆分的机会），而 prettier 那一条判的只是「文件现在干不干净」。
   # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种
   # 写法」的文件 ≥ 10 个就阻断，要求拆成两次提交。
   # `--staged` 是**输入面跳过**（ISSUE #1993）：它的面 = 仓库里真实存在的顶层目录与根级

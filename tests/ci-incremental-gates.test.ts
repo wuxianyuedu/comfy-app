@@ -188,6 +188,46 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     }
   });
 
+  it("`prettier 格式` 的扫描面就是 `check-format.cjs` 剩下的那两棵树（ISSUE #2010）", () => {
+    /* 这一档是 ISSUE #2010 从本地钩子**挪过来**的，它的 globs 是**手写的上界**：
+     * `check-format.cjs` 的判据面是「`GLOBS` 展成候选 → `IGNORE_GLOBS` 剔掉」,
+     * 剩下 `src/**` 与 `.storybook/**` 两棵 —— globs 写窄了就是「改了却没人查格式」，
+     * 而那种漏判**没有任何别的判据**会看见（钩子里那一步已经撤了）。
+     *
+     * 判法不走「读实现」：把 `IGNORE_GLOBS` 里每一条逐个喂给 `isScanned()`，
+     * 断言它们确实在面外；再把两棵树的样本喂进去，断言它们确实在面内 ——
+     * 于是「`IGNORE_GLOBS` 增删目录」这个动作会在这里当场红（要求同批回来看 globs）。 */
+    const gate = INCREMENTAL_GATES.find((g) => g.name === "prettier 格式");
+    expect(gate, "登记表里没有「prettier 格式」这一档 —— 它已随 ISSUE #2010 挪到平台侧，"
+      + "却没有登记收窄面 = 每一个 PR 都白付一次全库扫描（或反过来，改了却没人查）").toBeDefined();
+    expect(gate?.script).toBe("scripts/check-format.cjs");
+    /* `["src/**", ".storybook/**"]` 是那两棵树的写法；顺序不判（两棵树之间没有语义）。 */
+    expect([...(gate?.globs ?? [])].sort()).toEqual([".storybook/**", "src/**"]);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fmt = require("../scripts/check-format.cjs") as {
+      isScanned: (rel: string) => boolean;
+      IGNORE_GLOBS: readonly string[];
+    };
+    for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
+      expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);
+    }
+    /* 反向：`IGNORE_GLOBS` 里每一条都把文件真正剔出扫描面 —— 这一步是自检，
+     * 它红的含义是「`IGNORE_GLOBS` 失效了」，请先修判据再看 globs。 */
+    for (const glob of fmt.IGNORE_GLOBS) {
+      /* 造一个「一定长得像那个 glob 命中物」的探针：先展开花括号，再补上缺的路径与
+       * 扩展名。`*.js` 那类「通配 + 扩展名」的条目展开后已经是真文件名，不能再改扩展名
+       * —— 换成 `.ts` 会让它落回扫描面里，那测的是本函数而不是 `IGNORE_GLOBS`。 */
+      const braced = glob.replace(/\{[^}]*\}/g, "ts");
+      const probe = /\.\w+$/.test(braced.replace(/^\*/, "x"))
+        ? braced.replace(/\*/, "probe")
+        : braced.replace(/\*\*$|\*$/, "probe.ts");
+      expect(
+        fmt.isScanned(probe),
+        `\`IGNORE_GLOBS\` 里的 ${glob} 没能把 ${probe} 剔出扫描面 —— 判据面与登记表漂了`,
+      ).toBe(false);
+    }
+  });
+
   it("每条被收窄的 stage 在 .cnb.yml 里都真实存在且能跑（不是登记了一条不存在的）", () => {
     /* `checkIncrementalGates` 只核对 `ifModify`，不核对「这条 stage 还在不在
      * `COMFYAPP_CI_GATES` 的顺序清单里」—— 有人把某条 stage 从 GATES 摘掉、

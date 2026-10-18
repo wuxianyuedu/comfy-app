@@ -872,6 +872,32 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     }
   });
 
+  it("`prettier 格式` 是**在跑**的那一档，不是停用（ISSUE #2010 改变了它的来路）", () => {
+    /* 这条 stage 的名字在停用清单里躺过一阵（2026-10-16 临时让位给 E2E 调试，
+     * 恢复条件是「E2E 一绿 + 平台日志中文可读」）。ISSUE #2010 把它从本地钩子
+     * **挪过来接管**：判据一字未改，改变的是「判据 ⇄ 执行者」的关系 —— 从此它在这里
+     * 是**唯一**执行者。于是那份停用清单里的同名条目必须出网，否则两句话对不上：
+     * 一边说「这一步不许跑」，一边说「这一步是那条判据的唯一执行者」。
+     *
+     * 为什么这条要单独判（`单元测试` 那条同款理由）：判据与 stage 的**在场**是两件事，
+     * 而「钩子撤掉 + 平台侧还在停用」组合起来的结果是「谁都没跑它」，且不会有
+     * 任何别的判据变红 —— 失效形态正是「谁都没跑它」。 */
+    const text = readRegisteredConfig();
+    const order = registeredGateOrder(text);
+    const disabled = registeredDisabledGates(text);
+    expect(
+      order,
+      "`prettier 格式` 不在 COMFYAPP_CI_GATES 里 —— 它已随 ISSUE #2010 从本地钩子" +
+        "挪到平台侧，钩子里那一步同时撤掉了；两边都没有 = 这条判据一个执行者都没有",
+    ).toContain("prettier 格式");
+    expect(
+      disabled,
+      "`prettier 格式` 还在 `COMFYAPP_CI_DISABLED_GATES` 里 —— 那一项是 2026-10-16 的" +
+        "临时让位（恢复条件是 E2E 一绿 + 日志中文可读），与 ISSUE #2010 的「挪执行者」" +
+        "不是同一件事；此刻它是这条判据的唯一执行者，停用等于把它关掉",
+    ).not.toContain("prettier 格式");
+  });
+
   it("慢 stage 带着量级余量的 `timeout` 预算（不然卡死要等满 2h 才有人知道）", () => {
     const text = readRegisteredConfig();
     const timeouts = stageTimeouts(text);
