@@ -10,7 +10,12 @@
  *      假 comfy-cli 都要它（本仓写明的唯一下限就是 3.10，
  *      `scripts/setup-comfy-cli-venv.ps1`）；
  *   ② **配错了**——`.cnb.yml` 里有 host 侧 PowerShell 认不了的语法面（`?.` / `??`
- *      是 pwsh 7 才有的），它们**不会在解析期报错**，只会在跑到那一步时整段炸。
+ *      是 pwsh 7 才有的），它们**不会在解析期报错**，只会在跑到那一步时整段炸；
+ *   ③ **配了一条这条路径根本不支持的路**——某个 stage 带了任务级 `image:`。自托管
+ *      节点上没有 docker daemon，平台连「起容器」都做不到，那一格会在 **70ms** 内红在
+ *      `Runner does not enable Docker` 上（实测 `cnb-cqk-1k550gpp2`，§13.5.3.4.1.3）。
+ *      它与 ① 反着：① 是**静默少判**、③ 是**整条流水线在倒数第二步红**，而两者都是
+ *      几秒钟就能问出来的事。
  *
  * 两格有一个共同的形态，也正是用户那一句诉求的落点：**它们红得晚**。第 ① 格红在
  * 「单元测试」里那几条用例上（而它们按既有口径走 `env` 档跳过、**不会红**
@@ -276,6 +281,47 @@ export function stageBlockIn(text, name) {
 }
 
 /**
+ * `.cnb.yml` 里**带了任务级 `image:` 的 stage**（名字，按出现顺序；空数组 = 一格都没有）。
+ *
+ * ## 为什么这一条会红
+ *
+ * 自托管节点上**没有 docker daemon**，而任务级 `image:` 要求平台为这一格起一个独立
+ * 容器 —— 它连第一步都做不到。实测（`cnb-cqk-1k550gpp2`，PR #2003 首跑）：
+ *
+ *     浏览器安装  error [70ms]  →  Runner does not enable Docker.
+ *
+ * 70 毫秒、脚本一行都没执行、前面三十三步全绿。所以本仓的形态是**整条宿主机直跑**，
+ * 这条判据把「有人又加了一格」这件事在**最便宜的位置**（装依赖之前）拦下来 —— 而不是
+ * 让它在整条流水线倒数第二步以一句英语报错收场。
+ *
+ * ## 解析不另写一份
+ *
+ * 走 `stageBlockIn()`（与本步别的用途同一个收口口径），只认 stage 那一层自己的键：
+ * `env:` 里的同名键缩进更深，不会被算进来。判据面仍在
+ * `tests/ci-image-identity.test.ts`（允许的名单逐格点名），这里只负责「红在便宜的位置」。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @returns {string[]} 带 `image:` 的 stage 名
+ */
+export function stagesWithImage(text) {
+  const lines = String(text ?? "").split("\n");
+  /** @type {string[]} */
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
+    const name = item?.[1];
+    if (name === undefined) continue;
+    const block = stageBlockIn(text, name);
+    if (block === null) continue;
+    const found = block
+      .split("\n")
+      .some((raw) => /^ {4}image:\s*\S/.test(raw));
+    if (found && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+/**
  * 某个 stage 的 `env:` 里某个键的**字面值**（去引号；找不到回 `null`）。
  *
  * 只看那一项自己的块（`stageBlockIn` 收的口），**不解析继承 / 锚点**：这一步要回答的
@@ -382,6 +428,28 @@ export function envProbe({
       );
     } else {
       notes.push("`.cnb.yml` 的 script 块只用宿主 PowerShell 认的语法面");
+    }
+  }
+
+  /* ── ①′ 任务级 `image:`：这条路径根本不支持它 ──
+   *
+   * 与 ① 同一类（配置写错了），但形态相反：① 是静默少判、这一条是**整条流水线在倒数
+   * 第二步红**，且那一格会在 70ms 内以一句英语收场（`Runner does not enable Docker`，
+   * 见 `stagesWithImage()` 的头注）。放在这里是因为它读的是同一份配置文本、代价是零。 */
+  if (configText !== null) {
+    const withImage = stagesWithImage(configText);
+    if (withImage.length > 0) {
+      problems.push(
+        `这些 stage 带了任务级 \`image:\`：${withImage.join(" / ")} —— ` +
+          "自托管节点上**没有 docker daemon**，平台连「起容器」都做不到，这些格子会在 " +
+          "70ms 内红在 `Runner does not enable Docker` 上（实测 cnb-cqk-1k550gpp2，" +
+          "脚本一行都没执行）。\n" +
+          "      下一动作：把那一行 `image:` 删掉（本仓的形态是整条宿主机直跑，" +
+          "见规范 §13.5.3.4.1.3）；要「装好工具的现成环境」就走节点镜像计划 " +
+          "`node scripts/ci-image-plan.mjs`，别在流水线里声明它。",
+      );
+    } else {
+      notes.push("`.cnb.yml` 的 stage 一格都没带 `image:`（这条路径上没有 docker daemon）");
     }
   }
 
