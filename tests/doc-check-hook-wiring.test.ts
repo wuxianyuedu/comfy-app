@@ -32,7 +32,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { registeredGateOrder, stageBlock } from "./no-platform-ci-config.test";
+import {
+  registeredDisabledGates,
+  registeredGateOrder,
+  stageBlock,
+} from "./no-platform-ci-config.test";
 
 import { groupShBody, runSteps, stepsInGroup } from "./helpers/hook-groups";
 
@@ -380,6 +384,11 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
  * `IGNORE_GLOBS` 之后只剩 `src/**` 与 `.storybook/**`）。于是「只加 changelog 碎片 /
  * 只改文档 / 只动 `scripts/` 或 `tests/`」这一大类高频提交在这两步上白付 6.5s。
  *
+ * ⚠️ `check-format.cjs` 那一半**已随 ISSUE #2010 整体挪到平台侧**（题面那句
+ * 「prettier 只是格式化，不影响功能」）—— 它不再只是「加个 `--staged`」，而是
+ * 「不在提交这一档上跑」。所以本组现在只钉 `check-ui-primitives`，格式那一条的
+ * 两半判据在下面 `prettier 格式：执行者在平台侧` 那一组里。
+ *
  * 同族里 **`--staged` 就是这一步能存在的前提**（与上面 docs-api 那条同一口径）：
  * 抹掉 flag 在本文件里与「让全库扫描回到无条件执行」等价，而**没有任何别的判据**
  * 会看见这个差异 —— 它只会让每次提交慢一点，慢不会让任何人报错。
@@ -392,20 +401,6 @@ const UI_PRIMITIVES = join(REPO_ROOT, "scripts", "check-ui-primitives.cjs");
 describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
-
-  it("prettier 格式棘轮在钩子里带 --staged 条件触发", () => {
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/check-format.cjs"),
-    );
-    expect(
-      hit,
-      `门禁链 ${steps.length} 步里没有 prettier 格式棘轮，或它丢了 --staged —— ` +
-        "后者会让全库扫描回到无条件执行（每次提交白付 2.9s 热缓存 / 17.6s 冷缓存）",
-    ).toEqual({
-      label: "prettier 格式硬闸",
-      cmd: "node scripts/check-format.cjs --staged",
-    });
-  });
 
   it("UI 基元复用棘轮在钩子里带 --staged 条件触发", () => {
     const hit = steps.find((s) =>
@@ -421,13 +416,10 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
     });
   });
 
-  it("两个脚本都实现了 --staged 这一档（不是只在钩子里写了个 flag）", () => {
+  it("UI 基元的脚本实现了 --staged 这一档（不是只在钩子里写了个 flag）", () => {
     // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成
     // 未知参数（多数脚本忽略）⇒ 条件触发**静默失效**，退回无条件全库扫描。
-    const cases = [
-      ["check-format.cjs", FORMAT_GATE],
-      ["check-ui-primitives.cjs", UI_PRIMITIVES],
-    ] as const;
+    const cases = [["check-ui-primitives.cjs", UI_PRIMITIVES]] as const;
     for (const [name, file] of cases) {
       const script = readFileSync(file, "utf8");
       expect(
@@ -438,15 +430,11 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
   });
 
   it("判据面由扫描配置现算，没有第二份手抄的目录清单", () => {
-    // 这是本步能「不漂移」的前提：判据面必须从既有配置（`IGNORE_GLOBS` / `SCAN_DIRS`）
-    // 现算，抄一份就会漂 —— 抄的那份多收一个目录，那类文件的违规从此没人查，
+    // 这是本步能「不漂移」的前提：判据面必须从既有配置（`SCAN_DIRS`）现算，
+    // 抄一份就会漂 —— 抄的那份多收一个目录，那类文件的违规从此没人查，
     // 且形态是静默的（§12.12 / §12.18）。
-    const fmt = readFileSync(FORMAT_GATE, "utf8");
-    expect(
-      fmt.includes("GLOB_RES.some") && fmt.includes("IGNORE_RES.some"),
-      "check-format.cjs 的扫描面判定没有由 GLOBS / IGNORE_GLOBS 现算 —— " +
-        "手抄一份目录清单就会与 IGNORE_GLOBS 漂移",
-    ).toBe(true);
+    // （`check-format.cjs` 那一半随 ISSUE #2010 挪到平台侧，它自己那套「面由
+    // `GLOB_RES` + `IGNORE_RES` 现算」的判据在下面那组里单独钉。）
     const ui = readFileSync(UI_PRIMITIVES, "utf8");
     expect(
       ui.includes("skipUnlessStagedTouches({ roots: SCAN_DIRS"),
@@ -457,9 +445,125 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
 });
 
 /**
+ * prettier 格式：**执行者在平台侧**（ISSUE #2010）。
+ *
+ * 立案现场是用户的一句话：「prettier 只是格式化，不影响功能，挪到 ci 执行」。
+ * 这句话之所以成立，是因为它正落在 §13.5.17 那条尺子上 —— **结论挡不挡得住一次
+ * 代码回归**。格式漂了没有任何运行时症状，最坏后果是一次 `--write` 产出一份与本次
+ * 改动无关的全文件 diff（一眼可见、改回来也只是再跑一次格式化）；而它留在**每一次
+ * 提交**里要付冷缓存 ~21s / 热缓存 ~4.5s（钩子那一档的 `--staged` 只省掉「没碰到
+ * 扫描面」那一半，而 `src/**` 是最高频的提交类别）。
+ *
+ * 判五件事，**每一件都是「没有任何别的判据会看见」的静默形态**：
+ *   ① 钩子里不再有它（有 = 挪了个寂寞，提交照旧付那一笔）；
+ *   ② 平台侧有这一步（它判的是「谁都没跑它」这一格 —— 钩子撤掉 + 平台侧没加 = 判据消失）；
+ *   ③ 平台侧那一步**不带 `--staged`**（带 = 在平台侧恒跳过，挂了等于没挂）；
+ *   ④ 它在本地的**出口**还在（`pnpm check:all` 的 `format` 项）—— 挪执行者不等于删能力；
+ *   ⑤ 脚本头那句自我介绍指向平台侧（「自称在哪跑」⇄「真在哪跑」不一致，
+ *      正是 `tests/gate-executors.test.ts` 立案的那族形态）。
+ *
+ * ⑤ 与 ① 是同一条口径的反向两半：脚本文本与钩子步骤**同时**改错时（一起闭嘴）没有任何
+ * 别的判据会红，所以两半都要正面钉住。
+ */
+describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = hookGateSteps(hook);
+  const config = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
+
+  it("钩子 D 组里已经没有它了（挪走 = 提交那一刻不再付这笔）", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/check-format.cjs"),
+    );
+    expect(
+      hit,
+      `门禁链 ${steps.length} 步里又有 prettier 格式硬闸了 —— 它已随 ISSUE #2010 ` +
+        "挪到平台侧（`.cnb.yml` 的「prettier 格式」）。要么把它从钩子里去掉，" +
+        "要么同步改本判据（外加 §13.5.1.1 与 `.githooks/pre-commit` 头注那笔账）",
+    ).toBeUndefined();
+  });
+
+  it("平台侧 `.cnb.yml` 真的有这一步（挪走 ≠ 没人跑）", () => {
+    expect(
+      platformStages().some((x) => x.name === "prettier 格式"),
+      "`.cnb.yml` 里没有「prettier 格式」这一步 —— 钩子撤掉 + 平台侧没加 = " +
+        "这条判据一个执行者都没有（§13.5.1.1 与 §13.5.17 同一条两半判法）",
+    ).toBe(true);
+    expect(
+      registeredGateOrder(config),
+      "`prettier 格式` 不在 COMFYAPP_CI_GATES 里（在跑但不登记 = 在场没有执行者）",
+    ).toContain("prettier 格式");
+  });
+
+  it("平台侧那一步是**全量档**，且点名的就是这份脚本", () => {
+    const stage = platformStages().find((x) => x.name === "prettier 格式")?.stage;
+    expect(stage, "`.cnb.yml` 里解析不出「prettier 格式」这一步").toBeTruthy();
+    expect(
+      stage,
+      "平台侧那一步带了 `--staged`：那里的工作区就是这次要判的那份源码，" +
+        "`--staged` 读的是「本次暂存」、恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
+    ).not.toContain("--staged");
+    expect(
+      stage,
+      "「prettier 格式」跑的不是 scripts/check-format.cjs —— 两处各写一份判据必然分叉",
+    ).toContain("scripts/check-format.cjs");
+  });
+
+  it("它不在**停用**清单里（那是另一件事：临时让位，不是挪执行者）", () => {
+    /* `COMFYAPP_CI_DISABLED_GATES` 里同名的那条是 2026-10-16 的临时停用（让位给 E2E
+     * 调试），恢复条件是「E2E 一绿 + 平台日志中文可读」。本轮它是被**挪过来接管**的，
+     * 判据与执行者的关系变了 —— 于是「既在 GATES 又在 DISABLED」这句话会自相矛盾：
+     * 停止清单里的档按定义不该跑，而这一步现在是它的唯一执行者。 */
+    const disabled = registeredDisabledGates(config);
+    expect(
+      disabled,
+      "`prettier 格式` 同时出现在 GATES 与 DISABLED_GATES 里 —— 它此刻是这条判据的" +
+        "唯一执行者，停用清单里那一项是 2026-10-16 的临时让位，已随 ISSUE #2010 出网",
+    ).not.toContain("prettier 格式");
+  });
+
+  it("本地出口还在（`pnpm check:all` 的 format 项）—— 挪执行者不等于删能力", () => {
+    const gate = readFileSync(
+      join(REPO_ROOT, "scripts", "quality-gate.mjs"),
+      "utf8",
+    );
+    expect(
+      gate,
+      "`pnpm check:all` 里没有 prettier 这一档了 —— 挪走执行者之后它成了" +
+        "「只有平台侧跑」的一条，而本仓承诺的是「完整验证这一档照旧能本地跑一遍」",
+    ).toContain("scripts/check-format.cjs");
+  });
+
+  it("脚本头写明执行者在平台侧（自称 ⇄ 实际，别让两份承诺一起过期）", () => {
+    const script = readFileSync(FORMAT_GATE, "utf8");
+    expect(
+      script,
+      "check-format.cjs 的头部没写明它由平台侧 `.cnb.yml` 调用 —— " +
+        "脚本自称的执行者与实际不一致时，读的人会被指到钩子里去找一步不存在的步骤",
+    ).toContain(".cnb.yml");
+    expect(
+      script.includes("供 `.githooks/pre-commit` 调用"),
+      "check-format.cjs 的头部又写回「供 .githooks/pre-commit 调用」了 —— 钩子里" +
+        "已经没有这一步，那就是一句假承诺（§13.5.12 的立案形态）",
+    ).toBe(false);
+  });
+
+  it("判据面仍由扫描配置现算（没有第二份手抄的目录清单）", () => {
+    /* 这一条原住在上面那组里（与 `check-ui-primitives` 并列）；它随 ISSUE #2010
+     * 跟着这一步一起搬过来 —— 判据自己的身体没变，与它在哪个执行者手里无关。 */
+    const fmt = readFileSync(FORMAT_GATE, "utf8");
+    expect(
+      fmt.includes("GLOB_RES.some") && fmt.includes("IGNORE_RES.some"),
+      "check-format.cjs 的扫描面判定没有由 GLOBS / IGNORE_GLOBS 现算 —— " +
+        "手抄一份目录清单就会与 IGNORE_GLOBS 漂移",
+    ).toBe(true);
+  });
+});
+
+/**
  * 第二梯队全库扫描的「输入面跳过」接进 D 组（ISSUE #1747 续）。
  *
- * 立案现场：D 组里除两步最贵的（`check-ui-primitives` / `check-format`）之外，
+ * 立案现场：D 组里除两步最贵的（`check-ui-primitives` / `check-format`；后者已随
+ * ISSUE #2010 整体挪到平台侧）之外，
  * 还有第二梯队 14 步各自「扫全库的一个子集」，单项 0.27–1.85s，合计 ≈8.5s
  * （实测热缓存 8 核）。它们的扫描面全是**固定前缀**（`src/`、`src/lib`、
  * `src/components`+`src/app`、`src-tauri/src` ……），于是「只加 changelog 碎片 /
