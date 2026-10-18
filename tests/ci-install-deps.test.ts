@@ -15,15 +15,26 @@
  *   ③ **「退 0 但清单为空」不等于「没变」** —— PR 事件上三点 diff 的空集形态退 0，
  *      照「退 0 就采信」会把它读成「什么都没变」（见 `changedFiles` 里那段 ⚠️）。
  *
+ * 另有第四组（ISSUE #2010）：**全新 clone 上唯一真正生效的那道闸**是
+ * 「装出来的那一套 ⇄ 现在的依赖面」的指纹比对 —— 平台侧每一次构建都是全新 clone，
+ * 于是「依赖面没碰就跳过」这条判据此前**一次都没生效过**（实测固定 59~61s）。
+ *
  * 口径见规范 §13.5.20。
  */
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   DEP_FILES,
+  FINGERPRINT_FILE,
   changedFiles,
   decideInstall,
   main,
+  pnpmInstallFingerprint,
+  readInstallFingerprint,
+  writeInstallFingerprint,
 } from "../scripts/ci-install-deps.mjs";
 
 /** 造一个「git 调用」替身：按参数给出退出码与 stdout。 */
@@ -64,27 +75,68 @@ describe("decideInstall：该装 / 该跳过的三个方向", () => {
     const v = decideInstall({
       files: ["README.md", "pnpm-lock.yaml"],
       installed: true,
+      fingerprint: "f",
+      expected: "f",
     });
     expect(v.install).toBe(true);
     expect(v.why).toContain("pnpm-lock.yaml");
   });
 
   it("node_modules 不在 ⇒ 装（跳过的前提是它真在）", () => {
-    expect(decideInstall({ files: [], installed: false }).install).toBe(true);
+    expect(
+      decideInstall({
+        files: [],
+        installed: false,
+        fingerprint: "f",
+        expected: "f",
+      }).install,
+    ).toBe(true);
   });
 
   it("拿不到变更清单 ⇒ 装（「不知道」不是「没变」）", () => {
-    const v = decideInstall({ files: null, installed: true });
+    const v = decideInstall({
+      files: null,
+      installed: true,
+      fingerprint: "f",
+      expected: "f",
+    });
     expect(v.install).toBe(true);
     expect(v.why).toContain("不知道");
   });
 
-  it("只改了无关文件且 node_modules 在 ⇒ 跳过", () => {
+  it("只改了无关文件、且指纹对得上 ⇒ 跳过", () => {
     const v = decideInstall({
       files: ["src/lib/a.ts", "docs/README.md", "changelog.d/x.md"],
       installed: true,
+      fingerprint: "f",
+      expected: "f",
     });
     expect(v.install).toBe(false);
+  });
+
+  it("指纹对不上 ⇒ 装（全新 clone / 缓存里带着旧指纹：这是平台侧唯一的常态）", () => {
+    const v = decideInstall({
+      files: ["README.md"],
+      installed: true,
+      fingerprint: "old",
+      expected: "new",
+    });
+    expect(v.install).toBe(true);
+    expect(v.why).toContain("指纹");
+  });
+
+  it("没有指纹 / 算不出指纹 ⇒ 装（「没有证据」与「不知道」都不是「没变」）", () => {
+    for (const state of [
+      { fingerprint: null, expected: "new" },
+      { fingerprint: "old", expected: null },
+    ]) {
+      const v = decideInstall({
+        files: ["README.md"],
+        installed: true,
+        ...state,
+      });
+      expect(v.install, JSON.stringify(state)).toBe(true);
+    }
   });
 });
 
@@ -110,6 +162,92 @@ describe("changedFiles：清单为空与「命令退 0」不是同一件事", ()
       }),
     );
     expect(files).toEqual(["pnpm-lock.yaml", "src/lib/a.ts"]);
+  });
+});
+
+describe("依赖面指纹：记的是「这次装用的输入」，不是「文件长什么样」", () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ci-deps-"));
+    for (const f of [
+      "pnpm-lock.yaml",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "next.config.js",
+    ]) {
+      fs.writeFileSync(path.join(tmp, f), "# " + f + "\n");
+    }
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("同一份依赖面 ⇒ 同一个指纹；锁文件改一个字 ⇒ 变", () => {
+    const a = pnpmInstallFingerprint(tmp);
+    expect(a).toBe(pnpmInstallFingerprint(tmp));
+    fs.appendFileSync(path.join(tmp, "pnpm-lock.yaml"), "changed\n");
+    expect(pnpmInstallFingerprint(tmp)).not.toBe(a);
+  });
+
+  it("patches/ 也算依赖面（换一个补丁，装出来的产物就不同）", () => {
+    const before = pnpmInstallFingerprint(tmp);
+    fs.mkdirSync(path.join(tmp, "patches"));
+    fs.writeFileSync(path.join(tmp, "patches", "a.patch"), "diff --git\n");
+    expect(pnpmInstallFingerprint(tmp)).not.toBe(before);
+  });
+
+  it("读不到锁文件 / 配置 ⇒ null（调用方据此真装，不许猜成「没变」）", () => {
+    fs.rmSync(path.join(tmp, "pnpm-lock.yaml"));
+    expect(pnpmInstallFingerprint(tmp)).toBeNull();
+  });
+
+  it("落盘 / 读回是同一个值；没有文件时读回 null", () => {
+    const value = pnpmInstallFingerprint(tmp);
+    expect(readInstallFingerprint(tmp)).toBeNull();
+    expect(writeInstallFingerprint(tmp, value!)).toBe(true);
+    expect(readInstallFingerprint(tmp)).toBe(value);
+    expect(fs.existsSync(path.join(tmp, FINGERPRINT_FILE))).toBe(true);
+  });
+
+  it("main 先算指纹再装、装成功才落盘（半套不许被记成已验证）", () => {
+    const seen: Array<string | null> = [];
+    const failing = main({
+      root: tmp,
+      run: gitStub({
+        "diff --name-only origin/master...HEAD": {
+          status: 0,
+          stdout: "README.md\n",
+        },
+      }),
+      install: (fingerprint) => {
+        seen.push(fingerprint ?? null);
+        return 1;
+      },
+    });
+    expect(failing).toBe(1);
+    expect(seen[0], "装之前就要算、且交出去").toBe(pnpmInstallFingerprint(tmp));
+    expect(
+      readInstallFingerprint(tmp),
+      "非零退出时不许落指纹：那一套是半成品",
+    ).toBeNull();
+
+    const passing = main({
+      root: tmp,
+      run: gitStub({
+        "diff --name-only origin/master...HEAD": {
+          status: 0,
+          stdout: "README.md\n",
+        },
+      }),
+      install: (fingerprint) => {
+        seen.push(fingerprint ?? null);
+        return 0;
+      },
+    });
+    expect(passing).toBe(0);
+    expect(readInstallFingerprint(tmp)).toBe(pnpmInstallFingerprint(tmp));
   });
 });
 

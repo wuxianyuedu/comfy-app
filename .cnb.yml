@@ -609,7 +609,7 @@
   #     timeout: 45m
 
   # ── 结构 / 一致性硬规则（与 .githooks/pre-commit 同一批脚本）──
-  # ⚠️ `ifModify` 的第一处示例（本档共 16 处，全部登记在
+  # ⚠️ `ifModify` 的第一处示例（本档共 17 处，全部登记在
   # `scripts/ci-incremental-gates.mjs`）：它只扫 `src/components` + `src/app`，
   # 本次改动一个文件都没落在这两处时跳过。**每加一处都必须同批登记** ——
   # 判据 `tests/ci-incremental-gates.test.ts` 双向核对，机制见上面 `.gates` 头注。
@@ -619,7 +619,30 @@
       - src/app/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-title-bar-clearance.cjs
 
+  # 收窄（ISSUE #2010）：它扫的是**盘上的某一组目录**，不是整仓 —— 根目录里散落的
+  # 入口脚本（R9 的第一形态）与 git 临时状态文件（第二形态）只可能出现在**仓库根**，
+  # 而 src/lib 的子域纪律（R13/R14）只可能被 `src/lib` 的目录改动破坏。这几处一个
+  # 都没碰时，「文件名 / 归属 / 注释流水 / 控制字符」这些判据不可能变。
+  #
+  # ⚠️ 与上面那些只扫 `src/**` 的判据不同，它的形态更复杂，所以 globs 点得更宽：
+  #   · 根级 `*.ps1 / *.bat / *.cmd / *.vbs / *.ts / *.tsx` —— R9 判的是「根目录里
+  #     多了个本该归 tools/ 的入口」，面就是根目录本身（不经 `src` / `scripts`）；
+  #   · `src/**` —— R1–R5 / R10–R12 的扫描根（`SCAN_ROOTS` 之一）；
+  #   · `scripts/**` + `tools/**` —— R7 / R8 的扫描根（含中文的 .ps1 必须 BOM）。
+  # 代价写在明处：**新增一条以别的目录为扫描根的规则时，必须同批回来看这一行**
+  # （否则改那个目录不会触发本步）。登记与理由的唯一出处是
+  # `scripts/ci-incremental-gates.mjs`。
   - name: 文件结构硬规则
+    ifModify:
+      - "*.ps1"
+      - "*.bat"
+      - "*.cmd"
+      - "*.vbs"
+      - "*.ts"
+      - "*.tsx"
+      - src/**
+      - scripts/**
+      - tools/**
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-file-structure.cjs
 
   - name: 跨平台动作对照

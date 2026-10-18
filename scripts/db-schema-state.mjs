@@ -172,6 +172,59 @@ export function writeSchemaFingerprint(root, databaseUrl, value) {
 }
 
 /**
+ * 「库已经是当前这版 schema 建的那张」—— **只读、毫秒级**的统一判据。
+ *
+ * 它回答的是启动链路指纹闸门问的那个问题（表在 && 库里的指纹 == 源码指纹），
+ * 但**不写库、不跑 drizzle**：`db:push` 的空转档与 e2e 的开跑前预检都只要这个
+ * 答案（判据此前各写一份，两处的「指纹怎么比」必然分叉 —— §12.18）。
+ *
+ * 三种 `state` 与调用方的分工：
+ *   · `synced`   —— 一致，无需任何动作；
+ *   · `outdated` —— 两侧指纹都读到了但**不相等**：源码的 schema 换过而库没跟上。
+ *     要判定「需不需要跑 drizzle」，只有 dry-run 能答（那是调用方的事）；
+ *   · `unknown`  —— 判据失效（库不存在 / 读不到库里的指纹 / 读不到 schema 源 /
+ *     库里连表都没有）→ **不阻断**：拿不到结论不等于库是旧的，与
+ *     `ensureSchemaCurrent` 报 `unknown` 同一条口径。
+ *
+ * @param {string} root 项目根（绝对路径）
+ * @param {string} [databaseUrl] 形如 `file:./db.sqlite`
+ * @returns {{ state: "synced" | "outdated" | "unknown", detail: string }}
+ */
+export function probeSchemaFresh(root, databaseUrl) {
+  const tables = probeSchemaSync(root, databaseUrl);
+  if (tables !== "ready") {
+    return {
+      state: "unknown",
+      detail:
+        tables === "missing"
+          ? "库里还没有表"
+          : "读不到库（文件不存在 / 不是库）",
+    };
+  }
+  const want = schemaFingerprint(root);
+  if (want === null)
+    return { state: "unknown", detail: "读不到 schema 源文件" };
+  const have = readSchemaFingerprint(root, databaseUrl);
+  if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
+  /* `0` = 从没登记过（`PRAGMA user_version` 的初值，见 `readSchemaFingerprint`）。
+   * 它与「登记过、但对不上」是两件事：**没有基线**时不构成「库落后了」的结论 ——
+   * 与 `ensureSchemaCurrent` 对空库跳过指纹闸门同一条口径。 */
+  if (have === 0) {
+    return { state: "unknown", detail: "库里没登记过 schema 指纹" };
+  }
+  if (have === want) {
+    return { state: "synced", detail: "库结构与当前 schema 一致（指纹相符）" };
+  }
+  /* 指纹只回答「schema 源变没变」，不回答「库要不要改」：源码改了而改的东西
+   * 与表结构无关时，库其实是对的（drizzle 会说 No changes detected）。这一档
+   * 刻意**不**跑 drizzle —— 那要十几秒，而绝大多数启动都不该付它。 */
+  return {
+    state: "outdated",
+    detail: "源码的 schema 指纹与库里登记的不一致（库可能落后于源码）",
+  };
+}
+
+/**
  * 库里全部 schema 对象的 DDL 摘要 —— 「push 之后库有没有真的变」的判据。
  *
  * 一次 sqlite 查询（毫秒级），替掉「再跑一次 drizzle 看它说 No changes
