@@ -22,28 +22,39 @@
  * 4. 空清单必须被阻断，绝不让 `vitest run` 不带位置参数跑成全量。
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { wideFallbackNote } from "../scripts/affected-tests.mjs";
 import {
   DEFAULT_MAX_WORKERS,
   isTimeoutShaped,
+  junitReportArgs,
   loadPerCore,
   planLaunches,
   remainingWaitMs,
-  rerunReport,
   resolveMaxWorkers,
   resolveVitestEntry,
   runChunk,
   SAFE_ARGV_BUDGET,
-  unverifiedReport,
   waitForLoadToSettle as waitForLoadToSettleRaw,
+  writeFilesManifest,
 } from "../scripts/run-affected-tests.mjs";
+/* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
+ * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
+ * 且看起来像这次没有读数」。 */
+import { collectFileTimings } from "../scripts/precommit-timing.mjs";
+/* 话术层（收尾那两份账）现在住在自己那份文件里 —— 这里按它真实的落点 import，
+ * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
+import {
+  rerunReport,
+  unverifiedReport,
+} from "../scripts/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 
 /* `run-affected-tests.mjs` 是 `.mjs` + `@ts-nocheck`（提交门槛脚本，tsc 面在 `src/**`），
@@ -260,33 +271,48 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     // 抬预算那一侧的反向判据（这一档的主要敌人，见 §11.13 / §13.6.4）。
     expect(src).not.toMatch(/testTimeout\s*[:=]\s*\d/);
     expect(src).not.toMatch(/hookTimeout\s*[:=]\s*\d/);
-    /* 判的是「**传给 vitest 的 argv 里**并发只许一处」—— 复跑档不许另起一个更大的
-     * `--maxWorkers`。所以按 `spawn(` / `spawnSync(` 的实参行数，而不是整份文本里
-     * 出现过几次这个字符串：
-     *   · 注释 / 文件头说明里的形态不算（那里本来就有）；
-     *   · 日志话术（`resolveMaxWorkers` 的 `note`）里的同名字符串也不算 ——
-     *     它是给人看的一行提醒，不是并发旋钮，把它算进来会让这条判据变成
-     *     「谁在提示语里提到并发谁就红」，而真正的退化（复跑另给一个更大的并发）
-     *     照样能从 argv 那一行看出来。
-     * 「只许一处」本身不放松：argv 那一行仍是全文件唯一一处。 */
-    const workerArgvLines = src
-      .split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-      .filter((line) => /spawn(Sync)?\(/.test(line))
-      .filter((line) => line.includes("--maxWorkers="));
+    /* 判的是「**传给 vitest 的实参里**并发只许一处」—— 复跑档不许另起一个更大的
+     * `--maxWorkers`。取数的单位是**调用点**（`spawn(entry, [ … ])` 那一段实参），不是
+     * 「哪一行同时含 `spawn(` 与 `--maxWorkers=`」：后者钉的是**行形状** —— prettier 把
+     * 数组折成多行（例如给首跑/复跑各加一段分文件读数的参数）就会让它读出 0 处，而语义
+     * 一个字没变。判据因为排版而红，要修的是判据，不是把代码写回单行去迎合正则
+     * （同上面「读的落点是 verdict.mjs」那条对「提取落空 ⇒ 对着空数组比」的提防）。
+     *   · 注释 / 文件头说明里的形态不算（提取的是实参段，天然不含它们）；
+     *   · 日志话术（`resolveMaxWorkers` 的 `note`）里的同名字符串也不算 —— 它是给人看的
+     *     一行提醒，不是并发旋钮，把它算进来会让这条判据变成「谁在提示语里提到并发谁就
+     *     红」，而真正的退化（复跑另给一个更大的并发）照样能从实参那一段看出来。
+     * 「只许一处」本身不放松：全文件仍只有一处实参带并发旋钮。 */
+    const spawnSites = [
+      ...src.matchAll(/spawn\(\s*entry,\s*\[([\s\S]*?)\]\s*\)/g),
+    ].map((m) => m[1] ?? "");
     expect(
-      workerArgvLines,
-      `传进 vitest 的并发只该有一处（复跑必须更隔离，不许在这个方向上调）：${workerArgvLines.join(" | ")}`,
+      spawnSites.length,
+      "起 vitest 的调用点取不到两处 —— 提取落空会让下面每一条都对着空数组比",
+    ).toBeGreaterThanOrEqual(2);
+    const workerSites = spawnSites.filter((args) =>
+      args.includes("--maxWorkers="),
+    );
+    expect(
+      workerSites,
+      `传进 vitest 的并发只该有一处（复跑必须更隔离，不许在这个方向上调）：${workerSites.join(" | ")}`,
     ).toHaveLength(1);
     // 接线到 `resolveMaxWorkers` 的解析结果（首跑的并发由它决定）。
-    expect(workerArgvLines[0]).toContain("${workers}");
+    expect(workerSites[0]).toContain("${workers}");
     // 复跑那一次必须**不含**任何并发旗标（只加隔离，不给旋钮）。
-    const retryLine = src
-      .split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-      .find((line) => /spawn(Sync)?\(/.test(line) && line.includes("--no-file-parallelism"));
-    expect(retryLine, "复跑那一行还在吗？").toBeTruthy();
-    expect(retryLine).not.toContain("--maxWorkers");
+    const retrySite = spawnSites.find((args) =>
+      args.includes("--no-file-parallelism"),
+    );
+    expect(retrySite, "复跑那处实参还在吗？").toBeTruthy();
+    expect(retrySite).not.toContain("--maxWorkers");
+    /* 分文件读数**不许顶掉人类可读的输出**这件事不在这里判 —— 调用点这一段源码里
+     * 只有 `...junitReportArgs(…)`，`--reporter=default` 那两个字面量在函数体里。
+     * 判它的地方是下面「写的一侧与读的一侧必须是同一个布局」那一组（直接对函数返回值
+     * 判），在这里判会变成「对着源码找一份不在这儿的东西」—— 恒假的那种判据。 */
+    /* 读数文件名只许由 `junitReportArgs` 生成：两侧各写一份就会各漂一份，而漂开的形态
+     * 是「永远读不到」，在这一格它等价于「这次没有读数」。 */
+    for (const args of spawnSites) {
+      expect(args).not.toMatch(/comfy-c-/);
+    }
   });
 
   it("触发面：不带指纹时**先于复跑**返回（真断言红一次都不复跑）", () => {
@@ -295,7 +321,9 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      * 与「只剩日志文字」长得一样。
      * 整条链的**行为**由下一节用注入的假 spawn 整个跑一遍（两向都断退出码），
      * 这里只补一条形状：指纹判在复跑**之前**。 */
-    const chunkFn = /export async function runChunk\([\s\S]*?\n\}/.exec(src)?.[0];
+    const chunkFn = /export async function runChunk\([\s\S]*?\n\}/.exec(
+      src,
+    )?.[0];
     expect(chunkFn, "runChunk 还在吗？").toBeTruthy();
     const guard = chunkFn?.indexOf("if (!isTimeoutShaped(res.output))") ?? -1;
     const retry = chunkFn?.indexOf(`"--no-file-parallelism"`) ?? -1;
@@ -303,17 +331,20 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     expect(retry).toBeGreaterThan(-1);
     expect(guard, "指纹判断必须在复跑之前").toBeLessThan(retry);
     // 不带指纹那一支必须**返回非零**（不许静默继续）。
-    const earlyReturn = /if \(!isTimeoutShaped\(res\.output\)\) \{[\s\S]*?return res\.status \?\? 1;/.exec(
-      chunkFn ?? "",
-    );
+    const earlyReturn =
+      /if \(!isTimeoutShaped\(res\.output\)\) \{[\s\S]*?return res\.status \?\? 1;/.exec(
+        chunkFn ?? "",
+      );
     expect(earlyReturn, "不带指纹时应当直接阻断").toBeTruthy();
   });
 
   it("输出被抓在手里再原样回吐 —— 不抓就分不出「真断言红」与「机器太满」", () => {
     // 判决依赖输出内容，所以失败那一档不能再是 stdio:"inherit"。
-    const spawn = /function spawnVitest\(entry, args\) \{[\s\S]*?\n\}/.exec(src)?.[0];
+    const spawn = /function spawnVitest\(entry, args\) \{[\s\S]*?\n\}/.exec(
+      src,
+    )?.[0];
     expect(spawn, "spawnVitest 还在吗？").toBeTruthy();
-    expect(spawn).toContain("encoding: \"utf8\"");
+    expect(spawn).toContain('encoding: "utf8"');
     expect(spawn).toMatch(/process\.stdout\.write/);
     expect(spawn).toMatch(/process\.stderr\.write/);
     expect(spawn).not.toMatch(/stdio:\s*"inherit"/);
@@ -403,7 +434,9 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
     // 默认档就是真等待 —— 注入只在用例里发生，生产路径必须接上；
     // 且预算由调用点给（多块共享一份 deadline，见下一条）。
     expect(code).toMatch(/const settle =\s*\n?\s*deps\.settle \?\?/);
-    expect(code).toMatch(/waitForLoadToSettle\(\{ budgetMs: remainingWaitMs\(deps\.waitBudget\) \}\)/);
+    expect(code).toMatch(
+      /waitForLoadToSettle\(\{ budgetMs: remainingWaitMs\(deps\.waitBudget\) \}\)/,
+    );
     expect(code).toMatch(/const settled = await settle\(\);/);
   });
 
@@ -454,7 +487,8 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
 
   const TIMEOUT: SpawnResult = {
     status: 1,
-    output: "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
+    output:
+      "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
   };
   const REAL_RED: SpawnResult = {
     status: 1,
@@ -462,7 +496,8 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   };
   const GREEN: SpawnResult = { status: 0, output: "Test Files 2 passed" };
 
-  const settledLow = () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 0 });
+  const settledLow = () =>
+    Promise.resolve({ settled: true, load: 0.2, waitedMs: 0 });
   const unsettledHigh = () =>
     Promise.resolve({ settled: false, load: 9.5, waitedMs: 300_000 });
 
@@ -478,10 +513,18 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     entry: string;
     workers?: number;
     spawn?: (entry: string, args: string[]) => SpawnResult;
-    settle?: () => Promise<{ settled: boolean; load: number; waitedMs: number }>;
+    settle?: () => Promise<{
+      settled: boolean;
+      load: number;
+      waitedMs: number;
+    }>;
     waitBudget?: { deadline: number };
     onUnverified?: (files: string[]) => void;
-    onAttempt?: (record: { outcome: string; waitedMs?: number; settled?: boolean }) => void;
+    onAttempt?: (record: {
+      outcome: string;
+      waitedMs?: number;
+      settled?: boolean;
+    }) => void;
   }): Promise<{ code: number; text: string }> {
     const chunks: string[] = [];
     const realWrite = process.stderr.write.bind(process.stderr);
@@ -841,8 +884,12 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       encoding: "utf8",
     });
     expect(inc.status, inc.stderr).toBe(0);
-    expect(inc.stdout, "增量档应当给出清单与启动次数").toMatch(/个用例 \/ \d+ 次启动/);
-    expect(inc.stderr, "两档的话术必须可分辨").not.toContain("--full：按名字要全量");
+    expect(inc.stdout, "增量档应当给出清单与启动次数").toMatch(
+      /个用例 \/ \d+ 次启动/,
+    );
+    expect(inc.stderr, "两档的话术必须可分辨").not.toContain(
+      "--full：按名字要全量",
+    );
   });
 
   it("`--full` 复用同一条判决链（`runChunk([], …)`）—— 不另写一套跑法", () => {
@@ -856,16 +903,20 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
     const guard = /affected 解析没给出清单([\s\S]*?)return 1;/.exec(src)?.[0];
     expect(guard, "解不出空清单守卫").toBeTruthy();
     expect(guard).toContain("--full");
-    expect(guard, "空集必须仍然 return 1（不能因为 --full 存在就放行）").toContain("return 1;");
+    expect(
+      guard,
+      "空集必须仍然 return 1（不能因为 --full 存在就放行）",
+    ).toContain("return 1;");
   });
 
   it("`--full` **不接进钩子**（钩子只有增量档）", () => {
     const hook = readFileSync(HOOK_PATH, "utf8");
     const body = cGroupBody(hook);
     expect(body).toContain("run-affected-tests.mjs");
-    expect(body, "钩子里不许出现 --full：那会把每次提交变成整份套件的仪式").not.toContain(
-      "--full",
-    );
+    expect(
+      body,
+      "钩子里不许出现 --full：那会把每次提交变成整份套件的仪式",
+    ).not.toContain("--full");
   });
 
   it("wide 话术指名的就是这条命令，且它真的存在于入口（不是写了一段跑不响的话）", () => {
@@ -873,7 +924,9 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
        只钉前半 = 守一句散文；只钉后半 = 守一个没人知道的开关。 */
     const note = wideFallbackNote("门槛自身", 20);
     expect(note).toContain("scripts/run-affected-tests.mjs --full");
-    expect(src, "入口不认 --full，话术就指到空气上").toContain('argv.includes("--full")');
+    expect(src, "入口不认 --full，话术就指到空气上").toContain(
+      'argv.includes("--full")',
+    );
   });
 
   it("`--full` **不是**全量那一档（它不带覆盖率门槛，也不记那份账）", () => {
@@ -904,5 +957,88 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       runner,
       "全量那一档的记账通道必须挂在 test:coverage 上，而不是随便一个 vitest 跑法",
     ).toContain('"run", "test:coverage"');
+  });
+});
+
+describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一个布局", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** @returns {string} */
+  function tempDir() {
+    const dir = mkdtempSync(path.join(tmpdir(), "affected-junit-"));
+    dirs.push(dir);
+    return dir;
+  }
+
+  it("没有账本目录 ⇒ 一个字都不加（人自己跑这一档不该被塞读数）", () => {
+    expect(junitReportArgs("", 0, 1)).toEqual([]);
+  });
+
+  it("首跑与复跑各落一份，且 default reporter 不许被顶掉", () => {
+    const dir = tempDir();
+    const first = junitReportArgs(dir, 0, 1);
+    const retry = junitReportArgs(dir, 0, 2);
+    /* 只给 junit 会把人类可读的输出整个换掉 —— 而真红那一屏是唯一能读的东西。
+     * 这一条钉的是「加读数不许替代判定与输出」。 */
+    expect(first).toContain("--reporter=default");
+    expect(first).toContain("--reporter=junit");
+    expect(first.at(-1)).toContain("comfy-c-0-1.xml");
+    expect(String(retry.at(-1))).toContain("comfy-c-0-2.xml");
+    /* 两块不能共用一个文件：同一份清单在两遍里是两组条件不同的读数。 */
+    expect(first.at(-1)).not.toBe(retry.at(-1));
+  });
+
+  it("runChunk 真的把这两段拼进两次 spawn，清单仍在最后", async () => {
+    const dir = tempDir();
+    const calls: { entry: string; args: string[] }[] = [];
+    await runChunk(["tests/a.test.ts"], {
+      entry: "vitest.mjs",
+      junitDir: dir,
+      chunkId: 7,
+      spawn: (_entry: string, args: string[]) => {
+        calls.push({ entry: _entry, args });
+        return calls.length === 1
+          ? { status: 1, output: "Test timed out in 30000ms" }
+          : { status: 0, output: "" };
+      },
+      settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.args.join(" ")).toContain("comfy-c-7-1.xml");
+    expect(calls[1]?.args.join(" ")).toContain("comfy-c-7-2.xml");
+    /* 位置也钉一下：reporter 段在清单之前 —— 追加到尾部会被当成 vitest 的位置参数。 */
+    expect(calls[0]?.args.indexOf("--reporter=default")).toBe(1);
+    expect(calls[0]?.args.at(-1)).toBe("tests/a.test.ts");
+  });
+
+  it("清单落盘 + 读账读得到（两侧对同一布局的往返，改一边就该红）", () => {
+    const dir = tempDir();
+    expect(
+      writeFilesManifest(dir, ["tests/a.test.ts", "tests/b.test.ts"]),
+    ).toBe(true);
+    const xml = junitReportArgs(dir, 0, 1).at(-1) ?? "";
+    const file = xml.replace("--outputFile.junit=", "");
+    writeFileSync(
+      file,
+      `<?xml version="1.0"?>\n<testsuites name="vitest tests" time="2">\n` +
+        `<testsuite name="tests/a.test.ts" time="1.25"></testsuite>\n</testsuites>\n`,
+      "utf8",
+    );
+    const got = collectFileTimings({ dir });
+    expect(got.files).toEqual([{ name: "tests/a.test.ts", ms: 1250 }]);
+    expect(got.expected).toBe(2);
+    expect(got.missing).toBe(1);
+  });
+
+  it("清单写不进去（目录不存在）⇒ 回 false，不抛、也不冒充已落", () => {
+    expect(
+      writeFilesManifest(path.join(tmpdir(), "comfy-不存在的一层"), ["a"]),
+    ).toBe(false);
+    expect(junitReportArgs(undefined, 0, 1)).toEqual([]);
   });
 });

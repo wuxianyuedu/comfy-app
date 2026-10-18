@@ -127,6 +127,11 @@ record_timing() {
       [ -n "$line" ] && set -- "$@" --step "$line"
     done <"$LOGD/steps.ms"
   fi
+  # 组 C 的分文件耗时读数：vitest 的 junit XML 与清单都落在 `$LOGD` 里（上面那个
+  # trap 删的就是它，所以它不会留在检出里）。这里**只递目录** —— 解析在读账脚本里
+  # 做：shell 里解析 XML 就是第二份实现，而两份的漂移形态是静默的（同 `timing.sh`
+  # 那份时钟只留一处的同一条理由）。这一格只补读数，判定一个字没动。
+  [ -d "$LOGD" ] && set -- "$@" --junit-dir "$LOGD"
   node scripts/precommit-timing.mjs record "$@" || true
 }
 
