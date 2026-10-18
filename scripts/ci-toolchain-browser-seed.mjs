@@ -56,10 +56,10 @@ import {
  * ## 用哪个 URL / 哪个根
  *
  * 与装那一步**同一个根**：`env.PLAYWRIGHT_DOWNLOAD_HOST` 配着就用它，没配就按
- * `PLAYWRIGHT_HOST_CANDIDATES` 的**第一个**（`https://cdn.playwright.dev` ——
- * 上游对本档这一件真正会用的那个镜像，见候选表的头注）。这里刻意**不**自己做一遍
- * 「先量再挑」的排序：那件事已经由 `pickPlaywrightRoots()` 在装那一步做了，
- * 而两边各排一次序会漂（§12.18 那条「不造第二轮子」）。
+ * `PLAYWRIGHT_HOST_CANDIDATES` 的**第一个**（现在是 `cdn.npmmirror.com/binaries/playwright`
+ * —— 用户那一句「`playwright install` 很慢」要的就是「先试离得近的源」，见候选表的头注）。
+ * 这里刻意**不**自己做一遍「先量再挑」的排序：那件事已经由 `pickPlaywrightRoots()`
+ * 在装那一步做了，而两边各排一次序会漂（§12.18 那条「不造第二轮子」）。
  *
  * ## 为什么它失败不许把这一步判红
  *

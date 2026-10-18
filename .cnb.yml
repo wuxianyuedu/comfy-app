@@ -995,6 +995,14 @@
       # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
       # 而恢复之后这一步有**两条**通道：先自己分片取（不依赖这个根到得了大 body），
       # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
+      #
+      # ⚠️ **「很慢」要分两层看，换源只治其中一层**（用户那句诉求）。
+      # 换源治的是「从哪儿取」；`playwright install` 自己那份下载**没有续传**
+      # （`browserFetcher.ts` 每次失败 `unlink(zipPath)` 从头来），所以慢链路上一换
+      # 源也照样卡在大 body 上 —— 那一层由本仓的分片自取（`fetchUrlResumable`）治。
+      # 也就是说：**换源不是唯一的慢因，也不是判据**；判据始终是「装完真起一次」。
+      # 三个候选根的顺序同步调过（`PLAYWRIGHT_HOST_CANDIDATES` 把 npmmirror 排前），
+      # 好处是「没配根的环境（本地 / 别的节点）也先试离得近的源」。
       PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
       PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
       # ⚠️ **这里不写 `PLAYWRIGHT_BROWSERS_PATH`**：它只在「浏览器装在镜像里」那一档
