@@ -261,7 +261,7 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      工具链自证, 镜像身份, Python 可用性, Python 探针读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
+      工具链自证, 镜像身份, Python 可用性, Python 探针读数, 工作区复用读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -420,6 +420,35 @@
   # `Python 可用性` 一起在最便宜的位置跑，而 E2E 那一步要等十几分钟。
   - name: Python 探针读数
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/python-probe.mjs
+
+  # ── 工作区复用读数（**读数，恒不退非零**）──
+  #
+  # 本文件头注第 4 条把「每次构建都是全量 clone、没有配置能省掉它」写成了这条路径的
+  # 固定成本。那个结论有**数字**（`Prepare` ≈31.5s，规范 §13.5.20 那张预算表），但从来
+  # 没有**机制读数** —— 平台在这台宿主机上到底是哪一种：
+  #
+  #   ① 每次新建一个 job 目录、`git init` + 从零 fetch（那 31.5s 是「搬 130 MiB pack」）；
+  #   ② 复用同一目录、只做增量 fetch（那 31.5s 的大头是 checkout 落盘，不是网络）；
+  #   ③ 目录复用但 `.git` 每次被重建（常驻已经有一半，缺的是别把对象库清掉）。
+  #
+  # 三种形态各有各的出路，而**没有任何一处日志能把它们分开** —— 于是「要不要动平台那个
+  # 检出开关」（Pipeline 级 `git.enable: false`，官方语义「指定是否拉取代码」）这一问
+  # 只能靠猜。这一档就是把那一格变成可见读数；它同时读**第二格**：`node_modules` /
+  # `.next` 在构建开始时是不是冷的 —— 若冷，这条路径上交的就不止克隆那 31.5s，还有
+  # 「安装从零起」与「冷缓存 next build」两笔，而那两笔比克隆大一个量级。
+  #
+  # 逻辑在 `scripts/ci-workspace-probe.mjs` —— 不在这里就地写 PowerShell，理由与
+  # `工具链自证` 逐字相同：配置里的逻辑一条判据都测不到它。
+  #
+  # ⚠️ 跨构建对照要**两跑**才成立（第一跑只有本次自己，故它报「未定」而不是猜一个结论）。
+  # 账本写在**工作区之外**（`COMFYAPP_CI_PROBE_DIR`，缺省退宿主 `LOCALAPPDATA`）：写进
+  # 检出目录就成了未跟踪文件、被结构门禁那一套判，而这一档要的恰恰是「跨检出存活」。
+  # 判红的事一件都不做 —— 它判的是这台机器怎么被调度，那不是任何一次 PR 的缺陷。
+  - name: 工作区复用读数
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-probe.mjs
+    # 秒级（几次 git 调用 + 几个 stat）。给 5m 与 `新鲜度账` 同款：只是「卡死要早报」的
+    # 量级余量，判据本身远小于它。
+    timeout: 5m
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
   #
