@@ -458,6 +458,13 @@
   # SYSTEM，与 §13.5.3.5 那条「Python 装在 yuedu 会话里、SYSTEM 够不着」同源）：写进检出
   # 目录就成了未跟踪文件、被结构门禁那一套判，而这一档要的恰恰是「跨检出存活」。
   # 判红的事一件都不做 —— 它判的是这台机器怎么被调度，那不是任何一次 PR 的缺陷。
+  #
+  # 第二跑（`cnb-f5b-1k57bgqol`）自证了这条链：账本里已有上一跑那条，新跑的 job 目录换成
+  # `cnb-f5b-1k57bgqol-001~ttf\workspace` ⇒ 它自己印出「结论·①每次新目录」。它同时暴露了
+  # 对照行的一处「读了等于没读」：平台把每个 job 都检出成 `…\<流水线 id>~<随机段>\workspace`，
+  # 最后一段**恒等于 `workspace`**，只取 basename 时两跑并排一模一样 —— 有区分度的那一半在
+  # 父目录，故现在由 `jobLabel()` 取「父目录名 + 最后一段」，判据钉住「两个不同 job 的标签必须
+  # 不同」。与这一档开头那句是同一类病：**读数落在日志里读不出来，与没有读数等价**。
   - name: 工作区复用读数
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-probe.mjs
     # 秒级（几次 git 调用 + 几个 stat）。给 5m 与 `新鲜度账` 同款：只是「卡死要早报」的
