@@ -41,6 +41,7 @@ import {
   readPipelineConfig,
   stageBlockIn,
   stageEnvValue,
+  stagesWithImage,
 } from "../scripts/ci-env-probe.mjs";
 /* 每个 stage 现在都以 `node scripts/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
  * 而下面那条「环境前提点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
@@ -730,6 +731,95 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     });
     expect(code).toBe(0);
   });
+
+/**
+ * 第三格：**配了一条这条路径根本不支持的路**（任务级 `image:`）。
+ *
+ * 实测 `cnb-cqk-1k550gpp2`（PR #2003 首跑）：`.cnb.yml` 给 `浏览器安装` 加了
+ * `image: mcr.microsoft.com/playwright:v1.63.0-noble`，那一格 70 毫秒就红在
+ * `Runner does not enable Docker` 上 —— 脚本一行都没执行，前面三十三步全绿。
+ * 所以「有人又加了一格」这件事必须红在**便宜的位置**（装依赖之前），
+ * 而不是整条流水线倒数第二步。
+ */
+describe("环境前提：`.cnb.yml` 里不许有 stage 带 `image:`（自托管起不来容器）", () => {
+  const WITH_IMAGE = [
+    ".gates: &gates",
+    "  - name: 浏览器安装",
+    "    image: mcr.microsoft.com/playwright:v1.63.0-noble",
+    "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+    "    env:",
+    '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
+    "    timeout: 20m",
+    "  - name: 环境前提",
+    "    script: node scripts/ci-env-probe.mjs",
+    "",
+  ].join("\n");
+
+  it("`stagesWithImage()` 只认 stage 那一层，不把 `env:` 里的同名键算进来", () => {
+    const fixture = [
+      ".gates: &gates",
+      "  - name: A",
+      "    image: node:24",
+      "    script: echo a",
+      "  - name: B",
+      "    script: echo b",
+      "      env:",
+      "        image: not-an-image-key",
+      "    timeout: 5m",
+      "",
+    ].join("\n");
+    expect(stagesWithImage(fixture)).toEqual(["A"]);
+  });
+
+  it("现役 `.cnb.yml` **一格都没有**（上一次加的两格已在 2026-10-17 撤掉）", () => {
+    expect(stagesWithImage(readPipelineConfig(ROOT) ?? "")).toEqual([]);
+  });
+
+  it("配了 `image:` ⇒ 当场红，并点名那几格与「删掉那一行」这条下一动作", () => {
+    const lines: string[] = [];
+    const code = envProbe({
+      root: ROOT,
+      config: WITH_IMAGE,
+      findPythonImpl: () => ({
+        command: "python",
+        path: null,
+        version: "Python 3.12.2",
+      }),
+      runImpl: () => ({ ok: true, out: "12.4.1" }),
+      browserPresentImpl: () => ({ ok: true, out: "/pw/chrome-headless-shell" }),
+      reachabilityImpl: () => [],
+      log: String,
+      logError: (l: string) => lines.push(l),
+    });
+    expect(code, "配置里有 stage 带 `image:`，这一步却没红").toBe(1);
+    const said = lines.join("\n");
+    expect(said).toContain("浏览器安装");
+    expect(said).toContain("Runner does not enable Docker");
+    expect(said, "红要红在能指路的位置：说清下一动作是把那一行删掉").toContain(
+      "删掉",
+    );
+  });
+
+  it("不带 `image:` 的同一份配置 ⇒ 这一条不拦（绿要绿得住）", () => {
+    const code = envProbe({
+      root: ROOT,
+      config: WITH_IMAGE.replace(
+        "    image: mcr.microsoft.com/playwright:v1.63.0-noble\n",
+        "",
+      ),
+      findPythonImpl: () => ({
+        command: "python",
+        path: null,
+        version: "Python 3.12.2",
+      }),
+      runImpl: () => ({ ok: true, out: "12.4.1" }),
+      browserPresentImpl: () => ({ ok: true, out: "/pw/chrome-headless-shell" }),
+      reachabilityImpl: () => [],
+      ...silentPorts(),
+    });
+    expect(code).toBe(0);
+  });
+});
 
   it("配置里**没**给根时照旧铺开候选那一族（那时「出得去这类域吗」才是要答的问题）", () => {
     const asked: Array<string[] | undefined> = [];
