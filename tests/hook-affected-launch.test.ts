@@ -929,7 +929,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
     );
   });
 
-  it("`--full` **不是**全量那一档（它不带覆盖率门槛，也不记那份账）", () => {
+  it("`--full` **不是**全量那一档（它不带覆盖率门槛，也不记那份账）", async () => {
     /* 这一条判的是「两条全量通道不许被读成一件事」——它是本轮差点踩进去的坑：
      * 看到 `--full` 这个名字就顺手让它去写 `scripts/.full-suite-freshness.json`
      *（甚至替掉 `full-suite-run.mjs`），那条账记的就变成**没跑过覆盖率门槛**的一次了。
@@ -949,14 +949,15 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       "`--full` 去写全量新鲜度账 = 用一条不过覆盖率门槛的跑法冒充那一档",
     ).not.toMatch(/freshness|full-suite-run/);
 
-    const runner = readFileSync(
-      path.join(ROOT, "scripts", "full-suite-run.mjs"),
-      "utf8",
-    );
+    /* 判**语义**不判行形状：拿 `planRun()` 真跑一次读它给出的参数，而不是在源码文本里
+     * 找一句 `"run", "test:coverage"` —— 那个字面量会被 prettier 折行顶掉（本仓踩过第二次），
+     * 而折行不改任何行为，红出来的是一条假红。 */
+    const { planRun } = await import("../scripts/full-suite-run.mjs");
+    const plan = planRun();
     expect(
-      runner,
-      "全量那一档的记账通道必须挂在 test:coverage 上，而不是随便一个 vitest 跑法",
-    ).toContain('"run", "test:coverage"');
+      plan.args.slice(0, 2),
+      "全量那一档的记账通道必须挂在 `pnpm run test:coverage` 上，而不是随便一个 vitest 跑法",
+    ).toEqual(["run", "test:coverage"]);
   });
 });
 

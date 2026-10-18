@@ -90,8 +90,25 @@ export function gitUser(fallback) {
  *     不吃这一档的那条出路、没动输入面时的宽限。
  *   · `skipHow` —— 记一条「写明理由的豁免」那条命令。它是**另一条出路**而不是绕过：
  *     留下的是一条能复核的事实。
+ *   · `ciStage` —— 这一档**现在由平台侧哪一格跑**（`.cnb.yml` 的 stage 名）。非空 ⇒
+ *     本地不拦：执行者是那一条流水线，本地这笔账退成**读数**（谁在本地自己证过一次）。
+ *     这不是把判据放宽，是把「谁在什么时候跑它」这一栏换了值（§13.5.17 的口径）——
+ *     用例、预算、覆盖率阈值一个字没动。
+ *     ⚠️ **豁免只在平台侧真的有人跑时成立**：每个非空 `ciStage` 必须出现在
+ *     `.cnb.yml` 的 `COMFYAPP_CI_DAILY_GATES` 里，由 `tests/daily-tracks.test.ts` 判。
+ *     没有那一条判据时，「本地不拦」会变成「谁都不跑」的同义词。
+ */
+
+/**
+ * 一档的登记形状 —— **唯一出处**（`@typedef`）。此前它在三个签名里各抄一份，
+ * 加 `ciStage` 那一栏时三处都要记得改，而漏改一处表现为「调用方读不到它」（TS 报
+ * 属性不存在）或「判据读到 undefined」（运行时恒不成立）—— 两种都不是配置的样子。
  *
- * @type {Record<string, {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}>}
+ * @typedef {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number, ciStage: string}} FreshnessTrack
+ */
+
+/**
+ * @type {Record<string, FreshnessTrack>}
  */
 export const FRESHNESS_TRACKS = {
   e2e: {
@@ -124,6 +141,7 @@ export const FRESHNESS_TRACKS = {
      * 它是子集、不构成整档凭证（因此**不记账**，见 `isWholeTrackRun`），但「功能链路坏了
      * 还无人知晓」那一格由它守着；整档那一层由「动了面 ⇒ 当天证」与 7 天宽限两道夹住。 */
     graceMs: 7 * 86_400_000,
+    ciStage: "每日全量E2E",
   },
   full: {
     ledger: "scripts/.full-suite-freshness.json",
@@ -135,6 +153,7 @@ export const FRESHNESS_TRACKS = {
     dirty: ["src/", "tests/"],
     dirtyHow: 'node scripts/full-suite-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
+    ciStage: "每日单元测试",
   },
   artifact: {
     ledger: "scripts/.artifact-freshness.json",
@@ -153,6 +172,7 @@ export const FRESHNESS_TRACKS = {
     ],
     dirtyHow: 'node scripts/artifact-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
+    ciStage: "每日生产构建",
   },
 };
 /**
@@ -160,7 +180,7 @@ export const FRESHNESS_TRACKS = {
  * 登记」表现成「按键名当档名」而照样跑绿）。
  *
  * @param {string} kind `FRESHNESS_TRACKS` 的键
- * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}}
+ * @returns {FreshnessTrack}
  */
 export function freshnessTrack(kind) {
   const track = FRESHNESS_TRACKS[kind];
@@ -341,7 +361,7 @@ export function dirtiesTrack(track, changed) {
  *   · 今天动过输入面而账还停在改动之前 ⇒ 拦，动作是「现在跑一次」；
  *   · 没动输入面但已经旧过 `graceMs` ⇒ 拦，动作是「跑一次，或记一条 `--dirty` 说明」。
  *
- * @param {{track: {label: string, run: string, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}, at: Date, now: Date, dirtySince: Date | null}} input
+ * @param {{track: FreshnessTrack, at: Date, now: Date, dirtySince: Date | null}} input
  * @returns {string | null} 拦下时给一句问题；放行时 null
  */
 export function freshnessVerdict({ track, at, now, dirtySince }) {
@@ -398,7 +418,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
  * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}, kind: string, now?: Date, dirtySince?: Date | null}} scope
+ * @param {{required: string[], registered: string[], track: FreshnessTrack, kind: string, now?: Date, dirtySince?: Date | null}} scope
  *   `required` = 必须有记录的档（登记档减去正在登记中的档）；`registered` = 全部登记档（孤儿检查）；
  *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」，
  *   它同时决定 `daily` / `skipHow` 那两条分叉）；
@@ -415,15 +435,27 @@ export function checkFreshnessLedger(
 ) {
   /** @type {string[]} */
   const problems = [];
+  /* 「这一档本地要不要凭证」读的是 `ciStage` 那一栏（数据，不是档名分支）：非空 =
+   * 执行者是平台侧那一格，本地这笔账**只是读数**。
+   *
+   * ⚠️ 这里跳过的是**「今天必须自证」那一层**，不是整条判据：记录存在时它的形状
+   * （`who` / `how` / `verifiedAt` / `trackedBy`）照旧逐项判 —— 读数也得是真的，
+   * 一条写着「由 e2e 跑法证过」而挂在 full 账上的记录照样要红。
+   * 而「平台侧那一格真的在场」由 `tests/daily-tracks.test.ts` 判（每个非空 `ciStage`
+   * 必须出现在 `COMFYAPP_CI_DAILY_GATES` 里）—— 没有那一条，这里就变成「谁都不跑」。 */
+  const ciOwned = String(track.ciStage ?? "").trim() !== "";
   for (const key of required) {
     const entry = ledger[key];
     if (entry === undefined || entry === null) {
-      problems.push(
-        `${track.label}（${key}）没有新鲜度记录 —— 这一档现在是「录过一次就算数」：` +
-          "没有任何东西说清它上一次被实证跑绿是什么时候、按哪条命令。" +
-          `跑一次 \`${track.run}\`（绿即可记账，见 scripts 下对应的跑法脚本），` +
-          `或在 ${track.ledger} 里手工补一条。`,
-      );
+      /* 本地没有留痕在 ci-owned 那一档是**合法状态**（这一档由 CI 跑，本地没人欠）。 */
+      if (!ciOwned) {
+        problems.push(
+          `${track.label}（${key}）没有新鲜度记录 —— 这一档现在是「录过一次就算数」：` +
+            "没有任何东西说清它上一次被实证跑绿是什么时候、按哪条命令。" +
+            `跑一次 \`${track.run}\`（绿即可记账，见 scripts 下对应的跑法脚本），` +
+            `或在 ${track.ledger} 里手工补一条。`,
+        );
+      }
       continue;
     }
     if (typeof entry !== "object" || Array.isArray(entry)) {
@@ -471,6 +503,27 @@ export function checkFreshnessLedger(
           "只有这一栏能把它们分开。",
       );
     }
+    /* 「不跑」有两种，形状各自成立、**互不等于**：`skippedReason`（今天故意不跑）与
+     * `dirtyReason`（这次改动不吃这一档）。两者都放行，但都要能复核 —— 混成一栏之后，
+     * 账面上就分不出「这一档一直没人跑」与「每次都声明不吃它」。
+     *
+     * ⚠️ 这两栏的取法与「占位理由不算回答过」那一判**放在 `daily` 那一层之外**，因为它们是
+     * 账面的**形状**而不是「今天必须有凭证」那层的要求：`ciStage` 非空（本地不拦）时
+     * 那一层整层跳过，若把这条一起带走，「写一句『稍后』就算数」就随撤要求一起失去执行者 ——
+     * 而它治的正是「读数能不能被复核」，与谁去跑这一档无关（§11.8 那条边界）。 */
+    const waiver = ["skippedReason", "dirtyReason"].find(
+      (f) => typeof rec[f] === "string" && rec[f].trim(),
+    );
+    const waiverUsable =
+      waiver !== undefined && isUsableSkipReason(rec[waiver]);
+    if (waiver !== undefined && !waiverUsable) {
+      problems.push(
+        `${track.label}（${key}）的${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}理由` +
+          `（"${String(rec[waiver]).trim()}"）不算「有人回答过」—— ` +
+          `留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
+          `写清这次为什么不跑，或直接跑一次 \`${track.run}\`。`,
+      );
+    }
     /* 「每天首次」那一档多一条判据：这一次自证必须是**今天**的（或一条写明理由的豁免）。
      * 它只判日历日，不判「多久算旧」—— 阈值仍然不写进判据。
      * 记录写不清时上面已经拦过，这里只在形状成立时才比日期，免得同一件事报两遍。
@@ -486,16 +539,10 @@ export function checkFreshnessLedger(
      *     ⇒ 两头都拦。这条把「每日执行」从「每天一次仪式」改成了「**改了就当天跑**」，
      *     而后者才是这三档真正想要的。 */
     /* 判「这一档今天要不要凭证」读的是 `daily` 那一栏数据（不是按档名写死：
-     * 新增一档忘了在这里补一条 = 那一档谁都不判）。 */
-    if (track.daily) {
-      /* 「不跑」有两种，形状各自成立、**互不等于**：`skippedReason`（今天故意不跑）与
-       * `dirtyReason`（这次改动不吃这一档）。两者都放行，但都要能复核 —— 混成一栏之后，
-       * 账面上就分不出「这一档一直没人跑」与「每次都声明不吃它」。 */
-      const waiver = ["skippedReason", "dirtyReason"].find(
-        (f) => typeof rec[f] === "string" && rec[f].trim(),
-      );
-      const waiverUsable =
-        waiver !== undefined && isUsableSkipReason(rec[waiver]);
+     * 新增一档忘了在这里补一条 = 那一档谁都不判）。
+     * `ciOwned` 时整层跳过：今天要有凭证这件事的执行者已经换到平台侧那一格，
+     * 本地这一层再拦就是**同一条判据收两次钱**（而第二次的代价是 10~25 分钟墙钟）。 */
+    if (track.daily && !ciOwned) {
       /* **豁免只替它写在的那一天作证。**
        *
        * 这不是新口径，是把已有口径接上判据：写入侧 `writeSkipRecord` 把 `verifiedAt`
@@ -513,14 +560,9 @@ export function checkFreshnessLedger(
       const waiverMs = waiverUsable ? Date.parse(at) : Number.NaN;
       const waiverToday =
         !Number.isNaN(waiverMs) && isSameLocalDay(new Date(waiverMs), now);
-      if (waiver && !waiverUsable) {
-        problems.push(
-          `${track.label}（${key}）的${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}理由` +
-            `（"${String(rec[waiver]).trim()}"）不算「有人回答过」—— ` +
-            `留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
-            `写清这次为什么不跑，或直接跑一次 \`${track.run}\`。`,
-        );
-      } else if (
+      /* 占位理由那一判在**上面那层**（形状）已经报过，这里不再重复一条 —— 同一件事
+       * 在同一屏里出现两次会读起来像两件不同的事（与 `--skip` / `--dirty` 分栏同理）。 */
+      if (
         waiverToday &&
         waiver === "dirtyReason" &&
         dirtySince !== null &&

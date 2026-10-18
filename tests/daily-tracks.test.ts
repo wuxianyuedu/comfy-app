@@ -98,8 +98,32 @@ afterEach(() => {
   workdir = "";
 });
 
-/** 判一档：省去各处重复的「平台就是它自己的 key」那句。 */
+/**
+ * 判一档：省去各处重复的「平台就是它自己的 key」那句。
+ *
+ * ⚠️ 它判的是**本地拦截那一套口径**（`track: localTrack(kind)`，把 `ciStage` 清空）。
+ * 三档从 2026-10-19 起都登记了平台侧执行者，按当前登记跑时「今天必须有凭证」那几支
+ * 根本不会触发 —— 那样这里那批「⇒ 拦」的用例就会**因为走不到分支而恒绿**（恒绿与放行
+ * 在断言上一模一样，但它是 §11.23 那一族「写了没有读者」的形状）。
+ * 按当前登记判的那一档叫 `asRegistered()`，它判的正是「本地不拦」这一条新事实。
+ */
 function gate(kind: string, ledger: Record<string, unknown>, extra = {}) {
+  return runGate({
+    ledger,
+    kind,
+    keys: [freshnessTrack(kind).key],
+    track: localTrack(kind),
+    now: SAME_DAY,
+    ...extra,
+  });
+}
+
+/** 按**当前登记的形状**判一档（真实 `ciStage` ⇒ 本地那一层不该再出声）。 */
+function asRegistered(
+  kind: string,
+  ledger: Record<string, unknown>,
+  extra = {},
+) {
   return runGate({
     ledger,
     kind,
@@ -107,6 +131,20 @@ function gate(kind: string, ledger: Record<string, unknown>, extra = {}) {
     now: SAME_DAY,
     ...extra,
   });
+}
+
+/**
+ * 把一档读成「**平台侧没有执行者**」的那一档。
+ *
+ * 为什么判据需要它：三档从 2026-10-19 起都登记了 `ciStage`（执行者 = 每日那一格），
+ * 于是「今天动过面而账停在改动之前 ⇒ 拦」「过期 ⇒ 拦」「豁免过期 ⇒ 拦」这几支
+ * 在真实档上再也走不到。它们不是废弃分支 —— 任何一档将来失去平台侧执行者时，
+ * 清空 `ciStage` 就回到本地拦截的口径，而那时唯一还能证明「这支是活的」的东西
+ * 就是这几条用例。拿合成档打它，与拿合成空面档打「dirty 为空必须忽略 dirtySince」
+ * 是同一条理由（见上面那格）：**判据要能对当前登记之外的那种形状继续响**。
+ */
+function localTrack(kind: string) {
+  return { ...freshnessTrack(kind), ciStage: "" };
 }
 
 describe("三档的登记形状（§11.8）", () => {
@@ -369,6 +407,84 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
         dirtySince: new Date("2026-10-09T05:00:00.000Z"),
       }),
     ).not.toBeNull();
+  });
+});
+
+/**
+ * `ciStage` —— 执行者挪到平台侧之后，本地那一层拦什么、不拦什么（2026-10-19 的口径）。
+ *
+ * 立案：用户那句是「新鲜度都不要本地跑，都 ci 跑」。这句话成立的前提是**平台侧真的有人跑**，
+ * 而它一旦被满足，本地再要求「当天自证一次」就是同一条判据收两次钱，第二次的代价是
+ * 10~25 分钟墙钟（本仓实测：组 C 中位 1108s、全量 e2e 十几分钟、`next build` 冷节点上
+ * 比 118s 慢得多）。这一组判的四格缺一格都会漂：
+ *   ① 三档都登记了 `ciStage`（否则「本地不拦」是一句没有主语的话）；
+ *   ② 同一份「今天动过面而账停在改动之前」的输入，按当前登记判 ⇒ **不拦**；
+ *      把 `ciStage` 清空 ⇒ 立刻回到拦（证明那条豁免是数据在起作用，不是判据被删）；
+ *   ③ 豁免只豁免「今天必须有凭证」这一层：**账面的形状照旧判** —— 一条把 `trackedBy`
+ *      抄混的记录仍然红。撤的是要求，不是让读数可以假；
+ *   ④ 没有平台侧执行者时不许留空：`ciStage` 指向的那一格必须在
+ *      `COMFYAPP_CI_DAILY_GATES` 里（那条判据写在 `tests/no-platform-ci-config.test.ts`，
+ *      它判的是配置文件，这里只判判决）。
+ */
+describe("ciStage：执行者在平台侧的那些档（§11.8 / §13.5.23）", () => {
+  it("① 三档都登记了非空 `ciStage`，且判决把它带回来给调用方", () => {
+    for (const kind of ["e2e", "full", "artifact"]) {
+      const stage = String(freshnessTrack(kind).ciStage ?? "").trim();
+      expect(stage, `${kind} 没有登记平台侧执行者`).toBeTruthy();
+      expect(
+        asRegistered(kind, {}, {}).ciStage,
+        `${kind}：runGate 没把 ciStage 带出去，钩子那一行就说不清「谁在跑这一档」`,
+      ).toBe(stage);
+    }
+  });
+
+  it("② 同一份「动过面而账旧」的输入：按当前登记不拦，清空 ciStage 立刻拦", () => {
+    const old = { ...GOOD, verifiedAt: "2026-10-06T00:30:00.000Z" };
+    const dirtySince = new Date("2026-10-09T05:00:00.000Z");
+    const now = asRegistered("full", { full: old }, { dirtySince });
+    expect(
+      now.problems,
+      `本地还在拦这一档（${now.problems.join("；")}）—— 执行者已在平台侧，` +
+        "这一层再拦就是同一条判据收两次墙钟",
+    ).toEqual([]);
+    expect(now.exitCode).toBe(0);
+    // 同一份输入换个登记形状，必须立刻回到「拦」—— 证明豁免读的是数据，不是删了分支。
+    const local = gate("full", { full: old }, { dirtySince });
+    expect(local.exitCode).toBe(1);
+    expect(local.problems.join("\n")).toContain("今天的提交动过这一档的输入面");
+  });
+
+  it("② 顺带：本地**没有留痕**也不再是红，但读数照打（撤拦 ≠ 撤账）", () => {
+    const empty = asRegistered(
+      "full",
+      {},
+      {
+        dirtySince: new Date("2026-10-09T05:00:00.000Z"),
+      },
+    );
+    expect(
+      empty.problems,
+      "ci-owned 那一档「账里没有记录」不该再拦 —— 执行者在平台侧，本地这一格可以一直没人跑",
+    ).toEqual([]);
+    expect(
+      empty.ages.join(""),
+      "不拦不等于不打：「上一次本地自证是什么时候」是这一档唯一的能见度来源",
+    ).toContain("无记录");
+  });
+
+  it("③ 撤的是「今天必须有凭证」，不是账面的形状 —— `trackedBy` 抄混照旧红", () => {
+    /* 这一条是本组最要紧的一格：豁免写下去之后，「随便怎么写都算数」是最自然的滑坡。
+     * 记录存在时它的形状判据**一条都不该跟着 ciStage 一起撤** —— 读数也得是真的。 */
+    const mixed = {
+      ...GOOD,
+      verifiedAt: TODAY_AT,
+      trackedBy: "e2e", // 挂在 full 的账上，却是 e2e 跑法写的
+    };
+    const result = asRegistered("full", { full: mixed });
+    expect(result.exitCode).toBe(1);
+    expect(result.problems.join("\n")).toContain("两条新鲜度账同形");
+    // 同一条坏形状在本地口径下也红（两条腿共用同一份形状判据，不是各写一份）。
+    expect(gate("full", { full: mixed }).exitCode).toBe(1);
   });
 });
 
