@@ -74,9 +74,8 @@ import {
 } from "./db-push-core.mjs";
 import {
   ensureSchemaCurrent,
+  probeSchemaFresh,
   probeSchemaSync,
-  readSchemaFingerprint,
-  schemaFingerprint,
 } from "./db-schema-state.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
@@ -116,6 +115,13 @@ export const TRACK = freshnessTrack("e2e");
 export const E2E_DIR = "e2e";
 
 /**
+ * 开跑前 schema 预检的判决（`checkSchemaBeforeRun()` 的返回形状）。
+ *
+ * @typedef {{verdict: "proceed" | "ensure" | "abort", reason: string, risky?: string[]}}
+ *   SchemaVerdict
+ */
+
+/**
  * 起 Playwright 之前的**三条短路判据**，各交一句「要么说话、要么拦下」（ISSUE #1998）。
  *
  * 收在一处的理由与 `runPreflightReadings` 同源：这三条此前是 `main` 里三段就地 `await`
@@ -136,6 +142,7 @@ export const E2E_DIR = "e2e";
  *   browser?: typeof checkBrowserReady,
  * }} input
  * @returns {{
+ *   schemaVerdict: SchemaVerdict | null,
  *   python: () => Promise<{say?: string, abort?: string}>,
  *   schema: () => Promise<{say?: string, abort?: string}>,
  *   browser: () => Promise<{say?: string, abort?: string}>,
@@ -148,7 +155,15 @@ export function makePreflightCollectors({
   python = checkPythonReady,
   browser = checkBrowserReady,
 }) {
-  return {
+  /* schema 那一跳的判决**算一次、交出去两次**：一次是「说一句 / 拦下」，
+   * 一次给 `main` 决定「空库那一档要不要留下来建齐」。此前 `main` 判完这一条
+   * 之后又调了一次 `checkSchemaBeforeRun()` 来问同一个问题 —— 而那一调在
+   * 「指纹对不上」的机器上会**再起一轮 drizzle dry-run**（十几秒），只为读一个
+   * 与刚才那次逐字相同的结论。`schema` 挂的是本趟算出的那份，不是函数。
+   * ⚠️ 它只在 `runPreflightReadings` 真的走到 `schema` 这一步之后才有值：调用方
+   * 必须等那一步跑过再读（`main` 就是在它返回之后读的）。 */
+  const collectors = {
+    schemaVerdict: /** @type {SchemaVerdict | null} */ (null),
     async python() {
       const verdict = python({ env });
       env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(verdict);
@@ -159,6 +174,7 @@ export function makePreflightCollectors({
     },
     async schema() {
       const verdict = schema(cwd);
+      collectors.schemaVerdict = verdict;
       if (verdict.verdict === "abort") {
         const risky = (verdict.risky ?? [])
           .map((statement) => `[e2e-run]   ${statement}\n`)
@@ -189,6 +205,7 @@ export function makePreflightCollectors({
       };
     },
   };
+  return collectors;
 }
 
 /**
@@ -444,6 +461,11 @@ export function schemaPreflightDecision({
  * @returns {{verdict: "proceed" | "ensure" | "abort", reason: string, risky?: string[]}}
  */
 export function checkSchemaBeforeRun(root = ROOT) {
+  /* 「表在 && 指纹相符」这两跳**不在这里重写**：它与空库那一档、与
+   * `pnpm db:push` 的空转档问的是同一个问题，判据收在
+   * `db-schema-state.mjs` 的 `probeSchemaFresh()`（§12.18 —— 两处各写一份
+   * 必然分叉）。三种结论的分工在这里只有一句：`synced` 放行、`outdated` 付一次
+   * dry-run、`unknown` 不阻断。 */
   const probe = probeSchemaSync(root);
   if (probe !== "ready") {
     return schemaPreflightDecision({
@@ -453,24 +475,17 @@ export function checkSchemaBeforeRun(root = ROOT) {
       autoApplyable: false,
     });
   }
-  const want = schemaFingerprint(root);
+  const fresh = probeSchemaFresh(root);
   /* 判据失效（读不到 schema 源 / 读不到库里的指纹）时**不阻断**：那一档
    * 没有结论可用，而「拿不到结论」不等于「库是旧的」—— 与 `ensureSchemaCurrent`
    * 报 `unknown` 的同一条口径。 */
-  if (want === null) {
+  if (fresh.state === "unknown") {
     return {
       verdict: "proceed",
-      reason: "读不到 schema 源文件（判据失效，不阻断）",
+      reason: `${fresh.detail}（判据失效，不阻断）`,
     };
   }
-  const have = readSchemaFingerprint(root);
-  if (have === null) {
-    return {
-      verdict: "proceed",
-      reason: "读不到库里的指纹（判据失效，不阻断）",
-    };
-  }
-  if (have === want) {
+  if (fresh.state === "synced") {
     return schemaPreflightDecision({
       probe,
       fingerprintMatch: true,
@@ -744,8 +759,11 @@ async function main(argv) {
    * 过去，全新检出的现场是 `db: "empty"` ⇒ 503 ⇒ 那条 `@critical` 必红。
    *
    * **判决只算一次**：`ensure` 那一档才要建齐，而「是不是这一档」由上面那条
-   * schema 判据给出（`makePreflightCollectors` 已经把阻断那一档拦在门外）。 */
-  if (checkSchemaBeforeRun(ROOT).verdict === "ensure") {
+   * schema 判据给出（`makePreflightCollectors` 已经把阻断那一档拦在门外）。
+   * 读数取的是**那一步算出来的那份**（`collectors.schemaVerdict`），不重算 ——
+   * 指纹对不上的机器上重算一次 = 再起一轮 drizzle dry-run（十几秒），只为读一个
+   * 与刚才逐字相同的结论。 */
+  if (collectors.schemaVerdict?.verdict === "ensure") {
     const ensured = ensureSchemaBeforeRun({
       root: ROOT,
       forward: (chunk) => process.stdout.write(`[e2e-run]   ${chunk}`),
