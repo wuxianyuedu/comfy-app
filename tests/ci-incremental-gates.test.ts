@@ -136,8 +136,18 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "core 骨架单一事实源",
       "零消费导出",
       "core 出口纪律与基类纯度",
+      /* ⚠️ `生产构建` **2026-10-18 从 PR 那一条撤了**（挪进每日档，§13.5.23），而这个名字
+       * 刻意留在这一列：`parseStageIfModify()` 判的是「配置里带 `ifModify` 的 stage」，
+       * 所以这一列防的是**将来有人把它加回 PR 并顺手收窄** —— 那一跑它会红，而这是
+       * 唯一还看得见那件事的地方。每日那一格（`每日生产构建`）不在这一列的作用范围里：
+       * `parseStageIfModify()` 只认 `stages:` 直接子项的两空格缩进，定时那条是 8 空格，
+       * 而且每日清单的在场与入口由 `tests/no-platform-ci-config.test.ts` 双向钉。 */
       "生产构建",
       "浏览器安装",
+      /* `E2E 关键流程` 与 `生产构建` 同批离开 PR（2026-10-19，撤档说明在 `.cnb.yml`），
+       * 名字同样**留在这一列**：它防的还是「将来有人把它加回 PR 并顺手挂 `ifModify`」。
+       * 而这一格比 `生产构建` 多一条前提 —— 它需要 `next build` 的产物，恢复它必须
+       * **同批**把构建也放回 PR（`tests/no-platform-ci-config.test.ts` 那条判住）。 */
       "E2E 关键流程",
     ];
     const gated = parseStageIfModify(CONFIG);

@@ -62,6 +62,19 @@ const GOOD = freshnessRecord({
  * 容器是 UTC 时两者同日）。「不是今天 ⇒ 仍然要拦」那一条另写。 */
 const SAME_DAY = new Date("2026-10-09T06:00:00.000Z");
 
+/**
+ * 把 e2e 这一档读成「**平台侧还没有执行者**」的那一种登记形状。
+ *
+ * 2026-10-19 起真实登记里 `ciStage = 每日全量E2E`，于是「缺记录 / 今天动过面而账停在
+ * 改动之前 / 超出宽限」这三种红在真实档上**再也走不到**（本地那层整层跳过，见 §11.8）。
+ * 下面那三格判的是这一档**自己的话术**（账文件路径、输入面清单、宽限那句），仍然要能
+ * 被判红 —— 拿合成档打它与 `tests/daily-tracks.test.ts` 里同一条理由：
+ * **判据要能对当前登记之外的那种形状继续响**，否则「将来某一档失去平台执行者」这件事
+ * 发生时，唯一知道它的办法就是有人在生产上撞一次。
+ * ciStage 语义本身的完整矩阵在那一个文件里判，这里不重复。
+ */
+const localE2e = { ...freshnessTrack("e2e"), ciStage: "" };
+
 describe("全量 e2e 的记账语义（§11.8）", () => {
   it("绿了才记：红了不记（跑过 ≠ 跑绿过）", () => {
     expect(shouldRecord({ exitCode: 0, dryRun: false })).toBe(true);
@@ -247,6 +260,11 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
      *   · `dirty` / `graceMs`：吃输入面的档按「改了就当天跑」判，不吃的那一档两栏为空。
      * 逐档一起判：只有一侧变了就说明「同形」这句话已经不成立了。 */
     expect(freshnessTrack("e2e").daily).toBe(true);
+    /* 这一档的执行者现在是平台侧那一格（2026-10-19：「新鲜度都不要本地跑，都 CI 跑」）。
+     * 名字写在这里而不是别处：`e2e-run.mjs` 是那一格的入口，而「那一格真在每日清单里」
+     * 由 `tests/no-platform-ci-config.test.ts` 判 —— 两侧合起来才是「本地不拦」这句豁免
+     * 的完整前提；少任何一侧，「不拦」都会变成「谁都不跑」。 */
+    expect(freshnessTrack("e2e").ciStage).toBe("每日全量E2E");
     expect(freshnessTrack("e2e").skipHow).toBe(
       'node scripts/e2e-run.mjs --skip "<理由>"',
     );
@@ -357,6 +375,7 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     const result = runGate({
       ledger: {},
       kind: "e2e",
+      track: localE2e,
       keys: ["e2e"],
       now: SAME_DAY,
     });
@@ -374,6 +393,7 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
     const result = runGate({
       ledger: { e2e: yesterday },
       kind: "e2e",
+      track: localE2e,
       keys: ["e2e"],
       now: SAME_DAY,
       dirtySince: new Date("2026-10-09T01:00:00.000Z"),
@@ -402,6 +422,7 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
     const result = runGate({
       ledger: { e2e: stale },
       kind: "e2e",
+      track: localE2e,
       keys: ["e2e"],
       now: SAME_DAY,
       dirtySince: null,

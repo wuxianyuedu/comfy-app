@@ -113,6 +113,71 @@ if (pythonPreflight?.interpreter && executorEnv[COMFY_CLI_PYTHON_KEY]) {
  */
 const COLD_COMPILE_WORKERS = 2;
 
+/** webServer 能起的两档，逐字就是 Playwright 要执行的命令。 */
+export const E2E_SERVER_COMMANDS = {
+  dev: "pnpm dev",
+  start: "pnpm start",
+} as const;
+
+/**
+ * 「这一趟 webServer 起的是哪一档」的**唯一出处**。
+ *
+ * `scripts/e2e-run.mjs` 的 `resolveServerMode()` 判的是同一件事，两处**刻意不互相
+ * import**（本文件是 Playwright 的入口，由它自己加载 —— 拿配置当纯函数库引进来等于让
+ * 跑法脚本依赖一个它本来不认识的模块），一致性由 `tests/e2e-runtime-budget.test.ts` 钉，
+ * 与 {@link resolveE2eWorkers} 那条同一个理由。
+ *
+ * ## 为什么这件事需要一个**显式**的旋钮，而不是继续拿 `CI` 当代理
+ *
+ * 旧形态是 `CI || PNPM_START ⇒ pnpm start`。那句话把两件本来独立的事绑成了一件：
+ * 「这是不是一条 CI」与「这个工作区里有没有 `next build` 的产物」。2026-10-19 把 PR
+ * 那条流水线上的 `生产构建` 撤掉之后，耦合当场露出来（`cnb-ob4-1k5828a36`，
+ * `E2E 关键流程` 185.8s 红）：
+ *
+ *   [WebServer] Error: Could not find a production build in the '.next' directory.
+ *   Error: Timed out waiting 180000ms from config.webServer.
+ *
+ * 红在**没人声明过的东西**上：那条流水线仍然带 `CI`，配置于是仍然去起生产服务器，而产物
+ * 已经不在了。`PNPM_START` 帮不上 —— 它的缺席本来代表「dev 档」，而 `CI` 那一支在它前面。
+ *
+ * ## 形状（三条都是刻意的）
+ *
+ *   · `COMFY_E2E_SERVER=dev` ⇒ `pnpm dev`（首帧**现场编译**那一档）；`= start` ⇒ `pnpm start`；
+ *   · 没设这个键时**沿用旧规则**（`CI` / `PNPM_START` ⇒ start，否则 dev）：本地默认不减配，
+ *     而每日那一跑的 `每日全量E2E` 现在**显式写 start** —— 它对产物的依赖从此是配置里读得出的
+ *     一句话，而不是「它是 CI」的推论；
+ *   · **值不认识就抛，不回落**。回落 = 「写错一个字母 ⇒ 悄悄换一档」，而两种档的负载形态
+ *     完全不同（现场编译 vs 零编译），换错了只表现为「e2e 莫名其妙集体超时」——
+ *     本仓最不能有的那种「红在别处」（§11.23 / §12.12 同族）。
+ *
+ * ⚠️ `dev` 那一档在自托管节点上**没有读数**：本文件旧注释记着它的历史形态（ISSUE #1834，
+ * 8 worker 下首屏现场编译让冒烟用例集体超时）。所以「把 PR 那一格改成 dev 档」这条路
+ * 今天是**已知不利**的，本仓选的是把 E2E 整格挪到每日档（`.cnb.yml` 里那段撤档说明），
+ * 而不是拿一条会集体超时的 lane 冒充「PR 上也端到端验过」。
+ *
+ * @param env 进程环境（纯函数：用例注入，不读全局）
+ * @returns `pnpm dev` 或 `pnpm start`
+ */
+export function resolveWebServerCommand(
+  env: NodeJS.ProcessEnv,
+): (typeof E2E_SERVER_COMMANDS)[keyof typeof E2E_SERVER_COMMANDS] {
+  const explicit = String(env.COMFY_E2E_SERVER ?? "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "dev") return E2E_SERVER_COMMANDS.dev;
+  if (explicit === "start") return E2E_SERVER_COMMANDS.start;
+  if (explicit !== "") {
+    throw new Error(
+      `COMFY_E2E_SERVER 的值认不出来："${env.COMFY_E2E_SERVER}"（只认 dev / start）—— ` +
+        "这一档决定 webServer 起的是「现场编译」还是「生产构建」，两种负载形态完全不同，" +
+        "拼错时静默回落会让红读起来像用例问题。",
+    );
+  }
+  return env.CI || env.PNPM_START
+    ? E2E_SERVER_COMMANDS.start
+    : E2E_SERVER_COMMANDS.dev;
+}
+
 /**
  * 「这次跑的 webServer 会不会**现场编译**首帧」—— 它决定并发档（ISSUE #1834）。
  *
@@ -212,16 +277,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      // CI 上必须用生产构建 + start：dev server（Turbopack）首屏要现场编译，
-      // 冷启动远超 180s 的等待窗口，会让冒烟用例集体超时。CI 门禁已先跑
-      // `pnpm build`，这里只需起服务。本地开发仍用 dev（热更新、无需先构建）。
-      //
-      // 本地那条默认**刻意不减配**：`pnpm dev` 要求先 `pnpm build` 才能跑 ——
-      // 那会让「按需跑一次 e2e」变成「先花十分钟构建」。要那一档的人用
-      // `PNPM_START=1` 显式说（`scripts/e2e-run.mjs` 认它，语义与 CI 档逐字相同：
-      // 生产构建 + start + 不现场编译 ⇒ 并发也回到默认，见 `resolveE2eWorkers`）。
-      command:
-        process.env.CI || process.env.PNPM_START ? "pnpm start" : "pnpm dev",
+      // 起哪一档由 `resolveWebServerCommand` 一处决定（下面那格），这里只消费它的结论。
+      command: resolveWebServerCommand(process.env),
       url: appOrigin,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,

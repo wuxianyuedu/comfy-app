@@ -733,13 +733,22 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
  * `pnpm run build`（而不是 `artifact-run.mjs`），于是「这一步绿了」只落在日志里、
  * 账面上一个字不变。判据与账是两件事，两个执行者要读到同一份事实。
  *
- * 判四层（缺一层这条「挪」就退化成一句好看的话）：
+ * 判四层（2026-10-18 起第三半换了执行者、第四半分量的确变重了）：
  *   ① 平台侧那一步在（`.cnb.yml` 的「新鲜度账」，跑的是与钩子**同一份**脚本）；
- *   ② 它排在「生产构建」**之前** —— 跑法脚本跑绿会刷新账，同一分支的 stage 共享
- *      工作区，排在后面时读到的是「刚被本次构建证过的账」，恒放行；
- *   ③ 「生产构建」的入口是**跑法脚本**而不是裸 `pnpm run build`（裸跑 = 跑了不记账）；
- *   ④ 本地那一半**不许撤**：平台侧是 squash 合并、**不跑本地钩子**（硬规则 6），
- *      而 CI 只在 PR 事件上跑 —— PR 之间、以及本地迭代时，钩子那一步是唯一的能见度。
+ *   ② PR 那一条上**凡刷新账的档都排在它之后**，而此刻一条都没有 —— `生产构建` 挪进
+ *      每日档（§13.5.23）、`单元测试` 仍停用。所以这一条判两半：在场的刷新者不许排在
+ *      前面（给「加回来」留着），以及 `生产构建` 不许在 `GATES` 里（把撤档这个决定
+ *      写死成断言，而不是留一句「顺序真好看」）；
+ *   ③ ~~「生产构建」的入口是跑法脚本~~ —— 同一件事现在**只**由每日档那一条判
+ *      （`tests/no-platform-ci-config.test.ts` 的「定时那一跑」：入口 + `timeout`）。
+ *      这里删掉而不是留个空壳：两处钉同一个事实，漂了没人知道哪份是真的（§12.12）；
+ *   ④ 本地那一半**不许撤**：这一步仍在每次提交里跑、仍打三份账的时刻与形状。
+ *      ⚠️ 2026-10-19 起它的角色变了：三档都登记了 `ciStage`（执行者在平台侧每日档），
+ *      所以它**不再要求当天自证**，只剩两件事仍然非有不可 —— 打读数（「这一档上次被
+ *      实证跑绿是什么时候」必须被看见），以及判账面形状（撤的是要求，不是让读数可以假）。
+ *      「撤拦 ≠ 撤掉这一步」由下面那条用例判：把这一步从链里删掉，读数就再没有读者。
+ *      而「本地不拦」成立的前提（那一格真在每日清单里）由
+ *      `tests/no-platform-ci-config.test.ts` 判，不在这里写第二份。
  */
 describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () => {
   const hook = readFileSync(HOOK, "utf8");
@@ -765,34 +774,56 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
     ).toContain("新鲜度账");
   });
 
-  it("「新鲜度账」排在「生产构建」**之前**（否则读的是本次构建刚改过的账 = 恒放行）", () => {
-    /* 这条不是风格：`生产构建` 用的 `artifact-run.mjs` 跑绿之后会刷新
-     * `scripts/.artifact-freshness.json`，而同一分支的 stage **共享同一个工作区** ——
-     * 排在它后面时这一步读到的是刚被这一次构建改过的账，于是「源分支上账是旧的」
-     * 永远判不出来（判据在场、结论恒放行，正是本仓最不能有的静默形态）。
-     * 判据用 `COMFYAPP_CI_GATES` 的顺序（那份有序清单是既有事实源）。 */
+  it("PR 那一条上凡刷新新鲜度账的档都排在「新鲜度账」之后（此刻一格都不许有）", () => {
+    /* 这条不是风格：跑法脚本跑绿之后会**刷新自己那笔账**
+     * （`artifact-run.mjs` → `scripts/.artifact-freshness.json`，`full-suite-run.mjs` →
+     * `.full-suite-freshness.json`），而同一分支的 stage **共享同一个工作区** ——
+     * 排在 `新鲜度账` 之前时，那一步读到的是「刚被这一次运行改过的账」，
+     * 于是「源分支上账是旧的」永远判不出来（判据在场、结论恒放行，
+     * 正是本仓最不能有的静默形态）。
+     *
+     * 认的是「这一步的 script 点名了记账入口」这个**语义**，不是行形状：把命令包进
+     * `ci-cp936-exit.mjs`、换 stage 的位置、甚至换 YAML 缩进，这条都还看得见。
+     *
+     * ⚠️ `e2e-run.mjs` **不在这一列**，两个理由现在叠在一起：PR 那条 2026-10-19 起没有
+     *   端到端那一格（整格挪到每日档），而它此前带的 `--grep=@critical` 按
+     *   `isWholeTrackRun()` 也**不构成整档凭证 ⇒ 不记账**（见 `freshness-ledger.mjs`）。
+     *   算进来等于判出一条假冲突；而每日那一格跑的是整档、真的会刷新账，那一半由
+     *   「每日清单 ⇄ `ciStage`」那条判据管，不在这里写第二份。
+     *
+     * 2026-10-18 之后这一列在 PR 上是**空的**：`生产构建` 与 `单元测试` 都只在每日档
+     * （`每日生产构建` / `每日单元测试`）。所以这一条今天判的是第二半 ——
+     * 「PR 清单里不许出现记账入口」，而那是刻意的挪档结论，不是恰好没有。
+     * 谁把某一格加回来，第一半（顺序）自动接管。 */
+    const ledgerRefreshing = [
+      "scripts/artifact-run.mjs",
+      "scripts/full-suite-run.mjs",
+    ];
     const order = registeredGateOrder(config);
+    expect(order, "`新鲜度账` 不在 GATES 清单里").toContain("新鲜度账");
     const freshAt = order.indexOf("新鲜度账");
-    const buildAt = order.indexOf("生产构建");
-    expect(freshAt, "`新鲜度账` 不在 GATES 清单里").toBeGreaterThanOrEqual(0);
-    expect(buildAt, "`生产构建` 不在 GATES 清单里").toBeGreaterThanOrEqual(0);
+    const refreshers = platformStages()
+      .map((s, at) => ({ ...s, at }))
+      .filter((s) =>
+        ledgerRefreshing.some((entry) => (s.stage ?? "").includes(entry)),
+      );
+    const beforeGate = refreshers
+      .filter((s) => s.at < freshAt)
+      .map((s) => s.name);
     expect(
-      freshAt,
-      "`新鲜度账` 排在 `生产构建` 之后 —— 那一步的跑法脚本会先把账刷新，" +
-        "于是这条判据读到的是「刚被本次构建证过的账」，恒放行",
-    ).toBeLessThan(buildAt);
-  });
-
-  it("「生产构建」的入口是跑法脚本，不是裸 `pnpm run build`（裸跑 = 跑了不记账）", () => {
-    const stage = platformStages().find((x) => x.name === "生产构建")?.stage;
-    expect(stage, "`.cnb.yml` 里解析不出「生产构建」这一步").toBeTruthy();
+      beforeGate,
+      `这些 stage 排在 \`新鲜度账\` 之前：${beforeGate.join(", ")} —— 它们的跑法脚本会先把账刷新，` +
+        "于是这一步读到的是「刚被本次运行证过的账」，恒放行",
+    ).toEqual([]);
+    /* 半边二：`生产构建` 此刻**不许**在 PR 清单里 —— 2026-10-18 的挪档结论要写死成
+     * 断言，而不是靠「恰好解析不出来」。它现在只在每日档，那一格的入口与预算由
+     * `tests/no-platform-ci-config.test.ts` 的「定时那一跑」判。 */
     expect(
-      stage,
-      "「生产构建」跑的还是裸 `pnpm run build` —— 那样这一步的绿只落在日志里、" +
-        "`scripts/.artifact-freshness.json` 一个字不变，本地「改了就当天跑」照旧拦人。" +
-        "入口要写 `node scripts/artifact-run.mjs`（它内部就是 `pnpm run build`）",
-    ).not.toContain("pnpm run build");
-    expect(stage).toContain("scripts/artifact-run.mjs");
+      order,
+      "`生产构建` 又回到 `COMFYAPP_CI_GATES` 了 —— 那是 2026-10-18 撤掉的一格" +
+        "（PR 上再跑一次 `pnpm run build` 是第二次执行同一个判据，不是第二份信息：" +
+        "这一档的机器执行者是每日那一格 `每日生产构建`。要恢复请先改 §13.5.23）",
+    ).not.toContain("生产构建");
   });
 
   it("本地那一半仍在钩子门禁链里（平台侧 squash 合并不跑本地钩子，不能只剩它）", () => {

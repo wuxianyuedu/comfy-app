@@ -310,11 +310,23 @@ export function stripArgvSeparator(argv) {
 }
 
 /**
- * 本趟跑的是哪一档 webServer（`playwright.config.ts` 的 `command` 读的是同一对键）。
+ * 本趟跑的是哪一档 webServer（`playwright.config.ts` 的 `resolveWebServerCommand()`
+ * 判的是**同一件事**，读的是同一个键）。
  *
  * **为什么这一档必须由本文件说出来**：两档的负载形态完全不同（现场编译 vs 生产构建），
  * 而它们的差别在输出里一个字都看不见 —— 下一个人看到「8.7 分钟 / 43 failed」时无法
  * 判断那是哪一种，只能重新量一遍。
+ *
+ * ## `COMFY_E2E_SERVER`：把「有没有产物」从「是不是 CI」里分出来（2026-10-19）
+ *
+ * 旧形态只看 `CI || PNPM_START`，而那句话把两件独立的事绑成了一件。PR 那条流水线上的
+ * `生产构建` 被撤掉之后当场露出来（`cnb-ob4-1k5828a36`）：那条 lane 仍然带 `CI`，配置
+ * 仍然去起 `pnpm start`，而 `.next` 里已经没有产物 ——
+ * `[WebServer] Could not find a production build` ⇒ `Timed out waiting 180000ms`。
+ * 现在显式的 `COMFY_E2E_SERVER`（`dev` / `start`）**排在 `CI` 之前**，没设时沿用旧规则；
+ * 认不出的值抛而不是回落（静默换档的表现是「e2e 集体超时」，读起来像用例问题）。
+ * 同一条判断在配置文件里另有一份，两份**刻意不互相 import**，一致由
+ * `tests/e2e-runtime-budget.test.ts` 钉。
  *
  * ## `workers` 现在**两档都有值**（ISSUE #1998）
  *
@@ -333,6 +345,26 @@ export function stripArgvSeparator(argv) {
  *   `workers === null` = 用 Playwright 的默认并行度（只在算不出上界时出现）
  */
 export function resolveServerMode(env) {
+  /* 显式旋钮**优先于** `CI`：这一档现在由 stage 自己声明（`每日全量E2E` 写 `start`，
+   * 因为它排在 `每日生产构建` 之后、同一分支共享工作区 ⇒ 那里真的有产物）。
+   * 空串**不算**一个显式值：它落回旧规则（`??` 只挡 null/undefined，而空串要走的正是
+   * 「没有显式声明」那一支 —— 两份实现在这一格必须逐字同语义，见那条对账判据）。 */
+  const explicit = String(env.COMFY_E2E_SERVER ?? "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "dev") {
+    return { start: false, workers: COLD_COMPILE_WORKERS };
+  }
+  if (explicit === "start") {
+    return { start: true, workers: COLD_COMPILE_WORKERS };
+  }
+  if (explicit !== "") {
+    throw new Error(
+      `COMFY_E2E_SERVER 的值认不出来："${env.COMFY_E2E_SERVER}"（只认 dev / start）—— ` +
+        "这一档决定 webServer 起的是「现场编译」还是「生产构建」，两种负载形态完全不同，" +
+        "拼错时静默回落会让红读起来像用例问题。",
+    );
+  }
   /* **两档同一个并发**（上界见 `COLD_COMPILE_WORKERS`）：现场编译档的理由是首帧
    * 编译不抢核，生产构建档的理由是这台机上同时开着的浏览器与服务太多 —— 两条都不是
    * 「核多就铺开」那种自由度，所以档位只影响 webServer 命令，不影响 worker 数。 */

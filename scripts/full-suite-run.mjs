@@ -27,11 +27,17 @@
  *   node scripts/full-suite-run.mjs --skip "<理由>"  今天不跑，记一条写明理由的豁免
  *   node scripts/full-suite-run.mjs --dirty "<理由>" 这次改动不吃这一档，记一条
  */
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { resolveCiWorkers } from "./ci-load.mjs";
+/* 分文件耗时的形状与钩子那一档**共用同一份解析**（`parseJunitXml`）：本地账本与 CI 日志
+ * 报的是同一个量的两种形状，抄两份解析器就会在「谁把外层 `<testsuites>` 当成一个文件」
+ * 这种地方分叉，而那类分叉只会让读数偏，不会让它红。 */
+import { parseJunitXml } from "./precommit-timing.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
   abortedAdvice,
@@ -69,10 +75,32 @@ export const TRACK = freshnessTrack("full");
  * @param {number} [workers] `--maxWorkers`（缺省由 `resolveCiWorkers()` 给）
  * @returns {{label: string, args: string[]}}
  */
-export function planRun(extra = [], workers = resolveCiWorkers().workers) {
+export function planRun(
+  extra = [],
+  workers = resolveCiWorkers().workers,
+  junitFile = "",
+) {
   return {
     label: "全量单测 + 覆盖率棘轮（vitest run --coverage）",
-    args: ["run", "test:coverage", `--maxWorkers=${workers}`, ...extra],
+    args: [
+      "run",
+      "test:coverage",
+      `--maxWorkers=${workers}`,
+      /* 分文件耗时读数（与钩子那一档同一份出口）。**放在 `extra` 之前、且不进 `extra`**：
+       * `isWholeTrackRun(extra)` 把「透传了任何参数」判成「跑的不是整档、不记账」，
+       * 而这一串是本档自己给 vitest 的读数参数、不是调用方在收窄范围 —— 塞错位置会让
+       * 每一次 CI 全量跑都「绿了不记账」，等于把记账通道整个关掉。
+       * 两个 reporter 一起给：只给 junit 会把人类可读的输出顶掉（真红那一屏是唯一能读
+       * 的东西）。落点由调用点决定，文件名不在这里造第二份约定。 */
+      ...(junitFile
+        ? [
+            "--reporter=default",
+            "--reporter=junit",
+            `--outputFile.junit=${junitFile}`,
+          ]
+        : []),
+      ...extra,
+    ],
   };
 }
 
@@ -90,6 +118,49 @@ export function planRun(extra = [], workers = resolveCiWorkers().workers) {
  */
 function passthrough(argv) {
   return argv.filter((a) => a !== "--dry-run");
+}
+
+/**
+ * 分文件耗时榜 —— **读数**，不参与任何判定。
+ *
+ * 为什么要它在 CI 上打：本仓「哪一档最贵」此前只有一个 stage 级墙钟（分钟级那一格），
+ * 而要把负载假红风险高的自测挪去定时那一跑，得先看得见**是哪几份文件**在吃时间。
+ * 与钩子那侧共用 `parseJunitXml`（同一份形状，两份实现必漂）。
+ *
+ * 三条形制：① 只打前 `limit` 名 + 一句合计与其余之和 —— 全平台单次构建日志硬上限
+ * 102400 字节，700 行明细会把**后面所有 stage 的日志**挤掉（覆盖率那格就是为此而设的）；
+ * ② 明写「只算测试阶段、用来排序不当墙钟」，否则这串数会被读成 stage 墙钟的分解；
+ * ③ 没有读数时打的是「没有」而不是「0 份」—— 这一跑被预算砍在收尾之前时，两者
+ *    在日志里必须长得不一样（拿不到测量 ≠ 测量结果是 0，§13.6.4.1 同一条）。
+ *
+ * @param {string} xmlText junit XML 全文；读不到时调用方给空串
+ * @param {{limit?: number, file?: string}} [opts]
+ * @returns {string[]}
+ */
+export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
+  const where = file ? `（落点 ${file}）` : "";
+  const entries = parseJunitXml(String(xmlText ?? ""));
+  if (entries.length === 0) {
+    return [
+      `[full-suite-run] 分文件耗时读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`,
+    ];
+  }
+  const sorted = [...entries].sort((a, b) => b.ms - a.ms);
+  const sum = entries.reduce((a, e) => a + e.ms, 0);
+  const head = sorted.slice(0, limit);
+  const headSum = head.reduce((a, e) => a + e.ms, 0);
+  const mid = sorted[Math.floor(sorted.length / 2)]?.ms ?? 0;
+  return [
+    `[full-suite-run] 分文件耗时：${entries.length} 份、合计 ${(sum / 1000).toFixed(1)}s` +
+      `（**只算测试阶段**，用来排序、不当 stage 墙钟）${where}`,
+    ...head.map(
+      (e) => `  ${`${(e.ms / 1000).toFixed(1)}s`.padStart(8)}  ${e.name}`,
+    ),
+    `  中位 ${(mid / 1000).toFixed(1)}s ｜ 其余 ${Math.max(0, entries.length - head.length)} 份合计 ${(
+      (sum - headSum) /
+      1000
+    ).toFixed(1)}s`,
+  ];
 }
 
 /**
@@ -159,7 +230,18 @@ function main(argv) {
   }
   const extra = passthrough(argv);
   const load = resolveCiWorkers();
-  const run = planRun(extra, load.workers);
+  /* 分文件耗时的落点。**先删再跑**：留在那儿的上一次结果会被当成这一轮的执行证据
+   * （`check-known-failed-stale.mjs` 为此立过同一条口径 —— 假读数比没有读数坏）。
+   * 落 `os.tmpdir()` 而不是仓库里：CI 的检出是一次性的，但 `pnpm test` 在本机也走这一份
+   * 代码，写进检出就是给自己留一个未跟踪文件（R9 / `.gitignore` 那一套会判）。 */
+  const junitFile = path.join(os.tmpdir(), "comfy-full-suite-junit.xml");
+  try {
+    fs.rmSync(junitFile, { force: true });
+  } catch {
+    /* 删不掉只意味着下面那份榜可能混进上一轮的读数 —— 而这一档是读数，不判红。
+     * 真要在意的是「别拿上一轮冒充这一轮」，所以下面打印时把落点一起打出来。 */
+  }
+  const run = planRun(extra, load.workers, junitFile);
   if (load.note) process.stderr.write(`[full-suite-run] ${load.note}\n`);
   if (dryRun) {
     process.stdout.write(
@@ -176,6 +258,17 @@ function main(argv) {
     stdio: "inherit",
     timeoutMs: FULL_SUITE_TIMEOUT_MS,
   });
+  /* 榜打在**三态分流之前**：红的那一次与被预算砍的那一次，恰恰是最需要知道
+   * 「是哪几份在吃时间」的两次。读不到只打一句「没有」，不抛 —— 它是读数。 */
+  let junitText = "";
+  try {
+    junitText = fs.readFileSync(junitFile, "utf8");
+  } catch {
+    junitText = "";
+  }
+  for (const line of suiteRanking(junitText, { file: junitFile })) {
+    process.stdout.write(`${line}\n`);
+  }
   /* 三态分流：**「被预算砍」与「判据红」必须长得不一样**（`classifyOutcome`）。
    * 旧写法 `res.status ?? 1` 把两者都读成 1，于是「这次没测成」会被当成
    * 「这批用例红了」，下一个人去查用例、查一整天。 */
