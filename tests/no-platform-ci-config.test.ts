@@ -41,6 +41,9 @@ import path from "node:path";
  * 而下面那条「这一步点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
 import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
+/* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
+ * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
+import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -267,6 +270,72 @@ export function registeredDisabledGates(text: string): string[] {
     .split(",")
     .map((n) => n.trim())
     .filter(Boolean);
+}
+
+/** 定时那一跑的清单（与 `.cnb.yml` 的 `COMFYAPP_CI_DAILY_GATES` 同一份，顺序即执行序）。 */
+const DAILY_GATES = [
+  "每日安装依赖",
+  "每日 Python 可用性",
+  "每日同步数据库表结构",
+  "每日单元测试",
+  "每日生产构建",
+];
+
+/**
+ * 「每日」那一跑里应当与 PR 那一跑**逐字同形**的几格（定时名 → PR 名）。
+ *
+ * 名字不同是刻意的（按名字取块的解析器会撞车），所以「同一件事」只能由 script 相同来保证。
+ */
+const DAILY_SCRIPT_MIRRORS: [string, string][] = [
+  // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
+  ["每日安装依赖", "Install dependencies"],
+  ["每日 Python 可用性", "Python 可用性"],
+  ["每日同步数据库表结构", "同步数据库表结构"],
+];
+
+/** `45m` / `30m` / `3h` → 分钟。解析不出时回 0（调用方的断言会把它读成「没预算」）。 */
+function stageBudgetMinutes(raw: string | undefined): number {
+  const m = /^(\d+)([smh])$/.exec(String(raw ?? "").trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  return m[2] === "h" ? n * 60 : m[2] === "s" ? n / 60 : n;
+}
+
+/**
+ * 某一格里**真正会执行**的那些命令行（丢掉空行与 shell 注释）。
+ *
+ * 为什么不比整块：两格的散文解释本来就该不同（PR 那一格要讲「为什么这一步是前提」、
+ * 定时那一格要讲「为什么每天一次」），要求逐字相同只会逼人删注释 —— 而漂移能藏的地方
+ * 只有命令行。返回数组而不是拼好的字符串，红的时候两边的差是哪一行一眼可见。
+ */
+function executableScriptLines(text: string, name: string): string[] {
+  return stageScriptLine(text, name)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+}
+
+/**
+ * 取某一格的 `script` 原文（去掉行首缩进与尾部空白）。
+ *
+ * 多行块（`script: |`）取整块 —— 只取第一行的话，「两格第一行相同、第二行不同」
+ * 这种恰好是最坏形态的漂移会读成相同。
+ */
+function stageScriptLine(text: string, name: string): string {
+  const block = stageBlock(text, name);
+  if (!block) return "";
+  const lines = block.split(/\r?\n/);
+  const at = lines.findIndex((l) => /^\s*script:/.test(l));
+  if (at < 0) return "";
+  const first = lines[at]?.replace(/^\s*script:[ \t]*/, "") ?? "";
+  if (first && !/^[|>][-+]?\s*$/.test(first)) return first.trim();
+  const body: string[] = [];
+  for (const line of lines.slice(at + 1)) {
+    if (/^\s*(timeout|env|ifModify|name|retries):/.test(line)) break;
+    if (line.trim() === "") continue;
+    body.push(line.replace(/^\s+/, "").trimEnd());
+  }
+  return body.join("\n");
 }
 
 /**
@@ -1243,8 +1312,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toEqual(registeredDailyGateOrder(text));
     expect(
       registeredDailyGateOrder(text),
-      "`COMFYAPP_CI_DAILY_GATES` 没有登记「每日生产构建」—— 定时那一跑跑什么就没有事实源了",
-    ).toEqual(["每日生产构建"]);
+      "`COMFYAPP_CI_DAILY_GATES` 与定时流水线里的 stage 对不上 —— 那一跑跑什么就没有事实源了",
+    ).toEqual(DAILY_GATES);
     const stage = stageBlock(text, "每日生产构建");
     expect(stage, "`.cnb.yml` 里找不到「每日生产构建」那一项").toBeTruthy();
     expect(
@@ -1265,6 +1334,89 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       budget,
       "「每日生产构建」没有 `timeout` 预算 —— 平台默认 Job 上限是 2 小时，卡死要等满才有人知道",
     ).toBeTruthy();
+  });
+
+  it("每日单元测试：整档 + 跑法脚本 + 预算大于脚本自己的墙钟预算", () => {
+    const text = readRegisteredConfig();
+    const entry = "scripts/full-suite-run.mjs";
+    /* 只扫 `script` 那一串，不扫整块：这一档的注释正当地要写出「不许带 `--grep`」这句话，
+     * 把说明判成违规等于逼人删注释（与 PS 5.1 那条形制判据「注释里同形文本放过」同一条口径）。 */
+    const script = stageScriptLine(text, "每日单元测试");
+    expect(
+      script,
+      "「每日单元测试」没有 `script` —— 那一格根本不会跑任何命令",
+    ).toBeTruthy();
+    expect(
+      script,
+      "「每日单元测试」跑的应是**跑法脚本** —— 裸 vitest 的绿只落在日志里，" +
+        "`scripts/.full-suite-freshness.json` 一个字不变，本地「当天跑过」那条判据照旧拦人",
+    ).toContain(entry);
+    expect(
+      existsSync(path.join(ROOT, entry)),
+      `${entry} 不在盘上 —— 那一步会在平台侧以「文件不存在」的形态红`,
+    ).toBe(true);
+    /* 整档：`isWholeTrackRun` 把「透传了参数」判成不构成凭证、当场不记账。
+     * 所以这里判的不是风格 —— 加了 `--grep` 的那一跑会**绿着不记账**，
+     * 而账面看起来与真跑过一模一样。 */
+    for (const forbidden of ["--grep", "--coverage=false", "tests/"]) {
+      expect(
+        script,
+        `「每日单元测试」带了 ${forbidden} —— 那不是整档，跑绿也不记账`,
+      ).not.toContain(forbidden);
+    }
+    /* 预算必须**大于**脚本自己的墙钟预算：否则先被掐的是 stage，而那一刀不带
+     * 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`），读起来就像判据红。 */
+    const minutes = stageBudgetMinutes(stageTimeouts(text).get("每日单元测试"));
+    expect(
+      minutes,
+      "「每日单元测试」没有 `timeout` 预算（一天的量级，卡死要早报）",
+    ).toBeTruthy();
+    expect(
+      minutes * 60_000,
+      `stage 预算必须大于 FULL_SUITE_TIMEOUT_MS（${FULL_SUITE_TIMEOUT_MS}ms）—— ` +
+        "否则先被平台掐的是 stage，那一刀没有分流话术",
+    ).toBeGreaterThan(FULL_SUITE_TIMEOUT_MS);
+  });
+
+  it("定时那一跑的前提格：安装与 Python 必须先于单测，且 script 与 PR 那格逐字相同", () => {
+    const text = readRegisteredConfig();
+    const order = registeredDailyGateOrder(text);
+    const suite = order.indexOf("每日单元测试");
+    expect(suite, "「每日单元测试」不在定时清单里").toBeGreaterThan(-1);
+    /* 顺序不是风格：每次构建都是全新 job 目录（`工作区复用读数` 两跑实测），没有
+     * `node_modules` 与库表时，那一跑会以「找不到 next / 连不上库」的形态红，
+     * 而那种报错指不到真正缺的那一格。 */
+    expect(
+      order.indexOf("每日安装依赖"),
+      "「每日安装依赖」必须排在「每日单元测试」之前 —— 否则整档跑在没有 node_modules 的检出上",
+    ).toBeLessThan(suite);
+    expect(
+      order.indexOf("每日 Python 可用性"),
+      "「每日 Python 可用性」必须排在「每日单元测试」之前 —— 缺解释器时相关用例只走 env 档跳过（静默少判）",
+    ).toBeLessThan(suite);
+    expect(
+      order.indexOf("每日同步数据库表结构"),
+      "「每日同步数据库表结构」必须排在「每日单元测试」之前 —— 没库时读库的用例报的是「连不上」",
+    ).toBeLessThan(suite);
+    /* 两跑之间**不许各漂一份**：这些格子的名字带「每日」前缀（不共用名字是为了让
+     * 按名字取块的解析器不撞车），所以「同一件事」这件事只能由 script 逐字相同来保证。
+     * 比的是**真正会执行的那些行**：块脚本里的 `#` 注释与空行不算 —— 两格各自要解释的
+     * 事情不一样（PR 那一格背着一整段「为什么这一步是前提」），把散文也要求逐字相同
+     * 只会逼人删解释，而漂移恰恰藏在命令行里。 */
+    for (const [daily, pr] of DAILY_SCRIPT_MIRRORS) {
+      const a = executableScriptLines(text, daily);
+      const b = executableScriptLines(text, pr);
+      expect(a, `定时那一跑里找不到「${daily}」的 script`).toBeTruthy();
+      expect(
+        b,
+        `PR 那一跑里找不到「${pr}」的 script —— 镜像判据两边都要取得到，否则它是空转`,
+      ).toBeTruthy();
+      expect(
+        a,
+        `「${daily}」与 PR 那一格的命令行不再逐字相同 —— 判据是同一份脚本，` +
+          "改一边不改另一边就是两条流水线各自漂（§12.12 的孪生形态，只是它长在配置里）",
+      ).toEqual(b);
+    }
   });
 
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {

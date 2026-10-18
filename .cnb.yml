@@ -283,8 +283,33 @@
     # 两者的差别就是这次要回答的那件事（生产构建每天一次，见 §13.5.23）。
     # 名字在这儿 = 那一格必须一字不差地出现在 crontab 流水线里（判据
     # `tests/no-platform-ci-config.test.ts` 双向核对：缺一格红、多一格红）。
+    #
+    # ── 为什么全量单测在**这一份**而不是 PR 那一份（ISSUE #2018 的口径）────────
+    #
+    # 用户点的问题是「可能负载假红的，能不能挪去 CI 执行」。答案是「能，但**不是
+    # 放到 PR 那一条**」—— 这台节点上 CI 与本地钩子共用同一台 16 核机，所以「挪去 CI」
+    # **不减少总负载**，它改变的是谁被假红卡住、以及重试的代价。而全量 vitest 恰好是
+    # 这条流水线上唯一两档会自己起一堆子进程的之一（另一档是 `next build`），
+    # `scripts/ci-load.mjs` 的文件头把这条边界写死了：
+    #
+    #   · **不同 PR 之间仍然会叠加**（`lock` 按 PR 分锁只掐同一 key 上的旧跑，平台不给
+    #     「同时跑几条」的旋钮）—— 历史上三条全量流水线挤同一台机，`单元测试` 跑到
+    #     **8640s 被墙钟掐断**，只留下一句 `timeout of 8640000ms exceeded`；
+    #   · 套件里大量用例**真起子进程**（git / node / prettier / PowerShell），超订的那一份
+    #     从「等 CPU」变成「等子进程」，形态就是 `Test timed out in 30000ms` 而单跑全绿。
+    #
+    # 放到每天 04:00 那一跑，这两个前提同时消失：**没有并发的 PR**、机器是空的，
+    # 而这正是「负载读数不可信」这一族唯一的解法（抬超时预算与降门槛都被 §11.13 / §13.6.4
+    # 明令禁止）。代价说在明处：最晚 24 小时才发现 —— 与 #2010 给 `生产构建` 做的是
+    # **同一个取舍**，而本仓已有「每日档有主」那套新鲜度账（`daily-run.mjs` /
+    # `test:coverage:tracked`）接得住它，红了第二天早上有人在。
+    #
+    # ⚠️ **前面三格是前提，不是装饰**：每次构建都是全新 job 目录、`node_modules` 恒不在场
+    #   （`工作区复用读数` 两跑实测，形态①）。定时那一跑此前**只有构建那一格**，而
+    #   `artifact-run.mjs` 跑的是 `pnpm run build` —— 它没有安装档就会在 04:00 以
+    #   「找不到 next」的形态红。顺序有判据：安装必须先于任何吃 `node_modules` 的格子。
     COMFYAPP_CI_DAILY_GATES: >-
-      每日生产构建
+      每日安装依赖, 每日 Python 可用性, 每日同步数据库表结构, 每日单元测试, 每日生产构建
     # ⚠️ 末尾那两条的**顺序有意**：`浏览器安装` 要下 ~120 MiB（分钟级），而判「装没装成」
     # 是零成本的 —— 排在 `E2E 关键流程` 之前，缺件才会在便宜的位置报出来（判据判这条序）。
 
@@ -1252,6 +1277,48 @@ master:
     - <<: *common
       name: 每日生产构建
       stages:
+        # ── 前提三格：script 行与 PR 那条流水线上的同名档**逐字相同** ──────────
+        # 为什么不共用 YAML 锚点：`pipelineStageNames()` / `stageBlock()` 是按名字在文本里
+        # 取块的，两格重名会让「哪一条流水线的读数」变成解析器的运气。所以这里各起一个
+        # 带「每日」前缀的名字，而**由判据钉住它的 script 与 PR 那一格逐字相同**
+        # （`tests/no-platform-ci-config.test.ts`）—— 漂移的形态是「一边改了另一边没改」，
+        # 那正是这份清单里所有「只许一处」的判据在挡的东西。
+        - name: 每日安装依赖
+          # 与 PR 那格同一份实现（`ci-install-deps.mjs`：先自证 pnpm 起得来，再按语义判
+          # 要不要装）。定时这一跑每次都是全新检出 ⇒ 这一跳恒为「装」，不是可省的装饰。
+          script: |
+            $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+            $ErrorActionPreference = "Stop"
+            node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+            node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+        - name: 每日 Python 可用性
+          # 判据那一份只有 `--python-only` 一个；这一格跑在单测**之前**是因为缺解释器时
+          # 相关用例只走 `env` 档跳过（**静默少判**），必须在便宜的位置先报一次。
+          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --python-only
+        - name: 每日同步数据库表结构
+          # 库里要有表：套件里读库的那几条在没有库时的形态是「连不上」，看起来像业务故障
+          # （§9.1 那格「页面 200、接口 500」的同一族误诊）。`db-push.mjs` 复核真建出表。
+          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
+        # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
+        - name: 每日单元测试
+          # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
+          # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
+          # 跑绿刷新 `scripts/.full-suite-freshness.json`，本地「改了就当天跑」那条判据与
+          # 这一档读的是同一份事实。裸写 vitest 时这一档的绿只落在日志里、账面一个字不变。
+          #
+          # ⚠️ **必须整档跑**：`isWholeTrackRun` 会把「透传了 `--grep` / 指到单个文件」的
+          #   绿判成**不构成整档凭证**、当场不记账。并发不进 `extra` 的同一条理由写在
+          #   `planRun` 的注释里（塞错位置 = 每一次都绿而不记账）。
+          #
+          # 这一档还打**分文件耗时榜**（前 10 + 合计 + 中位，落 `os.tmpdir()` 的 junit，
+          # 与钩子那侧共用 `parseJunitXml`）—— 它顺带回答「这台机上跑全量时哪几份在吃
+          # 时间」，而那个数此前只在本地账本里有。只算测试阶段，用来排序不当 stage 墙钟。
+          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
+          # 45m：`full-suite-run.mjs` 自己的墙钟预算是 30 分钟（`FULL_SUITE_TIMEOUT_MS`），
+          # stage 预算必须**大于**它，否则先被平台掐的是 stage，而那一刀不带
+          # 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`）。历史读数 827s
+          # （`cnb-eus-1k5058g8l`，755 文件全量绿）—— 45m 给的是安静机器上的三倍余量。
+          timeout: 45m
         # 入口是**跑法脚本**（ISSUE #1979 的口径，与 PR 那条的「生产构建」同一条）：
         # 裸 `pnpm run build` 会让这一步的绿只落在日志里、`scripts/.artifact-freshness.json`
         # 一个字不变。外面这一层（`ci-daily-build.mjs`）多出来的只有事件身份与镜像读数，

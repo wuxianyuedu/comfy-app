@@ -38,6 +38,7 @@ import {
   shouldRecord as suiteRecords,
   TRACK as SUITE_TRACK,
   planRun as suitePlan,
+  suiteRanking,
 } from "../scripts/full-suite-run.mjs";
 import {
   abortedAdvice,
@@ -853,5 +854,72 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       expect(Number.isNaN(at.getTime())).toBe(false);
       expect(at.getTime()).toBeLessThanOrEqual(Date.now());
     }
+  });
+});
+
+/**
+ * 「每日单元测试」那一档在 CI 上打的**分文件耗时榜**。
+ *
+ * 这一组判的三件事各自都会静默失效，所以不能只测 happy path：
+ *  · 读数参数被塞进 `extra` ⇒ `isWholeTrackRun` 把每一次跑判成「不是整档」⇒ 记账通道关掉；
+ *  · junit 没落盘时打「0 份」而不是「没有」⇒ 与「跑完了但一份都没计时」逐字同形；
+ *  · 明细不限行数 ⇒ 平台单次构建日志硬上限 102400 字节，会把**后面所有 stage** 的日志挤掉。
+ */
+describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）", () => {
+  const JUNIT = [
+    '<?xml version="1.0" encoding="UTF-8" ?>',
+    '<testsuites name="vitest tests" tests="3" failures="0" errors="0" time="61">',
+    '    <testsuite name="tests/a.test.ts" hostname="H" tests="1" time="30.5"></testsuite>',
+    '    <testsuite name="tests/b.test.ts" hostname="H" tests="1" time="30"></testsuite>',
+    '    <testsuite name="tests/c.test.ts" hostname="H" tests="1" time="0.5"></testsuite>',
+    "</testsuites>",
+  ].join("\n");
+
+  it("读数走 planRun 的第三参，不进 extra —— 否则每一次跑都绿而不记账", () => {
+    const withJunit = suitePlan([], 4, "/tmp/x.xml");
+    expect(withJunit.args.slice(0, 3)).toEqual([
+      "run",
+      "test:coverage",
+      "--maxWorkers=4",
+    ]);
+    /* `--reporter=default` 必须在：只给 junit 会把人类可读的输出整个换掉，
+     * 而真红那一屏是唯一能读的东西。 */
+    expect(withJunit.args).toContain("--reporter=default");
+    expect(withJunit.args).toContain("--reporter=junit");
+    expect(withJunit.args.join(" ")).toContain("--outputFile.junit=/tmp/x.xml");
+    // 人给的透传参数仍然排在最后（不被读数参数挤掉）。
+    expect(suitePlan(["--foo"], 4, "/tmp/x.xml").args.at(-1)).toBe("--foo");
+    // 记账判定只看 `extra`：加了读数参数之后仍然算整档。
+    expect(suiteRecords({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
+  });
+
+  it("没给落点时一个字都不加（本地 pnpm test:coverage 的形态与此前逐字相同）", () => {
+    expect(suitePlan(["--dry"], 4).args).toEqual([
+      "run",
+      "test:coverage",
+      "--maxWorkers=4",
+      "--dry",
+    ]);
+  });
+
+  it("榜：降序、有界、明写「只算测试阶段」，合计与中位都在", () => {
+    const lines = suiteRanking(JUNIT, { limit: 2, file: "/tmp/x.xml" });
+    const text = lines.join("\n");
+    expect(text).toContain("3 份、合计 61.0s");
+    expect(text).toContain("只算测试阶段");
+    expect(text).toContain("/tmp/x.xml");
+    expect(text).toContain("30.5s  tests/a.test.ts");
+    expect(text).toContain("中位 30.0s");
+    // limit 是真生效的：3 份只打 2 行明细，其余折成一句合计。
+    expect(text).toContain("tests/a.test.ts");
+    expect(text).toContain("tests/b.test.ts");
+    expect(text).not.toContain("tests/c.test.ts");
+    expect(text).toContain("其余 1 份合计 0.5s");
+  });
+
+  it("junit 没落盘时打「没有」，不打「0 份」—— 拿不到测量 ≠ 测量结果是 0", () => {
+    const text = suiteRanking("", { file: "/tmp/gone.xml" }).join("\n");
+    expect(text).toContain("**没有**");
+    expect(text).not.toMatch(/0 份、合计/);
   });
 });
