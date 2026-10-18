@@ -930,37 +930,59 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBe(true);
   });
 
-  it("`浏览器安装` 排在 `E2E 关键流程` 之前，且点名的入口在盘上", () => {
+  it("`E2E 那一格已离开 PR（撤档，不是停用），而它的序约束整套挪到每日那一条", () => {
     const text = readRegisteredConfig();
-    /* 这一格是自托管路径上**新暴露**的（ISSUE #1961）：旧版 `docker.image: node:24`
-     * 那条路里，Playwright 的浏览器是镜像白拿的；换成裸宿主机之后没了那层兜底，
-     * 而 `pnpm install` 不会拉浏览器二进制 —— `E2E 关键流程` 第一次真跑到就红在
-     * `Executable doesn't exist at …\ms-playwright\chromium_headless_shell-…` 上。
-     *
-     * 顺序约束与 Python 那条同源：装浏览器要下 ~100+ MiB（分钟级），而判「装没装成」
-     * 是零成本的；排在 E2E 之后 = 那个结论要么看不到、要么在最贵的位置才看到。
-     *
-     * **停用时这条顺序约束无从谈起**（两条都不在清单里，`indexOf` 回 -1）——
-     * 处置与 `单元测试` 那条逐字相同：停用与否不是这里判的（那是「停用登记」两条的事），
-     * 这里只判「在它们真排进清单时必须一前一后」，并要求停用必须留痕。 */
+    /* 立案（`cnb-ob4-1k5828a36`，本 PR 自己那一跑）：撤掉 PR 上的 `生产构建` 之后，
+     * `E2E 关键流程` 红在 `[WebServer] Could not find a production build` ⇒
+     * `Timed out waiting 180000ms from config.webServer`。病根是 `playwright.config.ts`
+     * 旧那句 `CI || PNPM_START ⇒ pnpm start` 把「是不是 CI」与「工作区里有没有产物」
+     * 绑成了一件。两条出路里选了「整格挪到每日档」而不是「PR 改跑现场编译档」，
+     * 理由与那份实测读数写在 `.cnb.yml` 那段撤档说明里（dev 档在这台节点上从来没有读数，
+     * 而它历史形态是「冒烟集体超时」）。 */
     const order = registeredGateOrder(text);
     const disabled = registeredDisabledGates(text);
-    const installAt = order.indexOf("浏览器安装");
-    const e2eAt = order.indexOf("E2E 关键流程");
-    if (installAt < 0 || e2eAt < 0) {
+    expect(
+      order,
+      "`E2E 关键流程` 又回到 `COMFYAPP_CI_GATES` 了 —— 它需要 `next build` 的产物，" +
+        "而 PR 那一条上 2026-10-19 起没有构建那一格。要恢复 PR 的端到端，先同批恢复构建",
+    ).not.toContain("E2E 关键流程");
+    /* 「不在 GATES、也不在 DISABLED」在这里是**允许**的，与 `生产构建` 同一条理由：
+     * 撤档不是停用 —— 停用要留原文（下面「停用登记」那两条判它），而这一格的原文与
+     * 顺序约束整体搬到了每日那一条，搬去的落点由本条后半判住。 */
+    expect(
+      disabled,
+      "`E2E 关键流程` 出现在停用清单里 —— 它不是「临时屏蔽、等环境好了加回来」，" +
+        "而是**已经在每日档上每天跑着**（`每日全量E2E`）。登进停用清单等于同时说两句假话",
+    ).not.toContain("E2E 关键流程");
+
+    /* 顺序约束搬到每日那一条：浏览器缺件时整档只红在 launch 那一跳，而产物不在时
+     * 红在 webServer 的 180s 超时上 —— 两者都指不到真正缺的那一格。 */
+    const daily = registeredDailyGateOrder(text);
+    const e2eAt = daily.indexOf("每日全量E2E");
+    expect(
+      e2eAt,
+      "「每日全量E2E」不在每日清单里 —— 上面那条搬家的断言失去落点",
+    ).toBeGreaterThan(-1);
+    for (const prerequisite of ["每日浏览器安装", "每日生产构建"]) {
       expect(
-        disabled,
-        "「浏览器安装」/「E2E 关键流程」既不在 `COMFYAPP_CI_GATES` 里、也没在 " +
-          "`COMFYAPP_CI_DISABLED_GATES` 里登记 —— 这是「删除」而不是「停用」",
-      ).toEqual(expect.arrayContaining(["浏览器安装", "E2E 关键流程"]));
-    } else {
-      expect(
-        installAt,
-        "`浏览器安装` 必须排在 `E2E 关键流程` 之前：缺件时那一步会以" +
-          "「全档每条都报同一个 launch 失败」的形态红，看不出真正要修的是什么",
+        daily.indexOf(prerequisite),
+        `「${prerequisite}」必须排在「每日全量E2E」之前 —— ` +
+          (prerequisite === "每日生产构建"
+            ? "这一格的 webServer 起的是 `pnpm start`，产物来自它"
+            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"),
       ).toBeLessThan(e2eAt);
     }
+    /* 产物前提要**写在配置里**，不能只靠顺序推断：这一格显式声明 `COMFY_E2E_SERVER: start`。
+     * 少了这一行，它对产物的依赖就回到「因为它是 CI」那种推论 —— 而这次的红正是推论错了。 */
+    expect(
+      stageEnvAssignments(text, "每日全量E2E"),
+      "「每日全量E2E」没有显式声明 `COMFY_E2E_SERVER: start` —— 它起的是生产服务器，" +
+        "这件事必须由配置自己说出来，而不是由「它是 CI」推出来（`cnb-ob4-1k5828a36` 的教训）",
+    ).toContain("COMFY_E2E_SERVER: start");
+  });
 
+  it("`浏览器安装` 的入口在盘上（PR 上那一格现在只为节点状态与每日档暖缓存）", () => {
+    const text = readRegisteredConfig();
     /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 那条口径：`script` 里的
      * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。
      * **两种形态都要读得出来**：活的（`.gates` 里那一项，`script:` 缩进 4 空格）
@@ -1165,18 +1187,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 冷节点上不是秒级），而它正是那条「自动修档凭什么可以多花这一次钱」的另一半 ——
      * 该有的预算与那几条一样是分钟量级。 */
     const disabled = registeredDisabledGates(text);
-    /* ⚠️ `生产构建` **2026-10-18 从这一列摘掉了**，而且不是因为预算可以不要：那一格
-     * 离开了 PR 那一条，现在只在每日档（`每日生产构建`）。它的预算由下面那条
-     * 「定时那一跑」的判据钉（`stageTimeouts(text).get("每日生产构建")`），
-     * 入口是不是跑法脚本也由同一条钉 —— 这里再留一个不存在的名字只会变成一句空话。
-     * 反过来，「谁把 `生产构建` 加回 PR 却不给预算」由 `MUST_ALWAYS_RUN` 那条
-     * （`tests/ci-incremental-gates.test.ts`）与 `.gates` 里那段撤档说明看着。 */
-    const required = [
-      "ESLint 零警告",
-      "单元测试",
-      "生成态文档与源同步",
-      "E2E 关键流程",
-    ].filter((name) => !disabled.includes(name));
+    /* ⚠️ `生产构建`（2026-10-18）与 `E2E 关键流程`（2026-10-19）**都从这一列摘掉了**，
+     * 而且不是因为预算可以不要：那两格离开了 PR 那一条，现在只在每日档
+     * （`每日生产构建` / `每日全量E2E`）。它们的预算由下面那条「定时那一跑」的判据钉，
+     * 入口是不是跑法脚本也由同一条钉 —— 这里再留两个不存在的名字只会变成一句空话。
+     * 「谁把它们加回 PR 却不给预算」由 `MUST_ALWAYS_RUN`（`ci-incremental-gates`）与
+     * `.gates` 里那两段撤档说明看着。 */
+    const required = ["ESLint 零警告", "单元测试", "生成态文档与源同步"].filter(
+      (name) => !disabled.includes(name),
+    );
     const missing = required.filter((name) => !timeouts.has(name));
     expect(
       missing,
@@ -1453,21 +1472,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         `「每日全量E2E」带了 ${forbidden} —— 那不是整档，跑绿也不记账`,
       ).not.toContain(forbidden);
     }
-    /* 顺序：浏览器二进制没落地时，这一格只会红在 launch 那一跳（「Executable doesn't
-     * exist at …」），指不到真正缺的那一格 —— 与 PR 那两格的同一条理由。 */
-    const order = registeredDailyGateOrder(text);
-    const e2eAt = order.indexOf("每日全量E2E");
-    expect(e2eAt, "「每日全量E2E」不在定时清单里").toBeGreaterThan(-1);
-    expect(
-      order.indexOf("每日浏览器安装"),
-      "「每日浏览器安装」必须排在「每日全量E2E」之前 —— 缺件要在便宜的位置报出来",
-    ).toBeLessThan(e2eAt);
-    for (const prerequisite of ["每日安装依赖", "每日同步数据库表结构"]) {
-      expect(
-        order.indexOf(prerequisite),
-        `「${prerequisite}」必须排在「每日全量E2E」之前 —— 这一格要装好的依赖与真的库表`,
-      ).toBeLessThan(e2eAt);
-    }
+    /* 顺序与产物前提**不在这里判**：`每日生产构建` / `每日浏览器安装` 必须排在前、
+     * 以及这一格显式声明 `COMFY_E2E_SERVER: start`，都写在上面那条「E2E 已离开 PR」的
+     * 判据里 —— 那三件与「为什么这一格非搬不可」是同一个故事，拆成两处各自半条，
+     * 读者两边都看不全（而同一件事判两遍正是 §12.12 要拦的形状）。
+     * 这一格只管**跑法形状**：点名整档入口、不带任何收窄参数、带分钟量级预算。 */
     const minutes = stageBudgetMinutes(stageTimeouts(text).get("每日全量E2E"));
     expect(
       minutes,

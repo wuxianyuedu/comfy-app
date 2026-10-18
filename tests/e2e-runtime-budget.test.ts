@@ -278,6 +278,79 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
     }
   });
 
+  it("`COMFY_E2E_SERVER` 显式优先，且两份实现给同一个答案（认不出的值必须抛）", async () => {
+    /* 立案（`cnb-ob4-1k5828a36`）：PR 撤掉 `生产构建` 之后，`E2E 关键流程` 仍以
+     * `CI ⇒ pnpm start` 去起一台**没有产物**的生产服务器 ——
+     * `[WebServer] Could not find a production build` ⇒ `Timed out waiting 180000ms`。
+     * 那句话把「是不是 CI」与「有没有产物」绑成了一件，所以这一档现在可以由 stage
+     * 显式声明（`每日全量E2E` 写 `start`）。
+     *
+     * 三份判据各有各的失效形态，缺一份都还会漂：
+     *   ① **两份实现同答案**：配置那一份决定真正执行什么，跑法那一份决定输出与记账
+     *      的 `how` 写哪一档。两边不一致时的表现是「日志说跑的是 dev，跑的其实是 start」
+     *      —— 那比没有这一档更坏（§11.23 声明与读者同源）。
+     *   ② **显式压过 `CI`**：不压过就等于没有这个旋钮。
+     *   ③ **认不出的值抛而不是回落**：回落 = 拼错一个字母悄悄换档，而两档的负载形态
+     *      完全不同，报出来的红读起来像用例问题。 */
+    const { resolveWebServerCommand, E2E_SERVER_COMMANDS } =
+      await import("../playwright.config");
+    const { resolveServerMode } = (await import("../scripts/e2e-run.mjs")) as {
+      resolveServerMode: (env: NodeJS.ProcessEnv) => { start: boolean };
+    };
+    /* ② + ①：四组环境，两份实现逐组对账。 */
+    for (const env of [
+      { COMFY_E2E_SERVER: "dev" },
+      { COMFY_E2E_SERVER: "start" },
+      { COMFY_E2E_SERVER: "dev", CI: "1", PNPM_START: "1" },
+      { CI: "1" },
+      { PNPM_START: "1" },
+      {},
+    ] as Array<Record<string, string>>) {
+      const command = resolveWebServerCommand(
+        env as unknown as NodeJS.ProcessEnv,
+      );
+      const mode = resolveServerMode(env as NodeJS.ProcessEnv);
+      expect(command, JSON.stringify(env)).toBe(
+        mode.start ? E2E_SERVER_COMMANDS.start : E2E_SERVER_COMMANDS.dev,
+      );
+    }
+    /* 显式 `dev` 压过 `CI`：这正是「PR 那条没有产物」那一档的形状。 */
+    expect(
+      resolveWebServerCommand({
+        COMFY_E2E_SERVER: "dev",
+        CI: "1",
+      } as unknown as NodeJS.ProcessEnv),
+      "显式的 dev 没压过 CI —— 那这个旋钮等于没有，`CI ⇒ start` 那句旧推论还在管事",
+    ).toBe("pnpm dev");
+    /* ③：认不出的值两份都抛。 */
+    /* 只认 `dev` / `start`（大小写不敏感：值是从 YAML 的 env 里来的，`Start` 认是**刻意的**，
+     * 拼错单词才抛）。 */
+    for (const bad of ["deev", "production", "star"]) {
+      expect(
+        () =>
+          resolveWebServerCommand({
+            COMFY_E2E_SERVER: bad,
+          } as unknown as NodeJS.ProcessEnv),
+        `配置那一份对 "${bad}" 回落了`,
+      ).toThrow(/COMFY_E2E_SERVER/);
+      expect(
+        () =>
+          resolveServerMode({
+            COMFY_E2E_SERVER: bad,
+          } as unknown as NodeJS.ProcessEnv),
+        `跑法那一份对 "${bad}" 回落了`,
+      ).toThrow(/COMFY_E2E_SERVER/);
+    }
+    /* 空串**不算**一个显式值：它落回旧规则。这一格管的是「两份实现对同一个输入的
+     * 答案是不是同一句」—— 任一处把空串当成显式值去抛，配置那一份与跑法那一份就会
+     * 一个抛、一个放行，而红出现在谁身上都不像配置问题。 */
+    expect(
+      resolveWebServerCommand({
+        COMFY_E2E_SERVER: "",
+      } as unknown as NodeJS.ProcessEnv),
+    ).toBe("pnpm dev");
+  });
+
   it("`timeout` 一个字节都没动 —— 降的是负载，不是预算", () => {
     /* 这条是整档的**红线**：如果有人把 `timeout: 60_000` 改成 120_000 来「修」这条红，
      * 那正是 §11.13 要拦的形态，而它在别处不会红。 */

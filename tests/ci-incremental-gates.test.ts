@@ -144,6 +144,10 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
        * 而且每日清单的在场与入口由 `tests/no-platform-ci-config.test.ts` 双向钉。 */
       "生产构建",
       "浏览器安装",
+      /* `E2E 关键流程` 与 `生产构建` 同批离开 PR（2026-10-19，撤档说明在 `.cnb.yml`），
+       * 名字同样**留在这一列**：它防的还是「将来有人把它加回 PR 并顺手挂 `ifModify`」。
+       * 而这一格比 `生产构建` 多一条前提 —— 它需要 `next build` 的产物，恢复它必须
+       * **同批**把构建也放回 PR（`tests/no-platform-ci-config.test.ts` 那条判住）。 */
       "E2E 关键流程",
     ];
     const gated = parseStageIfModify(CONFIG);
