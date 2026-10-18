@@ -620,7 +620,10 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
      * 注释态那一支改拿**夹具**对账：它判的是「两份实现同口径」，与「现役配置里还有
      * 没有停用项」无关 —— 靠现役配置出题会让这条用例随停用清单一起失效。 */
     const live = readPipelineConfig(ROOT) ?? "";
-    for (const name of ["浏览器安装", "E2E 关键流程"]) {
+    /* 两格各代表一种形状：`浏览器安装` 带 `env:` 块，`Install dependencies` 是
+     * `script: |` 的多行体（2026-10-19 之前第二个名字用的是 PR 的 `E2E 关键流程`，
+     * 那一格现在撤到每日档 —— 换一格，判的还是同一件事：「两份解析同口径」）。 */
+    for (const name of ["浏览器安装", "Install dependencies"]) {
       const active = stageBlockIn(live, name);
       expect(active, `${name} 解析不出内容`).toBeTruthy();
       expect(active, `活的形态下两份解析漂了（${name}）`).toBe(

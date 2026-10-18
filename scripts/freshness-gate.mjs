@@ -23,6 +23,16 @@
  * `run` 那一栏的命令跑绿即记，或 `skipHow` / `dirtyHow` 记一条写明理由的账
  * （占位理由被拦）。
  *
+ * ⚠️ **而这三档现在都不必在本地跑**（2026-10-19 的口径，规范 §13.5.23）：登记里
+ * `ciStage` 非空 ⇒ 「今天必须有凭证」那一层整层跳过，本地这笔账退成**读数** ——
+ * 执行者是平台侧每日档的那三格（`每日单元测试` / `每日生产构建` / `每日全量E2E`）。
+ * 这不是把判据放宽：用例、预算、覆盖率阈值一个字没动，动的只有「谁在什么时候跑它」
+ * （§13.5.17），而它换过去的条件是**那三格真在场** —— 由
+ * `tests/daily-tracks.test.ts` 判「每个非空 `ciStage` 都必须在
+ * `COMFYAPP_CI_DAILY_GATES` 里」。`dirty` / `graceMs` 那两栏仍然留着并照旧被读：
+ * 它们现在服务的是**读数**（「今天动过这一档的面」这件事仍然打在台面上），
+ * 而任何一档日后没有平台侧执行者时，把 `ciStage` 清空就回到拦截口径。
+ *
  * 用法：`node scripts/freshness-gate.mjs`（由 `.githooks/pre-commit` 的 **D0 形态前置档**调用）
  *      `node scripts/freshness-gate.mjs --ledger`（= `pnpm check:freshness`）：开工那一眼 ——
  *      打账面（时刻 / 距今 / 谁 + 命令）**并打出这一档现在欠不欠**，但**不阻断**（退 0）；
@@ -95,17 +105,22 @@ export function trackScopes() {
  * 「谁 / 按哪条命令」。拆开是因为消费方不同 —— 人读 `ages`，要核另外两栏的（或要判
  * 「这条到底有没有时刻」的用例）读 `stamps` / `records`，不去正则拆一句中文。
  *
- * @param {{ledger: Record<string, unknown>, kind?: string, keys?: string[], now?: Date, dirtySince?: Date | null}} input
- * @returns {{exitCode: number, problems: string[], ages: string[], stamps: (string | null)[], records: {key: string, who: string, how: string}[]}}
+ * @param {{ledger: Record<string, unknown>, kind?: string, keys?: string[], track?: import("./freshness-ledger.mjs").FreshnessTrack | null, now?: Date, dirtySince?: Date | null}} input
+ * @returns {{exitCode: number, problems: string[], ages: string[], stamps: (string | null)[], records: {key: string, who: string, how: string}[], ciStage: string}}
  */
 export function runGate({
   ledger,
   kind = "e2e",
   keys,
+  track: trackOverride = null,
   now = new Date(),
   dirtySince = null,
 }) {
-  const track = freshnessTrack(kind);
+  /* `track` 这一格可注入**不是为了让判据好测**：三档从 2026-10-19 起都登记了
+   * `ciStage`（执行者在平台侧），于是「本地要拦」那几支在真实档上**再也走不到**。
+   * 那几支仍然要能被执行、能被判红（它们是任何一档将来失去平台侧执行者时的口径），
+   * 所以这里给一个注入点，让判据拿合成档去打 —— 与 `now` / `dirtySince` 同一个理由。 */
+  const track = trackOverride ?? freshnessTrack(kind);
   /* 缺省值与 `trackScopes()` **同源**（那里是判决面的唯一出处）：两个地方各自写一份
    * 「这一档有哪些键」时，`main`（走 `trackScopes`）与直接调 `runGate` 的调用方
    * （走缺省值）会对同一档给出不同答案 —— 而默认值那一侧错了不会红（调用方几乎总是
@@ -149,6 +164,9 @@ export function runGate({
     ages,
     stamps,
     records,
+    /* 「这一档的执行者在不在平台侧」是**判决的一部分**，不是话术：调用方要据此把
+     * 同一行读成「拦」或「读数」。留空 = 本地仍然是必经之路。 */
+    ciStage: String(track.ciStage ?? "").trim(),
   };
 }
 
@@ -336,8 +354,10 @@ function main() {
        * 措辞是「欠」而不是「✗」，退出码仍为 0 —— 这一档是给人看状态的，
        * 阻断的那份在钩子里，两份各有各的执行者（§13.5.12 那一族：别写一把没人读的判据，
        * 也别让一条读数线变成必经之路）。 */
-      const owed =
-        result.exitCode === 0
+      const owed = result.ciStage
+        ? `        本地**不欠**这一档：执行者是平台侧每日档 \`${result.ciStage}\`；` +
+          "这一栏只是本地留痕（谁在本地自己证过一次、按哪条命令）。\n"
+        : result.exitCode === 0
           ? "        这一档现在**不缺**：账面满足当下的判据。\n"
           : `        这一档现在**欠**一次自证（判据若跑在钩子里，这一次会被拦下）：\n` +
             result.problems.map((p) => `      · ${p}\n`).join("");
@@ -381,7 +401,12 @@ function main() {
       );
       continue;
     }
-    process.stdout.write(`  [ok] ${track.label}：每档都有主（${reading}）\n`);
+    process.stdout.write(
+      `  [ok] ${track.label}：每档都有主（${reading}）` +
+        (result.ciStage
+          ? ` —— **执行者在平台侧**：每日档 \`${result.ciStage}\`，本地这一档不拦、只留读数\n`
+          : "\n"),
+    );
   }
   return failed;
 }

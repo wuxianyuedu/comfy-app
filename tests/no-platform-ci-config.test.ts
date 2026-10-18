@@ -41,6 +41,10 @@ import path from "node:path";
  * 而下面那条「这一步点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
 import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
+/* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
+ * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
+import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
+import { FRESHNESS_TRACKS } from "../scripts/freshness-ledger.mjs";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -267,6 +271,113 @@ export function registeredDisabledGates(text: string): string[] {
     .split(",")
     .map((n) => n.trim())
     .filter(Boolean);
+}
+
+/** 定时那一跑的清单（与 `.cnb.yml` 的 `COMFYAPP_CI_DAILY_GATES` 同一份，顺序即执行序）。 */
+const DAILY_GATES = [
+  "每日安装依赖",
+  "每日 Python 可用性",
+  "每日同步数据库表结构",
+  "每日单元测试",
+  "每日生产构建",
+  "每日浏览器安装",
+  "每日全量E2E",
+];
+
+/**
+ * 「每日」那一跑里应当与 PR 那一跑**逐字同形**的几格（定时名 → PR 名）。
+ *
+ * 名字不同是刻意的（按名字取块的解析器会撞车），所以「同一件事」只能由 script 相同来保证。
+ */
+const DAILY_SCRIPT_MIRRORS: [string, string][] = [
+  // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
+  ["每日安装依赖", "Install dependencies"],
+  ["每日 Python 可用性", "Python 可用性"],
+  ["每日同步数据库表结构", "同步数据库表结构"],
+  /* 浏览器那一格比的不只是命令行：它背着**两行 env**（下载根 + 连接超时），那是四次
+   * 取证读数换来的（`cnb-gt1-1k513ill4` 那一族）。只比命令行的话，「一边改了根、
+   * 另一边没改」会逐字通过，而红只在第二天 04:00 出现 —— 比 这个 正是最贵的一种漂。
+   * `每日全量E2E` **不在这一列**：它带的参数与 PR 那格**必须不同**（子集不记账），
+   * 那一条由下面单独的判据按「不许带收窄参数」判，而不是拿相同性判。 */
+  ["每日浏览器安装", "浏览器安装"],
+];
+
+/** `45m` / `30m` / `3h` → 分钟。解析不出时回 0（调用方的断言会把它读成「没预算」）。 */
+function stageBudgetMinutes(raw: string | undefined): number {
+  const m = /^(\d+)([smh])$/.exec(String(raw ?? "").trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  return m[2] === "h" ? n * 60 : m[2] === "s" ? n / 60 : n;
+}
+
+/**
+ * 某一格里**真正会执行**的那些命令行（丢掉空行与 shell 注释）。
+ *
+ * 为什么不比整块：两格的散文解释本来就该不同（PR 那一格要讲「为什么这一步是前提」、
+ * 定时那一格要讲「为什么每天一次」），要求逐字相同只会逼人删注释 —— 而漂移能藏的地方
+ * 只有命令行。返回数组而不是拼好的字符串，红的时候两边的差是哪一行一眼可见。
+ */
+function executableScriptLines(text: string, name: string): string[] {
+  return stageScriptLine(text, name)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+}
+
+/**
+ * 取某一格 `env:` 下的**赋值行**（丢注释与空行），给镜像判据当第二条腿。
+ *
+ * 为什么要它：`浏览器安装` 那两行 env（下载根 + 连接超时）与它的命令行是一件事的两半 ——
+ * 「从哪儿取那 120 MiB」写在 env 里，不在 script 里。只比 script 时，改了 PR 那格的根
+ * 而没改每日那格（或反过来）是**逐字通过**的，而这条漂移的可见形态是「第二天 04:00 红」，
+ * 离它最后一次被读已经隔了一整晚。
+ *
+ * 收的是 `KEY: value` 那种形状（`-` 开头的列表项与更深一层的结构一律不当赋值行），
+ * 所以它不会把注释或下一格的键吞进来；`env:` 缺席时回空数组 = 两格都不许有 env。
+ */
+function stageEnvAssignments(text: string, name: string): string[] {
+  const block = stageBlock(text, name);
+  if (!block) return [];
+  const lines = block.split(/\r?\n/);
+  const at = lines.findIndex((l) => /^\s*env:\s*$/.test(l));
+  if (at < 0) return [];
+  const out: string[] = [];
+  for (const line of lines.slice(at + 1)) {
+    if (
+      /^\s*(script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(
+        line,
+      )
+    )
+      break;
+    const t = line.trim();
+    if (t === "" || t.startsWith("#") || t.startsWith("-")) continue;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*\s*:/.test(t)) continue;
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * 取某一格的 `script` 原文（去掉行首缩进与尾部空白）。
+ *
+ * 多行块（`script: |`）取整块 —— 只取第一行的话，「两格第一行相同、第二行不同」
+ * 这种恰好是最坏形态的漂移会读成相同。
+ */
+function stageScriptLine(text: string, name: string): string {
+  const block = stageBlock(text, name);
+  if (!block) return "";
+  const lines = block.split(/\r?\n/);
+  const at = lines.findIndex((l) => /^\s*script:/.test(l));
+  if (at < 0) return "";
+  const first = lines[at]?.replace(/^\s*script:[ \t]*/, "") ?? "";
+  if (first && !/^[|>][-+]?\s*$/.test(first)) return first.trim();
+  const body: string[] = [];
+  for (const line of lines.slice(at + 1)) {
+    if (/^\s*(timeout|env|ifModify|name|retries):/.test(line)) break;
+    if (line.trim() === "") continue;
+    body.push(line.replace(/^\s+/, "").trimEnd());
+  }
+  return body.join("\n");
 }
 
 /**
@@ -819,37 +930,59 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBe(true);
   });
 
-  it("`浏览器安装` 排在 `E2E 关键流程` 之前，且点名的入口在盘上", () => {
+  it("`E2E 那一格已离开 PR（撤档，不是停用），而它的序约束整套挪到每日那一条", () => {
     const text = readRegisteredConfig();
-    /* 这一格是自托管路径上**新暴露**的（ISSUE #1961）：旧版 `docker.image: node:24`
-     * 那条路里，Playwright 的浏览器是镜像白拿的；换成裸宿主机之后没了那层兜底，
-     * 而 `pnpm install` 不会拉浏览器二进制 —— `E2E 关键流程` 第一次真跑到就红在
-     * `Executable doesn't exist at …\ms-playwright\chromium_headless_shell-…` 上。
-     *
-     * 顺序约束与 Python 那条同源：装浏览器要下 ~100+ MiB（分钟级），而判「装没装成」
-     * 是零成本的；排在 E2E 之后 = 那个结论要么看不到、要么在最贵的位置才看到。
-     *
-     * **停用时这条顺序约束无从谈起**（两条都不在清单里，`indexOf` 回 -1）——
-     * 处置与 `单元测试` 那条逐字相同：停用与否不是这里判的（那是「停用登记」两条的事），
-     * 这里只判「在它们真排进清单时必须一前一后」，并要求停用必须留痕。 */
+    /* 立案（`cnb-ob4-1k5828a36`，本 PR 自己那一跑）：撤掉 PR 上的 `生产构建` 之后，
+     * `E2E 关键流程` 红在 `[WebServer] Could not find a production build` ⇒
+     * `Timed out waiting 180000ms from config.webServer`。病根是 `playwright.config.ts`
+     * 旧那句 `CI || PNPM_START ⇒ pnpm start` 把「是不是 CI」与「工作区里有没有产物」
+     * 绑成了一件。两条出路里选了「整格挪到每日档」而不是「PR 改跑现场编译档」，
+     * 理由与那份实测读数写在 `.cnb.yml` 那段撤档说明里（dev 档在这台节点上从来没有读数，
+     * 而它历史形态是「冒烟集体超时」）。 */
     const order = registeredGateOrder(text);
     const disabled = registeredDisabledGates(text);
-    const installAt = order.indexOf("浏览器安装");
-    const e2eAt = order.indexOf("E2E 关键流程");
-    if (installAt < 0 || e2eAt < 0) {
+    expect(
+      order,
+      "`E2E 关键流程` 又回到 `COMFYAPP_CI_GATES` 了 —— 它需要 `next build` 的产物，" +
+        "而 PR 那一条上 2026-10-19 起没有构建那一格。要恢复 PR 的端到端，先同批恢复构建",
+    ).not.toContain("E2E 关键流程");
+    /* 「不在 GATES、也不在 DISABLED」在这里是**允许**的，与 `生产构建` 同一条理由：
+     * 撤档不是停用 —— 停用要留原文（下面「停用登记」那两条判它），而这一格的原文与
+     * 顺序约束整体搬到了每日那一条，搬去的落点由本条后半判住。 */
+    expect(
+      disabled,
+      "`E2E 关键流程` 出现在停用清单里 —— 它不是「临时屏蔽、等环境好了加回来」，" +
+        "而是**已经在每日档上每天跑着**（`每日全量E2E`）。登进停用清单等于同时说两句假话",
+    ).not.toContain("E2E 关键流程");
+
+    /* 顺序约束搬到每日那一条：浏览器缺件时整档只红在 launch 那一跳，而产物不在时
+     * 红在 webServer 的 180s 超时上 —— 两者都指不到真正缺的那一格。 */
+    const daily = registeredDailyGateOrder(text);
+    const e2eAt = daily.indexOf("每日全量E2E");
+    expect(
+      e2eAt,
+      "「每日全量E2E」不在每日清单里 —— 上面那条搬家的断言失去落点",
+    ).toBeGreaterThan(-1);
+    for (const prerequisite of ["每日浏览器安装", "每日生产构建"]) {
       expect(
-        disabled,
-        "「浏览器安装」/「E2E 关键流程」既不在 `COMFYAPP_CI_GATES` 里、也没在 " +
-          "`COMFYAPP_CI_DISABLED_GATES` 里登记 —— 这是「删除」而不是「停用」",
-      ).toEqual(expect.arrayContaining(["浏览器安装", "E2E 关键流程"]));
-    } else {
-      expect(
-        installAt,
-        "`浏览器安装` 必须排在 `E2E 关键流程` 之前：缺件时那一步会以" +
-          "「全档每条都报同一个 launch 失败」的形态红，看不出真正要修的是什么",
+        daily.indexOf(prerequisite),
+        `「${prerequisite}」必须排在「每日全量E2E」之前 —— ` +
+          (prerequisite === "每日生产构建"
+            ? "这一格的 webServer 起的是 `pnpm start`，产物来自它"
+            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"),
       ).toBeLessThan(e2eAt);
     }
+    /* 产物前提要**写在配置里**，不能只靠顺序推断：这一格显式声明 `COMFY_E2E_SERVER: start`。
+     * 少了这一行，它对产物的依赖就回到「因为它是 CI」那种推论 —— 而这次的红正是推论错了。 */
+    expect(
+      stageEnvAssignments(text, "每日全量E2E"),
+      "「每日全量E2E」没有显式声明 `COMFY_E2E_SERVER: start` —— 它起的是生产服务器，" +
+        "这件事必须由配置自己说出来，而不是由「它是 CI」推出来（`cnb-ob4-1k5828a36` 的教训）",
+    ).toContain("COMFY_E2E_SERVER: start");
+  });
 
+  it("`浏览器安装` 的入口在盘上（PR 上那一格现在只为节点状态与每日档暖缓存）", () => {
+    const text = readRegisteredConfig();
     /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 那条口径：`script` 里的
      * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。
      * **两种形态都要读得出来**：活的（`.gates` 里那一项，`script:` 缩进 4 空格）
@@ -1054,13 +1187,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 冷节点上不是秒级），而它正是那条「自动修档凭什么可以多花这一次钱」的另一半 ——
      * 该有的预算与那几条一样是分钟量级。 */
     const disabled = registeredDisabledGates(text);
-    const required = [
-      "ESLint 零警告",
-      "单元测试",
-      "生成态文档与源同步",
-      "生产构建",
-      "E2E 关键流程",
-    ].filter((name) => !disabled.includes(name));
+    /* ⚠️ `生产构建`（2026-10-18）与 `E2E 关键流程`（2026-10-19）**都从这一列摘掉了**，
+     * 而且不是因为预算可以不要：那两格离开了 PR 那一条，现在只在每日档
+     * （`每日生产构建` / `每日全量E2E`）。它们的预算由下面那条「定时那一跑」的判据钉，
+     * 入口是不是跑法脚本也由同一条钉 —— 这里再留两个不存在的名字只会变成一句空话。
+     * 「谁把它们加回 PR 却不给预算」由 `MUST_ALWAYS_RUN`（`ci-incremental-gates`）与
+     * `.gates` 里那两段撤档说明看着。 */
+    const required = ["ESLint 零警告", "单元测试", "生成态文档与源同步"].filter(
+      (name) => !disabled.includes(name),
+    );
     const missing = required.filter((name) => !timeouts.has(name));
     expect(
       missing,
@@ -1184,7 +1319,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toMatch(/Test-Path[^]*coverage\/lcov\.info/);
   });
 
-  it("定时那一跑（crontab）挂在 master 下、每天一次，且只跑「每日生产构建」那一格（ISSUE #2010）", () => {
+  it("定时那一跑（crontab）挂在 master 下、每天一次，且跑的就是 `COMFYAPP_CI_DAILY_GATES` 那七格（ISSUE #2010 / #2018）", () => {
     /* 用户的要求是「生产构建改为定时任务，每天 1 次」。这句话在配置里落成三件
      * 互相独立的事实，缺任一件都会**静默失效**（不会报错，只是那条流水线不按
      * 人想的那样跑）：
@@ -1233,9 +1368,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       expect(field, `cron 的${name}段应当是 \`*\`：${event.cron}`).toBe("*");
     }
 
-    /* ③ 那一跑只跑一格，且是**跑法脚本**（不是裸 `pnpm run build`）。
-     * 全跑门禁不是定时任务要做的事（那是 `pull_request` 那条流水线的差事），
-     * 而裸跑 = 跑了不记账（`scripts/.artifact-freshness.json` 一个字不变）。 */
+    /* ③ 那一跑跑的是每日清单那七格（四格前提 + 三档重档），每一格都是**跑法脚本**
+     * （不是裸 `pnpm run build` / 裸 vitest）。全跑门禁不是定时任务要做的事（那是
+     * `pull_request` 那条流水线的差事），而裸跑 = 跑了不记账
+     * （`scripts/.artifact-freshness.json` 一个字不变）。 */
     const daily = pipelineStageNames(text, "每日生产构建");
     expect(
       daily,
@@ -1243,8 +1379,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toEqual(registeredDailyGateOrder(text));
     expect(
       registeredDailyGateOrder(text),
-      "`COMFYAPP_CI_DAILY_GATES` 没有登记「每日生产构建」—— 定时那一跑跑什么就没有事实源了",
-    ).toEqual(["每日生产构建"]);
+      "`COMFYAPP_CI_DAILY_GATES` 与定时流水线里的 stage 对不上 —— 那一跑跑什么就没有事实源了",
+    ).toEqual(DAILY_GATES);
     const stage = stageBlock(text, "每日生产构建");
     expect(stage, "`.cnb.yml` 里找不到「每日生产构建」那一项").toBeTruthy();
     expect(
@@ -1265,6 +1401,165 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       budget,
       "「每日生产构建」没有 `timeout` 预算 —— 平台默认 Job 上限是 2 小时，卡死要等满才有人知道",
     ).toBeTruthy();
+  });
+
+  it("每日单元测试：整档 + 跑法脚本 + 预算大于脚本自己的墙钟预算", () => {
+    const text = readRegisteredConfig();
+    const entry = "scripts/full-suite-run.mjs";
+    /* 只扫 `script` 那一串，不扫整块：这一档的注释正当地要写出「不许带 `--grep`」这句话，
+     * 把说明判成违规等于逼人删注释（与 PS 5.1 那条形制判据「注释里同形文本放过」同一条口径）。 */
+    const script = stageScriptLine(text, "每日单元测试");
+    expect(
+      script,
+      "「每日单元测试」没有 `script` —— 那一格根本不会跑任何命令",
+    ).toBeTruthy();
+    expect(
+      script,
+      "「每日单元测试」跑的应是**跑法脚本** —— 裸 vitest 的绿只落在日志里，" +
+        "`scripts/.full-suite-freshness.json` 一个字不变，本地「当天跑过」那条判据照旧拦人",
+    ).toContain(entry);
+    expect(
+      existsSync(path.join(ROOT, entry)),
+      `${entry} 不在盘上 —— 那一步会在平台侧以「文件不存在」的形态红`,
+    ).toBe(true);
+    /* 整档：`isWholeTrackRun` 把「透传了参数」判成不构成凭证、当场不记账。
+     * 所以这里判的不是风格 —— 加了 `--grep` 的那一跑会**绿着不记账**，
+     * 而账面看起来与真跑过一模一样。 */
+    for (const forbidden of ["--grep", "--coverage=false", "tests/"]) {
+      expect(
+        script,
+        `「每日单元测试」带了 ${forbidden} —— 那不是整档，跑绿也不记账`,
+      ).not.toContain(forbidden);
+    }
+    /* 预算必须**大于**脚本自己的墙钟预算：否则先被掐的是 stage，而那一刀不带
+     * 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`），读起来就像判据红。 */
+    const minutes = stageBudgetMinutes(stageTimeouts(text).get("每日单元测试"));
+    expect(
+      minutes,
+      "「每日单元测试」没有 `timeout` 预算（一天的量级，卡死要早报）",
+    ).toBeTruthy();
+    expect(
+      minutes * 60_000,
+      `stage 预算必须大于 FULL_SUITE_TIMEOUT_MS（${FULL_SUITE_TIMEOUT_MS}ms）—— ` +
+        "否则先被平台掐的是 stage，那一刀没有分流话术",
+    ).toBeGreaterThan(FULL_SUITE_TIMEOUT_MS);
+  });
+
+  it("每日全量E2E：整档（不许带任何收窄参数）+ 排在浏览器之后 + 有分钟量级预算", () => {
+    const text = readRegisteredConfig();
+    const entry = "scripts/e2e-run.mjs";
+    const script = stageScriptLine(text, "每日全量E2E");
+    expect(
+      script,
+      "「每日全量E2E」没有 `script` —— 那一格根本不会跑任何命令",
+    ).toBeTruthy();
+    expect(
+      script,
+      `「每日全量E2E」应点名 ${entry} —— 它是 \`FRESHNESS_TRACKS.e2e\` 现在唯一的执行者，` +
+        "裸 `playwright test` 的绿不记账，而本地自证已经从钩子里撤掉（§11.8）",
+    ).toContain(entry);
+    expect(
+      existsSync(path.join(ROOT, entry)),
+      `${entry} 不在盘上 —— 那一步会在平台侧以「文件不存在」的形态红`,
+    ).toBe(true);
+    /* 收窄参数 = 跑绿也**不构成整档凭证**（`isWholeTrackRun`）。这一条比「风格」重：
+     * PR 那一格带的正是 `--grep=@critical`，抄过来会得到一格「每天绿、账面永远不动」
+     * 的档 —— 与「这一档三个月没人跑」在账面上逐字同形。
+     * 只扫 `script`：这一档的注释正当地要写出「不许带 `--grep`」这句话。 */
+    for (const forbidden of ["--grep", "tests/", "e2e/"]) {
+      expect(
+        script,
+        `「每日全量E2E」带了 ${forbidden} —— 那不是整档，跑绿也不记账`,
+      ).not.toContain(forbidden);
+    }
+    /* 顺序与产物前提**不在这里判**：`每日生产构建` / `每日浏览器安装` 必须排在前、
+     * 以及这一格显式声明 `COMFY_E2E_SERVER: start`，都写在上面那条「E2E 已离开 PR」的
+     * 判据里 —— 那三件与「为什么这一格非搬不可」是同一个故事，拆成两处各自半条，
+     * 读者两边都看不全（而同一件事判两遍正是 §12.12 要拦的形状）。
+     * 这一格只管**跑法形状**：点名整档入口、不带任何收窄参数、带分钟量级预算。 */
+    const minutes = stageBudgetMinutes(stageTimeouts(text).get("每日全量E2E"));
+    expect(
+      minutes,
+      "「每日全量E2E」没有 `timeout` 预算 —— 平台默认 Job 上限是 2 小时，卡死要等满才有人知道",
+    ).toBeTruthy();
+    expect(
+      minutes,
+      `「每日全量E2E」的预算 ${minutes}m 不在分钟量级那一档（10~60）`,
+    ).toBeGreaterThan(9);
+  });
+
+  it("本地撤掉自证要求的三档，每一档的 `ciStage` 都必须在定时清单里（撤拦 ≠ 没人跑）", () => {
+    /* 这一条是 `FRESHNESS_TRACKS[*].ciStage` 那格豁免的**唯一前提**：
+     * `freshness-gate.mjs` 看到非空 `ciStage` 就不再要求本地当天自证，
+     * 于是「本地不拦」成立的条件全在「平台侧那一格真的每天在跑」上。
+     * 没有这条判据时，删掉一个每日 stage（或把名字打错）会让那一档变成
+     * **谁都不跑**，而本地照样绿 —— 那是本仓最不能有的静默形态（§11.23 那一族）。 */
+    const text = readRegisteredConfig();
+    const daily = registeredDailyGateOrder(text);
+    expect(
+      daily,
+      "定时清单解析不出来 —— 这条判据一旦取不到清单就会恒放行，先看解析器",
+    ).toBeTruthy();
+    for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
+      const stage = String(track.ciStage ?? "").trim();
+      expect(
+        stage,
+        `\`${kind}\` 没有登记 ciStage，而本地又不拦 —— 那一档现在没有任何执行者`,
+      ).toBeTruthy();
+      expect(
+        daily,
+        `「${stage}」不在 \`COMFYAPP_CI_DAILY_GATES\` 里 —— ${track.label} 这一档` +
+          "本地不拦的前提没了。要么把那一格加回定时清单，要么把 ciStage 清空让本地重新拦",
+      ).toContain(stage);
+    }
+  });
+
+  it("定时那一跑的前提格：安装与 Python 必须先于单测，且 script 与 PR 那格逐字相同", () => {
+    const text = readRegisteredConfig();
+    const order = registeredDailyGateOrder(text);
+    const suite = order.indexOf("每日单元测试");
+    expect(suite, "「每日单元测试」不在定时清单里").toBeGreaterThan(-1);
+    /* 顺序不是风格：每次构建都是全新 job 目录（`工作区复用读数` 两跑实测），没有
+     * `node_modules` 与库表时，那一跑会以「找不到 next / 连不上库」的形态红，
+     * 而那种报错指不到真正缺的那一格。 */
+    expect(
+      order.indexOf("每日安装依赖"),
+      "「每日安装依赖」必须排在「每日单元测试」之前 —— 否则整档跑在没有 node_modules 的检出上",
+    ).toBeLessThan(suite);
+    expect(
+      order.indexOf("每日 Python 可用性"),
+      "「每日 Python 可用性」必须排在「每日单元测试」之前 —— 缺解释器时相关用例只走 env 档跳过（静默少判）",
+    ).toBeLessThan(suite);
+    expect(
+      order.indexOf("每日同步数据库表结构"),
+      "「每日同步数据库表结构」必须排在「每日单元测试」之前 —— 没库时读库的用例报的是「连不上」",
+    ).toBeLessThan(suite);
+    /* 两跑之间**不许各漂一份**：这些格子的名字带「每日」前缀（不共用名字是为了让
+     * 按名字取块的解析器不撞车），所以「同一件事」这件事只能由 script 逐字相同来保证。
+     * 比的是**真正会执行的那些行**：块脚本里的 `#` 注释与空行不算 —— 两格各自要解释的
+     * 事情不一样（PR 那一格背着一整段「为什么这一步是前提」），把散文也要求逐字相同
+     * 只会逼人删解释，而漂移恰恰藏在命令行里。 */
+    for (const [daily, pr] of DAILY_SCRIPT_MIRRORS) {
+      const a = [
+        ...executableScriptLines(text, daily),
+        ...stageEnvAssignments(text, daily),
+      ];
+      const b = [
+        ...executableScriptLines(text, pr),
+        ...stageEnvAssignments(text, pr),
+      ];
+      expect(a, `定时那一跑里找不到「${daily}」的 script`).toBeTruthy();
+      expect(
+        b,
+        `PR 那一跑里找不到「${pr}」的 script —— 镜像判据两边都要取得到，否则它是空转`,
+      ).toBeTruthy();
+      expect(
+        a,
+        `「${daily}」与 PR 那一格的**命令行与 env 赋值**不再逐字相同 —— 判据是同一份脚本、` +
+          "取字节的根也是同一个，改一边不改另一边就是两条流水线各自漂（§12.12 的孪生形态，" +
+          "只是它长在配置里）",
+      ).toEqual(b);
+    }
   });
 
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {

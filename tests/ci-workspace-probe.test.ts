@@ -356,7 +356,11 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
         ".next": factOf(false),
       }).join("\n");
       expect(text).toContain("安装是从零装起");
-      expect(text).toContain("生产构建冷缓存");
+      /* 「构建冷缓存起」这句自 2026-10-18 起带一条限定：PR 那条不跑构建，`.next` 只在
+       * 每日那一跑才产 —— 这一格现在真正回答的是「常驻缓存目录有没有生效」（§13.5.23）。
+       * 判这一句而不是判 stage 名：stage 名改了这句话不该跟着漂。 */
+      expect(text).toContain("构建冷缓存起");
+      expect(text).toContain("每日");
     });
 
     it("两件都在场 ⇒ 不许再说「从零装」", () => {
