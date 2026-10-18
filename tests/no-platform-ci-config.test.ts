@@ -494,12 +494,50 @@ export function pipelineStageNames(
        * 同级的 `- <<: *anchor` / `name:` 仍在同一条里，不能当成收尾（`push` 那条的
        * `- <<:` 就在这一层）。 */
       if (indent < itemIndent) break;
+      /* `stages: *daily_gates` 这种**引用形态**：清单在锚点里，去那儿读。
+       * 每日那七格现在是两个触发口共用一份（04:00 定时 + 页面上的手点按钮），写成两份
+       * 的那一刻就是它俩开始各漂的那一刻。解析器必须认得引用，否则「手点那条跑的是不是
+       * 同一份」这件事根本没有判据能问。 */
+      const alias = /^stages:[ \t]*\*(\S+)[ \t]*$/.exec(body);
+      if (alias?.[1] !== undefined) return anchorStageNames(text, alias[1]);
       if (body.startsWith("stages:")) stageIndent = indent;
       continue;
     }
     /* 已在 `stages:` 里：更浅或同级的键 ⇒ 这一条流水线结束了。 */
     if (indent <= stageIndent && !body.startsWith("- ")) break;
     const item = /^- name:[ \t]*(\S.*?)[ \t]*$/.exec(body);
+    if (item?.[1] !== undefined) out.push(item[1]);
+  }
+  return out;
+}
+
+/**
+ * 读一个顶层锚点（`.daily-gates: &daily_gates`）里的 stage 名单。
+ *
+ * 收尾按「**顶格**的一行」判：锚点块的正文一律带缩进，遇到第一条顶格行（下一个
+ * `.keys:` / `master:`）就是块结束。注释行与空行跳过 —— 块里那些注释正当地要解释每一格。
+ *
+ * @param text `.cnb.yml` 原文
+ * @param anchor `&` 后面那个名字
+ * @returns stage 名；`[]` = 锚点不存在（调用方要把它当成「没找到」，不是「清单为空」）
+ */
+export function anchorStageNames(text: string, anchor: string): string[] {
+  const lines = text.split("\n");
+  const escaped = anchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const def = new RegExp(`^\\.[^:]*:[ \\t]*&${escaped}[ \\t]*$`);
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (def.test(lines[i] ?? "")) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return [];
+  const out: string[] = [];
+  for (const raw of lines.slice(start + 1)) {
+    if (raw.trim() === "" || raw.trim().startsWith("#")) continue;
+    if (/^\S/.test(raw)) break;
+    const item = /^-\s+name:[ \t]*(\S.*?)[ \t]*$/.exec(raw.trim());
     if (item?.[1] !== undefined) out.push(item[1]);
   }
   return out;
@@ -850,14 +888,79 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
     expect(runner.namespace).toBe("group");
     expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
-    // 三条流水线都必须引用那个锚点：只引用一条 = 另一条悄悄回落到平台池。
+    // 四条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
+    // （`runner.namespace: group` + `tags` 就在这个锚点里）。
     // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。
-    // 三个事件：`pull_request` / `push` / `crontab`（ISSUE #2010 加了最后一条）。
+    // 四个事件：`pull_request` / `push` / `crontab`（ISSUE #2010）/
+    //   `web_trigger_daily`（每日档的手动触发口，按钮在 `.cnb/web_trigger.yml`）。
     const refs = text.match(/^\s+-\s*<<:\s*\*\w+/gm) ?? [];
     expect(
       refs.length,
-      "锚点引用数与流水线数对不上（三个事件各要 <<: 一次）",
-    ).toBe(3);
+      "锚点引用数与流水线数对不上（四个事件各要 <<: 一次）",
+    ).toBe(4);
+  });
+
+  it("定时与**手点**两个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
+    /* 手动触发那一口解决的是「想知道答案的人不该等到早上四点」；它必须与定时那一条
+     * 是**同一件事**，否则「手点一遍每日档」这句话就没有确定含义（两种漂法各自都有过：
+     * 复制一份 stage 清单 ⇒ 加格子时只加一边；按钮指到一个 PR 清单 ⇒ 手点的根本不是每日档）。 */
+    const text = readRegisteredConfig();
+    const viaCron = pipelineStageNames(text, "每日生产构建");
+    const viaButton = pipelineStageNames(text, "每日档（手动触发）");
+    const declared = registeredDailyGateOrder(text);
+    expect(
+      declared.length,
+      "每日清单解析为空 —— 后面的比较就没有对象了",
+    ).toBeGreaterThan(0);
+    expect(
+      viaCron,
+      "定时那一条的 stage 名单与 `COMFYAPP_CI_DAILY_GATES` 不一致",
+    ).toEqual(declared);
+    expect(
+      viaButton,
+      "手点那一条与定时那一条跑的**不是同一份**清单 —— 它应当引用同一个 `*daily_gates` 锚点",
+    ).toEqual(declared);
+
+    /* 事件键与按钮：**两个方向**都要有对象。这里的失效形态都是「按了没反应」或
+     * 「永远没人按」，而两种都不会让任何一边自己变红。 */
+    const events = [...text.matchAll(/^ {2}(web_trigger_\w+):$/gm)].map(
+      (m) => m[1],
+    );
+    expect(
+      events.length,
+      ".cnb.yml 里没有 `web_trigger_*` 事件键",
+    ).toBeGreaterThan(0);
+    const triggerFile = path.join(ROOT, ".cnb", "web_trigger.yml");
+    expect(
+      existsSync(triggerFile),
+      "缺 `.cnb/web_trigger.yml` —— 官方把按钮定义放在这个文件里，没有它就没有按钮可点",
+    ).toBe(true);
+    const buttons = readFileSync(triggerFile, "utf8");
+    const bound = [
+      ...buttons.matchAll(/^[ 	]*event:[ 	]*(web_trigger_\w+)[ 	]*$/gm),
+    ].map((m) => m[1]);
+    expect(
+      bound.length,
+      "`.cnb/web_trigger.yml` 里一个 `event:` 都没有",
+    ).toBeGreaterThan(0);
+    for (const ev of bound) {
+      expect(
+        events,
+        `按钮事件「${ev}」在 .cnb.yml 里没有对应的流水线键 —— 按下去什么都不跑`,
+      ).toContain(ev);
+    }
+    for (const ev of events) {
+      expect(
+        bound,
+        `.cnb.yml 里有事件键「${ev}」却没有对应按钮 —— 这条流水线永远等不到人点`,
+      ).toContain(ev);
+    }
+    /* 按钮只在 master 的页面上显示：`reg` 是**正则**，写 `master` 会前缀匹配到
+     * `master-anything`，那种分支上按下去跑的是那条分支的 HEAD。 */
+    expect(
+      buttons,
+      "按钮的 `reg` 必须锚定到 master（正则要带 ^ 与 $）—— 否则每日档能在别的分支上被点",
+    ).toMatch(/^ {2}- reg: \^\S+\$[ 	]*$/m);
   });
 
   it("规范正文确实写着这次的决策反转（反向锚点）", () => {
@@ -1800,6 +1903,40 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ]);
     expect(pipelineStageNames(fixture, "别的流水线")).toEqual(["别的格"]);
     expect(pipelineStageNames(fixture, "不存在的流水线")).toEqual([]);
+    /* **引用形态**（`stages: *daily_gates`）：两个触发口共用一份清单之后，判据读得到的
+     * 必须还是那七格。这一支此前根本没被解析器支持 —— 不是缺功能，是缺一条会红的判据：
+     * 遇到引用它回 `[]`，于是「这条流水线一格都没有」看起来像事实，而它其实是解析失败。 */
+    const aliased = [
+      ".daily-gates: &daily_gates",
+      "  - name: 每日安装依赖",
+      "    script: x",
+      "  # 注释行不算一格",
+      "  - name: 每日全量E2E",
+      "    script: y",
+      ".other: &other",
+      "  - name: 别的锚点",
+      "master:",
+      '  "crontab: 0 4 * * *":',
+      "    - <<: *common",
+      "      name: 每日生产构建",
+      "      stages: *daily_gates",
+      "  web_trigger_daily:",
+      "    - <<: *common",
+      "      name: 每日档（手动触发）",
+      "      stages: *daily_gates",
+      "",
+    ].join("\n");
+    expect(pipelineStageNames(aliased, "每日生产构建")).toEqual([
+      "每日安装依赖",
+      "每日全量E2E",
+    ]);
+    expect(
+      pipelineStageNames(aliased, "每日档（手动触发）"),
+      "两个触发口读出来不一样 —— 引用解析在某一侧走岔了",
+    ).toEqual(pipelineStageNames(aliased, "每日生产构建"));
+    // 锚点不存在时是「没找到」，不是「清单为空」：调用方要能分开这两件事。
+    expect(anchorStageNames(aliased, "no_such_anchor")).toEqual([]);
+    expect(anchorStageNames(aliased, "other")).toEqual(["别的锚点"]);
   });
 
   it("扫描面真的收到了仓库根（不是空数组假装通过）", () => {
