@@ -256,35 +256,31 @@ describe("镜像身份：流水线上真的在跑它（脚本存在而配置没�
 });
 
 /**
- * 「哪几格换了环境」必须是**一份读得出来的名单**（ISSUE #1993 续）。
+ * 「哪几格换了环境」必须是**一份读得出来的名单**（ISSUE #1993 续 → 2026-10-17 订正）。
  *
- * 这条守的是一句很容易被读反的话：自托管上「没有 docker」不等于「没有容器」——
- * 失效的只是 `pipeline.docker.image` / `volumes`（声明构建环境那两把旋钮），
- * 而**Job 级 `image:`** 与插件任务仍在独立容器里跑（官方 `script-vs-plugin.md`
- * 「执行环境」）。于是本仓的真实形态是「宿主机直跑 + 少数几格进容器」。
+ * ## 现役答案是**零格**，而这条判据守的是那个「零」
  *
- * ⚠️ 写的是 **Job 级**、不是 stage 级 —— 这两层在这条路径上**结果相反**：stage 级
- * `image:` 换的是整条流水线的构建环境（自托管 Runner 不具备），实测整格 99ms 就答
- * `Runner does not enable Docker.`；Job 级只给这一个任务起容器，照常可用。
- * 所以下面的用例同时判「Job 级有那两格」与「stage 级一格都没有」。
+ * 上一版这条判据钉的是「进容器的正好是 `浏览器安装` / `E2E 关键流程` 两格」，依据是
+ * 官方 `script-vs-plugin.md` 的一句「指定 `image` 的脚本任务在独立容器中执行」。那句话
+ * 本身没错，但它讲的是**平台池**那种形态；自托管节点上**没有 docker daemon**，平台连
+ * 「起容器」都做不到 —— 而且这与「写在 stage 上还是 Job 上」无关，两跑各用一种写法，
+ * 各红一次，答案都是同一句（`cnb-cqk-1k550gpp2`，PR #2003 首跑）：
  *
- * 为什么要有判据而不是只留注释：**多一格少一格都不会报错**。有人顺手给「类型检查」
- * 也加个 `image:`，配置照跑、日志照绿 —— 而那一格要拉镜像、要重装依赖，正是这份
- * 配置当初把「装一次」放在宿主机上的理由。名单在这里逐格点名，加一格就得先过这一条。
+ *     浏览器安装  error [70ms]  →  Runner does not enable Docker.
+ *
+ * 70 毫秒、脚本一行都没执行、前面三十三步全绿。所以 `.cnb.yml` 里那两行 `image:` 撤了，
+ * 这条判据把允许的名单钉成**空** —— 与上一版是同一条判据、只换了答案：名单仍在这里
+ * **逐格点名**，加一格就必须先过这一条，而它会指着上面这段读数说话。
+ *
+ * ## 名单是空的，所以「不空转」由下面另几条担着
+ *
+ * `toEqual([])` 与「解析器永远返回空」在结果上无法区分 —— 那是本文件头注列为要堵的
+ * 失效形态之一。喂夹具的那两条（Job 级认得出来 / stage 级进另一个出口）就是这一档的
+ * 非空转证明：解析器还活着，绿的只是配置本身。要改回去的前提写在 `.cnb.yml` 那一段
+ * 注释里，且必须与这里的判据**同批**改。
  */
 describe("容器格：哪几格进容器是**决定**，不是随手写的（ISSUE #1993 续）", () => {
-  /**
-   * 本仓**允许**换环境的那几格 —— 此刻是**零格**。
-   *
-   * 前一版这里是 `["浏览器安装", "E2E 关键流程"]`：那两格写着任务级 `image:`，想让官方
-   * Playwright 镜像里预装好的 headless shell 绕开「120 MiB 取不回来」。平台两次回同一句
-   * `Runner does not enable Docker.`（70ms / 109ms，容器都没起）—— 自托管节点没有开容器
-   * 能力，这与「写在 stage 上还是 Job 上」无关（§13.5.3.4.1.3 的反例与 §13.5.3.4.1.5）。
-   *
-   * 所以名单收成空数组不是「放宽判据」，而是**这一档此刻的形态就是宿主机直跑**：名单仍在
-   * 这里逐格点名（多一格少一格都红），只是没有格子在名单里。要加回去的前提写在 `.cnb.yml`
-   * 那一段注释里，且必须与下面几条判据同批改。
-   */
+  /** 本仓**允许**带 `image:` 的 stage —— **空**：这台节点上没有 docker daemon。 */
   const CONTAINER_STAGES: string[] = [];
 
   it("解析器只认 Job 级 `image:`，且不把 `env:` 里的同名键算进来", () => {
@@ -309,7 +305,7 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
       { name: "B", image: "node:24" },
     ]);
     /* 写错层的那一格**不进**这份名单，而进另一个出口 —— 它压根跑不起来，
-     * 与「某一格进了容器」是两件事（`readImageDeclarations()` 一次扫描两个出口）。 */
+     * 与「某一格进了容器」是两件事（`readImageDeclarations()` 两个出口）。 */
     const wrongLevel = [
       "master:",
       "  pull_request:",
@@ -325,51 +321,51 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
     ]);
   });
 
-  it("现役 `.cnb.yml`：进容器的正好是名单里那几格（多一格少一格都红）", () => {
+  it("现役 `.cnb.yml`：**一格都不带** `image:`（带一格就是 70ms 的 `Runner does not enable Docker`）", () => {
     const got = platformImageStages(read(".cnb.yml")).map((s) => s.name);
     expect(
       got,
-      "进容器的 stage 与决定不一致 —— 改名单要同批改这条判据，并写成「为什么」",
+      "有 stage 带了 `image:` —— 自托管节点上没有 docker daemon，这一格会在 70ms 内红在 " +
+        "`Runner does not enable Docker` 上（实测 cnb-cqk-1k550gpp2，脚本一行都没执行）。" +
+        "真要换环境，先解决「这台节点起不起得来容器」这件事，别只加一行 image:；" +
+        "改这份名单要同批改这条判据，并写成「为什么」",
     ).toEqual(CONTAINER_STAGES);
   });
 
-  it("名单里每一格都用同一张钉了版本的 Playwright 镜像（`latest` 等于没有身份）", () => {
-    const stages = platformImageStages(read(".cnb.yml"));
-    if (stages.length === 0) {
-      /* 空名单是**此刻的真形态**（节点没有容器能力），不是「这条判据不管了」：
-       * 下面几条对夹具的复算仍然跑，名单一非空它们就自动生效。 */
-      expect(CONTAINER_STAGES).toEqual([]);
-      return;
-    }
-    const refs = stages.map((s) => s.image);
-    expect(
-      new Set(refs).size,
-      "几格的镜像不是同一张 —— 浏览器落点会分成两处",
-    ).toBe(1);
-    expect(imageTagVerdict(refs[0]).verdict).toBe("pinned");
-    expect(refs[0], "Playwright 镜像要带官方的那套浏览器").toMatch(
-      /playwright:v\d+\.\d+\.\d+-(jammy|noble)$/,
-    );
+  it("这条判据不是空转：喂一份真带 `image:` 的配置，它认得出来且与空名单不等", () => {
+    /* 名单是空数组时，上面那条的绿与「解析器瞎了」在结果上无法区分 —— 那正是「恒绿的
+     * 空转」。所以这里给解析器喂一份**真的带 image** 的配置，断言它认得出来。 */
+    const withImage = [
+      "master:",
+      "  pull_request:",
+      "    - stages:",
+      "    - name: 浏览器安装",
+      "      jobs:",
+      "        - name: 浏览器安装",
+      "          image: mcr.microsoft.com/playwright:v1.63.0-noble",
+      "          script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "",
+    ].join("\n");
+    const names = platformImageStages(withImage).map((s) => s.name);
+    expect(names).toEqual(["浏览器安装"]);
+    expect(names).not.toEqual(CONTAINER_STAGES);
   });
 
-  it("没有容器格时不许声明 `PLAYWRIGHT_BROWSERS_PATH: /ms-playwright`（宿主上没有那个路径）", () => {
-    /* 那一行只在「浏览器装在镜像里」时成立。节点没有容器能力时写它 = 让落点判据
-     * （`playwrightBrowsersRoot()` 优先读它）去一个不存在的目录找东西，于是「装好了」与
-     * 「一件都没有」在日志里逐字同形 —— 本仓最贵的那类红。
+  it("浏览器落点：不给 `PLAYWRIGHT_BROWSERS_PATH` 覆盖（覆盖那一版是给容器用的，随它一起撤掉）", () => {
+    /* 官方 Playwright 镜像把浏览器装在 `/ms-playwright`，那一行当初是**给容器**配的：
+     * 判据得去镜像里那个目录找。带 `image:` 的 stage 在这台节点上必然红（见上），
+     * 于是这一行剩下的唯一效果是**把落点判据指到一个宿主上不存在的目录** ——
+     * 「明明装过」与「一件都没有」在日志里逐字同形（本仓最贵的那类红）。
+     * 现在这一格跑在宿主机上，落点就按 `playwrightBrowsersRoot()` 自己推，别给覆盖。
      *
-     * 名单非空时反过来：那两格**必须**指向镜像里的落点，否则同样红。两个方向由同一个
-     * 事实（这一跑有没有容器格）驱动，所以它们排在同一条用例里。 */
-    /* 按**行首的键**判，不按「文件里出现过这个词」：`.cnb.yml` 的注释里正当会写它
-     * （那两段注释正是在解释「为什么现在不写它」）。 */
-    const declared = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:/m.test(read(".cnb.yml"));
-    const containers = platformImageStages(read(".cnb.yml")).length;
+     * 按**行首的键**判，不按「文件里出现过这个词」：`.cnb.yml` 的注释里正当会写它
+     * （那几段注释正是在解释「为什么现在不写它」）。 */
+    const text = read(".cnb.yml");
+    const override = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:/m.exec(text);
     expect(
-      declared,
-      containers === 0
-        ? "没有容器格却声明了 `PLAYWRIGHT_BROWSERS_PATH` —— 宿主上 `/ms-playwright` 不存在，" +
-            "落点判据会去空目录找东西（「装好了」与「一件都没有」逐字同形）"
-        : "有容器格却没声明 `PLAYWRIGHT_BROWSERS_PATH` —— 镜像里的浏览器在 `/ms-playwright`，" +
-            "落点判据会去宿主那个空目录找",
-    ).toBe(containers > 0);
+      override?.[0] ?? null,
+      "`.cnb.yml` 里还有 `PLAYWRIGHT_BROWSERS_PATH` —— 那是给容器用的覆盖；" +
+        "宿主机上它会把落点判据指到一个空目录（`浏览器安装` 因此永远重新下载）",
+    ).toBeNull();
   });
 });

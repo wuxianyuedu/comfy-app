@@ -27,14 +27,20 @@
  * 一起打出来、把「声明与磁盘对不上」的那几档写成读数、以及**没有标识时给出下一动作**。
  * 它恒退 0。
  *
- * ## 第四件事（ISSUE #1993 续）：它也报「本仓的容器格是哪几格」
+ * ## 第四件事（ISSUE #1993 续）：它也报「本仓的容器格是哪几格」—— 而答案是**零格**
  *
  * 「宿主机直跑」与「这一格跑在容器里」不是二选一 —— 平台侧**Job 级** `image:`
- * 与插件任务仍然在容器里跑（`.cnb.yml` 里 `浏览器安装` / `E2E 关键流程` 两格就是）。
- * 那句话此前只写在文档里，于是「到底哪几格在容器里」只能靠人翻 900 行 YAML。
- * 现在它由 `platformImageStages()` 从 `.cnb.yml` 里**读出来**，跟着这条读数每跑一次
- * 打一遍 —— 判据面仍在 `tests/ci-image-identity.test.ts`（哪几格该有 `image:` 由它钉住），
- * 这里只负责「让这一跑的形态可见」。
+ * 与插件任务仍然在容器里跑。那句话此前只写在文档里，于是「到底哪几格在容器里」
+ * 只能靠人翻 900 行 YAML。现在它由 `platformImageStages()` 从 `.cnb.yml` 里**读出来**，
+ * 跟着这条读数每跑一次打一遍 —— 判据面仍在 `tests/ci-image-identity.test.ts`
+ * （哪几格该有 `image:` 由它钉住），这里只负责「让这一跑的形态可见」。
+ *
+ * ⚠️ 而**此刻那一档是空的**：`.cnb.yml` 曾给 `浏览器安装` / `E2E 关键流程` 各加过
+ * 一行任务级 `image:`，平台侧第一跑 70 毫秒就答了 `Runner does not enable Docker.`
+ * （`cnb-cqk-1k550gpp2`，§13.5.3.4.1.5）—— 脚本一行都没执行。所以「没有 docker」
+ * 是**整条执行面**的，与「写在 stage 上还是 Job 上」无关：自托管节点上没有 docker
+ * daemon，平台连起容器这一步都做不到。读数与判据都留着，因为下一次「要不要给某格
+ * 换环境」一定会有人再问一遍，而那时先要看到的就是这一行读数与那次 70ms 的红。
  *
  * ## 两个标识只有一份出处
  *
@@ -51,7 +57,11 @@ import { fileURLToPath } from "node:url";
 /* 容器计划的读数与**同一个事实**的另一个出口（ISSUE #1993）：哪几格进容器、它们挂的
  * 卷能不能让浏览器落点跨容器存活、runner 是不是自托管。本档只**打**它，判据在
  * `tests/ci-container-plan.test.ts` —— 分工与 `platformImageStages()` 一致。 */
-import { describePlan } from "./ci-container-plan.mjs";
+import {
+  containerStages,
+  describePlan,
+  stageLevelImages,
+} from "./ci-container-plan.mjs";
 
 /** `.cnb.yml` 里本仓认得的那一档「Job 级镜像」—— 宿主机没 docker 之后容器仍从这一格来。 */
 const CNB_CONFIG = ".cnb.yml";
@@ -68,99 +78,56 @@ export const ROOT = path.resolve(HERE, "..");
 /**
  * 从 `.cnb.yml` 原文里读出**哪几格在容器里跑**（Job 级 `image:`）。
  *
- * ## 为什么这件事要有执行者
+ * ## 为什么这件事要有执行者（而现役答案是「一格都没有」）
  *
  * 自托管这条路上「镜像」一度被读成「没有」（§13.5.3.4.1 那张表的第一条：`pipeline
- * .docker.image` 不生效）。可失效的只是**声明构建环境**那一层 —— 平台侧**Job 级**
- * `image:` 与插件任务仍在独立容器里执行（官方 `script-vs-plugin.md`「执行环境」：
- * 指定 `image` 的脚本任务在独立容器中执行）。于是本仓的真实形态是
- * **宿主机直跑 + 少数几格进容器**，而不是「整条没有镜像」。
+ * .docker.image` 不生效）。可失效的远不止那一层：`浏览器安装` / `E2E 关键流程` 各加过
+ * 一行任务级 `image:`，平台侧第一跑就是
+ * `浏览器安装 error [70ms] → Runner does not enable Docker.`（`cnb-cqk-1k550gpp2`）。
+ * 节点上没有 docker daemon，连起容器这一步都做不到，于是本仓的真实形态是
+ * **整条宿主机直跑**，判据把允许的名单钉成空。
  *
- * 那句话此前只写在文档里；写进读数之后，「这一跑是哪几格换了环境」跟着每次构建
- * 落进日志 —— 与这条读数存在的理由逐字相同（环境是隐形的）。
+ * 解析器与这条读数保留，是因为「哪一格带了 `image:`」正是那次事故里**没人读得出来**
+ * 的那件事：配置看着对、日志里只有一句 70ms 的 Docker 报错。留着它，下一次有人加
+ * 一格时，这一跑就会当场把名字打出来。
  *
- * ## 认的是 **Job** 那一层，而且只认那一层
+ * ## 解析不另写一份（ISSUE #1993 的容器计划那份才是唯一出处）
  *
- * 平台有两层镜像语义，在这条路径上**一层能用、一层不能**（实测：写错那一层，整格
- * 99ms 就答 `Runner does not enable Docker.`）：
+ * 两级镜像语义、「认 Job 那一层」、注释剥离全部收在 `scripts/ci-container-plan.mjs`
+ * 的 `containerStages()` 里 —— 本函数是它的**投影**：只取「哪几格、什么镜像」这一行
+ * 读数，判据面在 `tests/ci-container-plan.test.ts`。写第二份解析器的话，两份会在
+ * 「stage 级算不算」这种问题上各答一半，而它们本该永远是同一个答案。
  *
- *   · **Job 级**（脚本任务「指定 `image` 时在独立容器中执行」）= 平台为这一个任务起
- *     一个容器 —— 自托管上照常可用，**本仓用这一层**；
- *   · **Stage 级**（`Stage.image`「当前 Stage 下的所有任务默认都在这个镜像环境中执行」）
- *     = 给整条流水线容器换镜像 —— 那正是自托管 Runner 不具备的能力。
+ * #### 一个刻意保留的差别：不剥 YAML 注释
  *
- * 所以本函数对两者**分开报**：Job 级的 `image:` 进 `stages`，Stage 级的进
- * `stageLevelImages`（后者不是「另一份名单」，而是**一级不该出现的声明** ——
- * 判据要求它为空，理由见 `tests/ci-container-plan.test.ts`）。
- *
- * 缩进判据是有意的：`env:` 里的同名键不会撞上（它们的缩进更深），而 `# ` 注释掉的
- * 那一行也不匹配。stage 名取**外层**那个（`- name: X` + `jobs:`）—— 判据与账里
- * 一直用外层名，Job 层的同名只是为了让那一层有名字。
+ * `containerStages()` 先剥掉 `#` 注释再读，本函数读的是**原文**。所以 `# - name: C` +
+ * `#   image: node:24` 这种注释掉的写法在这里**不会**被算成声明（缩进对不上 `- name:`
+ * 那一层），但 `.cnb.yml` 里 `image:` 出现在行尾注释里时两边可能给出不同的行 —— 判据
+ * 只认本函数对**现役配置**的结论，那一份没有注释形式的 `image:`。
  *
  * @param {string} text `.cnb.yml` 原文
  * @returns {Array<{name: string, image: string}>} 有序，与配置里出现的顺序一致
  */
 export function platformImageStages(text) {
-  return readImageDeclarations(text).stages;
+  return containerStages(text).map(({ name, image }) => ({ name, image }));
 }
 
 /**
- * 两级 `image:` 的**一次扫描、两个出口**（Job 级 / Stage 级）。
+ * 两级 `image:` 的**两个出口**（Job 级 / Stage 级）—— 与 `platformImageStages()`
+ * 同一份事实的更完整形态，给 `tests/ci-image-identity.test.ts` 判「写错层」用。
  *
- * 分开成两个出口而不是一个「合并后的名单」，是因为两边的**下一动作相反**：
- * Job 级多一格是「有人多花了一次安装」，Stage 级出现一格是「这一格在这条路径上
- * 根本起不来」。合成一份名单会让后者读起来像前者。
+ * 两个出口而不是一个合并名单，是因为两边的**下一动作相反**：Job 级多一格是「有人多花
+ * 了一次安装」，Stage 级出现一格是「这一格在这条路径上根本起不来」。合成一份名单会让
+ * 后者读起来像前者。解析全部转交 `ci-container-plan.mjs`（见上）。
  *
  * @param {string} text `.cnb.yml` 原文
  * @returns {{stages: Array<{name: string, image: string}>, stageLevelImages: Array<{name: string, image: string}>}}
  */
 export function readImageDeclarations(text) {
-  /* ⚠️ **不写 `^ {n}` 那一族正则**：这台机（Node 24 的 V8）在「锚 + 定长量词 +
-   * 后续字面量」上会漏回溯 —— `^ {2}a` 对 `"    a"` 判 false（`^a{2}b` 对 `"aaab"`
-   * 同样判 false）。本函数要判的是缩进层级，按字符计数比量词直白得多，也顺手绕开
-   * 那个坑；**别为了迁就引擎去改用例的期望值**。 */
-  /** @type {Array<{name: string, image: string}>} */
-  const stages = [];
-  /** @type {Array<{name: string, image: string}>} */
-  const stageLevelImages = [];
-  /** @type {{name: string, indent: number} | null} */
-  let stage = null;
-  /** @type {{name: string, indent: number} | null} */
-  let job = null;
-  for (const raw of text.split("\n")) {
-    const indent = raw.length - raw.trimStart().length;
-    const body = raw.trim();
-    /* 回到顶层键（`master:` 等）：这一族结束了。`stages:` 那一层不结束 —— 后面还有项。 */
-    if (indent === 0 && body !== "") {
-      stage = null;
-      job = null;
-      continue;
-    }
-    /* 列表项：`- name: X`（缩进多少层都认 —— `stages:` 可能嵌在 pipeline 里）。
-     * 比当前 stage 更深的那一项是**子 Job**（`jobs:` 下），否则它就是一个新 stage。 */
-    if (body.startsWith("- name:")) {
-      const item = { name: body.slice("- name:".length).trim(), indent };
-      if (stage !== null && indent > stage.indent) job = item;
-      else {
-        stage = item;
-        job = null;
-      }
-      continue;
-    }
-    /* 这一项自己的键：比它的 `- name:` 深一层。更深的是 `env:` / `volumes:` 里的
-     * 同名键或条目，不算声明。 */
-    if (!body.startsWith("image:")) continue;
-    const value = body
-      .slice("image:".length)
-      .trim()
-      .replace(/^["']|["']$/g, "");
-    if (value === "") continue;
-    if (job !== null && indent === job.indent + 2)
-      stages.push({ name: stage?.name ?? job.name, image: value });
-    else if (stage !== null && indent === stage.indent + 2)
-      stageLevelImages.push({ name: stage.name, image: value });
-  }
-  return { stages, stageLevelImages };
+  return {
+    stages: platformImageStages(text),
+    stageLevelImages: stageLevelImages(text),
+  };
 }
 
 /**
@@ -273,11 +240,11 @@ export function imageIdentity({
   /* 本仓的容器格（Job 级 `image:`）—— 与上面「这台机长自哪版」是**两件事**：
    * 前者是宿主身份，后者是「这一跑哪几格换了环境」。放在同一处打，是因为它们
    * 回答的是同一个问题：**这一次跑在什么环境上**（见文件头第四件事）。 */
-  const containerStages = platformImageStages(readConfig());
+  const containerGrids = platformImageStages(readConfig());
   lines.push(
-    containerStages.length === 0
+    containerGrids.length === 0
       ? `容器格（Job 级 image:）：没有 —— 每一步都跑在宿主机上`
-      : `容器格（Job 级 image:）：${containerStages
+      : `容器格（Job 级 image:）：${containerGrids
           .map((s) => `${s.name} → ${s.image}`)
           .join("；")}`,
   );
