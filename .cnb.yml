@@ -104,15 +104,19 @@
 #    而平台侧只会表现为「流水线起不来」）。判 `.cnb.yml` 的语法用
 #    `pnpm exec prettier --check .cnb.yml` —— 它带 YAML 解析器。
 #
-# ── 三条流水线：谁在什么事件上跑 ────────────────────────────────────────
+# ── 四条流水线：谁在什么事件上跑 ────────────────────────────────────────
 #
 #   质量门禁        pull_request（不合并就不该结束）
 #   master 合并复核  push（只复核「确实是 PR 合并进来的」，不重跑全套）
 #   每日生产构建     "crontab: 0 4 * * *"（每天 04:00；机器空着、没有并发 PR 时
-#                    才拿得到的那一跑 —— 全量单测与构建都在这一条上，口径见 §13.5.23。
-#                    「今天 master 的 HEAD 能不能构建/能不能测」与「这次改动能不能构建」
-#                    是两个问题，而 2026-10-18 起第二条只剩本地那笔新鲜度账在答，
-#                    PR 那一条不再跑构建）
+#                    才拿得到的那一跑 —— 全量单测 / 构建 / 全量 E2E 都在这条上，
+#                    口径见 §13.5.23。「今天 master 的 HEAD 行不行」与
+#                    「这次改动能不能构建」是两个问题，而 2026-10-19 起第二个问题
+#                    在平台侧没有执行者了：PR 那一条不再跑构建、也不跑端到端）
+#   每日档（手动触发） web_trigger_daily（**同一份七格**，人想现在就知道答案时点一下；
+#                    按钮定义在 `.cnb/web_trigger.yml`，与这里的事件键靠名字对上。
+#                    它与定时那一条的**两处**不同 —— 执行身份是按按钮的人、
+#                    取的是按下那一刻的 master HEAD —— 写在下面那一格上面）
 #
 # push 不重跑全套的理由与旧版相同（合并提交由平台按**已验过的源分支 SHA** 生成、
 # 不引入新代码），但今天它不再是「省额度」，而是「省一遍没有新信息的运行时间」。
@@ -377,6 +381,118 @@
 #
 # 判定门槛（哪类能进登记表、哪类绝对不行）逐条写在 `scripts/ci-incremental-gates.mjs`
 # 的文件头；口径与边界见规范 §13.5.18。
+# ── 每日那七格：定时与手动触发**共用这一份**（`.daily-gates` 锚点）────────────
+#
+# 为什么做成锚点而不是两处各写一遍：这条清单现在有**两个触发口** ——
+# ① `"crontab: 0 4 * * *"`（每天 04:00，无人值守）；② `web_trigger_daily`
+# （人在页面上手点，按钮定义在 `.cnb/web_trigger.yml`）。两条跑的是**同一件事**：
+# 「现在就把这七格跑一遍」。写成两份的时刻就是它俩开始各漂的时刻（哪天给每日档加一格、
+# 忘了加到手点那条，「手点一遍每日档」得到的就不是每天 04:00 那一跑）——
+# §12.12 的孪生形态，只是它长在配置里。判据钉的是「两条解析出来的 stage 名单**逐字相同**
+# 且等于 `COMFYAPP_CI_DAILY_GATES`」（`tests/no-platform-ci-config.test.ts`）。
+#
+# 与 `.gates`（PR 那三十七格）同理，这里也刻意**不带 `ifModify`**：这七格是「重跑一遍」
+# 的语义，按改动面跳过就不是每日档了。
+.daily-gates: &daily_gates
+  # ── 前提三格：script 行与 PR 那条流水线上的同名档**逐字相同** ──────────
+  # 为什么不共用 YAML 锚点：`pipelineStageNames()` / `stageBlock()` 是按名字在文本里
+  # 取块的，两格重名会让「哪一条流水线的读数」变成解析器的运气。所以这里各起一个
+  # 带「每日」前缀的名字，而**由判据钉住它的 script 与 PR 那一格逐字相同**
+  # （`tests/no-platform-ci-config.test.ts`）—— 漂移的形态是「一边改了另一边没改」，
+  # 那正是这份清单里所有「只许一处」的判据在挡的东西。
+  - name: 每日安装依赖
+    # 与 PR 那格同一份实现（`ci-install-deps.mjs`：先自证 pnpm 起得来，再按语义判
+    # 要不要装）。定时这一跑每次都是全新检出 ⇒ 这一跳恒为「装」，不是可省的装饰。
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $ErrorActionPreference = "Stop"
+      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  - name: 每日 Python 可用性
+    # 判据那一份只有 `--python-only` 一个；这一格跑在单测**之前**是因为缺解释器时
+    # 相关用例只走 `env` 档跳过（**静默少判**），必须在便宜的位置先报一次。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --python-only
+  - name: 每日同步数据库表结构
+    # 库里要有表：套件里读库的那几条在没有库时的形态是「连不上」，看起来像业务故障
+    # （§9.1 那格「页面 200、接口 500」的同一族误诊）。`db-push.mjs` 复核真建出表。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
+  # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
+  - name: 每日单元测试
+    # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
+    # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
+    # 跑绿刷新 `scripts/.full-suite-freshness.json`，本地「改了就当天跑」那条判据与
+    # 这一档读的是同一份事实。裸写 vitest 时这一档的绿只落在日志里、账面一个字不变。
+    #
+    # ⚠️ **必须整档跑**：`isWholeTrackRun` 会把「透传了 `--grep` / 指到单个文件」的
+    #   绿判成**不构成整档凭证**、当场不记账。并发不进 `extra` 的同一条理由写在
+    #   `planRun` 的注释里（塞错位置 = 每一次都绿而不记账）。
+    #
+    # 这一档还打**分文件耗时榜**（前 10 + 合计 + 中位，落 `os.tmpdir()` 的 junit，
+    # 与钩子那侧共用 `parseJunitXml`）—— 它顺带回答「这台机上跑全量时哪几份在吃
+    # 时间」，而那个数此前只在本地账本里有。只算测试阶段，用来排序不当 stage 墙钟。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
+    # 45m：`full-suite-run.mjs` 自己的墙钟预算是 30 分钟（`FULL_SUITE_TIMEOUT_MS`），
+    # stage 预算必须**大于**它，否则先被平台掐的是 stage，而那一刀不带
+    # 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`）。历史读数 827s
+    # （`cnb-eus-1k5058g8l`，755 文件全量绿）—— 45m 给的是安静机器上的三倍余量。
+    timeout: 45m
+  # 入口是**跑法脚本**（ISSUE #1979 的口径）：
+  # 裸 `pnpm run build` 会让这一步的绿只落在日志里、`scripts/.artifact-freshness.json`
+  # 一个字不变。外面这一层（`ci-daily-build.mjs`）多出来的只有事件身份与镜像读数，
+  # 判据与记账仍然是 `artifact-run.mjs` 那一份。
+  - name: 每日生产构建
+    # 控制台编码先钉住（头注第 6 条 / `ci-cp936-exit.mjs`），与其余每一格同形。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs
+    # 30m：这一格跑的就是 `next build` + 数产物 + 冒烟。实测 118s
+    # （`cnb-eus-1k5058g8l`）/ 131.0s（`cnb-ln5-1k540cfn1`），而 `next build` 在冷
+    # 节点上比读数慢得多，但真挂死必须早报 —— 一天的预算只有这一条，卡满 2h 墙钟
+    # 等于当天这一跑没有结论。与 `artifact-run.mjs` 的 `ARTIFACT_TIMEOUT_MS` 同量级。
+    # ⚠️ 它**没有并发旋钮**，这是刻意的（ISSUE #1993 / 规范 §13.5.21）：`next build`
+    # 的 worker 数由构建器自己按机器定，没有一个「按核数收敛」的键；`NODE_OPTIONS`
+    # 那类改的是内存上限、不是并发 —— 拿它冒充降载就是换一个东西。这条路径上
+    # **唯一真能控负载**的手段是「别让两条流水线同时压同一台机」
+    # （`lock.cancel-in-progress` + 按 PR 分锁，见 §13.5.3.10）。
+    timeout: 30m
+  # ── 每日全量 E2E 的前提格：浏览器 ──────────────────────────────────
+  # 与 PR 那格 `浏览器安装` 同一份实现（`ci-toolchain-selfcheck.mjs --playwright-only`），
+  # 所以**两行 env 也必须一起带**：下载根与连接超时是那两次读数换来的
+  # （`cnb-gt1-1k513ill4` 起），只镜像命令行不镜像 env 时，「Playwright 换版本的那个
+  # 早上」定时那一跑会从默认根去取那 120 MiB —— 而默认根在这台节点上取不到，
+  # 红只在第二天 04:00 出现。镜像判据现在两处都比（命令行 + `env` 的赋值行）。
+  # 幂等：落点已有那一件时这一格是 1~5s（实测 `cnb-cdt-1k51s6mf1`）。
+  - name: 每日浏览器安装
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    env:
+      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+    timeout: 20m
+  # ── 全量 E2E（每天一次；这一格是 `FRESHNESS_TRACKS.e2e` 的执行者）──────
+  #
+  # 为什么要在每日档跑**整档**：本地那一层从 2026-10-19 起不再要求自证（`ciStage`
+  # 那一栏，规范 §11.8 / §13.5.23），而 PR 上的 `E2E 关键流程` 只跑 `@critical` 子集 ——
+  # `isWholeTrackRun` 明写子集**不构成整档凭证**。没有这一格，「80 条 spec 今天能不能
+  # 全过」就从一台有人推代码才判得出来的机器，变成一个谁都不判的空白。
+  #
+  # ⚠️ **不许带任何收窄参数**（`--grep` / 指到单个 spec）：带了就会**绿着不记账**，
+  #   而日志与账面看起来与真跑过一模一样 —— 那正是这一族最坏的静默形态。
+  #   判据把这一条钉在 `script` 上（只扫命令行，不扫注释：注释里正当地要写这句话）。
+  #
+  # 跑法：`e2e-run.mjs` 自己起 webServer（`pnpm dev`，零 `PNPM_START` ⇒ 不依赖构建产物，
+  #   这一格因此与 `每日生产构建` **各自独立**：构建坏了不影响端到端链路的结论）。
+  # 45m：本地整档是十几分钟量级，而节点上是冷工作区 + 现场编译；与 `每日单元测试`
+  #   同一档预算口径（卡死要早报，一天只有这一跑）。
+  - name: 每日全量E2E
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs
+    # ⚠️ 这一行 env 是**产物前提的声明**，不是调档偏好：webServer 起的是 `pnpm start`，
+    # 而 `.next` 里那份产物来自排在前面的 `每日生产构建`（同一分支的 stage 共享工作区）。
+    # 旧形态下这件事靠 `playwright.config.ts` 里那句 `CI || PNPM_START` 推断，而它把
+    # 「是不是 CI」与「有没有产物」绑成了一件 —— PR 那条撤掉构建之后就是这么红的
+    # （`cnb-ob4-1k5828a36`：`Could not find a production build` ⇒ webServer 180s 超时）。
+    # 现在写在一句话里，顺序判据也钉住「`每日生产构建` 必须排在这一格之前」。
+    env:
+      COMFY_E2E_SERVER: start
+    timeout: 45m
+
 .gates: &gates
   # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
   # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
@@ -1312,102 +1428,25 @@ master:
   "crontab: 0 4 * * *":
     - <<: *common
       name: 每日生产构建
-      stages:
-        # ── 前提三格：script 行与 PR 那条流水线上的同名档**逐字相同** ──────────
-        # 为什么不共用 YAML 锚点：`pipelineStageNames()` / `stageBlock()` 是按名字在文本里
-        # 取块的，两格重名会让「哪一条流水线的读数」变成解析器的运气。所以这里各起一个
-        # 带「每日」前缀的名字，而**由判据钉住它的 script 与 PR 那一格逐字相同**
-        # （`tests/no-platform-ci-config.test.ts`）—— 漂移的形态是「一边改了另一边没改」，
-        # 那正是这份清单里所有「只许一处」的判据在挡的东西。
-        - name: 每日安装依赖
-          # 与 PR 那格同一份实现（`ci-install-deps.mjs`：先自证 pnpm 起得来，再按语义判
-          # 要不要装）。定时这一跑每次都是全新检出 ⇒ 这一跳恒为「装」，不是可省的装饰。
-          script: |
-            $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
-            $ErrorActionPreference = "Stop"
-            node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
-            node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
-        - name: 每日 Python 可用性
-          # 判据那一份只有 `--python-only` 一个；这一格跑在单测**之前**是因为缺解释器时
-          # 相关用例只走 `env` 档跳过（**静默少判**），必须在便宜的位置先报一次。
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --python-only
-        - name: 每日同步数据库表结构
-          # 库里要有表：套件里读库的那几条在没有库时的形态是「连不上」，看起来像业务故障
-          # （§9.1 那格「页面 200、接口 500」的同一族误诊）。`db-push.mjs` 复核真建出表。
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
-        # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
-        - name: 每日单元测试
-          # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
-          # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
-          # 跑绿刷新 `scripts/.full-suite-freshness.json`，本地「改了就当天跑」那条判据与
-          # 这一档读的是同一份事实。裸写 vitest 时这一档的绿只落在日志里、账面一个字不变。
-          #
-          # ⚠️ **必须整档跑**：`isWholeTrackRun` 会把「透传了 `--grep` / 指到单个文件」的
-          #   绿判成**不构成整档凭证**、当场不记账。并发不进 `extra` 的同一条理由写在
-          #   `planRun` 的注释里（塞错位置 = 每一次都绿而不记账）。
-          #
-          # 这一档还打**分文件耗时榜**（前 10 + 合计 + 中位，落 `os.tmpdir()` 的 junit，
-          # 与钩子那侧共用 `parseJunitXml`）—— 它顺带回答「这台机上跑全量时哪几份在吃
-          # 时间」，而那个数此前只在本地账本里有。只算测试阶段，用来排序不当 stage 墙钟。
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
-          # 45m：`full-suite-run.mjs` 自己的墙钟预算是 30 分钟（`FULL_SUITE_TIMEOUT_MS`），
-          # stage 预算必须**大于**它，否则先被平台掐的是 stage，而那一刀不带
-          # 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`）。历史读数 827s
-          # （`cnb-eus-1k5058g8l`，755 文件全量绿）—— 45m 给的是安静机器上的三倍余量。
-          timeout: 45m
-        # 入口是**跑法脚本**（ISSUE #1979 的口径）：
-        # 裸 `pnpm run build` 会让这一步的绿只落在日志里、`scripts/.artifact-freshness.json`
-        # 一个字不变。外面这一层（`ci-daily-build.mjs`）多出来的只有事件身份与镜像读数，
-        # 判据与记账仍然是 `artifact-run.mjs` 那一份。
-        - name: 每日生产构建
-          # 控制台编码先钉住（头注第 6 条 / `ci-cp936-exit.mjs`），与其余每一格同形。
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs
-          # 30m：这一格跑的就是 `next build` + 数产物 + 冒烟。实测 118s
-          # （`cnb-eus-1k5058g8l`）/ 131.0s（`cnb-ln5-1k540cfn1`），而 `next build` 在冷
-          # 节点上比读数慢得多，但真挂死必须早报 —— 一天的预算只有这一条，卡满 2h 墙钟
-          # 等于当天这一跑没有结论。与 `artifact-run.mjs` 的 `ARTIFACT_TIMEOUT_MS` 同量级。
-          # ⚠️ 它**没有并发旋钮**，这是刻意的（ISSUE #1993 / 规范 §13.5.21）：`next build`
-          # 的 worker 数由构建器自己按机器定，没有一个「按核数收敛」的键；`NODE_OPTIONS`
-          # 那类改的是内存上限、不是并发 —— 拿它冒充降载就是换一个东西。这条路径上
-          # **唯一真能控负载**的手段是「别让两条流水线同时压同一台机」
-          # （`lock.cancel-in-progress` + 按 PR 分锁，见 §13.5.3.10）。
-          timeout: 30m
-        # ── 每日全量 E2E 的前提格：浏览器 ──────────────────────────────────
-        # 与 PR 那格 `浏览器安装` 同一份实现（`ci-toolchain-selfcheck.mjs --playwright-only`），
-        # 所以**两行 env 也必须一起带**：下载根与连接超时是那两次读数换来的
-        # （`cnb-gt1-1k513ill4` 起），只镜像命令行不镜像 env 时，「Playwright 换版本的那个
-        # 早上」定时那一跑会从默认根去取那 120 MiB —— 而默认根在这台节点上取不到，
-        # 红只在第二天 04:00 出现。镜像判据现在两处都比（命令行 + `env` 的赋值行）。
-        # 幂等：落点已有那一件时这一格是 1~5s（实测 `cnb-cdt-1k51s6mf1`）。
-        - name: 每日浏览器安装
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
-          env:
-            PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
-            PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-          timeout: 20m
-        # ── 全量 E2E（每天一次；这一格是 `FRESHNESS_TRACKS.e2e` 的执行者）──────
-        #
-        # 为什么要在每日档跑**整档**：本地那一层从 2026-10-19 起不再要求自证（`ciStage`
-        # 那一栏，规范 §11.8 / §13.5.23），而 PR 上的 `E2E 关键流程` 只跑 `@critical` 子集 ——
-        # `isWholeTrackRun` 明写子集**不构成整档凭证**。没有这一格，「80 条 spec 今天能不能
-        # 全过」就从一台有人推代码才判得出来的机器，变成一个谁都不判的空白。
-        #
-        # ⚠️ **不许带任何收窄参数**（`--grep` / 指到单个 spec）：带了就会**绿着不记账**，
-        #   而日志与账面看起来与真跑过一模一样 —— 那正是这一族最坏的静默形态。
-        #   判据把这一条钉在 `script` 上（只扫命令行，不扫注释：注释里正当地要写这句话）。
-        #
-        # 跑法：`e2e-run.mjs` 自己起 webServer（`pnpm dev`，零 `PNPM_START` ⇒ 不依赖构建产物，
-        #   这一格因此与 `每日生产构建` **各自独立**：构建坏了不影响端到端链路的结论）。
-        # 45m：本地整档是十几分钟量级，而节点上是冷工作区 + 现场编译；与 `每日单元测试`
-        #   同一档预算口径（卡死要早报，一天只有这一跑）。
-        - name: 每日全量E2E
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs
-          # ⚠️ 这一行 env 是**产物前提的声明**，不是调档偏好：webServer 起的是 `pnpm start`，
-          # 而 `.next` 里那份产物来自排在前面的 `每日生产构建`（同一分支的 stage 共享工作区）。
-          # 旧形态下这件事靠 `playwright.config.ts` 里那句 `CI || PNPM_START` 推断，而它把
-          # 「是不是 CI」与「有没有产物」绑成了一件 —— PR 那条撤掉构建之后就是这么红的
-          # （`cnb-ob4-1k5828a36`：`Could not find a production build` ⇒ webServer 180s 超时）。
-          # 现在写在一句话里，顺序判据也钉住「`每日生产构建` 必须排在这一格之前」。
-          env:
-            COMFY_E2E_SERVER: start
-          timeout: 45m
+      stages: *daily_gates
+
+  # ── 手动触发那一条：与 04:00 那一跑**同一份七格**（按钮在 `.cnb/web_trigger.yml`）──
+  #
+  # 为什么要有它：每日档回答的是「master 的 HEAD 今天行不行」，而**想知道答案的人不该
+  # 等到早上四点** —— 刚合完一笔碰构建链的改动、或夜里那次红的东西修好了想立刻复验时，
+  # 手点一下就有结论。它与定时那一条跑的是同一份 `*daily_gates`（见上面那个锚点的理由），
+  # 所以这里不需要第二份 stage 清单，也不需要第二条 `*_GATES` 环境变量。
+  #
+  # ⚠️ 两件事仍然不同，别把它们读成一件事：
+  #   · **执行身份**：定时那一跑是「最后改这份配置并推送的人」（官方负责人机制），
+  #     手动这一跑是**按按钮的那个人** —— 红了先说清是谁发起的，再按「上一次绿的构建」
+  #     取 master 的提交区间定位（同 `ci-daily-build.mjs` 头注那条）。
+  #   · **取的是哪份代码**：两条都取**按下时刻的 master HEAD**。手点不是「重跑历史那一跑」，
+  #     而是「以现在这份 master 再跑一遍」—— 想复现夜里那次红的现场，得先确认 master
+  #     在那之后没动过。
+  #   · `lock` 与定时那一条**同一个 key**（`<<: *common`），所以两条不会同时在同一台机上
+  #     压一遍七格：04:00 那一跑还在跑时手点，会被新一跑掐掉旧的一跑（`cancel-in-progress`）。
+  web_trigger_daily:
+    - <<: *common
+      name: 每日档（手动触发）
+      stages: *daily_gates

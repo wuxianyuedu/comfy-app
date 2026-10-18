@@ -3733,20 +3733,46 @@ Error: Timed out waiting 180000ms from config.webServer.
 **形态**（`.cnb.yml`，判据在 `tests/no-platform-ci-config.test.ts`）：
 
 ```yaml
+# 七格只写一份，两个触发口共用同一个锚点
+.daily-gates:
+  &daily_gates # 名单是 env.COMFYAPP_CI_DAILY_GATES（判据双向核对）：四格前提 + 三档重档
+  - name: 每日安装依赖 # script 与 PR 那格逐字相同（镜像判据连 env 一起钉）
+  - name: 每日 Python 可用性
+  - name: 每日同步数据库表结构
+  - name: 每日单元测试 # node scripts/full-suite-run.mjs，timeout: 45m
+  - name: 每日生产构建 # node scripts/ci-daily-build.mjs，timeout: 30m
+  - name: 每日浏览器安装 # 与 PR 那格同 command + 同 env；缺件要在便宜位置报
+  - name: 每日全量E2E # node scripts/e2e-run.mjs，timeout: 45m，不带 --grep，env: COMFY_E2E_SERVER=start
+
 master:
   "crontab: 0 4 * * *":
     - <<: *common
       name: 每日生产构建
-      stages:
-        # 四格前提 + 三档重档；名单是 env.COMFYAPP_CI_DAILY_GATES（判据双向核对）
-        - name: 每日安装依赖 # script 与 PR 那格逐字相同（镜像判据钉）
-        - name: 每日 Python 可用性
-        - name: 每日同步数据库表结构
-        - name: 每日单元测试 # node scripts/full-suite-run.mjs，timeout: 45m
-        - name: 每日生产构建 # node scripts/ci-daily-build.mjs，timeout: 30m
-        - name: 每日浏览器安装 # 与 PR 那格同 command + 同 env；缺件要在便宜位置报
-        - name: 每日全量E2E # node scripts/e2e-run.mjs，timeout: 45m，**不带 --grep**
+      stages: *daily_gates
+  # 同一个锚点的第二个触发口（按钮在 `.cnb/web_trigger.yml`）
+  web_trigger_daily:
+    - <<: *common
+      name: 每日档（手动触发）
+      stages: *daily_gates
 ```
+
+**每日档还要能手点**（2026-10-19 追加的要求：「每日档除了指定时间触发，还需要可手动触发」）。
+这件事的全部理由是**延迟**：撤掉 PR 那一条之后，「master 行不行」这个答案最晚要等到第二天
+04:00 —— 而刚合完一笔碰构建链的改动、或夜里那次红修好了想立刻复验的人，不该被这个延迟按住。
+四件配套的事实，每件都有判据：
+
+| 事实                           | 落成                                                                                                           | 判据                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 两个触发口跑的是**同一件事**   | 两条都 `stages: *daily_gates`（同一个锚点，不复制清单）                                                        | 两边各自解析出的名单必须等于 `COMFYAPP_CI_DAILY_GATES`                       |
+| 按钮与事件键**两两对上**       | `.cnb/web_trigger.yml` 的 `event:` ⇄ `.cnb.yml` 的 `web_trigger_*:` 键                                         | 双向：多一边就是「按了没反应」或「永远没人按」，两种都不会让另一边自己变红   |
+| 只在 master 上能点             | `reg: ^master$`（`reg` 是**正则**，写 `master` 会前缀匹配到 `master-x` 那种分支，按下去跑的是那条分支的 HEAD） | 同一组里锚定形状那条                                                         |
+| 仍然在**同一台自托管节点**上跑 | 两条都 `<<: *common`（`runner.namespace` + `tags` + `lock` 全在锚点里）                                        | 锚点引用数 = 流水线数（四个事件各一次）；少一条 = 那条悄悄回落到计费的平台池 |
+
+两处仍然不同，别把「手点」读成「重跑夜里那一跑」：**执行身份**是按按钮的人（定时那条是
+配置持有者），**取的是按下那一刻的 master HEAD**。夜里那次红修好后手点，验的是「修完的
+master 行不行」，不是「复现夜里那一跑」—— 要复现得先确认 master 在这中间没被别人推过。
+`lock` 与定时那条同 key：04:00 那一跑还在跑时手点，新的会把旧的掐掉（`cancel-in-progress`），
+不会出现两条重档同时压同一台机。
 
 四件互相独立的事实，缺任一件都**静默失效**（平台不报错，只是不按人想的那样跑）：
 
@@ -3759,9 +3785,10 @@ master:
    而配置看起来仍像一条正常的定时任务。挑 `0 4`：离有人开工还有几个小时（红了有人
    上班时看见），又避开整点那一档（最小调度间隔 5 分钟，整点是全平台最挤的位置）。
 4. **每一格都是跑法脚本**。#2010 立这条时是「只跑一格」；#2018 加上全量单测、
-   2026-10-18 把构建也只剩这一条之后，它是「三格前提 + 两档重档」，而**前提那三格不是
+   2026-10-19 加上构建与全量 E2E 之后，它是「四格前提 + 三档重档」，而**前提那几格不是
    装饰**：每次构建都是全新 job 目录、`node_modules` 恒不在场（§13.5.3.4.2 形态①），
-   缺了它们这一条会在 04:00 以「找不到 next」的形态红 —— 一天只红这一次，等于当天没结论。
+   缺了它们这一条会在 04:00 以「找不到 next / 连不上库 / Executable doesn't exist」的形态红
+   —— 一天只红这一次，等于当天没结论。**手点那一口不改变这一点**：同一份清单，缺哪格都一样红。
    `node scripts/ci-daily-build.mjs` 就是 `artifact-run.mjs`（同一条 `pnpm run build` 链、
    同一份记账）外面一层**只属于定时那一跑**的壳：打事件身份（`CNB_EVENT` / `CNB_BUILD_ID` /
    执行身份）、打一次工具链镜像读数（`ci-image-identity.mjs`，读数、恒退 0）、把退出码
