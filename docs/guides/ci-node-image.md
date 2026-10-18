@@ -45,15 +45,30 @@ Job 级 `image:` 是另一档，见 §13.5.3.4.1.3）。所以「节点上该
 # 0) 先看一眼它打算怎么做（版本号全部现读，不给版本时它会去镜像源取一版）
 node scripts/ci-image-plan.mjs --node-version v24.22.0
 
-# 1) 造镜像（在一台有 docker 的机器上；`-f -` 直接吃生成的 Dockerfile）
+# 1) 造镜像（在一台有 docker 的机器上；`-f -` 直接吃 stdin 喂进来的 Dockerfile）
 node scripts/ci-image-plan.mjs --dockerfile --node-version v24.22.0 |
-  docker build -t comfyapp-ci:ci-node-v1 -
+  docker build --build-arg NODE_VERSION=v24.22.0 -t comfyapp-ci:ci-node-v1 -f - .
 
 # 2) 装进宿主机（`docker cp` 拷出来，不挂载宿主目录）
 docker create --name comfyapp-ci-ci-node-v1 comfyapp-ci:ci-node-v1 true
 docker cp comfyapp-ci-ci-node-v1:/ — > /tmp/comfyapp-ci-rootfs.tar
 docker rm -f comfyapp-ci-ci-node-v1
 ```
+
+> **`--dockerfile` 只打 stdout，不写文件。** 想看落盘的那一份用 `--write`
+> （写出 `docker/ci-node.Dockerfile`，**别提交进仓库** —— 版本号全部现读，它是一次性
+> 构建输入）：
+>
+> ```powershell
+> node scripts/ci-image-plan.mjs --write --node-version v24.22.0
+> # → [ci-image-plan] 已写出 docker/ci-node.Dockerfile（comfyapp-ci:ci-node-v1）
+> ```
+>
+> 上面第 1 条那句提示也印在正文开头（Dockerfile 的 `#` 注释行，两种消费方式都不受伤）。
+>
+> **别写 `-f <(…)`**：进程替换是 POSIX shell 的语法，PowerShell / cmd 会把 `<(` 当成一个
+> 文件名，报 `The system cannot find the file specified` —— 那条红读起来像「脚本没产出
+> 文件」，实际是这两句根本不是同一件事。管道喂 stdin 在两个 shell 里是同一个写法。
 
 > `node scripts/ci-image-plan.mjs` 的完整输出里还带着 `docker save`（跨机搬运）与
 > `docker image inspect`（取 digest）两条，照抄即可 —— 那一段是**唯一出处**，别手写第二份。
