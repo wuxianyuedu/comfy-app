@@ -215,6 +215,21 @@ export function fmtAge(ageS) {
 }
 
 /**
+ * 对照行里「这一次是哪一台 job」的写法：**父目录名 + 最后一段**，不是只取 basename。
+ *
+ * 第二跑读数当场暴露的缺陷：平台把每个 job 都检出成 `…\\<流水线 id>~<随机段>\\workspace`，
+ * 最后一段**恒等于 `workspace`** —— 只取 basename 时两跑并排就是 `workspace / workspace`，
+ * 而这一行的全部用处正是让人看出「这是两个不同目录」。有区分度的那一半在父目录上
+ * （`cnb-f3v-1k57a1o1l-001~c5g` vs `cnb-f5b-1k57bgqol-001~ttf`），所以那里取两段。
+ *
+ * @param {string} cwd
+ */
+export function jobLabel(cwd) {
+  const p = String(cwd);
+  return path.join(path.basename(path.dirname(p)), path.basename(p));
+}
+
+/**
  * 一个目录的在场性与「它是多久以前出现的」。
  *
  * `birthtimeMs` 在部分文件系统上是 0，那时退回 `mtimeMs` 并如实标出用的哪一个 ——
@@ -362,7 +377,7 @@ export function reuseVerdict(history, current) {
       "    那正是这条路此前被判死的那一格（规范 §13.5.3.4.2），不是风格问题。",
       `  对照：${history
         .slice(-6)
-        .map((e) => path.basename(String(e.cwd)))
+        .map((e) => jobLabel(e.cwd))
         .join(" / ")}`,
     ];
   }
@@ -498,7 +513,7 @@ export function workspaceProbeLines(io = {}) {
   all.slice(-6).forEach((e, i, arr) => {
     const self = i === arr.length - 1 ? "  ← 本次" : "";
     lines.push(
-      `  ${new Date(Number(e.atMs)).toISOString()}  ${path.basename(String(e.cwd))}` +
+      `  ${new Date(Number(e.atMs)).toISOString()}  ${jobLabel(e.cwd)}` +
         `  HEAD ${String(e.head ?? "-").slice(0, 8)}  .git ${fmtAge(e.gitAgeS)} 前${self}`,
     );
   });

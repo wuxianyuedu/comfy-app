@@ -9,6 +9,7 @@ import {
   dirFact,
   envReadout,
   fmtAge,
+  jobLabel,
   reuseVerdict,
   workspaceProbeLines,
 } from "../scripts/ci-workspace-probe.mjs";
@@ -379,6 +380,22 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
       expect(text).not.toContain("coverage");
       expect(text).not.toContain("playwright-report");
     });
+  });
+
+  it("对照行取得出「是哪一台 job」：只取 basename 时两跑都叫 workspace，那一行等于没读", () => {
+    const run1 = path.join(
+      os.tmpdir(),
+      "cnb-f3v-1k57a1o1l-001~c5g",
+      "workspace",
+    );
+    const run2 = path.join(
+      os.tmpdir(),
+      "cnb-f5b-1k57bgqol-001~ttf",
+      "workspace",
+    );
+    expect(jobLabel(run1)).not.toBe(jobLabel(run2));
+    expect(jobLabel(run1)).toContain("cnb-f3v-1k57a1o1l-001~c5g");
+    expect(path.basename(run1)).toBe(path.basename(run2));
   });
 
   it("每一支会进日志的文案都能以 CP936 出口（⇒ 与 ⚠️ 实测被打成 ?，正是这一档最该读的那几行）", () => {
