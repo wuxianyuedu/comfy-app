@@ -8,11 +8,20 @@
  * （`Prepare` ≈31.5s，规范 §13.5.20 那张预算表），而它背后的**机制**从来没有读数：
  * 平台在宿主机上到底是
  *
- *   ① 每次新建一个 job 目录、`git init` + 全量 `fetch`（那么 31.5s 是「搬 130 MiB
- *      pack」的钱，想省只能让对象库常驻）；还是
- *   ② 复用同一个目录、只 `fetch` 增量（那么 31.5s 里大头是 checkout 5121 个文件 +
+ *   ① 每次新建一个 job 目录、`git init` + 全量 `fetch`（那 31.5s 是「从零搬对象库」的钱，
+ *      想省只能让对象库常驻）；还是
+ *   ② 复用同一个目录、只 `fetch` 增量（那 31.5s 里大头是 checkout 五千多个文件落盘 +
  *      Windows Defender 逐文件扫，而对象库已经在地上）；还是
  *   ③ 目录复用但 `.git` 被重建（省下的只有目录那半格）。
+ *
+ * **第一跑读数（`cnb-f3v-1k57a1o1l`，PR #2016）已经把这一格定成 ①**，而且不需要对照：
+ * 工作区路径本身就带着本次流水线的 id —— `…\runner\<repoId>\cnb-f3v-1k57a1o1l-001~c5g\
+ * workspace`，目录名按流水线生成 ⇒ 每次构建一个新目录；`.git` 与 `.git/FETCH_HEAD` 都在
+ * 59s / 58s 前出现（与 `Prepare` 那 35.5s 对得上），HEAD detached、`refs/heads` 零条、
+ * 浅克隆 false、对象库 57168 KiB（**≈56 MiB，不是开发机上那 130 MiB 的全量 —— 那一份
+ * 含 99 个 pack、22178 个松散对象与所有本地分支，CI 取的是协商后的单 ref**）。同一跑里
+ * `node_modules` / `.next` / `coverage` / `playwright-report` **四个都不在场** ⇒ 安装与
+ * 生产构建都从冷态起，那两笔（59s / 131s）比克隆本身大。
  *
  * 这三种形态各有各的出路，而**现在没有任何一处读数能把它们分开** —— 于是「要不要上
  * 平台那个 `git.enable: false` 开关、自己 fetch 到一份常驻目录」这个问题只能靠猜。
@@ -344,11 +353,13 @@ export function reuseVerdict(history, current) {
   if (sameDir.length === 0) {
     return [
       `结论·①每次新目录：此前 ${history.length} 次没有一个落在本次这个目录上`,
-      "  ⇒ 对象库每次从零搬起；要省这一跳，只有「平台不检出 + 自己 fetch 到一份常驻目录」",
+      "  → 对象库每次从零搬起；要省这一跳，只有「平台不检出 + 自己 fetch 到一份常驻目录」",
       "    （平台侧那个开关是 Pipeline 级的 `git.enable: false`，官方语义「指定是否拉取代码」）",
-      "  ⚠️ 走那条路要**同批**补一条会红的断言：`git rev-parse HEAD` 必须等于本次事件给的",
-      "    commit。少了它，「这一跑跑的是哪份源码」就没有任何执行者 —— 那正是这条路此前被",
-      "    判死的那一格（规范 §13.5.3.4.2），不是风格问题。",
+      "  ※ 走那条路要**同批**补一条会红的断言：`git rev-parse HEAD` 必须等于本次事件检出的",
+      "    那个 sha。变量要对着 `CNB_PULL_REQUEST_MERGE_SHA` 判 —— 第一跑实测 HEAD 是 merge",
+      "    提交（d399bd34…），而 `CNB_COMMIT` 给的是源分支 head（f2325166…），两者不同：拿错",
+      "    变量会把绿的一跑判成红。少了这条断言，「这一跑跑的是哪份源码」就没有任何执行者 ——",
+      "    那正是这条路此前被判死的那一格（规范 §13.5.3.4.2），不是风格问题。",
       `  对照：${history
         .slice(-6)
         .map((e) => path.basename(String(e.cwd)))
@@ -357,19 +368,19 @@ export function reuseVerdict(history, current) {
   }
   /* `sameDir` 非空由上面那个分支保证，但下标取值的类型仍是 `ProbeEntry | undefined`。
    * 兜到 `current` 而不是断言非空：真走到那一支就是「读不出对照」，那时报②（同目录、
-   * 对象库没变 ⇒ 别动检出层）比编一个③出来更不打扰人。 */
+   * 对象库没变 → 别动检出层）比编一个③出来更不打扰人。 */
   const last = sameDir.at(-1) ?? current;
   if (Number(last.gitBornMs) === Number(current.gitBornMs)) {
     return [
       `结论·②同目录且 .git 没被重建（同一份对象库活了 ${sameDir.length + 1} 次构建）`,
-      "  ⇒ 平台已经在做增量 fetch；那笔克隆时间的大头不在网络搬包，而在 checkout 落盘",
-      "  ⇒ 那么 `git.enable` 这一档动不了真正的成本，别为它改检出层",
+      "  → 平台已经在做增量 fetch；那笔克隆时间的大头不在网络搬包，而在 checkout 落盘",
+      "  → 那么 `git.enable` 这一档动不了真正的成本，别为它改检出层",
     ];
   }
   return [
     `结论·③同目录但 .git 被重建（本次 .git 现于 ${fmtAge(current.gitAgeS)} 前，` +
       `上一次同目录那跑现于 ${fmtAge(last.gitAgeS)} 前）`,
-    "  ⇒ 目录活着、对象库每次从零 —— 常驻目录已经有一半，缺的那一半是别把 .git 清掉",
+    "  → 目录活着、对象库每次从零 —— 常驻目录已经有一半，缺的那一半是别把 .git 清掉",
   ];
 }
 
@@ -387,13 +398,13 @@ export function cacheVerdict(facts) {
   const lines = [];
   lines.push(
     facts.node_modules?.present
-      ? `缓存侧·node_modules 在场（${fmtAge(facts.node_modules.ageS)} 前出现）⇒ 这一跑的安装不是从零起`
-      : "缓存侧·node_modules 不在场 ⇒ 这一跑的安装是从零装起，那一档是净成本",
+      ? `缓存侧·node_modules 在场（${fmtAge(facts.node_modules.ageS)} 前出现）→ 这一跑的安装不是从零起`
+      : "缓存侧·node_modules 不在场 → 这一跑的安装是从零装起，那一档是净成本",
   );
   lines.push(
     facts[".next"]?.present
-      ? `缓存侧·.next 在场（${fmtAge(facts[".next"].ageS)} 前出现）⇒ 生产构建带着上一轮的产物图`
-      : "缓存侧·.next 不在场 ⇒ 生产构建冷缓存起，那一档与克隆同一笔税（工作区不活）",
+      ? `缓存侧·.next 在场（${fmtAge(facts[".next"].ageS)} 前出现）→ 生产构建带着上一轮的产物图`
+      : "缓存侧·.next 不在场 → 生产构建冷缓存起，那一档与克隆同一笔税（工作区不活）",
   );
   return lines;
 }

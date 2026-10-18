@@ -18,6 +18,31 @@ const CWD = path.join(os.tmpdir(), "probe-ws");
 const LEDGER = path.join(os.tmpdir(), "probe-ledger.json");
 const NOW = 1_800_000_000_000;
 
+/**
+ * 会被 CP936 吃掉的码位 —— 实测来源是 PowerShell 的 `[Text.Encoding]::GetEncoding(936)`
+ * 对本脚本全文做「编码 → 解码」往返，落不回原形的就这三枚（`⇒` / `⚠` / 变体选择符）。
+ *
+ * **为什么判据用名单，而不是「拿 GBK 编一遍看坏没坏」**：Node 没有 GBK **编码器**
+ * （`TextEncoder("gbk")` 静默落回 UTF-8 —— 那正是 `scripts/ci-cp936-exit.mjs` 存在的理由），
+ * 而用例在任何宿主上都要给同一个答案，所以不能去起 PowerShell。
+ *
+ * **怎么扩**：往这一档的打印文案里加生僻符号时，先跑一次那个往返（`.cnb.yml` 头注第 6 条
+ * 记着整条链为什么是 CP936），把新的坏字符补进这里。这条判据要挡的病很具体：**红的时候
+ * 最该读的那几行正好是非 ASCII**，而 `⇒` 被打成 `?` 那次就是这一档自己的下一动作读不出来。
+ */
+const CP936_UNENCODABLE = [0x21d2, 0x26a0, 0xfe0f];
+
+function expectCp936Safe(lines: string[]) {
+  const text = lines.join("\n");
+  const hits = CP936_UNENCODABLE.filter((code) =>
+    text.includes(String.fromCharCode(code)),
+  ).map((code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`);
+  expect(
+    hits,
+    "这些码位在 CP936 里没有对应字节，平台日志会把它们打成 ? —— 读数读不出等于没有读数",
+  ).toEqual([]);
+}
+
 /** 一次「像 CI 那样的检出」：detached HEAD、没有 refs/heads、没有 remote、单 pack。 */
 const GIT_FACTS: Record<string, string> = {
   "rev-parse HEAD": "a".repeat(40),
@@ -354,6 +379,37 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
       expect(text).not.toContain("coverage");
       expect(text).not.toContain("playwright-report");
     });
+  });
+
+  it("每一支会进日志的文案都能以 CP936 出口（⇒ 与 ⚠️ 实测被打成 ?，正是这一档最该读的那几行）", () => {
+    const branches = [
+      ...reuseVerdict([], entryOf()),
+      ...reuseVerdict(
+        [entryOf({ cwd: path.join(os.tmpdir(), "job-a") })],
+        entryOf(),
+      ),
+      ...reuseVerdict(
+        [entryOf({ gitBornMs: 1000 })],
+        entryOf({ gitBornMs: 1000 }),
+      ),
+      ...reuseVerdict(
+        [entryOf({ gitBornMs: 7 })],
+        entryOf({ gitBornMs: 1000 }),
+      ),
+      ...cacheVerdict({
+        ...baseFacts,
+        node_modules: factOf(false),
+        ".next": factOf(false),
+      }),
+      ...cacheVerdict({
+        ...baseFacts,
+        node_modules: factOf(true, 20),
+        ".next": factOf(true, 10),
+      }),
+      ...envReadout({ CNB_TOKEN: "t", CNB_COMMIT: "c" }),
+      ...probe(warmTree()).lines,
+    ];
+    expectCp936Safe(branches);
   });
 
   it("年龄读数分档：CI 上要看的量级留在秒，开发检出那种几十岁不退化成「0d」", () => {
