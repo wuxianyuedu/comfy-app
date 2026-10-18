@@ -34,7 +34,6 @@ const HISTORY_TASK_DASHED = /\bT\d{1,3}-\d{1,3}\b/;
 const HISTORY_TASK_BARE = /\bT\d{1,3}\b/;
 const HISTORY_TASK_REF_CONTEXT = /反模式|§/;
 
-
 // 块注释的闭合标记用**正则字面量**表达,而不写字符串:源码里因此不出现连续的
 // 块注释闭合标记 —— 否则 `tests/gate-hint-targets-exist.test.ts` 的简易
 // `stripComments` 会把它当成真的闭合(它是非贪婪匹配),让后面的字符串字面量
@@ -379,7 +378,6 @@ const DOMAIN_EXEMPT = new Set([
  * 的缺口(文件不在 src/ 根,警告与代理一起消失,构建期不报任何错)。 */
 const R2_EXEMPT = new Set(["src/proxy.ts"]);
 
-
 // Next.js App Router 保留文件名(框架强制小写,不可改名)——src/app 下豁免
 const NEXT_RESERVED = new Set([
   "page",
@@ -403,6 +401,36 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
 // 只排除「不可能放仓库入口」的目录:依赖、构建产物、被 gitignore 的打包输出、
 // 以及 target(可能包含第三方 Rust 产物)。用相对路径前缀判断,避免按目录名
 // 误伤 tools/shadcn-registry 这类同名但受规范的目录。
+/**
+ * R1–R14 的**触发面**：这一刀扫的目录与文件 —— `ifModify` globs 的唯一出处。
+ *
+ * 干什么用：平台侧 `.cnb.yml` 的 `文件结构硬规则` 带一组 `ifModify` —— 本次改动
+ * 一处都不落在这些 glob 里时，这一步不执行（与本地钩子
+ * `skipUnlessStagedTouches()` 同义）。而这组 glob 与**这里的扫描根**必须是同一件事，
+ * 否则「收窄了」与「扫描面变了」会各自漂、且谁都不会响。
+ *
+ * 于是它由两段拼成，两段都是**从判据自己的读取点机械导出的**：
+ *
+ *   ① `SCAN_ROOTS` —— 脚本真的遍历的那几个根；另加根目录本身（R9 的两形态与
+ *      R7/R8 的第一层就扫在 `"."`）。按目录写成 `<dir>/**`，根目录写成
+ *      `ROOT_SCRIPT_GLOBS`（**点名的扩展名**，不是 `*`：根目录里还有 README、
+ *      配置、`.gitignore` 那些，它们一个都不参与 R7/R8 的判据）；
+ *   ② 导出给 `scripts/ci-incremental-gates.mjs`，由那边的登记表原样用在
+ *      `ifModify` 上 —— **别在 YAML 里手抄第二份**。
+ *
+ * ⚠️ 新增一条以别的目录为扫描根的规则时，同批回来加一行（这是 R 系列唯一会让
+ * 「改了那个目录却不触发本步」的失效面）。
+ */
+const SCAN_ROOTS = ["src", "scripts", "tools"];
+
+/** 根目录里的判据按**扩展名**触发（见上面 ①）。 */
+const ROOT_SCRIPT_GLOBS = ["*.ps1", "*.bat", "*.cmd", "*.vbs", "*.ts", "*.tsx"];
+
+/** `ifModify` 形态的触发面（`ci-incremental-gates.mjs` 直接用它）。 */
+const TRIGGER_GLOBS = [
+  ...ROOT_SCRIPT_GLOBS,
+  ...SCAN_ROOTS.map((dir) => `${dir}/**`),
+];
 const SCAN_EXCLUDED = [
   "node_modules/",
   ".git/",
@@ -461,4 +489,7 @@ module.exports = {
   CONVENTION_EXEMPT,
   SCAN_EXCLUDED,
   GIT_TRANSIENT_ROOT_FILES,
+  SCAN_ROOTS,
+  ROOT_SCRIPT_GLOBS,
+  TRIGGER_GLOBS,
 };

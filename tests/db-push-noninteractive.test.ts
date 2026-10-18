@@ -93,9 +93,75 @@ describe("pnpm db:push 非交互可用", () => {
         timeout: 120_000,
       },
     );
-    expect(result.status, "建不出库时必须非零退出（旧实现此处 exit 0）").not.toBe(0);
+    expect(
+      result.status,
+      "建不出库时必须非零退出（旧实现此处 exit 0）",
+    ).not.toBe(0);
     expect(result.stderr).toContain("db:push");
   }, 150_000);
+});
+
+describe("db:push 的空转档：库已经是这一版 schema 建的就不再起 drizzle", () => {
+  /**
+   * 平台侧每条 PR 都会跑 `同步数据库表结构`，而绝大多数 PR 一行 schema 都没碰 ——
+   * 那一趟 drizzle 只会回一句 `No changes detected`，却要十几秒（CI 节点上更久）。
+   *
+   * 判据收在 `probeSchemaFresh()`（只读、毫秒级），两种形态必须都是**照跑**：
+   *   · 指纹对不上 ⇒ 不知道要不要改，交给 drizzle 说；
+   *   · 判据失效（库不在 / 读不到指纹 / 读不到 schema 源）⇒ 「拿不到结论」不是
+   *     「已经一致」，不许据此跳过。
+   * 用例真造 sqlite 文件来驱动它，不 mock。
+   */
+  it("库里登记的指纹与源码一致 ⇒ synced（空转档的判据）", async () => {
+    const state = await import("../scripts/db-schema-state.mjs");
+    const url = `file:${dbFile}`;
+    /* 造一份「schema 源目录」：指纹算的是那份目录里 .ts 的内容哈希，与仓库
+     * 自己的 src/server/db 无关，所以这里能用最小夹具把两侧对齐。 */
+    const schemaDir = path.join(tmp, "src", "server", "db");
+    fs.mkdirSync(schemaDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(schemaDir, "schema.ts"),
+      "export const t = 1;\n",
+    );
+    createSchema(dbFile);
+
+    /* 表在、但库里从没登记过指纹（\`PRAGMA user_version\` 读出来是 0）⇒ 判据
+     * 失效那一档：没有基线就不构成「库落后了」的结论，所以不跳。 */
+    expect(state.probeSchemaFresh(tmp, url).state).toBe("unknown");
+    const fingerprint = state.schemaFingerprint(tmp);
+    expect(fingerprint).not.toBeNull();
+    state.writeSchemaFingerprint(tmp, url, fingerprint!);
+    expect(state.probeSchemaFresh(tmp, url).state).toBe("synced");
+
+    // 指纹对不上 ⇒ outdated（照跑，由 drizzle 说要不要改）
+    state.writeSchemaFingerprint(tmp, url, fingerprint! + 1);
+    expect(state.probeSchemaFresh(tmp, url).state).toBe("outdated");
+  });
+
+  it("库不在 / 空库 / 读不到 schema 源 ⇒ 都是 unknown（不据此跳过）", async () => {
+    const state = await import("../scripts/db-schema-state.mjs");
+    const url = `file:${dbFile}`;
+    // 库文件都不在
+    expect(state.probeSchemaFresh(tmp, url).state).toBe("unknown");
+    // 库在但一张表都没有（等价于「从没建过」）
+    fs.writeFileSync(dbFile, "");
+    expect(state.probeSchemaFresh(tmp, url).state).toBe("unknown");
+    // 表在、库里有指纹，但读不到 schema 源
+    createSchema(dbFile);
+    state.writeSchemaFingerprint(tmp, url, 12345);
+    expect(state.probeSchemaFresh(tmp, url).state).toBe("unknown");
+  });
+
+  it("db-push 的入口用的是共享判据（不是在本文件里另判一次指纹）", () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "db-push.mjs"),
+      "utf8",
+    );
+    expect(src).toContain("probeSchemaFresh");
+    expect(src).toContain('fresh.state === "synced"');
+    // 判据失效时不许跳：只认 "synced" 这一档（写成 `!== "outdated"` 会把 unknown 也放过）。
+    expect(src).not.toMatch(/fresh\.state\s*!==\s*"outdated"/);
+  });
 });
 
 describe("探测判据跨实现同源", () => {
@@ -111,7 +177,9 @@ describe("探测判据跨实现同源", () => {
     expect(m, "TS 侧必须保留单一定义的 SENTINEL_TABLE").toBeTruthy();
     expect((mjs as { SENTINEL_TABLE: string }).SENTINEL_TABLE).toBe(m![1]);
     // 探针名也要对得上，否则「在不在」的语义无从对照。
-    expect(typeof (ts as { probeSchemaSync: unknown }).probeSchemaSync).toBe("function");
+    expect(typeof (ts as { probeSchemaSync: unknown }).probeSchemaSync).toBe(
+      "function",
+    );
   });
 
   it("同一批真实库状态下，两份实现给出同一结论", async () => {
@@ -161,7 +229,10 @@ describe("构建期缺 DATABASE_URL 不得把构建打死", () => {
     // 该模块在构建期模块图上、且会被 code frame 渲染，必须保持纯 ASCII
     //（否则下一个踩中的偏移会把 next build 用一个指不到原因的 Rust panic 打死）。
     const nonAscii = [...src].filter((c) => c.charCodeAt(0) > 127).length;
-    expect(nonAscii, "src/server/db.ts 必须保持纯 ASCII（AGENTS 硬规则 15）").toBe(0);
+    expect(
+      nonAscii,
+      "src/server/db.ts 必须保持纯 ASCII（AGENTS 硬规则 15）",
+    ).toBe(0);
   });
 
   it("db-push 与 db.ts 认同一套默认库文件锚点", () => {

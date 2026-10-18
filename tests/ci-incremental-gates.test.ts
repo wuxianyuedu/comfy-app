@@ -31,6 +31,9 @@
  *
  * 口径与边界见规范 §13.5.18。
  */
+import fs from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -41,6 +44,7 @@ import {
   readCnbConfig,
 } from "../scripts/ci-incremental-gates.mjs";
 import { matchedInputs } from "../scripts/check-docs-api.cjs";
+import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
 
 const CONFIG = readCnbConfig();
 
@@ -102,7 +106,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "分支守卫",
       "同步数据库表结构",
       "类型检查",
-      "文件结构硬规则",
+      /* ⚠️ `文件结构硬规则` **从这一列挪进登记表了**（ISSUE #2010）：用户点名的
+       * 三格耗时项之一（实测 2~4s，看起来最便宜，但它是每次 PR 都跑的全库遍历）。
+       * 它扫的是**盘上的某一组目录**（`src/` + `scripts/` + `tools/` + 仓库根的
+       * 入口类文件），不是「跨全仓的单一事实源」那类不变量 —— 后者不可收窄的理由是
+       * 「任何一处改动都可能破坏它」，而这里违规只可能出现在扫描面内的文件里。
+       * 触发面由 `file-structure-rules.cjs` 的 `TRIGGER_GLOBS` 机械导出，
+       * 所以「收窄了但扫描面变了」这种漂也会当场红（见文件头最后一条用例）。 */
       "UI/逻辑分离",
       "lib Node-only 声明",
       /* ⚠️ `格式化提交分离` **2026-10-17 从这一列挪出去了**（ISSUE #1993）：它判的是
@@ -198,17 +208,27 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      * 断言它们确实在面外；再把两棵树的样本喂进去，断言它们确实在面内 ——
      * 于是「`IGNORE_GLOBS` 增删目录」这个动作会在这里当场红（要求同批回来看 globs）。 */
     const gate = INCREMENTAL_GATES.find((g) => g.name === "prettier 格式");
-    expect(gate, "登记表里没有「prettier 格式」这一档 —— 它已随 ISSUE #2010 挪到平台侧，"
-      + "却没有登记收窄面 = 每一个 PR 都白付一次全库扫描（或反过来，改了却没人查）").toBeDefined();
+    expect(
+      gate,
+      "登记表里没有「prettier 格式」这一档 —— 它已随 ISSUE #2010 挪到平台侧，" +
+        "却没有登记收窄面 = 每一个 PR 都白付一次全库扫描（或反过来，改了却没人查）",
+    ).toBeDefined();
     expect(gate?.script).toBe("scripts/check-format.cjs");
     /* `["src/**", ".storybook/**"]` 是那两棵树的写法；顺序不判（两棵树之间没有语义）。 */
-    expect([...(gate?.globs ?? [])].sort()).toEqual([".storybook/**", "src/**"]);
+    expect([...(gate?.globs ?? [])].sort()).toEqual([
+      ".storybook/**",
+      "src/**",
+    ]);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fmt = require("../scripts/check-format.cjs") as {
       isScanned: (rel: string) => boolean;
       IGNORE_GLOBS: readonly string[];
     };
-    for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
+    for (const rel of [
+      "src/lib/a.ts",
+      "src/app/b.tsx",
+      ".storybook/preview.tsx",
+    ]) {
       expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);
     }
     /* 反向：`IGNORE_GLOBS` 里每一条都把文件真正剔出扫描面 —— 这一步是自检，
@@ -225,6 +245,43 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
         fmt.isScanned(probe),
         `\`IGNORE_GLOBS\` 里的 ${glob} 没能把 ${probe} 剔出扫描面 —— 判据面与登记表漂了`,
       ).toBe(false);
+    }
+  });
+
+  it("文件结构硬规则的触发面与判据自己的扫描根同源（不是手抄的一份）", () => {
+    /* 这一条抓的漂与上一条同形，但对象是 `check-file-structure.cjs`：
+     * 有人给它加了一个新的扫描根（比如 `e2e/`），而 `.cnb.yml` 的 `ifModify`
+     * **看起来一切正常** —— 后续改动那个目录时这一步一次都不会跑，违规静默漏过。
+     *
+     * 全部用注入样本复算，不靠「读实现」：扫描根下的每一个目录、以及根目录的
+     * 每一种入口扩展名，都要能被 `TRIGGER_GLOBS` 认下来。 */
+    const gate = INCREMENTAL_GATES.find((g) => g.name === "文件结构硬规则");
+    expect(gate, "登记表里没有这一档").toBeDefined();
+    expect(gate?.globs).toEqual(TRIGGER_GLOBS);
+    /* 判据真的遍历每一个扫描根（源码里那一句 `})("<dir>")` / `walk("<dir>")`
+     * 是它的读取点）—— 少了这一半，`SCAN_ROOTS` 写错也不会有东西响。 */
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "check-file-structure.cjs"),
+      "utf8",
+    );
+    for (const dir of SCAN_ROOTS) {
+      /* 三种读取点形态：`})("<dir>")`（IIFE 从它起扫）、`walk("<dir>")`（递归入口）、
+       * 以及 R7/R8 那一趟的 `walkScripts(dir)` —— 它从 `"."` 起递归、`SCAN_EXCLUDED`
+       * 之外全走，于是 `scripts/` 与 `tools/` 也在这一趟里（名字在代码里，不在字符串里，
+       * 所以这一支只认「那趟扫描还在」，不解析它到底走了哪些目录）。 */
+      const walked =
+        src.includes(`})("${dir}")`) ||
+        new RegExp(`(walk\\w*)\\("${dir}"\\)`).test(src) ||
+        (dir !== "src" && src.includes("(function walkScripts(dir) {"));
+      expect(walked, `${dir} 在 SCAN_ROOTS 里，但判据并不遍历它`).toBe(true);
+      expect(TRIGGER_GLOBS).toContain(`${dir}/**`);
+    }
+    /* 根目录那几种扩展名：R7（禁用 .bat/.cmd/.vbs）与 R9（根目录禁 .ps1）都扫在
+     * `"."` 上，所以它们必须都在触发面里 —— 否则「根目录多了一个 .cmd」不会触发判据。 */
+    for (const ext of [".ps1", ".bat", ".cmd", ".vbs", ".ts", ".tsx"]) {
+      expect(TRIGGER_GLOBS, `根目录的 ${ext} 不在触发面里`).toContain(
+        `*${ext}`,
+      );
     }
   });
 

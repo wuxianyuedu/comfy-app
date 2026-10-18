@@ -83,6 +83,11 @@ const ROOT = path.resolve(HERE, "..");
 const { INPUT_RES: DOCS_API_INPUT_RES } = createRequire(import.meta.url)(
   "./check-docs-api.cjs",
 );
+/* `文件结构硬规则` 的触发面同样**不手抄**：扫描根与根目录扩展名在判据自己的
+ * 声明层（`file-structure-rules.cjs` 的 `TRIGGER_GLOBS`），那里改一处、这里跟着变。 */
+const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(
+  import.meta.url,
+)("./file-structure-rules.cjs");
 
 /**
  * 把一条「锚定到仓库根的输入面正则」反推成 `ifModify` glob。
@@ -134,6 +139,21 @@ export const INCREMENTAL_GATES = [
     globs: ["src/components/**", "src/app/**"],
     script: "scripts/check-title-bar-clearance.cjs",
     why: '扫描面是 SCAN_DIRS = ["src/components", "src/app"]（本档唯一入口 full-screen-layer 的消费方也只能在这两处）。它判的是「顶层浮层必须让出标题行」，而浮层只可能写在视图层。',
+  },
+  {
+    name: "文件结构硬规则",
+    globs: FILE_STRUCTURE_TRIGGER_GLOBS,
+    script: "scripts/check-file-structure.cjs",
+    why:
+      "它扫的是**盘上的某一组目录**，不是整仓：R1–R5 / R10–R12 的扫描根是 `src/`，" +
+      "R7 / R8 在 `src/` `scripts/` `tools/` 三处（含中文的 .ps1 必须带 BOM），" +
+      "R9 的两形态（散落的入口 .ps1 + git 临时状态文件）都只可能出现在**仓库根**，" +
+      "R13 / R14 只看 `src/lib` 的顶层条目。触发面由那份声明层的 `TRIGGER_GLOBS` 机械导出" +
+      "（`SCAN_ROOTS` + 根目录扩展名），所以它不是第二份会漂的副本 ——" +
+      "改扫描根时配置跟着变。收窄安全的方向：这几处一个都没碰时，文件名 / 归属 / 注释流水 /" +
+      "控制字符这些判据不可能变（它不是「跨全仓的单一事实源」那类不变量）。" +
+      "⚠️ 代价写在明处：新增一条以别的目录为扫描根的规则时，必须同批更新" +
+      "`scripts/file-structure-rules.cjs` 的 `SCAN_ROOTS`。",
   },
   {
     name: "import 别名统一",
