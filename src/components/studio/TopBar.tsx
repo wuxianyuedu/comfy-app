@@ -82,7 +82,7 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   };
 
   return (
-    <header className="border-border-subtle bg-canvas z-base flex h-12 shrink-0 items-center gap-2 border-b px-3">
+    <header className="border-border-subtle bg-canvas z-base h-top-bar flex shrink-0 items-center gap-2 border-b px-3">
       <SidebarTrigger className="-ml-1" />
       <Separator
         orientation="vertical"

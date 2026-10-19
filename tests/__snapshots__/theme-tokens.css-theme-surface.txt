@@ -139,6 +139,7 @@
 --shadow-card
 --spacing-stage-rail
 --spacing-title-bar
+--spacing-top-bar
 --text-2xs
 --text-3xs
 --text-4xs
