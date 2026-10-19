@@ -41,10 +41,25 @@ import { useSettingsPage } from "~/app/(main)/settings/hooks/use-settings-page";
 export interface SettingsViewProps {
   /** 撑满父级高度（工作区视图里由外层给视口高度）；缺省走外壳自己的视口档。 */
   fillHeight?: boolean;
+  /**
+   * 跳转时要求直接停驻的目标分区 id（来自 `workspace:navigate` 事件的一次性
+   * 载荷）。工作区页签挂载点会传；独立路由 `/settings` 不传，保持默认分区。
+   * 合法性由 `useSettingsPage` 按 `SETTINGS_SECTIONS` 收敛。
+   */
+  initialSection?: string | null;
+  /** 目标分区已落定后回调（容器据此清空一次性载荷）。 */
+  onConsumeSection?: () => void;
 }
 
-export function SettingsView({ fillHeight }: SettingsViewProps) {
-  const c = useSettingsPage();
+export function SettingsView({
+  fillHeight,
+  initialSection,
+  onConsumeSection,
+}: SettingsViewProps) {
+  const c = useSettingsPage({
+    initialSection,
+    onConsumeInitialSection: onConsumeSection,
+  });
 
   /* 屏名只在「这一屏才出现」时给可见标题（ISSUE #1872）：工作区页签（`fillHeight`）
    * 的页签条与顶栏已经在写「设置」，屏内再写一遍是同一个名字的第三次出现 —— 那时
@@ -53,6 +68,10 @@ export function SettingsView({ fillHeight }: SettingsViewProps) {
   const frame = {
     section: c.section,
     onSelect: c.setSection,
+    /* 跳转载荷的落点透给外壳：三态壳也带着它 —— 加载壳没有分区节、滚不过去也
+     * 不会消费载荷；就绪壳挂上后再滚到目标分区。 */
+    jumpSection: c.pendingJump,
+    onJumpApplied: c.ackJumpSection,
     ...(fillHeight ? { className: "h-full" } : { title: "设置" }),
   };
 

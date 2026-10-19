@@ -269,4 +269,25 @@ describe("useInterval", () => {
     });
     expect(run, "返回 null 之后不再跑").toHaveBeenCalledTimes(1);
   });
+
+  it("ms 函数返回 0：异步 run 没跑完就不再发下一拍（不叠发占满连接预算）", async () => {
+    let release: () => void = () => undefined;
+    const run = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    renderHook(() => useInterval(run, { ms: () => 0 }));
+    expect(run).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(run, "上一拍还挂在途，不该再发下一拍").toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(run, "上一拍跑完才立刻发下一拍").toHaveBeenCalledTimes(2);
+  });
 });

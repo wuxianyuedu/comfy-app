@@ -44,12 +44,25 @@ export default function WorkspacePage() {
    * 触发方是工坊右栏的「资源库」卡 —— 那条链路上有 WorkshopPipeline /
    * WorkshopAside 两层，穿 props 不划算（见 `lib/app-events` 里本事件的说明）。
    * 载荷是字符串，这里按 `WORKSPACE_VIEWS` 收敛：未知 id 直接忽略，
-   * 不让它把 `viewMode` 带进一个无分支可渲染的状态。 */
+   * 不让它把 `viewMode` 带进一个无分支可渲染的状态。
+   *
+   * 载荷里的 `section`（目标设置分区）先落进一次性 state，再由视图栈逐层传给
+   * 设置视图、由它消费后回调清空（同下方的 `canvasSeedNew` 那一族）。 */
+  const [pendingSettingsSection, setPendingSettingsSection] = useState<
+    string | null
+  >(null);
+  const consumeSettingsSection = useCallback(
+    () => setPendingSettingsSection(null),
+    [],
+  );
   useEffect(
     () =>
-      subscribeAppEvent("workspace:navigate", ({ view }) => {
+      subscribeAppEvent("workspace:navigate", ({ view, section }) => {
         const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
-        if (target) navigateTo(target);
+        if (!target) return;
+        if (target === "settings" && section)
+          setPendingSettingsSection(section);
+        navigateTo(target);
       }),
     [navigateTo],
   );
@@ -294,6 +307,7 @@ export default function WorkspacePage() {
           <WorkspaceViewStack
             tabs={viewTabs}
             activeKey={activeViewKey}
+            activeView={viewMode}
             activeProjectId={activeProjectId}
             recentProjects={recentProjects}
             onEnterProject={refreshActiveProject}
@@ -310,6 +324,8 @@ export default function WorkspacePage() {
             onConsumeCanvasSeed={() => setCanvasSeedNew(false)}
             pendingCanvasWorkflow={pendingCanvasWorkflow}
             onConsumePendingWorkflow={() => setPendingCanvasWorkflow(null)}
+            settingsSection={pendingSettingsSection}
+            onConsumeSettingsSection={consumeSettingsSection}
           />
         </AppShell>
 
