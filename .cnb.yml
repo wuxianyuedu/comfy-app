@@ -427,9 +427,13 @@
     #   绿判成**不构成整档凭证**、当场不记账。并发不进 `extra` 的同一条理由写在
     #   `planRun` 的注释里（塞错位置 = 每一次都绿而不记账）。
     #
-    # 这一档还打**分文件耗时榜**（前 10 + 合计 + 中位，落 `os.tmpdir()` 的 junit，
-    # 与钩子那侧共用 `parseJunitXml`）—— 它顺带回答「这台机上跑全量时哪几份在吃
-    # 时间」，而那个数此前只在本地账本里有。只算测试阶段，用来排序不当 stage 墙钟。
+    # 这一档还打**分文件耗时榜**（前 10 + 合计 + 中位，junit 落仓库内的
+    # `node_modules/.cache/`，与钩子那侧共用 `parseJunitXml`）—— 它顺带回答「这台机上跑全量时
+    # 哪几份在吃时间」，而那个数此前只在本地账本里有。只算测试阶段，用来排序不当 stage 墙钟。
+    # ⚠️ 落点**不是** `os.tmpdir()`：那样拼出来的是 `--outputFile.junit=C:\…`，而 PowerShell
+    #   宿主会在第一个冒号处把它切成两个参数，切剩的一截变成 vitest 的位置过滤器 ——
+    #   这一档首跑 12.6s 红、后面三档全 skipped 就是这么来的（`cnb-2in-1k589j0kp`，
+    #   边界表在 `scripts/launcher-core/shell.mjs` 的 `PS_UNSAFE_ARG_RE`）。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
     # 45m：`full-suite-run.mjs` 自己的墙钟预算是 30 分钟（`FULL_SUITE_TIMEOUT_MS`），
     # stage 预算必须**大于**它，否则先被平台掐的是 stage，而那一刀不带
