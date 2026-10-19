@@ -14,11 +14,16 @@ import {
 } from "~/lib/workflow/workflow-types";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
-/** 工作流库页头右侧动作按钮的**统一形态基类**：紧凑、同高度同圆角同字重。
- *  主 / 次按钮只差配色（渐变 vs outline），由调用方各自追加，避免三处各写一份
- *  padding / 圆角 / 字号而漂移成三种观感（此前正是粉渐变 / 深色 / 纯紫混杂）。 */
-export const HEADER_ACTION_BTN =
-  "h-auto shrink-0 gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium";
+/** 工作流库页头右侧动作按钮的**统一形态基类**：三处只差配色（渐变 vs outline），
+ *  由调用方各自追加，避免三处各写一份 padding / 圆角 / 字号而漂移成三种观感
+ *  （此前正是粉渐变 / 深色 / 纯紫混杂）。
+ *
+ *  这一串**只装与 `ui/button` 缺省档不同的那部分**：高度、圆角、字重、字号一律
+ *  回落到基元的 `h-8 rounded-lg text-sm font-medium`。此前它自带
+ *  `h-auto py-1.5 text-xs`，实测把三颗压成 ~28px 的一档 —— 既不是基元的 `sm`
+ *  也不是 `default`，且 CTA 文案落到了 `text-xs`（规范 03 §3.10.1 里 12px 是
+ *  「段级说明」档，不是按钮文案档）。回到 h-8 也让这一排与顶栏其余控件同高。 */
+export const HEADER_ACTION_BTN = "shrink-0 gap-1.5 px-3";
 
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
 export interface LocalWorkflowRoot {
