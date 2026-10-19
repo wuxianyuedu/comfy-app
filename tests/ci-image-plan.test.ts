@@ -14,6 +14,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -140,11 +141,16 @@ describe("版本号现读：锁文件里只认根 importer", () => {
     /* 反向复算：改成「第一段」会得到「找不到这两件」—— 而那句话与
      * 「本仓真的没有这两个依赖」逐字同形。 */
     const onlyFirst = lock.slice(0, lock.indexOf("packages:"));
-    expect(toolingVersionsFromLock(onlyFirst, ["@playwright/test"])).toEqual({});
+    expect(toolingVersionsFromLock(onlyFirst, ["@playwright/test"])).toEqual(
+      {},
+    );
   });
 
   it("不会串到 packages: 那一段里的同名包", () => {
-    const text = toolingVersionsFromLock(lock, ["playwright", "@playwright/test"]);
+    const text = toolingVersionsFromLock(lock, [
+      "playwright",
+      "@playwright/test",
+    ]);
     expect(text.playwright).toBeUndefined();
   });
 
@@ -216,8 +222,12 @@ describe("Dockerfile 的形状", () => {
     const selfCheck = selfCheckRunLines().join("\n");
     const checks = checkCommands().join("\n");
     for (const item of IMAGE_CHECKS) {
-      expect(selfCheck).toContain(item.name === "chrome-headless-shell" ? "test -x" : item.name);
-      expect(checks).toContain(item.name === "chrome-headless-shell" ? "test -x" : item.name);
+      expect(selfCheck).toContain(
+        item.name === "chrome-headless-shell" ? "test -x" : item.name,
+      );
+      expect(checks).toContain(
+        item.name === "chrome-headless-shell" ? "test -x" : item.name,
+      );
     }
     /* 浏览器那一件**不在 PATH 上**：写成 `command -v` 会永远找不到，而那种红
      * 读起来像「镜像里没装浏览器」。 */
@@ -276,29 +286,98 @@ describe("tarball：权限位、符号链接、可复现", () => {
 
   it("512 字节对齐，且两份输入打出来的字节完全相同", () => {
     expect(buf.length % 512).toBe(0);
-    expect(tarballDigest(buildTarStream({ root: src }))).toBe(tarballDigest(buf));
+    expect(tarballDigest(buildTarStream({ root: src }))).toBe(
+      tarballDigest(buf),
+    );
   });
 
+  /** mode 低 9 位 → tar 列里那 9 个字符（`0o755` → `rwxr-xr-x`）。 */
+  const rwxField = (mode: number) =>
+    [6, 3, 0]
+      .map((s) => {
+        const t = (mode >> s) & 7;
+        return `${t & 4 ? "r" : "-"}${t & 2 ? "w" : "-"}${t & 1 ? "x" : "-"}`;
+      })
+      .join("");
+  /* `tar -tvf` 的每行只按**第一格**与**行尾**取信息，不按列序号：GNU tar 把 uid/gid
+   * 合成 `0/0`、Windows 自带的 bsdtar 分成两格，日期在中文 locale 下又是「1月 01 1970」
+   * 三格 —— 原来那句 `split(/\s+/).slice(5)` 在 bsdtar 上整体错位，于是 `sub/link`
+   * 明明在清单里（实测那行是 `lrwxrwxrwx … sub/link -> ..\a.txt`）却被数成 **0 条**
+   * （CI `cnb-vue-1k59blt4c`：`expected +0 to be 1`）。第一格（类型 + mode）两种实现都在
+   * 位置 0，名字在最后一个空格之后（链接条目再砍掉 ` -> 目标`），这两条跨实现都成立。 */
+  const firstField = (line: string) => line.trim().split(/\s+/)[0] ?? "";
+  const nameOf = (line: string) => {
+    const head = (line.split(" -> ")[0] ?? "").trim();
+    const parts = head.split(/\s+/);
+    return parts[parts.length - 1] ?? "";
+  };
+  const lineFor = (text: string, name: string) =>
+    text.split(/\r?\n/).find((l) => nameOf(l) === name);
+
+  /** 读这份 tarball 的清单：**相对路径 + `cwd`**，并且把「这台机器没有 tar」与
+   *  「tar 在，却读不了这个包」分开。
+   *
+   * 两件都是实测撞出来的：
+   *   · 传绝对路径时，Git 自带那份 GNU tar 会把 `C:\Users\…` 的冒号读成
+   *     **远程语法**（`host:path`），直接 `tar: Cannot connect to C: resolve failed`
+   *     退 **128**（本机现测）。而下面曾经只有一句 `if (status !== 0) return;` ——
+   *     于是这一格在这台开发机上**从来没有判过任何东西**，绿与「判过了」逐字同形
+   *     （§13.5.16 那条「红也 ≠ 跑过」的反面：**没跑也不红**）。CI 那台节点上是
+   *     bsdtar、没有这个语法，所以同一条判据在两台机器上**一台判、一台不判**。
+   *   · 「没有 tar」的证据是 `spawnSync` 的 `error`（ENOENT），不是退出码。
+   *     拿退出码当「环境没有」的判据，就会把真故障一起吞掉。 */
+  const listTar = () => {
+    const list = spawnSync("tar", ["-tvf", path.basename(tarFile)], {
+      cwd: TMP,
+      encoding: "utf8",
+    });
+    if (list.error) return null; // 这台机器上确实没有 tar（极简容器）—— 那一档不在这里红
+    expect(
+      list.status,
+      `tar 在盘上，却读不了这份包（退出码 ${list.status}）：` +
+        String(list.stderr).trim().slice(0, 200),
+    ).toBe(0);
+    return list.stdout;
+  };
+
   it("宿主 tar 认得它（权限位与符号链接都在）", () => {
-    const list = spawnSync("tar", ["-tvf", tarFile], { encoding: "utf8" });
-    if (list.status !== 0) return; // 没有 tar 的环境（极简容器）不在这里红
-    const text = list.stdout;
-    expect(text).toMatch(/^-rwxr-xr-x .*bin\/run\.sh$/m);
-    expect(text).toMatch(/^lrwxrwxrwx .*sub\/link -> \.\.\/a\.txt$/m);
-    /* 反向复算：少了 `mode` 那一段，可执行文件在容器里 EACCES，而报错指不到这一层。 */
-    expect(text).not.toMatch(/^-rw-r--r-- .*bin\/run\.sh$/m);
+    const text = listTar();
+    if (text === null) return;
+    /* 期望的 mode 来自**盘上那个文件本身**，不是写死的 `rwxr-xr-x`。
+     * 这一格判的是「`buildTarStream` 有没有把 stat 里的 mode 原样带进 header」，
+     * 而 Windows 上那句 `spawnSync("chmod", ["755", …])` 是一条不存在的命令 ——
+     * 盘上就是 `0666`，于是写死的字面量把「宿主没有 exec 位」判成「打包丢了权限」
+     * （CI 实测：`expected '-rw-rw-rw- …' to match /^-rwxr-xr-x .*bin\/run\.sh$/`）。
+     * 换成按盘上事实比，两端判的是同一件事，而且比原来更严：header 与盘上不一致就红
+     * （原来那句只认 755，把「在 Windows 上根本没法保权限」这件事一起误报进来了）。 */
+    const onDisk = rwxField(
+      statSync(path.join(src, "bin", "run.sh")).mode & 0o777,
+    );
+    const runLine = lineFor(text, "bin/run.sh");
+    expect(runLine, "tar 清单里没有 `bin/run.sh` 这一条").toBeDefined();
+    expect(firstField(runLine ?? "")).toBe(`-${onDisk}`);
+    const linkLine = lineFor(text, "sub/link");
+    expect(
+      linkLine,
+      "tar 清单里没有 `sub/link` 这一条（链接被打成了普通文件？）",
+    ).toBeDefined();
+    /* 类型位必须是 `l`，目标必须是那个**相对**路径。分隔符与重复斜杠都归一再比 ——
+     * 三种宿主给的字面量实测不一样：bsdtar 给 `..\a.txt`、Git 的 GNU tar 给
+     * `..//a.txt`、POSIX 的 tar 给 `../a.txt`，而这一格要判的从来是
+     * 「链的是同目录上层的 `a.txt`」，不是某一种转写形状。 */
+    expect(firstField(linkLine ?? "")).toMatch(/^l/);
+    const target = (linkLine ?? "").split(" -> ")[1] ?? "";
+    expect(target.replaceAll("\\", "/").replace(/\/{2,}/g, "/")).toBe(
+      "../a.txt",
+    );
   });
 
   it("不穿符号链接（链接的目标不被打成第二份内容）", () => {
-    const list = spawnSync("tar", ["-tvf", tarFile], { encoding: "utf8" });
-    if (list.status !== 0) return;
-    const names = list.stdout
-      .trim()
-      .split("\n")
-      .map((l) => l.split(/\s+/).slice(5).join(" "));
-    /* `sub/link` 可能显示成 `sub/link -> ../a.txt`，所以按「以它开头」认。 */
-    expect(names.filter((n) => n.startsWith("sub/link")).length).toBe(1);
-    expect(names.some((n) => n === "a.txt")).toBe(true);
+    const text = listTar();
+    if (text === null) return;
+    const names = text.trim().split(/\r?\n/).map(nameOf);
+    expect(names.filter((n) => n === "sub/link").length).toBe(1);
+    expect(names).toContain("a.txt");
   });
 });
 

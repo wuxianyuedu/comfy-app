@@ -407,13 +407,30 @@ function isPathLike(token) {
  *
  * @param {string} command `.cnb.yml` 里写的那条命令
  * @param {string[]} args 那条命令自己的参数（原样转交，本函数不改写）
+ * @param {{platform?: NodeJS.Platform,
+ *          env?: NodeJS.ProcessEnv | Record<string, string | undefined>}} [options]
+ *   往下交给 `resolveCommandInvocation()` / `commandInvocation()`。
+ *   **缺省仍是 `process.env` / `process.platform` ⇒ 生产侧一个字不改。**
+ *   这一跳以前一个 options 都不接，于是调用方注入的 `env` 停在半路：
+ *   「默认解析口接没接上」那条判据实际问的是**这台机器的 PATH**（Windows 上
+ *   解析到 corepack 那句 `pnpm.ps1`、经宿主起 ⇒ 起的是 `pwsh.EXE`），
+ *   换一台机器换一个答案 —— 那是「判据与宿主绑死」那一族（#1397 同形）。
+ *
+ * ⚠️ 这一层**只接 `env`，不接 `platform`**（`runWithCp936Exit` 那侧的调用点写死只传 env），
+ *   理由是同一份文件里那两条「模拟非 Windows」的用例**真起外部命令**（`echo`）：
+ *   把 `platform` 也交给解析口，POSIX 规则下 `executableExts` 只剩无扩展名那一档，
+ *   Windows 的 PATH 上一个都找不到 ⇒ 那两条从「判转码」变成「判这台机器有没有
+ *   一个叫 `echo` 的无扩展名文件」。它们要模拟的是**出口那一半**（转码 vs 原样转出），
+ *   从来不是解析层。所以这里的边界是刻意的，代价与出处见 `runWithCp936Exit`。
  * @returns {{command: string, args: string[], resolved: boolean}}
  */
-export function resolveShellInvocation(command, args) {
-  if (!isPathLike(command)) return resolveByName(command, args);
-  const { command: c, prefixArgs } = resolveByPath(path.resolve(command), [
-    "--version",
-  ]);
+export function resolveShellInvocation(command, args, options = {}) {
+  if (!isPathLike(command)) return resolveByName(command, args, options);
+  const { command: c, prefixArgs } = resolveByPath(
+    path.resolve(command),
+    ["--version"],
+    options,
+  );
   return { command: c, args: [...prefixArgs, ...args], resolved: true };
 }
 
@@ -472,10 +489,13 @@ export function formatSpawnFailure({ err, command, realCommand, cwd }) {
  *
  * @param {string[]} argv
  * @param {{platform?: NodeJS.Platform,
+ *          env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *          spawnProc?: typeof spawn,
  *          write?: typeof writeCp936,
- *          resolve?: (cmd: string, args: string[]) =>
- *            {command: string, args: string[], resolved: boolean},
+ *          resolve?: (cmd: string, args: string[], options?: {
+ *            platform?: NodeJS.Platform,
+ *            env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
+ *          }) => {command: string, args: string[], resolved: boolean},
  *          out?: (chunk: string) => void}} [ports]
  * @returns {Promise<number>} 该转出去的退出码
  */
@@ -483,6 +503,7 @@ export function runWithCp936Exit(
   argv,
   {
     platform = process.platform,
+    env = process.env,
     spawnProc = spawn,
     write = writeCp936,
     resolve = resolveShellInvocation,
@@ -501,8 +522,18 @@ export function runWithCp936Exit(
    * 那个「回退」对一条盘上的路径是忠实的，对 `pnpm` 这种名字却是把 `spawn("pnpm")`
    * 扔给 Windows（ENOENT，见头注第三个坑）。 */
   /* 解析口自己就是那位执行者（默认值 `resolveShellInvocation`：名字查 PATH、路径过
-   * 形态判据）。这里只负责把它交出的形状校验一遍。 */
-  const invocation = resolve(command, args);
+   * 形态判据）。这里只负责把它交出的形状校验一遍。
+   *
+   * ⚠️ **只把 `env` 交下去，`platform` 刻意不交**。两条都是「注入面」，但只有一条是
+   * 解析层的事实：`env` 决定**问哪张 PATH**（不交，用例造的自己那个假 PATH 根本不参与，
+   * 于是「默认解析口接没接上」那条判据实际判的是这台机器上恰好装着什么 —— Windows 上
+   * 它解析到 corepack 的 `pnpm.ps1`、经宿主起，`seen[0]` 成了 `pwsh.EXE`，实测红）。
+   * 而 `platform` 交下去会**改掉另一批用例判的东西**：同一份文件里那两条
+   * 「模拟非 Windows」的用例真起 `echo`，POSIX 的 `executableExts` 只剩无扩展名那一档，
+   * Windows 的 PATH 上一个都找不到 ⇒ 它们从「判转码不转码」变成「判这台机器有没有
+   * 一个叫 `echo` 的无扩展名文件」。那两条要模拟的是出口那一半，从来不是解析层。
+   * 边界写在代码里而不是靠人记得，见 `resolveShellInvocation` 的那条 ⚠️。 */
+  const invocation = resolve(command, args, { env });
   /* 解析口必须交出 `{command, args, resolved}`：`undefined` 悄悄流下去只会变成
    * `spawn(undefined, …)` 的 `ERR_INVALID_ARG_TYPE`（报错点离真因一整层）。
    * 生产路径另有护栏 —— `spawn` 传函数会抛，于是「拿 Promise resolve 当注入面」
