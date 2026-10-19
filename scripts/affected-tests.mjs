@@ -21,8 +21,9 @@
  *      import 命中 `dir/index.*` 的 barrel 转出口）。只看「谁直接 import」不够：
  *      视图层的常态是 `X.test → Panel → X.tsx`，只走一跳时改 `X.tsx` 会解析出
  *      「受影响 0 个用例」（实测撞到过），那这句承诺就是空话。
- *   ④ 改动路径以字面量出现在测试文本里：门禁用例用 `execFileSync` 起被测脚本、
- *      主题用例按路径读 CSS，这类消费不是 import，只有整串匹配抓得住。
+ *   ④ 改动路径以字面量出现在测试的**代码文本**里（比对面已剥注释，§13.5.8）：门禁用例
+ *      用 `execFileSync` 起被测脚本、主题用例按路径读 CSS，这类消费不是 import，
+ *      只有整串匹配抓得住。
  *      同族：改 `scripts/<name>.cjs|mjs|py` 时按名字配 `tests/<name>.test.ts`。
  *
  * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
@@ -54,6 +55,7 @@ import { fileURLToPath } from "node:url";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
+import { stripComments } from "./tw4-scan-core.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
@@ -176,24 +178,24 @@ function wideReasonFor(rel) {
  *
  * @param {Iterable<string>} nodes 参与建图的文件（源码 + 测试）
  * @param {(rel: string) => string | null} readText
- * @returns {{importedBy: Map<string, Set<string>>, texts: Map<string, string>}}
+ * @returns {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}}
  */
 export function buildImportedBy(nodes, readText) {
   /** @type {Map<string, Set<string>>} */
   const importedBy = new Map();
-  /** @type {Map<string, string>} */
-  const texts = new Map();
+  /** ④ 的比对面：注释里引用一个路径 ≠ 运行期读它，所以只留「代码文本」这一份。 */
+  const codeTexts = new Map();
   for (const from of nodes) {
     const text = readText(from);
     if (text === null || text === undefined) continue;
-    texts.set(from, text);
+    if (isTestPath(from)) codeTexts.set(from, stripComments(text));
     for (const cand of specifiersOf(text, from)) {
       let bucket = importedBy.get(cand);
       if (!bucket) importedBy.set(cand, (bucket = new Set()));
       bucket.add(from);
     }
   }
-  return { importedBy, texts };
+  return { importedBy, codeTexts };
 }
 
 /**
@@ -229,7 +231,7 @@ function reachFrom(roots, importedBy) {
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, texts: Map<string, string>}}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}}} input
  * @returns {Resolution}
  */
 export function resolveAffectedTests({
@@ -342,7 +344,7 @@ export function resolveAffectedTests({
    * 注入这一条不是优化手段而是**口径**手段：归因的数必须与主解析走同一条判定链，
    * 否则两处会各自漂 —— 实测过一版「照抄一份判定」的归因，三个文件的数就都差了
    * 一两份（「按路径引用」那一档在增量面里只对尚未选中的测试生效）。 */
-  const { importedBy, texts } =
+  const { importedBy, codeTexts } =
     graph ?? buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
 
   const hops = reachFrom(list, importedBy);
@@ -351,9 +353,15 @@ export function resolveAffectedTests({
   }
 
   /* ── ④ 路径以字面量被引用（闭包抓不到的那类消费）──────────────────────── */
+  /* 比对面是**剥注释之后**的代码文本（`codeTexts`，建树时一次算好）。为什么必须剥：
+   * 本仓的门禁自测**在文件头的 JSDoc 里引用规范章节**是硬规则 15 要求的动作，于是
+   * 「改一句注释」与「运行期读了那个文件」在原文里逐字同形 —— 实测只提交文档时，
+   * `docs/standards/13-提交与-code-review.md` 一个路径把 6 份门禁自测按「按路径引用」
+   * 拉进增量面（上次账本逐文件读数合计 455.8s，量级参考），而那六份里没有一份在运行期
+   * 读那份 `.md`。口径、实测量与判据在 §13.5.8。 */
   for (const testFile of testFiles) {
     if (picked.has(testFile)) continue;
-    const text = texts.get(testFile);
+    const text = codeTexts.get(testFile);
     if (text === undefined) continue;
     for (const rel of list) {
       if (rel !== testFile && text.includes(rel)) {
@@ -398,7 +406,7 @@ export function resolveAffectedTests({
  * 精确、实际含义不同的数，比不给更坏。
  *
  * @param {string[]} changedPaths 本次改动的文件
- * @param {{importedBy: Map<string, Set<string>>, texts: Map<string, string>}} graph
+ * @param {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}} graph
  *   `buildImportedBy()` 的产物（复用同一份图，避免逐文件重建）
  * @param {string[]} testFiles 参与统计的测试全集（须与建图时的口径一致）
  * @param {string[]} sourceFiles 参与建图的源码全集（须与建图时的口径一致）

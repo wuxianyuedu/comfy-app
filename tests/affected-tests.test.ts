@@ -234,6 +234,35 @@ describe("affected-tests：兜底方向", () => {
     expect(String(res.reasons.__faceSkipped)).toContain("tests/base-check");
   });
 
+  /**
+   * 边④「按路径引用」的比对面必须是**剥注释之后**的代码文本（ISSUE #2022）。
+   *
+   * 这一条挡的是本仓自己造出来、又被自己踩中的形态：硬规则 15 要求门禁自测在文件头
+   * 引用规范章节，于是「注释里写着这份文档的路径」与「运行期读了这份文档」在原文里
+   * 逐字同形。实测只提交文档时，`docs/standards/13-提交与-code-review.md` 一个路径
+   * 把 7 份门禁自测拉进增量面（上次账本逐文件读数合计 480.7s：`check-reformat-only`
+   * 278.9s、`check-bundle-budget` 101.2s、`check-format` 52.0s…），而那七份里没有一份
+   * 在运行期读那份 `.md` —— 「改到哪、测到哪」被反向用成了「改一句注释就陪跑九分钟」。
+   */
+  it("边④：注释里的路径引用不算消费方（文档提交不再陪跑门禁自测）", () => {
+    const run = harness({
+      [UI_TEST]:
+        "/* 规范：docs/standards/13-提交与-code-review.md §13.5 */\nit('x', () => {});\n",
+    });
+    const res = run(["docs/standards/13-提交与-code-review.md"]);
+    expect(res.reasons[UI_TEST]).toBeUndefined();
+  });
+
+  it("边④：同一份路径写在代码字面量里仍然命中（剥注释不许把真消费剥没）", () => {
+    // 上两条合起来才钉住方向：只判「注释不命中」的话，把整个 ④ 删掉也能过。
+    const run = harness({
+      [UI_TEST]:
+        "/* 规范：docs/standards/13-提交与-code-review.md */\nconst p = 'docs/standards/13-提交与-code-review.md';\nit('x', () => p);\n",
+    });
+    const res = run(["docs/standards/13-提交与-code-review.md"]);
+    expect(res.reasons[UI_TEST]).toContain("按路径引用");
+  });
+
   it("已知基线红只从增量面剔除，固定清单与其余受影响用例照跑", () => {
     const RED = "src/a/other-line-red.test.ts";
     const run = harness(

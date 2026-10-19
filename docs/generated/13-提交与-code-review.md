@@ -4265,7 +4265,36 @@ await」等一并揪出来，一次报几百处、评审看下来全是"这里�
 | 自身             | 改测试就跑它                                                                                                                                                                                                                                                                                         |
 | 同名兄弟 / 快照  | 改 `x.ts` 跑 `x.test.ts(x)`；改 `__snapshots__/x.test.tsx.snap` 跑宿主                                                                                                                                                                                                                               |
 | 反向 import 闭包 | 谁 import 了改动文件、谁又 import 了那些文件……沿 import 图走到测试为止。静态 `from`、副作用 import、动态 `import()`、`require`、`vi.mock` 都算；别名 `~/` `@/`、相对说明符按**引用方位置**解析；目录 import 命中 `dir/index.*`，所以 barrel 的转出口天然在图里（**没有**「同目录就算消费」那种放宽） |
-| 按路径引用       | 改动路径以字面量出现在测试里（门禁 `execFileSync` 起被测脚本、主题用例按路径读 CSS），另含 `scripts/<name>` ⇄ `tests/<name>.test.ts` 的同名配对                                                                                                                                                      |
+| 按路径引用       | 改动路径以字面量出现在测试的**代码文本**里（门禁 `execFileSync` 起被测脚本、主题用例按路径读 CSS），另含 `scripts/<name>` ⇄ `tests/<name>.test.ts` 的同名配对                                                                                                                                        |
+
+**「按路径引用」的比对面是剥注释之后的代码文本，不是原文**（ISSUE #2022）：这一条
+最初写成 `text.includes(改动路径)`，而本仓的门禁自测**在文件头的 JSDoc 里引用规范章节**
+是硬规则 15 要求的动作 —— 于是「改一句注释」与「运行期读了那个文件」在判据里逐字同形。
+实测代价（同一台机器、同一份 `FIXED_STRUCTURAL_TESTS`，逐文件耗时取账本
+`.git/comfy-precommit-timing.jsonl` 最后一次读数）：只提交文档时，
+`docs/standards/13-提交与-code-review.md` 这一个路径把 **6 份**门禁自测按「按路径引用」
+拉进增量面 —— `tests/check-reformat-only.test.ts` 278.9s、`check-bundle-budget` 101.2s、
+`check-format` 52.0s、`check-void-floats` 12.3s、`check-non-null-assertions` 8.4s、
+`check-changelog-fragments` 3.0s，合计 **455.8s**（这几份的量级；带负载，**不作因果
+读数**，见 §13.5.24 那句「要一个可引用的前后对比得在机器空的时候各跑一次」）。而这六份里
+没有任何一份在运行期读那份 `.md` —— 那个字符串只在注释里。
+
+改法是拿**唯一那份** `stripComments`（`scripts/tw4-scan-core.mjs` 的重导出，纯 Node 层
+不能 import `tests/helpers/` 的 TS 版本，见 §12.18 与该文件的台账注释）在建树时顺手算出
+`codeTexts`，第 ④ 档只比它；`importedBy` 那一档照旧用原文（说明符提取自有口径，不顺手改）。
+三条口径：
+
+- **不是收紧「文档改动不测」**：`check-reformat-only` 这类文件仍然由**输入面**（它自己
+  那条判据的面）与 `scripts/<name>` ⇄ `tests/<name>.test.ts` 的同名配对决定，动到被测脚本
+  一定跑；这一刀只把「注释里的引用」从消费关系里摘掉。
+- **命中判据仍然只减不误加**：`package.json` 那类被 33 份测试以**代码字面量**真实引用的
+  路径，剥注释后照样全部命中（实测 raw 35 → stripped 33，掉的那 2 份是注释里提了一句）；
+  `.cnb.yml` raw 18 → 12、只掉 6 份零耗时的。
+- **归因与主链同一条判定链**：`attributeAffected` 复用注入的同一份图，所以 `--attribute`
+  的数与真正要跑的清单继续对得上（§13.5.8.4 那条「两处漂移是静默的」在这里同样成立）。
+
+成本：234 份测试 / 2.5MB 剥注释实测 281ms，建树时一次（不是每次调用、更不是每个改动文件
+一次 —— 那会把 220ms 的解析成本再乘一遍，见 §13.5.8.2）。
 
 闭包为什么必须走满：视图层的常态是 `X.test → Panel → X.tsx`，只走一跳时改 `X.tsx`
 解析出来是「受影响 0 个用例」（实测撞到过），那「改到哪、测到哪」就是空话。
@@ -6258,12 +6287,36 @@ typedoc 的入口 glob」。那句话对，结论错 —— **入口 glob 是能
 `check-reformat-only`（本次 245.3s，单它一条就是预算的一半）与
 `ci-toolchain-selfcheck`（67.0s），那是**图那层的边**比真实依赖关系宽（「任一 `scripts/**`
 改动 ⇒ 拉进这两个测试」）。下一刀的形态因此已经清楚：把同一把「面由判据自己导出」的尺
-用到边上去，而不是继续从 86 份里砍便宜的。
+用到**边**上去，而不是继续从 86 份里砍便宜的 —— 那一刀就是下面的第三刀，已落。
 
 **判据**：`tests/fixed-gate-input-faces.test.ts`（11 例：名单在清单内 / 每个模式命中真实路径 /
 名单封闭 / 三种匹配形状 / 两向切分且点名 / 空清单不过筛 / `wide` 不过筛），
 `tests/affected-tests.test.ts` 里那三处「比整表」的断言同步改成「比该跑的那些」
 （用同一个选择函数，不在测试里再抄一遍那 4 个名字）。
+
+**第三刀（已落）：收窄的是「边」，不是清单** —— 把同一把尺用到第 ④ 档的比对面。
+文档类提交的整条尾巴不是固定清单带进来的，而是「测试的**注释**里引用了这份文档路径」
+带进来的：`node scripts/affected-tests.mjs --changed docs/standards/13-提交与-code-review.md`
+改前 **94 份**（固定 87 + 受影响 7）、改后 **88 份**（固定 86 + 受影响 2）。掉出去的六份
+正是那几台最贵的门禁自测（`check-reformat-only` 278.9s、`check-bundle-budget` 101.2s、
+`check-format` 52.0s、`check-void-floats` 12.3s、`check-non-null-assertions` 8.4s、
+`check-changelog-fragments` 3.0s —— 账本最后一次逐文件读数，量级参考；机制与口径在
+§13.5.8）。这一刀与第二刀不同：**份数与被剔文件的身份是确定性的**，不随负载变；而
+**墙钟差值现在仍给不出可引用的读数** —— 落这一刀的当口兄弟检出在跑自己的钩子
+（机器 100%、27 个 node 进程），按上面那条纪律，前后各一次要在机器空的时候跑，
+不能拿这一轮冒充因果。
+
+安全方向当场在真仓库上复算过：改 `scripts/check-reformat-only.cjs` 时
+`tests/check-reformat-only.test.ts` **仍然**被「脚本同名回归」点回来（87 份里含它），
+所以这一刀不是「把守卫关掉」，是把「注释里的引用」不再当消费关系。
+**判据**：`tests/affected-tests.test.ts` 新增两例 —— 注释里的路径不拉人、同一份路径写在
+代码字面量里照旧拉人（只判前一条的话，把整个 ④ 删掉也能过）。
+
+剩下的最贵一格是常驻的：`storybook-tsc-input`（真起 `tsc --noEmit`，本批 39.1~146.5s）与
+`check-commit-claims`（真造提交，47.8~90.7s）都在固定清单里、没有可收窄的输入面，所以
+「文档提交 ≤ 5 分钟」这一档现在是**擦线而不是宽松**。下一格只能从两个方向来：**A** 键控
+持久缓存（把 `Install dependencies` 那 76.9s 变成秒级，见 §13.5.3.4.3 的档位表）、
+**D** 常驻检出（把 `D0` 与 `D` 组那 30~50s 的冷启摊平）。
 
 ### 13.6 分支与合并策略
 
