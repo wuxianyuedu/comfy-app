@@ -31,11 +31,10 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/* `args` 显式写一遍（而不是只挂在 `meta.args` 上）：a11y 那一档
- *（`tests/a11y-axe-stories.test.ts`）按 **`story.args`** 渲染，读不到 `meta.args`
- * ——只挂 meta 的故事会以**裸组件**（无 children）被测出来，`button-name` 当场命中。
- * 这不是那一档的缺陷，是「故事自己得站得住」：把内容写在 args 上，
- * 顺带让控件面板里也看得见它的初值。 */
+/* `args` 显式写一遍（而不是只挂在 `meta.args` 上）：让这一条故事自己站得住 ——
+ * 内容写在 args 上，控件面板里也看得见它的初值。
+ * `tests/a11y-axe-stories.test.ts` 按 Storybook 的语义渲染（args 是 `meta.args` 与
+ * `story.args` 的浅合并），两种写法都读得到；只挂 meta 而故事里不写，它同样渲得出内容。 */
 export const Default: Story = {
   args: { children: "文生图" },
 };

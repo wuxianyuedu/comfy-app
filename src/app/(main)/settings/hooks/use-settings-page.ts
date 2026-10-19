@@ -41,6 +41,9 @@ import type {
   Settings,
   SettingsPageController,
 } from "./use-settings-page-types";
+/* 分区白名单是**值**（不是类型），`export *` 不会把它带进本文件作用域，
+ * 跳转落点的收敛要用到它，所以单独再值导入一条。 */
+import { SETTINGS_SECTIONS } from "./use-settings-page-types";
 export * from "./use-settings-page-types";
 
 /** 提示条停留时长。 */
@@ -88,10 +91,50 @@ function writeSettingsCache(value: {
   }
 }
 
+/** 目标分区（来自跳转载荷）的合法性收敛：不在白名单里就当作没给。 */
+function readInitialSection(raw: string | null | undefined): Section | null {
+  return SETTINGS_SECTIONS.some((item) => item.id === raw)
+    ? (raw as Section)
+    : null;
+}
+
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
-export function useSettingsPage(): SettingsPageController {
+export function useSettingsPage(options?: {
+  /** 跳转要求直接停驻的分区 id（一次性载荷，来自 `workspace:navigate`）。 */
+  initialSection?: string | null;
+  /** 目标分区落定后的回调：容器据此清空一次性载荷，避免下次进设置还落在它上面。 */
+  onConsumeInitialSection?: () => void;
+}): SettingsPageController {
+  const { initialSection, onConsumeInitialSection } = options ?? {};
   const trpc = useTRPC();
-  const [section, setSection] = useState<Section>("llmLocal");
+  const [section, setSection] = useState<Section>(
+    () => readInitialSection(initialSection) ?? "llmLocal",
+  );
+  /* 尚未落定的跳转目标 —— 与 `section`（导航高亮）分开：分区落点要等**外壳真的
+   * 滚过去**才算完成，而外壳只有把分区节铺出来之后才滚得动（三态中的加载 / 失败
+   * 壳没有分区节）。
+   *
+   * 这里刻意**不在挂载时消费**载荷（收口前的写法是在 effect 里 `setSection` +
+   * 立刻回调，于是设置页首帧还在 loading、载荷已被清空，等到就绪外壳挂上时
+   * 跳转目标已经丢了 —— 用户看到的症状是「点去设置，左侧仍停在第一项」）。
+   * 现在载荷留到 `ackJumpSection` 被调用为止，而它由外壳在**命中锚点**之后才调。 */
+  const [pendingJump, setPendingJump] = useState<Section | null>(() =>
+    readInitialSection(initialSection),
+  );
+  useEffect(() => {
+    const requested = readInitialSection(initialSection);
+    if (!requested) return;
+    /* 设置是**瞬时页签**（切走即退场），通常挂载时的初值就够。这一条 effect 只
+     * 覆盖「设置已挂载时又跳进来一次」：登记待落定的目标，仍不在这里消费。 */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPendingJump(requested);
+    setSection(requested);
+  }, [initialSection]);
+  /** 外壳把跳转目标真的滚过去之后调它：清空待落定目标 + 回调容器清载荷。 */
+  const ackJumpSection = useCallback(() => {
+    setPendingJump(null);
+    onConsumeInitialSection?.();
+  }, [onConsumeInitialSection]);
   const { theme, setTheme } = useTheme();
   const [saving, setSaving] = useState(false);
 
@@ -370,6 +413,8 @@ export function useSettingsPage(): SettingsPageController {
     comfyDefaultPort: COMFYUI_DEFAULT_PORT,
     section,
     setSection,
+    pendingJump,
+    ackJumpSection,
     theme: theme === "light" ? "light" : "dark",
     setTheme: (value: "light" | "dark") => setTheme(value),
     isInitialLoad:

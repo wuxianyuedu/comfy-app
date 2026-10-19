@@ -9,15 +9,35 @@
 //   · 启动日志框在页上（硬规则 4：失败路径必须有用户可见出口）；
 //   · 页上写出「这一点下去会按哪条**已保存**路径启动」—— 它是「改了路径没保存」
 //     这个组合就地可见的那一份事实（本页无草稿，见 ComfyuiControlView 文件头）。
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ComfyuiControlView } from "./ComfyuiControlView";
 import type { ComfyuiControlController } from "./hooks/use-comfyui-control";
 
+/* 记账「跳转出口」派发的事件载荷：`emitAppEvent` 换成 spy，其余（订阅侧）保留真实实现，
+   免得本页挂载链上别处对 `app-events` 的用法被一起换掉。 */
+const { emitAppEventMock, emitCalls } = vi.hoisted(() => {
+  const calls: Array<{ name: string; payload: unknown }> = [];
+  return {
+    emitAppEventMock: vi.fn((name: string, payload?: unknown) => {
+      calls.push({ name, payload });
+    }),
+    emitCalls: calls,
+  };
+});
+vi.mock("~/lib/app-events", async () => {
+  const actual =
+    await vi.importActual<Record<string, unknown>>("~/lib/app-events");
+  return { ...actual, emitAppEvent: emitAppEventMock };
+});
+
 /* 本仓不在 setup 里注册自动 cleanup（`globals: false`），每份用例自己收尾 ——
    与 RuntimeLogBox.test.tsx / AppearanceSection.test.tsx 同款。 */
 afterEach(cleanup);
+beforeEach(() => {
+  emitCalls.length = 0;
+});
 
 function controller(
   over: Partial<ComfyuiControlController> = {},
@@ -138,6 +158,27 @@ describe("ComfyuiControlView", () => {
     expect(
       screen.getByRole("button", { name: /去设置里配置/ }),
     ).toBeInTheDocument();
+  });
+
+  it("点「去设置里配置」带上目标分区：直接停在「创作后端」那一节", () => {
+    render(
+      <ComfyuiControlView
+        c={controller({
+          instance: {
+            pathConfigured: false,
+            instanceType: null,
+            desktopManaged: false,
+          },
+        })}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /去设置里配置/ }));
+    /* 只切到「设置」还不够 —— 设置是一页到底的分区目录，载荷必须带上
+       `section: "comfyui"`（本页文案写的「设置 → 创作后端」）。 */
+    expect(emitCalls).toContainEqual({
+      name: "workspace:navigate",
+      payload: { view: "settings", section: "comfyui" },
+    });
   });
 
   it("页上写明将按哪条已保存路径启动（本页无草稿，这条是唯一的事实出口）", () => {

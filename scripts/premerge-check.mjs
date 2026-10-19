@@ -30,7 +30,7 @@
  *
  * ── 退出码（与 `base-check.mjs` / `check-claims` / 新判据**逐字同口径**）──
  *
- *   `0` = 三段全绿（或 `--json` 下事实已复算）；
+ *   `0` = 各段全绿（或 `--json` 下事实已复算）；
  *   `1` = **有段红了**（本脚本要报告的事实：哪一段、红的哪几条）；
  *   `2` = **有段没跑起来**（非 git 检出 / 取不到上游 / 浅克隆）—— 「没跑起来」
  *         与「跑了且红」在退出码上**必须分开**，否则前者会被读成后者（§13.6.2）。
@@ -45,7 +45,8 @@
  *
  * ── 用法 ──────────────────────────────────────────────────────────────
  *
- *   pnpm check:premerge                 # 三段全跑，人眼看的报告
+ *   pnpm check:premerge                 # 各段全跑（复算 = 钩子注册表的全套）
+ *   pnpm check:premerge --light         # 复算只跑本地形态档那几条（跳过条数会被打印出来）
  *   pnpm check:premerge --json          # 机器可读（逐段给结论）
  *   pnpm check:premerge --skip-claims   # 只跑复算 + 合并面（PR 里还没写合并信息时）
  *   pnpm check:premerge --only=base     # 只跑一段（排查用）
@@ -61,12 +62,16 @@ import {
   resolveMergeBaseRef,
   resolveMergeBatch,
 } from "./base-check.mjs";
+import { localTierLabels } from "./base-check/hook-steps.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
 /**
- * 三段的定义 —— 顺序即执行序（复算最贵、先跑；后两段是廉价的纯 git 复查）。
+ * 四段的定义 —— 顺序即执行序（复算与受影响用例最贵、先跑；后两段是廉价的纯 git 复查）。
+ *
+ * `unitTests` 是 2026-10-19 从 `.githooks/pre-commit` 挪过来的那一档（§13.5.25）：
+ * 提交只跑形态档，重档的本地执行者改成推送这一跳。
  *
  * `mergeLoss` 那一格是 `anchored` 而不是裸 `script`：它**需要一个锚点**
  * （`--baseline <已知好的参照点>`），而那个锚点在「合并前」这一刻是**算得出来的**
@@ -75,12 +80,24 @@ const ROOT = path.resolve(HERE, "..");
  * **恒报「不构成证据」** —— 恰好是这套编排要消灭的那类静默失效
  * （看着在跑、事实一次没复算）。口径与出口见 §13.6.2.1。
  *
- * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string}>}
+ * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string} | {label: string, kind: "changed", script: string}>}
  */
 const SEGMENTS = {
   base: {
     label: "合并前复算（钩子里那批全仓判据）",
     kind: "base",
+  },
+  /* 从 commit 挪到 push 的那一档（ISSUE #2022 / §13.5.25）：提交本身现在只跑形态档，
+   * 「改到哪、测到哪」这一层不能没有本地执行者 —— 它的家从 pre-commit 搬到这里。
+   * 走的是**同一条判决链**（`run-affected-tests.mjs` + `COMFY_AFFECTED_CHANGED`），
+   * 不在这里再筛一遍：两处各自筛一次的漂移是静默的，而这一段的红会拦推送。
+   * ⚠️ 它**不是**在干净快照里判的（`base` 那一格是）：快照没有这一推的内容，
+   * 拿它判受影响用例等于判一份不存在的代码。所以它在本检出上跑，清单取自
+   * 「这一推要带上去的文件」= `merge-base(要并进去的那条, HEAD)..HEAD`。 */
+  unitTests: {
+    label: "受影响用例（从 pre-commit 挪到 pre-push 的那一档）",
+    kind: "changed",
+    script: "run-affected-tests.mjs",
   },
   claims: {
     label: "提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）",
@@ -142,14 +159,40 @@ export function resolveLossBaseline(cwd = ROOT) {
 }
 
 /**
+ * 「这一推要带上去的文件」= `merge-base(要并进去的那条, HEAD)..HEAD` 的名字清单。
+ *
+ * 锚点复用 `resolveLossBaseline()` 而不是另推一次：那个问题是「这条线从哪一刻起分开」，
+ * 与 `mergeLoss` 那一格问的是同一件事（拿 `origin/master` 的尖端会把分支侧自己的正当改动
+ * 整片读成差异 —— 那边已经为这个错过一次，见它上面那段）。
+ *
+ * @param {string} cwd
+ * @returns {string[]} 空数组 = 取不到（调用方必须按「没跑起来」处理，不是「没有改动」）
+ */
+export function pushBatchFiles(cwd = ROOT) {
+  const anchor = resolveLossBaseline(cwd);
+  if (!anchor.ok) return [];
+  try {
+    const out = execFileSync(
+      "git",
+      ["diff", "--name-only", `${anchor.baseline}..HEAD`],
+      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    );
+    return out.split(/\r?\n/).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * @param {string[]} argv
- * @returns {{json: boolean, only: string | null, skip: Set<string>}}
+ * @returns {{json: boolean, only: string | null, skip: Set<string>, light: boolean}}
  */
 function parseArgs(argv) {
-  /** @type {{json: boolean, only: string | null, skip: Set<string>}} */
-  const out = { json: false, only: null, skip: new Set() };
+  /** @type {{json: boolean, only: string | null, skip: Set<string>, light: boolean}} */
+  const out = { json: false, only: null, skip: new Set(), light: false };
   for (const a of argv) {
     if (a === "--json") out.json = true;
+    else if (a === "--light") out.light = true;
     else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
     else if (a.startsWith("--skip-")) out.skip.add(a.slice("--skip-".length));
   }
@@ -160,19 +203,19 @@ function parseArgs(argv) {
  * 跑一段「脚本型」的复查 —— 子进程 + 退出码**原样**透传。
  *
  * 为什么透传而不是归一：三条判据的退出码含义是**同一套**（0 / 1 红 / 2 没跑起来），
- * 在中间层再翻译一遍就等于造第二个口径（§12.18）。中间层只负责「把三段的码合成
+ * 在中间层再翻译一遍就等于造第二个口径（§12.18）。中间层只负责「把各段的码合成
  * 一个总码」+「把输出都打出来」。
  *
  * @param {string} script
  * @param {string[]} args
  * @returns {{code: number, output: string}}
  */
-function runScript(script, args) {
+function runScript(script, args, extraEnv = {}) {
   const r = spawnSync(process.execPath, [path.join(HERE, script), ...args], {
     cwd: ROOT,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, CI: "1" },
+    env: { ...process.env, CI: "1", ...extraEnv },
   });
   /* Node 自己在 `MODULE_NOT_FOUND` 时也退 1 —— 与「判据红了」同形。所以「没跑起来」
    * 由**两路输出全空**（脚本连一行都没打出来）兜一层，再归一成 2。
@@ -191,7 +234,7 @@ function runScript(script, args) {
 }
 
 /**
- * 合成三段的总码：**2 优先于 1**（没法归因的读数不许被当成结论）。
+ * 合成各段的总码：**2 优先于 1**（没法归因的读数不许被当成结论）。
  *
  * @param {number[]} codes
  * @returns {number}
@@ -207,7 +250,7 @@ export function combineCodes(codes) {
  * @returns {number} 退出码
  */
 function main(argv) {
-  const { json, only, skip } = parseArgs(argv);
+  const { json, only, skip, light: lightRecompute } = parseArgs(argv);
 
   if (!isGitCheckout(ROOT)) {
     process.stderr.write(
@@ -222,7 +265,7 @@ function main(argv) {
   });
   if (wanted.length === 0) {
     process.stderr.write(
-      "[premerge] 三段全被跳过 —— 没有任何东西被复算（退 2）\n",
+      "[premerge] 各段全被跳过 —— 没有任何东西被复算（退 2）\n",
     );
     return 2;
   }
@@ -260,6 +303,25 @@ function main(argv) {
         });
         continue;
       }
+      /* 档位（ISSUE #2022 / §13.5.25）：合并前这一跳**默认跑全套** —— 业主的第二条口径是
+       * 「把 pre-commit 的内容挪到 pre-push」，也就是：提交那一档越快越好（只留形态档），
+       * 但重档不能没有本地执行者，它的家从 commit 搬到 push。
+       * `--light` 是反向的出口（在飞的改动想先推上去、把判定完全交给平台时用它），
+       * 用了就必须在读数里说清跳过了几条 —— 否则「premerge 绿」会被读成「全套复算过」，
+       * 而那正是本仓反复钉的假绿形状。
+       * 清单仍只有钩子那一份：`localTierLabels()` 从钩子文本的 `run_group D0` 块边界取，
+       * 不在这儿另立名单（两份名单的漂移是静默的）。 */
+      const localTier = localTierLabels();
+      const commands = lightRecompute
+        ? batch.commands.filter((c) => localTier.has(c.label))
+        : batch.commands;
+      const skippedCount = batch.commands.length - commands.length;
+      if (lightRecompute && skippedCount > 0) {
+        process.stdout.write(
+          `[premerge] --light：本段只复算本地档那几条，跳过 ${skippedCount} 条重档` +
+            "（这一跳不构成全套凭证；行为面由平台那一跑兜底）\n",
+        );
+      }
       /* `baseCheckMany` 自己把判决写进输出、**恒退 0**（「判据红了」是它要报告的事实）。
        * 合并前这一跳要的却是「红没红」这个**闸门**语义 —— 所以这里按它返回的
        * `summary` 折算：`current-green` = 0，`inconclusive` = 2，其余 = 1。
@@ -271,7 +333,7 @@ function main(argv) {
 
       const captured = captureStdout(() =>
         baseCheckMany({
-          commands: batch.commands,
+          commands,
           ref,
           keep: false,
           json: false,
@@ -300,6 +362,33 @@ function main(argv) {
         continue;
       }
       const r = runScript(script, [`HEAD`, "--baseline", anchor.baseline]);
+      results.push({ key, label: seg.label, code: r.code, output: r.output });
+      continue;
+    }
+    if (seg.kind === "changed") {
+      /* 从 commit 挪到 push 的那一档（§13.5.25）：**在本检出上跑**，清单是「这一推要带上
+       * 去的那些文件」。两件事不能改：① 不拿 `base` 那格的干净快照跑 —— 快照里没有这一推
+       * 的内容，判出来的受影响面是别人的；② 不在这里自己筛一遍 —— 名单由
+       * `run-affected-tests.mjs` 经 `COMFY_AFFECTED_CHANGED` 交给同一条判决链去算，
+       * 两处各筛一次的漂移是静默的（`tests/affected-tests.test.ts` 那条「归因与主链同源」
+       * 同一条理由）。
+       * 取不到清单（浅克隆 / 没有上游）⇒ **退 2**，不是退 0：这一档没判 = 没有证据。 */
+      const { script } = /** @type {{script: string}} */ (seg);
+      const files = pushBatchFiles();
+      if (files.length === 0) {
+        results.push({
+          key,
+          label: seg.label,
+          code: 2,
+          output:
+            "[premerge] 取不到「这一推要带上去的文件」清单 —— 受影响用例这一档没判，" +
+            "不构成证据（浅克隆 / 分叉点算不出来）\n",
+        });
+        continue;
+      }
+      const r = runScript(script, [], {
+        COMFY_AFFECTED_CHANGED: files.join("\n"),
+      });
       results.push({ key, label: seg.label, code: r.code, output: r.output });
       continue;
     }

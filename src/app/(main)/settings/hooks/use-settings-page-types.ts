@@ -115,6 +115,13 @@ export interface SettingsPageController {
   /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
   section: Section;
   setSection: (section: Section) => void;
+  /**
+   * 跳转载荷要求直接停驻、但**尚未落定**的分区；已落定（外壳真的滚过去并回调）
+   * 后为 null。外壳据此在分区节铺好之后瞬时滚过去。
+   */
+  pendingJump: Section | null;
+  /** 跳转目标真正落定 —— 外壳命中锚点后调它（清空 `pendingJump` + 消费载荷）。 */
+  ackJumpSection: () => void;
   /* 外观主题：Light / Dark（持久化偏好，统一走 next-themes）。 */
   theme: "light" | "dark";
   setTheme: (theme: "light" | "dark") => void;

@@ -300,8 +300,9 @@
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, prettier 格式,
-      重档静态判据
+      UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, 生成态文档与源同步,
+      API 文档生成物与源同步, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
+      零消费导出, core 出口纪律与基类纯度, 工作区出处, 重档静态判据
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
     # 而这两问的答案如今分在两处：会自己起一堆子进程的那两档（全量单测、`next build`）
@@ -1198,6 +1199,48 @@
   # 而判据本体是**逐文件跑 prettier**（每个改动过的源文件一次）。所以面就是
   # 「`SOURCE_RE` 认的扩展名在仓库里可能出现的那几棵树」—— 由 `stagedRoots()` 现算，
   # 这里写的是它现算的**上界**（顶层目录 + 根级配置名）；判宽只会少省几秒，判窄是漏判。
+
+  # ── 收进聚合档的那几格：**原文以注释形态留在这里**，名字仍在 `COMFYAPP_CI_GATES` 里 ──
+  #
+  # 这是「停用 ≠ 删除」机制在**页内**的第三种形态（前两种见 `COMFYAPP_CI_DISABLED_GATES`
+  # 那两条注释）：这几格的名字**仍在 `COMFYAPP_CI_GATES` 里**（它们没被停用，是换了执行者
+  # —— 从「各自一格」换成下面那一格的条目），所以判据对它们的要求不是「名字进停用清单」，
+  # 而是**原文 grep 得回来**：`tests/ci-incremental-gates.test.ts` / `ci-autofix-duties.test.ts`
+  # 双向核对「登记过的条目 ⇒ 聚合档里真有那一行」「这里带 `--autofix` 的条目 ⇒ 登记过」。
+  #
+  # ⚠️ 别把这段当成「已经删了」的残留清理掉：抹掉它 = 「悄悄删掉」与「收进聚合档」在配置里
+  # 重新变成同形，而那正是本仓花了两轮才分开的两件事。
+  #
+  # 恢复动作（真要拆回独立 stage）：取消注释 → 从下面聚合档的条目表删掉同名条目
+  # → 若它带 `ifModify`，同批登记进 `scripts/ci-incremental-gates.mjs`。
+  #
+  # - name: 格式化提交分离
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
+  # - name: 生成态文档与源同步
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
+  # - name: API 文档生成物与源同步
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
+  # - name: 覆盖率上报
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
+  # - name: 文档引用与权威源一致
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
+  # - name: core 骨架单一事实源
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+  # - name: 零消费导出
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
+  # - name: core 出口纪律与基类纯度
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+
+  # ⚠️ **执行面是钩子注册表，不是条目表**（两轮合并之后的口径）：这一格跑的命令是
+  # `node scripts/ci-heavy-gates.mjs`，而它读的正是 `.githooks/pre-commit` 里那些
+  # `run "<标签>" <命令>` 步骤行 —— 也正是 `scripts/check-gate-executors.cjs` 认的出处
+  # 之一。所以「把步骤从钩子里删掉」从来不是挪档的正确形态（那等于删执行者，而
+  # `.cnb.yml` 不被台账认作执行者），正确形态是**步骤留在钩子里、由档位决定谁执行**。
+  # `scripts/ci-heavy-gates.mjs` 里的 `HEAVY_GATES` 因此只剩**登记面**的角色（哪几条
+  # 判据会自己改工作区 / 哪一格被收窄），不再是跑批清单。
+  # 只剥那个「只看暂存区」的旗标（CI 没有暂存区，留着它判的是「空提交」= 一条恒绿的
+  # 判据），参数一律不改 —— 改一个参数就是改判据。
+  # 与上面几格同理带 cp936 那层：这一档红的时候必须读得出是哪一条判据、为什么。
 
   # ── 重档静态判据：一格，一次 job，内部按顺序逐条跑 ─────────────────────────
   #

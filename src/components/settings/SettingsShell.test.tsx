@@ -177,6 +177,51 @@ describe("SettingsShell", () => {
     expect(onSelect).toHaveBeenCalledWith("logs");
   });
 
+  it("跳转载荷：分区节挂好后**瞬时**滚到目标节，并回调消费", () => {
+    /* DOM 档里没有 `scrollIntoView` 的实现 —— 不 stub 会直接抛。 */
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const onJumpApplied = vi.fn();
+    render(
+      <SettingsShell
+        section="comfyui"
+        onSelect={vi.fn()}
+        jumpSection="comfyui"
+        onJumpApplied={onJumpApplied}
+        sections={sectionsStub()}
+      />,
+    );
+    /* 落点用 `behavior: "auto"`（瞬时）：平滑动画期间观察器会先报当前视图里
+       那几节，高亮会闪一下再跳到位。 */
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: "start",
+      behavior: "auto",
+    });
+    expect(scrollIntoView.mock.instances[0]).toBe(
+      document.getElementById(sectionAnchorId("comfyui")),
+    );
+    /* 真的滚过去了 ⇒ 回调消费载荷（容器据此清空一次性载荷）。 */
+    expect(onJumpApplied).toHaveBeenCalledTimes(1);
+  });
+
+  it("三态外壳没有分区节：滚不过去，也就**不**消费跳转载荷", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const onJumpApplied = vi.fn();
+    render(
+      <SettingsShell
+        section="comfyui"
+        onSelect={vi.fn()}
+        fallback={<p>正在读取设置…</p>}
+        jumpSection="comfyui"
+        onJumpApplied={onJumpApplied}
+      />,
+    );
+    /* 加载 / 失败壳里没有锚点 ⇒ 载荷先留着，等就绪外壳挂上后再落。 */
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(onJumpApplied).not.toHaveBeenCalled();
+  });
+
   it("页签已在说屏名时不重复可见标题：屏名收进 sr-only（ISSUE #1872）", () => {
     renderShellWithTitle(undefined);
     /* 可见的那一行 `h1`（`.u-title-page`）不在 —— 页签 + 顶栏已经在写「设置」。 */

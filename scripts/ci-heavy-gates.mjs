@@ -31,14 +31,30 @@
  * `--autofix` 的条目 ⇒ 登记过」，所以「哪一档会自己改工作区」「哪一格被收窄」这两件
  * 事依然各只有一处出处。
  *
+ * ## 执行面：钩子注册表（合并后口径）
+ *
+ * 本文件里有两件事，此前混在一起，现在分开：
+ *
+ *   · **登记面** = 下面的 `HEAVY_GATES` 条目表。它回答「原来哪几条 stage 收进了这一格」，
+ *     是 `scripts/ci-autofix-duties.mjs` 与 `scripts/ci-incremental-gates.mjs` 的唯一出处
+ *     （「哪一档会自己改工作区」「哪一格被收窄」都按条目名登记）。
+ *   · **执行面** = `.githooks/pre-commit` 里那些 `run "<标签>" <命令>` 步骤行。
+ *     这也是 `scripts/check-gate-executors.cjs` 认的执行者出处之一。所以「把步骤从钩子里
+ *     删掉」从来不是挪档的正确形态（那等于删执行者），正确形态是**步骤留在钩子里、
+ *     由档位决定谁执行** —— 平台这一格读的就是同一份注册表。
+ *
+ * 两条主干的两种做法在这里合流：一边把十条 stage 收成一格（治的是「每格各付一次 job
+ * 开销」），一边让这一格读钩子注册表（治的是「清单抄成第二份」）。合起来仍然只有
+ * 一处执行面，条目表只作为登记面保留。
+ *
  * 用法：`node scripts/ci-heavy-gates.mjs [--only 条目名 …]`
  *   （`--only` 只给人手工排查用；`.cnb.yml` 里不带它 —— 平台侧永远跑全）
  */
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+
+import { readHookSteps, runGate } from "./base-check/hook-steps.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -113,111 +129,115 @@ export const HEAVY_GATES = [
 
 /** 条目名集合（登记表与自测共用，避免各处重算）。 */
 export const HEAVY_GATE_NAMES = new Set(HEAVY_GATES.map((g) => g.name));
-
 /**
- * 起一条判据并转述它的结论。
+ * 把注册表里的步骤变成「全量档」的命令：只剥 `--staged` 这一个旗标。
  *
- * `stdio: "inherit"` 而不是抓输出：这一格在平台侧整体包在 `ci-cp936-exit.mjs` 里，
- * 输出要**边到边流**出去（那个文件头记着「攒到 close 才发 = 被 kill 时整轮日志为零」）。
- * 抓一层再一次性打出去会把那条修好的性质当场退化。
+ * 刻意不做别的改写 —— 每条步骤的参数就是它自己的判据口径，改一个参数就是改判据。
+ * 平台侧没有暂存区，留着 `--staged` 判的是「空提交」= 一条**恒绿**的判据
+ * （本仓最恨的那一型）。
  *
- * @param {HeavyGate} gate
- * @returns {number} 该条判据的退出码
+ * @param {string[]} argv
+ * @returns {string[]}
  */
-function runGate(gate) {
-  const [command, ...args] = gate.argv;
-  if (command === undefined) return 1;
-  const started = Date.now();
-  console.log(`\n[heavy-gates] ▶ ${gate.name}（${gate.argv.join(" ")}）`);
-  const res = spawnSync(command, args, {
-    cwd: ROOT,
-    stdio: "inherit",
-    /* Windows 上 `.bin/*` 是垫片（`.cmd` / `.ps1`），`shell: false` 起不来 —— 与本仓
-     * 其它「起子进程」的入口同一条处置（`ci-cp936-exit.mjs` 的 `resolveShellInvocation`）。 */
-    shell: process.platform === "win32",
-  });
-  const seconds = ((Date.now() - started) / 1000).toFixed(1);
-  const code = res.status ?? 1;
-  console.log(
-    code === 0
-      ? `[heavy-gates] ✓ ${gate.name}（${seconds}s）`
-      : `[heavy-gates] ✗ ${gate.name}（${seconds}s，退出码 ${code}）`,
-  );
-  return code;
+export function fullTreeArgv(argv) {
+  return argv.filter((a) => a !== "--staged");
 }
 
 /**
- * 取一条判据的**入口路径**。
+ * 跑完整张注册表。
  *
- * `argv` 的第一个元素是宿主（`node`，或可直接执行的 `node_modules/.bin/*`），
- * 第二个才是入口 —— 但 `node <入口>` 与 `<入口> run …` 两种形态里，入口都在第
- * 二项 **除了** `argv[0]` 本身是 `.bin/*` 那种直接执行的形态。判法按「谁是真入口」：
- * `argv[0] === "node"` ⇒ 入口是 `argv[1]`；否则入口是 `argv[0]`。
- *
- * @param {HeavyGate} gate
- * @returns {string}
+ * @param {{cwd?: string, only?: string | null}} [io]
+ * @returns {{runs: {label: string, code: number, output: string}[], unreadable: boolean}}
+ *   `unreadable` = 注册表本身没读出来（钩子文件不在 / 解析零条）—— 那是
+ *   「本档不构成证据」，不是「没有档要跑」。
  */
-function entryOf(gate) {
-  return gate.argv[0] === "node" ? (gate.argv[1] ?? "") : (gate.argv[0] ?? "");
-}
-
-/** 缺件时不静默：入口不在盘上就是配置写错了，按失败报，并说清是哪一条。 */
-function missingEntries() {
-  return HEAVY_GATES.filter((g) => {
-    const entry = entryOf(g);
-    return entry !== "" && !existsSync(path.join(ROOT, entry));
-  }).map((g) => `${g.name} → ${entryOf(g)}`);
-}
-
-function main() {
-  /** @type {string[]} */
-  const only = [];
-  const argv = process.argv.slice(2);
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === "--only") {
-      const next = argv[i + 1];
-      if (next !== undefined) only.push(next);
-      i += 1;
-    }
+export function runHeavyGates(io = {}) {
+  const cwd = io.cwd ?? ROOT;
+  const only = io.only ?? null;
+  /* 注册表按**这个 cwd** 取，不写成模块自己的 ROOT：否则注入的目录（用例给的那个没有
+   * 钩子的临时目录）照样读到真仓库的 50 条 ⇒ 「没跑起来」那一档在测试里永远命中不了，
+   * 而它正是这条判据唯一有牙的地方。 */
+  const all = readHookSteps(path.join(cwd, ".githooks", "pre-commit"));
+  if (all.length === 0) return { runs: [], unreadable: true };
+  const steps = only
+    ? all.filter(
+        (s) => HEAVY_GATE_NAMES.has(s.label) || s.argv.join(" ").includes(only),
+      )
+    : all;
+  /** @type {{label: string, code: number, output: string}[]} */
+  const runs = [];
+  for (const step of steps) {
+    const r = runGate(fullTreeArgv(step.argv), cwd);
+    runs.push({ label: step.label, code: r.code, output: r.output });
   }
-  const selected =
-    only.length === 0
-      ? [...HEAVY_GATES]
-      : HEAVY_GATES.filter((g) => only.includes(g.name));
+  return { runs, unreadable: false };
+}
 
-  if (selected.length === 0) {
-    console.error(
-      `[heavy-gates] ✗ 没有匹配的条目：${only.join(" / ")}（可选：${[...HEAVY_GATE_NAMES].join(" / ")}）`,
+/**
+ * 入口：跑 + 打 + 定退出码。
+ *
+ * 三态退出码与 `premerge-check.mjs` / `base-check.mjs` **逐字同口径**：
+ *   `0` = 全绿；`1` = 有档红了；`2` = 有档**没跑起来**（`runGate` 的 127 哨兵）。
+ * 「没跑起来」与「跑了且红」必须在退出码上分开，否则前者会被读成后者。
+ *
+ * @param {{cwd?: string, argv?: string[], log?: (line: string) => void}} [io]
+ * @returns {number}
+ */
+export function main(io = {}) {
+  const argv = io.argv ?? process.argv.slice(2);
+  const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
+  const onlyArg = argv.find((a) => a.startsWith("--only="));
+  const only = onlyArg ? onlyArg.slice("--only=".length) : null;
+  const { runs, unreadable } = runHeavyGates({ cwd: io.cwd, only });
+
+  if (unreadable) {
+    log(
+      "[重档] 没跑起来：读不到 `.githooks/pre-commit` 的步骤注册表（0 条）—— " +
+        "本档不构成证据，不是「没有判据要跑」",
     );
+    return 2;
+  }
+
+  const red = runs.filter((r) => r.code !== 0 && r.code !== 127);
+  const missing = runs.filter((r) => r.code === 127);
+  if (argv.includes("--json")) {
+    log(
+      JSON.stringify(
+        {
+          total: runs.length,
+          red: red.map((r) => r.label),
+          notRun: missing.map((r) => r.label),
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    runs.forEach((r, i) => {
+      const tag = r.code === 0 ? "ok" : r.code === 127 ? "没跑起来" : "红";
+      log(`[重档] ${i + 1}/${runs.length} ${tag} ${r.label}`);
+      if (r.code !== 0) {
+        const tail = String(r.output ?? "")
+          .trim()
+          .split(/\r?\n/)
+          .slice(-12);
+        for (const line of tail) log(`        ${line}`);
+      }
+    });
+  }
+  log(
+    `[重档] 合计 ${runs.length} 条：红 ${red.length}、没跑起来 ${missing.length}、` +
+      `绿 ${runs.length - red.length - missing.length}`,
+  );
+  if (red.length > 0) {
+    for (const r of red) log(`[重档] ✗ ${r.label}`);
     return 1;
   }
-
-  const missing = missingEntries();
   if (missing.length > 0) {
-    console.error(
-      `[heavy-gates] ✗ 这些条目的入口不在盘上 —— 配置与盘上漂了，先修其中一边：\n  ${missing.join("\n  ")}`,
-    );
-    return 1;
+    // 127 单列一档并退 2：把它并进「红」就等于宣布「判据判出失败」，而事实是它没判。
+    for (const r of missing) log(`[重档] ? ${r.label} —— 没跑起来，不等于通过`);
+    return 2;
   }
-
-  console.log(
-    `[heavy-gates] 本次 ${selected.length} 条，串行跑（并行会把节点压成「谁都不推进」的形态）`,
-  );
-  const failed = [];
-  for (const gate of selected) {
-    const code = runGate(gate);
-    if (code !== 0) failed.push(`${gate.name}（退出码 ${code}）`);
-  }
-
-  if (failed.length > 0) {
-    /* 逐条失败都点名：这一格**不许**在第一条红时停下 —— 停下的形态正是「后面哪条红过
-     * 一次都看不出来」，而它被合起来的意义正是让一轮就能看到全部读数。 */
-    console.error(
-      `\n[heavy-gates] ✗ ${failed.length}/${selected.length} 条红：\n  ${failed.join("\n  ")}`,
-    );
-    return 1;
-  }
-  console.log(`\n[heavy-gates] ✓ ${selected.length} 条全绿`);
   return 0;
 }
 
@@ -225,8 +245,8 @@ function main() {
  * `HEAVY_GATES`）只暴露纯数据与函数 —— 否则 `process.exit()` 会当场把测试进程杀掉，
  * 而那件事的形态是「用例一条都没跑、套件却红了」，读起来与真红完全两样。 */
 if (
-  process.argv[1] &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   process.exit(main());
 }

@@ -267,6 +267,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
    * 面板会以为「日志里什么也没有」，正是 ISSUE #360 里最难排查的那种空白。
    * 只在**状态翻转**时写一条（不刷屏），恢复后再翻转回正常。 */
   const unreachableRef = useRef(false);
+  /* 背压闸：上一轮六路来源还没跑完时跳过这一拍。理由见本轮拉取处的说明
+   * （一轮六路并行的突发会占满浏览器的同源连接预算）。`false` = 空闲。 */
+  const roundBusyRef = useRef(false);
   /* 卸载守卫：`useInterval` 卸载即停间隔，但**已发出的那次请求仍可能回来**
    * 并在组件消失后 `setState` —— 所以 `mountedRef` 保留（规范 16 §16.2.4.15）。 */
   const mountedRef = useRef(true);
@@ -346,10 +349,35 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    /* 四路并行拉取：此前 `for await` 串行，一轮 = 4 次往返叠加在单进程 Next
-     * 上排队；改 Promise.all 后一轮 ≈ 1 次往返。各源已在 pollSource 内自行
-     * try/catch（网络失败只记一次「不可达」），单源出错不会让整批 reject。 */
-    await Promise.all(POLL_SOURCES.map((source) => pollSource(source)));
+    /* 六路来源**串行**拉取（此前是 `Promise.all` 六路并行）。
+     *
+     * 为什么从并行改回串行：浏览器对同源 HTTP/1.1 只有 **6 条**连接预算，而六路
+     * 并行一轮就把整份预算占满 —— 叠加同一时刻的其它来源（`/api/dev/server-id`
+     * 探活、`/api/comfy/state` 长轮询、`/api/comfy/liveness` SSE、tRPC 批量请求、
+     * 按需编译的分块），浏览器网络栈当场报资源不足，把**与日志无关**的请求也打成
+     * `net::ERR_INSUFFICIENT_RESOURCES`（本机 3885 实测：同一时刻的
+     * `/api/comfy/state`、`/api/dev/build-id`、`/api/update-check` 一并中招）。
+     * 其中就有用户点「去设置里配置」时才**按需**发出的设置分块 `import()`：它失败
+     * 后走 `lazy-chunk-recovery` 的整页刷新，在飞的 tRPC 被中断（`Failed to fetch`），
+     * 刷新后连续两拍探活失败即翻成「应用服务已断开」。
+     *
+     * 串行把「任何时刻至多 1 条在途日志请求」变成不变量，连接预算让给真正按需发出
+     * 的请求；一轮耗时（六路各 50~200ms）仍远小于 `POLL_MS`，面板的「实时感」没有
+     * 可感差别。各源已在 pollSource 内自行 try/catch（网络失败只记一次「不可达」），
+     * 单源出错不会中断整轮；`roundBusyRef` 另给一条背压闸 —— 一轮超过间隔时原来会
+     * 直接叠出第二轮（六路变十二路），现在跳过这一拍。 */
+    if (roundBusyRef.current) return;
+    roundBusyRef.current = true;
+    try {
+      for (const source of POLL_SOURCES) {
+        /* 卸载即停：剩下的来源不必再问（已发出的那一发由 pollSource 自查
+         * `mountedRef`）。 */
+        if (!mountedRef.current) return;
+        await pollSource(source);
+      }
+    } finally {
+      roundBusyRef.current = false;
+    }
   }, [addEntry, appendFileLogs, setSessionStart, setBootId]);
 
   /* 每 `POLL_MS` 拉一次；挂载即先拉一次（`immediate`），切后台暂停

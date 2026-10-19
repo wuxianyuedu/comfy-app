@@ -71,10 +71,15 @@ export interface AppEvents {
    * 容器（`app/workspace/page.tsx`）之间隔着 `WorkshopPipeline` / `WorkshopAside`
    * 两层，为一条「跳过去」的链接穿三层 props 不划算；订阅侧也只有一处。
    *
-   * 载荷刻意写成 `string` 而不是 import `WorkspaceView`：本模块在 `src/lib`，
-   * 不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
+   * `section` 是可选的目标分区 id，**只在 `view === "settings"` 时有意义**：
+   * 设置是一页到底的分区目录，光切到「设置」只会落在默认（或上次）分区 ——
+   * 从别处跳过来的入口（如 ComfyUI 页的「去设置里配置」）要的是「直接停在
+   * 创作后端那一节」，光有 `view` 表达不了。
+   *
+   * 载荷刻意写成 `string` 而不是 import `WorkspaceView` / `Section`：本模块在
+   * `src/lib`，不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
    */
-  "workspace:navigate": { view: string };
+  "workspace:navigate": { view: string; section?: string };
   /**
    * 自定义节点注册表被重新灌入（画布挂载时那一次、以及每次解析收尾后的那一次）。
    * 载荷：无 —— 结论本身可查（`~/config/custom-nodes` 的
