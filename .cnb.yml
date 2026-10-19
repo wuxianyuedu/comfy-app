@@ -1454,3 +1454,27 @@ master:
     - <<: *common
       name: 每日档（手动触发）
       stages: *daily_gates
+
+  # ── 第三个触发口：CLI / API —— 与上面两条**同一份七格** ──
+  #
+  # 为什么手点那个按钮还不够：按钮要**一双手**。实测踩到的形态是「修完想立刻复验」那一趟 ——
+  # 改动已经进 master，而自动化这边既打不开那个按钮、服务端也**拒绝**用 CLI 发
+  # `web_trigger_daily`（`start-build` 的 `--event` 只认 `api_trigger` 或其前缀，实测 400
+  # `Event must be 'api_trigger' or start with 'api_trigger_'.`）。于是「四格依次过」这件事
+  # 的机器证明只能等人手点，或等到第二天 04:00 —— 这两条都不是修法，是把这个洞留给下一个人。
+  #
+  # 与 `web_trigger_daily` 的三点差别，都在这段配置里，不写在注释之外的任何地方：
+  #   · **没有按钮声明文件**：那个口靠 `.cnb/web_trigger.yml` 与事件名成对；这一条不需要，
+  #     事件名本身就是 API 的入参（所以它也没有 `reg` 那一层「哪些分支显示按钮」的问题，
+  #     分支由 `--branch` 给，缺省是主分支）。
+  #   · **事件名不许改名成别的形状**：`api_trigger` 开头是**服务端的硬要求**，写成
+  #     `daily_api` 之后这一条会永远没人能触发，而配置解析期一个字都不报 ——
+  #     这一条由 `tests/no-platform-ci-config.test.ts` 判（判前缀，不判整串名字）。
+  #   · **执行身份**是发命令的那个人（与手点同族，都不是「最后改这份配置并推送的人」）。
+  #
+  # `lock` 同样继承 `*common` ⇒ 三条触发口共用一把锁，不会出现两个触发口在同一台机上
+  # 同时压一遍七格（表现为后起的那一跑把前一跑 `cancel-in-progress` 掉）。
+  api_trigger_daily:
+    - <<: *common
+      name: 每日档（API 触发）
+      stages: *daily_gates
