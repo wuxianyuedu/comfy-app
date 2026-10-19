@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { AUTOFIX_DUTIES } from "../scripts/ci-autofix-duties.mjs";
 import {
-  DECLARED_SHA_ENV,
+  DECLARED_SHA_ENVS,
   parseStatus,
   provenanceVerdict,
   underWriter,
@@ -112,18 +112,57 @@ describe("三格的判定与档位", () => {
     prefixes: ["docs/generated/", "docs/api/"],
   };
 
-  it("① HEAD 与声明一致 ⇒ ok；不一致 ⇒ 红；任一侧拿不到 ⇒ 「未校验」而不是红", () => {
+  /**
+   * 出处那一格问的是「有没有**含**声明的那一份」，不是「逐字等于」。
+   *
+   * 平台对 `pull_request` 事件检出的是临时合并提交：本档上线后连着两跑红在这一格，
+   * 两次 HEAD 各不相同（`7776cc6bfb1f` / `aa0a02578300`）而声明面是 `202c7524` /
+   * `c87f48c7`，两个 HEAD 都不在任何远程引用上。逐字相等从第一天起就不成立 ——
+   * 这四档把它钉成形状：等 ⇒ ok、含 ⇒ ok、不含 ⇒ 红、算不出 ⇒ 未校验。
+   */
+  it("① 等 ⇒ ok；含（祖先）⇒ ok 并交出父提交与树；不含 ⇒ 红；算不出 ⇒ 未校验", () => {
     const sha = "a".repeat(40);
+    const other = "b".repeat(40);
+    const shape = { parents: [sha, "c".repeat(40)], tree: "d".repeat(40) };
     expect(provenanceVerdict({ ...base, declared: sha, head: sha }).red).toBe(
       false,
     );
-    const mismatch = provenanceVerdict({
+    const merged = provenanceVerdict({
       ...base,
       declared: sha,
-      head: "b".repeat(40),
+      head: other,
+      contains: true,
+      shape,
     });
-    expect(mismatch.red).toBe(true);
-    expect(mismatch.lines.join("\n")).toContain("出处·红");
+    expect(merged.red).toBe(false);
+    const mergedText = merged.lines.join("\n");
+    expect(mergedText).toContain("出处·ok");
+    expect(mergedText).not.toContain("不是同一份"); // 旧的假前提话术不许回潮
+    expect(mergedText).toContain("父提交 2 个");
+    expect(mergedText).toContain("树 " + shape.tree.slice(0, 12));
+    const stale = provenanceVerdict({
+      ...base,
+      declared: sha,
+      head: other,
+      contains: false,
+      shape,
+    });
+    expect(stale.red).toBe(true);
+    expect(stale.lines.join("\n")).toContain("出处·红");
+    const unknownRelation = provenanceVerdict({
+      ...base,
+      declared: sha,
+      head: other,
+      contains: null,
+    });
+    expect(unknownRelation.red, "拿不到祖先关系就判红 = 把缺测量当结论").toBe(
+      false,
+    );
+    expect(unknownRelation.lines.join("\n")).toContain("出处·未校验");
+  });
+
+  it("① 拿不到声明 ⇒ 「未校验」而不是红（这一条与上一条不同格：缺一侧 vs 缺关系）", () => {
+    const sha = "a".repeat(40);
     for (const declared of [null, undefined, ""]) {
       const unknown = provenanceVerdict({
         ...base,
@@ -197,8 +236,14 @@ describe("三格的判定与档位", () => {
     expect(text).toContain("另 1 处");
   });
 
-  it(`${DECLARED_SHA_ENV} 这一格的名字本身就是判据的一部分（换了注入键要当场发现）`, () => {
-    expect(DECLARED_SHA_ENV).toBe("CNB_COMMIT");
+  it(`${DECLARED_SHA_ENVS.join(" / ")} 这组键名与**顺序**都是判据的一部分`, () => {
+    /* 键名换了会当场发现（这条原来就在）；顺序是新增的那半 —— PR 事件上 HEAD 等于 merge
+     * 面而不是源 head 面，把它排到后面就等于回到那两跑的红（假红会教会所有人绕过这一档，
+     * 见 §13.5.3.4.2 与本文件那段注释）。 */
+    expect(DECLARED_SHA_ENVS).toEqual([
+      "CNB_PULL_REQUEST_MERGE_SHA",
+      "CNB_COMMIT",
+    ]);
   });
 });
 
@@ -240,6 +285,78 @@ describe("出口", () => {
         env: { CNB_COMMIT: sha, COMFYAPP_CI_PROBE_DIR: dir },
         run,
         spawn: () => ({ status: 128, stdout: "" }),
+        ledgerDir: dir,
+      }),
+    ).toBe(0);
+  });
+
+  /**
+   * 祖先关系那一格的**三值**必须在 git 封装上就分得开（不是只在纯函数里想过）。
+   *
+   * `merge-base --is-ancestor` 对「对象根本不在这里」与「在、但不是祖先」退的都是非零 ——
+   * 直接把退出码当结论，会把「取不到测量」读成「测量结果为假」，于是常驻工作区一旦没带上
+   * 那个对象就全红，而真正该红的陈旧树混在里面看不出来（§13.6.4.1 那一类）。
+   * 所以先单独验对象在不在，再判祖先，两条各退各的档。
+   */
+  it("HEAD ≠ 声明时：含 ⇒ 0、不含 ⇒ 1、对象取不到 ⇒ 0（未校验而不是红）", () => {
+    const dir = tmpLedgerDir();
+    const declared = "a".repeat(40);
+    const head = "b".repeat(40);
+    const face =
+      (verifyOk: boolean, ancestorOk: boolean) =>
+      (cmd: string, args: string[]) => {
+        if (cmd !== "git") return { ok: false, out: "" };
+        if (args[0] === "rev-parse" && args[1] === "HEAD")
+          return { ok: true, out: head };
+        if (args[0] === "rev-parse" && args[1] === "--verify")
+          return { ok: verifyOk, out: verifyOk ? declared : "" };
+        if (args[0] === "merge-base")
+          return {
+            ok: ancestorOk,
+            out: ancestorOk ? "" : "fatal: Not a valid object name",
+          };
+        if (args[0] === "log") return { ok: true, out: declared };
+        return { ok: false, out: "" };
+      };
+    const call = (verifyOk: boolean, ancestorOk: boolean) =>
+      main({
+        cwd: path.sep,
+        env: { CNB_COMMIT: declared, COMFYAPP_CI_PROBE_DIR: dir },
+        run: face(verifyOk, ancestorOk),
+        spawn: () => ({ status: 0, stdout: "" }),
+        ledgerDir: dir,
+      });
+
+    expect(call(true, true)).toBe(0);
+    expect(call(true, false)).toBe(1);
+    expect(call(false, false)).toBe(0);
+  });
+
+  /**
+   * PR 事件那一跑的真实形状（这次假红的原位复现）：HEAD 是 merge 提交，
+   * 而 `CNB_COMMIT` 是源分支 head —— 两个键都在场时**必须**先认 merge 面。
+   *
+   * 这条不是假想题：前两条构建就是这样红的（`7776cc6bfb1f` / `aa0a02578300` 对
+   * `202c7524` / `c87f48c7`），而规范 §13.5.3.4.2 早已记下「要比对的是
+   * `CNB_PULL_REQUEST_MERGE_SHA`」。它钉住的是「别再拿另一个键去断言」这个顺序本身。
+   */
+  it("PR 形态：merge 面 == HEAD 而源 head 面 ≠ HEAD ⇒ ok（不许再假红）", () => {
+    const dir = tmpLedgerDir();
+    const mergeSha = "e".repeat(40);
+    const sourceSha = "f".repeat(40);
+    expect(
+      main({
+        cwd: path.sep,
+        env: {
+          CNB_PULL_REQUEST_MERGE_SHA: mergeSha,
+          CNB_COMMIT: sourceSha,
+          COMFYAPP_CI_PROBE_DIR: dir,
+        },
+        run: (cmd: string, args: string[]) =>
+          cmd === "git" && args[1] === "HEAD"
+            ? { ok: true, out: mergeSha }
+            : { ok: false, out: "" },
+        spawn: () => ({ status: 0, stdout: "" }),
         ledgerDir: dir,
       }),
     ).toBe(0);

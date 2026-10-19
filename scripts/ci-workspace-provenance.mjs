@@ -57,8 +57,20 @@ const ROOT = path.resolve(HERE, "..");
 
 /** 本档的账文件名（与 `comfyapp-ci-workspace-probe.json` 同目录、不同本）。 */
 export const LEDGER_FILE = "comfyapp-ci-workspace-provenance.json";
-/** 平台注入的「这次要跑哪份提交」—— 取不到就走「未校验」。 */
-export const DECLARED_SHA_ENV = "CNB_COMMIT";
+/**
+ * 平台注入的「这次要跑哪份提交」—— 按事件形态取第一个非空者，全取不到就走「未校验」。
+ *
+ * 顺序是这条判据的**内容**而不是风格问题（§13.5.3.4.2 第二跑那段早就记过这件事，本档
+ * 第一次上线却把它犯了）：`pull_request` 事件上工作区的 HEAD 是一枚**临时合并提交**
+ * （源 head 合上 target 当时的事实），它逐字**不等于** `CNB_COMMIT`（那是源分支 head）。
+ * 只拿 `CNB_COMMIT` 去断言 ⇒ 每一跑 PR 都假红，而假红会教会所有人绕过这一档 ——
+ * 比没有判据更坏。实测：本档前两条构建（`cnb-bkm-1k59gdkro` / `cnb-7rd-1k59j1mc4`）
+ * 各红在此，两次 HEAD 互不相同（`7776cc6bfb1f` / `aa0a02578300`）且都不在任何远程引用上。
+ *
+ * 于是三层：先按 merge 面对（PR 事件的正解）→ 再按源 head 面（push / 分支事件）→
+ * 都不等时问「**含不含**」（祖先关系），那才是「这一跑有没有跑到这份码」这句话本身。
+ */
+export const DECLARED_SHA_ENVS = ["CNB_PULL_REQUEST_MERGE_SHA", "CNB_COMMIT"];
 
 /**
  * 被登记为「会写工作区」的路径前缀 —— **从 `AUTOFIX_DUTIES` 派生**，不在这里重抄。
@@ -142,11 +154,31 @@ export function parseStatus(raw) {
 /**
  * 三格判定。**纯函数**：不碰 fs、不碰 git，全部输入由调用方给（判据据此能注入夹具）。
  *
- * @param {{declared?: string | null, head?: string | null, trackedDirty: string[], untracked: string[], prefixes: string[]}} input
+ * 出处那一格问的是「**这一跑有没有含这次事件声明的那份源码**」，不是「HEAD 逐字等于
+ * 它」—— 平台对 `pull_request` 事件检出的是一枚**临时合并提交**（head 合上 target 当时
+ * 的样子），它本来就不等于任何推送出去的 SHA，也不在任何引用上。实测（ISSUE #2022）：
+ * 本档第一次上线就连着两跑红在这一格，两次的 HEAD 各不相同（`7776cc6bfb1f` /
+ * `aa0a02578300`）而声明面分别是 `202c7524` / `c87f48c7`，两个 HEAD 都取不到于任何
+ * 远程引用 —— 逐字相等是一个从一开始就不成立的形状。
+ *
+ * 所以三档：相等 ⇒ ok；声明 SHA 是 HEAD 的祖先 ⇒ ok 并把父提交与树一起打出来（这才是
+ * 「跑的是这份码 + master」的证据）；都不是 ⇒ 红（跑错源码 / 陈旧工作区）。祖先关系
+ * **算不出来**（声明对象在本检出里取不到）⇒ 未校验 —— 拿不到测量不等于测量结果是红。
+ *
+ * @param {{declared?: string | null, declaredFrom?: string | null, head?: string | null, contains?: boolean | null, shape?: {parents: string[], tree: string | null}, trackedDirty: string[], untracked: string[], prefixes: string[]}} input
  * @returns {{red: boolean, lines: string[], offenders: string[]}}
  */
 export function provenanceVerdict(input) {
-  const { declared, head, trackedDirty, untracked, prefixes } = input;
+  const {
+    declared,
+    declaredFrom = DECLARED_SHA_ENVS[0],
+    head,
+    contains = null,
+    shape = { parents: [], tree: null },
+    trackedDirty,
+    untracked,
+    prefixes,
+  } = input;
   const lines = [];
   let red = false;
 
@@ -154,6 +186,9 @@ export function provenanceVerdict(input) {
   const norm = (s) => (s ?? "").trim().toLowerCase().slice(0, 12);
   const want = norm(declared);
   const have = norm(head);
+  const shapeReadout =
+    `父提交 ${shape.parents.length} 个（${shape.parents.slice(0, 3).join(" ") || "无 —— 根提交"}）` +
+    `·树 ${norm(shape.tree) || "取不到"}`;
   if (!want || !have) {
     lines.push(
       `出处·未校验 声明 SHA=${want || "拿不到"} / HEAD=${have || "拿不到"} —— ` +
@@ -161,12 +196,25 @@ export function provenanceVerdict(input) {
     );
   } else if (want === have) {
     lines.push(
-      `出处·ok HEAD == ${have}（就是 ${DECLARED_SHA_ENV} 声明的那一份）`,
+      `出处·ok HEAD == ${have}（就是 ${declaredFrom} 声明的那一份）·${shapeReadout}`,
+    );
+  } else if (contains === true) {
+    lines.push(
+      `出处·ok HEAD=${have} **含**声明的那一份 ${want}` +
+        `（来自 ${declaredFrom} ⇒ 这一跑确实跑到了这份码；它为何不等于该 SHA 看同一行的形状）` +
+        `·${shapeReadout}`,
+    );
+  } else if (contains === null) {
+    lines.push(
+      `出处·未校验 HEAD=${have} ≠ 声明的 ${want}，而祖先关系算不出来` +
+        `（声明对象在本检出里取不到）——${shapeReadout}`,
     );
   } else {
     red = true;
     lines.push(
-      `出处·红 HEAD=${have} 而平台声明的是 ${want} —— 这一跑跑的源码与这次事件不是同一份`,
+      `出处·红 HEAD=${have} 既不是声明的 ${want}，也**不含**它 ⇒ 这一跑的树里没有这份码` +
+        `（形态上指向工作区陈旧 / 被复用 / 检出错分支，但本档只判「含不含」，不替它认原因）` +
+        `·${shapeReadout}`,
     );
   }
 
@@ -247,6 +295,43 @@ function headSha(cwd, runCmd) {
 }
 
 /**
+ * 声明的那一份是不是 HEAD 的祖先？三值：`true` / `false` / `null`（算不出来）。
+ *
+ * 先单独验对象在不在：`merge-base --is-ancestor` 对「不存在的对象」与「存在但不是祖先」
+ * 都退非零，直接把它的退出码当结论会把**取不到测量**读成**测量结果为假**（本仓反复钉的
+ * 那一类静默失效，见 §13.6.4.1）。
+ *
+ * @param {string} cwd @param {string | null} declared @param {RunFn} runCmd
+ * @returns {boolean | null}
+ */
+function declaredContainedInHead(cwd, declared, runCmd) {
+  const sha = (declared ?? "").trim();
+  if (!sha) return null;
+  const exists = runCmd(
+    "git",
+    ["rev-parse", "--verify", "--quiet", `${sha}^0`],
+    {
+      cwd,
+    },
+  );
+  if (!exists.ok) return null;
+  return runCmd("git", ["merge-base", "--is-ancestor", sha, "HEAD"], {
+    cwd,
+  }).ok;
+}
+
+/** HEAD 的形状：父提交列表 + 树。只作读数（红不红由上面那三档定）。
+ * @param {string} cwd @param {RunFn} runCmd @returns {{parents: string[], tree: string | null}} */
+function headShape(cwd, runCmd) {
+  const p = runCmd("git", ["log", "-1", "--format=%P", "HEAD"], { cwd });
+  const t = runCmd("git", ["log", "-1", "--format=%T", "HEAD"], { cwd });
+  return {
+    parents: p.ok ? p.out.split(/\s+/).filter(Boolean) : [],
+    tree: t.ok ? t.out : null,
+  };
+}
+
+/**
  * 入口：判 + 打 + 记账。
  *
  * @param {{cwd?: string, env?: Record<string, string | undefined>, run?: RunFn, spawn?: SpawnFn, readJunit?: (file: string, enc: string) => string, ledgerDir?: string, nowMs?: number}} [io]
@@ -261,9 +346,19 @@ export function main(io = {}) {
   const status = gitStatus(cwd, io.spawn);
   const parsed =
     status === null ? { trackedDirty: [], untracked: [] } : parseStatus(status);
+  /* 按形态取第一个非空者（顺序的理由见 `DECLARED_SHA_ENVS` 那段）：PR 事件先认 merge 面，
+   * push / 每日档没有那个键 ⇒ 退回源 head。 */
+  const declaredFrom =
+    DECLARED_SHA_ENVS.find((key) => (env[key] ?? "").trim() !== "") ?? null;
+  /** @type {string | null} */
+  const declared = declaredFrom ? (env[declaredFrom] ?? null) : null;
+  const head = headSha(cwd, runCmd);
   const verdict = provenanceVerdict({
-    declared: env[DECLARED_SHA_ENV] ?? null,
-    head: headSha(cwd, runCmd),
+    declared,
+    declaredFrom,
+    head,
+    contains: declaredContainedInHead(cwd, declared, runCmd),
+    shape: headShape(cwd, runCmd),
     trackedDirty: parsed.trackedDirty,
     untracked: parsed.untracked,
     prefixes,

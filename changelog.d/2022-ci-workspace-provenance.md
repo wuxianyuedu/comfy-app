@@ -2,7 +2,8 @@
 
 - **流水线多一条 `工作区出处`**（ISSUE #2022，`.cnb.yml` 末段 + `scripts/ci-workspace-provenance.mjs`
   - `tests/ci-workspace-provenance.test.ts`）：判「这一跑跑的是**哪份源码**、工作区被**谁**改过」。
-    三格里 ①`HEAD == CNB_COMMIT`（拿不到声明退成「未校验」，不冒充结论也不误伤）与
+    三格里 ①「工作区的树**有没有含**这次事件声明的那一份」（三档：相等 ⇒ ok、声明面是 HEAD
+    的祖先 ⇒ ok 并交出父提交与树、都不成立 ⇒ 红；算不出祖先关系退成「未校验」，不冒充结论）与
     ②「tracked 面上出现的改动必须落在**登记过的写者**前缀下」判红，③未跟踪文件只取数 ——
     一条此刻恒真的断言不是判据，它只会教会人忽略红。
     ②那份名单**派生自** `scripts/ci-autofix-duties.mjs` 的 `AUTOFIX_DUTIES`（给它补了 `outputs`
@@ -23,3 +24,18 @@
   另外三条实测把实现形态钉住：不能穿过 junction 从零安装（树看着完整，`tsc` 却因同一份声明
   经两条路径解析成两个身份而红 `TS2339`）、不能把装好的树搬进缓存目录（pnpm 建的是绝对路径
   联接，换根即全断）、而 runner 收尾那句 `Remove-Item -Recurse -Force` 实测**不穿链**（有对照档）。
+
+- **`工作区出处` 第一次上线就连着两跑假红，红在它自己该避开的地方**（§13.5.3.4.2 早已记下同一
+  件事）：① 原来断言 `HEAD == CNB_COMMIT`，而 `pull_request` 事件检出的是**临时合并提交**
+  （源 head 合上 target 当时的事实），它本来就不等于任何推送出去的 SHA。实测两条构建
+  `cnb-bkm-1k59gdkro` / `cnb-7rd-1k59j1mc4` 分别红成 `HEAD=7776cc6bfb1f vs 声明 202c7524`、
+  `HEAD=aa0a02578300 vs 声明 c87f48c7`，两个 HEAD 都不在任何远程引用上；同一跑的其余 40 格
+  全绿 ⇒ 红的只有这一格，不是「跑错源码」。改两处：声明面按
+  `DECLARED_SHA_ENVS = [CNB_PULL_REQUEST_MERGE_SHA, CNB_COMMIT]` **按顺序取第一个非空者**
+  （PR 事件先认 merge 面），并加一层与键名无关的语义兜底 —— 逐字不等时改问「声明面是不是
+  HEAD 的祖先」，是则 ok 并把父提交与树一起打出来，不是才红。祖先关系**算不出来**（声明对象
+  不在本检出里）单独走「未校验」：`merge-base --is-ancestor` 对「对象不存在」与「不是祖先」
+  退的都是非零，直接把退出码当结论会把「取不到测量」读成「测量结果为假」。
+  判据：`tests/ci-workspace-provenance.test.ts` 三格各一条 —— 键名与**顺序**、PR 形态
+  （merge 面 == HEAD 而源 head 面 ≠ HEAD ⇒ 0）、三值在 git 封装上分得开（含 ⇒ 0 / 不含 ⇒ 1 /
+  对象取不到 ⇒ 0）。三档另在真 git 上各跑一遍复现（挑现成提交当声明面，不动工作区）。
