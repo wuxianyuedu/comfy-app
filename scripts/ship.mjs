@@ -261,18 +261,38 @@ export async function main(deps = {}) {
       .filter(Boolean);
     const staged = dirtyLines.filter((l) => /^[AMR]/.test(l));
     const unstaged = dirtyLines.filter((l) => !/^[AMR]/.test(l));
-    /* 「单 PR 单变更」要数的是**这次带来的**碎片，不是目录里躺着的全部 ——
-     * 第一版用 `git ls-files changelog.d` 数出了 118 份，那条守卫于是恒真、
-     * 等于没有（而它看起来像在判什么，比不判更糟）。改成按本次工作树状态数：
-     * 新增（含未跟踪）或改动的碎片才算。 */
-    const fragRes = run("git", ["status", "--porcelain", "--", "changelog.d"]);
+    /* 「单 PR 单变更」数的是**这条分支相对上游带进来的**碎片。这一格错过两次，
+     * 两次都是「挑了最省事的那个取数面」：
+     *   ① `git ls-files changelog.d` → 数出 **118 份**（整个目录的存量）⇒ 恒真，
+     *      那条守卫等于没有，而它看起来像在判什么，比不判更糟；
+     *   ② 改成只看工作树 → 第一次跑把碎片提交掉之后，工作树干净 ⇒ **恒假**，
+     *      于是 `pnpm ship --merge`（同一条分支上的第二次跑）在 preflight 就被拒。
+     * 正确的面是**两者取并**：分支相对 `origin/master` 已提交的 + 还没提交的。
+     * 「同一条分支上重跑要还能过」这一向是 ② 的修法自己带出来的，见用例。 */
+    const branchFragRes = run("git", [
+      "diff",
+      "--name-only",
+      "origin/master...HEAD",
+      "--",
+      "changelog.d",
+    ]);
+    const workFragRes = run("git", [
+      "status",
+      "--porcelain",
+      "--",
+      "changelog.d",
+    ]);
     const frags = [
-      ...new Set(
-        fragRes.stdout
+      ...new Set([
+        ...branchFragRes.stdout
+          .split("\n")
+          .map((s) => s.trim())
+          .filter((p) => p.endsWith(".md")),
+        ...workFragRes.stdout
           .split("\n")
           .map((l) => l.slice(2).trim()) // `XY <path>`：前两列是状态位
           .filter((p) => p.endsWith(".md")),
-      ),
+      ]),
     ];
     const slugRes = run("git", ["remote", "get-url", "origin"]);
     const slug = parseSlug(slugRes.stdout);

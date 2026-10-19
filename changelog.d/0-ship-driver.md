@@ -71,6 +71,15 @@
     `pull-request` 里面、要用它当场解析出的 PR 号；单独 `--only` 到它们会「一段都没执行」
     然后返回成功。加了显式拒绝（退 2 + 一句可行动的下一动作）与用例，
     并反向钉住早期阶段不被误伤。
+  - **修上一条时又改过头，被「同一条分支上的第二次跑」照出来**。把碎片从「整个目录」
+    改成「只看工作树」之后，第一次跑提交掉碎片 ⇒ 工作树干净 ⇒ 这条守卫对
+    `pnpm ship --merge` **恒假**，于是它在 preflight 就把一条正常的分支拦在门口。
+    「单 PR 单变更」是**分支相对上游**的属性，不是工作树的属性 —— 正确的面是
+    `git diff --name-only origin/master...HEAD -- changelog.d` ∪ `git status --porcelain -- changelog.d`。
+    两次挑错取数面是同一类错、方向相反：① 整个目录 ⇒ 恒真（看着在判其实不判）；
+    ② 只看工作树 ⇒ 对第二次跑恒假。**「数一下有多少」这类判据，先看真实仓库里那个数
+    是多少再决定取哪个面** —— 这里的 118 与 0 两个读数都是当场量出来的。
+    两个面各钉一条用例（分支已提交 1 份 + 工作树干净 ⇒ 放行；工作树带 1 份 ⇒ 读到 1 份）。
 
 ## 刻意没做的事（写清楚，别当成已完成）
 
@@ -100,7 +109,7 @@
 
 - `tsc --noEmit` 0 错（`scripts/*.mjs` 在 `checkJs` 面上，且本仓开着 `noUncheckedIndexedAccess`
   —— 索引取值一律 `| undefined`，22 条错全部按这个口径改实现，没有在调用侧加 `!` 糊）。
-- `tests/ship.test.ts` **32 passed**：`readBuildVerdict`（三档 + 大小写 + 四条负控制）、
+- `tests/ship.test.ts` **33 passed**：`readBuildVerdict`（三档 + 大小写 + 四条负控制）、
   `pickBuildForSha`（并行两条只认 sha / 无命中不退化成「拿最新」/ event 不是 pull_request 不算 /
   同 sha 多条取最新 / 畸形入参不抛）、`asArray`（**null ≠ 空数组**：前者是「没拿到列表」、
   后者会被读成「查过了没有我的」）、`combineShipCodes`（2 压 1 + 三态字面值钉住）、

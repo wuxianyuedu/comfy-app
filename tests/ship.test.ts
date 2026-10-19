@@ -387,6 +387,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     commitStatus?: number;
     /** 本次要暂存的文件（触发真提交那一支）。 */
     dirty?: string[];
+    /** 这条分支相对 `origin/master` **已提交**的碎片（第二次跑那一向）。 */
+    branchFrags?: string[];
   };
 
   /**
@@ -420,6 +422,12 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         return ok(frags.map((f) => `?? ${f}`).join("\n"));
       if (cmd === "git" && key.includes("status --porcelain"))
         return ok(dirty.map((f) => `M  ${f}`).join("\n"));
+      // 分支相对上游**已提交**的碎片（同一条分支上第二次跑就靠这一格不为空）。
+      if (
+        cmd === "git" &&
+        key.includes("diff --name-only origin/master...HEAD -- changelog.d")
+      )
+        return ok((env.branchFrags ?? []).join("\n"));
       if (cmd === "git" && key.startsWith("commit"))
         return {
           status: env.commitStatus ?? 0,
@@ -550,5 +558,28 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       args: ["--dry-run"],
     });
     expect(heard.join("\n")).toContain("碎片 1 份");
+  });
+
+  it("同一条分支上第二次跑（碎片已提交、工作树干净）不许被那条守卫拒掉", async () => {
+    /* 这是把上一条从「恒真」改成「只看工作树」之后**新引入**的失效：
+     * 第一次跑提交了碎片 ⇒ 工作树干净 ⇒ 只看工作树就恒假 ⇒
+     * `pnpm ship --merge` 在 preflight 被拒（实测：exit 1「没有 changelog.d 碎片」）。
+     * 正确的面是「分支相对上游已提交的 ∪ 还没提交的」，所以这一格必须读到 1 份。 */
+    const heard: string[] = [];
+    const { run } = fake({
+      frags: [],
+      branchFrags: ["changelog.d/0-already-committed.md"],
+    });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    const all = heard.join("\n");
+    expect(all).toContain("碎片 1 份");
+    expect(all).not.toContain("没有 changelog.d/ 碎片");
+    expect(code).toBe(CODE.GREEN);
   });
 });
