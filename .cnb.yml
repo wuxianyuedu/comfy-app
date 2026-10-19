@@ -285,9 +285,8 @@
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, 生成态文档与源同步,
-      API 文档生成物与源同步, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
-      零消费导出, core 出口纪律与基类纯度
+      UI/逻辑分离, lib Node-only 声明, prettier 格式,
+      重档静态判据
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
     # 而这两问的答案如今分在两处：会自己起一堆子进程的那两档（全量单测、`next build`）
@@ -1082,149 +1081,39 @@
   # 而判据本体是**逐文件跑 prettier**（每个改动过的源文件一次）。所以面就是
   # 「`SOURCE_RE` 认的扩展名在仓库里可能出现的那几棵树」—— 由 `stagedRoots()` 现算，
   # 这里写的是它现算的**上界**（顶层目录 + 根级配置名）；判宽只会少省几秒，判窄是漏判。
-  - name: 格式化提交分离
-    ifModify:
-      - "**/*.ts"
-      - "**/*.tsx"
-      - "**/*.js"
-      - "**/*.jsx"
-      - "**/*.mjs"
-      - "**/*.cjs"
-      - "**/*.css"
-      - "**/*.scss"
-      - "**/*.json"
-      - "**/*.md"
-      - "**/*.mdx"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
 
-  # ── 文档面三条（ISSUE #1975：从 `.githooks/pre-commit` 的 D 组挪到这里）──
+  # ── 重档静态判据：一格，一次 job，内部按顺序逐条跑 ─────────────────────────
   #
-  # 它们原本在钩子里（`生成态文档与源同步` / `API 文档生成物与源同步` /
-  # `文档引用与权威源一致`），2026-10-16 撤到平台侧。判据**一个字没改**，
-  # 挪的只是执行者 —— 三条判的都是**文档与文档生成物**，漂了不会有任何运行时症状，
-  # 只会在下一次有人读文档时误导他，因此挡不住任何一次代码回归，不该占用「提交那一刻」
-  # 这份最贵的预算。口径与逐条实测见规范 §13.5.17。
+  # 这一格取代了原来的 10 条各自独立的 stage（`格式化提交分离` / `生成态文档与源同步` /
+  # `API 文档生成物与源同步` / `覆盖率上报` / `文档引用与权威源一致` / `core 骨架单一事实源` /
+  # `零消费导出` / `core 出口纪律与基类纯度` …）。**判据一条没少**：每一条仍是原来那份
+  # 脚本、原来那份参数，只是不再各占一个平台 stage。
   #
-  # ⚠️ 三条在平台侧是**全量档**（不带 `--staged`）：平台侧的工作区就是这次要判的那份
-  # 源码，而本地那一档对着的是「工作区里半成品状态的暂存区」—— 全量档更接近要守的
-  # 那件事（「合并后的源码与产物一致」）。
+  # 为什么合（2026-10-19 的现场）：`cnb-hpl-1k5a0s6ss` 上 `ESLint 零警告` 一步撞到平台的
+  # **20m stage 预算**被强杀（`任务超过最大执行时间而被强制关闭：20m0s`，脚本一行输出都没有），
+  # 整条流水线后面三十格全 skipped。而同一台机、同一份工作区，`cnb-smq-1k59vlk3l` 上同一步
+  # 是 305s 跑过的 —— 差的是**前面那二十几格各自付一次的 job 开销与盘上扫描**，不是 ESLint
+  # 变慢了。也就是说：把判据一条条摊成 stage，每一格都在替**别的格**付重复成本。
   #
-  # ⚠️ `pnpm run docs` **不要写成 `pnpm docs`**：后者是 pnpm 的内建命令
-  # （`pnpm docs <PACKAGE>`），会抢在脚本前面、typedoc 根本不跑。`check-docs-api.cjs`
-  # 内部调的是 `scripts/typedoc-run.mjs`，与本步无关；这里只跑比对档。
-  # ⚠️ 这一档是 `--check --autofix`，不是裸 `--check`（ISSUE #1981）：判据红了**就地重渲染
-  # 一遍、再判一次**，而不是先红一轮让人本地跑 `pnpm doc:render` 再来。红了才花那笔钱
-  # （绿的时候一次都不多跑），而红的时候省掉的是一整轮流水线加一个人的机械动作。
+  # 合起来之后：本次 job 只付一次开销，条目在**进程内**串行（`scripts/ci-heavy-gates.mjs`），
+  # 每条的墙钟、退出码、末若干行输出都打在同一份日志里 —— 红了照样一眼看出是哪一条，
+  # 且不再是「一条红、后面全 skipped」的形态。
   #
-  # 三步各自的分工别混：`ifModify`（若有人登记）管「改没改到」，`--check` 管判定，
-  # `--autofix` 只管「红了之后怎么写」—— 结论**永远来自第二次 `--check`**，只跑写入模式
-  # 就退 0 等于把未经复核的写入报成通过。凭什么这一档可以自动修、以及为什么**不**顺便
-  # `git commit` / `git push`（平台侧能否回写分支是一条单独的决策，PR 源分支可能来自 fork），
-  # 两条都写在 `scripts/ci-autofix-duties.mjs` 的文件头。
+  # ⚠️ **`ifModify` 收窄全部撤掉了**（原来 `格式化提交分离` / `覆盖率上报` 各带一组）。
+  # 理由：`ifModify` 是按**整格**跳过的，一格装十条判据时它只能判成「本次没碰 → 十条都不跑」，
+  # 而那十条的扫描面并不相同 —— 那正是本仓最不能有的形态（判据在场、结论静默变成放行）。
+  # 现在格内**不跳**，代价是每次多跑几条秒级脚本；真要收窄也要回到「按条目判扫描面」，
+  # 不是按格。
   #
-  # 自动修之后**红的那一轮仍然是红的**：修好的是工作区，提交与重跑仍由人 / 代理那一侧做。
-  # 这也是 `--autofix` 只出现在这一档的原因 —— 它要求「产物是纯确定的重新生成」且
-  # 「红了没有第二种成因」，两条同时成立才敢自动写（登记表 `AUTOFIX_DUTIES` 逐条写理由，
-  # `tests/ci-autofix-duties.test.ts` 双向核对它 ⇄ 本文件）。
-  # 收窄（`ifModify`）：本次改动一个文件都没落在「编辑态文档 / 提取源 / 生成面配置」里时
-  # 跳过这一步 —— `docs/generated/**` 只由这几处决定（三条方向都只读它们）。
-  # README.md / AGENTS.md 不在清单里，因为它们不在 `SCOPED_DOCS` 里（AGENTS.md 刻意不进
-  # 生成面，否则会复制出一份没有占位符要替换的副本、反而误导读者去改产物）。
-  # ⚠️ 新增一条 FACTS 事实读了别的文件时，要同批回来补这一行 —— 漏补的形态是
-  # 「改了那个文件，这一步却不跑」。登记与理由的唯一出处：scripts/ci-incremental-gates.mjs。
-  - name: 生成态文档与源同步
-    ifModify:
-      - docs/**
-      - src/**
-      - package.json
-      - pnpm-workspace.yaml
-      - next.config.js
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
-    # 绿的时候是秒级（30 份文档的比对），红的时候多一次重渲染 —— 仍是秒级。
-    # 给 10m 是「卡死要早报」那条量级（与 `API 文档生成物与源同步` 的 20m 同款理由：
-    # 真跑得完的形态差一两个数量级）。**不是放宽判据** —— 预算只管多久放弃。
-    timeout: 10m
-
-  # ⚠️ 这一档**同批加了自动修**（`--check --autofix`，ISSUE #2001）：判据红了不是直接
-  # 收场，而是就地重生成 `docs/api/`、**再判一次**。理由与 `生成态文档与源同步` 那条
-  # 逐字同源（两条前提都满足：typedoc 对同一份源产出逐字节相同，判据自己每次都在复核
-  # 这个前提；而它的三个方向都只说明「产物与源不一致」，源码写错由 `类型检查` / 单测 /
-  # 生产构建各自去红）。实测这一格在自托管节点上是**全流水线最贵的一格**（201.8s），
-  # 而它的红几乎总是「改了 `src/lib` 忘了 `pnpm run docs`」—— 让人本地再跑一遍，
-  # 付的是**又一整轮流水线**，省下的只是一个机械动作。
-  # 修好之后**这一跑仍然是红的**（自动修只写工作区，提交与重跑由人 / 代理那一侧做）——
-  # 这是刻意的边界，见 `scripts/ci-autofix-duties.mjs` 头注第 1 条。
-  # ⚠️ 这一档也收窄了（ISSUE #1981 收尾），而且它的 globs **不是手抄的**：
-  # 由 `scripts/check-docs-api.cjs` 的 `INPUT_RES` 机械反推（登记在
-  # `scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`）。理由是那份常量
-  # 本来就是这条判据自己的触发面声明（文件头第 4 条：「触发面 = typedoc 的输入面」），
-  # 再手写一份等价的 glob 只会多一处会漂的副本。
-  # 它是本档**最贵的一格**：实测 201.8s（`cnb-ln5-1k540cfn1`），占整条流水线 12m14s
-  # 的 27.5% —— 而绝大多数 PR 一行 `src/lib|server|trpc` 都没碰，此前每次都要为它
-  # 付一次全量 typedoc 重生成 + 2618 个文件的比对。
-  - name: API 文档生成物与源同步
-    ifModify:
-      - src/lib/**
-      - src/server/**
-      - src/trpc/**
-      - typedoc.json
-      - package.json
-      - pnpm-lock.yaml
-      - scripts/check-docs-api.cjs
-      - scripts/typedoc-run.mjs
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
-    # ⚠️ `--check` 与 `--autofix` **两个都要**（`tests/ci-autofix-duties.test.ts` 判这一条）：
-    # 只有 `--autofix` 而没有 `--check` 是最坏的形态 —— 脚本会走写入模式、不判任何东西、
-    # 恒退 0，于是判据在配置里而结论恒放行。
-    #
-    # 全量档实测 32s（本机 8 核，热缓存；与钩子里那一档同量级）。平台侧冷节点上
-    # typedoc 重生成会慢得多，给 20m（与 ESLint 那条同款：真跑得完的形态差一两个
-    # 数量级，卡死的形态 20m 报出来，不必等满平台默认的 2h 墙钟）。
-    # 红的时候多一次重生成 + 一轮比对（仍在同一量级），所以预算不动。
-    timeout: 20m
-
-  # ── 覆盖率上报（ISSUE #1990）──
-  #
-  # 「洞察 → 单元测试覆盖率」页此前**一条数据都没有**：那个页面读的是 `testing:coverage`
-  # 插件上报的读数，而这个插件在 #623 删旧版流水线时被一起拿走了，#1959 按完整流程
-  # 重建时没被带回来 —— 于是前端永远停在「无 / 无」，看起来像平台坏了，实际是**没人上报**。
-  #
-  # 这一档是**纯从属**的，两件事别搞混：
-  #   · 它**判不了任何东西**：真正的覆盖率门槛在 `vitest.config.ts` 的 `thresholds` 里，
-  #     由 `单元测试`（`scripts/full-suite-run.mjs` → `vitest run --coverage`）判。
-  #     本档只把那份产物**报出去**，阈值一个字不设（平台阈值是绝对百分比，与本仓
-  #     「按目录记门槛 + 棘轮」的口径冲突：填低了形同虚设、填高了把正常 PR 拦死）；
-  #   · 所以 `单元测试` 被临时停用（见 `COMFYAPP_CI_DISABLED_GATES`）期间，
-  #     `coverage/lcov.info` **不存在** —— 此时本档只跳过并留一行话，**不许判红**：
-  #     一个「测都没跑」的绿没法靠它变出来，把它判红等于让「停用」这件事
-  #     连带把整条流水线拦死（那正是停用要避免的形态）。
-  #   ⚠️ 恢复 `单元测试` 时**顺手删掉**这一档：上报器用平台的 coverage 类型时，
-  #   报告文件是它的必需输入（官方 build/plugin/testing.md 的「覆盖率上报」一节：
-  #   `breakIfNoCoverage` 缺省即报错退出 —— 旧版 #623 之前那一跑就是这么红的）。
-  #   现在所以能留，是因为做成了命令行形态、自己判「有没有文件」。
-  - name: 覆盖率上报
-    # 只跟着 `单元测试` 走：它不跑，这里就没有报告可报。
-    ifModify:
-      - src/**
-      - tests/**
-      - vitest.config.ts
-    script: >-
-      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;
-      if (Test-Path -LiteralPath coverage/lcov.info) {
-        node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
-      } else { Write-Host "[coverage-report] 没有 coverage/lcov.info（单元测试这一档此刻未产出报告），跳过上报" }
-
-  - name: 文档引用与权威源一致
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
-
-  - name: core 骨架单一事实源
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
-
-  - name: 零消费导出
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
-
-  - name: core 出口纪律与基类纯度
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+  # 判据与执行者的对应关系仍在 `scripts/ci-heavy-gates.mjs` 的条目表里，谁被删了在
+  # 本地钩子那一档与 `tests/ci-heavy-gates.test.ts` 当场红（条目 ⇄ 脚本两向核对）。
+  - name: 重档静态判据
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-heavy-gates.mjs
+    # 平台单 stage 默认预算 20m 是硬上限（实测强杀形态见上面那段），而这一格装的是原先
+    # 十条各自独立跑的东西 —— 它的**合理**墙钟应当与原十格的总和同级。给 45m 是因为
+    # `生成态文档与源同步` 在红的时候要就地重渲染 30 份文档（`--autofix` 那一跳），
+    # 冷节点上不是秒级；`覆盖率上报` 在没有报告时只打一行。
+    timeout: 45m
 
   # ── 构建与产物：**这一格 2026-10-18 起不在 PR 上跑了**（口径见 §13.5.23）──
   #

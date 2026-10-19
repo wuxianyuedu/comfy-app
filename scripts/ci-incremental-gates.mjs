@@ -11,6 +11,20 @@
  * 落在扫描面内就跳过），而那条通道**只在本地存在** —— 平台侧那条流水线不知道
  * 「扫描面」这回事，于是它把同一份判据在同一个文件上重跑了一遍。
  *
+ * ── 复合执行者：`重档静态判据` 一格装多条，**不收窄**（2026-10-19）────────
+ *
+ * 原先各自占一格的那批静态判据（`格式化提交分离` / `生成态文档与源同步` /
+ * `API 文档生成物与源同步` / `覆盖率上报` / `文档引用与权威源一致` / `core` 那两条 /
+ * `零消费导出`）现在收进一格 `重档静态判据`（`scripts/ci-heavy-gates.mjs`），理由是
+ * 平台单 stage 的 20m 硬上限与「每一格各付一次 job 开销」——现场与逐条读数见那个文件
+ * 的头注。收进去之后它们**一律不收窄**，因为 `ifModify` 是按**整格**跳过的：
+ * 一格装十条时它只能表达「十条一起跑」或「十条一起不跑」，而那十条的扫描面并不相同，
+ * 后者正是本仓最不能有的形态（判据在场、结论静默变成放行）。
+ *
+ * 这条边界有判据：`COMPOUND_EXECUTORS` 点名的 stage 一条 `ifModify` 都不许挂，
+ * 而它们原来的那些收窄登记已经从本表**删掉**（登记表只收「一个执行者一条判据」的形态，
+ * 这一点由下面那条双向核对保证 —— 表里每条都必须能在配置里找到同名 stage）。
+ *
  * ── 为什么平台侧的机制是 `ifModify` 而不是复用 `--staged` ───────────────
  *
  * `.cnb.yml` 的 stage 支持 `ifModify: [glob…]`（CNB 官方语法手册
@@ -77,51 +91,17 @@ import { createRequire } from "node:module";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
-/* `API 文档生成物与源同步` 的触发面**不手抄**：判据自己的 `INPUT_RES` 才是它的事实源
- * （文件头第 4 条：「触发面 = typedoc 的输入面」）。`.cjs` 用 `require` 拿 —— 本文件是
- * `.mjs`，`createRequire` 是跨模块系统唯一不靠 `.default` 猜测的那条路。 */
-const { INPUT_RES: DOCS_API_INPUT_RES } = createRequire(import.meta.url)(
-  "./check-docs-api.cjs",
-);
+/* ⚠️ 这里原来还有两件东西：`API 文档生成物与源同步` 的 `INPUT_RES` 反推（`globFromInputRe`
+ * + 上面那个 `createRequire`）与那一档的登记项。它们随 2026-10-19 的合并一起删掉了 ——
+ * 那一档进了聚合执行者、不再有 `ifModify` 可反推。**别照着这段历史把它加回来**：
+ * 「那一格还在跑、跑的仍是 `INPUT_RES` 认的那些输入」这件事现在由
+ * `tests/ci-incremental-gates.test.ts` 直接对着 `HEAVY_GATES` 判（条目表还在、入口还在盘上、
+ * 判定门是 `--check --autofix`），不再经过 glob 这一层。 */
 /* `文件结构硬规则` 的触发面同样**不手抄**：扫描根与根目录扩展名在判据自己的
  * 声明层（`file-structure-rules.cjs` 的 `TRIGGER_GLOBS`），那里改一处、这里跟着变。 */
 const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(
   import.meta.url,
 )("./file-structure-rules.cjs");
-
-/**
- * 把一条「锚定到仓库根的输入面正则」反推成 `ifModify` glob。
- *
- * 只认本表实际出现过的两种形状，认不出的**直接抛**（比返回一个猜出来的 glob 强：
- * 猜窄了 = 静默漏跑，猜宽了 = 静默白跑，两种都没有任何信号）。两条与
- * `check-docs-api.cjs` 的 `INPUT_RES` 逐条对应：
- *
- *   /^src\/lib\/.*\.ts$/   ⇒ `src/lib/**`   —— 「目录 + 任意文件」那一支；
- *   /^typedoc\.json$/        ⇒ `typedoc.json` —— 单个文件那一支。
- *
- * 做法是**先去掉正则的转义再按字面读**：`INPUT_RES` 里的 `\\/` 与 `\\.` 是正则意义上的
- * 斜杠与点，转义留着会把它们读成「目录分隔符以外的什么东西」，反推出来的 glob 全是怪的。
- *
- * ⚠️ 单文件那支刻意返回**带扩展名的全名**：`package.json` 若写成 `package.*`，
- * glob 语义会把 `package-lock.json` 一起收进来，而它不是这一档的输入面。
- *
- * @param {RegExp} re 锚定到仓库根的输入面正则
- * @returns {string}
- */
-function globFromInputRe(re) {
-  const src = re.source
-    .replace(/^\^/, "")
-    .replace(/\$$/, "")
-    /* 去掉正则的转义前缀（`\\/` → `/`、`\\.` → `.`）：留下的是它**要匹配的字面文本**。 */
-    .split(String.fromCharCode(92))
-    .join("");
-  const dir = /^([^*]+)\/\.\*\.\w+$/.exec(src);
-  if (dir?.[1] !== undefined) return `${dir[1]}/**`;
-  if (!src.includes("*")) return src;
-  throw new Error(
-    `ci-incremental-gates: 认不出这条输入面正则的形状（反推不出 ifModify glob）：${re}`,
-  );
-}
 
 /**
  * stage 名 → 它的扫描面（`ifModify` glob 列表）。
@@ -227,30 +207,6 @@ export const INCREMENTAL_GATES = [
     why: "只看 changelog.d/** 的碎片形态与 CHANGELOG.md 有没有被直接改（`[Unreleased]` 段落）。与本次代码改动无关时不该重跑。",
   },
   {
-    name: "API 文档生成物与源同步",
-    /* ⚠️ 这一档的 globs **不手抄** —— 由判据自己的 `INPUT_RES` 反推（见文件头
-     * 「能机械导出的就不手抄」）。于是「产物由哪些输入决定」只有一处出处：
-     * `scripts/check-docs-api.cjs` 的 `INPUT_RES`。 */
-    globs: DOCS_API_INPUT_RES.map(globFromInputRe),
-    script: "scripts/check-docs-api.cjs",
-    why:
-      "它的触发面本来就是判据自己声明的那一份：`check-docs-api.cjs` 的 `INPUT_RES`（typedoc 的 entryPoints 三条 glob + `typedoc.json` + 依赖声明），文件头第 4 条写的就是「触发面 = typedoc 的输入面」。" +
-      "本条的 globs 由那份常量机械反推（`globFromInputRe`），所以它不是第二份会漂的副本 —— 改判据的输入面时配置跟着变。" +
-      "收窄安不安全：输入没变，typedoc 的产物不可能漂（判据比的是「重生成结果 ⇄ docs/api」），所以「一行 src 都没碰的 PR」不该为它付那 200 秒 ——" +
-      "它是本档在自托管节点上最贵的一格（实测 201.8s，占整条流水线 12m14s 的 27.5%）。",
-  },
-  {
-    name: "覆盖率上报",
-    globs: ["src/**", "tests/**", "vitest.config.ts"],
-    script: "scripts/ci-coverage-report.mjs",
-    why:
-      "它**不判任何东西**（ISSUE #1990）：只把 `coverage/lcov.info` 交给平台的上报通道，" +
-      "而那份产物只可能由这三处决定 —— 用例与源码（`src/**` / `tests/**`）与覆盖率面声明（`vitest.config.ts`），" +
-      "三者一个都没碰时报告（如果有）与上一次逐字节同源，重报一遍不会写出新的读数。" +
-      "收窄的方向是安全的：它缺报告时**跳过而不是判红**（`单元测试` 被临时停用时报告本来就不存在），" +
-      "所以「本不该跑却跑了」与「该跑没跑」都不会改变任何代码结论。",
-  },
-  {
     name: "端口推导跨语言一致性",
     globs: [
       "scripts/app-port.mjs",
@@ -283,53 +239,25 @@ export const INCREMENTAL_GATES = [
       "⚠️ 判据面由 `IGNORE_GLOBS` 现算，这两条 glob 是它的**补集**（手写的上界）：" +
       "`IGNORE_GLOBS` 增删目录（例如把 `tests/` 从白名单里摘掉）时必须同批回来看这一行，否则「改了却没人查格式」或「白跑」。",
   },
-  {
-    name: "格式化提交分离",
-    globs: [
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.js",
-      "**/*.jsx",
-      "**/*.mjs",
-      "**/*.cjs",
-      "**/*.css",
-      "**/*.scss",
-      "**/*.json",
-      "**/*.md",
-      "**/*.mdx",
-    ],
-    script: "scripts/check-reformat-only.cjs",
-    why:
-      "它的判据本体是**逐文件跑一次 prettier**（`classifyReformatOnly()`），所以面就是" +
-      "`check-reformat-only.cjs` 的 `SOURCE_RE`（那些扩展名）与这些 glob 是同一件事 —— " +
-      "这份清单由 `stagedRoots()` 的现算上界反推（顶层目录与根级文件的并集），不是手抄的目录名单。" +
-      "收窄安全的方向：本次改动**一个源文件都没有**时（例如只改图 / 只改 yaml），它本来也只会得出" +
-      "「没有文件改动，跳过」；而「面上有源文件」时照旧全跑，判据强度一点没动。" +
-      "⚠️ 代价写在明处：`SOURCE_RE` 新增一种扩展名时**必须同批回来看这一行**。" +
-      "本地钩子里那一步也接了 `--staged`（同一份 `gate-scan-read.cjs` 的 `discernRoots`）。",
-  },
-  {
-    name: "生成态文档与源同步",
-    globs: [
-      "docs/**",
-      "src/**",
-      "package.json",
-      "pnpm-workspace.yaml",
-      "next.config.js",
-    ],
-    script: "scripts/render-doc-placeholders.cjs",
-    why:
-      "它判的是「编辑态文档 ⇄ docs/generated/** 产物」，而两侧的输入面都能点清：产物只由 SCOPED_DOCS（都在 docs/**）与 FACTS 的提取源决定，后者是源码 / 配置里的真实值（src/**、package.json、pnpm-workspace.yaml、next.config.js）。" +
-      "README.md / AGENTS.md 刻意**不在** globs 里：它们不在 SCOPED_DOCS 中（AGENTS.md 不进生成面，见 §13.5.5 那条注释），改了它们不可能让这一步红。" +
-      "⚠️ 代价写在明处：FACTS 新增一条读别的文件的事实、而那个文件不在这份 globs 里时，改它不会触发本步 —— 所以新增事实要同批回来看这一行（`doc-facts.cjs` 的提取源就是这份清单的权威）。" +
-      "这一步同时是 `--autofix` 档（ISSUE #1981），收窄之后「只改了代码、一次都没碰文档」的那类 PR 也不再为它付钱。",
-  },
 ];
 
 /** 表里登记的名字集合（判据与自测都用它，避免各处重算）。 */
 export const INCREMENTAL_GATE_NAMES = new Set(
   INCREMENTAL_GATES.map((g) => g.name),
 );
+
+/**
+ * **复合执行者**：一格装多条判据的 stage 名（此刻只有 `重档静态判据`）。
+ *
+ * 它们一条 `ifModify` 都不许挂 —— 理由写在文件头「复合执行者」那一节：
+ * `ifModify` 是按整格跳过的，一格装十条时任何收窄都只能表达成「十条一起不跑」，
+ * 而那十条的扫描面并不相同。这条边界也解释了为什么原来那几条（`生成态文档与源同步` /
+ * `API 文档生成物与源同步` / `覆盖率上报` / `格式化提交分离`）的收窄登记从本表删掉了：
+ * 收进去之后它们的执行者换了，登记表只收「一个执行者一条判据」的形态。
+ *
+ * @type {ReadonlyArray<string>}
+ */
+export const COMPOUND_EXECUTORS = ["重档静态判据"];
 
 /**
  * 从 `.cnb.yml` 原文里解析出**每个 stage 的 `ifModify` 清单**。
@@ -442,6 +370,19 @@ export function checkIncrementalGates(text) {
           `「哪几条被收窄了」必须只有一处出处：把它登记进 ` +
           `scripts/ci-incremental-gates.mjs（含「为什么这条收窄是安全的」），` +
           `或者去掉那条 \`ifModify\`（默认档 = 任何改动都跑，这是安全方向）`,
+      );
+    }
+  }
+
+  /* 方向三：**复合执行者一条 `ifModify` 都不许挂**（文件头「复合执行者」那一节）。
+   * 一格装十条判据时，`ifModify` 只能表达「十条一起跑」或「十条一起不跑」，而那十条的
+   * 扫描面并不相同 —— 后者是「判据在场、结论静默变成放行」，比不收窄坏得多。 */
+  for (const name of COMPOUND_EXECUTORS) {
+    if (actual.has(name)) {
+      problems.push(
+        `\`${name}\` 是**复合执行者**（一格装多条判据，见 scripts/ci-heavy-gates.mjs），` +
+          `它不许挂 \`ifModify\`：整格跳过会让格内那几条扫描面不同的判据一起静默放行。` +
+          `要省时间请从条目那一侧想办法（例如条目自己判扫描面），别按格收窄`,
       );
     }
   }
