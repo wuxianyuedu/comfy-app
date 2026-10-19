@@ -109,7 +109,7 @@ export function EditableLabel({
          *  其余形态（`border-input` / `rounded-lg` / focus 换边不出阴影）照
          *  `ui/input.tsx` 的缺省档：此前这里自己写了 `border-violet-400/40`
          *  —— 既写死调色板、又不是全站其余输入框那一档（ISSUE #2031）。 */
-        className="nodrag nopan border-input bg-transparent text-ink-bright focus-visible:border-ring focus-visible:ring-ring/50 w-32 max-w-full min-w-0 shrink rounded-lg border px-2 py-px text-xs font-semibold outline-none focus-visible:ring-3"
+        className="nodrag nopan border-input text-ink-bright focus-visible:border-ring focus-visible:ring-ring/50 w-32 max-w-full min-w-0 shrink rounded-lg border bg-transparent px-2 py-px text-xs font-semibold outline-none focus-visible:ring-3"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>

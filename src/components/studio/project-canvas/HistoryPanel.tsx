@@ -266,7 +266,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                             mediaType: task.mediaType,
                           })
                         }
-                        className="text-ink-soft group-hover:flex absolute top-1 right-1 hidden rounded bg-black/70 hover:bg-black/60 hover:text-white"
+                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
                       >
                         <Plus
                           data-icon="inline-start"
