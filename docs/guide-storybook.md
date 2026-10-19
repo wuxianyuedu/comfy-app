@@ -18,7 +18,12 @@ Storybook 把这一步缩成「起一个工作台、点开那个组件」：
 - **画布**是组件本身，带 Args 面板可以现场改 props；
 - **工具栏**切 `dark` / `light`（与应用的 `next-themes` 同一条 class 链路）；
 - **a11y 面板**列出这棵树的违规项（**人**现场看某一棵树）。台账 E6 那一格的**自动化执行者**不在这里，
-  是 `tests/a11y-axe-stories.test.ts`：把每个故事在 jsdom 里渲染后跑 axe-core。
+  是 `tests/a11y-axe-stories.test.ts`：按 Storybook 的语义（`story.render ?? meta.render`，
+  args 取 `meta.args` 与 `story.args` 的浅合并）把每个故事渲进 jsdom 再跑 axe-core。
+  两处的**分工不是「一个自动一个人」**：那一档只判 jsdom 给得出事实的东西（结构、名字、
+  角色、状态），而 `color-contrast` / `label-content-name-mismatch` / `link-in-text-block`
+  要的是字体度量、伪元素 `content` 与真实布局 —— jsdom 没有，Tailwind class 在测试里也不生效，
+  所以那三条在那一档被显式关掉并逐条写明理由。**面板这里判得到的，恰恰是 jsdom 判不了的那一类**。
 
 ## 怎么用
 

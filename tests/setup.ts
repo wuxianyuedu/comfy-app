@@ -3,12 +3,14 @@
  * - 注册 @testing-library/jest-dom 匹配器（toBeInTheDocument、toBeDisabled 等）
  * - 重置内存限流桶，避免用例间互相污染
  * - **每用例卸载已挂载的组件**（见下）
+ * - 处置 jsdom 的能力缺口噪音（见文件末那一段）
  */
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach, beforeEach } from "vitest";
+import { afterAll, afterEach, beforeEach } from "vitest";
 import { resetRateLimitBuckets } from "~/server/api/middleware/rate-limit";
 
+import { installJsdomCapabilityGate } from "./helpers/jsdom-capability";
 import { stripInheritedGitEnv } from "./helpers/git-sandbox-env";
 
 /* 剥掉从钩子继承来的 git 环境（清单与机制见 `helpers/git-sandbox-env.ts`）。
@@ -43,4 +45,21 @@ afterEach(() => {
 
 beforeEach(() => {
   resetRateLimitBuckets();
+});
+
+/* jsdom 的能力缺口（没有字体度量的 `getContext`、带伪元素的 `getComputedStyle`）走的
+ * 是 `VirtualConsole` 那条 `jsdomError`，而默认通道把它原样打进 stderr —— 于是
+ * 「宿主缺能力」与「被测代码真出错」在日志里**逐字同形**，全量跑那一跑的读数被两行
+ * 噪音占掉。这里接一次处置器：白名单内计数、白名单外逐字照 jsdom 默认形态转发，
+ * 文件结束时把吞掉的条数与理由打出来（没有这一行，「安静」与「被关掉」同形）。
+ * 三条口径与为什么不装原生 `canvas` 包，写在 `helpers/jsdom-capability.ts` 文件头。
+ *
+ * 返回 `null` 表示这一档根本没有 jsdom（node / happy-dom project）—— 那是环境事实，
+ * 不是失败；判据面在 `tests/jsdom-capability-gate.test.ts`。 */
+const jsdomCapability = installJsdomCapabilityGate(globalThis);
+afterAll(() => {
+  for (const line of jsdomCapability?.summaryLines() ?? []) {
+    console.info(line);
+  }
+  jsdomCapability?.detach();
 });

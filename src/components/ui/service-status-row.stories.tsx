@@ -27,9 +27,10 @@ const BASE = `http://127.0.0.1:${String(COMFYUI_DEFAULT_PORT)}`;
 const meta = {
   title: "UI/ServiceStatusRow",
   component: StatusButton,
-  /* 默认 args 必须**自带可访问名**：a11y 扫描那一档不跑 `render`，它按
-   * `story.args ?? {}` 裸渲染 `component` —— 缺 `children` 会得到一颗没有名字的
-   * 按钮（`button-name`），而那是扫描档的判据，不是这一条 story 的形态。 */
+  /* 默认 args 自带可访问名与 `onClick`：这一档的 story 全用 `render` 摆整行，
+   * meta 上的初值是给「直接在 Args 面板里看裸组件」那一档留的。
+   * `tests/a11y-axe-stories.test.ts` 按 Storybook 的语义渲染（先 `render`，
+   * args 合 `meta.args` 与 `story.args`），所以这里不要求每条故事重抄一遍。 */
   args: { children: "启动 ComfyUI", onClick: () => undefined },
 } satisfies Meta<typeof StatusButton>;
 
@@ -39,8 +40,6 @@ type Story = StoryObj<typeof meta>;
 
 /** 真实落点：一条运行中的状态行（关闭实心、打开走软底）。 */
 export const Default: Story = {
-  /* 每个具名故事都自带 args：a11y 扫描那一档按 `story.args ?? {}` 裸渲染
-     `component`（不跑 `render`），缺 children 就是一颗没有名字的按钮。 */
   args: { children: "启动 ComfyUI", onClick: () => undefined },
   render: () => (
     <div
