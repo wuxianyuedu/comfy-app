@@ -48,7 +48,12 @@ import {
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
  * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
  * 且看起来像这次没有读数」。 */
-import { collectFileTimings } from "../scripts/precommit-timing.mjs";
+import {
+  cFileXmlName,
+  collectFileTimings,
+} from "../scripts/precommit-timing.mjs";
+/* 复跑面那一层同理：按它真实的落点 import（机制层拆出去之后不再转一层假出口）。 */
+import { retryScope } from "../scripts/affected-launch-retry-scope.mjs";
 /* 话术层（收尾那两份账）现在住在自己那份文件里 —— 这里按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import {
@@ -1041,5 +1046,146 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
       writeFilesManifest(path.join(tmpdir(), "comfy-不存在的一层"), ["a"]),
     ).toBe(false);
     expect(junitReportArgs(undefined, 0, 1)).toEqual([]);
+  });
+});
+
+describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
+  const CHUNK = ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"];
+
+  /** 写一份第 1 遍的 junit 读数到临时账本目录，返回该目录。 */
+  function firstPassXml(dir: string, body: string): string {
+    writeFileSync(
+      cFileXmlName(dir, 0, 1),
+      `<?xml version="1.0" encoding="UTF-8" ?>\n<testsuites name="vitest tests" tests="3">${body}</testsuites>\n`,
+    );
+    return dir;
+  }
+  const suite = (name: string, failures: number, errors = 0) =>
+    `<testsuite name="${name}" tests="1" failures="${failures}" errors="${errors}" time="0.4"></testsuite>`;
+
+  it("第 1 遍有 2 份失败 ⇒ 复跑面就是那 2 份（顺序按本块清单）", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "c-scope-"));
+    try {
+      firstPassXml(
+        dir,
+        suite("tests/c.test.ts", 1) +
+          suite("tests/a.test.ts", 0, 1) +
+          suite("tests/b.test.ts", 0),
+      );
+      const got = retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 });
+      expect(got.files).toEqual(["tests/a.test.ts", "tests/c.test.ts"]);
+      expect(got.why).toContain("2/3");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("读数里的陌生路径不许进复跑面（它不属于这一块，跑它会改判据的分母）", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "c-scope-"));
+    try {
+      firstPassXml(
+        dir,
+        suite("tests/zzz.test.ts", 1) + suite("tests/b.test.ts", 1),
+      );
+      expect(
+        retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 }).files,
+      ).toEqual(["tests/b.test.ts"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("三种「读不出来」一律退回整块 —— 宁可多跑，也不许漏跑一份真失败的文件", () => {
+    /* ① 不在钩子里跑（没有账本目录）。 */
+    const noDir = retryScope({ chunk: CHUNK });
+    expect(noDir.files).toEqual(CHUNK);
+    expect(noDir.why).toContain("没有账本目录");
+
+    const dir = mkdtempSync(path.join(tmpdir(), "c-scope-"));
+    try {
+      /* ② 文件没落盘。 */
+      const missing = retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 });
+      expect(missing.files).toEqual(CHUNK);
+      expect(missing.why).toContain("取不到");
+
+      /* ③ 读到了却一份失败都没有：崩在 suite 之前 / reporter 没记上。
+       *    这一档与「这次清单本来就这么点」逐字同形，所以只能按最贵的算。 */
+      firstPassXml(
+        dir,
+        suite("tests/a.test.ts", 0) + suite("tests/b.test.ts", 0),
+      );
+      const empty = retryScope({ chunk: CHUNK, junitDir: dir, chunkId: 0 });
+      expect(empty.files).toEqual(CHUNK);
+      expect(empty.why).toContain("没有");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("整条链：超时形态 ⇒ 第 2 遍只带失败那 1 份，且「未校验」点名的也是那 1 份", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "c-chain-"));
+    try {
+      firstPassXml(
+        dir,
+        suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0),
+      );
+      const TIMEOUT = {
+        status: 1,
+        output:
+          "Error: Test timed out in 30000ms.\nIf this is a long-running test...",
+      };
+      const GREEN = { status: 0, output: "Test Files 1 passed" };
+      const calls: string[][] = [];
+      const unverified: string[][] = [];
+      const code = await runChunk(CHUNK, {
+        entry: "vitest.mjs",
+        junitDir: dir,
+        chunkId: 0,
+        spawn: (_entry: string, args: string[]) => {
+          calls.push(args.filter((a) => a.endsWith(".test.ts")));
+          return calls.length === 1 ? TIMEOUT : GREEN;
+        },
+        settle: () =>
+          Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
+        onUnverified: (files: string[]) => unverified.push([...files]),
+      });
+      expect(code).toBe(0);
+      /* 第 1 遍是整块（判决还没发生），第 2 遍收窄到失败的那一份。 */
+      expect(calls[0]).toEqual(CHUNK);
+      expect(calls[1]).toEqual(["tests/a.test.ts"]);
+      /* 没跑过第 2 遍的 b/c 不能被写成「未校验」—— 它们第一遍就绿了。 */
+      expect(unverified).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("第 2 遍仍只是超时形态 ⇒ 点名的名单是复跑面，不是整块", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "c-chain-"));
+    try {
+      firstPassXml(
+        dir,
+        suite("tests/a.test.ts", 1) + suite("tests/b.test.ts", 0),
+      );
+      const TIMEOUT = {
+        status: 1,
+        output: "Error: Test timed out in 30000ms.",
+      };
+      const unverified: string[][] = [];
+      const code = await runChunk(CHUNK, {
+        entry: "vitest.mjs",
+        junitDir: dir,
+        chunkId: 0,
+        spawn: () => TIMEOUT,
+        settle: () =>
+          Promise.resolve({ settled: true, load: 0.1, waitedMs: 800 }),
+        onUnverified: (files: string[]) => unverified.push([...files]),
+      });
+      /* 未校验 ⇒ 放行（退 0），但名单必须只有那一份。 */
+      expect(code).toBe(0);
+      expect(unverified).toEqual([["tests/a.test.ts"]]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

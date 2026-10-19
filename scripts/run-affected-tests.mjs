@@ -117,6 +117,9 @@ import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
  * import 而不是各抄一份文件名：抄两份的漂移形态是静默的 —— 改名那侧照常跑、
  * 这侧读不到，而「读不到」在这一格长得和「这次没有读数」一模一样。 */
 import { C_MANIFEST_NAME, cFileXmlName } from "./precommit-timing.mjs";
+/* 复跑面（第 2 遍该跑哪几份）住在自己那份文件里 —— 与话术层同一刀，理由写在那份文件头：
+ * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。 */
+import { retryScope } from "./affected-launch-retry-scope.mjs";
 /* 收尾那两份账与「毫秒→秒」的格式住在**话术层**：本文件是机制层（清单 / 分块 / 起进程 /
  * 判超时指纹 / 定不退不退），那三段只把已经定完的结论排成给人读的账。拆开的理由不是「长」
  * 而是 §12.6 R5 那句 —— 读不动的那一层的失效形态是「判据恒绿」，不是报错。 */
@@ -796,6 +799,9 @@ export async function runChunk(chunk, deps) {
     deps.settle ??
     (() => waitForLoadToSettle({ budgetMs: remainingWaitMs(deps.waitBudget) }));
   const settled = await settle();
+  /* 复跑面由 `retryScope` 给（只跑第 1 遍里失败的那几份）：这一格**只改跑多少份**，
+   * 旗标 / 预算 / 结论档位一律照旧，而三条退回形态都是「宁可多跑」那一边。 */
+  const scope = retryScope({ chunk, junitDir, chunkId, read: deps.readJunit });
   /* 「等了多久」要说出口，而不是只说「在等」：它是**唯一**能区分
    * 「机器空了，所以第二遍与第一遍不同条件」与「一点没等，第二遍和第一遍同条件」的读数
    * —— 后者的复跑只证伪了「真断言红」，并没有排除负载。放在这里（而不只在收尾账里）
@@ -808,13 +814,13 @@ export async function runChunk(chunk, deps) {
           settled.settled
             ? `（每核负载回落到 ${settled.load.toFixed(2)}）`
             : " 没等到回落"
-        } —— 起第 2 遍：同一份 ${chunk.length} 条清单、--no-file-parallelism\n`,
+        } —— 起第 2 遍：${scope.why}、--no-file-parallelism\n`,
   );
   const retry = spawn(entry, [
     "run",
     ...junitReportArgs(junitDir, chunkId, 2),
     "--no-file-parallelism",
-    ...chunk,
+    ...scope.files,
   ]);
   if (retry.status === 0) {
     process.stderr.write(
@@ -850,7 +856,9 @@ export async function runChunk(chunk, deps) {
             "    不改变上面的结论。）\n") +
         "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
     );
-    deps.onUnverified?.(chunk);
+    /* 点名的范围必须是**这次真的没拿到可信读数的那些**，而不是整块：整块那份名单会把
+     * 第一遍已经绿过的文件也写成「未校验」，而下一个人据此重跑时会在不存在的地方找问题。 */
+    deps.onUnverified?.(scope.files);
     report({
       outcome: "rerun-unverified",
       waitedMs: settled.waitedMs,
