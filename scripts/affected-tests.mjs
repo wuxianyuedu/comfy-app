@@ -53,6 +53,7 @@ import { fileURLToPath } from "node:url";
 
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
+import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
@@ -252,17 +253,40 @@ export function resolveAffectedTests({
     reasons[rel] = reasons[rel] ? `${reasons[rel]} + ${why}` : why;
   };
   /**
-   * 固定清单永远并入 —— 空集是最危险的形态：`vitest run` 不带位置参数就是跑全量。
+   * 固定清单并入 —— 空集是最危险的形态：`vitest run` 不带位置参数就是跑全量。
+   *
+   * ⚠️ **只有增量档（`subset`）按输入面筛**（`scripts/fixed-gate-input-faces.mjs`）：
+   * `all` 那一档是「放弃收窄」的兜底 —— 改了全局测试配置、或命中了不可达的公共地基，
+   * 那一刻的前提正是「这次没法信筛出来的结果」，所以固定清单**一条都不跳**。
+   * 被跳过的条目必须进 `reasons.__faceSkipped` 由 `main()` 打出口：一条悄悄不跑的判据，
+   * 与一条没写判据的判据在日志里逐字同形（本仓立案最狠的那一族）。
+   *
    * @param {"subset" | "all"} mode
    * @param {Iterable<string>} extra
    * @param {string} [note]
    * @returns {Resolution}
    */
-  const withFixed = (mode, extra, note) => ({
-    mode,
-    tests: [...new Set([...FIXED_STRUCTURAL_TESTS, ...extra])].sort(),
-    reasons: note ? { __note: note } : reasons,
-  });
+  const withFixed = (mode, extra, note) => {
+    /* 改动清单为空 ⇒ **不过筛**。这一格与 `wide` 那种兜底不同源但同一取向：空清单在这里
+     * 分不清「什么都没改」与「拿不到清单」（`stagedPaths()` 两条路都回 `[]`/`null`），
+     * 而「不知道」不等于「没变」—— 同 `ci-install-deps.mjs` 那两条安全边界的一条口径。
+     * 真发生时最贵的后果是「一次没人筛过的提交悄悄少跑四条判据」。 */
+    const pickedFixed =
+      mode === "subset" && changed.size > 0
+        ? selectFixedByFace(FIXED_STRUCTURAL_TESTS, changed)
+        : { keep: [...FIXED_STRUCTURAL_TESTS], skipped: [] };
+    const out = {
+      mode,
+      tests: [...new Set([...pickedFixed.keep, ...extra])].sort(),
+      reasons: note ? { __note: note } : reasons,
+    };
+    if (pickedFixed.skipped.length > 0) {
+      out.reasons.__faceSkipped = pickedFixed.skipped
+        .map((s) => s.test)
+        .join(" ");
+    }
+    return out;
+  };
 
   const changed = new Set();
   /** @type {string[]} */
@@ -408,7 +432,11 @@ export function attributeAffected(changedPaths, graph, testFiles, sourceFiles) {
   }
   // 稳定排序：同份数时按路径字典序，避免同样的改动在不同机器上给出不同顺序。
   return out.sort((a, b) =>
-    b.affected !== a.affected ? b.affected - a.affected : a.file < b.file ? -1 : 1,
+    b.affected !== a.affected
+      ? b.affected - a.affected
+      : a.file < b.file
+        ? -1
+        : 1,
   );
 }
 
@@ -549,12 +577,7 @@ function main() {
     );
     process.stdout.write(
       JSON.stringify(
-        attributeAffected(
-          changed,
-          graph,
-          inputs.testFiles,
-          inputs.sourceFiles,
-        ),
+        attributeAffected(changed, graph, inputs.testFiles, inputs.sourceFiles),
       ) + "\n",
     );
     return 0;
@@ -587,9 +610,20 @@ function main() {
       wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length),
     );
   } else {
+    /* 「固定 N」必须是**这次真跑到的**固定条数，不是清单长度 —— 开了输入面之后两者
+     * 可以不同，而这一行是唯一会被读账的数字：拿清单长度冒充实跑，跳过的那几条
+     * 就在这句话里消失了（同「读不到就少说一条」那类病）。 */
     process.stderr.write(
       `[affected] 暂存 ${changed.length} 个文件 → 跑 ${res.tests.length} 个测试` +
-        `（固定 ${FIXED_STRUCTURAL_TESTS.length} + 受影响 ${extra.length}）\n`,
+        `（固定 ${res.tests.length - extra.length} + 受影响 ${extra.length}）\n`,
+    );
+  }
+  if (res.reasons.__faceSkipped) {
+    const skipped = res.reasons.__faceSkipped.split(" ").filter(Boolean);
+    process.stderr.write(
+      `[affected] 固定清单按**输入面**跳过 ${skipped.length} 条（${skipped.join(" ")}）` +
+        "—— 名单与每条的面在 scripts/fixed-gate-input-faces.mjs，" +
+        "「改到被测工具却没跑」是不允许的形态，所以这里逐条点名而不是静默少跑\n",
     );
   }
   if (res.reasons.__skipped) {
