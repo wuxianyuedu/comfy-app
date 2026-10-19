@@ -143,6 +143,22 @@ _STAGED_N="$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d " ")"
 # run_group <id> <说明> <命令…>：后台跑一个组，rc 落文件，末尾统一判定。
 run_group() {
   id="$1"; desc="$2"; shift 2
+  # ── 档位开关（ISSUE #2022）───────────────────────────────────────────────
+  # 本地**提交**默认只跑 D0（形态前置档）：A(tsc) / B(eslint) / C(受影响用例) / D(静态判据)
+  # 这四组不再在每次提交上跑。**它们没有消失** —— 第一层接手是推送那一跳
+  # （`.githooks/pre-push` → `check:premerge` 各段，含 `unitTests`），第二层是平台流水线
+  # （规范 §13.5.25）。业主口径：提交在开发者的编辑循环里，慢 = 直接被 `--no-verify` 绕掉。
+  # ⚠️ **这里的“不跑”只关执行时机，不关注册表**：那 50 条 `run "<标签>" <命令>` 步骤行
+  # 逐字留在这份文件里，因为 `scripts/check-gate-executors.cjs` 是按**文本**解析本文件的
+  # 三处出处之一（另两处是 `quality-gate.mjs` / `quality-gate.ps1`；`.cnb.yml` **不算**
+  # 执行者）。把步骤删掉 = 那一族判据当场失去执行者 = 本仓最恨的静默删除。
+  # 人要在本地跑全套（合并前自查、或怀疑 CI 那一份不可信）：`COMFY_HEAVY_GATES=1 git commit …`，
+  # 或 `pnpm check:all`。跳过不是通过：收尾那一段会把跳过的组**逐组点名**，
+  # 所以账本与日志里读得出「这次提交本地没测行为面」，不会出现一次冒充全绿的绿钩子。
+  if [ "$id" != "D0" ] && [ "${COMFY_HEAVY_GATES:-0}" != "1" ]; then
+    echo "skipped" >"$LOGD/$id.skip"
+    return 0
+  fi
   (
     set_now_ms _g0
     echo "── 组 $id：$desc"
@@ -760,7 +776,13 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
 rc=0
+SKIPPED_IDS=""
 for id in A B C D; do
+  # 档位跳过的组：**不 wait、不当结论**，但要被数进下面那句点名里。
+  if [ -f "$LOGD/$id.skip" ]; then
+    SKIPPED_IDS="$SKIPPED_IDS $id"
+    continue
+  fi
   eval "pid=\$${id}_pid"
   wait "$pid"
   if [ ! -f "$LOGD/$id.rc" ]; then
@@ -794,4 +816,13 @@ for id in A B C D; do
 done
 
 [ "$rc" -ne 0 ] && { echo "[pre-commit] 提交被门槛拦下"; exit 1; }
-echo "[pre-commit] 全部通过 ✓"
+if [ -n "$SKIPPED_IDS" ]; then
+  # 这句必须打出来：跳档之后「全部通过」四个字容易被读成「全套判据过了」，而那不等价 ——
+  # 通过的只有 D0（形态档）。行为面这一半的结论在平台那一次跑里，不在这里。
+  echo "[pre-commit] ⚠ 本次提交本地**没跑**：组$SKIPPED_IDS（tsc / eslint / 受影响用例 / 静态判据全量）"
+  echo "[pre-commit] ⚠ 上面那句不是「已通过」——它等价于「这次没测行为面」（与 §13.6.2 那个"
+  echo "[pre-commit] ⚠   inconclusive 同一口径）。兜底两层：推送那一跳跑全套（check:premerge"
+  echo "[pre-commit] ⚠   各段，含受影响用例），平台流水线是第二层 —— 见规范 §13.5.25。"
+  echo "[pre-commit] ⚠ 本地要全套：COMFY_HEAVY_GATES=1 git commit …（或 pnpm check:all）。"
+fi
+echo "[pre-commit] 入选档位全部通过 ✓（D0 形态档$([ -n "$SKIPPED_IDS" ] && echo "；重档见平台" )）"

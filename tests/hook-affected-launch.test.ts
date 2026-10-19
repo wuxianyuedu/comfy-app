@@ -31,18 +31,24 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { wideFallbackNote } from "../scripts/affected-tests.mjs";
+/* 「认出超时形态 + 等机器喘口气」那一层住在自己的模块里（`run-affected-tests.mjs`
+ * 越过 900 行硬闸时按职责拆出，理由写在那份文件头）。用例跟着 import 走，不在这里
+ * 再要一份 `run-affected-tests.mjs` 的同名出口 —— 那等于给拆出去的块留一条「搬走了
+ * 但还能从老地方拿到」的假象。 */
+import {
+  isTimeoutShaped,
+  loadPerCore,
+  remainingWaitMs,
+  waitForLoadToSettle,
+} from "../scripts/affected-launch-load-retry.mjs";
 import {
   DEFAULT_MAX_WORKERS,
-  isTimeoutShaped,
   junitReportArgs,
-  loadPerCore,
   planLaunches,
-  remainingWaitMs,
   resolveMaxWorkers,
   resolveVitestEntry,
   runChunk,
   SAFE_ARGV_BUDGET,
-  waitForLoadToSettle as waitForLoadToSettleRaw,
   writeFilesManifest,
 } from "../scripts/run-affected-tests.mjs";
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
@@ -61,18 +67,6 @@ import {
   unverifiedReport,
 } from "../scripts/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
-
-/* `run-affected-tests.mjs` 是 `.mjs` + `@ts-nocheck`（提交门槛脚本，tsc 面在 `src/**`），
- * 所以 import 出来的每一个符号在类型层都是 `any` —— 直接 `await` 会撞
- * `@typescript-eslint/await-thenable`（「await 一个非 Promise」）。这里按它 JSDoc 里
- * 已经写明的契约把**用到的那个**收成有类型的别名，其余符号照旧用。 */
-const waitForLoadToSettle = waitForLoadToSettleRaw as unknown as (options?: {
-  budgetMs?: number;
-  pollMs?: number;
-  probe?: { loadavg: () => number[]; cpus: () => unknown[] };
-  sleepFn?: (ms: number) => void | Promise<void>;
-  now?: () => number;
-}) => Promise<{ load: number; waitedMs: number; settled: boolean }>;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK_PATH = ".githooks/pre-commit";
@@ -256,6 +250,14 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      * 读的落点是 `base-check/verdict.mjs` 而不是 `base-check.mjs`：判决那一层
      * 随 R5 拆分搬过去了（`base-check.mjs` 1382 → 648 行），只读主文件时
      * 提取块落空 ⇒ `theirs` 是空数组 ⇒ 这条断言对着空数组比、**静默变成空转**。 */
+    /* 读的落点跟着**职责**走：指纹清单随 R5 拆分搬进了
+     * `scripts/affected-launch-load-retry.mjs`（`run-affected-tests.mjs` 越过 900 行硬闸，
+     * 按「负载归因 vs 起进程」切开）。留在老地方读 ⇒ `pick` 落空 ⇒ 下面那条
+     * `mine.length > 0` 当场红 —— 这条断言的意义正在这里，别为了它把清单抄回来。 */
+    const launcherLayer = readFileSync(
+      "scripts/affected-launch-load-retry.mjs",
+      "utf8",
+    );
     const baseCheck = readFileSync("scripts/base-check/verdict.mjs", "utf8");
     const pick = (text: string): string[] => {
       const block = /const TIMEOUT_SIGNATURES = \[([\s\S]*?)\n\];/.exec(text);
@@ -265,7 +267,7 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
         .filter((line) => line.startsWith("/"))
         .map((line) => line.replace(/,$/, ""));
     };
-    const mine = pick(src);
+    const mine = pick(launcherLayer);
     const theirs = pick(baseCheck);
     expect(mine.length).toBeGreaterThan(0);
     expect(mine).toEqual(theirs);
