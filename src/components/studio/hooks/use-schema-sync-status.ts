@@ -20,6 +20,12 @@ import { isRecord } from "~/lib/is-record";
 
 export const SCHEMA_SYNC_POLL_MS = 2000;
 
+/** 稳定态（库结构已一致、无需提示）下的轮询节奏：状态栏那一格在 `ready` 下本就不
+ *  占位，没必要每 2s 打一次 `GET /api/schema` —— 降到 30s 只作「万一结构又变了」
+ *  的兜底，同时把面板里的访问日志噪声压下去（用户侧看到的「这些请求太频繁」主要
+ *  就是它）。仍有事要办（syncing / missing / stale / 刚探到）时才保持 2s。 */
+export const SCHEMA_SYNC_IDLE_MS = 30_000;
+
 /** 与 `scripts/db-schema-state.mjs` 的 `ensureSchemaCurrent` 返回值一一对应。 */
 export type SchemaSyncPhase =
   "syncing" | "ready" | "synced" | "missing" | "stale" | "unknown";
@@ -168,6 +174,10 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
     canPush: false,
   });
   const stoppedRef = useRef(false);
+  /* 当前相位 + 「是否已探到过一次真实读数」：驱动轮询频率（稳定后降速，而不是
+   * 每 2s 无脑打一次 `GET /api/schema`）。见下方 `schemaPollMs`。 */
+  const phaseRef = useRef<SchemaSyncPhase>("unknown");
+  const resolvedRef = useRef(false);
 
   const probe = useCallback(async () => {
     try {
@@ -181,18 +191,23 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
       const record = isRecord(data) ? data : {};
       const phase = toPhase(record.phase);
       const at = typeof record.at === "string" ? record.at : null;
+      /* 探到过一次真实读数：`unknown` 此后只可能是「已提示过同步完成的回落」，
+       * 而非首帧未量到 —— 降速判据据此区分（见 `schemaPollMs`）。 */
+      resolvedRef.current = true;
 
       /* `synced`（刚同步完，建议刷新）只提示一次：刷新后状态文件里还是同一个
        * `at`，再提示一遍就成了噪音；陈旧的 `synced`（上次同步之后再没启动过）
        * 也不提示 —— 那时刷新什么也不会变。 */
       if (phase === "synced") {
         if (!isFresh(at) || readAck() === at) {
+          phaseRef.current = "unknown";
           setStatus({ phase: "unknown", detail: null, canPush: false });
           return;
         }
         writeAck(at);
       }
 
+      phaseRef.current = phase;
       setStatus({
         phase,
         detail: typeof record.detail === "string" ? record.detail : null,
@@ -213,7 +228,19 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
     };
   }, []);
 
-  useInterval(probe, { ms: SCHEMA_SYNC_POLL_MS });
+  /* 稳定态（库结构已一致 / 已提示过一次「同步完成」）降速到 30s：状态栏那一格在
+   * `ready` 下本就不占位，每 2s 打一次 `GET /api/schema` 纯粹是日志噪声与服务端
+   * 负担；仍有事要办（syncing / missing / stale / 刚探到）时才保持 2s。 */
+  const schemaPollMs = useCallback<() => number | null>(() => {
+    const phase = phaseRef.current;
+    if (phase === "ready") return SCHEMA_SYNC_IDLE_MS;
+    if (phase === "unknown") {
+      return resolvedRef.current ? SCHEMA_SYNC_IDLE_MS : SCHEMA_SYNC_POLL_MS;
+    }
+    return SCHEMA_SYNC_POLL_MS;
+  }, []);
+
+  useInterval(probe, { ms: schemaPollMs });
 
   return status;
 }

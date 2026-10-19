@@ -35,9 +35,9 @@ import { useComfyReadiness } from "./hooks/use-comfy-readiness";
  * 共用同一条）。视图层这里零 IO（规范 §17）。
  *
  * 刻意没搬原型里的两块：
- *   · **队列 / 历史计数** —— `useComfyQueue` 目前还是「每实例各一份 useState + useInterval」，
- *     在首页再挂一处就是同一个端点两路轮询，正是状态指标那一刀刚消掉的形状。先给队列补
- *     同样的单点持有者，再谈把它放上首页。
+ *   · **队列 / 历史计数** —— `useComfyQueue` 的轮询已经收进
+ *     `src/lib/comfy/comfy-queue-store.ts` 这一个持有者（与状态栏共用同一条），在首页
+ *     再挂一处也不会多一路轮询。把它放上首页只是产品决策，不是技术债。
  *   · **Ollama 与显存不足建议** —— 前者的运行态与模型清单只在设置页作用域内取（
  *     `src/app/(main)/settings/hooks/use-settings-page-ollama.ts`），后者需要一条真实的
  *     失败镜头数据源；两者都没有现成出口，凭原型的样子写一份假数据比不写更糟。
