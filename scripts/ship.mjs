@@ -170,6 +170,36 @@ function cnbJson(run, args) {
 }
 
 /**
+ * 对外入口：跑一遍编排，**无论走到哪个出口都清掉自己写的临时文件**。
+ *
+ * 提交信息与 PR 正文都是当场拼出来的原文，留在盘上没有用处 ——
+ * 而 `.workbuddy/` 是 gitignored，所以「忘了删」不会进历史、只会一直堆着。
+ * 实测前几轮真跑就在 `.workbuddy/` 里留了 3 份提交信息。
+ *
+ * 清理放在 `finally` 而不是每个调用点后面，是因为**最常见的失败路径本身就是一个
+ * 提前 return**（钩子拦下提交时 `return finish(codes)` 就发生在写完临时文件之后）——
+ * 「用完顺手删一句」在这种形状下照样漏，而且漏的恰好是没人回头看的那几次。
+ *
+ * @param {Parameters<typeof runFlow>[0]} [deps] 注入点
+ * @returns {Promise<number>} 进程退出码（三态）
+ */
+export async function main(deps = {}) {
+  /** @type {string[]} */
+  const tmpFiles = [];
+  try {
+    return await runFlow(deps, tmpFiles);
+  } finally {
+    for (const p of tmpFiles) {
+      try {
+        fs.unlinkSync(p);
+      } catch {
+        // 已经被删 / 从来没写成：清理尽力而为，不该改变这一次编排的结论。
+      }
+    }
+  }
+}
+
+/**
  * 主编排。所有外部效应都从 `deps` 注入，所以它可以被完整单测（见 `tests/ship.test.ts`）。
  *
  * @param {{
@@ -180,11 +210,19 @@ function cnbJson(run, args) {
  *   sleep?: (ms:number)=>void,
  *   now?: ()=>number,
  *   args?: string[],
- * }} [deps] 注入点
+ * }} deps 注入点（由 `main` 总是给全，所以这里不标可选 —— 标了会让后面那个
+ *    必需参数报 TS1016「required 不能跟在 optional 之后」）
+ * @param {string[]} tmpFiles 临时文件回收清单，由 `main` 建并在 `finally` 里清
  * @returns {Promise<number>} 进程退出码（三态）
  */
-export async function main(deps = {}) {
+async function runFlow(deps, tmpFiles) {
   const root = deps.root ?? process.cwd();
+  /** 写一份临时文件并**登记待回收** —— 只有这一条出口，漏登记就删不掉。 */
+  const mkTmp = (/** @type {string} */ name, /** @type {string} */ text) => {
+    const p = writeTmp(root, name, text);
+    tmpFiles.push(p);
+    return p;
+  };
   const run = deps.run ?? makeRunner(root);
   /** cnb 在不在：**真起一次** `--version` 看退码。不按「PATH 里有没有那个名字」判 ——
    *  在 Windows 垫片上「找得到」与「起得来」是两件事（见 `cnbSpawn` 那段）。 */
@@ -373,7 +411,7 @@ export async function main(deps = {}) {
           return finish(codes);
         }
         for (const a of opt.adds) run("git", ["add", "--", a]);
-        const cf = writeTmp(root, "ship-commit-msg", msg);
+        const cf = mkTmp("ship-commit-msg", msg);
         const cm = run("git", ["commit", "-F", cf]);
         relay(cm);
         if (cm.status !== 0) {
@@ -451,7 +489,7 @@ export async function main(deps = {}) {
             "origin/master...HEAD",
           ]).stdout.trim(),
         });
-        const bf = writeTmp(root, "ship-pr-body", body);
+        const bf = mkTmp("ship-pr-body", body);
         const made = cnbJson(run, [
           "pulls",
           "post-pull",
