@@ -26,7 +26,9 @@ import { startPollTimer } from "~/lib/poll-timer";
  *     语义与 `use-comfy-stats` / `use-update-check` 的既有实现一致；
  *  3. 间隔之间的「上一轮还没回来就发下一轮」不在这里挡 —— 那是**背压**问题，
  *     由调用方决定（多数轮询是幂等的单次查询，重叠无害；需要串行的落点应自己
- *     在 `run` 里排队）。本 hook 只负责「什么时候该跑」。
+ *     在 `run` 里排队）。本 hook 只负责「什么时候该跑」。**唯一的例外是
+ *     `ms` 返回 `0` 那一档**：「本拍跑完立刻再来」按定义就得等本拍结算，
+ *     实现本体（`~/lib/poll-timer`）会等 —— 不等就成了空转叠发。
  *
  * **桌面场景补的一条**（`pauseWhenUnfocused`）：WebView2 里窗口被别的窗口
  * 遮挡但未最小化时，`document.visibilityState` 仍报 `visible`、`visibilitychange`

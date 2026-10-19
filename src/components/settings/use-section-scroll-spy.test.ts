@@ -183,7 +183,9 @@ describe("useSectionScrollSpy", () => {
       for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
     });
 
-    act(() => result.current.scrollToSection("c"));
+    act(() => {
+      result.current.scrollToSection("c");
+    });
     expect(onActiveChange).toHaveBeenCalledWith("c");
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(scrollIntoView.mock.instances[0]).toBe(nodes.get("c"));
@@ -208,7 +210,9 @@ describe("useSectionScrollSpy", () => {
       for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
     });
 
-    act(() => result.current.scrollToSection("b"));
+    act(() => {
+      result.current.scrollToSection("b");
+    });
     expect(onActiveChange).toHaveBeenCalledWith("b");
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });

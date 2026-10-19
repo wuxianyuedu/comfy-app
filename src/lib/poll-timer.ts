@@ -10,8 +10,10 @@
 // 就等于把 §16.2.4.15 刚收口的重复**重新造回来**，而且两份的暂停判据一定会漂。
 //
 // 所以：这段是那条规则的**实现本体**，`useInterval` 只是它的 React 外壳。
-// 语义、边界与坑（含「上一轮没回来就发下一轮」不在这里挡，那是背压、由调用方决定）
-// 全部以 `use-interval.ts` 的文件头为准，两处共用同一份判断，不各写一套。
+// 语义、边界与坑（含「上一轮没回来就发下一轮」不在这里挡，那是背压、由调用方决定；
+// **`ms` 返回 `0` 那一档例外** —— 它按定义就是「本拍跑完立刻再来」，非等不可，
+// 否则异步的长轮询会以 ~4ms 的节奏叠发，判据见 `arm` 里 `0` 档那段）全部以
+// `use-interval.ts` 的文件头为准，两处共用同一份判断，不各写一套。
 //
 // **`ms` 可以是函数**（ISSUE #1351）：存活探测要「按阶段给频率」（启动等待
 // 400ms、空闲 15s、出图 30s、隐藏 60s），而档位在运行中会变。函数形态让
@@ -37,8 +39,9 @@ export interface PollTimerOptions {
    *  生效，不会抢跑。
    *
    *  函数返回 `null` 表示「**下一拍不排**」（调用方仍可经 `stop()` / 重建拉起）；
-   *  返回 `0` 表示「立刻再跑一拍」（事件驱动那一档）。两者**不可混为一谈**：
-   *  把 `null` 当 `0` 会成为忙等（实测一秒空转上万次）。 */
+   *  返回 `0` 表示「**本拍跑完立刻再跑一拍**」（事件驱动那一档：等这件事有了结果
+   *  就马上再问一次）。两者**不可混为一谈**：把 `null` 当 `0` 会成为忙等
+   *  （实测一秒空转上万次）。 */
   ms: number | null | (() => number | null);
   /** 启动时是否立即先跑一次（默认 true）。 */
   immediate?: boolean;
@@ -81,14 +84,22 @@ export function startPollTimer(
 
   let timer: ReturnType<typeof setInterval> | null = null;
   let chain: ReturnType<typeof setTimeout> | null = null;
+  /* 最近一拍的 `run` 结果：`0` 档要靠它做「本拍跑完立刻再来」的续排。 */
+  let lastRun: Promise<unknown> = Promise.resolve();
+  /* 停表标志。`0` 档的续排落在**异步回调**里（下面 `pending.then`），
+   * `clearTimeout` 拦不住已经把回调发车出去的那一格，必须另有布尔判据兜住
+   * 「`stop()` 之后又悄悄多跑一拍」。 */
+  let stopped = true;
 
   const tick = (): void => {
     /* `run` 可以是 async 函数，返回值因此可能是 Promise。这里不写 `void run()`：
        那条形态一是撞上 src/lib 的「void 悬空 Promise」棘轮（悬浮 Promise 没人负责），
        二是失败会静默沉掉。统一交给 `fireAndForget`，通道由调用方的 `onError` 决定。 */
-    fireAndForget(Promise.resolve(run()), onError);
+    lastRun = Promise.resolve(run());
+    fireAndForget(lastRun, onError);
   };
   const stop = (): void => {
+    stopped = true;
     if (timer !== null) {
       clearInterval(timer);
       timer = null;
@@ -100,25 +111,52 @@ export function startPollTimer(
   };
   const start = (): void => {
     stop();
+    stopped = false;
     if (immediate) tick();
     if (!dynamic) {
       timer = setInterval(tick, ms);
       return;
     }
-    /* 函数形态：本拍跑完再问下一拍的间隔。`run` 是异步的，但这里**不等它**
-     * ——等待会让「上一轮还没回来」变成阻塞，而背压是调用方的事（见文件头）。
-     * 「跑完再排」在这里的含义是「本拍已发车」，不是「本拍已到站」。 */
     const arm = (): void => {
       const next = ms();
       /* `null` = 下一拍不排（调用方靠 `stop()` / 重建拉起，或者它自己会重新
        * 订阅）。**不能与 `0` 混为一谈**：`0` 是「立刻再跑一拍」（事件驱动那一档），
        * 把 `null` 也当成 0 就成了忙等 —— 实测这条会在一秒内空转上万次。 */
       if (next === null) return;
-      const delay = next <= 0 ? 0 : next;
+      if (next > 0) {
+        /* 正数档：本拍**已发车**即排下一拍，不等它到站 —— 等待会让「上一轮还没
+         * 回来」变成阻塞，而那是调用方自己的背压（见文件头）。 */
+        chain = setTimeout(() => {
+          tick();
+          arm();
+        }, next);
+        return;
+      }
+      /* `0` 档：等**本拍跑完**再立刻来下一拍 —— 这是它与正数档唯一的区别，
+       * 也是 `ms` 里唯一一处「事件驱动」语义（调用方用它表达「这件事有了结果
+       * 就马上再问一次」）。
+       *
+       * **必须等 `run` 结算**，不能直接按 `0` 排下一拍：`run` 通常是异步的
+       * （最长的一条是 25s 的服务端长轮询），按 0 排就成了 ~4ms 的空转 —— 实测
+       * 300ms 内叠发 23 拍、**同时 6 拍在途**，把浏览器对**同源只有 6 条**的
+       * HTTP/1.1 连接预算整份占住，连累与它无关的请求一起报
+       * `net::ERR_INSUFFICIENT_RESOURCES`（现场：点「去设置里配置」时按需加载的
+       * 设置分块失败 → 整页自愈刷新 → 在飞 tRPC 被中断 → 状态栏翻「应用服务已断开」）。
+       *
+       * 续排隔一层 `setTimeout(0)`：`run` 若是**同步**完成（`ms` 档位测试里的
+       * `vi.fn()` 就是这种），只挂 `then` 会退化成微任务空转（没有宏任务让位，
+       * 在浏览器里直接卡住事件循环）。 */
+      const pending = lastRun;
       chain = setTimeout(() => {
-        tick();
-        arm();
-      }, delay);
+        fireAndForget(
+          pending.then(() => {
+            if (stopped) return;
+            tick();
+            arm();
+          }),
+          onError,
+        );
+      }, 0);
     };
     arm();
   };

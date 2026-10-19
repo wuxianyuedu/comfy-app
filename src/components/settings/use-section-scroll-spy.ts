@@ -62,8 +62,17 @@ export interface UseSectionScrollSpyOptions<Id extends string = string> {
 export interface SectionScrollSpy<Id extends string = string> {
   /** 挂到**每个分区节**上的 `ref` 回调（`sectionId` 即锚点 id）。 */
   registerSection: (sectionId: Id) => (el: HTMLElement | null) => void;
-  /** 滚到指定分区（导航点击调它）。 */
-  scrollToSection: (sectionId: Id) => void;
+  /**
+   * 滚到指定分区（导航点击调它）。
+   *
+   * 返回**是否真的命中了锚点**：三态外壳（加载 / 失败）下没有分区节，那时必须
+   * 返回 `false` —— 调用方据此判断「这一跳还没落定、载荷先留着」，等就绪外壳
+   * 挂上分区节后再滚（否则跳转载荷会在没有落点的首帧里被吃掉）。
+   *
+   * `behavior` 默认平滑；跳转载荷的落点用 `"auto"`（瞬时）—— 动画期间观察器会
+   * 先报「当前视图里那几节」，高亮会闪一下再跳到位。
+   */
+  scrollToSection: (sectionId: Id, behavior?: ScrollBehavior) => boolean;
 }
 
 /**
@@ -166,16 +175,20 @@ export function useSectionScrollSpy<Id extends string>({
     return () => observer.disconnect();
   }, [containerRef, sectionIds, revision]);
 
-  const scrollToSection = useCallback((sectionId: Id) => {
-    const el = nodesRef.current.get(sectionId);
-    if (!el) return;
-    /* 先改高亮再滚：滚动是动画的，等高亮跟着滚落定会有肉眼可见的滞后。 */
-    if (sectionId !== activeRef.current) {
-      activeRef.current = sectionId;
-      notifyRef.current(sectionId);
-    }
-    el.scrollIntoView({ block: "start", behavior: "smooth" });
-  }, []);
+  const scrollToSection = useCallback(
+    (sectionId: Id, behavior: ScrollBehavior = "smooth"): boolean => {
+      const el = nodesRef.current.get(sectionId);
+      if (!el) return false;
+      /* 先改高亮再滚：滚动是动画的，等高亮跟着滚落定会有肉眼可见的滞后。 */
+      if (sectionId !== activeRef.current) {
+        activeRef.current = sectionId;
+        notifyRef.current(sectionId);
+      }
+      el.scrollIntoView({ block: "start", behavior });
+      return true;
+    },
+    [],
+  );
 
   return { registerSection, scrollToSection };
 }

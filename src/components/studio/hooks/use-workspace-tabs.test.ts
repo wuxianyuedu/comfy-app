@@ -39,7 +39,9 @@ function storedTabsSurvive(): boolean {
 }
 
 describe("页签恢复不被落盘反冲", () => {
-  beforeEach(() => sessionStorage.clear());
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
   afterEach(() => cleanup());
 
   it("挂载即恢复：存储里的项目页仍在，且没被初始态冲掉", async () => {
