@@ -888,25 +888,28 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
     expect(runner.namespace).toBe("group");
     expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
-    // 四条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
+    // 五条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
     // （`runner.namespace: group` + `tags` 就在这个锚点里）。
     // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。
-    // 四个事件：`pull_request` / `push` / `crontab`（ISSUE #2010）/
-    //   `web_trigger_daily`（每日档的手动触发口，按钮在 `.cnb/web_trigger.yml`）。
+    // 五个事件：`pull_request` / `push` / `crontab`（ISSUE #2010）/
+    //   `web_trigger_daily`（每日档的手动触发口，按钮在 `.cnb/web_trigger.yml`）/
+    //   `api_trigger_daily`（同一件事的 CLI / API 形态，理由与判据见下面那条三向对照）。
     const refs = text.match(/^\s+-\s*<<:\s*\*\w+/gm) ?? [];
     expect(
       refs.length,
-      "锚点引用数与流水线数对不上（四个事件各要 <<: 一次）",
-    ).toBe(4);
+      "锚点引用数与流水线数对不上（五个事件各要 <<: 一次）",
+    ).toBe(5);
   });
 
-  it("定时与**手点**两个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
+  it("定时 / 手点 / API 三个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
     /* 手动触发那一口解决的是「想知道答案的人不该等到早上四点」；它必须与定时那一条
      * 是**同一件事**，否则「手点一遍每日档」这句话就没有确定含义（两种漂法各自都有过：
-     * 复制一份 stage 清单 ⇒ 加格子时只加一边；按钮指到一个 PR 清单 ⇒ 手点的根本不是每日档）。 */
+     * 复制一份 stage 清单 ⇒ 加格子时只加一边；按钮指到一个 PR 清单 ⇒ 手点的根本不是每日档）。
+     * API 那一口同理 —— 它存在的理由恰恰是「按钮要一双手」，见下面那条事件名前缀的判据。 */
     const text = readRegisteredConfig();
     const viaCron = pipelineStageNames(text, "每日生产构建");
     const viaButton = pipelineStageNames(text, "每日档（手动触发）");
+    const viaApi = pipelineStageNames(text, "每日档（API 触发）");
     const declared = registeredDailyGateOrder(text);
     expect(
       declared.length,
@@ -920,6 +923,30 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       viaButton,
       "手点那一条与定时那一条跑的**不是同一份**清单 —— 它应当引用同一个 `*daily_gates` 锚点",
     ).toEqual(declared);
+    expect(
+      viaApi,
+      "API 那一条与定时那一条跑的**不是同一份**清单 —— 同一个锚点，不另抄一份",
+    ).toEqual(declared);
+
+    /* 事件名必须是 `api_trigger` 或其前缀 —— 这是**服务端**的硬要求（实测 400
+     * `Event must be 'api_trigger' or start with 'api_trigger_'.`）。写成 `daily_api`
+     * 那一类名字，这条流水线在配置解析期一个字都不报，而永远没人能触发它 ——
+     * 判前缀不判整串：后缀是自由命名的（官方口径），把它钉成字面量等于把实现细节当判据。 */
+    const apiEvents = [...text.matchAll(/^ {2}(api_trigger\w*):$/gm)].map(
+      (m) => m[1],
+    );
+    expect(
+      apiEvents,
+      "API 触发口的事件键丢了，或不再是 `api_trigger` 前缀（服务端会直接 400）",
+    ).toContain("api_trigger_daily");
+    const badApi = [...text.matchAll(/^ {2}(\w+):$/gm)]
+      .map((m) => m[1] ?? "")
+      .filter((k) => /api.?trigger|trigger.?api/i.test(k))
+      .filter((k) => !k.startsWith("api_trigger"));
+    expect(
+      badApi,
+      `有触发口用了服务端不收的事件名（必须 ^api_trigger）：${badApi.join(" / ")}`,
+    ).toEqual([]);
 
     /* 事件键与按钮：**两个方向**都要有对象。这里的失效形态都是「按了没反应」或
      * 「永远没人按」，而两种都不会让任何一边自己变红。 */
