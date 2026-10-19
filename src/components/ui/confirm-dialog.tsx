@@ -15,10 +15,17 @@
  * 焦点锁在弹窗内、关闭后焦点归还触发元素），本组件只负责「确认弹窗」的形态。
  *
  * 视觉语言与全局设计 token 一致（浅色 / 深色两态）：
- *   - 背景遮罩:  bg-canvas-deep（浅色）/ bg-black/65（深色）+ backdrop-blur-sm
- *   - 卡片:      bg-panel/95 + 中性 ring（浅色深 ring、深色浅 ring）
+ *   - 背景遮罩:  走 `ui/dialog` 的 `dialogBackdropClass()`（`bg-scrim` 两态取值，
+ *               由 `tests/dialog-backdrop-contrast.test.ts` 真量对比度）
+ *   - 卡片:      bg-panel + 中性 ring（浅色深 ring、深色浅 ring）
  *                + border-destructive/30（危险） /
  *                border-primary-500/25（信息）
+ *
+ * 卡片**不带背景模糊**（ISSUE #2031 · 规范 03 §3.13）：它本来就坐在一层
+ * 带色遮罩上，模糊只在「下面有活的、会动的东西」时才看得出来，而这个弹窗
+ * 出现时下半屏是静止的遮罩 —— 观感差别读不出来，代价是把整张卡片和它背后
+ * 的内容拖进一个 backdrop-filter 图层。扁平档的浮层靠**投影 + 描边 + 不透明
+ * 底色**分层，不靠模糊。
  *
  * 颜色全部走语义 token（规范 03 §3.6.2）：这里曾把 `violet-500/600` 写死
  * 6 处，于是「改品牌色」对确认弹窗不起作用 —— 它绕开了 `--color-primary`。
@@ -117,7 +124,7 @@ export function ConfirmDialog({
         data-testid="modal-dialog"
       >
         <div
-          className={`bg-panel/95 relative w-full max-w-105 overflow-hidden rounded-2xl border p-6 ring-1 backdrop-blur-md ${ringClass}`}
+          className={`bg-panel/95 relative w-full max-w-105 overflow-hidden rounded-2xl border p-6 ring-1 ${ringClass}`}
         >
           {/* 柔和强调底色 —— 定调但不喧宾夺主 */}
           <div

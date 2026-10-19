@@ -43,7 +43,6 @@ export function WorkflowPreviewRunFeedback({
     <>
       {/* ── 进度条（两种模式通用，running 时显示） ── */}
       {phase.kind === "running" && (
-        // p71-allow:start brand 渐变 · 工作流执行进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1
         <div className="w-95" aria-live="polite">
           <ProgressBar
             value={pct}
@@ -55,10 +54,9 @@ export function WorkflowPreviewRunFeedback({
             }
             className="text-2xs"
             trackClassName="bg-surface-2 h-1.5"
-            fillClassName="bg-linear-to-r from-violet-500 to-fuchsia-500 duration-300"
+            fillClassName="u-gradient-brand duration-300"
           />
         </div>
-        // p71-allow:end
       )}
 
       {/* ── 运行结果图（只在「实际使用」页签显示；编辑对外参数是配置界面，

@@ -32,7 +32,7 @@ export const Default: Story = {};
 /** 画布错误面板的容器色。 */
 export const InCanvasPanel: Story = {
   render: (args) => (
-    <div className="rounded-md border border-fuchsia-500/40 bg-fuchsia-500/5 px-3 py-2">
+    <div className="border-accent/40 bg-accent/5 rounded-md border px-3 py-2">
       <ValidationErrorList {...args} />
     </div>
   ),

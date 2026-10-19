@@ -67,7 +67,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
   } = useHistoryPanel({ projectId });
 
   return (
-    <aside className="bg-panel/98 border-border-strong flex h-full w-90 shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
+    <aside className="bg-panel border-border-strong flex h-full w-90 shrink-0 flex-col overflow-hidden border-l">
       {/* ── Header ── */}
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
         <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">
@@ -266,7 +266,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                             mediaType: task.mediaType,
                           })
                         }
-                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/60 backdrop-blur group-hover:flex hover:bg-black/60 hover:text-white"
+                        className="text-ink-soft group-hover:flex absolute top-1 right-1 hidden rounded bg-black/70 hover:bg-black/60 hover:text-white"
                       >
                         <Plus
                           data-icon="inline-start"

@@ -196,7 +196,7 @@ export function WorkflowIoPreviewPanel({
   return (
     <div className="z-canvas-max pointer-events-none absolute top-4 right-4 bottom-4 flex w-130 flex-col">
       {/* p71-allow:start sky · IO 预览面板的 identity 色（这套 UI 里"IO 预览"的既有装饰身份、非状态色、无匹配 token），见 §3.6.1 */}
-      <div className="bg-panel/92 pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 shadow-2xl backdrop-blur-md">
+      <div className="bg-panel pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 shadow-2xl">
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="size-2 shrink-0 rounded-full bg-sky-400" />

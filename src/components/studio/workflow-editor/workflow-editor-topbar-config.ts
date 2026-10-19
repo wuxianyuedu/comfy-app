@@ -151,7 +151,7 @@ export const TOP_BAR_BREADCRUMB_CLASS = `flex ${TOP_BAR_BREADCRUMB_MIN_WIDTH_CLA
  * 保持两行内容各自居中。
  */
 export const TOP_BAR_ROOT_CLASS =
-  "border-border-strong flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3 backdrop-blur-md";
+  "border-border-strong bg-panel flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3";
 
 /**
  * 按钮语义态 → 类。

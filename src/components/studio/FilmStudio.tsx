@@ -173,7 +173,7 @@ export function FilmStudio() {
       </div>
 
       {/* ── Status Bar ──────────────────────────────── */}
-      <footer className="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
+      <footer className="border-border-subtle bg-panel-deep z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t">
         <span className="bg-success shadow-success/40 inline-block size-1.75 rounded-full shadow-sm" />
         <span className="text-ink-muted text-2xs">
           ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用
