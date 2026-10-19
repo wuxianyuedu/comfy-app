@@ -230,7 +230,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     type="button"
                     variant="gradient"
                     onClick={openScriptEditor}
-                    className="text-2xs rounded-lg px-4 py-1.5 font-medium"
+                    className="px-4"
                   >
                     编辑剧本
                   </Button>
@@ -259,7 +259,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       type="button"
                       variant="ghost"
                       onClick={scriptPicker.open}
-                      className="text-ink bg-subtle hover:bg-surface-2 rounded-lg px-4 py-1.5 text-xs font-medium"
+                      className="bg-subtle text-ink hover:bg-surface-2 px-4"
                     >
                       导入剧本
                     </Button>
@@ -267,7 +267,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       type="button"
                       variant="gradient"
                       onClick={openScriptEditor}
-                      className="text-2xs rounded-lg px-4 py-1.5 font-medium"
+                      className="px-4"
                     >
                       新建剧本
                     </Button>
