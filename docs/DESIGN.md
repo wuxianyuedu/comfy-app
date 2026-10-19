@@ -458,7 +458,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | `--spacing-title-bar`  | 2.25rem (36px)                                               | 标题行高，`TitleBarTabs` 高度与全屏视图让位**同取这一处**（壳态下 `[data-shell] [data-slot="sidebar-container"]` 靠它让位） |
 | `--spacing-stage-rail` | 13rem (208px)                                                | 工坊竖向阶段轨道列宽，要装下「徽章 + 阶段名 + 完成度小字」的最长一行                                                        |
-| `--panel-right-width`  | 360px                                                        | 右侧面板宽，动画走 `transition-all + w-(--panel-right-width)`（主规范 §4.4.3 的面板级例外）                                 |
+| `--panel-right-width`  | 360px                                                        | 右侧面板宽。**当前无产品消费者** —— 面板本体已随 Legacy 清理第 2 批 `701d17ad` 移除，留着它是 §3.1 括号语法示例与 `cn()` 合并判据的夹具；重建右侧列时接上它，别另立一个数 `transition-all + w-(--panel-right-width)`（主规范 §4.4.3 的面板级例外）                                 |
 | `--card-spacing`       | `--spacing(4)`=16px / `data-[size=sm]` → `--spacing(3)`=12px | `ui/card` 的局部变量，一个开关换两档内距                                                                                    |
 
 全局常驻的底栏/日志面板要求贴底内容**自己预留 24px（`pb-6`）**，不再逐页补挂（`src/app/layout.tsx:41-42`）。
