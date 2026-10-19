@@ -26,8 +26,9 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/* `args` 显式写一遍（`onChange` 也要给）：a11y 那一档按 `story.args` 渲染，
- * 读不到 `meta.args` —— 只挂 meta 的故事会以裸组件被测出来。 */
+/* `args` 显式写一遍（`onChange` 也要给）：让这一条故事自己站得住。
+ * a11y 那一档按 Storybook 的语义合 `meta.args` 与 `story.args`，两种写法都读得到 ——
+ * 但它只在**两边都没有**时才退成裸组件，所以初值给全这件事仍由故事自己负责。 */
 export const Default: Story = {
   args: { value: "grid", onChange: () => undefined },
 };

@@ -1268,10 +1268,22 @@
   违规与「这一档拿不到状态的故事」都登记在 `scripts/.a11y-axe-known.json`，
   **双向不陈旧**（新违规 ⇒ 红；修好了登记还在 ⇒ 也红），**没有 `--update`** ——
   判红时打印逐字可粘的候选清单，并把同一份候选写到系统临时目录，但判据自己不写回登记表
-  （不许有「跑一下就绿」的出口）。实测：11 条 `(组件, 规则)` / 4 个规则 /
-  55 个故事需要 Storybook 的 decorator 因而覆盖不到（登记在册、不静默跳过）；单文件 ~20s。
-  页面级规则（`region` / `landmark-*`）显式关掉并写明理由 —— 裸渲染一枚组件时它们必然命中，
-  那不是缺陷；页面级那一档的真落点在 e2e（E3″ 现在连执行者都没有）。
+  （不许有「跑一下就绿」的出口）。实测（按 Storybook 语义渲染之后重数）：**8 条
+  `(组件, 规则)`** / 20 个故事渲不出来（`command.tsx` 那 4 条的原因是 jsdom 没有
+  `ResizeObserver`，其余三族要 Storybook 那侧的 provider）/ 单文件 ~41s。
+  ⚠️ **这次重数同时订正了这张账自己错过的一次**：此前登记的 11 条里有 **7 条是执行者的
+  形状造成的假存量**（它按 `createElement(meta.component, story.args)` 渲染、不跑故事的
+  `render`、也不合 `meta.args`，于是裸组件拿不到 `children`，axe 报「按钮没有名字」），
+  而「55 个故事需要 decorator」里也有 41 个是同一个原因；同一轮**露面 4 条真违规**
+  （`button-group` / `field` / `item` / `select`），已按负债登记。教训写进执行者的文件头
+  第 ④ 条：**判据的输入形态与被判对象不一致时，红与绿都不是事实**。
+  两类规则显式关掉并逐条写明理由：页面级（`region` / `landmark-*` 等）对裸渲染的单枚
+  组件没有意义，真落点在 e2e（E3″ 现在连执行者都没有）；**需要真实绘制的三条**
+  （`color-contrast` / `label-content-name-mismatch` / `link-in-text-block`）要字体度量、
+  伪元素 `content` 与生效的 CSS，jsdom 三样都没有 —— 硬判只会得到 `incomplete`
+  而被「只收 violations」这一档丢掉，那是结构性假通过。这三条的判点是 Storybook 的
+  a11y 面板（真浏览器 + CSS 生效，人现场看某一棵树），**机器那一格仍按空记**（本条目的
+  这一行不因为它被关了就声称覆盖到了）。
   另两格仍是空的：bundle **只有分析没有门禁**（`scripts/analyze-bundle.mjs` 靠
   `@next/bundle-analyzer`、强制 `next build --webpack`、`pnpm analyze` 手动跑；
   阈值 / 棘轮全库零命中）；变异测试**无任何工具**，仓内现况是「每条判据配人工反向变异并记档」
