@@ -359,7 +359,9 @@ export function WorkspaceViewStack({
         const content = LAZY_VIEWS.has(tab.view) ? (
           renderView(tab.view)
         ) : (
-          <ViewOpenReport view={tab.view}>{renderView(tab.view)}</ViewOpenReport>
+          <ViewOpenReport view={tab.view}>
+            {renderView(tab.view)}
+          </ViewOpenReport>
         );
         return (
           <div

@@ -60,7 +60,8 @@ export default function WorkspacePage() {
       subscribeAppEvent("workspace:navigate", ({ view, section }) => {
         const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
         if (!target) return;
-        if (target === "settings" && section) setPendingSettingsSection(section);
+        if (target === "settings" && section)
+          setPendingSettingsSection(section);
         navigateTo(target);
       }),
     [navigateTo],

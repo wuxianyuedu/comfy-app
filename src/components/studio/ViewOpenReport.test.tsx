@@ -42,7 +42,9 @@ function renderReport(
 ) {
   const element = (
     <ViewOpenedAtContext.Provider
-      value={(candidate: WorkspaceView) => (candidate === view ? openedAt : null)}
+      value={(candidate: WorkspaceView) =>
+        candidate === view ? openedAt : null
+      }
     >
       <ViewOpenReport view={view}>
         <span>内容</span>

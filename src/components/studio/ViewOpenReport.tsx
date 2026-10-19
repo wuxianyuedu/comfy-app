@@ -35,8 +35,9 @@ import { pageHeaderTitle, type WorkspaceView } from "./NavItems";
 /** 当前屏「打开时刻」的查询口：不是当前屏（还没激活）、或还没落定时返回 null。 */
 export type ViewOpenedAtLookup = (view: WorkspaceView) => number | null;
 
-export const ViewOpenedAtContext =
-  createContext<ViewOpenedAtLookup | null>(null);
+export const ViewOpenedAtContext = createContext<ViewOpenedAtLookup | null>(
+  null,
+);
 
 /**
  * 把一屏内容包一层：内容挂载时补记一条「界面打开：<屏名> 耗时 <n>ms」。

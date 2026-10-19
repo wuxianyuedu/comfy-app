@@ -27,9 +27,8 @@ const { emitAppEventMock, emitCalls } = vi.hoisted(() => {
   };
 });
 vi.mock("~/lib/app-events", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>(
-    "~/lib/app-events",
-  );
+  const actual =
+    await vi.importActual<Record<string, unknown>>("~/lib/app-events");
   return { ...actual, emitAppEvent: emitAppEventMock };
 });
 
