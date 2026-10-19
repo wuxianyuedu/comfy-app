@@ -95,18 +95,36 @@
    `shellStaleWarning()` 把「没重编就提交」拦下，并在改了 `src-tauri/src/*.rs` 时跑
    `cargo test`（壳内全部 `#[test]` 唯一的执行者——条数随源码变动，别在这里写死，以
    `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
-6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，并随 ISSUE #1959 由仓库根 `.cnb.yml` 重新调用（跑在根组织自托管节点上、不参与核时计费，§13.5.3）——**平台侧这一层又有兜底了，但它取自源分支、且跑的是另一份清单**，不能替代本地这一层。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**合并那一跳现在有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（分钟级，实测数据与为什么不在这里写数见 §13.6.2.1；证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。
-7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + **形态前置档 D0**（串行的那一条线：
-   判「这次提交自身的形态」且稳态 ≤2.5s 的判据，在其余四组启动之前跑完，见 §13.5.8.2.1）+
-   结构检查 + tsc + eslint + UI/逻辑分离硬闸 + 结构守护与受影响用例 + CHANGELOG 碎片），
+6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，并随 ISSUE #1959 由仓库根 `.cnb.yml` 重新调用（跑在根组织自托管节点上、不参与核时计费，§13.5.3）——**平台侧这一层又有兜底了，但它取自源分支、且跑的是另一份清单**，不能替代本地这一层。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**合并那一跳现在有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。**这一跳也降档了**（ISSUE #2022 / §13.5.25）：它默认只复算「本地档那几条」（同一份注册表，边界由 `localTierLabels()` 取，不另立名单），并打印跳过了几条重档；要全套 `pnpm check:premerge --full`。业主口径是「本地两处都快」，兜底在平台。
+7. **提交必须通过 `.githooks/pre-commit`，而这一档现在是「形态档」**（分支守卫 + **形态前置档
+   D0**：判「这次提交自身的形态」那几条，串行跑完再进其余档，见 §13.5.8.2.1）。
+   **tsc / eslint / 受影响用例 / 其余静态判据默认不在每次提交上跑**（ISSUE #2022 / 规范
+   §13.5.25）——它们仍**逐字留在 `.githooks/pre-commit` 里当注册表**，由 `COMFY_HEAVY_GATES`
+   这个档位开关决定谁执行。为什么不能把它们删去 CI：`scripts/check-gate-executors.cjs` 认的
+   执行者出处只有钩子的 `run "<标签>" <命令>` 行、`quality-gate.mjs` 的 gate 表、
+   `quality-gate.ps1` 的 `$Blocks`，**`.cnb.yml` 不在它的解析面上** —— 删步骤 = 那批判据
+   当场没有执行者，而账面一条红都不会出现。跳档时钩子会打印「本地**没跑**：组 A B C D」并
+   明说那不是「已通过」。本地要全套：`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`。
+   **兜底分两层**：`pnpm check:premerge` 现在在推送那一跳**默认跑全套**（干净快照上复算钩子那批
+   全仓判据 + 本检出上的受影响用例 + 提交信息声明 + 合并丢一侧），平台是第二层
+   ——`ESLint 零警告` 与 `重档静态判据` 两格 2026-10-19 起在 PR 流水线上在场。
+   **全量单测不在 PR 档**（§13.5.21）：节点上并行 PR 会把带超时的读数变成不可信的红，且它跑绿
+   要刷「整档凭证」——拿并发下的绿刷那张账比不刷更坏。所以**单测的 PR 侧执行者就是本地这一跳**
+   （`unitTests` 段跑受影响面），节点侧仍是每天 04:00 那一跑。
+   想只推形态档那几条再交给平台判：`pnpm check:premerge --light`（它会打印跳过了几条重档 ——
+   降档永远要被读出来，不许冒充「全套过了」）。§13.6.1 那句「平台拦 push、放行 PR 合并」
+   由此比过去更承重，「PR 跑绿才合并」是纪律不是习惯。
    全部走 `pnpm exec`。
    **两份生成物同步（`docs/generated/**` 见 §13.5.5、`docs/api/**` 见 §13.5.5.1）
    2026-10-16 起已挪到平台侧 `.cnb.yml`**（ISSUE #1975，连同「文档引用与权威源一致」共三条）：
    它们判的是**读者面**的一致性、挡不住任何一次代码回归，而 `check-docs-api.cjs`
    **触发即 31s**（`--staged` 的输入面是 `src/lib` / `src/server` / `src/trpc`，最常见的提交类别正落在里面）。
-   判据一字未改，改的只是执行者；本地出口照旧（`pnpm run docs` / `pnpm doc:render` /
-   `pnpm doc:check`），口径与逐条实测见 §13.5.17。
-   测试那一层是「改到哪、测到哪」的增量层（固定清单 + 暂存改动沿**静态 import 图**
+   判据一字未改，改的只是执行者。**`docs/api/**` 那一格在平台上是「先就地重生成、再判」的登记写者**
+   （`AUTOFIX_DUTIES` + `verifyDeterminism` 已复核过「同源两次产出逐字节相同」），
+   所以**改完代码不要在本地跑 `pnpm run docs`** —— 那两千多份生成物不是任何一次提交的必经产物；
+   真要本地跑只剩两种情形：发版/整理那一轮，或人明确要求。本地出口仍留着的是
+   `pnpm doc:render` / `pnpm doc:check`（这两条便宜且判的是本仓自己维护的文字），口径与逐条实测见 §13.5.17。
+   测试那一层是「改到哪、测到哪」的增量层（固定清单 + 改动面沿**静态 import 图**
    追溯到的用例，判据与**已知边界**见 §13.5.8）——运行时拼出来的路径抓不到、也不是
    全量，全量仍由 `pnpm test` / `pnpm check:all` 负责。钩子失败先修代码，
    禁止 `--no-verify` 绕过进历史。钩子由 `pnpm install` 自动接上
@@ -208,7 +226,12 @@
 
 ## 快速排障
 
-被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构 / 命名 → §12.8、源码控制字符 → §12.11、跨平台动作对照 → §9.5、CHANGELOG 碎片 → §13.10.5、**生成物与源同步** → §13.5.5 / §13.5.5.1），**不要用 `--no-verify` 换一条干净历史**。
+被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构 / 命名 → §12.8、源码控制字符 → §12.11、跨平台动作对照 → §9.5、CHANGELOG 碎片 → §13.10.5、**生成物与源同步** → §13.5.5 / §13.5.5.1、**「钩子怎么这么快/这么慢」→ §13.5.25**），**不要用 `--no-verify` 换一条干净历史**。
+
+**提交很绿但行为面没测，不是矛盾**（ISSUE #2022 / §13.5.25）：本地默认档只跑形态档 D0，
+`tsc` / `eslint` / 受影响用例 / 其余静态判据由平台那一跑兜底。所以「提交过了」这句话**不许**
+被写成「已校验」——钩子自己会打印「本地**没跑**：组 A B C D」。要本地全套：
+`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`（合并前复算全套：`pnpm check:premerge --full`）。
 
 **跑门禁前发现 `node_modules` 不在**：这是「还没装」，不是「装不了」——先
 `pnpm install --frozen-lockfile`（冷装约 8 分钟）再跑。不要把它当成「本机不支持校验」
@@ -216,7 +239,7 @@
 
 **改了 `src/lib` / `src/server` / `src/trpc` 就会触发 `docs/api/**` 同步判据**（它由**平台侧流水线**跑，ISSUE #1975 起不再进 pre-commit，见 §13.5.17；`pnpm run docs` 的产物提交进 git，AGENTS 与主规范 §9 都承诺它「随构建链更新」，而实测此前构建链里没有任何一处跑 typedoc —— 产物停在最初两次提交上、留着指向已删模块的 `lib_comfyui_markdown.html`）：报「落后 / 缺失 / 多余」时 `pnpm run docs` 重生成并把 `docs/api/**` 一并提交，**不要手改生成物**。⚠️ **别写 `pnpm docs`**：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的文档），会抢在脚本前面、typedoc 根本不跑（实测报 `the following required arguments were not provided: <PACKAGE>`）—— 带脚本名的动词要用 `pnpm run <脚本>`。`pnpm run docs` 现在**按产物判成败**：typedoc 写出失败时照样退 0、日志照样收在 `[info] html generated at …` 上（「退出码 0 + 说生成了 + 产物一个没更新」三件套），所以那一层验的是 `index.html` 是不是这一轮写的、失败会重试，全失败才退非零（唯一实现 `scripts/typedoc-run.mjs`，`docs:check` 用的是同一份）。
 
-**报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而平台侧那条流水线（#1959 起）取自源分支、跑的是另一份清单，所以硬闸违规仍可能落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。**复算有执行者了**：`node scripts/base-check.mjs <拦住你的那条>`（整条命令 / 钩子标签 / 裸脚本名都认；`--fetch` 先拉、`--json` 给机器可读）——它把那条门禁在干净的上游提交上重跑一遍，给你 `baseline-red`（别线的红，就地修或登记）/ `yours`（你自己的）/ `current-green` / `inconclusive`（**没跑起来，不构成证据**：最典型是那条判据只存在你未提交的改动里）/ `load-flake`（**两侧都红且两侧输出都是超时形态** ⇒ 疑似负载假红，先隔离复跑，**不许**照 `baseline-red` 登记、**不许**抬 `testTimeout`）。五态的下一动作与**不许**为它放宽判据的口径见 §13.6.2；时间型判据在 CPU 高负载下的完整处置见 §13.6.4（**C 组已经把「隔离复跑」这一步接进钩子**：带超时指纹的失败会等机器喘口气、再 `--no-file-parallelism` 复跑一次 —— 第二遍绿 ⇒ 负载假红放过；第二遍指纹消失 ⇒ 真红照拦；第二遍**仍只是超时形态** ⇒ 记为「未校验」放行并逐条点名（**拿不到测量 ≠ 测量结果是红的**，ISSUE #1747），全程不抬预算、也不看 `os.loadavg()` —— 见 §13.6.4.1）。
+**报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而平台侧那条流水线（#1959 起）取自源分支、跑的是另一份清单，所以硬闸违规仍可能落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。**复算有执行者了**：`node scripts/base-check.mjs <拦住你的那条>`（整条命令 / 钩子标签 / 裸脚本名都认；`--fetch` 先拉、`--json` 给机器可读）——它把那条门禁在干净的上游提交上重跑一遍，给你 `baseline-red`（别线的红，就地修或登记）/ `yours`（你自己的）/ `current-green` / `inconclusive`（**没跑起来，不构成证据**：最典型是那条判据只存在你未提交的改动里）/ `load-flake`（**两侧都红且两侧输出都是超时形态** ⇒ 疑似负载假红，先隔离复跑，**不许**照 `baseline-red` 登记、**不许**抬 `testTimeout`）。五态的下一动作与**不许**为它放宽判据的口径见 §13.6.2；时间型判据在 CPU 高负载下的完整处置见 §13.6.4（**C 组已经把「隔离复跑」这一步接进钩子**：带超时指纹的失败会等机器喘口气、再 `--no-file-parallelism` **只复跑失败的那几份**（复跑整块会让一份指纹拖着 90~115 份串行再跑一遍，实测组 C 1411s / 全钩子 1412s；三条读不出来的形态一律退回整块，方向单边化）—— 第二遍绿 ⇒ 负载假红放过；第二遍指纹消失 ⇒ 真红照拦；第二遍**仍只是超时形态** ⇒ 记为「未校验」放行并逐条点名（**拿不到测量 ≠ 测量结果是红的**，ISSUE #1747），全程不抬预算、也不看 `os.loadavg()` —— 见 §13.6.4.1）。
 
 启动 / 构建 / 产物层的**症状 → 已知根因**、日志顺序、端口「解析链 vs 静态链」、corepack 三形态、`dev.mjs` 静默 `exit=0`、启动页被 Explorer 压后……**全部收在 [`docs/standards/launch-and-build.md`](docs/standards/launch-and-build.md) §5 排障手册**（本项目全部历史事故都在里面）。按需定位：端口两条链与 `dev.port.derived` 判据见 §1.1（`pnpm doc:check` 已核对，文档里不要写死 3100）；`.env` 三项非空 → `scripts/env-preflight.mjs` + 哨兵表 → `scripts/db-schema-state.mjs` 两条预检挂在 `dev.mjs` / `start.mjs` 起 Next 之前，见 §9.1 / §9.2 第 6 条；corepack 三形态探测、`whichCommand()` / `usableCommand()` 判据、`pnpm check:toolchain` 自查入口见 §2.1.1–2.1.4；「`✓ Ready` 后两秒 `exit=0`」的内层 `pnpm.cmd` 拼法事故与 `pnpmInvocation()` 唯一入口见 §2.1.6；启动页 vs 应用窗的前台归属（`spawn_splash_front()` / `bring_splash_to_front()`）见 §1.3。**日志按 §4 布局看** `log/` 分区（`launcher/` → `nextjs/` → `services/` → `tools/` → `archive/`）。改完构建 / 产物相关的东西，先跑 `node scripts/check-standalone-contents.cjs`（同时查「不该有的」与「必须有的」）。**用例红先定性再改**：`pnpm exec vitest run --no-file-parallelism <文件>` 隔离重跑，串行也红才是真红；串行绿的是预算 / 并发问题（预算与 `maxWorkers` 的实测出处见 §11.13，不要靠继续抬超时掩盖）。
 

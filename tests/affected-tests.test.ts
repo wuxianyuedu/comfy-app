@@ -13,6 +13,9 @@ import {
   wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+/* #2022：固定清单里开了输入面那几条在增量档会缺席，所以本文件凡是「比整表」的断言
+ * 都改成比「该跑的那些」—— 用同一个选择函数，而不是在测试里再抄一遍那 4 个名字。 */
+import { selectFixedByFace } from "../scripts/fixed-gate-input-faces.mjs";
 import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -214,14 +217,50 @@ describe("affected-tests：兜底方向", () => {
     expect(r.stderr).toContain(tail ?? "");
   });
 
-  it("只改文档 → 仍然只跑固定清单，结果永不为空", () => {
+  it("只改文档 → 跑「固定清单里该跑的那些」，结果永不为空", () => {
     // 空集是最危险的形态：`vitest run` 不带位置参数=跑全量，
     // 于是「一次改 README 的提交」会变成「等十分钟并捡到别线的红」。
     const run = harness({ [UI_TEST]: "it('x', () => {});" });
     const res = run(["docs/README.md"]);
     expect(res.mode).toBe("subset");
     expect(res.tests.length).toBeGreaterThan(0);
-    expect(res.tests).toEqual([...FIXED_STRUCTURAL_TESTS].sort());
+    /* 与 #2022 之前唯一的差别：开了输入面那几条（现在是 4 条工具自检）在面没命中时
+     * 缺席 —— 且**必须**在 `__faceSkipped` 里点名，所以这里比的是「该跑的那些」而不是
+     * 整表。整表那条不变量挪到上面 wide 那一档（不过筛）与
+     * `tests/fixed-gate-input-faces.test.ts`（名单封闭 + 每条都在固定清单里）。 */
+    expect(res.tests).toEqual(
+      selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["docs/README.md"]).keep.sort(),
+    );
+    expect(String(res.reasons.__faceSkipped)).toContain("tests/base-check");
+  });
+
+  /**
+   * 边④「按路径引用」的比对面必须是**剥注释之后**的代码文本（ISSUE #2022）。
+   *
+   * 这一条挡的是本仓自己造出来、又被自己踩中的形态：硬规则 15 要求门禁自测在文件头
+   * 引用规范章节，于是「注释里写着这份文档的路径」与「运行期读了这份文档」在原文里
+   * 逐字同形。实测只提交文档时，`docs/standards/13-提交与-code-review.md` 一个路径
+   * 把 7 份门禁自测拉进增量面（上次账本逐文件读数合计 480.7s：`check-reformat-only`
+   * 278.9s、`check-bundle-budget` 101.2s、`check-format` 52.0s…），而那七份里没有一份
+   * 在运行期读那份 `.md` —— 「改到哪、测到哪」被反向用成了「改一句注释就陪跑九分钟」。
+   */
+  it("边④：注释里的路径引用不算消费方（文档提交不再陪跑门禁自测）", () => {
+    const run = harness({
+      [UI_TEST]:
+        "/* 规范：docs/standards/13-提交与-code-review.md §13.5 */\nit('x', () => {});\n",
+    });
+    const res = run(["docs/standards/13-提交与-code-review.md"]);
+    expect(res.reasons[UI_TEST]).toBeUndefined();
+  });
+
+  it("边④：同一份路径写在代码字面量里仍然命中（剥注释不许把真消费剥没）", () => {
+    // 上两条合起来才钉住方向：只判「注释不命中」的话，把整个 ④ 删掉也能过。
+    const run = harness({
+      [UI_TEST]:
+        "/* 规范：docs/standards/13-提交与-code-review.md */\nconst p = 'docs/standards/13-提交与-code-review.md';\nit('x', () => p);\n",
+    });
+    const res = run(["docs/standards/13-提交与-code-review.md"]);
+    expect(res.reasons[UI_TEST]).toContain("按路径引用");
   });
 
   it("已知基线红只从增量面剔除，固定清单与其余受影响用例照跑", () => {
@@ -239,7 +278,11 @@ describe("affected-tests：兜底方向", () => {
     expect(res.tests).not.toContain(RED);
     // 剔除必须留痕：调用方（钩子）把它打印出来，不静默。
     expect(res.reasons.__skipped).toContain(RED);
-    for (const fixed of FIXED_STRUCTURAL_TESTS)
+    /* 同样按「该跑的那些」比：`src/a/leaf.ts` 不落在任何一条输入面里（面是各判各的，
+     * 见 `tests/fixed-gate-input-faces.test.ts`），所以那几条工具自检此刻本就缺席。 */
+    for (const fixed of selectFixedByFace(FIXED_STRUCTURAL_TESTS, [
+      "src/a/leaf.ts",
+    ]).keep)
       expect(res.tests).toContain(fixed);
   });
 
@@ -331,7 +374,10 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
     const testFiles = keys.filter(isTestPath);
     const sourceFiles = keys.filter(isSourcePath);
     const readText = (rel: string) => files[rel] ?? null;
-    const graph = buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
+    const graph = buildImportedBy(
+      new Set([...sourceFiles, ...testFiles]),
+      readText,
+    );
     return {
       graph,
       testFiles,
@@ -361,8 +407,7 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
       "src/components/ui/wide.test.tsx": "import { W } from './wide';\n",
       "src/components/studio/panel.tsx":
         "import { W } from '../ui/wide';\nexport const P = W;\n",
-      "src/components/studio/panel.test.tsx":
-        "import { P } from './panel';\n",
+      "src/components/studio/panel.test.tsx": "import { P } from './panel';\n",
     };
     const { attribute, resolve } = attrHarness(files);
     const changed = ["src/lib/hub.ts", "src/components/ui/wide.tsx"];
@@ -372,7 +417,9 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
       const affected = alone.tests.filter(
         (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
       ).length;
-      expect(entry.affected, `${entry.file} 的归因数与主链不一致`).toBe(affected);
+      expect(entry.affected, `${entry.file} 的归因数与主链不一致`).toBe(
+        affected,
+      );
       expect(entry.total).toBe(alone.tests.length);
     }
   });
@@ -426,10 +473,9 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
     const leafRows = attribute(["src/lib/leaf.ts"]);
     expect(leafRows[0]?.affected).toBe(1);
     // 多文件时两行都在，且 hub 在前
-    expect(attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file)).toEqual([
-      "src/lib/hub.ts",
-      "src/lib/leaf.ts",
-    ]);
+    expect(
+      attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file),
+    ).toEqual(["src/lib/hub.ts", "src/lib/leaf.ts"]);
   });
 
   it("空改动清单 → 空数组（不是抛异常，调用方靠它判「没有归因」）", () => {
@@ -472,17 +518,9 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
       const expected = alone.tests.filter(
         (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
       ).length;
-      const [entry] = attributeAffected(
-        [file],
-        graph,
-        testFiles,
-        sourceFiles,
-      );
+      const [entry] = attributeAffected([file], graph, testFiles, sourceFiles);
       expect(entry, `${file} 应当有归因行`).toBeTruthy();
-      expect(
-        entry?.affected,
-        `${file} 在真仓库上与主链不一致`,
-      ).toBe(expected);
+      expect(entry?.affected, `${file} 在真仓库上与主链不一致`).toBe(expected);
     }
   });
 });

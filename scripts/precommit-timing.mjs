@@ -243,6 +243,20 @@ function groupsOf(run) {
 }
 
 /**
+ * 内层 `<testsuite …>` 标签（一个用例文件一条）。
+ *
+ * 单独抽出来是为了让「**谁**失败了」与「每个文件多久」共用同一份形状知识：这两件事读的是
+ * 同一个标签，各自写一遍正则的话，改了外层 `testsuites` 的排除条件只会修到一半 ——
+ * 而漏的那一半表现为「把汇总当成一个文件」，是个看起来像读数的假象而不是错误。
+ *
+ * @param {string} xml
+ * @returns {string[]} 原始标签文本
+ */
+function suiteTags(xml) {
+  return [...String(xml).matchAll(/<testsuite\b[^>]*>/g)].map((m) => m[0]);
+}
+
+/**
  * 一份 vitest junit XML → 每个用例文件的耗时。
  *
  * 形状是按 vitest 5.0.3 的实际输出定的，不是猜的：外层 `<testsuites name="vitest tests">`
@@ -259,14 +273,43 @@ function groupsOf(run) {
 export function parseJunitXml(xml) {
   /** @type {{name: string, ms: number}[]} */
   const out = [];
-  for (const m of String(xml).matchAll(/<testsuite\b[^>]*>/g)) {
-    const tag = m[0];
+  for (const tag of suiteTags(xml)) {
     const name = /\bname="([^"]*)"/.exec(tag)?.[1];
     const time = /\btime="([^"]*)"/.exec(tag)?.[1];
     if (!name || time === undefined) continue;
     const secs = Number(time);
     if (!Number.isFinite(secs) || secs < 0) continue;
     out.push({ name, ms: Math.round(secs * 1000) });
+  }
+  return out;
+}
+
+/**
+ * 一份 vitest junit XML → **失败过**的用例文件名（`failures` 或 `errors` 不为 0）。
+ *
+ * 唯一的消费者是组 C 的隔离复跑：那里要回答「第二遍该重跑哪几份」。整块重跑的版本让
+ * 一份带超时指纹的文件拖着一百多份一起串行再跑一遍（实测把组 C 推到 1411s，
+ * 而整条钩子的时长几乎全是这一格）—— 见 `scripts/run-affected-tests.mjs` 的 `retryScope`。
+ *
+ * 读不出来的那份（属性缺失 / 不是数字）**不算失败**：这一格的用途是缩小复跑面，
+ * 而「解析不出 ⇒ 当作失败 ⇒ 复跑面变大」是安全方向；反过来漏一份真失败的文件
+ * 才是不能接受的，所以调用方在**结果为空**时必须退回整块（那条口径写在调用点）。
+ *
+ * @param {string} xml
+ * @returns {string[]} 失败的用例文件路径（与 junit 里的 `name` 同形态）
+ */
+export function failingSuitesFromJunit(xml) {
+  /** @type {string[]} */
+  const out = [];
+  for (const tag of suiteTags(xml)) {
+    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+    if (!name) continue;
+    const bad = ["failures", "errors"].some((key) => {
+      const raw = new RegExp(`\\b${key}="([^"]*)"`).exec(tag)?.[1];
+      const n = Number(raw);
+      return raw !== undefined && Number.isFinite(n) && n > 0;
+    });
+    if (bad) out.push(name);
   }
   return out;
 }

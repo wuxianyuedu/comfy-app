@@ -21,8 +21,9 @@
  *      import 命中 `dir/index.*` 的 barrel 转出口）。只看「谁直接 import」不够：
  *      视图层的常态是 `X.test → Panel → X.tsx`，只走一跳时改 `X.tsx` 会解析出
  *      「受影响 0 个用例」（实测撞到过），那这句承诺就是空话。
- *   ④ 改动路径以字面量出现在测试文本里：门禁用例用 `execFileSync` 起被测脚本、
- *      主题用例按路径读 CSS，这类消费不是 import，只有整串匹配抓得住。
+ *   ④ 改动路径以字面量出现在测试的**代码文本**里（比对面已剥注释，§13.5.8）：门禁用例
+ *      用 `execFileSync` 起被测脚本、主题用例按路径读 CSS，这类消费不是 import，
+ *      只有整串匹配抓得住。
  *      同族：改 `scripts/<name>.cjs|mjs|py` 时按名字配 `tests/<name>.test.ts`。
  *
  * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
@@ -53,6 +54,8 @@ import { fileURLToPath } from "node:url";
 
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
+import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
+import { stripComments } from "./tw4-scan-core.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
@@ -175,24 +178,24 @@ function wideReasonFor(rel) {
  *
  * @param {Iterable<string>} nodes 参与建图的文件（源码 + 测试）
  * @param {(rel: string) => string | null} readText
- * @returns {{importedBy: Map<string, Set<string>>, texts: Map<string, string>}}
+ * @returns {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}}
  */
 export function buildImportedBy(nodes, readText) {
   /** @type {Map<string, Set<string>>} */
   const importedBy = new Map();
-  /** @type {Map<string, string>} */
-  const texts = new Map();
+  /** ④ 的比对面：注释里引用一个路径 ≠ 运行期读它，所以只留「代码文本」这一份。 */
+  const codeTexts = new Map();
   for (const from of nodes) {
     const text = readText(from);
     if (text === null || text === undefined) continue;
-    texts.set(from, text);
+    if (isTestPath(from)) codeTexts.set(from, stripComments(text));
     for (const cand of specifiersOf(text, from)) {
       let bucket = importedBy.get(cand);
       if (!bucket) importedBy.set(cand, (bucket = new Set()));
       bucket.add(from);
     }
   }
-  return { importedBy, texts };
+  return { importedBy, codeTexts };
 }
 
 /**
@@ -228,7 +231,7 @@ function reachFrom(roots, importedBy) {
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, texts: Map<string, string>}}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}}} input
  * @returns {Resolution}
  */
 export function resolveAffectedTests({
@@ -252,17 +255,40 @@ export function resolveAffectedTests({
     reasons[rel] = reasons[rel] ? `${reasons[rel]} + ${why}` : why;
   };
   /**
-   * 固定清单永远并入 —— 空集是最危险的形态：`vitest run` 不带位置参数就是跑全量。
+   * 固定清单并入 —— 空集是最危险的形态：`vitest run` 不带位置参数就是跑全量。
+   *
+   * ⚠️ **只有增量档（`subset`）按输入面筛**（`scripts/fixed-gate-input-faces.mjs`）：
+   * `all` 那一档是「放弃收窄」的兜底 —— 改了全局测试配置、或命中了不可达的公共地基，
+   * 那一刻的前提正是「这次没法信筛出来的结果」，所以固定清单**一条都不跳**。
+   * 被跳过的条目必须进 `reasons.__faceSkipped` 由 `main()` 打出口：一条悄悄不跑的判据，
+   * 与一条没写判据的判据在日志里逐字同形（本仓立案最狠的那一族）。
+   *
    * @param {"subset" | "all"} mode
    * @param {Iterable<string>} extra
    * @param {string} [note]
    * @returns {Resolution}
    */
-  const withFixed = (mode, extra, note) => ({
-    mode,
-    tests: [...new Set([...FIXED_STRUCTURAL_TESTS, ...extra])].sort(),
-    reasons: note ? { __note: note } : reasons,
-  });
+  const withFixed = (mode, extra, note) => {
+    /* 改动清单为空 ⇒ **不过筛**。这一格与 `wide` 那种兜底不同源但同一取向：空清单在这里
+     * 分不清「什么都没改」与「拿不到清单」（`stagedPaths()` 两条路都回 `[]`/`null`），
+     * 而「不知道」不等于「没变」—— 同 `ci-install-deps.mjs` 那两条安全边界的一条口径。
+     * 真发生时最贵的后果是「一次没人筛过的提交悄悄少跑四条判据」。 */
+    const pickedFixed =
+      mode === "subset" && changed.size > 0
+        ? selectFixedByFace(FIXED_STRUCTURAL_TESTS, changed)
+        : { keep: [...FIXED_STRUCTURAL_TESTS], skipped: [] };
+    const out = {
+      mode,
+      tests: [...new Set([...pickedFixed.keep, ...extra])].sort(),
+      reasons: note ? { __note: note } : reasons,
+    };
+    if (pickedFixed.skipped.length > 0) {
+      out.reasons.__faceSkipped = pickedFixed.skipped
+        .map((s) => s.test)
+        .join(" ");
+    }
+    return out;
+  };
 
   const changed = new Set();
   /** @type {string[]} */
@@ -318,7 +344,7 @@ export function resolveAffectedTests({
    * 注入这一条不是优化手段而是**口径**手段：归因的数必须与主解析走同一条判定链，
    * 否则两处会各自漂 —— 实测过一版「照抄一份判定」的归因，三个文件的数就都差了
    * 一两份（「按路径引用」那一档在增量面里只对尚未选中的测试生效）。 */
-  const { importedBy, texts } =
+  const { importedBy, codeTexts } =
     graph ?? buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
 
   const hops = reachFrom(list, importedBy);
@@ -327,9 +353,15 @@ export function resolveAffectedTests({
   }
 
   /* ── ④ 路径以字面量被引用（闭包抓不到的那类消费）──────────────────────── */
+  /* 比对面是**剥注释之后**的代码文本（`codeTexts`，建树时一次算好）。为什么必须剥：
+   * 本仓的门禁自测**在文件头的 JSDoc 里引用规范章节**是硬规则 15 要求的动作，于是
+   * 「改一句注释」与「运行期读了那个文件」在原文里逐字同形 —— 实测只提交文档时，
+   * `docs/standards/13-提交与-code-review.md` 一个路径把 6 份门禁自测按「按路径引用」
+   * 拉进增量面（上次账本逐文件读数合计 455.8s，量级参考），而那六份里没有一份在运行期
+   * 读那份 `.md`。口径、实测量与判据在 §13.5.8。 */
   for (const testFile of testFiles) {
     if (picked.has(testFile)) continue;
-    const text = texts.get(testFile);
+    const text = codeTexts.get(testFile);
     if (text === undefined) continue;
     for (const rel of list) {
       if (rel !== testFile && text.includes(rel)) {
@@ -374,7 +406,7 @@ export function resolveAffectedTests({
  * 精确、实际含义不同的数，比不给更坏。
  *
  * @param {string[]} changedPaths 本次改动的文件
- * @param {{importedBy: Map<string, Set<string>>, texts: Map<string, string>}} graph
+ * @param {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}} graph
  *   `buildImportedBy()` 的产物（复用同一份图，避免逐文件重建）
  * @param {string[]} testFiles 参与统计的测试全集（须与建图时的口径一致）
  * @param {string[]} sourceFiles 参与建图的源码全集（须与建图时的口径一致）
@@ -408,7 +440,11 @@ export function attributeAffected(changedPaths, graph, testFiles, sourceFiles) {
   }
   // 稳定排序：同份数时按路径字典序，避免同样的改动在不同机器上给出不同顺序。
   return out.sort((a, b) =>
-    b.affected !== a.affected ? b.affected - a.affected : a.file < b.file ? -1 : 1,
+    b.affected !== a.affected
+      ? b.affected - a.affected
+      : a.file < b.file
+        ? -1
+        : 1,
   );
 }
 
@@ -549,12 +585,7 @@ function main() {
     );
     process.stdout.write(
       JSON.stringify(
-        attributeAffected(
-          changed,
-          graph,
-          inputs.testFiles,
-          inputs.sourceFiles,
-        ),
+        attributeAffected(changed, graph, inputs.testFiles, inputs.sourceFiles),
       ) + "\n",
     );
     return 0;
@@ -587,9 +618,20 @@ function main() {
       wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length),
     );
   } else {
+    /* 「固定 N」必须是**这次真跑到的**固定条数，不是清单长度 —— 开了输入面之后两者
+     * 可以不同，而这一行是唯一会被读账的数字：拿清单长度冒充实跑，跳过的那几条
+     * 就在这句话里消失了（同「读不到就少说一条」那类病）。 */
     process.stderr.write(
       `[affected] 暂存 ${changed.length} 个文件 → 跑 ${res.tests.length} 个测试` +
-        `（固定 ${FIXED_STRUCTURAL_TESTS.length} + 受影响 ${extra.length}）\n`,
+        `（固定 ${res.tests.length - extra.length} + 受影响 ${extra.length}）\n`,
+    );
+  }
+  if (res.reasons.__faceSkipped) {
+    const skipped = res.reasons.__faceSkipped.split(" ").filter(Boolean);
+    process.stderr.write(
+      `[affected] 固定清单按**输入面**跳过 ${skipped.length} 条（${skipped.join(" ")}）` +
+        "—— 名单与每条的面在 scripts/fixed-gate-input-faces.mjs，" +
+        "「改到被测工具却没跑」是不允许的形态，所以这里逐条点名而不是静默少跑\n",
     );
   }
   if (res.reasons.__skipped) {

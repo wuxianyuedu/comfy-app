@@ -146,7 +146,7 @@ const realFs = {
  * @param {{cwd?: string}} [options]
  * @returns {RunResult}
  */
-function run(cmd, args, options = {}) {
+export function run(cmd, args, options = {}) {
   const r = spawnSync(cmd, args, {
     encoding: "utf8",
     windowsHide: true,
@@ -157,24 +157,43 @@ function run(cmd, args, options = {}) {
 }
 
 /**
- * 账本落点：显式给 → 宿主 `LOCALAPPDATA` → 用户目录下的 `.cache`。
+ * 账本**目录**：显式给 → 宿主 `LOCALAPPDATA` → 用户目录下的 `.cache`。
+ *
+ * 单独导出的理由：这一族读数档（本文件与 `ci-workspace-provenance.mjs`）各自有自己的
+ * 账本文件名，但**必须落同一个目录** —— 两本账分开退路，就会出现「同一台机上一个看得见
+ * 上一个看不见」那种永远对不上的对照。
+ *
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function ledgerRoot(env = process.env) {
+  return (
+    env.COMFYAPP_CI_PROBE_DIR ||
+    env.LOCALAPPDATA ||
+    path.join(os.homedir(), ".cache")
+  );
+}
+
+/**
+ * 账本落点（`ledgerRoot()` + 本档的文件名）。
  *
  * @param {Record<string, string | undefined>} [env]
  */
 export function ledgerPath(env = process.env) {
-  const root =
-    env.COMFYAPP_CI_PROBE_DIR ||
-    env.LOCALAPPDATA ||
-    path.join(os.homedir(), ".cache");
-  return path.join(root, LEDGER_FILE);
+  return path.join(ledgerRoot(env), LEDGER_FILE);
 }
 
 /**
  * 读账本；不存在 / 读不动 / 形状不对一律回空数组（读数不许因为自身故障而打不出正文）。
  *
+ * 收成**泛型**而不是 `ProbeEntry`：这一对函数的机制是「追加一条、留最近 N 条、JSON 落盘」，
+ * 与条目长什么样无关，而同一目录下现在住着第二本账（`ci-workspace-provenance.mjs` 的
+ * `comfyapp-ci-workspace-provenance.json`）。类型写死成第一本的条目形状，第二本要么被迫
+ * 伪造无关字段、要么各抄一份 append —— 两条都是把「共用一处实现」这件事付掉。
+ *
+ * @template T
  * @param {string} file
  * @param {FsLike} [fsLike]
- * @returns {ProbeEntry[]}
+ * @returns {T[]}
  */
 export function readLedger(file, fsLike = realFs) {
   try {
@@ -188,8 +207,9 @@ export function readLedger(file, fsLike = realFs) {
 /**
  * 写账本（追加一条、留最近 `LEDGER_KEEP` 条）。落盘目录不存在时先建出来。
  *
+ * @template T
  * @param {string} file
- * @param {ProbeEntry} entry
+ * @param {T} entry
  * @param {FsLike} [fsLike]
  */
 export function writeLedger(file, entry, fsLike = realFs) {
