@@ -1,0 +1,554 @@
+/**
+ * `scripts/ship.mjs` 的**取数**判据。
+ *
+ * ## 为什么这份文件只测「取数」，不测「流程走没走完」
+ *
+ * `ship` 是编排层，它唯一的新逻辑就是**从外部执行者那里把结论读对**。流程本身
+ * 全是既有判据（`pre-commit` / `pre-push` / 平台 build / `is_merged`），那些各有
+ * 自己的执行者，不该在这里重测一遍（AGENTS 硬规则 24：不在调用点重抄）。
+ *
+ * 而「读错一个字段」在这一族里是**最贵的失效**，因为它不报错、只是把结论换掉：
+ *
+ *   · 把 HTTP 信封的 `status: 200` 读成流水线终态 ⇒ 一条从没跑起来的 build 被报成成功；
+ *   · 并行会话的 build 列表里挑了不相干的那条 ⇒ 拿别人的绿灯合自己的 PR；
+ *   · 「列表没拿到」与「拿到了但没有我的」并成一格 ⇒ 「没测到」被读成「测过了」。
+ *
+ * 前两条是**实测踩到的**（ISSUE #2027 那趟流程里：非 JSON 输出里 `status:` 出现两次，
+ * `grep '^status:'` 恒取到 200，于是白轮询 28 次；同一时刻另有两条 `pull_request` 在跑）。
+ * 所以本文件里的每一条都喂**那份真实形状**的样本，而不是喂一个理想化的最小对象。
+ *
+ * ## 反向样本（缺了就会静默全绿的那几种）
+ *
+ * `readBuildVerdict` 那组里刻意各有一条「只有信封字段」与「data 是别的形状」的负控制 ——
+ * 判据若被写成 `json.status ?? json.data.status`，正样本照样绿，只有负样本会红。
+ */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+import {
+  asArray,
+  buildPullBody,
+  CODE,
+  combineShipCodes,
+  findPullForBranch,
+  parseArgs,
+  parseSlug,
+  pickBuildForSha,
+  planCommands,
+  readBuildVerdict,
+  readPullVerdict,
+} from "../scripts/ship-core.mjs";
+import { main } from "../scripts/ship.mjs";
+
+/** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
+const BUILD_ENVELOPE_AND_DATA = {
+  status: 200,
+  trace: "00-abc-01",
+  contentType: "application/json; charset=utf-8",
+  data: {
+    status: "success",
+    pipelinesStatus: { "x-001": { status: "success" } },
+  },
+};
+
+describe("readBuildVerdict：只认 data.status，信封那个 status 与判决无关", () => {
+  it("两个 status 并存时取的是 data 那一个", () => {
+    expect(readBuildVerdict(BUILD_ENVELOPE_AND_DATA)).toEqual({
+      state: "green",
+      raw: "success",
+    });
+  });
+
+  it("负控制：只有信封 status（data 缺席）⇒ unknown，**不是** green", () => {
+    // 写成 `json.status ?? json.data.status` 的实现会让这条正样本「看起来对」，
+    // 而它读的其实是 HTTP 状态码 —— 200 永远不等于流水线绿。
+    expect(readBuildVerdict({ status: 200 }).state).toBe("unknown");
+    expect(readBuildVerdict(null).state).toBe("unknown");
+    expect(readBuildVerdict({ data: {} }).state).toBe("unknown");
+    expect(
+      readBuildVerdict({ data: { status: /** @type {any} */ 200 } }).state,
+    ).toBe("unknown");
+  });
+
+  it("data.status 的三档：success / 终态失败 / 在跑", () => {
+    expect(readBuildVerdict({ data: { status: "success" } }).state).toBe(
+      "green",
+    );
+    for (const s of ["failed", "error", "cancelled", "canceled"]) {
+      expect(readBuildVerdict({ data: { status: s } }).state).toBe("red");
+    }
+    for (const s of ["running", "pending", "queued", "waiting", "created"]) {
+      expect(readBuildVerdict({ data: { status: s } }).state).toBe("running");
+    }
+    // 认不出的值不猜方向：unknown ⇒ 调用方退 2，而不是退 0 或退 1。
+    expect(readBuildVerdict({ data: { status: "whatever" } }).state).toBe(
+      "unknown",
+    );
+  });
+
+  it("大小写不敏感（平台在 success / SUCCESS 之间换过写法）", () => {
+    expect(readBuildVerdict({ data: { status: "SUCCESS" } }).state).toBe(
+      "green",
+    );
+  });
+});
+
+describe("pickBuildForSha：并行会话下只认 sha 命中那条", () => {
+  const MINE = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
+  const OTHER = "3d6aceb456db9aff10a5eee692db3a241afff818";
+
+  it("同 event 两条并存时，选中的是 sha 命中的那条", () => {
+    const builds = [
+      {
+        sn: "cnb-t9s-other",
+        event: "pull_request",
+        sha: OTHER,
+        createTime: "2026-10-19T09:20:00Z",
+      },
+      {
+        sn: "cnb-7f0-mine",
+        event: "pull_request",
+        sha: MINE,
+        createTime: "2026-10-19T09:12:32Z",
+      },
+    ];
+    expect(pickBuildForSha(builds, MINE)).toEqual({
+      sn: "cnb-7f0-mine",
+      createTime: "2026-10-19T09:12:32Z",
+    });
+  });
+
+  it("负控制：sha 不在列表里 ⇒ null，**不许**退化成「拿最新那条」", () => {
+    // 退化成「最新」就是把别人的 build 读成自己的 —— 那正是这一族最贵的误读。
+    const builds = [
+      { sn: "cnb-x", event: "pull_request", sha: OTHER, createTime: "z" },
+    ];
+    expect(pickBuildForSha(builds, MINE)).toBeNull();
+  });
+
+  it("event 不是 pull_request 的不算（同一 sha 可能是 push / 每日档）", () => {
+    const builds = [
+      { sn: "cnb-daily", event: "push", sha: MINE, createTime: "z" },
+    ];
+    expect(pickBuildForSha(builds, MINE)).toBeNull();
+  });
+
+  it("同 sha 多条时取 createTime 最新的那条", () => {
+    const builds = [
+      {
+        sn: "old",
+        event: "pull_request",
+        sha: MINE,
+        createTime: "2026-10-19T09:00:00Z",
+      },
+      {
+        sn: "new",
+        event: "pull_request",
+        sha: MINE,
+        createTime: "2026-10-19T10:00:00Z",
+      },
+    ];
+    expect(pickBuildForSha(builds, MINE)?.sn).toBe("new");
+  });
+
+  it("sha 比对不区分大小写，且入参畸形时不抛", () => {
+    expect(
+      pickBuildForSha(
+        [
+          {
+            sn: "a",
+            event: "pull_request",
+            sha: MINE.toUpperCase(),
+            createTime: "z",
+          },
+        ],
+        MINE,
+      )?.sn,
+    ).toBe("a");
+    expect(pickBuildForSha([], MINE)).toBeNull();
+    expect(pickBuildForSha(/** @type {any} */ null, MINE)).toBeNull();
+    expect(pickBuildForSha([{ sn: "a" }], "")).toBeNull();
+  });
+});
+
+describe("asArray：「没拿到列表」与「拿到了但是空的」是两件事", () => {
+  it("两种 data 形状都收", () => {
+    expect(asArray({ data: [{ sn: "a" }] })).toHaveLength(1);
+    expect(asArray({ data: { data: [{ sn: "a" }] } })).toHaveLength(1);
+  });
+
+  it("取不到回 null（⇒ 调用方退 2），不回空数组（⇒ 会被读成「查过了，没有」）", () => {
+    expect(asArray({})).toBeNull();
+    expect(asArray(null)).toBeNull();
+    expect(asArray({ data: null })).toBeNull();
+  });
+});
+
+describe("combineShipCodes：2 压过 1", () => {
+  it("「有一步没跑起来」不被「另有几步红了」盖掉", () => {
+    expect(combineShipCodes([CODE.GREEN, CODE.RED, CODE.NOT_RUN])).toBe(
+      CODE.NOT_RUN,
+    );
+    expect(combineShipCodes([CODE.GREEN, CODE.RED])).toBe(CODE.RED);
+    expect(combineShipCodes([CODE.GREEN])).toBe(CODE.GREEN);
+    expect(combineShipCodes([])).toBe(CODE.GREEN);
+  });
+
+  it("三态的字面值钉住（0 绿 / 1 红 / 2 没跑起来），与 premerge-check 同口径", () => {
+    expect([CODE.GREEN, CODE.RED, CODE.NOT_RUN]).toEqual([0, 1, 2]);
+  });
+});
+
+describe("parseArgs：拼错的旗标不许被静默忽略", () => {
+  it("未知旗标进 unknown（调用方据此停，而不是当成「没要那个动作」）", () => {
+    const a = parseArgs(["--merg"]);
+    expect(a.merge).toBe(false);
+    expect(a.unknown).toEqual(["--merg"]);
+  });
+
+  it("合并默认关；--message / --add 两种写法都收", () => {
+    expect(parseArgs([]).merge).toBe(false);
+    expect(parseArgs(["--merge"]).merge).toBe(true);
+    expect(parseArgs(["--message=x"]).message).toBe("x");
+    expect(parseArgs(["-m", "x"]).message).toBe("x");
+    expect(parseArgs(["--add", "a.ts", "--add=b.md"]).adds).toEqual([
+      "a.ts",
+      "b.md",
+    ]);
+  });
+
+  it("--no-wait 与 --only 各自独立", () => {
+    expect(parseArgs(["--no-wait"]).wait).toBe(false);
+    expect(parseArgs(["--only=poll"]).only).toBe("poll");
+  });
+});
+
+describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
+  it("取不到就回 null（不猜一个仓库名 —— 猜错会把 PR 开到别处）", () => {
+    expect(parseSlug("https://cnb.cool/moon-read/comfy-app-t3")).toBe(
+      "moon-read/comfy-app-t3",
+    );
+    expect(parseSlug("https://cnb.cool/moon-read/comfy-app-t3.git")).toBe(
+      "moon-read/comfy-app-t3",
+    );
+    expect(parseSlug("git@cnb.cool:moon-read/comfy-app-t3.git")).toBe(
+      "moon-read/comfy-app-t3",
+    );
+    expect(parseSlug("")).toBeNull();
+    expect(parseSlug("https://cnb.cool/")).toBeNull();
+  });
+});
+
+describe("findPullForBranch：重跑不产生第二个 PR", () => {
+  const LIST = {
+    data: [
+      { number: 2029, state: "open", head: { ref: "refs/heads/fix/a" } },
+      { number: 2025, state: "open", head: { ref: "refs/heads/feat/b" } },
+    ],
+  };
+
+  it("按 head.ref 命中；没有就回 null（⇒ 才去建）", () => {
+    expect(findPullForBranch(LIST, "feat/b")).toBe(2025);
+    expect(findPullForBranch(LIST, "feat/nope")).toBeNull();
+    expect(findPullForBranch({}, "feat/b")).toBeNull();
+    expect(findPullForBranch(null, "feat/b")).toBeNull();
+  });
+});
+
+describe("readPullVerdict：字段缺省时不抛，且默认值是「没合上」", () => {
+  it("缺 data / 缺字段都归一到安全默认", () => {
+    expect(readPullVerdict(null)).toEqual({
+      number: null,
+      mergeableState: "unknown",
+      blockedOn: "",
+      isMerged: false,
+      state: "unknown",
+    });
+    expect(
+      readPullVerdict({
+        data: { number: 2027, is_merged: true, mergeable_state: "mergeable" },
+      }).isMerged,
+    ).toBe(true);
+  });
+});
+
+describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 argv", () => {
+  const st = {
+    branch: "feat/x",
+    sha: "abcdef1234567890",
+    slug: "moon-read/comfy-app-t3",
+    adds: ["src/a.ts"],
+    hasMessage: true,
+    merge: true,
+  };
+
+  it("逐条含命令本体，且平台调用一律带 -v（JSON 是唯一取数面）", () => {
+    const plan = planCommands(st);
+    expect(plan).toContain("git add -- src/a.ts");
+    expect(plan).toContain("git push -u origin feat/x");
+    for (const line of plan.filter((l) => l.startsWith("cnb "))) {
+      expect(line, `计划里这条 cnb 调用没带 -v：${line}`).toContain("-v");
+    }
+  });
+
+  it("合并那一行只在 merge 为真时出现（默认不合并这条纪律的自证）", () => {
+    expect(planCommands(st).some((l) => l.includes("merge-pull"))).toBe(true);
+    expect(
+      planCommands({ ...st, merge: false }).some((l) =>
+        l.includes("merge-pull"),
+      ),
+    ).toBe(false);
+  });
+
+  it("对账：计划里的「模块+工具」对 ⇄ 源码里真实调用的，必须同集合", () => {
+    /* `planCommands` 是命令清单的第二份抄本 —— 这正是要避免的形态，所以不装作它不是：
+     * 这里把它与真执行面**逐条对账**，任何一侧新增/改名而另一侧没跟，这条就红。
+     * 只比「模块 + 工具」这一对（参数值里有 `<tmp>` / `…` 这类占位，逐字比会脆）。 */
+    const src = readFileSync(
+      path.resolve(__dirname, "../scripts/ship.mjs"),
+      "utf8",
+    );
+    /** 从 `cnbJson(run, ["pulls", "post-pull", …])` 里抽出前两个字符串。 */
+    const called = new Set<string>();
+    for (const m of src.matchAll(
+      /cnbJson\(run,\s*\[\s*"(\w+)"\s*,\s*"([\w-]+)"/g,
+    )) {
+      called.add(`${m[1]} ${m[2]}`);
+    }
+    const planned = new Set<string>();
+    for (const line of planCommands({ ...st, merge: true })) {
+      const m = /^cnb (\w+) ([\w-]+)/.exec(line);
+      if (m) planned.add(`${m[1]} ${m[2]}`);
+    }
+    // 前置断言：提取本身要真的抓到东西（正则写漂会让两侧都成空集、于是恒绿）。
+    expect(
+      called.size,
+      "从源码里一条 cnb 调用都没抽到 ⇒ 提取正则坏了",
+    ).toBeGreaterThan(0);
+    expect(planned).toEqual(called);
+  });
+});
+
+describe("buildPullBody：只搬量到的事实，不生成会被复核的因果句", () => {
+  it("碎片标题与 diffstat 进正文", () => {
+    const body = buildPullBody({
+      root: process.cwd(),
+      fragments: ["changelog.d/0-nonexistent-for-test.md"],
+      diffstat: " 1 file changed",
+    });
+    expect(body).toContain("changelog.d/0-nonexistent-for-test.md");
+    expect(body).toContain("1 file changed");
+  });
+
+  it("负控制：正文里不许出现 check-commit-claims 会拿事实复核的那三种句式", () => {
+    // ①「§x.y 照旧保留」②「<path> 一个字没动」③「N 处…收到 0」。
+    // 脚本没跑过那些判据，写出来就是**未经验证的声明**进了历史。
+    const body = buildPullBody({
+      root: process.cwd(),
+      fragments: ["changelog.d/0-x.md"],
+      diffstat: " 3 files changed",
+    });
+    for (const banned of [
+      "照旧保留",
+      "一个字没动",
+      "收到 0",
+      "收到0",
+      "没动",
+    ]) {
+      expect(body, `正文里出现了未经验证的声明句式：${banned}`).not.toContain(
+        banned,
+      );
+    }
+  });
+});
+
+describe("main()：用注入的假执行者钉住「哪些命令真的会被跑」", () => {
+  /**
+   * 注入执行者的返回形状 —— 与 `ship.mjs` 里 `makeRunner` 的逐字同形。
+   * 这里用 TS 语法而不是 JSDoc `@type`：本文件是 `.ts`，而 JSDoc 的变量/参数注解
+   * 只在 `.js` / `.mjs` 里被采纳，在 `.ts` 里会被静默忽略（实测报
+   * `Property 'branch' does not exist on type '{}'`）。
+   */
+  type FakeResult = {
+    status: number;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+  };
+
+  /** 现场形状。 */
+  type FakeEnv = {
+    branch?: string;
+    frags?: string[];
+    cnbMissing?: boolean;
+    /** 假 `git commit` 往 **stderr** 写的话（钩子的输出面）。 */
+    commitStderr?: string;
+    commitStatus?: number;
+    /** 本次要暂存的文件（触发真提交那一支）。 */
+    dirty?: string[];
+  };
+
+  /**
+   * 造一个 git / cnb / node 的替身，并**记录每一次调用**。
+   * 记录才是这一组的核心：断言的不是返回值，而是「它有没有伸手去改世界」。
+   */
+  function fake(env: FakeEnv = {}) {
+    const calls: string[] = [];
+    const branch = env.branch ?? "feat/x";
+    const frags = env.frags ?? ["changelog.d/0-x.md"];
+    const dirty = env.dirty ?? [];
+    const ok = (stdout: string, stderr = ""): FakeResult => ({
+      status: 0,
+      stdout,
+      stderr,
+      error: null,
+    });
+    const run = (cmd: string, args: string[]): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") {
+        return env.cnbMissing
+          ? { status: -1, stdout: "", stderr: "", error: "ENOENT" }
+          : ok("1.15.25");
+      }
+      if (cmd === "git" && key.includes("--abbrev-ref")) return ok(branch);
+      if (cmd === "git" && key.includes("rev-parse HEAD"))
+        return ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      // ⚠️ 顺序要紧：碎片那一查也是 `status --porcelain`，只是多一个 `-- changelog.d`。
+      if (cmd === "git" && key.includes("status --porcelain -- changelog.d"))
+        return ok(frags.map((f) => `?? ${f}`).join("\n"));
+      if (cmd === "git" && key.includes("status --porcelain"))
+        return ok(dirty.map((f) => `M  ${f}`).join("\n"));
+      if (cmd === "git" && key.startsWith("commit"))
+        return {
+          status: env.commitStatus ?? 0,
+          stdout: "",
+          stderr: env.commitStderr ?? "",
+          error: null,
+        };
+      if (cmd === "git" && key.includes("get-url"))
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      if (cmd === "node" && key.includes("check-deps-freshness"))
+        return ok("OK");
+      return ok("");
+    };
+    return { run, calls };
+  }
+
+  /** 会改动世界的命令形状 —— dry-run 一条都不许碰。 */
+  const WRITE_SHAPES = [
+    "git add",
+    "git commit",
+    "git push",
+    "git checkout",
+    "git fetch",
+    "cnb pulls post-pull",
+    "cnb pulls merge-pull",
+  ];
+
+  /** 把 `main` 的输出吞掉：这一组判的是**调用面**，不是它说了什么。
+   *  `probeCnb` 也一并注入 —— 否则每条用例都会去探一遍真机的 PATH，
+   *  结论就随「这台机器装没装 cnb」漂了。 */
+  const quiet = {
+    root: process.cwd(),
+    log: () => undefined,
+    probeCnb: () => true,
+  };
+
+  it("dry-run 不执行任何写动作（这才是它敢让人随手跑的理由）", async () => {
+    const { run, calls } = fake();
+    const code = await main({ ...quiet, run, args: ["--dry-run"] });
+    expect(code).toBe(CODE.GREEN);
+    for (const w of WRITE_SHAPES) {
+      expect(
+        calls.filter((c) => c.startsWith(w)),
+        `dry-run 竟然执行了：${w}`,
+      ).toHaveLength(0);
+    }
+    // 它仍然要读 —— 不读就没法给出计划。
+    expect(calls.some((c) => c.includes("--abbrev-ref"))).toBe(true);
+  });
+
+  it("负控制：dry-run 不保证恒退 0 —— 在 master 上照样报阻塞", async () => {
+    // 「恒退 0」这句已从声明里撤掉，因为一个会藏掉阻塞事实的预览比不预览更糟。
+    // 这条用例钉的是撤完之后行为不再被文档反向拉扯。
+    const { run } = fake({ branch: "master" });
+    expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.RED);
+  });
+
+  it("没有 changelog.d 碎片 ⇒ 红（单 PR 单变更那条不成立）", async () => {
+    const { run } = fake({ frags: [] });
+    expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.RED);
+  });
+
+  it("cnb 不在 ⇒ 平台那几段没有执行者 ⇒ 退 2，不是退 0", async () => {
+    const { run, calls } = fake();
+    expect(await main({ ...quiet, run, probeCnb: () => false, args: [] })).toBe(
+      CODE.NOT_RUN,
+    );
+    // 本地动作照跑，但一个 cnb 平台调用都没发出去。
+    expect(calls.some((c) => c.startsWith("cnb pulls"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("git push"))).toBe(true);
+  });
+
+  it("未知旗标 ⇒ 退 2 并停，不把它读成「没要那个动作」", async () => {
+    const { run, calls } = fake();
+    expect(await main({ ...quiet, run, args: ["--merg"] })).toBe(CODE.NOT_RUN);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("--only=poll / verdict / merge 拒绝单独跑（否则是一段没跑却退 0 的假绿灯）", async () => {
+    for (const phase of ["poll", "verdict", "merge"]) {
+      const { run, calls } = fake();
+      expect(
+        await main({ ...quiet, run, args: [`--only=${phase}`] }),
+        `--only=${phase} 不该被当成「跑过了且没问题」`,
+      ).toBe(CODE.NOT_RUN);
+      expect(calls).toHaveLength(0);
+    }
+    // 反向：能单独跑的早期阶段不许被这条守卫误伤。
+    const { run } = fake();
+    expect(
+      await main({ ...quiet, run, args: ["--only=preflight", "--dry-run"] }),
+    ).toBe(CODE.GREEN);
+  });
+
+  it("提交被钩子拦下时，stderr 上的理由必须被转述出来", async () => {
+    /* 这一条是本轮最重的回归。钩子把全部原因写在 **stderr**，而第一版只接 stdout ——
+     * 屏幕上就只剩一句「提交被门槛拦下」而一个理由都没有。
+     * 一个职责是「如实转述执行者」的工具，把执行者的话弄丢了，比没有这个工具更糟。 */
+    const heard: string[] = [];
+    const { run } = fake({
+      dirty: ["src/a.ts"],
+      commitStatus: 1,
+      commitStderr: "[pre-commit] ✗ 组 C 失败（退出码 1）：tests/x.test.ts 红",
+    });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--message=x"],
+    });
+    const all = heard.join("\n");
+    expect(code).toBe(CODE.RED);
+    expect(all).toContain("组 C 失败");
+    expect(all).toContain("tests/x.test.ts 红");
+  });
+
+  it("「单 PR 单变更」数的是本次带来的碎片，不是目录里躺着的全部", async () => {
+    /* 第一版用 `git ls-files changelog.d` 数出了 118 份 —— 那条守卫于是恒真、
+     * 等于没有，而它看起来像在判什么。现在只数本次工作树里新增/改动的。 */
+    const heard: string[] = [];
+    const { run } = fake({ frags: ["changelog.d/0-only-this.md"] });
+    await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    expect(heard.join("\n")).toContain("碎片 1 份");
+  });
+});
