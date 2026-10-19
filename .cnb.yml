@@ -281,13 +281,13 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      工具链自证, 镜像身份, Python 可用性, Python 探针读数, 工作区复用读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
+      镜像身份, 工作区复用读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, 生成态文档与源同步,
       API 文档生成物与源同步, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
-      零消费导出, core 出口纪律与基类纯度, 浏览器安装
+      零消费导出, core 出口纪律与基类纯度
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
     # 而这两问的答案如今分在两处：会自己起一堆子进程的那两档（全量单测、`next build`）
@@ -325,19 +325,33 @@
     #   **每一个非空 `ciStage` 都必须出现在这份清单里**。少了这一条，「本地不拦」就
     #   悄悄变成「谁都不跑」，而两边都是绿的。
     #
-    # ⚠️ **前面四格是前提，不是装饰**：每次构建都是全新 job 目录、`node_modules` 恒不在场
+    # ⚠️ **前面五格是前提，不是装饰**：每次构建都是全新 job 目录、`node_modules` 恒不在场
     #   （`工作区复用读数` 两跑实测，形态①）。定时那一跑此前**只有构建那一格**，而
     #   `artifact-run.mjs` 跑的是 `pnpm run build` —— 它没有安装档就会在 04:00 以
     #   「找不到 next」的形态红。顺序有判据：安装必须先于任何吃 `node_modules` 的格子，
     #   而 `每日浏览器安装` 必须先于 `每日全量E2E`（缺件时 E2E 只红在 launch 那一跳，
     #   指不到真正缺的那一格）。
+    #   2026-10-19 起这五格是 **工具链自证 / 安装 / Python 可用性 / Python 探针读数 /
+    #   同步表结构** —— 前四格里的工具链与 Python 那两格是同日从 PR 撤进来的（下面那段）。
+    #
+    # ⚠️ **只判节点事实的格子不再每个 PR 都判**（2026-10-19 的口径：「这个环境不会经常
+    #   改动」）：`工具链自证` 13.8s、`Python 可用性` 2.8s、`Python 探针读数` 3.0s、
+    #   `浏览器安装` 3.0s 从 PR 那份清单撤到这里，**每撤一格都必须同批在这份清单里
+    #   加上同名的一格** —— 判据 `tests/no-platform-ci-config.test.ts` 逐格双向核对
+    #   （PR 清单里不许再有它、每日清单里必须有它、且那一格点的仍是同一个入口与
+    #   同一面旗标）。少了这条判据，「撤到每日档」与「悄悄删掉」在配置文件里逐字同形。
+    #   留在 PR 上的那一问是「这台机跑不动整条链吗」，由 `Install dependencies` 里的
+    #   `check-pnpm-available.mjs` 判 —— 它一秒就有答案，且每个 PR 都需要。
     COMFYAPP_CI_DAILY_GATES: >-
-      每日安装依赖, 每日 Python 可用性, 每日同步数据库表结构, 每日单元测试, 每日生产构建,
+      每日工具链自证, 每日安装依赖, 每日 Python 可用性, 每日 Python 探针读数,
+      每日同步数据库表结构, 每日单元测试, 每日生产构建,
       每日浏览器安装, 每日全量E2E
-    # ⚠️ 末尾那一格仍在 PR 上的理由与它的顺序：`浏览器安装` 要下 ~120 MiB（分钟级），而
-    # 判「装没装成」是零成本的 —— 它现在既替自己报缺件，也替第二天 04:00 的 `每日全量E2E`
-    # 暖同一个 `%LOCALAPPDATA%` 落点（同一台机、同一个账号）。PR 那条上的 `E2E 关键流程`
-    # 2026-10-19 起撤到每日档，原因与两条出路的取舍写在 `.gates` 末尾那段。
+    # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
+    #   （分钟级），而判「装没装成」是零成本的。2026-10-19 起这一格是**唯一**的执行者
+    #   （PR 上那一格同日撤到这里）—— 撤的理由是 PR 上再没有任何一步用浏览器
+    #   （`E2E 关键流程` 早已撤成 `每日全量E2E`，两条出路的取舍写在 `.gates` 末尾那段），
+    #   而它每次仍然要在 PR 上占一格排队位。同一台机、同一个账号，落点仍是
+    #   `%LOCALAPPDATA%`，所以每日档跑过一次之后，节点上的缓存在下一次每日档时是热的。
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
@@ -383,12 +397,15 @@
 # 的文件头；口径与边界见规范 §13.5.18。
 # ── 每日那七格：定时与手动触发**共用这一份**（`.daily-gates` 锚点）────────────
 #
-# 为什么做成锚点而不是两处各写一遍：这条清单现在有**两个触发口** ——
+# 为什么做成锚点而不是两处各写一遍：这条清单现在有**三个触发口** ——
 # ① `"crontab: 0 4 * * *"`（每天 04:00，无人值守）；② `web_trigger_daily`
-# （人在页面上手点，按钮定义在 `.cnb/web_trigger.yml`）。两条跑的是**同一件事**：
-# 「现在就把这七格跑一遍」。写成两份的时刻就是它俩开始各漂的时刻（哪天给每日档加一格、
+# （人在页面上手点，按钮定义在 `.cnb/web_trigger.yml`）；③ `api_trigger_daily`
+# （CLI / API：`cnb build start-build --event api_trigger_daily`，服务端只认
+# `api_trigger` 前缀，所以那个按钮**点不动**自动化这条路 —— 见下面那格的注释）。
+# 三条跑的是**同一件事**：
+# 「现在就把这份清单跑一遍」。写成几份的时刻就是它们开始各漂的时刻（哪天给每日档加一格、
 # 忘了加到手点那条，「手点一遍每日档」得到的就不是每天 04:00 那一跑）——
-# §12.12 的孪生形态，只是它长在配置里。判据钉的是「两条解析出来的 stage 名单**逐字相同**
+# §12.12 的孪生形态，只是它长在配置里。判据钉的是「三条解析出来的 stage 名单**逐字相同**
 # 且等于 `COMFYAPP_CI_DAILY_GATES`」（`tests/no-platform-ci-config.test.ts`）。
 #
 # 与 `.gates`（PR 那三十七格）同理，这里也刻意**不带 `ifModify`**：这七格是「重跑一遍」
@@ -400,18 +417,103 @@
   # 带「每日」前缀的名字，而**由判据钉住它的 script 与 PR 那一格逐字相同**
   # （`tests/no-platform-ci-config.test.ts`）—— 漂移的形态是「一边改了另一边没改」，
   # 那正是这份清单里所有「只许一处」的判据在挡的东西。
+  # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
+  # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
+  # 后面每一步都会以看不懂的方式失败（`pnpm: not recognized`、corepack 拉版本超时），
+  # 排障成本远高于在这里花三秒正面回答。失败即非零退出 —— 它必须会红。
+  #
+  # ⚠️ 2026-10-19 从 PR 那一条挪到这里（业主口径：「只是判断环境的，不要每次都判断，
+  # 这个环境不会经常改动」）。**挪的是节奏，不是撤账**：这一格在 PR 上每次跑要
+  # 13.8s（逐格读数见 `COMFYAPP_CI_GATES` 那段），而它问的是**节点事实** ——
+  # 一次 PR 改不动 PATH、改不动 winget。今天卡住每日那一跑的三条基线红里就有一条
+  # 长在这一族上（`ci-toolchain-selfcheck`），「每次都判」换到的是噪声而不是结论。
+  # 留在 PR 上的那一半是 `Install dependencies` 里的 `check-pnpm-available.mjs` ——
+  # 它判的是「这台机跑不动整条链吗」，那才是每个 PR 都需要有人回答的问题。
+  - name: 每日工具链自证
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      # ── 编码探针（头注第 6 条那件事的**常读读数**）──
+      # 前四行中文分别由四层吐出：PS 自己（写它自己的编码）、cmd（console CP）、
+      # node（UTF-8）、以及**绕过控制台对象、直接以 CP936 字节写 stdout** 的那一行。
+      # 哪一行在平台侧可读，就说明**平台在那一层用的是什么编码** —— 乱码是「多层里
+      # 哪一层断的」这件事，只看一行日志永远分不开。
+      Write-Output "编码探针·PS 原生：中文一二三"
+      cmd /c "echo 编码探针·CMD：中文一二三"
+      node -e "console.log('编码探针·NODE：中文一二三')"
+      # 第 4 行是**决定性的那一条**（2026-10-16 晚加）：前两轮读数已经否掉「控制台代码页」
+      # 与「宿主 ANSI 代码页」两个嫌疑人，剩下「解码端写死 CP936」这一种。
+      # 这一行可读 ⇒ 就是它，仓库侧「逐 stage 以 CP936 出口」这条出路成立；
+      # 这一行仍乱 ⇒ 还没找对层，继续往上（判读见头注第 6 条）。
+      $gbk=[Text.Encoding]::GetEncoding(936); $b=$gbk.GetBytes("编码探针·GBK 出口：中文一二三`n"); [Console]::OpenStandardOutput().Write($b,0,$b.Length); [Console]::OpenStandardOutput().Flush()
+      # 逻辑在 scripts/ci-toolchain-selfcheck.mjs —— **不在这里就地写 PowerShell**。
+      #
+      # 这一步原先是一段 ~70 行就地 PowerShell（探 Python、用 winget 当场装、
+      # 打印「这个账号看得见什么」）。问题不在它写得对不对，而在**配置里的逻辑
+      # 一条判据都测不到它** —— `.cnb.yml` 只在平台上跑，本地一个执行者都没有，
+      # 于是它只能靠「推上去看看红不红」验（#1959 第二、三轮各红过一次）。
+      #
+      # 现在是 scripts/ci-toolchain-selfcheck.mjs：
+      #   · 候选表回到唯一一处（src/lib/process/python-candidates.ts）——
+      #     此前它探的面与门禁探的面不是同一份，两边各判一次「没有」；
+      #   · 这一步**能被单测直接跑**（tests/ci-toolchain-selfcheck.test.ts）；
+      #   · 失败时的取证（执行账号、PATH、四个安装位置的命中情况）一并搬进脚本，
+      #     并给出「位置命中而命令探不到 ⇒ 改账号 PATH，别重复装」这条分岔。
+      # 仍会红：缺 git / node（不在 engines.node 内）/ pnpm / Python 时非零退出。
+      # 清单与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.5。
+      #
+      # **第一件事是把控制台输出编码钉成 UTF-8**（ISSUE #1959 的日志乱码）。
+      # 平台抓取 stage 输出用的是宿主 ANSI 代码页（中文 Windows 上是 CP936），
+      # 而 Node / pnpm 无条件写 UTF-8 —— 于是本机打的每一个非 ASCII 字符在日志里
+      # 都是乱码（`工具链自证通过 ✓` → `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`），而 PowerShell
+      # 自己打的字是好的（它按控制台的编码写字节）。这一句把那两边重新对齐。
+      # 放在**最前**：后面的每一步都在打这种字，先把编码钉住再说话。
+      # `chcp` / `[Console]::OutputEncoding` 改的是**控制台对象**上的设置，
+      # 同一控制台里的进程共享它 —— 所以它在第一步设、后面的 stage 都受益。
+      # 它恒退 0（纠正动作与读数，不是判据），机制见 scripts/ci-console-encoding.mjs。
+      # ⚠️ 两条各包一层 `ci-cp936-exit`：先钉住控制台编码（让 PowerShell 把 Node 的
+      # UTF-8 **解对**），再由外壳把它以 **CP936** 写回给平台（ISSUE #1977）。
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-console-encoding.mjs --apply
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs
+  # 与 PR 那格同一份实现（`ci-install-deps.mjs`：先自证 pnpm 起得来，再按语义判
+  # 要不要装）。定时这一跑每次都是全新检出 ⇒ 这一跳恒为「装」，不是可省的装饰。
   - name: 每日安装依赖
-    # 与 PR 那格同一份实现（`ci-install-deps.mjs`：先自证 pnpm 起得来，再按语义判
-    # 要不要装）。定时这一跑每次都是全新检出 ⇒ 这一跳恒为「装」，不是可省的装饰。
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
       node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
   - name: 每日 Python 可用性
-    # 判据那一份只有 `--python-only` 一个；这一格跑在单测**之前**是因为缺解释器时
-    # 相关用例只走 `env` 档跳过（**静默少判**），必须在便宜的位置先报一次。
+    # ── **必须排在「每日单元测试」之前**（这条顺序原来是 PR 上的，2026-10-19 随两格一起搬来）──
+    #
+    # 套件里有一族用例（`tests/helpers/python-exe.ts` 的 `PYTHON_OK` 守卫、
+    # `e2e/support/fake-comfyui-executor-env.mjs`、`scripts/check-app-port-vectors.cjs`）
+    # 需要一个**真能起来**的解释器。缺件时它们按既有口径走 `env` 档跳过并登记 —— 也就是说
+    # 这一步**不会让那一格变红**，只是少判几格。而「少判」在日志里是隐身的。
+    #
+    # 实测（`cnb-jt3-1k5071kou`）：这台节点上确实一个解释器都没有，而单测照样往下跑、
+    # `Python 可用性` 排在**两小时之后** —— 于是「缺 Python」这件事要么永远看不到，
+    # 要么在最贵的位置才看到：那一次 `单元测试` 跑到 2h24m 被 8640s 的墙钟上限掐断，
+    # 整条流水线只留下 `timeout of 8640000ms exceeded`，一条失败原因都读不到。
+    #
+    # 判据那一份只有 `--python-only` 一个（`findPython` / `installPython` /
+    # `pythonForensics`）；它与 `每日工具链自证` 不重复：那一步判**整机四件**且缺件即红，
+    # 这一步只回答**解释器住哪** —— 绿时打一行版本号（把「E2E 到底用哪个解释器」变成
+    # 可读读数），缺件时打取证并**非零退出**（红在能指路的位置）。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --python-only
+  # ── Python 探针读数（两条链各自的结论，**只打印、不阻断**）──
+  #
+  # `每日 Python 可用性` 用的那条链（`findPython` 起**裸名字**，Windows 交给 CreateProcess
+  # 按 PATH 解析）与 E2E 前置用的那条链（`resolvePython` 手工扫 PATH × PATHEXT、再对
+  # **绝对路径**起一次）是「同一台机器上哪个解释器能跑」的两个不同实现。实测出过
+  # 相反结论（`cnb-g36-1k50hvu52`：`Python 可用性` 绿、`E2E 关键流程` 报
+  # 「PATH 上没有可用的 Python」）—— 而**只看一边的日志分不出是哪一边错**。
+  #
+  # `scripts/python-probe.mjs` 把两边的读数都打，退出码恒为 0：它是**打印**、
+  # 不是判据（判据那一份只有 `--python-only` 一个）。2026-10-19 随 `Python 可用性`
+  # 一起从 PR 那一条挪来（同一口径：判的是节点，不是这次改动），而它排在解释器
+  # 判据之后、`每日全量E2E` 之前 —— 那才是这两份结论互相要看着的位置。
+  - name: 每日 Python 探针读数
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/python-probe.mjs
   - name: 每日同步数据库表结构
     # 库里要有表：套件里读库的那几条在没有库时的形态是「连不上」，看起来像业务故障
     # （§9.1 那格「页面 200、接口 500」的同一族误诊）。`db-push.mjs` 复核真建出表。
@@ -464,11 +566,62 @@
   # 早上」定时那一跑会从默认根去取那 120 MiB —— 而默认根在这台节点上取不到，
   # 红只在第二天 04:00 出现。镜像判据现在两处都比（命令行 + `env` 的赋值行）。
   # 幂等：落点已有那一件时这一格是 1~5s（实测 `cnb-cdt-1k51s6mf1`）。
+  # ── 浏览器安装（2026-10-19 起这是**唯一**的执行者：PR 上那一格撤到这里）──
+  #
+  # 撤的理由与 `每日工具链自证` 同一条：它判的是**这台节点能不能到下载根、浏览器在不在
+  # 盘上**，一次 PR 改不动这两件事；而 `E2E 关键流程` 早已撤到 `每日全量E2E`，
+  # PR 上没有任何一步再用浏览器 —— 那一格剩下的唯一作用只是「替第二天暖缓存」，
+  # 那不该由每个 PR 付费。
+  # 判据仍然钉住这件事的两半：这一格必须在 `每日全量E2E` **之前**，
+  # 且 script / env 与当初 PR 上那一格**逐字同形**（镜像键与套接字超时是两个实测读数，
+  # 抄错一处就回到「到不了」那一档，见下面那两段注释）。
   - name: 每日浏览器安装
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
     env:
+      # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
+      #
+      # 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
+      # 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
+      # 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
+      # 这样一条链路上无论等多久都不会到。
+      #
+      # 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
+      # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
+      # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
+      #
+      # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
+      # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
+      # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
+      # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
+      # 也就是说这一档**推不出来**，只能由这里给：给上之后
+      # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
+      #
+      # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
+      # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
+      # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
+      # 真要换（内网代理、别的镜像站）改这一行即可。
+      #
+      # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
+      # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
+      # 而这一步有**两条**通道：先自己分片取（不依赖这个根到得了大 body），
+      # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
+      #
+      # ⚠️ **「很慢」要分两层看，换源只治其中一层**（用户那句诉求）。
+      # 换源治的是「从哪儿取」；`playwright install` 自己那份下载**没有续传**
+      # （`browserFetcher.ts` 每次失败 `unlink(zipPath)` 从头来），所以慢链路上一换
+      # 源也照样卡在大 body 上 —— 那一层由本仓的分片自取（`fetchUrlResumable`）治。
+      # 也就是说：**换源不是唯一的慢因，也不是判据**；判据始终是「装完真起一次」。
+      # 三个候选根的顺序同步调过（`PLAYWRIGHT_HOST_CANDIDATES` 把 npmmirror 排前），
+      # 好处是「没配根的环境（本地 / 别的节点）也先试离得近的源」。
       PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
       PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+      # ⚠️ **这里不写 `PLAYWRIGHT_BROWSERS_PATH`**：它只在「浏览器装在镜像里」那一档
+      # 成立（`/ms-playwright` 在 Windows 宿主上不存在）。宿主机直跑时落点判据按
+      # `%LOCALAPPDATA%` 推 —— 写了它等于让判据去一个空目录找东西，「装好了」与
+      # 「一件都没有」在日志里逐字同形。
+      # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
+      # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
+      # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
     timeout: 20m
   # ── 全量 E2E（每天一次；这一格是 `FRESHNESS_TRACKS.e2e` 的执行者）──────
   #
@@ -498,55 +651,16 @@
     timeout: 45m
 
 .gates: &gates
-  # ── 工具链自证（自托管特有：没有 docker 镜像兜底，装没装由这一步说了算）──
-  # 这段是本文件存在的**前提**，不是可选的自检：宿主机缺 Node / pnpm / git 时，
-  # 后面每一步都会以看不懂的方式失败（`pnpm: not recognized`、corepack 拉版本超时），
-  # 排障成本远高于在这里花三秒正面回答。失败即非零退出 —— 它必须会红。
-  - name: 工具链自证
-    script: |
-      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
-      # ── 编码探针（头注第 6 条那件事的**常读读数**）──
-      # 前四行中文分别由四层吐出：PS 自己（写它自己的编码）、cmd（console CP）、
-      # node（UTF-8）、以及**绕过控制台对象、直接以 CP936 字节写 stdout** 的那一行。
-      # 哪一行在平台侧可读，就说明**平台在那一层用的是什么编码** —— 乱码是「多层里
-      # 哪一层断的」这件事，只看一行日志永远分不开。
-      Write-Output "编码探针·PS 原生：中文一二三"
-      cmd /c "echo 编码探针·CMD：中文一二三"
-      node -e "console.log('编码探针·NODE：中文一二三')"
-      # 第 4 行是**决定性的那一条**（2026-10-16 晚加）：前两轮读数已经否掉「控制台代码页」
-      # 与「宿主 ANSI 代码页」两个嫌疑人，剩下「解码端写死 CP936」这一种。
-      # 这一行可读 ⇒ 就是它，仓库侧「逐 stage 以 CP936 出口」这条出路成立；
-      # 这一行仍乱 ⇒ 还没找对层，继续往上（判读见头注第 6 条）。
-      $gbk=[Text.Encoding]::GetEncoding(936); $b=$gbk.GetBytes("编码探针·GBK 出口：中文一二三`n"); [Console]::OpenStandardOutput().Write($b,0,$b.Length); [Console]::OpenStandardOutput().Flush()
-      # 逻辑在 scripts/ci-toolchain-selfcheck.mjs —— **不在这里就地写 PowerShell**。
-      #
-      # 这一步原先是一段 ~70 行就地 PowerShell（探 Python、用 winget 当场装、
-      # 打印「这个账号看得见什么」）。问题不在它写得对不对，而在**配置里的逻辑
-      # 一条判据都测不到它** —— `.cnb.yml` 只在平台上跑，本地一个执行者都没有，
-      # 于是它只能靠「推上去看看红不红」验（#1959 第二、三轮各红过一次）。
-      #
-      # 现在是 scripts/ci-toolchain-selfcheck.mjs：
-      #   · 候选表回到唯一一处（src/lib/process/python-candidates.ts）——
-      #     此前它探的面与门禁探的面不是同一份，两边各判一次「没有」；
-      #   · 这一步**能被单测直接跑**（tests/ci-toolchain-selfcheck.test.ts）；
-      #   · 失败时的取证（执行账号、PATH、四个安装位置的命中情况）一并搬进脚本，
-      #     并给出「位置命中而命令探不到 ⇒ 改账号 PATH，别重复装」这条分岔。
-      # 仍会红：缺 git / node（不在 engines.node 内）/ pnpm / Python 时非零退出。
-      # 清单与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.5。
-      #
-      # **第一件事是把控制台输出编码钉成 UTF-8**（ISSUE #1959 的日志乱码）。
-      # 平台抓取 stage 输出用的是宿主 ANSI 代码页（中文 Windows 上是 CP936），
-      # 而 Node / pnpm 无条件写 UTF-8 —— 于是本机打的每一个非 ASCII 字符在日志里
-      # 都是乱码（`工具链自证通过 ✓` → `宸ュ叿閾捐嚜璇侀€氳繃 鉁?`），而 PowerShell
-      # 自己打的字是好的（它按控制台的编码写字节）。这一句把那两边重新对齐。
-      # 放在**最前**：后面的每一步都在打这种字，先把编码钉住再说话。
-      # `chcp` / `[Console]::OutputEncoding` 改的是**控制台对象**上的设置，
-      # 同一控制台里的进程共享它 —— 所以它在第一步设、后面的 stage 都受益。
-      # 它恒退 0（纠正动作与读数，不是判据），机制见 scripts/ci-console-encoding.mjs。
-      # ⚠️ 两条各包一层 `ci-cp936-exit`：先钉住控制台编码（让 PowerShell 把 Node 的
-      # UTF-8 **解对**），再由外壳把它以 **CP936** 写回给平台（ISSUE #1977）。
-      node scripts/ci-cp936-exit.mjs -- node scripts/ci-console-encoding.mjs --apply
-      node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs
+  # ── 2026-10-19：环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
+  # 撤的是节奏、不是账：`工具链自证` / `Python 可用性` / `Python 探针读数` 现在各有
+  # 一名每日档里的同名执行者（`每日工具链自证` / `每日 Python 可用性` /
+  # `每日 Python 探针读数`），判据双向核对（少了执行者就红，见
+  # `tests/no-platform-ci-config.test.ts` 那条「撤下来的每一格必须有每日的对应」）。
+  # 为什么它们不属于「每个 PR 都判」：三份脚本问的都是**节点事实**（PATH、winget/scoop
+  # 装没装、解释器住哪），一次 PR 改不动它们；留在这一条上的是
+  # `Install dependencies` 里的 `check-pnpm-available.mjs` —— 「这台机跑不动整条链吗」
+  # 才是每个 PR 都需要有人回答的那一问。逐格代价与这次决定的原文见
+  # `COMFYAPP_CI_GATES` 上面那段与 §13.5.23。
 
   # ── 镜像身份（**读数，恒不退非零**；ISSUE #1993）──
   #
@@ -572,41 +686,16 @@
   - name: 镜像身份
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-image-identity.mjs
 
-  # ── Python 可用性（**必须排在「单元测试」之前**）──
+  # ── `Python 可用性` / `Python 探针读数` 已经不在这一条上（2026-10-19）──
   #
-  # `单元测试` 里有一族用例（`tests/helpers/python-exe.ts` 的 `PYTHON_OK` 守卫、
-  # `e2e/support/fake-comfyui-executor-env.mjs`、`scripts/check-app-port-vectors.cjs`）
-  # 需要一个**真能起来**的解释器。缺件时它们按既有口径走 `env` 档跳过并登记 —— 也就是说
-  # 这一步**不会让那条 stage 变红**，只是少判几格。而「少判」在日志里是隐身的。
-  #
-  # 实测（`cnb-jt3-1k5071kou`）：这台节点上确实一个解释器都没有，而 `单元测试` 照样
-  # 往下跑、`Python 可用性` / `E2E 关键流程` 那两步排在**两小时之后** —— 于是
-  # 「缺 Python」这件事要么永远看不到，要么在最贵的位置才看到。第六次首跑就是后一种：
-  # 在 `ESLint` 之后排队两小时，`单元测试` 一步跑到 2h24m 被 8640s 的墙钟上限掐断，
-  # 整条流水线只留下 `timeout of 8640000ms exceeded`，一条失败原因都读不到。
-  #
-  # 所以把它从「E2E 之前那一步」提前到这里：判据是**同一个**（`--python-only` 调的是
-  # `findPython` / `installPython` / `pythonForensics` 那一份），只是让它在整条流水线上
-  # **最先**回答，代价几秒。它与第一步「工具链自证」不重复：那一步判的是**整机四件**
-  # 且缺件时非零退出（这一步在它绿了之后跑，说明四件齐），这一步只回答**解释器住哪**
-  # ——绿的时候打一行版本号（等于把「E2E 到底会用哪个解释器」变成可读读数），
-  # 缺件时打取证并**非零退出**（红在能指路的位置，而不是两小时后一串超时）。
-  - name: Python 可用性
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --python-only
-
-  # ── Python 探针读数（两条链各自的结论，**只打印、不阻断**）──
-  #
-  # `Python 可用性` 用的那条链（`findPython` 起**裸名字**，Windows 交给 CreateProcess
-  # 按 PATH 解析）与 E2E 前置用的那条链（`resolvePython` 手工扫 PATH × PATHEXT、再对
-  # **绝对路径**起一次）是「同一台机器上哪个解释器能跑」的两个不同实现。实测出过
-  # 相反结论（`cnb-g36-1k50hvu52`：`Python 可用性` 绿、`E2E 关键流程` 报
-  # 「PATH 上没有可用的 Python」）—— 而**只看一边的日志分不出是哪一边错**。
-  #
-  # `scripts/python-probe.mjs` 把两边的读数都打，退出码恒为 0：它是**打印**、
-  # 不是判据（判据那一份只有 `--python-only` 一个）。放在这里是因为它会跟着
-  # `Python 可用性` 一起在最便宜的位置跑，而 E2E 那一步要等十几分钟。
-  - name: Python 探针读数
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/python-probe.mjs
+  # 两格的**理由与事故**跟着它们搬到了每日档（`每日 Python 可用性` /
+  # `每日 Python 探针读数`，见 `.daily-gates` 里那两段），这里只留一句「为什么撤」：
+  # 这两份脚本问的是**这台节点上解释器住哪、哪条链起得来** —— 一次 PR 改不动 PATH、
+  # 改不动 winget 装没装，而它们每次跑都要在 PR 上占一格排队位。撤下之后仍然有人判
+  # 同一件事：`每日单元测试` 之前必有 `每日 Python 可用性`（顺序有判据），
+  # 而 PR 侧「跑不动整条链」那一问由下面 `Install dependencies` 里的
+  # `check-pnpm-available.mjs` 接着（它判的是 host 解析面，与上面那条不是一条链，
+  # 也不该被压成一条）。
 
   # ── 工作区复用读数（**读数，恒不退非零**）──
   #
@@ -1262,54 +1351,13 @@
   #   ② 镜像标签（`-noble` 与 Playwright 版本同批升）随 `image:` 一起撤掉；
   #   ③ 「容器格共用一份命名卷」那条桥（`volumes:`）**没有容器就没有跨容器这回事**，
   #      一并撤掉 —— 它原本要治的「每格重下 120 MiB」在宿主机上不成立（同一块盘）。
-  - name: 浏览器安装
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
-    env:
-      # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
-      #
-      # 先撞的是 30s 的**套接字**超时（`NET_DEFAULT_TIMEOUT`）—— 那不等于「CDN 不通」，
-      # 是「这一次没量完」。可把它放宽到 120s 之后**照旧超时**（`timed out after 120000ms`），
-      # 于是结论变了：这台节点**真的到不了** `cdn.playwright.dev`。180 MiB 的包在
-      # 这样一条链路上无论等多久都不会到。
-      #
-      # 所以换镜像 —— 走 `PLAYWRIGHT_DOWNLOAD_HOST`（Playwright 自己的环境变量，
-      # 不引第二套机制）。选 npmmirror 的 Playwright 二进制镜像是因为**它真能供上这一件**：
-      # 实测它按同一段路径回 HTTP 200，且 15s 内收到了 99 MiB。
-      #
-      # **为什么这一行只能是「外面给的」**：Playwright 自己的三个内置镜像**全同族**
-      # （`cdn.playwright.dev` / `playwright.download.prss.microsoft.com`），
-      # 这台节点出不去这一族时它 `retryCount = 5` 的「回退」等于没有 ——
-      # 实测逐字打了 5 次同一个域名，然后 `Download failure, code=1`。
-      # 也就是说这一档**推不出来**，只能由这里给：给上之后
-      # `runPlaywrightInstall()` 就只用它（不再陪 Playwright 挨个试不通的那三档）。
-      #
-      # ⚠️ **这个值是给这台节点用的，换网络要跟着换**。平台侧 env 能覆盖它；
-      # 本地不设就回到 Playwright 的默认行为（`playwrightHostsToTry` 的判据）。
-      # 选它是因为它是 Playwright 点名的镜像键，而不是本仓发明的那一套；
-      # 真要换（内网代理、别的镜像站）改这一行即可。
-      #
-      # ⚠️ 这两行与判据无关：判据仍是「装完真起一次浏览器」（`--playwright-only` 的复验）。
-      # 镜像只是把「到得了」这件事从宿主机身上挪到一个到得了的地方。
-      # 而这一步有**两条**通道：先自己分片取（不依赖这个根到得了大 body），
-      # 失败才原样交给 `playwright install`（那时才用得上下面这两行）。
-      #
-      # ⚠️ **「很慢」要分两层看，换源只治其中一层**（用户那句诉求）。
-      # 换源治的是「从哪儿取」；`playwright install` 自己那份下载**没有续传**
-      # （`browserFetcher.ts` 每次失败 `unlink(zipPath)` 从头来），所以慢链路上一换
-      # 源也照样卡在大 body 上 —— 那一层由本仓的分片自取（`fetchUrlResumable`）治。
-      # 也就是说：**换源不是唯一的慢因，也不是判据**；判据始终是「装完真起一次」。
-      # 三个候选根的顺序同步调过（`PLAYWRIGHT_HOST_CANDIDATES` 把 npmmirror 排前），
-      # 好处是「没配根的环境（本地 / 别的节点）也先试离得近的源」。
-      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
-      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-      # ⚠️ **这里不写 `PLAYWRIGHT_BROWSERS_PATH`**：它只在「浏览器装在镜像里」那一档
-      # 成立（`/ms-playwright` 在 Windows 宿主上不存在）。宿主机直跑时落点判据按
-      # `%LOCALAPPDATA%` 推 —— 写了它等于让判据去一个空目录找东西，「装好了」与
-      # 「一件都没有」在日志里逐字同形。
-      # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
-      # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
-      # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。
-    timeout: 20m
+  # ⚠️ 这一格 2026-10-19 从 PR 撤到每日档（`每日浏览器安装`，理由与逐字同形的
+  # script/env 都在那一格的注释里）。撤的是节奏不是账：`E2E 关键流程` 早已撤到
+  # `每日全量E2E`，PR 上没有任何一步再用浏览器，而「节点能不能到下载根」是一次 PR
+  # 改不动的事实。判据两头都钉着（`tests/no-platform-ci-config.test.ts`）：
+  # PR 清单里撤掉的每一格必须在每日清单里有同名执行者；`每日浏览器安装` 必须排在
+  # `每日全量E2E` 之前。上面那段「为什么不写 `image:`」的历史留在原处 —— 它讲的是
+  # 这条流水线的形态，不属于某一格。
 
   # ── E2E：这一格也离开 PR 了（2026-10-19，被上面那次挪档**逼出来的**，不是新决定）──
   #

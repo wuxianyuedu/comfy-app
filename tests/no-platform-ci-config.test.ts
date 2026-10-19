@@ -275,8 +275,10 @@ export function registeredDisabledGates(text: string): string[] {
 
 /** 定时那一跑的清单（与 `.cnb.yml` 的 `COMFYAPP_CI_DAILY_GATES` 同一份，顺序即执行序）。 */
 const DAILY_GATES = [
+  "每日工具链自证",
   "每日安装依赖",
   "每日 Python 可用性",
+  "每日 Python 探针读数",
   "每日同步数据库表结构",
   "每日单元测试",
   "每日生产构建",
@@ -285,21 +287,55 @@ const DAILY_GATES = [
 ];
 
 /**
+ * 2026-10-19 从 **PR 那一条撤到每日档**的几格：
+ * `[PR 上的旧名, 每日档里的名字, 每日块必须点名的入口, 必须带的旗标]`。
+ *
+ * 业主口径是「只判断环境的那些不要每次都判断 —— 这个环境不会经常改动」（逐格代价：
+ * `工具链自证` 13.8s、`Python 可用性` 2.8s、`Python 探针读数` 3.0s、`浏览器安装` 3.0s）。
+ * 而**撤的是节奏，不是账**：这四个名字从此只出现在每日清单里，且每日那一格里
+ * 必须真有一个格、点的仍是**同一个入口脚本与同一个旗标** ——
+ * 少了这条判据，「从 PR 撤下」与「谁都不判了」在配置文件里逐字同形，
+ * 而那正是本仓最不能有的形态（清单看着完整、执行面是空的）。
+ *
+ * ⚠️ 每日名是**写出来的**，不是拼出来的：真实名字是 `每日 Python 可用性`（中间有空格），
+ * 用 `` `每日${旧名}` `` 拼会得到 `每日Python 可用性`，那条判据于是恒红 ——
+ * 而它红的原因与配置对不对毫无关系（第一版就是这么错的）。
+ */
+const PR_MOVED_TO_DAILY: [string, string, string, string][] = [
+  ["工具链自证", "每日工具链自证", "scripts/ci-toolchain-selfcheck.mjs", ""],
+  [
+    "Python 可用性",
+    "每日 Python 可用性",
+    "scripts/ci-toolchain-selfcheck.mjs",
+    "--python-only",
+  ],
+  ["Python 探针读数", "每日 Python 探针读数", "scripts/python-probe.mjs", ""],
+  [
+    "浏览器安装",
+    "每日浏览器安装",
+    "scripts/ci-toolchain-selfcheck.mjs",
+    "--playwright-only",
+  ],
+];
+
+/**
  * 「每日」那一跑里应当与 PR 那一跑**逐字同形**的几格（定时名 → PR 名）。
  *
  * 名字不同是刻意的（按名字取块的解析器会撞车），所以「同一件事」只能由 script 相同来保证。
+ *
+ * ⚠️ 这一列**只留两边都还在的**。`Python 可用性` 与 `浏览器安装` 在 2026-10-19 撤出了
+ * PR 清单（见上面 `PR_MOVED_TO_DAILY`），拿一个不存在的 PR 块来比相同性，得到的不是
+ * 「两边漂了」而是「一边根本不在场」—— 那种红会教会人忽略红。它们由那条判据接住。
  */
 const DAILY_SCRIPT_MIRRORS: [string, string][] = [
   // 多行块也在内：这一格是 `script: |` 的三行体，只比第一行会漏掉「第二行改了」这种漂移。
   ["每日安装依赖", "Install dependencies"],
-  ["每日 Python 可用性", "Python 可用性"],
-  ["每日同步数据库表结构", "同步数据库表结构"],
   /* 浏览器那一格比的不只是命令行：它背着**两行 env**（下载根 + 连接超时），那是四次
    * 取证读数换来的（`cnb-gt1-1k513ill4` 那一族）。只比命令行的话，「一边改了根、
-   * 另一边没改」会逐字通过，而红只在第二天 04:00 出现 —— 比 这个 正是最贵的一种漂。
+   * 另一边没改」会逐字通过，而红只在第二天 04:00 出现 —— 比这个正是最贵的一种漂。
    * `每日全量E2E` **不在这一列**：它带的参数与 PR 那格**必须不同**（子集不记账），
    * 那一条由下面单独的判据按「不许带收窄参数」判，而不是拿相同性判。 */
-  ["每日浏览器安装", "浏览器安装"],
+  ["每日同步数据库表结构", "同步数据库表结构"],
 ];
 
 /** `45m` / `30m` / `3h` → 分钟。解析不出时回 0（调用方的断言会把它读成「没预算」）。 */
@@ -1111,24 +1147,29 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toContain("COMFY_E2E_SERVER: start");
   });
 
-  it("`浏览器安装` 的入口在盘上（PR 上那一格现在只为节点状态与每日档暖缓存）", () => {
+  it("`每日浏览器安装` 的入口在盘上（2026-10-19 起它是唯一的执行者）", () => {
     const text = readRegisteredConfig();
     /* 那一步点名的入口必须真在盘上（同 `Python 探测入口` 那条口径：`script` 里的
      * 路径写错了不会在配置解析期报错，只在真要用的那一刻答「文件不存在」）。
-     * **两种形态都要读得出来**：活的（`.gates` 里那一项，`script:` 缩进 4 空格）
+     * **两种形态都要读得出来**：活的（锚点里那一项，`script:` 带缩进）
      * 与被注释掉的（`# ` 前缀让 `- name:` 那一行不再是 stage 项，剥掉前缀后顶格）。
      * ⚠️ 正则**必须容忍前导空白** —— ISSUE #1966 恢复这一格时，只认顶格的
      * `^(?:#\s*)?script:` 把活的形态判成「解析不出 script」，而它要判的是
      * 「入口在不在盘上」，不是那一行在第几列。
      * 不从原文里做「紧邻下一行」的匹配：停用块在 `- name:` 与 `script:` 之间插了
-     * 一段说明，紧邻匹配会当场落空。 */
+     * 一段说明，紧邻匹配会当场落空。
+     *
+     * 名字带「每日」是 2026-10-19 那次挪档的结果（PR 那一格撤到每日档，撤的是节奏
+     * 不是账）—— 下面那条「PR 撤掉的每一格必须在每日清单里有同名执行者」判的就是
+     * 这件事，所以这里不再回到 PR 那一份。 */
     const blockText =
-      stageBlock(text, "浏览器安装") ?? commentedStageBlock(text, "浏览器安装");
+      stageBlock(text, "每日浏览器安装") ??
+      commentedStageBlock(text, "每日浏览器安装");
     const scriptLine = /^[ \t]*(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(
       blockText ?? "",
     );
     const command = scriptLine?.[1]?.trim();
-    expect(command, "解析不出「浏览器安装」那一步的 script").toBeTruthy();
+    expect(command, "解析不出「每日浏览器安装」那一步的 script").toBeTruthy();
     /* ⚠️ 入口**不一定在第一个字符上**：每个 stage 的脚本现在都以一句
      * `[Console]::OutputEncoding=…;` 开头（平台 stage shell 是 PowerShell，
      * 不设它平台侧的中文日志全是乱码，见 `.cnb.yml` 头注第 6 条），外面还包着
@@ -1139,15 +1180,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     )?.[1];
     expect(
       entry,
-      `「浏览器安装」那一步指向的不是 scripts/ 下的入口：${command}`,
+      `「每日浏览器安装」那一步指向的不是 scripts/ 下的入口：${command}`,
     ).toBeTruthy();
     expect(
       existsSync(path.join(ROOT, entry ?? "")),
-      `「浏览器安装」点名的入口不在盘上：${entry}`,
+      `「每日浏览器安装」点名的入口不在盘上：${entry}`,
     ).toBe(true);
   });
 
-  it("`浏览器安装` 那一步把下载的套接字超时放宽了（180 MiB 撞 30s 是「没量完」）", () => {
+  it("`每日浏览器安装` 那一步把下载的套接字超时放宽了（180 MiB 撞 30s 是「没量完」）", () => {
     const text = readRegisteredConfig();
     /* 现场（`cnb-rkr-1k510rsgg` 的 `浏览器安装` stage）：180 MiB 的包撞上 Playwright
      * 默认的 30s **套接字**超时（`NET_DEFAULT_TIMEOUT`）被按时掐断：
@@ -1164,19 +1205,22 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* **停用时读注释块**（`commentedStageBlock`）：那两个键仍在原文里，恢复时照抄
      * 的就是它们。停用不该让「下载预算配置得对不对」这件事失去判据 —— 否则停用
      * 期间有人把镜像那一行删掉，谁也不会知道，恢复时又回到「只调超时数字」那条错路。 */
-    const active = stageBlock(text, "浏览器安装");
-    const stage = active ?? commentedStageBlock(text, "浏览器安装");
+    const active = stageBlock(text, "每日浏览器安装");
+    const stage = active ?? commentedStageBlock(text, "每日浏览器安装");
     if (active === null) {
       expect(
         registeredDisabledGates(text),
-        "「浏览器安装」既不在 `GATES` 里、也没在 `DISABLED_GATES` 里登记 —— " +
+        "「每日浏览器安装」既不在清单里、也没在 `DISABLED_GATES` 里登记 —— " +
           "这一段判据会失去扫描对象，先补登记",
-      ).toContain("浏览器安装");
+      ).toContain("每日浏览器安装");
     }
-    expect(stage, "解析不出「浏览器安装」这一步 —— 名字被改了？").toBeTruthy();
     expect(
       stage,
-      "「浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— 默认的 30s 是" +
+      "解析不出「每日浏览器安装」这一步 —— 名字被改了？",
+    ).toBeTruthy();
+    expect(
+      stage,
+      "「每日浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— 默认的 30s 是" +
         "**套接字**超时，180 MiB 的包在慢链路上会被它按时掐断",
     ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
     expect(stage).toMatch(
@@ -1195,37 +1239,39 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 判据见 `tests/ci-toolchain-selfcheck.test.ts` 的「下载根由外面给」那一组）。 */
     expect(
       stage,
-      "「浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_HOST` —— 自托管节点到不了 " +
+      "「每日浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_HOST` —— 自托管节点到不了 " +
         "`cdn.playwright.dev`（120s 也超时），只放宽那个超时数字是没用的",
     ).toContain("PLAYWRIGHT_DOWNLOAD_HOST");
     expect(stage).toMatch(/PLAYWRIGHT_DOWNLOAD_HOST:\s*"https:\/\/[^"]+"/);
   });
 
-  it("`单元测试` 排在 `Python 可用性` 之后（缺件要在最便宜的位置报出来）", () => {
-    const order = registeredGateOrder(readRegisteredConfig());
+  it("`每日单元测试` 排在 `每日 Python 可用性` 之后（声明清单那一份）", () => {
+    /* 这条原来是 PR 那一份的顺序判据（`单元测试` vs `Python 可用性`）。2026-10-19
+     * 两格一起挪到每日档之后，PR 清单里两个名字都没有了 ⇒ 顺序约束本身**没有消失**，
+     * 它换了一份清单：缺解释器时单测照旧往下跑（相关用例走 `env` 档跳过、不会红），
+     * 而它要跑到 2h24m 才可能被平台墙钟掐断（实测 `cnb-jt3-1k5071kou`）——
+     * 「要么看不到、要么在最贵的位置才看到」这个形态与挂在哪条流水线无关。
+     * 这里判的是**声明的那份清单**（`COMFYAPP_CI_DAILY_GATES`），而
+     * 「定时流水线里事实的 stage 顺序」由下面那条前提格判据判 —— 声明与事实两份，
+     * 只读一份时另一份漂了没人红（本仓一贯的双向核对）。 */
+    const order = registeredDailyGateOrder(readRegisteredConfig());
     expect(
       order.length,
-      "解析不出 COMFYAPP_CI_GATES —— 键被删了或换了形状，这条顺序约束就没有执行者了",
+      "解析不出 COMFYAPP_CI_DAILY_GATES —— 键被删了或换了形状，这条顺序约束就没有执行者了",
     ).toBeGreaterThan(0);
-    const probeAt = order.indexOf("Python 可用性");
-    expect(probeAt).toBeGreaterThanOrEqual(0);
-    /* **停用时这条顺序约束无从谈起**（条目不在清单里，indexOf 回 -1）。
-     * 停用与否不是这里判的 —— 那是下面「停用登记」两条的事；这里只判
-     * 「在它真排进清单时必须排在 Python 之后」，而不是把它当成永久删除。 */
-    const testAt = order.indexOf("单元测试");
-    if (testAt < 0) {
-      expect(
-        registeredDisabledGates(readRegisteredConfig()),
-        "`单元测试` 既不在 COMFYAPP_CI_GATES 里、也没在 COMFYAPP_CI_DISABLED_GATES " +
-          "里登记 —— 这是「删除」而不是「停用」，判据拦的就是这个静默形态",
-      ).toContain("单元测试");
-      return;
-    }
+    const probeAt = order.indexOf("每日 Python 可用性");
+    const testAt = order.indexOf("每日单元测试");
+    /* 两个名字都必须取到：取不到就是**这一格被从清单里删了**，而顺序判据会退化成
+     * 「-1 比 -1 小」那种永远成立的空判（解析失败伪装成结论）。 */
     expect(
       probeAt,
-      "`Python 可用性` 必须排在 `单元测试` 之前：缺解释器时那一步照旧往下跑" +
-        "（相关用例走 env 档跳过、不会红），而它要跑到 2h24m 才可能被平台墙钟掐断" +
-        "（实测 cnb-jt3-1k5071kou）—— 排在后面 = 这个结论要么看不到、要么在最贵的位置才看到",
+      "`每日 Python 可用性` 不在每日清单里了",
+    ).toBeGreaterThanOrEqual(0);
+    expect(testAt, "`每日单元测试` 不在每日清单里了").toBeGreaterThanOrEqual(0);
+    expect(
+      probeAt,
+      "`每日 Python 可用性` 必须排在 `每日单元测试` 之前：缺解释器时那一格照旧往下跑，" +
+        "红的形态是几十分钟之后一句 `timeout of 8640000ms exceeded`，读不到原因",
     ).toBeLessThan(testAt);
   });
 
@@ -1689,6 +1735,57 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
           "取字节的根也是同一个，改一边不改另一边就是两条流水线各自漂（§12.12 的孪生形态，" +
           "只是它长在配置里）",
       ).toEqual(b);
+    }
+  });
+
+  it("从 PR 撤下来的环境格，每一格在每日那一跑里都有同名执行者（撤拦 ≠ 撤账）", () => {
+    /* 2026-10-19 的口径：只判**节点**的那几格不必每个 PR 都判（`工具链自证` 13.8s /
+     * `Python 可用性` 2.8s / `Python 探针读数` 3.0s / `浏览器安装` 3.0s，逐格读数来自
+     * 合并前那一跑的 stage 表）。**撤的是节奏，不是账** —— 这条判据就是那一句的机器形式：
+     * 四个名字必须①不在 PR 清单里（否则它同时是两份执行者，镜像判据失去对象），
+     * ②在每日清单里有 `每日<名>` 那一格，③那一格点的仍是**同一个入口脚本**、
+     * 共用脚本时还带着**那个分档旗标**。
+     *
+     * 少了③，「撤到每日档」与「悄悄删掉」在配置文件里逐字同形：名字还在清单上、
+     * 块被换成一条别的命令，两边都是绿的 —— 而那一格其实谁都不判了。 */
+    const text = readRegisteredConfig();
+    const prOrder = registeredGateOrder(text);
+    const dailyOrder = registeredDailyGateOrder(text);
+    expect(
+      prOrder.length,
+      "解析不出 COMFYAPP_CI_GATES —— 这条判据就没有对象了",
+    ).toBeGreaterThan(0);
+    expect(
+      dailyOrder.length,
+      "解析不出 COMFYAPP_CI_DAILY_GATES —— 这条判据就没有对象了",
+    ).toBeGreaterThan(0);
+    for (const [former, dailyName, entry, flag] of PR_MOVED_TO_DAILY) {
+      expect(
+        prOrder,
+        `「${former}」又回到 PR 清单里了 —— 那意味着它同时是两份执行者，` +
+          "`DAILY_SCRIPT_MIRRORS` 必须同批把它加回相同性判据，两处不能各说一套",
+      ).not.toContain(former);
+      expect(
+        dailyOrder,
+        `「${former}」从 PR 撤下来之后，每日清单里没有「${dailyName}」—— ` +
+          "这一格如今谁都不判，而清单上看着仍在",
+      ).toContain(dailyName);
+      const lines = executableScriptLines(text, dailyName);
+      expect(
+        lines,
+        `每日档里取不到「${dailyName}」的 script —— 名字改了，还是整块没了`,
+      ).toBeTruthy();
+      const command = lines.join(" ");
+      expect(
+        command,
+        `「${dailyName}」点的入口不是 ${entry}：撤档不等于换判据`,
+      ).toContain(entry);
+      if (flag !== "") {
+        expect(
+          command,
+          `「${dailyName}」丢了 ${flag} —— 它与别的格共用同一份脚本，是这一面旗标把它分成另一格`,
+        ).toContain(flag);
+      }
     }
   });
 
