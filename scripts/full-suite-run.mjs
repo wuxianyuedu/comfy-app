@@ -226,6 +226,119 @@ export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
 }
 
 /**
+ * 每份文件的**两份**时长：junit 里 `<testsuite time>`（该文件在 worker 里的总时长，
+ * 即 vitest 的 `task.result.duration`）与其中所有 `<testcase time>` 之和（纯断言时长）。
+ *
+ * 为什么要第二份：vitest 在收尾自报的相位分解，三次独立读数都是 `tests 46–51%` 而
+ * `setup 23–24% + environment 13–14% + import 12–13%` 合计约一半（`cnb-b0l-1k59op66t`
+ * 2442.43s / `cnb-r0d-1k5a0348r` 2729.89s / 本地 1609.51s）。那四个百分数**没有名字**：
+ * 它不说哪几份在交税，而没有名字就没法决定该治谁、还是只能切片绕开。
+ *
+ * ⚠️ **这份榜只量得到「文件内可见」的那一份税**。本地第一次对账（776 份）实测：
+ * `Σ文件总时长 2793.6s = 断言 2724.0s + 69.6s` —— 也就是 `<testsuite time>` 基本等于
+ * Σ`<testcase time>`（差 2%），vitest 报的那约一半 environment / import / setup **不在
+ * junit 的每文件账上**。所以这一份读的是「哪几份在自己的钩子里干活」（实测三份占掉 90%：
+ * `db-migrate-equivalence` 30.6s / `docs-candidate-hygiene` 21.4s /
+ * `tailwind-source-roots` 10.3s），**它不回答「那 50% 归谁」** —— 把这句写进话术，
+ * 是因为拿它当整笔税的分解读，正好会得出一个方向相反的结论（本仓第一次量就是这么错的）。
+ *
+ * 形状按 vitest 5.0.3 的实际输出定，两条已知边界写在下面 {@link suitePhaseTax} 的话术里
+ * （自闭合的 `<testsuite/>` 不配对、以及「Σ文件总时长 ≠ 墙钟」那笔差额归谁）。
+ *
+ * @param {string} xml junit XML 全文
+ * @returns {{name: string, totalMs: number, testsMs: number, cases: number}[]}
+ */
+export function parseJunitPhaseCosts(xml) {
+  /** @type {{name: string, totalMs: number, testsMs: number, cases: number}[]} */
+  const out = [];
+  for (const m of String(xml ?? "").matchAll(
+    /<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g,
+  )) {
+    const attrs = m[1] ?? "";
+    const body = m[2] ?? "";
+    const name = /\bname="([^"]*)"/.exec(attrs)?.[1];
+    const total = /\btime="([^"]*)"/.exec(attrs)?.[1];
+    if (!name || total === undefined) continue;
+    const totalSecs = Number(total);
+    if (!Number.isFinite(totalSecs) || totalSecs < 0) continue;
+    let testsMs = 0;
+    let cases = 0;
+    for (const c of body.matchAll(/<testcase\b[^>]*?\btime="([0-9.eE+-]+)"/g)) {
+      const secs = Number(c[1]);
+      if (!Number.isFinite(secs) || secs < 0) continue;
+      testsMs += secs * 1000;
+      cases += 1;
+    }
+    out.push({
+      name,
+      totalMs: Math.round(totalSecs * 1000),
+      testsMs: Math.round(testsMs),
+      cases,
+    });
+  }
+  return out;
+}
+
+/**
+ * 分文件**装载税**榜 —— 同样是读数，不参与任何判定。
+ *
+ * 三条形制与 {@link suiteRanking} 同一条（日志 102400 字节上限、只打前 N 名、
+ * 读不到时打「没有」而不是「0 份」）。这里再加两条对账，因为这份数**天生对不平**：
+ *
+ * ① **Σ文件总时长 ≠ stage 墙钟**。差额是并发摊薄（一条 4 个 worker，四份文件的
+ * 时长在墙钟上只算一次）与非文件阶段（globalSetup、覆盖率报告生成）。所以墙钟只作为
+ * 下界一起打出来，不做除法 —— 拿一个对不平的分母去算「税占多少 %」会读出一个假比例。
+ * ② **税可能为负**。junit 的用例时长是各自测的，一条用例在 `afterEach` 里等到的东西
+ * 可能同时被算进两份数里；出现负数就照实打，不夹到 0（夹了就是拿形状掩盖机制）。
+ *
+ * @param {string} xmlText junit XML 全文；读不到时调用方给空串
+ * @param {{limit?: number, file?: string, wallMs?: number | null}} [opts]
+ * @returns {string[]}
+ */
+export function suitePhaseTax(
+  xmlText,
+  { limit = 10, file = "", wallMs = null } = {},
+) {
+  const where = file ? `（落点 ${file}）` : "";
+  const entries = parseJunitPhaseCosts(String(xmlText ?? ""));
+  if (entries.length === 0) {
+    return [
+      `[full-suite-run] 装载税读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`,
+    ];
+  }
+  const withTax = entries.map((e) => ({ ...e, taxMs: e.totalMs - e.testsMs }));
+  const sorted = [...withTax].sort((a, b) => b.taxMs - a.taxMs);
+  const sumTotal = withTax.reduce((a, e) => a + e.totalMs, 0);
+  const sumTests = withTax.reduce((a, e) => a + e.testsMs, 0);
+  const sumTax = sumTotal - sumTests;
+  const head = sorted.slice(0, limit);
+  const headTax = head.reduce((a, e) => a + e.taxMs, 0);
+  /** @param {number} ms @returns {string} */
+  const secs = (ms) => (ms / 1000).toFixed(1);
+  return [
+    `[full-suite-run] 装载税：${entries.length} 份、Σ文件总时长 ${secs(sumTotal)}s` +
+      ` = 断言 ${secs(sumTests)}s + 装载/钩子 ${secs(sumTax)}s` +
+      `（占 Σ 的 ${sumTotal === 0 ? "0" : ((sumTax / sumTotal) * 100).toFixed(0)}%）${where}`,
+    ...head.map(
+      (e) =>
+        `  税 ${`${secs(e.taxMs)}s`.padStart(8)}  总 ${`${secs(e.totalMs)}s`.padStart(
+          8,
+        )}  断言 ${`${secs(e.testsMs)}s`.padStart(8)}  ${e.name}`,
+    ),
+    `  中位税 ${secs(sorted[Math.floor(sorted.length / 2)]?.taxMs ?? 0)}s ｜ 其余 ${Math.max(
+      0,
+      entries.length - head.length,
+    )} 份合计 ${secs(sumTax - headTax)}s`,
+    wallMs
+      ? `[full-suite-run] 对账：本档墙钟 ${secs(wallMs)}s，Σ文件总时长 ${secs(sumTotal)}s` +
+        " —— 差额是并发摊薄（worker 数由 `resolveCiWorkers()` 按现场核数定，见上面那行读数）" +
+        "与非文件阶段（globalSetup / 覆盖率报告）。**这一档不把它摊到任何一份文件上**，" +
+        "所以两数不相等不是坏读数；拿它做除法才会。"
+      : "",
+  ].filter((l) => l !== "");
+}
+
+/**
  * 这一跑该不该记账 —— 抽成纯入口，好让「红了不记」这条边界能被真跑一次。
  *
  * 「绿」且「跑的是整档」才记：本档透传参数，`--help` / 指到单个文件都会退 0 而没跑
@@ -332,11 +445,13 @@ function main(argv) {
     );
     return 0;
   }
+  const wallStart = Date.now();
   const res = runPnpmSync(run.args, {
     cwd: ROOT,
     stdio: "inherit",
     timeoutMs: FULL_SUITE_TIMEOUT_MS,
   });
+  const wallMs = Date.now() - wallStart;
   /* 榜打在**三态分流之前**：红的那一次与被预算砍的那一次，恰恰是最需要知道
    * 「是哪几份在吃时间」的两次。读不到只打一句「没有」，不抛 —— 它是读数。 */
   let junitText = "";
@@ -346,6 +461,14 @@ function main(argv) {
     junitText = "";
   }
   for (const line of suiteRanking(junitText, { file: junitFile })) {
+    process.stdout.write(`${line}\n`);
+  }
+  /* 第二份榜：断言之外的税摊到文件上（vitest 自报的四个相位百分数没有名字，
+   * 而没有名字就没法决定该治谁、还是只能切片绕开）。 */
+  for (const line of suitePhaseTax(junitText, {
+    file: junitFile,
+    wallMs,
+  })) {
     process.stdout.write(`${line}\n`);
   }
   /* 三态分流：**「被预算砍」与「判据红」必须长得不一样**（`classifyOutcome`）。

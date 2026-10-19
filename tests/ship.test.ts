@@ -39,6 +39,7 @@ import {
   planCommands,
   readBuildVerdict,
   readPullVerdict,
+  resolveUpstream,
 } from "../scripts/ship-core.mjs";
 import { main } from "../scripts/ship.mjs";
 
@@ -241,6 +242,59 @@ describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
   });
 });
 
+/**
+ * 远端名与上游基线的推导。这一组存在的原因是这一版把 `origin` **写死在五处**
+ * （`get-url origin` / `origin/master...HEAD` 取碎片 / `git push -u origin` /
+ * `fetch origin master` / `cat-file origin/master:<碎片>`），而本仓按硬规则 6 只有
+ * 一个叫 `cnb` 的远端 —— 五条命令全部失败，而失败在每一处都长得像「答案为空」：
+ * 碎片那一查拿到空串 ⇒ preflight 报「没有 changelog.d 碎片」⇒ `pnpm ship` 在本仓
+ * 从第一次跑起就没工作过，报的还是一个听起来正当的理由。
+ */
+describe("resolveUpstream：远端名与主干基线（本仓没有 origin）", () => {
+  it("① 有上游就用上游 —— 这是 git 已经知道的事，不另推", () => {
+    expect(
+      resolveUpstream({ upstream: "cnb/master", remotes: ["cnb"] }),
+    ).toEqual({
+      remote: "cnb",
+      base: "cnb/master",
+      source: "upstream",
+    });
+    /* 带斜杠的分支名不能被截断（`cnb` + `release/2026-10`）。 */
+    expect(
+      resolveUpstream({ upstream: "cnb/release/2026-10", remotes: ["cnb"] })
+        .base,
+    ).toBe("cnb/release/2026-10");
+  });
+
+  it("② 没有上游但只有唯一远端 ⇒ 推 `<远端>/master`，并标明是推的", () => {
+    const got = resolveUpstream({ upstream: "", remotes: ["cnb"] });
+    expect(got).toEqual({
+      remote: "cnb",
+      base: "cnb/master",
+      source: "sole-remote",
+    });
+    /* 推出来的东西必须读得出它是推的：默认分支不叫 master 时这一档会偏，
+     * 而调用方靠「基线引用验不过」那一格把它抓住 —— 不是靠这里猜对。 */
+    expect(got.source).not.toBe("upstream");
+  });
+
+  it("③ 多个远端且没有上游 ⇒ 回到 origin 的习惯；再没有就给 null", () => {
+    expect(
+      resolveUpstream({ upstream: null, remotes: ["origin", "gitee"] }).remote,
+    ).toBe("origin");
+    expect(
+      resolveUpstream({ upstream: null, remotes: ["cnb", "gitee"] }),
+    ).toEqual({
+      remote: null,
+      base: null,
+      source: "none",
+    });
+    /* `null` 是「没有执行者」的入参，不是「基线是空字符串」——
+     * 后者会让 `${base}...HEAD` 变成一条语法合法、语义全错的 git 命令。 */
+    expect(resolveUpstream({ upstream: null, remotes: [] }).base).toBeNull();
+  });
+});
+
 describe("findPullForBranch：重跑不产生第二个 PR", () => {
   const LIST = {
     data: [
@@ -282,12 +336,20 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     adds: ["src/a.ts"],
     hasMessage: true,
     merge: true,
+    /* 本仓的远端叫 `cnb`（硬规则 6：没有 `origin`）。计划里那一行必须用**解析出的**
+     * 远端名 —— 写死 `origin` 时这一版在 push 那一段就起不来，而 dry-run 照样打印得
+     * 很漂亮：计划与执行两头都写着同一条错。 */
+    remote: "cnb",
+    baseBranch: "master",
   };
 
   it("逐条含命令本体，且平台调用一律带 -v（JSON 是唯一取数面）", () => {
     const plan = planCommands(st);
     expect(plan).toContain("git add -- src/a.ts");
-    expect(plan).toContain("git push -u origin feat/x");
+    expect(plan).toContain("git push -u cnb feat/x");
+    expect(plan.some((l) => l.includes("--base master --head feat/x"))).toBe(
+      true,
+    );
     for (const line of plan.filter((l) => l.startsWith("cnb "))) {
       expect(line, `计划里这条 cnb 调用没带 -v：${line}`).toContain("-v");
     }
@@ -388,8 +450,12 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     commitStatus?: number;
     /** 本次要暂存的文件（触发真提交那一支）。 */
     dirty?: string[];
-    /** 这条分支相对 `origin/master` **已提交**的碎片（第二次跑那一向）。 */
+    /** 这条分支相对上游基线**已提交**的碎片（第二次跑那一向）。 */
     branchFrags?: string[];
+    /** HEAD 的上游（`git rev-parse --abbrev-ref --symbolic-full-name @{u}`）。 */
+    upstream?: string | null;
+    /** 那条上游引用在不在本地（验不验得过）。false = `rev-parse --verify` 退非 0。 */
+    baseExists?: boolean;
   };
 
   /**
@@ -415,7 +481,17 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
           ? { status: -1, stdout: "", stderr: "", error: "ENOENT" }
           : ok("1.15.25");
       }
+      /* ⚠️ 必须排在下面那条通用 `--abbrev-ref` **之前**：HEAD 那一查与上游那一查
+       * 共用同一个前缀，顺序反了上游查询会拿到分支名，于是「远端解析」这一格
+       * 判的是夹具自己的形状。 */
+      if (cmd === "git" && key.includes("@{u}"))
+        return ok(env.upstream === null ? "" : (env.upstream ?? "cnb/master"));
       if (cmd === "git" && key.includes("--abbrev-ref")) return ok(branch);
+      if (cmd === "git" && key === "remote") return ok("cnb\n");
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
+        return env.baseExists === false
+          ? { status: 1, stdout: "", stderr: "", error: null }
+          : ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
       if (cmd === "git" && key.includes("rev-parse HEAD"))
         return ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
       // ⚠️ 顺序要紧：碎片那一查也是 `status --porcelain`，只是多一个 `-- changelog.d`。
@@ -424,9 +500,10 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       if (cmd === "git" && key.includes("status --porcelain"))
         return ok(dirty.map((f) => `M  ${f}`).join("\n"));
       // 分支相对上游**已提交**的碎片（同一条分支上第二次跑就靠这一格不为空）。
+      // 基线名由 `resolveUpstream` 推（本仓是 `cnb/master`）—— 夹具跟着它，不写死 origin。
       if (
         cmd === "git" &&
-        key.includes("diff --name-only origin/master...HEAD -- changelog.d")
+        key.includes("diff --name-only cnb/master...HEAD -- changelog.d")
       )
         return ok((env.branchFrags ?? []).join("\n"));
       if (cmd === "git" && key.startsWith("commit"))
@@ -489,6 +566,26 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("没有 changelog.d 碎片 ⇒ 红（单 PR 单变更那条不成立）", async () => {
     const { run } = fake({ frags: [] });
     expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.RED);
+  });
+
+  it("基线引用不存在 ⇒ 退 2 并说「没有事实源」，**不许**退成「没有碎片」的红", async () => {
+    /* 这一格钉的是「取不到」与「取到且为空」必须长得不一样 —— 而这一版就是在这里
+     * 把两件事混成一件的：远端名写死 `origin`，`origin/master...HEAD` 那条 git 直接失败、
+     * stdout 为空，于是 preflight 报「没有 changelog.d 碎片」（一条正当的假结论），
+     * 而真原因是「这条比对没有事实源」。 */
+    const heard: string[] = [];
+    const { run } = fake({ frags: [], branchFrags: [], baseExists: false });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    const all = heard.join("\n");
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(all).toContain("没有事实源");
+    expect(all).not.toContain("单 PR 单变更那条不成立");
   });
 
   it("cnb 不在 ⇒ 平台那几段没有执行者 ⇒ 退 2，不是退 0", async () => {
