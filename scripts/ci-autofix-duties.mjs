@@ -59,6 +59,10 @@ import path from "node:path";
  * @property {string} stage  `.cnb.yml` 里的 stage 名（字面比对）
  * @property {string} entry  入口脚本（仓库相对路径）—— 判据与配置两边都按它认
  * @property {readonly string[]} args `--autofix` 档必须落到的那个判定门（`script` 里的 args 要逐字出现）
+ * @property {readonly string[]} outputs 这一档**会被它改写**的仓库相对路径前缀 ——
+ *   「谁会写工作区」与「写到哪一处」必须同处登记：`scripts/ci-workspace-provenance.mjs`
+ *   拿这份名单去判「tracked 面上出现的改动是不是登记过的写者干的」，而那条判据要的
+ *   恰好是**唯一出处**（另抄一份前缀 = 加一档自动修时会漏改，而漏改的那一侧是静默的）。
  * @property {string} why   「为什么这一档可以自动修」（两条前提各自怎么成立的）
  */
 
@@ -68,6 +72,7 @@ export const AUTOFIX_DUTIES = [
     stage: "生成态文档与源同步",
     entry: "scripts/render-doc-placeholders.cjs",
     args: ["--check", "--autofix"],
+    outputs: ["docs/generated/"],
     why:
       "① 纯确定的重生成：`renderDocContent()` 是「当前源 + 当前占位符事实 → 产物」的唯一一处计算，" +
       "`--check` 与写入模式共用它（共用这一份正是它自己写着的要求），所以「重渲染一遍」得到的就是唯一答案，" +
@@ -79,6 +84,7 @@ export const AUTOFIX_DUTIES = [
     stage: "API 文档生成物与源同步",
     entry: "scripts/check-docs-api.cjs",
     args: ["--check", "--autofix"],
+    outputs: ["docs/api/"],
     why:
       "① 纯确定的重生成：typedoc 对同一份源与同一份 `typedoc.json` 产出逐字节相同 —— 这不是推测，" +
       "是判据自己每次都在复核的前提（`verifyDeterminism`：同源两次重生成相同、换一个路径的 worktree 也相同，" +

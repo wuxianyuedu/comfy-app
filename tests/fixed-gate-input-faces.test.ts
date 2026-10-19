@@ -1,0 +1,194 @@
+/**
+ * 固定清单的输入面登记（ISSUE #2022）——「最贵的几条重档判据凭什么可以不跑」。
+ *
+ * 背景：本地 pre-commit 超过 5 分钟的实际后果是 `--no-verify`，而「钩子拦得住」是 §13.6
+ * 整节的前提。实测一次只改 14 个文件（0 个 `src/**`）的提交：组 C 545.4s，其中四条
+ * **工具行为自检**（在临时工作区里现拷夹具跑被测工具）合计约 260s 的分文件耗时 ——
+ * 它们每次都跑，可业务代码怎么改都不会让它们的判决漂。机制沿用平台侧那 13 条
+ * `ifModify` 的口径（§13.5.20：触发面由判据自己导出），这里接到钩子这一层。
+ *
+ * 这一档最危险的失效形态是**悄悄不跑**：面写窄一条、或路径打错一个字母，那条判据就
+ * 永久缺席，而日志上它与「这次真的不需要跑」逐字同形。所以本文件的用例全部朝那个方向设：
+ *
+ *   ① 登记的每一条必须**真的在固定清单里** —— 给一条本来就走 import 图的判据写面，
+ *      写出来的是一条永不生效的死面；
+ *   ② 每个模式必须**至少命中仓库里一个被跟踪的路径** —— 这一条直接判死拼写错误；
+ *   ③ 名单封闭（现在 4 条）—— 加第 5 条是一次签字，不是这一层代码能自己扩张的；
+ *   ④ 两向都测：面没命中 ⇒ 缺席**且被点名**；命中 ⇒ 在场；
+ *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」。
+ */
+import { execFileSync } from "node:child_process";
+import { describe, expect, it } from "vitest";
+
+import { resolveAffectedTests } from "../scripts/affected-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import {
+  INPUT_FACES,
+  faceHits,
+  faceMatches,
+  selectFixedByFace,
+} from "../scripts/fixed-gate-input-faces.mjs";
+
+/** 被跟踪路径的全集 —— ② 那一条的事实来源（本地 `git ls-files`，不走网络）。 */
+function trackedPaths(): string[] {
+  return execFileSync("git", ["ls-files"], { encoding: "utf8" })
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+describe("输入面登记的形状", () => {
+  it("每一条都在固定清单里（不然那是一条永不生效的死面）", () => {
+    const orphans = INPUT_FACES.filter(
+      (entry) => !FIXED_STRUCTURAL_TESTS.includes(entry.test),
+    ).map((entry) => entry.test);
+    expect(
+      orphans,
+      "这些登记不在 FIXED_STRUCTURAL_TESTS 里 —— 它们本来就走 import 图（有条件跑），" +
+        "再写一道面只会让「谁决定它跑不跑」变成两处",
+    ).toEqual([]);
+  });
+
+  it("每一个模式都至少命中一个被跟踪的路径（判死拼写错误与改名后没跟着改的面）", () => {
+    const tracked = trackedPaths();
+    const dead = [];
+    for (const entry of INPUT_FACES) {
+      for (const pattern of entry.face) {
+        if (!tracked.some((file) => faceMatches(file, pattern))) {
+          dead.push(`${entry.test} :: ${pattern}`);
+        }
+      }
+    }
+    expect(
+      dead,
+      "这些面在仓库里一个路径都不匹配 —— 它永远不会命中，等于把那条判据从固定清单里删掉，" +
+        "而这件事在日志里没有任何区别",
+    ).toEqual([]);
+  });
+
+  it("名单是封闭的那 4 条：加一条要人来签字", () => {
+    expect(INPUT_FACES.map((entry) => entry.test).sort()).toEqual([
+      "tests/a11y-rules-gate.test.ts",
+      "tests/base-check.test.ts",
+      "tests/check-bundle-budget.test.ts",
+      "tests/tw4-hardgate-behaviour.test.ts",
+    ]);
+    /* 每条都得说清「它读什么」—— 没有 why 的面，下一条只会照着猜着改宽。 */
+    for (const entry of INPUT_FACES) {
+      expect(entry.why.length, `${entry.test} 缺「它读什么」`).toBeGreaterThan(
+        20,
+      );
+      expect(entry.face.length).toBeGreaterThan(1);
+    }
+  });
+});
+
+describe("模式匹配的三种形状", () => {
+  it("精确路径、目录前缀、同段通配各自的行为", () => {
+    expect(faceMatches("eslint.config.js", "eslint.config.js")).toBe(true);
+    expect(faceMatches("src/App.tsx", "eslint.config.js")).toBe(false);
+    expect(faceMatches(".githooks/pre-commit", ".githooks/**")).toBe(true);
+    expect(faceMatches(".githooks/x/y", ".githooks/**")).toBe(true);
+    /* 目录前缀不许吞同名兄弟：`scripts/x/**` 不匹配 `scripts/x2/y` —— 那种漂法会把
+     * 不相干的判据一路点进来，面就悄悄变宽了。 */
+    expect(faceMatches("scripts/x2/y", "scripts/x/**")).toBe(false);
+    expect(faceMatches("scripts/tw4-a.json", "scripts/tw4-*.json")).toBe(true);
+    expect(faceMatches("scripts/deep/tw4-a.json", "scripts/tw4-*.json")).toBe(
+      false,
+    );
+  });
+
+  it("空模式与「整仓库通配」一律不命中（那种写法等于没写面）", () => {
+    for (const pattern of ["", "*", "**", "./**"]) {
+      expect(faceMatches("src/app/page.tsx", pattern), pattern).toBe(false);
+    }
+  });
+
+  it("改判据自己的测试文件必须命中（不然改测试看不到效果）", () => {
+    for (const entry of INPUT_FACES) {
+      expect(faceHits(entry, [entry.test]), entry.test).toBe(true);
+      expect(faceHits(entry, ["docs/README.md"]), entry.test).toBe(false);
+    }
+  });
+});
+
+describe("切分与接线", () => {
+  it("没命中的固定条目被跳过，且**逐条点名**（悄悄不跑是本仓最狠的那族）", () => {
+    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["docs/README.md"]);
+    expect(got.skipped.map((s) => s.test).sort()).toEqual(
+      INPUT_FACES.map((entry) => entry.test).sort(),
+    );
+    for (const one of got.skipped) {
+      expect(
+        one.why.length,
+        `${one.test} 的跳过原因要说清它读什么`,
+      ).toBeGreaterThan(20);
+    }
+    expect(got.keep).toEqual(
+      FIXED_STRUCTURAL_TESTS.filter(
+        (t) => !INPUT_FACES.some((entry) => entry.test === t),
+      ),
+    );
+  });
+
+  it("改了被测工具 ⇒ 那一条回到清单里", () => {
+    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [
+      "scripts/base-check.mjs",
+    ]);
+    expect(got.keep).toContain("tests/base-check.test.ts");
+    expect(got.skipped.map((s) => s.test)).not.toContain(
+      "tests/base-check.test.ts",
+    );
+    /* 其余三条不该被它带起来：面是各判各的。 */
+    expect(got.skipped.map((s) => s.test)).toContain(
+      "tests/a11y-rules-gate.test.ts",
+    );
+  });
+
+  it("增量档（subset）过筛，并把跳过记进 reasons.__faceSkipped", () => {
+    const res = resolveAffectedTests({
+      changedPaths: ["docs/README.md"],
+      testFiles: [...FIXED_STRUCTURAL_TESTS],
+      sourceFiles: [],
+      readText: () => null,
+    });
+    expect(res.mode).toBe("subset");
+    expect(res.tests).not.toContain("tests/base-check.test.ts");
+    expect(String(res.reasons.__faceSkipped ?? "")).toContain(
+      "tests/a11y-rules-gate.test.ts",
+    );
+  });
+
+  it("改动清单为空 ⇒ 一条都不跳（「不知道」不等于「没变」，与装依赖那档同一口径）", () => {
+    const res = resolveAffectedTests({
+      changedPaths: [],
+      testFiles: [...FIXED_STRUCTURAL_TESTS],
+      sourceFiles: [],
+      readText: () => null,
+    });
+    expect(res.mode).toBe("subset");
+    expect(res.reasons.__faceSkipped).toBeUndefined();
+    for (const entry of INPUT_FACES) {
+      expect(res.tests, `${entry.test} 在拿不到清单时必须照跑`).toContain(
+        entry.test,
+      );
+    }
+  });
+
+  it("放弃收窄那一档**完全不过筛**：那一刻的前提就是别信筛出来的结果", () => {
+    /* `vitest.config.ts` 在宽面名单里（全局测试配置）⇒ 整步退回「只跑固定清单」。 */
+    const res = resolveAffectedTests({
+      changedPaths: ["vitest.config.ts"],
+      testFiles: [...FIXED_STRUCTURAL_TESTS],
+      sourceFiles: [],
+      readText: () => null,
+    });
+    expect(res.mode).toBe("all");
+    expect(res.reasons.__faceSkipped).toBeUndefined();
+    for (const entry of INPUT_FACES) {
+      expect(res.tests, `${entry.test} 在 wide 档必须照跑`).toContain(
+        entry.test,
+      );
+    }
+  });
+});

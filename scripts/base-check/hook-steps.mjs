@@ -12,7 +12,13 @@ import process from "node:process";
 
 import { pnpmInvocation } from "../launcher-core/shell.mjs";
 import { chainedSteps } from "./chained-steps.mjs";
-import { cleanGitEnv, git, HOOK, resolveMergeBaseRef, ROOT } from "./git-ref.mjs";
+import {
+  cleanGitEnv,
+  git,
+  HOOK,
+  resolveMergeBaseRef,
+  ROOT,
+} from "./git-ref.mjs";
 
 /**
  * 把一个「门禁命令」参数数组规范化成 `{ label, argv }`。
@@ -247,6 +253,39 @@ export function readHookSteps(hookPath = HOOK) {
     steps.push({ label, argv: tokenize(bare) });
   }
   return steps;
+}
+
+/**
+ * 本地档（D0 形态前置档）的步骤标签 —— 「哪几条是秒级形态档」这件事的**唯一出处**。
+ *
+ * 为什么按文本块边界取、而不是列一份标签清单：那份清单就是注册表的第二份抄本，
+ * 而它漂移的方向恰好是「本地少了执行者而账面看不出来」（`check-gate-executors.cjs`
+ * 只认 `run` 行，抄本不在它的解析面上 ⇒ 静默）。取法与本文件既有的两条一致：
+ * 只认**步骤行**，块边界就是 `run_group D0` 那一行到它 `sh -c '` 的收尾引号。
+ *
+ * 消费方：`.githooks/pre-commit` 的档位开关（默认只跑这一档）与
+ * `scripts/premerge-check.mjs`（合并前那一跳默认只复算这一档，`--full` 才全套）。
+ *
+ * @param {string} hookPath @returns {Set<string>}
+ */
+export function localTierLabels(hookPath = HOOK) {
+  let text;
+  try {
+    text = fs.readFileSync(hookPath, "utf8");
+  } catch {
+    return new Set();
+  }
+  const lines = text.split("\n");
+  const start = lines.findIndex((l) => /^run_group\s+D0\b/.test(l));
+  if (start < 0) return new Set();
+  const out = new Set();
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (/^'/.test(line)) break; // D0 那个 `sh -c '…'` 的收尾引号
+    const m = line.match(/^\s*run\s+"([^"]+)"/);
+    if (m && m[1] !== undefined) out.add(m[1]);
+  }
+  return out;
 }
 
 /**
