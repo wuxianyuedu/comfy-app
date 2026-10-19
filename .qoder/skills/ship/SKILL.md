@@ -34,11 +34,16 @@ pnpm ship --merge            # CI 绿了才合并（squash）
 
 | 要做的事                   | 谁在做                                                          |
 | -------------------------- | --------------------------------------------------------------- |
-| 提交门槛（五组五十步）     | `.githooks/pre-commit`（由 `git commit` 触发）                  |
+| 提交门槛                   | `.githooks/pre-commit`（由 `git commit` 触发）                  |
 | 合并前固定动作三段         | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明 |
 | 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因） |
 | 流水线终态                 | 平台 build 的 `data.status`                                     |
 | 合没合上                   | PR 的 `is_merged` **且**回读 `origin/master` 顶端有没有那份碎片 |
+
+⚠️ **`ship` 提交段「全过」不等于 tsc / eslint / 用例过了**。`pre-commit` 默认只跑形态档，
+重档由 `COMFY_HEAVY_GATES=1` 那一档与平台兜底（规范 §13.5.25）—— 钩子自己会打印
+「本地**没跑**：组 A B C D」，那句话不是客套，别把它读成「已通过」。
+本地要全套：`COMFY_HEAVY_GATES=1 pnpm ship …`，或合并前 `pnpm check:premerge --full`。
 
 **它自己一次也不判「绿不绿」。** 所以：不要为了「跑得快」去绕过它直接调 `cnb`，
 也不要把它打印的结论再加工一遍 —— 它转述的就是执行者的原值。
