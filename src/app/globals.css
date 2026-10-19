@@ -1001,6 +1001,21 @@ textarea::-webkit-scrollbar {
   .btn-gradient:active:not(:disabled) {
     transform: translateY(1px);
   }
+  /* 品牌双色渐变的**条 / 点 / 填充**档（与 `.btn-gradient` 同一对端点：
+     primary → accent）。此前这四个落点（Agent 头像、历史分组竖条、
+     两处进度条填充）各自手抄 `from-violet-500 to-fuchsia-500` ——
+     那是 Tailwind 调色板里的两格，与品牌 token 不同源：改品牌色时它们
+     **不跟手**，而且 `violet-500` 已经不是当前 `--color-primary-500`
+     （#8d50e2），四条一直画在旧紫上。
+     收成一个类而不是四处改 token 名，是因为渐变**方向**（to-r / to-b /
+     to-br）属于调用处：色相只有一个来源，方向留在原地。 */
+  .u-gradient-brand {
+    background-image: linear-gradient(
+      to right,
+      var(--color-primary-500),
+      var(--color-accent)
+    );
+  }
   /* 页签选中态（当前打开的那一页）。
      为什么不是「换个背景色」就完事：暗色下标题行的底是 `--color-panel-deep`
      （#0f0f16），而原先选中态给的是 `bg-canvas`（#0a0a0f）—— **比底还暗**，

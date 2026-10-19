@@ -41,6 +41,7 @@ import path from "node:path";
  * 而下面那条「这一步点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
 import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
+import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
@@ -287,6 +288,7 @@ const DAILY_GATES = [
   "每日 Python 探针读数",
   "每日同步数据库表结构",
   "每日生产构建",
+  "每日 ESLint 零警告",
   "每日浏览器安装",
   "每日全量E2E",
   "每日单元测试",
@@ -322,6 +324,13 @@ const PR_MOVED_TO_DAILY: [string, string, string, string][] = [
     "scripts/ci-toolchain-selfcheck.mjs",
     "--playwright-only",
   ],
+  /* `ESLint 零警告` 是**另一条理由**（不是「节点事实」而是「起一堆子进程」：
+   * 它挂满过 8640s 与 20m 两次，且红的地方从来不是这次改动违规，而是这台机当时
+   * 腾不出核）。同一张表接住它，是因为要判的东西**逐字相同**：PR 清单里不许再有、
+   * 每日清单里必须有一格、那一格点的仍是同一条命令（`pnpm run lint` —— 扫描范围与
+   * `--max-warnings 0` 都在 `package.json` 的 `lint` 脚本里，见 `eslint.config.js`
+   * 顶部那节「命令口径只有一处」）。 */
+  ["ESLint 零警告", "每日 ESLint 零警告", "pnpm run lint", ""],
 ];
 
 /**
@@ -1390,10 +1399,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 于是这里也不要求它有预算 —— 预算跟着 stage 走。它一旦被加回来（不再出现在
      * 停用清单里），这条要求**自动恢复**，不需要有人记得改回来。
      *
-     * `生成态文档与源同步` 是那个名单的第五个（ISSUE #1981）：从 `--check` 换成
-     * `--check --autofix` 之后，它**红了要就地重渲染再判一次**（30 份文档的渲染，
-     * 冷节点上不是秒级），而它正是那条「自动修档凭什么可以多花这一次钱」的另一半 ——
-     * 该有的预算与那几条一样是分钟量级。 */
+     * `生成态文档与源同步` 曾是那个名单的第五个（ISSUE #1981）：`--check --autofix`
+     * 红了要就地重渲染再判一次，不是一个 stage 能在秒级里做完的。2026-10-19 它收进了
+     * 聚合档 `重档静态判据`（理由见 `scripts/ci-heavy-gates.mjs` 头注），预算跟着搬到
+     * 那一格上 —— 而那一格的预算在下面被**单独**要求（`重档静态判据` 同在这份名单里，
+     * 这里不再点一个已经不存在的 stage 名，那只会是一句空话）。 */
     const disabled = registeredDisabledGates(text);
     /* ⚠️ `生产构建`（2026-10-18）与 `E2E 关键流程`（2026-10-19）**都从这一列摘掉了**，
      * 而且不是因为预算可以不要：那两格离开了 PR 那一条，现在只在每日档
@@ -1401,7 +1411,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 入口是不是跑法脚本也由同一条钉 —— 这里再留两个不存在的名字只会变成一句空话。
      * 「谁把它们加回 PR 却不给预算」由 `MUST_ALWAYS_RUN`（`ci-incremental-gates`）与
      * `.gates` 里那两段撤档说明看着。 */
-    const required = ["ESLint 零警告", "单元测试", "生成态文档与源同步"].filter(
+    const required = ["ESLint 零警告", "单元测试", "重档静态判据"].filter(
       (name) => !disabled.includes(name),
     );
     const missing = required.filter((name) => !timeouts.has(name));
@@ -1493,38 +1503,44 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("覆盖率上报那一档接回了上报链，且**没报告时不判红**（ISSUE #1990）", () => {
     /* 这一条守的是一个已经发生过两次的形态：上报是 #623 删旧版流水线时被一起拿走的，
      * #1959 按完整流程重建时没被带回来 —— 于是「洞察 → 单元测试覆盖率」永远是
-     * 「无 / 无」，而没有任何一步会红（页面读的是平台侧读数，配置里少一条 stage
+     * 「无 / 无」，而没有任何一步会红（页面读的是平台侧读数，配置里少一条执行者
      * 与「还没跑过」长得一模一样）。
      *
-     * 两半分开判：
-     *   ① `覆盖率上报` 必须在清单里、点名的入口在盘上（不然接回去也只是一句注释）；
+     * 2026-10-19 起它不再是独立 stage，而是聚合档 `重档静态判据` 的一个条目
+     * （理由见 `scripts/ci-heavy-gates.mjs` 头注：平台单 stage 20m 与每格一次的
+     * job 开销）。两半仍然分开判：
+     *   ① 它在**条目表里**、点名的入口在盘上（不然接回去也只是一句注释）；
      *   ② 它**必须**自己判「有没有报告」—— 缺 `coverage/lcov.info` 时只跳过。
      *      理由不是「宽容」：`单元测试` 此刻是临时停用的，报告本来就不存在，
      *      把它判红等于让停用这件事连带把整条流水线拦死。 */
-    const text = readRegisteredConfig();
-    const order = registeredGateOrder(text);
+    const gate = HEAVY_GATES.find((g) => g.name === "覆盖率上报");
     expect(
-      order,
-      "`覆盖率上报` 不在 COMFYAPP_CI_GATES 里 —— 平台侧的覆盖率读数又没人写了" +
+      gate,
+      "聚合档 `重档静态判据` 的条目表里没有 `覆盖率上报` —— 平台侧的覆盖率读数又没人写了" +
         "（「洞察 → 单元测试覆盖率」会退回「无 / 无」）",
-    ).toContain("覆盖率上报");
-    const stage = stageBlock(text, "覆盖率上报");
-    expect(stage, "`.cnb.yml` 里找不到 `覆盖率上报` 那一项").not.toBeNull();
-    if (stage === null) return;
+    ).toBeDefined();
     const entry = "scripts/ci-coverage-report.mjs";
-    expect(stage, `\`覆盖率上报\` 没有点名 ${entry}`).toContain(entry);
+    expect(gate?.argv.join(" "), `\`覆盖率上报\` 没有点名 ${entry}`).toContain(
+      entry,
+    );
     expect(
       existsSync(path.join(ROOT, entry)),
       `${entry} 不在盘上 —— 这一档会静默什么都不做（cnb 自己不存在时同理，` +
         "但那条至少会在日志里说出来）",
     ).toBe(true);
-    /* ② 「有没有报告」这件事必须由这一步自己答，不能交给平台插件的缺省值
-     * （`breakIfNoCoverage` 缺省即报错退出 —— 那正是旧版在 1~2s 内红掉的那一格）。 */
+    /* ② 「有没有报告」这件事必须由那个脚本自己答，不能交给平台插件的缺省值
+     * （`breakIfNoCoverage` 缺省即报错退出 —— 那正是旧版在 1~2s 内红掉的那一格）。
+     * 判据读**脚本原文**而不是命令行：跳过这一跳是它的实现，不是它的一条参数。 */
+    const script = readFileSync(path.join(ROOT, entry), "utf8");
     expect(
-      stage,
+      script,
       "`覆盖率上报` 必须自己判报告在不在（`coverage/lcov.info` 缺席时跳过而不是判红）——" +
         "`单元测试` 此刻被临时停用，报告本来就不存在",
-    ).toMatch(/Test-Path[^]*coverage\/lcov\.info/);
+    ).toContain("coverage/lcov.info");
+    expect(
+      script,
+      "那个脚本必须有一个「没有报告」的出口，且在缺报告时**不退非零**",
+    ).toMatch(/没有报告/);
   });
 
   it("定时那一跑（crontab）挂在 master 下、每天一次，且跑的就是 `COMFYAPP_CI_DAILY_GATES` 那七格（ISSUE #2010 / #2018）", () => {

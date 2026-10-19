@@ -30,7 +30,7 @@ export function FilmStudioPropertyPanel({
   onPatchShot,
 }: FilmStudioPropertyPanelProps) {
   return (
-    <aside className="border-border-subtle bg-panel-deep/85 flex w-70 shrink-0 flex-col border-l backdrop-blur-sm">
+    <aside className="border-border-subtle bg-panel-deep flex w-70 shrink-0 flex-col border-l">
       {/* Header */}
       <div className="border-border-subtle flex h-11 items-center border-b px-4">
         <span className="text-ink-field text-sm font-semibold">镜头属性</span>

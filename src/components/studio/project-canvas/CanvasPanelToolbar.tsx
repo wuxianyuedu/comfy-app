@@ -49,7 +49,7 @@ export function CanvasPanelToolbar({
 
   return (
     <div
-      className={`border-border-strong bg-panel/95 dark:shadow-black/50p-blur-md flex flex-col items-center gap-1 rounded-2xl border p-1.5 shadow-xl shadow-black/20 backdrop-blur ${
+      className={`border-border-strong bg-panel flex flex-col items-center gap-1 rounded-2xl border p-1.5 shadow-xl shadow-black/20 dark:shadow-black/50 ${
         floating
           ? "z-canvas-ui absolute top-1/2 left-3 -translate-y-1/2"
           : "shrink-0 self-center"
@@ -78,7 +78,7 @@ export function CanvasPanelToolbar({
               {item.icon}
               {/* Tooltip —— 悬停或激活时显示在按钮右侧 */}
               <span
-                className={`border-border-strong bg-panel/95 text-ink-soft text-2xs pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 font-medium whitespace-nowrap shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
+                className={`border-border-strong bg-panel text-ink-soft text-2xs pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 font-medium whitespace-nowrap shadow-xl shadow-black/40 transition-opacity ${
                   isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                 }`}
               >

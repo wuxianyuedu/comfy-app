@@ -245,7 +245,7 @@ export function ZoomIndicator({
           }
           beginEdit();
         }}
-        className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
+        className={`border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg select-none hover:border-white/25 ${
           dragging
             ? "border-primary-400/50 cursor-grabbing"
             : "cursor-ns-resize"

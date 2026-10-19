@@ -77,7 +77,7 @@ export function ModelCard({
           )}
           {/* 类型徽标走 ui/badge：它是「浮在图片上的极小面积叠层」，浅底会与封面
               糊在一起 —— 走 §3.6.1 的固定暗色判据，故底色仍取 `bg-black/45`。 */}
-          <Badge className="absolute top-2 left-2 rounded-md border-transparent bg-black/45 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
+          <Badge className="absolute top-2 left-2 rounded-md border-transparent bg-black/60 px-2 py-0.5 text-xs font-medium text-white">
             {modelTypeLabel(model.type)}
           </Badge>
         </div>

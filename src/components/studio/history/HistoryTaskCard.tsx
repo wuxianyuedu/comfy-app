@@ -81,15 +81,13 @@ export function HistoryTaskCard({
           {/* 进行中：底部进度条（卡片下缘的一条装饰条：无轨道底色、方角，
               宽度下限与文字百分比分列两处，观感与收口前一致）。 */}
           {st.showProgress && (
-            // p71-allow:start brand 渐变 · violet→fuchsia 是项目品牌视觉、非状态色，不 token 化（§3.6.1 装饰渐变例外）
             <ProgressBar
               value={progress}
               showValue={false}
               className="absolute inset-x-0 bottom-0"
               trackClassName="bg-canvas-deep h-1 rounded-none"
-              fillClassName="rounded-none bg-linear-to-r from-violet-500 to-fuchsia-500 duration-1000 ease-linear"
+              fillClassName="u-gradient-brand rounded-none duration-1000 ease-linear"
             />
-            // p71-allow:end
           )}
           {/* 排队中：虚线边框 + 计时图标 */}
           {task.status === "QUEUED" && (

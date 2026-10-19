@@ -35,15 +35,17 @@ import {
   AUTOFIX_DUTIES,
   AUTOFIX_STAGE_NAMES,
   checkAutofixDuties,
+  collectExecutors,
   parseStageScripts,
   readCnbConfig,
 } from "../scripts/ci-autofix-duties.mjs";
+import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 
 const CONFIG = readCnbConfig(process.cwd());
 
 describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
-  it("真仓一致：登记表与 .cnb.yml 逐字同源", () => {
-    const problems = checkAutofixDuties(CONFIG);
+  it("真仓一致：登记表与两个执行面（stage + 聚合档条目）逐字同源", () => {
+    const problems = checkAutofixDuties(CONFIG, ["--autofix"], HEAVY_GATES);
     expect(
       problems,
       `平台侧自动修登记与配置不一致：\n${problems.join("\n")}`,
@@ -85,8 +87,9 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
   it("自动修名单是**封闭**的：每一档都点名了 `--check` 与 `--autofix` 两个旗标", () => {
     /* 只有 `--autofix` 而没有 `--check` 是**最坏的形态**：脚本会走写入模式（它不判任何
      * 东西、恒退 0），于是这一步永远绿 —— 判据在配置里、结论恒放行。 */
+    const executors = collectExecutors(CONFIG, HEAVY_GATES);
     for (const name of AUTOFIX_STAGE_NAMES) {
-      const line = parseStageScripts(CONFIG).get(name) ?? "";
+      const line = executors.get(name) ?? "";
       expect(line, `${name} 的 script 不认识（解析为空）`).not.toBe("");
       expect(line, `${name} 少了 --check：只写不判 = 恒绿`).toContain(
         "--check",
@@ -101,7 +104,7 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
       checkAutofixDuties(
         "gates: &gates\n  - name: 别的\n    script: node x.cjs\n",
       ),
-    ).toContainEqual(expect.stringContaining("没有它的单行 `script:`"));
+    ).toContainEqual(expect.stringContaining("配置与聚合档里都没有这个名字"));
     /* ② 配置里那一档点名了入口却没带 `--autofix`。
      * 缩进按 `.gates: &gates` 那一层的真实形态写（stage 项在 `gates:` 名下，
      * 所以是 2 空格 `- name:` + 4 空格 `script:`）—— 写成别的缩进会被解析器正确地

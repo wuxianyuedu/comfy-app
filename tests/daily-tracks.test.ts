@@ -1033,8 +1033,13 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
     /* 落点猜错的表现是「读数没有」，而「读数没有」与「这一档没跑过文件」在日志里同形；
      * 所以宁可在配置解析期就红，也不要在读数层留一个读不出原因的洞。 */
     expect(() => toTransportSafePath("/tmp/x.xml")).toThrow(/仓库内/);
+    /* POSIX 上的 `/tmp` 就是「仓库外」，所以那一条走到的是**仓库外**话术。而
+     * `C:\…` 这一条在 POSIX 上**根本不是绝对路径**（`path.isAbsolute` 为 false），
+     * 于是它先被当成相对路径、撞上的是**冒号**那一条（两条话术各指各的下一动作，
+     * 这点对得正好）。在 Windows 上同一行会走到「仓库外」。判据原先只认前者 ⇒
+     * 整条用例在非 win32 宿主上必红（本地钩子的组 C 就是这么暴露的）。 */
     expect(() => toTransportSafePath("C:\\WINDOWS\\TEMP\\x.xml")).toThrow(
-      /仓库内/,
+      process.platform === "win32" ? /仓库内/ : /冒号/,
     );
     expect(
       () => suitePlan([], 4, path.resolve(ROOT, "..", "outside.xml")).args,

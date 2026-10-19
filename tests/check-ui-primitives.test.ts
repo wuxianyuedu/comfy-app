@@ -5903,6 +5903,67 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P87「整块容器自带 backdrop-blur」（硬闸，ISSUE #2031 · 规范 03 §3.13）──
+   * 判据见 scripts/ui-primitives-rules-p67-p86.cjs 里 P87 的注释。锚点是
+   * **一行里 `backdrop-blur` 与贴边定位是否同现** —— 所以正反两侧各一条，
+   * 且反面要覆盖「贴边条放行」与「注释里的不算」两件事。
+   */
+
+  test("P87 卡片/弹窗自己带 backdrop-blur → 阻断", ({ repo }) => {
+    repo.write(
+      "src/components/studio/P87Card.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <div className="bg-panel/90 rounded-xl border p-4 shadow-2xl backdrop-blur-md">',
+        "      x",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P87");
+    expect(output).toContain("P87Card.tsx");
+  });
+
+  test("P87 贴边条（铺满一段、下面真有内容流过）放行", ({ repo }) => {
+    /* 顶栏 / 页脚 / 状态栏这一档是模糊唯一有意义的位置：内容从条底下滚过。
+     * 形态判据是「两条对边贴齐」（`inset-x-0` / `fixed` / 上下或左右各归零），
+     * 不是白名单 —— 新增一屏的顶栏不必登记就该过。 */
+    repo.write(
+      "src/components/studio/P87EdgeBar.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <header className="border-border-subtle bg-panel fixed inset-x-0 top-0 flex h-12 items-center border-b backdrop-blur-md">',
+        "      x",
+        "    </header>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P87 注释里提到 backdrop-blur 不计（剥注释那一层的回归钉）", ({
+    repo,
+  }) => {
+    repo.write(
+      "src/components/studio/P87Comment.tsx",
+      [
+        "export function V() {",
+        "  /* 这里曾经是 bg-panel/90 + backdrop-blur-md，已按扁平规范撤掉 */",
+        '  return <div className="bg-panel rounded-xl border p-4">x</div>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
   /* ── 分层（ISSUE #1747）：预计算层 + 判据分档 ────────────────────────
    * 两条机制都不是判据本身，但都会**静默**失效，所以各配正例：
    *   · 预计算层失效的形态是「算得更慢」（不报错）—— 只能靠行为断言钉住；
@@ -5942,7 +6003,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       defName,
       probe + "function __STRIP_IMPL__(text) {",
     );
-    expect(next, "stripComments 的声明没找到 —— 本用例的前提已变").not.toBe(src);
+    expect(next, "stripComments 的声明没找到 —— 本用例的前提已变").not.toBe(
+      src,
+    );
     repo.write(rel, next);
     /* 两份**内容相同**的文件 + 第三份不同内容的文件。 */
     repo.write("src/components/studio/A.tsx", BUTTON_VIEW);
@@ -5991,10 +6054,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* 重复登记的形态：一条 id 出现在两档里 —— 取哪一档都说不清，必须报错。 */
     const rel = "scripts/ui-primitives-scope.cjs";
     const src = repo.read(rel);
-    const next = src.replace(
-      '    "P75",',
-      '    "P75", "P80",',
-    );
+    const next = src.replace('    "P75",', '    "P75", "P80",');
     expect(next, "P75 的登记项没找到 —— 本用例的前提已变").not.toBe(src);
     repo.write(rel, next);
     const { code, output } = repo.run();
@@ -6043,7 +6103,7 @@ describe("UI 基元复用棘轮 --staged 输入面跳过（ISSUE #1747）", () =
     gitExpect(code).toBe(0);
     repo.write(
       "src/components/studio/Probe.tsx",
-      "export function V() {\n  return <button type=\"button\">x</button>;\n}\n",
+      'export function V() {\n  return <button type="button">x</button>;\n}\n',
     );
     repo.git("add", "src/components/studio/Probe.tsx");
     const r = repo.run(["--staged"]);
