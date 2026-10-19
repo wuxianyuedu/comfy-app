@@ -43,12 +43,18 @@ import { cn } from "~/lib/utils";
  * | --- | --- | --- |
  * | 底色 | `bg-primary-soft` | `bg-transparent`，悬停 `hover:bg-subtle` |
  * | 字色 | `text-primary-strong` | `text-muted-foreground`，悬停 `hover:text-ink` |
- * | 描边 | `border-primary` | `border-border` |
+ * | 描边 | `border-primary/40` | `border-border` |
  * | 字重 | `font-semibold` | `font-normal` |
  *
  * 四层里任意一层失效，「选中」仍读得出来 —— 这是 §16.2.4.5「逐条定性」要求
  * 的「不是只差一个近乎同值的底色」（浅色主题下 `bg-subtle` 与行头底色
  * `surface-1` 同值 #f7f8fa 那件事，见 LogPanel 的 #609）。
+ *
+ * **描边取 `/40` 而不是饱和的 `border-primary`**：选中档已经是「深底 + 浅紫字
+ * + 加粗」，再套一圈饱和紫环，读起来像**输入框被聚焦**而不是**这一档被选中**
+ * （`dashed` 档的描边本来也是 `/40`，同一件里两档同值才成一套）。收 alpha 不
+ * 掉那一层：未选中是中性发丝边 `border-border`，选中是带品牌色相的边，两者在
+ * 两态主题下都判得出来。
  *
  * ## 选中档的悬停为什么必须写死
  *
@@ -73,7 +79,7 @@ const selectChipVariants = cva(
   /* 基类只放"两种状态都要"的东西：形状、过渡、焦点环、禁用档。
    * 尺寸与圆角走 `size` 轴 —— 一排 chip 用胶囊（`rounded-full`），
    * 分段控件里的用方角（`rounded-lg`），那是调用处的布局决定。 */
-  "h-auto border font-medium transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+  "h-auto border font-medium tabular-nums transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       /* 轴名取 `shape` 不取 `variant`：`Button` 自己已有一个 `variant`
@@ -83,16 +89,16 @@ const selectChipVariants = cva(
         /* 胶囊：一排筛选/选择 chip（模型清单、模式清单）。
          * 选中档的 `hover:*` 与常态同值 —— 见文件头「选中档的悬停为什么
          * 必须写死」。 */
-        pill: "rounded-full px-3 py-1 text-xs border-border bg-transparent text-muted-foreground hover:bg-subtle hover:text-ink aria-checked:border-primary aria-checked:bg-primary-soft aria-checked:font-semibold aria-checked:text-primary-strong aria-checked:hover:bg-primary-soft aria-checked:hover:text-primary-strong",
+        pill: "rounded-full px-3 py-1 text-xs border-border bg-transparent text-muted-foreground hover:bg-subtle hover:text-ink aria-checked:border-primary/40 aria-checked:bg-primary-soft aria-checked:font-semibold aria-checked:text-primary-strong aria-checked:hover:bg-primary-soft aria-checked:hover:text-primary-strong",
         /* 方角：分段控件 / 就近切换（工坊"本地 / API 直连"那一排）。 */
         segment:
-          "rounded-lg px-3 py-1.5 text-sm border-border bg-transparent text-muted-foreground hover:bg-subtle hover:text-ink aria-checked:border-primary aria-checked:bg-primary-soft aria-checked:font-semibold aria-checked:text-primary-strong aria-checked:hover:bg-primary-soft aria-checked:hover:text-primary-strong",
+          "rounded-lg px-3 py-1.5 text-sm border-border bg-transparent text-muted-foreground hover:bg-subtle hover:text-ink aria-checked:border-primary/40 aria-checked:bg-primary-soft aria-checked:font-semibold aria-checked:text-primary-strong aria-checked:hover:bg-primary-soft aria-checked:hover:text-primary-strong",
         /* 紧凑：编辑器里的次级 chip（模式分类下的小按钮、类型选择）。
          * 字号只到 `text-2xs`(11px) —— 这是**微标签两档的上限**，
          * 再往下就是 `text-3xs`(10px) 那档「角标 / 极小徽标」，
          * 不承担可读文案（DESIGN.md §Typography）。 */
         compact:
-          "rounded px-2 py-0.5 text-2xs border-border bg-transparent text-muted-foreground hover:bg-subtle hover:text-ink aria-checked:border-primary aria-checked:bg-primary-soft aria-checked:font-semibold aria-checked:text-primary-strong aria-checked:hover:bg-primary-soft aria-checked:hover:text-primary-strong",
+          "rounded px-2 py-0.5 text-2xs border-border bg-transparent text-muted-foreground hover:bg-subtle hover:text-ink aria-checked:border-primary/40 aria-checked:bg-primary-soft aria-checked:font-semibold aria-checked:text-primary-strong aria-checked:hover:bg-primary-soft aria-checked:hover:text-primary-strong",
         /* 虚线"添加"档：不是选中态，是同一排里的**动作**（＋ 添加模式 /
          * ＋ 添加输入映射）。它与选中档共用"品牌色描边 + 品牌色字"，
          * 但底色透明、描边虚线 —— 靠这两点与"已选中"区分开。 */

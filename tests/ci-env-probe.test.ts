@@ -34,6 +34,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   envProbe,
+  BROWSER_INSTALL_STAGE,
   parseVersionTriple,
   ps7OnlySyntaxIn as ps7OnlySyntaxInProbe,
   PYTHON_MIN_TEXT,
@@ -588,7 +589,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     ".gates: &gates",
     "  - name: 环境前提",
     "    script: node scripts/ci-env-probe.mjs",
-    "  - name: 浏览器安装",
+    `  - name: ${BROWSER_INSTALL_STAGE}`,
     "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
     "    env:",
     '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
@@ -598,14 +599,14 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   ].join("\n");
 
   it("摘 stage 块那一段与门禁判据**逐项同一份答案**", () => {
-    for (const name of ["环境前提", "浏览器安装"]) {
+    for (const name of ["环境前提", BROWSER_INSTALL_STAGE]) {
       expect(
         stageBlockIn(YML, name),
         `两份 stageBlock 的文本副本漂了（${name}）`,
       ).toBe(stageBlockGate(YML, name));
     }
     /* 两边都得**真的命中**（不然这条用例是空转）。 */
-    expect(stageBlockIn(YML, "浏览器安装")).not.toBeNull();
+    expect(stageBlockIn(YML, BROWSER_INSTALL_STAGE)).not.toBeNull();
     expect(stageBlockIn(YML, "不存在的那一步")).toBeNull();
   });
 
@@ -620,10 +621,11 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
      * 注释态那一支改拿**夹具**对账：它判的是「两份实现同口径」，与「现役配置里还有
      * 没有停用项」无关 —— 靠现役配置出题会让这条用例随停用清单一起失效。 */
     const live = readPipelineConfig(ROOT) ?? "";
-    /* 两格各代表一种形状：`浏览器安装` 带 `env:` 块，`Install dependencies` 是
+    /* 两格各代表一种形状：`每日浏览器安装` 带 `env:` 块，`Install dependencies` 是
      * `script: |` 的多行体（2026-10-19 之前第二个名字用的是 PR 的 `E2E 关键流程`，
-     * 那一格现在撤到每日档 —— 换一格，判的还是同一件事：「两份解析同口径」）。 */
-    for (const name of ["浏览器安装", "Install dependencies"]) {
+     * 那一格现在撤到每日档；`浏览器安装` 也一并撤到每日档 ⇒ 这里读的是它在每日档里的
+     * 名字。**换格不换判**：判的还是「两份解析同口径」）。 */
+    for (const name of [BROWSER_INSTALL_STAGE, "Install dependencies"]) {
       const active = stageBlockIn(live, name);
       expect(active, `${name} 解析不出内容`).toBeTruthy();
       expect(active, `活的形态下两份解析漂了（${name}）`).toBe(
@@ -632,43 +634,46 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     }
     const disabledFixture = [
       ".gates: &gates",
-      "# - name: 浏览器安装",
+      `# - name: ${BROWSER_INSTALL_STAGE}`,
       "# script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
       "# env:",
       '# PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
       "",
     ].join("\n");
     expect(
-      stageBlockIn(disabledFixture, "浏览器安装"),
+      stageBlockIn(disabledFixture, BROWSER_INSTALL_STAGE),
       "停用形态下两份解析漂了 —— 「配置里那个根」会量错对象",
-    ).toBe(commentedStageBlock(disabledFixture, "浏览器安装"));
+    ).toBe(commentedStageBlock(disabledFixture, BROWSER_INSTALL_STAGE));
     expect(
-      stageBlockIn(disabledFixture, "浏览器安装"),
+      stageBlockIn(disabledFixture, BROWSER_INSTALL_STAGE),
       "停用形态解析不出内容（这一支是「停用期间也答得出配置里那个根」的全部依据）",
     ).toBeTruthy();
   });
 
   it("`env` 的取值去引号；找不到的键 / stage 回 `null`（那是「不知道」，不判红）", () => {
-    expect(stageEnvValue(YML, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_HOST")).toBe(
-      "https://m/root",
-    );
+    expect(
+      stageEnvValue(YML, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST"),
+    ).toBe("https://m/root");
     expect(
       stageEnvValue(
         YML,
-        "浏览器安装",
+        BROWSER_INSTALL_STAGE,
         "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT",
       ),
     ).toBe("120000");
-    expect(stageEnvValue(YML, "浏览器安装", "没有这个键")).toBeNull();
+    expect(stageEnvValue(YML, BROWSER_INSTALL_STAGE, "没有这个键")).toBeNull();
     expect(
       stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST"),
     ).toBeNull();
-    /* 现役 `.cnb.yml` 里那一步真的配了它 —— 判据指着的那一行必须是**真的存在**的。 */
+    /* 现役 `.cnb.yml` 里那一步真的配了它 —— 判据指着的那一行必须是**真的存在**的。
+     * 名字取 `BROWSER_INSTALL_STAGE`（与被测实现同一个常量）：2026-10-19 那一格撤到
+     * 每日档、名字加了前缀，判据与实现各写一份字符串就会在下次挪档时**同时指错** ——
+     * 实现读不到根就退回量候选，判据却还在为「读到了」而绿。 */
     const live = readPipelineConfig(ROOT) ?? "";
     expect(
-      stageEnvValue(live, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_HOST"),
-      "现役 `.cnb.yml` 的 `浏览器安装` 没有 `PLAYWRIGHT_DOWNLOAD_HOST` —— 这一组判据" +
-        "量不到任何东西",
+      stageEnvValue(live, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST"),
+      `现役 \`.cnb.yml\` 的 \`${BROWSER_INSTALL_STAGE}\` 没有 \`PLAYWRIGHT_DOWNLOAD_HOST\` —— ` +
+        "这一组判据量不到任何东西",
     ).toMatch(/^https:\/\//);
   });
 
@@ -735,94 +740,104 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     expect(code).toBe(0);
   });
 
-/**
- * 第三格：**配了一条这条路径根本不支持的路**（任务级 `image:`）。
- *
- * 实测 `cnb-cqk-1k550gpp2`（PR #2003 首跑）：`.cnb.yml` 给 `浏览器安装` 加了
- * `image: mcr.microsoft.com/playwright:v1.63.0-noble`，那一格 70 毫秒就红在
- * `Runner does not enable Docker` 上 —— 脚本一行都没执行，前面三十三步全绿。
- * 所以「有人又加了一格」这件事必须红在**便宜的位置**（装依赖之前），
- * 而不是整条流水线倒数第二步。
- */
-describe("环境前提：`.cnb.yml` 里不许有 stage 带 `image:`（自托管起不来容器）", () => {
-  const WITH_IMAGE = [
-    ".gates: &gates",
-    "  - name: 浏览器安装",
-    "    image: mcr.microsoft.com/playwright:v1.63.0-noble",
-    "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
-    "    env:",
-    '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
-    "    timeout: 20m",
-    "  - name: 环境前提",
-    "    script: node scripts/ci-env-probe.mjs",
-    "",
-  ].join("\n");
-
-  it("`stagesWithImage()` 只认 stage 那一层，不把 `env:` 里的同名键算进来", () => {
-    const fixture = [
+  /**
+   * 第三格：**配了一条这条路径根本不支持的路**（任务级 `image:`）。
+   *
+   * 实测 `cnb-cqk-1k550gpp2`（PR #2003 首跑）：`.cnb.yml` 给 `浏览器安装` 加了
+   * `image: mcr.microsoft.com/playwright:v1.63.0-noble`，那一格 70 毫秒就红在
+   * `Runner does not enable Docker` 上 —— 脚本一行都没执行，前面三十三步全绿。
+   * 所以「有人又加了一格」这件事必须红在**便宜的位置**（装依赖之前），
+   * 而不是整条流水线倒数第二步。
+   */
+  describe("环境前提：`.cnb.yml` 里不许有 stage 带 `image:`（自托管起不来容器）", () => {
+    const WITH_IMAGE = [
       ".gates: &gates",
-      "  - name: A",
-      "    image: node:24",
-      "    script: echo a",
-      "  - name: B",
-      "    script: echo b",
-      "      env:",
-      "        image: not-an-image-key",
-      "    timeout: 5m",
+      "  - name: 浏览器安装",
+      "    image: mcr.microsoft.com/playwright:v1.63.0-noble",
+      "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "    env:",
+      '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
+      "    timeout: 20m",
+      "  - name: 环境前提",
+      "    script: node scripts/ci-env-probe.mjs",
       "",
     ].join("\n");
-    expect(stagesWithImage(fixture)).toEqual(["A"]);
-  });
 
-  it("现役 `.cnb.yml` **一格都没有**（上一次加的两格已在 2026-10-17 撤掉）", () => {
-    expect(stagesWithImage(readPipelineConfig(ROOT) ?? "")).toEqual([]);
-  });
-
-  it("配了 `image:` ⇒ 当场红，并点名那几格与「删掉那一行」这条下一动作", () => {
-    const lines: string[] = [];
-    const code = envProbe({
-      root: ROOT,
-      config: WITH_IMAGE,
-      findPythonImpl: () => ({
-        command: "python",
-        path: null,
-        version: "Python 3.12.2",
-      }),
-      runImpl: () => ({ ok: true, out: "12.4.1" }),
-      browserPresentImpl: () => ({ ok: true, out: "/pw/chrome-headless-shell" }),
-      reachabilityImpl: () => [],
-      log: String,
-      logError: (l: string) => lines.push(l),
-    });
-    expect(code, "配置里有 stage 带 `image:`，这一步却没红").toBe(1);
-    const said = lines.join("\n");
-    expect(said).toContain("浏览器安装");
-    expect(said).toContain("Runner does not enable Docker");
-    expect(said, "红要红在能指路的位置：说清下一动作是把那一行删掉").toContain(
-      "删掉",
-    );
-  });
-
-  it("不带 `image:` 的同一份配置 ⇒ 这一条不拦（绿要绿得住）", () => {
-    const code = envProbe({
-      root: ROOT,
-      config: WITH_IMAGE.replace(
-        "    image: mcr.microsoft.com/playwright:v1.63.0-noble\n",
+    it("`stagesWithImage()` 只认 stage 那一层，不把 `env:` 里的同名键算进来", () => {
+      const fixture = [
+        ".gates: &gates",
+        "  - name: A",
+        "    image: node:24",
+        "    script: echo a",
+        "  - name: B",
+        "    script: echo b",
+        "      env:",
+        "        image: not-an-image-key",
+        "    timeout: 5m",
         "",
-      ),
-      findPythonImpl: () => ({
-        command: "python",
-        path: null,
-        version: "Python 3.12.2",
-      }),
-      runImpl: () => ({ ok: true, out: "12.4.1" }),
-      browserPresentImpl: () => ({ ok: true, out: "/pw/chrome-headless-shell" }),
-      reachabilityImpl: () => [],
-      ...silentPorts(),
+      ].join("\n");
+      expect(stagesWithImage(fixture)).toEqual(["A"]);
     });
-    expect(code).toBe(0);
+
+    it("现役 `.cnb.yml` **一格都没有**（上一次加的两格已在 2026-10-17 撤掉）", () => {
+      expect(stagesWithImage(readPipelineConfig(ROOT) ?? "")).toEqual([]);
+    });
+
+    it("配了 `image:` ⇒ 当场红，并点名那几格与「删掉那一行」这条下一动作", () => {
+      const lines: string[] = [];
+      const code = envProbe({
+        root: ROOT,
+        config: WITH_IMAGE,
+        findPythonImpl: () => ({
+          command: "python",
+          path: null,
+          version: "Python 3.12.2",
+        }),
+        runImpl: () => ({ ok: true, out: "12.4.1" }),
+        browserPresentImpl: () => ({
+          ok: true,
+          out: "/pw/chrome-headless-shell",
+        }),
+        reachabilityImpl: () => [],
+        log: String,
+        logError: (l: string) => lines.push(l),
+      });
+      expect(code, "配置里有 stage 带 `image:`，这一步却没红").toBe(1);
+      const said = lines.join("\n");
+      /* 这里断的是**夹具自己那个 stage 名**被点名出来，不是「浏览器那一格叫什么」——
+       * 上面那一处批量改常量时把它一起改了，红的是「期望 `每日浏览器安装`、实际打了
+       * 夹具里写的 `浏览器安装`」。判的是「红话里要点名出事的那一格」，名字跟着夹具走。 */
+      expect(said).toContain("浏览器安装");
+      expect(said).toContain("Runner does not enable Docker");
+      expect(
+        said,
+        "红要红在能指路的位置：说清下一动作是把那一行删掉",
+      ).toContain("删掉");
+    });
+
+    it("不带 `image:` 的同一份配置 ⇒ 这一条不拦（绿要绿得住）", () => {
+      const code = envProbe({
+        root: ROOT,
+        config: WITH_IMAGE.replace(
+          "    image: mcr.microsoft.com/playwright:v1.63.0-noble\n",
+          "",
+        ),
+        findPythonImpl: () => ({
+          command: "python",
+          path: null,
+          version: "Python 3.12.2",
+        }),
+        runImpl: () => ({ ok: true, out: "12.4.1" }),
+        browserPresentImpl: () => ({
+          ok: true,
+          out: "/pw/chrome-headless-shell",
+        }),
+        reachabilityImpl: () => [],
+        ...silentPorts(),
+      });
+      expect(code).toBe(0);
+    });
   });
-});
 
   it("配置里**没**给根时照旧铺开候选那一族（那时「出得去这类域吗」才是要答的问题）", () => {
     const asked: Array<string[] | undefined> = [];

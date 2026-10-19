@@ -151,32 +151,88 @@ describe("控制台输出编码：纠正动作", () => {
 });
 
 describe("控制台输出编码：流水线上真的在纠它", () => {
-  it("第一步（工具链自证）在**打印任何中文之前**先纠编码", () => {
+  /** 取某个锚点（`.gates` / `.daily-gates`）里**第一格**的正文（从它的 `- name:` 到下一格之前）。 */
+  const firstStageBody = (yml: string, anchor: RegExp) => {
+    const at = yml.search(anchor);
+    expect(at, `找不到锚点 ${anchor} —— 这条判据没有对象了`).toBeGreaterThan(
+      -1,
+    );
+    const tail = yml.slice(at);
+    const start = tail.search(/^ {2}- name:/m);
+    expect(start, `${anchor} 下面一格都没有`).toBeGreaterThan(-1);
+    const rest = tail.slice(start);
+    const next = rest.slice(1).search(/^ {2}- name:/m);
+    return next < 0 ? rest : rest.slice(0, next + 1);
+  };
+
+  it("每条流水线的**第一格**自己就把控制台编码钉住（在它打任何中文之前）", () => {
+    /* 这一条原来钉的是「第一步 = `工具链自证`」，而那句纠编码写在那一格里。
+     * 2026-10-19 那一格撤到每日档（只判节点事实的格子不必每个 PR 都判）之后，
+     * PR 的第一格换成了 `镜像身份` —— 于是它红的方向是**名字**，不是危险本身。
+     *
+     * 危险不变的那半是：第一个 stage 之前没有任何人钉过 `[Console]::OutputEncoding`，
+     * 它打的每一行非 ASCII 都会按宿主代码页（中文 Windows 是 CP936）落进平台日志
+     * （ISSUE #1959 的 `宸ュ叿閾捐嚜璇?` 就是这么来的）。所以按**位置**问，不按名字问：
+     * 每条流水线的第一个 stage，自己的 script 必须在任何输出之前先钉编码 ——
+     * 与那一格叫什么、挂在哪个触发口都无关，下一次再挪档它不会变成假红。 */
     const yml = read(".cnb.yml");
-    const stageAt = yml.indexOf("- name: 工具链自证");
-    expect(stageAt, "`.cnb.yml` 里找不到「工具链自证」那一步").toBeGreaterThan(-1);
-    const applyAt = yml.indexOf("ci-console-encoding.mjs --apply");
-    expect(
-      applyAt,
-      "没有人纠控制台输出编码 —— 日志乱码那一格因此没有任何执行者",
-    ).toBeGreaterThan(stageAt);
-    /* 顺序要紧：纠编码必须在**同一步里**、且在这一步第一次打印中文**之前**。
+    for (const anchor of [/^\.gates:[^\n]*$/m, /^\.daily-gates:[^\n]*$/m]) {
+      const lines = firstStageBody(yml, anchor)
+        .split("\n")
+        .filter((l) => l.trim() !== "");
+      const scriptAt = lines.findIndex((l) => /^\s+script:/.test(l));
+      expect(scriptAt, `锚点 ${anchor} 的第一格没有 script 行`).toBeGreaterThan(
+        -1,
+      );
+      /* 两种形态都要认：单行 `script: $enc=…; node …`，与块标量 `script: |` 之后的第一行。 */
+      const scriptLine = lines[scriptAt] ?? "";
+      const isBlock = scriptLine.trim() === "script: |";
+      const firstStatement =
+        lines[scriptAt + (isBlock ? 1 : 0)] ?? "";
+      expect(
+        firstStatement,
+        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：` +
+          firstStatement.trim().slice(0, 90),
+      ).toContain("[Console]::OutputEncoding");
+    }
+  });
+
+  it("纠编码那句仍在**它所在的那一格**里，且排在会打中文的命令之前", () => {
+    /* 名字不写死（上面那条管位置、这条管顺序）：判的是「`--apply` 与
+     * `ci-toolchain-selfcheck` 同一格，且 apply 在前」。
      *
      * 找的是**命令调用行**（行首就是 `node …`），不是「这个文件名的任意一次出现」——
      * 那一步的说明注释里正当地写着同一个文件名，按 `indexOf` 找会把注释算成调用，
      * 于是这条顺序判据自己判错方向。 */
-    const invoked = yml
-      .slice(stageAt)
+    const yml = read(".cnb.yml");
+    const applyAt = yml.indexOf("ci-console-encoding.mjs --apply");
+    expect(
+      applyAt,
+      "没有人纠控制台输出编码 —— 日志乱码那一格因此没有任何执行者",
+    ).toBeGreaterThan(-1);
+    /* 从 apply 往上回到它所属那一格的 `- name:`、往下到下一格之前为止：
+     * 拿「自己那一格」当窗口，而不是「从这一格一直到文件末尾」（原来的写法）。 */
+    const stageAt = yml.slice(0, applyAt).lastIndexOf("\n  - name:");
+    expect(stageAt, "`--apply` 不在任何一个 stage 块里").toBeGreaterThan(-1);
+    const nextAt = yml.slice(applyAt).search(/\n {2}- name:/);
+    const block = yml.slice(
+      stageAt + 1,
+      nextAt < 0 ? undefined : applyAt + nextAt,
+    );
+    const invoked = block
       .split("\n")
       .findIndex((l) =>
-        unwrapCp936(l.trim()).startsWith("node scripts/ci-toolchain-selfcheck.mjs"),
+        unwrapCp936(l.trim()).startsWith(
+          "node scripts/ci-toolchain-selfcheck.mjs",
+        ),
       );
     expect(invoked, "同一步里找不到工具链自证的命令调用行").toBeGreaterThan(-1);
-    const applyLine = yml
-      .slice(stageAt)
+    const applyLine = block
       .split("\n")
       .findIndex((l) =>
-        unwrapCp936(l.trim()).startsWith("node scripts/ci-console-encoding.mjs"),
+        unwrapCp936(l.trim()).startsWith(
+          "node scripts/ci-console-encoding.mjs",
+        ),
       );
     expect(applyLine, "同一步里找不到纠编码的命令调用行").toBeGreaterThan(-1);
     expect(

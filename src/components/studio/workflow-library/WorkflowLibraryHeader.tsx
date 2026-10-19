@@ -81,10 +81,14 @@ export function WorkflowLibraryHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+        {/* 渐变档不再补投影：`.btn-gradient` 的 hover 已经是 brightness，
+            而这圈 `shadow-lg shadow-primary-500/*` 是扁平规范明确不发的
+            「渐变发光」（DESIGN.md §Elevation：纯色、无阴影、无模糊、无渐变发光）。
+            剧本侧那两颗同款渐变按钮上的同一圈发光此前已刻意撤掉。 */}
         <Button
           onClick={onToggleImport}
           variant="gradient"
-          className={`${HEADER_ACTION_BTN} shadow-primary-500/20 hover:shadow-primary-500/30 shadow-lg`}
+          className={HEADER_ACTION_BTN}
         >
           <FolderInput data-icon="inline-start" size={13} />
           导入工作流

@@ -36,13 +36,16 @@ import {
 import {
   FULL_SUITE_TIMEOUT_MS,
   shouldRecord as suiteRecords,
+  SUITE_JUNIT_RELATIVE,
   TRACK as SUITE_TRACK,
   planRun as suitePlan,
   suiteRanking,
+  toTransportSafePath,
 } from "../scripts/full-suite-run.mjs";
 import {
   abortedAdvice,
   classifyOutcome,
+  hostUnsafeArgs,
 } from "../scripts/launcher-core/shell.mjs";
 import {
   FRESHNESS_TRACKS,
@@ -976,10 +979,13 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
 /**
  * 「每日单元测试」那一档在 CI 上打的**分文件耗时榜**。
  *
- * 这一组判的三件事各自都会静默失效，所以不能只测 happy path：
+ * 这一组判的几件事各自都会静默失效，所以不能只测 happy path：
  *  · 读数参数被塞进 `extra` ⇒ `isWholeTrackRun` 把每一次跑判成「不是整档」⇒ 记账通道关掉；
  *  · junit 没落盘时打「0 份」而不是「没有」⇒ 与「跑完了但一份都没计时」逐字同形；
- *  · 明细不限行数 ⇒ 平台单次构建日志硬上限 102400 字节，会把**后面所有 stage** 的日志挤掉。
+ *  · 明细不限行数 ⇒ 平台单次构建日志硬上限 102400 字节，会把**后面所有 stage** 的日志挤掉；
+ *  · 拼出来的 `--outputFile.junit=…` 里带冒号 ⇒ PowerShell 宿主在第一个冒号处把它切成两个
+ *    参数，剩下一截变成 vitest 的位置过滤器，整跑以「No test files found」收场
+ *    （CI 首跑 `cnb-2in-1k589j0kp`，边界表在 `launcher-core/shell.mjs`）。
  */
 describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）", () => {
   const JUNIT = [
@@ -991,8 +997,12 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
     "</testsuites>",
   ].join("\n");
 
+  /* 落点在本档里**只能是仓库内的相对形态**，所以这里的入参用 `path.join(ROOT, …)` 造一个
+   * 真实的仓库内绝对路径 —— 判的正是「绝对进、相对出」这一跳，而不是常量本身。 */
+  const IN_REPO = path.join(ROOT, "node_modules/.cache/x.xml");
+
   it("读数走 planRun 的第三参，不进 extra —— 否则每一次跑都绿而不记账", () => {
-    const withJunit = suitePlan([], 4, "/tmp/x.xml");
+    const withJunit = suitePlan([], 4, IN_REPO);
     expect(withJunit.args.slice(0, 3)).toEqual([
       "run",
       "test:coverage",
@@ -1002,11 +1012,88 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
      * 而真红那一屏是唯一能读的东西。 */
     expect(withJunit.args).toContain("--reporter=default");
     expect(withJunit.args).toContain("--reporter=junit");
-    expect(withJunit.args.join(" ")).toContain("--outputFile.junit=/tmp/x.xml");
+    expect(withJunit.args).toContain(
+      "--outputFile.junit=node_modules/.cache/x.xml",
+    );
     // 人给的透传参数仍然排在最后（不被读数参数挤掉）。
-    expect(suitePlan(["--foo"], 4, "/tmp/x.xml").args.at(-1)).toBe("--foo");
-    // 记账判定只看 `extra`：加了读数参数之后仍然算整档。
+    expect(suitePlan(["--foo"], 4, IN_REPO).args.at(-1)).toBe("--foo");
+    // 记账判定只看 `extra`：加了读数参数仍然算整档。
     expect(suiteRecords({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
+  });
+
+  it("拼给 vitest 的那一个参数**过不了宿主谓词**就不许发出去（CI 首跑那次红的对案）", () => {
+    /* `cnb-2in-1k589j0kp`：`--outputFile.junit=C:\WINDOWS\TEMP\…` 到达 vitest 时是
+     * `--outputFile.junit=C` 加 `\WINDOWS\TEMP\…` 两个参数，后者成了位置过滤器
+     * ⇒ 12.6s 退 1，看起来像「这个仓没有用例」，于是它后面三档全部 skipped。
+     * 这里判的是**形状**（用宿主那一跳同一个谓词），不是话术。 */
+    expect(hostUnsafeArgs(suitePlan([], 4, IN_REPO).args, true)).toEqual([]);
+  });
+
+  it("仓库外的落点**抛**并说清机制 —— 不静默换成一个可能不存在的位置", () => {
+    /* 落点猜错的表现是「读数没有」，而「读数没有」与「这一档没跑过文件」在日志里同形；
+     * 所以宁可在配置解析期就红，也不要在读数层留一个读不出原因的洞。 */
+    expect(() => toTransportSafePath("/tmp/x.xml")).toThrow(/仓库内/);
+    expect(() => toTransportSafePath("C:\\WINDOWS\\TEMP\\x.xml")).toThrow(
+      /仓库内/,
+    );
+    expect(
+      () => suitePlan([], 4, path.resolve(ROOT, "..", "outside.xml")).args,
+    ).toThrow(/仓库内/);
+    /* 仓库内但值里带冒号（相对路径里唯一还能拼出坏形状的东西）⇒ 抛的是**冒号**那一条，
+     * 不是「仓库外」—— 两条话术各指各的下一动作，混成一条就会把人支去改目录。 */
+    expect(() => toTransportSafePath("a:b.xml")).toThrow(/冒号/);
+  });
+
+  it("落点常量在仓库内、不含冒号，且**被 git 忽略**（不给检出留未跟踪文件）", () => {
+    expect(
+      hostUnsafeArgs([`--outputFile.junit=${SUITE_JUNIT_RELATIVE}`], true),
+    ).toEqual([]);
+    expect(path.isAbsolute(SUITE_JUNIT_RELATIVE)).toBe(false);
+    expect(toTransportSafePath(path.join(ROOT, SUITE_JUNIT_RELATIVE))).toBe(
+      SUITE_JUNIT_RELATIVE,
+    );
+    /* 「未跟踪文件」这一格不是形容词：R9 与 `.gitignore` 会真的拦下落在检出里的产物，
+     * 所以这里问 git 本人「这个路径你忽略吗」。`check-ignore -q` 忽略→退 0 且不打印，
+     * 不忽略→退 1，而 `execFileSync` 对非零退码抛 ⇒ 抛就是这条判据该红的时候。
+     * （`encoding` 必须给：不给拿到的是 Buffer，`toBe("")` 会拿 Buffer 比字符串。） */
+    expect(
+      execFileSync("git", ["check-ignore", "-q", SUITE_JUNIT_RELATIVE], {
+        cwd: ROOT,
+        stdio: "pipe",
+        encoding: "utf8",
+      }),
+    ).toBe("");
+  });
+
+  it("`hostUnsafeArgs` 判的是实测那条边界，不是「路径长得像绝对路径」", () => {
+    /* 边界是本机逐形状跑出来的（表在 `PS_UNSAFE_ARG_RE` 头上）：坏的是
+     * 「破折号开头 + `=` + 值里有冒号」这一交集。裸绝对路径与不带破折号的 `k=v:`
+     * 都原样到达 —— **把它们也拦下就是拒掉一条本来能跑的命令**（`viaHost: false`
+     * 那一半同理：非宿主形态没有这次切分）。 */
+    const split = "--outputFile.junit=C:\\dir\\a.xml";
+    expect(hostUnsafeArgs([split], true)).toEqual([split]);
+    expect(hostUnsafeArgs([split], false)).toEqual([]);
+    expect(
+      hostUnsafeArgs(["--outputFile.junit=node_modules/.cache/a.xml"], true),
+    ).toEqual([]);
+    // 冒号不一定要跟在驱动器字母后面：值里第一个冒号就是切点。
+    expect(hostUnsafeArgs(["--out=1:\\x", "--out=./C:\\x"], true)).toEqual([
+      "--out=1:\\x",
+      "--out=./C:\\x",
+    ]);
+    // 下面三条都是**观察到的安全形状**，一条都不许被挑出来。
+    expect(
+      hostUnsafeArgs(
+        [
+          "C:\\dir\\a.xml",
+          "out=C:\\dir\\a.xml",
+          "/p=C:\\x",
+          "a=b:c",
+          "--out=C\\dir",
+        ],
+        true,
+      ),
+    ).toEqual([]);
   });
 
   it("没给落点时一个字都不加（本地 pnpm test:coverage 的形态与此前逐字相同）", () => {
