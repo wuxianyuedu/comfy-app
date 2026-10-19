@@ -55,8 +55,8 @@ export class ErrorBoundary extends React.Component<
         return custom;
       }
       return (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-6 py-12 text-center">
-          <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+        <div className="border-destructive/25 bg-destructive/5 flex flex-col items-center justify-center gap-3 rounded-2xl border px-6 py-12 text-center">
+          <p className="text-danger-strong text-sm font-semibold">
             组件渲染出错
           </p>
           <button

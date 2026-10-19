@@ -196,8 +196,7 @@ export function ProjectOutputs() {
       />
 
       {/* ── Cover banner ── */}
-      {/* p71-allow:start brand violet/fuchsia · 封面横幅与项目徽章（非状态色），见 §3.6.1 */}
-      <div className="relative mb-6 h-45 overflow-hidden rounded-2xl border border-violet-500/20">
+      <div className="border-primary/20 relative mb-6 h-45 overflow-hidden rounded-2xl border">
         {cover ? (
           <MediaThumbnail
             src={cover.localPath}
@@ -207,13 +206,13 @@ export function ProjectOutputs() {
             loop
           />
         ) : (
-          <div className="text-ink-muted grid h-full place-items-center bg-linear-to-br from-violet-500/10 to-fuchsia-500/10 text-sm">
+          <div className="text-ink-muted from-primary/10 to-accent/20 grid h-full place-items-center bg-linear-to-br text-sm">
             生成结果将作为封面展示在这里
           </div>
         )}
         <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
         <div className="absolute bottom-3 left-4">
-          <span className="text-2xs rounded-md bg-violet-500/90 px-2 py-0.5 font-semibold text-white">
+          <span className="text-2xs bg-primary/90 rounded-md px-2 py-0.5 font-semibold text-white">
             封面
           </span>
           <p className="font-title mt-1.5 text-lg font-bold text-white drop-shadow">
@@ -221,7 +220,6 @@ export function ProjectOutputs() {
           </p>
         </div>
       </div>
-      {/* p71-allow:end */}
 
       {/* ── Output grid ── */}
       {loading ? (
@@ -264,9 +262,8 @@ export function ProjectOutputs() {
                     </div>
                   )}
 
-                  {/* p71-allow:start brand violet/fuchsia · 视频产出播放按钮与类型徽章（非状态色） */}
                   {isVideoOut && (
-                    <span className="ring-border-strong absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
+                    <span className="ring-border-strong bg-primary/90 absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full ring-2">
                       <svg
                         width="24"
                         height="24"
@@ -279,11 +276,10 @@ export function ProjectOutputs() {
                     </span>
                   )}
                   {isVideoOut && (
-                    <span className="text-3xs absolute top-2 right-2 rounded-md bg-fuchsia-500/90 px-1.5 py-0.5 font-semibold text-white">
+                    <span className="text-3xs bg-accent/90 absolute top-2 right-2 rounded-md px-1.5 py-0.5 font-semibold text-white">
                       视频
                     </span>
                   )}
-                  {/* p71-allow:end */}
                   <StatusBadge
                     status={output.status}
                     label={taskStatusLabel(output.status)}

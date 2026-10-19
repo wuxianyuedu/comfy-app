@@ -479,7 +479,7 @@ function WorkflowLibraryCanvasInner({
        * 边不可选、不显示此条。 */}
       {canWire && selectedEdgeIds.size > 0 && (
         <div
-          className="border-primary-500/40 bg-primary-500/15 text-primary-strong z-canvas-ui text-2xs absolute bottom-2 left-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-sm backdrop-blur-sm"
+          className="border-primary-500/40 bg-primary-500/15 text-primary-strong z-canvas-ui text-2xs absolute bottom-2 left-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-sm"
           data-testid="wflib-edge-delete-hint"
         >
           <span>已选中 {selectedEdgeIds.size} 条线</span>

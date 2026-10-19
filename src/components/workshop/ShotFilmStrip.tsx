@@ -96,7 +96,7 @@ export function ShotFilmStrip({
 
                 {/* 镜角标：有封面时盖在图上，仍要能看出是第几镜 */}
                 {shot.imageUrl && (
-                  <span className="text-4xs absolute top-0.5 left-0.5 rounded bg-black/45 px-1 leading-4 text-white tabular-nums backdrop-blur-sm">
+                  <span className="text-4xs absolute top-0.5 left-0.5 rounded bg-black/60 px-1 leading-4 text-white tabular-nums">
                     {formatShotIndex(shot.index)}
                   </span>
                 )}

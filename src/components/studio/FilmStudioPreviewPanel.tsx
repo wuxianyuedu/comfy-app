@@ -23,7 +23,7 @@ export function FilmStudioPreviewPanel({
   return (
     <div className="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-80 flex-1 items-center justify-center overflow-hidden rounded-2xl border">
       {/* Resolution hint：写尺寸表达（比例 + 档位），与全项目的尺寸口径一致。 */}
-      <span className="text-ink-faintest bg-canvas-deep text-3xs absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono backdrop-blur-sm">
+      <span className="text-ink-faintest bg-canvas-deep text-3xs absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono">
         {sizeSpecSummary(c.size)} · {c.fps}fps
       </span>
 
@@ -60,9 +60,8 @@ export function FilmStudioPreviewPanel({
       </Hint>
 
       {/* 影片进度覆盖层（生成中） */}
-      {/* p71-allow:start brand 渐变 · 影片进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1 */}
       {c.film && c.running && (
-        <div className="absolute right-0 bottom-0 left-0 bg-black/60 px-4 py-2.5 backdrop-blur-sm">
+        <div className="absolute right-0 bottom-0 left-0 bg-black/75 px-4 py-2.5">
           <ProgressBar
             value={c.film.progress}
             label={
@@ -72,11 +71,10 @@ export function FilmStudioPreviewPanel({
             }
             className="mb-1.5 text-xs"
             trackClassName="bg-surface-2 h-1.5"
-            fillClassName="bg-linear-to-r from-violet-500 to-fuchsia-500"
+            fillClassName="u-gradient-brand"
           />
         </div>
       )}
-      {/* p71-allow:end */}
 
       {/* 成片播放器（完成后） */}
       {c.film?.status === "DONE" && c.film.finalVideo && (

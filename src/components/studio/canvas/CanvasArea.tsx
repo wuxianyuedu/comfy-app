@@ -150,7 +150,7 @@ export function CanvasArea({
 
       {/* ── Bottom Toolbar ── */}
       <div className="z-canvas-ui absolute bottom-3 left-1/2 -translate-x-1/2">
-        <div className="border-border-strong bg-panel/95 flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
+        <div className="border-border-strong bg-panel flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10">
           {/* 发送 / 运行按钮 */}
           <ToolbarButton
             hint="执行"
@@ -226,8 +226,8 @@ export function CanvasArea({
           className={`z-canvas-ui absolute bottom-3 left-3 flex h-8 gap-1.5 rounded-lg px-2.5 ${
             minimapVisible
               ? "text-ink-strong border-primary-500/30 bg-primary-500/10"
-              : "border-border-strong bg-panel/85 text-ink-fainter hover:text-ink-strong"
-          } backdrop-blur-sm`}
+              : "border-border-strong bg-panel text-ink-fainter hover:text-ink-strong"
+          }`}
         >
           <LayoutGrid data-icon="inline-start" size={12} />
           小地图

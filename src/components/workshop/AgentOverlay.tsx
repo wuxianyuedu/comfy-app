@@ -170,11 +170,9 @@ export function AgentOverlay({
     >
       {/* Header */}
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
-        {/* p71-allow:start brand 渐变 · 智能体头像 violet→fuchsia 双色（项目品牌视觉），单档 token 化会失去渐变识别度，见 §3.6.1 */}
-        <span className="text-2xs flex size-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 font-bold text-white">
+        <span className="text-2xs u-gradient-brand flex size-6 items-center justify-center rounded-full font-bold text-white">
           <Icon name="bot" size={13} className="text-white" />
         </span>
-        {/* p71-allow:end */}
         <div className="flex-1">
           <h3 className="text-ink u-title">创作指挥 Agent</h3>
           <p className="text-muted-foreground text-xs">
@@ -394,7 +392,7 @@ export function AgentFab({
         {...handleProps}
         onClick={onOpen}
         style={{ right: offset.right, bottom: offset.bottom }}
-        className={`shadow-primary-500/20 ${zClass("popup")} fixed size-10 touch-none rounded-full p-0 shadow-lg ${
+        className={`${zClass("popup")} fixed size-10 touch-none rounded-full p-0 shadow-lg shadow-black/25 ${
           dragging ? "cursor-grabbing" : "cursor-grab"
         }`}
         aria-label="打开创作指挥 Agent"

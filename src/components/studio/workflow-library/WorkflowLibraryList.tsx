@@ -278,11 +278,9 @@ function WorkflowListItem({
         onClick={onClick}
         className={[
           "h-auto w-full min-w-0 rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
-          // p71-allow:start brand 渐变 · 选中态 violet→fuchsia 双色（项目品牌视觉 · 与卡片头 logo 呼应）
           selected
-            ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-primary-500)_15%,transparent)]"
+            ? "border-primary/40 from-primary/15 to-accent/10 bg-linear-to-br"
             : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
-          // p71-allow:end
         ].join("")}
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}

@@ -43,10 +43,18 @@
  * ## 「收窄名单只有一处出处」（与 §13.5.18 同一条口径）
  *
  * `tests/ci-autofix-duties.test.ts` 双向核对：
- *   · 登记表里每条 ⇒ `.cnb.yml` 的 `script` 必须是它点名的入口（下面 `args` 逐字出现）；
- *   · `.cnb.yml` 里带 `--autofix`（或 `--fix` 由本表登记）的 stage ⇒ 必须在登记表里。
+ *   · 登记表里每条 ⇒ 它的**执行者**必须是它点名的入口（下面 `args` 逐字出现）；
+ *   · 执行者表里带 `--autofix`（或 `--fix` 由本表登记）的条目 ⇒ 必须在登记表里。
  * 少了任一半，「哪几档会自己改工作区」就没有唯一出处 —— 而这类失效**不会让任何别的
  * 判据变红**，只会让下一个人在某次构建里突然看到一份被改过的工作树。
+ *
+ * ## 执行者从「stage」改成「条目」（2026-10-19）
+ *
+ * 原来这两条各占 `.cnb.yml` 的一个 stage。平台单 stage 有 20m 硬上限，而摊成十几个
+ * stage 时每一格都在各付一次 job 开销（现场与理由见 `scripts/ci-heavy-gates.mjs` 头注），
+ * 于是它们被收进**一格**：`重档静态判据`。所以登记表的 `stage` 现在是**执行者名**，
+ * 那个名字在两张表里指同一件事 —— 配置里的 stage 名，或聚合档里的条目名。
+ * 「哪一格装哪些条目」的唯一出处是 `HEAVY_GATES`，本文件只按名字引用它。
  */
 
 import fs from "node:fs";
@@ -56,7 +64,8 @@ import path from "node:path";
  * 一条「红了就自己补上再验」的登记。
  *
  * @typedef {object} AutofixDuty
- * @property {string} stage  `.cnb.yml` 里的 stage 名（字面比对）
+ * @property {string} stage  执行者名（字面比对）：`.cnb.yml` 里的 stage 名，或
+ *   `HEAVY_GATES` 里的条目名 —— 两者不会重名（重名时 `checkAutofixDuties` 会报）
  * @property {string} entry  入口脚本（仓库相对路径）—— 判据与配置两边都按它认
  * @property {readonly string[]} args `--autofix` 档必须落到的那个判定门（`script` 里的 args 要逐字出现）
  * @property {readonly string[]} outputs 这一档**会被它改写**的仓库相对路径前缀 ——
@@ -132,10 +141,40 @@ export function parseStageScripts(text) {
 }
 
 /**
- * 校验 `.cnb.yml` 与登记表是否双向同源 —— 判据本体。
+ * 收集**全部执行面**的命令行：stage 名 → 它跑的那条命令。
  *
- * 运行方式两种都认，但**只认登记过的那个入口**（下面第二半）：`script` 里出现
- * `--autofix` 的 stage 必须在表里。第一半是「表里这条还在配置里跑着、跑的还是那个入口」。
+ * 两个来源，同一条口径：
+ *   · `.cnb.yml` 里每个 stage 的单行 `script:`（`parseStageScripts()`）；
+ *   · 聚合档 `重档静态判据` 里的每个条目（`HEAVY_GATES` 的 `argv` 拼成一行）。
+ *
+ * 为什么要合：摊成十几个 stage 时每一格都在各付一次 job 开销，于是它们被收进一格
+ * （见 `scripts/ci-heavy-gates.mjs` 头注）。收进去之后「哪一档会自己改工作区」仍然
+ * 得逐条可见 —— 否则自动修这件事就从「一处出处」退回「混在一个大 stage 的脚本里」。
+ *
+ * @param {string} text `.cnb.yml` 原文
+ * @param {readonly {name: string, argv: readonly string[]}[]} heavyGates 聚合档的条目
+ * @returns {Map<string, string>} 执行者名 → 命令行
+ */
+export function collectExecutors(text, heavyGates) {
+  const out = parseStageScripts(text);
+  for (const gate of heavyGates) {
+    /* 聚合档的条目名与 stage 名共用一个命名空间：重名会让两份登记各说各话，
+     * 而这在配置里完全看不出来（一边是 `- name:`，一边是 JS 数组项）。 */
+    if (out.has(gate.name)) {
+      throw new Error(
+        `ci-autofix-duties: 「${gate.name}」同时是 .cnb.yml 的 stage 名与聚合档的条目名 —— 执行者名必须唯一`,
+      );
+    }
+    out.set(gate.name, gate.argv.join(" "));
+  }
+  return out;
+}
+
+/**
+ * 校验配置 + 聚合档 与登记表是否双向同源 —— 判据本体。
+ *
+ * 运行方式两种都认，但**只认登记过的那个入口**（下面第二半）：命令行里出现
+ * `--autofix` 的执行者必须在表里。第一半是「表里这条还在跑着、跑的还是那个入口」。
  *
  * 第二条判据（`--autofix` 的 token）由调用方给：本文件不预设「自动修的旗标长什么样」，
  * 因为 `--check` / `--fix` / `--autofix` 三种写法在仓里都存在，把它们压成一个正则
@@ -143,10 +182,16 @@ export function parseStageScripts(text) {
  *
  * @param {string} text `.cnb.yml` 原文
  * @param {readonly string[]} autofixTokens 视为「自动修档」的旗标字面量
+ * @param {readonly {name: string, argv: readonly string[]}[]} heavyGates 聚合档的条目
+ *   （缺省为空 = 只认 stage，纯配置的自测样本走这一档）
  * @returns {string[]} 逐条不一致（人读的话术）
  */
-export function checkAutofixDuties(text, autofixTokens = ["--autofix"]) {
-  const scripts = parseStageScripts(text);
+export function checkAutofixDuties(
+  text,
+  autofixTokens = ["--autofix"],
+  heavyGates = [],
+) {
+  const scripts = collectExecutors(text, heavyGates);
   /** @type {string[]} */
   const problems = [];
 
@@ -154,8 +199,8 @@ export function checkAutofixDuties(text, autofixTokens = ["--autofix"]) {
     const line = scripts.get(duty.stage);
     if (line === undefined) {
       problems.push(
-        `\`${duty.stage}\` 在自动修登记表里，但 .cnb.yml 里没有它的单行 \`script:\` —— ` +
-          `要么把这一步补回配置，要么把它从 scripts/ci-autofix-duties.mjs 的 AUTOFIX_DUTIES 里删掉`,
+        `\`${duty.stage}\` 在自动修登记表里，但配置与聚合档里都没有这个名字 —— ` +
+          `要么把这一步补回来，要么把它从 scripts/ci-autofix-duties.mjs 的 AUTOFIX_DUTIES 里删掉`,
       );
       continue;
     }
