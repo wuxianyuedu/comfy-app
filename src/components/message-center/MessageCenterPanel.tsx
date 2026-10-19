@@ -172,7 +172,7 @@ export function MessageCenterPanel() {
   return (
     <FullScreenLayer
       zClass={zClass("modal")}
-      className="bg-bg/92 flex flex-col backdrop-blur-md"
+      className="bg-bg flex flex-col"
       role="dialog"
       aria-modal="true"
       aria-label="消息中心"

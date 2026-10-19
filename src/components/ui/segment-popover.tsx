@@ -160,7 +160,7 @@ export function MultiSegmentPopover({
         sideOffset={6}
         /* 面板自身滚动：段数与选项数都不固定，给高度封顶。
            `p-3` 是该面板原来的内距，`gap-0` 抵消基元默认的 `gap-2.5`。 */
-        className="bg-panel/95 ring-border-strong max-h-[min(60vh,460px)] w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10 backdrop-blur-md dark:shadow-black/50"
+        className="bg-panel ring-border-strong max-h-[min(60vh,460px)] w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10"
       >
         {sections.map((section, i) => (
           <Section

@@ -46,6 +46,9 @@ const jsxA11y = (() => {
  *      与改造前那两条「ts / tsx」glob 同口径 —— 列宽了会给它们套上 1600+ 个假错）；
  *   ② `package.json` 的 `lint` / `lint:fix` 脚本参数 —— 显式列出要扫的目录
  *      （`eslint src tests scripts e2e tools *.config.*`），**不是** `eslint .`。
+ *      调用点只有一处口径：本地钩子 B 组、`scripts/quality-gate.mjs`、`quality-gate.ps1`、
+ *      以及平台侧的 `ESLint 零警告` 那一格（它曾经写的是 `eslint .` —— 扫描面宽一圈、
+ *      又没有 `--cache`，在全仓上跑满 20m 被平台掐断）。
  *
  * 新增一个目录（草稿目录 `_scratch/`、临时实验目录…）默认**不被扫**：它既不在
  * ① 也不在 ②，不必改这个文件，也不必往任何忽略清单里补一行。

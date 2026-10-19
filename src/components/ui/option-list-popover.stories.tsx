@@ -124,19 +124,19 @@ export const DecoratedRows: Story = {
       {
         value: "local",
         label: "本地模型",
-        prefix: <span className="size-2 rounded-full bg-emerald-500" />,
+        prefix: <span className="bg-success size-2 rounded-full" />,
         suffix: <span className="text-ink-faint text-[10px]">本机</span>,
       },
       {
         value: "remote",
         label: "在线模型",
-        prefix: <span className="size-2 rounded-full bg-sky-500" />,
+        prefix: <span className="bg-info size-2 rounded-full" />,
         suffix: <span className="text-ink-faint text-[10px]">API</span>,
       },
       {
         value: "missing",
         label: "未配置的条目",
-        prefix: <span className="size-2 rounded-full bg-amber-500" />,
+        prefix: <span className="bg-warning size-2 rounded-full" />,
       },
     ],
     value: "local",

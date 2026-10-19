@@ -13,7 +13,7 @@ export function FilmStudioTimeline({
   bgmName,
 }: FilmStudioTimelineProps) {
   return (
-    <div className="border-border-subtle bg-panel-deep/90 mt-auto rounded-xl border p-3 backdrop-blur-sm">
+    <div className="border-border-subtle bg-panel-deep mt-auto rounded-xl border p-3">
       {/* Time ruler */}
       <div className="mb-2 flex items-center justify-between px-1">
         <span className="text-ink-faintest text-3xs font-mono">00:00</span>

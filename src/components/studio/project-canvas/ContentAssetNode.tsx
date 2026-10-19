@@ -208,7 +208,7 @@ export function ContentAssetBody({
               gallery.setIndex(0);
               gallery.setOpen(true);
             }}
-            className="hover:bg-primary/80 text-3xs absolute top-2.5 right-2.5 h-auto min-w-5 rounded-full bg-black/70 px-1.5 font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm hover:text-white"
+            className="hover:bg-primary/80 text-3xs absolute top-2.5 right-2.5 h-auto min-w-5 rounded-full bg-black/70 px-1.5 font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 hover:text-white"
           >
             {imageCount}
           </Button>
@@ -293,10 +293,10 @@ export function ContentAssetBody({
               </Hint>
               {/* 底部计数 + 缩略条 */}
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">
-                <span className="tabular-ns text-2xs rounded-full bg-black/60 px-3 py-1 font-medium text-white/90 backdrop-blur-sm">
+                <span className="tabular-ns text-2xs rounded-full bg-black/70 px-3 py-1 font-medium text-white/90">
                   {gallery.index + 1} / {galleryImages.length}
                 </span>
-                <div className="bg-subtle flex gap-1.5 overflow-hidden rounded-full p-1 backdrop-blur-sm">
+                <div className="bg-subtle flex gap-1.5 overflow-hidden rounded-full p-1">
                   {galleryImages.map((img, i) => (
                     <Hint label={`第 ${i + 1} 张`} accessibleName key={img.id}>
                       <Button

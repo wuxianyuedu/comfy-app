@@ -14,7 +14,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   if (loading) {
     return (
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <div className="border-border-strong from-subtle to-canvas-deep flex flex-col items-center gap-3 rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
+        <div className="border-border-strong from-subtle to-canvas-deep flex flex-col items-center gap-3 rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/40">
           <Spinner className="size-10" />
           <p className="text-ink-soft text-sm">加载中…</p>
         </div>
@@ -23,7 +23,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   }
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-      <div className="border-border-strong from-subtle to-canvas-deep rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/10 backdrop-blur-md dark:shadow-black/40">
+      <div className="border-border-strong from-subtle to-canvas-deep rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/10 dark:shadow-black/40">
         <div className="mb-3 flex justify-center gap-2">
           <span
             className="inline-block size-10 rounded-xl shadow-lg"

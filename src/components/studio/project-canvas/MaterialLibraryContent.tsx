@@ -160,7 +160,7 @@ export function MaterialLibraryContent({
                         variant="ghost"
                         size="icon-xs"
                         onClick={() => onUse(item)}
-                        className="text-ink-soft rounded bg-black/60 backdrop-blur hover:bg-black/60 hover:text-white"
+                        className="text-ink-soft rounded bg-black/70 hover:bg-black/60 hover:text-white"
                       >
                         <Plus
                           data-icon="inline-start"
@@ -175,7 +175,7 @@ export function MaterialLibraryContent({
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => void remove(item)}
-                      className="text-ink-soft hover:text-destructive rounded bg-black/60 backdrop-blur hover:bg-black/60"
+                      className="text-ink-soft hover:text-destructive rounded bg-black/70 hover:bg-black/60"
                     >
                       <Trash2 data-icon="inline-start" size={12} />
                     </Button>

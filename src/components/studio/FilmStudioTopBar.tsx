@@ -22,7 +22,7 @@ export function FilmStudioTopBar({
   onRedo,
 }: FilmStudioTopBarProps) {
   return (
-    <header className="border-border-subtle bg-panel/88 z-base relative flex shrink-0 items-center gap-3 border-b px-4 py-0 backdrop-blur-md">
+    <header className="border-border-subtle bg-panel z-base relative flex shrink-0 items-center gap-3 border-b px-4 py-0">
       {/* 项目名 —— 它本身就是这一屏的标题。此前右侧还挂一个「· 视频成片工作室」：
           与侧栏 / 页签那一项（`NAV_ITEMS` 的 `film` → 「成片」）指同一件事，
           只是换了套说法，既挤宽度又没多给信息（ISSUE #1423）。 */}

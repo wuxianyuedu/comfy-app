@@ -26,12 +26,17 @@ import {
  * 语义 token；本件只补三件事：
  *   · 一个**必填的字符串标题**（`Card` 本体没有 title prop，标题走
  *     `CardHeader + CardTitle`，本件把这一层结构固定下来）；
- *   · 一处**外观微调**（`rounded-2xl` + `shadow-sm shadow-black/5` +
- *     `backdrop-blur`），保留设置页现有视觉密度。这三条都是**中性 tailwind
- *     utility、不含颜色**，不会与 shadcn 主题色冲突；此前的 `dark:bg-…/60`
- *     与 `dark:shadow-none dark:shadow-black/2` 是「手写 dark: 覆盖语义
+ *   · 一处**外观微调**（`rounded-2xl` + `shadow-sm shadow-black/5`），保留
+ *     设置页现有视觉密度。这两条都是**中性 tailwind utility、不含颜色**，
+ *     不会与 shadcn 主题色冲突；此前的 `dark:bg-…/60` 与
+ *     `dark:shadow-none dark:shadow-black/2` 是「手写 dark: 覆盖语义
  *     token」——违反 shadcn `styling.md` 原则 4，随本批删除（token 自身
- *     已含浅/深两态，透明度差由 backdrop-blur 吸收）。
+ *     已含浅/深两态）。
+ *   · **`backdrop-blur` 本来也在这三条里，已随 ISSUE #2031 撤掉**：模糊要
+ *     「下面是活的、会动的东西」才有意义，设置页卡片坐在不透明的页面底上，
+ *     它 **0 像素效果**，却把该卡与祖先链上的每一份内容都拖进一个
+ *     backdrop-filter 图层（合成与绘制成本是真的）。扁平规范据此不让容器类
+ *     表面带模糊，见规范 03 §3.13。
  *
  * ## 标题行现在收在同一支上（`title` 之下的那一行由本件给）
  *
@@ -60,7 +65,7 @@ export function SettingsCard({
   return (
     <ShadcnCard
       className={cn(
-        "border-border-subtle bg-surface-1 text-ink rounded-2xl border py-0 shadow-sm shadow-black/5 backdrop-blur",
+        "border-border-subtle bg-surface-1 text-ink rounded-2xl border py-0 shadow-sm shadow-black/5",
         className,
       )}
     >

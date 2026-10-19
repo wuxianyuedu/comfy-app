@@ -39,6 +39,7 @@ import {
 } from "./no-platform-ci-config.test";
 
 import { groupShBody, runSteps, stepsInGroup } from "./helpers/hook-groups";
+import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 
 const REPO_ROOT = resolve(".");
 const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
@@ -83,6 +84,29 @@ function platformStages(): { name: string; stage: string | null }[] {
   }));
 }
 
+/**
+ * 某条判据在平台侧的**执行面**：它跑在哪、那条命令行长什么样。
+ *
+ * 两个来源都要读（2026-10-19 起）：`.cnb.yml` 里独立的 stage，与聚合档
+ * `重档静态判据` 里的条目（`HEAVY_GATES`）。只读前者会把收进聚合档的那几条判成
+ * 「平台侧没有这一步」，而那是个**指错方向的红** —— 人会跑去配置里补一个 stage，
+ * 而判据其实好好地跑在格子里。唯一出处仍是 `.cnb.yml` 的 `script:` 与
+ * `scripts/ci-heavy-gates.mjs` 的条目表，本函数不抄第二份。
+ *
+ * @param {string} stageName stage 名，或聚合档里的条目名（两者不重名）
+ * @returns {{where: string, command: string} | null}
+ */
+function platformExecutor(stageName: string) {
+  const stage = stageBlock(
+    readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8"),
+    stageName,
+  );
+  if (stage !== null) return { where: "stage", command: stage };
+  const gate = HEAVY_GATES.find((g) => g.name === stageName);
+  if (!gate) return null;
+  return { where: "重档静态判据", command: gate.argv.join(" ") };
+}
+
 /** §13.1「本地提交前必须通过」代码块里的命令（`✅ <命令>  # 说明` 的那部分）。 */
 const GATE_CHECKLIST_DOC = join(
   REPO_ROOT,
@@ -108,7 +132,9 @@ function readChecklistCommands() {
       .slice(0, close)
       .split("\n")
       .filter((l) => l.startsWith("✅ "))
-      .map((l) => (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim()),
+      .map((l) =>
+        (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim(),
+      ),
   );
 }
 
@@ -133,12 +159,18 @@ describe("doc:check 在平台侧、不在钩子里（ISSUE #1371 立档 → ISSU
     ).toBeUndefined();
   });
 
-  it("平台侧 `.cnb.yml` 真的有这一步（挪走 ≠ 没人跑）", () => {
+  it("平台侧真的在跑这一步（挪走 ≠ 没人跑）", () => {
+    const executor = platformExecutor("文档引用与权威源一致");
     expect(
-      platformStages().some((x) => x.name === "文档引用与权威源一致"),
-      "`.cnb.yml` 里没有「文档引用与权威源一致」这一步 —— 钩子撤掉 + 平台侧没加 = " +
-        "这条判据一个执行者都没有，而它正是本判据要拦的形态（§13.5.17）",
-    ).toBe(true);
+      executor,
+      "平台侧（`.cnb.yml` 的 stage 清单与聚合档 `重档静态判据` 的条目表）都没有" +
+        "「文档引用与权威源一致」—— 钩子撤掉 + 平台侧没加 = 这条判据一个执行者都没有，" +
+        "而它正是本判据要拦的形态（§13.5.17）",
+    ).not.toBeNull();
+    expect(
+      executor?.command,
+      "那一条点的不是 scripts/check-doc-references.cjs —— 名字在、判据换了",
+    ).toContain("scripts/check-doc-references.cjs");
   });
 
   it("脚本头不许回到「不接 pre-commit（避免过度打扰提交）」那句旧签字", () => {
@@ -273,23 +305,26 @@ describe("API 文档生成物与源同步（ISSUE #1329 收尾 → ISSUE #1975 �
   });
 
   it("平台侧那一步在，且是**全量档**（`--staged` 在平台侧恒跳过 = 白挂）", () => {
-    const hit = platformStages().find(
-      (x) => x.name === "API 文档生成物与源同步",
-    );
+    const executor = platformExecutor("API 文档生成物与源同步");
     expect(
-      hit,
-      "`.cnb.yml` 里没有「API 文档生成物与源同步」这一步 —— 钩子撤掉 + 平台侧没加 = " +
-        "docs/api/** 又回到「进 git + 零判据」的过期面（§13.5.17）",
-    ).toBeDefined();
+      executor,
+      "平台侧（`.cnb.yml` 的 stage 清单与聚合档 `重档静态判据` 的条目表）都没有" +
+        "「API 文档生成物与源同步」—— 钩子撤掉 + 平台侧没加 = docs/api/** 又回到" +
+        "「进 git + 零判据」的过期面（§13.5.17）",
+    ).not.toBeNull();
     expect(
-      hit?.stage,
+      executor?.command,
       "平台侧那一步的原文块解析不出来（名字被改了？）",
     ).toBeTruthy();
     expect(
-      hit?.stage,
+      executor?.command,
       "平台侧那一步带了 `--staged`：平台侧的工作区就是这次要判的那份源码，" +
         "`--staged` 在那里读的是「本次暂存」，恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
     ).not.toContain("--staged");
+    expect(
+      executor?.command,
+      "平台侧那一步必须是 `--check --autofix`（只写不判 = 恒绿）",
+    ).toContain("--check");
   });
 
   it("生成物仍然提交进 git（判据对象没被 .gitignore 摘掉）", () => {
@@ -341,9 +376,7 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
   const steps = hookGateSteps(hook);
 
   it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/shell-gate.mjs"),
-    );
+    const hit = steps.find((s) => s.cmd.includes("scripts/shell-gate.mjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里没有桌面壳门禁 —— AGENTS 硬规则 5「改了壳必须重编」` +
@@ -471,9 +504,7 @@ describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
   const config = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
 
   it("钩子 D 组里已经没有它了（挪走 = 提交那一刻不再付这笔）", () => {
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/check-format.cjs"),
-    );
+    const hit = steps.find((s) => s.cmd.includes("scripts/check-format.cjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里又有 prettier 格式硬闸了 —— 它已随 ISSUE #2010 ` +
@@ -495,7 +526,9 @@ describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
   });
 
   it("平台侧那一步是**全量档**，且点名的就是这份脚本", () => {
-    const stage = platformStages().find((x) => x.name === "prettier 格式")?.stage;
+    const stage = platformStages().find(
+      (x) => x.name === "prettier 格式",
+    )?.stage;
     expect(stage, "`.cnb.yml` 里解析不出「prettier 格式」这一步").toBeTruthy();
     expect(
       stage,
@@ -578,14 +611,46 @@ describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
  */
 const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
   // [标签, 脚本名, 期望命令里带 --staged 的形态]
-  ["标题行让位硬规则", "check-title-bar-clearance.cjs", "node scripts/check-title-bar-clearance.cjs --staged"],
-  ["import 别名统一(~ 前缀)", "check-import-alias.cjs", "node scripts/check-import-alias.cjs --staged"],
-  ["内联样式注入", "check-inline-style.cjs", "node scripts/check-inline-style.cjs --staged"],
-  ["跨文件重复块", "check-code-duplication.cjs", "node scripts/check-code-duplication.cjs --staged"],
-  ["函数长度(硬闸，>400 行即阻断)", "check-function-length.cjs", "node scripts/check-function-length.cjs --staged"],
-  ["模块循环依赖(硬闸)", "check-circular-deps.cjs", "node scripts/check-circular-deps.cjs --staged"],
-  ["地基层零消费导出(硬闸)", "check-dead-exports.cjs", "node scripts/check-dead-exports.cjs --staged"],
-  ["浮层层级刻度硬闸", "check-overlay-z.cjs", "node scripts/check-overlay-z.cjs --staged"],
+  [
+    "标题行让位硬规则",
+    "check-title-bar-clearance.cjs",
+    "node scripts/check-title-bar-clearance.cjs --staged",
+  ],
+  [
+    "import 别名统一(~ 前缀)",
+    "check-import-alias.cjs",
+    "node scripts/check-import-alias.cjs --staged",
+  ],
+  [
+    "内联样式注入",
+    "check-inline-style.cjs",
+    "node scripts/check-inline-style.cjs --staged",
+  ],
+  [
+    "跨文件重复块",
+    "check-code-duplication.cjs",
+    "node scripts/check-code-duplication.cjs --staged",
+  ],
+  [
+    "函数长度(硬闸，>400 行即阻断)",
+    "check-function-length.cjs",
+    "node scripts/check-function-length.cjs --staged",
+  ],
+  [
+    "模块循环依赖(硬闸)",
+    "check-circular-deps.cjs",
+    "node scripts/check-circular-deps.cjs --staged",
+  ],
+  [
+    "地基层零消费导出(硬闸)",
+    "check-dead-exports.cjs",
+    "node scripts/check-dead-exports.cjs --staged",
+  ],
+  [
+    "浮层层级刻度硬闸",
+    "check-overlay-z.cjs",
+    "node scripts/check-overlay-z.cjs --staged",
+  ],
 ];
 
 /**
@@ -614,18 +679,21 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
-  it.for(SECOND_TIER)("%s 在钩子里带 --staged 条件触发", ([label, , expected]) => {
-    const hit = steps.find((s) => s.label === label);
-    expect(
-      hit,
-      `门禁链 ${steps.length} 步里没有「${label}」—— 判据从门禁链里被摘掉了`,
-    ).toBeDefined();
-    expect(
-      hit?.cmd,
-      `「${label}」丢了 --staged —— 全库扫描会回到无条件执行：这一大类高频提交` +
-        "（只加 changelog 碎片 / 只改文档 / 只动 scripts 或 tests）在它上面白付",
-    ).toBe(expected);
-  });
+  it.for(SECOND_TIER)(
+    "%s 在钩子里带 --staged 条件触发",
+    ([label, , expected]) => {
+      const hit = steps.find((s) => s.label === label);
+      expect(
+        hit,
+        `门禁链 ${steps.length} 步里没有「${label}」—— 判据从门禁链里被摘掉了`,
+      ).toBeDefined();
+      expect(
+        hit?.cmd,
+        `「${label}」丢了 --staged —— 全库扫描会回到无条件执行：这一大类高频提交` +
+          "（只加 changelog 碎片 / 只改文档 / 只动 scripts 或 tests）在它上面白付",
+      ).toBe(expected);
+    },
+  );
 
   it.for(SECOND_TIER)("%s 的脚本真的实现了 --staged", ([, script]) => {
     // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成未知
@@ -648,8 +716,13 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
     for (const [, script] of SECOND_TIER) {
       const text = readFileSync(join(REPO_ROOT, "scripts", script), "utf8");
       const lines = text.split("\n");
-      const skipAt = lines.findIndex((l) => l.includes("skipUnlessStagedTouches("));
-      expect(skipAt, `${script} 找不到 --staged 短路语句`).toBeGreaterThanOrEqual(0);
+      const skipAt = lines.findIndex((l) =>
+        l.includes("skipUnlessStagedTouches("),
+      );
+      expect(
+        skipAt,
+        `${script} 找不到 --staged 短路语句`,
+      ).toBeGreaterThanOrEqual(0);
       // 只认**真的** require 行：注释里出现的同一段字面不算（本仓的风格是
       // 在文件头解释「为什么这样加载」，那条注释必然含 `require("typescript")`）。
       const tsAt = lines.findIndex(
@@ -666,7 +739,6 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
       ).toBeLessThan(tsAt);
     }
   });
-
 });
 
 describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔账）", () => {
@@ -674,9 +746,7 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
   const steps = hookGateSteps(hook);
 
   it("聚合档那一行在钩子里带 --staged 条件触发", () => {
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/run-ast-gates.cjs"),
-    );
+    const hit = steps.find((s) => s.cmd.includes("scripts/run-ast-gates.cjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里没有 AST 判据聚合档 —— 6 条判据一个执行者都没有了`,
@@ -696,7 +766,7 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
   );
 
   it.for(AGGREGATED_AST_GATES)(
-    "%s 自己仍实现 --staged，且短路在 require(\"typescript\") 之前",
+    '%s 自己仍实现 --staged，且短路在 require("typescript") 之前',
     (script) => {
       const lines = readFileSync(
         join(REPO_ROOT, "scripts", script),
@@ -827,9 +897,7 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
   });
 
   it("本地那一半仍在钩子门禁链里（平台侧 squash 合并不跑本地钩子，不能只剩它）", () => {
-    const hit = steps.find((s) =>
-      s.cmd.includes("scripts/freshness-gate.mjs"),
-    );
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里没有新鲜度账判决 —— 平台侧只在 PR 事件上跑，` +
@@ -867,18 +935,33 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
 const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
   ["CHANGELOG 碎片", "node scripts/check-changelog-fragments.cjs"],
   ["待发段落的来源锚 ⇄ 条目归属", "node scripts/check-changelog-versions.cjs"],
-  ["每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）", "node scripts/freshness-gate.mjs"],
+  [
+    "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）",
+    "node scripts/freshness-gate.mjs",
+  ],
   ["UI/逻辑分离硬闸", "node scripts/check-ui-logic-separation.cjs"],
   ["地基层零消费导出(硬闸)", "node scripts/check-dead-exports.cjs --staged"],
-  ["故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）", "node scripts/storybook-check.mjs --changed"],
+  [
+    "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）",
+    "node scripts/storybook-check.mjs --changed",
+  ],
   ["产品版本号三处同步(D7)", "node scripts/check-app-version.cjs"],
   ["ui/ 定制标记与台账（§16.8）", "node scripts/check-ui-customizations.cjs"],
   ["跨平台动作对照(.ps1⇄.mjs)", "node scripts/check-ps1-consistency.mjs"],
   ["端口推导跨语言一致性", "node scripts/check-app-port-vectors.cjs"],
   ["import 别名统一(~ 前缀)", "node scripts/check-import-alias.cjs --staged"],
-  ["依赖新鲜度（只判动了依赖面的提交，§13.5.13）", "node scripts/check-deps-freshness.mjs --staged"],
-  ["依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）", "node scripts/check-allow-builds.cjs --staged"],
-  ["基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)", "node scripts/check-infra-file-size.cjs --staged"],
+  [
+    "依赖新鲜度（只判动了依赖面的提交，§13.5.13）",
+    "node scripts/check-deps-freshness.mjs --staged",
+  ],
+  [
+    "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）",
+    "node scripts/check-allow-builds.cjs --staged",
+  ],
+  [
+    "基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)",
+    "node scripts/check-infra-file-size.cjs --staged",
+  ],
 ];
 
 describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () => {
@@ -888,7 +971,10 @@ describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () =>
 
   it("两个块都解析得出来（解析不出时其余各条会空转）", () => {
     // 「读不到块」与「块里没有那一步」在两处都长成同样的绿，所以先正面钉扫描面非空。
-    expect(d0.length, "读不到 D0 块的 `run` 步骤 —— 组名或 `sh -c` 的引号形状变了").toBeGreaterThan(0);
+    expect(
+      d0.length,
+      "读不到 D0 块的 `run` 步骤 —— 组名或 `sh -c` 的引号形状变了",
+    ).toBeGreaterThan(0);
     expect(d.length, "读不到 D 块的 `run` 步骤").toBeGreaterThan(0);
   });
 
@@ -935,11 +1021,17 @@ describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () =>
   });
 
   it("读不到 D0 的退出码时拦下，不是放行", () => {
-    const seg = hook.slice(hook.indexOf('wait "$D0_pid"'), hook.indexOf("run_group A "));
+    const seg = hook.slice(
+      hook.indexOf('wait "$D0_pid"'),
+      hook.indexOf("run_group A "),
+    );
     const guardAt = seg.indexOf('[ ! -f "$LOGD/D0.rc" ]');
-    expect(guardAt, "D0 之后没有「读不到退出码」那一支 —— 缺退出码就成了「默认 0 = 通过」").toBeGreaterThanOrEqual(0);
     expect(
-      seg.slice(guardAt, seg.indexOf('_d0_rc=', guardAt)),
+      guardAt,
+      "D0 之后没有「读不到退出码」那一支 —— 缺退出码就成了「默认 0 = 通过」",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      seg.slice(guardAt, seg.indexOf("_d0_rc=", guardAt)),
       "读不到退出码那一支没有 exit 1 —— 这一档是后面四组的唯一前置，" +
         "「判据没跑完」不等于「判据通过」（§13.5.15 同款口径）",
     ).toContain("exit 1");

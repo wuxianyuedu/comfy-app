@@ -28,7 +28,7 @@ export function SelectedToolbar({
   const btn =
     "nodrag nopan text-ink-soft hover:bg-subtle flex size-7 items-center justify-center rounded-full text-sm transition-colors";
   return (
-    <div className="nodrag nopan border-border-strong bg-panel border]/95 z-base absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
+    <div className="nodrag nopan border-border-strong bg-panel z-base absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border px-1 py-1 shadow-lg shadow-black/40">
       <Hint label="删除节点 (Delete)" accessibleName>
         <Button
           variant="ghost"

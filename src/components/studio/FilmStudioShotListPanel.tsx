@@ -33,7 +33,7 @@ export function FilmStudioShotListPanel({
   onReviewShot,
 }: FilmStudioShotListPanelProps) {
   return (
-    <aside className="border-border-subtle bg-panel-deep/85 flex w-65 shrink-0 flex-col border-r backdrop-blur-sm">
+    <aside className="border-border-subtle bg-panel-deep flex w-65 shrink-0 flex-col border-r">
       {/* Header */}
       <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2">

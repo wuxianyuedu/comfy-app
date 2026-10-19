@@ -37,12 +37,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  COMPOUND_EXECUTORS,
   INCREMENTAL_GATES,
   INCREMENTAL_GATE_NAMES,
   checkIncrementalGates,
   parseStageIfModify,
   readCnbConfig,
 } from "../scripts/ci-incremental-gates.mjs";
+import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 import { matchedInputs } from "../scripts/check-docs-api.cjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
 
@@ -170,23 +172,31 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ).toEqual([]);
   });
 
-  it("`API 文档生成物与源同步` 的 globs 与判据自己的输入面同源（不是手抄的副本）", () => {
-    /* 这一档的 globs 由 `check-docs-api.cjs` 的 `INPUT_RES` 反推（`globFromInputRe`）。
-     * 抓的是一种很难被看见的漂：有人改了判据的输入面（比如 typedoc 多了一条
-     * entryPoint），而配置那边**看起来一切正常** —— 新的入口目录一次都不会触发这一步，
-     * 于是产物漂了、判据没跑、没有任何信号。
+  it("`API 文档生成物与源同步` 收进聚合档之后**不收窄**，且判据的输入面仍然只有一处出处", () => {
+    /* 这一条原来判的是「那一档的 ifModify globs 由 `check-docs-api.cjs` 的 `INPUT_RES`
+     * 反推」。2026-10-19 那一档被收进聚合档 `重档静态判据`（平台单 stage 20m 硬上限，
+     * 摊成十几个 stage 时每格都在各付一次 job 开销，见 `scripts/ci-heavy-gates.mjs` 头注），
+     * 于是 `ifModify` 这一层不再存在 —— 它按**整格**跳过，一格装十条时只能表达
+     * 「十条一起不跑」，而那十条的扫描面并不相同。
      *
-     * 全部用注入样本复算，不靠「读实现」：配置里每一条 glob 都要能找到一个样本，
-     * 而那个样本确实被判据自己认作输入面。 */
-    const gate = INCREMENTAL_GATES.find(
-      (g) => g.name === "API 文档生成物与源同步",
-    );
-    expect(gate, "登记表里没有这一档").toBeDefined();
-    const globs = gate?.globs ?? [];
-    expect(globs.length).toBeGreaterThan(0);
-    /* 判据认的每一类输入面（三条 entryPoint 目录 + 两份配置 + 锁文件），配置里都得覆盖。
-     * 这里点名而不是遍历 `INPUT_RES`：遍历会让「判据删掉一条输入面、配置也跟着少一条」
-     * 恒绿 —— 那正是本判据要拦的那种漂。 */
+     * 但判据的**输入面**这件事没有消失，它仍然只有一处出处：`INPUT_RES`。所以这里
+     * 转而钉两件事：① 那条判据确实在聚合档的条目表里（不是被悄悄删了）；② 判据认的
+     * 每一类输入面都还在 `INPUT_RES` 里（样本喂进去必须被认下来）。
+     *
+     * 为什么只钉输入面、不再钉 globs：没有 globs 可钉了。而「改了输入面会不会有人知道」
+     * 这一问现在由聚合档回答 —— 它每次都在跑，不按改动面判断。 */
+    const gate = HEAVY_GATES.find((g) => g.name === "API 文档生成物与源同步");
+    expect(
+      gate,
+      "聚合档 `重档静态判据` 的条目表里没有 `API 文档生成物与源同步` —— " +
+        "`docs/api/**` 又回到「进 git + 零判据」的过期面",
+    ).toBeDefined();
+    expect(
+      gate?.argv.join(" "),
+      "那一条的判定门必须是 `--check --autofix`（只写不判 = 恒绿，自动修登记表也按它核对）",
+    ).toBe("node scripts/check-docs-api.cjs --check --autofix");
+    /* 判据认的每一类输入面（三条 entryPoint 目录 + 两份配置 + 锁文件）都得被认下来 ——
+     * 这一半是「判据自己的触发面声明还在」的读数，与聚合档无关，别跟着一起删。 */
     for (const f of [
       "src/lib/a.ts",
       "src/server/a.ts",
@@ -201,14 +211,6 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
         matchedInputs([f]),
         `判据不认 ${f}，这条用例的样本已经过期`,
       ).toEqual([f]);
-      const dir =
-        f.includes("/") && f.endsWith(".ts") && !f.startsWith("scripts/")
-          ? `${f.slice(0, f.lastIndexOf("/"))}/**`
-          : f;
-      expect(
-        globs,
-        `判据认 ${f}，但 .cnb.yml 那一档的 ifModify 里没有 ${dir}`,
-      ).toContain(dir);
     }
   });
 
@@ -296,6 +298,47 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       expect(TRIGGER_GLOBS, `根目录的 ${ext} 不在触发面里`).toContain(
         `*${ext}`,
       );
+    }
+  });
+
+  it("复合执行者（`重档静态判据`）一条 `ifModify` 都不许挂，且条目表不许被掏空", () => {
+    /* 这一条守的是 2026-10-19 那次合并的**边界**：十几条静态判据收进一格是为了让它们
+     * 共享一次 job 开销（理由见 `scripts/ci-heavy-gates.mjs` 头注），但合起来之后
+     * `ifModify` 就退化成「十条一起跑 / 十条一起不跑」—— 后者让格内那几条扫描面不同的
+     * 判据一起静默放行，比不收窄坏得多。
+     *
+     * 三件事一起判：① 复合执行者本身不许带 ifModify、也不许进登记表（登记表只收
+     * 「一个执行者一条判据」的形态）；② 条目表非空，且每条都点了一个仓库相对入口、
+     * 那个入口真在盘上（条目表被掏空或写错路径时，这一格会变成一次什么都不做的空跑，
+     * 而「空跑」与「跑了全绿」在配置上长得一样）。 */
+    const gated = parseStageIfModify(CONFIG);
+    expect(COMPOUND_EXECUTORS.length).toBeGreaterThan(0);
+    for (const name of COMPOUND_EXECUTORS) {
+      expect(
+        gated.has(name),
+        `\`${name}\` 挂了 \`ifModify\` —— 它是复合执行者（一格装多条判据），` +
+          "整格跳过会让格内扫描面不同的判据一起静默放行；要省时间请从条目那一侧想办法",
+      ).toBe(false);
+      expect(
+        INCREMENTAL_GATE_NAMES.has(name),
+        `\`${name}\` 在登记表里 —— 登记表只收「一个执行者一条判据」的形态`,
+      ).toBe(false);
+    }
+    expect(HEAVY_GATES.length).toBeGreaterThan(0);
+    for (const gate of HEAVY_GATES) {
+      expect(gate.name.length, "有一个条目没写名字").toBeGreaterThan(0);
+      const entry = gate.argv[0] === "node" ? gate.argv[1] : gate.argv[0];
+      expect(entry, `\`${gate.name}\` 没点入口`).toMatch(
+        /^(scripts\/.+\.(cjs|mjs)|node_modules\/.+)$/,
+      );
+      expect(
+        fs.existsSync(path.join(process.cwd(), entry ?? "")),
+        `\`${gate.name}\` 点的入口不在盘上：${entry}`,
+      ).toBe(true);
+      expect(
+        gate.why.length,
+        `\`${gate.name}\` 没写「它判什么」`,
+      ).toBeGreaterThan(10);
     }
   });
 

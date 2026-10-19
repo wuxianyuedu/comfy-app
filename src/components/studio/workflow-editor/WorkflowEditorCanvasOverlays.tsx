@@ -72,7 +72,7 @@ export function WorkflowEditorErrorScreen({
 export function SubgraphLoadingOverlay() {
   return (
     <div className="bg-canvas-deep z-base pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="bg-canvas/90 border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm dark:shadow-black/50">
+      <div className="bg-canvas border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10">
         <PageLoading
           label="加载子工作流…"
           className="flex-row items-center gap-3"
@@ -85,7 +85,7 @@ export function SubgraphLoadingOverlay() {
 /** IO 编辑模式的顶部提示气泡。 */
 export function IoEditModeBanner() {
   return (
-    <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs font-medium shadow-lg backdrop-blur-sm">
+    <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs font-medium shadow-lg">
       📌 IO
       编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
     </div>
@@ -102,7 +102,7 @@ export function SubgraphErrorToast({
 }) {
   return (
     <div className="z-canvas-max pointer-events-none absolute top-3 left-1/2 -translate-x-1/2">
-      <div className="border-destructive/40 bg-destructive/15 text-danger-strong pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-2 text-xs shadow-lg backdrop-blur-sm">
+      <div className="border-destructive/40 bg-destructive/15 text-danger-strong pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-2 text-xs shadow-lg">
         <span>⚠ {error}</span>
         <Button
           variant="ghost"
@@ -125,7 +125,7 @@ export function SubgraphErrorToast({
    看不出这条提示（ISSUE #609 红框圈的那块）。 */
 export function CanvasHintTooltip() {
   return (
-    <div className="text-2xs pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-gray-300 backdrop-blur-sm">
+    <div className="text-2xs pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/75 px-4 py-2 text-gray-300">
       点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
     </div>
   );

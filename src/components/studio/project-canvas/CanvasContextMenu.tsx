@@ -52,7 +52,7 @@ export function CanvasContextMenu({
         align="start"
         sideOffset={0}
         /* 锚点是零尺寸，`w-(--anchor-width)` 会算成 0，这里给回原来的固定宽。 */
-        className="border-border-strong bg-panel/95 w-52 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60"
+        className="border-border-strong bg-panel w-52 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 dark:shadow-black/60"
       >
         {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
         <DropdownMenuGroup>

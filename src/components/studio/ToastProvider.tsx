@@ -161,7 +161,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           return (
             <div
               key={item.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel/95 p-3.5 shadow-xl shadow-black/8 backdrop-blur-md transition-all dark:shadow-black/40`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel p-3.5 shadow-xl shadow-black/8 transition-all dark:shadow-black/40`}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
                 {item.kind === "loading" ? (
