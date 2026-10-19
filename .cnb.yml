@@ -296,7 +296,7 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
+      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -815,6 +815,20 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-probe.mjs
     # 秒级（几次 git 调用 + 几个 stat）。给 5m 与 `新鲜度账` 同款：只是「卡死要早报」的
     # 量级余量，判据本身远小于它。
+    timeout: 5m
+
+  # ── 缓存槽读数（ISSUE #2022 第二步的**第一增量**，恒不退非零）──
+  # 只回答三问：有没有槽（`COMFY_CI_CACHE_ROOT` 配没配）、该落哪个键、这一跑与它的关系
+  # 是 `reuse` / `install-into-slot` / `no-cache` 中哪一档。键刻意复用 `ci-install-deps.mjs`
+  # 的 `pnpmInstallFingerprint` —— 两处各算一份 sha 的漂移形态是「缓存命中判断」与「碰了
+  # 依赖面就得真装」不再一致，那时的表现是依赖不对但门禁全绿。
+  #
+  # ⚠️ 这一格**今天不复制、不链接、不装**：把 `Install dependencies` 接向槽是第二增量。
+  # 分两批的理由不是谨慎 —— 那一格是每次构建都要过的，键算错一次的代价是让所有 PR 装不上，
+  # 与档位那一刀立的「先让判据在场，再把开关拨过去」是同一条纪律。
+  - name: 缓存槽读数
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-cache-slot.mjs
+    # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
     timeout: 5m
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──

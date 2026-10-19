@@ -22,7 +22,8 @@
  * `readBuildVerdict` 那组里刻意各有一条「只有信封字段」与「data 是别的形状」的负控制 ——
  * 判据若被写成 `json.status ?? json.data.status`，正样本照样绿，只有负样本会红。
  */
-import { readFileSync } from "node:fs";
+import fs, { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -678,5 +679,37 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(all).toContain("碎片 1 份");
     expect(all).not.toContain("没有 changelog.d/ 碎片");
     expect(code).toBe(CODE.GREEN);
+  });
+
+  it("临时文件一定被回收 —— 且要打在「提前 return」那条失败路径上", async () => {
+    /* 提交信息与 PR 正文是当场拼出的原文，留在盘上没用处，而 `.workbuddy/` 是
+     * gitignored ⇒ 漏删不会进历史，只会一直堆着（实测前几轮真跑留了 3 份）。
+     * 关键是选哪条路径验：钩子**拦下**提交时，`return finish(codes)` 就发生在
+     * 写完临时文件之后 —— 「用完顺手删一句」在这种形状下照样漏，
+     * 而漏的恰好是没人回头看的那几次。所以这里喂 commitStatus: 1。 */
+    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "ship-cleanup-"));
+    try {
+      const { run } = fake({
+        dirty: ["src/a.ts"],
+        commitStatus: 1,
+        commitStderr: "[pre-commit] ✗ 组 C 失败",
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: () => undefined,
+        probeCnb: () => true,
+        args: ["--message=真提交信息原文"],
+      });
+      expect(code).toBe(CODE.RED);
+      // 前置断言：那个目录确实被建过 —— 否则「没残留」只是因为压根没写过。
+      expect(fs.existsSync(path.join(tmpRoot, ".workbuddy"))).toBe(true);
+      expect(
+        readdirSync(path.join(tmpRoot, ".workbuddy")),
+        "临时文件没被回收",
+      ).toEqual([]);
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 });
