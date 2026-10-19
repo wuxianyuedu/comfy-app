@@ -19,6 +19,7 @@ import { useLogPanelPin } from "./use-log-panel-pin";
 import { LogPanelHeader } from "./LogPanelHeader";
 import { LogPanelFooter } from "./LogPanelFooter";
 import {
+  LOG_MESSAGE_OVERHEAD,
   LOG_ROW_SINGLE,
   layoutRows,
   scrollHeightOf,
@@ -79,13 +80,16 @@ function useVirtualWindow(input: {
     }
     return ids;
   }, [expansionMap]);
+  /* 软换行估高用的是**正文列**可用宽度，不是整面板宽：时刻/级别/来源/复制这几列
+   * 占了约 `LOG_MESSAGE_OVERHEAD` px，直接拿整宽会低估行数、把多行正文裁掉。 */
+  const messageWidth = Math.max(200, viewportWidth - LOG_MESSAGE_OVERHEAD);
   const { rows, totalSize } = useMemo(
     () =>
-      layoutRows(pageLogs, wrap, wrap ? viewportWidth : 0, {
+      layoutRows(pageLogs, wrap, wrap ? messageWidth : 0, {
         expandedIds,
         singleLineIds: cliJsonIds,
       }),
-    [pageLogs, wrap, viewportWidth, expandedIds, cliJsonIds],
+    [pageLogs, wrap, messageWidth, expandedIds, cliJsonIds],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
