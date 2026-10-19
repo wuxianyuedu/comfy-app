@@ -28,7 +28,6 @@
  *   node scripts/full-suite-run.mjs --dirty "<理由>" 这次改动不吃这一档，记一条
  */
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -42,6 +41,7 @@ import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
   abortedAdvice,
   classifyOutcome,
+  PS_UNSAFE_ARG_RE,
   runPnpmSync,
 } from "./launcher-core/shell.mjs";
 import {
@@ -73,6 +73,8 @@ export const TRACK = freshnessTrack("full");
  *
  * @param {string[]} [extra] 透传的额外参数
  * @param {number} [workers] `--maxWorkers`（缺省由 `resolveCiWorkers()` 给）
+ * @param {string} [junitFile] 分文件耗时读数的落点。**允许给绝对路径** —— 只要它落在
+ *   仓库内，就会被换成相对路径再交给 vitest（原因见 {@link toTransportSafePath}）。
  * @returns {{label: string, args: string[]}}
  */
 export function planRun(
@@ -80,6 +82,9 @@ export function planRun(
   workers = resolveCiWorkers().workers,
   junitFile = "",
 ) {
+  /* 读数参数只在「调用方给了落点」时才加（与钩子那侧 `--junit-dir` 没递到就一个字都不加
+   * 同一条口径 —— 让人自己跑的那档形态与此前逐字相同）。 */
+  const junitArg = junitFile ? toTransportSafePath(junitFile) : "";
   return {
     label: "全量单测 + 覆盖率棘轮（vitest run --coverage）",
     args: [
@@ -91,17 +96,74 @@ export function planRun(
        * 而这一串是本档自己给 vitest 的读数参数、不是调用方在收窄范围 —— 塞错位置会让
        * 每一次 CI 全量跑都「绿了不记账」，等于把记账通道整个关掉。
        * 两个 reporter 一起给：只给 junit 会把人类可读的输出顶掉（真红那一屏是唯一能读
-       * 的东西）。落点由调用点决定，文件名不在这里造第二份约定。 */
-      ...(junitFile
+       * 的东西）。 */
+      ...(junitArg
         ? [
             "--reporter=default",
             "--reporter=junit",
-            `--outputFile.junit=${junitFile}`,
+            `--outputFile.junit=${junitArg}`,
           ]
         : []),
       ...extra,
     ],
   };
+}
+
+/**
+ * 把一个落点换成「**能安全穿过 PowerShell 宿主**」的形式。
+ *
+ * ## 为什么这层不是多余的谨慎（CI 实测）
+ *
+ * `每日单元测试` 第一次在平台侧触发就 12.6s 红（`cnb-2in-1k589j0kp`，2026-10-19 04:00），
+ * 日志里那两行就是全部证据：
+ *
+ *   $ vitest run --coverage "--maxWorkers=4" "--reporter=junit" "--outputFile.junit=C" "\\WINDOWS\\TEMP\\comfy-full-suite-junit.xml"
+ *   失败话术原文：No test files found, exiting with code 1 —— 切剩的那半截被 vitest 当成了
+ *   位置过滤器（`filter: //WINDOWS/TEMP/…`）。
+ *
+ * 也就是 `--outputFile.junit=C:\WINDOWS\TEMP\a.xml` 到达 vitest 时**已经不是同一个参数**：
+ * 从第一个冒号处切开，剩下的那半截变成一个**位置过滤器**，于是「一个用例都没匹配上」。
+ * 本机逐形状复现过（`launcher-core/shell.mjs` 的 `PS_UNSAFE_ARG_RE` 头上那张表就是结果）：
+ * 坏的是「破折号开头 + `=` + 值里有冒号」这一交集，而**裸绝对路径**（`C:\dir\a.xml` 单独一个
+ * 参数）与 `out=C:\dir\a.xml`（不带破折号）都原样到达 —— 所以这一层的修法不是「别用绝对路径」，
+ * 是「**值里不许有冒号**」。引号救不了：`pwsh -File` 不剥参数的引号（试过，包 `'…'`
+ * 后脚本收到的是带引号的字面量）。
+ *
+ * ## 形状
+ *
+ *   · 仓库内 ⇒ 换成相对路径（vitest 按项目根解析；`node_modules/.cache/` 在被 ignore 的那一侧，
+ *     所以既不会给检出留未跟踪文件，也不会像 `coverage/` 那样与覆盖率输出共用生命周期）；
+ *   · 仓库外（`os.tmpdir()` 那种）⇒ **抛**，不静默换成一个可能不存在的位置：
+ *     这条链的产物是要被 `collectFileTimings` / `suiteRanking` 读回去的，落点猜错的表现
+ *     是「读数没有」，而「读数没有」与「这一档没跑过文件」在日志里很容易同形；
+ *   · 换算出来仍含冒号 ⇒ 抛。走到这里说明常量被改坏了（判据与宿主那一跳**同一个谓词**，
+ *     见 `launcher-core/shell.mjs` 的 `PS_UNSAFE_ARG_RE` —— 在这里抄一份正则就是两条会分叉的判据）。
+ *
+ * @param {string} target 绝对或相对路径
+ * @returns {string} 交给 vitest 的形式（能安全拼进 `--outputFile.junit=`）
+ */
+export function toTransportSafePath(target) {
+  const rel = path.isAbsolute(target)
+    ? path.relative(ROOT, target).replaceAll("\\", "/")
+    : target.replaceAll("\\", "/");
+  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error(
+      `[full-suite-run] 分文件读数的落点必须落在仓库内：${target} —— ` +
+        "绝对路径（`C:\\…` 那种）拼成 `--outputFile.junit=…` 之后，穿过 PowerShell 宿主时会在" +
+        "**第一个冒号处被切成两个参数**，被切剩的那半截变成 vitest 的位置过滤器，" +
+        "现场是「No test files found」而不是「文件不存在」。" +
+        "仓库外的落点请改成 `node_modules/.cache/` 下的一份（它本来就在 ignore 面里）。",
+    );
+  }
+  /* 判的是**拼好之后的那一个参数**，不是这段路径本身 —— 谓词与 `runPnpmSync` 拒答时用的
+   * 是同一条，所以这里不会与宿主那一跳各说一套。 */
+  if (PS_UNSAFE_ARG_RE.test(`--outputFile.junit=${rel}`)) {
+    throw new Error(
+      `[full-suite-run] 换算出来的落点拼进 --outputFile.junit= 之后仍然带冒号（${rel}），` +
+        "不交给 vitest —— 机制与上面那条同一种（切点在第一个冒号）。",
+    );
+  }
+  return rel;
 }
 
 /**
@@ -193,6 +255,16 @@ export function shouldRecord({ exitCode, dryRun, extra = [] }) {
  */
 export const FULL_SUITE_TIMEOUT_MS = 30 * 60_000;
 
+/**
+ * 分文件耗时读数的落点（相对仓库根）。**这一串里不许出现冒号** —— 它会被原样拼进
+ * `--outputFile.junit=` 交给 vitest，而那条命令要穿过 PowerShell 宿主（破折号开头的
+ * `--x=…` 一旦在 `=` 之后带冒号就会在那里被切成两个参数）。
+ * 选 `node_modules/.cache/` 的理由（git 忽略面里、不与覆盖率的清理共用生命周期、
+ * 且 CI 的一次性检出与本机 `pnpm test` 都能用同一份代码）写在 `main()` 那一段。
+ */
+export const SUITE_JUNIT_RELATIVE =
+  "node_modules/.cache/comfy-full-suite-junit.xml";
+
 /* 「被预算砍 vs 判据红」的分流在 `launcher-core/shell.mjs` 的 `classifyOutcome()` /
  * `abortedAdvice()` —— **那件事只有一份实现**（§12.12）：本档、`artifact-run` 与
  * 未来的档都读它，各写一份就会在「谁把 `status ?? 1` 又写回去」上分叉。 */
@@ -232,10 +304,17 @@ function main(argv) {
   const load = resolveCiWorkers();
   /* 分文件耗时的落点。**先删再跑**：留在那儿的上一次结果会被当成这一轮的执行证据
    * （`check-known-failed-stale.mjs` 为此立过同一条口径 —— 假读数比没有读数坏）。
-   * 落 `os.tmpdir()` 而不是仓库里：CI 的检出是一次性的，但 `pnpm test` 在本机也走这一份
-   * 代码，写进检出就是给自己留一个未跟踪文件（R9 / `.gitignore` 那一套会判）。 */
-  const junitFile = path.join(os.tmpdir(), "comfy-full-suite-junit.xml");
+   *
+   * ⚠️ 落点在**仓库内**、并且交给 vitest 的是**相对路径** —— 不是随手挑的：CI 那一跑
+   * 第一次用 `os.tmpdir()`（= `C:\WINDOWS\TEMP\…`）就 12.6s 红，PowerShell 宿主把
+   * `--outputFile.junit=C:` 与剩下的路径切成两个参数（机制、逐形状复现与形状口径都写在
+   * {@link toTransportSafePath} 的头注里）。`node_modules/.cache/` 在被 ignore 的那一侧，
+   * 所以既不会给检出留未跟踪文件（R9 / `.gitignore` 那一套），也不会像 `coverage/`
+   * 那样与覆盖率输出目录**共用生命周期**（覆盖率那一档 clean 时可能把它一起擦掉，
+   * 表现正是「读数没有」—— 与「这一档没跑过文件」同形，最难查的那一种）。 */
+  const junitFile = path.join(ROOT, SUITE_JUNIT_RELATIVE);
   try {
+    fs.mkdirSync(path.dirname(junitFile), { recursive: true });
     fs.rmSync(junitFile, { force: true });
   } catch {
     /* 删不掉只意味着下面那份榜可能混进上一轮的读数 —— 而这一档是读数，不判红。

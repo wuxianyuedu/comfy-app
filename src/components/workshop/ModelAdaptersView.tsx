@@ -435,15 +435,23 @@ export function ModelAdaptersView() {
         </p>
       )}
 
-      <div className="flex items-center justify-end">
-        <Button
-          variant="primary-solid"
-          onClick={() => void save()}
-          disabled={!selectedModel || saving}
-        >
-          {saving ? "保存中…" : "保存适配器"}
-        </Button>
-      </div>
+      {/* 保存这一行跟着上面那段映射表单一起出现（同一判据 `selectedModel`）：
+          没选模型时上面什么都不渲染，这一颗就成了一条悬在空白里的禁用件 ——
+          它此刻既点不动，也没有任何东西可保存。主 CTA 档（h-auto px-4 py-2），
+          与全站其余实心按钮同形；此前它吃基元缺省 h-8 px-2.5，比这一屏上面
+          每一行的控件都矮一档。 */}
+      {selectedModel && (
+        <div className="flex items-center justify-end">
+          <Button
+            variant="primary-solid"
+            onClick={() => void save()}
+            disabled={saving}
+            className="h-auto px-4 py-2"
+          >
+            {saving ? "保存中…" : "保存适配器"}
+          </Button>
+        </div>
+      )}
     </DocumentFrame>
   );
 }

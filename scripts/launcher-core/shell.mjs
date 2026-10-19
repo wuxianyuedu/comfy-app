@@ -185,6 +185,45 @@ export function runSync(
 }
 
 /**
+ * 「这一串参数在 PowerShell 宿主那一跳会被切开」的形状 —— **本机逐形状实测**出来的边界：
+ *
+ * | 参数形态                        | 到达程序时               |
+ * | ------------------------------- | ------------------------ |
+ * | `--out=C:\dir\a.xml`            | `--out=C` + `\dir\a.xml` |
+ * | `--out=C:/dir/a.xml`            | `--out=C` + `/dir/a.xml` |
+ * | `--out=./C:\x`                  | `--out=./C` + `\x`       |
+ * | `--out=1:\x` / `--out=:\x`      | 同样在冒号处切           |
+ * | `C:\dir\a.xml`（裸绝对路径）    | **原样**                 |
+ * | `out=C:\dir\a.xml`（无前置破折）| **原样**                 |
+ * | `/p=C:\x`                       | **原样**                 |
+ * | `a=b:c`                         | **原样**                 |
+ * | `--out=C\dir\a.xml`（无冒号）   | **原样**                 |
+ *
+ * 所以坏的是**一个**交集：以破折号开头、带 `=`、且 `=` 之后还有冒号 —— 切点在第一个冒号。
+ * 「参数里有绝对路径」不是判据（裸路径那一行原样到达），按那个写就会拦掉本来能跑的命令。
+ *
+ * 判据与 {@link runPnpmSync} 里那段注释是同一条机制；导出是为了让用例能对**形状**本身
+ * 下判，而不必真起一次宿主（一次宿主要 2–4s 且依赖这台机器上的 PowerShell 版本）。
+ */
+export const PS_UNSAFE_ARG_RE = /^-.*=[^:]*:/;
+
+/**
+ * 给定「调用方给的参数」与「这一跳是否走 PowerShell 宿主」，回那些会被切开的参数。
+ *
+ * 抽成纯函数是因为这条判据的**两个方向**都得能被执行：宿主形态下 `--x=C:\a.xml` 必须被
+ * 挑出来，而同一批参数里的裸绝对路径与非宿主形态下的同一条必须**不被挑出来**（拦错了
+ * 就是把一条本来能跑的命令拒掉，那比不拦更坏 —— 上表里后四行是这条边界的反面证据）。
+ * 真起一次宿主来做这件事既慢又依赖机器，拿这一格判就够。
+ *
+ * @param {string[]} args 调用方给 pnpm 的参数（不含宿主自己的前缀）
+ * @param {boolean} viaHost 这一跳是否经 `-File <shim>` 的宿主形态
+ * @returns {string[]} 会被切开的参数（空 = 安全）
+ */
+export function hostUnsafeArgs(args, viaHost) {
+  return viaHost ? args.filter((a) => PS_UNSAFE_ARG_RE.test(a)) : [];
+}
+
+/**
  * 同步跑一条 `pnpm …` 命令，形态由 `pnpmInvocation()` 一处判定。
  *
  * 存在的理由：`pnpmInvocation` 只解决了「**服务**怎么起」（`dev.mjs` / `start.mjs`
@@ -235,6 +274,39 @@ export function runPnpmSync(
       }),
       command: name,
       args,
+    };
+  }
+  /* ⚠️ **走 PowerShell 宿主时，`--x=…` 里不许有冒号**（`--outputFile.junit=C:\…` 那种）。
+   * 实测机制（本机逐形状复现，边界表见 {@link PS_UNSAFE_ARG_RE}）：以破折号开头、带 `=`、
+   * `=` 之后还有冒号的那一串，到达脚本时是**两个**参数（`--x=C` + `\dir\a.xml`）——
+   * 切点在第一个冒号，所以驱动器前缀只是**最常见的那一种触发形状**。裸绝对路径与不带破折号
+   * 的 `k=v:` 都原样到达，**不在拦的范围内**（拦了就是拒掉一条能跑的命令）。包引号没用
+   * （`-File` 不剥引号，脚本收到的是带引号的字面量）。
+   * 后果不是「报错看不懂」而是**语义被换掉**：CI 上那半截残参变成了 vitest 的位置过滤器，
+   * 整跑以 `No test files found` 收场，看起来像「这个仓没有用例」（`cnb-2in-1k589j0kp`）。
+   *
+   * 所以这里**当场拒**（返回「命令没起来」那一族，与 `error` 同一条分流），而不是让
+   * 一次坏翻译去冒充一次真失败。`viaHost === false`（直接可执行 / `cmd` 批处理形态）
+   * 没有这个切分问题，一律不拦。修的方向：把值换成不含冒号的形式 —— 落点是文件时就是
+   * **仓库内的相对路径**（`full-suite-run.mjs` 的 `toTransportSafePath()` 就是这么做的）。 */
+  const unsafe = hostUnsafeArgs(args, invocation.viaHost);
+  if (unsafe.length > 0) {
+    const message =
+      "参数里有 `--x=…:…` 这种形态，而这一跳走的是 PowerShell 宿主" +
+      `（${invocation.command}）：\n` +
+      unsafe.map((a) => `      · ${a}`).join("\n") +
+      "\n  PS 的 `-File` 会在第一个冒号处把一个参数切成两个（实测），于是被切剩的那半截会" +
+      "变成程序的**位置参数** —— 表现是「什么都没匹配上」，不是「路径写错了」。\n" +
+      "  出路：值里不要出现冒号（文件落点改成仓库内的相对路径，见 scripts/full-suite-run.mjs" +
+      " 的 toTransportSafePath）。";
+    return {
+      ok: false,
+      stdout: "",
+      stderr: message,
+      status: null,
+      error: Object.assign(new Error(message), { code: "EINVAL" }),
+      command: invocation.command,
+      args: invocation.args,
     };
   }
   // 回显的是**形态判据选出来的**那条（宿主 + `-File <shim>` 都带上）：源码里的

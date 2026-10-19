@@ -2480,42 +2480,63 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     }
   }
 
-  it("**片长自适应地退档**：一条每次只吐 20 KB 的链路也能走完整包（逐字节对上）", async () => {
-    const TOTAL = 256 * 1024;
-    await withStallingLink(TOTAL, 20 * 1024, async (base) => {
-      const dest = path.join(
-        mkdtempSync(path.join(tmpdir(), "cnb-fetch-")),
-        "x.bin",
-      );
-      try {
-        const res = fetchUrlResumable(`${base}/x.zip`, dest, {
-          chunkBytes: 128 * 1024,
-          chunkTimeoutMs: 700,
-          retries: 2,
-        });
-        expect(
-          res.ok,
-          "一条「每次只吐 20 KB」的链路把整包判成了取不到 —— 片长没有退档，或者退档之后" +
-            "已落盘的部分被丢掉了（这正是 Playwright 那条路做不到的那一格）",
-        ).toBe(true);
-        expect(
-          readFileSync(dest).length,
-          "取回来的字节数**必须逐字节等于**声明长度：多了说明失败那一片的半成品被留在了" +
-            "文件里（下一次重试与它重叠），少了说明收尾没接上",
-        ).toBe(TOTAL);
-        expect(
-          readFileSync(dest).every((b) => b === 7),
-          "内容不对 —— 说明片与片之间接错了位置（偏移算错）",
-        ).toBe(true);
-        expect(
-          res.chunks,
-          "一片都没记到 —— 这条用例没量到东西",
-        ).toBeGreaterThan(1);
-      } finally {
-        rmSync(path.dirname(dest), { recursive: true, force: true });
-      }
-    });
-  });
+  /* 这一格的墙钟成本 = 停顿的片数 × `chunkTimeoutMs`（假链路对 `> BURST` 的请求只吐
+   * 一段就挂住），所以它天生是一格**慢用例**：本机空载隔离单跑实测 **17.9s**，
+   * 而每日档带着 4 个 worker 并发跑同一格时实测 **40.4s** —— 全局 `testTimeout` 是 30s，
+   * 于是它在第二种场合必红，而那句红什么也没说（`cnb-vue-1k59blt4c` 之后本机复现）。
+   * 处置分两半，顺序要紧：**先降成本**（`chunkTimeoutMs` 700ms → 200ms，35.4s → 17.9s，
+   * 判据一字未改 —— 见下面那一处注释），**再登记预算**（这一行）：登记的依据是
+   * 上面那两个实测数，不是「让它过去」的意愿（§11.13 明令禁止的是拿预算换绿；
+   * 与 `tests/check-a11y-rules.test.ts` 的 `CONFIG_BUDGET` / `CLI_BUDGET` 同一处置）。
+   * 120s 与同一 describe 里那些「真起子进程」的格同档，且远小于 stage 的墙钟。 */
+  it(
+    "**片长自适应地退档**：一条每次只吐 20 KB 的链路也能走完整包（逐字节对上）",
+    { timeout: 120_000 },
+    async () => {
+      const TOTAL = 256 * 1024;
+      await withStallingLink(TOTAL, 20 * 1024, async (base) => {
+        const dest = path.join(
+          mkdtempSync(path.join(tmpdir(), "cnb-fetch-")),
+          "x.bin",
+        );
+        try {
+          const res = fetchUrlResumable(`${base}/x.zip`, dest, {
+            chunkBytes: 128 * 1024,
+            /* 这条的墙钟成本 = **停顿的片数 × `chunkTimeoutMs`**（假链路对 `> BURST`
+             * 的请求只吐 20 KB 就挂住，客户端只能等自己的超时 —— 见 `withStallingLink`
+             * 那句 120 秒不结束的 `setTimeout`）。按 700ms 实测**隔离单跑 35.4s**，
+             * 而全局 `testTimeout` 是 30s ⇒ 它在任何机器上都必然红（这就是每日全量档
+             * 第一次有执行者时照出来的那条，`cnb-vue-1k59blt4c`）。
+             * 处置是**降成本**而不是抬预算（§11.13）：这一格判的是「片长退档 + 半成品
+             * 不留在盘上」，那条结论只要求「片段在超时内收不齐」，与超时具体是 700 还是
+             * 200 无关。降到 200ms 之后实测约 10s，30s 预算里留三倍余量。 */
+            chunkTimeoutMs: 200,
+            retries: 2,
+          });
+          expect(
+            res.ok,
+            "一条「每次只吐 20 KB」的链路把整包判成了取不到 —— 片长没有退档，或者退档之后" +
+              "已落盘的部分被丢掉了（这正是 Playwright 那条路做不到的那一格）",
+          ).toBe(true);
+          expect(
+            readFileSync(dest).length,
+            "取回来的字节数**必须逐字节等于**声明长度：多了说明失败那一片的半成品被留在了" +
+              "文件里（下一次重试与它重叠），少了说明收尾没接上",
+          ).toBe(TOTAL);
+          expect(
+            readFileSync(dest).every((b) => b === 7),
+            "内容不对 —— 说明片与片之间接错了位置（偏移算错）",
+          ).toBe(true);
+          expect(
+            res.chunks,
+            "一片都没记到 —— 这条用例没量到东西",
+          ).toBeGreaterThan(1);
+        } finally {
+          rmSync(path.dirname(dest), { recursive: true, force: true });
+        }
+      });
+    },
+  );
 
   it("**断了接着来**：已落盘的前缀不被重下（第二次调用从半路接）", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-resume-"));

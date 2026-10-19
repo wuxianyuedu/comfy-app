@@ -7,6 +7,11 @@ import { textHandler } from "~/lib/form-props";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Input } from "~/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "~/components/ui/input-group";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
@@ -61,64 +66,77 @@ export function ModelLibrary() {
         <Button
           variant="outline"
           onClick={() => c.setConfigOpen(true)}
-          className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
+          className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary-strong gap-1.5"
         >
           <Icon data-icon="inline-start" name="settings" size={16} />
           模型目录配置
         </Button>
-        <input
-          value={c.q}
-          onChange={textHandler(c.setQ)}
-          placeholder="搜索模型名称…"
-          className="border-border bg-subtle text-ink-bright w-40 min-w-0 shrink rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-56"
-        />
+        {/* 搜索走 `ui/input-group` 基元（与 ⌘K 那一枚同款）：此前这里是裸
+            `<input>` 自拼尺寸 + 写死的 `focus:border-violet-500/40`，既绕开了
+            输入框唯一的出口，焦点色也不跟品牌走（规范 03 §3.6.2）。高度交给
+            基元的 h-8，与顶栏其余控件同档。 */}
+        <InputGroup className="w-40 shrink-0 sm:w-56">
+          <InputGroupAddon>
+            <Icon name="search" aria-hidden className="opacity-60" />
+          </InputGroupAddon>
+          <InputGroupInput
+            value={c.q}
+            onChange={textHandler(c.setQ)}
+            aria-label="搜索模型名称"
+            placeholder="搜索模型名称…"
+          />
+        </InputGroup>
       </ViewActions>
 
-      <div
-        role="radiogroup"
-        aria-label="按类型筛选模型"
-        className="mb-5 flex flex-wrap items-center gap-2"
-      >
-        {c.loading ? (
-          /* 首屏骨架的档位占位：与真实 chip 同高同圆角，避免「全部 (0)」
-           * 先闪一秒再变成真 chips（数量从 0 跳上去比不显示更吵）。
-           * 占位一律走 `ui/skeleton` 基元（P3：不许在视图里手写 animate-pulse）。 */
-          <>
-            <Skeleton className="h-7 w-16 rounded-full" />
-            <Skeleton className="h-7 w-20 rounded-full" />
-            <Skeleton className="h-7 w-14 rounded-full" />
-          </>
-        ) : (
-          <>
-            <SelectChip
-              selected={c.filter === ALL_TYPES}
-              onClick={() => c.setFilter(ALL_TYPES)}
-            >
-              {`全部 (${c.models.length})`}
-            </SelectChip>
-            {c.typeChips.map(([t, count]) => {
-              const meta = folderMeta(t);
-              return (
-                <SelectChip
-                  key={t}
-                  selected={c.filter === t}
-                  onClick={() => c.setFilter(t)}
-                >
-                  {`${meta.label} (${count})`}
-                </SelectChip>
-              );
-            })}
-          </>
-        )}
-        {/* 后台同步指示：sync 在首屏之后重扫目录，这里只报「在同步」，
-            不挡内容（首屏数据已经是上一轮的存量）。 */}
-        {!c.loading && c.refreshing && (
-          <span className="text-ink-faint ml-auto flex items-center gap-1.5 text-xs">
-            <Spinner className="size-3.5" />
-            同步中…
-          </span>
-        )}
-      </div>
+      {/* 一档都筛不出来时不渲染这一排：库里 0 个模型时它只剩孤零零一枚
+          「全部 (0)」，点它什么也不会发生，而下方空态已经在说同一件事。 */}
+      {(c.loading || c.models.length > 0) && (
+        <div
+          role="radiogroup"
+          aria-label="按类型筛选模型"
+          className="mb-5 flex flex-wrap items-center gap-2"
+        >
+          {c.loading ? (
+            /* 首屏骨架的档位占位：与真实 chip 同高同圆角，避免「全部 (0)」
+             * 先闪一秒再变成真 chips（数量从 0 跳上去比不显示更吵）。
+             * 占位一律走 `ui/skeleton` 基元（P3：不许在视图里手写 animate-pulse）。 */
+            <>
+              <Skeleton className="h-7 w-16 rounded-full" />
+              <Skeleton className="h-7 w-20 rounded-full" />
+              <Skeleton className="h-7 w-14 rounded-full" />
+            </>
+          ) : (
+            <>
+              <SelectChip
+                selected={c.filter === ALL_TYPES}
+                onClick={() => c.setFilter(ALL_TYPES)}
+              >
+                {`全部 (${c.models.length})`}
+              </SelectChip>
+              {c.typeChips.map(([t, count]) => {
+                const meta = folderMeta(t);
+                return (
+                  <SelectChip
+                    key={t}
+                    selected={c.filter === t}
+                    onClick={() => c.setFilter(t)}
+                  >
+                    {`${meta.label} (${count})`}
+                  </SelectChip>
+                );
+              })}
+            </>
+          )}
+          {/* 后台同步指示：sync 在首屏之后重扫目录，这里只报「在同步」，
+              不挡内容（首屏数据已经是上一轮的存量）。 */}
+          {!c.loading && c.refreshing && (
+            <span className="text-ink-faint ml-auto flex items-center gap-1.5 text-xs">
+              <Spinner className="size-3.5" />
+              同步中…
+            </span>
+          )}
+        </div>
+      )}
 
       {c.loading ? (
         <ModelListSkeleton />
@@ -128,10 +146,14 @@ export function ModelLibrary() {
           description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
           minHeightClass="min-h-75"
           action={
+            /* 空态里唯一能解决问题的那一颗 → 实心档。此前是软底 `primary`，
+               与它下面那句说明同色阶，读起来像又一条描述而不是出口。
+               不再补 `mt-4`：`EmptyState` 的 EmptyContent 已经给了 mt-3，
+               两处叠加会把说明与按钮之间撑成 28px。 */
             <Button
-              variant="primary"
+              variant="primary-solid"
               onClick={() => c.setConfigOpen(true)}
-              className="mt-4 h-auto gap-1.5 rounded-lg px-4 py-2"
+              className="h-auto gap-1.5 px-4 py-2"
             >
               <Icon data-icon="inline-start" name="settings" size={16} />
               去配置目录
@@ -409,7 +431,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               onChange={textHandler(c.setQ)}
               aria-label="搜索目录名"
               placeholder="搜索目录名…"
-              className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
+              className="bg-subtle flex-1"
             />
             <FieldLabel className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
               <Checkbox

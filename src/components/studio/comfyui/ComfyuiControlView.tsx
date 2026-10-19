@@ -124,11 +124,12 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             </StatusButton>
             {/* 并列出口：同一个地址再交给系统默认浏览器（放大看 / 装插件 / 多屏）。
                 页签内嵌照旧，这里不做替换。地址由服务端自己探（comfyOpen），不采信
-                界面里缓存的旧 base。禁用口径与「打开查看」一致。 */}
+                界面里缓存的旧 base。禁用口径与「打开查看」一致。
+                配色与「打开查看」同一档：此前它是这一排里唯一走 `outline` + 手写
+                `text-muted-foreground` 覆写的次级按钮，三颗次级就长出两种形状，
+                读起来像「这四个按钮各有不同职责」，而它们其实是同一层。 */}
             <StatusButton
               onClick={() => void c.openComfyInBrowser()}
-              variant="outline"
-              className="text-muted-foreground hover:text-ink"
               disabled={c.browserOpening || (!running && !c.status?.probing)}
             >
               {c.browserOpening ? "打开中…" : "在浏览器打开"}
