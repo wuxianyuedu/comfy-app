@@ -388,6 +388,48 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
   });
 
+  /* 跳转落点：从别处（如 ComfyUI 页的「去设置里配置」）跳进来时载荷带目标分区，
+   * hook 直接停在它上面，并把目标登记成 `pendingJump` 交外壳去滚。
+   *
+   * 载荷**不在挂载时消费**：设置页首帧通常在 loading（外壳没有分区节），那时
+   * 消费掉载荷，等就绪外壳挂上时跳转目标已经丢了（现场：左侧停在第一项）。
+   * 只有外壳真的滚过去、调 `ackJumpSection` 之后才算落定。 */
+  it("带 initialSection 跳进来：停在目标分区并登记待落定目标，消费等外壳回调", () => {
+    const onConsume = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useSettingsPage({
+          initialSection: "comfyui",
+          onConsumeInitialSection: onConsume,
+        }),
+      { wrapper: makeWrapper() },
+    );
+    expect(result.current.section).toBe("comfyui");
+    expect(result.current.pendingJump).toBe("comfyui");
+    expect(onConsume).not.toHaveBeenCalled();
+
+    act(() => result.current.ackJumpSection());
+    expect(result.current.pendingJump).toBeNull();
+    expect(onConsume).toHaveBeenCalled();
+  });
+
+  /* 载荷是字符串（来自 `src/lib`，不得反向依赖视图层），合法性由这里按
+   * `SETTINGS_SECTIONS` 收敛：不在白名单里就当没给，仍落默认分区、也不登记目标。 */
+  it("非法 initialSection 被收敛掉：仍落默认分区，且不登记跳转目标", () => {
+    const onConsume = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useSettingsPage({
+          initialSection: "not-a-section",
+          onConsumeInitialSection: onConsume,
+        }),
+      { wrapper: makeWrapper() },
+    );
+    expect(result.current.section).toBe("llmLocal");
+    expect(result.current.pendingJump).toBeNull();
+    expect(onConsume).not.toHaveBeenCalled();
+  });
+
   /* 回归 ISSUE #59：设置界面「打开 → 关闭 → 再打开」会显示「配置数据未就绪」。
    * 根因：播种只比对「数据引用是否变化」，关闭再打开时 QueryClient 命中缓存，
    * 挂载首帧 llmConfig/settingsData 即就绪，prev 初值被缓存命中 → 分支永不触发，

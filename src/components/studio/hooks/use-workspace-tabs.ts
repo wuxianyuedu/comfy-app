@@ -110,6 +110,12 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
     writeTabsState(tabsState);
   }, [tabsState, hydrated]);
 
+  /* 当前视图 id —— 判据只认「视图」，同一视图的两个项目页签算同一屏。
+   * 「界面打开」的日志（含耗时）不在这里写：它要等这一屏**内容真的挂载**才算
+   * 数，落在 `WorkspaceViewStack` + `ViewOpenReport`（见那两处的说明）。 */
+  const viewMode: WorkspaceView =
+    findTab(tabsState.tabs, tabsState.activeKey)?.view ?? HOME_VIEW;
+
   const navigateTo = useCallback((view: WorkspaceView) => {
     /* 绑的是 store 的同步读数，不是组件里那个 `activeProjectId` React 状态：
        「打开项目」的 handler 里 setActive(id) 与 navigateTo 是同一次事件先后调用的，
@@ -138,7 +144,7 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   return {
     tabs: tabsState.tabs,
     activeKey: tabsState.activeKey,
-    viewMode: findTab(tabsState.tabs, tabsState.activeKey)?.view ?? HOME_VIEW,
+    viewMode,
     navigateTo,
     selectTab,
     closeTab,

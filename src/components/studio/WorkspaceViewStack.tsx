@@ -19,7 +19,7 @@
  */
 
 import dynamic from "next/dynamic";
-import type { ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 
 import { reloadOnceForChunkError } from "~/lib/shell/lazy-chunk-recovery";
 
@@ -39,6 +39,12 @@ import { isProjectTab } from "~/components/studio/NavItems";
 import type { ViewTab } from "./workspace-tabs";
 import type { WorkspaceView } from "./NavItems";
 import { ViewTabActiveProvider } from "./ViewActions";
+import {
+  ViewOpenReport,
+  ViewOpenedAtContext,
+  withViewOpenReport,
+  type ViewOpenedAtLookup,
+} from "./ViewOpenReport";
 
 /**
  * 懒加载视图的**统一出口**：所有 `next/dynamic` 声明都经它，好让「分块加载失败」
@@ -54,20 +60,33 @@ import { ViewTabActiveProvider } from "./ViewActions";
  * 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，让它悬着比
  * 立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）。没触发刷新
  * （不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到 error boundary。
+ *
+ * 顺带在这条唯一的出口上包一层 `withViewOpenReport`：分块解析后把内容包住，
+ * 「界面打开耗时」的测量点于是正好落在内容真正挂载那一刻（外层包裹量不到 ——
+ * 见 `./ViewOpenReport` 的说明）。视图 id 一并登记进 `LAZY_VIEWS`，让视图栈
+ * 知道「这一屏由懒加载那条路自己记日志」，不必在别处再手抄一份懒加载清单。
  */
-function lazyView<P>(
+
+/** 由 `lazyView` 自己登记的懒加载视图 —— 它们的「界面打开」日志在内容挂载点写。 */
+const LAZY_VIEWS = new Set<WorkspaceView>();
+
+function lazyView<P extends object>(
+  view: WorkspaceView,
   loader: () => Promise<ComponentType<P>>,
 ): ComponentType<P> {
+  LAZY_VIEWS.add(view);
   return dynamic(
     () =>
-      loader().catch((err: unknown) => {
-        /* 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，
-         * 让它悬着比立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）；
-         * 没触发刷新（不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到
-         * error boundary。 */
-        if (reloadOnceForChunkError(err)) return NEVER_SETTLES;
-        throw err;
-      }),
+      loader()
+        .then((mod) => withViewOpenReport(view, mod))
+        .catch((err: unknown) => {
+          /* 刷新的那一跳返回一个永不 settle 的 promise：页面正在被换掉，
+           * 让它悬着比立刻抛错更好（抛了会先闪一下 error boundary 再被导航覆盖）；
+           * 没触发刷新（不是分块问题 / 本会话已刷过）时照常抛，错误照旧落到
+           * error boundary。 */
+          if (reloadOnceForChunkError(err)) return NEVER_SETTLES;
+          throw err;
+        }),
     { ssr: false },
   );
 }
@@ -81,24 +100,24 @@ const NEVER_SETTLES = new Promise<never>(() => {
 /* 只有 HomePage / AuroraBackground / VideoQueueModal（在页面侧）是即时加载的。 */
 /* 设置（与历史 / 队列 / 控制台同族，都是「项目无关的全局视图」）：只在进入该
  * 视图时才拉 —— 它带着全部配置查询与 Ollama 探测，不该摊到别的视图首屏。 */
-const SettingsView = lazyView(() =>
+const SettingsView = lazyView("settings", () =>
   import("~/components/settings/SettingsView").then((m) => m.SettingsView),
 );
 
 /* 模型适配 / 模式契约：与设置同一族（项目无关的全局配置视图）。 */
-const ModelAdaptersView = lazyView(() =>
+const ModelAdaptersView = lazyView("model-adapters", () =>
   import("~/components/workshop/ModelAdaptersView").then(
     (mod) => mod.ModelAdaptersView,
   ),
 );
-const ModeContractView = lazyView(() =>
+const ModeContractView = lazyView("mode-contract", () =>
   import("~/components/workshop/mode-contract/ModeContractView").then(
     (mod) => mod.ModeContractView,
   ),
 );
 
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
-const ResourceLibrary = lazyView(() =>
+const ResourceLibrary = lazyView("library", () =>
   import("~/components/studio/library/ResourceLibrary").then(
     (mod) => mod.ResourceLibrary,
   ),
@@ -106,12 +125,12 @@ const ResourceLibrary = lazyView(() =>
 
 /* 项目主页：进入项目后的落点。懒加载 —— 它与画布 / 工坊一样只在进项目后需要，
  * 放在应用首页的初始包里没有收益。 */
-const ProjectHomePage = lazyView(() =>
+const ProjectHomePage = lazyView("project", () =>
   import("~/components/studio/project-home").then((mod) => mod.ProjectHomePage),
 );
 
 /* 队列与运行：与历史同族（都在看「机器现在在干什么」），只在进入该视图时才拉。 */
-const QueueMonitor = lazyView(() =>
+const QueueMonitor = lazyView("queue", () =>
   import("~/components/studio/queue/QueueMonitor").then(
     (mod) => mod.QueueMonitor,
   ),
@@ -120,22 +139,22 @@ const QueueMonitor = lazyView(() =>
 /* ComfyUI 运行页（ISSUE #1900）：与历史 / 队列同族（「项目无关的全局视图」，
  * 都在看本机后端现在在干什么）。它带着状态查询的事件订阅与启动日志轮询，
  * 懒加载 —— 不该摊到别的视图首屏。 */
-const ComfyuiControl = lazyView(() =>
+const ComfyuiControl = lazyView("comfyui", () =>
   import("~/components/studio/comfyui/ComfyuiControl").then(
     (mod) => mod.ComfyuiControl,
   ),
 );
 
 /* 控制台（ISSUE #1327）：与历史 / 队列同族（都是「项目无关的全局视图」）。 */
-const ConsoleView = lazyView(() =>
+const ConsoleView = lazyView("console", () =>
   import("~/components/console/ConsoleView").then((m) => m.ConsoleView),
 );
 
 /* 客户端上懒加载更重的画布 / 影片编辑器（ReactFlow 等）。 */
-const FilmStudio = lazyView(() =>
+const FilmStudio = lazyView("film", () =>
   import("~/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
 );
-const ProjectCanvas = lazyView(() =>
+const ProjectCanvas = lazyView("canvas", () =>
   import("~/components/studio/ProjectCanvas").then((mod) => mod.ProjectCanvas),
 );
 
@@ -145,6 +164,8 @@ export interface WorkspaceViewStackProps {
   tabs: ViewTab[];
   /** 当前页签 key。 */
   activeKey: string;
+  /** 当前页签对应的**视图**（同一视图两个页签算同一屏）—— 打开耗时按它归属。 */
+  activeView: WorkspaceView;
   /** 活跃项目 id —— 项目类视图与「项目优先闸门」判据。 */
   activeProjectId: string | null;
   /** 最近项目（项目主页取名字用）。 */
@@ -171,11 +192,15 @@ export interface WorkspaceViewStackProps {
   onConsumeCanvasSeed: () => void;
   pendingCanvasWorkflow: { id: string; name: string; taskType: string } | null;
   onConsumePendingWorkflow: () => void;
+  /** 设置：跳转时指定的目标分区（一次性载荷，交给设置视图落定后消费）。 */
+  settingsSection: string | null;
+  onConsumeSettingsSection: () => void;
 }
 
 export function WorkspaceViewStack({
   tabs,
   activeKey,
+  activeView,
   activeProjectId,
   recentProjects,
   onEnterProject,
@@ -192,6 +217,8 @@ export function WorkspaceViewStack({
   onConsumeCanvasSeed,
   pendingCanvasWorkflow,
   onConsumePendingWorkflow,
+  settingsSection,
+  onConsumeSettingsSection,
 }: WorkspaceViewStackProps) {
   /**
    * 某一个视图该渲染什么 —— **按视图取值**，不再按「当前视图」取值。
@@ -249,7 +276,13 @@ export function WorkspaceViewStack({
         return <ComfyuiControl />;
 
       case "settings":
-        return <SettingsView fillHeight />;
+        return (
+          <SettingsView
+            fillHeight
+            initialSection={settingsSection}
+            onConsumeSection={onConsumeSettingsSection}
+          />
+        );
 
       case "model-adapters":
         return <ModelAdaptersView />;
@@ -290,11 +323,44 @@ export function WorkspaceViewStack({
     }
   };
 
+  /* 当前屏「打开时刻」的记账 —— 交给 `ViewOpenReport` 在内容挂载点多读一次，
+   * 由它算出「内容真的出现」减去这一步的耗时。
+   *
+   * 为什么是**成对**的 `{ view, at }` 而不是裸时刻：时刻与它对应的视图必须绑在
+   * 一起，否则「刚激活、时刻还没换」的那一帧里，新视图会拿到上一屏的旧时刻，算出
+   * 一个垃圾耗时（React 的子 effect 先于父 effect —— 内容那侧先读到 provider）。
+   * 绑成一对之后该帧读到的是 `null`（视图对不上）⇒ 只记一条正确的。
+   *
+   * 计时刻意放在 **effect** 里：渲染期调用 `performance.now()` 属 React 的不纯
+   * 调用（`react-hooks/purity` 会红），effect 里则是合规的。 */
+  const [opened, setOpened] = useState<{
+    view: WorkspaceView;
+    at: number;
+  } | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpened({ view: activeView, at: performance.now() });
+  }, [activeView]);
+
+  /* 同一屏的不同页签共用同一个视图 id，与 `useWorkspaceTabs` 的口径一致。 */
+  const openedAtOf = useMemo<ViewOpenedAtLookup>(
+    () => (view) => (opened?.view === view ? opened.at : null),
+    [opened],
+  );
+
   return (
-    <>
+    <ViewOpenedAtContext.Provider value={openedAtOf}>
       {tabs.map((tab) => {
         const isActive = tab.key === activeKey;
         const isHome = tab.view === "home";
+        /* 懒加载视图的「界面打开」日志由 `lazyView` 包的内容自己记（它的测量点
+         * 在分块解析后）；即时加载的视图（首页 / 作品库…）在这里补包一层 —— 它
+         * 一激活就挂载，耗时天然接近 0，但「打开了」这件事要记下来。 */
+        const content = LAZY_VIEWS.has(tab.view) ? (
+          renderView(tab.view)
+        ) : (
+          <ViewOpenReport view={tab.view}>{renderView(tab.view)}</ViewOpenReport>
+        );
         return (
           <div
             key={tab.key}
@@ -310,11 +376,11 @@ export function WorkspaceViewStack({
                 送按钮，不按页签过滤就会「四屏的按钮挤在同一条顶栏里」（见
                 `ViewActions` 里 `ViewTabActiveContext` 那段）。 */}
             <ViewTabActiveProvider active={isActive}>
-              {renderView(tab.view)}
+              {content}
             </ViewTabActiveProvider>
           </div>
         );
       })}
-    </>
+    </ViewOpenedAtContext.Provider>
   );
 }

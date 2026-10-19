@@ -80,6 +80,8 @@ export function SettingsPageView({
       onSelect={c.setSection}
       className={className}
       {...(title === undefined ? {} : { title })}
+      jumpSection={c.pendingJump}
+      onJumpApplied={c.ackJumpSection}
       banner={
         <>
           {c.flash && (

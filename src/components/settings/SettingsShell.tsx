@@ -57,7 +57,13 @@
  *     屏名只在这一屏才出现，仍给可见标题；说明仍收掉（它读一次就够）。
  */
 
-import { useCallback, useMemo, useRef, type ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react";
 
 import {
   SETTINGS_SECTIONS,
@@ -102,6 +108,14 @@ type SettingsShellProps = {
    * 占位置；而放在分区之前则保证它不会被第一节的标题挡掉。
    */
   banner?: ReactNode;
+  /**
+   * 跳转载荷要求直接停驻的目标分区（尚未落定）。外壳在分区节挂好之后**瞬时**滚到
+   * 它，并回调 `onJumpApplied`；三态壳（`fallback`）下没有分区节，滚不过去、
+   * 也就**不回调**（载荷留着，等就绪外壳再落）。
+   */
+  jumpSection?: Section | null;
+  /** 跳转目标真的滚过去了（外壳命中了锚点）—— 调用方据此消费一次性载荷。 */
+  onJumpApplied?: () => void;
 } & (
   | {
       /**
@@ -134,6 +148,8 @@ export function SettingsShell({
   className = "h-[calc(100vh-var(--toolbar-height,48px))]",
   title,
   banner,
+  jumpSection,
+  onJumpApplied,
   fallback,
   sections,
 }: SettingsShellProps) {
@@ -158,6 +174,20 @@ export function SettingsShell({
     },
     [onSelect, scrollToSection],
   );
+
+  /* 跳转载荷的落点：`layout` 期（分区节刚挂上、观察器与浏览器还没算位置）就
+   * **瞬时**滚过去。放在 layout 期而不是普通 effect：普通 effect 跑在观察器建立
+   * 之后，容器仍停在顶部，初始那批 IntersectionObserver 回调会把第一个分区判成
+   * 当前项、把刚设好的高亮覆写回第一项（这正是「点去设置，左侧还是第一项」的
+   * 现场）。瞬时（`behavior: "auto"`）而不是平滑：动画期间观察器会先报当前视图
+   * 里那几节，高亮会闪一下再跳。
+   *
+   * 只有 `scrollToSection` 真的命中锚点（返回 true）才回调消费载荷 —— 三态壳
+   * （加载 / 失败）没有分区节，那时不能把载荷吃掉，就绪壳挂上后再滚。 */
+  useLayoutEffect(() => {
+    if (!jumpSection) return;
+    if (scrollToSection(jumpSection, "auto")) onJumpApplied?.();
+  }, [jumpSection, scrollToSection, onJumpApplied]);
 
   return (
     <div className={`bg-bg flex flex-col overflow-hidden ${className}`}>
