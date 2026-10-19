@@ -297,6 +297,9 @@ describe("CP936 出口：编排与退出码", () => {
     };
     await runWithCp936Exit(["--", "echo"], {
       platform: "linux",
+      /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
+      /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
+      resolve: passthroughResolve,
       spawnProc: (() => {
         queueMicrotask(() => handlers.close?.(0));
         return child;
@@ -327,6 +330,9 @@ describe("CP936 出口：编排与退出码", () => {
     const child = fakeChild("中文一二三\n", 0);
     await runWithCp936Exit(["--", "echo"], {
       platform: "linux",
+      /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
+      /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
+      resolve: passthroughResolve,
       spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
@@ -341,6 +347,9 @@ describe("CP936 出口：编排与退出码", () => {
     const child = fakeChild("中文一二三\n", 0);
     await runWithCp936Exit(["--", "echo"], {
       platform: "win32",
+      /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
+      /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
+      resolve: passthroughResolve,
       spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
@@ -358,6 +367,9 @@ describe("CP936 出口：编排与退出码", () => {
     const child = fakeChild("中文一二三\n", 0);
     await runWithCp936Exit(["--", "echo"], {
       platform: "win32",
+      /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
+      /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
+      resolve: passthroughResolve,
       spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
