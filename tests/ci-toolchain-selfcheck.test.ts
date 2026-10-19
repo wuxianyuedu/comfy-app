@@ -2490,7 +2490,15 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
       try {
         const res = fetchUrlResumable(`${base}/x.zip`, dest, {
           chunkBytes: 128 * 1024,
-          chunkTimeoutMs: 700,
+          /* 这条的墙钟成本 = **停顿的片数 × `chunkTimeoutMs`**（假链路对 `> BURST`
+           * 的请求只吐 20 KB 就挂住，客户端只能等自己的超时 —— 见 `withStallingLink`
+           * 那句 120 秒不结束的 `setTimeout`）。按 700ms 实测**隔离单跑 35.4s**，
+           * 而全局 `testTimeout` 是 30s ⇒ 它在任何机器上都必然红（这就是每日全量档
+           * 第一次有执行者时照出来的那条，`cnb-vue-1k59blt4c`）。
+           * 处置是**降成本**而不是抬预算（§11.13）：这一格判的是「片长退档 + 半成品
+           * 不留在盘上」，那条结论只要求「片段在超时内收不齐」，与超时具体是 700 还是
+           * 200 无关。降到 200ms 之后实测约 10s，30s 预算里留三倍余量。 */
+          chunkTimeoutMs: 200,
           retries: 2,
         });
         expect(
