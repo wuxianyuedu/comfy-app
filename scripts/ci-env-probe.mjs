@@ -313,20 +313,30 @@ export function stagesWithImage(text) {
     if (name === undefined) continue;
     const block = stageBlockIn(text, name);
     if (block === null) continue;
-    const found = block
-      .split("\n")
-      .some((raw) => /^ {4}image:\s*\S/.test(raw));
+    const found = block.split("\n").some((raw) => /^ {4}image:\s*\S/.test(raw));
     if (found && !out.includes(name)) out.push(name);
   }
   return out;
 }
 
 /**
+ * 装 Playwright 浏览器那一格在 `.cnb.yml` 里的**当前名字**（本文件唯一的出处）。
+ *
+ * 2026-10-19 它随「只判节点事实的格子不必每个 PR 都判」那次挪档从 PR 撤到每日档，
+ * 名字带上「每日」前缀。这一步必须按**当下那个名字**去读它的 `env`：读不到就静默退回
+ * 「量候选根」，而它唯一的职责是回答「**配置给的那一个根**到不到」—— 名字散在两份
+ * 文件里写死，一定会漂到那种「不报错、只是换了个问题」的状态，所以这里出一个常量，
+ * 判据 import 它（`tests/ci-env-probe.test.ts`）。
+ */
+export const BROWSER_INSTALL_STAGE = "每日浏览器安装";
+
+/**
  * 某个 stage 的 `env:` 里某个键的**字面值**（去引号；找不到回 `null`）。
  *
  * 只看那一项自己的块（`stageBlockIn` 收的口），**不解析继承 / 锚点**：这一步要回答的
- * 是「`浏览器安装` 那一步会拿到哪个下载根」，而那一步的键就写在它自己的 `env:` 上
- * （`.cnb.yml` 里逐字如此，`tests/no-platform-ci-config.test.ts` 也判着它必须在）。
+ * 是「浏览器那一格会拿到哪个下载根」（名字见 `BROWSER_INSTALL_STAGE`），而那一步的键
+ * 就写在它自己的 `env:` 上（`.cnb.yml` 里逐字如此，
+ * `tests/no-platform-ci-config.test.ts` 也判着它必须在）。
  *
  * @param {string} text `.cnb.yml` 原文
  * @param {string} stage stage 名
@@ -449,7 +459,9 @@ export function envProbe({
           "`node scripts/ci-image-plan.mjs`，别在流水线里声明它。",
       );
     } else {
-      notes.push("`.cnb.yml` 的 stage 一格都没带 `image:`（这条路径上没有 docker daemon）");
+      notes.push(
+        "`.cnb.yml` 的 stage 一格都没带 `image:`（这条路径上没有 docker daemon）",
+      );
     }
   }
 
@@ -598,13 +610,22 @@ export function envProbe({
     if (already.ok) {
       notes.push(
         `浏览器落点上已经有那一件（${already.out}）—— ` +
-          `\`浏览器安装\` 会走「已装，跳过下载」，这一格不依赖网络`,
+          "`" +
+          BROWSER_INSTALL_STAGE +
+          "` 会走「已装，跳过下载」，这一格不依赖网络",
       );
     } else {
       /* 配置里那一步会用的根（读不到那条配置 / 那个键时退回「按本步 env」的老口径
-       * —— 那是「不知道」，不是「不达标」，见下面 catch 与 `problems` 那两条）。 */
+       * —— 那是「不知道」，不是「不达标」，见下面 catch 与 `problems` 那两条）。
+       * ⚠️ 名字走 `BROWSER_INSTALL_STAGE` 一个出处：那一格 2026-10-19 从 PR 撤到每日档、
+       * 名字加了前缀，写死的字符串会**静默**读不到根 ⇒ 这一步退回「量五个候选根」，
+       * 于是它报的不再是「配置给的那一个到不到」，而它的全部职责就是回答那一句。 */
       const configuredHost = configText
-        ? stageEnvValue(configText, "浏览器安装", "PLAYWRIGHT_DOWNLOAD_HOST")
+        ? stageEnvValue(
+            configText,
+            BROWSER_INSTALL_STAGE,
+            "PLAYWRIGHT_DOWNLOAD_HOST",
+          )
         : null;
       const roots = configuredHost
         ? [configuredHost]
@@ -627,21 +648,30 @@ export function envProbe({
       }
       if (reachable.length === 0) {
         problems.push(
+          /* 话术里的 stage 名一律取 `BROWSER_INSTALL_STAGE`：读不到配置那一步的根
+           * 时，人照着红话去改的那一行必须**就是**这一格读的那一格。名字散在
+           * 消息里写死，下一次挪档就会把人指到一个不存在的 stage 上。 */
           (configuredHost
-            ? "浏览器落点是空的，而 `.cnb.yml` 给 `浏览器安装` 配的那个下载根" +
+            ? "浏览器落点是空的，而 `.cnb.yml` 给 `" +
+              BROWSER_INSTALL_STAGE +
+              "` 配的那个下载根" +
               `（${configuredHost}）**取不回字节** —— `
             : "浏览器落点是空的，而**一个下载根都到不了** —— ") +
-            "`浏览器安装` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在" +
+            "`" +
+            BROWSER_INSTALL_STAGE +
+            "` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在" +
             "那里失败，而那时前面三十步的预算已经花掉了。\n" +
             `      实测过的现场：${verdicts[0]?.root ?? "（没有候选）"} → ` +
             `${verdicts[0]?.verdict ?? "?"}\n` +
             "      下一动作（前两条在人不在仓）：\n" +
             (configuredHost
-              ? "        · 把这台节点**真能到**的镜像根换到 `.cnb.yml` 的 " +
-                "`浏览器安装` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上 —— 就是上面" +
+              ? "        · 把这台节点**真能到**的镜像根换到 `.cnb.yml` 的 `" +
+                BROWSER_INSTALL_STAGE +
+                "` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上 —— 就是上面" +
                 "「下载根探测」那几行里判通的那一个；\n"
-              : "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 " +
-                "`浏览器安装` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；\n") +
+              : "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 `" +
+                BROWSER_INSTALL_STAGE +
+                "` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；\n") +
             "        · 或给节点配内网代理 / 放行镜像域；\n" +
             "        · 或**预先把 `chromium-headless-shell` 装进节点的落点** —— " +
             "装过一次之后这一格就再也不碰网络（长期存在的机器上这是最省事的一条）。",
@@ -650,14 +680,16 @@ export function envProbe({
         notes.push(
           `浏览器落点是空的，而${configuredHost ? "配置里那个根" : "下载根"}` +
             `有 ${reachable.length}/${verdicts.length} 条真取回了字节` +
-            "（`浏览器安装` 那一步应该装得成）",
+            "（`" +
+            BROWSER_INSTALL_STAGE +
+            "` 那一步应该装得成）",
         );
       }
       if (configuredHost) {
-        /* 配置里那一行只在「确实量了它」时点出来 —— 它是这一步与 `浏览器安装` 之间
+        /* 配置里那一行只在「确实量了它」时点出来 —— 它是这一步与浏览器那一格之间
          * 唯一的事实对齐点，人改的就是这一行。 */
         notes.push(
-          `上面量的是 \`.cnb.yml\` 给 \`浏览器安装\` 配的那个根：${configuredHost}`,
+          `上面量的是 \`.cnb.yml\` 给 \`${BROWSER_INSTALL_STAGE}\` 配的那个根：${configuredHost}`,
         );
       }
     }
@@ -666,7 +698,9 @@ export function envProbe({
      * 但它要留一条读数，否则这一步会看起来像「浏览器那一格没在判」。 */
     notes.push(
       `浏览器前提探测本身出错：${/** @type {Error} */ (error).message} —— ` +
-        "本步不据此判红（那一格仍归 `浏览器安装`）",
+        "本步不据此判红（那一格仍归 `" +
+        BROWSER_INSTALL_STAGE +
+        "`）",
     );
   }
 
