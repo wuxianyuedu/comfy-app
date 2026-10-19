@@ -38,8 +38,10 @@ import {
   shouldRecord as suiteRecords,
   SUITE_JUNIT_RELATIVE,
   TRACK as SUITE_TRACK,
+  parseJunitPhaseCosts,
   planRun as suitePlan,
   suiteRanking,
+  suitePhaseTax,
   toTransportSafePath,
 } from "../scripts/full-suite-run.mjs";
 import {
@@ -1129,5 +1131,89 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
     const text = suiteRanking("", { file: "/tmp/gone.xml" }).join("\n");
     expect(text).toContain("**没有**");
     expect(text).not.toMatch(/0 份、合计/);
+  });
+
+  /* ── 第二份榜：断言之外的「装载税」 ─────────────────────────────
+   * vitest 收尾自报的相位分解，三次独立读数都是 `tests 46–51%, setup 23–24%,
+   * environment 13–14%, import 12–13%`（`cnb-b0l-1k59op66t` 2442.43s /
+   * `cnb-r0d-1k5a0348r` 2729.89s / 本地 1609.51s）—— 也就是这个 stage 只有一半时间在跑断言。
+   * ⚠️ 但那份税**不在 junit 里**：本地对账量到「Σ文件总时长 2793.6s = 断言 2724.0s + 69.6s」，
+   * 即 `<testsuite time>` 只含断言与文件内钩子，不含每文件各交一次的 environment / import。
+   * 所以这一组判的是「文件内可见的那一份税」，它**不回答**「那 50% 归谁」—— 话术里必须
+   * 这么写着，否则这份榜会被当成整笔税的分解。下面五格各钉一条会让它静默失效的边界。 */
+  const JUNIT_WITH_CASES = [
+    '<?xml version="1.0" encoding="UTF-8" ?>',
+    '<testsuites name="vitest tests">',
+    '    <testsuite name="tests/heavy-load.test.ts" tests="2" time="30.5">',
+    '        <testcase classname="tests/heavy-load.test.ts" name="一" time="0.5"/>',
+    '        <testcase classname="tests/heavy-load.test.ts" name="二" time="1"/>',
+    "    </testsuite>",
+    '    <testsuite name="tests/pure-assert.test.ts" tests="1" time="2">',
+    '        <testcase classname="tests/pure-assert.test.ts" name="一" time="1.9"/>',
+    "    </testsuite>",
+    '    <testsuite name="tests/negative.test.ts" tests="1" time="1">',
+    '        <testcase classname="tests/negative.test.ts" name="一" time="1.4"/>',
+    "    </testsuite>",
+    '    <testsuite name="vitest unhandled errors" tests="0" time="0"></testsuite>',
+    "</testsuites>",
+  ].join("\n");
+
+  it("税 = 文件总时长 − Σ用例时长，并按税降序排（不是按谁跑得最久）", () => {
+    const byName = new Map(
+      parseJunitPhaseCosts(JUNIT_WITH_CASES).map((c) => [c.name, c]),
+    );
+    expect(byName.get("tests/heavy-load.test.ts")).toEqual({
+      name: "tests/heavy-load.test.ts",
+      totalMs: 30500,
+      testsMs: 1500,
+      cases: 2,
+    });
+    const text = suitePhaseTax(JUNIT_WITH_CASES, { limit: 10 }).join("\n");
+    /* 交税最多的是「总 30.5s / 断言 1.5s」那份，而不是断言最久的 —— 按总时长排就会
+     * 把后者顶到第一名，那份榜读的就不再是「谁在交税」。 */
+    expect(text.indexOf("heavy-load")).toBeLessThan(
+      text.indexOf("pure-assert"),
+    );
+    expect(text).toContain("33.5s");
+    expect(text).toContain("4.8s");
+    expect(text).toContain("28.7s");
+  });
+
+  it("税为负时照实打，不夹到 0 —— 夹了就是拿形状掩盖机制", () => {
+    /* 用例时长是各自测的，`afterEach` 里等到的东西可能同时落进两份数 ⇒ 差值可以为负。
+     * 那是「这两份数不是严格嵌套」的事实，不是脏数据。 */
+    const text = suitePhaseTax(JUNIT_WITH_CASES, { limit: 10 }).join("\n");
+    expect(text).toContain("-0.4s");
+    expect(text).toContain("tests/negative.test.ts");
+  });
+
+  it("夹具里没有 <testcase> 时退化成「税 = 总时长」，而不是报「没有」", () => {
+    /* 上面那份榜的夹具就是这个形状（只有 `<testsuite time>`）。退化可以，冒充没有不行 ——
+     * 后者会让读的人以为这一档没跑，而它只是拿不到用例级明细。 */
+    const text = suitePhaseTax(JUNIT, { limit: 3 }).join("\n");
+    expect(text).toContain("装载/钩子 61.0s");
+    expect(text).not.toContain("**没有**");
+  });
+
+  it("明细有界（日志 102400 字节上限），对账行只在给了墙钟时出现", () => {
+    const bounded = suitePhaseTax(JUNIT_WITH_CASES, { limit: 1 });
+    const detail = bounded.filter((l) => l.startsWith("  税 "));
+    expect(detail).toHaveLength(1);
+    expect(bounded.join("\n")).not.toContain("对账");
+    const withWall = suitePhaseTax(JUNIT_WITH_CASES, {
+      limit: 1,
+      wallMs: 40_000,
+    }).join("\n");
+    expect(withWall).toContain("对账");
+    /* 墙钟与 Σ文件总时长天生不相等（并发摊薄 + 非文件阶段）。这里钉的是**话术不许把它
+     * 摊到文件上** —— 一旦有人拿它做除法，那个百分数就是假的。 */
+    expect(withWall).toContain("不把它摊到任何一份文件上");
+    expect(withWall).toContain("40.0s");
+  });
+
+  it("junit 读不到时税榜也打「没有」（与耗时榜同一条口径）", () => {
+    const text = suitePhaseTax("", { file: "/tmp/gone.xml" }).join("\n");
+    expect(text).toContain("**没有**");
+    expect(parseJunitPhaseCosts("")).toEqual([]);
   });
 });

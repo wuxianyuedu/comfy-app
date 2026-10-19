@@ -8,14 +8,14 @@
  * （漏跑一步 / 顺序反了 / 只跑了自己记得的那条）**都不报错**。
  *
  * 所以本文件判的是**编排**那几件容易静默失效的事：
- *   ① 三段各自在、且**不发明第二套实现**（`base` 段走 `base-check.mjs` 的既有
- *      `baseCheckMany`，另外两段走既有脚本 —— 抄一份就会漂，§12.18 / §12.12）；
+ *   ① 每一段各自在、且**不发明第二套实现**（`base` 段走 `base-check.mjs` 的既有
+ *      `baseCheckMany`，其余段走既有脚本 —— 抄一份就会漂，§12.18 / §12.12）；
  *   ② 总码的合成口径：**「没跑起来」(2) 压过「红了」(1)** —— 拿一个无法归因的
  *      读数下判决是把人往错方向送（§13.6.2）；
  *   ③ `base` 段的四态 ⇄ 退出码的折算只在**一处**（`current-green`=0、
  *      `yours`/`baseline-red`=1、`inconclusive`=2）；
- *   ④ `--only` / `--skip-*` 开关真的在筛段，且**筛空 = 2**（不许「三段全跳过」
- *      却报全绿 —— 那是本仓库最怕的那种静默）。
+ *   ④ `--only` / `--skip-*` 开关真的在筛段，且**筛空 = 2**（不许「各段全跳过」
+ *      却报全绿 —— 那是本仓库最怕的那种静默）。跳过清单按 `SEGMENTS` 推，不硬写段数。
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -23,7 +23,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { combineCodes, lastSummary } from "../scripts/premerge-check.mjs";
+import {
+  combineCodes,
+  lastSummary,
+  SEGMENTS,
+} from "../scripts/premerge-check.mjs";
 
 const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
 
@@ -81,7 +85,12 @@ describe("premerge-check —— 从 base-check 的报告里读回结论词", () 
   });
 
   test("四种结论词都认得", () => {
-    for (const v of ["current-green", "inconclusive", "baseline-red", "yours"]) {
+    for (const v of [
+      "current-green",
+      "inconclusive",
+      "baseline-red",
+      "yours",
+    ]) {
       expect(lastSummary(`[base-check] 结论：${v}\n`)).toBe(v);
     }
   });
@@ -92,10 +101,21 @@ describe("premerge-check —— 从 base-check 的报告里读回结论词", () 
 });
 
 describe("premerge-check —— 段的筛选", () => {
-  test("三段全被跳过 ⇒ 退 2，**不许**报全绿", () => {
+  test("各段全被跳过 ⇒ 退 2，**不许**报全绿", () => {
     /* 「什么都没复算」与「复算过且全绿」必须分开 —— 同 §11.23.1 那条：
-     * 静默的绿比没有更坏（它让人以为这件事有人管）。 */
-    const { code, output } = run(["--skip-base", "--skip-claims", "--skip-mergeLoss"]);
+     * 静默的绿比没有更坏（它让人以为这件事有人管）。
+     *
+     * ⚠️ 跳过清单**从 `SEGMENTS` 推**，不硬写。硬写的那一版在 #2022 加出 `unitTests`
+     * 段之后变成一条环境依赖的用例：它跳了 3 / 4 段，剩下那段的「没跑起来」把结论词
+     * 从「各段全被跳过」换成「有段没跑起来」，于是**在能算出改动清单的检出上绿、
+     * 在算不出的检出上红**（节点那一跑红的就是这个，而报错一个字都不指向漏跳的那一段）。
+     * 从段表推 ⇒ 以后加一段，这里不跟着处理就当场红。 */
+    const allSkips = Object.keys(SEGMENTS).flatMap((key) => [`--skip-${key}`]);
+    expect(
+      allSkips.length,
+      "SEGMENTS 是空的 —— 这条用例就没有对象了，别让它绿着骗人",
+    ).toBeGreaterThan(0);
+    const { code, output } = run(allSkips);
     expect(code).toBe(2);
     expect(output).toContain("全被跳过");
   });
@@ -149,7 +169,7 @@ describe("premerge-check —— 不发明第二套实现（面的来源）", () 
     expect(source).not.toContain("readHookSteps");
   });
 
-  test("另外两段走既有脚本（子进程），不把它们的判据逻辑抄进来", () => {
+  test("除 `base` 之外各段走既有脚本（子进程），不把它们的判据逻辑抄进来", () => {
     const source = execFileSync(
       process.execPath,
       [
@@ -229,14 +249,15 @@ describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退
       const tip = g("rev-parse", "master");
       g("checkout", "-q", "work");
 
-      const { resolveLossBaseline } = await import("../scripts/premerge-check.mjs");
+      const { resolveLossBaseline } =
+        await import("../scripts/premerge-check.mjs");
       const got = resolveLossBaseline(repo);
       expect(got.ok).toBe(true);
       if (!got.ok) return;
       /* 关键：它得停在**分叉点**，不是上游尖端。 */
       expect(got.baseline).toBe(fork);
       expect(got.baseline).not.toBe(tip);
-        } finally {
+    } finally {
       rmSync(repo, { recursive: true, force: true });
     }
   });
@@ -266,7 +287,8 @@ describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "c1");
       /* 没有 `origin/master`、也没有本地 `master` ⇒ `resolveMergeBaseRef` 给 null。 */
-      const { resolveLossBaseline } = await import("../scripts/premerge-check.mjs");
+      const { resolveLossBaseline } =
+        await import("../scripts/premerge-check.mjs");
       const got = resolveLossBaseline(repo);
       expect(got.ok).toBe(false);
       if (!got.ok) expect(got.reason).toContain("取不到要并进去的那条");
@@ -275,9 +297,17 @@ describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退
     }
   });
 
-  test("三段全跑时，`mergeLoss` 段不是「没跑起来」", () => {
-    /* 上一条判的是单段；这条判的是**编排**那一半：整跑时第三段也得真跑。 */
-    const { output } = run(["--skip-base"]);
+  test("整跑时 `mergeLoss` 段不是「没跑起来」", () => {
+    /* 上一条判的是单段；这条判的是**编排**那一半：多段一起跑时 `mergeLoss` 也得真跑
+     * （按段名说、不按第几段说 —— 段序在 #2022 加出 `unitTests` 之后已经挪过一次）。
+     *
+     * ⚠️ 这里必须**同时跳掉 `unitTests` 那一段**：那一段跑的是真的受影响用例层
+     * （`run-affected-tests.mjs`，本检出上量到 90+ 份 / 一次几十秒），而它跑多少
+     * **取决于宿主检出这一推要带上去哪些文件** —— 拿它来判「编排有没有把 `mergeLoss` 带上」，
+     * 等于让一条用例的耗时与结论都随分支拓扑漂（本文件那条超时的真因就是这类耦合：
+     * `mergeLoss` 的 diff 大小同样等于「分支离 master 多远」）。
+     * 那一段自己的在场由上面「各段全被跳过」那条从段表推的判据守着，不在这里重复付钱。 */
+    const { output } = run(["--skip-base", "--skip-unitTests"]);
     expect(output).toContain("合并有没有把一侧整份覆盖掉");
     expect(output).not.toContain("缺少 --baseline");
   });
