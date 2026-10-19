@@ -455,15 +455,23 @@ describe("CP936 出口：编排与退出码", () => {
      *   · 路径的命令**不产出**「PATH 上找不到」（`resolved` 恒真）；
      *   · 但它**仍要过形态判据** —— 「不问 PATH」只解决误报，命令本身在 Windows 上
      *     照样要落 `.ps1` 回退才起得来（下一个用例判那一半）。 */
+    const given = ["--noEmit"];
     const resolved = resolveShellInvocation(
       path.join("node_modules", ".bin", "tsc"),
-      ["--noEmit"],
+      given,
     );
     expect(resolved.resolved).toBe(true);
     /* 绝对化过 —— 证明它走的是「形态」那条路，不是原样透传。 */
     expect(path.isAbsolute(resolved.command)).toBe(true);
-    /* 参数原样转交，一个都不改写。 */
-    expect(resolved.args).toEqual(["--noEmit"]);
+    /* 参数原样转交，一个都不改写 —— 判的是**调用方给的那一串必须逐字落在尾部**，
+     * 而不是「整串就等于我给的」。后者把「写下来的那一条」当成「被执行的那一条」：
+     * `commandInvocation()` 的契约是交出**能直接 spawn 的整串**，Windows 上
+     * 宿主与 `-File <shim>` 就在 `args` 里（见 `usableCommand()` 那条
+     * 「`.ps1` 必须交宿主起」）—— 所以前缀本来就该**按机器出现**，
+     * 原来那句 `toEqual(given)` 在这台机器上必然红（实测：
+     * `expected ['-NoProfile', …(5)] to deeply equal ['--noEmit']`）。
+     * 尾部这一判在两个方向上都比原断言强：改写参数会红，把调用方的参数挤到中间也红。 */
+    expect(resolved.args.slice(-given.length)).toEqual(given);
   });
 
   it("Windows 的反斜杠路径同判「是路径」（两种分隔符都认）", () => {
@@ -526,9 +534,18 @@ describe("CP936 出口：编排与退出码", () => {
      * —— 默认值写错、或压根没接上时，注入面自己把缺陷抹平、那几条照样绿。
      * 这一条因此**不注入 `resolve`**，判的就是那条线接上了没有。 */
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cp936-bin-"));
-    fs.writeFileSync(path.join(dir, "pnpm"), "#!/bin/sh\necho 1\n", {
-      mode: 0o755,
-    });
+    /* 夹具必须是**这台宿主真起得来**的东西。解析层判「能不能跑」的方式是真起一次
+     * （`usableCommand` 的探针），一个 shebang 文本在 Windows 上永远起不来 ⇒
+     * 结论会是「PATH 上查无此命令」，而**那句与「解析口压根没接上」在日志里同形**
+     * —— 正是 #1397 那一族说过的「mock 排的形状必须真机出得来」。
+     * Windows 上给它 `<dir>/pnpm.EXE`（`PATHEXT` 里那一档；复制当前 node 二进制
+     * 就是一个真能跑的 PE 映像），POSIX 上给无扩展名的 `<dir>/pnpm`。 */
+    const fake = path.join(
+      dir,
+      process.platform === "win32" ? "pnpm.EXE" : "pnpm",
+    );
+    fs.copyFileSync(process.execPath, fake);
+    fs.chmodSync(fake, 0o755);
     const seen: string[] = [];
     const handlers: Record<string, (arg: unknown) => void> = {};
     const child = {
@@ -541,6 +558,18 @@ describe("CP936 出口：编排与退出码", () => {
     };
     await runWithCp936Exit(["--", "pnpm", "install"], {
       platform: "linux",
+      /* `env` 必须注入进来，而且**要靠这一跳生效**。这一格造的是自己那份假 PATH
+       * （上面那个 `dir`），而此前 `runWithCp936Exit` 递给解析口的是
+       * `resolve(command, args)` —— 一个 options 都不带，于是注入的 `env` 停在半路，
+       * 这一格实际问的是**这台机器的 PATH**：Windows 上解析到 corepack 那句
+       * `pnpm.ps1`、经宿主起，`seen[0]` 成了 `pwsh.EXE`
+       * （实测 `expected 'pwsh.EXE' to be 'pnpm'`）。
+       * 红本身有信息量，但它说明的是「注入面只管了一半」，不是「解析口没接上」——
+       * 所以补的是 `env` 那一跳，`platform` 仍只用于出口那一半（见实现里那条 ⚠️：
+       * 同文件那两条「模拟非 Windows」的用例真起 `echo`，把 platform 交给解析层
+       * 会把它们改成「判这台机器有没有一个叫 echo 的无扩展名文件」）。
+       * 补齐之后这一格的答案只由**注入进去的那张 PATH** 决定，换宿主不换结论。 */
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
       spawnProc: ((cmd: string) => {
         seen.push(cmd);
         queueMicrotask(() => handlers.close?.(0));
@@ -553,7 +582,13 @@ describe("CP936 出口：编排与退出码", () => {
      * [ '/tmp/…/pnpm' ]`）。 */
     expect(seen[0]).not.toBe("pnpm");
     expect(path.isAbsolute(seen[0] ?? "")).toBe(true);
-    expect(path.basename(seen[0] ?? "")).toBe("pnpm");
+    /* 起的是**这个夹具自己那一个**，不是这台机器 PATH 上恰好装着的某个 pnpm ——
+     * 上一句判「接没接上解析口」，这一句判「问的是哪张 PATH」。少了它，`seen[0]`
+     * 指到宿主上任何一份叫 `pnpm` 的东西都照样绿（本次那条红正是这个样子）。
+     * 名字按宿主比（Windows 上带 `.EXE`，那本来就是 PATHEXT 那一档的事）。 */
+    expect(path.resolve(seen[0] ?? "").toLowerCase()).toBe(
+      path.resolve(fake).toLowerCase(),
+    );
   });
 
   it("PATH 上查无此命令 ⇒ **可读出口 + 127**，不是把裸名字丢给 spawn", async () => {
@@ -833,12 +868,21 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
   };
 
   it("`splitStreamChunk` 只切**整行**，行尾残余留在 carry 里", () => {
-    expect(splitStreamChunk("", "甲\n乙\n")).toEqual({ text: "甲\n乙\n", carry: "" });
+    expect(splitStreamChunk("", "甲\n乙\n")).toEqual({
+      text: "甲\n乙\n",
+      carry: "",
+    });
     /* 关键那一格：`乙` 还没有换行符收尾 ⇒ **不许**当成一整行发出去（发早了会把
      * 下一块拼上来的那半截丢在日志里断成两行）。 */
-    expect(splitStreamChunk("", "甲\n乙")).toEqual({ text: "甲\n", carry: "乙" });
+    expect(splitStreamChunk("", "甲\n乙")).toEqual({
+      text: "甲\n",
+      carry: "乙",
+    });
     /* 上一块留下的残余与这一块拼起来才成行。 */
-    expect(splitStreamChunk("乙", "丙\n")).toEqual({ text: "乙丙\n", carry: "" });
+    expect(splitStreamChunk("乙", "丙\n")).toEqual({
+      text: "乙丙\n",
+      carry: "",
+    });
     /* 一块里一行都没有（长行被截成多块）—— 一个字都不发。 */
     expect(splitStreamChunk("很长的一", "行还在继续")).toEqual({
       text: "",
