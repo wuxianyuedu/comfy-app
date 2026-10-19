@@ -281,10 +281,11 @@ const DAILY_GATES = [
   "每日 Python 可用性",
   "每日 Python 探针读数",
   "每日同步数据库表结构",
-  "每日单元测试",
   "每日生产构建",
+  "每日 ESLint 零警告",
   "每日浏览器安装",
   "每日全量E2E",
+  "每日单元测试",
 ];
 
 /**
@@ -317,6 +318,13 @@ const PR_MOVED_TO_DAILY: [string, string, string, string][] = [
     "scripts/ci-toolchain-selfcheck.mjs",
     "--playwright-only",
   ],
+  /* `ESLint 零警告` 是**另一条理由**（不是「节点事实」而是「起一堆子进程」：
+   * 它挂满过 8640s 与 20m 两次，且红的地方从来不是这次改动违规，而是这台机当时
+   * 腾不出核）。同一张表接住它，是因为要判的东西**逐字相同**：PR 清单里不许再有、
+   * 每日清单里必须有一格、那一格点的仍是同一条命令（`pnpm run lint` —— 扫描范围与
+   * `--max-warnings 0` 都在 `package.json` 的 `lint` 脚本里，见 `eslint.config.js`
+   * 顶部那节「命令口径只有一处」）。 */
+  ["ESLint 零警告", "每日 ESLint 零警告", "pnpm run lint", ""],
 ];
 
 /**
