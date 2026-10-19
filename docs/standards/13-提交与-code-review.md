@@ -3772,16 +3772,18 @@ Error: Timed out waiting 180000ms from config.webServer.
 **形态**（`.cnb.yml`，判据在 `tests/no-platform-ci-config.test.ts`）：
 
 ```yaml
-# 七格只写一份，两个触发口共用同一个锚点
+# 清单只写一份，三个触发口共用同一个锚点
 .daily-gates:
-  &daily_gates # 名单是 env.COMFYAPP_CI_DAILY_GATES（判据双向核对）：四格前提 + 三档重档
+  &daily_gates # 名单是 env.COMFYAPP_CI_DAILY_GATES（判据双向核对）：前提格 + 三档重档
+  - name: 每日工具链自证
   - name: 每日安装依赖 # script 与 PR 那格逐字相同（镜像判据连 env 一起钉）
   - name: 每日 Python 可用性
+  - name: 每日 Python 探针读数
   - name: 每日同步数据库表结构
-  - name: 每日单元测试 # node scripts/full-suite-run.mjs，timeout: 45m
   - name: 每日生产构建 # node scripts/ci-daily-build.mjs，timeout: 30m
   - name: 每日浏览器安装 # 与 PR 那格同 command + 同 env；缺件要在便宜位置报
   - name: 每日全量E2E # node scripts/e2e-run.mjs，timeout: 45m，不带 --grep，env: COMFY_E2E_SERVER=start
+  - name: 每日单元测试 # node scripts/full-suite-run.mjs，timeout: 45m —— **排最后**，理由见下
 
 master:
   "crontab: 0 4 * * *":
@@ -3799,6 +3801,17 @@ master:
       name: 每日档（API 触发）
       stages: *daily_gates
 ```
+
+**为什么 `每日单元测试` 排在最后**（业主口径：「最容易出问题的放最后，然后执行过的就不用
+重复执行了」）。CNB 的 stage 是串行且**失败即停**的，而这一格是这条流水线上唯一会因
+**这台机器的负载**而红的格子：套件里大量用例真起子进程，超订的那一份从等 CPU 变成等
+子进程，形态是 `Test timed out in 30000ms` 而单跑全绿。实测 `cnb-b0l-1k59op66t` ——
+775 份里只 1 份这样红，其余 774 份全绿，而它后面三格全部 `skipped`。它排在中间时，
+一单条与代码无关的抖动就决定 `每日生产构建` / `每日浏览器安装` / `每日全量E2E` 这一天
+跑不跑（那三格此前一次都没有执行记录）。顺序由
+`tests/no-platform-ci-config.test.ts` 的那条「它是每日那一跑的最后一条」钉住 ——
+要把它挪回中间，先补上「超时指纹 ⇒ 等机器喘口气 ⇒ 隔离复跑一次」那一档（钩子 C 组
+早就有，每日这一跑还没有）。
 
 **每日档还要能手点**（2026-10-19 追加的要求：「每日档除了指定时间触发，还需要可手动触发」）。
 这件事的全部理由是**延迟**：撤掉 PR 那一条之后，「master 行不行」这个答案最晚要等到第二天

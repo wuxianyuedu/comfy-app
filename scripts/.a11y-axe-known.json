@@ -1,15 +1,15 @@
 {
-  "note": "E6「a11y 自动化」的负债登记表：执行者 `tests/a11y-axe-stories.test.ts`（输入是 `src/components/ui/*.stories.tsx` 的全部故事，逐故事渲染跑 axe-core）。`violations` 每行 = (组件文件, axe 规则) + 当前命中节点数；`unrenderable` = 这一档拿不到状态的故事（需要 Storybook decorator / provider，登记就是为了让「覆盖了几个」这句话有答案）。页面级规则（region / landmark-*）在 `PAGE_SCOPE_RULES_OFF` 里显式关掉：裸渲染一枚组件时它们必然命中，那不是缺陷。**没有 --update**：这张表要人读过再粘贴，判红时测试会把候选清单打到 stdout 与系统临时目录（它自己不写回登记表 —— 判据不许有「跑一下就绿」的出口）。",
+  "note": "E6「a11y 自动化」的负债登记表：执行者 `tests/a11y-axe-stories.test.ts`（输入是 `src/components/ui/*.stories.tsx` 的全部故事，**按 Storybook 的语义**逐故事渲染后跑 axe-core —— `story.render ?? meta.render`，args 是 `meta.args` 与 `story.args` 的浅合并）。`violations` 每行 = (组件文件, axe 规则) + 当前命中节点数；`unrenderable` = 这一档渲不出来的故事（登记就是为了让「覆盖了几个」这句话有答案；**为什么**渲不出来由判红时逐条打印，不进账 —— 错误文案会随实现漂）。剩下这三族：`command.tsx` 是宿主缺 API（jsdom 没有 `ResizeObserver`，实测原因），`resizable.tsx` / `sidebar.tsx` / `sonner.tsx` 要 Storybook 那侧的 provider 现场。两类规则被显式关掉并各自写明理由：① 页面级（`region` / `landmark-*` / `form-field-multiple-labels`）—— 裸渲染一枚组件时它们必然命中，那不是缺陷，真落点在 e2e；② 需要真实绘制的（`color-contrast` / `label-content-name-mismatch` / `link-in-text-block`）—— jsdom 没有字体度量、没有伪元素 computed style、`getBoundingClientRect` 恒 0，而这一档也不注入应用的样式表，硬判只会得到 `incomplete`（本用例只收 violations，于是**结构性地假通过**）。那三条的判点是 Storybook 的 a11y 面板（`@storybook/addon-a11y`，真浏览器 + CSS 生效），那是人现场看某一棵树的执行者，机器那一格仍按空记。**没有 --update**：这张表要人读过再粘贴，判红时测试会把候选清单打到 stdout 与系统临时目录（它自己不写回登记表 —— 判据不许有「跑一下就绿」的出口）。",
   "violations": [
     {
-      "component": "button.tsx",
+      "component": "button-group.tsx",
       "rule": "button-name",
-      "nodes": 6
+      "nodes": 1
     },
     {
-      "component": "disclosure.tsx",
-      "rule": "button-name",
-      "nodes": 5
+      "component": "field.tsx",
+      "rule": "aria-toggle-field-name",
+      "nodes": 1
     },
     {
       "component": "file-picker.tsx",
@@ -17,82 +17,40 @@
       "nodes": 3
     },
     {
-      "component": "hint.tsx",
-      "rule": "button-name",
-      "nodes": 5
-    },
-    {
-      "component": "native-select.tsx",
-      "rule": "select-name",
-      "nodes": 4
+      "component": "item.tsx",
+      "rule": "aria-required-children",
+      "nodes": 1
     },
     {
       "component": "number-field.tsx",
       "rule": "label",
-      "nodes": 4
-    },
-    {
-      "component": "option-list-popover.tsx",
-      "rule": "button-name",
-      "nodes": 2
+      "nodes": 7
     },
     {
       "component": "progress-bar.tsx",
       "rule": "aria-progressbar-name",
-      "nodes": 5
+      "nodes": 8
     },
     {
       "component": "progress.tsx",
       "rule": "aria-progressbar-name",
-      "nodes": 4
+      "nodes": 1
     },
     {
-      "component": "textarea.tsx",
-      "rule": "label",
-      "nodes": 4
-    },
-    {
-      "component": "toggle.tsx",
+      "component": "select.tsx",
       "rule": "button-name",
-      "nodes": 4
+      "nodes": 7
     }
   ],
   "unrenderable": [
-    "breadcrumb-path.tsx > Default",
-    "breadcrumb-path.tsx > Searching",
-    "code-block.tsx > Languages",
-    "image-viewer.tsx > Landscape",
-    "image-viewer.tsx > ViewableImageGrid",
-    "json-viewer.tsx > Default",
-    "json-viewer.tsx > Empty",
-    "json-viewer.tsx > FullyExpanded",
-    "json-viewer.tsx > LazyWrapped",
-    "key-value-rows.tsx > AllLayouts",
-    "key-value-rows.tsx > Inline",
-    "key-value-rows.tsx > Rows",
-    "key-value-rows.tsx > Stacked",
-    "key-value-rows.tsx > TableLayout",
-    "key-value-rows.tsx > ValueVsRaw",
-    "media-thumbnail.tsx > Default",
-    "media-thumbnail.tsx > NoSource",
-    "media-thumbnail.tsx > RealSources",
-    "multi-mode-select.tsx > DefaultModeAccent",
-    "multi-mode-select.tsx > Disabled",
-    "multi-mode-select.tsx > HideExtraBadge",
-    "multi-mode-select.tsx > MultipleModes",
-    "multi-mode-select.tsx > SingleMode",
-    "option-list-popover.tsx > ControlledOpen",
-    "option-list-popover.tsx > Default",
-    "option-list-popover.tsx > Disabled",
+    "command.tsx > Empty",
+    "command.tsx > Inline",
+    "command.tsx > ShortcutVsChecked",
+    "command.tsx > WithDisabled",
     "resizable.tsx > Horizontal",
     "resizable.tsx > ThreePanels",
     "resizable.tsx > Vertical",
     "resizable.tsx > WithoutHandle",
-    "select.tsx > AlignItemWithTriggerOff",
-    "select.tsx > Default",
-    "select.tsx > Grouped",
-    "select.tsx > States",
-    "select.tsx > TriggerSizes",
     "sidebar.tsx > CollapsibleIcon",
     "sidebar.tsx > CollapsibleNone",
     "sidebar.tsx > CollapsibleOffcanvas",
@@ -102,18 +60,8 @@
     "sidebar.tsx > SideRight",
     "sidebar.tsx > VariantFloating",
     "sidebar.tsx > VariantInset",
-    "simple-key-handler.tsx (meta.component 不是组件)",
     "sonner.tsx > LoadingThenResolve",
     "sonner.tsx > Variants",
-    "sonner.tsx > WithDescription",
-    "status-badge.tsx > CustomLabels",
-    "status-badge.tsx > Default",
-    "status-badge.tsx > Tones",
-    "status-badge.tsx > WithoutDot",
-    "tabs.tsx > Default",
-    "tabs.tsx > ListVariants",
-    "tabs.tsx > Orientations",
-    "tabs.tsx > WithDisabled",
-    "use-lazy-chunk-fallback.tsx (meta.component 不是组件)"
+    "sonner.tsx > WithDescription"
   ]
 }

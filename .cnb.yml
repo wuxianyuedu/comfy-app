@@ -334,6 +334,13 @@
     #   2026-10-19 起这五格是 **工具链自证 / 安装 / Python 可用性 / Python 探针读数 /
     #   同步表结构** —— 前四格里的工具链与 Python 那两格是同日从 PR 撤进来的（下面那段）。
     #
+    # ⚠️ **`每日单元测试` 排在这份清单的最后**（业主口径：「最容易出问题的放最后，
+    #   然后执行过的就不用重复执行了」）。它不是「前提」也不是「重档优先」，它是这一条上
+    #   唯一会因**这台机器的负载**而红的格子（套件里大量用例真起子进程，超订的那一份
+    #   从等 CPU 变成等子进程 ⇒ `Test timed out in 30000ms`），而它排在中间时，一单条
+    #   抖动就把 `每日生产构建` / `每日浏览器安装` / `每日全量E2E` 一起 skip 掉。
+    #   顺序本身有判据（这一格必须是每日清单的最后一条），挪回中间会当场红。
+    #
     # ⚠️ **只判节点事实的格子不再每个 PR 都判**（2026-10-19 的口径：「这个环境不会经常
     #   改动」）：`工具链自证` 13.8s、`Python 可用性` 2.8s、`Python 探针读数` 3.0s、
     #   `浏览器安装` 3.0s 从 PR 那份清单撤到这里，**每撤一格都必须同批在这份清单里
@@ -344,8 +351,8 @@
     #   `check-pnpm-available.mjs` 判 —— 它一秒就有答案，且每个 PR 都需要。
     COMFYAPP_CI_DAILY_GATES: >-
       每日工具链自证, 每日安装依赖, 每日 Python 可用性, 每日 Python 探针读数,
-      每日同步数据库表结构, 每日单元测试, 每日生产构建,
-      每日浏览器安装, 每日全量E2E
+      每日同步数据库表结构, 每日生产构建, 每日浏览器安装,
+      每日全量E2E, 每日单元测试
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
     #   （分钟级），而判「装没装成」是零成本的。2026-10-19 起这一格是**唯一**的执行者
     #   （PR 上那一格同日撤到这里）—— 撤的理由是 PR 上再没有任何一步用浏览器
@@ -518,30 +525,12 @@
     # 库里要有表：套件里读库的那几条在没有库时的形态是「连不上」，看起来像业务故障
     # （§9.1 那格「页面 200、接口 500」的同一族误诊）。`db-push.mjs` 复核真建出表。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
-  # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
-  - name: 每日单元测试
-    # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
-    # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
-    # 跑绿刷新 `scripts/.full-suite-freshness.json`，本地「改了就当天跑」那条判据与
-    # 这一档读的是同一份事实。裸写 vitest 时这一档的绿只落在日志里、账面一个字不变。
-    #
-    # ⚠️ **必须整档跑**：`isWholeTrackRun` 会把「透传了 `--grep` / 指到单个文件」的
-    #   绿判成**不构成整档凭证**、当场不记账。并发不进 `extra` 的同一条理由写在
-    #   `planRun` 的注释里（塞错位置 = 每一次都绿而不记账）。
-    #
-    # 这一档还打**分文件耗时榜**（前 10 + 合计 + 中位，junit 落仓库内的
-    # `node_modules/.cache/`，与钩子那侧共用 `parseJunitXml`）—— 它顺带回答「这台机上跑全量时
-    # 哪几份在吃时间」，而那个数此前只在本地账本里有。只算测试阶段，用来排序不当 stage 墙钟。
-    # ⚠️ 落点**不是** `os.tmpdir()`：那样拼出来的是 `--outputFile.junit=C:\…`，而 PowerShell
-    #   宿主会在第一个冒号处把它切成两个参数，切剩的一截变成 vitest 的位置过滤器 ——
-    #   这一档首跑 12.6s 红、后面三档全 skipped 就是这么来的（`cnb-2in-1k589j0kp`，
-    #   边界表在 `scripts/launcher-core/shell.mjs` 的 `PS_UNSAFE_ARG_RE`）。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
-    # 45m：`full-suite-run.mjs` 自己的墙钟预算是 30 分钟（`FULL_SUITE_TIMEOUT_MS`），
-    # stage 预算必须**大于**它，否则先被平台掐的是 stage，而那一刀不带
-    # 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`）。历史读数 827s
-    # （`cnb-eus-1k5058g8l`，755 文件全量绿）—— 45m 给的是安静机器上的三倍余量。
-    timeout: 45m
+  # ── 全量单测**不在这里**：它排在整份清单的最后 ──
+  # 理由是业主那句「最容易出问题的放最后」：这一档是这条流水线上唯一会因**这台机的
+  # 负载**而单条超时的格子（实测 `cnb-b0l-1k59op66t`：775 份里 1 份红在
+  # `Test timed out in 30000ms`，而同一时刻另一份检出在跑全量 vitest），
+  # 排在中间就等于让一单条抖动决定后面三格跑不跑 —— 那三格至今零执行记录。
+  # 原文与预算注释在 `.daily-gates` 末尾。顺序由判据钉住（不许回到中间）。
   # 入口是**跑法脚本**（ISSUE #1979 的口径）：
   # 裸 `pnpm run build` 会让这一步的绿只落在日志里、`scripts/.artifact-freshness.json`
   # 一个字不变。外面这一层（`ci-daily-build.mjs`）多出来的只有事件身份与镜像读数，
@@ -648,6 +637,44 @@
     # 现在写在一句话里，顺序判据也钉住「`每日生产构建` 必须排在这一格之前」。
     env:
       COMFY_E2E_SERVER: start
+    timeout: 45m
+  # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
+  #
+  # ⚠️ **它排在整份清单的最后**（业主口径：「最容易出问题的放最后，然后执行过的就不用
+  # 重复执行了」）。这一格是这条流水线上唯一会因**这台机的负载**而单条超时的格子 ——
+  # 实测 `cnb-b0l-1k59op66t`：775 份里只 1 份红，红在 `Test timed out in 30000ms`，
+  # 而同一时刻另一份检出（`comfy-app-t3-branch2`）在跑全量 vitest、又一份在跑全量 eslint。
+  # 它排在中间时，那一单条抖动就把 `每日生产构建` / `每日浏览器安装` / `每日全量E2E`
+  # 三格一起 skip 掉（那三格至今零执行记录）。挪到最后之后，同一跑里那三格先拿到结论，
+  # 不必为了单测的抖动把前面几格重付一次。
+  # 顺序有判据：`tests/no-platform-ci-config.test.ts` 钉「这一格是每日清单的最后一条」。
+  - name: 每日单元测试
+    # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
+    # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
+    # 跑绿刷新 `scripts/.full-suite-freshness.json`，本地「改了就当天跑」那条判据与
+    # 这一档读的是同一份事实。裸写 vitest 时这一档的绿只落在日志里、账面一个字不变。
+    #
+    # ⚠️ **必须整档跑**：`isWholeTrackRun` 会把「透传了 `--grep` / 指到单个文件」的
+    #   绿判成**不构成整档凭证**、当场不记账。并发不进 `extra` 的同一条理由写在
+    #   `planRun` 的注释里（塞错位置 = 每一次都绿而不记账）。
+    #
+    # 这一档还打**分文件耗时榜**（前 10 + 合计 + 中位，junit 落仓库内的
+    # `node_modules/.cache/`，与钩子那侧共用 `parseJunitXml`）—— 它顺带回答「这台机上跑全量时
+    # 哪几份在吃时间」，而那个数此前只在本地账本里有。只算测试阶段，用来排序不当 stage 墙钟。
+    # ⚠️ 落点**不是** `os.tmpdir()`：那样拼出来的是 `--outputFile.junit=C:\…`，而 PowerShell
+    #   宿主会在第一个冒号处把它切成两个参数，切剩的一截变成 vitest 的位置过滤器 ——
+    #   这一档首跑 12.6s 红、后面三档全 skipped 就是这么来的（`cnb-2in-1k589j0kp`，
+    #   边界表在 `scripts/launcher-core/shell.mjs` 的 `PS_UNSAFE_ARG_RE`）。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
+    # 45m：`full-suite-run.mjs` 自己的墙钟预算是 30 分钟（`FULL_SUITE_TIMEOUT_MS`），
+    # stage 预算必须**大于**它，否则先被平台掐的是 stage，而那一刀不带
+    # 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`）。
+    # ⚠️ 两次读数把这条预算钉在很窄的带里：安静机器 827s（`cnb-eus-1k5058g8l`，755 文件
+    #   全量绿），而**满载机器 2466s**（`cnb-b0l-1k59op66t`，同规模、41 分钟）—— 后者已经
+    #   贴着 45m 的 stage 墙钟。而那一跑里 30 分钟的内部预算**并没有掐住它**
+    #   （vitest 自己跑完了全程），也就是「被预算砍」那一档话术在这里没有执行者 ——
+    #   这一格排到最后之后，被掐的代价不再是「后面三格没了」，但仍要修（见任务：
+    #   `full-suite-run.mjs` 的 timeoutMs 在 Windows 上是否真收得掉子树）。
     timeout: 45m
 
 .gates: &gates
