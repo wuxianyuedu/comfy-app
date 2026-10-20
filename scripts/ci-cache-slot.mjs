@@ -66,6 +66,7 @@ export function slotPath(cacheRoot, key) {
  * @param {string} a @param {string} b @returns {boolean}
  */
 export function sameVolumeAs(a, b) {
+  /** @param {string} p @returns {string} */
   const rootOf = (p) => {
     try {
       return path.parse(path.resolve(p)).root.toLowerCase();
