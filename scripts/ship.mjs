@@ -25,6 +25,20 @@
  *   | 流水线终态          | 平台 build 的 `data.status`（`cnb … -v` 的 JSON）            |
  *   | 合没合上            | PR 的 `is_merged` + **回读解析出的主干基线顶端**            |
  *
+ * ── 模块形状（一份 900 行硬闸装不下整条链，而按行数切会把因果切散）──────
+ *
+ *   · `ship-core.mjs`     —— **判断**：参数、阶段表、三态码的合成、平台 JSON 里
+ *     哪一格才是终态。纯函数，不起进程、不读文件之外的事实。
+ *   · `ship-exec.mjs`     —— **效应适配**：`cnb` 垫片怎么起、stderr 怎么接、
+ *     一次性临时文件落在 git 目录哪儿。只因宿主而变。
+ *   · `ship-platform.mjs` —— **平台侧四段**：PR / 轮询 / verdict / 合并并回读。
+ *     只经注入的 `run` 摸世界，所以整段可被假执行者跑完。
+ *   · 本文件              —— **本地三段 + 装配**：preflight / commit / push，
+ *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）。
+ *
+ * 拆的是**变化方向**：加一个阶段只动本文件与 `ship-platform.mjs`，改 Windows 垫片
+ * 只动 `ship-exec.mjs`。对外行为、命令行、退出码、打印原文一字不改。
+ *
  * ── 三条写进代码的纪律（不是文档承诺）──────────────────────────
  *
  * 1. **不发明判定。** 终态只认两个原值：build 的 `data.status`、PR 的 `is_merged`。
@@ -64,112 +78,29 @@
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
 import process from "node:process";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { pnpmInvocation } from "./launcher-core/shell.mjs";
-import { gitScratchPath, resolveGitDir } from "./git-dir.mjs";
+import { resolveGitDir } from "./git-dir.mjs";
 import {
-  asArray,
-  buildPullBody,
   CODE,
   combineShipCodes,
-  findPullForBranch,
   parseArgs,
   parseSlug,
   PHASES,
-  pickBuildForSha,
   planCommands,
-  readBuildVerdict,
   readProof,
-  readPullVerdict,
   resolveUpstream,
 } from "./ship-core.mjs";
-
-/**
- * 把 `cnb <args>` 解析成「这一族真正起得来的形态」。
- *
- * ⚠️ Windows 上 `cnb` 是 pnpm 全局目录里的三个垫片：无扩展名那份 node 不认
- * （ENOENT）、`cnb.cmd` 在无 shell 下被 Node 直接拒（**EINVAL**，CVE-2021-22940
- * 那批修复的副作用）、没有 `cnb.exe`。而本仓刻意 `shell: false`
- * （`launcher-core/shell.mjs` 头注第 2 条：多一层 `cmd /C` 就多一层失败面）。
- * 所以「`spawnSync("cnb")` 失败」**不等于**「这台机器没有 cnb」——
- * 实测 `usableCommand("cnb").ok` 与 `commandInvocation("cnb")` 都会给出否，
- * 而同一时刻命令行里 `cnb` 好得很。
- *
- * 出路不是自己摸 PATH、更不是偷偷开 `shell: true`，而是走**已经为 pnpm 解决过
- * 同一件事的那份唯一实现**：`pnpmInvocation(args, {name})` —— 它把
- * `cnb.ps1` 经 PowerShell 宿主起起来（实测 `viaHost: true`，spawn 退 0）。
- * 那个 `name` 选项就是它通用的一面，别因为函数名里有 pnpm 就另写一份。
- *
- * @param {string[]} args cnb 参数
- * @returns {{command:string,args:string[]} | null} 起得来的形态；找不到命令时 null
- */
-export function cnbSpawn(args) {
-  const inv = pnpmInvocation(args, { name: "cnb" });
-  return inv ? { command: inv.command, args: inv.args } : null;
-}
-
-/**
- * 造一个「跑外部命令」的执行者（测试里整体替换掉）。
- *
- * ⚠️ **`stderr` 必须一起带回来**：`git commit` 被 pre-commit 拦下时，钩子把全部
- * 原因写在 **stderr** 上。第一版只接了 `stdout`，于是屏幕上只剩一句
- * 「提交被门槛拦下」而**一个理由都没有** —— 对一个职责就是「如实转述执行者」的
- * 工具，这是它能犯的最重的错。
- *
- * @param {string} cwd 工作目录
- * @returns {(cmd:string,args:string[])=>{status:number,stdout:string,stderr:string,error:string|null}} 执行函数
- */
-export function makeRunner(cwd) {
-  return (cmd, args) => {
-    const inv = cmd === "cnb" ? cnbSpawn(args) : { command: cmd, args };
-    if (!inv) {
-      return {
-        status: -1,
-        stdout: "",
-        stderr: "",
-        error: "ENOENT",
-      };
-    }
-    const r = spawnSync(inv.command, inv.args, { cwd, encoding: "utf8" });
-    const err = r.error
-      ? /** @type {Error & {code?:string}} */ (r.error).code || String(r.error)
-      : null;
-    return {
-      status: r.status === null || r.status === undefined ? -1 : r.status,
-      stdout: r.stdout || "",
-      stderr: r.stderr || "",
-      error: err,
-    };
-  };
-}
-
-/**
- * 跑一次 `cnb … -v` 并把 stdout 当 JSON 解析。
- *
- * 解析失败**返回 null 而不是抛**：调用方据此判「没跑起来」（`CODE.NOT_RUN`），
- * 而不是让它冒成一条栈 —— 栈会被读成「命令跑过且失败」，那正是这一族要避免的误读。
- *
- * @param {(cmd:string,args:string[])=>{status:number,stdout:string,stderr:string,error:string|null}} run 执行者
- * @param {string[]} args cnb 参数
- * @returns {{json:any,code:number,raw:string} | null} 解析结果；取不到时 null
- */
-function cnbJson(run, args) {
-  const r = run("cnb", args);
-  if (r.error === "ENOENT") return null;
-  const text = r.stdout.trim();
-  const at = text.indexOf("{");
-  if (at < 0) return null;
-  try {
-    return { json: JSON.parse(text.slice(at)), code: r.status, raw: text };
-  } catch {
-    return null;
-  }
-}
+import { makeRunner, safeRead, short, writeScratch } from "./ship-exec.mjs";
+import {
+  createOrReusePull,
+  mergeAndVerify,
+  pollUntilTerminal,
+  reportVerdict,
+} from "./ship-platform.mjs";
 
 /**
  * 对外入口：跑一遍编排，**无论走到哪个出口都清掉自己写的临时文件**。
@@ -206,7 +137,7 @@ export async function main(deps = {}) {
  *
  * @param {{
  *   root?: string,
- *   run?: (cmd:string,args:string[])=>{status:number,stdout:string,stderr:string,error:string|null},
+ *   run?: (cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult,
  *   probeCnb?: ()=>boolean,
  *   resolveGitDir?: (cwd?:string)=>string | null,
  *   log?: (s:string)=>void,
@@ -222,7 +153,6 @@ async function runFlow(deps, tmpFiles) {
   const root = deps.root ?? process.cwd();
   /** git 目录怎么解析：默认那份唯一实现，测试里指到临时目录。 */
   const resolveDir = deps.resolveGitDir ?? resolveGitDir;
-  /** 写一份临时文件并**登记待回收** —— 只有这一条出口，漏登记就删不掉。 */
   /** 写一份临时文件到 git 目录并**登记待回收**；没有落点时回 null（不往工作区猜）。 */
   const mkTmp = (/** @type {string} */ name, /** @type {string} */ text) => {
     const p = writeScratch(root, name, text, resolveDir);
@@ -231,7 +161,7 @@ async function runFlow(deps, tmpFiles) {
   };
   const run = deps.run ?? makeRunner(root);
   /** cnb 在不在：**真起一次** `--version` 看退码。不按「PATH 里有没有那个名字」判 ——
-   *  在 Windows 垫片上「找得到」与「起得来」是两件事（见 `cnbSpawn` 那段）。 */
+   *  在 Windows 垫片上「找得到」与「起得来」是两件事（见 `ship-exec.mjs` 的 `cnbSpawn`）。 */
   const probeCnb =
     deps.probeCnb ?? (() => run("cnb", ["--version"]).status === 0);
   const log = deps.log ?? ((s) => process.stdout.write(s + "\n"));
@@ -556,7 +486,7 @@ async function runFlow(deps, tmpFiles) {
       codes.push(CODE.GREEN);
     }
 
-    // ── 阶段 3-6：平台侧（需要 cnb）────────────────────────────
+    // ── 阶段 3-6：平台侧（需要 cnb，实现见 `ship-platform.mjs`）──
     if (!cnbOk) {
       codes.push(CODE.NOT_RUN);
       return finish(codes);
@@ -564,78 +494,17 @@ async function runFlow(deps, tmpFiles) {
     const newSha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
 
     if (want("pull-request")) {
-      const list = cnbJson(run, [
-        "pulls",
-        "list-pulls",
-        "--repo",
+      const { number } = createOrReusePull({
+        run,
+        log,
+        mkTmp,
+        root,
         slug,
-        "--state",
-        "open",
-        "-v",
-      ]);
-      let number = list ? findPullForBranch(list.json, branch) : null;
-      if (number) {
-        log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
-      } else {
-        const title = run("git", ["log", "-1", "--pretty=%s"]).stdout.trim();
-        const body = buildPullBody({
-          root,
-          fragments: frags,
-          /* 基线取不到时这一格就是空 —— 宁缺：拿 `HEAD...HEAD` 会得到一份「什么都没有」
-           * 的 diffstat，而 PR 正文里那句「这次改了哪些文件」正是读者判断成本的入口。 */
-          diffstat: baseRef
-            ? run("git", ["diff", "--stat", `${baseRef}...HEAD`]).stdout.trim()
-            : "",
-        });
-        /* 守卫排在落临时文件**之前**：`mkTmp` 的回收挂在 `main` 的 `finally` 上，
-         * 先建再退虽然不会留垃圾，但会让「这次没建 PR」那一次也在盘上写过一份
-         * 提交信息原文 —— 而 #2037 修的就是这类东西不该留在盘上。 */
-        if (!baseBranch) {
-          log(
-            "[ship] 推不出主干分支名（基线引用不可用）⇒ 不建 PR：拿一个猜的 `--base` 建出去，" +
-              "得到的是「PR 指向一条不存在的主干」，而平台会照建不误。这一格退 NOT_RUN。",
-          );
-          codes.push(CODE.NOT_RUN);
-          return finish(codes);
-        }
-        const bf = mkTmp("ship-pr-body", body);
-        if (!bf) {
-          /* 正文可能上千行，`--body <串>` 会撞上 Windows 的 32k argv 上限，
-           * 所以这一格只能走文件。取不到 git 目录 = 不在真检出里 ⇒ 说清楚
-           * 而不是往工作区猜一个落点。 */
-          log(
-            "[ship] 取不到 git 目录 ⇒ PR 正文没有落点，这一格没有执行者（不是「不需要」）。",
-          );
-          codes.push(CODE.NOT_RUN);
-          return finish(codes);
-        }
-        const made = cnbJson(run, [
-          "pulls",
-          "post-pull",
-          "--repo",
-          slug,
-          "--base",
-          baseBranch,
-          "--head",
-          branch,
-          "--head-repo",
-          slug,
-          "--title",
-          title,
-          "--body-file",
-          bf,
-          "-v",
-        ]);
-        if (!made) {
-          log(
-            "[ship] 建 PR 没拿到可解析的响应 ⇒ 这一格没有结论（不是「失败」也不是「成功」）",
-          );
-          codes.push(CODE.NOT_RUN);
-          return finish(codes);
-        }
-        number = readPullVerdict(made.json).number;
-        log(`[ship] ✓ 已建 PR #${number}`);
-      }
+        branch,
+        frags,
+        baseRef,
+        baseBranch,
+      });
       if (!number) {
         codes.push(CODE.NOT_RUN);
         return finish(codes);
@@ -643,176 +512,47 @@ async function runFlow(deps, tmpFiles) {
       codes.push(CODE.GREEN);
 
       // ── 阶段 4：poll ─────────────────────────────────────────
-      let buildState = /** @type {"green"|"red"|"running"|"unknown"} */ (
-        "unknown"
-      );
-      let buildSn = null;
-      if (want("poll") && opt.wait) {
-        const deadline = now() + 45 * 60 * 1000;
-        for (;;) {
-          const logs = cnbJson(run, [
-            "build",
-            "get-build-logs",
-            "--repo",
-            slug,
-            "-v",
-          ]);
-          const builds = logs ? asArray(logs.json) : null;
-          if (!builds) {
-            log(
-              "[ship] 取不到 build 列表 ⇒ 没跑起来，不当成「还在跑」也不当成「绿」",
-            );
-            codes.push(CODE.NOT_RUN);
-            return finish(codes);
-          }
-          const picked = pickBuildForSha(builds, newSha);
-          if (!picked) {
-            log(
-              `[ship] 按 sha ${short(newSha)} 还没解析到 build（平台可能尚未开跑）…`,
-            );
-          } else {
-            buildSn = picked.sn;
-            const st = cnbJson(run, [
-              "build",
-              "get-build-status",
-              "--repo",
-              slug,
-              "--sn",
-              picked.sn,
-              "-v",
-            ]);
-            /** @type {{state:"green"|"red"|"running"|"unknown",raw:string|null}} */
-            const v = st
-              ? readBuildVerdict(st.json)
-              : { state: "unknown", raw: null };
-            buildState = v.state;
-            log(
-              `[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`,
-            );
-            if (v.state !== "running" && v.state !== "unknown") break;
-          }
-          if (now() > deadline) {
-            log("[ship] 轮询到预算上限仍未出终态 ⇒ 记「没跑起来」，不猜结论");
-            buildState = "unknown";
-            break;
-          }
-          await sleep(20000);
-        }
-      } else {
+      if (!(want("poll") && opt.wait)) {
         log("[ship] 跳过轮询（--no-wait / --only）⇒ 不合并。");
         codes.push(CODE.GREEN);
         return finish(codes);
       }
+      const poll = await pollUntilTerminal({
+        run,
+        log,
+        slug,
+        newSha,
+        now,
+        sleep,
+      });
+      if (poll.stop !== null) {
+        codes.push(poll.stop);
+        return finish(codes);
+      }
+      const { buildState, buildSn } = poll;
 
       // ── 阶段 5：verdict ──────────────────────────────────────
       if (want("verdict")) {
-        const pr = cnbJson(run, [
-          "pulls",
-          "get-pull",
-          "--repo",
-          slug,
-          "--number",
-          String(number),
-          "-v",
-        ]);
-        const pv = pr ? readPullVerdict(pr.json) : null;
-        if (pv) {
-          log(
-            `[ship] PR #${number}：mergeable_state=${pv.mergeableState} blocked_on=${pv.blockedOn || "(无)"} is_merged=${pv.isMerged}`,
-          );
-        }
-        if (buildState === "green") {
-          log(
-            `[ship] ✓ CI 绿（build ${buildSn}）。下一动作：pnpm ship --merge`,
-          );
-          codes.push(CODE.GREEN);
-        } else if (buildState === "red") {
-          log(
-            `[ship] ✗ CI 红（build ${buildSn}）。日志：https://cnb.cool/${slug}/-/build/logs/${buildSn}`,
-          );
-          log(
-            "[ship] 归因交给既有执行者：`node scripts/base-check.mjs <拦住你的那条>` —— 本脚本不自己判「是我的还是主干的」。",
-          );
-          codes.push(CODE.RED);
-        } else {
-          log("[ship] 没拿到 build 终态 ⇒ 这一格没有结论，不进入合并。");
-          codes.push(CODE.NOT_RUN);
-        }
+        codes.push(
+          reportVerdict({ run, log, slug, number, buildState, buildSn }),
+        );
       }
 
       // ── 阶段 6：merge（显式）─────────────────────────────────
       if (want("merge")) {
-        if (!opt.merge) {
-          log("[ship] 未给 --merge ⇒ 停在判决处。合并是显式动作。");
-          codes.push(CODE.GREEN);
-        } else if (buildState !== "green") {
-          log("[ship] 拒绝合并：CI 不是绿的（当前是 " + buildState + "）。");
-          codes.push(CODE.RED);
-        } else {
-          const title = run("git", ["log", "-1", "--pretty=%s"]).stdout.trim();
-          const mg = cnbJson(run, [
-            "pulls",
-            "merge-pull",
-            "--repo",
+        codes.push(
+          mergeAndVerify({
+            run,
+            log,
             slug,
-            "--number",
-            String(number),
-            "--merge-style",
-            "squash",
-            "--commit-title",
-            `${title} (#${number})`,
-            "-v",
-          ]);
-          /** @type {{merged?:boolean,sha?:string} | null} */
-          const mergeData = mg && mg.json ? (mg.json.data ?? null) : null;
-          if (!mergeData || mergeData.merged !== true) {
-            log(
-              "[ship] 合并调用没给出 merged:true ⇒ 不假定它成功了，去平台上核对。",
-            );
-            codes.push(CODE.RED);
-          } else {
-            // 回读两件事：平台说合上了，**且**碎片真的在主干顶端（只看平台回执 = 半个结论）。
-            /* 回读的那条引用也来自解析出的基线（`cnb/master` 在本仓），不写死 `origin`：
-             * 写死时 `fetch` 与 `cat-file` 双双失败，而 `frags.every(...)` 拿到的是
-             * 「每份都不在主干」⇒ 报成红；反过来若某处吞了失败，就会报成「都在」。
-             * 两个方向都错，且都读起来像有结论。 */
-            const baseParts = (baseRef ?? "").split("/");
-            const baseBranch = baseParts.slice(1).join("/");
-            run("git", [
-              "fetch",
-              baseParts[0] ?? up.remote ?? "origin",
-              baseBranch || "master",
-            ]);
-            const stillOpen = cnbJson(run, [
-              "pulls",
-              "get-pull",
-              "--repo",
-              slug,
-              "--number",
-              String(number),
-              "-v",
-            ]);
-            const back = stillOpen ? readPullVerdict(stillOpen.json) : null;
-            const readRef = baseRef ?? `${up.remote ?? "origin"}/master`;
-            const fragOnMaster = frags.every(
-              (f) =>
-                run("git", ["cat-file", "-e", `${readRef}:${f}`]).status === 0,
-            );
-            log(
-              `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? back.isMerged : "?"} 碎片在主干顶端=${fragOnMaster}`,
-            );
-            codes.push(
-              back && back.isMerged && fragOnMaster ? CODE.GREEN : CODE.RED,
-            );
-            if (fragOnMaster && back && back.isMerged) {
-              run("git", ["checkout", "master"]);
-              run("git", ["pull", "--ff-only"]);
-              log(
-                "[ship] 本地 master 已同步。远端分支**没删**（那不在本脚本的动作面里）。",
-              );
-            }
-          }
-        }
+            number,
+            frags,
+            baseRef,
+            up,
+            merge: opt.merge,
+            buildState,
+          }),
+        );
       }
     }
   }
@@ -834,51 +574,6 @@ async function runFlow(deps, tmpFiles) {
     log(`[ship] 结论：exit ${code} —— ${word}`);
     return code;
   }
-}
-
-/**
- * 把一份「只给这一次调用用」的文本落到 git 目录里（机器本地、不入库），
- * 与 `comfy-premerge-proof.json` / `comfy-precommit-timing.jsonl` 同一户、同一理由。
- *
- * 取不到 git 目录时回 `null` —— 调用方据此**跳过**这一步，而不是往工作区里猜一个落点：
- * 落在工作区就得靠 `.gitignore` 兜，而「靠 gitignore 兜住的临时文件」正是
- * AGENTS 硬规则 12 点名的那一族（`MERGE_MSG` / `COMMIT_EDITMSG` 落进工作区
- * 只说明「用 `-F` 写提交说明、提交完忘了删」）。
- *
- * @param {string} root 仓库根
- * @param {string} name 临时文件名前缀
- * @param {string} text 内容
- * @param {(cwd?:string)=>string | null} [resolve] git 目录解析器（测试可注入）
- * @returns {string | null} 写出的绝对路径；没有落点时 null
- */
-function writeScratch(root, name, text, resolve = resolveGitDir) {
-  const dir = gitScratchPath(root, "comfy-ship-tmp", resolve);
-  if (!dir) return null;
-  fs.mkdirSync(dir, { recursive: true });
-  const p = path.join(dir, `${name}-${process.pid}.tmp`);
-  fs.writeFileSync(p, text, "utf8");
-  return p;
-}
-
-/**
- * @param {string} root 仓库根
- * @param {string} rel 相对路径
- * @returns {string} 内容；读不到回空串
- */
-function safeRead(root, rel) {
-  try {
-    return fs.readFileSync(path.resolve(root, rel), "utf8");
-  } catch {
-    return "";
-  }
-}
-
-/**
- * @param {string | undefined} s 长串
- * @returns {string} 前 8 位或占位
- */
-function short(s) {
-  return s ? String(s).slice(0, 8) : "?";
 }
 
 if (
