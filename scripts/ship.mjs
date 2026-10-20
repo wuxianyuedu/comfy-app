@@ -288,14 +288,22 @@ async function runFlow(deps, tmpFiles) {
     return CODE.NOT_RUN;
   }
 
-  /* ── 远端名与上游基线：在两道守卫（未知旗标 / `--only` 单独跑）之后解析一次 ──
+  /* ── 远端名与主干基线：在两道守卫（未知旗标 / `--only` 单独跑）之后解析一次 ──
    * push / PR 正文 / fetch / 「回读主干顶端」四段都要用它，所以不能等各段各自去推。
-   * 这一版原先五处**写死 `origin`**，而本仓按规范只有一个叫 `cnb` 的远端
-   * （硬规则 6 / §13.6）⇒ 那五条命令全部失败，而每处失败都长得像「答案为空」：
-   * 碎片那一查拿到空串 ⇒ preflight 报「没有 changelog.d 碎片」⇒ `pnpm ship` 在本仓
-   * 从第一次跑起就没工作过，报的还是一个听起来正当的理由。
-   * 推不出远端名时**不在这里**判红：各阶段拿 `up.remote === null` 自己退 NOT_RUN ——
-   * 「取不到远端」与「这一步跑出来是红的」是两件事（三态退出码那条口径）。 */
+   *
+   * ⚠️ 「上游 `@{u}`」与「主干基线」**不是同一件事**，这一格错过一次：
+   * `git push -u origin feat/x` 把这条分支的上游设成**它在远端的副本**
+   * （`origin/feat/x`），于是拿 `@{u}` 当基线就是 `feat/x...HEAD` —— 自己与自己比，
+   * 结果恒空，碎片那一查报「0 份 ⇒ 单 PR 单变更不成立」。而撞上它的正是
+   * **推送之后的那一次跑**，也就是 `pnpm ship --merge` 那一跳（实测在
+   * `pnpm ship --no-wait` 上：exit 1「没有 changelog.d/ 碎片」）。
+   * 所以远端名先落地，再取 `refs/remotes/<远端>/HEAD` 那条**本地就有**的符号引用
+   * （零网络）当主干；两处都取不到时才退 `<远端>/master` 并标明是推的。
+   *
+   * 远端名同样是每台克隆自己的事实，不写死（并行检出里见过 `cnb`，本检出实测只有
+   * `origin`；见 docs/audits/2026-10-12 R12-01）。推不出远端名时**不在这里**判红：
+   * 各阶段拿 `up.remote === null` 自己退 NOT_RUN —— 「取不到远端」与
+   * 「这一步跑出来是红的」是两件事（三态退出码那条口径）。 */
   const upRes = run("git", [
     "rev-parse",
     "--abbrev-ref",
@@ -303,9 +311,25 @@ async function runFlow(deps, tmpFiles) {
     "@{u}",
   ]);
   const remotesRes = run("git", ["remote"]);
+  const headRes = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const localBranch = headRes.stdout.trim();
+  /* 第一趟只要「远端叫什么」—— 主干那条符号引用是按远端名去问的，得先知道远端名。 */
+  const probe = resolveUpstream({
+    upstream: upRes.stdout,
+    remotes: remotesRes.stdout.split("\n"),
+    localBranch,
+  });
   up = resolveUpstream({
     upstream: upRes.stdout,
     remotes: remotesRes.stdout.split("\n"),
+    localBranch,
+    remoteHead: probe.remote
+      ? run("git", [
+          "symbolic-ref",
+          "--quiet",
+          `refs/remotes/${probe.remote}/HEAD`,
+        ]).stdout
+      : null,
   });
   /* 基线引用要**真的存在**才拿来比：拿不存在的 ref 做 `A...HEAD`，git 失败、stdout 为空，
    * 而这一查的语义是「这条分支带进来了什么」—— 空串会被读成「什么都没带」，
