@@ -20,12 +20,14 @@
  *    **检出的 `.git/config`**（`core.hooksPath` + `git lfs install --local --manual`），
  *    那不在 `node_modules` 里、接槽接不过来 —— 于是由作业自己补（`runJobLifecycle`）。
  *
- * ## 为什么带开关、且默认关
+ * ## 开关：已拨（两条流水线同值）
  *
  * `Install dependencies` 每一次构建都过，它红了后面就没有任何一步。把「机制」与
  * 「换执行者」同批推上去的形态是一次键算错就让所有 PR 装不上 —— 与本仓在档位那一刀上
- * 立的纪律相反。所以这一档要 `COMFY_CI_SLOT=1` 才走；不开时 `ci-install-deps.mjs`
- * 的行为与本增量之前逐字相同。
+ * 立的纪律相反，所以机制先落地、开关后拨（#2045 与本次之间就是这一隔）。
+ * 今天的状态（2026-10-20）：`.cnb.yml` 的 PR 与每日两格安装依赖都置了 `COMFY_CI_SLOT=1`。
+ * 两格必须同值是既有判据（`tests/no-platform-ci-config.test.ts` 比「命令行 + env 赋值」
+ * 逐字相同）说了算；回退 = 摘掉那两行 env。
  *
  * ## 两条硬边界
  *
@@ -326,6 +328,34 @@ export function pruneSlots(io) {
 }
 
 /**
+ * 槽的现状 —— 三格分开，尤其不许把「指纹文件在、但这一趟读不动」读成「键变了」。
+ *
+ * 这条区分是**打开开关的前提**：判成「键变了」会走重装，而重装在失败时把那棵树删掉。
+ * 并发作业时那棵树可能正被另一个作业**接在上面**（它读到了匹配的指纹才接的），
+ * 于是一次 `EBUSY`（Windows 上另一进程正在写那个文件时的既定形态）的代价是
+ * 把别人正在用的依赖树删了 —— 那比「这一跑没省到时间」重得多。
+ *
+ * @param {string} slot
+ * @returns {{treePresent: boolean, fingerprint: string | null, unreadable: boolean}}
+ */
+export function readSlotState(slot) {
+  const treePresent = fs.existsSync(path.join(slot, "node_modules"));
+  const file = path.join(slot, FINGERPRINT_FILE);
+  let exists = false;
+  try {
+    exists = fs.existsSync(file);
+  } catch {
+    /* `existsSync` 自己不抛；留着是为了形状一致，读不动照样落到下面那一格。 */
+  }
+  if (!exists) return { treePresent, fingerprint: null, unreadable: false };
+  try {
+    return { treePresent, fingerprint: fs.readFileSync(file, "utf8").trim(), unreadable: false };
+  } catch {
+    return { treePresent, fingerprint: null, unreadable: true };
+  }
+}
+
+/**
  * 三档读数的执行版。装与起进程都走注入的 `run`（默认 `runPnpmSync` 那唯一一条出口）。
  *
  * @param {{
@@ -348,20 +378,24 @@ export function applySlot(io = {}) {
   const cacheRoot = (env[CACHE_ROOT_ENV] ?? "").trim();
   const key = pnpmInstallFingerprint(cwd);
   const slot = cacheRoot && key ? slotPath(cacheRoot, key) : null;
-  const present = Boolean(slot && fs.existsSync(path.join(slot, "node_modules")));
-  let slotFingerprint = null;
-  if (slot && present) {
-    try {
-      /* `FINGERPRINT_FILE` 是**相对槽根**的路径（它就是那份 install 在自己的根上写的），
-       * 再拼一次 `node_modules` 会指到一个不存在的位置、把命中读成没命中。 */
-      slotFingerprint = fs
-        .readFileSync(path.join(slot, FINGERPRINT_FILE), "utf8")
-        .trim();
-    } catch {
-      slotFingerprint = null;
-    }
+  const state = slot
+    ? readSlotState(slot)
+    : { treePresent: false, fingerprint: null, unreadable: false };
+  /* 读不动 ⇒ 既不接也不重装：这一跑没省到时间是小事，把别人正在用的树删了是事故。 */
+  if (state.unreadable) {
+    log("[缓存槽] 槽里有指纹文件但这一趟读不动 ⇒ 不判「键变了」、不接、不删（退回普通装）");
+    return {
+      handled: false,
+      action: "no-cache",
+      why: "指纹读不动（不是读不到）⇒ 没有足够事实动那棵树",
+    };
   }
-  const plan = planSlot({ cacheRoot, key, slotPresent: present, slotFingerprint });
+  const plan = planSlot({
+    cacheRoot,
+    key,
+    slotPresent: state.treePresent,
+    slotFingerprint: state.fingerprint,
+  });
   log(`[缓存槽] ${plan.action} · ${plan.why}`);
   if (!slot || plan.action === "no-cache") {
     return { handled: false, action: plan.action, why: plan.why };

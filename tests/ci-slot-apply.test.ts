@@ -270,6 +270,32 @@ describe("applySlot 的三档", () => {
     expect(installs).toBe(1);
   });
 
+  it("指纹文件在但读不动 ⇒ 不判「键变了」、不接、也不删那棵树", () => {
+    // 「读不动」与「读不到」必须分开：判成键变了会走重装，而重装失败时删槽 ——
+    // 那棵树可能正被另一个作业接在上面（它是读到匹配指纹才接的）。
+    // 这里用「同名的目录」造出 existsSync 为真、readFileSync 必抛的形状（EISDIR）。
+    fs.mkdirSync(path.join(slot, "node_modules", ".ci-deps-fingerprint"), {
+      recursive: true,
+    });
+    let installs = 0;
+    const out = applySlot({
+      cwd: job,
+      env: env(cache),
+      run: () => {
+        installs += 1;
+        return { status: 0 };
+      },
+      spawn: () => ({ status: 0 }),
+      probe: () => 100 * 1024 ** 3,
+      log: () => undefined,
+    });
+    expect(out.handled).toBe(false);
+    expect(out.action).toBe("no-cache");
+    expect(out.why).toContain("读不动");
+    expect(installs).toBe(0);
+    expect(fs.existsSync(path.join(slot, "node_modules"))).toBe(true);
+  });
+
   it("盘不够 ⇒ 不装、不建槽、退回普通装", () => {
     let installs = 0;
     const out = applySlot({
