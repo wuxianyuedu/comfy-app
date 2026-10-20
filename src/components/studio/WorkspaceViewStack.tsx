@@ -45,6 +45,10 @@ import {
   withViewOpenReport,
   type ViewOpenedAtLookup,
 } from "./ViewOpenReport";
+import {
+  registerLazyViewLoader,
+  startLazyViewPrefetch,
+} from "./lazy-view-prefetch";
 
 /**
  * 懒加载视图的**统一出口**：所有 `next/dynamic` 声明都经它，好让「分块加载失败」
@@ -75,6 +79,10 @@ function lazyView<P extends object>(
   loader: () => Promise<ComponentType<P>>,
 ): ComponentType<P> {
   LAZY_VIEWS.add(view);
+  /* 同一份 loader 再登记一份给空闲预热：动态 import 从此不必等用户点开那一屏
+   * 才发出（按需编译 / 现拉分块的代价从「点击之后」挪到「挂载之后的空闲里」，
+   * 见 ./lazy-view-prefetch）。 */
+  registerLazyViewLoader(loader);
   return dynamic(
     () =>
       loader()
@@ -341,6 +349,13 @@ export function WorkspaceViewStack({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpened({ view: activeView, at: performance.now() });
   }, [activeView]);
+
+  /* 懒加载分块的空闲预热：挂载即启动（幂等，StrictMode 双跑只排一次）。
+   * 为什么要它：「界面打开」耗时里那段 15~23s 是点击之后才发出的 `import()`
+   * （dev 按需编译 / 生产现拉），提前要一遍，用户点开时直接兑现。 */
+  useEffect(() => {
+    startLazyViewPrefetch();
+  }, []);
 
   /* 同一屏的不同页签共用同一个视图 id，与 `useWorkspaceTabs` 的口径一致。 */
   const openedAtOf = useMemo<ViewOpenedAtLookup>(
