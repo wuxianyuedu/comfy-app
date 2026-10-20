@@ -750,6 +750,42 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(heard.join("\n")).toContain("碎片 1 份");
   });
 
+  it("没有任何一段落下结论时不许退 0（--only=commit / push / pull-request 那一形）", async () => {
+    /* 阶段 0 之外的每一段都嵌在 `want("preflight")` 里面，所以单跑这三段时
+     * `codes` 是空数组，而 `combineShipCodes([])` 回 0 ⇒ 屏幕落出「全绿到终态」，
+     * 实际一段都没跑。实测（拆分之前的同一入口）：
+     * `node scripts/ship.mjs --only=commit --dry-run` 只打印那一句结论、退 0。 */
+    for (const phase of ["commit", "push", "pull-request"]) {
+      const heard: string[] = [];
+      const { run, calls } = fake();
+      expect(
+        await main({
+          root: process.cwd(),
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          args: [`--only=${phase}`],
+        }),
+        `--only=${phase} 一段都没跑，不该被读成「跑过了且没问题」`,
+      ).toBe(CODE.NOT_RUN);
+      /* 而且真的没伸手改世界：这三段各自的写动作一条都不该出现。 */
+      expect(
+        calls.filter((c) =>
+          ["git commit", "git push", "cnb pulls post-pull"].some((w) =>
+            c.startsWith(w),
+          ),
+        ),
+        `--only=${phase} 伸出了写动作`,
+      ).toEqual([]);
+      expect(heard.join("\n")).toContain("没有任何一段落下结论");
+    }
+    /* 反向：正常跑完阶段 0 的那几条不许被这条守卫误伤。 */
+    const { run } = fake();
+    expect(
+      await main({ ...quiet, run, args: ["--only=preflight", "--dry-run"] }),
+    ).toBe(CODE.GREEN);
+  });
+
   it("同一条分支上第二次跑（碎片已提交、工作树干净）不许被那条守卫拒掉", async () => {
     /* 这是把上一条从「恒真」改成「只看工作树」之后**新引入**的失效：
      * 第一次跑提交了碎片 ⇒ 工作树干净 ⇒ 只看工作树就恒假 ⇒
