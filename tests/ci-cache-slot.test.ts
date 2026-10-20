@@ -22,6 +22,7 @@ import {
   main,
   planSlot,
   resolveCacheRoot,
+  sameVolumeAs,
   SLOT_ACTIONS,
   slotPath,
 } from "../scripts/ci-cache-slot.mjs";
@@ -29,10 +30,24 @@ import {
 const ROOT = path.resolve(__dirname, "..");
 const KEY = "a".repeat(64);
 
-/** 临时槽根（用真实文件系统跑 `readSlot` 那一侧，夹具造不出「目录在但没指纹」这一档）。 */
+/**
+ * 临时槽根（用真实文件系统跑 `readSlot` 那一侧，夹具造不出「目录在但没指纹」这一档）。
+ *
+ * ⚠️ 它必须与 `ROOT` **同卷**：执行档现在会拦跨卷的槽根（那条守卫是 #2049 之后一次
+ * `EXDEV` 真红换来的），而 `os.tmpdir()` 在 C:、本仓在 F: —— 拿 tmp 当槽根会让
+ * 「槽不在 ⇒ install-into-slot」这一档永远测不到，看起来像判据坏了。
+ * 落点取卷根下的临时目录，正是生产里推导出来的那个位置同一层。
+ */
 const made: string[] = [];
 function tmpRoot(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ci-slot-"));
+  const onRepoVolume = path.join(path.parse(ROOT).root, "comfy-slot-test");
+  let dir: string;
+  try {
+    dir = fs.mkdtempSync(onRepoVolume);
+  } catch {
+    // POSIX 上卷根不可写 ⇒ 退回 tmp（此时同卷守卫在该平台上恒真，不影响这些用例）。
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "ci-slot-"));
+  }
   made.push(dir);
   return dir;
 }
@@ -179,9 +194,9 @@ describe("槽根的推导（不写死盘符）", () => {
     });
     expect(out.root).not.toBeNull();
     expect(path.parse(out.root!).root).toBe(path.parse(store).root);
-    expect(
-      (out.root!).endsWith(path.join("ci-cache", "comfy-app-t3")),
-    ).toBe(true);
+    expect(out.root!.endsWith(path.join("ci-cache", "comfy-app-t3"))).toBe(
+      true,
+    );
     expect(out.from).toContain(store);
   });
 
@@ -226,5 +241,34 @@ describe("槽根的推导（不写死盘符）", () => {
     const text = lines.join("\n");
     expect(text).toContain("槽根来源");
     expect(text).toContain(".pnpm-store");
+  });
+});
+
+describe("第二条同卷义务：槽与作业必须同卷", () => {
+  it("同卷判真、跨卷判假（Windows 上就是盘符；POSIX 上根恒 `/` ⇒ 恒真）", () => {
+    expect(sameVolumeAs(ROOT, path.join(ROOT, "node_modules"))).toBe(true);
+    if (process.platform === "win32") {
+      expect(sameVolumeAs("D:/ci-cache/repo", ROOT)).toBe(false);
+      // 空串**不是**「读不到」：`path.resolve("")` 落在 cwd ⇒ 判同卷。
+      // 「没有槽根」这件事由上一格（`planSlot` 的 `!cacheRoot`）去说，别指望这里拦。
+      expect(sameVolumeAs("", ROOT)).toBe(true);
+    }
+  });
+
+  it("跨卷 ⇒ no-cache，且那句话把后果说清（红会落在别人一条用例里）", () => {
+    const out = planSlot({
+      cacheRoot: "D:/ci-cache/repo",
+      key: KEY,
+      sameVolume: false,
+    });
+    expect(out.action).toBe("no-cache");
+    expect(out.why).toContain("同一卷");
+    expect(out.why).toContain("EXDEV");
+  });
+
+  it("没给这条事实时不拦（默认同卷 ⇒ 既有四档的形状不变）", () => {
+    expect(planSlot({ cacheRoot: "D:/ci-cache/repo", key: KEY }).action).toBe(
+      "install-into-slot",
+    );
   });
 });

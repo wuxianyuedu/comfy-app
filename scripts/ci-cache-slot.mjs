@@ -52,21 +52,57 @@ export function slotPath(cacheRoot, key) {
 }
 
 /**
+ * 两个路径是否落在**同一个卷**上（Windows 上就是同一个盘符；POSIX 上恒为 `/` ⇒ 恒真）。
+ *
+ * 这里要判的是第二条同卷义务，第一条（与 store 同卷）管的是硬链接，这一条管**能不能用**：
+ * 作业里的 `node_modules` 是指向槽的 junction，于是「往 `node_modules` 里挪一个文件」这类
+ * 动作（`fs.renameSync` 那一型）在跨卷时不是变慢，是**直接失败** ——
+ * 实测形态：`EXDEV: cross-device link not permitted, rename
+ * '<G:>\…\workspace\.storybook\generated\app-origin.json' ->
+ *  '<G:>\…\workspace\node_modules\.cache\…'`（目标穿过 junction 落在了 F: 的槽里）。
+ * 红的位置在一条用例里，原因在缓存槽的选址上 —— 所以选址必须自己拦下来，
+ * 不许让别人去猜（同 §13.5.3.4.3 那句「红在别处、永远指不到这一层」）。
+ *
+ * @param {string} a @param {string} b @returns {boolean}
+ */
+export function sameVolumeAs(a, b) {
+  /** @param {string} p @returns {string} */
+  const rootOf = (p) => {
+    try {
+      return path.parse(path.resolve(p)).root.toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+  const ra = rootOf(a);
+  const rb = rootOf(b);
+  return ra !== "" && ra === rb;
+}
+
+/**
  * 该落哪一档。**纯函数**：所有事实由调用方给（于是四档都能在用例里造出来，不需要真树）。
  *
  * 判别顺序里两条「不猜」的分支排在前面：没配槽 与 键算不出来。它们与「槽没命中」
  * 是三件不同的事，混成一档就会在「其实没配」与「配了但键变了」之间给出同一个读数。
  *
- * @param {{cacheRoot?: string | null, key?: string | null, slotPresent?: boolean, slotFingerprint?: string | null}} input
+ * @param {{cacheRoot?: string | null, key?: string | null, slotPresent?: boolean,
+ *   slotFingerprint?: string | null, sameVolume?: boolean}} input
+ *   `sameVolume` = 槽根与**作业检出**是否同卷（默认 `true`，即调用方没这条事实时不拦）。
  * @returns {{action: string, path: string | null, why: string}}
  */
 export function planSlot(input) {
-  const { cacheRoot, key, slotPresent = false, slotFingerprint = null } = input;
+  const {
+    cacheRoot,
+    key,
+    slotPresent = false,
+    slotFingerprint = null,
+    sameVolume = true,
+  } = input;
   if (!cacheRoot) {
     return {
       action: "no-cache",
       path: null,
-      why: `没配 ${CACHE_ROOT_ENV} —— 节点上没有跨作业活下来的目录，这一格没有槽可言`,
+      why: `没配 ${CACHE_ROOT_ENV}（也不是推导出来的）—— 节点上没有跨作业活下来的目录，这一格没有槽可言`,
     };
   }
   if (!key) {
@@ -74,6 +110,16 @@ export function planSlot(input) {
       action: "no-cache",
       path: null,
       why: "依赖面指纹算不出来（锁文件 / 配置读不到）⇒ 不拿一个猜出来的键去找槽",
+    };
+  }
+  if (!sameVolume) {
+    return {
+      action: "no-cache",
+      path: null,
+      why:
+        `槽根与作业检出**不在同一卷** ⇒ 不接：作业里的 \`node_modules\` 是指向槽的链接，` +
+        "跨卷时「往 node_modules 里挪一个文件」这类 rename 会直接 EXDEV 失败" +
+        "（红会落在某条用例里，原因在选址上 —— 所以这里拦，不让人猜）",
     };
   }
   const slot = slotPath(cacheRoot, key);
@@ -192,7 +238,12 @@ export function main(io = {}) {
   /* 槽路径只由「槽根 + 键」决定，不含任何磁盘事实 ⇒ 先算它、再读它的现状、最后交给
    * `planSlot` 判关系（顺序反过来就得在 plan 里再算一遍路径，那是第二份事实）。 */
   const slot = cacheRoot && key ? slotPath(cacheRoot, key) : null;
-  const plan = planSlot({ cacheRoot, key, ...readSlot(slot, cwd) });
+  const plan = planSlot({
+    cacheRoot,
+    key,
+    sameVolume: cacheRoot ? sameVolumeAs(cacheRoot, cwd) : true,
+    ...readSlot(slot, cwd),
+  });
   log(
     `[缓存槽读数] 键 ${(key ?? "取不到").slice(0, 12)}·槽 ${
       cacheRoot ? cacheRoot : "未配置"
