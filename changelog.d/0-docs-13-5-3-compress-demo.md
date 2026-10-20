@@ -21,7 +21,8 @@
   **同一行**」上判，那一行的反引号屏障与「无」字不能压掉；`check-doc-references.cjs` 的
   步数判据（`STEP_INDEX_RE` / `STEP_COUNT_RE`）按行判，「第 N 步」与 `pre-commit`/`CI`
   **写进同一行就红** —— 合并相邻两行时会当场踩到。
-- **`docs/generated/**` 是逐字节派生物**（本轮实测：源 7489 行 / 生成态 7492 行，差 3 行 banner），
-  改完编辑态必须 `pnpm doc:render` 同批提交。复算：`check-doc-references.cjs` 与
-  `check-gate-flag-claims.cjs` 均退 0，读这份文档的五份用例 **249 条全绿**。
-  体量：`13` 章 7547 → 7489 行。
+- **`docs/generated/**` 是逐字节派生物**（本轮实测：源与生成态差 3 行 banner，重跑 `pnpm doc:render`
+  零变化），改完编辑态必须同批提交生成态。复算：`check-doc-references.cjs` 与
+  `check-gate-flag-claims.cjs` 均退 0，读这份文档的六份用例 **267 条全绿**。
+  体量：本批净 **−58 行**（`13` 章 7547 → 7489）；与并行那笔 `§13.5.3.4.3` 的 +51 合流后，
+  主干上是 7540 行 —— 那 51 行一个字没动，rebase 后逐处核过。
