@@ -1,5 +1,5 @@
 /**
- * `scripts/ship.mjs` 的**取数**判据。
+ * `pnpm ship`（`scripts/ship*.mjs` 这一族）的**取数**判据。
  *
  * ## 为什么这份文件只测「取数」，不测「流程走没走完」
  *
@@ -383,9 +383,10 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     adds: ["src/a.ts"],
     hasMessage: true,
     merge: true,
-    /* 本仓的远端叫 `cnb`（硬规则 6：没有 `origin`）。计划里那一行必须用**解析出的**
-     * 远端名 —— 写死 `origin` 时这一版在 push 那一段就起不来，而 dry-run 照样打印得
-     * 很漂亮：计划与执行两头都写着同一条错。 */
+    /* 远端名是**每台克隆机器自己的事实**（并行检出里实测见过 `cnb`，本检出是
+     * `origin`，见 docs/audits/2026-10-12 R12-01），所以夹具故意给一个不是 `origin`
+     * 的名字：计划里那一行必须用**解析出的**远端名 —— 写死 `origin` 时这一版在 push
+     * 那一段就起不来，而 dry-run 照样打印得很漂亮：计划与执行两头都写着同一条错。 */
     remote: "cnb",
     baseBranch: "master",
   };
@@ -437,11 +438,15 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
   it("对账：计划里的「模块+工具」对 ⇄ 源码里真实调用的，必须同集合", () => {
     /* `planCommands` 是命令清单的第二份抄本 —— 这正是要避免的形态，所以不装作它不是：
      * 这里把它与真执行面**逐条对账**，任何一侧新增/改名而另一侧没跟，这条就红。
-     * 只比「模块 + 工具」这一对（参数值里有 `<tmp>` / `…` 这类占位，逐字比会脆）。 */
-    const src = readFileSync(
-      path.resolve(__dirname, "../scripts/ship.mjs"),
-      "utf8",
-    );
+     * 只比「模块 + 工具」这一对（参数值里有 `<tmp>` / `…` 这类占位，逐字比会脆）。
+     * 取数面是 `scripts/ship*.mjs` **整个族**，不是某一个文件：cnb 调用从编排入口
+     * 搬去平台侧模块时，只读单份文件的提取会抓到 0 条 ⇒ 两侧都空集、于是恒绿，
+     * 而下面那条前置断言就是拦住这种「提取坏了却看起来像结论」的。 */
+    const shipDir = path.resolve(__dirname, "../scripts");
+    const src = readdirSync(shipDir)
+      .filter((f) => /^ship.*\.mjs$/.test(f))
+      .map((f) => readFileSync(path.join(shipDir, f), "utf8"))
+      .join("\n");
     /** 从 `cnbJson(run, ["pulls", "post-pull", …])` 里抽出前两个字符串。 */
     const called = new Set<string>();
     for (const m of src.matchAll(
@@ -498,7 +503,9 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
 
 describe("main()：用注入的假执行者钉住「哪些命令真的会被跑」", () => {
   /**
-   * 注入执行者的返回形状 —— 与 `ship.mjs` 里 `makeRunner` 的逐字同形。
+   * 注入执行者的返回形状 —— 与 `ship-exec.mjs` 的 `ExecResult` 同形。
+   * 「同形」不是这句注释自己保证的：`main({ run })` 的入参类型就是那个 typedef，
+   * 少一个字段（尤其 `stderr`）会当场在 `fake()` 的调用点报 TS 错。
    * 这里用 TS 语法而不是 JSDoc `@type`：本文件是 `.ts`，而 JSDoc 的变量/参数注解
    * 只在 `.js` / `.mjs` 里被采纳，在 `.ts` 里会被静默忽略（实测报
    * `Property 'branch' does not exist on type '{}'`）。
