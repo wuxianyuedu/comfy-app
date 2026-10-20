@@ -270,19 +270,35 @@ export function hasRoomForSlot(io) {
 }
 
 /**
- * 一个路径所在卷的空闲字节。
+ * 一个路径所在卷的空闲字节 —— **路径还不存在时向上找到最近存在的祖先**。
  *
- * @param {string} target @returns {number | null} 卷读不到时给 `null`，不猜
+ * 为什么必须向上找，而不是「读不到就 null」：`fs.statfsSync` 对不存在的目标抛 `ENOENT`
+ * （本机实测），而**槽根在第一次被建出来之前必然不存在**。按「读不到」处理时那句
+ * 「读不到 ⇒ 按不够处理」就把第一次那一跑永久判成不建槽，于是开关拨下去也是空转 ——
+ * 这个形态在节点上实测到了：#2049 合并后 `F:\runner\ci-cache\comfy-app-t3` 仍然没有
+ * 被创建，CI 全绿（回退本来就是绿的），而槽一次都没生效。
+ *
+ * 自由空间本来就是**卷级**事实，沿同一卷向上取任意一个存在的目录，读到的就是同一个数，
+ * 所以这不是「放宽判据让它通过」，是把量具指对量具。真正读不到的情形（盘符不存在、
+ * 权限拒绝）照旧返回 `null` 并被判成不够。
+ *
+ * @param {string} target @returns {number | null}
  */
 export function statfsFreeBytes(target) {
-  let info;
-  try {
-    info = fs.statfsSync(target);
-  } catch {
-    return null;
+  let dir = path.resolve(target);
+  for (;;) {
+    try {
+      const info = fs.statfsSync(dir);
+      const bytes = info.bsize * info.bavail;
+      return Number.isFinite(bytes) ? bytes : null;
+    } catch (err) {
+      const code = errCode(err);
+      if (code !== "ENOENT" && code !== "ENOTDIR") return null;
+      const parent = path.dirname(dir);
+      if (parent === dir) return null;
+      dir = parent;
+    }
   }
-  const bytes = info.bsize * info.bavail;
-  return Number.isFinite(bytes) ? bytes : null;
 }
 
 /**
