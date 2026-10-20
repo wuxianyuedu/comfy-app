@@ -497,8 +497,16 @@
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-console-encoding.mjs --apply
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs
   # 与 PR 那格同一份实现（`ci-install-deps.mjs`：先自证 pnpm 起得来，再按语义判
-  # 要不要装）。定时这一跑每次都是全新检出 ⇒ 这一跳恒为「装」，不是可省的装饰。
+  # 要不要装）。判定与命令行**必须与 PR 那格逐字相同** —— 这不是风格：判据
+  # `tests/no-platform-ci-config.test.ts` 比的就是「命令行 + env 赋值」两组字面，
+  # 同一份脚本长在两条流水线上各配一份 env，就是两条流水线各自漂（§12.12 的孪生形态）。
+  # ⚠️ 因此这里**也**置了 `COMFY_CI_SLOT`：原打算留定时这一跑当「不走槽的对照臂」，
+  # 被那条判据否掉了 —— 那就拿不到对照组。这不损失结论的可信度：该比的两侧
+  # （未命中=冷装 / 命中=接槽）**本来就在同一条流水线里各留了打印**，见下面那格的 env 注释。
   - name: 每日安装依赖
+    env:
+      COMFY_CI_CACHE_ROOT: F:\runner\ci-cache\comfy-app-t3
+      COMFY_CI_SLOT: "1"
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -824,11 +832,11 @@
   # 依赖面就得真装」不再一致，那时的表现是依赖不对但门禁全绿。
   #
   # ⚠️ 这一格**只读数、不碰盘**：动作在执行档 `scripts/ci-slot-apply.mjs`，而它由
-  # `COMFY_CI_SLOT=1` 才拨 —— **这里刻意不置那个开关**。第二增量的机制已经落地（规范
-  # §13.5.3.4.3 有四个实测数与三条边界），但那一格接的是 `Install dependencies`、
-  # 每次构建都要过它，键算错一次的代价是所有 PR 装不上：打开它是一次「一行可回退」的
-  # 动作，不是一个默认值。这一格配上槽根之后，日志会如实说出「这一跑会不会命中」——
-  # 那正是平台侧三档收益实测缺的那一格。
+  # `COMFY_CI_SLOT=1` 才拨 —— 开关的落点在**下面那格 `Install dependencies`**（本格不置它，
+  # 两格各判一件事：这里回答「会不会命中」，那里执行「命中就接」）。机制与开关是分两批推的：
+  # 那一格每次构建都要过，键算错一次的代价是所有 PR 装不上 —— 先让判据在场、再把开关拨过去
+  # （同 §13.5.25 那条纪律）。本格配上槽根之后，日志会如实说出「这一跑会不会命中」——
+  # 那是平台侧三档收益实测的两个出处之一（另一个是 `Install dependencies` 自己那句打印）。
   - name: 缓存槽读数
     env:
       # 三条例外都不成立，所以落点选在 `F:\runner\ci-cache\comfy-app-t3`：
@@ -892,6 +900,19 @@
   # pnpm 自己那几秒（实测 59~61s 的绝大部分是后面的 `postinstall` 里那几条
   # node 脚本与缓存刷新，见 §13.5.20）。`pnpm` 自证照旧每次都跑。
   - name: Install dependencies
+    env:
+      # 槽根与上面 `缓存槽读数` 那格**同一个值**（两处写不一样的路径，读数就在判
+      # 一个不存在的东西）。同卷是硬要求：pnpm 跨卷不硬链接，换卷装会退化成整树复制。
+      COMFY_CI_CACHE_ROOT: F:\runner\ci-cache\comfy-app-t3
+      # 开关（ISSUE #2022 第二步，机制见 §13.5.3.4.3）：**这一跑开始走槽**。
+      # 走与不走都由 `ci-install-deps.mjs` 自己打印（`✓ 走缓存槽（reuse）` /
+      # `走缓存槽（install-into-slot）` / `槽未接管（原因）⇒ 照常装`），所以三档收益的
+      # 读数是从它自己的那句话里取的，不是从「这格变快了」倒推的。
+      # 该比的两侧在同一格内就有：未命中那一跑量的就是冷装本身（节点上 76.9s 那一格），
+      # 命中那一跑的打印里装那一跳根本没发生 —— 不需要另留一条「不走槽」的流水线当对照。
+      # 两条流水线（PR 与每日）都置同一个值是硬要求，理由见「每日安装依赖」上面那段。
+      # 回退 = 摘掉这两处 env 里的这一行。
+      COMFY_CI_SLOT: "1"
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
