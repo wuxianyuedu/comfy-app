@@ -427,13 +427,19 @@ export function planCommands(st) {
  * 读 pre-push 落的合并前证明（机器本地、**不入库**，见 `premerge-proof.mjs`）。
  *
  * @param {string} root 仓库根
+ * @param {(cwd?:string)=>string | null} [resolve] git 目录解析器 —— 默认那份唯一实现；
+ *   调用方注入了自己的解析器时**必须一起传进来**，否则这一格读的是这台机器的真实 `.git`
  * @returns {{headSha?:string,upstreamSha?:string,verifiedAt?:string,baselineRed?:string[]} | null} 取不到回 null
  */
-export function readProof(root) {
+export function readProof(root, resolve = resolveGitDir) {
   /* git 目录的解析不在这里重做 —— 唯一实现见 `scripts/git-dir.mjs`。
    * 这里此前自己判「`.git` 是文件就当指针读」，只覆盖 worktree 那一种，
-   * `GIT_DIR` 与裸仓库一个都不认；手写一份弱化的同一件事，比不写更难被发现。 */
-  const gitDir = resolveGitDir(root);
+   * `GIT_DIR` 与裸仓库一个都不认；手写一份弱化的同一件事，比不写更难被发现。
+   *
+   * `resolve` 是这一次跑**已经注入的那一份**解析器：证明的读取也归它管，否则
+   * 注入只覆盖临时文件那一半，另一半点的是这台机器真实的 `.git` —— 「同一次跑里
+   * git 目录指哪儿」就会有两套答案（用例里表现为本地绿、节点红）。 */
+  const gitDir = resolve(root);
   if (!gitDir) return null;
   try {
     return JSON.parse(

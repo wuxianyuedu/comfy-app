@@ -1016,75 +1016,120 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     };
   }
 
+  /** 自带一份合并前证明的现场。
+   *
+   * `push` 那一段会读 `comfy-premerge-proof.json`，读不到就压上 `NOT_RUN` —— 开发机上它
+   * 在（真推送过），CI 节点上没有，于是凡「断言走到 PR / 合并那一段的结论」的格子都会
+   * **本地绿、节点红**（实测 #2064 第一条就这样）。凡要断退出码的走完整链的格子，都用这一份。 */
+  function proofRoot(tag: string): { tmpRoot: string; gitDir: string } {
+    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), `ship-${tag}-`));
+    const gitDir = path.join(tmpRoot, "gitdir");
+    fs.mkdirSync(gitDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(gitDir, "comfy-premerge-proof.json"),
+      JSON.stringify({
+        headSha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+        upstreamSha: "1c649c36b2b51cc7fc96141f8e26da2f5e88d9c3",
+        verifiedAt: "2026-01-01T00:00:00.000Z",
+        baselineRed: [],
+      }),
+      "utf8",
+    );
+    return { tmpRoot, gitDir };
+  }
+
   it("建 PR 用的标题：取分支第一笔非常规提交，顶端那个合并节点不算", async () => {
     /* 与上面那格同一件事的执行侧：`git log -1 --pretty=%s` 在「先合 master 再 ship」
      * 与「最后补一笔碎片」两种走法下都会顶掉主体那一笔，而 PR 标题与 squash 那一行
      * 都从它取。夹具默认把顶端设成 `Merge branch 'master' into fix/x`。 */
-    const heard: string[] = [];
-    const base = fake();
-    const run = overrideRun(base, {
-      "list-pulls": '{"status":200,"data":[]}',
-      "post-pull": '{"status":201,"data":{"number":2999}}',
-    });
-    const code = await main({
-      root: process.cwd(),
-      run,
-      log: (s: string) => heard.push(s),
-      probeCnb: () => true,
-      args: ["--no-wait"],
-    });
-    const post = base.calls.find((c) => c.includes("post-pull")) ?? "";
-    expect(post, "没建 PR，或标题没进 argv").toContain(
-      "--title fix(x): 主体的那一笔",
-    );
-    expect(post).not.toContain("--title Merge branch");
-    expect(heard.join("\n")).toContain("标题取自 branch-first");
-    expect(code).toBe(CODE.GREEN);
+    const { tmpRoot, gitDir } = proofRoot("title");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "list-pulls": '{"status":200,"data":[]}',
+        "post-pull": '{"status":201,"data":{"number":2999}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      const post = base.calls.find((c) => c.includes("post-pull")) ?? "";
+      expect(post, "没建 PR，或标题没进 argv").toContain(
+        "--title fix(x): 主体的那一笔",
+      );
+      expect(post).not.toContain("--title Merge branch");
+      expect(heard.join("\n")).toContain("标题取自 branch-first");
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 
-  it("合并那一行的标题同样取自分支；两处都没有 ⇒ 不拿空串去建 PR", async () => {
-    const heard: string[] = [];
-    const base = fake({ branchSubjects: [], headSubject: "" });
-    const run = overrideRun(base, {
-      "list-pulls": '{"status":200,"data":[]}',
-    });
-    const code = await main({
-      root: process.cwd(),
-      run,
-      log: (s: string) => heard.push(s),
-      probeCnb: () => true,
-      args: ["--no-wait"],
-    });
-    expect(
-      base.calls.some((c) => c.includes("post-pull")),
-      '标题是空串也不该把 `--title ""` 发给平台',
-    ).toBe(false);
-    expect(heard.join("\n")).toContain("标题");
-    expect(code).toBe(CODE.NOT_RUN);
+  it("两处都取不到标题 ⇒ 不伸手建 PR，退 2 而不是建出一条没有标题的", async () => {
+    /* 自带证明这一份现场（见 `proofRoot`），否则这里的 `NOT_RUN` 可能只是「缺证明」
+     * 压上来的，断言就成了空转。 */
+    const { tmpRoot, gitDir } = proofRoot("no-title");
+    try {
+      const heard: string[] = [];
+      const base = fake({ branchSubjects: [], headSubject: "" });
+      const run = overrideRun(base, {
+        "list-pulls": '{"status":200,"data":[]}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      expect(
+        base.calls.some((c) => c.includes("post-pull")),
+        '标题是空串也不该把 `--title ""` 发给平台',
+      ).toBe(false);
+      const all = heard.join("\n");
+      expect(all).toContain("标题取自 none");
+      expect(all).toContain("不建 PR");
+      expect(code).toBe(CODE.NOT_RUN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
 
-    /* 反向：人显式给的 `--title` 走到底 —— 这一格同时钉住「加旗标不改其余推导」。 */
-    const heard2: string[] = [];
-    const base2 = fake();
-    const run2 = overrideRun(base2, {
-      "list-pulls": '{"status":200,"data":[]}',
-      "post-pull": '{"status":201,"data":{"number":3001}}',
-    });
-    await main({
-      root: process.cwd(),
-      run: run2,
-      log: (s: string) => heard2.push(s),
-      probeCnb: () => true,
-      args: ["--no-wait", "--title=feat(z): 整条 PR 其实是这件事"],
-    });
-    expect(base2.calls.find((c) => c.includes("post-pull")) ?? "").toContain(
-      "--title feat(z): 整条 PR 其实是这件事",
-    );
-    expect(heard2.join("\n")).toContain("标题取自 flag");
+  it("显式 `--title` 压过推导，且来源读得出是 flag", async () => {
+    const { tmpRoot, gitDir } = proofRoot("flag-title");
+    try {
+      const heard2: string[] = [];
+      const base2 = fake();
+      const run2 = overrideRun(base2, {
+        "list-pulls": '{"status":200,"data":[]}',
+        "post-pull": '{"status":201,"data":{"number":3001}}',
+      });
+      await main({
+        root: tmpRoot,
+        run: run2,
+        log: (s: string) => heard2.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait", "--title=feat(z): 整条 PR 其实是这件事"],
+      });
+      expect(base2.calls.find((c) => c.includes("post-pull")) ?? "").toContain(
+        "--title feat(z): 整条 PR 其实是这件事",
+      );
+      expect(heard2.join("\n")).toContain("标题取自 flag");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 
   it("响应能解析但没有 PR 号时，不许念出「已建」—— 那句成功必须有号撑着", async () => {
     /* 实测踩过的外形：`cnb pulls post-pull` 的响应**能解析**、`data` 里却没有号
-     * （这一次是 `--title` 里带 `--xxx=yyy` 经 PowerShell 宿主转发时失败），
+     * （第一次撞到它是 #2057：提交信息被 `pnpm run` 压成一整行，发出去的标题就是那一坨），
      * 而上一版先打印 `✓ 已建 PR #null` 再回来看值 —— 平台上根本没有那个 PR，
      * 屏幕上写着成功。所以这一格把「念出口」排在「验到有号」之后，并把响应原文
      * 与 stderr 一起转述出来：这一族宁可说一句「没跑起来」，也不许替执行者总结。 */

@@ -469,7 +469,9 @@ async function runFlow(deps, tmpFiles) {
         codes.push(CODE.RED);
         return finish(codes);
       }
-      const proof = readProof(root);
+      /* 证明的读取也走这一次注入的解析器 —— 少了这个参数，注入只覆盖临时文件那一半，
+       * 而这一格会去读这台机器真实的 `.git`（用例本地绿、节点红就是这么来的）。 */
+      const proof = readProof(root, resolveDir);
       if (proof) {
         log(
           `[ship] ✓ 合并前证明：head ${short(proof.headSha)} · 上游 ${short(proof.upstreamSha)} · ${proof.verifiedAt || "?"}`,
