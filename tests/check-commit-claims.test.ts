@@ -388,10 +388,18 @@ describe("真历史（本仓库）", () => {
       let out = "";
       let code = 0;
       try {
+        /* `stdio` **必须显式给**：不给的时候 `execFileSync` 会把子进程的 stderr
+         * 直接接到**父进程**的 stderr 上（Node 文档原文：stderr by default will be
+         * output to the parent process' stderr unless stdio is specified），于是这条
+         * 用例的预期产物「2 处声明与事实矛盾」会原样糊进 vitest 的报告 —— 而这与
+         * 「门禁自己真的在报反事实」在日志里**逐字同形**（平台侧 `cnb-n1j-1k5ct202i`
+         * 第 9 格就留着这么一段，读的人按「提交信息说反话」去查，而那一格是全绿的）。
+         * 接住之后它进 `out`，断言照旧，报告里不再有它。 */
         out = execFileSync(process.execPath, [SCRIPT, "--commit", "ad81a912"], {
           cwd: REPO_ROOT,
           encoding: "utf8",
           timeout: 120_000,
+          stdio: ["ignore", "pipe", "pipe"],
         });
       } catch (err) {
         const e = err as { status?: number; stdout?: string; stderr?: string };
