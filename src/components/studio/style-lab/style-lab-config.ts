@@ -19,7 +19,6 @@ import {
   combinationCount,
   MATRIX_HARD_LIMIT,
   MATRIX_SOFT_LIMIT,
-  SECONDS_PER_IMAGE_ESTIMATE,
 } from "~/lib/style-lab/style-lab-matrix";
 
 export { CHARACTER_ATTRIBUTES, STYLE_TAG_OPTIONS };
@@ -84,7 +83,8 @@ export interface StyleLabMatrixPreview {
   comboCount: number;
   /** 计划展开的格数 =（风格按不约束记 1）× 特征叉积。与 `create` 的算术闸同一口径。 */
   cellCount: number;
-  etaText: string;
+  /** 预计整批耗时；`null` = 本机还没有可参考的实测耗时（不拿编的数冒充估计）。 */
+  etaText: string | null;
   overSoft: boolean;
   overHard: boolean;
 }
@@ -99,16 +99,23 @@ export interface StyleLabMatrixPreview {
 export function plannedMatrixPreview(
   styles: readonly string[],
   traits: StyleLabTraits,
+  /** 本机已完成出图的实测中位耗时（秒）；null = 暂无参考。 */
+  medianSecPerImage: number | null,
 ): StyleLabMatrixPreview {
   const styleCount = styles.length;
   const comboCount = combinationCount(traits);
   const cellCount = axisCount(styleCount) * comboCount;
-  const etaSeconds = cellCount * SECONDS_PER_IMAGE_ESTIMATE;
   return {
     styleCount,
     comboCount,
     cellCount,
-    etaText: etaText(etaSeconds),
+    /* 耗时只从实测来：没有历史时返回 null，由界面说「暂无参考」——
+       拿一个拍出来的秒数算「约 34 分钟」，用户会照着它决定要不要分批，
+       那就是用一个编造的数驱动真实决策。 */
+    etaText:
+      medianSecPerImage == null
+        ? null
+        : etaText(cellCount * medianSecPerImage),
     overSoft: cellCount > MATRIX_SOFT_LIMIT,
     overHard: cellCount > MATRIX_HARD_LIMIT,
   };
@@ -119,7 +126,9 @@ export function matrixFormulaText(
   styles: readonly string[],
   traits: StyleLabTraits,
 ): string {
-  const p = plannedMatrixPreview(styles, traits);
+  /* 这一句只报格数，不报耗时：ETA 属于「提交前」那一屏的决策信息，列表行不需要，
+     所以显式传 null（而不是给个假样本量去算一个用不上的数）。 */
+  const p = plannedMatrixPreview(styles, traits, null);
   return `${String(p.styleCount)} 风格 × ${String(p.comboCount)} 特征 = ${String(
     p.cellCount,
   )} 格`;

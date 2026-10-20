@@ -3,10 +3,11 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import {
   styleLabRepository,
+  taskRepository,
   workflowTemplateRepository,
 } from "~/lib/core/repository";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
-import { combinationCount } from "~/lib/style-lab/style-lab-matrix";
+import { combinationCount, medianSeconds } from "~/lib/style-lab/style-lab-matrix";
 import type {
   StyleLabExperimentRow,
   StyleLabListItem,
@@ -16,6 +17,11 @@ import type {
   StyleExperimentRow,
   StyleExperimentCellRow,
 } from "~/server/db/schema";
+
+/* ETA 的样本量：取最近这么多条已完成出图算中位数。用中位数而不是均值、用一批
+ * 而不是最近一条，是因为单张图的耗时会被「显存吃紧慢一轮」这类离群值拉偏——
+ * 一个偏慢的样本会让用户以为整批要更久，从而做出错误的分批决定。 */
+const MEDIAN_SAMPLE_SIZE = 20;
 
 /* JSON 列（styles / traits / params）在 schema 里是 `text(..., { mode: "json" })`，
  * Drizzle 读回来是已解析的 JS 值，但推断类型是 `unknown`；这里按 DTO 声明收窄。
@@ -78,7 +84,7 @@ export const styleLabRouter = createTRPCRouter({
         })
         .optional(),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const take = input?.take ?? 60;
       const rows = await styleLabRepository.listRecent(take);
       const cells = await styleLabRepository.findCellsForExperiments(
@@ -93,7 +99,14 @@ export const styleLabRouter = createTRPCRouter({
           doneCount: entry.done,
         };
       });
-      return { items };
+      /* ETA 的唯一来源：本机最近已完成出图的真实耗时中位数。
+       * 没有历史就给 null —— 界面宁可说「暂无参考」，也不拿一个编出来的秒数
+       * 让用户据此决定要不要分批。 */
+      const durations = await taskRepository.findRecentImageDurations(
+        ctx.user.id,
+        MEDIAN_SAMPLE_SIZE,
+      );
+      return { items, medianSecPerImage: medianSeconds(durations) };
     }),
 
   /* 创建：只立「试验定义」，不产生格子 —— 扇出入口在下一批。 */

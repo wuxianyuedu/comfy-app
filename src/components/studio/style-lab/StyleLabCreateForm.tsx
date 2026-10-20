@@ -115,7 +115,10 @@ export function StyleLabCreateForm({ c }: { c: StyleLabController }) {
           ))}
 
           <p className="text-ink-faint text-xs tabular-nums">
-            计划 {String(c.preview.cellCount)} 格 · 预计 {c.preview.etaText}
+            计划 {String(c.preview.cellCount)} 格 ·{" "}
+            {c.preview.etaText
+              ? `预计 ${c.preview.etaText}`
+              : "暂无耗时参考（本机还没有已完成的出图）"}
             {c.preview.overSoft ? "（这批会很久，建议拆开试）" : ""}
             {c.preview.overHard ? "（超出单批上限）" : ""}
           </p>

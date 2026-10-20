@@ -8,7 +8,7 @@ import { db } from "~/lib/db";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
-import { eq, and, inArray, desc, asc, sql, count } from "drizzle-orm";
+import { eq, and, inArray, desc, asc, sql, count, isNotNull } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 
@@ -407,6 +407,54 @@ export class TaskRepository extends DrizzleRepository<Task> {
       .from(task)
       .where(eq(task.status, "QUEUED"));
     return rows[0]?.c ?? 0;
+  }
+
+  /**
+   * 最近若干条**已成功出图**任务的实际单张耗时（秒），按提交时间倒序取 `take` 条样本。
+   *
+   * 为什么要有这一条读法：批量扇出那一屏要在提交前告诉用户「这批大概多久」，而这个数
+   * 只能来自**本机真实跑过的那几次**（`finishedAt - createdAt`）。此前那里写的是一条
+   * 拍出来的常数，于是界面报出一句看起来像测量的假数 —— 换掉它的唯一办法就是给一条
+   * 真读数，而不是再猜一个更像的数。
+   *
+   * 两条筛选口径：
+   *   · `status = SUCCEEDED` 且 `finishedAt` 非空 —— 没跑完的行没有「实际耗时」可言；
+   *     `RUNNING` 行的 `finishedAt` 为空，用它当样本会拿「还没结束」冒充「用了多久」。
+   *   · `resultImages` 非空 —— 这一格回答的是「出一张图要多久」。终态但零产物的成功行
+   *     （工作流没接出图节点）不算一次出图，混进来会把样本往便宜的方向拽。
+   *
+   * 差值非正就丢弃：库里成对写歪（时钟回拨、`claimedAt`/`finishedAt` 被跨进程乱序写入）
+   * 时会算出 0 或负数。留着它不是「一个偏小的真实样本」，而是一条不该进统计的坏数据 ——
+   * 中位数对离样本是稳的，但对这种**符号就错**的值没有辨别能力。
+   *
+   * 这里给的是**原始样本**而不是中位数：怎么把样本翻成一个数（取中位还是均值）与
+   * 怎么把它显示出来，是判据与文案的事，归 `~/lib/style-lab/style-lab-matrix`；
+   * 仓储只回答「本机有哪些样本」。
+   */
+  async findRecentImageDurations(
+    userId: string,
+    take: number,
+  ): Promise<number[]> {
+    const rows = await db
+      .select({ createdAt: task.createdAt, finishedAt: task.finishedAt })
+      .from(task)
+      .where(
+        and(
+          eq(task.userId, userId),
+          eq(task.status, "SUCCEEDED"),
+          isNotNull(task.finishedAt),
+          isNotNull(task.resultImages),
+        ),
+      )
+      .orderBy(desc(task.createdAt))
+      .limit(take);
+    const durations: number[] = [];
+    for (const row of rows) {
+      if (!row.finishedAt) continue;
+      const seconds = (row.finishedAt.getTime() - row.createdAt.getTime()) / 1000;
+      if (Number.isFinite(seconds) && seconds > 0) durations.push(seconds);
+    }
+    return durations;
   }
 
   // 以下 16 个方法各 delegate 一行到 `impl`；SQL 主体与 JSDoc（包括

@@ -182,8 +182,13 @@ export function useStyleLab(): StyleLabController {
   );
 
   const preview = useMemo(
-    () => plannedMatrixPreview(form.styles, form.traits),
-    [form.styles, form.traits],
+    () =>
+      plannedMatrixPreview(
+        form.styles,
+        form.traits,
+        listQ.data?.medianSecPerImage ?? null,
+      ),
+    [form.styles, form.traits, listQ.data?.medianSecPerImage],
   );
   const validation = useMemo(() => validateCreateForm(form), [form]);
 

@@ -12,11 +12,10 @@
 <li><a href="" aria-current="page">MATRIX_HARD_LIMIT</a></li></ul>
 <h1>Variable MATRIX_HARD_LIMIT<code class="tsd-tag">Const</code></h1></div>
 <div class="tsd-signature"><span class="tsd-kind-variable">MATRIX_HARD_LIMIT</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">60</span></div>
-<div class="tsd-comment tsd-typography"><p>硬上限（格）：超过就拒绝这一批（下一批的扇出入口会用它挡在提交之前）。
-取 60 是「约 42 分钟起步」这一档 —— 再长就该拆成几次试，而不是一口气压满串行队列。</p>
+<div class="tsd-comment tsd-typography"><p>硬上限（格）：超过就拒绝这一批，并要求拆成几次（<code>runBatch</code> 挡在提交之前）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/style-lab/style-lab-matrix.ts:24</li></ul></aside></div>
+<li>Defined in src/lib/style-lab/style-lab-matrix.ts:30</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
