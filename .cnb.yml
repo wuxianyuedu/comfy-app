@@ -505,7 +505,8 @@
   # （未命中=冷装 / 命中=接槽）**本来就在同一条流水线里各留了打印**，见下面那格的 env 注释。
   - name: 每日安装依赖
     env:
-      COMFY_CI_CACHE_ROOT: F:\runner\ci-cache\comfy-app-t3
+      # 一个路径都不写：槽根由 `resolveCacheRoot` 问 `pnpm store path` 推导（见 `缓存槽读数`
+      # 那格上面的那段）。这里只留开关。
       COMFY_CI_SLOT: "1"
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -826,30 +827,21 @@
     timeout: 5m
 
   # ── 缓存槽读数（ISSUE #2022 第二步；恒不退非零）──
-  # 只回答三问：有没有槽（`COMFY_CI_CACHE_ROOT` 配没配）、该落哪个键、这一跑与它的关系
-  # 是 `reuse` / `install-into-slot` / `no-cache` 中哪一档。键刻意复用 `ci-deps-face.mjs`
-  # 的 `pnpmInstallFingerprint` —— 两处各算一份 sha 的漂移形态是「缓存命中判断」与「碰了
-  # 依赖面就得真装」不再一致，那时的表现是依赖不对但门禁全绿。
+  # 只回答三问：有没有槽、该落哪个键、这一跑与它的关系是 `reuse` / `install-into-slot` /
+  # `no-cache` 中哪一档。键刻意复用 `ci-deps-face.mjs` 的 `pnpmInstallFingerprint` ——
+  # 两处各算一份 sha 的漂移形态是「缓存命中判断」与「碰了依赖面就得真装」不再一致，
+  # 那时的表现是依赖不对但门禁全绿。
   #
   # ⚠️ 这一格**只读数、不碰盘**：动作在执行档 `scripts/ci-slot-apply.mjs`，而它由
-  # `COMFY_CI_SLOT=1` 才拨 —— 开关的落点在**下面那格 `Install dependencies`**（本格不置它，
-  # 两格各判一件事：这里回答「会不会命中」，那里执行「命中就接」）。机制与开关是分两批推的：
-  # 那一格每次构建都要过，键算错一次的代价是所有 PR 装不上 —— 先让判据在场、再把开关拨过去
-  # （同 §13.5.25 那条纪律）。本格配上槽根之后，日志会如实说出「这一跑会不会命中」——
-  # 那是平台侧三档收益实测的两个出处之一（另一个是 `Install dependencies` 自己那句打印）。
+  # `COMFY_CI_SLOT=1` 才拨 —— 开关的落点在下面那格 `Install dependencies`（本格不置它，
+  # 两格各判一件事：这里回答「会不会命中」，那里执行「命中就接」）。机制与开关分两批推，
+  # 理由同 §13.5.25 那条纪律：那一格每次构建都要过，键算错一次的代价是所有 PR 装不上。
+  #
+  # **这里一个路径都不写**：槽根由 `resolveCacheRoot` 在作业时问
+  # `pnpm store path`（同一条 cwd、同一条解析面，所以就是那次 install 真正会用的 store），
+  # 取它所在卷下的 `ci-cache/<包名>`。写死盘符曾经把这台机器坑在什么位置上，见
+  # §13.5.3.4.3 里「runner 换盘」那一段。
   - name: 缓存槽读数
-    env:
-      # 三条例外都不成立，所以落点选在 `F:\runner\ci-cache\comfy-app-t3`：
-      # ① 它必须活在**作业目录以外** —— `<repoId>/<流水线 id>/workspace` 那个带 id 的
-      #    目录每跑新建再删，正是「热态永远不成立」的根因（§13.5.3.4.3）；
-      # ② 它必须与 `F:\.pnpm-store\v11` **同卷** —— pnpm 跨卷不做硬链接，换卷安装会退化成
-      #    整树复制，实测一个槽的净成本就从 52 MiB 变成表观的 982 MiB；
-      # ③ 目录不在**不影响读数** —— `planSlot` 读成「槽不在」⇒ `install-into-slot`。
-      #    但**执行档曾经被这一格挡死**：`fs.statfsSync` 对不存在的路径抛 `ENOENT`，而
-      #    「读不到 ⇒ 按不够处理」把每一跑都判成不建槽 —— 开关拨下去是空转（#2049 实测到，
-      #    #2050 修：向上取同一卷最近存在的祖先）。所以这一条从现在起是有牙齿的：
-      #    `F:\runner\ci-cache\comfy-app-t3\<键>` 真的被建出来了，读数与盘上事实可对账。
-      COMFY_CI_CACHE_ROOT: F:\runner\ci-cache\comfy-app-t3
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-cache-slot.mjs
     # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
     timeout: 5m
@@ -904,9 +896,6 @@
   # node 脚本与缓存刷新，见 §13.5.20）。`pnpm` 自证照旧每次都跑。
   - name: Install dependencies
     env:
-      # 槽根与上面 `缓存槽读数` 那格**同一个值**（两处写不一样的路径，读数就在判
-      # 一个不存在的东西）。同卷是硬要求：pnpm 跨卷不硬链接，换卷装会退化成整树复制。
-      COMFY_CI_CACHE_ROOT: F:\runner\ci-cache\comfy-app-t3
       # 开关（ISSUE #2022 第二步，机制见 §13.5.3.4.3）：**这一跑开始走槽**。
       # 走与不走都由 `ci-install-deps.mjs` 自己打印（`✓ 走缓存槽（reuse）` /
       # `走缓存槽（install-into-slot）` / `槽未接管（原因）⇒ 照常装`），所以三档收益的
