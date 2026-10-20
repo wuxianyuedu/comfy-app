@@ -61,19 +61,39 @@ describe("档位：跳过必须被说出来", () => {
     }
   });
 
-  it("pre-push 那一跳接手了 commit 的重档（四段里必须有 unitTests）", () => {
+  it("pre-push 不再背受影响用例：那一段 2026-10-20 撤了，执行者换成平台那一格", () => {
+    /* 沿革（别读混）：`unitTests` 段 2026-10-19 从 pre-commit 的 C 组搬到 pre-push，
+     * 2026-10-20 又整体撤掉 —— 本地这一跳在共享机上的失效形态是 forks worker 调度
+     * 超时而不是用例红（实测拦下一次、隔离复跑 88 文件 1116 条全绿），增量档自此
+     * 由 `.cnb.yml` 的 `受影响用例` 一格执行。
+     * 这里钉两件：① premerge 段表里**没有** `unitTests`（留一段恒跳过会让 `--json`
+     * 的读数里永远有一格「没跑起来」，而那一格不构成证据，§13.6.2）；② 新执行者的
+     * 三个事实都在场（GATES 里有名字、跑法脚本走同一条判决链、改动面经 env 传入）。 */
     const src = readFileSync(
       path.join(ROOT, "scripts/premerge-check.mjs"),
       "utf8",
     );
-    // 段在场 + 用同一份注册表 + `--light` 那一档必须自己说出来。
-    expect(src).toContain('kind: "changed"');
-    expect(src).toContain("unitTests");
+    expect(src).not.toContain("unitTests:");
+    expect(src).not.toContain('kind: "changed"');
+    // `base` 段仍读钩子注册表（localTierLabels），`--light` 那一档的跳过条数照旧要说出来。
     expect(src).toContain("localTierLabels");
-    expect(src).toContain("COMFY_AFFECTED_CHANGED");
     expect(src).toContain("--light");
-    // 拿不到清单不能退 0（那会把「没判」读成「判过且绿」）。
-    expect(src).toMatch(/files\.length === 0[\s\S]{0,400}code: 2/);
+
+    const ci = readFileSync(
+      path.join(ROOT, "scripts/ci-affected-tests.mjs"),
+      "utf8",
+    );
+    // 同一条判决链：跑法脚本起的是 run-affected-tests.mjs，改动面经 env 递进去。
+    expect(ci).toContain("run-affected-tests.mjs");
+    expect(ci).toContain("COMFY_AFFECTED_CHANGED");
+    // 并发按 §13.5.21 的唯一出处收敛，不在这里另写一个数。
+    expect(ci).toContain("resolveCiWorkers");
+
+    const cnb = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
+    expect(cnb).toContain("- name: 受影响用例");
+    expect(cnb).toContain("类型检查, 受影响用例,");
+    // 拿不到改动面 / 清单为空必须退 2（没判 ≠ 绿）。
+    expect(ci).toMatch(/files\.length === 0[\s\S]{0,400}return 2/);
   });
 
   /**
