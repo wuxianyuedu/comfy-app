@@ -130,8 +130,20 @@ describe("空闲与锁：两条「不够就不做」的闸", () => {
     expect(free).toBeGreaterThan(0);
   });
 
-  it("路径不存在时给 null，而不是给一个「看起来够用」的数", () => {
-    expect(statfsFreeBytes(path.join(job, "没有这个路径"))).toBeNull();
+  it("槽根还不存在时照样读得出所在卷的自由空间（这条以前反过来钉）", () => {
+    // 旧断言写的是「路径不存在 ⇒ null」，而那正是**空转的成因**：槽根在第一次被建出来
+    // 之前必然不存在，null 被 `hasRoomForSlot` 判成「不够」，于是开关拨下去也永远不建槽
+    // —— 节点上实测到了（#2049 合并后槽根目录仍未被创建，而 CI 全绿，因为回退本来就绿）。
+    // 自由空间是卷级事实，向上取最近存在的祖先读到的就是同一个数。
+    const missing = path.join(cache, "这个键还没被建出来");
+    const fromMissing = statfsFreeBytes(missing);
+    const fromRoot = statfsFreeBytes(cache);
+    expect(fromMissing).not.toBeNull();
+    expect(fromMissing).toBe(fromRoot);
+  });
+
+  it("整条路径都不属于任何存在的卷 ⇒ 给 null（读不到就是读不到，按不够处理）", () => {
+    expect(statfsFreeBytes("Z:/这一台机器上没有这个盘")).toBeNull();
   });
 
   it("低于下限 ⇒ 不建槽，且原因里带两个数（读数要能自查）", () => {
@@ -294,6 +306,32 @@ describe("applySlot 的三档", () => {
     expect(out.why).toContain("读不动");
     expect(installs).toBe(0);
     expect(fs.existsSync(path.join(slot, "node_modules"))).toBe(true);
+  });
+
+  it("不注入 probe 也要能对「还不存在的槽根」做出决定 ⇒ 真去建（节点空转的回归位）", () => {
+    // 上面那条「盘不够」的用例注入的是假读数，所以它测不到默认量具；而生产里第一次
+    // 遇到的一定是「槽根还没被建出来」。这一条不注入 `probe`，走真实的 `statfsFreeBytes`。
+    fs.rmSync(path.join(job, "node_modules"), { recursive: true, force: true });
+    const missingCache = path.join(cache, "还没有这个目录");
+    let installs = 0;
+    const out = applySlot({
+      cwd: job,
+      env: { [SLOT_ENABLED_ENV]: "1", COMFY_CI_CACHE_ROOT: missingCache },
+      run: () => {
+        installs += 1;
+        fs.mkdirSync(path.join(missingCache, key, "node_modules"), {
+          recursive: true,
+        });
+        return { status: 0 };
+      },
+      spawn: () => ({ status: 0 }),
+      log: () => undefined,
+    });
+    expect(installs).toBe(1);
+    expect(out.handled).toBe(true);
+    expect(fs.existsSync(path.join(missingCache, key, FINGERPRINT_FILE))).toBe(
+      true,
+    );
   });
 
   it("盘不够 ⇒ 不装、不建槽、退回普通装", () => {
