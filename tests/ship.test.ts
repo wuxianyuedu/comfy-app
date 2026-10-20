@@ -681,15 +681,18 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(code).toBe(CODE.GREEN);
   });
 
-  it("临时文件一定被回收 —— 且要打在「提前 return」那条失败路径上", async () => {
-    /* 提交信息与 PR 正文是当场拼出的原文，留在盘上没用处，而 `.workbuddy/` 是
-     * gitignored ⇒ 漏删不会进历史，只会一直堆着（实测前几轮真跑留了 3 份）。
-     * 关键是选哪条路径验：钩子**拦下**提交时，`return finish(codes)` 就发生在
-     * 写完临时文件之后 —— 「用完顺手删一句」在这种形状下照样漏，
-     * 而漏的恰好是没人回头看的那几次。所以这里喂 commitStatus: 1。 */
-    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "ship-cleanup-"));
+  it("提交信息走 argv 直传 —— 一个临时文件都不建", async () => {
+    /* 原先的形状是「写一份 `.workbuddy/ship-commit-msg-<pid>.tmp` → `git commit -F`
+     * → finally 回收」。回收已经修好了（见 git 历史），但**不建文件**比建了再删强：
+     * 少一处落点，就少一处会忘、少一处依赖某个工具目录存在、也少一处
+     * 「提交信息原文躺在盘上」。AGENTS 硬规则 12 把 `COMMIT_EDITMSG` 落进工作区
+     * 点名为「提交完忘了删」的信号，这一改是往那个方向收。
+     *
+     * 断言选的是「什么都没建」而不是「建了又删干净」—— 后者要靠前置断言证明
+     * 文件确实建过才不是空转，而前者直接就是这个设计的承诺。 */
+    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "ship-argv-msg-"));
     try {
-      const { run } = fake({
+      const { run, calls } = fake({
         dirty: ["src/a.ts"],
         commitStatus: 1,
         commitStderr: "[pre-commit] ✗ 组 C 失败",
@@ -699,14 +702,45 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         run,
         log: () => undefined,
         probeCnb: () => true,
-        args: ["--message=真提交信息原文"],
+        args: ['--message=第一行\n\n正文带换行与 "引号" 和 `反引号`'],
       });
       expect(code).toBe(CODE.RED);
-      // 前置断言：那个目录确实被建过 —— 否则「没残留」只是因为压根没写过。
-      expect(fs.existsSync(path.join(tmpRoot, ".workbuddy"))).toBe(true);
+      const commitCall = calls.find((c) => c.startsWith("git commit"));
+      expect(commitCall, "没调到 git commit").toBeTruthy();
+      expect(commitCall).toContain("--message=");
+      expect(commitCall, "-F 那一套已经撤了").not.toContain("-F");
+      // 一个文件都不该建（含隐藏目录）。
+      expect(readdirSync(tmpRoot), "工作区里被建了东西").toEqual([]);
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("PR 正文落在 git 目录里，且用完一定被回收（含中途失败那条路径）", async () => {
+    /* 提交信息已经不建文件了，PR 正文还得建（上千行会撞 Windows 32k argv 上限）。
+     * 所以「finally 回收」这条保证仍要有对象 —— 不能因为少了一处就宣布不用测了。
+     *
+     * 选的路径仍是**会中途返回**的那条：post-pull 拿不到可解析响应 ⇒ 退 2。
+     * 前置断言用「那个目录被建过」—— 否则「目录是空的」只是因为压根没写过。 */
+    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "ship-pr-body-"));
+    const gitDir = path.join(tmpRoot, "gitdir", "comfy-ship-tmp");
+    try {
+      const { run } = fake();
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: () => undefined,
+        probeCnb: () => true,
+        resolveGitDir: () => path.join(tmpRoot, "gitdir"),
+        args: [],
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(fs.existsSync(gitDir), "正文没写到 git 目录里").toBe(true);
+      expect(readdirSync(gitDir), "临时文件没被回收").toEqual([]);
+      // 工作区那一侧一个东西都不该有（落点全在 git 目录内）。
       expect(
-        readdirSync(path.join(tmpRoot, ".workbuddy")),
-        "临时文件没被回收",
+        readdirSync(tmpRoot).filter((n) => n !== "gitdir"),
+        "往工作区里写了东西",
       ).toEqual([]);
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
