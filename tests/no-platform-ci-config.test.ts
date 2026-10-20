@@ -1411,9 +1411,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 入口是不是跑法脚本也由同一条钉 —— 这里再留两个不存在的名字只会变成一句空话。
      * 「谁把它们加回 PR 却不给预算」由 `MUST_ALWAYS_RUN`（`ci-incremental-gates`）与
      * `.gates` 里那两段撤档说明看着。 */
-    const required = ["ESLint 零警告", "单元测试", "重档静态判据"].filter(
-      (name) => !disabled.includes(name),
-    );
+    const required = [
+      "ESLint 零警告",
+      "单元测试",
+      "重档静态判据",
+      /* 2026-10-20 新增的增量档：它起 vitest 子进程，卡死的形态与 `单元测试` 同族
+       * （实测本地 forks worker 调度超时），所以预算跟着那一族走，不因为「跑得快」
+       * 就省掉 —— 预算回答的是「卡死多久有人知道」，不是「通常跑多久」。 */
+      "受影响用例",
+    ].filter((name) => !disabled.includes(name));
     const missing = required.filter((name) => !timeouts.has(name));
     expect(
       missing,
