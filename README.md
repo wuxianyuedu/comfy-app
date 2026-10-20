@@ -416,7 +416,9 @@ pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占�
 > 终态只认平台 build 的 `data.status` 与 PR 的 `is_merged`，其余一律委托既有执行者。
 > 四条要知道的边界：① 退出码三态，**`2` 是「有一步没跑起来」，不等于通过**；
 > ② 默认**不合并**，要 `--merge`；③ 不代写提交信息、不替你 `git add -A`
-> （树脏又没给 `--message` 就停在提交那一段）；④ **它说「提交段全过」不等于 tsc / eslint /
+> （树脏又没给 `--message` 就停在提交那一段）；**多行提交信息用 `--message-file`** ——
+> `pnpm run` 会把 argv 里的真换行改写成字面量 `\n`，整条信息会压成一行 subject，而 PR 标题
+> 取的就是那一行；④ **它说「提交段全过」不等于 tsc / eslint /
 > 用例过了** —— `pre-commit` 默认只跑形态档，本地要全套加 `COMFY_HEAVY_GATES=1`（规范 §13.5.25）。
 > 全部旗标与阶段见 `scripts/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
 

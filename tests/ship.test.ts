@@ -33,6 +33,7 @@ import {
   CODE,
   combineShipCodes,
   findPullForBranch,
+  looksNewlineMangled,
   parseArgs,
   parseSlug,
   pickBuildForSha,
@@ -250,6 +251,20 @@ describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
  * 碎片那一查拿到空串 ⇒ preflight 报「没有 changelog.d 碎片」⇒ `pnpm ship` 在本仓
  * 从第一次跑起就没工作过，报的还是一个听起来正当的理由。
  */
+describe("looksNewlineMangled：`pnpm run` 把 argv 里的换行改写成字面量这一格", () => {
+  it("认「没有真换行 + 带字面量 \\n」这一形，其余一律不拦", () => {
+    // 实测形状：`pnpm ship --message "一行<换行>二行"` 到 node 手里成了一条
+    // `一行\n二行`（真换行没了）；`pnpm exec node` 那条路径则保留真换行。
+    expect(looksNewlineMangled("标题\\n\\n正文一段\\n正文二段")).toBe(true);
+    /* 真换行在 ⇒ 不是改写产物（`--message-file` 读出来的、`pnpm exec` 传进来的都是这形）。 */
+    expect(looksNewlineMangled("标题\n\n正文")).toBe(false);
+    // 普通单行不受影响 —— 判据必须只认那一形，别顺手多拦。
+    expect(looksNewlineMangled("fix(a): 单行提交信息")).toBe(false);
+    expect(looksNewlineMangled("")).toBe(false);
+    expect(looksNewlineMangled(null)).toBe(false);
+  });
+});
+
 describe("resolveUpstream：远端名与主干基线（两处都是每台克隆自己的事实）", () => {
   it("① 有上游就用上游 —— 这是 git 已经知道的事，不另推", () => {
     expect(
@@ -855,6 +870,30 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }
+  });
+
+  it("`--message` 被 `pnpm run` 压成一行时，停在提交之前并给出出口", async () => {
+    /* 真发生的形状（实测）：`pnpm ship --message "一行<换行>二行"` 到 node 手里成了一条
+     * 带字面量 `\n` 的单行 —— `pnpm run` 这一层改写的，`pnpm exec` 不改（同一份 argv 两条
+     * 路径各跑一次对比过）。按原样提交会得一整行 subject，而 PR 标题就取
+     * `git log -1 --pretty=%s` ⇒ 那样一份标题被平台拒（响应可解析、`data` 里没有号）。
+     * 断言重点是**伸手之前**就停：`git add` 与 `git commit` 一条都不该出现 —— 既然这条
+     * 信息不能原样进历史，就不该先把暂存面动过。 */
+    const heard: string[] = [];
+    const { run, calls } = fake({ dirty: ["src/a.ts"] });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--message=标题\\n\\n正文一段\\n正文二段"],
+    });
+    const all = heard.join("\n");
+    expect(code).toBe(CODE.RED);
+    expect(calls.filter((c) => c.startsWith("git commit"))).toEqual([]);
+    expect(calls.filter((c) => c.startsWith("git add"))).toEqual([]);
+    expect(all).toContain("--message-file");
+    expect(all).toContain("pnpm exec");
   });
 
   it("PR 正文落在 git 目录里，且用完一定被回收（含中途失败那条路径）", async () => {

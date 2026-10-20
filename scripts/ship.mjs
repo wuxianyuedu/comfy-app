@@ -69,7 +69,9 @@
  * ── 用法 ───────────────────────────────────────────────────────
  *
  *   pnpm ship                                  # 到「CI 出终态 + 打印下一动作」为止
- *   pnpm ship --message "…"                    # 需要它代为提交时给出提交信息
+ *   pnpm ship --message "…"                    # 需要它代为提交时给出提交信息（单行）
+ *   pnpm ship --message-file .git/msg.txt      # 多行提交信息走文件 —— `pnpm run` 会把
+ *                                              #  argv 里的真换行改写成字面量 \n，多行别从命令行进
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
  *   pnpm ship --merge                          # 允许在 CI 绿时执行 squash 合并
  *   pnpm ship --dry-run                        # 只打印将要执行的命令，一条都不执行（阻塞照报）
@@ -87,6 +89,7 @@ import { resolveGitDir } from "./git-dir.mjs";
 import {
   CODE,
   combineShipCodes,
+  looksNewlineMangled,
   parseArgs,
   parseSlug,
   PHASES,
@@ -427,11 +430,29 @@ async function runFlow(deps, tmpFiles) {
           codes.push(CODE.RED);
           return finish(codes);
         }
+        /* 排在 `git add` **之前**：既然这条信息不能原样进历史，就不要先把暂存面改了
+         * 再退回去 —— 那一手会让「这次提交包含什么」被一次不会发生的提交动过。 */
+        if (looksNewlineMangled(msg)) {
+          log(
+            "[ship] `--message` 里没有真换行、却带着字面量 \\n ⇒ 这条信息已被 `pnpm run` 压成一行。",
+          );
+          log(
+            "[ship] 按原样提交只会得到一整行 subject，而 PR 标题取的就是它（实测那样一份被平台拒）。",
+          );
+          log(
+            "[ship] 两条出口：`pnpm ship --message-file <路径>`（多行信息的正路），" +
+              '或 `pnpm exec node scripts/ship.mjs --message "…"`（`pnpm exec` 保留真换行）。',
+          );
+          codes.push(CODE.RED);
+          return finish(codes);
+        }
         for (const a of opt.adds) run("git", ["add", "--", a]);
-        /* 提交信息走 argv 直传，**不落文件**：`spawnSync` 不经 shell，
-         * 所以多行与引号都是字面量，没有 `-F` 那一套「写个临时文件、提交完还得删干净」
-         * 的泄漏面（AGENTS 硬规则 12 把 `COMMIT_EDITMSG` 落进工作区点名为「提交完忘了删」
-         * 的信号 —— 少建一个文件，就少一处会忘的地方）。 */
+        /* 提交信息走 argv 直传，**不落文件**：`spawnSync` 这一跳不经 shell，git 拿到的
+         * 就是数组里那一串字面量（引号、多行都不再被解释），没有 `-F` 那一套「写个临时
+         * 文件、提交完还得删干净」的泄漏面（AGENTS 硬规则 12 把 `COMMIT_EDITMSG` 落进
+         * 工作区点名为「提交完忘了删」的信号 —— 少建一个文件，就少一处会忘的地方）。
+         * ⚠️ 「多行不会被破坏」只保证**这一跳**：更外层的 `pnpm run` 已经把 argv 里的
+         * 真换行改写成字面量 `\n` 了，那一格由上面 `looksNewlineMangled` 拦下。 */
         const cm = run("git", ["commit", `--message=${msg}`]);
         relay(cm);
         if (cm.status !== 0) {

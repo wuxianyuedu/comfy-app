@@ -346,6 +346,29 @@ export function buildPullBody({ root, fragments, diffstat }) {
 }
 
 /**
+ * 识别「这条提交信息已经被 `pnpm run` 压成一行」的形状 —— 只判形状，不判内容。
+ *
+ * 形状从哪来的（本仓实测，两个出口行为不同）：
+ *   · `pnpm exec node -e …  "一行<换行>二行"` ⇒ 收到**真换行**；
+ *   · `pnpm ship --message "一行<换行>二行"`（即 `pnpm run ship`）⇒ node 手里已成
+ *     字面量 `\n`，屏幕上那条回显 `node scripts/ship.mjs "--message" "一行\n二行"` 就是证据。
+ * 后果不是「排版难看」：整条信息变成**一行 subject**，而 PR 标题取的就是
+ * `git log -1 --pretty=%s` —— 实测那样一份标题被平台拒（响应可解析、`data` 里没有号）。
+ *
+ * 判据故意保守：**必须**同时满足「没有真换行」与「出现字面量 `\n`」。
+ * 单行且不含 `\n` 的正常提交信息不受影响；真换行在的信息（`--message-file` 读出来的、
+ * `pnpm exec` 传进来的）也不受影响。代价是一种误判：一行散文里恰好写了字面量 `\n`
+ * 且没有真换行 —— 那会被拦下，而拦下的话术直接给出两条出口，不是死路。
+ *
+ * @param {string | null | undefined} msg 拿到的提交信息原文
+ * @returns {boolean} 命中改写形状时为 true
+ */
+export function looksNewlineMangled(msg) {
+  if (!msg) return false;
+  return !msg.includes("\n") && msg.includes("\\n");
+}
+
+/**
  * `--dry-run` 的命令计划。它打印的就是真跑时会执行的同一份 argv ——
  * 这是量具自证：计划与执行分叉，说明有人在两处各写一遍（`tests/ship.test.ts`
  * 拿「模块+工具对同集合」逐条对账钉着这件事）。
