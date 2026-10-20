@@ -923,4 +923,39 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       rmSync(tmpRoot, { recursive: true, force: true });
     }
   });
+
+  it("响应能解析但没有 PR 号时，不许念出「已建」—— 那句成功必须有号撑着", async () => {
+    /* 实测踩过的外形：`cnb pulls post-pull` 的响应**能解析**、`data` 里却没有号
+     * （这一次是 `--title` 里带 `--xxx=yyy` 经 PowerShell 宿主转发时失败），
+     * 而上一版先打印 `✓ 已建 PR #null` 再回来看值 —— 平台上根本没有那个 PR，
+     * 屏幕上写着成功。所以这一格把「念出口」排在「验到有号」之后，并把响应原文
+     * 与 stderr 一起转述出来：这一族宁可说一句「没跑起来」，也不许替执行者总结。 */
+    const heard: string[] = [];
+    const base = fake();
+    const run = (cmd: string, args: string[]): FakeResult => {
+      if (cmd === "cnb" && args.join(" ").includes("post-pull")) {
+        return {
+          status: 0,
+          stdout: '{"status":400,"data":{"message":"title invalid"}}',
+          stderr: "cnb: bad request",
+          error: null,
+        };
+      }
+      return base.run(cmd, args);
+    };
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: [],
+    });
+    const all = heard.join("\n");
+    expect(all, "没有号却念了「已建」").not.toContain("已建 PR");
+    expect(all).toContain("没有 PR 号");
+    // 执行者的原话必须能看见 —— 只说一句「没有结论」等于把线索吞了。
+    expect(all).toContain("title invalid");
+    expect(all).toContain("bad request");
+    expect(code).toBe(CODE.NOT_RUN);
+  });
 });
