@@ -981,7 +981,9 @@ describe("LogPanel 日志面板", () => {
             .getAttribute("data-log-index"),
         );
 
-      /* 一页 200 行，视口 600px（单行 27px）只装得下二十来行 + overscan。 */
+      /* 一页 200 行，视口 600px（单行取 `LOG_ROW_SINGLE`）只装得下二十来行 +
+       * overscan。这里不写像素数：那个常量从 27 改到 28 时，抄下来的数字就是
+       * 漏改的那一处（`e2e/critical-flows.spec.ts` 同一条教训）。 */
       expect(rowCount()).toBeGreaterThan(0);
       expect(rowCount()).toBeLessThan(200);
       expect(firstIndex()).toBe(0);
