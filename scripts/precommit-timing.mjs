@@ -44,8 +44,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+
+import { resolveGitDir } from "./git-dir.mjs";
 
 /**
  * 读目录时用到的那两个 fs 动作（薄壳，不是 `typeof fs`）。
@@ -101,28 +102,10 @@ export function cFileXmlName(dir, chunkId, attempt) {
 
 // ── 账本位置 ────────────────────────────────────────────────────────────
 
-/**
- * 本检出 `.git` 的绝对路径；不在检出里时返回 `null`。
- *
- * 走 git 而不是硬编码 `<root>/.git`：worktree（`git worktree add` 建的那一份）与
- * `GIT_DIR` 环境变量都会让 `.git` **不是**仓库根下的一个目录（前者是一个指向
- * `…/.git/worktrees/<name>` 的文件）。硬编码那一份会在这些检出上把账写到别的
- * 地方去，而 `base-check.mjs` 正是靠 worktree 跑的 —— 那会让它的读数混进「人提交」
- * 的账里。
- *
- * @param {string} [cwd]
- * @returns {string | null}
- */
-export function resolveGitDir(cwd = process.cwd()) {
-  const r = spawnSync("git", ["rev-parse", "--absolute-git-dir"], {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  });
-  if (r.status !== 0) return null;
-  const dir = String(r.stdout ?? "").trim();
-  return dir || null;
-}
+/* 「本检出的 `.git` 在哪」不在这里实现了 —— 那份正确的（走
+ * `rev-parse --absolute-git-dir`，覆盖 worktree 指针 / `GIT_DIR` / 裸仓库三种形态）
+ * 已收进 `scripts/git-dir.mjs`，本文件按它真实的落点 import。
+ * 原处不留转口：留一个「看起来还在这儿」的再导出，下一次就有人 import 那一层空的。 */
 
 /**
  * @param {string | null} gitDir
