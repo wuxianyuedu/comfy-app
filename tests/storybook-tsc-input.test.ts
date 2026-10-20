@@ -52,7 +52,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { readAppOrigin } from "../.storybook/app-origin-reader";
 import { APP_ORIGIN_DEFAULTS } from "../.storybook/app-origin-defaults";
@@ -163,19 +163,18 @@ function narrowTsconfigText(
  * 不报错（见文件头）。
  */
 async function provisionNextEnv(outDir: string): Promise<string> {
-  const { writeAppTypeDeclarations } = (await import(
-    "next/dist/lib/typescript/writeAppTypeDeclarations.js"
-  )) as {
-    writeAppTypeDeclarations: (options: {
-      baseDir: string;
-      distDir: string;
-      imageImportsEnabled: boolean;
-      hasPagesDir: boolean;
-      hasAppDir: boolean;
-      strictRouteTypes: boolean;
-      typedRoutes: boolean;
-    }) => Promise<void>;
-  };
+  const { writeAppTypeDeclarations } =
+    (await import("next/dist/lib/typescript/writeAppTypeDeclarations.js")) as {
+      writeAppTypeDeclarations: (options: {
+        baseDir: string;
+        distDir: string;
+        imageImportsEnabled: boolean;
+        hasPagesDir: boolean;
+        hasAppDir: boolean;
+        strictRouteTypes: boolean;
+        typedRoutes: boolean;
+      }) => Promise<void>;
+    };
   fs.mkdirSync(outDir, { recursive: true });
   await writeAppTypeDeclarations({
     baseDir: outDir,
@@ -351,7 +350,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         /* 先确认「挪得动」再往下跑：挪不动就当场说清是暂存点的问题，别由后面
            那句还原替它顶罪（跨卷时真因是 EXDEV，报出来的却是 ENOENT）。 */
         fs.mkdirSync(path.dirname(stash), { recursive: true });
-        fs.renameSync(generatedFile, stash);
+        moveFileAcrossVolumes(generatedFile, stash);
         expect(
           fs.existsSync(stash) && !fs.existsSync(generatedFile),
           `生成件没能挪进 ${stash} —— 暂存点必须与仓库同卷（见 generatedStashFile）`,
@@ -530,7 +529,10 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         "junction",
       );
       fs.mkdirSync(path.join(dir, "src", "app"), { recursive: true });
-      fs.writeFileSync(path.join(dir, "src", "app", "globals.css"), "/* x */\n");
+      fs.writeFileSync(
+        path.join(dir, "src", "app", "globals.css"),
+        "/* x */\n",
+      );
       fs.writeFileSync(
         path.join(dir, "entry.tsx"),
         `import "./src/app/globals.css";\nexport const Y = 1;\n`,
@@ -670,6 +672,25 @@ function generatedStashFile(root: string, pid: number): string {
   );
 }
 
+/** 把一份文件挪到另一处，**跨卷时退成 copy + unlink**。
+ *
+ * 为什么这里不能只信 ① 那条「同一卷」前提：CI 节点上 workspace 与
+ * `workspace/node_modules` **不同卷**（后者是指向另一盘缓存的链接，实测
+ * `G:\runner\…\workspace\node_modules` → `F:\runner\ci-cache\…`），于是
+ * `renameSync` 直接 `EXDEV`。那一格的判点是「制造出缺失态之后 tsc 退 0」，
+ * 挪不动只说明**这一格没跑起来**，不是判据红 —— 拿它拦 PR 等于让节点布局冒充代码结论。
+ * copy+unlink 与 rename 在语义上等价（原处不再有、暂存点有了），代价只是一份 json 的拷贝；
+ * 同卷时仍然先走 rename，不退化。 */
+function moveFileAcrossVolumes(from: string, to: string): void {
+  try {
+    fs.renameSync(from, to);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EXDEV") throw e;
+    fs.copyFileSync(from, to);
+    fs.unlinkSync(from);
+  }
+}
+
 /** 把暂存的生成件放回原处，并收掉本次自建的暂存目录（判据不该在缓存里留垃圾）。
  *  放回不了（进程被中断、暂存没落成）就按本机现生成一份：一次判据不该把开发期
  *  输入弄丢 —— 丢了之后的现象是「跑过 storybook 的机器才开始红」。 */
@@ -678,7 +699,9 @@ function restoreGeneratedFile(generatedFile: string, stash: string): void {
     if (fs.existsSync(generatedFile)) {
       fs.rmSync(generatedFile, { force: true });
     }
-    fs.renameSync(stash, generatedFile);
+    /* 放回这一跳同样可能是跨卷的（暂存在 `node_modules` 那一侧，生成件在仓库里），
+     * 所以走同一个挪法，不许在这里留第二条只会 EXDEV 的路。 */
+    moveFileAcrossVolumes(stash, generatedFile);
     fs.rmSync(path.dirname(stash), { recursive: true, force: true });
     return;
   }
@@ -728,3 +751,57 @@ function resolveTscBin(): {
   }
   return null;
 }
+
+/** ④ 那一格「挪得动」的前提在 CI 节点上不成立（ISSUE #2059）：workspace 与
+ *  `workspace\node_modules` 不同卷，`renameSync` 直接 EXDEV。这里补两条对**兜底本身**的
+ *  判据 —— 本机造不出跨卷（同卷 rename 一定成功），所以按形状替掉 rename，
+ *  而不是留一段「只有节点上才跑得到」的死代码。 */
+describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局当判据红", () => {
+  const errno = (code: string): NodeJS.ErrnoException => {
+    const e = new Error(`${code}: simulated`) as NodeJS.ErrnoException;
+    e.code = code;
+    return e;
+  };
+
+  it("EXDEV ⇒ 原处不再有、暂存点有了、内容一致", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-exdev-"));
+    try {
+      const from = path.join(dir, "app-origin.json");
+      const to = path.join(dir, "cache", "app-origin.json");
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.writeFileSync(from, '{"port":3123}', "utf8");
+      const spy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+        throw errno("EXDEV");
+      });
+      moveFileAcrossVolumes(from, to);
+      /* 取读数要排在 `mockRestore()` **之前** —— 它会把调用记录一起清掉，
+       * 排后面拿到的是 0，看起来像「rename 从没被试过」。 */
+      const tried = spy.mock.calls.length;
+      spy.mockRestore();
+      expect(tried, "没有先试 rename").toBeGreaterThan(0);
+      expect(fs.existsSync(to), "跨卷退路没把东西放到暂存点").toBe(true);
+      expect(fs.existsSync(from), "原处还在 ⇒ 缺失态根本没造出来").toBe(false);
+      expect(fs.readFileSync(to, "utf8")).toBe('{"port":3123}');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("非 EXDEV 的失败原样抛 —— 兜底不许把别的错读成「挪好了」", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-eperm-"));
+    try {
+      const from = path.join(dir, "app-origin.json");
+      const to = path.join(dir, "cache", "app-origin.json");
+      fs.writeFileSync(from, "{}", "utf8");
+      const spy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+        throw errno("EPERM");
+      });
+      expect(() => moveFileAcrossVolumes(from, to)).toThrow("EPERM");
+      spy.mockRestore();
+      expect(fs.existsSync(from), "报错被吞了 ⇒ 原处不该还在").toBe(true);
+      expect(fs.existsSync(to), "EPERM 不该被当成「走退路」").toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
