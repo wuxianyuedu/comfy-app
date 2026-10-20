@@ -53,7 +53,12 @@ import {
   pnpmInstallFingerprint,
 } from "./ci-deps-face.mjs";
 import { linkDependencies, unlinkDependencies } from "./base-check.mjs";
-import { planSlot, resolveCacheRoot, slotPath } from "./ci-cache-slot.mjs";
+import {
+  planSlot,
+  resolveCacheRoot,
+  sameVolumeAs,
+  slotPath,
+} from "./ci-cache-slot.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -487,6 +492,7 @@ export function applySlot(io = {}) {
   const plan = planSlot({
     cacheRoot,
     key,
+    sameVolume: cacheRoot ? sameVolumeAs(cacheRoot, cwd) : true,
     slotPresent: state.treePresent,
     slotFingerprint: state.fingerprint,
   });
