@@ -72,6 +72,37 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK_PATH = ".githooks/pre-commit";
 const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
 
+/**
+ * 把一段代码跑起来期间 `process.stderr` 的写入**收在手里**（随返回值交出 `text`）。
+ *
+ * 为什么要有这个：`runChunk` 的每一档判决都会往 stderr 写话术（「第 2 遍全绿」、
+ * 「记为未校验」、「按真红处置」…），而下面这些用例绝大多数只关心**退出码**。不抓的话
+ * 每跑一次就在 vitest 的报告里糊一段夹具的判决话术，与本文件无关的人读报告时会以为
+ * 那是**真跑**出来的结论 —— 实测踩到过两次：
+ *
+ *   · 本机：那几段被误读成 C 组自己的输出；
+ *   · 平台：`cnb-n1j-1k5ct202i` 第 9 格（受影响用例）的日志里，这一族话术与真跑的
+ *     输出逐字同形，读日志的人按「负载假红 / 真红」去查产品代码，而那一次 32 格全绿。
+ *
+ * 所以**每一处**调用 `runChunk` 的用例都必须走它（或走下面那份委托它的 `runCapturing`），
+ * 「不许有漏掉的调用点」由本文件末尾那条判据钉住（针尖的构造方式见它里面的说明）。
+ */
+async function captureStderr<T>(
+  fn: () => Promise<T>,
+): Promise<{ value: T; text: string }> {
+  const chunks: string[] = [];
+  const realWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (s: string | Uint8Array) => {
+    chunks.push(String(s));
+    return true;
+  };
+  try {
+    return { value: await fn(), text: chunks.join("") };
+  } finally {
+    process.stderr.write = realWrite;
+  }
+}
+
 /** 造一份「n 个用例」的合成清单，单条长度接近真实值（约 60 字符）。 */
 function syntheticFiles(count: number): string[] {
   return Array.from(
@@ -379,12 +410,16 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
 
   it("负载已在阈值下 ⇒ 一点不等（否则每次超时都要先白等一轮）", async () => {
     let slept = 0;
-    const res = await waitForLoadToSettle({
-      probe: { loadavg: () => [1, 0, 0], cpus: cores(8) },
-      sleepFn: () => {
-        slept += 1;
-      },
-    });
+    /* 这一层也会往 stderr 打「每核负载 … 等它回落再复跑」（每一跳一行），而这里的
+     * 负载是**假探针**给的 —— 那几行进了报告，同样会被读成「这台机器现在很满」。 */
+    const { value: res } = await captureStderr(() =>
+      waitForLoadToSettle({
+        probe: { loadavg: () => [1, 0, 0], cpus: cores(8) },
+        sleepFn: () => {
+          slept += 1;
+        },
+      }),
+    );
     expect(slept).toBe(0);
     expect(res).toMatchObject({ waitedMs: 0, settled: true });
   });
@@ -400,19 +435,21 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
     const queue = [40, 30, 2];
     const reads: number[] = [];
     const sleeps: number[] = [];
-    const res = await waitForLoadToSettle({
-      probe: {
-        loadavg: () => {
-          const value = queue[Math.min(reads.length, queue.length - 1)] ?? 0;
-          reads.push(value);
-          return [value, 0, 0];
+    const { value: res } = await captureStderr(() =>
+      waitForLoadToSettle({
+        probe: {
+          loadavg: () => {
+            const value = queue[Math.min(reads.length, queue.length - 1)] ?? 0;
+            reads.push(value);
+            return [value, 0, 0];
+          },
+          cpus: cores(8),
         },
-        cpus: cores(8),
-      },
-      sleepFn: (ms) => {
-        sleeps.push(ms);
-      },
-    });
+        sleepFn: (ms) => {
+          sleeps.push(ms);
+        },
+      }),
+    );
     expect(sleeps).toHaveLength(2);
     expect(reads).toEqual([40, 30, 2]);
     expect(res).toMatchObject({ settled: true });
@@ -420,16 +457,18 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
 
   it("等不到 ⇒ `settled: false`（**只是优化没兑现**，不再是「按真红上报」）", async () => {
     let ticks = 0;
-    const res = await waitForLoadToSettle({
-      budgetMs: 3,
-      pollMs: 1,
-      // 假时钟每跳推进 1ms ⇒ 必然越过 3ms 预算而负载一直很高。
-      now: () => ticks,
-      sleepFn: () => {
-        ticks += 1;
-      },
-      probe: { loadavg: () => [80, 0, 0], cpus: cores(8) },
-    });
+    const { value: res } = await captureStderr(() =>
+      waitForLoadToSettle({
+        budgetMs: 3,
+        pollMs: 1,
+        // 假时钟每跳推进 1ms ⇒ 必然越过 3ms 预算而负载一直很高。
+        now: () => ticks,
+        sleepFn: () => {
+          ticks += 1;
+        },
+        probe: { loadavg: () => [80, 0, 0], cpus: cores(8) },
+      }),
+    );
     expect(res).toMatchObject({ settled: false });
   });
 
@@ -509,12 +548,10 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     Promise.resolve({ settled: false, load: 9.5, waitedMs: 300_000 });
 
   /**
-   * 跑一次 `runChunk` 并把它的 stderr **收在手里**。
+   * 跑一次本块的 `runChunk` 并把它的 stderr **收在手里**。
    *
-   * 为什么要有这个：`runChunk` 的每一档判决都会往 stderr 写话术，而这些用例绝大多数
-   * 只关心**退出码**。不抓的话每跑一次就在 vitest 的报告里糊一段「记为未校验…」，
-   * 与本文件无关的人读报告时会以为那是**真跑**出来的结论（实测踩到过：那几段被误读成
-   * C 组自己的输出）。
+   * 只判退出码的那些用例也必须走它 —— 理由与「夹具话术不许糊进报告」那一条同源，
+   * 写在模块级 `captureStderr` 的头注里（那里有两次实测被误读的读数）。
    */
   async function runCapturing(deps: {
     entry: string;
@@ -533,23 +570,17 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
       settled?: boolean;
     }) => void;
   }): Promise<{ code: number; text: string }> {
-    const chunks: string[] = [];
-    const realWrite = process.stderr.write.bind(process.stderr);
-    process.stderr.write = (s: string | Uint8Array) => {
-      chunks.push(String(s));
-      return true;
-    };
-    try {
-      const code = await runChunk(CHUNK, deps);
-      return { code, text: chunks.join("") };
-    } finally {
-      process.stderr.write = realWrite;
-    }
+    /* 委托给模块级那一份：抓取的**机制**只许有一处，各写一份就会漂成
+     * 「有的调用点抓得到、有的抓不到」（§12.12 / §12.18）。 */
+    const { value: code, text } = await captureStderr(() =>
+      runChunk(CHUNK, deps),
+    );
+    return { code, text };
   }
 
   it("超时 + 隔离复跑绿 ⇒ **通过**（这就是「无论负载如何都能提交」那一半）", async () => {
     const { spawn, calls } = fakeSpawn([TIMEOUT, GREEN]);
-    const code = await runChunk(CHUNK, {
+    const { code } = await runCapturing({
       entry: "vitest.mjs",
       spawn,
       settle: settledLow,
@@ -571,7 +602,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
 
   it("真断言红 ⇒ **一次都不复跑**、直接阻断（不把真回归洗成负载假红）", async () => {
     const { spawn, calls } = fakeSpawn([REAL_RED, GREEN]);
-    const code = await runChunk(CHUNK, {
+    const { code } = await runCapturing({
       entry: "vitest.mjs",
       spawn,
       settle: settledLow,
@@ -582,7 +613,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
 
   it("第二遍指纹消失（真断言 / 真挂死）⇒ 阻断 —— 「未校验」这一档不许把它洗掉", async () => {
     const { spawn, calls } = fakeSpawn([TIMEOUT, REAL_RED]);
-    const code = await runChunk(CHUNK, {
+    const { code } = await runCapturing({
       entry: "vitest.mjs",
       spawn,
       settle: settledLow,
@@ -647,7 +678,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   it("第一遍就绿 ⇒ 只调一次，且不等、不复跑", async () => {
     const { spawn, calls } = fakeSpawn([GREEN]);
     let settledCalls = 0;
-    const code = await runChunk(CHUNK, {
+    const { code } = await runCapturing({
       entry: "vitest.mjs",
       spawn,
       settle: () => {
@@ -736,6 +767,28 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
       codes.push((await once(results)).code);
     }
     expect(codes).toEqual([0, 0, 0, 1, 1]);
+  });
+
+  /* 「话术不许糊进报告」这件事本身要有读者 —— 上面每一条都**自觉地**走了 `runCapturing`，
+   * 而下一条新用例忘了走的时候，没有任何一条断言会红，只有读报告的人会看到一段
+   * 「未校验 / 真红」而以为那是真跑的结论（平台侧 `cnb-n1j-1k5ct202i` 第 9 格就是这么
+   * 被读错的）。同一族还有 `waitForLoadToSettle` 的「每核负载 …」—— 那一行里的负载
+   * 是假探针给的，进了报告同样会被读成「这台机器现在很满」。
+   *
+   * 所以判的是**调用点的形状**：本文件里不许有「直接 await 这两个函数」那种写法 ——
+   * 走了 `runCapturing` / `captureStderr` 的那几处都不是这个形状。 */
+  it("本文件不许出现没接住 stderr 的调用点（夹具话术不许进报告）", () => {
+    const self = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    /* 针尖按**拼接**构造：把它整段写成字面量的话，这条断言会命中它自己（恒红 ——
+     * 而恒红的判据比没有更坏，下一个人学到的动作是「先把它删掉」）。 */
+    const leaky = new RegExp(
+      `await\\s+(${["runChunk", "waitForLoadToSettle"].join("|")})\\(`,
+    );
+    expect(self, "本文件读不到 —— 路径/文件名变了？").toContain("runChunk(");
+    expect(
+      leaky.test(self),
+      "有调用点没接住 stderr：它的判决话术会以「真跑的结论」的形态出现在报告里",
+    ).toBe(false);
   });
 });
 
@@ -1004,18 +1057,20 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
   it("runChunk 真的把这两段拼进两次 spawn，清单仍在最后", async () => {
     const dir = tempDir();
     const calls: { entry: string; args: string[] }[] = [];
-    await runChunk(["tests/a.test.ts"], {
-      entry: "vitest.mjs",
-      junitDir: dir,
-      chunkId: 7,
-      spawn: (_entry: string, args: string[]) => {
-        calls.push({ entry: _entry, args });
-        return calls.length === 1
-          ? { status: 1, output: "Test timed out in 30000ms" }
-          : { status: 0, output: "" };
-      },
-      settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
-    });
+    await captureStderr(() =>
+      runChunk(["tests/a.test.ts"], {
+        entry: "vitest.mjs",
+        junitDir: dir,
+        chunkId: 7,
+        spawn: (_entry: string, args: string[]) => {
+          calls.push({ entry: _entry, args });
+          return calls.length === 1
+            ? { status: 1, output: "Test timed out in 30000ms" }
+            : { status: 0, output: "" };
+        },
+        settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
+      }),
+    );
     expect(calls).toHaveLength(2);
     expect(calls[0]?.args.join(" ")).toContain("comfy-c-7-1.xml");
     expect(calls[1]?.args.join(" ")).toContain("comfy-c-7-2.xml");
@@ -1139,18 +1194,20 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
       const GREEN = { status: 0, output: "Test Files 1 passed" };
       const calls: string[][] = [];
       const unverified: string[][] = [];
-      const code = await runChunk(CHUNK, {
-        entry: "vitest.mjs",
-        junitDir: dir,
-        chunkId: 0,
-        spawn: (_entry: string, args: string[]) => {
-          calls.push(args.filter((a) => a.endsWith(".test.ts")));
-          return calls.length === 1 ? TIMEOUT : GREEN;
-        },
-        settle: () =>
-          Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
-        onUnverified: (files: string[]) => unverified.push([...files]),
-      });
+      const { value: code } = await captureStderr(() =>
+        runChunk(CHUNK, {
+          entry: "vitest.mjs",
+          junitDir: dir,
+          chunkId: 0,
+          spawn: (_entry: string, args: string[]) => {
+            calls.push(args.filter((a) => a.endsWith(".test.ts")));
+            return calls.length === 1 ? TIMEOUT : GREEN;
+          },
+          settle: () =>
+            Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
+          onUnverified: (files: string[]) => unverified.push([...files]),
+        }),
+      );
       expect(code).toBe(0);
       /* 第 1 遍是整块（判决还没发生），第 2 遍收窄到失败的那一份。 */
       expect(calls[0]).toEqual(CHUNK);
@@ -1174,15 +1231,17 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
         output: "Error: Test timed out in 30000ms.",
       };
       const unverified: string[][] = [];
-      const code = await runChunk(CHUNK, {
-        entry: "vitest.mjs",
-        junitDir: dir,
-        chunkId: 0,
-        spawn: () => TIMEOUT,
-        settle: () =>
-          Promise.resolve({ settled: true, load: 0.1, waitedMs: 800 }),
-        onUnverified: (files: string[]) => unverified.push([...files]),
-      });
+      const { value: code } = await captureStderr(() =>
+        runChunk(CHUNK, {
+          entry: "vitest.mjs",
+          junitDir: dir,
+          chunkId: 0,
+          spawn: () => TIMEOUT,
+          settle: () =>
+            Promise.resolve({ settled: true, load: 0.1, waitedMs: 800 }),
+          onUnverified: (files: string[]) => unverified.push([...files]),
+        }),
+      );
       /* 未校验 ⇒ 放行（退 0），但名单必须只有那一份。 */
       expect(code).toBe(0);
       expect(unverified).toEqual([["tests/a.test.ts"]]);
