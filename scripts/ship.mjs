@@ -71,6 +71,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { gitScratchPath, resolveGitDir } from "./git-dir.mjs";
 import {
   asArray,
   buildPullBody,
@@ -207,6 +208,7 @@ export async function main(deps = {}) {
  *   root?: string,
  *   run?: (cmd:string,args:string[])=>{status:number,stdout:string,stderr:string,error:string|null},
  *   probeCnb?: ()=>boolean,
+ *   resolveGitDir?: (cwd?:string)=>string | null,
  *   log?: (s:string)=>void,
  *   sleep?: (ms:number)=>void,
  *   now?: ()=>number,
@@ -218,10 +220,13 @@ export async function main(deps = {}) {
  */
 async function runFlow(deps, tmpFiles) {
   const root = deps.root ?? process.cwd();
+  /** git 目录怎么解析：默认那份唯一实现，测试里指到临时目录。 */
+  const resolveDir = deps.resolveGitDir ?? resolveGitDir;
   /** 写一份临时文件并**登记待回收** —— 只有这一条出口，漏登记就删不掉。 */
+  /** 写一份临时文件到 git 目录并**登记待回收**；没有落点时回 null（不往工作区猜）。 */
   const mkTmp = (/** @type {string} */ name, /** @type {string} */ text) => {
-    const p = writeTmp(root, name, text);
-    tmpFiles.push(p);
+    const p = writeScratch(root, name, text, resolveDir);
+    if (p) tmpFiles.push(p);
     return p;
   };
   const run = deps.run ?? makeRunner(root);
@@ -469,8 +474,11 @@ async function runFlow(deps, tmpFiles) {
           return finish(codes);
         }
         for (const a of opt.adds) run("git", ["add", "--", a]);
-        const cf = mkTmp("ship-commit-msg", msg);
-        const cm = run("git", ["commit", "-F", cf]);
+        /* 提交信息走 argv 直传，**不落文件**：`spawnSync` 不经 shell，
+         * 所以多行与引号都是字面量，没有 `-F` 那一套「写个临时文件、提交完还得删干净」
+         * 的泄漏面（AGENTS 硬规则 12 把 `COMMIT_EDITMSG` 落进工作区点名为「提交完忘了删」
+         * 的信号 —— 少建一个文件，就少一处会忘的地方）。 */
+        const cm = run("git", ["commit", `--message=${msg}`]);
         relay(cm);
         if (cm.status !== 0) {
           log(
@@ -567,6 +575,16 @@ async function runFlow(deps, tmpFiles) {
           return finish(codes);
         }
         const bf = mkTmp("ship-pr-body", body);
+        if (!bf) {
+          /* 正文可能上千行，`--body <串>` 会撞上 Windows 的 32k argv 上限，
+           * 所以这一格只能走文件。取不到 git 目录 = 不在真检出里 ⇒ 说清楚
+           * 而不是往工作区猜一个落点。 */
+          log(
+            "[ship] 取不到 git 目录 ⇒ PR 正文没有落点，这一格没有执行者（不是「不需要」）。",
+          );
+          codes.push(CODE.NOT_RUN);
+          return finish(codes);
+        }
         const made = cnbJson(run, [
           "pulls",
           "post-pull",
@@ -795,13 +813,23 @@ async function runFlow(deps, tmpFiles) {
 }
 
 /**
+ * 把一份「只给这一次调用用」的文本落到 git 目录里（机器本地、不入库），
+ * 与 `comfy-premerge-proof.json` / `comfy-precommit-timing.jsonl` 同一户、同一理由。
+ *
+ * 取不到 git 目录时回 `null` —— 调用方据此**跳过**这一步，而不是往工作区里猜一个落点：
+ * 落在工作区就得靠 `.gitignore` 兜，而「靠 gitignore 兜住的临时文件」正是
+ * AGENTS 硬规则 12 点名的那一族（`MERGE_MSG` / `COMMIT_EDITMSG` 落进工作区
+ * 只说明「用 `-F` 写提交说明、提交完忘了删」）。
+ *
  * @param {string} root 仓库根
  * @param {string} name 临时文件名前缀
  * @param {string} text 内容
- * @returns {string} 写出的绝对路径
+ * @param {(cwd?:string)=>string | null} [resolve] git 目录解析器（测试可注入）
+ * @returns {string | null} 写出的绝对路径；没有落点时 null
  */
-function writeTmp(root, name, text) {
-  const dir = path.join(root, ".workbuddy");
+function writeScratch(root, name, text, resolve = resolveGitDir) {
+  const dir = gitScratchPath(root, "comfy-ship-tmp", resolve);
+  if (!dir) return null;
   fs.mkdirSync(dir, { recursive: true });
   const p = path.join(dir, `${name}-${process.pid}.tmp`);
   fs.writeFileSync(p, text, "utf8");

@@ -17,6 +17,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { resolveGitDir } from "./git-dir.mjs";
+
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 
@@ -303,13 +305,13 @@ export function planCommands(st) {
   p.push("git ls-files changelog.d");
   p.push("node scripts/check-deps-freshness.mjs");
   for (const a of st.adds) p.push(`git add -- ${a}`);
-  if (st.hasMessage) p.push("git commit -F <message>");
+  if (st.hasMessage) p.push("git commit --message=<提交信息原文>");
   /* 远端名与主干分支都来自解析（`resolveUpstream`），不写死 `origin` / `master` ——
    * 本仓的远端叫 `cnb`（硬规则 6），写死时计划与执行两头一起错。 */
   p.push(`git push -u ${st.remote || "origin"} ${st.branch}`);
   p.push(`cnb pulls list-pulls --repo ${st.slug} --state open -v`);
   p.push(
-    `cnb pulls post-pull --repo ${st.slug} --base ${st.baseBranch || "master"} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <tmp> -v`,
+    `cnb pulls post-pull --repo ${st.slug} --base ${st.baseBranch || "master"} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
   );
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);
@@ -328,17 +330,11 @@ export function planCommands(st) {
  * @returns {{headSha?:string,upstreamSha?:string,verifiedAt?:string,baselineRed?:string[]} | null} 取不到回 null
  */
 export function readProof(root) {
-  let gitDir = path.join(root, ".git");
-  // `.git` 在 worktree / 自定义 hooksPath 检出里是**指针文件**而不是目录，
-  // 直接拼路径会读不到证明 —— 那会被报成「钩子没跑」，而它其实跑了。
-  try {
-    if (fs.statSync(gitDir).isFile()) {
-      const m = fs.readFileSync(gitDir, "utf8").match(/^gitdir:\s*(.+)$/m);
-      if (m && m[1]) gitDir = path.resolve(root, m[1].trim());
-    }
-  } catch {
-    return null;
-  }
+  /* git 目录的解析不在这里重做 —— 唯一实现见 `scripts/git-dir.mjs`。
+   * 这里此前自己判「`.git` 是文件就当指针读」，只覆盖 worktree 那一种，
+   * `GIT_DIR` 与裸仓库一个都不认；手写一份弱化的同一件事，比不写更难被发现。 */
+  const gitDir = resolveGitDir(root);
+  if (!gitDir) return null;
   try {
     return JSON.parse(
       fs.readFileSync(path.join(gitDir, "comfy-premerge-proof.json"), "utf8"),
