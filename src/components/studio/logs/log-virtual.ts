@@ -48,6 +48,15 @@
  */
 import { clamp } from "~/lib/clamp";
 
+/**
+ * 估算行高时，从面板总宽里扣掉「非正文列」的固定开销（时刻 + 级别徽标 + 来源 +
+ * 复制按钮 + 内边距 + 列间距，约 260px）。`countLines` 算软换行用的是**正文列**
+ * 的可用宽度，而非整面板宽 —— 此前直接拿整宽估算，会把多行消息的行数低估，正文
+ * 被 `overflow-hidden` 裁掉（「超出边框看不全」）。落一个偏保守的固定值：宁可
+ * 多留一点空白（本模块文件头明定的安全方向），也不让内容跑到视口外。
+ */
+export const LOG_MESSAGE_OVERHEAD = 260;
+
 export const LOG_ROW_SINGLE = 28;
 
 /** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 14px 行高 = 19.25）。 */
@@ -103,6 +112,12 @@ export function estimateRowHeight(message: string, wrap: boolean): number {
  */
 export function countLines(message: string, availableWidth = 0): number {
   const segments = message.split("\n");
+  /* 行尾换行符产生的**末尾空段**不算独立的一行：一条以 `\n` 结尾的消息会被拆出
+   * 一个空末段，若按它计数就会多估一整行空白（「只显示一行却占了两行空间」）。
+   * 段中间的空段（空行）仍保留——它确实是一行。 */
+  while (segments.length > 1 && segments[segments.length - 1] === "") {
+    segments.pop();
+  }
   if (availableWidth <= 0) return segments.length;
   let total = 0;
   for (const segment of segments) {
