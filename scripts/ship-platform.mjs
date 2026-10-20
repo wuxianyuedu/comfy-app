@@ -24,6 +24,7 @@ import {
   asArray,
   buildPullBody,
   CODE,
+  deriveTitle,
   findPullForBranch,
   pickBuildForSha,
   readBuildVerdict,
@@ -52,6 +53,44 @@ import { cnbJson, short } from "./ship-exec.mjs";
  */
 
 /**
+ * 标题的取数（PR 标题与 squash 那一行共用这一份），并把来源念出口。
+ *
+ * 为什么不在调用点各写一遍 `git log -1 --pretty=%s`：那一格取的是分支**当前顶端**那一笔，
+ * 于是「先把 master 合进来再 `--merge`」把主干那一行写成 `Merge branch 'master' into …`，
+ * 「最后补一笔碎片」把它写成 `docs(changelog): …` —— 两条都已上了主干（#2057 / #2055）。
+ * 推导本身在 `ship-core.mjs` 的 `deriveTitle`（纯函数），这里只负责取读数。
+ *
+ * 念出口排在返回**之前**：标题坏了要当场看得见，而不是等 squash 落进历史再回头读 log。
+ *
+ * @param {{
+ *   run: PlatformIO["run"],
+ *   log: PlatformIO["log"],
+ *   baseRef: string | null,
+ *   explicit?: string | null,
+ * }} ctx
+ * @returns {{title:string,source:string}} 标题与它的来源
+ */
+function pickTitle({ run, log, baseRef, explicit = null }) {
+  const subjects = baseRef
+    ? run("git", [
+        "log",
+        "--no-merges",
+        "--reverse",
+        "--format=%s",
+        `${baseRef}..HEAD`,
+      ]).stdout.split("\n")
+    : [];
+  const head = run("git", ["log", "-1", "--pretty=%s"]).stdout.trim();
+  const t = deriveTitle({ subjects, head, explicit });
+  log(
+    `[ship] 标题取自 ${t.source}${baseRef ? `（比的是 ${baseRef}..HEAD）` : ""}：${
+      t.title || "(空)"
+    }`,
+  );
+  return t;
+}
+
+/**
  * 阶段 3：拿这条分支的 PR —— 已有开放的复用，没有就建。
  *
  * 幂等是必需的：同一条分支上第二次 `pnpm ship`（第一次只推到建 PR、CI 还没绿）
@@ -62,12 +101,23 @@ import { cnbJson, short } from "./ship-exec.mjs";
  *   frags: string[],
  *   baseRef: string | null,
  *   baseBranch: string | null,
+ *   explicitTitle?: string | null,
  * }} ctx
  * @returns {{number: any}} PR 号；拿不到时是 falsy，由调用方按 `CODE.NOT_RUN` 收
  */
 export function createOrReusePull(ctx) {
-  const { run, log, mkTmp, root, slug, branch, frags, baseRef, baseBranch } =
-    ctx;
+  const {
+    run,
+    log,
+    mkTmp,
+    root,
+    slug,
+    branch,
+    frags,
+    baseRef,
+    baseBranch,
+    explicitTitle,
+  } = ctx;
   const list = cnbJson(run, [
     "pulls",
     "list-pulls",
@@ -82,7 +132,19 @@ export function createOrReusePull(ctx) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
     return { number };
   }
-  const title = run("git", ["log", "-1", "--pretty=%s"]).stdout.trim();
+  const { title } = pickTitle({
+    run,
+    log,
+    baseRef,
+    explicit: explicitTitle,
+  });
+  if (!title) {
+    log(
+      '[ship] 标题两处都取不到 ⇒ 不建 PR：`--title ""` 建出来的是一条没有标题的 PR，' +
+        "而读者第一件事读的就是它。这一格按「没有执行者」处理，不是「已建」。",
+    );
+    return { number: null };
+  }
   const body = buildPullBody({
     root,
     fragments: frags,
@@ -299,11 +361,23 @@ export function reportVerdict(ctx) {
  *   up: Upstream,
  *   merge: boolean,
  *   buildState: "green"|"red"|"running"|"unknown",
+ *   explicitTitle?: string | null,
  * }} ctx
  * @returns {number} 三态退出码之一
  */
 export function mergeAndVerify(ctx) {
-  const { run, log, slug, number, frags, baseRef, up, merge, buildState } = ctx;
+  const {
+    run,
+    log,
+    slug,
+    number,
+    frags,
+    baseRef,
+    up,
+    merge,
+    buildState,
+    explicitTitle,
+  } = ctx;
   if (!merge) {
     log("[ship] 未给 --merge ⇒ 停在判决处。合并是显式动作。");
     return CODE.GREEN;
@@ -312,7 +386,19 @@ export function mergeAndVerify(ctx) {
     log("[ship] 拒绝合并：CI 不是绿的（当前是 " + buildState + "）。");
     return CODE.RED;
   }
-  const title = run("git", ["log", "-1", "--pretty=%s"]).stdout.trim();
+  const { title } = pickTitle({
+    run,
+    log,
+    baseRef,
+    explicit: explicitTitle,
+  });
+  if (!title) {
+    log(
+      "[ship] 标题两处都取不到 ⇒ 不合并：squash 那一行是主干上读者第一眼读到的东西，" +
+        "给它一个空串等于留下一行没有内容的历史。这一格按「没有执行者」处理。",
+    );
+    return CODE.NOT_RUN;
+  }
   const mg = cnbJson(run, [
     "pulls",
     "merge-pull",
