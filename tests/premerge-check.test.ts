@@ -299,15 +299,12 @@ describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退
 
   test("整跑时 `mergeLoss` 段不是「没跑起来」", () => {
     /* 上一条判的是单段；这条判的是**编排**那一半：多段一起跑时 `mergeLoss` 也得真跑
-     * （按段名说、不按第几段说 —— 段序在 #2022 加出 `unitTests` 之后已经挪过一次）。
+     * （按段名说、不按第几段说 —— 段序在 #2022 加出 `unitTests` 那一档时已经挪过一次，
+     * 2026-10-20 那一档又撤了，按位置说下次还会错）。
      *
-     * ⚠️ 这里必须**同时跳掉 `unitTests` 那一段**：那一段跑的是真的受影响用例层
-     * （`run-affected-tests.mjs`，本检出上量到 90+ 份 / 一次几十秒），而它跑多少
-     * **取决于宿主检出这一推要带上去哪些文件** —— 拿它来判「编排有没有把 `mergeLoss` 带上」，
-     * 等于让一条用例的耗时与结论都随分支拓扑漂（本文件那条超时的真因就是这类耦合：
-     * `mergeLoss` 的 diff 大小同样等于「分支离 master 多远」）。
-     * 那一段自己的在场由上面「各段全被跳过」那条从段表推的判据守着，不在这里重复付钱。 */
-    const { output } = run(["--skip-base", "--skip-unitTests"]);
+     * ⚠️ 这里跳掉 `base` 就够：`unitTests` 段撤了之后，剩下的段全是廉价的纯 git /
+     * 文本复查（`claims` / `mergeLoss`），没有哪一段的耗时取决于宿主检出的分支拓扑。 */
+    const { output } = run(["--skip-base"]);
     expect(output).toContain("合并有没有把一侧整份覆盖掉");
     expect(output).not.toContain("缺少 --baseline");
   });

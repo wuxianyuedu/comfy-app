@@ -68,10 +68,18 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
 /**
- * 四段的定义 —— 顺序即执行序（复算与受影响用例最贵、先跑；后两段是廉价的纯 git 复查）。
+ * 四段的定义 —— 顺序即执行序（复算最贵、先跑；后两段是廉价的纯 git 复查）。
  *
- * `unitTests` 是 2026-10-19 从 `.githooks/pre-commit` 挪过来的那一档（§13.5.25）：
- * 提交只跑形态档，重档的本地执行者改成推送这一跳。
+ * ⚠️ **2026-10-20 起只剩三段**：`unitTests`（受影响用例）那一档撤了。它从
+ * pre-commit 搬到 push 之后只活了不到一天就被撤掉 —— 本地这一跳在最需要它给出
+ * 结论的机器上给的恰是最不可信的读数：它会起 vitest 子进程，而共享机（另一条
+ * 检出并发推 + 多个 dev server 抢核）上失效形态不是用例红，是
+ * `Failed to start forks worker / Timeout waiting for worker`；隔离复跑 88 个
+ * 用例文件 / 1116 条全绿。新执行者是平台侧 PR 流水线的 `受影响用例` 一格
+ * （`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs` +
+ * `COMFY_AFFECTED_CHANGED`，同一条判决链，并发按 `ci-load.mjs` 收敛）。
+ * 撤段而不是「留一段恒跳过」：恒跳过的段会让 `--json` 的读数里永远有一格
+ * 「没跑起来」，而那一格不构成证据（§13.6.2 的口径：没判 ≠ 绿）。
  *
  * `mergeLoss` 那一格是 `anchored` 而不是裸 `script`：它**需要一个锚点**
  * （`--baseline <已知好的参照点>`），而那个锚点在「合并前」这一刻是**算得出来的**
@@ -81,29 +89,15 @@ const ROOT = path.resolve(HERE, "..");
  * （看着在跑、事实一次没复算）。口径与出口见 §13.6.2.1。
  *
  * ⚠️ **它被导出只为一件事**：`tests/premerge-check.test.ts` 那条「各段全被跳过 ⇒ 退 2」
- * 的跳过清单**从这里推**，不硬写名单 —— 硬写的话，加第五段时那条用例会继续绿着、
- * 而它其实漏了一段没跳（本次红就是这么来的：加了 `unitTests` 段，测试还只跳三段，
- * 于是它在「能算出清单」的检出上绿、在「算不出清单」的检出上红，红的还是话术）。
- * 从段表推 ⇒ 加一段就必须同时处理它，否则当场红。
+ * 的跳过清单**从这里推**，不硬写名单 —— 硬写的话，加第四段时那条用例会继续绿着、
+ * 而它其实漏了一段没跳。从段表推 ⇒ 加一段就必须同时处理它，否则当场红。
  *
- * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string} | {label: string, kind: "changed", script: string}>}
+ * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string}>}
  */
 export const SEGMENTS = {
   base: {
     label: "合并前复算（钩子里那批全仓判据）",
     kind: "base",
-  },
-  /* 从 commit 挪到 push 的那一档（ISSUE #2022 / §13.5.25）：提交本身现在只跑形态档，
-   * 「改到哪、测到哪」这一层不能没有本地执行者 —— 它的家从 pre-commit 搬到这里。
-   * 走的是**同一条判决链**（`run-affected-tests.mjs` + `COMFY_AFFECTED_CHANGED`），
-   * 不在这里再筛一遍：两处各自筛一次的漂移是静默的，而这一段的红会拦推送。
-   * ⚠️ 它**不是**在干净快照里判的（`base` 那一格是）：快照没有这一推的内容，
-   * 拿它判受影响用例等于判一份不存在的代码。所以它在本检出上跑，清单取自
-   * 「这一推要带上去的文件」= `merge-base(要并进去的那条, HEAD)..HEAD`。 */
-  unitTests: {
-    label: "受影响用例（从 pre-commit 挪到 pre-push 的那一档）",
-    kind: "changed",
-    script: "run-affected-tests.mjs",
   },
   claims: {
     label: "提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）",
@@ -161,31 +155,6 @@ export function resolveLossBaseline(cwd = ROOT) {
       ok: false,
       reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）`,
     };
-  }
-}
-
-/**
- * 「这一推要带上去的文件」= `merge-base(要并进去的那条, HEAD)..HEAD` 的名字清单。
- *
- * 锚点复用 `resolveLossBaseline()` 而不是另推一次：那个问题是「这条线从哪一刻起分开」，
- * 与 `mergeLoss` 那一格问的是同一件事（拿 `origin/master` 的尖端会把分支侧自己的正当改动
- * 整片读成差异 —— 那边已经为这个错过一次，见它上面那段）。
- *
- * @param {string} cwd
- * @returns {string[]} 空数组 = 取不到（调用方必须按「没跑起来」处理，不是「没有改动」）
- */
-export function pushBatchFiles(cwd = ROOT) {
-  const anchor = resolveLossBaseline(cwd);
-  if (!anchor.ok) return [];
-  try {
-    const out = execFileSync(
-      "git",
-      ["diff", "--name-only", `${anchor.baseline}..HEAD`],
-      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-    );
-    return out.split(/\r?\n/).filter(Boolean);
-  } catch {
-    return [];
   }
 }
 
@@ -368,33 +337,6 @@ function main(argv) {
         continue;
       }
       const r = runScript(script, [`HEAD`, "--baseline", anchor.baseline]);
-      results.push({ key, label: seg.label, code: r.code, output: r.output });
-      continue;
-    }
-    if (seg.kind === "changed") {
-      /* 从 commit 挪到 push 的那一档（§13.5.25）：**在本检出上跑**，清单是「这一推要带上
-       * 去的那些文件」。两件事不能改：① 不拿 `base` 那格的干净快照跑 —— 快照里没有这一推
-       * 的内容，判出来的受影响面是别人的；② 不在这里自己筛一遍 —— 名单由
-       * `run-affected-tests.mjs` 经 `COMFY_AFFECTED_CHANGED` 交给同一条判决链去算，
-       * 两处各筛一次的漂移是静默的（`tests/affected-tests.test.ts` 那条「归因与主链同源」
-       * 同一条理由）。
-       * 取不到清单（浅克隆 / 没有上游）⇒ **退 2**，不是退 0：这一档没判 = 没有证据。 */
-      const { script } = /** @type {{script: string}} */ (seg);
-      const files = pushBatchFiles();
-      if (files.length === 0) {
-        results.push({
-          key,
-          label: seg.label,
-          code: 2,
-          output:
-            "[premerge] 取不到「这一推要带上去的文件」清单 —— 受影响用例这一档没判，" +
-            "不构成证据（浅克隆 / 分叉点算不出来）\n",
-        });
-        continue;
-      }
-      const r = runScript(script, [], {
-        COMFY_AFFECTED_CHANGED: files.join("\n"),
-      });
       results.push({ key, label: seg.label, code: r.code, output: r.output });
       continue;
     }

@@ -70,9 +70,11 @@
 #
 # 保留的坑位注释：npx→pnpm exec（typescript 别名链 npx 会崩）；master 只走 PR（规范 13.6，
 # 故分支守卫最先跑、错了不必再耗 tsc/lint）；eslint 零警告口径；tsc/eslint 各建一份 TS
-# 程序、并发吃内存。**机器紧张时有一个有执行者的口子**：`COMFY_PRECOMMIT_MAX_WORKERS=1`
-# 压 C 组的并发（`run-affected-tests.mjs` 认这个变量，只调并发、不碰任何判据；
-# 缺省 4）。为什么不建议改这条钩子本身：口径与实测曲线见规范 §13.5.8.1。
+# 程序、并发吃内存。**机器紧张时压并发的口子**：`COMFY_PRECOMMIT_MAX_WORKERS=1`
+# （`run-affected-tests.mjs` 认这个变量，只调并发、不碰任何判据；缺省 4）——
+# 2026-10-20 起 C 组本地不跑了，这个口子的主战场换到平台侧
+# `scripts/ci-affected-tests.mjs`（并发按 `ci-load.mjs` 的现场核数收敛，见那里）。
+# 为什么不建议改这条钩子本身：口径与实测曲线见规范 §13.5.8.1。
 # --no-verify 绕过会进历史，慎用。
 set -u
 
@@ -143,17 +145,38 @@ _STAGED_N="$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d " ")"
 # run_group <id> <说明> <命令…>：后台跑一个组，rc 落文件，末尾统一判定。
 run_group() {
   id="$1"; desc="$2"; shift 2
+  # ── 组 C：执行者已挪到平台侧（2026-10-20），本地一律不执行 ────────────────
+  # 它与 A/B/D 的「降档」不是一件事：`COMFY_HEAVY_GATES=1` 也换不回来。
+  # 立案现场：会起 vitest 子进程的这一档在共享机上的失效形态**不是用例红**，而是
+  # `Failed to start forks worker / Timeout waiting for worker` —— 另一条检出并发推
+  # 自己的分支 + 多个 dev server 抢核时，pre-push 的受影响用例档被这种调度超时拦下，
+  # 而隔离复跑 88 个用例文件 / 1116 条全绿。也就是说本地这一跳在最需要它给出结论的
+  # 机器上，给的恰是最不可信的读数。
+  # 新执行者：`.cnb.yml` 的 `受影响用例` 那一格（`scripts/ci-affected-tests.mjs` →
+  # `run-affected-tests.mjs` + `COMFY_AFFECTED_CHANGED`，**同一条判决链**；并发按
+  # `ci-load.mjs` 的现场核数收敛，超时形态的隔离复跑话术仍由启动器自己负责）。
+  # ⚠️ 这一段**留着不删**：`tests/hook-affected-launch.test.ts` 钉的就是这个入口形状
+  # （C 组必须走 `run-affected-tests.mjs`，不许退回 `pnpm exec vitest run $files`）。
+  # 本地要跑受影响面：`pnpm check:all`（全量）或手工
+  # `COMFY_AFFECTED_CHANGED=$'src/a.ts' node scripts/run-affected-tests.mjs`。
+  if [ "$id" = "C" ]; then
+    echo "skipped" >"$LOGD/$id.skip"
+    echo "ci" >"$LOGD/$id.moved"
+    return 0
+  fi
   # ── 档位开关（ISSUE #2022）───────────────────────────────────────────────
-  # 本地**提交**默认只跑 D0（形态前置档）：A(tsc) / B(eslint) / C(受影响用例) / D(静态判据)
-  # 这四组不再在每次提交上跑。**它们没有消失** —— 第一层接手是推送那一跳
-  # （`.githooks/pre-push` → `check:premerge` 各段，含 `unitTests`），第二层是平台流水线
+  # 本地**提交**默认只跑 D0（形态前置档）：A(tsc) / B(eslint) / D(静态判据)
+  # 这三组不再在每次提交上跑。**它们没有消失** —— 第一层接手是推送那一跳
+  # （`.githooks/pre-push` → `check:premerge` 的 `base` 段），第二层是平台流水线
   # （规范 §13.5.25）。业主口径：提交在开发者的编辑循环里，慢 = 直接被 `--no-verify` 绕掉。
   # ⚠️ **这里的“不跑”只关执行时机，不关注册表**：那 50 条 `run "<标签>" <命令>` 步骤行
   # 逐字留在这份文件里，因为 `scripts/check-gate-executors.cjs` 是按**文本**解析本文件的
   # 三处出处之一（另两处是 `quality-gate.mjs` / `quality-gate.ps1`；`.cnb.yml` **不算**
   # 执行者）。把步骤删掉 = 那一族判据当场失去执行者 = 本仓最恨的静默删除。
-  # 人要在本地跑全套（合并前自查、或怀疑 CI 那一份不可信）：`COMFY_HEAVY_GATES=1 git commit …`，
-  # 或 `pnpm check:all`。跳过不是通过：收尾那一段会把跳过的组**逐组点名**，
+  # 人要在本地跑 A/B/D（合并前自查、或怀疑 CI 那一份不可信）：
+  # `COMFY_HEAVY_GATES=1 git commit …`，或 `pnpm check:all`。**C 组除外** ——
+  # 它 2026-10-20 起整体挪去了平台侧，连这个开关也换不回来（见下面那段）。
+  # 跳过不是通过：收尾那一段会把跳过的组**逐组点名**，
   # 所以账本与日志里读得出「这次提交本地没测行为面」，不会出现一次冒充全绿的绿钩子。
   if [ "$id" != "D0" ] && [ "${COMFY_HEAVY_GATES:-0}" != "1" ]; then
     echo "skipped" >"$LOGD/$id.skip"
@@ -376,7 +399,14 @@ grep -E '^── ' "$LOGD/D0.log" | sed 's/^/  [ok] /'
 run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'
 run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm run lint'
 
-# ── C：结构守护测试（固定清单 + 本次改动牵扯到的用例）合并成一次 vitest ──────
+# ── C：结构守护测试（固定清单 + 本次改动牵扯到的用例）──────────────────────
+# ⚠️ **2026-10-20 起这一组本地不再执行**：执行者是 `.cnb.yml` 的 `受影响用例` 一格
+# （`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs`，同一条判决链）。
+# 理由与边界记在 `run_group()` 里组 C 那段：共享机上它的失效形态是 forks worker
+# 调度超时而不是用例红。**这一行留着不删** ——
+# `tests/hook-affected-launch.test.ts` 钉的就是入口形状，且它是这份钩子里唯一一处
+# 「受影响用例从哪起」的登记。
+#
 # 固定清单的**唯一出处**是 `scripts/affected-tests.mjs` 的 FIXED_STRUCTURAL_TESTS，
 # 这里不再抄一遍：抄一份就会漂移，且清单里的用例被改名后，钩子会「一条都不跑却
 # 仍然绿」。增量层的五条判据与它的**已知边界**（不保证传递依赖；命中公共地基时
@@ -821,8 +851,14 @@ if [ -n "$SKIPPED_IDS" ]; then
   # 通过的只有 D0（形态档）。行为面这一半的结论在平台那一次跑里，不在这里。
   echo "[pre-commit] ⚠ 本次提交本地**没跑**：组$SKIPPED_IDS（tsc / eslint / 受影响用例 / 静态判据全量）"
   echo "[pre-commit] ⚠ 上面那句不是「已通过」——它等价于「这次没测行为面」（与 §13.6.2 那个"
-  echo "[pre-commit] ⚠   inconclusive 同一口径）。兜底两层：推送那一跳跑全套（check:premerge"
-  echo "[pre-commit] ⚠   各段，含受影响用例），平台流水线是第二层 —— 见规范 §13.5.25。"
-  echo "[pre-commit] ⚠ 本地要全套：COMFY_HEAVY_GATES=1 git commit …（或 pnpm check:all）。"
+  echo "[pre-commit] ⚠   inconclusive 同一口径）。兜底两层：推送那一跳跑复算（check:premerge"
+  echo "[pre-commit] ⚠   的 base 段），平台 PR 流水线是第二层（含「受影响用例」那一格）—— 见规范 §13.5.25。"
+  echo "[pre-commit] ⚠ 本地要 A/B/D 全套：COMFY_HEAVY_GATES=1 git commit …（或 pnpm check:all）。"
+fi
+# 组 C 单独念一句：它不是「这一跳降档」，是执行者换了地方 —— 混在上一行的
+# 「组 A B C D」里会被读成「下台机器上还会跑」，而事实是本地再也不跑它了。
+if [ -f "$LOGD/C.moved" ]; then
+  echo "[pre-commit] ⚠ 组 C（受影响用例）本地不再执行：执行者是平台侧 PR 流水线的「受影响用例」一格"
+  echo "[pre-commit] ⚠   （scripts/ci-affected-tests.mjs → run-affected-tests.mjs，同一条判决链）。"
 fi
 echo "[pre-commit] 入选档位全部通过 ✓（D0 形态档$([ -n "$SKIPPED_IDS" ] && echo "；重档见平台" )）"
