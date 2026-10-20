@@ -80,9 +80,15 @@ const ROOT = path.resolve(HERE, "..");
  * **恒报「不构成证据」** —— 恰好是这套编排要消灭的那类静默失效
  * （看着在跑、事实一次没复算）。口径与出口见 §13.6.2.1。
  *
+ * ⚠️ **它被导出只为一件事**：`tests/premerge-check.test.ts` 那条「各段全被跳过 ⇒ 退 2」
+ * 的跳过清单**从这里推**，不硬写名单 —— 硬写的话，加第五段时那条用例会继续绿着、
+ * 而它其实漏了一段没跳（本次红就是这么来的：加了 `unitTests` 段，测试还只跳三段，
+ * 于是它在「能算出清单」的检出上绿、在「算不出清单」的检出上红，红的还是话术）。
+ * 从段表推 ⇒ 加一段就必须同时处理它，否则当场红。
+ *
  * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string} | {label: string, kind: "changed", script: string}>}
  */
-const SEGMENTS = {
+export const SEGMENTS = {
   base: {
     label: "合并前复算（钩子里那批全仓判据）",
     kind: "base",

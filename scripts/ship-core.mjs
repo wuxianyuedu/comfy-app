@@ -17,6 +17,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { resolveGitDir } from "./git-dir.mjs";
+
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 
@@ -106,6 +108,51 @@ export function parseSlug(remoteUrl) {
   if (!s) return null;
   const m = s.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
   return m ? (m[1] ?? null) : null;
+}
+
+/**
+ * 「远端叫什么、基线是哪条」的推导 —— 唯一一份。
+ *
+ * 为什么要有这一件：这一版此前两处**写死 `origin`**（`git remote get-url origin` 与
+ * `git diff origin/master...HEAD -- changelog.d`），而本仓按规范只有一个叫 `cnb` 的远端
+ * （硬规则 6 / §13.6：远端名 `cnb`，无 `origin`）。后果不是「少一句提示」：
+ * 两条 git 命令都**失败**，而失败在这里长得与「答案为空」一模一样 ——
+ * 碎片那一查拿到空串 ⇒ preflight 判「没有 changelog.d 碎片」⇒ **`pnpm ship` 在本仓
+ * 从第一次跑起就没工作过**，且报的还是一条听起来正当的理由。
+ *
+ * 三档来源，顺序有理由：
+ *   ① `@{u}`（HEAD 自己的上游）—— 最贴事实：这条分支在跟谁比，是 git 知道的事；
+ *   ② 唯一远端 + `<远端>/master` —— 新建的本地分支还没上游时的合理推法，
+ *      **打印时标明是推的**（默认分支不叫 master 时它会偏，但偏了会被下面那条
+ *      「基线引用不存在 ⇒ 退 2」的判据当场抓住，不会静默变成「没有碎片」）；
+ *   ③ 多个远端且没有上游 ⇒ 交回 `origin`（历史习惯），再没有就给 `null` ——
+ *      调用方必须按「没有执行者」处理，不许拿空 diff 冒充结论。
+ *
+ * @param {{upstream?: string | null, remotes?: string[]}} input
+ * @returns {{remote: string | null, base: string | null, source: "upstream" | "sole-remote" | "origin" | "none"}}
+ */
+export function resolveUpstream({ upstream, remotes = [] }) {
+  const u = (upstream || "").trim();
+  const slash = u.indexOf("/");
+  if (slash > 0 && u.slice(slash + 1)) {
+    return {
+      remote: u.slice(0, slash),
+      base: u,
+      source: "upstream",
+    };
+  }
+  const named = remotes.map((r) => (r || "").trim()).filter(Boolean);
+  if (named.length === 1) {
+    return {
+      remote: named[0] ?? null,
+      base: `${named[0]}/master`,
+      source: "sole-remote",
+    };
+  }
+  if (named.includes("origin")) {
+    return { remote: "origin", base: "origin/master", source: "origin" };
+  }
+  return { remote: null, base: null, source: "none" };
 }
 
 /**
@@ -248,7 +295,7 @@ export function buildPullBody({ root, fragments, diffstat }) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -258,11 +305,13 @@ export function planCommands(st) {
   p.push("git ls-files changelog.d");
   p.push("node scripts/check-deps-freshness.mjs");
   for (const a of st.adds) p.push(`git add -- ${a}`);
-  if (st.hasMessage) p.push("git commit -F <message>");
-  p.push(`git push -u origin ${st.branch}`);
+  if (st.hasMessage) p.push("git commit --message=<提交信息原文>");
+  /* 远端名与主干分支都来自解析（`resolveUpstream`），不写死 `origin` / `master` ——
+   * 本仓的远端叫 `cnb`（硬规则 6），写死时计划与执行两头一起错。 */
+  p.push(`git push -u ${st.remote || "origin"} ${st.branch}`);
   p.push(`cnb pulls list-pulls --repo ${st.slug} --state open -v`);
   p.push(
-    `cnb pulls post-pull --repo ${st.slug} --base master --head ${st.branch} --head-repo ${st.slug} --title … --body-file <tmp> -v`,
+    `cnb pulls post-pull --repo ${st.slug} --base ${st.baseBranch || "master"} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
   );
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);
@@ -281,17 +330,11 @@ export function planCommands(st) {
  * @returns {{headSha?:string,upstreamSha?:string,verifiedAt?:string,baselineRed?:string[]} | null} 取不到回 null
  */
 export function readProof(root) {
-  let gitDir = path.join(root, ".git");
-  // `.git` 在 worktree / 自定义 hooksPath 检出里是**指针文件**而不是目录，
-  // 直接拼路径会读不到证明 —— 那会被报成「钩子没跑」，而它其实跑了。
-  try {
-    if (fs.statSync(gitDir).isFile()) {
-      const m = fs.readFileSync(gitDir, "utf8").match(/^gitdir:\s*(.+)$/m);
-      if (m && m[1]) gitDir = path.resolve(root, m[1].trim());
-    }
-  } catch {
-    return null;
-  }
+  /* git 目录的解析不在这里重做 —— 唯一实现见 `scripts/git-dir.mjs`。
+   * 这里此前自己判「`.git` 是文件就当指针读」，只覆盖 worktree 那一种，
+   * `GIT_DIR` 与裸仓库一个都不认；手写一份弱化的同一件事，比不写更难被发现。 */
+  const gitDir = resolveGitDir(root);
+  if (!gitDir) return null;
   try {
     return JSON.parse(
       fs.readFileSync(path.join(gitDir, "comfy-premerge-proof.json"), "utf8"),

@@ -23,7 +23,7 @@
  *   | 合并前固定动作三段  | `.githooks/pre-push` → `premerge-proof.mjs`（由 push 触发）  |
  *   | 「红是我的还是主干」| `base-check.mjs`（本脚本在 CI 红时调它，不自己归因）         |
  *   | 流水线终态          | 平台 build 的 `data.status`（`cnb … -v` 的 JSON）            |
- *   | 合没合上            | PR 的 `is_merged` + **回读 `origin/master` 顶端**            |
+ *   | 合没合上            | PR 的 `is_merged` + **回读解析出的主干基线顶端**            |
  *
  * ── 三条写进代码的纪律（不是文档承诺）──────────────────────────
  *
@@ -71,6 +71,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { gitScratchPath, resolveGitDir } from "./git-dir.mjs";
 import {
   asArray,
   buildPullBody,
@@ -85,6 +86,7 @@ import {
   readBuildVerdict,
   readProof,
   readPullVerdict,
+  resolveUpstream,
 } from "./ship-core.mjs";
 
 /**
@@ -206,6 +208,7 @@ export async function main(deps = {}) {
  *   root?: string,
  *   run?: (cmd:string,args:string[])=>{status:number,stdout:string,stderr:string,error:string|null},
  *   probeCnb?: ()=>boolean,
+ *   resolveGitDir?: (cwd?:string)=>string | null,
  *   log?: (s:string)=>void,
  *   sleep?: (ms:number)=>void,
  *   now?: ()=>number,
@@ -217,10 +220,13 @@ export async function main(deps = {}) {
  */
 async function runFlow(deps, tmpFiles) {
   const root = deps.root ?? process.cwd();
+  /** git 目录怎么解析：默认那份唯一实现，测试里指到临时目录。 */
+  const resolveDir = deps.resolveGitDir ?? resolveGitDir;
   /** 写一份临时文件并**登记待回收** —— 只有这一条出口，漏登记就删不掉。 */
+  /** 写一份临时文件到 git 目录并**登记待回收**；没有落点时回 null（不往工作区猜）。 */
   const mkTmp = (/** @type {string} */ name, /** @type {string} */ text) => {
-    const p = writeTmp(root, name, text);
-    tmpFiles.push(p);
+    const p = writeScratch(root, name, text, resolveDir);
+    if (p) tmpFiles.push(p);
     return p;
   };
   const run = deps.run ?? makeRunner(root);
@@ -235,6 +241,13 @@ async function runFlow(deps, tmpFiles) {
   const opt = parseArgs(deps.args ?? process.argv.slice(2));
   const codes = /** @type {number[]} */ ([]);
   const want = (/** @type {string} */ p) => !opt.only || opt.only === p;
+  /** 下面几段共用的远端/基线，在两道守卫之后解析（见 `resolveUpstream` 那一段的注释）。 */
+  /** @type {{remote: string | null, base: string | null, source: string}} */
+  let up = { remote: null, base: null, source: "none" };
+  /** @type {string | null} */
+  let baseRef = null;
+  /** @type {string | null} */
+  let baseBranch = null;
   /**
    * 把一个外部命令的输出**原样**转述出来 —— **含 stderr**。
    * 钩子与 git 都把关键的话写在 stderr，只转 stdout 等于把理由丢掉、
@@ -275,6 +288,37 @@ async function runFlow(deps, tmpFiles) {
     return CODE.NOT_RUN;
   }
 
+  /* ── 远端名与上游基线：在两道守卫（未知旗标 / `--only` 单独跑）之后解析一次 ──
+   * push / PR 正文 / fetch / 「回读主干顶端」四段都要用它，所以不能等各段各自去推。
+   * 这一版原先五处**写死 `origin`**，而本仓按规范只有一个叫 `cnb` 的远端
+   * （硬规则 6 / §13.6）⇒ 那五条命令全部失败，而每处失败都长得像「答案为空」：
+   * 碎片那一查拿到空串 ⇒ preflight 报「没有 changelog.d 碎片」⇒ `pnpm ship` 在本仓
+   * 从第一次跑起就没工作过，报的还是一个听起来正当的理由。
+   * 推不出远端名时**不在这里**判红：各阶段拿 `up.remote === null` 自己退 NOT_RUN ——
+   * 「取不到远端」与「这一步跑出来是红的」是两件事（三态退出码那条口径）。 */
+  const upRes = run("git", [
+    "rev-parse",
+    "--abbrev-ref",
+    "--symbolic-full-name",
+    "@{u}",
+  ]);
+  const remotesRes = run("git", ["remote"]);
+  up = resolveUpstream({
+    upstream: upRes.stdout,
+    remotes: remotesRes.stdout.split("\n"),
+  });
+  /* 基线引用要**真的存在**才拿来比：拿不存在的 ref 做 `A...HEAD`，git 失败、stdout 为空，
+   * 而这一查的语义是「这条分支带进来了什么」—— 空串会被读成「什么都没带」，
+   * 一条听起来完全正当的假结论。所以正面验一次，验不到就往下标成「没有事实源」。 */
+  baseRef =
+    up.base !== null &&
+    run("git", ["rev-parse", "--verify", "--quiet", up.base]).status === 0
+      ? up.base
+      : null;
+  /** 主干**分支名**（PR 的 `--base` 要的是它，不是 `<远端>/<分支>`）。推不出就不给
+   *  `master` 兜底 —— 兜一个猜的分支名，报出来的是「PR 建到了不存在的主干上」。 */
+  baseBranch = baseRef ? baseRef.split("/").slice(1).join("/") : null;
+
   // ── 阶段 0：preflight ────────────────────────────────────────
   if (want("preflight")) {
     const head = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
@@ -307,15 +351,17 @@ async function runFlow(deps, tmpFiles) {
      *      那条守卫等于没有，而它看起来像在判什么，比不判更糟；
      *   ② 改成只看工作树 → 第一次跑把碎片提交掉之后，工作树干净 ⇒ **恒假**，
      *      于是 `pnpm ship --merge`（同一条分支上的第二次跑）在 preflight 就被拒。
-     * 正确的面是**两者取并**：分支相对 `origin/master` 已提交的 + 还没提交的。
+     * 正确的面是**两者取并**：分支相对上游基线已提交的 + 还没提交的。
      * 「同一条分支上重跑要还能过」这一向是 ② 的修法自己带出来的，见用例。 */
-    const branchFragRes = run("git", [
-      "diff",
-      "--name-only",
-      "origin/master...HEAD",
-      "--",
-      "changelog.d",
-    ]);
+    const branchFragRes = baseRef
+      ? run("git", [
+          "diff",
+          "--name-only",
+          `${baseRef}...HEAD`,
+          "--",
+          "changelog.d",
+        ])
+      : { stdout: "" };
     const workFragRes = run("git", [
       "status",
       "--porcelain",
@@ -334,12 +380,16 @@ async function runFlow(deps, tmpFiles) {
           .filter((p) => p.endsWith(".md")),
       ]),
     ];
-    const slugRes = run("git", ["remote", "get-url", "origin"]);
+    const slugRes = up.remote
+      ? run("git", ["remote", "get-url", up.remote])
+      : { stdout: "" };
     const slug = parseSlug(slugRes.stdout);
     const cnbOk = probeCnb();
 
     log(
-      `[ship] 分支 ${branch} · sha ${sha.slice(0, 8)} · 仓库 ${slug || "(取不到)"}`,
+      `[ship] 分支 ${branch} · sha ${sha.slice(0, 8)} · 仓库 ${slug || "(取不到)"}` +
+        ` · 远端 ${up.remote || "(无)"} · 基线 ${baseRef || "(取不到)"}` +
+        `（来源 ${up.source}${baseRef === null ? " ⇒ 碎片那一查没有事实源，见下" : ""}）`,
     );
     log(
       `[ship] 暂存 ${staged.length} 项 · 未暂存 ${unstaged.length} 项 · changelog.d 碎片 ${frags.length} 份`,
@@ -349,16 +399,27 @@ async function runFlow(deps, tmpFiles) {
         "[ship] 还有未暂存的改动，而本次没给 --add ⇒ 暂存面由你负责，脚本不替你 `git add -A`。",
       );
     }
+    if (baseRef === null) {
+      log(
+        `[ship] 取不到可比的上游基线（上游 ${up.base ?? "(无)"} 不存在或这条分支还没有上游）` +
+          " ⇒ 「分支带进来了哪些碎片」这一格**没有事实源**。这不是「没有碎片」，" +
+          "也不是「通过」：先 `git fetch` 或给这条分支设上游（`git branch -u <远端>/master`）。\n",
+      );
+      codes.push(CODE.NOT_RUN);
+      return finish(codes);
+    }
     if (frags.length === 0) {
       log(
-        "[ship] 没有 changelog.d/ 碎片 ⇒ 单 PR 单变更那条不成立（§13.10.5）。先补一份。",
+        `[ship] 没有 changelog.d/ 碎片（比的是 ${baseRef}...HEAD 与工作树）` +
+          " ⇒ 单 PR 单变更那条不成立（§13.10.5）。先补一份。",
       );
       codes.push(CODE.RED);
       return finish(codes);
     }
     if (!slug) {
       log(
-        "[ship] 取不到 origin 的 org/repo ⇒ 后面的平台动作没有执行者（不是「不需要」）",
+        `[ship] 取不到远端 \`${up.remote ?? "(未解析出远端名)"}\` 的 org/repo` +
+          " ⇒ 后面的平台动作没有执行者（不是「不需要」）",
       );
       codes.push(CODE.NOT_RUN);
       return finish(codes);
@@ -373,6 +434,8 @@ async function runFlow(deps, tmpFiles) {
         adds: opt.adds,
         hasMessage: Boolean(opt.message || opt.messageFile),
         merge: opt.merge,
+        remote: up.remote,
+        baseBranch,
       })) {
         log(`        $ ${c}`);
       }
@@ -411,8 +474,11 @@ async function runFlow(deps, tmpFiles) {
           return finish(codes);
         }
         for (const a of opt.adds) run("git", ["add", "--", a]);
-        const cf = mkTmp("ship-commit-msg", msg);
-        const cm = run("git", ["commit", "-F", cf]);
+        /* 提交信息走 argv 直传，**不落文件**：`spawnSync` 不经 shell，
+         * 所以多行与引号都是字面量，没有 `-F` 那一套「写个临时文件、提交完还得删干净」
+         * 的泄漏面（AGENTS 硬规则 12 把 `COMMIT_EDITMSG` 落进工作区点名为「提交完忘了删」
+         * 的信号 —— 少建一个文件，就少一处会忘的地方）。 */
+        const cm = run("git", ["commit", `--message=${msg}`]);
         relay(cm);
         if (cm.status !== 0) {
           log(
@@ -430,7 +496,15 @@ async function runFlow(deps, tmpFiles) {
 
     // ── 阶段 2：push（合并前固定动作由 pre-push 钩子自己跑）────
     if (want("push")) {
-      const ps = run("git", ["push", "-u", "origin", branch]);
+      if (!up.remote) {
+        log(
+          "[ship] 推不出远端名（既没有上游、也不是「唯一远端」）⇒ push 没有执行者，" +
+            "这一格不是「通过」（三态退出码：这是 NOT_RUN）。",
+        );
+        codes.push(CODE.NOT_RUN);
+        return finish(codes);
+      }
+      const ps = run("git", ["push", "-u", up.remote, branch]);
       relay(ps);
       if (ps.status !== 0) {
         log(
@@ -483,20 +557,41 @@ async function runFlow(deps, tmpFiles) {
         const body = buildPullBody({
           root,
           fragments: frags,
-          diffstat: run("git", [
-            "diff",
-            "--stat",
-            "origin/master...HEAD",
-          ]).stdout.trim(),
+          /* 基线取不到时这一格就是空 —— 宁缺：拿 `HEAD...HEAD` 会得到一份「什么都没有」
+           * 的 diffstat，而 PR 正文里那句「这次改了哪些文件」正是读者判断成本的入口。 */
+          diffstat: baseRef
+            ? run("git", ["diff", "--stat", `${baseRef}...HEAD`]).stdout.trim()
+            : "",
         });
+        /* 守卫排在落临时文件**之前**：`mkTmp` 的回收挂在 `main` 的 `finally` 上，
+         * 先建再退虽然不会留垃圾，但会让「这次没建 PR」那一次也在盘上写过一份
+         * 提交信息原文 —— 而 #2037 修的就是这类东西不该留在盘上。 */
+        if (!baseBranch) {
+          log(
+            "[ship] 推不出主干分支名（基线引用不可用）⇒ 不建 PR：拿一个猜的 `--base` 建出去，" +
+              "得到的是「PR 指向一条不存在的主干」，而平台会照建不误。这一格退 NOT_RUN。",
+          );
+          codes.push(CODE.NOT_RUN);
+          return finish(codes);
+        }
         const bf = mkTmp("ship-pr-body", body);
+        if (!bf) {
+          /* 正文可能上千行，`--body <串>` 会撞上 Windows 的 32k argv 上限，
+           * 所以这一格只能走文件。取不到 git 目录 = 不在真检出里 ⇒ 说清楚
+           * 而不是往工作区猜一个落点。 */
+          log(
+            "[ship] 取不到 git 目录 ⇒ PR 正文没有落点，这一格没有执行者（不是「不需要」）。",
+          );
+          codes.push(CODE.NOT_RUN);
+          return finish(codes);
+        }
         const made = cnbJson(run, [
           "pulls",
           "post-pull",
           "--repo",
           slug,
           "--base",
-          "master",
+          baseBranch,
           "--head",
           branch,
           "--head-repo",
@@ -653,7 +748,17 @@ async function runFlow(deps, tmpFiles) {
             codes.push(CODE.RED);
           } else {
             // 回读两件事：平台说合上了，**且**碎片真的在主干顶端（只看平台回执 = 半个结论）。
-            run("git", ["fetch", "origin", "master"]);
+            /* 回读的那条引用也来自解析出的基线（`cnb/master` 在本仓），不写死 `origin`：
+             * 写死时 `fetch` 与 `cat-file` 双双失败，而 `frags.every(...)` 拿到的是
+             * 「每份都不在主干」⇒ 报成红；反过来若某处吞了失败，就会报成「都在」。
+             * 两个方向都错，且都读起来像有结论。 */
+            const baseParts = (baseRef ?? "").split("/");
+            const baseBranch = baseParts.slice(1).join("/");
+            run("git", [
+              "fetch",
+              baseParts[0] ?? up.remote ?? "origin",
+              baseBranch || "master",
+            ]);
             const stillOpen = cnbJson(run, [
               "pulls",
               "get-pull",
@@ -664,10 +769,10 @@ async function runFlow(deps, tmpFiles) {
               "-v",
             ]);
             const back = stillOpen ? readPullVerdict(stillOpen.json) : null;
+            const readRef = baseRef ?? `${up.remote ?? "origin"}/master`;
             const fragOnMaster = frags.every(
               (f) =>
-                run("git", ["cat-file", "-e", `origin/master:${f}`]).status ===
-                0,
+                run("git", ["cat-file", "-e", `${readRef}:${f}`]).status === 0,
             );
             log(
               `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? back.isMerged : "?"} 碎片在主干顶端=${fragOnMaster}`,
@@ -708,13 +813,23 @@ async function runFlow(deps, tmpFiles) {
 }
 
 /**
+ * 把一份「只给这一次调用用」的文本落到 git 目录里（机器本地、不入库），
+ * 与 `comfy-premerge-proof.json` / `comfy-precommit-timing.jsonl` 同一户、同一理由。
+ *
+ * 取不到 git 目录时回 `null` —— 调用方据此**跳过**这一步，而不是往工作区里猜一个落点：
+ * 落在工作区就得靠 `.gitignore` 兜，而「靠 gitignore 兜住的临时文件」正是
+ * AGENTS 硬规则 12 点名的那一族（`MERGE_MSG` / `COMMIT_EDITMSG` 落进工作区
+ * 只说明「用 `-F` 写提交说明、提交完忘了删」）。
+ *
  * @param {string} root 仓库根
  * @param {string} name 临时文件名前缀
  * @param {string} text 内容
- * @returns {string} 写出的绝对路径
+ * @param {(cwd?:string)=>string | null} [resolve] git 目录解析器（测试可注入）
+ * @returns {string | null} 写出的绝对路径；没有落点时 null
  */
-function writeTmp(root, name, text) {
-  const dir = path.join(root, ".workbuddy");
+function writeScratch(root, name, text, resolve = resolveGitDir) {
+  const dir = gitScratchPath(root, "comfy-ship-tmp", resolve);
+  if (!dir) return null;
   fs.mkdirSync(dir, { recursive: true });
   const p = path.join(dir, `${name}-${process.pid}.tmp`);
   fs.writeFileSync(p, text, "utf8");

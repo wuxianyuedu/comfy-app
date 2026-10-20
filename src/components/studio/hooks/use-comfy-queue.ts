@@ -2,43 +2,23 @@
 
 // ── ComfyUI 排队 / 当前执行（底部状态栏那一格的数据源）──
 //
-// 数据来自 `GET /api/comfy/queue` —— 服务端三路聚合（执行器内存态 + DB +
-// ComfyUI `/queue`，见 `queue-status.server.ts`）。为什么值得占一格：任务全在
-// 串行排队（MAX_CONCURRENCY=1），用户盯着画布转圈时最想知道的正是「前面还堵着
-// 几个、当前这个跑了多久、跑的是哪个工作流与模型」——这些此前只散在日志面板里，
-// 而**耗时根本没暴露过**。
-//
-// 两个周期：状态轮询 2s（与 dev server 存活探测同频）；「已运行 mm:ss」由本地
-// 1s tick 算 —— 只靠轮询的话秒数会一跳两秒，看起来像卡住，而这一格恰恰是用户
-// 用来判断「它还在动吗」的。
+// 轮询本体已收进 `~/lib/comfy/comfy-queue-store`（与 comfy-stats-store 同款：
+// 全页单点持有者，状态栏与队列面板共用一条 GET /api/comfy/queue，避免重复轮询）。
+// 本文件只剩「订阅快照 + 纯展示函数」两层：组件只消费 useComfyQueue()，逻辑
+// （notice 文案 / 耗时格式化）走下面的纯函数，视图不再自己发请求（硬规则 10）。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 
-import { useInterval } from "~/components/ui/use-interval";
-import { noteComfyBusy } from "~/lib/comfy/comfy-busy-store";
-import { isRecord } from "~/lib/is-record";
-import { useOfflineGate } from "./use-offline-gate";
-import type {
-  ComfyQueueStatus,
-  ComfyRunningTask,
-} from "~/lib/comfyui/queue-status-types";
+import {
+  COMFY_QUEUE_POLL_MS,
+  subscribeComfyQueue,
+  getComfyQueueSnapshot,
+  getComfyQueueServerSnapshot,
+  type ComfyQueueView,
+} from "~/lib/comfy/comfy-queue-store";
 
-export const COMFY_QUEUE_POLL_MS = 2000;
-
-/** 本地秒表周期（只为让「已运行」连续，不发请求）。 */
-const ELAPSED_TICK_MS = 1000;
-
-const EMPTY: ComfyQueueStatus = {
-  online: false,
-  comfy: { running: 0, pending: 0 },
-  running: null,
-  queued: 0,
-};
-
-export interface ComfyQueueView extends ComfyQueueStatus {
-  /** 当前任务已运行的毫秒数；没有在跑的任务时为 null。 */
-  elapsedMs: number | null;
-}
+export { COMFY_QUEUE_POLL_MS };
+export type { ComfyQueueView };
 
 /** 已运行时长 → `mm:ss`（超过一小时带上小时）。 */
 export function formatElapsed(ms: number): string {
@@ -97,113 +77,11 @@ export function comfyQueueNotice(
   return { text, title: title.join("\n") };
 }
 
-function numberOr(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function parseRunning(value: unknown): ComfyRunningTask | null {
-  if (!isRecord(value)) return null;
-  if (typeof value.taskId !== "string" || typeof value.startedAt !== "number") {
-    return null;
-  }
-  return {
-    taskId: value.taskId,
-    workflowName:
-      typeof value.workflowName === "string" ? value.workflowName : null,
-    model: typeof value.model === "string" ? value.model : null,
-    startedAt: value.startedAt,
-    progress: numberOr(value.progress, 0),
-    nodeType: typeof value.nodeType === "string" ? value.nodeType : null,
-  };
-}
-
-/** 网络载荷 → 状态（`unknown` 收窄，不做类型断言）。 */
-function parseStatus(data: unknown): ComfyQueueStatus {
-  if (!isRecord(data)) return EMPTY;
-  const comfy = isRecord(data.comfy) ? data.comfy : {};
-  return {
-    online: data.online === true,
-    comfy: {
-      running: numberOr(comfy.running, 0),
-      pending: numberOr(comfy.pending, 0),
-    },
-    running: parseRunning(data.running),
-    queued: numberOr(data.queued, 0),
-  };
-}
-
+/** 订阅同一份队列与运行快照（全页单点持有，见 `comfy-queue-store`）。 */
 export function useComfyQueue(): ComfyQueueView {
-  const [status, setStatus] = useState<ComfyQueueStatus>(EMPTY);
-  /* 本地秒表。初值刻意为 0（不是 `Date.now()`）——它参与首帧渲染，用真实时钟
-   * 会让 SSR 与客户端首帧不一致；没有在跑的任务时它根本不被读。 */
-  const [now, setNow] = useState(0);
-  const stoppedRef = useRef(false);
-  /* 在线判定走与资源格同一条迟滞（use-offline-gate）：ComfyUI 跑图时 /queue
-   * 偶发超时被服务端判 online:false，单次不该让这一格闪没，连续达阈值才提交离线。
-   * 两路共用同一原语，保证「ComfyUI 是否在线」的口径一致。 */
-  const tolerateOffline = useOfflineGate();
-  /* 自增请求号：只接受最新一次的观测，丢弃乱序迟到的旧回包，避免污染连续失败计数。 */
-  const reqIdRef = useRef(0);
-
-  const probe = useCallback(async () => {
-    const myReq = ++reqIdRef.current;
-    try {
-      const res = await fetch("/api/comfy/queue", {
-        cache: "no-store",
-        signal: AbortSignal.timeout(2500),
-      });
-      if (!res.ok) return;
-      const data: unknown = await res.json();
-      if (stoppedRef.current || myReq !== reqIdRef.current) return;
-      const parsed = parseStatus(data);
-      if (parsed.online) {
-        tolerateOffline(true);
-        setStatus(parsed);
-        /* 把「忙不忙」喂给全页单点（ISSUE #1351）：系统指标的持有者据此把
-         * `/system_stats` 的探测降到出图档 —— 那条探针内部会调
-         * `torch.cuda.mem_get_info`，GPU 满载时打它等于往排队的 aiohttp 里
-         * 再插请求。口径：本应用在跑 **或** ComfyUI 自己排着队都算忙。 */
-        noteComfyBusy(
-          parsed.running !== null ||
-            parsed.comfy.pending > 0 ||
-            parsed.comfy.running > 0 ||
-            parsed.queued > 0,
-        );
-        return;
-      }
-      // 离线观测：容忍期内保留上一次好状态（不闪），连续失败达阈值才提交离线。
-      /* 离线时也要喂 `false`：不然「忙」会一直挂着（黏滞窗口过后本该转闲），
-       * `noteComfyBusy` 的黏滞 + 幂等保证这里连着喂不会把状态抖来抖去。 */
-      noteComfyBusy(false);
-      if (!tolerateOffline(false)) {
-        setStatus(parsed);
-      }
-    } catch {
-      /* 探测失败不动状态：瞬时断网不该让状态栏那一格忽明忽暗（与 dev server
-       * 存活探测同口径，见 use-dev-server-liveness.ts 文件头）。 */
-    }
-  }, [tolerateOffline]);
-
-  useInterval(
-    useCallback(() => {
-      setNow(Date.now());
-    }, []),
-    { ms: ELAPSED_TICK_MS },
+  return useSyncExternalStore(
+    subscribeComfyQueue,
+    getComfyQueueSnapshot,
+    getComfyQueueServerSnapshot,
   );
-  useInterval(probe, { ms: COMFY_QUEUE_POLL_MS });
-
-  useEffect(() => {
-    stoppedRef.current = false;
-    return () => {
-      stoppedRef.current = true;
-    };
-  }, []);
-
-  return {
-    ...status,
-    elapsedMs:
-      status.running === null
-        ? null
-        : Math.max(0, now - status.running.startedAt),
-  };
 }

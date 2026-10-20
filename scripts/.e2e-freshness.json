@@ -1,9 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-16T18:04:05.254Z",
-    "who": "cnb.dQh7kaCfAPA",
-    "how": "PNPM_START=1 pnpm test:e2e",
-    "trackedBy": "e2e"
+    "verifiedAt": "2026-10-19T16:18:07.548Z",
+    "who": "yuedu",
+    "how": "pnpm test:e2e",
+    "trackedBy": "e2e",
+    "skippedReason": "本次提交只动 ComfyUI 队列事件通道（server 端共享 diff + SSE 路由 /api/comfy/queue/events）与日志面板行高估算、轮询降速；已跑绿受影响的 5 个用例文件（共 30 例）+ 全仓 tsc / eslint / docs:check。e2e 档本机跑不起来：本检出 db.sqlite 的 pending schema 含 DROP TABLE loraTrainingJob（丢数据，属业主决定），e2e-run 的 schema 预检按设计 abort；待 schema 决定后补跑本档。"
   }
 }
