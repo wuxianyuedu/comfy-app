@@ -1,22 +1,23 @@
 /**
- * 缓存槽的**键控与计划**（ISSUE #2022 第二步的第一增量：只出读数，不改安装路径）。
+ * 缓存槽的**键控与计划**（ISSUE #2022 第二步：读数的形状在第一增量，动作在
+ * `ci-slot-apply.mjs` 第二增量）。
  *
- * 为什么要分两批：这一件事的落点在 `Install dependencies` 那一格上，而那一格是**每一次
+ * 为什么分两批：这一件事的落点在 `Install dependencies` 那一格上，而那一格是**每一次
  * 构建都要过的**（它红了整条流水线就没有后面的事）。把「机制」与「换执行者」同批推上去，
  * 表现就是一次键算错让所有 PR 装不上 —— 与本仓在档位那一刀上立的同一条纪律相反：
- * 先让判据在场，再把开关拨过去。所以本文件今天**不复制、不链接、不装**，只回答三问：
+ * 先让判据在场，再把开关拨过去。所以本文件**只回答三问、不碰盘**：
  *   ① 有没有槽（节点上是否存在一块跨作业活下来的目录 —— `工作区复用读数` 两跑实测的
  *      形态①说：没有，每个作业都是新目录，所以「缓存」的收益全在**能不能自己带一棵树**）；
  *   ② 该落哪个键；
  *   ③ 这一跑与该键的关系是 `reuse` / `install-into-slot` / `no-cache` 中的哪一档。
  *
- * 键的来源刻意复用 `ci-install-deps.mjs` 的 `pnpmInstallFingerprint`，不在这里重算一份：
+ * 键的来源刻意复用 `ci-deps-face.mjs` 的 `pnpmInstallFingerprint`，不在这里重算一份：
  * 那份指纹已经是「装的那一次」与「现在」同一份输入的判据（锁文件 + 三份配置 + `patches/`）。
  * 两处各算一份的漂移形态是具体的 —— 缓存命中判断与「碰了依赖面就得真装」的判断不再一致，
  * 于是**装了旧的**或**没装新的**，两者的表现都是「依赖不对，但门禁全绿」。
  *
  * ⚠️ 槽必须是**能就地跑 `pnpm install` 的真实目录**，不是「把装好的树搬过来」也不是
- * 「穿过 junction 装」：三条实测见规范 §13.5.3.4.3（穿链装会让同一份声明经两条路径解析成
+ * 「穿过 junction 装」：实测见规范 §13.5.3.4.3（穿链装会让同一份声明经两条路径解析成
  * 两个身份、pnpm 建的是绝对内部链接换根即全断、runner 收尾那句 `Remove-Item` 实测不穿链）。
  *
  * 退出码：本档**恒 0**。它与 `工作区复用读数` 同一性质 —— 读数不是判据；把「没配槽」
@@ -30,7 +31,7 @@ import { fileURLToPath } from "node:url";
 import {
   FINGERPRINT_FILE,
   pnpmInstallFingerprint,
-} from "./ci-install-deps.mjs";
+} from "./ci-deps-face.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -82,7 +83,7 @@ export function planSlot(input) {
     return {
       action: "install-into-slot",
       path: slot,
-      why: "该键的槽不在（第一次，或槽根被清过）⇒ 第二增量会在这个目录里就地装",
+      why: "该键的槽不在（第一次，或槽根被清过）⇒ `ci-slot-apply.mjs` 会在这个目录里就地装",
     };
   }
   if (slotFingerprint !== key) {
@@ -97,7 +98,7 @@ export function planSlot(input) {
   return {
     action: "reuse",
     path: slot,
-    why: "键与槽内指纹逐字相同 ⇒ 第二增量会把这一跑的依赖面接向它，并跳过安装",
+    why: "键与槽内指纹逐字相同 ⇒ `ci-slot-apply.mjs` 把这一跑的依赖面接向它，并跳过安装",
   };
 }
 
@@ -144,8 +145,8 @@ export function main(io = {}) {
   );
   log(`[缓存槽读数]   ${plan.why}`);
   log(
-    "[缓存槽读数] ⚠ 这一格只是读数：**今天不复制、不链接、不装**，" +
-      "把 `Install dependencies` 接向槽是第二增量（规范 §13.5.3.4.3）。",
+    "[缓存槽读数] 这一格**只读数、不碰盘**：不复制、不链接、不装的动作全在" +
+      "执行档 `ci-slot-apply.mjs` 里（规范 §13.5.3.4.3）。",
   );
   return 0;
 }

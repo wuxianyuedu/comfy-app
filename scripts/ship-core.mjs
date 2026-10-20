@@ -111,50 +111,107 @@ export function parseSlug(remoteUrl) {
 }
 
 /**
- * 「远端叫什么、基线是哪条」的推导 —— 唯一一份。
+ * 「远端叫什么、主干基线是哪条」的推导 —— 唯一一份。
  *
  * 为什么要有这一件：这一版此前两处**写死 `origin`**（`git remote get-url origin` 与
- * `git diff origin/master...HEAD -- changelog.d`）。远端名**不是仓库里的事实，是每台
- * 克隆机器自己的事实**（`docs/audits/2026-10-12-architecture-risk-review.md` R12-01：
- * 本仓的并行检出里实测见过 `cnb`，而本检出 `git remote -v` 只有 `origin`）⇒ 写死
- * 哪一边都会在另一台上失败。后果不是「少一句提示」：
+ * `git diff origin/master...HEAD -- changelog.d`）。远端名与默认分支**都是每台克隆
+ * 机器自己的事实**（`docs/audits/2026-10-12-architecture-risk-review.md` R12-01 记的
+ * 正是这一格：并行检出里实测见过 `cnb`，而本检出 `git remote -v` 只有 `origin`）
+ * ⇒ 写死哪一边都会在另一边失败。后果不是「少一句提示」：
  * 两条 git 命令都**失败**，而失败在这里长得与「答案为空」一模一样 ——
  * 碎片那一查拿到空串 ⇒ preflight 判「没有 changelog.d 碎片」⇒ **`pnpm ship` 在那台
  * 检出上从第一次跑起就没工作过**，且报的还是一条听起来正当的理由。
  *
- * 三档来源，顺序有理由：
- *   ① `@{u}`（HEAD 自己的上游）—— 最贴事实：这条分支在跟谁比，是 git 知道的事；
- *   ② 唯一远端 + `<远端>/master` —— 新建的本地分支还没上游时的合理推法，
- *      **打印时标明是推的**（默认分支不叫 master 时它会偏，但偏了会被下面那条
- *      「基线引用不存在 ⇒ 退 2」的判据当场抓住，不会静默变成「没有碎片」）；
- *   ③ 多个远端且没有上游 ⇒ 交回 `origin`（历史习惯），再没有就给 `null` ——
+ * ── 「上游」与「主干」不是同一件事（这一版栽过的第二格）──────────────
+ *
+ * `@{u}` 回答的是「这条分支在跟踪谁」。而 `git push -u origin feat/x` 把上游设成
+ * **这条分支自己在远端的副本**（`origin/feat/x`）—— 于是拿 `@{u}` 当基线就是
+ * `feat/x...HEAD`＝**自己与自己比** ⇒ 恒空 ⇒ 碎片那一查报 0 份 ⇒
+ * 「每次推送之后重新跑都被拒」，而 `pnpm ship --merge` 正是推送之后的那一次跑。
+ * 所以顺序是「先问它是不是自己」，再退回主干那三条事实。
+ *
+ * 四档来源，顺序有理由：
+ *   ① `@{u}` **且它的分支段不是本地分支自己** —— 那是人显式设的比较目标
+ *      （往 release 线开 PR 就是这一形），最贴事实，不许被默认分支顶掉；
+ *   ② `refs/remotes/<远端>/HEAD` —— 远端默认分支，git 本地就有这条符号引用，零网络；
+ *   ③ 唯一远端 + `<远端>/master` —— 新建分支还没上游、且这台克隆没设过 remote HEAD
+ *      时的合理推法，**打印时标明是推的**（默认分支不叫 master 时它会偏，但偏了会被
+ *      下面那条「基线引用不存在 ⇒ 退 2」的判据当场抓住，不会静默变成「没有碎片」）；
+ *   ④ 多个远端且没有上游 ⇒ 交回 `origin`（历史习惯），再没有就给 `null` ——
  *      调用方必须按「没有执行者」处理，不许拿空 diff 冒充结论。
  *
- * @param {{upstream?: string | null, remotes?: string[]}} input
- * @returns {{remote: string | null, base: string | null, source: "upstream" | "sole-remote" | "origin" | "none"}}
+ * @param {{
+ *   upstream?: string | null,
+ *   remotes?: string[],
+ *   localBranch?: string | null,
+ *   remoteHead?: string | null,
+ * }} input 四条读数（后两条可缺）
+ * @returns {{remote: string | null, base: string | null, source: "upstream" | "remote-head" | "sole-remote" | "origin" | "none"}}
  */
-export function resolveUpstream({ upstream, remotes = [] }) {
+export function resolveUpstream({
+  upstream,
+  remotes = [],
+  localBranch = null,
+  remoteHead = null,
+}) {
+  const named = remotes.map((r) => (r || "").trim()).filter(Boolean);
   const u = (upstream || "").trim();
   const slash = u.indexOf("/");
-  if (slash > 0 && u.slice(slash + 1)) {
+  const remoteFromUpstream = slash > 0 ? u.slice(0, slash) : null;
+  const upstreamBranch = slash > 0 ? u.slice(slash + 1) : "";
+  if (remoteFromUpstream && upstreamBranch) {
+    /* 上游分支段 == 本地分支名 ⇒ 那是这条分支在远端的副本，不是比较目标。
+     * `localBranch` 取不到时按①处理：那是「不知道」，不是「相等」，
+     * 不该把一份缺的读数升级成一条否定。 */
+    const selfCopy = Boolean(localBranch) && upstreamBranch === localBranch;
+    if (!selfCopy) {
+      return {
+        remote: remoteFromUpstream,
+        base: u,
+        source: "upstream",
+      };
+    }
+    const trunk = trunkFromRemoteHead(remoteFromUpstream, remoteHead);
+    if (trunk)
+      return { remote: remoteFromUpstream, base: trunk, source: "remote-head" };
     return {
-      remote: u.slice(0, slash),
-      base: u,
-      source: "upstream",
-    };
-  }
-  const named = remotes.map((r) => (r || "").trim()).filter(Boolean);
-  if (named.length === 1) {
-    return {
-      remote: named[0] ?? null,
-      base: `${named[0]}/master`,
+      remote: remoteFromUpstream,
+      base: `${remoteFromUpstream}/master`,
       source: "sole-remote",
     };
   }
-  if (named.includes("origin")) {
-    return { remote: "origin", base: "origin/master", source: "origin" };
-  }
-  return { remote: null, base: null, source: "none" };
+  const sole =
+    named.length === 1
+      ? (named[0] ?? null)
+      : named.includes("origin")
+        ? "origin"
+        : null;
+  if (!sole) return { remote: null, base: null, source: "none" };
+  const trunk = trunkFromRemoteHead(sole, remoteHead);
+  if (trunk) return { remote: sole, base: trunk, source: "remote-head" };
+  return {
+    remote: sole,
+    base: `${sole}/master`,
+    source: named.length === 1 ? "sole-remote" : "origin",
+  };
+}
+
+/**
+ * 从 `refs/remotes/<远端>/HEAD` 那条符号引用里取出主干 ref。
+ *
+ * 只认「前缀对得上这个远端」的那一条：拿另一台远端的默认分支当基线，比对的是
+ * 别的仓库的历史，而这一格的失败形态又是一条空 diff（不是报错）。
+ *
+ * @param {string} remote 远端名
+ * @param {string | null | undefined} remoteHead `git symbolic-ref` 的原文
+ * @returns {string | null} 形如 `cnb/master`；取不到时 null
+ */
+function trunkFromRemoteHead(remote, remoteHead) {
+  const prefix = `refs/remotes/${remote}/`;
+  const s = (remoteHead || "").trim();
+  if (!s.startsWith(prefix)) return null;
+  const branch = s.slice(prefix.length);
+  return branch ? `${remote}/${branch}` : null;
 }
 
 /**
@@ -302,18 +359,25 @@ export function buildPullBody({ root, fragments, diffstat }) {
  */
 export function planCommands(st) {
   const p = [];
+  const remote = st.remote || "origin";
+  const trunk = st.baseBranch || "master";
   p.push("git rev-parse --abbrev-ref HEAD");
   p.push("git status --porcelain");
-  p.push("git ls-files changelog.d");
+  /* 碎片那一查的**两条**取数都要在计划里出现：执行面是「分支相对主干已提交的 ∪
+   * 还没提交的」（#2034 收到并集后就没有 `git ls-files` 这一查了）。计划里留着那条
+   * 已经没人执行的命令，等于让 dry-run 教给读者一个取数面 —— 而它恰恰是那次误判的
+   * 来源（`ls-files` 数的是目录存量 118 份，恒真）。 */
+  p.push(`git diff --name-only ${remote}/${trunk}...HEAD -- changelog.d`);
+  p.push("git status --porcelain -- changelog.d");
   p.push("node scripts/check-deps-freshness.mjs");
   for (const a of st.adds) p.push(`git add -- ${a}`);
   if (st.hasMessage) p.push("git commit --message=<提交信息原文>");
   /* 远端名与主干分支都来自解析（`resolveUpstream`），不写死 `origin` / `master` ——
-   * 本仓的远端叫 `cnb`（硬规则 6），写死时计划与执行两头一起错。 */
-  p.push(`git push -u ${st.remote || "origin"} ${st.branch}`);
+   * 两处都是每台克隆自己的事实，写死时计划与执行两头一起错。 */
+  p.push(`git push -u ${remote} ${st.branch}`);
   p.push(`cnb pulls list-pulls --repo ${st.slug} --state open -v`);
   p.push(
-    `cnb pulls post-pull --repo ${st.slug} --base ${st.baseBranch || "master"} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
+    `cnb pulls post-pull --repo ${st.slug} --base ${trunk} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
   );
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);

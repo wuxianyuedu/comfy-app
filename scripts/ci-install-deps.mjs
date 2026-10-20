@@ -56,88 +56,35 @@
  * node_modules」直接跑它，不碰真网络、不碰真安装。
  */
 import { spawnSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
+import {
+  applySlot,
+  clearJobLink,
+  SLOT_ENABLED_ENV,
+} from "./ci-slot-apply.mjs";
+import {
+  DEP_FILES,
+  FINGERPRINT_FILE,
+  pnpmInstallFingerprint,
+} from "./ci-deps-face.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
-/** 依赖面：碰了任一项就必须真装（见头注「判据」那一段）。 */
-export const DEP_FILES = [
-  "pnpm-lock.yaml",
-  "package.json",
-  "pnpm-workspace.yaml",
-  "next.config.js",
-];
+/**
+ * 依赖面那一份声明今天住在 `ci-deps-face.mjs`（抽出它的原因见那份文件头：断掉
+ * 「装不装」与「接谁」之间的循环依赖）。这里**原样转出去**是为了两件事：这两个名字
+ * 早就是别人 import 的入口（`ci-cache-slot.mjs`、两份用例），而转出去与住在里面
+ * 对调用方没有区别。新增消费点请直接指向叶子。
+ */
+export { DEP_FILES, FINGERPRINT_FILE, pnpmInstallFingerprint };
 
 /** 装好了的判据：`pnpm install` 自己写的元数据（与启动器同一份口径）。 */
 const INSTALLED_PROBE = "node_modules/.modules.yaml";
-
-/**
- * 「这一套依赖是照这一次装出来的」—— 装之前算出的指纹落盘处（见文件头第三道闸）。
- *
- * 归 `node_modules/`：它描述的就是那份产物，`node_modules` 被清掉时它一起消失
- * （于是「没有证据」与「产物不在」是同一件事），也不必往 .gitignore 里加一行。
- */
-export const FINGERPRINT_FILE = "node_modules/.ci-deps-fingerprint";
-
-/**
- * 依赖面的**内容**指纹：锁文件 + 三份配置 + 补丁目录。
- *
- * 为什么不直接复用 `DEP_FILES` 的 mtime / 存在性：全新 clone 上它们全都「存在且
- * 是刚写的」，那种判据在那里恒真。这里要的是「装的那一次」与「现在」同一份输入。
- *
- * 补丁目录单独成一项（而不是遍历进文件清单）：`patches/` 里换一个文件，
- * `pnpm install` 的产物就不同，而它不在 `DEP_FILES` 里（那是**变更清单**的判据，
- * 两份清单职责不同）。
- *
- * @param {string} root 仓库根
- * @returns {string | null} 算不出来（读不到锁文件 / 配置）时 null —— 调用方据此真装
- */
-export function pnpmInstallFingerprint(root) {
-  const hash = crypto.createHash("sha256");
-  for (const file of DEP_FILES) {
-    try {
-      hash.update(file);
-      hash.update(fs.readFileSync(path.join(root, file)));
-    } catch {
-      return null;
-    }
-  }
-  hash.update(readPatchesDigest(root));
-  return hash.digest("hex");
-}
-
-/**
- * `patches/` 的摘要（文件名 + 内容）。目录不在时回一句固定的话（**不是**空串：
- * 「没有补丁」也是一种状态，它要与「读不到目录」区分开）。
- *
- * @param {string} root 仓库根
- * @returns {string}
- */
-function readPatchesDigest(root) {
-  const dir = path.join(root, "patches");
-  let names;
-  try {
-    names = fs.readdirSync(dir).sort();
-  } catch {
-    return "patches:absent";
-  }
-  const hash = crypto.createHash("sha256");
-  for (const name of names) {
-    hash.update(name);
-    try {
-      hash.update(fs.readFileSync(path.join(dir, name)));
-    } catch {
-      return "patches:unreadable";
-    }
-  }
-  return `patches:${hash.digest("hex")}`;
-}
 
 /**
  * 读回上次装完时落的指纹（没有 / 读不动 ⇒ null）。
@@ -303,6 +250,11 @@ export function decideInstall({
  * 而这条流水线**只跑在 Windows 自托管节点上**，正是那一档。
  */
 function runInstall() {
+  /* 作业里那条指进槽的链必须先摘掉：留着它跑作业内的 install，pnpm 会顺着链把新的一套
+   * 写进**槽**、而键仍是旧的（规范 §13.5.3.4.3 第一条，从散文变成有执行者）。 */
+  if (clearJobLink(ROOT)) {
+    process.stdout.write("[ci-install-deps] 已摘掉作业里那条指进缓存槽的链接（不在链上装）\n");
+  }
   const res = runPnpmSync(["install", "--frozen-lockfile"], {
     cwd: ROOT,
     stdio: "inherit",
@@ -315,6 +267,35 @@ function runInstall() {
     return 1;
   }
   return res.status ?? 1;
+}
+
+/**
+ * 入口层的那一把闸：**先问槽，接不上再真装**。
+ *
+ * 为什么放在这一层而不是塞进 `runInstall`：`runInstall` 的职责是「真跑一次 install」，
+ * 把「跑不跑」的第二把闸叠进去，它就开始同时回答两个问题 —— 档位那一刀（§13.5.25）
+ * 已经示范过这种叠法后来多难拆。
+ *
+ * 开关是 `COMFY_CI_SLOT`：置成 `1` 才问槽，不置时行为与本增量之前逐字相同（一次槽都不问）。
+ * 今天 PR 那一格已置、每日那一格留空当对照 —— 为什么这样分、以及回退是哪一行，
+ * 写在 `.cnb.yml` 的那两行 env 上面与规范 §13.5.3.4.3。
+ *
+ * @param {string | null} _expected 装之前算出的指纹（成功后由 `main` 落盘，这里不消费它）
+ * @returns {number} 退出码
+ */
+function runInstallWithSlot(_expected) {
+  if ((process.env[SLOT_ENABLED_ENV] ?? "").trim() !== "1") {
+    return runInstall();
+  }
+  const out = applySlot({ cwd: ROOT, env: process.env });
+  if (out.handled) {
+    process.stdout.write(
+      `[ci-install-deps] ✓ 走缓存槽（${out.action}）：${out.why}\n`,
+    );
+    return 0;
+  }
+  process.stdout.write(`[ci-install-deps] 槽未接管（${out.why}）⇒ 照常装\n`);
+  return runInstall();
 }
 
 /**
@@ -340,7 +321,7 @@ export function main(deps = {}) {
       return { status: out.status ?? 1, stdout: out.stdout ?? "" };
     });
   const root = deps.root ?? ROOT;
-  const install = deps.install ?? runInstall;
+  const install = deps.install ?? runInstallWithSlot;
 
   const files = changedFiles(run);
   const installed = fs.existsSync(path.join(root, INSTALLED_PROBE));

@@ -54,3 +54,16 @@ describe("WorkspaceViewStack — 懒加载视图都走分块失败自愈出口",
     expect(code).toContain("~/lib/shell/lazy-chunk-recovery");
   });
 });
+
+describe("WorkspaceViewStack — 懒加载分块接空闲预热", () => {
+  const code = stripComments(fs.readFileSync(FILE, "utf8"));
+
+  it("lazyView 把 loader 登记进预热，视图栈挂载时启动预热", () => {
+    /* 为什么要 mechanized：「界面打开」耗时里那段按需编译/现拉的代价原本落在
+     * 用户点击之后（现场读数 15~23s）。登记漏一份 = 那一屏的首开仍是点击后才
+     * 编译；挂载不启动 = 登记了也没人要。两件事的形状都在源码里，和上面那批
+     * 判据同一档，漏了在正常构建下同样看不出。 */
+    expect(code).toContain("registerLazyViewLoader(loader)");
+    expect(code).toContain("startLazyViewPrefetch()");
+  });
+});
