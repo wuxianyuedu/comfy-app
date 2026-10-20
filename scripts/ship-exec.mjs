@@ -99,7 +99,7 @@ export function makeRunner(cwd) {
  *
  * @param {(cmd:string,args:string[])=>ExecResult} run 执行者
  * @param {string[]} args cnb 参数
- * @returns {{json:any,code:number,raw:string} | null} 解析结果；取不到时 null
+ * @returns {{json:any,code:number,raw:string,stderr:string} | null} 解析结果；取不到时 null
  */
 export function cnbJson(run, args) {
   const r = run("cnb", args);
@@ -108,7 +108,12 @@ export function cnbJson(run, args) {
   const at = text.indexOf("{");
   if (at < 0) return null;
   try {
-    return { json: JSON.parse(text.slice(at)), code: r.status, raw: text };
+    return {
+      json: JSON.parse(text.slice(at)),
+      code: r.status,
+      raw: text,
+      stderr: r.stderr || "",
+    };
   } catch {
     return null;
   }

@@ -136,6 +136,24 @@ export function createOrReusePull(ctx) {
     return { number: null };
   }
   number = readPullVerdict(made.json).number;
+  if (!number) {
+    /* ⚠️ 这一格错过一次，而且是最重的那一类：响应**能解析**、`data` 里却没有号
+     * （实测 `cnb pulls post-pull` 带一个含 `--xxx=yyy` 的 `--title` 经 PowerShell 宿主
+     * 转发时失败），上一版把 `✓ 已建 PR #null` 先打了出去 —— 平台上根本没有那个 PR，
+     * 而屏幕上写着成功。取值之后**先验再念**：念出来的一句「已建」必须有一个号撑着。
+     * 原文与 stderr 一起给：这个工具的职责是如实转述执行者，不是替它总结。 */
+    log(
+      "[ship] 建 PR 的响应解析出来了，但里面**没有 PR 号** ⇒ 不打印「已建」，" +
+        "这一格按「没跑起来」处理（exit 2）。",
+    );
+    log(
+      `[ship]   退码 ${made.code} · 响应原文（截 500 字）：${made.raw.slice(0, 500)}`,
+    );
+    if (made.stderr.trim()) {
+      log(`[ship]   stderr：${made.stderr.trim().slice(0, 500)}`);
+    }
+    return { number: null };
+  }
   log(`[ship] ✓ 已建 PR #${number}`);
   return { number };
 }
