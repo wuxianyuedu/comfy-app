@@ -3250,9 +3250,8 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
 真实现也真跑过一次（Linux，`process.execPath` 起一条子进程，打一行、睡 3 秒、再打一行）：
 第一行 **+27ms** 到、第二行 **+3030ms** 到 —— 旧写法两行都会在 +3030ms 一起出现。
 
-> 七轮下来的形状值得再记一笔：**每一处修完都只是把红往下推一格**，而这一格推出来的
-> 是「日志本身在长跑上会消失」。它不是业务缺陷，是**取证工具自己的缺陷** —— 而它恰好
-> 出现在最需要取证的那一格上（36 分钟的 stage 红了、却一个字都读不到）。
+> 这一串的形状：**每一处修完都只是把红往下推一格**。它们不是业务缺陷，是**取证工具自己的
+> 缺陷** —— 而恰好出现在最需要取证的那一格上（36 分钟的 stage 红了、却一个字都读不到）。
 
 ###### 第十三处：探针**把真命令跑了一遍** —— 外壳在起那条命令之前先起了它一次（ISSUE #1977 第八轮）
 
@@ -3303,10 +3302,6 @@ standalone 入口属于**桌包链**（`standalone-runtime.mjs`）—— 那边�
 - `tests/ci-cp936-exit.test.ts` 新增一条判「转码那一步带墙钟预算」—— 形状判据，
   理由与该文件既有的 `spawnImpl` 那一组同源（落字节那一跳在 Linux 上判不到）。
 
-> 八轮下来的形状再记一笔：**每一处修完都只是把红往下推一格**。这一格推出来的不是
-> 「日志怎么发」，而是「**在起那条命令之前，外壳先起过它一次**」—— 一个取证工具自己
-> 制造孤儿进程、并且把每一格都跑两遍的缺陷。
-
 ###### 第十四处：替身那一格修好之后，红落到**同一个成因的另一个对象**上（ISSUE #1977）
 
 `reclaimOwnFakePort`（第十一处）把「上一跑漏下的替身」收掉之后，`E2E 关键流程` 又红在
@@ -3350,15 +3345,10 @@ teardown 那条路没走 —— 于是**第一个和第二个** webServer 都会
 
 ###### 第十五处：`spawnSync` 的 `inherit` **不落日志** —— 输出攒在调用方的 Buffer 里（ISSUE #1998）
 
-第十四处（应用端口那一格）修完之后，`E2E 关键流程` 走到了**生产者自己那一层**：它跑满
-30 分钟被 stage 墙钟 kill（`cnb-m0t-1k54oljem`），而日志**零行** —— 连 `e2e-run` 那几条
-「起 Playwright 前：应用端口 空 / 替身端口 空」都没有：
-
-    ❌ E2E 关键流程: 2160137ms (error)
-       错误信息: timeout of 2160000ms exceeded
-       ─── 日志 ───
-       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs --grep=@critical
-       Finished, code: ECONNABORTED, duration: 36m 0s
+第十四处修完之后，`E2E 关键流程` 走到了**生产者自己那一层**：跑满 30 分钟被 stage 墙钟
+kill（`cnb-m0t-1k54oljem`），而日志**零行** —— 连 `e2e-run` 那几条「起 Playwright 前：
+应用端口 空 / 替身端口 空」都没有。那一段与第十二处逐字同形（`Finished, code: ECONNABORTED,
+duration: 36m 0s`），只差构建号与那十几毫秒。
 
 第十二处修的是**外壳**（`ci-cp936-exit.mjs` 攒到 `close` 才发），这一处的缓存落在
 **调用方**那一层：`e2e-run.mjs` 用 `spawnSync(process.execPath, [entry, …],
