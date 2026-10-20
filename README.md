@@ -398,6 +398,7 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 pnpm dev          # 前端开发服务器
 pnpm build        # Next.js 生产构建（standalone）
 pnpm check        # eslint + tsc --noEmit
+pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（合并要显式加 --merge）
 pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
 pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）
@@ -408,6 +409,16 @@ pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占�
 
 非开发人员无需记上面命令，双击根目录 `tools/start/verify-quality.ps1` 即可一键跑质量门禁
 （typecheck / eslint 零警告 / vitest），用法与"新增校验怎么补"见 `docs/standards/11` 的 11.12。
+
+> **`pnpm ship` 是「分支 → 提交 → push → PR → 等 CI → 绿了合并」这条流程的执行者**，
+> 补的是判定层之上缺的那一格：门禁本身很全（`pre-commit` / `pre-push` / 平台流水线），
+> 但「按顺序跑完并如实转述」此前由每个执行者临时手写一遍。它**不自己判「绿不绿」**——
+> 终态只认平台 build 的 `data.status` 与 PR 的 `is_merged`，其余一律委托既有执行者。
+> 四条要知道的边界：① 退出码三态，**`2` 是「有一步没跑起来」，不等于通过**；
+> ② 默认**不合并**，要 `--merge`；③ 不代写提交信息、不替你 `git add -A`
+> （树脏又没给 `--message` 就停在提交那一段）；④ **它说「提交段全过」不等于 tsc / eslint /
+> 用例过了** —— `pre-commit` 默认只跑形态档，本地要全套加 `COMFY_HEAVY_GATES=1`（规范 §13.5.25）。
+> 全部旗标与阶段见 `scripts/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
 
 ---
 
