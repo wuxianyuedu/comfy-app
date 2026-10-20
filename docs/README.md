@@ -11,7 +11,8 @@ AIGC:
 
 # Comfy-APP-T3 文档中心（统一索引）
 
-> 索引维护日期：2026-08-27
+> 索引的修订时刻以 `git log -- docs/README.md` 为准（这里不写日期：写死的那一天会和
+> 最后一次真实修订脱钩）。
 > 本文件是 `docs/` 目录的**统一索引入口**：从这里可导航至主规范《Comfy-APP-T3-项目开发规范》与《前端工程规范文档集》（standards，README + 01~18 章）全部章节，并标注两份文档的分工关系与冲突处理方式。
 
 ---
@@ -26,6 +27,7 @@ AIGC:
 | 功能流程图 · 工作流库                | [guides/feature-workflow-library-flow.md](guides/feature-workflow-library-flow.md)                                         | 工作流库全链路流程：列表与磁盘跟踪 / 三条导入路径 / 详情三页签 / 对外参数落点 / 就地运行 / 交付给谁                                                                                                                                                                                                                                               | **功能方向口径**（改工作流库流程时以本图为准）                             |
 | 测试说明                             | [TESTING.md](guides/TESTING.md)                                                                                            | 单测聚焦范围与测试体系说明                                                                                                                                                                                                                                                                                                                        | 配套                                                                       |
 | 拉取更新后环境同步指南               | [guides/sync-after-pull.md](guides/sync-after-pull.md)                                                                     | 远端改了 pnpm 配置/依赖后，本地拉取代码如何同步环境                                                                                                                                                                                                                                                                                               | 配套                                                                       |
+| CI 构建节点镜像与预装计划            | [guides/ci-node-image.md](guides/ci-node-image.md)                                                                         | 「换台构建机器就要重来一遍」怎么快起来：`node scripts/ci-image-plan.mjs` 打印的三条命令（造镜像 / 装进宿主机 / 钉身份），以及这份指南**不**替你做的事（仓库不碰 docker）                                                                                                                                                                          | 配套                                                                       |
 | 应用内「页面跑着旧代码」处置指南     | [guide-stale-code.md](guide-stale-code.md)                                                                                 | 应用长开期间拉到新代码后白屏/功能失效：怎么判断、怎么一次修好                                                                                                                                                                                                                                                                                     | 配套                                                                       |
 | 数据库备份与迁移指南                 | [guide-database-backup.md](guide-database-backup.md)                                                                       | SQLite 数据库（db.sqlite）的备份、跨机器/跨用户迁移、WAL 损坏恢复、任务管理器进程说明                                                                                                                                                                                                                                                             | 配套                                                                       |
 | ComfyUI 执行器独立宿主指南           | [guide-executor-host.md](guide-executor-host.md)                                                                           | `COMFY_EXECUTOR=host` 灰度开关：怎么开（必须走 launcher）、怎么退、日志在哪、恢复语义与已知观察项                                                                                                                                                                                                                                                 | 配套                                                                       |
@@ -64,7 +66,7 @@ AIGC:
 | §1 项目总览与技术栈        | [15.1 技术栈速查](standards/15-附录.md#151-技术栈速查)                                                                                                                                                                                           | 主规范为选型总纲；附录为速查表（版本/约定一致）                                               |
 | §2.1 目录结构约定          | [12.1 顶层目录约定](standards/12-代码组织与文件结构.md#121-顶层目录约定与主规范-21-一致)                                                                                                                                                         | 文档集细化（含 `(studio)` 分组路由、`api/`、`HistoryList` 拆目录、`ui/`）                     |
 | §2.2 tRPC router 组织      | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证与会话better-auth对齐主规范-24)、[1.7 tRPC/React Query/Zustand 分工](standards/01-架构与状态管理.md#17-trpc--react-query-与-zustand-的分工)                                               | 主规范总则；文档集提供 context 接入代码与数据流示例                                           |
-| §2.3 数据层规范（Drizzle） | [1.10 数据层规范](standards/01-架构与状态管理.md#110-数据层规范drizzle-orm--better-sqlite3对齐主规范-23)                                                                                                                                         | 内容基本一致（历史重复）；主规范保留强制条款，文档集补充 `db:*` 命令与细节                    |
+| §2.3 数据层规范（Drizzle） | [1.10 数据层规范](standards/01-架构与状态管理.md#110-数据层规范drizzle-orm--sqlite对齐主规范-23)                                                                                                                                         | 内容基本一致（历史重复）；主规范保留强制条款，文档集补充 `db:*` 命令与细节                    |
 | §2.4 better-auth 会话      | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证与会话better-auth对齐主规范-24)                                                                                                                                                           | 内容基本一致（历史重复）；文档集补充受保护 procedure 示例                                     |
 | §3 命名规范                | [12.6.1 变量命名硬约束](standards/12-代码组织与文件结构.md#1261-变量命名硬约束对齐主规范-3)、[14.4 C8](standards/14-反模式速查表.md#144-组件)                                                                                                    | 主规范为命名总表；文档集细化变量级硬约束（禁单字母、事件参数语义化）                          |
 | §4.1 TypeScript 规范       | [05 类型安全](standards/05-类型安全.md)                                                                                                                                                                                                          | 主规范硬约束（strict/禁 any）；文档集展开 any/unknown/as/Zod/类型守卫                         |
@@ -147,9 +149,9 @@ AIGC:
 
 > 针对 `docs/audits/` 下的整改跟踪文件及类似过程产物，统一以下处理规则：
 > 台账的**周期性逐条复核**流程见 §8（季度巡检）。`docs/audits/` 目录可以**为空**
-> （2026-09-03 那两份整改文件已全部闭环并按其生命周期删除过；今天目录里的几份
-> —— 性能排查台账、性能审计报告与 2026-10-12 架构风险审查 —— 都还有 ⬜ 未闭环条目，
-> 按 §7.2/§7.3 **不得删除**），
+> （2026-09-03 那两份整改文件已全部闭环并按其生命周期删除过；今天目录里的那几份还没走完——
+> 逐份还剩哪些条以各文件自己的状态图例为准，本文不抄清单也不记份数，
+> 按 §7.2/§7.3 未闭环即**不得删除**），
 > 新增审计文件时再建目录，不需要为「占位」保留空目录。
 
 ### 7.1 文件归宿
@@ -256,8 +258,8 @@ AIGC:
 | `pnpm doc:check`                                   | 文档里的硬编码值/路径与权威源（源码/配置）一致；新增规范文档未登记进 `SCOPED_DOCS` 或豁免名单即报错（ISSUE #316 守卫）                                                                                                                                                        | **平台侧流水线**（`.cnb.yml` 的「文档引用与权威源一致」，ISSUE #1975 从 pre-commit 挪走，见 13 §13.5.17）；巡检收尾也可手跑 |
 | `node scripts/render-doc-placeholders.cjs --check` | 生成态 `docs/generated/**` 是否与编辑态源文档一致（落后 / 缺失 / 多余三个方向；**平台侧流水线**的「生成态文档与源同步」，ISSUE #1975 从 pre-commit 挪走，见 13.5.5 / 13.5.17）。平台侧跑的是 `--check --autofix`：红了就地重渲染再判一次（§13.5.19），本地跑裸 `--check` 即可 | 改编辑态文档后；重渲染并提交的结果是否同步                                                                                  |
 | `pnpm doc:render`                                  | 把编辑态的占位符渲染成原文，产出 `docs/generated/`                                                                                                                                                                                                                            | 改含占位符文档后                                                                                                            |
-| `node scripts/check-file-structure.cjs`            | 结构/命名/注释流水硬规则（R1-R12 + R14，钩子标签见上），在 pre-commit 强制                                                                                                                                                                                                    | 每次提交                                                                                                                    |
-| `pnpm check`                                       | `pnpm run lint`（零警告，范围白名单见 `eslint.config.js`）+ `tsc --noEmit`                                                                                                                                                                                                    | 每次提交                                                                                                                    |
+| `node scripts/check-file-structure.cjs`            | 结构/命名/注释流水硬规则（R1-R12 + R14，钩子标签见上），在 pre-commit 强制                                                                                                                                                                                                    | **默认档不跑**：它在 D 组，注册表在场而执行时机由 `COMFY_HEAVY_GATES` 决定（13 §13.5.25）；本地要全套用 `pnpm check:all` |
+| `pnpm check`                                       | `pnpm run lint`（零警告，范围白名单见 `eslint.config.js`）+ `tsc --noEmit`                                                                                                                                                                                                    | **默认档不跑**：tsc / eslint 在 A、B 两组，同上；平台侧在场哪几格以 `.cnb.yml` 的两份清单为准 |
 
 > `doc:check` 的校验范围与豁免名单定义在 `scripts/doc-facts.cjs`
 > （`SCOPED_DOCS` / `SCOPED_DOC_DIRS` / `SCOPED_DOC_EXEMPTIONS`），
