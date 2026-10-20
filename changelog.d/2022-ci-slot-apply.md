@@ -14,7 +14,8 @@
   一个槽的净盘 —— 表观 982 MiB / 83,664 个文件里只有 2,599 个（3.1%）是 `nlink==1` 的
   独占数据（1.7 MiB），删掉实测**回收 52 MiB** ⇒ 配额按键控个数（4）而不是按 GB，按 `du`
   那个 3.5G 定会把配额定成假数；冷装两把读数 69s（全量检出）/ 52.6s（只放依赖面输入），
-  节点上同一格是 76.9s；接过去以后 `tsc --noEmit` 退 0 且**不需要 `.next/`**、`vitest`
+  节点侧那一跳的同日对照见 #2022-ci-slot-node-evidence 那份碎片（普通装 51s / 建槽 69.2s /
+  命中 ≈2s —— 本碎片写作时手上只有更早一天的一个读数，别拿它当现行系数）；接过去以后 `tsc --noEmit` 退 0 且**不需要 `.next/`**、`vitest`
   三份 29 条全绿 —— 挑的三份里 `check-allow-builds` 是真去读 `node_modules/.pnpm` 事实的
   那一条、`db-schema-ready` 是要 `require` 原生 `.node` 的那一条，`.bin` 也是从链里解析起来的
   （真实进程命令行 `<job>\node_modules\.bin\..\@typescript\native\bin\tsc`）。
