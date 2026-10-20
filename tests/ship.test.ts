@@ -32,6 +32,7 @@ import {
   buildPullBody,
   CODE,
   combineShipCodes,
+  deriveTitle,
   findPullForBranch,
   parseArgs,
   parseSlug,
@@ -218,6 +219,15 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
       "a.ts",
       "b.md",
     ]);
+    /* `--title` 两种写法同样要收 —— 它是标题那格的显式出口，
+     * 而 `--add` 那一族曾因为一次替换整块丢掉过一条分支。 */
+    expect(parseArgs(["--title", "feat(a): 人给的标题"]).title).toBe(
+      "feat(a): 人给的标题",
+    );
+    expect(parseArgs(["--title=feat(b): 等号写法"]).title).toBe(
+      "feat(b): 等号写法",
+    );
+    expect(parseArgs([]).title).toBeNull();
   });
 
   it("--no-wait 与 --only 各自独立", () => {
@@ -468,6 +478,57 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
   });
 });
 
+describe("deriveTitle：PR 标题与主干那一行该取自哪一笔", () => {
+  it("① 分支相对主干的第一笔非常规提交 —— 合并节点与补碎片那一笔都不算", () => {
+    /* 实测代价（主干上留着两条坏行）：标题取 `git log -1 --pretty=%s`，于是
+     * 「先把 master 合进来再 `pnpm ship --merge`」把主干那一行写成
+     * `Merge branch 'master' into fix/…`（#2057），而「最后补一笔碎片」把它写成
+     * `docs(changelog): 碎片按合流后的实际落地面重写`（#2055）——
+     * 两条都不描述这次变更，squash 之后读者只能看到一个与内容无关的标题。 */
+    expect(
+      deriveTitle({
+        subjects: [
+          "fix(ship): 主体的那一笔",
+          "docs(changelog): 补碎片",
+          "test: 加一条反向样本",
+        ],
+        head: "Merge branch 'master' into fix/x",
+      }),
+    ).toEqual({ title: "fix(ship): 主体的那一笔", source: "branch-first" });
+  });
+
+  it("② 人显式给的 `--title` 压过一切推导", () => {
+    expect(
+      deriveTitle({
+        subjects: ["fix(a): 一笔"],
+        head: "fix(a): 一笔",
+        explicit: "feat(b): 这整条 PR 是一件更大的事",
+      }),
+    ).toEqual({
+      title: "feat(b): 这整条 PR 是一件更大的事",
+      source: "flag",
+    });
+  });
+
+  it("③ 分支上没有非常规提交时退回 HEAD，两处都空就是空 —— 不许编一个", () => {
+    expect(deriveTitle({ subjects: [], head: "fix(c): 只有这一笔" })).toEqual({
+      title: "fix(c): 只有这一笔",
+      source: "head",
+    });
+    /* `subjects` 里塞合并节点是调用方的责任（`--no-merges`），这里不重复判；
+     * 但两处都取不到时必须交回空串 —— 空标题会被调用方按「没跑起来」处理，
+     * 而不是把 `--title ""` 发给平台建出一个没有标题的 PR。 */
+    expect(deriveTitle({ subjects: [], head: "" })).toEqual({
+      title: "",
+      source: "none",
+    });
+    expect(deriveTitle({ subjects: ["  "], head: "" })).toEqual({
+      title: "",
+      source: "none",
+    });
+  });
+});
+
 describe("buildPullBody：只搬量到的事实，不生成会被复核的因果句", () => {
   it("碎片标题与 diffstat 进正文", () => {
     const body = buildPullBody({
@@ -536,6 +597,10 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     /** 远端默认分支的符号引用（`git symbolic-ref refs/remotes/<远端>/HEAD`）。
      *  `null` = 这台克隆没有它（那样就只能推 `<远端>/master`，且要读得出是推的）。 */
     remoteHead?: string | null;
+    /** 这条分支相对主干**自己带进来的**提交 subject（`log --no-merges --reverse`）。 */
+    branchSubjects?: string[];
+    /** 当前顶端那一笔的 subject（`log -1 --pretty=%s`）—— 默认给一个合并节点形状。 */
+    headSubject?: string;
   };
 
   /**
@@ -598,6 +663,14 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         if (base === `cnb/${branch}`) return ok("");
         return ok((env.branchFrags ?? []).join("\n"));
       }
+      /* 标题的取数面（`deriveTitle` 那一格）：`--no-merges --reverse` 给的是这条分支
+       * **自己带进来的**那些提交，`log -1` 给的是当前顶端那一笔。默认把后者设成一个
+       * 合并节点、前者设成主体那一笔 —— 缺陷正是拿后者当标题（#2057 在主干上留下的
+       * 那行 `Merge branch 'master' into …` 就是这么来的）。 */
+      if (cmd === "git" && key.includes("log --no-merges"))
+        return ok((env.branchSubjects ?? ["fix(x): 主体的那一笔"]).join("\n"));
+      if (cmd === "git" && key.includes("log -1 --pretty=%s"))
+        return ok(env.headSubject ?? "Merge branch 'master' into fix/x");
       if (cmd === "git" && key.startsWith("commit"))
         return {
           status: env.commitStatus ?? 0,
@@ -924,9 +997,139 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     }
   });
 
+  /** 让假执行者按命令**覆盖应答**，但记录照旧走 `fake()` 那一份。
+   *  先 `base.run` 再覆盖 —— 反过来写会绕过记录，于是「断言它有没有伸出这条手」
+   *  拿到的是空数组，看起来像「没伸手」，实际是我的量具没接上（这一格错过一次）。 */
+  function overrideRun(
+    base: ReturnType<typeof fake>,
+    answers: Record<string, string>,
+  ) {
+    return (cmd: string, args: string[]): FakeResult => {
+      const r = base.run(cmd, args);
+      const key = args.join(" ");
+      for (const [needle, stdout] of Object.entries(answers)) {
+        if (cmd === "cnb" && key.includes(needle)) {
+          return { status: 0, stdout, stderr: "", error: null };
+        }
+      }
+      return r;
+    };
+  }
+
+  /** 自带一份合并前证明的现场。
+   *
+   * `push` 那一段会读 `comfy-premerge-proof.json`，读不到就压上 `NOT_RUN` —— 开发机上它
+   * 在（真推送过），CI 节点上没有，于是凡「断言走到 PR / 合并那一段的结论」的格子都会
+   * **本地绿、节点红**（实测 #2064 第一条就这样）。凡要断退出码的走完整链的格子，都用这一份。 */
+  function proofRoot(tag: string): { tmpRoot: string; gitDir: string } {
+    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), `ship-${tag}-`));
+    const gitDir = path.join(tmpRoot, "gitdir");
+    fs.mkdirSync(gitDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(gitDir, "comfy-premerge-proof.json"),
+      JSON.stringify({
+        headSha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+        upstreamSha: "1c649c36b2b51cc7fc96141f8e26da2f5e88d9c3",
+        verifiedAt: "2026-01-01T00:00:00.000Z",
+        baselineRed: [],
+      }),
+      "utf8",
+    );
+    return { tmpRoot, gitDir };
+  }
+
+  it("建 PR 用的标题：取分支第一笔非常规提交，顶端那个合并节点不算", async () => {
+    /* 与上面那格同一件事的执行侧：`git log -1 --pretty=%s` 在「先合 master 再 ship」
+     * 与「最后补一笔碎片」两种走法下都会顶掉主体那一笔，而 PR 标题与 squash 那一行
+     * 都从它取。夹具默认把顶端设成 `Merge branch 'master' into fix/x`。 */
+    const { tmpRoot, gitDir } = proofRoot("title");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "list-pulls": '{"status":200,"data":[]}',
+        "post-pull": '{"status":201,"data":{"number":2999}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      const post = base.calls.find((c) => c.includes("post-pull")) ?? "";
+      expect(post, "没建 PR，或标题没进 argv").toContain(
+        "--title fix(x): 主体的那一笔",
+      );
+      expect(post).not.toContain("--title Merge branch");
+      expect(heard.join("\n")).toContain("标题取自 branch-first");
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("两处都取不到标题 ⇒ 不伸手建 PR，退 2 而不是建出一条没有标题的", async () => {
+    /* 自带证明这一份现场（见 `proofRoot`），否则这里的 `NOT_RUN` 可能只是「缺证明」
+     * 压上来的，断言就成了空转。 */
+    const { tmpRoot, gitDir } = proofRoot("no-title");
+    try {
+      const heard: string[] = [];
+      const base = fake({ branchSubjects: [], headSubject: "" });
+      const run = overrideRun(base, {
+        "list-pulls": '{"status":200,"data":[]}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      expect(
+        base.calls.some((c) => c.includes("post-pull")),
+        '标题是空串也不该把 `--title ""` 发给平台',
+      ).toBe(false);
+      const all = heard.join("\n");
+      expect(all).toContain("标题取自 none");
+      expect(all).toContain("不建 PR");
+      expect(code).toBe(CODE.NOT_RUN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("显式 `--title` 压过推导，且来源读得出是 flag", async () => {
+    const { tmpRoot, gitDir } = proofRoot("flag-title");
+    try {
+      const heard2: string[] = [];
+      const base2 = fake();
+      const run2 = overrideRun(base2, {
+        "list-pulls": '{"status":200,"data":[]}',
+        "post-pull": '{"status":201,"data":{"number":3001}}',
+      });
+      await main({
+        root: tmpRoot,
+        run: run2,
+        log: (s: string) => heard2.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait", "--title=feat(z): 整条 PR 其实是这件事"],
+      });
+      expect(base2.calls.find((c) => c.includes("post-pull")) ?? "").toContain(
+        "--title feat(z): 整条 PR 其实是这件事",
+      );
+      expect(heard2.join("\n")).toContain("标题取自 flag");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
   it("响应能解析但没有 PR 号时，不许念出「已建」—— 那句成功必须有号撑着", async () => {
     /* 实测踩过的外形：`cnb pulls post-pull` 的响应**能解析**、`data` 里却没有号
-     * （这一次是 `--title` 里带 `--xxx=yyy` 经 PowerShell 宿主转发时失败），
+     * （第一次撞到它是 #2057：提交信息被 `pnpm run` 压成一整行，发出去的标题就是那一坨），
      * 而上一版先打印 `✓ 已建 PR #null` 再回来看值 —— 平台上根本没有那个 PR，
      * 屏幕上写着成功。所以这一格把「念出口」排在「验到有号」之后，并把响应原文
      * 与 stderr 一起转述出来：这一族宁可说一句「没跑起来」，也不许替执行者总结。 */

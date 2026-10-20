@@ -61,13 +61,14 @@ export function combineShipCodes(codes) {
  * 而这里最贵的误读是「以为会合、其实没合」或反之。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,adds:string[],merge:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,adds:string[],merge:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
+    title: null,
     adds: [],
     merge: false,
     dryRun: false,
@@ -82,16 +83,49 @@ export function parseArgs(argv) {
     else if (a === "--no-wait") out.wait = false;
     else if (a === "--message" || a === "-m") out.message = argv[++i] ?? "";
     else if (a === "--message-file") out.messageFile = argv[++i] ?? "";
+    else if (a === "--title") out.title = argv[++i] ?? "";
     else if (a === "--add") out.adds.push(argv[++i] ?? "");
     else if (a.startsWith("--message="))
       out.message = a.slice("--message=".length);
     else if (a.startsWith("--message-file="))
       out.messageFile = a.slice("--message-file=".length);
+    else if (a.startsWith("--title=")) out.title = a.slice("--title=".length);
     else if (a.startsWith("--add=")) out.adds.push(a.slice("--add=".length));
     else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
     else out.unknown.push(a);
   }
   return out;
+}
+
+/**
+ * PR 标题 / squash 那一行的取数 —— 只从给它的读数里推，不起进程。
+ *
+ * 为什么不是 `git log -1 --pretty=%s`：那一格取的是**这条分支当前顶端**那一笔，而本仓
+ * 两条已上主干的行就是被它写坏的 —— 「先把 master 合进来再 `--merge`」把主干那一行写成
+ * `Merge branch 'master' into fix/…`（#2057），「最后补一笔碎片」把它写成
+ * `docs(changelog): 碎片按合流后的实际落地面重写`（#2055）。squash 之后读者看到的标题
+ * 与这次变更的内容无关，而评审的第一件事就是读标题。
+ *
+ * 优先级（每一档都是可反转的一处，加旗标不改其余）：
+ *   ① `--title` —— 人是权威：标题是判断，不该由拓扑决定；
+ *   ② 这条分支相对主干带进来的**第一笔非常规提交** —— 一次 PR 一件事，那件事在
+ *      分支开口那一笔就说清了；后面的碎片补笔 / 复核样本都是它的尾巴；
+ *   ③ HEAD 那一笔 —— 分支上只剩合并节点时的退路，**读得出是退的**；
+ *   ④ 空串 —— 两处都没有，交回空由调用方按「没跑起来」处理（不许编一个标题，
+ *      也不许把 `--title ""` 发给平台建出一条没有标题的 PR）。
+ *
+ * @param {{subjects?: string[], head?: string, explicit?: string | null}} input
+ *   `subjects` 是按 `git log --no-merges --reverse` 排好的分支自带提交 subject
+ * @returns {{title: string, source: "flag" | "branch-first" | "head" | "none"}} 标题与它的来源
+ */
+export function deriveTitle({ subjects = [], head = "", explicit = null }) {
+  const flag = (explicit || "").trim();
+  if (flag) return { title: flag, source: "flag" };
+  const first = subjects.map((s) => (s || "").trim()).filter(Boolean)[0] ?? "";
+  if (first) return { title: first, source: "branch-first" };
+  const h = (head || "").trim();
+  if (h) return { title: h, source: "head" };
+  return { title: "", source: "none" };
 }
 
 /**
@@ -393,13 +427,19 @@ export function planCommands(st) {
  * 读 pre-push 落的合并前证明（机器本地、**不入库**，见 `premerge-proof.mjs`）。
  *
  * @param {string} root 仓库根
+ * @param {(cwd?:string)=>string | null} [resolve] git 目录解析器 —— 默认那份唯一实现；
+ *   调用方注入了自己的解析器时**必须一起传进来**，否则这一格读的是这台机器的真实 `.git`
  * @returns {{headSha?:string,upstreamSha?:string,verifiedAt?:string,baselineRed?:string[]} | null} 取不到回 null
  */
-export function readProof(root) {
+export function readProof(root, resolve = resolveGitDir) {
   /* git 目录的解析不在这里重做 —— 唯一实现见 `scripts/git-dir.mjs`。
    * 这里此前自己判「`.git` 是文件就当指针读」，只覆盖 worktree 那一种，
-   * `GIT_DIR` 与裸仓库一个都不认；手写一份弱化的同一件事，比不写更难被发现。 */
-  const gitDir = resolveGitDir(root);
+   * `GIT_DIR` 与裸仓库一个都不认；手写一份弱化的同一件事，比不写更难被发现。
+   *
+   * `resolve` 是这一次跑**已经注入的那一份**解析器：证明的读取也归它管，否则
+   * 注入只覆盖临时文件那一半，另一半点的是这台机器真实的 `.git` —— 「同一次跑里
+   * git 目录指哪儿」就会有两套答案（用例里表现为本地绿、节点红）。 */
+  const gitDir = resolve(root);
   if (!gitDir) return null;
   try {
     return JSON.parse(
