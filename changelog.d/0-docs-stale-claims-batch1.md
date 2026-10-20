@@ -94,6 +94,10 @@
 - **这一族没有任何判据会红**：`check-doc-references.cjs` 只核 AGENTS.md 的路径与硬编码值、
   以及 `§NN.M` 标题锚点；文档正文里的手抄枚举、组件名、格名、条数全部在射程外。所以
   正解是**不抄清单**，而不是把它抄得更勤。
+- **这一批自己的第一笔提交把排障表的一行断成了两行**：在一条 1100+ 字符的表格行里插句子时
+  带了换行，而 markdown 表格行必须单行 —— 那一行从此渲染在表外。事后用 `awk` 数行长度自查
+  发现，已同批改回单行。记在这儿是因为：**这类损坏没有任何判据会红**（`.md` 不在 prettier 的
+  扫描面 `GLOBS` 里，`doc:check` 也不判表格形状），只有人事后读 diff 才看得见。
 - 复算：`pnpm doc:render` 后 `docs/generated/**` 与源同批；`check-doc-references.cjs` 退 0；
   `tests/check-doc-references.test.ts` / `tests/docs-candidate-hygiene.test.ts` /
   `tests/shell-gate.test.ts` / `tests/doc-check-hook-wiring.test.ts` 全绿。
