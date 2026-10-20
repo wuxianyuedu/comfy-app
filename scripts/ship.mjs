@@ -71,6 +71,7 @@
  *   pnpm ship                                  # 到「CI 出终态 + 打印下一动作」为止
  *   pnpm ship --message "…"                    # 需要它代为提交时给出提交信息
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
+ *   pnpm ship --title "…"                      # 覆盖标题（默认取分支第一笔非常规提交）
  *   pnpm ship --merge                          # 允许在 CI 绿时执行 squash 合并
  *   pnpm ship --dry-run                        # 只打印将要执行的命令，一条都不执行（阻塞照报）
  *   pnpm ship --only=preflight               # 单跑阶段 0 看读数字段（其余段都排在它后面，
@@ -505,6 +506,7 @@ async function runFlow(deps, tmpFiles) {
         frags,
         baseRef,
         baseBranch,
+        explicitTitle: opt.title,
       });
       if (!number) {
         codes.push(CODE.NOT_RUN);
@@ -552,6 +554,7 @@ async function runFlow(deps, tmpFiles) {
             up,
             merge: opt.merge,
             buildState,
+            explicitTitle: opt.title,
           }),
         );
       }
