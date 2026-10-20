@@ -253,7 +253,7 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
       所以「界面有没有变形」现在只由 review 看图负责 —— 不要再把它读成「有那一层兜着」。
 - [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/shell-gate.mjs`（pre-commit D 组）
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
-      但它**不是全量执行者**：不动壳的提交永远不跑那 37 条 `#[test]`，全量仍要靠
+      但它**不是全量执行者**：不动壳的提交永远不跑壳里那些 `#[test]`，全量仍要靠
       `cd src-tauri && cargo test` 的手上（`check:all` 里也没有这一路）。
 - [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 15 个有同名测试（闸门第一批补了
       5 个 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；第二批补了

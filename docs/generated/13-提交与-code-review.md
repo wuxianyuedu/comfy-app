@@ -154,9 +154,9 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 | 层                | 位置                                         | 拦什么                                        | 能绕过吗                                  |
 | ----------------- | -------------------------------------------- | --------------------------------------------- | ----------------------------------------- |
-| 本地              | `.githooks/pre-commit`（判据分 4 组并行跑）  | 分支守卫 + 结构硬规则 + tsc + eslint + 各棘轮 | 只能 `--no-verify`（进历史，Review 可见） |
+| 本地              | `.githooks/pre-commit`（D0 形态前置档串行，A/B/C/D 四组并行；**默认档只跑 D0**，见 §13.5.25） | 分支守卫 + 形态前置那几条；tsc / eslint / 受影响用例 / 其余静态判据仍逐字在注册表里，由 `COMFY_HEAVY_GATES` 决定谁执行 | 只能 `--no-verify`（进历史，Review 可见） |
 | 平台（push 保护） | CNB **分支保护设置**                         | `master` 的直接 push（放行 PR 合并）          | 需管理员改设置                            |
-| 平台（流水线）    | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`） | PR 上的全套门禁 + `master` 合并形态复核       | 源分支删入口（见 13.6.1 服务端那两条）    |
+| 平台（流水线）    | 仓库根 `.cnb.yml` → 自托管节点（标签 `win`） | PR 上的门禁格（在场哪几格以 `.cnb.yml` 自己列的为准，见 §13.5.25）+ `master` 合并形态复核 | 源分支删入口（见 13.6.1 服务端那两条）    |
 
 > **服务端形态重新有了调用方**：`scripts/check-branch-guard.cjs` 的
 > `--pr-check` / `--merge-commit` 由 `.cnb.yml` 调用（后者在 `push` 那条流水线里）。
@@ -171,8 +171,11 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 所以必须由判据守。
 
 ```
-本地提交前必须通过（.githooks/pre-commit；判据按互不依赖分 4 组并行：
-A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
+本地提交前必须通过门槛的注册表（.githooks/pre-commit）。下面这份是「登记了什么、各自归
+哪节」的索引，**不是「这次跑了哪几条」的凭证**：步骤行与 flag 的唯一出处是钩子里的
+`run "<标签>" <命令>`，默认档只串行跑 D0 形态前置档，A/B/C/D 由 `COMFY_HEAVY_GATES`
+决定谁执行（§13.5.25）。编排：D0 在前，其余四组并行——A=tsc、B=eslint、
+C=受影响用例（它的执行者已不在本地，见下面那一行）、D=其余静态检查：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R12 + R5 硬闸（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
@@ -195,23 +198,30 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs --staged # 基础设施层文件长度**硬闸**：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）；`--staged` 见下 13.5.8.2
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
-   # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 唯一的执行者），并复用
+   # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳内全部 #[test] 唯一的执行者；条数随源码
+   # 变动，不在文档里记账），并复用
    # `dev-launcher.mjs` 的 `shellStaleWarning` 把硬规则 5「改了壳必须重编」升成阻断（见 11 §11.10.4）
 ✅ node scripts/freshness-gate.mjs           # 每一档都有主（**三份同形的账**，见 11 §11.8）：
    # **全量 e2e**（`scripts/.e2e-freshness.json`）、**全量单测 + 覆盖率**
    # （`scripts/.full-suite-freshness.json`）、**产物级护栏**（`scripts/.artifact-freshness.json`）
    # —— 判「每一档都有一条新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」。
-   # 三档**都判一条「今天自证过没有」**，且现在**同一味**（`track.dirty` 都非空，钩子重构 4）：
-   # 当天动过这一档的输入面就必须今天自证，没动过以 `graceMs`（7 天）为宽限。
+   # 三档**同形**（`track.dirty` 都非空，钩子重构 4）：口径是「当天动过这一档的输入面就
+   # 必须今天自证，没动过以 `graceMs`（7 天）为宽限」；而三档**现在都登记着 `ciStage`**
+   # ⇒ 本地这一层只打读数、不拦（撤掉的是「必须跑」，不是让读数可以假；清空某档的
+   # `ciStage` 就回到拦截口径）。执行者在平台每日档，见 §13.5.4 那张表。
    # e2e 那档吃的面 = `src/` / `e2e/` / `playwright.config.ts` / `next.config.js` / `pnpm-lock.yaml`；
    # 它以前按**本地日历日**判，于是只动 `.githooks/` 或文档的提交也欠一次全量 e2e（现场见 §11.8）。
    # 出路：跑一次（跑绿即记）/ `--skip "<理由>"`
    # （今天故意不跑）/ `--dirty "<理由>"`（这次改动不吃这一档）；账文件还没入库时只提醒、不阻断。
-   # 判决面由 `FRESHNESS_TRACKS` **现算**（`trackScopes()`），不手抄档名清单。钩子里**不跑**这四档
+   # 判决面由 `FRESHNESS_TRACKS` **现算**（`trackScopes()`），不手抄档名清单。钩子里**不跑**这三档
    # （起 webServer / 十分钟量级），记账走各自的跑法脚本（见 §13.5.4 那张「谁在什么时候跑它」表）。
    # 动手前想知道「今天欠哪几档」：`pnpm check:freshness`（只读、不阻断，见 §11.8）。
-✅ node scripts/run-affected-tests.mjs       # C 组：结构守护固定清单 + 本次改动
-   # 牵扯到的用例，一次 vite（固定清单唯一出处是 `affected-tests.mjs` 里的
+✅ node scripts/run-affected-tests.mjs       # C 组登记的那一步：结构守护固定清单 + 本次改动
+   # 牵扯到的用例，一次 vite。**这一档的本地执行者已撤下**，现在跑它的是 `.cnb.yml` 的
+   # `受影响用例` 那一格（同一个 `run-affected-tests.mjs`、同一条判决链，见 §13.5.25）；
+   # 钩子里那一行留着不删，是因为入口形状由 `tests/hook-affected-launch.test.ts` 钉着，
+   # 删掉就没有第二处说「受影响用例从哪起」。
+   # （固定清单唯一出处是 `affected-tests.mjs` 里的
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
    # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」。
@@ -4728,7 +4738,8 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 
 上面那张表回答了「为什么慢、慢多少」，但**没有回答「降单份有没有用」**。本轮把这个问题
 量到了底，结论是反直觉的：**降任何单份的时长都不会改变 C 组墙钟，除非那份同时降低了
-总 CPU 时间**。实测（8 核、热缓存、固定清单 77 份 / 867 例）：
+总 CPU 时间**。实测（8 核、热缓存、固定清单 77 份 / 867 例 —— 那是**当时那份清单**的份数，
+下面几处「77 份」同指这一次取样，现值以 `FIXED_STRUCTURAL_TESTS` 为准）：
 
 | 口径                                          | 读数                                                     |
 | --------------------------------------------- | -------------------------------------------------------- |
