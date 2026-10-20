@@ -137,13 +137,16 @@
       （`src/sentry.server.config.ts` / `src/sentry.edge.config.ts`，含
       `beforeSend` 脱掉 cookie / authorization），`src/env.js` 已收 `SENTRY_DSN`、
       `.env.example` 留着空位。缺的是**客户端那一份**
-      （`src/sentry.client.config.ts`）与它要读的 DSN —— 而 DSN 得先有一个项目。
+      （入口名按已装的 `@sentry/nextjs` 11.4 是 `src/instrumentation-client.ts`；
+      `sentry.client.config.ts` 在这个版本里只剩「检测到旧文件 + 客户端重复 `Sentry.init()`」
+      那条告警的兼容面）与它要读的 DSN —— 而 DSN 得先有一个项目。
       **等什么**：**一个 Sentry 项目及其 DSN**（自建 / 云端都行）。
       **与 P0-4 一起给更省事**：source map 上传要的是**组织 slug + 项目 slug +
       带 `project:releases` 的 auth token**。
-      **给到之后我做什么**：补 `sentry.client.config.ts`，并在
-      `instrumentation.ts` 的 `register()` 里按 `NEXT_RUNTIME === "browser"` 挂上
-      （形状与现有 nodejs / edge 两支一致）；把 ErrorBoundary 的
+      **给到之后我做什么**：补 `src/instrumentation-client.ts` —— 这一份是 **Next 自己加载**
+      的（`next/dist/lib/require-instrumentation-client.js`），**不**经 `src/instrumentation.ts`
+      的 `register()`（那个 `register()` 只管 nodejs / edge 两支，按 `NEXT_RUNTIME` 分）；
+      把 ErrorBoundary 的
       `componentDidCatch` 从只 `console.error` 改成**真上报**
       （`onError` 那条对外出口保留不动）。两处都要按 07 §7.18.2.1（脱敏）与 launch-and-build §7.3（产物卫生）
       各审一遍「敏感值不许明文落日志、也不许进包」，且 DSN 走 `NEXT_PUBLIC_` 前缀
@@ -361,8 +364,10 @@
       已挂进 A13 残留那条。
 - [ ] **A9 无 `middleware.ts`、better-auth 未配 `trustedOrigins`；限流仅 1 个 mutation**。证据：`src/server/better-auth/config.ts:8-39`；`src/server/api/routers/task.ts`（`rateLimitedProcedure` 只用在 delete 上）。
 - [x] **A10 脚手架残留 `post.getSecretMessage` 不在路由表（已移除，本批复算勾销）**：
-      `8740948` 一并删掉了它，`src/server/api/routers/post.ts` 现只剩 `getLatest` / `create`
-      两条且都在 `authedProcedure` 后。（台账当时把「修了什么」写进了代码注释，
+      `8740948` 一并删掉了它。（写这条时 `src/server/api/routers/post.ts` 还剩
+      `getLatest` / `create` 两条、都在 `authedProcedure` 后；那整个脚手架口后来随 E3
+      「零执行者的死口」那一批删净 —— 见 `src/server/api/root.ts` 文件头，现在这个文件
+      已不在树上。）（台账当时把「修了什么」写进了代码注释，
       却没改这张表 —— 见上方 P1 段首的复算说明。）
 - [x] **A11 远端模型密钥被「保存一次设置」清掉（A4 那次脱敏的副作用，本批照出并修复）**：
       `getConfigForClient` 下发的远端条目**不带 `apiKey`**（A4 要求的脱敏），而
