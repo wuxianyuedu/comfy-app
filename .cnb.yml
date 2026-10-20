@@ -844,8 +844,11 @@
       #    目录每跑新建再删，正是「热态永远不成立」的根因（§13.5.3.4.3）；
       # ② 它必须与 `F:\.pnpm-store\v11` **同卷** —— pnpm 跨卷不做硬链接，换卷安装会退化成
       #    整树复制，实测一个槽的净成本就从 52 MiB 变成表观的 982 MiB；
-      # ③ 目录不在**不影响读数** —— `planSlot` 读成「槽不在」⇒ `install-into-slot`，
-      #    那本来就是第一次那一跑该有的答案。
+      # ③ 目录不在**不影响读数** —— `planSlot` 读成「槽不在」⇒ `install-into-slot`。
+      #    但**执行档曾经被这一格挡死**：`fs.statfsSync` 对不存在的路径抛 `ENOENT`，而
+      #    「读不到 ⇒ 按不够处理」把每一跑都判成不建槽 —— 开关拨下去是空转（#2049 实测到，
+      #    #2050 修：向上取同一卷最近存在的祖先）。所以这一条从现在起是有牙齿的：
+      #    `F:\runner\ci-cache\comfy-app-t3\<键>` 真的被建出来了，读数与盘上事实可对账。
       COMFY_CI_CACHE_ROOT: F:\runner\ci-cache\comfy-app-t3
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-cache-slot.mjs
     # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
