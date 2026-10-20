@@ -1255,15 +1255,15 @@ workspace`，最后一段恒定，只取 `basename` 就把有区分度的那一�
 `走缓存槽（install-into-slot）` / `槽未接管（原因）⇒ 照常装`；再加一条物理核对 ——
 槽根目录在不在、里面有没有 `.ci-deps-fingerprint`。日志绿 + 槽根空 = 没生效。
 
-**一条已知但没在节点身份上验过的残余**（写在这里，别让下一个人以为它已被回答）：槽里那次
-`pnpm install` 解析到的 store 必须与作业里那次是同一个。仓库不配 store（`pnpm-workspace.yaml`
-与 `package.json` 里都没有 `storeDir`），而 machine 级的 pnpm 配置与 cwd 无关，所以同机同身份下
-两次解析必然同一个 —— 但 runner 跑在 LocalSystem 身份上，与本机的用户 profile 不是同一个；
-**这一条只在用户身份上实测过**（日志那句 `Packages are hard linked from the content-addressable
-store` + store 落在 `F:\.pnpm-store\v11`）。它猜错的后果是**盘**而不是正确性：跨卷时 pnpm 退化成
-整树复制，一个槽从 52 MiB 变成 982 MiB、四个键约 4 GiB —— 仍在 20 GiB 下限的保护范围内，
-而省时间那件事照旧成立（树就在那儿）。第一次走 `install-into-slot` 的构建里读一眼那格的日志
-就能证实或证伪，不必为它先加探针。
+**那条 store 残余已于当晚在节点身份上关掉**（#2050 的 runner 日志，`cnb build
+build-runner-download-log --pipelineId cnb-ous-1k5c5lpe5-001`）：节点上那次槽内安装自己写着
+`Content-addressable store is at: F:\.pnpm-store\v11` 与 `Packages are hard linked from the
+content-addressable store to the virtual store`，而 `fsutil hardlink list` 对槽里一个
+`package.json` 数出 **9 个链接名**（store + 各并行检出 + `F:\runner\ci-cache\…` 这一条）。
+⇒ LocalSystem 这个 profile 解析到的就是同一个 store，52 MiB/键 那个成本读数是**节点上的**形态。
+实测的墙钟：槽内冷装 `Done in 1m 9.2s`（对照：同日普通装那一格 76.9s —— 这两个数**不做因果**，
+差 7.7s 最像的原因是槽里的 `package.json` 摘了 `scripts`、因此不跑本仓那几条 postinstall，
+但没有把两条链路其余变量钉住的对照，所以它只是一个待验的解释）。
 
 顺带把两处散文变成了执行者：**「绝不穿过链装」**（上面第 1 条实测的成因）现在是
 `clearJobLink` —— 真要在作业里装，先摘掉作业那条指进槽的链，只摘 reparse point、
