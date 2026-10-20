@@ -817,16 +817,28 @@
     # 量级余量，判据本身远小于它。
     timeout: 5m
 
-  # ── 缓存槽读数（ISSUE #2022 第二步的**第一增量**，恒不退非零）──
+  # ── 缓存槽读数（ISSUE #2022 第二步；恒不退非零）──
   # 只回答三问：有没有槽（`COMFY_CI_CACHE_ROOT` 配没配）、该落哪个键、这一跑与它的关系
-  # 是 `reuse` / `install-into-slot` / `no-cache` 中哪一档。键刻意复用 `ci-install-deps.mjs`
+  # 是 `reuse` / `install-into-slot` / `no-cache` 中哪一档。键刻意复用 `ci-deps-face.mjs`
   # 的 `pnpmInstallFingerprint` —— 两处各算一份 sha 的漂移形态是「缓存命中判断」与「碰了
   # 依赖面就得真装」不再一致，那时的表现是依赖不对但门禁全绿。
   #
-  # ⚠️ 这一格**今天不复制、不链接、不装**：把 `Install dependencies` 接向槽是第二增量。
-  # 分两批的理由不是谨慎 —— 那一格是每次构建都要过的，键算错一次的代价是让所有 PR 装不上，
-  # 与档位那一刀立的「先让判据在场，再把开关拨过去」是同一条纪律。
+  # ⚠️ 这一格**只读数、不碰盘**：动作在执行档 `scripts/ci-slot-apply.mjs`，而它由
+  # `COMFY_CI_SLOT=1` 才拨 —— **这里刻意不置那个开关**。第二增量的机制已经落地（规范
+  # §13.5.3.4.3 有四个实测数与三条边界），但那一格接的是 `Install dependencies`、
+  # 每次构建都要过它，键算错一次的代价是所有 PR 装不上：打开它是一次「一行可回退」的
+  # 动作，不是一个默认值。这一格配上槽根之后，日志会如实说出「这一跑会不会命中」——
+  # 那正是平台侧三档收益实测缺的那一格。
   - name: 缓存槽读数
+    env:
+      # 三条例外都不成立，所以落点选在 `F:\runner\ci-cache\comfy-app-t3`：
+      # ① 它必须活在**作业目录以外** —— `<repoId>/<流水线 id>/workspace` 那个带 id 的
+      #    目录每跑新建再删，正是「热态永远不成立」的根因（§13.5.3.4.3）；
+      # ② 它必须与 `F:\.pnpm-store\v11` **同卷** —— pnpm 跨卷不做硬链接，换卷安装会退化成
+      #    整树复制，实测一个槽的净成本就从 52 MiB 变成表观的 982 MiB；
+      # ③ 目录不在**不影响读数** —— `planSlot` 读成「槽不在」⇒ `install-into-slot`，
+      #    那本来就是第一次那一跑该有的答案。
+      COMFY_CI_CACHE_ROOT: F:\runner\ci-cache\comfy-app-t3
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-cache-slot.mjs
     # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
     timeout: 5m
