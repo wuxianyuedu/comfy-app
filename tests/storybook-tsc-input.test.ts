@@ -198,8 +198,9 @@ async function provisionNextEnv(outDir: string): Promise<string> {
  *
  * 暂存点落 `node_modules/.cache` 的两个理由与 ④ 挪生成件那处同源（见
  * generatedStashFile 的注释）：git 不看、类型程序与 eslint 都不展开；且与仓库同卷
- * （Windows 上跨卷 rename / 写入直接失败）。这里多一条：`extends` 用的 `tsconfig.json`
- * 是**绝对路径**，配置本身放哪儿都不影响它继承到什么。
+ * （同卷是首选 —— 跨卷时 `rename` 会 EXDEV，那一跳由 moveFileAcrossVolumes 退成 copy，
+ * 而**写入**本身跨卷没问题，别把两件事写成一件）。这里多一条：`extends` 用的
+ * `tsconfig.json` 是**绝对路径**，配置本身放哪儿都不影响它继承到什么。
  *
  * `os.tmpdir()` 在这里同样不行 —— 那次事故（详见 generatedStashFile）已经把
  * 「仓库内的输入 + 仓库外的临时目录」这条组合判死过一回。
@@ -353,7 +354,8 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         moveFileAcrossVolumes(generatedFile, stash);
         expect(
           fs.existsSync(stash) && !fs.existsSync(generatedFile),
-          `生成件没能挪进 ${stash} —— 暂存点必须与仓库同卷（见 generatedStashFile）`,
+          `生成件没能挪进 ${stash} —— 暂存点必须在仓库内（跨卷本应由 copy 退路兜住，
+挪不动说明这一格没跑起来，不是判据红；见 generatedStashFile）`,
         ).toBe(true);
         /* 挪的只是那个 json，**目录必须还在**：pre-commit 各组是并发跑的
            （`wall ≈ max(各组)`），组 A 的 tsc 与组 B 的 eslint 都在遍历
@@ -436,7 +438,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     },
   );
 
-  it("④ 的暂存点形状：仓库内、同卷、不入库，且挪的是文件不是目录", () => {
+  it("④ 的暂存点形状：仓库内、不入库、不被遍历，且挪的是文件不是目录", () => {
     /* 这条是 ④ 的前提，不是装饰。两处约束各自对应一次真实事故：
        · 落回 `os.tmpdir()` ⇒ 仓库与临时目录不同卷的机器上 rename 直接 EXDEV，
          「挪走」从没成功，报错却指向还原（ENOENT），顺带把真目录删了；
@@ -448,10 +450,16 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       stash.startsWith(path.join(ROOT, "node_modules") + path.sep),
       "暂存点只在 node_modules 下面：那里 git 不看、类型程序与 eslint 也不展开",
     ).toBe(true);
+    /* 「与仓库同卷」现在是**首选**而不是硬要求（跨卷由 moveFileAcrossVolumes 退成 copy），
+       所以这里不判卷。而且原来那句 `path.parse(stash).root === path.parse(ROOT).root`
+       在 stash 由 ROOT 拼出来的前提下恒真 —— 一条恒真的断言不是判据，它只教会人忽略红。
+       换成可证伪的那一条：暂存点必须跟着 `root` 参数走。照 `os.tmpdir()` 写死的实现
+       在单卷机器上永远绿，而它正是当年把这台机器的开发期输入删掉的那一版。 */
+    const elsewhere = generatedStashFile(path.join(ROOT, "elsewhere"), 4242);
     expect(
-      path.parse(stash).root,
-      "暂存点与仓库必须同一卷 —— 跨卷 rename 在 Windows 直接失败",
-    ).toBe(path.parse(ROOT).root);
+      elsewhere.startsWith(path.join(ROOT, "elsewhere") + path.sep),
+      "暂存点必须由传进来的 root 派生 —— 写死到仓库外的临时目录，跨卷那一格就又回来了",
+    ).toBe(true);
     expect(
       path.basename(stash),
       "挪的必须是那个 json 本身；把目录搬走会让同批并发的遍历撞 ENOENT",
@@ -651,11 +659,13 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
  *
  *  两条约束，各自对应一次真实事故：
  *
- *  ① 必须在仓库内、与仓库**同一卷**。Windows 上 `rename` 跨卷直接 EXDEV（仓库在
- *     F:、`%TEMP%` 在 C: 是常见开发机形态，本机实测）。原先暂存在 `os.tmpdir()`，
- *     「挪」这一步从没成功，`finally` 却照旧把真目录 `rmSync` 掉、再去 rename 一个
- *     从没存在的暂存点 —— 报出来的是 ENOENT（指向还原），真因被盖掉，而且每跑一次
- *     就把这台机器的开发期输入删一次。
+ *  ① 必须在仓库内、**优先与仓库同一卷**。同卷是首选而不是硬要求：`rename` 跨卷会 EXDEV，
+ *     而那一跳现在由 {@link moveFileAcrossVolumes} 退成 copy+unlink，语义等价（原处不再有、
+ *     暂存点有了），代价只是一份 json 的拷贝。
+ *     **仍在仓库内**这一条不打折：原先暂存在 `os.tmpdir()`（仓库在 F:、`%TEMP%` 在 C: 是
+ *     常见开发机形态，本机实测），那时 copy 退路还没有，「挪」这一步从没成功，`finally`
+ *     却照旧把真目录 `rmSync` 掉、再去 rename 一个从没存在的暂存点 —— 报出来的是
+ *     ENOENT（指向还原），真因被盖掉，而且每跑一次就把这台机器的开发期输入删一次。
  *     选 `node_modules/.cache`：git 不看这里、类型程序与 eslint 都不展开这里，而
  *     `package.json` 的 lint 早已把 `.cache` 当缓存目录在用 —— 同一处用途，不另造约定。
  *
@@ -674,13 +684,15 @@ function generatedStashFile(root: string, pid: number): string {
 
 /** 把一份文件挪到另一处，**跨卷时退成 copy + unlink**。
  *
- * 为什么这里不能只信 ① 那条「同一卷」前提：CI 节点上 workspace 与
- * `workspace/node_modules` **不同卷**（后者是指向另一盘缓存的链接，实测
- * `G:\runner\…\workspace\node_modules` → `F:\runner\ci-cache\…`），于是
- * `renameSync` 直接 `EXDEV`。那一格的判点是「制造出缺失态之后 tsc 退 0」，
- * 挪不动只说明**这一格没跑起来**，不是判据红 —— 拿它拦 PR 等于让节点布局冒充代码结论。
- * copy+unlink 与 rename 在语义上等价（原处不再有、暂存点有了），代价只是一份 json 的拷贝；
- * 同卷时仍然先走 rename，不退化。 */
+ *  立案现场（2026-10-20 的 CI 节点）：workspace 在 G:、而 `workspace/node_modules` 是指向
+ *  缓存槽的链接，槽根那会儿还写死在 F: —— `renameSync` 直接 `EXDEV`，红的是本条判据，
+ *  原因在缓存选址上。那一格的判点是「制造出缺失态之后 tsc 退 0」，挪不动只说明
+ *  **这一格没跑起来**，不是判据红 —— 拿它拦 PR 等于让节点布局冒充代码结论。
+ *
+ *  ⚠️ 那条写死已被订正：槽根现在由 `pnpm store path` 所在卷推导（#2061），所以节点上
+ *  这一跳走的仍是 **rename**，copy 那一支当前打不到。留着它不是留着旧 bug 的通路，
+ *  而是这条判据不该依赖「本机/本节点恰好同卷」这个前提 —— 显式把槽根配到另一卷、
+ *  或换一台仓库与缓存不同盘的机器，它都还得跑得起来。 */
 function moveFileAcrossVolumes(from: string, to: string): void {
   try {
     fs.renameSync(from, to);
@@ -692,20 +704,36 @@ function moveFileAcrossVolumes(from: string, to: string): void {
 }
 
 /** 把暂存的生成件放回原处，并收掉本次自建的暂存目录（判据不该在缓存里留垃圾）。
- *  放回不了（进程被中断、暂存没落成）就按本机现生成一份：一次判据不该把开发期
- *  输入弄丢 —— 丢了之后的现象是「跑过 storybook 的机器才开始红」。 */
-function restoreGeneratedFile(generatedFile: string, stash: string): void {
+ *  放回不了（进程被中断、暂存没落成、**挪这一步自己抛**）就按本机现生成一份：
+ *  一次判据不该把开发期输入弄丢 —— 丢了之后的现象是「跑过 storybook 的机器才开始红」。
+ *
+ *  `move` 可注入：那条「挪不动也要把输入找回来」的路径本机造不出来（同卷 rename
+ *  一定成功、ENOSPC 更没法按需触发），不给它一个缝就只能干看着承诺与实现不一致。 */
+function restoreGeneratedFile(
+  generatedFile: string,
+  stash: string,
+  move: (from: string, to: string) => void = moveFileAcrossVolumes,
+): void {
   if (fs.existsSync(stash)) {
     if (fs.existsSync(generatedFile)) {
       fs.rmSync(generatedFile, { force: true });
     }
-    /* 放回这一跳同样可能是跨卷的（暂存在 `node_modules` 那一侧，生成件在仓库里），
-     * 所以走同一个挪法，不许在这里留第二条只会 EXDEV 的路。 */
-    moveFileAcrossVolumes(stash, generatedFile);
+    /* 放回这一跳走同一个挪法（跨卷时它自己退成 copy），不许在这里留第二条只会 EXDEV 的路。
+       但 copy 那一支中间**两侧都没有文件**（先 rm 再 copy），ENOSPC / EACCES 抛在中间时
+       既没放回、也不会走到下面那条「暂存点不存在才触发」的重生成 —— 所以这一跳包 try/catch，
+       兜回承诺的那一句：就地现生成一份，比给下一跑留一个缺失态便宜。 */
+    try {
+      move(stash, generatedFile);
+    } catch {
+      writeStorybookAppOrigin(ROOT, generatedFile);
+    }
     fs.rmSync(path.dirname(stash), { recursive: true, force: true });
     return;
   }
-  writeStorybookAppOrigin(ROOT, path.join(ROOT, GENERATED_REL));
+  /* 重生成落到**传进来的那个路径**，不在这里重算一遍 `ROOT/GENERATED_REL`：
+     两处各算一份的漂移形态是「测的时候写到仓库里、跑的时候写到别处」，
+     而这条承诺的全部内容就是「别把开发期输入弄丢」。 */
+  writeStorybookAppOrigin(ROOT, generatedFile);
 }
 
 /** 判据要真跑一次 tsc：从依赖里解出可执行文件，不写死 `node_modules/.bin/tsc`。
@@ -752,10 +780,12 @@ function resolveTscBin(): {
   return null;
 }
 
-/** ④ 那一格「挪得动」的前提在 CI 节点上不成立（ISSUE #2059）：workspace 与
- *  `workspace\node_modules` 不同卷，`renameSync` 直接 EXDEV。这里补两条对**兜底本身**的
- *  判据 —— 本机造不出跨卷（同卷 rename 一定成功），所以按形状替掉 rename，
- *  而不是留一段「只有节点上才跑得到」的死代码。 */
+/** ④ 那一格「挪得动」的前提曾经在 CI 节点上不成立（ISSUE #2059 的现场）：workspace 在
+ *  G:、`workspace\node_modules` 是指向写死在 F: 的缓存槽的链接，`renameSync` 直接 EXDEV。
+ *  这里补两条对**兜底本身**的判据 —— 本机造不出跨卷（同卷 rename 一定成功），所以按形状
+ *  替掉 rename，而不是留一段「只有节点上才跑得到」的死代码。
+ *  ⚠️ 那个写死的槽根已被 #2061 订正成按 store 所在卷推导 ⇒ 节点上现在走的仍是 rename，
+ *  这两条判据测的是**形状兜底还在**，不是「正在被走到的那条路」。 */
 describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局当判据红", () => {
   const errno = (code: string): NodeJS.ErrnoException => {
     const e = new Error(`${code}: simulated`) as NodeJS.ErrnoException;
@@ -800,6 +830,89 @@ describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局�
       spy.mockRestore();
       expect(fs.existsSync(from), "报错被吞了 ⇒ 原处不该还在").toBe(true);
       expect(fs.existsSync(to), "EPERM 不该被当成「走退路」").toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/** 还原那一跳的窗口（同一族的「曾经真、现在不真」：头上的承诺写的是「放回不了就现生成」，
+ *  而实现里那条现生成**只挂在「暂存点不存在」那一支** —— copy 退路中途抛（ENOSPC / EACCES）
+ *  就既没放回也没重生成，开发期输入当场丢了。
+ *  ⚠️ 严重性说清：`sameVolume` 守卫之后节点走的是 rename，这条窗口目前打不到 ——
+ *  修的是承诺与实现的一致性，不是正在发生的坏。 */
+describe("restoreGeneratedFile：挪不动也必须把开发期输入找回来", () => {
+  /** 造一份「生成件已被挪走、暂存点在」的现场，返回两侧路径。 */
+  const staged = (dir: string, content: string) => {
+    const generatedFile = path.join(
+      dir,
+      ".storybook",
+      "generated",
+      "app-origin.json",
+    );
+    const stash = generatedStashFile(dir, 7777);
+    fs.mkdirSync(path.dirname(stash), { recursive: true });
+    fs.writeFileSync(stash, content, "utf8");
+    return { generatedFile, stash };
+  };
+
+  it("挪回中途抛 ⇒ 就地现生成一份，且暂存目录照样收干净", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-restore-throw-"));
+    try {
+      const { generatedFile, stash } = staged(dir, '{"APP_DEV_PORT":3999}');
+      restoreGeneratedFile(generatedFile, stash, () => {
+        throw Object.assign(new Error("ENOSPC: simulated"), { code: "ENOSPC" });
+      });
+      expect(
+        fs.existsSync(generatedFile),
+        "承诺是「一次判据不该把开发期输入弄丢」—— 挪不动时两侧都不许是空的",
+      ).toBe(true);
+      const restored = JSON.parse(fs.readFileSync(generatedFile, "utf8")) as {
+        APP_DEV_PORT?: number;
+      };
+      expect(typeof restored.APP_DEV_PORT).toBe("number");
+      expect(fs.existsSync(path.dirname(stash)), "暂存目录不许留在缓存里").toBe(
+        false,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("挪得动 ⇒ 放回的是暂存那一份，不是重生成出来的另一份", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-restore-ok-"));
+    try {
+      const { generatedFile, stash } = staged(
+        dir,
+        '{"sentinel":"放回的不是重生成"}',
+      );
+      restoreGeneratedFile(generatedFile, stash, (from, to) => {
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        fs.copyFileSync(from, to);
+        fs.unlinkSync(from);
+      });
+      expect(fs.readFileSync(generatedFile, "utf8")).toBe(
+        '{"sentinel":"放回的不是重生成"}',
+      );
+      expect(fs.existsSync(path.dirname(stash))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("暂存点压根不存在 ⇒ 现生成一份（既有那一支不许被上面的 try/catch 带跑）", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-restore-nostash-"));
+    try {
+      const generatedFile = path.join(
+        dir,
+        ".storybook",
+        "generated",
+        "app-origin.json",
+      );
+      restoreGeneratedFile(generatedFile, generatedStashFile(dir, 6666), () => {
+        throw new Error("这一支不该碰到 move");
+      });
+      expect(fs.existsSync(generatedFile)).toBe(true);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
