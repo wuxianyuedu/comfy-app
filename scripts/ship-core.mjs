@@ -114,11 +114,13 @@ export function parseSlug(remoteUrl) {
  * 「远端叫什么、基线是哪条」的推导 —— 唯一一份。
  *
  * 为什么要有这一件：这一版此前两处**写死 `origin`**（`git remote get-url origin` 与
- * `git diff origin/master...HEAD -- changelog.d`），而本仓按规范只有一个叫 `cnb` 的远端
- * （硬规则 6 / §13.6：远端名 `cnb`，无 `origin`）。后果不是「少一句提示」：
+ * `git diff origin/master...HEAD -- changelog.d`）。远端名**不是仓库里的事实，是每台
+ * 克隆机器自己的事实**（`docs/audits/2026-10-12-architecture-risk-review.md` R12-01：
+ * 本仓的并行检出里实测见过 `cnb`，而本检出 `git remote -v` 只有 `origin`）⇒ 写死
+ * 哪一边都会在另一台上失败。后果不是「少一句提示」：
  * 两条 git 命令都**失败**，而失败在这里长得与「答案为空」一模一样 ——
- * 碎片那一查拿到空串 ⇒ preflight 判「没有 changelog.d 碎片」⇒ **`pnpm ship` 在本仓
- * 从第一次跑起就没工作过**，且报的还是一条听起来正当的理由。
+ * 碎片那一查拿到空串 ⇒ preflight 判「没有 changelog.d 碎片」⇒ **`pnpm ship` 在那台
+ * 检出上从第一次跑起就没工作过**，且报的还是一条听起来正当的理由。
  *
  * 三档来源，顺序有理由：
  *   ① `@{u}`（HEAD 自己的上游）—— 最贴事实：这条分支在跟谁比，是 git 知道的事；
