@@ -4,7 +4,7 @@
  *
  * ── 为什么是 pre-push，而不是「记得敲一次」──────────────────────────────
  *
- * `pnpm check:premerge` 各段复算（干净快照上的全仓判据 / 本检出上的受影响用例 / 提交信息里的机械可核声明 /
+ * `pnpm check:premerge` 各段复算（干净快照上的全仓判据 / 提交信息里的机械可核声明 /
  * 合并有没有丢一侧）此前**唯一的执行者就是人**。它天然跑不进 `pre-commit`：本地钩子面前
  * 没有平台侧那一次 squash 合并。于是「我的分支绿」到「master 绿」之间那一跳靠纪律补，
  * 而纪律的三种漏法（漏跑一步 / 顺序反了 / 只跑了自己记得的那条）都不报错。
@@ -379,8 +379,10 @@ export function runFromStdin(stdinText) {
   }
 
   process.stdout.write(
-    `[pre-push] 跑合并前固定动作（check:premerge 各段；分钟级 —— 其中「受影响用例」那一档 2026-10-19 从 pre-commit 挪到这里，§13.5.25）\n` +
-      `[pre-push]   为什么要跑：${verdict.reasons.join("；")}\n`,
+    `[pre-push] 跑合并前固定动作（check:premerge 各段；分钟级 —— 干净快照上的全仓判据那一档最贵）\n` +
+      `[pre-push]   为什么要跑：${verdict.reasons.join("；")}\n` +
+      `[pre-push]   受影响用例那一档不在这里：2026-10-20 起它的执行者是平台侧 PR 流水线的\n` +
+      `[pre-push]   「受影响用例」一格（scripts/ci-affected-tests.mjs → run-affected-tests.mjs）。\n`,
   );
   /* `--json` 拿逐段码：只有 base 段红时才再问一次归属（那是一批全仓判据的量级，放在稀有
    * 路径上付；绿的那条路径仍然只跑一次）。 */
