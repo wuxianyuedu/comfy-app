@@ -78,6 +78,10 @@ const PAGE_HEADER_CONSUMERS = [
    * `ui/page-header` 之后，屏名走 `pageHeaderTitle(...)`、档位由基元给。 */
   "src/components/workshop/ModelAdaptersView.tsx",
   "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx",
+  /* 风格实验室：新屏（页签名 + `PageHeader srTitle` + `pageHeaderTitle("style-lab")`
+     同出处）—— 加进这份具名清单是让「它别退回手抄页头」继续被拦（不削弱判据，
+     只扩它实际该覆盖的第 11 屏）。 */
+  "src/components/studio/style-lab/StyleLabView.tsx",
 ] as const;
 
 function read(rel: string): string {

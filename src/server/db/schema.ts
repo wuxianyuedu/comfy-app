@@ -686,6 +686,86 @@ export const production = sqliteTable(
   (t) => [index("production_user_updated_idx").on(t.userId, t.updatedAt)],
 );
 
+// ── 风格实验室（工坊之前那一屏：风格 × 角色特征的试与浏览）──────────────
+// 这屏的产物是**一组出图结果 + 它们的组合归属**，不是图片本身：图片照常落在
+// `task` / `taskImage`（唯一的产物落点），这里只记「哪一格是哪条任务跑出来的」。
+// 再抄一份图片路径就会有第二份真值 —— 删任务时那边不会跟着删（硬规则 20 的
+// 同款事故形态）。
+//
+// 为什么这一层现在只存「试验定义」而没有任何行：批量出图的编排（矩阵扇出）
+// 是下一批；先把存储与浏览的口径立住，界面才有诚实的空态可显示。
+// 纯新增表，不动既有表；启动时由 drizzle-kit push 建表。
+export const styleExperiment = sqliteTable(
+  "styleExperiment",
+  {
+    id: cuid(),
+    name: text("name").notNull(),
+    /** 跑这套组合用的工作流。
+     *
+     * **刻意不加 `.references()`**（与 `task.projectId` / `filmShot.taskId` 同口径）：
+     * 库开了 `PRAGMA foreign_keys = ON`（`~/lib/sqlite-pragmas`），带上外键之后
+     * 「删除工作流」会从一次正常操作变成一句约束报错 —— 而这屏记的是用户自己
+     * 试出来的那批结果，工作流被改名/删掉都不该让它消失。存在性在写入时判
+     * （`styleLab.create`），读侧不靠约束。 */
+    workflowId: text("workflowId").notNull(),
+    /** 用的哪个模式（与 `workflowTemplate.modes` / 模式契约同一口径的码）。 */
+    mode: text("mode").notNull(),
+    /** 风格标签（字符串数组，取自 `~/lib/workshop/character-options` 的词表）。 */
+    styles: text("styles", { mode: "json" }).notNull().default("[]"),
+    /** 角色特征：`{ 维度id: 选中值[] }`。空数组 = 这一维不约束（见组合数判据）。 */
+    traits: text("traits", { mode: "json" }).notNull().default("{}"),
+    /** 生图参数快照（steps / cfg / sampler / scheduler / size / seedMode）。
+     *  存**快照**而不是引用某处的默认值：这一屏的意义是「这组图是在这套参数下
+     *  出来的」，参数被别处改掉之后，旧的对比结论就作废了。 */
+    params: text("params", { mode: "json" }).notNull().default("{}"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+    /** 软删除标记：这一屏的行是「我试过什么」的记录，删一次不该把结果一起抹掉。 */
+    deletedAt: dateNull("deletedAt"),
+  },
+  (t) => [
+    // 列表页唯一读路径：排除软删 + 按创建时间倒序。缺这条复合索引时 better-sqlite3
+    // 的同步执行会退化成全表扫（与 task 那几条同一考量）。
+    index("style_experiment_created_idx").on(t.deletedAt, t.createdAt),
+    index("style_experiment_workflow_idx").on(t.workflowId),
+  ],
+);
+
+export const styleExperimentCell = sqliteTable(
+  "styleExperimentCell",
+  {
+    id: cuid(),
+    experimentId: text("experimentId")
+      .notNull()
+      .references(() => styleExperiment.id, { onDelete: "cascade" }),
+    /** 这一格由哪条任务跑出；未出图（批量还没跑）时为 NULL。
+     *  与 `filmShot.taskId` 同款：**不加外键**，理由同上（任务行归任务域管，
+     *  清历史不该连带改写这里的归属结论）。 */
+    taskId: text("taskId"),
+    style: text("style").notNull(),
+    /** 该格对应的特征键：维度 id 拼上选中值，供「这一行是什么组合」回读。 */
+    traitKey: text("traitKey").notNull(),
+    /** 这一格实际提交给工作流的提示词（风格 + 特征拼出来的那一句）。 */
+    prompt: text("prompt").notNull(),
+    /** 这一格里代表整组展示的那一枚（浏览位）。 */
+    isRepresentative: integer("isRepresentative", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index("style_experiment_cell_experiment_idx").on(t.experimentId),
+    index("style_experiment_cell_task_idx").on(t.taskId),
+  ],
+);
+
 // ── 关系（仅 include 用到：task.images / filmProject.shots）────────
 export const taskRelations = relations(task, ({ many }) => ({
   images: many(taskImage),
@@ -723,6 +803,8 @@ export type RemoteModelInsert = InferInsertModel<typeof remoteModel>;
 export type Skill = InferSelectModel<typeof skill>;
 export type FilmProject = InferSelectModel<typeof filmProject>;
 export type FilmShot = InferSelectModel<typeof filmShot>;
+export type StyleExperimentRow = InferSelectModel<typeof styleExperiment>;
+export type StyleExperimentCellRow = InferSelectModel<typeof styleExperimentCell>;
 export type AuditLog = InferSelectModel<typeof auditLog>;
 export type WorkshopSession = InferSelectModel<typeof workshopSession>;
 export type Production = InferSelectModel<typeof production>;

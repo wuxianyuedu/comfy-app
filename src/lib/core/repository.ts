@@ -35,5 +35,6 @@ export * from "./repository-model";
 export * from "./repository-model-tag";
 export * from "./repository-film";
 export * from "./repository-skill";
+export * from "./repository-style-lab";
 export * from "./repository-user";
 export * from "./repository-post";

@@ -158,6 +158,13 @@ const ConsoleView = lazyView("console", () =>
   import("~/components/console/ConsoleView").then((m) => m.ConsoleView),
 );
 
+/* 风格实验室：全局视图，带试验列表与就绪工作流的查询，只在进入该视图时才拉。 */
+const StyleLab = lazyView(() =>
+  import("~/components/studio/style-lab/StyleLab").then(
+    (mod) => mod.StyleLab,
+  ),
+);
+
 /* 客户端上懒加载更重的画布 / 影片编辑器（ReactFlow 等）。 */
 const FilmStudio = lazyView("film", () =>
   import("~/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
@@ -316,6 +323,9 @@ export function WorkspaceViewStack({
 
       case "console":
         return <ConsoleView />;
+
+      case "style-lab":
+        return <StyleLab />;
 
       case "outputs":
         return <ProjectOutputs />;

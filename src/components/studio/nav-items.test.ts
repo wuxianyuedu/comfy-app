@@ -35,6 +35,9 @@ const GLOBAL_IDS: WorkspaceView[] = [
   "model-adapters",
   "mode-contract",
   "console",
+  /* 风格实验室（工坊之前的一屏）：全局项，排在「控制台」之后（全局项链路收尾）。
+     它进侧栏、不是瞬时页签，故只在这一份有序清单里补一个位置即可。 */
+  "style-lab",
 ];
 const PROJECT_TAB_IDS: WorkspaceView[] = [
   "project",

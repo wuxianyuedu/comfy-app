@@ -46,6 +46,9 @@ export const WORKSPACE_VIEWS: WorkspaceView[] = [
      —— `navigateTo` 与 sessionStorage 恢复都按这份白名单收敛未知 id。 */
   "model-adapters",
   "mode-contract",
+  /* 风格实验室：与它进 NAV_ITEMS 同批登记 —— 漏进这份白名单的后果不是报错，
+     而是「侧栏点得开、刷新后恢复不了」（navigateTo 与 sessionStorage 都按它收敛）。 */
+  "style-lab",
 ];
 
 function readTabsState(): WorkspaceTabsState | null {

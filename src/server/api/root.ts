@@ -5,6 +5,7 @@ import { filmRouter } from "~/server/api/routers/film";
 import { workflowRouter } from "~/server/api/routers/workflow";
 import { modelRouter } from "~/server/api/routers/model";
 import { skillRouter } from "~/server/api/routers/skill";
+import { styleLabRouter } from "~/server/api/routers/style-lab";
 import { llmRouter } from "~/server/api/routers/llm";
 import { settingRouter } from "~/server/api/routers/setting";
 import { workflowModelRouter } from "~/server/api/routers/workflow-model";
@@ -35,6 +36,7 @@ export const appRouter = createTRPCRouter({
   workflow: workflowRouter,
   model: modelRouter,
   skill: skillRouter,
+  styleLab: styleLabRouter,
   llm: llmRouter,
   setting: settingRouter,
   workflowModel: workflowModelRouter,

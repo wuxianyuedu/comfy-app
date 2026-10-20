@@ -63,7 +63,8 @@ export type WorkspaceView =
   | "console"
   | "settings"
   | "model-adapters"
-  | "mode-contract";
+  | "mode-contract"
+  | "style-lab";
 
 export interface NavItem {
   id: WorkspaceView;
@@ -238,6 +239,24 @@ export const NAV_ITEMS: NavItem[] = [
     label: "控制台",
     enabled: true,
     icon: <Terminal size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 风格实验室（工坊之前的一屏）：记录并浏览「风格 × 角色特征」的文生图试验，
+       为后续角色卡生成喂料。归**全局项**而不是项目页签 —— 它与「当前是哪个画布
+       项目」无关（记的是本机试验定义），与队列 / ComfyUI 同族（常驻、切走不关，
+       所以不标 `transient`）。排在「控制台」之后、项目页签之前：全局项链路的收尾。
+       本批只有「存储 + 浏览 + 建元数据」，批量扇出没接 —— 界面用一句禁用说明如实交代。 */
+    id: "style-lab",
+    label: "风格实验室",
+    enabled: true,
+    icon: (
+      <svg {...ICON_PROPS}>
+        <rect x="3" y="3" width="8" height="8" rx="1.5" />
+        <rect x="13" y="3" width="8" height="8" rx="1.5" />
+        <rect x="3" y="13" width="8" height="8" rx="1.5" />
+        <path d="M13 17h8M17 13v8" />
+      </svg>
+    ),
   },
   {
     /* 项目主页放在页签第一位：它是进入项目后的落点（此前直接落画布，

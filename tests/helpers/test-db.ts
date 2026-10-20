@@ -51,6 +51,8 @@ const jsonColumns = new Set<string>([
   "shots",
   "progress",
   "run",
+  "styles",
+  "traits",
 ]);
 
 const TABLES = [
@@ -77,6 +79,8 @@ const TABLES = [
   "workshopSession",
   "workshopDraft",
   "production",
+  "styleExperiment",
+  "styleExperimentCell",
 ];
 
 const CREATE_SQL = `
@@ -184,6 +188,16 @@ CREATE TABLE IF NOT EXISTS production (
   tone TEXT NOT NULL DEFAULT '', logline TEXT NOT NULL DEFAULT '', scriptMarkdown TEXT NOT NULL DEFAULT '',
   scenes TEXT NOT NULL DEFAULT '[]', characters TEXT NOT NULL DEFAULT '[]', shots TEXT NOT NULL DEFAULT '[]',
   progress TEXT NOT NULL DEFAULT '{}', run TEXT NOT NULL DEFAULT '{}', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS styleExperiment (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, workflowId TEXT NOT NULL, mode TEXT NOT NULL,
+  styles TEXT NOT NULL DEFAULT '[]', traits TEXT NOT NULL DEFAULT '{}', params TEXT NOT NULL DEFAULT '{}',
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT
+);
+CREATE TABLE IF NOT EXISTS styleExperimentCell (
+  id TEXT PRIMARY KEY, experimentId TEXT NOT NULL, taskId TEXT, style TEXT NOT NULL,
+  traitKey TEXT NOT NULL, prompt TEXT NOT NULL, isRepresentative INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL
 );
 
 

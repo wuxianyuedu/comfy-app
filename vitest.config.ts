@@ -746,6 +746,19 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* 风格实验室域（文生图试验的存储与浏览）：组合数、笛卡尔展开、串行预算档位。
+         * 新增域**同批**登记（规范 §12.5.3 R14 / §18.6）—— 数值取自
+         * `pnpm exec vitest run --coverage src/lib/style-lab/style-lab-matrix.test.ts`
+         * 的实测聚合值（100 / 100 / 100 / 100），只升不降。
+         * 为什么是满档：本目录当前只有 `style-lab-matrix.ts` 一份可执行实现；
+         * `style-lab-types.ts` 转出词表与类型、不贡献自有语句，因此聚合值由前者决定。
+         * 后续往这一目录加实现时，先补用例再抬门槛，别把这条降到"刚好过"。 */
+        "src/lib/style-lab/**": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         /* markdown 渲染域（ISSUE #1329）：`marked` + `DOMPurify` 的接线、消毒
          * 白名单、样式表。新增域**同批**登记（规范 §12.5.3 R14 / §18.6）——
          * 数值取自 `pnpm exec vitest run --coverage src/lib/markdown` 的实测值
