@@ -1287,6 +1287,20 @@ store —— 取该 store 所在**卷根**下的 `ci-cache/<包名小写>`。问
 （宁可不省，也不猜一个卷）。读数那一格会把**来源**与结论一起打印，因为一个孤零零的路径
 读不出它是配的还是推的。
 
+**同卷这件事有两条，不是一条**（第二条是别人一次真红教的，不是推演出来的）：
+
+| 那一条同卷 | 破了会怎样 | 症状落在哪儿 |
+| --- | --- | --- |
+| 槽 ⇄ **store** | pnpm 不做硬链接，退化成整树复制 | 没有红 —— 只有一个槽从 52 MiB 悄悄变成表观 982 MiB（量级看上面那张四数表） |
+| 槽 ⇄ **作业检出** | 作业里 `node_modules` 是指向槽的链接，于是「往 `node_modules` 里挪一个文件」这类 `rename` **直接失败** | 红在**别人的一条用例里**：`EXDEV: cross-device link not permitted, rename '<G:>\…\workspace\.storybook\generated\app-origin.json' -> '<G:>\…\workspace\node_modules\.cache\…'` |
+
+第二行就是 #2049 那批写死盘符的直接后果：runner 搬到 `G:` 之后作业在 G:、槽根还钉在 F:。
+所以 `planSlot` 多了一档 —— `sameVolume` 为假 ⇒ **no-cache**，且那句话把 EXDEV 的后果写进去；
+读数与执行两条链共用这一个判断（不各判一份，同 `COMFY_AFFECTED_CHANGED` 那条纪律）。
+推导出来的根天然满足两条：`pnpm store path` 的答案本来就随 cwd 变，作业在哪个卷，store 与槽
+就在哪个卷。**显式 `COMFY_CI_CACHE_ROOT` 那个出口仍然留着**（换盘是真实需求），但它现在被这档
+管着 —— 配到别的卷上会被执行档自己拒掉并打印原因，而不是变成别人用例里一条看不懂的 EXDEV 红。
+
 **那条 store 残余已于当晚在节点身份上关掉**（#2050 的 runner 日志，`cnb build
 build-runner-download-log --pipelineId cnb-ous-1k5c5lpe5-001`）：节点上那次槽内安装自己写着
 `Content-addressable store is at: F:\.pnpm-store\v11` 与 `Packages are hard linked from the

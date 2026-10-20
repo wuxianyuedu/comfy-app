@@ -589,3 +589,33 @@ describe("常量与判据的配对", () => {
     expect(SLOT_TTL_MS).toBeGreaterThan(24 * 60 * 60 * 1000);
   });
 });
+
+describe("跨卷时执行档自己拦下来（win32 才有卷这个概念）", () => {
+  const maybe = process.platform === "win32" ? it : it.skip;
+  maybe("槽根在别的盘 ⇒ 不装、不建链，并说出 EXDEV 那一格", () => {
+    // 实测形态（#2049 之后那一次）：作业在 G:、槽根写死在 F:，于是
+    // `rename '<G:>\…\workspace\.storybook\generated\app-origin.json' ->
+    //  '<G:>\…\workspace\node_modules\.cache\…'` 报 EXDEV —— 红落在那条用例里，
+    // 原因在选址上。所以选址这一格必须由执行档自己拒掉，而不是让别人去猜。
+    fs.rmSync(path.join(job, "node_modules"), { recursive: true, force: true });
+    let installs = 0;
+    const out = applySlot({
+      cwd: job,
+      env: {
+        [SLOT_ENABLED_ENV]: "1",
+        COMFY_CI_CACHE_ROOT: "D:/ci-cache/comfy-app-t3",
+      },
+      run: () => {
+        installs += 1;
+        return { status: 0 };
+      },
+      spawn: () => ({ status: 0 }),
+      probe: () => 100 * 1024 ** 3,
+      log: () => undefined,
+    });
+    expect(out.handled).toBe(false);
+    expect(out.action).toBe("no-cache");
+    expect(installs).toBe(0);
+    expect(fs.existsSync(path.join(job, "node_modules"))).toBe(false);
+  });
+});
