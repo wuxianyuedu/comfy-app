@@ -10,17 +10,17 @@
 
 ## 技术栈
 
-| 层       | 技术                                                                        |
-| -------- | --------------------------------------------------------------------------- |
-| 前端框架 | Next.js 16（App Router, React 19, TypeScript）                              |
-| 样式     | Tailwind CSS v4（`@tailwindcss/postcss`）                                   |
-| API      | tRPC v11 + TanStack React Query                                             |
-| 鉴权     | better-auth                                                                 |
+| 层       | 技术                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------- |
+| 前端框架 | Next.js 16（App Router, React 19, TypeScript）                                                              |
+| 样式     | Tailwind CSS v4（`@tailwindcss/postcss`）                                                                   |
+| API      | tRPC v11 + TanStack React Query                                                                             |
+| 鉴权     | better-auth                                                                                                 |
 | 数据库   | Drizzle ORM + SQLite（服务端驱动以 `src/server/db.ts` 的 import 为准；schema 见 `src/server/db/schema.ts`） |
-| 状态管理 | Zustand                                                                     |
-| 桌面壳   | Tauri v2（Rust）+ WebView2                                                  |
-| 测试     | Vitest（单元/组件）、Playwright（e2e）                                      |
-| 文档     | TypeDoc（输出至 `docs/`）                                                   |
+| 状态管理 | Zustand                                                                                                     |
+| 桌面壳   | Tauri v2（Rust）+ WebView2                                                                                  |
+| 测试     | Vitest（单元/组件）、Playwright（e2e）                                                                      |
+| 文档     | TypeDoc（输出至 `docs/`）                                                                                   |
 
 ---
 
@@ -416,7 +416,10 @@ pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占�
 > 终态只认平台 build 的 `data.status` 与 PR 的 `is_merged`，其余一律委托既有执行者。
 > 四条要知道的边界：① 退出码三态，**`2` 是「有一步没跑起来」，不等于通过**；
 > ② 默认**不合并**，要 `--merge`；③ 不代写提交信息、不替你 `git add -A`
-> （树脏又没给 `--message` 就停在提交那一段）；④ **它说「提交段全过」不等于 tsc / eslint /
+> （树脏又没给 `--message` 就停在提交那一段）；**多行提交信息用 `--message-file`** ——
+> `pnpm run` 会把 argv 里的真换行改写成字面量 `\n`，整条信息会压成一行 subject 直接进历史；
+> PR 标题与 squash 那一行取的是**这条分支相对主干的第一笔非常规提交**（不是顶端那一笔，
+> 觉得那笔写小了可以 `--title "…"` 覆盖）；④ **它说「提交段全过」不等于 tsc / eslint /
 > 用例过了** —— `pre-commit` 默认只跑形态档，本地要全套加 `COMFY_HEAVY_GATES=1`（规范 §13.5.25）。
 > 全部旗标与阶段见 `scripts/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
 
