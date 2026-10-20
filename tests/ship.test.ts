@@ -1,5 +1,5 @@
 /**
- * `scripts/ship.mjs` 的**取数**判据。
+ * `pnpm ship`（`scripts/ship*.mjs` 这一族）的**取数**判据。
  *
  * ## 为什么这份文件只测「取数」，不测「流程走没走完」
  *
@@ -250,7 +250,7 @@ describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
  * 碎片那一查拿到空串 ⇒ preflight 报「没有 changelog.d 碎片」⇒ `pnpm ship` 在本仓
  * 从第一次跑起就没工作过，报的还是一个听起来正当的理由。
  */
-describe("resolveUpstream：远端名与主干基线（本仓没有 origin）", () => {
+describe("resolveUpstream：远端名与主干基线（两处都是每台克隆自己的事实）", () => {
   it("① 有上游就用上游 —— 这是 git 已经知道的事，不另推", () => {
     expect(
       resolveUpstream({ upstream: "cnb/master", remotes: ["cnb"] }),
@@ -292,6 +292,53 @@ describe("resolveUpstream：远端名与主干基线（本仓没有 origin）", 
     /* `null` 是「没有执行者」的入参，不是「基线是空字符串」——
      * 后者会让 `${base}...HEAD` 变成一条语法合法、语义全错的 git 命令。 */
     expect(resolveUpstream({ upstream: null, remotes: [] }).base).toBeNull();
+  });
+
+  it("④ 上游取的是「谁在跟踪」，不是「主干在哪」 —— 自跟踪必须退回主干", () => {
+    /* `git push -u origin feat/x` 之后 `@{u}` = `cnb/feat/x`（分支自己在远端的副本）。
+     * 拿它当基线 ⇒ `cnb/feat/x...HEAD` 恒空 ⇒ 碎片那一查报 0 份。这一档必须让位于
+     * 「远端默认分支」那条事实。 */
+    expect(
+      resolveUpstream({
+        upstream: "cnb/feat/x",
+        remotes: ["cnb"],
+        localBranch: "feat/x",
+        remoteHead: "refs/remotes/cnb/master",
+      }),
+    ).toEqual({ remote: "cnb", base: "cnb/master", source: "remote-head" });
+
+    /* 反过来：上游是**别的目标分支**（人显式设的，如往 release 线开 PR）时，
+     * 那仍然是最贴事实的基线，不能被默认分支顶掉。 */
+    expect(
+      resolveUpstream({
+        upstream: "cnb/release/2026-10",
+        remotes: ["cnb"],
+        localBranch: "feat/x",
+        remoteHead: "refs/remotes/cnb/master",
+      }).base,
+    ).toBe("cnb/release/2026-10");
+
+    /* 这台克隆没有 `refs/remotes/<远端>/HEAD`（手工 clone 常见）⇒ 只能推
+     * `<远端>/master`，且来源要读得出是推的，不能冒充 `upstream`。 */
+    const guessed = resolveUpstream({
+      upstream: "cnb/feat/x",
+      remotes: ["cnb"],
+      localBranch: "feat/x",
+      remoteHead: null,
+    });
+    expect(guessed.base).toBe("cnb/master");
+    expect(guessed.source).not.toBe("upstream");
+
+    /* 在 master 上自跟踪时，「基线 = 上游」本来就成立 —— 这一档不能把那条也顶掉，
+     * 否则①那一档的真语义就没了。 */
+    expect(
+      resolveUpstream({
+        upstream: "cnb/master",
+        remotes: ["cnb"],
+        localBranch: "master",
+        remoteHead: "refs/remotes/cnb/master",
+      }).base,
+    ).toBe("cnb/master");
   });
 });
 
@@ -336,9 +383,10 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     adds: ["src/a.ts"],
     hasMessage: true,
     merge: true,
-    /* 本仓的远端叫 `cnb`（硬规则 6：没有 `origin`）。计划里那一行必须用**解析出的**
-     * 远端名 —— 写死 `origin` 时这一版在 push 那一段就起不来，而 dry-run 照样打印得
-     * 很漂亮：计划与执行两头都写着同一条错。 */
+    /* 远端名是**每台克隆机器自己的事实**（并行检出里实测见过 `cnb`，本检出是
+     * `origin`，见 docs/audits/2026-10-12 R12-01），所以夹具故意给一个不是 `origin`
+     * 的名字：计划里那一行必须用**解析出的**远端名 —— 写死 `origin` 时这一版在 push
+     * 那一段就起不来，而 dry-run 照样打印得很漂亮：计划与执行两头都写着同一条错。 */
     remote: "cnb",
     baseBranch: "master",
   };
@@ -364,14 +412,41 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     ).toBe(false);
   });
 
+  it("计划里的碎片那一查与执行面同形（取并的两条，不是那条已经没人跑的 ls-files）", () => {
+    /* `planCommands` 是抄本，抄本会过期：#2034 把执行面从 `git ls-files changelog.d`
+     * （数出整个目录 118 份 ⇒ 那条守卫恒真）改成「分支相对主干已提交的 ∪ 还没提交的」
+     * 之后，计划里那一行还停在旧取数面上。dry-run 是给人的第一份说明书，
+     * 它写着一件不存在的查询，就把错的取数面教给了读者。 */
+    const plan = planCommands(st);
+    expect(plan).toContain(
+      "git diff --name-only cnb/master...HEAD -- changelog.d",
+    );
+    expect(plan).toContain("git status --porcelain -- changelog.d");
+    expect(plan.join("\n")).not.toContain("git ls-files");
+    /* 带斜杠的主干名（往 release 线开 PR）不能被拼成 `cnb/release`。 */
+    expect(
+      planCommands({
+        ...st,
+        remote: "cnb",
+        baseBranch: "release/2026-10",
+      }).some((l) =>
+        l.includes("git diff --name-only cnb/release/2026-10...HEAD"),
+      ),
+    ).toBe(true);
+  });
+
   it("对账：计划里的「模块+工具」对 ⇄ 源码里真实调用的，必须同集合", () => {
     /* `planCommands` 是命令清单的第二份抄本 —— 这正是要避免的形态，所以不装作它不是：
      * 这里把它与真执行面**逐条对账**，任何一侧新增/改名而另一侧没跟，这条就红。
-     * 只比「模块 + 工具」这一对（参数值里有 `<tmp>` / `…` 这类占位，逐字比会脆）。 */
-    const src = readFileSync(
-      path.resolve(__dirname, "../scripts/ship.mjs"),
-      "utf8",
-    );
+     * 只比「模块 + 工具」这一对（参数值里有 `<tmp>` / `…` 这类占位，逐字比会脆）。
+     * 取数面是 `scripts/ship*.mjs` **整个族**，不是某一个文件：cnb 调用从编排入口
+     * 搬去平台侧模块时，只读单份文件的提取会抓到 0 条 ⇒ 两侧都空集、于是恒绿，
+     * 而下面那条前置断言就是拦住这种「提取坏了却看起来像结论」的。 */
+    const shipDir = path.resolve(__dirname, "../scripts");
+    const src = readdirSync(shipDir)
+      .filter((f) => /^ship.*\.mjs$/.test(f))
+      .map((f) => readFileSync(path.join(shipDir, f), "utf8"))
+      .join("\n");
     /** 从 `cnbJson(run, ["pulls", "post-pull", …])` 里抽出前两个字符串。 */
     const called = new Set<string>();
     for (const m of src.matchAll(
@@ -428,7 +503,9 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
 
 describe("main()：用注入的假执行者钉住「哪些命令真的会被跑」", () => {
   /**
-   * 注入执行者的返回形状 —— 与 `ship.mjs` 里 `makeRunner` 的逐字同形。
+   * 注入执行者的返回形状 —— 与 `ship-exec.mjs` 的 `ExecResult` 同形。
+   * 「同形」不是这句注释自己保证的：`main({ run })` 的入参类型就是那个 typedef，
+   * 少一个字段（尤其 `stderr`）会当场在 `fake()` 的调用点报 TS 错。
    * 这里用 TS 语法而不是 JSDoc `@type`：本文件是 `.ts`，而 JSDoc 的变量/参数注解
    * 只在 `.js` / `.mjs` 里被采纳，在 `.ts` 里会被静默忽略（实测报
    * `Property 'branch' does not exist on type '{}'`）。
@@ -456,6 +533,9 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     upstream?: string | null;
     /** 那条上游引用在不在本地（验不验得过）。false = `rev-parse --verify` 退非 0。 */
     baseExists?: boolean;
+    /** 远端默认分支的符号引用（`git symbolic-ref refs/remotes/<远端>/HEAD`）。
+     *  `null` = 这台克隆没有它（那样就只能推 `<远端>/master`，且要读得出是推的）。 */
+    remoteHead?: string | null;
   };
 
   /**
@@ -486,6 +566,12 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
        * 判的是夹具自己的形状。 */
       if (cmd === "git" && key.includes("@{u}"))
         return ok(env.upstream === null ? "" : (env.upstream ?? "cnb/master"));
+      /* 主干那一条有本地可读的权威事实：远端的 `HEAD` 符号引用。
+       * 夹具默认给出（与真实克隆一致），`remoteHead: null` 那一格专门演「没有它」。 */
+      if (cmd === "git" && key.includes("symbolic-ref"))
+        return env.remoteHead === null
+          ? { status: 1, stdout: "", stderr: "", error: null }
+          : ok(env.remoteHead ?? "refs/remotes/cnb/master");
       if (cmd === "git" && key.includes("--abbrev-ref")) return ok(branch);
       if (cmd === "git" && key === "remote") return ok("cnb\n");
       if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
@@ -499,13 +585,19 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         return ok(frags.map((f) => `?? ${f}`).join("\n"));
       if (cmd === "git" && key.includes("status --porcelain"))
         return ok(dirty.map((f) => `M  ${f}`).join("\n"));
-      // 分支相对上游**已提交**的碎片（同一条分支上第二次跑就靠这一格不为空）。
-      // 基线名由 `resolveUpstream` 推（本仓是 `cnb/master`）—— 夹具跟着它，不写死 origin。
+      /* 分支相对上游**已提交**的碎片（同一条分支上第二次跑就靠这一格不为空）。
+       * 这里**不**按某个写死的基线名命中 —— 命中基线名等于替被测代码担保「它选的
+       * 那条引用是对的」。改为照 git 的语义答：拿 HEAD 自己这条分支的远端副本当基线
+       * 就是自己比自己 ⇒ 结果必空，这正是那条缺陷的现场。 */
       if (
         cmd === "git" &&
-        key.includes("diff --name-only cnb/master...HEAD -- changelog.d")
-      )
+        key.includes("diff --name-only") &&
+        key.includes("...HEAD")
+      ) {
+        const base = key.replace("diff --name-only ", "").split("...")[0] ?? "";
+        if (base === `cnb/${branch}`) return ok("");
         return ok((env.branchFrags ?? []).join("\n"));
+      }
       if (cmd === "git" && key.startsWith("commit"))
         return {
           status: env.commitStatus ?? 0,
@@ -679,6 +771,55 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(all).toContain("碎片 1 份");
     expect(all).not.toContain("没有 changelog.d/ 碎片");
     expect(code).toBe(CODE.GREEN);
+  });
+
+  it("上游就是这条分支自己的远端副本时，基线要退回主干而不是拿自己比自己", async () => {
+    /* 现场（实测撞在 `pnpm ship --no-wait` 上）：`git push -u origin feat/x` 之后，
+     * `@{u}` 变成 `origin/feat/x` —— 那是**这条分支自己**在远端的副本，不是主干。
+     * 而 `resolveUpstream` 那一档①「有上游就用上游」不区分这两件事，于是
+     * `git diff --name-only origin/feat/x...HEAD` 拿到**恒空**（自己与自己比），
+     * 碎片那一查报 0 份 ⇒ 「单 PR 单变更不成立」⇒ 每次推送之后重新跑都会被拒，
+     * 且理由听起来完全正当。上一那条用例只覆盖了「上游是主干」的形状，
+     * 所以这一格当时没有被抓到。 */
+    const heard: string[] = [];
+    const { run } = fake({
+      frags: [],
+      branchFrags: ["changelog.d/0-already-committed.md"],
+      upstream: "cnb/feat/x",
+    });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    const all = heard.join("\n");
+    expect(all, `基线取成了分支自己的副本 ⇒ ${all.split("\n")[0]}`).toContain(
+      "基线 cnb/master",
+    );
+    expect(all).toContain("碎片 1 份");
+    expect(code).toBe(CODE.GREEN);
+  });
+
+  it("远端没有 HEAD 符号引用时，退回 <远端>/master 并读得出是推的", async () => {
+    const heard: string[] = [];
+    const { run } = fake({
+      frags: [],
+      branchFrags: ["changelog.d/0-already-committed.md"],
+      upstream: "cnb/feat/x",
+      remoteHead: null,
+    });
+    await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    const all = heard.join("\n");
+    expect(all).toContain("基线 cnb/master");
+    expect(all).toContain("碎片 1 份");
   });
 
   it("提交信息走 argv 直传 —— 一个临时文件都不建", async () => {

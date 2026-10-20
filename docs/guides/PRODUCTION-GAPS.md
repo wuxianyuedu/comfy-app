@@ -554,8 +554,7 @@
 - [ ] **C7 未关 `poweredByHeader`**；`typescript.ignoreBuildErrors:true`。证据：`next.config.js`（0 命中）/ `:17-19`。
 - [ ] **C8 `shadcn` CLI 错放 `dependencies`**。证据：`package.json:83`。
 - [x] **D1 日志无轮转无上限 —— 已闭合，且台账原描述本身是过时的（ISSUE #1611 阶段三 D 段盘点）**。
-      **主通道**在 ISSUE #1326 就闭环了：一次启动一份文件（`<来源>-<YYYYMMDD-HHmmss>.log`）
-      + `pruneRuntimeLogFiles` 每来源留 20 份 + 用例 + 规范 07 §7.29 写明 ——
+      **主通道**在 ISSUE #1326 就闭环了：一次启动一份文件（`<来源>-<YYYYMMDD-HHmmss>.log`）+ `pruneRuntimeLogFiles` 每来源留 20 份 + 用例 + 规范 07 §7.29 写明 ——
       台账那句「固定名 `app-runtime.log` 纯 append」说的**不是**主通道。
       真正的残留只有一处：`scripts/dev-launcher.mjs` 的 `appendRuntimeWarning()`
       仍按固定名 `app-runtime.log` 追加（壳过期 / pnpm 不匹配两条预检提醒发生在
@@ -712,7 +711,9 @@
 
 - [ ] **E1 提交时只跑一小撮用例**：原记「pre-commit 仅跑 7 测试文件（1.6%）」的形态已
       变过一次——现在是**固定 9 份结构守护 + 沿静态 import 图解析出的受影响用例**
-      （`scripts/affected-tests.mjs`，规范 §13.5.8），改到哪测到哪这条已落地。仍未解决
+      （`scripts/affected-tests.mjs`，规范 §13.5.8），改到哪测到哪这条已落地；**2026-10-20
+      起这一层的执行者换成平台侧 PR 流水线的 `受影响用例` 一格**（本地两个执行者撤销的
+      原因：共享机上的失效形态是 forks worker 调度超时而不是用例红，见 §13.5.25）。仍未解决
       的两点：① 靠运行时 `readdir` 自扫扫描面的判据不会被「改了某份 check 脚本」拉进
       这一层（实测撞到过一次：那条红在 master 静置到全量复跑才看见）；② `check:all` 只有
       4 项、不含棘轮/E2E/覆盖率。证据：`.githooks/pre-commit:63-70`；`scripts/quality-gate.mjs:39-65`。
