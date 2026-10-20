@@ -18,8 +18,8 @@
 | 框架 | Next.js 16.3（App Router, Turbopack） | `next dev --turbo` 开发 |
 | 语言 | TypeScript 7（strict） | `tsc --noEmit` 零错误为提交门槛 |
 | 全栈类型安全 | tRPC 11 + @tanstack/react-query | superjson 序列化 |
-| ORM | Drizzle ORM + better-sqlite3 | schema 在 `src/server/db/schema.ts`，数据访问收敛到 `src/lib/core/repository*` |
-| 认证 | better-auth 1.3 | 会话接入 tRPC context |
+| ORM | Drizzle ORM + SQLite | schema 在 `src/server/db/schema.ts`，服务端驱动以 `src/server/db.ts` 的 import 为准，数据访问收敛到 `src/lib/core/repository*` |
+| 认证 | better-auth | 会话接入 tRPC context；版本以 `package.json` 为准 |
 | 样式 | Tailwind CSS 4 | `@tailwindcss/postcss` |
 | 画布 | @xyflow/react 12 | 工作流画布 + 项目画布 |
 | 状态 | zustand 5 | 轻量全局状态（debug-store 等） |
@@ -27,7 +27,12 @@
 | 桌面壳 | Tauri 2 | 套壳 WebView2 |
 | 日志 | pino + pino-pretty | 服务端结构化日志 |
 
-**开发端口**：dev server `localhost:3100`；本地 ComfyUI `:{{comfyui.port}}`。
+**开发端口**：dev server `localhost:3100` —— 这一行保留的是**静态链**的直观值，
+由 `tests/check-doc-references.test.ts` 钉着（别按「文档里不要写死端口」那条去删它）。
+`pnpm dev` 实际监听的口不在那个数上：它由 `scripts/app-port.mjs` 按 `.env` 的
+`COMFYAPP_PORT` → 检出路径推导，Node / PowerShell / Python / Rust 四侧同一套判据，
+照抄 `:3100` 去连开发服会 `ERR_CONNECTION_REFUSED`。两条链的口径见 launch-and-build §1.1
+与 `docs/reference-facts.md` 的 `dev.port` / `dev.port.derived` 两行。本地 ComfyUI `:{{comfyui.port}}`。
 
 ---
 
@@ -385,7 +390,7 @@ CHANGELOG 写**对外差异**。完整细则见
 
 ```bash
 pnpm install        # postinstall 接上 git hooks（scripts/install-git-hooks.mjs）
-pnpm dev            # 开发（Turbopack localhost:3100）
+pnpm dev            # 开发（Turbopack；端口由 scripts/app-port.mjs 按检出推导，不固定）
 pnpm build && pnpm start   # 生产预览
 ```
 
