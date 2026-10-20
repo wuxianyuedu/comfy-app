@@ -28,10 +28,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import {
-  FINGERPRINT_FILE,
-  pnpmInstallFingerprint,
-} from "./ci-deps-face.mjs";
+import { FINGERPRINT_FILE, pnpmInstallFingerprint } from "./ci-deps-face.mjs";
+import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -103,6 +101,56 @@ export function planSlot(input) {
 }
 
 /**
+ * 槽根 = **这个作业的工作区里 `pnpm` 自己回答的那个 store 所在的卷** 下的 `ci-cache/<包名>`。
+ *
+ * 不写死盘符，理由不是风格：这台机器的 runner 就在今天从 `F:` 搬到了 `G:`，而写死的
+ * `F:\runner\ci-cache\…` 会跟着一起留在 F: —— 于是槽与**这个作业真正用的那个 store 跨卷**，
+ * pnpm 从硬链接退化成整树复制（实测一个槽的净成本从 52 MiB 变成表观的 982 MiB）。
+ * 「同卷」是这件事全部收益的前提，所以它必须是**推导出来的**，不是抄下来的。
+ *
+ * 为什么问 `pnpm store path` 而不是问 runner 目录或盘符：那条命令用的解析面与
+ * `pnpm install` 在同一次构建里用的是**同一条**（实测随 cwd 变：从 `F:\AI\…` 答
+ * `F:\.pnpm-store\v11`、从 `G:\runner` 答 `G:\.pnpm-store\v11`、从 `C:` 的用户临时目录
+ * 答 `C:\Users\…\pnpm\store\v11`）。所以只要 store 搬到哪儿，槽就跟到哪儿，不需要有人
+ * 记得改配置 —— 而「有人记得改」正是被删掉的那个写死值的失效方式。
+ *
+ * `COMFY_CI_CACHE_ROOT` 仍然优先：那是「这台机器想把缓存放到另一块盘」的显式出口，
+ * 但用它的人要自己承担同卷这件事。
+ *
+ * @param {{cwd: string, env?: Record<string, string | undefined>,
+ *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} io
+ * @returns {{root: string | null, from: string}} `from` 会进日志（答案与它的来源必须一起读）
+ */
+export function resolveCacheRoot(io) {
+  const env = io.env ?? {};
+  const explicit = (env[CACHE_ROOT_ENV] ?? "").trim();
+  if (explicit) return { root: explicit, from: `环境变量 ${CACHE_ROOT_ENV}` };
+  const run = io.run;
+  if (!run) return { root: null, from: "无 pnpm 出口 ⇒ 不猜路径" };
+  const res = run(["store", "path"], { cwd: io.cwd });
+  const store = String(res?.stdout ?? "").trim();
+  if ((res?.status ?? 1) !== 0 || !store) {
+    return {
+      root: null,
+      from: "问不出 store ⇒ 不设槽（宁可不省，也不猜一个卷）",
+    };
+  }
+  let name = "repo";
+  try {
+    name = String(
+      JSON.parse(fs.readFileSync(path.join(io.cwd, "package.json"), "utf8"))
+        .name ?? "repo",
+    ).toLowerCase();
+  } catch {
+    /* 读不到包名就用一个中性目录名 —— 它只用于区分同机上的不同仓库。 */
+  }
+  return {
+    root: path.join(path.parse(store).root, "ci-cache", name),
+    from: `由 store ${store} 所在卷推导`,
+  };
+}
+
+/**
  * 读一个槽的现状（只有两种「读不到」被区分开：目录不在 / 在但没有已装产物）。
  *
  * @param {string | null} slot @param {string} cwd 解析相对路径的基准（测试给临时目录）
@@ -125,14 +173,21 @@ function readSlot(slot, cwd) {
 /**
  * 入口：算键 + 出读数。恒退 0（性质见文件头）。
  *
- * @param {{cwd?: string, env?: Record<string, string | undefined>, log?: (line: string) => void}} [io]
+ * @param {{cwd?: string, env?: Record<string, string | undefined>, log?: (line: string) => void,
+ *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} [io]
+ *   `run` 是问 `pnpm store path` 的那条出口 —— 用例注入它，就不必真起一次 pnpm。
  * @returns {number}
  */
 export function main(io = {}) {
   const cwd = io.cwd ?? ROOT;
   const env = io.env ?? process.env;
   const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
-  const cacheRoot = (env[CACHE_ROOT_ENV] ?? "").trim() || null;
+  const run =
+    io.run ??
+    ((args, opts) => runPnpmSync(args, opts));
+  const resolved = resolveCacheRoot({ cwd, env, run });
+  const cacheRoot = resolved.root;
+  log(`[缓存槽读数] 槽根来源：${resolved.from}`);
   const key = pnpmInstallFingerprint(cwd);
   /* 槽路径只由「槽根 + 键」决定，不含任何磁盘事实 ⇒ 先算它、再读它的现状、最后交给
    * `planSlot` 判关系（顺序反过来就得在 plan 里再算一遍路径，那是第二份事实）。 */
