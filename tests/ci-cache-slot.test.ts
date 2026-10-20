@@ -21,6 +21,7 @@ import {
   CACHE_ROOT_ENV,
   main,
   planSlot,
+  resolveCacheRoot,
   SLOT_ACTIONS,
   slotPath,
 } from "../scripts/ci-cache-slot.mjs";
@@ -99,6 +100,8 @@ describe("键的来源与读数形态", () => {
     const code = main({
       cwd: ROOT,
       env: { [CACHE_ROOT_ENV]: "" },
+      // 不注入就会真去起一次 pnpm 问 store（用例不许依赖宿主的 pnpm 与网络）。
+      run: () => ({ status: 1 }),
       log: (l) => lines.push(l),
     });
     expect(code).toBe(0);
@@ -147,5 +150,81 @@ describe("键的来源与读数形态", () => {
       log: (l) => lines.push(l),
     });
     expect(lines.join("\n")).toContain("结论 reuse");
+  });
+});
+
+describe("槽根的推导（不写死盘符）", () => {
+  /** 与真仓库同卷的一个假 store 路径（`pnpm store path` 会答成这个形态）。 */
+  const storeOnThisVolume = () =>
+    path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
+
+  it("显式 `COMFY_CI_CACHE_ROOT` 优先，且来源被点名（那是「这台机器要放另一块盘」的出口）", () => {
+    const out = resolveCacheRoot({
+      cwd: ROOT,
+      env: { [CACHE_ROOT_ENV]: "D:/somewhere/else" },
+      run: () => {
+        throw new Error("显式配了就不该再起 pnpm");
+      },
+    });
+    expect(out.root).toBe("D:/somewhere/else");
+    expect(out.from).toContain(CACHE_ROOT_ENV);
+  });
+
+  it("没配时由 store 推导，并且**与 store 同卷**（跨卷 ⇒ 硬链接退化成整树复制）", () => {
+    const store = storeOnThisVolume();
+    const out = resolveCacheRoot({
+      cwd: ROOT,
+      env: {},
+      run: () => ({ status: 0, stdout: `${store}\n` }),
+    });
+    expect(out.root).not.toBeNull();
+    expect(path.parse(out.root!).root).toBe(path.parse(store).root);
+    expect(
+      (out.root!).endsWith(path.join("ci-cache", "comfy-app-t3")),
+    ).toBe(true);
+    expect(out.from).toContain(store);
+  });
+
+  it("runner 换盘 ⇒ 推导跟着换，配置一个字都不用改（这一条就是那次搬家要防的事）", () => {
+    const answerFor = (driveRoot: string) =>
+      path.join(driveRoot, ".pnpm-store", "v11");
+    const rootOf = (driveRoot: string) =>
+      resolveCacheRoot({
+        cwd: ROOT,
+        env: {},
+        run: () => ({ status: 0, stdout: answerFor(driveRoot) }),
+      }).root;
+    const a = rootOf("F:\\")!;
+    const b = rootOf("G:\\")!;
+    expect(path.parse(a).root).not.toBe(path.parse(b).root);
+    expect(a).toContain("ci-cache");
+    expect(b).toContain("ci-cache");
+  });
+
+  it("问不出 store ⇒ 不设槽（宁可不省，也不猜一个卷）", () => {
+    expect(
+      resolveCacheRoot({ cwd: ROOT, env: {}, run: () => ({ status: 1 }) }).root,
+    ).toBeNull();
+    expect(
+      resolveCacheRoot({
+        cwd: ROOT,
+        env: {},
+        run: () => ({ status: 0, stdout: "   \n" }),
+      }).root,
+    ).toBeNull();
+    expect(resolveCacheRoot({ cwd: ROOT, env: {} }).root).toBeNull();
+  });
+
+  it("读数里必须连着来源一起出现（一个路径孤零零摆在那儿，读的人不知道它是哪来的）", () => {
+    const lines: string[] = [];
+    main({
+      cwd: ROOT,
+      env: {},
+      run: () => ({ status: 0, stdout: `${storeOnThisVolume()}\n` }),
+      log: (l: string) => lines.push(l),
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("槽根来源");
+    expect(text).toContain(".pnpm-store");
   });
 });

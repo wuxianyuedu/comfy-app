@@ -53,7 +53,7 @@ import {
   pnpmInstallFingerprint,
 } from "./ci-deps-face.mjs";
 import { linkDependencies, unlinkDependencies } from "./base-check.mjs";
-import { CACHE_ROOT_ENV, planSlot, slotPath } from "./ci-cache-slot.mjs";
+import { planSlot, resolveCacheRoot, slotPath } from "./ci-cache-slot.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +70,15 @@ export const MAX_SLOT_KEYS = 4;
 
 /** 锁的失效时刻（毫秒）：拿着一把没主的锁比没有锁更坏，所以给一个明确的过期。 */
 export const LOCK_STALE_MS = 20 * 60 * 1000;
+
+/**
+ * 淘汰的 TTL 闸门（毫秒）：**比一次构建的墙钟长**，所以「正被人用」的键必然落在闸门内。
+ * 取 26 小时而不是 24 小时，是为了让每日那一跑（04:00）与它前后那跑不互相把对方的树删掉。
+ */
+export const SLOT_TTL_MS = 26 * 60 * 60 * 1000;
+
+/** 「最近用过」的邮票文件名（内容就是一个毫秒时刻）。 */
+export const SLOT_USED_FILE = ".ci-slot-used";
 
 const LOCK_FILE = ".ci-slot.lock";
 const JOB_HOOK_SCRIPT = path.join("scripts", "install-git-hooks.mjs");
@@ -141,7 +150,9 @@ export function materializeSlotInputs(input) {
  */
 export function runJobLifecycle(io = {}) {
   const jobRoot = io.jobRoot ?? ROOT;
-  const spawn = io.spawn ?? ((exe, args, opts) => ({ status: spawnSync(exe, args, opts).status }));
+  const spawn =
+    io.spawn ??
+    ((exe, args, opts) => ({ status: spawnSync(exe, args, opts).status }));
   const res = spawn(process.execPath, [JOB_HOOK_SCRIPT], {
     cwd: jobRoot,
     stdio: "inherit",
@@ -150,7 +161,10 @@ export function runJobLifecycle(io = {}) {
   if (status !== 0) {
     return { ok: false, why: `补跑 install-git-hooks 退 ${status}` };
   }
-  return { ok: true, why: "作业侧 `.git/config` 那笔已补（hooksPath + lfs 过滤器）" };
+  return {
+    ok: true,
+    why: "作业侧 `.git/config` 那笔已补（hooksPath + lfs 过滤器）",
+  };
 }
 
 /**
@@ -303,45 +317,96 @@ export function statfsFreeBytes(target) {
 }
 
 /**
- * 按键控的 LRU 淘汰：只留最近用过的 `keep` 个键，**当前键永不淘汰**。
+ * 「这一跑开始用这个槽了」的记号 —— 接槽那一刻写一个毫秒时刻。
  *
- * 「最近用过」取目录 mtime —— 接槽那次会碰到它，所以命中即续期，不需要另记一本账。
+ * 为什么不能拿目录 mtime 当「最近用过」：接槽（在**作业**里建一条 junction）根本不碰槽目录，
+ * 而运行期那些写入（`.vite` 之类）落在 `node_modules` 里面、也不碰槽根那一层的 mtime。
+ * 于是「天天被命中的热键」可能看起来最旧 —— 按 mtime 淘汰会**删掉另一个作业正在用的树**，
+ * 那一个构建的依赖当场消失。这一枚邮票就是为了让淘汰读到「用过」这个真事实。
  *
- * @param {{cacheRoot: string, keep?: number, currentKey?: string | null}} io
- * @returns {string[]} 被删掉的键（目录名）
+ * @param {string} slot @param {number} [now] @returns {boolean} 写成功与否（失败不判红）
+ */
+export function markSlotUsed(slot, now = Date.now()) {
+  try {
+    fs.writeFileSync(path.join(slot, SLOT_USED_FILE), `${now}\n`);
+    return true;
+  } catch {
+    /* 邮票写不上 ⇒ 该键之后会被「读不到最近使用」保护住（不淘汰），不该为此让这一跑红。 */
+    return false;
+  }
+}
+
+/**
+ * 这个槽最近什么时候被用过。
+ *
+ * @param {string} slot @returns {number | null} 读不到 ⇒ null（null 一律**不淘汰**）
+ */
+export function slotLastUsed(slot) {
+  try {
+    const n = Number(
+      fs.readFileSync(path.join(slot, SLOT_USED_FILE), "utf8").trim(),
+    );
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 按键控的 LRU 淘汰，**外加一道 TTL 闸门**。
+ *
+ * 两道的分工要说清，因为它们是两件事：
+ * - `keep` 管**盘**（实测每键净占约 52 MiB，四个不到 0.3 GiB）；
+ * - `ttlMs` 管**别的作业还在不在用**。并发作业下我的键是 Y，把键 X 判成「最久没用」删掉，
+ *   而 X 上正有一个构建接在那棵树 ⇒ 那一个构建的依赖树当场消失。TTL 比一次构建的墙钟长
+ *   （默认 26 小时 vs 单条流水线实测几分钟到二十几分钟），所以「正在用」的键必然落在闸门内；
+ *   代价是盘可能暂时超出 `keep` —— 那是**正确性换空间**，方向只许这么换。
+ * - **读不到邮票的键一律留着**：宁可留一个来历不明的槽多占 52 MiB，也不赌它没人用。
+ *
+ * @param {{cacheRoot: string, keep?: number, currentKey?: string | null,
+ *   now?: number, ttlMs?: number}} io
+ * @returns {{evicted: string[], held: string[]}} 删掉的与因闸门留下的
  */
 export function pruneSlots(io) {
-  const { cacheRoot, keep = MAX_SLOT_KEYS, currentKey = null } = io;
+  const {
+    cacheRoot,
+    keep = MAX_SLOT_KEYS,
+    currentKey = null,
+    now = Date.now(),
+    ttlMs = SLOT_TTL_MS,
+  } = io;
   let entries;
   try {
     entries = fs.readdirSync(cacheRoot, { withFileTypes: true });
   } catch {
-    return [];
+    return { evicted: [], held: [] };
   }
   const keyed = entries
     .filter((e) => e.isDirectory() && e.name !== currentKey)
-    .map((e) => {
-      const abs = path.join(cacheRoot, e.name);
-      let mtimeMs = 0;
-      try {
-        mtimeMs = fs.statSync(abs).mtimeMs;
-      } catch {
-        /* 读不到时间的排最后：先淘汰来历不明的那一个。 */
-      }
-      return { key: e.name, abs, mtimeMs };
-    })
-    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    .map((e) => ({
+      key: e.name,
+      abs: path.join(cacheRoot, e.name),
+      lastUsed: slotLastUsed(path.join(cacheRoot, e.name)),
+    }))
+    .sort((a, b) => (b.lastUsed ?? 0) - (a.lastUsed ?? 0));
   const budget = Math.max(0, keep - (currentKey ? 1 : 0));
   const evicted = [];
+  const held = [];
   for (const item of keyed.slice(budget)) {
+    const fresh = item.lastUsed === null || now - item.lastUsed < ttlMs;
+    if (fresh) {
+      held.push(item.key);
+      continue;
+    }
     try {
       fs.rmSync(item.abs, { recursive: true, force: true });
       evicted.push(item.key);
     } catch {
       /* 删不掉就留在账上：多留一个槽不坏正确性，报一次红才坏。 */
+      held.push(item.key);
     }
   }
-  return evicted;
+  return { evicted, held };
 }
 
 /**
@@ -366,7 +431,11 @@ export function readSlotState(slot) {
   }
   if (!exists) return { treePresent, fingerprint: null, unreadable: false };
   try {
-    return { treePresent, fingerprint: fs.readFileSync(file, "utf8").trim(), unreadable: false };
+    return {
+      treePresent,
+      fingerprint: fs.readFileSync(file, "utf8").trim(),
+      unreadable: false,
+    };
   } catch {
     return { treePresent, fingerprint: null, unreadable: true };
   }
@@ -392,7 +461,13 @@ export function applySlot(io = {}) {
   const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
   const run = io.run ?? ((args, opts) => runPnpmSync(args, opts));
   const spawn = io.spawn;
-  const cacheRoot = (env[CACHE_ROOT_ENV] ?? "").trim();
+  const resolved = resolveCacheRoot({
+    cwd,
+    env,
+    run: (args, opts) => run(args, opts),
+  });
+  const cacheRoot = resolved.root;
+  log(`[缓存槽] 槽根 ${cacheRoot ?? "（未设）"} · 来源：${resolved.from}`);
   const key = pnpmInstallFingerprint(cwd);
   const slot = cacheRoot && key ? slotPath(cacheRoot, key) : null;
   const state = slot
@@ -400,7 +475,9 @@ export function applySlot(io = {}) {
     : { treePresent: false, fingerprint: null, unreadable: false };
   /* 读不动 ⇒ 既不接也不重装：这一跑没省到时间是小事，把别人正在用的树删了是事故。 */
   if (state.unreadable) {
-    log("[缓存槽] 槽里有指纹文件但这一趟读不动 ⇒ 不判「键变了」、不接、不删（退回普通装）");
+    log(
+      "[缓存槽] 槽里有指纹文件但这一趟读不动 ⇒ 不判「键变了」、不接、不删（退回普通装）",
+    );
     return {
       handled: false,
       action: "no-cache",
@@ -414,7 +491,7 @@ export function applySlot(io = {}) {
     slotFingerprint: state.fingerprint,
   });
   log(`[缓存槽] ${plan.action} · ${plan.why}`);
-  if (!slot || plan.action === "no-cache") {
+  if (!cacheRoot || !slot || plan.action === "no-cache") {
     return { handled: false, action: plan.action, why: plan.why };
   }
   const slotModules = path.join(slot, "node_modules");
@@ -426,6 +503,7 @@ export function applySlot(io = {}) {
       return { handled: false, action: "reuse", why: "链未建立" };
     }
     const life = runJobLifecycle({ jobRoot: cwd, spawn });
+    markSlotUsed(slot, io.now ? io.now() : Date.now());
     log(`[缓存槽] 接槽完成 ${link} · 作业侧：${life.why}`);
     return { handled: true, action: "reuse", why: life.why };
   }
@@ -466,16 +544,29 @@ export function applySlot(io = {}) {
       };
     }
     fs.writeFileSync(path.join(slot, FINGERPRINT_FILE), `${key}\n`);
-    const evicted = pruneSlots({ cacheRoot, currentKey: key });
-    if (evicted.length > 0) {
-      log(`[缓存槽] LRU 淘汰 ${evicted.length} 个键：${evicted.map((k) => k.slice(0, 8)).join(", ")}`);
+    markSlotUsed(slot, io.now ? io.now() : Date.now());
+    const { evicted, held } = pruneSlots({
+      cacheRoot,
+      currentKey: key,
+      now: io.now ? io.now() : Date.now(),
+    });
+    if (evicted.length > 0 || held.length > 0) {
+      log(
+        `[缓存槽] 配额档：淘汰 ${evicted.length} 个（${evicted.map((k) => k.slice(0, 8)).join(", ") || "无"}）` +
+          `·超配额但留着 ${held.length} 个（TTL 内或读不到邮票 ⇒ 不敢删别人可能在用的树）`,
+      );
     }
     const link = linkDependencies(slot, cwd);
     if (!link) {
       log("[缓存槽] 槽装好了，但作业里已有一棵树 ⇒ 不动它（下一次命中时再接）");
-      return { handled: false, action: plan.action, why: "槽已就绪，本次未接管" };
+      return {
+        handled: false,
+        action: plan.action,
+        why: "槽已就绪，本次未接管",
+      };
     }
     const life = runJobLifecycle({ jobRoot: cwd, spawn });
+    markSlotUsed(slot, io.now ? io.now() : Date.now());
     log(`[缓存槽] 装完并接上 ${link} · 作业侧：${life.why}`);
     return { handled: true, action: plan.action, why: life.why };
   } finally {

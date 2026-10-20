@@ -17,9 +17,25 @@
  *      `index → logger → … → index`。环检测只认真实存在的边，所以此前不报红 ——
  *      本用例直接断言该反例为环，锁住「为什么这里不许 `export *`」这个理由。
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+/* 扫描面上的「列到名字、读时已没」由这一层地基统一回答（`tests/gate-scan-read.test.ts`
+ * 是它自己的判据）：`tests/` 下那些自造自删的并发探针（`.setup-cleanup-probe-*.test.tsx`）
+ * 与本用例同时活动，CI 上撞出来的是一条不含本判据、也不含真凶的 `ENOENT` 栈。 */
+const requireCjs = createRequire(import.meta.url);
+const reader = requireCjs("../scripts/gate-scan-read.cjs") as {
+  dirExists: (dir: string) => boolean;
+  readForScan: (abs: string) => string | null;
+  walkForScan: (
+    dir: string,
+    fileRe: RegExp,
+    opts?: { skipDirs?: Set<string> },
+  ) => string[];
+  vanishedNote: (count: number) => string;
+};
 
 const ROOT = process.cwd();
 const INDEX = join(ROOT, "src", "lib", "core", "index.ts");
@@ -64,18 +80,46 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
       expect(names).toContain("SkillSeed");
 
       // 反向：扫全仓（含测试 / 脚本），每个转出的符号必须至少有一处引用。
-      const corpus = ["src", "tests", "scripts", "e2e"]
-        .flatMap((dir) => walkAll(join(ROOT, dir)))
+      const roots = ["src", "tests", "scripts", "e2e"].map((d) =>
+        join(ROOT, d),
+      );
+      /* 「根不在」与「条目消失」是两回事（`gate-scan-read` 那条口径）：一份都没读到
+       * 却报绿，比崩掉更坏。老写法把 `readdirSync` 的 ENOENT 一并吞成空数组，
+       * 于是重命名一个顶层目录就能让本用例静默失去覆盖面。 */
+      const missingRoots = roots.filter((r) => !reader.dirExists(r));
+      expect(
+        missingRoots,
+        "扫描根缺失 ⇒ 这一轮的语料是残缺的，「无人引用」这个结论没有依据：" +
+          missingRoots.join(", "),
+      ).toEqual([]);
+      let vanished = 0;
+      const corpus = roots
+        .flatMap((dir) => walkAll(dir))
         .filter((f) => f !== INDEX)
-        .map((f) => stripComments(readFileSync(f, "utf8")))
+        .map((f) => {
+          /* 消失 ⇒ 这一轮没读到，计入读数而不是崩掉整条判据（读不到 ≠ 没有违规，
+           * 但「列到名字、读时已没」的那一份内容里也不可能藏着引用）。 */
+          const text = reader.readForScan(f);
+          if (text === null) {
+            vanished += 1;
+            return "";
+          }
+          return stripComments(text);
+        })
         .join("\n");
+      if (vanished > 0) {
+        /* 静默跳过等于让本用例在它其实没读过的文件上假装绿 —— 读数要出来。
+         * 打印排在断言之前：断言失败时 vitest 会把这一段一起带出去。 */
+        console.info(`[core-barrel]${reader.vanishedNote(vanished).trim()}`);
+      }
       const orphaned = names.filter(
         (n) => !new RegExp(`\\b${n}\\b`).test(corpus),
       );
       expect(
         orphaned,
         "以下符号被 `core/index.ts` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n" +
-          "要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。",
+          "要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。" +
+          reader.vanishedNote(vanished),
       ).toEqual([]);
     },
   );
@@ -105,22 +149,16 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
   });
 });
 
-/** 递归列出目录下的源码文件（文档与产物不参与）。 */
-function walkAll(dir: string, out: string[] = []): string[] {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return out;
-  }
-  for (const name of entries) {
-    if (name === "node_modules" || name === ".next" || name === ".git")
-      continue;
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) walkAll(full, out);
-    else if (/\.(ts|tsx|mjs|cjs)$/.test(name)) out.push(full);
-  }
-  return out;
+/** 递归列出目录下的源码文件（文档与产物不参与）。
+ *
+ * 遍历这一步走 `scripts/gate-scan-read.cjs` 那一份地基（AGENTS 硬规则 24），不再自己
+ * `readdirSync` + `statSync`：后者在「列到名字 → 取类型」之间还有一次消失窗口
+ * （CI 上崩的是读取那一跳，枚举这一跳同形）。本仓早就为这件事写过唯一一份实现，
+ * 在这里留第二份弱化版只会让下一次竞态换个栈再崩一次。 */
+function walkAll(dir: string): string[] {
+  return reader.walkForScan(dir, /\.(ts|tsx|mjs|cjs)$/, {
+    skipDirs: new Set([".git", ".next", "node_modules"]),
+  });
 }
 
 /** 有向图环检测（DFS + 递归栈）。 */

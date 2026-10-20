@@ -75,7 +75,8 @@
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
  *   pnpm ship --merge                          # 允许在 CI 绿时执行 squash 合并
  *   pnpm ship --dry-run                        # 只打印将要执行的命令，一条都不执行（阻塞照报）
- *   pnpm ship --only=poll                      # 单跑一段（排查用，见 PHASES）
+ *   pnpm ship --only=preflight               # 单跑阶段 0 看读数字段（其余段都排在它后面，
+ *                                            #  单跑会落不出任何结论 ⇒ 退 2，见 `finish`）
  *   pnpm ship --no-wait                        # 建完 PR 就停，不轮询 build
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge
@@ -585,6 +586,20 @@ async function runFlow(deps, tmpFiles) {
    * @returns {number} 合并后的退出码
    */
   function finish(cs) {
+    /* 一条结论都没有 ≠ 「都跑了且是绿的」。这一格错过一次：`--only=commit` /
+     * `--only=push` / `--only=pull-request` 会把阶段 0 整段跳过（后面每一段都嵌在
+     * `want("preflight")` 里面），于是 `cs` 是空数组，而 `combineShipCodes([])`
+     * 回 `0` —— 屏幕上落出「全绿到终态」，实际**一段都没跑**。三态口径里那第三条
+     * 「没跑起来 ⇒ 2」本来就是给这种形状准备的，只是空数组此前没人接。
+     * 空账这一格按 `NOT_RUN` 而不是按「请求过的阶段列表」判：将来再加段、或有人
+     * 把某段改成条件跳过，都掉不进同一个假绿灯。 */
+    if (cs.length === 0) {
+      log(
+        `[ship] 本次没有任何一段落下结论${opt.only ? `（--only=${opt.only} 用不上：阶段 0 之外的每一段都排在它后面）` : ""}` +
+          " ⇒ 记「没跑起来」（exit 2），**不是**「通过」。",
+      );
+      return CODE.NOT_RUN;
+    }
     const code = combineShipCodes(cs);
     const word =
       code === CODE.GREEN
