@@ -73,6 +73,7 @@
  *   pnpm ship --message-file .git/msg.txt      # 多行提交信息走文件 —— `pnpm run` 会把
  *                                              #  argv 里的真换行改写成字面量 \n，多行别从命令行进
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
+ *   pnpm ship --title "…"                      # 覆盖标题（默认取分支第一笔非常规提交）
  *   pnpm ship --merge                          # 允许在 CI 绿时执行 squash 合并
  *   pnpm ship --dry-run                        # 只打印将要执行的命令，一条都不执行（阻塞照报）
  *   pnpm ship --only=preflight               # 单跑阶段 0 看读数字段（其余段都排在它后面，
@@ -489,7 +490,9 @@ async function runFlow(deps, tmpFiles) {
         codes.push(CODE.RED);
         return finish(codes);
       }
-      const proof = readProof(root);
+      /* 证明的读取也走这一次注入的解析器 —— 少了这个参数，注入只覆盖临时文件那一半，
+       * 而这一格会去读这台机器真实的 `.git`（用例本地绿、节点红就是这么来的）。 */
+      const proof = readProof(root, resolveDir);
       if (proof) {
         log(
           `[ship] ✓ 合并前证明：head ${short(proof.headSha)} · 上游 ${short(proof.upstreamSha)} · ${proof.verifiedAt || "?"}`,
@@ -526,6 +529,7 @@ async function runFlow(deps, tmpFiles) {
         frags,
         baseRef,
         baseBranch,
+        explicitTitle: opt.title,
       });
       if (!number) {
         codes.push(CODE.NOT_RUN);
@@ -573,6 +577,7 @@ async function runFlow(deps, tmpFiles) {
             up,
             merge: opt.merge,
             buildState,
+            explicitTitle: opt.title,
           }),
         );
       }

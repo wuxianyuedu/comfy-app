@@ -145,8 +145,8 @@
 | --------------------------- | ------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------- |
 | `path.tauri.conf`           | Tauri 配置                | `src-tauri/tauri.conf.json`           | 窗口与构建配置                                                                     |
 | `path.lib.rs`               | Rust 壳入口               | `src-tauri/src/lib.rs`                | 窗口逻辑 / 端口协调                                                                |
-| `path.dev-launcher`         | 启动编排脚本（Windows）   | `scripts/dev-launcher.ps1`            | Windows 侧进程编排者（taskkill / Job Object）                                      |
-| `path.dev-launcher.mjs`     | 启动编排脚本（跨平台）    | `scripts/dev-launcher.mjs`            | Linux / macOS 侧进程编排者（进程组 / 会话锚点），与 .ps1 同契约同产物（规范 §3.3） |
+| `path.dev-launcher`         | 启动编排入口（Windows 双击） | `scripts/dev-launcher.ps1`            | 只做「定位项目根 → 调用 `.mjs` → 透传退出码」的薄入口，**不含任何 Windows 专属编排**（硬规则 12；长度与内容由 `tests/cross-platform-launcher.test.ts` 守着） |
+| `path.dev-launcher.mjs`     | 启动编排者（全平台唯一实现） | `scripts/dev-launcher.mjs`            | 端口 / 缓存指纹 / 进度快照 / 回收语义都在这一个文件里，与 `.ps1` 同契约同产物（规范 §3.3） |
 | `path.dev-launcher-session` | 启动会话锚点              | `scripts/dev-launcher-session.mjs`    | PID + 心跳落盘，崩溃后仍可回收孤儿                                                 |
 | `path.shell-launch-rs`      | 壳自编排模块              | `src-tauri/src/shell_launch.rs`       | 起编排器 / 认亲 / 回收 / 运行模式                                                  |
 | `path.start-entry`          | 桌面壳启动入口            | `tools/start/start-tauri.ps1`         | 双击即启动（直启 `app.exe`）                                                       |
@@ -162,7 +162,8 @@
 ## 3. 校验范围
 
 > `pnpm doc:check` 校验纳入 `SCOPED_DOCS` 的文档集合，现已**全量纳入** `docs/standards/`
-> 规范正文（01~17 章）与 `docs/guides/` 规范指南，连同启动链路/含值类文档共 26 篇
+> 的规范正文（01~18 章）与 `docs/guides/` 的规范指南。**篇数不在这里记账**：
+> `scripts/doc-facts.cjs` 的 `SCOPED_DOCS` 就是那份清单，多一篇少一篇都以它为准
 > （「全量」由 §3.1 的校验范围守卫机器判定：新增规范文档未登记即报错，不再靠人记得）：
 >
 > - **启动链路类**：`docs/standards/launch-and-build.md`、`docs/startup-hotreload.md`、
@@ -252,10 +253,11 @@
 > | C2 章节锚点        | 3 行窗口内同一 bullet 同时出现 `docs/standards/NN-*.md` 与 `§NN.M`（且 `major == NN`）时，去目标文件里定位 `^#{1,6}\s+(§)?NN.M\b` 标题锚点                    | 单级 `§N`（如 `§17`）不校验，粒度太粗易混淆；`launch-and-build.md` 无 `NN-` 前缀不进入匹配面，避免与 `standards/NN-*` 里同号章节跨文件误配（本仓库 `§9.5` 在 `standards/09` 与 `launch-and-build` 各有一份）。                                                                                                                                                                                                                                                                                                                                                                                                     |
 > | C4 台账命令口径    | `checkLedgerCommands` 的遍历集合是 `[AGENTS_MD_PATH, ...SCOPED_DOCS]`，让 AGENTS.md 与 §2「台账命令口径守卫」（防 npm/npx 表述漂移，AGENTS 硬规则 1）同层受控 | AGENTS.md **刻意不进** `SCOPED_DOCS`——进则被 `render-doc-placeholders` 复制成 `docs/generated/AGENTS.md`，产物里没有 {{占位符}} 需要替换、只是同一份内容，反而误导读者去改产物（规范 §13.5.5「禁止手改生成物」）。现有 `checkLedgerCommands` 已带说明性引用豁免（同句出现「改为 / 修正 / pnpm / 禁止 / 违反」放行），无需为本条单开新判据。                                                                                                                                                                                                                                                                        |
 
-守卫**已随 `doc:check` 一起进 `.githooks/pre-commit`**（D 组「文档引用与权威源一致」，
-ISSUE #1371 把旧的「手动档」签字翻掉了；改 AGENTS.md 或调整 `docs/standards/**` 章节号后
-不必再靠人记得跑 `pnpm doc:check`）。回归测试见 `tests/check-doc-references.test.ts`
-「AGENTS.md ↔ standards 漂移守卫」段。
+守卫的执行者现在在**平台侧**：`.cnb.yml` 的「文档引用与权威源一致」那一格（ISSUE #1975 把它
+从 pre-commit 挪走——它判的是读者面的一致性、挡不住任何一次代码回归，逐条实测与口径见
+规范 §13.5.17）。本地这一格**不再随每次提交自动跑**，所以改完 AGENTS.md 或调整
+`docs/standards/**` 章节号后要自己跑一次 `pnpm doc:check`，别把它读成「提交时会顺带判」。
+回归测试见 `tests/check-doc-references.test.ts`「AGENTS.md ↔ standards 漂移守卫」段。
 
 ## 3.7 门禁步骤的引用口径：写标签，不写序号（ISSUE #1374）
 

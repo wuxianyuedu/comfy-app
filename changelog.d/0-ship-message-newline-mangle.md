@@ -4,7 +4,8 @@
   `pnpm exec node -e … "一行<换行>二行"` 收到**真换行**，而 `pnpm ship --message "一行<换行>二行"`
   （即 `pnpm run ship`）在 node 的 argv 里已成字面量 `\n` —— 屏幕上那条回显
   `node scripts/ship.mjs "--message" "一行\n二行"` 就是证据。后果不是排版：整条信息变成
-  **一行 subject**，而 PR 标题取的是 `git log -1 --pretty=%s` ⇒ 实测那样一份标题被平台拒
+  **一行 subject**，而当时 PR 标题取的正是 `git log -1 --pretty=%s` ⇒ 实测那样一份标题被平台拒
+  （这一格后来由 #2064 改掉：标题现在取「分支相对主干的第一笔非常规提交」，不再看顶端那一笔）
   （`pulls post-pull` 响应可解析、`data` 里没有号），并且一旦提交成功，那一坨就进了历史。
 - 现在提交前先认这个形状（`ship-core.mjs` 的 `looksNewlineMangled`：必须**同时**满足
   「没有真换行」与「出现字面量 `\n`」），命中就**停在 `git add` 与 `git commit` 之前**

@@ -10,17 +10,17 @@
 
 ## 技术栈
 
-| 层       | 技术                                                                        |
-| -------- | --------------------------------------------------------------------------- |
-| 前端框架 | Next.js 16（App Router, React 19, TypeScript）                              |
-| 样式     | Tailwind CSS v4（`@tailwindcss/postcss`）                                   |
-| API      | tRPC v11 + TanStack React Query                                             |
-| 鉴权     | better-auth                                                                 |
-| 数据库   | Drizzle ORM + better-sqlite3（SQLite；schema 见 `src/server/db/schema.ts`） |
-| 状态管理 | Zustand                                                                     |
-| 桌面壳   | Tauri v2（Rust）+ WebView2                                                  |
-| 测试     | Vitest（单元/组件）、Playwright（e2e）                                      |
-| 文档     | TypeDoc（输出至 `docs/`）                                                   |
+| 层       | 技术                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------- |
+| 前端框架 | Next.js 16（App Router, React 19, TypeScript）                                                              |
+| 样式     | Tailwind CSS v4（`@tailwindcss/postcss`）                                                                   |
+| API      | tRPC v11 + TanStack React Query                                                                             |
+| 鉴权     | better-auth                                                                                                 |
+| 数据库   | Drizzle ORM + SQLite（服务端驱动以 `src/server/db.ts` 的 import 为准；schema 见 `src/server/db/schema.ts`） |
+| 状态管理 | Zustand                                                                                                     |
+| 桌面壳   | Tauri v2（Rust）+ WebView2                                                                                  |
+| 测试     | Vitest（单元/组件）、Playwright（e2e）                                                                      |
+| 文档     | TypeDoc（输出至 `docs/`）                                                                                   |
 
 ---
 
@@ -192,9 +192,9 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 起组件工作台                            | `pnpm storybook`                               | `tools/start/storybook.ps1`       |
 | 出一份节点镜像的操作计划（装机提速）    | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）          |
 
-> 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`（本地钩子；平台侧 CI 已随 ISSUE #623 删除，
-> 没有那一层兜底 —— 口径见 `docs/standards/13-提交与-code-review.md` §13.5）
-> 核对它们与磁盘 / `package.json` 三向对齐 —— 表里的路径与 `pnpm` 命令都真实存在、
+> 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`，
+> 平台侧也有同名那一格在跑（在场哪几格以 `.cnb.yml` 自己列的为准；口径见 `docs/standards/13-提交与-code-review.md` §13.5）——
+> 它核对它们与磁盘 / `package.json` 三向对齐 —— 表里的路径与 `pnpm` 命令都真实存在、
 > `tools/**` 下的双击入口至少出现在**这里或 `tools/README.md`**（后者是完整清单，
 > 本表只收日常动作）—— **新入口没登记、或新增动作却只写了一侧，都会提交失败**。
 
@@ -417,8 +417,9 @@ pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占�
 > 四条要知道的边界：① 退出码三态，**`2` 是「有一步没跑起来」，不等于通过**；
 > ② 默认**不合并**，要 `--merge`；③ 不代写提交信息、不替你 `git add -A`
 > （树脏又没给 `--message` 就停在提交那一段）；**多行提交信息用 `--message-file`** ——
-> `pnpm run` 会把 argv 里的真换行改写成字面量 `\n`，整条信息会压成一行 subject，而 PR 标题
-> 取的就是那一行；④ **它说「提交段全过」不等于 tsc / eslint /
+> `pnpm run` 会把 argv 里的真换行改写成字面量 `\n`，整条信息会压成一行 subject 直接进历史；
+> PR 标题与 squash 那一行取的是**这条分支相对主干的第一笔非常规提交**（不是顶端那一笔，
+> 觉得那笔写小了可以 `--title "…"` 覆盖）；④ **它说「提交段全过」不等于 tsc / eslint /
 > 用例过了** —— `pre-commit` 默认只跑形态档，本地要全套加 `COMFY_HEAVY_GATES=1`（规范 §13.5.25）。
 > 全部旗标与阶段见 `scripts/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
 
