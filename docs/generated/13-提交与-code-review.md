@@ -1266,6 +1266,51 @@ workspace`，最后一段恒定，只取 `basename` 就把有区分度的那一�
 `走缓存槽（install-into-slot）` / `槽未接管（原因）⇒ 照常装`；再加一条物理核对 ——
 槽根目录在不在、里面有没有 `.ci-deps-fingerprint`。日志绿 + 槽根空 = 没生效。
 
+**淘汰那一刀也差点删到别人正在用的树**（写代码时想窄了，这里连同修法一起留档）：
+`pruneSlots` 原先按**目录 mtime** 做 LRU，注释还写着「接槽那次会碰到它，所以命中即续期」——
+那句是**错的**：接槽是在**作业**里建一条 junction，根本不碰槽目录那一层；运行期的写入
+（`.vite` 之类）落在 `node_modules` 里面，也不碰槽根的 mtime。于是「天天被命中的热键」
+看起来可能最旧，而并发作业下我的键是 Y、把键 X 判成最久不用**整目录删掉** ——
+X 上那个构建的依赖树当场消失。现在的形态：
+
+- 接槽/装槽那一刻写一枚 `.ci-slot-used`（内容就是一个毫秒时刻）—— 这是「用过」的**唯一出处**，
+  不靠文件系统时间猜；
+- 淘汰要**同时**满足「落在配额之外」与「过了 TTL（26 小时，比最坏的构建墙钟长一个身位）」；
+- **读不到邮票的键一律留着** —— 宁可多占 52 MiB，也不赌它没人用。
+  ⇒ 代价写明白：盘可能暂时超出 `keep`。这是**用空间换正确性**，方向只许这么换。
+
+`keep` 管盘、TTL 管「有没有人还在用」，这两件事不能由同一个数字管 —— 混成一个就是上面那个 bug
+的形状。用例里三条分别钉住：过期才可淘汰、TTL 内一个都不删、没邮票的留着。
+
+**槽根不写盘符，由 `pnpm store path` 推导**（同日另一件事逼出来的订正：这台机器的 runner 从
+`F:` 搬到了 `G:`）。原先 `.cnb.yml` 里两处写着 `F:\runner\ci-cache\comfy-app-t3` —— 搬家之后
+那句话不会跟着搬，于是槽留在 F: 而这个作业真正用的 store 在 G:（实测 `pnpm store path` 的答案
+**随 cwd 变**：从 `F:\AI\…` 答 `F:\.pnpm-store\v11`、从 `G:\runner` 答 `G:\.pnpm-store\v11`、
+从 `C:` 的用户临时目录答 `C:\Users\…\pnpm\store\v11`）。跨卷那一刻 pnpm 不再硬链接，
+**一个槽的净成本从 52 MiB 变成表观的 982 MiB** —— 也就是「同卷」不是选址偏好，而是这件事
+全部收益的前提，所以它必须由推导得到，不能由人抄下来。
+
+现在的规则（`resolveCacheRoot`）：`COMFY_CI_CACHE_ROOT` 若显式配置则优先（那是「这台机器要把
+缓存放另一块盘」的出口，用它的人自己承担同卷这件事）；否则在**作业根上**问一次
+`pnpm store path` —— 与那次 `pnpm install` 同一条 cwd、同一条解析面，所以答的就是它真正会用的
+store —— 取该 store 所在**卷根**下的 `ci-cache/<包名小写>`。问不出 store ⇒ **不设槽**
+（宁可不省，也不猜一个卷）。读数那一格会把**来源**与结论一起打印，因为一个孤零零的路径
+读不出它是配的还是推的。
+
+**同卷这件事有两条，不是一条**（第二条是别人一次真红教的，不是推演出来的）：
+
+| 那一条同卷 | 破了会怎样 | 症状落在哪儿 |
+| --- | --- | --- |
+| 槽 ⇄ **store** | pnpm 不做硬链接，退化成整树复制 | 没有红 —— 只有一个槽从 52 MiB 悄悄变成表观 982 MiB（量级看上面那张四数表） |
+| 槽 ⇄ **作业检出** | 作业里 `node_modules` 是指向槽的链接，于是「往 `node_modules` 里挪一个文件」这类 `rename` **直接失败** | 红在**别人的一条用例里**：`EXDEV: cross-device link not permitted, rename '<G:>\…\workspace\.storybook\generated\app-origin.json' -> '<G:>\…\workspace\node_modules\.cache\…'` |
+
+第二行就是 #2049 那批写死盘符的直接后果：runner 搬到 `G:` 之后作业在 G:、槽根还钉在 F:。
+所以 `planSlot` 多了一档 —— `sameVolume` 为假 ⇒ **no-cache**，且那句话把 EXDEV 的后果写进去；
+读数与执行两条链共用这一个判断（不各判一份，同 `COMFY_AFFECTED_CHANGED` 那条纪律）。
+推导出来的根天然满足两条：`pnpm store path` 的答案本来就随 cwd 变，作业在哪个卷，store 与槽
+就在哪个卷。**显式 `COMFY_CI_CACHE_ROOT` 那个出口仍然留着**（换盘是真实需求），但它现在被这档
+管着 —— 配到别的卷上会被执行档自己拒掉并打印原因，而不是变成别人用例里一条看不懂的 EXDEV 红。
+
 **那条 store 残余已于当晚在节点身份上关掉**（#2050 的 runner 日志，`cnb build
 build-runner-download-log --pipelineId cnb-ous-1k5c5lpe5-001`）：节点上那次槽内安装自己写着
 `Content-addressable store is at: F:\.pnpm-store\v11` 与 `Packages are hard linked from the

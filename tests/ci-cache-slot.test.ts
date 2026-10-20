@@ -21,6 +21,8 @@ import {
   CACHE_ROOT_ENV,
   main,
   planSlot,
+  resolveCacheRoot,
+  sameVolumeAs,
   SLOT_ACTIONS,
   slotPath,
 } from "../scripts/ci-cache-slot.mjs";
@@ -28,10 +30,24 @@ import {
 const ROOT = path.resolve(__dirname, "..");
 const KEY = "a".repeat(64);
 
-/** 临时槽根（用真实文件系统跑 `readSlot` 那一侧，夹具造不出「目录在但没指纹」这一档）。 */
+/**
+ * 临时槽根（用真实文件系统跑 `readSlot` 那一侧，夹具造不出「目录在但没指纹」这一档）。
+ *
+ * ⚠️ 它必须与 `ROOT` **同卷**：执行档现在会拦跨卷的槽根（那条守卫是 #2049 之后一次
+ * `EXDEV` 真红换来的），而 `os.tmpdir()` 在 C:、本仓在 F: —— 拿 tmp 当槽根会让
+ * 「槽不在 ⇒ install-into-slot」这一档永远测不到，看起来像判据坏了。
+ * 落点取卷根下的临时目录，正是生产里推导出来的那个位置同一层。
+ */
 const made: string[] = [];
 function tmpRoot(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ci-slot-"));
+  const onRepoVolume = path.join(path.parse(ROOT).root, "comfy-slot-test");
+  let dir: string;
+  try {
+    dir = fs.mkdtempSync(onRepoVolume);
+  } catch {
+    // POSIX 上卷根不可写 ⇒ 退回 tmp（此时同卷守卫在该平台上恒真，不影响这些用例）。
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "ci-slot-"));
+  }
   made.push(dir);
   return dir;
 }
@@ -99,6 +115,8 @@ describe("键的来源与读数形态", () => {
     const code = main({
       cwd: ROOT,
       env: { [CACHE_ROOT_ENV]: "" },
+      // 不注入就会真去起一次 pnpm 问 store（用例不许依赖宿主的 pnpm 与网络）。
+      run: () => ({ status: 1 }),
       log: (l) => lines.push(l),
     });
     expect(code).toBe(0);
@@ -147,5 +165,110 @@ describe("键的来源与读数形态", () => {
       log: (l) => lines.push(l),
     });
     expect(lines.join("\n")).toContain("结论 reuse");
+  });
+});
+
+describe("槽根的推导（不写死盘符）", () => {
+  /** 与真仓库同卷的一个假 store 路径（`pnpm store path` 会答成这个形态）。 */
+  const storeOnThisVolume = () =>
+    path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
+
+  it("显式 `COMFY_CI_CACHE_ROOT` 优先，且来源被点名（那是「这台机器要放另一块盘」的出口）", () => {
+    const out = resolveCacheRoot({
+      cwd: ROOT,
+      env: { [CACHE_ROOT_ENV]: "D:/somewhere/else" },
+      run: () => {
+        throw new Error("显式配了就不该再起 pnpm");
+      },
+    });
+    expect(out.root).toBe("D:/somewhere/else");
+    expect(out.from).toContain(CACHE_ROOT_ENV);
+  });
+
+  it("没配时由 store 推导，并且**与 store 同卷**（跨卷 ⇒ 硬链接退化成整树复制）", () => {
+    const store = storeOnThisVolume();
+    const out = resolveCacheRoot({
+      cwd: ROOT,
+      env: {},
+      run: () => ({ status: 0, stdout: `${store}\n` }),
+    });
+    expect(out.root).not.toBeNull();
+    expect(path.parse(out.root!).root).toBe(path.parse(store).root);
+    expect(out.root!.endsWith(path.join("ci-cache", "comfy-app-t3"))).toBe(
+      true,
+    );
+    expect(out.from).toContain(store);
+  });
+
+  it("runner 换盘 ⇒ 推导跟着换，配置一个字都不用改（这一条就是那次搬家要防的事）", () => {
+    const answerFor = (driveRoot: string) =>
+      path.join(driveRoot, ".pnpm-store", "v11");
+    const rootOf = (driveRoot: string) =>
+      resolveCacheRoot({
+        cwd: ROOT,
+        env: {},
+        run: () => ({ status: 0, stdout: answerFor(driveRoot) }),
+      }).root;
+    const a = rootOf("F:\\")!;
+    const b = rootOf("G:\\")!;
+    expect(path.parse(a).root).not.toBe(path.parse(b).root);
+    expect(a).toContain("ci-cache");
+    expect(b).toContain("ci-cache");
+  });
+
+  it("问不出 store ⇒ 不设槽（宁可不省，也不猜一个卷）", () => {
+    expect(
+      resolveCacheRoot({ cwd: ROOT, env: {}, run: () => ({ status: 1 }) }).root,
+    ).toBeNull();
+    expect(
+      resolveCacheRoot({
+        cwd: ROOT,
+        env: {},
+        run: () => ({ status: 0, stdout: "   \n" }),
+      }).root,
+    ).toBeNull();
+    expect(resolveCacheRoot({ cwd: ROOT, env: {} }).root).toBeNull();
+  });
+
+  it("读数里必须连着来源一起出现（一个路径孤零零摆在那儿，读的人不知道它是哪来的）", () => {
+    const lines: string[] = [];
+    main({
+      cwd: ROOT,
+      env: {},
+      run: () => ({ status: 0, stdout: `${storeOnThisVolume()}\n` }),
+      log: (l: string) => lines.push(l),
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("槽根来源");
+    expect(text).toContain(".pnpm-store");
+  });
+});
+
+describe("第二条同卷义务：槽与作业必须同卷", () => {
+  it("同卷判真、跨卷判假（Windows 上就是盘符；POSIX 上根恒 `/` ⇒ 恒真）", () => {
+    expect(sameVolumeAs(ROOT, path.join(ROOT, "node_modules"))).toBe(true);
+    if (process.platform === "win32") {
+      expect(sameVolumeAs("D:/ci-cache/repo", ROOT)).toBe(false);
+      // 空串**不是**「读不到」：`path.resolve("")` 落在 cwd ⇒ 判同卷。
+      // 「没有槽根」这件事由上一格（`planSlot` 的 `!cacheRoot`）去说，别指望这里拦。
+      expect(sameVolumeAs("", ROOT)).toBe(true);
+    }
+  });
+
+  it("跨卷 ⇒ no-cache，且那句话把后果说清（红会落在别人一条用例里）", () => {
+    const out = planSlot({
+      cacheRoot: "D:/ci-cache/repo",
+      key: KEY,
+      sameVolume: false,
+    });
+    expect(out.action).toBe("no-cache");
+    expect(out.why).toContain("同一卷");
+    expect(out.why).toContain("EXDEV");
+  });
+
+  it("没给这条事实时不拦（默认同卷 ⇒ 既有四档的形状不变）", () => {
+    expect(planSlot({ cacheRoot: "D:/ci-cache/repo", key: KEY }).action).toBe(
+      "install-into-slot",
+    );
   });
 });

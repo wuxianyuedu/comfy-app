@@ -26,11 +26,14 @@ import {
   FREE_SPACE_FLOOR_BYTES,
   hasRoomForSlot,
   materializeSlotInputs,
+  markSlotUsed,
   MAX_SLOT_KEYS,
   pruneSlots,
   runJobLifecycle,
   slotInputs,
+  slotLastUsed,
   SLOT_ENABLED_ENV,
+  SLOT_TTL_MS,
   statfsFreeBytes,
 } from "../scripts/ci-slot-apply.mjs";
 import {
@@ -461,27 +464,85 @@ describe("作业里那条链的摘除（绝不穿链装）", () => {
 });
 
 describe("LRU 与作业侧补写", () => {
-  it("超出配额先淘汰最久没用的，当前键永不淘汰", () => {
+  it("超出配额**且过了 TTL** 才淘汰；当前键永不淘汰", () => {
     const keys = Array.from({ length: MAX_SLOT_KEYS + 2 }, (_, i) => `k${i}`);
+    const now = 8 * 60 * 60 * 1000 * 1000;
     for (const k of keys) {
       const dir = path.join(cache, k);
       fs.mkdirSync(dir, { recursive: true });
-      // 名字越靠前越旧：用未来时间戳排最新的那几个。
-      const when = new Date(
-        Date.now() - (keys.length - Number(k.slice(1))) * 60_000,
+      // 名字越靠前越旧，且落在配额之外的那两个必须**超出 TTL** 才可淘汰。
+      markSlotUsed(
+        dir,
+        now - (keys.length - Number(k.slice(1))) * 10 * 60 * 60 * 1000,
       );
-      fs.utimesSync(dir, when, when);
     }
     const current = keys[keys.length - 1] ?? "";
-    const evicted = pruneSlots({ cacheRoot: cache, currentKey: current });
-    expect(evicted.length).toBe(2);
-    expect(evicted).not.toContain(current);
+    const out = pruneSlots({ cacheRoot: cache, currentKey: current, now });
+    expect(out.evicted.length).toBe(2);
+    expect(out.evicted).not.toContain(current);
+    expect(out.held).toEqual([]);
     expect(fs.existsSync(path.join(cache, current))).toBe(true);
   });
 
-  it("槽根不在 ⇒ 不抛，返回空淘汰清单（没得淘汰就是没得淘汰）", () => {
+  it("TTL 之内一律不删 —— 那条键可能正被另一个作业接在树上", () => {
+    // 并发作业下我的键是 e，把 a 判成「最久没用」删掉 ⇒ a 上那个构建的依赖树当场消失。
+    // 所以配额只管盘，「有没有人用」由 TTL 管；代价是盘可以暂时超出配额，方向只许这么换。
+    const now = 8 * 60 * 60 * 1000 * 1000;
+    const names = ["a", "b", "c", "d", "e"];
+    for (const [i, k] of names.entries()) {
+      const dir = path.join(cache, k);
+      fs.mkdirSync(dir, { recursive: true });
+      markSlotUsed(dir, now - (names.length - i) * 60_000);
+    }
+    const out = pruneSlots({ cacheRoot: cache, currentKey: "e", now });
+    expect(out.evicted).toEqual([]);
+    expect(out.held).toEqual(["a"]);
+    expect(fs.existsSync(path.join(cache, "a"))).toBe(true);
+  });
+
+  it("读不到邮票的键 ⇒ 留着（宁可多占 52 MiB，也不赌它没人用）", () => {
+    const dir = path.join(cache, "没有邮票的键");
+    fs.mkdirSync(dir, { recursive: true });
+    expect(slotLastUsed(dir)).toBeNull();
+    const now = Date.now();
+    // 把它排到配额之外（其余四个都比它「新」），它仍然不该被删。
+    for (const [i, k] of Array.from(
+      { length: MAX_SLOT_KEYS },
+      (_, j) => `n${j}`,
+    ).entries()) {
+      const other = path.join(cache, k);
+      fs.mkdirSync(other, { recursive: true });
+      markSlotUsed(other, now - i * 60_000);
+    }
+    const out = pruneSlots({ cacheRoot: cache, currentKey: null, now });
+    expect(out.evicted).not.toContain("没有邮票的键");
+    expect(out.held).toContain("没有邮票的键");
+    expect(fs.existsSync(dir)).toBe(true);
+  });
+
+  it("邮票就是「用过」这件事的唯一出处：接槽那一跑必须续期", () => {
+    fs.mkdirSync(path.join(slot, "node_modules"), { recursive: true });
+    fs.writeFileSync(path.join(slot, FINGERPRINT_FILE), `${key}\n`);
+    fs.rmSync(path.join(job, "node_modules"), { recursive: true, force: true });
+    const used = 1234567890;
+    applySlot({
+      cwd: job,
+      env: { [SLOT_ENABLED_ENV]: "1", COMFY_CI_CACHE_ROOT: cache },
+      run: () => ({ status: 0 }),
+      spawn: () => ({ status: 0 }),
+      probe: () => 100 * 1024 ** 3,
+      now: () => used,
+      log: () => undefined,
+    });
+    expect(slotLastUsed(slot)).toBe(used);
+  });
+
+  it("槽根不在 ⇒ 不抛，两个清单都空（没得淘汰就是没得淘汰）", () => {
     expect(pruneSlots({ cacheRoot: path.join(cache, "没有这个目录") })).toEqual(
-      [],
+      {
+        evicted: [],
+        held: [],
+      },
     );
   });
 
@@ -519,5 +580,42 @@ describe("常量与判据的配对", () => {
 
   it("开关的名字不许被改名改掉（`.cnb.yml` 与用例都按这个名字拨）", () => {
     expect(SLOT_ENABLED_ENV).toBe("COMFY_CI_SLOT");
+  });
+
+  it("TTL 必须显著长于一次最坏的构建墙钟 —— 短了就会删到别人正在用的树", () => {
+    // 单条流水线实测从几分钟到二十几分钟；跨天不可引用绝对数，所以这里只钉量级：
+    // 闸门取 26 小时，比「一天里最长的一次构建」还长一个身位。
+    expect(SLOT_TTL_MS).toBe(26 * 60 * 60 * 1000);
+    expect(SLOT_TTL_MS).toBeGreaterThan(24 * 60 * 60 * 1000);
+  });
+});
+
+describe("跨卷时执行档自己拦下来（win32 才有卷这个概念）", () => {
+  const maybe = process.platform === "win32" ? it : it.skip;
+  maybe("槽根在别的盘 ⇒ 不装、不建链，并说出 EXDEV 那一格", () => {
+    // 实测形态（#2049 之后那一次）：作业在 G:、槽根写死在 F:，于是
+    // `rename '<G:>\…\workspace\.storybook\generated\app-origin.json' ->
+    //  '<G:>\…\workspace\node_modules\.cache\…'` 报 EXDEV —— 红落在那条用例里，
+    // 原因在选址上。所以选址这一格必须由执行档自己拒掉，而不是让别人去猜。
+    fs.rmSync(path.join(job, "node_modules"), { recursive: true, force: true });
+    let installs = 0;
+    const out = applySlot({
+      cwd: job,
+      env: {
+        [SLOT_ENABLED_ENV]: "1",
+        COMFY_CI_CACHE_ROOT: "D:/ci-cache/comfy-app-t3",
+      },
+      run: () => {
+        installs += 1;
+        return { status: 0 };
+      },
+      spawn: () => ({ status: 0 }),
+      probe: () => 100 * 1024 ** 3,
+      log: () => undefined,
+    });
+    expect(out.handled).toBe(false);
+    expect(out.action).toBe("no-cache");
+    expect(installs).toBe(0);
+    expect(fs.existsSync(path.join(job, "node_modules"))).toBe(false);
   });
 });

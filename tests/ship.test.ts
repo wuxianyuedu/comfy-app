@@ -750,6 +750,42 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(heard.join("\n")).toContain("碎片 1 份");
   });
 
+  it("没有任何一段落下结论时不许退 0（--only=commit / push / pull-request 那一形）", async () => {
+    /* 阶段 0 之外的每一段都嵌在 `want("preflight")` 里面，所以单跑这三段时
+     * `codes` 是空数组，而 `combineShipCodes([])` 回 0 ⇒ 屏幕落出「全绿到终态」，
+     * 实际一段都没跑。实测（拆分之前的同一入口）：
+     * `node scripts/ship.mjs --only=commit --dry-run` 只打印那一句结论、退 0。 */
+    for (const phase of ["commit", "push", "pull-request"]) {
+      const heard: string[] = [];
+      const { run, calls } = fake();
+      expect(
+        await main({
+          root: process.cwd(),
+          run,
+          log: (s: string) => heard.push(s),
+          probeCnb: () => true,
+          args: [`--only=${phase}`],
+        }),
+        `--only=${phase} 一段都没跑，不该被读成「跑过了且没问题」`,
+      ).toBe(CODE.NOT_RUN);
+      /* 而且真的没伸手改世界：这三段各自的写动作一条都不该出现。 */
+      expect(
+        calls.filter((c) =>
+          ["git commit", "git push", "cnb pulls post-pull"].some((w) =>
+            c.startsWith(w),
+          ),
+        ),
+        `--only=${phase} 伸出了写动作`,
+      ).toEqual([]);
+      expect(heard.join("\n")).toContain("没有任何一段落下结论");
+    }
+    /* 反向：正常跑完阶段 0 的那几条不许被这条守卫误伤。 */
+    const { run } = fake();
+    expect(
+      await main({ ...quiet, run, args: ["--only=preflight", "--dry-run"] }),
+    ).toBe(CODE.GREEN);
+  });
+
   it("同一条分支上第二次跑（碎片已提交、工作树干净）不许被那条守卫拒掉", async () => {
     /* 这是把上一条从「恒真」改成「只看工作树」之后**新引入**的失效：
      * 第一次跑提交了碎片 ⇒ 工作树干净 ⇒ 只看工作树就恒假 ⇒
@@ -886,5 +922,40 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }
+  });
+
+  it("响应能解析但没有 PR 号时，不许念出「已建」—— 那句成功必须有号撑着", async () => {
+    /* 实测踩过的外形：`cnb pulls post-pull` 的响应**能解析**、`data` 里却没有号
+     * （这一次是 `--title` 里带 `--xxx=yyy` 经 PowerShell 宿主转发时失败），
+     * 而上一版先打印 `✓ 已建 PR #null` 再回来看值 —— 平台上根本没有那个 PR，
+     * 屏幕上写着成功。所以这一格把「念出口」排在「验到有号」之后，并把响应原文
+     * 与 stderr 一起转述出来：这一族宁可说一句「没跑起来」，也不许替执行者总结。 */
+    const heard: string[] = [];
+    const base = fake();
+    const run = (cmd: string, args: string[]): FakeResult => {
+      if (cmd === "cnb" && args.join(" ").includes("post-pull")) {
+        return {
+          status: 0,
+          stdout: '{"status":400,"data":{"message":"title invalid"}}',
+          stderr: "cnb: bad request",
+          error: null,
+        };
+      }
+      return base.run(cmd, args);
+    };
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: [],
+    });
+    const all = heard.join("\n");
+    expect(all, "没有号却念了「已建」").not.toContain("已建 PR");
+    expect(all).toContain("没有 PR 号");
+    // 执行者的原话必须能看见 —— 只说一句「没有结论」等于把线索吞了。
+    expect(all).toContain("title invalid");
+    expect(all).toContain("bad request");
+    expect(code).toBe(CODE.NOT_RUN);
   });
 });
