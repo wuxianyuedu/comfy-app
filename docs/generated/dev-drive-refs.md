@@ -201,23 +201,30 @@ Add-MpPreference -ExclusionPath "G:\"
 Windows 搜索索引同理，标成「不索引内容」即可（用户级，代价是一次全量属性改写）：
 
 ```powershell
-# 注意尾部必须带 \*：attrib 把 "G:\" 里的反斜杠当字面量，
-# 直接吐「File not found - G:\」而什么也不做（实测过）。
-attrib +I /S /D "G:\*"
+# 整盘一条命令：自己枚举、跳过符号链接与联接点
+$o = [System.IO.EnumerationOptions]::new()
+$o.RecurseSubdirectories = $true
+$o.AttributesToSkip = [System.IO.FileAttributes]::ReparsePoint   # 不跟 pnpm 那些符号链接
+$o.IgnoreInaccessible = $true
+foreach ($f in [System.IO.Directory]::EnumerateFiles('G:\', '*', $o)) {
+  $a = [System.IO.File]::GetAttributes($f)
+  if (-not ($a -band [System.IO.FileAttributes]::NotContentIndexed)) {
+    [System.IO.File]::SetAttributes($f, $a -bor [System.IO.FileAttributes]::NotContentIndexed)
+  }
+}
 ```
 
-> 整盘一次跑还有两个坑（都实测过）：① 回收站里的坏软链会让这次遍历**中途停下**，
-> 后半棵树（典型就是仓库那一片）拿不到标记 —— 实测第一趟 `.pnpm-store` 命中 100%、
-> 仓库命中 0%；② 跑完要抽查，别拿「命令没报错」当「标记到位了」。
-> 更稳的形态是按顶层目录分批（跳过回收站）：
-
-```powershell
-Get-ChildItem "G:\" -Directory -Force | Where-Object Name -ne '$RECYCLE.BIN' |
-  ForEach-Object { attrib +I /S /D "$($_.FullName)\*" }
-```
-
-> 这条标记只作用于**当前已有**的文件；新落盘的文件不继承它。
+> **为什么不给 `attrib`**（两个坑都实测过，别照抄旧命令）：
+> ① `attrib +I /S /D "G:\"` 直接吐 `File not found - G:\` —— 结尾的反斜杠被当字面量，
+> 整条命令一次都没生效；
+> ② 加上通配符（`attrib +I /S /D "G:\*"`）后，它会跟着 `node_modules` 里 pnpm 的
+> **符号链接**递归 —— 实测对着仓库跑 15 分钟、CPU 208 秒，仓库内标记覆盖仍是 **0%**
+> （`.pnpm-store` 那种没有符号链接的树倒是标上了）。
+> 上面这条自己枚举、显式跳过 reparse point，实测整盘几分钟跑完、覆盖率 100%。
+>
+> 另两条注意：这条标记只作用于**当前已有**的文件，新落盘的文件不继承它；
 > 想要一劳永逸，Windows 搜索的「索引选项 → 排除项」才是按目录长期生效的那一处。
+> 跑完要**抽查**（命令不报错 ≠ 标记到位）。
 
 ### 二、需要重格式化（动数据）
 

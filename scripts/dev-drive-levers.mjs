@@ -538,19 +538,25 @@ function searchIndexLever(drive) {
     status: "actionable",
     detail:
       "Windows 搜索服务在跑，会持续把开发盘上的内容读进索引；开发目录没有检索价值，" +
-      "标成「不索引内容」即可（代价：一次全量属性改写，跑完就不再打扰）。",
+      "标成「不索引内容」即可（代价：一次全量属性改写，实测整盘约几分钟；" +
+      "标记只作用于当前已有的文件，新落盘的不继承）。",
     actions: [
       {
-        label: "标记为不索引内容（用户级即可，量大时较慢）",
-        // 尾部必须带 `\*`：attrib 把 `G:\` 里的反斜杠当字面量，直接吐「File not found」而什么也不做。
-        command: `attrib +I /S /D "${drive}\\*"`,
+        label:
+          "标记为不索引内容（整盘一条命令：自己枚举、跳过符号链接与联接点，所以不会在 node_modules 里打转）",
+        command:
+          `$o=[System.IO.EnumerationOptions]::new();$o.RecurseSubdirectories=$true;` +
+          `$o.AttributesToSkip=[System.IO.FileAttributes]::ReparsePoint;$o.IgnoreInaccessible=$true;` +
+          `foreach($f in [System.IO.Directory]::EnumerateFiles('${drive}\\','*',$o)){` +
+          `$a=[System.IO.File]::GetAttributes($f);` +
+          `if(-not($a -band [System.IO.FileAttributes]::NotContentIndexed)){` +
+          `[System.IO.File]::SetAttributes($f,$a -bor [System.IO.FileAttributes]::NotContentIndexed)}}`,
         scope: "user",
       },
       {
-        label: "更稳的形态：按顶层目录分批（整盘一次跑会被回收站里的坏软链打断、漏掉后半棵树）",
-        command:
-          `Get-ChildItem "${drive}" -Directory -Force | Where-Object Name -ne '$RECYCLE.BIN' | ` +
-          `ForEach-Object { attrib +I /S /D "$($_.FullName)\\*" }`,
+        label:
+          "只标某一棵子树时也能用 attrib（注意尾部必须带 \\*，否则它什么也不做）",
+        command: `attrib +I /S /D "${drive}\\*"`,
         scope: "user",
       },
     ],
