@@ -609,4 +609,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 三十步门禁（红法全在别处）。触发面是那个脚本与 `.cnb.yml`，静态 import 图里
   // 只有它自己 —— 故进固定清单。
   "tests/ci-install-deps.test.ts",
+  // 「检出目录在哪」只许 scripts/git-dir.mjs 一处知道（ISSUE #2072）：四处硬拼那一族
+  // 回归时没有任何 import 图能替它兜底（改那些脚本不会把这条带进受影响集），必须固定跑。
+  "tests/git-dir-literal-scan.test.ts",
 ];

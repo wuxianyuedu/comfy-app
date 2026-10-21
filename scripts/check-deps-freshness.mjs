@@ -85,6 +85,7 @@ import {
   unresolvableDeclaredDeps,
 } from "./launcher-core/worktree.mjs";
 import { DEPENDENCY_FILES } from "./dependency-face.mjs";
+import { resolveGitDir } from "./git-dir.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -178,28 +179,11 @@ function git(args, cwd) {
 }
 
 /**
- * 本地检出的 gitdir —— 支持 worktree（`.git` 是文件、里面写着 `gitdir: ...`）。
- *
- * 不拼死 `.git/...` 的原因：本仓的开发流程里 `git worktree add` 是常态
- * （§13.6.2 让每个人在干净基线上复算门禁就是这么做的），而 worktree 里 `.git`
- * 是一个**文本文件**。拼死路径的表现是「远端引用永远不可知」—— 一条永远走不
- * 进去的判据。
- * @returns {string} gitdir 绝对路径（读不出时退回 `<root>/.git`，由调用方判可用性）
+ * 本地检出的 gitdir 解析统一收口到 `scripts/git-dir.mjs`（ISSUE #2072）：那里认
+ * worktree 里 `.git` 是个文件、并直接给 `git rev-parse --absolute-git-dir` 的真身。
+ * 本文件不再持第二份实现（旧实现还退回 `<root>/.git` 字面量，在 worktree 上指向
+ * 那个文件，远端引用永远查不到）。
  */
-export function resolveGitDir(root) {
-  const dotGit = path.join(root, ".git");
-  try {
-    if (fs.statSync(dotGit).isDirectory()) return dotGit;
-    const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(dotGit, "utf8"));
-    if (m) {
-      const target = m[1].trim();
-      return path.isAbsolute(target) ? target : path.resolve(root, target);
-    }
-  } catch {
-    /* 掉到下面的兜底 */
-  }
-  return dotGit;
-}
 
 /**
  * 远端引用（`origin/<branch>`）的取证时间 —— **以它自己的 reflog 为准**。
@@ -224,14 +208,9 @@ export function remoteRefTimestamp(root, rev = DEFAULT_REMOTE_REV) {
   const at = rev.lastIndexOf("/");
   const remote = at > 0 ? rev.slice(0, at) : "origin";
   const branch = at > 0 ? rev.slice(at + 1) : rev;
-  const log = path.join(
-    resolveGitDir(root),
-    "logs",
-    "refs",
-    "remotes",
-    remote,
-    branch,
-  );
+  const gitDir = resolveGitDir(root);
+  if (!gitDir) return null; // 不在 git 检出里 ⇒ 远端引用不可知
+  const log = path.join(gitDir, "logs", "refs", "remotes", remote, branch);
   try {
     return fs.statSync(log).mtimeMs;
   } catch {
@@ -329,7 +308,8 @@ export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
  */
 export function hasInProgressMerge(root) {
   try {
-    return fs.existsSync(path.join(resolveGitDir(root), "MERGE_HEAD"));
+    const gitDir = resolveGitDir(root);
+    return gitDir ? fs.existsSync(path.join(gitDir, "MERGE_HEAD")) : false;
   } catch {
     /* 解析不出 git 目录 ⇒ 当作「不是合并提交」，② 照常按分叉点判（保守方向：
        宁可多判一次，不可把「查不了」读成「没问题」—— 同 `readAtRev` 的口径）。 */
