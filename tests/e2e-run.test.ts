@@ -20,18 +20,30 @@ import { PYTHON_PREFLIGHT_ENV_KEY } from "../e2e/support/preflight-python.mjs";
 import {
   E2E_DIR,
   TRACK,
-  checkSchemaBeforeRun,
-  ensureSchemaBeforeRun,
   makePreflightCollectors,
   parseSkip,
   planRun,
   resolvePlaywrightInvocation,
   runChild,
   runPreflightReadings,
-  schemaPreflightDecision,
   shouldRecord,
   stripArgvSeparator,
 } from "../scripts/e2e-run.mjs";
+/* schema 预检那三张卡在 #1956 这一批里从 `e2e-run.mjs` 拆到了
+ * `e2e-schema-preflight.mjs`（R5 的 900 行硬闸，出口只有按职责拆）。判据直接指着
+ * 定义它们的那一份，不跟着走「转出去再用」的路 —— 多一层转发就多一处「改了实现
+ * 忘了改出口」的缝。 */
+import {
+  canAutoApply,
+  pendingStatements,
+  pushBlockedByTty,
+} from "../scripts/db-push-core.mjs";
+import {
+  checkSchemaBeforeRun,
+  dryRunConcluded,
+  ensureSchemaBeforeRun,
+  schemaPreflightDecision,
+} from "../scripts/e2e-schema-preflight.mjs";
 import {
   FRESHNESS_TRACKS,
   freshnessRecord,
@@ -148,6 +160,26 @@ describe("开跑前的 schema 预检（#1834 收尾的现场）", () => {
     "DROP INDEX `task_project_idx`;",
   ];
 
+  /* 两份 drizzle 的**原话**，临时副本上真跑抓下来的（仓库与活库未碰），逐行照抄
+   * （`[⣷]` 那行的 spinner 与 ANSI 清行序列对判据无影响，这里省掉）。
+   * 它们一起把「空清单」的两种成因钉死：条数相同，差别只在有没有那句终态。 */
+  const NO_CHANGES_OUTPUT = `No config path provided, using default 'drizzle.config.ts'
+Reading config file 'drizzle.config.ts'
+[✓] Pulling schema from database...
+
+[i] No changes detected`;
+  const BLOCKED_BEFORE_ENUMERATING_OUTPUT = `No config path provided, using default 'drizzle.config.ts'
+Reading config file 'drizzle.config.ts'
+[✓] Pulling schema from database...
+
+Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or process.stdout.isTTY is false). This can happen when running in CI, piped input, or non-interactive shells.
+    at render10 (…/drizzle-kit/bin.cjs:1450:31)
+    at promptNamedWithSchemasConflict (…/drizzle-kit/bin.cjs:32812:65)
+    at tablesResolver (…/drizzle-kit/bin.cjs:32001:60)
+    at applySqliteSnapshotsDiff (…/drizzle-kit/bin.cjs:29837:17)
+    at prepareSQLitePush (…/drizzle-kit/bin.cjs:32652:58)
+    at async sqlitePush (…/drizzle-kit/bin.cjs:82786:26)`;
+
   it("指纹一致 ⇒ 放行（正常机器的常态，且零成本——不起 drizzle）", () => {
     const d = schemaPreflightDecision({
       probe: "ready",
@@ -177,15 +209,108 @@ describe("开跑前的 schema 预检（#1834 收尾的现场）", () => {
     }
   });
 
-  it("指纹不一致但 dry-run 没有待执行语句 ⇒ 放行（指纹只是没登记）", () => {
+  it("指纹不一致、dry-run 交出终态却没有待执行语句 ⇒ 放行（指纹只是没登记）", () => {
     const d = schemaPreflightDecision({
       probe: "ready",
       fingerprintMatch: false,
       pending: [],
       autoApplyable: false,
+      /* 「清单是空的」在这一档的含义是 drizzle 说 `No changes detected` —— 它答了，
+       * 答案是「没差异」。下一档是它根本没答。 */
+      measured: true,
     });
     expect(d.verdict).toBe("proceed");
     expect(d.reason).toContain("没有待执行语句");
+  });
+
+  it("指纹不一致、**清单没拿到** ⇒ 阻断，不许读成「库本来就对」（ISSUE #1956）", () => {
+    /* 立案现场（本轮在临时副本上真跑复现，活库未碰）：库里那张 `workflowTemplate`
+     * 被改名走，diff 撞上「这是改名还是新建+删除」的询问 —— 它在**列出语句之前**
+     * 就要人回答，无 TTY 时当场抛，`about to execute` 那句根本不出现。于是
+     * `pendingStatements` 交出空清单，而旧判决把「没读到」读成「库本来就对」放行：
+     * 这一卡存在的理由（#1834 那批「库落后 → 接口 500 → 用例报元素没出现」的红）
+     * 恰恰被它自己放进了来。口径同 §13.6.2「拿不到测量 ≠ 测量结果是红的」，
+     * 反过来也不成立。 */
+    const d = schemaPreflightDecision({
+      probe: "ready",
+      fingerprintMatch: false,
+      pending: [],
+      autoApplyable: false,
+      measured: false,
+    });
+    expect(d.verdict).toBe("abort");
+    expect(d.reason).toContain("没交出语句清单");
+    /* 缺省方向：调用方**没写** measured 时也必须落阻断侧，不许默认成「拿到了」。 */
+    const omitted = schemaPreflightDecision({
+      probe: "ready",
+      fingerprintMatch: false,
+      pending: [],
+      autoApplyable: false,
+    });
+    expect(omitted.verdict).toBe("abort");
+  });
+
+  it("空清单的两种成因由 drizzle 的**原话**分开，不是由条数分开（#1956 的判据）", () => {
+    /* ① 库本来就对、只是指纹没登记 ⇒ 必须继续放行。堵掉它就是把 #1834 的解药
+     *    变成新的 blocker，所以这一形和下面那一形**同一条用例里**判。 */
+    const noChangesPending = pendingStatements(NO_CHANGES_OUTPUT);
+    expect(noChangesPending).toEqual([]);
+    expect(dryRunConcluded(NO_CHANGES_OUTPUT, noChangesPending)).toBe(true);
+    expect(
+      schemaPreflightDecision({
+        probe: "ready",
+        fingerprintMatch: false,
+        pending: noChangesPending,
+        autoApplyable: canAutoApply(noChangesPending),
+        measured: dryRunConcluded(NO_CHANGES_OUTPUT, noChangesPending),
+      }).verdict,
+    ).toBe("proceed");
+
+    /* ② 它在**列出语句之前**就要人回答（改名撞上重命名询问）⇒ 没拿到，不许放行。
+     *    与 ① 同样的空清单、同样的条数。 */
+    const blockedPending = pendingStatements(BLOCKED_BEFORE_ENUMERATING_OUTPUT);
+    expect(blockedPending).toEqual([]);
+    expect(pushBlockedByTty(BLOCKED_BEFORE_ENUMERATING_OUTPUT)).toBe(true);
+    expect(
+      dryRunConcluded(BLOCKED_BEFORE_ENUMERATING_OUTPUT, blockedPending),
+    ).toBe(false);
+    expect(
+      schemaPreflightDecision({
+        probe: "ready",
+        fingerprintMatch: false,
+        pending: blockedPending,
+        autoApplyable: canAutoApply(blockedPending),
+        measured: dryRunConcluded(
+          BLOCKED_BEFORE_ENUMERATING_OUTPUT,
+          blockedPending,
+        ),
+      }).verdict,
+    ).toBe("abort");
+
+    /* ③ 第三种「没拿到」：命令压根没起来（`pushSchema` 走 invocationFailed 那支时
+     *    firstOutput 是空的）。空文本也不是「库本来就对」。 */
+    expect(dryRunConcluded("", [])).toBe(false);
+  });
+
+  it("接线：那一趟 dry-run 的输出**真的**过了 `dryRunConcluded`（不是被写成常量 true）", () => {
+    /* 上一条判的是纯函数，这一条判的是**调用点认不认它** —— 只判纯函数的话，
+     * 有人把 `measured` 直接写成 `true`（那就是旧行为）一条用例都不会红。
+     * 三处读数注进来，两份原话各驱一遍整条链，不碰库也不起 drizzle。 */
+    const drive = (output: string) =>
+      checkSchemaBeforeRun(ROOT, {
+        sync: () => "ready",
+        fresh: () => ({ state: "outdated", detail: "指纹对不上" }),
+        dryRun: () => ({ firstOutput: output }),
+      });
+    const proceedRun = drive(NO_CHANGES_OUTPUT);
+    expect(proceedRun.verdict).toBe("proceed");
+    const blockedRun = drive(BLOCKED_BEFORE_ENUMERATING_OUTPUT);
+    expect(blockedRun.verdict).toBe("abort");
+    expect(blockedRun.reason).toContain("没交出语句清单");
+    /* 拦下那一档**没有** risky 清单（没读到语句，编不出逐条），所以出口话术里
+     * 那句「这是要人做『丢不丢得起』决定的变更」不许被套上来 —— 给没测到的东西
+     * 编一个诊断，和放行那一档是同一个错的两半。 */
+    expect(blockedRun.risky ?? []).toEqual([]);
   });
 
   it("待执行全是安全语句 ⇒ 放行（启动链路会后台应用，与不带这一卡时同行为）", () => {
@@ -220,7 +345,17 @@ describe("开跑前的 schema 预检（#1834 收尾的现场）", () => {
     const d = checkSchemaBeforeRun(ROOT);
     expect(["proceed", "ensure", "abort"]).toContain(d.verdict);
     expect(typeof d.reason).toBe("string");
-    if (d.verdict === "abort") expect(d.risky?.length ?? 0).toBeGreaterThan(0);
+    /* abort 有两条来路（#1956 之后）：**拿到清单且含丢数据语句**才带 risky；
+     * **没拿到清单**那条带不出语句 —— 拿「risky 必非空」判它等于把新那一档判成
+     * 用例红。这里按语义钉：有 risky 就逐条给全，没有就必须在 reason 里说清
+     * 「是读不出而不是库没问题」。 */
+    if (d.verdict === "abort") {
+      if ((d.risky?.length ?? 0) > 0) {
+        expect(d.reason).toContain("丢数据");
+      } else {
+        expect(d.reason).toContain("没交出语句清单");
+      }
+    }
   });
 });
 
