@@ -26,8 +26,12 @@
  * 5. 再单独跑一档「基线已清到 0」：`if (before && after > before)` 这类写法在 `before=0`
  *    时整条短路、拒涨分支根本不执行，而「治理到 0」恰恰是最不该松的那一刻；
  * 6. 第 4 步那句**拒涨的话本身**要给出可执行的下一步（先改再 `--update` / 明说不要用
- *    `--update` / 改成人的手工登记）—— 退出码判对了、话术把人指向一条自己会拒绝的命令，
- *    同样是在教人绕开判据（`check-tsc-diagnostic-executors.cjs` 就是这样落地的）。
+ *    `--update` / 改成人的手工登记 / 例外流程另给一个显式认账旗标 —— 四种形状的清单与
+ *    为什么这么分，只住在 `tests/helpers/ratchet-refusal.ts` 的文件头）。
+ *
+ *    第 6 步的实现只有一份，`COVERED_LOCALLY` 那四家的本地用例也调它 ——
+ *    那张表写的是「本地已覆盖拒涨」，而原先那四份钉的都是退出码加一个短语，
+ *    「出路是不是死路」这半边没有执行者（见下面 `COVERED_LOCALLY 点名的那份用例…` 那条）。
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -38,6 +42,10 @@ import {
   type GateRepo,
   type GateRepoOptions,
 } from "./helpers/gate-repo";
+import {
+  expectActionableRefusal,
+  ACTIONABLE_REFUSAL,
+} from "./helpers/ratchet-refusal";
 
 /** 一条棘轮的完整描述：脚本、基线落点、夹具输入、以及「怎么再加一条违规」。 */
 interface Ratchet {
@@ -342,16 +350,9 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
            * 判的对象是话术而不是退出码：`check-tsc-diagnostic-executors.cjs` 落地时红话写着
            * 「再跑 `--update`（= 把基线收紧到 N）」，而同一个 `--update` 对上涨正是非零拒绝 ——
            * 照它跑只会再吃一次红，真问题（「这条声明由谁执行」）一次都没被回答。
-           * 三种自洽写法都算通过：**先改再 --update**（把顺序写明）、**明说不要用
-           * `--update`**（把这条堵死）、**改成人的动作**（手工登记 / 逐条写理由）。
            * 这条只在 ④ 已经拦下的那条输出上判，所以判的是「拒涨那一刻说的话」，
-           * 不是脚本里随便哪句提到旗标的注释。 */
-          expect(
-            widen.output,
-            `${ratchet.script}：--update 拒涨了，但红话没给出可执行的下一步`,
-          ).toMatch(
-            /先[\s\S]{0,240}?(再|之后)[\s\S]{0,60}--update|不要用\s*`?--update`?|`?--update`?\s*(是|只用于|不能拿来|拒绝)|(手工|逐条)[\s\S]{0,60}(登记|改|写)/,
-          );
+           * 不是脚本里随便哪句提到旗标的注释。三种自洽写法的清单在 helper 文件头。 */
+          expectActionableRefusal(widen.output, ratchet.script);
         } finally {
           handle.dispose();
         }
@@ -432,6 +433,42 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
       expect(
         Object.keys(PENDING),
         "待配清单必须为空：新增的棘轮在同一批里就把拒涨判据配好",
+      ).toEqual([]);
+    });
+
+    it("死路那句话本身必须判红（反例钉子：新扩的分支不许把原始现场又放过去）", () => {
+      /* `check-tsc-diagnostic-executors.cjs` 当年落地的就是这一句 —— 它把上涨态的出路
+       * 指回同一个会 `exit 2` 拒绝这个方向的旗标。这条判据后来被扩到认四种形状
+       *（先改再 --update / 明说不要用·不给 --update / 人的动作 / 例外流程另给一个显式旗标），
+       * 每扩一次都可能顺手把这句放过去，所以把它钉成**否定式**期望：
+       * 第四个分支带的是 `--(?!update)`，认「另一个认账旗标」而不认把人推回 `--update`。
+       * 断的是**指令的形状**（一句真能被抄进终端的话），不是某个脚本的具体措辞。 */
+      const deadEnd =
+        "出口：再跑 `node scripts/check-tsc-diagnostic-executors.cjs --update`" +
+        "（= 把基线收紧到 60）";
+      expect(deadEnd).not.toMatch(ACTIONABLE_REFUSAL);
+    });
+
+    it("COVERED_LOCALLY 点名的那份用例必须真判过「拒涨话给出路」这一半", () => {
+      /* 这张表的语义是「沙箱造不出它们的输入面，所以由本地用例覆盖拒涨」——
+       * 实测那四份本地用例原先钉的都是**退出码 + 句子里的一个短语**
+       *（`toContain("拒绝把基线往上涨")` 那一形），而「那条出路是不是死路」这半边
+       * 只有上面第 ⑥ 步判过、而 ⑥ 只跑 `RATCHETS`。于是「表里点名了 = 判过了」
+       * 是一句没有执行者的声明，正是 §11.2.1 那一族（假保险的登记形态）。
+       * 这里把它接上：被点名的文件必须调用那份唯一实现（`tests/helpers/ratchet-refusal.ts`），
+       * 判的是「有没有这个执行者」，所以认符号名而不是认某句措辞或某种行形状。 */
+      const missing = Object.entries(COVERED_LOCALLY).filter(([, testFile]) => {
+        const src = readFileSync(
+          join(import.meta.dirname, "..", testFile),
+          "utf8",
+        );
+        return !/expectActionableRefusal\s*\(/.test(src);
+      });
+      expect(
+        missing.map(([b, f]) => `${b} → ${f}`),
+        "这几家被 COVERED_LOCALLY 归成「本地已覆盖」，但那份用例里没有一句在判" +
+          "「拒涨那句话给出的是上涨态里可执行的下一步」：请调用 " +
+          "`expectActionableRefusal(那次拒涨的输出, 脚本名)`",
       ).toEqual([]);
     });
 
