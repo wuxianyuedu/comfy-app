@@ -256,6 +256,17 @@
      先断言 `<html>` 的 class 已经在目标档 —— 它红了就钉死「provider 把 class 改回去了」，
      它绿了而色相仍错，才往 `color-mix` 的样式重解析时机去查）；
      最小复现 14s（两个 spec 同跑），不需要整档。
+   · **处置（同日，ISSUE #2100 已闭）**：`beforeEach` 的 `goto` 去掉
+     `waitUntil: "domcontentloaded"`（默认 `load`），`setTheme()` 拨完之后 poll 一次
+     「`<html>` 确实在目标档」。中途走过一条更错的解法——写 `localStorage.theme` 再 `reload`
+     让 provider 自己落地：它在那条「二次代入」上把**用例自己搭的前提**拆了
+     （要先「建项目 → 开画布」才有可测 DOM），红从「色相取错」变成 `解析不出颜色：none`。
+   · **修后本地读数**：最小复现两格同跑 `8 passed`（13.9s）；整档
+     `COMFY_E2E_SERVER=start node scripts/e2e-run.mjs` ⇒ **`81 passed`（1.5m）**，
+     e2e 新鲜度账随之登记（`scripts/.e2e-freshness.json` 随本增量提交）。
+     同形隐患一处未在本增量内改：`e2e/view-tabs.spec.ts:147-151` 是同一句手写 `classList`
+     且同样不验状态是否生效 —— 它现在是绿的，把一个 lucky-green 改成会红不属于本刀的范围，
+     已记在 #2100 的收口评论里。
    · 它是**「第一次被执行」照出来的红**：#2081 未修前这一格从未跑到过，所以既不是搬盘，
      也不是 #2081/#2091 两修的副作用；
    · 它排在 `每日单元测试` 之前 ⇒ 那一格这一跑又回到 skipped，每日档三张新鲜度账里 **e2e 与 full
