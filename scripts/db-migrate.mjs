@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { runPnpmSync } from "./launcher-core/shell.mjs";
+import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { resolveSqlitePath } from "./db-schema-state.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -94,6 +95,35 @@ function migrationFiles() {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 }
+
+/* ── ⓪ 参数契约：本入口不接受任何参数，认不出的旗标一律拦下 ────────────────
+ *
+ * 这一格排在**所有作动之前**（也在下面那道前置判决之前），因为它要挡的是「一次
+ * 根本没被理解的调用」，与库/迁移文件在不在无关。
+ *
+ * 立案实测（`DATABASE_URL` 指到临时目录的一份新库，开发库未碰，ISSUE #2096）：
+ * 这个入口此前一句 `argv` 都不读，于是 `node scripts/db-migrate.mjs --dry-run`
+ * 被当成「没有参数的那一次调用」照跑 —— 建出 23 张表、账本记上 1/1，**退出码 0**。
+ * 比 `db:push` 那一格（#1956，已由 PR #2093 修好）更值得拦的地方在于：push 留下的
+ * 结构漂移还能被指纹读出来，而 migrate 一旦落了账，下一次它是从账本断点**续跑**，
+ * 谁都不会再问一次那条记录是谁批准的。
+ *
+ * 判据与正文形状在 `cli-arg-contract.mjs`（两个入口问的是同一个问题，§12.18）。
+ * 注意这里**不**沿用 push 那句「无 TTY 时它停在确认那一步」—— `migrate` 的 SQL 是
+ * 生成好的，它压根不需要交互，要「先看会跑什么」只能去读文件与账本。 */
+rejectUnknownArgs({
+  command: "db:migrate",
+  action:
+    "它默认动的是 `drizzle-kit migrate` —— **真的写库**，并往 `__drizzle_migrations` 记一条账。",
+  exits: [
+    "先看看会跑什么 → 直接读 drizzle/<那份>.sql（迁移 SQL 是生成好的，不必跑起来才看见）；",
+    "已经应用了几份 → SELECT count(*) FROM __drizzle_migrations" +
+      "（库地址取 DATABASE_URL，缺省 ./db.sqlite）；",
+    "只要库与 schema 一致、不要账 → pnpm db:push；",
+    "要新增迁移 → pnpm db:generate 生成 .sql 之后再跑本命令。",
+  ],
+  fail,
+});
 
 /* ── ① 前置判决：没有迁移文件就别往下走 ─────────────────────────────────
  *

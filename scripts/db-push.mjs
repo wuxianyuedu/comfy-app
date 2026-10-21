@@ -41,6 +41,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { pushSchema } from "./db-push-core.mjs";
+import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
 import {
   probeSchemaFresh,
@@ -60,26 +61,25 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  * 批次落了库（那批里唯一一条 `DROP TABLE loraTrainingJob` 恰好是张 0 行的表 ——
  * 没造成损失，但**这个方向本来不该由「恰好那张表是空的」来兜**）。
  *
+ * 判据与正文形状在 `cli-arg-contract.mjs`（`db:migrate` 问的是同一个问题，
+ * §12.18 一处定义）；这里只交出自己的那一句因果与出口。
+ *
  * 为什么是「拒绝」而不是「补一个 `--dry-run`」：破坏性入口遇到不认识的旗标时，
  * 唯一不猜的答复就是不作动。真要一份不写库的语句清单，出口现成且已被实测：
  * `pnpm exec drizzle-kit push`（不带 `--force`）—— 无 TTY 时它把语句列出来、停在
  * 确认那一步，库不动（本轮就是拿这一形在临时副本上复现出 #1956 那个 fail-open 的）。 */
-if (process.argv.length > 2) {
-  fail(
-    [
-      `本命令不接受参数，但收到了：${process.argv.slice(2).join(" ")}`,
-      "",
-      "它默认动的是 `drizzle-kit push --force` —— **真的写库**，且自动批准会丢数据的语句。",
-      "认不出的旗标在这里不会被当成「已生效的开关」。",
-      "",
-      "想要的东西对应哪一条：",
-      "  · 一份不写库的待执行语句清单 → pnpm exec drizzle-kit push（不带 --force；",
-      "    无 TTY 时它列出语句后停在确认那一步，库不动）；",
-      "  · 只要不丢数据的变更 → 交给启动链路自动应用，或看 e2e 开跑前那一卡的判决；",
-      "  · 要审阅 SQL 再决定 → pnpm db:generate + pnpm db:migrate。",
-    ].join("\n"),
-  );
-}
+rejectUnknownArgs({
+  command: "db:push",
+  action:
+    "它默认动的是 `drizzle-kit push --force` —— **真的写库**，且自动批准会丢数据的语句。",
+  exits: [
+    "一份不写库的待执行语句清单 → pnpm exec drizzle-kit push（不带 --force；" +
+      "无 TTY 时它列出语句后停在确认那一步，库不动）；",
+    "只要不丢数据的变更 → 交给启动链路自动应用，或看 e2e 开跑前那一卡的判决；",
+    "要审阅 SQL 再决定 → pnpm db:generate + pnpm db:migrate。",
+  ],
+  fail,
+});
 
 /* 库路径的解析**只有一份实现**（`resolveSqlitePath`，与启动链路同源）——
  * 这里此前自己抄了一遍逐字等价的版本，`db:migrate` 的入口又要同一件事：
