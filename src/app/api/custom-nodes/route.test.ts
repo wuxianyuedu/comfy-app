@@ -28,6 +28,7 @@ import type { NextRequest } from "next/server";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { customNodesManifestPath } from "~/lib/comfyui/custom-nodes-manifest.server";
+import { pythonCandidates } from "~/lib/process/python-candidates";
 
 type Cb = (...args: unknown[]) => void;
 interface FakeChild {
@@ -222,6 +223,17 @@ function argv(i = 0): string[] {
   return spawnMock.mock.calls[i]?.[1] as string[];
 }
 
+/**
+ * 期望顺序 = **那份判据给本平台的顺序**，不在这里抄第二份名字表。
+ *
+ * 抄一份字面量就是把 A14 的成因在测试里复现一遍：路由与用例同时写死 `python3 → python → py`
+ * 时，两边一起错也一起绿。取判据之后这条判的是「路由有没有复用判据」——
+ * 谁再自写一张表（或把顺序改回去），这里当场红。
+ * 「Windows 上是 `python → py → python3`」与「`py` 必须带 `-3`」那两条**平台字面量**
+ * 钉在 `src/lib/process/python-run.test.ts`（那里两个平台都能正面跑）。
+ */
+const ORDER = pythonCandidates();
+
 beforeEach(() => {
   vi.clearAllMocks();
   /* `clearAllMocks` 清的是调用记录，**不清 `mockImplementationOnce` 的队列** ——
@@ -396,6 +408,70 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     const args = argv();
     expect(args).toContain("--paths");
     expect(args[args.indexOf("--paths") + 1]).toBe("C:/ComfyUI/custom_nodes");
+  });
+});
+
+/**
+ * 解析口（`streamParse`）的解释器退避 —— 台账 A14 在这条链上照出两个形状，
+ * 而它们**过去没有任何执行者**：上面那一组只测「argv 会不会被客户端加长」，
+ * 从不排第二、第三个子进程，所以「起不来时说什么」与「换档之后谁收尾」两格都是空的。
+ * 体量读数：这条链在改之前未被覆盖的那一段就是退避与收尾那十几行。
+ */
+describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () => {
+  it("全部候选都退 127 → 每一个都起过，且那句原因落成 error 日志", async () => {
+    // 「排一个候选一次」按判据的长度来，不写死数字（POSIX 上只有两个候选）。
+    ORDER.forEach(() => queueChild({ closeCode: 127 }));
+    const res = await post({ action: "parse", packages: ["ComfyUI-Foo"] });
+    const events = await eventsOf(res);
+    /* 旧写法是 `i < pyCandidates.length - 1`：最后一个候选轮不到，于是这一句
+     * 永远发不出来 —— 用户看到的是一句「0 个节点」，而真因是压根没有解释器。 */
+    expect(interpreterNames()).toEqual(ORDER);
+    const miss = events.filter(
+      (e) => e.type === "log" && String(e.msg).includes("未找到 Python 解释器"),
+    );
+    expect(miss).toHaveLength(1);
+    expect(miss[0]?.level).toBe("error");
+    const done = eventOf(events, "done");
+    expect(done.ok).toBe(false);
+    expect(done.report).toBeNull();
+  });
+
+  it("第一个候选 ENOENT（真形状：error 之后还有一次 close）→ 收尾归第二个候选", async () => {
+    putReport({ mode: "full", packages: {} });
+    queueChild({ error: { code: "ENOENT" }, closeCode: null });
+    queueChild({ closeCode: 0 });
+    const res = await post({ action: "parse", packages: ["ComfyUI-Foo"] });
+    const events = await eventsOf(res);
+    expect(interpreterNames()).toEqual(ORDER.slice(0, 2));
+    const done = eventOf(events, "done");
+    /* `exitCode` 才是「谁收的尾」的读数：少了 `handedOff` 那一层守卫，第一个**压根没起来**
+     * 的进程随后那次 `close(null)` 会先定案 —— 于是这一格是 `null`，第二档真跑完的输出
+     * 全被丢掉（而报告文件在盘上其实存在，所以 `ok` 照样可能是 true，看不出来）。 */
+    expect(done.exitCode).toBe(0);
+    expect(done.ok).toBe(true);
+  });
+
+  it("非缺解释器的失败（EACCES）不换档，原因透成 error 并收尾", async () => {
+    queueChild({ error: { code: "EACCES", message: "spawn EACCES" } });
+    queueChild({ closeCode: 0 });
+    const res = await post({ action: "parse", packages: ["ComfyUI-Foo"] });
+    const events = await eventsOf(res);
+    expect(interpreterNames()).toEqual(ORDER.slice(0, 1));
+    expect(JSON.stringify(events)).toContain("EACCES");
+    expect(eventOf(events, "done").ok).toBe(false);
+  });
+
+  it("起 `py` 那一档时 argv 首位是 -3（这条链同样不许裸起 py）", async () => {
+    // 「排一个候选一次」按判据的长度来，不写死数字（POSIX 上只有两个候选）。
+    ORDER.forEach(() => queueChild({ closeCode: 127 }));
+    const res = await post({ action: "parse", packages: ["ComfyUI-Foo"] });
+    await eventsOf(res);
+    /* 逐候选对账，而不是只盯 `calls[2]`：位置由判据给，写死下标就等于在这里
+     * 又抄一份顺序（POSIX 上根本没有 `py` 这一档，那条断言会莫名其妙地空过）。 */
+    for (const [command, args] of spawnMock.mock.calls) {
+      if (String(command) !== "py") continue;
+      expect((args as string[])[0]).toBe("-3");
+    }
   });
 });
 
@@ -1065,7 +1141,14 @@ function queueChild(plan: ChildPlan): void {
         );
       }
       if (!plan.noClose && (!plan.error || plan.closeCode !== undefined)) {
-        fire(child.proc, "close", plan.closeCode ?? 0);
+        /* `closeCode: null` 是**真机那一形**（spawn 失败时 Node 给的是 null，不是 0），
+         * 所以这里不能写 `?? 0` —— 那样 `null` 会被折成 0，「退出码为空」这一档
+         * 在夹具里就永远造不出来了。 */
+        fire(
+          child.proc,
+          "close",
+          plan.closeCode === undefined ? 0 : plan.closeCode,
+        );
       }
     }, 0);
     return handle;
@@ -1109,12 +1192,12 @@ function interpreterNames(): string[] {
 }
 
 describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行语法", () => {
-  it("python3 缺位（异步 ENOENT）→ 退到 python，结果仍然落地", async () => {
+  it("第一个候选缺位（异步 ENOENT）→ 退到第二个，结果仍然落地", async () => {
     coldRoot();
     queueChild({ error: { code: "ENOENT" } });
     queueChild({ lines: [ONE_PKG_LINE] });
     const events = await getEvents();
-    expect(interpreterNames()).toEqual(["python3", "python"]);
+    expect(interpreterNames()).toEqual(ORDER.slice(0, 2));
     const done = eventOf(events, "discover_done");
     expect(done.packages).toHaveLength(1);
     expect(done.cached).toBe(false);
@@ -1122,15 +1205,13 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     expect(JSON.stringify(events)).not.toContain("未找到 Python 解释器");
   });
 
-  it("三个候选全 ENOENT → 三个都得起过，最后一个的原因当场透出来", async () => {
+  it("全部候选都 ENOENT → 每一个都得起过，最后一个的原因当场透出来", async () => {
     coldRoot();
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      queueChild({ error: { code: "ENOENT" } });
-    }
+    ORDER.forEach(() => queueChild({ error: { code: "ENOENT" } }));
     const events = await getEvents();
-    /* 「全失败」这一档的真形状是**三个候选都起过**：少起一个就是退避链断了，
+    /* 「全失败」这一档的真形状是**每个候选都起过**：少起一个就是退避链断了，
      * 而界面只显示「没有节点」，没人知道是解释器没找着。 */
-    expect(interpreterNames()).toEqual(["python3", "python", "py"]);
+    expect(interpreterNames()).toEqual(ORDER);
     /* 最后一个候选之后必须仍然给出**一句读得懂的原因** —— 这一句在修可达性之前不可达
      * （两条退避都写成 `i < pyCandidates.length - 1`，`i` 最大只到 2 就地 resolve），
      * 真机没装 Python 时界面只剩「0 个节点」。 */
@@ -1142,13 +1223,12 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     expect(events.some((e) => e.type === "discover_done")).toBe(false);
   });
 
-  it("三个候选都以 127 退出 → 同一句「未找到 Python 解释器」，与 ENOENT 那一档同答案", async () => {
+  it("全部候选都以 127 退出 → 同一句「未找到 Python 解释器」，与 ENOENT 那一档同答案", async () => {
     coldRoot();
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      queueChild({ closeCode: 127 });
-    }
+    // 「排一个候选一次」按判据的长度来，不写死数字（POSIX 上只有两个候选）。
+    ORDER.forEach(() => queueChild({ closeCode: 127 }));
     const events = await getEvents();
-    expect(interpreterNames()).toEqual(["python3", "python", "py"]);
+    expect(interpreterNames()).toEqual(ORDER);
     expect(
       events.filter((e) => msgOf(e).includes("未找到 Python 解释器")),
     ).toHaveLength(1);
@@ -1163,7 +1243,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     queueChild({ lines: [ONE_PKG_LINE] });
     const events = await getEvents();
     expect(spawnMock.mock.calls).toHaveLength(1);
-    expect(interpreterNames()).toEqual(["python3"]);
+    expect(interpreterNames()).toEqual(ORDER.slice(0, 1));
     const progress = events.filter((e) => e.type === "progress");
     expect(JSON.stringify(progress)).toContain("EACCES");
     expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
@@ -1174,8 +1254,25 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     queueChild({ closeCode: 127 });
     queueChild({ lines: [ONE_PKG_LINE] });
     const events = await getEvents();
-    expect(interpreterNames()).toEqual(["python3", "python"]);
+    expect(interpreterNames()).toEqual(ORDER.slice(0, 2));
     expect(eventOf(events, "discover_done").packages).toHaveLength(1);
+  });
+
+  it("缺解释器那一档的真形状是 error 之后**再来一次 close**：那次 close 不许定案", async () => {
+    /* 真机上 `spawn` 一个不存在的命令，Node 先报 `error`（ENOENT），随后**仍然发一次
+     * `close`**。上面那两条退避用例的夹具刻意不发这次 close —— 于是「换到第二个候选
+     * 并且第二个真跑成」这一条路，在加了这个守卫之前从来没有执行者：第一个（压根没起来
+     * 的）进程的 close 会先走到收尾分支，把「0 个节点」定成答案并置 `resolved`，
+     * 第二个真跑成的那一档随后被 `if (resolved) return` 丢掉。
+     * 这一条要的就是**第二个候选的结果落地**，不是「有个 discover_done 就行」。 */
+    coldRoot();
+    queueChild({ error: { code: "ENOENT" }, closeCode: null });
+    queueChild({ lines: [ONE_PKG_LINE] });
+    const events = await getEvents();
+    expect(interpreterNames()).toEqual(ORDER.slice(0, 2));
+    expect(eventOf(events, "discover_done").packages).toHaveLength(1);
+    /* 空结果只许出现这一次：真答案被顶掉时这里是 `[]`。 */
+    expect(JSON.stringify(events)).not.toContain("未找到 Python 解释器");
   });
 
   it("解析器写 stderr 的每一行都转成进度，前面带 ⚠️（警告在界面上要看得见）", async () => {
