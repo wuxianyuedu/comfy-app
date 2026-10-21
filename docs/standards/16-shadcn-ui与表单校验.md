@@ -6193,9 +6193,11 @@ pnpm dlx shadcn@latest add dialog form input select
    ```bash
    pnpm add react-hook-form @hookform/resolvers
    ```
-3. 校验：`src/components/ui/form-rhf.tsx` 存在，且 import 来自 `@base-ui/react`（**非** `@radix-ui/*`）。
+3. 校验：`src/components/ui/form-rhf.tsx` 存在，且**没有引入 `@radix-ui/*`**（它只用 `react-hook-form` + 项目 `Label` + `cn`；base-ui 并不在这条链上）。
 
 > 当前状态（2026-09-02，已补齐）：`zod@4` ✅；`react-hook-form@7.87` ✅；`@hookform/resolvers@5.9.1` ✅；`src/components/ui/form-rhf.tsx` 已生成（base-ui 兼容：RHF `Controller` + 项目 `Label`，`FormControl` 用 `cloneElement` 透传 `id`/`aria-*`，未引入 radix 依赖）。开箱即用。
+> ⚠️ 那三个版本号是**那一天那次核对的读数**（`react-hook-form` 现在钉在更高的 patch 上），别当现值引用 —— 现值一律取 `package.json`，一条命令的复算法见 15 §15.1。
+> ⚠️ 这句里的「已补齐 / 开箱即用」说的是**这份绑定层可用**，不是「RHF 已接进业务」：`ui/form-rhf.tsx` 的模块头自己就登记着「当前 src 内 **0 消费点**，为将来预留」，而「不接入 RHF、字段级校验住 `src/lib/<domain>/*-schema.ts`」是 §16.2.4.8 的决策。上面第 3 条那句「import 来自 `@base-ui/react`（非 `@radix-ui/*`）」**两头都不成立**：那份文件全部 import 只有 `react`、`react-hook-form`、`~/lib/utils` 的 `cn`、`~/components/ui/label`（原生 `<label>` 的薄封装），既没有 `@radix-ui/*`，也没有任何 `@base-ui/react` —— 照那句话去文件里找 base-ui 的 import 会一无所获，而它想表达的「没有把 radix 那套拉回来」这一半是对的。
 
 #### 最小范式（schema 驱动 + 自动校验）
 
