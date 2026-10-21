@@ -65,6 +65,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { resolveGitDir } from "./git-dir.mjs";
 
 /** 账本文件名（住在 `COMFYAPP_CI_PROBE_DIR` 或宿主 `LOCALAPPDATA` 下，**不在检出目录里**）。 */
 export const LEDGER_FILE = "comfyapp-ci-workspace-probe.json";
@@ -259,7 +260,7 @@ export function jobLabel(cwd) {
  * `birthtimeMs` 在部分文件系统上是 0，那时退回 `mtimeMs` 并如实标出用的哪一个 ——
  * 这一档的全部价值就是那个年龄，取不到要说，不能假装取到了。
  *
- * @param {string} target
+ * @param {string | null} target
  * @param {number} nowMs
  * @param {FsLike} [fsLike]
  * @returns {DirFact}
@@ -267,6 +268,7 @@ export function jobLabel(cwd) {
 export function dirFact(target, nowMs, fsLike = realFs) {
   /** @type {DirFact} */
   const absent = { present: false, ageS: null, bornMs: null, from: "-" };
+  if (target == null) return absent;
   /** @type {{birthtimeMs: number, mtimeMs: number} | null} */
   let st = null;
   try {
@@ -454,7 +456,8 @@ export function cacheVerdict(facts) {
  * 组装要打印的每一行。所有外部依赖都可注入，所以判据不需要真机。
  *
  * @param {{cwd?: string, env?: Record<string, string | undefined>, nowMs?: number,
- *          run?: RunFn, fs?: FsLike, ledger?: string}} [io]
+ *          run?: RunFn, fs?: FsLike, ledger?: string,
+ *          gitDirOf?: (root: string) => string | null}} [io]
  * @returns {string[]}
  */
 export function workspaceProbeLines(io = {}) {
@@ -464,12 +467,21 @@ export function workspaceProbeLines(io = {}) {
   const runCmd = io.run ?? run;
   const fsLike = io.fs ?? realFs;
   const file = io.ledger ?? ledgerPath(env);
+  const gitDirOf = io.gitDirOf ?? resolveGitDir;
   const git = gitReadout(cwd, runCmd);
+  // 本仓检出在哪：走权威解析（认链接工作树里 `.git` 是个文件的情形），不硬拼
+  // 检出子目录（硬拼在 worktree 上指向那个文件）。不在 git 检出里时
+  // `gitDir` 为 null，`dirFact` 对 null 走「absent」分支（try/catch 吞掉 statSync(null)）。
+  const gitDir = gitDirOf(cwd);
   /** @type {ProbeFacts} */
   const facts = {
     workspace: dirFact(cwd, nowMs, fsLike),
-    gitDir: dirFact(path.join(cwd, ".git"), nowMs, fsLike),
-    fetchHead: dirFact(path.join(cwd, ".git/FETCH_HEAD"), nowMs, fsLike),
+    gitDir: dirFact(gitDir, nowMs, fsLike),
+    fetchHead: dirFact(
+      gitDir ? path.join(gitDir, "FETCH_HEAD") : null,
+      nowMs,
+      fsLike,
+    ),
     node_modules: dirFact(path.join(cwd, "node_modules"), nowMs, fsLike),
     ".next": dirFact(path.join(cwd, ".next"), nowMs, fsLike),
     coverage: dirFact(path.join(cwd, "coverage"), nowMs, fsLike),

@@ -46,6 +46,7 @@ import { fileURLToPath } from "node:url";
 
 import { defaultShellExe, shellStaleWarning } from "./dev-launcher.mjs";
 import { whichCommand } from "./launcher-core/shell.mjs";
+import { resolveGitDir } from "./git-dir.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -80,7 +81,11 @@ export function stagedFiles() {
  * @returns {string[]} 过滤后的清单；非合并态原样返回。
  */
 export function dropAdoptedShellInputs(staged, repoRoot = ROOT) {
-  const mergeHeadPath = path.join(repoRoot, ".git", "MERGE_HEAD");
+  // 本仓检出在哪：走权威解析（认链接工作树里 `.git` 是个文件的情形），不硬拼
+  // 检出子目录（硬拼在 worktree 上指向那个文件、MERGE_HEAD 永远查不到）。
+  const gitDir = resolveGitDir(repoRoot);
+  if (!gitDir) return staged; // 不在 git 检出里 ⇒ 没有合并进行中，原样返回
+  const mergeHeadPath = path.join(gitDir, "MERGE_HEAD");
   if (!fs.existsSync(mergeHeadPath)) return staged;
   const mergeHead = fs.readFileSync(mergeHeadPath, "utf8").trim();
   if (!mergeHead) return staged;
