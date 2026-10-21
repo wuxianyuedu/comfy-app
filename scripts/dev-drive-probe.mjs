@@ -18,6 +18,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { resolveGitDir } from "./git-dir.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -516,25 +517,44 @@ export function probeCacheLocations(platform) {
  * @returns {WorkdirEntry[]}
  */
 export function probeWorkdirs(platform) {
-  const names = ["node_modules", ".next", path.join("src-tauri", "target"), ".git"];
-  return names.map((name) => {
-    const target = path.join(ROOT, name);
-    const exists = fs.existsSync(target);
-    let realPath = target;
-    if (exists) {
-      try {
-        realPath = fs.realpathSync(target);
-      } catch {
-        realPath = target;
-      }
+  /* `.git` 不在这里拼：「检出目录在哪」只有 `git-dir.mjs` 一处知道（ISSUE #2072）。
+   * 硬拼在**链接工作树**上是错的 —— 那里 `.git` 是个文件而不是目录，探针会报一个
+   * 看起来存在、其实没有 `HEAD` / `MERGE_HEAD` 的落点。真身由 `resolveGitDir` 答，
+   * 取不到（不在仓库里 / 解析不出）就**不出一条**，而不是拿名义路径假装量到了。 */
+  const names = ["node_modules", ".next", path.join("src-tauri", "target")];
+  const out = names.map((name) =>
+    workdirEntry(name, path.join(ROOT, name), platform),
+  );
+  const gitDir = resolveGitDir(ROOT);
+  if (gitDir !== null) {
+    out.push(workdirEntry(path.relative(ROOT, gitDir), gitDir, platform));
+  }
+  return out;
+}
+
+/**
+ * 一条目录落点：存在与否 + 解开软链接之后的真实路径 + 是否与检出同卷。
+ * @param {string} name 报告里显示的名字
+ * @param {string} target 名义路径
+ * @param {NodeJS.Platform} platform
+ * @returns {WorkdirEntry}
+ */
+function workdirEntry(name, target, platform) {
+  const exists = fs.existsSync(target);
+  let realPath = target;
+  if (exists) {
+    try {
+      realPath = fs.realpathSync(target);
+    } catch {
+      realPath = target;
     }
-    return {
-      name,
-      exists,
-      realPath,
-      sameVolume: exists ? isSameVolume(realPath, ROOT, platform) : true,
-    };
-  });
+  }
+  return {
+    name,
+    exists,
+    realPath,
+    sameVolume: exists ? isSameVolume(realPath, ROOT, platform) : true,
+  };
 }
 
 /**
