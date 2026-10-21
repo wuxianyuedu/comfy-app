@@ -61,16 +61,17 @@ export function combineShipCodes(codes) {
  * 而这里最贵的误读是「以为会合、其实没合」或反之。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,closeIssue:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,closeIssue:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
     title: null,
     adds: [],
     merge: false,
+    closeIssue: false,
     dryRun: false,
     wait: true,
     only: null,
@@ -79,6 +80,7 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i] ?? "";
     if (a === "--merge") out.merge = true;
+    else if (a === "--close-issue") out.closeIssue = true;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--no-wait") out.wait = false;
     else if (a === "--message" || a === "-m") out.message = argv[++i] ?? "";
@@ -95,6 +97,75 @@ export function parseArgs(argv) {
     else out.unknown.push(a);
   }
   return out;
+}
+
+/**
+ * 一行文字里点名的 issue 号（`#2070` / `(#2070)` 两种写法都认，按出现顺序去重）。
+ *
+ * ⚠️ **只许喂 squash 那一行的「标题本体」，不许喂拼完 PR 号的那一整行**：
+ * `mergeAndVerify` 发给平台的是 `${title} (#${number})`，而那个尾数是 **PR 号**
+ * （本仓 PR 号与 issue 号共用一套编号空间，`#2110` 既是一条 PR、也可能正好是
+ * 某个人的 issue）。拿整行去提号就会把「关掉这个 PR」读成「关掉那张 issue」——
+ * 而那是一张别人正在用的单子。
+ *
+ * @param {string} text 标题本体
+ * @returns {number[]}
+ */
+export function issueNumbersFromText(text) {
+  /** @type {number[]} */
+  const out = [];
+  for (const m of String(text ?? "").matchAll(/#\s?(\d{2,})/g)) {
+    out.push(Number(m[1]));
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * 「这一格该不该关、以什么码落」—— 判断与效应分开，才判得动最危险的那一档。
+ *
+ * 三条口径，方向都是「宁可没做，不可做了还谎称做了」：
+ *   · **只跟在验真的合并之后**。`mergeAndVerify` 的回读是两件独立事实
+ *     （PR 的 `is_merged` + 碎片真在主干顶端）；没走到那一步就关单，等于把一张
+ *     还没落地的单子标成完成 —— 那正是 §11.23 那一族（声明与事实矛盾）在这里的形状。
+ *   · 要求了但这一跳没合并 ⇒ **2（没跑起来）并说明**，不是静默跳过。分跳跑
+ *     （`--no-wait` → 轮询 → `--merge`）的人在最后一跳才该带这个旗标；把它误带在
+ *     轮询那一跳上，屏幕上仍会落「全绿到终态」，而那一格根本没动过 —— 2 压过 0
+ *     就是为了让这种误带当场读得出来。
+ *   · 标题里没有号 ⇒ 也按 2，并说出「喂进去的是哪一行」。编一个号、或猜分支名里
+ *     那串数字，都比不上句实话。
+ *
+ * @param {{requested: boolean, landedVerified: boolean, title: string}} input
+ * @returns {{act: boolean, code: number | null, numbers: number[], reason: string}}
+ */
+export function decideCloseIssue({ requested, landedVerified, title }) {
+  if (!requested) {
+    return {
+      act: false,
+      code: null,
+      numbers: [],
+      reason: "未要求关单（--close-issue）。",
+    };
+  }
+  if (!landedVerified) {
+    return {
+      act: false,
+      code: CODE.NOT_RUN,
+      numbers: [],
+      reason:
+        "这一跳没有**验真的合并**（合并是显式动作，且要回读到 is_merged + 碎片在主干顶端）" +
+        " ⇒ 单子不能标成完成",
+    };
+  }
+  const numbers = issueNumbersFromText(title);
+  if (numbers.length === 0) {
+    return {
+      act: false,
+      code: CODE.NOT_RUN,
+      numbers: [],
+      reason: `落地那一行的标题本体里没有 (#号)：「${title}」`,
+    };
+  }
+  return { act: true, code: null, numbers, reason: "" };
 }
 
 /**
@@ -411,7 +482,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -443,6 +514,15 @@ export function planCommands(st) {
     p.push(
       `cnb pulls merge-pull --repo ${st.slug} --number <n> --merge-style squash --commit-title "… (#<n>)" -v`,
     );
+  /* 阶段 7 也是**伸手改世界**的那一类，所以它在计划里必须看得见 —— 与合并同一档：
+   * 不显式给 `--close-issue` 就不出现。`get-issue` 那一条是回读（独立一问），
+   * 它不在 WRITE_SHAPES 里，但同样要出现在计划中，否则 dry-run 教的执行面是缺一块的。 */
+  if (st.closeIssue) {
+    p.push(
+      `cnb issues update-issue --repo ${st.slug} --number <n> --state closed --state-reason completed -v`,
+    );
+    p.push(`cnb issues get-issue --repo ${st.slug} --number <n> -v`);
+  }
   return p;
 }
 
