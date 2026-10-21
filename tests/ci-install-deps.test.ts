@@ -34,6 +34,7 @@ import {
   main,
   pnpmInstallFingerprint,
   readInstallFingerprint,
+  runInstallWithSlot,
   writeInstallFingerprint,
 } from "../scripts/ci-install-deps.mjs";
 
@@ -284,5 +285,69 @@ describe("main：装 / 跳过两条出口的退出码", () => {
     });
     expect(calls).toBe(1);
     expect(code).toBe(1);
+  });
+});
+
+/**
+ * 执行档的三条出口都在日志里（规范 §13.5.3.4.3 那句「往上读收益时，出处只能是那几句打印」）。
+ *
+ * 这一组钉的是**读数在场**，不是收益大小：每日那一格现在按策略不接槽（ISSUE #2081），
+ * 而旧实现里「开关没拨」这一条**什么都不打印** —— 于是它在日志里与「什么都没发生」逐字同形，
+ * 下一个人分不清「按策略不接」与「配了槽却没接管」，只能靠猜。
+ * 少一次读数比少一次收益更难查，所以这一句必须响亮。
+ */
+describe("接槽执行档的三条出口", () => {
+  /** 收齐打印的替身。 */
+  function collector() {
+    const lines: string[] = [];
+    return {
+      write: (s: string) => lines.push(s),
+      get text() {
+        return lines.join("");
+      },
+    };
+  }
+
+  it("开关没拨：照常装，且把「按策略不接槽」打出来", () => {
+    const stub = installStub();
+    const out = collector();
+    const code = runInstallWithSlot(null, {
+      env: {},
+      write: out.write,
+      install: stub.run,
+    });
+    expect(code).toBe(0);
+    expect(stub.calls, "开关没拨也要真装一次 —— 每日那一格靠的就是这一跳").toBe(
+      1,
+    );
+    expect(out.text).toContain("槽未接管（开关没拨");
+    expect(out.text).toContain("⇒ 照常装");
+  });
+
+  it("只有 `1` 算拨开：写成 `0` 走的是同一句策略话术，而不是一句「接不上」", () => {
+    const out = collector();
+    const code = runInstallWithSlot(null, {
+      env: { COMFY_CI_SLOT: "0" },
+      write: out.write,
+      install: () => 0,
+    });
+    expect(code).toBe(0);
+    expect(out.text).toContain("开关没拨");
+  });
+
+  it("env 从注入读，不读进程全局（否则单测会随本机开关变结论）", () => {
+    process.env.COMFY_CI_SLOT = "not-1";
+    try {
+      const out = collector();
+      runInstallWithSlot(null, {
+        env: {},
+        write: out.write,
+        install: () => 0,
+      });
+      // 注入的是「没有这个键」，而进程里那条垃圾值不该把它读成别的档。
+      expect(out.text).toContain("槽未接管（开关没拨");
+    } finally {
+      delete process.env.COMFY_CI_SLOT;
+    }
   });
 });
