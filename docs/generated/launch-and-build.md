@@ -1924,7 +1924,7 @@ dev server 一侧的固有事实：懒加载的 `import()` **不是**在页面�
 | 场景                                             | 命令                                                                                                         | 说明                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页               | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目                     |
-| 生产构建（standalone + 安装包）                  | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                                                                                                                                                                                                                                                       |
+| 生产构建（standalone + 安装包）                  | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB + 装配后再数一次产物，§7.6「装配之后必须再数一次产物」）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                                                                                                                                                                                                     |
 | 前端/standalone 体积分析                         | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物 `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听 `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 前端 bundle 体积预算（判定档，ISSUE #1781）      | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）                      | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，评审确认后 `--allow-increase --update`。规范 §13.5.4。     |
 | 页面级运行时读数（e2e 档，ISSUE #1781 的右半边） | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）         | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器）                                                                              |
@@ -2663,13 +2663,27 @@ Cannot find package 'promise-limit' imported from …\.next\standalone\…
 
 **`src` 为什么按文件放行**：桌包的回收入口 `scripts/reap-process.mjs`（以及 `dev-launcher.mjs`）运行期 `await import("../src/lib/process/kill-process-tree.ts")`——硬规则 3 的平台机制单点就在那份 TS 里。随包能用是因为 Node 22.18+/24 的类型擦除默认开启，而**随包的 Node 是构建机那一份二进制**（`build-desktop.mjs` 复制 `process.execPath`），所以这个能力在构建时就钉死了，与使用者装没装 Node 无关。清单只放这一份文件（`RUNTIME_SRC`），由 `tests/standalone-runtime.test.ts` 与两处说明符逐字比对——将来给它加个 `enum` 之类的非可擦除语法，红的是这条用例而不是用户的双击。
 
+**装配之后必须再数一次产物（台账 R5-01 / ISSUE #1953）**：`pnpm build` 收尾那次
+`check-standalone-contents.cjs` 数的是 `.next/standalone` 与**组装前**的中间态，而
+本节的装配（整树 `dereference` 拷贝 → 白名单剪枝 → §分发卫生 → §首启建表 →
+§载荷实体化 上提 + 删 `.pnpm`）全部发生在**之后**——真正被 `bundle.resources`
+装进安装包、编译期内嵌进 exe 的是 `src-tauri/static` 这一份，它此前**从来没被数过**
+（硬规则 18「产物要数两层」的第二层是空的：本节末的自查入口能数到它，出厂链路上
+没有执行者）。落法：`build-desktop.mjs` 在剪枝与体积护栏之后、sidecar 与
+`pnpm tauri build` 之前同批调用一次 `check-standalone-contents.cjs`（判据本体早已
+支持数 static 层，`main()` 两层目录都存在就都查）——一次完整出厂构建的日志里因此
+看得到「standalone + static」两次计数，那正是「装配之后确实数过一次」的凭证。
+验收两半：① 往装配后的 `static` 里放一个 `db.sqlite`，判据点名两条违规
+（顶层白名单外条目 + 开发库文件）并退 1；② 真跑一次出厂构建，日志里出现两次计数。
+**别把 ① 当成 ② 的证据**——① 只证明判据认得出投毒，不证明出厂链路真的敲了它。
+
 **自查入口**（不装安装包也能验）：
 
 ```bash
 node scripts/build-desktop.mjs                                     # 组装 + §载荷实体化 + §首启建表 + 逐件断言
 PORT=4210 node src-tauri/static/scripts/standalone-runtime.mjs      # 看 boot 行 / 建表 / 日志与库的落点
 COMFY_EXECUTOR=host PORT=4210 node src-tauri/static/scripts/standalone-runtime.mjs  # 再加宿主：executor mode=host → host pid= → log/current/services/ 里 boot 与 inject-ok
-node scripts/check-standalone-contents.cjs                          # 真数产物：不该有的 + 必须有的
+node scripts/check-standalone-contents.cjs                          # 真数产物：不该有的 + 必须有的（build-desktop 装配后也会同批调它，见上一段）
 ```
 
 **但上面三条都验不到第 6–8 层**——那三层要的是「壳自己起一遍」。不装安装包的复演法（本次实测用的就是它）：在**检出之外**建一个与打包器同布局的目录（`app.exe` + `node.exe` + `static\**`，`static` 用真拷贝而不是符号链，否则运行期写入会落回载荷目录把产物弄脏），把 `src-tauri/target/release/app.exe` 复制进去双击。第 6–8 层各留下一条只在壳侧才有的日志证据（`launch mode=""` / 探测端口与 `boot pid=… port=…` 不一致 / 建窗到定模式之间的 WARN 串）。

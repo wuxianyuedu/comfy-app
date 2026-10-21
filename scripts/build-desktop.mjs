@@ -9,6 +9,9 @@
  *        - .next/static/*            → static/.next/static（前端静态资源，standalone 不自动带）
  *        - public/*                  → 静态资源 /public
  *        - 生成 index.html（sidecar 就绪前的过渡加载页）
+ *      装配与剪枝完成（§载荷实体化 / 尺寸护栏）之后、tauri build 之前，再数一次
+ *      产物（check-standalone-contents.cjs，两层都查）——`pnpm build` 收尾那次数的
+ *      是组装前的中间态，真正内嵌进 exe 的是 static 这一份（AGENTS 硬规则 18）
  *   3) 复制当前 Node 运行时为 Tauri sidecar：src-tauri/binaries/node-<target-triple>[.exe]
  *      （bundle.externalBin = ["binaries/node"]，打包后资源中按平台名为 node / node.exe）
  *
@@ -476,6 +479,39 @@ if (totalMB / 1024 > MAX_STATIC_GB) {
 console.log(
   `[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈值 ${MAX_STATIC_GB}GB）`,
 );
+
+// ── 2.6 §出厂计数：装配后的 static 再数一次（AGENTS 硬规则 18 / 台账 R5-01）──
+// 「产物要数两层」的第二层此前是空的：`pnpm build` 收尾那次
+// `check-standalone-contents.cjs` 数的是 `.next/standalone` 与**组装前**的中间态，
+// 而本文件的 §载荷实体化（上提 + 删 .pnpm）与上面的尺寸守卫全部发生在**之后** ——
+// 真正被 `bundle.resources` 装进安装包、编译期内嵌进 exe 的是 `src-tauri/static`
+// 这一份，它从来没被数过。判据本体已支持数 static 层（`main()` 两层目录都存在就都查），
+// 这里只负责在**装配剪枝之后、tauri build 之前**把它敲一次：日志里因此会看到
+// 「standalone + static」两次计数，那正是「装配之后确实数过一次」的凭证。
+// 为什么放在尺寸护栏之后：两者都是 static 层的闸，顺序无所谓，但都必须早于
+// sidecar 与 `pnpm tauri build`——红在这里 = 构建期就拦住，放过去就是用户解包才发现。
+{
+  const check = spawnSync(
+    process.execPath,
+    [join(root, "scripts", "check-standalone-contents.cjs")],
+    { stdio: "inherit", cwd: root, windowsHide: true },
+  );
+  if (check.error) {
+    fail(
+      `起 check-standalone-contents 失败（${check.error.code ?? "UNKNOWN"}）：` +
+        `${check.error.message}；实际命令：node scripts/check-standalone-contents.cjs`,
+    );
+  }
+  if (check.status !== 0) {
+    fail(
+      `装配后的 src-tauri/static 数出违规（exit ${check.status ?? "?"}）——` +
+        "这一份才是真正内嵌进 exe 的出厂载荷，读数见上面的 [static] 行；" +
+        "排查口径：减法只发生在 scripts/standalone-private-inputs.mjs（§7.3），" +
+        "缺件回到 next.config.js 的 outputFileTracingIncludes（§7.4），" +
+        "别往 outputFileTracingExcludes 上补条目（§7.2 实测它不读整目录条目）。",
+    );
+  }
+}
 
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");
