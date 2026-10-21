@@ -1349,7 +1349,22 @@ content-addressable store to the virtual store`，而 `fsutil hardlink list` 对
 `Symlink [project]/node_modules is invalid, it points out of the filesystem root`，
 而本小节第 1 条那句「接过去是干净的」验的是 `tsc` 与 `vitest`，**从没验过 `next build`**。
 不接槽那一臂过了 Turbopack（跑到 121.3s 才红在别处）⇒ 这一条红归给接槽，不归给搬盘。
-定性与取数手法见上面那份账页；处置（每日那一格退不退槽、还是让槽树以实目录进作业）**不在本增量里**。
+
+**处置（同日，ISSUE #2081）：每日那一格退回不接槽，PR 那一格继续接。** 三条出路里挑它的
+理由不是省事，是读数：`experimental.turbopackAdditionalRoots`（官方为「`node_modules` 是指向
+全局虚拟 store 的链」准备的那一格）**在本仓锁定的 Next 16.3.8 里不存在** —— 判法不是查文档，
+是在装出来的那份 `node_modules/next/dist/server/config-shared.d.ts` 上 grep；而把
+`turbopack.root` 放宽到能同时罩住作业与槽，官方自己就写了「别放宽到家目录那样」——
+Turbopack 会 watch 整个根目录，而这里要罩住的是整块 `G:\`。剩下的「让槽树以实目录进作业」
+与「每日不接槽」付的是**同一笔钱**（都是往工作区里真写一遍，48.8s 暖），却多出一条新机制。
+⇒ 形态定为：**每天多付 ~35s，换回一个能构建的工作区**。
+
+这条差别在配置里**不是**「两边各漂一份」：`tests/no-platform-ci-config.test.ts` 把它收成一条
+**登记过的例外**（`DAILY_ENV_ONLY_ON_PR`），钉的形状比「可以不一样」窄得多 —— PR 那一侧必须
+正好置着一行 `COMFY_CI_SLOT: "1"`、每日那一侧**一个字都不许出现**（写 `"0"` 也算违规：那是一条
+谁都不读的关掉的开关，下一次会被读成「这里本来就该有它」），其余各行仍逐字相同。
+四种坏形状（每日补回开关 / 写成 `"0"` / PR 侧被摘掉 / 同键写两遍）由
+`PR-only env 例外不是空转` 那组用例逐个点名。
 
 顺带把两处散文变成了执行者：**「绝不穿过链装」**（上面第 1 条实测的成因）现在是
 `clearJobLink` —— 真要在作业里装，先摘掉作业那条指进槽的链，只摘 reparse point、

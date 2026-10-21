@@ -505,14 +505,19 @@
   # 要不要装）。判定与命令行**必须与 PR 那格逐字相同** —— 这不是风格：判据
   # `tests/no-platform-ci-config.test.ts` 比的就是「命令行 + env 赋值」两组字面，
   # 同一份脚本长在两条流水线上各配一份 env，就是两条流水线各自漂（§12.12 的孪生形态）。
-  # ⚠️ 因此这里**也**置了 `COMFY_CI_SLOT`：原打算留定时这一跑当「不走槽的对照臂」，
-  # 被那条判据否掉了 —— 那就拿不到对照组。这不损失结论的可信度：该比的两侧
-  # （未命中=冷装 / 命中=接槽）**本来就在同一条流水线里各留了打印**，见下面那格的 env 注释。
+  #
+  # ⚠️ **这一格现在不接槽，而那是那条判据上唯一登记过的例外**（ISSUE #2081，2026-10-21）：
+  # 接槽把作业里的 `node_modules` 整体接成**指向项目根之外**的 junction，而 Turbopack 对
+  # 这一条有硬要求 —— 每日那一跑后面背着 `每日生产构建`，它当场
+  # `Symlink [project]/node_modules is invalid, it points out of the filesystem root`（13.8s 就死，
+  # 连带 skip 掉 ESLint / 浏览器 / 全量E2E / 全量单测四格）。PR 那一格不构建，所以同一条链
+  # 在 PR 上从来没有被它的消费者拒绝过。
+  # 两臂读数（同一台机、同一份 master，唯一变量就是这一行 env）见规范 §13.5.3.4.3 与
+  # `docs/audits/2026-10-21-timing-baseline-refs-volume.md`：接槽命中 13.8s、不接槽 48.8s（暖）。
+  # ⇒ 代价是**每天多付 ~35s**，换来的是整条每日档有一个能构建的工作区 —— 槽是优化不是前提。
+  # 例外不是「可以随便漂」：判据钉死「PR 那一侧必须置着 `COMFY_CI_SLOT`、每日这一侧一个字都不许出现」，
+  # 其余各行仍然逐字相同；改这条形状要走判据，不能只改这里。
   - name: 每日安装依赖
-    env:
-      # 一个路径都不写：槽根由 `resolveCacheRoot` 问 `pnpm store path` 推导（见 `缓存槽读数`
-      # 那格上面的那段）。这里只留开关。
-      COMFY_CI_SLOT: "1"
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
