@@ -93,10 +93,10 @@ afterEach(() => {
 });
 
 /** 在真仓库里跑迁移入口（`stdio` 全 pipe：无 TTY，正是要复现的环境）。 */
-function runMigrate(databaseUrl = `file:${dbFile}`) {
+function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: string[] = []) {
   return spawnSync(
     process.execPath,
-    [path.join(process.cwd(), "scripts", "db-migrate.mjs")],
+    [path.join(process.cwd(), "scripts", "db-migrate.mjs"), ...extraArgs],
     {
       cwd: process.cwd(),
       encoding: "utf8",
@@ -138,6 +138,44 @@ describe("pnpm db:migrate 非交互可用", () => {
     expect(src).toContain('.endsWith(".sql")');
     expect(src).toContain("files.length === 0");
   });
+});
+
+/**
+ * 参数契约（ISSUE #2096）：认不出的旗标**不许**被吞掉之后照旧落库。
+ *
+ * 立案实测（修之前）：这个入口一句 `argv` 都不读，于是
+ * `node scripts/db-migrate.mjs --dry-run` 被当成「没有参数的那一次调用」照跑 ——
+ * 临时库里建出 23 张表、`__drizzle_migrations` 记上 1/1，**退出码 0**。
+ *
+ * ⚠️ 这一档刻意**不挪开**真 `drizzle/`（与上面那档相反）：判的正是
+ * 「迁移文件在场、写库那条路是活的」那一形 —— 拿「前提不成立」的早退来当
+ * 「它没写库」的证据，会把这条缺陷读成不存在。
+ *
+ * 断言的重心是**库里的事实**（库文件没被建出来），不是话术里有没有那两个字：
+ * 「打印了拒绝的话」与「没动库」是两件事，后者才是这条链要的（同
+ * `tests/db-push-noninteractive.test.ts` 的 #1956 那一条）。
+ */
+describe("参数契约：未知旗标拦下，且一个字节都不写", () => {
+  it("`--dry-run` ⇒ 非零退出，库文件**根本没被创建**", () => {
+    const r = runMigrate(`file:${dbFile}`, ["--dry-run"]);
+    expect(r.status, "认不出的参数必须退非零").not.toBe(0);
+    expect(r.stderr).toContain("不接受参数");
+    // 话术要把「它默认动的是什么」说出来：只说「参数不对」等于让人再猜一轮。
+    expect(r.stderr).toContain("drizzle-kit migrate");
+    expect(r.stderr).toContain("__drizzle_migrations");
+    expect(
+      fs.existsSync(dbFile),
+      "拦下那一跑不许留下库文件（这一格的存在意义就是「不作动」）",
+    ).toBe(false);
+  }, 150_000);
+
+  it("不带参数时**不**被这道守卫拦住（守卫不是「永远退非零」）", () => {
+    /* 反向的一半必须有：把守卫写成无条件 fail，上面那条照样绿。
+     * 这里只要求「走过 ⓪ 步」—— 真跑会去起 drizzle-kit，所以判的是它**没有**
+     * 报「不接受参数」，而不是判它最终红绿（那由库里的事实决定）。 */
+    const r = runMigrate(`file:${path.join(tmp, "no-such-dir", "db.sqlite")}`);
+    expect(r.stderr).not.toContain("不接受参数");
+  }, 150_000);
 });
 
 describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
