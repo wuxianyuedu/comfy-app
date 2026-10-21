@@ -236,7 +236,8 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
 ## 已知边界（当前真实状态）
 
 **已经有自动化**：提交前钩子（分支守卫 + tsc + eslint 零警告 + 20 多条静态判据 + 固定守护
-清单与受影响用例）；`pnpm check:all` 的全量 + 覆盖率棘轮；29 条 `@critical` E2E。
+清单与受影响用例）；`pnpm check:all` 的全量 + 覆盖率棘轮；平台每日那一跑的 `每日全量E2E`
+（跑 e2e 全档、不带 `--grep`，条数以 `pnpm exec playwright test --list` 为准）。
 
 **没有自动化 / 仍开放**（细节与优先级见 `docs/guides/PRODUCTION-GAPS.md`）：
 

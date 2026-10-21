@@ -1180,19 +1180,24 @@
       `src/lib/media/media-url.ts`、
       `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`、
       `git show ab12a551^:src/app/api/images/route.ts`。
-- [ ] **E3″ 端到端：80 条 spec（29 条 `@critical`）没有任何自动执行者，且没有真登录态**（E3 的 router 维度已收口；原记「3 spec / 31 用例」的体量早就过时）：
-      现状是 `e2e/*.spec.ts` 17 份（像素那 5 份已随整档删除）、80 条 `test()`，`@critical`
-      出现在 29 条用例与 20 个 `describe` 上。执行者那一格**实测为空**：`playwright test`
-      唯一的调用点是 `scripts/e2e-run.mjs`（人敲 `pnpm test:e2e`），pre-commit 只有读文本的
-      `freshness-gate.mjs` 一步、不起 Playwright；平台侧 `.cnb.yml`（#1959 起）跑
-      `e2e-run.mjs --grep @critical`，那是**全量 e2e 的真子集**、且不落新鲜度账。
+- [~] **E3″ 端到端：81 条用例（`@critical` 覆盖 73 条）现在每日有一格真跑全档，欠的是真登录态**（E3 的 router 维度已收口；原记「3 spec / 31 用例」与「80 条 / 29 条 critical」两档体量都过时了）：
+      现状以 Playwright 自己的枚举为准（`pnpm exec playwright test --list` →
+      **81 tests in 21 files**；加 `--grep=@critical` → **73 tests in 19 files**，比"标了 `@critical`
+      的用例数"多，因为标记也挂在 `describe` 上、会带进整组子用例）：`e2e/*.spec.ts` 21 份
+      （像素那 5 份已随整档删除）。**执行者这一格不再是空的**：平台侧 `.cnb.yml` 的每日清单里
+      有 `每日全量E2E`，它跑的是**不带 `--grep` 的** `node scripts/e2e-run.mjs` ⇒ 81 条全档，
+      且 `每日生产构建` / `每日浏览器安装` 必须排在它之前（两道前提各有顺序判据）。
+      2026-10-21 那次每日跑实测到 `1 failed / 80 passed`、本格 100.0s（红在一条主题 token 断言，
+      三次 retry 同形 —— 见 `docs/audits/2026-10-21-timing-baseline-refs-volume.md` 的立案 5；
+      这一格此前**零执行记录**，是它前面的构建格一直红着把它挡住了）。
+      本地那一档仍然只有人敲的 `pnpm test:e2e`，pre-commit 只有一步读文本的
+      `freshness-gate.mjs`、不起 Playwright —— 这是刻意的分工（§13.5.21 那条「并发下的墙钟读数不可信」
+      同样适用于端到端）。
       **本批把「每日自证」那一档的豁免通道修紧了**（`skippedReason` / `dirtyReason` 此前
       从不比日期，一条理由替未来每一天作证 —— 本机那条 2026-10-08 的豁免让这一档天天报绿而
-      80 条 spec 一次没跑；口径与取舍见 §11.8），但那只解决「账面不许冒充」：
-      **仍然没有任何东西自动跑它**。剩下的两格是内容决定，不是机械活：
-      ① 给这一档一个真执行者（要么把 `--grep @critical` 接进每日档并允许它跑十分钟，
-      要么按 §13.5.4 的按需召唤登记清楚「谁在什么时机跑」）；
-      ② 登录态 —— 现在**没有任何一条走完「登录 → 建项目 → 出图」的旅程**：
+      81 条一次没跑；口径与取舍见 §11.8），但那只解决「账面不许冒充」：
+      **剩下的一格是内容决定，不是机械活**：
+      ① 登录态 —— 现在**没有任何一条走完「登录 → 建项目 → 出图」的旅程**：
       `critical-flows.spec.ts` 明写「不假装认证成功」，登录后视图全靠 `stubBackend` /
       `stubTrpc` 与直接种 `localStorage`，没有 `storageState`、没有 setup project。
       所以「壳起不来 / 会话过期 / 中间件改写」这类**只在真实 HTTP 栈上成立**的缺陷
@@ -1203,7 +1208,7 @@
       取证面现在是「今天的提交 ∪ `git diff --cached`」，合成规则抽成纯函数 `combineEvidence`
       （四种组合各有用例；`git` 问不出来时不新增结论）。口径见 §11.8。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
-- [ ] **E5 棘轮的 `--update` 拒涨此前只有散文，现在有了横切行为判据（余两格按名登记）**：
+- [x] **E5 棘轮的 `--update` 拒涨此前只有散文，现在有了横切行为判据（两格 PENDING 也已处置完）**：
       原记「棘轮 `--update` 无制衡，证据 `AGENTS.md:94,97`」——那句证据早就过时了：
       24 个「带 `--update` 且把一份基线写回去」的脚本里，17 个**确实写了**拒涨那一支。
       装机时 `grep` 那句文案会给出**相反的结论**：下面七家都能被命中
@@ -1281,7 +1286,8 @@
   （`button-group` / `field` / `item` / `select`），已按负债登记。教训写进执行者的文件头
   第 ④ 条：**判据的输入形态与被判对象不一致时，红与绿都不是事实**。
   两类规则显式关掉并逐条写明理由：页面级（`region` / `landmark-*` 等）对裸渲染的单枚
-  组件没有意义，真落点在 e2e（E3″ 现在连执行者都没有）；**需要真实绘制的三条**
+  组件没有意义，真落点在 e2e（E3″ —— 每日那一格已经真跑全档 81 条，缺的是真登录态，所以
+  页面级规则要在那一格才判得动）；**需要真实绘制的三条**
   （`color-contrast` / `label-content-name-mismatch` / `link-in-text-block`）要字体度量、
   伪元素 `content` 与生效的 CSS，jsdom 三样都没有 —— 硬判只会得到 `incomplete`
   而被「只收 violations」这一档丢掉，那是结构性假通过。这三条的判点是 Storybook 的
