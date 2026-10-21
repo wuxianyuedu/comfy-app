@@ -1335,22 +1335,18 @@ story 不经 store 读）。
 | 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元            | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除                          |
 | 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/CanvasSettingsPanel.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`）                                                               |
 
-#### 16.2.4.2 P1 按钮分批的进度与做法
+#### 16.2.4.2 P1 按钮的分批转换：做法与评出的口径
 
 按钮这一条不是「一次性替换」，而是**一次一个目录**地把手写 `<button>` 换掉，
 因为绝大多数调用点带着自己的布局类（全宽列表行、图标圆钮、Tab 项），
 变体只能接管外观语义，尺寸与排布仍由调用处的 `className` 承担。
 
-**已完成批次**（每批都把该目录清零，再 `--update` 收紧基线）：
-
-| 批次 | 目录                                                               | 清零处数       | 手法                                                                   |
-| ---- | ------------------------------------------------------------------ | -------------- | ---------------------------------------------------------------------- |
-| 1    | `studio/logs/`                                                     | 16             | 图标钮 → `size="icon-xs"`；Tab → `variant="ghost"` + `h-auto`          |
-| 1    | `studio/workflow-library/`                                         | 28             | 文字动作 → `variant="outline"` / `"ghost"`；实心紫 → `"primary-solid"` |
-| 2    | `studio/project-canvas/`（含 `CanvasNode/`）                       | 84             | 见下                                                                   |
-| 3    | `studio/workflow-editor/`                                          | 14 + 2（P3）   | 见下                                                                   |
-| 4    | `app/(main)/settings/` + `components/settings/`                    | 45 + 11（P3）  | 见下                                                                   |
-| 5    | 全库清零：`workshop/` + `studio/` 散件 + `app/` + 剩余 `studio/**` | 174 + 24（P3） | 见下                                                                   |
+**批次流水不在这里记账**：逐批「哪个目录清零了几处」的权威源是 git 历史与门禁当下的基线文件
+（`scripts/.ui-primitives-baseline.json` —— `total: 0`、`rules: {}`，即 P1/P2/P3 的存量已清零、
+三条都升成了硬闸；复算入口是 `node scripts/check-ui-primitives.cjs` 自己的结论行）。抄一份处数进文档
+就是第二个会脱钩的事实来源。留在这里的只有转换本身评出来的口径。两批当时的手法一句话收着：图标钮走
+`size="icon-xs"`、Tab 项走 `variant="ghost"`、文字动作走 `variant="outline"` / `"ghost"`，
+实心主题色一律不手搓。
 
 **`studio/project-canvas/` 这批评测出的三条口径**：
 
