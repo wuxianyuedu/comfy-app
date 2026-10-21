@@ -24,7 +24,11 @@
   本地复跑同一档：**全量档同样红**（`1 failed / 80 passed`，1.3m，与 CI 那一跑 100.0s 同形），
   而**单跑该 spec 是绿的**（`7 passed`）——把 `theme-toggle.spec.ts` 拉进来同跑就翻红（14s，最小复现）。
   ⇒ 差异不在执行面、不在库（本地 `db:push` 后 23 张表、schema 收敛，红照旧）、也不在搬盘，
-  而在**测试之间的主题状态**：token 那格靠 `documentElement.classList.toggle("dark")` 自己拨主题，
-  而主题在产品侧是持久化的，前一格改过的持久值会在后续渲染里重新落地。
+  而在**有两条写者在抢同一个 DOM 属性**：token 那格绕开产品那条路，直接
+  `documentElement.classList.toggle("dark")` 拨主题，而 `next-themes`（`attribute="class"` +
+  **`defaultTheme="dark"`**、只存 localStorage、服务端零落点 —— 均逐条查过）会在 hydration
+  及其后每次落地时按自己的值重写 `<html>` 的 class。谁后写谁赢：错误消息里 **α 对、色相错**
+  （light 档读到 dark 那颗 slate-400）。`--workers=1` 严格串行仍红 ⇒ 不是并行争用，是顺序/时机依赖。
+  立案与三条出路见 **ISSUE #2100**。
   口径同 §11.13 第三条：换个跑法就换结果 ⇒ 失效的是**前提**，不是预算；它不是超时形态，抬 `timeout` 没用。代价写在明处：它排在 `每日单元测试` 之前，所以那一格又回到 skipped，
   每日档三张新鲜度账里 **e2e 与 full 仍没有当天凭证**。
