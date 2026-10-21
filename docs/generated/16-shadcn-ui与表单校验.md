@@ -1620,8 +1620,8 @@ token —— 「合并」这一步**不需要动 `ui/` 里的任何一行**，�
 | ------------------------ | --------------------- | ------------------------------------------------------------------- |
 | `--color-muted`（深）    | `#9a9aad` → `#141419` | 名字归位：它是 shadcn 的**表面**语义（`bg-muted`），浅色档本就如此  |
 | `--secondary`（深）      | `#16161c` → `#141419` | 归一化到 `--color-subtle`（浅色档不变；原深色档与浅色档语义不一致） |
-| `--sidebar-accent`（深） | `#16161c` → `#141419` | 同上（`--sidebar*` **零引用**）                                     |
-| `--sidebar`（浅）        | `#ffffff` → `#f0f1f5` | 归一化到 `--color-panel-deep`（`--sidebar*` **零引用**）            |
+| `--sidebar-accent`（深） | `#16161c` → `#141419` | 同上。⚠️ **这一族不是「零引用」**：`ui/sidebar.tsx` 里 `hover:bg-sidebar-accent` / `active:bg-sidebar-accent` / `text-sidebar-accent-foreground` 共 6 处在用，且同文件登记着 ISSUE #1291「此前悬停与选中**共用同一档底色**（`--sidebar-accent`）」——这档是被专门拆过的那一档，改它会动侧栏按钮的悬停与选中态 |
+| `--sidebar`（浅）        | `#ffffff` → `#f0f1f5` | 归一化到 `--color-panel-deep`。`--sidebar` 基色由 `ui/sidebar.tsx` 的 `bg-sidebar` 一族 utility 消费（复算：`grep -c "bg-sidebar\b" src/components/ui/sidebar.tsx`），**也不是零引用** —— 动这档之前先读那些调用处 |
 
 另新增两颗项目 token：`--color-on-brand`（品牌实心底上的文字色）与
 `--color-ring-shadow`（浮层 1px ring，原先只存在于别名里）。**编译产物的
@@ -1743,7 +1743,7 @@ dark:text-emerald-300` 这类写死值）。
 
 | 基元          | 近似形态                                                                                                                                               | 为什么不动                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scroll-area` | 全库 **54 个文件**在用 `overflow-y-auto` / `overflow-auto` 的滚动容器；其中 **5 个组件**另加了自绘滚动条外观（`custom-scrollbar`）                     | 判据**已更正**（见下）。**真正挡住迁移的不是「高度由 flex 链推出」** —— `ScrollArea.Root` 的 `Viewport` 是 `size-full`，flex 链推得出来的高度它照样撑满。挡住的是**命令式滚动跟随**：这 5 处全部持有滚动容器的 `ref` 并直接读写 `scrollTop`（贴底跟随 / 只滚不跳 / 加载更多），而 `ui/scroll-area` 的 `Viewport` 是内部子树、不转发 ref（`ScrollAreaViewport` 本身是 `ForwardRefExoticComponent`，是 `ui/` 这份封装没把它透出来）。要接就得改 `ui/`（工具生成目录，下次 `shadcn add` 会覆盖）—— 代价大于收益 |
+| `scroll-area` | 滚动容器遍布全库（**计数只给复算入口**：`grep -rl "overflow-y-auto" src --include=*.tsx` 与 `grep -rl "overflow-auto" src --include=*.tsx` 取并集数文件；自绘滚动条外观的那几处数 `grep -rl "custom-scrollbar" src`。2026-10-21 量到 **68** 与 **15**，旧写的「54 / 5」是更早一次的读数）                     | 判据**已更正**（见下）。**真正挡住迁移的不是「高度由 flex 链推出」** —— `ScrollArea.Root` 的 `Viewport` 是 `size-full`，flex 链推得出来的高度它照样撑满。挡住的是**命令式滚动跟随**：那几处全部持有滚动容器的 `ref` 并直接读写 `scrollTop`（贴底跟随 / 只滚不跳 / 加载更多），而 `ui/scroll-area` 的 `Viewport` 是内部子树、不转发 ref（`ScrollAreaViewport` 本身是 `ForwardRefExoticComponent`，是 `ui/` 这份封装没把它透出来）。要接就得改 `ui/`（工具生成目录，下次 `shadcn add` 会覆盖）—— 代价大于收益 |
 | `accordion`   | 6 个文件用原生 `<details>/<summary>`（历史详情原始 JSON、节点错误面板参数、工坊三处生成过程），另有若干 `{isOpen && …}` 条件渲染的展开块（训练页日志） | 原生 `<details>` 的**展开态是浏览器原生 a11y 语义**（`<summary>` 自带可聚焦与 toggle 角色）且支持「查找时自动展开」；`accordion` 的价值在于「一组互斥面板 + 动画 + 键盘导航」，而这 6 处是**单个独立折叠块**，没有互斥分组。训练页的 `{isOpen && …}` 反而更像 accordion 的落点，但它当前是按钮触发的，接上要改触发器形态（外观会变）                                                                                                                                                                         |
 | `avatar`      | 首页顶栏一个 `u-avatar`（纯 CSS 底 + 圆形 div），工坊 5 处「首字母圆形徽标」                                                                           | 两者都不是**头像**：顶栏那个没有图片（`AvatarImage` 无从渲染、`AvatarFallback` 恰好够用但换成基元只多一层嵌套），工坊那 5 处是**首字母初值**徽标（`bg-primary-soft` + 单字），语义是「角色编号」不是「用户头像」。接上基元 = 为一个 div 加两层包装                                                                                                                                                                                                                                                           |
 
@@ -2148,9 +2148,13 @@ tsc / eslint 也都不看 —— 只能靠「同一件事只允许一处实现�
 肉眼完全看不出来，只有量 DOM 节点数才发现（这正是 `LogPanel.test` 里那条
 「虚拟化没生效在 jsdom 里不可见」的用例存在的理由）。
 
-口径：**依赖「元素出现了没有」而不是「面板开了没有」** —— 把滚动元素本身放进
-state（`ref` 回调里 `setBodyEl(el)`），量视口的 effect 依赖它。这样量测与
-挂载方式无关，换任何 lazy / portal 容器都不会再静默失效。
+口径：**依赖「元素出现了没有」而不是「面板开了没有」** —— 量测必须发生在**拿到元素的那一刻**，
+而不是排在某个开合信号后面。当时那版落法是「把滚动元素本身放进 state（`ref` 回调里
+`setBodyEl(el)`）」，**这个符号现在树上没有**：虚拟化那轮（07 §7.28）把这一层重写进
+`use-log-panel-pin.ts`，它文件头两处明写「这里只读写 ref，不用 state」，元素由父组件
+持有的 ref 给出、`el.clientHeight` 在回调里现取现量；进 state 的只有**滚动位置**
+（那里的理由与本条同源：「滚动位置是渲染输入，只读 ref 会出现滚了但不重渲染」）。
+⇒ 复算这一层时别去找 `setBodyEl`；要找的是「量测的触发条件是不是元素本身」。
 
 ##### 判据：P9（硬闸）+ 出口侧契约
 
@@ -5361,7 +5365,9 @@ createReentrancyLock(); // 跨组件实例 / 非 hook 场景（模块级、服�
 `projectIdRef`）—— 它们只写一次或只读，不是闸门。形态上的分界线是
 **名字所指的语义**与**「写一次 + 读两处」**这两个条件同时成立。
 
-出口自身的实现 `~/lib/reentrancy-lock.ts` 在 `EXEMPT_FILES.P66` 里显式登记。
+出口自身的实现 `src/components/ui/use-reentrancy-lock.ts` 在 `EXEMPT_FILES.P66` 里显式登记
+（那张表在 `scripts/ui-primitives-exempt-files.cjs`，`re` 逐字写着这个路径；
+**不在 `src/lib/` 下** —— 旧写法把它放进了 lib，照那句话去 lib 里找会一无所获）。
 
 > ⚠️ **①（读 state 判）不在判据范围内** —— 「`if (busy) return;`」与
 > 「`if (!busy)` 才渲染」在文本上是同一件事，机器分不出这个 `busy` 是拿来做
@@ -6187,6 +6193,7 @@ pnpm dlx shadcn@latest add dialog form input select
 启用步骤：
 
 1. 确认/配置团队 shadcn registry（或临时用 `shadcn add @shadcn/form`）。生成产物为 **base-nova / base-ui 版** `src/components/ui/form-rhf.tsx`——底层 `@base-ui/react` 已导出 `Form`（`onFormSubmit(formValues)`、`validationMode`）与 `Field` 原语，shadcn 的 `form.tsx` 即 RHF `Controller` + base-ui `Field` 的封装。
+   ⚠️ 这句讲的是**库里有什么**，不是**本仓用了什么**：复算入口是 `node_modules/@base-ui/react/form/Form.d.ts`（`onFormSubmit` 与 `validationMode` 都在里面）与同级的 `field/` 目录。而**本仓那份 `form-rhf.tsx` 一个都没用** —— 它的全部 import 只有 `react`、`react-hook-form`、`cn`、`~/components/ui/label`。把这句读成「form-rhf 的底层是 base-ui」就会在文件里找不到 base-ui 的 import（下面第 3 条同批订正）。
 2. 安装运行时依赖（若 `shadcn add` 未自动装）：
    ```bash
    pnpm add react-hook-form @hookform/resolvers
