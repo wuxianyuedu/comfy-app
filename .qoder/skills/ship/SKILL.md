@@ -18,9 +18,10 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 pnpm ship --dry-run          # 先看它打算跑哪些命令（一条都不执行，但阻塞照报）
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
+pnpm ship --merge --close-issue   # 合上之后，把落地那一行点名的 issue 置为 closed
 ```
 
-## 三条必须先知道的边界
+## 几条必须先知道的边界
 
 1. **退出码三态，`2` 不等于通过。** `0` 走到终态且事实为绿；`1` 有事实是红的；
    **`2` 有一步没跑起来**（`cnb` 不在、按 sha 取不到 build、非 git 检出）。
@@ -37,20 +38,28 @@ pnpm ship --merge            # CI 绿了才合并（squash）
    两句这样的坏标题）。这条 PR 其实是一件事、而分支开口那笔写小了，就显式 `--title "…"`。
 3. **合并是显式动作。** 不给 `--merge` 就停在判决处。给了 `--merge` 而 CI 不是绿的，
    它会拒绝合并并退 `1` —— 这个拒绝是功能，不是故障。
-4. **长链分跳跑，别塞进一条后台命令**：`pnpm ship --no-wait`（提交 / 推送 / 建 PR）→
+4. **关单也是显式的（`--close-issue`），且只跟在验真的合并之后。** 它只做一件机械事：
+   把**落地那一行的标题本体**里点名的 `(#N)` 置为 `closed / completed`，然后走一次
+   独立的 `get-issue` 回读，把 `state` / `state_reason` / `closed_at` 三件原值打出来
+   （回执不算结论）。带在没有合并的那一跳上 ⇒ 那一格落 `2` 并说明，**不静默跳过**，
+   也一次都不碰 `cnb`。号只从标题本体取、不从拼完 PR 号的那一整行取 —— 本仓 PR 号与
+   issue 号共用一套编号，喂整行会去关一张别人正在用的单子。
+   **它不写 issue 的内容**：那条「已落地 + 读数 + 因果」的记录是判断，与提交信息同一档。
+5. **长链分跳跑，别塞进一条后台命令**：`pnpm ship --no-wait`（提交 / 推送 / 建 PR）→
    `pnpm ship`（轮询出终态）→ `pnpm ship --merge`。每跳都幂等，PR 已存在就复用；
    一条整链在 push 那跳被宿主断掉时，屏幕上不会留下任何线索（实测只剩一个 `127`）。
    单跑 `--only=commit|push|pull-request` 已不可能：那会一段结论都不落，如今退 `2`。
 
 ## 它不重复判的东西
 
-| 要做的事                   | 谁在做                                                          |
-| -------------------------- | --------------------------------------------------------------- |
-| 提交门槛                   | `.githooks/pre-commit`（由 `git commit` 触发）                  |
-| 合并前固定动作三段         | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明 |
-| 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因） |
-| 流水线终态                 | 平台 build 的 `data.status`                                     |
-| 合没合上                   | PR 的 `is_merged` **且**回读 `origin/master` 顶端有没有那份碎片 |
+| 要做的事                   | 谁在做                                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 提交门槛                   | `.githooks/pre-commit`（由 `git commit` 触发）                                                                          |
+| 合并前固定动作三段         | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明                                                         |
+| 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                         |
+| 流水线终态                 | 平台 build 的 `data.status`                                                                                             |
+| 合没合上                   | PR 的 `is_merged` **且**回读 `origin/master` 顶端有没有那份碎片                                                         |
+| 单子关没关上               | `--close-issue` 之后一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
 
 ⚠️ **`ship` 提交段「全过」不等于 tsc / eslint / 用例过了**。`pre-commit` 默认只跑形态档，
 重档由 `COMFY_HEAVY_GATES=1` 那一档与平台兜底（规范 §13.5.25）—— 钩子自己会打印

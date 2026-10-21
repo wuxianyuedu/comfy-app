@@ -65,6 +65,11 @@
  *     「`<path>` 一个字没动」「N 处收到 0」三种句式拿提交树复核。所以 PR 正文
  *     只填它**量到的**（diffstat、碎片标题、失败 stage 名），不填推断。
  *   · **不碰 `--force` / 不改历史 / 不删分支**。
+ *   · **不替 issue 写内容**。`--close-issue` 只做一件机械事：把落地那一行点名的
+ *     单子置 `closed / completed`，然后**独立回读** `state` / `state_reason` /
+ *     `closed_at` 三件原值打出来。那条「已落地 + 读数 + 因果」的记录评论是判断，
+ *     与提交信息同一档，不由编排层生成 —— 生成出来的那句话必然是一句
+ *     「它说它做了」，而这一族存在的意义恰恰是不采信这种话。
  *
  * ── 用法 ───────────────────────────────────────────────────────
  *
@@ -75,6 +80,9 @@
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
  *   pnpm ship --title "…"                      # 覆盖标题（默认取分支第一笔非常规提交）
  *   pnpm ship --merge                          # 允许在 CI 绿时执行 squash 合并
+ *   pnpm ship --merge --close-issue            # 合上之后关掉落地那一行点名的 issue
+ *                                              #  （显式才做；只跟在**验真的合并**之后，
+ *                                              #   误带在没有合并的那一跳上 ⇒ 退 2 并说明）
  *   pnpm ship --dry-run                        # 只打印将要执行的命令，一条都不执行（阻塞照报）
  *   pnpm ship --only=preflight               # 单跑阶段 0 看读数字段（其余段都排在它后面，
  *                                            #  单跑会落不出任何结论 ⇒ 退 2，见 `finish`）
@@ -101,6 +109,7 @@ import {
 } from "./ship-core.mjs";
 import { makeRunner, safeRead, short, writeScratch } from "./ship-exec.mjs";
 import {
+  closeIssues,
   createOrReusePull,
   mergeAndVerify,
   pollUntilTerminal,
@@ -427,6 +436,7 @@ async function runFlow(deps, tmpFiles) {
         adds: opt.adds,
         hasMessage: Boolean(opt.message || opt.messageFile),
         merge: opt.merge,
+        closeIssue: opt.closeIssue,
         remote: up.remote,
         baseBranch,
       })) {
@@ -599,6 +609,10 @@ async function runFlow(deps, tmpFiles) {
       }
 
       // ── 阶段 6：merge（显式）─────────────────────────────────
+      /* `landed` 是「落进主干的那一行」的快照，由阶段 6 在**验真之后**填；
+       * 阶段 7 要从它的标题本体里取 issue 号 —— 不在那里回推，因为合并那一步
+       * 会把 HEAD 挪到 master，`pickTitle` 那时已经算不出这条分支的第一笔。 */
+      const landed = { title: "", sha: "", verified: false };
       if (want("merge")) {
         codes.push(
           mergeAndVerify({
@@ -612,8 +626,17 @@ async function runFlow(deps, tmpFiles) {
             merge: opt.merge,
             buildState,
             explicitTitle: opt.title,
+            landed,
           }),
         );
+      }
+
+      // ── 阶段 7：关单（显式，且只跟在验真的合并之后）────────────
+      /* 这一格**只在人点名时出现**（`--close-issue`）：关一张单子是把状态写到
+       * 别人也看得见、且不会自动回退的地方，与合并本身同一档，所以同一个口径 ——
+       * 默认不开。没合并成而带着它跑，落的是 2 并说明（不是静默跳过、更不是绿）。 */
+      if (opt.closeIssue) {
+        codes.push(closeIssues({ run, log, slug, closeIssue: true, landed }));
       }
     }
   }
