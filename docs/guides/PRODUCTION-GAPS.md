@@ -542,6 +542,35 @@
       （18 条形状判据，四项门槛满档）、`src/proxy.ts`（接线与 matcher）、
       `src/app/api/film/bgm/route.ts`（无主前缀的来源）、`src/server/film/compose-film.ts`
       （`films/_tmp_<id>` 中间目录与 `films/<id>.mp4` 收口 —— 判据里那条 `_tmp_` 还原就是为它写的）。
+- [ ] **A14 `custom-nodes` 那条路由绕开了「按平台选 Python 解释器」的唯一判据，起 `py` 时不带 `-3`**（2026-10-21 复量照出，未修；修法与验收口径写在下面）：
+      `src/lib/process/python-candidates.ts` 是这条问题的**唯一出处**（它自己的文件头就写着
+      「三处曾经各写一份候选名……判据只能有一处（硬规则 24）」，并在
+      `pythonProbeArgs()` 里规定「`py` 必须带 `-3`，裸 `py` 是列出已装版本并退非零」）。
+      而 `src/app/api/custom-nodes/route.ts` 里**三处字面量** `["python3","python","py"]`
+      （`runDiscover` 的非流式循环、`runDiscoverStreaming`、`streamParse`）把它绕开了：
+      复算 `grep -c pythonCandidates src/app/api/custom-nodes/route.ts` → **0**（这个文件从不 import 那份判据）。
+      后果有两条，都在**这台应用的主要平台（Windows）**上：
+      ① 顺序错 —— 那份判据给 Windows 的是 `["python","py","python3"]`（官方安装器落 `python.exe`，
+      装 Store 版时常常**只有** `py`，`python3` 多半只是占位别名），路由却从 `python3` 起；
+      ② 起了 `py` 也不带 `-3` —— 命中 `py` 那一档时 `py -u scripts/parse_custom_nodes.py …`
+      选的是注册表默认版本，而按那份判据的注释，裸 `py` 的语义根本不是「跑这个脚本」。
+      表现是设置页「扫描自定义节点」显示 **0 个**，而界面上没有任何一句说是解释器的事 ——
+      与 #1664/#1665 修掉的那格同形（那两条修的是 `runDiscoverStreaming` 的退避边界）。
+      **同一族的第二处旧形状也在这里**：`streamParse` 的 `close` 分支写的是
+      `code === 127 && i < pyCandidates.length - 1`（route.ts 618 行），而 `#1665` 在
+      `runDiscoverStreaming` 里刚把这一条改成 `< pyCandidates.length`（463 行）——
+      最后一个候选退 127 时，解析口不会给出「未找到 Python 解释器」那句原因。
+      **为什么没顺手改**：它不是机械替换。既有的 12 条流式协议执行者把**平台盲的顺序**
+      当期望钉住了（`route.test.ts` 里 `interpreterNames()` 逐条断
+      `toEqual(["python3","python","py"])`），改吃 `pythonCandidates()` 等于同时改期望与
+      真机行为 —— 要按「注入 platform + 两侧各做一次变异」那一套来，且第①②两条后果要各自
+      有新用例正面要求（`py -3` 出现在 argv 里、Windows 顺序先 `python`）。
+      **建议的修法**：路由不再自写候选表，改成 `pythonCandidates()` 取顺序 +
+      `pythonProbeArgs(name, args)` 拼启动参数，并把两条链（含 `runDiscover` 那份循环）
+      共用同一份「退避 + 按行切分 + 127/ENOENT 同因」内核 —— 顺带让 §12.12 意义上的
+      那对同族实现合一，未覆盖的那 ~31 行随既有 12 条执行者一起被盖住。
+      台账关系：这是 **E5 / §12.18 / 硬规则 24** 的一次现实复发（「地基已有、调用点没复用」），
+      与 `AGENTS.md` 里那条「缺能力补地基，不造第二轮子」同一条口径。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。
 - [ ] **B2 生产路径 21 处 `unwrap()` + 构建失败 panic**，无降级 UI。证据：`src-tauri/src/lib.rs:72,918,1391,1741`；`shell_launch.rs:78,83,201`。
 - [ ] **B3 违反自身规范：`std::process::Command` 直起外部进程 3 处**（应走 `tauri-plugin-shell`）。证据：`src-tauri/src/shell_launch.rs:575`；`lib.rs:1167`；`detached_spawn.rs:147`。
