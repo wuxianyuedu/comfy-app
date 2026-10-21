@@ -253,9 +253,21 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
 });
 
 describe("main：装 / 跳过两条出口的退出码", () => {
+  let tmp: string;
+  beforeEach(() => {
+    /* 隔离到临时根：原用例不传 root、直接断言宿主实时盘（#2030 的假红来源——并行
+     * 满载下 `node_modules/.ci-deps-fingerprint` 偶发读抛错成 null，就走「装」而假红，
+     * 且写回还会污染宿主检出）。这里造一个「已按这份依赖面装好」的根，状态确定。 */
+    tmp = makeInstalledRoot();
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
   it("跳过时不调用安装，且退 0", () => {
     const inst = installStub();
     const code = main({
+      root: tmp,
       run: gitStub({
         "diff --name-only origin/master...HEAD": {
           status: 0,
@@ -265,13 +277,14 @@ describe("main：装 / 跳过两条出口的退出码", () => {
       install: inst.run,
     });
     expect(code).toBe(0);
-    /* `node_modules` 在本仓是装好的（判据自己也跑在它上面），所以这一格走到「跳过」。 */
+    /* 依赖面没碰、node_modules 在场、指纹对得上 ⇒ 跳过（状态来自临时根，不读宿主）。 */
     expect(inst.calls).toBe(0);
   });
 
   it("要装时调用一次安装，退出码原样透出", () => {
     let calls = 0;
     const code = main({
+      root: tmp,
       run: gitStub({
         "diff --name-only origin/master...HEAD": {
           status: 0,
@@ -287,6 +300,24 @@ describe("main：装 / 跳过两条出口的退出码", () => {
     expect(code).toBe(1);
   });
 });
+
+/** 造一个「已按这份依赖面装好」的临时根：依赖面四份文件齐、`.modules.yaml` 在场、
+ * 指纹对得上。用来隔离 `main()` 用例，不让它去断言宿主实时盘（#2030）。 */
+function makeInstalledRoot(): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ci-deps-skip-"));
+  for (const f of [
+    "pnpm-lock.yaml",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "next.config.js",
+  ]) {
+    fs.writeFileSync(path.join(root, f), "# " + f + "\n");
+  }
+  fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
+  fs.writeFileSync(path.join(root, "node_modules", ".modules.yaml"), "{}");
+  writeInstallFingerprint(root, pnpmInstallFingerprint(root)!);
+  return root;
+}
 
 /**
  * 执行档的三条出口都在日志里（规范 §13.5.3.4.3 那句「往上读收益时，出处只能是那几句打印」）。

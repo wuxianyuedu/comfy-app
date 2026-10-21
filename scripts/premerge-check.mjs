@@ -83,16 +83,24 @@ const ROOT = path.resolve(HERE, "..");
  *
  * `mergeLoss` 那一格是 `anchored` 而不是裸 `script`：它**需要一个锚点**
  * （`--baseline <已知好的参照点>`），而那个锚点在「合并前」这一刻是**算得出来的**
- * —— 见 `resolveLossBaseline()`。早先的写法是 `args: []`，于是这一段**恒退 2**
+ * —— 见 `resolveForkBaseline()`。早先的写法是 `args: []`，于是这一段**恒退 2**
  * （`check-merged-side-loss.mjs` 缺 `--baseline` 直接 exit 2），整个入口因此
  * **恒报「不构成证据」** —— 恰好是这套编排要消灭的那类静默失效
  * （看着在跑、事实一次没复算）。口径与出口见 §13.6.2.1。
+ *
+ * `claims` 那一格**同批改成 `anchored`**（ISSUE #2070，方向与上面那条相反、病是同一个）：
+ * 它此前也是 `args: []`，而 `check-commit-claims.mjs` 不带参数时**只审 HEAD** ——
+ * 于是「批次里较早那笔的假声明」在推送那一刻根本没人看：作者本地推的时候审的是
+ * 最新一笔，合并之后 HEAD 前进，就再没有第二个执行者回头重放它。判据本体一字不改，
+ * 改的是**取哪些提交**：`shape: "range"` ⇒ 交 `<分叉点>..HEAD`，也就是「本次带进来的
+ * 那一批」。实测代价（本仓 30 笔真提交逐条审）14 秒 —— 没有声明的提交只值一次
+ * `git log`，贵的是**真带声明**的那几笔（本机单条约 49 秒），而一批里通常只有 0~1 笔。
  *
  * ⚠️ **它被导出只为一件事**：`tests/premerge-check.test.ts` 那条「各段全被跳过 ⇒ 退 2」
  * 的跳过清单**从这里推**，不硬写名单 —— 硬写的话，加第四段时那条用例会继续绿着、
  * 而它其实漏了一段没跳。从段表推 ⇒ 加一段就必须同时处理它，否则当场红。
  *
- * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string}>}
+ * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string, shape: "baseline" | "range"}>}
  */
 export const SEGMENTS = {
   base: {
@@ -101,61 +109,121 @@ export const SEGMENTS = {
   },
   claims: {
     label: "提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）",
-    kind: "script",
+    kind: "anchored",
     script: "check-commit-claims.mjs",
-    args: [],
+    /* 审「这批」而不是审「最新那一笔」—— 见上面那段 #2070。 */
+    shape: "range",
   },
   mergeLoss: {
     label: "合并有没有把一侧整份覆盖掉（#1617）",
     kind: "anchored",
     script: "check-merged-side-loss.mjs",
+    shape: "baseline",
   },
 };
 
 /**
- * 给「合并有没有丢一侧」那一格**算**出它的锚点（`--baseline`）。
+ * 锚点取不到时那一段该记成什么 —— **退 2 并说明**，不许记成绿。
+ *
+ * 这一档此前写的是 `code: 0`：取不到分叉点 ⇒ 那一段「绿」。它与本仓反复在修的那一形
+ * 逐字同（`tests/premerge-check.test.ts` 那条「算不出锚点时退 2 并说明，绝不静默退 0」
+ * 说的是**函数**的契约，而**编排**这一层把 ok:false 折成了 0 —— 契约对了、接线错了）。
+ * 现在两段共用这一个折算点，所以把它单列成一个函数：`main` 里那一段要真跑 git，
+ * 用例进不去（本文件的 `combineCodes` / `lastSummary` 同样是提成纯函数才可判的）。
+ *
+ * 「取不到分叉点」在真实推送路径上不会悄悄改变判决：同一次跑里 `base` 段遇到同一个
+ * 情况本来就记 2（见上面那个分支），`combineCodes` 又是「2 压过 1」——
+ * 这里改的是**读数的诚实度**，不是新增一道拦。
+ *
+ * @param {string} label 段名（打给人看的那一条）
+ * @param {string} reason 取不到的原因（`resolveForkBaseline()` 交回的那句）
+ * @returns {{code: number, output: string}}
+ */
+export function anchorMissed(label, reason) {
+  return {
+    code: 2,
+    output:
+      `[premerge] ${label}：这一段**没跑起来** —— ${reason}。` +
+      "「取不到分叉点」不是「这批没问题」（§13.6.2：没判 ≠ 绿）。\n",
+  };
+}
+
+/**
+ * 跑一条只读 git 命令，拿标准输出；跑不动返回 `null`（不抛）。
+ *
+ * 本文件原先在 `merge-base` 那一处内联 `execFileSync` + `try/catch`，现在「这个引用
+ * 指不指得动一个提交」也要同一件事 —— 两处各写一遍就会有一处漏掉 `null` 那一支
+ * （§12.12 的小尺寸版）。**不导出**：它只是这两个读取动作的公共形状，
+ * 外面要用 git 的话各自有自己的口径。
+ *
+ * @param {string[]} args
+ * @param {string} cwd
+ * @returns {string | null}
+ */
+function runGit(args, cwd) {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 给 `anchored` 那两格**算**出它们共同的锚点。
  *
  * 锚点是什么：**这条线从哪一刻起与要并进去的那条分开的** —— 也就是
  * `merge-base(<要并进去的那条>, HEAD)`。`check-merged-side-loss.mjs` 判的是
  * 「结果版是不是退回了基线之前的某一版」，所以「基线」= **分叉点**，不是
  * `origin/master` 的尖端：拿后者会把分支侧自己的正当改动整片读成差异。
+ * `claims` 那一段要的也正是这一格：`<分叉点>..HEAD` = 本次带进来的那一批提交。
+ *
+ * 「要并进去的那条」有两个来源，按可信度排：
+ *   ① `CNB_PULL_REQUEST_TARGET_SHA`（平台在 PR 事件上给的那个 sha）——
+ *      自托管那条流水线上**只 fetch 协商后的单 ref**（`refs/heads` 零条，见
+ *      `工作区复用读数` 那格的读数），所以那里未必有 `origin/master` 这个引用名。
+ *      `ci-affected-tests.mjs` 取改动面用的就是它，两格认同一个来源，不各找各的
+ *      （§12.18）；**拿到 sha 之后仍然要算 `merge-base`** —— 它是目标线的尖端，
+ *      不是分叉点，直接当基线用会踩上面那句警告。
+ *   ② 取不到 env 时按本地那套找引用（各 remote 的 `master` → 本地 `master`）。
  *
  * 为什么在这里算、而不是让判据自己算：判据的**天真形态**（自己推被丢的那一侧是谁）
  * 在 `ad81a912` 上实测 128 份改动 → **0 命中**（那条线在 squash 之后常常已不可达）。
  * 但「分叉点」与那个不是同一个问题 —— 它**是**可算的，且正是判据需要的语义。
  * 这与 `.githooks/prepare-commit-msg` 那条提交前档同源（那边用 `MERGE_HEAD` + merge-base）。
  *
+ * @param {string} [cwd]
+ * @param {Record<string, string | undefined>} [env] 平台事件的那几个变量
  * @returns {{ok: true, baseline: string} | {ok: false, reason: string}}
  */
-export function resolveLossBaseline(cwd = ROOT) {
-  const ref = resolveMergeBaseRef(cwd);
+export function resolveForkBaseline(cwd = ROOT, env = process.env) {
+  /** @param {string} ref @returns {boolean} 这个引用在本检出里指得动一个提交 */
+  const isCommit = (ref) =>
+    runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd) !==
+    null;
+  /* ① 平台给的目标 sha：只在它**真的落在这份对象库里**时才用 —— 浅克隆 / 单 ref
+   *    之外的那个 sha 会让 merge-base 直接失败，那种「用了但跑不动」比退回 ② 更难读。 */
+  const fromEnv = String(env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
+  const ref = isCommit(fromEnv) ? fromEnv : resolveMergeBaseRef(cwd);
   if (!ref) {
     return {
       ok: false,
       reason:
-        "取不到要并进去的那条（各 remote 的 master / 本地 master）—— 先 `git fetch` 再跑",
+        "取不到要并进去的那条（`CNB_PULL_REQUEST_TARGET_SHA` / 各 remote 的 master / 本地 master）—— 先 `git fetch` 再跑",
     };
   }
-  try {
-    /* 只读一条 git 命令；失败 ⇒ 历史不全（浅克隆）⇒ 如实报「没跑起来」，不问「红没红」。 */
-    const base = execFileSync("git", ["merge-base", ref, "HEAD"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    if (!base) {
-      return {
-        ok: false,
-        reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）`,
-      };
-    }
-    return { ok: true, baseline: base };
-  } catch {
+  /* 只读一条 git 命令；跑不动 ⇒ 历史不全（浅克隆）⇒ 如实报「没跑起来」，不问「红没红」。 */
+  const base = runGit(["merge-base", ref, "HEAD"], cwd);
+  if (!base) {
     return {
       ok: false,
       reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）`,
     };
   }
+  return { ok: true, baseline: base };
 }
 
 /**
@@ -209,6 +277,34 @@ function runScript(script, args, extraEnv = {}) {
 }
 
 /**
+ * `base` 段那一批里**实际会被跑到的脚本名**（从 argv 里认 `*.mjs` / `*.cjs` / `*.js`）。
+ *
+ * 存在的理由只有一件：`resolveMergeBatch` 的**第二个来源**
+ * （`base-check/chained-steps.mjs`）已经把 `check-commit-claims.mjs --range <base>..HEAD`
+ * 收进那一批了 —— 也就是说「审这一批的声明」在 base 段里**早就有执行者**，
+ * 而本文件自己那格 `claims` 此前只审 HEAD 一笔（ISSUE #2070）。把它改成审同一批之后，
+ * 同一次跑里就可能出现**两遍同样的核对**（带声明的提交实测单条约 49 秒），
+ * 所以这里要一个「base 段跑没跑过它」的读数。
+ *
+ * ⚠️ 必须按**实际要跑的那批**（`--light` 筛过之后）算，不能按 `resolveMergeBatch`
+ * 算出来的整批算：`localTierLabels()` 里没有那条 chained 的标签，`--light` 会把
+ * 它筛掉 —— 拿整批去重就等于把「其实没跑」的那条也免掉，那是假绿的新住处。
+ *
+ * @param {Array<{argv?: string[]}>} commands
+ * @returns {Set<string>} 形如 `scripts/check-commit-claims.mjs`
+ */
+export function scriptsInCommands(commands) {
+  const out = new Set();
+  for (const c of commands ?? []) {
+    for (const a of c?.argv ?? []) {
+      const text = String(a);
+      if (/\.(mjs|cjs|js)$/.test(text)) out.add(text);
+    }
+  }
+  return out;
+}
+
+/**
  * 合成各段的总码：**2 优先于 1**（没法归因的读数不许被当成结论）。
  *
  * @param {number[]} codes
@@ -247,6 +343,9 @@ function main(argv) {
 
   /** @type {Array<{key: string, label: string, code: number, output: string}>} */
   const results = [];
+  /* `base` 段**实际跑过**的脚本（见 `scriptsInCommands` 那段：按筛过的批算）。
+   * 循环外声明，因为段序是 `base` 在前 —— 后面的段要能读它。 */
+  const ranInBase = new Set();
 
   for (const [key, seg] of wanted) {
     /* `seg` 的联合类型由 `SEGMENTS` 的 JSDoc 给出；两处用法各自收窄（见下）。 */
@@ -291,6 +390,8 @@ function main(argv) {
         ? batch.commands.filter((c) => localTier.has(c.label))
         : batch.commands;
       const skippedCount = batch.commands.length - commands.length;
+      /* 记下这一段**实际**会跑的脚本名（`--light` 筛过之后那一半）。 */
+      for (const s of scriptsInCommands(commands)) ranInBase.add(s);
       if (lightRecompute && skippedCount > 0) {
         process.stdout.write(
           `[premerge] --light：本段只复算本地档那几条，跳过 ${skippedCount} 条重档` +
@@ -327,20 +428,46 @@ function main(argv) {
       continue;
     }
     if (seg.kind === "anchored") {
-      /* 带锚点的那一格（`mergeLoss`）：锚点**在这里算**，算不出就如实报「没跑起来」。
-       * 早先它是裸 `script` + `args: []`，于是恒退 2、整个入口恒「不构成证据」
-       * —— 见 `SEGMENTS` 那条注释。 */
-      const { script } = /** @type {{script: string}} */ (seg);
-      const anchor = resolveLossBaseline();
-      if (!anchor.ok) {
-        results.push({ key, label: seg.label, code: 0, output: "" });
+      /* 带锚点的两格（`claims` / `mergeLoss`）：锚点**在这里算**，算不出就如实报
+       * 「没跑起来」。早先 `claims` 是裸 `script` + `args: []` ⇒ 只审 HEAD（#2070），
+       * 而 `mergeLoss` 取不到锚点时被折成 0 ⇒ 记成绿 —— 两种都是「没读到」被读成
+       * 「读过了且没问题」，折算只留这一个出口（`anchorMissed`）。 */
+      const { script, shape } =
+        /** @type {{script: string, shape: "baseline" | "range"}} */ (seg);
+      /* **同一次跑里不判两遍**：`base` 段的第二个来源已经带着 `--range <base>..HEAD`
+       * 跑过这份脚本了（`base-check/chained-steps.mjs`）。跳过时必须把「在哪儿判的」
+       * 打在读数里 —— 安静地少跑一段，与少跑一段本身同形（§13.5.12 那条纪律）。
+       * `--light` 把那一条筛掉了，所以去重看的是实际跑过的那批，不是算出来的整批。 */
+      if (ranInBase.has(`scripts/${script}`)) {
+        results.push({
+          key,
+          label: seg.label,
+          code: 0,
+          output:
+            "[premerge] 这一段**已在 base 段里判过**（同一份 `--range <base>..HEAD`，" +
+            "来自 `base-check/chained-steps.mjs` 的第二来源）—— 不在这里再跑一遍。\n",
+        });
         continue;
       }
-      const r = runScript(script, [`HEAD`, "--baseline", anchor.baseline]);
+      const anchor = resolveForkBaseline();
+      if (!anchor.ok) {
+        const missed = anchorMissed(seg.label, anchor.reason);
+        results.push({ key, label: seg.label, ...missed });
+        continue;
+      }
+      const args =
+        shape === "range"
+          ? /* `<分叉点>..HEAD` = 本次带进来的那一批（不含分叉点本身：它是目标线上
+             *    早就存在、早就被审过的一笔）。 */
+            [`${anchor.baseline}..HEAD`]
+          : ["HEAD", "--baseline", anchor.baseline];
+      const r = runScript(script, args);
       results.push({ key, label: seg.label, code: r.code, output: r.output });
       continue;
     }
-    /* `base` / `anchored` 都已在上面 `continue`，这里收窄到裸 script 那两段。 */
+    /* `base` / `anchored` 都已在上面 `continue`，剩下的是**不需要锚点**的裸脚本段：
+     * 目前一段都没有（`claims` 从 #2070 起也要锚点），留着是因为 `SEGMENTS` 的类型
+     * 仍然允许 `kind: "script"` —— 将来加一段廉价复查时不必回来改分派。 */
     const scripted = /** @type {{script: string, args: string[]}} */ (seg);
     const r = runScript(scripted.script, scripted.args);
     results.push({ key, label: seg.label, code: r.code, output: r.output });
