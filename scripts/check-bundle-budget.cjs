@@ -142,6 +142,75 @@ function baselineRevState(rev) {
 }
 
 /**
+ * 「记了但不可达」那一档的**第二归因通道**：按基线的 `generatedAt` 数主干上其后动过
+ * 客户端源码的提交，并带回最近几笔的标题（ISSUE #2082 的现场）。
+ *
+ * 为什么这条走得通：`baselineRev` 记的几乎总是**分支提交**，而本仓是 squash 合并 ——
+ * 分支一删就没有 ref 指向它，`git gc` 之后一律查不到（§12.13.3 里 ISSUE #653 那句原话，
+ * 也正是 `baselineRevState()` 分出 `stale` 这一档的理由）。于是每一次判红都只能说
+ * 「无法判断这批读数与基线之间源码动过几次」，而它给的下一步（「先分清该不该认账」）
+ * 需要的恰恰是这份归因 —— 一句话把动作推回原地。
+ * `generatedAt` 是基线里**另一个实测值**，它不依赖那枚提交还在不在，所以日期这条路
+ * 在 `stale` 档上仍然量得出来。
+ *
+ * 量不到时回 `null`（git 不可用 / 日期形状不合法 / 不在检出里）：调用方按「没量到」说话，
+ * 不拿猜的数顶上去。**判红不因此变绿** —— 补的是归因，不是判决。
+ *
+ * @returns {{count: number, recent: Array<{rev: string, title: string}>} | null}
+ */
+function commitsSinceDateTouchingSource(dateStr, limit = 5) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr ?? ""))) return null;
+  const res = spawnSync(
+    "git",
+    [
+      "log",
+      "--since",
+      `${dateStr} 00:00:00`,
+      "--first-parent",
+      "--format=%h\x1f%s",
+      "--",
+      "src/",
+    ],
+    { cwd: ROOT, encoding: "utf8" },
+  );
+  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  const rows = res.stdout
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const at = l.indexOf("\x1f");
+      return { rev: l.slice(0, at), title: l.slice(at + 1) };
+    });
+  return { count: rows.length, recent: rows.slice(0, limit) };
+}
+
+/**
+ * `--update` 该落的那枚修订号：**主干可达的那一枚优先**（ISSUE #2082）。
+ *
+ * 为什么不是直接记 HEAD：本仓 PR 走 squash 合并，记录那一刻的 HEAD 是**分支提交**，
+ * 合入之后没有 ref 指向它，`git gc` 之后 `baselineRevState()` 一律判 `stale`。
+ * #1988 那一刀把「压根取不到（null）」拦住了，但**形状完全合法、每一次判红却都归因不了**
+ * 的这一半留了下来 —— master 上那份 `0a618c1c` 就是它长出来的样子。
+ * `merge-base HEAD origin/master` 落在主干上，squash 之后仍在场，拿它当锚点，
+ * 「基线之后源码动过几次」才真的数得出来。
+ *
+ * 问不到主干（没有 `origin/master` 这个 ref / 不在 git 检出里 / git 不可用）回 `null`，
+ * 由调用方退回 HEAD —— 那仍是会消失的那一枚，所以打印里必须说清用的是哪一枚、为什么。
+ *
+ * @returns {string | null}
+ */
+function trunkReachableRev() {
+  const res = spawnSync("git", ["merge-base", "HEAD", "origin/master"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  const rev = res.stdout.trim();
+  return REV_SHAPE.test(rev) ? rev : null;
+}
+
+/**
  * 本检出的 HEAD 是不是一个**合并提交**（父提交 > 1）。
  *
  * 为什么要单开这一档：合并提交的 `HEAD` 是**这一版的祖先里没有**的提交 —— 索引里那份
@@ -237,7 +306,7 @@ function readBaseline() {
   return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
 }
 
-function writeBaseline(m, note) {
+function writeBaseline(m, note, rev) {
   const payload = {
     generatedAt: new Date().toISOString().slice(0, 10),
     note:
@@ -247,8 +316,10 @@ function writeBaseline(m, note) {
         "棘轮只许下降，" +
         "抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
     /* 读数是**哪一版源码**的产物（规范 §12.13.3）：判红时用它把「基线过期」从
-     * 猜测变成事实 —— 见 `commitsSinceBaseline`。 */
-    baselineRev: headRev(),
+     * 猜测变成事实 —— 见 `commitsSinceBaseline`。调用方给的是主干可达的那一枚
+     * （`trunkReachableRev`），没给才退回 HEAD —— 见 `commitsSinceDateTouchingSource`
+     * 头注里那条「squash 之后分支提交查不到」的成因。 */
+    baselineRev: rev ?? headRev(),
     metric: {
       scope: ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
       raw: m.raw,
@@ -423,7 +494,8 @@ function main() {
     /* 写盘前先校验形状：`--update` 落下去的必须是 40 位十六进制。只判「不是 null」不够 ——
      * 读那一侧要拿它 `git cat-file -e` 去认「基线之后源码动过几次」，写成短哈希 / ref
      * 这类形态在那边同样是查不到，只是把失效挪到了下一步。 */
-    const rev = headRev();
+    const anchor = trunkReachableRev();
+    const rev = anchor ?? headRev();
     if (!REV_SHAPE.test(String(rev))) {
       console.error(
         "[bundle-budget] 拒绝写入基线：取不到可用的当前修订号（不在 git 检出里 / git 不可用）。\n" +
@@ -432,7 +504,15 @@ function main() {
       );
       return 1;
     }
-    writeBaseline(now);
+    writeBaseline(now, undefined, rev);
+    /* 用的是哪一枚锚点必须打出来：两种锚点的**失效方向不同**（主干那枚一直数得出，
+     * HEAD 那枚在 squash 合入后不可达、只能改走日期通道），不写出来就只能事后猜。 */
+    console.log(
+      `[bundle-budget] 基线锚点 baselineRev=${String(rev).slice(0, 8)} —— ` +
+        (anchor
+          ? "取的是主干可达的那一枚（merge-base HEAD origin/master），squash 合入后仍数得出「其后动过几次」"
+          : "本检出问不到 origin/master，退回 HEAD —— 这一枚在 squash 合入后多半不可达，届时判红改走 generatedAt 那条第二归因（ISSUE #2082）"),
+    );
     console.log(
       `[bundle-budget] 基线已更新（${path.relative(ROOT, BASELINE)}）：` +
         `${before ? `gzip ${kb(before.gzip)} → ${kb(now.gzip)}、文件数 ${before.files} → ` : ""}` +
@@ -483,12 +563,35 @@ function main() {
     } else if (state.kind === "stale") {
       /* 「记了、但那个提交在本检出里不存在」与「没记」是两档（ISSUE #1988）：
        * 后者的下一步是重记一次；前者是**基线过期**，重记之前必须先分清涨的这点体积
-       * 该不该认 —— 这正是 §13.5.4 例外流程的第一步，反过来做就是把劣化记账放行。 */
+       * 该不该认 —— 这正是 §13.5.4 例外流程的第一步，反过来做就是把劣化记账放行。
+       *
+       * 话术在这里订正一处（ISSUE #2082）：旧那句把原因写成「基线过期 / 浅克隆」，而本仓
+       * 的常态是前者 —— PR 走 squash 合并，那枚分支提交在合入后不再有 ref 指向，
+       * `git gc` 之后在任何主干检出上都查不到。它与浅克隆无关，且**每一次判红都必然落到
+       * 这一档**（master 上那份 `0a618c1c` 就是这么来的）。所以这里不再停在
+       * 「无法判断」，改走 `generatedAt` 那条第二归因通道。 */
+      const byDate = commitsSinceDateTouchingSource(base.generatedAt);
+      const staleHead =
+        `  基线修订号：${String(base.baselineRev).slice(0, 8)} 在本检出里不可达` +
+        "（基线过期 —— 本仓常态是 squash 合入后那枚分支提交不再有 ref 指向，浅克隆是另一种）——\n";
       console.error(
-        `  基线修订号：${String(base.baselineRev).slice(0, 8)} 在本检出里不可达（基线过期 / 浅克隆）——\n` +
-          "    无法判断这批读数与基线之间源码动过几次。**别直接 --update 重记**：" +
-          "先按下面逐文件诊断分清「涨了」与「换了名」，确认这点体积该不该认账；" +
-          "确认之后再带 --allow-increase 重记基线（§13.5.4 例外流程）。",
+        byDate
+          ? staleHead +
+              `    改按基线日期 ${base.generatedAt} 归因：src/ 侧其后有 ${byDate.count} 次主干提交` +
+              (byDate.recent.length
+                ? `（${byDate.recent.map((r) => `${r.rev} ${r.title}`).join("；")}）`
+                : "") +
+              "。\n" +
+              (byDate.count > 0
+                ? "    ⇒ 这批读数取自基线之后的源码，涨幅可能正是那几次改动换来的。" +
+                  "**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」，" +
+                  "确认这点体积该不该认账；确认之后再带 --allow-increase 重记基线（§13.5.4 例外流程）。"
+                : "    ⇒ src/ 侧其后一次提交都没有，那么这笔上涨**不是**基线之后的源码换来的。" +
+                  "**别直接 --update 重记**：先看下面逐文件诊断（§13.5.4 例外流程）。")
+          : staleHead +
+              "    基线日期那条也量不到（没有 generatedAt / 日期形状不合法 / git 不可用），" +
+              "所以这批读数与基线之间源码动过几次**判断不了**。" +
+              "**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」（§13.5.4 例外流程）。",
       );
     } else {
       const since = commitsSinceBaseline(state.rev);
