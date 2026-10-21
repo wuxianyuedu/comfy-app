@@ -99,6 +99,33 @@ describe("pnpm db:push 非交互可用", () => {
     ).not.toBe(0);
     expect(result.stderr).toContain("db:push");
   }, 150_000);
+
+  it("认不出的旗标 ⇒ 非零退出，且**一个字节都没往库里写**（ISSUE #1956）", () => {
+    /* 立案现场：这个入口不解析 argv，于是 `node scripts/db-push.mjs --dry-run`
+     * 被当成「没有参数的那次调用」照跑 —— 而它默认动的是 `push --force`（真写库、
+     * 自动批准会丢数据的语句）。实测那一跑落了库，只因为那批里唯一的 DROP 恰好
+     * 打在一张 0 行的表上才没造成损失；方向不该由「恰好表是空的」来兜。
+     * 破坏性入口遇到不认识的旗标，唯一不猜的答复是不作动。 */
+    const result = spawnSync(
+      process.execPath,
+      [path.join(process.cwd(), "scripts", "db-push.mjs"), "--dry-run"],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 60_000,
+      },
+    );
+    expect(result.status, "未知参数必须退非零").not.toBe(0);
+    expect(result.stderr).toContain("不接受参数");
+    // 说清它默认动的是什么，并给出「要一份不写库的清单」该跑哪一条。
+    expect(result.stderr).toContain("drizzle-kit push --force");
+    expect(result.stderr).toContain("pnpm exec drizzle-kit push");
+    /* 真正的那一条判据：库没被建出来。上面那几条话术漂了也会被这条抓住 ——
+     * 「打印了拒绝的话」与「没动库」是两件事，这里要的是后者。 */
+    expect(fs.existsSync(dbFile), "拒绝参数那一跑不许留下库文件").toBe(false);
+  }, 70_000);
 });
 
 describe("db:push 的空转档：库已经是这一版 schema 建的就不再起 drizzle", () => {
