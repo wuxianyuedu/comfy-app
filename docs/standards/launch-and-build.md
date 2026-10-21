@@ -3094,6 +3094,7 @@ sidecar」两种不同形态的失败。
 | 全量单测 + 覆盖率（跑绿即记「改了就当天跑」账，规范 §11.8 / §13.5.4）         | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm run test:coverage` 在两侧同形）    | `scripts/full-suite-run.mjs`（`pnpm run test:coverage:tracked` / `node scripts/full-suite-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                    |
 | 产物级护栏（build + 剥私有输入 + 数产物 + 冒烟，跑绿即记同一份账）            | `scripts/quality-gate.ps1`（暂无 Windows 入口：`pnpm run build` 在两侧同形）                        | `scripts/artifact-run.mjs`（`pnpm run build:tracked` / `node scripts/artifact-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                                |
 | 产品版本号三处同步（D7，规范 §7.1.1）                                         | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-app-version.cjs`（`pnpm check:app-version`，契约测试 `tests/check-app-version.test.ts`）                                                                        |
+| 开发盘（ReFS / Dev Drive）红利探测与调优（实测能力 + 动作矩阵）                | `tools/start/tune-dev-drive.ps1`                                                                   | `scripts/dev-drive-tune.mjs`（`pnpm dev:drive`；探测 `scripts/dev-drive-probe.mjs`；实测 `scripts/dev-drive-bench.mjs`；判据 `scripts/dev-drive-levers.mjs`；契约测试 `tests/dev-drive-tune.test.ts` 与 `tests/dev-drive-bench.test.ts`；指南 `docs/guides/dev-drive-refs.md`）                                                  |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个
