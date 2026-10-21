@@ -20,6 +20,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { copyGateDeps } from "./helpers/gate-repo";
+import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 import { symlinkDir } from "./helpers/symlink-dir";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
@@ -260,6 +261,9 @@ describe("FormField 接线门禁：棘轮（§16.2.4.26）", () => {
     );
     expect(r.ok).toBe(false);
     expect(r.output).toContain("拒绝把基线往上涨");
+    /* 上面那两行判的是「拦下了」；这一行判的是「拦住之后那句话能不能走」——
+     * 出路自洽性的判据只有一份实现（`./helpers/ratchet-refusal`）。 */
+    expectActionableRefusal(r.output, "check-form-field-wiring.cjs");
   });
 
   it("⑤′ `--update` 在净数不涨时直接收紧", () => {
