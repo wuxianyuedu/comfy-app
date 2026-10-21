@@ -36,11 +36,15 @@ import {
 } from "../scripts/artifact-run.mjs";
 import {
   FULL_SUITE_TIMEOUT_MS,
+  RERUN_TIMEOUT_MS,
   shouldRecord as suiteRecords,
   SUITE_JUNIT_RELATIVE,
   TRACK as SUITE_TRACK,
+  classifyRerunOutcome,
   parseJunitPhaseCosts,
+  planIsolatedRerun,
   planRun as suitePlan,
+  rerunLaunches,
   suiteRanking,
   suitePhaseTax,
   toTransportSafePath,
@@ -1216,5 +1220,111 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
     const text = suitePhaseTax("", { file: "/tmp/gone.xml" }).join("\n");
     expect(text).toContain("**没有**");
     expect(parseJunitPhaseCosts("")).toEqual([]);
+  });
+});
+
+/* ── 每日那一跑的「超时指纹 → 隔离复跑」（§13.6.4 / §13.6.4.1）────────────
+ * 触发事实：`cnb-b0l-1k59op66t` —— `每日单元测试` 里只有
+ * `tests/deps-freshness-gate.test.ts:166` 一条 `Test timed out in 30000ms`
+ * （没有任何断言报错），就把后面的 `每日生产构建` / `每日浏览器安装` /
+ * `每日全量E2E` 三格全部 skip。组 C 有这一档而每日档没有，
+ * 于是「排不上调度」在每日链上长得和「代码回归了」一模一样。 */
+describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判决链）", () => {
+  const TIMEOUT_JUNIT = [
+    '<testsuites name="vitest tests" tests="2" failures="1">',
+    '  <testsuite name="tests/deps-freshness-gate.test.ts" failures="1" errors="0">',
+    '    <testcase name="红了就点名">',
+    '      <failure message="Test timed out in 30000ms.">Test timed out in 30000ms.</failure>',
+    "    </testcase>",
+    "  </testsuite>",
+    "</testsuites>",
+  ].join("\n");
+  const ASSERTION_JUNIT = [
+    '<testsuite name="tests/real.test.ts" failures="1" errors="0">',
+    '  <failure message="expected 1 to be 2">AssertionError</failure>',
+    "</testsuite>",
+  ].join("\n");
+
+  it("绿的那次不复跑（没有要定性的红）", () => {
+    expect(
+      planIsolatedRerun({ exitCode: 0, junitText: TIMEOUT_JUNIT }),
+    ).toEqual({
+      retry: false,
+      files: [],
+      why: "这一跑是绿的，没有要定性的红",
+    });
+  });
+
+  it("红而**不带**超时指纹 ⇒ 一次都不复跑（真红照拦，这一格最该守住）", () => {
+    const plan = planIsolatedRerun({ exitCode: 1, junitText: ASSERTION_JUNIT });
+    expect(plan.retry).toBe(false);
+    expect(plan.why).toContain("按真红处置");
+    /* 反向复算：把同一个 exitCode 换成带指纹的读数，结论当场变成复跑。
+       没有这一句，「不复跑」可能只是判据没接上（恒 false）而不是判对了。 */
+    expect(
+      planIsolatedRerun({ exitCode: 1, junitText: TIMEOUT_JUNIT }).retry,
+    ).toBe(true);
+  });
+
+  it("带指纹时**只复跑失败的那几份**，名单取自 junit（不拖整档重跑）", () => {
+    const plan = planIsolatedRerun({ exitCode: 1, junitText: TIMEOUT_JUNIT });
+    expect(plan.retry).toBe(true);
+    expect(plan.files).toEqual(["tests/deps-freshness-gate.test.ts"]);
+    expect(plan.why).toContain("1 份");
+  });
+
+  it("带指纹但读不出名单 ⇒ **退回整档**（方向单边化：宁可多跑，不许漏跑）", () => {
+    const plan = planIsolatedRerun({
+      exitCode: 1,
+      junitText: "Failed to start forks worker",
+    });
+    expect(plan.retry).toBe(true);
+    expect(plan.files).toEqual([]);
+    expect(plan.why).toContain("退回整档");
+  });
+
+  it("第 2 遍的三态：绿=负载假红 / 仍带指纹=未校验 / 指纹消失=真红", () => {
+    expect(classifyRerunOutcome({ exitCode: 0, output: "" })).toBe(
+      "load-flake",
+    );
+    expect(
+      classifyRerunOutcome({
+        exitCode: 1,
+        output: "Test timed out in 30000ms",
+      }),
+    ).toBe("unverified");
+    expect(
+      classifyRerunOutcome({ exitCode: 1, output: "expected 1 to be 2" }),
+    ).toBe("real-red");
+  });
+
+  it("复跑命令行带 `--no-file-parallelism` 而**绝不带 `--coverage`**", () => {
+    const args = rerunLaunches({ files: ["a.test.ts", "b.test.ts"] });
+    expect(args).toEqual([
+      ["run", "--no-file-parallelism", "a.test.ts", "b.test.ts"],
+    ]);
+    for (const launch of args) {
+      expect(launch.join(" ")).not.toContain("--coverage");
+    }
+    /* 覆盖率门槛（`vitest.config.ts` 的 `coverage.thresholds`）判的是整档的分子分母：
+       拿一份子集去跑覆盖率必然跌破，那等于把「负载假红」换成一条**新的假红**。 */
+    expect(rerunLaunches({ files: [] })).toEqual([
+      ["run", "--no-file-parallelism"],
+    ]);
+  });
+
+  it("复跑的墙钟预算严格小于整档那一跑（复跑不许比整档更宽）", () => {
+    expect(RERUN_TIMEOUT_MS).toBeLessThan(FULL_SUITE_TIMEOUT_MS);
+  });
+
+  it("这一档不重写指纹清单：脚本里不许出现第二份超时正则", () => {
+    const src = readFileSync(
+      path.join(ROOT, "scripts/full-suite-run.mjs"),
+      "utf8",
+    );
+    expect(src).toContain('from "./affected-launch-load-retry.mjs"');
+    /* 「Test timed out」在本仓只能是**被引用**的话术，不该在这里被重新定义成一份正则。
+       两份清单漂移的代价由 `tests/hook-affected-launch.test.ts` 钉在组 C 那一侧。 */
+    expect(/\/Test timed out in[^/]*\/i/.test(src)).toBe(false);
   });
 });
