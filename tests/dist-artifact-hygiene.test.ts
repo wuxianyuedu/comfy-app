@@ -653,6 +653,66 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   });
 
   /**
+   * 投毒验收（台账 R5-01 / ISSUE #1953）的**可执行形态**：往装配后的 static 里
+   * 放一个 `db.sqlite`，判据必须点名。2026-10 现场复现过的那两条是「顶层白名单外
+   * 条目」+「开发库文件」一起响 —— 少任何一条，这个形状就从缝里漏出去。
+   *
+   * 它与出厂链路上那次真敲（`build-desktop.mjs` 装配后同批调用）的分工：这条锁
+   * 「判据认得出投毒」，接线由下面那条形态用例锁；两者合起来才等于「装配之后
+   * 确实数过一次」—— 单有前者不证明链路敲了它，单有后者不证明判据有牙。
+   */
+  it("往 static 里放一个 db.sqlite → 两条违规一起点名（投毒验收）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-poison-"));
+    const lines: string[] = [];
+    const errSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...a: unknown[]) => {
+        lines.push(a.join(" "));
+      });
+    const logSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation((...a: unknown[]) => {
+        lines.push(a.join(" "));
+      });
+    try {
+      // 合法态先立：齐件的 static 判 0，否则下面那条红没有信息量（不是恒红）。
+      makeProduct(dir, NAMES);
+      expect(checkerExports().checkDir(dir, "static")).toBe(false);
+
+      // 投毒：模拟「分发卫生没剥干净」——开发库落在最终内嵌进 exe 的那一层。
+      writeFileSync(join(dir, "db.sqlite"), "SQLite format 3");
+      expect(checkerExports().checkDir(dir, "static")).toBe(true);
+      const report = lines.join(" ");
+      expect(report).toContain("顶层出现白名单外的条目");
+      expect(report).toContain("开发库文件");
+      expect(report).toContain("db.sqlite");
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 接线的形态判据（R5-01 的另一半）：判据在 `.next/standalone` 层早有执行者
+   * （`pnpm build` 收尾那一步），而 `src-tauri/static` 此前只有「人手工跑一次
+   * 自查入口」—— 出厂链路上没有执行者。这条锁三件事：真的敲了、敲的就是数
+   * static 那一份、且排在 sidecar 之前（排在 `tauri build` 之后等于从来不检查）。
+   */
+  it("出厂链路在装配后同批敲数产物判据，且排在 sidecar 之前", () => {
+    const check = buildDesktop.indexOf("check-standalone-contents.cjs");
+    const sidecar = buildDesktop.indexOf("3/4 复制 Node 运行时为 sidecar");
+    expect(
+      check,
+      "build-desktop.mjs 没有调用 check-standalone-contents.cjs",
+    ).toBeGreaterThan(-1);
+    expect(sidecar, "找不到 sidecar 步骤（3/4），顺序无从判").toBeGreaterThan(
+      -1,
+    );
+    expect(check).toBeLessThan(sidecar);
+  });
+
+  /**
    * 两个口径的分工也得钉住，否则下次有人「统一成一份清单」就会一边假红一边假绿：
    * standalone 的 `node_modules/next` 是指向 pnpm store 的**链接**，
    * 「必须有的」按可达判（经链接 require 得到就算在位），
