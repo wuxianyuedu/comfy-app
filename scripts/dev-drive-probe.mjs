@@ -79,6 +79,14 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
  */
 
 /**
+ * @typedef {object} IndexMarking
+ * @property {boolean} known 读到了没有（读不到就是 false，不猜）
+ * @property {number} sampled 抽了多少个文件
+ * @property {number} marked 其中带「不索引内容」标记的
+ * @property {number | null} ratio 覆盖率
+ */
+
+/**
  * @typedef {object} ProbeReport
  * @property {string} repo
  * @property {NodeJS.Platform} platform
@@ -88,6 +96,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
  * @property {Record<string, string | null>} git
  * @property {Record<string, CacheEntry | null>} cache
  * @property {DefenderProbe} defender
+ * @property {IndexMarking} indexMarking
  * @property {WorkdirEntry[]} workdirs
  */
 
@@ -520,8 +529,7 @@ export function probeWorkdirs(platform) {
  * @param {NodeJS.Platform} platform
  * @returns {DefenderProbe}
  */
-export function probeDefender(platform) {
-  if (platform !== "win32") {
+export function probeDefender(platform) {  if (platform !== "win32") {
     return { known: false, realTime: null, exclusions: [], performanceMode: false };
   }
   const result = runPowerShell(
@@ -542,6 +550,45 @@ export function probeDefender(platform) {
     realTime: flag.trim() !== "True",
     exclusions,
     performanceMode: false,
+  };
+}
+
+/**
+ * 抽读「不索引内容」标记的覆盖率 —— 用来回答「这条标记到底生效没有」。
+ *
+ * 抽的是检出里的源码与文档两处（**不抽 `node_modules`**：它文件数占大头，
+ * 抽到的多半是依赖而不是自己的东西）。读不到就记「不判」，不猜。
+ * @param {NodeJS.Platform} platform
+ * @returns {{ known: boolean, sampled: number, marked: number, ratio: number | null }}
+ */
+export function probeIndexMarking(platform) {
+  const empty = { known: false, sampled: 0, marked: 0, ratio: null };
+  if (platform !== "win32") return empty;
+  const roots = [path.join(ROOT, "src"), path.join(ROOT, "docs")].filter((item) =>
+    fs.existsSync(item),
+  );
+  if (roots.length === 0) return empty;
+  const parts = roots.map(
+    (item) =>
+      `Get-ChildItem -LiteralPath '${item}' -Recurse -File -Force -ErrorAction SilentlyContinue`,
+  );
+  const result = runPowerShell(
+    `$files = @(${parts.join("; ")}) | Select-Object -First 300; ` +
+      `"$($files.Count)|$(@($files | Where-Object { $_.Attributes -band [IO.FileAttributes]::NotContentIndexed }).Count)"`,
+    platform,
+  );
+  if (!result.ok) return empty;
+  const [total = "", marked = ""] = result.stdout.split("|");
+  const sampled = Number(total);
+  const hits = Number(marked);
+  if (!Number.isFinite(sampled) || !Number.isFinite(hits) || sampled === 0) {
+    return empty;
+  }
+  return {
+    known: true,
+    sampled,
+    marked: hits,
+    ratio: Number((hits / sampled).toFixed(3)),
   };
 }
 

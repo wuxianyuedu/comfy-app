@@ -34,6 +34,7 @@ import {
   probeDefender,
   probeDevDrive,
   probeGitConfig,
+  probeIndexMarking,
   probePnpmStore,
   probeVolume,
   probeWorkdirs,
@@ -205,6 +206,7 @@ function collectReport(flags = {}, platform = process.platform) {
   const git = probeGitConfig();
   const cache = probeCacheLocations(platform);
   const defender = probeDefender(platform);
+  const indexMarking = probeIndexMarking(platform);
   const workdirs = probeWorkdirs(platform);
   const bench = flags.bench ? runIoBench({ filters: volume.filters, platform }) : null;
   /** @type {DevDriveReport} */
@@ -217,6 +219,7 @@ function collectReport(flags = {}, platform = process.platform) {
     git,
     cache,
     defender,
+    indexMarking,
     workdirs,
     bench,
   };

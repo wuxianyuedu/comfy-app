@@ -22,6 +22,7 @@ import {
  * @typedef {import("./dev-drive-probe.mjs").CacheEntry} CacheEntry
  * @typedef {import("./dev-drive-probe.mjs").VolumeProbe} VolumeProbe
  * @typedef {import("./dev-drive-probe.mjs").WorkdirEntry} WorkdirEntry
+ * @typedef {import("./dev-drive-probe.mjs").IndexMarking} IndexMarking
  * @typedef {import("./dev-drive-bench.mjs").BenchReport} BenchReport
  */
 
@@ -90,7 +91,7 @@ export function buildLevers(report) {
   levers.push(defenderLever(volume, report.defender ?? { known: false }));
   levers.push(filtersLever(volume, report.bench ?? null));
   if (report.bench && report.bench.ran) levers.push(ioBenchLever(report.bench));
-  levers.push(searchIndexLever(drive));
+  levers.push(searchIndexLever(drive, report.indexMarking ?? { known: false, sampled: 0, marked: 0, ratio: null }));
   levers.push(gitIndexLever(git));
   levers.push(cacheLever("temp", "构建期临时目录（TEMP / TMP）", cache.temp, drive));
   levers.push(cacheLever("cargo-home", "Rust 依赖缓存（CARGO_HOME）", cache.cargoHome, drive));
@@ -518,17 +519,34 @@ function ioBenchLever(bench) {
 }
 
 /**
- * Windows Search 索引：后台反复读盘，收益不如排除来得直接。
+ * Windows Search 索引：后台反复读盘。
+ *
+ * 这一条要能自己回答「标记到底生效没有」——所以它不只是一条建议，
+ * 还读一遍检出里的标记覆盖率：覆盖到位就是「就位」，没到位才给动作。
  * @param {string} drive
+ * @param {IndexMarking} marking 抽读到的标记覆盖率
  * @returns {Lever}
  */
-function searchIndexLever(drive) {
+function searchIndexLever(drive, marking) {
   if (!drive) {
     return {
       id: "search-index",
       title: "Windows Search 索引（后台读盘）",
       status: "na",
       detail: "没读到卷信息，本条不判。",
+      actions: [],
+    };
+  }
+  if (marking && marking.known && marking.ratio !== null && marking.ratio >= 0.95) {
+    return {
+      id: "search-index",
+      title: "Windows Search 索引（后台读盘）",
+      status: "ok",
+      detail:
+        `实测：抽查检出内 ${marking.sampled} 个文件，${marking.marked} 个带「不索引内容」标记` +
+        `（${Math.round(marking.ratio * 100)}%）→ 这些内容不再进搜索索引。` +
+        "注意：标记只作用于**当前已有**的文件，新落盘的不继承；" +
+        "要长期生效，Windows 搜索的「索引选项 → 排除项」里还得加这一条。",
       actions: [],
     };
   }

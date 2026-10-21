@@ -84,6 +84,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
       exclusions: [],
       performanceMode: false,
     },
+    indexMarking: { known: false, sampled: 0, marked: 0, ratio: null },
     workdirs: [],
   };
   return { ...base, ...overrides };
@@ -368,6 +369,33 @@ function makeBench(
     ],
   };
 }
+
+describe("搜索索引这一条：要能自己回答「标记生效没有」", () => {
+  it("读不到覆盖率 → 待办（不判成通过）", () => {
+    const report = makeReport();
+    report.indexMarking = { known: false, sampled: 0, marked: 0, ratio: null };
+    expect(leverOf(report, "search-index").status).toBe("actionable");
+  });
+
+  it("抽查覆盖率够高 → 就位，且不再给动作", () => {
+    const report = makeReport();
+    report.indexMarking = { known: true, sampled: 300, marked: 300, ratio: 1 };
+    const lever = leverOf(report, "search-index");
+    expect(lever.status).toBe("ok");
+    expect(lever.detail).toContain("不索引内容");
+    expect(lever.actions).toHaveLength(0);
+  });
+
+  it("覆盖率不够 → 待办，并给出那条实测能跑的命令", () => {
+    const report = makeReport();
+    report.indexMarking = { known: true, sampled: 300, marked: 120, ratio: 0.4 };
+    const lever = leverOf(report, "search-index");
+    expect(lever.status).toBe("actionable");
+    expect(
+      lever.actions.some((action) => action.command.includes("NotContentIndexed")),
+    ).toBe(true);
+  });
+});
 
 describe("开发卷上的筛选器", () => {
   it("读不到清单 → 不判", () => {
