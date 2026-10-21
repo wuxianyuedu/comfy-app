@@ -22,7 +22,7 @@ branch:
     buttons:
       - name: 跑每日档（全量单测 / 生产构建 / 全量 E2E）
         description: >-
-          以 master 当前 HEAD 跑一遍与每天 04:00 完全相同的那七格
-          （同一份 `.daily-gates` 锚点，见 .cnb.yml）。红了先按「上一次绿的构建」
+          以 master 当前 HEAD 跑一遍与每天定时那一跑完全相同的那七格
+          （时刻见 `.cnb.yml` 的 `crontab` 事件键；清单是同一份 `.daily-gates` 锚点）。红了先按「上一次绿的构建」
           取提交区间定位，别按负责人机制直接派单。
         event: web_trigger_daily
