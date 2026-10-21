@@ -44,10 +44,44 @@ const CONTRAST_PAIRS = [
 /** WCAG 1.4.11「非文本对比度」：图形对象要 ≥3:1。 */
 const MIN_GRAPHICAL_RATIO = 3;
 
+/**
+ * 把页面切到指定主题档，并**确认它真落地了**才让用例继续往下读样式。
+ *
+ * 旧形态是一句 `classList.toggle("dark", …)` 之后什么都不等 —— 那是在和 hydration
+ * 抢同一个属性：`src/app/ThemeProvider.tsx` 是 `attribute="class"` +
+ * **`defaultTheme="dark"`** + `enableSystem={false}`，新 context 的 localStorage 是空的，
+ * 所以 provider 挂载时一定会把 class 落回 dark。症状正是 ISSUE #2100 那一屏：
+ * **α 是对的、色相取成了 dark 那颗**（light 档读到 slate-400），且只在别的用例把路由
+ * 焐热、hydration 落点前移之后稳定复现。
+ *
+ * 两条一起治：**`beforeEach` 等到 `load`**（脚本到位是这条用户路径成立的前提 ——
+ * 同一条口径在 `:373` 那条「二次代入」的立案注释里已经立过一次），拨完再 **poll 一次
+ * 「页面确实在目标档」**。后者是本函数存在的另一半：**「我拨过了」不等于「页面在这档」**；
+ * 缺了它，竞争只会把红挪到一条看不懂的消息上。
+ *
+ * ⚠️ 这里刻意**不**用「写 localStorage 再 reload」那种写法：同文件 `:373` 那条要先
+ * 「建项目 → 开画布」才有可测的 DOM，reload 会把它自己搭的前提拆掉
+ * （实测换成 reload 后，红从「色相取错」变成「`stroke: none` 解析不出颜色」——
+ * 那是画布没了，不是 token 落空）。
+ */
 async function setTheme(page: Page, dark: boolean): Promise<void> {
   await page.evaluate((d) => {
     document.documentElement.classList.toggle("dark", d);
   }, dark);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (d) => document.documentElement.classList.contains("dark") === d,
+          dark,
+        ),
+      {
+        message:
+          `主题没落到 ${dark ? "dark" : "light"} 档 —— ` +
+          "provider 在拨动之后又按自己的值改回去了（见 ISSUE #2100）",
+      },
+    )
+    .toBe(true);
 }
 
 /** 读 token 的声明值，以及它挂到真实 SVG 呈现属性上解析出的 fill / stroke。 */
@@ -167,7 +201,11 @@ function contrastRatio(a: string, b: string): number {
 
 test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    /* 不写 `waitUntil: "domcontentloaded"`：这一档的**前提**是脚本已到位 ——
+     * provider 的 `applyTheme` 在挂载效果里跑，DCL 早于它，于是用例拨完 class 之后
+     * 被它改回去（读数与因果见上面的 `setTheme`，立案在 ISSUE #2100）。
+     * 默认的 `load` 与同级 `:373` 那条「二次代入」同一口径。 */
+    await page.goto("/login");
   });
 
   test("两态下 CONSUMED_TOKENS 全部解析得到具体颜色", async ({ page }) => {
