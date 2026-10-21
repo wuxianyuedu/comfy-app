@@ -516,8 +516,10 @@ export function probeCacheLocations(platform) {
  *
  * 检出目录（git 目录）**不在这里硬拼** —— 「检出位置只有 `scripts/git-dir.mjs` 知道」
  * 是本仓的一条硬规则（ISSUE #2072 的字面量扫描闸：`scripts/**` 里不许再出现引号包住的
- * 检出子目录字面量）。这里改用 git 自己报的位置，顺带也对了链接工作树 ——
- * 那里的 git 目录是个**文件**，硬拼指不到它。
+ * 检出子目录字面量；链接工作树里 `<root>/.git` 还是一个**指向别处的文件**、不是目录，
+ * 硬拼连它都指不到）。落点一律问 `resolveGitDir()`，条目名用显式的 `git-dir`，
+ * 不靠相对路径去推。读不出（不在检出里）就**不报这一条**：猜一个路径会把「不知道」
+ * 在下游读成「知道，而且答案就是那个」。
  * @param {NodeJS.Platform} platform
  * @returns {WorkdirEntry[]}
  */

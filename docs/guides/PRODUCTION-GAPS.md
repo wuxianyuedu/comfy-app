@@ -1245,7 +1245,33 @@
       而放行，落地之后下一个提交才红，「改了就当天跑」执行成了「**改了由别人补跑**」。
       取证面现在是「今天的提交 ∪ `git diff --cached`」，合成规则抽成纯函数 `combineEvidence`
       （四种组合各有用例；`git` 问不出来时不新增结论）。口径见 §11.8。
-- [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
+- [~] **E4 msw 与 zod↔API 契约测试：契约那一半有了两格，msw 那一半是分工问题不是缺陷**（2026-10-21 复量）：
+      原记「msw 仅 7 文件使用」—— 这个数按今天的任一口径都不符，而**不同口径本来就给不同数**
+      （算「文件里出现过 msw 的 API」与算「直接 `import` msw 包」差一倍；复算分别是
+      `grep -rlE "from \"msw|from 'msw|setupServer" --include="*.ts" --include="*.tsx" src tests | wc -l`
+      与去掉 `setupServer` 那一项）。所以份数不抄进正文，只留这两条。
+      **并且「用得少」不是缺陷**：msw 与「替掉传输层」答的是两问 —— 前者测「客户端管线能把帧
+      装配成什么」，后者测「服务端真实发出的列集与前端镜像声明的列集是不是同一份」。
+      这条口径已写进 §11.3；同批把那里残留的 msw **v2 选项名**改掉（装的这份是 3.x，
+      键叫 `onUnhandledFrame`，`onUnhandledRequest` 已不在它的类型里 —— 照旧名写直接判类型红）。
+      · **已闭**：契约判据两格。第一格 `tests/task-list-wire-contract.test.ts`（`task.list` 的
+        `videoPath`，症状是「下载按钮一次没出现过」）；第二格
+        `tests/task-detail-images-wire-contract.test.ts`（`task.detail` 的 `images`）。
+        第二格的原状是 `src/lib/media/task-images-client.ts` 里一处 `as unknown as` 加一个手写
+        `type`：类型擦除之后**运行时没人知道客户端读了哪几列**，列被改名时的表现是相册永远空，
+        而 tsc / eslint / 那份只 mock 传输层返回固定对象的单测 / 覆盖率门槛全绿 —— 与第一格同形。
+        动手时把那份手写镜像换成 zod（这类判据需要一份**运行时可读**的形状），并抽出
+        `tests/helpers/wire-contract.ts`（JSON 传输 + `missingFromWire`）给两份共用 ——
+        第二份动手时照抄那四行就是 §12.12 意义上的孪生实现。变异两刀各打在一半上：
+        镜像多声明一列 → 正向那条红并点名线上缺的是哪列；镜像退化成逐字复制线上列 →
+        反向那条红（「镜像是收窄」不是装饰，少了这条正向能被一份「全抄」的实现无痛满足）。
+      · **还留着**：其余具名导出的 schema 没有契约判据（复算
+        `grep -rnoE "^export const [A-Za-z0-9_]+ = z\." --include="*.ts" src | grep -v "\.test\."`）。
+        按危害排下来是三处：远端模型的**键名分叉**（客户端 `model` ↔ 服务端 `name`，
+        `kind` 两侧各写一份枚举）、`generate.generate` 的**入参**（`GenerateSchema` 被多处
+        `RouterInputs` 镜像复用，而 mutate 侧在用例里是桩 —— 真实入参校验从没跑过）、
+        comfy state 的 **REST 信封**（消费侧手写逐字段判型并 `as` 收窄，生产侧与消费侧各测各的，
+        没有一份把两边接起来）。
 - [x] **E5 棘轮的 `--update` 拒涨此前只有散文，现在有了横切行为判据（两格 PENDING 也已处置完）**：
       原记「棘轮 `--update` 无制衡，证据 `AGENTS.md:94,97`」——那句证据早就过时了：
       24 个「带 `--update` 且把一份基线写回去」的脚本里，17 个**确实写了**拒涨那一支。
