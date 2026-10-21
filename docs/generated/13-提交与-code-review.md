@@ -1469,6 +1469,12 @@ Turbopack 会 watch 整个根目录，而这里要罩住的是整块 `G:\`。剩
 > - **候选名 / 顺序 / `py` 要带 `-3` 只有一处**：`src/lib/process/python-candidates.ts`；
 >   「真起一次确认」连同候选遍历收在 `src/lib/process/python-resolve.ts`，由 E2E 夹具
 >   与 `tests/helpers/python-exe.ts` 直接取用。
+> - **「退避着起解释器跑一个脚本」另有一份**：`src/lib/process/python-run.ts` 收走三件跨调用点
+>   同形的事 —— `pythonAttempts()`（顺序与每个候选的 argv，转调上面那份判据）、
+>   `isInterpreterMiss()`（`ENOENT` 与退出码 127 **同因**）、`forEachOutputLine()`（按行切分）。
+>   调用点（`src/app/api/custom-nodes/route.ts` 的三条链）不再自写候选表；
+>   **平台字面量只住在 `python-run.test.ts`**，调用点的用例取 `pythonCandidates()` 当期望 ——
+>   两边同时写死一串字面量时一起错也一起绿，那正是台账 A14 的成因。
 > - **跨宿主的两处保留文本副本、由用例对账**：`scripts/check-app-port-vectors.cjs`
 >   是 `.cjs`（`require` 不到那份 `.ts`），`scripts/ci-toolchain-selfcheck.mjs` 刻意不
 >   `import` 它（这一步要在「Node 模块链还没被证明可用」的机器上也能给出可读输出）。

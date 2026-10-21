@@ -60,6 +60,7 @@
 | `start/verify-quality.ps1` | start/ | 质量门禁 | 双击即跑 typecheck / lint / vitest（跨平台等价：`pnpm check:all`，见规范 11.12） |
 | `start/run-tests.ps1` | start/ | 质量门禁 | 只跑 vitest（可指定文件 / `-Full` 复现基线失败 / 透传 vitest 参数），补 verify-quality「三项串联」之外的日常红绿循环（跨平台等价：`pnpm test:file` / `pnpm test:full`，见规范 11.12） |
 | `start/sync-lint.ps1` | start/ | 质量检查 | 同步依赖 + `pnpm lint`（install && lint，拉取更新/改完代码后日常自检用，见规范 §8） |
+| `start/tune-dev-drive.ps1` | start/ | 开发环境 | 探测开发盘（ReFS / Dev Drive）红利并给动作矩阵（逻辑在 `scripts/dev-drive-tune.mjs`，= `pnpm dev:drive`；指南 `docs/guides/dev-drive-refs.md`） |
 | `start/register-comfyapp-protocol.ps1` | start/ | 一次性配置 | 注册 `comfyapp://` 协议（HKCU，免管理员） |
 | `start/Create-AppShortcut.ps1` | start/ | 一次性配置 | 在仓库根生成 `Comfy APP.lnk` 启动快捷方式（由 `build-tauri-release.ps1` 构建成功后自动调用；手动 `cargo build --release --features custom-protocol` 之后想单独补生成时也可直接双击） |
 | `build/build-tauri-release.ps1` | build/ | 壳 | 构建 `src-tauri/target/release/app.exe`（唯一入口；prebuilt / tauri dev 都用它） |
@@ -96,6 +97,7 @@
 | `start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
 | `start/run-tests.ps1` | `scripts/run-tests.ps1` |
 | `start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
+| `start/tune-dev-drive.ps1` | `scripts/dev-drive-tune.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
 | `docs/generate-docs.ps1` | `scripts/generate-docs.ps1` |
 | `docs/generate-api-docs.ps1` | `scripts/generate-api-docs.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
 | `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |

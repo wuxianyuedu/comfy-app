@@ -181,6 +181,9 @@ function probe(
       run: fakeRun(),
       fs: fsLike,
       ledger: LEDGER,
+      // 判据不依赖真机 git：检出目录落点照旧按 `cwd/.git` 解析，与上面那份
+      // 假 fs 的键一致（production 走 git-dir.mjs 的 `resolveGitDir`，认工作树真身）。
+      gitDirOf: (root) => path.join(root, ".git"),
     }),
     written,
     made,

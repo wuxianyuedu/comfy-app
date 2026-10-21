@@ -17,6 +17,7 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | `sync-lint.ps1` | 日常：同步依赖 + `pnpm lint` | `scripts/sync-lint.ps1` |
 | `register-comfyapp-protocol.ps1` | 一次性：注册 `comfyapp://` 协议（HKCU，免管理员） | `scripts/install-comfyapp-helper.ps1` |
 | `storybook.ps1` | 起组件工作台 Storybook（http://127.0.0.1:6006），看 ui/ 组件形态与 a11y | `scripts/storybook.mjs` |
+| `tune-dev-drive.ps1` | 探测开发盘（ReFS / Dev Drive）红利：实测硬链接 / 块克隆 / 稀疏文件，给动作矩阵 | `scripts/dev-drive-tune.mjs`（指南 `docs/guides/dev-drive-refs.md`） |
 
 ## 非 Windows 平台（同一件事的跨平台入口）
 
@@ -33,3 +34,4 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | 生成原文文档 | `../docs/generate-docs.ps1` | `pnpm doc:gen` |
 | 初始化 `.env` | `run-local.ps1` | `pnpm env:init` |
 | 起组件工作台 | `storybook.ps1` | `pnpm storybook` |
+| 探测开发盘红利并调优 | `tune-dev-drive.ps1` | `pnpm dev:drive` |

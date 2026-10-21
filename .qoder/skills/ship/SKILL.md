@@ -58,7 +58,7 @@ pnpm ship --merge --close-issue   # 合上之后，把落地那一行点名的 i
 | 合并前固定动作三段         | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明                                                         |
 | 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                         |
 | 流水线终态                 | 平台 build 的 `data.status`                                                                                             |
-| 合没合上                   | PR 的 `is_merged` **且**回读 `origin/master` 顶端有没有那份碎片                                                         |
+| 合没合上                   | PR 的 `is_merged` **且**回读解析出的主干基线顶端有没有那份碎片                                                          |
 | 单子关没关上               | `--close-issue` 之后一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
 
 ⚠️ **`ship` 提交段「全过」不等于 tsc / eslint / 用例过了**。`pre-commit` 默认只跑形态档，

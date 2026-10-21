@@ -545,35 +545,44 @@
       （18 条形状判据，四项门槛满档）、`src/proxy.ts`（接线与 matcher）、
       `src/app/api/film/bgm/route.ts`（无主前缀的来源）、`src/server/film/compose-film.ts`
       （`films/_tmp_<id>` 中间目录与 `films/<id>.mp4` 收口 —— 判据里那条 `_tmp_` 还原就是为它写的）。
-- [ ] **A14 `custom-nodes` 那条路由绕开了「按平台选 Python 解释器」的唯一判据，起 `py` 时不带 `-3`**（2026-10-21 复量照出，未修；修法与验收口径写在下面）：
-      `src/lib/process/python-candidates.ts` 是这条问题的**唯一出处**（它自己的文件头就写着
-      「三处曾经各写一份候选名……判据只能有一处（硬规则 24）」，并在
-      `pythonProbeArgs()` 里规定「`py` 必须带 `-3`，裸 `py` 是列出已装版本并退非零」）。
-      而 `src/app/api/custom-nodes/route.ts` 里**三处字面量** `["python3","python","py"]`
-      （`runDiscover` 的非流式循环、`runDiscoverStreaming`、`streamParse`）把它绕开了：
-      复算 `grep -c pythonCandidates src/app/api/custom-nodes/route.ts` → **0**（这个文件从不 import 那份判据）。
-      后果有两条，都在**这台应用的主要平台（Windows）**上：
-      ① 顺序错 —— 那份判据给 Windows 的是 `["python","py","python3"]`（官方安装器落 `python.exe`，
+- [x] **A14 `custom-nodes` 那条路由绕开了「按平台选 Python 解释器」的唯一判据，起 `py` 时不带 `-3`（已修 + 抽出内核，判据分层见末尾）**：
+      原状是 `src/app/api/custom-nodes/route.ts` 在三处（`runDiscover` 的非流式循环、
+      `runDiscoverStreaming`、`streamParse`）各写一份字面量 `["python3","python","py"]`，
+      而 `src/lib/process/python-candidates.ts` 早已规定候选名、顺序与「`py` 必须带 `-3`，
+      裸 `py` 是列出已装版本并退非零」。两条后果都落在**本应用的主要平台 Windows** 上：
+      ① 顺序错 —— 判据给 Windows 的是 `["python","py","python3"]`（官方安装器落 `python.exe`，
       装 Store 版时常常**只有** `py`，`python3` 多半只是占位别名），路由却从 `python3` 起；
-      ② 起了 `py` 也不带 `-3` —— 命中 `py` 那一档时 `py -u scripts/parse_custom_nodes.py …`
-      选的是注册表默认版本，而按那份判据的注释，裸 `py` 的语义根本不是「跑这个脚本」。
-      表现是设置页「扫描自定义节点」显示 **0 个**，而界面上没有任何一句说是解释器的事 ——
-      与 #1664/#1665 修掉的那格同形（那两条修的是 `runDiscoverStreaming` 的退避边界）。
-      **同一族的第二处旧形状也在这里**：`streamParse` 的 `close` 分支写的是
-      `code === 127 && i < pyCandidates.length - 1`（route.ts 618 行），而 `#1665` 在
-      `runDiscoverStreaming` 里刚把这一条改成 `< pyCandidates.length`（463 行）——
-      最后一个候选退 127 时，解析口不会给出「未找到 Python 解释器」那句原因。
-      **为什么没顺手改**：它不是机械替换。既有的 12 条流式协议执行者把**平台盲的顺序**
-      当期望钉住了（`route.test.ts` 里 `interpreterNames()` 逐条断
-      `toEqual(["python3","python","py"])`），改吃 `pythonCandidates()` 等于同时改期望与
-      真机行为 —— 要按「注入 platform + 两侧各做一次变异」那一套来，且第①②两条后果要各自
-      有新用例正面要求（`py -3` 出现在 argv 里、Windows 顺序先 `python`）。
-      **建议的修法**：路由不再自写候选表，改成 `pythonCandidates()` 取顺序 +
-      `pythonProbeArgs(name, args)` 拼启动参数，并把两条链（含 `runDiscover` 那份循环）
-      共用同一份「退避 + 按行切分 + 127/ENOENT 同因」内核 —— 顺带让 §12.12 意义上的
-      那对同族实现合一，未覆盖的那 ~31 行随既有 12 条执行者一起被盖住。
-      台账关系：这是 **E5 / §12.18 / 硬规则 24** 的一次现实复发（「地基已有、调用点没复用」），
-      与 `AGENTS.md` 里那条「缺能力补地基，不造第二轮子」同一条口径。
+      ② 命中 `py` 那一档时不带 `-3`，起的是「列出已装版本」而不是「跑这个脚本」。
+      用户侧表现是设置页「扫描自定义节点」显示 **0 个**，而界面上没有任何一句说是解释器的事。
+      **修成的形状**：路由不再自写候选表，三处都取 `~/lib/process/python-run` 那份内核 ——
+      `pythonAttempts(scriptArgs, platform?)` 给「顺序 + 每个候选的 argv」（转调上面那份判据，
+      不在此重复表）、`isInterpreterMiss()` 把 `ENOENT` 与退出码 127 定成**同一个原因**、
+      `forEachOutputLine()` 收走两处孪生的按行切分。§18.4 三选一取 `import "server-only"`。
+      **动手时照出两条同族的更硬的缺陷**（立案那时无从看见）：
+      ③ 真机上解释器缺位是 `error`(ENOENT) **之后还发一次 `close`**，而两个 `close` 分支
+      原本没有「本档已交接」这一层 —— 那个压根没起来的进程的 `close` 会先把「0 个节点」
+      定成答案并置终态标志，**第二个真跑成的候选随后被丢掉**。旧夹具在只给 `error` 时
+      不发 `close`，所以这一形从来没有执行者；现在两条链各有一层 `handedOff`，
+      并各有一条用例排的是 `error` + `closeCode: null` 那个真形状。
+      ④ `streamParse` 的退避边界写成 `i < length - 1`（最后一个候选轮不到，那句原因不可达），
+      且 `closed = true` 压在退避判断**之前**（一旦换档，下一档的 `close` 会在第一行守卫处
+      返回，`done` 发不出来、流一直挂着）。现在数字边界整类消失：链的长度就是边界，
+      越界由 `attempts.at(i)` 兜住；收尾标志只在「本次真要收尾」那一支里置。
+      **判据的分层（本批的口径产出）**：平台字面量只住在 `src/lib/process/python-run.test.ts`
+      —— `platform` 是形参，所以 Windows 的 `python → py → python3`、「只有 `py` 带 `-3`」、
+      POSIX 的「没有 `py` 也就多不出 `-3`」都能被正面断言（真机只有一个平台，靠默认值就只剩
+      一半判据在跑）；调用点的用例一律取 `pythonCandidates()` 当期望，**不抄第二份名字表** ——
+      路由与用例同时写死同一串字面量时，两边一起错也一起绿，那就是 A14 本身的复现。
+      变异四处、每处都有用例当场红：路由退回自写表（解析口四条含 `-3` 那条全红）／
+      `pythonProbeArgs` 去掉 `-3`（内核与 `python-resolve` 那侧共五条红）／
+      退避边界写回 `length - 1`（「每个候选都起过」红）／摘掉 `handedOff` 守卫
+      （两条 `error→close` 用例红）。
+      复算入口：`grep -c '"python3", "python", "py"' src/app/api/custom-nodes/route.ts` → **0**、
+      `grep -c pythonAttempts src/app/api/custom-nodes/route.ts` → **4**；
+      覆盖 `pnpm exec vitest run --coverage --coverage.include='src/app/api/custom-nodes/route.ts' src/app/api/custom-nodes/route.test.ts`
+      （statements 93.96%，未盖到的区间里已不含解释器退避那一段）。
+      顺带一处形状统一：探测口的 `stderr` 现在也按行切，一次多行警告不再挤成一条带换行的事件。
+      台账关系：这是 **E5 / §12.18 / 硬规则 24**「地基已有、调用点没复用」的一次现实复发与收口。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。
 - [ ] **B2 生产路径 21 处 `unwrap()` + 构建失败 panic**，无降级 UI。证据：`src-tauri/src/lib.rs:72,918,1391,1741`；`shell_launch.rs:78,83,201`。
 - [ ] **B3 违反自身规范：`std::process::Command` 直起外部进程 3 处**（应走 `tauri-plugin-shell`）。证据：`src-tauri/src/shell_launch.rs:575`；`lib.rs:1167`；`detached_spawn.rs:147`。
@@ -1239,7 +1248,33 @@
       而放行，落地之后下一个提交才红，「改了就当天跑」执行成了「**改了由别人补跑**」。
       取证面现在是「今天的提交 ∪ `git diff --cached`」，合成规则抽成纯函数 `combineEvidence`
       （四种组合各有用例；`git` 问不出来时不新增结论）。口径见 §11.8。
-- [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
+- [~] **E4 msw 与 zod↔API 契约测试：契约那一半有了两格，msw 那一半是分工问题不是缺陷**（2026-10-21 复量）：
+      原记「msw 仅 7 文件使用」—— 这个数按今天的任一口径都不符，而**不同口径本来就给不同数**
+      （算「文件里出现过 msw 的 API」与算「直接 `import` msw 包」差一倍；复算分别是
+      `grep -rlE "from \"msw|from 'msw|setupServer" --include="*.ts" --include="*.tsx" src tests | wc -l`
+      与去掉 `setupServer` 那一项）。所以份数不抄进正文，只留这两条。
+      **并且「用得少」不是缺陷**：msw 与「替掉传输层」答的是两问 —— 前者测「客户端管线能把帧
+      装配成什么」，后者测「服务端真实发出的列集与前端镜像声明的列集是不是同一份」。
+      这条口径已写进 §11.3；同批把那里残留的 msw **v2 选项名**改掉（装的这份是 3.x，
+      键叫 `onUnhandledFrame`，`onUnhandledRequest` 已不在它的类型里 —— 照旧名写直接判类型红）。
+      · **已闭**：契约判据两格。第一格 `tests/task-list-wire-contract.test.ts`（`task.list` 的
+        `videoPath`，症状是「下载按钮一次没出现过」）；第二格
+        `tests/task-detail-images-wire-contract.test.ts`（`task.detail` 的 `images`）。
+        第二格的原状是 `src/lib/media/task-images-client.ts` 里一处 `as unknown as` 加一个手写
+        `type`：类型擦除之后**运行时没人知道客户端读了哪几列**，列被改名时的表现是相册永远空，
+        而 tsc / eslint / 那份只 mock 传输层返回固定对象的单测 / 覆盖率门槛全绿 —— 与第一格同形。
+        动手时把那份手写镜像换成 zod（这类判据需要一份**运行时可读**的形状），并抽出
+        `tests/helpers/wire-contract.ts`（JSON 传输 + `missingFromWire`）给两份共用 ——
+        第二份动手时照抄那四行就是 §12.12 意义上的孪生实现。变异两刀各打在一半上：
+        镜像多声明一列 → 正向那条红并点名线上缺的是哪列；镜像退化成逐字复制线上列 →
+        反向那条红（「镜像是收窄」不是装饰，少了这条正向能被一份「全抄」的实现无痛满足）。
+      · **还留着**：其余具名导出的 schema 没有契约判据（复算
+        `grep -rnoE "^export const [A-Za-z0-9_]+ = z\." --include="*.ts" src | grep -v "\.test\."`）。
+        按危害排下来是三处：远端模型的**键名分叉**（客户端 `model` ↔ 服务端 `name`，
+        `kind` 两侧各写一份枚举）、`generate.generate` 的**入参**（`GenerateSchema` 被多处
+        `RouterInputs` 镜像复用，而 mutate 侧在用例里是桩 —— 真实入参校验从没跑过）、
+        comfy state 的 **REST 信封**（消费侧手写逐字段判型并 `as` 收窄，生产侧与消费侧各测各的，
+        没有一份把两边接起来）。
 - [x] **E5 棘轮的 `--update` 拒涨此前只有散文，现在有了横切行为判据（两格 PENDING 也已处置完）**：
       原记「棘轮 `--update` 无制衡，证据 `AGENTS.md:94,97`」——那句证据早就过时了：
       24 个「带 `--update` 且把一份基线写回去」的脚本里，17 个**确实写了**拒涨那一支。
@@ -1275,6 +1310,24 @@
       这一维落地前先量过存量：15 家 / 16 处提到 `--update` 的上涨红话逐处读过，
       **今天全部已是自洽写法**，所以它是一格 0 误报的预防闸；变异一刀（把 `check-theme-colors`
       那句「先 token 化，不要用 --update 掩盖」换成「请处理上述新增项」）→ 只有那一家那一格红。
+      **2026-10-21 把这一维的判决面补齐了**（今天的复算口径：提到 `--update` 的判据脚本
+      `grep -l -- "--update" scripts/check-*.cjs | wc -l` = 26 份，其中在 argv 读取处真出现这个
+      旗标的只有 7 份，其余的提及都在注释或「本判据不给 `--update`」那句红话里；
+      而「带写入通道」的那个集合始终由 `discoveredBaselines()` 现算，不另抄一份）：
+      `COVERED_LOCALLY` 那四家的归类语句写的是「本地用例覆盖了拒涨」，实测那四份钉的都是
+      **退出码 + 句子里的一个短语**（`toContain("拒绝把基线往上涨")` 那一形），
+      「出路是不是死路」这半边**只有 ⑥ 判过，而 ⑥ 只跑 `RATCHETS`** —— 于是「表里点名了 =
+      判过了」是一句没有执行者的声明（§11.2.1 那一族的登记形态）。收法不是四家各写一遍正则：
+      判据抽成 `tests/helpers/ratchet-refusal.ts` 一份实现（第四种形状「例外流程另给一个显式
+      认账旗标」是为 `--allow-increase` 那一形收的，分支带 `--(?!update)` 所以不认把人推回
+      `--update` 的话），四家本地用例各调一次，另加两条判据 —— 一条钉「被 `COVERED_LOCALLY`
+      点名的那份文件里真有这句调用」，一条把当年那句死路话（「再跑 `… --update`」）钉成
+      **否定式**期望，这样这一维以后每次扩形状都不可能顺手把原始现场放过去。
+      判据抽成 `tests/helpers/ratchet-refusal.ts` 一份实现（第四种形状「例外流程另给一个显式
+      认账旗标」是为 `--allow-increase` 那一形收的，分支带 `--(?!update)` 所以不认把人推回
+      `--update` 的话），四家本地用例各调一次，另加两条判据 —— 一条钉「被 `COVERED_LOCALLY`
+      点名的那份文件里真有这句调用」，一条把当年那句死路话（「再跑 `… --update`」）钉成
+      **否定式**期望，这样这一维以后每次扩形状都不可能顺手把原始现场放过去。
       脚本与基线的对应关系由 `discoveredBaselines()` 从真仓库**现算**，不抄第二份清单；
       归因两条都是装机撞出来的：**认「真把那份 `.json` 写回去」而不是「脚本里出现过这个基线名」**
       （`check-tsc-diagnostic-executors.cjs` 只**读**姊妹索引 `.declaration-readers.json` 做同源核对，
