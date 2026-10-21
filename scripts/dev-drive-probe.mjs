@@ -18,6 +18,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { resolveGitDir } from "./git-dir.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -511,14 +512,26 @@ export function probeCacheLocations(platform) {
 }
 
 /**
- * 构建与依赖目录的真实落点。
+ * 构建与依赖目录的真实落点（git 目录那一条的落点由 `git-dir.mjs` 给）。
  * @param {NodeJS.Platform} platform
  * @returns {WorkdirEntry[]}
  */
 export function probeWorkdirs(platform) {
-  const names = ["node_modules", ".next", path.join("src-tauri", "target"), ".git"];
-  return names.map((name) => {
-    const target = path.join(ROOT, name);
+  const targets = [
+    path.join(ROOT, "node_modules"),
+    path.join(ROOT, ".next"),
+    path.join(ROOT, "src-tauri", "target"),
+  ];
+  /* git 目录的落点只有 `scripts/git-dir.mjs` 一处知道。这里原先硬拼那一个
+   * 字面量，而链接工作树里 `<root>/.git` 是一个**指向别处的文件**、不是目录 ——
+   * 于是这一条的 `exists / realPath / sameVolume` 三格全落在错的一侧，
+   * 而这个探测的全部价值就是那三格（它答的是「哪一坨数据在别的卷上」）。
+   * 读不出（不在检出里）就**不报这一条**：猜一个路径会把「不知道」在下游
+   * 读成「知道，而且答案就是那个」。 */
+  const gitDir = resolveGitDir(ROOT);
+  if (gitDir) targets.push(gitDir);
+  return targets.map((target) => {
+    const name = path.relative(ROOT, target) || target;
     const exists = fs.existsSync(target);
     let realPath = target;
     if (exists) {
