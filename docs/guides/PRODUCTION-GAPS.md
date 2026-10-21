@@ -47,7 +47,7 @@
       违反 AGENTS 硬规则 1「包管理只用 pnpm」,已于 2026-09-10 巡检修正)。
 - [x] 覆盖率棘轮抬升:`src/lib/comfyui/**` 两批模块相继入榜,判断规则与
       调度判决被逐条断言: - `lifecycle.ts` 的判决表抽到纯函数模块 `lifecycle-derive.ts`(90% 硬门槛),
-      `lifecycle.ts` 本体按实测值设门槛(45/60/45 + 分支 30); - 两条 sweeper(`reaper.ts` 70/60)与调度器(`executor-scheduler.ts` 70/50)
+      `lifecycle.ts` 本体按实测值设门槛(45/60/45 + 分支 30); - 两条 sweeper(`reaper.ts` 70/60)与调度器(`executor-scheduler.ts` 70/50，**现名 `executor-dispatch.ts`** —— 两条派发循环在 2026-09-28 收成一条、旧文件已删)
       的判决矩阵测试落地后按实测值设门槛。
       新增 `comfyui/**` 模块的测试后,按同样方式把各自门槛加进 §11.7 棘轮表。
 
@@ -82,7 +82,7 @@
       105),并补齐逻辑层行为测试(30 用例:行归属、多模式可见性、拖拽重排、
       图片上传、默认值刷新口径,见 ISSUE #319)。`CustomNodesSettings` 同批拆分
       与测试见 ISSUE #318。
-- [x] `components/model/model-library.tsx` 与 `studio/ModelLibrary.tsx`
+- [x] `components/model/ModelLibrary.tsx`（原文写成 kebab 的 `model-library.tsx`，两处都是 PascalCase）与 `studio/ModelLibrary.tsx`
       语义撞车的处置(原条目「确认两者职责或合并」)。
       **结论:确认职责,不合并**——两者服务不同路由、各自独立握手: - `components/model/ModelLibrary.tsx` 服务 `/models` 独立页
       (`app/(main)/models/page.tsx` 唯一消费方),面向「模型卡片库」浏览; - `components/studio/ModelLibrary.tsx` 服务 `/workspace` 工作室内页签
