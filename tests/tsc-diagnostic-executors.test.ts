@@ -14,6 +14,7 @@
  */
 import { defineGateRepo } from "./helpers/gate-repo";
 import type { GateRepo } from "./helpers/gate-repo";
+import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -153,6 +154,10 @@ test("② 声明行数涨上去 → 阻断，且出口必须是**人写得下的
   expect(output).toContain("这一步**不给");
   // 也不许把人推向「放宽判据」那一侧。
   expect(output).toContain("为了让这一步变绿");
+  /* 这一族就是从这里被发现是死路的（红话把人指回同一个会拒绝的旗标）。
+   * 上面那些断言判的是这句话的具体形状，下面这条判的是它属于四种自洽写法之一，
+   * 判据与其余三家共用同一份实现。 */
+  expectActionableRefusal(output, "check-tsc-diagnostic-executors.cjs");
 });
 
 test("② 声明行数降下去 → 不阻断，但提示收紧基线", ({ repo }) => {

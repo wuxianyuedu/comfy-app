@@ -23,6 +23,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { expectActionableRefusal } from "./helpers/ratchet-refusal";
+
 import {
   BLOCKED_SEVERITIES,
   RULE_VERSION,
@@ -291,6 +293,8 @@ describe("真脚本：--update 只许降（验收点名要求的形态）", () =
     expect(upd.code).toBe(1);
     expect(upd.out).toContain("--update 拒绝执行");
     expect(upd.out).toContain("brand-new-pkg#9");
+    /* 「拦下了」之外还要判「那句话能不能走」：判据只有一份实现。 */
+    expectActionableRefusal(upd.out, "check-dependency-audit.mjs");
     // 关键：被拒之后基线文件**没被动过**。
     expect(readLedger(dir).entries.length).toBe(1);
   });
