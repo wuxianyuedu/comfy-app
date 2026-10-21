@@ -432,4 +432,139 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
       expect(output).not.toContain("未提交的改动");
     },
   );
+
+  /**
+   * 「记了但不可达」那一档的**第二归因通道**（ISSUE #2082）。
+   *
+   * 旧形态在这一档只说一句「无法判断这批读数与基线之间源码动过几次」，然后把下一步
+   * 推回「先分清这点体积该不该认」—— 而那一步需要的正是它刚说拿不到的东西。
+   * 本仓 PR 走 squash 合并，`baselineRev` 记的分支提交在合入后不再有 ref 指向，
+   * 所以**每一次判红都必然落到这一档**（master 上那份 `0a618c1c` 就是这么来的）。
+   * 这几条用例各钉一个方向：数得出来必须报数、数出来是零必须说清「不是那之后的源码」，
+   * 连日期都不可信时**不许冒充有归因**；以及 `--update` 落的锚点必须是主干可达的那一枚。
+   */
+  testWithGit(
+    "基线修订号不可达时改按 generatedAt 归因，并把那几笔提交带出来",
+    ({ repo }) => {
+      seedChunks(repo);
+      expect(repo.run(["--update"]).code).toBe(0);
+      /* 基线之后追加一次**真动过 src/** 的提交 —— 归因通道读的就是这个面。 */
+      repo.write("src/a.ts", "export const a = 1;\n");
+      repo.git("add", "-A");
+      repo.git("commit", "-qm", "feat: 往客户端加一个模块");
+      const baseline = JSON.parse(
+        repo.read("scripts/.bundle-budget-baseline.json"),
+      ) as Record<string, unknown>;
+      // 形状合法、本检出里不存在：squash 合入 + gc 之后的老形态。
+      baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
+      repo.write(
+        "scripts/.bundle-budget-baseline.json",
+        `${JSON.stringify(baseline, null, 2)}\n`,
+      );
+
+      chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+      const { code, output } = repo.run();
+      expect(code, output).toBe(1);
+      expect(output).toContain("改按基线日期");
+      expect(output).toContain("1 次主干提交");
+      expect(output).toContain("feat: 往客户端加一个模块");
+      // 旧那句「无法判断」不许再出现 —— 它把动作推回原地，而这里有数可给。
+      expect(output).not.toContain("无法判断这批读数与基线之间源码动过几次");
+    },
+  );
+
+  testWithGit(
+    "src/ 侧其后一次提交都没有时，把「0」当结论说出来而不是退化成量不到",
+    ({ repo }) => {
+      seedChunks(repo);
+      expect(repo.run(["--update"]).code).toBe(0);
+      const baseline = JSON.parse(
+        repo.read("scripts/.bundle-budget-baseline.json"),
+      ) as Record<string, unknown>;
+      baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
+      repo.write(
+        "scripts/.bundle-budget-baseline.json",
+        `${JSON.stringify(baseline, null, 2)}\n`,
+      );
+      chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+      const { code, output } = repo.run();
+      expect(code, output).toBe(1);
+      // 这条夹具的历史里只有 seed 与那次 --update 之前的提交，都没动 src/ ⇒ 数得出来，是 0。
+      expect(output).toContain("0 次主干提交");
+      expect(output).toContain("src/ 侧其后一次提交都没有");
+    },
+  );
+
+  test("基线日期也不可信时不许冒充有归因（说「判断不了」而不是编一个数）", ({
+    repo,
+  }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+    const baseline = JSON.parse(
+      repo.read("scripts/.bundle-budget-baseline.json"),
+    ) as Record<string, unknown>;
+    baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
+    delete baseline.generatedAt; // 第二通道唯一的输入没了 ⇒ 必须明说量不到
+    repo.write(
+      "scripts/.bundle-budget-baseline.json",
+      `${JSON.stringify(baseline, null, 2)}\n`,
+    );
+    chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("基线日期那条也量不到");
+    expect(output).toContain("判断不了");
+    expect(output).not.toContain("次主干提交");
+  });
+
+  testWithGit(
+    "--update 落的锚点是主干可达的那一枚，不是会随 squash 消失的 HEAD",
+    ({ repo }) => {
+      // 把当前（seed）提交冒充成主干位置：`origin/master` 指在它上。
+      const trunk = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      repo.git("update-ref", "refs/remotes/origin/master", trunk);
+      // 分支上再走一步 —— HEAD 从此是「合入后没有 ref 指向它」的那一类。
+      repo.write("src/a.ts", "export const a = 1;\n");
+      repo.git("add", "-A");
+      repo.git("commit", "-qm", "feat: 分支上的一笔");
+      const head = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+
+      seedChunks(repo);
+      const seeded = repo.run(["--update"]);
+      expect(seeded.code, seeded.output).toBe(0);
+      expect(seeded.output).toContain("取的是主干可达的那一枚");
+      const baseline = JSON.parse(
+        repo.read("scripts/.bundle-budget-baseline.json"),
+      ) as { baselineRev?: string };
+      expect(
+        baseline.baselineRev,
+        "锚点记成了分支提交 —— 那正是 #2082 的病根",
+      ).toBe(trunk);
+      expect(baseline.baselineRev).not.toBe(head);
+    },
+  );
+
+  test("问不到主干时退回 HEAD，并把「这一枚多半不可达」打在脸上", ({
+    repo,
+  }) => {
+    seedChunks(repo);
+    const seeded = repo.run(["--update"]);
+    expect(seeded.code, seeded.output).toBe(0);
+    expect(seeded.output).toContain("退回 HEAD");
+    expect(seeded.output).toContain("第二归因");
+    const head = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    const baseline = JSON.parse(
+      repo.read("scripts/.bundle-budget-baseline.json"),
+    ) as { baselineRev?: string };
+    expect(baseline.baselineRev).toBe(head);
+  });
 });
