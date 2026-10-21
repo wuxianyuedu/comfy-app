@@ -353,6 +353,60 @@ const DAILY_SCRIPT_MIRRORS: [string, string][] = [
   ["每日同步数据库表结构", "同步数据库表结构"],
 ];
 
+/**
+ * 两格 env 之间**唯一被登记过的差别**：`每日安装依赖` 那一格不接槽（ISSUE #2081）。
+ *
+ * ⚠️ 这份名单**不是**「这几个键允许随便漂」，它钉的是一个更窄的形状：
+ *  · 名单里的键，PR 那一侧必须**正好置着一行** `KEY: "1"`；
+ *  · 每日那一侧必须**一个字都不出现** —— 写成 `COMFY_CI_SLOT: "0"` 也算违规，那是一条
+ *    谁都不读「关掉的开关」，而下一次会有人把它当「这里本来就该有它」读回去；
+ *  · 除此之外两侧的全部行仍**逐字相同**（下面那条 `toEqual` 一字未松）。
+ *
+ * 为什么不干脆让配置自己表达「这里可以不一样」：那样判据只能判「不相同」，判不出
+ * 「不相同的那一行正是被允许的那一行」—— 第一次故意改与第一次手滑在账面上同形。
+ */
+const DAILY_ENV_ONLY_ON_PR: Record<string, string[]> = {
+  "每日安装依赖": ["COMFY_CI_SLOT"],
+};
+
+/** 一行 env 赋值的键名；不是赋值形状（如脚本行 `$enc=…` / `node …`）回 `null`。 */
+function envAssignmentKey(line: string): string | null {
+  const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*:/.exec(line.trim());
+  return m?.[1] ?? null;
+}
+
+/** 判「PR-only 例外」的形状；回 `null` = 合法，回一句字符串 = 下一动作。 */
+function checkPrOnlyEnvExceptions(
+  dailyEnv: string[],
+  prEnv: string[],
+  onlyOnPr: string[],
+): string | null {
+  for (const key of onlyOnPr) {
+    const onPr = prEnv.filter((l) => envAssignmentKey(l) === key);
+    const onDaily = dailyEnv.filter((l) => envAssignmentKey(l) === key);
+    if (onPr.length !== 1) {
+      return `登记为「只在 PR 那一格」的 ${key}，在 PR 那格读到 ${onPr.length} 行 —— ${
+        onPr.length === 0
+          ? "名单过期了：要么把键从 DAILY_ENV_ONLY_ON_PR 里删掉，要么把配置改回去"
+          : "同一个键写两遍是 YAML 的静默覆盖，谁都不知道生效的是哪一行"
+      }`;
+    }
+    const prLine = onPr[0] ?? "";
+    if (!/:\s*"?1"?\s*$/.test(prLine)) {
+      return `PR 那一格的 ${key} 不再是「置着」的形状（原文：${prLine}）—— 这条例外钉的是「PR 接槽、每日不接」，不是「这几行可以随便漂」`;
+    }
+    if (onDaily.length > 0) {
+      return `每日那一格又写上了 ${key}（原文：${onDaily[0] ?? ""}）—— 接槽把作业里的 node_modules 接成指向项目根之外的链，而每日档后面背着 next build（两臂读数与因果见 ISSUE #2081、规范 §13.5.3.4.3）`;
+    }
+  }
+  return null;
+}
+
+/** 剥掉登记为 PR-only 的那几行，剩下的才拿去逐字比。 */
+function dropPrOnlyEnvLines(env: string[], onlyOnPr: string[]): string[] {
+  return env.filter((l) => !onlyOnPr.includes(envAssignmentKey(l) ?? ""));
+}
+
 /** `45m` / `30m` / `3h` → 分钟。解析不出时回 0（调用方的断言会把它读成「没预算」）。 */
 function stageBudgetMinutes(raw: string | undefined): number {
   const m = /^(\d+)([smh])$/.exec(String(raw ?? "").trim());
@@ -1770,26 +1824,77 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 事情不一样（PR 那一格背着一整段「为什么这一步是前提」），把散文也要求逐字相同
      * 只会逼人删解释，而漂移恰恰藏在命令行里。 */
     for (const [daily, pr] of DAILY_SCRIPT_MIRRORS) {
-      const a = [
-        ...executableScriptLines(text, daily),
-        ...stageEnvAssignments(text, daily),
-      ];
-      const b = [
-        ...executableScriptLines(text, pr),
-        ...stageEnvAssignments(text, pr),
-      ];
-      expect(a, `定时那一跑里找不到「${daily}」的 script`).toBeTruthy();
+      const dailyScript = executableScriptLines(text, daily);
+      const prScript = executableScriptLines(text, pr);
+      const dailyEnv = stageEnvAssignments(text, daily);
+      const prEnv = stageEnvAssignments(text, pr);
       expect(
-        b,
-        `PR 那一跑里找不到「${pr}」的 script —— 镜像判据两边都要取得到，否则它是空转`,
+        [...dailyScript, ...dailyEnv],
+        `定时那一跑里找不到「${daily}」的 script`,
       ).toBeTruthy();
       expect(
-        a,
+        [...prScript, ...prEnv],
+        `PR 那一跑里找不到「${pr}」的 script —— 镜像判据两边都要取得到，否则它是空转`,
+      ).toBeTruthy();
+      /* 例外那一半先按**形状**判（名单里的键必须只在 PR 侧、且必须是「置着」的形状），
+       * 再把那几行剥掉 —— 剩下的仍然走同一条逐字相同。顺序要紧：先判形状，
+       * 「每日那一格被人补回了开关」才会被读成那句，而不是被 toEqual 报成一堆行的差。 */
+      const onlyOnPr = DAILY_ENV_ONLY_ON_PR[daily] ?? [];
+      expect(
+        checkPrOnlyEnvExceptions(dailyEnv, prEnv, onlyOnPr),
+        `${daily} 与 ${pr} 之间的 PR-only env 例外形状不成立`,
+      ).toBeNull();
+      expect(
+        [...dailyScript, ...dropPrOnlyEnvLines(dailyEnv, onlyOnPr)],
         `「${daily}」与 PR 那一格的**命令行与 env 赋值**不再逐字相同 —— 判据是同一份脚本、` +
           "取字节的根也是同一个，改一边不改另一边就是两条流水线各自漂（§12.12 的孪生形态，" +
-          "只是它长在配置里）",
-      ).toEqual(b);
+          "只是它长在配置里）。唯一的例外登记在 DAILY_ENV_ONLY_ON_PR，它只豁免那一行",
+      ).toEqual([...prScript, ...dropPrOnlyEnvLines(prEnv, onlyOnPr)]);
     }
+  });
+
+  it("PR-only env 例外不是空转：四种坏形状都要被点名，而现役形状必须过", () => {
+    const keys = ["COMFY_CI_SLOT"];
+    const healthyPr = ['COMFY_CI_SLOT: "1"'];
+    // 对照组：现役那份形状（PR 置着、每日一个字都没有）必须判成合法 ——
+    // 否则这条判据就成了恒红，而恒红的判据与没有判据在账面上同形。
+    expect(checkPrOnlyEnvExceptions([], healthyPr, keys)).toBeNull();
+    // ① 每日那一格被人补回了开关（这正是本次要挡回去的那一步）。
+    expect(
+      checkPrOnlyEnvExceptions(['COMFY_CI_SLOT: "1"'], healthyPr, keys),
+    ).toContain("每日那一格又写上了");
+    // ② 写成「关掉的开关」同样不行：它读起来像「这里本来就该有一行」。
+    expect(
+      checkPrOnlyEnvExceptions(['COMFY_CI_SLOT: "0"'], healthyPr, keys),
+    ).toContain("每日那一格又写上了");
+    // ③ PR 那一格被摘干净 ⇒ 名单过期，必须点名而不是静默放行。
+    expect(checkPrOnlyEnvExceptions([], [], keys)).toContain("名单过期了");
+    // ④ PR 那一格还在，但不再是「置着」的形状 ⇒ 例外被改成了「随便漂」。
+    expect(
+      checkPrOnlyEnvExceptions([], ['COMFY_CI_SLOT: "0"'], keys),
+    ).toContain("不再是「置着」的形状");
+    // 同一个键写两遍（YAML 静默覆盖）也要被抓住。
+    expect(
+      checkPrOnlyEnvExceptions(
+        [],
+        ['COMFY_CI_SLOT: "1"', 'COMFY_CI_SLOT: "0"'],
+        keys,
+      ),
+    ).toContain("同一个键写两遍");
+    // 名单为空时不误伤：形状检查一条都不该响。
+    expect(checkPrOnlyEnvExceptions(["A: 1"], ["A: 1"], [])).toBeNull();
+    // 剥行那一步只剥名单里的键，其余一字不动（否则「逐字相同」会被悄悄放宽）。
+    expect(
+      dropPrOnlyEnvLines(
+        ['COMFY_CI_SLOT: "1"', 'PLAYWRIGHT_DOWNLOAD_HOST: "x"'],
+        keys,
+      ),
+    ).toEqual(['PLAYWRIGHT_DOWNLOAD_HOST: "x"']);
+    expect(dropPrOnlyEnvLines(['B: "1"'], [])).toEqual(['B: "1"']);
+    // 脚本行不会被误认成 env 赋值（`$enc=…` / `node …` 都没有 `KEY:` 那个形状）。
+    expect(envAssignmentKey("$enc=[Text.Encoding]::UTF8")).toBeNull();
+    expect(envAssignmentKey("node scripts/db-push.mjs")).toBeNull();
+    expect(envAssignmentKey('  COMFY_CI_SLOT: "1"')).toBe("COMFY_CI_SLOT");
   });
 
   it("从 PR 撤下来的环境格，每一格在每日那一跑里都有同名执行者（撤拦 ≠ 撤账）", () => {
