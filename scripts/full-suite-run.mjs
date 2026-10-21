@@ -36,7 +36,19 @@ import { resolveCiWorkers } from "./ci-load.mjs";
 /* 分文件耗时的形状与钩子那一档**共用同一份解析**（`parseJunitXml`）：本地账本与 CI 日志
  * 报的是同一个量的两种形状，抄两份解析器就会在「谁把外层 `<testsuites>` 当成一个文件」
  * 这种地方分叉，而那类分叉只会让读数偏，不会让它红。 */
-import { parseJunitXml } from "./precommit-timing.mjs";
+import { parseJunitXml, failingSuitesFromJunit } from "./precommit-timing.mjs";
+/* 超时指纹与「等机器喘口气」这两件事**不重造**：判据与组 C 逐字同源
+ * （`tests/hook-affected-launch.test.ts` 每天核对两份指纹清单不漂移），
+ * 复跑面的命令行切分也复用组 C 那一份（`planLaunches` 管 argv 长度预算）。
+ * 触发事实：`cnb-b0l-1k59op66t` 那一跑，`每日单元测试` 只有 1 份红
+ * （`tests/deps-freshness-gate.test.ts:166` 超时 30s）就把后面的
+ * `每日生产构建` / `每日浏览器安装` / `每日全量E2E` 三格全部 skip 掉 ——
+ * 而那次红是调度排不上，不是断言报错。 */
+import {
+  isTimeoutShaped,
+  waitForLoadToSettle,
+} from "./affected-launch-load-retry.mjs";
+import { planLaunches } from "./run-affected-tests.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
   abortedAdvice,
@@ -367,6 +379,11 @@ export function shouldRecord({ exitCode, dryRun, extra = [] }) {
  * 又远小于「挂死」该被检出的时间（钩子那侧的时间型判据见 §13.6.4，那一条不在这里）。
  */
 export const FULL_SUITE_TIMEOUT_MS = 30 * 60_000;
+/**
+ * 复跑那一趟的墙钟预算。刻意**小于**整档那一跑：复跑面按定义只含红的那几份，
+ * 给它整档的预算等于允许这一格悄悄变成第二次全量。
+ */
+export const RERUN_TIMEOUT_MS = 12 * 60_000;
 
 /**
  * 分文件耗时读数的落点（相对仓库根）。**这一串里不许出现冒号** —— 它会被原样拼进
@@ -386,7 +403,88 @@ export const SUITE_JUNIT_RELATIVE =
  * @param {string[]} argv
  * @returns {number}
  */
-function main(argv) {
+/**
+ * 第 2 遍该不该跑、跑哪几份 —— 档位表与组 C 逐字同一张（规范 §13.6.4 / §13.6.4.1）：
+ *
+ * | 第一跑的形态                       | 动作                            |
+ * | ---------------------------------- | ------------------------------- |
+ * | 绿                                 | 不复跑（没有要定性的红）        |
+ * | 红、**不带**超时指纹               | **一次都不复跑**，真红照拦      |
+ * | 红、带指纹、读得出失败名单         | 只复跑那几份（串行、不抬预算）  |
+ * | 红、带指纹、读不出名单             | **退回整档**（方向单边化）      |
+ *
+ * 退回整档那一行是刻意的：漏跑一份真失败的文件，比多跑一批已经绿过的文件贵得多。
+ * 这一层**只回答「跑哪几份」**——旗标、预算、结论档位都不在这里定。
+ *
+ * @param {{exitCode: number, junitText: string}} input
+ * @returns {{retry: boolean, files: string[], why: string}} `why` 要说出口
+ */
+export function planIsolatedRerun(input) {
+  const { exitCode, junitText } = input;
+  if (exitCode === 0) {
+    return { retry: false, files: [], why: "这一跑是绿的，没有要定性的红" };
+  }
+  if (!isTimeoutShaped(junitText)) {
+    return {
+      retry: false,
+      files: [],
+      why: "红的形态里没有超时 / worker 起不来指纹 ⇒ 按真红处置，不复跑",
+    };
+  }
+  const failed = failingSuitesFromJunit(junitText);
+  if (failed.length === 0) {
+    return {
+      retry: true,
+      files: [],
+      why: "带超时指纹，但 junit 里一份失败名单都读不出 ⇒ 退回整档串行复跑",
+    };
+  }
+  return {
+    retry: true,
+    files: failed,
+    why: `只复跑第 1 遍里失败的那 ${failed.length} 份`,
+  };
+}
+
+/**
+ * 复跑之后的三态。判据只看**第二遍自己的输出形态**（不看 `os.loadavg()`，ISSUE #1747）：
+ *
+ *   · `load-flake` —— 第二遍绿 ⇒ 刚才那次是负载假红；
+ *   · `unverified` —— 第二遍**仍**带指纹 ⇒ 这台机器此刻给不出可信读数，
+ *     **不是绿也不是红**，放行但必须点名；
+ *   · `real-red` —— 第二遍指纹消失 ⇒ 真红，照拦。
+ *
+ * @param {{exitCode: number, output: string}} input
+ * @returns {"load-flake" | "unverified" | "real-red"}
+ */
+export function classifyRerunOutcome(input) {
+  if (input.exitCode === 0) return "load-flake";
+  return isTimeoutShaped(input.output) ? "unverified" : "real-red";
+}
+
+/**
+ * 复跑那一趟的命令行（**不带 `--coverage`**，这是刻意的）：覆盖率门槛
+ * （`vitest.config.ts` 的 `coverage.thresholds`）判的是**整档**的分子分母，
+ * 拿一份子集去跑覆盖率必然跌破门槛，那会把「负载假红」换成一条**新的假红**。
+ * 串行那一半（`--no-file-parallelism`）是本档唯一允许的降负载手段，
+ * **预算一个都不抬**（`testTimeout` 由 `vitest.config.ts` 说）。
+ *
+ * 名单为空 = 不加位置过滤器 = 整档（与 `planIsolatedRerun` 那行「退回整档」同一语义；
+ * 不拿 `"."` 当过滤器，那是另一种匹配语义）。argv 超预算时由组 C 那份
+ * `planLaunches` 切成多趟，一趟只跑一段。
+ *
+ * @param {{files: string[]}} input
+ * @returns {string[][]} 每条是一趟 `vitest run …` 的参数
+ */
+export function rerunLaunches(input) {
+  const { files } = input;
+  const head = ["run", "--no-file-parallelism"];
+  if (files.length === 0) return [head];
+  return planLaunches(files).map((chunk) => [...head, ...chunk]);
+}
+
+/** @param {string[]} argv */
+async function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* 两条「不跑」的出路互斥地先处理：给了它们就不该再去起 vitest。 */
   for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
@@ -488,6 +586,83 @@ function main(argv) {
     return 1;
   }
   const exitCode = res.status ?? 1;
+  /* ── 超时指纹的隔离复跑（组 C 那一档补到每日这一跑上）──────────────────
+   * 为什么这一格必须有：每日链是**串行失败即停**，而 `每日单元测试` 排最后 ——
+   * 它之前每一格都吃过「一份文件排不上调度、把整档拖成红」的那次
+   * （触发事实 `cnb-b0l-1k59op66t`：只有 `tests/deps-freshness-gate.test.ts:166`
+   * 一条 `Test timed out in 30000ms`，没有任何断言报错）。
+   * 判决链在这里**不重写**：档位表在 `planIsolatedRerun` / `classifyRerunOutcome`，
+   * 指纹清单与等待都 import 组 C 那两份模块（两份清单漂移由
+   * `tests/hook-affected-launch.test.ts` 钉着）。
+   * 只在**整档那一跑**上启用：透传过参数的那次本来就不构成凭证，再复跑一遍
+   * 只是把一个不可信的读数变成两个。 */
+  if (exitCode !== 0 && shouldRecord({ exitCode, dryRun, extra })) {
+    const plan = planIsolatedRerun({ exitCode, junitText });
+    if (plan.retry) {
+      process.stderr.write(
+        `[full-suite-run] 红里带超时指纹 ⇒ 按 §13.6.4 先当负载读数看：${plan.why}。\n` +
+          "  先等机器喘口气，再 `--no-file-parallelism` 串行复跑（**不抬任何预算**）…\n",
+      );
+      const settled = await waitForLoadToSettle();
+      process.stderr.write(
+        settled.waitedMs === 0
+          ? `[full-suite-run] 没等（第一读数就已回落：每核 ${settled.load.toFixed(2)}）` +
+              " ⇒ 第二遍与第一遍几乎同条件，它只能证伪「真断言红」，不能证明负载已散\n"
+          : `[full-suite-run] 等了 ${(settled.waitedMs / 1000).toFixed(1)}s` +
+              `${settled.settled ? `（每核负载回落到 ${settled.load.toFixed(2)}）` : " 没等到回落"}\n`,
+      );
+      /** @type {{status: number, output: string}} */
+      const rerun = rerunLaunches({ files: plan.files }).reduce(
+        (acc, args) => {
+          if (acc.status !== 0) return acc;
+          const res2 = runPnpmSync(["exec", "vitest", ...args], {
+            cwd: ROOT,
+            stdio: "pipe",
+            timeoutMs: RERUN_TIMEOUT_MS,
+          });
+          const out = `${String(res2.stdout ?? "")}\n${String(res2.stderr ?? "")}`;
+          return {
+            status: res2.status ?? 1,
+            output: `${acc.output}\n${out}`.slice(-24_000),
+          };
+        },
+        { status: 0, output: "" },
+      );
+      const verdict = classifyRerunOutcome({
+        exitCode: rerun.status,
+        output: rerun.output,
+      });
+      if (verdict === "load-flake") {
+        process.stderr.write(
+          "[full-suite-run] **第 2 遍全绿** ⇒ 刚才那次是**负载假红**（同一批用例在更隔离的\n" +
+            "  条件下重测的结果，不是「放宽了判据」）。本档退 0，但**不记账** ——\n" +
+            "  这条账记的是「整档带着覆盖率门槛跑绿过」，而第 2 遍没带覆盖率那一半。\n" +
+            "  降负载的杠杆是并发（`maxWorkers` / 串行），不是 `testTimeout`。\n",
+        );
+        return 0;
+      }
+      if (verdict === "unverified") {
+        const named = plan.files.length
+          ? plan.files.map((f) => `    · ${f}\n`).join("")
+          : "    · （读不出名单，整档这一跑都没拿到可信读数）\n";
+        process.stderr.write(
+          "[full-suite-run] ⚠️ **第 2 遍仍然只是超时形态** —— 这台机器此刻给不出可信读数，\n" +
+            "  本次这些文件记为**未校验**：既不是绿（没有证据说它过），也不是红\n" +
+            "  （失败的是调度，没有一条断言报错）。退 0 放行，**不记账**，逐条点名：\n" +
+            named +
+            "  ⚠️ 这一档**不许**写成「已通过」；它等价于「这次没测」（ISSUE #1747）。\n" +
+            "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
+        );
+        return 0;
+      }
+      process.stderr.write(
+        "[full-suite-run] **第 2 遍指纹已消失**（不再是调度形态）⇒ 这不是负载假红，按真红处置。\n" +
+          "  红的归属先用 `node scripts/base-check.mjs <拦住你的那条>` 复算，再决定修代码还是登记。\n" +
+          "  下面贴第 2 遍输出的尾部（最多 24000 字符，串行的那份读数才是该看的现场）：\n" +
+          `${rerun.output.slice(-24_000)}\n`,
+      );
+    }
+  }
   if (exitCode === 0 && !shouldRecord({ exitCode, dryRun, extra })) {
     /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个测试文件），跑的不是整档。
      * 下面那条「✗ 未通过（退出码 0）」是红的话术，拿它打这一拍会自相矛盾。 */
@@ -525,5 +700,5 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }
