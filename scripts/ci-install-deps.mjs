@@ -61,11 +61,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
-import {
-  applySlot,
-  clearJobLink,
-  SLOT_ENABLED_ENV,
-} from "./ci-slot-apply.mjs";
+import { applySlot, clearJobLink, SLOT_ENABLED_ENV } from "./ci-slot-apply.mjs";
 import {
   DEP_FILES,
   FINGERPRINT_FILE,
@@ -253,7 +249,9 @@ function runInstall() {
   /* 作业里那条指进槽的链必须先摘掉：留着它跑作业内的 install，pnpm 会顺着链把新的一套
    * 写进**槽**、而键仍是旧的（规范 §13.5.3.4.3 第一条，从散文变成有执行者）。 */
   if (clearJobLink(ROOT)) {
-    process.stdout.write("[ci-install-deps] 已摘掉作业里那条指进缓存槽的链接（不在链上装）\n");
+    process.stdout.write(
+      "[ci-install-deps] 已摘掉作业里那条指进缓存槽的链接（不在链上装）\n",
+    );
   }
   const res = runPnpmSync(["install", "--frozen-lockfile"], {
     cwd: ROOT,
@@ -276,26 +274,39 @@ function runInstall() {
  * 把「跑不跑」的第二把闸叠进去，它就开始同时回答两个问题 —— 档位那一刀（§13.5.25）
  * 已经示范过这种叠法后来多难拆。
  *
- * 开关是 `COMFY_CI_SLOT`：置成 `1` 才问槽，不置时行为与本增量之前逐字相同（一次槽都不问）。
- * 今天 PR 那一格已置、每日那一格留空当对照 —— 为什么这样分、以及回退是哪一行，
- * 写在 `.cnb.yml` 的那两行 env 上面与规范 §13.5.3.4.3。
+ * 开关是 `COMFY_CI_SLOT`：置成 `1` 才问槽，不置时**一次槽都不问**（连空闲空间都不读）。
+ * 现在的拨法是**按档**：PR 那一格接、每日那一格不接 —— 每日后面背着 `每日生产构建`，
+ * 而接槽形态下 Turbopack 拒指向项目根之外的 `node_modules` 链（ISSUE #2081）。
+ * 为什么这样分、回退要动哪一行，写在 `.cnb.yml` 那两格上面与规范 §13.5.3.4.3。
+ *
+ * 三条出口都必须**在日志里读得出来**（规范 §13.5.3.4.3 那句「往上读收益时，出处只能是那几句打印」）：
+ * 开关没拨／ 接上了（`✓ 走缓存槽（…）`）／ 接不上退回（`槽未接管（原因）⇒ 照常装`）。
+ * 前两条在旧形态里逐字同形于「什么都没发生」—— 于是「这一档按策略不接槽」与「配了槽但没接管」
+ * 在日志里分不开，下一个人只能靠猜；而**少一次读数比少一次收益更难查**。
  *
  * @param {string | null} _expected 装之前算出的指纹（成功后由 `main` 落盘，这里不消费它）
+ * @param {{env?: Record<string, string | undefined>, write?: (s: string) => void, install?: () => number}} [deps]
+ *   单测据此注入：不碰真安装、不碰真槽、不改真 `process.env`。
  * @returns {number} 退出码
  */
-function runInstallWithSlot(_expected) {
-  if ((process.env[SLOT_ENABLED_ENV] ?? "").trim() !== "1") {
-    return runInstall();
-  }
-  const out = applySlot({ cwd: ROOT, env: process.env });
-  if (out.handled) {
-    process.stdout.write(
-      `[ci-install-deps] ✓ 走缓存槽（${out.action}）：${out.why}\n`,
+export function runInstallWithSlot(_expected, deps = {}) {
+  const env = deps.env ?? process.env;
+  const write = deps.write ?? ((s) => process.stdout.write(s));
+  const install = deps.install ?? runInstall;
+  if ((env[SLOT_ENABLED_ENV] ?? "").trim() !== "1") {
+    write(
+      "[ci-install-deps] 槽未接管（开关没拨：这一档按策略不接槽 —— 每日档后面背着 next build，" +
+        "见 .cnb.yml 里那格的注释与 ISSUE #2081）⇒ 照常装\n",
     );
+    return install();
+  }
+  const out = applySlot({ cwd: ROOT, env });
+  if (out.handled) {
+    write(`[ci-install-deps] ✓ 走缓存槽（${out.action}）：${out.why}\n`);
     return 0;
   }
-  process.stdout.write(`[ci-install-deps] 槽未接管（${out.why}）⇒ 照常装\n`);
-  return runInstall();
+  write(`[ci-install-deps] 槽未接管（${out.why}）⇒ 照常装\n`);
+  return install();
 }
 
 /**
