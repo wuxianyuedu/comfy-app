@@ -24,6 +24,8 @@ import {
   asArray,
   buildPullBody,
   CODE,
+  combineShipCodes,
+  decideCloseIssue,
   deriveTitle,
   findPullForBranch,
   pickBuildForSha,
@@ -362,7 +364,10 @@ export function reportVerdict(ctx) {
  *   merge: boolean,
  *   buildState: "green"|"red"|"running"|"unknown",
  *   explicitTitle?: string | null,
+ *   landed?: {title: string, sha: string, verified: boolean} | null,
  * }} ctx
+ *   `landed` 是「落进主干的那一行」的快照，由本函数在**验真之后**填 —— 阶段 7（关单）
+ *   要的标题本体取自它，不在那里回推（原因见成功路径上那处注释）。
  * @returns {number} 三态退出码之一
  */
 export function mergeAndVerify(ctx) {
@@ -377,6 +382,9 @@ export function mergeAndVerify(ctx) {
     merge,
     buildState,
     explicitTitle,
+    /* 一份「落进主干的那一行」的快照，由本函数在**验真之后**填。
+     * 传不传都行（不传就是没人要这份读数），所以老的调用形状不会坏。 */
+    landed = null,
   } = ctx;
   if (!merge) {
     log("[ship] 未给 --merge ⇒ 停在判决处。合并是显式动作。");
@@ -444,10 +452,103 @@ export function mergeAndVerify(ctx) {
     `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? back.isMerged : "?"} 碎片在主干顶端=${fragOnMaster}`,
   );
   if (!(back && back.isMerged && fragOnMaster)) return CODE.RED;
+  /* 验真过了才写这份读数 —— 并且**在这里**写，不留给阶段 7 去回推：
+   * 下面两行 `git checkout master` + `pull` 会把 HEAD 挪走，而
+   * `pickTitle` 取的是「这条分支相对主干带进来的第一笔」，跳过了这一步就再也算不出来。
+   * 阶段 7（关单）要的正是「落进主干的那一行标题本体」，所以它是**这一刻**的快照。 */
+  if (landed) {
+    landed.title = title;
+    landed.sha = mergeData.sha ?? "";
+    landed.verified = true;
+  }
   run("git", ["checkout", "master"]);
   run("git", ["pull", "--ff-only"]);
   log(
     "[ship] 本地 master 已同步。远端分支**没删**（那不在本脚本的动作面里）。",
   );
   return CODE.GREEN;
+}
+
+/**
+ * 阶段 7：把这一行点名的 issue 置为 `closed / completed`，并**回读**再下结论。
+ *
+ * 与合并那一格同一条纪律：平台回执只是半个结论。所以这里调完 `update-issue` 之后
+ * 走一次独立的 `get-issue`，认三件原值 —— `state` / `state_reason` / `closed_at`，
+ * 并把它们原样打出来（`closed_at` 在场意味着这不是一句「我发了个请求」）。
+ *
+ * 幂等：对一张**已经关着**的单子再跑一次，回读照样是那三件（`closed_at` 是第一次
+ * 关它的那个时刻）—— 所以「重跑一遍 ship」不会把状态改坏，也不会谎报。
+ *
+ * 效应与判断分家：该不该关、以什么码落，全在 `decideCloseIssue`（纯函数，判得动
+ * 「要求了但这一跳没合并」那一档）；这里只负责发请求、回读、把原值打出来。
+ *
+ * @param {{
+ *   run: PlatformIO["run"],
+ *   log: PlatformIO["log"],
+ *   slug: string,
+ *   closeIssue: boolean,
+ *   landed?: {title: string, sha: string, verified: boolean} | null,
+ * }} ctx
+ * @returns {number} `CODE` 之一
+ */
+export function closeIssues(ctx) {
+  const { run, log, slug, closeIssue, landed = null } = ctx;
+  const plan = decideCloseIssue({
+    requested: closeIssue === true,
+    landedVerified: landed?.verified === true,
+    title: landed?.title ?? "",
+  });
+  if (!plan.act) {
+    if (plan.code === CODE.NOT_RUN) {
+      log(`[ship] 关单这一格**没有执行**：${plan.reason}`);
+      return CODE.NOT_RUN;
+    }
+    return CODE.GREEN;
+  }
+
+  /** @type {number[]} */
+  const codes = [];
+  for (const number of plan.numbers) {
+    const put = cnbJson(run, [
+      "issues",
+      "update-issue",
+      "--repo",
+      slug,
+      "--number",
+      String(number),
+      "--state",
+      "closed",
+      "--state-reason",
+      "completed",
+      "-v",
+    ]);
+    if (!put) {
+      log(
+        `[ship] #${number}：关闭调用没有拿到 JSON 回执（cnb 不在 / 输出不是 JSON）` +
+          " ⇒ 记「没有执行者」，不去猜它成没成。",
+      );
+      codes.push(CODE.NOT_RUN);
+      continue;
+    }
+    /* **独立回读**：不看 update 的返回值当结论。 */
+    const back = cnbJson(run, [
+      "issues",
+      "get-issue",
+      "--repo",
+      slug,
+      "--number",
+      String(number),
+      "-v",
+    ]);
+    const d = back?.json?.data ?? null;
+    const state = d?.state ?? "(取不到)";
+    const reason = d?.state_reason ?? "(无)";
+    const at = d?.closed_at ?? "(无)";
+    log(
+      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}` +
+        ` · 落地那一行 sha=${short(landed?.sha ?? "")}`,
+    );
+    codes.push(state === "closed" ? CODE.GREEN : CODE.RED);
+  }
+  return combineShipCodes(codes);
 }

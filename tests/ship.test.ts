@@ -32,8 +32,10 @@ import {
   buildPullBody,
   CODE,
   combineShipCodes,
+  decideCloseIssue,
   deriveTitle,
   findPullForBranch,
+  issueNumbersFromText,
   looksNewlineMangled,
   parseArgs,
   parseSlug,
@@ -43,6 +45,7 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
+import { closeIssues } from "../scripts/ship-platform.mjs";
 import { main } from "../scripts/ship.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -234,6 +237,228 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
   it("--no-wait 与 --only 各自独立", () => {
     expect(parseArgs(["--no-wait"]).wait).toBe(false);
     expect(parseArgs(["--only=poll"]).only).toBe("poll");
+  });
+
+  it("--close-issue 默认关，且不牵连 --merge（两个是各自独立的显式动作）", () => {
+    expect(parseArgs([]).closeIssue).toBe(false);
+    expect(parseArgs(["--merge"]).closeIssue).toBe(false);
+    expect(parseArgs(["--close-issue"]).closeIssue).toBe(true);
+    expect(parseArgs(["--close-issue"]).merge).toBe(false);
+    /* 拼错的写法进 unknown —— 「以为会关、其实没关」与合并那一格是同一族误读。 */
+    const typo = parseArgs(["--close-issues"]);
+    expect(typo.closeIssue).toBe(false);
+    expect(typo.unknown).toEqual(["--close-issues"]);
+  });
+});
+
+describe("issueNumbersFromText：只从标题本体取，绝不从拼完 PR 号的那一整行取", () => {
+  it("(#2070) 与 #2070 两种写法都认，按出现顺序去重", () => {
+    expect(issueNumbersFromText("fix(a): 修一格 (#2070)")).toEqual([2070]);
+    expect(issueNumbersFromText("fix(a): 修一格 #2070 与 #2096")).toEqual([
+      2070, 2096,
+    ]);
+    expect(issueNumbersFromText("修 (#2070) 再修 (#2070)")).toEqual([2070]);
+    expect(issueNumbersFromText("没有号的一行")).toEqual([]);
+    expect(issueNumbersFromText("")).toEqual([]);
+  });
+
+  it("负控制：那一整行末尾的 (#2110) 是 **PR 号**，喂整行就会去关一张别人的单子", () => {
+    /* 本仓 PR 号与 issue 号共用一套编号空间：`#2110` 既可能是这条 PR，也可能是
+     * 某个人的 issue。`mergeAndVerify` 发给平台的是 `${title} (#${number})`，
+     * 所以「号」必须来自 `title` 本体 —— 这一条钉的就是那条边界。 */
+    const title = "fix(a): 修一格 (#2070)";
+    const squashLine = `${title} (#2110)`;
+    expect(issueNumbersFromText(title)).toEqual([2070]);
+    expect(issueNumbersFromText(squashLine)).toEqual([2070, 2110]);
+  });
+});
+
+describe("decideCloseIssue：要求了但没合并 ⇒ 不是「跳过」，是 2", () => {
+  it("没要求 ⇒ 不动、也不落任何码", () => {
+    const d = decideCloseIssue({
+      requested: false,
+      landedVerified: true,
+      title: "fix(a): 一格 (#2070)",
+    });
+    expect(d.act).toBe(false);
+    expect(d.code).toBeNull();
+  });
+
+  it("要求了、这一跳没有验真的合并 ⇒ NOT_RUN 并说明（单子不能被标成完成）", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: false,
+      title: "fix(a): 一格 (#2070)",
+    });
+    expect(d.act).toBe(false);
+    expect(d.code).toBe(CODE.NOT_RUN);
+    expect(d.reason).toContain("没有");
+  });
+
+  it("要求了、也合上了，但标题里没有号 ⇒ 也按 NOT_RUN，并说出喂进去的是哪一行", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: true,
+      title: "docs(x): 这行没写号",
+    });
+    expect(d.act).toBe(false);
+    expect(d.code).toBe(CODE.NOT_RUN);
+    expect(d.reason).toContain("docs(x): 这行没写号");
+  });
+
+  it("合上了且标题里有号 ⇒ 动手，号就是那一个", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: true,
+      title: "fix(a): 一格 (#2070)",
+    });
+    expect(d.act).toBe(true);
+    expect(d.numbers).toEqual([2070]);
+    expect(d.code).toBeNull();
+  });
+});
+
+describe("closeIssues：回执不算结论，独立回读三件原值才算", () => {
+  /* 与 `ship-exec.mjs` 的 `ExecResult` 同形（`error` 是**必需**的：把它写成可选，
+   * 注入时就过不了类型 —— 而那正是这层接缝唯一的形状约束）。 */
+  type FakeResult = {
+    status: number;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+  };
+
+  /** 按 cnb 的子命令答；`calls` 记录每一次伸手。 */
+  function io(opts: {
+    update?: string | null;
+    state?: string;
+    stateReason?: string | null;
+    closedAt?: string | null;
+  }) {
+    const calls: string[] = [];
+    const log: string[] = [];
+    const json = (data: unknown) =>
+      JSON.stringify({ status: 200, contentType: "application/json", data });
+    const run = (_cmd: string, args: string[]): FakeResult => {
+      calls.push(args.join(" "));
+      if (args[0] === "issues" && args[1] === "update-issue") {
+        if (opts.update === null)
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        return {
+          status: 0,
+          stdout: opts.update ?? json({ number: 2070, state: "closed" }),
+          stderr: "",
+          error: null,
+        };
+      }
+      if (args[0] === "issues" && args[1] === "get-issue") {
+        return {
+          status: 0,
+          stdout: json({
+            number: 2070,
+            state: opts.state ?? "closed",
+            state_reason: opts.stateReason ?? "completed",
+            closed_at: opts.closedAt ?? "2026-10-21T08:54:30Z",
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    return { run, calls, log };
+  }
+
+  const landedOk = {
+    title: "fix(a): 一格 (#2070)",
+    sha: "abc1234",
+    verified: true,
+  };
+
+  it("合上了 ⇒ 关它、再回读，并把三件原值打出来", () => {
+    const f = io({});
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: landedOk,
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.calls[0]).toContain("--state closed --state-reason completed");
+    // 回读是一次**独立的** get-issue，不是复用 update 的返回。
+    expect(f.calls.some((c) => c.includes("get-issue"))).toBe(true);
+    expect(f.log.join("\n")).toContain("state=closed");
+    expect(f.log.join("\n")).toContain("closed_at=2026-10-21T08:54:30Z");
+  });
+
+  it("回读说还开着 ⇒ 红（1），不跟着回执念成绿", () => {
+    const f = io({ state: "open", stateReason: null, closedAt: null });
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: landedOk,
+    });
+    expect(code).toBe(CODE.RED);
+    expect(f.log.join("\n")).toContain("state=open");
+  });
+
+  it("关闭调用没拿到 JSON ⇒ 2，且**不发**那次回读（没执行者就不去猜）", () => {
+    const f = io({ update: null });
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: landedOk,
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls.filter((c) => c.includes("get-issue"))).toEqual([]);
+  });
+
+  it("最要紧的那条安全边界：这一跳没合并成 ⇒ cnb **一次都不碰**", () => {
+    /* 误把 `--close-issue` 带在轮询那一跳（或合并被拒的那一次）上时，
+     * 世界不能被改动 —— 关掉一张没落地的单子，正是这一族最贵的误读。 */
+    const f = io({});
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: { title: "fix(a): 一格 (#2070)", sha: "", verified: false },
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls).toEqual([]);
+    expect(f.log.join("\n")).toContain("没有执行");
+  });
+
+  it("已经关着的单子再跑一次：幂等，回读带的是第一次那个时刻", () => {
+    const f = io({ closedAt: "2026-10-21T07:02:02Z" });
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: landedOk,
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.log.join("\n")).toContain("closed_at=2026-10-21T07:02:02Z");
+  });
+
+  it("没给 --close-issue ⇒ 这一格根本不存在（不落任何码、也不打字）", () => {
+    const f = io({});
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: false,
+      landed: landedOk,
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.calls).toEqual([]);
+    expect(f.log).toEqual([]);
   });
 });
 
@@ -480,7 +705,15 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       called.add(`${m[1]} ${m[2]}`);
     }
     const planned = new Set<string>();
-    for (const line of planCommands({ ...st, merge: true })) {
+    /* 两个显式动作**都拨上**才是「源码里可能伸手的全部集合」：`--merge` 与
+     * `--close-issue` 各自的命令都只在对应旗标下进计划（默认那份是子集）。
+     * 只拨一个的话，另一格新增的调用会在这条对账里被漏看 —— 而这条对账的存在
+     * 理由恰恰是「计划与执行两头一起错时没人响」。 */
+    for (const line of planCommands({
+      ...st,
+      merge: true,
+      closeIssue: true,
+    })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
       if (m) planned.add(`${m[1]} ${m[2]}`);
     }
@@ -713,6 +946,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     "git fetch",
     "cnb pulls post-pull",
     "cnb pulls merge-pull",
+    /* 关一张单子是把状态写到别人也看得见、且不会自动回退的地方 —— 与合并同一档。 */
+    "cnb issues update-issue",
   ];
 
   /** 把 `main` 的输出吞掉：这一组判的是**调用面**，不是它说了什么。
