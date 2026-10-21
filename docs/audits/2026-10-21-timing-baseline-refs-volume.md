@@ -236,14 +236,26 @@
      - 全量档本地复跑（`COMFY_E2E_SERVER=start node scripts/e2e-run.mjs`，产物按当轮 master 重建）⇒
        **`1 failed / 80 passed`（1.3m）**，与 CI 那一跑（100.0s、同样 `1 failed / 80 passed`）逐字同形。
      ⇒ 差异**不在执行面（`SKIP_ENV_VALIDATION` / 占位 secret）、不在库**（本地 `db:push` 后 23 张表、
-     schema 收敛，红照旧）、**也不在搬盘**。它落在**测试之间的主题状态**：
-     `theme-token-consumers` 靠 `documentElement.classList.toggle("dark", …)` 自己拨主题，
-     而主题在产品侧是**持久化**的 —— `theme-toggle` 那一格改过之后，持久值会在后续渲染里重新落地，
-     于是「拨了 classList 就等于这副表面」这个前提在同档里不成立。
+     schema 收敛，红照旧）、**也不在搬盘**。
+     ⚠️ **本条此前给的机制（「主题在产品侧是持久化的，前一格改过的持久值会重新落地」）也被否证**：
+     `src/app/ThemeProvider.tsx:28-31` 是 `attribute="class"` + **`defaultTheme="dark"`** +
+     `enableSystem={false}` + `storageKey="theme"` —— 主题只落 **localStorage**，而 Playwright 每条用例
+     一个新 context，带不到下一格；`theme` 在 `src/lib/app-settings/**` 与 `src/server/**` **零命中**，
+     顶栏那枚按钮（`src/components/studio/TopBar.tsx:123-128`）走的是 `next-themes` 的 `setTheme`，不写库。
+     **剩下的位子是有两个写者抢同一个 DOM 属性**：用例绕开产品那条路，直接
+     `documentElement.classList.toggle("dark", …)`（该 spec 的 `setTheme()`，`:47-51`），
+     而 provider 在 hydration 及其后每次落地时按它自己的值（默认 **dark**）重写 `<html>` 的 class ——
+     谁后写谁赢。错误消息的形状与这一句吻合：**α 是对的、色相是错的**（light 档读到 dark 那颗
+     slate-400 `[148,163,184]`，本地落在 `α=0.6` 那一遍、CI 落在 `0.22` 那一遍）。
+     矩阵里那条反直觉的数据也由它解释：把 `theme-toggle` 挪到前面就红，是因为它把 `/workspace`
+     那条路由焐热了、hydration 落点前移；而 **`--workers=1` 严格串行仍红**（11.7s）⇒
+     不是并行争用，是**顺序 / 时机依赖**。
      口径同 §11.13 第三条：**同一份断言换个跑法就换结果 ⇒ 失效的是前提，不是预算**；
-     它也不是超时形态，抬 `timeout` 一格都不该动。
-     下一动作（不在本增量）：`theme-toggle` 收尾把持久值复位，或 token 那格显式设定持久值再读
-     —— 最小复现只要 14s（两个文件同跑），不需要整档。
+     它也不是超时形态，抬 `timeout` 一格都不该动，也不许登记成 `KNOWN_FAILED_FILES` 或靠重试取绿。
+     下一动作与三条出路在 **ISSUE #2100**（第一条是一行诊断：`setTheme()` 之后、读样式之前，
+     先断言 `<html>` 的 class 已经在目标档 —— 它红了就钉死「provider 把 class 改回去了」，
+     它绿了而色相仍错，才往 `color-mix` 的样式重解析时机去查）；
+     最小复现 14s（两个 spec 同跑），不需要整档。
    · 它是**「第一次被执行」照出来的红**：#2081 未修前这一格从未跑到过，所以既不是搬盘，
      也不是 #2081/#2091 两修的副作用；
    · 它排在 `每日单元测试` 之前 ⇒ 那一格这一跑又回到 skipped，每日档三张新鲜度账里 **e2e 与 full
