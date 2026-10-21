@@ -24,6 +24,12 @@ import {
 } from "~/lib/app-settings/app-settings.server";
 import { readEnvVar } from "~/lib/envfile";
 import { errorText } from "~/lib/error-message";
+import {
+  forEachOutputLine,
+  isInterpreterMiss,
+  missingInterpreterMessage,
+  pythonAttempts,
+} from "~/lib/process/python-run";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
 import { isPlainRecord, isRecord } from "~/lib/is-record";
@@ -292,8 +298,10 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
       parentDir as string,
     ]),
   ];
-  for (const py of ["python3", "python", "py"]) {
-    const stdout = await spawnCapture(py, args);
+  /* 候选名与顺序**不在这里写**（台账 A14）：字面量表一旦落在调用点，`py` 就少一个 `-3`，
+   * 而 Windows 上的第一候选也不是 `python3`。见 `~/lib/process/python-run`。 */
+  for (const attempt of pythonAttempts(args)) {
+    const stdout = await spawnCapture(attempt.command, attempt.args);
     if (stdout === null) continue;
     try {
       const parsed: unknown = JSON.parse(stdout);
@@ -345,7 +353,13 @@ function runDiscoverStreaming(
   }
 
   return new Promise((resolve) => {
-    const pyCandidates = ["python3", "python", "py"];
+    /* 退避链整体取自判据（台账 A14）：顺序按平台给，`py` 那一档自动带 `-3`。 */
+    const attempts = pythonAttempts([
+      "-u",
+      "scripts/parse_custom_nodes.py",
+      "--discover-parent",
+      parent,
+    ]);
     let i = 0;
     let finalJson = "";
     let resolved = false;
@@ -353,92 +367,93 @@ function runDiscoverStreaming(
     const tryRun = () => {
       /* `.at()` 越界即 `undefined`：取候选与「有没有候选」判据合成一处，
        * 不必先比 `i < length` 再靠 `!` 把 `undefined` 从类型里抹掉。 */
-      const py = pyCandidates.at(i);
-      if (!py) {
+      const attempt = attempts.at(i);
+      if (!attempt) {
         if (!resolved) {
           resolved = true;
           send({
             type: "progress",
             parent,
             phase: "scan",
-            msg: "⚠️ 未找到 Python 解释器",
+            msg: `⚠️ ${missingInterpreterMessage()}`,
           });
           resolve([]);
         }
         return;
       }
+      /* 本档是否已经把退避交给下一个候选。**必须**有这一层：真机上 `spawn` 失败会先报
+       * `error`、随后**再发一次 `close`**，少了这个守卫，那个压根没起来的进程的 `close`
+       * 会走到下面的收尾分支，把「空结果」定成最终答案（`resolved = true`），
+       * 后面真跑成的那一档就被丢掉 —— 表现正是 Windows 上第一候选缺位时
+       * 「扫描到 0 个节点」，而过去的夹具只排 `error`、不排第二次 `close`，
+       * 所以这一形从来没有执行者（台账 A14）。 */
+      let handedOff = false;
       const cp = spawn(
-        /*turbopackIgnore: true*/ py,
-        ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent],
+        /*turbopackIgnore: true*/ attempt.command,
+        attempt.args,
         {
           cwd: process.cwd(),
           env: process.env,
         },
       );
 
-      let buf = "";
-      cp.stdout.on("data", (d: Buffer) => {
-        buf += d.toString();
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl);
-          buf = buf.slice(nl + 1);
-          if (!line.trim()) continue;
-          if (line.startsWith("PROGRESS::")) {
-            // 行格式是 PROGRESS::scan|msg=...|key=value|...，
-            // 或 PROGRESS::hash|msg=...|done=K|total=M。
-            // 其中 `msg=` 那段是在界面副标题里显示的人读文本；
-            // 其它 key=value（discovered、done、total）用来驱动进度条填充，
-            // 这样界面不必去解析中文文本。
-            const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
-            if (!m) continue;
-            const phase = m[1] as "scan" | "hash";
-            const rest = m[2]!;
-            // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
-            // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
-            // 向后兼容：没有 `|msg=` 的旧格式行，就把剩余部分整体当 msg。
-            const fields: DiscoverProgressFields = { phase, msg: "" };
-            const msgM = /\|?msg=([^|]*)/.exec(rest);
-            if (msgM) {
-              fields.msg = msgM[1]!;
-            } else {
-              fields.msg = rest;
-            }
-            const kvRegex = /\|?(discovered|done|total)=(\d+)/g;
-            let kv: RegExpExecArray | null;
-            while ((kv = kvRegex.exec(rest)) !== null) {
-              const n = parseInt(kv[2]!, 10);
-              const k = kv[1]!;
-              if (k === "discovered") fields.discovered = n;
-              else if (k === "done") fields.done = n;
-              else if (k === "total") fields.total = n;
-            }
-            send({ type: "progress", parent, ...fields });
-          } else if (line.startsWith("{")) {
-            // 以最后一行为准（解析器只在末尾打印一次结果）
-            finalJson = line;
+      forEachOutputLine(cp.stdout, (line) => {
+        if (line.startsWith("PROGRESS::")) {
+          // 行格式是 PROGRESS::scan|msg=...|key=value|...，
+          // 或 PROGRESS::hash|msg=...|done=K|total=M。
+          // 其中 `msg=` 那段是在界面副标题里显示的人读文本；
+          // 其它 key=value（discovered、done、total）用来驱动进度条填充，
+          // 这样界面不必去解析中文文本。
+          const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
+          if (!m) return;
+          const phase = m[1] as "scan" | "hash";
+          const rest = m[2]!;
+          // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
+          // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
+          // 向后兼容：没有 `|msg=` 的旧格式行，就把剩余部分整体当 msg。
+          const fields: DiscoverProgressFields = { phase, msg: "" };
+          const msgM = /\|?msg=([^|]*)/.exec(rest);
+          if (msgM) {
+            fields.msg = msgM[1]!;
           } else {
-            // 其它日志行 —— 也当作扫描进度透出去
-            send({ type: "progress", parent, phase: "scan", msg: line });
+            fields.msg = rest;
           }
+          const kvRegex = /\|?(discovered|done|total)=(\d+)/g;
+          let kv: RegExpExecArray | null;
+          while ((kv = kvRegex.exec(rest)) !== null) {
+            const n = parseInt(kv[2]!, 10);
+            const k = kv[1]!;
+            if (k === "discovered") fields.discovered = n;
+            else if (k === "done") fields.done = n;
+            else if (k === "total") fields.total = n;
+          }
+          send({ type: "progress", parent, ...fields });
+        } else if (line.startsWith("{")) {
+          // 以最后一行为准（解析器只在末尾打印一次结果）
+          finalJson = line;
+        } else {
+          // 其它日志行 —— 也当作扫描进度透出去
+          send({ type: "progress", parent, phase: "scan", msg: line });
         }
       });
-      cp.stderr.on("data", (d: Buffer) => {
+      /* stderr 也按行切，与解析口那条链同形：整块一次透出会把两行警告挤成
+       * 事件里一句带换行的文案，界面上只显示第一行。 */
+      forEachOutputLine(cp.stderr, (line) => {
         send({
           type: "progress",
           parent,
           phase: "scan",
-          msg: "⚠️ " + d.toString().trim(),
+          msg: "⚠️ " + line,
         });
       });
 
       cp.on("error", (e: NodeJS.ErrnoException) => {
-        /* 退避的边界是 `i < pyCandidates.length` 而不是 `- 1`：最后一个候选也要**再走一次
-         * `tryRun()` 的顶上那一档**，那句「未找到 Python 解释器」才可达。写成 `- 1` 时
-         * `i` 最大只到 2 就地 resolve，真机没装 Python 的表现是「0 个节点 + 一句原因都没有」
-         * —— 由 `tests/.../route.test.ts` 的「三个候选全 ENOENT」那两条钉住（ISSUE #1664 的
-         * 同批后续）。 */
-        if (e.code === "ENOENT" && i < pyCandidates.length) {
+        if (handedOff || resolved) return;
+        /* 退避**不写数字边界**：链的长度就是边界，越界由 `attempts.at(i)` 兜住。
+         * 写成 `length - 1` 会让最后一个候选永远轮不到，那句「未找到 Python 解释器」
+         * 因此不可达 —— 真机没装 Python 的表现就退化成「0 个节点、一句原因都没有」。 */
+        if (isInterpreterMiss({ errno: e.code })) {
+          handedOff = true;
           i += 1;
           tryRun();
           return;
@@ -456,11 +471,11 @@ function runDiscoverStreaming(
       });
 
       cp.on("close", (code) => {
-        if (resolved) return;
-        /* 与上面 `error` 那一支同一条边界（最后一个候选之后再走一次 `tryRun()` 顶上那一档）：
-         * 127 是「命令不存在」的另一形状（Windows 上没有 `python3` 时可能这样退），
-         * 它必须与 ENOENT 给出**同一句**原因，而不是悄悄回一个空列表。 */
-        if (code === 127 && i < pyCandidates.length) {
+        if (resolved || handedOff) return;
+        /* 与上面 `error` 那一支**同因**（内核里就是同一条判据）：127 是「命令不存在」在
+         * Windows 上的另一形状，它必须与 ENOENT 给出同一句原因，而不是悄悄回一个空列表。 */
+        if (isInterpreterMiss({ exitCode: code })) {
+          handedOff = true;
           i += 1;
           tryRun();
           return;
@@ -520,8 +535,7 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
       const send = (ev: ParseStreamEvent) =>
         controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
 
-      const pyCandidates = ["python3", "python", "py"];
-      const args = [
+      const scriptArgs = [
         "-u",
         "scripts/parse_custom_nodes.py",
         "--out",
@@ -530,22 +544,25 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
         REPORT,
       ];
       if (onlyPkgs?.length) {
-        args.push("--only-pkgs", onlyPkgs.join(","));
+        scriptArgs.push("--only-pkgs", onlyPkgs.join(","));
       } else {
-        args.push("--paths", paths.join(","));
+        scriptArgs.push("--paths", paths.join(","));
       }
+      /* 退避链整体取自判据（台账 A14）：本文件此前在这里第三度自写候选表，
+       * 于是 Windows 上从 `python3` 起、且命中 `py` 那一档不带 `-3`。 */
+      const attempts = pythonAttempts(scriptArgs);
       let i = 0;
       let closed = false;
 
       const tryRun = () => {
         /* 同 `runDiscoverStreaming`：`.at()` 越界即 `undefined`，
          * 取候选与「有没有候选」判据合成一处。 */
-        const py = pyCandidates.at(i);
-        if (!py) {
+        const attempt = attempts.at(i);
+        if (!attempt) {
           send({
             type: "log",
             level: "error",
-            msg: "未找到 Python 解释器（已尝试 python3 / python / py）",
+            msg: missingInterpreterMessage(),
           });
           send({
             type: "done",
@@ -557,13 +574,22 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
           controller.close();
           return;
         }
-        const cp = spawn(/*turbopackIgnore: true*/ py, args, {
-          cwd: process.cwd(),
-          env: process.env,
-        });
+        /* 见 `runDiscoverStreaming` 里那段同名的守卫：真机上缺解释器是 `error` 之后
+         * **还会再来一次 `close`**，那一趟不许把「没有报告」定成最终答案。 */
+        let handedOff = false;
+        const cp = spawn(
+          /*turbopackIgnore: true*/ attempt.command,
+          attempt.args,
+          {
+            cwd: process.cwd(),
+            env: process.env,
+          },
+        );
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
-          if (e.code === "ENOENT") {
+          if (handedOff || closed) return;
+          if (isInterpreterMiss({ errno: e.code })) {
+            handedOff = true;
             i += 1;
             tryRun();
             return;
@@ -585,25 +611,15 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
           controller.close();
         });
 
+        /* 按行切分交给内核 —— 与探测口原本是一段孪生实现（两份 `indexOf("\n")` 循环，
+         * 一份在 `end` 时补发尾行、一份不补）。 */
         const pipeLogs = (
           s: NodeJS.ReadableStream,
           defaultLevel: "info" | "error" = "info",
         ) => {
-          let chunk = "";
-          s.on("data", (d: Buffer) => {
-            chunk += d.toString();
-            let nl: number;
-            while ((nl = chunk.indexOf("\n")) >= 0) {
-              const line = chunk.slice(0, nl);
-              chunk = chunk.slice(nl + 1);
-              if (line.trim())
-                send({ type: "log", level: defaultLevel, msg: line });
-            }
-          });
-          s.on("end", () => {
-            if (chunk.trim())
-              send({ type: "log", level: defaultLevel, msg: chunk.trim() });
-          });
+          forEachOutputLine(s, (line) =>
+            send({ type: "log", level: defaultLevel, msg: line }),
+          );
         };
         // 解析器的 stdout 是正常进度（绿色 info）。
         // stderr 是错误（红色）—— 解析器把语法错误与一般异常经 log_stderr()
@@ -613,13 +629,19 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
         pipeLogs(cp.stderr, "error");
 
         cp.on("close", (code) => {
-          if (closed) return;
-          closed = true;
-          if (code === 127 && i < pyCandidates.length - 1) {
+          if (closed || handedOff) return;
+          /* 这一处有两个顺序要紧：
+           *   · 退避**不写数字边界**（与上面 `error` 那一支同一条判据、同一个理由）；
+           *   · 收尾标志只能在「本次真要收尾」这一支里置 —— 压在退避判断之前，
+           *     换档之后下一档进程的 `close` 就会在第一行守卫处返回，
+           *     报告与 `done` 一个都发不出来，流一直挂着（没有超时那一档兜它）。 */
+          if (isInterpreterMiss({ exitCode: code })) {
+            handedOff = true;
             i += 1;
             tryRun();
             return;
           }
+          closed = true;
           let report: unknown = null;
           try {
             if (fs.existsSync(REPORT))
