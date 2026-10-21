@@ -603,6 +603,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     commitStatus?: number;
     /** 本次要暂存的文件（触发真提交那一支）。 */
     dirty?: string[];
+    /** 直接覆盖 `git status --porcelain` 的返回（喂非默认形状，见 #2073 那格）。 */
+    porcelain?: string;
     /** 这条分支相对上游基线**已提交**的碎片（第二次跑那一向）。 */
     branchFrags?: string[];
     /** HEAD 的上游（`git rev-parse --abbrev-ref --symbolic-full-name @{u}`）。 */
@@ -664,7 +666,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       if (cmd === "git" && key.includes("status --porcelain -- changelog.d"))
         return ok(frags.map((f) => `?? ${f}`).join("\n"));
       if (cmd === "git" && key.includes("status --porcelain"))
-        return ok(dirty.map((f) => `M  ${f}`).join("\n"));
+        return ok(env.porcelain ?? dirty.map((f) => `M  ${f}`).join("\n"));
       /* 分支相对上游**已提交**的碎片（同一条分支上第二次跑就靠这一格不为空）。
        * 这里**不**按某个写死的基线名命中 —— 命中基线名等于替被测代码担保「它选的
        * 那条引用是对的」。改为照 git 的语义答：拿 HEAD 自己这条分支的远端副本当基线
@@ -746,6 +748,37 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("没有 changelog.d 碎片 ⇒ 红（单 PR 单变更那条不成立）", async () => {
     const { run } = fake({ frags: [] });
     expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.RED);
+  });
+
+  it("preflight 的暂存/未暂存读数按列判，不把未暂存改动算成已暂存（#2073）", async () => {
+    /* 根因：`status --porcelain` 的 `XY <路径>` 两列，先 trim 就把行首空格吃掉，
+     * 未暂存的 ` M file` 塌成 `M file` 被数成已暂存 —— 读数谎报，且「还有未暂存的
+     * 改动」那句提醒永不触发。这里喂一组真实形状，断言分类按列、且提醒会触发。 */
+    const heard: string[] = [];
+    const { run } = fake({
+      frags: [],
+      porcelain: [
+        " M README.md", // 改了没 add ⇒ 未暂存（已修改）
+        "MM src/a.ts", // 又 add 又改 ⇒ 两边都算
+        "A  src/b.ts", // 已暂存新增
+        "?? untracked.log", // 未跟踪
+      ].join("\n"),
+    });
+    await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    const line = heard.find((s) => s.includes("暂存")) ?? "";
+    // 暂存 = `A` + `MM` = 2；未暂存（已修改）= ` M` + `MM` = 2；未跟踪 = `??` = 1。
+    expect(line, `读数谎报：${line}`).toContain("暂存 2 项");
+    expect(line).toContain("未暂存 2 项");
+    expect(line).toContain("未跟踪 1 项");
+    expect(heard.join("\n"), "未暂存改动存在却没提醒").toContain(
+      "还有未暂存的改动",
+    );
   });
 
   it("基线引用不存在 ⇒ 退 2 并说「没有事实源」，**不许**退成「没有碎片」的红", async () => {

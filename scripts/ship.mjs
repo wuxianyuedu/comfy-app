@@ -108,6 +108,40 @@ import {
 } from "./ship-platform.mjs";
 
 /**
+ * 把 `git status --porcelain` 的输出**按列**分成「已暂存 / 未暂存（已修改）/ 未跟踪」三档。
+ *
+ * ⚠️ 必须按列取状态位，**绝不能先 `trim()`**：porcelain 每行是 `XY <路径>`，前两字符
+ * `X`=索引状态、`Y`=工作树状态。先 `trim()` 会把行首空格吃掉，于是未暂存的 ` M file`
+ * 塌成 `M file` 被误判成已暂存（ISSUE #2073）—— 那一句读数谎报，还会让
+ * 「还有未暂存的改动」提醒永不触发。
+ *
+ * @param {string} stdout `git status --porcelain` 的原始输出
+ * @returns {{staged: string[], unstagedModified: string[], untracked: string[]}}
+ */
+function parsePorcelain(stdout) {
+  /** @type {string[]} */
+  const staged = [];
+  /** @type {string[]} */
+  const unstagedModified = [];
+  /** @type {string[]} */
+  const untracked = [];
+  for (const raw of String(stdout).split("\n")) {
+    if (!raw) continue;
+    const x = raw[0]; // 索引状态
+    const y = raw[1]; // 工作树状态
+    if (x === "?") {
+      untracked.push(raw.slice(3)); // `?? <path>`
+      continue;
+    }
+    // X 是索引里的真实状态（非空格、非未跟踪、非忽略）⇒ 已暂存。
+    if (x !== " " && x !== "!") staged.push(raw.slice(3));
+    // Y 是工作树里的真实改动（非空格、非忽略）⇒ 未暂存（已修改）。
+    if (y !== " " && y !== "!") unstagedModified.push(raw.slice(3));
+  }
+  return { staged, unstagedModified, untracked };
+}
+
+/**
  * 对外入口：跑一遍编排，**无论走到哪个出口都清掉自己写的临时文件**。
  *
  * 提交信息与 PR 正文都是当场拼出来的原文，留在盘上没有用处 ——
@@ -298,12 +332,9 @@ async function runFlow(deps, tmpFiles) {
     const shaRes = run("git", ["rev-parse", "HEAD"]);
     const sha = shaRes.stdout.trim();
     const dirty = run("git", ["status", "--porcelain"]);
-    const dirtyLines = dirty.stdout
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const staged = dirtyLines.filter((l) => /^[AMR]/.test(l));
-    const unstaged = dirtyLines.filter((l) => !/^[AMR]/.test(l));
+    const { staged, unstagedModified, untracked } = parsePorcelain(
+      dirty.stdout,
+    );
     /* 「单 PR 单变更」数的是**这条分支相对上游带进来的**碎片。这一格错过两次，
      * 两次都是「挑了最省事的那个取数面」：
      *   ① `git ls-files changelog.d` → 数出 **118 份**（整个目录的存量）⇒ 恒真，
@@ -351,9 +382,12 @@ async function runFlow(deps, tmpFiles) {
         `（来源 ${up.source}${baseRef === null ? " ⇒ 碎片那一查没有事实源，见下" : ""}）`,
     );
     log(
-      `[ship] 暂存 ${staged.length} 项 · 未暂存 ${unstaged.length} 项 · changelog.d 碎片 ${frags.length} 份`,
+      `[ship] 暂存 ${staged.length} 项 · 未暂存 ${unstagedModified.length} 项 · 未跟踪 ${untracked.length} 项 · changelog.d 碎片 ${frags.length} 份`,
     );
-    if (unstaged.length > 0 && opt.adds.length === 0) {
+    if (
+      unstagedModified.length + untracked.length > 0 &&
+      opt.adds.length === 0
+    ) {
       log(
         "[ship] 还有未暂存的改动，而本次没给 --add ⇒ 暂存面由你负责，脚本不替你 `git add -A`。",
       );
@@ -424,7 +458,7 @@ async function runFlow(deps, tmpFiles) {
       const msg = opt.messageFile
         ? safeRead(root, opt.messageFile)
         : opt.message;
-      if (dirtyLines.length > 0 || staged.length > 0) {
+      if (staged.length + unstagedModified.length + untracked.length > 0) {
         if (!msg) {
           log(
             "[ship] 有改动但没给 --message ⇒ 停。提交信息是判断（症状/读数/因果），脚本不代写。",
