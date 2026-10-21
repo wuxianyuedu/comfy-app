@@ -15,6 +15,7 @@
     "db:push": "node scripts/db-push.mjs",
     "env:init": "node scripts/env-init.mjs",
     "check:toolchain": "node scripts/check-pnpm-available.mjs",
+    "dev:drive": "node scripts/dev-drive-tune.mjs",
     "db:studio": "drizzle-kit studio",
     "dev": "node scripts/dev.mjs",
     "deps:guard": "node scripts/deps-install-guard.mjs",
