@@ -27,6 +27,7 @@ import {
   combineCodes,
   lastSummary,
   SEGMENTS,
+  scriptsInCommands,
 } from "../scripts/premerge-check.mjs";
 
 const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
@@ -185,7 +186,7 @@ describe("premerge-check —— 不发明第二套实现（面的来源）", () 
   });
 });
 
-describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退 2）", () => {
+describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退 2、也不许只审一笔）", () => {
   test("`mergeLoss` 段自己算出锚点：/ --baseline 不再是「缺参」", () => {
     /* **这是本文件最要紧的一条回归**：早先 `SEGMENTS.mergeLoss` 是裸 `script` +
      * `args: []`，而 `check-merged-side-loss.mjs` 缺 `--baseline` 会**直接 exit 2**
@@ -198,6 +199,66 @@ describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退
      * 取不到 merge target / 浅克隆这一族原因给出，且必须在输出里说清原因。 */
     expect([0, 1, 2]).toContain(code);
     if (code === 2) expect(output).toContain("[premerge] ");
+  });
+
+  test("`claims` 段的扫描面是**这批**，不是「最新那一笔」（ISSUE #2070）", () => {
+    /* 立案形状：`SEGMENTS.claims` 此前是裸 `script` + `args: []`，而
+     * `check-commit-claims.mjs` 不带参数时**只审 HEAD** —— 于是批次里较早那笔的
+     * 假声明在推送那一刻没人看，合并之后 HEAD 前进，就再没有第二个执行者重放它
+     * （`ad81a912` 就是这么进的主干）。判据本体一字未改，改的是**取哪些提交**：
+     * 同一个分叉点锚，交出去的是 `<分叉点>..HEAD`。
+     *
+     * 这里判的是**编排**那一半（取数形状）；行为那一半在
+     * `tests/check-commit-claims.test.ts` 的 ①b 那组（同一夹具里「较早那笔说谎」）。 */
+    /* 段表是 `Record<string, 联合>`，取数形状那一格在各成员上键不同 —— 这里按判据
+     * 要问的三样取一个视图，而不是往生产类型里塞可选键。 */
+    const claims: { kind: string; shape?: string; args?: string[] } =
+      SEGMENTS.claims!;
+    expect(claims.kind).toBe("anchored");
+    expect(claims.shape).toBe("range");
+    /* 反向那半：这一段不许再带回「空 args」的旧形态 —— 那就是缺陷本身。 */
+    expect(claims.args).toBeUndefined();
+  });
+
+  test("同一次跑里不判两遍：`base` 段跑过的那份脚本不再单跑（#2070 的连带）", () => {
+    /* 事实纠正（本单动手时查实）：批次面**早就有执行者** ——
+     * `resolveMergeBatch` 的第二个来源（`base-check/chained-steps.mjs`）已经把
+     * `check-commit-claims.mjs --range <base>..HEAD` 收进 base 段那一批。
+     * 真正漏的是两处：`--light` 会把那条筛掉（本地档那 14 条里没有它），
+     * 以及本文件自己那格 `claims` 只审 HEAD。改成审同一批之后，
+     * 全档那一跑就可能出现**两遍同样的核对**（带声明的提交单条约 49 秒）。 */
+    const chained = [
+      {
+        argv: ["node", "scripts/check-commit-claims.mjs", "--range", "x..HEAD"],
+      },
+      { argv: ["node", "scripts/check-file-structure.cjs"] },
+    ];
+    const seen = scriptsInCommands(chained);
+    expect(seen.has("scripts/check-commit-claims.mjs")).toBe(true);
+    expect(seen.has("scripts/check-file-structure.cjs")).toBe(true);
+
+    /* `--light` 筛过之后那一批里**没有**它 —— 这时去重必须不生效，
+     * 否则「light 档没跑」会被读成「base 段跑过了」，那正是假绿的形状。 */
+    const light = [{ argv: ["node", "scripts/check-file-structure.cjs"] }];
+    expect(
+      scriptsInCommands(light).has("scripts/check-commit-claims.mjs"),
+    ).toBe(false);
+
+    /* 非脚本项（`pnpm run lint` 那一族）不该被当成「跑过某个 .mjs」。 */
+    expect(scriptsInCommands([{ argv: ["pnpm", "run", "lint"] }]).size).toBe(0);
+    expect(scriptsInCommands([]).size).toBe(0);
+  });
+
+  test("`--only=claims` 真跑起来，且不把「这批没带新提交」报成判据坏了", () => {
+    /* 在真仓库上跑这一段：区间为空（分叉点 == HEAD）时脚本说「无可审，不是判过」并
+     * 退 0；旧形态在那一档说「取不到要审的提交」+ 退 2，于是「刚 fetch 完还没动手」
+     * 会被读成「这条判据跑不了」。两种读数不能混（§13.6.2）。 */
+    const { code, output } = run(["--only=claims"]);
+    expect(output).not.toContain("取不到要审的提交");
+    expect([0, 1, 2]).toContain(code);
+    if (code === 2) expect(output).toContain("[premerge] ");
+    /* 走到「审了几笔」这一层：绿的那一支必须说得出条数，或说得出「无可审」。 */
+    if (code === 0) expect(output).toMatch(/次提交|无可审/);
   });
 
   test("锚点 = **分叉点**（`merge-base` 要并进去的那条 vs HEAD），不是上游的尖端", async () => {
@@ -249,14 +310,86 @@ describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退
       const tip = g("rev-parse", "master");
       g("checkout", "-q", "work");
 
-      const { resolveLossBaseline } =
+      const { resolveForkBaseline } =
         await import("../scripts/premerge-check.mjs");
-      const got = resolveLossBaseline(repo);
+      const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(true);
       if (!got.ok) return;
       /* 关键：它得停在**分叉点**，不是上游尖端。 */
       expect(got.baseline).toBe(fork);
       expect(got.baseline).not.toBe(tip);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("平台上那条线**没有 `master` 引用**时：目标 sha 从 env 进来，分叉点照样算得出", async () => {
+    /* 为什么需要这一格：自托管那条流水线**只 fetch 协商后的单 ref**（`refs/heads`
+     * 零条 —— 读数就在 `工作区复用读数` 那一格的注释里），所以 `resolveMergeBaseRef`
+     * 那套「各 remote 的 master / 本地 master」在平台上未必取得到东西。
+     * `claims` 要上平台当第二个执行者（#2070），就得认平台给的那个来源
+     * （`CNB_PULL_REQUEST_TARGET_SHA`，`ci-affected-tests.mjs` 用的同一个）。 */
+    const repo = mkdtempSync(join(tmpdir(), "premerge-envtarget-"));
+    try {
+      const g = (...args: string[]) =>
+        execFileSync(
+          "git",
+          [
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "-c",
+            "commit.gpgsign=false",
+            ...args,
+          ],
+          { cwd: repo, encoding: "utf8" },
+        ).trim();
+      /* 全程不出现任何名为 `master` 的引用 —— 这就是平台检出的形状。 */
+      g("init", "-q", "-b", "main");
+      writeFileSync(join(repo, "a.txt"), "1\n");
+      g("add", "-A");
+      g("commit", "-qm", "base");
+      const target = g("rev-parse", "HEAD");
+      g("checkout", "-q", "-b", "work");
+      writeFileSync(join(repo, "b.txt"), "1\n");
+      g("add", "-A");
+      g("commit", "-qm", "mine");
+
+      const { resolveForkBaseline } =
+        await import("../scripts/premerge-check.mjs");
+
+      /* ① 没有 env：这条路在平台上就是取不到，必须**照实说取不到**（不是编一个基线）。 */
+      const without = resolveForkBaseline(repo, {});
+      expect(without.ok).toBe(false);
+
+      /* ② 有 env：目标 sha 落在这份对象库里 ⇒ 分叉点算得出来，且是 `merge-base`
+       *    而不是那个尖端本身 —— 这里 target 恰好是 HEAD 的祖先，所以两者相同；
+       *    关键是它**仍然走了 merge-base**（上一条测试判的是尖端 ≠ 分叉点那一形）。 */
+      const withEnv = resolveForkBaseline(repo, {
+        CNB_PULL_REQUEST_TARGET_SHA: target,
+      });
+      expect(withEnv.ok).toBe(true);
+      if (!withEnv.ok) return;
+      expect(withEnv.baseline).toBe(target);
+      /* 交出去的那一批就是「PR 自己的提交」，不多不少一笔。 */
+      const batch = execFileSync(
+        "git",
+        ["log", "--format=%s", `${withEnv.baseline}..HEAD`],
+        { cwd: repo, encoding: "utf8" },
+      )
+        .trim()
+        .split("\n");
+      expect(batch).toEqual(["mine"]);
+
+      /* ③ env 里那个 sha 不在对象库里（浅克隆之外的另一态）⇒ **不**拿它充数，
+       *    退回引用那一套、取不到就照实说。宁可「没跑起来」，不要一个假基线。 */
+      const bogus = resolveForkBaseline(repo, {
+        CNB_PULL_REQUEST_TARGET_SHA: "f".repeat(40),
+      });
+      expect(bogus.ok).toBe(false);
+      if (!bogus.ok)
+        expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -287,11 +420,24 @@ describe("premerge-check —— 带锚点的那一段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "c1");
       /* 没有 `origin/master`、也没有本地 `master` ⇒ `resolveMergeBaseRef` 给 null。 */
-      const { resolveLossBaseline } =
+      const { anchorMissed, resolveForkBaseline } =
         await import("../scripts/premerge-check.mjs");
-      const got = resolveLossBaseline(repo);
+      const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(false);
-      if (!got.ok) expect(got.reason).toContain("取不到要并进去的那条");
+      if (!got.ok) {
+        expect(got.reason).toContain("取不到要并进去的那条");
+        /* **编排那一半也要判**：这一段此前把 `ok:false` 折成 `code: 0` —— 函数契约
+         * 对了、接线错了，于是「取不到分叉点」在总读数里是**绿**。`anchorMissed` 是
+         * 两段（`claims` / `mergeLoss`）唯一的共用折算点，把它提成纯函数才判得动
+         * （`main` 里那一段要真跑 git，用例进不去）。
+         * 变异复算：把这里改回 0 ⇒ 本条当场红。 */
+        const missed = anchorMissed("某段", got.reason);
+        expect(missed.code).toBe(2);
+        expect(missed.output).toContain(got.reason);
+        expect(missed.output).toContain("没跑起来");
+        // 而且 2 压过 1：合成器不许把「没跑起来」降级成「红了」。
+        expect(combineCodes([0, missed.code, 1])).toBe(2);
+      }
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

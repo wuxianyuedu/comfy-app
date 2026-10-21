@@ -301,7 +301,7 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 新鲜度账, 同步数据库表结构,
+      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 新鲜度账, 同步数据库表结构,
       类型检查, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -942,6 +942,31 @@
   # CNB_PULL_REQUEST_TARGET_SHA 是 sha —— 拿它当 branch 用会静默失效。
   - name: 分支守卫
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --pr-check --target master
+
+  # ── 提交声明核对（平台侧的第二个执行者，ISSUE #2070）──
+  #
+  # 判的是「提交信息里那句『§x.y 照旧保留』在那次提交的树里是不是真在」。这一格的
+  # 存在理由不是再判一遍，而是**换一个执行者**：本地那一段（`premerge-check.mjs` 的
+  # `claims` 段）只在推送那一刻跑一次，而它过去取的是**最近一次提交** —— 假声明长在
+  # 批次里较早那笔上时恰好看不见（`ad81a912` 就是这么进的主干：那句话在它自己的树里
+  # 不成立，`docs/standards/13` / `AGENTS.md` / `.githooks/pre-commit` 里都没有
+  # §13.5.13 / §13.6.3 两节，后来才被补回来）。
+  #
+  # 两件事同批做掉，判据本体一字未改：
+  #   · 扫描面从「最近一笔」改成 `<分叉点>..HEAD` = **本次带进来的那一批**；
+  #   · 取不到分叉点时那一段记 **2（没跑起来）并说明**，不再折成 0（绿的）。
+  #
+  # 平台上这一格跑的是**同一个入口**（`--only=claims`），不是第二份实现 ——
+  # 「目标那条线」在这里的来源是 `CNB_PULL_REQUEST_TARGET_SHA`（这台节点只 fetch
+  # 协商后的单 ref，未必有 `origin/master` 这个引用名；`受影响用例` 用的是同一个），
+  # 分叉点仍然要算 `merge-base`，不拿尖端充数。
+  #
+  # 代价（本机实测）：没有声明的提交只值一次 `git log`，30 笔 14 秒；贵的是**真带
+  # 声明**的那几笔（单条约 49 秒，要对每一节 `ls-tree` + 逐份 `git show`），
+  # 而一条 PR 通常 0~1 笔。墙钟给 10 分钟兜那一头。
+  - name: 提交声明核对
+    timeout: 10m
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/premerge-check.mjs --only=claims
 
   # ── 新鲜度账判决（平台侧的第二个执行者，ISSUE #1979）──
   #
