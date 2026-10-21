@@ -104,6 +104,69 @@ test("声明与该节一致时 → 绿", ({ repo }) => {
   repoExpect(output).toContain("都与事实一致");
 });
 
+/* ── ①b 扫描面：审「最新一笔」会漏掉批次里较早的那笔（ISSUE #2070）──── */
+
+test("假声明在较早那笔上：只审 HEAD 漏过，审区间抓到", ({ repo }) => {
+  /* 立案形状（`ad81a912`）：作者推送那一刻被说一句，合并之后 HEAD 前进 ⇒
+   * 「只审最近一次提交」的那个执行者再也看不到它。所以判据的两态都要钉：
+   *   · 默认（HEAD 一笔）⇒ **漏过** —— 这一条记的是缺陷本身，不是要求；
+   *   · 交一段区间 ⇒ 抓到，且点名的是较早那一笔，不是最新那一笔。
+   * 执行者（`premerge-check.mjs` 的 `claims` 段）交的是 `<分叉点>..HEAD`；
+   * 那里「取哪些提交」由编排决定，本文件只判「给了区间就真逐条审」。 */
+  repo.write("docs/standards/13-提交与-code-review.md", docWith("13.5.12"));
+  commitAll(repo, "docs: 起点");
+  repo.write("src/a.ts", "export const a = 101;\n");
+  commitAll(
+    repo,
+    "feat: 带假声明的那笔\n\nmaster 新增的 §13.5.13 两节照旧保留。",
+  );
+  /* 之后再一笔干净的 —— 它就是「合并后 HEAD 的前进」那一格的最小复现。 */
+  repo.write("src/b.ts", "export const b = 1;\n");
+  commitAll(repo, "feat: 之后的一笔（没有声明）");
+
+  const headOnly = repo.run(["--commit", "HEAD"]);
+  repoExpect(headOnly.code).toBe(0);
+  repoExpect(headOnly.output).toContain("没有可机械核对的声明");
+
+  const batch = repo.run(["HEAD~2..HEAD"]);
+  repoExpect(batch.code).toBe(1);
+  repoExpect(batch.output).toContain("声明与事实矛盾");
+  repoExpect(batch.output).toContain("§13.5.13");
+  // 点名点到的是那笔说谎的（打印行是「<sha8> <subject>」），不是顶端那笔 ——
+  // 夹具的 `git` 句柄只落命令、不回 stdout，所以按 subject 认，不抄 sha。
+  repoExpect(batch.output).toContain("带假声明的那笔");
+
+  /* 逐条都审：区间里 2 笔，`--json` 的 `commits` 就得是 2 ——
+   * 「拿到区间却只审顶端」会同时过掉上面两条断言。 */
+  const asJson = repo.run(["HEAD~2..HEAD", "--json"]);
+  const parsed = JSON.parse(asJson.output) as { commits: number };
+  repoExpect(parsed.commits).toBe(2);
+});
+
+test("区间里没有提交 ⇒ 退 0 并说「无可审，不是判过」（不许折成「取不到」）", ({
+  repo,
+}) => {
+  /* 这是合并前常见的一态：`<分叉点> == HEAD`（刚 fetch 完、分支还没带新东西）。
+   * 旧形态把它报成「取不到要审的提交」并退 2 —— 那是把「没带东西」说成
+   * 「判据坏了」，而 2 在本仓的口径里是「没跑起来、不构成证据」。 */
+  repo.write("docs/standards/13-提交与-code-review.md", docWith("13.5.12"));
+  commitAll(repo, "docs: 起点");
+
+  const { code, output } = repo.run(["HEAD..HEAD"]);
+  repoExpect(code).toBe(0);
+  repoExpect(output).toContain("无可审");
+  repoExpect(output).not.toContain("取不到要审的提交");
+});
+
+test("spec 本身跑不动（rev 不存在）⇒ 还是退 2，与上面那档分开", ({ repo }) => {
+  repo.write("docs/standards/13-提交与-code-review.md", docWith("13.5.12"));
+  commitAll(repo, "docs: 起点");
+
+  const { code, output } = repo.run(["no-such-rev..HEAD"]);
+  repoExpect(code).toBe(2);
+  repoExpect(output).toContain("取不到要审的提交");
+});
+
 /* ── ② / ③ 并列章节各算一条、折行拼回一句 ─────────────────────────── */
 
 test("同一句里并列的两个章节各报一条（不是只报一个）", ({ repo }) => {

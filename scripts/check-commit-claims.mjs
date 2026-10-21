@@ -59,6 +59,14 @@
  *   node scripts/check-commit-claims.mjs --report            # 同上（与 §11.23.5 里
  *                                                          # 「只列命中、不判失败」那个入口名一致）
  *
+ * ⚠️ **不带参数就是只审 HEAD 一笔**，而「审 HEAD 一笔」当不了合并前的那道判据
+ * （ISSUE #2070）：假声明长在批次里较早那笔上时，推送那一刻审的是最新一笔 ⇒ 漏过；
+ * 合并之后 HEAD 前进 ⇒ 再没有第二个执行者回头重放。所以**执行者一律交一段区间**：
+ * `premerge-check.mjs` 的 `claims` 段交 `<分叉点>..HEAD`（= 本次带进来的那一批），
+ * 平台侧 PR 那一格跑的是同一个入口（`node scripts/premerge-check.mjs --only=claims`）。
+ * 区间里没有提交（`base == HEAD`）时打一句「无可审，不是判过」并退 **0** ——
+ * 那与「spec 写错 / 不是 git 检出」的 **2** 是两件事，别混（§13.6.2）。
+ *
  * 退出码：`0` = 声明的**事实**已复算（有反事实声明时会同时打印出来）；`1` = 发现了
  * 与事实矛盾的声明；`2` = 核对过程本身失败（不是 git 检出 / 取不到那个提交 / 句式解析
  * 失灵）—— 与「声明说反话」分开，因为后者是本脚本要**报告**的事实。
@@ -570,12 +578,17 @@ export function auditCommit(commit) {
 /**
  * 一段提交区间里的逐条提交（`<rev>..HEAD`；给单个 rev 时只审它一个）。
  *
+ * ⚠️ **「取不到」与「区间里没有提交」是两种读数**，此前都折成 `[]` ⇒ 调用点只能报
+ * 「取不到要审的提交」，把「这批没带新东西进来」（合法，且是合并前常见的一态）
+ * 说成了过程失败。现在：spec 本身跑不动 ⇒ `null`（→ 退 2）；跑通了但 0 笔 ⇒ `[]`
+ * （→ 打印「无可审」并退 0）。
+ *
  * @param {string} spec
- * @returns {string[]}
+ * @returns {string[] | null}
  */
 export function resolveCommits(spec) {
   const out = git(["log", "--format=%H", spec]);
-  if (out === null) return [];
+  if (out === null) return null;
   return out
     .split("\n")
     .map((l) => l.trim())
@@ -628,14 +641,22 @@ function main(argv) {
       ? resolveCommits(commitArg)
       : (() => {
           const one = git(["rev-parse", commitArg]);
-          return one === null ? [] : [one.trim()];
+          return one === null ? null : [one.trim()];
         })();
 
-  if (commits.length === 0) {
+  if (commits === null) {
     process.stderr.write(
       `[commit-claims] 取不到要审的提交：「${commitArg}」\n`,
     );
     return 2;
+  }
+  /* 区间跑通了、里面一笔都没有 —— 那是「这批没带新的提交」，不是核对失败。
+   * 报成 2 会让人以为判据坏了；报成「审过 N 笔且都一致」又是假绿。 */
+  if (commits.length === 0) {
+    process.stdout.write(
+      `[commit-claims] 「${commitArg}」里没有提交 —— 无可审，**不是判过**\n`,
+    );
+    return 0;
   }
 
   const audits = [];
