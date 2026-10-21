@@ -25,6 +25,7 @@ import path from "node:path";
 import { deflateRawSync } from "node:zlib";
 
 import { localTimestamp } from "./log.mjs";
+import { resolveGitDir } from "../git-dir.mjs";
 
 /** 日志根下的固定名（改这里即改布局，别在别处拼这些字面量）。 */
 export const LOG_LAYOUT = {
@@ -126,17 +127,17 @@ export function runDirName(at, runId) {
  * @returns {{ branch: string | null, commit: string | null }}
  */
 export function readGitHead(root) {
+  // 本仓检出在哪：走权威解析（认链接工作树里 `.git` 是个文件的情形），不硬拼
+  // 检出子目录（硬拼在 worktree 上指向那个文件、HEAD 永远读不到）。
+  const gitDir = resolveGitDir(root);
+  if (!gitDir) return { branch: null, commit: null };
   try {
-    const head = fs
-      .readFileSync(path.join(root, ".git", "HEAD"), "utf8")
-      .trim();
+    const head = fs.readFileSync(path.join(gitDir, "HEAD"), "utf8").trim();
     if (!head.startsWith("ref:")) return { branch: null, commit: head || null };
     const ref = head.slice(4).trim();
     const branch = ref.replace(/^refs\/heads\//, "");
     try {
-      const commit = fs
-        .readFileSync(path.join(root, ".git", ref), "utf8")
-        .trim();
+      const commit = fs.readFileSync(path.join(gitDir, ref), "utf8").trim();
       return { branch, commit: commit || null };
     } catch {
       return { branch, commit: null };
@@ -171,7 +172,16 @@ export function readAppVersion(root) {
  * @param {{ runId?: string, at?: Date, args?: string[], mode?: string, platform?: string }} [options]
  * @returns {{ runId: string, dir: string, runJson: string, startedAt: Date }}
  */
-export function startRun(root, { runId = newRunId(), at = new Date(), args = [], mode = "", platform = process.platform } = {}) {
+export function startRun(
+  root,
+  {
+    runId = newRunId(),
+    at = new Date(),
+    args = [],
+    mode = "",
+    platform = process.platform,
+  } = {},
+) {
   const dir = currentDir(root);
   fs.mkdirSync(dir, { recursive: true });
   const git = readGitHead(root);
@@ -180,7 +190,7 @@ export function startRun(root, { runId = newRunId(), at = new Date(), args = [],
     startedAt: at.toISOString(),
     startedAtLocal: localTimestamp(at),
     appVersion: readAppVersion(root),
-    branch: git.branch,
+    branch: git.branch ?? "(unknown)",
     commit: git.commit,
     args,
     mode,
@@ -255,7 +265,7 @@ export function patchRun(root, patch) {
 export function recordPid(root, name, pid) {
   const meta = readRunJson(root);
   if (!meta) return;
-  const pids = { ...(/** @type {Record<string, number>} */ (meta.pids) ?? {}) };
+  const pids = { .../** @type {Record<string, number>} */ ((meta.pids) ?? {}) };
   if (pid == null) delete pids[name];
   else pids[name] = pid;
   patchRun(root, { pids });
@@ -311,7 +321,15 @@ function emptyDir(dir) {
  * @param {{ exitCode?: number | null, crashed?: boolean, at?: Date, touchLatest?: boolean }} [options]
  * @returns {string | null} 归档目录路径（没有可归档内容时返回 null）
  */
-export function archiveCurrent(root, { exitCode = null, crashed = false, at = new Date(), touchLatest = true } = {}) {
+export function archiveCurrent(
+  root,
+  {
+    exitCode = null,
+    crashed = false,
+    at = new Date(),
+    touchLatest = true,
+  } = {},
+) {
   const cur = currentDir(root);
   if (!fs.existsSync(cur)) return null;
   const before = readRunJson(root);
@@ -511,7 +529,10 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
   for (const name of drop) {
     const dir = path.join(runsDir(root), name);
     try {
-      if (dirSize(dir) > RETENTION.zipAboveBytes && name.endsWith(".zip") === false) {
+      if (
+        dirSize(dir) > RETENTION.zipAboveBytes &&
+        name.endsWith(".zip") === false
+      ) {
         await zipDirectory(dir, `${dir}.zip`);
         zipped++;
       }
@@ -575,7 +596,11 @@ export async function zipDirectory(dir, outFile) {
   const out = Buffer.concat([
     ...local,
     centralBuf,
-    endOfCentral({ count: files.length, centralSize: centralBuf.length, centralOffset: offset }),
+    endOfCentral({
+      count: files.length,
+      centralSize: centralBuf.length,
+      centralOffset: offset,
+    }),
   ]);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, out);
@@ -590,11 +615,12 @@ export async function zipDirectory(dir, outFile) {
  */
 function collectFiles(dir, prefix = "") {
   const out = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  )) {
+  for (const entry of fs
+    .readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))) {
     const rel = prefix ? path.join(prefix, entry.name) : entry.name;
-    if (entry.isDirectory()) out.push(...collectFiles(path.join(dir, entry.name), rel));
+    if (entry.isDirectory())
+      out.push(...collectFiles(path.join(dir, entry.name), rel));
     else if (entry.isFile()) out.push(rel);
   }
   return out;
@@ -607,7 +633,13 @@ function collectFiles(dir, prefix = "") {
  * @param {{ nameBytes: Buffer, crc: number, compressSize: number, uncompressedSize: number, method: number }} p
  * @returns {{ header: Buffer, size: number }}
  */
-function localHeader({ nameBytes, crc, compressSize, uncompressedSize, method }) {
+function localHeader({
+  nameBytes,
+  crc,
+  compressSize,
+  uncompressedSize,
+  method,
+}) {
   const size = 30 + nameBytes.length;
   const b = Buffer.alloc(size);
   b.writeUInt32LE(0x04034b50, 0);
@@ -630,7 +662,14 @@ function localHeader({ nameBytes, crc, compressSize, uncompressedSize, method })
  * @param {{ nameBytes: Buffer, crc: number, compressSize: number, uncompressedSize: number, method: number, offset: number }} p
  * @returns {Buffer}
  */
-function centralHeader({ nameBytes, crc, compressSize, uncompressedSize, method, offset }) {
+function centralHeader({
+  nameBytes,
+  crc,
+  compressSize,
+  uncompressedSize,
+  method,
+  offset,
+}) {
   const b = Buffer.alloc(46 + nameBytes.length);
   b.writeUInt32LE(0x02014b50, 0);
   b.writeUInt16LE(20, 4); // version made by
@@ -708,7 +747,8 @@ function crc32(buf) {
 export async function exportDiagnostics(root, { at = new Date(), runId } = {}) {
   const cur = currentDir(root);
   const meta = readRunJson(root);
-  const id = runId ?? (typeof meta?.runId === "string" ? meta.runId : "unknown");
+  const id =
+    runId ?? (typeof meta?.runId === "string" ? meta.runId : "unknown");
   // 时间戳与 runs 目录名同形（`<日期>_<时分秒>`，无冒号）：用户在 Windows 上
   // 打开 exports/ 时两个地方的名字读起来是同一套写法。
   const stamp = localTimestamp(at)
