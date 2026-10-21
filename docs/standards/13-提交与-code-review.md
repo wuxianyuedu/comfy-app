@@ -7200,7 +7200,8 @@ into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后�
   | **四态折算** | `current-green`=0 / `yours`·`baseline-red`=1 / `inconclusive`=2，只在**一处** | 两处各折算一遍 → 漂，且「同一个事实在两条入口上说成两回事」  |
   | **筛空**     | 三段全被跳过 ⇒ **退 2**，不许报全绿                                           | 「什么都没复算」被读成「复算过且全绿」（静默的绿比没有更坏） |
 
-  **第三段的锚点由入口自己算**（`resolveLossBaseline()`）：`check-merged-side-loss.mjs`
+  **带锚点那两格的锚点由入口自己算**（`resolveForkBaseline()`，原名 `resolveLossBaseline`，
+  #2070 起 `claims` 那格也用同一个）：`check-merged-side-loss.mjs`
   需要一个 `--baseline`，而它在「合并前」这一刻**是算得出来的** —— 就是那条线的
   **分叉点**：
 
