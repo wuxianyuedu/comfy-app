@@ -110,7 +110,7 @@
 
 ## 立案（本 PR 只记不修）
 
-1. **接槽 × Turbopack：`每日生产构建` 在 13.8s 处 FATAL**（臂 A）。
+1. **接槽 × Turbopack：`每日生产构建` 在 13.8s 处 FATAL**（臂 A）→ **ISSUE #2081**。
    `Symlink [project]/node_modules is invalid, it points out of the filesystem root`。
    成因形状：接槽把作业里的 `node_modules` 做成**指向项目根之外**的 junction（槽根由
    `pnpm store path` 推导 ⇒ `G:\ci-cache\comfy-app-t3\<key>`，作业在 `G:\runner\…\workspace`），
@@ -118,7 +118,7 @@
    从没验过 `next build`。臂 B（不接槽）过了 Turbopack 跑到 121.3s ⇒ **红归给接槽，不归给搬盘**。
    开关是 2026-10-20 拨的（#2049/#2051），而每日那一跑上一次执行是当天 04:00（拨开关之前）——
    所以这是这两格第一次组合，不是回归。
-2. **`bundle-budget` 棘轮红 +543 B，且它的比对前提在 CI 上不成立**（臂 B）。
+2. **`bundle-budget` 棘轮红 +543 B，且它的比对前提在 CI 上不成立**（臂 B）→ **ISSUE #2082**。
    `gzip 总量上升：2276.7 KB → 2277.2 KB`，同屏另一句是
    `基线修订号 0a618c1c 在本检出里不可达（基线过期 / 浅克隆）`——也就是它**无法判断**这批读数与
    基线之间源码动过几次，却仍然阻断。基线生成于 2026-10-17。

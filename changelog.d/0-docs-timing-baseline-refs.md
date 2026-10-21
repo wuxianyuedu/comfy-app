@@ -15,7 +15,8 @@
   - 同时记档三条**与搬盘无关、但正挡着每日档**的在红：接槽形态下 `每日生产构建` 起不来
     （Turbopack 拒绝指向项目根之外的 `node_modules` junction，而不接槽那一臂过了这一关 ⇒
     红归接槽），`bundle-budget` 棘轮 +543 B 且其基线修订号在 CI 浅克隆上不可达，
-    `tests/git-dir.test.ts` 在节点身份上把 TEMP 的大小写拼法当成事实。
+    `tests/git-dir.test.ts` 在节点身份上把 TEMP 的大小写拼法当成事实。前两条已开成
+    **ISSUE #2081**（接槽 × Turbopack）与 **ISSUE #2082**（`bundle-budget` 在 CI 上无法归因却仍然阻断）。
   - 还有一条取数手法的缺口被补上：`cnb build start-build --config <内联 YAML>` 的探针**必须带分支键那一层**，
     且**必须自带独立 `lock.key`**（照抄 `pr-$CNB_PULL_REQUEST_IID` 会在非 PR 事件上退化成 `pr-`，
     被任何一次 push 流水线 `cancel-in-progress` 掐掉——实测死过一次）。
