@@ -18,6 +18,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { resolveGitDir } from "./git-dir.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -512,13 +513,24 @@ export function probeCacheLocations(platform) {
 
 /**
  * 构建与依赖目录的真实落点。
+ *
+ * 检出目录（git 目录）**不在这里硬拼** —— 「检出位置只有 `scripts/git-dir.mjs` 知道」
+ * 是本仓的一条硬规则（ISSUE #2072 的字面量扫描闸：`scripts/**` 里不许再出现引号包住的
+ * 检出子目录字面量）。这里改用 git 自己报的位置，顺带也对了链接工作树 ——
+ * 那里的 git 目录是个**文件**，硬拼指不到它。
  * @param {NodeJS.Platform} platform
  * @returns {WorkdirEntry[]}
  */
 export function probeWorkdirs(platform) {
-  const names = ["node_modules", ".next", path.join("src-tauri", "target"), ".git"];
-  return names.map((name) => {
-    const target = path.join(ROOT, name);
+  /** @type {{ name: string, target: string }[]} */
+  const entries = [
+    { name: "node_modules", target: path.join(ROOT, "node_modules") },
+    { name: ".next", target: path.join(ROOT, ".next") },
+    { name: "src-tauri/target", target: path.join(ROOT, "src-tauri", "target") },
+  ];
+  const gitDir = resolveGitDir(ROOT);
+  if (gitDir) entries.push({ name: "git-dir", target: gitDir });
+  return entries.map(({ name, target }) => {
     const exists = fs.existsSync(target);
     let realPath = target;
     if (exists) {
