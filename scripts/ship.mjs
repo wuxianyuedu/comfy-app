@@ -70,6 +70,11 @@
  *     `closed_at` 三件原值打出来。那条「已落地 + 读数 + 因果」的记录评论是判断，
  *     与提交信息同一档，不由编排层生成 —— 生成出来的那句话必然是一句
  *     「它说它做了」，而这一族存在的意义恰恰是不采信这种话。
+ *   · **不替你立案，也不替你凑一个号**。阶段 0 会把「这次带来的碎片各挂在哪个号上」
+ *     念出来，其中段落是 `## Fixed` 而号是 `0` 的那几份额外点一句「先立案再改」
+ *     （规范 §13.10.9）—— 那是**读数**，一次也不参与退码。做成硬闸的必然后果是随手
+ *     挂一张别人开着的单子，而 §13.10.8 记的就是那次事故（挂错号比不挂更贵，
+ *     且号只是个字符串、没有判据会红）。
  *
  * ── 用法 ───────────────────────────────────────────────────────
  *
@@ -106,6 +111,7 @@ import {
   planCommands,
   readProof,
   resolveUpstream,
+  ticketReading,
 } from "./ship-core.mjs";
 import { makeRunner, safeRead, short, writeScratch } from "./ship-exec.mjs";
 import {
@@ -393,6 +399,15 @@ async function runFlow(deps, tmpFiles) {
     log(
       `[ship] 暂存 ${staged.length} 项 · 未暂存 ${unstagedModified.length} 项 · 未跟踪 ${untracked.length} 项 · changelog.d 碎片 ${frags.length} 份`,
     );
+    /* 「这次变更挂在哪张单子上」在这一格念出来 —— 它是**读数**，不参与退码。
+     * 放在这里而不是别处的理由：这是整条链上唯一一处「碎片文件名 + 首行段落」都还在手边、
+     * 而写动作一个都没发生的时刻。此前的读数时机只有最危险那一格（`--close-issue` 在
+     * **合并已发生之后**才发现标题里没有号），那等于让「没立案」一路走到主干。 */
+    if (frags.length > 0) {
+      for (const l of ticketReading({ root, fragments: frags }).lines) {
+        log(l);
+      }
+    }
     if (
       unstagedModified.length + untracked.length > 0 &&
       opt.adds.length === 0
