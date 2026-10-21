@@ -42,13 +42,13 @@
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
-const fs = require("node:fs");
 const path = require("node:path");
 const {
   readForScan,
   walkForScan,
   vanishedNote,
 } = require("./gate-scan-read.cjs");
+const { loadProjects, matchesAny } = require("./vitest-projects.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -149,56 +149,6 @@ function stripCommentsAndStrings(src) {
 }
 
 /**
- * 把**注释**换成等长空白（字符串原样保留）—— 给「必须按原文偏移去切配置」的那一步用。
- *
- * 为什么必须有这一步（实测撞出来的形状）：`parseProjectGlobs()` 原来直接在**原文**上
- * `indexOf("projects:")`。本轮把共享项从 `SHARED_TEST_OPTIONS` 搬回根 `test` 时，
- * 那段解释性注释里写了一句「inline project（`projects: [{ test: {…} }]`）」——
- * 于是 `indexOf` 命中的是**注释里那一处**、`[` 也落在注释里，
- * 两个 project 一个都解析不出来。
- * 表现不是「判据报错」而是**判据判失败**（`found < 2` 那条兜底救了它）：
- * 如果没有那条兜底，它会退回「没有目录档」＝判据②静默消失、照样报 OK ——
- * 正是本仓库反复踩的那一族（§11.13.1「判据在场 ≠ 判据在跑」）。
- *
- * ⚠️ 不能用上面那个 `stripCommentsAndStrings()`：它把字符串换成 `""` 占位，
- * **偏移会变**，而下面要拿 `indexOf` 的偏移去切数组、还要读 `include: DOM_TEST_GLOBS`
- * 这种标识符与字符串条目。所以这里是「只表注释、长度不变」的那一版。
- */
-function blankComments(src) {
-  const chars = [...src];
-  let i = 0;
-  const n = src.length;
-  let state = "code"; // code | line | block | str | tpl
-  let open = "";
-  while (i < n) {
-    const c = src[i];
-    const c2 = src.slice(i, i + 2);
-    if (state === "code") {
-      if (c2 === "//") { state = "line"; chars[i] = " "; chars[i + 1] = " "; i += 2; continue; }
-      if (c2 === "/*") { state = "block"; chars[i] = " "; chars[i + 1] = " "; i += 2; continue; }
-      if (c === '"' || c === "'") { state = "str"; open = c; i += 1; continue; }
-      if (c === "`") { state = "tpl"; open = c; i += 1; continue; }
-      i += 1; continue;
-    }
-    if (state === "line") {
-      if (c === "\n") { state = "code"; i += 1; continue; }
-      chars[i] = " "; i += 1; continue;
-    }
-    if (state === "block") {
-      if (c2 === "*/") { state = "code"; chars[i] = " "; chars[i + 1] = " "; i += 2; continue; }
-      if (c !== "\n") chars[i] = " ";
-      i += 1; continue;
-    }
-    /* str / tpl：原样保留，只处理转义与闭合 */
-    if (c === "\\") { i += 2; continue; }
-    const closer = state === "str" ? (open === '"' ? '"' : "'") : "`";
-    if (c === closer) { state = "code"; }
-    i += 1;
-  }
-  return chars.join("");
-}
-
-/**
  * 枚举扫描面。**点开头的目录**不进去，但点开头的**文件**照收 —— 并发探针
  * （`tests/.setup-cleanup-probe-*.test.tsx`）正是后者，跳掉它等于判据在最该看着它的
  * 那一刻转身不看。消失容错的口径见 `gate-scan-read.cjs`（这一度是本文件自己的一份
@@ -215,201 +165,17 @@ function declaredEnv(text) {
 }
 
 /**
- * `vitest.config.ts` 的 `projects` 里按目录声明的档。
+ * `vitest.config.ts` 的 `projects` 里按目录声明的档，与每个档的 `environment`。
  *
- * 解析的是**源码文本**而不是 import 它 —— 那份配置顶层 import 了 `vitest/config`
- * 与 `node:path`，在判据里加载它会把 vitest 一起拉起来（判据要能独立跑、要快）。
+ * 解析与 glob 引擎抽在 `vitest-projects.cjs`（`check-test-inventory.cjs` 共用同一份）——
+ * 判「用例归属」的判据有两份，各自抄一遍 `indexOf("projects:")` 的代价是静默的：
+ * 配置里 `DOM_TEST_GLOBS` 加一条目录时只有一份跟着变，另一份照旧报 OK。
  *
- * ⚠️ 解析器**只管一种形状**：`projects` 里两个对象，各自 `name: "<档名>"`，
- * 同对象内有 `include` / `exclude` 数组字面量。首版用一条「从 name 抓到下一个
- * 对象开头」的正则 + 一个拼出来的取数组正则，实测**两个都拿不到东西却仍然退 0**
- * （`include: []`）—— 于是判据②变成「永远没有目录档」＝静默消失，而它照样报 OK。
- * 这正是本仓库反复踩的那一族（§11.13.1「判据在场 ≠ 判据在跑」），所以现在：
- *   ① 解析按**括号配对**走（不是「找下一个 `{`」），形状不认识就 `found` 不增；
- *   ② `found < 2` **判失败**，不许退回「没有目录档」；
- *   ③ 数组里的条目必须都是字符串字面量，否则同样判失败。
+ * 形状不认识 ⇒ `found` 不增，由下面 `found < 2` 兜住（**不许**退回「没有目录档」
+ * ＝ 判据静默消失，同 §11.13.1「判据在场 ≠ 判据在跑」）。
  */
-function parseProjectGlobs() {
-  const raw = fs.readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8");
-  /* ⚠️ 在**抹掉注释**的文本上找 `projects:`（偏移不变，字符串照旧）——
-   * 解释性注释里正当会出现 `projects:` 这个词，直接在原文上找会命中注释那一处。 */
-  const text = blankComments(raw);
-  /** 档名 ⇒ `{ include, exclude }`。两个档都得解析出来，缺一个由 `found` 兜住。 */
-  const tiers = new Map();
-  const marker = "projects:";
-  const at = text.indexOf(marker);
-  if (at < 0) return { tiers, found: 0 };
-  /* 从 `projects:` 后的 `[` 开始，按括号配对切出这个数组的**顶层元素**。 */
-  const bracket = text.indexOf("[", at);
-  if (bracket < 0) return { tiers, found: 0 };
-  const items = splitTopLevel(text.slice(bracket + 1));
-  let found = 0;
-  for (const item of items) {
-    const nameM = /name:\s*"([^"]+)"/.exec(item);
-    if (!nameM) continue;
-    const name = nameM[1];
-    const inc = literalArray(item, "include", text);
-    const exc = literalArray(item, "exclude", text);
-    if (inc === null) continue; // 形状不认识 —— 不计入 found，由 found<2 兜住
-    found += 1;
-    tiers.set(name, { include: inc, exclude: exc ?? [] });
-  }
-  return { tiers, found };
-}
-
-/**
- * 每个档的 `environment` —— 从**配置源码**读，不写死档名。
- *
- * 为什么值得单独一步：②③ 要比对的是「文件头声明的环境 ⇄ 它所属档的环境」。
- * 把 `jsdom` / `happy-dom` 这些字面量抄进本脚本，就等于让判据持有第二份
- * 「哪个档是什么环境」的真相 —— 配置里给 DOM 档换个实现时，本判据会因为
- * **两边已经不同源**而静默放过（判据照旧报 OK，比对的却是旧档名）。
- * 同族的坑见 §11.17.4「判据自己不许静默降级」。
- *
- * ⚠️ 解析的是**抹掉注释**的文本（同 `parseProjectGlobs`）：解释性注释里正当
- * 会写出 `environment: "jsdom"` 这种字样（本文件与 `vitest.config.ts` 的注释里
- * 就有），在原文上取第一个命中会读到注释里那一处。
- *
- * @returns {Record<string, string>} 档名 ⇒ 环境名；读不到的档不在表里。
- */
-function parseTierEnvironments() {
-  const text = blankComments(fs.readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8"));
-  const marker = "projects:";
-  const at = text.indexOf(marker);
-  if (at < 0) return {};
-  const bracket = text.indexOf("[", at);
-  if (bracket < 0) return {};
-  /** 档名 ⇒ 环境名。 */
-  const out = {};
-  for (const item of splitTopLevel(text.slice(bracket + 1))) {
-    const nameM = /name:\s*"([^"]+)"/.exec(item);
-    const envM = /environment:\s*"([^"]+)"/.exec(item);
-    if (nameM && envM) out[nameM[1]] = envM[1];
-  }
-  return out;
-}
-
-/** 按括号配对把数组体切成顶层元素（不处理嵌套对象里的逗号）。 */
-function splitTopLevel(body) {
-  const out = [];
-  let depth = 0;
-  let cur = "";
-  let state = "code";
-  for (let i = 0; i < body.length; i += 1) {
-    const ch = body[i];
-    if (state === "str") {
-      cur += ch;
-      if (ch === "\\") { cur += body[i + 1] ?? ""; i += 1; continue; }
-      if (ch === '"' || ch === "'") state = "code";
-      continue;
-    }
-    if (ch === '"' || ch === "'") { state = "str"; cur += ch; continue; }
-    if (ch === "{" || ch === "(" || ch === "[") depth += 1;
-    if (ch === "}" || ch === ")" || ch === "]") {
-      depth -= 1;
-      /* 回到 0 就是 `projects: [...]` 那一层的收尾，后面的内容不属于它。 */
-      if (depth < 0) break;
-    }
-    if (ch === "," && depth === 0) { out.push(cur); cur = ""; continue; }
-    cur += ch;
-  }
-  if (cur.trim()) out.push(cur);
-  return out;
-}
-
-/**
- * 取对象字面量里 `key: [ "…", … ]` 的字符串条目。
- *
- * 支持两种写法，因为它们各自都好用、且**都必须被认出来**：
- *   · `include: [<字符串字面量>, …]` —— 直接写在一行里；
- *   · `include: DOM_TEST_GLOBS`      —— 顶层 `const` 数组（列出 26 个目录用的就是它，
- *     写成字面量会把两个 project 挤成一坨）。
- * 认不出标识符时**返回 `null`**（判失败），不静默按空数组处理 —— 那正是首版
- * 「`include: []` 却退 0」那个静默消失的形状。
- *
- * @returns {string[] | null} 形状不认识时 `null`
- */
-function literalArray(objText, key, configText) {
-  const at = objText.indexOf(key + ":");
-  if (at < 0) return null;
-  /* 标识符写法：`key: SOME_CONST` —— 去顶层找 `const SOME_CONST = [...]`。 */
-  const ident = new RegExp(key + String.raw`:\s*([A-Za-z_$][\w$]*)\s*[,}\n]`).exec(objText);
-  if (ident && configText) {
-    const decl = new RegExp(String.raw`const\s+` + ident[1] + String.raw`\s*=\s*\[`).exec(configText);
-    if (!decl) return null;
-    return collectStringLiterals(configText.slice(decl.index + decl[0].length - 1));
-  }
-  const open = objText.indexOf("[", at);
-  if (open < 0) return null;
-  let depth = 0;
-  let close = -1;
-  for (let i = open; i < objText.length; i += 1) {
-    if (objText[i] === "[") depth += 1;
-    else if (objText[i] === "]") {
-      depth -= 1;
-      if (depth === 0) { close = i; break; }
-    }
-  }
-  if (close < 0) return null;
-  return collectStringLiterals(objText.slice(open));
-}
-
-/** 从一个 `[…]` 字面量（含方括号）里取出所有字符串条目名。 */
-function collectStringLiterals(arrayText) {
-  let depth = 0;
-  let close = -1;
-  for (let i = 0; i < arrayText.length; i += 1) {
-    if (arrayText[i] === "[") depth += 1;
-    else if (arrayText[i] === "]") {
-      depth -= 1;
-      if (depth === 0) { close = i; break; }
-    }
-  }
-  if (close < 0) return null;
-  const inner = arrayText.slice(1, close);
-  return [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
-}
-
-/** 正则里需要转义的字面量字符。 */
-const ESCAPE_RE = /[.+^${}()|[\]\\?]/g;
-
-/**
- * 极简 glob → 正则。支持 `**`、`*`、`{a,b}` 三种（本仓 `include` 里实际出现的全部）。
- *
- * ⚠️ 「双星号 + 斜杠」必须翻成 `(?:[^/]+/)*`（**零层或多层**目录），
- * 不能翻成「任意字符 + 斜杠」：后者要求**至少一层**目录，于是 `src/config/<星号><星号>/x.test.ts` 匹配不到
- * `src/config/custom-nodes.test.ts`（实测：目录档整条失效、判据②静默空转）。
- * `*` 翻 `[^/]*`（不跨目录），字面量段先转义 —— 顺序不能反。
- */
-function globToRe(g) {
-  let out = "";
-  for (let i = 0; i < g.length; i += 1) {
-    const ch = g[i];
-    if (ch === "*") {
-      if (g[i + 1] === "*") {
-        /* 「双星号 + 斜杠」→ 零层或多层目录；结尾的裸双星号 → 任意 */
-        if (g[i + 2] === "/") { out += "(?:[^/]+/)*"; i += 2; }
-        else { out += ".*"; i += 1; }
-      } else out += "[^/]*";
-      continue;
-    }
-    if (ch === "{") {
-      const close = g.indexOf("}", i);
-      if (close > 0) {
-        out += "(?:" + g.slice(i + 1, close).split(",").map(escapeRe).join("|") + ")";
-        i = close;
-        continue;
-      }
-    }
-    out += escapeRe(ch);
-  }
-  return new RegExp("^" + out + "$");
-}
-
-function escapeRe(s) { return s.replace(ESCAPE_RE, String.fromCharCode(92) + "$&"); }
-
-function matchesAny(rel, globs) {
-  return globs.some((g) => globToRe(g).test(rel));
+function projectGlobs() {
+  return loadProjects(ROOT);
 }
 
 function toPosix(p) { return p.split(path.sep).join("/"); }
@@ -462,10 +228,14 @@ function main() {
   }
 
   /* ②③ 需要先知道「哪个档负责哪些用例」。 */
-  const { tiers, found } = parseProjectGlobs();
+  const { tiers, found, environments: envOfTier, configText } = projectGlobs();
   if (found < 2) {
     console.error(
       "[ERROR] 解析 `vitest.config.ts` 的 `projects` 失败（拿到 " + found + " 个档，期望 2）。\n" +
+      (configText === null
+        ? "        连 `vitest.config.ts` 都没读到 —— 那本身就是要判失败的故障，\n" +
+          "        不许当「配置里没有 projects」处理。\n"
+        : "") +
       "        本判据依赖那两个 project 的 `include` / `exclude` glob；\n" +
       "        配置形状改了就要同批改这里 —— 静默退回「没有目录档」等于这条判据消失。",
     );
@@ -475,7 +245,6 @@ function main() {
    * 本脚本只保证「文件头说的环境」与「它所属档的环境」对得上。
    * 硬编码档名会让「给 DOM 档换一个环境实现」这类改动在不改本脚本的情况下
    * 静默失效（判据照旧报 OK，而比对的两边已经不同源）。 */
-  const envOfTier = parseTierEnvironments();
 
   /**
    * 一份用例**实际**会跑在哪个档：`exclude` 优先，其次按 `include` 命中。
