@@ -54,6 +54,10 @@ const SCOPED_DOCS = [
   /* 节点镜像的操作指南：它引用的四件落点（Playwright 的浏览器路径）与两条环境变量名
    * 都来自源码，漂了就会指着一个不存在的位置 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
   "docs/guides/ci-node-image.md",
+  /* 开发盘（ReFS / Dev Drive）红利指南：它引用的落点（pnpm store、四个缓存目录名、
+   * Defender 排除项的命令形态）都来自机器配置，漂了就会指着一个不存在的位置 ——
+   * 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/dev-drive-refs.md",
 ];
 function readJson(p) {
   return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
