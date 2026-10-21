@@ -203,6 +203,29 @@ describe("块克隆这一条：判据只能来自实测", () => {
     const lever = leverOf(report, "block-clone");
     expect(lever.status).toBe("na");
   });
+
+  it("读不到卷类型 ≠ 这块卷不是 ReFS：实测可用就判就位", () => {
+    // 踩过一次：查文件系统类型那条命令偶发返回空，报告里就写成了「当前卷不是 ReFS」。
+    // 「读不到」与「不是」是两件事 —— 混起来会把一块实测能克隆的卷报成「不适用」。
+    const report = makeReport();
+    report.volume.category = "unknown";
+    report.volume.fsType = null;
+    report.capabilities.blockClone = true;
+    const lever = leverOf(report, "block-clone");
+    expect(lever.status).toBe("ok");
+    expect(lever.detail).not.toContain("不是 ReFS");
+  });
+
+  it("读不到卷类型、实测也没测出 → 记不判，同样不说成「不是 ReFS」", () => {
+    const report = makeReport();
+    report.volume.category = "unknown";
+    report.volume.fsType = null;
+    report.capabilities.blockClone = false;
+    report.capabilities.blockCloneKnown = true;
+    const lever = leverOf(report, "block-clone");
+    expect(lever.status).toBe("na");
+    expect(lever.detail).not.toContain("不是 ReFS");
+  });
 });
 
 describe("其余杠杆的状态判定", () => {

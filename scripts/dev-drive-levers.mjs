@@ -213,6 +213,25 @@ function workdirLever(workdirs) {
 }
 
 /**
+ * 块克隆可用时给的那一条提醒：Node 的强制克隆标志在 Windows 上没有实现，
+ * 所以别把 pnpm 的导入方式设成 clone（那是 libuv 的事，不是卷的能力）。
+ * @param {ProbeReport["capabilities"]} caps
+ * @returns {LeverAction[]}
+ */
+function libuvCloneAdvice(caps) {
+  /** @type {LeverAction[]} */
+  const actions = [];
+  if (!caps.libuvForceClone) {
+    actions.push({
+      label: "别把 pnpm 的导入方式设成 clone（强制克隆标志在 Windows 上没有实现）",
+      command: "（不用改：pnpm 默认的硬链接比克隆更省空间，且本仓 store 已与检出同卷）",
+      scope: "user",
+    });
+  }
+  return actions;
+}
+
+/**
  * 块克隆：判据是「复制之后源与目标是不是同一批物理簇」，不是「强制克隆标志能不能用」。
  * @param {VolumeProbe} volume
  * @param {ProbeReport["capabilities"]} caps
@@ -220,10 +239,35 @@ function workdirLever(workdirs) {
  * @returns {Lever}
  */
 function blockCloneLever(volume, caps, drive) {
+  const title = "块克隆（复制大文件不搬字节）";
+  // 「读不到卷类型」与「这块卷不是 ReFS」是**两件事**，不能混成一句 ——
+  // 混起来会把一块实测能克隆的卷报成「不适用」（卷类型查不到时就会发生）。
+  if (volume.category === "unknown") {
+    if (caps.blockCloneKnown && caps.blockClone) {
+      return {
+        id: "block-clone",
+        title,
+        status: "ok",
+        detail:
+          "读不到卷类型（查文件系统类型那条命令这次没返回），但**实测可用**：复制一份 4 MB 文件后，" +
+          "源与目标落在**同一批物理簇**（LCN 相同）→ 这块卷的复制是元数据级操作，不搬字节。",
+        actions: libuvCloneAdvice(caps),
+      };
+    }
+    return {
+      id: "block-clone",
+      title,
+      status: "na",
+      detail:
+        "读不到卷类型（查文件系统类型那条命令这次没返回），实测也没测出块克隆 —— " +
+        "两条都读不到就不判，不猜。",
+      actions: [],
+    };
+  }
   if (volume.category !== "refs") {
     return {
       id: "block-clone",
-      title: "块克隆（复制大文件不搬字节）",
+      title,
       status: "na",
       detail: "块克隆是 ReFS 专属能力，当前卷不是 ReFS，本条不适用。",
       actions: [],
@@ -241,15 +285,6 @@ function blockCloneLever(volume, caps, drive) {
     };
   }
   if (caps.blockClone) {
-    /** @type {LeverAction[]} */
-    const actions = [];
-    if (!caps.libuvForceClone) {
-      actions.push({
-        label: "别把 pnpm 的导入方式设成 clone（强制克隆标志在 Windows 上没有实现）",
-        command: "（不用改：pnpm 默认的硬链接比克隆更省空间，且本仓 store 已与检出同卷）",
-        scope: "user",
-      });
-    }
     return {
       id: "block-clone",
       title: "块克隆（复制大文件不搬字节）",
@@ -258,7 +293,7 @@ function blockCloneLever(volume, caps, drive) {
         "实测：复制一份 4 MB 文件后，源与目标落在**同一批物理簇**（LCN 相同）→ " +
         "这块卷的复制是元数据级操作，不搬字节。Windows 11 24H2 起受支持的复制操作原生克隆，" +
         "开发盘上尤其明显：构建产物拷贝、依赖物化、文件同步都省掉了整份字节的读写。",
-      actions,
+      actions: libuvCloneAdvice(caps),
     };
   }
   /** @type {LeverAction[]} */

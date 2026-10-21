@@ -250,12 +250,25 @@ export function probeVolume(platform) {
     };
   }
   const letter = root.replace(/[:\\]/g, "");
-  const result = runPowerShell(
-    `$v = Get-Volume -DriveLetter ${letter} -ErrorAction SilentlyContinue; ` +
-      `if ($v) { "$($v.FileSystemType)|$($v.FileSystemLabel)" } else { "|" }`,
+  // 首选 `DriveInfo`（.NET API：不依赖卷管理服务是否就绪，返回值也不受系统语言影响）；
+  // 读不到再退回 `Get-Volume`（字段更多，但那条路依赖存储服务 —— 负载高时它会**偶发
+  // 返回空**，踩过一次：卷类型读空，报告里跟着把「不是 ReFS」写成了结论）。
+  let raw = "";
+  const viaDriveInfo = runPowerShell(
+    `$d = [System.IO.DriveInfo]::GetDrives() | Where-Object { $_.Name -like '${letter}:*' } | Select-Object -First 1; ` +
+      `if ($d) { "$($d.DriveFormat)|$($d.VolumeLabel)" } else { "|" }`,
     platform,
   );
-  const [fsType = "", label = ""] = result.stdout.split("|");
+  raw = String(viaDriveInfo.stdout ?? "").trim();
+  if (!raw || raw === "|") {
+    const viaGetVolume = runPowerShell(
+      `$v = Get-Volume -DriveLetter ${letter} -ErrorAction SilentlyContinue; ` +
+        `if ($v) { "$($v.FileSystemType)|$($v.FileSystemLabel)" } else { "|" }`,
+      platform,
+    );
+    raw = String(viaGetVolume.stdout ?? "").trim();
+  }
+  const [fsType = "", label = ""] = raw.split("|");
   return {
     root,
     fsType: fsType || null,
