@@ -24,11 +24,11 @@
  */
 import type * as LoggerModule from "~/lib/core/logger";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ZodRawShape } from "zod";
 
 import { historyTaskRowSchema } from "~/lib/project-canvas/history-panel-client";
 import { createCallerFactory } from "~/server/api/trpc";
 import { taskRouter } from "~/server/api/routers/task";
+import { missingFromWire, throughJsonWire } from "./helpers/wire-contract";
 import { getTestDb, seedTask, seedUser, type Row } from "./helpers/test-db";
 import { makeCtx } from "./helpers/trpc";
 import {
@@ -86,20 +86,14 @@ const COVER = (id: string, localPath: string, mediaType = "image"): Row => ({
 });
 
 /** 走一次 JSON 序列化 —— 浏览器拿到的就是这个（Date 变字符串、undefined 键消失）。
- *  少了这一步，测的是「进程内传对象」，而线上是「传文本」。 */
+ *  少了这一步，测的是「进程内传对象」，而线上是「传文本」。实现住在
+ *  `./helpers/wire-contract`（第二份契约判据动手时抽的，不在调用点重抄）。 */
 async function wireRows(
   input: { take?: number } = { take: 200 },
 ): Promise<Record<string, unknown>[]> {
   const rows = await createCaller(makeCtx()).list(input);
-  const viaWire = JSON.parse(JSON.stringify(rows)) as {
-    tasks: Record<string, unknown>[];
-  };
+  const viaWire = throughJsonWire<{ tasks: Record<string, unknown>[] }>(rows);
   return viaWire.tasks;
-}
-
-/** 镜像声明的列里，线上没有发出来的那些。 */
-function missingFromWire(shape: ZodRawShape, wireKeys: string[]): string[] {
-  return Object.keys(shape).filter((key) => !wireKeys.includes(key));
 }
 
 beforeEach(() => {
