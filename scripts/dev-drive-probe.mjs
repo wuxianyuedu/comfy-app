@@ -512,26 +512,27 @@ export function probeCacheLocations(platform) {
 }
 
 /**
- * 构建与依赖目录的真实落点（git 目录那一条的落点由 `git-dir.mjs` 给）。
+ * 构建与依赖目录的真实落点。
+ *
+ * 检出目录（git 目录）**不在这里硬拼** —— 「检出位置只有 `scripts/git-dir.mjs` 知道」
+ * 是本仓的一条硬规则（ISSUE #2072 的字面量扫描闸：`scripts/**` 里不许再出现引号包住的
+ * 检出子目录字面量；链接工作树里 `<root>/.git` 还是一个**指向别处的文件**、不是目录，
+ * 硬拼连它都指不到）。落点一律问 `resolveGitDir()`，条目名用显式的 `git-dir`，
+ * 不靠相对路径去推。读不出（不在检出里）就**不报这一条**：猜一个路径会把「不知道」
+ * 在下游读成「知道，而且答案就是那个」。
  * @param {NodeJS.Platform} platform
  * @returns {WorkdirEntry[]}
  */
 export function probeWorkdirs(platform) {
-  const targets = [
-    path.join(ROOT, "node_modules"),
-    path.join(ROOT, ".next"),
-    path.join(ROOT, "src-tauri", "target"),
+  /** @type {{ name: string, target: string }[]} */
+  const entries = [
+    { name: "node_modules", target: path.join(ROOT, "node_modules") },
+    { name: ".next", target: path.join(ROOT, ".next") },
+    { name: "src-tauri/target", target: path.join(ROOT, "src-tauri", "target") },
   ];
-  /* git 目录的落点只有 `scripts/git-dir.mjs` 一处知道。这里原先硬拼那一个
-   * 字面量，而链接工作树里 `<root>/.git` 是一个**指向别处的文件**、不是目录 ——
-   * 于是这一条的 `exists / realPath / sameVolume` 三格全落在错的一侧，
-   * 而这个探测的全部价值就是那三格（它答的是「哪一坨数据在别的卷上」）。
-   * 读不出（不在检出里）就**不报这一条**：猜一个路径会把「不知道」在下游
-   * 读成「知道，而且答案就是那个」。 */
   const gitDir = resolveGitDir(ROOT);
-  if (gitDir) targets.push(gitDir);
-  return targets.map((target) => {
-    const name = path.relative(ROOT, target) || target;
+  if (gitDir) entries.push({ name: "git-dir", target: gitDir });
+  return entries.map(({ name, target }) => {
     const exists = fs.existsSync(target);
     let realPath = target;
     if (exists) {
