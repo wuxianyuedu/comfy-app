@@ -198,8 +198,23 @@ Add-MpPreference -ExclusionPath "G:\"
 Windows 搜索索引同理，标成「不索引内容」即可（用户级，代价是一次全量属性改写）：
 
 ```powershell
-attrib +I /S /D "G:\"
+# 注意尾部必须带 \*：attrib 把 "G:\" 里的反斜杠当字面量，
+# 直接吐「File not found - G:\」而什么也不做（实测过）。
+attrib +I /S /D "G:\*"
 ```
+
+> 整盘一次跑还有两个坑（都实测过）：① 回收站里的坏软链会让这次遍历**中途停下**，
+> 后半棵树（典型就是仓库那一片）拿不到标记 —— 实测第一趟 `.pnpm-store` 命中 100%、
+> 仓库命中 0%；② 跑完要抽查，别拿「命令没报错」当「标记到位了」。
+> 更稳的形态是按顶层目录分批（跳过回收站）：
+
+```powershell
+Get-ChildItem "G:\" -Directory -Force | Where-Object Name -ne '$RECYCLE.BIN' |
+  ForEach-Object { attrib +I /S /D "$($_.FullName)\*" }
+```
+
+> 这条标记只作用于**当前已有**的文件；新落盘的文件不继承它。
+> 想要一劳永逸，Windows 搜索的「索引选项 → 排除项」才是按目录长期生效的那一处。
 
 ### 二、需要重格式化（动数据）
 

@@ -542,7 +542,15 @@ function searchIndexLever(drive) {
     actions: [
       {
         label: "标记为不索引内容（用户级即可，量大时较慢）",
-        command: `attrib +I /S /D "${drive}"`,
+        // 尾部必须带 `\*`：attrib 把 `G:\` 里的反斜杠当字面量，直接吐「File not found」而什么也不做。
+        command: `attrib +I /S /D "${drive}\\*"`,
+        scope: "user",
+      },
+      {
+        label: "更稳的形态：按顶层目录分批（整盘一次跑会被回收站里的坏软链打断、漏掉后半棵树）",
+        command:
+          `Get-ChildItem "${drive}" -Directory -Force | Where-Object Name -ne '$RECYCLE.BIN' | ` +
+          `ForEach-Object { attrib +I /S /D "$($_.FullName)\\*" }`,
         scope: "user",
       },
     ],
