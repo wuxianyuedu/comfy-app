@@ -169,7 +169,7 @@ run_group() {
   # 这三组不再在每次提交上跑。**它们没有消失** —— 第一层接手是推送那一跳
   # （`.githooks/pre-push` → `check:premerge` 的 `base` 段），第二层是平台流水线
   # （规范 §13.5.25）。业主口径：提交在开发者的编辑循环里，慢 = 直接被 `--no-verify` 绕掉。
-  # ⚠️ **这里的“不跑”只关执行时机，不关注册表**：那 50 条 `run "<标签>" <命令>` 步骤行
+  # ⚠️ **这里的“不跑”只关执行时机，不关注册表**：那 51 条 `run "<标签>" <命令>` 步骤行
   # 逐字留在这份文件里，因为 `scripts/check-gate-executors.cjs` 是按**文本**解析本文件的
   # 三处出处之一（另两处是 `quality-gate.mjs` / `quality-gate.ps1`；`.cnb.yml` **不算**
   # 执行者）。把步骤删掉 = 那一族判据当场失去执行者 = 本仓最恨的静默删除。
@@ -419,13 +419,13 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(50 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(51 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
-# ⚠️ 上面那句「D(50 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
-# `run` 步骤的**总数**一致（D0 那 14 条 + D 那 36 条 = 50），新增判据时必须同步这个数字。
-# 严格说与本组**并行**的只有 D 那 36 条：D0 的 14 条在本组启动之前就串行跑完了（见文件头
-# 那一档）。拿 50 说并发面积是**偏保守**的那一侧 —— 它高估争抢，而低估争抢才会诱人去抬
+# ⚠️ 上面那句「D(51 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
+# `run` 步骤的**总数**一致（D0 那 14 条 + D 那 37 条 = 51），新增判据时必须同步这个数字。
+# 严格说与本组**并行**的只有 D 那 37 条：D0 的 14 条在本组启动之前就串行跑完了（见文件头
+# 那一档）。拿 51 说并发面积是**偏保守**的那一侧 —— 它高估争抢，而低估争抢才会诱人去抬
 # `--maxWorkers`，那正是这一族事故（`Failed to start forks worker`）的方向。
 run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
   # 先答一格「这台机器上解释器在哪」：几条用到 Python 的用例缺件时按**既有口径**
@@ -801,6 +801,18 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #   ② **未登记的声明不许新增**（声明行计数零增量）—— 新写一处就红，直到你回答「它谁在执行」；
   #   ③ 登记项与事实脱钩即红（落点没了 / 关键词找不到了）。
   # 判据自己不许静默降级（台账读不出 / 空表 / 对侧读不到 ⇒ 判失败，不是「没有站点要查」）。
+  # 「用例存量」—— 磁盘上的 *.test.ts(x) 与 `vitest.config.ts` 给出的**收集面**对账
+  # （2026-10-21 立档）。立案现场：全仓 794 份用例逐份确认 `vitest list` 真的为它打了行，
+  # 那次是**人**跑的、读数全绿，而「全绿」只对那一天成立 —— 配置里 `DOM_TEST_GLOBS`
+  # 加一条目录、`projects` 改一次 include / exclude、或有人把用例放进任何 glob 都没盖住的
+  # 位置，效果是同一件事：那份文件从此不在任何 project 的收集面上，而它**不会让任何东西变红**
+  # （照样被 eslint / tsc 扫、照样进 PR diff，只是再也没人跑它）。
+  # 成本实测：不起 vite，只读一份配置 + 枚举文件名，< 1s、零网络、零子进程。
+  # 与姊妹判据 `check-test-environment.cjs` 共用同一份解析（`scripts/vitest-projects.cjs`）：
+  # 那一份**刻意不判**「漏收 / 重叠」（它判的是文件头与目录档有没有打架），这一份专判。
+  # 已知边界：判不出「收了但零条用例」（整份 skip / 只剩类型导出）—— 那一层归
+  # `conditional-skip-registry` 与 `check-test-todo.cjs`。
+  run "用例存量（磁盘 ⇄ vitest.config.ts 收集面）" node scripts/check-test-inventory.cjs
   run "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）" node scripts/check-tsc-diagnostic-executors.cjs
 '
 
