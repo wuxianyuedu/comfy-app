@@ -25,6 +25,8 @@ pnpm ship --branch feat/x    # 还没有分支时，让它先把分支建出来�
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
 pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉
+pnpm ship --merge --close-issue 2179             # 本轮号（标题里那批）+ 人点名的号，并集去重
+pnpm ship --close-issue 2179                     # 只补关：本轮不合，凭平台侧「已合并 PR」的落地证明关它
 pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上那批**残留进程（默认只念读数）
 ```
 
@@ -47,18 +49,25 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    两句这样的坏标题）。这条 PR 其实是一件事、而分支开口那笔写小了，就显式 `--title "…"`。
 3. **合并是显式动作。** 不给 `--merge` 就停在判决处。给了 `--merge` 而 CI 不是绿的，
    它会拒绝合并并退 `1` —— 这个拒绝是功能，不是故障。
-4. **关单也是显式的（`--close-issue`），且只跟在验真的合并之后。** 它只做一件机械事：
-   把**落地那一行的标题本体**里点名的 `(#N)` 置为 `closed / completed`，然后走一次
-   独立的 `get-issue` 回读，把 `state` / `state_reason` / `closed_at` 三件原值打出来
-   （回执不算结论）。带在没有合并的那一跳上 ⇒ 那一格落 `2` 并说明，**不静默跳过**，
-   也一次都不碰 `cnb`。号只从标题本体取、不从拼完 PR 号的那一整行取 —— 本仓 PR 号与
-   issue 号共用一套编号，喂整行会去关一张别人正在用的单子。
-   **它不写 issue 的内容**：那条「已落地 + 读数 + 因果」的记录是判断，与提交信息同一档。
+4. **关单也是显式的（`--close-issue`），而且「凭什么关」只有一条线：没有落地证明就不关。**
+   号有两种来源，前提**刻意不同**：
+   - **不点名** ⇒ 关**落地那一行的标题本体**里点名的 `(#N)`，前提是本轮合并已验真；
+   - **点名**（`2179` / `#2179` / 一次多张 / `--close-issue=2179,2186`）⇒ 本轮也合并时并集去重；
+     **只点名、不 `--merge`** 时走**只补关**那一路（不跑 preflight / commit / push），前提换成
+     「平台查得到它随某条**已合并**的 PR 落地」。
+   反查 `pulls list-pulls --state closed` 之后**逐条认 `is_merged`** —— 列表的 `--state` 没有
+   `merged` 这一档，`closed` 里混着「合了」与「关了没合」；标题先剥掉平台追加的 `(#<PR号>)`
+   再提号，本仓 PR 号与 issue 号共用一套编号，喂整行会去关一张别人正在用的单子。
+   没有验真的合并、又查不到落地证明 ⇒ 那一格落 `2` 并说明，**不静默跳过**，也一次都不碰 `cnb`。
+   关完走一次独立的 `get-issue`，把 `state` / `state_reason` / `closed_at` 三件原值打出来
+   （回执不算结论）。**它不写 issue 的内容**：那条「已落地 + 读数 + 因果」的记录是判断，
+   与提交信息同一档。
 5. **长链分跳跑，别塞进一条后台命令**：`pnpm ship --no-wait`（提交 / 推送 / 建 PR）→
    `pnpm ship`（轮询出终态）→ `pnpm ship --merge`。每跳都幂等，PR 已存在就复用；
    一条整链在 push 那跳被宿主断掉时，屏幕上不会留下任何线索（实测只剩一个 `127`）。
    单跑 `--only=commit|push|pull-request` 已不可能：那会一段结论都不落，如今退 `2`。
-   `--only=close-issue|clean-branch` 同理被拒 —— 它们要的是合并那一段的验真结果。
+   `--only=close-issue|clean-branch` 同理被拒（`--only` 只认那三段）—— 要单跑关单就用
+   `--close-issue <号>` 那一路，不带号时它仍要合并那一段的验真结果。
 6. **分支的两头：建可以代做，名字不行；删必须点名。** `--branch <名字>` 只补「动 ref」那半件事（在 `master` / 游离 HEAD 上才建，已在同名分支上
    是幂等，名字撞了已存在的 ref 就退 `2` 而不是覆盖，当前在**另一条**分支上也停 —— 它不在
    分支之间搬工作树）。**它不从 issue 号或提交信息里造名字**：名字是判断。
@@ -122,7 +131,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 | 流水线终态                 | 平台 build 的 `data.status`                                                                                             |
 | 合没合上                   | PR 的 `is_merged` **且**回读解析出的主干基线顶端有没有那份碎片                                                          |
 | 这次变更挂在哪张单子上     | 阶段 0 的 `ticketReading()`：碎片文件名的号 + 首行段落（**读数，不改退码**）                                            |
-| 单子关没关上               | `--close-issue` 之后一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
+| 单子关没关上               | 本轮号跟验真的合并；人点名的号在本轮没合并时反查 `pulls list-pulls`（`closed` 里**逐条认 `is_merged`**，标题先剥 PR 尾数）。关完一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
 | 分支收干净没有             | `--clean-branch` 之后各问一次事实：`git ls-remote --heads` 与 `git show-ref --verify`（push / branch 的退码都不算结论） |
 | 进程收干净没有             | 阶段 0 念 `runningAppInstances()` 的归属读数；`--reap` 只发 `reap-process.mjs`，**收完再读一次同一份判据**才算数        |
 | 这条流水线还在不在动       | 轮询的签名 `(sn, data.status, pipeline 完成数, stage 完成数)` **加上「此刻有没有一格在飞」**（`inFlightStages`）—— 两件同时成立才断流，不做无新读数的等待 |

@@ -27,6 +27,16 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+/* 与 `ship-exec.mjs` 的 `ExecResult` 同形（`error` 是**必需**的：把它写成可选，
+ * 注入时就过不了类型 —— 而那正是这层接缝唯一的形状约束）。放在模块层是因为
+ * 不止一组假执行者要用它（后面的 `describe` 各自那份是局部收窄，不冲突）。 */
+type FakeResult = {
+  status: number;
+  stdout: string;
+  stderr: string;
+  error: string | null;
+};
+
 import {
   asArray,
   buildPullBody,
@@ -34,13 +44,12 @@ import {
   CODE,
   combineShipCodes,
   decideCleanBranch,
-  decideCloseIssue,
   decideCreateBranch,
   deriveTitle,
   findPullForBranch,
-  issueNumbersFromText,
   looksNewlineMangled,
   parseArgs,
+  parseIssueNumberToken,
   parseSlug,
   pickBuildForSha,
   planCommands,
@@ -49,16 +58,22 @@ import {
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
 import {
+  decideCloseIssue,
+  findMergedPullProofs,
+  issueNumbersFromText,
+  pullTitleBody,
+} from "../scripts/ship-close.mjs";
+import {
   issueAuthoring,
   readDevHandle,
   ticketReading,
 } from "../scripts/ship-ticket.mjs";
 import {
   cleanBranch,
-  closeIssues,
   pollUntilTerminal,
   reportVerdict,
 } from "../scripts/ship-platform.mjs";
+import { closeIssues } from "../scripts/ship-close.mjs";
 import {
   decideReap,
   instanceReading,
@@ -462,21 +477,13 @@ describe("decideCleanBranch：只跟在验真的合并之后，且只删这一�
 });
 
 describe("closeIssues：回执不算结论，独立回读三件原值才算", () => {
-  /* 与 `ship-exec.mjs` 的 `ExecResult` 同形（`error` 是**必需**的：把它写成可选，
-   * 注入时就过不了类型 —— 而那正是这层接缝唯一的形状约束）。 */
-  type FakeResult = {
-    status: number;
-    stdout: string;
-    stderr: string;
-    error: string | null;
-  };
-
   /** 按 cnb 的子命令答；`calls` 记录每一次伸手。 */
   function io(opts: {
     update?: string | null;
     state?: string;
     stateReason?: string | null;
     closedAt?: string | null;
+    merged?: { number: number; is_merged: boolean; title: string }[];
   }) {
     const calls: string[] = [];
     const log: string[] = [];
@@ -484,6 +491,14 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
       JSON.stringify({ status: 200, contentType: "application/json", data });
     const run = (_cmd: string, args: string[]): FakeResult => {
       calls.push(args.join(" "));
+      if (args[0] === "pulls" && args[1] === "list-pulls") {
+        return {
+          status: 0,
+          stdout: json(opts.merged ?? []),
+          stderr: "",
+          error: null,
+        };
+      }
       if (args[0] === "issues" && args[1] === "update-issue") {
         if (opts.update === null)
           return { status: 0, stdout: "boom", stderr: "", error: null };
@@ -602,6 +617,245 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
     expect(code).toBe(CODE.GREEN);
     expect(f.calls).toEqual([]);
     expect(f.log).toEqual([]);
+  });
+
+  /* ── 补关通道（ISSUE #2199）：人点名的号，前提换成「平台查得到落地证明」 ── */
+
+  it("补关：平台查得到它随某条已合并 PR 落地 ⇒ 关它并回读（来源要念出来）", () => {
+    const f = io({
+      merged: [
+        {
+          number: 2182,
+          is_merged: true,
+          title: "fix(ci): 四条判据 (#2179) (#2182)",
+        },
+      ],
+    });
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: null,
+      explicit: [2179],
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.calls.some((c) => c.includes("list-pulls"))).toBe(true);
+    expect(
+      f.calls.some((c) => c.includes("update-issue") && c.includes("2179")),
+    ).toBe(true);
+    expect(f.log.join("\n")).toContain("落地证明是已合并的 PR #2182");
+  });
+
+  it("补关：查不到落地证明 ⇒ 2，且**一次写动作都不发**", () => {
+    const f = io({ merged: [] });
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: null,
+      explicit: [2179],
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls.filter((c) => c.includes("update-issue"))).toEqual([]);
+    expect(f.log.join("\n")).toContain("查不到");
+    expect(f.log.join("\n")).not.toContain("手动");
+  });
+});
+
+describe("#2199 --close-issue 收号：三种写法都认，不像号的 token 当场点名", () => {
+  it("裸旗标保持今天的行为：号从标题取，一个 token 都不收", () => {
+    const o = parseArgs(["--close-issue"]);
+    expect(o.closeIssue).toBe(true);
+    expect(o.closeIssueNumbers).toEqual([]);
+    expect(o.closeIssueBad).toEqual([]);
+  });
+
+  it("空格分隔：2179 / #2179 / 多个号；后面的旗标不被吞掉", () => {
+    expect(parseArgs(["--close-issue", "2179"]).closeIssueNumbers).toEqual([
+      2179,
+    ]);
+    expect(parseArgs(["--close-issue", "#2179"]).closeIssueNumbers).toEqual([
+      2179,
+    ]);
+    const many = parseArgs(["--close-issue", "2179", "2186", "--clean-branch"]);
+    expect(many.closeIssueNumbers).toEqual([2179, 2186]);
+    expect(many.cleanBranch).toBe(true);
+  });
+
+  it("等号写法：逗号与空白都切开", () => {
+    expect(parseArgs(["--close-issue=2179,2186"]).closeIssueNumbers).toEqual([
+      2179, 2186,
+    ]);
+    expect(parseArgs(["--close-issue=#2179 2186"]).closeIssueNumbers).toEqual([
+      2179, 2186,
+    ]);
+  });
+
+  it("不像号 ⇒ 记进 bad 并**停手**，不吞后面的旗标", () => {
+    const o = parseArgs(["--close-issue", "abc", "--merge"]);
+    expect(o.closeIssueBad).toEqual(["abc"]);
+    expect(o.closeIssueNumbers).toEqual([]);
+    expect(o.merge).toBe(true);
+  });
+
+  it("负控制：单个数字不像号（那是打错，不是一张一号单子）", () => {
+    expect(parseArgs(["--close-issue", "1"]).closeIssueBad).toEqual(["1"]);
+    expect(parseIssueNumberToken("2179")).toBe(2179);
+    expect(parseIssueNumberToken("#2179")).toBe(2179);
+    expect(parseIssueNumberToken("#")).toBeNull();
+  });
+});
+
+describe("#2199 两条通道：前提不同，落地证明是同一条线", () => {
+  it("本轮已验真 ⇒ 标题号 + 人点名的号并集去重，来源分开标", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: true,
+      title: "fix(a): 一格 (#2070)",
+      explicit: [2070, 2179],
+    });
+    expect(d.act).toBe(true);
+    expect(d.numbers).toEqual([2070, 2179]);
+    expect(d.sources.get(2070)).toContain("本轮");
+    expect(d.sources.get(2179)).toContain("人点名");
+  });
+
+  it("本轮没合并 + 查得到落地证明 ⇒ 只关查得到的那张", () => {
+    const proofs = new Map([
+      [2179, { prNumber: 2182, title: "fix(ci): 四条判据 (#2179)" }],
+    ]);
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: false,
+      title: "",
+      explicit: [2179, 2200],
+      proofs,
+      proofScanned: 12,
+    });
+    expect(d.act).toBe(true);
+    expect(d.numbers).toEqual([2179]);
+    expect(d.unproven).toEqual([2200]);
+    expect(d.sources.get(2179)).toContain("#2182");
+  });
+
+  it("本轮没合并 + 查不到 ⇒ 2，话术是「不构成结论」，**不含「手动」**", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: false,
+      title: "",
+      explicit: [2179],
+      proofs: new Map(),
+      proofScanned: 40,
+    });
+    expect(d.act).toBe(false);
+    expect(d.code).toBe(CODE.NOT_RUN);
+    expect(d.unproven).toEqual([2179]);
+    expect(d.reason).toContain("最近 40");
+    expect(d.reason).not.toContain("手动");
+  });
+
+  it("取不到那份列表 ⇒ 2（不是 0），也不念成「查不到」", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: false,
+      title: "",
+      explicit: [2179],
+      proofRan: false,
+    });
+    expect(d.code).toBe(CODE.NOT_RUN);
+    expect(d.reason).toContain("没有结论");
+    expect(d.reason).not.toContain("查不到");
+  });
+});
+
+describe("#2199 pullTitleBody：先剥掉平台追加的 PR 尾数，再提号", () => {
+  it("只剥末尾那个 (#PR号)，中间的 (#单号) 原样留着", () => {
+    expect(pullTitleBody("fix(a): 一格 (#2070) (#2182)", 2182)).toBe(
+      "fix(a): 一格 (#2070)",
+    );
+    expect(pullTitleBody("fix(a): 一格 (#2070)", 2182)).toBe(
+      "fix(a): 一格 (#2070)",
+    );
+  });
+
+  it("负控制：PR 号不是纯数字 ⇒ 原样返回（不拿别人的输入去构造正则）", () => {
+    expect(pullTitleBody("x (#1)", "1)(.*")).toBe("x (#1)");
+  });
+});
+
+describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号", () => {
+  function io(pages: unknown[][], opts: { fail?: boolean } = {}) {
+    const calls: string[] = [];
+    const run = (_c: string, args: string[]): FakeResult => {
+      calls.push(args.join(" "));
+      if (opts.fail) return { status: 9, stdout: "", stderr: "", error: null };
+      const page = Number(args[args.indexOf("--page") + 1]);
+      const data = pages[page - 1] ?? [];
+      return {
+        status: 0,
+        stdout: JSON.stringify({ status: 200, data }),
+        stderr: "",
+        error: null,
+      };
+    };
+    return { run, calls };
+  }
+
+  it("命中：那条已合并 PR 的标题本体里真有这个号", () => {
+    const f = io([
+      [
+        {
+          number: 2182,
+          is_merged: true,
+          title: "fix(ci): 四条判据 (#2179) (#2182)",
+        },
+        { number: 2170, is_merged: false, title: "没合的 PR (#2199)" },
+      ],
+    ]);
+    const r = findMergedPullProofs({
+      run: f.run,
+      slug: "o/r",
+      numbers: [2179],
+    });
+    expect(r.ran).toBe(true);
+    expect(r.scanned).toBe(1);
+    expect(r.proofs.get(2179)).toEqual({
+      prNumber: 2182,
+      title: "fix(ci): 四条判据 (#2179)",
+    });
+  });
+
+  it("负控制：PR 自己的号不能被当成单子号", () => {
+    const f = io([
+      [{ number: 2179, is_merged: true, title: "chore(x): 没有单子 (#2179)" }],
+    ]);
+    expect(
+      findMergedPullProofs({ run: f.run, slug: "o/r", numbers: [2179] }).proofs
+        .size,
+    ).toBe(0);
+  });
+
+  it("负控制：没合并的那条即便标题里有号也不算证明", () => {
+    const f = io([
+      [{ number: 2170, is_merged: false, title: "fix(a): 一格 (#2179)" }],
+    ]);
+    expect(
+      findMergedPullProofs({ run: f.run, slug: "o/r", numbers: [2179] }).proofs
+        .size,
+    ).toBe(0);
+  });
+
+  it("cnb 取不到 ⇒ ran=false（不构成结论），且不往下翻页", () => {
+    const f = io([[]], { fail: true });
+    const r = findMergedPullProofs({
+      run: f.run,
+      slug: "o/r",
+      numbers: [2179],
+    });
+    expect(r.ran).toBe(false);
+    expect(f.calls.length).toBe(1);
   });
 });
 

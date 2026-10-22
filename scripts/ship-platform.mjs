@@ -32,7 +32,6 @@ import {
   CODE,
   combineShipCodes,
   decideCleanBranch,
-  decideCloseIssue,
   deriveTitle,
   findPullForBranch,
   pickBuildForSha,
@@ -605,90 +604,6 @@ export function mergeAndVerify(ctx) {
       : "[ship] 本地 master 已同步。远端分支**没删**（这一跳没要 --clean-branch）。",
   );
   return CODE.GREEN;
-}
-
-/**
- * 阶段 7：把这一行点名的 issue 置为 `closed / completed`，并**回读**再下结论。
- *
- * 与合并那一格同一条纪律：平台回执只是半个结论。所以这里调完 `update-issue` 之后
- * 走一次独立的 `get-issue`，认三件原值 —— `state` / `state_reason` / `closed_at`，
- * 并把它们原样打出来（`closed_at` 在场意味着这不是一句「我发了个请求」）。
- *
- * 幂等：对一张**已经关着**的单子再跑一次，回读照样是那三件（`closed_at` 是第一次
- * 关它的那个时刻）—— 所以「重跑一遍 ship」不会把状态改坏，也不会谎报。
- *
- * 效应与判断分家：该不该关、以什么码落，全在 `decideCloseIssue`（纯函数，判得动
- * 「要求了但这一跳没合并」那一档）；这里只负责发请求、回读、把原值打出来。
- *
- * @param {{
- *   run: PlatformIO["run"],
- *   log: PlatformIO["log"],
- *   slug: string,
- *   closeIssue: boolean,
- *   landed?: {title: string, sha: string, verified: boolean} | null,
- * }} ctx
- * @returns {number} `CODE` 之一
- */
-export function closeIssues(ctx) {
-  const { run, log, slug, closeIssue, landed = null } = ctx;
-  const plan = decideCloseIssue({
-    requested: closeIssue === true,
-    landedVerified: landed?.verified === true,
-    title: landed?.title ?? "",
-  });
-  if (!plan.act) {
-    if (plan.code === CODE.NOT_RUN) {
-      log(`[ship] 关单这一格**没有执行**：${plan.reason}`);
-      return CODE.NOT_RUN;
-    }
-    return CODE.GREEN;
-  }
-
-  /** @type {number[]} */
-  const codes = [];
-  for (const number of plan.numbers) {
-    const put = cnbJson(run, [
-      "issues",
-      "update-issue",
-      "--repo",
-      slug,
-      "--number",
-      String(number),
-      "--state",
-      "closed",
-      "--state-reason",
-      "completed",
-      "-v",
-    ]);
-    if (!put) {
-      log(
-        `[ship] #${number}：关闭调用没有拿到 JSON 回执（cnb 不在 / 输出不是 JSON）` +
-          " ⇒ 记「没有执行者」，不去猜它成没成。",
-      );
-      codes.push(CODE.NOT_RUN);
-      continue;
-    }
-    /* **独立回读**：不看 update 的返回值当结论。 */
-    const back = cnbJson(run, [
-      "issues",
-      "get-issue",
-      "--repo",
-      slug,
-      "--number",
-      String(number),
-      "-v",
-    ]);
-    const d = back?.json?.data ?? null;
-    const state = d?.state ?? "(取不到)";
-    const reason = d?.state_reason ?? "(无)";
-    const at = d?.closed_at ?? "(无)";
-    log(
-      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}` +
-        ` · 落地那一行 sha=${short(landed?.sha ?? "")}`,
-    );
-    codes.push(state === "closed" ? CODE.GREEN : CODE.RED);
-  }
-  return combineShipCodes(codes);
 }
 
 /**
