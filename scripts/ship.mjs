@@ -75,6 +75,12 @@
  *     （规范 §13.10.9）—— 那是**读数**，一次也不参与退码。做成硬闸的必然后果是随手
  *     挂一张别人开着的单子，而 §13.10.8 记的就是那次事故（挂错号比不挂更贵，
  *     且号只是个字符串、没有判据会红）。
+ *   · **不造分支名，也不批量清分支**。`--branch` 只补「动 ref」那半件机械事，名字由人给
+ *     （`feat/…`、`fix/<issue号>-…` 是本仓习惯，不是脚本能推的事实 —— 猜错会让这条变更
+ *     顶着另一个身份进评审与后续引用）；`--clean-branch` 只删**这一次跑的那条**分支，
+ *     「把所有已合并分支一次收掉」需要另一套判据（squash 形态下 `git branch -d` 的祖先
+ *     判据恒假），那不在本脚本的动作面里。也不碰 `git reset --hard`：本地 `master` 上
+ *     若有误提交，AGENTS 硬规则 6 那三步是给人执行的。
  *
  * ── 用法 ───────────────────────────────────────────────────────
  *
@@ -84,16 +90,22 @@
  *                                              #  argv 里的真换行改写成字面量 \n，多行别从命令行进
  *   pnpm ship --add src/a.ts --add changelog.d/0-x.md --message "…"   # 由它代为暂存（逐个点名，不 -A）
  *   pnpm ship --title "…"                      # 覆盖标题（默认取分支第一笔非常规提交）
+ *   pnpm ship --branch feat/x                  # 当前没有可用分支时先把分支建出来再往下走
+ *                                              #  （名字只能人给：脚本不从 issue 号/标题里造）
  *   pnpm ship --merge                          # 允许在 CI 绿时执行 squash 合并
  *   pnpm ship --merge --close-issue            # 合上之后关掉落地那一行点名的 issue
  *                                              #  （显式才做；只跟在**验真的合并**之后，
  *                                              #   误带在没有合并的那一跳上 ⇒ 退 2 并说明）
+ *   pnpm ship --merge --clean-branch           # 合上之后删掉**这次那一条**分支（远端 + 本地）
+ *                                              #  （同样是显式动作；两边各自独立回读，
+ *                                              #   回读没跑起来落 2 而不是「已删」；不批量清）
  *   pnpm ship --dry-run                        # 只打印将要执行的命令，一条都不执行（阻塞照报）
  *   pnpm ship --only=preflight               # 单跑阶段 0 看读数字段（其余段都排在它后面，
  *                                            #  单跑会落不出任何结论 ⇒ 退 2，见 `finish`）
  *   pnpm ship --no-wait                        # 建完 PR 就停，不轮询 build
  *
- * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge
+ * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge · close-issue · clean-branch
+ * （`close-issue` / `clean-branch` 不能单跑：它们要的是合并那一段的验真结果。）
  */
 import fs from "node:fs";
 import process from "node:process";
@@ -104,6 +116,7 @@ import { resolveGitDir } from "./git-dir.mjs";
 import {
   CODE,
   combineShipCodes,
+  decideCreateBranch,
   looksNewlineMangled,
   parseArgs,
   parseSlug,
@@ -115,6 +128,7 @@ import {
 } from "./ship-core.mjs";
 import { makeRunner, safeRead, short, writeScratch } from "./ship-exec.mjs";
 import {
+  cleanBranch,
   closeIssues,
   createOrReusePull,
   mergeAndVerify,
@@ -257,11 +271,17 @@ async function runFlow(deps, tmpFiles) {
     );
     return CODE.NOT_RUN;
   }
-  /* poll / verdict / merge 要用「本次跑里解析出来的 PR 号」，而那个号是在
-   * pull-request 那一段拿到的 —— 单独 --only=poll 会走进「一段都没跑、
-   * 于是没有任何结论」却退 0 的形态。那是假绿灯，正是本工具要防的那一类，
-   * 所以显式拒绝，而不是让它安静地成功。 */
-  const NEEDS_PR_NUMBER = ["poll", "verdict", "merge"];
+  /* poll / verdict / merge / close-issue / clean-branch 要用「本次跑里解析出来的 PR 号」
+   * 或「合并那一段才有的验真结果」，而它们是在 pull-request / merge 那两段拿到的 ——
+   * 单独 --only=poll 会走进「一段都没跑、于是没有任何结论」却退 0 的形态。那是假绿灯，
+   * 正是本工具要防的那一类，所以显式拒绝，而不是让它安静地成功。 */
+  const NEEDS_PR_NUMBER = [
+    "poll",
+    "verdict",
+    "merge",
+    "close-issue",
+    "clean-branch",
+  ];
   if (opt.only && NEEDS_PR_NUMBER.includes(opt.only)) {
     log(
       `[ship] [ERROR] --only=${opt.only} 不能单独跑：它要用 pull-request 那一段解析出的 PR 号。`,
@@ -330,12 +350,74 @@ async function runFlow(deps, tmpFiles) {
   // ── 阶段 0：preflight ────────────────────────────────────────
   if (want("preflight")) {
     const head = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
-    const branch = head.stdout.trim();
+    let branch = head.stdout.trim();
     if (head.status !== 0 || !branch) {
       log(
         "[ship] 取不到 HEAD ⇒ 非 git 检出 / 游离 HEAD，这一格没有结论（不是「通过」）",
       );
       return CODE.NOT_RUN;
+    }
+    /* ── 建分支那一格（`--branch`，显式才动 ref）──────────────────
+     * 这一格原本只会打印一句「先 git checkout -b feat/<描述>」然后退 1 —— 于是脚本在
+     * 「人还没有分支」的时刻是旁观者：第一次跑的屏幕输出全部作废，人得先离开这条链
+     * 手动建完再回来跑第二遍。名字仍然只由人给（判断不在这里），脚本只补「动 ref」
+     * 那半件机械事；四态的判断在 `decideCreateBranch`。 */
+    const wantName = (opt.branch || "").trim();
+    const cb = decideCreateBranch({
+      requested: wantName || null,
+      current: branch,
+      existsLocal: wantName
+        ? run("git", [
+            "show-ref",
+            "--verify",
+            "--quiet",
+            `refs/heads/${wantName}`,
+          ]).status === 0
+        : false,
+      existsRemote: wantName
+        ? run("git", [
+            "show-ref",
+            "--verify",
+            "--quiet",
+            `refs/remotes/${up.remote || "origin"}/${wantName}`,
+          ]).status === 0
+        : false,
+    });
+    if (cb.requested) {
+      if (cb.act) {
+        if (opt.dryRun) {
+          log(
+            `[ship] --dry-run：不建分支。计划里第一跳是 git checkout -b ${cb.branch}；` +
+              `下面几行的读数仍取自当前 HEAD（${branch}）—— 预览不替人动 ref。`,
+          );
+          branch = cb.branch;
+        } else {
+          const co = run("git", ["checkout", "-b", cb.branch]);
+          relay(co);
+          if (co.status !== 0) {
+            log(
+              `[ship] 建分支没成（exit ${co.status}）⇒ 停：后面每一跳的分支名都取自它，` +
+                "这一格没有结论，不拿一次失败的 checkout 冒充「已经在分支上」。",
+            );
+            codes.push(CODE.RED);
+            return finish(codes);
+          }
+          log(
+            `[ship] ✓ 已建并切到分支 ${cb.branch}（未提交的改动照带）。` +
+              "本地 `master` 上若还留着误提交，本脚本**不动**它——`git reset --hard` 是" +
+              "破坏性动作，AGENTS 硬规则 6 那三步由人执行。",
+          );
+          branch = cb.branch;
+        }
+        codes.push(CODE.GREEN);
+      } else if (cb.code === CODE.RED || cb.code === CODE.NOT_RUN) {
+        log(`[ship] ${cb.reason}`);
+        codes.push(cb.code);
+        return finish(codes);
+      } else {
+        log(`[ship] ${cb.reason}`);
+        codes.push(CODE.GREEN);
+      }
     }
     if (branch === "master" || branch === "HEAD") {
       log(
@@ -452,6 +534,8 @@ async function runFlow(deps, tmpFiles) {
         hasMessage: Boolean(opt.message || opt.messageFile),
         merge: opt.merge,
         closeIssue: opt.closeIssue,
+        cleanBranch: opt.cleanBranch,
+        createBranch: cb.act ? cb.branch : null,
         remote: up.remote,
         baseBranch,
       })) {
@@ -652,6 +736,23 @@ async function runFlow(deps, tmpFiles) {
        * 默认不开。没合并成而带着它跑，落的是 2 并说明（不是静默跳过、更不是绿）。 */
       if (opt.closeIssue) {
         codes.push(closeIssues({ run, log, slug, closeIssue: true, landed }));
+      }
+
+      // ── 阶段 8：清理分支（显式，且只跟在验真的合并之后）──────────
+      /* 与合并、关单同一档：默认不开。这一格动的是 ref —— 远端那条删掉后 PR 的评审线索
+       * 一起没，本地那条是这些提交唯一的对象（squash 落进主干的是另一笔）。
+       * 所以守卫就是「合并验真过没有」，而不是「用户是不是随口说了清理」。 */
+      if (opt.cleanBranch) {
+        codes.push(
+          cleanBranch({
+            run,
+            log,
+            remote: up.remote,
+            branch,
+            landedVerified: landed.verified,
+            cleanBranch: true,
+          }),
+        );
       }
     }
   }
