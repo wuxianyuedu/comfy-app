@@ -103,8 +103,10 @@
    这个档位开关决定谁执行。为什么不能把它们删去 CI：`scripts/check-gate-executors.cjs` 认的
    执行者出处只有钩子的 `run "<标签>" <命令>` 行、`quality-gate.mjs` 的 gate 表、
    `quality-gate.ps1` 的 `$Blocks`，**`.cnb.yml` 不在它的解析面上** —— 删步骤 = 那批判据
-   当场没有执行者，而账面一条红都不会出现。跳档时钩子会打印「本地**没跑**：组 A B C D」并
-   明说那不是「已通过」。本地要全套：`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`。
+   当场没有执行者，而账面一条红都不会出现。跳档时钩子会打印「本地**没跑**：<降了的那几组，
+   逐组点名>」并明说那不是「已通过」（这句话由 `scripts/gate-tier-summary.cjs` 按**这一轮实际
+   降了什么**念，标签取自钩子那五行 `run_group`；写死清单会在 `COMFY_HEAVY_GATES=1` 那一跑里
+   推翻自己的上一行，见 §13.5.25 与 ISSUE #2154）。本地要全套：`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`。
    **「受影响用例」那一档例外，本地一律不跑**（2026-10-20）：它会起 vitest 子进程，共享机上
    的失效形态不是用例红而是 `Failed to start forks worker / Timeout waiting for worker`
    （实测拦下一次、隔离复跑 88 文件 1116 条全绿）⇒ 它的两个本地执行者（pre-commit 的 C 组、
@@ -250,7 +252,9 @@
 **提交很绿但行为面没测，不是矛盾**（ISSUE #2022 / §13.5.25）：本地默认档只跑形态档 D0，
 `tsc` / `eslint` / 其余静态判据由平台那一跑兜底；**受影响用例**那一档 2026-10-20 起也只有
 平台一个执行者（PR 流水线的 `受影响用例` 一格，本地 C 组与 pre-push 段都撤了）。所以
-「提交过了」这句话**不许**被写成「已校验」——钩子自己会打印「本地**没跑**：组 A B C D」。
+「提交过了」这句话**不许**被写成「已校验」——钩子自己会打印「本地**没跑**：<降了的那几组>」，
+逐组点名由 `scripts/gate-tier-summary.cjs` 按这一轮实际档位生成（§13.5.25 / ISSUE #2154：
+清单不许写死，否则它在 `COMFY_HEAVY_GATES=1` 那一跑里当场推翻自己上面那三行 `[ok]`）。
 要本地跑 A/B/D 全套：`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`
 （合并前复算：`pnpm check:premerge --full`）。
 

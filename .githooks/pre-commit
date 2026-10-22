@@ -837,12 +837,22 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
 rc=0
 SKIPPED_IDS=""
+MOVED_IDS=""
+RAN_IDS=""
 for id in A B C D; do
   # 档位跳过的组：**不 wait、不当结论**，但要被数进下面那句点名里。
   if [ -f "$LOGD/$id.skip" ]; then
-    SKIPPED_IDS="$SKIPPED_IDS $id"
+    # ⚠️ 挪去平台的那一组（C）**不是降档**：旧形态把它混进「组 A B C D」那一句里，
+    # 读起来像「下一台机器上还会跑」，而事实是本地再也不跑它（`COMFY_HEAVY_GATES=1`
+    # 也换不回来）。两个名单分开，收尾那句才有地方说实话（ISSUE #2154）。
+    if [ -f "$LOGD/$id.moved" ]; then
+      MOVED_IDS="$MOVED_IDS $id"
+    else
+      SKIPPED_IDS="$SKIPPED_IDS $id"
+    fi
     continue
   fi
+  RAN_IDS="$RAN_IDS $id"
   eval "pid=\$${id}_pid"
   wait "$pid"
   if [ ! -f "$LOGD/$id.rc" ]; then
@@ -876,19 +886,12 @@ for id in A B C D; do
 done
 
 [ "$rc" -ne 0 ] && { echo "[pre-commit] 提交被门槛拦下"; exit 1; }
-if [ -n "$SKIPPED_IDS" ]; then
-  # 这句必须打出来：跳档之后「全部通过」四个字容易被读成「全套判据过了」，而那不等价 ——
-  # 通过的只有 D0（形态档）。行为面这一半的结论在平台那一次跑里，不在这里。
-  echo "[pre-commit] ⚠ 本次提交本地**没跑**：组$SKIPPED_IDS（tsc / eslint / 受影响用例 / 静态判据全量）"
-  echo "[pre-commit] ⚠ 上面那句不是「已通过」——它等价于「这次没测行为面」（与 §13.6.2 那个"
-  echo "[pre-commit] ⚠   inconclusive 同一口径）。兜底两层：推送那一跳跑复算（check:premerge"
-  echo "[pre-commit] ⚠   的 base 段），平台 PR 流水线是第二层（含「受影响用例」那一格）—— 见规范 §13.5.25。"
-  echo "[pre-commit] ⚠ 本地要 A/B/D 全套：COMFY_HEAVY_GATES=1 git commit …（或 pnpm check:all）。"
-fi
-# 组 C 单独念一句：它不是「这一跳降档」，是执行者换了地方 —— 混在上一行的
-# 「组 A B C D」里会被读成「下台机器上还会跑」，而事实是本地再也不跑它了。
-if [ -f "$LOGD/C.moved" ]; then
-  echo "[pre-commit] ⚠ 组 C（受影响用例）本地不再执行：执行者是平台侧 PR 流水线的「受影响用例」一格"
-  echo "[pre-commit] ⚠   （scripts/ci-affected-tests.mjs → run-affected-tests.mjs，同一条判决链）。"
-fi
-echo "[pre-commit] 入选档位全部通过 ✓（D0 形态档$([ -n "$SKIPPED_IDS" ] && echo "；重档见平台" )）"
+# ── 收尾那几句话交给 `scripts/gate-tier-summary.cjs`（ISSUE #2154）──────────
+# 这里**不再就地写话术**：旧那四行 echo 有一句把「没跑哪些」的清单写死成全集
+# （`（tsc / eslint / 受影响用例 / 静态判据全量）`），于是在 `COMFY_HEAVY_GATES=1` 那一跑里，
+# 它紧挨着 `[ok] ── 组 A / 组 B / 组 D` 打印了一句当场为假的话；同段的「本地要 A/B/D 全套」
+# 与收尾的「D0 形态档；重档见平台」是同一个病。措辞挪进脚本之后它才有执行者
+# （`tests/gate-tier-summary.test.ts` 三种档位形态各测一次）—— 钩子里就地的 echo 一条用例
+# 都测不到它。传给它的只有**组号**（钩子当场量到的三张名单），说明由脚本自己从
+# `run_group <id> "<说明>"` 那几行取：标签仍然只有一份，那份住在被解析的那一侧。
+node scripts/gate-tier-summary.cjs --ran "D0$RAN_IDS" --skipped "$SKIPPED_IDS" --moved "$MOVED_IDS"
