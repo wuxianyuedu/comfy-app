@@ -34,6 +34,11 @@
  * `sha256` 把两侧对齐，能对上的是「同一份内容换名」（不算变化），对不上的才是
  * 「新增内容」或「真变大」。判定不由它下。
  *
+ * ⚠️ 但「新增内容」这个桶**不能单独打印**（ISSUE #2141）：老块内容涨几十字节就会换哈希，
+ * 于是它同时是「新增」与「消失」两条 —— 只报前一半时，一笔 44 B 的小改在屏幕上长得像
+ * 新增了 30 KB。两份输出（判红那一档与 `--update` / `--report` 那一档）都走 `deltaLines()`，
+ * 必须把**消失合计与并排净差**一起给出来。
+ *
  * ── 测量口径（ISSUE 第 2 问那四条，逐条有实测答案）────────────────────
  *
  * 1. **测哪个数**：`.next/static/chunks` 下所有 client chunk 的 **gzip 后字节数之和**，
@@ -356,10 +361,14 @@ function delta(n) {
 }
 
 /**
- * 诊断：把当前产物与基线**按内容指纹**对齐，分出三类（不参与判定）。
+ * 诊断：把当前产物与基线**按内容指纹**对齐，分出四类（不参与判定）。
  *
  * - **同内容换名**：两侧指纹相同、名字不同 —— 本仓实测不发生，但口径上它「不算变化」；
- * - **新增内容**：指纹在基线里找不到 —— 这是「多了东西」的唯一可靠形状；
+ * - **新增内容**：指纹在基线里找不到 —— 这是一个**混装袋**：真多了东西，与「老块内容小改
+ *   → 哈希换了名」都落在这里（后者不进 `renamed` 因为指纹变了、也不进 `grown` 因为名字变了）；
+ * - **消失内容**：基线里那一块既没有同内容的现块、也没有同名的现块。缺了这一类，上一行
+ *   就会被读成「新增了 30 KB」，而它其实是一笔 44 B 的小改（ISSUE #2141 的现场）——
+ *   所以 `added` 与 `gone` **必须并排打印，并给出净差**（见 `addedLines()`）；
  * - **同名但变大**：名字恰好没变的那些，能直接给出「谁大了多少」。
  *
  * 基线里没有指纹（本轮之前生成的旧格式）时返回 `null`，由调用方把这一点**写在输出里**
@@ -371,6 +380,8 @@ function diagnose(cur, base) {
 
   const baseBySha = new Map(baseEntries.map((e) => [e.sha, e]));
   const baseByName = new Map(baseEntries.map((e) => [e.name, e]));
+  const curBySha = new Set(cur.entries.map((e) => e.sha));
+  const curByName = new Set(cur.entries.map((e) => e.name));
 
   const renamed = [];
   const added = [];
@@ -386,7 +397,61 @@ function diagnose(cur, base) {
     if (sameName) grown.push([e.name, sameName.gzip, e.gzip]);
     else added.push(e);
   }
-  return { renamed, added, grown };
+  const gone = baseEntries.filter(
+    (e) => !curBySha.has(e.sha) && !curByName.has(e.name),
+  );
+  const sumGzip = (list) => list.reduce((a, e) => a + (e.gzip ?? 0), 0);
+  return {
+    renamed,
+    added,
+    grown,
+    gone,
+    addedGzip: sumGzip(added),
+    goneGzip: sumGzip(gone),
+  };
+}
+
+/**
+ * 「新增 / 消失 / 净差」那几行 —— 两个打印点（判红那一档与 `--update` / `--report` 那一档）
+ * 共用一份措辞：同一件事在两份输出里长成两个样子，就会有人拿其中一份去签字。
+ *
+ * 「新增 / 消失 / 净差」那几行 —— 两个打印点（判红那一档与 `--update` / `--report` 那一档）
+ * 共用一份措辞：同一件事在两份输出里长成两个样子，就会有人拿其中一份去签字。
+ *
+ * @param {ReturnType<typeof diagnose>} d 诊断结果
+ * @param {number} top 列出几个名字
+ * @param {string} [indent] 额外缩进（`--update` 那一档嵌在「与基线的差异」下面，多两层）
+ * @returns {string[]} 缩进好的输出行
+ */
+function deltaLines(d, top, indent = "") {
+  const out = [];
+  if (!d.added.length) {
+    /* 只有消失（变小 / 换了实现）：单独说一句净差，别让它静默 —— 同一句里的
+     * 「净差」在两边都要能读到，否则读者只在红的那一档看见差值、平时看不见。 */
+    if (d.gone.length) {
+      out.push(
+        `${indent}消失内容 ${d.gone.length} 个（gzip 合计 ${kb(d.goneGzip)}）⇒ 净差 ${delta(-d.goneGzip)}（变小，不算违规）`,
+      );
+    }
+    return out;
+  }
+  out.push(
+    `${indent}新增内容 ${d.added.length} 个（gzip 合计 ${kb(d.addedGzip)}，指纹在基线里找不到）` +
+      (d.gone.length
+        ? `；同时消失 ${d.gone.length} 个（合计 ${kb(d.goneGzip)}）⇒ 并排净差 ${delta(d.addedGzip - d.goneGzip)}`
+        : "；基线里没有配对的消失块 ⇒ 这些是真多出来的"),
+  );
+  out.push(
+    `${indent}「新增」按内容指纹算 —— 老块内容小改导致换名也会落在这里；` +
+      "要看的是上面那行的净差，不是最大的那个名字。",
+  );
+  for (const e of d.added
+    .slice()
+    .sort((a, b) => b.gzip - a.gzip)
+    .slice(0, top)) {
+    out.push(`${indent}  · ${e.name}（gzip ${kb(e.gzip)}）`);
+  }
+  return out;
 }
 
 function main() {
@@ -422,7 +487,10 @@ function main() {
         : "  基线：不存在（先跑 --update 落一份实测初值）",
     );
     const d = base ? diagnose(now, base) : null;
-    if (d && (d.renamed.length || d.added.length || d.grown.length)) {
+    if (
+      d &&
+      (d.renamed.length || d.added.length || d.grown.length || d.gone.length)
+    ) {
       console.log("  与基线的差异（按内容指纹对齐，诊断用、不参与判定）：");
       if (d.renamed.length) {
         console.log(
@@ -434,17 +502,7 @@ function main() {
             (d.renamed.length > 3 ? " 等" : ""),
         );
       }
-      if (d.added.length) {
-        console.log(
-          `    · 新增内容 ${d.added.length} 个，最大的 3 个：` +
-            d.added
-              .slice()
-              .sort((a, b) => b.gzip - a.gzip)
-              .slice(0, 3)
-              .map((e) => `${e.name}（${kb(e.gzip)}）`)
-              .join("、"),
-        );
-      }
+      for (const line of deltaLines(d, 3, "    ")) console.log(line);
       if (d.grown.length) {
         console.log(`    · 同名且变大 ${d.grown.length} 个`);
       }
@@ -633,17 +691,7 @@ function main() {
     if (d) {
       /* 诊断是**给人看的**、不参与判定：比的是内容指纹，名字换了不算变化。 */
       const lines = [];
-      if (d.added.length) {
-        lines.push(
-          `  新增内容 ${d.added.length} 个（指纹在基线里找不到），最大的 5 个：`,
-        );
-        for (const e of d.added
-          .slice()
-          .sort((a, b) => b.gzip - a.gzip)
-          .slice(0, 5)) {
-          lines.push(`    · ${e.name}（gzip ${kb(e.gzip)}）`);
-        }
-      }
+      lines.push(...deltaLines(d, 5));
       if (d.renamed.length) {
         lines.push(
           `  同内容换名 ${d.renamed.length} 个（不计变化）：` +
