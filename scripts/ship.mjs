@@ -40,7 +40,12 @@
  *     （硬规则 9 唯一实现），回收只发 `scripts/reap-process.mjs`（硬规则 3 唯一入口）。
  *   · `ship-ticket.mjs`   —— **单子那一格**：碎片挂在哪个号上、谁提的、按什么优先级。
  *     与「外部执行者的形状」不同的变化方向，所以不在 `ship-core`（叠一起已越过 900 行硬闸）。
- *   · 本文件              —— **本地三段 + 装配**：preflight / commit / push，
+ *   · `ship-local.mjs`    —— **本地两段**：commit 与 push（含工作树三列状态的读法）。
+ *     不碰 cnb、不需要平台回读，动的是本地 ref 与远端同名分支 —— 与 `ship-platform` 那四段
+ *     正相反。（搬出去的直接原因是 #2189：加上「只补关」那格之后本文件 928 行，
+ *     被 `check-infra-file-size.cjs` 的 900 硬闸拦下 —— 那一闸说的是「出口只有一个：拆」，
+ *     拆法按职责、不按行数，见该模块文件头。）
+ *   · 本文件              —— **装配 + preflight**：阶段顺序、读数的落点，
  *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
  *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
  *
@@ -132,15 +137,13 @@ import {
   CODE,
   combineShipCodes,
   decideCreateBranch,
-  looksNewlineMangled,
   parseArgs,
   parseSlug,
   PHASES,
   planCommands,
-  readProof,
   resolveUpstream,
 } from "./ship-core.mjs";
-import { makeRunner, safeRead, short, writeScratch } from "./ship-exec.mjs";
+import { makeRunner, writeScratch } from "./ship-exec.mjs";
 import {
   issueAuthoring,
   readDevHandle,
@@ -159,40 +162,7 @@ import {
   pollUntilTerminal,
   reportVerdict,
 } from "./ship-platform.mjs";
-
-/**
- * 把 `git status --porcelain` 的输出**按列**分成「已暂存 / 未暂存（已修改）/ 未跟踪」三档。
- *
- * ⚠️ 必须按列取状态位，**绝不能先 `trim()`**：porcelain 每行是 `XY <路径>`，前两字符
- * `X`=索引状态、`Y`=工作树状态。先 `trim()` 会把行首空格吃掉，于是未暂存的 ` M file`
- * 塌成 `M file` 被误判成已暂存（ISSUE #2073）—— 那一句读数谎报，还会让
- * 「还有未暂存的改动」提醒永不触发。
- *
- * @param {string} stdout `git status --porcelain` 的原始输出
- * @returns {{staged: string[], unstagedModified: string[], untracked: string[]}}
- */
-function parsePorcelain(stdout) {
-  /** @type {string[]} */
-  const staged = [];
-  /** @type {string[]} */
-  const unstagedModified = [];
-  /** @type {string[]} */
-  const untracked = [];
-  for (const raw of String(stdout).split("\n")) {
-    if (!raw) continue;
-    const x = raw[0]; // 索引状态
-    const y = raw[1]; // 工作树状态
-    if (x === "?") {
-      untracked.push(raw.slice(3)); // `?? <path>`
-      continue;
-    }
-    // X 是索引里的真实状态（非空格、非未跟踪、非忽略）⇒ 已暂存。
-    if (x !== " " && x !== "!") staged.push(raw.slice(3));
-    // Y 是工作树里的真实改动（非空格、非忽略）⇒ 未暂存（已修改）。
-    if (y !== " " && y !== "!") unstagedModified.push(raw.slice(3));
-  }
-  return { staged, unstagedModified, untracked };
-}
+import { parsePorcelain, runCommitStage, runPushStage } from "./ship-local.mjs";
 
 /**
  * 对外入口：跑一遍编排，**无论走到哪个出口都清掉自己写的临时文件**。
@@ -646,96 +616,35 @@ async function runFlow(deps, tmpFiles) {
     }
     codes.push(CODE.GREEN);
 
-    // ── 阶段 1：commit ─────────────────────────────────────────
+    // ── 阶段 1：commit（实现见 `ship-local.mjs`，判据仍在 `ship-core.mjs`）──
     if (want("commit")) {
-      const msg = opt.messageFile
-        ? safeRead(root, opt.messageFile)
-        : opt.message;
-      if (staged.length + unstagedModified.length + untracked.length > 0) {
-        if (!msg) {
-          log(
-            "[ship] 有改动但没给 --message ⇒ 停。提交信息是判断（症状/读数/因果），脚本不代写。",
-          );
-          codes.push(CODE.RED);
-          return finish(codes);
-        }
-        /* 排在 `git add` **之前**：既然这条信息不能原样进历史，就不要先把暂存面改了
-         * 再退回去 —— 那一手会让「这次提交包含什么」被一次不会发生的提交动过。 */
-        if (looksNewlineMangled(msg)) {
-          log(
-            "[ship] `--message` 里没有真换行、却带着字面量 \\n ⇒ 这条信息已被 `pnpm run` 压成一行。",
-          );
-          log(
-            "[ship] 按原样提交只会得到一整行 subject，而 PR 标题取的就是它（实测那样一份被平台拒）。",
-          );
-          log(
-            "[ship] 两条出口：`pnpm ship --message-file <路径>`（多行信息的正路），" +
-              '或 `pnpm exec node scripts/ship.mjs --message "…"`（`pnpm exec` 保留真换行）。',
-          );
-          codes.push(CODE.RED);
-          return finish(codes);
-        }
-        for (const a of opt.adds) run("git", ["add", "--", a]);
-        /* 提交信息走 argv 直传，**不落文件**：`spawnSync` 这一跳不经 shell，git 拿到的
-         * 就是数组里那一串字面量（引号、多行都不再被解释），没有 `-F` 那一套「写个临时
-         * 文件、提交完还得删干净」的泄漏面（AGENTS 硬规则 12 把 `COMMIT_EDITMSG` 落进
-         * 工作区点名为「提交完忘了删」的信号 —— 少建一个文件，就少一处会忘的地方）。
-         * ⚠️ 「多行不会被破坏」只保证**这一跳**：更外层的 `pnpm run` 已经把 argv 里的
-         * 真换行改写成字面量 `\n` 了，那一格由上面 `looksNewlineMangled` 拦下。 */
-        const cm = run("git", ["commit", `--message=${msg}`]);
-        relay(cm);
-        if (cm.status !== 0) {
-          log(
-            `[ship] 提交被门槛拦下（exit ${cm.status}）。钩子的原话在上面，**不要**用 --no-verify 换一条干净历史。`,
-          );
-          codes.push(CODE.RED);
-          return finish(codes);
-        }
-        log("[ship] ✓ 已提交（门槛全过）");
-      } else {
-        log("[ship] 工作树干净 ⇒ 跳过提交这一段。");
-      }
-      codes.push(CODE.GREEN);
+      const r = runCommitStage({
+        opt,
+        root,
+        staged,
+        unstagedModified,
+        untracked,
+        log,
+        run,
+        relay,
+      });
+      codes.push(...r.codes);
+      if (r.stop) return finish(codes);
     }
 
     // ── 阶段 2：push（合并前固定动作由 pre-push 钩子自己跑）────
     if (want("push")) {
-      if (!up.remote) {
-        log(
-          "[ship] 推不出远端名（既没有上游、也不是「唯一远端」）⇒ push 没有执行者，" +
-            "这一格不是「通过」（三态退出码：这是 NOT_RUN）。",
-        );
-        codes.push(CODE.NOT_RUN);
-        return finish(codes);
-      }
-      const ps = run("git", ["push", "-u", up.remote, branch]);
-      relay(ps);
-      if (ps.status !== 0) {
-        log(
-          `[ship] push 失败（exit ${ps.status}）⇒ 多半是 pre-push 的合并前复算没放行。`,
-        );
-        codes.push(CODE.RED);
-        return finish(codes);
-      }
-      /* 证明的读取也走这一次注入的解析器 —— 少了这个参数，注入只覆盖临时文件那一半，
-       * 而这一格会去读这台机器真实的 `.git`（用例本地绿、节点红就是这么来的）。 */
-      const proof = readProof(root, resolveDir);
-      if (proof) {
-        log(
-          `[ship] ✓ 合并前证明：head ${short(proof.headSha)} · 上游 ${short(proof.upstreamSha)} · ${proof.verifiedAt || "?"}`,
-        );
-        if (Array.isArray(proof.baselineRed) && proof.baselineRed.length > 0) {
-          log(
-            `[ship]   其中 ${proof.baselineRed.length} 条是主干自带的红（已放行，见 §13.6.2）`,
-          );
-        }
-      } else {
-        log(
-          "[ship] 没读到合并前证明（HEAD 与上游都没动，或钩子未接上）⇒ 这一格**没有**结论。",
-        );
-        codes.push(CODE.NOT_RUN);
-      }
-      codes.push(CODE.GREEN);
+      const r = runPushStage({
+        up,
+        branch,
+        root,
+        resolveDir,
+        log,
+        run,
+        relay,
+      });
+      codes.push(...r.codes);
+      if (r.stop) return finish(codes);
     }
 
     // ── 阶段 3-6：平台侧（需要 cnb，实现见 `ship-platform.mjs`）──
