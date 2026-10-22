@@ -1,0 +1,202 @@
+{
+  "$comment": "判据自身的承重数值账 —— 详见 scripts/check-gate-thresholds.cjs 的文件头。方向逐条记，不按全局符号推：kind=threshold 的阻断阈值有大有小两种方向（R5 的 900 越大越松，孪生的 MIN_LINES 越大越严），kind=floor 的地板越小越危险，kind=report 只报不拦。",
+  "entries": [
+    {
+      "file": "scripts/check-file-structure.cjs",
+      "const": "SPLIT_HINT_LINES",
+      "value": 900,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "group": "r5-split-lines",
+      "why": "R5 文件长度硬闸（AGENTS 硬规则 22）：超过即阻断，无基线、无 --update。"
+    },
+    {
+      "file": "scripts/check-infra-file-size.cjs",
+      "const": "SPLIT_HINT_LINES",
+      "value": 900,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "group": "r5-split-lines",
+      "why": "基础设施层（scripts/tools）同维度硬闸，与 R5 同一把尺子（组内必须同数）。"
+    },
+    {
+      "file": "scripts/check-function-length.cjs",
+      "const": "HINT_LINES",
+      "value": 400,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "函数长度硬闸（§12.13 / 硬规则 21）。注释里记着「降到 200 会让 40 个函数一起亮」——放宽容易，收紧是另一笔账。"
+    },
+    {
+      "file": "scripts/check-rust-function-length.cjs",
+      "const": "HINT_LINES",
+      "value": 120,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "Rust 壳同维度阈值 120（硬规则 21）：与 TS 那 400 是两把不同的尺子，不可互相替代。"
+    },
+    {
+      "file": "scripts/check-code-duplication.cjs",
+      "const": "MIN_LINES",
+      "value": 60,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "pair": "MIN_SIMILARITY",
+      "why": "孪生对判据的两个门槛之一（§12.12 / 硬规则 20）：两个数**同时**决定命中面，只动其中一个也算放宽。"
+    },
+    {
+      "file": "scripts/check-code-duplication.cjs",
+      "const": "MIN_SIMILARITY",
+      "value": 0.75,
+      "unit": "比例",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "pair": "MIN_LINES",
+      "why": "逐行重合比例下限；注释记着「碰巧都用 zod 校验」这类结构相似只有 0.2~0.3。"
+    },
+    {
+      "file": "scripts/check-comment-language.cjs",
+      "const": "ENGLISH_WORDS_THRESHOLD",
+      "value": 3,
+      "unit": "个连续英文词",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "中文注释硬判据（§12.4.6 / 硬规则 23）：达到这个数才算「英文写的」。"
+    },
+    {
+      "file": "scripts/check-reformat-only.cjs",
+      "const": "LIMIT",
+      "value": 10,
+      "unit": "个纯格式化文件",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "「整文件重排混进功能提交」的触发下限：1 会变成噪声源，所以不在 1 阻断。"
+    },
+    {
+      "file": "scripts/check-ui-customizations.cjs",
+      "const": "MARKER_MAX_LINE",
+      "value": 3,
+      "unit": "行",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "ui/ 定制标记的行号窗口（§16.8）：改它动的是命中面，不是「严/松」那一维。"
+    },
+    {
+      "file": "scripts/check-on-demand-duties.cjs",
+      "const": "MIN_DUTIES",
+      "value": 5,
+      "unit": "条登记",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "B 档地板：解析失灵时最容易退化成「0 行、全绿」。低于这个数就是「提取坏了」，不是「 duties 变少了」。"
+    },
+    {
+      "file": "scripts/check-tsc-diagnostic-executors.cjs",
+      "const": "MIN_ENTRIES",
+      "value": 1,
+      "unit": "条执行者",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "同上：一条都没有 ⇒ 这条判据什么都没看到，必须红而不是绿。"
+    },
+    {
+      "file": "scripts/check-bundle-budget.cjs",
+      "const": "MIN_CHUNKS",
+      "value": 20,
+      "unit": "个 chunk",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "产物 chunk 数地板：解析面缩小通常意味着构建没跑全，而不是「包变瘦了」。"
+    },
+    {
+      "file": "scripts/check-test-inventory.cjs",
+      "const": "EXPECTED_TIERS",
+      "value": 2,
+      "unit": "个 project",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "收集面档位数量（node / DOM 两档）：少一档就是一片用例静默不进任何 project。"
+    },
+    {
+      "file": "scripts/check-declaration-readers.cjs",
+      "const": "MIN_CARRIERS",
+      "value": 8,
+      "unit": "个承载文件",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "声明 ⇄ 读者判据的承载面地板，同族失效形态。"
+    },
+    {
+      "file": "scripts/check-gate-thresholds.cjs",
+      "const": "MIN_ENTRIES",
+      "value": 15,
+      "unit": "条账",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "这条判据自己的自证下限：账被清空或判据文件被搬走时，「比对了 0 条」与「全部一致」长得一样。把它调小等于关掉那一判 —— 所以它也在自己的扫描面里，不设例外。"
+    },
+    {
+      "file": "scripts/check-app-port-vectors.cjs",
+      "const": "PROBE_TIMEOUT_MS",
+      "value": 10000,
+      "unit": "毫秒（源码写 10_000）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "命令可用性探测预算：改它动的是「拿不到读数」那一档（不是红/绿），所以只报不拦。"
+    },
+    {
+      "file": "scripts/check-app-port-vectors.cjs",
+      "const": "PY_TIMEOUT_MS",
+      "value": 30000,
+      "unit": "毫秒（源码写 30_000）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "Python 侧真跑预算，同上。话术里的秒数跟着它走。"
+    },
+    {
+      "file": "scripts/check-test-sleep.cjs",
+      "const": "AWAIT_LOOKBEHIND",
+      "value": 24,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "往回找 await/return 的前缀窗口：误报控制量，不是松紧阈值。"
+    },
+    {
+      "file": "scripts/check-test-sleep.cjs",
+      "const": "WINDOW_MAX",
+      "value": 300,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "new Promise( 之后的搜索窗口上限（防跨大段代码误配）。"
+    },
+    {
+      "file": "scripts/check-test-waitfor.cjs",
+      "const": "WINDOW_MAX",
+      "value": 600,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "站点回调的搜索窗口上限，同上一家。"
+    },
+    {
+      "file": "scripts/check-void-floats.cjs",
+      "const": "RULE_VERSION",
+      "value": 1,
+      "unit": "版本戳",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "账本格式的版本戳，不是判红阈值；入账只为「别处新增承重数值时这格不装看不见」。"
+    }
+  ],
+  "$notCovered": {
+    "vitest-config-thresholds": "vitest.config.ts 里那一大片覆盖率门槛项由 scripts/ci-coverage-report.mjs 从实测生成，再抄一份进这本账必然脱钩（规范 §11.7 那条棘轮有自己的账）。条数随文件变，所以这里也不写死它。",
+    "unnamed-inline-numbers": "写进表达式里的内联数值（如 check-theme-colors.cjs 判短写法 hex 的 `v.length <= 5`）本判据扫不到 —— 它只认顶层具名常量。把它们先提成具名常量属于改判据本身，另案；不写「约 N 处」这种数，因为没有任何一格会随它过期而红。"
+  }
+}

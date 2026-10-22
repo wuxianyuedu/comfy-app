@@ -942,6 +942,10 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
     "文档源 ⇄ 生成态镜像同批",
     "node scripts/check-doc-mirror-pairing.cjs --staged",
   ],
+  /* 「把判据自己的阈值调松」此前没有任何一格会红（ISSUE #2156）：它不读代码、只把
+   * 源码里的具名常量与 scripts/.gate-thresholds.json 对账，毫秒级，而它必须落在
+   * 「改阈值那一笔」上 —— 挪去平台侧等于把红推给下一个动判据的人（同上一条的理由）。 */
+  ["判据自身的数值 ⇄ 账同批", "node scripts/check-gate-thresholds.cjs"],
   [
     "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）",
     "node scripts/freshness-gate.mjs",
