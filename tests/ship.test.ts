@@ -44,6 +44,7 @@ import {
   readBuildVerdict,
   readPullVerdict,
   resolveUpstream,
+  ticketReading,
 } from "../scripts/ship-core.mjs";
 import { closeIssues } from "../scripts/ship-platform.mjs";
 import { main } from "../scripts/ship.mjs";
@@ -459,6 +460,118 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
     expect(code).toBe(CODE.GREEN);
     expect(f.calls).toEqual([]);
     expect(f.log).toEqual([]);
+  });
+});
+
+/**
+ * 只装碎片的临时根 —— `ticketReading` 判的是「文件名里的号 + 首行段落」，
+ * 两份都得上盘。落点用 `os.tmpdir()` 的真实 Windows 路径，不写 `/tmp`：那串在
+ * MSYS 下能解析、到了 Windows 侧进程里是另一个地方，读不到文件会被当成「没有段落」。
+ */
+function fragRoot(files: Record<string, string>) {
+  const root = mkdtempSync(path.join(os.tmpdir(), "ship-ticket-"));
+  const dir = path.join(root, "changelog.d");
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [name, text] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, name), text);
+  }
+  return root;
+}
+
+describe("ticketReading：这次变更挂在哪张单子上（读数，不是闸）", () => {
+  it("带号的碎片被列出来（`<号>-` 与 `#<号>-` 两种形态都认，与形态门禁同一条正则）", () => {
+    const root = fragRoot({
+      "2127-a.md": "## Fixed\n\n- 条目\n",
+      "#408-b.md": "## Changed\n\n- 条目\n",
+    });
+    try {
+      const r = ticketReading({
+        root,
+        fragments: ["changelog.d/2127-a.md", "changelog.d/#408-b.md"],
+      });
+      expect(r.numbers).toEqual([2127, 408]);
+      expect(r.anonymous).toEqual([]);
+      expect(r.lines[0]).toContain("#2127 #408");
+      expect(r.lines.join("\n")).not.toContain("先立案");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("`## Fixed` 而号是 0 ⇒ 点名「先立案」，并给建单出口（本脚本不替人按下去）", () => {
+    const root = fragRoot({ "0-a14-kernel.md": "## Fixed\n\n- 条目\n" });
+    try {
+      const r = ticketReading({
+        root,
+        fragments: ["changelog.d/0-a14-kernel.md"],
+      });
+      expect(r.anonymousFixed).toEqual(["0-a14-kernel.md"]);
+      const all = r.lines.join("\n");
+      expect(all).toContain("0-a14-kernel.md");
+      expect(all).toContain("先立案");
+      expect(all).toContain("cnb issues create-issue");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("负控制①：段落不是 Fixed 的无号碎片**不报违规** —— §13.10.8 第 2 条那条 `0-` 出口照旧可用", () => {
+    const root = fragRoot({ "0-ship-driver.md": "## Added\n\n- 条目\n" });
+    try {
+      const r = ticketReading({
+        root,
+        fragments: ["changelog.d/0-ship-driver.md"],
+      });
+      expect(r.anonymous).toEqual(["0-ship-driver.md"]);
+      expect(r.anonymousFixed).toEqual([]);
+      expect(r.lines.join("\n")).not.toContain("先立案");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("负控制②：首行读不到 ⇒ 不判段落，**不凭空指控**人没立案", () => {
+    const root = fragRoot({});
+    try {
+      const r = ticketReading({
+        root,
+        fragments: ["changelog.d/0-not-on-disk.md"],
+      });
+      expect(r.anonymous).toEqual(["0-not-on-disk.md"]);
+      expect(r.anonymousFixed).toEqual([]);
+      expect(r.lines.join("\n")).not.toContain("先立案");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("号去重按出现顺序、非 `<号>-` 形态的文件不参与（README.md 没有号这一格可判）", () => {
+    const root = fragRoot({
+      "2070-a.md": "## Fixed\n\n- 条目\n",
+      "2070-b.md": "## Added\n\n- 条目\n",
+      "0-c.md": "## Fixed\n\n- 条目\n",
+      "0-d.md": "## Added\n\n- 条目\n",
+      "README.md": "# changelog.d —— CHANGELOG 碎片目录\n",
+    });
+    try {
+      const r = ticketReading({
+        root,
+        fragments: [
+          "changelog.d/2070-a.md",
+          "changelog.d/2070-b.md",
+          "changelog.d/0-c.md",
+          "changelog.d/0-d.md",
+          "changelog.d/README.md",
+        ],
+      });
+      expect(r.numbers).toEqual([2070]);
+      expect(r.anonymous).toEqual(["0-c.md", "0-d.md"]);
+      expect(r.anonymousFixed).toEqual(["0-c.md"]);
+      // 两份无号里只有一份是 Fixed：另一份要在话术上被明确排除，不然读者会以为全部碎片都违规。
+      expect(r.lines.join("\n")).toContain("另 1 份无号碎片的段落不是");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -1014,6 +1127,47 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(heard.join("\n"), "未暂存改动存在却没提醒").toContain(
       "还有未暂存的改动",
     );
+  });
+
+  it("阶段 0 念出「单子」那一行，而它是读数：退码不因它改变", async () => {
+    /* 默认夹具那份 `changelog.d/0-x.md` 不在盘上 ⇒ 只念「无号碎片 1 份」，
+     * **不**指控没立案（首行读不到就不判）。这一条钉的两件事：读数在场、闸不在场。 */
+    const heard: string[] = [];
+    const { run } = fake();
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run"],
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(heard.join("\n")).toContain("单子：（无） · 无号碎片 1 份");
+    expect(heard.join("\n")).not.toContain("先立案");
+  });
+
+  it("盘上真有「## Fixed + 0-」那份碎片时点名先立案 —— 仍然退 0（这条不是闸）", async () => {
+    const root = fragRoot({ "0-lazy-chunk.md": "## Fixed\n\n- 条目\n" });
+    const heard: string[] = [];
+    try {
+      const { run } = fake({ frags: ["changelog.d/0-lazy-chunk.md"] });
+      const code = await main({
+        root,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        args: ["--dry-run"],
+      });
+      const all = heard.join("\n");
+      expect(all).toContain("0-lazy-chunk.md");
+      expect(all).toContain("先立案");
+      expect(
+        code,
+        "把这条做成闸，人就会去凑一张别人开着的单子（§13.10.8）",
+      ).toBe(CODE.GREEN);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("基线引用不存在 ⇒ 退 2 并说「没有事实源」，**不许**退成「没有碎片」的红", async () => {
