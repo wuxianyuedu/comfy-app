@@ -27,6 +27,7 @@ pnpm ship --merge            # CI 绿了才合并（squash）
 pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉
 pnpm ship --merge --close-issue 2179             # 本轮号（标题里那批）+ 人点名的号，并集去重
 pnpm ship --close-issue 2179                     # 只补关：本轮不合，凭平台侧「已合并 PR」的落地证明关它
+pnpm ship --whoami                               # 只读自查：这份检出的留痕短名 + 署名行 + 手工补 PR 标签的粘贴命令
 pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上那批**残留进程（默认只念读数）
 ```
 
@@ -120,6 +121,15 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    断流那一格落 **`2`（没有终态结论）**，不是红 —— `2` 在这里的读法是「这一格没拿到结论」，
    下一动作是人去看那一格的日志，或过一会儿再 `pnpm ship`（PR 复用不重建）。
    45 分钟墙钟预算保留，兜「动得很慢」那条路，两条判点各打各的话。
+10. **平台留痕：写文字带署名，PR 建完补 `dev:` 标签并回读（ISSUE #2204）。**
+    凡向平台写文字（issue 评论 / PR 正文），正文末尾带一行 `提交人：dev:<短名>`；未配写
+    `提交人：未配`，不编、也不拿 git `user.name` 顶替（那是提交身份）。`ship` 建的 PR
+    （含复用已有 PR）会自己 `post-pull-labels` → **独立回读** `list-pull-labels`，回读里
+    看得见那个名字才念「已打上」；`post-pull` 与 `create-issue` 同形，没有 `--labels`。
+    手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 `ship`，那两条路
+    要自己带：`pnpm ship --whoami` 打出这份检出的短名、署名行与两条可粘贴命令 —— 它一次
+    也不碰平台、不改任何状态。未配 handle **不阻断**（留痕是读数，不是判据）；Windows
+    检出会给**这一份** `.env` 的绝对路径与 `pnpm env:init`。
 
 ## 它不重复判的东西
 

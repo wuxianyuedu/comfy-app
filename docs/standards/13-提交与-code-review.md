@@ -8351,6 +8351,31 @@ cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels de
 `tests/ship.test.ts` 的 `issueAuthoring` / `readDevHandle` 两组（含「非 Windows 未配 ⇒ 不点名」
 与「注释掉的 `.env.example` 形态不算配了」两条负控制）。
 
+**PR 与 issue 评论是同一格留痕，开口也补上了（ISSUE #2204）**。`dev:<短名>` 的生成处只有
+`ship-ticket.mjs` 的 `devLabel()`，署名行只有 `signatureLine()`（两者被 `issueAuthoring`、
+PR 正文与 `--whoami` 共用；不许在调用点各拼一套）。两条口径：
+
+- **凡向平台写文字（issue 评论 / PR 正文），正文末尾带一行** `提交人：dev:<短名>`；
+  未配时如实写 `提交人：未配`，**不编一个名字**（也**不许**拿 git `user.name` 顶替 ——
+  那是提交身份，不是提单身份）。
+- **建 PR 后补 `dev:` 标签，并独立回读**。`cnb pulls post-pull` 与 `create-issue` 同形：
+  **没有 `--labels`**，只能建完之后 `post-pull-labels`；而回执不算结论，必须再跑一次
+  `list-pull-labels`，回读里看得见那个名字才算打上了（PR #2202 上实测：手打标签 → 回读
+  `["dev:yuedu-win"]`；`ship` 之前建出来的 PR 回读是空 —— 那就是缺口的现场）。
+  `pnpm ship` 建的 PR（含复用已有 PR）会自动做完这两步。
+
+**手工通道的漏口不靠脚本兜**：手工 `cnb pulls post-pull` 与 `cnb issues post-issue-comment`
+不经过 `ship`，而平台侧的 `author` 是 token 的账号本体（跨检出逐字相同 —— 不许写成
+「由 cnb 账号自动带上」，那是假读数）。所以给一条能粘贴的自查出口：
+`pnpm ship --whoami` 打出这一份检出的留痕短名、署名行与两条命令（`post-pull-labels` +
+`list-pull-labels`）；它一次也不碰平台、不改任何状态、不参与退码。
+
+与 issue 侧同一条边界：**未配 handle 不阻断**（它是留痕读数，不是判据）。区别只在话术 ——
+Windows 检出要把**这一份** `.env` 的绝对路径与 `pnpm env:init` 念出来（四份并行检出时
+「去 `.env` 加一行」指不出是哪一份，#2186 的现场）。回归见 `tests/ship.test.ts` 的
+`devLabel / signatureLine / whoamiLines` 组与 `main()` 里那几格（打标签 → 回读的顺序、
+回读没有时的负控制、未配时一次标签动作都不伸手）。
+
 ### 13.11 随手改与 TODO 记录规范
 
 浏览、修改代码时，如果发现不符合本规范、可优化或设计不合理的地方：
