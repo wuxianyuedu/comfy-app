@@ -174,6 +174,89 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     expect(r.stdout).toContain("跳过");
   });
 
+  it("必填项本来就齐时也只补缺失的键 —— #2175 那格留痕这才传得到已有检出（#2186）", () => {
+    const example = fs.readFileSync(EXAMPLE, "utf8");
+    // 模拟「早在 #2175 之前生成的 .env」：必填齐、改过日志级别、没有后来新增的那个可选键。
+    const mine = example
+      .replace(
+        /^BETTER_AUTH_SECRET=.*$/m,
+        'BETTER_AUTH_SECRET="' + "b".repeat(64) + '"',
+      )
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
+      )
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
+      )
+      .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "")
+      .replace(/^LOG_LEVEL=.*$/m, 'LOG_LEVEL="debug"');
+    const r = runEnvInitIn({ ".env.example": example, ".env": mine });
+    expect(r.status, r.stderr).toBe(0);
+    const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
+    const parsed = parseEnvFile(after);
+    expect(
+      parsed.has("COMFYAPP_DEV_HANDLE"),
+      "缺的可选键要被补上（值照 example 的显式空值）",
+    ).toBe(true);
+    expect(parsed.get("COMFYAPP_DEV_HANDLE")).toBe("");
+    // 「只补缺、绝不覆盖」是这一档唯一的安全前提：用户自己改过的值必须一字不动。
+    expect(parsed.get("LOG_LEVEL")).toBe("debug");
+    expect(after).toMatch(/^BETTER_AUTH_SECRET="b{64}"$/m);
+    expect(r.stdout).toContain("COMFYAPP_DEV_HANDLE");
+    expect(checkEnvFile(tmp, {})).toBeNull();
+  });
+
+  it("负控制：注释形态的可选键不被提升成真值（端口钉回 3100 会打散并行检出）", () => {
+    const example = fs.readFileSync(EXAMPLE, "utf8");
+    const mine = example
+      .replace(
+        /^BETTER_AUTH_SECRET=.*$/m,
+        'BETTER_AUTH_SECRET="' + "d".repeat(64) + '"',
+      )
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
+      )
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
+      )
+      .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
+    const r = runEnvInitIn({ ".env.example": example, ".env": mine });
+    expect(r.status, r.stderr).toBe(0);
+    const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
+    const parsed = parseEnvFile(after);
+    expect(
+      parsed.has("COMFYAPP_PORT"),
+      "example 里那一行是注释 ⇒ 补齐面不收它（收了就是替所有人钉死端口）",
+    ).toBe(false);
+    expect(after).toMatch(/^# COMFYAPP_PORT=.*$/m);
+  });
+
+  it("必填项整行都不在时也补得出来（旧 `fill()` 只做行内替换 ⇒ 念「已补齐」而其实没补）", () => {
+    const example = fs.readFileSync(EXAMPLE, "utf8");
+    const stripped = example
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, "")
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, "")
+      .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, "")
+      .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
+    const r = runEnvInitIn({ ".env.example": example, ".env": stripped });
+    expect(r.status, r.stderr).toBe(0);
+    const parsed = parseEnvFile(
+      fs.readFileSync(path.join(tmp, ".env"), "utf8"),
+    );
+    for (const key of REQUIRED_ENV_KEYS) {
+      expect((parsed.get(key) ?? "").trim(), `${key} 必须被补出来`).not.toBe(
+        "",
+      );
+    }
+    // 话术只点名补了哪个键，密钥值不进日志。
+    expect(r.stdout).not.toContain(parsed.get("BETTER_AUTH_SECRET")!);
+    expect(checkEnvFile(tmp, {})).toBeNull();
+  });
+
   it("改写没命中行时非零退出（不留一个仍然起不来的 .env）", () => {
     // .env.example 的键名被改掉 = 真实会发生的漂移；此时必须失败而不是貌似成功。
     const broken = fs

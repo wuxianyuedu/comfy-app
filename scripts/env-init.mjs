@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 本地 `.env` 生成入口（跨平台，`pnpm env:init`）。
+// 本地 `.env` 生成 / 补齐入口（跨平台，`pnpm env:init`）。
 //
 // 为什么需要它：`src/env.js` 在启动时强制校验 `BETTER_AUTH_SECRET` 与两个
 // `BETTER_AUTH_GITHUB_*`，而 `.env.example` 里这三项都是**空串**，且
@@ -14,9 +14,11 @@
 //   · BETTER_AUTH_GITHUB_CLIENT_ID / _SECRET → 本地占位值
 // 其余行（DATABASE_URL、COMFYAPP_PORT 注释等）原样保留。
 //
-// 幂等：已存在 `.env` 时不覆盖（只报告），绝不吞掉使用者的配置。
+// 幂等与「只补不覆盖」：已有值一律不动。今天它还只做到「不覆盖」，
+// 现在连「补缺」一起做到 —— 见下面 `missingKeys` 那段（ISSUE #2186）。
 import fs from "node:fs";
 import path from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 // 密钥与占位值的**单一定义点**在 launcher-core 那份（桌包 standalone 运行期也用它）：
@@ -26,6 +28,10 @@ import {
   newAuthSecret,
   OAUTH_PLACEHOLDER,
 } from "./launcher-core/standalone-runtime-env.mjs";
+// `.env` 的解析也只有一份：`env-preflight.mjs` 那同一条最小子集（忽略 `#` 注释行、
+// 去成对引号与行尾注释）。在这里再写一个解析器就是第三份口径（第三份是 app-port 那份
+// 单键取值 —— 它只取一个键，形状不同，不并入）。
+import { REQUIRED_ENV_KEYS, parseEnvFile } from "./env-preflight.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = path.join(root, ".env");
@@ -49,10 +55,69 @@ function fill(content) {
 
 /** 三项必填值是否都拿到了非空内容（判据同 `src/env.js`：空串 == 未给）。 */
 export function hasRequiredValues(content) {
-  return ["BETTER_AUTH_SECRET", "BETTER_AUTH_GITHUB_CLIENT_ID", "BETTER_AUTH_GITHUB_CLIENT_SECRET"].every(
-    (key) =>
-      new RegExp(`^${key}="?([^"\\r\\n]+)"?\\s*$`, "m").test(content),
+  return REQUIRED_ENV_KEYS.every((key) =>
+    new RegExp(`^${key}="?([^"\\r\\n]+)"?\\s*$`, "m").test(content),
   );
+}
+
+/**
+ * 生成期缺哪几项必填 —— 与「在文件里但值是空的」是两种形状。
+ *
+ * 这一格是本单顺带查出来的相邻缺口：今天 `fill()` 只做**行内替换**，所以一份
+ * 「整行没有 `BETTER_AUTH_SECRET`」的 `.env` 会被判成「必填项为空」、被念成「已就地补齐」，
+ * 而实际上那一行根本没被补出来（`^KEY=.*$` 匹配不到任何行）。补齐档必须能**加行**。
+ *
+ * @param {string} content 现有 `.env` 文本
+ * @param {string[]} keys 要查的键（必填三项）
+ * @returns {string[]} 整行都不存在的键
+ */
+function absentKeys(content, keys) {
+  const have = parseEnvFile(content);
+  return keys.filter((k) => !have.has(k));
+}
+
+/**
+ * `.env.example` 里**未被注释**的键，配它在该文件里的原样值。
+ *
+ * 注释形态的可选键（`# COMFYAPP_PORT="3100"` 那一族）**刻意不进补齐面**：把注释提升成
+ * 真值会改行为 —— 端口口径是按检出路径推导到 3200~3999（规范 §1.1），钉回 3100 会
+ * 直接打散并行检出。要让人拿到新的一格，就得像 `COMFYAPP_DEV_HANDLE` 那样写成
+ * **显式空值**（空值 == 没配，所以默认形态是安全的）。
+ *
+ * @param {string} example 该文件文本
+ * @returns {Array<{key: string, value: string}>}
+ */
+function exampleKeys(example) {
+  return [...parseEnvFile(example).entries()].map(([key, value]) => ({
+    key,
+    value,
+  }));
+}
+
+/**
+ * 算出「该往 `.env` 追加哪些行」—— 只补缺，绝不覆盖已有键。
+ *
+ * @param {{example: string, current: string}} input
+ * @returns {string[]} 待追加的整行（已按 `KEY="value"` 形态）
+ */
+function missingLines({ example, current }) {
+  const have = parseEnvFile(current);
+  /** @type {string[]} */
+  const out = [];
+  for (const { key, value } of exampleKeys(example)) {
+    if (have.has(key)) continue;
+    // 必填三项的值由 `fill()` / 那一份单一定义点负责 —— 不在这里造第二个密钥来源。
+    if (REQUIRED_ENV_KEYS.includes(key)) continue;
+    out.push(`${key}="${value}"`);
+  }
+  for (const key of absentKeys(current, REQUIRED_ENV_KEYS)) {
+    out.push(
+      key === "BETTER_AUTH_SECRET"
+        ? `${key}="${newAuthSecret()}"`
+        : `${key}="${OAUTH_PLACEHOLDER}"`,
+    );
+  }
+  return out;
 }
 
 if (!fs.existsSync(examplePath)) {
@@ -60,34 +125,69 @@ if (!fs.existsSync(examplePath)) {
   process.exit(1);
 }
 
-if (fs.existsSync(envPath)) {
-  const current = fs.readFileSync(envPath, "utf8");
-  if (hasRequiredValues(current)) {
-    process.stdout.write("[env:init] ✓ 已存在 .env 且必填项非空，跳过（不覆盖你的配置）。\n");
-    process.exit(0);
+const exampleText = fs.readFileSync(examplePath, "utf8");
+
+if (!fs.existsSync(envPath)) {
+  const next = fill(exampleText);
+  if (!hasRequiredValues(next)) {
+    // 自检：改写没命中行时立刻暴露，而不是留个仍然起不来的 .env。
+    process.stderr.write(
+      "[env:init] ✗ 生成的 .env 仍缺必填项——.env.example 里的键名可能已改动，请检查脚本的替换口径。\n",
+    );
+    process.exit(1);
   }
-  // 存在但值留空：典型的 `cp .env.example .env` 留下的半成品。补齐即可，
-  // 不整份重写——使用者可能已经改过端口等其它项。
-  fs.writeFileSync(envPath, fill(current), "utf8");
+  fs.writeFileSync(envPath, next, "utf8");
   process.stdout.write(
-    "[env:init] ✓ 已有 .env 但必填项为空，已就地补齐（其余配置保持不变）。\n",
+    [
+      "[env:init] ✓ 已生成 .env（随机密钥 + 本地 OAuth 占位值）。",
+      "[env:init]   · GitHub OAuth 要真跑登录流程时，请换成自己的 client id / secret；",
+      "[env:init]   · .env 已被 gitignore，凭据不会入库。",
+    ].join("\n") + "\n",
   );
   process.exit(0);
 }
 
-const next = fill(fs.readFileSync(examplePath, "utf8"));
-if (!hasRequiredValues(next)) {
-  // 自检：改写没命中行时立刻暴露，而不是留个仍然起不来的 .env。
+// 已存在 `.env`：今天的旧档是「必填齐 ⇒ 整份跳过」，于是**本仓此后新增的任何可选键都传不到
+// 这份检出**（#2186 的现场：同机四份并行检出里两份有 `.env`、都没有 `COMFYAPP_DEV_HANDLE`，
+// 而 #2175 那格留痕全靠它）。现在改成「必填齐也照样补缺」，但「只补没有的键」这条
+// 承诺一字未改 —— 已有值不覆盖、不重排、不动注释。
+const current = fs.readFileSync(envPath, "utf8");
+const hadRequired = hasRequiredValues(current);
+const filled = hadRequired ? current : fill(current);
+const additions = missingLines({ example: exampleText, current: filled });
+const next =
+  additions.length > 0
+    ? `${filled.replace(/\s*$/, "")}\n${additions.join("\n")}\n`
+    : filled;
+
+if (next !== current && !hasRequiredValues(next)) {
+  // 自检（与生成分支同一条）：补齐没命中时当场暴露，而不是留下一个仍然起不来的 .env。
   process.stderr.write(
-    "[env:init] ✗ 生成的 .env 仍缺必填项——.env.example 里的键名可能已改动，请检查脚本的替换口径。\n",
+    "[env:init] ✗ 补齐之后必填项仍为空 —— 请检查 .env.example 的键名与本脚本的替换口径。\n",
   );
   process.exit(1);
 }
+
+if (next === current) {
+  process.stdout.write(
+    "[env:init] ✓ 已存在 .env：必填项非空，且 .env.example 里没有它缺的键 ⇒ 没有要补的，" +
+      "跳过写入（已有键一律不覆盖）。\n",
+  );
+  process.exit(0);
+}
+
 fs.writeFileSync(envPath, next, "utf8");
 process.stdout.write(
   [
-    "[env:init] ✓ 已生成 .env（随机密钥 + 本地 OAuth 占位值）。",
-    "[env:init]   · GitHub OAuth 要真跑登录流程时，请换成自己的 client id / secret；",
-    "[env:init]   · .env 已被 gitignore，凭据不会入库。",
+    hadRequired
+      ? "[env:init] ✓ 已有 .env，必填项本来就齐 ⇒ 只补缺失的键（不覆盖你的任何配置）。"
+      : "[env:init] ✓ 已有 .env 但必填项为空，已就地补齐（其余配置保持不变）。",
+    ...additions.map((line) => {
+      const key = line.split("=", 1)[0] ?? line;
+      // 必填三项的值是密钥/占位值：只说补了哪个键，不回显值（值不进日志）。
+      return REQUIRED_ENV_KEYS.includes(key)
+        ? `[env:init]   · 补上缺失的必填项 ${key}（值由本脚本生成，不打出来）`
+        : `[env:init]   · 补上缺失的键 ${key}（值照 .env.example；填你自己的再启动）`;
+    }),
   ].join("\n") + "\n",
 );
