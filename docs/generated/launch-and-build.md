@@ -2914,6 +2914,18 @@ pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出
 无人监听；且旧提示里的小贴士指向 `tools/start/run-local.ps1`（Windows 专属，
 与本模式的零 `.ps1` 依赖相悖）。
 
+**「别人加了新的 `.env` 键，我怎么想起来补」——启动器会念**（ISSUE #2205）：
+`pnpm env:init` 只补缺、不覆盖（#2186），但此前没有任何时刻提醒人去跑它——
+不经过 `pnpm ship` 的人永远看不到那一格。现在启动应用的几条入口都会做一次
+非阻断读数（`envInitHint`）：`dev-launcher.mjs` 在环境预检**通过之后**、
+工具链门禁之前；`pnpm dev` / `pnpm start` 两条直达入口则在共用预检
+`exitIfEnvNotReady` 通过后念同一句（编排器那条路的子进程输出进日志文件，
+屏幕上不会重复）。`.env` 若缺 `.env.example` 里未注释的键，就打印一行
+`环境配置提醒：.env 缺 N 个 .env.example 里的键：… ⇒ pnpm env:init`（WARN）。
+补齐面与这条读数共用 `missingEnvKeys`（`env-preflight.mjs`），所以「念出来的键」
+与「真补上去的键」不会分叉。**只念不改**：不写文件、不改退出码；`.env` 缺失时
+由上面那条阻断提示给出口、这一格不重复念，`SKIP_ENV_VALIDATION` 下静默。
+
 **建库（`pnpm db:push`）为什么不能直接写 `drizzle-kit push`**：它在需要交互确认
 时会在无 TTY 环境（CI、脚本、远程会话、容器）报 `Interactive prompts require a
 TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `/`、
@@ -3051,7 +3063,12 @@ Next」，用户要盯着空窗等半分钟才看到页面；现在等待时间�
    - **提示里不得出现 Windows 专属入口**：旧实现在缺文件时提示「双击
      `tools/start/run-local.ps1`」，与本模式的零 `.ps1` 依赖直接矛盾。
      回归测试见 `tests/linux-env-bootstrap.test.ts`（含真跑 `env-init.mjs` 与
-     `dev.mjs`，反向验证：还原旧入口/去掉预检，对应用例必失败）。
+     `dev.mjs`，反向验证：还原旧入口/去掉预检，对应用例必失败）；
+   - **「怎么想起来跑」也有执行者**（ISSUE #2205）：启动应用的那几条入口在预检
+     通过后做一次非阻断读数（`envInitHint`；`dev.mjs` / `start.mjs` 挂在共用的
+     `exitIfEnvNotReady` 上），缺 `.env.example` 里未注释的键就打一行
+     `pnpm env:init` 的提醒——只读、不写文件、不改退码，且与补齐面共用
+     `missingEnvKeys`（判据只有一份）。
 
 ### 9.3 桌面壳的跨平台（`pnpm tauri build`）
 

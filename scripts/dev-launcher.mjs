@@ -32,7 +32,7 @@ import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
 import { writeAppServiceExit } from "./app-service-exit.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
-import { checkEnvFile } from "./env-preflight.mjs";
+import { checkEnvFile, envInitHint } from "./env-preflight.mjs";
 import {
   createLogSink,
   currentDirOf,
@@ -469,6 +469,7 @@ export async function run(argv = process.argv.slice(2)) {
       status,
       reapStaleSession,
       checkEnvFile,
+      envInitHint,
       runToolchainGate,
       syncDependencies,
       applyPendingRestoreAtBoot,

@@ -26,6 +26,7 @@ import process from "node:process";
  * @param {(phase: string, progress: number, message: string, extra?: object) => void} ctx.status 进度快照
  * @param {(root: string) => Promise<number[] | null>} ctx.reapStaleSession 回收上次孤儿
  * @param {(root: string) => { message: string } | null} ctx.checkEnvFile 环境文件门禁
+ * @param {(root: string) => string | null} ctx.envInitHint 非阻断读数：`.env` 缺哪些 `env:init` 会补的键
  * @param {(root: string) => string | null} ctx.runToolchainGate 工具链门禁
  * @param {(root: string, deps: object) => Promise<string | null>} ctx.syncDependencies 依赖补装
  * @param {(root: string, opts: { write?: (line: string) => void }) => import("../db-backup-core.mjs").RestoreResult} ctx.applyPendingRestoreAtBoot 待恢复备份
@@ -58,6 +59,13 @@ export async function runStartupGates(ctx, target) {
       },
     };
   }
+  // 1.1) 非阻断读数（ISSUE #2205）：必填项齐了，但 `.env` 还缺 `.env.example` 里的
+  //      键（典型是后来新增的 COMFYAPP_DEV_HANDLE）⇒ 念一句 `pnpm env:init`。
+  //      只念不改：不写文件、不改退码。启动是人人都会碰到的时刻，而 `env:init`
+  //      此前没有任何时刻提醒人去跑它 —— 不经过 `pnpm ship` 的人永远看不到。
+  const envHint = ctx.envInitHint(root);
+  if (envHint) log(`环境配置提醒：${envHint}`, "WARN");
+
   const gateProblem = ctx.runToolchainGate(root);
   if (gateProblem) {
     // 多行提示分两条写：`status` 的 message 是启动页**一行**标题位，塞整段
