@@ -885,6 +885,7 @@ describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—�
     const r = issueAuthoring({
       handle: null,
       platform: "win32",
+      root: "/checkout/one",
       showExits: true,
     });
     expect(r.required).toBe(true);
@@ -892,6 +893,10 @@ describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—�
     expect(all).toContain("Windows 开发者");
     expect(all).toContain("COMFYAPP_DEV_HANDLE");
     expect(all).toContain("--labels dev:<短名>");
+    // 一台机器上多份并行检出时，「去 .env 里加一行」指不出是哪一份（#2186 的现场），
+    // 而整行缺失时下一动作是那一条命令 —— 两句都要把人带到能动的地方。
+    expect(all).toContain("checkout");
+    expect(all).toContain("env:init");
   });
 
   it("负控制：非 Windows 没配 ⇒ 同一句事实，但**不点名要求**（本轮口径只管 Windows）", () => {

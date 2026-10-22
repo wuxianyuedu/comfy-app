@@ -77,7 +77,10 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    **Windows 开发者**要求配它 —— 因为**平台给不了这一格**：issue 是被 token 的账号本体创建的，
    这台机器上多份并行检出回读的 `author.username` 与那串 noreply 子地址**逐字相同**（实测五张单、
    跨并行会话），而提交那一侧可分的通道（git author 子地址，见 `docs/guides/git-identity.md` §4）
-   在单子上不存在。缺单或没配留痕时才念出口，且是**两条命令**：
+   在单子上不存在。那一行 `.env` 整行缺失时，下一动作是 `pnpm env:init` —— 它只把
+   `.env.example` 里有、而这份 `.env` 里没有的键补上（已有值一律不覆盖，#2186），
+   而 ship 念的那句会带上**这一份检出的路径**（四份并行检出时「去 `.env` 加一行」指不出是哪份）。
+   缺单或没配留痕时才念出口，且是**两条命令**：
    ① `cnb issues create-issue --repo <组织>/<仓库> --title "…" --body-file <正文文件> --priority <P0|P1|P2|P3>`；
    ② 建完再 `cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels dev:<短名>`
    —— 实测 ① 里的 `--labels` **不落地**（回读 `labels: []`），标签只能建完之后按。

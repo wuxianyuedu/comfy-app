@@ -555,6 +555,7 @@ async function runFlow(deps, tmpFiles) {
     for (const l of issueAuthoring({
       handle,
       platform: process.platform,
+      root,
       showExits: !handle || (ticket?.anonymousFixed.length ?? 0) > 0,
     }).lines) {
       log(l);
