@@ -39,13 +39,19 @@ import {
   readPullVerdict,
 } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
-import { classifyBuildOutcome } from "./ci-build-readout.mjs";
+import { classifyBuildOutcome, inFlightStages } from "./ci-build-readout.mjs";
 
 /**
  * 轮询的**同签名断流**上限：连续这么多次读到同一件事就不再读。
  * 定在 10 的理由是形状：20 秒一眼 ⇒ 连着 10 眼（≈3 分 20 秒）一个读数都没动，
- * 继续轮下去只是把同一句话多刷几遍；一条真的在推进的流水线在这个窗口里至少会
- * 动一次（`data.status` 或 pipeline 计数）。45 分钟墙钟预算保留，兜「动得很慢」那条路。
+ * 继续轮下去只是把同一句话多刷几遍。45 分钟墙钟预算保留，兜「动得很慢」那条路。
+ *
+ * ⚠️ 那句「一条真的在推进的流水线在这个窗口里至少会动一次」**只在配上一个前提时成立**：
+ * 签名是离散计数，而一格**长** stage 在内部推进时不产生任何新计数（ISSUE #2184 实测：
+ * `cnb-akv-1k5hh712q/pending/0-1+11/33` 连着 10 眼一模一样而 `受影响用例` 那一格正在跑，
+ * 几分钟后同一条构建是 28/33；本仓组 C 单跑实测过 1411s）。所以断流的判据是
+ * **签名不变 且 没有任何一格在飞**（`inFlightStages`），而不是「签名不变」——
+ * 也不是把上限调大：那只是把误掐概率换小，两件事仍然分不开。
  */
 const POLL_STALL_MAX = 10;
 
@@ -268,7 +274,8 @@ export function createOrReusePull(ctx) {
  * }} ctx
  * @returns {Promise<{buildState:"green"|"red"|"cancelled"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
  *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（取不到列表），
- *   以及**同签名断流**（跑起来了、连着 6 次读数一模一样，再等下去只是重复同一句话）。
+ *   以及**同签名断流**（连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，
+ *   再等下去只是重复同一句话）。
  */
 export async function pollUntilTerminal(ctx) {
   const { run, log, slug, newSha, now, sleep } = ctx;
@@ -277,14 +284,19 @@ export async function pollUntilTerminal(ctx) {
   let buildSn = null;
   const deadline = now() + 45 * 60 * 1000;
   /* 同一签名**连续**读了多少次：第一条就把计数设成 1，所以「连续 10 次」= 第 10 次读到同一件事
-   * 就断流。签名里任何一件变了（sn / data.status / pipeline 完成数 / **stage 完成数**）就归零
-   * —— 掐掉的只是「每 20 秒重复同一句话直到烧完预算」那种等待。
+   * 就断流。签名里任何一件变了（sn / data.status / pipeline 完成数 / **stage 完成数**）就归零，
+   * **有格在飞也归零**（下面那段）—— 掐掉的只是「每 20 秒重复同一句话直到烧完预算」那种等待。
    * stage 级那一件不是锦上添花：本仓的 PR 是一条 pipeline / 三十几个 stage，只看 pipeline 级
    * 计数时，一条推进到 28/33 的流水线读数一直是 `…/pending/0-1`，会被这条当成「没在动」掐掉
    * （2026-10-22 实测 `cnb-7d9-1k5h9edct`）；而运行中那一格的 `duration` 是占位 `0`，
-   * 也当不了进度。 */
+   * 也当不了进度。
+   * 但**光补 stage 计数还不够**：计数是离散的，一格跑得久（组 C 单跑实测 1411s）时它自己不动，
+   * 于是 #2167 之后仍然误掐过一次（`…/pending/0-1+11/33` 连满 10 眼，ISSUE #2184）
+   * ⇒ 断流现在要**两件同时成立**：签名不变，且这一刻没有一格处在「在飞」那一族状态里。 */
   let lastSig = null;
   let sameSig = 0;
+  /** 「这一轮已经因为格数续过命」的标记：每轮只念一次那句说明（见下面计数那一段）。 */
+  let announcedFlight = false;
   for (;;) {
     const logs = cnbJson(run, [
       "build",
@@ -344,7 +356,26 @@ export async function pollUntilTerminal(ctx) {
       if (v.state !== "running" && v.state !== "unknown") break;
     }
     const sig = buildSignature(statusJson, picked ? picked.sn : "");
-    sameSig = sig === lastSig ? sameSig + 1 : 1;
+    /* 「同签名」只是**没产生新计数**，不等于「没在动」：一格长 stage 在内部推进时签名逐字不变
+     * （ISSUE #2184 实测 `…/pending/0-1+11/33` 连着 10 眼，而 `受影响用例` 正在跑；几分钟后
+     * 同一条构建是 28/33）。所以停滞要同时满足两件：签名不变 **且** 此刻没有任何一格在飞。
+     * 在飞那一判每轮只念一次 —— 它是「还在跑」这一事实的说明，不是每 20 秒要复述一遍的进度条。 */
+    const flying = inFlightStages(statusJson);
+    if (sig !== lastSig) {
+      sameSig = 1;
+      announcedFlight = false;
+    } else if (flying.count > 0) {
+      sameSig = 1;
+      if (!announcedFlight) {
+        announcedFlight = true;
+        log(
+          `[ship]   签名没变（${sig}），但有 ${flying.count} 格在飞：` +
+            `${flying.names.slice(0, 3).join("、")} ⇒ 还在跑，继续轮`,
+        );
+      }
+    } else {
+      sameSig += 1;
+    }
     lastSig = sig;
     if (sameSig >= POLL_STALL_MAX) {
       /* 落 **2**（没跑起来）而不是红：签名含 stage 级进度之后，「连着 10 眼一模一样」意味着
@@ -354,8 +385,8 @@ export async function pollUntilTerminal(ctx) {
        * （推进中的流水线也会被念成没动），签名补上 stage 级之后不再成立，业主定：改记 2。
        * 下一动作仍然给人（看那一格的日志，或过一会儿再跑一次 `pnpm ship`，PR 复用不重建）。 */
       log(
-        `[ship] build ${buildSn ?? "(未解析到 build)"} 连续 ${sameSig} 次读数没变` +
-          `（${sig}）⇒ 不再轮询：这一格没有终态结论`,
+        `[ship] build ${buildSn ?? "(未解析到 build)"} 连续 ${sameSig} 次读数没变、` +
+          `且此刻没有一格在飞（${sig}）⇒ 不再轮询：这一格没有终态结论`,
       );
       log(
         `[ship]   接着看：https://cnb.cool/${slug}/-/build/logs/${buildSn || "<sn>"}` +
