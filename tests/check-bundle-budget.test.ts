@@ -213,6 +213,46 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     expect(report.output).not.toContain("新增内容");
   });
 
+  test("老块内容小改会换哈希：诊断必须并排给出「消失」与净差，不许只报新增（ISSUE #2141）", ({
+    repo,
+  }) => {
+    /* 现场形状：一笔改动让某个块涨几十字节 ⇒ Turbopack 给它换名，逐文件账里
+     * 「新增 1 / 消失 1」是同**一块**的两面。只报「新增内容 30.6 KB」时，
+     * 44 B 的小改在屏幕上长得像新增了 30 KB —— 那正是这一条要挡的读法。 */
+    seedChunks(repo);
+    const before = "/* ".concat("m".repeat(4000), " */\n");
+    chunk(repo, "aa-old-name.js", before);
+    expect(repo.run(["--update", "--allow-increase"]).code).toBe(0);
+
+    const after = "/* ".concat("m".repeat(4000), " */X\n");
+    repo.remove(".next/static/chunks/aa-old-name.js");
+    chunk(repo, "bb-new-name.js", after);
+
+    const { code, output } = repo.run(["--report"]);
+    expect(code, output).toBe(0);
+    /* 三面都要在：新增、配对消失、并排净差。缺任何一面，这句就又只剩吓人的那一半。 */
+    expect(output).toContain("新增内容 1 个");
+    expect(output).toContain("同时消失 1 个");
+    expect(output).toMatch(/并排净差 \+\d+ B/);
+    /* 而且它不许把「净差是几十字节」这件事藏起来：同一份输出里总量那一档也在（诊断与判定同屏）。 */
+    expect(output).not.toMatch(/新增内容 \d+ 个[^\n]*最大的/);
+  });
+
+  test("只有消失（块变小到没有配对）也要说一句净差，不许静默", ({ repo }) => {
+    seedChunks(repo);
+    const big = "/* ".concat("z".repeat(4000), " */\n");
+    chunk(repo, "aa-shrink.js", big);
+    expect(repo.run(["--update", "--allow-increase"]).code).toBe(0);
+
+    /* 换成一个更小的同内容块：名字变了、内容也变了 ⇒ 账上是「新增 1 + 消失 1」，
+     * 但净差是**负的** —— 变小不判红，可它同样要能被读到。 */
+    repo.remove(".next/static/chunks/aa-shrink.js");
+    chunk(repo, "bb-smaller.js", "/* z */\n");
+    const { code, output } = repo.run(["--report"]);
+    expect(code, output).toBe(0);
+    expect(output).toMatch(/并排净差 -\d+ B/);
+  });
+
   test("跨环境/跨时间的改名不吃账：基线里存的是指纹，不是文件名", ({
     repo,
   }) => {
