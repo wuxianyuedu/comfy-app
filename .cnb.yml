@@ -380,6 +380,34 @@
     #   （`E2E 关键流程` 早已撤成 `每日全量E2E`，两条出路的取舍写在 `.gates` 末尾那段），
     #   而它每次仍然要在 PR 上占一格排队位。同一台机、同一个账号，落点仍是
     #   `%LOCALAPPDATA%`，所以每日档跑过一次之后，节点上的缓存在下一次每日档时是热的。
+    # ── 落点：把 CI 的临时目录与浏览器都放到开发盘（G:）────────────────────────
+    #
+    # 为什么写在这**一级**（流水线级 env）而不是某一格的 `env:`：这一组变量的作用面
+    # 是**跨格**的 —— 浏览器装在 `每日浏览器安装` 那一格、跑在 `每日全量E2E` 那一格，
+    # 两格必须看**同一个**落点。写在某一格里 ⇒ 那一格看得到、另一格看不到 ⇒
+    # **装好了，探不到**（这两种红在日志里原本逐字同形，是本仓最贵的那类红）。
+    # 判据：`tests/ci-dev-drive-root.test.ts` 钉「这三行必须在流水线级 env 里」。
+    #
+    # ⚠️ **这三个值是给这台自托管节点用的**：它的检出工作区在 `G:`（`ORANGE_RUNNER_DATA_DIR`
+    # 指到那儿），而服务账号（systemprofile）的 `%LOCALAPPDATA%` 与 `%TEMP%` 落在 `C:` 上 ——
+    # 于是「检出在开发盘、临时目录与浏览器在系统盘」是今天的事实。换节点要跟着换。
+    # 落点与卷的实测读数见 `docs/guides/dev-drive-refs.md` 的「CI 侧」那节。
+    #
+    # `TEMP` / `TMP` **成对**写：Node 的 `os.tmpdir()` 只看 `TEMP`，而另一些工具只看
+    # `TMP` —— 只写一个的形态是「一半的工具把临时文件写到了临时目录之外」。
+    # 目录必须**事先存在**（`G:\Temp` 已在开发盘上建好）：临时根不存在时 Node 仍会
+    # 把它当成临时目录返回，于是第一次写就 ENOENT —— 那不是「慢」，是「看不懂的红」。
+    # `环境前提` 那一格会把它补出来并打印读数（幂等，缺了才建）。
+    TEMP: "G:\\Temp"
+    TMP: "G:\\Temp"
+    # 浏览器落点：Playwright 自己的环境变量（不引第二套机制）。**装与判都只看它** ——
+    # 判据 `playwrightBrowsersRoot()` 与 `browserExecutableExists()` 同源（实现住在
+    # `scripts/ci-toolchain-browser-root.mjs`），所以这一行改了就同时改了两边。
+    #
+    # ⚠️ **不要把它挪进某一格的 `env:`** —— 理由见上面那段「为什么写在这一级」。
+    # 也**不要**写成容器里那个 `/ms-playwright`：那是给镜像配的，在宿主上不存在，
+    # 写了等于让落点判据去一个空目录找东西（判据 `tests/ci-image-identity.test.ts` 守这条）。
+    PLAYWRIGHT_BROWSERS_PATH: "G:\\.cache\\ms-playwright"
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
@@ -667,10 +695,16 @@
       # 好处是「没配根的环境（本地 / 别的节点）也先试离得近的源」。
       PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
       PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-      # ⚠️ **这里不写 `PLAYWRIGHT_BROWSERS_PATH`**：它只在「浏览器装在镜像里」那一档
-      # 成立（`/ms-playwright` 在 Windows 宿主上不存在）。宿主机直跑时落点判据按
-      # `%LOCALAPPDATA%` 推 —— 写了它等于让判据去一个空目录找东西，「装好了」与
-      # 「一件都没有」在日志里逐字同形。
+      # ⚠️ **这里不写 `PLAYWRIGHT_BROWSERS_PATH`** —— 它在**流水线级** env 里
+      # （见 `.common` 那段「落点」）。理由与当初**不同**，两段都要留着：
+      #   · 当初是因为容器那个 `/ms-playwright` 在 Windows 宿主上不存在 —— 写了它等于
+      #     让落点判据去一个空目录找东西，「装好了」与「一件都没有」在日志里逐字同形；
+      #   · 现在是因为**这一格与 `每日全量E2E` 那一格必须看同一个落点** —— 写在某一格
+      #     的 `env:` 里，装的那一格看得到、跑 E2E 的那一格看不到，仍然是「装好了，
+      #     探不到」。流水线级 env 是**所有格都能看到**的那一层。
+      #
+      # 判据钉住这件事的两半：`tests/ci-dev-drive-root.test.ts` 判「那三行在流水线级
+      # env 里」，`tests/ci-image-identity.test.ts` 判「不是容器那个路径」。
       # 实测首次要下 ~100+ MiB（chromium + chromium-headless-shell 两件）。给 20m：
       # 冷节点 + 慢链路够用，而卡死（CDN 真的不通）时也能在 20m 报出来，不必等满平台
       # 默认的 2h 墙钟。**不是放宽判据** —— 预算只管多久放弃。

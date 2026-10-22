@@ -351,21 +351,31 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
     expect(names).not.toEqual(CONTAINER_STAGES);
   });
 
-  it("浏览器落点：不给 `PLAYWRIGHT_BROWSERS_PATH` 覆盖（覆盖那一版是给容器用的，随它一起撤掉）", () => {
+  it("浏览器落点：覆盖只能指向宿主上真实存在的落点（不许是容器那个 `/ms-playwright`）", () => {
     /* 官方 Playwright 镜像把浏览器装在 `/ms-playwright`，那一行当初是**给容器**配的：
      * 判据得去镜像里那个目录找。带 `image:` 的 stage 在这台节点上必然红（见上），
      * 于是这一行剩下的唯一效果是**把落点判据指到一个宿主上不存在的目录** ——
      * 「明明装过」与「一件都没有」在日志里逐字同形（本仓最贵的那类红）。
-     * 现在这一格跑在宿主机上，落点就按 `playwrightBrowsersRoot()` 自己推，别给覆盖。
+     *
+     * ⚠️ **判据收窄过，但没收掉**：现在 `.cnb.yml` 的**流水线级** env 里有一行
+     * `PLAYWRIGHT_BROWSERS_PATH`，它指的是开发盘上那个**真实存在**的落点 ——
+     * 覆盖本身是正当的（自托管节点把浏览器与其余开发盘实体放在一起，见 `.cnb.yml`
+     * 那段「落点」）。**仍然要拦的是容器那个路径**：它在 Windows 宿主上不存在，
+     * 留着它依旧是「把落点判据指到一个空目录」。
+     *
+     * 形状那一半（三行必须在**流水线级** env、`TEMP` 与 `TMP` 成对、三者同卷）由
+     * `tests/ci-dev-drive-root.test.ts` 判 —— 那一组守的是「每一格都看到它们」。
      *
      * 按**行首的键**判，不按「文件里出现过这个词」：`.cnb.yml` 的注释里正当会写它
-     * （那几段注释正是在解释「为什么现在不写它」）。 */
+     * （那几段注释正是在解释「为什么这里不写它」）。 */
     const text = read(".cnb.yml");
-    const override = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:/m.exec(text);
+    const override = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:[ \t]*(.*)$/m.exec(text);
+    const value = (override?.[1] ?? "").trim().replace(/^["']|["']$/g, "");
     expect(
-      override?.[0] ?? null,
-      "`.cnb.yml` 里还有 `PLAYWRIGHT_BROWSERS_PATH` —— 那是给容器用的覆盖；" +
-        "宿主机上它会把落点判据指到一个空目录（`浏览器安装` 因此永远重新下载）",
-    ).toBeNull();
+      value,
+      "`.cnb.yml` 里 `PLAYWRIGHT_BROWSERS_PATH` 指向了容器那个路径 —— " +
+        "它在 Windows 宿主上不存在，会把落点判据指到一个空目录" +
+        "（`浏览器安装` 因此永远重新下载，而日志与「一件都没有」逐字同形）",
+    ).not.toBe("/ms-playwright");
   });
 });
