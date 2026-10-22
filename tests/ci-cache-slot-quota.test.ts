@@ -1,0 +1,261 @@
+/**
+ * 「缓存槽的配额与淘汰」那件事的**契约**。
+ *
+ * ## 它守的是哪三件事
+ *
+ * 缓存槽是**按依赖面的指纹键控**的：依赖面一变就是新键、新键就是一个新槽。于是
+ * 「键有没有上限」这件事必然要回答，而答案分两半：
+ *
+ *   · **配额**（`MAX_SLOT_KEYS`）管**盘** —— 键数超了就淘汰；
+ *   · **TTL**（`SLOT_TTL_MS`）管**「有没有人还在用」** —— 闸门内的键一律留着。
+ *
+ * 两件事不能由同一个数字管（混成一个就是「删掉别人正在用的树」那一族 bug 的形状，
+ * 见规范 §13.5.3.4.3 记的那次事故）。代价也写明白：闸门内的键会让盘暂时超出配额，
+ * 那是**用空间换正确性**，方向只许这么换。
+ *
+ * 由此，本组用例钉的是：
+ *
+ *   ① **策略只有一处** —— 配额与 TTL 的数字住在读数那一侧，执行档从那里取；
+ *      漂了之后的表现是「读数说够、执行按另一份算」，而淘汰那一刀是**会删盘**的动作；
+ *   ② **淘汰在「命中」那条路上也跑** —— 此前它只在「装槽」那条路上跑，于是
+ *      「不再新建键 ⇒ 旧键永不回收」；
+ *   ③ **空壳那一档的三个条件缺一不可** —— 没有产物、没有锁、目录 mtime 过了 TTL。
+ *
+ * ## 为什么读数也要有一份策略
+ *
+ * 「键数有没有上限」此前**只有执行面、没有读数面**（日志上只有一句「淘汰 N 个·
+ * 超配额但留着 M 个」）。于是「现在到底有几个键、超额的那几个是被闸门挡着还是真淘汰了」
+ * 在日志里读不出来 —— 而这一问正是「键无上限」这句话的落点。
+ */
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+import {
+  listSlots,
+  MAX_SLOT_KEYS,
+  SLOT_TTL_MS,
+  SLOT_USED_FILE,
+} from "../scripts/ci-cache-slot.mjs";
+import {
+  applySlot,
+  pruneSlots,
+  SLOT_ENABLED_ENV,
+} from "../scripts/ci-slot-apply.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * 造一个槽目录（可带产物、指纹、邮票、锁）。
+ *
+ * ⚠️ 指纹文件住在 **`node_modules/` 里面**（`FINGERPRINT_FILE` 就是
+ * `node_modules/.ci-deps-fingerprint`）—— 所以「有指纹」必然意味着「有产物树」，
+ * 两者不是两件独立的事。这一条写在这里，是因为「空壳」的定义正是
+ * 「既没有 `node_modules`、也没有指纹」。
+ */
+function makeSlot(
+  cacheRoot: string,
+  key: string,
+  opts: {
+    tree?: boolean;
+    fingerprint?: string | null;
+    stamp?: number | null;
+    lock?: boolean;
+    mtime?: number;
+  } = {},
+): string {
+  const dir = path.join(cacheRoot, key);
+  mkdirSync(dir, { recursive: true });
+  if (opts.tree) mkdirSync(path.join(dir, "node_modules"), { recursive: true });
+  if (opts.fingerprint) {
+    const modules = path.join(dir, "node_modules");
+    mkdirSync(modules, { recursive: true });
+    writeFileSync(
+      path.join(modules, ".ci-deps-fingerprint"),
+      `${opts.fingerprint}\n`,
+    );
+  }
+  if (typeof opts.stamp === "number") {
+    writeFileSync(path.join(dir, SLOT_USED_FILE), `${opts.stamp}\n`);
+  }
+  if (opts.lock) writeFileSync(path.join(dir, ".ci-slot.lock"), "");
+  if (typeof opts.mtime === "number") {
+    const at = new Date(opts.mtime);
+    utimesSync(dir, at, at);
+  }
+  return dir;
+}
+
+describe("缓存槽的配额与淘汰（契约）", () => {
+  it("配额与 TTL 只有一处（读数侧与执行侧是同一份）", () => {
+    /* 执行档**不许**自己写这两个数字：它是「会删盘」那一刀的执行者，而读数那一格
+     * 要把「配额是几个」说出来 —— 两处各写一份时，漂了之后没人能回答「哪一份是真的」。 */
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-slot-apply.mjs"),
+      "utf8",
+    );
+    expect(
+      /export const MAX_SLOT_KEYS\s*=/.test(src),
+      "`ci-slot-apply.mjs` 里又定义了一份配额 —— 它该从读数那一侧取（`ci-cache-slot.mjs`）",
+    ).toBe(false);
+    expect(/export const SLOT_TTL_MS\s*=/.test(src)).toBe(false);
+    expect(/export const SLOT_USED_FILE\s*=/.test(src)).toBe(false);
+    expect(src).toContain('from "./ci-cache-slot.mjs"');
+    /* 数字本身也钉住：改它是**改策略**，得走人，不许悄悄改。 */
+    expect(MAX_SLOT_KEYS).toBe(4);
+    expect(SLOT_TTL_MS).toBe(26 * 60 * 60 * 1000);
+    expect(SLOT_TTL_MS).toBeGreaterThan(24 * 60 * 60 * 1000);
+  });
+
+  it("淘汰在「命中」那条路上也跑（不再新建键 ⇒ 旧键也得被回收）", () => {
+    /* 行为级的断言代价太大（接槽要真建一条 junction），所以这里钉**源码形态** ——
+     * 与 `tests/ci-toolchain-selfcheck.test.ts` 的「复验真的排在装之后」同一处置：
+     * 那一组也是靠源码切片来钉顺序的。 */
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-slot-apply.mjs"),
+      "utf8",
+    );
+    const reuseAt = src.indexOf('plan.action === "reuse"');
+    expect(reuseAt, "执行档里找不到「命中」那一支").toBeGreaterThan(-1);
+    const installAt = src.indexOf("install-into-slot");
+    const reuseBranch = src.slice(
+      reuseAt,
+      installAt > reuseAt ? installAt : reuseAt + 4000,
+    );
+    expect(
+      reuseBranch,
+      "命中那一支没有跑淘汰 —— 于是「依赖面不再变」的那段时间里，过了 TTL 的键会一直躺着",
+    ).toContain("pruneAndReport");
+  });
+
+  it("空壳那一档：三个条件缺一不可", () => {
+    const cache = mkdtempSync(path.join(tmpdir(), "slot-shell-"));
+    try {
+      const now = 10 * 24 * 60 * 60 * 1000;
+      const old = now - SLOT_TTL_MS - 60_000;
+      /* 三个条件都满足 ⇒ 回收（哪怕它还在配额之内 —— 空壳不是「一个槽」）。 */
+      makeSlot(cache, "空壳", { mtime: old });
+      /* 有锁 ⇒ 有人在往里装 ⇒ 不动。 */
+      makeSlot(cache, "有锁的空壳", { mtime: old, lock: true });
+      /* mtime 还很新 ⇒ 可能是刚建出来的（建目录与拿锁之间有窗口）⇒ 不动。 */
+      makeSlot(cache, "新的空壳", { mtime: now });
+      /* 有产物 ⇒ 不是空壳 ⇒ 按配额与 TTL 那一档走（这里它在配额内 ⇒ 不动）。 */
+      makeSlot(cache, "有产物的", { tree: true, stamp: now, mtime: old });
+
+      const out = pruneSlots({ cacheRoot: cache, keep: 10, now });
+      expect(out.evicted).toContain("空壳");
+      expect(out.evicted).not.toContain("有锁的空壳");
+      expect(out.evicted).not.toContain("新的空壳");
+      expect(out.evicted).not.toContain("有产物的");
+      expect(existsSync(path.join(cache, "空壳"))).toBe(false);
+      expect(existsSync(path.join(cache, "有锁的空壳"))).toBe(true);
+      expect(existsSync(path.join(cache, "新的空壳"))).toBe(true);
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
+  });
+
+  it("配额那一档仍旧是「超配额且过了 TTL 才淘汰」（闸门内的键一律留着）", () => {
+    const cache = mkdtempSync(path.join(tmpdir(), "slot-quota-"));
+    try {
+      const now = 8 * 60 * 60 * 1000 * 1000;
+      const keys = Array.from({ length: MAX_SLOT_KEYS + 2 }, (_, i) => `k${i}`);
+      /* 名字越靠前越旧；落在配额之外的那两个必须**超出 TTL** 才可淘汰。 */
+      for (const [i, k] of keys.entries()) {
+        makeSlot(cache, k, {
+          tree: true,
+          fingerprint: k,
+          stamp: now - (keys.length - i) * 10 * 60 * 60 * 1000,
+        });
+      }
+      const current = keys[keys.length - 1]!;
+      const out = pruneSlots({ cacheRoot: cache, currentKey: current, now });
+      expect(out.evicted.length).toBe(2);
+      expect(out.evicted).not.toContain(current);
+      expect(out.held).toEqual([]);
+      expect(existsSync(path.join(cache, current))).toBe(true);
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
+  });
+
+  it("闸门内的键一个都不删（用空间换正确性，方向只许这么换）", () => {
+    const cache = mkdtempSync(path.join(tmpdir(), "slot-ttl-"));
+    try {
+      const now = 8 * 60 * 60 * 1000 * 1000;
+      const names = ["a", "b", "c", "d", "e"];
+      for (const [i, k] of names.entries()) {
+        makeSlot(cache, k, {
+          tree: true,
+          fingerprint: k,
+          stamp: now - (names.length - i) * 60_000,
+        });
+      }
+      const out = pruneSlots({ cacheRoot: cache, currentKey: "e", now });
+      expect(out.evicted).toEqual([]);
+      expect(out.held).toEqual(["a"]);
+      expect(existsSync(path.join(cache, "a"))).toBe(true);
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
+  });
+
+  it("读数那一格答得出「键数 / 配额 / 超额的几个被闸门挡着 / 空槽几个」", () => {
+    const cache = mkdtempSync(path.join(tmpdir(), "slot-read-"));
+    try {
+      const now = 10 * 24 * 60 * 60 * 1000;
+      /* 三个可用的键 + 一个空壳。 */
+      for (const [i, k] of ["a", "b", "c"].entries()) {
+        makeSlot(cache, k, {
+          tree: true,
+          fingerprint: k,
+          stamp: now - (i + 1) * 60_000,
+        });
+      }
+      makeSlot(cache, "空壳", { mtime: now - SLOT_TTL_MS - 60_000 });
+      const slots = listSlots({ cacheRoot: cache, now, currentKey: "c" });
+      expect(slots.count).toBe(4);
+      expect(slots.quota).toBe(MAX_SLOT_KEYS);
+      /* 配额 4、当前键占一个 ⇒ 预算 3 ⇒ 超额 1 个。 */
+      expect(slots.overQuota).toBe(1);
+      expect(slots.emptyCount).toBe(1);
+      /* 闸门内的那个超额键被挡着（不是被淘汰了）。 */
+      expect(slots.heldByTtl).toBe(1);
+      expect(slots.keys.map((k) => k.key)).toContain("空壳");
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
+  });
+
+  it("读数那一格的打印里带着那几项（读数落在日志里读不出来，与没有读数等价）", () => {
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-cache-slot.mjs"),
+      "utf8",
+    );
+    for (const word of ["键数", "配额", "超配额", "空槽"]) {
+      expect(src, `读数的打印里应当有「${word}」`).toContain(word);
+    }
+  });
+
+  it("开关没打开时执行档一次都不该被调用（这一条不许被顺手改掉）", () => {
+    expect(SLOT_ENABLED_ENV).toBe("COMFY_CI_SLOT");
+    /* `applySlot` 是执行者，而调用方（`ci-install-deps.mjs`）按开关决定要不要调它 ——
+     * 判据在这里钉住「开关名不许变」，因为回退 = 摘掉那两行 env。 */
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-install-deps.mjs"),
+      "utf8",
+    );
+    expect(src).toContain(SLOT_ENABLED_ENV);
+    expect(typeof applySlot).toBe("function");
+  });
+});

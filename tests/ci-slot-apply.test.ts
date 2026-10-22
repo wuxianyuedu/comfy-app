@@ -142,7 +142,17 @@ describe("空闲与锁：两条「不够就不做」的闸", () => {
     const fromMissing = statfsFreeBytes(missing);
     const fromRoot = statfsFreeBytes(cache);
     expect(fromMissing).not.toBeNull();
-    expect(fromMissing).toBe(fromRoot);
+    expect(fromRoot).not.toBeNull();
+    /* ⚠️ **不能逐字节相等**：自由空间是**会动的**卷级事实，而这两读之间卷上可能正有
+     * 别的进程在写（本仓自己的测试夹具就在写临时目录）—— 逐字相等会把「读到的是同一个
+     * 卷」误写成「读到的是同一个瞬间的数」，于是这条用例在并发下必红（实测抖过：
+     * 两次读差 240 KB）。
+     *
+     * 这一条真正要钉的是「**读得到**」（空转的成因就是 null）；「同一个卷」是第二层，
+     * 而它只能松着判 —— 自由空间是会动的量。读到别的卷、或读不到，都会被抓住。 */
+    const a = fromMissing!;
+    const b = fromRoot!;
+    expect(Math.abs(a - b)).toBeLessThan(Math.max(b * 0.01, 64 * 1024 ** 2));
   });
 
   it("整条路径都不属于任何存在的卷 ⇒ 给 null（读不到就是读不到，按不够处理）", () => {
@@ -503,6 +513,11 @@ describe("LRU 与作业侧补写", () => {
   it("读不到邮票的键 ⇒ 留着（宁可多占 52 MiB，也不赌它没人用）", () => {
     const dir = path.join(cache, "没有邮票的键");
     fs.mkdirSync(dir, { recursive: true });
+    /* ⚠️ **给一棵产物树**：这一条要判的是「**有产物却读不到邮票**的键一律留着」，
+     * 而不是一个空目录 —— 空壳另有一档（没有产物、没有锁、目录 mtime 过了 TTL ⇒
+     * 回收），它保护的不是「别人正在用的树」，所以那一档可以回收。
+     * 两者混在一起时，这一条会因「目录刚好是新建的」而假绿（空壳那档要 mtime 过 TTL）。 */
+    fs.mkdirSync(path.join(dir, "node_modules"), { recursive: true });
     expect(slotLastUsed(dir)).toBeNull();
     const now = Date.now();
     // 把它排到配额之外（其余四个都比它「新」），它仍然不该被删。

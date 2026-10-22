@@ -39,7 +39,6 @@
  * 幂等：`playwright install` 对已存在的版本是 no-op（实测秒级返回）。
  */
 import { readdirSync } from "node:fs";
-import path from "node:path";
 
 /* 探测那一层（「这个根到不到得了」）按职责拆到了 `ci-toolchain-browser-reach.mjs`
  * —— 本文件 900 行的硬闸（§12.6 R5）不容许它继续长在这里，而那一段的**消费者**
@@ -55,6 +54,21 @@ import { fetchPlaywrightBrowser } from "./ci-toolchain-browser-fetch.mjs";
 /* 「自取」那一步的**编排**（取哪个地址 / 落到哪个目录 / 要不要续传）单独一份
  * —— 理由见它的文件头（本文件是 900 行硬闸守着的，那一段接进来就超了）。 */
 import { seedBrowserOnOwn } from "./ci-toolchain-browser-seed.mjs";
+/* 「落点根」的推导（平台默认 / 生效落点 / 候选根）也单独一份 —— 理由见它的文件头：
+ * 落点推导是这一族里最容易被复制的那一份（装、复验、自取三处都要它），拆出来之后
+ * 「一处推导、多处引用」由模块边界保证，而不是靠约定。 */
+import {
+  findBrowserExecutable,
+  playwrightBrowsersRoot,
+  playwrightRootCandidates,
+} from "./ci-toolchain-browser-root.mjs";
+
+export {
+  findBrowserExecutable,
+  platformDefaultBrowsersRoot,
+  playwrightBrowsersRoot,
+  playwrightRootCandidates,
+} from "./ci-toolchain-browser-root.mjs";
 
 export {
   FETCH_CHUNK_BYTES,
@@ -603,6 +617,19 @@ function stringOrNull(value) {
  * 判据是**真 launch**）与这份文件的用例（`tests/ci-toolchain-selfcheck.test.ts`
  * 的「装完必须复验」那一组）守着，不在这里重判。
  *
+ * ## 为什么要问**两个**根
+ *
+ * 生效落点扑空时再问一句平台默认 —— 这一问是为了把两件逐字同形的事分开：
+ * 「一件都没有」与「装在别处、这一跑看不见它」。
+ *
+ * 落点被**覆盖**时（自托管节点把浏览器放到开发盘就是这一档），装的那一处与运行时
+ * 看的那一处都由 `PLAYWRIGHT_BROWSERS_PATH` 决定 —— 它写在**流水线级** env 里时两边
+ * 一致；一旦被挪进某一格的 `env:`，装的那一格看得到、跑 E2E 的那一格看不到 ⇒
+ * **装好了，探不到**。而那两种红在日志里原本逐字同形（本仓最贵的那类红）。
+ *
+ * ⚠️ **判据本身一个字没改**：默认根里有、而生效落点里没有时，仍然判不过（`ok` 仍是假）
+ * —— 运行时只看生效落点，判过它才是假的。这一问只改**读数说的是什么**。
+ *
  * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>,
  *          list?: (dir: string) => string[]}} [options]
  *   `list` 是注入面（默认 `readdirSync`），让两个方向都能被真跑一次。
@@ -613,111 +640,41 @@ export function browserExecutableExists({
   env = process.env,
   list = (dir) => readdirSync(dir),
 } = {}) {
-  const root = playwrightBrowsersRoot({ platform, env });
-  let entries;
-  try {
-    entries = list(root);
-  } catch {
-    return {
-      ok: false,
-      out: `落点根读不到：${root}（PLAYWRIGHT_BROWSERS_PATH=${
-        env.PLAYWRIGHT_BROWSERS_PATH ?? "(未设)"
-      }）`,
-    };
+  const { primary, fallback } = playwrightRootCandidates({ platform, env });
+  const envNote = env.PLAYWRIGHT_BROWSERS_PATH ?? "(未设)";
+  const at = findBrowserExecutable({ root: primary, platform, list, envNote });
+  if (at.found) return { ok: true, out: at.found };
+  /* **落点扑空时再问一句「是不是装在别处」** —— 为什么问、问完判据怎么不变，
+   * 都在上面那段「为什么要问两个根」里；这里只留一句结论：
+   * 默认根里有、而生效落点里没有 ⇒ **仍然判不过**（运行时只看生效落点），
+   * 但读数会点名「装在 <默认根>，而运行时看不见它」。 */
+  if (fallback) {
+    const alt = findBrowserExecutable({
+      root: fallback,
+      platform,
+      list,
+      envNote,
+    });
+    if (alt.found) {
+      return {
+        ok: false,
+        out:
+          `生效落点 ${primary} 下没有那一件，而 ${fallback} 下有（${alt.found}）—— ` +
+          `装了却探不到：运行时只看生效落点（PLAYWRIGHT_BROWSERS_PATH=${envNote}）`,
+      };
+    }
   }
-  const dir = entries.find((e) => e.startsWith("chromium_headless_shell-"));
-  if (!dir) {
-    return {
-      ok: false,
-      out: `${root} 下没有 chromium_headless_shell-*（现有：${
-        entries.join(", ") || "空目录"
-      }）`,
-    };
-  }
-  const exe =
-    platform === "win32"
-      ? "chrome-headless-shell.exe"
-      : "chrome-headless-shell";
-  /* 拼路径按**目标平台**的分隔符（同 `playwrightBrowsersRoot` 那条口径）。 */
-  const p = platform === "win32" ? path.win32 : path.posix;
-  const under = p.join(root, dir);
-  const found = findFileUnder(under, exe, 3, p.join);
-  return found
-    ? { ok: true, out: found }
-    : { ok: false, out: `${under} 下找不到 ${exe}` };
+  return { ok: false, out: at.miss };
 }
 
 /**
  * Playwright 的**浏览器落点根**（按平台推，`PLAYWRIGHT_BROWSERS_PATH` 优先）。
  *
- * 三个平台的默认值与上游 `registry/index.ts` 一致：Windows 走 `%LOCALAPPDATA%`
- * 下的 `ms-playwright`，macOS 走 `~/Library/Caches/ms-playwright`，其余走
- * `~/.cache/ms-playwright`。**不写死某一台机器的盘符** —— 自托管那台机把用户数据
- * 放在 `D:` 盘（`ci-toolchain-python.mjs` 的 `pathDrives()` 记过这一格），
- * 而 `%LOCALAPPDATA%` 正好跟着走。
- *
- * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>}} [options]
- * @returns {string}
+ * ⚠️ **实现搬走了** —— 现在住在 `ci-toolchain-browser-root.mjs`，由本文件转出同一个名字
+ * （旧调用点不必跟着改）。搬走的原因是本文件离 900 行硬闸只剩十几行，而落点推导与
+ * 「在落点下找那一件」这两件事是这一族里最容易被复制的两份：拆成自己的模块之后，
+ * 「一处推导、多处引用」由**模块边界**保证，而不是靠约定。
  */
-export function playwrightBrowsersRoot({
-  platform = process.platform,
-  env = process.env,
-} = {}) {
-  const override = env.PLAYWRIGHT_BROWSERS_PATH;
-  if (override) return override;
-  /* **按目标平台取分隔符**，不用宿主的 `path`（`node:path` 是宿主那一份）。
-   *
-   * 判据是可注入的 `platform`，所以本函数会**在一种平台上判另一种平台**（单测正是
-   * 这么用的）。用宿主 `path.join` 时：在 Linux 上判 `win32` 会得到
-   * `D:/Users/ci/ms-playwright`（应为反斜杠），在 Windows 上判 `darwin` 会得到
-   * `\h\Library\Caches\ms-playwright`（应为正斜杠）—— 平台侧实测报的正是后一种，
-   * 断言原文是「`expected` 一个反斜杠路径、`to be` 一个正斜杠路径」那句。
-   *
-   * 这与 `executable-resolve.ts` 那句「大小写不敏感只按目标平台」是同一条口径，
-   * 也与 `ci-toolchain-python.mjs` 的 `pathDrives` 记过的「按目标平台的分隔符切 PATH，
-   * 不按宿主的」同源。 */
-  const p = platform === "win32" ? path.win32 : path.posix;
-  const home = env.USERPROFILE ?? env.HOME ?? "";
-  if (platform === "win32") {
-    const local =
-      env.LOCALAPPDATA ?? (home ? p.join(home, "AppData", "Local") : "");
-    return local ? p.join(local, "ms-playwright") : "ms-playwright";
-  }
-  if (platform === "darwin") {
-    return home
-      ? p.join(home, "Library", "Caches", "ms-playwright")
-      : "ms-playwright";
-  }
-  return home ? p.join(home, ".cache", "ms-playwright") : "ms-playwright";
-}
-
-/**
- * 在 `dir` 下按**深度上限**找一个文件名（**不穿符号链接**，越界即停）。
- *
- * @param {string} dir
- * @param {string} name
- * @param {number} depth
- * @returns {string | null}
- */
-function findFileUnder(dir, name, depth, join = path.join) {
-  if (depth < 0) return null;
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  for (const e of entries) {
-    if (e.isSymbolicLink()) continue;
-    const full = join(dir, e.name);
-    if (e.isFile() && e.name === name) return full;
-    if (e.isDirectory()) {
-      const hit = findFileUnder(full, name, depth - 1, join);
-      if (hit) return hit;
-    }
-  }
-  return null;
-}
 
 /**
  * 这一步要装的那几件 —— **只有 headless shell**，不是 `playwright install` 的默认一套。
