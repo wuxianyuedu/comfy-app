@@ -18,7 +18,7 @@ import {
   type ValidationError,
 } from "~/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
-import type { RouterInputs } from "~/trpc/react";
+import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
 
 /** 单次 /api/upload 的结果：成功给出文件名，失败给出可读原因与可否重试。 */
 type UploadAttempt =
@@ -128,13 +128,15 @@ export async function uploadMediaFile(
   return { name, url };
 }
 
-/* 生成 mutation 的 tRPC 传输契约（此前是 `payload as any`）。 */
-type GenerateInput = RouterInputs["generate"]["generate"];
-
-export async function startGenerate(
-  payload: Record<string, unknown>,
-): Promise<string> {
-  const d = await vanillaApi.generate.generate.mutate(payload as GenerateInput);
+/**
+ * 发起一次生成。
+ *
+ * 入参类型是 `GenerateInput`（由 `generateInputSchema` 反向派生），而不是
+ * `Record<string, unknown>` + 传输前一句 `as` —— 那句 cast 存在过的前提就是
+ * 「客户端这一侧没有任何东西知道线上要什么形状」（台账 E4 第四格）。
+ */
+export async function startGenerate(input: GenerateInput): Promise<string> {
+  const d = await vanillaApi.generate.generate.mutate(input);
   if (!d.taskId) throw new Error("生成失败");
   return d.taskId;
 }

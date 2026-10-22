@@ -1245,7 +1245,7 @@
       而放行，落地之后下一个提交才红，「改了就当天跑」执行成了「**改了由别人补跑**」。
       取证面现在是「今天的提交 ∪ `git diff --cached`」，合成规则抽成纯函数 `combineEvidence`
       （四种组合各有用例；`git` 问不出来时不新增结论）。口径见 §11.8。
-- [~] **E4 msw 与 zod↔API 契约测试：契约那一半有了三格，msw 那一半是分工问题不是缺陷**（2026-10-21 复量）：
+- [~] **E4 msw 与 zod↔API 契约测试：契约那一半有了四格，msw 那一半是分工问题不是缺陷**（2026-10-22 复量）：
       原记「msw 仅 7 文件使用」—— 这个数按今天的任一口径都不符，而**不同口径本来就给不同数**
       （算「文件里出现过 msw 的 API」与算「直接 `import` msw 包」差一倍；复算分别是
       `grep -rlE "from \"msw|from 'msw|setupServer" --include="*.ts" --include="*.tsx" src tests | wc -l`
@@ -1282,19 +1282,39 @@
         ⇒ 缺的从来不是「路由侧有没有读数」，而是**把两边接起来**那一格。
       · **还留着**：其余具名导出的 schema 没有契约判据（复算
         `grep -rnoE "^export const [A-Za-z0-9_]+ = z\." --include="*.ts" src | grep -v "\.test\."`）。
-        按危害排下来是两处：远端模型的**键名分叉**（客户端 `model` ↔ 服务端 `name`，
-        `kind` 两侧各写一份枚举，中间靠手写桥接）、`generate.generate` 的**入参通路**。
-        后者要先订正一格我自己写错的判断（立案时把「`RouterInputs` 派生」当成了手写镜像）：
-        `RouterInputs["generate"]["generate"]` 那几处是**从 schema 反向派生的类型**，
-        字段改名会当场编译红，所以它不是漂移面。真正的洞在两条 cast 上：
-        `src/lib/project-canvas/canvas-api.ts` 的 `startGenerate(payload: Record<string, unknown>)`
-        在传输前塞一句 `payload as GenerateInput`（判据落在这一句上等于没有），
-        而 `use-generate.ts` 的重试通路把**任务行 `params` 列里存的旧载荷**原样送回同一个 cast ——
-        两端之间没有客户端可读的形状，服务端 zod 是唯一判点。
-        下一刀的形状：把 `use-generate.ts` 里那段载荷构造抽成可注入的纯函数（§17 的取向），
-        再用真 `GenerateSchema` 判四格 —— 画布构造出的那一形过、少必填 `workflow` 被拒、
-        三层 `paramMap`（`source.mode:<模式>`；此前那里写的是 `z.record(z.string(), z.string())`，
-        表达不了这层结构）过、库里翻出来的旧形状被拒且界面拿到能读的错。
+        剩下那一处是远端模型的**键名分叉**（客户端 `model` ↔ 服务端 `name`，
+        `kind` 两侧各写一份枚举，中间靠手写桥接）。
+      · **`generate.generate` 的入参通路已配上了（第四格）**。先订正一格我自己写错的判断
+        （立案时把「`RouterInputs` 派生」当成了手写镜像）：`RouterInputs["generate"]["generate"]`
+        那几处是**从 schema 反向派生的类型**，字段改名会当场编译红，所以它不是漂移面。
+        真正的洞在三条 cast 上（动手时数出来的是三条，不是立案时说的两条）：
+        `canvas-api.startGenerate(payload: Record<string, unknown>)` 传输前那句 `as`、
+        `use-generate.ts` 重试通路把**任务行 `params` 列里存的旧载荷**原样送回同一个 cast、
+        以及 `video-queue-client.submitGeneration` 把调用方给的 `params` 摊开之后 `as` 一次。
+        前两条的修法是**把判据搬到客户端读得到的地方**：入参 schema（原 `GenerateSchema`，
+        现 `generateInputSchema`）从 `src/server/api/routers/generate.ts` 搬进
+        `src/lib/workflow/workflow-generate-input.ts`
+        （与 `workflow-io-types.ts` 同一手法 —— 形状住 lib，服务端只是 `.input()` 它的消费方之一），
+        画布那段构造从 `runGenerate` 抽成纯函数 `buildCanvasGeneratePayload`（返回类型就是
+        `GenerateInput`，`startGenerate` 不再吃 `Record<string, unknown>` —— cast 存在的条件被拆掉），
+        重试走 `parseStoredGenerateInput`：同一个 schema，拒了就不发这次请求，
+        并把「缺哪一列、下一步做什么」拼成一句中文交给错误面板。
+        判据 `tests/generate-input-wire-contract.test.ts`（5 条）不造夹具载荷 —— 它把
+        **画布真构造出的那一份**接进**真 router**：① 收得下、且逐键等于落进 `params` 列的那一份
+        （含 `control_after_generate` 那条并数组的派生，与 random→randomize 的换算）；
+        ② 缺必填 `workflow` 时 router 与客户端预检**同拒**（拒的信号来自 schema，
+        不是来自画布那句界面 guard）；③ 从库里翻出来的载荷再过一次判据**仍然建得出任务**
+        （重试的幂等前提：写进去的是转换之后的形状）；④ 旧形状（`workflowInputs` 写成对象）
+        被拒时给的是**点名哪一列、并带着出路的一句中文**（内层仍嵌着 zod 那句英文原文，
+        没有冒充「全部本地化」——判据断的是那三样都在）；⑤ 三层 `paramMap`（`source.mode:<模式>`）在这一列上
+        仍是那份权威形状，没被 generate 这边又收窄一次。变异两刀打在不同的半边：
+        构造里漏掉 `referenceImages` 那一步 → **只有**①红（红话是「那一列 undefined」）；
+        把预检改成「不判、原样发」→ ②④红而①绿 —— 少了第二刀，①会被一份「客户端压根不判」
+        的实现无痛满足。
+        **第三条 cast 留着没动**，因为它撞在一份有主的既有契约上：
+        `tests/task-list-wire-contract.test.ts` 显式判「`params` 缺省时照样把只有 `prompt`
+        的入参发出去」与「服务端拒绝时把拒绝原样交回调用方（出口在视图，这里不吞）」。
+        要给那条通路加预检，就得先改掉那份判据 —— 那是改**别人的口径**，不在这一格里顺手做。
 - [x] **E5 棘轮的 `--update` 拒涨此前只有散文，现在有了横切行为判据（两格 PENDING 也已处置完）**：
       原记「棘轮 `--update` 无制衡，证据 `AGENTS.md:94,97`」——那句证据早就过时了：
       24 个「带 `--update` 且把一份基线写回去」的脚本里，17 个**确实写了**拒涨那一支。
