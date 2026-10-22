@@ -365,7 +365,11 @@
       里的 `public/generated/…`）不是路径构造、不在扫描面内 —— 视图层引不到这份纯 Node
       地基（`node:path` 会被客户端打包判据拦），所以它们只能跟着「搬根」那天一起改，
       已挂进 A13 残留那条。
-- [ ] **A9 无 `middleware.ts`、better-auth 未配 `trustedOrigins`；限流仅 1 个 mutation**。证据：`src/server/better-auth/config.ts:8-39`；`src/server/api/routers/task.ts`（`rateLimitedProcedure` 只用在 delete 上）。
+- [ ] **A9 无 `middleware.ts`、限流仅 1 个 mutation**（`trustedOrigins` 那半已随 ISSUE #2158
+      第 4 条补上：origin 策略收在 `src/server/better-auth/origin-policy.ts`（动态 baseURL ——
+      origin 按请求的 `Host` 头解析，桌面端口运行期才定 ⇒ 编译期写死必错），显式可信名单 =
+      回环两个 host 形状 + 配置项 origin；判据 `tests/better-auth-origin-policy.test.ts`）。
+      证据：`src/server/better-auth/config.ts`；`src/server/api/routers/task.ts`（`rateLimitedProcedure` 只用在 delete 上）。
 - [x] **A10 脚手架残留 `post.getSecretMessage` 不在路由表（已移除，本批复算勾销）**：
       `8740948` 一并删掉了它。（写这条时 `src/server/api/routers/post.ts` 还剩
       `getLatest` / `create` 两条、都在 `authedProcedure` 后；那整个脚手架口后来随 E3
