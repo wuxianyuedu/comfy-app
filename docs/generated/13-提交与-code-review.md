@@ -188,6 +188,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
 ✅ node scripts/check-doc-mirror-pairing.cjs --staged # 改了 `SCOPED_DOCS` 的文档源 ⇒ 同批必须带上 `docs/generated/**` 的镜像；不读内容、一次 `git diff --cached`（见下 13.5.5 的那个「例外」）
 ✅ node scripts/check-gate-thresholds.cjs # 判据自身的数值 ⇄ 账：把 R5 的 900、函数长度 400 这类阈值**调松而不同批改 `scripts/.gate-thresholds.json`** 即红（方向逐条记，见下 §13.5.26）
+✅ node scripts/check-tracked-secrets.cjs --staged # 被跟踪的文字里的凭据形状：明文凭据进 `docs/**` / `.cnb.yml` / 夹具即红，只点名位置与形状、不回显内容，无基线无 `--allow`（见 launch-and-build.md §7.3 末节）
 ✅ node scripts/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）

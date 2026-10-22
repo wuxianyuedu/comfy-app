@@ -946,6 +946,10 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
    * 源码里的具名常量与 scripts/.gate-thresholds.json 对账，毫秒级，而它必须落在
    * 「改阈值那一笔」上 —— 挪去平台侧等于把红推给下一个动判据的人（同上一条的理由）。 */
   ["判据自身的数值 ⇄ 账同批", "node scripts/check-gate-thresholds.cjs"],
+  /* 「把凭据写进被跟踪的文字」这一格此前没有执行者（ISSUE #2157）：硬规则 17 那两层防线
+   * 都在产物层与日志层，而 `docs/**` / `.cnb.yml` / 夹具里落一个真 token 本地与平台都不红。
+   * 存量实测 0 命中 ⇒ 直接做成硬闸，没有基线、没有 `--allow`；命中只点名位置与形状，不回显内容。 */
+  ["被跟踪文字里的凭据形状", "node scripts/check-tracked-secrets.cjs --staged"],
   [
     "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）",
     "node scripts/freshness-gate.mjs",
