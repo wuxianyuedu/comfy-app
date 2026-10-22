@@ -180,6 +180,11 @@
     由 `node scripts/merge-changelog-fragments.mjs` 在发版/整理时并入。
     形态由 `scripts/check-changelog-fragments.cjs` 在 pre-commit 强制拦截，
     回归测试见 `tests/check-changelog-fragments.test.ts`。
+    **改缺陷那一类（碎片首行段落是 `## Fixed`）动手前先立案**（ISSUE #2127 / 规范 §13.10.9）：
+    那张单就是问题报告本体（症状 / 当场读数 / 根因），不是改动写完之后再凑的编号；`0-` 那条
+    无号出口（§13.10.8 第 2 条）只覆盖「本来没有诉求单的变更」，不覆盖修缺陷。
+    `pnpm ship` 阶段 0 把这一格念出来（`scripts/ship-core.mjs` 的 `ticketReading`，
+    **是读数、不参与退码**——做成硬闸的直接后果是随手挂一张别人开着的单子，那正是 §13.10.8 记的事故）。
 15. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
     未读 `README.md` / `docs/README.md` / 本文件全文就动手 = 违规；
     命中「强制先读规范文档的改动范围」表或相关规范章节时，须读完对应章节
