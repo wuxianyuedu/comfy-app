@@ -173,6 +173,24 @@ function errCode(err) {
 }
 
 /**
+ * 「那个路径上有没有东西」—— **lstat**，不是 `existsSync`。
+ *
+ * `existsSync` **跟链走**：一个**悬空**的链接（目标已被删）会被读成「不在」⇒ 于是去建链接
+ * ⇒ 撞 `EEXIST`。本机实测踩到过这个形态（一次实验把 `.next/cache` 指到后来删掉的目录）。
+ *
+ * @param {string} p
+ * @returns {boolean}
+ */
+function pathOccupied(p) {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 把 `<仓库>/.next/cache` 接到槽上（junction），并给一条**收尾**动作。
  *
  * ⚠️ **摘链不许穿链**：Windows 上删一个目录链接要删「链接本身」而不是「它指着的目录」。
@@ -188,6 +206,12 @@ export function linkBuildCache(io) {
   const nextDir = path.join(repoRoot, ".next");
   const link = path.join(nextDir, "cache");
   const noop = { linked: false, why: "没接上", restore: () => {} };
+  if (pathOccupied(link)) {
+    return {
+      ...noop,
+      why: "`.next/cache` 那个路径上已经有东西（目录或链接，含悬空的）⇒ 不接槽",
+    };
+  }
   try {
     fs.mkdirSync(nextDir, { recursive: true });
     fs.mkdirSync(slotDir, { recursive: true });
@@ -241,7 +265,7 @@ export function withBuildCacheSlot(run, io = {}) {
 
   const resolved = resolveBuildCacheRoot({ cwd, env, run: runStorePath });
   const face = buildFaceFingerprint(cwd);
-  const localCachePresent = fs.existsSync(path.join(cwd, ".next", "cache"));
+  const localCachePresent = pathOccupied(path.join(cwd, ".next", "cache"));
   const spaceOk = resolved.root ? hasRoom(resolved.root).ok : false;
 
   const plan = planBuildCache({

@@ -200,6 +200,20 @@ describe("接槽与收尾：链接摘掉，常驻目录还在", () => {
       "keep",
     );
   });
+
+  it("`.next/cache` 是个**悬空**链接 ⇒ 也算「那个路径上有东西」⇒ 不接槽", () => {
+    // `existsSync` 跟链走 ⇒ 悬空链接会被读成「不在」⇒ 于是去建链接 ⇒ 撞 EEXIST。
+    // 本机实测踩到过这个形态（一次实验把 `.next/cache` 指到后来删掉的目录）。
+    const repo = fakeRepo("dangling");
+    const slot = tmpDir("slot3");
+    const existing = path.join(repo, ".next", "cache");
+    fs.mkdirSync(path.dirname(existing), { recursive: true });
+    fs.symlinkSync(path.join(repo, "no-such-target"), existing, "junction");
+
+    const link = linkBuildCache({ repoRoot: repo, slotDir: slot });
+    expect(link.linked).toBe(false);
+    expect(link.why).toContain(".next/cache");
+  });
 });
 
 describe("withBuildCacheSlot：开关关着时与「没有这个机制」逐字相同", () => {
