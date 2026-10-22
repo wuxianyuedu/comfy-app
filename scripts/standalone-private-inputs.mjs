@@ -220,6 +220,12 @@ export const RUNTIME_SCRIPTS = [
   // 编排器加载即 `ERR_MODULE_NOT_FOUND`，桌包重新编排一次的表现只是「双击没反应」。
   "launcher-core/runtime-heal.mjs",
   "launcher-core/sync-attribution.mjs",
+  // 「本检出 `.git` 在哪」的唯一实现（ISSUE #2043 收成一处，#2072 把 launcher 也接上）：
+  // `launcher-core/run.mjs` 顶层静态 import 它 —— 少这份同样是整个编排器在加载期
+  // `ERR_MODULE_NOT_FOUND`，桌包脱离仓库重新编排一次的表现只是「双击没反应」，
+  // 而本地源码树齐全、看不出任何异常。登记漏在 #2072 那一批（改了代码没改清单），
+  // 由 `tests/dist-artifact-hygiene.test.ts` 的「清单覆盖编排器的相对 import 闭包」照出来。
+  "git-dir.mjs",
   // 桌包 standalone 形态的运行入口与它的环境装配（ISSUE #1216）：壳把
   // `node server.js` 换成 `node scripts/standalone-runtime.mjs`，缺这份就是
   // standalone 桌包回到「起不来且没人知道为什么」。

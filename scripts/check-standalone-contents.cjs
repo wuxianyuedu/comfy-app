@@ -147,6 +147,10 @@ const ALLOWED_SCRIPTS = new Set([
   // `RUNTIME_SCRIPTS` 同源，缺一份即红。
   "launcher-core/runtime-heal.mjs",
   "launcher-core/sync-attribution.mjs",
+  // 「本检出 `.git` 在哪」的唯一实现（ISSUE #2043 / #2072）：`launcher-core/run.mjs`
+  // 顶层静态 import 它 —— 缺这份就是编排器加载期 ERR_MODULE_NOT_FOUND（表同上）。
+  // 与 `RUNTIME_SCRIPTS` 同源，缺一份即红。
+  "git-dir.mjs",
   // 桌包 standalone 的运行入口与它的环境装配（ISSUE #1216）：壳把 `node server.js`
   // 换成 `node scripts/standalone-runtime.mjs`，缺这份 = 载荷只能退回直接起 server，
   // 首启建表与运行期 env 装配（分发产物按硬规则 17 不含 .env）一起失效。

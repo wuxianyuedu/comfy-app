@@ -611,5 +611,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   "tests/ci-install-deps.test.ts",
   // 「检出目录在哪」只许 scripts/git-dir.mjs 一处知道（ISSUE #2072）：四处硬拼那一族
   // 回归时没有任何 import 图能替它兜底（改那些脚本不会把这条带进受影响集），必须固定跑。
+  // 「用例存量」—— 磁盘上的 *.test.ts(x) 与 `vitest.config.ts` 给出的收集面对账
+  // （§11.25，2026-10-21 立档）。它的输入面是那份配置本身：改 `DOM_TEST_GLOBS` /
+  // `projects` 在静态 import 图里追不到任何用例（没有任何测试 import 它），而漏收那一档
+  // 的失效方向是静默的 —— 那份文件从此一个 project 都不接，却没有任何东西会红。
+  // 所以它必须与本次暂存无关也照跑。它同时是判据自己的门禁自测：该拦的（漏收 / 重叠 /
+  // 配置解析不到 / 空扫描面）与该放的（两边一致 / `--report` 只压退出码）各自有探针。
+  "tests/check-test-inventory.test.ts",
+  // 「检出目录在哪」只许 scripts/git-dir.mjs 一处知道（ISSUE #2072）：四处硬拼那一族
+  // 回归时没有任何 import 图能替它兜底（改那些脚本不会把这条带进受影响集），必须固定跑。
   "tests/git-dir-literal-scan.test.ts",
 ];
