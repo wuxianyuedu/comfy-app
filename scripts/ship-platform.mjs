@@ -19,6 +19,11 @@
  *
  * 终态依旧只认两个原值：build 的 `data.status`、PR 的 `is_merged`（取自
  * `ship-core.mjs` 的那两个 reader）。本层一次也不自己判「绿不绿」。
+ *
+ * ⚠️ 但 build 那一侧多了一层：**逐格读数优先于构建级状态**。平台把「被取消」的
+ * 那一跑记成构建级 `error`，而它与「某一格真失败」的处置完全不同（后者去查产物，
+ * 前者去重跑）。分类只有一份，在 `ci-build-readout.mjs` —— 单跑口与 PR 口共用同一份
+ * 判据，不许两处各写一套（ISSUE #2158 第 2 条 / 规范 §13.5.26）。
  */
 import {
   asArray,
@@ -31,10 +36,10 @@ import {
   deriveTitle,
   findPullForBranch,
   pickBuildForSha,
-  readBuildVerdict,
   readPullVerdict,
 } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
+import { classifyBuildOutcome } from "./ci-build-readout.mjs";
 
 /**
  * 轮询的**同签名断流**上限：连续这么多次读到同一件事就不再读。
@@ -43,6 +48,20 @@ import { cnbJson, short } from "./ship-exec.mjs";
  * 动一次（`data.status` 或 pipeline 计数）。45 分钟墙钟预算保留，兜「动得很慢」那条路。
  */
 const POLL_STALL_MAX = 10;
+
+/**
+ * 平台侧那份分类 → 这一层用的形状。
+ *
+ * 「真失败」在这一层仍叫 `red`（那一族的处置一个字没变：去查产物）；新增的
+ * `cancelled` 是**第三种形状**——那一跑没跑完，既不是绿也不是红。
+ *
+ * @param {"green"|"failed"|"cancelled"|"running"|"unknown"} state
+ * @returns {"green"|"red"|"cancelled"|"running"|"unknown"}
+ */
+export function toShipBuildState(state) {
+  if (state === "failed") return "red";
+  return state;
+}
 
 /**
  * 编排入口注入给本层的执行面。
@@ -247,13 +266,14 @@ export function createOrReusePull(ctx) {
  *   now: ()=>number,
  *   sleep: (ms:number)=>void | Promise<void>,
  * }} ctx
- * @returns {Promise<{buildState:"green"|"red"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
+ * @returns {Promise<{buildState:"green"|"red"|"cancelled"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
  *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（取不到列表），
  *   以及**同签名断流**（跑起来了、连着 6 次读数一模一样，再等下去只是重复同一句话）。
  */
 export async function pollUntilTerminal(ctx) {
   const { run, log, slug, newSha, now, sleep } = ctx;
-  let buildState = /** @type {"green"|"red"|"running"|"unknown"} */ ("unknown");
+  let buildState =
+    /** @type {"green"|"red"|"cancelled"|"running"|"unknown"} */ ("unknown");
   let buildSn = null;
   const deadline = now() + 45 * 60 * 1000;
   /* 同一签名**连续**读了多少次：第一条就把计数设成 1，所以「连续 10 次」= 第 10 次读到同一件事
@@ -299,12 +319,28 @@ export async function pollUntilTerminal(ctx) {
         "-v",
       ]);
       statusJson = st ? st.json : null;
-      /** @type {{state:"green"|"red"|"running"|"unknown",raw:string|null}} */
-      const v = st
-        ? readBuildVerdict(st.json)
+      /* 逐格读数优先于构建级状态 —— 平台把「被取消」记成构建级 `error`，而它与
+       * 「真失败」的处置完全不同（前者重跑，后者查产物）。分类只有一份，
+       * 在 `ci-build-readout.mjs`（ISSUE #2158 第 2 条 / 规范 §13.5.26）。 */
+      const outcome = st ? classifyBuildOutcome(st.json) : null;
+      /** @type {{state:"green"|"red"|"cancelled"|"running"|"unknown",raw:string|null}} */
+      const v = outcome
+        ? { state: toShipBuildState(outcome.state), raw: outcome.raw }
         : { state: "unknown", raw: null };
       buildState = v.state;
       log(`[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`);
+      if (v.state === "cancelled" && outcome) {
+        const first = outcome.cancelled[0];
+        const skipped = outcome.skipped
+          .filter((s) => (first ? s.index > first.index : true))
+          .map((s) => s.name || s.id);
+        log(
+          `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"}` +
+            " 被顶掉 ⇒ 下面那几格根本没跑" +
+            (skipped.length > 0 ? `（${skipped.join("、")}）` : "") +
+            "，这一跑没有 CI 结论",
+        );
+      }
       if (v.state !== "running" && v.state !== "unknown") break;
     }
     const sig = buildSignature(statusJson, picked ? picked.sn : "");
@@ -343,12 +379,16 @@ export async function pollUntilTerminal(ctx) {
  * 红的时候**不自己归因** —— 点名既有执行者 `base-check.mjs`。这一格是整条链上
  * 最容易顺手加一句「大概是你哪条改动导致的」的地方，而那句话没有执行者。
  *
+ * ⚠️ 「被取消」**不算红**：那一跑没跑完，产物一个字都没被验证过 —— 说它红就是
+ * 替平台编了一个不存在的产物问题。它落在「没跑到结论」那一档（`CODE.NOT_RUN`），
+ * 处置是重跑，不是查产物（ISSUE #2158 第 2 条 / 规范 §13.5.26）。
+ *
  * @param {{
  *   run: PlatformIO["run"],
  *   log: PlatformIO["log"],
  *   slug: string,
  *   number: any,
- *   buildState: "green"|"red"|"running"|"unknown",
+ *   buildState: "green"|"red"|"cancelled"|"running"|"unknown",
  *   buildSn: string | null,
  * }} ctx
  * @returns {number} 三态退出码之一
@@ -373,6 +413,16 @@ export function reportVerdict(ctx) {
   if (buildState === "green") {
     log(`[ship] ✓ CI 绿（build ${buildSn}）。下一动作：pnpm ship --merge`);
     return CODE.GREEN;
+  }
+  if (buildState === "cancelled") {
+    log(
+      `[ship] ✗ CI 那一跑**被取消**（build ${buildSn}）—— 不是产物坏了：那一跑没跑完，下游格根本没跑。`,
+    );
+    log(
+      "[ship] 下一动作：重跑这一跑（锁被另一跑顶掉 / 人为终止）再读一次；不要去查产物。",
+    );
+    log(`[ship] 日志：https://cnb.cool/${slug}/-/build/logs/${buildSn}`);
+    return CODE.NOT_RUN;
   }
   if (buildState === "red") {
     log(
@@ -405,7 +455,7 @@ export function reportVerdict(ctx) {
  *   baseRef: string | null,
  *   up: Upstream,
  *   merge: boolean,
- *   buildState: "green"|"red"|"running"|"unknown",
+ *   buildState: "green"|"red"|"cancelled"|"running"|"unknown",
  *   explicitTitle?: string | null,
  *   landed?: {title: string, sha: string, verified: boolean} | null,
  *   cleanBranch?: boolean,
@@ -438,7 +488,12 @@ export function mergeAndVerify(ctx) {
     return CODE.GREEN;
   }
   if (buildState !== "green") {
-    log("[ship] 拒绝合并：CI 不是绿的（当前是 " + buildState + "）。");
+    log(
+      "[ship] 拒绝合并：CI 不是绿的（当前是 " +
+        buildState +
+        (buildState === "cancelled" ? " = 那一跑被取消，没有结论" : "") +
+        "）。",
+    );
     return CODE.RED;
   }
   const { title } = pickTitle({
