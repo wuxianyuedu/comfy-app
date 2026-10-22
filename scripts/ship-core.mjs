@@ -66,14 +66,36 @@ export function combineShipCodes(codes) {
 }
 
 /**
+ * 一个命令行 token 是不是合法的 issue 号（`2179` 或 `#2179`）。不是就回 `null`。
+ *
+ * 「像不像号」只在这一处判：`--close-issue 2179` 与 `--close-issue=2179,2186` 两种写法共用它 ——
+ * 各写一份正则的漂移形态是「一种写法能关、另一种不能，而两边都不报错」。
+ * 两位是刻意下限：`--close-issue 1` 那种一眼就是打错的输入应当被点名，而不是被当成
+ * 「存在一张一号单子」（个位数在本仓是早期真 issue，猜错的代价比多问一句高）。
+ *
+ * @param {string} token 命令行上的一个 token
+ * @returns {number | null}
+ */
+export function parseIssueNumberToken(token) {
+  const bare = String(token ?? "").replace(/^#/, "");
+  return /^\d{2,}$/.test(bare) ? Number(bare) : null;
+}
+
+/**
  * 解析命令行。未知旗标**不静默忽略** —— 拼错的旗标会被读成「没要那个动作」，
  * 而这里最贵的误读是「以为会合、其实没合」或反之。
  *
+ * **`--close-issue` 的两种写法**（ISSUE #2199）：
+ *   · 裸旗标 = 从本轮落地那一行的标题本体取号（#2070 那批的口径，一字未改）；
+ *   · `--close-issue 2179` / `--close-issue #2179` / `--close-issue=2179,2186` = 人点名。
+ *     紧跟的 token 只要不像号就停手并把它记进 `closeIssueBad` —— 既不许当未知旗标静默收下
+ *     （那会被读成「没要那个动作」），也不许往后吃掉本该属于别的旗标的参数。
+ *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -82,6 +104,8 @@ export function parseArgs(argv) {
     adds: [],
     merge: false,
     closeIssue: false,
+    closeIssueNumbers: [],
+    closeIssueBad: [],
     cleanBranch: false,
     reap: false,
     dryRun: false,
@@ -92,8 +116,18 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i] ?? "";
     if (a === "--merge") out.merge = true;
-    else if (a === "--close-issue") out.closeIssue = true;
-    else if (a === "--clean-branch") out.cleanBranch = true;
+    else if (a === "--close-issue") {
+      out.closeIssue = true;
+      while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
+        const tok = String(argv[++i] ?? "");
+        const n = parseIssueNumberToken(tok);
+        if (n === null) {
+          out.closeIssueBad.push(tok);
+          break;
+        }
+        out.closeIssueNumbers.push(n);
+      }
+    } else if (a === "--clean-branch") out.cleanBranch = true;
     else if (a === "--reap") out.reap = true;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--no-wait") out.wait = false;
@@ -111,78 +145,19 @@ export function parseArgs(argv) {
       out.branch = a.slice("--branch=".length);
     else if (a.startsWith("--add=")) out.adds.push(a.slice("--add=".length));
     else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
-    else out.unknown.push(a);
+    else if (a.startsWith("--close-issue=")) {
+      out.closeIssue = true;
+      for (const tok of (a.slice("--close-issue=".length) || "").split(
+        /[,\s]+/,
+      )) {
+        if (tok === "") continue;
+        const n = parseIssueNumberToken(tok);
+        if (n === null) out.closeIssueBad.push(tok);
+        else out.closeIssueNumbers.push(n);
+      }
+    } else out.unknown.push(a);
   }
   return out;
-}
-
-/**
- * 一行文字里点名的 issue 号（`#2070` / `(#2070)` 两种写法都认，按出现顺序去重）。
- *
- * ⚠️ **只许喂 squash 那一行的「标题本体」，不许喂拼完 PR 号的那一整行**：
- * `mergeAndVerify` 发给平台的是 `${title} (#${number})`，而那个尾数是 **PR 号**
- * （本仓 PR 号与 issue 号共用一套编号空间，`#2110` 既是一条 PR、也可能正好是
- * 某个人的 issue）。拿整行去提号就会把「关掉这个 PR」读成「关掉那张 issue」——
- * 而那是一张别人正在用的单子。
- *
- * @param {string} text 标题本体
- * @returns {number[]}
- */
-export function issueNumbersFromText(text) {
-  /** @type {number[]} */
-  const out = [];
-  for (const m of String(text ?? "").matchAll(/#\s?(\d{2,})/g)) {
-    out.push(Number(m[1]));
-  }
-  return [...new Set(out)];
-}
-
-/**
- * 「这一格该不该关、以什么码落」—— 判断与效应分开，才判得动最危险的那一档。
- *
- * 三条口径，方向都是「宁可没做，不可做了还谎称做了」：
- *   · **只跟在验真的合并之后**。`mergeAndVerify` 的回读是两件独立事实
- *     （PR 的 `is_merged` + 碎片真在主干顶端）；没走到那一步就关单，等于把一张
- *     还没落地的单子标成完成 —— 那正是 §11.23 那一族（声明与事实矛盾）在这里的形状。
- *   · 要求了但这一跳没合并 ⇒ **2（没跑起来）并说明**，不是静默跳过。分跳跑
- *     （`--no-wait` → 轮询 → `--merge`）的人在最后一跳才该带这个旗标；把它误带在
- *     轮询那一跳上，屏幕上仍会落「全绿到终态」，而那一格根本没动过 —— 2 压过 0
- *     就是为了让这种误带当场读得出来。
- *   · 标题里没有号 ⇒ 也按 2，并说出「喂进去的是哪一行」。编一个号、或猜分支名里
- *     那串数字，都比不上句实话。
- *
- * @param {{requested: boolean, landedVerified: boolean, title: string}} input
- * @returns {{act: boolean, code: number | null, numbers: number[], reason: string}}
- */
-export function decideCloseIssue({ requested, landedVerified, title }) {
-  if (!requested) {
-    return {
-      act: false,
-      code: null,
-      numbers: [],
-      reason: "未要求关单（--close-issue）。",
-    };
-  }
-  if (!landedVerified) {
-    return {
-      act: false,
-      code: CODE.NOT_RUN,
-      numbers: [],
-      reason:
-        "这一跳没有**验真的合并**（合并是显式动作，且要回读到 is_merged + 碎片在主干顶端）" +
-        " ⇒ 单子不能标成完成",
-    };
-  }
-  const numbers = issueNumbersFromText(title);
-  if (numbers.length === 0) {
-    return {
-      act: false,
-      code: CODE.NOT_RUN,
-      numbers: [],
-      reason: `落地那一行的标题本体里没有 (#号)：「${title}」`,
-    };
-  }
-  return { act: true, code: null, numbers, reason: "" };
 }
 
 /**

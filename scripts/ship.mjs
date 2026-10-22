@@ -45,6 +45,9 @@
  *     正相反。（搬出去的直接原因是 #2189：加上「只补关」那格之后本文件 928 行，
  *     被 `check-infra-file-size.cjs` 的 900 硬闸拦下 —— 那一闸说的是「出口只有一个：拆」，
  *     拆法按职责、不按行数，见该模块文件头。）
+ *   · `ship-close.mjs`    —— **关单那一格**：要不要关、关哪几张、凭什么关（本轮验真合并 /
+ *     平台侧落地证明），以及关完的独立回读。它跟着「单子的落地证明口径」动，不跟 build 状态机走；
+ *     叠进 `ship-core` 会把它推过 900 行（#2199 现场量的 917 行）。
  *   · 本文件              —— **装配 + preflight**：阶段顺序、读数的落点，
  *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
  *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
@@ -78,9 +81,11 @@
  *     「`<path>` 一个字没动」「N 处收到 0」三种句式拿提交树复核。所以 PR 正文
  *     只填它**量到的**（diffstat、碎片标题、失败 stage 名），不填推断。
  *   · **不碰 `--force` / 不改历史 / 不删分支**。
- *   · **不替 issue 写内容**。`--close-issue` 只做一件机械事：把落地那一行点名的
- *     单子置 `closed / completed`，然后**独立回读** `state` / `state_reason` /
- *     `closed_at` 三件原值打出来。那条「已落地 + 读数 + 因果」的记录评论是判断，
+ *   · **不替 issue 写内容**。`--close-issue` 只做一件机械事：把点名的单子置
+ *     `closed / completed`，然后**独立回读** `state` / `state_reason` /
+ *     `closed_at` 三件原值打出来。号有两种来源（本轮落地那一行的标题本体 / 人在命令行
+ *     上点名），但「凭什么关」只有一条线：没有落地证明就不关（`ship-close.mjs` 那段）。
+ *     那条「已落地 + 读数 + 因果」的记录评论是判断，
  *     与提交信息同一档，不由编排层生成 —— 生成出来的那句话必然是一句
  *     「它说它做了」，而这一族存在的意义恰恰是不采信这种话。
  *   · **不默认杀进程。** 本检出的实例在不在跑，阶段 0 每轮都念一行（归属取自硬规则 9 那条
@@ -113,6 +118,10 @@
  *   pnpm ship --merge --close-issue            # 合上之后关掉落地那一行点名的 issue
  *                                              #  （显式才做；只跟在**验真的合并**之后，
  *                                              #   误带在没有合并的那一跳上 ⇒ 退 2 并说明）
+ *   pnpm ship --close-issue 2179               # 只补关：人点名的号**不要求本轮合并**，
+ *                                              #  前提换成「平台查得到它随某条已合并 PR 落地」
+ *                                              #  （查不到 ⇒ 退 2；「查不到」不等于「没落地」）
+ *   pnpm ship --merge --close-issue 2179       # 本轮号（标题里那批）+ 人点名的号，并集去重
  *   pnpm ship --merge --clean-branch           # 合上之后删掉**这次那一条**分支（远端 + 本地）
  *   pnpm ship --reap                           # 这一轮结束时收掉本检出**端口上那批**残留进程
  *                                              #  （阶段 0 每轮都念一行归属读数；`via:"session"`
@@ -125,7 +134,8 @@
  *   pnpm ship --no-wait                        # 建完 PR 就停，不轮询 build
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge · close-issue · clean-branch
- * （`close-issue` / `clean-branch` 不能单跑：它们要的是合并那一段的验真结果。）
+ * （`close-issue` 带号时能单跑 —— 那是「补关」那一路，要平台侧的落地证明；不带号或
+ * `clean-branch` 不能单跑：它们要的是合并那一段的验真结果。）
  */
 import fs from "node:fs";
 import process from "node:process";
@@ -156,12 +166,12 @@ import {
 } from "./ship-reap.mjs";
 import {
   cleanBranch,
-  closeIssues,
   createOrReusePull,
   mergeAndVerify,
   pollUntilTerminal,
   reportVerdict,
 } from "./ship-platform.mjs";
+import { closeIssues } from "./ship-close.mjs";
 import { parsePorcelain, runCommitStage, runPushStage } from "./ship-local.mjs";
 
 /**
@@ -295,6 +305,19 @@ async function runFlow(deps, tmpFiles) {
     );
     return CODE.NOT_RUN;
   }
+  /* `--close-issue` 后面跟的东西必须像 issue 号（ISSUE #2199）。把它当未知旗标收下是
+   * 最坏的一种读法：那一跑会退成「拼错的旗标」，而人真正想要的那个动作（补关一张
+   * 早已落地的单子）连被讨论都没被讨论。 */
+  if (opt.closeIssueBad.length > 0) {
+    log(
+      `[ship] [ERROR] --close-issue 收的是 issue 号（2 位以上数字，可写 #2179），` +
+        `这里不像：${opt.closeIssueBad.join(" ")}`,
+    );
+    log(
+      "[ship] 一个都不认 ⇒ 不动任何单子；这一格没有结论（不是「已经关好了」）。",
+    );
+    return CODE.NOT_RUN;
+  }
   /* poll / verdict / merge / close-issue / clean-branch 要用「本次跑里解析出来的 PR 号」
    * 或「合并那一段才有的验真结果」，而它们是在 pull-request / merge 那两段拿到的 ——
    * 单独 --only=poll 会走进「一段都没跑、于是没有任何结论」却退 0 的形态。那是假绿灯，
@@ -370,6 +393,44 @@ async function runFlow(deps, tmpFiles) {
   /** 主干**分支名**（PR 的 `--base` 要的是它，不是 `<远端>/<分支>`）。推不出就不给
    *  `master` 兜底 —— 兜一个猜的分支名，报出来的是「PR 建到了不存在的主干上」。 */
   baseBranch = baseRef ? baseRef.split("/").slice(1).join("/") : null;
+
+  /** 仓库 slug 与 cnb 在场性 —— 装配层的事实（阶段 0 的屏幕输出与「只补关」那一路都要用）。 */
+  const slugRes = up.remote
+    ? run("git", ["remote", "get-url", up.remote])
+    : { stdout: "" };
+  const slug = parseSlug(slugRes.stdout);
+  const cnbOk = probeCnb();
+
+  /* ── 「只补关」那一路（ISSUE #2199）───────────────────────────
+   * 人在命令行上点名的号**而本轮没要合并** ⇒ 这一跑的目的就是把早已落地、却没关掉的单子关上
+   * （现场是 #2179：内容在 `1a05cd40` 上，单子还挂着）。判据用人自己给的 `--merge`，
+   * 不去猜「工作树干不干净」那种间接信号：要连本次改动一起交出去，就照旧
+   * `--merge … --close-issue <号>`，那时这些号跟在本轮验真的合并之后一起关。
+   * 「凭什么可以关」仍由 `decideCloseIssue` 判 —— 这一路要有一份平台侧的落地证明，
+   * 没有证明就退 2，而不是把单子标成完成。 */
+  if (opt.closeIssue && opt.closeIssueNumbers.length > 0 && !opt.merge) {
+    if (!cnbOk || !slug) {
+      log(
+        `[ship] 补关这一格没有执行者（${cnbOk ? "仓库 slug 取不到" : "cnb 不在"}）` +
+          " ⇒ 不动任何单子，也不猜它关没关。",
+      );
+      return CODE.NOT_RUN;
+    }
+    log(
+      `[ship] 本轮只补关：人点名 ${opt.closeIssueNumbers.map((n) => `#${n}`).join(" ")}` +
+        " 而没要 --merge ⇒ 不跑 preflight / commit / push。",
+    );
+    return finish([
+      closeIssues({
+        run,
+        log,
+        slug,
+        closeIssue: true,
+        landed: null,
+        explicit: opt.closeIssueNumbers,
+      }),
+    ]);
+  }
 
   // ── 阶段 0：preflight ────────────────────────────────────────
   if (want("preflight")) {
@@ -491,11 +552,6 @@ async function runFlow(deps, tmpFiles) {
           .filter((p) => p.endsWith(".md")),
       ]),
     ];
-    const slugRes = up.remote
-      ? run("git", ["remote", "get-url", up.remote])
-      : { stdout: "" };
-    const slug = parseSlug(slugRes.stdout);
-    const cnbOk = probeCnb();
 
     log(
       `[ship] 分支 ${branch} · sha ${sha.slice(0, 8)} · 仓库 ${slug || "(取不到)"}` +
@@ -731,7 +787,16 @@ async function runFlow(deps, tmpFiles) {
        * 别人也看得见、且不会自动回退的地方，与合并本身同一档，所以同一个口径 ——
        * 默认不开。没合并成而带着它跑，落的是 2 并说明（不是静默跳过、更不是绿）。 */
       if (opt.closeIssue) {
-        codes.push(closeIssues({ run, log, slug, closeIssue: true, landed }));
+        codes.push(
+          closeIssues({
+            run,
+            log,
+            slug,
+            closeIssue: true,
+            landed,
+            explicit: opt.closeIssueNumbers,
+          }),
+        );
       }
 
       // ── 阶段 8：清理分支（显式，且只跟在验真的合并之后）──────────
