@@ -1007,8 +1007,11 @@ describe("reapCheckoutInstances：只收 via port 那批，session 那一档不�
 describe("pollUntilTerminal：读数连着若干次一模一样就断流，不烧墙钟", () => {
   /* 这一格要防的形状是实测撞过的：一次真跑里 20 次轮询全是同一句「还没解析到 build」，
    * 最后落 exit 2 —— 等待没有换来任何新事实，而屏幕上只看得出「在等」。
-   * 断流的依据是**签名**（sn / data.status / pipeline 完成数-总数），任何一件变了就归零，
-   * 所以它只掐掉重复，不掐掉慢。 */
+   * 断流的依据是**签名**（sn / data.status / pipeline 完成数-总数 / stage 完成数-总数），
+   * 任何一件变了就归零，所以它只掐掉重复，不掐掉慢。
+   * stage 级那一件是 2026-10-22 补的：本仓 PR 是一条 pipeline / 三十几个 stage，
+   * 只看 pipeline 级计数时推进中的流水线也念得出 `…/pending/0-1` —— 于是「只掐重复」
+   * 那句话在那种拓扑上不成立（下面「stage 在推进」那一条就是这个反例的钉子）。 */
   type FakeResult = {
     status: number;
     stdout: string;
@@ -1028,6 +1031,8 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     statuses?: string[];
     /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
     progress?: string[];
+    /** 每次的 stage 计数（"12/33" 这种 `完成/总`）；不给就造不出 stages 字段。 */
+    stageProgress?: string[];
     /** false = 列表里没有这条 sha（平台还没开跑）。 */
     found?: boolean;
   }) {
@@ -1050,12 +1055,54 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
         const [done, total] = (
           progress[Math.min(i, progress.length - 1)] ?? "0-1"
         ).split("-");
+        const stage = (opts.stageProgress ?? [])[
+          Math.min(i, (opts.stageProgress ?? []).length - 1)
+        ];
         i += 1;
-        const pipelinesStatus: Record<string, { status: string }> = {};
+        /** 平台那一层的外部形状（本测试只造得出判据看得见的字段）。 */
+        const pipelinesStatus: Record<
+          string,
+          {
+            status: string;
+            stages?: {
+              status: string;
+              duration: number;
+              name: string;
+              id: string;
+            }[];
+          }
+        > = {};
         for (let p = 0; p < Number(total); p += 1) {
-          pipelinesStatus[`p${p}`] = {
-            status: p < Number(done) ? "success" : "running",
-          };
+          const pipeline: {
+            status: string;
+            stages?: {
+              status: string;
+              duration: number;
+              name: string;
+              id: string;
+            }[];
+          } = { status: p < Number(done) ? "success" : "running" };
+          pipelinesStatus[`p${p}`] = pipeline;
+          if (stage) {
+            /* 只有第一条 pipeline 带 stages（与本仓的真实拓扑一致：一条流水线，
+             * 里面几十格）。运行中那一格的 `duration` 是占位 0 —— 平台按格缓冲。 */
+            const [sDone, sTotal] = stage.split("/");
+            const stages: {
+              status: string;
+              duration: number;
+              name: string;
+              id: string;
+            }[] = [];
+            for (let s = 0; s < Number(sTotal); s += 1) {
+              stages.push({
+                status: s < Number(sDone) ? "success" : "start",
+                duration: 0,
+                name: `stage-${s}`,
+                id: `stage-${s}`,
+              });
+            }
+            pipeline.stages = stages;
+          }
         }
         return ok(
           JSON.stringify({
@@ -1078,7 +1125,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
 
   const base = { slug: "org/repo", newSha: SHA };
 
-  it("同一读数连续 10 次 ⇒ 断流、落红，并且只读了 10 眼", async () => {
+  it("同一读数连续 10 次 ⇒ 断流、记「没有终态结论」（exit 2，不是红）", async () => {
     const f = io({ statuses: ["pending"], progress: ["0-1"] });
     const out = await pollUntilTerminal({
       run: f.run,
@@ -1087,13 +1134,52 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       now: f.now,
       sleep: f.sleep,
     });
-    expect(out.stop).toBe(CODE.RED);
+    /* 落 2 而不是 1：签名含 stage 级进度之后，「连着 10 眼一模一样」意味着一个格都没推进过，
+     * 那是「拿不到测量」而不是「测出一个红」（#2152 当初落红，理由在只看 pipeline 级计数的
+     * 签名下会把推进中的流水线也念成没动；业主定：改记 2）。 */
+    expect(out.stop).toBe(CODE.NOT_RUN);
     expect(f.polls()).toBe(10);
     const all = f.log.join("\n");
     expect(all).toContain("连续 10 次读数没变");
     expect(all).toContain("没有终态结论");
     // 断流那句要带着日志页，否则「不再等了」等于把人赶进下一步去猜。
     expect(all).toContain("/-/build/logs/b1");
+  });
+
+  it("负控制：pipeline 级读数一字不动、stage 一路推进 ⇒ 不算断流，继续轮到终态", async () => {
+    /* 这一条就是本仓那条拓扑的反例钉子：一条 pipeline、三十几个 stage 时 `done-total`
+     * 整跑都停在 `0-1`。序列刻意排到 12 眼（> `POLL_STALL_MAX`）—— 只看 pipeline 级计数的
+     * 旧版本会在第 10 眼断流落红，而那条流水线其实正推进到 28/33
+     * （2026-10-22 实测 `cnb-7d9-1k5h9edct`）。 */
+    const f = io({
+      statuses: [...Array<string>(11).fill("pending"), "success"],
+      progress: Array(12).fill("0-1"),
+      stageProgress: [
+        "1/33",
+        "4/33",
+        "7/33",
+        "9/33",
+        "12/33",
+        "15/33",
+        "18/33",
+        "21/33",
+        "24/33",
+        "26/33",
+        "28/33",
+        "33/33",
+      ],
+    });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("green");
+    expect(f.polls()).toBe(12);
+    expect(f.log.join("\n")).not.toContain("读数没变");
   });
 
   it("负控制：第 4 眼签名变了（pipeline 从 0-1 走到 1-1）⇒ 计数归零，继续轮到终态", async () => {
@@ -1123,13 +1209,13 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
       now: f.now,
       sleep: f.sleep,
     });
-    expect(out.stop).toBe(CODE.RED);
+    expect(out.stop).toBe(CODE.NOT_RUN);
     const repeated = f.log.filter((s) => s.includes("还没解析到 build"));
     expect(repeated).toHaveLength(10);
     expect(f.log.join("\n")).toContain("(未解析到 build)");
   });
 
-  it("buildSignature：三件原值进签名，缺 data 与缺 sn 都各有稳定形状", () => {
+  it("buildSignature：四件原值进签名，缺 data / 缺 sn / 缺 stages 都各有稳定形状", () => {
     expect(
       buildSignature(
         {
@@ -1137,13 +1223,63 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
             status: "running",
             pipelinesStatus: {
               p0: { status: "success" },
-              p1: { status: "running" },
+              p1: {
+                status: "running",
+                stages: [
+                  { status: "success" },
+                  { status: "start" },
+                  { status: "pending" },
+                ],
+              },
             },
           },
         },
         "b1",
       ),
-    ).toBe("b1/running/1-2");
+    ).toBe("b1/running/1-2+1/3");
+    /* stage 级那两件必须真的进签名 —— 本仓一条 pipeline 的拓扑下，它是唯一会动的量。
+     * 两段的差别只在「多一格从 pending 走到 start」：运行中的那一格在平台词汇里就叫 `start`，
+     * 把它数成已完成的话，这一对签名会相等，断流照旧掐掉正在推进的流水线。 */
+    expect(
+      buildSignature(
+        {
+          data: {
+            status: "pending",
+            pipelinesStatus: {
+              p0: { status: "running", stages: [{ status: "success" }] },
+            },
+          },
+        },
+        "b1",
+      ),
+    ).not.toBe(
+      buildSignature(
+        {
+          data: {
+            status: "pending",
+            pipelinesStatus: {
+              p0: {
+                status: "running",
+                stages: [{ status: "success" }, { status: "start" }],
+              },
+            },
+          },
+        },
+        "b1",
+      ),
+    );
+    /* 外部形状不完整（没有 stages 字段）时按 0 计，不替平台补一个「大概在进行」的形状。 */
+    expect(
+      buildSignature(
+        {
+          data: {
+            status: "running",
+            pipelinesStatus: { p0: { status: "running" } },
+          },
+        },
+        "b1",
+      ),
+    ).toBe("b1/running/0-1+0/0");
     expect(buildSignature(null, "")).toContain("(未解析到 build)");
     expect(buildSignature({}, "b2")).toContain("(取不到 data)");
   });
