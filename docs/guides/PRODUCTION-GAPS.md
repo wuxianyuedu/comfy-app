@@ -1283,9 +1283,18 @@
       · **还留着**：其余具名导出的 schema 没有契约判据（复算
         `grep -rnoE "^export const [A-Za-z0-9_]+ = z\." --include="*.ts" src | grep -v "\.test\."`）。
         按危害排下来是两处：远端模型的**键名分叉**（客户端 `model` ↔ 服务端 `name`，
-        `kind` 两侧各写一份枚举，中间靠手写桥接）、`generate.generate` 的**入参**
-        （`GenerateSchema` 被多处 `RouterInputs` 镜像复用，而 mutate 侧在用例里是桩 ——
-        真实入参校验从没跑过）。
+        `kind` 两侧各写一份枚举，中间靠手写桥接）、`generate.generate` 的**入参通路**。
+        后者要先订正一格我自己写错的判断（立案时把「`RouterInputs` 派生」当成了手写镜像）：
+        `RouterInputs["generate"]["generate"]` 那几处是**从 schema 反向派生的类型**，
+        字段改名会当场编译红，所以它不是漂移面。真正的洞在两条 cast 上：
+        `src/lib/project-canvas/canvas-api.ts` 的 `startGenerate(payload: Record<string, unknown>)`
+        在传输前塞一句 `payload as GenerateInput`（判据落在这一句上等于没有），
+        而 `use-generate.ts` 的重试通路把**任务行 `params` 列里存的旧载荷**原样送回同一个 cast ——
+        两端之间没有客户端可读的形状，服务端 zod 是唯一判点。
+        下一刀的形状：把 `use-generate.ts` 里那段载荷构造抽成可注入的纯函数（§17 的取向），
+        再用真 `GenerateSchema` 判四格 —— 画布构造出的那一形过、少必填 `workflow` 被拒、
+        三层 `paramMap`（`source.mode:<模式>`；此前那里写的是 `z.record(z.string(), z.string())`，
+        表达不了这层结构）过、库里翻出来的旧形状被拒且界面拿到能读的错。
 - [x] **E5 棘轮的 `--update` 拒涨此前只有散文，现在有了横切行为判据（两格 PENDING 也已处置完）**：
       原记「棘轮 `--update` 无制衡，证据 `AGENTS.md:94,97`」——那句证据早就过时了：
       24 个「带 `--update` 且把一份基线写回去」的脚本里，17 个**确实写了**拒涨那一支。
