@@ -38,6 +38,7 @@ import {
   listLinks,
   repairUnfollowableLinks,
   runLinkRepair,
+  siblingVariantInstalled,
 } from "../scripts/standalone-link-repair.mjs";
 import { symlinkDir } from "./helpers/symlink-dir";
 
@@ -119,6 +120,59 @@ describe("真文件系统那一层（跨平台夹具）", () => {
     expect(result.broken).toEqual([]);
     expect(result.lines.join("\n")).toContain("跳过");
   });
+
+  it("真文件系统那一层：同包的其它变体装了实体 ⇒ 那条死链算「非本平台变体」", () => {
+    /* 造 pnpm 的真实形状：`.pnpm/<包>+<变体>@<ver>/node_modules/<包>/<变体>`。
+     * 死链指向**没装实体**的那一支，同包的另一支（win32 那份）有实体。 */
+    const nm = dir("node_modules");
+    const scopeDir = dir(
+      "node_modules",
+      ".pnpm",
+      "libsql@0.5.29",
+      "node_modules",
+      "@libsql",
+    );
+    // 同包的另一支：win32-x64-msvc，实体在。
+    dir(
+      "node_modules",
+      ".pnpm",
+      "@libsql+win32-x64-msvc@0.5.29",
+      "node_modules",
+      "@libsql",
+      "win32-x64-msvc",
+    );
+    // 死链指向的那一支：目录在、实体不在。
+    const dead = path.join(scopeDir, "darwin-arm64");
+    symlinkDir(dir("nothing-here"), dead);
+    rmSync(path.join(root, "nothing-here"), { recursive: true, force: true });
+
+    const text =
+      "..\\..\\..\\@libsql+darwin-arm64@0.5.29\\node_modules\\@libsql\\darwin-arm64";
+    expect(siblingVariantInstalled(nm, text)).toBe(true);
+
+    // 而「同包一个变体都没装」时，那才是真缺件。
+    const lonelyNm = dir("lonely", "node_modules");
+    const lonelyScope = dir(
+      "lonely",
+      "node_modules",
+      ".pnpm",
+      "gone@1.0.0",
+      "node_modules",
+      "gone",
+    );
+    const lonelyLink = path.join(lonelyScope, "variant");
+    symlinkDir(dir("lonely", "nothing"), lonelyLink);
+    rmSync(path.join(root, "lonely", "nothing"), {
+      recursive: true,
+      force: true,
+    });
+    expect(
+      siblingVariantInstalled(
+        lonelyNm,
+        "..\\..\\..\\gone+variant@1.0.0\\node_modules\\gone\\variant",
+      ),
+    ).toBe(false);
+  });
 });
 
 /** 注入用的一条链接（`text` 是它的链接文本；`abs` 不必真存在）。 */
@@ -141,7 +195,9 @@ function fake(input: {
   brokenRels?: string[];
   rebuildResult?: { ok: boolean; error: string };
   targetExists?: boolean;
+  dirExists?: boolean;
   throwOnReadText?: boolean;
+  siblingInstalled?: boolean;
 }) {
   const links = input.links;
   const brokenRels = new Set(input.brokenRels ?? links.map((l) => l.rel));
@@ -169,6 +225,9 @@ function fake(input: {
       return r;
     },
     exists: (_p: string) => input.targetExists ?? true,
+    /* 「产物目录在不在」与「目标在不在」是两个判据（分开注入的理由见脚本里的注释）。 */
+    dirExists: (_p: string) => input.dirExists ?? true,
+    sibling: (_nm: string, _text: string) => input.siblingInstalled ?? false,
   };
   return { deps, rebuildCalls };
 }
@@ -258,6 +317,51 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
     // 话术必须点名「表现」，否则下一个人只会看到 Cannot find package。
     expect(text).toContain("Cannot find package");
   });
+
+  it("目标不在 + 同包其它变体已安装 ⇒ 判「非本平台变体死链」，不阻断但要点名", () => {
+    /* win32 上必然出现的形态：pnpm 给 optionalDependencies 的**每个**平台变体都建了链接，
+     * 但只装本平台那一份 ⇒ 别的平台那几条的目标必然不存在（不是缺件）。 */
+    const { deps } = fake({
+      links: [
+        {
+          abs: "N/.pnpm/libsql@0.5.29/node_modules/@libsql/darwin-arm64",
+          rel: ".pnpm/libsql@0.5.29/node_modules/@libsql/darwin-arm64",
+          text: "..\\..\\..\\@libsql+darwin-arm64@0.5.29\\node_modules\\@libsql\\darwin-arm64",
+        },
+      ],
+      targetExists: false,
+      rebuildResult: { ok: false, error: "ENOENT (no such file)" },
+      siblingInstalled: true,
+    });
+    const out = runLinkRepair("N", deps);
+    const text = out.lines.join("\n");
+    expect(out.broken).toHaveLength(1);
+    expect(out.broken[0]?.variantDead).toBe(true);
+    /* 阻断的那一档必须是空的 —— 否则本机 `pnpm build` 永远过不去这一格。 */
+    expect(out.blocking).toEqual([]);
+    expect(text).toContain("非本平台变体死链");
+    expect(text).toContain("darwin-arm64");
+    expect(text).not.toContain("重建后仍有");
+  });
+
+  it("目标不在 + 同包没有别的变体 ⇒ 那才是真缺件，仍然阻断", () => {
+    const { deps } = fake({
+      links: [
+        {
+          abs: "N/.pnpm/foo@1.0.0/node_modules/foo",
+          rel: ".pnpm/foo@1.0.0/node_modules/foo",
+          text: "..\\..\\..\\foo@1.0.0\\node_modules\\foo",
+        },
+      ],
+      targetExists: false,
+      rebuildResult: { ok: false, error: "ENOENT (no such file)" },
+      siblingInstalled: false,
+    });
+    const out = runLinkRepair("N", deps);
+    expect(out.broken[0]?.variantDead).toBe(false);
+    expect(out.blocking).toHaveLength(1);
+    expect(out.lines.join("\n")).toContain("重建后仍有 1 条穿不过去");
+  });
 });
 
 describe("接线在位", () => {
@@ -276,11 +380,12 @@ describe("接线在位", () => {
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
-  it("退出码只由「还有没修好的链接」决定（不许把违规吞成日志）", () => {
+  it("退出码只由「还有真缺件」决定（不许把违规吞成日志，也别让死链把整条链掐断）", () => {
     const source = readFileSync(
       path.resolve(__dirname, "../scripts/standalone-link-repair.mjs"),
       "utf8",
     );
-    expect(source).toMatch(/return result\.broken\.length > 0 \? 1 : 0;/);
+    /* `blocking` = 扣掉「非本平台变体死链」之后的那一档（那类死链不阻断，见文件头）。 */
+    expect(source).toMatch(/return result\.blocking\.length > 0 \? 1 : 0;/);
   });
 });
