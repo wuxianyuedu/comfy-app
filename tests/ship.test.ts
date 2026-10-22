@@ -53,6 +53,7 @@ import {
   cleanBranch,
   closeIssues,
   pollUntilTerminal,
+  reportVerdict,
 } from "../scripts/ship-platform.mjs";
 import {
   decideReap,
@@ -1282,6 +1283,129 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     ).toBe("b1/running/0-1+0/0");
     expect(buildSignature(null, "")).toContain("(未解析到 build)");
     expect(buildSignature({}, "b2")).toContain("(取不到 data)");
+  });
+});
+
+describe("被取消的那一跑：结论是「没有结论」，不是「CI 红」（ISSUE #2158 第 2 条）", () => {
+  type FakeResult = {
+    status: number;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+  };
+  const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
+  const ok = (stdout: string): FakeResult => ({
+    status: 0,
+    stdout,
+    stderr: "",
+    error: null,
+  });
+
+  /* 真形状（`cnb-lm1-1k5h1otqt`）：第二格被顶掉、第三格根本没跑，而**构建级**是
+     `error` —— 平台把「被取消」写成「红」，这正是这一族要分开的那个混淆。 */
+  const CANCELLED = {
+    status: 200,
+    data: {
+      status: "error",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "cancel",
+          stages: [
+            { status: "success", name: "工作区出处", id: "stage-0" },
+            { status: "cancel", name: "被顶掉的那格", id: "stage-1" },
+            { status: "skipped", name: "下面那一格", id: "stage-2" },
+          ],
+        },
+      },
+    },
+  };
+
+  function io() {
+    const log: string[] = [];
+    const run = (_cmd: string, args: string[]): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              data: [
+                { sn: "b1", sha: SHA, event: "pull_request", createTime: "t" },
+              ],
+            },
+          }),
+        );
+      }
+      if (args[1] === "get-build-status") {
+        return ok(JSON.stringify(CANCELLED));
+      }
+      if (args[1] === "get-pull") {
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              number: 7,
+              mergeable_state: "mergeable",
+              blocked_on: "",
+              is_merged: false,
+              state: "open",
+            },
+          }),
+        );
+      }
+      return ok("");
+    };
+    return { log, run };
+  }
+
+  it("轮询那一格：状态是 cancelled，日志点名被顶掉的那一格与下面根本没跑的那几格", async () => {
+    const f = io();
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "org/repo",
+      newSha: SHA,
+      now: () => 0,
+      sleep: async () => undefined,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("cancelled");
+    const all = f.log.join("\n");
+    expect(all).toContain("被取消");
+    expect(all).toContain("被顶掉的那格");
+    expect(all).toContain("下面那一格");
+  });
+
+  it("判决那一格：退 2（没有结论），并且**不**说「CI 红」", () => {
+    const f = io();
+    const code = reportVerdict({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "org/repo",
+      number: 7,
+      buildState: "cancelled",
+      buildSn: "b1",
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    const all = f.log.join("\n");
+    expect(all).toContain("被取消");
+    expect(all).toContain("不要去查产物");
+    expect(all).not.toContain("CI 红");
+  });
+
+  it("负控制：真红的那一跑仍然是红、仍然退 1（这一族的行为一个字没改）", () => {
+    const f = io();
+    const code = reportVerdict({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "org/repo",
+      number: 7,
+      buildState: "red",
+      buildSn: "b1",
+    });
+    expect(code).toBe(CODE.RED);
+    expect(f.log.join("\n")).toContain("CI 红");
   });
 });
 
