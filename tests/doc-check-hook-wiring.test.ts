@@ -935,6 +935,13 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
 const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
   ["CHANGELOG 碎片", "node scripts/check-changelog-fragments.cjs"],
   ["待发段落的来源锚 ⇄ 条目归属", "node scripts/check-changelog-versions.cjs"],
+  /* 「改了文档源就得同批带上镜像」—— 这条从平台回到本地是有理由的（平台那格跑
+   * `--check --autofix`，会就地修好，红只落在下一个动文档面的人身上），
+   * 理由与被挪走的那两条（内容一致 / 引用权威）不同：那两条读全库内容，这条只读暂存清单。 */
+  [
+    "文档源 ⇄ 生成态镜像同批",
+    "node scripts/check-doc-mirror-pairing.cjs --staged",
+  ],
   [
     "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）",
     "node scripts/freshness-gate.mjs",

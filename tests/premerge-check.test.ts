@@ -224,7 +224,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     /* 事实纠正（本单动手时查实）：批次面**早就有执行者** ——
      * `resolveMergeBatch` 的第二个来源（`base-check/chained-steps.mjs`）已经把
      * `check-commit-claims.mjs --range <base>..HEAD` 收进 base 段那一批。
-     * 真正漏的是两处：`--light` 会把那条筛掉（本地档那 14 条里没有它），
+     * 真正漏的是两处：`--light` 会把那条筛掉（本地档那一串里没有它（条数以 `localTierLabels()` 现取）），
      * 以及本文件自己那格 `claims` 只审 HEAD。改成审同一批之后，
      * 全档那一跑就可能出现**两遍同样的核对**（带声明的提交单条约 49 秒）。 */
     const chained = [

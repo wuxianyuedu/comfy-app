@@ -1,0 +1,129 @@
+/**
+ * `check-doc-mirror-pairing.cjs` 的判据 —— 「改了 `SCOPED_DOCS` 的文档源，就必须同批
+ * 带上 `docs/generated/**` 的镜像」（规范 §13.5.5，挂在 pre-commit 的 D0 形态档）。
+ *
+ * 这条判据存在的理由是**红会落到别人身上**：平台那一格 `生成态文档与源同步` 跑的是
+ * `--check --autofix`，就地修好再判，所以「漏带镜像」在它那里从不出现；唯一还照得出它的
+ * 是 `受影响用例` 里 `tests/check-doc-references.test.ts` 的「绿的时候不多写」—— 那一格
+ * 按增量面命中，于是 2026-10-21 一天里三次，红都落在**下一个动文档面的人**身上。
+ *
+ * 夹具用 `createGateRepo()`（与其余 D0 判据同一份）：这条判据的**被测输入是暂存区本身** ——
+ * 不 `git add` 就没有任何输入，而拿真仓库的索引做实验会污染同一台机上并行的检出。
+ * `SCOPED_DOCS` 由 `copyGateDeps()` 随脚本一起带进沙箱（脚本 `require("./doc-facts.cjs")`），
+ * 所以沙箱里用的就是真清单，不在测试里抄第二份文档名。
+ */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import { defineGateRepo, describe } from "./helpers/gate-repo";
+
+/** 沙箱里用的两份真文档：一份在 `SCOPED_DOCS` 里（有镜像），一份不在（不该被判）。 */
+const SOURCE = "docs/standards/15-附录.md";
+const TWIN = "docs/generated/15-附录.md";
+const UNSCOPED = "docs/audits/某次过程文件.md";
+
+const { test, expect } = defineGateRepo({
+  script: "check-doc-mirror-pairing.cjs",
+  files: {
+    [SOURCE]: "# 附录\n\n正文。\n",
+    [TWIN]: "<!-- 生成态镜像 -->\n\n# 附录\n\n正文。\n",
+    [UNSCOPED]: "# 过程文件\n",
+  },
+  /* 一个「文件都已提交、索引干净」的起点：这样每条用例里 `git add` 了什么，
+   * 就等于本次提交带了什么 —— 被测输入到此为止，脚本读的正是这份暂存面。
+   * （`commit()` 刻意不替调用点 `git add`，所以这里要自己把基线全量加上。） */
+  setup: (repo) => {
+    repo.git("init", "-q");
+    repo.git("add", "--", ".");
+    repo.commit("基线");
+  },
+});
+
+describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
+  test("改了源、没带上镜像 → 拦，并点名是哪一对、出路是哪条命令", ({
+    repo,
+  }) => {
+    repo.write(SOURCE, "# 附录\n\n改了正文。\n");
+    repo.git("add", "--", SOURCE);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain(SOURCE);
+    expect(r.output).toContain(TWIN);
+    /* 出路必须是执行者写得下的那一条命令，不是「检查一下」这类无从落地的话。 */
+    expect(r.output).toContain("pnpm doc:render");
+    expect(r.output).toContain("不要手改生成物");
+  });
+
+  test("源与镜像同批 → 放行（这正是修法本身）", ({ repo }) => {
+    repo.write(SOURCE, "# 附录\n\n改了正文。\n");
+    repo.write(TWIN, "<!-- 生成态镜像 -->\n\n# 附录\n\n改了正文。\n");
+    repo.git("add", "--", SOURCE, TWIN);
+    const r = repo.run(["--staged"]);
+    expect(r.output, r.output).not.toContain("✗");
+    expect(r.code).toBe(0);
+  });
+
+  test("只改镜像、没改源 → 不判（重渲染产物可以因任何原因单独提交）", ({
+    repo,
+  }) => {
+    repo.write(TWIN, "<!-- 生成态镜像 -->\n\n改了产物。\n");
+    repo.git("add", "--", TWIN);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+  });
+
+  test("不在 SCOPED_DOCS 里的 .md 改了 → 不判（误报一片的判据活不过一次评审）", ({
+    repo,
+  }) => {
+    repo.write(UNSCOPED, "# 过程文件\n\n又改了一段。\n");
+    repo.git("add", "--", UNSCOPED);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).not.toContain(UNSCOPED);
+  });
+
+  test("删掉源而镜像没同批处理（改名 / 从 SCOPED_DOCS 摘登记那一形）同样拦", ({
+    repo,
+  }) => {
+    repo.git("rm", "-q", SOURCE);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain(SOURCE);
+    expect(r.output).toContain(TWIN);
+  });
+
+  test("暂存区为空时说「没有可判」，不说「已通过」", ({ repo }) => {
+    const r = repo.run(["--staged"]);
+    expect(r.code).toBe(0);
+    /* 这是这条判据的**否定式**要求：空暂存被打印成「OK」时，下一个人在钩子输出里
+     * 就分不出「判过了、没问题」与「压根没有输入可判」。 */
+    expect(r.output).toContain("没有什么可判");
+    expect(r.output).not.toContain("OK：");
+  });
+});
+
+describe("接线", () => {
+  test("这一步在 pre-commit 的 D0 里（判据写了却没有执行者 = 假保险）", () => {
+    const hook = readFileSync(
+      path.join(import.meta.dirname, "..", ".githooks", "pre-commit"),
+      "utf8",
+    );
+    expect(hook).toContain(
+      'run "文档源 ⇄ 生成态镜像同批" node scripts/check-doc-mirror-pairing.cjs --staged',
+    );
+  });
+
+  test("映射只有一处：渲染器与这条判据都取 `doc-facts` 的 `generatedPathFor`", () => {
+    const read = (rel: string) =>
+      readFileSync(path.join(import.meta.dirname, "..", rel), "utf8");
+    const facts = read("scripts/doc-facts.cjs");
+    const renderer = read("scripts/render-doc-placeholders.cjs");
+    const pairing = read("scripts/check-doc-mirror-pairing.cjs");
+    expect(facts).toContain("function generatedPathFor(");
+    /* 渲染器**不再自己写一遍**这条映射 —— 两份 `path.join(产物目录, basename)`
+     * 早晚会在「两份源映射到同一个产物名」那类形状上分叉，而那正是这条判据的对象。 */
+    expect(renderer).not.toContain("function generatedPathFor(");
+    expect(renderer).toContain("generatedPathFor,");
+    expect(pairing).toContain("generatedPathFor");
+  });
+});
