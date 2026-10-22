@@ -90,11 +90,49 @@ export function normalizeEntryApiKey(
 /** extraModels 的原始存储 / 传输形状：旧数据是纯名字字符串，新数据是条目对象。 */
 export type RawExtraModel = string | RemoteModelEntry;
 
+/**
+ * 列表里**一枚对象**的容错归一（`normalizeExtraModels` 与 `splitExtraModels` 共用）。
+ *
+ * 这两处过去各写一遍同样的四步（名字 trim / 无名丢弃 / 接口空白折 `null` / 密钥三态 /
+ * 用途白名单），只差「去重」那一半 —— 于是给条目加一个字段时，改一处、漏一处，
+ * 而两处的失效形态还不一样（读出来少一列 vs 保存时静默不落）。抽成一处之后，
+ * 「读边界认哪些键」这件事在库里只有一个答案。
+ *
+ * 它与 `~/lib/llm/remote-model-schema` 的 `remoteModelEntrySchema` **刻意是两个角色**：
+ * 那份判「这条请求能不能收下」（认不出的用途直接拒），这一份判「库里那一行读出来是什么」
+ * （认不出的用途落 `null`、整条留着 —— 历史上写坏一列不该让模型从列表里消失）。
+ * 两者对**同一枚合法条目**必须给出同样的字段，那一件事有判据：
+ * `tests/remote-model-entry-wire-contract.test.ts` 的「读边界与入参判据对同一枚合法条目同读数」。
+ *
+ * 返回 `null` = 这一枚不是条目（不是对象、没有名字、名字全空白）。
+ */
+function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
+  if (typeof item !== "object" || item === null) return null;
+  const rec = item as Record<string, unknown>;
+  const name = typeof rec.name === "string" ? rec.name.trim() : "";
+  if (name === "") return null;
+  const kind: unknown = rec.kind;
+  const apiKey = normalizeEntryApiKey(rec);
+  return {
+    name,
+    baseUrl:
+      typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
+        ? rec.baseUrl
+        : null,
+    // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
+    ...(apiKey === undefined ? {} : { apiKey }),
+    kind:
+      typeof kind === "string" &&
+      (REMOTE_MODEL_KINDS as readonly string[]).includes(kind)
+        ? (kind as RemoteModelKind)
+        : null,
+  };
+}
+
 /** 把 DB / 请求载荷里的 extraModels 归一化成条目数组（丢弃无名与空白项）。 */
 export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
   if (!Array.isArray(raw)) return [];
   const out: RemoteModelEntry[] = [];
-  const kinds: readonly string[] = REMOTE_MODEL_KINDS;
   for (const item of raw) {
     if (typeof item === "string") {
       // 字符串形态只带了名字，对连接参数**不提供意见**（挂 null 会被读成「清空」）
@@ -102,25 +140,8 @@ export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
         out.push({ name: item, baseUrl: null, kind: null });
       continue;
     }
-    if (typeof item !== "object" || item === null) continue;
-    const rec = item as Record<string, unknown>;
-    const name = typeof rec.name === "string" ? rec.name.trim() : "";
-    if (name === "") continue;
-    const kind: unknown = rec.kind;
-    const apiKey = normalizeEntryApiKey(rec);
-    out.push({
-      name,
-      baseUrl:
-        typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
-          ? rec.baseUrl
-          : null,
-      // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
-      ...(apiKey === undefined ? {} : { apiKey }),
-      kind:
-        typeof kind === "string" && kinds.includes(kind)
-          ? (kind as RemoteModelKind)
-          : null,
-    });
+    const entry = normalizeExtraModelItem(item);
+    if (entry) out.push(entry);
   }
   return out;
 }
@@ -153,27 +174,11 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
       if (n !== "" && !localNames.includes(n)) localNames.push(n);
       continue;
     }
-    if (typeof item !== "object" || item === null) continue;
-    const rec = item as Record<string, unknown>;
-    const name = typeof rec.name === "string" ? rec.name.trim() : "";
-    if (name === "") continue;
-    if (remoteEntries.some((e) => e.name === name)) continue;
-    const kind: unknown = rec.kind;
-    const apiKey = normalizeEntryApiKey(rec);
-    remoteEntries.push({
-      name,
-      baseUrl:
-        typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
-          ? rec.baseUrl
-          : null,
-      // 与 `normalizeExtraModels` 同一份三态口径（这里就是设置页保存时走的那条）
-      ...(apiKey === undefined ? {} : { apiKey }),
-      kind:
-        typeof kind === "string" &&
-        REMOTE_MODEL_KINDS.includes(kind as RemoteModelKind)
-          ? (kind as RemoteModelKind)
-          : null,
-    });
+    /* 对象那一支的归一与读取侧同一次实现（见 `normalizeExtraModelItem`）——
+     * 这里多出来的只有「按名字去重」与「字符串归本地候选」这两条分派规则。 */
+    const entry = normalizeExtraModelItem(item);
+    if (!entry || remoteEntries.some((e) => e.name === entry.name)) continue;
+    remoteEntries.push(entry);
   }
   return { localNames, remoteEntries };
 }
