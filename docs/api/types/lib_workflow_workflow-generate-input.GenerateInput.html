@@ -8,14 +8,18 @@
 <div class="col-content">
 <div class="tsd-page-title">
 <ul class="tsd-breadcrumb" aria-label="Breadcrumb">
-<li><a href="../modules/lib_media_video-queue-client.html">lib/media/video-queue-client</a></li>
+<li><a href="../modules/lib_workflow_workflow-generate-input.html">lib/workflow/workflow-generate-input</a></li>
 <li><a href="" aria-current="page">GenerateInput</a></li></ul>
 <h1>Type Alias GenerateInput</h1></div>
-<div class="tsd-signature"><span class="tsd-kind-type-alias">GenerateInput</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">RouterInputs</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">&quot;generate&quot;</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">&quot;generate&quot;</span><span class="tsd-signature-symbol">]</span></div>
-<div class="tsd-comment tsd-typography"><p>Wire type of the generate mutation input。</p>
+<div class="tsd-signature"><span class="tsd-kind-type-alias">GenerateInput</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">z.input</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-keyword">typeof</span> <a href="../variables/lib_workflow_workflow-generate-input.generateInputSchema.html" class="tsd-signature-type tsd-kind-variable">generateInputSchema</a><span class="tsd-signature-symbol">&gt;</span></div>
+<div class="tsd-comment tsd-typography"><p>调用点写的入参类型。</p>
+<p>取 <code>z.input</code> 而不是 <code>z.infer</code>：<code>paramMap</code> 那一条带 <code>.transform()</code>，<code>z.infer</code> 是
+<strong>转换之后</strong>的形状（<code>paramMap</code> 变成必写的键），而调用方传的恰恰是转换<strong>之前</strong>的
+数据 —— tRPC 的 <code>RouterInputs</code> 用的也是前者。拿后者当类型，每个不写 <code>paramMap</code>
+的构造点都会平白红一次。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/media/video-queue-client.ts:13</li></ul></aside></div>
+<li>Defined in src/lib/workflow/workflow-generate-input.ts:72</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

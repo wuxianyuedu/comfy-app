@@ -41,7 +41,6 @@ import path from "node:path";
  * 而下面那条「这一步点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
 import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
-import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 /* 单跑那三档的前提集与「单跑名 ⇄ 每日名」的对照是**数据**，一份出处在
  * `scripts/ci-oneshot-gates.mjs`。这里 import 它而不是在测试里重抄一遍 ——
  * 重抄就成了「判据自己就是第二份事实」。 */
@@ -1613,17 +1612,23 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      *   ① 它在**条目表里**、点名的入口在盘上（不然接回去也只是一句注释）；
      *   ② 它**必须**自己判「有没有报告」—— 缺 `coverage/lcov.info` 时只跳过。
      *      理由不是「宽容」：`单元测试` 此刻是临时停用的，报告本来就不存在，
-     *      把它判红等于让停用这件事连带把整条流水线拦死。 */
-    const gate = HEAVY_GATES.find((g) => g.name === "覆盖率上报");
+     *      把它判红等于让停用这件事连带把整条流水线拦死。
+     *
+     * ⚠️ 2026-10-22 订正①：它**恢复成独立的活 stage**。理由与「文档面那三条」同款 ——
+     * 2026-10-20 那一笔把它的原文注释掉了（理由是「收进聚合档」），而聚合档读的是
+     * **钩子注册表**、它 2026-10-16 就已从钩子里撤走 ⇒ 那一格从来没跑它 ⇒
+     * 「平台侧的覆盖率读数」从那天起没人写了，而两张登记表互核却全绿。
+     * 现在它自己占一格（它是**报告型**，没有 `ifModify`：它读的不是「本次改动」，
+     * 收窄它等于「只在某类改动上才记覆盖率」）。 */
+    const stageName = "覆盖率上报";
+    const block = stageBlock(readRegisteredConfig(), stageName);
     expect(
-      gate,
-      "聚合档 `重档静态判据` 的条目表里没有 `覆盖率上报` —— 平台侧的覆盖率读数又没人写了" +
+      block,
+      `配置里没有「${stageName}」这一格（不是注释形态就是被删了）—— 平台侧的覆盖率读数又没人写了` +
         "（「洞察 → 单元测试覆盖率」会退回「无 / 无」）",
-    ).toBeDefined();
+    ).toBeTruthy();
     const entry = "scripts/ci-coverage-report.mjs";
-    expect(gate?.argv.join(" "), `\`覆盖率上报\` 没有点名 ${entry}`).toContain(
-      entry,
-    );
+    expect(block, `\`${stageName}\` 没有点名 ${entry}`).toContain(entry);
     expect(
       existsSync(path.join(ROOT, entry)),
       `${entry} 不在盘上 —— 这一档会静默什么都不做（cnb 自己不存在时同理，` +
