@@ -485,6 +485,19 @@ const SCOPED_DOC_EXEMPTIONS = {
 /** 生成文档输出目录（相对 ROOT） */
 const GENERATED_DOCS_DIR = "docs/generated";
 
+/**
+ * 源文档 → 生成态镜像的落点。**这条映射只有这一处**：
+ * `render-doc-placeholders.cjs` 按它写与判，`check-doc-mirror-pairing.cjs` 按它判
+ * 「改了源有没有同批带上镜像」。各写一遍（`path.join(GENERATED_DOCS_DIR, basename)`）
+ * 早晚会在「两份源映射到同一个产物名」那类形状上分叉 —— 而那正是这里的判据对象。
+ *
+ * @param {string} docRel 源文档的仓库相对路径（`SCOPED_DOCS` 里的那种正斜杠形式）
+ * @returns {string} 镜像的相对路径（带平台分隔符，比较前需归一）
+ */
+function generatedPathFor(docRel) {
+  return path.join(GENERATED_DOCS_DIR, path.basename(docRel));
+}
+
 module.exports = {
   ROOT,
   SCOPED_DOCS,
@@ -492,6 +505,7 @@ module.exports = {
   SCOPED_DOC_EXEMPTIONS,
   FACTS,
   GENERATED_DOCS_DIR,
+  generatedPathFor,
   readJson,
   readText,
   exists,

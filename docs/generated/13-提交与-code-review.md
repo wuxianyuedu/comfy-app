@@ -186,6 +186,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-ui-logic-separation.cjs   # 视图层 IO 硬闸（命中即阻断，见 17）
 ✅ node scripts/check-changelog-fragments.cjs
 ✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
+✅ node scripts/check-doc-mirror-pairing.cjs --staged # 改了 `SCOPED_DOCS` 的文档源 ⇒ 同批必须带上 `docs/generated/**` 的镜像；不读内容、一次 `git diff --cached`（见下 13.5.5 的那个「例外」）
 ✅ node scripts/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
@@ -4449,6 +4450,7 @@ ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前
 起跑在聚合执行者 `重档静态判据` 的条目里（`scripts/ci-heavy-gates.mjs`），与写入模式
 **共用同一份「源 → 生成物」计算**（`scripts/render-doc-placeholders.cjs` 的
 `renderDocContent()`，只比对不写入）。
+
 报三个方向 —— 少报任何一个，漏掉的那类都会静默留在产物目录里：
 
 | 方向     | 含义                                 | 典型来因                         |
@@ -4460,6 +4462,23 @@ ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前
 修法：`pnpm doc:render` 后把重渲染结果**一并提交**（不要手改生成物）。比对前把换行
 归一到 LF —— 这条判据问的是「内容是否一致」，行尾由 `.gitattributes` 与 §13.7 负责，
 两件事不混在一处。
+
+**但它有一个半边回到了本地，而且必须回到本地**：`check-doc-mirror-pairing.cjs`
+（钩子步骤标签 `文档源 ⇄ 生成态镜像同批`，D0 形态档）判的不是「内容一不一致」，
+而是「**这次提交有没有把镜像带上**」这一件提交的形态。理由在那一格的执行方式：
+平台跑的是 `--check --autofix` —— 它**就地修好再判**，所以「改了源、没带镜像」
+在平台的读数里从不出现；唯一还照得出它的，是 `受影响用例` 那格里
+`tests/check-doc-references.test.ts` 的「绿的时候不多写」，而那一格按增量面命中，
+于是红总落在**下一个动文档面的人**身上（实测 2026-10-21 一天内三次，每次吃掉一次
+CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2 那句「报错指向的文件你
+根本没碰过」同一族，只是这次的根因不是硬闸落进主干，而是一条判据的**执行者不在
+漏做的那个人身上**）。
+成本口径：它不读任何文档内容，一次 `git diff --cached --name-only -z` 加一次集合比对，
+实测 0.28s（含 node 启动），与 D0 里那两条 CHANGELOG 判据同量级；「源 → 镜像」那条映射
+也不另写一遍，取 `scripts/doc-facts.cjs` 的 `generatedPathFor()`（渲染器同一个函数）。
+自测：`tests/check-doc-mirror-pairing.test.ts` —— 六个方向（漏带 ⇒ 拦且点名那一对、
+同批 ⇒ 放行、只改镜像 ⇒ 不判、不在 `SCOPED_DOCS` 里 ⇒ 不判、删源 ⇒ 同样要同批、
+暂存为空 ⇒ 说「没有可判」而不是「已通过」）加两条接线（钩子里有这一步；映射只有一处）。
 
 ##### 13.5.5.1 同族第二处：`docs/api/**` 生成物与源同步（`node scripts/check-docs-api.cjs`）
 
