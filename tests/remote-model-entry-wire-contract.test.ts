@@ -35,7 +35,11 @@ import {
   remoteModelEntrySchema,
   type RemoteModelFieldValues,
 } from "~/lib/llm/remote-model-schema";
-import { REMOTE_MODEL_KINDS } from "~/lib/llm/types";
+import {
+  REMOTE_MODEL_KINDS,
+  normalizeExtraModels,
+  splitExtraModels,
+} from "~/lib/llm/types";
 import { createCallerFactory } from "~/server/api/trpc";
 import { llmRouter } from "~/server/api/routers/llm";
 import { getTestDb } from "./helpers/test-db";
@@ -163,5 +167,49 @@ describe("远端模型条目 ⇄ configSave 的入参判据", () => {
     expect(entry.apiKey).toBeUndefined();
     /* 空白接口折成 `null` —— 新增与编辑在这一条上本来就同形（写入侧都落「跟随全局」）。 */
     expect(entry.baseUrl).toBeNull();
+  });
+
+  it("读边界与入参判据对同一枚合法条目给同样的字段", () => {
+    /* 这一条买的是「加一列时两边一起红」：`normalizeExtraModelItem`（库里那一列的读边界，
+     * `normalizeExtraModels` 与 `splitExtraModels` 现在共用它）与 `remoteModelEntrySchema`
+     *（请求能不能收下）读的是同一枚条目的同一批键。读边界哪天漏归一一个新字段，
+     * 这里就是「判据收了、读出来没有」那种不对称 —— 而那种不对称今天的表现是
+     * 「保存成功了但列表里看不到」。 */
+    const valid = [
+      entryFromDialog({
+        baseUrl: "https://api.example/v1",
+        apiKey: "sk-1",
+        kind: "video",
+      }),
+      entryFromDialog({ model: "ollama-名-带-空格" }),
+    ];
+    for (const item of valid) {
+      const parsed = remoteModelEntrySchema.parse(item);
+      expect(normalizeExtraModels([parsed])).toEqual([parsed]);
+      /* 拆分管线（设置页保存那条）也必须给同一份 —— 它过去是同一逻辑的第二份实现。 */
+      const split = splitExtraModels([parsed]);
+      expect(split.remoteEntries).toEqual([parsed]);
+      expect(split.localNames).toEqual([]);
+    }
+  });
+
+  it("认不出的用途：入参拒收、读边界落 null 并留住整条（这是两个角色的分界）", () => {
+    /* 上面那条判的是「合法条目两边同读数」，这一条判的是**刻意不同**的那一半：
+     * 请求里带一个词表外的用途应当当场拒（那是客户端拼错了）；而库里已经存着一行
+     * 词表外的用途时，读边界必须把整条留着、把这一列折成 `null` —— 历史上写坏一列
+     * 不该让一个模型从列表里消失。两处如果哪天并成一份，红会出现在这里。 */
+    const drifted = {
+      name: "gpt-x",
+      baseUrl: "https://api.example/v1",
+      kind: "audio",
+    };
+    expect(remoteModelEntrySchema.safeParse(drifted).success).toBe(false);
+    expect(normalizeExtraModels([drifted])).toEqual([
+      {
+        name: "gpt-x",
+        baseUrl: "https://api.example/v1",
+        kind: null,
+      },
+    ]);
   });
 });

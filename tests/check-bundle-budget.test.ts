@@ -178,6 +178,35 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     expect(repo.run().code).toBe(0);
   });
 
+  /* ── 「该谁签」是这两句红话里承重的那一格（ISSUE #2149）─────────────────────
+   *
+   * 判红之后要走的是「有人认这笔」，而两个出口（判红那档的收尾、`--update` 拒涨那档）
+   * 过去都写成「评审确认后」—— 那个抽象的签字者从来不存在，于是六天内四笔账
+   * （#1988 / #2082 / #2132 / #2149）**没有一笔是造成它的 PR 认的**，全挂在主干上
+   * 把后面四格的出勤一起挡掉（§13.5.21：其中两格的唯一执行者就在那条链上）。
+   * 所以这里钉的是话术的**指向**：必须点名谁签、必须给出「这笔不是你的怎么办」。
+   * 反向自证靠同一次输出里必然出现的正面短语（断言不是恒真 —— 两句都删掉就两头红）。
+   */
+  test("认账那句点名「谁签」并给出「不是你的账就立案」（两处出口都不许写「评审确认后」）", ({
+    repo,
+  }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+    /* 只把已有的一个 chunk 变大：文件数不变，落进「gzip 总量上升」那一档。 */
+    chunk(repo, "0800.js", `/* ${"g".repeat(20000)} */\n`);
+
+    const blocked = repo.run();
+    expect(blocked.code, blocked.output).toBe(1);
+    expect(blocked.output).toContain("谁把这批客户端字节带进来的谁签");
+    expect(blocked.output).toContain("这不是你的账");
+    expect(blocked.output).not.toContain("评审确认后");
+
+    const refused = repo.run(["--update"]);
+    expect(refused.code, refused.output).toBe(1);
+    expect(refused.output).toContain("造成它的那条 PR");
+    expect(refused.output).not.toContain("评审确认后");
+  });
+
   test("--report 只出清单、不判失败（盘点用）", ({ repo }) => {
     seedChunks(repo);
     const { code, output } = repo.run(["--report"]);
