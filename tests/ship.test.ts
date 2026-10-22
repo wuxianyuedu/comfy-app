@@ -1532,37 +1532,47 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
   it("整链跑通：合并验真之后才清理，且那句边界声明按这一轮实际做了什么来说", async () => {
     /* 这条补的是这一族的一处空白：此前没有任何一条用例跑通过
      * `preflight → 轮询 → 合并 → 清理`，所以「合并那一段说的话」与「清理那一段做的事」
-     * 会不会互相矛盾，只有真跑一次才知道（而真跑那一次确实矛盾过 —— ISSUE #2145）。 */
-    const heard: string[] = [];
-    const { run, calls } = fake({ chain: true });
-    const code = await main({
-      root: process.cwd(),
-      run,
-      log: (s: string) => heard.push(s),
-      probeCnb: () => true,
-      args: ["--merge", "--clean-branch"],
-    });
-    const all = heard.join("\n");
-    expect(all).toContain("已有开放 PR #777 ⇒ 复用");
-    expect(all).toContain("is_merged=true");
-    expect(all).not.toContain("没删");
-    expect(all).toContain("交给下一段（--clean-branch）收");
-    expect(code).toBe(CODE.GREEN);
-    /* 顺序也是判点：清理必须在**验真**之后，否则删的就是这些提交唯一的对象。 */
-    const at = (needle: string) => calls.findIndex((c) => c.startsWith(needle));
-    expect(at("cnb pulls merge-pull")).toBeGreaterThanOrEqual(0);
-    expect(at("git push cnb --delete feat/x")).toBeGreaterThan(
-      at("cnb pulls merge-pull"),
-    );
-    expect(calls.slice(at("git push cnb --delete feat/x") - 1)).toEqual([
-      "git rev-parse --short feat/x",
-      "git push cnb --delete feat/x",
-      "git ls-remote --heads cnb feat/x",
-      "git branch -D feat/x",
-      "git show-ref --verify --quiet refs/heads/feat/x",
-    ]);
-    // 恢复线要真的带着那笔 sha，不然「可以恢复」是一句空话。
-    expect(all).toContain("git branch feat/x edda13b6");
+     * 会不会互相矛盾，只有真跑一次才知道（而真跑那一次确实矛盾过 —— ISSUE #2145）。
+     * ⚠️ 走完整链又要断退出码的格子必须**自带一份合并前证明**：`push` 那一段读不到
+     * `comfy-premerge-proof.json` 就压 `NOT_RUN`，开发机上有、CI 节点上没有 ——
+     * 这条第一版就是这样「本地绿、节点红」（同形先例见本文件 `proofRoot` 那段）。 */
+    const { tmpRoot, gitDir } = proofRoot("chain-clean");
+    try {
+      const heard: string[] = [];
+      const { run, calls } = fake({ chain: true });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--merge", "--clean-branch"],
+      });
+      const all = heard.join("\n");
+      expect(all).toContain("已有开放 PR #777 ⇒ 复用");
+      expect(all).toContain("is_merged=true");
+      expect(all).not.toContain("没删");
+      expect(all).toContain("交给下一段（--clean-branch）收");
+      expect(code).toBe(CODE.GREEN);
+      /* 顺序也是判点：清理必须在**验真**之后，否则删的就是这些提交唯一的对象。 */
+      const at = (needle: string) =>
+        calls.findIndex((c) => c.startsWith(needle));
+      expect(at("cnb pulls merge-pull")).toBeGreaterThanOrEqual(0);
+      expect(at("git push cnb --delete feat/x")).toBeGreaterThan(
+        at("cnb pulls merge-pull"),
+      );
+      expect(calls.slice(at("git push cnb --delete feat/x") - 1)).toEqual([
+        "git rev-parse --short feat/x",
+        "git push cnb --delete feat/x",
+        "git ls-remote --heads cnb feat/x",
+        "git branch -D feat/x",
+        "git show-ref --verify --quiet refs/heads/feat/x",
+      ]);
+      // 恢复线要真的带着那笔 sha，不然「可以恢复」是一句空话。
+      expect(all).toContain("git branch feat/x edda13b6");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 
   it("负控制：同一轮没给 --clean-branch ⇒ 那句「没删」照旧要念（边界声明不许被删掉）", async () => {
