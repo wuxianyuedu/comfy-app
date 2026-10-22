@@ -22,7 +22,8 @@ import { resolveGitDir } from "./git-dir.mjs";
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 
-/** 阶段顺序表。**可反转**：新增/摘掉一段只改这张表 + 对应的 `run*`，不动判决逻辑。 */
+/** 阶段顺序表。**可反转**：新增/摘掉一段只改这张表 + 对应的 `run*`，不动判决逻辑。
+ * `clean-branch` 排在最后：它要的是「合并已经验真」这件事，而那是 `merge` 那一段的产物。 */
 export const PHASES = [
   "preflight",
   "commit",
@@ -31,6 +32,8 @@ export const PHASES = [
   "poll",
   "verdict",
   "merge",
+  "close-issue",
+  "clean-branch",
 ];
 
 /** build 的终态集合（其余一律当「还没完」）。 */
@@ -61,17 +64,19 @@ export function combineShipCodes(codes) {
  * 而这里最贵的误读是「以为会合、其实没合」或反之。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,closeIssue:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,adds:string[],merge:boolean,closeIssue:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
     title: null,
+    branch: null,
     adds: [],
     merge: false,
     closeIssue: false,
+    cleanBranch: false,
     dryRun: false,
     wait: true,
     only: null,
@@ -81,17 +86,21 @@ export function parseArgs(argv) {
     const a = argv[i] ?? "";
     if (a === "--merge") out.merge = true;
     else if (a === "--close-issue") out.closeIssue = true;
+    else if (a === "--clean-branch") out.cleanBranch = true;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--no-wait") out.wait = false;
     else if (a === "--message" || a === "-m") out.message = argv[++i] ?? "";
     else if (a === "--message-file") out.messageFile = argv[++i] ?? "";
     else if (a === "--title") out.title = argv[++i] ?? "";
+    else if (a === "--branch") out.branch = argv[++i] ?? "";
     else if (a === "--add") out.adds.push(argv[++i] ?? "");
     else if (a.startsWith("--message="))
       out.message = a.slice("--message=".length);
     else if (a.startsWith("--message-file="))
       out.messageFile = a.slice("--message-file=".length);
     else if (a.startsWith("--title=")) out.title = a.slice("--title=".length);
+    else if (a.startsWith("--branch="))
+      out.branch = a.slice("--branch=".length);
     else if (a.startsWith("--add=")) out.adds.push(a.slice("--add=".length));
     else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
     else out.unknown.push(a);
@@ -166,6 +175,127 @@ export function decideCloseIssue({ requested, landedVerified, title }) {
     };
   }
   return { act: true, code: null, numbers, reason: "" };
+}
+
+/**
+ * 「这次要不要先把分支建出来」—— 判断与效应分家（与 `decideCloseIssue` 同一形状）。
+ *
+ * 四条口径：
+ *   · **名字只能由人给**。`feat/…`、`fix/<issue号>-…` 是本仓习惯，不是脚本能推的事实；
+ *     从 issue 标题或提交信息里"造"一个名字，等于替这次变更决定它对外叫什么（§13.10.9
+ *     同一条纪律：机械的那一半归脚本，判断的那一半归人）。
+ *   · **只补那一格拒绝的**：这一格原本只会打印「先 `git checkout -b …`」然后退 1，
+ *     于是脚本在「人还没分支」的时刻是旁观者。给了 `--branch` 才动 ref。
+ *   · **不把人正在干的活搬走**：已经在**另一条**分支上时停（退 2）—— 那种情形里"建分支"
+ *     多半是打错了旗标，而 `git checkout -b` 会把工作树与未提交改动一起带走。
+ *   · **幂等**：已经在同名分支上就是「已经做过」，不动 ref、不落红。
+ *
+ * @param {{requested?: string | null, current: string, existsLocal?: boolean, existsRemote?: boolean}} input
+ * @returns {{requested: boolean, act: boolean, code: number | null, branch: string, reason: string}}
+ */
+export function decideCreateBranch({
+  requested = null,
+  current,
+  existsLocal = false,
+  existsRemote = false,
+}) {
+  const name = (requested || "").trim();
+  if (!name) {
+    return {
+      requested: false,
+      act: false,
+      code: null,
+      branch: "",
+      reason: "未要求建分支（--branch）。",
+    };
+  }
+  if (name === "master" || name === "HEAD") {
+    return {
+      requested: true,
+      act: false,
+      code: CODE.RED,
+      branch: name,
+      reason: `分支名是「${name}」⇒ 停：本仓不许直连主干（硬规则 6），换一个名字。`,
+    };
+  }
+  if (current === name) {
+    return {
+      requested: true,
+      act: false,
+      code: CODE.GREEN,
+      branch: name,
+      reason: `已经在 ${name} 上 ⇒ 这一格是幂等（不动 ref）。`,
+    };
+  }
+  if (existsLocal || existsRemote) {
+    return {
+      requested: true,
+      act: false,
+      code: CODE.NOT_RUN,
+      branch: name,
+      reason:
+        `${name} 已经存在（${existsLocal ? "本地" : "远端"} ref 查得到）⇒ 不覆盖、不切换：` +
+        "接着那条分支干就先 `git checkout " +
+        name +
+        "` 再跑；要新开一条就换一个名字。",
+    };
+  }
+  if (current && current !== "master" && current !== "HEAD") {
+    return {
+      requested: true,
+      act: false,
+      code: CODE.NOT_RUN,
+      branch: name,
+      reason:
+        `当前在 ${current} 上，而 --branch 指的是 ${name} ⇒ 停：` +
+        "本脚本不在分支之间搬工作树（那一步该由人看着未提交的改动做）。",
+    };
+  }
+  return { requested: true, act: true, code: null, branch: name, reason: "" };
+}
+
+/**
+ * 「这次跑完要不要把分支清掉」—— 同样只跟在**验真的合并**之后。
+ *
+ * 为什么默认关、且必须有 `landed.verified`：合并之后本地那条分支是这些提交**唯一的对象**
+ * （squash 落进主干的是另一笔），删错了只能靠 reflog 或平台 PR 找回。而 `ship` 在合并那一跳
+ * 已经拿到两件独立事实（PR 的 `is_merged` + 碎片真在主干顶端），只有拿着这两件才谈得上删。
+ *
+ * 只删**这一次跑的那条分支**：「把所有已合并分支一次清掉」需要另一套判据（squash 形态下
+ * `git branch -d` 的祖先判据恒假，实测六条已合并分支全部不肯删），那不在本脚本的动作面里。
+ *
+ * @param {{requested: boolean, landedVerified: boolean, branch: string}} input
+ * @returns {{act: boolean, code: number | null, branch: string, reason: string}}
+ */
+export function decideCleanBranch({ requested, landedVerified, branch }) {
+  if (!requested) {
+    return {
+      act: false,
+      code: null,
+      branch: "",
+      reason: "未要求清理分支（--clean-branch）。",
+    };
+  }
+  if (!landedVerified) {
+    return {
+      act: false,
+      code: CODE.NOT_RUN,
+      branch,
+      reason:
+        "这一跳没有**验真的合并**（is_merged + 碎片在主干顶端）⇒ 本地那条分支是这些提交" +
+        "唯一的对象，不许删",
+    };
+  }
+  const name = (branch || "").trim();
+  if (!name || name === "master" || name === "HEAD") {
+    return {
+      act: false,
+      code: CODE.NOT_RUN,
+      branch: name,
+      reason: `要删的分支名不可用（「${name || "(空)"}」）⇒ 不猜名字、不删别的东西`,
+    };
+  }
+  return { act: true, code: null, branch: name, reason: "" };
 }
 
 /**
@@ -561,13 +691,16 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
   const p = [];
   const remote = st.remote || "origin";
   const trunk = st.baseBranch || "master";
+  /* 建分支排在最前面：它是 `--branch` 唯一能改变形状的一格（不在分支上时，后面每一跳
+   * 的分支名都取自它）。给了旗标才出现 —— 与合并/关单同一档：默认那份计划里没有这一步。 */
+  if (st.createBranch) p.push(`git checkout -b ${st.createBranch}`);
   p.push("git rev-parse --abbrev-ref HEAD");
   p.push("git status --porcelain");
   /* 碎片那一查的**两条**取数都要在计划里出现：执行面是「分支相对主干已提交的 ∪
@@ -601,6 +734,14 @@ export function planCommands(st) {
       `cnb issues update-issue --repo ${st.slug} --number <n> --state closed --state-reason completed -v`,
     );
     p.push(`cnb issues get-issue --repo ${st.slug} --number <n> -v`);
+  }
+  /* 清理那一跳的**四条**都要出现在计划里：两条是动作，两条是回读。只写动作不写回读，
+   * dry-run 就把「回执即结论」这个形状教给读者 —— 而这一族从不采信回执。 */
+  if (st.cleanBranch) {
+    p.push(`git push ${remote} --delete ${st.branch}`);
+    p.push(`git ls-remote --heads ${remote} ${st.branch}`);
+    p.push(`git branch -D ${st.branch}`);
+    p.push(`git show-ref --verify --quiet refs/heads/${st.branch}`);
   }
   return p;
 }
