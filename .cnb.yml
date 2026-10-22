@@ -175,24 +175,33 @@
   #
   #   · `pull_request` ⇒ `pr-<PR 编号>` —— **每个 PR 互不相同**，不同 PR 之间再不相干；
   #     同一个 PR 里连着推几个提交仍然落回同一把锁（后一跑终止前一跑，这才是想要的粒度）；
-  #   · `push`         ⇒ `pr-` —— 这一档只有一条流水线（`master 合并复核`），
-  #     它本来就该是「一条就够」，不带分支名也不丢语义。
+  #   · 非 PR 事件 ⇒ `pr-`（变量无值 ⇒ 等于「不带这一半」）—— 这一档**当年**只有一条
+  #     流水线（`master 合并复核`），所以那句「不带分支名也不丢语义」在当时是真的。
+  #
+  # ⚠️ 那半句今天**不再成立**，而且是有害的：每日档三条触发口与单跑口六条都是
+  # `<<: *common`，共用一把 `pr-` ⇒ 「一次无关的 master push 掐掉正在跑的按需复验」
+  # 被当场验到两次（`cnb-5j9-1k5bc4p4u` / `cnb-lm1-1k5h1otqt`，逐秒对账见下面
+  # `.lock-daily` 那一段与 ISSUE #2114）。修法不是改这句，而是**按触发类各写一把**：
+  # 非 PR 的九条流水线现在都显式带 `lock: *lock_*`，`.common` 这一条退回到只管
+  # `pull_request`（以及「没写覆盖时兜底」——而那种兜底现在会被判红，见下）。
   #
   # 为什么不按「事件」分两档写（`pull_request` 用 `$CNB_PULL_REQUEST_IID`、`push` 用
-  # `$CNB_DEFAULT_BRANCH`）：那要么靠平台侧的变量缺省为空来兜（没实据），要么把
-  # `lock` 从锚点里搬出来在两档各写一份 —— 而两份锁配置漂了之后「哪一份是真的」
-  # 没有判据能回答。留一条、用「非 PR 事件该变量无值」这条**有文档依据**的性质分叉，
-  # 是本仓能拿到的唯一一份事实。
+  # `$CNB_DEFAULT_BRANCH`）：那要么靠平台侧的变量缺省为空来兜（没实据，而这次坏的正是它），
+  # 要么把 `lock` 在两档各写一份字面量 —— 两份锁配置漂了之后「哪一份是真的」没有判据能回答。
+  # 现在的形状避开这两半：**定义各一份**（`.lock-push` / `.lock-daily` / `.lock-oneshot-*`，
+  # 全是字面量 key、不带变量），流水线只**引用**；判据同时钉「每类一把、异类不相撞」
+  # 与「非 PR 流水线不许靠继承兜底」。
   #
   # 依据：`lock.key` 是官方点名**支持变量替换**的属性（`build/env.md` §支持变量替换
   # 那张表里有 `lock.key`）；`CNB_PULL_REQUEST_IID` 见 `build-in-env.md`（PR 仓库编号，
   # 非合并类事件触发时自然没有值）。⚠️ **刻意不用** `CNB_BRANCH`（正是它会退化成
   # 目标分支），也**不用** `CNB_PULL_REQUEST_ID`（PR 的**全局** ID，跨仓库才需要那个粒度）。
   #
-  # 判据：`tests/no-platform-ci-config.test.ts` 的 `resolvePipelineLockKey()` 一族
-  # —— 它要求 `lock.key` 存在、里头的 `${…}` 全在白名单内、`CNB_BRANCH` 不在其中，
-  # 并把上面这份原文表达式**喂进一个自带的模拟替换器**跑出两种事件下的实际 key，
-  # 断言「两条不同 PR 的 key 不同」「两条同 PR 的 key 相同」。口径见规范 §13.5.3.9。
+  # 判据：`tests/no-platform-ci-config.test.ts` 的 `resolveLockKey()` 与
+  # `pipelineLockAssignments()` 一族 —— 它要求 `lock.key` 存在、里头的 `${…}` 全在白名单内、
+  # `CNB_BRANCH` 不在其中，并把上面这份原文表达式**喂进一个自带的模拟替换器**跑出两种事件下的实际 key，
+  # 断言「两条不同 PR 的 key 不同」「两条同 PR 的 key 相同」「九条非 PR 流水线分属四把类锁、
+  # 且没有一条落回 `pr-`」。口径见规范 §13.5.3.10。
   lock:
     key: pr-$CNB_PULL_REQUEST_IID
     cancel-in-progress: true
@@ -466,6 +475,64 @@
 #
 # 与 `.gates`（PR 那三十七格）同理，这里也刻意**不带 `ifModify`**：这七格是「重跑一遍」
 # 的语义，按改动面跳过就不是每日档了。
+
+# ── 锁按**触发类**分：`push` / `daily` / 单跑三档各一把 ────────────────────────
+#
+# `.common` 那条 `lock.key: pr-$CNB_PULL_REQUEST_IID` 的理由写在它自己的头注里（#1981：
+# 平台默认 key 含 `CNB_BRANCH`，而合并类事件上它是**目标分支** ⇒ 全仓 PR 共用一把锁、
+# 并行 PR 互相掐停）。PR 那一半今天照旧成立，这里一字未动。坏下来的是它**多出来的那半句**：
+# `CNB_PULL_REQUEST_IID` 在非 PR 事件上没有值 ⇒ 所有非 PR 流水线落回同一把字面 `pr-`，
+# 而写下那句前提的时候（#1981）全档只有**一条**非 PR 流水线（`master 合并复核`），
+# 所以「不带分支名也不丢语义」当时是真的。
+#
+# 后来加的两批都用了 `<<: *common`，那句前提就没人回来改了：每日档三条触发口
+# （定时 / 手点 / API）+ 单跑口六条 ⇒ 现在**九条**非 PR 流水线共用一把 `pr-`。
+# 两次后果都是当场取到的读数，不是推演：
+#
+#   · `cnb-5j9-1k5bc4p4u`：前 9 格全绿，最后一格 `每日单元测试` **cancel** ——
+#     终止时刻与两笔 master push 的 `createTime` 相差 3 秒（ISSUE #2114 出勤表第四行）；
+#   · `cnb-lm1-1k5h1otqt`（`api_trigger_build`）：跑到第 **244.06 秒**被 `cancel`，
+#     紧挨着的那次 push（`cnb-ndi-1k5h20bhg`，`2026-10-22T05:40:39.000Z`）与之差 **0.2 秒**。
+#     被掐掉的不是「每天一次的无人值守」，而是**一个人为了排障刚点下去的按需复验** ——
+#     它前面已经花了 244 秒装依赖，重跑一遍才能拿到结论。
+#
+# ⇒ 一把锁要挡的是「**同一件事**被重复排队」，不是「所有非 PR 的事」。
+#   `master 合并复核` 掐掉正在跑的每日档 / 单跑，从来不是任何人的意图。
+#
+# 所以按触发类各给一把，键名一律是**字面量**（不带变量 ⇒ 不存在「某个事件上变量无值
+# 就退化」这条路；#1981 那条教训正是别指望变量在某个事件上有值）：
+#
+#   · `push`     —— 仍然只有 `master 合并复核` 一条，它本来就该「一条就够」；
+#   · `daily`    —— 定时 / 手点 / API 那三条**同一档**，「后起的掐掉先跑的」一字未改地保留
+#                   （§13.5.3.10 想要的就是这份互斥：同一台机上不要同时压两遍那七格）；
+#   · `oneshot-build` / `oneshot-e2e` / `oneshot-unit` —— 每档自己一把：同一档被连点两次
+#                   仍然只留最新那一跑，而**不同档各跑各的** ——
+#                   「我要复验构建」不再被别人的「我要复验 E2E」掐掉。
+#
+# ⚠️ 这里**新增**了一条平台事实：不同档的单跑从此可以同时在跑，而节点只有一台。
+#   这不是拿并发换绿 —— PR 之间本来就各用一把 `pr-<iid>`、早就在叠加了；真要挡「整台机
+#   一次只跑一条重档」得另做一条全局锁，那是另一个决定，写在这里而不是顺手做掉。
+#
+# 判据：`tests/no-platform-ci-config.test.ts` 的 `pipelineLockAssignments()` 与
+# `resolveLockKey()` 一族 —— 按事件把每条流水线的**有效 key** 代出来，判
+# 「同类的 key 相同、异类的 key 相异、任何一条都不与 `pr-<iid>` 撞」，
+# 并逐条带坏形态的反向复算（含「有人忘了写覆盖 ⇒ 退回 `pr-`」那一种）。
+.lock-push: &lock_push
+  key: push
+  cancel-in-progress: true
+.lock-daily: &lock_daily
+  key: daily
+  cancel-in-progress: true
+.lock-oneshot-build: &lock_oneshot_build
+  key: oneshot-build
+  cancel-in-progress: true
+.lock-oneshot-e2e: &lock_oneshot_e2e
+  key: oneshot-e2e
+  cancel-in-progress: true
+.lock-oneshot-unit: &lock_oneshot_unit
+  key: oneshot-unit
+  cancel-in-progress: true
+
 .daily-gates: &daily_gates
   # ── 前提三格：script 行与 PR 那条流水线上的同名档**逐字相同** ──────────
   # 为什么不共用 YAML 锚点：`pipelineStageNames()` / `stageBlock()` 是按名字在文本里
@@ -1762,6 +1829,7 @@ master:
   push:
     - <<: *common
       name: master 合并复核
+      lock: *lock_push
       stages:
         - name: 合并形态复核
           # ⚠️ 这一格是**唯一**没钉控制台编码的 stage（其余每个 `script` 都以
@@ -1780,6 +1848,7 @@ master:
   "crontab: 0 2 * * *":
     - <<: *common
       name: 每日生产构建
+      lock: *lock_daily
       stages: *daily_gates
 
   # ── 手动触发那一条：与 02:00 那一跑**同一份七格**（按钮在 `.cnb/web_trigger.yml`）──
@@ -1796,11 +1865,13 @@ master:
   #   · **取的是哪份代码**：两条都取**按下时刻的 master HEAD**。手点不是「重跑历史那一跑」，
   #     而是「以现在这份 master 再跑一遍」—— 想复现夜里那次红的现场，得先确认 master
   #     在那之后没动过。
-  #   · `lock` 与定时那一条**同一个 key**（`<<: *common`），所以两条不会同时在同一台机上
+  #   · `lock` 与定时那一条**同一把** `*lock_daily`（不是靠 `<<: *common` 落回 `pr-`，
+  #     那正是 ISSUE #2114 的第二条死因），所以两条不会同时在同一台机上
   #     压一遍七格：02:00 那一跑还在跑时手点，会被新一跑掐掉旧的一跑（`cancel-in-progress`）。
   web_trigger_daily:
     - <<: *common
       name: 每日档（手动触发）
+      lock: *lock_daily
       stages: *daily_gates
 
   # ── 第三个触发口：CLI / API —— 与上面两条**同一份七格** ──
@@ -1820,11 +1891,12 @@ master:
   #     这一条由 `tests/no-platform-ci-config.test.ts` 判（判前缀，不判整串名字）。
   #   · **执行身份**是发命令的那个人（与手点同族，都不是「最后改这份配置并推送的人」）。
   #
-  # `lock` 同样继承 `*common` ⇒ 三条触发口共用一把锁，不会出现两个触发口在同一台机上
-  # 同时压一遍七格（表现为后起的那一跑把前一跑 `cancel-in-progress` 掉）。
+  # `lock` 与上面两条同为一把 `*lock_daily` ⇒ 三条触发口共用一把锁，不会出现两个触发口
+  # 在同一台机上同时压一遍七格（表现为后起的那一跑把前一跑 `cancel-in-progress` 掉）。
   api_trigger_daily:
     - <<: *common
       name: 每日档（API 触发）
+      lock: *lock_daily
       stages: *daily_gates
 
   # ── 单跑三档重档：手点 + API 各一条，两条引用同一张整表锚点 ────────────────
@@ -1838,30 +1910,37 @@ master:
   # 前提是「引用得到同一张表」就够了；至于表里那些**副本**不许与每日那几格漂开，
   # 由「逐字相同」那条判据负责（形态与否证的完整经过见上面 `.oneshot-*` 那段的头注）。
   #
-  # 与每日档共用的 `lock`（`<<: *common` ⇒ key 在非 PR 事件退化成 `pr-`）意味着
-  # **单跑会掐掉正在跑的定时那一跑**，反之也一样 —— 这是 ISSUE #2114 记下的第二个
-  # 死因，本条不修它；要点单跑之前先看定时那一跑在不在场。
+  # 每档自己一把锁（`lock: *lock_oneshot_*`，理由与那份退化史实见上面 `.lock-daily` 那段）：
+  # 同一档被连点两次仍然只留最新那一跑；不同档各跑各的，也不再与每日档 / `push` 互掐 ——
+  # ISSUE #2114 记下的第二个死因（`pr-` 一把共用）到这里才算修掉，现场读数：
+  # `cnb-lm1-1k5h1otqt` 跑到 244.06 秒被一次无关 push 掐掉。
   web_trigger_e2e:
     - <<: *common
       name: 单跑全量E2E（手动触发）
+      lock: *lock_oneshot_e2e
       stages: *oneshot_e2e
   web_trigger_build:
     - <<: *common
       name: 单跑生产构建（手动触发）
+      lock: *lock_oneshot_build
       stages: *oneshot_build
   web_trigger_unit:
     - <<: *common
       name: 单跑全量单测（手动触发）
+      lock: *lock_oneshot_unit
       stages: *oneshot_unit
   api_trigger_e2e:
     - <<: *common
       name: 单跑全量E2E（API 触发）
+      lock: *lock_oneshot_e2e
       stages: *oneshot_e2e
   api_trigger_build:
     - <<: *common
       name: 单跑生产构建（API 触发）
+      lock: *lock_oneshot_build
       stages: *oneshot_build
   api_trigger_unit:
     - <<: *common
       name: 单跑全量单测（API 触发）
+      lock: *lock_oneshot_unit
       stages: *oneshot_unit
