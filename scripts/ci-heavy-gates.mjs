@@ -121,6 +121,11 @@ export const HEAVY_GATES = [
     why: "判 core 的出口纪律与仓储基类纯度，两条都是全仓级不变量。",
   },
   {
+    name: "CP936 字形登记",
+    argv: ["node", "scripts/check-cp936-glyphs.cjs"],
+    why: "判「会进 CI 日志的面里，没有 CP936 字形的字符是不是都登记了替代写法」；那一跳会把没字形的字符写成问号，于是连「这一条过了」都会变成问号（规范 §13.5.3.5 的日志乱码那一族）。",
+  },
+  {
     name: "格式化提交分离",
     argv: ["node", "scripts/check-reformat-only.cjs"],
     why: "判「这次改动里有多少个文件只是被 prettier 重排过」；判据本体逐文件跑 prettier，面上有源文件才动手。",

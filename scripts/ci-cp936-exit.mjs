@@ -133,6 +133,10 @@ import {
   commandInvocation,
   resolveCommandInvocation,
 } from "../src/lib/process/executable-resolve.ts";
+import {
+  describeGlyphReplacements,
+  normalizeCp936Glyphs,
+} from "./ci-cp936-glyphs.mjs";
 
 /* 这两个别名只为一件事：模块里那两兄弟的名字都长，而它们各自要表达的是**收什么**——
  * `resolveCommandInvocation` 收**名字**（PATH 查找 + 形态），`commandInvocation`
@@ -582,6 +586,16 @@ export function runWithCp936Exit(
      * 它原来是每跑收尾一句，现在成了按行发，每行都重复一遍会把真输出埋掉。 */
     let carry = "";
     let warnedTranscodeFailure = false;
+    /* 字形归一化的**跨块累计**（ISSUE #1977 那一族之外的一件事，见下）。
+     *
+     * 为什么要单独记一份：转码是**边到边发**的，一个 stage 的输出会分成很多块，
+     * 而「这一跑里有哪些字符没有 CP936 字形」是**整跑**的性质。记在这里 ⇒
+     * 收尾时能打一条**总数**；即时读数则只对**第一次出现的那个字符**打一条
+     * （同一个字符重复出现几百次，逐次打会把真输出埋掉）。
+     *
+     * ⚠️ 记的是**原字符**而不是替代物：`✓` 与 `✔` 都归到 `√`，但它们在原文里
+     * 是两回事，汇总时要能分辨。 */
+    const glyphTotals = new Map();
     /**
      * 发一批**整行**文本：Windows 上过 PowerShell 转码、其余平台原样。
      *
@@ -596,10 +610,43 @@ export function runWithCp936Exit(
         emit(text);
         return;
       }
+      /* **先把没有 CP936 字形的字符换成读得出来的写法，再交给转码**。
+       *
+       * 这一步放在**转码之前**而不是之后：CP936 编不出来的字符，.NET 的编码器
+       * 会把它们各自写成**一个问号**（单字节 `0x3F`）—— 而那个问号与「原文里本来
+       * 就有的问号」逐字同形。放在之后就已经晚了（信息在那一步就没了）。
+       *
+       * 被吃掉的往往不是装饰，是判决：vitest 的**绿色通过标记** `✓` 就在这一列
+       * （而红色失败标记 `×` 有字形、活得好好的）—— 于是「这一条过了」在日志上
+       * 打印成一个问号。详见 `scripts/ci-cp936-glyphs.mjs` 的文件头。 */
+      const normalized = normalizeCp936Glyphs(text);
+      if (normalized.replaced.length > 0) {
+        const fresh = [];
+        for (const item of normalized.replaced) {
+          const prev = glyphTotals.get(item.from);
+          glyphTotals.set(item.from, {
+            from: item.from,
+            to: item.to,
+            count: (prev?.count ?? 0) + item.count,
+          });
+          /* 第一次出现的字符才打即时读数：重复的那个只进总数。 */
+          if (!prev) fresh.push(item);
+        }
+        if (fresh.length > 0) {
+          /* ⚠️ **读数必须走 `write`（CP936 那一跳），不能走 `emit`** ——
+           * `emit` 是本进程 stdout 的直写（UTF-8 字节），而平台按 CP936 解一切：
+           * 走 `emit` 的中文会在日志里变成乱码，那正是这一层要治的病。
+           * 这句话自己的字符也必须**全是 CP936 编得出来的**（`describeGlyphReplacements`
+           * 保证了这一点）。 */
+          const line = `${describeGlyphReplacements(fresh)}\n`;
+          const { ok } = write(line, { stdio: "inherit" });
+          if (!ok) emit(line);
+        }
+      }
       /* 转码成功时**不必再 emit** —— `write()` 已经把 PowerShell 那份 936 字节
        * 直接接到本进程的 stdout 上了（`stdio: "inherit"`）。这里只在没做成时
        * 兜底把原文照打一遍。 */
-      const { ok } = write(text, { stdio: "inherit" });
+      const { ok } = write(normalized.text, { stdio: "inherit" });
       if (ok) return;
       if (!warnedTranscodeFailure) {
         warnedTranscodeFailure = true;
@@ -608,7 +655,7 @@ export function runWithCp936Exit(
             "日志可能仍是乱码；退出码不受影响\n",
         );
       }
-      emit(text);
+      emit(normalized.text);
     };
     for (const stream of [child.stdout, child.stderr]) {
       /* **显式钉 UTF-8**：`String(buffer)` 走 `buf.toString()`，其默认编码取自
@@ -650,6 +697,20 @@ export function runWithCp936Exit(
        * 都已经发出去了，这正是流式要买的东西。 */
       flush(carry);
       carry = "";
+      /* 收尾打一条**总数**：逐块那条只对第一次出现的字符说「这个被换过」，而
+       * 「这一跑一共换了几处」是整跑才答得出的问题。逐块读数留给人看形态，
+       * 这一条留给想核对总量的人。
+       *
+       * ⚠️ 同样走 `write`（CP936 那一跳）—— `emit` 那条路是 UTF-8 直写，
+       * 平台按 CP936 解，中文会在那里变成乱码。
+       *
+       * 这一条在**被平台按 stage 超时 kill** 时不会来（`close` 不来）—— 但那时
+       * 前面每一次出现的即时读数都已经发出去了，形态不会丢。 */
+      if (glyphTotals.size > 0) {
+        const summary = `${describeGlyphReplacements([...glyphTotals.values()], "这一跑")}\n`;
+        const { ok } = write(summary, { stdio: "inherit" });
+        if (!ok) emit(summary);
+      }
       settle(code ?? 0);
     });
   });
