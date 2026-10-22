@@ -25,6 +25,7 @@ import {
   buildPullBody,
   CODE,
   combineShipCodes,
+  decideCleanBranch,
   decideCloseIssue,
   deriveTitle,
   findPullForBranch,
@@ -549,6 +550,113 @@ export function closeIssues(ctx) {
         ` · 落地那一行 sha=${short(landed?.sha ?? "")}`,
     );
     codes.push(state === "closed" ? CODE.GREEN : CODE.RED);
+  }
+  return combineShipCodes(codes);
+}
+
+/**
+ * 阶段 8：把**这一次跑的**那条分支收掉 —— 远端与本地各删一次，各自独立回读。
+ *
+ * 与合并、关单同一条纪律：**回执不算结论**。所以两边都不看 `git push --delete` /
+ * `git branch -D` 的退码，而是各问一次事实 ——
+ *   · 远端：`git ls-remote --heads <远端> <分支>` 里还有没有那条；
+ *   · 本地：`git show-ref --verify refs/heads/<分支>` 还查不查得到。
+ * 回读本身没跑起来（网络 / 非零）落 `NOT_RUN` 而不是「已删」—— 「没拿到测量」与
+ * 「测量结果是红的」是两件事，这一族从头到尾就是在守这一条。
+ *
+ * 本地为什么用 `-D` 而不是 `-d`：本仓 PR 是 **squash 合并**，本地那笔永远不是主干那笔的
+ * 祖先，`-d` 的祖先判据在这条形状下**恒假**（实测六条已合并分支全部被拒）。写成 `-d`
+ * 等于把这条能力做成"永远不生效"。代价由前两道守卫承担：只在 `landedVerified` 为真时才走到，
+ * 且**删之前先把那笔 sha 打出来**当恢复线（`git branch <名> <sha>`）。
+ *
+ * @param {{
+ *   run: PlatformIO["run"],
+ *   log: PlatformIO["log"],
+ *   remote: string | null,
+ *   branch: string,
+ *   landedVerified: boolean,
+ *   cleanBranch: boolean,
+ * }} ctx
+ * @returns {number} `CODE` 之一
+ */
+export function cleanBranch(ctx) {
+  const {
+    run,
+    log,
+    remote,
+    branch,
+    landedVerified,
+    cleanBranch: requested,
+  } = ctx;
+  const plan = decideCleanBranch({ requested, landedVerified, branch });
+  if (!plan.act) {
+    if (plan.code === CODE.NOT_RUN) {
+      log(`[ship] 分支清理**没有执行**：${plan.reason}`);
+      return CODE.NOT_RUN;
+    }
+    return CODE.GREEN;
+  }
+  const name = plan.branch;
+  if (!remote) {
+    log(
+      "[ship] 推不出远端名 ⇒ 远端那一半没有执行者，这一格按「没跑起来」处理，" +
+        "不去删本地那一半冒充「清理完成」。",
+    );
+    return CODE.NOT_RUN;
+  }
+  const sha = run("git", ["rev-parse", "--short", name]).stdout.trim();
+  log(
+    `[ship] 清理分支 ${name} · 被删那笔 ${sha || "(取不到)"} —— 要恢复：` +
+      `git branch ${name} ${sha || "<sha>"}`,
+  );
+
+  /** @type {number[]} */
+  const codes = [];
+  const del = run("git", ["push", remote, "--delete", name]);
+  const echo = [del.stdout, del.stderr]
+    .map((s) => (s || "").trim())
+    .filter(Boolean);
+  for (const line of echo) {
+    log(`[ship]   ${line.split("\n").join("\n[ship]   ")}`);
+  }
+  const back = run("git", ["ls-remote", "--heads", remote, name]);
+  if (back.status !== 0) {
+    log(
+      `[ship] 远端回读没跑起来（exit ${back.status}）⇒ 这一格不判「已删」，也不判「还在」`,
+    );
+    codes.push(CODE.NOT_RUN);
+  } else if (back.stdout.trim()) {
+    log(`[ship] 远端回读：${remote} 的 heads 里**仍然有** ${name}（删没掉）`);
+    codes.push(CODE.RED);
+  } else {
+    log(`[ship] ✓ 远端回读：${remote} 的 heads 里已无 ${name}`);
+    codes.push(CODE.GREEN);
+  }
+
+  const rm = run("git", ["branch", "-D", name]);
+  const rmEcho = [rm.stdout, rm.stderr]
+    .map((s) => (s || "").trim())
+    .filter(Boolean);
+  for (const line of rmEcho) {
+    log(`[ship]   ${line.split("\n").join("\n[ship]   ")}`);
+  }
+  const verify = run("git", [
+    "show-ref",
+    "--verify",
+    "--quiet",
+    `refs/heads/${name}`,
+  ]);
+  if (rm.status !== 0 && verify.status === 0) {
+    log(
+      `[ship] 本地那一半没删掉（exit ${rm.status}）⇒ 这一格是红的，不记「已清理」`,
+    );
+    codes.push(CODE.RED);
+  } else if (verify.status === 0) {
+    log(`[ship] 本地回读：refs/heads/${name} **还在**`);
+    codes.push(CODE.RED);
+  } else {
+    log(`[ship] ✓ 本地回读：refs/heads/${name} 已不在（恢复线见上面那行 sha）`);
+    codes.push(CODE.GREEN);
   }
   return combineShipCodes(codes);
 }

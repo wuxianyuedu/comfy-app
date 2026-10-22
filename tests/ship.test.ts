@@ -32,7 +32,9 @@ import {
   buildPullBody,
   CODE,
   combineShipCodes,
+  decideCleanBranch,
   decideCloseIssue,
+  decideCreateBranch,
   deriveTitle,
   findPullForBranch,
   issueNumbersFromText,
@@ -46,7 +48,7 @@ import {
   resolveUpstream,
   ticketReading,
 } from "../scripts/ship-core.mjs";
-import { closeIssues } from "../scripts/ship-platform.mjs";
+import { cleanBranch, closeIssues } from "../scripts/ship-platform.mjs";
 import { main } from "../scripts/ship.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -250,6 +252,18 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
     expect(typo.closeIssue).toBe(false);
     expect(typo.unknown).toEqual(["--close-issues"]);
   });
+
+  it("--branch 两种写法都收；--clean-branch 默认关（清 ref 不是随口就该做的动作）", () => {
+    expect(parseArgs([]).branch).toBeNull();
+    expect(parseArgs([]).cleanBranch).toBe(false);
+    expect(parseArgs(["--branch", "feat/x"]).branch).toBe("feat/x");
+    expect(parseArgs(["--branch=fix/2143-y"]).branch).toBe("fix/2143-y");
+    expect(parseArgs(["--clean-branch"]).cleanBranch).toBe(true);
+    /* 同一个理由：拼错的 `--clean-branch` 被静默忽略，就是「以为会清、其实没清」，
+     * 屏幕上还留着合并那两行的绿。 */
+    expect(parseArgs(["--clen-branch"]).unknown).toEqual(["--clen-branch"]);
+    expect(parseArgs(["--branc"]).unknown).toEqual(["--branc"]);
+  });
 });
 
 describe("issueNumbersFromText：只从标题本体取，绝不从拼完 PR 号的那一整行取", () => {
@@ -316,6 +330,112 @@ describe("decideCloseIssue：要求了但没合并 ⇒ 不是「跳过」，是 
     expect(d.act).toBe(true);
     expect(d.numbers).toEqual([2070]);
     expect(d.code).toBeNull();
+  });
+});
+
+describe("decideCreateBranch：名字只能人给，脚本只补动 ref 那一半", () => {
+  it("没给 --branch ⇒ 这一格不存在（不落码、不动 ref）", () => {
+    const d = decideCreateBranch({ current: "master" });
+    expect(d.requested).toBe(false);
+    expect(d.act).toBe(false);
+    expect(d.code).toBeNull();
+  });
+
+  it("在 master 上给了名字 ⇒ 建", () => {
+    expect(
+      decideCreateBranch({ requested: "feat/x", current: "master" }),
+    ).toEqual({
+      requested: true,
+      act: true,
+      code: null,
+      branch: "feat/x",
+      reason: "",
+    });
+  });
+
+  it("游离 HEAD 也算「没有可用分支」（硬规则 6 那一格过去就是这么判的）", () => {
+    expect(
+      decideCreateBranch({ requested: "feat/x", current: "HEAD" }).act,
+    ).toBe(true);
+  });
+
+  it("负控制①：已经在同名分支上 ⇒ 幂等，不落红也不重复建", () => {
+    const d = decideCreateBranch({ requested: "feat/x", current: "feat/x" });
+    expect(d.act).toBe(false);
+    expect(d.code).toBe(CODE.GREEN);
+  });
+
+  it("负控制②：名字撞了已存在的 ref ⇒ 停（不覆盖、不切换）—— 删掉别人的分支不是「建分支」", () => {
+    for (const exists of [{ existsLocal: true }, { existsRemote: true }]) {
+      const d = decideCreateBranch({
+        requested: "feat/x",
+        current: "master",
+        ...exists,
+      });
+      expect(d.act).toBe(false);
+      expect(d.code).toBe(CODE.NOT_RUN);
+      expect(d.reason).toContain("已经存在");
+    }
+  });
+
+  it("负控制③：当前在另一条分支上而 --branch 指别名 ⇒ 停，不在分支之间搬工作树", () => {
+    const d = decideCreateBranch({ requested: "feat/y", current: "feat/x" });
+    expect(d.act).toBe(false);
+    expect(d.code).toBe(CODE.NOT_RUN);
+    expect(d.reason).toContain("不在分支之间搬");
+  });
+
+  it("负控制④：名字是 master / HEAD ⇒ 红（不许把「建分支」做成「切回主干」）", () => {
+    for (const name of ["master", "HEAD"]) {
+      const d = decideCreateBranch({ requested: name, current: "master" });
+      expect(d.act, `名字 ${name} 不该被拿去建分支`).toBe(false);
+      expect(d.code).toBe(CODE.RED);
+    }
+  });
+});
+
+describe("decideCleanBranch：只跟在验真的合并之后，且只删这一次那一条", () => {
+  it("没给 --clean-branch ⇒ 这一格根本不存在", () => {
+    const d = decideCleanBranch({
+      requested: false,
+      landedVerified: true,
+      branch: "feat/x",
+    });
+    expect(d.act).toBe(false);
+    expect(d.code).toBeNull();
+  });
+
+  it("要求了但这一跳没有验真的合并 ⇒ 2 并说明（本地那条是这些提交唯一的对象）", () => {
+    const d = decideCleanBranch({
+      requested: true,
+      landedVerified: false,
+      branch: "feat/x",
+    });
+    expect(d.act).toBe(false);
+    expect(d.code).toBe(CODE.NOT_RUN);
+    expect(d.reason).toContain("唯一的对象");
+  });
+
+  it("负控制：分支名为空 / 是 master ⇒ 不删（不猜名字，更不删主干）", () => {
+    for (const branch of ["", "master", "HEAD"]) {
+      const d = decideCleanBranch({
+        requested: true,
+        landedVerified: true,
+        branch,
+      });
+      expect(d.act, `分支名「${branch}」不该走到删除`).toBe(false);
+      expect(d.code).toBe(CODE.NOT_RUN);
+    }
+  });
+
+  it("验真过 + 正常分支名 ⇒ 才允许动 ref", () => {
+    expect(
+      decideCleanBranch({
+        requested: true,
+        landedVerified: true,
+        branch: "feat/x",
+      }),
+    ).toEqual({ act: true, code: null, branch: "feat/x", reason: "" });
   });
 });
 
@@ -477,6 +597,152 @@ function fragRoot(files: Record<string, string>) {
   }
   return root;
 }
+
+describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问一次事实", () => {
+  type FakeResult = {
+    status: number;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+  };
+
+  /**
+   * git 的替身。形状按真实输出给：`ls-remote` 命中是一行 `<sha>\trefs/heads/<名>`、
+   * 没命中是**空串退 0**（这正是这一格的判点：空与失败不是一件事）。
+   */
+  function gitIo(
+    opts: {
+      remoteStillThere?: boolean;
+      lsRemoteFails?: boolean;
+      localStillThere?: boolean;
+      pushStatus?: number;
+      branchStatus?: number;
+    } = {},
+  ) {
+    const calls: string[] = [];
+    const log: string[] = [];
+    const ok = (stdout = "", status = 0): FakeResult => ({
+      status,
+      stdout,
+      stderr: "",
+      error: null,
+    });
+    const run = (_cmd: string, args: string[]): FakeResult => {
+      calls.push(args.join(" "));
+      const key = args.join(" ");
+      if (key.startsWith("rev-parse --short")) return ok("dead123");
+      if (key.startsWith("push cnb --delete"))
+        return ok("", opts.pushStatus ?? 0);
+      if (key.startsWith("ls-remote --heads")) {
+        if (opts.lsRemoteFails) return ok("", 128);
+        return ok(opts.remoteStillThere ? "abc123\trefs/heads/feat/x" : "", 0);
+      }
+      if (key.startsWith("branch -D")) return ok("", opts.branchStatus ?? 0);
+      if (key.startsWith("show-ref --verify"))
+        return ok("", opts.localStillThere ? 0 : 1);
+      return ok("");
+    };
+    return { run, calls, log };
+  }
+
+  const base = { remote: "cnb", branch: "feat/x", landedVerified: true };
+
+  it("两边都回读到「没有了」才算清理完成，并把恢复线那行 sha 打出来", () => {
+    const f = gitIo();
+    const code = cleanBranch({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      ...base,
+      cleanBranch: true,
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.log.join("\n")).toContain("git branch feat/x dead123");
+    expect(f.calls).toEqual([
+      "rev-parse --short feat/x",
+      "push cnb --delete feat/x",
+      "ls-remote --heads cnb feat/x",
+      "branch -D feat/x",
+      "show-ref --verify --quiet refs/heads/feat/x",
+    ]);
+  });
+
+  it("负控制①：push 退 0 但远端回读仍然有 ⇒ 红（回执不算结论）", () => {
+    const f = gitIo({ remoteStillThere: true });
+    expect(
+      cleanBranch({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        ...base,
+        cleanBranch: true,
+      }),
+    ).toBe(CODE.RED);
+  });
+
+  it("负控制②：远端回读**没跑起来** ⇒ 2，不判「已删」也不判「还在」", () => {
+    const f = gitIo({ lsRemoteFails: true });
+    expect(
+      cleanBranch({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        ...base,
+        cleanBranch: true,
+      }),
+    ).toBe(CODE.NOT_RUN);
+  });
+
+  it("负控制③：本地 show-ref 仍查得到 ⇒ 红，不记「已清理」", () => {
+    const f = gitIo({ localStillThere: true });
+    expect(
+      cleanBranch({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        ...base,
+        cleanBranch: true,
+      }),
+    ).toBe(CODE.RED);
+  });
+
+  it("没有验真的合并 ⇒ 一次伸手都不伸（`-D` 那一步是删唯一的对象）", () => {
+    const f = gitIo();
+    const code = cleanBranch({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      remote: "cnb",
+      branch: "feat/x",
+      landedVerified: false,
+      cleanBranch: true,
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls).toEqual([]);
+  });
+
+  it("没要求 ⇒ 这一格根本不存在（不落码、不打字、不伸手）", () => {
+    const f = gitIo();
+    const code = cleanBranch({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      ...base,
+      cleanBranch: false,
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.calls).toEqual([]);
+    expect(f.log).toEqual([]);
+  });
+
+  it("远端名取不到 ⇒ 2，且不去删本地那一半冒充「清理完成」", () => {
+    const f = gitIo();
+    const code = cleanBranch({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      remote: null,
+      branch: "feat/x",
+      landedVerified: true,
+      cleanBranch: true,
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls.filter((c) => c.startsWith("branch -D"))).toEqual([]);
+  });
+});
 
 describe("ticketReading：这次变更挂在哪张单子上（读数，不是闸）", () => {
   it("带号的碎片被列出来（`<号>-` 与 `#<号>-` 两种形态都认，与形态门禁同一条正则）", () => {
@@ -775,6 +1041,25 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     ).toBe(false);
   });
 
+  it("建分支与清分支那两跳同样只在旗标下出现，且清分支的**回读**也在计划里", () => {
+    /* 默认那份计划里两条都不该有 —— 「不给旗标就出现在计划里」意味着 dry-run 教的
+     * 执行面比人请求过的大。 */
+    const plain = planCommands(st).join("\n");
+    expect(plain).not.toContain("git checkout -b");
+    expect(plain).not.toContain("branch -D");
+    const made = planCommands({ ...st, createBranch: "feat/new" }).join("\n");
+    expect(made).toContain("git checkout -b feat/new");
+    const cleaned = planCommands({ ...st, cleanBranch: true });
+    expect(cleaned).toContain("git push cnb --delete feat/x");
+    expect(cleaned).toContain("git ls-remote --heads cnb feat/x");
+    expect(cleaned).toContain("git branch -D feat/x");
+    expect(cleaned).toContain(
+      "git show-ref --verify --quiet refs/heads/feat/x",
+    );
+    /* 远端名用解析出来的那个（夹具里是 cnb），写死 origin 就是两头一起错。 */
+    expect(cleaned.join("\n")).not.toContain("origin --delete");
+  });
+
   it("计划里的碎片那一查与执行面同形（取并的两条，不是那条已经没人跑的 ls-files）", () => {
     /* `planCommands` 是抄本，抄本会过期：#2034 把执行面从 `git ls-files changelog.d`
      * （数出整个目录 118 份 ⇒ 那条守卫恒真）改成「分支相对主干已提交的 ∪ 还没提交的」
@@ -962,6 +1247,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     remoteHead?: string | null;
     /** 这条分支相对主干**自己带进来的**提交 subject（`log --no-merges --reverse`）。 */
     branchSubjects?: string[];
+    /** `show-ref --verify` 查得到那个 ref（--branch 那一跳的「名字已被占用」形态）。 */
+    refExists?: boolean;
     /** 当前顶端那一笔的 subject（`log -1 --pretty=%s`）—— 默认给一个合并节点形状。 */
     headSubject?: string;
   };
@@ -1006,6 +1293,13 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         return env.baseExists === false
           ? { status: 1, stdout: "", stderr: "", error: null }
           : ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      /* `show-ref --verify --quiet <ref>`：git 的语义是**查不到退 1**。默认答「查不到」，
+       * 因为这一格在 --branch 那一跳判的是「这个名字有没有被占用」—— 拿通用兜底的
+       * 退 0 当默认值，等于让夹具自己担保「名字都撞车了」，于是建分支那一格永远走不到。 */
+      if (cmd === "git" && key.startsWith("show-ref --verify --quiet"))
+        return env.refExists
+          ? ok("9b1bade9cafe9b5a4d76e0c0d0bfb1d1a3a4f9b2")
+          : { status: 1, stdout: "", stderr: "", error: null };
       if (cmd === "git" && key.includes("rev-parse HEAD"))
         return ok("d02ec96364d5f3713b77c91b0d3fe789878f1747");
       // ⚠️ 顺序要紧：碎片那一查也是 `status --porcelain`，只是多一个 `-- changelog.d`。
@@ -1057,6 +1351,10 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     "git push",
     "git checkout",
     "git fetch",
+    /* 建分支与删分支都在这一族里：`git checkout -b` 动 HEAD、`git branch -D` 动 ref。
+     * 前者被上面那条 `git checkout` 前缀覆盖，后者没有 —— 漏一条就等于给 dry-run
+     * 留了一个「可以悄悄动 ref」的口子。 */
+    "git branch -D",
     "cnb pulls post-pull",
     "cnb pulls merge-pull",
     /* 关一张单子是把状态写到别人也看得见、且不会自动回退的地方 —— 与合并同一档。 */
@@ -1091,6 +1389,76 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     // 这条用例钉的是撤完之后行为不再被文档反向拉扯。
     const { run } = fake({ branch: "master" });
     expect(await main({ ...quiet, run, args: ["--dry-run"] })).toBe(CODE.RED);
+  });
+
+  it("--dry-run + --branch：念出「不建分支」并把那一跳印进计划，一条 ref 都不动", async () => {
+    const heard: string[] = [];
+    const { run, calls } = fake({ branch: "master" });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--dry-run", "--branch", "feat/new"],
+    });
+    const all = heard.join("\n");
+    expect(code).toBe(CODE.GREEN);
+    expect(all).toContain("不建分支");
+    expect(all).toContain("$ git checkout -b feat/new");
+    // 预览不许动 ref —— `git checkout` 与 `git branch -D` 都在 WRITE_SHAPES 里。
+    for (const w of WRITE_SHAPES) {
+      expect(
+        calls.filter((c) => c.startsWith(w)),
+        `dry-run 竟然执行了：${w}`,
+      ).toHaveLength(0);
+    }
+  });
+
+  it("真跑 + --branch：建分支那一跳真的执行，后面 push 用的就是新名字", async () => {
+    const heard: string[] = [];
+    const { run, calls } = fake({ branch: "master" });
+    await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--no-wait", "--branch", "feat/new"],
+    });
+    expect(calls).toContain("git checkout -b feat/new");
+    expect(calls).toContain("git push -u cnb feat/new");
+    expect(heard.join("\n")).toContain("已建并切到分支 feat/new");
+    // 那句「不动本地 master 上可能存在的误提交」是这条链的边界，不是客套。
+    expect(heard.join("\n")).toContain("reset --hard");
+  });
+
+  it("名字已被占用 ⇒ 退 2 且不 checkout（「建分支」不等于「覆盖别人的分支」）", async () => {
+    const heard: string[] = [];
+    const { run, calls } = fake({ branch: "master", refExists: true });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--no-wait", "--branch", "feat/new"],
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(heard.join("\n")).toContain("已经存在");
+    expect(calls.filter((c) => c.startsWith("git checkout"))).toEqual([]);
+  });
+
+  it("--only=clean-branch 不能单跑：它要的是合并那一段的验真结果", async () => {
+    const heard: string[] = [];
+    const { run, calls } = fake();
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--only=clean-branch", "--clean-branch"],
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(heard.join("\n")).toContain("不能单独跑");
+    expect(calls.filter((c) => c.startsWith("git branch -D"))).toEqual([]);
   });
 
   it("没有 changelog.d 碎片 ⇒ 红（单 PR 单变更那条不成立）", async () => {

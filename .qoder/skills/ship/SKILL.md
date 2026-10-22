@@ -21,9 +21,10 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 
 ```bash
 pnpm ship --dry-run          # 先看它打算跑哪些命令（一条都不执行，但阻塞照报）
+pnpm ship --branch feat/x    # 还没有分支时，让它先把分支建出来再往下走（名字必须人给）
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
-pnpm ship --merge --close-issue   # 合上之后，把落地那一行点名的 issue 置为 closed
+pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉
 ```
 
 ## 几条必须先知道的边界
@@ -54,7 +55,16 @@ pnpm ship --merge --close-issue   # 合上之后，把落地那一行点名的 i
    `pnpm ship`（轮询出终态）→ `pnpm ship --merge`。每跳都幂等，PR 已存在就复用；
    一条整链在 push 那跳被宿主断掉时，屏幕上不会留下任何线索（实测只剩一个 `127`）。
    单跑 `--only=commit|push|pull-request` 已不可能：那会一段结论都不落，如今退 `2`。
-6. **那一行「单子」是读数，不是闸。** 阶段 0 打印 `单子：#N · 无号碎片 N 份`，
+   `--only=close-issue|clean-branch` 同理被拒 —— 它们要的是合并那一段的验真结果。
+6. **分支的两头：建可以代做，名字不行；删必须点名。**
+   `--branch <名字>` 只补「动 ref」那半件事（在 `master` / 游离 HEAD 上才建，已在同名分支上
+   是幂等，名字撞了已存在的 ref 就退 `2` 而不是覆盖，当前在**另一条**分支上也停 —— 它不在
+   分支之间搬工作树）。**它不从 issue 号或提交信息里造名字**：名字是判断。
+   `--clean-branch` 只删**这一次跑的那一条**分支，且只跟在验真的合并之后；本地那笔用的是
+   `git branch -D`（squash 之后 `-d` 的祖先判据恒假，实测六条已合并分支全部被拒），
+   所以删之前会把那笔 sha 打出来当恢复线。「把所有已合并分支一次清掉」不在它的动作面里 ——
+   那需要另一套判据（"什么算已合并"在 squash 形态下只能问平台，不能问 `merge-base`）。
+7. **那一行「单子」是读数，不是闸。** 阶段 0 打印 `单子：#N · 无号碎片 N 份`，
    其中段落是 `## Fixed` 而号是 `0` 的会点一句「先立案」—— 它**一次也不参与退码**
    （用例把这条钉着）。做成硬闸的直接后果不是「大家都立案」，而是「为了让屏幕上念出个号，
    随手挂一张最近开着的别人的单子」，那正是 §13.10.8 记的那次事故（号挂错比不写更贵，
@@ -73,6 +83,7 @@ pnpm ship --merge --close-issue   # 合上之后，把落地那一行点名的 i
 | 合没合上                   | PR 的 `is_merged` **且**回读解析出的主干基线顶端有没有那份碎片                                                          |
 | 这次变更挂在哪张单子上     | 阶段 0 的 `ticketReading()`：碎片文件名的号 + 首行段落（**读数，不改退码**）                                             |
 | 单子关没关上               | `--close-issue` 之后一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
+| 分支收干净没有             | `--clean-branch` 之后各问一次事实：`git ls-remote --heads` 与 `git show-ref --verify`（push / branch 的退码都不算结论） |
 
 ⚠️ **`ship` 提交段「全过」不等于 tsc / eslint / 用例过了**。`pre-commit` 默认只跑形态档，
 重档由 `COMFY_HEAVY_GATES=1` 那一档与平台兜底（规范 §13.5.25）—— 钩子自己会打印
