@@ -39,7 +39,11 @@ import {
 } from "./no-platform-ci-config.test";
 
 import { groupShBody, runSteps, stepsInGroup } from "./helpers/hook-groups";
-import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
+import {
+  HEAVY_GATES,
+  heavyGateRegistryProblems,
+} from "../scripts/ci-heavy-gates.mjs";
+import { readHookSteps } from "../scripts/base-check/hook-steps.mjs";
 
 const REPO_ROOT = resolve(".");
 const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
@@ -104,7 +108,16 @@ function platformExecutor(stageName: string) {
   if (stage !== null) return { where: "stage", command: stage };
   const gate = HEAVY_GATES.find((g) => g.name === stageName);
   if (!gate) return null;
-  return { where: "重档静态判据", command: gate.argv.join(" ") };
+  /* 聚合档这一支**必须核「这一格真会跑它」**（2026-10-22 加）。
+   *
+   * 原来这里只要「条目表里有这个名字」就算数 —— 而那张表只是**登记面**，这一格跑的是
+   * **钩子的步骤行**。2026-10-20 就是这么溜过去的：表上写着 4 条、钩子里没有、配置里
+   * 的原文也注释掉了 ⇒ 那 4 条**一个执行者都没有**，而这里（以及两张登记表之间的互核）
+   * 全绿。⇒ 「表上有」不等于「有人跑」，这一支现在按钩子的步骤行认。 */
+  const hook = readFileSync(HOOK, "utf8");
+  const step = hookGateSteps(hook).find((s) => s.cmd === gate.argv.join(" "));
+  if (!step) return null;
+  return { where: "重档静态判据", command: step.cmd };
 }
 
 /** §13.1「本地提交前必须通过」代码块里的命令（`✅ <命令>  # 说明` 的那部分）。 */
@@ -1075,5 +1088,91 @@ describe("D0 形态前置档：串行的那一条线（钩子重构 1）", () =>
         `组 ${id} 没有 source 时钟，或那个块解析不出来`,
       ).toContain('. "$COMFY_TIMING_SH"');
     }
+  });
+});
+
+/**
+ * 复合执行者 `重档静态判据` 的**登记面 ⇄ 执行面**自证（2026-10-22 立项）。
+ *
+ * ## 立案现场
+ *
+ * 2026-10-20（`0c6c8897`）把 `生成态文档与源同步` / `API 文档生成物与源同步` /
+ * `文档引用与权威源一致` / `覆盖率上报` 在 `.cnb.yml` 里的原文**注释掉**了，理由是
+ * 「收进聚合档 `重档静态判据`」。但那一格读的是**钩子注册表**（`.githooks/pre-commit`
+ * 的 `run` 步骤行）—— 而其中那三条在 2026-10-16（`8d0d0b23`）就已经从钩子里撤走了
+ * （`覆盖率上报` 从没进过钩子：它是 10-19 才被收进条目表的，而条目表不执行任何东西）。
+ *
+ * ⇒ **两次搬动方向相反、在中间对穿**：钩子说「我搬去平台了」，平台说「我收进聚合档了」，
+ * 而聚合档只认钩子。落空的是那 4 条判据 —— 从 2026-10-20 起**一个执行者都没有**。
+ *
+ * 代价是实打实的：`docs/api/**` 在无人看管下漂了 32 份（`7aae1747` 等 5 笔 `src/lib`
+ * 提交之后没人重生成），本地 `node scripts/check-docs-api.cjs --check` 退 1（墙钟 491.2s）。
+ *
+ * ## 为什么它溜过去了
+ *
+ * 因为**缺的是「登记面 ⇄ 执行面」这一对**，而当时只有「表 ⇄ 表」的互核：
+ * `tests/ci-autofix-duties.test.ts` 拿登记表与聚合档条目表对，
+ * `tests/ci-incremental-gates.test.ts` 拿登记表与 `.cnb.yml` 的 `ifModify` 对 ——
+ * 两边都绿，因为**表上写着它们在**。而「表上写着」与「有人真跑」是两件事。
+ *
+ * ## 本条判的就是那件事
+ *
+ * `heavyGateRegistryProblems()`：条目表里每一条的 `argv` 必须**逐字**出现在钩子的
+ * 步骤行里 —— 这一格跑的就是钩子的步骤，「表上有、钩子里没有」= 「没人跑它」。
+ */
+describe("复合执行者 `重档静态判据`：条目表与执行面必须对得上（2026-10-22 立项）", () => {
+  /* 用**运行时那个解析器**（`readHookSteps`），不是本文件惯用的 `runSteps` ——
+   * 自证跑在 `scripts/ci-heavy-gates.mjs` 里，用另一个解析器验它等于验了另一件事
+   * （两个解析器的口径差一处，这一处就恰好是「静默少读一步」的那种）。 */
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = readHookSteps(HOOK);
+
+  it("真仓自证通过：条目表里每一条，这一格都真会跑它", () => {
+    const problems = heavyGateRegistryProblems(steps);
+    expect(
+      problems,
+      `聚合档的条目表与钩子的执行面对不上：\n${problems.join("\n")}\n` +
+        "—— 表上有而钩子里没有 = 那一格不会跑它，那条判据就此没有执行者",
+    ).toEqual([]);
+  });
+
+  it("表里每一条的命令都在钩子的步骤行里（逐字）", () => {
+    const cmds = new Set(steps.map((s) => s.argv.join(" ")));
+    for (const gate of HEAVY_GATES) {
+      expect(
+        cmds.has(gate.argv.join(" ")),
+        `条目「${gate.name}」的命令在钩子里找不到同一条 —— 它是登记面，不是执行面`,
+      ).toBe(true);
+    }
+  });
+
+  it("判据不是空转：喂进一份「表里有、钩子里没有」的步骤就红", () => {
+    /* 反向验证：把钩子的步骤行换成一个空的集合，上面那条自证必须**报出**那一条 ——
+     * 否则「自证通过」是恒真的（把函数实现成 `return []` 也能过）。 */
+    const problems = heavyGateRegistryProblems([]);
+    expect(
+      problems.length,
+      "空的钩子步骤集下自证必须逐条报出「表上有、钩子里没有」",
+    ).toBe(HEAVY_GATES.length);
+  });
+
+  it("钩子里带自动修旗标的步骤必须在条目表里（改工作区只有一处出处）", () => {
+    const autofixSteps = steps.filter((s) => s.argv.join(" ").includes("--autofix"));
+    const tableCmds = new Set(HEAVY_GATES.map((g) => g.argv.join(" ")));
+    for (const step of autofixSteps) {
+      expect(
+        tableCmds.has(step.argv.join(" ")),
+        `钩子里的「${step.label}」带自动修旗标却不在条目表里 —— ` +
+          "「哪一档会自己改工作区」必须只有一处出处",
+      ).toBe(true);
+    }
+  });
+
+  it("钩子的步骤行本身还在（解析器没空转）", () => {
+    expect(
+      steps.length,
+      `钩子里的步骤行解析出 ${steps.length} 条 —— 解析器失灵会让上面几条变成恒真`,
+    ).toBeGreaterThan(0);
+    expect(hook).toContain('run "');
   });
 });

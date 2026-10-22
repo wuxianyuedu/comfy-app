@@ -45,8 +45,13 @@ import {
   readCnbConfig,
 } from "../scripts/ci-incremental-gates.mjs";
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
-import { matchedInputs } from "../scripts/check-docs-api.cjs";
+import {
+  INPUT_GLOBS,
+  INPUT_RES,
+  matchedInputs,
+} from "../scripts/check-docs-api.cjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
+import { stageBlock } from "./no-platform-ci-config.test";
 
 const CONFIG = readCnbConfig();
 
@@ -172,31 +177,44 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ).toEqual([]);
   });
 
-  it("`API 文档生成物与源同步` 收进聚合档之后**不收窄**，且判据的输入面仍然只有一处出处", () => {
-    /* 这一条原来判的是「那一档的 ifModify globs 由 `check-docs-api.cjs` 的 `INPUT_RES`
-     * 反推」。2026-10-19 那一档被收进聚合档 `重档静态判据`（平台单 stage 20m 硬上限，
-     * 摊成十几个 stage 时每格都在各付一次 job 开销，见 `scripts/ci-heavy-gates.mjs` 头注），
-     * 于是 `ifModify` 这一层不再存在 —— 它按**整格**跳过，一格装十条时只能表达
-     * 「十条一起不跑」，而那十条的扫描面并不相同。
+  it("`API 文档生成物与源同步` 自己占一格、收窄挂在**那一格**上，且输入面只有一处出处", () => {
+    /* 这一条的三段历史值得留着，因为**每一段都留一个形状**：
      *
-     * 但判据的**输入面**这件事没有消失，它仍然只有一处出处：`INPUT_RES`。所以这里
-     * 转而钉两件事：① 那条判据确实在聚合档的条目表里（不是被悄悄删了）；② 判据认的
-     * 每一类输入面都还在 `INPUT_RES` 里（样本喂进去必须被认下来）。
+     *   · 2026-10-19：那一档被收进聚合档 `重档静态判据`（平台单 stage 20m 硬上限，
+     *     摊成十几个 stage 时每格都在各付一次 job 开销）⇒ `ifModify` 这一层不再存在
+     *     （它按**整格**跳过，一格装多条时只能表达「一起不跑」）。
+     *   · 2026-10-20：那一档在 `.cnb.yml` 里的**原文被注释掉**（理由是「收进聚合档」），
+     *     而聚合档读的是**钩子注册表** —— 那一档 2026-10-16 就已从钩子里撤走 ⇒
+     *     **两次搬动方向相反、在中间对穿** ⇒ 那一档从 2026-10-20 起一个执行者都没有
+     *     （`docs/api/**` 随后在无人看管下漂了 32 份）。
+     *   · 2026-10-22（现在）：它**恢复成自己的活 stage**，收窄挂在**那一格**上 ——
+     *     平台的 `ifModify` 只能按格算，而复合执行者一条都不许挂（格内扫描面不同的
+     *     判据一起静默放行，见 `scripts/ci-incremental-gates.mjs` 的 `COMPOUND_EXECUTORS`）。
      *
-     * 为什么只钉输入面、不再钉 globs：没有 globs 可钉了。而「改了输入面会不会有人知道」
-     * 这一问现在由聚合档回答 —— 它每次都在跑，不按改动面判断。 */
-    const gate = HEAVY_GATES.find((g) => g.name === "API 文档生成物与源同步");
+     * 于是本条判的是三件事：① 那一格**真的活着**（配置里不是注释形态）；
+     * ② 它的收窄**逐字**等于判据自己声明的输入面（不是第二份手抄）；
+     * ③ 判定门是 `--check --autofix`（只写不判 = 恒绿，自动修登记表也按它核对）。 */
+    const stageName = "API 文档生成物与源同步";
+    const globs = parseStageIfModify(CONFIG).get(stageName);
     expect(
-      gate,
-      "聚合档 `重档静态判据` 的条目表里没有 `API 文档生成物与源同步` —— " +
-        "`docs/api/**` 又回到「进 git + 零判据」的过期面",
+      globs,
+      `配置里没有「${stageName}」这一格的 \`ifModify\` —— 它要么被注释掉了（= 没有执行者），` +
+        "要么收窄被摘了（那一格会每次都付 201.8s）",
     ).toBeDefined();
+    /* 收窄的形状 = 判据自己那份声明（`INPUT_GLOBS`，**上界**形态）+ 产物面。
+     * 判据改了输入面而这里没跟，当场红 —— 这就是「机械导出」的那道对账。 */
     expect(
-      gate?.argv.join(" "),
-      "那一条的判定门必须是 `--check --autofix`（只写不判 = 恒绿，自动修登记表也按它核对）",
-    ).toBe("node scripts/check-docs-api.cjs --check --autofix");
+      globs,
+      "那一格的收窄与判据自己声明的输入面不一致 —— 改判据的触发面时必须同批改这里",
+    ).toEqual([...INPUT_GLOBS, "docs/api/**"]);
+    /* 判定门逐字在那一格里：只写不判 = 恒绿；少了 `--autofix` 则自动修登记表对不上。 */
+    const block = stageBlock(CONFIG, stageName);
+    expect(block, `配置里解析不出「${stageName}」这一格`).toBeTruthy();
+    expect(block).toContain("scripts/check-docs-api.cjs");
+    expect(block).toContain("--check");
+    expect(block).toContain("--autofix");
     /* 判据认的每一类输入面（三条 entryPoint 目录 + 两份配置 + 锁文件）都得被认下来 ——
-     * 这一半是「判据自己的触发面声明还在」的读数，与聚合档无关，别跟着一起删。 */
+     * 这一半是「判据自己的触发面声明还在」的读数，与它挂在哪一格无关。 */
     for (const f of [
       "src/lib/a.ts",
       "src/server/a.ts",
@@ -211,6 +229,16 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
         matchedInputs([f]),
         `判据不认 ${f}，这条用例的样本已经过期`,
       ).toEqual([f]);
+    }
+    /* ⚠️ 两侧形态不许分叉：`INPUT_RES`（判据自己判暂存面时用的窄面）每一条都得落在
+     * 某条 glob 里 —— 加了一条 `INPUT_RES` 而忘了加 glob，那一类改动就永远不触发
+     * 这一格（收窄收窄过头 = 漏判，而漏判是静默的）。 */
+    for (const re of INPUT_RES) {
+      const prefix = re.source.replace(/^\^/, "").split(/[\\/.*]/)[0] ?? "";
+      expect(
+        INPUT_GLOBS.some((g) => g.includes(prefix)),
+        `判据的输入面 \`${re.source}\` 没有对应的 glob —— 改输入面时必须同批改 \`INPUT_GLOBS\``,
+      ).toBe(true);
     }
   });
 

@@ -97,6 +97,35 @@ const INPUT_RES = [
 ];
 
 /**
+ * 同一张输入面的 **glob 形态** —— 平台侧 `ifModify` 收窄的唯一出处。
+ *
+ * 为什么是**上界**而不是逐字等价的窄面：`ifModify` 的判据是「变更文件一个都不落在
+ * 给定 glob 内 ⇒ 这一步不执行」（`scripts/ci-incremental-gates.mjs` 的口径），
+ * **判宽只会少省几秒，判窄是漏判** —— 而 `INPUT_RES` 的窄面（只收 `.ts`）与它的
+ * glob 形态（收该目录下的一切）不是一一等价的，抄一份窄的进来就等于把
+ * 「改了 `src/lib` 下的非 `.ts` 文件」这一类改动放过头。
+ *
+ * 两条形态住在**同一个文件**里，而不是一份在判据、一份在登记表：跨文件抄一份就是
+ * 第二份会漂的副本（§12.12 / §12.18），而漂的方向恰好是「判据改了触发面、配置没跟」
+ * —— 那一格于是再也不跑，且没人看见。
+ *
+ * ⚠️ 两侧的对应关系由 `tests/ci-incremental-gates.test.ts` 核（逐条比「窄面的字面
+ * 前缀是不是落在某条 glob 里」）：加一条 `INPUT_RES` 而忘了加一条 glob，当场红。
+ *
+ * @type {readonly string[]}
+ */
+const INPUT_GLOBS = [
+  "src/lib/**",
+  "src/server/**",
+  "src/trpc/**",
+  "typedoc.json",
+  "package.json",
+  "pnpm-lock.yaml",
+  "scripts/check-docs-api.cjs",
+  "scripts/typedoc-run.mjs",
+];
+
+/**
  * 暂存改动是否命中输入面。
  * @param {string[]} files 相对仓库根、正斜杠的文件清单
  * @returns {string[]} 命中的文件（空数组 = 不触发）
@@ -407,6 +436,7 @@ if (require.main === module) {
 
 module.exports = {
   INPUT_RES,
+  INPUT_GLOBS,
   matchedInputs,
   walk,
   compare,
