@@ -28,9 +28,15 @@ const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 const hookText = readFileSync(HOOK, "utf8");
 
 describe("档位：注册表与边界", () => {
-  it("注册表总数一条不少（50 条 = D0 那 14 + D 那 36）—— 降档不是删步骤", () => {
+  /**
+   * ⚠️ 这两个数是**当天的存量**，不是常量：往 `.githooks/pre-commit` 加一步或减一步，
+   * 必须同批把它们改对。这条用例读的是**文本**（`readFileSync(HOOK)`），没有任何 import
+   * 依赖 ⇒ 改钩子的那条线自己跑不到它（受影响用例选不中），红会落在**之后每一条 PR** 上
+   * —— 而「受影响用例」是那一档唯一的执行者，于是等价于主干冻结。实测与出路见 ISSUE #2135。
+   */
+  it("注册表总数一条不少（51 条 = D0 那 14 + D 那 37）—— 降档不是删步骤", () => {
     const all = readHookSteps();
-    expect(all.length).toBe(50);
+    expect(all.length).toBe(51);
     expect(localTierLabels().size).toBe(14);
     // 边界取错的话，本地档会变成「恰好少一条」这类静默漂移 ⇒ 与总数一起钉。
     expect([...localTierLabels()]).toEqual(
