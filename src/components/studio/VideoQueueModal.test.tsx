@@ -8,6 +8,9 @@
  *
  * 这里钉的是收口后的形态：单选语义（radiogroup + radio）、两枚的选中态由
  * `tab` 一处驱动、且选中档**自带与常态同值的悬停**。
+ *
+ * 另有一条判的是**失败通道**（台账 E4 第三刀之后）：整批都失败时，出口那句必须带上
+ * 入参判据点名的那一列，而不是把原因吞成「检查参数或 ComfyUI 连接」。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -22,9 +25,22 @@ import { ToastProvider } from "./ToastProvider";
 import { VideoQueueModal } from "./VideoQueueModal";
 
 /* 队列数据来自网络层；这一组用例只判那一排按钮的形态，喂空队列即可。 */
+const submitGenerationMock = vi.fn<
+  (
+    params: Record<string, unknown> | undefined,
+    prompt: string,
+  ) => Promise<unknown>
+>(async () => {
+  throw new Error(
+    "这份请求的入参与当前形状不符（workflow：缺少要执行的工作流），这次没有发出去；请重新配置参数后再生成。",
+  );
+});
 vi.mock("~/lib/media/video-queue-client", () => ({
   fetchVideoTasks: vi.fn(async () => []),
-  submitVideoTasks: vi.fn(async () => ({ ok: true })),
+  submitGeneration: (
+    params: Record<string, unknown> | undefined,
+    prompt: string,
+  ) => submitGenerationMock(params, prompt),
 }));
 
 afterEach(cleanup);
@@ -38,6 +54,30 @@ function renderModal() {
     </ToastProvider>,
   );
 }
+
+describe("VideoQueueModal 的批量提交出口", () => {
+  it("整批都失败时，出口拿到的是判据点名的那一列，不是「检查参数或连接」", async () => {
+    /* 「跳过失败项」是这条通路的域语义，但**第一条失败的原因不能一起跳掉**：
+     * 草稿页签只有提示词、没有工作流来源，于是每条都过不了入参判据，而旧界面只给一句
+     * 「提交失败，请检查参数或 ComfyUI 连接」—— 那既不是提示词框的问题也不是连接问题，
+     * 用户照着那句话查错方向。原因本身来自客户端预检（见
+     * `tests/task-list-wire-contract.test.ts` 的 `submitGeneration`），这里判的是它有没有走到界面。 */
+    /* 播种走在 **prop 变化**上（挂载时就给同一份批次不会切页签 —— 那段判据写的是
+     * 「换了批次」，不是「打开时有批次」），所以先空后有一发 rerender。 */
+    const withDrafts = (items: { prompt: string }[]) => (
+      <ToastProvider>
+        <VideoQueueModal open onClose={() => undefined} draftItems={items} />
+      </ToastProvider>
+    );
+    const view = render(withDrafts([]));
+    view.rerender(withDrafts([{ prompt: "一条镜头" }]));
+
+    fireEvent.click(screen.getByRole("button", { name: /开始生成/ }));
+    expect(await screen.findByText(/缺少要执行的工作流/)).toHaveTextContent(
+      "workflow",
+    );
+  });
+});
 
 describe("VideoQueueModal 的队列视图切换", () => {
   it("语义是单选，不是 aria-pressed 开关", () => {

@@ -35,7 +35,7 @@ import { setActiveTaskId } from "~/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { buildCanvasGeneratePayload } from "~/components/studio/project-canvas/CanvasNode/generate-payload";
 import {
-  parseStoredGenerateInput,
+  parseGenerateInput,
   type GenerateInput,
 } from "~/lib/workflow/workflow-generate-input";
 import { errorMessage } from "~/lib/error-message";
@@ -303,7 +303,7 @@ export function useGenerate({
      * 把它送回同一个 cast，于是「旧形状」只会在服务端变成一句英文的 zod 原文。
      * 预检用的就是服务端那一个 `generateInputSchema`（判据不另立一份），
      * 拒了就不发这次请求，并把能读的这句话交给错误面板。 */
-    const parsed = parseStoredGenerateInput(req);
+    const parsed = parseGenerateInput(req);
     if (!parsed.ok) {
       patch({
         status: "error",
