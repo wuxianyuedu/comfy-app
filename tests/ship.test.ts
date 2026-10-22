@@ -1249,6 +1249,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     branchSubjects?: string[];
     /** `show-ref --verify` 查得到那个 ref（--branch 那一跳的「名字已被占用」形态）。 */
     refExists?: boolean;
+    /** 答齐全链（轮询 / 合并 / 清理）那几跳 —— 默认关，见 `fake()` 里那段注释。 */
+    chain?: boolean;
     /** 当前顶端那一笔的 subject（`log -1 --pretty=%s`）—— 默认给一个合并节点形状。 */
     headSubject?: string;
   };
@@ -1339,6 +1341,72 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
       if (cmd === "node" && key.includes("check-deps-freshness"))
         return ok("OK");
+      /* ── 整链形状（`chain: true` 才答）───────────────────────────
+       * 默认不答，是为了不惊动已有那些用例：它们中好几条判的正是「建 PR 那一跳的
+       * 各种失败出口」，一旦 list-pulls 有了可解析的响应就会改走「复用」那条支路。 */
+      if (!env.chain) return ok("");
+      if (cmd === "git" && key.startsWith("rev-parse --short"))
+        return ok("edda13b6");
+      if (cmd === "git" && key.startsWith("cat-file -e")) return ok("");
+      if (cmd === "git" && key.startsWith("push cnb --delete")) return ok("");
+      if (cmd === "git" && key.startsWith("ls-remote --heads")) return ok("");
+      if (cmd === "git" && key.startsWith("branch -D")) return ok("");
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              data: [
+                {
+                  sn: "cnb-267-1k5h0qvib",
+                  sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+                  event: "pull_request",
+                  createTime: "2026-10-22T05:20:07.000Z",
+                },
+              ],
+            },
+          }),
+        );
+      if (
+        cmd === "cnb" &&
+        args[0] === "build" &&
+        args[1] === "get-build-status"
+      )
+        return ok(JSON.stringify({ status: 200, data: { status: "success" } }));
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "list-pulls")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: [
+              {
+                number: 777,
+                head: { ref: `refs/heads/${branch}` },
+                base: { ref: "refs/heads/master" },
+              },
+            ],
+          }),
+        );
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              number: 777,
+              is_merged: true,
+              mergeable_state: "mergeable",
+            },
+          }),
+        );
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "merge-pull")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              merged: true,
+              sha: "906bce4c1a0b3f0d6a1c2b3e4f50617283a4b5c6",
+            },
+          }),
+        );
       return ok("");
     };
     return { run, calls };
@@ -1458,6 +1526,68 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     });
     expect(code).toBe(CODE.NOT_RUN);
     expect(heard.join("\n")).toContain("不能单独跑");
+    expect(calls.filter((c) => c.startsWith("git branch -D"))).toEqual([]);
+  });
+
+  it("整链跑通：合并验真之后才清理，且那句边界声明按这一轮实际做了什么来说", async () => {
+    /* 这条补的是这一族的一处空白：此前没有任何一条用例跑通过
+     * `preflight → 轮询 → 合并 → 清理`，所以「合并那一段说的话」与「清理那一段做的事」
+     * 会不会互相矛盾，只有真跑一次才知道（而真跑那一次确实矛盾过 —— ISSUE #2145）。
+     * ⚠️ 走完整链又要断退出码的格子必须**自带一份合并前证明**：`push` 那一段读不到
+     * `comfy-premerge-proof.json` 就压 `NOT_RUN`，开发机上有、CI 节点上没有 ——
+     * 这条第一版就是这样「本地绿、节点红」（同形先例见本文件 `proofRoot` 那段）。 */
+    const { tmpRoot, gitDir } = proofRoot("chain-clean");
+    try {
+      const heard: string[] = [];
+      const { run, calls } = fake({ chain: true });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--merge", "--clean-branch"],
+      });
+      const all = heard.join("\n");
+      expect(all).toContain("已有开放 PR #777 ⇒ 复用");
+      expect(all).toContain("is_merged=true");
+      expect(all).not.toContain("没删");
+      expect(all).toContain("交给下一段（--clean-branch）收");
+      expect(code).toBe(CODE.GREEN);
+      /* 顺序也是判点：清理必须在**验真**之后，否则删的就是这些提交唯一的对象。 */
+      const at = (needle: string) =>
+        calls.findIndex((c) => c.startsWith(needle));
+      expect(at("cnb pulls merge-pull")).toBeGreaterThanOrEqual(0);
+      expect(at("git push cnb --delete feat/x")).toBeGreaterThan(
+        at("cnb pulls merge-pull"),
+      );
+      expect(calls.slice(at("git push cnb --delete feat/x") - 1)).toEqual([
+        "git rev-parse --short feat/x",
+        "git push cnb --delete feat/x",
+        "git ls-remote --heads cnb feat/x",
+        "git branch -D feat/x",
+        "git show-ref --verify --quiet refs/heads/feat/x",
+      ]);
+      // 恢复线要真的带着那笔 sha，不然「可以恢复」是一句空话。
+      expect(all).toContain("git branch feat/x edda13b6");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("负控制：同一轮没给 --clean-branch ⇒ 那句「没删」照旧要念（边界声明不许被删掉）", async () => {
+    const heard: string[] = [];
+    const { run, calls } = fake({ chain: true });
+    await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--merge"],
+    });
+    const all = heard.join("\n");
+    expect(all).toContain("远端分支**没删**（这一跳没要 --clean-branch）");
+    expect(all).not.toContain("交给下一段");
     expect(calls.filter((c) => c.startsWith("git branch -D"))).toEqual([]);
   });
 

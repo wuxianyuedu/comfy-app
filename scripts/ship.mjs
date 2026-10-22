@@ -726,6 +726,9 @@ async function runFlow(deps, tmpFiles) {
             buildState,
             explicitTitle: opt.title,
             landed,
+            /* 只把「人这一跳给了哪个旗标」递过去：合并那一段收尾那句边界声明要按
+             * 这一轮实际做了什么来说，不留一句被下一行推翻的话。 */
+            cleanBranch: opt.cleanBranch,
           }),
         );
       }

@@ -366,9 +366,11 @@ export function reportVerdict(ctx) {
  *   buildState: "green"|"red"|"running"|"unknown",
  *   explicitTitle?: string | null,
  *   landed?: {title: string, sha: string, verified: boolean} | null,
+ *   cleanBranch?: boolean,
  * }} ctx
  *   `landed` 是「落进主干的那一行」的快照，由本函数在**验真之后**填 —— 阶段 7（关单）
  *   要的标题本体取自它，不在那里回推（原因见成功路径上那处注释）。
+ *   `cleanBranch` 只是「人这一跳给了哪个旗标」的读数 —— 判断不在这里，本函数只把它念对。
  * @returns {number} 三态退出码之一
  */
 export function mergeAndVerify(ctx) {
@@ -386,6 +388,8 @@ export function mergeAndVerify(ctx) {
     /* 一份「落进主干的那一行」的快照，由本函数在**验真之后**填。
      * 传不传都行（不传就是没人要这份读数），所以老的调用形状不会坏。 */
     landed = null,
+    /* 同上：不传按「没要清理」念，与旗标默认关的口径一致。 */
+    cleanBranch = false,
   } = ctx;
   if (!merge) {
     log("[ship] 未给 --merge ⇒ 停在判决处。合并是显式动作。");
@@ -464,8 +468,13 @@ export function mergeAndVerify(ctx) {
   }
   run("git", ["checkout", "master"]);
   run("git", ["pull", "--ff-only"]);
+  /* 那句边界声明按**这一跳实际做了什么**来说：`--clean-branch` 落地之前它是事实，
+   * 落地之后如果还照原样念，就成了「在这一轮里被自己的下一行推翻」的声明 ——
+   * 形态与 `check-commit-claims.mjs` 治的那一类相同，只是它落在运行期输出里、照不到。 */
   log(
-    "[ship] 本地 master 已同步。远端分支**没删**（那不在本脚本的动作面里）。",
+    cleanBranch
+      ? "[ship] 本地 master 已同步。远端分支交给下一段（--clean-branch）收。"
+      : "[ship] 本地 master 已同步。远端分支**没删**（这一跳没要 --clean-branch）。",
   );
   return CODE.GREEN;
 }
