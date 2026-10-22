@@ -149,13 +149,17 @@ export function readDevHandle({ root, env = {} }) {
  * @param {{
  *   handle?: string | null,
  *   platform?: string,
+ *   root?: string,
  *   showExits?: boolean,
- * }} input `showExits` = 要不要把「这两格怎么按」那两句念出来（缺单或没配时才念，别每次都刷屏）
+ * }} input `showExits` = 要不要把「这两格怎么按」那两句念出来（缺单或没配时才念，别每次都刷屏）；
+ *   `root` 只用来把「去哪份检出填这一行」说实 —— 一台机器上四份并行检出时，
+ *   「去 `.env` 里加一行」这句话指不出是哪一份（#2186 的现场）。
  * @returns {{handle: string | null, required: boolean, lines: string[]}}
  */
 export function issueAuthoring({
   handle = null,
   platform = "",
+  root = "",
   showExits = false,
 } = {}) {
   const required = platform === "win32";
@@ -165,11 +169,14 @@ export function issueAuthoring({
       " —— **这一格是读数，不改退码**",
   ];
   if (!handle) {
+    const where = path.join(root || ".", ".env");
     lines.push(
       required
-        ? "[ship] 没配提单留痕 ⇒ 出口里那一格留空。Windows 开发者按规范在 `.env` 里加一行 " +
-            `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（它是提单留痕：不进 \`src/env.js\`、运行期不读、不随包）`
-        : `[ship] 没配提单留痕，而本轮只对 Windows 开发者要求这一格 ⇒ 不点名（当前宿主：${platform || "未告知"}）`,
+        ? "[ship] 没配提单留痕 ⇒ 出口里那一格留空。Windows 开发者按规范在**这一份检出**的 " +
+            `\`${where}\` 里填一行 \`${DEV_HANDLE_ENV_KEY}="<短名>"\`` +
+            "（整行都不在时先跑 `pnpm env:init` —— 它只补缺失的键、不覆盖你已有的配置，#2186）。" +
+            "它是提单留痕：不进 `src/env.js`、运行期不读、不随包"
+        : `[ship] 没配提单留痕，而本轮只对 Windows 开发者要求这一格 ⇒ 不点名（当前宿主：${platform || "未告知"}；要配就填在 ${where}）`,
     );
   }
   if (showExits) {
