@@ -30,6 +30,7 @@ import { describe, expect, it } from "vitest";
 import {
   asArray,
   buildPullBody,
+  buildSignature,
   CODE,
   combineShipCodes,
   decideCleanBranch,
@@ -48,7 +49,16 @@ import {
   resolveUpstream,
   ticketReading,
 } from "../scripts/ship-core.mjs";
-import { cleanBranch, closeIssues } from "../scripts/ship-platform.mjs";
+import {
+  cleanBranch,
+  closeIssues,
+  pollUntilTerminal,
+} from "../scripts/ship-platform.mjs";
+import {
+  decideReap,
+  instanceReading,
+  reapCheckoutInstances,
+} from "../scripts/ship-reap.mjs";
 import { main } from "../scripts/ship.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -263,6 +273,13 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
      * 屏幕上还留着合并那两行的绿。 */
     expect(parseArgs(["--clen-branch"]).unknown).toEqual(["--clen-branch"]);
     expect(parseArgs(["--branc"]).unknown).toEqual(["--branc"]);
+  });
+
+  it("--reap 默认关：不给旗标就一次都不该伸手", () => {
+    expect(parseArgs([]).reap).toBe(false);
+    expect(parseArgs(["--merge", "--clean-branch"]).reap).toBe(false);
+    expect(parseArgs(["--reap"]).reap).toBe(true);
+    expect(parseArgs(["--reep"]).unknown).toEqual(["--reep"]);
   });
 });
 
@@ -838,6 +855,297 @@ describe("ticketReading：这次变更挂在哪张单子上（读数，不是闸
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("reapCheckoutInstances：只收 via port 那批，session 那一档不归它收", () => {
+  type Live = { running?: boolean; pids?: number[]; via?: string | null };
+
+  /** 「判据 + 执行者」的替身：`before` 是收尾那一格第一次读到的形状。 */
+  function io(
+    before: Live | null | Error,
+    after: Live | null | Error,
+    reapStatus = 0,
+  ) {
+    const calls: string[] = [];
+    const log: string[] = [];
+    let n = 0;
+    const read = async (_root: string): Promise<Live> => {
+      const one = n++ === 0 ? before : after;
+      if (one instanceof Error) throw one;
+      if (one === null) throw new Error("判据返回了空形状");
+      return one;
+    };
+    const run = (_cmd: string, args: string[]) => {
+      calls.push(args.join(" "));
+      return {
+        status: reapStatus,
+        stdout: `via taskkill /PID ${args[1]} /T /F`,
+        stderr: "",
+        error: null,
+      };
+    };
+    return { read, run, calls, log };
+  }
+
+  const portLive = { running: true, pids: [4242], via: "port" };
+  const sessionLive = { running: true, pids: [777, 778], via: "session" };
+  const noneLive = { running: false, pids: [], via: null };
+
+  it("判据答「无」⇒ 绿、且一次回收都不发", async () => {
+    const f = io(noneLive, noneLive);
+    const code = await reapCheckoutInstances({
+      root: "/tmp",
+      log: (s) => f.log.push(s),
+      run: f.run,
+      read: f.read,
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.calls).toEqual([]);
+    expect(f.log.join("\n")).toContain("没有需要收的");
+  });
+
+  it("via port：逐个发 reap-process.mjs，然后**独立回读**才算收干净", async () => {
+    const f = io(portLive, noneLive);
+    const code = await reapCheckoutInstances({
+      root: "/tmp",
+      log: (s) => f.log.push(s),
+      run: f.run,
+      read: f.read,
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.calls).toEqual(["scripts/reap-process.mjs 4242"]);
+    expect(f.log.join("\n")).toContain("已无在跑的应用实例");
+  });
+
+  it("关键负控制：via session ⇒ 不杀会话，也**不许**念成「没有需要收的」", async () => {
+    const f = io(sessionLive, sessionLive);
+    const code = await reapCheckoutInstances({
+      root: "/tmp",
+      log: (s) => f.log.push(s),
+      run: f.run,
+      read: f.read,
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls).toEqual([]);
+    const all = f.log.join("\n");
+    expect(all).toContain("不是残留");
+    // 关键的那一句：不许走到「无事可做」那条出口（它打的是一句把在跑的服务报成没东西可收的话）。
+    expect(all).not.toContain("没有在跑的应用实例");
+    // 出口要指到编排器自己的收尾路径，不然这一句只是拒绝。
+    expect(all).toContain("dev-launcher.mjs");
+  });
+
+  it("decideReap 四态各给一个动作（判断与效应分家，这条边界不写在效应代码里）", () => {
+    expect(decideReap(noneLive)).toEqual({
+      act: "none",
+      code: CODE.GREEN,
+      pids: [],
+      reason: "",
+    });
+    expect(decideReap(sessionLive).act).toBe("session");
+    expect(decideReap(sessionLive).code).toBe(CODE.NOT_RUN);
+    expect(decideReap(portLive)).toEqual({
+      act: "port",
+      code: null,
+      pids: [4242],
+      reason: "",
+    });
+    // running:true 却没 pid ⇒ 不猜、不按端口反查。
+    const odd = decideReap({ running: true, pids: [], via: "port" });
+    expect(odd.code).toBe(CODE.NOT_RUN);
+    expect(odd.act).toBe("none");
+  });
+
+  it("负控制：回收全退 0 而回读说还在 ⇒ 红（退码不算结论）", async () => {
+    const f = io(portLive, portLive);
+    expect(
+      await reapCheckoutInstances({
+        root: "/tmp",
+        log: (s) => f.log.push(s),
+        run: f.run,
+        read: f.read,
+      }),
+    ).toBe(CODE.RED);
+  });
+
+  it("负控制：归属判据本身抛错 ⇒ 2 且不发回收（读不出来 ≠ 没有残留）", async () => {
+    const f = io(new Error("netstat 起不来"), noneLive);
+    const code = await reapCheckoutInstances({
+      root: "/tmp",
+      log: (s) => f.log.push(s),
+      run: f.run,
+      read: f.read,
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls).toEqual([]);
+  });
+
+  it("负控制：回读那一次抛错 ⇒ 2（收令发出去了，落没落不知道）", async () => {
+    const f = io(portLive, new Error("第二次查询失败"));
+    const code = await reapCheckoutInstances({
+      root: "/tmp",
+      log: (s) => f.log.push(s),
+      run: f.run,
+      read: f.read,
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls).toEqual(["scripts/reap-process.mjs 4242"]);
+  });
+
+  it("instanceReading：无 / 在场 / 读不出 / 矛盾形状各有一句实话", () => {
+    expect(instanceReading(noneLive)).toBe("无");
+    expect(instanceReading(portLive)).toContain("1 个（via port · pids 4242）");
+    expect(instanceReading(sessionLive)).toContain("via session");
+    expect(instanceReading(null)).toContain("没读到");
+    expect(
+      instanceReading({ running: false, pids: [7], via: "port" }),
+    ).toContain("形状矛盾");
+  });
+});
+
+describe("pollUntilTerminal：读数连着若干次一模一样就断流，不烧墙钟", () => {
+  /* 这一格要防的形状是实测撞过的：一次真跑里 20 次轮询全是同一句「还没解析到 build」，
+   * 最后落 exit 2 —— 等待没有换来任何新事实，而屏幕上只看得出「在等」。
+   * 断流的依据是**签名**（sn / data.status / pipeline 完成数-总数），任何一件变了就归零，
+   * 所以它只掐掉重复，不掐掉慢。 */
+  type FakeResult = {
+    status: number;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+  };
+  const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
+  const ok = (stdout: string): FakeResult => ({
+    status: 0,
+    stdout,
+    stderr: "",
+    error: null,
+  });
+
+  function io(opts: {
+    /** 每次 get-build-status 的 data.status；用完后重复最后一个。 */
+    statuses?: string[];
+    /** 每次的 pipeline 计数（"0-1" 这种 `完成-总`），与 statuses 同长。 */
+    progress?: string[];
+    /** false = 列表里没有这条 sha（平台还没开跑）。 */
+    found?: boolean;
+  }) {
+    const log: string[] = [];
+    const calls: string[] = [];
+    let i = 0;
+    const run = (_cmd: string, args: string[]): FakeResult => {
+      calls.push(args.join(" "));
+      if (args[1] === "get-build-logs") {
+        const builds =
+          opts.found === false
+            ? []
+            : [{ sn: "b1", sha: SHA, event: "pull_request", createTime: "t" }];
+        return ok(JSON.stringify({ status: 200, data: { data: builds } }));
+      }
+      if (args[1] === "get-build-status") {
+        const statuses = opts.statuses ?? ["pending"];
+        const progress = opts.progress ?? ["0-1"];
+        const st = statuses[Math.min(i, statuses.length - 1)] ?? "pending";
+        const [done, total] = (
+          progress[Math.min(i, progress.length - 1)] ?? "0-1"
+        ).split("-");
+        i += 1;
+        const pipelinesStatus: Record<string, { status: string }> = {};
+        for (let p = 0; p < Number(total); p += 1) {
+          pipelinesStatus[`p${p}`] = {
+            status: p < Number(done) ? "success" : "running",
+          };
+        }
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { sn: "b1", status: st, pipelinesStatus },
+          }),
+        );
+      }
+      return ok("");
+    };
+    return {
+      log,
+      calls,
+      run,
+      polls: () => i,
+      now: () => 0,
+      sleep: async () => undefined,
+    };
+  }
+
+  const base = { slug: "org/repo", newSha: SHA };
+
+  it("同一读数连续 10 次 ⇒ 断流、落红，并且只读了 10 眼", async () => {
+    const f = io({ statuses: ["pending"], progress: ["0-1"] });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+    });
+    expect(out.stop).toBe(CODE.RED);
+    expect(f.polls()).toBe(10);
+    const all = f.log.join("\n");
+    expect(all).toContain("连续 10 次读数没变");
+    expect(all).toContain("没有终态结论");
+    // 断流那句要带着日志页，否则「不再等了」等于把人赶进下一步去猜。
+    expect(all).toContain("/-/build/logs/b1");
+  });
+
+  it("负控制：第 4 眼签名变了（pipeline 从 0-1 走到 1-1）⇒ 计数归零，继续轮到终态", async () => {
+    const f = io({
+      statuses: ["running", "running", "running", "running", "success"],
+      progress: ["0-1", "0-1", "0-1", "1-1", "1-1"],
+    });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("green");
+    expect(f.polls()).toBe(5);
+    expect(f.log.join("\n")).not.toContain("读数没变");
+  });
+
+  it("「按 sha 还没解析到 build」刷 20 次那一形：第 10 次就断，不再烧满预算", async () => {
+    const f = io({ found: false });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+    });
+    expect(out.stop).toBe(CODE.RED);
+    const repeated = f.log.filter((s) => s.includes("还没解析到 build"));
+    expect(repeated).toHaveLength(10);
+    expect(f.log.join("\n")).toContain("(未解析到 build)");
+  });
+
+  it("buildSignature：三件原值进签名，缺 data 与缺 sn 都各有稳定形状", () => {
+    expect(
+      buildSignature(
+        {
+          data: {
+            status: "running",
+            pipelinesStatus: {
+              p0: { status: "success" },
+              p1: { status: "running" },
+            },
+          },
+        },
+        "b1",
+      ),
+    ).toBe("b1/running/1-2");
+    expect(buildSignature(null, "")).toContain("(未解析到 build)");
+    expect(buildSignature({}, "b2")).toContain("(取不到 data)");
   });
 });
 
@@ -1427,6 +1735,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     "cnb pulls merge-pull",
     /* 关一张单子是把状态写到别人也看得见、且不会自动回退的地方 —— 与合并同一档。 */
     "cnb issues update-issue",
+    /* 杀进程是这一族里最不可逆的一格：dev server 里可能正跑着人没存的东西。 */
+    "node scripts/reap-process.mjs",
   ];
 
   /** 把 `main` 的输出吞掉：这一组判的是**调用面**，不是它说了什么。

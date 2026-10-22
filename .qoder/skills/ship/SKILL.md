@@ -25,6 +25,7 @@ pnpm ship --branch feat/x    # 还没有分支时，让它先把分支建出来�
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
 pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉
+pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上那批**残留进程（默认只念读数）
 ```
 
 ## 几条必须先知道的边界
@@ -56,8 +57,7 @@ pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**
    一条整链在 push 那跳被宿主断掉时，屏幕上不会留下任何线索（实测只剩一个 `127`）。
    单跑 `--only=commit|push|pull-request` 已不可能：那会一段结论都不落，如今退 `2`。
    `--only=close-issue|clean-branch` 同理被拒 —— 它们要的是合并那一段的验真结果。
-6. **分支的两头：建可以代做，名字不行；删必须点名。**
-   `--branch <名字>` 只补「动 ref」那半件事（在 `master` / 游离 HEAD 上才建，已在同名分支上
+6. **分支的两头：建可以代做，名字不行；删必须点名。**   `--branch <名字>` 只补「动 ref」那半件事（在 `master` / 游离 HEAD 上才建，已在同名分支上
    是幂等，名字撞了已存在的 ref 就退 `2` 而不是覆盖，当前在**另一条**分支上也停 —— 它不在
    分支之间搬工作树）。**它不从 issue 号或提交信息里造名字**：名字是判断。
    `--clean-branch` 只删**这一次跑的那一条**分支，且只跟在验真的合并之后；本地那笔用的是
@@ -71,6 +71,20 @@ pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**
    而号只是个字符串，没有任何判据会红）。`ship` 也**不替你建单**：单子的标题与正文是判断，
    它只把 `cnb issues create-issue --repo <组织>/<仓库> --title "…" --body-file <正文文件>`
    那句出口摆出来，按不按由人决定。
+8. **进程那一格：读数每轮都念，动手要点名，而 session 那一档不归它收。** 阶段 0 另有一行
+   `本检出应用实例：无 / N 个（via session|port · pids …）`，取自硬规则 9 那条归属判据
+   （`launcher-core/port-reap.mjs` 的 `runningAppInstances()`）—— **是读数，不参与退码**：
+   有人在用 dev server 是正常状态，把「有进程在跑」判成红就是误报。`--reap` 才动手，
+   而且**只收 `via:"port"` 那批**（有人绕过编排器自己起的那种，才是任务结束后还在跑的残留）；
+   `via:"session"` 意味着**编排器还活着** —— 那不是残留，停它要走编排器自己的收尾
+   （`tools/start/*` 或 `dev-launcher.mjs` 的退出回收），这一格落 `2` 并说清「不是没东西可收」。
+   收完必须**独立回读**同一条判据：`reap-process.mjs` 全部退 0 也不算结论（回读还在 ⇒ 红，
+   回读拿不到 ⇒ 2）。不泛匹配 `node.exe`、不按端口反查；不给旗标一次都不伸手；`--dry-run` 只进计划。
+9. **轮询只掐「重复」，不掐「慢」。** 签名 = `(build sn, data.status, pipeline 完成数-总数)`，
+   连着 10 眼一模一样 ⇒ 不再轮询（`POLL_STALL_MAX`）。任何一件变了就归零，所以推进很慢的
+   流水线不会被掐。断流那一格落 **红（1）**，不是 `2` —— 那一格确实拿到了读数，只是没有终态；
+   把它归进「有一步没跑起来」会把下一动作读错（人去查执行者，而真正要问的是这条流水线为什么不动）。
+   45 分钟墙钟预算保留，兜「动得很慢」那条路，两条判点各打各的话。
 
 ## 它不重复判的东西
 
@@ -84,6 +98,8 @@ pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**
 | 这次变更挂在哪张单子上     | 阶段 0 的 `ticketReading()`：碎片文件名的号 + 首行段落（**读数，不改退码**）                                             |
 | 单子关没关上               | `--close-issue` 之后一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
 | 分支收干净没有             | `--clean-branch` 之后各问一次事实：`git ls-remote --heads` 与 `git show-ref --verify`（push / branch 的退码都不算结论） |
+| 进程收干净没有             | 阶段 0 念 `runningAppInstances()` 的归属读数；`--reap` 只发 `reap-process.mjs`，**收完再读一次同一份判据**才算数       |
+| 这条流水线还在不在动       | 轮询的签名 `(sn, data.status, pipeline 完成数)` —— 连着 10 眼没变就断流，不做无新读数的等待                              |
 
 ⚠️ **`ship` 提交段「全过」不等于 tsc / eslint / 用例过了**。`pre-commit` 默认只跑形态档，
 重档由 `COMFY_HEAVY_GATES=1` 那一档与平台兜底（规范 §13.5.25）—— 钩子自己会打印
