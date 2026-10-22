@@ -47,12 +47,17 @@ import {
   readBuildVerdict,
   readPullVerdict,
   resolveUpstream,
-  ticketReading,
 } from "../scripts/ship-core.mjs";
+import {
+  issueAuthoring,
+  readDevHandle,
+  ticketReading,
+} from "../scripts/ship-ticket.mjs";
 import {
   cleanBranch,
   closeIssues,
   pollUntilTerminal,
+  reportVerdict,
 } from "../scripts/ship-platform.mjs";
 import {
   decideReap,
@@ -792,7 +797,9 @@ describe("ticketReading：这次变更挂在哪张单子上（读数，不是闸
       const all = r.lines.join("\n");
       expect(all).toContain("0-a14-kernel.md");
       expect(all).toContain("先立案");
-      expect(all).toContain("cnb issues create-issue");
+      // 命令只有一份实现（在 `issueAuthoring` 那两行里）⇒ 这一格只指路，不抄第二份。
+      expect(all).toContain("建单的出口在下面那两行");
+      expect(all).not.toContain("cnb issues create-issue");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -855,6 +862,114 @@ describe("ticketReading：这次变更挂在哪张单子上（读数，不是闸
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—— 是读数，不参与判决", () => {
+  it("配了留痕 ⇒ 念出 dev:<短名>，优先级指回平台原生 --priority（本脚本不代填）", () => {
+    const all = issueAuthoring({
+      handle: "yuedu-win",
+      platform: "linux",
+      showExits: true,
+    }).lines.join("\n");
+    expect(all).toContain("提单人=dev:yuedu-win");
+    expect(all).toContain("读数，不改退码");
+    // 实测 `create-issue --labels` 不落地（回读是空）⇒ 出口必须是两条，而不是一条说了不算。
+    expect(all).toContain("cnb issues create-issue");
+    expect(all).toContain("--priority <P0|P1|P2|P3>");
+    expect(all).toContain("cnb issues post-issue-labels");
+    expect(all).toContain("--labels dev:yuedu-win");
+  });
+
+  it("Windows 且没配 ⇒ 点名要配，并给 `.env` 里那个键名与占位标签", () => {
+    const r = issueAuthoring({
+      handle: null,
+      platform: "win32",
+      showExits: true,
+    });
+    expect(r.required).toBe(true);
+    const all = r.lines.join("\n");
+    expect(all).toContain("Windows 开发者");
+    expect(all).toContain("COMFYAPP_DEV_HANDLE");
+    expect(all).toContain("--labels dev:<短名>");
+  });
+
+  it("负控制：非 Windows 没配 ⇒ 同一句事实，但**不点名要求**（本轮口径只管 Windows）", () => {
+    const r = issueAuthoring({ handle: null, platform: "linux" });
+    expect(r.required).toBe(false);
+    const all = r.lines.join("\n");
+    expect(all).toContain("只对 Windows 开发者要求");
+    expect(all).not.toContain("Windows 开发者按规范在");
+  });
+
+  it("两格都在场、又不缺单 ⇒ 只念身份那一行（出口每次都刷屏就没人看了）", () => {
+    const r = issueAuthoring({
+      handle: "yuedu-win",
+      platform: "win32",
+      showExits: false,
+    });
+    expect(r.lines).toHaveLength(1);
+    expect(r.lines[0]).toContain("提单人=dev:yuedu-win");
+  });
+
+  it("出口只教「怎么按对」，不出现任何跳过形态", () => {
+    const all = issueAuthoring({
+      handle: null,
+      platform: "win32",
+      showExits: true,
+    }).lines.join("\n");
+    expect(all).not.toContain("--no-verify");
+    expect(all).not.toContain("--allow");
+  });
+});
+
+describe("readDevHandle：进程环境优先，回落本检出 .env，读不到就是「没配」", () => {
+  /** 造一份只有 `.env` 的临时检出根。 */
+  function envRoot(text: string) {
+    const root = mkdtempSync(path.join(os.tmpdir(), "ship-handle-"));
+    fs.writeFileSync(path.join(root, ".env"), text);
+    return root;
+  }
+
+  it("进程环境里给了就用它（首尾空白吃掉）", () => {
+    const root = envRoot('COMFYAPP_DEV_HANDLE="from-file"');
+    try {
+      expect(
+        readDevHandle({
+          root,
+          env: { COMFYAPP_DEV_HANDLE: "  from-env  " },
+        }),
+      ).toBe("from-env");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("回落到 `.env`：与 `COMFYAPP_PORT` 同一份最小解析（引号、行尾注释都算对）", () => {
+    const root = envRoot('COMFYAPP_DEV_HANDLE="yuedu-win" # 提单留痕\n');
+    try {
+      expect(readDevHandle({ root, env: {} })).toBe("yuedu-win");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("负控制：`.env.example` 那种**注释掉**的形态不算配了 ⇒ 回 null，不念成一个空短名", () => {
+    const root = envRoot('# COMFYAPP_DEV_HANDLE="yuedu-win"\n');
+    try {
+      expect(readDevHandle({ root, env: {} })).toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("没有 `.env`（CI / 干净检出）⇒ null，而不是抛错也不是「读不出来」", () => {
+    expect(
+      readDevHandle({
+        root: path.join(os.tmpdir(), "comfy-no-such-checkout"),
+        env: {},
+      }),
+    ).toBeNull();
   });
 });
 
@@ -1282,6 +1397,129 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     ).toBe("b1/running/0-1+0/0");
     expect(buildSignature(null, "")).toContain("(未解析到 build)");
     expect(buildSignature({}, "b2")).toContain("(取不到 data)");
+  });
+});
+
+describe("被取消的那一跑：结论是「没有结论」，不是「CI 红」（ISSUE #2158 第 2 条）", () => {
+  type FakeResult = {
+    status: number;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+  };
+  const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
+  const ok = (stdout: string): FakeResult => ({
+    status: 0,
+    stdout,
+    stderr: "",
+    error: null,
+  });
+
+  /* 真形状（`cnb-lm1-1k5h1otqt`）：第二格被顶掉、第三格根本没跑，而**构建级**是
+     `error` —— 平台把「被取消」写成「红」，这正是这一族要分开的那个混淆。 */
+  const CANCELLED = {
+    status: 200,
+    data: {
+      status: "error",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "cancel",
+          stages: [
+            { status: "success", name: "工作区出处", id: "stage-0" },
+            { status: "cancel", name: "被顶掉的那格", id: "stage-1" },
+            { status: "skipped", name: "下面那一格", id: "stage-2" },
+          ],
+        },
+      },
+    },
+  };
+
+  function io() {
+    const log: string[] = [];
+    const run = (_cmd: string, args: string[]): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              data: [
+                { sn: "b1", sha: SHA, event: "pull_request", createTime: "t" },
+              ],
+            },
+          }),
+        );
+      }
+      if (args[1] === "get-build-status") {
+        return ok(JSON.stringify(CANCELLED));
+      }
+      if (args[1] === "get-pull") {
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              number: 7,
+              mergeable_state: "mergeable",
+              blocked_on: "",
+              is_merged: false,
+              state: "open",
+            },
+          }),
+        );
+      }
+      return ok("");
+    };
+    return { log, run };
+  }
+
+  it("轮询那一格：状态是 cancelled，日志点名被顶掉的那一格与下面根本没跑的那几格", async () => {
+    const f = io();
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "org/repo",
+      newSha: SHA,
+      now: () => 0,
+      sleep: async () => undefined,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("cancelled");
+    const all = f.log.join("\n");
+    expect(all).toContain("被取消");
+    expect(all).toContain("被顶掉的那格");
+    expect(all).toContain("下面那一格");
+  });
+
+  it("判决那一格：退 2（没有结论），并且**不**说「CI 红」", () => {
+    const f = io();
+    const code = reportVerdict({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "org/repo",
+      number: 7,
+      buildState: "cancelled",
+      buildSn: "b1",
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    const all = f.log.join("\n");
+    expect(all).toContain("被取消");
+    expect(all).toContain("不要去查产物");
+    expect(all).not.toContain("CI 红");
+  });
+
+  it("负控制：真红的那一跑仍然是红、仍然退 1（这一族的行为一个字没改）", () => {
+    const f = io();
+    const code = reportVerdict({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      slug: "org/repo",
+      number: 7,
+      buildState: "red",
+      buildSn: "b1",
+    });
+    expect(code).toBe(CODE.RED);
+    expect(f.log.join("\n")).toContain("CI 红");
   });
 });
 

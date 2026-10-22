@@ -931,6 +931,203 @@ export function resolveLockKey(
   );
 }
 
+/** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, 有没有 cancel-in-progress: true }`。 */
+export function lockAnchorDefinitions(
+  text: string,
+): Map<string, { key: string; cancelInProgress: boolean }> {
+  const out = new Map<string, { key: string; cancelInProgress: boolean }>();
+  const def =
+    /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
+  for (const m of text.matchAll(def)) {
+    const name = m[1];
+    const body = m[2] ?? "";
+    const key = /^[ \t]+key:[ \t]*(\S.*?)[ \t]*$/m.exec(body)?.[1];
+    if (name === undefined || key === undefined) continue;
+    out.set(name, {
+      key,
+      cancelInProgress: /^[ \t]+cancel-in-progress:[ \t]*true[ \t]*$/m.test(
+        body,
+      ),
+    });
+  }
+  return out;
+}
+
+/**
+ * `master:` 块里每条流水线的**锁归属**与它引用的那份 stage 清单。
+ *
+ * 为什么按文本解析而不是 `js-yaml`：本文件的其余判据全是文本形状（同一口径），
+ * 而且 `js-yaml` 不是本仓的直接依赖（它在 `.pnpm` 里是传递依赖，用例不该倚它）。
+ *
+ * 形状前提与 `resolveAnchoredRunner` 那族一致：分支键 2 空格、事件键下那条流水线项
+ * 的 `name:` / `lock:` / `stages:` 都在 6 空格那一层。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns 每条流水线一项（`lockRef === null` = 吃 `.common` 那条 = 要么真是 PR，要么忘了写覆盖）
+ */
+export function pipelineLockAssignments(text: string): Array<{
+  event: string;
+  name: string;
+  lockRef: string | null;
+  stagesRef: string | null;
+}> {
+  const out: Array<{
+    event: string;
+    name: string;
+    lockRef: string | null;
+    stagesRef: string | null;
+  }> = [];
+  let inMaster = false;
+  let event = "";
+  let name = "";
+  let lockRef: string | null = null;
+  let stagesRef: string | null = null;
+  for (const raw of text.split(/\r?\n/)) {
+    if (/^master:[ \t]*$/.test(raw)) {
+      inMaster = true;
+      continue;
+    }
+    /* 下一个顶层键 ⇒ `master:` 块结束。 */
+    if (inMaster && /^\S/.test(raw) && !raw.startsWith("#")) inMaster = false;
+    if (!inMaster) continue;
+    if (raw.trim() === "" || /^\s*#/.test(raw)) continue;
+    const eventKey = /^ {2}(\S.*):[ \t]*$/.exec(raw);
+    if (eventKey?.[1] !== undefined) {
+      event = eventKey[1].replace(/^"|"$/g, "").trim();
+      continue;
+    }
+    const nameKey = /^ {6}name:[ \t]*(.+?)[ \t]*$/.exec(raw);
+    if (nameKey?.[1] !== undefined) {
+      name = nameKey[1];
+      lockRef = null;
+      stagesRef = null;
+      continue;
+    }
+    const lockKey = /^ {6}lock:[ \t]*\*(\w+)[ \t]*$/.exec(raw);
+    if (lockKey?.[1] !== undefined) {
+      lockRef = lockKey[1];
+      continue;
+    }
+    const stagesKey = /^ {6}stages:[ \t]*(\*\w+)?[ \t]*$/.exec(raw);
+    if (stagesKey !== null) {
+      /* 一份 `stages:` 收尾一项；内联清单（没有 `*ref`）当作**只属于这一条**，
+       * 于是「同一把锁只许给同一份工作清单」那条规则对它天然要求独占。 */
+      stagesRef = stagesKey[1] ?? `inline:${name}`;
+      out.push({ event, name, lockRef, stagesRef });
+    }
+  }
+  return out;
+}
+
+/**
+ * 锁按触发类分开之后要成立的五件事，返回**违规清单**（空 = 都成立）。
+ *
+ * 判的不是风格。ISSUE #2114 记下的第二条死因是「所有非 PR 流水线共用一把退化成
+ * `pr-` 的锁」，现场两次：`cnb-5j9-1k5bc4p4u`（每日最后一格与两笔 push 相差 3 秒被
+ * `cancel`）与 `cnb-lm1-1k5h1otqt`（一次 `api_trigger_build` 跑到 244.06 秒被一次
+ * 无关 push 掐掉，与那条 push 的 `createTime` 差 0.2 秒）。所以这里要钉住的是：
+ *
+ *  · **R1** 非 PR 的每条都显式写 `lock:` —— 靠 `<<: *common` 继承就是那次退化的入口；
+ *  · **R2** 引用的那把类锁在场、带 `cancel-in-progress: true`、且 key 是**字面量**
+ *    （带变量 = 又一次「某个事件上它无值就退化」，正是 #1981 那条教训）；
+ *  · **R3** 同一把锁只许给**同一份工作清单**（`stages:` 引用相同）——
+ *    这条把「互掐」限制在「同一件事被重复排队」上：三条每日触发口允许（同一份
+ *    `*daily_gates`），而「单跑构建」与「单跑 E2E」共用一把就是本条要拦的形态；
+ *  · **R4** 任何一条非 PR 的 key 都不许等于退化后的那个 `pr-`，也不许等于 `pr-<iid>`；
+ *  · **R5** PR 那一条仍然用带 `CNB_PULL_REQUEST_IID` 的模板（PR 粒度不许回退成
+ *    「全仓一把」，那是 #1981 修掉的第一个 bug）。
+ *
+ * @param text `.cnb.yml` 原文
+ * @param prIid 用来模拟一次 PR 事件的编号（默认任取一个，只用于比对形状）
+ * @returns 每条违规的一句人话
+ */
+export function lockClassViolations(text: string, prIid = "1982"): string[] {
+  const bad: string[] = [];
+  const defs = lockAnchorDefinitions(text);
+  const commonTemplate = pipelineLockKeyTemplate(text);
+  if (commonTemplate === null) {
+    return ["`.common` 锚点里没有 `lock.key` —— 全部流水线回落到平台默认 key"];
+  }
+  const rows = pipelineLockAssignments(text);
+  if (rows.length === 0) {
+    return [
+      "解析不出 `master:` 块里的任何流水线 —— 判据在这一份配置上恒转（要修解析器）",
+    ];
+  }
+  const prKey = resolveLockKey(commonTemplate, {
+    CNB_PULL_REQUEST_IID: prIid,
+    CNB_PULL_REQUEST: "true",
+  });
+  /* 非 PR 事件上那个变量无值 ⇒ 这就是那份退化后的形状本身。 */
+  const degenerateKey = resolveLockKey(commonTemplate, {});
+
+  /** 同一把工作清单 → 允许共用它的那些锁；反过来锁 → 它只能给一份清单。 */
+  const lockToWork = new Map<string, Set<string | null>>();
+
+  for (const row of rows) {
+    if (row.event === "pull_request") {
+      /* R5：PR 那一条的 key 必须随 PR 编号变。用两个编号各代一次、比结果 ——
+       * 只看原文里有没有那个变量名是不够的（#1981 那个 bug 的原文里也有变量，
+       * 只是代进去之后两条 PR 逐字相同）。 */
+      const template =
+        row.lockRef === null
+          ? commonTemplate
+          : (defs.get(row.lockRef)?.key ?? commonTemplate);
+      const a = resolveLockKey(template, { CNB_PULL_REQUEST_IID: "1980" });
+      const b = resolveLockKey(template, { CNB_PULL_REQUEST_IID: "1982" });
+      if (a === b) {
+        bad.push(
+          `PR 流水线「${row.name}」的 key 与 PR 编号无关（两代都是「${a}」）—— 并行 PR 会互相掐停，这是 #1981 修掉的形态回潮`,
+        );
+      }
+      continue;
+    }
+    /* R1：非 PR 的一条都不许靠继承拿锁 —— 那次退化就是从继承进来的。 */
+    if (row.lockRef === null) {
+      bad.push(
+        `非 PR 流水线「${row.name}」（事件 ${row.event}）没有显式的 lock 覆盖 —— 它会继承 .common 那条模板，而该模板在非 PR 事件上退化成一把共用锁`,
+      );
+      continue;
+    }
+    const def = defs.get(row.lockRef);
+    if (def === undefined) {
+      bad.push(`「${row.name}」引用了不存在的锁锚点 *${row.lockRef}`);
+      continue;
+    }
+    if (!def.cancelInProgress) {
+      bad.push(
+        `锁 *${row.lockRef} 没有 cancel-in-progress: true —— 重复排队收不成一条`,
+      );
+    }
+    /* R2：类锁的 key 必须是字面量。 */
+    if (def.key.includes("$")) {
+      bad.push(
+        `锁 *${row.lockRef} 的 key「${def.key}」带变量 —— 变量在某个事件上无值就退化成共用一把（#1981 那条教训的另一面）`,
+      );
+    }
+    /* R4：不许等于退化形状，也不许等于 PR 那把的形状。 */
+    if (def.key === degenerateKey || def.key === prKey) {
+      bad.push(
+        `「${row.name}」的 key「${def.key}」与非 PR 退化 / PR 那把逐字相同 —— 跨事件互掐回来了`,
+      );
+    }
+    const seen = lockToWork.get(def.key);
+    if (seen === undefined) lockToWork.set(def.key, new Set([row.stagesRef]));
+    else seen.add(row.stagesRef);
+  }
+  for (const [key, works] of lockToWork) {
+    if (works.size > 1) {
+      const list = [...works]
+        .map((w) => w ?? "(没收到 stages 引用)")
+        .join(" / ");
+      bad.push(
+        `锁 key「${key}」被 ${works.size} 份不同的 stage 清单共用（${list}）—— 同一把锁只该挡「同一件事被重复排队」，不同事之间不该互掐`,
+      );
+    }
+  }
+  return bad;
+}
+
 /** 规范里必须留痕的口径；缺失 = 决策被悄悄推翻、而文件面判据还没跟着变。 */
 const DOC_ANCHORS: Array<{ file: string; mustContain: string[] }> = [
   {
@@ -1598,6 +1795,174 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* ⑤ 未替换的原文不许留下裸 `$`（平台不认的写法会**原样**进 key，看起来像
      * 「生效了」而实际是所有人共用一把名字里带 `$` 的锁）。 */
     expect(template).not.toMatch(/\$[^{A-Za-z0-9_]/);
+  });
+
+  /* ── 锁按**触发类**分开（ISSUE #2114 的第二条死因）───────────────────────
+   *
+   * 上面那一条判的是「PR 之间不许互掐」（#1981，那个 bug 的现场是 PR #1980 掐了 #1982）。
+   * 这一族判的是它的另一半：`CNB_PULL_REQUEST_IID` 在非 PR 事件上无值 ⇒ 所有非 PR
+   * 流水线落回同一把字面 `pr-`，而这份配置的非 PR 流水线从**一条**长到了**九条**
+   * （`master 合并复核` + 每日三条触发口 + 单跑六条），那句「这一档只有一条流水线，
+   * 不带分支名也不丢语义」的前提就是这么被推翻的 —— 而没人回来改它，因为它写在注释里。
+   * 两次现场读数：`cnb-5j9-1k5bc4p4u` 的 `每日单元测试` 被一次 push 掐掉（差 3 秒）、
+   * `cnb-lm1-1k5h1otqt` 的一次按需复验跑到 244.06 秒被一次无关 push 掐掉（差 0.2 秒）。
+   */
+  it("非 PR 的每条流水线各有其类锁，且一把锁只挡「同一件事被重复排队」", () => {
+    const text = readRegisteredConfig();
+    expect(lockClassViolations(text), text).toEqual([]);
+    /* 现推的基准，不写死条数（同 `runner 是锚点展开后…` 那一条的口径）：
+     * 九条非 PR + 一条 PR。少解析出一条就是判据在空转，所以按 `stages:` 那一层对齐。 */
+    const rows = pipelineLockAssignments(text);
+    const stageLines = (text.match(/^ {6}stages:/gm) ?? []).length;
+    expect(
+      rows.length,
+      `解析出的流水线数（${rows.length}）与带 stages: 的项（${stageLines}）对不上 —— 有一条被漏掉，它就没人判`,
+    ).toBe(stageLines);
+    expect(rows.filter((r) => r.event === "pull_request").length).toBe(1);
+    expect(
+      rows.filter((r) => r.event !== "pull_request").length,
+    ).toBeGreaterThanOrEqual(9);
+    /* 三条每日触发口仍然同一把（那份互斥是刻意保留的，不是被这次改动顺手拆掉的）。
+     * 这里**不钉事件名清单** —— 时刻那一格由 crontab 那几条判据管，这里只管锁。 */
+    const daily = rows.filter((r) => r.lockRef === "lock_daily");
+    expect(daily.length).toBe(3);
+    expect(new Set(daily.map((r) => r.stagesRef)).size).toBe(1);
+    expect(daily.every((r) => r.event !== "pull_request")).toBe(true);
+    /* 单跑：同一档的 web 与 api 各引用同一把、且引用同一份 stage 清单。 */
+    for (const suffix of ["build", "e2e", "unit"] as const) {
+      const same = rows.filter((r) => r.lockRef === `lock_oneshot_${suffix}`);
+      expect(same.length, `单跑 ${suffix} 那两条应有一把共用的类锁`).toBe(2);
+      expect(new Set(same.map((r) => r.stagesRef)).size).toBe(1);
+    }
+  });
+
+  /**
+   * 反向自检：这一族的五条规则各喂一个坏形状，都必须被抓到。
+   *
+   * 用一份**自带的最小配置**而不是去改现役 `.cnb.yml`：现役那份近两千行，
+   * 在它上面做字符串替换会把「替换没命中」伪装成「判据过了」（本仓栽过一次那种）。
+   * 这份夹具的五条流水线形状与现役一致（分支键 2 空格、项内 6 空格、`- <<: *common`），
+   * 所以它同时是**解析器本身**的活体证据 —— 那 4 条收不齐，后面每一条断言都无从谈起。
+   */
+  it("锁按类分开那五条判据不是空转：五种坏形状各被点名，而现役配置一条都不被抓", () => {
+    const fixture = [
+      ".common: &common",
+      "  lock:",
+      "    key: pr-$CNB_PULL_REQUEST_IID",
+      "    cancel-in-progress: true",
+      ".lock-push: &lock_push",
+      "  key: push",
+      "  cancel-in-progress: true",
+      ".lock-daily: &lock_daily",
+      "  key: daily",
+      "  cancel-in-progress: true",
+      "master:",
+      "  pull_request:",
+      "    - <<: *common",
+      "      name: 质量门禁",
+      "      stages: *gates",
+      "  push:",
+      "    - <<: *common",
+      "      name: master 合并复核",
+      "      lock: *lock_push",
+      "      stages: *push_stages",
+      "  web_trigger_daily:",
+      "    - <<: *common",
+      "      name: 每日档（手动触发）",
+      "      lock: *lock_daily",
+      "      stages: *daily_gates",
+      "  api_trigger_daily:",
+      "    - <<: *common",
+      "      name: 每日档（API 触发）",
+      "      lock: *lock_daily",
+      "      stages: *daily_gates",
+      "",
+    ].join("\n");
+
+    /* 活体证据：解析器在这一份上收得出那 4 条流水线、锁锚点收得出 2 把。
+     * 名单逐条列出来（只数条数的话，「漏了一条又把另一条错认成事件键」这类坏
+     * 解析仍然看不出来）。 */
+    expect(
+      pipelineLockAssignments(fixture).map(
+        (r) => `${r.event}|${r.name}|${r.lockRef ?? "(继承)"}|${r.stagesRef}`,
+      ),
+    ).toEqual([
+      "pull_request|质量门禁|(继承)|*gates",
+      "push|master 合并复核|lock_push|*push_stages",
+      "web_trigger_daily|每日档（手动触发）|lock_daily|*daily_gates",
+      "api_trigger_daily|每日档（API 触发）|lock_daily|*daily_gates",
+    ]);
+    expect([...lockAnchorDefinitions(fixture).keys()]).toEqual([
+      "lock_push",
+      "lock_daily",
+    ]);
+    expect(lockClassViolations(fixture)).toEqual([]);
+
+    // ① R1：有人**忘了写覆盖** ⇒ 那条流水线静默回落到 `pr-`，正是被修掉的那个形态。
+    const forgotten = fixture.replace("      lock: *lock_push\n", "");
+    expect(lockClassViolations(forgotten).join("\n")).toContain(
+      "没有显式的 lock 覆盖",
+    );
+
+    // ② R3：两个**不同的工作清单**被并进一把锁 ⇒ 单跑会掐掉每日（本条要拦的形状）。
+    const merged = fixture.replace(
+      ".lock-daily: &lock_daily\n  key: daily\n",
+      ".lock-daily: &lock_daily\n  key: push\n",
+    );
+    expect(lockClassViolations(merged).join("\n")).toContain(
+      "份不同的 stage 清单共用",
+    );
+
+    // ③ R2 的前半：类锁漏掉 `cancel-in-progress` ⇒ 重复排队收不成一条，而不报错。
+    const noCancel = fixture.replace(
+      ".lock-daily: &lock_daily\n  key: daily\n  cancel-in-progress: true\n",
+      ".lock-daily: &lock_daily\n  key: daily\n",
+    );
+    expect(lockClassViolations(noCancel).join("\n")).toContain(
+      "没有 cancel-in-progress",
+    );
+
+    // ④ R2 的后半：key 里放进变量 ⇒ 换个事件它就无值，退化这件事又回来了。
+    const templated = fixture.replace(
+      "  key: daily\n  cancel-in-progress: true",
+      "  key: daily-$CNB_BRANCH\n  cancel-in-progress: true",
+    );
+    expect(lockClassViolations(templated).join("\n")).toContain("带变量");
+
+    // ⑤ R4 / R5：R4 —— 类锁写成那个退化形状本身；R5 —— PR 那把不再随编号变。
+    const degenerate = fixture.replace(
+      "  key: push\n  cancel-in-progress: true",
+      "  key: pr-\n  cancel-in-progress: true",
+    );
+    expect(lockClassViolations(degenerate).join("\n")).toContain(
+      "与非 PR 退化 / PR 那把逐字相同",
+    );
+    const prCollapses = fixture.replace(
+      "    key: pr-$CNB_PULL_REQUEST_IID\n",
+      "    key: pr-$CNB_DEFAULT_BRANCH\n",
+    );
+    expect(lockClassViolations(prCollapses).join("\n")).toContain(
+      "与 PR 编号无关",
+    );
+
+    /* ⑥ 解析器不许假装通过。两种「没有对象」是两件不同的事，都必须出声：
+     *    · 没有 `.common.lock.key` ⇒ 全档回落到平台默认 key（#1981 那个 bug 的形状）；
+     *    · 有 `.common` 但 `master:` 下一条流水线都收不出来 ⇒ 判据在空转。 */
+    expect(lockClassViolations("master:\n").join("\n")).toContain(
+      "没有 `lock.key`",
+    );
+    expect(
+      lockClassViolations(
+        [
+          ".common: &common",
+          "  lock:",
+          "    key: pr-$CNB_PULL_REQUEST_IID",
+          "    cancel-in-progress: true",
+          "master:",
+          "",
+        ].join("\n"),
+      ).join("\n"),
+    ).toContain("解析不出");
   });
 
   it("覆盖率上报那一档接回了上报链，且**没报告时不判红**（ISSUE #1990）", () => {

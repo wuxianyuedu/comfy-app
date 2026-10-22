@@ -38,6 +38,8 @@
  *   · `ship-reap.mjs`     —— **进程那一格**：本检出的归属读数与 `--reap` 的收尾回收。
  *     两半都不自己判 —— 归属只问 `launcher-core/port-reap.mjs` 的 `runningAppInstances()`
  *     （硬规则 9 唯一实现），回收只发 `scripts/reap-process.mjs`（硬规则 3 唯一入口）。
+ *   · `ship-ticket.mjs`   —— **单子那一格**：碎片挂在哪个号上、谁提的、按什么优先级。
+ *     与「外部执行者的形状」不同的变化方向，所以不在 `ship-core`（叠一起已越过 900 行硬闸）。
  *   · 本文件              —— **本地三段 + 装配**：preflight / commit / push，
  *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
  *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
@@ -137,9 +139,13 @@ import {
   planCommands,
   readProof,
   resolveUpstream,
-  ticketReading,
 } from "./ship-core.mjs";
 import { makeRunner, safeRead, short, writeScratch } from "./ship-exec.mjs";
+import {
+  issueAuthoring,
+  readDevHandle,
+  ticketReading,
+} from "./ship-ticket.mjs";
 import {
   logInstanceReading,
   reapCheckoutInstances,
@@ -533,10 +539,25 @@ async function runFlow(deps, tmpFiles) {
      * 放在这里而不是别处的理由：这是整条链上唯一一处「碎片文件名 + 首行段落」都还在手边、
      * 而写动作一个都没发生的时刻。此前的读数时机只有最危险那一格（`--close-issue` 在
      * **合并已发生之后**才发现标题里没有号），那等于让「没立案」一路走到主干。 */
-    if (frags.length > 0) {
-      for (const l of ticketReading({ root, fragments: frags }).lines) {
+    const ticket =
+      frags.length > 0 ? ticketReading({ root, fragments: frags }) : null;
+    if (ticket) {
+      for (const l of ticket.lines) {
         log(l);
       }
+    }
+    /* 单子的另外两格：谁提的、按什么优先级 —— 同样是读数，不参与退码（ISSUE #2175）。
+     * 「提单人」这一格平台给不了：issue 是被 token 的账号本体创建的，多份并行检出回读到的
+     * `author` 逐字相同（实测），而提交那一侧的通道（git author 子地址）在单子上不存在
+     * —— 见 `docs/guides/git-identity.md` §4。留痕因此只能写在单子上。
+     * 出口那两句只在「缺单」或「没配留痕」时念：都在场时不必每次刷屏。 */
+    const handle = readDevHandle({ root, env: process.env });
+    for (const l of issueAuthoring({
+      handle,
+      platform: process.platform,
+      showExits: !handle || (ticket?.anonymousFixed.length ?? 0) > 0,
+    }).lines) {
+      log(l);
     }
     /* 本检出的应用服务此刻在不在跑 —— 一格**读数**，不参与退码。放在这里是理由：这是
      * 整条链上唯一一处「还没动手、而机器的状态可以顺手交代」的时刻。真收在 `--reap`
