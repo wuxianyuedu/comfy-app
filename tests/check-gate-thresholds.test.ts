@@ -72,11 +72,12 @@ function sources(over: Record<string, string> = {}) {
 const run = (
   entries: Entry[],
   over: Record<string, string> = {},
-  masterEntries: Map<string, unknown> | null = null,
+  masterEntries: Map<string, { value: number }> | null = null,
 ) =>
   analyze({
     entries,
     readSource: sources(over),
+    // 主干那份账只被读 `value` 这一格 ⇒ 判据收的是 ReadonlyMap，这里不必再 cast 一次。
     masterEntries,
     minEntries: 1,
   });

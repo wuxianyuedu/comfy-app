@@ -79,14 +79,22 @@ function isLooser(entry, from, to) {
 }
 
 /**
+ * 账里一条的形状。方向记在 `strictness` 上（缺省按「越大越松」），三档口径见文件头。
+ *
+ * @typedef {{
+ *   file: string, const: string, value: number, unit?: string, kind: string,
+ *   strictness?: string, group?: string, movedFrom?: number, movedIssue?: string
+ * }} GateThreshold
+ */
+
+/**
  * 纯判断：喂账、喂「怎么读源码」、喂主干那份账，回问题清单与读数清单。
  *
- * @param {{
- *   entries: any[],
- *   readSource: (file: string) => string | null,
- *   masterEntries?: Map<string, any> | null,
- *   minEntries?: number,
- * }} input
+ * 参数那一行刻意不折行：折成多行之后，`Map<string, GateThreshold>` 这类**类型续行**会脱离
+ * JSDoc 结构行的豁免（上一行的 `{{` 让「整段是一个类型块」判不出来），而「注释一律中文」
+ * 那条硬闸是按英文虚词表筛的 —— 旧写法里那个 `any` 恰好在表里，于是类型语法被读成一句英文。
+ *
+ * @param {{entries: GateThreshold[], readSource: (file: string) => string | null, masterEntries?: ReadonlyMap<string, { value: number }> | null, minEntries?: number}} input
  * @returns {{problems: string[], notes: string[]}}
  */
 function analyze({
@@ -188,9 +196,10 @@ function analyze({
       entries.filter((e) => e.file === f).map((e) => e.const),
     );
     for (const m of text.matchAll(CONST_DECL)) {
-      if (!inLedger.has(m[1])) {
+      const name = /** @type {string} */ (m[1]);
+      if (!inLedger.has(name)) {
         problems.push(
-          `${f} 里有顶层数值 ${m[1]} 而账上没有 —— 是承重的就入账（threshold / floor），` +
+          `${f} 里有顶层数值 ${name} 而账上没有 —— 是承重的就入账（threshold / floor），` +
             '不是承重的也以 "kind": "report" 入账：入账这个动作本身就是那次判断。',
         );
       }
@@ -249,7 +258,7 @@ function readLedger() {
  * 主干上那本账（相对放宽的基准）。取不到（首次落地 / 无 origin/master）返回 null，
  * 由 `analyze()` 念成「这一轮无从比较」而不是「这一轮一致」。
  *
- * @returns {Map<string, any> | null}
+ * @returns {Map<string, GateThreshold> | null}
  */
 function masterLedger() {
   try {
@@ -259,9 +268,9 @@ function masterLedger() {
       // stderr 不转发：主干上还没有这本账时 git 会打一行 fatal，那是实现细节不是结论。
       stdio: ["ignore", "pipe", "ignore"],
     });
-    /** @type {any[]} */
+    /** @type {GateThreshold[]} */
     const list = JSON.parse(out).entries ?? [];
-    /** @type {Map<string, any>} */
+    /** @type {Map<string, GateThreshold>} */
     const map = new Map();
     for (const e of list) map.set(`${e.file}#${e.const}`, e);
     return map;
