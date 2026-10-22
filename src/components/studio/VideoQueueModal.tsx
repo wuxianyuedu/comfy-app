@@ -10,6 +10,7 @@ import { SelectChip } from "~/components/ui/select-chip";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { runAsyncAction } from "~/lib/async-action";
+import { errorMessage } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { useToast } from "~/components/studio/ToastProvider";
@@ -133,17 +134,26 @@ export function VideoQueueModal({
       runAsyncAction(
         async () => {
           let ok = 0;
+          /* 「跳过失败项」是本动作的域语义，但**第一条失败的原因不能一起跳掉**：
+           * 草稿那一列只有 `prompt`，服务端不收（`workflow` 必填），于是过去每条都失败、
+           * 界面只给一句「请检查参数或 ComfyUI 连接」—— 而那既不是参数框的问题也不是
+           * 连接问题。留一个原因出来，出口拿到的就是判据真正说出的那一列。 */
+          let firstFailure = "";
           for (const it of items) {
             try {
               const d = await submitGeneration(it.params, it.prompt);
               if (d.taskId) ok++;
-            } catch {
-              /* 跳过失败项 */
+            } catch (e) {
+              if (!firstFailure) firstFailure = errorMessage(e, "提交失败");
             }
           }
           if (ok === 0) {
             /* 一条都没成：抛出去走出口的失败通道，文案带可执行动作。 */
-            throw new Error("提交失败，请检查参数或 ComfyUI 连接");
+            throw new Error(
+              firstFailure
+                ? `提交失败：${firstFailure}`
+                : "提交失败，请检查参数或 ComfyUI 连接",
+            );
           }
           setDraft([]);
           setTab("queue");
