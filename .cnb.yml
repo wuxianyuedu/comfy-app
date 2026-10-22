@@ -1483,30 +1483,64 @@
   # 「`SOURCE_RE` 认的扩展名在仓库里可能出现的那几棵树」—— 由 `stagedRoots()` 现算，
   # 这里写的是它现算的**上界**（顶层目录 + 根级配置名）；判宽只会少省几秒，判窄是漏判。
 
-  # ── 收进聚合档的那几格：**原文以注释形态留在这里**，名字仍在 `COMFYAPP_CI_GATES` 里 ──
+  # ── 文档面与上报这几格：**各自一格，各带自己的收窄**（2026-10-22 恢复执行者）────
   #
-  # 这是「停用 ≠ 删除」机制在**页内**的第三种形态（前两种见 `COMFYAPP_CI_DISABLED_GATES`
-  # 那两条注释）：这几格的名字**仍在 `COMFYAPP_CI_GATES` 里**（它们没被停用，是换了执行者
-  # —— 从「各自一格」换成下面那一格的条目），所以判据对它们的要求不是「名字进停用清单」，
-  # 而是**原文 grep 得回来**：`tests/ci-incremental-gates.test.ts` / `ci-autofix-duties.test.ts`
-  # 双向核对「登记过的条目 ⇒ 聚合档里真有那一行」「这里带 `--autofix` 的条目 ⇒ 登记过」。
+  # ⚠️ 2026-10-20 那一笔（`0c6c8897`）把这几格的原文注释掉了，理由是「收进聚合档」。
+  # 但聚合档 `重档静态判据` 读的是**钩子注册表**（`.githooks/pre-commit` 的 `run` 步骤行），
+  # 而其中那三条在 2026-10-16（`8d0d0b23`）就已经从钩子里撤走了 —— 两次搬动方向相反、
+  # 在中间对穿 ⇒ 从 2026-10-20 起它们**一个执行者都没有**。
+  # （`覆盖率上报` 从没进过钩子：它是 10-19 才被收进条目表的，而条目表不执行任何东西。）
+  # 实测（平台日志 `cnb-n1k-1k5h6bnm6`）：`render-doc-placeholders` / `check-doc-references`
+  # 零命中，`check-docs-api.cjs` 只命中它自己的单测 —— 脚本本身一次没跑。
+  # 代价是实打实的：`docs/api/**` 在无人看管下漂了 32 份（`7aae1747` 等 5 笔 `src/lib`
+  # 提交之后没人重生成），本地 `node scripts/check-docs-api.cjs --check` 现在退 1。
   #
-  # ⚠️ 别把这段当成「已经删了」的残留清理掉：抹掉它 = 「悄悄删掉」与「收进聚合档」在配置里
-  # 重新变成同形，而那正是本仓花了两轮才分开的两件事。
+  # 处置：**恢复成各自的活 stage**，并给前两格挂上**按这一格算的收窄**。
+  # 为什么不是「进聚合档 + 格内收窄」：平台的 `ifModify` 是**按整格**的，而复合执行者
+  # 一条都不许挂（格内扫描面不同的判据一起静默放行 —— 见 `scripts/ci-incremental-gates.mjs`
+  # 的 `COMPOUND_EXECUTORS`）。⇒ 要按条目收窄，就得让它自己占一格。
   #
-  # 恢复动作（真要拆回独立 stage）：取消注释 → 从下面聚合档的条目表删掉同名条目
-  # → 若它带 `ifModify`，同批登记进 `scripts/ci-incremental-gates.mjs`。
+  # 收窄的形状与理由只有一处出处：`scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`
+  # （那里逐条写着「它守的是哪份脚本、为什么这条收窄是安全的」）。
+  - name: 生成态文档与源同步
+    ifModify:
+      - "docs/**"
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
+  - name: API 文档生成物与源同步
+    ifModify:
+      - "src/lib/**"
+      - "src/server/**"
+      - "src/trpc/**"
+      - "typedoc.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "scripts/check-docs-api.cjs"
+      - "scripts/typedoc-run.mjs"
+      - "docs/api/**"
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
+  # 覆盖率上报是**报告型**（它不判任何东西，只把 coverage/lcov.info 交给平台的上报通道；
+  # 报告不在时它自己跳过而不判红）。它没有 `ifModify`：它读的不是「本次改动」，
+  # 收窄它等于「只在某类改动上才记覆盖率」。
+  - name: 覆盖率上报
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
+  # 文档引用与权威源一致：判的是**全库**文档里的引用与权威源（域不是某几个目录），
+  # 收窄成任何子集都是漏判；而它自己只要 0.42s ⇒ 每跑必跑不贵，不挂 `ifModify`。
+  - name: 文档引用与权威源一致
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
+
+  # ── 下面这几格**没有自己的 stage**：它们的执行者在别处 ──────────────────────
+  #
+  # 「停用 ≠ 删除」机制在**页内**的第四种形态（前三种见 `COMFYAPP_CI_DISABLED_GATES`
+  # 那两条注释与上面那段「收进聚合档」）：这几格的名字**仍在 `COMFYAPP_CI_GATES` 里**
+  # （它们没被停用，是换了执行者），但它们的原文是注释形态 —— 因为执行者是：
+  #   · `格式化提交分离` / `零消费导出` ⇒ 复合档 `重档静态判据` 里的条目
+  #     （执行面 = 钩子注册表，见 `scripts/ci-heavy-gates.mjs` 的头注）；
+  #   · `core 骨架单一事实源` / `core 出口纪律与基类纯度` ⇒ 「受影响用例」那一格的
+  #     固定清单（`scripts/fixed-structural-tests.mjs`），那 5 个用例文件每次 PR 都跑。
+  # 恢复动作（真要拆回独立 stage）：取消注释 → 从复合档的条目表删掉同名条目。
   #
   # - name: 格式化提交分离
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
-  # - name: 生成态文档与源同步
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
-  # - name: API 文档生成物与源同步
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
-  # - name: 覆盖率上报
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
-  # - name: 文档引用与权威源一致
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
   # - name: core 骨架单一事实源
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
   # - name: 零消费导出
@@ -1527,10 +1561,19 @@
 
   # ── 重档静态判据：一格，一次 job，内部按顺序逐条跑 ─────────────────────────
   #
-  # 这一格取代了原来的 10 条各自独立的 stage（`格式化提交分离` / `生成态文档与源同步` /
-  # `API 文档生成物与源同步` / `覆盖率上报` / `文档引用与权威源一致` / `core 骨架单一事实源` /
-  # `零消费导出` / `core 出口纪律与基类纯度` …）。**判据一条没少**：每一条仍是原来那份
+  # 这一格取代了原来那 8 条各自独立的 stage。**判据一条没少**：每一条仍是原来那份
   # 脚本、原来那份参数，只是不再各占一个平台 stage。
+  #
+  # ⚠️ 2026-10-22 订正它的**成员名单**：原先记的是「那 8 条都收进了这一格」，而实际上
+  # 这一格的执行面是**钩子注册表**（`.githooks/pre-commit` 的 `run` 步骤行）——
+  # 那 8 条里有 4 条在 2026-10-16 就已经从钩子里撤走了，所以**这一格从来没跑过它们**
+  # （2026-10-20 又把它们在配置里的原文注释掉 ⇒ 那 4 条彻底没有执行者）。
+  # 现在：`生成态文档与源同步` / `API 文档生成物与源同步` / `覆盖率上报` /
+  # `文档引用与权威源一致` 恢复成各自的活 stage（见上面那段）；这一格只跑**钩子里
+  # 真有步骤行的那几条**（`格式化提交分离` / `零消费导出` / `CP936 字形登记` …），
+  # 而 `core` 那两条由「受影响用例」格的固定清单执行。
+  # 成员名单只有一处出处：`scripts/ci-heavy-gates.mjs` 的 `HEAVY_GATES`，而那一格
+  # **自证**「表里每一条都被它真跑」（表与钩子对不上 ⇒ 判红，见那个文件的头注）。
   #
   # 为什么合（2026-10-19 的现场）：`cnb-hpl-1k5a0s6ss` 上 `ESLint 零警告` 一步撞到平台的
   # **20m stage 预算**被强杀（`任务超过最大执行时间而被强制关闭：20m0s`，脚本一行输出都没有），
@@ -1542,20 +1585,20 @@
   # 每条的墙钟、退出码、末若干行输出都打在同一份日志里 —— 红了照样一眼看出是哪一条，
   # 且不再是「一条红、后面全 skipped」的形态。
   #
-  # ⚠️ **`ifModify` 收窄全部撤掉了**（原来 `格式化提交分离` / `覆盖率上报` 各带一组）。
-  # 理由：`ifModify` 是按**整格**跳过的，一格装十条判据时它只能判成「本次没碰 → 十条都不跑」，
-  # 而那十条的扫描面并不相同 —— 那正是本仓最不能有的形态（判据在场、结论静默变成放行）。
-  # 现在格内**不跳**，代价是每次多跑几条秒级脚本；真要收窄也要回到「按条目判扫描面」，
-  # 不是按格。
+  # ⚠️ **`ifModify` 收窄全部撤掉了**（复合执行者一条都不许挂）。理由：`ifModify` 是按
+  # **整格**跳过的，一格装多条判据时它只能判成「本次没碰 → 全都不跑」，而那些判据的
+  # 扫描面并不相同 —— 那正是本仓最不能有的形态（判据在场、结论静默变成放行）。
+  # 现在格内**不跳**，代价是每次多跑几条秒级脚本；真要收窄要回到「按条目判扫描面」，
+  # 不是按格 —— 而平台的 `ifModify` 只能按格算 ⇒ **需要收窄的判据不进这一格**，
+  # 它自己占一格（上面那几格就是）。
   #
-  # 判据与执行者的对应关系仍在 `scripts/ci-heavy-gates.mjs` 的条目表里，谁被删了在
-  # 本地钩子那一档与 `tests/ci-heavy-gates.test.ts` 当场红（条目 ⇄ 脚本两向核对）。
+  # 判据与执行者的对应关系在 `scripts/ci-heavy-gates.mjs` 的条目表里，而那一格**自证**
+  # 「表里每一条都被它真跑」—— 表与钩子对不上就判红（2026-10-20 那次就是这样溜过去的：
+  # 表里写着、格子里没跑，而登记表之间互核全绿）。
   - name: 重档静态判据
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-heavy-gates.mjs
     # 平台单 stage 默认预算 20m 是硬上限（实测强杀形态见上面那段），而这一格装的是原先
-    # 十条各自独立跑的东西 —— 它的**合理**墙钟应当与原十格的总和同级。给 45m 是因为
-    # `生成态文档与源同步` 在红的时候要就地重渲染 30 份文档（`--autofix` 那一跳），
-    # 冷节点上不是秒级；`覆盖率上报` 在没有报告时只打一行。
+    # 那几条各自独立跑的东西 —— 它的**合理**墙钟应当与原几格的总和同级。
     timeout: 45m
 
   # ── 构建与产物：**这一格 2026-10-18 起不在 PR 上跑了**（口径见 §13.5.23）──

@@ -17,6 +17,11 @@
 <div class="tsd-signature tsd-anchor-link" id="submitgeneration"><span class="tsd-kind-call-signature">submitGeneration</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">params</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">prompt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">taskId</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">&gt;</span><a href="#submitgeneration" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>提交一条生成；成功返回 taskId（由调用方决定怎么提示/刷新）。</p>
+<p>发出去之前先过<strong>服务端那一个</strong> <code>generateInputSchema</code>（<code>parseGenerateInput</code>），
+不合格就<strong>不发</strong>。过去这里是 <code>{...(params ?? {}), prompt} as GenerateInput</code> ——
+调用点给什么就发什么，而 <code>workflow</code> 是必填：草稿页签那一列只有 <code>prompt</code> 的载荷
+每次都要走完一次往返，换回一句英文的 zod 原文，再被「逐条提交、跳过失败项」
+那层吞成「什么都没发生」。现在同一个形状问题在本地就有名字与出路。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
@@ -25,7 +30,7 @@
 <li><span><span class="tsd-kind-parameter">prompt</span>: <span class="tsd-signature-type">string</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">taskId</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/media/video-queue-client.ts:100</li></ul></aside></div></li></ul></section></div>
+<li>Defined in src/lib/media/video-queue-client.ts:105</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
