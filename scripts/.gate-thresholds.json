@@ -78,6 +78,42 @@
       "why": "「整文件重排混进功能提交」的触发下限：1 会变成噪声源，所以不在 1 阻断。"
     },
     {
+      "file": "scripts/check-tracked-secrets.cjs",
+      "const": "MIN_VALUE_LEN",
+      "value": 24,
+      "unit": "个字符",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "赋值式凭据的值长下限（ISSUE #2157）：调大 = 更少的行算凭据 = 放宽这条硬闸，所以它进账而不是留在正则里。"
+    },
+    {
+      "file": "scripts/check-tracked-secrets.cjs",
+      "const": "MIN_VALUE_CLASSES",
+      "value": 3,
+      "unit": "个字符类别",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "熵代理的类别数：全小写 + 连字符的 CI 占位值只有两类，靠这一道自然排除。调大它等于放行更多「看着像 key」的值 —— 是放宽，不是收紧。"
+    },
+    {
+      "file": "scripts/check-tracked-secrets.cjs",
+      "const": "PEM_ENTITY_MIN",
+      "value": 64,
+      "unit": "个连续 base64 字符",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "PEM 头之后要跟这么长一段实体才算私钥 —— 这条限定是判据能存在的前提（redaction 的假夹具就是靠它不命中），调大它会把真私钥也放过去。"
+    },
+    {
+      "file": "scripts/check-tracked-secrets.cjs",
+      "const": "MIN_URL_PASS_LEN",
+      "value": 6,
+      "unit": "个字符",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "URL 内嵌口令的下限：短于它的按 `user:pass@host` 那种教学写法放过。与上一条同族 —— 都是「命中面」的下限，越大越松。"
+    },
+    {
       "file": "scripts/check-ui-customizations.cjs",
       "const": "MARKER_MAX_LINE",
       "value": 3,
