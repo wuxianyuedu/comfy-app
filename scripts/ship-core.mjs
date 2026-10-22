@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveGitDir } from "./git-dir.mjs";
-import { fragmentHead } from "./ship-ticket.mjs";
+import { fragmentHead, signatureLine } from "./ship-ticket.mjs";
 
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
@@ -92,10 +92,10 @@ export function parseIssueNumberToken(token) {
  *     （那会被读成「没要那个动作」），也不许往后吃掉本该属于别的旗标的参数。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -110,12 +110,14 @@ export function parseArgs(argv) {
     reap: false,
     dryRun: false,
     wait: true,
+    whoami: false,
     only: null,
     unknown: [],
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i] ?? "";
     if (a === "--merge") out.merge = true;
+    else if (a === "--whoami") out.whoami = true;
     else if (a === "--close-issue") {
       out.closeIssue = true;
       while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
@@ -585,10 +587,11 @@ export function findPullForBranch(json, branch) {
  * 只搬「盘上已有的字」：段落标题 + 碎片文件名。不写因果、不写「已验证」那类声明
  * （`check-commit-claims.mjs` 会拿提交树复核句式，而 PR 正文迟早会被抄进合并信息）。
  *
- * @param {{root:string,fragments:string[],diffstat:string}} input 量到的事实
+ * @param {{root:string,fragments:string[],diffstat:string,handle?:string|null}} input 量到的事实
+ *   与这一跑的留痕短名（ISSUE #2204：正文末尾一行 `提交人：dev:<短名>`，未配写「未配」）
  * @returns {string} 正文
  */
-export function buildPullBody({ root, fragments, diffstat }) {
+export function buildPullBody({ root, fragments, diffstat, handle = null }) {
   const lines = ["## 本 PR 带的变更碎片（`changelog.d/`）", ""];
   for (const f of fragments) {
     // 首行的读法只有一处（`fragmentHead`）：两处各读各的，就会开始对同一份碎片给两种答案。
@@ -602,10 +605,13 @@ export function buildPullBody({ root, fragments, diffstat }) {
     diffstat || "(空)",
     "```",
     "",
+    signatureLine(handle),
+    "",
   );
   lines.push(
     "> 本段由 `pnpm ship` 拼装，内容全部是它当场量到的事实（碎片标题与 diffstat）。",
-    "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写，也不替你签。",
+    "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；上面那行「提交人」只是" +
+      "这一跑的留痕，不是对正文的判断背书。",
   );
   return lines.join("\n");
 }
@@ -642,7 +648,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,authorLabel?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -670,6 +676,14 @@ export function planCommands(st) {
   p.push(
     `cnb pulls post-pull --repo ${st.slug} --base ${trunk} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
   );
+  /* 标签与回读是**一对**：只写「打标签」就把「回执即结论」教给读者，而这一族
+   * 从不采信回执（ISSUE #2204）。未配留痕时这两条都不执行，所以按旗标出现。 */
+  if (st.authorLabel) {
+    p.push(
+      `cnb pulls post-pull-labels --repo ${st.slug} --number <n> --labels dev:<短名> -v`,
+    );
+    p.push(`cnb pulls list-pull-labels --repo ${st.slug} --number <n> -v`);
+  }
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);
   p.push(`cnb pulls get-pull --repo ${st.slug} --number <n> -v`);
