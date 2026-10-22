@@ -42,6 +42,14 @@ import path from "node:path";
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
 import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
+/* 单跑那三档的前提集与「单跑名 ⇄ 每日名」的对照是**数据**，一份出处在
+ * `scripts/ci-oneshot-gates.mjs`。这里 import 它而不是在测试里重抄一遍 ——
+ * 重抄就成了「判据自己就是第二份事实」。 */
+import {
+  ONESHOT_TARGETS,
+  oneshotGates,
+  oneshotPairs,
+} from "../scripts/ci-oneshot-gates.mjs";
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
@@ -366,7 +374,7 @@ const DAILY_SCRIPT_MIRRORS: [string, string][] = [
  * 「不相同的那一行正是被允许的那一行」—— 第一次故意改与第一次手滑在账面上同形。
  */
 const DAILY_ENV_ONLY_ON_PR: Record<string, string[]> = {
-  "每日安装依赖": ["COMFY_CI_SLOT"],
+  每日安装依赖: ["COMFY_CI_SLOT"],
 };
 
 /** 一行 env 赋值的键名；不是赋值形状（如脚本行 `$enc=…` / `node …`）回 `null`。 */
@@ -951,6 +959,30 @@ export function missingAnchors(
 }
 
 /**
+ * `.cnb.yml` 的**顶层键**清单（缩进 0、非注释、非空行，取第一个 `:` 之前的部分）。
+ *
+ * 为什么要判这个：`master:` 这类事件容器出现**两次**时，YAML 不报错 —— 后一处静默
+ * 覆盖前一处。而这份配置里 `master:` 下面挂着 `"crontab: 0 2 * * *"`，所以
+ * 「新开一个 `master:` 好加几条流水线」这个动作会**当场让定时那一跑消失**，
+ * 配置读起来却完全正常（与 ISSUE #2114 那句「账面认为有人判」同族的失效形态）。
+ * 判据只判一件事：同一个顶层键不许出现第二行 —— 新事件一律作为已有 `master:` 的子键加。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns 顶层键（按出现顺序，**允许重复**：重复就是要抓的东西）
+ */
+export function topLevelKeys(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split("\n")) {
+    if (raw === "" || raw.startsWith("#")) continue;
+    if (/^\S/.test(raw)) {
+      const m = /^([^:]+):/.exec(raw.trimEnd());
+      if (m?.[1] !== undefined) out.push(m[1].trim());
+    }
+  }
+  return out;
+}
+
+/**
  * 读登记在册的平台侧配置原文。
  *
  * 它**不存在时直接抛**：本文件所有调用点都建立在「这份配置在」这个前提上，
@@ -993,17 +1025,26 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
     expect(runner.namespace).toBe("group");
     expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
-    // 五条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
+    // 每条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
     // （`runner.namespace: group` + `tags` 就在这个锚点里）。
     // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。
-    // 五个事件：`pull_request` / `push` / `crontab`（ISSUE #2010）/
-    //   `web_trigger_daily`（每日档的手动触发口，按钮在 `.cnb/web_trigger.yml`）/
-    //   `api_trigger_daily`（同一件事的 CLI / API 形态，理由与判据见下面那条三向对照）。
+    //
+    // ⚠️ 这里**不再钉一个写死的条数**（过去钉的是 5，等于把「今天有几条流水线」当判据）：
+    // 加一条流水线（单跑那六条就是）会让它红，而红的不是任何缺陷 —— 这条判据要问的是
+    // 「有没有哪条流水线漏了引用」。基准改从文本里现推：一条流水线必然带且只带一个
+    // 顶层 `stages:` 键（六空格那一层，引用形态 `stages: *x` 与内联形态都算），
+    // 引用数与它对齐才算每条都接上了 runner。把某条的 `stages:` 删了同样红。
     const refs = text.match(/^\s+-\s*<<:\s*\*\w+/gm) ?? [];
+    const stageLists = text.match(/^ {6}stages:/gm) ?? [];
     expect(
       refs.length,
-      "锚点引用数与流水线数对不上（五个事件各要 <<: 一次）",
-    ).toBe(5);
+      `锚点引用数（${refs.length}）与带 \`stages:\` 的流水线数（${stageLists.length}）对不上 —— ` +
+        "有一条流水线没接上 `*common`，它会静默回落到计费的平台池",
+    ).toBe(stageLists.length);
+    expect(
+      refs.length,
+      "一条流水线都没引用锚点（`.common` 被删了或换了形状）",
+    ).toBeGreaterThanOrEqual(5);
   });
 
   it("定时 / 手点 / API 三个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
@@ -2228,5 +2269,179 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     for (const anchor of ["package.json", "vitest.config.ts", ".githooks"]) {
       expect(top).toContain(anchor);
     }
+  });
+});
+
+describe("单跑口：三档重档各自一条，前提格的正文必须与每日那格逐字相同", () => {
+  /**
+   * 某一格的**正文**（剥掉列表项自己那行 `name:`，再剥掉注释与空行，比的是
+   * `script` / `env` / `timeout`）。
+   *
+   * 两处刻意：① **名字不参与比较** —— 单跑那格本来就要另起一个不重名的名字
+   * （见下面那条判据），比名字等于比错的东西；② **注释不算漂移** ——
+   * `stageBlock()` 会把下一格前面的说明注释一起收进来（那是 2 空格的正常正文宽度），
+   * 而每日那几格带着大量取证注释、单跑那几格不该重抄一遍。要比的是命令、env、预算。
+   */
+  function stageBody(text: string, name: string): string | null {
+    const block = stageBlock(text, name);
+    if (block === null) return null;
+    return block
+      .split("\n")
+      .slice(1)
+      .filter((line) => {
+        const body = line.trim();
+        return body !== "" && !body.startsWith("#");
+      })
+      .join("\n")
+      .trimEnd();
+  }
+
+  /**
+   * 锚点列表里（恰好两空格缩进的 `- name:`）出现**两次以上**的格名。
+   *
+   * 只扫这一层是有范围的：`.daily-gates` / `.oneshot-*` / `.gates` 的 stage 项都在这一层，
+   * 而 `jobs:` 下的 Job 与所属 stage **同名是刻意的**（容器那格的形态），更深缩进的写法
+   * 因此不算违规。要防的是「两条流水线里有两个同名 stage」——那会让按名字取块的解析器
+   * 读到哪一个变成运气（`.cnb.yml` 里 `每日安装依赖` 那段注释记着同一件事）。
+   */
+  function duplicatedStageNames(text: string): string[] {
+    const seen = new Map<string, number>();
+    for (const m of text.matchAll(/^ {2}- name: (\S.*?)[ \t]*$/gm)) {
+      const name = m[1] ?? "";
+      seen.set(name, (seen.get(name) ?? 0) + 1);
+    }
+    return [...seen].filter(([, n]) => n > 1).map(([k]) => k ?? "");
+  }
+
+  it("每档的 web 与 api 两条清单相同，且等于注册表的「最小前提 + 目标」", () => {
+    const text = readRegisteredConfig();
+    const daily = registeredDailyGateOrder(text);
+    for (const target of ONESHOT_TARGETS) {
+      const expected = oneshotGates(target);
+      for (const pair of oneshotPairs(target)) {
+        expect(
+          daily,
+          `注册表里的「${pair.daily}」不在每日档的清单里 —— 单跑口引用的是一个每日根本不跑的格`,
+        ).toContain(pair.daily);
+      }
+      for (const [ev, pipeline] of [
+        [target.eventWeb, target.pipelineWeb],
+        [target.eventApi, target.pipelineApi],
+      ] as const) {
+        const got = pipelineStageNames(text, pipeline);
+        expect(
+          got,
+          `${ev} 那一条跑的清单与注册表不一致：期望 ${expected.join(" → ")}，实际 ${got.join(" → ")}`,
+        ).toEqual(expected);
+      }
+    }
+  });
+
+  it("每个单跑格的正文与它对应的每日格逐字相同（副本不许漂）", () => {
+    const text = readRegisteredConfig();
+    for (const target of ONESHOT_TARGETS) {
+      for (const pair of oneshotPairs(target)) {
+        const oneshotBody = stageBody(text, pair.oneshot);
+        const dailyBody = stageBody(text, pair.daily);
+        expect(
+          oneshotBody,
+          `${pair.oneshot} 在配置里找不到那一项`,
+        ).not.toBeNull();
+        expect(dailyBody, `${pair.daily} 在配置里找不到那一项`).not.toBeNull();
+        expect(
+          oneshotBody,
+          `${pair.oneshot} 的正文与 ${pair.daily} 不再逐字相同 —— 这就是「同一份脚本长在两条流水线上各漂一份」（ISSUE #2081 那一族）`,
+        ).toBe(dailyBody);
+      }
+    }
+  });
+
+  it("单跑的格名不许与每日格或彼此重名", () => {
+    const text = readRegisteredConfig();
+    expect(
+      duplicatedStageNames(text),
+      "锚点清单里出现了同名 stage：按名字取块的解析器会读错那一条流水线",
+    ).toEqual([]);
+  });
+
+  it("顶层 `master:` 只许有一份：多开一份会让定时那一跑静默消失", () => {
+    const text = readRegisteredConfig();
+    const keys = topLevelKeys(text);
+    const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
+    expect(
+      dup,
+      `顶层键重复（YAML 静默取后一份，前一份里的事件就此没有执行者）：${dup.join(" / ")}`,
+    ).toEqual([]);
+    /* 量具自己先自证：同一份文本里写两次就会被数出来，而注释里的 `master:` 不算。 */
+    expect(topLevelKeys("a:\n  x: 1\na:\n  y: 2\n")).toEqual(["a", "a"]);
+    expect(topLevelKeys("# c:\nx:\n  y: 1\n")).toEqual(["x"]);
+  });
+
+  it("反向自检：四种坏形状都要被各自的判据点名，而现役形状一条都不许被抓", () => {
+    const text = readRegisteredConfig();
+    const e2e = ONESHOT_TARGETS.find((t) => t.gate.daily === "每日全量E2E");
+    if (!e2e)
+      throw new Error("注册表里没有「每日全量E2E」那一行，这条自检没有基准");
+    const pipeline = e2e.pipelineWeb;
+    const live = pipelineStageNames(text, pipeline);
+
+    /* ① 漏一格：整项删掉（改名不算删 —— 改名之后清单还是四格，那条判据要抓的是
+     * 「这一档根本没跑」，所以变异必须真的少一格）。 */
+    const browserAt = text.indexOf("  - name: 单跑E2E·浏览器安装");
+    const e2eAt = text.indexOf("  - name: 单跑E2E·全量E2E", browserAt);
+    if (browserAt < 0 || e2eAt < 0)
+      throw new Error("单跑E2E 那张锚点表里找不到浏览器/目标那两格");
+    const dropped = text.slice(0, browserAt) + text.slice(e2eAt);
+    const droppedList = pipelineStageNames(dropped, pipeline);
+    expect(droppedList, "① 漏一格必须让清单变短").not.toEqual(live);
+    expect(droppedList).toHaveLength(live.length - 1);
+
+    /* ② 顺序颠倒：把浏览器那一格挪到表首（条数不变 ⇒ 只有顺序判据抓得住）。 */
+    const headAt = text.indexOf(".oneshot-e2e: &oneshot_e2e");
+    const headEnd = text.indexOf("  - name:", headAt);
+    const moved =
+      text.slice(0, headEnd) +
+      text.slice(browserAt, e2eAt) +
+      text.slice(headEnd, browserAt) +
+      text.slice(e2eAt);
+    const movedList = pipelineStageNames(moved, pipeline);
+    expect(movedList, "② 顺序颠倒必须被点名").not.toEqual(live);
+    expect(movedList).toHaveLength(live.length);
+
+    /* ③ 正文漂移：改一处 script，由「逐字相同」那条抓。 */
+    const driftedBody = text.replace(
+      "node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs\n  - name: 单跑E2E·浏览器安装",
+      "node scripts/db-push.mjs --force\n  - name: 单跑E2E·浏览器安装",
+    );
+    expect(stageBody(driftedBody, "单跑E2E·同步数据库表结构")).not.toEqual(
+      stageBody(driftedBody, "每日同步数据库表结构"),
+    );
+    expect(
+      stageBody(driftedBody, "单跑E2E·同步数据库表结构"),
+      "③ 正文漂移必须改得到那一项",
+    ).not.toBe(stageBody(text, "单跑E2E·同步数据库表结构"));
+
+    /* ④ 名字撞车：把单跑那格改成每日的名字，由「不许重名」那条抓。 */
+    const collided = text.replace(
+      "  - name: 单跑E2E·安装依赖",
+      "  - name: 每日安装依赖",
+    );
+    expect(duplicatedStageNames(collided), "④ 重名必须被点名").toContain(
+      "每日安装依赖",
+    );
+
+    /* 现役形状：四条判据一条都不许抓到东西（否则上面的「会变」是自证的假象）。 */
+    expect(live).toEqual(oneshotGates(e2e));
+    expect(duplicatedStageNames(text)).toEqual([]);
+    for (const pair of oneshotPairs(e2e)) {
+      expect(stageBody(text, pair.oneshot)).toBe(stageBody(text, pair.daily));
+    }
+
+    /* ⑤ 决定必须在规范正文里有原文（只长在配置里的决定等于没有决定）。 */
+    expect(
+      missingAnchors("docs/standards/13-提交与-code-review.md", [
+        "单跑那一跑不是每日档的出勤",
+      ]),
+    ).toEqual([]);
   });
 });
