@@ -598,12 +598,19 @@ export function pickBuildForSha(builds, sha) {
  * 为什么需要它：预算 45 分钟是按墙钟烧的，而实测烧完之后常见的是「20 次读数一模一样」
  * （按 sha 还没解析到 build，或平台把 build 排在队列里没动）。那种情况下每 20 秒念一遍
  * 同一句话，最后落 exit 2 —— 等待本身没有换来任何新事实，而屏幕上看不出来。
- * 签名取**三件原值**：`sn` / `data.status` / pipeline 的「完成数-总数」；任何一件变了
- * 都算「在动」，计数器归零 —— 所以这条不会把一个正在推进的流水线提前掐掉。
+ * 签名取**四件原值**：`sn` / `data.status` / pipeline 的「完成数-总数」/ **stage 的
+ * 「完成数-总数」**；任何一件变了都算「在动」，计数器归零。
+ *
+ * ⚠️ 后一件是 2026-10-22 补的，因为它补的是**一句被现场推翻的话**：本仓的 PR 流水线是
+ * **一条 pipeline、三十几个 stage** 的拓扑（实测 `cnb-7d9-1k5h9edct`：`pipelinesStatus`
+ * 只有 1 个条目、`stages` 有 33 个），所以 `done-total` 整跑都停在 `0-1` —— 只看 pipeline 级
+ * 计数的版本会把一条**正在推进**的流水线（28/33 格已完成）读成「连着 10 眼一模一样」而掐掉。
+ * stage 级计数才是这条拓扑上唯一会动的量；而运行中的那一格 `duration` 是占位值 `0`
+ * （同一眼 `cnb-7d9-1k5h9edct` 里在跑的那格就是 `dur=0`，平台按格缓冲），所以也不能拿时长当进度。
  *
  * @param {any} json `cnb build get-build-status -v` 的解析结果（外部形状）
  * @param {string} sn 这一眼归属的 build sn（列表里取到的那条）
- * @returns {string} 形如 `cnb-xxx-yyy/success/1-1`；没解析到 build 时形如 `(未解析到 build)/?/0-0`
+ * @returns {string} 形如 `cnb-xxx-yyy/success/1-1+12/33`；没解析到 build 时形如 `(未解析到 build)/?/0-0+0/0`
  */
 export function buildSignature(json, sn = "") {
   const d = (json && json.data) || null;
@@ -617,7 +624,26 @@ export function buildSignature(json, sn = "") {
     (p) =>
       p && typeof p.status === "string" && !RUNNING.has(p.status.toLowerCase()),
   ).length;
-  return `${sn || "(未解析到 build)"}/${status}/${done}-${total}`;
+  /* stage 级：把每条 pipeline 的 `stages[]` 汇起来数完成格。缺 `stages`（外部形状不完整）
+   * 时按 0 计，签名照样稳定可比 —— 这里不替平台补一个「大概在进行」的形状。
+   * ⚠️ 判「完成」比 pipeline 级多排除一个 `start`：平台那一层的词汇里**运行中的那一格就叫
+   * `start`**（且它的 `duration` 是占位 `0`，见上面那段），照 `RUNNING` 那份集合会把它数成
+   * 已完成 —— 于是「pending → start」这一步推进在签名里看不见，正是要防的那种念法。 */
+  let stageTotal = 0;
+  let stageDone = 0;
+  for (const p of entries) {
+    /** @type {{ status?: unknown }[]} */
+    const stages = p && Array.isArray(p.stages) ? p.stages : [];
+    stageTotal += stages.length;
+    stageDone += stages.filter(
+      (s) =>
+        s &&
+        typeof s.status === "string" &&
+        !RUNNING.has(s.status.toLowerCase()) &&
+        s.status.toLowerCase() !== "start",
+    ).length;
+  }
+  return `${sn || "(未解析到 build)"}/${status}/${done}-${total}+${stageDone}/${stageTotal}`;
 }
 
 /**
