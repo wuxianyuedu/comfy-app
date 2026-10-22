@@ -58,6 +58,10 @@ const SCOPED_DOCS = [
    * Defender 排除项的命令形态）都来自机器配置，漂了就会指着一个不存在的位置 ——
    * 与 `sync-after-pull.md` 同类，纳入校验。 */
   "docs/guides/dev-drive-refs.md",
+  /* 提交身份指南：里面的命令形态（--show-origin / includeIf）与「author 与 committer
+   * 谁会被平台流程改写」都是从 git 与平台行为实测来的，写错了不会报错、只会照着
+   * 一个失效的配置去配 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/git-identity.md",
 ];
 function readJson(p) {
   return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
