@@ -241,6 +241,32 @@ export function downstreamSkipped(outcome) {
 }
 
 /**
+ * 「某一格**正在跑**」的词汇表（ISSUE #2184）。
+ *
+ * 它与上面那份 `RUNNING_STATES` **不是同一维**，也不是抄来的第二份：那份作用在**构建级**
+ * `data.status`（实测那一层在跑时回的是 `pending`），而平台给**逐格**的运行中状态用的词是
+ * `start`（#2167 实测：整跑期间 `data.status` 恒 `pending`，格与格之间靠 `start` 标在飞）。
+ * 判「这条流水线此刻有没有一格在动」只认这一份 —— 拿 `RUNNING_STATES` 去数格会把 `start`
+ * 读成「没在跑」，而那正是 #2184 断错的那一形。
+ */
+const STAGE_IN_FLIGHT_STATES = new Set(["start", "running", "processing"]);
+
+/**
+ * 这一眼里**在飞的格数**与最久的那一格 —— 轮询用它把「一格都没起来」与「一格跑了很久」分开。
+ *
+ * 只数**本仓配置的那几格**（`classifyStages` 那条 id 形状口径），平台自带的
+ * `Prepare` / `End` 不算 —— 它们在跑不代表本仓的判据在推进。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果（null / 畸形都当「读到 0 格」）
+ * @returns {{count: number, names: string[]}}
+ */
+export function inFlightStages(json) {
+  const configured = classifyBuildOutcome(json).configured;
+  const flying = configured.filter((s) => STAGE_IN_FLIGHT_STATES.has(s.status));
+  return { count: flying.length, names: flying.map((s) => s.name || s.id) };
+}
+
+/**
  * 把分类结果写成给人看的那几行。
  *
  * @param {ReturnType<typeof classifyBuildOutcome>} outcome

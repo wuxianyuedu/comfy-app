@@ -1126,7 +1126,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
    * 任何一件变了就归零，所以它只掐掉重复，不掐掉慢。
    * stage 级那一件是 2026-10-22 补的：本仓 PR 是一条 pipeline / 三十几个 stage，
    * 只看 pipeline 级计数时推进中的流水线也念得出 `…/pending/0-1` —— 于是「只掐重复」
-   * 那句话在那种拓扑上不成立（下面「stage 在推进」那一条就是这个反例的钉子）。 */
+   * 那句话在那种拓扑上不成立（下面「stage 在推进」那一条就是这个反例的钉子）。
+   * 第二个前提是同日 #2184 补的：**计数是离散的**，一格跑久了签名自己不动，
+   * 所以「签名没变」还要配「此刻没有一格在飞」才叫停滞
+   * （下面「有一格在飞」与「所有格都已落定」那两条是这一判的正反钉子）。 */
   type FakeResult = {
     status: number;
     stdout: string;
@@ -1295,6 +1298,51 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     expect(out.buildState).toBe("green");
     expect(f.polls()).toBe(12);
     expect(f.log.join("\n")).not.toContain("读数没变");
+  });
+
+  it("负控制（ISSUE #2184 那一形）：签名冻住但有一格在飞 ⇒ 不断流，且那句说明每轮只念一次", async () => {
+    /* #2167 把 stage 计数取进签名之后，「一格跑了很久」仍然会被念成停滞：计数是离散的，
+     * 那一格在 `start` 里自己不动签名（现场读数 `…/pending/0-1+11/33` 连满 10 眼，
+     * 而几分钟后同一条构建是 28/33）。这一条喂 13 眼完全相同的签名 + 32/33（= 一格在飞），
+     * 旧版本会在第 10 眼断流。 */
+    const f = io({
+      statuses: [...Array<string>(13).fill("pending"), "success"],
+      progress: Array(14).fill("0-1"),
+      stageProgress: Array(14).fill("32/33"),
+    });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("green");
+    expect(f.polls()).toBe(14);
+    const all = f.log.join("\n");
+    expect(all).not.toContain("不再轮询");
+    expect(all).toContain("有 1 格在飞");
+    // 只念一次：反复复述「还在跑」与复述「没变化」是同一类噪音。
+    expect(all.split("格在飞").length - 1).toBe(1);
+  });
+
+  it("负控制：所有格都已落定、签名还冻着 ⇒ 第 10 眼照旧断流（那一判不因为加了格数而失效）", async () => {
+    const f = io({
+      statuses: [...Array<string>(12).fill("pending"), "success"],
+      progress: Array(13).fill("0-1"),
+      stageProgress: Array(13).fill("33/33"),
+    });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+    });
+    expect(out.stop).toBe(CODE.NOT_RUN);
+    expect(f.polls()).toBe(10);
+    expect(f.log.join("\n")).toContain("且此刻没有一格在飞");
   });
 
   it("负控制：第 4 眼签名变了（pipeline 从 0-1 走到 1-1）⇒ 计数归零，继续轮到终态", async () => {

@@ -28,6 +28,7 @@ import {
   classifyStages,
   downstreamSkipped,
   formatOutcome,
+  inFlightStages,
   main,
   parseArgs,
 } from "../scripts/ci-build-readout.mjs";
@@ -414,5 +415,62 @@ describe("入口：三档各退各的码", () => {
     });
     expect(code).toBe(2);
     expect(log.join("\n")).toContain("用法");
+  });
+});
+
+/**
+ * `inFlightStages`（ISSUE #2184）：轮询的**第二个前提**。
+ *
+ * 签名是离散计数，一格跑得久时签名自己不动 —— 只看「签名没变」就会把正在推进的流水线
+ * 掐掉（现场：`…/pending/0-1+11/33` 连满 10 眼，几分钟后同一条构建是 28/33）。
+ * 所以这一判要认的是平台那份**逐格**词汇：运行中的那一格叫 `start`，
+ * 而还没轮到的那一格叫 `pending` —— 两者必须分开，否则队列里没起来的那种真停滞
+ * 就再也断不掉了（那是 #2152 这一格存在的全部理由）。
+ */
+describe("inFlightStages：这一刻有没有一格在飞", () => {
+  /** 造一份「一条 pipeline、几格各有各状态」的读数。 */
+  const build = (statuses: string[]) => ({
+    status: 200,
+    data: {
+      status: "pending",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "pending",
+          stages: statuses.map((s, i) => ({
+            status: s,
+            duration: 0,
+            name: s === "start" ? "受影响用例" : `格${i}`,
+            id: `stage-${i}`,
+          })),
+        },
+      },
+    },
+  });
+
+  it("一格 `start` ⇒ 数出 1 格，并带上格名（那一格是要念给人的）", () => {
+    expect(inFlightStages(build(["success", "start", "pending"]))).toEqual({
+      count: 1,
+      names: ["受影响用例"],
+    });
+  });
+
+  it("负控制：`pending`（还没轮到）不算在飞 ⇒ 队列里没起来那一形照旧能断流", () => {
+    expect(inFlightStages(build(["success", "pending", "pending"])).count).toBe(
+      0,
+    );
+  });
+
+  it("已落定的格（success / error / cancel / skipped）都不算在飞", () => {
+    expect(
+      inFlightStages(build(["success", "error", "cancel", "skipped"])).count,
+    ).toBe(0);
+  });
+
+  it("读不到（null / 畸形 / 没有 pipelinesStatus）⇒ 0 格，而不是抛错", () => {
+    expect(inFlightStages(null)).toEqual({ count: 0, names: [] });
+    expect(inFlightStages({})).toEqual({ count: 0, names: [] });
+    expect(inFlightStages({ data: { pipelinesStatus: null } }).count).toBe(0);
   });
 });

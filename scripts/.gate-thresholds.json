@@ -229,6 +229,15 @@
       "kind": "report",
       "strictness": "n/a",
       "why": "账本格式的版本戳，不是判红阈值；入账只为「别处新增承重数值时这格不装看不见」。"
+    },
+    {
+      "file": "scripts/ship-platform.mjs",
+      "const": "POLL_STALL_MAX",
+      "value": 10,
+      "unit": "眼（每眼 20 秒）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "轮询的耐心预算，不是松紧量：调大它只是把误掐概率换小，「一格都没起来」与「一格跑很久」仍然分不开（ISSUE #2184 定的就是这一点，别拿这一格当出路）。真正的判据是「签名不变 且 inFlightStages() 为 0」。"
     }
   ],
   "$notCovered": {
