@@ -9,3 +9,8 @@
   §13.10.9，并与 §13.10.8 第 2 条那条 `0-` 出口互相划界（它覆盖「本来没有诉求单的变更」，
   不覆盖修缺陷）；`AGENTS.md` 硬规则 14 同步。实现是 `scripts/ship-core.mjs` 的 `ticketReading()`
   （效应与判断分家，编排入口只打印），回归见 `tests/ship.test.ts`。
+- **顺带把 `docs/generated/**` 两份镜像补回与源同步**（§13.5.5 的既定修法：`pnpm doc:render` 之后把
+  重渲染结果一并提交）：`13-提交与-code-review.md` 落后于本次新增的 §13.10.9；
+  `11-测试与可观测性.md` 落后于主干上 §11.27 那一批（19c7aa40 改了编辑态却没同步生成态，
+  而 `tests/check-doc-references.test.ts` 判的正是「一致时一句『重新生成』都不打」——
+  这一格挡着每一个动文档面的 PR，读数以 `pnpm doc:render` 当场重算为准）。
