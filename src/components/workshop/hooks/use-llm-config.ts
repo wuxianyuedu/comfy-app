@@ -10,6 +10,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   effectiveProviderType,
   splitExtraModels,
+  REMOTE_MODEL_KINDS,
   type LLMConfigView,
   type RemoteModelKind,
 } from "~/lib/llm/types";
@@ -36,7 +37,7 @@ function toModelNames(raw: unknown): string[] {
       if (name === "") continue;
       const kind =
         typeof rec.kind === "string" &&
-        ["chat", "image", "video"].includes(rec.kind)
+        REMOTE_MODEL_KINDS.includes(rec.kind as RemoteModelKind)
           ? (rec.kind as RemoteModelKind)
           : null;
       if (!isChatModel(kind)) continue;

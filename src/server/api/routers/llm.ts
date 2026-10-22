@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getConfigForClient } from "~/lib/llm/server";
+import { remoteModelEntrySchema } from "~/lib/llm/remote-model-schema";
 import { splitExtraModels } from "~/lib/llm/types";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { remoteModelRepository } from "~/lib/core/repository";
@@ -38,17 +39,12 @@ const taskTypeKeys = [
   "creative",
 ] as const;
 
-/** 候选模型条目：兼容旧纯名字字符串与新对象（远端条目可带独立接口 / 密钥） */
+/** 候选模型条目：兼容旧纯名字字符串与新对象（远端条目可带独立接口 / 密钥）。
+ *  对象那一半的形状**不在这里定义** —— 它与弹窗草稿写回的那一枚条目是同一份
+ *  真相（`~/lib/llm/remote-model-schema` 的 `remoteModelEntrySchema`，含 `kind`
+ *  的词表）。在这里再抄一份行内枚举，就是「弹窗能选、服务端不认」那种漂移的起点。 */
 const extraModelsSchema = z.array(
-  z.union([
-    z.string(),
-    z.object({
-      name: z.string().min(1),
-      baseUrl: z.string().nullish(),
-      apiKey: z.string().nullish(),
-      kind: z.enum(["chat", "image", "video"]).nullish(),
-    }),
-  ]),
+  z.union([z.string(), remoteModelEntrySchema]),
 );
 
 export const llmRouter = createTRPCRouter({

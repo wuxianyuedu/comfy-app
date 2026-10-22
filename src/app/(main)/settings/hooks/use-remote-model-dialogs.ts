@@ -25,19 +25,19 @@ import type {
 } from "~/lib/llm/usage-test-client";
 import type { RemoteModelEntry, RemoteModelKind } from "~/lib/llm/types";
 import { useBusyAction } from "~/components/ui/use-busy-action";
-import { validateRemoteModelFields } from "~/lib/llm/remote-model-schema";
+import {
+  remoteModelEntryFromDraft,
+  validateRemoteModelFields,
+  type RemoteModelFieldValues,
+} from "~/lib/llm/remote-model-schema";
 
 import type { ReadySettingsPageController } from "./use-settings-page";
 import { createUsageFieldEditor } from "./usage-field-editor";
 
-/** 添加 / 编辑模型弹窗的表单草稿。 */
-export interface ModelDialogForm {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  /** 用途：对话（默认）/ 图片 / 视频——图片 / 视频模型先落配置，供远程生成接入。 */
-  kind: RemoteModelKind;
-}
+/** 添加 / 编辑模型弹窗的表单草稿 —— 就是字段级 schema 判过之后那份值
+ *  （`~/lib/llm/remote-model-schema`）。此前这里另写了一份四字段 interface，
+ *  与 schema 同形但互不引用：schema 加一个字段，表单状态不会跟着红。 */
+export type ModelDialogForm = RemoteModelFieldValues;
 
 export type ModelDialog =
   | { mode: "add" }
@@ -405,15 +405,14 @@ export function useRemoteModelDialogs(
       return;
     }
     setFieldErrors({});
-    const baseUrl = addForm.baseUrl.trim();
+    /* 第二关：草稿 → 条目（`model` → `name` 那一跳住在 lib，两处调用共用一份）。
+     * 集合级规则（重名 / 条目已不存在）在 controller 里，那里才看得见整份清单。 */
+    const entry = remoteModelEntryFromDraft(addForm);
     if (dialog?.mode === "edit") {
       const result = await c.updateRemoteModel(dialog.original, {
-        name: addForm.model,
-        /* 空串 = 清掉独立接口（跟随全局） */
-        baseUrl: baseUrl ? baseUrl : null,
-        apiKey: addForm.apiKey.trim() ? addForm.apiKey.trim() : undefined,
-        clearApiKey: clearKey && !addForm.apiKey.trim(),
-        kind: addForm.kind,
+        ...entry,
+        /* 勾选「清掉独立密钥」且这次没填新密钥 —— 只有编辑侧有这一层意图。 */
+        clearApiKey: clearKey && entry.apiKey === undefined,
       });
       if (!result.ok) {
         /* 集合级失败（重名 / 条目已不存在）里的「重名」本质是名称字段的问题，
@@ -424,13 +423,7 @@ export function useRemoteModelDialogs(
       setDialog(null);
       return;
     }
-    const result = await c.addRemoteModel({
-      name: addForm.model,
-      /* 留空不落条目字段 → 跟随已保存的全局连接配置 */
-      baseUrl: baseUrl || undefined,
-      apiKey: addForm.apiKey.trim() ? addForm.apiKey.trim() : undefined,
-      kind: addForm.kind,
-    });
+    const result = await c.addRemoteModel(entry);
     if (!result.ok) {
       markCollectionError(result.error, "添加失败");
       return;

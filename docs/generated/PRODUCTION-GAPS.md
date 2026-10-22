@@ -1248,7 +1248,7 @@
       而放行，落地之后下一个提交才红，「改了就当天跑」执行成了「**改了由别人补跑**」。
       取证面现在是「今天的提交 ∪ `git diff --cached`」，合成规则抽成纯函数 `combineEvidence`
       （四种组合各有用例；`git` 问不出来时不新增结论）。口径见 §11.8。
-- [~] **E4 msw 与 zod↔API 契约测试：契约那一半有了四格，msw 那一半是分工问题不是缺陷**（2026-10-22 复量）：
+- [~] **E4 msw 与 zod↔API 契约测试：契约那一半有了五格，msw 那一半是分工问题不是缺陷**（2026-10-22 复量）：
       原记「msw 仅 7 文件使用」—— 这个数按今天的任一口径都不符，而**不同口径本来就给不同数**
       （算「文件里出现过 msw 的 API」与算「直接 `import` msw 包」差一倍；复算分别是
       `grep -rlE "from \"msw|from 'msw|setupServer" --include="*.ts" --include="*.tsx" src tests | wc -l`
@@ -1285,8 +1285,37 @@
         ⇒ 缺的从来不是「路由侧有没有读数」，而是**把两边接起来**那一格。
       · **还留着**：其余具名导出的 schema 没有契约判据（复算
         `grep -rnoE "^export const [A-Za-z0-9_]+ = z\." --include="*.ts" src | grep -v "\.test\."`）。
-        剩下那一处是远端模型的**键名分叉**（客户端 `model` ↔ 服务端 `name`，
-        `kind` 两侧各写一份枚举，中间靠手写桥接）。
+        下一处按危害排是 `normalizeExtraModels` 那一类**手写逐字段判型**：它读的正是
+        远端条目那一列，而条目形状现在有了运行时的权威 schema
+        （`remoteModelEntrySchema`），归一化却还在自己 `typeof` 一遍 —— 两边各读各的，
+        加一个必填字段时红只会落在一边。
+      · **远端模型的键名分叉与两份 `kind` 枚举已配上判据（第五格）**。立案时写的是
+        「两侧各写一份枚举」，动手时数出来的是**五份**同词表：路由入参那条行内
+        `z.enum(["chat","image","video"])`、工坊下拉里那条 `["chat","image","video"].includes(...)`
+        （它同时是 `normalizeExtraModels` 内层那段的重抄）、`UsageTestKind` 那一份、
+        `usage-field-editor` 的状态类型、以及 lib 里那份 `REMOTE_MODEL_KINDS`。
+        前两份是**这条通路上的**，本批收掉：路由入参改吃 `~/lib/llm/remote-model-schema`
+        导出的 `remoteModelEntrySchema`（`kind` 用 `z.enum(REMOTE_MODEL_KINDS)`），
+        工坊那处内联白名单改吃常量。后三份**刻意没动** —— 「实际使用测试能调哪几种用途」
+        与「一条远端模型可以标成哪几种用途」在今天的口径里是两个概念，
+        合并它们要先把概念对上，不是消重。
+        键名那一半：`model`（弹窗草稿）↔ `name`（条目 / 库里那一列）的连接过去在
+        `submitDialog()` 里**写了两遍**（新增与编辑各一遍），而 `ModelDialogForm` 又是一份
+        与字段级 schema 同形、互不引用的 interface，controller 那侧还第三次抄了条目的参数形状。
+        现在桥只有一座（`remoteModelEntryFromDraft`，`RemoteModelDraftEntry` 是它唯一的输出形状，
+        弹窗状态与 controller 签名都从它派生），新增与编辑在「空白接口」上本来就同形
+        （写入侧都折成「跟随已保存的全局配置」），过去一边 `undefined` 一边 `null` 只是写法不同。
+        判据 `tests/remote-model-entry-wire-contract.test.ts`（5 条）走的是**真端到端**：
+        未判过的表单状态 → 真桥 → 真 `llmRouter.configSave` → 真仓储落库 → 真
+        `getConfigForClient` 脱敏回读，逐字段比。四格分别是：① 那一枚条目原样回读得到
+        （含三个收空 —— 桥收到的就是没判过的状态，所以收空是它的责任）；
+        ② `REMOTE_MODEL_KINDS` 里**每一个**用途都存得进去 —— 这就是「两份枚举」的语义判据，
+        比 grep 那条字面量强：抄的那一份换任何写法都能骗过 grep，骗不过一次真调用；
+        ③ 键名漂移那一形（写 `model`、不写 `name`）被拒**且库里零行**；
+        ④ `hasApiKey` 是只读视图字段，带着它回写不会凭空长出密钥。
+        变异两刀打在不同的半边：桥不再收 `model` 两侧的空 → 只有 ① 红
+        （`expected ' gpt-x ' to be 'gpt-x'`）；把服务端那一份词表抄窄成 `chat|image` →
+        ② 红并带着 zod 那句 `Invalid option`，而 ①③④ 照绿。
       · **`generate.generate` 的入参通路已配上了（第四格）**。先订正一格我自己写错的判断
         （立案时把「`RouterInputs` 派生」当成了手写镜像）：`RouterInputs["generate"]["generate"]`
         那几处是**从 schema 反向派生的类型**，字段改名会当场编译红，所以它不是漂移面。
