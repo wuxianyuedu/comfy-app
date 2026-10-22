@@ -14,7 +14,7 @@
  *
  * 四种自洽写法都算通过：**先改再 `--update`**（把顺序写明）、**明说不要用 `--update`**
  * （把这条堵死）、**改成人的动作**（手工登记 / 逐条写理由）、**例外流程另给一个显式旗标**
- * （`check-bundle-budget.cjs` 那一形：贴 before/after 读数 + 评审确认后带
+ * （`check-bundle-budget.cjs` 那一形：贴 before/after 读数 + 由造成它的那条 PR 认账后带
  * `--allow-increase` 重跑 —— 认的是「另一个必须认账才敲得动的动作」，所以这个分支
  * 刻意**不认 `--update` 本身**，否则 `check-tsc-diagnostic-executors.cjs` 那个原始现场
  *（红话把人指回同一个会拒绝的旗标）就又被放过去了）。
