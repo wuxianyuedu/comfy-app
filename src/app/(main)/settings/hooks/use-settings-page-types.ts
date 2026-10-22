@@ -27,9 +27,9 @@ import type {
 import {
   TASK_TYPES,
   type RemoteModelEntry,
-  type RemoteModelKind,
   type TaskType,
 } from "~/lib/llm/types";
+import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
 export type Settings = {
@@ -226,24 +226,18 @@ export interface SettingsPageController {
   /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试。增删改即时落库
    * （无需单独的保存按钮），返回本次保存结果供弹窗留在原地报错。 */
   remoteModelList: RemoteModelEntry[];
-  addRemoteModel: (entry: {
-    name: string;
-    baseUrl?: string;
-    apiKey?: string;
-    kind?: RemoteModelKind;
-  }) => Promise<{ ok: boolean; error?: string }>;
+  /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
+   * 这一层过去另写一遍字段，于是「弹窗拼的那枚条目」与「controller 收的那枚条目」
+   * 是两个各自自洽的形状。 */
+  addRemoteModel: (
+    entry: RemoteModelDraftEntry,
+  ) => Promise<{ ok: boolean; error?: string }>;
   /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
    *  模型引用旧名会同步更新。
    *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
   updateRemoteModel: (
     name: string,
-    patch: {
-      name?: string;
-      baseUrl?: string | null;
-      apiKey?: string;
-      clearApiKey?: boolean;
-      kind?: RemoteModelKind | null;
-    },
+    patch: Partial<RemoteModelDraftEntry>,
   ) => Promise<{ ok: boolean; error?: string }>;
   removeRemoteModel: (name: string) => Promise<{ ok: boolean; error?: string }>;
   probeRemote: (input: {

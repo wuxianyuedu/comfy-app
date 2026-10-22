@@ -21,11 +21,9 @@ import {
   type UsageTaskQueryInput,
   type UsageTestInput,
 } from "~/lib/llm/usage-test-client";
-import {
-  type RemoteModelEntry,
-  type RemoteModelKind,
-  type TaskType,
-} from "~/lib/llm/types";
+import { type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
+/* 条目形状的唯一出处：controller 收的那一枚，就是 lib 里那座草稿→条目桥产出的那枚。 */
+import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 
 import type { LlmConfig } from "./use-settings-page-types";
 
@@ -93,12 +91,9 @@ export function useSettingsRemoteModels(input: {
    * 增删改即时落库（无需再点保存按钮），失败时提示条给出可读错误。
    * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。 */
   const addRemoteModel = useCallback(
-    async (entry: {
-      name: string;
-      baseUrl?: string;
-      apiKey?: string;
-      kind?: RemoteModelKind;
-    }): Promise<{ ok: boolean; error?: string }> => {
+    async (
+      entry: RemoteModelDraftEntry,
+    ): Promise<{ ok: boolean; error?: string }> => {
       if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
       const name = entry.name.trim();
       if (!name) return { ok: false, error: "请填写模型名称" };
@@ -138,13 +133,7 @@ export function useSettingsRemoteModels(input: {
   const updateRemoteModel = useCallback(
     async (
       name: string,
-      patch: {
-        name?: string;
-        baseUrl?: string | null;
-        apiKey?: string;
-        clearApiKey?: boolean;
-        kind?: RemoteModelKind | null;
-      },
+      patch: Partial<RemoteModelDraftEntry>,
     ): Promise<{ ok: boolean; error?: string }> => {
       if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
       const nextName = (patch.name ?? name).trim();
