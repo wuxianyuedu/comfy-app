@@ -30,6 +30,23 @@
  * 因此重建的动手顺序是「先在临时名字上建 → 验可跟随 → 删旧的 → 换上」：临时名字建不起来
  * （权限那一种）时，**原来那条链接还在**，这一步不会把产物改得比修之前更坏。
  *
+ * ### 第三种形态：非本平台的变体死链（2026-10-22 补）
+ *
+ * 上面那两种之外还有一种，**在 win32 上是必然出现的**，原先被当成缺件拦下：
+ * pnpm 会给 optionalDependencies 的**每一个平台变体**都建一条链接，但只安装本平台那一份。
+ * 于是产物里躺着指向 `@libsql/darwin-arm64` / `@libsql/linux-arm-gnueabihf` 这类
+ * **别的平台**的链接，而那些目标在 win32 上根本不存在 —— 「目标不存在」是必然的，
+ * 不是缺件：运行期用的是本平台那份（`@libsql/win32-x64-msvc`，目标确实在）。
+ *
+ * 判据：**同包的其它变体已安装** ⇒ 这条是「非本平台变体死链」，**不阻断**，但要报告；
+ * 同包一个变体都没装 ⇒ 那才是真缺件，仍然阻断。
+ * 判法不认平台名单：看 `.pnpm` 下有没有同包（`<name>` / `@scope`）的**其它**变体目录，
+ * 且那份的实体在（`siblingVariantInstalled()`）。
+ *
+ * 为什么这类死链无害：运行期 require 的是本平台那份（native binding 按平台条件加载），
+ * 那条死链永远不会被 require 到 —— 它只是产物里的一条指向空处的路标。
+ * 真正「产物能不能起来」由链上的冒烟（`smoke-executor-host-standalone.mjs`）判。
+ *
  * 用法：node scripts/standalone-link-repair.mjs   （`pnpm build` 链上的一步）
  */
 import {
@@ -137,8 +154,65 @@ export function rebuildLinkInPlace(abs, linkText) {
  *   target: string,
  *   targetExists: boolean,
  *   error: string,
+ *   variantDead: boolean,
  * }} BrokenLink
  */
+
+/**
+ * 这条死链是不是「非本平台的变体」—— 即**同包的其它变体已安装**，只有这一份没装。
+ *
+ * 判法不认平台名单（不写死 `darwin-*` / `linux-*` 这类词表）：从链接文本里取出
+ * `.pnpm/<X>/node_modules/<rest>`，`X` 形如 `@libsql+darwin-arm64@0.5.29` 或
+ * `foo+bar@1.0.0`（**含 `+`** 才是变体形态；`libsql@0.5.29` 是包本体、peer 变体用 `_` 分隔，
+ * 两者都不走这条路），`X` 的 `+` 之前那截是**包名**（`@libsql`）。
+ * 然后在 `.pnpm` 下找同包的**其它**变体目录，看那份的实体在不在。
+ *
+ * @param {string} nodeModules 载荷的 `node_modules` 目录
+ * @param {string} linkText 链接文本
+ * @returns {boolean} 同包有别的变体已安装 ⇒ `true`
+ */
+export function siblingVariantInstalled(nodeModules, linkText) {
+  /* 取 `…/<X>/node_modules/<rest>` 里的 `X`。
+   * ⚠️ **不能要求文本里有 `.pnpm`**：pnpm 写出来的链接文本是**相对**的
+   * （`..\..\..\@libsql+darwin-arm64@0.5.29\node_modules\@libsql\darwin-arm64`），
+   * `.pnpm` 那层在**解析后的绝对路径**里、不在文本里 —— 照着文本找 `.pnpm`
+   * 一条都匹配不到，于是每条变体死链都被当成缺件（实测：判据改完仍 exit 1）。 */
+  const m = /(?:^|[\\/])([^\\/]+)[\\/]node_modules[\\/](.+)$/.exec(linkText);
+  if (!m) return false;
+  const x = m[1] ?? "";
+  const plus = x.lastIndexOf("+");
+  if (plus <= 0) return false;
+  const base = x.slice(0, plus);
+  const rest = (m[2] ?? "").split(/[\\/]/).filter(Boolean);
+  if (rest.length === 0) return false;
+  const pnpmDir = join(nodeModules, ".pnpm");
+  let names;
+  try {
+    names = readdirSync(pnpmDir);
+  } catch {
+    return false;
+  }
+  for (const name of names) {
+    if (!name.startsWith(base + "+")) continue;
+    /* 目录名形如 `<base>+<其它变体>@<ver>` —— 实体路径里用的是**那一支的**变体名，
+     * 不是这条死链自己的（`rest` 的末段是死链指向的那个变体，用它去找就永远找不到）。 */
+    const variant = name.slice(base.length + 1).replace(/@[^@]*$/, "");
+    if (variant === "") continue;
+    const candidate = join(
+      pnpmDir,
+      name,
+      "node_modules",
+      ...rest.slice(0, -1),
+      variant,
+    );
+    try {
+      if (statSync(candidate).isDirectory()) return true;
+    } catch {
+      /* 这份变体也没装实 —— 找下一份 */
+    }
+  }
+  return false;
+}
 
 /**
  * 这一步实际用的系统调用，可整体替换（见 `repairUnfollowableLinks` 的 `deps`）。
@@ -149,6 +223,8 @@ export function rebuildLinkInPlace(abs, linkText) {
  *   follow?: (abs: string) => "follow" | "broken",
  *   rebuild?: (abs: string, linkText: string) => {ok: boolean, error: string},
  *   exists?: (p: string) => boolean,
+ *   dirExists?: (p: string) => boolean,
+ *   sibling?: (nodeModules: string, linkText: string) => boolean,
  * }} LinkDeps
  */
 
@@ -174,6 +250,7 @@ export function repairUnfollowableLinks(dir, deps = {}) {
   const follow = deps.follow ?? linkFollowability;
   const rebuild = deps.rebuild ?? rebuildLinkInPlace;
   const exists = deps.exists ?? existsSync;
+  const sibling = deps.sibling ?? siblingVariantInstalled;
 
   const links = list(dir);
   /** @type {BrokenLink[]} */
@@ -191,6 +268,7 @@ export function repairUnfollowableLinks(dir, deps = {}) {
         target: "",
         targetExists: false,
         error: `readlink 失败：${describeError(e)}`,
+        variantDead: false,
       });
       continue;
     }
@@ -200,12 +278,15 @@ export function repairUnfollowableLinks(dir, deps = {}) {
       continue;
     }
     const target = resolve(dirname(abs), linkText);
+    const targetExists = exists(target);
     broken.push({
       rel,
       linkText,
       target,
-      targetExists: exists(target),
+      targetExists,
       error: ok ? "重建后 stat 仍失败" : error,
+      /* 目标不在 + 同包其它变体已安装 ⇒ 非本平台变体死链（不阻断，见文件头第三种形态）。 */
+      variantDead: !targetExists && sibling(dir, linkText),
     });
   }
   return { scanned: links.length, repaired, broken };
@@ -223,19 +304,27 @@ function describeError(e) {
 /**
  * 构建链上那一跑的完整判定（`main` 与用例共用，退出码不藏在打印里）。
  *
+ * 报告分两档：**真缺件**（阻断）与**非本平台变体死链**（不阻断，但要点名）。
+ * 两档分开的原因是它们的处置完全不同 —— 前者要补依赖，后者什么都不用做。
+ *
  * @param {string} nodeModules 载荷的 `node_modules` 目录
  * @param {LinkDeps} [deps]
- * @returns {{ran: boolean, scanned: number, repaired: number, broken: BrokenLink[], lines: string[]}}
+ * @returns {{ran: boolean, scanned: number, repaired: number, broken: BrokenLink[],
+ *            blocking: BrokenLink[], lines: string[]}}
  */
 export function runLinkRepair(nodeModules, deps = {}) {
-  const exists = deps.exists ?? existsSync;
-  if (!exists(nodeModules)) {
+  /* ⚠️ 「产物目录在不在」与「某条链接的目标在不在」是**两个**判据，不能共用一个注入口：
+   * 共用时，「目标不在」会顺带把产物目录也判成不存在 —— 于是这一步直接跳过，
+   * 读数上看起来像「没发现问题」，而真实情况是产物根本没被检查。 */
+  const dirExists = deps.dirExists ?? existsSync;
+  if (!dirExists(nodeModules)) {
     // 与同链上的 `standalone-private-inputs.mjs` 同一口径：产物不在不是这一步的故障。
     return {
       ran: false,
       scanned: 0,
       repaired: 0,
       broken: [],
+      blocking: [],
       lines: ["[standalone-links] 未找到 .next/standalone/node_modules，跳过"],
     };
   }
@@ -243,25 +332,40 @@ export function runLinkRepair(nodeModules, deps = {}) {
     nodeModules,
     deps,
   );
+  const blocking = broken.filter((b) => !b.variantDead);
+  const variantDead = broken.filter((b) => b.variantDead);
   const lines = [
     `[standalone-links] 扫描 ${scanned} 条符号链接` +
       (repaired > 0 ? `，重建其中不可跟随的 ${repaired} 条` : "，全部可跟随"),
   ];
-  if (broken.length > 0) {
+  if (variantDead.length > 0) {
     lines.push(
-      `[standalone-links] ✗ 重建后仍有 ${broken.length} 条穿不过去（拦下：` +
+      `[standalone-links] ⚠ ${variantDead.length} 条是非本平台变体死链` +
+        "（目标不存在，但同包的其它变体已安装 —— 运行期用的是本平台那份，不需要处理）",
+    );
+    for (const b of variantDead.slice(0, 10)) {
+      lines.push(
+        `    ${b.rel}：链接文本=${JSON.stringify(b.linkText)} 目标存在=NO ${b.error}`,
+      );
+    }
+    if (variantDead.length > 10)
+      lines.push(`    …其余 ${variantDead.length - 10} 条同类`);
+  }
+  if (blocking.length > 0) {
+    lines.push(
+      `[standalone-links] ✗ 重建后仍有 ${blocking.length} 条穿不过去（拦下：` +
         "继续往下跑的话 server.js 会报「Cannot find package」，而包常常就在产物里）",
     );
-    for (const b of broken.slice(0, 10)) {
+    for (const b of blocking.slice(0, 10)) {
       lines.push(
         `    ${b.rel}：链接文本=${JSON.stringify(b.linkText)} ` +
           `目标存在=${b.targetExists ? "YES" : "NO"} ${b.error}`,
       );
     }
-    if (broken.length > 10)
-      lines.push(`    …其余 ${broken.length - 10} 条同类`);
+    if (blocking.length > 10)
+      lines.push(`    …其余 ${blocking.length - 10} 条同类`);
   }
-  return { ran: true, scanned, repaired, broken, lines };
+  return { ran: true, scanned, repaired, broken, blocking, lines };
 }
 
 /** 作为脚本直接执行：修 `.next/standalone/node_modules`。 */
@@ -274,7 +378,7 @@ function main() {
     if (line.startsWith("[standalone-links] ✗")) console.error(line);
     else console.log(line);
   }
-  return result.broken.length > 0 ? 1 : 0;
+  return result.blocking.length > 0 ? 1 : 0;
 }
 
 const invokedDirectly =
