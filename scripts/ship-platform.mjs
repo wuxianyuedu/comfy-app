@@ -23,6 +23,7 @@
 import {
   asArray,
   buildPullBody,
+  buildSignature,
   CODE,
   combineShipCodes,
   decideCleanBranch,
@@ -34,6 +35,14 @@ import {
   readPullVerdict,
 } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
+
+/**
+ * 轮询的**同签名断流**上限：连续这么多次读到同一件事就不再读。
+ * 定在 10 的理由是形状：20 秒一眼 ⇒ 连着 10 眼（≈3 分 20 秒）一个读数都没动，
+ * 继续轮下去只是把同一句话多刷几遍；一条真的在推进的流水线在这个窗口里至少会
+ * 动一次（`data.status` 或 pipeline 计数）。45 分钟墙钟预算保留，兜「动得很慢」那条路。
+ */
+const POLL_STALL_MAX = 10;
 
 /**
  * 编排入口注入给本层的执行面。
@@ -239,13 +248,19 @@ export function createOrReusePull(ctx) {
  *   sleep: (ms:number)=>void | Promise<void>,
  * }} ctx
  * @returns {Promise<{buildState:"green"|"red"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
- *   `stop` 非 null 时调用方直接以此码收尾（那一格没跑起来）
+ *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（取不到列表），
+ *   以及**同签名断流**（跑起来了、连着 6 次读数一模一样，再等下去只是重复同一句话）。
  */
 export async function pollUntilTerminal(ctx) {
   const { run, log, slug, newSha, now, sleep } = ctx;
   let buildState = /** @type {"green"|"red"|"running"|"unknown"} */ ("unknown");
   let buildSn = null;
   const deadline = now() + 45 * 60 * 1000;
+  /* 同一签名**连续**读了多少次：第一条就把计数设成 1，所以「连续 6 次」= 第 6 次读到同一件事
+   * 就断流。签名里任何一件变了（sn / data.status / pipeline 完成数）就归零 —— 正在推进的
+   * 流水线不会被这条掐掉，掐掉的只是「每 20 秒重复同一句话直到烧完预算」那种等待。 */
+  let lastSig = null;
+  let sameSig = 0;
   for (;;) {
     const logs = cnbJson(run, [
       "build",
@@ -262,6 +277,8 @@ export async function pollUntilTerminal(ctx) {
       return { buildState, buildSn, stop: CODE.NOT_RUN };
     }
     const picked = pickBuildForSha(builds, newSha);
+    /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
+    let statusJson = null;
     if (!picked) {
       log(
         `[ship] 按 sha ${short(newSha)} 还没解析到 build（平台可能尚未开跑）…`,
@@ -277,6 +294,7 @@ export async function pollUntilTerminal(ctx) {
         picked.sn,
         "-v",
       ]);
+      statusJson = st ? st.json : null;
       /** @type {{state:"green"|"red"|"running"|"unknown",raw:string|null}} */
       const v = st
         ? readBuildVerdict(st.json)
@@ -284,6 +302,23 @@ export async function pollUntilTerminal(ctx) {
       buildState = v.state;
       log(`[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`);
       if (v.state !== "running" && v.state !== "unknown") break;
+    }
+    const sig = buildSignature(statusJson, picked ? picked.sn : "");
+    sameSig = sig === lastSig ? sameSig + 1 : 1;
+    lastSig = sig;
+    if (sameSig >= POLL_STALL_MAX) {
+      /* 落 **红** 而不是 2：这一格确实拿到了读数（连着这么多眼都是同一个），不是「执行者不在」——
+       * 那是两种不同的事，混成一个码就是这一族从头在防的形状。红的意思是「这一轮没通过」，
+       * 下一动作是人（或过一会儿再跑一次 `pnpm ship`），不是「去查执行者为什么没跑」。 */
+      log(
+        `[ship] build ${buildSn ?? "(未解析到 build)"} 连续 ${sameSig} 次读数没变` +
+          `（${sig}）⇒ 不再轮询：这一格没有终态结论`,
+      );
+      log(
+        `[ship]   接着看：https://cnb.cool/${slug}/-/build/logs/${buildSn || "<sn>"}` +
+          "，或过一会儿再 `pnpm ship`（PR 已存在会复用，不重建）",
+      );
+      return { buildState, buildSn, stop: CODE.RED };
     }
     if (now() > deadline) {
       log("[ship] 轮询到预算上限仍未出终态 ⇒ 记「没跑起来」，不猜结论");
