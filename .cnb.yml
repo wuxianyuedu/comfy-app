@@ -518,8 +518,7 @@
   # ⇒ 代价是**每天多付 ~35s**，换来的是整条每日档有一个能构建的工作区 —— 槽是优化不是前提。
   # 例外不是「可以随便漂」：判据钉死「PR 那一侧必须置着 `COMFY_CI_SLOT`、每日这一侧一个字都不许出现」，
   # 其余各行仍然逐字相同；改这条形状要走判据，不能只改这里。
-  - &stage_daily_install
-    name: 每日安装依赖
+  - name: 每日安装依赖
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -557,8 +556,7 @@
   # 判据之后、`每日全量E2E` 之前 —— 那才是这两份结论互相要看着的位置。
   - name: 每日 Python 探针读数
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/python-probe.mjs
-  - &stage_daily_dbpush
-    name: 每日同步数据库表结构
+  - name: 每日同步数据库表结构
     # 库里要有表：套件里读库的那几条在没有库时的形态是「连不上」，看起来像业务故障
     # （§9.1 那格「页面 200、接口 500」的同一族误诊）。`db-push.mjs` 复核真建出表。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
@@ -572,8 +570,7 @@
   # 裸 `pnpm run build` 会让这一步的绿只落在日志里、`scripts/.artifact-freshness.json`
   # 一个字不变。外面这一层（`ci-daily-build.mjs`）多出来的只有事件身份与镜像读数，
   # 判据与记账仍然是 `artifact-run.mjs` 那一份。
-  - &stage_daily_build
-    name: 每日生产构建
+  - name: 每日生产构建
     # 控制台编码先钉住（头注第 6 条 / `ci-cp936-exit.mjs`），与其余每一格同形。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs
     # 30m：这一格跑的就是 `next build` + 数产物 + 冒烟。实测 118s
@@ -630,8 +627,7 @@
   # 判据仍然钉住这件事的两半：这一格必须在 `每日全量E2E` **之前**，
   # 且 script / env 与当初 PR 上那一格**逐字同形**（镜像键与套接字超时是两个实测读数，
   # 抄错一处就回到「到不了」那一档，见下面那两段注释）。
-  - &stage_daily_browser
-    name: 每日浏览器安装
+  - name: 每日浏览器安装
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
     env:
       # **这两行是实测读数换来的**（`cnb-gt1-1k513ill4`）。
@@ -694,8 +690,7 @@
   #   这一格因此与 `每日生产构建` **各自独立**：构建坏了不影响端到端链路的结论）。
   # 45m：本地整档是十几分钟量级，而节点上是冷工作区 + 现场编译；与 `每日单元测试`
   #   同一档预算口径（卡死要早报，一天只有这一跑）。
-  - &stage_daily_e2e
-    name: 每日全量E2E
+  - name: 每日全量E2E
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs
     # ⚠️ 这一行 env 是**产物前提的声明**，不是调档偏好：webServer 起的是 `pnpm start`，
     # 而 `.next` 里那份产物来自排在前面的 `每日生产构建`（同一分支的 stage 共享工作区）。
@@ -716,8 +711,7 @@
   # 三格一起 skip 掉（那三格至今零执行记录）。挪到最后之后，同一跑里那三格先拿到结论，
   # 不必为了单测的抖动把前面几格重付一次。
   # 顺序有判据：`tests/no-platform-ci-config.test.ts` 钉「这一格是每日清单的最后一条」。
-  - &stage_daily_unit
-    name: 每日单元测试
+  - name: 每日单元测试
     # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
     # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
     # 跑绿刷新 `scripts/.full-suite-freshness.json`，本地「改了就当天跑」那条判据与
@@ -748,14 +742,80 @@
 
 # ── 单跑口：三档重档各自一条，前提自动带上 ────────────────────────────────
 #
-# 每档两条流水线（手点 + API），`stages:` 逐字相同、都只由别名引用组成：
+# 每档两条流水线（手点 + API），两条都引用**同一张整表锚点**：
 # 「单独验一次某一档」此前只能等 02:00 或整档手点，而修完东西想立刻复验一次的人
 # 不该为另外九格付费。六条定义都在文件末尾那个**已有的** `master:` 块里 ——
 # 这里不再开第二个 `master:`（同名顶层键会让 YAML 静默丢掉前一处，crontab 那条
-# 就是这么没的；判据 `topLevelKeys()` 现在也判这件事）。前提集的取证见
-# `scripts/ci-gate-aliases.mjs` 与规范 §13.5.23。
+# 就是这么没的；判据 `topLevelKeys()` 现在也判这件事）。前提集的取证与
+# 「每日名 ⇄ 单跑名」的对照见 `scripts/ci-oneshot-gates.mjs` 与规范 §13.5.23。
 # ⚠️ 单跑那一跑**不是每日档的出勤**：它只证「这一档现在过不过」，
 # 不许被读成「今天定时那一跑跑过了」（ISSUE #2114 那条区分在这里同样成立）。
+
+# ── 单跑那三张清单：整表锚点，格名每张都自带目标档前缀 ───────────────────────
+#
+# 为什么不用「序列元素级别的别名」（`- *stage_daily_install`）：那种写法必须把列表项拆成
+# 两行（`- &anchor` 换行 `name: X`），而本仓有**六份各自独立的 `.cnb.yml` stage 解析器**
+# （`ci-autofix-duties` / `ci-env-probe` / `ci-container-plan` / `ci-image-identity` /
+# `ci-incremental-gates` / `no-platform-ci-config`），它们认的都是 `- name: X` 这一行形状。
+# 实测代价：平台「受影响用例」那一格红三处（「解析出的 stage 数比 `script:` 少 6」、
+# 某格「解析不出内容」），而每条红的真实原因都指不到「形状」上 —— 读起来像判据坏了。
+# 探针本身是过的（`cnb-7d7-1k5f9m3c5`：平台确实会展开并执行元素级别名），
+# **所以这不是能力问题，是这份配置的解析面付不起** —— 结论：不改行形状。
+#
+# 换成的代价写在明处：前提格的正文在这份文件里有多份（安装那格三份）。它由一条判据钉住
+# ——「每个 `单跑<档>·X` 的 script / env / timeout 必须与 `每日X` 那格逐字相同」，
+# 与 PR 那侧 ↔ 每日那侧「同一份脚本两条流水线」用的是同一个办法（#2081 就是这套判据抓的）。
+#
+# 为什么名字要带目标档前缀：`stageBlock()` / `pipelineStageNames()` 是按**名字**在文本里
+# 取块的，两格重名就让「读的是哪条流水线的哪一格」变成解析器的运气。安装那一格出现在
+# 三张表里 ⇒ 三个不同的名字；不然「逐字相同」那条判据只会比到第一次出现的那份，
+# 后面两份漂移得静悄悄。
+#
+# 为什么每张表都带前提：每次构建都是全新 job 目录、`node_modules` 恒不在场
+# （`工作区复用读数` 两跑实测），只跑目标那一格会红在「找不到 next / 连不上库 / 没有浏览器」——
+# 那是**已知的假红**。逐档前提集与理由的一份出处：`scripts/ci-oneshot-gates.mjs`。
+.oneshot-build: &oneshot_build
+  - name: 单跑构建·安装依赖
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $ErrorActionPreference = "Stop"
+      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  - name: 单跑构建·同步数据库表结构
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
+  - name: 单跑构建·生产构建
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs
+    timeout: 30m
+.oneshot-e2e: &oneshot_e2e
+  - name: 单跑E2E·安装依赖
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $ErrorActionPreference = "Stop"
+      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  - name: 单跑E2E·同步数据库表结构
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
+  - name: 单跑E2E·浏览器安装
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+    env:
+      PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+    timeout: 20m
+  - name: 单跑E2E·全量E2E
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/e2e-run.mjs
+    env:
+      COMFY_E2E_SERVER: start
+    timeout: 45m
+.oneshot-unit: &oneshot_unit
+  - name: 单跑单测·安装依赖
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $ErrorActionPreference = "Stop"
+      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  - name: 单跑单测·全量单测
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
+    timeout: 45m
 
 .gates: &gates
   # ── 2026-10-19：环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
@@ -1733,17 +1793,16 @@ master:
       name: 每日档（API 触发）
       stages: *daily_gates
 
-  # ── 单跑三档重档：手点 + API 各一条，清单只由**别名引用**组成 ──────────────
+  # ── 单跑三档重档：手点 + API 各一条，两条引用同一张整表锚点 ────────────────
   #
   # 为什么六条而不是三条：`web_trigger_*` 那个口**打不开自动化**（服务端只认 `api_trigger`
   # 前缀，实测 400 `Event must be 'api_trigger' or start with 'api_trigger_'`），而
   # `api_trigger_*` 那一口**没有按钮**（按钮靠 `.cnb/web_trigger.yml` 与事件名成对）。
   # 两件事各自要有人答，所以各写一条 —— 而这两条**不许漂**，判据逐条比它们展开后的清单。
   #
-  # 为什么每条都短：`stages:` 里一个命令都没有，全部是指向每日那一份的别名引用
-  # （`- *stage_daily_install`）。单跑口因此**结构上不可能**长成第二份实现，
-  # 而它带的每一条前提都与每日档逐字同一件（同一个锚点，不是抄的一份）。
-  # 别名会被平台展开并经节点执行：探针 `cnb-7d7-1k5f9m3c5` 两格 `success` 实测过。
+  # 为什么六条都很短：每条只有一个 `stages: *oneshot_xxx`，一格正文都不写。
+  # 前提是「引用得到同一张表」就够了；至于表里那些**副本**不许与每日那几格漂开，
+  # 由「逐字相同」那条判据负责（形态与否证的完整经过见上面 `.oneshot-*` 那段的头注）。
   #
   # 与每日档共用的 `lock`（`<<: *common` ⇒ key 在非 PR 事件退化成 `pr-`）意味着
   # **单跑会掐掉正在跑的定时那一跑**，反之也一样 —— 这是 ISSUE #2114 记下的第二个
@@ -1751,42 +1810,24 @@ master:
   web_trigger_e2e:
     - <<: *common
       name: 单跑全量E2E（手动触发）
-      stages:
-        - *stage_daily_install
-        - *stage_daily_dbpush
-        - *stage_daily_browser
-        - *stage_daily_e2e
+      stages: *oneshot_e2e
   web_trigger_build:
     - <<: *common
       name: 单跑生产构建（手动触发）
-      stages:
-        - *stage_daily_install
-        - *stage_daily_dbpush
-        - *stage_daily_build
+      stages: *oneshot_build
   web_trigger_unit:
     - <<: *common
       name: 单跑全量单测（手动触发）
-      stages:
-        - *stage_daily_install
-        - *stage_daily_unit
+      stages: *oneshot_unit
   api_trigger_e2e:
     - <<: *common
       name: 单跑全量E2E（API 触发）
-      stages:
-        - *stage_daily_install
-        - *stage_daily_dbpush
-        - *stage_daily_browser
-        - *stage_daily_e2e
+      stages: *oneshot_e2e
   api_trigger_build:
     - <<: *common
       name: 单跑生产构建（API 触发）
-      stages:
-        - *stage_daily_install
-        - *stage_daily_dbpush
-        - *stage_daily_build
+      stages: *oneshot_build
   api_trigger_unit:
     - <<: *common
       name: 单跑全量单测（API 触发）
-      stages:
-        - *stage_daily_install
-        - *stage_daily_unit
+      stages: *oneshot_unit
