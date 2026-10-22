@@ -270,6 +270,14 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-app-version.cjs        # 产品版本号三处同步（D7，ISSUE #1611）：package.json /
    # src-tauri/tauri.conf.json / src-tauri/Cargo.toml 三处逐字相等 + 形态合法（见 launch-and-build §7.1.1）。
    # 只判相等，刻意不判「该不该升」——那是发布判断
+✅ node scripts/check-test-inventory.cjs # 用例存量：磁盘上的 `*.test.ts(x)` ⇄ `vitest.config.ts`
+   # 两个 project 的 `include` / `exclude` 给出的**收集面**。「一个档都没接住」（漏收）与
+   # 「两个档都接住」（重叠）即阻断 —— 前者的失效方向是静默的：那份文件从此不在任何
+   # project 的收集面上，却照样被 eslint / tsc 扫、照样进 PR diff，只是再也没人跑它。
+   # 判据**不起 vite**（成本 < 1s），收集面从同一份配置离线算，与 `check-test-environment.cjs`
+   # 共用解析件 `scripts/vitest-projects.cjs`；那一份刻意不判这两条（它判文件头与目录档
+   # 有没有打架），这一份专判。已知边界：判不出「收了但零条用例」（整份 skip / 只剩类型导出）
+   # —— 那一层归 `conditional-skip-registry` 与 `check-test-todo.cjs`（见 11 §11.27）
 ✅ node scripts/check-a11y-rules.cjs         # jsx-a11y 的规则开关 ⇄ 判据（见 06 §6.12）：
    # 官方 recommended 集合全开（从插件自己的数据算，不手抄规则表）、本仓与官方默认的
    # 每一处不同都在 scripts/.a11y-rule-ledger.json 登记（关掉一条 / 就地豁免一个文件，

@@ -28,6 +28,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
+import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 
 /**
  * 主夹具是**真 git 检出**（一次 seed 提交）。
@@ -166,6 +167,10 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     const refused = repo.run(["--update"]);
     expect(refused.code, refused.output).toBe(1);
     expect(refused.output).toContain("拒绝抬高基线");
+    /* 这一家的自洽形态是「例外流程另给一个显式认账旗标」（`--allow-increase`）：
+     * 判的是那句话有没有把人指到一个**认了账才敲得动**的动作上，而不是指回
+     * 刚刚拒绝过它的 `--update`。 */
+    expectActionableRefusal(refused.output, "check-bundle-budget.cjs");
 
     const allowed = repo.run(["--update", "--allow-increase"]);
     expect(allowed.code, allowed.output).toBe(0);
