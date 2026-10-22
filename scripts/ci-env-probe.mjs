@@ -44,13 +44,14 @@
  * `check-app-port-vectors.cjs` ⇄ `python-candidates.ts` 同一处置），由用例逐项对账。
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
   browserExecutableExists,
+  playwrightBrowsersRoot,
   playwrightReachabilityVerdicts,
   playwrightDownloadRoots,
 } from "./ci-toolchain-browser.mjs";
@@ -371,6 +372,38 @@ function run(cmd, args) {
     ok: r.status === 0 && !r.error,
     out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim(),
   };
+}
+
+/**
+ * 把临时根补出来（幂等：已在就不动），返回「补成了没 / 为什么没补成」。
+ *
+ * 为什么由这一步做：落点写在 `.cnb.yml` 的**流水线级** env 里，而**配置指到哪儿，
+ * 就该由谁把它建出来** —— 否则换台机器（或有人删了那个目录）之后，第一笔写临时
+ * 文件的动作就 ENOENT，而那一句在日志里读不出「目录没了」。
+ *
+ * ⚠️ **只对绝对路径动手**：相对路径建出来的是「作业目录下的一个子目录」，
+ * 那与「临时根」的语义不符（而配置里写相对路径本身就该由人改）。
+ *
+ * @param {string} dir
+ * @returns {{ok: boolean, created: boolean, why: string}}
+ */
+export function ensureDir(dir) {
+  const target = String(dir ?? "").trim();
+  if (!target) return { ok: false, created: false, why: "路径是空的" };
+  if (!path.isAbsolute(target)) {
+    return { ok: false, created: false, why: "不是绝对路径" };
+  }
+  try {
+    if (existsSync(target)) return { ok: true, created: false, why: "已在" };
+    mkdirSync(target, { recursive: true });
+    return { ok: true, created: true, why: "刚补出来" };
+  } catch (error) {
+    return {
+      ok: false,
+      created: false,
+      why: /** @type {Error} */ (error).message,
+    };
+  }
 }
 
 /**
@@ -703,6 +736,41 @@ export function envProbe({
         "`）",
     );
   }
+
+  /* ── ⑥ 落点：临时根与浏览器根（写到哪儿去、那个目录在不在）──
+   *
+   * 这一格答的是「这一趟的临时文件写到哪儿去」—— 它是**配置**给的事实（`.cnb.yml`
+   * 的流水线级 env 里的 `TEMP` / `TMP` / `PLAYWRIGHT_BROWSERS_PATH`），而**落点目录
+   * 必须事先存在**：临时根不存在时 Node 的 `os.tmpdir()` 仍会把它当成临时目录返回，
+   * 于是第一次写就 ENOENT —— 那不是「慢」，是「看不懂的红」（读不出「目录没了」）。
+   *
+   * 所以这一格做两件事：**补目录**（幂等，缺了才建）与**打印读数**（根在哪儿、在不在）。
+   *
+   * ⚠️ **刻意不判红**：落点不对的处置是「人改配置 / 人补目录」，不是「这一趟红」——
+   * 与「浏览器根不通 ⇒ 当场红」那一条**刻意不同**（那条红的是**必然**失败的那一跳，
+   * 而落点不存在这件事在多数形态下是「第一次写临时文件时才发现」，补上就没事了）。
+   * 目录补不出来时（权限拒绝 / 盘符不存在）才进 `problems` —— 那才是真的跑不下去。 */
+  const tempRoot = env.TEMP ?? env.TMP ?? "";
+  if (tempRoot) {
+    const ensured = ensureDir(tempRoot);
+    if (ensured.ok) {
+      notes.push(
+        `临时根 ${tempRoot}` +
+          (ensured.created ? "（原先不存在，这一格刚补出来）" : "（已在）") +
+          `·TMP=${env.TMP ?? "(未设)"}`,
+      );
+    } else {
+      problems.push(
+        `临时根 ${tempRoot} 建不出来（${ensured.why}）—— 这一趟的临时文件无处可写，` +
+          "下一动作：在节点上把这个目录建出来（或把 `.cnb.yml` 的 `TEMP` 改到一个已存在的目录）。",
+      );
+    }
+  } else {
+    notes.push(
+      "临时根没配（`TEMP` / `TMP` 都没设）—— 工具会退回系统默认的那个",
+    );
+  }
+  notes.push(`浏览器落点 ${playwrightBrowsersRoot({ env })}`);
 
   for (const note of notes) log(`（${note}）`);
 

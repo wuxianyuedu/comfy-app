@@ -66,12 +66,29 @@ import {
 } from "./ci-deps-face.mjs";
 import { linkDependencies, unlinkDependencies } from "./base-check.mjs";
 import {
+  MAX_SLOT_KEYS,
   planSlot,
+  readSlotState,
   resolveCacheRoot,
   sameVolumeAs,
+  slotLastUsed,
   slotPath,
+  SLOT_TTL_MS,
+  SLOT_USED_FILE,
 } from "./ci-cache-slot.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
+
+/* 「配额是几个」「TTL 是多久」「读一个槽的现状」这几份**策略与读数**住在读数那一侧
+ * （`ci-cache-slot.mjs`）—— 执行档从那里取，不另抄一份。漂了之后的表现是
+ * 「读数说够、执行按另一份算」，而淘汰那一刀是**会删盘**的动作。
+ * 旧调用点不必跟着改：这三个名字照旧从这里转出。 */
+export {
+  MAX_SLOT_KEYS,
+  readSlotState,
+  slotLastUsed,
+  SLOT_TTL_MS,
+  SLOT_USED_FILE,
+} from "./ci-cache-slot.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -82,20 +99,8 @@ export const SLOT_ENABLED_ENV = "COMFY_CI_SLOT";
 /** 空闲下限（字节）。低于它就不建槽 —— 槽省的是时间，不该拿能写盘的空间去换。 */
 export const FREE_SPACE_FLOOR_BYTES = 20 * 1024 ** 3;
 
-/** 槽根下最多留几个键（实测每槽净占约 52 MiB，四个不到 0.3 GiB）。 */
-export const MAX_SLOT_KEYS = 4;
-
 /** 锁的失效时刻（毫秒）：拿着一把没主的锁比没有锁更坏，所以给一个明确的过期。 */
 export const LOCK_STALE_MS = 20 * 60 * 1000;
-
-/**
- * 淘汰的 TTL 闸门（毫秒）：**比一次构建的墙钟长**，所以「正被人用」的键必然落在闸门内。
- * 取 26 小时而不是 24 小时，是为了让每日那一跑（02:00）与它前后那跑不互相把对方的树删掉。
- */
-export const SLOT_TTL_MS = 26 * 60 * 60 * 1000;
-
-/** 「最近用过」的邮票文件名（内容就是一个毫秒时刻）。 */
-export const SLOT_USED_FILE = ".ci-slot-used";
 
 const LOCK_FILE = ".ci-slot.lock";
 const JOB_HOOK_SCRIPT = path.join("scripts", "install-git-hooks.mjs");
@@ -356,16 +361,62 @@ export function markSlotUsed(slot, now = Date.now()) {
 /**
  * 这个槽最近什么时候被用过。
  *
- * @param {string} slot @returns {number | null} 读不到 ⇒ null（null 一律**不淘汰**）
+ * ⚠️ **实现搬到读数那一侧**（`ci-cache-slot.mjs`）—— 「读过」的读法与「配额 / TTL」
+ * 是同一份策略，分两处各写一遍的话，漂了之后的表现是「读数说够、执行按另一份算」。
+ * 本文件照旧转出同一个名字（旧调用点不必跟着改）。
  */
-export function slotLastUsed(slot) {
+
+/**
+ * 这个槽是不是一个**没人要的空壳**（崩在半路的安装留下的那种）。
+ *
+ * 三个条件缺一不可：
+ * - **没有产物也没有指纹** —— 里面没有可用依赖树 ⇒ 没有任何作业会命中它；
+ * - **没有锁** —— 锁是「有人正在往里装」的唯一出处（`acquireSlotLock` 写的）；
+ * - **目录 mtime 过了 TTL** —— 「建目录」与「拿锁」之间有一个窗口，一个刚建出来的
+ *   空目录不该被当成垃圾。
+ *
+ * ⚠️ **mtime 在这一档里是可用的**，而在「按最近使用淘汰」那一档里不可用 ——
+ * 差别在于**这一档只判空壳**：没有产物的目录里没有任何东西值得保护，而目录自己
+ * 的 mtime 就是「它从哪儿来」的证据。上一档（按 mtime 做 LRU）栽的坑是
+ * 「天天被命中的热键看起来最旧」—— 那是在**有产物**的目录上按 mtime 排序。
+ *
+ * @param {string} abs 槽目录的绝对路径
+ * @param {number} now @param {number} ttlMs
+ * @returns {boolean}
+ */
+function isUselessShell(abs, now, ttlMs) {
+  const state = readSlotState(abs);
+  /* 有产物、有指纹、或读不动 ⇒ 一律不碰（读不动尤其不能碰：那是「不知道」）。 */
+  if (state.treePresent || state.fingerprint !== null || state.unreadable) {
+    return false;
+  }
   try {
-    const n = Number(
-      fs.readFileSync(path.join(slot, SLOT_USED_FILE), "utf8").trim(),
-    );
-    return Number.isFinite(n) ? n : null;
+    if (fs.existsSync(path.join(abs, LOCK_FILE))) return false;
   } catch {
-    return null;
+    return false;
+  }
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(abs).mtimeMs;
+  } catch {
+    return false;
+  }
+  return now - mtime >= ttlMs;
+}
+
+/**
+ * 删一个槽目录。删不掉就回 `false` —— 调用方把「删不掉」记成「留着」，
+ * 多留一个槽不坏正确性，报一次红才坏。
+ *
+ * @param {string} abs
+ * @returns {boolean}
+ */
+function removeSlot(abs) {
+  try {
+    fs.rmSync(abs, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -409,16 +460,28 @@ export function pruneSlots(io) {
   const budget = Math.max(0, keep - (currentKey ? 1 : 0));
   const evicted = [];
   const held = [];
-  for (const item of keyed.slice(budget)) {
+  for (const [index, item] of keyed.entries()) {
+    /* **空壳那一档**：没有产物、没有指纹、没有锁、目录 mtime 过了 TTL ⇒ 回收。
+     * 它**不受配额约束** —— 空壳不是「一个槽」，它是崩在半路的安装留下的渣，
+     * 留着既不好用也永远不会自己好起来。与上面那档的区别在于**保护对象**：
+     * 上面那档要保护的是「别人正在用的依赖树」，这一档没有任何东西要保护。 */
+    if (isUselessShell(item.abs, now, ttlMs)) {
+      if (removeSlot(item.abs)) {
+        evicted.push(item.key);
+      } else {
+        held.push(item.key);
+      }
+      continue;
+    }
+    if (index < budget) continue;
     const fresh = item.lastUsed === null || now - item.lastUsed < ttlMs;
     if (fresh) {
       held.push(item.key);
       continue;
     }
-    try {
-      fs.rmSync(item.abs, { recursive: true, force: true });
+    if (removeSlot(item.abs)) {
       evicted.push(item.key);
-    } catch {
+    } else {
       /* 删不掉就留在账上：多留一个槽不坏正确性，报一次红才坏。 */
       held.push(item.key);
     }
@@ -427,36 +490,33 @@ export function pruneSlots(io) {
 }
 
 /**
+ * 跑一次淘汰并把结果打出来（两条路共用一份，免得两处各写一遍话术）。
+ *
+ * @param {{cacheRoot: string, key: string | null, now: number,
+ *   log: (line: string) => void}} io
+ * @returns {{evicted: string[], held: string[]}}
+ */
+function pruneAndReport(io) {
+  const { evicted, held } = pruneSlots({
+    cacheRoot: io.cacheRoot,
+    currentKey: io.key,
+    now: io.now,
+  });
+  if (evicted.length > 0 || held.length > 0) {
+    io.log(
+      `[缓存槽] 配额档：淘汰 ${evicted.length} 个（${evicted.map((k) => k.slice(0, 8)).join(", ") || "无"}）` +
+        `·超配额但留着 ${held.length} 个（TTL 内 / 读不到邮票 / 删不掉的 ⇒ 不敢动别人可能在用的树）`,
+    );
+  }
+  return { evicted, held };
+}
+
+/**
  * 槽的现状 —— 三格分开，尤其不许把「指纹文件在、但这一趟读不动」读成「键变了」。
  *
- * 这条区分是**打开开关的前提**：判成「键变了」会走重装，而重装在失败时把那棵树删掉。
- * 并发作业时那棵树可能正被另一个作业**接在上面**（它读到了匹配的指纹才接的），
- * 于是一次 `EBUSY`（Windows 上另一进程正在写那个文件时的既定形态）的代价是
- * 把别人正在用的依赖树删了 —— 那比「这一跑没省到时间」重得多。
- *
- * @param {string} slot
- * @returns {{treePresent: boolean, fingerprint: string | null, unreadable: boolean}}
+ * ⚠️ **实现搬到读数那一侧**（`ci-cache-slot.mjs`）—— 理由同上（策略与读数同一份）。
+ * 本文件照旧转出同一个名字（旧调用点不必跟着改）。
  */
-export function readSlotState(slot) {
-  const treePresent = fs.existsSync(path.join(slot, "node_modules"));
-  const file = path.join(slot, FINGERPRINT_FILE);
-  let exists = false;
-  try {
-    exists = fs.existsSync(file);
-  } catch {
-    /* `existsSync` 自己不抛；留着是为了形状一致，读不动照样落到下面那一格。 */
-  }
-  if (!exists) return { treePresent, fingerprint: null, unreadable: false };
-  try {
-    return {
-      treePresent,
-      fingerprint: fs.readFileSync(file, "utf8").trim(),
-      unreadable: false,
-    };
-  } catch {
-    return { treePresent, fingerprint: null, unreadable: true };
-  }
-}
 
 /**
  * 三档读数的执行版。装与起进程都走注入的 `run`（默认 `runPnpmSync` 那唯一一条出口）。
@@ -522,6 +582,19 @@ export function applySlot(io = {}) {
     }
     const life = runJobLifecycle({ jobRoot: cwd, spawn });
     markSlotUsed(slot, io.now ? io.now() : Date.now());
+    /* **命中这一趟也要跑淘汰** —— 淘汰此前只在「装槽」那条路上跑，于是
+     * 「不再新建键 ⇒ 旧键永不回收」：依赖面不再变的那段时间里，过了 TTL 的键
+     * 会一直躺着（而键数正是配额该管的那个数）。命中是最常走的一条路 ——
+     * 它每次都在碰缓存根，所以它是回收旧键的**主要时机**。
+     *
+     * ⚠️ **跑在接槽之后**：先把自己的树接上，再去动别人的 —— 顺序反过来时，
+     * 淘汰有可能把**自己**那个键算进「超配额」（它此刻还没盖上邮票）。 */
+    pruneAndReport({
+      cacheRoot,
+      key,
+      now: io.now ? io.now() : Date.now(),
+      log,
+    });
     log(`[缓存槽] 接槽完成 ${link} · 作业侧：${life.why}`);
     return { handled: true, action: "reuse", why: life.why };
   }
@@ -563,17 +636,12 @@ export function applySlot(io = {}) {
     }
     fs.writeFileSync(path.join(slot, FINGERPRINT_FILE), `${key}\n`);
     markSlotUsed(slot, io.now ? io.now() : Date.now());
-    const { evicted, held } = pruneSlots({
+    pruneAndReport({
       cacheRoot,
-      currentKey: key,
+      key,
       now: io.now ? io.now() : Date.now(),
+      log,
     });
-    if (evicted.length > 0 || held.length > 0) {
-      log(
-        `[缓存槽] 配额档：淘汰 ${evicted.length} 个（${evicted.map((k) => k.slice(0, 8)).join(", ") || "无"}）` +
-          `·超配额但留着 ${held.length} 个（TTL 内或读不到邮票 ⇒ 不敢删别人可能在用的树）`,
-      );
-    }
     const link = linkDependencies(slot, cwd);
     if (!link) {
       log("[缓存槽] 槽装好了，但作业里已有一棵树 ⇒ 不动它（下一次命中时再接）");

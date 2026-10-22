@@ -180,6 +180,53 @@ pnpm config set cache-dir "G:\.pnpm-cache"
 
 ---
 
+## CI 侧：流水线也吃开发盘红利
+
+自托管节点就在这台机上（`G:\runner`），而 CI 以 **systemprofile 服务账号**跑 ——
+于是「用户级环境变量」那一整套（`TEMP` / `CARGO_HOME` / `PLAYWRIGHT_BROWSERS_PATH` /
+`npm_config_cache`）**对 CI 一条都不生效**：服务账号读的是机器级 env 与
+`.cnb.yml` 里的 env，不读用户 HKCU。
+
+节点从 `F:` 搬到 `G:` 之后，CI 这边的落点是这样（读数来自节点自己的 stream-log，
+`G:\runner\data\orange-ci\stream-log\cnb-<sn>-001.log`）：
+
+| 环节 | 落点 | 在开发盘 |
+| --- | --- | --- |
+| 检出工作区 | `G:\runner\data\orange-ci\runner\<repoId>\<job>~<rand>\workspace` | ✅ |
+| pnpm store | `G:\.pnpm-store\v11`（跟着检出所在卷走） | ✅ |
+| 缓存槽 | `G:\ci-cache\comfy-app-t3\<键>` | ✅ |
+| 临时目录（`TEMP` / `TMP`） | `C:\Windows\System32\config\systemprofile\AppData\Local\` | ❌ |
+| 浏览器落点 | `C:\Windows\System32\config\systemprofile\AppData\Local\ms-playwright` | ❌ |
+
+⇒ 仓库侧的处置是 `.cnb.yml` 的**流水线级** env 里加三行，都指到开发盘：
+
+```yaml
+    TEMP: "G:\\Temp"
+    TMP: "G:\\Temp"
+    PLAYWRIGHT_BROWSERS_PATH: "G:\\.cache\\ms-playwright"
+```
+
+三条要点，缺一条就有一类红：
+
+1. **必须写在流水线级，不能写在某一格的 `env:` 里** —— 浏览器装在 `每日浏览器安装`
+   那一格、跑在 `每日全量E2E` 那一格，两格必须看**同一个**落点；写在某一格里 ⇒
+   那一格看得到、另一格看不到 ⇒ **装好了，探不到**（而「明明装过」与「一件都没有」
+   在日志里原本逐字同形）。
+2. **临时根要事先存在** —— 临时根不存在时 Node 仍把它当临时目录返回，第一笔写就
+   ENOENT，而日志里读不出「目录没了」。`环境前提` 那一格会把它**补出来**（幂等，
+   缺了才建）并打印读数；换台节点时记得先把目录建好。
+3. **容器那个路径仍然不能写** —— `/ms-playwright` 只在 Playwright 镜像里成立，
+   在 Windows 宿主上不存在，写着它等于让落点判据去一个空目录找东西。
+
+判据在两处，各守一半：`tests/ci-image-identity.test.ts` 判「不许指向容器那个路径」，
+`tests/ci-dev-drive-root.test.ts` 判「三行在流水线级、成对、同卷、推导只有一处」。
+口径与实测读数见规范 §13.5.3.4.4。
+
+> ⚠️ **换节点要跟着换**：这三行是给这台自托管节点写的（它检出在 `G:`）。
+> 节点搬到别处时，改这三行 + 改节点上那两个目录，与改别处的配置是同一件事。
+
+---
+
 ## 需要你拍板的两类动作
 
 ### 一、需要管理员权限（只读查询 / 改安全策略）
