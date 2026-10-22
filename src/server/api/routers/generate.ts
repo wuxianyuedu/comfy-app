@@ -1,5 +1,3 @@
-import { z } from "zod";
-import { workflowParamMapInputSchema } from "~/lib/workflow/workflow-param-map";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
@@ -12,41 +10,15 @@ import {
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
-
-const WorkflowInputSchema = z.object({
-  nodeId: z.string(),
-  name: z.string(),
-  value: z.unknown().optional(),
-});
-
-export const GenerateSchema = z.object({
-  /** 工作流库工作流 id（内置模板已移除，这里是唯一的工作流来源）。 */
-  workflow: z.string().min(1),
-  /** 提示词 / 反向提示词：供历史列表与任务标题（参数真值走 workflowInputs）。 */
-  prompt: z.string().max(2000).optional(),
-  negative: z.string().max(2000).optional(),
-  /** 参考图 / 首末帧文件名（已在 ComfyUI input 目录）。 */
-  inputImage: z.string().optional(),
-  firstFrame: z.string().optional(),
-  lastFrame: z.string().optional(),
-  /** 视频时长：帧数（按秒表达的口由 workflowInputs 里的 duration 落下）。 */
-  frames: z.number().int().min(1).max(1000).optional(),
-  /* 走 `paramMap` 列的**权威入参 schema**（`~/lib/workflow/workflow-param-map`）。
-   * 此前这里是 `z.record(z.string(), z.string())` ——「一层 key → string」，
-   * 表达不了库里真实的三层结构（`source.mode:<模式>` 的嵌套），与
-   * `workflow.update` 的 `z.unknown()` 也不是同一个形状。 */
-  paramMap: workflowParamMapInputSchema,
-  workflowInputs: z.array(WorkflowInputSchema).optional(),
-  projectId: z.string().optional(),
-  /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */
-  shotId: z.string().optional(),
-  referenceImages: z.array(z.string()).optional(),
-});
+/* 入参判据住在 `~/lib/workflow/workflow-generate-input`（台账 E4 第四格）：客户端
+ * 构造载荷与重试预检用的是**同一个** schema，这里只是把它接到 `.input()` 上。
+ * 在它旁边再定义一份，就等于把那条通路重新拆成两边各写各的。 */
+import { generateInputSchema } from "~/lib/workflow/workflow-generate-input";
 
 export const generateRouter = createTRPCRouter({
   /* POST /api/generate —— 新建 */
   generate: authedProcedure
-    .input(GenerateSchema)
+    .input(generateInputSchema)
     .mutation(async ({ ctx, input }) => {
       const data = input;
 

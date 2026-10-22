@@ -12,7 +12,6 @@ import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import {
   outputTargetKind,
-  toWorkflowInputsPayload,
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "~/components/studio/workflow-io";
@@ -34,15 +33,11 @@ import {
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { setActiveTaskId } from "~/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
+import { buildCanvasGeneratePayload } from "~/components/studio/project-canvas/CanvasNode/generate-payload";
 import {
-  collectReferenceImages,
-  seedModeOverrides,
-} from "~/components/studio/project-canvas/CanvasNode/helpers";
-import {
-  applyParamMapping,
-  buildParamEntries,
-  parseParamMapping,
-} from "~/lib/workflow/workflow-param-mapping";
+  parseStoredGenerateInput,
+  type GenerateInput,
+} from "~/lib/workflow/workflow-generate-input";
 import { errorMessage } from "~/lib/error-message";
 
 export interface UseGenerateArgs {
@@ -149,48 +144,15 @@ export function useGenerate({
       patch({ status: "running", error: undefined, progress: 0 });
       /* 把 `payload` 提到外层，好让 catch 块也能把
        *  请求快照进 errorContext。try 块赋值前它是 `null`。 */
-      let payload: Record<string, unknown> | null = null;
+      let payload: GenerateInput | null = null;
       try {
-        /* 有映射表时按「对外参数 → 目标端口」解析：作者画过线的对外口只覆盖他连到的
-         *  那个端口（不把该节点别的默认值也塞进去），没连线的对外口仍按工作流默认值
-         *  兜底 —— 落点完全由作者画的线决定，运行期不做任何「猜一个端口」的推断。 */
-        const mode = wfMode ?? null;
-        /* 组合控件覆盖到的端口（宽/高、比例/像素/倍数）：一个「尺寸」口接到这几个
-         *  端口上时，值要逐端口派生成各自认的形状 —— 不传这份集合，多端口只能按
-         *  单端口处理，「尺寸」另外几条线就从外部拿不到值（ISSUE #355）。判定与
-         *  表单同一份（`inferGroups`），不另算一遍避免漂移。 */
-        const mapped = wfIO
-          ? applyParamMapping({
-              io: wfIO,
-              entries: buildParamEntries(wfIO, undefined, { mode }),
-              mapping: parseParamMapping(wfParamMap ?? d.paramMap),
-              values: d.workflowInputs ?? {},
-              mode,
-            })
-          : null;
-        const baseInputs =
-          mapped && mapped.inputs.length > 0
-            ? mapped.inputs
-            : toWorkflowInputsPayload(
-                wfIO ?? undefined,
-                d.workflowInputs ?? {},
-              );
-        const cagInputs = seedModeOverrides(wfIO ?? null, d.seedModes);
-        payload = {
-          workflow: d.workflowId,
-          // 暴露的针脚取值驱动工作流（不是旧的写死
-          // 提示词/反向/参考图/步数/CFG/种子 字段）。种子的「生成后控制」模式
-          // 也并入同一数组（name=control_after_generate），执行点按此写进
-          // 工作流原件的控件槽。注：原本单独下发的 seedModes 字段被 zod schema
-          // 剥离、从未到达后端，故改为并入 workflowInputs 一并生效。
-          workflowInputs: [...baseInputs, ...cagInputs],
-        };
-        // 把上游生成的图片喂进这条工作流（经边自动串联）。
-        if (d.inputImage) payload.inputImage = d.inputImage;
-        // 项目级产出：归属到当前画布项目 + 记录参考图。
-        payload.projectId = getActiveId() ?? undefined;
-        const refs = collectReferenceImages(d);
-        if (refs.length) payload.referenceImages = refs;
+        payload = buildCanvasGeneratePayload({
+          d,
+          wfIO,
+          wfParamMap,
+          wfMode,
+          projectId: getActiveId(),
+        });
         const taskId = await startGenerate(payload);
         patch({ taskId });
         setActiveTaskId(taskId, id);
@@ -335,9 +297,24 @@ export function useGenerate({
    *  一遍（不发新 task）。这样用户在保存当前错误上下文
    *  的同时，可以一键重试而无需重新输入所有字段。 */
   const retryGenerate = async (req: unknown) => {
+    /* 这一份 `req` 是**外部输入**：它来自节点上的 `errorContext.request`，而那格的
+     * 来源是任务行 `params` 列里存下来的载荷 —— 它跨过一次入参演进（今天的 schema
+     * 与写下那一行的那天不必相同）。过去这里直接 `req as Record<string, unknown>`
+     * 把它送回同一个 cast，于是「旧形状」只会在服务端变成一句英文的 zod 原文。
+     * 预检用的就是服务端那一个 `generateInputSchema`（判据不另立一份），
+     * 拒了就不发这次请求，并把能读的这句话交给错误面板。 */
+    const parsed = parseStoredGenerateInput(req);
+    if (!parsed.ok) {
+      patch({
+        status: "error",
+        error: parsed.message,
+        errorContext: { request: req, timestamp: new Date().toISOString() },
+      });
+      return;
+    }
     try {
       patch({ status: "running", error: undefined });
-      const taskId = await startGenerate(req as Record<string, unknown>);
+      const taskId = await startGenerate(parsed.input);
       patch({ taskId });
       setActiveTaskId(taskId, id);
       const result = await pollTask(taskId, undefined, (progress) =>
