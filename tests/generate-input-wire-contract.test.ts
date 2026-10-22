@@ -32,7 +32,7 @@ import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { defaultData } from "~/lib/project-canvas/canvas-types";
 import {
   generateInputSchema,
-  parseStoredGenerateInput,
+  parseGenerateInput,
 } from "~/lib/workflow/workflow-generate-input";
 import { createCallerFactory } from "~/server/api/trpc";
 import { generateRouter } from "~/server/api/routers/generate";
@@ -175,7 +175,7 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
     expect(generateInputSchema.safeParse(input).success).toBe(false);
     /* 逐维比而不是 `toEqual({ok:false, message: expect.stringContaining(…)})`：
      * 后者让 `message` 那格退化成 `any`，而这一条判的正是「文案里点名了缺哪一列」。 */
-    const rejected = parseStoredGenerateInput(input);
+    const rejected = parseGenerateInput(input);
     expect(rejected.ok).toBe(false);
     if (rejected.ok) throw new Error("这一形必须被拒");
     expect(rejected.message).toContain("缺少要执行的工作流");
@@ -191,7 +191,7 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
 
   it("从库里翻出来的载荷再判一次仍然过，第二次真建得出任务", async () => {
     const { res } = await submitCanvas();
-    const parsed = parseStoredGenerateInput(storedParams(res.taskId));
+    const parsed = parseGenerateInput(storedParams(res.taskId));
     if (!parsed.ok) throw new Error(`预检意外失败：${parsed.message}`);
     const again = await createCaller(makeCtx()).generate(parsed.input);
     expect(typeof again.taskId).toBe("string");
@@ -206,13 +206,13 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
     /* `workflowInputs` 在历史行里有过写成对象的（库里那一列是自由 JSON 文本）。
      * 过去的表现是服务端 BAD_REQUEST 的 flatten 原文（`Expected array, received
      * object`）直接进错误面板 —— 用户分不清是「我配的参数不对」还是「这条记录老了」。 */
-    const parsed = parseStoredGenerateInput({
+    const parsed = parseGenerateInput({
       workflow: WORKFLOW_ID,
       workflowInputs: { "1::widget::text": "一只猫" },
     });
     if (parsed.ok) throw new Error("这一形必须被拒");
     expect(parsed.message).toContain("workflowInputs");
-    expect(parsed.message).toContain("无法原样重跑");
+    expect(parsed.message).toContain("没有发出去");
     /* 出路要落在用户做得出的动作上，而不只是「参数错误」。 */
     expect(parsed.message).toContain("重新配置参数");
   });
@@ -226,7 +226,7 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
       source: { "mode:T2I": { "1::widget::text": "1::widget::text" } },
       positiveNode: "历史命名空间，原样保留",
     };
-    const parsed = parseStoredGenerateInput({
+    const parsed = parseGenerateInput({
       workflow: WORKFLOW_ID,
       workflowInputs: [{ nodeId: "1", name: "text", value: "一只猫" }],
       paramMap,

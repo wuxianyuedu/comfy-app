@@ -7,10 +7,7 @@
 import { z } from "zod";
 
 import { vanillaApi } from "~/trpc/vanilla";
-import type { RouterInputs } from "~/trpc/react";
-
-/** Wire type of the generate mutation input。 */
-export type GenerateInput = RouterInputs["generate"]["generate"];
+import { parseGenerateInput } from "~/lib/workflow/workflow-generate-input";
 
 /**
  * `task.list` 一行在本模块的**镜像**（§05「API 响应一律 Zod 校验」）。
@@ -96,13 +93,20 @@ export async function fetchVideoTasks(): Promise<VideoTask[]> {
   return parseVideoRows(data.tasks);
 }
 
-/** 提交一条生成；成功返回 taskId（由调用方决定怎么提示/刷新）。 */
+/**
+ * 提交一条生成；成功返回 taskId（由调用方决定怎么提示/刷新）。
+ *
+ * 发出去之前先过**服务端那一个** `generateInputSchema`（`parseGenerateInput`），
+ * 不合格就**不发**。过去这里是 `{...(params ?? {}), prompt} as GenerateInput` ——
+ * 调用点给什么就发什么，而 `workflow` 是必填：草稿页签那一列只有 `prompt` 的载荷
+ * 每次都要走完一次往返，换回一句英文的 zod 原文，再被「逐条提交、跳过失败项」
+ * 那层吞成「什么都没发生」。现在同一个形状问题在本地就有名字与出路。
+ */
 export async function submitGeneration(
   params: Record<string, unknown> | undefined,
   prompt: string,
 ): Promise<{ taskId?: string }> {
-  return vanillaApi.generate.generate.mutate({
-    ...(params ?? {}),
-    prompt,
-  } as GenerateInput);
+  const parsed = parseGenerateInput({ ...(params ?? {}), prompt });
+  if (!parsed.ok) throw new Error(parsed.message);
+  return vanillaApi.generate.generate.mutate(parsed.input);
 }

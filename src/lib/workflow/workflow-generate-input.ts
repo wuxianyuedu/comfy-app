@@ -10,7 +10,7 @@
  *
  * 所以这里把两件事收在一处：
  *   · `generateInputSchema` —— **唯一**的入参判据。`src/server/api/routers/generate.ts`
- *     用它做 `.input()`，客户端用它做重试前的预检（`parseStoredGenerateInput`）。
+ *     用它做 `.input()`，客户端用它做重试前的预检（`parseGenerateInput`）。
  *     与 `workflow-io-types.ts` 同一手法：形状住在 lib，服务端不必跨界引视图，
  *     客户端也不必复制第二份。
  *   · `GenerateInput` —— 调用点写的就是这个类型，`startGenerate` 不再吃
@@ -35,7 +35,7 @@ const workflowInputSchema = z.object({
  *
  * 逐字段口径与过去一字未改，只给 `workflow` 补了一条**用户真的会撞上**的中文文案
  * （重试一条记录不全的旧任务时，缺的就是这一条）。其余字段仍是 zod 的默认文案：
- * 它们经 `parseStoredGenerateInput` 汇成一句中文再交给界面，服务端那条错误信封走的是
+ * 它们经 `parseGenerateInput` 汇成一句中文再交给界面，服务端那条错误信封走的是
  * `src/server/api/trpc.ts` 的 `error.cause.flatten()`。
  */
 export const generateInputSchema = z.object({
@@ -71,22 +71,24 @@ export const generateInputSchema = z.object({
  */
 export type GenerateInput = z.input<typeof generateInputSchema>;
 
-/** 重试通道的读边界结果：`ok: false` 时带着**能直接给用户看**的一句。 */
-export type StoredGenerateInput =
+/** 一份来源不定的载荷解析成入参的结果：`ok: false` 时带着**能直接给用户看**的一句。 */
+export type GenerateInputResult =
   { ok: true; input: GenerateInput } | { ok: false; message: string };
 
 /**
- * 把「上次那次请求的载荷」（错误面板里的 `errorContext.request`，或任务行 `params`
- * 列里翻出来的旧形状）解析回可发送的入参。
+ * 把一份**来源不定**的载荷解析成可发送的入参。两个生产者：
+ *   · 错误面板的重试 —— `errorContext.request`，其源头是任务行 `params` 那一列
+ *     （库里的一列 JSON，跨得过 schema 演进，跨不过的是形状本身）；
+ *   · 视频队列的草稿 —— 调用点摊开的那份 `params`，它的来源是**视图里的文本行**，
+ *     连「必填的 `workflow` 从哪来」都还没有归属。
  *
- * 为什么要在客户端预检，而不是照发出去让服务端拒：这一份数据是**外部输入**
- * （库里的一列 JSON，跨过一次 schema 演进），而重试是一条用户点下去就有副作用的
- * 动作。让服务端判的代价不是「多一次往返」，而是那句错误 —— tRPC 的 zod 信封
- * 在界面上是 `Expected array, received object` 这类英文原文，用户分不清是
- * 「我配的参数不对」还是「这条记录本身老了」。判据仍然只有一份：这里用的就是
- * 服务端那一个 `generateInputSchema`，不是另写一份收窄。
+ * 为什么要在客户端预检，而不是照发出去让服务端拒：这两份都是**外部输入**，而发出去
+ * 是一条用户点下去就有副作用的动作。让服务端判的代价不是「多一次往返」，而是那句错误 ——
+ * tRPC 的 zod 信封在界面上是 `Expected array, received object` 这类英文原文，
+ * 用户分不清是「我配的参数不对」还是「这条记录本身老了」。判据仍然只有一份：
+ * 这里用的就是服务端那一个 `generateInputSchema`，不是另写一份收窄。
  */
-export function parseStoredGenerateInput(raw: unknown): StoredGenerateInput {
+export function parseGenerateInput(raw: unknown): GenerateInputResult {
   const parsed = generateInputSchema.safeParse(raw);
   if (parsed.success) return { ok: true, input: parsed.data };
   const where = parsed.error.issues
@@ -94,6 +96,6 @@ export function parseStoredGenerateInput(raw: unknown): StoredGenerateInput {
     .join("；");
   return {
     ok: false,
-    message: `这条记录的入参与当前形状不符（${where}），无法原样重跑；请重新配置参数后再生成。`,
+    message: `这份请求的入参与当前形状不符（${where}），这次没有发出去；请重新配置参数后再生成。`,
   };
 }

@@ -244,20 +244,33 @@ describe("parseVideoRows 的缺省口径", () => {
 });
 
 describe("submitGeneration", () => {
-  it("params 与 prompt 合成一次 mutate 入参；params 缺省时只有 prompt", async () => {
-    await submitGeneration({ width: 512 }, "一条镜头");
-    expect(mutateMock).toHaveBeenCalledWith({ width: 512, prompt: "一条镜头" });
+  it("合法的载荷照发，但发出去的是入参判据认的那些列", async () => {
+    /* 台账 E4 的第三刀改的正是这一条的口径：过去这里判「调用点给什么就发什么」，
+     * 于是 `{width: 512}` 这一形（没有必填 `workflow`）也被原样送上线，走完一次往返
+     * 才换回一句英文的 zod 原文，再被视图那层「逐条提交、跳过失败项」吞掉。
+     * 现在客户端先过**服务端那一个** `generateInputSchema`：认得的列照发，
+     * 判据不收的键不再上线（`width` 本来也会被服务端剥掉，只是过去剥在服务端）。 */
+    await submitGeneration({ workflow: "wf-1", width: 512 }, "一条镜头");
+    expect(mutateMock).toHaveBeenCalledWith({
+      workflow: "wf-1",
+      prompt: "一条镜头",
+    });
+  });
 
-    mutateMock.mockClear();
-    await submitGeneration(undefined, "只有提示词");
-    expect(mutateMock).toHaveBeenCalledWith({ prompt: "只有提示词" });
+  it("缺必填 `workflow` 就不发，且原因点名那一列", async () => {
+    await expect(submitGeneration(undefined, "只有提示词")).rejects.toThrow(
+      /workflow/,
+    );
+    /* 「不发」是这条判据的全部价值：一次都没打出去，界面上拿到的是哪一列不对，
+     * 而不是一句「请检查参数或 ComfyUI 连接」。 */
+    expect(mutateMock).not.toHaveBeenCalled();
   });
 
   it("服务端拒绝时把拒绝原样交回调用方（出口在视图，这里不吞）", async () => {
     /* 用 mockRejectedValueOnce 而不是 mockImplementationOnce(() => { throw … })：
      * 后者会让 `Promise.resolve(mock())` 那类写法把同步抛错当成 fulfilled 吞掉。 */
     mutateMock.mockRejectedValueOnce(new Error("没有可用的视频工作流"));
-    await expect(submitGeneration({}, "x")).rejects.toThrow(
+    await expect(submitGeneration({ workflow: "wf-1" }, "x")).rejects.toThrow(
       "没有可用的视频工作流",
     );
   });
