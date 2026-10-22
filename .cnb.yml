@@ -668,6 +668,19 @@
   - name: 每日生产构建
     # 控制台编码先钉住（头注第 6 条 / `ci-cp936-exit.mjs`），与其余每一格同形。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs
+    # ── 构建缓存槽（ISSUE #2158；机制与实测见 `scripts/ci-build-cache-slot.mjs` 头注）──
+    #
+    # 这一格跑的是**生产构建**（每日那格是这台节点上**唯一每天都会发生的构建**；单跑口是同一份
+    # 脚本的副本，两格正文必须逐字相同）。runner 每个作业都新建一个带流水线 id 的工作区目录
+    # （形态由 `工作区复用读数` 定死）⇒ Turbopack 的持久缓存每次都从零开始。
+    # 实测（同机同源三跑，`next build` 自报的编译段）：**冷** 95s ／ **暖**（用上一个工作区
+    # 留下的常驻目录）14.9s —— 省的是整个编译段。
+    #
+    # ⚠️ **开关默认关**（`COMFY_CI_BUILD_CACHE`），只有构建这两格置着它。理由与依赖面那套槽同源：
+    # 先让判据在场，再把开关拨过去（规范 §13.5.25）。机制本身是**失败即退回**的：槽根算不出、
+    # 空间不够、槽被别人占着 —— 任一成立就只打一行读数、照常构建（缓存是加速，不是前提）。
+    env:
+      COMFY_CI_BUILD_CACHE: "1"
     # 30m：这一格跑的就是 `next build` + 数产物 + 冒烟。实测 118s
     # （`cnb-eus-1k5058g8l`）/ 131.0s（`cnb-ln5-1k540cfn1`），而 `next build` 在冷
     # 节点上比读数慢得多，但真挂死必须早报 —— 一天的预算只有这一条，卡满 2h 墙钟
@@ -886,6 +899,19 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
   - name: 单跑构建·生产构建
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-build.mjs
+    # ── 构建缓存槽（ISSUE #2158；机制与实测见 `scripts/ci-build-cache-slot.mjs` 头注）──
+    #
+    # 这一格跑的是**生产构建**（每日那格是这台节点上**唯一每天都会发生的构建**；单跑口是同一份
+    # 脚本的副本，两格正文必须逐字相同）。runner 每个作业都新建一个带流水线 id 的工作区目录
+    # （形态由 `工作区复用读数` 定死）⇒ Turbopack 的持久缓存每次都从零开始。
+    # 实测（同机同源三跑，`next build` 自报的编译段）：**冷** 95s ／ **暖**（用上一个工作区
+    # 留下的常驻目录）14.9s —— 省的是整个编译段。
+    #
+    # ⚠️ **开关默认关**（`COMFY_CI_BUILD_CACHE`），只有构建这两格置着它。理由与依赖面那套槽同源：
+    # 先让判据在场，再把开关拨过去（规范 §13.5.25）。机制本身是**失败即退回**的：槽根算不出、
+    # 空间不够、槽被别人占着 —— 任一成立就只打一行读数、照常构建（缓存是加速，不是前提）。
+    env:
+      COMFY_CI_BUILD_CACHE: "1"
     timeout: 30m
 .oneshot-e2e: &oneshot_e2e
   - name: 单跑E2E·安装依赖
