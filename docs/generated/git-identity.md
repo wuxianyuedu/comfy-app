@@ -107,6 +107,13 @@ git 原生支持条件加载，不需要脚本、不需要 hook、对各家 IDE 
 更稳的留痕是分支名（`feat/<repo>-xxx`）与 commit scope（`feat(comfyui):`），
 口径见规范 §13.2 / §13.6。
 
+> ⚠️ **这一节只覆盖提交**。issue / 单子那一侧**没有 git author 这一格可配**：实测
+> `cnb issues get-issue` 回读的 `author.username` 与那串 `…+<账号>@noreply.cnb.cool` 子地址
+> 在并行检出之间**逐字相同**（issue 是被 token 的账号本体创建的），所以「谁提的这张单」平台答不出来。
+> 单子的留痕走另一条路：`.env` 的 `COMFYAPP_DEV_HANDLE` + 单子上的 `dev:<短名>` 标签，
+> 优先级走平台原生 `--priority` —— 口径与那两条命令的实测形态见规范 §13.10.10，
+> `pnpm ship` 阶段 0 会把这一格念出来（是读数，不拦）。
+
 ## 5. 已经提交的历史怎么办
 
 改写作者 = 改写历史。共享分支（含所有从它分出去的分支）**别动** ——
