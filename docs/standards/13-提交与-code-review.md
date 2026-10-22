@@ -8194,7 +8194,14 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 | 时刻           | 谁在做                                                                  | 做什么                                                                             |
 | -------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | 交出去之前     | `scripts/ship-ticket.mjs` 的 `ticketReading()`，由 `ship.mjs` 阶段 0 打印 | 念出「本次碎片挂在 `#N`」；`## Fixed` 而号是 `0` 的点一句「先立案」并给出建单出口   |
-| 合并并且验真后 | `pnpm ship --merge --close-issue`（`closeIssues()`）                    | 关掉**落地那一行标题本体**里点名的号，再独立回读 `state` / `state_reason` / `closed_at` |
+| 合并并且验真后 | `pnpm ship --merge --close-issue [号…]`（`scripts/ship-close.mjs`）      | 关掉**落地那一行标题本体**里点名的号 + 人点名的号（并集），再独立回读 `state` / `state_reason` / `closed_at` |
+
+**早已落地、却还挂着的单子**（变更随别人的 PR 进了主干）走 `pnpm ship --close-issue <号>` 那一路：
+不跑 preflight / commit / push，前提从「本轮合并已验真」换成平台侧的落地证明 ——
+反查 `pulls list-pulls --state closed` 之后**逐条认 `is_merged`**（列表没有 `merged` 这一档，
+`closed` 里混着「合了」与「关了没合」），标题先剥掉平台追加的 `(#<PR号>)` 再提号
+（PR 号与 issue 号共用编号空间）。查不到证明退 `2`（「没有结论」），既不念成「没落地」，
+也不提供 `--force-close` 这类绕过口。
 
 ⚠️ **这一格是读数，不是闸** —— 它一次也不参与退码（回归用例把这条钉着）。做成硬闸会当场把
 §13.10.8 那次事故请回来：为了让屏幕上念出个号，随手挂一张最近开着的别人的单子，而「号挂错」
