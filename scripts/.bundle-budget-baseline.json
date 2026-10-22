@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-10-21",
+  "generatedAt": "2026-10-22",
   "note": "client chunk 体积预算（规范 §13.5.4，ISSUE #1781）。判定看 gzip 与文件数两个总量（raw 一并量、一并打，但不判）；逐文件账是诊断输出，按 sha256 对齐，不进基线。棘轮只许下降，抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
-  "baselineRev": "d752ed116da9dea2ecf12f4d40161ea387b87f68",
+  "baselineRev": "a2afa73376e219277ef37cb7f03bc2a28040f8b3",
   "metric": {
     "scope": ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
-    "raw": 9906248,
-    "gzip": 2331848,
+    "raw": 9907731,
+    "gzip": 2332387,
     "files": 221
   },
   "entries": [
@@ -466,12 +466,6 @@
       "gzip": 214
     },
     {
-      "name": "1gwk4_2404t7w.js",
-      "sha": "6ccf1d5b28672ad02e4347af7cb6cc0e88f2e130b575d5980fdb1acf1fc6c729",
-      "raw": 107914,
-      "gzip": 31250
-    },
-    {
       "name": "1jovlml9z4wnf.js",
       "sha": "71269a3f912ff7c94a25f9edc578b274715b25f50f883976488a1e5b43cbe726",
       "raw": 20217,
@@ -680,12 +674,6 @@
       "sha": "13ea5c4e4ab1c28ac72e644f0ed507b688e8c33af65be45f0f0a112dbac9dff1",
       "raw": 1379,
       "gzip": 544
-    },
-    {
-      "name": "23lm6v2wi7sjz.js",
-      "sha": "e09c02ec239cc93e732f2d050600dde4bfc95ce48dfb547b24eed567c7fe1ecb",
-      "raw": 3280,
-      "gzip": 877
     },
     {
       "name": "24z6gepqj-aj6.js",
@@ -934,6 +922,12 @@
       "gzip": 2035
     },
     {
+      "name": "2zf-46-2phjlo.js",
+      "sha": "1041965bda9300d89488ec826f62a32ff0236fc38e2c993b6eaa565268fb87a5",
+      "raw": 3280,
+      "gzip": 877
+    },
+    {
       "name": "2zyq0b2v-rqpd.js",
       "sha": "d39628e89132dc77e63fa9b3d6a22bd87e2dad59aa78028b3219a4ab47a8f7cd",
       "raw": 5276,
@@ -1100,6 +1094,12 @@
       "sha": "cb5f9c791fd12ce5523305f1b3e6d2397d21ec75262a69d5575dfb388ef87379",
       "raw": 31589,
       "gzip": 10539
+    },
+    {
+      "name": "3gpd4ke-0618r.js",
+      "sha": "9c1494fa211ef53a043acf6995c7349fd7e1ae579ae37d50ab1543aa70bed276",
+      "raw": 109397,
+      "gzip": 31789
     },
     {
       "name": "3hdd1jieuyl4j.js",
