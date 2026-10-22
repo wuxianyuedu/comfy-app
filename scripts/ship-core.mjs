@@ -13,11 +13,17 @@
  *   · 「取不到」一律回 `null` / `unknown`，**不猜方向** —— 空数组会被读成
  *     「查过了，里面没有我的」，而 null 读成「没拿到列表」，后者才是事实；
  *   · 不抛异常：畸形输入走到 `unknown` 那一档，由调用方退 2。
+ *
+ * 「单子」那一族（碎片读数、提单人留痕、优先级词表）不在这里 —— 它在 `ship-ticket.mjs`：
+ * 那些判的不是「外部执行者的形状」，而是碎片与单子的口径，变化方向不同，而两份叠在一起
+ * 已经越过 `check-infra-file-size.cjs` 那 900 行硬闸（AGENTS 硬规则 22）。本文件只从它取
+ * `fragmentHead`（首行的读法一处，PR 正文与单子读数共用）。
  */
 import fs from "node:fs";
 import path from "node:path";
 
 import { resolveGitDir } from "./git-dir.mjs";
+import { fragmentHead } from "./ship-ticket.mjs";
 
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
@@ -298,92 +304,6 @@ export function decideCleanBranch({ requested, landedVerified, branch }) {
     };
   }
   return { act: true, code: null, branch: name, reason: "" };
-}
-
-/**
- * 一份 `changelog.d/` 碎片的首行（按形态门禁的口径，就是段落标题那一行）。
- *
- * 读不到回**空串**：那是「没有读到」，不是「读到空段落」—— 调用方要按「判不了」
- * 处理，不许把它升级成一条否定（`0-x.md` 这类路径在工作树之外、或还没写）。
- * 刻意**不导出**：本模块内两处用它（PR 正文与「单子」读数），对外没有第三个消费者。
- *
- * @param {string} root 仓库根
- * @param {string} rel 碎片相对路径（`changelog.d/408-x.md`）
- * @returns {string}
- */
-function fragmentHead(root, rel) {
-  try {
-    return String(
-      fs.readFileSync(path.join(root, rel), "utf8").split("\n", 1)[0],
-    ).trim();
-  } catch {
-    return "";
-  }
-}
-
-/**
- * 「这次变更挂在哪张单子上」—— **只读数，不拦**。
- *
- * 三条口径，方向都是「把没挂单念出来，而不是逼出一个号」：
- *   · **判的是段落，不是号**：`## Fixed` 意味着这次在改一个缺陷，而那张单子就是
- *     问题报告的本体（症状 / 读数 / 根因），所以它应当在动手**之前**存在；
- *     `## Added` / `## Changed` 这类本来没有诉求单可立的变更，`0-` 那条出口照旧可用
- *     （§13.10.8 第 2 条：「不写」是可核的，「写错」不可核 —— 挂错号会让两张单同时坏）。
- *   · **不是闸**：本函数一次也不参与退码。做成硬闸的必然后果是「为了让读数念出个号，
- *     随手挂一张最近开着的单子」，那正是 §13.10.8 记的那次事故，而这一格本来就
- *     **没有任何判据会红**（号只是个字符串，谁都能填）。
- *   · **读不到就不判**：首行取不到段落标题时按「判不了」处理 —— 宁可不念这一句，
- *     也不要凭一份读不到的文件指控人「没立案」。
- *
- * @param {{root: string, fragments?: string[]}} input 读数字段
- * @returns {{numbers: number[], anonymous: string[], anonymousFixed: string[], lines: string[]}}
- *   `numbers` 是去重后的单号（按出现顺序），`anonymousFixed` 是「段落 Fixed 而号是 0」的那几份
- */
-export function ticketReading({ root, fragments = [] }) {
-  /** @type {number[]} */
-  const numbers = [];
-  /** @type {string[]} */
-  const anonymous = [];
-  /** @type {string[]} */
-  const anonymousFixed = [];
-  for (const rel of fragments) {
-    const name = path.basename(rel);
-    const m = /^#?(\d+)-/.exec(name);
-    // 不是 `<号>-<slug>.md` 形态的文件（目录说明 `README.md` 之类）没有号这一格可判。
-    if (!m) continue;
-    if (Number(m[1]) === 0) {
-      anonymous.push(name);
-      const section = /^#{1,6}\s*([A-Za-z]+)/.exec(fragmentHead(root, rel));
-      if ((section?.[1] ?? "") === "Fixed") anonymousFixed.push(name);
-    } else {
-      numbers.push(Number(m[1]));
-    }
-  }
-  const uniq = [...new Set(numbers)];
-  const otherAnonymous = anonymous.length - anonymousFixed.length;
-  const lines = [
-    `[ship] 单子：${uniq.length ? uniq.map((n) => `#${n}`).join(" ") : "（无）"}` +
-      ` · 无号碎片 ${anonymous.length} 份 —— 取自碎片的文件名与首行段落，` +
-      "**这一格是读数，不改退码**",
-  ];
-  if (anonymousFixed.length > 0) {
-    lines.push(
-      `[ship] ${anonymousFixed.join("、")} 的段落是 \`## Fixed\` 而号是 \`0\` ⇒ ` +
-        "**这次在改缺陷，却没有单子**。按 §13.10.9 先立案再动手：那张单就是问题报告的" +
-        "本体（症状 / 读数 / 根因），不是给已经写完的改动凑一个编号。",
-    );
-    lines.push(
-      "[ship] 建单的出口（本脚本不替你按下去，也不替你写正文）：" +
-        '`cnb issues create-issue --repo <组织>/<仓库> --title "…" --body-file <正文文件>`',
-    );
-  }
-  if (otherAnonymous > 0) {
-    lines.push(
-      `[ship] 另 ${otherAnonymous} 份无号碎片的段落不是 \`Fixed\` ⇒ §13.10.8 第 2 条` +
-        "那条 `0-` 出口照旧可用，这里不报违规。",
-    );
-  }
-  return { numbers: uniq, anonymous, anonymousFixed, lines };
 }
 
 /**
