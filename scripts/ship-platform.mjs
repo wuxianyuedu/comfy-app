@@ -256,9 +256,13 @@ export async function pollUntilTerminal(ctx) {
   let buildState = /** @type {"green"|"red"|"running"|"unknown"} */ ("unknown");
   let buildSn = null;
   const deadline = now() + 45 * 60 * 1000;
-  /* 同一签名**连续**读了多少次：第一条就把计数设成 1，所以「连续 6 次」= 第 6 次读到同一件事
-   * 就断流。签名里任何一件变了（sn / data.status / pipeline 完成数）就归零 —— 正在推进的
-   * 流水线不会被这条掐掉，掐掉的只是「每 20 秒重复同一句话直到烧完预算」那种等待。 */
+  /* 同一签名**连续**读了多少次：第一条就把计数设成 1，所以「连续 10 次」= 第 10 次读到同一件事
+   * 就断流。签名里任何一件变了（sn / data.status / pipeline 完成数 / **stage 完成数**）就归零
+   * —— 掐掉的只是「每 20 秒重复同一句话直到烧完预算」那种等待。
+   * stage 级那一件不是锦上添花：本仓的 PR 是一条 pipeline / 三十几个 stage，只看 pipeline 级
+   * 计数时，一条推进到 28/33 的流水线读数一直是 `…/pending/0-1`，会被这条当成「没在动」掐掉
+   * （2026-10-22 实测 `cnb-7d9-1k5h9edct`）；而运行中那一格的 `duration` 是占位 `0`，
+   * 也当不了进度。 */
   let lastSig = null;
   let sameSig = 0;
   for (;;) {
@@ -307,9 +311,12 @@ export async function pollUntilTerminal(ctx) {
     sameSig = sig === lastSig ? sameSig + 1 : 1;
     lastSig = sig;
     if (sameSig >= POLL_STALL_MAX) {
-      /* 落 **红** 而不是 2：这一格确实拿到了读数（连着这么多眼都是同一个），不是「执行者不在」——
-       * 那是两种不同的事，混成一个码就是这一族从头在防的形状。红的意思是「这一轮没通过」，
-       * 下一动作是人（或过一会儿再跑一次 `pnpm ship`），不是「去查执行者为什么没跑」。 */
+      /* 落 **2**（没跑起来）而不是红：签名含 stage 级进度之后，「连着 10 眼一模一样」意味着
+       * 这条流水线**一个格都没推进过**，那就不是「测出一个红」而是「这一格没有终态结论」——
+       * 与 `base-check` 的 `inconclusive` 同一口径（拿不到测量 ≠ 测量结果是红的）。
+       * #2152 当初把它落红，理由是「它拿到了读数」；那句话在只看 pipeline 级计数的签名下成立
+       * （推进中的流水线也会被念成没动），签名补上 stage 级之后不再成立，业主定：改记 2。
+       * 下一动作仍然给人（看那一格的日志，或过一会儿再跑一次 `pnpm ship`，PR 复用不重建）。 */
       log(
         `[ship] build ${buildSn ?? "(未解析到 build)"} 连续 ${sameSig} 次读数没变` +
           `（${sig}）⇒ 不再轮询：这一格没有终态结论`,
@@ -318,7 +325,7 @@ export async function pollUntilTerminal(ctx) {
         `[ship]   接着看：https://cnb.cool/${slug}/-/build/logs/${buildSn || "<sn>"}` +
           "，或过一会儿再 `pnpm ship`（PR 已存在会复用，不重建）",
       );
-      return { buildState, buildSn, stop: CODE.RED };
+      return { buildState, buildSn, stop: CODE.NOT_RUN };
     }
     if (now() > deadline) {
       log("[ship] 轮询到预算上限仍未出终态 ⇒ 记「没跑起来」，不猜结论");
