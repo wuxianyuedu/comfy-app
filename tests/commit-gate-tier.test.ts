@@ -28,13 +28,13 @@ const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 const hookText = readFileSync(HOOK, "utf8");
 
 describe("档位：注册表与边界", () => {
-  it("注册表总数一条不少（50 条 = D0 那 14 + D 那 36）—— 降档不是删步骤", () => {
+  it("注册表总数一条不少（52 条 = D0 那 15 + D 那 37）—— 降档不是删步骤", () => {
     const all = readHookSteps();
-    expect(all.length).toBe(50);
-    expect(localTierLabels().size).toBe(14);
+    expect(all.length).toBe(52);
+    expect(localTierLabels().size).toBe(15);
     // 边界取错的话，本地档会变成「恰好少一条」这类静默漂移 ⇒ 与总数一起钉。
     expect([...localTierLabels()]).toEqual(
-      all.slice(0, 14).map((s) => s.label),
+      all.slice(0, 15).map((s) => s.label),
     );
   });
 

@@ -35,6 +35,7 @@ const {
   SCOPED_DOCS,
   FACTS,
   GENERATED_DOCS_DIR,
+  generatedPathFor,
   readText,
   exists,
 } = require("./doc-facts.cjs");
@@ -83,10 +84,9 @@ function resolvePlaceholders(text, map) {
   return out;
 }
 
-function generatedPathFor(docRel) {
-  const base = path.basename(docRel);
-  return path.join(GENERATED_DOCS_DIR, base);
-}
+/* 映射只有一处：`doc-facts.cjs` 的 `generatedPathFor`（「源 → 生成态镜像」这条规则
+ * 同时被 `check-doc-mirror-pairing.cjs` 用来判「改了源有没有同批带上镜像」——
+ * 两边各写一遍就会在「两份源映射到同一个产物名」那类形状上分叉）。 */
 
 /** 一份原文文档的内容（写入模式与 `--check` 共用：判据与实现读同一份「源 → 生成物」计算）。 */
 function renderDocContent(docRel, map) {
