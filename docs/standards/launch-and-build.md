@@ -3108,7 +3108,11 @@ sidecar」两种不同形态的失败。
 - **comfy-cli 的 venv**：由 `scripts/setup-comfy-cli-venv.ps1` 建
   （Windows 侧），Linux / macOS 上需手工准备；解释器发现与进程探测本身
   已支持 POSIX 布局（§9.1）。这是**仍待补的缺口**（该脚本尚未跨平台化），
-  不是「设计上不需要」。
+  不是「设计上不需要」。现已立案跟踪：**ISSUE #2197** —— 那里记着两件本条一句话装不下的事：
+  ① 这一族的失效形态是**静默的**（`scripts/check-ps1-consistency.mjs` 只判「对照表里登记过的
+  每一行必须两侧都有」，未登记的单侧动作结构上看不见，所以这条缺口从没自己冒出来过）；
+  ② 那份 `.ps1` 同时是本仓**Python 解释器下限的权威源**（`tests/ci-env-probe.test.ts` 读它的
+  源码取值），跨平台化时版本下限只能有一处定义。
 - **打包类入口**（`tools/build/**`）与 **本机固定目录的 Registry**
   （`tools/shadcn-registry/start-shadcn-registry.ps1`）：前者靠 Rust / PyInstaller 工具链且面向
   Windows 分发，POSIX 上按 §7 的等价 `pnpm tauri build` 等命令直接跑；后者指向
