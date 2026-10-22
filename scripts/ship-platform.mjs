@@ -25,6 +25,8 @@
  * 前者去重跑）。分类只有一份，在 `ci-build-readout.mjs` —— 单跑口与 PR 口共用同一份
  * 判据，不许两处各写一套（ISSUE #2158 第 2 条 / 规范 §13.5.26）。
  */
+import path from "node:path";
+
 import {
   asArray,
   buildPullBody,
@@ -39,6 +41,7 @@ import {
 } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { classifyBuildOutcome, inFlightStages } from "./ci-build-readout.mjs";
+import { DEV_HANDLE_ENV_KEY, devLabel } from "./ship-ticket.mjs";
 
 /**
  * 轮询的**同签名断流**上限：连续这么多次读到同一件事就不再读。
@@ -127,6 +130,74 @@ function pickTitle({ run, log, baseRef, explicit = null }) {
 }
 
 /**
+ * 给 PR 补 `dev:<短名>` 标签，并**独立回读**再下结论（ISSUE #2204）。
+ *
+ * `post-pull-labels` 的回执不算结论：issue 侧实测 `create-issue --labels` 不落地，
+ * PR 侧同样只认 `list-pull-labels` 里看得见那个名字（与合并 / 关单同一条纪律）。
+ *
+ * 但它是**留痕读数，不是判据**：未配 handle、或平台没把标签落地，都不改退码 ——
+ * 做成硬闸的后果与 #2175 同型（逼人随手填一个值，而假留痕比没留痕难查）。
+ * 未配时把这一份检出的 `.env` 绝对路径与命令念出来：四份并行检出时，
+ * 「去 `.env` 加一行」指不出是哪一份（#2186 的现场）。
+ *
+ * @param {{
+ *   run: PlatformIO["run"],
+ *   log: PlatformIO["log"],
+ *   slug: string,
+ *   number: any,
+ *   handle: string | null | undefined,
+ *   root: string,
+ * }} ctx
+ */
+function stampAuthorLabel({ run, log, slug, number, handle, root }) {
+  const label = devLabel(handle);
+  if (!label) {
+    log(
+      `[ship] 未配 ${DEV_HANDLE_ENV_KEY} ⇒ PR #${number} 没有 \`dev:\` 标签` +
+        "（这一格是读数，不参与退码）。在 " +
+        `\`${path.join(root, ".env")}\` 填一行 \`${DEV_HANDLE_ENV_KEY}="<短名>"\`` +
+        "（整行不在时先跑 `pnpm env:init`），再 `pnpm ship` 重跑会补上。",
+    );
+    return;
+  }
+  cnbJson(run, [
+    "pulls",
+    "post-pull-labels",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "--labels",
+    label,
+    "-v",
+  ]);
+  const read = cnbJson(run, [
+    "pulls",
+    "list-pull-labels",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "-v",
+  ]);
+  const names = read
+    ? (asArray(read.json) ?? []).map((x) => String(x?.name ?? ""))
+    : [];
+  if (names.includes(label)) {
+    log(`[ship] ✓ PR #${number} 标签 ${label} 已回读（list-pull-labels）`);
+    return;
+  }
+  log(
+    `[ship] PR #${number} 的标签 ${label} **没有落地证明**` +
+      `（${read ? "回读里没有这个名字" : "回读没跑起来"}）⇒ 不念「已打上」；` +
+      "这一格是读数、不改退码。手工补：",
+  );
+  log(
+    `[ship]   cnb pulls post-pull-labels --repo ${slug} --number ${number} --labels ${label} -v`,
+  );
+}
+
+/**
  * 阶段 3：拿这条分支的 PR —— 已有开放的复用，没有就建。
  *
  * 幂等是必需的：同一条分支上第二次 `pnpm ship`（第一次只推到建 PR、CI 还没绿）
@@ -138,6 +209,7 @@ function pickTitle({ run, log, baseRef, explicit = null }) {
  *   baseRef: string | null,
  *   baseBranch: string | null,
  *   explicitTitle?: string | null,
+ *   handle?: string | null,
  * }} ctx
  * @returns {{number: any}} PR 号；拿不到时是 falsy，由调用方按 `CODE.NOT_RUN` 收
  */
@@ -153,6 +225,7 @@ export function createOrReusePull(ctx) {
     baseRef,
     baseBranch,
     explicitTitle,
+    handle,
   } = ctx;
   const list = cnbJson(run, [
     "pulls",
@@ -166,6 +239,7 @@ export function createOrReusePull(ctx) {
   let number = list ? findPullForBranch(list.json, branch) : null;
   if (number) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
+    stampAuthorLabel({ run, log, slug, number, handle, root });
     return { number };
   }
   const { title } = pickTitle({
@@ -184,6 +258,7 @@ export function createOrReusePull(ctx) {
   const body = buildPullBody({
     root,
     fragments: frags,
+    handle,
     /* 基线取不到时这一格就是空 —— 宁缺：拿 `HEAD...HEAD` 会得到一份「什么都没有」
      * 的 diffstat，而 PR 正文里那句「这次改了哪些文件」正是读者判断成本的入口。 */
     diffstat: baseRef
@@ -253,6 +328,7 @@ export function createOrReusePull(ctx) {
     return { number: null };
   }
   log(`[ship] ✓ 已建 PR #${number}`);
+  stampAuthorLabel({ run, log, slug, number, handle, root });
   return { number };
 }
 

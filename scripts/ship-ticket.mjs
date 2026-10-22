@@ -135,6 +135,35 @@ export function readDevHandle({ root, env = {} }) {
 }
 
 /**
+ * `dev:<短名>` —— 平台留痕标签的**唯一生成处**（issue 标签、PR 标签与署名行共用这一份）。
+ *
+ * 空白 / null 回 `null`：那是「没配」，不是「配了一个空名字」。调用点据此念「未配」，
+ * 不许自己拼一个 `dev:` 或拿 git `user.name` 顶上 —— 后者是提交身份，不是提单身份
+ * （`docs/guides/git-identity.md` §4）。
+ *
+ * @param {string | null | undefined} handle 短名（取自 `readDevHandle`）
+ * @returns {string | null} 标签名；未配时为 null
+ */
+export function devLabel(handle) {
+  const h = String(handle ?? "").trim();
+  return h === "" ? null : `dev:${h}`;
+}
+
+/**
+ * 向平台写文字时的署名行（issue 评论与 PR 正文是**同一句**）。
+ *
+ * 未配时如实写「未配」、不编一个名字：这行是留痕，读者要靠它判断「这串字是谁写的」，
+ * 编一个比空着更坏。
+ *
+ * @param {string | null | undefined} handle 短名
+ * @returns {string} 署名行
+ */
+export function signatureLine(handle) {
+  const label = devLabel(handle);
+  return label ? `提交人：${label}` : "提交人：未配";
+}
+
+/**
  * 「这张单是谁提的、按什么优先级」—— 同样是**只读数，不拦**（ISSUE #2175）。
  *
  * 为什么账号层分不出人（当场实测，跨 #2135 / #2149 / #2156 / #2157 / #2163 五张单、跨并行会话）：
@@ -164,7 +193,7 @@ export function issueAuthoring({
 } = {}) {
   const required = platform === "win32";
   const lines = [
-    `[ship] 单子身份：提单人=${handle ? `dev:${handle}` : "未配"} · ` +
+    `[ship] 单子身份：提单人=${devLabel(handle) ?? "未配"} · ` +
       `优先级走平台原生 \`--priority\`（${ISSUE_PRIORITIES}，本脚本不代填）` +
       " —— **这一格是读数，不改退码**",
   ];
@@ -187,8 +216,49 @@ export function issueAuthoring({
     );
     lines.push(
       "[ship]   建完再补一句 —— 实测 `create-issue --labels` 不落地（回读是空），标签要在建完之后按：" +
-        `\`cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels dev:${handle ?? "<短名>"}\``,
+        `\`cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels ${devLabel(handle) ?? "dev:<短名>"}\``,
     );
   }
   return { handle, required, lines };
+}
+
+/**
+ * `--whoami` 的自查出口：把「这一份检出是谁」与**两条留痕规则**打出来（ISSUE #2204）。
+ *
+ * 为什么需要它：手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不走 `ship`，
+ * 那两条路没有任何脚本能兜 —— 平台侧的 `author` 是 token 的账号本体，跨检出逐字相同。
+ * 所以漏口只能靠「一条能粘贴的出口 + 文档口径」：这里给的就是那条出口，**一次也不碰平台**，
+ * 也不改退码（它是读数，和阶段 0 那两行同口径）。
+ *
+ * @param {{handle?: string | null, root?: string, slug?: string | null}} input
+ * @returns {string[]} 要打印的几行
+ */
+export function whoamiLines({ handle = null, root = "", slug = null } = {}) {
+  const label = devLabel(handle);
+  const repo = slug || "<组织>/<仓库>";
+  const lines = [
+    `[ship] 本检出的平台留痕：${label ?? "未配"}（取自 ${DEV_HANDLE_ENV_KEY}：` +
+      "进程环境优先，其次这一份检出的 `.env`）",
+  ];
+  if (!label) {
+    lines.push(
+      `[ship] 未配 ⇒ 在 \`${path.join(root || ".", ".env")}\` 填一行 ` +
+        `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（整行不在时先跑 \`pnpm env:init\`，` +
+        "它只补缺失的键、不覆盖已有配置）",
+    );
+  }
+  lines.push(
+    `[ship] 规则一：凡向平台写文字（issue 评论 / PR 正文），正文带一行 \`${signatureLine(handle)}\``,
+  );
+  lines.push(
+    "[ship] 规则二：建 PR 后补标签并**独立回读**（`ship` 建的会自己做；手工建的要自己跑）：",
+  );
+  lines.push(
+    `[ship]   cnb pulls post-pull-labels --repo ${repo} --number <PR号> --labels ${label ?? "dev:<短名>"} -v`,
+  );
+  lines.push(
+    `[ship]   cnb pulls list-pull-labels --repo ${repo} --number <PR号> -v` +
+      "  ← 回读里看得见那个名字才算打上了",
+  );
+  return lines;
 }

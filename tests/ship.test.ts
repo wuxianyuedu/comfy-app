@@ -64,9 +64,12 @@ import {
   pullTitleBody,
 } from "../scripts/ship-close.mjs";
 import {
+  devLabel,
   issueAuthoring,
   readDevHandle,
+  signatureLine,
   ticketReading,
+  whoamiLines,
 } from "../scripts/ship-ticket.mjs";
 import {
   cleanBranch,
@@ -300,6 +303,12 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
     expect(parseArgs(["--merge", "--clean-branch"]).reap).toBe(false);
     expect(parseArgs(["--reap"]).reap).toBe(true);
     expect(parseArgs(["--reep"]).unknown).toEqual(["--reep"]);
+  });
+
+  it("--whoami 默认关；拼错进 unknown（自查口不该被一个 typo 静默变成整条 ship）", () => {
+    expect(parseArgs([]).whoami).toBe(false);
+    expect(parseArgs(["--whoami"]).whoami).toBe(true);
+    expect(parseArgs(["--who-am-i"]).unknown).toEqual(["--who-am-i"]);
   });
 });
 
@@ -1232,6 +1241,48 @@ describe("readDevHandle：进程环境优先，回落本检出 .env，读不到�
   });
 });
 
+describe("devLabel / signatureLine / whoamiLines：平台留痕只有一份生成处（ISSUE #2204）", () => {
+  it("配了 ⇒ `dev:<短名>`；两侧共用同一份（标签名与署名行不会各拼一套）", () => {
+    expect(devLabel("yuedu-win")).toBe("dev:yuedu-win");
+    expect(signatureLine("yuedu-win")).toBe("提交人：dev:yuedu-win");
+    // 首尾空白吃掉 —— 与 `readDevHandle` 同一条口径。
+    expect(devLabel("  yuedu-win  ")).toBe("dev:yuedu-win");
+  });
+
+  it("未配 / 空白 ⇒ 标签 null、署名如实写「未配」，不编一个名字", () => {
+    for (const v of [null, undefined, "", "   "]) {
+      expect(devLabel(v)).toBeNull();
+      expect(signatureLine(v)).toBe("提交人：未配");
+    }
+  });
+
+  it("--whoami 出口：配了就把两条规则与可粘贴命令打出来", () => {
+    const all = whoamiLines({
+      handle: "yuedu-win",
+      root: "/checkout/one",
+      slug: "moon-read/comfy-app-t3",
+    }).join("\n");
+    expect(all).toContain("dev:yuedu-win");
+    expect(all).toContain("提交人：dev:yuedu-win");
+    expect(all).toContain(
+      "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number <PR号> --labels dev:yuedu-win -v",
+    );
+    // 回读那一行不是可选提示：回执不算结论，看得见名字才算打上了。
+    expect(all).toContain("cnb pulls list-pull-labels");
+    expect(all).toContain("回读里看得见那个名字才算打上了");
+  });
+
+  it("没配 ⇒ 点到这一份检出的 .env 与 env:init，而不是只说「未配」", () => {
+    const all = whoamiLines({ handle: null, root: "/checkout/one" }).join("\n");
+    expect(all).toContain("未配");
+    expect(all).toContain(path.join("/checkout/one", ".env"));
+    expect(all).toContain("pnpm env:init");
+    expect(all).toContain("提交人：未配");
+    // 仓库取不到时占位，而不是把 `undefined` 拼进一条能粘贴的命令。
+    expect(all).toContain("--repo <组织>/<仓库>");
+  });
+});
+
 describe("reapCheckoutInstances：只收 via port 那批，session 那一档不归它收", () => {
   type Live = { running?: boolean; pids?: number[]; via?: string | null };
 
@@ -2021,6 +2072,18 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     }
   });
 
+  it("作者标签与独立回读成对出现，且只在配了留痕时进计划（#2204）", () => {
+    const plain = planCommands(st).join("\n");
+    expect(plain).not.toContain("post-pull-labels");
+    const withLabel = planCommands({ ...st, authorLabel: true }).join("\n");
+    expect(withLabel).toContain("cnb pulls post-pull-labels");
+    // 回读不是可选步骤：只打不回读，dry-run 就把「回执即结论」教给读者。
+    expect(withLabel).toContain("cnb pulls list-pull-labels");
+    expect(withLabel.indexOf("post-pull-labels")).toBeLessThan(
+      withLabel.indexOf("list-pull-labels"),
+    );
+  });
+
   it("合并那一行只在 merge 为真时出现（默认不合并这条纪律的自证）", () => {
     expect(planCommands(st).some((l) => l.includes("merge-pull"))).toBe(true);
     expect(
@@ -2100,6 +2163,7 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       ...st,
       merge: true,
       closeIssue: true,
+      authorLabel: true,
     })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
       if (m) planned.add(`${m[1]} ${m[2]}`);
@@ -2173,6 +2237,23 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
     });
     expect(body).toContain("changelog.d/0-nonexistent-for-test.md");
     expect(body).toContain("1 file changed");
+  });
+
+  it("配了留痕 ⇒ 正文带一行署名；没配 ⇒ 写「未配」而不是编一个名字", () => {
+    const withHandle = buildPullBody({
+      root: process.cwd(),
+      fragments: [],
+      diffstat: " 1 file changed",
+      handle: "yuedu-win",
+    });
+    expect(withHandle).toContain("提交人：dev:yuedu-win");
+    const without = buildPullBody({
+      root: process.cwd(),
+      fragments: [],
+      diffstat: " 1 file changed",
+    });
+    expect(without).toContain("提交人：未配");
+    expect(without).not.toContain("dev:");
   });
 
   it("负控制：正文里不许出现 check-commit-claims 会拿事实复核的那三种句式", () => {
@@ -3110,5 +3191,171 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(all).toContain("title invalid");
     expect(all).toContain("bad request");
     expect(code).toBe(CODE.NOT_RUN);
+  });
+
+  it("建 PR 后打 dev 标签，并**独立回读**才念成功（回执不算结论，ISSUE #2204）", async () => {
+    const { tmpRoot, gitDir } = proofRoot("author-label");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "list-pulls": '{"status":200,"data":[]}',
+        "post-pull-labels": '{"status":200}',
+        "list-pull-labels":
+          '{"status":200,"data":[{"name":"dev:yuedu-win"}]}',
+        "post-pull": '{"status":201,"data":{"number":2999}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+        args: ["--no-wait"],
+      });
+      const all = heard.join("\n");
+      expect(code).toBe(CODE.GREEN);
+      expect(base.calls).toContain(
+        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 2999 --labels dev:yuedu-win -v",
+      );
+      expect(base.calls).toContain(
+        "cnb pulls list-pull-labels --repo moon-read/comfy-app-t3 --number 2999 -v",
+      );
+      // 顺序：先打、再独立回读。反过来写等于拿上一次的状态给自己作证。
+      const applyAt = base.calls.findIndex((c) =>
+        c.includes("post-pull-labels"),
+      );
+      const readAt = base.calls.findIndex((c) => c.includes("list-pull-labels"));
+      expect(applyAt).toBeGreaterThanOrEqual(0);
+      expect(readAt).toBeGreaterThan(applyAt);
+      expect(all).toContain("✓ PR #2999 标签 dev:yuedu-win 已回读");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("回执 200 但回读里没有那个标签 ⇒ 不念「已回读」，也不改退码", async () => {
+    const { tmpRoot, gitDir } = proofRoot("author-label-missing");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "list-pulls": '{"status":200,"data":[]}',
+        "post-pull-labels": '{"status":200}',
+        "list-pull-labels": '{"status":200,"data":[]}',
+        "post-pull": '{"status":201,"data":{"number":3002}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+        args: ["--no-wait"],
+      });
+      const all = heard.join("\n");
+      expect(all).not.toContain("已回读");
+      expect(all).toContain("没有落地证明");
+      // 手工补的那条命令必须给全 —— 只说「没打上」等于把下一步吞了。
+      expect(all).toContain(
+        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 3002 --labels dev:yuedu-win -v",
+      );
+      // 留痕是读数，不是闸（#2175 同一条）：标签没落地照样走到 GREEN。
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("复用已有 PR 而未配 handle ⇒ 只念一句，一次标签动作都不伸手", async () => {
+    const { tmpRoot, gitDir } = proofRoot("author-label-reuse");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "list-pulls":
+          '{"status":200,"data":[{"number":2888,"head":{"ref":"refs/heads/feat/x"},"base":{"ref":"refs/heads/master"}}]}',
+        "post-pull-labels": '{"status":200}',
+        "list-pull-labels":
+          '{"status":200,"data":[{"name":"dev:yuedu-win"}]}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        env: {},
+        args: ["--no-wait"],
+      });
+      const all = heard.join("\n");
+      expect(code).toBe(CODE.GREEN);
+      expect(all).toContain("复用，不重建");
+      // 未配 ⇒ 不阻断，但要点到**这一份检出**的 .env 与该跑的命令。
+      expect(all).toContain("未配 COMFYAPP_DEV_HANDLE");
+      expect(all).toContain(path.join(tmpRoot, ".env"));
+      expect(all).toContain("pnpm env:init");
+      expect(
+        base.calls.filter((c) => c.includes("pull-labels")),
+        "未配 handle 却伸手打标签了",
+      ).toEqual([]);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("复用已有 PR 且配了 handle ⇒ 同样打标签并回读", async () => {
+    const { tmpRoot, gitDir } = proofRoot("author-label-reuse-ok");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "list-pulls":
+          '{"status":200,"data":[{"number":2888,"head":{"ref":"refs/heads/feat/x"},"base":{"ref":"refs/heads/master"}}]}',
+        "post-pull-labels": '{"status":200}',
+        "list-pull-labels":
+          '{"status":200,"data":[{"name":"dev:yuedu-win"}]}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+        args: ["--no-wait"],
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(base.calls).toContain(
+        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 2888 --labels dev:yuedu-win -v",
+      );
+      expect(heard.join("\n")).toContain("✓ PR #2888 标签 dev:yuedu-win 已回读");
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("--whoami：只读自查，一次也不碰 cnb，也不受 master 守卫影响", async () => {
+    const heard: string[] = [];
+    const base = fake({ branch: "master" });
+    const code = await main({
+      root: process.cwd(),
+      run: base.run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => {
+        throw new Error("--whoami 不该探 cnb");
+      },
+      env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+      args: ["--whoami"],
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(base.calls.filter((c) => c.startsWith("cnb "))).toEqual([]);
+    const all = heard.join("\n");
+    expect(all).toContain("dev:yuedu-win");
+    expect(all).toContain("提交人：dev:yuedu-win");
+    expect(all).toContain("cnb pulls post-pull-labels");
+    expect(all).toContain("cnb pulls list-pull-labels");
   });
 });

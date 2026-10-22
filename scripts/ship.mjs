@@ -132,6 +132,9 @@
  *   pnpm ship --only=preflight               # 单跑阶段 0 看读数字段（其余段都排在它后面，
  *                                            #  单跑会落不出任何结论 ⇒ 退 2，见 `finish`）
  *   pnpm ship --no-wait                        # 建完 PR 就停，不轮询 build
+ *   pnpm ship --whoami                         # 只读自查：这一份检出的留痕短名 +
+ *                                              #   手工写平台文字 / 建 PR 后补标签的粘贴命令
+ *                                              #   （一次也不碰平台，不改任何状态）
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge · close-issue · clean-branch
  * （`close-issue` 带号时能单跑 —— 那是「补关」那一路，要平台侧的落地证明；不带号或
@@ -158,6 +161,7 @@ import {
   issueAuthoring,
   readDevHandle,
   ticketReading,
+  whoamiLines,
 } from "./ship-ticket.mjs";
 import {
   logInstanceReading,
@@ -245,6 +249,7 @@ export async function main(deps = {}) {
  *   sleep?: (ms:number)=>void,
  *   now?: ()=>number,
  *   args?: string[],
+ *   env?: Record<string, string | undefined>,
  *   readInstances?: (root: string) => Promise<{running?: boolean, pids?: number[], via?: string | null}>,
  * }} deps 注入点（由 `main` 总是给全，所以这里不标可选 —— 标了会让后面那个
  *    必需参数报 TS1016「required 不能跟在 optional 之后」）
@@ -253,6 +258,9 @@ export async function main(deps = {}) {
  */
 async function runFlow(deps, tmpFiles) {
   const root = deps.root ?? process.cwd();
+  /** 进程环境是外部输入，与 `run` / `probeCnb` 同一档注入：留痕短名从它读，
+   *  用例靠这一格钉住「有 handle / 没 handle」两种现场，而不随开发机的 `.env` 漂。 */
+  const env = deps.env ?? process.env;
   /** git 目录怎么解析：默认那份唯一实现，测试里指到临时目录。 */
   const resolveDir = deps.resolveGitDir ?? resolveGitDir;
   /** 写一份临时文件到 git 目录并**登记待回收**；没有落点时回 null（不往工作区猜）。 */
@@ -399,6 +407,17 @@ async function runFlow(deps, tmpFiles) {
     ? run("git", ["remote", "get-url", up.remote])
     : { stdout: "" };
   const slug = parseSlug(slugRes.stdout);
+  /* ── `--whoami`：只读自查口（ISSUE #2204）─────────────────────
+   * 手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 ship，
+   * 那两条路的留痕只能靠人照着一条能粘贴的出口做。这个出口一次也不碰平台
+   * （甚至不 probe cnb）、不改任何状态，所以在分支守卫与 preflight 之前就返回。 */
+  if (opt.whoami) {
+    const handle = readDevHandle({ root, env });
+    for (const l of whoamiLines({ handle, root, slug })) {
+      log(l);
+    }
+    return CODE.GREEN;
+  }
   const cnbOk = probeCnb();
 
   /* ── 「只补关」那一路（ISSUE #2199）───────────────────────────
@@ -577,7 +596,7 @@ async function runFlow(deps, tmpFiles) {
      * `author` 逐字相同（实测），而提交那一侧的通道（git author 子地址）在单子上不存在
      * —— 见 `docs/guides/git-identity.md` §4。留痕因此只能写在单子上。
      * 出口那两句只在「缺单」或「没配留痕」时念：都在场时不必每次刷屏。 */
-    const handle = readDevHandle({ root, env: process.env });
+    const handle = readDevHandle({ root, env });
     for (const l of issueAuthoring({
       handle,
       platform: process.platform,
@@ -648,6 +667,7 @@ async function runFlow(deps, tmpFiles) {
         createBranch: cb.act ? cb.branch : null,
         remote: up.remote,
         baseBranch,
+        authorLabel: Boolean(handle),
       })) {
         log(`        $ ${c}`);
       }
@@ -722,6 +742,7 @@ async function runFlow(deps, tmpFiles) {
         baseRef,
         baseBranch,
         explicitTitle: opt.title,
+        handle,
       });
       if (!number) {
         codes.push(CODE.NOT_RUN);
