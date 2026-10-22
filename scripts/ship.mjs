@@ -22,6 +22,8 @@
  *   | 提交门槛            | `.githooks/pre-commit`（由 `git commit` 触发，本脚本不重跑） |
  *   | 合并前固定动作三段  | `.githooks/pre-push` → `premerge-proof.mjs`（由 push 触发）  |
  *   | 「红是我的还是主干」| `base-check.mjs`（本脚本在 CI 红时调它，不自己归因）         |
+ *   | 本检出有没有实例在跑 | `launcher-core/port-reap.mjs` 的 `runningAppInstances()`（硬规则 9）|
+ *   | 真要把那批进程收掉   | `scripts/reap-process.mjs` → `kill-process-tree`（硬规则 3，整棵树）  |
  *   | 流水线终态          | 平台 build 的 `data.status`（`cnb … -v` 的 JSON）            |
  *   | 合没合上            | PR 的 `is_merged` + **回读解析出的主干基线顶端**            |
  *
@@ -33,8 +35,12 @@
  *     一次性临时文件落在 git 目录哪儿。只因宿主而变。
  *   · `ship-platform.mjs` —— **平台侧四段**：PR / 轮询 / verdict / 合并并回读。
  *     只经注入的 `run` 摸世界，所以整段可被假执行者跑完。
+ *   · `ship-reap.mjs`     —— **进程那一格**：本检出的归属读数与 `--reap` 的收尾回收。
+ *     两半都不自己判 —— 归属只问 `launcher-core/port-reap.mjs` 的 `runningAppInstances()`
+ *     （硬规则 9 唯一实现），回收只发 `scripts/reap-process.mjs`（硬规则 3 唯一入口）。
  *   · 本文件              —— **本地三段 + 装配**：preflight / commit / push，
- *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）。
+ *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
+ *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
  *
  * 拆的是**变化方向**：加一个阶段只动本文件与 `ship-platform.mjs`，改 Windows 垫片
  * 只动 `ship-exec.mjs`。对外行为、命令行、退出码、打印原文一字不改。
@@ -70,6 +76,10 @@
  *     `closed_at` 三件原值打出来。那条「已落地 + 读数 + 因果」的记录评论是判断，
  *     与提交信息同一档，不由编排层生成 —— 生成出来的那句话必然是一句
  *     「它说它做了」，而这一族存在的意义恰恰是不采信这种话。
+ *   · **不默认杀进程。** 本检出的实例在不在跑，阶段 0 每轮都念一行（归属取自硬规则 9 那条
+ *     判据，是**读数**、不参与退码）；要收得点名 `--reap`，而且**只收 `via:"port"` 那批**——
+ *     `via:"session"` 是「编排器还活着」，那不是残留，停它要走编排器自己的收尾路径。
+ *     既不泛匹配 `node.exe` 也不按端口反查（硬规则 3：各写一遍正是历史上误杀与留孤儿的根因）。
  *   · **不替你立案，也不替你凑一个号**。阶段 0 会把「这次带来的碎片各挂在哪个号上」
  *     念出来，其中段落是 `## Fixed` 而号是 `0` 的那几份额外点一句「先立案再改」
  *     （规范 §13.10.9）—— 那是**读数**，一次也不参与退码。做成硬闸的必然后果是随手
@@ -97,6 +107,9 @@
  *                                              #  （显式才做；只跟在**验真的合并**之后，
  *                                              #   误带在没有合并的那一跳上 ⇒ 退 2 并说明）
  *   pnpm ship --merge --clean-branch           # 合上之后删掉**这次那一条**分支（远端 + 本地）
+ *   pnpm ship --reap                           # 这一轮结束时收掉本检出**端口上那批**残留进程
+ *                                              #  （阶段 0 每轮都念一行归属读数；`via:"session"`
+ *                                              #   那一档不归这里收，见 `ship-reap.mjs`）
  *                                              #  （同样是显式动作；两边各自独立回读，
  *                                              #   回读没跑起来落 2 而不是「已删」；不批量清）
  *   pnpm ship --dry-run                        # 只打印将要执行的命令，一条都不执行（阻塞照报）
@@ -127,6 +140,11 @@ import {
   ticketReading,
 } from "./ship-core.mjs";
 import { makeRunner, safeRead, short, writeScratch } from "./ship-exec.mjs";
+import {
+  logInstanceReading,
+  reapCheckoutInstances,
+  readAppInstances,
+} from "./ship-reap.mjs";
 import {
   cleanBranch,
   closeIssues,
@@ -187,8 +205,9 @@ function parsePorcelain(stdout) {
 export async function main(deps = {}) {
   /** @type {string[]} */
   const tmpFiles = [];
+  let code;
   try {
-    return await runFlow(deps, tmpFiles);
+    code = await runFlow(deps, tmpFiles);
   } finally {
     for (const p of tmpFiles) {
       try {
@@ -198,6 +217,34 @@ export async function main(deps = {}) {
       }
     }
   }
+  /* 收尾回收挂在**唯一出口**上，而不是某个阶段末尾：一轮可以从七八个出口结束
+   * （门槛拦下、基线取不到、cnb 不在、轮询到顶…），挂在阶段里就总有「哪条路径忘了收」
+   * 这种形态 —— 而那恰好是这一格要防的事。`--dry-run` 只进计划，不伸手。 */
+  const opt = parseArgs(deps.args ?? process.argv.slice(2));
+  if (opt.reap && !opt.dryRun) {
+    const root = deps.root ?? process.cwd();
+    const log = deps.log ?? ((s) => process.stdout.write(s + "\n"));
+    const run = deps.run ?? makeRunner(root);
+    const before = code;
+    code = combineShipCodes([
+      code,
+      await reapCheckoutInstances({
+        root,
+        log,
+        run,
+        read: deps.readInstances ?? readAppInstances,
+      }),
+    ]);
+    /* 合并进来之后先前那句「结论：exit N」就可能过期 —— 那正是这一族最反对的形状
+     * （一句声明被同一轮的下一行推翻），所以只在结论**变了**的时候改口一次。 */
+    if (code !== before) {
+      log(
+        `[ship] 含收尾回收的最终结论：exit ${code}` +
+          `（上面那行 exit ${before} 是回收之前的结论）`,
+      );
+    }
+  }
+  return code;
 }
 
 /**
@@ -212,6 +259,7 @@ export async function main(deps = {}) {
  *   sleep?: (ms:number)=>void,
  *   now?: ()=>number,
  *   args?: string[],
+ *   readInstances?: (root: string) => Promise<{running?: boolean, pids?: number[], via?: string | null}>,
  * }} deps 注入点（由 `main` 总是给全，所以这里不标可选 —— 标了会让后面那个
  *    必需参数报 TS1016「required 不能跟在 optional 之后」）
  * @param {string[]} tmpFiles 临时文件回收清单，由 `main` 建并在 `finally` 里清
@@ -489,6 +537,20 @@ async function runFlow(deps, tmpFiles) {
       for (const l of ticketReading({ root, fragments: frags }).lines) {
         log(l);
       }
+    }
+    /* 本检出的应用服务此刻在不在跑 —— 一格**读数**，不参与退码。放在这里是理由：这是
+     * 整条链上唯一一处「还没动手、而机器的状态可以顺手交代」的时刻。真收在 `--reap`
+     * （见 `main`），两半共用同一条归属判据；读不出来就念「读不出来」，不圆成「无」。 */
+    try {
+      logInstanceReading(
+        log,
+        await (deps.readInstances ?? readAppInstances)(root),
+      );
+    } catch (e) {
+      log(
+        `[ship] 本检出应用实例：读不出来（${e instanceof Error ? e.message : String(e)}）` +
+          " ⇒ 这一格不构成结论，也不参与退码",
+      );
     }
     if (
       unstagedModified.length + untracked.length > 0 &&

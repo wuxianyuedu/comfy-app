@@ -64,10 +64,10 @@ export function combineShipCodes(codes) {
  * 而这里最贵的误读是「以为会合、其实没合」或反之。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -77,6 +77,7 @@ export function parseArgs(argv) {
     merge: false,
     closeIssue: false,
     cleanBranch: false,
+    reap: false,
     dryRun: false,
     wait: true,
     only: null,
@@ -87,6 +88,7 @@ export function parseArgs(argv) {
     if (a === "--merge") out.merge = true;
     else if (a === "--close-issue") out.closeIssue = true;
     else if (a === "--clean-branch") out.cleanBranch = true;
+    else if (a === "--reap") out.reap = true;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--no-wait") out.wait = false;
     else if (a === "--message" || a === "-m") out.message = argv[++i] ?? "";
@@ -591,6 +593,34 @@ export function pickBuildForSha(builds, sha) {
 }
 
 /**
+ * 「这一眼与上一眼是不是同一件事」的签名 —— 轮询用它判**有没有在动**，不判绿不绿。
+ *
+ * 为什么需要它：预算 45 分钟是按墙钟烧的，而实测烧完之后常见的是「20 次读数一模一样」
+ * （按 sha 还没解析到 build，或平台把 build 排在队列里没动）。那种情况下每 20 秒念一遍
+ * 同一句话，最后落 exit 2 —— 等待本身没有换来任何新事实，而屏幕上看不出来。
+ * 签名取**三件原值**：`sn` / `data.status` / pipeline 的「完成数-总数」；任何一件变了
+ * 都算「在动」，计数器归零 —— 所以这条不会把一个正在推进的流水线提前掐掉。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果（外部形状）
+ * @param {string} sn 这一眼归属的 build sn（列表里取到的那条）
+ * @returns {string} 形如 `cnb-xxx-yyy/success/1-1`；没解析到 build 时形如 `(未解析到 build)/?/0-0`
+ */
+export function buildSignature(json, sn = "") {
+  const d = (json && json.data) || null;
+  const status = d && typeof d.status === "string" ? d.status : "(取不到 data)";
+  const entries =
+    d && d.pipelinesStatus && typeof d.pipelinesStatus === "object"
+      ? Object.values(d.pipelinesStatus)
+      : [];
+  const total = entries.length;
+  const done = entries.filter(
+    (p) =>
+      p && typeof p.status === "string" && !RUNNING.has(p.status.toLowerCase()),
+  ).length;
+  return `${sn || "(未解析到 build)"}/${status}/${done}-${total}`;
+}
+
+/**
  * 读 PR JSON 的判决字段（同样只读 `data.*`）。
  *
  * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string}} | null} json 解析结果
@@ -691,7 +721,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -742,6 +772,16 @@ export function planCommands(st) {
     p.push(`git ls-remote --heads ${remote} ${st.branch}`);
     p.push(`git branch -D ${st.branch}`);
     p.push(`git show-ref --verify --quiet refs/heads/${st.branch}`);
+  }
+  /* 收尾回收也在计划里看得见。pid 是当场从归属判据取的，所以这一行按**形状**写 ——
+   * 计划教的是「这一跳会发哪类命令、收完还要回读哪一句」，不是假装预先知道 pid。 */
+  if (st.reap) {
+    p.push(
+      "node scripts/reap-process.mjs <pid>（逐个；pid 只取 runningAppInstances 里 via port 那批）",
+    );
+    p.push(
+      "再读一次 runningAppInstances 作为回读 —— 回读说还在 ⇒ 红；via session ⇒ 这一格不收、落 2",
+    );
   }
   return p;
 }
