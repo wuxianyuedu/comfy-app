@@ -192,17 +192,44 @@ export function planSlot(input) {
  *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} io
  * @returns {{root: string | null, from: string}} `from` 会进日志（答案与它的来源必须一起读）
  */
-export function resolveCacheRoot(io) {
+/**
+ * 槽根的**两份事实**（卷根 + 包名）—— 依赖面那套槽与构建缓存那套槽**共用**这一份推导。
+ *
+ * 为什么共用：两处各问一次 `pnpm store path` 就会有两份「槽在哪」的答案，而它们必须同源
+ * —— 「依赖面槽在 F:、构建缓存槽在 G:」没有任何好处，只会让人以为那是故意的
+ * （§12.12：同一件事只允许一处实现）。
+ *
+ * @param {{cwd: string, env?: Record<string, string | undefined>,
+ *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} io
+ * @returns {{explicit: string | null, volumeRoot: string | null, name: string, from: string}}
+ */
+function cacheRootFacts(io) {
   const env = io.env ?? {};
   const explicit = (env[CACHE_ROOT_ENV] ?? "").trim();
-  if (explicit) return { root: explicit, from: `环境变量 ${CACHE_ROOT_ENV}` };
+  if (explicit) {
+    return {
+      explicit,
+      volumeRoot: null,
+      name: "",
+      from: `环境变量 ${CACHE_ROOT_ENV}`,
+    };
+  }
   const run = io.run;
-  if (!run) return { root: null, from: "无 pnpm 出口 ⇒ 不猜路径" };
+  if (!run) {
+    return {
+      explicit: null,
+      volumeRoot: null,
+      name: "",
+      from: "无 pnpm 出口 ⇒ 不猜路径",
+    };
+  }
   const res = run(["store", "path"], { cwd: io.cwd });
   const store = String(res?.stdout ?? "").trim();
   if ((res?.status ?? 1) !== 0 || !store) {
     return {
-      root: null,
+      explicit: null,
+      volumeRoot: null,
+      name: "",
       from: "问不出 store ⇒ 不设槽（宁可不省，也不猜一个卷）",
     };
   }
@@ -216,8 +243,56 @@ export function resolveCacheRoot(io) {
     /* 读不到包名就用一个中性目录名 —— 它只用于区分同机上的不同仓库。 */
   }
   return {
-    root: path.join(path.parse(store).root, "ci-cache", name),
+    explicit: null,
+    volumeRoot: path.parse(store).root,
+    name,
     from: `由 store ${store} 所在卷推导`,
+  };
+}
+
+/**
+ * @param {{cwd: string, env?: Record<string, string | undefined>,
+ *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} io
+ * @returns {{root: string | null, from: string}} `from` 会进日志（答案与它的来源必须一起读）
+ */
+export function resolveCacheRoot(io) {
+  const facts = cacheRootFacts(io);
+  if (facts.explicit) return { root: facts.explicit, from: facts.from };
+  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  return {
+    root: path.join(facts.volumeRoot, "ci-cache", facts.name),
+    from: facts.from,
+  };
+}
+
+/**
+ * **构建缓存槽**的根（`scripts/ci-build-cache-slot.mjs` 用它）。
+ *
+ * 与依赖面那套槽**同卷**、不同目录（`ci-build-cache/` 而不是 `ci-cache/`）——
+ * 不同目录是必须的：依赖面那套的槽目录按「依赖面指纹」命名，而它的读数与淘汰
+ * （`listSlots` / `pruneSlots`）把槽根下的**每个目录**都当成一个键；构建缓存槽按
+ * 「构建面指纹」命名，两套混在一个根下时，那边的淘汰会把这边正在用的目录删掉。
+ *
+ * ⚠️ `COMFY_CI_CACHE_ROOT`（显式出口）**只覆盖依赖面那套槽**：它的语义是「那个槽根
+ * 指到哪儿去」，改成「卷根」会让已配的机器把依赖面槽整个搬走。构建缓存槽因此问不到
+ * 显式出口时按推导走。
+ *
+ * @param {{cwd: string, env?: Record<string, string | undefined>,
+ *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} io
+ * @returns {{root: string | null, from: string}}
+ */
+export function resolveBuildCacheRoot(io) {
+  const facts = cacheRootFacts(io);
+  if (facts.explicit) {
+    return {
+      root: null,
+      from: `${facts.from}（该变量只覆盖依赖面那套槽，构建缓存槽不跟着它走）`,
+    };
+  }
+  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  return {
+    root: path.join(facts.volumeRoot, "ci-build-cache", facts.name),
+    from: facts.from,
   };
 }
 
@@ -386,9 +461,7 @@ export function main(io = {}) {
   const cwd = io.cwd ?? ROOT;
   const env = io.env ?? process.env;
   const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
-  const run =
-    io.run ??
-    ((args, opts) => runPnpmSync(args, opts));
+  const run = io.run ?? ((args, opts) => runPnpmSync(args, opts));
   const resolved = resolveCacheRoot({ cwd, env, run });
   const cacheRoot = resolved.root;
   log(`[缓存槽读数] 槽根来源：${resolved.from}`);

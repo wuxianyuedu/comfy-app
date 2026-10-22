@@ -23,12 +23,19 @@
  *   node scripts/artifact-run.mjs                  构建 + 数产物，绿了记一笔账
  *   node scripts/artifact-run.mjs --skip "<理由>"   今天不跑，记一条写明理由的豁免
  *   node scripts/artifact-run.mjs --dirty "<理由>"  这次改动不吃这一档，记一条
+ *
+ * ⚠️ **构建那一段外面套着「构建缓存槽」**（`ci-build-cache-slot.mjs`）：开关
+ * `COMFY_CI_BUILD_CACHE=1` 置着时，`.next/cache` 会指到一台机器上的**常驻目录**，
+ * 于是「换一个工作区路径再构建」不再从零编译（实测编译段 95s → 14.9s）。
+ * 接线放在这里，是因为这一档是**平台每日构建**与**本地 `build:tracked`**的共同入口；
+ * 开关默认关，且机制**失败即退回**（算不出槽根 / 空间不够 / 槽被别人占着 ⇒ 照常构建）。
  */
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+import { withBuildCacheSlot } from "./ci-build-cache-slot.mjs";
 import {
   abortedAdvice,
   classifyOutcome,
@@ -126,14 +133,18 @@ export function main(argv) {
     );
     return 0;
   }
-  const res = runPnpmSync(run.args, {
-    cwd: ROOT,
-    stdio: "inherit",
-    /* 显式给预算：产物档跑的是 `next build` + 数产物，它的缺省 600_000 与全量档
-     * 同源、也同病（ISSUE #1834：撞预算时 `status` 为 null，与「判据红」同形）。
-     * 30 分钟是「真挂死」与「机器慢」之间那条线，与全量档同一个数。 */
-    timeoutMs: ARTIFACT_TIMEOUT_MS,
-  });
+  const res = withBuildCacheSlot(
+    () =>
+      runPnpmSync(run.args, {
+        cwd: ROOT,
+        stdio: "inherit",
+        /* 显式给预算：产物档跑的是 `next build` + 数产物，它的缺省 600_000 与全量档
+         * 同源、也同病（ISSUE #1834：撞预算时 `status` 为 null，与「判据红」同形）。
+         * 30 分钟是「真挂死」与「机器慢」之间那条线，与全量档同一个数。 */
+        timeoutMs: ARTIFACT_TIMEOUT_MS,
+      }),
+    { cwd: ROOT, env: process.env },
+  );
   /* 「被预算砍」与「判据红」分开报（`launcher-core/shell.mjs` 一份实现）。 */
   if (classifyOutcome(res) === "aborted") {
     process.stderr.write(
