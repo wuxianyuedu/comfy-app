@@ -53,6 +53,28 @@ export function parseEnvFile(content) {
 }
 
 /**
+ * `.env.example` 里未注释、而 `.env` 里整行都没有的键 —— `pnpm env:init` 的补齐面。
+ *
+ * 这一格是**判据**，不是「怎么补」：`env-init.mjs` 与启动器那条读数共用它
+ * （ISSUE #2205）。写的值由调用方决定（必填项生成密钥、其余照 example），
+ * 这里只回答「哪些键整行都不在」。两条口径要一起读：
+ *   · 注释形态的可选键（`# COMFYAPP_PORT=...`）**不进补齐面** —— 把注释提升成真值
+ *     会改行为（端口口径按检出路径推导，钉回固定端口会打散并行检出）；
+ *   · 必填项即便不在 `.env.example` 里，整行缺失时也要补（值由 `env:init` 生成）。
+ *
+ * @param {{ example: string, current: string }} input
+ * @returns {string[]} 按 `.env.example` 出现顺序（不在 example 里的必填项排在末尾）
+ */
+export function missingEnvKeys({ example, current }) {
+  const have = parseEnvFile(current);
+  const fromExample = [...parseEnvFile(example).keys()].filter(
+    (k) => !have.has(k),
+  );
+  const requiredAbsent = REQUIRED_ENV_KEYS.filter((k) => !have.has(k));
+  return [...new Set([...fromExample, ...requiredAbsent])];
+}
+
+/**
  * 未通过预检时的可行动提示（不夹带任何 Windows 专属入口）。
  * @param {{ envPath: string, missingFile: boolean, emptyKeys: string[] }} info
  * @returns {string}
@@ -102,14 +124,55 @@ export function checkEnvFile(root, envVars = process.env) {
 }
 
 /**
- * 在入口脚本里接线：预检失败即打印提示并**非零退出**（不再起 Next）。
+ * 启动器的**非阻断读数**：`.env` 缺哪些 `pnpm env:init` 会补的键（ISSUE #2205）。
+ *
+ * 为什么落在这里而不是文档里的一句「记得跑」：`env:init` 的能力已经有了（#2186），
+ * 但没有任何时刻提醒人去跑它 —— 不经过 `pnpm ship` 的人永远看不到那一格。
+ * 启动应用是人人都会碰到的时刻，所以读数放在启动器里，且**只念不改**：
+ * 不写文件、不改退出码。
+ *
+ * 没有 `.env` / 没有 `.env.example` 时返回 null：前一种 `checkEnvFile` 已经阻断并给出
+ * `env:init` 出口，不在这一格重复念；`SKIP_ENV_VALIDATION` 下同样不念（与 `src/env.js`
+ * 同口径）。
+ *
+ * @param {string} root 项目根（绝对路径）
+ * @param {Record<string, string | undefined>} [envVars]
+ * @returns {string | null}
+ */
+export function envInitHint(root, envVars = process.env) {
+  if (envVars.SKIP_ENV_VALIDATION) return null;
+  try {
+    const current = fs.readFileSync(path.join(root, ".env"), "utf8");
+    const example = fs.readFileSync(path.join(root, ".env.example"), "utf8");
+    const keys = missingEnvKeys({ example, current });
+    if (keys.length === 0) return null;
+    return (
+      `.env 缺 ${keys.length} 个 \`.env.example\` 里的键：${keys.join(" / ")} ⇒ ` +
+      "`pnpm env:init`（只补缺失的键，不覆盖已有配置）"
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 在入口脚本里接线：预检失败即打印提示并**非零退出**（不再起 Next）；
+ * 通过时念一次 `envInitHint`（缺键 ⇒ `pnpm env:init`），不改退出码。
+ *
+ * 这一档覆盖 `pnpm dev` / `pnpm start` 两条直达入口（编排器那条由
+ * `startup-gates.mjs` 自己念）——两边共用 `envInitHint`，判据只有一份。
+ *
  * @param {string} root 项目根（绝对路径）
  * @param {Record<string, string | undefined>} [envVars]
  * @returns {void}
  */
 export function exitIfEnvNotReady(root, envVars = process.env) {
   const problem = checkEnvFile(root, envVars);
-  if (!problem) return;
+  if (!problem) {
+    const hint = envInitHint(root, envVars);
+    if (hint) process.stderr.write(`[env-preflight] ⚠ ${hint}\n`);
+    return;
+  }
   process.stderr.write(
     [
       "",

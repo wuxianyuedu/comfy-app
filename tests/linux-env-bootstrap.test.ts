@@ -26,13 +26,17 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   REQUIRED_ENV_KEYS,
   checkEnvFile,
+  envInitHint,
+  exitIfEnvNotReady,
+  missingEnvKeys,
   parseEnvFile,
 } from "../scripts/env-preflight.mjs";
+import { runStartupGates } from "../scripts/launcher-core/startup-gates.mjs";
 
 const ROOT = process.cwd();
 const EXAMPLE = path.join(ROOT, ".env.example");
@@ -337,6 +341,149 @@ describe("预检判据与 src/env.js 同口径", () => {
     );
     expect(parsed.get("BETTER_AUTH_SECRET")).toBe("abc");
     expect(parsed.get("BETTER_AUTH_GITHUB_CLIENT_ID")).toBe("plain");
+  });
+});
+
+describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
+  /** 一份「必填齐、example 里的键全在」的 `.env`。 */
+  function completeEnv(): string {
+    return fs
+      .readFileSync(EXAMPLE, "utf8")
+      .replace(/^BETTER_AUTH_SECRET=.*$/m, `BETTER_AUTH_SECRET="${"e".repeat(64)}"`)
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
+      )
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
+      );
+  }
+
+  it("missingEnvKeys：按 example 顺序报缺，整行缺失的必填项排在末尾", () => {
+    const example = [
+      'ALPHA="1"',
+      'BETA="2"',
+      "# GAMMA=\"注释键不进补齐面\"",
+      'DELTA="4"',
+      'BETTER_AUTH_SECRET=""',
+    ].join("\n");
+    const current = ['ALPHA="mine"', 'DELTA="mine"'].join("\n");
+    expect(missingEnvKeys({ example, current })).toEqual([
+      "BETA",
+      "BETTER_AUTH_SECRET",
+      "BETTER_AUTH_GITHUB_CLIENT_ID",
+      "BETTER_AUTH_GITHUB_CLIENT_SECRET",
+    ]);
+    // 已在文件里的键（哪怕值留空）不算「缺」：这一类由 `env:init` 的 fill 负责。
+    expect(
+      missingEnvKeys({
+        example: 'A=""\nB=""',
+        current: [
+          "A=",
+          "B=",
+          "BETTER_AUTH_SECRET=",
+          "BETTER_AUTH_GITHUB_CLIENT_ID=",
+          "BETTER_AUTH_GITHUB_CLIENT_SECRET=",
+        ].join("\n"),
+      }),
+      "值空但行在 ⇒ 不归这一格",
+    ).toEqual([]);
+  });
+
+  it("envInitHint：只读，缺文件或 SKIP_ENV_VALIDATION 时静默", () => {
+    expect(envInitHint(tmp, {}), "没有 .env 时由阻断那条给出口").toBeNull();
+    const whole = completeEnv();
+    fs.writeFileSync(path.join(tmp, ".env.example"), whole, "utf8");
+    fs.writeFileSync(path.join(tmp, ".env"), whole, "utf8");
+    expect(envInitHint(tmp, {}), "键齐时不念").toBeNull();
+    expect(
+      envInitHint(tmp, { SKIP_ENV_VALIDATION: "1" }),
+      "跳过校验时不念（与 src/env.js 同口径）",
+    ).toBeNull();
+  });
+
+  /** 跑预检桥段：除了 `.env` 的两个读数，其余门禁全部空转（这条判的只是提醒）。 */
+  async function runGates() {
+    const lines: string[] = [];
+    const gated = await runStartupGates(
+      {
+        log: (message: string) => lines.push(message),
+        root: tmp,
+        status: () => undefined,
+        reapStaleSession: async () => null,
+        checkEnvFile: (root: string) => checkEnvFile(root, {}),
+        envInitHint: (root: string) => envInitHint(root, {}),
+        runToolchainGate: () => null,
+        syncDependencies: async () => null,
+        applyPendingRestoreAtBoot: () => ({ status: "nothing-to-do" }),
+        resolveAppPort: () => 3100,
+      },
+      { portOrNull: null, mode: "dev" },
+    );
+    return { gated, lines };
+  }
+
+  it("runStartupGates：缺可选键时念一行 WARN，且不阻断启动", async () => {
+    const example = completeEnv();
+    fs.writeFileSync(path.join(tmp, ".env.example"), example, "utf8");
+    fs.writeFileSync(
+      path.join(tmp, ".env"),
+      example.replace(/^COMFYAPP_DEV_HANDLE=.*$/m, ""),
+      "utf8",
+    );
+    const { gated, lines } = await runGates();
+    expect(gated.ok, "提醒不是闸：启动照常继续").toBe(true);
+    const hint = lines.find((line) => line.includes("环境配置提醒"));
+    expect(hint, "缺键时要有人念出来").toBeDefined();
+    expect(hint).toContain("COMFYAPP_DEV_HANDLE");
+    expect(hint).toContain("pnpm env:init");
+  });
+
+  it("pnpm dev / start 的共用预检也念（不只编排器那条路）", () => {
+    const example = completeEnv();
+    fs.writeFileSync(path.join(tmp, ".env.example"), example, "utf8");
+    fs.writeFileSync(
+      path.join(tmp, ".env"),
+      example.replace(/^COMFYAPP_DEV_HANDLE=.*$/m, ""),
+      "utf8",
+    );
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: string | Uint8Array) => {
+        writes.push(String(chunk));
+        return true;
+      });
+    try {
+      exitIfEnvNotReady(tmp, {});
+    } finally {
+      spy.mockRestore();
+    }
+    expect(writes.join("")).toContain("COMFYAPP_DEV_HANDLE");
+    expect(writes.join("")).toContain("pnpm env:init");
+  });
+
+  it("runStartupGates：必填齐且键全时不念，必填缺失时不重复念", async () => {
+    const example = completeEnv();
+    fs.writeFileSync(path.join(tmp, ".env.example"), example, "utf8");
+    fs.writeFileSync(path.join(tmp, ".env"), example, "utf8");
+    const complete = await runGates();
+    expect(complete.lines.some((line) => line.includes("环境配置提醒"))).toBe(
+      false,
+    );
+
+    // 必填缺失时阻断那条已经给了 `pnpm env:init` 的完整出口，这一格不再重复念。
+    fs.writeFileSync(
+      path.join(tmp, ".env"),
+      example.replace(/^BETTER_AUTH_SECRET=.*$/m, ""),
+      "utf8",
+    );
+    const blocked = await runGates();
+    expect(blocked.gated.ok).toBe(false);
+    expect(blocked.lines.some((line) => line.includes("环境配置提醒"))).toBe(
+      false,
+    );
   });
 });
 

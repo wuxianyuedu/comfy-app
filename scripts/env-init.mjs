@@ -31,7 +31,11 @@ import {
 // `.env` 的解析也只有一份：`env-preflight.mjs` 那同一条最小子集（忽略 `#` 注释行、
 // 去成对引号与行尾注释）。在这里再写一个解析器就是第三份口径（第三份是 app-port 那份
 // 单键取值 —— 它只取一个键，形状不同，不并入）。
-import { REQUIRED_ENV_KEYS, parseEnvFile } from "./env-preflight.mjs";
+import {
+  REQUIRED_ENV_KEYS,
+  missingEnvKeys,
+  parseEnvFile,
+} from "./env-preflight.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = path.join(root, ".env");
@@ -61,63 +65,30 @@ export function hasRequiredValues(content) {
 }
 
 /**
- * 生成期缺哪几项必填 —— 与「在文件里但值是空的」是两种形状。
- *
- * 这一格是本单顺带查出来的相邻缺口：今天 `fill()` 只做**行内替换**，所以一份
- * 「整行没有 `BETTER_AUTH_SECRET`」的 `.env` 会被判成「必填项为空」、被念成「已就地补齐」，
- * 而实际上那一行根本没被补出来（`^KEY=.*$` 匹配不到任何行）。补齐档必须能**加行**。
- *
- * @param {string} content 现有 `.env` 文本
- * @param {string[]} keys 要查的键（必填三项）
- * @returns {string[]} 整行都不存在的键
- */
-function absentKeys(content, keys) {
-  const have = parseEnvFile(content);
-  return keys.filter((k) => !have.has(k));
-}
-
-/**
- * `.env.example` 里**未被注释**的键，配它在该文件里的原样值。
- *
- * 注释形态的可选键（`# COMFYAPP_PORT="3100"` 那一族）**刻意不进补齐面**：把注释提升成
- * 真值会改行为 —— 端口口径是按检出路径推导到 3200~3999（规范 §1.1），钉回 3100 会
- * 直接打散并行检出。要让人拿到新的一格，就得像 `COMFYAPP_DEV_HANDLE` 那样写成
- * **显式空值**（空值 == 没配，所以默认形态是安全的）。
- *
- * @param {string} example 该文件文本
- * @returns {Array<{key: string, value: string}>}
- */
-function exampleKeys(example) {
-  return [...parseEnvFile(example).entries()].map(([key, value]) => ({
-    key,
-    value,
-  }));
-}
-
-/**
  * 算出「该往 `.env` 追加哪些行」—— 只补缺，绝不覆盖已有键。
+ *
+ * 「哪些键算缺」的唯一判据是 `env-preflight.mjs` 的 `missingEnvKeys`：启动器那条
+ * 提醒读数与这里共用它（ISSUE #2205）。两边各写一份的后果不是重复代码，而是
+ * 「念出来的键」与「真补上去的键」会悄悄分叉 —— 用户按提示跑完仍然缺。
+ *
+ * 补行的**值**在这里定：必填三项走那一份单一定义点（随机密钥 / OAuth 占位值），
+ * 其余照 `.env.example` 的原样值。注释形态的可选键（`# COMFYAPP_PORT=...`）不进
+ * 补齐面，理由在 `missingEnvKeys` 的注释里（把注释提升成真值会改行为）。
  *
  * @param {{example: string, current: string}} input
  * @returns {string[]} 待追加的整行（已按 `KEY="value"` 形态）
  */
 function missingLines({ example, current }) {
-  const have = parseEnvFile(current);
-  /** @type {string[]} */
-  const out = [];
-  for (const { key, value } of exampleKeys(example)) {
-    if (have.has(key)) continue;
-    // 必填三项的值由 `fill()` / 那一份单一定义点负责 —— 不在这里造第二个密钥来源。
-    if (REQUIRED_ENV_KEYS.includes(key)) continue;
-    out.push(`${key}="${value}"`);
-  }
-  for (const key of absentKeys(current, REQUIRED_ENV_KEYS)) {
-    out.push(
-      key === "BETTER_AUTH_SECRET"
-        ? `${key}="${newAuthSecret()}"`
-        : `${key}="${OAUTH_PLACEHOLDER}"`,
-    );
-  }
-  return out;
+  const exampleValues = parseEnvFile(example);
+  return missingEnvKeys({ example, current }).map((key) => {
+    // 必填三项的值由那一份单一定义点负责 —— 不在这里造第二个密钥来源。
+    if (!REQUIRED_ENV_KEYS.includes(key)) {
+      return `${key}="${exampleValues.get(key) ?? ""}"`;
+    }
+    return key === "BETTER_AUTH_SECRET"
+      ? `${key}="${newAuthSecret()}"`
+      : `${key}="${OAUTH_PLACEHOLDER}"`;
+  });
 }
 
 if (!fs.existsSync(examplePath)) {
