@@ -122,15 +122,31 @@ describe("只有一条 pull：内存队列不再长回来", () => {
   });
 
   it("提交方只写库 + kick，不再往执行器推 Job", () => {
+    /* 提交链已收口成唯一实现 `src/server/lib/enqueue-task.ts`（单条与批量共用），
+       所以「必须满足三条」的名单跟着搬到那一处；原调用方 generate.ts 降为
+       **委托方**，另判一条更严的：既不许推内存队列，也不许自己 createQueued
+       —— 否则第二条提交路径随时能悄悄长回来，而这条 ADR 要防的正是它。 */
     for (const rel of [
-      "src/server/api/routers/generate.ts",
+      "src/server/lib/enqueue-task.ts",
       "src/lib/workshop/workflow-run.server.ts",
     ]) {
       const src = code(rel);
       expect(src, `${rel} 不该再直接 enqueue`).not.toMatch(/\benqueue\(/);
       expect(src, `${rel} 提交后要踢一次领取`).toMatch("kickQueue()");
-      expect(src).toMatch("claimedBy: executorClaim");
+      expect(src, `${rel} 提交时要登记执行宿主归属`).toMatch(
+        "claimedBy: executorClaim",
+      );
     }
+
+    const delegating = code("src/server/api/routers/generate.ts");
+    expect(delegating, "generate.ts 不该再直接 enqueue").not.toMatch(
+      /\benqueue\(/,
+    );
+    expect(
+      delegating,
+      "generate.ts 应委托给唯一入队实现，而不是自己写库行",
+    ).not.toMatch(/createQueued/);
+    expect(delegating).toMatch("enqueueWorkflowTask");
   });
 
   it("续跑与广播都走叶子总线（收口侧与通道侧不 import 调度层，规范 12.7）", () => {

@@ -159,7 +159,7 @@ const ConsoleView = lazyView("console", () =>
 );
 
 /* 风格实验室：全局视图，带试验列表与就绪工作流的查询，只在进入该视图时才拉。 */
-const StyleLab = lazyView(() =>
+const StyleLab = lazyView("style-lab", () =>
   import("~/components/studio/style-lab/StyleLab").then(
     (mod) => mod.StyleLab,
   ),
