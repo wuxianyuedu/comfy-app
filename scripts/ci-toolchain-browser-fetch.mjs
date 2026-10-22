@@ -690,7 +690,7 @@ export function playwrightExeName(platform = undefined) {
 /**
  * 在 `dir` 下按深度上限找一个文件名（**不穿符号链接**，越界即停）。
  *
- * 与 `ci-toolchain-browser.mjs` 的 `findFileUnder()` 是**同一条判据的两个调用点**：
+ * 与 `ci-toolchain-browser-root.mjs` 的 `findBrowserExecutable()` 是**同一条判据的两个调用点**：
  * 那个判「装完的落点里有那一件」，这个判「刚解出来的落点里有那一件」。刻意不抽共享
  * 模块：两处的 `dir` 语义（一个是落点根、一个是那一版的目录）与深度不同，
  * 而这一支只服务本文件的复验 —— 真正要一致的是**判什么**（那个文件名），

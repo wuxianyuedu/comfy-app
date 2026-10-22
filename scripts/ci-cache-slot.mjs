@@ -41,6 +41,31 @@ export const CACHE_ROOT_ENV = "COMFY_CI_CACHE_ROOT";
 export const SLOT_ACTIONS = ["reuse", "install-into-slot", "no-cache"];
 
 /**
+ * 槽根下最多留几个键。
+ *
+ * 为什么按「个」而不按「GB」定：实测一个槽的**表观**大小约 982 MiB / 83,664 个文件，
+ * 而其中 `nlink==1` 的独占数据只有 2,599 个（3.1%）、合计 1.7 MiB —— 删掉之后磁盘
+ * 实测**回收 52 MiB**（其余是目录项）。按 `du` 那个 3.5G 定配额等于把配额定成一个
+ * 假数，而按「个」定，四个键的净占用不到 0.3 GiB。
+ *
+ * ⚠️ **这份常量的家在读数这一侧**（本文件），执行档 `ci-slot-apply.mjs` 从这里取 ——
+ * 「配额是几个」这件事只能有一处，漂了之后的表现是「读数说够、执行按另一份算」，
+ * 而淘汰那一刀是**会删盘**的动作。
+ */
+export const MAX_SLOT_KEYS = 4;
+
+/**
+ * 淘汰的 TTL 闸门（毫秒）：**比一次构建的墙钟长**，所以「正被人用」的键必然落在闸门内。
+ *
+ * 取 26 小时而不是 24 小时，是为了让每日那一跑（02:00）与它前后那跑不互相把对方的
+ * 树删掉。
+ */
+export const SLOT_TTL_MS = 26 * 60 * 60 * 1000;
+
+/** 「最近用过」的邮票文件名（内容就是一个毫秒时刻）。 */
+export const SLOT_USED_FILE = ".ci-slot-used";
+
+/**
  * 槽目录 = `<槽根>/<键>`。
  *
  * 键是 sha256 十六进制，直接当目录名：跨作业比较只需要「同一个键 → 同一个目录」，
@@ -217,6 +242,139 @@ function readSlot(slot, cwd) {
 }
 
 /**
+ * 这个槽最近什么时候被用过（读不到 ⇒ `null`，而 `null` 一律**不淘汰**）。
+ *
+ * 那是**「用过」的唯一出处**：接槽是在**作业**里建一条 junction，根本不碰槽目录
+ * 那一层；运行期的写入（`.vite` 之类）落在 `node_modules` 里面，也不碰槽根的 mtime。
+ * 于是「天天被命中的热键」按 mtime 看可能最旧 —— 按 mtime 淘汰会**删掉另一个作业
+ * 正在用的树**，那一个构建的依赖当场消失。
+ *
+ * @param {string} slot
+ * @returns {number | null}
+ */
+export function slotLastUsed(slot) {
+  try {
+    const n = Number(
+      fs.readFileSync(path.join(slot, SLOT_USED_FILE), "utf8").trim(),
+    );
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 槽的现状 —— 三格分开，尤其不许把「指纹文件在、但这一趟读不动」读成「键变了」。
+ *
+ * 这条区分是**打开开关的前提**：判成「键变了」会走重装，而重装在失败时把那棵树删掉。
+ * 并发作业时那棵树可能正被另一个作业**接在上面**（它读到了匹配的指纹才接的），
+ * 于是一次 `EBUSY`（Windows 上另一进程正在写那个文件时的既定形态）的代价是
+ * 把别人正在用的依赖树删了 —— 那比「这一跑没省到时间」重得多。
+ *
+ * @param {string} slot
+ * @returns {{treePresent: boolean, fingerprint: string | null, unreadable: boolean}}
+ */
+export function readSlotState(slot) {
+  const treePresent = fs.existsSync(path.join(slot, "node_modules"));
+  const file = path.join(slot, FINGERPRINT_FILE);
+  let exists = false;
+  try {
+    exists = fs.existsSync(file);
+  } catch {
+    /* `existsSync` 自己不抛；留着是为了形状一致，读不动照样落到下面那一格。 */
+  }
+  if (!exists) return { treePresent, fingerprint: null, unreadable: false };
+  try {
+    return {
+      treePresent,
+      fingerprint: fs.readFileSync(file, "utf8").trim(),
+      unreadable: false,
+    };
+  } catch {
+    return { treePresent, fingerprint: null, unreadable: true };
+  }
+}
+
+/**
+ * 槽根下**现在**有什么 —— 配额那一格读数的唯一出处。
+ *
+ * ## 它答的是哪一问
+ *
+ * 「键数有没有上限」这件事此前**只有执行面、没有读数面**：淘汰发生在
+ * `ci-slot-apply.mjs` 里，而日志上只有一句「淘汰 N 个·超配额但留着 M 个」。
+ * 于是「现在到底有几个键、超额的那几个是被 TTL 挡着还是真淘汰了」在日志里读不出来 ——
+ * 而这一问正是「键无上限」这句话的落点。
+ *
+ * ## 四档读数各自是什么意思
+ *
+ * - `count` —— 槽根下有几个键目录；
+ * - `overQuota` —— 超出配额的那几个（配额按「个」定，见 `MAX_SLOT_KEYS`）；
+ * - `heldByTtl` —— 超额里**被 TTL 挡着**的那几个（它们还在闸门内 ⇒ 可能正被人用，
+ *   **用空间换正确性**，方向只许这么换）；
+ * - `emptyCount` —— **里面没有产物也没有指纹**的那几个（崩在半路的安装留下的空壳；
+ *   它们既不好用、也永远不会自己好起来 —— 执行档那一档就是专门回收它们的）。
+ *
+ * @param {{cacheRoot: string, now?: number, ttlMs?: number, quota?: number,
+ *   currentKey?: string | null}} io
+ * @returns {{
+ *   root: string, quota: number, count: number, overQuota: number, heldByTtl: number,
+ *   emptyCount: number,
+ *   keys: Array<{key: string, lastUsed: number | null, expired: boolean,
+ *     usable: boolean, unreadable: boolean}>,
+ * }}
+ */
+export function listSlots(io) {
+  const {
+    cacheRoot,
+    now = Date.now(),
+    ttlMs = SLOT_TTL_MS,
+    quota = MAX_SLOT_KEYS,
+    currentKey = null,
+  } = io;
+  const empty = {
+    root: cacheRoot,
+    quota,
+    count: 0,
+    overQuota: 0,
+    heldByTtl: 0,
+    emptyCount: 0,
+    keys: [],
+  };
+  let entries;
+  try {
+    entries = fs.readdirSync(cacheRoot, { withFileTypes: true });
+  } catch {
+    return empty;
+  }
+  const keys = entries
+    .filter((e) => e.isDirectory())
+    .map((e) => {
+      const abs = path.join(cacheRoot, e.name);
+      const lastUsed = slotLastUsed(abs);
+      const state = readSlotState(abs);
+      return {
+        key: e.name,
+        lastUsed,
+        expired: lastUsed !== null && now - lastUsed >= ttlMs,
+        usable: state.treePresent || state.fingerprint !== null,
+        unreadable: state.unreadable,
+      };
+    })
+    .sort((a, b) => (b.lastUsed ?? 0) - (a.lastUsed ?? 0));
+  const budget = Math.max(0, quota - (currentKey ? 1 : 0));
+  const over = keys.slice(budget);
+  return {
+    root: cacheRoot,
+    quota,
+    count: keys.length,
+    overQuota: over.length,
+    heldByTtl: over.filter((k) => !k.expired).length,
+    emptyCount: keys.filter((k) => !k.usable).length,
+    keys,
+  };
+}
+
+/**
  * 入口：算键 + 出读数。恒退 0（性质见文件头）。
  *
  * @param {{cwd?: string, env?: Record<string, string | undefined>, log?: (line: string) => void,
@@ -250,8 +408,20 @@ export function main(io = {}) {
     }·结论 ${plan.action}`,
   );
   log(`[缓存槽读数]   ${plan.why}`);
+  if (cacheRoot) {
+    const slots = listSlots({ cacheRoot, currentKey: key });
+    log(
+      `[缓存槽读数] 键数 ${slots.count}（配额 ${slots.quota}）·超配额 ${slots.overQuota} 个` +
+        `（其中被 TTL 挡着 ${slots.heldByTtl} 个 ⇒ 它们可能正被人用，这是用空间换正确性）` +
+        `·空槽 ${slots.emptyCount} 个`,
+    );
+    log(
+      "[缓存槽读数]   配额按「个」定：一个键的**净**盘约 52 MiB（表观 ~1 GB 里绝大部分是" +
+        "与 store 共享的硬链接），所以该管的是键数而不是表观体积。",
+    );
+  }
   log(
-    "[缓存槽读数] 这一格**只读数、不碰盘**：不复制、不链接、不装的动作全在" +
+    "[缓存槽读数] 这一格**只读数、不碰盘**：不复制、不链接、不装、不删的动作全在" +
       "执行档 `ci-slot-apply.mjs` 里（规范 §13.5.3.4.3）。",
   );
   return 0;
