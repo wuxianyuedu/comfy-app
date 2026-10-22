@@ -41,7 +41,10 @@
  * 用法：
  *   node scripts/check-tracked-secrets.cjs --staged   # 增量面：本次暂存的新增行（钩子用的这一档）
  *   node scripts/check-tracked-secrets.cjs --all      # 全仓被跟踪文本（人工审计 / 存量重扫）
- * 退出码：0 没命中；1 命中（只点名文件:行与形状）；2 输入面不明（两档都没给 ⇒ 不构成结论）。
+ *   node scripts/check-tracked-secrets.cjs            # **缺省 = 全量档** —— 平台的重档那一跑读的是
+ *                                                     # 注册表里那 55 条 `run` 行、会剥掉 `--staged`，
+ *                                                     # 所以不带旗标是真实调用形态而不是操作失误（见 main 里那段）
+ * 退出码：0 没命中；1 命中（只点名文件:行与形状）；2 输入面取不到（git 不可用 ⇒ 不构成结论）。
  */
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -348,35 +351,42 @@ function main(argv = process.argv.slice(2), deps = {}) {
   const write = deps.write ?? ((s) => process.stdout.write(s));
   const args = new Set(argv);
   const STAGED = args.has("--staged");
-  const ALL = args.has("--all");
-  if (!STAGED && !ALL) {
-    write(
-      "[tracked-secrets] 既没给 --staged 也没给 --all ⇒ 输入面不明，这一格没有结论（不是「没命中」）。\n" +
-        "  钩子用的那一档：node scripts/check-tracked-secrets.cjs --staged\n" +
-        "  人工审计那一档：pnpm check:secrets\n",
-    );
-    return 2;
-  }
+  /* 缺省那一档**就是全量档** —— 注册表在平台上是剥掉 `--staged` 之后跑的
+   * （`ci-heavy-gates.mjs` 的「重档静态判据」那一跑读的就是钩子里那 55 条 `run` 行），
+   * 所以「不带旗标」是一种真实调用形态，不是操作失误。实测：把它做成
+   * 「输入面不明 ⇒ 退 2」时，重档那一格当场报 `5/55 红 被跟踪文字里的凭据形状`，
+   * 一条 CI 红指向我自己的旗标假设。同族写法（`check-allow-builds.cjs` /
+   * `check-doc-mirror-pairing.cjs`）都是「不带旗标 = 全量判定（手动 / 合并前用）」。 */
+  const ALL = !STAGED;
 
   /** @type {Array<{file: string, rows: Array<{line: number, text: string}>}>} */
   let inputs = [];
   let scanned = 0;
   let unreadable = [];
-  if (ALL) {
-    const read = readAll();
-    unreadable = read.unreadable;
-    scanned = read.texts.length;
-    inputs = read.texts.map((t) => ({
-      file: t.file,
-      rows: rowsOfText(t.text),
-    }));
-  } else {
-    const byFile = readStaged();
-    scanned = byFile.size;
-    inputs = [...byFile.entries()].map(([file, rows]) => ({ file, rows }));
+  try {
+    if (ALL) {
+      const read = readAll();
+      unreadable = read.unreadable;
+      scanned = read.texts.length;
+      inputs = read.texts.map((t) => ({
+        file: t.file,
+        rows: rowsOfText(t.text),
+      }));
+    } else {
+      const byFile = readStaged();
+      scanned = byFile.size;
+      inputs = [...byFile.entries()].map(([file, rows]) => ({ file, rows }));
+    }
+  } catch (e) {
+    // git 取不到清单（不在检出里 / git 不可用）⇒ 这一格没有结论，不圆成「没命中」。
+    write(
+      `[tracked-secrets] ${STAGED ? "`git diff --cached`" : "`git ls-files`"} 取不到输入面：` +
+        `${e instanceof Error ? e.message : String(e)} ⇒ 不构成结论（不是「没命中」）。\n`,
+    );
+    return 2;
   }
 
-  if (!ALL && scanned === 0) {
+  if (STAGED && scanned === 0) {
     write(
       "[tracked-secrets] 暂存区没有新增行 ⇒ 没有什么可判（这不是「已通过」）。\n",
     );

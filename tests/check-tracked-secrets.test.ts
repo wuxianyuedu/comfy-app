@@ -206,16 +206,48 @@ describe("出口：只点名位置与形状，绝不回显内容", () => {
 });
 
 describe("输入面：拿不到就不许念成「没命中」", () => {
-  it("两档都没给 ⇒ 退 2，并说「这一格没有结论」", () => {
+  it("缺省那一档 = 全量档 ⇒ 读 all 那一面，而不是报「输入面不明」（注册表在平台会剥掉 --staged）", () => {
     let out = "";
+    let stagedCalled = 0;
+    let allCalled = 0;
     expect(
       main([], {
+        stagedLines: () => {
+          stagedCalled += 1;
+          return new Map();
+        },
+        allTexts: () => {
+          allCalled += 1;
+          return {
+            texts: [{ file: "docs/x.md", text: "示例：<你的 token>" }],
+            unreadable: [],
+          };
+        },
+        write: (s: string) => {
+          out += s;
+        },
+      }),
+    ).toBe(0);
+    expect(allCalled).toBe(1);
+    expect(stagedCalled).toBe(0);
+    expect(out).toContain("全仓被跟踪文本");
+    // 这条钉的是当场那次 CI 红：`--staged` 被剥掉后曾退 2，重档那一格报「5/55 红」。
+    expect(out).not.toContain("没有结论");
+  });
+
+  it("输入面取不到（git 不可用 / 不在检出里）⇒ 退 2，并明说「不构成结论」", () => {
+    let out = "";
+    expect(
+      main(["--staged"], {
+        stagedLines: () => {
+          throw new Error("not a git repository");
+        },
         write: (s: string) => {
           out += s;
         },
       }),
     ).toBe(2);
-    expect(out).toContain("没有结论");
+    expect(out).toContain("不构成结论");
     expect(out).not.toContain("没有凭据形状");
   });
 
