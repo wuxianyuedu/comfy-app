@@ -53,7 +53,13 @@
  *    （逐文件内容指纹不进基线：那会让基线体积随 chunk 数线性膨胀，而判定并不读它）。
  * 4. **新依赖怎么算**：预算是**棘轮**（只许降不许升）。加一个大依赖会当场红，这是想要的
  *    （正是防劣化）；例外流程是**在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积**，
- *    由评审确认后 `--update --allow-increase` 抬高基线 —— 见 §13.5.4 的例外流程那一节。
+ *    然后 `--update --allow-increase` 抬高基线 —— 见 §13.5.4 的例外流程那一节。
+ *    **签的是谁带进来这批字节的那个人**（ISSUE #2149）：口径原本是「评审确认后」，
+ *    而「确认后」在实践里等于「等一个不知道这账是自己的路过」—— 六天内四笔账（#1988 /
+ *    #2082 / #2132 / #2149）没有一笔是造成它的那条 PR 认的，全挂在主干上等下一次构建。
+ *    带它合入的那条 PR 同批认，是因为**只有那里同时有**这三样：为什么加了客户端字节、
+ *    before/after、以及「压回去」这条路还来不来得及。判据不因此多写一个启发式扫描器
+ *    （§12.18 / 硬规则 24）—— 它只把「该谁」写在红话里。
  *
  * ── 与 `analyze-bundle.mjs` 的分工 ───────────────────────────────
  *
@@ -63,8 +69,8 @@
  *
  * 用法：
  *   node scripts/check-bundle-budget.cjs            # 检查（棘轮：只许降不许升）
- *   node scripts/check-bundle-budget.cjs --update   # 治理/评审确认后重写基线（须伴随下降，
- *                                                   #   除非带 --allow-increase + 理由）
+ *   node scripts/check-bundle-budget.cjs --update   # 由造成这批字节的那条 PR 认账后重写基线
+ *                                                   #   （须伴随下降，除非带 --allow-increase + 理由）
  *   node scripts/check-bundle-budget.cjs --report   # 只出清单，不判失败（盘点用）
  */
 const fs = require("node:fs");
@@ -538,14 +544,18 @@ function main() {
     const grew = before && now.gzip > before.gzip;
     const moreFiles = before && now.files > before.files;
     /* 拒涨：与 check-overlay-z.cjs 那批棘轮同口径 ——
-     * 「--update 只许降」。例外流程（加依赖）必须显式带 --allow-increase，逼出一个
-     * 「有人在 PR 里认过账」的动作，而不是让 --update 默默把预算抬高。 */
+     * 「--update 只许降」。例外流程必须显式带 --allow-increase，逼出一个
+     * 「有人在 PR 里认过账」的动作，而不是让 --update 默默把预算抬高。
+     * 触发面过去写的是「加依赖」（ISSUE #1781 那一版想到的只有它），而六天内实到的四笔
+     * **没有一笔是新依赖**，全是「给客户端加一份运行时 schema」那类代码增量 ——
+     * 那句话让所有人（包括造出这笔增量的人）都不觉得这条流程是自己的。 */
     if (before && (grew || moreFiles) && !ALLOW_INCREASE) {
       console.error(
         `[bundle-budget] 拒绝抬高基线：gzip ${kb(before.gzip)} → ${kb(now.gzip)}、` +
           `文件数 ${before.files} → ${now.files}（棘轮只许下降）。\n` +
-          "  新增依赖若确实是想要的，请在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积，" +
-          "评审确认后带 --allow-increase 重跑（规范 §13.5.4 的例外流程）。",
+          "  这批体积若是你想要的（新依赖，或给客户端加了一份运行时 schema），" +
+          "请在**造成它的那条 PR** 里贴 before/after 两档读数 + 说明为什么值这个体积，" +
+          "带 --allow-increase 重跑（规范 §13.5.4 的例外流程）。",
       );
       return 1;
     }
@@ -720,8 +730,14 @@ function main() {
     }
     console.error(
       "  规范见 docs/standards/13-提交与-code-review.md §13.5.4；\n" +
-        "  这是预算、不是禁令：确认这个体积值得，就在 PR 里贴 before/after 两档读数 + 说明，" +
-        "评审确认后带 --allow-increase 重跑 --update；否则先把它压回去。",
+        "  这是预算、不是禁令：**谁把这批客户端字节带进来的谁签** —— 在造成它的那条 PR 里贴" +
+        " before/after 两档读数 + 一句为什么值这个体积，同批带 --allow-increase 重跑 --update；" +
+        "否则先把它压回去。\n" +
+        "  ⚠️ 认账之前先分清这笔**是不是你的**（上面那句「其后 N 次提交」就是来自证的）：" +
+        "那些提交都已进主干、且没有一笔在你这条线上 ⇒ 这不是你的账，立案，别替别人签" +
+        "（§13.5.4「不是你的账」那一档）。\n" +
+        "  要一份平台的独立读数（不改本地账）用单跑口 `api_trigger_build`，见 §13.5.23；" +
+        "认账那一次 --update 读的是本地产物。",
     );
     return 1;
   }
