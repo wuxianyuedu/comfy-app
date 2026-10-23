@@ -7,6 +7,7 @@ import {
   attributeAffected,
   buildImportedBy,
   changedPathsFrom,
+  changedPathsFromNameStatus,
   isSourcePath,
   isTestPath,
   resolveAffectedTests,
@@ -27,7 +28,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 /** 夹具：`files` 是「仓库相对路径 → 内容」；测试文件当输出候选，其余当 import 图节点。 */
 function harness(
   files: Record<string, string>,
-  opts: { knownFailed?: string[] } = {},
+  opts: { knownFailed?: string[]; tracked?: string[] } = {},
 ) {
   const keys = Object.keys(files);
   const testFiles = keys.filter(isTestPath);
@@ -39,6 +40,7 @@ function harness(
       sourceFiles,
       knownFailed: opts.knownFailed,
       readText: (rel: string) => files[rel] ?? null,
+      tracked: opts.tracked ?? null,
     });
 }
 
@@ -176,6 +178,114 @@ describe("affected-tests：五条命中判据", () => {
     expect(res.tests).toContain("tests/check-x.test.ts");
     expect(res.tests).not.toContain("src/a/plain.test.ts");
     expect(res.reasons["src/a/spawn.test.ts"]).toContain("按路径引用");
+  });
+});
+
+describe("affected-tests：改名（ISSUE #2226）", () => {
+  it("`--name-status -M` 的 R 行把旧路径也收进改动面；C 行只收新路径", () => {
+    // `--name-only` 只剩新路径，而按旧路径读文件的用例正是靠旧路径才选得中。
+    const out = [
+      "M\tsrc/a.ts",
+      "A\tsrc/b.ts",
+      "D\tsrc/gone.ts",
+      "R100\tscripts/old-name.mjs\tscripts/new-name.mjs",
+      "C075\tsrc/base.ts\tsrc/copy.ts",
+    ].join("\n");
+    const got = changedPathsFromNameStatus(out);
+    expect(got.paths).toEqual([
+      "src/a.ts",
+      "src/b.ts",
+      "src/gone.ts",
+      "scripts/old-name.mjs",
+      "scripts/new-name.mjs",
+      "src/copy.ts",
+    ]);
+    /* 复制（C）的源文件没变，不进 `renamedFrom`，也不该多跑它的消费方。 */
+    expect(got.renamedFrom).toEqual(["scripts/old-name.mjs"]);
+  });
+
+  it("反斜杠与重复路径归一（同一路径只出现一次）", () => {
+    const got = changedPathsFromNameStatus(
+      "M\tsrc\\a.ts\nR100\tsrc/a.ts\tsrc/b.ts\n",
+    );
+    expect(got.paths).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(got.renamedFrom).toEqual(["src/a.ts"]);
+  });
+
+  it("旧路径以整串字面量出现在用例里 ⇒ 按路径引用入选", () => {
+    const FROM = "src/lib/old-endpoints.ts";
+    const TO = "src/lib/endpoints.ts";
+    const CONSUMER = "tests/reads-old-path.test.ts";
+    const run = harness({
+      [TO]: "export const endpoints = 1;",
+      [CONSUMER]: `const p = "${FROM}";\nit("x", () => p);\n`,
+    });
+    const res = run([FROM, TO]);
+    expect(res.reasons[CONSUMER]).toContain("按路径引用");
+  });
+
+  it("旧路径被 join 拆成两片写 ⇒ 只在该路径**已消失**时兜底命中", () => {
+    const FROM = "src/lib/old/endpoints.ts";
+    const CONSUMER = "tests/joins-old-path.test.ts";
+    const files = {
+      [CONSUMER]:
+        'const p = path.join(ROOT, "src/lib/old", "endpoints.ts");\n' +
+        'it("x", () => p);\n',
+    };
+    /* 改名旧侧已不在索引里 ⇒ 「目录 + 文件名」两片都对上就入选。 */
+    const gone = harness(files, { tracked: [CONSUMER] });
+    expect(gone([FROM]).reasons[CONSUMER]).toContain("按旧路径片引用");
+    /* 同一份内容、同一份改动面，但那个路径**还在树上**（只是被改，不是改名）⇒
+     * 分片匹配不启用：单看 basename 会把半个测试面误拉进来。 */
+    const alive = harness(files, { tracked: [CONSUMER, FROM] });
+    expect(alive([FROM]).reasons[CONSUMER]).toBeUndefined();
+  });
+
+  it("只写了文件名、没写目录 ⇒ 分片兜底不命中（防误报）", () => {
+    const FROM = "src/lib/old/endpoints.ts";
+    const CONSUMER = "tests/mentions-basename.test.ts";
+    const run = harness(
+      {
+        [CONSUMER]: 'const p = "endpoints.ts";\nit("x", () => p);\n',
+      },
+      { tracked: [CONSUMER] },
+    );
+    expect(run([FROM]).reasons[CONSUMER]).toBeUndefined();
+  });
+
+  it("归因也走同一条链：tracked 传下去才对得上主链的「旧路径片」", () => {
+    // 不传 tracked 时归因会把这个消费方算成 0（分片判据在归因里缺席），
+    // 而那正是「两处数各自漂」那类病 —— 所以参数必须一路传到底。
+    const FROM = "src/lib/old/endpoints.ts";
+    const CONSUMER = "tests/joins-old-path.test.ts";
+    const files: Record<string, string> = {
+      [CONSUMER]:
+        'const p = path.join(ROOT, "src/lib/old", "endpoints.ts");\n' +
+        'it("x", () => p);\n',
+    };
+    const testFiles = [CONSUMER];
+    const sourceFiles = [CONSUMER];
+    const readText = (rel: string) => files[rel] ?? null;
+    const graph = buildImportedBy(new Set(testFiles), readText);
+    const tracked = [CONSUMER];
+    const [row] = attributeAffected(
+      [FROM],
+      graph,
+      testFiles,
+      sourceFiles,
+      tracked,
+    );
+    expect(row?.affected).toBe(1);
+    expect(row?.affected).toBe(
+      resolveAffectedTests({
+        changedPaths: [FROM],
+        testFiles,
+        sourceFiles,
+        readText,
+        graph,
+        tracked,
+      }).tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t)).length,
+    );
   });
 });
 
@@ -634,9 +744,12 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
 
   it("清单来源三档互斥且有优先：argv > stdin > 暂存区", () => {
     /* 这一档的纯函数出口：来源只决定「清单从哪来」，不决定「清单怎么算」。 */
-    expect(changedPathsFrom(["--changed", "a.ts", "b.ts"])).toEqual(["a.ts", "b.ts"]);
-    expect(changedPathsFrom(["--changed", "a.ts", "--json"])).toEqual(["a.ts"]);
+    expect(changedPathsFrom(["--changed", "a.ts", "b.ts"]).paths).toEqual([
+      "a.ts",
+      "b.ts",
+    ]);
+    expect(changedPathsFrom(["--changed", "a.ts", "--json"]).paths).toEqual(["a.ts"]);
     /* 暂存区那一档要真的起 git（这个仓库有暂存区可读）⇒ 只断言它是个数组。 */
-    expect(Array.isArray(changedPathsFrom([]))).toBe(true);
+    expect(Array.isArray(changedPathsFrom([]).paths)).toBe(true);
   });
 });
