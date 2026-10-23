@@ -120,7 +120,15 @@ const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(
  * 而复合执行者一条都不许挂 —— 见下面 `COMPOUND_EXECUTORS`）。触发面从判据自己那份
  * 声明里取，不在本表抄第二份：
  *   · `API 文档生成物与源同步` ⇒ `check-docs-api.cjs` 的 `INPUT_GLOBS`（它自己的
- *     输入面，**上界**形态）+ 产物面 `docs/api/**`（产物被手改过也要看得见）。
+ *     输入面）+ 产物面 `docs/api/**`（产物被手改过也要看得见）。
+ *     ⚠️ **2026-10-23 订正（ISSUE #2223）**：那份「输入面」原先被称作「**上界**形态」，
+ *     而它**不是上界** —— typedoc 沿 import 走，三根之外的文件也会进产物
+ *     （`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里）。
+ *     面判窄了 = **漏判**，而漏判是静默的（这一格被 `ifModify` 跳过，与「判过且通过」
+ *     在读数上无差别）。现在那份面 = 三根 ∪ **闭包叶子集**，而叶子集**不是手抄的**：
+ *     真相由 `scripts/docs-api-input-closure.mjs` 算出（从 `typedoc.json` 的
+ *     `entryPoints` 出发沿静态 import 走），由 `tests/ci-incremental-gates.test.ts`
+ *     双向核对 —— 闭包里多出任何一个文件、而面里没有它 ⇒ 当场红。
  *   · `生成态文档与源同步` ⇒ `doc-facts.cjs` 的 `SCOPED_DOCS`（源）与 `docs/generated/**`
  *     （产物）；源与产物**都在 `docs/**` 下面**，故取上界 `docs/**`（逐条抄 32 个路径
  *     就是第二份会漂的副本 —— 抄一份的漂移形态是「新增一篇文档忘了加进收窄面」）。
@@ -286,8 +294,11 @@ export const INCREMENTAL_GATES = [
     script: "scripts/check-docs-api.cjs",
     why:
       "它判的是「`docs/api/**` 里的 typedoc 产物 ⇄ 它的输入面」同不同步 —— 两面都要看：" +
-      "输入面（`check-docs-api.cjs` 自己的 `INPUT_GLOBS`：**上界**形态，判宽只会少省几秒、判窄是漏判）" +
-      "+ 产物面 `docs/api/**`（产物被手改过也要看得见）。" +
+      "输入面（`check-docs-api.cjs` 自己的 `INPUT_GLOBS` = 三根 ∪ **闭包叶子集**：" +
+      "三根之外、改了会改产物的那批文件）+ 产物面 `docs/api/**`（产物被手改过也要看得见）。" +
+      "⚠️ 那份叶子集**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出" +
+      "（从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），" +
+      "`tests/ci-incremental-gates.test.ts` 双向核对（ISSUE #2223：面判窄了 = 漏判，漏判是静默的）。" +
       "⚠️ 这一格是全流水线最贵的一格（自托管节点实测 201.8s），所以收窄不是优化而是**能不能常驻**的前提；" +
       "但它一旦没有收窄，每一次 PR 都要付这笔 —— 2026-10-20 起它连执行者都没有了（见文件头那两笔搬动）。",
   },
