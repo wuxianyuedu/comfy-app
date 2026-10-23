@@ -185,6 +185,13 @@ export function main(deps = {}) {
     COMFY_PRECOMMIT_MAX_WORKERS: String(workers),
   };
   const r = spawn(path.join(HERE, "run-affected-tests.mjs"), childEnv);
+  /* 原值透传，**不改写**（三档：0 通过/已确认全是超时，1 真红，2 未判定）。
+   * 平台把非零读成 stage 失败，所以 2 这一档在这一侧**不会被算进绿** —— 那正是
+   * ISSUE #2225 要的：旧实现里「同块里一份超时 + 一份真断言红」被块级指纹读成退 0，
+   * stage 报 success，那次真红没有任何一格会看见。
+   * ⚠️ 这一档在本地钩子里**没有落点**：`run_group C` 早在档位开关之前 `return 0`
+   * （2026-10-20 起本地不跑这一档，§13.5.25），所以本地只有手工 / `pnpm check:all`
+   * 那一跳会读到 2 —— 按「未判定」念，不是绿也不是红。 */
   return r.status;
 }
 

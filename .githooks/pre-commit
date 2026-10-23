@@ -899,6 +899,10 @@ for id in A B C D; do
     continue
   fi
   code="$(cat "$LOGD/$id.rc")"
+  # 组 C 在这里**永远不会跑到**（2026-10-20 起它的本地执行者撤了，`run_group C` 那行只当登记，
+  # `COMFY_HEAVY_GATES=1` 也换不回来 —— 见 §13.5.25），所以启动器新增的那一档
+  # 「退 2 = 未判定」（ISSUE #2225）在钩子这一侧**没有落点**，不在这里写一段跑不到的分支。
+  # 它的落点在平台那一格：`scripts/ci-affected-tests.mjs` 原值透传 ⇒ stage 非零 ⇒ 不算绿。
   if [ "$code" -ne 0 ]; then
     rc=1
     echo ""
