@@ -621,4 +621,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 「检出目录在哪」只许 scripts/git-dir.mjs 一处知道（ISSUE #2072）：四处硬拼那一族
   // 回归时没有任何 import 图能替它兜底（改那些脚本不会把这条带进受影响集），必须固定跑。
   "tests/git-dir-literal-scan.test.ts",
+  // 「`docs/api/**` 的产物到底由哪些文件决定」（ISSUE #2223）：收窄面原先只有三根
+  // （`src/lib` / `src/server` / `src/trpc`），而 typedoc 沿 import 走 —— 三根之外的
+  // 文件也会进产物（`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在
+  // `docs/api/**` 里）⇒ 改那份文件**不会被判到**，而漏判是静默的（`ifModify` 跳过的
+  // 形态与「判过且通过」在读数上无差别）。这条守的是「**面 ⇄ 事实**」：闭包由
+  // `scripts/docs-api-input-closure.mjs` 从 `typedoc.json` 算出，收窄面罩不住它就红。
+  // 触发面是「某个 `src/lib` 下的模块新 import 了一个根外的文件」—— 那条改动**不在**
+  // 本用例的静态 import 图里（它改的是别的模块），只在受影响时才跑等于让它随下一次
+  // 新增 import 过去，故进固定清单。
+  "tests/docs-api-input-closure.test.ts",
 ];
