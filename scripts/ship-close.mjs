@@ -29,6 +29,7 @@ import { asArray } from "./ship-build.mjs";
 import { CODE, combineShipCodes } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { finishIssueWork } from "./ship-claim.mjs";
+import { issueItemShapes } from "./ship-ticket.mjs";
 
 /**
  * 一行文字里点名的 issue 号（`#2070` / `(#2070)` 两种写法都认，按出现顺序去重）。
@@ -381,6 +382,19 @@ export function closeIssues(ctx) {
           ? ` · 落地那一行 sha=${short(landed.sha)}`
           : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`),
     );
+    /* 「回读里没有正文这一格」与「正文是空的」必须分开念：前者不能念成「零条」
+     * （拿缺字段当结论，正是这一族反复在收的那一型）。 */
+    if (typeof d?.body !== "string") {
+      log(`[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`);
+    } else {
+      const s = issueItemShapes(d.body);
+      log(
+        `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}` +
+          (s.total === 0 ? "（正文里没数出条目形态）" : "") +
+          " —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。" +
+          "这一格是读数，不改退码。",
+      );
+    }
     if (state === "closed") {
       codes.push(CODE.GREEN);
       /* 关单成功之后才做「开发结束」评论与撤处理人标签：单子还没关成就先放掉标签，

@@ -71,6 +71,7 @@ import {
   commentHeader,
   handlerLabel,
   issueAuthoring,
+  issueItemShapes,
   participantLabel,
   readDevHandle,
   ticketReading,
@@ -508,6 +509,7 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
     state?: string;
     stateReason?: string | null;
     closedAt?: string | null;
+    body?: string;
     merged?: { number: number; is_merged: boolean; title: string }[];
   }) {
     const calls: string[] = [];
@@ -542,6 +544,9 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
             state: opts.state ?? "closed",
             state_reason: opts.stateReason ?? "completed",
             closed_at: opts.closedAt ?? "2026-10-21T08:54:30Z",
+            /* 不给 `body` 时**不补空串** —— 「回读里没这一格」与「正文是空的」是两件事，
+             * 后者可以念成零条，前者不行（#2251）。 */
+            ...(opts.body === undefined ? {} : { body: opts.body }),
           }),
           stderr: "",
           error: null,
@@ -573,6 +578,43 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
     expect(f.calls.some((c) => c.includes("get-issue"))).toBe(true);
     expect(f.log.join("\n")).toContain("state=closed");
     expect(f.log.join("\n")).toContain("closed_at=2026-10-21T08:54:30Z");
+  });
+
+  it("正文里还列着条目 ⇒ 念出形态读数，退码一次也不动（是读数不是闸，#2251）", () => {
+    /* 「处置了几条」机器读不出来，但「正文里数得出几条」能。这一格钉的不是数字，
+     * 是**方向**：unchecked > 0 时退码必须仍是 GREEN —— 做成闸就会逼人把正文删短来凑数
+     * （与 §13.10.9 那句「随手挂一张别人的单子」同型）。 */
+    const f = io({
+      body: "### 红的那两条\n- [ ] 体积那条\n- [ ] 预算那条\n- [x] 已经修掉的\n1. 待确认的警告\n",
+    });
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: landedOk,
+    });
+    const all = f.log.join("\n");
+    expect(all).toContain("小节 1");
+    expect(all).toContain("未勾 2/已勾 1");
+    expect(all).toContain("序号 1");
+    expect(all).toContain("不改退码");
+    expect(code).toBe(CODE.GREEN);
+  });
+
+  it("回读里没有正文那一格 ⇒ 念「正文没读到」，不许念成「零条」", () => {
+    const f = io({});
+    const code = closeIssues({
+      run: f.run,
+      log: (l) => f.log.push(l),
+      slug: "org/repo",
+      closeIssue: true,
+      landed: landedOk,
+    });
+    const all = f.log.join("\n");
+    expect(all).toContain("正文没读到");
+    expect(all).not.toContain("小节 0");
+    expect(code).toBe(CODE.GREEN);
   });
 
   it("回读说还开着 ⇒ 红（1），不跟着回执念成绿", () => {
@@ -1207,6 +1249,42 @@ describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—�
     }).lines.join("\n");
     expect(all).not.toContain("--no-verify");
     expect(all).not.toContain("--allow");
+  });
+});
+
+describe("issueItemShapes：一张单子正文里的条目形态（#2251 —— 是读数，不是「剩余条数」）", () => {
+  it("真实那张单的形态：`###` + 序号在场，而复选框一条都没有", () => {
+    /* 立案现场：标题列了 7 条待办的那张单，正文用的是小节与序号，不是 checkbox。
+     * 这一格钉的就是「只按 `- [ ]` 数会把 7 条读成 0 条」那一族误读。 */
+    const body = [
+      "## 读数",
+      "### 第 1 条：红的那格",
+      "### 第 2 条：警告那三格",
+      "1. 待确认 A",
+      "2) 待确认 B",
+      "- 项目符不算条目形态（它太常见）",
+    ].join("\n");
+    const s = issueItemShapes(body);
+    expect(s.headings).toBe(2);
+    expect(s.ordered).toBe(2);
+    expect(s.unchecked).toBe(0);
+    expect(s.checked).toBe(0);
+    expect(s.total).toBe(4);
+  });
+
+  it("复选框分未勾 / 已勾两档，缩进的也数得到", () => {
+    const s = issueItemShapes(
+      "- [ ] 甲\n  - [ ] 乙\n- [x] 丙\n* [X] 丁\n",
+    );
+    expect(s.unchecked).toBe(2);
+    expect(s.checked).toBe(2);
+  });
+
+  it("`###` 后面没内容不算小节；空正文与非字符串输入都归零而不是抛", () => {
+    expect(issueItemShapes("###   \n### 有内容\n").headings).toBe(1);
+    expect(issueItemShapes("").total).toBe(0);
+    expect(issueItemShapes(undefined as never).total).toBe(0);
+    expect(issueItemShapes(null as never).total).toBe(0);
   });
 });
 
