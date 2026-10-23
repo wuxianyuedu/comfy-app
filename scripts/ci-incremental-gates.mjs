@@ -14,7 +14,7 @@
  * ── 复合执行者：`重档静态判据` 一格装多条，**不收窄**（2026-10-19）────────
  *
  * 原先各自占一格的那批静态判据（`格式化提交分离` / `生成态文档与源同步` /
- * `API 文档生成物与源同步` / `覆盖率上报` / `文档引用与权威源一致` / `core` 那两条 /
+ * `API 文档生成与自检` / `覆盖率上报` / `文档引用与权威源一致` / `core` 那两条 /
  * `零消费导出`）现在收进一格 `重档静态判据`（`scripts/ci-heavy-gates.mjs`），理由是
  * 平台单 stage 的 20m 硬上限与「每一格各付一次 job 开销」——现场与逐条读数见那个文件
  * 的头注。收进去之后它们**一律不收窄**，因为 `ifModify` 是按**整格**跳过的：
@@ -63,6 +63,10 @@
  *     （201.8s），不收窄就没有资格常驻。三条里 `文档引用与权威源一致` 仍然**不进表**
  *     （它判的是全库文档里的引用与权威源，域不是某几个目录，收窄成任何子集都是漏判；
  *     它自己只要 0.42s，每跑必跑不贵）。
+ *     ⚠️ **2026-10-23 订正（ISSUE #2231）**：`docs/api/**` 那一族的判据语义变了 ——
+ *     产物不再进 git ⇒ 它不再判「源与产物同不同步」（那个问题**没有对象**了），
+ *     改判「这一轮生成的产物可不可用」⇒ 它的面**只剩输入面**（产物面 `docs/api/**`
+ *     已从收窄面里去掉，见下面那条登记项）。
  *   · `生产构建` / `浏览器安装` / `E2E 关键流程` —— 产物与端到端链路，任何改动都可能
  *     影响（`next build` 的失败可以由一个 import 引起），且它们判的正是「整仓能不能
  *     起来」；`浏览器安装` 是 E2E 的前提、`E2E` 依赖它。
@@ -82,7 +86,7 @@
  * ── 能机械导出的就**不手抄**（ISSUE #1981 收尾）────────────────────────────
  *
  * 环境类的 globs 由上面的条件手写（「脚本里有 `SCAN_DIR`」正是它们的判据）；而
- * `API 文档生成物与源同步` 那一档**有**一份更硬的事实源：判据自己的 `INPUT_RES`
+ * `API 文档生成与自检` 那一档**有**一份更硬的事实源：判据自己的 `INPUT_RES`
  * （`scripts/check-docs-api.cjs`，第 4 条写着「触发面 = typedoc 的输入面」）。
  * 手抄一份 glob 与它逐字等价，只会多一处会漂的副本 —— 所以那一档的 globs 由
  * `INPUT_RES` **反推**（`globFromInputRe`），改判据的触发面时配置跟着变，
@@ -97,7 +101,7 @@ import { createRequire } from "node:module";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
-/* ⚠️ 这里原来还有两件东西：`API 文档生成物与源同步` 的 `INPUT_RES` 反推（`globFromInputRe`
+/* ⚠️ 这里原来还有两件东西：`API 文档生成与自检` 的 `INPUT_RES` 反推（`globFromInputRe`
  * + 上面那个 `createRequire`）与那一档的登记项。它们随 2026-10-19 的合并一起删掉了 ——
  * 那一档进了聚合执行者、不再有 `ifModify` 可反推。**别照着这段历史把它加回来**：
  * 「那一格还在跑、跑的仍是 `INPUT_RES` 认的那些输入」这件事现在由
@@ -119,8 +123,9 @@ const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(
  * 处置：恢复成各自的活 stage，`ifModify` 挂在这一格上（平台的 `ifModify` 是**按格**的，
  * 而复合执行者一条都不许挂 —— 见下面 `COMPOUND_EXECUTORS`）。触发面从判据自己那份
  * 声明里取，不在本表抄第二份：
- *   · `API 文档生成物与源同步` ⇒ `check-docs-api.cjs` 的 `INPUT_GLOBS`（它自己的
- *     输入面）+ 产物面 `docs/api/**`（产物被手改过也要看得见）。
+ *   · `API 文档生成与自检` ⇒ `check-docs-api.cjs` 的 `INPUT_GLOBS`（它自己的
+ *     输入面）。**产物面 `docs/api/**` 已不在面里**（ISSUE #2231）：产物不再进 git ⇒
+ *     它既不在变更文件清单里、也不会被谁改坏 ⇒ 留在面里只是白占一行。
  *     ⚠️ **2026-10-23 订正（ISSUE #2223）**：那份「输入面」原先被称作「**上界**形态」，
  *     而它**不是上界** —— typedoc 沿 import 走，三根之外的文件也会进产物
  *     （`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里）。
@@ -136,8 +141,6 @@ const { TRIGGER_GLOBS: FILE_STRUCTURE_TRIGGER_GLOBS } = createRequire(
 const { INPUT_GLOBS: DOCS_API_INPUT_GLOBS } = createRequire(
   import.meta.url,
 )("./check-docs-api.cjs");
-/** 产物面：判据的结论是「源与产物同不同步」，**产物被改动同样要看得见**。 */
-const DOCS_API_OUT_GLOB = "docs/api/**";
 /** `生成态文档与源同步` 的面：源（`SCOPED_DOCS`）与产物（`docs/generated/**`）同在 `docs/**`。 */
 const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
 
@@ -289,16 +292,18 @@ export const INCREMENTAL_GATES = [
       "`tests/ci-incremental-gates.test.ts` 核（源与产物两面都必须在面内）。",
   },
   {
-    name: "API 文档生成物与源同步",
-    globs: [...DOCS_API_INPUT_GLOBS, DOCS_API_OUT_GLOB],
+    name: "API 文档生成与自检",
+    globs: [...DOCS_API_INPUT_GLOBS],
     script: "scripts/check-docs-api.cjs",
     why:
-      "它判的是「`docs/api/**` 里的 typedoc 产物 ⇄ 它的输入面」同不同步 —— 两面都要看：" +
-      "输入面（`check-docs-api.cjs` 自己的 `INPUT_GLOBS` = 三根 ∪ **闭包叶子集**：" +
-      "三根之外、改了会改产物的那批文件）+ 产物面 `docs/api/**`（产物被手改过也要看得见）。" +
+      "它判的是「**这一轮生成的** `docs/api/**` 可不可用」（跑得通 / 骨架齐全 / 可移植），" +
+      "所以面就是**它的输入面**（`check-docs-api.cjs` 自己的 `INPUT_GLOBS` = 三根 ∪ " +
+      "**闭包叶子集**：三根之外、改了会改产物的那批文件）。" +
       "⚠️ 那份叶子集**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出" +
       "（从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），" +
       "`tests/ci-incremental-gates.test.ts` 双向核对（ISSUE #2223：面判窄了 = 漏判，漏判是静默的）。" +
+      "⚠️ **产物面 `docs/api/**` 不在面里**（ISSUE #2231）：产物不再进 git ⇒ 它既不在变更" +
+      "文件清单里、也不会被谁改坏 ⇒ 留在面里只是白占一行。" +
       "⚠️ 这一格是全流水线最贵的一格（自托管节点实测 201.8s），所以收窄不是优化而是**能不能常驻**的前提；" +
       "但它一旦没有收窄，每一次 PR 都要付这笔 —— 2026-10-20 起它连执行者都没有了（见文件头那两笔搬动）。",
   },
@@ -317,7 +322,7 @@ export const INCREMENTAL_GATE_NAMES = new Set(
  * 而那十条的扫描面并不相同。
  *
  * ⚠️ 2026-10-22 订正一件事：**「收进复合执行者」不等于「收窄登记从本表删掉」**。
- * 2026-10-19 的合并把 `生成态文档与源同步` / `API 文档生成物与源同步` 的收窄登记删了
+ * 2026-10-19 的合并把 `生成态文档与源同步` / `API 文档生成与自检` 的收窄登记删了
  * （理由是「收进去之后它们的执行者换了，登记表只收『一个执行者一条判据』的形态」），
  * 而 2026-10-20 又把它们在 `.cnb.yml` 里的原文注释掉（理由是「收进聚合档」）——
  * 两次搬动方向相反、在中间对穿，于是那两条**一个执行者都没有**。

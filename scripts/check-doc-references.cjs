@@ -550,6 +550,52 @@ function gitignoredRootNames() {
 /** `.gitignore` 里的根级单名集合（每次进程只算一次）。 */
 const GITIGNORED_ROOT_NAMES = gitignoredRootNames();
 
+/**
+ * `.gitignore` 里的**目录形态**忽略规则（`docs/api/` / `/dist/` / `/src/generated/`）——
+ * 归一后的仓库相对路径（`docs/api` / `dist` / `src/generated`）。
+ *
+ * 为什么根级单名那份不够（2026-10-23，ISSUE #2231 的连带）：`docs/api/` 进 `.gitignore`
+ * 之后，AGENTS.md 里「产物落在 `docs/api/`」那句话在新克隆里指向一个**不存在**的目录
+ * ⇒ `pnpm doc:check` 在 CI 上恒红，而「按提示去改 AGENTS.md」是错的 —— 那句话讲的是
+ * 「产物落在哪」，不是「仓库里有这个目录」。旧实现只认根级**单名**（带斜杠的一律跳过），
+ * 于是嵌套形态的运行期产物没有豁免：同一个洞，只是要等第一个嵌套形态出现。
+ *
+ * 只收**以 `/` 结尾**的规则（目录形态）且**不带通配**：带通配的（`start-tauri` 那一族，
+ * 末尾是 `*` 而不是 `/`）匹配的是一族目录，收进来等于把一大片路径都豁免掉。
+ *
+ * @returns {string[]}
+ */
+function gitignoredDirPaths() {
+  const gi = exists(".gitignore") ? readText(".gitignore") : "";
+  const dirs = new Set();
+  for (const raw of gi.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith("!")) continue;
+    if (!line.endsWith("/")) continue;
+    const body = line.replace(/^\//, "").replace(/\/+$/, "");
+    if (body === "") continue;
+    if (/[*?[\]{}]/.test(body)) continue;
+    dirs.add(body);
+  }
+  return [...dirs];
+}
+
+/** `.gitignore` 里的目录形态忽略规则（每次进程只算一次）。 */
+const GITIGNORED_DIR_PATHS = gitignoredDirPaths();
+
+/**
+ * 这个路径是不是「运行期产物」（落在某个被 `.gitignore` 忽略的目录里）⇒
+ * 不参与「文件必须存在」判定。
+ *
+ * 判的是「**等于**或**在它下面**」：目录形态的忽略规则覆盖的是整棵树。
+ *
+ * @param {string} p 仓库相对路径
+ * @returns {boolean}
+ */
+function isRuntimeProductPath(p) {
+  return GITIGNORED_DIR_PATHS.some((d) => p === d || p.startsWith(`${d}/`));
+}
+
 /** 把一段反引号内容或链接 URL 判成「仓库相对路径」→ 返回规范化后的相对路径；不是则返回 null。 */
 function looksLikeRepoPath(raw) {
   const p = raw.trim();
@@ -595,7 +641,8 @@ function checkAgentsMdPaths() {
       const p = looksLikeRepoPath(c.raw);
       if (!p) continue;
       // 运行期产物（被 .gitignore 忽略）不参与「文件必须存在」判定，见上节。
-      if (GITIGNORED_ROOT_NAMES.has(p)) continue;
+      // 两类都查：根级单名（`db.sqlite`）与**目录形态**的忽略规则（`docs/api/`）。
+      if (GITIGNORED_ROOT_NAMES.has(p) || isRuntimeProductPath(p)) continue;
       const key = `${p}@L${lineno}`;
       if (seen.has(key)) continue;
       seen.add(key);
