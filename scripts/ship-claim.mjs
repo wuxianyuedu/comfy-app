@@ -638,7 +638,7 @@ export function finishIssueWork(ctx) {
  *   root:string,
  *   opt:any,
  *   mkTmp:(name:string,text:string)=>string|null,
- *   createIssue?:(ctx:any)=>number,
+ *   createIssue?:any,
  *   dryRun?:boolean,
  * }} ctx
  * @returns {number} `CODE` 之一
