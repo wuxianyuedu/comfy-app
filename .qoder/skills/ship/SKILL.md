@@ -71,6 +71,9 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    与提交信息同一档。
 5. **长链分跳跑，别塞进一条后台命令**：`pnpm ship --no-wait`（提交 / 推送 / 建 PR）→
    `pnpm ship`（轮询出终态）→ `pnpm ship --merge`。每跳都幂等，PR 已存在就复用；
+   但「已存在」只认**开放** PR —— 合并成功会把 PR 转 `closed`，所以**内容已落地的分支上再跑
+   会撞落地判定那一格**（ISSUE #2250）：它按 `head.sha` 认平台的 `is_merged`，命中就停下念
+   「已随 PR #N 落地 ⇒ 要接着改请开新分支」并退 `2`，没有绕过口。
    一条整链在 push 那跳被宿主断掉时，屏幕上不会留下任何线索（实测只剩一个 `127`）。
    单跑 `--only=commit|push|pull-request` 已不可能：那会一段结论都不落，如今退 `2`。
    `--only=close-issue|clean-branch` 同理被拒（`--only` 只认那三段）—— 要单跑关单就用

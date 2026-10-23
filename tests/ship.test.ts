@@ -50,6 +50,7 @@ import {
   decideCleanBranch,
   decideCreateBranch,
   deriveTitle,
+  findMergedPullForHeadSha,
   findPullForBranch,
   looksNewlineMangled,
   parseArgs,
@@ -2857,6 +2858,59 @@ describe("findPullForBranch：重跑不产生第二个 PR", () => {
   });
 });
 
+describe("findMergedPullForHeadSha：这一笔是不是已经随某条已合并的 PR 落过地（ISSUE #2250）", () => {
+  /* 样本取**平台真实形状**（`list-pulls --state closed -v` 实测）：列表页没有 `merged`
+   * 这一档，`closed` 里混着「合了」与「关了没合」，所以只认逐条 `is_merged`。 */
+  const CLOSED = {
+    data: [
+      {
+        number: 2237,
+        state: "closed",
+        is_merged: true,
+        head: { ref: "refs/heads/fix/a", sha: "dd16f7ec" },
+      },
+      {
+        number: 2244,
+        state: "closed",
+        is_merged: false,
+        head: { ref: "refs/heads/fix/b", sha: "aa11bb22" },
+      },
+      {
+        number: 2245,
+        state: "closed",
+        is_merged: true,
+        head: { ref: "refs/heads/fix/c", sha: "cc33dd44" },
+      },
+    ],
+  };
+
+  it("sha 逐字相等且 `is_merged` 为真才算命中", () => {
+    expect(findMergedPullForHeadSha(CLOSED, "dd16f7ec")).toBe(2237);
+    /* 同一笔 sha 挂在别的分支上也算：判的是「这一笔进过主干」，不是「这条分支合过」。 */
+    expect(findMergedPullForHeadSha(CLOSED, "cc33dd44")).toBe(2245);
+  });
+
+  it("三条反面各拦一种误读：关了没合 / sha 不同 / sha 为空", () => {
+    /* is_merged=false 的那条 sha 就算撞上也不算 —— 列表状态词与「合了」是两件事。 */
+    expect(findMergedPullForHeadSha(CLOSED, "aa11bb22")).toBeNull();
+    expect(findMergedPullForHeadSha(CLOSED, "ff99ee88")).toBeNull();
+    expect(findMergedPullForHeadSha(CLOSED, "")).toBeNull();
+    expect(findMergedPullForHeadSha(CLOSED, undefined as never)).toBeNull();
+  });
+
+  it("信封形状：只给 HTTP `status` 不给 data 时不算命中（与「信封不等于终态」同一条）", () => {
+    expect(findMergedPullForHeadSha({ status: 200 }, "dd16f7ec")).toBeNull();
+    expect(findMergedPullForHeadSha(null, "dd16f7ec")).toBeNull();
+    /* `data.data` 那一层嵌套（分页信封）也要认，否则整格恒为「没查到」。 */
+    expect(
+      findMergedPullForHeadSha(
+        { data: { data: [{ number: 1, is_merged: true, head: { sha: "x" } }] } },
+        "x",
+      ),
+    ).toBe(1);
+  });
+});
+
 describe("readPullVerdict：字段缺省时不抛，且默认值是「没合上」", () => {
   it("缺 data / 缺字段都归一到安全默认", () => {
     expect(readPullVerdict(null)).toEqual({
@@ -4672,6 +4726,108 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       expect(all).toContain("标题取自 none");
       expect(all).toContain("不建 PR");
       expect(code).toBe(CODE.NOT_RUN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("内容已随某条已合并 PR 落地 ⇒ 不再建 PR：退 2 并给「开新分支」的出口（ISSUE #2250）", async () => {
+    /* 现场形状：squash 合并成功会把 PR 转 `closed`，于是「开放清单里没有」那格失效，
+     * 同一条分支上再跑一次 ship 会建出一条**内容已在主干**的幽灵 PR —— 它能被再合一次
+     * （主干落重复提交），还白烧一轮 CI。夹具的 HEAD 是 `d02ec96…`，这里就让它逐字命中。 */
+    const { tmpRoot, gitDir } = proofRoot("landed");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "--state open": '{"status":200,"data":[]}',
+        "--state closed":
+          '{"status":200,"data":[{"number":2237,"state":"closed","is_merged":true,"head":{"ref":"refs/heads/feat/x","sha":"d02ec96364d5f3713b77c91b0d3fe789878f1747"}}]}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      expect(
+        base.calls.some((c) => c.includes("post-pull")),
+        "已落地却还伸手建 PR —— 那条就是幽灵 PR",
+      ).toBe(false);
+      const all = heard.join("\n");
+      expect(all).toContain("已随 PR #2237 落地");
+      expect(all).toContain("开新分支");
+      expect(code).toBe(CODE.NOT_RUN);
+      /* 它确实去问了 closed 那一档，而不是拿 open 那份读数凑过去。 */
+      expect(
+        base.calls.some(
+          (c) => c.includes("list-pulls") && c.includes("--state closed"),
+        ),
+      ).toBe(true);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("反面：closed 里那条是「关了没合」⇒ 照常建 PR（落地判定不许把所有历史都当已落地）", async () => {
+    /* `--state` 没有 `merged` 这一档，`closed` 混着两种 —— 只认 `is_merged` 这件事
+     * 只有配上这一格才算钉住：把它写成「sha 出现在 closed 清单里就停」，
+     * 被关掉的 PR 那条分支就永远发不出去，而这条红看起来像「幂等坏了」。 */
+    const { tmpRoot, gitDir } = proofRoot("closed-unmerged");
+    try {
+      const base = fake();
+      const run = overrideRun(base, {
+        "--state open": '{"status":200,"data":[]}',
+        "--state closed":
+          '{"status":200,"data":[{"number":2240,"state":"closed","is_merged":false,"head":{"ref":"refs/heads/feat/x","sha":"d02ec96364d5f3713b77c91b0d3fe789878f1747"}}]}',
+        "post-pull": '{"status":201,"data":{"number":3002}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: () => undefined,
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      expect(
+        base.calls.find((c) => c.includes("post-pull")) ?? "",
+        "关了没合的那条不算落地，PR 该建",
+      ).toContain("--title");
+      expect(code).toBe(CODE.GREEN);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("落地判定读不到清单 ⇒ 念「未判定」并照建：缺读数不撤销结论", async () => {
+    /* 与 `combineEvidence` 那条同一口径：「git/平台问不出来」既不算「已落地」，也不算
+     * 「没落地」。把它写成「读不到就停」会多出一条新的假阻塞 —— 网络抖一下，
+     * 一条正常的 PR 就发不出去，而屏幕上看不出任何区别。 */
+    const { tmpRoot, gitDir } = proofRoot("landed-unknown");
+    try {
+      const heard: string[] = [];
+      const base = fake();
+      const run = overrideRun(base, {
+        "--state open": '{"status":200,"data":[]}',
+        "--state closed": "不是 JSON",
+        "post-pull": '{"status":201,"data":{"number":3003}}',
+      });
+      const code = await main({
+        root: tmpRoot,
+        run,
+        log: (s: string) => heard.push(s),
+        probeCnb: () => true,
+        resolveGitDir: () => gitDir,
+        args: ["--no-wait"],
+      });
+      const all = heard.join("\n");
+      expect(all).toContain("未判定");
+      expect(all).not.toContain("已随 PR");
+      expect(base.calls.some((c) => c.includes("post-pull"))).toBe(true);
+      expect(code).toBe(CODE.GREEN);
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }

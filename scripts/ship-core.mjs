@@ -545,6 +545,37 @@ export function findPullForBranch(json, branch) {
 }
 
 /**
+ * 「这一笔 sha 是不是已经随某条**已合并**的 PR 落进主干」（ISSUE #2250）。
+ *
+ * 上面那条幂等只认**开放** PR：squash 合并成功那一刻 PR 转 `closed`，于是同一条分支上
+ * 再跑一次 ship 会走「没有就建」，长出一条内容已在主干的幽灵 PR（能被再合一次、
+ * 白烧一轮 CI）。这一格认的是平台的正面事实：`is_merged === true` 那条上的
+ * `head.sha` 与这一笔逐字相等 —— squash 改的是主干那笔的 sha，分支头那笔在 PR 记录里留着。
+ *
+ * 与 `ship-close.mjs` 的落地反查同一条取法：列表的 `--state` 没有 `merged` 这一档，
+ * `closed` 里混着「合了」与「关了没合」，所以只认逐条 `is_merged`，不认状态词。
+ *
+ * @param {any} json `list-pulls --state closed` 的原样 JSON
+ * @param {string} headSha 本地 HEAD 的 sha
+ * @returns {number | null} 命中的 PR 号；认不出（含空 sha）时 `null`
+ */
+export function findMergedPullForHeadSha(json, headSha) {
+  const sha = String(headSha ?? "").trim();
+  if (!sha) return null;
+  const raw = json && json.data;
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && Array.isArray(raw.data)
+      ? raw.data
+      : [];
+  for (const p of list) {
+    if (p?.is_merged !== true) continue;
+    if (String(p?.head?.sha ?? "") === sha) return Number(p.number);
+  }
+  return null;
+}
+
+/**
  * 把 `changelog.d/` 里的碎片标题拼成 PR 正文的**事实部分**。
  *
  * 只搬「盘上已有的字」：段落标题 + 碎片文件名。不写因果、不写「已验证」那类声明
