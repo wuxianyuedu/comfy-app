@@ -135,32 +135,76 @@ export function readDevHandle({ root, env = {} }) {
 }
 
 /**
- * `dev:<短名>` —— 平台留痕标签的**唯一生成处**（issue 标签、PR 标签与署名行共用这一份）。
+ * 两枚角色标签的词表。**前缀说的是「这个人在这件事里是什么」，不是仓库名**：
+ * 同一份检出在两个仓库里都是同一个短名，换仓库由 `--repo` 区分；把仓库名叠进
+ * 前缀会让「谁提的 / 谁在做」这一维不再可枚举。
+ */
+export const ISSUE_LABEL_ROLES = Object.freeze({
+  author: "提单人",
+  handler: "处理人",
+});
+
+/**
+ * `<角色>:<短名>` —— 平台留痕标签的唯一拼法。
  *
  * 空白 / null 回 `null`：那是「没配」，不是「配了一个空名字」。调用点据此念「未配」，
- * 不许自己拼一个 `dev:` 或拿 git `user.name` 顶上 —— 后者是提交身份，不是提单身份
+ * 不许自己拼一个前缀或拿 git `user.name` 顶上 —— 后者是提交身份，不是提单 / 处理身份
  * （`docs/guides/git-identity.md` §4）。
  *
+ * @param {string} role `ISSUE_LABEL_ROLES` 里的值
  * @param {string | null | undefined} handle 短名（取自 `readDevHandle`）
  * @returns {string | null} 标签名；未配时为 null
  */
-export function devLabel(handle) {
+export function roleLabel(role, handle) {
   const h = String(handle ?? "").trim();
-  return h === "" ? null : `dev:${h}`;
+  return h === "" ? null : `${role}:${h}`;
+}
+
+/** 提单人标签（`提单人:<短名>`）。 */
+export function authorLabel(handle) {
+  return roleLabel(ISSUE_LABEL_ROLES.author, handle);
+}
+
+/** 处理人标签（`处理人:<短名>`）。 */
+export function handlerLabel(handle) {
+  return roleLabel(ISSUE_LABEL_ROLES.handler, handle);
 }
 
 /**
- * 向平台写文字时的署名行（issue 评论与 PR 正文是**同一句**）。
+ * 从 `get-issue` 回读的标签里取出某个角色的短名。标签可能是字符串或 `{name}` 对象
+ * （平台两种回读形状都见过），两种都收；不是这个角色的一律忽略。
  *
- * 未配时如实写「未配」、不编一个名字：这行是留痕，读者要靠它判断「这串字是谁写的」，
- * 编一个比空着更坏。
+ * @param {any[]} labels `get-issue` / `list-issues` 的 labels
+ * @param {string} role `ISSUE_LABEL_ROLES` 里的值
+ * @returns {string[]} 去重后的短名（按出现顺序）
+ */
+export function labelValues(labels, role) {
+  const prefix = `${role}:`;
+  const out = [];
+  for (const item of Array.isArray(labels) ? labels : []) {
+    const name = typeof item === "string" ? item : String(item?.name ?? "");
+    if (!name.startsWith(prefix)) continue;
+    const value = name.slice(prefix.length).trim();
+    if (value !== "" && !out.includes(value)) out.push(value);
+  }
+  return out;
+}
+
+/**
+ * 向平台写文字时的署名行。**角色决定前缀**：提单 / PR 正文写 `提单人:<短名>`，
+ * 领取 / 结束评论写 `处理人:<短名>`。未配时如实写「未配」、不编一个名字 ——
+ * 这行是留痕，读者要靠它判断「这串字是谁写的」。
  *
  * @param {string | null | undefined} handle 短名
  * @returns {string} 署名行
  */
-export function signatureLine(handle) {
-  const label = devLabel(handle);
-  return label ? `提交人：${label}` : "提交人：未配";
+export function authorSignature(handle) {
+  return authorLabel(handle) ?? `${ISSUE_LABEL_ROLES.author}:未配`;
+}
+
+/** 处理人署名行（领取 / 结束评论用）。 */
+export function handlerSignature(handle) {
+  return handlerLabel(handle) ?? `${ISSUE_LABEL_ROLES.handler}:未配`;
 }
 
 /**
@@ -192,12 +236,14 @@ export function issueAuthoring({
   showExits = false,
 } = {}) {
   const required = platform === "win32";
+  const name = String(handle ?? "").trim();
+  const label = authorLabel(name);
   const lines = [
-    `[ship] 单子身份：提单人=${devLabel(handle) ?? "未配"} · ` +
+    `[ship] 单子身份：提单人=${name || "未配"}（标签 ${label ?? "提单人:<名称>"}） · ` +
       `优先级走平台原生 \`--priority\`（${ISSUE_PRIORITIES}，本脚本不代填）` +
       " —— **这一格是读数，不改退码**",
   ];
-  if (!handle) {
+  if (!name) {
     const where = path.join(root || ".", ".env");
     lines.push(
       required
@@ -216,10 +262,10 @@ export function issueAuthoring({
     );
     lines.push(
       "[ship]   建完再补一句 —— 实测 `create-issue --labels` 不落地（回读是空），标签要在建完之后按：" +
-        `\`cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels ${devLabel(handle) ?? "dev:<短名>"}\``,
+        `\`cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels ${label ?? "提单人:<名称>"}\``,
     );
   }
-  return { handle, required, lines };
+  return { handle: name || null, required, lines };
 }
 
 /**
@@ -234,13 +280,16 @@ export function issueAuthoring({
  * @returns {string[]} 要打印的几行
  */
 export function whoamiLines({ handle = null, root = "", slug = null } = {}) {
-  const label = devLabel(handle);
+  const name = String(handle ?? "").trim();
+  const label = handlerLabel(name);
+  const author = authorLabel(name);
   const repo = slug || "<组织>/<仓库>";
   const lines = [
-    `[ship] 本检出的平台留痕：${label ?? "未配"}（取自 ${DEV_HANDLE_ENV_KEY}：` +
-      "进程环境优先，其次这一份检出的 `.env`）",
+    `[ship] 本检出的平台留痕：${name || "未配"}` +
+      (name ? `（提单人标签 ${author} · 处理人标签 ${label}）` : "") +
+      `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`,
   ];
-  if (!label) {
+  if (!name) {
     lines.push(
       `[ship] 未配 ⇒ 在 \`${path.join(root || ".", ".env")}\` 填一行 ` +
         `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（整行不在时先跑 \`pnpm env:init\`，` +
@@ -248,17 +297,24 @@ export function whoamiLines({ handle = null, root = "", slug = null } = {}) {
     );
   }
   lines.push(
-    `[ship] 规则一：凡向平台写文字（issue 评论 / PR 正文），正文带一行 \`${signatureLine(handle)}\``,
+    `[ship] 规则一：凡向平台写文字，正文末尾带一行署名 —— 提单 / PR 正文用 \`${authorSignature(name)}\`，` +
+      `领取 / 结束评论用 \`${handlerSignature(name)}\``,
   );
   lines.push(
     "[ship] 规则二：建 PR 后补标签并**独立回读**（`ship` 建的会自己做；手工建的要自己跑）：",
   );
   lines.push(
-    `[ship]   cnb pulls post-pull-labels --repo ${repo} --number <PR号> --labels ${label ?? "dev:<短名>"} -v`,
+    `[ship]   cnb pulls post-pull-labels --repo ${repo} --number <PR号> --labels ${label ?? "处理人:<名称>"} -v`,
   );
   lines.push(
     `[ship]   cnb pulls list-pull-labels --repo ${repo} --number <PR号> -v` +
       "  ← 回读里看得见那个名字才算打上了",
+  );
+  lines.push(
+    "[ship] 规则三：单子的领取 / 结束 / 查看走 ship（领取会补 `处理人:` 并评论，结束会评论并撤标签）：",
+  );
+  lines.push(
+    `[ship]   pnpm ship --claim <号> · pnpm ship --release <号> · pnpm ship --claims`,
   );
   return lines;
 }

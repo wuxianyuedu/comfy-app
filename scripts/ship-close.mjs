@@ -27,6 +27,7 @@
 
 import { CODE, combineShipCodes, asArray } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
+import { finishIssueWork } from "./ship-claim.mjs";
 
 /**
  * 一行文字里点名的 issue 号（`#2070` / `(#2070)` 两种写法都认，按出现顺序去重）。
@@ -283,11 +284,24 @@ export function findMergedPullProofs(ctx) {
  *   closeIssue: boolean,
  *   landed?: {verified: boolean, sha?: string, title?: string} | null,
  *   explicit?: number[],
+ *   handle?: string | null,
+ *   mkTmp?: ((name: string, text: string) => string | null) | null,
  * }} ctx
+ *   `handle` / `mkTmp` 是「关完之后补结束评论并撤处理人标签」那一格的执行面：
+ *   未配留痕、或调用方没给临时文件落点时，那一格**跳过**（关单本身照常）。
  * @returns {number} `CODE` 之一
  */
 export function closeIssues(ctx) {
-  const { run, log, slug, closeIssue, landed = null, explicit = [] } = ctx;
+  const {
+    run,
+    log,
+    slug,
+    closeIssue,
+    landed = null,
+    explicit = [],
+    handle = null,
+    mkTmp = null,
+  } = ctx;
   const landedVerified = landed?.verified === true;
   const title = landed?.title ?? "";
   let scan = { proofs: new Map(), scanned: 0, ran: true };
@@ -366,7 +380,18 @@ export function closeIssues(ctx) {
           ? ` · 落地那一行 sha=${short(landed.sha)}`
           : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`),
     );
-    codes.push(state === "closed" ? CODE.GREEN : CODE.RED);
+    if (state === "closed") {
+      codes.push(CODE.GREEN);
+      /* 关单成功之后才做「开发结束」评论与撤处理人标签：单子还没关成就先放掉标签，
+       * 等于在「还在开着的单」上宣布结束。评论失败时 `finishIssueWork` 会保留标签。 */
+      if (handle && mkTmp) {
+        codes.push(
+          finishIssueWork({ run, log, slug, handle, number, mkTmp }),
+        );
+      }
+    } else {
+      codes.push(CODE.RED);
+    }
   }
   return combineShipCodes(codes);
 }
