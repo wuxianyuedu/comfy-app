@@ -2,7 +2,7 @@
 /**
  * ship-core.mjs —— `pnpm ship` 的**纯判定层**（规范 §13.6）。
  *
- * 这一层只做一件事：**把外部执行者（平台 build / PR / git 输出）的原文读成三态结论**，
+ * 这一层只做一件事：**把外部执行者（平台 PR / git 输出）的原文读成三态结论**，
  * 不产生副作用。拆出来不是为了行数好看，而是因为它的输入是**外部形状** ——
  * 平台改字段、加一档状态、把 `data` 从对象换成数组，红都该落在这一层，
  * 而不是落在「编排有没有按顺序走」那一半上。两层的判据因此各自独立：
@@ -18,6 +18,10 @@
  * 那些判的不是「外部执行者的形状」，而是碎片与单子的口径，变化方向不同，而两份叠在一起
  * 已经越过 `check-infra-file-size.cjs` 那 900 行硬闸（AGENTS 硬规则 22）。本文件只从它取
  * `fragmentHead`（首行的读法一处，PR 正文与单子读数共用）。
+ *
+ * 「build 读数」那一族（按 sha 归属构建 / 轮询签名 / 三态判定 / `asArray`）同样按这条线
+ * 分了出去，在 `ship-build.mjs`：它服务的是一条 build 自己的读法，与 PR / git 的形状各自
+ * 独立变化，放在同一份文件里只会在下一次加字段时再撞一次 900 行。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -41,17 +45,6 @@ export const PHASES = [
   "close-issue",
   "clean-branch",
 ];
-
-/** build 的终态集合（其余一律当「还没完」）。 */
-const TERMINAL = new Set([
-  "success",
-  "failed",
-  "error",
-  "cancelled",
-  "canceled",
-]);
-/** build 里「在跑 / 排队」的形态。 */
-const RUNNING = new Set(["running", "pending", "queued", "waiting", "created"]);
 
 /**
  * 合并多个阶段的退出码：**`2` 压过 `1`，`1` 压过 `0`**。
@@ -92,10 +85,10 @@ export function parseIssueNumberToken(token) {
  *     （那会被读成「没要那个动作」），也不许往后吃掉本该属于别的旗标的参数。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -116,6 +109,12 @@ export function parseArgs(argv) {
     release: null,
     releaseBad: [],
     claims: false,
+    newIssue: null,
+    newIssueBad: [],
+    issueBodyFile: null,
+    priority: null,
+    diagnose: false,
+    diagnoseSn: null,
     only: null,
     unknown: [],
   };
@@ -124,7 +123,39 @@ export function parseArgs(argv) {
     if (a === "--merge") out.merge = true;
     else if (a === "--whoami") out.whoami = true;
     else if (a === "--claims") out.claims = true;
-    else if (a === "--claim" || a === "--release") {
+    /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
+     * 那一形）。所以下一个 token 只在不像旗标时才当构建号收下。 */
+    else if (a === "--diagnose") {
+      out.diagnose = true;
+      const tok =
+        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
+          ? String(argv[++i] ?? "")
+          : "";
+      if (tok !== "") out.diagnoseSn = tok;
+    } else if (a === "--new-issue") {
+      const tok =
+        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
+          ? String(argv[++i] ?? "")
+          : "";
+      if (tok.trim() === "") out.newIssueBad.push("(缺标题)");
+      else out.newIssue = tok;
+    } else if (a === "--issue-body-file") {
+      out.issueBodyFile = argv[++i] ?? "";
+    } else if (a === "--priority") {
+      out.priority = argv[++i] ?? "";
+    } else if (a.startsWith("--diagnose=")) {
+      out.diagnose = true;
+      const tok = a.slice("--diagnose=".length);
+      if (tok !== "") out.diagnoseSn = tok;
+    } else if (a.startsWith("--new-issue=")) {
+      const tok = a.slice("--new-issue=".length);
+      if (tok.trim() === "") out.newIssueBad.push("(缺标题)");
+      else out.newIssue = tok;
+    } else if (a.startsWith("--issue-body-file=")) {
+      out.issueBodyFile = a.slice("--issue-body-file=".length);
+    } else if (a.startsWith("--priority=")) {
+      out.priority = a.slice("--priority=".length);
+    } else if (a === "--claim" || a === "--release") {
       const isClaim = a === "--claim";
       const tok =
         i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
@@ -476,115 +507,6 @@ function trunkFromRemoteHead(remote, remoteHead) {
 }
 
 /**
- * **只**读 build JSON 的 `data.status`。
- *
- * 入参声明成 `any` 是诚实的：它解析的是外部平台的 JSON，形状不由本仓决定，
- * 而本函数的职责恰恰是**在形状不对时给出 `unknown`（⇒ 退 2）而不是抛**。
- * 期望的形状是 `{ status:number, data:{ status:string } }` —— 注意取的是 `data.status`。
- *
- * @param {any} json `cnb … -v` 解析结果
- * @returns {{state:"green"|"red"|"running"|"unknown",raw:string|null}} 判决用的中间态
- */
-export function readBuildVerdict(json) {
-  const raw =
-    json && json.data && typeof json.data.status === "string"
-      ? json.data.status
-      : null;
-  // ⚠️ 这里**故意不看** `json.status`：那是 HTTP 信封（200 只说明「问到了」）。
-  if (raw === null) return { state: "unknown", raw: null };
-  const low = raw.toLowerCase();
-  if (low === "success") return { state: "green", raw };
-  if (TERMINAL.has(low)) return { state: "red", raw };
-  if (RUNNING.has(low)) return { state: "running", raw };
-  return { state: "unknown", raw };
-}
-
-/**
- * 在**并行**的 build 列表里挑出属于本次 sha 的那一条。
- *
- * 同一台节点上会同时有多条 `pull_request` build（实测撞过两条并存），而列表项里
- * **没有 PR 号**可锚 —— 唯一可靠的归属键是 `sha`。取不到就回 `null`（⇒ 阶段判
- * 「没跑起来」），**不许**退化成「拿最新那条」：那等于把别人的绿灯读成自己的。
- *
- * @param {any[] | null | undefined} builds 平台返回的列表（外部形状，逐条判字段）
- * @param {string} sha 本次要归属的 commit sha
- * @returns {{sn:string,createTime:string} | null} 命中的 build（多条取最新）
- */
-export function pickBuildForSha(builds, sha) {
-  if (!Array.isArray(builds) || !sha) return null;
-  /** @type {{sn:string,createTime:string}[]} */
-  const hit = [];
-  for (const b of builds) {
-    if (
-      b &&
-      typeof b.sha === "string" &&
-      b.sha.toLowerCase() === sha.toLowerCase() &&
-      b.event === "pull_request" &&
-      typeof b.sn === "string"
-    ) {
-      hit.push({ sn: b.sn, createTime: String(b.createTime || "") });
-    }
-  }
-  if (hit.length === 0) return null;
-  hit.sort((x, y) => y.createTime.localeCompare(x.createTime));
-  return hit[0] ?? null;
-}
-
-/**
- * 「这一眼与上一眼是不是同一件事」的签名 —— 轮询用它判**有没有在动**，不判绿不绿。
- *
- * 为什么需要它：预算 45 分钟是按墙钟烧的，而实测烧完之后常见的是「20 次读数一模一样」
- * （按 sha 还没解析到 build，或平台把 build 排在队列里没动）。那种情况下每 20 秒念一遍
- * 同一句话，最后落 exit 2 —— 等待本身没有换来任何新事实，而屏幕上看不出来。
- * 签名取**四件原值**：`sn` / `data.status` / pipeline 的「完成数-总数」/ **stage 的
- * 「完成数-总数」**；任何一件变了都算「在动」，计数器归零。
- *
- * ⚠️ 后一件是 2026-10-22 补的，因为它补的是**一句被现场推翻的话**：本仓的 PR 流水线是
- * **一条 pipeline、三十几个 stage** 的拓扑（实测 `cnb-7d9-1k5h9edct`：`pipelinesStatus`
- * 只有 1 个条目、`stages` 有 33 个），所以 `done-total` 整跑都停在 `0-1` —— 只看 pipeline 级
- * 计数的版本会把一条**正在推进**的流水线（28/33 格已完成）读成「连着 10 眼一模一样」而掐掉。
- * stage 级计数才是这条拓扑上唯一会动的量；而运行中的那一格 `duration` 是占位值 `0`
- * （同一眼 `cnb-7d9-1k5h9edct` 里在跑的那格就是 `dur=0`，平台按格缓冲），所以也不能拿时长当进度。
- *
- * @param {any} json `cnb build get-build-status -v` 的解析结果（外部形状）
- * @param {string} sn 这一眼归属的 build sn（列表里取到的那条）
- * @returns {string} 形如 `cnb-xxx-yyy/success/1-1+12/33`；没解析到 build 时形如 `(未解析到 build)/?/0-0+0/0`
- */
-export function buildSignature(json, sn = "") {
-  const d = (json && json.data) || null;
-  const status = d && typeof d.status === "string" ? d.status : "(取不到 data)";
-  const entries =
-    d && d.pipelinesStatus && typeof d.pipelinesStatus === "object"
-      ? Object.values(d.pipelinesStatus)
-      : [];
-  const total = entries.length;
-  const done = entries.filter(
-    (p) =>
-      p && typeof p.status === "string" && !RUNNING.has(p.status.toLowerCase()),
-  ).length;
-  /* stage 级：把每条 pipeline 的 `stages[]` 汇起来数完成格。缺 `stages`（外部形状不完整）
-   * 时按 0 计，签名照样稳定可比 —— 这里不替平台补一个「大概在进行」的形状。
-   * ⚠️ 判「完成」比 pipeline 级多排除一个 `start`：平台那一层的词汇里**运行中的那一格就叫
-   * `start`**（且它的 `duration` 是占位 `0`，见上面那段），照 `RUNNING` 那份集合会把它数成
-   * 已完成 —— 于是「pending → start」这一步推进在签名里看不见，正是要防的那种念法。 */
-  let stageTotal = 0;
-  let stageDone = 0;
-  for (const p of entries) {
-    /** @type {{ status?: unknown }[]} */
-    const stages = p && Array.isArray(p.stages) ? p.stages : [];
-    stageTotal += stages.length;
-    stageDone += stages.filter(
-      (s) =>
-        s &&
-        typeof s.status === "string" &&
-        !RUNNING.has(s.status.toLowerCase()) &&
-        s.status.toLowerCase() !== "start",
-    ).length;
-  }
-  return `${sn || "(未解析到 build)"}/${status}/${done}-${total}+${stageDone}/${stageTotal}`;
-}
-
-/**
  * 读 PR JSON 的判决字段（同样只读 `data.*`）。
  *
  * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string}} | null} json 解析结果
@@ -689,7 +611,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,newIssue?:boolean,diagnose?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -778,8 +700,28 @@ export function planCommands(st) {
       `cnb issues list-issues --repo ${st.slug} --labels 处理人:${who} --state open --page <p> --page-size 100 -v`,
     );
   }
+  /* 建单是**两条**命令：实测 `create-issue --labels` 不落地（回读 labels 为空），
+   * 标签只能在建完之后按。两条都进计划，单子上才不会出现「只建了单、没留痕」的出口。 */
+  if (st.newIssue) {
+    p.push(
+      `cnb issues create-issue --repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-issue-body-<pid>.tmp --priority <P0|P1|P2|P3> -v`,
+    );
+    if (st.handle) {
+      p.push(
+        `cnb issues post-issue-labels --repo ${st.slug} --number <n> --labels 提单人:${st.handle} -v`,
+      );
+    }
+    p.push(`cnb issues get-issue --repo ${st.slug} --number <n> -v（建后回读：标题 / 优先级 / 标签）`);
+  }
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);
+  /* 红格的日志正文只有按格取得到（`get-build-stage` 的 `data.content`）。它只在
+   * `--diagnose` 下被执行 —— 默认那份计划里不出现，否则 dry-run 教的执行面比请求的大。 */
+  if (st.diagnose) {
+    p.push(
+      `cnb build get-build-stage --repo ${st.slug} --sn <sn> --pipelineId <pipelineId> --stageId <stageId> -v`,
+    );
+  }
   p.push(`cnb pulls get-pull --repo ${st.slug} --number <n> -v`);
   if (st.merge)
     p.push(
@@ -840,19 +782,4 @@ export function readProof(root, resolve = resolveGitDir) {
   } catch {
     return null;
   }
-}
-
-/**
- * `cnb build get-build-logs -v` 的 data 形状在版本间有两种（裸数组 / `{data:[…]}`）。
- * 两种都收，取不到就回 null —— **不回空数组**：空数组会被 `pickBuildForSha` 读成
- * 「列表拿到了、里面没有我的」，而 null 读成「没拿到列表」，后者才是「没跑起来」。
- *
- * @param {any} json 解析结果
- * @returns {any[] | null} 列表或 null
- */
-export function asArray(json) {
-  const d = json && json.data;
-  if (Array.isArray(d)) return d;
-  if (d && Array.isArray(d.data)) return d.data;
-  return null;
 }
