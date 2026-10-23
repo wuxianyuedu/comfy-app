@@ -37,15 +37,26 @@
  *      全失败就在这里停下，不拿空目录去做比对。
  *   4. **触发面 = typedoc 的输入面**：`src/lib/**` / `src/server/**` / `src/trpc/**`
  *      （`typedoc.json` 的 `entryPoints` 三条 glob）+ `typedoc.json` 本身 + 依赖声明
- *      （`package.json` / `pnpm-lock.yaml`，typedoc 与 TS 版本会改变产物形态）。
- *      这**不是启发式收窄**，是「产物只由这些输入决定」的直接映射：输入没变，产物
- *      不可能漂。改这几个以外的文件时本步立刻返回 0（`--staged` 模式），不给普通
+ *      （`package.json` / `pnpm-lock.yaml`，typedoc 与 TS 版本会改变产物形态）
+ *      + **闭包叶子集**（`CLOSURE_LEAVES`）。
+ *      改这几个以外的文件时本步立刻返回 0（`--staged` 模式），不给普通
  *      提交加那 31s（实测 `pnpm exec typedoc` 冷 31s）。
+ *      ⚠️ **2026-10-23 订正（ISSUE #2223）**：这一条原来写着「这**不是启发式收窄**，
+ *      是『产物只由这些输入决定』的直接映射：输入没变，产物不可能漂」—— **那句话是错的**。
+ *      typedoc 沿 import 走：三根**之外**的文件也会进产物（`BackupResult` 定义在
+ *      `scripts/db-backup-core.mjs`，而它出现在 `docs/api/**` 里）⇒ 收窄面判窄了就是
+ *      **漏判**，而漏判是静默的（`ifModify` 跳过的形态与「判过且通过」在读数上无差别）。
+ *      实测：三根之外有 11 个被引用的文件，其中 10 个原先不在面内。
+ *      现在的面 = 三根 ∪ 闭包叶子集，而那份叶子集**不是手抄的事实** ——
+ *      真相由 `scripts/docs-api-input-closure.mjs` 算出（从 `typedoc.json` 的
+ *      `entryPoints` 出发沿静态 import 走），由 `tests/ci-incremental-gates.test.ts`
+ *      双向核对：闭包里多出任何一个文件、而面里没有它 ⇒ 当场红。
  *   5. **平台侧的触发面与这份清单同源**（ISSUE #1981）：`.cnb.yml` 的
  *      `API 文档生成物与源同步` 带着由 `INPUT_RES` 机械导出的 `ifModify`
  *      （`scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`），
  *      判据 `tests/ci-incremental-gates.test.ts` 双向核对 —— 于是「产物由哪些输入决定」
- *      写在**一处**。实测这一步在自托管节点上是**全流水线最贵的一格**（201.8s，
+ *      写在**一处**（声明），而**真相**由闭包模块算、由那条用例盯（事实）。
+ *      实测这一步在自托管节点上是**全流水线最贵的一格**（201.8s，
  *      占 12m14s 的 27.5%），而绝大多数 PR 一行 `src/lib|server|trpc` 都没碰。
  *
  * 用法：
@@ -80,8 +91,45 @@ const OUT_ABS = path.join(ROOT, OUT_REL);
 const TAG = "[docs-api --check]";
 
 /**
+ * **闭包叶子集** —— typedoc 输入面的「根外」那一部分（ISSUE #2223）。
+ *
+ * 这些文件不在 `src/lib` / `src/server` / `src/trpc` 三根里，但**改它们会改
+ * `docs/api/**`**：typedoc 沿 import 走，而根外的文件里有**被产物引用**的类型 ——
+ * 例：`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里。
+ *
+ * 为什么它们必须在面内：面判窄了 = **漏判**，而漏判是静默的（`ifModify` 跳过的形态
+ * 与「判过且通过」在读数上无差别）。2026-10-20 之前那批判据「一个执行者都没有」，
+ * 而 `docs/api/**` 随后漂了 32 份 —— 同一个洞的两面。
+ *
+ * 这份名单**不是手抄的事实**：真相由 `scripts/docs-api-input-closure.mjs` 算出
+ * （从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），由
+ * `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、而这里
+ * 没有它 ⇒ 当场红。**本列表是「声明」，闭包模块是「事实」，两者对账。**
+ *
+ * @type {readonly string[]}
+ */
+const CLOSURE_LEAVES = [
+  "scripts/db-backup-core.mjs",
+  "scripts/db-push-core.mjs",
+  "scripts/db-schema-state.mjs",
+  "scripts/launcher-core/command-echo.mjs",
+  "scripts/launcher-core/shell.mjs",
+  "scripts/launcher-core/worktree.mjs",
+  "scripts/lockfile/lock-diff.d.mts",
+  "scripts/lockfile/lock-diff.mjs",
+  "src/config/custom-nodes.ts",
+  "src/env.js",
+];
+
+/** 把一个路径变成「逐字匹配它自己」的正则（点号等元字符要转义）。 */
+function exactPathRe(p) {
+  return new RegExp(`^${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+}
+
+/**
  * 决定产物的输入面（相对仓库根、正斜杠）。与 `typedoc.json` 的 `entryPoints` 同集合，
- * 另加「会改变产物形态」的两类：typedoc 配置自身与依赖声明。
+ * 另加「会改变产物形态」的两类：typedoc 配置自身与依赖声明；
+ * 另加**闭包叶子集**（三根之外、但改它们会改产物的那批，见 ISSUE #2223）。
  */
 const INPUT_RES = [
   /^src\/lib\/.*\.ts$/,
@@ -94,6 +142,7 @@ const INPUT_RES = [
    * 此前它改了自己不触发，于是「改了判据 → 推上去 → 没跑」是这类改动的默认形状。 */
   /^scripts\/check-docs-api\.cjs$/,
   /^scripts\/typedoc-run\.mjs$/,
+  ...CLOSURE_LEAVES.map(exactPathRe),
 ];
 
 /**
@@ -109,8 +158,12 @@ const INPUT_RES = [
  * 第二份会漂的副本（§12.12 / §12.18），而漂的方向恰好是「判据改了触发面、配置没跟」
  * —— 那一格于是再也不跑，且没人看见。
  *
- * ⚠️ 两侧的对应关系由 `tests/ci-incremental-gates.test.ts` 核（逐条比「窄面的字面
- * 前缀是不是落在某条 glob 里」）：加一条 `INPUT_RES` 而忘了加一条 glob，当场红。
+ * ⚠️ 两侧的对应关系由 `tests/ci-incremental-gates.test.ts` 核，**而且核的是「罩住」
+ * 而不是「前缀沾边」**（ISSUE #2223 的现场：旧写法只比第一段前缀，于是
+ * `scripts/db-backup-core.mjs` 的前缀 `scripts` 被 `scripts/check-docs-api.cjs`
+ * 满足 ⇒ 任何 `scripts/` 下的新文件都「已覆盖」⇒ 面判窄了而没人看见）。
+ * 现在那条用例做两件事：① 每条 `INPUT_RES` 命中的**每一个文件**都要被某条 glob
+ * 真的罩住；② 闭包算出来的**每一个叶子**都要被某条 glob 罩住。
  *
  * @type {readonly string[]}
  */
@@ -123,6 +176,7 @@ const INPUT_GLOBS = [
   "pnpm-lock.yaml",
   "scripts/check-docs-api.cjs",
   "scripts/typedoc-run.mjs",
+  ...CLOSURE_LEAVES,
 ];
 
 /**
@@ -437,6 +491,7 @@ if (require.main === module) {
 module.exports = {
   INPUT_RES,
   INPUT_GLOBS,
+  CLOSURE_LEAVES,
   matchedInputs,
   walk,
   compare,

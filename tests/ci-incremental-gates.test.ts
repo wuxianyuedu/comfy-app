@@ -50,10 +50,90 @@ import {
   INPUT_RES,
   matchedInputs,
 } from "../scripts/check-docs-api.cjs";
+import { filesUnder } from "../scripts/docs-api-input-closure.mjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
+import { globToRe } from "../scripts/vitest-projects.cjs";
 import { stageBlock } from "./no-platform-ci-config.test";
 
 const CONFIG = readCnbConfig();
+
+/**
+ * 一个路径是否被某条 glob 罩住。
+ *
+ * glob → 正则**复用** `scripts/vitest-projects.cjs` 已导出的那一份（同一套 `**` / `*` /
+ * `{a,b}` 口径，且带锚点）—— 不在本文件写第二套 glob 匹配（§12.12 / §12.18）。
+ *
+ * @param rel 仓库相对路径
+ * @param globs glob 清单
+ * @returns 是否被某一条罩住
+ */
+function coveredBy(rel: string, globs: readonly string[]): boolean {
+  return globs.some((g) => globToRe(g).test(rel));
+}
+
+/**
+ * 一条输入面正则的「字面前缀」= 第一个通配符之前的那段（正则锚定到仓库根）。
+ *
+ * `/^src\/lib\/.*\.ts$/` → `src/lib`；`/^typedoc\.json$/` → `typedoc.json`
+ * （整条都是字面量 ⇒ 前缀就是那个文件本身）。
+ *
+ * @param re 输入面正则
+ * @returns 目录前缀 / 字面文件路径；通配出现在第一段里时返回 `null`（没法枚举）
+ */
+function literalPrefixOf(re: RegExp): string | null {
+  const src = re.source.replace(/^\^/, "").replace(/\$$/, "");
+  let out = "";
+  let sawWildcard = false;
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src.charAt(i);
+    /* 转义符把下一个字符当**字面量**（`\/` 是斜杠、`\.` 是点），不是通配。 */
+    if (ch === "\\") {
+      const next = src[i + 1];
+      if (next === undefined) break;
+      out += next;
+      i += 1;
+      continue;
+    }
+    if (".*+?()[]{}|^$".includes(ch)) {
+      sawWildcard = true;
+      break;
+    }
+    out += ch;
+  }
+  if (!sawWildcard) return out;
+  const cut = out.lastIndexOf("/");
+  return cut < 0 ? null : out.slice(0, cut);
+}
+
+/**
+ * 目录枚举的缓存 —— 同一次运行里同一个前缀只列一次（三根加起来 600 多个文件，
+ * 而这条用例是**每次提交都跑**的固定清单成员）。
+ */
+const filesUnderCache = new Map<string, string[]>();
+
+/**
+ * 一条输入面正则命中的、**盘上真实存在**的文件清单。
+ *
+ * 字面前缀是文件 ⇒ 就是它；是目录 ⇒ 把那个目录下的候选文件列出来逐个过正则
+ * （目录遍历复用 `scripts/docs-api-input-closure.mjs` 已导出的 `filesUnder`，
+ * 不在本文件抄第二份遍历）。
+ *
+ * @param re 输入面正则
+ * @returns 仓库相对路径清单
+ */
+function filesMatchedBy(re: RegExp): string[] {
+  const prefix = literalPrefixOf(re);
+  if (prefix === null || prefix === "") return [];
+  const abs = path.join(process.cwd(), prefix);
+  if (!fs.existsSync(abs)) return [];
+  if (fs.statSync(abs).isFile()) return re.test(prefix) ? [prefix] : [];
+  let listed = filesUnderCache.get(prefix);
+  if (listed === undefined) {
+    listed = filesUnder(prefix);
+    filesUnderCache.set(prefix, listed);
+  }
+  return listed.filter((f) => re.test(f));
+}
 
 describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", () => {
   it("真仓一致：登记表与 .cnb.yml 逐字同源", () => {
@@ -230,15 +310,28 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
         `判据不认 ${f}，这条用例的样本已经过期`,
       ).toEqual([f]);
     }
-    /* ⚠️ 两侧形态不许分叉：`INPUT_RES`（判据自己判暂存面时用的窄面）每一条都得落在
-     * 某条 glob 里 —— 加了一条 `INPUT_RES` 而忘了加 glob，那一类改动就永远不触发
-     * 这一格（收窄收窄过头 = 漏判，而漏判是静默的）。 */
+    /* ⚠️ 两侧形态不许分叉 —— 而且核的是「**罩住**」，不是「前缀沾边」
+     * （ISSUE #2223 的现场：旧写法只比第一段前缀，于是
+     * `scripts/db-backup-core.mjs` 的前缀 `scripts` 被 `scripts/check-docs-api.cjs`
+     * 那条 glob 满足 ⇒ 任何 `scripts/` 下的新文件都「已覆盖」⇒ 面判窄了而没人看见）。
+     *
+     * 现在核的是**逐个文件**：判据的窄面（`INPUT_RES`）命中的每一个文件，都必须被
+     * 某条 glob 真的罩住。枚举不靠「读实现」，而是从每条正则里取出它锚定的
+     * **字面前缀**（第一个通配符之前的那段），把那个前缀下的文件列出来逐个过。 */
     for (const re of INPUT_RES) {
-      const prefix = re.source.replace(/^\^/, "").split(/[\\/.*]/)[0] ?? "";
+      const prefix = literalPrefixOf(re);
       expect(
-        INPUT_GLOBS.some((g) => g.includes(prefix)),
-        `判据的输入面 \`${re.source}\` 没有对应的 glob —— 改输入面时必须同批改 \`INPUT_GLOBS\``,
-      ).toBe(true);
+        prefix,
+        `判据的输入面 \`${re.source}\` 没法枚举（通配出现在第一段里）—— ` +
+          "请把它改成锚定到某个目录或某个文件的形式",
+      ).not.toBeNull();
+      for (const f of filesMatchedBy(re)) {
+        expect(
+          coveredBy(f, INPUT_GLOBS),
+          `判据的输入面 \`${re.source}\` 命中的 ${f} 没有被任何一条 glob 罩住 —— ` +
+            "改输入面时必须同批改 `INPUT_GLOBS`（面判窄了 = 漏判，而漏判是静默的）",
+        ).toBe(true);
+      }
     }
   });
 
