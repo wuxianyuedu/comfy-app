@@ -8304,7 +8304,7 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 
 | 时刻           | 谁在做                                                                  | 做什么                                                                             |
 | -------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 交出去之前     | `scripts/ship-ticket.mjs` 的 `ticketReading()`，由 `ship.mjs` 阶段 0 打印 | 念出「本次碎片挂在 `#N`」；`## Fixed` 而号是 `0` 的点一句「先立案」并给出建单出口   |
+| 交出去之前     | `scripts/ship-ticket.mjs` 的 `ticketReading()`，由 `ship-preflight.mjs` 阶段 0 打印 | 念出「本次碎片挂在 `#N`」；`## Fixed` 而号是 `0` 的点一句「先立案」并给出建单出口   |
 | 合并并且验真后 | `pnpm ship --merge --close-issue [号…]`（`scripts/ship-close.mjs`）      | 关掉**落地那一行标题本体**里点名的号 + 人点名的号（并集），再独立回读 `state` / `state_reason` / `closed_at` |
 
 **早已落地、却还挂着的单子**（变更随别人的 PR 进了主干）走 `pnpm ship --close-issue <号>` 那一路：
@@ -8331,7 +8331,7 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 `pnpm ship` 阶段 0 在「单子」那一行之后紧跟着念一行：
 
 ```
-[ship] 单子身份：提单人=dev:yuedu-win · 优先级走平台原生 --priority（P0|P1|P2|P3，本脚本不代填） —— 这一格是读数，不改退码
+[ship] 单子身份：提单人=yuedu-win（标签 提单人:yuedu-win） · 优先级走平台原生 --priority（P0|P1|P2|P3，本脚本不代填） —— 这一格是读数，不改退码
 ```
 
 **为什么平台给不了「谁提的」**（当场实测，跨 #2135 / #2149 / #2156 / #2157 / #2163 五张单、
@@ -8340,13 +8340,16 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 固定值，不随检出、不随会话变。这与 `docs/guides/git-identity.md` §4 讲的提交那一侧**正相反**：
 那边平台 squash 合并保留 `author`、只换 `committer`，所以给每份检出配一个 author 子地址就能
 「页面归同一个人、日志分得开」；**单子这一侧没有 git author 这一格可配**。
-于是留痕只能写在单子自己身上 —— 一台机器多份并行检出共用一个 CNB 账号时，靠 `dev:<短名>` 这一枚
-标签分辨。
+于是留痕只能写在单子自己身上 —— 一台机器多份并行检出共用一个 CNB 账号时，靠**角色标签**分辨。
 
 | 格       | 落在哪儿                                                                 | 来源                                                                                     |
 | -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| 提单人   | issue 的标签 `dev:<短名>`                                                 | `.env` 的 `COMFYAPP_DEV_HANDLE`（进程环境同名优先）；本轮**只对 Windows 开发者**要求配 |
+| 提单人   | issue 的标签 `提单人:<短名>`                                              | `.env` 的 `COMFYAPP_DEV_HANDLE`（进程环境同名优先）；本轮**只对 Windows 开发者**要求配 |
+| 处理人   | issue / PR 的标签 `处理人:<短名>`（领取时打、结束时撤）                     | 同一个短名；领取 / 结束见 §13.10.11                                                       |
 | 优先级   | issue 的原生字段 `--priority`                                              | 人判断；`ship` 只念那一格是空的，**不代填**、不做成闸                                     |
+
+**两枚前缀说的是「这个人在这件事里是什么」，不是仓库名**：同一份检出在别的仓库里仍是同一个
+短名，换仓库由 `--repo` 区分；把仓库名叠进前缀会让「谁提的 / 谁在做」这一维不再可枚举。
 
 **优先级那张表**（这一格必须**有词表**，否则它退化成「大家都填同一个值来消红」）：
 
@@ -8372,12 +8375,13 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待�
 
 ```
 cnb issues create-issue --repo <组织>/<仓库> --title "…" --body-file <正文文件> --priority <P0|P1|P2|P3>
-cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels dev:<短名>
+cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels 提单人:<短名>
 ```
 
 `create-issue` 也收 `--labels`，但**实测不落地**：#2174 带 `--labels dev:yuedu-win` 建完回读是
 `labels: []`，而 `--priority P1` 落地了；再跑一次 `post-issue-labels` 之后回读才是
 `["dev:yuedu-win"]`（标签由这一调用顺带创建：`description` 与 `name` 同串、`color` 自动分配）。
+那次读数早于 #2213 的前缀改名；现行命名是 `提单人:<短名>`，落地形态一字不差、只是标签名变了。
 ⇒ 只给一条 `create-issue --labels` 的出口就是「话说了、事没做」，那正是 §13.5.12 立案的那一族。
 
 **三条不许**：① 不许把优先级做成硬闸（「没填 `--priority` 就退 1」）—— 随手填的 `P0` 比空值更坏，
@@ -8394,30 +8398,78 @@ cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels de
 `tests/ship.test.ts` 的 `issueAuthoring` / `readDevHandle` 两组（含「非 Windows 未配 ⇒ 不点名」
 与「注释掉的 `.env.example` 形态不算配了」两条负控制）。
 
-**PR 与 issue 评论是同一格留痕，开口也补上了（ISSUE #2204）**。`dev:<短名>` 的生成处只有
-`ship-ticket.mjs` 的 `devLabel()`，署名行只有 `signatureLine()`（两者被 `issueAuthoring`、
-PR 正文与 `--whoami` 共用；不许在调用点各拼一套）。两条口径：
+**PR 与 issue 评论是同一格留痕，开口也补上了（ISSUE #2204）**。角色标签的生成处只有
+`ship-ticket.mjs` 的 `roleLabel()` / `authorLabel()` / `handlerLabel()`，署名行只有
+`authorSignature()` / `handlerSignature()`（被 `issueAuthoring`、PR 正文、领取 / 结束评论与
+`--whoami` 共用；不许在调用点各拼一套）。三条口径：
 
-- **凡向平台写文字（issue 评论 / PR 正文），正文末尾带一行** `提交人：dev:<短名>`；
-  未配时如实写 `提交人：未配`，**不编一个名字**（也**不许**拿 git `user.name` 顶替 ——
-  那是提交身份，不是提单身份）。
-- **建 PR 后补 `dev:` 标签，并独立回读**。`cnb pulls post-pull` 与 `create-issue` 同形：
+- **凡向平台写文字，正文末尾带一行署名**：提单 / PR 正文用 `提单人:<短名>`，领取 / 结束评论用
+  `处理人:<短名>`；未配时如实写 `…:未配`，**不编一个名字**（也**不许**拿 git `user.name`
+  顶替 —— 那是提交身份，不是提单 / 处理身份）。
+- **建 PR 后补 `处理人:<短名>` 标签，并独立回读**。`cnb pulls post-pull` 与 `create-issue` 同形：
   **没有 `--labels`**，只能建完之后 `post-pull-labels`；而回执不算结论，必须再跑一次
   `list-pull-labels`，回读里看得见那个名字才算打上了（PR #2202 上实测：手打标签 → 回读
-  `["dev:yuedu-win"]`；`ship` 之前建出来的 PR 回读是空 —— 那就是缺口的现场）。
+  `["dev:yuedu-win"]`；`ship` 之前建出来的 PR 回读是空 —— 那就是缺口的现场。
+  那次读数用的是 #2213 之前的标签名；现行命名是 `处理人:<短名>`，调用形态不变）。
   `pnpm ship` 建的 PR（含复用已有 PR）会自动做完这两步。
+- **PR 标签同样是留痕读数，不是判据**：未配 handle、或平台没把标签落地，都不改退码 ——
+  做成硬闸的后果与 §13.10.8 那次事故同型（逼人随手填一个值，而假留痕比没留痕难查）。
 
-**手工通道的漏口不靠脚本兜**：手工 `cnb pulls post-pull` 与 `cnb issues post-issue-comment`
-不经过 `ship`，而平台侧的 `author` 是 token 的账号本体（跨检出逐字相同 —— 不许写成
+**手工通道的漏口不靠脚本兜**：手工 `cnb pulls post-pull`、`cnb issues post-issue-comment` 与
+手工领单都不经过 `ship`，而平台侧的 `author` 是 token 的账号本体（跨检出逐字相同 —— 不许写成
 「由 cnb 账号自动带上」，那是假读数）。所以给一条能粘贴的自查出口：
-`pnpm ship --whoami` 打出这一份检出的留痕短名、署名行与两条命令（`post-pull-labels` +
-`list-pull-labels`）；它一次也不碰平台、不改任何状态、不参与退码。
+`pnpm ship --whoami` 打出一份检出的留痕短名、两枚角色标签、三条留痕规则（提单署名、PR 标签回读、
+领取 / 结束入口）与可粘贴命令；它一次也不碰平台、不改任何状态、不参与退码。
 
 与 issue 侧同一条边界：**未配 handle 不阻断**（它是留痕读数，不是判据）。区别只在话术 ——
 Windows 检出要把**这一份** `.env` 的绝对路径与 `pnpm env:init` 念出来（四份并行检出时
 「去 `.env` 加一行」指不出是哪一份，#2186 的现场）。回归见 `tests/ship.test.ts` 的
-`devLabel / signatureLine / whoamiLines` 组与 `main()` 里那几格（打标签 → 回读的顺序、
-回读没有时的负控制、未配时一次标签动作都不伸手）。
+`authorLabel / handlerLabel / authorSignature / handlerSignature / whoamiLines` 组与 `main()`
+里那几格（打标签 → 回读的顺序、回读没有时的负控制、未配时一次标签动作都不伸手）。
+
+#### 13.10.11 领取 / 结束释放 / 我的领取列表：`--claim` / `--release` / `--claims`（ISSUE #2213）
+
+「谁在做这张单」与「谁提的」共用同一个短名（`COMFYAPP_DEV_HANDLE`），但**角色前缀不同**：
+领取写 `处理人:<短名>`，提单写 `提单人:<短名>`。三条入口彼此互斥，也不与主流程
+（`--merge` / `--close-issue` / `--branch` / `--message` / `--add` / `--only` …）同跑 ——
+「领一张单」和「把代码合进主干」是两件事，混在一跑里出问题时读不出是哪一半。
+它们排在阶段 0 **之前**：因此 `master` 上、工作树脏、没有 changelog 碎片时都照样能领单。
+
+| 动作                        | 写什么                                                                 | 独立回读什么                                      |
+| --------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
+| `pnpm ship --claim <号>`    | 先 `post-issue-labels` 打 `处理人:<短名>`，再评论「开发者 <短名> 已接单，正在开发中。」 | `get-issue` 回读标签；`list-issue-comments` 回读评论 |
+| `pnpm ship --release <号>`  | 先评论「开发者 <短名> 开发结束。」，再 `delete-issue-label` 撤自己的标签   | 评论回读；撤标签后 `get-issue` 回读                |
+| `pnpm ship --claims`        | 不写                                                                   | `list-issues --labels 处理人:<短名> --state open` 分页读 |
+
+**顺序不是排版**：
+
+- claim 先标签后评论 —— 标签先落地，别人刷新时立刻看得见；评论晚一步失败时标签还在，
+  重跑只补评论（幂等），不出现「评论说在开发、但谁都能抢」的窗口。
+- release 先评论后撤标签 —— 撤标签是「别人可以接了」的开关，而公开的结束声明必须先成立；
+  评论没落地就**保留标签**并退 2，不出现「标签没了、单子上也没人说结束了」。
+- 关单（`--close-issue`）验真关闭之后走同一段收尾：处理人是我 ⇒ 补「开发结束」评论、撤标签；
+  处理人是别人（或标签不在场）⇒ **不代发、不动标签**，退 0。
+
+**标签不是锁**（这一条必须读）：平台没有 compare-and-set，`post-issue-labels` 是加法 ——
+两个会话可以同时读到「没有处理人」再各自打上。所以这一格做的是**写后独立回读 + 冲突当场报红**：
+回读里同时出现两个 `处理人:` ⇒ 退 1 并说明「要人裁定」，此时不再往下发评论。
+它**不承诺互斥**；把它说成锁比没有这一格更危险（有人会依赖它）。
+
+平台侧的取数口径：
+
+- 原生 assignee 用不了：`can-user-be-assigned-to-issue` 对短名回 400
+  `user … has not permission to be assigned`，而账号名跨并行检出逐字相同（§13.10.10），
+  所以「谁在做」只能写在标签 + 评论上。
+- `list-issue-comments --sort -created` 读的是**新到旧**；判「最新一条属于我的状态评论」而不是
+  「出现过」——同一张单可以「领取 → 结束 → 再领取」，只看出现过会把上一轮那句「开发结束」
+  当成本轮结论（于是重领之后的第一次 `--release` 不再发评论）。
+- 取不到评论列表 / 回读没跑起来 ⇒ 退 2；不把「读不到」念成「没有」或「已释放」。
+  单子不在 `open` ⇒ 不领取（退 1）；不在我名下而单子开着 ⇒ 不释放（退 1）。
+
+负控制（回归在 `tests/ship.test.ts` 的 `ship-claim` 组）：别人已领取 ⇒ 一次写动作都不发
+（评论仍走平台原生通道，但 `--claim` 不替你评论）；单子已关 ⇒ 不领取；未配短名 ⇒ 2 且一次
+cnb 都不碰；`--claim --merge` ⇒ 2；`--claims` 读不到列表 ⇒ 2 且不念「没有领取中的单子」；
+写后回读冒出第二个处理人 ⇒ 1 且不再发评论。
 
 ### 13.11 随手改与 TODO 记录规范
 

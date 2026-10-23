@@ -41,7 +41,7 @@ import {
 } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { classifyBuildOutcome, inFlightStages } from "./ci-build-readout.mjs";
-import { DEV_HANDLE_ENV_KEY, devLabel } from "./ship-ticket.mjs";
+import { DEV_HANDLE_ENV_KEY, handlerLabel } from "./ship-ticket.mjs";
 
 /**
  * 轮询的**同签名断流**上限：连续这么多次读到同一件事就不再读。
@@ -130,7 +130,7 @@ function pickTitle({ run, log, baseRef, explicit = null }) {
 }
 
 /**
- * 给 PR 补 `dev:<短名>` 标签，并**独立回读**再下结论（ISSUE #2204）。
+ * 给 PR 补 `处理人:<短名>` 标签，并**独立回读**再下结论（ISSUE #2204）。
  *
  * `post-pull-labels` 的回执不算结论：issue 侧实测 `create-issue --labels` 不落地，
  * PR 侧同样只认 `list-pull-labels` 里看得见那个名字（与合并 / 关单同一条纪律）。
@@ -149,11 +149,11 @@ function pickTitle({ run, log, baseRef, explicit = null }) {
  *   root: string,
  * }} ctx
  */
-function stampAuthorLabel({ run, log, slug, number, handle, root }) {
-  const label = devLabel(handle);
+function stampHandlerLabel({ run, log, slug, number, handle, root }) {
+  const label = handlerLabel(handle);
   if (!label) {
     log(
-      `[ship] 未配 ${DEV_HANDLE_ENV_KEY} ⇒ PR #${number} 没有 \`dev:\` 标签` +
+      `[ship] 未配 ${DEV_HANDLE_ENV_KEY} ⇒ PR #${number} 没有 \`处理人:\` 标签` +
         "（这一格是读数，不参与退码）。在 " +
         `\`${path.join(root, ".env")}\` 填一行 \`${DEV_HANDLE_ENV_KEY}="<短名>"\`` +
         "（整行不在时先跑 `pnpm env:init`），再 `pnpm ship` 重跑会补上。",
@@ -239,7 +239,7 @@ export function createOrReusePull(ctx) {
   let number = list ? findPullForBranch(list.json, branch) : null;
   if (number) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
-    stampAuthorLabel({ run, log, slug, number, handle, root });
+    stampHandlerLabel({ run, log, slug, number, handle, root });
     return { number };
   }
   const { title } = pickTitle({
@@ -328,7 +328,7 @@ export function createOrReusePull(ctx) {
     return { number: null };
   }
   log(`[ship] ✓ 已建 PR #${number}`);
-  stampAuthorLabel({ run, log, slug, number, handle, root });
+  stampHandlerLabel({ run, log, slug, number, handle, root });
   return { number };
 }
 
