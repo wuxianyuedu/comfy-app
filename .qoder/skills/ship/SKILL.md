@@ -1,15 +1,15 @@
 ---
 name: ship
-description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并」这条流程交给 `pnpm ship` 跑。当要提交本次改动并推到远端、开 PR、看 CI 结果或合并时使用。它只编排既有判据（pre-commit / pre-push / 平台 build / base-check），不发明第二套判定；合并必须显式 `--merge`。
+description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并」这条流程交给 `pnpm ship` 跑。当要提交本次改动并推到远端、开 PR、看 CI 结果、CI 红了要取失败格与失败行、要按规范建一张留有提单痕的单子、或合并时使用。它只编排既有判据（pre-commit / pre-push / 平台 build / base-check），不发明第二套判定；合并必须显式 `--merge`，建单必须人给标题与正文。
 ---
 
 # 从工作树到 `master`：`pnpm ship`
 
 **逻辑只有一份，在 `scripts/ship*.mjs` 这一族里。** 本 Skill 不重抄流程，只说什么时候用它、
 它的边界在哪、以及哪几格仍然要人判断。要看全部旗标与阶段名就读 `scripts/ship.mjs` 的文件头
-（那里列了这一族各自的职责：`-core` 判断、`-exec` 效应适配、`-platform` 平台侧四段、
-`-local` 本地两段、`-close` 关单、`-claim` 领取 / 结束 / 列表、`-preflight` 阶段 0，
-入口只做装配与收口）。
+（那里列了这一族各自的职责：`-core` 判断、`-build` build 取数、`-exec` 效应适配、`-platform` 平台侧四段、
+`-local` 本地两段、`-close` 关单、`-claim` 领取 / 结束 / 列表 / 建单分派、`-issue-new` 一步建单、
+`-diagnose` 只读诊断、`-preflight` 阶段 0，入口只做装配与收口）。
 
 ## 什么时候用
 
@@ -31,6 +31,8 @@ pnpm ship --close-issue 2179                     # 只补关：本轮不合，�
 pnpm ship --claim 2187                           # 领取：打 `处理人:` + `参与人:` 标签，评论「已接单」（写后回读）
 pnpm ship --release 2187                         # 结束：评论「开发结束」+ 撤 `处理人:`（`参与人:` 保留）
 pnpm ship --claims                               # 列出自己领取中（state=open）的单子
+pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
+pnpm ship --new-issue "fix(x): …" --issue-body-file .git/issue.md --priority P1   # 一步建单：建 → 补提单人标签 → 独立回读（标题/正文人给）
 pnpm ship --whoami                               # 只读自查：这份检出的留痕短名 + 署名行 + 手工补 PR 标签的粘贴命令
 pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上那批**残留进程（默认只念读数）
 ```
@@ -84,7 +86,8 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    其中段落是 `## Fixed` 而号是 `0` 的会点一句「先立案」—— 它**一次也不参与退码**
    （用例把这条钉着）。做成硬闸的直接后果不是「大家都立案」，而是「为了让屏幕上念出个号，
    随手挂一张最近开着的别人的单子」，那正是 §13.10.8 记的那次事故（号挂错比不写更贵，
-   而号只是个字符串，没有任何判据会红）。`ship` 也**不替你建单**：单子的标题与正文是判断。
+   而号只是个字符串，没有任何判据会红）。`ship` **不替你写**单子：标题与正文是判断；
+   写好之后可以用 `--new-issue` 一步建单（建单 → 补 `提单人:` → 独立回读，见第 12 条与 §13.10.12）。
    **单子的另两格（提单人 / 优先级）同样是读数。** 阶段 0 紧接着一行
    `单子身份：提单人=<短名>（标签 提单人:<短名>） · 优先级走平台原生 --priority（P0|P1|P2|P3，本脚本不代填）`。
    留痕的来源是 `.env` 里的 `COMFYAPP_DEV_HANDLE`（进程环境同名优先），本轮只对
@@ -158,6 +161,18 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
     不是「没有」）。
     关单验真之后若处理人是你，同一套收尾会补「开发结束」评论、撤 `处理人:`，并保留
     `参与人:`；处理人是别人则**不代发**。
+12. **建单走 `--new-issue`；CI 红了先 `--diagnose`，别手抄 `get-build-stage`。**
+    `pnpm ship --new-issue "<标题>" --issue-body-file <正文> [--priority <P0..P3>]`：建单 →
+    补 `提单人:<短名>` → **独立 `get-issue` 回读**（标题 / 优先级 / 标签）之后才念结论。
+    标题与正文是判断，必须人给（§13.10.9：修缺陷先立案）；正文末尾的署名行由脚本补。
+    `--priority` 只认平台词表，不给就走默认 `P2`，词表外 ⇒ `2`（§13.10.12）。
+    `pnpm ship --diagnose [sn]` 只读取回整跑判决 + 每一格红格 + **失败行（带完整日志行号）** +
+    末尾若干行 + 完整日志链接；不给 `sn` 时按 HEAD 的 sha 在 `pull_request` 构建里逐字归属
+    （找不到 ⇒ `2`，不拿「最新那条」顶上）。退出码与 `ci-build-readout.mjs` 同口径：绿 `0` /
+    真红 `1` / 被取消、还在跑、取不到 `2`。它**不写平台**（只发三条读命令）、也**不归因**
+    （那是 `base-check.mjs`）；与主流程和单子动作互斥，排在 preflight 之前 —— 在 `master` 上、
+    工作树脏时照样能跑（§13.10.13）。两个形状坑（`pipelinesStatus` 是按 id 索引的对象、
+    格日志 `content` 是带 ANSI 的行数组）只有一份实现，别再按数组 / 字符串读。
 
 ## 它不重复判的东西
 
@@ -167,6 +182,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 | 合并前固定动作三段         | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明                                                         |
 | 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                         |
 | 流水线终态                 | 平台 build 的 `data.status`                                                                                             |
+| CI 红在哪一格、失败行是什么 | `pnpm ship --diagnose [sn]`（只读取回；取数/归一只有 `ci-build-readout.mjs` 一份实现，归因仍归 `base-check.mjs`）        |
 | 合没合上                   | PR 的 `is_merged` **且**回读解析出的主干基线顶端有没有那份碎片                                                          |
 | 这次变更挂在哪张单子上     | 阶段 0 的 `ticketReading()`：碎片文件名的号 + 首行段落（**读数，不改退码**）                                            |
 | 单子关没关上               | 本轮号跟验真的合并；人点名的号在本轮没合并时反查 `pulls list-pulls`（`closed` 里**逐条认 `is_merged`**，标题先剥 PR 尾数）。关完一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
