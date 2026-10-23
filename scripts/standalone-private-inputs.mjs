@@ -282,6 +282,12 @@ export const STATIC_ALLOWED_TOPLEVEL = [
  * 「看着像不像运行时的」。目录级放行会让将来新增的 `src/**` 自动进产物，而这条白名单
  * 存在的全部意义就是「默认不进」。
  *
+ * **清单的完备性由 `tests/standalone-runtime.test.ts` 的闭包判据核对**（新增一份
+ * 运行期依赖而漏登记 ⇒ 当场红）：入口是 `RUNTIME_SCRIPTS` **全部** `.mjs`（不是「记得
+ * 写进来的那几个」），顺 `.ts` 自己的 import 一路走到底，再减掉 `PREBUNDLED_SRC_ROOTS`
+ * 那一份闭包（构建期已打进预编译件的）。实测读数（判据那一跑的口径）：全部入口可达
+ * `src/` 61 个、打包掉 58 个、**净 3 个 = 本清单逐字相等**（ISSUE #2158 第 7 条）。
+ *
  * 为什么允许放行 TS 源：Node 22.18+/24 的类型擦除（type stripping）默认开启，
  * `.mjs` 里 `import("./x.ts")` 能直接跑——注意随包的 Node 是**构建机那一份二进制**
  * （`build-desktop.mjs` 复制 `process.execPath`），所以这个能力在构建时就钉死了，
@@ -306,6 +312,22 @@ export const RUNTIME_SRC = [
    * 不是「放行了它的父模块就够」。 */
   "lib/process/platform.ts",
 ];
+
+/**
+ * 运行期**不会**以 `.ts` 形态被加载、但闭包里带着一大片 `src/**` 的那些根（相对 `src/`）。
+ *
+ * 为什么要有这一份：`scripts/executor-host.mjs` 的 `loadRuntimeGraph()` 是**两条分支** ——
+ * 预编译件 `scripts/executor-host.runtime.mjs` 在（产物形态）就 `import` 它；
+ * **不在**才 `import("tsx/esm/api")` 后加载 `src/lib/comfyui/host-runtime.ts`
+ * （dev 兜底 —— `tsx` 是 devDependency、不随包）。所以从这份根出发那 71 个 `src/**`
+ * 是**构建期被打进预编译件**的，产物里读的是那一件 bundle（1505 KB），不是这些 `.ts`。
+ *
+ * 闭包判据必须减掉它们：不减，「运行期真的会读的」会被算成 74 个，而真要随包的只有 3 个 ——
+ * 那时这条判据要么红得没道理，要么被人改成「放宽清单」而失去意义（ISSUE #2158 第 7 条）。
+ *
+ * 新增一份预编译交付件时在这里加一行并写清「产物里读的是哪一件」。
+ */
+export const PREBUNDLED_SRC_ROOTS = ["lib/comfyui/host-runtime.ts"];
 
 /**
  * `.next/standalone` 允许的**顶层条目**（默认拒绝，ISSUE #1217）。

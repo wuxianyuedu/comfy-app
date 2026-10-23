@@ -2331,8 +2331,16 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
 
   `src` **不在任何一层**：它走「祖先放行、叶子逐文件判」——`scripts/reap-process.mjs` 与
   `scripts/dev-launcher.mjs` 都要 `await import("../src/lib/process/kill-process-tree.ts")`
-  （硬规则 3 的平台机制单点），所以 `RUNTIME_SRC` 只放行那一个文件，`src/` 下其余的
+  （硬规则 3 的平台机制单点），所以 `RUNTIME_SRC` 逐文件放行（`kill-process-tree.ts`
+  与它的闭包 `executable-resolve.ts` / `platform.ts`，共三份），`src/` 下其余的
   （含 `src/generated/*.json`，那是开发机自定义节点的解析结果）一律不进。
+  **这份清单的完备性有判据**：`tests/standalone-runtime.test.ts` 从 `RUNTIME_SCRIPTS`
+  **全部** `.mjs` 出发算 import 闭包、顺 `.ts` 自己的 import 走到底，再减掉
+  `PREBUNDLED_SRC_ROOTS` 那一份（构建期已打进 `scripts/executor-host.runtime.mjs` 的），
+  净集必须与 `RUNTIME_SRC` **逐字相等**（漏登记与多挂一份都红）。实测：全部入口可达
+  `src/` 61 个 − 打包掉 58 个 = 净 3 个。这一格补的是 ISSUE #2158 第 7 条那一问
+  （产物里被剔掉的 90 个 `src/` 文件，「运行期若有人 import 其中之一会怎样」此前
+  没有一格在看：入口是硬编码的 3 份文件，第 4 份随包脚本 import 新的一份时它不说）。
   实测为什么非默认拒绝不可：Turbopack 不读 excludes 的整目录条目（§7.2 第三件事之二），
   一次构建的顶层是 40 个条目；**跑完当时那套按名字的剔除清单之后仍然剩 19 个**，里面是
   `python-venv`（5356 个文件）、`src-tauri`（8516）、`tests` / `e2e` / `tools` /
