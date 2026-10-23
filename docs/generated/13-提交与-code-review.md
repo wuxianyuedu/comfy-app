@@ -4421,18 +4421,22 @@ master 行不行」，不是「复现夜里那一跑」—— 要复现得先确
 | `- Experiments (use with caution):` 里的 `? useTypeScriptCli`     | `next.config.js` 把 `experimental.useTypeScriptCli` **钉死**为 `false`（硬规则 2；成因见那份配置里的注释：双版本并存下 CLI 模式会误报并挂死 dev server） | 不证明那个键没生效 —— 它生效着，钉死就是为了生效 |
 | `Skipping validation of types`                                    | `next.config.js` 的 `typescript.ignoreBuildErrors: true` —— 内嵌的类型校验被跳过（内建检测认不出 alias 包）                   | **不证明类型是好的**：类型正确性由独立的 `tsc --noEmit`（CI 的「类型检查」那一格）保证 |
 | `Attention: Next.js now collects completely anonymous telemetry…` | Next 16 的遥测提示                                                                                                              | 不证明本仓把什么发出去了（那是 Next 的匿名遥测）   |
+| `⚠ Failed to copy traced files for …route.js`（ENOENT copyfile） | **2026-10-23 定性**：缺的是 `@libsql/darwin-arm64` 那一类**非本平台的原生变体** —— pnpm 在 win32 上只装本平台那份 binding，那些目录盘上根本不在；与 §7.3 那 4 条死链同一族（ISSUE #2158 第 3 条已认下「非本平台的变体不是缺件」）。CI 上 **0 次**：CI 的 install 布局不产生这些变体链接。原 B 组第 6 条 | **不证明产物没缺件**：它只说明**这一条**警告指向的是非本平台变体。哪天这条警告点名的**不是**非本平台变体，那就是缺件，不是噪声 —— 判据是「缺的那个路径属不属于本平台」 |
+| `? No build cache found. Please configure build caching…` | **2026-10-22 处置**：本仓不接 remote cache（要 token），改用**文件系统持久缓存落常驻目录**（§13.5.3.4.3 第三增量）—— 而它按内容哈希命中、换工作区路径照样命中，所以「要 token」不是唯一出路。原 B 组第 5 条 | 不证明缓存一定命中：槽根算不出 / 空间不够 / 槽被别人占着时它会**失败即退回**（只读数、照常构建） |
+| `WARN [Better Auth]: [better-auth] Base URL is not set…` | **2026-10-22 处置**：改动态 baseURL（`{ allowedHosts, fallback, protocol }`），origin 按请求的 `Host` 头解析 ⇒ 桌面端口随机也天然对，且**没有值进产物**。原 B 组第 4 条 | 不证明「设置了 baseURL」：动态形态**永远**不打这条警告，所以警告消失也不等于 origin 一定对（那由 `tests/better-auth-origin-policy.test.ts` 判） |
 
 **B. 已知、但待决的**（读到它们不许当成「没问题」，也不许当成「坏了」）：
 
-| 提示                                                       | 它对应 ISSUE #2158 的哪一条 | 为什么现在不能说成「预期」                                          |
-| ---------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------- |
-| `? No build cache found. Please configure build caching…`  | 第 5 条                     | 配 remote cache 要 token；「本仓不配」这句话**还没有被认下**        |
-| `WARN [Better Auth]: [better-auth] Base URL is not set…`   | 第 4 条                     | 桌面形态下 baseURL 怎么给还没拍；且那个值不能烘进产物（硬规则 17）  |
-| traced files 复制失败（ENOENT）                             | 第 6 条                     | 还没定性是 Windows + Turbopack 的噪声，还是产物真缺依赖            |
+**B 组现在没有条目**（2026-10-23）：原三条（build cache / Better Auth baseURL / traced files
+ENOENT）都已定性或处置，上表逐条记了它们各自的**边界**（「它不证明什么」那一列）—— 那三列
+比「已修」三个字重要：这三条每一条都曾经是「每次构建都在、没人查」的东西，而把它们移进
+A 组的依据是**现场读数**，不是「看着无害」。
+
+**新提示一律先落 B 组**，定性之后才准搬进 A 组。
 
 **为什么值得写这一份**：这些提示每次都在，而「这一格红了怎么看」此前没有一份对照表，于是读
-的人只能自己猜「这是不是坏了」；猜错的方向往往是「去查产物」—— 而 B 组那三件真正待决的事
-项，去查产物是查不出来的（一条要 token，一条要产品口径，一条要先补判据）。
+的人只能自己猜「这是不是坏了」；猜错的方向往往是「去查产物」—— 而 B 组那些真正待决的事项，
+去查产物是查不出来的（要 token 的那条、要产品口径的那条、要先补判据的那条都是如此）。
 
 ⚠️ 这份对照表**不是**「所有看着像提示的行」的清单：**没定性的一律不许进 A 组** ——
 「把没查过的说成没问题」正是这份表最容易变成的那种东西。
