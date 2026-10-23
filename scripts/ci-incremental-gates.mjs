@@ -11,15 +11,25 @@
  * 落在扫描面内就跳过），而那条通道**只在本地存在** —— 平台侧那条流水线不知道
  * 「扫描面」这回事，于是它把同一份判据在同一个文件上重跑了一遍。
  *
- * ── 复合执行者：`重档静态判据` 一格装多条，**不收窄**（2026-10-19）────────
+ * ── 复合执行者：`重档静态判据` 一格装多条，**整格不收窄、格内逐条收窄** ─────────
  *
  * 原先各自占一格的那批静态判据（`格式化提交分离` / `生成态文档与源同步` /
  * `API 文档生成与自检` / `覆盖率上报` / `文档引用与权威源一致` / `core` 那两条 /
  * `零消费导出`）现在收进一格 `重档静态判据`（`scripts/ci-heavy-gates.mjs`），理由是
  * 平台单 stage 的 20m 硬上限与「每一格各付一次 job 开销」——现场与逐条读数见那个文件
- * 的头注。收进去之后它们**一律不收窄**，因为 `ifModify` 是按**整格**跳过的：
- * 一格装十条时它只能表达「十条一起跑」或「十条一起不跑」，而那十条的扫描面并不相同，
+ * 的头注。
+ *
+ * **整格**不收窄：`.cnb.yml` 的 `ifModify` 是按**整格**跳过的，一格装十条时它只能
+ * 表达「十条一起跑」或「十条一起不跑」，而那十条的扫描面并不相同，
  * 后者正是本仓最不能有的形态（判据在场、结论静默变成放行）。
+ *
+ * ⚠️ **但「整格不收窄」不等于「格内也不收窄」**（ISSUE #2255 的现场，2026-10-23 订正）：
+ * 那 13 条判据**在平台那一格被 `ifModify` 收窄**，在复合档里却**照跑全量**
+ * （本机实测 22.9s / 复合档逐条墙钟的 10.5%）⇒ 收窄白做。
+ * ⇒ 复合档现在**逐条**按**这张表**判面（`narrowingEntryForScript()` / `faceTouched()`，
+ * 本文件末尾那两个出口），与平台那一格用**同一份 glob** ⇒ 两处口径逐字一致。
+ * 收窄的两条边界：**改动面取不到 ⇒ 一条都不跳**（“不知道” ≠ “没改”）、
+ * **跳过的逐条点名且不计入「绿」**（跳过不是判过）。
  *
  * 这条边界有判据：`COMPOUND_EXECUTORS` 点名的 stage 一条 `ifModify` 都不许挂，
  * 而它们原来的那些收窄登记已经从本表**删掉**（登记表只收「一个执行者一条判据」的形态，
@@ -153,8 +163,7 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
  * 唯一权威），别在这儿复述成第二份会过期的定义。
  *
  * @type {ReadonlyArray<{name: string, globs: readonly string[], why: string, script: string}>}
- */
-export const INCREMENTAL_GATES = [
+ */export const INCREMENTAL_GATES = [
   {
     name: "标题行让位",
     globs: ["src/components/**", "src/app/**"],
@@ -485,6 +494,62 @@ function main() {
   return 1;
 }
 
+/* ── 收窄面的两个出口（ISSUE #2255）───────────────────────────────────────
+ *
+ * 这张表原来只服务**平台那一格**（`.cnb.yml` 的 `ifModify`）。ISSUE #2255 的现场是：
+ * 复合档（`scripts/ci-heavy-gates.mjs`）跑的是**钩子注册表整张**，于是那 13 条
+ * 「在平台那一格被 `ifModify` 收窄」的判据，在复合档里**照跑全量** ⇒ 收窄白做
+ * （本机实测 22.9s / 复合档逐条墙钟的 10.5%）。
+ *
+ * ⇒ 复合档也要用**同一张表**判面。两处用同一份 glob ⇒ 收窄的口径逐字一致
+ * （`checkIncrementalGates()` 已经在核「表 ⇄ `.cnb.yml`」的双向一致）。
+ */
+
+/** glob → 正则：**复用**别处那份（`scripts/vitest-projects.cjs` 导出的 `globToRe` /
+ * `matchesAny`）—— 另写一份就会与 vitest 收集面那套 `**` 语义漂开（那份的头注记着
+ * 一次真实事故：「双星号 + 斜杠」翻错会让整条面匹配不到任何路径）。 */
+const { matchesAny } = createRequire(import.meta.url)("./vitest-projects.cjs");
+
+/**
+ * 按**判据脚本**找它的那条收窄登记。
+ *
+ * 为什么按脚本而不按 stage 名：stage 名是平台那一侧的说法（`.cnb.yml` 里的 `- name:`），
+ * 而复合档那一侧看到的是**钩子的步骤行**（标签 + 命令）—— 两边唯一的共同点是
+ * 「这条判据是哪份脚本」。按脚本查 ⇒ 一条判据与它的面**必然**是同一条登记。
+ *
+ * @param {string} script 仓库相对路径（`scripts/xxx.cjs`）
+ * @returns {{name: string, globs: readonly string[], why: string, script: string} | null}
+ *   找不到 = 这条判据**没有**收窄面（那是不许收窄的形态：全仓不变量 / 前提类）
+ */
+export function narrowingEntryForScript(script) {
+  const s = String(script ?? "").replace(/\\/g, "/");
+  if (s === "") return null;
+  return INCREMENTAL_GATES.find((e) => e.script === s) ?? null;
+}
+
+/**
+ * 这次的改动面有没有碰到这条登记的面。
+ *
+ * 语义与平台的 `ifModify` **逐字同义**：变更文件一个都不落在给定 glob 内 ⇒ 跳过。
+ *
+ * ⚠️ **空清单不等于「没改」**：那是「不知道」——所以本函数对**空清单**返回 `true`
+ * （= 照跑）。把「不知道」读成「没改」会让整批判据静默消失，而那正是本仓最贵的形态。
+ *
+ * @param {{globs: readonly string[]}} entry 收窄登记
+ * @param {readonly string[]} files 改动面（仓库相对路径）
+ * @returns {boolean} true = 碰到了（照跑）；false = 没碰到（可按面跳过）
+ */
+export function faceTouched(entry, files) {
+  const globs = entry?.globs ?? [];
+  /* 没有面 ⇒ 不许收窄（宁可多跑）：全仓不变量与前提类都在这一档里。 */
+  if (globs.length === 0) return true;
+  const list = Array.isArray(files) ? files : [];
+  if (list.length === 0) return true;
+  return list.some((f) =>
+    matchesAny(String(f ?? "").replace(/\\/g, "/"), globs),
+  );
+}
+
 /* 「是不是被直接执行」按 Node 自己的口径判 —— 这条踩过（ISSUE #1961 最后一格：
  * `file://${path.resolve(...)}` 在 Windows 上恒不相等，main() 一次都不跑、进程退 0）。
  * 用 argv[1] 与当前文件的 realpath 比较，平台无关。 */
@@ -494,3 +559,5 @@ if (
 ) {
   process.exit(main());
 }
+
+
