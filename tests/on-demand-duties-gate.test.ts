@@ -125,6 +125,16 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
         fact: { kind: "gate-not-in-all", gate: "bundleBudget" },
         executor: "pnpm check:bundle（也挂在 pnpm build 收尾）",
       },
+      {
+        /* 同上：跟着真 `quality-gate.mjs` 的 `dailyAttendance`（`run: false`）走。
+         * ISSUE #2114 出路 1 —— 判据要上网问平台，所以它是**按需入口**而不是 `all`
+         * 的一档（把网络请求放进每次完整验证是另一回事）。 */
+        id: "daily-attendance",
+        name: "每日那一跑的出勤",
+        notInHook: "要上网问平台",
+        fact: { kind: "gate-not-in-all", gate: "dailyAttendance" },
+        executor: "pnpm check:daily-attendance",
+      },
       ...(overrides.extra ?? []),
     ],
   };

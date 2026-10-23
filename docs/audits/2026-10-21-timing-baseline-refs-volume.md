@@ -542,3 +542,39 @@ cnb-lao-1k5gho1pn  event=api_trigger_build  branch=master
 「在册 ≠ 出勤」缺的那半条（#2114 出路 1）还没落地的证据。下一次派发（`0 0 * * *` 的第一落点）
 若仍缺勤，就该做出勤判据，不再换时刻。
 
+## 第三天（10-23 上午）：`0 0` 的第一落点跑完了，出路 1 也落了地
+
+**第一落点的读数**（`cnb-hk7-1k5i5euak`，event `crontab: 0 0 * * *`，
+`createTime 2026-10-22T16:00:17Z` = 本地 **10-23 00:00:17**，**没有延迟补派**）：
+
+```text
+  status: success / 10 格全部 success
+  Prepare 31.5s · 每日工具链自证 13.3s · 每日安装依赖 256.4s · Python 可用性 3.6s
+  Python 探针读数 4.2s · 同步数据库表结构 20.4s · 每日生产构建 128.9s
+  每日 ESLint 零警告 333.5s · 每日浏览器安装 2.8s · 每日全量E2E 100.9s · 每日单元测试 658.6s
+```
+
+⇒ **本页立案 4 记的那条「五派发零跑完」在这里断掉了**：第一次落点是第 6 次派发、第一次跑完，
+**本仓那 10 格全 success**（`Prepare` / `BeforeEnd` / `End` 也绿；`DebugDetection` 是平台自带那一档、
+永远 `skipped`，不计入），整档墙钟 ≈ 26 分钟。这一格换到的东西到此是**实测**的，不再是推断的
+（上一节那句「样本只有四晚」的边界仍然成立 —— 一次成功不保证下一个夜里人收工更早）。
+也顺带回答了本页表 B 那条：`每日安装依赖` 在这一跑是 256.4s（冷态），与「每日那一跑拿到的一直是冷态」一致。
+
+**出路 1 落地**：`pnpm check:daily-attendance`（`scripts/check-daily-attendance.mjs`）。
+按 `crontab:` **前缀** + 两条手点 / API 口认每日派发（写死钟点的判据在第二次换时刻时就该静默失效了），
+三态退码 0 出勤 / 1 缺勤 / **2 没结论或取不到读数（不算绿）**，逐格判定整个复用
+`ci-build-readout.mjs` 那份四档（不写第二份），登记在 `quality-gate.mjs` 的
+`GATES.dailyAttendance`（`run: false`）+ `scripts/.on-demand-duties.json` 的一行
+（`fact.kind = gate-not-in-all`）——它不进 `.gate-executor-ledger.json` 的 `onDemand`，
+那个位置是「一个执行者都没有」的那一档，而这里有名字。今晚这一跑用它读出来是：
+
+```text
+[daily-attendance] 出勤 ✓ cnb-hk7-1k5i5euak 在 0.8 小时前跑完，每一格都有 success 结论
+逐格：10 格有结论 · 判定 green（平台原文 success）
+```
+
+⚠️ 它补的是「**读得出来**」这一格，**不是**睡眠那一半：睡过去的派发不会有任何执行者当场判它，
+这条只能被下一次核对读成「已经 N 小时没绿过」。所以 #2114 仍开着等出路 2（电源侧，
+`powercfg` 那一档在业主手里）。
+
+

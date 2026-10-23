@@ -3911,6 +3911,7 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
 | 产物级护栏（`pnpm run build`）                   | 分钟量级（`next build` + 起 sidecar 冒烟）                                                                                                                                                         | 钩子 D0 只打**读数**（本地不再要求当天自证，2026-10-19）；跑它在平台侧的**每日档** `ci-daily-build.mjs`（里面还是 `artifact-run.mjs` 那一份），PR 那一格 2026-10-18 起撤掉 —— 见 §13.5.23                                                         | `FRESHNESS_TRACKS.artifact`                                                          |
 | 依赖漏洞扫描（`check-dependency-audit.mjs`）     | 网络请求（离线 / registry 抖动不该变成提交失败）                                                                                                                                                   | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`）                                                                                                                                                                              | `quality-gate.mjs` 的 `dependencyAudit`                                              |
 | `tw4-canonical-report` / `tw4-spacing-canonical` | 起 Tailwind 引擎（~6s），判的是 CSS 等价改写而非正确性                                                                                                                                             | 按需召唤 + `--check` 棘轮                                                                                                                                                                                                                         | `.gate-executor-ledger.json` 的 `onDemand`                                           |
+| **每日档的出勤**（`check-daily-attendance.mjs`）       | 要上网问平台（一次 `get-build-logs` + 至多三跑逐格详情）。把网络请求放进每次提交的编辑循环是另一回事 —— 同 §13.5.13 那条「`git fetch` 是人的动作，判据自身不做网络请求」                                     | 按需召唤：`pnpm check:daily-attendance`（0 出勤 / 1 缺勤 / **2 没结论或取不到读数 —— 退 2 不算绿**）。谁在什么时候该跑：任何一次拿「平台那一档在跑」当本地豁免理由的争论现场，以及换时刻 / 撤档之后第一次核对（ISSUE #2114 / §13.5.23 末节）      | `quality-gate.mjs` 的 `GATES.dailyAttendance`（`run: false`）+ `.on-demand-duties.json` 的 `daily-attendance` 行 |
 | 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）                                                                                                                                              | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次）                                                                                                                                                                         | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`                                    |
 | **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并；单次分钟级（钩子内三次实测 116 / 84 / 83 秒、单独跑 336 秒，见 §13.6.2.1），挂进每次提交是拿它换一个不会天天变的结论（§13.6.2 / §11.23.5） | `.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑（§13.6.2.1）；人仍可手工敲一次，或在 PR 里 `@` 评审 NPC 唤起一轮                                                                                                                              | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）+ `scripts/premerge-proof.mjs` |
 
@@ -4639,6 +4640,44 @@ HTML 报告给人看、退出码恒 0；本判据是**机器判定档**、量**�
 （详见 §13.5.12），不再是一句谁都能忘的人为提醒。判定档的形态在 ISSUE #1811 的 tw4 项
 里又收了一步：从「基线 `total: 0` 的棘轮」翻成**硬闸**（删基线、删 `--update`，
 `--check` 命中即退 1）。
+
+**在册 ≠ 出勤：`pnpm check:daily-attendance`**（ISSUE #2114 出路 1）
+
+上面那句「这一档是 X 的唯一执行者」此前只被**在册**那一半守着 —— `no-platform-ci-config`
+数的是格名在不在每日清单里。而 2026-10-18 → 10-22 那**五派发零跑完**（两次没落到这台机、
+一次被 8640s 墙钟掐成 error、一次被同一把锁取消、一次睡满 3.0h）期间**账面全绿**：
+`FRESHNESS_TRACKS[*].ciStage` 非空 ⇒ 本地 D0 那层「今天必须有凭证」整层跳过，
+而被跳过的理由是「平台会跑」—— 那句话当时没有人判。
+
+补上的这一档答的是同一个问题的另一半：
+
+- **判什么**：窗口内（默认 36h = 每天一次 + 半天余量，吃得下实测存在的延迟补派）
+  最近一次**每日类派发**在不在、跑成了哪一档。每日类按 `crontab:` **前缀** +
+  两条手点 / API 触发口认 —— 那个事件名里**含小时**，而 10-22 一天换过两次
+  （`0 4` → `0 2` → `0 0`），写死钟点的判据第二次换时刻时就会静默变成「永远读不到派发」；
+- **不判什么**：清单全不全（还是 `no-platform-ci-config` 的活）、这一跑红在哪
+  （逐格判定整个复用 `ci-build-readout.mjs` 的 `classifyBuildOutcome()`，
+  不在这里写第二份格级判定 —— 那是 §12.12 的孪生）；
+- **三态退码**：`0` 出勤 / `1` 缺勤（真失败，或窗口内压根没有派发）/
+  **`2` 没结论、没跑到，或取不到读数**。「被取消」与「拿不到测量」都落 2：
+  说成红就是替平台编一个不存在的产物问题（`ci-build-readout.mjs` 那条口径同），
+  而并进绿更是直接把这条判据变成会说谎的那一种；
+- **网络只在被要求时发生**：判据自身不做网络请求（§13.10 之外另见 §13.5.13 那句
+  「`git fetch` 是人的动作」）。`--from <JSON>` 那一档是给「已经取回一份读数」的场景
+  （也是用例的执行面）：**列表那份没有逐格读数 ⇒ 只能落 2**，一份没有 `event` /
+  `createTime` 的详情也落 2 —— 凑形状判出勤是这条判据最不该犯的错。
+  登记在 `quality-gate.mjs` 的 `GATES.dailyAttendance`（`run: false`）并在
+  `scripts/.on-demand-duties.json` 补一行（`fact.kind = gate-not-in-all`）—— 理由与
+  「谁在什么时候跑」都在那两处；**不**登记进 `scripts/.gate-executor-ledger.json`
+  的 `onDemand`，因为台账那条口径是「**没有任何执行者**、只能人手召唤」，而这一档在
+  `check:all` 的注册表里有名字（判据 `check-gate-executors.cjs` 会当场指出两边的不符）。
+
+⚠️ **它的先天限制要一起留着**：*睡过去的那一次*不会有任何执行者去判 —— 那一跑根本没落地，
+本地判据只能在下一次有人跑它时把「已经 N 小时没有绿过」读出来。所以这条把「缺勤」变成可失败的
+事实，**不**等于睡眠那一半被处置完（那一半要么落到电源侧 `powercfg`，要么落到节点唤醒后自报，
+见 #2114 出路 2）。第一次 `0 0` 派发的真读数（2026-10-23 00:00:17，
+`cnb-hk7-1k5i5euak`，10 格全 success）跑出来的就是这一档的绿：
+`出勤 ✓ … 在 0.8 小时前跑完`。
 
 这张表里**原本还有一行**「R5 行数棘轮 → `@` 跑 `check-file-structure.cjs --strict`」，随
 ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前提「挂着 11 个存量」不再成立）之后，
