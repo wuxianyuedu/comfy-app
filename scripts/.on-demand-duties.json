@@ -90,6 +90,16 @@
         "gate": "bundleBudget"
       },
       "executor": "按需召唤（`pnpm check:bundle` / `pnpm check:all --mode bundleBudget`）+ 棘轮（scripts/.bundle-budget-baseline.json 的判定档）；同一脚本也挂在 `pnpm build` 收尾（形态 C 兜底）"
+    },
+    {
+      "id": "daily-attendance",
+      "name": "每日那一跑的出勤（上一次派发到底有没有执行）",
+      "notInHook": "要上网问平台（一次 get-build-logs + 至多三跑的逐格详情）。把网络请求放进每次提交的编辑循环是另一回事 —— §13.5.13 同口径：判据自身不做网络请求，「现在去不去问平台」是人的动作",
+      "fact": {
+        "kind": "gate-not-in-all",
+        "gate": "dailyAttendance"
+      },
+      "executor": "按需召唤：`pnpm check:daily-attendance`（0 出勤 / 1 缺勤 / 2 没结论或取不到读数 —— 退 2 不算绿）。跑它的两个现场：① 任何一次拿「平台那一档在跑」当本地豁免理由的争论（`FRESHNESS_TRACKS[*].ciStage` 那串豁免的前提就是这句话）；② 每日档换了时刻或撤了格之后，第一次核对。口径与先天限制（睡过去的那一次当场无人可判）见 §13.5.23 末节 / ISSUE #2114"
     }
   ]
 }
