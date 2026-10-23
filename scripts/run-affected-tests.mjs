@@ -116,10 +116,20 @@ import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 /* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威）。
  * import 而不是各抄一份文件名：抄两份的漂移形态是静默的 —— 改名那侧照常跑、
  * 这侧读不到，而「读不到」在这一格长得和「这次没有读数」一模一样。 */
-import { C_MANIFEST_NAME, cFileXmlName } from "./precommit-timing.mjs";
+import {
+  C_MANIFEST_NAME,
+  cFileXmlName,
+  failingSuiteTextsFromJunit,
+} from "./precommit-timing.mjs";
 /* 复跑面（第 2 遍该跑哪几份）住在自己那份文件里 —— 与话术层同一刀，理由写在那份文件头：
- * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。 */
+ * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。
+ * 判决粒度（第 2 遍那份红按文件分开）住在隔壁那份里（`affected-launch-retry-verdict.mjs`）——
+ * 取数按文件而判决按块，粗的那一份会把细的那一份的真红一起吞掉（ISSUE #2225）。 */
 import { retryScope } from "./affected-launch-retry-scope.mjs";
+import {
+  classifyRetry,
+  mergePerFileReads,
+} from "./affected-launch-retry-verdict.mjs";
 import {
   isTimeoutShaped,
   remainingWaitMs,
@@ -218,6 +228,45 @@ export const SAFE_ARGV_BUDGET = 24_000;
  * （几百条全过、退出码非零）。口径与推导见规范 §13.5.8。
  */
 export const DEFAULT_MAX_WORKERS = 4;
+
+/**
+ * 「分不出哪份是超时」时逐文件补跑的**上限**（份数）。
+ *
+ * 为什么要有上限：逐文件补跑是一份一次进程启动（约 1–3s），而这条路只在
+ * 「第 2 遍仍红且第 2 遍的 junit 认不出这些文件」这条稀有路径上走 —— 上限之内
+ * 用几十秒换回判决粒度，值得；上限之外（典型是第 1 遍崩在 suite 之前、整块都被
+ * 拉去复跑）逐文件跑等于把整块再跑一遍，而那块本来就是因为跑不动才红的。
+ * 超过上限就停在这一档并把名单点出来（退 2），**不**冒充「整块只是超时形态」。
+ *
+ * 8 = 实测「一次改一个 feature」时组 C 失败文件数的常见上界再留一倍余量。
+ * 这一条与下面那份 `SCOPE_ADVICE_MIN` 都在 `scripts/.gate-thresholds.json` 里按 `report`
+ * 入账（不是松紧量：调它只改变「要不要多花那几十秒」，不改变任何一条断言的判定）。
+ */
+const PER_FILE_RERUN_MAX = 8;
+
+/**
+ * 读第 2 遍那份 junit 的**失败 suite 及各自文本**（判决按文件分开的依据）。
+ *
+ * 读不到就回空数组 —— 空数组在 `classifyRetry` 里会得到「每份都认不出自己」，
+ * 那一档的行为是补跑或退 2，**不是**放行。方向刻意只往「多测、少放行」偏：
+ * 把「读不到」读成「没有超时指纹」会把真红放大，读成「全是超时」会把真红吞掉，
+ * 而吞掉那一型正是 ISSUE #2225 的现场。
+ *
+ * @param {{junitDir?: string, chunkId: number, read?: (file: string, enc: string) => string}} input
+ * @returns {{name: string, body: string}[]}
+ */
+export function readRetrySuiteFailures(input) {
+  const dir = input.junitDir ?? "";
+  if (!dir) return [];
+  const read = input.read ?? readFileSync;
+  let xml = "";
+  try {
+    xml = read(cFileXmlName(dir, input.chunkId, 2), "utf8");
+  } catch {
+    return [];
+  }
+  return failingSuiteTextsFromJunit(xml);
+}
 
 /**
  * 从环境变量取一个**显式的**并发覆盖（`COMFY_PRECOMMIT_MAX_WORKERS`）。
@@ -629,7 +678,13 @@ async function main(argv) {
 }
 
 /**
- * 跑**一块**清单，返回该块的退出码（0 = 通过 / 未校验，非零 = 真红）。
+ * 跑**一块**清单，返回该块的退出码。三档，各有各的结论（ISSUE #2225 之后不再是两档）：
+ *
+ * | 退码 | 含义                                       | 谁决定怎么处理                                             |
+ * | ---- | ------------------------------------------ | ---------------------------------------------------------- |
+ * | `0`  | 通过，或**已确认每份都只是超时**（未校验） | 钩子放行并点名（#1747 那条口径）                           |
+ * | `1`  | 有文件的失败不是调度形态（真红）           | 钩子阻断；平台那格照原值非零                               |
+ * | `2`  | **未判定**：有文件拿不到自己的读数         | 钩子按「既不是绿也不是红」放行并点名；平台原样透传 ⇒ 不算绿 |
  *
  * 单独抽出来是为了让「超时形态 ⇒ 等待 + 隔离复跑 ⇒ 按第二遍的形态定论」这条判决链
  * **可以被用例整个跑一遍**（注入假的 `spawn` / 假等待即可），而不是只断源码的字面
@@ -730,14 +785,59 @@ export async function runChunk(chunk, deps) {
     });
     return 0;
   }
-  /* 串行仍红、**不再复跑**（第三次只会把钩子变长，不改变结论）。这时唯一的
-   * 分叉是「这一遍的读数可不可信」，判据是**第二遍自己的输出形态**：
-   *
-   *   · 第二遍**仍带**超时 / worker 起不来指纹 ⇒ 连单进程串行都排不上，说明这台机器
-   *     此刻给不出可信读数。这一档**未校验**：不是绿（没有证据说它过），也不是红
-   *     （没有证据说它错 —— 那些指纹说明失败的是调度，不是断言）⇒ 放行 + 点名。
-   *   · 第二遍指纹消失了（真断言 / 真挂死）⇒ 真红，照旧阻断。 */
-  if (isTimeoutShaped(retry.output)) {
+  /* 串行仍红、**不再整块复跑**（第三次只会把钩子变长，不改变结论）。这时要问的是
+   * 「这一遍的读数能不能**按文件**分开」，而不是「整块输出里还有没有指纹」——
+   * 后者是块级口径，它把「A 超时 + B 真断言红」整块读成「只是超时形态」并退 0，
+   * 于是 B 那次真红没有任何一格会看见（ISSUE #2225：判定粒度比取数粒度粗，
+   * 粗的那一份就把细的那一份吞了，而吞掉表现为 success）。三档结论：
+   *   · 任一份文件的失败文本**不带**指纹 ⇒ 真红，阻断并点名那几份；
+   *   · 每一份都带指纹 ⇒ **未校验**：放行 + 逐条点名（沿用 #1747 那条口径）；
+   *   · 有文件在第 2 遍的读数里认不出自己 ⇒ 先**有界逐文件复跑**把粒度拿回来
+   *     （一份一个退出码，那份退出码就是它的结论，不需要再解析块）；拿不回来就是
+   *     **未判定**，退 2 —— 它既不是绿也不是红，但**不许**冒充「整块只是超时形态」。 */
+  const readSuites = readRetrySuiteFailures({
+    junitDir,
+    chunkId,
+    read: deps.readJunit,
+  });
+  let verdict = classifyRetry({ files: scope.files, readSuites });
+  if (
+    verdict.kind === "unattributed" &&
+    verdict.unknown.length > 0 &&
+    verdict.unknown.length <= PER_FILE_RERUN_MAX
+  ) {
+    process.stderr.write(
+      `[affected-launch] ${verdict.unknown.length} 份文件在第 2 遍的读数里认不出自己` +
+        " ⇒ 逐文件各跑一次把判决粒度拿回来（不解析块，一份自己一个退出码）…\n",
+    );
+    /** @type {{file: string, status: number | null, output: string}[]} */
+    const perFile = [];
+    for (const file of verdict.unknown) {
+      const one = spawn(entry, ["run", "--no-file-parallelism", file]);
+      perFile.push({ file, status: one.status, output: one.output });
+    }
+    verdict = mergePerFileReads(verdict, perFile);
+  }
+
+  if (verdict.kind === "unattributed") {
+    process.stderr.write(
+      `[affected-launch] ⚠ 第 2 遍仍红，而有 ${verdict.unknown.length} 份文件` +
+        "**拿不到自己的读数**（超过逐文件补跑的上限，或补跑也没落上读数）。\n" +
+        "  这一档不叫「未校验」：未校验是「确认每份都只是超时」，而这里是**分不出**。\n" +
+        "  ⇒ 本组退 2（构成结论，但不是绿，也不是红）。点名：\n" +
+        verdict.unknown.map((f) => `    · ${f}\n`).join("") +
+        "  下一动作：把那几份单独跑一次定性（串行、同一份清单，规范 §13.6.4 那条）；\n" +
+        "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
+    );
+    report({
+      outcome: "rerun-unattributed",
+      waitedMs: settled.waitedMs,
+      settled: settled.settled,
+    });
+    return 2;
+  }
+
+  if (verdict.kind === "unverified") {
     process.stderr.write(
       "[affected-launch] **第 2 遍仍然只是超时形态**（连单进程串行都排不上）——\n" +
         "  这一遍给不出可信读数，所以这批用例本次记为**未校验**：\n" +
@@ -752,8 +852,9 @@ export async function runChunk(chunk, deps) {
         "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
     );
     /* 点名的范围必须是**这次真的没拿到可信读数的那些**，而不是整块：整块那份名单会把
-     * 第一遍已经绿过的文件也写成「未校验」，而下一个人据此重跑时会在不存在的地方找问题。 */
-    deps.onUnverified?.(scope.files);
+     * 第一遍已经绿过的文件也写成「未校验」，而下一个人据此重跑时会在不存在的地方找问题。
+     * 按文件分档之后这份名单比原来更准：逐文件补跑里自己通过的那些不在里面。 */
+    deps.onUnverified?.(verdict.timedOut);
     report({
       outcome: "rerun-unverified",
       waitedMs: settled.waitedMs,
@@ -762,7 +863,9 @@ export async function runChunk(chunk, deps) {
     return 0;
   }
   process.stderr.write(
-    "[affected-launch] **第 2 遍**指纹已消失（不再是调度形态）⇒ 这不是负载假红，按真红处置：\n" +
+    "[affected-launch] **第 2 遍**里有文件的失败**不是**调度形态 ⇒ 这不是负载假红，按真红处置。\n" +
+      `  同块里确实还有超时的那 ${verdict.timedOut.length} 份，它们不替这几份挡：\n` +
+      verdict.hardFail.map((f) => `    · ${f}\n`).join("") +
       "  用 `node scripts/base-check.mjs <这条>` 复算归属（你的 / 别线的），\n" +
       "  再决定修代码还是登记 —— 不要抬 testTimeout。\n",
   );
