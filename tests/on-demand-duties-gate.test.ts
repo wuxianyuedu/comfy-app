@@ -27,7 +27,9 @@ const { test, expect } = defineGateRepo({
   dir: "scripts",
   workdir: "on-demand-duties",
   /* 两份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：
-   *   · `freshness-ledger.mjs` —— 新鲜度档的键（判据 `import` 它）；
+   *   · `freshness-ledger.mjs` —— 新鲜度档的键（判据 `import` 它）；它按 `scripts/**` 900 行
+   *     硬闸把「机器分支回看 / 回写」拆到了 `freshness-ledger-sync.mjs`，所以那份也得一并
+   *     拷进来，否则 `import` 链到半路 `ERR_MODULE_NOT_FOUND`、整组用例红。
    *   · `quality-gate.mjs`    —— `run: false` 的门禁项。
    *
    * **按需召唤台账刻意不拷真件**：那两份 tw4 条目只需一条在场就够（夹具要的是
@@ -35,6 +37,7 @@ const { test, expect } = defineGateRepo({
    * （`files` 在后），但那会让「夹具提供了什么」这件事不可读 —— 直接写更清楚。 */
   copy: [
     { from: "scripts/freshness-ledger.mjs", to: "scripts/freshness-ledger.mjs" },
+    { from: "scripts/freshness-ledger-sync.mjs", to: "scripts/freshness-ledger-sync.mjs" },
     { from: "scripts/quality-gate.mjs", to: "scripts/quality-gate.mjs" },
   ],
   /* 台账与索引都按用例改写 —— 夹具给一份最小可用的。 */
