@@ -67,7 +67,7 @@ afterAll(() => {
 describe("freshness ledger 机器分支回看（#2247）", () => {
   it("readBranchLedger 能从指定 ref 读出账", () => {
     const ledger = readBranchLedger({ root: ROOT, rel: E2E_REL, branch: BRANCH });
-    expect(ledger?.e2e?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
+    expect((ledger as any)?.e2e?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
   });
 
   it("readFreshnessLedger 机器账权威：机器有则以机器为准（不取工作树那份）", () => {
