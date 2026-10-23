@@ -4981,6 +4981,17 @@ await」等一并揪出来，一次报几百处、评审看下来全是"这里�
 | 反向 import 闭包 | 谁 import 了改动文件、谁又 import 了那些文件……沿 import 图走到测试为止。静态 `from`、副作用 import、动态 `import()`、`require`、`vi.mock` 都算；别名 `~/` `@/`、相对说明符按**引用方位置**解析；目录 import 命中 `dir/index.*`，所以 barrel 的转出口天然在图里（**没有**「同目录就算消费」那种放宽） |
 | 按路径引用       | 改动路径以字面量出现在测试的**代码文本**里（门禁 `execFileSync` 起被测脚本、主题用例按路径读 CSS），另含 `scripts/<name>` ⇄ `tests/<name>.test.ts` 的同名配对                                                                                                                                        |
 
+**改名（`R`）的旧路径也进改动面**（ISSUE #2226）：改动面由 `git diff --name-status -M`
+产出（本地暂存区与平台 PR 入口同一份解析 `changedPathsFromNameStatus`），`R` 行的
+**旧路径与新路径都进 roots**。`--name-only` 只剩新路径，而「按路径读那个文件、又不
+import」的用例（门禁自测的常态）正是靠旧路径那一串才被选中 —— 改名于是把它的消费方
+整条抹掉，钩子 / PR 照样全绿。旧路径已不在索引里时，「按路径引用」再退一档：测试代码
+文本里同时出现**目录**与**文件名**两片（`join(ROOT, "src/a", "b.ts")` 的写法）也算命中；
+这一档只在调用方给了 `tracked`（`git ls-files`）且该路径**确实已消失**时启用 —— 单看
+basename 会把半个测试面误拉进来（`route.ts` / `index.ts` 这类名字遍地都是）。改名事件
+本身在 stderr 念一行（本地与 CI 各一处），不是静默多跑几份。判据在
+`tests/affected-tests.test.ts` 的「改名」一组与 `tests/ci-affected-tests.test.ts`。
+
 **「按路径引用」的比对面是剥注释之后的代码文本，不是原文**（ISSUE #2022）：这一条
 最初写成 `text.includes(改动路径)`，而本仓的门禁自测**在文件头的 JSDoc 里引用规范章节**
 是硬规则 15 要求的动作 —— 于是「改一句注释」与「运行期读了那个文件」在判据里逐字同形。
@@ -5121,11 +5132,12 @@ respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配�
 （现 27 条）钉住，其中「整条判决链」那一节用**注入的假 spawn / 假负载**把五条路径各跑一遍
 （两向都断退出码），不是只断源码形状。
 
-判据由 `tests/affected-tests.test.ts` 钉住（20 条，实测 `pnpm exec vitest run` 的读数；
+判据由 `tests/affected-tests.test.ts` 钉住（35 条，实测 `pnpm exec vitest run` 的读数；
 这个数没有判据核，改完数量要顺手同步这里）：四条判据各一组夹具、**两跳
 传递**与 barrel 转出口（含「没转出去的 sibling 不算消费」这条反面）、被删文件的
-消费方仍被拉起、公共地基的放弃收窄、**结果永不为空**（空参数会让 `vitest run`
-跑成全量）、固定清单每个文件真实存在、`isTestPath` 与 `vitest.config.ts` 的
+消费方仍被拉起、**改名旧路径**（R 行两侧都进面、整串字面量与「目录 + 文件名」分片、
+后者只在旧路径确实消失时启用）、公共地基的放弃收窄、**结果永不为空**（空参数会让
+`vitest run` 跑成全量）、固定清单每个文件真实存在、`isTestPath` 与 `vitest.config.ts` 的
 `include` 不漂移。
 
 ##### 13.5.8.1 共享机上 C 组为什么慢、慢多少、杠杆在哪（ISSUE #1648）
@@ -7154,7 +7166,8 @@ worker / Timeout waiting for worker to respond` —— 实测 pre-push 的那一
   pre-push 的 `unitTests` 段（后者活了不到一天）；判据与判决链一字未改
   （`run-affected-tests.mjs` + `COMFY_AFFECTED_CHANGED`），换的只是谁起它。新入口
   `scripts/ci-affected-tests.mjs` 做三件事：按 `CNB_PULL_REQUEST_TARGET_SHA` 算这个 PR 的
-  改动面（三点 diff；取不到 ⇒ **退 2**，空清单同样退 2 —— 放行会让启动器把 vitest 跑成全量，
+  改动面（三点 diff，`--name-status -M` —— 改名的旧路径也进面，见 §13.5.8；取不到 ⇒ **退 2**，
+  空清单同样退 2 —— 放行会让启动器把 vitest 跑成全量，
   而全量绿在 PR 这一跳上是被 §13.5.21 否掉的读数）、按 `ci-load.mjs` 收敛并发、把退出码
   三态原样转出去。C 组的 `run_group C` 行仍逐字留在钩子里当登记
   （`tests/hook-affected-launch.test.ts` 钉的就是那个入口形状），`COMFY_HEAVY_GATES=1`
