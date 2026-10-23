@@ -375,7 +375,7 @@ CHANGELOG 写**对外差异**。完整细则见
 | 命名规范 | 项目 docs 或 output 归档 | 命名规则变更时 |
 | 测试说明 | `docs/guides/TESTING.md` | 测试体系变更时 |
 | 更新日志 | `changelog.d/`（碎片）→ `CHANGELOG.md`（并入） | 用户可感知的变更随 PR 落碎片文件（见 §5.4） |
-| API 文档 | `docs/api`（typedoc 生成，提交进 git） | 改了 `src/lib` / `src/server` / `src/trpc` 后 `pnpm run docs` 重生成并同提交（`pnpm docs` 是 pnpm 内建命令、会抢走脚本）；由 `check-docs-api.cjs` 在 pre-commit 核（详见规范 13 §13.5.5.1） |
+| API 文档 | `docs/api`（typedoc 生成，**不提交进 git** —— ISSUE #2231） | 本地想看：`pnpm run docs` 生成一份（只在本机，`pnpm docs` 是 pnpm 内建命令、会抢走脚本）；平台侧那一格「API 文档生成与自检」生成一份自己用并判它可不可用（详见规范 13 §13.5.5.1）。**没有「一并提交」这回事** |
 
 - 代码行为变更必须同步相关文档；文档与代码同提交。
 - 长文档用目录 + 表格 + 示例，禁止大段无结构文字。

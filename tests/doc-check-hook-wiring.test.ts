@@ -43,6 +43,7 @@ import {
   HEAVY_GATES,
   heavyGateRegistryProblems,
 } from "../scripts/ci-heavy-gates.mjs";
+import { parseStageScripts } from "../scripts/ci-autofix-duties.mjs";
 import { readHookSteps } from "../scripts/base-check/hook-steps.mjs";
 
 const REPO_ROOT = resolve(".");
@@ -290,7 +291,8 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
 });
 
 /**
- * API 文档生成物与源同步：**已从 D 组挪到平台侧**（ISSUE #1329 收尾 → ISSUE #1975）。
+ * API 文档生成与自检：**已从 D 组挪到平台侧**（ISSUE #1329 收尾 → ISSUE #1975），
+ * 并在 ISSUE #2231 **改了判据对象**（原名「API 文档生成物与源同步」）。
  *
  * 它进钩子时带的是 `--staged`（输入面跳过），而那个跳过的**输入面是 `src/lib|server|trpc`**
  * —— 本仓最常见的提交类别正好全落在它里面，于是「跳过」在真实提交上几乎不生效：
@@ -299,12 +301,14 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
  *
  * 判两半：钩子里不再有它、平台侧那一步在（且**不带 `--staged`** —— 平台侧是全量档，
  * 传 `--staged` 会让它在平台侧恒跳过，等于白挂）。
+ *
+ * ⚠️ **ISSUE #2231 之后平台侧那一步不再带 `--autofix`**：产物不再进 git ⇒ 没有
+ * 「自动修完再提交」的对象；而「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上
+ * 隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
  */
 const DOCS_API = join(REPO_ROOT, "scripts", "check-docs-api.cjs");
-/** 生成物目录（提交进 git，判据对象是它）。 */
-const DOCS_API_OUT = join(REPO_ROOT, "docs", "api");
 
-describe("API 文档生成物与源同步（ISSUE #1329 收尾 → ISSUE #1975 挪执行者）", () => {
+describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执行者 → ISSUE #2231 改判据对象）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
@@ -313,17 +317,17 @@ describe("API 文档生成物与源同步（ISSUE #1329 收尾 → ISSUE #1975 �
     expect(
       hit,
       `门禁链 ${steps.length} 步里又有 docs-api 同步了 —— 它已随 ISSUE #1975 挪到平台侧 ` +
-        "（`.cnb.yml` 的「API 文档生成物与源同步」）。要么把它从钩子里去掉，要么同步改本判据",
+        "（`.cnb.yml` 的「API 文档生成与自检」）。要么把它从钩子里去掉，要么同步改本判据",
     ).toBeUndefined();
   });
 
   it("平台侧那一步在，且是**全量档**（`--staged` 在平台侧恒跳过 = 白挂）", () => {
-    const executor = platformExecutor("API 文档生成物与源同步");
+    const executor = platformExecutor("API 文档生成与自检");
     expect(
       executor,
       "平台侧（`.cnb.yml` 的 stage 清单与聚合档 `重档静态判据` 的条目表）都没有" +
-        "「API 文档生成物与源同步」—— 钩子撤掉 + 平台侧没加 = docs/api/** 又回到" +
-        "「进 git + 零判据」的过期面（§13.5.17）",
+        "「API 文档生成与自检」—— 钩子撤掉 + 平台侧没加 = 这一格又回到" +
+        "「没人跑」的形态（§13.5.17）",
     ).not.toBeNull();
     expect(
       executor?.command,
@@ -334,22 +338,46 @@ describe("API 文档生成物与源同步（ISSUE #1329 收尾 → ISSUE #1975 �
       "平台侧那一步带了 `--staged`：平台侧的工作区就是这次要判的那份源码，" +
         "`--staged` 在那里读的是「本次暂存」，恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
     ).not.toContain("--staged");
-    expect(
-      executor?.command,
-      "平台侧那一步必须是 `--check --autofix`（只写不判 = 恒绿）",
-    ).toContain("--check");
   });
 
-  it("生成物仍然提交进 git（判据对象没被 .gitignore 摘掉）", () => {
-    // 判据的整个前提是「产物在仓库里」。若有人把它退回忽略态，这一步会找不到目录
-    // 而报「不存在」—— 那条报错读起来像配置问题，不像「你把判据对象搬走了」。
+  it("平台侧那一步**不带 `--autofix`**（产物不再进 git，没有「自动修完再提交」的对象）", () => {
+    /* ISSUE #2231 的现场：master 上那份产物与源差 9 处，而平台那一格**报绿** ——
+     * 因为它带 `--autofix`：发现不一致就就地重生成、再判一次，第二次一致 ⇒ 退 0。
+     * 「修好了」与「本来就对」在读数上完全同形 ⇒ 漂移在 CI 上隐形。
+     * 产物从 git 里搬走之后，那一格改判「这一轮生成的产物可不可用」，自动修旗标
+     * 必须跟着摘掉 —— 否则「自动修 + 再判」这个形状会留在配置里，而读数上看不出。
+     *
+     * ⚠️ 核的是**那一行的 `script:`**，不是整块 —— 整块里还有注释，而注释里出现
+     * 旗标字面量（那正是本条要说明的事）**不**等于「这一格带着那个旗标」。
+     * 解析口径复用 `scripts/ci-autofix-duties.mjs` 的 `parseStageScripts()`
+     * （自动修登记表核的也是那一行）。 */
+    const script = parseStageScripts(
+      readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8"),
+    ).get("API 文档生成与自检");
+    expect(script, "配置里解析不出「API 文档生成与自检」那一行的 script").toBeDefined();
     expect(
-      existsSync(DOCS_API_OUT),
-      `docs/api/ 不在仓库里了 —— 本判据的对象是提交进 git 的生成物；` +
-        "要么把它加回来，要么连同这一步一起删（不要留下一个指向空气的判据）",
-    ).toBe(true);
+      script,
+      "平台侧那一步又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象",
+    ).not.toContain("--autofix");
+  });
+
+  it("生成物**不再**提交进 git（判据对象换成了「这一轮生成的产物」）", () => {
+    /* 上一版在这里断言的是「产物仍然提交进 git（判据对象没被 .gitignore 摘掉）」——
+     * 判据的整个前提是「产物在仓库里」，而 ISSUE #2231 把那个前提撤了：产物进
+     * `.gitignore`，于是「提交进 git 的那份与源同不同步」这个问题**没有对象**了。
+     * 新的前提是「产物不在 git 里」—— 有人把它加回 git ⇒ 漂移那一族又活了。 */
     const ignore = readFileSync(join(REPO_ROOT, ".gitignore"), "utf8");
-    expect(ignore).not.toContain("docs/api");
+    expect(
+      ignore,
+      "`.gitignore` 里没有 `docs/api/` —— 产物又被搬回 git 了 ⇒ 「提交进 git 的那份与源同" +
+        "不同步」这个问题重新有对象，而那一格不再判它 ⇒ 漂移在 CI 上隐形（#2231 的现场）",
+    ).toContain("docs/api/");
+    /* 判据本身也不该再要求「产物目录事先存在」—— 它自己生成那一份。 */
+    const script = readFileSync(DOCS_API, "utf8");
+    expect(
+      script,
+      "判据里还留着「产物目录不存在 ⇒ 判红」那套 —— 产物不再进 git，判据自己生成一份",
+    ).not.toContain("生成物本应提交进 git");
   });
 
   it("脚本头写明它现在由**平台侧**调用（挪了执行者，承诺要跟着改）", () => {

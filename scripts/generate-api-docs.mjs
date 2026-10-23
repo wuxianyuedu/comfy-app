@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * generate-api-docs.mjs — 重生成 `docs/api/**`（= `pnpm run docs`，跨平台）。
+ * generate-api-docs.mjs — 生成一份 API 文档到 `docs/api/`（= `pnpm run docs`，跨平台）。
  *
  * 它只做三件事：定位 typedoc 的输出目录 → 调 `scripts/typedoc-run.mjs` 跑并验 →
  * 把结论翻译成退出码。**跑与验的逻辑不在这里**（`typedoc-run.mjs` 是唯一实现，
- * `scripts/check-docs-api.cjs` 用的是同一份）。
+ * `scripts/check-docs-api.cjs` 用的是同一份 —— 那边是「生成 + 自检」，这边是「只生成」）。
  *
  * 为什么 `pnpm run docs` 不再直接写 `typedoc`：那个形态下「跑没跑成功」由
  * typedoc 的退出码说了算，而它写失败时照样退 0、日志照样收在
@@ -12,8 +12,22 @@
  * 下一次有人发现已经是「翻 `docs/api` 看到它过期」。现在换成一个会验产物、会重试、
  * 全失败就退 1 的入口（背景与判据见 `typedoc-run.mjs` 的文件头）。
  *
+ * ⚠️ **产物不再进 git**（ISSUE #2231）：`docs/api/` 进了 `.gitignore` ⇒ 本命令生成的
+ * 那份只是**本机的一份副本**，没有「必须一并提交」的义务，也没有人会因为它过期而红
+ * ——「提交进 git 的那份产物与源同不同步」这个问题连同它的判据一起没了
+ * （见 `scripts/check-docs-api.cjs` 的文件头）。平台侧那一格
+ * （`.cnb.yml` 的「API 文档生成与自检」）跑的是同一份生成 + 一道自检。
+ *
  * ⚠️ 别写 `pnpm docs`：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的
  * 文档），会抢在脚本前面、typedoc 根本不跑。带脚本名的动词要用 `pnpm run <脚本>`。
+ *
+ * ⚠️ **别把本文件 `await import` 进任何 `.cjs` / `.ts` / `.js`**（跨平台动作用
+ * `.mjs` 是 §9.5 的口径，但「被 import」这件事有个副作用）：仓库的 `tsconfig.json`
+ * 把全仓的 `.cjs` / `.ts` / `.js` 都编进了 program，而 typedoc 用的正是那份
+ * program ⇒ 一个被 import 的 `.mjs` 会**跟着进 typedoc 的类型检查面**，它身上的类型
+ * 错误会让 typedoc 直接退 3（实测：`scripts/` 下一批 `.mjs` 有几十处存量类型错误）。
+ * 现在 `scripts/check-docs-api.cjs` 只 import `scripts/typedoc-run.mjs` 与
+ * `scripts/docs-api-input-closure.mjs` —— 这两个（连同它们的传递依赖）都是类型干净的。
  *
  * 用法：
  *   node scripts/generate-api-docs.mjs                 # 写 docs/api（默认）

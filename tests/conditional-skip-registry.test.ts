@@ -158,6 +158,19 @@ const REGISTERED: Registration[] = [
     tier: "artifact",
     why: "同上 —— 产物级探针（测试文件/变更碎片/文档计数）只在有产物时执行；没跑过 pnpm build 的检出上整块不判",
   },
+  {
+    file: "tests/docs-api-input-closure.test.ts",
+    guard: "!productOnDisk",
+    count: 1,
+    tier: "artifact",
+    why:
+      "typedoc 的产物**不再进 git**（ISSUE #2231）⇒ 只有跑过 `pnpm run docs` 的检出才有 " +
+      "`docs/api/functions/lib_db-backup_backup.createBackup.html`。它是**构建**产物，但生成它的那条" +
+      "构建链是 `pnpm run docs`（typedoc），**不在** `pnpm build` 里 ⇒ 跑过 build 也不算数；平台侧" +
+      "「受影响用例」那一格跑在「API 文档生成与自检」之前 ⇒ 那边也永远没有。这一条是「这个类型真的" +
+      "出现在产物里」的**产物级**证据（源侧那一半 —— 文件在闭包里 + 它确实定义着那个类型 —— " +
+      "不依赖产物，始终在判）",
+  },
 ];
 
 /**

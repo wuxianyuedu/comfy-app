@@ -11,5 +11,7 @@
 非 Windows 平台用 `pnpm doc:gen`（同一套两步，跨平台实现在 `scripts/generate-docs.mjs`）。
 
 **API 文档（`docs/api/**`）是另一条**：TypeDoc 产物，跨平台入口是 `pnpm run docs`
-（`scripts/generate-api-docs.mjs`），Windows 双击用 `generate-api-docs.ps1`。它提交进
-git，由 `pnpm docs:check` 在提交时核对「与源同步」。
+（`scripts/generate-api-docs.mjs`），Windows 双击用 `generate-api-docs.ps1`。
+⚠️ **它不再进 git**（ISSUE #2231，`.gitignore` 的 `docs/api/`）—— 生成出来的那份
+只在本机；平台侧那一格「API 文档生成与自检」自己生成一份自己用（`pnpm docs:check`
+生成 + 自检），**没有「一并提交」这回事**。

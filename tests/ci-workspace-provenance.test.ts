@@ -53,8 +53,8 @@ describe("解析 git status -z", () => {
   });
 
   it("重命名是双段记录：只认结果路径，源路径不再被当成一条记录", () => {
-    const got = parseStatus("R  docs/api/new.html\0docs/api/old.html\0");
-    expect(got.trackedDirty).toEqual(["docs/api/new.html"]);
+    const got = parseStatus("R  src/lib/new.ts\0src/lib/old.ts\0");
+    expect(got.trackedDirty).toEqual(["src/lib/new.ts"]);
     expect(got.untracked).toEqual([]);
   });
 
@@ -82,7 +82,7 @@ describe("允许写脏的名单", () => {
   });
 
   it("underWriter 认前缀，也认「就是那个目录本身」，但不认后半截同名", () => {
-    const allow = ["docs/generated/", "docs/api/"];
+    const allow = ["docs/generated/", "coverage/"];
     expect(underWriter("docs/generated/13.md", allow)).toBe(true);
     expect(underWriter("docs/generated", allow)).toBe(true);
     expect(underWriter("src/app/page.tsx", allow)).toBe(false);
@@ -109,7 +109,7 @@ describe("三格的判定与档位", () => {
   const base = {
     trackedDirty: [] as string[],
     untracked: [] as string[],
-    prefixes: ["docs/generated/", "docs/api/"],
+    prefixes: ["docs/generated/", "coverage/"],
   };
 
   /**
@@ -206,7 +206,7 @@ describe("三格的判定与档位", () => {
       ...base,
       declared: null,
       head: null,
-      trackedDirty: ["docs/generated/13.md", "docs/api/index.html"],
+      trackedDirty: ["docs/generated/13.md", "coverage/lcov.info"],
     });
     expect(got.red).toBe(false);
     expect(got.lines.join("\n")).toContain("全部落在登记过的写者前缀下");
