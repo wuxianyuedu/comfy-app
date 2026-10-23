@@ -242,6 +242,7 @@
   ],
   "$notCovered": {
     "vitest-config-thresholds": "vitest.config.ts 里那一大片覆盖率门槛项由 scripts/ci-coverage-report.mjs 从实测生成，再抄一份进这本账必然脱钩（规范 §11.7 那条棘轮有自己的账）。条数随文件变，所以这里也不写死它。",
-    "unnamed-inline-numbers": "写进表达式里的内联数值（如 check-theme-colors.cjs 判短写法 hex 的 `v.length <= 5`）本判据扫不到 —— 它只认顶层具名常量。把它们先提成具名常量属于改判据本身，另案；不写「约 N 处」这种数，因为没有任何一格会随它过期而红。"
+    "unnamed-inline-numbers": "写进表达式里的内联数值（如 check-theme-colors.cjs 判短写法 hex 的 `v.length <= 5`）本判据扫不到 —— 它只认顶层具名常量。把它们先提成具名常量属于改判据本身，另案；不写「约 N 处」这种数，因为没有任何一格会随它过期而红。",
+    "scan-root-is-check-cjs": "「整份未入账」那一判的扫描根是磁盘上的 `scripts/check-*.cjs`（ISSUE #2188 起从磁盘现算，不再从账里推）。`*-check.mjs` / `ship-*.mjs` / `quality-gate.mjs` 这些形状**本轮刻意不进扫描根**：账可以点名它们（现在就有一条 `ship-platform.mjs`），被点名的那些数照样逐判核，但不会因为这份文件整体没入账而红 —— 给它们入账的门槛与 check-* 相同，只是没有人替它们现算覆盖面。这一档从「隐含盲区」变成「已声明的边界」，要扩面就连这句一起改。"
   }
 }
