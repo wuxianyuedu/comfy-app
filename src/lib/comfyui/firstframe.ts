@@ -13,6 +13,7 @@ import { artifactDiskPath } from "~/lib/media/output-paths";
 import { FIRST_FRAME_WAIT, backoffDelayMs } from "~/lib/retry-policy";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import { taskRepository } from "../core/repository-task";
+import { firstSavedImage } from "~/lib/workshop/api-channel-shared";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { uploadImage } from "./client";
 
@@ -70,14 +71,14 @@ async function waitForImage(taskId: string): Promise<string> {
       if (row.status !== "SUCCEEDED") {
         throw new Error(row.error ?? `首帧生成失败（${row.status}）`);
       }
-      const outputs =
-        (row.resultImages as Array<{
-          mediaType?: string;
-          localPath?: string;
-        }> | null) ?? [];
-      const first = outputs.find((im) => im.mediaType === "image");
-      if (!first?.localPath) throw new Error("首帧无图像输出");
-      return first.localPath;
+      /* 「取第一张图」这一步只有一份实现（`~/lib/workshop/api-channel-shared` 的
+       * `firstSavedImage`）：这里此前内联抄了一遍 `cast + find`，风格试验的矩阵
+       * 是第二个消费点 —— 两份副本对「什么算一张图」的判据迟早各漂一次（本地那份
+       * 只认 `mediaType === "image"`，共享那份还接住纯 URL 字符串与按扩展名推断）。
+       * 失败语义仍旧留在这里：拿不到就抛，首帧合成没有「空图也能继续」这一档。 */
+      const firstImage = firstSavedImage(row.resultImages);
+      if (!firstImage) throw new Error("首帧无图像输出");
+      return firstImage;
     }
     await new Promise((resolve) =>
       setTimeout(resolve, backoffDelayMs({ ...FIRST_FRAME_WAIT, attempt })),

@@ -692,13 +692,21 @@ export const production = sqliteTable(
 // 再抄一份图片路径就会有第二份真值 —— 删任务时那边不会跟着删（硬规则 20 的
 // 同款事故形态）。
 //
-// 为什么这一层现在只存「试验定义」而没有任何行：批量出图的编排（矩阵扇出）
-// 是下一批；先把存储与浏览的口径立住，界面才有诚实的空态可显示。
+// `styleExperiment` 是「试验定义」（跑哪条工作流的哪个模式、这套风格 × 特征），
+// `styleExperimentCell` 是它展开出的**座位表**：矩阵扇出按格登记，每格只多一个
+// `taskId` 指向那条出图任务。格子行由 `runBatch` 现算现落，所以「先建试验、后跑
+// 一批」与「跑第二次只补没跑过的座位」用的是同一份形状。
 // 纯新增表，不动既有表；启动时由 drizzle-kit push 建表。
 export const styleExperiment = sqliteTable(
   "styleExperiment",
   {
     id: cuid(),
+    /* 归属列与 `task` / `workflowTemplate` / `production` 同一形态：这一屏的行
+     * 不是全局共享的草稿，而是「我试过什么」的记录 —— 少了这一列，`list` 会把
+     * 别人试过的组合列给用户看，`runBatch` 也会拿别人的试验去排队本机显卡。 */
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     /** 跑这套组合用的工作流。
      *
@@ -714,7 +722,11 @@ export const styleExperiment = sqliteTable(
     styles: text("styles", { mode: "json" }).notNull().default("[]"),
     /** 角色特征：`{ 维度id: 选中值[] }`。空数组 = 这一维不约束（见组合数判据）。 */
     traits: text("traits", { mode: "json" }).notNull().default("{}"),
-    /** 生图参数快照（steps / cfg / sampler / scheduler / size / seedMode）。
+    /** 生图参数快照。本层**读**的只有四个键：`seed` 与 `seedMode`（这批的 seed
+     *  怎么派生，见 `~/lib/style-lab/style-lab-matrix` 的 `batchBaseSeed` /
+     *  `cellTaskSeed`）、`ageGender` 与 `skillSlug`（投影成角色卡时补的两栏）。
+     *  steps / cfg / sampler 这些**不是**模式契约的对外口，扇出不下发它们 ——
+     *  出图一律用工作流图内自带的值，所以这里存了也只是「当时打算用什么」的记录。
      *  存**快照**而不是引用某处的默认值：这一屏的意义是「这组图是在这套参数下
      *  出来的」，参数被别处改掉之后，旧的对比结论就作废了。 */
     params: text("params", { mode: "json" }).notNull().default("{}"),
@@ -729,9 +741,14 @@ export const styleExperiment = sqliteTable(
     deletedAt: dateNull("deletedAt"),
   },
   (t) => [
-    // 列表页唯一读路径：排除软删 + 按创建时间倒序。缺这条复合索引时 better-sqlite3
-    // 的同步执行会退化成全表扫（与 task 那几条同一考量）。
-    index("style_experiment_created_idx").on(t.deletedAt, t.createdAt),
+    // 列表页唯一读路径：`userId` 等值 + 排除软删 + 按创建时间倒序。缺这条复合索引时
+    // better-sqlite3 的同步执行会退化成全表扫（与 task / workflowTemplate 那几条
+    // 同一考量）。等值列排在最前，范围/排序列在后 —— 顺序反过来索引就用不上。
+    index("style_experiment_user_created_idx").on(
+      t.userId,
+      t.deletedAt,
+      t.createdAt,
+    ),
     index("style_experiment_workflow_idx").on(t.workflowId),
   ],
 );

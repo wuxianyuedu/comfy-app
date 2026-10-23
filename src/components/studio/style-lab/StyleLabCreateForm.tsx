@@ -1,12 +1,9 @@
 "use client";
 
-import { Play } from "lucide-react";
-
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { FormField } from "~/components/ui/form-field";
-import { Hint } from "~/components/ui/hint";
 import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { textHandler } from "~/lib/form-props";
@@ -141,18 +138,13 @@ export function StyleLabCreateForm({ c }: { c: StyleLabController }) {
             >
               {c.creating ? "保存中" : "创建试验"}
             </Button>
-            {/* 诚实的禁用出口：点了什么都不做或必失败，比明说「下一批开放」更坏。 */}
-            <Hint label={c.batchRunner.reason} side="top" wrap>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled
-                aria-label={c.batchRunner.reason}
-              >
-                <Play data-icon="inline-start" className="size-3" aria-hidden />
-                {c.batchRunner.label}
-              </Button>
-            </Hint>
+            {/* 这里不摆「批量生成」那枚按钮：跑一批的对象是**某一条**已登记的试验
+                （它的 workflowId / mode / 这套选择），表单这一块还没有那样一条。
+                入口在下面的列表每一行上 —— 留一枚永远禁用的按钮只会让人以为
+                这一屏出不了图。 */}
+            <span className="text-ink-fainter text-2xs">
+              创建后在「试验记录」里展开这一条，即可按格跑这批。
+            </span>
           </div>
         </div>
       )}

@@ -177,6 +177,24 @@ export function extractSavedOutputs(value: unknown): SavedOutput[] {
   return out;
 }
 
+/** 任务产物清单（`task.resultImages`，库里是 `unknown`）里的**第一张图**。
+ *
+ * 走的是 {@link extractSavedOutputs} 那一份归一（纯 URL 字符串与
+ * `{ localPath, mediaType }` 两种历史形状都接住），这里只多做一步「取图像那一档的
+ * 第一枚」——那一步此前没有出口：`~/lib/comfyui/firstframe.ts` 内联抄了一份（把
+ * `resultImages` cast 成数组再按 `mediaType` 找），风格试验的矩阵是第二个消费点。
+ * 两份副本的差别会表现成「同一条任务在一处有图、另一处说无图像输出」。
+ *
+ * 只回答「有没有、地址是什么」，不回答「拿不到该怎么办」：调用方的失败语义各不同
+ * （首帧合成要抛错，风格矩阵要显示空位），所以这里给 `null` 而不是抛。
+ */
+export function firstSavedImage(resultImages: unknown): string | null {
+  return (
+    extractSavedOutputs(resultImages).find((item) => item.kind === "image")
+      ?.url ?? null
+  );
+}
+
 /** 由远端模型条目的 Base URL 解析「生图」端点（OpenAI 兼容 images/generations）。
  *  用户在设置页填的 Base URL 三种形态都兼容：
  *    已含完整动作段（…/v1/images/generations）→ 原样使用；

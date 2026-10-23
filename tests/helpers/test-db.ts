@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS production (
   progress TEXT NOT NULL DEFAULT '{}', run TEXT NOT NULL DEFAULT '{}', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS styleExperiment (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, workflowId TEXT NOT NULL, mode TEXT NOT NULL,
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, workflowId TEXT NOT NULL, mode TEXT NOT NULL,
   styles TEXT NOT NULL DEFAULT '[]', traits TEXT NOT NULL DEFAULT '{}', params TEXT NOT NULL DEFAULT '{}',
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT
 );
@@ -217,6 +217,8 @@ export interface TestTables {
   workflowModelTags: Row[];
   tasks: Row[];
   taskImages: Row[];
+  styleExperiments: Row[];
+  styleExperimentCells: Row[];
   llmConfig: Row[];
   posts: Row[];
   models: Row[];
@@ -301,6 +303,40 @@ function getRow(table: string, id: string): Row {
   return parseRow(table, raw);
 }
 
+/** 改一行的某几列（发一次真的 UPDATE）。
+ *
+ * 为什么需要这一条而不是「改 `$tables.X` 里那个对象」：`$tables` 的每个键都是
+ * **重新查库**的 getter，改它拿到的副本不会落库 —— 下一次 `SELECT` 仍是旧值。
+ * 用例要造的常常正是「库里已经是这个状态」（这一格的任务收口成 SUCCEEDED、
+ * 这一行被谁名下、格子指到了别的任务上），那只能走 SQL。
+ *
+ * 列的序列化沿用 `serializeValue`（JSON 列、Date、boolean 三种形态与 seed 同一口径），
+ * 不在这里另写一份「怎么把值写进 SQLite」。 */
+export function updateRow(
+  _tdb: TestDb,
+  table: string,
+  id: string,
+  patch: Record<string, unknown>,
+): void {
+  if (!currentSqlite) throw new Error("test db 未初始化");
+  const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
+  if (entries.length === 0) return;
+  const sets = entries.map(([col]) => `"${col}" = ?`).join(", ");
+  const values = entries.map(([col, v]) => serializeValue(col, v));
+  currentSqlite
+    .prepare(`UPDATE "${table}" SET ${sets} WHERE id = ?`)
+    .run(...values, id);
+}
+
+/** 按 id 删一行（发真的 DELETE）。
+ *
+ * 与 `updateRow` 同因：用例要的另一种库内状态是「这一行已经不在了」——典型是
+ * 「工作流被删掉之后再去跑批」，改 `$tables` 的副本删不掉它。 */
+export function deleteRows(_tdb: TestDb, table: string, id: string): void {
+  if (!currentSqlite) throw new Error("test db 未初始化");
+  currentSqlite.prepare(`DELETE FROM "${table}" WHERE id = ?`).run(id);
+}
+
 export function createTestDb(): TestDb {
   const sqlite = new Database(":memory:");
   sqlite.pragma("foreign_keys = OFF"); // 内存库独立插入，放宽外键
@@ -355,6 +391,12 @@ export function createTestDb(): TestDb {
     },
     get taskImages() {
       return allRows("taskImage");
+    },
+    get styleExperiments() {
+      return allRows("styleExperiment");
+    },
+    get styleExperimentCells() {
+      return allRows("styleExperimentCell");
     },
     get llmConfig() {
       return allRows("llmConfig");
@@ -500,6 +542,9 @@ export interface SeedTaskInput {
   images?: Row[];
   workflowSnapshot?: unknown;
   referenceImages?: unknown;
+  /** 产物清单（JSON 列）。没产物时留 `null` 而不是空数组 —— 与真库的写法一致，
+   *  「这张图还没出」与「出了但零产物」在库里要能分开。 */
+  resultImages?: unknown;
   progress?: number;
   error?: string | null;
   createdAt?: Date;

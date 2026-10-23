@@ -15,6 +15,8 @@ import {
   type OptionGroup,
   type StyleLabTraits,
 } from "~/lib/style-lab/style-lab-types";
+import { taskStatusLabel } from "~/lib/task-state";
+import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
 import {
   combinationCount,
   MATRIX_HARD_LIMIT,
@@ -53,16 +55,49 @@ export const EMPTY_FORM: StyleLabCreateForm = {
 };
 
 /**
- * 这一批的「生成」能力还没上线（只存试验定义、不扇出格子）。
+ * 一次扇出结果在屏上那三句话（第①层派生，视图只渲染）。
  *
- * 界面必须诚实说明这一点而不是假装能跑：给一个点了必然失败或什么都不做的按钮，
- * 比明说「下一批改这一刀」更坏（硬规则 4：失败路径要有用户可见出口）。
+ * 为什么由纯函数拼而不是写在视图里：这三句是这一屏唯一能告诉用户「这批到底发生了
+ * 什么」的地方，写进 JSX 就没法用例如判（规范 17 §17.1「删掉 JSX 还能不能跑测试」）。
  */
-export const BATCH_RUNNER_UNAVAILABLE: { label: string; reason: string } = {
-  label: "批量生成",
-  reason:
-    "这一版只登记与浏览试验定义，还没接矩阵扇出与排队执行 —— 生成入口下一批开放。",
-};
+export interface StyleLabBatchSummary {
+  /** 「已把 N 格排进队列」那一句（含没有新格可跑那一档）。 */
+  queuedText: string;
+  /** 这批共用的基准 seed；`null` = 整批一格都没入队，报这个数没有意义。 */
+  seedText: string | null;
+  /**
+   * 「给了值但没落到端口」那一句 —— 复用 `describeUnmatchedInputs` 那份唯一出口。
+   *
+   * `seed` 出现在这一档时含义很具体：**这批并没有真的共用同一枚 seed**，那句
+   * 「控制变量」的承诺落空了。不报出来，用户就会拿一张随机差异去比风格。
+   */
+  unmatchedText: string | null;
+}
+
+export function summarizeBatch(outcome: {
+  enqueued: number;
+  skipped: number;
+  baseSeed: number;
+  unmatched: readonly string[];
+}): StyleLabBatchSummary {
+  const queuedText =
+    outcome.enqueued > 0
+      ? `已把 ${String(outcome.enqueued)} 格排进队列` +
+        (outcome.skipped > 0
+          ? `，跳过 ${String(outcome.skipped)} 格已出图的`
+          : "")
+      : /* 一格都没新入队。两种形状在这一句上不分开说：库里那批格子本来就都跑过了，
+           界面要说的是「没有新东西要跑」而不是假装开始了一批。 */
+        `这批没有新格子要跑（${String(outcome.skipped)} 格已排过队）`;
+  return {
+    queuedText,
+    seedText:
+      outcome.enqueued > 0
+        ? `这批共用基准 seed ${String(outcome.baseSeed)}`
+        : null,
+    unmatchedText: describeUnmatchedInputs(outcome.unmatched),
+  };
+}
 
 /** 某一维参与扇出的取值个数：没选 = 1（不约束），与 `style-lab-matrix` 同一条口径。 */
 function axisCount(n: number): number {
@@ -134,7 +169,58 @@ export function matrixFormulaText(
   )} 格`;
 }
 
-/** 完成度：已出图 / 已登记格子。本批没有格子，恒为「0 / 0」——如实显示而不是留空。 */
+/** 轴 id → 屏上的维度名（读词表的 `label`，不在这里另存一份对照表）。 */
+const AXIS_LABEL_BY_ID: Record<string, string> = Object.fromEntries(
+  CHARACTER_ATTRIBUTES.map((axis) => [axis.id, axis.label]),
+);
+
+/**
+ * 特征**身份键** → 屏上那句「这一格是什么组合」。
+ *
+ * 库里存的是 `costume=汉服;temperament=清冷`（带轴 id 才按构造唯一，理由见
+ * `style-lab-matrix` 的 `cellTraitKey`），而屏上要的是「服装：汉服 · 气质：清冷」。
+ * 两者分开的理由与那条同源：把文案塞进身份键，将来想改一个字面就得迁一次库。
+ *
+ * 认不出的轴 id（词表改过名、旧行还在库里）原样显示那一段的值而不是整段丢掉 ——
+ * 那格确实出过图，只是这一屏暂时说不出它属于哪一维。
+ */
+export function traitKeyDisplayText(traitKey: string): string {
+  const pairs = traitKey.split(";").filter((pair) => pair !== "");
+  if (pairs.length === 0) return "仅风格";
+  return pairs
+    .map((pair) => {
+      const at = pair.indexOf("=");
+      if (at <= 0) return pair;
+      const axisId = pair.slice(0, at);
+      const value = pair.slice(at + 1);
+      const label = AXIS_LABEL_BY_ID[axisId];
+      return label ? `${label}：${value}` : value;
+    })
+    .join(" · ");
+}
+
+/** 风格那一列的显示（不约束风格时给一句人话，而不是一个空白）。 */
+export function styleDisplayText(style: string): string {
+  return style === "" ? "不限风格" : style;
+}
+
+/** 一格在屏上的状态文案。
+ *
+ * 三档分开的理由都在用户那侧：
+ *  · 没绑任务 ⇒「未入队」——这一格只是矩阵里的一个座位，还没跑过；
+ *  · 绑了任务但读不到状态 ⇒「任务已不在」——通常是历史被清了。显示成「未知」会把
+ *    「格子指向一条没了的任务」这件真实的事藏起来（它意味着这一格永远不会自己变绿）；
+ *  · 其余一律读 `taskStatusLabel` 那张全库唯一的表，不在这一屏再造第五份措辞。 */
+export function cellStatusText(cell: {
+  taskId: string | null;
+  status: string | null;
+}): string {
+  if (cell.taskId === null) return "未入队";
+  if (cell.status === null) return "任务已不在";
+  return taskStatusLabel(cell.status);
+}
+
+/** 完成度：已绑任务的格子 / 已登记的格子。跑过一批之后这两个数才真的非零。 */
 export function completionText(doneCount: number, cellCount: number): string {
   return `完成度 ${String(doneCount)} / ${String(cellCount)}`;
 }

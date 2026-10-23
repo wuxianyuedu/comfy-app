@@ -38,8 +38,14 @@ export function StyleLabView({ c }: { c: StyleLabController }) {
           {`${String(c.items.length)} 条试验`}
         </span>
         <span className="text-ink-fainter flex items-center gap-1.5 text-2xs">
-          <StatusDot state="probing" sizeClass="size-1.5" />
-          {c.batchRunner.reason}
+          {/* `StatusDot` 没有「闲置」这一档，也不该为一行静态说明造一个假状态点：
+              只有真的在扇出时才挂那颗「探测中」的点。 */}
+          {c.runningBatchId ? (
+            <StatusDot state="probing" sizeClass="size-1.5" />
+          ) : null}
+          {c.runningBatchId
+            ? "正在把这一批按格排进队列…"
+            : "单卡串行 · 一批按格依次出图"}
         </span>
         <Button
           variant="outline"

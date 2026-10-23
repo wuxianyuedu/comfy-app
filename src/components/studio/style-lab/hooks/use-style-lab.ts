@@ -18,14 +18,20 @@ import { useToast } from "../../ToastProvider";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { useTRPC } from "~/trpc/react";
-import type { StyleLabListItem } from "~/lib/style-lab/style-lab-types";
+import type {
+  StyleLabBatchOutcome,
+  StyleLabCellWithStatus,
+  StyleLabListItem,
+  StyleLabStopOutcome,
+} from "~/lib/style-lab/style-lab-types";
 import type { WorkflowListRow } from "~/lib/workflow/workflow-list-types";
 
 import {
-  BATCH_RUNNER_UNAVAILABLE,
   EMPTY_FORM,
   plannedMatrixPreview,
+  summarizeBatch,
   validateCreateForm,
+  type StyleLabBatchSummary,
   type StyleLabCreateForm,
   type StyleLabMatrixPreview,
 } from "../style-lab-config";
@@ -68,8 +74,26 @@ export interface StyleLabController {
   askDelete: (id: string) => void;
   cancelDelete: () => void;
   confirmDelete: () => Promise<void>;
-  /** 矩阵扇出还没上线时的诚实出口（按钮禁用 + 那句解释）。 */
-  batchRunner: { label: string; reason: string; enabled: false };
+  /** 矩阵扇出：展开哪一条试验看它的座位表。 */
+  expandedId: string | null;
+  /** 展开某条试验（同时清掉上一次的批次结果，避免两批的话串到一行上）。 */
+  expand: (id: string) => void;
+  collapse: () => void;
+  /** 展开那条试验的格子（含任务状态与成品图）；未展开时为空数组。 */
+  cells: StyleLabCellWithStatus[];
+  cellsLoading: boolean;
+  /** 读座位表失败的一句话；null = 查询本身没问题（动作失败走 toast，不落这里）。 */
+  cellsError: string | null;
+  /** 正在扇出的那条试验（按钮文案与禁用态读它）。 */
+  runningBatchId: string | null;
+  /** 跑一批：整张矩阵按格串行入队，已出图的座位跳过。 */
+  runBatch: (id: string) => Promise<void>;
+  /** 正在取消的那条试验。 */
+  stoppingBatchId: string | null;
+  /** 停一批：取消这一试验名下仍在进行中的格子任务。 */
+  stopBatch: (id: string) => Promise<void>;
+  /** 最近一次扇出的那三句话；`null` = 这一屏还没跑过批。 */
+  batchSummary: StyleLabBatchSummary | null;
   refresh: () => void;
 }
 
@@ -114,10 +138,18 @@ export function useStyleLab(): StyleLabController {
 
   const createMut = useMutation(trpc.styleLab.create.mutationOptions());
   const deleteMut = useMutation(trpc.styleLab.softDelete.mutationOptions());
+  const runBatchMut = useMutation(trpc.styleLab.runBatch.mutationOptions());
+  const stopBatchMut = useMutation(trpc.styleLab.stopBatch.mutationOptions());
 
   const [form, setForm] = useState<StyleLabCreateForm>(EMPTY_FORM);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /* 座位表按「展开了哪一条」现取：列表那 60 行不需要每行都带着一串任务状态，
+     而展开的那一条要立刻看得见「这一格排队中 / 已完成」。 */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [batchSummary, setBatchSummary] = useState<StyleLabBatchSummary | null>(
+    null,
+  );
 
   const workflowOptions = useMemo<StyleLabWorkflowOption[]>(() => {
     /* `workflow.list` 返回的是聚合体 `{ workflows, localPending, localRoots }`，
@@ -221,7 +253,7 @@ export function useStyleLab(): StyleLabController {
            errorMessage(error, failureText)，服务端那句「缺哪个口」原样上屏，
            压成「创建失败」就丢掉了下一步动作的依据。 */
         failureText: "创建试验失败，请稍后重试",
-        successText: "已登记试验 —— 批量生成下一批开放",
+        successText: "已登记试验 —— 在列表里展开这一条就能跑这批",
         readResultEnvelope: false,
       },
     );
@@ -253,6 +285,88 @@ export function useStyleLab(): StyleLabController {
     if (result.ok) void listQ.refetch();
   }, [deleteMut, deleteTargetId, listQ, report]);
 
+  /* 座位表：展开了那一条才读。`enabled` 挡住未展开时的往返 —— 列表那几十行不必
+     每行都带着一串任务状态与产物图。 */
+  const detailQ = useQuery({
+    ...trpc.styleLab.detail.queryOptions({ id: expandedId ?? "" }),
+    enabled: expandedId !== null,
+  });
+
+  const expand = useCallback((id: string) => {
+    /* 换一条看就把上一次的批次结果清掉：那三句话说的是**那一批**，留在另一条试验
+       的行下面会变成「这条也跑过了」的假账。 */
+    setExpandedId((prev) => {
+      if (prev !== id) setBatchSummary(null);
+      return id;
+    });
+  }, []);
+  const collapse = useCallback(() => {
+    setExpandedId(null);
+    setBatchSummary(null);
+  }, []);
+
+  const runBatch = useCallback(
+    async (id: string) => {
+      /* 扇出的结果要拿来拼那三句话，而 `runAsyncAction` 只回「成/败 + 文案」，
+         所以在这里接住原值：反馈仍然由它统一走（失败时服务端那句「尚未封装就绪，
+         缺：提示词」或「一次最多跑 60 格」原样上屏 —— 压成「生成失败」就丢掉了
+         下一步动作的依据），成功那一句由结果派生。
+
+         用 holder 而不是 `let outcome = null` 再在闭包里赋值：TS 不跟踪闭包里的
+         赋值，外面那次判空会被收窄成「永远是 null」，下一步就报 `never`。 */
+      const got: { outcome: StyleLabBatchOutcome | null } = { outcome: null };
+      const result = await runAsyncAction(
+        async () => {
+          got.outcome = await runBatchMut.mutateAsync({ id });
+        },
+        {
+          report,
+          failureText: "跑这批失败",
+          readResultEnvelope: false,
+        },
+      );
+      const outcome = got.outcome;
+      if (!result.ok || !outcome) return;
+      const summary = summarizeBatch(outcome);
+      setBatchSummary(summary);
+      report("ok", summary.queuedText);
+      void listQ.refetch();
+      void detailQ.refetch();
+    },
+    [detailQ, listQ, report, runBatchMut],
+  );
+
+  const stopBatch = useCallback(
+    async (id: string) => {
+      const got: { outcome: StyleLabStopOutcome | null } = { outcome: null };
+      const result = await runAsyncAction(
+        async () => {
+          got.outcome = await stopBatchMut.mutateAsync({ id });
+        },
+        {
+          report,
+          failureText: "取消这批失败",
+          readResultEnvelope: false,
+        },
+      );
+      const outcome = got.outcome;
+      if (!result.ok || !outcome) return;
+      /* 「0 条」也要说：按了停止却一句话没有，用户分不清「没得取消」与「没取消掉」。 */
+      report(
+        "ok",
+        outcome.cancelled > 0
+          ? `已取消 ${String(outcome.cancelled)} 格` +
+            (outcome.alreadyDone > 0
+              ? `，另有 ${String(outcome.alreadyDone)} 格已出完`
+              : "")
+          : "这一批没有在跑的任务可取消",
+      );
+      void listQ.refetch();
+      void detailQ.refetch();
+    },
+    [detailQ, listQ, report, stopBatchMut],
+  );
+
   return {
     loading: listQ.isPending,
     loadError: listQ.isError ? "读不到试验记录，后端可能刚重启" : null,
@@ -275,7 +389,17 @@ export function useStyleLab(): StyleLabController {
     askDelete,
     cancelDelete,
     confirmDelete,
-    batchRunner: { ...BATCH_RUNNER_UNAVAILABLE, enabled: false },
+    expandedId,
+    expand,
+    collapse,
+    cells: detailQ.data?.cells ?? [],
+    cellsLoading: detailQ.isPending && expandedId !== null,
+    cellsError: detailQ.isError ? "读不到这一条的格子，后端可能刚重启" : null,
+    runningBatchId: runBatchMut.isPending ? (runBatchMut.variables?.id ?? null) : null,
+    runBatch,
+    stoppingBatchId: stopBatchMut.isPending ? (stopBatchMut.variables?.id ?? null) : null,
+    stopBatch,
+    batchSummary,
     refresh: () => void listQ.refetch(),
   };
 }

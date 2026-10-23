@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractBase64DataUrl,
   extractSavedOutputs,
+  firstSavedImage,
   guessMediaKind,
   resolveImagesGenerationsEndpoint,
 } from "~/lib/workshop/api-channel-shared";
@@ -66,6 +67,44 @@ describe("extractSavedOutputs", () => {
 
   it("无 localPath 的对象跳过", () => {
     expect(extractSavedOutputs([{ foo: 1 }])).toEqual([]);
+  });
+});
+
+/* `firstSavedImage` 是「按图像那一档挑第一枚产物」的唯一出口：调用方拿 `null` 显示
+   空位（风格矩阵里那一格还没出图），而不是各自去兜 `undefined`。 */
+describe("firstSavedImage", () => {
+  it("两种历史形状都取到第一张图的地址", () => {
+    expect(
+      firstSavedImage([
+        { localPath: "/api/generated/t/img_0.png", mediaType: "image" },
+      ]),
+    ).toBe("/api/generated/t/img_0.png");
+    expect(firstSavedImage(["/a.png", "/b.mp4"])).toBe("/a.png");
+  });
+
+  it("产物里只有视频时给 null —— 不拿别的媒体冒充一张图", () => {
+    expect(
+      firstSavedImage([
+        { localPath: "/api/generated/t/vid_0.mp4", mediaType: "video" },
+      ]),
+    ).toBeNull();
+  });
+
+  it("多枚时取第一枚图像（顺序就是落盘顺序）", () => {
+    expect(
+      firstSavedImage([
+        { localPath: "/v.mp4", mediaType: "video" },
+        { localPath: "/i0.png", mediaType: "image" },
+        { localPath: "/i1.png", mediaType: "image" },
+      ]),
+    ).toBe("/i0.png");
+  });
+
+  it("零产物与畸形形状都给 null", () => {
+    expect(firstSavedImage([])).toBeNull();
+    expect(firstSavedImage(null)).toBeNull();
+    expect(firstSavedImage(undefined)).toBeNull();
+    expect(firstSavedImage({ notAnArray: true })).toBeNull();
   });
 });
 

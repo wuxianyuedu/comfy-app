@@ -298,10 +298,16 @@ export class TaskRepository extends DrizzleRepository<Task> {
    * 成片监看每 4s 一轮、每轮要按镜头取十几个任务的进度，逐个查就是每轮 N 次
    * 往返（N = 镜头数），跑满 240 轮是上万次查询；批量版一轮只发一条 `IN`。
    * 这里连 `resultImages` 一起取（成片镜头要从中挑视频路径），避免调用方
-   * 为拿它再查一遍。 */
+   * 为拿它再查一遍。
+   *
+   * `userId` 也在取列里：按批量 id 做**动作**的调用方（风格试验「停止这一批」逐格
+   * 取消）必须先确认这些行归属当前用户 —— 与 `task.cancel` 那次越权修复同一条口径
+   * （见 `~/server/api/routers/task.ts`）。归属判在取数这一趟，调用方就不必为它
+   * 按 id 再回表读整行（`workflowSnapshot` / `logs` 单行可达数 MB）。 */
   async findExecutionProgressMany(taskIds: string[]): Promise<
     Array<{
       id: string;
+      userId: string;
       status: string;
       progress: number;
       resultImages: unknown;
@@ -311,6 +317,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return db
       .select({
         id: task.id,
+        userId: task.userId,
         status: task.status,
         progress: task.progress,
         resultImages: task.resultImages,
