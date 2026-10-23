@@ -69,6 +69,7 @@ import {
   handlerLabel,
   handlerSignature,
   issueAuthoring,
+  participantLabel,
   readDevHandle,
   ticketReading,
   whoamiLines,
@@ -93,6 +94,7 @@ import {
   instanceReading,
   reapCheckoutInstances,
 } from "../scripts/ship-reap.mjs";
+import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { main } from "../scripts/ship.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -1255,27 +1257,30 @@ describe("readDevHandle：进程环境优先，回落本检出 .env，读不到�
   });
 });
 
-describe("角色标签与署名：提单人 / 处理人 —— 只有一份生成处（ISSUE #2204 / #2213）", () => {
-  it("同一份短名派生两枚标签：issue 侧 `提单人:`、PR / 领取侧 `处理人:`", () => {
+describe("角色标签与署名：提单人 / 处理人 / 参与人 —— 只有一份生成处（ISSUE #2204 / #2213 / #2215）", () => {
+  it("同一份短名派生三枚标签：issue 侧 `提单人:`、PR / 领取侧 `处理人:`、只增不删的 `参与人:`", () => {
     expect(authorLabel("yuedu-win")).toBe("提单人:yuedu-win");
     expect(handlerLabel("yuedu-win")).toBe("处理人:yuedu-win");
+    expect(participantLabel("yuedu-win")).toBe("参与人:yuedu-win");
     expect(authorSignature("yuedu-win")).toBe("提单人:yuedu-win");
     expect(handlerSignature("yuedu-win")).toBe("处理人:yuedu-win");
     // 首尾空白吃掉 —— 与 `readDevHandle` 同一条口径。
     expect(authorLabel("  yuedu-win  ")).toBe("提单人:yuedu-win");
     expect(handlerLabel("  yuedu-win  ")).toBe("处理人:yuedu-win");
+    expect(participantLabel("  yuedu-win  ")).toBe("参与人:yuedu-win");
   });
 
   it("未配 / 空白 ⇒ 标签 null、署名如实写「未配」，不编一个名字", () => {
     for (const v of [null, undefined, "", "   "]) {
       expect(authorLabel(v)).toBeNull();
       expect(handlerLabel(v)).toBeNull();
+      expect(participantLabel(v)).toBeNull();
       expect(authorSignature(v)).toBe("提单人:未配");
       expect(handlerSignature(v)).toBe("处理人:未配");
     }
   });
 
-  it("--whoami 出口：两枚标签、三条规则与可粘贴命令都在", () => {
+  it("--whoami 出口：三枚标签、三条规则与可粘贴命令都在", () => {
     const all = whoamiLines({
       handle: "yuedu-win",
       root: "/checkout/one",
@@ -1283,6 +1288,7 @@ describe("角色标签与署名：提单人 / 处理人 —— 只有一份生�
     }).join("\n");
     expect(all).toContain("提单人:yuedu-win");
     expect(all).toContain("处理人:yuedu-win");
+    expect(all).toContain("参与人:yuedu-win");
     expect(all).toContain("提单 / PR 正文用 `提单人:yuedu-win`");
     expect(all).toContain("领取 / 结束评论用 `处理人:yuedu-win`");
     expect(all).toContain(
@@ -1549,6 +1555,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         f.calls.slice(said + 1).some((c) => c.startsWith("issues list-issue-comments")),
       ).toBe(true);
       expect(f.labels()).toContain(`处理人:${handle}`);
+      expect(f.labels()).toContain(`参与人:${handle}`);
       expect(f.comments()[0]).toContain("已接单");
       expect(f.comments()[0]).toContain(`处理人:${handle}`);
     } finally {
@@ -1652,7 +1659,9 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
   });
 
   it("--claim：已在名下、只缺评论 ⇒ 只补评论，不重复打标签（幂等）", () => {
-    const f = issueIo({ labels: [`处理人:${handle}`] });
+    const f = issueIo({
+      labels: [`处理人:${handle}`, `参与人:${handle}`],
+    });
     const s = scratch();
     try {
       const code = runIssueAction({
@@ -1667,6 +1676,31 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       });
       expect(code).toBe(CODE.GREEN);
       expect(f.calls.some((c) => c.includes("post-issue-labels"))).toBe(false);
+      expect(f.comments()[0]).toContain("已接单");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：旧单只有处理人、缺参与人 ⇒ 只补参与人（不重复打处理人）", () => {
+    const f = issueIo({ labels: [`处理人:${handle}`] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      const puts = f.calls.filter((c) => c.includes("post-issue-labels"));
+      expect(puts).toHaveLength(1);
+      expect(puts[0]).toContain(`--labels 参与人:${handle}`);
+      expect(f.labels()).toContain(`参与人:${handle}`);
       expect(f.comments()[0]).toContain("已接单");
     } finally {
       s.cleanup();
@@ -1719,8 +1753,10 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
     }
   });
 
-  it("--release：评论先于撤标签，撤后独立回读", () => {
-    const f = issueIo({ labels: [`处理人:${handle}`] });
+  it("--release：评论先于撤标签，撤后独立回读；参与人保留", () => {
+    const f = issueIo({
+      labels: [`处理人:${handle}`, `参与人:${handle}`],
+    });
     const s = scratch();
     try {
       const code = runIssueAction({
@@ -1744,6 +1780,10 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       ).toBe(true);
       expect(f.comments()[0]).toContain("开发结束");
       expect(f.labels()).not.toContain(`处理人:${handle}`);
+      expect(f.labels()).toContain(`参与人:${handle}`);
+      expect(
+        f.calls.some((c) => c.includes("delete-issue-label") && c.includes("参与人:")),
+      ).toBe(false);
     } finally {
       s.cleanup();
     }
@@ -1944,8 +1984,10 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
     }
   });
 
-  it("finishIssueWork：处理人是我 ⇒ 结束评论 + 撤标签（先评论后撤）", () => {
-    const f = issueIo({ labels: [`处理人:${handle}`] });
+  it("finishIssueWork：处理人是我 ⇒ 结束评论 + 撤处理人（参与人保留）", () => {
+    const f = issueIo({
+      labels: [`处理人:${handle}`, `参与人:${handle}`],
+    });
     const s = scratch();
     try {
       const code = finishIssueWork({
@@ -1959,6 +2001,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       expect(code).toBe(CODE.GREEN);
       expect(f.comments()[0]).toContain("开发结束");
       expect(f.labels()).not.toContain(`处理人:${handle}`);
+      expect(f.labels()).toContain(`参与人:${handle}`);
       expect(
         f.calls.findIndex((c) => c.includes("post-issue-comment")),
       ).toBeLessThan(
@@ -2018,8 +2061,10 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
     }
   });
 
-  it("closeIssues 验真关闭后带上 handle：补「开发结束」评论并撤自己的标签", () => {
-    const f = issueIo({ labels: [`处理人:${handle}`] });
+  it("closeIssues 验真关闭后带上 handle：补「开发结束」评论并撤自己的处理人标签，参与人保留", () => {
+    const f = issueIo({
+      labels: [`处理人:${handle}`, `参与人:${handle}`],
+    });
     const s = scratch();
     try {
       const code = closeIssues({
@@ -2034,6 +2079,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       expect(code).toBe(CODE.GREEN);
       expect(f.comments()[0]).toContain("开发结束");
       expect(f.labels()).not.toContain(`处理人:${handle}`);
+      expect(f.labels()).toContain(`参与人:${handle}`);
     } finally {
       s.cleanup();
     }
@@ -2874,7 +2920,12 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     );
     expect(claim).toContain("cnb issues post-issue-labels");
     expect(claim).toContain("--labels 处理人:yuedu-win");
+    expect(claim).toContain("--labels 参与人:yuedu-win");
     expect(claim).toContain("cnb issues post-issue-comment");
+    // 两枚标签都打完才回读：两枚都看得见才念「已打上」。
+    expect(claim.lastIndexOf("--labels 参与人:yuedu-win")).toBeLessThan(
+      claim.lastIndexOf("get-issue"),
+    );
     // 打标签与发评论之后各有一处独立回读（get-issue / list-issue-comments）。
     expect(claim.indexOf("post-issue-labels")).toBeLessThan(
       claim.lastIndexOf("get-issue"),
@@ -3099,6 +3150,60 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
       expect(body, `正文里出现了未经验证的声明句式：${banned}`).not.toContain(
         banned,
       );
+    }
+  });
+});
+
+describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（ISSUE #2215）", () => {
+  it("缺键时念 `pnpm env:init`，且不改退码", async () => {
+    /* CI 的「受影响用例」格设了 `SKIP_ENV_VALIDATION=1`（`.cnb.yml`），而 `envInitHint()`
+     * 按设计在该变量在场时整格静默 —— 不清掉它，这条验的就不是接线而是「跳过时不出声」。
+     * 用例自己收起再还原，别让读数取决于跑在谁的机器上。 */
+    const savedSkip = process.env.SKIP_ENV_VALIDATION;
+    delete process.env.SKIP_ENV_VALIDATION;
+    const rootDir = mkdtempSync(path.join(os.tmpdir(), "ship-preflight-env-"));
+    fs.writeFileSync(path.join(rootDir, ".env"), "BETTER_AUTH_SECRET=abc\n", "utf8");
+    fs.writeFileSync(
+      path.join(rootDir, ".env.example"),
+      'BETTER_AUTH_SECRET=""\nCOMFYAPP_DEV_HANDLE=""\n',
+      "utf8",
+    );
+    const logs: string[] = [];
+    const run = (cmd: string, args: string[]): FakeResult => {
+      const key = args.join(" ");
+      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
+        return { status: 0, stdout: "feat/x\n", stderr: "", error: null };
+      if (cmd === "git" && key === "rev-parse HEAD")
+        return { status: 0, stdout: "abc1234\n", stderr: "", error: null };
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    try {
+      const res = await runPreflightStage({
+        run,
+        log: (l: string) => logs.push(l),
+        relay: () => undefined,
+        opt: parseArgs([]),
+        root: rootDir,
+        up: { remote: "origin", base: "master", source: "remote-head" },
+        baseRef: null,
+        baseBranch: "master",
+        slug: "moon-read/comfy-app-t3",
+        cnbOk: true,
+        handle: null,
+        readInstances: async () => ({ running: false }),
+        platform: "linux",
+      });
+      const text = logs.join("\n");
+      expect(text).toContain("环境配置提醒");
+      expect(text).toContain("COMFYAPP_DEV_HANDLE");
+      expect(text).toContain("pnpm env:init");
+      // 读数不改结论：baseRef 取不到仍按原判据落 2。
+      expect(res.action).toBe("finish");
+      expect(res.codes).toContain(CODE.NOT_RUN);
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+      if (savedSkip === undefined) delete process.env.SKIP_ENV_VALIDATION;
+      else process.env.SKIP_ENV_VALIDATION = savedSkip;
     }
   });
 });
