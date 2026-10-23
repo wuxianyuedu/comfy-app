@@ -26,11 +26,15 @@ import { describe, expect, it } from "vitest";
 import {
   classifyBuildOutcome,
   classifyStages,
+  describeFailedStages,
   downstreamSkipped,
   formatOutcome,
   inFlightStages,
   main,
+  normalizeStageContent,
   parseArgs,
+  pipelineForStage,
+  stageLogExcerpt,
 } from "../scripts/ci-build-readout.mjs";
 
 /** 被取消那一跑（`cnb-lm1-1k5h1otqt`）：第二格被顶掉，第三格根本没跑。 */
@@ -472,5 +476,157 @@ describe("inFlightStages：这一刻有没有一格在飞", () => {
     expect(inFlightStages(null)).toEqual({ count: 0, names: [] });
     expect(inFlightStages({})).toEqual({ count: 0, names: [] });
     expect(inFlightStages({ data: { pipelinesStatus: null } }).count).toBe(0);
+  });
+});
+
+/**
+ * 格的日志正文有三种形状（字符串 / 行数组 / 带 ANSI），归一是**唯一实现**。
+ *
+ * 不归一的后果不是「显示难看」：`content` 是行数组时按字符串读会得到 `"a,b,c"`，
+ * 行号与 `FAIL` 匹配全部失效，于是「摘要空着」被读成「日志里没有失败行」。
+ */
+describe("normalizeStageContent：三种形状一处收口", () => {
+  it("行数组按行拼接（不是逗号串）", () => {
+    expect(normalizeStageContent(["a", "b", "c"])).toBe("a\nb\nc");
+  });
+
+  it("字符串原样保留、CRLF 归一成 LF", () => {
+    expect(normalizeStageContent("a\r\nb\rc")).toBe("a\nb\nc");
+  });
+
+  it("剥掉 ANSI 控制序列（颜色不该混进行号与匹配）", () => {
+    expect(normalizeStageContent(["\u001b[31mFAIL\u001b[0m x", "ok"])).toBe(
+      "FAIL x\nok",
+    );
+  });
+
+  it("非字符串 / null / 缺字段 ⇒ 空串，不抛", () => {
+    expect(normalizeStageContent(null)).toBe("");
+    expect(normalizeStageContent(undefined)).toBe("");
+    expect(normalizeStageContent([null, 42])).toBe("\n42");
+  });
+});
+
+describe("stageLogExcerpt：失败行带行号 + 尾部，两段都给", () => {
+  const LOG = [
+    "RUN v1",
+    " ✓ 通过的一堆",
+    " ❯ src/a.test.ts (3 tests | 1 failed)",
+    "   × 缺键时念 pnpm env:init",
+    "     → expected 'x' to contain 'y'",
+    " FAIL src/a.test.ts > 那一条",
+    "AssertionError: expected 1 to be 2",
+    " Test Files  1 failed (1)",
+    "",
+  ].join("\n");
+
+  it("失败行原样带完整日志行号", () => {
+    const ex = stageLogExcerpt(LOG);
+    const lines = ex.failure.map((l) => l.line);
+    expect(lines).toContain(4);
+    expect(lines).toContain(6);
+    expect(lines).toContain(7);
+    expect(lines).toContain(8);
+    expect(ex.failure.map((l) => l.text).join("\n")).toContain(
+      "缺键时念 pnpm env:init",
+    );
+  });
+
+  it("尾部按「末 N 行」取，且行号对得上完整日志", () => {
+    const ex = stageLogExcerpt(LOG, { tailLines: 2 });
+    expect(ex.totalLines).toBe(9);
+    expect(ex.tail.map((l) => l.line)).toEqual([7, 8]);
+  });
+
+  it("负控制：日志里没有失败形状 ⇒ 失败行为空（那是「没认出」，不是「没有红」）", () => {
+    expect(stageLogExcerpt("all good\nok\n").failure).toEqual([]);
+  });
+});
+
+describe("describeFailedStages：红格的头、失败行、尾部与日志链接", () => {
+  const STAGE_DETAIL = {
+    status: 200,
+    data: {
+      status: "error",
+      duration: 100418,
+      error: "",
+      content: [
+        "RUN v5.0.3",
+        " × 缺键时念 pnpm env:init 5ms",
+        "   → expected 'a' to contain 'b'",
+        " Test Files  1 failed (1)",
+      ],
+    },
+  };
+
+  function fakeRun(detail: unknown) {
+    return (_cmd: string, args: string[]) => {
+      if (args[0] === "build" && args[1] === "get-build-stage") {
+        return {
+          status: 0,
+          stdout: JSON.stringify(detail),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+  }
+
+  it("念出格名 / status / 耗时，失败行带行号，尾部与完整链接都在", () => {
+    const log: string[] = [];
+    const outcome = classifyBuildOutcome(FAILED_BUILD);
+    const noted = describeFailedStages(fakeRun(STAGE_DETAIL), {
+      slug: "org/repo",
+      sn: "cnb-723-1k5h25hkt",
+      outcome,
+      log: (s) => log.push(s),
+    });
+    const text = log.join("\n");
+    expect(noted).toBe(1);
+    expect(text).toContain("失败格：单跑构建·生产构建");
+    expect(text).toContain("100418s");
+    expect(text).toContain("L2  × 缺键时念 pnpm env:init");
+    expect(text).toContain("末 4 行");
+    // 完整日志链接由 `formatOutcome` 的下一动作那句给出（不是这里重复一遍）。
+    expect(
+      formatOutcome(outcome, {
+        sn: "cnb-723-1k5h25hkt",
+        slug: "org/repo",
+      }).join("\n"),
+    ).toContain("https://cnb.cool/org/repo/-/build/logs/cnb-723-1k5h25hkt");
+  });
+
+  it("取不到正文 ⇒ 念「没有结论」，不念「日志里没有失败行」", () => {
+    const log: string[] = [];
+    const noted = describeFailedStages(fakeRun({}), {
+      slug: "org/repo",
+      sn: "b1",
+      outcome: classifyBuildOutcome(FAILED_BUILD),
+      log: (s) => log.push(s),
+    });
+    expect(noted).toBe(0);
+    expect(log.join("\n")).toContain("取不到这一格的日志正文");
+    expect(log.join("\n")).not.toContain("没认出失败行");
+  });
+
+  it("pipelineForStage 找得到格所在的流水线；找不到回 null", () => {
+    const outcome = classifyBuildOutcome(FAILED_BUILD);
+    expect(pipelineForStage(outcome, "stage-2")?.name).toBe(
+      "单跑生产构建（API 触发）",
+    );
+    expect(pipelineForStage(outcome, "stage-9")).toBeNull();
+  });
+});
+
+describe("formatOutcome：前缀可注入（ship 的 --diagnose 复用同一份话术）", () => {
+  it("每行都用给定前缀", () => {
+    const lines = formatOutcome(classifyBuildOutcome(GREEN_BUILD), {
+      sn: "b1",
+      slug: "org/repo",
+      prefix: "[ship]",
+    });
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line.startsWith("[ship]")).toBe(true);
   });
 });

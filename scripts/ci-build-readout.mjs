@@ -70,7 +70,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { asArray, parseSlug } from "./ship-core.mjs";
+import { asArray } from "./ship-build.mjs";
+import { parseSlug } from "./ship-core.mjs";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -267,15 +268,201 @@ export function inFlightStages(json) {
 }
 
 /**
+ * 把那一格的日志正文归一成一段文本。
+ *
+ * 平台在不同版本里给过三种形状，这里**一处收口**：`content: string` /
+ * `content: string[]`（逐行，实测是本仓现在这一形）/ 带 ANSI 转义的控制序列。
+ * 不归一的后果不是「显示难看」：`content` 是行数组时按字符串读会得到
+ * `"a,b,c"`，行号与 `FAIL` 匹配全部失效，于是「摘要空着」被读成「日志里没有失败行」。
+ *
+ * @param {unknown} content `get-build-stage` 的 `data.content`
+ * @returns {string}
+ */
+export function normalizeStageContent(content) {
+  const raw = Array.isArray(content)
+    ? content
+        .map((x) => (typeof x === "string" ? x : x == null ? "" : String(x)))
+        .join("\n")
+    : typeof content === "string"
+      ? content
+      : "";
+  return raw
+    .replace(/\u001b\[[0-9;]*[A-Za-z]/g, "")
+    .replace(/\r\n?/g, "\n");
+}
+
+/** 一行像不像「失败证据」。只做**认出**，不解释它为什么失败。 */
+const FAILURE_MARKERS = [
+  /\bFAIL\b/,
+  /\bAssertionError\b/,
+  /^\s*[×✗]\s/,
+  /^\s*Failed Tests\b/,
+  /\bTest Files\s+\d+\s+failed\b/,
+  /\bTests\s+\d+\s+failed\b/,
+  /\[ELIFECYCLE\]/,
+  /\bError:\s/,
+];
+
+/**
+ * 从那一格的日志里挑出「失败行 + 尾部」两段，行号原样保留。
+ *
+ * 为什么不是「只给最后 N 行」：vitest 的失败明细与最后的汇总隔着一大段通过用例，
+ * 只给尾部会把 `× 缺键时念 …` 那一行切掉；为什么不是「正则取失败行就够」：
+ * 失败行**下面**的上下文（期望/实际、退出码、`[affected-launch] …`）才是判断材料。
+ * 两段都给，且都带行号 —— 人能拿它直接跳进完整日志，不用再搜一遍。
+ *
+ * @param {string} text 归一后的日志正文
+ * @param {{maxFailureLines?: number, tailLines?: number}} [opts]
+ * @returns {{failure: Array<{line: number, text: string}>, tail: Array<{line: number, text: string}>, totalLines: number}}
+ */
+export function stageLogExcerpt(text, opts = {}) {
+  const maxFailureLines = opts.maxFailureLines ?? 25;
+  const tailLines = opts.tailLines ?? 40;
+  const lines = String(text ?? "").split("\n");
+  const failure = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (failure.length >= maxFailureLines) break;
+    const line = lines[i];
+    if (!line || !line.trim()) continue;
+    if (FAILURE_MARKERS.some((re) => re.test(line))) {
+      failure.push({ line: i + 1, text: line.trimEnd() });
+    }
+  }
+  let end = lines.length;
+  while (end > 0 && !(lines[end - 1] ?? "").trim()) end -= 1;
+  const start = Math.max(0, end - tailLines);
+  /** @type {Array<{line: number, text: string}>} */
+  const tail = [];
+  for (let i = start; i < end; i += 1) {
+    const line = lines[i] ?? "";
+    if (!line.trim()) continue;
+    tail.push({ line: i + 1, text: line.trimEnd() });
+  }
+  return { failure, tail, totalLines: lines.length };
+}
+
+/**
+ * 某一格的详情（状态 / 耗时 / 平台给的原因 / 日志正文）。
+ *
+ * `get-build-stage` 此前只被 `fetchStageReason()` 用来读 `error` —— 而 `content`
+ * 才是「红在哪一行」的唯一来源（ISSUE #2217）。这里把它一次取全，两个消费者共用。
+ *
+ * @param {(cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult} run 执行者
+ * @param {string} slug 仓库路径
+ * @param {string} sn 构建号
+ * @param {string} pipelineId 流水线 id
+ * @param {string} stageId 格 id
+ * @returns {{status: string, duration: number | null, error: string, text: string} | null}
+ */
+export function fetchStageDetail(run, slug, sn, pipelineId, stageId) {
+  const res = cnbJson(run, [
+    "build",
+    "get-build-stage",
+    "--repo",
+    slug,
+    "--sn",
+    sn,
+    "--pipelineId",
+    pipelineId,
+    "--stageId",
+    stageId,
+    "-v",
+  ]);
+  const d =
+    res && res.json && typeof res.json === "object" ? res.json.data : null;
+  if (!d || typeof d !== "object") return null;
+  return {
+    status: typeof d.status === "string" ? d.status : "",
+    duration: Number.isFinite(d.duration) ? Number(d.duration) : null,
+    error: typeof d.error === "string" ? d.error.trim() : "",
+    text: normalizeStageContent(d.content),
+  };
+}
+
+/**
+ * 某一格在哪条流水线里（同一跑里格 id 在流水线内唯一）。
+ *
+ * @param {ReturnType<typeof classifyBuildOutcome>} outcome
+ * @param {string} stageId
+ * @returns {ReturnType<typeof classifyBuildOutcome>["pipelines"][number] | null}
+ */
+export function pipelineForStage(outcome, stageId) {
+  return (
+    outcome.pipelines.find((p) =>
+      [...p.configured, ...p.failed, ...p.cancelled, ...p.skipped].some(
+        (s) => s.id === stageId,
+      ),
+    ) || null
+  );
+}
+
+/** 一次最多展开几格失败日志（再多就该直接看完整日志了）。 */
+export const MAX_DETAIL_STAGES = 3;
+
+/**
+ * 把失败格的日志摘要写出来：格头 + 失败行（带行号）+ 尾部 + 完整日志链接。
+ *
+ * 这里是**唯一一份**实现：`ci-build-readout` 自己的入口与 `pnpm ship --diagnose`
+ * 都走它 —— 两份各写一遍的后果，是同一次红在两条命令里给出不一样的行号/摘要。
+ *
+ * @param {(cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult} run 执行者
+ * @param {object} deps
+ * @param {string} deps.slug 仓库路径
+ * @param {string} deps.sn 构建号
+ * @param {ReturnType<typeof classifyBuildOutcome>} deps.outcome 分类结果
+ * @param {(line: string) => void} [deps.log] 输出通道
+ * @param {string} [deps.prefix] 每行前缀
+ * @returns {number} 真正取到日志正文的格数（取不到不算「没有失败行」）
+ */
+export function describeFailedStages(run, { slug, sn, outcome, log = console.log, prefix = "[build-readout]" }) {
+  let detailed = 0;
+  const shown = outcome.failed.slice(0, MAX_DETAIL_STAGES);
+  for (const s of shown) {
+    const pipeline = pipelineForStage(outcome, s.id);
+    if (!pipeline) {
+      log(`${prefix}   失败格：${s.name || s.id}（${s.id}）不在任何一条流水线的读数里 ⇒ 取不到日志。`);
+      continue;
+    }
+    const detail = fetchStageDetail(run, slug, sn, pipeline.id, s.id);
+    const status = (detail && detail.status) || s.status;
+    const duration =
+      detail && detail.duration !== null ? ` · ${detail.duration}s` : "";
+    log(`${prefix}   ── 失败格：${s.name || s.id}（${s.id} · ${pipeline.name || pipeline.id} · status=${status}${duration}）`);
+    if (!detail) {
+      log(`${prefix}      取不到这一格的日志正文 ⇒ 没有结论（不是「日志里没有失败行」）。`);
+      continue;
+    }
+    detailed += 1;
+    if (detail.error) log(`${prefix}      平台给的原因：${detail.error}`);
+    const excerpt = stageLogExcerpt(detail.text);
+    if (excerpt.failure.length === 0) {
+      log(`${prefix}      没认出失败行（正文共 ${excerpt.totalLines} 行）—— 看下面的尾部与完整日志。`);
+    } else {
+      log(`${prefix}      失败行（行号即完整日志的行号）：`);
+      for (const l of excerpt.failure) log(`${prefix}      L${l.line} ${l.text}`);
+    }
+    log(`${prefix}      末 ${excerpt.tail.length} 行：`);
+    for (const l of excerpt.tail) log(`${prefix}      L${l.line} ${l.text}`);
+  }
+  if (outcome.failed.length > shown.length) {
+    log(
+      `${prefix}   另有 ${outcome.failed.length - shown.length} 格也红了，此处没展开；完整日志：https://cnb.cool/${slug}/-/build/logs/${sn}`,
+    );
+  }
+  return detailed;
+}
+
+/**
  * 把分类结果写成给人看的那几行。
  *
  * @param {ReturnType<typeof classifyBuildOutcome>} outcome
- * @param {{sn?: string, slug?: string, reason?: string | null}} [extra]
+ * @param {{sn?: string, slug?: string, reason?: string | null, prefix?: string}} [extra]
  * @returns {string[]}
  */
 export function formatOutcome(outcome, extra = {}) {
   const sn = extra.sn || "(未知构建)";
   const slug = extra.slug || "";
+  const tag = extra.prefix || "[build-readout]";
   const lines = [];
   const head = {
     green: "绿（这一跑有结论）",
@@ -284,41 +471,41 @@ export function formatOutcome(outcome, extra = {}) {
     running: "没有结论（还在跑）",
     unknown: "没有结论（读数形状不认识，不猜方向）",
   };
-  lines.push(`[build-readout] build ${sn} → 结论：${head[outcome.state]}`);
+  lines.push(`${tag} build ${sn} → 结论：${head[outcome.state]}`);
   for (const p of outcome.pipelines) {
     lines.push(
-      `[build-readout]   流水线：${p.name || "(无名)"}（status=${p.status || "(无)"}）`,
+      `${tag}   流水线：${p.name || "(无名)"}（status=${p.status || "(无)"}）`,
     );
   }
   for (const s of outcome.failed) {
     lines.push(
-      `[build-readout]   红的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`,
+      `${tag}   红的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`,
     );
   }
   for (const s of outcome.cancelled) {
     lines.push(
-      `[build-readout]   被取消的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`,
+      `${tag}   被取消的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`,
     );
   }
   const skipped = downstreamSkipped(outcome);
   for (const s of skipped) {
     lines.push(
-      `[build-readout]   下面这些格根本没跑：${s.name || s.id}（${s.id}，status=skipped）`,
+      `${tag}   下面这些格根本没跑：${s.name || s.id}（${s.id}，status=skipped）`,
     );
   }
   if (extra.reason) {
-    lines.push(`[build-readout]   平台给的原因：${extra.reason}`);
+    lines.push(`${tag}   平台给的原因：${extra.reason}`);
   }
   if (outcome.state === "failed") {
     lines.push(
-      `[build-readout]   下一动作：查那一格的日志：https://cnb.cool/${slug}/-/build/logs/${sn}`,
+      `${tag}   下一动作：查那一格的日志：https://cnb.cool/${slug}/-/build/logs/${sn}`,
     );
   } else if (outcome.state === "cancelled") {
     lines.push(
-      "[build-readout]   下一动作：重跑这一格（锁被另一跑顶掉 / 人为终止），不要去查产物。",
+      `${tag}   下一动作：重跑这一格（锁被另一跑顶掉 / 人为终止），不要去查产物。`,
     );
   } else if (outcome.state === "running") {
-    lines.push("[build-readout]   下一动作：等它跑完再读一次。");
+    lines.push(`${tag}   下一动作：等它跑完再读一次。`);
   }
   return lines;
 }
@@ -385,24 +572,8 @@ export function fetchBuildList(run, slug, event, limit) {
  * @returns {string | null} 原因原文；取不到时 null
  */
 export function fetchStageReason(run, slug, sn, pipelineId, stageId) {
-  const res = cnbJson(run, [
-    "build",
-    "get-build-stage",
-    "--repo",
-    slug,
-    "--sn",
-    sn,
-    "--pipelineId",
-    pipelineId,
-    "--stageId",
-    stageId,
-    "-v",
-  ]);
-  const d =
-    res && res.json && typeof res.json === "object" ? res.json.data : null;
-  if (!d || typeof d !== "object") return null;
-  const why = typeof d.error === "string" ? d.error.trim() : "";
-  return why === "" ? null : why;
+  const detail = fetchStageDetail(run, slug, sn, pipelineId, stageId);
+  return detail && detail.error !== "" ? detail.error : null;
 }
 
 /**
@@ -572,8 +743,10 @@ export function main({
     for (const line of formatOutcome(outcome, { sn, slug, reason })) {
       log(line);
     }
-    if (outcome.state === "failed") worst = CODE.RED;
-    else if (outcome.state !== "green" && worst !== CODE.RED)
+    if (outcome.state === "failed") {
+      describeFailedStages(run, { slug, sn, outcome, log });
+      worst = CODE.RED;
+    } else if (outcome.state !== "green" && worst !== CODE.RED)
       worst = CODE.NOT_RUN;
   }
   return worst;
