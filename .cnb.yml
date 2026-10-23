@@ -1533,6 +1533,14 @@
       - "docs/**"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
   - name: API 文档生成物与源同步
+    # ⚠️ 这 10 条**不在三根里**，但改它们会改 `docs/api/**`（ISSUE #2223）：typedoc 沿
+    # import 走，而根外的文件里有**被产物引用**的类型 —— `BackupResult` 定义在
+    # `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里。面判窄了 = **漏判**，
+    # 而漏判是静默的（这一格被 `ifModify` 跳过，与「判过且通过」在读数上无差别）。
+    # 这份名单**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出
+    # （从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），由
+    # `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、
+    # 而这里没有它 ⇒ 当场红。**别在这里手加一条**：加错了没人知道（那正是 #2223）。
     ifModify:
       - "src/lib/**"
       - "src/server/**"
@@ -1542,6 +1550,16 @@
       - "pnpm-lock.yaml"
       - "scripts/check-docs-api.cjs"
       - "scripts/typedoc-run.mjs"
+      - "scripts/db-backup-core.mjs"
+      - "scripts/db-push-core.mjs"
+      - "scripts/db-schema-state.mjs"
+      - "scripts/launcher-core/command-echo.mjs"
+      - "scripts/launcher-core/shell.mjs"
+      - "scripts/launcher-core/worktree.mjs"
+      - "scripts/lockfile/lock-diff.d.mts"
+      - "scripts/lockfile/lock-diff.mjs"
+      - "src/config/custom-nodes.ts"
+      - "src/env.js"
       - "docs/api/**"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
   # 覆盖率上报是**报告型**（它不判任何东西，只把 coverage/lcov.info 交给平台的上报通道；

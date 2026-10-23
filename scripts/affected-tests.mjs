@@ -146,11 +146,16 @@ const SPEC_RE =
 
 /**
  * 一份源码静态引用到的模块（候选路径集合，含 barrel 的 `dir/index.*` 形态）。
+ *
+ * **导出的理由**：`scripts/docs-api-input-closure.mjs` 要算 typedoc 输入面的
+ * 传递闭包，而它需要的正是这同一份说明符解析 —— 抄第二份正则就会漂（§12.12 / §12.18），
+ * 而漂的形态恰好是「闭包算少了 ⇒ 收窄面判窄 ⇒ 静默漏判」。
+ *
  * @param {string} text
  * @param {string} fromFile
  * @returns {Set<string>}
  */
-function specifiersOf(text, fromFile) {
+export function specifiersOf(text, fromFile) {
   const out = new Set();
   for (const m of text.matchAll(SPEC_RE)) {
     const spec = m[1];
