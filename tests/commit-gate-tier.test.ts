@@ -7,7 +7,8 @@
  * 判据的出处，而账面上一条红都不会出现：步骤没了 ⇒ 「没有档要找执行者」⇒ 绿。
  * 所以这里钉的不是「跑得快」，是**注册表还在、且真的有人跑它**。
  *
- * 三条方向各一：① 注册表总数与本地档边界（挪档不许减清单）；② 跳档必须被说出来
+ * 三条方向各一：① 注册表 ⇄ 钩子双向对账与本地档边界（挪档不许减清单，也不许加完不登记）；
+ * ② 跳档必须被说出来
  * （否则一次「只跑了 D0」的绿会被读成「全套过了」）；③ CI 那一档读的是同一份注册表。
  */
 import { readFileSync } from "node:fs";
@@ -21,6 +22,11 @@ import {
   localTierLabels,
   readHookSteps,
 } from "../scripts/base-check/hook-steps.mjs";
+import {
+  DECLARED_D0_STEPS,
+  DECLARED_STEPS,
+  registryProblems,
+} from "../scripts/base-check/declared-hook-steps.mjs";
 import { fullTreeArgv, main as heavyMain } from "../scripts/ci-heavy-gates.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
@@ -29,19 +35,52 @@ const hookText = readFileSync(HOOK, "utf8");
 
 describe("档位：注册表与边界", () => {
   /**
-   * ⚠️ 这两个数是**当天的存量**，不是常量：往 `.githooks/pre-commit` 加一步或减一步，
-   * 必须同批把它们改对。这条用例读的是**文本**（`readFileSync(HOOK)`），没有任何 import
-   * 依赖 ⇒ 改钩子的那条线自己跑不到它（受影响用例选不中），红会落在**之后每一条 PR** 上
-   * —— 而「受影响用例」是那一档唯一的执行者，于是等价于主干冻结。实测与出路见 ISSUE #2135。
+   * 这一格**不写总数**（ISSUE #2235）。应然清单住在
+   * `scripts/base-check/declared-hook-steps.mjs`，这里只核「注册表与钩子说的是不是同一件事」。
+   *
+   * 为什么抄一份名单不算第二份漂移：那份名单是**规约**（「这些判据必须有执行者」），
+   * 而它的两个漂移方向都被 `registryProblems()` 挡住 —— 钩子加了没登记 ⇒ 红；
+   * 登记了而钩子没有 ⇒ 红。两者都**点名是哪一条**，这比旧写法强一整格：
+   * 「总数不等」只说差一条，而排查「差的是哪条」要把 56 行重读一遍。
    */
-  it("注册表总数一条不少（56 条 = D0 那 17 + D 那 39）—— 降档不是删步骤", () => {
+  it("注册表 ⇄ 钩子步骤双向对账（一条不差、一条不多，本地档边界一致）", () => {
+    expect(registryProblems(readHookSteps(), localTierLabels())).toEqual([]);
+  });
+
+  it("总数由注册表派生，而不是由测试手写（旧写法是那三个手写数的现场）", () => {
+    expect(readHookSteps().length).toBe(DECLARED_STEPS.length);
+    expect(localTierLabels().size).toBe(DECLARED_D0_STEPS.length);
+  });
+
+  it("删一步（把降档做成删步骤）⇒ 红，并点名缺的是哪一条", () => {
     const all = readHookSteps();
-    expect(all.length).toBe(56);
-    expect(localTierLabels().size).toBe(17);
-    // 边界取错的话，本地档会变成「恰好少一条」这类静默漂移 ⇒ 与总数一起钉。
-    expect([...localTierLabels()]).toEqual(
-      all.slice(0, 17).map((s) => s.label),
+    const [removed = { label: "", argv: [] }] = all;
+    expect(
+      removed.label,
+      "钩子解析为空 ⇒ 解析器或行形状坏了，这条断言没有对象",
+    ).toBeTruthy();
+    const problems = registryProblems(
+      all.filter((s) => s.label !== removed.label),
+      localTierLabels(),
     );
+    expect(problems.length, "删掉一步却一条不一致都不报").toBeGreaterThan(0);
+    expect(problems.join("\n")).toContain(removed.label);
+  });
+
+  it("裸加一步（钩子里有、注册表没登记）⇒ 红，同样点名", () => {
+    const problems = registryProblems(
+      [...readHookSteps(), { label: "临时探针（没登记）", argv: ["node", "x.cjs"] }],
+      localTierLabels(),
+    );
+    expect(problems.join("\n")).toContain("临时探针（没登记）");
+  });
+
+  it("把一条判据挪出本地档而不在注册表登记 ⇒ 红（「本地每次都跑的那批」不许静默变少）", () => {
+    const tier = new Set(localTierLabels());
+    const [moved = ""] = [...tier];
+    expect(moved, "D0 块读为空 ⇒ 档位开关与 `--light` 也读到空了").toBeTruthy();
+    tier.delete(moved);
+    expect(registryProblems(readHookSteps(), tier).join("\n")).toContain(moved);
   });
 
   it("本地档的标签全部落在注册表里（取法与注册表同源，不另立名单）", () => {
