@@ -164,7 +164,7 @@ export async function runPreflightStage(ctx) {
   }
   const shaRes = run("git", ["rev-parse", "HEAD"]);
   const sha = shaRes.stdout.trim();
-  const dirty = run("git", ["status", "--porcelain"]);
+  const dirty = run("git", ["-c", "core.quotePath=false", "status", "--porcelain"]);
   const { staged, unstagedModified, untracked } = parsePorcelain(dirty.stdout);
   /* 「单 PR 单变更」数的是**这条分支相对上游带进来的**碎片。这一格错过两次，
    * 两次都是「挑了最省事的那个取数面」：
@@ -176,6 +176,8 @@ export async function runPreflightStage(ctx) {
    * 「同一条分支上重跑要还能过」这一向是 ② 的修法自己带出来的，见用例。 */
   const branchFragRes = baseRef
     ? run("git", [
+        "-c",
+        "core.quotePath=false",
         "diff",
         "--name-only",
         `${baseRef}...HEAD`,
@@ -184,6 +186,8 @@ export async function runPreflightStage(ctx) {
       ])
     : { stdout: "" };
   const workFragRes = run("git", [
+    "-c",
+    "core.quotePath=false",
     "status",
     "--porcelain",
     "--",

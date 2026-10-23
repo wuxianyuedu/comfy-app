@@ -41,8 +41,13 @@ import {
 /** 造一个「git 调用」替身：按参数给出退出码与 stdout。 */
 const gitStub =
   (byArgs: Record<string, { status: number; stdout: string }>) =>
-  (args: string[]) =>
-    byArgs[args.join(" ")] ?? { status: 1, stdout: "" };
+  (args: string[]) => {
+    /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
+     * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算，替身才不会被
+     * 「多了一个旗标」这件事顶掉。 */
+    const shape = args[0] === "-c" ? args.slice(2) : args;
+    return byArgs[shape.join(" ")] ?? { status: 1, stdout: "" };
+  };
 
 /** 造一个「安装」替身：只记有没有被调用。 */
 function installStub() {

@@ -79,10 +79,16 @@ export const RUST_SOURCE_RE = /^src-tauri\/src\/.*\.rs$/;
 
 /** 读暂存区文件清单（相对仓库根、正斜杠）。 */
 export function stagedFiles() {
-  const out = spawnSync("git", ["diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+   * 的文件头「口径 ④」）。 */
+  const out = spawnSync(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+    },
+  );
   if (out.status !== 0) return [];
   return out.stdout.split(/\r?\n/).filter(Boolean);
 }

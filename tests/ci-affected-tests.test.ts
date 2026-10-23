@@ -25,11 +25,14 @@ function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
   const calls: string[][] = [];
   const runGit = (args: string[], _cwd: string) => {
     calls.push(args);
+    /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
+     * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算。 */
+    const shape = args[0] === "-c" ? args.slice(2) : args;
     const key =
-      args[0] === "diff"
-        ? `diff ${args[args.length - 1] ?? ""}`
-        : (args[0] ?? "");
-    const hit = handlers[key] ?? handlers[args[0] ?? ""];
+      shape[0] === "diff"
+        ? `diff ${shape[shape.length - 1] ?? ""}`
+        : (shape[0] ?? "");
+    const hit = handlers[key] ?? handlers[shape[0] ?? ""];
     if (!hit) return { ok: false, stdout: "" };
     return hit;
   };
@@ -55,7 +58,9 @@ describe("ci-affected-tests — 改动面从哪来", () => {
       via: "CNB_PULL_REQUEST_TARGET_SHA（三点 diff）",
     });
     /* 三点（`...`）不是两点：两点 diff 会把目标分支自己的新提交也算进这个 PR 的面。 */
-    expect(calls[0]?.[3]).toBe("refs/heads/master...HEAD");
+    expect(calls[0]?.[5]).toBe("refs/heads/master...HEAD");
+    /* 路径要原样：`-c core.quotePath=false` 必须在（ISSUE #2272）。 */
+    expect(calls[0]?.slice(0, 2)).toEqual(["-c", "core.quotePath=false"]);
   });
 
   it("目标 sha 的 git 没跑起来 ⇒ 报「取不到」，不当成空清单放行", () => {
@@ -129,6 +134,8 @@ describe("ci-affected-tests — 改动面从哪来", () => {
     expect(calls[0]).toEqual(["merge-base", "origin/master", "HEAD"]);
     /* 兜底档与 PR 档同用 `--name-status -M`：`--name-only` 会把旧路径吃掉。 */
     expect(calls[1]).toEqual([
+      "-c",
+      "core.quotePath=false",
       "diff",
       "--name-status",
       "-M",

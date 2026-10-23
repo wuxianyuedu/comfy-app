@@ -114,6 +114,28 @@ describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
     expect(r.output).toContain(TWIN);
   });
 
+  test("--base 形态：判决**不因机器的 git 配置而变**（强制 core.quotePath=true）", ({
+    repo,
+  }) => {
+    /* 这一条是 ISSUE #2272 的现场：机器之间本来就有差别 —— runner 的 git 是**全默认**
+     * （`core.quotePath=true`，路径被转义加引号），本机全局配了 `false` ⇒ 同一份代码
+     * 在平台上是「OK：本次没有……」（绿），在本机是红的。
+     * ⇒ 这里强制成 runner 的形态跑一遍，判决必须**一样**。 */
+    repo.write(SOURCE, "# 附录\n\n改了正文。\n");
+    repo.git("add", "--", SOURCE);
+    repo.commit("改了源，没带镜像");
+    const r = repo.run(["--base", "HEAD~1"], {
+      env: {
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.quotepath",
+        GIT_CONFIG_VALUE_0: "true",
+      },
+    });
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain(SOURCE);
+    expect(r.output).toContain(TWIN);
+  });
+
   test("--base 形态：源与镜像同批 ⇒ 放行", ({ repo }) => {
     repo.write(SOURCE, "# 附录\n\n改了正文。\n");
     repo.write(TWIN, "<!-- 生成态镜像 -->\n\n# 附录\n\n改了正文。\n");
