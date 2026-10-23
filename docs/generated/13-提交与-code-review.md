@@ -8451,12 +8451,13 @@ cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels �
 与「注释掉的 `.env.example` 形态不算配了」两条负控制）。
 
 **PR 与 issue 评论是同一格留痕，开口也补上了（ISSUE #2204）**。角色标签的生成处只有
-`ship-ticket.mjs` 的 `roleLabel()` / `authorLabel()` / `handlerLabel()`，署名行只有
-`authorSignature()` / `handlerSignature()`（被 `issueAuthoring`、PR 正文、领取 / 结束评论与
-`--whoami` 共用；不许在调用点各拼一套）。三条口径：
+`ship-ticket.mjs` 的 `roleLabel()` / `authorLabel()` / `handlerLabel()`，署名只有
+`commentHeader()` 一处（被 issue 正文、PR 正文、领取 / 结束评论与 `--whoami` 共用；
+不许在调用点各拼一套）。三条口径：
 
-- **凡向平台写文字，正文末尾带一行署名**：提单 / PR 正文用 `提单人:<短名>`，领取 / 结束评论用
-  `处理人:<短名>`；未配时如实写 `…:未配`，**不编一个名字**（也**不许**拿 git `user.name`
+- **凡向平台写文字，正文最前面带一行粗体署名 ``**[评论人：<短名>]**``**：提单 / PR 正文与
+  领取 / 结束评论**同一格式**（角色分工由标签承担，正文不再重复写 `提单人:` / `处理人:`）；
+  未配时如实写 ``**[评论人：未配]**``，**不编一个名字**（也**不许**拿 git `user.name`
   顶替 —— 那是提交身份，不是提单 / 处理身份）。
 - **建 PR 后补 `处理人:<短名>` 标签，并独立回读**。`cnb pulls post-pull` 与 `create-issue` 同形：
   **没有 `--labels`**，只能建完之后 `post-pull-labels`；而回执不算结论，必须再跑一次
@@ -8470,13 +8471,13 @@ cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels �
 **手工通道的漏口不靠脚本兜**：手工 `cnb pulls post-pull`、`cnb issues post-issue-comment` 与
 手工领单都不经过 `ship`，而平台侧的 `author` 是 token 的账号本体（跨检出逐字相同 —— 不许写成
 「由 cnb 账号自动带上」，那是假读数）。所以给一条能粘贴的自查出口：
-`pnpm ship --whoami` 打出一份检出的留痕短名、两枚角色标签、三条留痕规则（提单署名、PR 标签回读、
+`pnpm ship --whoami` 打出一份检出的留痕短名、两枚角色标签、三条留痕规则（开头署名、PR 标签回读、
 领取 / 结束入口）与可粘贴命令；它一次也不碰平台、不改任何状态、不参与退码。
 
 与 issue 侧同一条边界：**未配 handle 不阻断**（它是留痕读数，不是判据）。区别只在话术 ——
 Windows 检出要把**这一份** `.env` 的绝对路径与 `pnpm env:init` 念出来（四份并行检出时
 「去 `.env` 加一行」指不出是哪一份，#2186 的现场）。回归见 `tests/ship.test.ts` 的
-`authorLabel / handlerLabel / authorSignature / handlerSignature / whoamiLines` 组与 `main()`
+`authorLabel / handlerLabel / commentHeader / whoamiLines` 组与 `main()`
 里那几格（打标签 → 回读的顺序、回读没有时的负控制、未配时一次标签动作都不伸手）。
 
 #### 13.10.11 领取 / 结束释放 / 我的领取列表：`--claim` / `--release` / `--claims`（ISSUE #2213 / #2215）
@@ -8493,6 +8494,12 @@ Windows 检出要把**这一份** `.env` 的绝对路径与 `pnpm env:init` 念�
 | `pnpm ship --claim <号>`    | 先 `post-issue-labels` 补 `处理人:<短名>` 与 `参与人:<短名>`（缺哪枚补哪枚），再评论「开发者 <短名> 已接单，正在开发中。」 | 一次 `get-issue` 回读**两枚**标签都看得见；`list-issue-comments` 回读评论 |
 | `pnpm ship --release <号>`  | 先评论「开发者 <短名> 开发结束。」，再 `delete-issue-label` 撤自己的 `处理人:` | 评论回读；撤标签后 `get-issue` 回读（`参与人:` 仍在） |
 | `pnpm ship --claims`        | 不写                                                                   | `list-issues --labels 处理人:<短名> --state open` 分页读 |
+
+**评论开头统一署名、状态判定不看署名**：两条状态评论都以 ``**[评论人：<短名>]**`` 开头
+（与提单 / PR 正文同一格式，§13.10.10），空一行再接「开发者 <短名> 已接单，正在开发中。」/
+「开发者 <短名> 开发结束。」。判「最新一条属于我的状态评论」认的是**正文那句**而不是开头
+署名 —— 两边的开头逐字相同，拿它当判据会把每一条 release 读成 claim；旧的「结尾
+`处理人:<短名>`」形态仍然认，历史评论不需要重写。
 
 **两枚标签是两种生命周期，不能合并**：
 
@@ -8532,7 +8539,8 @@ Windows 检出要把**这一份** `.env` 的绝对路径与 `pnpm env:init` 念�
 （评论仍走平台原生通道，但 `--claim` 不替你评论）；单子已关 ⇒ 不领取；未配短名 ⇒ 2 且一次
 cnb 都不碰；`--claim --merge` ⇒ 2；`--claims` 读不到列表 ⇒ 2 且不念「没有领取中的单子」；
 写后回读冒出第二个处理人 ⇒ 1 且不再发评论；`--release` / 关单收尾撤掉 `处理人:` 之后
-`参与人:` 仍在，且撤标签的动作里不出现 `参与人:`。
+`参与人:` 仍在，且撤标签的动作里不出现 `参与人:`；旧形态（结尾 `处理人:<短名>`、无开头
+署名）的结束评论仍被读成 release（开头署名两边相同，状态判定只认正文那句）。
 
 #### 13.10.12 一步建单：`--new-issue` / `--issue-body-file` / `--priority`（ISSUE #2217）
 
@@ -8548,7 +8556,7 @@ pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priorit
 | 谁做 | 做什么                                                                                                                     |
 | ---- | -------------------------------------------------------------------------------------------------------------------------- |
 | 脚本 | 建单 → 补 `提单人:<短名>` → **独立 `get-issue` 回读**（标题 / 优先级 / 标签）→ 念下一动作 `pnpm ship --claim <号>` |
-| 人   | 标题与正文（症状 / 当场读数 / 根因；正文末尾由脚本补一行 `提单人:<短名>` 署名）、`--priority` 的值                           |
+| 人   | 标题与正文（症状 / 当场读数 / 根因；正文开头由脚本补一行 `**[评论人：<短名>]**` 署名）、`--priority` 的值                           |
 
 四条口径：
 

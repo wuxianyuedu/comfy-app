@@ -219,25 +219,20 @@ export function labelValues(labels, role) {
 }
 
 /**
- * 向平台写文字时的署名行。**角色决定前缀**：提单 / PR 正文写 `提单人:<短名>`，
- * 领取 / 结束评论写 `处理人:<短名>`。未配时如实写「未配」、不编一个名字 ——
- * 这行是留痕，读者要靠它判断「这串字是谁写的」。
+ * 向平台写文字时的开头署名。**同一格式、不分角色**：`**[评论人：<短名>]**`。
+ *
+ * 为什么不再按角色分 `提单人:` / `处理人:`：这两个前缀已经由标签承担（机器可读），
+ * 正文里再写一遍既冗余、又让人以为正文那行也是判据。读者只要一眼看出「这串字是谁写的」，
+ * 所以统一放在最前面；角色分工去标签里读。
+ *
+ * 未配时如实写「未配」、不编一个名字 —— 它仍是留痕，不是判断。
  *
  * @param {string | null | undefined} handle 短名
- * @returns {string} 署名行
+ * @returns {string} 开头署名行（不含换行）
  */
-export function authorSignature(handle) {
-  return authorLabel(handle) ?? `${ISSUE_LABEL_ROLES.author}:未配`;
-}
-
-/**
- * 处理人署名行（领取 / 结束评论用）。
- *
- * @param {string | null | undefined} handle 短名
- * @returns {string}
- */
-export function handlerSignature(handle) {
-  return handlerLabel(handle) ?? `${ISSUE_LABEL_ROLES.handler}:未配`;
+export function commentHeader(handle) {
+  const name = String(handle ?? "").trim();
+  return `**[评论人：${name || "未配"}]**`;
 }
 
 /**
@@ -333,8 +328,8 @@ export function whoamiLines({ handle = null, root = "", slug = null } = {}) {
     );
   }
   lines.push(
-    `[ship] 规则一：凡向平台写文字，正文末尾带一行署名 —— 提单 / PR 正文用 \`${authorSignature(name)}\`，` +
-      `领取 / 结束评论用 \`${handlerSignature(name)}\``,
+    `[ship] 规则一：凡向平台写文字，正文最前面带一行粗体署名 \`${commentHeader(name)}\` —— ` +
+      "提单 / PR 正文与领取 / 结束评论同一格式；角色分工看标签（提单人 / 处理人 / 参与人）",
   );
   lines.push(
     "[ship] 规则二：建 PR 后补标签并**独立回读**（`ship` 建的会自己做；手工建的要自己跑）：",
