@@ -22,9 +22,10 @@
  *   ① **改动面**：PR 事件上平台给 `CNB_PULL_REQUEST_TARGET_SHA`（官方
  *      `build-in-env.md`；`.cnb.yml` 的分支守卫一格早已在用同一族变量），按
  *      **三点** diff（`<target>...HEAD` = 与目标的 merge-base 之差，正是「这个 PR
- *      改了什么」）取名字清单。没有它（非 PR 事件 / 手工触发）时退回
- *      `<remote>/master` 或本地 `master` 的 merge-base 两点 diff —— 与撤掉的
- *      `premerge-check.mjs#pushBatchFiles` 同一个口径。
+ *      改了什么」）取改动清单。读法 `--name-status -M`：改名的 **R 行两侧都进面**
+ *      （只给新路径时，按旧路径读文件的用例会随改名整条漏跑，ISSUE #2226）。没有它
+ *      （非 PR 事件 / 手工触发）时退回 `<remote>/master` 或本地 `master` 的
+ *      merge-base 两点 diff —— 与撤掉的 `premerge-check.mjs#pushBatchFiles` 同一个口径。
  *   ② **拿不到改动面 ⇒ 退 2**，不是退 0：这一格没判 = 没有证据（§13.6.2）。
  *      清单为空（diff 为空）同样退 2 —— 空清单若放行，`vitest run` 会跑成全量，
  *      而「全量绿」在 PR 这一跳上是被 §13.5.21 明确否掉的那个读数。
@@ -42,6 +43,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { changedPathsFromNameStatus } from "./affected-tests.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { resolveMergeBaseRef } from "./base-check.mjs";
 
@@ -79,14 +81,17 @@ function gitRun(args, deps = {}) {
  * 这一次要判的改动面（仓库相对路径清单）。
  *
  * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null}} [deps]
- * @returns {{ok: true, files: string[], via: string} | {ok: false, reason: string}}
+ * @returns {{ok: true, files: string[], renamedFrom: string[], via: string} | {ok: false, reason: string}}
  */
 export function resolveChangedFiles(deps = {}) {
   const env = deps.env ?? process.env;
   /* ① PR 事件：平台给的目标分支 sha —— 三点 diff 就是「这个 PR 改了什么」。 */
   const target = String(env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
   if (target !== "") {
-    const got = gitRun(["diff", "--name-only", `${target}...HEAD`], deps);
+    const got = gitRun(
+      ["diff", "--name-status", "-M", `${target}...HEAD`],
+      deps,
+    );
     if (!got.ok) {
       return {
         ok: false,
@@ -95,15 +100,14 @@ export function resolveChangedFiles(deps = {}) {
           "（浅克隆 / 该 sha 不在本地对象库里；先 fetch 再跑）",
       };
     }
-    const files = got.stdout.split(/\r?\n/).filter(Boolean);
-    if (files.length === 0) {
-      return {
-        ok: true,
-        files: [],
-        via: `CNB_PULL_REQUEST_TARGET_SHA（三点 diff）`,
-      };
-    }
-    return { ok: true, files, via: `CNB_PULL_REQUEST_TARGET_SHA（三点 diff）` };
+    const via = `CNB_PULL_REQUEST_TARGET_SHA（三点 diff）`;
+    const parsed = changedPathsFromNameStatus(got.stdout);
+    return {
+      ok: true,
+      files: parsed.paths,
+      renamedFrom: parsed.renamedFrom,
+      via,
+    };
   }
   /* ② 非 PR 事件 / 手工触发：退回「要并进去的那条」的 merge-base 两点 diff。 */
   const ref =
@@ -124,16 +128,21 @@ export function resolveChangedFiles(deps = {}) {
       reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）`,
     };
   }
+  /* 两档都走 `--name-status -M`：`--name-only` 把 R 行压成新路径一条，
+   * 旧路径就那样从改动面上消失了 —— 而按旧路径消费该文件的用例正是靠它才被选中。
+   * 与 PR 档同一条解析（`changedPathsFromNameStatus`），不另写一份。 */
   const got = gitRun(
-    ["diff", "--name-only", `${mb.stdout.trim()}..HEAD`],
+    ["diff", "--name-status", "-M", `${mb.stdout.trim()}..HEAD`],
     deps,
   );
   if (!got.ok) {
     return { ok: false, reason: `算不出 ${mb.stdout.trim()}..HEAD 的改动清单` };
   }
+  const parsed = changedPathsFromNameStatus(got.stdout);
   return {
     ok: true,
-    files: got.stdout.split(/\r?\n/).filter(Boolean),
+    files: parsed.paths,
+    renamedFrom: parsed.renamedFrom,
     via: `${ref} 的分叉点`,
   };
 }
@@ -165,6 +174,12 @@ export function main(deps = {}) {
     `[ci-affected] 改动面：${changed.files.length} 个文件（${changed.via}）；` +
       `并发 --maxWorkers=${workers}（${cores} 核，${source}）\n`,
   );
+  if (changed.renamedFrom.length > 0) {
+    process.stdout.write(
+      `[ci-affected] 其中 ${changed.renamedFrom.length} 处是改名：旧路径也进了改动面` +
+        `（${changed.renamedFrom.join(" ")}）—— 按旧路径引用那个文件的用例靠这一条才选得中\n`,
+    );
+  }
   const spawn =
     deps.spawn ??
     ((/** @type {string} */ script, /** @type {NodeJS.ProcessEnv} */ e) => {

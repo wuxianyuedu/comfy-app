@@ -20,12 +20,15 @@ import { describe, expect, it } from "vitest";
 
 import { main, resolveChangedFiles } from "../scripts/ci-affected-tests.mjs";
 
-/** 假 git：按调用顺序回放预置结果。 */
+/** 假 git：按调用顺序回放预置结果（diff 的键取最后一个参数 —— 前面是 name-status / -M 这类选项）。 */
 function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
   const calls: string[][] = [];
   const runGit = (args: string[], _cwd: string) => {
     calls.push(args);
-    const key = args[0] === "diff" ? `diff ${args[2] ?? ""}` : (args[0] ?? "");
+    const key =
+      args[0] === "diff"
+        ? `diff ${args[args.length - 1] ?? ""}`
+        : (args[0] ?? "");
     const hit = handlers[key] ?? handlers[args[0] ?? ""];
     if (!hit) return { ok: false, stdout: "" };
     return hit;
@@ -38,7 +41,7 @@ describe("ci-affected-tests — 改动面从哪来", () => {
     const { runGit, calls } = fakeGit({
       "diff refs/heads/master...HEAD": {
         ok: true,
-        stdout: "src/a.ts\ntests/b.test.ts\n",
+        stdout: "M\tsrc/a.ts\nA\ttests/b.test.ts\n",
       },
     });
     const got = resolveChangedFiles({
@@ -48,10 +51,11 @@ describe("ci-affected-tests — 改动面从哪来", () => {
     expect(got).toEqual({
       ok: true,
       files: ["src/a.ts", "tests/b.test.ts"],
+      renamedFrom: [],
       via: "CNB_PULL_REQUEST_TARGET_SHA（三点 diff）",
     });
     /* 三点（`...`）不是两点：两点 diff 会把目标分支自己的新提交也算进这个 PR 的面。 */
-    expect(calls[0]?.[2]).toBe("refs/heads/master...HEAD");
+    expect(calls[0]?.[3]).toBe("refs/heads/master...HEAD");
   });
 
   it("目标 sha 的 git 没跑起来 ⇒ 报「取不到」，不当成空清单放行", () => {
@@ -77,16 +81,39 @@ describe("ci-affected-tests — 改动面从哪来", () => {
     expect(got).toEqual({
       ok: true,
       files: [],
+      renamedFrom: [],
       via: "CNB_PULL_REQUEST_TARGET_SHA（三点 diff）",
     });
     /* 没有第二次 git 调用：不偷偷改判另一份面。 */
     expect(calls).toHaveLength(1);
   });
 
+  it("改名 ⇒ 旧路径与新路径都进改动面（#2226）", () => {
+    const { runGit } = fakeGit({
+      "diff abc123...HEAD": {
+        ok: true,
+        stdout: "R100\tscripts/old-name.mjs\tscripts/new-name.mjs\n",
+      },
+    });
+    const got = resolveChangedFiles({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      runGit,
+    });
+    expect(got).toEqual({
+      ok: true,
+      files: ["scripts/old-name.mjs", "scripts/new-name.mjs"],
+      renamedFrom: ["scripts/old-name.mjs"],
+      via: "CNB_PULL_REQUEST_TARGET_SHA（三点 diff）",
+    });
+  });
+
   it("没有目标 sha ⇒ 退回 merge-base 两点 diff（与撤掉的 unitTests 段同一口径）", () => {
     const { runGit, calls } = fakeGit({
       "merge-base": { ok: true, stdout: "base123\n" },
-      "diff base123..HEAD": { ok: true, stdout: "src/c.ts\n" },
+      "diff base123..HEAD": {
+        ok: true,
+        stdout: "M\tsrc/c.ts\nR087\tlib/old.ts\tsrc/lib/new.ts\n",
+      },
     });
     const got = resolveChangedFiles({
       env: {},
@@ -95,11 +122,18 @@ describe("ci-affected-tests — 改动面从哪来", () => {
     });
     expect(got).toEqual({
       ok: true,
-      files: ["src/c.ts"],
+      files: ["src/c.ts", "lib/old.ts", "src/lib/new.ts"],
+      renamedFrom: ["lib/old.ts"],
       via: "origin/master 的分叉点",
     });
     expect(calls[0]).toEqual(["merge-base", "origin/master", "HEAD"]);
-    expect(calls[1]?.[2]).toBe("base123..HEAD");
+    /* 兜底档与 PR 档同用 `--name-status -M`：`--name-only` 会把旧路径吃掉。 */
+    expect(calls[1]).toEqual([
+      "diff",
+      "--name-status",
+      "-M",
+      "base123..HEAD",
+    ]);
   });
 
   it("连 fallback 引用都取不到 ⇒ 退 2 的理由说得清", () => {
@@ -132,7 +166,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", COMFY_CI_MAX_WORKERS: "2" },
-      runGit: () => ({ ok: true, stdout: "src/a.ts\nsrc/b.ts\n" }),
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\nM\tsrc/b.ts\n" }),
       spawn,
     });
     expect(code).toBe(0);
@@ -143,11 +177,27 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     expect(seen[0]!.env.COMFY_PRECOMMIT_MAX_WORKERS).toBe("2");
   });
 
+  it("改名那一路：旧路径也经 env 递进判决链（#2226）", () => {
+    const { spawn, seen } = fakeSpawn(0);
+    const code = main({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      runGit: () => ({
+        ok: true,
+        stdout: "R100\tscripts/old-name.mjs\tscripts/new-name.mjs\n",
+      }),
+      spawn,
+    });
+    expect(code).toBe(0);
+    expect(seen[0]!.env.COMFY_AFFECTED_CHANGED).toBe(
+      "scripts/old-name.mjs\nscripts/new-name.mjs",
+    );
+  });
+
   it("退出码原样透传（红就是红，不在入口里翻译）", () => {
     const { spawn } = fakeSpawn(1);
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
-      runGit: () => ({ ok: true, stdout: "src/a.ts\n" }),
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
     });
     expect(code).toBe(1);
