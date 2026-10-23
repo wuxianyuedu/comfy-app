@@ -51,6 +51,7 @@ import {
   freshnessReading,
   freshnessStamp,
   freshnessTrack,
+  readBranchLedger,
   readFreshnessLedgerAt,
 } from "./freshness-ledger.mjs";
 
@@ -69,7 +70,13 @@ const ROOT = path.resolve(HERE, "..");
  * @returns {Record<string, unknown>}
  */
 export function readFreshnessLedger(kind = "e2e", root = ROOT) {
-  return readFreshnessLedgerAt(root, freshnessTrack(kind).ledger);
+  // ISSUE #2247：平台每日跑绿的账只落在机器自有分支 `ci/freshness-ledger`，
+  // 工作树那份是最后一次本地跑（可能已在自己分支、带未合并改动），与机器跑的不一定是
+  // 同一份。故**机器账权威**：机器分支有这份账就以它为准，缺失才回退工作树。
+  const track = freshnessTrack(kind);
+  const machine = readBranchLedger({ root, rel: track.ledger });
+  if (machine && Object.keys(machine).length > 0) return machine;
+  return readFreshnessLedgerAt(root, track.ledger);
 }
 
 /**
