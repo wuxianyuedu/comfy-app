@@ -27,7 +27,7 @@ import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
   DEV_HANDLE_ENV_KEY,
-  commentHeader,
+  withCommentHeader,
   handlerLabel,
   ISSUE_LABEL_ROLES,
   labelValues,
@@ -56,12 +56,12 @@ function commentSentence(kind, handle) {
  * @returns {string}
  */
 export function claimComment(handle) {
-  return `${commentHeader(handle)}\n\n${commentSentence("claim", handle)}`;
+  return withCommentHeader(commentSentence("claim", handle), handle);
 }
 
 /** @param {string} handle 留痕短名 */
 export function releaseComment(handle) {
-  return `${commentHeader(handle)}\n\n${commentSentence("release", handle)}`;
+  return withCommentHeader(commentSentence("release", handle), handle);
 }
 
 /**

@@ -15,8 +15,9 @@
  *
  * 代做的是机械那一半：建单 → 按 `提单人:<短名>` → 独立 `get-issue` 回读
  * （标题 / 优先级 / 标签三件原值）。**不写正文**：标题与正文是判断（症状 / 读数 /
- * 根因），必须由人给（`--new-issue` + `--issue-body-file`）。正文开头补一行署名
- * （`commentHeader`），与 PR 正文同一口径 —— 那一行是留痕，不是判断。
+ * 根因），必须由人给（`--new-issue` + `--issue-body-file`）。正文开头保证有且只有一行
+ * 署名（`withCommentHeader` —— 正文文件里自己写了的不再重复补，#2258 就是那两行），
+ * 与 PR 正文同一口径 —— 那一行是留痕，不是判断。
  *
  * `--priority` 不代填：不给就走平台默认（P2），并把这句念出来；词表只认平台原生的
  * `P0|P1|P2|P3`（`ISSUE_PRIORITIES`）。给了一个词表外的值 ⇒ 停手，别让平台替我们
@@ -32,10 +33,10 @@ import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
   authorLabel,
-  commentHeader,
   ISSUE_LABEL_ROLES,
   ISSUE_PRIORITIES,
   labelValues,
+  withCommentHeader,
 } from "./ship-ticket.mjs";
 import { readIssue } from "./ship-claim.mjs";
 
@@ -105,7 +106,8 @@ export function readIssueBody(root, file, handle) {
   }
   return {
     ok: true,
-    text: `${commentHeader(handle)}\n\n${text.replace(/\s+$/, "")}\n`,
+    /* 幂等：正文文件里自己已经写了署名行的（#2258 那单就是），不再前插第二遍。 */
+    text: withCommentHeader(text, handle),
     where,
   };
 }
