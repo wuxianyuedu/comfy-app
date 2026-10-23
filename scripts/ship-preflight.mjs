@@ -32,6 +32,12 @@ import { logInstanceReading } from "./ship-reap.mjs";
 import { parsePorcelain } from "./ship-local.mjs";
 
 /**
+ * 本检出应用实例的归属读数（形状由 `port-reap.mjs` 的 `runningAppInstances()` 给）。
+ *
+ * @typedef {{running?: boolean, pids?: number[], via?: string|null}} InstanceReading
+ */
+
+/**
  * 跑阶段 0。
  *
  * @param {{
@@ -46,15 +52,15 @@ import { parsePorcelain } from "./ship-local.mjs";
  *   slug: string|null,
  *   cnbOk: boolean,
  *   handle: string|null,
- *   readInstances: (root:string)=>Promise<{running?:boolean, pids?:number[], via?:string|null}>,
+ *   readInstances: (root:string)=>Promise<InstanceReading>,
  *   platform?: string,
  * }} ctx
  * @returns {Promise<
  *   | {action:"stop", codes:number[], code:number}
  *   | {action:"finish", codes:number[]}
  *   | {action:"dry-run", codes:number[]}
- *   | {action:"continue", codes:number[], branch:string, sha:string, frags:string[],
- *      staged:string[], unstagedModified:string[], untracked:string[]}
+ *   | {action:"continue", codes:number[], branch:string, sha:string, slug:string,
+ *      frags:string[], staged:string[], unstagedModified:string[], untracked:string[]}
  * >}
  *   `stop` = 原样返回那个码（不打印「结论」，与本段此前那几处提前 return 同形）；
  *   `finish` = 把 `codes` 交给装配层的 `finish`；`dry-run` = 装配层直接退 `GREEN`。
@@ -313,6 +319,9 @@ export async function runPreflightStage(ctx) {
     codes,
     branch,
     sha,
+    /* slug 在这一格已经被 `!slug` 那道闸收窄成 string：装配层拿到的就是它，
+     * 不再对 `string|null` 做一次「反正不会空」的断言。 */
+    slug,
     frags,
     /* 工作树三列状态由本段读一次、交给 commit 那一段用：同一轮里读两次会让
      * 「该暂存什么」与「刚才念的读数」出现两个答案。 */

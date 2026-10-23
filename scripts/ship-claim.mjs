@@ -30,7 +30,12 @@ import {
   labelValues,
 } from "./ship-ticket.mjs";
 
-/** 单子评论的第一行 —— 回读时按它认「这一条是不是这个动作写的」。 */
+/**
+ * 单子评论的第一行 —— 回读时按它认「这一条是不是这个动作写的」。
+ *
+ * @param {string} handle 留痕短名
+ * @returns {string}
+ */
 export function claimComment(handle) {
   return `开发者 ${handle} 已接单，正在开发中。\n\n${handlerSignature(handle)}`;
 }
@@ -52,8 +57,8 @@ export function releaseComment(handle) {
  * @returns {"claim"|"release"|null}
  */
 export function handleCommentState(bodies, handle) {
-  const claim = claimComment(handle).split("\n", 1)[0];
-  const release = releaseComment(handle).split("\n", 1)[0];
+  const claim = claimComment(handle).split("\n", 1)[0] ?? "";
+  const release = releaseComment(handle).split("\n", 1)[0] ?? "";
   for (const body of Array.isArray(bodies) ? bodies : []) {
     const text = String(body ?? "");
     if (text.includes(claim)) return "claim";
@@ -596,9 +601,11 @@ export function finishIssueWork(ctx) {
  */
 export function runIssueAction(ctx) {
   const { run, log, slug, cnbOk, handle, root, opt, mkTmp, dryRun = false } = ctx;
+  const claimBad = /** @type {string[]} */ (opt.claimBad ?? []);
+  const releaseBad = /** @type {string[]} */ (opt.releaseBad ?? []);
   const bad = [
-    ...(opt.claimBad ?? []).map((x) => `--claim ${x}`),
-    ...(opt.releaseBad ?? []).map((x) => `--release ${x}`),
+    ...claimBad.map((x) => `--claim ${x}`),
+    ...releaseBad.map((x) => `--release ${x}`),
   ];
   if (bad.length > 0) {
     log(

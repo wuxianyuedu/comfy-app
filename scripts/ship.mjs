@@ -406,7 +406,7 @@ async function runFlow(deps, tmpFiles) {
   const slugRes = up.remote
     ? run("git", ["remote", "get-url", up.remote])
     : { stdout: "" };
-  const slug = parseSlug(slugRes.stdout);
+  let slug = parseSlug(slugRes.stdout);
   /* 留痕短名在**所有**要它的格子之前取一次：whoami、领取 / 结束 / 列表、preflight 的
    * 单子身份读数、PR 标签、关单后的结束评论。各格自己再读一次会让同一次跑里出现两套答案
    * （进程环境与 `.env` 在两次读之间变过就会分叉）。 */
@@ -502,7 +502,9 @@ async function runFlow(deps, tmpFiles) {
     if (pf.action === "stop") return pf.code;
     if (pf.action === "finish") return finish(codes);
     if (pf.action === "dry-run") return CODE.GREEN;
-    const { branch, sha, frags, staged, unstagedModified, untracked } = pf;
+    /* slug 由 preflight 的 `!slug` 闸收窄后带回：阶段 0 之后的平台动作不再面对 null。 */
+    const { branch, frags, staged, unstagedModified, untracked } = pf;
+    slug = pf.slug;
 
     // ── 阶段 1：commit（实现见 `ship-local.mjs`，判据仍在 `ship-core.mjs`）──
     if (want("commit")) {

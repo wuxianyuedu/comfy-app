@@ -160,12 +160,22 @@ export function roleLabel(role, handle) {
   return h === "" ? null : `${role}:${h}`;
 }
 
-/** 提单人标签（`提单人:<短名>`）。 */
+/**
+ * 提单人标签（`提单人:<短名>`）。
+ *
+ * @param {string | null | undefined} handle 短名
+ * @returns {string | null}
+ */
 export function authorLabel(handle) {
   return roleLabel(ISSUE_LABEL_ROLES.author, handle);
 }
 
-/** 处理人标签（`处理人:<短名>`）。 */
+/**
+ * 处理人标签（`处理人:<短名>`）。
+ *
+ * @param {string | null | undefined} handle 短名
+ * @returns {string | null}
+ */
 export function handlerLabel(handle) {
   return roleLabel(ISSUE_LABEL_ROLES.handler, handle);
 }
@@ -180,6 +190,7 @@ export function handlerLabel(handle) {
  */
 export function labelValues(labels, role) {
   const prefix = `${role}:`;
+  /** @type {string[]} */
   const out = [];
   for (const item of Array.isArray(labels) ? labels : []) {
     const name = typeof item === "string" ? item : String(item?.name ?? "");
@@ -202,7 +213,12 @@ export function authorSignature(handle) {
   return authorLabel(handle) ?? `${ISSUE_LABEL_ROLES.author}:未配`;
 }
 
-/** 处理人署名行（领取 / 结束评论用）。 */
+/**
+ * 处理人署名行（领取 / 结束评论用）。
+ *
+ * @param {string | null | undefined} handle 短名
+ * @returns {string}
+ */
 export function handlerSignature(handle) {
   return handlerLabel(handle) ?? `${ISSUE_LABEL_ROLES.handler}:未配`;
 }
