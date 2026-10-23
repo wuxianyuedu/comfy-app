@@ -144,6 +144,13 @@
  *   pnpm ship --claim 2187                     # 领取单子：评论「已接单」+ 打 `处理人:` 标签（写后回读）
  *   pnpm ship --release 2187                   # 结束处理：评论「开发结束」+ 撤 `处理人:` 标签（先评论后撤）
  *   pnpm ship --claims                         # 列出自己领取中（state=open）的单子
+ *   pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priority P1
+ *                                              # 一步建单：create-issue（正文文件 + 末尾署名）→
+ *                                              #   补 `提单人:` 标签 → 独立 get-issue 回读；
+ *                                              #   标题与正文是判断，脚本不代写
+ *   pnpm ship --diagnose [sn]                  # 只读：CI 红了就看那一跑的失败格 + 失败行 +
+ *                                              #   末 40 行 + 完整日志链接（不给号按 HEAD 归属）
+ *   pnpm ship --diagnose --dry-run             # 只打印它会读的那三条命令
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge · close-issue · clean-branch
  * （`close-issue` 带号时能单跑 —— 那是「补关」那一路，要平台侧的落地证明；不带号或
@@ -175,6 +182,8 @@ import {
 } from "./ship-platform.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
+import { runNewIssue } from "./ship-issue-new.mjs";
+import { runDiagnose } from "./ship-diagnose.mjs";
 import { runCommitStage, runPushStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
 
@@ -423,6 +432,59 @@ async function runFlow(deps, tmpFiles) {
   }
   const cnbOk = probeCnb();
 
+  /* ── `--diagnose`：CI 红了之后的只读取回（ISSUE #2217，规范 §13.10.13）──
+   * 排在 preflight 之前、与主流程互斥：红灯现场常常就在 master 上、工作树脏、
+   * 也没有新碎片 —— 那些阻塞对「读一跑构建」不成立。它一次也不写平台。 */
+  if (opt.diagnose) {
+    const clashes = [
+      opt.whoami ? "--whoami" : null,
+      opt.merge ? "--merge" : null,
+      opt.closeIssue ? "--close-issue" : null,
+      opt.cleanBranch ? "--clean-branch" : null,
+      opt.branch ? "--branch" : null,
+      opt.message != null ? "--message" : null,
+      opt.messageFile != null ? "--message-file" : null,
+      opt.title != null ? "--title" : null,
+      opt.adds.length > 0 ? "--add" : null,
+      opt.only ? "--only" : null,
+      opt.reap ? "--reap" : null,
+      opt.claim != null ? "--claim" : null,
+      opt.release != null ? "--release" : null,
+      opt.claims ? "--claims" : null,
+      opt.newIssue != null || opt.newIssueBad.length > 0 ? "--new-issue" : null,
+    ].filter(Boolean);
+    if (clashes.length > 0) {
+      log(
+        `[ship] [ERROR] --diagnose 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`,
+      );
+      return CODE.NOT_RUN;
+    }
+    return finish([
+      runDiagnose({
+        run,
+        log,
+        slug,
+        cnbOk,
+        sn: opt.diagnoseSn,
+        headSha: run("git", ["rev-parse", "HEAD"]).stdout.trim(),
+        dryRun: opt.dryRun,
+      }),
+    ]);
+  }
+  /* `--issue-body-file` / `--priority` 是 --new-issue 的两格输入。单独给它们等于
+   * 「想建单却漏了旗标」—— 静默忽略会让这一跑退回主流程，而人以为单子建好了。 */
+  if (
+    (opt.issueBodyFile !== null || opt.priority !== null) &&
+    opt.newIssue == null &&
+    opt.newIssueBad.length === 0
+  ) {
+    log(
+      "[ship] [ERROR] --issue-body-file / --priority 只跟 --new-issue 一起用；" +
+        "单独给它们不会建任何单子。",
+    );
+    return CODE.NOT_RUN;
+  }
+
   /* ── 单子的领取 / 结束 / 列表（规范 §13.10.11）──────────────────
    * 三条动作都**独立于主流程**：领一张单不需要干净工作树，也不该顺手合并什么。
    * 互斥与前置（cnb / slug / 留痕）在 `runIssueAction` 里判；这里只做分派，
@@ -431,8 +493,10 @@ async function runFlow(deps, tmpFiles) {
     opt.claim != null ||
     opt.release != null ||
     opt.claims ||
+    opt.newIssue != null ||
     opt.claimBad.length > 0 ||
-    opt.releaseBad.length > 0
+    opt.releaseBad.length > 0 ||
+    opt.newIssueBad.length > 0
   ) {
     return finish([
       runIssueAction({
@@ -444,6 +508,7 @@ async function runFlow(deps, tmpFiles) {
         root,
         opt,
         mkTmp,
+        createIssue: runNewIssue,
         dryRun: opt.dryRun,
       }),
     ]);

@@ -39,8 +39,12 @@ type FakeResult = {
 
 import {
   asArray,
-  buildPullBody,
   buildSignature,
+  pickBuildForSha,
+  readBuildVerdict,
+} from "../scripts/ship-build.mjs";
+import {
+  buildPullBody,
   CODE,
   combineShipCodes,
   decideCleanBranch,
@@ -51,9 +55,7 @@ import {
   parseArgs,
   parseIssueNumberToken,
   parseSlug,
-  pickBuildForSha,
   planCommands,
-  readBuildVerdict,
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
@@ -3006,16 +3008,43 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     ).toBe(true);
   });
 
+  it("--diagnose / --new-issue 的计划各自只在自己的旗标下出现", () => {
+    /* 默认那份计划里两格都不该有：`--diagnose` 是额外读的一格，`--new-issue` 是
+     * 伸手建单 —— 出现在默认计划里，dry-run 教的执行面就比人请求的大。 */
+    const plain = planCommands(st).join("\n");
+    expect(plain).not.toContain("get-build-stage");
+    expect(plain).not.toContain("create-issue");
+
+    expect(planCommands({ ...st, diagnose: true }).join("\n")).toContain(
+      "cnb build get-build-stage",
+    );
+    const made = planCommands({
+      ...st,
+      handle: "yuedu-win",
+      newIssue: true,
+    }).join("\n");
+    expect(made).toContain("cnb issues create-issue");
+    expect(made).toContain("--labels 提单人:yuedu-win");
+    // 标签只能建完之后按（create-issue --labels 实测不落地）。
+    expect(made.indexOf("create-issue")).toBeLessThan(
+      made.indexOf("post-issue-labels"),
+    );
+    expect(made.indexOf("post-issue-labels")).toBeLessThan(
+      made.indexOf("get-issue"),
+    );
+  });
+
   it("对账：计划里的「模块+工具」对 ⇄ 源码里真实调用的，必须同集合", () => {
     /* `planCommands` 是命令清单的第二份抄本 —— 这正是要避免的形态，所以不装作它不是：
      * 这里把它与真执行面**逐条对账**，任何一侧新增/改名而另一侧没跟，这条就红。
      * 只比「模块 + 工具」这一对（参数值里有 `<tmp>` / `…` 这类占位，逐字比会脆）。
-     * 取数面是 `scripts/ship*.mjs` **整个族**，不是某一个文件：cnb 调用从编排入口
-     * 搬去平台侧模块时，只读单份文件的提取会抓到 0 条 ⇒ 两侧都空集、于是恒绿，
-     * 而下面那条前置断言就是拦住这种「提取坏了却看起来像结论」的。 */
+     * 取数面是 `scripts/ship*.mjs` **整个族** + `ci-build-readout.mjs`（`--diagnose`
+     * 与 `ci-build-readout` 自己的入口共用同一份取数，那些 `cnbJson` 调用就在后者里）：
+     * cnb 调用从编排入口搬去平台侧模块时，只读单份文件的提取会抓到 0 条 ⇒ 两侧都空集、
+     * 于是恒绿，而下面那条前置断言就是拦住这种「提取坏了却看起来像结论」的。 */
     const shipDir = path.resolve(__dirname, "../scripts");
     const src = readdirSync(shipDir)
-      .filter((f) => /^ship.*\.mjs$/.test(f))
+      .filter((f) => /^ship.*\.mjs$/.test(f) || f === "ci-build-readout.mjs")
       .map((f) => readFileSync(path.join(shipDir, f), "utf8"))
       .join("\n");
     /** 从 `cnbJson(run, ["pulls", "post-pull", …])` 里抽出前两个字符串。 */
@@ -3029,7 +3058,8 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     /* 两个显式动作**都拨上**才是「源码里可能伸手的全部集合」：`--merge` 与
      * `--close-issue` 各自的命令都只在对应旗标下进计划（默认那份是子集）。
      * 只拨一个的话，另一格新增的调用会在这条对账里被漏看 —— 而这条对账的存在
-     * 理由恰恰是「计划与执行两头一起错时没人响」。 */
+     * 理由恰恰是「计划与执行两头一起错时没人响」。`--diagnose` / `--new-issue`
+     * 与领取那三格同理：它们的读 / 写命令只在各自旗标下出现。 */
     for (const line of planCommands({
       ...st,
       merge: true,
@@ -3038,6 +3068,8 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       claim: 2187,
       release: 2188,
       claims: true,
+      newIssue: true,
+      diagnose: true,
     })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
       if (m) planned.add(`${m[1]} ${m[2]}`);
@@ -3269,6 +3301,501 @@ describe("main() 的单子动作：独立于主流程，在 master 上、没碎�
     expect(code).toBe(CODE.NOT_RUN);
     expect(f.calls.some((c) => c.includes("issues"))).toBe(false);
     expect(f.log.join("\n")).toContain("不与");
+  });
+});
+
+/**
+ * `--diagnose`（ISSUE #2217）：CI 红了之后只读取回失败格与日志摘要。
+ *
+ * 判据落在三件事上：
+ *   ① 真红 ⇒ 1 且屏幕上出现失败行（不是只给一个日志链接）；
+ *   ② 绿 ⇒ 0，且**一次也不按格取日志**（那是红才需要的读）；
+ *   ③ 不给构建号时按 HEAD 的 sha 归属；归属不到 ⇒ 2（没结论），不拿最新一条顶。
+ */
+describe("--diagnose：只读取回失败格与日志摘要", () => {
+  const FAILED = {
+    status: 200,
+    data: {
+      status: "error",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "error",
+          stages: [
+            { status: "success", name: "Prepare", id: "prepare" },
+            { status: "success", name: "安装依赖", id: "stage-0" },
+            { status: "error", name: "受影响用例", id: "stage-1" },
+            { status: "skipped", name: "生产构建", id: "stage-2" },
+          ],
+        },
+      },
+    },
+  };
+  const GREEN = {
+    status: 200,
+    data: {
+      status: "success",
+      pipelinesStatus: {
+        "p-001": {
+          id: "p-001",
+          name: "质量门禁",
+          status: "success",
+          stages: [
+            { status: "success", name: "安装依赖", id: "stage-0" },
+            { status: "success", name: "受影响用例", id: "stage-1" },
+          ],
+        },
+      },
+    },
+  };
+  const STAGE_DETAIL = {
+    status: 200,
+    data: {
+      status: "error",
+      duration: 93,
+      error: "",
+      content: [
+        "RUN v5.0.3",
+        " × 缺键时念 pnpm env:init 5ms",
+        " Test Files  1 failed (1)",
+      ],
+    },
+  };
+
+  function diagnoseIo(opts: {
+    build?: unknown;
+    stage?: unknown;
+    builds?: unknown[];
+    headSha?: string;
+  }) {
+    const calls: string[] = [];
+    const log: string[] = [];
+    const ok = (stdout: string): FakeResult => ({
+      status: 0,
+      stdout,
+      stderr: "",
+      error: null,
+    });
+    const run = (cmd: string, args: string[]): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
+      if (cmd === "git" && key.includes("@{u}")) return ok("");
+      if (cmd === "git" && key === "remote") return ok("origin\n");
+      if (cmd === "git" && key.includes("symbolic-ref"))
+        return ok("refs/remotes/origin/master");
+      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("feat/x");
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
+        return ok("d02ec9");
+      if (cmd === "git" && key.includes("get-url"))
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      if (cmd === "git" && key.includes("rev-parse HEAD"))
+        return ok(opts.headSha ?? "d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+        return ok(JSON.stringify({ status: 200, data: opts.builds ?? [] }));
+      if (
+        cmd === "cnb" &&
+        args[0] === "build" &&
+        args[1] === "get-build-status"
+      )
+        return ok(JSON.stringify(opts.build ?? null));
+      if (
+        cmd === "cnb" &&
+        args[0] === "build" &&
+        args[1] === "get-build-stage"
+      )
+        return ok(JSON.stringify(opts.stage ?? {}));
+      return ok("");
+    };
+    return { run, calls, log };
+  }
+
+  const runMain = (f: ReturnType<typeof diagnoseIo>, args: string[]) =>
+    main({
+      args,
+      run: f.run,
+      log: (l: string) => f.log.push(l),
+    });
+
+  it("真红 ⇒ 1：点名红格、给出带行号的失败行与完整日志链接，且不写平台", async () => {
+    const f = diagnoseIo({ build: FAILED, stage: STAGE_DETAIL });
+    const code = await runMain(f, ["--diagnose", "cnb-723-1k5h25hkt"]);
+    const text = f.log.join("\n");
+    expect(code).toBe(CODE.RED);
+    expect(text).toContain("真失败");
+    expect(text).toContain("失败格：受影响用例");
+    expect(text).toContain("L2  × 缺键时念 pnpm env:init");
+    expect(text).toContain("Test Files  1 failed");
+    expect(text).toContain("base-check.mjs");
+    // 只读：一条写动作都没发（建 / 评论 / 合并 / 关单）。
+    for (const write of [
+      "post-",
+      "merge-pull",
+      "update-issue",
+      "delete-",
+      "create-issue",
+    ]) {
+      expect(f.calls.some((c) => c.includes(write)), `发了写动作：${write}`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("绿 ⇒ 0，且一次也不按格取日志（那是红才需要的读）", async () => {
+    const f = diagnoseIo({ build: GREEN });
+    const code = await runMain(f, ["--diagnose", "cnb-green"]);
+    expect(code).toBe(CODE.GREEN);
+    expect(f.log.join("\n")).toContain("绿");
+    expect(f.calls.some((c) => c.includes("get-build-stage"))).toBe(false);
+  });
+
+  it("不给构建号 ⇒ 按 HEAD 的 sha 在 pull_request 构建里归属", async () => {
+    const f = diagnoseIo({
+      build: FAILED,
+      stage: STAGE_DETAIL,
+      builds: [
+        {
+          sn: "cnb-old",
+          sha: "0000000",
+          event: "pull_request",
+          createTime: "2026-10-22T00:00:00Z",
+        },
+        {
+          sn: "cnb-mine",
+          sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+          event: "pull_request",
+          createTime: "2026-10-23T01:00:00Z",
+        },
+      ],
+    });
+    const code = await runMain(f, ["--diagnose"]);
+    expect(code).toBe(CODE.RED);
+    expect(f.log.join("\n")).toContain("归属到构建 cnb-mine");
+    expect(
+      f.calls.some((c) => c.includes("--sn cnb-mine")),
+    ).toBe(true);
+  });
+
+  it("归属不到 ⇒ 2（没有结论），不拿「最新那条」顶上", async () => {
+    const f = diagnoseIo({ build: FAILED, builds: [] });
+    const code = await runMain(f, ["--diagnose"]);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.log.join("\n")).toContain("没找到 pull_request 构建");
+    expect(f.calls.some((c) => c.includes("get-build-status"))).toBe(false);
+  });
+
+  it("与 --merge 同跑 ⇒ 2，且一条 build 命令都不发（一次只做一件）", async () => {
+    const f = diagnoseIo({});
+    const code = await runMain(f, ["--diagnose", "--merge"]);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.log.join("\n")).toContain("不与");
+    expect(f.calls.some((c) => c.includes("get-build"))).toBe(false);
+  });
+
+  it("--dry-run 只打印计划，不读平台", async () => {
+    const f = diagnoseIo({});
+    const code = await runMain(f, ["--diagnose", "--dry-run"]);
+    expect(code).toBe(CODE.GREEN);
+    expect(f.log.join("\n")).toContain("--dry-run 计划");
+    expect(f.calls.some((c) => c.includes("get-build"))).toBe(false);
+  });
+});
+
+/**
+ * `--new-issue`（ISSUE #2217）：建单 → 补 `提单人:` → 独立回读。
+ *
+ * 负控制的重点在「回执不算结论」：建单回执给了号，但回读里标签不在 ⇒ 2；
+ * 标题对不上 ⇒ 1（公开状态不是请求的那件事）。
+ */
+describe("--new-issue：一步建单并回读", () => {
+  function newIssueIo(opts: {
+    created?: unknown;
+    readback?: unknown;
+    labelsOk?: boolean;
+  }) {
+    const calls: string[] = [];
+    const log: string[] = [];
+    const ok = (stdout: string): FakeResult => ({
+      status: 0,
+      stdout,
+      stderr: "",
+      error: null,
+    });
+    const run = (cmd: string, args: string[]): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
+      if (cmd === "git" && key.includes("@{u}")) return ok("");
+      if (cmd === "git" && key === "remote") return ok("origin\n");
+      if (cmd === "git" && key.includes("symbolic-ref"))
+        return ok("refs/remotes/origin/master");
+      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
+        return ok("d02ec9");
+      if (cmd === "git" && key.includes("get-url"))
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "create-issue")
+        return ok(JSON.stringify(opts.created ?? { data: { number: 2222 } }));
+      if (
+        cmd === "cnb" &&
+        args[0] === "issues" &&
+        args[1] === "post-issue-labels"
+      )
+        return ok(opts.labelsOk === false ? "{}" : "{}");
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+        return ok(
+          JSON.stringify(
+            opts.readback ?? {
+              data: {
+                number: 2222,
+                state: "open",
+                title: "fix(ship): 一步建单",
+                priority: "P1",
+                labels: [{ name: "提单人:yuedu-win" }],
+              },
+            },
+          ),
+        );
+      return ok("");
+    };
+    return { run, calls, log };
+  }
+
+  function withBody(text: string) {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ship-new-issue-"));
+    const file = path.join(dir, "body.md");
+    fs.writeFileSync(file, text, "utf8");
+    return { dir, file };
+  }
+
+  const runMain = (
+    f: ReturnType<typeof newIssueIo>,
+    args: string[],
+    tmp: { dir: string },
+    env: Record<string, string | undefined> = {
+      COMFYAPP_DEV_HANDLE: "yuedu-win",
+    },
+    /* 「未配留痕」那一格要把 root 指到临时目录：本仓根上有 `.env`，短路回落到它
+     * 就等于在开发机上永远测不到「没配」那一形。 */
+    root?: string,
+  ) =>
+    main({
+      args,
+      run: f.run,
+      env,
+      log: (l: string) => f.log.push(l),
+      resolveGitDir: () => tmp.dir,
+      ...(root ? { root } : {}),
+    });
+
+  it("建单 → 打 提单人: → get-issue 回读，三件原值念出来", async () => {
+    const tmp = withBody("## 症状\n\nCI 红了\n");
+    const f = newIssueIo({});
+    try {
+      const code = await runMain(
+        f,
+        [
+          "--new-issue",
+          "fix(ship): 一步建单",
+          "--issue-body-file",
+          tmp.file,
+          "--priority",
+          "P1",
+        ],
+        tmp,
+      );
+      const text = f.log.join("\n");
+      expect(code).toBe(CODE.GREEN);
+      expect(f.calls.some((c) => c.includes("create-issue"))).toBe(true);
+      expect(f.calls.some((c) => c.includes("post-issue-labels"))).toBe(true);
+      expect(f.calls.some((c) => c.includes("get-issue"))).toBe(true);
+      expect(text).toContain("✓ #2222 已回读");
+      expect(text).toContain("labels=[提单人:yuedu-win]");
+      expect(text).toContain("pnpm ship --claim 2222");
+      // 不跑主流程任何一段（建单独立于提交 / 合并）。
+      expect(f.calls.some((c) => c.includes("status --porcelain"))).toBe(false);
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("负控制：回读里没有 提单人: 标签 ⇒ 2（回执不算结论）", async () => {
+    const tmp = withBody("## 症状\n\n…\n");
+    const f = newIssueIo({
+      readback: {
+        data: {
+          number: 2222,
+          state: "open",
+          title: "fix(ship): 一步建单",
+          priority: "P1",
+          labels: [],
+        },
+      },
+    });
+    try {
+      const code = await runMain(
+        f,
+        [
+          "--new-issue",
+          "fix(ship): 一步建单",
+          "--issue-body-file",
+          tmp.file,
+        ],
+        tmp,
+      );
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.log.join("\n")).toContain("回读里没有 提单人:yuedu-win");
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("回读标题与请求不一致 ⇒ 1（公开状态不是这一件事）", async () => {
+    const tmp = withBody("## 症状\n\n…\n");
+    const f = newIssueIo({
+      readback: {
+        data: {
+          number: 2222,
+          state: "open",
+          title: "别的标题",
+          priority: "P1",
+          labels: [{ name: "提单人:yuedu-win" }],
+        },
+      },
+    });
+    try {
+      const code = await runMain(
+        f,
+        [
+          "--new-issue",
+          "fix(ship): 一步建单",
+          "--issue-body-file",
+          tmp.file,
+        ],
+        tmp,
+      );
+      expect(code).toBe(CODE.RED);
+      expect(f.log.join("\n")).toContain("不一致");
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("缺正文文件 / 词表外的优先级 ⇒ 2，且一条 create-issue 都不发", async () => {
+    const tmp = withBody("## 症状\n\n…\n");
+    const missing = newIssueIo({});
+    try {
+      const noBody = await runMain(
+        missing,
+        ["--new-issue", "fix(ship): 一步建单"],
+        tmp,
+      );
+      expect(noBody).toBe(CODE.NOT_RUN);
+      expect(missing.calls.some((c) => c.includes("create-issue"))).toBe(false);
+
+      const badPriority = newIssueIo({});
+      const code = await runMain(
+        badPriority,
+        [
+          "--new-issue",
+          "fix(ship): 一步建单",
+          "--issue-body-file",
+          tmp.file,
+          "--priority",
+          "P9",
+        ],
+        tmp,
+      );
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(
+        badPriority.calls.some((c) => c.includes("create-issue")),
+      ).toBe(false);
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("未配留痕 ⇒ 单子照样建，只是没有 提单人:（读数，不阻断）", async () => {
+    const tmp = withBody("## 症状\n\n…\n");
+    const f = newIssueIo({
+      readback: {
+        data: {
+          number: 2222,
+          state: "open",
+          title: "fix(ship): 一步建单",
+          priority: "P2",
+          labels: [],
+        },
+      },
+    });
+    try {
+      const code = await runMain(
+        f,
+        ["--new-issue", "fix(ship): 一步建单", "--issue-body-file", tmp.file],
+        tmp,
+        {},
+        tmp.dir,
+      );
+      expect(code).toBe(CODE.GREEN);
+      expect(f.log.join("\n")).toContain("未配留痕短名");
+      expect(f.calls.some((c) => c.includes("post-issue-labels"))).toBe(false);
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--dry-run 只说要建什么，一条都不写", async () => {
+    const tmp = withBody("## 症状\n\n…\n");
+    const f = newIssueIo({});
+    try {
+      const code = await runMain(
+        f,
+        [
+          "--new-issue",
+          "fix(ship): 一步建单",
+          "--issue-body-file",
+          tmp.file,
+          "--dry-run",
+        ],
+        tmp,
+      );
+      expect(code).toBe(CODE.GREEN);
+      expect(f.log.join("\n")).toContain("--dry-run");
+      expect(f.calls.some((c) => c.includes("create-issue"))).toBe(false);
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("parseArgs：--diagnose / --new-issue 两格的形状", () => {
+  it("--diagnose 的构建号可选，给了就收下", () => {
+    const auto = parseArgs(["--diagnose"]);
+    expect(auto.diagnose).toBe(true);
+    expect(auto.diagnoseSn).toBeNull();
+    expect(parseArgs(["--diagnose", "cnb-x"]).diagnoseSn).toBe("cnb-x");
+    expect(parseArgs(["--diagnose=cnb-y"]).diagnoseSn).toBe("cnb-y");
+  });
+
+  it("--new-issue 缺标题 ⇒ 记进 newIssueBad；正文与优先级各自成格", () => {
+    const missing = parseArgs(["--new-issue"]);
+    expect(missing.newIssue).toBeNull();
+    expect(missing.newIssueBad).toEqual(["(缺标题)"]);
+    const full = parseArgs([
+      "--new-issue",
+      "fix(ship): x",
+      "--issue-body-file",
+      "body.md",
+      "--priority",
+      "P1",
+    ]);
+    expect(full.newIssue).toBe("fix(ship): x");
+    expect(full.issueBodyFile).toBe("body.md");
+    expect(full.priority).toBe("P1");
+    expect(full.newIssueBad).toEqual([]);
+    expect(parseArgs(["--new-issue=fix: x"]).newIssue).toBe("fix: x");
+    expect(parseArgs(["--priority=P0"]).priority).toBe("P0");
   });
 });
 

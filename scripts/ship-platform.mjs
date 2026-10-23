@@ -29,14 +29,16 @@ import path from "node:path";
 
 import {
   asArray,
-  buildPullBody,
   buildSignature,
+  pickBuildForSha,
+} from "./ship-build.mjs";
+import {
+  buildPullBody,
   CODE,
   combineShipCodes,
   decideCleanBranch,
   deriveTitle,
   findPullForBranch,
-  pickBuildForSha,
   readPullVerdict,
 } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
@@ -533,6 +535,9 @@ export function reportVerdict(ctx) {
   if (buildState === "red") {
     log(
       `[ship] ✗ CI 红（build ${buildSn}）。日志：https://cnb.cool/${slug}/-/build/logs/${buildSn}`,
+    );
+    log(
+      `[ship] 失败格与失败行：pnpm ship --diagnose ${buildSn}（只读，不用再手抄 stage 日志）。`,
     );
     log(
       "[ship] 归因交给既有执行者：`node scripts/base-check.mjs <拦住你的那条>` —— 本脚本不自己判「是我的还是主干的」。",

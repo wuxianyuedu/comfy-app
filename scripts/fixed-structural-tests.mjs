@@ -631,4 +631,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 本用例的静态 import 图里（它改的是别的模块），只在受影响时才跑等于让它随下一次
   // 新增 import 过去，故进固定清单。
   "tests/docs-api-input-closure.test.ts",
+  // 「钩子注册表总数」判据（ISSUE #2135 的冻结源）：它读的是 `.githooks/pre-commit`
+  // 的 run 行文本（`readHookSteps()` 解析 `run "<label>" <cmd>`），import 图一概追不到
+  // —— 改 `scripts/` 下的判据脚本或 `.githooks/**` 都不会把它带进增量面。后果正是 #2135
+  // 那一族「判据在场却零执行」：往钩子加一步，条数从 50 漂到 51，红落在之后每一条 PR 上、
+  // 而不是落在改钩子那一条，于是主干冻结。进固定清单后，倚靠 `affected-tests.mjs` 已有的
+  // `.githooks/**` wide 兜底（改钩子 → `withFixed("all")` 跑全固定清单），加一步的那条 PR
+  // 自己就会跑这份测试、当场抓到条数不符 —— 红在正确的地方，不再全员冻结。
+  "tests/commit-gate-tier.test.ts",
 ];

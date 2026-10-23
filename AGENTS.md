@@ -208,6 +208,11 @@
     `ship` 只念不代填。出口是**两条**命令——实测 `create-issue --labels` 不落地，标签要建完再补；
     口径、词表与实测见 §13.10.10（提交那一侧能分、单子那一侧不能分的对照见
     `docs/guides/git-identity.md` §4）。
+    **建单本身也有出口了**（ISSUE #2217）：`pnpm ship --new-issue "<标题>" --issue-body-file <正文> --priority <P0..P3>`
+    —— 建单 → 补 `提单人:<短名>` → 独立 `get-issue` 回读；标题、正文与优先级仍是人给的判断（§13.10.12）。
+    **CI 红了先诊断**：`pnpm ship --diagnose [sn]` 只读取回失败格与失败行（§13.10.13），归因仍归
+    `node scripts/base-check.mjs` —— 别再手抄 `get-build-stage` 的 `content`：它是带 ANSI 的行数组，
+    按字符串读会静默给出一份空读数。
 15. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
     未读 `README.md` / `docs/README.md` / 本文件全文就动手 = 违规；
     命中「强制先读规范文档的改动范围」表或相关规范章节时，须读完对应章节
