@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveGitDir } from "./git-dir.mjs";
-import { fragmentHead, signatureLine } from "./ship-ticket.mjs";
+import { authorSignature, fragmentHead } from "./ship-ticket.mjs";
 
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
@@ -92,10 +92,10 @@ export function parseIssueNumberToken(token) {
  *     （那会被读成「没要那个动作」），也不许往后吃掉本该属于别的旗标的参数。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -111,6 +111,11 @@ export function parseArgs(argv) {
     dryRun: false,
     wait: true,
     whoami: false,
+    claim: null,
+    claimBad: [],
+    release: null,
+    releaseBad: [],
+    claims: false,
     only: null,
     unknown: [],
   };
@@ -118,7 +123,27 @@ export function parseArgs(argv) {
     const a = argv[i] ?? "";
     if (a === "--merge") out.merge = true;
     else if (a === "--whoami") out.whoami = true;
-    else if (a === "--close-issue") {
+    else if (a === "--claims") out.claims = true;
+    else if (a === "--claim" || a === "--release") {
+      const isClaim = a === "--claim";
+      const tok =
+        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
+          ? String(argv[++i] ?? "")
+          : "";
+      const n = parseIssueNumberToken(tok);
+      if (n === null) {
+        if (isClaim) out.claimBad.push(tok || "(缺号)");
+        else out.releaseBad.push(tok || "(缺号)");
+      } else if (isClaim) {
+        /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
+         * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
+        if (out.claim !== null) {
+          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
+        } else out.claim = n;
+      } else if (out.release !== null) {
+        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
+      } else out.release = n;
+    } else if (a === "--close-issue") {
       out.closeIssue = true;
       while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
         const tok = String(argv[++i] ?? "");
@@ -147,7 +172,23 @@ export function parseArgs(argv) {
       out.branch = a.slice("--branch=".length);
     else if (a.startsWith("--add=")) out.adds.push(a.slice("--add=".length));
     else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
-    else if (a.startsWith("--close-issue=")) {
+    else if (a.startsWith("--claim=") || a.startsWith("--release=")) {
+      const isClaim = a.startsWith("--claim=");
+      const tok = a.slice(a.indexOf("=") + 1);
+      const n = parseIssueNumberToken(tok);
+      if (n === null) {
+        if (isClaim) out.claimBad.push(tok || "(缺号)");
+        else out.releaseBad.push(tok || "(缺号)");
+      } else if (isClaim) {
+        /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
+         * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
+        if (out.claim !== null) {
+          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
+        } else out.claim = n;
+      } else if (out.release !== null) {
+        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
+      } else out.release = n;
+    } else if (a.startsWith("--close-issue=")) {
       out.closeIssue = true;
       for (const tok of (a.slice("--close-issue=".length) || "").split(
         /[,\s]+/,
@@ -588,7 +629,7 @@ export function findPullForBranch(json, branch) {
  * （`check-commit-claims.mjs` 会拿提交树复核句式，而 PR 正文迟早会被抄进合并信息）。
  *
  * @param {{root:string,fragments:string[],diffstat:string,handle?:string|null}} input 量到的事实
- *   与这一跑的留痕短名（ISSUE #2204：正文末尾一行 `提交人：dev:<短名>`，未配写「未配」）
+ *   与这一跑的留痕短名（ISSUE #2204：正文末尾一行 `提单人:<短名>`，未配写「未配」）
  * @returns {string} 正文
  */
 export function buildPullBody({ root, fragments, diffstat, handle = null }) {
@@ -605,12 +646,12 @@ export function buildPullBody({ root, fragments, diffstat, handle = null }) {
     diffstat || "(空)",
     "```",
     "",
-    signatureLine(handle),
+    authorSignature(handle),
     "",
   );
   lines.push(
     "> 本段由 `pnpm ship` 拼装，内容全部是它当场量到的事实（碎片标题与 diffstat）。",
-    "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；上面那行「提交人」只是" +
+    "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；上面那行「提单人」只是" +
       "这一跑的留痕，不是对正文的判断背书。",
   );
   return lines.join("\n");
@@ -648,7 +689,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,authorLabel?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -677,12 +718,62 @@ export function planCommands(st) {
     `cnb pulls post-pull --repo ${st.slug} --base ${trunk} --head ${st.branch} --head-repo ${st.slug} --title … --body-file <git目录>/comfy-ship-tmp/ship-pr-body-<pid>.tmp -v`,
   );
   /* 标签与回读是**一对**：只写「打标签」就把「回执即结论」教给读者，而这一族
-   * 从不采信回执（ISSUE #2204）。未配留痕时这两条都不执行，所以按旗标出现。 */
-  if (st.authorLabel) {
+   * 从不采信回执（ISSUE #2204）。未配留痕时这两条都不执行，所以按 handle 出现。
+   * PR 上的角色是「处理人」（谁在推进这条 PR），与单子上的「提单人」分成两个前缀。 */
+  if (st.handle) {
     p.push(
-      `cnb pulls post-pull-labels --repo ${st.slug} --number <n> --labels dev:<短名> -v`,
+      `cnb pulls post-pull-labels --repo ${st.slug} --number <n> --labels 处理人:${st.handle} -v`,
     );
     p.push(`cnb pulls list-pull-labels --repo ${st.slug} --number <n> -v`);
+  }
+  /* 单子的领取 / 结束 / 列表是三条**独立动作**（`ship.mjs` 在 preflight 之前就分出去），
+   * 这里的计划只服务于「源码里每一个 cnb 工具都有一条对应的计划行」那本账：
+   * 对账用例把三个旗标一起拨上，任何一侧新增调用而另一侧没跟都会红。
+   * 写标签 / 评论一律**后跟独立回读** —— 回执不算结论。 */
+  if (st.claim != null) {
+    const who = st.handle || "<短名>";
+    p.push(
+      `cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v`,
+    );
+    p.push(
+      `cnb issues post-issue-labels --repo ${st.slug} --number ${st.claim} --labels 处理人:${who} -v`,
+    );
+    p.push(
+      `cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v（写后回读：回读里看得见才念「已打上」）`,
+    );
+    p.push(
+      `cnb issues post-issue-comment --repo ${st.slug} --number ${st.claim} --body-file <git目录>/comfy-ship-tmp/ship-issue-comment-<pid>.tmp -v`,
+    );
+    p.push(
+      `cnb issues list-issue-comments --repo ${st.slug} --number ${st.claim} --sort -created --page-size 100 -v`,
+    );
+  }
+  if (st.release != null) {
+    const who = st.handle || "<短名>";
+    p.push(
+      `cnb issues get-issue --repo ${st.slug} --number ${st.release} -v`,
+    );
+    p.push(
+      `cnb issues list-issue-comments --repo ${st.slug} --number ${st.release} --sort -created --page-size 100 -v`,
+    );
+    p.push(
+      `cnb issues post-issue-comment --repo ${st.slug} --number ${st.release} --body-file <git目录>/comfy-ship-tmp/ship-issue-comment-<pid>.tmp -v`,
+    );
+    p.push(
+      `cnb issues list-issue-comments --repo ${st.slug} --number ${st.release} --sort -created --page-size 100 -v`,
+    );
+    p.push(
+      `cnb issues delete-issue-label --repo ${st.slug} --number ${st.release} --name 处理人:${who} -v`,
+    );
+    p.push(
+      `cnb issues get-issue --repo ${st.slug} --number ${st.release} -v（撤后回读：看不见那枚才念「已释放」）`,
+    );
+  }
+  if (st.claims) {
+    const who = st.handle || "<短名>";
+    p.push(
+      `cnb issues list-issues --repo ${st.slug} --labels 处理人:${who} --state open --page <p> --page-size 100 -v`,
+    );
   }
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);

@@ -64,13 +64,24 @@ import {
   pullTitleBody,
 } from "../scripts/ship-close.mjs";
 import {
-  devLabel,
+  authorLabel,
+  authorSignature,
+  handlerLabel,
+  handlerSignature,
   issueAuthoring,
   readDevHandle,
-  signatureLine,
   ticketReading,
   whoamiLines,
 } from "../scripts/ship-ticket.mjs";
+import {
+  claimComment,
+  decideClaim,
+  decideRelease,
+  finishIssueWork,
+  handleCommentState,
+  releaseComment,
+  runIssueAction,
+} from "../scripts/ship-claim.mjs";
 import {
   cleanBranch,
   pollUntilTerminal,
@@ -1129,19 +1140,22 @@ describe("ticketReading：这次变更挂在哪张单子上（读数，不是闸
 });
 
 describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—— 是读数，不参与判决", () => {
-  it("配了留痕 ⇒ 念出 dev:<短名>，优先级指回平台原生 --priority（本脚本不代填）", () => {
+  it("配了留痕 ⇒ 念出 `提单人:<短名>` 标签，优先级指回平台原生 --priority（本脚本不代填）", () => {
     const all = issueAuthoring({
       handle: "yuedu-win",
       platform: "linux",
       showExits: true,
     }).lines.join("\n");
-    expect(all).toContain("提单人=dev:yuedu-win");
+    expect(all).toContain("提单人=yuedu-win");
+    expect(all).toContain("标签 提单人:yuedu-win");
     expect(all).toContain("读数，不改退码");
     // 实测 `create-issue --labels` 不落地（回读是空）⇒ 出口必须是两条，而不是一条说了不算。
     expect(all).toContain("cnb issues create-issue");
     expect(all).toContain("--priority <P0|P1|P2|P3>");
     expect(all).toContain("cnb issues post-issue-labels");
-    expect(all).toContain("--labels dev:yuedu-win");
+    expect(all).toContain("--labels 提单人:yuedu-win");
+    // 前缀是角色（谁提的），不是仓库名 —— 换仓库由 --repo 区分。
+    expect(all).not.toContain("dev:");
   });
 
   it("Windows 且没配 ⇒ 点名要配，并给 `.env` 里那个键名与占位标签", () => {
@@ -1155,7 +1169,7 @@ describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—�
     const all = r.lines.join("\n");
     expect(all).toContain("Windows 开发者");
     expect(all).toContain("COMFYAPP_DEV_HANDLE");
-    expect(all).toContain("--labels dev:<短名>");
+    expect(all).toContain("--labels 提单人:<名称>");
     // 一台机器上多份并行检出时，「去 .env 里加一行」指不出是哪一份（#2186 的现场），
     // 而整行缺失时下一动作是那一条命令 —— 两句都要把人带到能动的地方。
     expect(all).toContain("checkout");
@@ -1177,7 +1191,7 @@ describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—�
       showExits: false,
     });
     expect(r.lines).toHaveLength(1);
-    expect(r.lines[0]).toContain("提单人=dev:yuedu-win");
+    expect(r.lines[0]).toContain("提单人=yuedu-win");
   });
 
   it("出口只教「怎么按对」，不出现任何跳过形态", () => {
@@ -1241,35 +1255,46 @@ describe("readDevHandle：进程环境优先，回落本检出 .env，读不到�
   });
 });
 
-describe("devLabel / signatureLine / whoamiLines：平台留痕只有一份生成处（ISSUE #2204）", () => {
-  it("配了 ⇒ `dev:<短名>`；两侧共用同一份（标签名与署名行不会各拼一套）", () => {
-    expect(devLabel("yuedu-win")).toBe("dev:yuedu-win");
-    expect(signatureLine("yuedu-win")).toBe("提交人：dev:yuedu-win");
+describe("角色标签与署名：提单人 / 处理人 —— 只有一份生成处（ISSUE #2204 / #2213）", () => {
+  it("同一份短名派生两枚标签：issue 侧 `提单人:`、PR / 领取侧 `处理人:`", () => {
+    expect(authorLabel("yuedu-win")).toBe("提单人:yuedu-win");
+    expect(handlerLabel("yuedu-win")).toBe("处理人:yuedu-win");
+    expect(authorSignature("yuedu-win")).toBe("提单人:yuedu-win");
+    expect(handlerSignature("yuedu-win")).toBe("处理人:yuedu-win");
     // 首尾空白吃掉 —— 与 `readDevHandle` 同一条口径。
-    expect(devLabel("  yuedu-win  ")).toBe("dev:yuedu-win");
+    expect(authorLabel("  yuedu-win  ")).toBe("提单人:yuedu-win");
+    expect(handlerLabel("  yuedu-win  ")).toBe("处理人:yuedu-win");
   });
 
   it("未配 / 空白 ⇒ 标签 null、署名如实写「未配」，不编一个名字", () => {
     for (const v of [null, undefined, "", "   "]) {
-      expect(devLabel(v)).toBeNull();
-      expect(signatureLine(v)).toBe("提交人：未配");
+      expect(authorLabel(v)).toBeNull();
+      expect(handlerLabel(v)).toBeNull();
+      expect(authorSignature(v)).toBe("提单人:未配");
+      expect(handlerSignature(v)).toBe("处理人:未配");
     }
   });
 
-  it("--whoami 出口：配了就把两条规则与可粘贴命令打出来", () => {
+  it("--whoami 出口：两枚标签、三条规则与可粘贴命令都在", () => {
     const all = whoamiLines({
       handle: "yuedu-win",
       root: "/checkout/one",
       slug: "moon-read/comfy-app-t3",
     }).join("\n");
-    expect(all).toContain("dev:yuedu-win");
-    expect(all).toContain("提交人：dev:yuedu-win");
+    expect(all).toContain("提单人:yuedu-win");
+    expect(all).toContain("处理人:yuedu-win");
+    expect(all).toContain("提单 / PR 正文用 `提单人:yuedu-win`");
+    expect(all).toContain("领取 / 结束评论用 `处理人:yuedu-win`");
     expect(all).toContain(
-      "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number <PR号> --labels dev:yuedu-win -v",
+      "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number <PR号> --labels 处理人:yuedu-win -v",
     );
     // 回读那一行不是可选提示：回执不算结论，看得见名字才算打上了。
     expect(all).toContain("cnb pulls list-pull-labels");
     expect(all).toContain("回读里看得见那个名字才算打上了");
+    // 领取 / 结束 / 列表的入口也要在这里列出来（手工通道的自查出口）。
+    expect(all).toContain("pnpm ship --claim <号>");
+    expect(all).toContain("pnpm ship --release <号>");
+    expect(all).toContain("pnpm ship --claims");
   });
 
   it("没配 ⇒ 点到这一份检出的 .env 与 env:init，而不是只说「未配」", () => {
@@ -1277,9 +1302,762 @@ describe("devLabel / signatureLine / whoamiLines：平台留痕只有一份生�
     expect(all).toContain("未配");
     expect(all).toContain(path.join("/checkout/one", ".env"));
     expect(all).toContain("pnpm env:init");
-    expect(all).toContain("提交人：未配");
+    expect(all).toContain("提单人:未配");
+    expect(all).toContain("处理人:未配");
     // 仓库取不到时占位，而不是把 `undefined` 拼进一条能粘贴的命令。
     expect(all).toContain("--repo <组织>/<仓库>");
+  });
+});
+
+describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213）", () => {
+  /**
+   * 有状态的假平台：标签、评论、状态都能被写动作改到，**回读读的是改过之后的事实**。
+   * 这一点是本组的要害 —— 若回读始终返回夹具的初值，「写后独立回读」那几格用假执行者
+   * 就永远测不出来（回执与事实永远一致）。
+   */
+  function issueIo(
+    opts: {
+      state?: string;
+      labels?: string[];
+      comments?: string[];
+      getIssueFails?: boolean;
+      postCommentFails?: boolean;
+      commentListFails?: boolean;
+      writeExtraHandler?: string | null;
+      listFails?: boolean;
+      listRows?: { number: number; priority: string; title: string }[];
+      pages?: { number: number; priority: string; title: string }[][];
+    } = {},
+  ) {
+    let state = opts.state ?? "open";
+    let labels = [...(opts.labels ?? [])];
+    const comments = [...(opts.comments ?? [])];
+    const calls: string[] = [];
+    const log: string[] = [];
+    const json = (data: unknown) =>
+      JSON.stringify({ status: 200, contentType: "application/json", data });
+    const arg = (args: string[], name: string) => {
+      const i = args.indexOf(name);
+      return i >= 0 ? String(args[i + 1] ?? "") : "";
+    };
+    const run = (_cmd: string, args: string[]): FakeResult => {
+      calls.push(args.join(" "));
+      if (args[0] === "issues" && args[1] === "update-issue") {
+        state = "closed";
+        return {
+          status: 0,
+          stdout: json({ number: 2187, state }),
+          stderr: "",
+          error: null,
+        };
+      }
+      if (args[0] === "issues" && args[1] === "get-issue") {
+        if (opts.getIssueFails)
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        return {
+          status: 0,
+          stdout: json({
+            number: "2187",
+            state,
+            title: "领一张单试试",
+            priority: "P1",
+            labels: labels.map((name) => ({ name })),
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      if (args[0] === "issues" && args[1] === "post-issue-labels") {
+        const name = arg(args, "--labels");
+        if (name) labels.push(name);
+        // 竞态夹具：另一个会话在我之后也把它的处理人标签打了上来。
+        if (opts.writeExtraHandler)
+          labels.push(`处理人:${opts.writeExtraHandler}`);
+        return { status: 0, stdout: json({}), stderr: "", error: null };
+      }
+      if (args[0] === "issues" && args[1] === "delete-issue-label") {
+        const name = arg(args, "--name");
+        labels = labels.filter((x) => x !== name);
+        return { status: 0, stdout: json({}), stderr: "", error: null };
+      }
+      if (args[0] === "issues" && args[1] === "post-issue-comment") {
+        if (opts.postCommentFails)
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        const text = fs.readFileSync(arg(args, "--body-file"), "utf8");
+        comments.unshift(text);
+        return { status: 0, stdout: json({}), stderr: "", error: null };
+      }
+      if (args[0] === "issues" && args[1] === "list-issue-comments") {
+        if (opts.commentListFails)
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        return {
+          status: 0,
+          stdout: json(comments.map((body) => ({ body }))),
+          stderr: "",
+          error: null,
+        };
+      }
+      if (args[0] === "issues" && args[1] === "list-issues") {
+        if (opts.listFails)
+          return { status: 0, stdout: "boom", stderr: "", error: null };
+        const page = Number(arg(args, "--page") || "1");
+        const rows = opts.pages
+          ? (opts.pages[page - 1] ?? [])
+          : (opts.listRows ?? []);
+        return {
+          status: 0,
+          stdout: json(rows),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    return {
+      run,
+      calls,
+      log,
+      labels: () => labels,
+      comments: () => comments,
+    };
+  }
+
+  /** 评论正文要落盘（`--body-file` 那条路），用完清掉。 */
+  function scratch() {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ship-claim-test-"));
+    let n = 0;
+    return {
+      mkTmp: (_name: string, text: string) => {
+        const p = path.join(dir, `f-${n++}.tmp`);
+        fs.writeFileSync(p, text, "utf8");
+        return p;
+      },
+      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    };
+  }
+
+  const slug = "moon-read/comfy-app-t3";
+  const handle = "yuedu-win";
+  const opts = (argv: string[]) => parseArgs(argv);
+
+  it("评论文案：第一行是人话，第二行才是署名 —— 领取 / 结束各一条", () => {
+    expect(claimComment(handle)).toBe(
+      `开发者 ${handle} 已接单，正在开发中。\n\n处理人:${handle}`,
+    );
+    expect(releaseComment(handle)).toBe(
+      `开发者 ${handle} 开发结束。\n\n处理人:${handle}`,
+    );
+  });
+
+  it("handleCommentState 认的是**最新一条**自己的状态评论（领取→结束→再领取）", () => {
+    const claim = claimComment(handle);
+    const release = releaseComment(handle);
+    expect(handleCommentState([], handle)).toBeNull();
+    expect(handleCommentState([claim], handle)).toBe("claim");
+    // 列表是「新到旧」：第一条命中的才是这一轮的状态。
+    expect(handleCommentState([release, claim], handle)).toBe("release");
+    expect(handleCommentState([claim, release], handle)).toBe("claim");
+    // 别人的状态评论不影响我的判读。
+    expect(handleCommentState([claimComment("someone-else")], handle)).toBeNull();
+  });
+
+  it("decideClaim：未配 ⇒ 2；非 open ⇒ 1；别人名下 ⇒ 1 且说明「仍可评论」", () => {
+    expect(
+      decideClaim({ number: 7, state: "open", labels: [], handle: null }).code,
+    ).toBe(CODE.NOT_RUN);
+    expect(
+      decideClaim({ number: 7, state: "closed", labels: [], handle }).code,
+    ).toBe(CODE.RED);
+    const taken = decideClaim({
+      number: 7,
+      state: "open",
+      labels: [{ name: "处理人:someone-else" }],
+      handle,
+    });
+    expect(taken.act).toBe(false);
+    expect(taken.code).toBe(CODE.RED);
+    expect(taken.reason).toContain("仍然可以在单子上评论");
+  });
+
+  it("decideClaim：我是唯一处理人 ⇒ 幂等；我和别人同时挂着 ⇒ 冲突（不替谁撤标签）", () => {
+    const mine = decideClaim({
+      number: 7,
+      state: "open",
+      labels: [{ name: `处理人:${handle}` }],
+      handle,
+    });
+    expect(mine).toMatchObject({ act: true, already: true, others: [] });
+    const conflict = decideClaim({
+      number: 7,
+      state: "open",
+      labels: [{ name: `处理人:${handle}` }, { name: "处理人:someone-else" }],
+      handle,
+    });
+    expect(conflict.act).toBe(false);
+    expect(conflict.code).toBe(CODE.RED);
+    expect(conflict.others).toEqual(["someone-else"]);
+    expect(conflict.reason).toContain("人裁定");
+  });
+
+  it("decideRelease：不是我且开着 ⇒ 1；不是我且已关 ⇒ 0 无需动作；是我 ⇒ act", () => {
+    expect(
+      decideRelease({ number: 7, state: "open", labels: [], handle }).code,
+    ).toBe(CODE.RED);
+    const closed = decideRelease({
+      number: 7,
+      state: "closed",
+      labels: [],
+      handle,
+    });
+    expect(closed.act).toBe(false);
+    expect(closed.code).toBe(CODE.GREEN);
+    expect(
+      decideRelease({
+        number: 7,
+        state: "open",
+        labels: [{ name: `处理人:${handle}` }],
+        handle,
+      }).act,
+    ).toBe(true);
+  });
+
+  it("--claim：先打标签、再评论，两件都独立回读", () => {
+    const f = issueIo();
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      const put = f.calls.findIndex((c) => c.includes("post-issue-labels"));
+      const said = f.calls.findIndex((c) => c.includes("post-issue-comment"));
+      expect(put).toBeGreaterThan(-1);
+      // 标签先落地（别人刷新时立刻看得见），评论晚一步。
+      expect(put).toBeLessThan(said);
+      // 两处写动作之后各问了一次平台（不是拿回执当结论）。
+      expect(
+        f.calls.slice(put + 1).some((c) => c.startsWith("issues get-issue")),
+      ).toBe(true);
+      expect(
+        f.calls.slice(said + 1).some((c) => c.startsWith("issues list-issue-comments")),
+      ).toBe(true);
+      expect(f.labels()).toContain(`处理人:${handle}`);
+      expect(f.comments()[0]).toContain("已接单");
+      expect(f.comments()[0]).toContain(`处理人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：别人已领取 ⇒ 红，且一次写动作都不发", () => {
+    const f = issueIo({ labels: ["处理人:someone-else"] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.RED);
+      expect(
+        f.calls.some(
+          (c) =>
+            c.includes("post-issue-labels") ||
+            c.includes("post-issue-comment") ||
+            c.includes("delete-issue-label"),
+        ),
+      ).toBe(false);
+      expect(f.log.join("\n")).toContain("仍然可以在单子上评论");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：单子已关闭 ⇒ 红（不是「已经领好了」）", () => {
+    const f = issueIo({ state: "closed" });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.RED);
+      expect(f.calls.some((c) => c.includes("post-issue-labels"))).toBe(false);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：未配留痕 ⇒ 2，且一次 cnb 都不碰（连读都不读）", () => {
+    const f = issueIo();
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle: null,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.calls).toEqual([]);
+      expect(f.log.join("\n")).toContain("COMFYAPP_DEV_HANDLE");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：写后回读里冒出第二个处理人 ⇒ 红（标签不是锁，冲突要人裁定）", () => {
+    const f = issueIo({ writeExtraHandler: "someone-else" });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.RED);
+      expect(f.log.join("\n")).toContain("冲突");
+      // 冲突之后不再往下写评论 —— 先把这个事实交给人才说「正在开发中」。
+      expect(f.calls.some((c) => c.includes("post-issue-comment"))).toBe(false);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：已在名下、只缺评论 ⇒ 只补评论，不重复打标签（幂等）", () => {
+    const f = issueIo({ labels: [`处理人:${handle}`] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.calls.some((c) => c.includes("post-issue-labels"))).toBe(false);
+      expect(f.comments()[0]).toContain("已接单");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim：评论写失败 ⇒ 2 且标签**保留**（下一跑只补评论）", () => {
+    const f = issueIo({ postCommentFails: true });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.labels()).toContain(`处理人:${handle}`);
+      expect(f.comments()).toEqual([]);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claim --dry-run：只念计划，一次写动作都不发", () => {
+    const f = issueIo();
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claim", "2187", "--dry-run"]),
+        mkTmp: s.mkTmp,
+        dryRun: true,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.labels()).toEqual([]);
+      expect(f.calls.some((c) => c.includes("post-issue"))).toBe(false);
+      expect(f.log.join("\n")).toContain("一条都没写");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--release：评论先于撤标签，撤后独立回读", () => {
+    const f = issueIo({ labels: [`处理人:${handle}`] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--release", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      const said = f.calls.findIndex((c) => c.includes("post-issue-comment"));
+      const drop = f.calls.findIndex((c) => c.includes("delete-issue-label"));
+      expect(said).toBeGreaterThan(-1);
+      expect(said).toBeLessThan(drop);
+      // 撤完标签再问一次事实：回执不算结论。
+      expect(
+        f.calls.slice(drop + 1).some((c) => c.startsWith("issues get-issue")),
+      ).toBe(true);
+      expect(f.comments()[0]).toContain("开发结束");
+      expect(f.labels()).not.toContain(`处理人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--release：不在我名下且单子开着 ⇒ 红，一次写动作都不发", () => {
+    const f = issueIo({ labels: ["处理人:someone-else"] });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--release", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.RED);
+      expect(f.calls.some((c) => c.includes("post-issue"))).toBe(false);
+      expect(f.labels()).toEqual(["处理人:someone-else"]);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--release：结束评论没落地 ⇒ 2 且标签保留（不出现无声释放）", () => {
+    const f = issueIo({
+      labels: [`处理人:${handle}`],
+      postCommentFails: true,
+    });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--release", "2187"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.labels()).toContain(`处理人:${handle}`);
+      expect(f.calls.some((c) => c.includes("delete-issue-label"))).toBe(false);
+      expect(f.log.join("\n")).toContain("保留");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claims：按 `处理人:` 标签列 open 的单子；空列表念「没有」", () => {
+    const rows = [
+      { number: 2187, priority: "P1", title: "领一张单试试" },
+      { number: 2190, priority: "P2", title: "另一张" },
+    ];
+    const f = issueIo({ listRows: rows });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claims"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.calls[0]).toContain("--labels 处理人:yuedu-win");
+      expect(f.calls[0]).toContain("--state open");
+      expect(f.log.join("\n")).toContain("2 张");
+      expect(f.log.join("\n")).toContain("#2187 · P1 · 领一张单试试");
+
+      const empty = issueIo({ listRows: [] });
+      const code2 = runIssueAction({
+        run: empty.run,
+        log: (l) => empty.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claims"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code2).toBe(CODE.GREEN);
+      expect(empty.log.join("\n")).toContain("没有你领取中的单子");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("--claims：列表读不到 ⇒ 2，不念成「没有领取中的单子」", () => {
+    const f = issueIo({ listFails: true });
+    const s = scratch();
+    try {
+      const code = runIssueAction({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        cnbOk: true,
+        handle,
+        root: os.tmpdir(),
+        opt: opts(["--claims"]),
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.log.join("\n")).not.toContain("没有你领取中的单子");
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("互斥：一次只做一件，且不与主流程（--merge / --close-issue / --branch…）同跑", () => {
+    for (const argv of [
+      ["--claim", "2187", "--release", "2188"],
+      ["--claim", "2187", "--claims"],
+      ["--claim", "2187", "--merge"],
+      ["--release", "2187", "--close-issue", "2187"],
+      ["--claim", "2187", "--branch", "feat/x"],
+      ["--claim", "2187", "--only=commit"],
+    ]) {
+      const f = issueIo();
+      const s = scratch();
+      try {
+        const code = runIssueAction({
+          run: f.run,
+          log: (l) => f.log.push(l),
+          slug,
+          cnbOk: true,
+          handle,
+          root: os.tmpdir(),
+          opt: opts(argv),
+          mkTmp: s.mkTmp,
+        });
+        expect(code, `argv=${argv.join(" ")}`).toBe(CODE.NOT_RUN);
+        expect(f.calls, `argv=${argv.join(" ")} 不该碰平台`).toEqual([]);
+      } finally {
+        s.cleanup();
+      }
+    }
+  });
+
+  it("不像号 / 重复点名 ⇒ 2 并逐条点名，不去猜是哪一张", () => {
+    for (const argv of [
+      ["--claim", "abc"],
+      ["--claim"],
+      ["--claim", "2187", "--claim", "2188"],
+      ["--release", "#x"],
+    ]) {
+      const f = issueIo();
+      const s = scratch();
+      try {
+        const code = runIssueAction({
+          run: f.run,
+          log: (l) => f.log.push(l),
+          slug,
+          cnbOk: true,
+          handle,
+          root: os.tmpdir(),
+          opt: opts(argv),
+          mkTmp: s.mkTmp,
+        });
+        expect(code, `argv=${argv.join(" ")}`).toBe(CODE.NOT_RUN);
+        expect(f.calls).toEqual([]);
+      } finally {
+        s.cleanup();
+      }
+    }
+  });
+
+  it("cnb 不在 / slug 取不到 ⇒ 2（没有执行者，不去猜单子状态）", () => {
+    for (const ctx of [
+      { cnbOk: false, slug },
+      { cnbOk: true, slug: null },
+    ]) {
+      const f = issueIo();
+      const s = scratch();
+      try {
+        const code = runIssueAction({
+          run: f.run,
+          log: (l) => f.log.push(l),
+          cnbOk: ctx.cnbOk,
+          slug: ctx.slug,
+          handle,
+          root: os.tmpdir(),
+          opt: opts(["--claim", "2187"]),
+          mkTmp: s.mkTmp,
+        });
+        expect(code).toBe(CODE.NOT_RUN);
+        expect(f.calls).toEqual([]);
+      } finally {
+        s.cleanup();
+      }
+    }
+  });
+
+  it("finishIssueWork：处理人是我 ⇒ 结束评论 + 撤标签（先评论后撤）", () => {
+    const f = issueIo({ labels: [`处理人:${handle}`] });
+    const s = scratch();
+    try {
+      const code = finishIssueWork({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        handle,
+        number: 2187,
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.comments()[0]).toContain("开发结束");
+      expect(f.labels()).not.toContain(`处理人:${handle}`);
+      expect(
+        f.calls.findIndex((c) => c.includes("post-issue-comment")),
+      ).toBeLessThan(
+        f.calls.findIndex((c) => c.includes("delete-issue-label")),
+      );
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("finishIssueWork：处理人是别人 / 不在场 ⇒ 不代发、不动标签（退 0）", () => {
+    for (const labels of [["处理人:someone-else"], []]) {
+      const f = issueIo({ labels });
+      const s = scratch();
+      try {
+        const code = finishIssueWork({
+          run: f.run,
+          log: (l) => f.log.push(l),
+          slug,
+          handle,
+          number: 2187,
+          mkTmp: s.mkTmp,
+        });
+        expect(code).toBe(CODE.GREEN);
+        expect(
+          f.calls.some(
+            (c) =>
+              c.includes("post-issue-comment") ||
+              c.includes("delete-issue-label"),
+          ),
+        ).toBe(false);
+      } finally {
+        s.cleanup();
+      }
+    }
+  });
+
+  it("finishIssueWork：结束评论没落地 ⇒ 2 且标签保留", () => {
+    const f = issueIo({
+      labels: [`处理人:${handle}`],
+      postCommentFails: true,
+    });
+    const s = scratch();
+    try {
+      const code = finishIssueWork({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        handle,
+        number: 2187,
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.NOT_RUN);
+      expect(f.labels()).toContain(`处理人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("closeIssues 验真关闭后带上 handle：补「开发结束」评论并撤自己的标签", () => {
+    const f = issueIo({ labels: [`处理人:${handle}`] });
+    const s = scratch();
+    try {
+      const code = closeIssues({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        closeIssue: true,
+        landed: { title: "fix(x): 一格 (#2187)", sha: "abc1234", verified: true },
+        handle,
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.comments()[0]).toContain("开发结束");
+      expect(f.labels()).not.toContain(`处理人:${handle}`);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it("closeIssues 验真关闭但处理人是别人：不代发结束评论、不动标签", () => {
+    const f = issueIo({ labels: ["处理人:someone-else"] });
+    const s = scratch();
+    try {
+      const code = closeIssues({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug,
+        closeIssue: true,
+        landed: { title: "fix(x): 一格 (#2187)", sha: "abc1234", verified: true },
+        handle,
+        mkTmp: s.mkTmp,
+      });
+      expect(code).toBe(CODE.GREEN);
+      expect(f.comments()).toEqual([]);
+      expect(f.labels()).toEqual(["处理人:someone-else"]);
+    } finally {
+      s.cleanup();
+    }
   });
 });
 
@@ -2072,16 +2850,58 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
     }
   });
 
-  it("作者标签与独立回读成对出现，且只在配了留痕时进计划（#2204）", () => {
+  it("PR 处理人标签与独立回读成对出现，且只在配了留痕时进计划", () => {
     const plain = planCommands(st).join("\n");
     expect(plain).not.toContain("post-pull-labels");
-    const withLabel = planCommands({ ...st, authorLabel: true }).join("\n");
+    const withLabel = planCommands({ ...st, handle: "yuedu-win" }).join("\n");
     expect(withLabel).toContain("cnb pulls post-pull-labels");
+    expect(withLabel).toContain("--labels 处理人:yuedu-win");
     // 回读不是可选步骤：只打不回读，dry-run 就把「回执即结论」教给读者。
     expect(withLabel).toContain("cnb pulls list-pull-labels");
     expect(withLabel.indexOf("post-pull-labels")).toBeLessThan(
       withLabel.indexOf("list-pull-labels"),
     );
+  });
+
+  it("领取 / 结束 / 列表三格只在各自旗标下进计划，且每条写动作后都有回读", () => {
+    const plain = planCommands(st).join("\n");
+    expect(plain).not.toContain("--claim");
+    expect(plain).not.toContain("delete-issue-label");
+    expect(plain).not.toContain("list-issues");
+
+    const claim = planCommands({ ...st, handle: "yuedu-win", claim: 2187 }).join(
+      "\n",
+    );
+    expect(claim).toContain("cnb issues post-issue-labels");
+    expect(claim).toContain("--labels 处理人:yuedu-win");
+    expect(claim).toContain("cnb issues post-issue-comment");
+    // 打标签与发评论之后各有一处独立回读（get-issue / list-issue-comments）。
+    expect(claim.indexOf("post-issue-labels")).toBeLessThan(
+      claim.lastIndexOf("get-issue"),
+    );
+    expect(claim.indexOf("post-issue-comment")).toBeLessThan(
+      claim.lastIndexOf("list-issue-comments"),
+    );
+
+    const release = planCommands({
+      ...st,
+      handle: "yuedu-win",
+      release: 2188,
+    }).join("\n");
+    expect(release).toContain("cnb issues post-issue-comment");
+    expect(release).toContain("cnb issues delete-issue-label");
+    expect(release).toContain("--name 处理人:yuedu-win");
+    // 先评论、再撤标签：反过来的顺序会把「结束」这句话丢掉。
+    expect(release.indexOf("post-issue-comment")).toBeLessThan(
+      release.indexOf("delete-issue-label"),
+    );
+
+    const list = planCommands({ ...st, handle: "yuedu-win", claims: true }).join(
+      "\n",
+    );
+    expect(list).toContain("cnb issues list-issues");
+    expect(list).toContain("--labels 处理人:yuedu-win");
+    expect(list).toContain("--state open");
   });
 
   it("合并那一行只在 merge 为真时出现（默认不合并这条纪律的自证）", () => {
@@ -2163,7 +2983,10 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       ...st,
       merge: true,
       closeIssue: true,
-      authorLabel: true,
+      handle: "yuedu-win",
+      claim: 2187,
+      release: 2188,
+      claims: true,
     })) {
       const m = /^cnb (\w+) ([\w-]+)/.exec(line);
       if (m) planned.add(`${m[1]} ${m[2]}`);
@@ -2239,21 +3062,23 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
     expect(body).toContain("1 file changed");
   });
 
-  it("配了留痕 ⇒ 正文带一行署名；没配 ⇒ 写「未配」而不是编一个名字", () => {
+  it("配了留痕 ⇒ 正文带一行 `提单人:<短名>`；没配 ⇒ 写「未配」而不是编一个名字", () => {
     const withHandle = buildPullBody({
       root: process.cwd(),
       fragments: [],
       diffstat: " 1 file changed",
       handle: "yuedu-win",
     });
-    expect(withHandle).toContain("提交人：dev:yuedu-win");
+    expect(withHandle).toContain("提单人:yuedu-win");
     const without = buildPullBody({
       root: process.cwd(),
       fragments: [],
       diffstat: " 1 file changed",
     });
-    expect(without).toContain("提交人：未配");
-    expect(without).not.toContain("dev:");
+    expect(without).toContain("提单人:未配");
+    expect(without).not.toContain("yuedu-win");
+    // 正文里不出现旧的 `dev:` 形态：那一维已经拆成「提单人 / 处理人」两个角色。
+    expect(withHandle).not.toContain("dev:");
   });
 
   it("负控制：正文里不许出现 check-commit-claims 会拿事实复核的那三种句式", () => {
@@ -2275,6 +3100,70 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
         banned,
       );
     }
+  });
+});
+
+describe("main() 的单子动作：独立于主流程，在 master 上、没碎片时也能跑", () => {
+  /** 只答单子动作需要的那几跳 —— 别的一律空响应（走了就是用例失败）。 */
+  function issueMainIo(rows: { number: number; priority: string; title: string }[]) {
+    const calls: string[] = [];
+    const log: string[] = [];
+    const ok = (stdout: string): FakeResult => ({
+      status: 0,
+      stdout,
+      stderr: "",
+      error: null,
+    });
+    const run = (cmd: string, args: string[]): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
+      if (cmd === "git" && key.includes("@{u}")) return ok("");
+      if (cmd === "git" && key === "remote") return ok("cnb\n");
+      if (cmd === "git" && key.includes("symbolic-ref"))
+        return ok("refs/remotes/cnb/master");
+      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
+        return ok("d02ec9");
+      if (cmd === "git" && key.includes("get-url"))
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "list-issues")
+        return ok(JSON.stringify({ status: 200, data: rows }));
+      return ok("");
+    };
+    return { run, calls, log };
+  }
+
+  it("--claims：不跑 preflight（master 上、没有碎片也照样列得出来）", async () => {
+    const f = issueMainIo([
+      { number: 2187, priority: "P1", title: "领一张单试试" },
+    ]);
+    const code = await main({
+      args: ["--claims"],
+      env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+      run: f.run,
+      log: (l) => f.log.push(l),
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.calls.some((c) => c.includes("list-issues"))).toBe(true);
+    expect(f.calls.some((c) => c.includes("--state open"))).toBe(true);
+    // 主流程那几跳一次都没伸手：单子动作排在阶段 0 之前。
+    expect(f.calls.some((c) => c.includes("status --porcelain"))).toBe(false);
+    expect(f.calls.some((c) => c.includes("check-deps-freshness"))).toBe(false);
+    expect(f.log.join("\n")).toContain("#2187 · P1 · 领一张单试试");
+  });
+
+  it("--claim 与 --merge 同跑 ⇒ 2，且一张单子都不碰", async () => {
+    const f = issueMainIo([]);
+    const code = await main({
+      args: ["--claim", "2187", "--merge"],
+      env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+      run: f.run,
+      log: (l) => f.log.push(l),
+    });
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.calls.some((c) => c.includes("issues"))).toBe(false);
+    expect(f.log.join("\n")).toContain("不与");
   });
 });
 
@@ -3202,7 +4091,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         "list-pulls": '{"status":200,"data":[]}',
         "post-pull-labels": '{"status":200}',
         "list-pull-labels":
-          '{"status":200,"data":[{"name":"dev:yuedu-win"}]}',
+          '{"status":200,"data":[{"name":"处理人:yuedu-win"}]}',
         "post-pull": '{"status":201,"data":{"number":2999}}',
       });
       const code = await main({
@@ -3217,7 +4106,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       const all = heard.join("\n");
       expect(code).toBe(CODE.GREEN);
       expect(base.calls).toContain(
-        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 2999 --labels dev:yuedu-win -v",
+        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 2999 --labels 处理人:yuedu-win -v",
       );
       expect(base.calls).toContain(
         "cnb pulls list-pull-labels --repo moon-read/comfy-app-t3 --number 2999 -v",
@@ -3229,7 +4118,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       const readAt = base.calls.findIndex((c) => c.includes("list-pull-labels"));
       expect(applyAt).toBeGreaterThanOrEqual(0);
       expect(readAt).toBeGreaterThan(applyAt);
-      expect(all).toContain("✓ PR #2999 标签 dev:yuedu-win 已回读");
+      expect(all).toContain("✓ PR #2999 标签 处理人:yuedu-win 已回读");
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }
@@ -3260,7 +4149,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       expect(all).toContain("没有落地证明");
       // 手工补的那条命令必须给全 —— 只说「没打上」等于把下一步吞了。
       expect(all).toContain(
-        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 3002 --labels dev:yuedu-win -v",
+        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 3002 --labels 处理人:yuedu-win -v",
       );
       // 留痕是读数，不是闸（#2175 同一条）：标签没落地照样走到 GREEN。
       expect(code).toBe(CODE.GREEN);
@@ -3279,7 +4168,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
           '{"status":200,"data":[{"number":2888,"head":{"ref":"refs/heads/feat/x"},"base":{"ref":"refs/heads/master"}}]}',
         "post-pull-labels": '{"status":200}',
         "list-pull-labels":
-          '{"status":200,"data":[{"name":"dev:yuedu-win"}]}',
+          '{"status":200,"data":[{"name":"处理人:yuedu-win"}]}',
       });
       const code = await main({
         root: tmpRoot,
@@ -3316,7 +4205,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
           '{"status":200,"data":[{"number":2888,"head":{"ref":"refs/heads/feat/x"},"base":{"ref":"refs/heads/master"}}]}',
         "post-pull-labels": '{"status":200}',
         "list-pull-labels":
-          '{"status":200,"data":[{"name":"dev:yuedu-win"}]}',
+          '{"status":200,"data":[{"name":"处理人:yuedu-win"}]}',
       });
       const code = await main({
         root: tmpRoot,
@@ -3329,9 +4218,9 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       });
       expect(code).toBe(CODE.GREEN);
       expect(base.calls).toContain(
-        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 2888 --labels dev:yuedu-win -v",
+        "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number 2888 --labels 处理人:yuedu-win -v",
       );
-      expect(heard.join("\n")).toContain("✓ PR #2888 标签 dev:yuedu-win 已回读");
+      expect(heard.join("\n")).toContain("✓ PR #2888 标签 处理人:yuedu-win 已回读");
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }
@@ -3353,8 +4242,8 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(code).toBe(CODE.GREEN);
     expect(base.calls.filter((c) => c.startsWith("cnb "))).toEqual([]);
     const all = heard.join("\n");
-    expect(all).toContain("dev:yuedu-win");
-    expect(all).toContain("提交人：dev:yuedu-win");
+    expect(all).toContain("处理人:yuedu-win");
+    expect(all).toContain("提单人:yuedu-win");
     expect(all).toContain("cnb pulls post-pull-labels");
     expect(all).toContain("cnb pulls list-pull-labels");
   });

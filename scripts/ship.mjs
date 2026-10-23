@@ -48,7 +48,13 @@
  *   · `ship-close.mjs`    —— **关单那一格**：要不要关、关哪几张、凭什么关（本轮验真合并 /
  *     平台侧落地证明），以及关完的独立回读。它跟着「单子的落地证明口径」动，不跟 build 状态机走；
  *     叠进 `ship-core` 会把它推过 900 行（#2199 现场量的 917 行）。
- *   · 本文件              —— **装配 + preflight**：阶段顺序、读数的落点，
+ *   · `ship-claim.mjs`    —— **单子的领取 / 结束释放 / 我的领取列表**：`--claim` /
+ *     `--release` / `--claims`，以及关单之后那一步收尾评论与撤标签。它跟着「单子上
+ *     谁在做」这一维动，与合并那一路互斥。
+ *   · `ship-preflight.mjs`—— **阶段 0**：本检出自己的读数与本地门（分支守卫、碎片、
+ *     单子读数、实例归属、依赖新鲜度）。它判的都是「这一份检出」的事实，与平台侧四段
+ *     正相反；叠在本文件里会把装配层推过 900 行（第二次撞上，首次见 #2189）。
+ *   · 本文件              —— **装配**：阶段顺序、读数的落点，
  *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
  *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
  *
@@ -135,6 +141,9 @@
  *   pnpm ship --whoami                         # 只读自查：这一份检出的留痕短名 +
  *                                              #   手工写平台文字 / 建 PR 后补标签的粘贴命令
  *                                              #   （一次也不碰平台，不改任何状态）
+ *   pnpm ship --claim 2187                     # 领取单子：评论「已接单」+ 打 `处理人:` 标签（写后回读）
+ *   pnpm ship --release 2187                   # 结束处理：评论「开发结束」+ 撤 `处理人:` 标签（先评论后撤）
+ *   pnpm ship --claims                         # 列出自己领取中（state=open）的单子
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge · close-issue · clean-branch
  * （`close-issue` 带号时能单跑 —— 那是「补关」那一路，要平台侧的落地证明；不带号或
@@ -149,25 +158,14 @@ import { resolveGitDir } from "./git-dir.mjs";
 import {
   CODE,
   combineShipCodes,
-  decideCreateBranch,
   parseArgs,
   parseSlug,
   PHASES,
-  planCommands,
   resolveUpstream,
 } from "./ship-core.mjs";
 import { makeRunner, writeScratch } from "./ship-exec.mjs";
-import {
-  issueAuthoring,
-  readDevHandle,
-  ticketReading,
-  whoamiLines,
-} from "./ship-ticket.mjs";
-import {
-  logInstanceReading,
-  reapCheckoutInstances,
-  readAppInstances,
-} from "./ship-reap.mjs";
+import { readDevHandle, whoamiLines } from "./ship-ticket.mjs";
+import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
 import {
   cleanBranch,
   createOrReusePull,
@@ -176,7 +174,9 @@ import {
   reportVerdict,
 } from "./ship-platform.mjs";
 import { closeIssues } from "./ship-close.mjs";
-import { parsePorcelain, runCommitStage, runPushStage } from "./ship-local.mjs";
+import { runIssueAction } from "./ship-claim.mjs";
+import { runCommitStage, runPushStage } from "./ship-local.mjs";
+import { runPreflightStage } from "./ship-preflight.mjs";
 
 /**
  * 对外入口：跑一遍编排，**无论走到哪个出口都清掉自己写的临时文件**。
@@ -406,19 +406,48 @@ async function runFlow(deps, tmpFiles) {
   const slugRes = up.remote
     ? run("git", ["remote", "get-url", up.remote])
     : { stdout: "" };
-  const slug = parseSlug(slugRes.stdout);
+  let slug = parseSlug(slugRes.stdout);
+  /* 留痕短名在**所有**要它的格子之前取一次：whoami、领取 / 结束 / 列表、preflight 的
+   * 单子身份读数、PR 标签、关单后的结束评论。各格自己再读一次会让同一次跑里出现两套答案
+   * （进程环境与 `.env` 在两次读之间变过就会分叉）。 */
+  const handle = readDevHandle({ root, env });
   /* ── `--whoami`：只读自查口（ISSUE #2204）─────────────────────
    * 手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 ship，
    * 那两条路的留痕只能靠人照着一条能粘贴的出口做。这个出口一次也不碰平台
    * （甚至不 probe cnb）、不改任何状态，所以在分支守卫与 preflight 之前就返回。 */
   if (opt.whoami) {
-    const handle = readDevHandle({ root, env });
     for (const l of whoamiLines({ handle, root, slug })) {
       log(l);
     }
     return CODE.GREEN;
   }
   const cnbOk = probeCnb();
+
+  /* ── 单子的领取 / 结束 / 列表（规范 §13.10.11）──────────────────
+   * 三条动作都**独立于主流程**：领一张单不需要干净工作树，也不该顺手合并什么。
+   * 互斥与前置（cnb / slug / 留痕）在 `runIssueAction` 里判；这里只做分派，
+   * 且排在 preflight 之前 —— 否则在 master 上或没有碎片时连「领取」都跑不了。 */
+  if (
+    opt.claim != null ||
+    opt.release != null ||
+    opt.claims ||
+    opt.claimBad.length > 0 ||
+    opt.releaseBad.length > 0
+  ) {
+    return finish([
+      runIssueAction({
+        run,
+        log,
+        slug,
+        cnbOk,
+        handle,
+        root,
+        opt,
+        mkTmp,
+        dryRun: opt.dryRun,
+      }),
+    ]);
+  }
 
   /* ── 「只补关」那一路（ISSUE #2199）───────────────────────────
    * 人在命令行上点名的号**而本轮没要合并** ⇒ 这一跑的目的就是把早已落地、却没关掉的单子关上
@@ -447,250 +476,35 @@ async function runFlow(deps, tmpFiles) {
         closeIssue: true,
         landed: null,
         explicit: opt.closeIssueNumbers,
+        handle,
+        mkTmp,
       }),
     ]);
   }
 
-  // ── 阶段 0：preflight ────────────────────────────────────────
+  // ── 阶段 0：preflight（实现见 `ship-preflight.mjs`）──────────────
   if (want("preflight")) {
-    const head = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
-    let branch = head.stdout.trim();
-    if (head.status !== 0 || !branch) {
-      log(
-        "[ship] 取不到 HEAD ⇒ 非 git 检出 / 游离 HEAD，这一格没有结论（不是「通过」）",
-      );
-      return CODE.NOT_RUN;
-    }
-    /* ── 建分支那一格（`--branch`，显式才动 ref）──────────────────
-     * 这一格原本只会打印一句「先 git checkout -b feat/<描述>」然后退 1 —— 于是脚本在
-     * 「人还没有分支」的时刻是旁观者：第一次跑的屏幕输出全部作废，人得先离开这条链
-     * 手动建完再回来跑第二遍。名字仍然只由人给（判断不在这里），脚本只补「动 ref」
-     * 那半件机械事；四态的判断在 `decideCreateBranch`。 */
-    const wantName = (opt.branch || "").trim();
-    const cb = decideCreateBranch({
-      requested: wantName || null,
-      current: branch,
-      existsLocal: wantName
-        ? run("git", [
-            "show-ref",
-            "--verify",
-            "--quiet",
-            `refs/heads/${wantName}`,
-          ]).status === 0
-        : false,
-      existsRemote: wantName
-        ? run("git", [
-            "show-ref",
-            "--verify",
-            "--quiet",
-            `refs/remotes/${up.remote || "origin"}/${wantName}`,
-          ]).status === 0
-        : false,
-    });
-    if (cb.requested) {
-      if (cb.act) {
-        if (opt.dryRun) {
-          log(
-            `[ship] --dry-run：不建分支。计划里第一跳是 git checkout -b ${cb.branch}；` +
-              `下面几行的读数仍取自当前 HEAD（${branch}）—— 预览不替人动 ref。`,
-          );
-          branch = cb.branch;
-        } else {
-          const co = run("git", ["checkout", "-b", cb.branch]);
-          relay(co);
-          if (co.status !== 0) {
-            log(
-              `[ship] 建分支没成（exit ${co.status}）⇒ 停：后面每一跳的分支名都取自它，` +
-                "这一格没有结论，不拿一次失败的 checkout 冒充「已经在分支上」。",
-            );
-            codes.push(CODE.RED);
-            return finish(codes);
-          }
-          log(
-            `[ship] ✓ 已建并切到分支 ${cb.branch}（未提交的改动照带）。` +
-              "本地 `master` 上若还留着误提交，本脚本**不动**它——`git reset --hard` 是" +
-              "破坏性动作，AGENTS 硬规则 6 那三步由人执行。",
-          );
-          branch = cb.branch;
-        }
-        codes.push(CODE.GREEN);
-      } else if (cb.code === CODE.RED || cb.code === CODE.NOT_RUN) {
-        log(`[ship] ${cb.reason}`);
-        codes.push(cb.code);
-        return finish(codes);
-      } else {
-        log(`[ship] ${cb.reason}`);
-        codes.push(CODE.GREEN);
-      }
-    }
-    if (branch === "master" || branch === "HEAD") {
-      log(
-        `[ship] 当前在 \`${branch}\` 上。本仓不许直连主干（硬规则 6）⇒ 先：git checkout -b feat/<描述>`,
-      );
-      codes.push(CODE.RED);
-      return finish(codes);
-    }
-    const shaRes = run("git", ["rev-parse", "HEAD"]);
-    const sha = shaRes.stdout.trim();
-    const dirty = run("git", ["status", "--porcelain"]);
-    const { staged, unstagedModified, untracked } = parsePorcelain(
-      dirty.stdout,
-    );
-    /* 「单 PR 单变更」数的是**这条分支相对上游带进来的**碎片。这一格错过两次，
-     * 两次都是「挑了最省事的那个取数面」：
-     *   ① `git ls-files changelog.d` → 数出 **118 份**（整个目录的存量）⇒ 恒真，
-     *      那条守卫等于没有，而它看起来像在判什么，比不判更糟；
-     *   ② 改成只看工作树 → 第一次跑把碎片提交掉之后，工作树干净 ⇒ **恒假**，
-     *      于是 `pnpm ship --merge`（同一条分支上的第二次跑）在 preflight 就被拒。
-     * 正确的面是**两者取并**：分支相对上游基线已提交的 + 还没提交的。
-     * 「同一条分支上重跑要还能过」这一向是 ② 的修法自己带出来的，见用例。 */
-    const branchFragRes = baseRef
-      ? run("git", [
-          "diff",
-          "--name-only",
-          `${baseRef}...HEAD`,
-          "--",
-          "changelog.d",
-        ])
-      : { stdout: "" };
-    const workFragRes = run("git", [
-      "status",
-      "--porcelain",
-      "--",
-      "changelog.d",
-    ]);
-    const frags = [
-      ...new Set([
-        ...branchFragRes.stdout
-          .split("\n")
-          .map((s) => s.trim())
-          .filter((p) => p.endsWith(".md")),
-        ...workFragRes.stdout
-          .split("\n")
-          .map((l) => l.slice(2).trim()) // `XY <path>`：前两列是状态位
-          .filter((p) => p.endsWith(".md")),
-      ]),
-    ];
-
-    log(
-      `[ship] 分支 ${branch} · sha ${sha.slice(0, 8)} · 仓库 ${slug || "(取不到)"}` +
-        ` · 远端 ${up.remote || "(无)"} · 基线 ${baseRef || "(取不到)"}` +
-        `（来源 ${up.source}${baseRef === null ? " ⇒ 碎片那一查没有事实源，见下" : ""}）`,
-    );
-    log(
-      `[ship] 暂存 ${staged.length} 项 · 未暂存 ${unstagedModified.length} 项 · 未跟踪 ${untracked.length} 项 · changelog.d 碎片 ${frags.length} 份`,
-    );
-    /* 「这次变更挂在哪张单子上」在这一格念出来 —— 它是**读数**，不参与退码。
-     * 放在这里而不是别处的理由：这是整条链上唯一一处「碎片文件名 + 首行段落」都还在手边、
-     * 而写动作一个都没发生的时刻。此前的读数时机只有最危险那一格（`--close-issue` 在
-     * **合并已发生之后**才发现标题里没有号），那等于让「没立案」一路走到主干。 */
-    const ticket =
-      frags.length > 0 ? ticketReading({ root, fragments: frags }) : null;
-    if (ticket) {
-      for (const l of ticket.lines) {
-        log(l);
-      }
-    }
-    /* 单子的另外两格：谁提的、按什么优先级 —— 同样是读数，不参与退码（ISSUE #2175）。
-     * 「提单人」这一格平台给不了：issue 是被 token 的账号本体创建的，多份并行检出回读到的
-     * `author` 逐字相同（实测），而提交那一侧的通道（git author 子地址）在单子上不存在
-     * —— 见 `docs/guides/git-identity.md` §4。留痕因此只能写在单子上。
-     * 出口那两句只在「缺单」或「没配留痕」时念：都在场时不必每次刷屏。 */
-    const handle = readDevHandle({ root, env });
-    for (const l of issueAuthoring({
-      handle,
-      platform: process.platform,
+    const pf = await runPreflightStage({
+      run,
+      log,
+      relay,
+      opt,
       root,
-      showExits: !handle || (ticket?.anonymousFixed.length ?? 0) > 0,
-    }).lines) {
-      log(l);
-    }
-    /* 本检出的应用服务此刻在不在跑 —— 一格**读数**，不参与退码。放在这里是理由：这是
-     * 整条链上唯一一处「还没动手、而机器的状态可以顺手交代」的时刻。真收在 `--reap`
-     * （见 `main`），两半共用同一条归属判据；读不出来就念「读不出来」，不圆成「无」。 */
-    try {
-      logInstanceReading(
-        log,
-        await (deps.readInstances ?? readAppInstances)(root),
-      );
-    } catch (e) {
-      log(
-        `[ship] 本检出应用实例：读不出来（${e instanceof Error ? e.message : String(e)}）` +
-          " ⇒ 这一格不构成结论，也不参与退码",
-      );
-    }
-    if (
-      unstagedModified.length + untracked.length > 0 &&
-      opt.adds.length === 0
-    ) {
-      log(
-        "[ship] 还有未暂存的改动，而本次没给 --add ⇒ 暂存面由你负责，脚本不替你 `git add -A`。",
-      );
-    }
-    if (baseRef === null) {
-      log(
-        `[ship] 取不到可比的上游基线（上游 ${up.base ?? "(无)"} 不存在或这条分支还没有上游）` +
-          " ⇒ 「分支带进来了哪些碎片」这一格**没有事实源**。这不是「没有碎片」，" +
-          "也不是「通过」：先 `git fetch` 或给这条分支设上游（`git branch -u <远端>/master`）。\n",
-      );
-      codes.push(CODE.NOT_RUN);
-      return finish(codes);
-    }
-    if (frags.length === 0) {
-      log(
-        `[ship] 没有 changelog.d/ 碎片（比的是 ${baseRef}...HEAD 与工作树）` +
-          " ⇒ 单 PR 单变更那条不成立（§13.10.5）。先补一份。",
-      );
-      codes.push(CODE.RED);
-      return finish(codes);
-    }
-    if (!slug) {
-      log(
-        `[ship] 取不到远端 \`${up.remote ?? "(未解析出远端名)"}\` 的 org/repo` +
-          " ⇒ 后面的平台动作没有执行者（不是「不需要」）",
-      );
-      codes.push(CODE.NOT_RUN);
-      return finish(codes);
-    }
-
-    if (opt.dryRun) {
-      log("[ship] --dry-run：下面是将要执行的命令，**一条都没跑**：");
-      for (const c of planCommands({
-        branch,
-        sha,
-        slug,
-        adds: opt.adds,
-        hasMessage: Boolean(opt.message || opt.messageFile),
-        merge: opt.merge,
-        closeIssue: opt.closeIssue,
-        cleanBranch: opt.cleanBranch,
-        createBranch: cb.act ? cb.branch : null,
-        remote: up.remote,
-        baseBranch,
-        authorLabel: Boolean(handle),
-      })) {
-        log(`        $ ${c}`);
-      }
-      return CODE.GREEN;
-    }
-    if (!cnbOk) {
-      log(
-        "[ship] 这台机器上没有可用的 cnb ⇒ 平台侧那几段（PR / 轮询 / 合并）没有执行者。",
-      );
-      log(
-        "[ship] 本地两段照跑；跑完请自己开 PR。这一格记「没跑起来」，不记「已完成」。",
-      );
-    }
-
-    const fresh = run("node", ["scripts/check-deps-freshness.mjs"]);
-    if (fresh.status !== 0) {
-      log(
-        "[ship] 依赖新鲜度红了（硬规则 25）⇒ 先 `git pull` + `pnpm install` 再回来。",
-      );
-      codes.push(CODE.RED);
-      return finish(codes);
-    }
-    codes.push(CODE.GREEN);
+      up,
+      baseRef,
+      baseBranch,
+      slug,
+      cnbOk,
+      handle,
+      readInstances: deps.readInstances ?? readAppInstances,
+    });
+    codes.push(...pf.codes);
+    if (pf.action === "stop") return pf.code;
+    if (pf.action === "finish") return finish(codes);
+    if (pf.action === "dry-run") return CODE.GREEN;
+    /* slug 由 preflight 的 `!slug` 闸收窄后带回：阶段 0 之后的平台动作不再面对 null。 */
+    const { branch, frags, staged, unstagedModified, untracked } = pf;
+    slug = pf.slug;
 
     // ── 阶段 1：commit（实现见 `ship-local.mjs`，判据仍在 `ship-core.mjs`）──
     if (want("commit")) {
@@ -816,6 +630,8 @@ async function runFlow(deps, tmpFiles) {
             closeIssue: true,
             landed,
             explicit: opt.closeIssueNumbers,
+            handle,
+            mkTmp,
           }),
         );
       }
