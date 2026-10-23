@@ -3156,6 +3156,11 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
 
 describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（ISSUE #2215）", () => {
   it("缺键时念 `pnpm env:init`，且不改退码", async () => {
+    /* CI 的「受影响用例」格设了 `SKIP_ENV_VALIDATION=1`（`.cnb.yml`），而 `envInitHint()`
+     * 按设计在该变量在场时整格静默 —— 不清掉它，这条验的就不是接线而是「跳过时不出声」。
+     * 用例自己收起再还原，别让读数取决于跑在谁的机器上。 */
+    const savedSkip = process.env.SKIP_ENV_VALIDATION;
+    delete process.env.SKIP_ENV_VALIDATION;
     const rootDir = mkdtempSync(path.join(os.tmpdir(), "ship-preflight-env-"));
     fs.writeFileSync(path.join(rootDir, ".env"), "BETTER_AUTH_SECRET=abc\n", "utf8");
     fs.writeFileSync(
@@ -3197,6 +3202,8 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
       expect(res.codes).toContain(CODE.NOT_RUN);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
+      if (savedSkip === undefined) delete process.env.SKIP_ENV_VALIDATION;
+      else process.env.SKIP_ENV_VALIDATION = savedSkip;
     }
   });
 });
