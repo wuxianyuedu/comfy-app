@@ -61,6 +61,7 @@ import {
   gitUser,
   isWholeTrackRun,
   notWholeTrackNotice,
+  pushFreshnessLedger,
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
@@ -693,6 +694,18 @@ async function main(argv) {
   process.stdout.write(
     `[full-suite-run] ✓ 全量单测 + 覆盖率通过\n[full-suite-run] ${note}\n`,
   );
+  /* 回写机器自有分支 `ci/freshness-ledger`（ISSUE #2247）；仅每日档置
+   * `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op。 */
+  const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["full"] });
+  if (freshPush.pushed) {
+    process.stdout.write(
+      "[full-suite-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
+    );
+  } else if (freshPush.reason && freshPush.reason !== "opt-out") {
+    process.stdout.write(
+      `[full-suite-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
+    );
+  }
   return 0;
 }
 

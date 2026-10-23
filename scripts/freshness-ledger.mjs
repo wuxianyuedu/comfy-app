@@ -647,6 +647,14 @@ export function readFreshnessLedgerAt(root, rel) {
   }
 }
 
+/** 机器分支回看 / 回写逻辑拆到 `freshness-ledger-sync.mjs`（仓库 `scripts/**` 900 行硬闸，
+ * §12.6 R5：声明层与机制层分开）。本文件只管「本地工作树账」，跨分支那一半在 sync 模块。 */
+export {
+  FRESHNESS_LEDGER_BRANCH,
+  pushFreshnessLedger,
+  readBranchLedger,
+} from "./freshness-ledger-sync.mjs";
+
 /**
  * 把一档的**跑绿**写进它那份账（返回给输出用的一句读数）。
  *

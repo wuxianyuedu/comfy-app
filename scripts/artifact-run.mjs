@@ -46,6 +46,7 @@ import {
   gitUser,
   isWholeTrackRun,
   notWholeTrackNotice,
+  pushFreshnessLedger,
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
@@ -187,6 +188,19 @@ export function main(argv) {
   process.stdout.write(
     `[artifact-run] ✓ 产物级护栏通过\n[artifact-run] ${note}\n`,
   );
+  /* 把这一档的账回写到机器自有分支 `ci/freshness-ledger`（ISSUE #2247）。
+   * 仅在 `.cnb.yml` 每日档置了 `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op；
+   * 回写失败只提示、不影响跑法结论。 */
+  const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["artifact"] });
+  if (freshPush.pushed) {
+    process.stdout.write(
+      "[artifact-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
+    );
+  } else if (freshPush.reason && freshPush.reason !== "opt-out") {
+    process.stdout.write(
+      `[artifact-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
+    );
+  }
   return 0;
 }
 
