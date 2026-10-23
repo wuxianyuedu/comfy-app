@@ -109,9 +109,9 @@ if ($expectedPnpm) {
     Say-Info "package.json 未声明 pnpm 版本要求，跳过版本比对。"
 }
 
-# ── 4) 生成 .env（已存在则跳过）───────────────────────────────
+# ── 4) 生成 .env（已存在则跳过），再用 env:init 补缺键 ──────────
 Write-Host ""
-Write-Host "---------- [4/6] 生成本地配置 .env ----------" -ForegroundColor White
+Write-Host "---------- [4/6] 生成本地配置 .env 并补齐缺失键 ----------" -ForegroundColor White
 $envFile = Join-Path $root ".env"
 if (Test-Path $envFile) {
     Say-OK "已存在 .env，跳过生成（不覆盖你的配置）。"
@@ -137,6 +137,16 @@ if (Test-Path $envFile) {
         Say-Err "生成 .env 失败：$($_.Exception.Message)"
         exit 1
     }
+}
+
+# 跨平台统一的 `pnpm env:init` 再补一道：上面从 `.env.example` 生成时只包含 example 里
+# 已有的键，而本仓后续新增的可选键（如 `COMFYAPP_DEV_HANDLE` —— #2175 的启动留痕全靠它）
+# 不会自动进老 `.env`。`env:init` 只补**没有**的键、绝不覆盖已有的（见 scripts/env-init.mjs），
+# 正好补上这一步，且失败也不阻断启动（是「能补就补」的增强，不是硬依赖）。
+Write-Host ">>> pnpm env:init" -ForegroundColor Yellow
+& pnpm env:init
+if ($LASTEXITCODE -ne 0) {
+    Say-Warn "pnpm env:init 未能补齐 .env（exit=$LASTEXITCODE），不影响启动；需要某可选键时再手动补。"
 }
 
 # ── 5) 检查 / 安装依赖 node_modules ───────────────────────────

@@ -13,7 +13,7 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | bundleBudget | premerge | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | bundleBudget | dailyAttendance | premerge | all   (default all)
 
 Note on `premerge`: it is registered with Run=$false, i.e. NOT part of `all`.
 The platform squashes on merge (the local hook never sees that merge) and there
@@ -37,7 +37,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "bundleBudget", "premerge", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "bundleBudget", "dailyAttendance", "premerge", "all")]
   [string]$Mode = "all"
 )
 
@@ -128,6 +128,13 @@ $Blocks = @(
   # （形态 C 兜底），所以这条更准确地说是一份**按需入口**。
   @{ Name = "bundleBudget"; Label = "Bundle size budget (client chunk gzip total + file count ratchet)";
      Cmd = "node"; Args = @("scripts\check-bundle-budget.cjs"); Run = $false }
+  # **每日那一跑的出勤**（ISSUE #2114，规范 §13.5.23）。与 quality-gate.mjs 的
+  # GATES.dailyAttendance 同批同步。Run=$false：判据要上网问平台（一次 get-build-logs +
+  # 逐格详情），把网络请求放进「每次完整验证」是另一回事 —— §13.5.13 同口径：判据自身
+  # 不做网络请求，「现在去不去问平台」是人的动作。出口：verify-quality.ps1
+  # -Mode dailyAttendance。三态退码里 2 = 没结论 / 取不到读数，不算绿。
+  @{ Name = "dailyAttendance"; Label = "Daily tier attendance (did the last scheduled run actually execute)";
+     Cmd = "node"; Args = @("scripts\check-daily-attendance.mjs"); Run = $false }
   # **合并前的固定动作**（规范 §13.6.2；ISSUE #1611 拍板）。与 quality-gate.mjs 的
   # GATES.premerge 同批同步。Run=$false：平台侧 squash 合并不跑本地钩子、#623 之后
   # 也无 CI 兜底，所以「我的分支绿 → master 绿」那一跳的三条判据（复算这一批 /
