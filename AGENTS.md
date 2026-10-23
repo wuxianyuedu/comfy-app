@@ -65,7 +65,7 @@
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs`                                                                                                                                                                    | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs`                                                                                                                                                       |
 | 跨平台行为 / 端口与文档                                               | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1                                                                                                                                        |
 | 构建与打包                                                            | `scripts/build-desktop.mjs`、`tools/**`                                                                                                                                                                                         | §7、§8                                                                                                                                                                                                                                                                                          |
-| 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**                                                                                                                                        | §12.18（复用优先·写之前先查）、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                                                     |
+| 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                            | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
 
@@ -256,6 +256,25 @@
     前置判断只用一条命令：`pnpm check:toolchain`（它现在会正面回答「能不能装、装多久、
     装完能跑什么」，且 `node_modules` 判据与启动器**同一个实现**）。答「不可以」的
     情况只有一种：`node` / `pnpm` 本身不可用 —— 那时报的是工具链，不是依赖。
+
+27. **可复用的逻辑，能做成工具的就做成工具**（§12.20）：一段**动作**被手工执行到第二次，
+    它就该有名字——`pnpm <动词>` / `scripts/<名>.mjs` / `tools/<分类>/<名>.ps1`；第三次还在
+    人肉敲同一串命令是缺陷不是习惯。与硬规则 24 的分工：24 管**代码落笔前**（别抄实现），
+    本条管**流程面**（别重复拼命令）—— 代码抄一份的代价是行数与漂移，命令手敲到第三次的代价是
+    **每次都可能重新踩进同一个坑，而坑里没有任何一行代码可 blame**。`pnpm ship` 是这条的标本：
+    它之前「分支 → 提交 → push → PR → 等 CI → 合并」由每个执行者临时手写一遍，其中一套实测把
+    平台信封上的 HTTP `status: 200` 读成流水线终态（非 JSON 输出里两个字段同名，`grep '^status:'`
+    恒取到 200），于是对一条从没跑起来的 build 白轮询几十次。
+    **抽的门槛**：≥2 次真实发生过的手工执行，或明确马上有第 2 次；只做了一次、看不出重复的，先把
+    那一次的正确走法写进文档，别急着写脚本（一次性脚本正是第二轮子的主要来源）。
+    **四条不许**：入口里不另立第二套判定（结论必须来自既有执行者的原值）、不藏 `--no-verify`
+    那类绕过通道、降档/跳过不许被读成「全套过了」、效应不许只转述自己的 stdout（丢 stderr 是
+    这一族最重的事故）。**登记面早有执行者**：不进 `check:all` 的档 ⇒ `quality-gate.mjs` 的 `GATES`
+    或 `scripts/.on-demand-duties.json`（`check-on-demand-duties.cjs` 双向核对）；是判据的 ⇒
+    `check-gate-executors.cjs`（无执行者当场红）；`.ps1` 入口 ⇒ `check-ps1-consistency.mjs`。
+    **不新写**「文档里的 `pnpm <名>` 必须存在于 `scripts`」那条对账判据：本批实测扫 48 份文档得
+    52 处命中，几乎全是三类误报（`pnpm tauri` 那类 `node_modules/.bin` 二进制名、散文里提到 pnpm
+    这个词、以及「某入口已被撤销」的历史叙述）—— 名字空间是三层，判据只比得到一层。
 
 ## 快速排障
 
