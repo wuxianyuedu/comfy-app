@@ -91,9 +91,13 @@ type StoryShape = {
 
 type StoryModule = { default?: MetaShape } & Record<string, unknown>;
 
-const files = import.meta.glob("../src/components/ui/*.stories.tsx", {
+/* 断言**不直接挂在泛型调用上**：`@typescript-eslint/no-unnecessary-type-assertion`
+ * 会认「泛型调用的类型实参可从断言推断」，要求把类型写进 `glob<…>`（而这份 glob 的
+ * 泛型签名随 vite 版本变，写进去反而脆）。先落到变量再断言，形状不变、也不触发那条规则。 */
+const globbed = import.meta.glob("../src/components/ui/*.stories.tsx", {
   eager: true,
-}) as Record<string, StoryModule>;
+});
+const files = globbed as Record<string, StoryModule>;
 
 /** 页面级规则：判的是「一整页」，对单枚裸渲染的组件没有意义（见文件头第 ② 条）。 */
 const PAGE_SCOPE_RULES_OFF = [
