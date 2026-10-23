@@ -29,6 +29,7 @@
  * 脱敏回读（`getConfigForClient`）全部真实跑。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as LoggerModule from "~/lib/core/logger";
 
 import {
   remoteModelEntryFromDraft,
@@ -47,15 +48,17 @@ import { makeCtx } from "./helpers/trpc";
 import { throughJsonWire } from "./helpers/wire-contract";
 
 vi.mock("~/server/db", async () => {
-  const { createTestDb } = await import("./helpers/test-db");
-  return { db: createTestDb() };
+  const { dbMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return dbMockBoundary();
 });
-vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
-}));
-vi.mock("~/lib/core/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
+vi.mock("~/server/better-auth", async () => {
+  const { sessionMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return sessionMockBoundary();
+});
+vi.mock("~/lib/core/logger", async (importOriginal) => {
+  const { loggerMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return loggerMockBoundary(await importOriginal<typeof LoggerModule>());
+});
 
 const createCaller = createCallerFactory(llmRouter);
 const tdb = getTestDb();

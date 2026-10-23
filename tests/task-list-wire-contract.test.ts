@@ -55,16 +55,17 @@ vi.mock("~/trpc/vanilla", () => ({
 }));
 
 vi.mock("~/server/db", async () => {
-  const { createTestDb } = await import("./helpers/test-db");
-  return { db: createTestDb() };
+  const { dbMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return dbMockBoundary();
 });
-vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
-}));
-vi.mock("~/lib/core/logger", async (importOriginal) => ({
-  ...(await importOriginal<typeof LoggerModule>()),
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
+vi.mock("~/server/better-auth", async () => {
+  const { sessionMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return sessionMockBoundary();
+});
+vi.mock("~/lib/core/logger", async (importOriginal) => {
+  const { loggerMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return loggerMockBoundary(await importOriginal<typeof LoggerModule>());
+});
 
 const tdb = getTestDb();
 const createCaller = createCallerFactory(taskRouter);
