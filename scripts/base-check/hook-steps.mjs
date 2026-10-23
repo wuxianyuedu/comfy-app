@@ -200,6 +200,22 @@ export function groupSteps(hookPath = HOOK) {
 }
 
 /**
+ * 只对「本次改了什么」作答、**且没有别的入口**的那些步骤。
+ *
+ * 这一族与「带 `--staged` / `--changed` 的步骤」不是一回事，区别在**能不能剥**：
+ *   · 带 `--staged` 的步骤，剥掉那个旗标之后它判的是**全仓**（`fullTreeArgv()`
+ *     做的事）⇒ 判决面还在，判据仍然有效；
+ *   · 这一族**没有可剥的旗标** —— 它们直接读暂存区（`shell-gate` 就是读暂存区那份
+ *     清单），所以在「暂存区为空」的地方（平台流水线）它们**恒绿且无输出**。
+ *
+ * ⇒ 名单在此导出，因为**两处都要用同一个问法**：「这一步的判决面是不是只存在于
+ * 「本次改动」上」—— 合并前复算据此**不收**它（`mayDecideOnCleanSnapshot`），
+ * 平台复合档据此**换判决面**或**单列成没判**（`scripts/ci-heavy-gates.mjs`）。
+ * 两处各写一份名单就会漂开，而漂开的形态是「一处判了、另一处没判」。
+ */
+export const CHANGED_SCOPED = ["scripts/shell-gate.mjs"];
+
+/**
  * 一条指令**能不能在干净的上游快照上判决** —— 判据是它的**参数形态**，不是名字。
  *
  * 为什么按参数而不按名字：名字是自由的（`check-*` / `*-gate` / `storybook-check`），
@@ -218,7 +234,6 @@ export function mayDecideOnCleanSnapshot(argv) {
   const joined = argv.join(" ");
   if (argv.some((a) => a === "--staged" || a === "--changed")) return false;
   /** 只对「本次改了什么」作答的步骤（它们的判决依赖暂存区，干净快照里没有）。 */
-  const CHANGED_SCOPED = ["scripts/shell-gate.mjs"];
   if (CHANGED_SCOPED.some((p) => joined.includes(p))) return false;
   /** `base-check` 自己：复算里再复算会递归。 */
   if (argv.some((a) => a.endsWith("base-check.mjs"))) return false;

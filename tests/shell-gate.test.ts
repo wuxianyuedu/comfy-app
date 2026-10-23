@@ -660,3 +660,93 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     expect([0, 1]).toContain(cli.status);
   });
 });
+
+/**
+ * `--base` 形态：以 PR diff 为判决面（ISSUE #2224）。
+ *
+ * 这一族治的是「平台上恒绿且无输出」：本地形态的判决面是**暂存区**，而平台流水线
+ * 没有暂存区 ⇒ `touchesShell` 恒假 ⇒ 这一步退 0 且一个字都不打 ⇒ 硬规则 5 那两条
+ * （改了壳必须重编 / 壳内那批 `#[test]`）在平台侧**没有执行者**，而账面全绿。
+ */
+describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面）", () => {
+  const temps: string[] = [];
+  afterEach(() => {
+    for (const dir of temps.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** 一个「不是 git 检出、也没有编出来的壳」的目录。 */
+  function emptyRoot(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-base-"));
+    temps.push(dir);
+    return dir;
+  }
+
+  it("没碰壳 ⇒ 退 0，且 CLI 念出「本次没有壳改动」（不许返回 0 且无输出）", () => {
+    const cli = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--base", "HEAD"],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(cli.status).toBe(0);
+    expect(cli.stdout).toContain("本次没有壳改动");
+  });
+
+  it("基线取不到 ⇒ 退 2（没跑起来），且说清是「没跑起来」而不是「判红」", () => {
+    const cli = spawnSync(
+      process.execPath,
+      [
+        path.join(ROOT, "scripts", "shell-gate.mjs"),
+        "--base",
+        "no-such-ref-xyz",
+      ],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(cli.status).toBe(2);
+    expect(cli.stderr).toContain("没跑起来");
+  });
+
+  it("碰了 Rust 而 cargo 不在 ⇒ 退 2（没跑起来），不是退 1（判出失败）", () => {
+    const r = runGate({
+      staged: ["src-tauri/src/lib.rs"],
+      root: emptyRoot(),
+      cargoRunner: () => null,
+      mode: "base",
+    });
+    expect(r.exitCode).toBe(2);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual(["cargo:missing"]);
+  });
+
+  it("本地形态不变：同样「cargo 不在」退 1（那边确实该拦住提交）", () => {
+    const r = runGate({
+      staged: ["src-tauri/src/lib.rs"],
+      root: emptyRoot(),
+      cargoRunner: () => null,
+    });
+    expect(r.exitCode).toBe(1);
+  });
+
+  it("检出里没有编出来的壳 ⇒ 时效**不判**（平台侧不编壳），并把这件事说出来", () => {
+    const r = runGate({
+      staged: ["src-tauri/tauri.conf.json"],
+      root: emptyRoot(),
+      mode: "base",
+    });
+    expect(r.exitCode).toBe(0);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
+      "cargo:skipped",
+      "freshness:skipped",
+    ]);
+  });
+
+  it("cargo 失败 ⇒ 那个码原样交出去（退 2 只属于「没跑起来」）", () => {
+    const r = runGate({
+      staged: ["src-tauri/src/lib.rs"],
+      root: emptyRoot(),
+      cargoRunner: () => 7,
+      mode: "base",
+    });
+    expect(r.exitCode).toBe(7);
+  });
+});
