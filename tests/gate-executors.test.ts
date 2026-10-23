@@ -81,7 +81,7 @@ const { test, expect } = defineGateRepo({
   },
 });
 describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
-  test("本仓库原样应通过：两条 canonical 棘轮在册为按需召唤", () => {
+  test("本仓库原样应通过：按需召唤那些条在册为按需召唤", () => {
     // 在真仓库根跑（不建临时区）：这条断言的对象是「本仓库当前的判据-执行者关系」，
     // 而临时区里没有 `.githooks/` / `package.json` / `tests/`，所有靠它们当执行者的
     // 脚本都会被判成无执行者 —— 那是用例环境的问题，不是仓库的问题。
@@ -90,7 +90,17 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
       [join(REPO_ROOT, "scripts", SCRIPT_NAME)],
       { cwd: REPO_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
-    expect(output).toContain("按需召唤 2");
+    /* 条数从台账现算，不写死：写死一份计数就等于再造一条「加了条目忘了改数」的
+     * 会漂的判据（同一族先例见 #2135 那次钩子步数被钉死）。 */
+    const onDemand = JSON.parse(
+      readFileSync(
+        join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
+        "utf8",
+      ),
+    ) as { onDemand: Record<string, unknown> };
+    expect(output).toContain(
+      `按需召唤 ${Object.keys(onDemand.onDemand).length}`,
+    );
     expect(output).toContain("报告型自称在跑 0");
   });
 

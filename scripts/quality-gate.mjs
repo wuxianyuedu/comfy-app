@@ -166,6 +166,27 @@ const GATES = {
    * 它与 `check:all` **不互相替代**：后者是更宽的那一档（全量单测 + 覆盖率 +
    * 依赖审计），本条判的是这一跳。
    */
+  /**
+   * **每日那一跑的出勤**（ISSUE #2114 出路 1 / 规范 §13.5.23 末节）：答的是
+   * 「上一次每日派发到底有没有执行」，而不是「那一格里哪条判据红了」—— 后者归
+   * `ci-build-readout.mjs`，这一档整个复用它的四档判定，不重写第二份。
+   *
+   * **它不在 `all` 里**（`run: false`）：判据要上网问平台（一次 `get-build-logs` +
+   * 至多三跑的逐格详情）。把网络请求放进「每次完整验证」是另一回事 ——
+   * §13.5.13 那条同口径：判据自身不做网络请求，「现在去不去问平台」是人的动作。
+   * 三态退码里 **2 = 没结论 / 取不到读数，不算绿**（「被取消」与「拿不到测量」都不许
+   * 被读成红或被读成绿，那两种误读本案都发生过）。
+   *
+   * 什么时候该跑：任何一次拿「平台那一档在跑」当本地豁免理由的争论现场
+   * （`FRESHNESS_TRACKS[*].ciStage` 那串豁免的前提就是这句话），以及每日档换了时刻
+   * 或撤了格之后的第一次核对。出口：`pnpm check:daily-attendance`
+   * / `pnpm check:all --mode dailyAttendance`。
+   */
+  dailyAttendance: {
+    label: "Daily tier attendance (did the last scheduled run actually execute)",
+    args: ["../scripts/check-daily-attendance.mjs"],
+    run: false,
+  },
   premerge: {
     label: "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
     args: ["../scripts/premerge-check.mjs"],

@@ -1,0 +1,355 @@
+/**
+ * `scripts/check-daily-attendance.mjs` —— 「每日那一跑到底有没有执行」那条判据的判断面
+ * （ISSUE #2114 出路 1；口径在规范 §13.5.23 末节）。
+ *
+ * ## 它守的是什么
+ *
+ * 三档重档与 `ESLint 零警告` 的唯一执行者是平台上的每日那一跑，而「唯一执行者」这件事
+ * 此前只有**在册**那一半有人判（`no-platform-ci-config` 数的是格名在不在清单里）。
+ * 五派发零跑完的那四天里账面全绿 —— 于是那几档的本地豁免挂在一个没有任何判据在守的事实上。
+ * 本文件判的是补上之后的那一半：**结论必须跟着读数走，而不是跟着「配置里有这格」走**。
+ *
+ * ## 这里能判什么、不能判什么
+ *
+ * **不能**判「平台今天有没有把那一跑派出来」—— 那要网络，而判据自身不做网络请求
+ * （§13.5.13 同口径）。所以这里全部用**注入的读数**：真实命令的那一跳由
+ * `--from` 那条用例真起一次进程（读一份落盘的 JSON，不碰网络），
+ * 剩下的形状判断都在纯函数上做。
+ *
+ * **能**判的五件：
+ *   ① 绿的一次派发 = 出勤；
+ *   ② 四种「没跑成」的死法各自落到**正确的档**（真失败 1 / 被取消 2 / 没有派发 1 /
+ *     取不到逐格 2）—— 尤其「被取消」不许落在 1：那一跑没验证过任何产物，
+ *     说它红就是替平台编一个不存在的产物问题（同 `ci-build-readout.mjs` 那条口径）；
+ *   ③ 绿的但超出窗口 = 缺勤（这是「每天一次」这件事本身的账）；
+ *   ④ **哪些事件算每日派发**：按 `crontab:` 前缀认（时刻 10-22 一天换过两次，
+ *     写死钟点的判据第二天就会自己漂），三条触发口都算，而
+ *     `pull_request` / `push` / 单跑口**都不算** —— 否则「有人手点过一次单跑构建」
+ *     会被读成「每日档出勤了」，那正是本判据要拦的那种假绿；
+ *   ⑤ 逐格判定住在他处（`ci-build-readout`），这里不重抄一份。
+ */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import {
+  CODE,
+  isDailyDispatch,
+  judgeAttendance,
+  latestDailyDispatch,
+  readOffline,
+} from "../scripts/check-daily-attendance.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SCRIPT = path.join(ROOT, "scripts/check-daily-attendance.mjs");
+
+/** 2026-10-23 00:00 那一跑的真形状（第一次 `0 0` 派发，11 格全 success）。 */
+const GREEN_STAGES = [
+  { name: "Prepare", status: "success", duration: 31547 },
+  { name: "每日工具链自证", status: "success", duration: 13324 },
+  { name: "每日安装依赖", status: "success", duration: 256363 },
+  { name: "每日 Python 可用性", status: "success", duration: 3550 },
+  { name: "每日 Python 探针读数", status: "success", duration: 4177 },
+  { name: "每日同步数据库表结构", status: "success", duration: 20448 },
+  { name: "每日生产构建", status: "success", duration: 128856 },
+  { name: "每日 ESLint 零警告", status: "success", duration: 333521 },
+  { name: "每日浏览器安装", status: "success", duration: 2771 },
+  { name: "每日全量E2E", status: "success", duration: 100865 },
+  { name: "每日单元测试", status: "success", duration: 658594 },
+  { name: "BeforeEnd", status: "success", duration: 4 },
+  { name: "DebugDetection", status: "skipped", duration: 0 },
+  { name: "End", status: "success", duration: 83 },
+];
+
+/** 平台一份 stage 记录里我们要造的那几栏。 */
+interface StageFixture {
+  name: string;
+  status: string;
+  duration: number;
+}
+
+/**
+ * 造一份「sn + `get-build-status -v` 那个形状」的配对（判据吃的就是这一形）。
+ *
+ * `id` 按平台真那份补上（`stage-0` / `stage-1` …，平台自带的 `Prepare` / `BeforeEnd` /
+ * `End` / `DebugDetection` 没有这个形状）—— `classifyStages` 只把 `stage-N` 那一族算成
+ * 「本仓的格」，所以不给 id 的夹具走的是它「认不出形状就全收」的兜底支，两条路都得有样本。
+ */
+function detail(
+  sn: string,
+  event: string,
+  createTime: string,
+  stages: StageFixture[],
+  pipelineStatus = "success",
+) {
+  let seq = 0;
+  const withIds = stages.map((s: StageFixture) => {
+    const mine = /^(每日|单跑)/.test(String(s.name));
+    return {
+      ...s,
+      id: mine ? `stage-${(seq += 1) - 1}` : String(s.name).toLowerCase(),
+    };
+  });
+  return {
+    sn,
+    json: {
+      data: {
+        sn,
+        event,
+        createTime,
+        status: pipelineStatus === "success" ? "success" : "error",
+        pipelinesStatus: {
+          [`${sn}-001`]: {
+            id: `${sn}-001`,
+            name: "每日生产构建",
+            status: pipelineStatus,
+            labels: [{ key: "cpus", value: ["16"] }],
+            stages: withIds,
+          },
+        },
+      },
+    },
+  };
+}
+
+/** 列表里的一项（`get-build-logs` 的形状）。 */
+function listed(
+  sn: string,
+  event: string,
+  createTime: string,
+  status = "success",
+) {
+  return { sn, event, createTime, status };
+}
+
+const NOW = Date.parse("2026-10-23T02:00:00.000Z");
+const RECENT = "2026-10-22T16:00:17.000Z"; // = 本地 10-23 00:00:17
+
+describe("daily-attendance：出勤结论跟着读数走", () => {
+  it("窗口内一次逐格全绿的派发 = 出勤（退 0）", () => {
+    const got = judgeAttendance({
+      builds: [listed("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT)],
+      details: [
+        detail("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT, GREEN_STAGES),
+      ],
+      now: NOW,
+    });
+    expect(got.code, got.headline).toBe(CODE.PRESENT);
+    expect(got.verdict).toBe("present");
+    expect(got.headline).toContain("出勤 ✓");
+    /* 「几格有结论」只数本仓那几格（`stage-N` 那一族）：平台自带的 Prepare / BeforeEnd /
+     * End / DebugDetection 不计入，否则读数会把「十一格」念成永远对不上的数。 */
+    expect(got.evidence.join("\n")).toContain("10 格有结论");
+    /* `DebugDetection` 是平台自带那一档（永远 skipped），不许被算成「有格没跑」。 */
+    expect(got.evidence.join("\n")).not.toContain("DebugDetection");
+  });
+
+  it("绿的但已经超出窗口 = 缺勤（每天一次这件事本身就是账）", () => {
+    const stale = "2026-10-20T16:00:17.000Z"; // 距 now 54 小时
+    const got = judgeAttendance({
+      builds: [listed("cnb-old", "crontab: 0 0 * * *", stale)],
+      details: [detail("cnb-old", "crontab: 0 0 * * *", stale, GREEN_STAGES)],
+      now: NOW,
+    });
+    expect(got.code, got.headline).toBe(CODE.ABSENT);
+    expect(got.headline).toContain("没有下一次");
+  });
+
+  it("被取消那一跑落在「没结论」而不是「红」（#2114 那条锁退化的形状）", () => {
+    const stages = [
+      { name: "Prepare", status: "success", duration: 29083 },
+      { name: "单跑构建·安装依赖", status: "success", duration: 214977 },
+      { name: "单跑构建·同步数据库表结构", status: "cancel", duration: 86 },
+      { name: "单跑构建·生产构建", status: "skipped", duration: 0 },
+      { name: "BeforeEnd", status: "success", duration: 3 },
+      { name: "End", status: "success", duration: 81 },
+    ];
+    const got = judgeAttendance({
+      builds: [
+        listed("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, "error"),
+      ],
+      details: [
+        detail(
+          "cnb-lm1-1k5h1otqt",
+          "crontab: 0 0 * * *",
+          RECENT,
+          stages,
+          "cancel",
+        ),
+      ],
+      now: NOW,
+    });
+    expect(got.code, got.headline).toBe(CODE.NO_VERDICT);
+    expect(got.headline).toContain("被取消");
+    expect(got.headline).toContain("不是去查产物");
+    /* 「下面那格根本没跑」必须被点名 —— 它才是这条读数的人话部分。 */
+    expect(got.evidence.join("\n")).toContain("根本没跑的格");
+  });
+
+  it("起步即败（整条只跑到 Prepare）= 缺勤，不是「取不到」", () => {
+    const stages = [
+      { name: "Prepare", status: "error", duration: 300 },
+      { name: "每日工具链自证", status: "skipped", duration: 0 },
+      { name: "每日安装依赖", status: "skipped", duration: 0 },
+    ];
+    const got = judgeAttendance({
+      builds: [
+        listed("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, "error"),
+      ],
+      details: [
+        detail(
+          "cnb-7kr-1k5as018h",
+          "crontab: 0 4 * * *",
+          RECENT,
+          stages,
+          "error",
+        ),
+      ],
+      now: NOW,
+    });
+    expect(got.code, got.headline).toBe(CODE.ABSENT);
+    expect(got.verdict).toBe("absent");
+  });
+
+  it("列表里根本没有每日派发 = 缺勤，并且说清认的是哪三个事件", () => {
+    const got = judgeAttendance({
+      builds: [
+        listed("cnb-x", "pull_request", RECENT),
+        listed("cnb-y", "push", RECENT),
+      ],
+      details: [],
+      now: NOW,
+    });
+    expect(got.code, got.headline).toBe(CODE.ABSENT);
+    expect(got.headline).toContain("一次每日类派发都没有");
+  });
+
+  it("最近那一次取不到逐格读数 = 未校验（拿不到测量 ≠ 红的）", () => {
+    const got = judgeAttendance({
+      builds: [listed("cnb-z", "api_trigger_daily", RECENT)],
+      details: [],
+      now: NOW,
+    });
+    expect(got.code, got.headline).toBe(CODE.NO_VERDICT);
+    expect(got.headline).toContain("未校验");
+  });
+
+  /**
+   * 认事件的这一半单独钉：它决定这条判据会不会自己漂。
+   *
+   * `crontab` 的事件名**含小时**，而 2026-10-22 一天里换了两次（`0 4` → `0 2` → `0 0`）——
+   * 任何按整串名字写的判据在第二次换时刻时就会静默变成「永远读不到派发」。
+   */
+  it("按前缀认每日派发；单跑与 PR 跑绿都不算出勤", () => {
+    for (const event of [
+      "crontab: 0 4 * * *",
+      "crontab: 0 2 * * *",
+      "crontab: 0 0 * * *",
+      "web_trigger_daily",
+      "api_trigger_daily",
+    ]) {
+      expect(isDailyDispatch({ event }), event).toBe(true);
+    }
+    for (const event of [
+      "pull_request",
+      "push",
+      "api_trigger_build",
+      "web_trigger_build",
+      "api_trigger_daily_x", // 前缀相似但不是那一口：整串相等才算
+    ]) {
+      expect(isDailyDispatch({ event }), event).toBe(false);
+    }
+    /* 多条里挑最近的那一条 —— 拿旧的当「上一次」会把缺勤读成出勤。 */
+    const picked = latestDailyDispatch([
+      listed("old", "crontab: 0 4 * * *", "2026-10-20T16:00:00.000Z"),
+      listed("new", "crontab: 0 0 * * *", RECENT),
+      listed("pr", "pull_request", "2026-10-23T01:00:00.000Z"),
+    ]) as { sn: string } | null;
+    expect(picked?.sn).toBe("new");
+  });
+});
+
+describe("daily-attendance：命令行那一跳", () => {
+  /** 真起进程，读一份落在临时目录里的 JSON —— 不碰网络，但走的是生产入口本身。 */
+  function runCli(
+    args: string[],
+    files?: Record<string, string>,
+  ): { code: number | null; out: string } {
+    const dir = mkdtempSync(path.join(tmpdir(), "daily-attendance-"));
+    try {
+      for (const [name, text] of Object.entries(files ?? {})) {
+        writeFileSync(path.join(dir, name), text, "utf8");
+      }
+      const got = spawnSync(
+        process.execPath,
+        [SCRIPT, ...args.map((a: string) => a.replace("@DIR@", dir))],
+        { encoding: "utf8", cwd: ROOT },
+      );
+      return {
+        code: got.status,
+        out: `${got.stdout ?? ""}${got.stderr ?? ""}`,
+      };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("--from 一份列表：绿的那一次退 0，逐格清单一行不落", () => {
+    const body = JSON.stringify({
+      data: [listed("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT)],
+    });
+    /* 列表项里没有 pipelinesStatus ⇒ 判「取不到逐格」那一档（退 2），
+     * 这一条钉的是「只有一张列表时不许冒充出勤」。 */
+    const only = runCli(["--from", "@DIR@/list.json", "--json"], {
+      "list.json": body,
+    });
+    expect(only.code, only.out).toBe(CODE.NO_VERDICT);
+    expect(only.out).toContain("取不到逐格读数");
+
+    /* 同一条 sn 换成带逐格的详情 ⇒ 出勤。 */
+    const detailFile = runCli(["--from", "@DIR@/one.json", "--json"], {
+      "one.json": JSON.stringify(
+        detail("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT, GREEN_STAGES)
+          .json,
+      ),
+    });
+    expect(detailFile.code, detailFile.out).toBe(CODE.PRESENT);
+    expect((JSON.parse(detailFile.out) as { verdict: string }).verdict).toBe(
+      "present",
+    );
+
+    /* **真**那份 `get-build-status -v` 只有 `status` + `pipelinesStatus`（实测），
+     * 认不出它是哪一类派发、也认不出它是什么时候落的 ⇒ 必须落到「未校验」，
+     * 而不是被当成一次出勤 —— 这条钉的是「凑一份形状像的 JSON 就能判绿」这条路被封死。 */
+    const realShaped = runCli(["--from", "@DIR@/status-only.json", "--json"], {
+      "status-only.json": JSON.stringify({
+        data: {
+          status: "success",
+          pipelinesStatus: { "p-001": { stages: GREEN_STAGES } },
+        },
+      }),
+    });
+    expect(realShaped.code, realShaped.out).toBe(CODE.NO_VERDICT);
+    expect(realShaped.out).toContain("认不出它是不是每日派发");
+  });
+
+  it("--from 指不到文件时退 2 并说清，而不是退 0 什么都不打", () => {
+    const got = runCli(["--from", "@DIR@/没有这个文件.json"]);
+    expect(got.code, got.out).toBe(CODE.NO_VERDICT);
+    expect(got.out).toContain("未校验");
+    expect(got.out).toContain("--from 那个路径不存在");
+  });
+
+  it("readOffline 认得列表与单跑两种形状（第三种要出声）", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "daily-attendance-shape-"));
+    try {
+      const weird = path.join(dir, "weird.json");
+      writeFileSync(weird, JSON.stringify({ hello: "world" }), "utf8");
+      expect(readOffline(weird).failure).toContain("既不是列表也不是单跑详情");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

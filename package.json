@@ -42,6 +42,7 @@
     "check:all": "node scripts/quality-gate.mjs",
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",
     "check:freshness": "node scripts/freshness-gate.mjs --ledger",
+    "check:daily-attendance": "node scripts/check-daily-attendance.mjs",
     "check:app-version": "node scripts/check-app-version.cjs",
     "check:ci-incremental": "node scripts/ci-incremental-gates.mjs --check",
     "ci:image-plan": "node scripts/ci-image-plan.mjs",
