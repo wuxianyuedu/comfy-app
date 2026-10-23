@@ -99,6 +99,7 @@ import {
   gitUser,
   isWholeTrackRun,
   notWholeTrackNotice,
+  pushFreshnessLedger,
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
@@ -652,6 +653,18 @@ async function main(argv) {
     how: mode.start ? "PNPM_START=1 pnpm test:e2e" : TRACK.run,
   });
   process.stdout.write(`[e2e-run] ✓ 全量 e2e 通过\n[e2e-run] ${note}\n`);
+  /* 回写机器自有分支 `ci/freshness-ledger`（ISSUE #2247）；仅每日档置
+   * `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op。 */
+  const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["e2e"] });
+  if (freshPush.pushed) {
+    process.stdout.write(
+      "[e2e-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
+    );
+  } else if (freshPush.reason && freshPush.reason !== "opt-out") {
+    process.stdout.write(
+      `[e2e-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
+    );
+  }
   return 0;
 }
 
