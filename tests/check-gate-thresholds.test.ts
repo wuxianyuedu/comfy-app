@@ -316,6 +316,59 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
   });
 });
 
+/* ── `export const` 也在覆盖面内（ISSUE #2236）───────────────────────────────
+ *
+ * 「一条阈值承不承重」与「它被不被别的文件 import」是两件事。旧写法的两处正则都只认
+ * 行首 `const`，于是 `export const` 形态整体在面外 —— 本仓自己先撞上：新常量先写成
+ * `export const`，账一个字都没念它，改成非导出才进得来。
+ * 两处消费必须同一把尺子：只放宽扫面会造出「这份文件被扫到了，但账上那条找不到」这种
+ * 自相矛盾的红；只放宽取值则永远不会新抓到东西。所以三个方向各测一次。
+ */
+describe("账的覆盖面：export 前缀不是挡箭牌", () => {
+  const NEW_FILE = "scripts/check-exported-gate.cjs";
+  const entry: Entry = {
+    file: NEW_FILE,
+    const: "GATE_LIMIT",
+    value: 42,
+    kind: "threshold",
+    strictness: "larger-is-looser",
+  };
+  const runWith = (src: string, entries: Entry[]) =>
+    analyze({
+      entries,
+      readSource: sources({ [NEW_FILE]: src }),
+      minEntries: 1,
+      scanFiles: [NEW_FILE, "scripts/check-a.cjs"],
+    });
+
+  it("未入账的 `export const` ⇒ 红并点名那个数", () => {
+    const r = runWith("export const GATE_LIMIT = 42;\n", baseEntries());
+    expect(
+      r.problems.some((p: string) => p.includes("GATE_LIMIT")),
+      "`export const` 形态的阈值仍在面外（#2236 那一格）",
+    ).toBe(true);
+  });
+
+  it("已入账的它被改大 ⇒ 漂移红且念成「变松」（取值那一路也认 export）", () => {
+    const r = runWith("export const GATE_LIMIT = 90;\n", [
+      ...baseEntries(),
+      entry,
+    ]);
+    const drift = r.problems.find((p: string) => p.includes("GATE_LIMIT"));
+    expect(drift, "取值不认 export 时，放宽后的面会恒红").toBeTruthy();
+    expect(drift).toContain("源码 90 ≠ 账 42");
+    expect(drift).toContain("变松");
+  });
+
+  it("账与源码一致时不许有红（同一把尺子的第三向）", () => {
+    const r = runWith("export const GATE_LIMIT = 42;\n", [
+      ...baseEntries(),
+      entry,
+    ]);
+    expect(r.problems, r.problems.join("\n")).toEqual([]);
+  });
+});
+
 describe("真仓自证：这本账现在必须与源码一致", () => {
   it("账里每条都能在源码里定位到，且数值相等", () => {
     const root = path.resolve(__dirname, "..");

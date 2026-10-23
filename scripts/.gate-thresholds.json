@@ -256,6 +256,24 @@
       "kind": "report",
       "strictness": "n/a",
       "why": "组 C 慢到某个点才补一句「怎么降负载」的话术阈值。纯话术门槛，不参与判定，也不参与退出码。"
+    },
+    {
+      "file": "scripts/run-affected-tests.mjs",
+      "const": "SAFE_ARGV_BUDGET",
+      "value": 24000,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "一次 spawn 的命令行预算（Win32 上限 32767 留出余量）。它只决定「分几块跑」，不决定任何一条用例的判定 —— 调小是多次启动、调大是顶穿风险，两边都不放宽判据。"
+    },
+    {
+      "file": "scripts/run-affected-tests.mjs",
+      "const": "DEFAULT_MAX_WORKERS",
+      "value": 4,
+      "unit": "并发",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "钩子档 vitest 的默认并发（8 逻辑核、A/B/D 同时在跑那一档的实测值）。§13.6.4 那条口径明写「降负载的杠杆是并发，不是预算」，所以它是负载旋钮而不是判定阈值 —— 调它不改变任何一条断言的松紧。"
     }
   ],
   "$notCovered": {
