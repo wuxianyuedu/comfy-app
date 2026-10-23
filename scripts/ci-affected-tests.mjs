@@ -43,109 +43,27 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { changedPathsFromNameStatus } from "./affected-tests.mjs";
+import { resolveChangedFiles } from "./changed-scope.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
-import { resolveMergeBaseRef } from "./base-check.mjs";
+
+/* 「改动面怎么算」那一跳已经搬进 `scripts/changed-scope.mjs` —— 桌面壳门禁
+ * （`scripts/shell-gate.mjs` 的 `--base` 形态）也要问同一个问题，两边各算一次
+ * 就会在某一次改动里漂开（改名的旧路径算不算？三点 diff 还是两点？）。
+ * 这里是**转出**，不是复制一份实现（§12.12 / §12.18）。 */
+export { resolveChangedFiles };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
 /**
- * 跑一条 git 命令（`{ ok, stdout }`：失败与「空输出」必须分得开 —— `git diff`
- * 没有差异时也是空输出，而那不是故障）。
- *
- * @param {string[]} args
- * @param {{cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}}} [deps]
- * @returns {{ok: boolean, stdout: string}}
- */
-function gitRun(args, deps = {}) {
-  const cwd = deps.cwd ?? ROOT;
-  const runGit =
-    deps.runGit ??
-    ((/** @type {string[]} */ a, /** @type {string} */ c) => {
-      const r = spawnSync("git", a, {
-        cwd: c,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      return {
-        ok: r.status === 0,
-        stdout:
-          r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),
-      };
-    });
-  return runGit(args, cwd);
-}
-
-/**
  * 这一次要判的改动面（仓库相对路径清单）。
+ *
+ * 实现搬进 `scripts/changed-scope.mjs`（桌面壳门禁共用同一份口径）；这里保留
+ * 它的转出，调用方的形状与行为一字未变。
  *
  * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null}} [deps]
  * @returns {{ok: true, files: string[], renamedFrom: string[], via: string} | {ok: false, reason: string}}
  */
-export function resolveChangedFiles(deps = {}) {
-  const env = deps.env ?? process.env;
-  /* ① PR 事件：平台给的目标分支 sha —— 三点 diff 就是「这个 PR 改了什么」。 */
-  const target = String(env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
-  if (target !== "") {
-    const got = gitRun(
-      ["diff", "--name-status", "-M", `${target}...HEAD`],
-      deps,
-    );
-    if (!got.ok) {
-      return {
-        ok: false,
-        reason:
-          `CNB_PULL_REQUEST_TARGET_SHA=${target} 的 diff 没跑起来` +
-          "（浅克隆 / 该 sha 不在本地对象库里；先 fetch 再跑）",
-      };
-    }
-    const via = `CNB_PULL_REQUEST_TARGET_SHA（三点 diff）`;
-    const parsed = changedPathsFromNameStatus(got.stdout);
-    return {
-      ok: true,
-      files: parsed.paths,
-      renamedFrom: parsed.renamedFrom,
-      via,
-    };
-  }
-  /* ② 非 PR 事件 / 手工触发：退回「要并进去的那条」的 merge-base 两点 diff。 */
-  const ref =
-    deps.fallbackRef !== undefined
-      ? deps.fallbackRef
-      : resolveMergeBaseRef(ROOT);
-  if (!ref) {
-    return {
-      ok: false,
-      reason:
-        "取不到 PR 目标 sha、也取不到要并进去的那条（各 remote 的 master / 本地 master）—— 先 fetch 再跑",
-    };
-  }
-  const mb = gitRun(["merge-base", ref, "HEAD"], deps);
-  if (!mb.ok || mb.stdout.trim() === "") {
-    return {
-      ok: false,
-      reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）`,
-    };
-  }
-  /* 两档都走 `--name-status -M`：`--name-only` 把 R 行压成新路径一条，
-   * 旧路径就那样从改动面上消失了 —— 而按旧路径消费该文件的用例正是靠它才被选中。
-   * 与 PR 档同一条解析（`changedPathsFromNameStatus`），不另写一份。 */
-  const got = gitRun(
-    ["diff", "--name-status", "-M", `${mb.stdout.trim()}..HEAD`],
-    deps,
-  );
-  if (!got.ok) {
-    return { ok: false, reason: `算不出 ${mb.stdout.trim()}..HEAD 的改动清单` };
-  }
-  const parsed = changedPathsFromNameStatus(got.stdout);
-  return {
-    ok: true,
-    files: parsed.paths,
-    renamedFrom: parsed.renamedFrom,
-    via: `${ref} 的分叉点`,
-  };
-}
 
 /**
  * 主流程。
