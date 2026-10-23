@@ -316,7 +316,7 @@
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, 生成态文档与源同步,
-      API 文档生成物与源同步, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
+      API 文档生成与自检, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
       零消费导出, core 出口纪律与基类纯度, 工作区出处, 重档静态判据
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
@@ -447,7 +447,7 @@
 #   · `prettier 格式` 的**扫描面** —— `src/**` + `.storybook/**` 是手写 glob，
 #     与 `check-format.cjs` 的 `IGNORE_GLOBS` 是两件事（`IGNORE_GLOBS` 是**排除**面）。
 #     ⚠️ 但 `IGNORE_GLOBS` 增删目录时**必须同批回来看这两行**；
-#   · 判据脚本**自己的触发面** —— `API 文档生成物与源同步` 的 globs 由
+#   · 判据脚本**自己的触发面** —— `API 文档生成与自检` 的 globs 由
 #     `check-docs-api.cjs` 的 `INPUT_RES` 机械反推，不手抄第二份。
 #
 # ⚠️ **「哪几条被收窄了」只有一处出处**：`scripts/ci-incremental-gates.mjs` 的
@@ -1488,7 +1488,7 @@
   #
   # ⚠️ **不带 `--staged`**：平台侧的工作区就是这次要判的那份源码，`--staged` 在这里
   # 读的是「本次暂存」、恒为空 ⇒ 这一步会恒跳过（挂了等于没挂）。这与
-  # `API 文档生成物与源同步` 那两条同一条处置，判据
+  # `API 文档生成与自检` 那两条同一条处置，判据
   # `tests/doc-check-hook-wiring.test.ts` 双向钉住（钩子里没有 + 平台侧有且是全量档）。
   #
   # ⚠️ 紧邻的 `格式化提交分离` **不许跟着挪**：那条判的是「这次提交有没有把真实改动
@@ -1519,7 +1519,8 @@
   # 实测（平台日志 `cnb-n1k-1k5h6bnm6`）：`render-doc-placeholders` / `check-doc-references`
   # 零命中，`check-docs-api.cjs` 只命中它自己的单测 —— 脚本本身一次没跑。
   # 代价是实打实的：`docs/api/**` 在无人看管下漂了 32 份（`7aae1747` 等 5 笔 `src/lib`
-  # 提交之后没人重生成），本地 `node scripts/check-docs-api.cjs --check` 现在退 1。
+  # 提交之后没人重生成）。那一族漂移在 ISSUE #2231 之后**不再有对象**了 ——
+  # 产物已从 git 里搬走，见下面那一格。
   #
   # 处置：**恢复成各自的活 stage**，并给前两格挂上**按这一格算的收窄**。
   # 为什么不是「进聚合档 + 格内收窄」：平台的 `ifModify` 是**按整格**的，而复合执行者
@@ -1532,7 +1533,7 @@
     ifModify:
       - "docs/**"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
-  - name: API 文档生成物与源同步
+  - name: API 文档生成与自检
     # ⚠️ 这 10 条**不在三根里**，但改它们会改 `docs/api/**`（ISSUE #2223）：typedoc 沿
     # import 走，而根外的文件里有**被产物引用**的类型 —— `BackupResult` 定义在
     # `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里。面判窄了 = **漏判**，
@@ -1541,6 +1542,9 @@
     # （从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），由
     # `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、
     # 而这里没有它 ⇒ 当场红。**别在这里手加一条**：加错了没人知道（那正是 #2223）。
+    #
+    # ⚠️ **产物面 `docs/api/**` 不在收窄面里**（ISSUE #2231）：产物不再进 git ⇒ 它既不在
+    # 变更文件清单里、也不会被谁改坏 ⇒ 把它当收窄面只是白占一行。
     ifModify:
       - "src/lib/**"
       - "src/server/**"
@@ -1560,8 +1564,12 @@
       - "scripts/lockfile/lock-diff.mjs"
       - "src/config/custom-nodes.ts"
       - "src/env.js"
-      - "docs/api/**"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs --check --autofix
+    # 这一格现在判的是「**生成一份 + 这份可不可用**」，不是「与源同不同步」——
+    # 产物不再进 git（ISSUE #2231），于是「提交进 git 的那份」不存在了，那个问题
+    # **没有对象**。所以这一格不再带 `--autofix`：没有「自动修完再提交」的对象，
+    # 而「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：
+    # master 上差 9 处而平台报绿）。判据的形状见 `scripts/check-docs-api.cjs` 的文件头。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
   # 覆盖率上报是**报告型**（它不判任何东西，只把 coverage/lcov.info 交给平台的上报通道；
   # 报告不在时它自己跳过而不判红）。它没有 `ifModify`：它读的不是「本次改动」，
   # 收窄它等于「只在某类改动上才记覆盖率」。
@@ -1612,7 +1620,7 @@
   # 这一格的执行面是**钩子注册表**（`.githooks/pre-commit` 的 `run` 步骤行）——
   # 那 8 条里有 4 条在 2026-10-16 就已经从钩子里撤走了，所以**这一格从来没跑过它们**
   # （2026-10-20 又把它们在配置里的原文注释掉 ⇒ 那 4 条彻底没有执行者）。
-  # 现在：`生成态文档与源同步` / `API 文档生成物与源同步` / `覆盖率上报` /
+  # 现在：`生成态文档与源同步` / `API 文档生成与自检` / `覆盖率上报` /
   # `文档引用与权威源一致` 恢复成各自的活 stage（见上面那段）；这一格只跑**钩子里
   # 真有步骤行的那几条**（`格式化提交分离` / `零消费导出` / `CP936 字形登记` …），
   # 而 `core` 那两条由「受影响用例」格的固定清单执行。

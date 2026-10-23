@@ -74,7 +74,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { readHookSteps, runGate } from "./base-check/hook-steps.mjs";
+import { CHANGED_SCOPED, readHookSteps, runGate } from "./base-check/hook-steps.mjs";
+import { resolveBaseRef } from "./changed-scope.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -84,7 +85,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  * ## 这张表**只能**收这一格真会跑的条目（2026-10-22 订正）
  *
  * 原来的表里写着 9 条，而这一格**只跑其中 3 条** —— 2026-10-20（`0c6c8897`）把
- * `生成态文档与源同步` / `API 文档生成物与源同步` / `文档引用与权威源一致` / `覆盖率上报`
+ * `生成态文档与源同步` / `API 文档生成与自检` / `文档引用与权威源一致` / `覆盖率上报`
  * 在 `.cnb.yml` 里的原文注释掉了（理由是「收进聚合档」），而**这一格读的是钩子注册表**
  * ——那几条在 2026-10-16（`8d0d0b23`）就已经从钩子里撤走 ⇒ 两次搬动方向相反、在中间
  * 对穿 ⇒ 从 2026-10-20 起那 4 条**一个执行者都没有**，而表上写着它们在。
@@ -145,12 +146,57 @@ export function fullTreeArgv(argv) {
 }
 
 /**
+ * 这一步在**这一档**（平台侧、干净快照、没有暂存区）该怎么跑。
+ *
+ * 两族的分界在**能不能剥**：
+ *
+ *   · 带 `--staged` / `--changed` 的 ⇒ 剥掉那个旗标（`fullTreeArgv()`），它判的是
+ *     **全仓**，判决面还在 ⇒ 照跑。
+ *   · `CHANGED_SCOPED` 那一族（`shell-gate`）⇒ **判决面只在「本次改动」上**，而
+ *     这一档没有暂存区 ⇒ 它恒绿且**一个字都不打**（ISSUE #2224 的现场：平台上
+ *     「改了壳必须重编」与壳内那批 `#[test]` 一个执行者都没有，账面全绿）。
+ *     处置是**换判决面**：给它一条基线，让它按「相对基线改了什么」判
+ *     （`shell-gate --base <ref>`）；拿不到基线 ⇒ 这一条**没判**，单列退 2，
+ *     **不许计入「绿」**（§13.5.25 的三态口径：没判 ≠ 绿）。
+ *
+ * @param {string[]} argv 钩子那一步的命令
+ * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
+ * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]} | {ok: false, reason: string}}
+ */
+export function heavyGateArgv(argv, deps = {}) {
+  const joined = argv.join(" ");
+  if (!CHANGED_SCOPED.some((p) => joined.includes(p))) {
+    return {
+      ok: true,
+      argv: fullTreeArgv(argv),
+      via: "全量档（剥掉本次改动旗标）",
+      notRunCodes: [],
+    };
+  }
+  const base = resolveBaseRef({ cwd: deps.cwd, env: deps.env });
+  if (!base.ok) {
+    return { ok: false, reason: base.reason };
+  }
+  return {
+    ok: true,
+    argv: [...argv, "--base", base.ref],
+    via: `以基线为判决面（${base.via}）`,
+    /* 这一族自己把「没跑起来」报成 **2**（仓库三态：0 绿 / 1 红 / 2 没跑起来），
+     * 而这一档的既有约定是 **127**（命令找不到）。两个码都归「没跑起来」——
+     * 否则「拿不到基线」会被读成「判红」。 */
+    notRunCodes: [2],
+  };
+}
+
+/**
  * 跑完整张注册表。
  *
- * @param {{cwd?: string, only?: string | null}} [io]
- * @returns {{runs: {label: string, code: number, output: string, ms: number}[], unreadable: boolean}}
+ * @param {{cwd?: string, only?: string | null, env?: Record<string, string | undefined>}} [io]
+ * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[]}[], notJudged: {label: string, reason: string}[], unreadable: boolean}}
  *   `unreadable` = 注册表本身没读出来（钩子文件不在 / 解析零条）—— 那是
  *   「本档不构成证据」，不是「没有档要跑」。
+ *   `notJudged` = **没有判决面**的那些步骤（它们在这一档恒绿且无声）——
+ *   单独一档、退 2，不计入「绿」。
  *   `ms` = 那一条的墙钟（毫秒）—— 这一格此前只打「ok / 红」，**没有任何计时**，
  *   而文件头承诺过「每条的墙钟」⇒ 48s 那一堆只有总数没有分布，无从判断该优化谁。
  */
@@ -161,7 +207,7 @@ export function runHeavyGates(io = {}) {
    * 钩子的临时目录）照样读到真仓库的 50 条 ⇒ 「没跑起来」那一档在测试里永远命中不了，
    * 而它正是这条判据唯一有牙的地方。 */
   const all = readHookSteps(path.join(cwd, ".githooks", "pre-commit"));
-  if (all.length === 0) return { runs: [], unreadable: true };
+  if (all.length === 0) return { runs: [], notJudged: [], unreadable: true };
   const steps = only
     ? all.filter(
         (s) =>
@@ -170,19 +216,27 @@ export function runHeavyGates(io = {}) {
           s.argv.join(" ").includes(only),
       )
     : all;
-  /** @type {{label: string, code: number, output: string, ms: number}[]} */
+  /** @type {{label: string, code: number, output: string, ms: number, notRunCodes: number[]}[]} */
   const runs = [];
+  /** @type {{label: string, reason: string}[]} */
+  const notJudged = [];
   for (const step of steps) {
+    const resolved = heavyGateArgv(step.argv, { cwd, env: io.env });
+    if (!resolved.ok) {
+      notJudged.push({ label: step.label, reason: resolved.reason });
+      continue;
+    }
     const started = Date.now();
-    const r = runGate(fullTreeArgv(step.argv), cwd);
+    const r = runGate(resolved.argv, cwd);
     runs.push({
       label: step.label,
       code: r.code,
       output: r.output,
       ms: Date.now() - started,
+      notRunCodes: resolved.notRunCodes,
     });
   }
-  return { runs, unreadable: false };
+  return { runs, notJudged, unreadable: false };
 }
 
 /**
@@ -234,7 +288,7 @@ export function heavyGateRegistryProblems(hookSteps) {
  *   `0` = 全绿；`1` = 有档红了；`2` = 有档**没跑起来**（`runGate` 的 127 哨兵）。
  * 「没跑起来」与「跑了且红」必须在退出码上分开，否则前者会被读成后者。
  *
- * @param {{cwd?: string, argv?: string[], log?: (line: string) => void}} [io]
+ * @param {{cwd?: string, argv?: string[], log?: (line: string) => void, env?: Record<string, string | undefined>}} [io]
  * @returns {number}
  */
 export function main(io = {}) {
@@ -269,10 +323,15 @@ export function main(io = {}) {
     return 1;
   }
 
-  const { runs } = runHeavyGates({ cwd: io.cwd, only });
+  const { runs, notJudged } = runHeavyGates({ cwd: io.cwd, only, env: io.env });
 
-  const red = runs.filter((r) => r.code !== 0 && r.code !== 127);
-  const missing = runs.filter((r) => r.code === 127);
+  /* 「没跑起来」有两族：127（命令找不到，这一档的既有约定）与**那一步自己声明的**
+   * 退出码（`shell-gate` 报「没跑起来」用 2 —— 仓库三态 0 绿 / 1 红 / 2 没跑起来）。
+   * 两个码都必须归「没跑起来」：把 2 读成「判红」是把「没判」说成「判出失败」。 */
+  /** @param {{code: number, notRunCodes: number[]}} r */
+  const isNotRun = (r) => r.code === 127 || r.notRunCodes.includes(r.code);
+  const red = runs.filter((r) => r.code !== 0 && !isNotRun(r));
+  const missing = runs.filter(isNotRun);
   if (argv.includes("--json")) {
     log(
       JSON.stringify(
@@ -280,6 +339,9 @@ export function main(io = {}) {
           total: runs.length,
           red: red.map((r) => r.label),
           notRun: missing.map((r) => r.label),
+          /* 「没有判决面」那一档：它们在这一档恒绿且无声 ⇒ 单独列出来，
+           * 不许混进 `total` 里冒充「跑过」。 */
+          notJudged: notJudged.map((n) => ({ label: n.label, reason: n.reason })),
           ms: runs.map((r) => ({ label: r.label, ms: r.ms })),
         },
         null,
@@ -298,10 +360,16 @@ export function main(io = {}) {
         for (const line of tail) log(`        ${line}`);
       }
     });
+    /* 「没判」的那些**逐条点名**：恒绿且无声是这一族最贵的形态（判据在场、
+     * 结论静默变成放行）—— 名字不念出来，就等于它还在绿里。 */
+    for (const n of notJudged) {
+      log(`[重档] ? ${n.label} —— 这一条**没判**：${n.reason}`);
+    }
   }
   const totalMs = runs.reduce((sum, r) => sum + r.ms, 0);
   log(
     `[重档] 合计 ${runs.length} 条：红 ${red.length}、没跑起来 ${missing.length}、` +
+      `没判 ${notJudged.length}、` +
       `绿 ${runs.length - red.length - missing.length}；墙钟合计 ${totalMs}ms`,
   );
   if (red.length > 0) {
@@ -311,6 +379,11 @@ export function main(io = {}) {
   if (missing.length > 0) {
     // 127 单列一档并退 2：把它并进「红」就等于宣布「判据判出失败」，而事实是它没判。
     for (const r of missing) log(`[重档] ? ${r.label} —— 没跑起来，不等于通过`);
+    return 2;
+  }
+  if (notJudged.length > 0) {
+    /* 「没判」与「没跑起来」同列（都是「没有结论」，都不是「通过」）——
+     * 这一档原先是恒绿且无声（ISSUE #2224 的现场）。 */
     return 2;
   }
   return 0;

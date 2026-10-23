@@ -36,6 +36,25 @@
  *
  * 用法：`node scripts/shell-gate.mjs`（由 `.githooks/pre-commit` 的 D 组调用）
  *      `node scripts/shell-gate.mjs --staged a b c`（手工指定清单，调试用）
+ *      `node scripts/shell-gate.mjs --base <ref>`（**以 PR diff 为判决面**，平台侧那一档）
+ *
+ * ── `--base` 形态：为什么要有它（ISSUE #2224 的现场）────────────────────
+ *
+ * 这一步的判决面是「**本次改了什么**」，而本地形态从**暂存区**取那个面 —— 平台上
+ * 没有暂存区，于是 `touchesShell` 恒假 ⇒ 这一步在平台上**恒绿且一个字都不打**
+ * （§11.10.4 那两条「改了壳必须重编」与「壳内 `#[test]`」在平台侧没有执行者）。
+ *
+ * `--base <ref>` 换一个**判决面的来源**：「相对那条基线改了什么」—— 平台上拿得到
+ * （PR 事件上平台给 `CNB_PULL_REQUEST_TARGET_SHA`，由 `scripts/changed-scope.mjs`
+ * 统一选基线，与「受影响用例」那一格同一份口径）。判决链一字未改：还是
+ * 「碰没碰壳 → 要不要 cargo test → 壳时效」。
+ *
+ * 这一形态下有**两处与本地形态不同**，且两处都因为「平台上没有那件东西」：
+ *   · **壳时效不判** —— 判据比的是「编出来的 exe 比源码旧」，而平台检出里**没有**
+ *     编出来的壳（exe 不入库）。硬判的结果是「这个 PR 只要碰了壳就必红」，而那条红
+ *     与代码无关 ⇒ 改成**不判并说出来**（时效判据的对象是本地那个 exe）。
+ *   · **cargo 缺失退 2 而不是退 1** —— 「这台机器上没有 cargo」是「这一格没跑起来」，
+ *     不是「判据判出失败」（§13.5.25 的三态口径）。本地形态保持退 1（那边确实该拦）。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -47,6 +66,7 @@ import { fileURLToPath } from "node:url";
 import { defaultShellExe, shellStaleWarning } from "./dev-launcher.mjs";
 import { whichCommand } from "./launcher-core/shell.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
+import { changedFilesForBaseRef } from "./changed-scope.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -224,8 +244,11 @@ export function freshnessProblem(root = ROOT) {
  * 并按 `kind` 收窄后读 `problem`，`unknown` 会让这些读法在 strict 下报错，
  * 而为了让断言过就地把它们 `as string` 掉，等于把类型的意义丢掉。
  *
+ * `freshness` 的 `skipped` 只出现在 `--base` 形态下：平台上没有编出来的壳，
+ * 时效判据没有对象（原因见文件头那一段）。
+ *
  * @typedef {{ kind: "cargo", state: "skipped" | "missing" | "ok" | "failed", code?: number }
- *   | { kind: "freshness", state: "ok" | "blocked", problem?: string }} GateStep
+ *   | { kind: "freshness", state: "ok" | "blocked" | "skipped", problem?: string }} GateStep
  */
 
 /**
@@ -238,13 +261,15 @@ export function freshnessProblem(root = ROOT) {
  * 形状沿用 `check-dependency-audit.mjs` 的 `runAudit({ cwd, runner, fixtureFile })`：
  * 注入只是让分支可测，出厂行为不变（§12.18，不再发明第二套）。
  *
- * @param {{staged?: string[], root?: string, cargoRunner?: () => number | null}} [options]
+ * @param {{staged?: string[], root?: string, cargoRunner?: () => number | null, mode?: "staged" | "base"}} [options]
+ *   `mode` = `"staged"`（默认，本地那一跳）/ `"base"`（平台侧以 PR diff 为判决面）。
  * @returns {{ exitCode: number, steps: GateStep[] }}
  */
 export function runGate({
   staged,
   root = ROOT,
   cargoRunner = runCargoTest,
+  mode = "staged",
 } = {}) {
   const { touchesShell, needsCargoTest } = decide(staged ?? []);
   if (!touchesShell) {
@@ -258,7 +283,10 @@ export function runGate({
     const code = cargoRunner();
     if (code === null) {
       steps.push({ kind: "cargo", state: "missing" });
-      return { exitCode: 1, steps };
+      /* `--base` 形态（平台侧）：这台机器上没有 cargo ⇒ **这一格没跑起来**（2），
+       * 不是「判据判出失败」（1）—— 判据在场、执行者不在，这两件事必须分开说
+       * （§13.5.25 的三态口径）。本地形态保持退 1：那边确实该拦住提交。 */
+      return { exitCode: mode === "base" ? 2 : 1, steps };
     }
     if (code !== 0) {
       steps.push({ kind: "cargo", state: "failed", code });
@@ -269,6 +297,14 @@ export function runGate({
     steps.push({ kind: "cargo", state: "ok" });
   } else {
     steps.push({ kind: "cargo", state: "skipped" });
+  }
+
+  /* `--base` 形态：判据比的是「编出来的 exe 比源码旧」，而平台检出里**没有**编出来的
+   * 壳（exe 不入库）⇒ 没有可比的对象。硬判的结果是「这个 PR 只要碰了壳就必红」，
+   * 而那条红与代码无关 ⇒ 不判，并把「为什么不判」说出来。 */
+  if (mode === "base" && !defaultShellExe(root)) {
+    steps.push({ kind: "freshness", state: "skipped" });
+    return { exitCode: 0, steps };
   }
 
   const problem = freshnessProblem(root);
@@ -286,7 +322,7 @@ export function runGate({
  * @param {{ exitCode: number, steps: GateStep[] }} result
  * @returns {{ to: "out" | "err", text: string }[]}
  */
-function linesFor(result) {
+function linesFor(result, mode = "staged") {
   /** @type {{ to: "out" | "err", text: string }[]} */
   const out = [];
   for (const step of result.steps) {
@@ -297,7 +333,10 @@ function linesFor(result) {
           text:
             "[shell-gate] 找不到 cargo（PATH 与 rustup 的默认安装位都没有）—— 改了 Rust 壳却编不了，等于没验证。\n" +
             "        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）\n" +
-            "        已装却仍探不到时：PATH 里加上 $CARGO_HOME/bin（rustup 默认 <home>/.cargo/bin）",
+            "        已装却仍探不到时：PATH 里加上 $CARGO_HOME/bin（rustup 默认 <home>/.cargo/bin）" +
+            (mode === "base"
+              ? "\n        这一格按「没跑起来」收（退 2）—— 判据在场、执行者不在，不是「判出失败」。"
+              : ""),
         });
       } else if (step.state === "failed") {
         out.push({
@@ -312,6 +351,15 @@ function linesFor(result) {
           text: "  · 跳过 cargo test（只改了 conf / build.rs / 启动页，Rust 源码没动）",
         });
       }
+      continue;
+    }
+    if (step.state === "skipped") {
+      out.push({
+        to: "out",
+        text:
+          "  · 壳时效不判（检出里没有编出来的壳可比 —— 平台侧不编壳，exe 不入库；" +
+          "「改了壳必须重编」的对象是本地那个 exe）",
+      });
       continue;
     }
     if (step.state === "blocked") {
@@ -329,22 +377,67 @@ function linesFor(result) {
 function main() {
   const argv = process.argv.slice(2);
   const stagedIdx = argv.indexOf("--staged");
-  // 显式清单（`--staged a b c`）是调试 / 覆写通道，调用方说了算，不过采纳过滤；
-  // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件
-  // （见 dropAdoptedShellInputs）—— 否则纯前端 PR 只要拉了 master 就被永久拦住。
-  const staged =
-    stagedIdx >= 0
-      ? argv.slice(stagedIdx + 1)
-      : dropAdoptedShellInputs(stagedFiles());
+  const baseIdx = argv.indexOf("--base");
 
-  if (!decide(staged).touchesShell) return 0;
+  /** @type {string[]} */
+  let staged;
+  /** @type {"staged" | "base"} */
+  let mode = "staged";
+  let via = "";
 
-  console.log("[shell-gate] 暂存改动命中 src-tauri 的四类壳输入，开始判：");
-  if (decide(staged).needsCargoTest) {
+  if (baseIdx >= 0) {
+    /* `--base <ref>`：判决面 = 「相对那条基线改了什么」（平台侧那一档）。 */
+    mode = "base";
+    const baseRef = (argv[baseIdx + 1] ?? "").trim();
+    if (!baseRef) {
+      console.error(
+        "[shell-gate] `--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面，" +
+          "这一格按「没跑起来」收（退 2）。",
+      );
+      return 2;
+    }
+    const got = changedFilesForBaseRef(baseRef);
+    if (!got.ok) {
+      console.error(
+        `[shell-gate] ${got.reason} —— 这一格按「没跑起来」收（退 2）。`,
+      );
+      return 2;
+    }
+    /* 改名的两侧都进面：旧路径上的壳文件被搬走了，也算「这次改了壳」。 */
+    staged = [...got.files, ...got.renamedFrom];
+    via = `基线 ${baseRef}`;
+  } else if (stagedIdx >= 0) {
+    // 显式清单（`--staged a b c`）是调试 / 覆写通道，调用方说了算，不过采纳过滤；
+    // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件
+    // （见 dropAdoptedShellInputs）—— 否则纯前端 PR 只要拉了 master 就被永久拦住。
+    staged = argv.slice(stagedIdx + 1);
+  } else {
+    staged = dropAdoptedShellInputs(stagedFiles());
+  }
+
+  const { touchesShell, needsCargoTest } = decide(staged);
+  if (!touchesShell) {
+    /* 恒绿的那条不许「返回 0 且无输出」（ISSUE #2224 处置方向 3）：平台上这一步
+     * 曾经恒绿且一个字都不打 —— 账面全绿，而「改了壳必须重编」与壳内那批
+     * `#[test]` 在平台侧一个执行者都没有。 */
+    console.log(
+      `[shell-gate] 本次没有壳改动（清单 ${staged.length} 条，未命中 src-tauri 的四类壳输入）` +
+        (mode === "base" ? `；改动面来自 ${via}` : "") +
+        "。",
+    );
+    return 0;
+  }
+
+  console.log(
+    mode === "base"
+      ? `[shell-gate] PR 改动面命中 src-tauri 的四类壳输入（${via}），开始判：`
+      : "[shell-gate] 暂存改动命中 src-tauri 的四类壳输入，开始判：",
+  );
+  if (needsCargoTest) {
     console.log("  · cargo test（src-tauri/src/** 有改动）");
   }
-  const result = runGate({ staged });
-  for (const line of linesFor(result)) {
+  const result = runGate({ staged, mode });
+  for (const line of linesFor(result, mode)) {
     if (line.to === "err") console.error(line.text);
     else console.log(line.text);
   }

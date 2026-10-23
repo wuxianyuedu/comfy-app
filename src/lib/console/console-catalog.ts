@@ -306,9 +306,9 @@ export const CONSOLE_PRESETS: ConsolePresetGroup[] = [
       },
       {
         id: "docs-check",
-        label: "API 文档同步",
+        label: "API 文档生成与自检",
         command: "pnpm run docs:check",
-        desc: "docs/api/** 是否落后于 src；落后要跑 pnpm run docs 重生成",
+        desc: "生成一份 API 文档并自检（跑得通 / 骨架齐全 / 可移植）；产物不在 git 里，本地不必跑",
       },
       {
         id: "overlay-z",

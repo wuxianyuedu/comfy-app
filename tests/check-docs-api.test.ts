@@ -1,38 +1,34 @@
 /**
- * `scripts/check-docs-api.cjs` 的判据（ISSUE #1329 收尾）。
+ * `scripts/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。
  *
- * 这一步要拦的是「`docs/api/**` 生成物静默过期」——它进 git、被 AGENTS 与主规范 §9
- * 承诺「随构建链更新」，而构建链里没有任何一处调用 `pnpm docs`，于是产物停在最初那两次
- * 提交上（收尾时实测 2627 个文件差异，还留着指向已删模块的 `lib_comfyui_markdown.html`）。
+ * 这一步现在要拦的东西换了。上一版拦的是「`docs/api/**` 生成物静默过期」——
+ * 它进 git、被 AGENTS 与主规范 §9 承诺「随构建链更新」，而构建链里没有任何一处调用
+ * `pnpm docs`，于是产物停在最初那两次提交上（收尾时实测 2627 个文件差异，还留着指向
+ * 已删模块的 `lib_comfyui_markdown.html`）。
  *
- * 三条要钉的东西，各自都能「看起来还在、实际不判」：
- *   1. **触发面**：窄了 = 该重生成的提交没生成（判据白挂）；宽了 = 每个前端提交付 31s
- *      （然后没人愿意用）。它是 typedoc `entryPoints` 的直接映射，不是启发式，
- *      所以这里逐条钉住边界（含 `.test.ts` 也在入口 glob 里这件事）。
- *   2. **三个方向**：落后 / 缺失 / 多余 —— 少报任何一个，漏掉的那类都会静默留在
- *      产物目录里（与 `render-doc-placeholders --check` 同口径，理由同 §13.5.5）。
- *   3. **比对口径**：CRLF 检出不许报两千处假红；不穿符号链接（同 §7.3 的减法口径）。
- *   4. **自动修的落法**（ISSUE #2001）：`--check --autofix` 红了就地重生成再判一次，
- *      而重生成必须**三个方向都写** —— 只覆盖「落后 / 缺失」不删「多余」时，第二轮判定
- *      照旧红，于是这一档会退化成「每次都重跑一遍 typedoc 然后再红」。
+ * ISSUE #2231 把那份产物**从 git 里搬走**了（`.gitignore` 的 `docs/api/`），于是
+ * 「提交进 git 的那份与源同不同步」这个问题**没有对象**了 —— 判据改成三件能答的事：
+ *
+ *   1. **触发面**：窄了 = 改了会改产物的东西却没触发（判据白挂）；宽了 = 每个前端提交
+ *      付 31s（然后没人愿意用）。它是 typedoc `entryPoints` 的**直接映射** ∪ 闭包叶子集，
+ *      不是启发式，所以这里逐条钉住边界（含 `.test.ts` 也在入口 glob 里这件事）。
+ *   2. **骨架齐全 + 可移植**：产物缺了默认主题每一页都引用的那几份 = 读者打开就是坏的；
+ *      产物里烤进本机绝对路径 = 这份副本换台机器就不成立。
+ *   3. **`--autofix` 不再被接受**：产物不进 git ⇒ 没有「自动修完再提交」的对象；而
+ *      「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）。
  *
  * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
  */
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   INPUT_RES,
-  applyGenerated,
-  compare,
+  SKELETON,
+  judgeProduct,
   matchedInputs,
   walk,
 } from "../scripts/check-docs-api.cjs";
@@ -42,6 +38,25 @@ const temps: string[] = [];
 function tempDir(prefix: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), prefix));
   temps.push(dir);
+  return dir;
+}
+
+/**
+ * 建一份「骨架齐全」的产物夹具 —— 默认主题每一页都引用的那几份 + 一个模块页。
+ * @param {Record<string, string>} extra 额外的文件（相对产物目录）
+ */
+function productFixture(extra: Record<string, string> = {}): string {
+  const dir = tempDir("docs-api-prod-");
+  for (const rel of SKELETON) {
+    mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    writeFileSync(path.join(dir, rel), `stub:${rel}`);
+  }
+  mkdirSync(path.join(dir, "modules"), { recursive: true });
+  writeFileSync(path.join(dir, "modules", "lib_demo.html"), "<html>demo</html>");
+  for (const [rel, body] of Object.entries(extra)) {
+    mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    writeFileSync(path.join(dir, rel), body);
+  }
   return dir;
 }
 
@@ -109,10 +124,17 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
       ]),
     ).toEqual(["src/lib/a.ts", "pnpm-lock.yaml"]);
   });
+
+  it("产物面 `docs/api/**` 不在面内（产物不再进 git，ISSUE #2231）", () => {
+    /* 产物面曾经是面的一部分（产物被手改过也要看得见）。产物出库之后它既不在变更
+     * 文件清单里、也不会被谁改坏 ⇒ 留在面里只是白占一行。 */
+    expect(matchedInputs(["docs/api/index.html"])).toEqual([]);
+    expect(INPUT_RES.some((re) => re.test("docs/api/index.html"))).toBe(false);
+  });
 });
 
 describe("walk：不穿符号链接", () => {
-  it("目录链接不跟着走（产物里混进链接不该被算成多余文件）", () => {
+  it("目录链接不跟着走（产物里混进链接不该被算成产物）", () => {
     const root = tempDir("docs-api-walk-");
     mkdirSync(path.join(root, "sub"));
     writeFileSync(path.join(root, "a.html"), "a");
@@ -138,108 +160,68 @@ describe("walk：不穿符号链接", () => {
   });
 });
 
-describe("compare：三个方向都报", () => {
-  /** 建一对「重生成结果 vs 当前产物」夹具。 */
-  function fixture(want: Record<string, string>, got: Record<string, string>) {
-    const gen = tempDir("docs-api-gen-");
-    const cur = tempDir("docs-api-cur-");
-    for (const [rel, body] of Object.entries(want)) {
-      mkdirSync(path.dirname(path.join(gen, rel)), { recursive: true });
-      writeFileSync(path.join(gen, rel), body);
-    }
-    for (const [rel, body] of Object.entries(got)) {
-      mkdirSync(path.dirname(path.join(cur, rel)), { recursive: true });
-      writeFileSync(path.join(cur, rel), body);
-    }
-    return { gen, cur };
-  }
-
-  it("三向齐报：落后 / 缺失 / 多余（少报一个，漏掉的那类就静默留在产物里）", () => {
-    const { gen, cur } = fixture(
-      { "same.html": "x", "drift.html": "new", "missing.html": "m" },
-      { "same.html": "x", "drift.html": "old", "extra.html": "e" },
-    );
-    expect(compare(gen, cur)).toEqual({
-      drifted: ["drift.html"],
-      missing: ["missing.html"],
-      extra: ["extra.html"],
-    });
+describe("judgeProduct：骨架齐全 + 可移植（ISSUE #2231 的新判据）", () => {
+  it("骨架齐全、至少一个模块页、路径可移植 ⇒ 一条都不报", () => {
+    const dir = productFixture();
+    const got = judgeProduct(dir, "/nonexistent/repo", {});
+    expect(got.problems).toEqual([]);
+    expect(got.modulePages).toBe(1);
+    expect(got.files).toBeGreaterThan(0);
   });
 
-  it("完全一致时三张清单都空", () => {
-    const { gen, cur } = fixture(
-      { "a.html": "1", "sub/b.html": "2" },
-      { "a.html": "1", "sub/b.html": "2" },
-    );
-    expect(compare(gen, cur)).toEqual({ drifted: [], missing: [], extra: [] });
+  it("缺骨架文件 ⇒ 点名哪一个缺（读者打开就是坏的）", () => {
+    const dir = productFixture();
+    rmSync(path.join(dir, "assets", "search.js"), { force: true });
+    const got = judgeProduct(dir, "/nonexistent/repo", {});
+    expect(got.problems.join("\n")).toContain("缺少骨架文件：assets/search.js");
   });
 
-  it("CRLF 检出不算落后（行尾由 .gitattributes 与 §13.7 负责，不是这条判据问的事）", () => {
-    const { gen, cur } = fixture(
-      { "a.html": "line1\nline2\n" },
-      { "a.html": "line1\r\nline2\r\n" },
-    );
-    expect(compare(gen, cur).drifted).toEqual([]);
+  it("一个模块页都没有 ⇒ 报「这份 API 文档没有内容」", () => {
+    const dir = productFixture();
+    rmSync(path.join(dir, "modules"), { recursive: true, force: true });
+    const got = judgeProduct(dir, "/nonexistent/repo", {});
+    expect(got.problems.join("\n")).toContain("没有任何模块页");
   });
 
-  it("内容真不同仍然报（归一换行没有把判据归一掉）", () => {
-    const { gen, cur } = fixture(
-      { "a.html": "line1\nline2\n" },
-      { "a.html": "line1\nCHANGED\n" },
+  it("产物里烤进本机绝对路径 ⇒ 报出来（两种分隔符形态都查）", () => {
+    /* 这条不是洁癖：这份副本是要给人读的，而 typedoc 的源码链接 / 搜索索引 /
+     * 面包屑里只要有一处烤进了本机路径，读者点开的就不是同一个东西。 */
+    const win = productFixture({ "modules/leak.html": "<p>C:\\repo\\src\\lib\\x.ts</p>" });
+    expect(judgeProduct(win, "C:\\repo", {}).problems.join("\n")).toContain(
+      "本机绝对路径",
     );
-    expect(compare(gen, cur).drifted).toEqual(["a.html"]);
+    const posix = productFixture({ "modules/leak.html": "<p>/repo/src/lib/x.ts</p>" });
+    expect(judgeProduct(posix, "/repo", {}).problems.join("\n")).toContain(
+      "本机绝对路径",
+    );
+  });
+
+  it("typedoc.json 把 cleanOutputDir 关了 ⇒ 报出来（孤儿页面会留在这一轮里）", () => {
+    const dir = productFixture();
+    const got = judgeProduct(dir, "/nonexistent/repo", { cleanOutputDir: false });
+    expect(got.problems.join("\n")).toContain("cleanOutputDir");
   });
 });
 
-describe("applyGenerated：自动修的写入模式（三个方向都写）", () => {
-  it("落后覆盖、缺失补上、多余删掉 —— 第二轮判定必须是绿的", () => {
-    const gen = tempDir("docs-api-gen-");
-    const cur = tempDir("docs-api-cur-");
-    for (const [rel, body] of Object.entries({
-      "same.html": "x",
-      "drift.html": "new",
-      "sub/missing.html": "m",
-    })) {
-      mkdirSync(path.dirname(path.join(gen, rel)), { recursive: true });
-      writeFileSync(path.join(gen, rel), body);
+describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
+  it("撞上 --autofix 直接退 1 并说明为什么（不是静默忽略）", () => {
+    /* 静默忽略一个旗标正是本仓最恨的那族（脚自称与实际不一致）：产物不进 git ⇒
+     * 没有「自动修完再提交」的对象，而「自动修 + 再判」这个形状正是让「产物陈旧」
+     * 在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。 */
+    const script = path.resolve(__dirname, "..", "scripts", "check-docs-api.cjs");
+    let code = 0;
+    let out = "";
+    try {
+      out = execFileSync(process.execPath, [script, "--autofix"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (err) {
+      const e = err as { status?: number; stderr?: string };
+      code = e.status ?? -1;
+      out = `${e.stderr ?? ""}`;
     }
-    for (const [rel, body] of Object.entries({
-      "same.html": "x",
-      "drift.html": "old",
-      "extra.html": "e",
-    })) {
-      mkdirSync(path.dirname(path.join(cur, rel)), { recursive: true });
-      writeFileSync(path.join(cur, rel), body);
-    }
-
-    const diff = compare(gen, cur);
-    expect(applyGenerated(gen, diff, cur)).toEqual({ written: 2, removed: 1 });
-    /* 这一条是整组的意义：写入之后**再判一次**必须一致。少了它，「写了一半」
-     * （比如只覆盖不删孤儿）在断言上看起来同样是「写了 N 个」。 */
-    expect(compare(gen, cur)).toEqual({
-      drifted: [],
-      missing: [],
-      extra: [],
-    });
-  });
-
-  it("一致时一个都不写（自动修档的常态是「本来就绿」，不该产生 diff）", () => {
-    const gen = tempDir("docs-api-gen-");
-    const cur = tempDir("docs-api-cur-");
-    writeFileSync(path.join(gen, "a.html"), "1");
-    writeFileSync(path.join(cur, "a.html"), "1");
-    expect(applyGenerated(gen, compare(gen, cur), cur)).toEqual({
-      written: 0,
-      removed: 0,
-    });
-  });
-
-  it("缺失项的父目录不存在时自己建（产物有子目录）", () => {
-    const gen = tempDir("docs-api-gen-");
-    const cur = tempDir("docs-api-cur-");
-    mkdirSync(path.join(gen, "classes/deep"), { recursive: true });
-    writeFileSync(path.join(gen, "classes/deep/C.html"), "c");
-    expect(applyGenerated(gen, compare(gen, cur), cur).written).toBe(1);
-    expect(walk(cur).has("classes/deep/C.html")).toBe(true);
+    expect(code).toBe(1);
+    expect(out).toContain("--autofix");
   });
 });

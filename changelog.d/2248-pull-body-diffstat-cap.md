@@ -16,9 +16,14 @@
 - 平台给的拒绝理由现在**单独念一行**（`errcode` / `errmsg`，`readPullCreateError()`）：响应原文
   那一行是按字符截的，把外部拒绝的理由押在截断窗口里 = 让下一个执行者重查一遍已经有了的数。
   只认这两个键名，`message` 那类同名字段不猜（成功响应里它可能是别的意思）。
-- 两个数同批进判据数值账（`scripts/.gate-thresholds.cjs` 那本账）：`PULL_BODY_LIMIT` 是外部
+- 两个数同批进判据数值账（`scripts/check-gate-thresholds.cjs` 那本账）：`PULL_BODY_LIMIT` 是外部
   量纲、`DIFFSTAT_SAMPLE_MAX` 是起始样本预算，两边都记 `kind: "report"` —— 它们不改变任何一次
   判决的红绿。
+- **这一格的落点从 `ship-core.mjs` 拆到新的 `ship-pull-body.mjs`**：合上并行的 #2250 之后
+  `ship-core` 到 906 行、越过 `check-infra-file-size.cjs` 的 900 硬闸，而 #2189 / #2199 对同一件事
+  定过的拆法是「按职责、不按行数凑数」—— PR 正文只回答「发给平台的正文长什么样」，正好是一条
+  独立变化的线。同批登记两处清单：`scripts/ship.mjs` 文件头那一族职责表、project Skill
+  `.qoder/skills/ship/SKILL.md` 的模块列表（漏一处就是给下一个执行者留一份会过期的读数）。
 - 判定逻辑一字未改：`--stat` 怎么来的、标题怎么取、PR 怎么复用、终态怎么读，全部原样。
-  用例 `tests/ship.test.ts` 205 → 210 条（新增 5 条：对账、上限、不谎报截断、顶穿时一次都不发、
-  拒绝理由念得出来）。
+  用例新增 5 条（对账、上限、不谎报截断、顶穿时一次都不发、拒绝理由念得出来），三次变异各自
+  恰好命中一条 —— 逐条改坏再逐字节还原，读数见 #2248 那条评论。
