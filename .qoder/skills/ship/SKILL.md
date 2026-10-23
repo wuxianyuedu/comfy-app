@@ -152,7 +152,10 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
     也不拿 git `user.name` 顶替（那是提交身份，不是提单 / 处理身份）。**有且只有一行** ——
     正文文件里自己已经写了署名的，`ship` 不再前插第二遍，也不改写那一行里的人名
     （ISSUE #2268：无条件前插过一次，平台正文就出现两遍同名）。角色分工由标签承担
-    （提单人 / 处理人 / 参与人），正文不再重复写 `提单人:` / `处理人:`。`ship` 建的 PR
+    （提单人 / 处理人 / 参与人），正文不再重复写 `提单人:` / `处理人:`。
+    **这一格有只读审计**（ISSUE #2269）：`pnpm check:comment-headers` 扫 open 单子与 open PR
+    的正文首行，三态 0 在场 / 1 有缺或重复或不在首行 / 2 没读到读数 —— 它一次也不写，
+    回填由人点名。改了上面那四条写文字的出口之后就跑一次。`ship` 建的 PR
     （含复用已有 PR）会自己 `post-pull-labels` → **独立回读** `list-pull-labels`，回读里
     看得见 `处理人:<短名>` 才念「已打上」；`post-pull` 与 `create-issue` 同形，没有 `--labels`。
     手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 `ship`，那两条路
