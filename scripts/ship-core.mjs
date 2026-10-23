@@ -739,7 +739,10 @@ export function planCommands(st) {
       `cnb issues post-issue-labels --repo ${st.slug} --number ${st.claim} --labels 处理人:${who} -v`,
     );
     p.push(
-      `cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v（写后回读：回读里看得见才念「已打上」）`,
+      `cnb issues post-issue-labels --repo ${st.slug} --number ${st.claim} --labels 参与人:${who} -v（只增不删的经手记录）`,
+    );
+    p.push(
+      `cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v（写后回读：两枚标签都看得见才念「已打上」）`,
     );
     p.push(
       `cnb issues post-issue-comment --repo ${st.slug} --number ${st.claim} --body-file <git目录>/comfy-ship-tmp/ship-issue-comment-<pid>.tmp -v`,
