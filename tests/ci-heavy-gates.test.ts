@@ -15,7 +15,7 @@
  * 同一份 glob）⇒ 那 13 条「在平台那一格被 `ifModify` 跳过」的判据不再在这一格照跑全量。
  * 收窄的两条边界在这里钉住：**改动面取不到 ⇒ 一条都不跳**、**跳过的逐条点名且不计入绿**。
  */
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -209,5 +209,40 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
 
   it("面为空 ⇒ 不许收窄（宁可多跑）", () => {
     expect(faceTouched({ globs: [] }, ["docs/README.md"])).toBe(true);
+  });
+});
+
+/**
+ * 绿步的**读数也要有出口**（ISSUE #2256）。
+ *
+ * 现场：这一格此前**只转述红步的输出** ⇒ 「exit 0、但自己说了『我没有判任何东西』」
+ * 的那类形状在平台日志里一个字都不打 —— 那一格与「真的判过了」逐字同形。
+ * 最实的一例是 `文档源 ⇄ 生成态镜像同批`：它在平台上判的是**空暂存区**
+ * （判据的「不带 `--staged` 那一档」判的仍是暂存集），于是打印
+ * 「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0 ⇒ 计成绿，而那句话被丢掉。
+ */
+describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () => {
+  it("绿步自己那一行读数被转述出来（此前一个字都不打）", () => {
+    const lines: string[] = [];
+    const code = main({
+      cwd: ROOT,
+      argv: ["--only=文档源"],
+      env: {},
+      log: (line: string) => lines.push(line),
+      changedFiles: null,
+    });
+    const all = lines.join("\n");
+    expect(code).toBe(0);
+    /* 这一步是绿的（退出 0），但它自己打了读数 —— 那行读数必须在场。 */
+    expect(all).toContain("[doc-mirror-pairing]");
+  });
+
+  it("红步的转述口径不变（尾部若干行）", () => {
+    /* 红步那边取的是尾部若干行；这一条钉住「没把红步改成只取最后一行」。 */
+    const src = readFileSync(
+      path.join(ROOT, "scripts", "ci-heavy-gates.mjs"),
+      "utf8",
+    );
+    expect(src).toContain(".slice(-12)");
   });
 });
