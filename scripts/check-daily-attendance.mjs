@@ -94,20 +94,26 @@ export function latestDailyDispatch(builds) {
 /**
  * 「列表 + 逐格详情 + 现在时刻」→ 一句结论（纯函数，用例从这里注入）。
  *
- * @param {{
- *   builds: any[];
- *   details?: Array<{sn:string,json:any}>;
- *   now: number;
- *   windowHours?: number;
- * }} input `details` 是「sn → `get-build-status -v` 那份 JSON」的配对（可为空 ⇒ 判「取不到逐格」）
- * @returns {{
- *   code: number;
- *   verdict: "present" | "absent" | "cancelled" | "running" | "unknown";
- *   headline: string;
- *   evidence: string[];
- *   ageHours: number | null;
- *   sn: string | null;
- * }} 判定与逐格读数
+ * 两份形状写成 `@typedef` + `@property`（每行带中文说明），不写多行内联
+ * `@param {{…}}`：内联那种类型的**续行**会被注释语言判据（§12.4.6）当普通注释行读，
+ * 而 `any` / `details` 这类标识符凑够三个词就构成「疑似英文句子」—— 实测在这里红过一次。
+ *
+ * @typedef {object} AttendanceInput
+ * @property {any[]} builds 平台列表那份（项里要有 `event` / `createTime` / `sn`）
+ * @property {Array<{sn: string, json: any}>} [details] `sn → get-build-status -v 那份 JSON` 的配对；可为空 ⇒ 判「取不到逐格」
+ * @property {number} now 现在时刻（毫秒）
+ * @property {number} [windowHours] 窗口小时数，缺省取 `DEFAULT_WINDOW_HOURS`
+ *
+ * @typedef {object} AttendanceVerdict
+ * @property {"present" | "absent" | "cancelled" | "running" | "unknown"} verdict 落在哪一档
+ * @property {number} code 三态退码：0 出勤 / 1 缺勤 / 2 没结论或取不到读数
+ * @property {string} headline 念给人的那一句
+ * @property {string[]} evidence 逐格读数
+ * @property {number | null} ageHours 距「现在」几小时；认不出来时 null
+ * @property {string | null} sn 判的是哪一跑；一次派发都没有时 null
+ *
+ * @param {AttendanceInput} input 列表 + 逐格详情 + 现在时刻
+ * @returns {AttendanceVerdict} 判定与逐格读数
  */
 export function judgeAttendance({
   builds,
