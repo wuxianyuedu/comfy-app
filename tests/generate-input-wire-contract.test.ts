@@ -40,38 +40,36 @@ import { getTestDb, seedUser, seedWorkflowTemplate } from "./helpers/test-db";
 import { errorEnvelope, makeCtx } from "./helpers/trpc";
 import { throughJsonWire } from "./helpers/wire-contract";
 
-/* 里程碑日志（`createAppRuntimeLogger("generate")`）是**真实写盘**副作用：不隔离
- * 就会往仓库根的 `log/` 里写一行「生成任务已入队…」。换成本进程专用的临时目录，
- * 口径与 `src/server/api/routers/generate.test.ts` 同一份。 */
-const runtimeLogFile = vi.hoisted(
-  () =>
-    `${process.env.TMPDIR ?? "/tmp"}/generate-input-contract-${process.pid}-${Date.now()}/app-runtime.log`,
-);
+/* mock 边界的**实现体**在 `./helpers/wire-mock-boundary`（与同族那四份共用一份），
+ * 这里只留 `vi.mock` 的声明 —— 声明必须留在本文件顶层（vitest 把它 hoist 到 import
+ * 之前），而工厂里只能 dynamic import 那个 helper（静态 import 的绑定在这会踩 TDZ，
+ * 实测报 `Cannot access '__vi_import_N__' before initialization`）。
+ * 里程碑日志那块的临时目录名按文件给（不再需要 `vi.hoisted`：路径落在工厂里算）。 */
 vi.mock("~/lib/log/app-runtime-log", async (importOriginal) => {
-  const actual = await importOriginal<typeof AppRuntimeLogModule>();
-  return {
-    ...actual,
-    createAppRuntimeLogger: (ns: string) =>
-      actual.createAppRuntimeLogger(ns, runtimeLogFile),
-  };
+  const { runtimeLogMockBoundary } =
+    await import("./helpers/wire-mock-boundary");
+  return runtimeLogMockBoundary(
+    await importOriginal<typeof AppRuntimeLogModule>(),
+    "generate-input-contract",
+  );
 });
 vi.mock("~/server/db", async () => {
-  const { createTestDb } = await import("./helpers/test-db");
-  return { db: createTestDb() };
+  const { dbMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return dbMockBoundary();
 });
-vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
-}));
-vi.mock("~/lib/core/logger", async (importOriginal) => ({
-  ...(await importOriginal<typeof LoggerModule>()),
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-vi.mock("~/lib/comfyui/executor-continuation", () => ({
-  kickQueue: vi.fn(),
-  subscribe: vi.fn(),
-  getLogs: vi.fn(),
-  cancelTask: vi.fn(),
-}));
+vi.mock("~/server/better-auth", async () => {
+  const { sessionMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return sessionMockBoundary();
+});
+vi.mock("~/lib/core/logger", async (importOriginal) => {
+  const { loggerMockBoundary } = await import("./helpers/wire-mock-boundary");
+  return loggerMockBoundary(await importOriginal<typeof LoggerModule>());
+});
+vi.mock("~/lib/comfyui/executor-continuation", async () => {
+  const { continuationMockBoundary } =
+    await import("./helpers/wire-mock-boundary");
+  return continuationMockBoundary(vi.fn());
+});
 
 const createCaller = createCallerFactory(generateRouter);
 const tdb = getTestDb();
