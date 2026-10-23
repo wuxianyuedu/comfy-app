@@ -6,12 +6,16 @@ import { describe, expect, it } from "vitest";
 import {
   attributeAffected,
   buildImportedBy,
+  changedPathsFrom,
   isSourcePath,
   isTestPath,
   resolveAffectedTests,
   specCandidates,
   wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
+/* 清单那一跳的载体住在自己那份文件里 —— 用例按它真实的落点 import，
+ * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
+import { describeListFailure } from "../scripts/affected-launch-changed-list.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 /* #2022：固定清单里开了输入面那几条在增量档会缺席，所以本文件凡是「比整表」的断言
  * 都改成比「该跑的那些」—— 用同一个选择函数，而不是在测试里再抄一遍那 4 个名字。 */
@@ -522,5 +526,117 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
       expect(entry, `${file} 应当有归因行`).toBeTruthy();
       expect(entry?.affected, `${file} 在真仓库上与主链不一致`).toBe(expected);
     }
+  });
+});
+
+/**
+ * 改动面清单的**载体**（ISSUE #2240）。
+ *
+ * ## 现场
+ *
+ * 平台「受影响用例」那一格把整份改动面**逐个铺进 argv** 送给 `affected-tests.mjs`
+ * ⇒ 改动面大到几千条时（实测 2672 条 / 172796 字符）那个子进程**根本起不来**
+ * （`spawnSync` 报 `ENAMETOOLONG`、`status=null`）⇒ 这一格红在
+ * 「清单解析失败（退出码 信号）」，**后面 22 个 stage 全 `skipped`**。
+ *
+ * 同一个上限在这个仓里早被写在 `scripts/affected-tests.mjs` 的文件头里，只是认错了对象：
+ * 那句讲的是**全量清单**走 argv（为此造了 `--full` 那条显式通道），
+ * 而**改动面清单**走的是同一条 argv —— 没人看见。
+ *
+ * 现在改动面走 **stdin**。这一组钉四件事：
+ *   ① 两种载体**给同一份清单**时结果逐字相同（判决链一个字没改）；
+ *   ② 清单长到超过 Windows 的命令行上限时，stdin 那条**仍然跑得起来**；
+ *   ③ 启动器**不许**再把改动面铺进 argv（形状钉，防回潮）；
+ *   ④ 失败话术分得开「起不来」与「判红」，并念出条数（对账用）。
+ */
+describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2240）", () => {
+  const CLI = path.join(ROOT, "scripts", "affected-tests.mjs");
+  const LAUNCHER = path.join(ROOT, "scripts", "run-affected-tests.mjs");
+  const CARRIER = path.join(ROOT, "scripts", "affected-launch-changed-list.mjs");
+
+  /** 一份「长到超过 Windows 命令行上限」的改动面（路径都不存在，判决只看形状与条数）。 */
+  function hugeList(n = 900): string[] {
+    return Array.from(
+      { length: n },
+      (_, i) => `src/lib/bulk-package-${i}/module-with-a-longer-name-${i}.ts`,
+    );
+  }
+
+  it("同一份清单，两种载体给出同一份结果（判决链一个字没改）", () => {
+    const list = ["src/lib/endpoints.ts", "src/components/ui/hint.tsx", "docs/README.md"];
+    const viaArgv = spawnSync(process.execPath, [CLI, "--changed", ...list], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
+    const viaStdin = spawnSync(process.execPath, [CLI, "--changed-stdin"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      input: list.join("\n"),
+    });
+    expect(viaArgv.status, viaArgv.stderr ?? "").toBe(0);
+    expect(viaStdin.status, viaStdin.stderr ?? "").toBe(0);
+    expect(viaStdin.stdout).toBe(viaArgv.stdout);
+  });
+
+  it("清单长到超过命令行上限时，stdin 那条仍然跑得起来", () => {
+    const payload = hugeList().join("\n");
+    expect(
+      payload.length,
+      "这条用例的前提是清单超过 Windows 的命令行上限（32767 字符）",
+    ).toBeGreaterThan(32_767);
+    const r = spawnSync(process.execPath, [CLI, "--changed-stdin"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      input: payload,
+      maxBuffer: 64 << 20,
+    });
+    expect(r.status, r.stderr ?? "").toBe(0);
+    expect(r.stdout.trim().split(/\s+/).length).toBeGreaterThan(0);
+  });
+
+  it("启动器不许再把改动面铺进 argv（形状钉）", () => {
+    const src = fs.readFileSync(CARRIER, "utf8");
+    expect(src).toContain("--changed-stdin");
+    /* 反向：逐个铺进 argv 的写法不许回来（那是 ISSUE #2240 那次的原形）。
+     * 判的是**实参那一段**，不是整份文本 —— 注释里写着「argv」不犯法。 */
+    expect(src).not.toMatch(/["']--changed["']\s*,\s*\.\.\.changed/);
+  });
+
+  it("启动器在真实改动面量级上跑得起来（--dry-run 只走筛清单那一半，不起 vitest）", () => {
+    const payload = hugeList().join("\n");
+    const r = spawnSync(process.execPath, [LAUNCHER, "--dry-run"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: { ...process.env, COMFY_AFFECTED_CHANGED: payload },
+      maxBuffer: 64 << 20,
+    });
+    expect(r.status, r.stderr ?? "").toBe(0);
+    expect(r.stdout).toMatch(/\d+ 个用例 \/ \d+ 次启动/);
+  });
+
+  it("失败话术分得开「起不来」与「判红」，并念出条数", () => {
+    /* 早先只念一句「退出码 信号」—— 平台上分不出是「清单太长、子进程没起来」
+     * 还是「清单算出来是红的」。两者的处置完全不同。 */
+    const spawnFail = describeListFailure({
+      status: null,
+      error: { code: "ENAMETOOLONG", message: "spawnSync node ENAMETOOLONG" },
+      changedCount: 2672,
+    });
+    expect(spawnFail).toContain("子进程起不来");
+    expect(spawnFail).toContain("ENAMETOOLONG");
+    expect(spawnFail).toContain("改动面 2672 条");
+
+    const judgedRed = describeListFailure({ status: 1, changedCount: 3 });
+    expect(judgedRed).toContain("退出码 1");
+    expect(judgedRed).not.toContain("子进程起不来");
+    expect(judgedRed).toContain("改动面 3 条");
+  });
+
+  it("清单来源三档互斥且有优先：argv > stdin > 暂存区", () => {
+    /* 这一档的纯函数出口：来源只决定「清单从哪来」，不决定「清单怎么算」。 */
+    expect(changedPathsFrom(["--changed", "a.ts", "b.ts"])).toEqual(["a.ts", "b.ts"]);
+    expect(changedPathsFrom(["--changed", "a.ts", "--json"])).toEqual(["a.ts"]);
+    /* 暂存区那一档要真的起 git（这个仓库有暂存区可读）⇒ 只断言它是个数组。 */
+    expect(Array.isArray(changedPathsFrom([]))).toBe(true);
   });
 });

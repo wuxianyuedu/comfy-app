@@ -40,9 +40,17 @@
  * 命令行长度上限。⇒ 翻兜底的前置是先造一条**显式的全量通道**并接受那半小时，
  * 不是等基线红清零（那件事已经发生了）。规范 §13.5.8。
  *
+ * ⚠️ **同一个上限还有第二处**（ISSUE #2240）：上面那句讲的是
+ * **全量清单**走 argv，而**改动面清单**走的是同一条 argv —— 「删了一大批产物」那种 PR
+ * 的改动面能到几千条（实测 2672 条 / 172796 字符）⇒ 那个子进程**根本起不来**
+ * （`spawnSync` 报 `ENAMETOOLONG`、`status=null`），平台那一格红在
+ * 「清单解析失败（退出码 信号）」，后面 22 个 stage 全 `skipped`。
+ * ⇒ 改动面改走 **stdin**（`--changed-stdin`）：判决链一个字没动，换的只是**怎么把它送过去**。
+ *
  * 用法：
  *   node scripts/affected-tests.mjs                # 读暂存区（pre-commit 用）
- *   node scripts/affected-tests.mjs --changed a b  # 手工指定改动清单（调试用）
+ *   node scripts/affected-tests.mjs --changed a b  # 手工指定改动清单（调试用；短清单）
+ *   node scripts/affected-tests.mjs --changed-stdin # 改动清单从 stdin 读（一行一个路径；长清单走这条）
  *   node scripts/affected-tests.mjs --json         # 连命中原因一起打
  *   node scripts/affected-tests.mjs --fixed-only   # 只要固定清单
  */
@@ -487,6 +495,61 @@ function stagedPaths() {
     .filter(Boolean);
 }
 
+/**
+ * 从 stdin 读改动面清单（一行一个路径）。
+ *
+ * 为什么要有这条入口（ISSUE #2240）：argv 在 Windows 上有硬上限（整条命令行 32767 字符），
+ * 而改动面在「删了一大批产物」那种 PR 上能到几千条 ⇒ 逐个当 argv 传时那个子进程
+ * **根本起不来**（`spawnSync` 报 `ENAMETOOLONG`、`status=null`），平台那一格红在
+ * 「清单解析失败（退出码 信号）」。stdin 没有这个上限。
+ *
+ * 读不出来（是终端 / 读失败）⇒ 返回 `null`，让调用点按「没拿到清单」处理，
+ * 而不是把空清单当成「改动面为空」—— 那两种在下游是两种完全不同的判决。
+ *
+ * @returns {string[] | null}
+ */
+function stdinPaths() {
+  if (process.stdin.isTTY) {
+    process.stderr.write(
+      "[affected] --changed-stdin 要从 stdin 读清单（当前是终端 ⇒ 没有清单可读）\n",
+    );
+    return null;
+  }
+  let raw = "";
+  try {
+    raw = fs.readFileSync(0, "utf8");
+  } catch {
+    return null;
+  }
+  return raw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 改动面清单的来源：三档**互斥**，优先级从高到低。
+ *   ① `--changed a b`（argv；调试用，只适合短清单 —— 见 `stdinPaths()` 那段的长度上限）
+ *   ② `--changed-stdin`（stdin，一行一个路径；长清单走这条）
+ *   ③ 暂存区（默认，钩子里的常态）
+ *
+ * 三档都只改「清单**从哪来**」，**不改**「清单**怎么算**」—— 收窄规则仍只有这一份
+ * （§12.18 / §12.12：不发明第二套筛法）。
+ *
+ * @param {string[]} argv
+ * @returns {string[]}
+ */
+export function changedPathsFrom(argv) {
+  const ci = argv.indexOf("--changed");
+  if (ci >= 0) {
+    return argv.slice(ci + 1).filter((a) => !a.startsWith("--"));
+  }
+  if (argv.includes("--changed-stdin")) {
+    return stdinPaths() ?? [];
+  }
+  return stagedPaths() ?? [];
+}
+
 /** 参与 import 图的文件目录与扩展名：闭包要能穿过 `scripts/` 里的门禁脚本。 */
 const SOURCE_DIRS = ["src/", "tests/", "scripts/", "tools/"];
 const SOURCE_EXT_RE = /\.(ts|tsx|mts|js|jsx|mjs|cjs)$/;
@@ -574,11 +637,7 @@ function main() {
    * 它是**诊断档**，不参与筛选、不改清单、不影响退出码 —— 拿不到图时打空数组而不是
    * 报错：这条建议没有到「值得拦住提交」的分量（口径见属性函数头顶那节）。 */
   if (argv.includes("--attribute")) {
-    const ci = argv.indexOf("--changed");
-    const changed =
-      ci >= 0
-        ? argv.slice(ci + 1).filter((a) => !a.startsWith("--"))
-        : (stagedPaths() ?? []);
+    const changed = changedPathsFrom(argv);
     const inputs = collectInputs();
     if (inputs === null || changed.length === 0) {
       process.stdout.write("[]\n");
@@ -595,11 +654,7 @@ function main() {
     );
     return 0;
   }
-  const ci = argv.indexOf("--changed");
-  const changed =
-    ci >= 0
-      ? argv.slice(ci + 1).filter((a) => !a.startsWith("--"))
-      : (stagedPaths() ?? []);
+  const changed = changedPathsFrom(argv);
   const inputs = collectInputs();
   /** @type {Resolution} */
   const res =
