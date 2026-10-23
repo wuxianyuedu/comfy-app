@@ -75,6 +75,20 @@ function closure(): ReturnType<typeof docsApiInputClosure> {
   return cachedClosure;
 }
 
+/**
+ * 那份产物（`BackupResult` 在产物里的落点）在盘上吗？
+ *
+ * 产物**不再进 git**（ISSUE #2231）⇒ 只有跑过 `pnpm run docs` 的检出才有它；
+ * 平台上「受影响用例」那一格跑在「API 文档生成与自检」之前 ⇒ 那边也永远没有。
+ * 于是依赖它的那一条是**产物级条件断言**（登记在 `tests/conditional-skip-registry.test.ts`，
+ * tier=artifact）—— 「绿」与「产物级判据跑过」不是同一件事。
+ */
+const productPath = path.join(
+  ROOT,
+  "docs/api/functions/lib_db-backup_backup.createBackup.html",
+);
+const productOnDisk = fs.existsSync(productPath);
+
 describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
   it("根从 typedoc.json 的 entryPoints 导出，不手抄第二份", () => {
     const c = closure();
@@ -128,14 +142,22 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
   it("现场那个文件真的在闭包里：`scripts/db-backup-core.mjs`（BackupResult 的定义处）", () => {
     const c = closure();
     expect(c.leaves).toContain("scripts/db-backup-core.mjs");
-    /* 它定义的类型**真的**出现在产物里 —— 这一条是「它确实是输入」的现场证据，
-     * 不是「闭包算得对」的自证（自证只能证明算法自洽，证明不了面罩得住真相）。 */
-    const product = path.join(
-      ROOT,
-      "docs/api/functions/lib_db-backup_backup.createBackup.html",
-    );
-    expect(fs.existsSync(product), `产物 ${product} 不在盘上`).toBe(true);
-    expect(fs.readFileSync(product, "utf8")).toContain("BackupResult");
+    /* 它**确实定义着**那个类型 —— 这一条是「它确实是输入」的现场证据，不是「闭包算得对」的
+     * 自证（自证只能证明算法自洽，证明不了面罩得住真相）。
+     *
+     * ⚠️ 断言落在**源文件**上而不是产物上（ISSUE #2231 之后）：产物**不再进 git**，本机没跑过
+     * `pnpm run docs` 时盘上根本没有它 ⇒ 断言盘上的产物会在「没生成过」的检出上恒红
+     * （平台侧「受影响用例」那一格跑在「API 文档生成与自检」之前，也是这个形态）。 */
+    const source = path.join(ROOT, "scripts/db-backup-core.mjs");
+    expect(fs.existsSync(source), `源文件 ${source} 不在盘上`).toBe(true);
+    expect(fs.readFileSync(source, "utf8")).toContain("BackupResult");
+  });
+
+  it.skipIf(!productOnDisk)("它定义的类型真的出现在产物里（产物不在 git 里 ⇒ 本机没生成就没有）", () => {
+    /* 这一条是**产物级**断言：产物在盘上才判。产物出库（ISSUE #2231）之后它是一档
+     * 条件跳过（tier=artifact），登记在 `tests/conditional-skip-registry.test.ts` ——
+     * 「绿」与「产物级判据跑过」不是同一件事，那张表就是这句话的账。 */
+    expect(fs.readFileSync(productPath, "utf8")).toContain("BackupResult");
   });
 
   it("面罩得住闭包：闭包算出来的每一个叶子都被收窄面罩住（面判窄了 = 漏判）", () => {

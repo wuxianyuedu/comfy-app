@@ -20,6 +20,14 @@
  * 宁可多起一次 vite，也不许把用例丢掉 —— 「绿但没跑」比慢严重得多（口径同规范
  * §11.13「skip 不作为信号被任何门禁计数」那一族的反面）。
  *
+ * ⚠️ **但「改动面」本身不进 argv**（ISSUE #2240）：上面那条分块讲的是
+ * **vitest 那一跳**的命令行，而**改动面**那一跳早先是逐个把路径铺进 argv
+ * ⇒ 改动面大到几千条时（实测 2672 条 / 172796 字符）那个子进程**根本起不来**
+ * （`ENAMETOOLONG`、`status=null`）⇒ 平台「受影响用例」那一格红在
+ * 「清单解析失败（退出码 信号）」，后面 22 个 stage 全 `skipped`。
+ * 现在改动面走 **stdin**（`--changed-stdin`）：判决链一个字没动，换的只是载体 ——
+ * 那一跳住在 `scripts/affected-launch-changed-list.mjs`（理由写在那份文件头）。
+ *
  * 刻意**不做**的事：
  *   · 不在这里算清单 —— 收窄规则的唯一出处仍是 `affected-tests.mjs`，本文件只管启动；
  *   · 不兜「空清单」：空集会让 `vitest run` 不带位置参数跑成**全量**，那是更坏的失效，
@@ -113,6 +121,14 @@
 
 import { spawnSync } from "node:child_process";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
+/* 「改动面 ⇒ 清单」那一跳住在自己那份文件里 —— 与话术层、复跑面同一刀，理由写在那份文件头：
+ * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。
+ * 判决链仍只有 `scripts/affected-tests.mjs` 那一份（ISSUE #2240：换的只是**载体**，
+ * 不是筛法 —— 改动面走 stdin，不再逐个铺进 argv）。 */
+import {
+  collectAttribute,
+  collectList,
+} from "./affected-launch-changed-list.mjs";
 /* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威）。
  * import 而不是各抄一份文件名：抄两份的漂移形态是静默的 —— 改名那侧照常跑、
  * 这侧读不到，而「读不到」在这一格长得和「这次没有读数」一模一样。 */
@@ -476,61 +492,11 @@ export function scopeAdvice(input) {
  * 为一个纯提示让整个 C 组崩掉是把主次搞反了（与 `--attribute` 自己也「拿不到图时
  * 打空数组而不是报错」同口径）。**但必须打到 stderr**，静默吞掉会让「归因从来没
  * 成功过」这件事没人知道（同 §11.23「声明 ⇄ 读者」那一族）。
+ *
+ * ⚠️ 改动面**要一起送过去**（ISSUE #2240 的第三格）：原先这一档不带清单 ⇒
+ * `affected-tests.mjs` 只能读暂存区，而平台侧没有暂存区 ⇒ 归因恒为空 ⇒
+ * 那条「拆小」建议在平台上从来没生效过（只影响提示、不影响判定，但与本条同处一处失修）。
  */
-function collectAttribute() {
-  const res = spawnSync(
-    process.execPath,
-    [path.join(process.cwd(), "scripts", "affected-tests.mjs"), "--attribute"],
-    { encoding: "utf8" },
-  );
-  if (res.status !== 0) {
-    process.stderr.write(
-      "[affected-launch] 改动面归因拿不到（仅影响下面那条建议，不影响本次判定）\n",
-    );
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(String(res.stdout ?? "[]"));
-    if (!Array.isArray(parsed)) throw new Error("不是数组");
-    return parsed;
-  } catch {
-    process.stderr.write(
-      "[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n",
-    );
-    return [];
-  }
-}
-
-/** 调 `affected-tests.mjs` 拿清单（它的 stdout 只有空格分隔的路径一行）。 */
-function collectList() {
-  /* 改动面的来源有两档：默认读**暂存区**（钩子里的常态），而 pre-push 那一跳
-   * （`scripts/premerge-check.mjs` 的 `unitTests` 段）没有暂存区可读 —— 它手里是
-   * 「这一推要带上去的文件清单」，从 `COMFY_AFFECTED_CHANGED` 传进来（换行或空格分隔）。
-   * 走的是**同一条判决链**（`affected-tests.mjs` 的 `--changed`），不是第二份筛法：
-   * 两处各自筛一遍的漂移是静默的，而这一档的红会拦推送。 */
-  const changed = (process.env.COMFY_AFFECTED_CHANGED ?? "")
-    .split(/[\n\r]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const res = spawnSync(
-    process.execPath,
-    [
-      path.join(process.cwd(), "scripts", "affected-tests.mjs"),
-      ...(changed.length > 0 ? ["--changed", ...changed] : []),
-    ],
-    { encoding: "utf8" },
-  );
-  if (res.status !== 0) {
-    process.stderr.write(res.stderr ?? "");
-    throw new Error(
-      `[affected-launch] 清单解析失败（退出码 ${res.status ?? "信号"}）`,
-    );
-  }
-  // 清单脚本自己的说明走 stderr，stdout 只有那一行路径；按空白切最稳。
-  return String(res.stdout ?? "")
-    .split(/\s+/)
-    .filter(Boolean);
-}
 
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");

@@ -32,6 +32,13 @@
   - **文档面**：AGENTS.md、规范 §13.5.5.1（整节重写）/ §13.5.17 / §13.5.18 / §13.5.19、
     `docs/README.md`、`docs/reference-facts.md`、附录命令速查、主规范 §9、tools 索引、
     控制台命令目录，全部改成「产物不在 git 里」的新口径。
+  - **连带修一条用例的依赖**（`tests/docs-api-input-closure.test.ts`）：它原来断言
+    「产物文件在盘上」⇒ 产物出库后，在没跑过 `pnpm run docs` 的检出上恒红（平台上「受影响
+    用例」那一格跑在「API 文档生成与自检」之前，也是这个形态）。拆成两半：**源侧那一半**
+    （文件在闭包里 + 它确实定义着 `BackupResult`）不依赖产物、始终在判；**产物级那一半**
+    （那个类型真的出现在产物里）改成条件断言并登记进
+    `tests/conditional-skip-registry.test.ts`（tier=artifact）——「绿」与「产物级判据跑过」
+    不是同一件事，那张表就是这句话的账。
 
 ## Removed
 
