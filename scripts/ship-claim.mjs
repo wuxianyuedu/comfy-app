@@ -2,9 +2,11 @@
 /**
  * ship-claim.mjs —— 单子的**领取 / 结束释放 / 我的领取列表**（规范 §13.10.11）。
  *
- * 三件事都靠同一枚标签 `处理人:<短名>` 承重，而标签**不是锁**：平台没有 compare-and-set，
- * 两个会话可以同时读到「没有处理人」再各自打上。所以这里做的是「写后独立回读 + 冲突当场
- * 报出来」，而不是承诺互斥 —— 把标签说成锁，比没有这一格更危险（有人会依赖它）。
+ * 三件事靠两枚标签分工：`处理人:<短名>` 是**当前状态**（领取时打、结束即撤），
+ * `参与人:<短名>` 是**只增不删的经手记录**（结束、关单都不撤）。两者都不是锁：
+ * 平台没有 compare-and-set，两个会话可以同时读到「没有处理人」再各自打上。所以这里
+ * 做的是「写后独立回读 + 冲突当场报出来」，而不是承诺互斥 —— 把标签说成锁，比没有
+ * 这一格更危险（有人会依赖它）。
  *
  * 平台侧的取证（本轮实测）：
  *   · 原生 assignee **用不了**：`can-user-be-assigned-to-issue` 对 `yuedu-win` 回 400
@@ -28,6 +30,7 @@ import {
   handlerSignature,
   ISSUE_LABEL_ROLES,
   labelValues,
+  participantLabel,
 } from "./ship-ticket.mjs";
 
 /**
@@ -272,26 +275,38 @@ function ensureComment(ctx) {
 }
 
 /**
- * 打上 `处理人:<我>` 并回读。回读里出现第二个处理人 ⇒ 红（冲突），不念「已打上」。
+ * 领取时写两枚标签，写完**一次**独立回读同时验证三件：
+ *   · `处理人:<我>` 在场 —— 它是「当前谁在做」的唯一锁，结束即撤；
+ *   · `参与人:<我>` 在场 —— 只增不删的经手记录，结束后仍留着；
+ *   · 没有第二个 `处理人:` —— 标签不是锁，冲突要人裁定。
  *
- * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string}} ctx
+ * 只写回读里缺的那几枚：已经在场的不重复发（`--claim` 重跑是幂等）。
+ *
+ * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string, needHandler:boolean, needParticipant:boolean}} ctx
  * @returns {{code:number, others:string[]}}
  */
-function applyHandlerLabel(ctx) {
-  const { run, log, slug, number, handle } = ctx;
+function applyClaimLabels(ctx) {
+  const { run, log, slug, number, handle, needHandler, needParticipant } = ctx;
   const label = handlerLabel(handle);
-  if (!label) return { code: CODE.NOT_RUN, others: [] };
-  cnbJson(run, [
-    "issues",
-    "post-issue-labels",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--labels",
-    label,
-    "-v",
-  ]);
+  const participant = participantLabel(handle);
+  if (!label || !participant) return { code: CODE.NOT_RUN, others: [] };
+  for (const [needed, name] of /** @type {[boolean, string][]} */ ([
+    [needHandler, label],
+    [needParticipant, participant],
+  ])) {
+    if (!needed) continue;
+    cnbJson(run, [
+      "issues",
+      "post-issue-labels",
+      "--repo",
+      slug,
+      "--number",
+      String(number),
+      "--labels",
+      name,
+      "-v",
+    ]);
+  }
   const back = readIssue({ run, slug, number });
   if (!back) {
     log(
@@ -306,6 +321,10 @@ function applyHandlerLabel(ctx) {
     log(`[ship] #${number} 的回读里没有 ${label} ⇒ 不念「已打上」`);
     return { code: CODE.NOT_RUN, others };
   }
+  if (!labelValues(back.labels, ISSUE_LABEL_ROLES.participant).includes(handle)) {
+    log(`[ship] #${number} 的回读里没有 ${participant} ⇒ 不念「已打上」`);
+    return { code: CODE.NOT_RUN, others };
+  }
   if (others.length > 0) {
     log(
       `[ship] ✗ #${number} 回读里同时有 处理人:${handle} 与 处理人:${others.join("、")}` +
@@ -313,7 +332,9 @@ function applyHandlerLabel(ctx) {
     );
     return { code: CODE.RED, others };
   }
-  log(`[ship] ✓ #${number} 已打上 ${label}（get-issue 回读）`);
+  log(
+    `[ship] ✓ #${number} 已打上 ${label} 与 ${participant}（get-issue 回读：两枚都看得见）`,
+  );
   return { code: CODE.GREEN, others };
 }
 
@@ -347,7 +368,9 @@ function dropHandlerLabel(ctx) {
     log(`[ship] ✗ #${number} 的回读里 ${label} 还在 ⇒ 撤没掉`);
     return CODE.RED;
   }
-  log(`[ship] ✓ #${number} 已撤掉 ${label}（get-issue 回读）`);
+  log(
+    `[ship] ✓ #${number} 已撤掉 ${label}（get-issue 回读；${participantLabel(handle)} 保留 —— 经手记录只增不删）`,
+  );
   return CODE.GREEN;
 }
 
@@ -378,21 +401,40 @@ function runClaim(ctx) {
     return plan.code ?? CODE.RED;
   }
   const label = handlerLabel(handle);
+  const participant = participantLabel(handle);
+  /* 两枚标签的生命周期不同：`处理人:` 结束即撤，`参与人:` 只增不删。所以「要不要写」
+   * 分开判 —— 旧单（本功能之前领的）只有 `处理人:`，重跑一次要把 `参与人:` 补齐。 */
+  const haveHandler = labelValues(issue.labels, ISSUE_LABEL_ROLES.handler).includes(handle);
+  const haveParticipant = labelValues(issue.labels, ISSUE_LABEL_ROLES.participant).includes(handle);
   if (dryRun) {
+    const planned = [
+      ...(haveHandler ? [] : [`打上 ${label}`]),
+      ...(haveParticipant ? [] : [`打上 ${participant}`]),
+    ];
     log(
       `[ship] --dry-run：` +
-        (plan.already
-          ? `#${number} 已在 ${label} 名下 ⇒ 只会补一条「已接单」评论`
-          : `#${number} 将打上 ${label}，再评论「开发者 ${handle} 已接单，正在开发中。」`) +
+        (planned.length === 0
+          ? `#${number} 已在 ${label} 与 ${participant} 名下 ⇒ 只会补一条「已接单」评论`
+          : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`) +
         "；一条都没写。",
     );
     return CODE.GREEN;
   }
-  if (!plan.already) {
-    const put = applyHandlerLabel({ run, log, slug, number, handle });
+  if (!haveHandler || !haveParticipant) {
+    const put = applyClaimLabels({
+      run,
+      log,
+      slug,
+      number,
+      handle,
+      needHandler: !haveHandler,
+      needParticipant: !haveParticipant,
+    });
     if (put.code !== CODE.GREEN) return put.code;
   } else {
-    log(`[ship] #${number} 已经挂着 ${label} ⇒ 不重复打标签（幂等）`);
+    log(
+      `[ship] #${number} 已经挂着 ${label} 与 ${participant} ⇒ 不重复打标签（幂等）`,
+    );
   }
   return ensureComment({ run, log, slug, number, handle, kind: "claim", mkTmp });
 }
@@ -426,7 +468,7 @@ function runRelease(ctx) {
   if (dryRun) {
     log(
       `[ship] --dry-run：#${number} 将评论「开发者 ${handle} 开发结束。」，` +
-        `再撤 ${handlerLabel(handle)}；一条都没写。`,
+        `再撤 ${handlerLabel(handle)}（${participantLabel(handle)} 保留）；一条都没写。`,
     );
     return CODE.GREEN;
   }

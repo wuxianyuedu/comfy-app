@@ -30,6 +30,7 @@ import { CODE, decideCreateBranch, planCommands } from "./ship-core.mjs";
 import { issueAuthoring, ticketReading } from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
 import { parsePorcelain } from "./ship-local.mjs";
+import { envInitHint } from "./env-preflight.mjs";
 
 /**
  * 本检出应用实例的归属读数（形状由 `port-reap.mjs` 的 `runningAppInstances()` 给）。
@@ -244,6 +245,12 @@ export async function runPreflightStage(ctx) {
         " ⇒ 这一格不构成结论，也不参与退码",
     );
   }
+  /* `.env` 缺键的读数与启动器**同一份实现**（`envInitHint`，ISSUE #2205）：`pnpm dev` /
+   * `pnpm start` 两个入口都会念，而 `pnpm ship` 这条常走的路此前不念 —— 没配
+   * `COMFYAPP_DEV_HANDLE` 的人在这里只看到「未配」，看不到「跑一次 `env:init` 会补哪些键」。
+   * 与上面那两格同口径：**只念不改**，不写文件、不参与退码。 */
+  const envHint = envInitHint(root);
+  if (envHint) log(`[ship] 环境配置提醒：${envHint}`);
   if (unstagedModified.length + untracked.length > 0 && opt.adds.length === 0) {
     log(
       "[ship] 还有未暂存的改动，而本次没给 --add ⇒ 暂存面由你负责，脚本不替你 `git add -A`。",

@@ -135,13 +135,20 @@ export function readDevHandle({ root, env = {} }) {
 }
 
 /**
- * 两枚角色标签的词表。**前缀说的是「这个人在这件事里是什么」，不是仓库名**：
+ * 三枚角色标签的词表。**前缀说的是「这个人在这件事里是什么」，不是仓库名**：
  * 同一份检出在两个仓库里都是同一个短名，换仓库由 `--repo` 区分；把仓库名叠进
- * 前缀会让「谁提的 / 谁在做」这一维不再可枚举。
+ * 前缀会让「谁提的 / 谁在做 / 谁做过」这几维不再可枚举。
+ *
+ * `handler` 与 `participant` 是**两种生命周期**，不能合并成同一枚：
+ *   · `处理人:` 是**当前状态**（谁此刻在做），领取时打、结束即撤 —— 它是领取判据
+ *     唯一认的那一枚（`decideClaim`），留着不撤等于把这张单永久锁死；
+ *   · `参与人:` 是**历史集合**（谁做过），领取时补打、结束与关单都不撤 ——
+ *     只增不删，列表页能直接扫出这张单经手过哪些人。
  */
 export const ISSUE_LABEL_ROLES = Object.freeze({
   author: "提单人",
   handler: "处理人",
+  participant: "参与人",
 });
 
 /**
@@ -178,6 +185,16 @@ export function authorLabel(handle) {
  */
 export function handlerLabel(handle) {
   return roleLabel(ISSUE_LABEL_ROLES.handler, handle);
+}
+
+/**
+ * 参与人标签（`参与人:<短名>`）—— 只增不删的经手记录，不参与领取判据。
+ *
+ * @param {string | null | undefined} handle 短名
+ * @returns {string | null}
+ */
+export function participantLabel(handle) {
+  return roleLabel(ISSUE_LABEL_ROLES.participant, handle);
 }
 
 /**
@@ -299,10 +316,13 @@ export function whoamiLines({ handle = null, root = "", slug = null } = {}) {
   const name = String(handle ?? "").trim();
   const label = handlerLabel(name);
   const author = authorLabel(name);
+  const participant = participantLabel(name);
   const repo = slug || "<组织>/<仓库>";
   const lines = [
     `[ship] 本检出的平台留痕：${name || "未配"}` +
-      (name ? `（提单人标签 ${author} · 处理人标签 ${label}）` : "") +
+      (name
+        ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）`
+        : "") +
       `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`,
   ];
   if (!name) {
@@ -327,7 +347,8 @@ export function whoamiLines({ handle = null, root = "", slug = null } = {}) {
       "  ← 回读里看得见那个名字才算打上了",
   );
   lines.push(
-    "[ship] 规则三：单子的领取 / 结束 / 查看走 ship（领取会补 `处理人:` 并评论，结束会评论并撤标签）：",
+    "[ship] 规则三：单子的领取 / 结束 / 查看走 ship（领取会补 `处理人:` / `参与人:` 并评论，" +
+      "结束只撤 `处理人:`、保留 `参与人:`）：",
   );
   lines.push(
     `[ship]   pnpm ship --claim <号> · pnpm ship --release <号> · pnpm ship --claims`,
