@@ -1,4 +1,4 @@
-## Fixed
+## Changed
 
 - **`run-local` 现在也会跑 `pnpm env:init`，补齐 `.env` 里缺失的可选键** —— 之前 Windows 侧
   `tools/start/run-local.ps1` 走 `scripts/prepare-local-run.ps1` 第 4 步只「从 `.env.example` 生成

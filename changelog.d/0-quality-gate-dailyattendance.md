@@ -1,4 +1,4 @@
-## Fixed
+## Changed
 
 - **跨平台门禁名集合对齐**：`scripts/quality-gate.mjs` 的 `GATES` 含 `dailyAttendance`
   （#2114 加的按需档），但 `scripts/quality-gate.ps1` 的 `$Blocks` 漏了这一项，两侧门禁名
