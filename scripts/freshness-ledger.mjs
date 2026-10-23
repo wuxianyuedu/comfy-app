@@ -648,12 +648,21 @@ export function readFreshnessLedgerAt(root, rel) {
 }
 
 /** 机器分支回看 / 回写逻辑拆到 `freshness-ledger-sync.mjs`（仓库 `scripts/**` 900 行硬闸，
- * §12.6 R5：声明层与机制层分开）。本文件只管「本地工作树账」，跨分支那一半在 sync 模块。 */
-export {
+ * §12.6 R5：声明层与机制层分开）。本文件只管「本地工作树账」，跨分支那一半在 sync 模块。
+ *
+ * 这里用**真 import**（不是 `export … from`）再重新导出：受影响测试把用例复制到临时目录跑时，
+ * 依赖追踪只跟 `import … from`、不跟 `export … from` 门面（见 `launcher-core/shell.mjs`
+ * 同款注释），否则新建的 `freshness-ledger-sync.mjs` 不会进副本、整组用例 `ERR_MODULE_NOT_FOUND`。 */
+import {
   FRESHNESS_LEDGER_BRANCH,
   pushFreshnessLedger,
   readBranchLedger,
 } from "./freshness-ledger-sync.mjs";
+export {
+  FRESHNESS_LEDGER_BRANCH,
+  pushFreshnessLedger,
+  readBranchLedger,
+};
 
 /**
  * 把一档的**跑绿**写进它那份账（返回给输出用的一句读数）。
