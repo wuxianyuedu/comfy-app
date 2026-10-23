@@ -38,6 +38,7 @@ import {
   combineShipCodes,
   decideCleanBranch,
   deriveTitle,
+  findMergedPullForHeadSha,
   findPullForBranch,
   readPullVerdict,
 } from "./ship-core.mjs";
@@ -200,10 +201,60 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
 }
 
 /**
- * 阶段 3：拿这条分支的 PR —— 已有开放的复用，没有就建。
+ * 落地判定（ISSUE #2250）：这一笔 HEAD 是不是已经随某条**已合并**的 PR 进过主干。
+ *
+ * 为什么问平台而不问 diff 或 `merge-base`：squash 合并只保证**内容**相同，主干那笔 sha
+ * 与分支头不同，祖先判据对它恒假（实测：今天两条已合并分支的三点 diff 仍给出 7 / 4 个文件，
+ * 而分支头都不是 master 的祖先）。平台在 PR 记录里留着 `head.sha` 与 `is_merged`，
+ * 这两件才是正面事实，且与 `ship-close.mjs` 的落地反查同一套取法。
+ *
+ * 有界扫（页参数与那一路一致）：扫不到就照实念，**不撤销结论** —— 「取不到」不等于「没落地」，
+ * 那一格照常建 PR。
+ *
+ * @param {{run:(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult, slug:string, headSha:string, pages?:number, pageSize?:number}} ctx
+ * @returns {{prNumber: number | null, scanned: number, ran: boolean}}
+ */
+function findLandedPull(ctx) {
+  const { run, slug, headSha, pages = 5, pageSize = 20 } = ctx;
+  if (!slug || !headSha) return { prNumber: null, scanned: 0, ran: false };
+  let scanned = 0;
+  let ran = false;
+  for (let p = 1; p <= pages; p += 1) {
+    const got = cnbJson(run, [
+      "pulls",
+      "list-pulls",
+      "--repo",
+      slug,
+      "--state",
+      "closed",
+      "--page",
+      String(p),
+      "--page-size",
+      String(pageSize),
+      "-v",
+    ]);
+    if (!got) break;
+    ran = true;
+    const list = asArray(got.json);
+    if (!list || list.length === 0) break;
+    scanned += list.length;
+    const hit = findMergedPullForHeadSha(got.json, headSha);
+    if (hit) return { prNumber: hit, scanned, ran };
+    if (list.length < pageSize) break;
+  }
+  return { prNumber: null, scanned, ran };
+}
+
+/**
+ * 阶段 3：拿这条分支的 PR —— 已有开放的复用，**已落地的不建**，两种都不是才建。
  *
  * 幂等是必需的：同一条分支上第二次 `pnpm ship`（第一次只推到建 PR、CI 还没绿）
  * 不能长出第二个 PR，也不能因为「已经有了」而报失败。
+ *
+ * ⚠️ 但「开放清单里没有」不等于「这条分支没合过」：合并成功那一刻 PR 转 `closed`，
+ * 只认开放的那条幂等就在那一刻失效，于是合并之后再跑一次会长出一条**内容已在主干的
+ * 幽灵 PR**（能被再 squash 一次，主干落重复提交 + 白烧一轮 CI）—— 这一格由落地判定拦下
+ * （ISSUE #2250）。
  *
  * @param {PlatformIO & {
  *   branch: string,
@@ -243,6 +294,25 @@ export function createOrReusePull(ctx) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
     stampHandlerLabel({ run, log, slug, number, handle, root });
     return { number };
+  }
+  /* 开放清单里没有 ⇒ 还不能直接建：这条分支可能**已经合过了**（ISSUE #2250）。 */
+  const headSha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
+  const landed = findLandedPull({ run, slug, headSha });
+  if (landed.prNumber) {
+    log(
+      `[ship] 不建新 PR：HEAD ${short(headSha)} 已随 PR #${landed.prNumber} 落地（平台逐条认的 \`is_merged\`）。`,
+    );
+    log(
+      "[ship]   这一批内容已经在主干里 ⇒ 要接着改请开新分支（`pnpm ship --branch feat/<描述>`）。" +
+        "把同一批内容再合一次，主干上就多一笔重复提交，还白烧一轮 CI。",
+    );
+    return { number: null };
+  }
+  if (!landed.ran) {
+    log(
+      "[ship] 落地判定没读到 closed 清单（平台没答）⇒ 按**未判定**处理，照旧建 PR：" +
+        "缺读数不新增结论、也不撤销结论（「取不到」不等于「没落地」）。",
+    );
   }
   const { title } = pickTitle({
     run,
