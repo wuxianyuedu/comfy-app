@@ -24,10 +24,17 @@
  *
  *   · **不改成并行**：这些条目本身就是 CPU 密集型（prettier / vitest），
  *     并行只会把节点压成上面那种「谁都不推进」的形态 —— 那正是本次要治的病。
- *   · **不收窄**：`.cnb.yml` 的 `ifModify` 是按**整格**跳过的，一格装多条时它只能表达
- *     「一起跑」或「一起不跑」，而那些条目的扫描面并不相同 —— 后者正是本仓最不能
- *     有的形态（判据在场、结论静默变成放行）。格内一律跑全。
- *     ⇒ **需要收窄的判据不进这一格**，它自己占一格（平台的 `ifModify` 只能按格算）。
+ *   · **不给整格挂 `ifModify`**：`.cnb.yml` 的 `ifModify` 是按**整格**跳过的，
+ *     一格装多条时它只能表达「一起跑」或「一起不跑」，而那些条目的扫描面并不相同
+ *     —— 后者正是本仓最不能有的形态（判据在场、结论静默变成放行）。
+ *   · **格内逐条按面收窄**（ISSUE #2255，2026-10-23 加）：整格不能收窄，**格内可以**
+ *     —— 收窄面由**收窄登记表**（`scripts/ci-incremental-gates.mjs` 的
+ *     `INCREMENTAL_GATES`）给出，与平台那一格的 `ifModify` **同一份 glob**
+ *     （`checkIncrementalGates()` 已在核「表 ⇄ `.cnb.yml`」的双向一致）。
+ *     ⇒ 现场：那 13 条判据在平台那一格被 `ifModify` 跳过，在这一格却照跑全量
+ *     （本机实测 22.9s / 复合档逐条墙钟的 10.5%）—— 收窄白做。
+ *     ⚠️ 收窄的两条边界：**改动面取不到 ⇒ 一条都不跳**（“不知道” ≠ “没改”）、
+ *     **跳过的逐条点名且不计入「绿」**（跳过不是判过）。
  *   · **不改判据**：每一条都是原来那份脚本、那份参数，本文件只负责「起它、转述它」。
  *
  * ## 收窄面的唯一出处仍然是登记表
@@ -67,15 +74,17 @@
  * ⇒ `heavyGateRegistryProblems()` 判的就是这一对，且 `main()` **先自证、后跑**：
  * 对不上就判红、什么都不跑（那种红必须发生在跑之前）。
  *
- * 用法：`node scripts/ci-heavy-gates.mjs [--only 条目名 …]`
- *   （`--only` 只给人手工排查用；`.cnb.yml` 里不带它 —— 平台侧永远跑全）
+ * 用法：`node scripts/ci-heavy-gates.mjs [--only 条目名 …] [--no-narrow]`
+ *   （`--only` 与 `--no-narrow` 都只给人手工排查用；`.cnb.yml` 里不带它们 ——
+ *   平台侧按**改动面**收窄，见上面「边界」那一节）
  */
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { CHANGED_SCOPED, readHookSteps, runGate } from "./base-check/hook-steps.mjs";
-import { resolveBaseRef } from "./changed-scope.mjs";
+import { resolveBaseRef, resolveChangedFiles } from "./changed-scope.mjs";
+import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -189,14 +198,68 @@ export function heavyGateArgv(argv, deps = {}) {
 }
 
 /**
+ * 这一步跑的是哪份判据脚本（收窄表按**判据**查，不按标签查）。
+ *
+ * 取**第一个** `scripts/…` 路径：`node scripts/x.cjs …` 里那个 `x.cjs` 才是判据本身，
+ * 后面的参数与包装器都不是。取错了就会拿包装器的名字去查表 ⇒ 查不到 ⇒ 永不收窄
+ * （那个方向是安全的，但白费一次收窄的机会）。
+ *
+ * @param {readonly string[]} argv
+ * @returns {string | null}
+ */
+export function judgmentScriptOf(argv) {
+  const m = String((argv ?? []).join(" ")).match(
+    /scripts\/[A-Za-z0-9._-]+\.(?:cjs|mjs)/,
+  );
+  return m ? m[0] : null;
+}
+
+/**
+ * 这一步在复合档里该不该**按面跳过**（ISSUE #2255）。
+ *
+ * ## 它治的是哪一件事
+ *
+ * 平台侧那 13 个 stage 带 `ifModify` 收窄（面没被本次改动碰到 ⇒ 那一格不执行），
+ * 而**同一份判据**在复合档里照跑全量 ⇒ 收窄白做（本机实测 22.9s / 10.5%）。
+ *
+ * ## 口径（三条，逐条都有出处）
+ *
+ *   ① **面取自收窄登记表**（`scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`），
+ *      与平台那一格的 `ifModify` **同一份 glob** —— `checkIncrementalGates()` 已经在核
+ *      「表 ⇄ `.cnb.yml`」的双向一致 ⇒ 两处收窄的口径逐字相同。
+ *   ② **「不知道」不等于「没改」**：改动面取不到（`null`）或**清单为空** ⇒
+ *      **一条都不跳过**。把「不知道」读成「没改」会让整批判据静默消失 ——
+ *      那正是本仓最贵的形态（判据在场、结论静默变成放行）。
+ *   ③ **跳过的必须被点名**：跳过的那几条**不计入「绿」**，单独一档逐条念出来
+ *      （`main()` 里那一段）。静默跳过与静默放行是同一族病。
+ *
+ * @param {{label: string, argv: readonly string[]}} step 钩子那一步
+ * @param {{files: readonly string[]} | null} changed 改动面；`null` = 不知道
+ * @returns {{skip: false} | {skip: true, stage: string, globs: readonly string[], script: string}}
+ */
+export function narrowingDecision(step, changed) {
+  if (!changed) return { skip: false };
+  const files = changed.files ?? [];
+  if (files.length === 0) return { skip: false };
+  const script = judgmentScriptOf(step?.argv ?? []);
+  if (!script) return { skip: false };
+  const entry = narrowingEntryForScript(script);
+  if (!entry) return { skip: false };
+  if (faceTouched(entry, files)) return { skip: false };
+  return { skip: true, stage: entry.name, globs: entry.globs, script };
+}
+
+/**
  * 跑完整张注册表。
  *
- * @param {{cwd?: string, only?: string | null, env?: Record<string, string | undefined>}} [io]
- * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[]}[], notJudged: {label: string, reason: string}[], unreadable: boolean}}
+ * @param {{cwd?: string, only?: string | null, env?: Record<string, string | undefined>, changedFiles?: {files: readonly string[]} | null}} [io]
+ * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[]}[], skipped: {label: string, stage: string, globs: readonly string[]}[], notJudged: {label: string, reason: string}[], unreadable: boolean}}
  *   `unreadable` = 注册表本身没读出来（钩子文件不在 / 解析零条）—— 那是
  *   「本档不构成证据」，不是「没有档要跑」。
  *   `notJudged` = **没有判决面**的那些步骤（它们在这一档恒绿且无声）——
  *   单独一档、退 2，不计入「绿」。
+ *   `skipped` = **按面未触及**的那些（ISSUE #2255）—— 单独一档、逐条点名，
+ *   **不计入「绿」**（跳过不是判过）。
  *   `ms` = 那一条的墙钟（毫秒）—— 这一格此前只打「ok / 红」，**没有任何计时**，
  *   而文件头承诺过「每条的墙钟」⇒ 48s 那一堆只有总数没有分布，无从判断该优化谁。
  */
@@ -207,7 +270,9 @@ export function runHeavyGates(io = {}) {
    * 钩子的临时目录）照样读到真仓库的 50 条 ⇒ 「没跑起来」那一档在测试里永远命中不了，
    * 而它正是这条判据唯一有牙的地方。 */
   const all = readHookSteps(path.join(cwd, ".githooks", "pre-commit"));
-  if (all.length === 0) return { runs: [], notJudged: [], unreadable: true };
+  if (all.length === 0) {
+    return { runs: [], skipped: [], notJudged: [], unreadable: true };
+  }
   const steps = only
     ? all.filter(
         (s) =>
@@ -218,9 +283,21 @@ export function runHeavyGates(io = {}) {
     : all;
   /** @type {{label: string, code: number, output: string, ms: number, notRunCodes: number[]}[]} */
   const runs = [];
+  /** @type {{label: string, stage: string, globs: readonly string[]}[]} */
+  const skipped = [];
   /** @type {{label: string, reason: string}[]} */
   const notJudged = [];
   for (const step of steps) {
+    /* 按面跳过（ISSUE #2255）：面取自收窄登记表，与平台那一格同一份 glob。 */
+    const decision = narrowingDecision(step, io.changedFiles ?? null);
+    if (decision.skip) {
+      skipped.push({
+        label: step.label,
+        stage: decision.stage,
+        globs: decision.globs,
+      });
+      continue;
+    }
     const resolved = heavyGateArgv(step.argv, { cwd, env: io.env });
     if (!resolved.ok) {
       notJudged.push({ label: step.label, reason: resolved.reason });
@@ -236,7 +313,7 @@ export function runHeavyGates(io = {}) {
       notRunCodes: resolved.notRunCodes,
     });
   }
-  return { runs, notJudged, unreadable: false };
+  return { runs, skipped, notJudged, unreadable: false };
 }
 
 /**
@@ -288,7 +365,9 @@ export function heavyGateRegistryProblems(hookSteps) {
  *   `0` = 全绿；`1` = 有档红了；`2` = 有档**没跑起来**（`runGate` 的 127 哨兵）。
  * 「没跑起来」与「跑了且红」必须在退出码上分开，否则前者会被读成后者。
  *
- * @param {{cwd?: string, argv?: string[], log?: (line: string) => void, env?: Record<string, string | undefined>}} [io]
+ * @param {{cwd?: string, argv?: string[], log?: (line: string) => void, env?: Record<string, string | undefined>, changedFiles?: {files: readonly string[]} | null}} [io]
+ *   `changedFiles` 不给 ⇒ 自己按环境算（`resolveChangedFiles()`）；给 `null` ⇒
+ *   **不收窄**（全部照跑）。给一份清单 ⇒ 按那份清单判面（ISSUE #2255）。
  * @returns {number}
  */
 export function main(io = {}) {
@@ -323,7 +402,41 @@ export function main(io = {}) {
     return 1;
   }
 
-  const { runs, notJudged } = runHeavyGates({ cwd: io.cwd, only, env: io.env });
+  /* 收窄面（ISSUE #2255）：这一格按**收窄登记表**判「本次改动碰没碰到那条判据的面」。
+   * 拿不到改动面 ⇒ **一条都不跳过**（“不知道” ≠ “没改”），并把这件事念出来。 */
+  let changedFiles = io.changedFiles;
+  if (changedFiles === undefined) {
+    if (argv.includes("--no-narrow")) {
+      /* 手工排查要**全量**：这一格默认按面收窄（ISSUE #2255），而「手工复现一条红」
+       * 时拿到一份收窄过的读数会让人误判（"它怎么是绿的"）。 */
+      changedFiles = null;
+      log("[重档] `--no-narrow` ⇒ 这一格**不收窄**（全部照跑）");
+    } else {
+      const got = resolveChangedFiles({ cwd: io.cwd ?? ROOT, env: io.env });
+      changedFiles = got.ok ? { files: got.files } : null;
+      if (!got.ok) {
+        log(
+          `[重档] 取不到改动面 ⇒ 这一格**不收窄**（全部照跑）：${got.reason}`,
+        );
+      } else if (got.files.length === 0) {
+        log(
+          "[重档] 改动面是空的 ⇒ 这一格**不收窄**（全部照跑）—— 空清单是「不知道」，不是「没改」",
+        );
+      } else {
+        /* 念出「按哪份 diff 收窄」：收窄是**这一格**少判一些的理由，读者必须能核对它。 */
+        log(
+          `[重档] 改动面：${got.via}（${got.files.length} 个文件）⇒ 这一格按面收窄`,
+        );
+      }
+    }
+  }
+
+  const { runs, skipped, notJudged } = runHeavyGates({
+    cwd: io.cwd,
+    only,
+    env: io.env,
+    changedFiles,
+  });
 
   /* 「没跑起来」有两族：127（命令找不到，这一档的既有约定）与**那一步自己声明的**
    * 退出码（`shell-gate` 报「没跑起来」用 2 —— 仓库三态 0 绿 / 1 红 / 2 没跑起来）。
@@ -336,12 +449,19 @@ export function main(io = {}) {
     log(
       JSON.stringify(
         {
-          total: runs.length,
+          total: runs.length + skipped.length,
           red: red.map((r) => r.label),
           notRun: missing.map((r) => r.label),
           /* 「没有判决面」那一档：它们在这一档恒绿且无声 ⇒ 单独列出来，
            * 不许混进 `total` 里冒充「跑过」。 */
           notJudged: notJudged.map((n) => ({ label: n.label, reason: n.reason })),
+          /* 「按面未触及」那一档（ISSUE #2255）：跳过**不是**判过 ⇒ 单独列出来，
+           * 不许混进「绿」里冒充「跑过」。 */
+          skipped: skipped.map((s) => ({
+            label: s.label,
+            stage: s.stage,
+            globs: s.globs,
+          })),
           ms: runs.map((r) => ({ label: r.label, ms: r.ms })),
         },
         null,
@@ -349,6 +469,14 @@ export function main(io = {}) {
       ),
     );
   } else {
+    /* 「按面未触及」的那些**逐条点名**（ISSUE #2255）：静默跳过与静默放行是同一族病 ——
+     * 平台那一格以同一组 glob 收窄，这一格也收窄，但**跳过了哪几条必须说出来**。 */
+    for (const s of skipped) {
+      log(
+        `[重档] 按面未触及 ⇒ 跳过：${s.label}` +
+          `（面 ${s.globs.join(" / ")}；平台那一格：${s.stage}）`,
+      );
+    }
     runs.forEach((r, i) => {
       const tag = r.code === 0 ? "ok" : r.code === 127 ? "没跑起来" : "红";
       log(`[重档] ${i + 1}/${runs.length} ${tag} ${r.label}（${r.ms}ms）`);
@@ -368,8 +496,8 @@ export function main(io = {}) {
   }
   const totalMs = runs.reduce((sum, r) => sum + r.ms, 0);
   log(
-    `[重档] 合计 ${runs.length} 条：红 ${red.length}、没跑起来 ${missing.length}、` +
-      `没判 ${notJudged.length}、` +
+    `[重档] 合计 ${runs.length + skipped.length} 条：红 ${red.length}、没跑起来 ${missing.length}、` +
+      `没判 ${notJudged.length}、按面未触及 ${skipped.length}、` +
       `绿 ${runs.length - red.length - missing.length}；墙钟合计 ${totalMs}ms`,
   );
   if (red.length > 0) {
