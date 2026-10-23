@@ -276,6 +276,31 @@ export function withCommentHeader(body, handle) {
 }
 
 /**
+ * 一段平台文字的署名**形状**读数（ISSUE #2269，只读审计用）。
+ *
+ * 与 `withCommentHeader` 是一对：那一半保证形状，这一半**量**形状 ——
+ * 约定写在正文里而没有任何一处能回答「现在哪些文字没照做」，就是「在册 ≠ 出勤」那一型
+ * （#2114 的现场：判据在场、执行者不在场，账面全绿）。
+ *
+ * 四档，不合成一个分数：
+ *   · `缺` —— 全文没有署名行；
+ *   · `不在首行` —— 有，但第一段正文在它之前（读者先看到的是没有署名的文字）；
+ *   · `重复` —— 首行是署名行，但全文出现两遍及以上（#2258 的现场）；
+ *   · `正常` —— 首行是署名行且全文只有一遍。
+ *
+ * @param {string | null | undefined} body 正文原样
+ * @returns {"缺" | "不在首行" | "重复" | "正常"}
+ */
+export function headerShape(body) {
+  const lines = String(body ?? "").split(/\r?\n/);
+  const heads = lines.filter((l) => HEADER_LINE_RE.test(String(l).trim()));
+  if (heads.length === 0) return "缺";
+  const first = lines.find((l) => String(l).trim() !== "");
+  if (!HEADER_LINE_RE.test(String(first ?? "").trim())) return "不在首行";
+  return heads.length > 1 ? "重复" : "正常";
+}
+
+/**
  * 「这张单是谁提的、按什么优先级」—— 同样是**只读数，不拦**（ISSUE #2175）。
  *
  * 为什么账号层分不出人（当场实测，跨 #2135 / #2149 / #2156 / #2157 / #2163 五张单、跨并行会话）：
