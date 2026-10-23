@@ -25,6 +25,23 @@ const ROOT = path.resolve(HERE, "..");
 const E2E_REL = "scripts/.e2e-freshness.json";
 const BRANCH = "ci/freshness-ledger-test";
 
+/**
+ * 账里 `e2e` 那一档。
+ *
+ * 账的形状是 `Record<string, unknown>`（读账那层的既有契约），而这一档的形状是
+ * `{ verifiedAt?: string }` —— `unknown` 上取成员过不去，此处**收窄**而不是 `as any`：
+ * `as any` 让整条表达式退化成「不检查」的样子（`no-unsafe-member-access` 正是为它准备的），
+ * 而这里是断言「这一档被读到了」的地方，恰恰不该不检查。
+ *
+ * @param ledger 读回来那份账（读不出时是 `null`）
+ * @returns `e2e` 那一档；账里没有这一档时是 `undefined`
+ */
+function e2eTrack(
+  ledger: Record<string, unknown> | null,
+): { verifiedAt?: string } | undefined {
+  return ledger?.e2e as { verifiedAt?: string } | undefined;
+}
+
 function git(args: string): string {
   return execSync(`git ${args}`, { cwd: ROOT, encoding: "utf8" });
 }
@@ -67,12 +84,12 @@ afterAll(() => {
 describe("freshness ledger 机器分支回看（#2247）", () => {
   it("readBranchLedger 能从指定 ref 读出账", () => {
     const ledger = readBranchLedger({ root: ROOT, rel: E2E_REL, branch: BRANCH });
-    expect((ledger as any)?.e2e?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(e2eTrack(ledger)?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
   });
 
   it("readFreshnessLedger 机器账权威：机器有则以机器为准（不取工作树那份）", () => {
     const ledger = readFreshnessLedger("e2e", ROOT);
-    expect((ledger as any).e2e?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(e2eTrack(ledger)?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
   });
 
   it("pushFreshnessLedger 在本地（无 CNB 平台身份）时是 no-op、绝不误推", () => {
@@ -88,6 +105,6 @@ describe("freshness ledger 机器分支回看（#2247）", () => {
   it("机器分支缺失时回退工作树账（本地自证仍作兜底读数）", () => {
     delete process.env.FRESHNESS_LEDGER_BRANCH;
     const ledger = readFreshnessLedger("e2e", ROOT);
-    expect((ledger as any).e2e?.verifiedAt).not.toBe("2099-01-01T00:00:00.000Z");
+    expect(e2eTrack(ledger)?.verifiedAt).not.toBe("2099-01-01T00:00:00.000Z");
   });
 });
