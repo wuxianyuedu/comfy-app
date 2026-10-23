@@ -16,18 +16,20 @@
  *
  * 「单子」那一族（碎片读数、提单人留痕、优先级词表）不在这里 —— 它在 `ship-ticket.mjs`：
  * 那些判的不是「外部执行者的形状」，而是碎片与单子的口径，变化方向不同，而两份叠在一起
- * 已经越过 `check-infra-file-size.cjs` 那 900 行硬闸（AGENTS 硬规则 22）。本文件只从它取
- * `fragmentHead`（首行的读法一处，PR 正文与单子读数共用）。
+ * 已经越过 `check-infra-file-size.cjs` 那 900 行硬闸（AGENTS 硬规则 22）。
  *
  * 「build 读数」那一族（按 sha 归属构建 / 轮询签名 / 三态判定 / `asArray`）同样按这条线
  * 分了出去，在 `ship-build.mjs`：它服务的是一条 build 自己的读法，与 PR / git 的形状各自
  * 独立变化，放在同一份文件里只会在下一次加字段时再撞一次 900 行。
+ *
+ * 「PR 正文那一格」（碎片清单 + `git diff --stat` 的摘要与封顶）按同一条线分在
+ * `ship-pull-body.mjs`：它只回答「发给平台的正文长什么样」，与这里的「外部执行者的形状」
+ * 各自变化（ISSUE #2248 落地时这份文件又到了 906 行 —— 那正是上面两段写过的失效形态）。
  */
 import fs from "node:fs";
 import path from "node:path";
 
 import { resolveGitDir } from "./git-dir.mjs";
-import { commentHeader, fragmentHead } from "./ship-ticket.mjs";
 
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
@@ -524,6 +526,29 @@ export function readPullVerdict(json) {
 }
 
 /**
+ * 从「建 PR 的响应」里取**平台自己给的**拒绝理由（`errcode` / `errmsg`）。
+ *
+ * 为什么要单独念一句：这一格的收尾话术只会说「响应里没有 PR 号 ⇒ 没跑起来」，
+ * 而**为什么**没有号写在 `data.errcode` / `data.errmsg` 里（实测 2000003
+ * `body length exceeded the limit 65,535`，ISSUE #2248）。响应原文本来也会转述，
+ * 但那一句是按**字符**截的 —— 把外部拒绝的理由押在截断窗口里，就是让下一个执行者
+ * 重新查一遍已经量到的事。
+ *
+ * 只认这两个键名，不猜别的（`message` 那类同名字段在成功响应里可能是别的意思）。
+ *
+ * @param {any} json 响应解析结果
+ * @returns {{errcode: string, errmsg: string} | null} 两件都没有时 null（不编一个理由）
+ */
+export function readPullCreateError(json) {
+  if (!json || typeof json !== "object") return null;
+  const d = json.data && typeof json.data === "object" ? json.data : {};
+  const errcode = json.errcode ?? d.errcode;
+  const errmsg = json.errmsg ?? d.errmsg;
+  if (errcode === undefined && errmsg === undefined) return null;
+  return { errcode: String(errcode ?? ""), errmsg: String(errmsg ?? "") };
+}
+
+/**
  * 从 `cnb pulls list-pulls -v` 的 JSON 里按 head 分支名找已存在的 PR（幂等用）。
  *
  * @param {any} json 解析结果（外部形状，可能是裸数组也可能是 `{data:[…]}`）
@@ -573,44 +598,6 @@ export function findMergedPullForHeadSha(json, headSha) {
     if (String(p?.head?.sha ?? "") === sha) return Number(p.number);
   }
   return null;
-}
-
-/**
- * 把 `changelog.d/` 里的碎片标题拼成 PR 正文的**事实部分**。
- *
- * 只搬「盘上已有的字」：段落标题 + 碎片文件名。不写因果、不写「已验证」那类声明
- * （`check-commit-claims.mjs` 会拿提交树复核句式，而 PR 正文迟早会被抄进合并信息）。
- *
- * @param {{root:string,fragments:string[],diffstat:string,handle?:string|null}} input 量到的事实
- *   与这一跑的留痕短名（ISSUE #2204：正文开头一行 `**[评论人：<短名>]**`，未配写「未配」）
- * @returns {string} 正文
- */
-export function buildPullBody({ root, fragments, diffstat, handle = null }) {
-  const lines = [
-    commentHeader(handle),
-    "",
-    "## 本 PR 带的变更碎片（`changelog.d/`）",
-    "",
-  ];
-  for (const f of fragments) {
-    // 首行的读法只有一处（`fragmentHead`）：两处各读各的，就会开始对同一份碎片给两种答案。
-    lines.push(`- \`${f}\` → ${fragmentHead(root, f) || "(读不到)"}`);
-  }
-  lines.push(
-    "",
-    "## 改动量（`git diff --stat` 对上游）",
-    "",
-    "```",
-    diffstat || "(空)",
-    "```",
-    "",
-  );
-  lines.push(
-    "> 本段由 `pnpm ship` 拼装，内容全部是它当场量到的事实（碎片标题与 diffstat）。",
-    "> 判断、读数与因果请写在下面的正文里 —— 脚本不代写；开头那行「评论人」只是" +
-      "这一跑的留痕，不是对正文的判断背书。",
-  );
-  return lines.join("\n");
 }
 
 /**

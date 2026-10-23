@@ -44,7 +44,6 @@ import {
   readBuildVerdict,
 } from "../scripts/ship-build.mjs";
 import {
-  buildPullBody,
   CODE,
   combineShipCodes,
   decideCleanBranch,
@@ -57,9 +56,15 @@ import {
   parseIssueNumberToken,
   parseSlug,
   planCommands,
+  readPullCreateError,
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
+import {
+  buildPullBody,
+  capDiffstat,
+  PULL_BODY_LIMIT,
+} from "../scripts/ship-pull-body.mjs";
 import {
   decideCloseIssue,
   findMergedPullProofs,
@@ -87,6 +92,7 @@ import {
 } from "../scripts/ship-claim.mjs";
 import {
   cleanBranch,
+  createOrReusePull,
   pollUntilTerminal,
   reportVerdict,
 } from "../scripts/ship-platform.mjs";
@@ -3241,6 +3247,157 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
         banned,
       );
     }
+  });
+});
+
+/**
+ * PR 正文的**摘要性**（ISSUE #2248）。
+ *
+ * 起因是实测：#2231 那次改动面 2673 个文件，`git diff --stat` 原样贴进正文 = 166324 字节，
+ * 而平台对正文的硬上限是 65535 ⇒ 建 PR 直接被拒（`errcode 2000003`）。那一格在屏幕上只念
+ * 「响应里没有 PR 号 ⇒ 没跑起来」，看不出是**正文太长** —— 于是「改动面大」这一件事本身
+ * 就成了「PR 建不出来」，红的形态与被判对象毫无关系。
+ */
+describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不许顶穿上限（ISSUE #2248）", () => {
+  const ok = (stdout: string): FakeResult => ({
+    status: 0,
+    stdout,
+    stderr: "",
+    error: null,
+  });
+
+  /** 造一份 `git diff --stat` 的形状：N 行逐文件明细，末行是总数（顺序与 git 一致）。 */
+  const statText = (n: number) =>
+    [
+      ...Array.from({ length: n }, (_, i) => `  docs/generated/x${i}.md | 1 +`),
+      ` ${n} files changed, ${n} insertions(+)`,
+    ].join("\n");
+
+  /** 直调 `createOrReusePull` 的量具：记下每一次命令，以及交给 `mkTmp` 的那份正文。 */
+  function pullHarness(env: { stat?: string; postPull?: FakeResult } = {}) {
+    const calls: string[] = [];
+    const bodies: string[] = [];
+    const heard: string[] = [];
+    const run = (cmd: string, args: string[]): FakeResult => {
+      const key = args.join(" ");
+      calls.push(`${cmd} ${key}`);
+      if (cmd === "cnb" && key.includes("list-pulls"))
+        return ok('{"status":200,"data":[]}');
+      if (cmd === "cnb" && key.includes("post-pull"))
+        return env.postPull ?? ok('{"status":201,"data":{"number":3002}}');
+      if (cmd === "git" && key.startsWith("diff --stat"))
+        return ok(env.stat ?? "");
+      return ok("");
+    };
+    const io = {
+      run,
+      log: (s: string) => heard.push(s),
+      mkTmp: (_name: string, text: string) => {
+        bodies.push(text);
+        return "C:/tmp/comfy-ship-tmp/body";
+      },
+      root: process.cwd(),
+      slug: "x/y",
+      branch: "feat/big",
+      frags: ["changelog.d/0-x.md"],
+      baseRef: "cnb/master",
+      baseBranch: "master",
+      explicitTitle: "fix(x): 一句话说得完",
+      handle: null,
+    };
+    return { calls, bodies, heard, io };
+  }
+
+  it("capDiffstat 对账：列出的 + 省略的 === 逐行明细总数，且总计数行永远留下", () => {
+    const big = capDiffstat(statText(3000), 40);
+    expect(big.total).toBe(3000);
+    expect(big.listed + big.omitted).toBe(big.total);
+    expect(big.omitted).toBe(2960);
+    // 裁的是逐行明细，不是「这次动了多少」那一行 —— 被裁之后它是读者唯一的量。
+    expect(big.text.split("\n")).toContain(" 3000 files changed, 3000 insertions(+)");
+    expect(big.note).toContain("另有 2960 条未列出");
+    const small = capDiffstat(" a.ts | 1 +\n b.ts | 2 +-\n 2 files changed, 1 insertion(+)");
+    expect(small.omitted).toBe(0);
+    expect(small.note, "没裁却念「被裁了」就是量具说谎").toBe("");
+    expect(small.text).toContain("a.ts");
+  });
+
+  it("正文长度与改动面无关：3000 行的 diffstat 发出去的正文仍在上限之内", () => {
+    const { calls, bodies, io } = pullHarness({ stat: statText(3000) });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(3002);
+    expect(calls.some((c) => c.includes("post-pull"))).toBe(true);
+    expect(bodies.length, "正文必须经 mkTmp 落一次，否则断的是空串").toBe(1);
+    const [body = ""] = bodies;
+    expect(body.length).toBeLessThan(PULL_BODY_LIMIT);
+    // 省略必须被说出来：省了多少条、为什么，以及去哪里看全量。
+    expect(body).toContain("前 40 条");
+    expect(body).toContain("另有 2960 条未列出");
+    expect(body).toContain(" 3000 files changed");
+  });
+
+  it("小改动面原样进正文，不出现「未列出」那句话", () => {
+    const { bodies, io } = pullHarness({
+      stat: " a.ts | 1 +\n b.ts | 2 +-\n 2 files changed, 1 insertion(+)",
+    });
+    createOrReusePull(io);
+    expect(bodies[0]).toContain("a.ts | 1 +");
+    expect(bodies[0]).not.toContain("未列出");
+  });
+
+  it("封顶之后仍然装不下（碎片清单自己就顶穿上限）⇒ 一次 post-pull 都不发，并念出「不建 PR」", () => {
+    /* 这一格证明的是「减半」真的在承重：不是「40 条大概够用」的乐观假设。
+     * 碎片清单不在裁剪面里（少列一份碎片就等于漏报这次带了什么），所以它自己超长时
+     * 唯一诚实的出口是**不发**，并把已经量到的上限念出来。 */
+    const frags = Array.from(
+      { length: 900 },
+      (_, i) => `changelog.d/${"z".repeat(80)}${i}.md`,
+    );
+    const { calls, bodies, heard, io } = pullHarness({ stat: statText(3000) });
+    const out = createOrReusePull({ ...io, frags });
+    expect(
+      calls.some((c) => c.includes("post-pull")),
+      "超上限还发给平台，拿到的是一条 400 而不是一个结论",
+    ).toBe(false);
+    expect(bodies).toEqual([]);
+    expect(out.number).toBeFalsy();
+    const all = heard.join("\n");
+    expect(all).toContain("不建 PR");
+    expect(all).toContain(String(PULL_BODY_LIMIT));
+  });
+
+  it("平台给的拒绝（errcode / errmsg）单独念一行，不靠响应原文那个字符窗口", () => {
+    const { heard, io } = pullHarness({
+      postPull: {
+        status: 0,
+        stdout:
+          '{"status":400,"data":{"errcode":2000003,"errmsg":"body length exceeded the limit 65,535"}}',
+        stderr: "",
+        error: null,
+      },
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBeFalsy();
+    const all = heard.join("\n");
+    expect(all).toContain("平台给的拒绝：errcode=2000003");
+    expect(all).toContain("body length exceeded the limit 65,535");
+    expect(all).toContain("没有 PR 号");
+  });
+
+  it("readPullCreateError：只认 errcode / errmsg 这两个键名，成功响应一律回 null", () => {
+    expect(
+      readPullCreateError({
+        status: 400,
+        data: { errcode: 2000003, errmsg: "body length exceeded the limit 65,535" },
+      }),
+    ).toEqual({
+      errcode: "2000003",
+      errmsg: "body length exceeded the limit 65,535",
+    });
+    expect(readPullCreateError({ status: 201, data: { number: 3002 } })).toBeNull();
+    // 没有 errcode 的旧形状不猜：那一格仍由响应原文转述，不由这里编一个理由。
+    expect(readPullCreateError({ status: 400, data: { message: "title invalid" } })).toBeNull();
+    expect(readPullCreateError(null)).toBeNull();
   });
 });
 
