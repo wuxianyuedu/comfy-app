@@ -27,7 +27,8 @@
  *   1. 账 ⇄ 源码 数值相等（漂移即红，并说出是**变松**还是变严）；
  *   2. 同组必须同数（R5 与 infra 那两把 900 —— 只改一把 = 半边失效）；
  *   3. 这些判据文件里出现、而账里没有的顶层数值 ⇒ 红（不承重的也以 `kind:"report"` 入账：
- *      入账这个动作本身就是那次判断）；
+ *      入账这个动作本身就是那次判断）。**扫描根是磁盘上的 `scripts/check-*.cjs`**，不是
+ *      「账上点名的那些文件」—— 后者让整份没进账的判据永远不被扫（ISSUE #2188 的立案现场）；
  *   4. 相对主干账变松而未签字（`movedFrom` + `movedIssue`）⇒ 红；
  *   5. 自证：账非空、每条都定位得到 —— 正则写漂会让「比对了 0 条」与「全部一致」长得一样。
  *
@@ -94,7 +95,7 @@ function isLooser(entry, from, to) {
  * JSDoc 结构行的豁免（上一行的 `{{` 让「整段是一个类型块」判不出来），而「注释一律中文」
  * 那条硬闸是按英文虚词表筛的 —— 旧写法里那个 `any` 恰好在表里，于是类型语法被读成一句英文。
  *
- * @param {{entries: GateThreshold[], readSource: (file: string) => string | null, masterEntries?: ReadonlyMap<string, { value: number }> | null, minEntries?: number}} input
+ * @param {{entries: GateThreshold[], readSource: (file: string) => string | null, masterEntries?: ReadonlyMap<string, { value: number }> | null, minEntries?: number, scanFiles?: string[] | null}} input
  * @returns {{problems: string[], notes: string[]}}
  */
 function analyze({
@@ -102,6 +103,7 @@ function analyze({
   readSource,
   masterEntries = null,
   minEntries = MIN_ENTRIES,
+  scanFiles = null,
 }) {
   /** @type {string[]} */
   const problems = [];
@@ -188,15 +190,35 @@ function analyze({
     }
   }
 
-  // 3) 未入账的顶层数值
-  for (const f of [...new Set(entries.map((e) => e.file))]) {
+  // 3) 未入账的顶层数值 —— 输入面是**磁盘上的判据文件**，不是账上点名的那些
+  //    （ISSUE #2188：从账里推面 ⇒ 整份没进账的文件根本不进循环）。
+  const ledgerFiles = [...new Set(entries.map((e) => e.file))];
+  const filesToScan = [
+    ...new Set([...(scanFiles ?? ledgerFiles), ...ledgerFiles]),
+  ];
+  for (const f of filesToScan) {
     const text = readSource(f);
     if (text === null) continue;
+    const names = [...text.matchAll(CONST_DECL)].map(
+      (m) => /** @type {string} */ (m[1]),
+    );
+    if (names.length === 0) continue;
     const inLedger = new Set(
       entries.filter((e) => e.file === f).map((e) => e.const),
     );
-    for (const m of text.matchAll(CONST_DECL)) {
-      const name = /** @type {string} */ (m[1]);
+    /* 整份没进账 ⇒ 这一格里它一个字都不被判。单列一句而不是并入下面那条：
+       话术要点名「这份文件从没被这本账看过」，否则读者只会以为自己漏登记了一个数。
+       只报数名、不报数值 —— 数值在账里才对读者可见。 */
+    if (inLedger.size === 0) {
+      problems.push(
+        `${f} 里扫到 ${names.length} 个顶层具名数值（${names.join(" / ")}），` +
+          "而账里**一条都没有** ⇒ 这份文件整体不在本判据的覆盖面内。出路仍是那两条：" +
+          '是承重的入账（threshold / floor），不是承重的也以 "kind": "report" 入账' +
+          "—— 入账这个动作本身就是那次判断。",
+      );
+      continue;
+    }
+    for (const name of names) {
       if (!inLedger.has(name)) {
         problems.push(
           `${f} 里有顶层数值 ${name} 而账上没有 —— 是承重的就入账（threshold / floor），` +
@@ -234,7 +256,7 @@ function analyze({
 }
 
 /**
- * 真实 IO 的那几件：读源码、读本机账、读主干账。
+ * 真实 IO 的那几件：读源码、读本机账、读主干账、从磁盘现算「哪些文件算判据」。
  *
  * @param {string} file 相对仓库根的判据文件
  * @returns {string | null} 读不到（文件不在）时返回 null，由调用方念成「定位不到」
@@ -246,6 +268,29 @@ function realReadSource(file) {
   } catch {
     return null;
   }
+}
+
+/**
+ * 扫描根 —— `scripts/check-*.cjs` 这一族，**从磁盘现算**。
+ *
+ * 这一行就是 ISSUE #2188 的全部内容：旧写法的输入面是「账上点名的文件」，于是**整份没进账
+ * 的判据文件根本不进循环**，它那几个顶层数值一个字都不被判 —— 而这条判据的本职恰恰是
+ * 「新建判据的那一笔要显形」。#2157 那批新建 `check-tracked-secrets.cjs` 时，四个下限是
+ * 作者**自己记得**去入账的；没记得的话，这一格当场也是绿的（同 #2156 文件头那一型的第二次
+ * 出现，对象换成了它自己）。
+ *
+ * 刻意**不**按「哪些文件算判据」再抄一份清单：那是第二份账，漂移形态是静默的（清单少一份 ⇒
+ * 那份永远不被扫，而账面一条红都没有）—— 同 `check-format.cjs` 文件头那条「判据面由
+ * `IGNORE_GLOBS` 自己现算」的理由。`*-check.mjs` / `ship-*.mjs` / `quality-gate.mjs` 这些
+ * 形状**本轮刻意不纳入**，写在账的 `$notCovered` 里明说，不悄悄扩大也不悄悄缩小。
+ *
+ * @returns {string[]} 相对仓库根的路径
+ */
+function scanJudgeFiles() {
+  return fs
+    .readdirSync(path.join(ROOT, "scripts"), { withFileTypes: true })
+    .filter((e) => e.isFile() && /^check-.*\.cjs$/.test(e.name))
+    .map((e) => `scripts/${e.name}`);
 }
 
 function readLedger() {
@@ -302,6 +347,7 @@ function main(argv = process.argv.slice(2)) {
     entries,
     readSource: realReadSource,
     masterEntries: masterLedger(),
+    scanFiles: scanJudgeFiles(),
   });
   for (const n of notes) process.stdout.write(`[gate-thresholds] ⚠ ${n}\n`);
   if (AS_JSON) {

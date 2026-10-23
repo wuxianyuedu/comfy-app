@@ -6,7 +6,7 @@
  * 唯一的技术难点（A 档越大越松、B 档越小越危险，`strictness` 记错一条就会把收紧判成放宽）。
  * 因此 `analyze()` 是纯函数，这里全走它；末了两条再拿真仓自证一次。
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -220,6 +220,99 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
       master,
     );
     expect(r.problems.some((p: string) => p.includes("放宽"))).toBe(true);
+  });
+});
+
+/* ── 扫描根来自磁盘，不是从账里推（ISSUE #2188）──────────────────────────
+ *
+ * 这三条判的是「这条判据自己会不会漏看一份文件」，所以它们比上面那些更脆：
+ * 只测「账里点名的文件」时，一份整体没入账的新判据永远不在循环里 —— 那种漏
+ * 表现为绿，没有任何一条红会指向它。三条各钉一个方向：红 / 补一条就绿 /
+ * **不给扫描根时测不到**（最后那条是变异证明：它证明「面从磁盘来」这件事承重，
+ * 而不是断言恰好被别的路径顺带满足了）。
+ */
+describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）", () => {
+  /** 一份账上完全没有的新判据文件，里面只有一个顶层具名数值。 */
+  const NEW_FILE = "scripts/check-brand-new.cjs";
+  const newFileSources = () => ({
+    [NEW_FILE]: "const LIMIT = 42;\n",
+  });
+  const withNewFile = (over: Record<string, string> = {}) =>
+    sources({ ...newFileSources(), ...over });
+
+  it("含顶层数值而账里一条都没有 ⇒ 红，点名那份文件与数名", () => {
+    const r = analyze({
+      entries: baseEntries(),
+      readSource: withNewFile(),
+      minEntries: 1,
+      scanFiles: [...Object.keys(newFileSources()), "scripts/check-a.cjs"],
+    });
+    const hit = r.problems.find(
+      (p: string) => p.includes("check-brand-new") && p.includes("LIMIT"),
+    );
+    expect(hit, "整份未入账的新判据没被拦").toContain("一条都没有");
+    /* 只报数名、不报数值：数值要在账里才对读者可见。 */
+    expect(hit).not.toContain("42");
+  });
+
+  it("出路真的能走通：给它补一条 report 条目 ⇒ 绿", () => {
+    const entries: Entry[] = [
+      ...baseEntries(),
+      {
+        file: NEW_FILE,
+        const: "LIMIT",
+        value: 42,
+        kind: "report",
+        strictness: "n/a",
+      },
+    ];
+    const r = analyze({
+      entries,
+      readSource: withNewFile(),
+      minEntries: 1,
+      scanFiles: [NEW_FILE, "scripts/check-a.cjs"],
+    });
+    expect(r.problems, r.problems.join("\n")).toEqual([]);
+  });
+
+  it("变异自证：不给扫描根（退回旧那半张面孔）⇒ 那份文件压根不被扫", () => {
+    const r = analyze({
+      entries: baseEntries(),
+      readSource: withNewFile(),
+      minEntries: 1,
+    });
+    expect(
+      r.problems.some((p: string) => p.includes("check-brand-new")),
+      "输入面若仍从账里推，这一格就测不到 —— 上面两条会一起变成恒绿",
+    ).toBe(false);
+  });
+
+  it("自指面在扫描根里，且真仓在这张面上今天全绿", () => {
+    const root = path.resolve(__dirname, "..");
+    const ledger = JSON.parse(
+      readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
+    ) as { entries: Entry[] };
+    /* glob 写错的失效形态是「面为空 ⇒ 整格恒绿」，所以这里按磁盘自己数一遍：
+       扫描根必须非空、必须含这份判据自己（`MIN_ENTRIES` 那条自证的下限在账里），
+       否则「覆盖面」这句话只是断言里的一个装饰。 */
+    const scanned = readdirSync(path.join(root, "scripts"))
+      .filter((n) => /^check-.*\.cjs$/.test(n))
+      .map((n) => `scripts/${n}`);
+    expect(scanned.length).toBeGreaterThan(10);
+    expect(scanned).toContain("scripts/check-gate-thresholds.cjs");
+    const r = analyze({
+      entries: ledger.entries,
+      readSource: (f: string) => {
+        try {
+          return readFileSync(path.join(root, f), "utf8");
+        } catch {
+          return null;
+        }
+      },
+      masterEntries: new Map(),
+      scanFiles: scanned,
+    });
+    expect(r.problems, r.problems.join("\n")).toEqual([]);
   });
 });
 
