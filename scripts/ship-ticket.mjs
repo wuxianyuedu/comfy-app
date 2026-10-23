@@ -235,6 +235,46 @@ export function commentHeader(handle) {
   return `**[评论人：${name || "未配"}]**`;
 }
 
+/** 一行正文是不是署名行（只认这一种形状，正文中间的同形文字不算）。 */
+const HEADER_LINE_RE = /^\*\*\[评论人：[^\]\n]*\]\*\*$/;
+
+/**
+ * 给一段要发给平台的文字保证**有且只有一行**开头署名（ISSUE #2268）。
+ *
+ * 为什么必须幂等：这一行从 #2217 起是「写在正文里」的约定，人（或代理）会自己在
+ * 正文文件里写一行；`--new-issue` 再无条件前插一次，`#2258` 的正文因此连着两遍
+ * `**[评论人：b-win]**`。前插式的写法对「读进来的文本」永远不成立。
+ *
+ * 三条口径：
+ *   · **不改写人名** —— 开头已有署名行时保留**第一行原样**，只把后面重复的那些去掉。
+ *     那一行是谁写的由写正文的人决定，工具只保证「有且只有一行」；
+ *   · 只看开头：跳过前导空行，遇到第一行非署名内容就停，正文中间的同形文字不动；
+ *   · 没有时补本检出的那一行（未配就写「未配」，不编名字）。
+ *
+ * @param {string | null | undefined} body 要发出去的正文
+ * @param {string | null | undefined} handle 本检出的留痕短名
+ * @returns {string} 以一行署名开头、且署名只出现一次的正文
+ */
+export function withCommentHeader(body, handle) {
+  const lines = String(body ?? "").split(/\r?\n/);
+  let i = 0;
+  /** @type {string | null} */
+  let kept = null;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = String(line ?? "").trim();
+    if (trimmed === "") {
+      i += 1;
+      continue;
+    }
+    if (!HEADER_LINE_RE.test(trimmed)) break;
+    if (kept === null) kept = trimmed;
+    i += 1;
+  }
+  const rest = lines.slice(i).join("\n").replace(/\s+$/, "");
+  return `${kept ?? commentHeader(handle)}\n\n${rest}\n`;
+}
+
 /**
  * 「这张单是谁提的、按什么优先级」—— 同样是**只读数，不拦**（ISSUE #2175）。
  *

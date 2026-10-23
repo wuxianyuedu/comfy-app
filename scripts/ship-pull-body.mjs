@@ -9,7 +9,7 @@
  * 承重数值入账：`PULL_BODY_LIMIT` / `DIFFSTAT_SAMPLE_MAX` 登记在
  * `scripts/.gate-thresholds.json`（口径见规范 §13.5.26）。
  */
-import { commentHeader, fragmentHead } from "./ship-ticket.mjs";
+import { fragmentHead, withCommentHeader } from "./ship-ticket.mjs";
 
 /**
  * 平台对 PR 正文的硬上限。取自平台自己的那句拒绝（实测 `errcode 2000003` ·
@@ -79,8 +79,6 @@ export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
  */
 export function buildPullBody({ root, fragments, diffstat, handle = null }) {
   const head = [
-    commentHeader(handle),
-    "",
     "## 本 PR 带的变更碎片（`changelog.d/`）",
     "",
   ];
@@ -97,17 +95,20 @@ export function buildPullBody({ root, fragments, diffstat, handle = null }) {
   let sampleMax = DIFFSTAT_SAMPLE_MAX;
   for (;;) {
     const capped = capDiffstat(diffstat, sampleMax);
-    const body = [
-      ...head,
-      "## 改动量（`git diff --stat` 对上游）",
-      "",
-      "```",
-      capped.text,
-      "```",
-      "",
-      ...(capped.note ? [capped.note, ""] : []),
-      ...tail,
-    ].join("\n");
+    const body = withCommentHeader(
+      [
+        ...head,
+        "## 改动量（`git diff --stat` 对上游）",
+        "",
+        "```",
+        capped.text,
+        "```",
+        "",
+        ...(capped.note ? [capped.note, ""] : []),
+        ...tail,
+      ].join("\n"),
+      handle,
+    );
     if (body.length <= PULL_BODY_LIMIT || sampleMax === 0) return body;
     sampleMax = Math.floor(sampleMax / 2);
   }
