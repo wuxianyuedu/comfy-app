@@ -296,6 +296,48 @@ export function issueAuthoring({
   return { handle: name || null, required, lines };
 }
 
+/** 清单条目的四种形态（各数各的，不合成一个「还剩几条」）。 */
+/** @type {Array<[string, RegExp]>} */
+const ITEM_SHAPES = [
+  ["headings", /^###\s+\S/gm],
+  ["unchecked", /^\s*[-*]\s*\[ \]/gm],
+  ["checked", /^\s*[-*]\s*\[[xX]\]/gm],
+  ["ordered", /^\s*\d+[.)]\s+\S/gm],
+];
+
+/**
+ * 一张单子正文里数得出的**条目形态**（ISSUE #2251）。
+ *
+ * 为什么按形态分开数，而不是给一个「剩余条数」：真实单子的清单写法不统一 ——
+ * 实测 `#2158`（标题自己列了 2 条红 + 3 条警告 + 2 条待确认）正文里
+ * **`- [ ]` 复选框一条都没有**，条目写成 8 个 `###` 小节 + 34 条 `- ` 项目符 + 6 条序号。
+ * 所以「只按复选框数」会把一张列着 7 条待办的单读成 0 条 —— 那比不读更坏。
+ * 这里只报各形态的条数，**不判「处置了几条」**：机器读不出「某一条做完没有」，
+ * 那是人写在评论与 PR 里的判断。这一行是读数，一次也不参与退码（与「单子身份」同档）。
+ *
+ * @param {string} body 单子正文原样
+ * @returns {{headings: number, unchecked: number, checked: number, ordered: number, total: number}}
+ */
+export function issueItemShapes(body) {
+  const text = String(body ?? "");
+  /** @type {Record<string, number>} */
+  const shapes = {};
+  for (const [key, re] of ITEM_SHAPES) {
+    shapes[key] = (text.match(re) ?? []).length;
+  }
+  return {
+    headings: shapes.headings ?? 0,
+    unchecked: shapes.unchecked ?? 0,
+    checked: shapes.checked ?? 0,
+    ordered: shapes.ordered ?? 0,
+    total:
+      (shapes.headings ?? 0) +
+      (shapes.unchecked ?? 0) +
+      (shapes.checked ?? 0) +
+      (shapes.ordered ?? 0),
+  };
+}
+
 /**
  * `--whoami` 的自查出口：把「这一份检出是谁」与**两条留痕规则**打出来（ISSUE #2204）。
  *
