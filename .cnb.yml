@@ -270,6 +270,23 @@
     # `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条）。
     COMFYAPP_CI_DISABLED_GATES: >-
       单元测试, ESLint 零警告
+    # 「换了执行者」的登记（ISSUE #2227）：清单里那几个**以注释形态留在 `.gates` 里**的名字
+    # （停用形态与换执行者形态在配置里长得一模一样 ⇒ 机器分不出两者），它们的执行者在这里
+    # **机器可读**地登记一次。
+    #
+    # 登记的值是**入口路径**（`scripts/xxx.cjs` / `tests/xxx.test.ts`），不是执行者自己的
+    # 定义 —— 判据 `scripts/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单
+    # 用例 / 钩子步骤）核「这个路径真的会被跑」，**不抄第二份**（§12.12 / §12.18）。
+    # 多个入口用 `|` 分隔；每一项形如 `名字=路径`。
+    #
+    # ⚠️ 这一格**必须**与 `COMFYAPP_CI_GATES` 双向对账：清单里的每个名字要么有自己的 stage、
+    # 要么在这儿登记；而这儿登记的每个名字都要在清单里 —— 否则「执行者没了」与「换了执行者」
+    # 在配置里分不开，账面全绿（这正是 ISSUE #2227 的现场）。
+    COMFYAPP_CI_GATES_ELSEWHERE: >-
+      格式化提交分离=scripts/check-reformat-only.cjs,
+      零消费导出=scripts/check-dead-exports.cjs,
+      core 骨架单一事实源=tests/core-spine-single-source.test.ts,
+      core 出口纪律与基类纯度=tests/core-barrel-entry-discipline.test.ts
     # 恢复动作照旧三步：`.gates` 里取消注释 → 名字挪回 `GATES` → 从本清单删掉。
     # `ESLint 零警告` 的**两段历史别读混**：
     #   · 2026-10-16 停过一次，理由是「本地 B 组每条提交都在跑同一条 lint」；那条前提随

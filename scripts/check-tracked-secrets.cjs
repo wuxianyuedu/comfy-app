@@ -42,7 +42,7 @@
  *   node scripts/check-tracked-secrets.cjs --staged   # 增量面：本次暂存的新增行（钩子用的这一档）
  *   node scripts/check-tracked-secrets.cjs --all      # 全仓被跟踪文本（人工审计 / 存量重扫）
  *   node scripts/check-tracked-secrets.cjs            # **缺省 = 全量档** —— 平台的重档那一跑读的是
- *                                                     # 注册表里那 55 条 `run` 行、会剥掉 `--staged`，
+ *                                                     # 注册表里那 56 条 `run` 行、会剥掉 `--staged`，
  *                                                     # 所以不带旗标是真实调用形态而不是操作失误（见 main 里那段）
  * 退出码：0 没命中；1 命中（只点名文件:行与形状）；2 输入面取不到（git 不可用 ⇒ 不构成结论）。
  */
@@ -352,9 +352,9 @@ function main(argv = process.argv.slice(2), deps = {}) {
   const args = new Set(argv);
   const STAGED = args.has("--staged");
   /* 缺省那一档**就是全量档** —— 注册表在平台上是剥掉 `--staged` 之后跑的
-   * （`ci-heavy-gates.mjs` 的「重档静态判据」那一跑读的就是钩子里那 55 条 `run` 行），
+   * （`ci-heavy-gates.mjs` 的「重档静态判据」那一跑读的就是钩子里那 56 条 `run` 行），
    * 所以「不带旗标」是一种真实调用形态，不是操作失误。实测：把它做成
-   * 「输入面不明 ⇒ 退 2」时，重档那一格当场报 `5/55 红 被跟踪文字里的凭据形状`，
+   * 「输入面不明 ⇒ 退 2」时，重档那一格当场报「红 被跟踪文字里的凭据形状」，
    * 一条 CI 红指向我自己的旗标假设。同族写法（`check-allow-builds.cjs` /
    * `check-doc-mirror-pairing.cjs`）都是「不带旗标 = 全量判定（手动 / 合并前用）」。 */
   const ALL = !STAGED;

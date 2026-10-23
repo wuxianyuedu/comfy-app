@@ -41,6 +41,13 @@ import path from "node:path";
  * 而下面那条「这一步点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
 import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
+/* 那两份清单的解析**搬进 `scripts/ci-gate-names.mjs`** 了 —— 判据脚本
+ * `scripts/check-gate-name-executors.mjs` 也要读同一份清单，两边各写一遍就会漂开。
+ * 这里保留转出（三个消费方 import 的是这个文件的导出）。 */
+import {
+  registeredDisabledGates as disabledGatesImpl,
+  registeredGateOrder as gateOrderImpl,
+} from "../scripts/ci-gate-names.mjs";
 /* 单跑那三档的前提集与「单跑名 ⇄ 每日名」的对照是**数据**，一份出处在
  * `scripts/ci-oneshot-gates.mjs`。这里 import 它而不是在测试里重抄一遍 ——
  * 重抄就成了「判据自己就是第二份事实」。 */
@@ -236,17 +243,10 @@ export function ps7OnlySyntaxIn(text: string): string[] {
  * @param text `.cnb.yml` 原文
  * @returns stage 名（已 trim）
  */
+/* 实现见 `scripts/ci-gate-names.mjs`（判据脚本与三处消费它的测试共用同一份解析，
+ * 不各写一遍 —— §12.12 / §12.18）。 */
 export function registeredGateOrder(text: string): string[] {
-  const m =
-    /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
-      text,
-    );
-  const body = m?.[1];
-  if (body === undefined) return [];
-  return body
-    .split(",")
-    .map((n) => n.trim())
-    .filter(Boolean);
+  return gateOrderImpl(text);
 }
 
 /**
@@ -265,20 +265,9 @@ export function registeredGateOrder(text: string): string[] {
  * @param text `.cnb.yml` 原文
  * @returns 被停用的 stage 名（已 trim）
  */
+/* 实现见 `scripts/ci-gate-names.mjs`（同一份解析，三处消费共用）。 */
 export function registeredDisabledGates(text: string): string[] {
-  /* 正文行不许是注释（YAML 折叠标量的正文里不会出现 `#` 开头的行），
-   * 否则后面紧跟的说明注释会被一起吞进来 —— 那个坑 `registeredGateOrder` 侥幸没踩到
-   * 只是因为它的 `GATES` 后面没有注释而已。 */
-  const m =
-    /^[ \t]*COMFYAPP_CI_DISABLED_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
-      text,
-    );
-  const body = m?.[1];
-  if (body === undefined) return [];
-  return body
-    .split(",")
-    .map((n) => n.trim())
-    .filter(Boolean);
+  return disabledGatesImpl(text);
 }
 
 /**
