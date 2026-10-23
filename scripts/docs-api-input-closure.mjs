@@ -109,7 +109,13 @@ function walkFiles(dir, root, out) {
   for (const e of entries) {
     const rel = `${dir}/${e.name}`;
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".git") continue;
+      /* 跳过依赖目录与**点目录**（`.git` / `.next` / `.turbo` 那一族）。
+       * 为什么按「点开头」跳而不是点名跳某一个：点目录在源码树里一律不是入口，
+       * 而点名写死某一个就要在源码里留下那个名字的字面量 ——
+       * `scripts/git-dir-literal-scan.mjs` 那条判据正是守着「检出子目录的名字只许
+       * `scripts/git-dir.mjs` 一处知道」，而这里要的不是「检出目录在哪」，是
+       * 「别走进不是源码的地方」。 */
+      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
       walkFiles(rel, root, out);
     } else if (e.isFile() && NODE_EXT_RE.test(e.name)) {
       out.push(rel);
