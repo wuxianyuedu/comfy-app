@@ -2415,7 +2415,7 @@ CNB token 写进规范示例段并同步镜像，还要求「不要把这条通�
 执行者是 `scripts/check-tracked-secrets.cjs`：钩子那档只读**本次暂存的新增行**
 （`git diff --cached -U0`，零网络，实测 0.34~0.37s，挂在 D0 形态前置档），人工审计那一档
 `pnpm check:secrets` 扫全仓被跟踪文本（实测 2699 份、约 2.2s）。**不带旗标时走的是全量档** ——
-平台「重档静态判据」那一跑读的是注册表里那 56 条 `run` 行，而它会**剥掉 `--staged`**；
+平台「重档静态判据」那一跑读的是注册表里那批 `run` 行（应然清单与条数由 `scripts/base-check/declared-hook-steps.mjs` 自报，`tests/commit-gate-tier.test.ts` 双向核），而它会**剥掉 `--staged`**；
 这一版第一稿把「旗标缺失」做成「输入面不明 ⇒ 退 2」，当场被读成
 `[重档] 红 被跟踪文字里的凭据形状`（实测读数：那次合计里红 1、没跑起来 0、其余绿）。
 缺省走全量既与 `check-allow-builds.cjs` / `check-doc-mirror-pairing.cjs` 那一族

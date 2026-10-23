@@ -169,7 +169,9 @@ run_group() {
   # 这三组不再在每次提交上跑。**它们没有消失** —— 第一层接手是推送那一跳
   # （`.githooks/pre-push` → `check:premerge` 的 `base` 段），第二层是平台流水线
   # （规范 §13.5.25）。业主口径：提交在开发者的编辑循环里，慢 = 直接被 `--no-verify` 绕掉。
-  # ⚠️ **这里的“不跑”只关执行时机，不关注册表**：那 56 条 `run "<标签>" <命令>` 步骤行
+  # ⚠️ **这里的“不跑”只关执行时机，不关注册表**：那批 `run "<标签>" <命令>` 步骤行
+  # （应然清单与条数由 `scripts/base-check/declared-hook-steps.mjs` 自报，
+  # `tests/commit-gate-tier.test.ts` 双向核 —— 别在这一行抄一个数，它是会漂的存量）
   # 逐字留在这份文件里，因为 `scripts/check-gate-executors.cjs` 是按**文本**解析本文件的
   # 三处出处之一（另两处是 `quality-gate.mjs` / `quality-gate.ps1`；`.cnb.yml` **不算**
   # 执行者）。把步骤删掉 = 那一族判据当场失去执行者 = 本仓最恨的静默删除。
@@ -463,10 +465,11 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
-# `run` 步骤的**总数**一致（D0 那 17 条 + D 那 39 条 = 56），新增判据时必须同步这个数字。
-# 严格说与本组**并行**的只有 D 那 39 条：D0 的 17 条在本组启动之前就串行跑完了（见文件头
-# 那一档）。拿 56 说并发面积是**偏保守**的那一侧 —— 它高估争抢，而低估争抢才会诱人去抬
-# `--maxWorkers`，那正是这一族事故（`Failed to start forks worker`）的方向。
+# `run` 步骤的**总数**一致，而那个总数由 `scripts/base-check/declared-hook-steps.mjs` 自报
+# （本地档那批 + 重档那批）—— 新增判据只在注册表那一处登记，别在散文里再抄一个数。
+# 严格说与本组**并行**的只有重档（D）那批：本地档（D0）的几条在本组启动之前就串行跑完了
+# （见文件头那一档）。拿全量步骤数说并发面积是**偏保守**的那一侧 —— 它高估争抢，而低估
+# 争抢才会诱人去抬 `--maxWorkers`，那正是这一族事故（`Failed to start forks worker`）的方向。
 run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
   # 先答一格「这台机器上解释器在哪」：几条用到 Python 的用例缺件时按**既有口径**
   # 走 `env` 档跳过并登记（`tests/helpers/python-exe.ts` 的 `hasPython()`），
