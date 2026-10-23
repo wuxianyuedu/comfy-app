@@ -212,8 +212,27 @@ export function groupSteps(hookPath = HOOK) {
  * 「本次改动」上」—— 合并前复算据此**不收**它（`mayDecideOnCleanSnapshot`），
  * 平台复合档据此**换判决面**或**单列成没判**（`scripts/ci-heavy-gates.mjs`）。
  * 两处各写一份名单就会漂开，而漂开的形态是「一处判了、另一处没判」。
+ *
+ * ⚠️ **这一族是「按参数形态识别」抓不到的那一半**（ISSUE #2265 的现场）：
+ *   · `shell-gate` —— 钩子行里**连 `--staged` 都没有**，它自己读暂存区；
+ *   · `check-doc-mirror-pairing.cjs` —— 带 `--staged`，但**剥掉那个旗标之后它判的
+ *     仍是暂存集**（它自己的文件头写着「不带它判的也是暂存集」：镜像与源是否**同批**
+ *     是提交的属性，不是仓库的属性）⇒ 剥旗标这一手对它**无效**；
+ *   · `known-failed-selftest-gate.mjs` —— 同样**连旗标都没有**（钩子行是
+ *     `node scripts/known-failed-selftest-gate.mjs`），它自己读暂存区。
+ *
+ * 后两条在平台那一格（干净快照、没有暂存区）上**恒绿**：
+ *   · 前者自认「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0；
+ *   · 后者**一个字都不打**就退 0。
+ * ⇒ 两条都登记进来，让复合档给它们 `--base <ref>`（换判决面），
+ * 也让合并前复算**不收**它们（`mayDecideOnCleanSnapshot`）—— 那条复算在干净快照上
+ * 同样没有暂存区，收进去只会多一行恒绿。
  */
-export const CHANGED_SCOPED = ["scripts/shell-gate.mjs"];
+export const CHANGED_SCOPED = [
+  "scripts/shell-gate.mjs",
+  "scripts/check-doc-mirror-pairing.cjs",
+  "scripts/known-failed-selftest-gate.mjs",
+];
 
 /**
  * 一条指令**能不能在干净的上游快照上判决** —— 判据是它的**参数形态**，不是名字。

@@ -29,12 +29,37 @@
  *
  * 用法：`node scripts/known-failed-selftest-gate.mjs`（由 `.githooks/pre-commit` 的 D 组调用）
  *      `node scripts/known-failed-selftest-gate.mjs --staged a b c`（手工指定清单，调试用）
+ *      `node scripts/known-failed-selftest-gate.mjs --base <ref>`（**以 PR diff 为判决面**，平台侧那一档）
+ *
+ * ── `--base <ref>`：换判决面的来源（ISSUE #2265 的现场）──────────────────────
+ *
+ * 这一步的判决面是「**本次改了什么**」，而本地形态从**暂存区**取那个面 —— 平台上没有
+ * 暂存区，于是 `touchesMechanism` 恒假 ⇒ 这一步在平台上**恒绿且一个字都不打**
+ * （而它在本地是有牙齿的：「碰了这套机制就跑一次自证」在平台侧一个执行者都没有）。
+ *
+ * `--base <ref>` 换一个**判决面的来源**：「相对那条基线改了什么」—— 平台上拿得到
+ * （PR 事件上平台给 `CNB_PULL_REQUEST_TARGET_SHA`，由 `scripts/changed-scope.mjs`
+ * 统一选基线，与「受影响用例」那一格、`shell-gate` 同一份口径）。判决链一字未改。
+ *
+ * ⚠️ 两条边界：
+ *   · **判决面取不到 ⇒ 退 2，不是退 0**（仓库三态：0 绿 / 1 红 / 2 没跑起来）。
+ *     「没有输入可判」与「判过了、没问题」是两件事 —— 退 0 会被复合档计成「绿」。
+ *   · **没碰到机制也要说一句话**。此前这一步在「没碰到」时**一个字都不打** ⇒ 在平台上
+ *     它与「真的判过了」逐字同形。现在它会念出判决面与清单条数。
+ *
+ * ⚠️ **空清单不是「取不到」**：在 `--base` 形态下，基线取到了、diff 跑成功了、结果是空
+ * ⇒ 那是**成功测得「这次什么都没改」** ⇒ 没有可判的内容 ⇒ 绿（并把「0 个文件」念出来）。
+ * 只有「暂存集为空」那种形态才算「取不到面」—— 那里根本没有一次提交。
+ * （把空清单一律读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
+ * 「降档不许被读成全套过了」的忌讳。）
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+
+import { changedFilesForBaseRef } from "./changed-scope.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -132,14 +157,85 @@ function runSelfTest() {
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
 
-function main() {
-  const argv = process.argv.slice(2);
+/**
+ * 判决面：这一次「改了哪些文件」。
+ *
+ * 两个来源，**互斥**（判据只该看到一个来源 —— 两个都挂着，「到底按哪个面判」就变成读代码的事）：
+ *   · `--base <ref>` ⇒ 「相对那条基线改了什么」（平台侧那一档）；
+ *   · 暂存区（本地那一跳；`--staged a b c` 是手工指定清单的调试通道）。
+ *
+ * ⚠️ **取不到 ⇒ 这一格没判**（`ok: false`），由调用方退 2 —— 不是退 0。
+ * **空清单同样算「取不到」**：空清单若放行，「这次什么都没改」与「拿不到清单」就分不开了。
+ *
+ * @param {string[]} argv
+ * @returns {{ok: true, files: string[], via: string} | {ok: false, reason: string}}
+ */
+export function resolveFace(argv) {
+  const baseIdx = argv.indexOf("--base");
+  if (baseIdx >= 0) {
+    const baseRef = (argv[baseIdx + 1] ?? "").trim();
+    if (!baseRef) {
+      return {
+        ok: false,
+        reason: "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
+      };
+    }
+    const got = changedFilesForBaseRef(baseRef, { cwd: ROOT });
+    if (!got.ok) return { ok: false, reason: got.reason };
+    /* ⚠️ **空清单在这里是「成功测得没有改动」**，不是「取不到面」—— 基线取到了、
+     *   diff 跑成功了、结果是空，那就是「这次什么都没改」⇒ 没有可判的内容 ⇒ 绿。
+     *   （把它读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
+     *   「降档不许被读成全套过了」的忌讳。） */
+    return {
+      ok: true,
+      files: [...got.files, ...got.renamedFrom],
+      via: `基线 ${baseRef}`,
+    };
+  }
   const si = argv.indexOf("--staged");
-  const staged = si >= 0 ? argv.slice(si + 1) : stagedFiles();
-  if (!touchesMechanism(staged)) return 0;
+  const files = si >= 0 ? argv.slice(si + 1) : stagedFiles();
+  if (files.length === 0) {
+    return {
+      ok: false,
+      reason:
+        "暂存区是空的 —— 没有判决面（本地这一跳的暂存集永远非空；" +
+        "空的那一档只出现在平台上，而平台上没有暂存区）",
+    };
+  }
+  return { ok: true, files, via: si >= 0 ? "手工指定的清单" : "暂存区" };
+}
+
+/**
+ * 入口。
+ *
+ * `argv` 可注入（默认取 `process.argv`）—— 让用例能直接跑「判决面取不到」「没碰到机制
+ * 也要说一句话」那两条，而不必起一个子进程（ISSUE #2265）。
+ *
+ * @param {string[]} [argv]
+ * @returns {number} 退出码（0 绿 / 1 红 / 2 没跑起来）
+ */
+export function main(argv = process.argv.slice(2)) {
+  const face = resolveFace(argv);
+  if (!face.ok) {
+    console.error(
+      `[known-failed-selftest] 这一条**没判**：${face.reason} —— ` +
+        "没有判决面不等于「已通过」，按「没跑起来」收（退 2）。",
+    );
+    return 2;
+  }
+  const staged = face.files;
+  if (!touchesMechanism(staged)) {
+    /* 「没碰到机制」是一句**要念出来的结论**，不是沉默 —— 此前这一步在平台上
+     * 一个字都不打，而「恒绿且无声」与「真的判过了」逐字同形。 */
+    console.log(
+      `[known-failed-selftest] 本次改动没碰到「已知基线失败登记」机制 ⇒ 不用自证` +
+        `（判决面：${face.via}，${staged.length} 个文件）。`,
+    );
+    return 0;
+  }
 
   console.log(
-    "[known-failed-selftest] 暂存改动命中「已知基线失败登记」机制，跑一次自证：",
+    `[known-failed-selftest] 改动命中「已知基线失败登记」机制，跑一次自证（判决面：${face.via}）：`,
   );
   const result = runGate({ staged, selfTest: runSelfTest() });
   if (result.problem) {

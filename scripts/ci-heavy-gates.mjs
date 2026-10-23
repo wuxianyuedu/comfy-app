@@ -173,12 +173,19 @@ export function fullTreeArgv(argv) {
  *
  *   · 带 `--staged` / `--changed` 的 ⇒ 剥掉那个旗标（`fullTreeArgv()`），它判的是
  *     **全仓**，判决面还在 ⇒ 照跑。
- *   · `CHANGED_SCOPED` 那一族（`shell-gate`）⇒ **判决面只在「本次改动」上**，而
+ *   · `CHANGED_SCOPED` 那一族 ⇒ **判决面只在「本次改动」上**，而
  *     这一档没有暂存区 ⇒ 它恒绿且**一个字都不打**（ISSUE #2224 的现场：平台上
  *     「改了壳必须重编」与壳内那批 `#[test]` 一个执行者都没有，账面全绿）。
  *     处置是**换判决面**：给它一条基线，让它按「相对基线改了什么」判
  *     （`shell-gate --base <ref>`）；拿不到基线 ⇒ 这一条**没判**，单列退 2，
  *     **不许计入「绿」**（§13.5.25 的三态口径：没判 ≠ 绿）。
+ *
+ * ⚠️ **这一族里有一条「剥旗标对它无效」**（ISSUE #2265）：`check-doc-mirror-pairing.cjs`
+ * 带 `--staged`，但**剥掉那个旗标之后它判的仍是暂存集**（镜像与源是否**同批**是提交的
+ * 属性，不是仓库的属性）⇒ 剥旗标这一手对它**不成立**，它会自认「暂存区是空的 ——
+ * 没有什么可判」并退 0，被计成绿。
+ * ⇒ 这一族**连 `--staged` 一起剥掉**再挂 `--base <ref>`：判据只该看到**一个**
+ * 判决面来源（`--base` 优先于暂存区），两个都挂着会让「到底按哪个面判」变成读代码的事。
  *
  * @param {string[]} argv 钩子那一步的命令
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
@@ -200,7 +207,9 @@ export function heavyGateArgv(argv, deps = {}) {
   }
   return {
     ok: true,
-    argv: [...argv, "--base", base.ref],
+    /* `fullTreeArgv()` 先剥掉 `--staged`：这一族**只认一个判决面来源**，
+     * 而 `--base` 是这一档唯一拿得到的那一个（平台侧没有暂存区）。 */
+    argv: [...fullTreeArgv(argv), "--base", base.ref],
     via: `以基线为判决面（${base.via}）`,
     /* 这一族自己把「没跑起来」报成 **2**（仓库三态：0 绿 / 1 红 / 2 没跑起来），
      * 而这一档的既有约定是 **127**（命令找不到）。两个码都归「没跑起来」——
@@ -317,11 +326,28 @@ export function runHeavyGates(io = {}) {
     }
     const started = Date.now();
     const r = runGate(resolved.argv, cwd);
+    const ms = Date.now() - started;
+    /* 绿步**一个字都不打** ⇒ 这一格**没判**（ISSUE #2265 的机械兜底）。
+     *
+     * 「判据在场、退出码 0、而它自己什么都没说」——这一格与「真的判过了」逐字同形，
+     * 而账面上它占着一条「绿」。此前那一步是 `已知基线失败登记·自证`：它在平台上
+     * 恒绿且无声（改的是「暂存区是空的」那一族），账面全绿而判据没有执行者。
+     *
+     * 这一条把「有没有判决面」从**逐条核对**变成**机械判据**：任何一条判据将来
+     * 在这个形态下丢掉判决面，账面上就再也混不进「绿」里。
+     */
+    if (r.code === 0 && String(r.output ?? "").trim() === "") {
+      notJudged.push({
+        label: step.label,
+        reason: "判据退 0 但一个字都没打 —— 这一格没有判决面（恒绿且无声）",
+      });
+      continue;
+    }
     runs.push({
       label: step.label,
       code: r.code,
       output: r.output,
-      ms: Date.now() - started,
+      ms,
       notRunCodes: resolved.notRunCodes,
     });
   }
