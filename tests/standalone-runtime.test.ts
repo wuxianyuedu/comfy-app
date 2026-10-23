@@ -44,6 +44,7 @@ type StaticAllowModule = {
     onRemoved?: (name: string) => void,
   ) => string[];
   RUNTIME_SRC: string[];
+  PREBUNDLED_SRC_ROOTS: string[];
   RUNTIME_SCRIPTS: string[];
   BUILT_RUNTIME_SCRIPTS: string[];
   PRIVATE_INPUTS: string[];
@@ -149,12 +150,15 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     expect(isStaticPathAllowed("src/server/db.ts")).toBe(false);
   });
 
-  it("随包脚本 import 的那几份 TS 必须都在清单里（漏登记 = 桌包脚本加载即断）", async () => {
-    // 下列脚本都 import `../src/lib/…` 或 `../../src/lib/…`，而载荷里的 src/ 是
-    // 默认拒绝的 —— 清单与这些说明符必须逐字相等。
-    //   · `reap-process.mjs` / `dev-launcher.mjs`（`await import("../src/lib/process/…")`）；
-    //   · `launcher-core/shell.mjs`（**静态** import `../../src/lib/process/executable-resolve.ts`，
-    //     ISSUE #1327：判据下沉到 src/lib 后两侧共用同一份，见那份文件头）。
+  it("随包脚本 import 的那几份 TS 必须都在清单里（漏登记 = 桌包脚本加载即断）", () => {
+    // 入口面是 `RUNTIME_SCRIPTS` **全部** `.mjs`，不是「记得列进来的那几个」：
+    // 上一版只列了 3 份文件，于是第 4 份随包脚本 import 一份新的 `src/*.ts` 时这条用例
+    // 一个字都不会说 —— 那正是 ISSUE #2158 第 7 条问的那件事（产物里被剔掉的 90 个
+    // `src/` 文件，「运行期若有人 import 其中之一会怎样」当时没有一格在看）。
+    // 实测读数：全部入口可达 `src/` 61 个，其中 58 个是 `PREBUNDLED_SRC_ROOTS` 那一
+    // 份闭包（构建期已打进 `scripts/executor-host.runtime.mjs`），**净 3 个 = 本清单**。
+    // 载荷里的 src/ 是默认拒绝的，所以清单与这些说明符必须**逐字相等**（多了也是错：
+    // 清单里挂一份没人读的，等于放宽了「默认不进」那条口径）。
     // 相对深度两种写法都要认（`../` 与 `../../`）。
     //
     // **链要跟着走**（ISSUE #1961）：只数「脚本直接 import 的那一层」会漏掉被它
@@ -162,49 +166,85 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     // 漏了不是「那一步跳过」，是整个编排器加载即 `ERR_MODULE_NOT_FOUND`。
     // 实测踩过：`executable-resolve.ts` 多了个叶子 `platform.ts`，上面那层数字一个
     // 没变，而产物里少一份就等于桌包启动即断（这条用例当场红了才看见）。
-    const entries = [
-      "scripts/reap-process.mjs",
-      "scripts/dev-launcher.mjs",
-      "scripts/launcher-core/shell.mjs",
-    ];
+    /** 整行注释先剥掉：JSDoc 里点名的路径不是运行期依赖（与
+     *  `tests/dist-artifact-hygiene.test.ts` 那条 `scripts/` 闭包判据同一口径）。 */
+    const stripCommentLines = (src: string): string =>
+      src
+        .split("\n")
+        .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+        .join("\n");
+    /** 说明符 → 相对 `src/` 的路径（不含 `.ts`，落在 `src/` 之外返回 null）。 */
+    const toSrcRel = (spec: string, fromFile: string): string | null => {
+      const rel = path
+        .relative(
+          path.join(ROOT, "src"),
+          path.resolve(path.dirname(fromFile), spec),
+        )
+        .split(path.sep)
+        .join("/");
+      if (rel === "" || rel.startsWith("..")) return null;
+      return rel.replace(/\.ts$/, "");
+    };
     /** 一份 TS 里 `./x.ts` / `./x` 两种写法都要认（本仓 TS 侧惯例是省略扩展名，
      *  而 `.mjs` 侧必须带 —— 那正是 `platform.ts` 被拆出来的理由）。 */
     const relativeSpecifiers = (abs: string): string[] => {
-      const src = readFileSync(abs, "utf8");
-      return [...src.matchAll(/from "((?:\.\.\/)*\.\.?\/[^"]+)"/g)]
+      const code = stripCommentLines(readFileSync(abs, "utf8"));
+      return [...code.matchAll(/from "(\.[^"]+)"/g)]
         .map((m) => m[1])
-        .filter((spec): spec is string => spec !== undefined)
-        .filter((spec) => spec.startsWith("."));
+        .filter((spec): spec is string => typeof spec === "string");
     };
-    const seen = new Set<string>();
-    const queue = entries
-      .flatMap((file) =>
-        [...read(file).matchAll(/"\.\.(?:\/\.\.)?\/src\/(lib\/[^"]+)\.ts?"/g)]
-          .map((m) => m[1])
-          .filter((v): v is string => v !== undefined),
-      )
-      .filter((v) => !seen.has(v) && (seen.add(v), true));
-    while (queue.length > 0) {
-      const rel = queue.shift();
-      if (rel === undefined) break;
-      const abs = path.join(ROOT, "src", `${rel}.ts`);
-      if (!existsSync(abs)) continue;
-      for (const spec of relativeSpecifiers(abs)) {
-        const resolved = path.posix.normalize(
-          path.posix.join(path.posix.dirname(rel), spec.replace(/\.ts$/, "")),
-        );
-        if (resolved === "." || resolved.startsWith("../")) continue;
-        if (seen.has(resolved)) continue;
-        seen.add(resolved);
-        queue.push(resolved);
+    /** 从几个 `src/` 根出发，顺着它们自己的 import 走到底。 */
+    const closureFrom = (seeds: string[]): Set<string> => {
+      const seen = new Set(seeds);
+      const queue = [...seeds];
+      while (queue.length > 0) {
+        const rel = queue.shift();
+        if (rel === undefined) break;
+        const abs = path.join(ROOT, "src", `${rel}.ts`);
+        if (!existsSync(abs)) continue;
+        for (const spec of relativeSpecifiers(abs)) {
+          const next = toSrcRel(spec, abs);
+          if (next !== null && !seen.has(next)) {
+            seen.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      return seen;
+    };
+
+    const entries = registry.RUNTIME_SCRIPTS.filter((name) =>
+      name.endsWith(".mjs"),
+    )
+      .map((name) => path.join(ROOT, "scripts", name))
+      .filter((abs) => existsSync(abs));
+    /* 入口侧按「文件里出现 `../src/…` 的字符串」收，是因为回收链那两处是**常量中转**
+     * 的动态 import（`const specifier = "../src/lib/process/kill-process-tree.ts"`，
+     * 见 `scripts/reap-process.mjs` 文件头）—— 只认 `from "…"` 会把整条链漏掉。 */
+    const seeds: string[] = [];
+    for (const abs of entries) {
+      const code = stripCommentLines(readFileSync(abs, "utf8"));
+      for (const m of code.matchAll(/"((?:\.\.\/)+src\/[^"]+)"/g)) {
+        const rel = m[1] === undefined ? null : toSrcRel(m[1], abs);
+        if (rel !== null && !seeds.includes(rel)) seeds.push(rel);
       }
     }
+    const reachable = closureFrom(seeds);
+    const prebundled = closureFrom(
+      registry.PREBUNDLED_SRC_ROOTS.map((r) => r.replace(/\.ts$/, "")),
+    );
+    /* 两条反退化：入口面或排除面自己空掉时，下面那条「相等」会静默变成
+     * 「什么都没漏」—— 而这类清单判据最危险的失效形态正是那一种。 */
+    expect(entries.length).toBeGreaterThan(10);
+    expect(prebundled.size).toBeGreaterThan(10);
     /* 走链时剥过 `.ts`（为了把 `./x.ts` 与 `./x` 两种写法归一），这里要把它还回来：
-     * `RUNTIME_SRC` 的条目形态带扩展名（它就是 4 处脚本里 import 说明符的原文）。 */
-    const specifiers = [...seen].map((rel) => `${rel}.ts`).sort();
+     * `RUNTIME_SRC` 的条目形态带扩展名。 */
+    const specifiers = [...reachable]
+      .filter((rel) => !prebundled.has(rel))
+      .map((rel) => `${rel}.ts`)
+      .sort();
     expect(specifiers.length).toBeGreaterThan(0);
-    const { RUNTIME_SRC } = await loadStatic();
-    expect([...RUNTIME_SRC].sort()).toEqual(specifiers);
+    expect([...registry.RUNTIME_SRC].sort()).toEqual(specifiers);
   });
 
   it("落盘兜底真的剪得动（不只是 filter 里一句判断）", async () => {
