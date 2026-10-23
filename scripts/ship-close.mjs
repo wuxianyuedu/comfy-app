@@ -25,7 +25,8 @@
 /** 一次 `run` 的形状直接借 `ship-exec.mjs` 那份（`ExecResult` 的必填项在那边定，这里不另立一套）。 */
 /** @typedef {(cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult} CloseRun */
 
-import { CODE, combineShipCodes, asArray } from "./ship-core.mjs";
+import { asArray } from "./ship-build.mjs";
+import { CODE, combineShipCodes } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { finishIssueWork } from "./ship-claim.mjs";
 

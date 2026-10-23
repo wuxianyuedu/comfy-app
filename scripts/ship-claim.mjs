@@ -22,7 +22,8 @@
 
 import path from "node:path";
 
-import { asArray, CODE } from "./ship-core.mjs";
+import { asArray } from "./ship-build.mjs";
+import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
   DEV_HANDLE_ENV_KEY,
@@ -637,30 +638,35 @@ export function finishIssueWork(ctx) {
  *   root:string,
  *   opt:any,
  *   mkTmp:(name:string,text:string)=>string|null,
+ *   createIssue?:(ctx:any)=>number,
  *   dryRun?:boolean,
  * }} ctx
  * @returns {number} `CODE` 之一
  */
 export function runIssueAction(ctx) {
-  const { run, log, slug, cnbOk, handle, root, opt, mkTmp, dryRun = false } = ctx;
+  const { run, log, slug, cnbOk, handle, root, opt, mkTmp, createIssue, dryRun = false } = ctx;
   const claimBad = /** @type {string[]} */ (opt.claimBad ?? []);
   const releaseBad = /** @type {string[]} */ (opt.releaseBad ?? []);
+  const newIssueBad = /** @type {string[]} */ (opt.newIssueBad ?? []);
   const bad = [
     ...claimBad.map((x) => `--claim ${x}`),
     ...releaseBad.map((x) => `--release ${x}`),
+    ...newIssueBad.map((x) => `--new-issue ${x}`),
   ];
   if (bad.length > 0) {
     log(
-      `[ship] [ERROR] --claim / --release 收的是一张单的号（2 位以上数字，可写 #2179）；` +
-        `这一次这些不能当号用：${bad.join(" ")}`,
+      `[ship] [ERROR] --claim / --release 收的是一张单的号（2 位以上数字，可写 #2179）、` +
+        `--new-issue 收的是标题；这一次这些不能当号 / 标题用：${bad.join(" ")}`,
     );
     log("[ship] 一个都不认 ⇒ 不动任何单子，也不去猜是哪一张。");
     return CODE.NOT_RUN;
   }
+  const wantsNewIssue = opt.newIssue != null || newIssueBad.length > 0;
   const wanted = [
     opt.claim != null ? "--claim" : null,
     opt.release != null ? "--release" : null,
     opt.claims ? "--claims" : null,
+    wantsNewIssue ? "--new-issue" : null,
   ].filter(Boolean);
   if (wanted.length > 1) {
     log(`[ship] [ERROR] 一次只做一件事：拿到 ${wanted.join(" + ")}`);
@@ -691,6 +697,15 @@ export function runIssueAction(ctx) {
         " ⇒ 不读写任何单子。",
     );
     return CODE.NOT_RUN;
+  }
+  /* 建单**不要求**留痕：未配时照样建，只是没有 `提单人:` 标签（`runNewIssue` 会念出来）。
+   * 领取 / 结束 / 列表则必须有「谁」—— 那三格的动作本体就是「谁在做什么」。 */
+  if (wantsNewIssue) {
+    if (typeof createIssue !== "function") {
+      log("[ship] [ERROR] --new-issue 没有接上执行者（装配层漏传）⇒ 没有结论。");
+      return CODE.NOT_RUN;
+    }
+    return createIssue({ run, log, slug, handle, root, opt, mkTmp, dryRun });
   }
   const name = String(handle ?? "").trim();
   if (!name) {
