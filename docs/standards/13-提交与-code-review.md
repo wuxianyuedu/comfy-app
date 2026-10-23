@@ -5027,6 +5027,13 @@ basename 会把半个测试面误拉进来（`route.ts` / `index.ts` 这类名�
 本身也会被念出来 —— 本地那一档在 stderr、平台那一格在 stdout 各一行，不是静默多跑几份。判据在
 `tests/affected-tests.test.ts` 的「改名」一组与 `tests/ci-affected-tests.test.ts`。
 
+**改动面的口径只有一处**（ISSUE #2224 的连带）：`scripts/changed-scope.mjs` 是「这次改了什么」
+的**唯一出处**（基线怎么选 + diff 形态 + 改名的两侧），「受影响用例」这一格
+（`scripts/ci-affected-tests.mjs`）与桌面壳门禁（`scripts/shell-gate.mjs --base <ref>`）
+**都调它**。两边各算一次，就会在某一次改动里漂开 —— 改名的旧路径算不算？三点 diff 还是两点？
+基线取 PR 目标 sha 还是 merge-base？判据见 `tests/changed-scope.test.ts`；两档的 diff 形态
+逐字沿用既有实现（PR 三点 / 兜底两点），**判决链一个字没改**。
+
 **「按路径引用」的比对面是剥注释之后的代码文本，不是原文**（ISSUE #2022）：这一条
 最初写成 `text.includes(改动路径)`，而本仓的门禁自测**在文件头的 JSDoc 里引用规范章节**
 是硬规则 15 要求的动作 —— 于是「改一句注释」与「运行期读了那个文件」在判据里逐字同形。
