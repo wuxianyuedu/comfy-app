@@ -274,6 +274,24 @@
       "kind": "report",
       "strictness": "n/a",
       "why": "钩子档 vitest 的默认并发（8 逻辑核、A/B/D 同时在跑那一档的实测值）。§13.6.4 那条口径明写「降负载的杠杆是并发，不是预算」，所以它是负载旋钮而不是判定阈值 —— 调它不改变任何一条断言的松紧。"
+    },
+    {
+      "file": "scripts/ship-core.mjs",
+      "const": "PULL_BODY_LIMIT",
+      "value": 65535,
+      "unit": "字节",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "平台对 PR 正文的硬上限，取自它自己的拒绝原文（errcode 2000003「body length exceeded the limit 65,535」，ISSUE #2248）。外部的量纲、不是可调松紧的阈值：改它不改变任何一次判决，只会让本地那一格与平台不一致。"
+    },
+    {
+      "file": "scripts/ship-core.mjs",
+      "const": "DIFFSTAT_SAMPLE_MAX",
+      "value": 40,
+      "unit": "条（逐行明细样本）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "PR 正文里 diffstat 逐行明细的样本数。它只决定「摘要长多少行」，不决定任何一条判定；正文总长超上限时这个数还会自己减半（ISSUE #2248），所以它是起始值而不是保证值。"
     }
   ],
   "$notCovered": {

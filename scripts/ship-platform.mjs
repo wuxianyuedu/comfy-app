@@ -39,6 +39,8 @@ import {
   decideCleanBranch,
   deriveTitle,
   findPullForBranch,
+  PULL_BODY_LIMIT,
+  readPullCreateError,
   readPullVerdict,
 } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
@@ -277,6 +279,16 @@ export function createOrReusePull(ctx) {
     );
     return { number: null };
   }
+  /* 正文仍然超上限 ⇒ 一次网络往返都不发。到这里 diffstat 已经被裁过，剩下的只会是
+   * 碎片清单那一段（几千份碎片的形态本就说明这次该拆），而发出去只会拿到一条 400：
+   * 已经量到的上限不该押给执行者去替我重新发现（ISSUE #2248）。 */
+  if (body.length > PULL_BODY_LIMIT) {
+    log(
+      `[ship] PR 正文拼出来 ${body.length} 字节，超过上限 ${PULL_BODY_LIMIT} ⇒ 不建 PR：` +
+        "这一格没有执行者（不是「已建」）。出口是把这次变更拆小，或自己写正文手工建一条。",
+    );
+    return { number: null };
+  }
   const bf = mkTmp("ship-pr-body", body);
   if (!bf) {
     /* 正文可能上千行，`--body <串>` 会撞上 Windows 的 32k argv 上限，
@@ -324,6 +336,14 @@ export function createOrReusePull(ctx) {
     log(
       `[ship]   退码 ${made.code} · 响应原文（截 500 字）：${made.raw.slice(0, 500)}`,
     );
+    const platErr = readPullCreateError(made.json);
+    if (platErr) {
+      /* 单独一行，不靠上面那个字符窗口：拒绝理由是平台给的原值，念得出就不该让人
+       * 再去数一遍截断截到哪儿（ISSUE #2248：`2000003 body length exceeded …`）。 */
+      log(
+        `[ship]   平台给的拒绝：errcode=${platErr.errcode || "(无)"} · ${platErr.errmsg || "(无)"}`,
+      );
+    }
     if (made.stderr.trim()) {
       log(`[ship]   stderr：${made.stderr.trim().slice(0, 500)}`);
     }
