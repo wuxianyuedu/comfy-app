@@ -239,6 +239,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-cp936-glyphs.cjs   # CP936 字形登记：会进 CI 日志的面里，没有 CP936 字形的字符必须已登记替代写法（否则它们在平台日志里各变成一个问号 —— 连「这一条过了」都认不出；见 13 §13.5.3.5）
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
 ✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 新鲜度档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
+✅ node scripts/check-gate-name-executors.mjs # 「PR 上跑什么」那份清单里的每个名字 ⇄ 执行者：清单里那几个名字**以注释形态留在 `.gates` 里**（停用形态与「换了执行者」形态机器分不出两者），「换了执行者」在配置里机器可读地登记一次（`COMFYAPP_CI_GATES_ELSEWHERE`，登记的是入口路径），双向核对「清单里每个名字都有执行者 / 登记的每个入口都真在执行面里 / 既不是停用也不是在跑的注释残留当场点名」（见下 13.5.8）
 ✅ node scripts/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
@@ -5034,6 +5035,32 @@ basename 会把半个测试面误拉进来（`route.ts` / `index.ts` 这类名�
 基线取 PR 目标 sha 还是 merge-base？判据见 `tests/changed-scope.test.ts`；两档的 diff 形态
 逐字沿用既有实现（PR 三点 / 兜底两点），**判决链一个字没改**。
 
+**「PR 上跑什么」那份清单里的每个名字，执行者是谁**（ISSUE #2227 的现场）。`.cnb.yml` 的
+`COMFYAPP_CI_GATES` 是「PR 上跑什么」的**有序清单**，而「这一格在平台侧归谁执行」这件事
+**在配置里只由注释表达** —— 停用形态（`COMFYAPP_CI_DISABLED_GATES` 登记的那批）与「换了
+执行者」形态（清单里那几个名字）**都以注释形态留在 `.gates` 里** ⇒ 两种形态在配置里长得
+一模一样，机器分不出两者。
+
+那条缝的代价是实的：把 `tests/core-spine-single-source.test.ts` 从固定清单里删掉 ⇒
+`core 骨架单一事实源` 的**唯一执行者消失**，而清单照旧说它在 PR 上跑 ⇒ **账面全绿**。
+
+现在的口径：**「换了执行者」在配置里机器可读**（`.cnb.yml` 的
+`COMFYAPP_CI_GATES_ELSEWHERE`，键名与 `COMFYAPP_CI_DISABLED_GATES` 同一形态）。登记的值是
+**入口路径**（`scripts/xxx.cjs` / `tests/xxx.test.ts`），不是执行者自己的定义 ⇒ 判据
+`scripts/check-gate-name-executors.mjs` 去执行面（复合档条目 / 固定清单用例 / 钩子步骤
+三面）核「这个路径真的会被跑」，**不抄第二份**（§12.12 / §12.18）。
+
+判三件事：① 清单里的每个名字 ⇒（自己的 stage ｜「执行者在别处」的登记）二选一，且登记的
+入口真在执行面里；② 登记的每个名字都在清单里、每个入口都真在执行面里、且不与「活 stage」
+重复登记；③ 配置里以注释形态留着、却三处登记都没有的名字 —— 既不是停用也不是在跑。
+
+⚠️ **它必须有一个执行者**：判据脚本进 `.githooks/pre-commit` 的 D 组 ⇒ 平台侧复合档
+`重档静态判据` 自动跑它（那一格跑的正是钩子注册表，见 §13.5.25）。判据见
+`tests/ci-gate-names.test.ts`（每一条都拿夹具把判据逼红 —— 一条只会绿的判据就是又一条恒绿
+判据）。那份用例同时登记进**固定结构守护清单**（`scripts/fixed-structural-tests.mjs`）——
+不登记的话它只在 `scripts/ci-gate-names.mjs` 改动时才跑，而「有人把它改软」恰好**不在**
+改动面上（与 `doc-check-hook-wiring` 同因进固定清单）。
+
 **「按路径引用」的比对面是剥注释之后的代码文本，不是原文**（ISSUE #2022）：这一条
 最初写成 `text.includes(改动路径)`，而本仓的门禁自测**在文件头的 JSDoc 里引用规范章节**
 是硬规则 15 要求的动作 —— 于是「改一句注释」与「运行期读了那个文件」在判据里逐字同形。
@@ -7212,9 +7239,9 @@ D0(形态前置) 21.2s**，而**钩子总墙钟的中位是 346.6s、p90 894.9s*
 理由不是审美：`scripts/check-gate-executors.cjs` 认的执行者出处只有三处(钩子里
 `^  run "<标签>" <命令>` 那些步骤行、`quality-gate.mjs` 的 gate 表、`quality-gate.ps1` 的
 `$Blocks`)，**`.cnb.yml` 不在它的解析面上**。把那些步骤删过去 = 那一族判据当场没有执行者，
-而账面一条红都不会出现(「没有档要找执行者」)。所以 `.githooks/pre-commit` 里那 53 行逐字
-留在原处(缩进都不动 —— 台账按文本解析；**这个数由 `tests/commit-gate-tier.test.ts` 逐字钉住**
-：53 = D0 那 15 + D 那 38，加一步减一步都要同批改那里，见 ISSUE #2135 记的那次冻结)，只有
+而账面一条红都不会出现(「没有档要找执行者」)。所以 `.githooks/pre-commit` 里那些步骤行逐字
+留在原处(缩进都不动 —— 台账按文本解析；**条数不在这里写** —— 它由
+`tests/commit-gate-tier.test.ts` 逐字钉住，加一步减一步都要同批改那里，见 ISSUE #2135 记的那次冻结)，只有
 `run_group()` 自己按
 `COMFY_HEAVY_GATES` 决定启不启；CI 那一格读的是**同一份注册表**
 (`readHookSteps()`，它顺手把 `--staged` 剥掉 —— CI 没有暂存区，留着那些脚本判的是「空提交」，
