@@ -26,6 +26,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
+  // 「PR 上跑什么」那份清单里的每个名字，**执行者是谁** —— 这条判据
+  // （`scripts/check-gate-name-executors.mjs`）的**自证**：它证明那个判据能红。
+  // 不进固定清单的话，它只在 `scripts/ci-gate-names.mjs` 改动时才跑 ——
+  // 而「有人把它的某条用例删掉或改软」恰好**不在**改动面上，表现不是红而是
+  // 「判据恒绿而没人验过它能红」：与 `doc-check-hook-wiring` 同因进固定清单。
+  "tests/ci-gate-names.test.ts",
   // 那条判据的姊妹件：「环境前提」那一步（`scripts/ci-env-probe.mjs`）在**任何依赖
   // 安装之前**回答「在的那几件版本够不够」与「`.cnb.yml` 配错了没有」。它的回潮形态
   // 恰好**不在改动面上**：`ps7OnlySyntaxIn` 那两份副本住在 `scripts/` 与 `tests/` 两边，
