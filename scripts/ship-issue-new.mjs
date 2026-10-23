@@ -15,8 +15,8 @@
  *
  * 代做的是机械那一半：建单 → 按 `提单人:<短名>` → 独立 `get-issue` 回读
  * （标题 / 优先级 / 标签三件原值）。**不写正文**：标题与正文是判断（症状 / 读数 /
- * 根因），必须由人给（`--new-issue` + `--issue-body-file`）。正文末尾补一行署名
- * （`authorSignature`），与 PR 正文同一口径 —— 那一行是留痕，不是判断。
+ * 根因），必须由人给（`--new-issue` + `--issue-body-file`）。正文开头补一行署名
+ * （`commentHeader`），与 PR 正文同一口径 —— 那一行是留痕，不是判断。
  *
  * `--priority` 不代填：不给就走平台默认（P2），并把这句念出来；词表只认平台原生的
  * `P0|P1|P2|P3`（`ISSUE_PRIORITIES`）。给了一个词表外的值 ⇒ 停手，别让平台替我们
@@ -32,7 +32,7 @@ import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
   authorLabel,
-  authorSignature,
+  commentHeader,
   ISSUE_LABEL_ROLES,
   ISSUE_PRIORITIES,
   labelValues,
@@ -88,7 +88,7 @@ export function decideNewIssue({ title = null, body = null, priority = null }) {
 }
 
 /**
- * 读正文文件并在末尾补署名行（正文本身一字不改）。
+ * 读正文文件并在开头补署名行（正文本身一字不改）。
  *
  * @param {string} root 仓库根
  * @param {string} file 正文文件（相对路径按仓库根解析）
@@ -105,7 +105,7 @@ export function readIssueBody(root, file, handle) {
   }
   return {
     ok: true,
-    text: `${text.replace(/\s+$/, "")}\n\n${authorSignature(handle)}\n`,
+    text: `${commentHeader(handle)}\n\n${text.replace(/\s+$/, "")}\n`,
     where,
   };
 }

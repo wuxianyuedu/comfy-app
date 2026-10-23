@@ -27,26 +27,41 @@ import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
   DEV_HANDLE_ENV_KEY,
+  commentHeader,
   handlerLabel,
-  handlerSignature,
   ISSUE_LABEL_ROLES,
   labelValues,
   participantLabel,
 } from "./ship-ticket.mjs";
 
 /**
- * 单子评论的第一行 —— 回读时按它认「这一条是不是这个动作写的」。
+ * 状态评论里那句人话。领取 / 结束共用一处生成 —— **回读判据也用它**：
+ * 署名对两种动作逐字相同（只有「谁写的」），拿它判动作会把两条都认成第一条。
+ *
+ * @param {"claim"|"release"} kind 动作
+ * @param {string} handle 留痕短名
+ * @returns {string}
+ */
+function commentSentence(kind, handle) {
+  return kind === "claim"
+    ? `开发者 ${handle} 已接单，正在开发中。`
+    : `开发者 ${handle} 开发结束。`;
+}
+
+/**
+ * 单子评论 —— 开头一行粗体署名，正文那句人话由 `commentSentence` 统一给。
+ * 回读认的是**正文那句**，不是第一行。
  *
  * @param {string} handle 留痕短名
  * @returns {string}
  */
 export function claimComment(handle) {
-  return `开发者 ${handle} 已接单，正在开发中。\n\n${handlerSignature(handle)}`;
+  return `${commentHeader(handle)}\n\n${commentSentence("claim", handle)}`;
 }
 
 /** @param {string} handle 留痕短名 */
 export function releaseComment(handle) {
-  return `开发者 ${handle} 开发结束。\n\n${handlerSignature(handle)}`;
+  return `${commentHeader(handle)}\n\n${commentSentence("release", handle)}`;
 }
 
 /**
@@ -56,13 +71,16 @@ export function releaseComment(handle) {
  * 只看出现过就会把上一轮那句「开发结束」当成这一轮的结论 —— 于是重领之后第一次 release
  * 不再发评论。`list-issue-comments` 按 `-created` 取，所以第一条命中的就是最新状态。
  *
+ * 判据取正文那句（`commentSentence`）而不是首行署名：两种动作的署名逐字相同，
+ * 用它判会把 release 认成 claim。旧格式（末尾 `处理人:`）的评论同样含这句，仍认得出。
+ *
  * @param {string[]} bodies 评论正文（**新到旧**）
  * @param {string} handle 留痕短名
  * @returns {"claim"|"release"|null}
  */
 export function handleCommentState(bodies, handle) {
-  const claim = claimComment(handle).split("\n", 1)[0] ?? "";
-  const release = releaseComment(handle).split("\n", 1)[0] ?? "";
+  const claim = commentSentence("claim", handle);
+  const release = commentSentence("release", handle);
   for (const body of Array.isArray(bodies) ? bodies : []) {
     const text = String(body ?? "");
     if (text.includes(claim)) return "claim";
@@ -271,7 +289,9 @@ function ensureComment(ctx) {
     );
     return CODE.NOT_RUN;
   }
-  log(`[ship] ✓ #${number} 评论已回读（list-issue-comments）：${text.split("\n", 1)[0]}`);
+  log(
+    `[ship] ✓ #${number} 评论已回读（list-issue-comments）：${commentSentence(kind, handle)}`,
+  );
   return CODE.GREEN;
 }
 

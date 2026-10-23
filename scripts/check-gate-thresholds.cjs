@@ -28,7 +28,8 @@
  *   2. 同组必须同数（R5 与 infra 那两把 900 —— 只改一把 = 半边失效）；
  *   3. 这些判据文件里出现、而账里没有的顶层数值 ⇒ 红（不承重的也以 `kind:"report"` 入账：
  *      入账这个动作本身就是那次判断）。**扫描根是磁盘上的 `scripts/check-*.cjs`**，不是
- *      「账上点名的那些文件」—— 后者让整份没进账的判据永远不被扫（ISSUE #2188 的立案现场）；
+ *      「账上点名的文件」—— 后者让整份没进账的新判据永远不被扫（ISSUE #2188 的立案现场）；
+ *      而"顶层具名"两向都认 `export`（ISSUE #2236：可见性不是承重与否的分界）。
  *   4. 相对主干账变松而未签字（`movedFrom` + `movedIssue`）⇒ 红；
  *   5. 自证：账非空、每条都定位得到 —— 正则写漂会让「比对了 0 条」与「全部一致」长得一样。
  *
@@ -47,11 +48,24 @@ const LEDGER_REL = "scripts/.gate-thresholds.json";
 const MIN_ENTRIES = 15;
 
 /**
- * 顶层具名数值常量：`const NAME = 123;` / `0.75` / `10_000`。
+ * 「顶层具名数值常量」的开头形状 —— **一处定义、两处消费**（下面的 `CONST_DECL` 扫面，
+ * 与 `sourceValue()` 按账上点名的那个常量定点取值）。
+ *
+ * `export` 是**可选前缀**，不是另一件事：一条阈值只要写在这一层，它承不承重与它被不被
+ * 别的文件 import 无关。按可见性划覆盖面 = 教下一个人把阈值藏进 `export const` 后面
+ * （ISSUE #2236：本仓自己就先撞上过一次 —— 新常量先写成 `export const`，账一个字都没念它，
+ * 改成非导出才进得了面）。
+ */
+const CONST_HEAD = "^(?:export\\s+)?const\\s+";
+
+/**
+ * 顶层具名数值常量：`const NAME = 123;` / `export const NAME = 0.75;` / `10_000`。
  * 数值分隔写法要一起认，否则账上写 10000 会永远「找不到」；多行表达式不算，也不该入账。
  */
-const CONST_DECL =
-  /^const\s+([A-Z][A-Z0-9_]{2,})\s*=\s*(-?\d[\d_]*(?:\.\d+)?)(?=[;,\s])/gm;
+const CONST_DECL = new RegExp(
+  `${CONST_HEAD}([A-Z][A-Z0-9_]{2,})\\s*=\\s*(-?\\d[\\d_]*(?:\\.\\d+)?)(?=[;,\\s])`,
+  "gm",
+);
 
 /**
  * 把源码里那串数值（可能带 `_` 分隔）归成数字。
@@ -118,8 +132,10 @@ function analyze({
   const sourceValue = (file, name) => {
     const text = readSource(file);
     if (text === null) return { missing: "文件不存在" };
+    /* 前缀取上面那一条 `CONST_HEAD` —— 扫面与定点取值必须是同一把尺子，否则会出现
+       「这份文件被扫到了，但账上那条按老形状找不到」这种自相矛盾的红。 */
     const re = new RegExp(
-      `^const\\s+${name}\\s*=\\s*(-?\\d[\\d_]*(?:\\.\\d+)?)(?=[;,\\s])`,
+      `${CONST_HEAD}${name}\\s*=\\s*(-?\\d[\\d_]*(?:\\.\\d+)?)(?=[;,\\s])`,
       "m",
     );
     const raw = re.exec(text)?.[1];

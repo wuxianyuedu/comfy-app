@@ -67,9 +67,8 @@ import {
 } from "../scripts/ship-close.mjs";
 import {
   authorLabel,
-  authorSignature,
+  commentHeader,
   handlerLabel,
-  handlerSignature,
   issueAuthoring,
   participantLabel,
   readDevHandle,
@@ -91,6 +90,7 @@ import {
   reportVerdict,
 } from "../scripts/ship-platform.mjs";
 import { closeIssues } from "../scripts/ship-close.mjs";
+import { readIssueBody } from "../scripts/ship-issue-new.mjs";
 import {
   decideReap,
   instanceReading,
@@ -1264,8 +1264,7 @@ describe("角色标签与署名：提单人 / 处理人 / 参与人 —— 只�
     expect(authorLabel("yuedu-win")).toBe("提单人:yuedu-win");
     expect(handlerLabel("yuedu-win")).toBe("处理人:yuedu-win");
     expect(participantLabel("yuedu-win")).toBe("参与人:yuedu-win");
-    expect(authorSignature("yuedu-win")).toBe("提单人:yuedu-win");
-    expect(handlerSignature("yuedu-win")).toBe("处理人:yuedu-win");
+    expect(commentHeader("yuedu-win")).toBe("**[评论人：yuedu-win]**");
     // 首尾空白吃掉 —— 与 `readDevHandle` 同一条口径。
     expect(authorLabel("  yuedu-win  ")).toBe("提单人:yuedu-win");
     expect(handlerLabel("  yuedu-win  ")).toBe("处理人:yuedu-win");
@@ -1277,8 +1276,7 @@ describe("角色标签与署名：提单人 / 处理人 / 参与人 —— 只�
       expect(authorLabel(v)).toBeNull();
       expect(handlerLabel(v)).toBeNull();
       expect(participantLabel(v)).toBeNull();
-      expect(authorSignature(v)).toBe("提单人:未配");
-      expect(handlerSignature(v)).toBe("处理人:未配");
+      expect(commentHeader(v)).toBe("**[评论人：未配]**");
     }
   });
 
@@ -1291,8 +1289,8 @@ describe("角色标签与署名：提单人 / 处理人 / 参与人 —— 只�
     expect(all).toContain("提单人:yuedu-win");
     expect(all).toContain("处理人:yuedu-win");
     expect(all).toContain("参与人:yuedu-win");
-    expect(all).toContain("提单 / PR 正文用 `提单人:yuedu-win`");
-    expect(all).toContain("领取 / 结束评论用 `处理人:yuedu-win`");
+    expect(all).toContain("正文最前面带一行粗体署名 `**[评论人：yuedu-win]**`");
+    expect(all).toContain("提单 / PR 正文与领取 / 结束评论同一格式");
     expect(all).toContain(
       "cnb pulls post-pull-labels --repo moon-read/comfy-app-t3 --number <PR号> --labels 处理人:yuedu-win -v",
     );
@@ -1310,8 +1308,7 @@ describe("角色标签与署名：提单人 / 处理人 / 参与人 —— 只�
     expect(all).toContain("未配");
     expect(all).toContain(path.join("/checkout/one", ".env"));
     expect(all).toContain("pnpm env:init");
-    expect(all).toContain("提单人:未配");
-    expect(all).toContain("处理人:未配");
+    expect(all).toContain("**[评论人：未配]**");
     // 仓库取不到时占位，而不是把 `undefined` 拼进一条能粘贴的命令。
     expect(all).toContain("--repo <组织>/<仓库>");
   });
@@ -1448,12 +1445,12 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
   const handle = "yuedu-win";
   const opts = (argv: string[]) => parseArgs(argv);
 
-  it("评论文案：第一行是人话，第二行才是署名 —— 领取 / 结束各一条", () => {
+  it("评论文案：第一行是粗体署名，正文那句人话在下面 —— 领取 / 结束各一条", () => {
     expect(claimComment(handle)).toBe(
-      `开发者 ${handle} 已接单，正在开发中。\n\n处理人:${handle}`,
+      `**[评论人：${handle}]**\n\n开发者 ${handle} 已接单，正在开发中。`,
     );
     expect(releaseComment(handle)).toBe(
-      `开发者 ${handle} 开发结束。\n\n处理人:${handle}`,
+      `**[评论人：${handle}]**\n\n开发者 ${handle} 开发结束。`,
     );
   });
 
@@ -1467,6 +1464,13 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
     expect(handleCommentState([claim, release], handle)).toBe("claim");
     // 别人的状态评论不影响我的判读。
     expect(handleCommentState([claimComment("someone-else")], handle)).toBeNull();
+    // 旧格式（末尾 `处理人:`）的评论仍认得出动作 —— 换格式不能把历史评论读丢。
+    expect(
+      handleCommentState(
+        [`开发者 ${handle} 开发结束。\n\n处理人:${handle}`],
+        handle,
+      ),
+    ).toBe("release");
   });
 
   it("decideClaim：未配 ⇒ 2；非 open ⇒ 1；别人名下 ⇒ 1 且说明「仍可评论」", () => {
@@ -1559,7 +1563,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       expect(f.labels()).toContain(`处理人:${handle}`);
       expect(f.labels()).toContain(`参与人:${handle}`);
       expect(f.comments()[0]).toContain("已接单");
-      expect(f.comments()[0]).toContain(`处理人:${handle}`);
+      expect(f.comments()[0]?.startsWith(`${commentHeader(handle)}\n\n`)).toBe(true);
     } finally {
       s.cleanup();
     }
@@ -3145,20 +3149,20 @@ describe("buildPullBody：只搬量到的事实，不生成会被复核的因果
     expect(body).toContain("1 file changed");
   });
 
-  it("配了留痕 ⇒ 正文带一行 `提单人:<短名>`；没配 ⇒ 写「未配」而不是编一个名字", () => {
+  it("配了留痕 ⇒ 正文开头一行粗体署名；没配 ⇒ 写「未配」而不是编一个名字", () => {
     const withHandle = buildPullBody({
       root: process.cwd(),
       fragments: [],
       diffstat: " 1 file changed",
       handle: "yuedu-win",
     });
-    expect(withHandle).toContain("提单人:yuedu-win");
+    expect(withHandle.startsWith("**[评论人：yuedu-win]**\n\n")).toBe(true);
     const without = buildPullBody({
       root: process.cwd(),
       fragments: [],
       diffstat: " 1 file changed",
     });
-    expect(without).toContain("提单人:未配");
+    expect(without.startsWith("**[评论人：未配]**\n\n")).toBe(true);
     expect(without).not.toContain("yuedu-win");
     // 正文里不出现旧的 `dev:` 形态：那一维已经拆成「提单人 / 处理人」两个角色。
     expect(withHandle).not.toContain("dev:");
@@ -3568,6 +3572,26 @@ describe("--new-issue：一步建单并回读", () => {
     fs.writeFileSync(file, text, "utf8");
     return { dir, file };
   }
+
+  it("正文开头补一行粗体署名，正文本身一字不改（旧的末尾署名不再追加）", () => {
+    const tmp = withBody("## 症状\n\nCI 红了\n");
+    try {
+      const got = readIssueBody(tmp.dir, tmp.file, "yuedu-win");
+      expect(got.ok).toBe(true);
+      expect(got.text.startsWith("**[评论人：yuedu-win]**\n\n## 症状")).toBe(
+        true,
+      );
+      expect(got.text).toContain("CI 红了");
+      expect(got.text).not.toContain("提单人:");
+      expect(
+        readIssueBody(tmp.dir, tmp.file, null).text.startsWith(
+          "**[评论人：未配]**",
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
 
   const runMain = (
     f: ReturnType<typeof newIssueIo>,

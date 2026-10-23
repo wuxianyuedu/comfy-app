@@ -23,7 +23,8 @@
  *      「受影响 0 个用例」（实测撞到过），那这句承诺就是空话。
  *   ④ 改动路径以字面量出现在测试的**代码文本**里（比对面已剥注释，§13.5.8）：门禁用例
  *      用 `execFileSync` 起被测脚本、主题用例按路径读 CSS，这类消费不是 import，
- *      只有整串匹配抓得住。
+ *      只有整串匹配抓得住。改名时**旧路径也进改动面**（`--name-status -M` 的 R 行
+ *      两侧都收），否则按旧路径读文件的用例会随改名整条漏跑（ISSUE #2226）。
  *      同族：改 `scripts/<name>.cjs|mjs|py` 时按名字配 `tests/<name>.test.ts`。
  *
  * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
@@ -55,6 +56,7 @@ import { fileURLToPath } from "node:url";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
+import { parseDiffEntries } from "./launcher-core/sync-attribution.mjs";
 import { stripComments } from "./tw4-scan-core.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -101,6 +103,47 @@ export function isTestPath(rel) {
     (rel.startsWith("src/") || rel.startsWith("tests/")) &&
     /\.test\.tsx?$/.test(rel)
   );
+}
+
+/** 仓库相对路径的规范形态：去空白、反斜杠转正斜杠。 */
+/** @param {string} raw @returns {string} */
+function normalizeRel(raw) {
+  return String(raw).trim().replace(/\\/g, "/");
+}
+
+/**
+ * `git diff --name-status -M` 的输出 → 改动面。
+ *
+ * 为什么不用 `--name-only`：改名（`R`）在那一份输出里**只给新路径**，而旧路径才是
+ * 「谁按路径消费了它」的线索 —— 用旧路径读文件、又不 import 的用例因此整条漏跑
+ * （ISSUE #2226）。`R` 行把新旧两边都收进改动面；`C`（复制）源文件没变，只收新路径。
+ * 解析复用 `launcher-core/sync-attribution.mjs` 的 `parseDiffEntries`（运行期陈旧路由
+ * 归因也在用它，不另写一份切分）。
+ *
+ * @param {string} output `git diff --name-status -M` 的原始输出
+ * @returns {{paths: string[], renamedFrom: string[]}} `paths` 是改动面（含改名旧路径），
+ *   `renamedFrom` 只放 `R` 行的旧路径（读出改名事件用）
+ */
+export function changedPathsFromNameStatus(output) {
+  /** @type {string[]} */
+  const paths = [];
+  /** @type {string[]} */
+  const renamedFrom = [];
+  for (const entry of parseDiffEntries(output)) {
+    if (entry.status === "R" && entry.oldPath) {
+      const old = normalizeRel(entry.oldPath);
+      if (old) {
+        paths.push(old);
+        renamedFrom.push(old);
+      }
+    }
+    const next = normalizeRel(entry.path);
+    if (next) paths.push(next);
+  }
+  return {
+    paths: [...new Set(paths)],
+    renamedFrom: [...new Set(renamedFrom)],
+  };
 }
 
 /** import 说明符不带扩展名，按候选逐个试（含目录形式的 barrel）。 */
@@ -236,7 +279,9 @@ function reachFrom(roots, importedBy) {
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}, tracked?: string[] | null}} input
+ *   `tracked` 是当前树/索引里的全部路径（`git ls-files`）。给了它才对**已消失的旧路径**
+ *   （改名旧侧、删除）做「旧路径片」匹配；不给则只认整串字面量（用例夹具的默认口径）。
  * @returns {Resolution}
  */
 export function resolveAffectedTests({
@@ -246,6 +291,7 @@ export function resolveAffectedTests({
   readText,
   knownFailed = [],
   graph,
+  tracked = null,
 }) {
   /** @type {Record<string, string>} */
   const reasons = {};
@@ -299,7 +345,7 @@ export function resolveAffectedTests({
   /** @type {string[]} */
   const wide = [];
   for (const raw of changedPaths) {
-    const rel = String(raw).trim().replace(/\\/g, "/");
+    const rel = normalizeRel(raw);
     if (!rel) continue;
     const why = wideReasonFor(rel);
     if (why) wide.push(`${rel} —— ${why}`);
@@ -308,6 +354,11 @@ export function resolveAffectedTests({
   if (wide.length > 0) return withFixed("all", [], wide.join(" / "));
 
   const list = [...changed];
+  /* 已消失的旧路径：改名旧侧、删除项。它们不在索引/HEAD 的 `ls-files` 里，而按路径
+   * 读文件的用例仍可能写着它 —— 整串字面量之外，再用「目录 + 文件名」兜一次。 */
+  const trackedSet = tracked === null ? null : new Set(tracked.map(normalizeRel));
+  const vanished =
+    trackedSet === null ? [] : list.filter((rel) => !trackedSet.has(rel));
   for (const rel of list) {
     if (isTestPath(rel)) {
       add(rel, "自身");
@@ -358,7 +409,10 @@ export function resolveAffectedTests({
   }
 
   /* ── ④ 路径以字面量被引用（闭包抓不到的那类消费）──────────────────────── */
-  /* 比对面是**剥注释之后**的代码文本（`codeTexts`，建树时一次算好）。为什么必须剥：
+  /* 两种写法：整串路径（原样出现在代码里）；以及**已消失的旧路径**按「目录 + 文件名」
+   * 两片出现（`join(ROOT, "src/a", "b.ts")`）—— 后者只在调用方给了 `tracked` 时启用，
+   * 因为「已消失」正是判据（改名旧侧 / 删除），而没消失的路径按 basename 匹配会误报一片。
+   * 比对面是**剥注释之后**的代码文本（`codeTexts`，建树时一次算好）。为什么必须剥：
    * 本仓的门禁自测**在文件头的 JSDoc 里引用规范章节**是硬规则 15 要求的动作，于是
    * 「改一句注释」与「运行期读了那个文件」在原文里逐字同形 —— 实测只提交文档时，
    * `docs/standards/13-提交与-code-review.md` 一个路径把 6 份门禁自测按「按路径引用」
@@ -368,12 +422,32 @@ export function resolveAffectedTests({
     if (picked.has(testFile)) continue;
     const text = codeTexts.get(testFile);
     if (text === undefined) continue;
+    let why = "";
     for (const rel of list) {
       if (rel !== testFile && text.includes(rel)) {
-        add(testFile, "按路径引用");
+        why = "按路径引用";
         break;
       }
     }
+    if (why === "") {
+      for (const rel of vanished) {
+        const dir = path.posix.dirname(rel);
+        const base = path.posix.basename(rel);
+        /* 只认「目录与文件名都写了」的那一种：单看 basename（`route.ts` / `index.ts`）
+         * 会把半个测试面拉进来，而按路径读的常见形态恰好是 join(ROOT, 目录, 文件名)。
+         * 目录名重名时仍可能多报 —— 多跑几份是代价，改名把消费方整条抹掉才是要治的病。 */
+        if (
+          dir !== "." &&
+          base !== "" &&
+          text.includes(dir) &&
+          text.includes(base)
+        ) {
+          why = "按旧路径片引用";
+          break;
+        }
+      }
+    }
+    if (why !== "") add(testFile, why);
   }
 
   /* 已知基线红（`KNOWN_FAILED_FILES` 单点定义，与 `run-tests.mjs` / 一键门禁同一份）：
@@ -415,10 +489,19 @@ export function resolveAffectedTests({
  *   `buildImportedBy()` 的产物（复用同一份图，避免逐文件重建）
  * @param {string[]} testFiles 参与统计的测试全集（须与建图时的口径一致）
  * @param {string[]} sourceFiles 参与建图的源码全集（须与建图时的口径一致）
+ * @param {string[] | null} [tracked] 当前索引里的全部路径；与主链同一个口径 ——
+ *   「旧路径片」那一档要靠它判「这个路径是不是已经不在树上了」，不传就等于那条判据
+ *   在归因里缺席（两处数会漂，正是本函数头顶警告过的那种病）
  * @returns {{file: string, affected: number, total: number}[]} 按单独影响面**从大到小**排序；
  *   `affected` 是受影响份数（不含固定清单），`total` 是合计（含固定清单）
  */
-export function attributeAffected(changedPaths, graph, testFiles, sourceFiles) {
+export function attributeAffected(
+  changedPaths,
+  graph,
+  testFiles,
+  sourceFiles,
+  tracked = null,
+) {
   const out = [];
   for (const raw of changedPaths) {
     const rel = String(raw).trim().replace(/\\/g, "/");
@@ -437,6 +520,7 @@ export function attributeAffected(changedPaths, graph, testFiles, sourceFiles) {
       readText: () => null,
       knownFailed: [],
       graph,
+      tracked,
     });
     const affected = res.tests.filter(
       (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
@@ -476,15 +560,20 @@ function git(args) {
 
 /**
  * 暂存区改动。`--diff-filter` 保留 D：删掉的文件要去匹配「谁 import 了它」。
- * @returns {string[] | null}
+ * 用 `--name-status -M` 而不是 `--name-only`：改名在后者里只剩新路径，而旧路径正是
+ * 「谁按路径读它」的线索（ISSUE #2226）。`-M` 让 git 把「移动」判成 `R` 并给出两边。
+ * @returns {{paths: string[], renamedFrom: string[]} | null}
  */
-function stagedPaths() {
-  const out = git(["diff", "--cached", "--name-only", "--diff-filter=ACMRD"]);
+function stagedChanges() {
+  const out = git([
+    "diff",
+    "--cached",
+    "--name-status",
+    "-M",
+    "--diff-filter=ACMRD",
+  ]);
   if (out === null) return null;
-  return out
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return changedPathsFromNameStatus(out);
 }
 
 /** 参与 import 图的文件目录与扩展名：闭包要能穿过 `scripts/` 里的门禁脚本。 */
@@ -530,8 +619,9 @@ function readText(rel) {
 }
 
 /**
- * 一次 `git ls-files` 出两份清单：测试（输出的候选）与 import 图的节点。
- * @returns {{testFiles: string[], sourceFiles: string[]} | null}
+ * 一次 `git ls-files` 出三份：测试（输出的候选）、import 图的节点、以及全量路径
+ * （`tracked` 用来判「这个改动路径是不是已经不在树上了」—— 改名旧侧与删除项）。
+ * @returns {{testFiles: string[], sourceFiles: string[], tracked: string[]} | null}
  */
 function collectInputs() {
   const tracked = trackedPaths();
@@ -539,6 +629,7 @@ function collectInputs() {
   return {
     testFiles: tracked.filter(isTestPath),
     sourceFiles: tracked.filter(isSourcePath),
+    tracked,
   };
 }
 
@@ -578,7 +669,7 @@ function main() {
     const changed =
       ci >= 0
         ? argv.slice(ci + 1).filter((a) => !a.startsWith("--"))
-        : (stagedPaths() ?? []);
+        : (stagedChanges()?.paths ?? []);
     const inputs = collectInputs();
     if (inputs === null || changed.length === 0) {
       process.stdout.write("[]\n");
@@ -590,16 +681,23 @@ function main() {
     );
     process.stdout.write(
       JSON.stringify(
-        attributeAffected(changed, graph, inputs.testFiles, inputs.sourceFiles),
+        attributeAffected(
+          changed,
+          graph,
+          inputs.testFiles,
+          inputs.sourceFiles,
+          inputs.tracked,
+        ),
       ) + "\n",
     );
     return 0;
   }
   const ci = argv.indexOf("--changed");
+  const staged = ci >= 0 ? null : stagedChanges();
   const changed =
     ci >= 0
       ? argv.slice(ci + 1).filter((a) => !a.startsWith("--"))
-      : (stagedPaths() ?? []);
+      : (staged?.paths ?? []);
   const inputs = collectInputs();
   /** @type {Resolution} */
   const res =
@@ -615,6 +713,7 @@ function main() {
           sourceFiles: inputs.sourceFiles,
           readText,
           knownFailed: KNOWN_FAILED_FILES,
+          tracked: inputs.tracked,
         });
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));
@@ -627,8 +726,15 @@ function main() {
      * 可以不同，而这一行是唯一会被读账的数字：拿清单长度冒充实跑，跳过的那几条
      * 就在这句话里消失了（同「读不到就少说一条」那类病）。 */
     process.stderr.write(
-      `[affected] 暂存 ${changed.length} 个文件 → 跑 ${res.tests.length} 个测试` +
+      `[affected] 暂存 ${changed.length} 个路径 → 跑 ${res.tests.length} 个测试` +
         `（固定 ${res.tests.length - extra.length} + 受影响 ${extra.length}）\n`,
+    );
+  }
+  const renamedFrom = staged?.renamedFrom ?? [];
+  if (renamedFrom.length > 0) {
+    process.stderr.write(
+      `[affected] 改名 ${renamedFrom.length} 处 ⇒ 旧路径也进了改动面（${renamedFrom.join(" ")}）；` +
+        "按「目录 + 文件名」分片读它的用例按「旧路径片引用」入选\n",
     );
   }
   if (res.reasons.__faceSkipped) {

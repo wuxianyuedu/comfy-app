@@ -298,6 +298,46 @@ export function failingSuitesFromJunit(xml) {
 }
 
 /**
+ * 一份 vitest junit XML → **失败过的**用例文件，连它们各自的失败文本一起。
+ *
+ * 与上面那条同源、只多带一份 `body`：`failingSuitesFromJunit` 回答「复跑该跑哪几份」，
+ * 这一条回答「第 2 遍里，**哪一份**是超时、**哪一份**是断言红」（ISSUE #2225）。
+ * 判决粒度必须能与取数粒度对齐，否则一份超时会把同块里别人的真红一起吞掉 ——
+ * 那份吞掉表现为退出码 0，而没有任何一条红指向它。
+ *
+ * `body` 取的是「这个开标签之后、到下一个 `<testsuite` 或 `</testsuite>` 之前」那一段：
+ * vitest 的失败文本落在 `<testcase>` 的子里，而 `<testcase>` 不截断这一段 ⇒ 一并拿到。
+ * 形状按 vitest 5.0.3 的实际输出定（每个文件一个内层 `<testsuite>`，没有再嵌套一层）；
+ * 形状变了最坏是 `body` 短了，把那份读成「认不出」，不会把真红读成超时。
+ *
+ * @param {string} xml
+ * @returns {{name: string, body: string}[]} 属性读不出失败的 suite 不在这里
+ */
+export function failingSuiteTextsFromJunit(xml) {
+  const text = String(xml ?? "");
+  /** @type {{name: string, body: string}[]} */
+  const out = [];
+  const openRe = /<testsuite\b[^>]*>/g;
+  for (let m = openRe.exec(text); m !== null; m = openRe.exec(text)) {
+    const tag = m[0];
+    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+    if (!name) continue;
+    const bad = ["failures", "errors"].some((key) => {
+      const raw = new RegExp(`\\b${key}="([^"]*)"`).exec(tag)?.[1];
+      const n = Number(raw);
+      return raw !== undefined && Number.isFinite(n) && n > 0;
+    });
+    if (!bad) continue;
+    const nextOpen = text.indexOf("<testsuite", openRe.lastIndex);
+    const nextClose = text.indexOf("</testsuite>", openRe.lastIndex);
+    const stops = [nextOpen, nextClose].filter((i) => i !== -1);
+    const end = stops.length === 0 ? text.length : Math.min(...stops);
+    out.push({ name, body: text.slice(openRe.lastIndex, end) });
+  }
+  return out;
+}
+
+/**
  * 把账本目录里的分文件读数收成一份。
  *
  * 合并规则按 **(块, 遍) 升序**，后写的覆盖先写的 —— 于是第 2 遍（`--no-file-parallelism`

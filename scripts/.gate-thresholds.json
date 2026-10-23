@@ -238,6 +238,42 @@
       "kind": "report",
       "strictness": "n/a",
       "why": "轮询的耐心预算，不是松紧量：调大它只是把误掐概率换小，「一格都没起来」与「一格跑很久」仍然分不开（ISSUE #2184 定的就是这一点，别拿这一格当出路）。真正的判据是「签名不变 且 inFlightStages() 为 0」。"
+    },
+    {
+      "file": "scripts/run-affected-tests.mjs",
+      "const": "PER_FILE_RERUN_MAX",
+      "value": 8,
+      "unit": "份",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "「第 2 遍分不出哪份是超时」时逐文件补跑的上限（ISSUE #2225）。不是松紧量：调它只决定要不要多花几十秒拿回判决粒度，任何一条断言的判定都不随它变 —— 调大也不会让真红变绿。"
+    },
+    {
+      "file": "scripts/run-affected-tests.mjs",
+      "const": "SCOPE_ADVICE_MIN",
+      "value": 60,
+      "unit": "秒",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "组 C 慢到某个点才补一句「怎么降负载」的话术阈值。纯话术门槛，不参与判定，也不参与退出码。"
+    },
+    {
+      "file": "scripts/run-affected-tests.mjs",
+      "const": "SAFE_ARGV_BUDGET",
+      "value": 24000,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "一次 spawn 的命令行预算（Win32 上限 32767 留出余量）。它只决定「分几块跑」，不决定任何一条用例的判定 —— 调小是多次启动、调大是顶穿风险，两边都不放宽判据。"
+    },
+    {
+      "file": "scripts/run-affected-tests.mjs",
+      "const": "DEFAULT_MAX_WORKERS",
+      "value": 4,
+      "unit": "并发",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "钩子档 vitest 的默认并发（8 逻辑核、A/B/D 同时在跑那一档的实测值）。§13.6.4 那条口径明写「降负载的杠杆是并发，不是预算」，所以它是负载旋钮而不是判定阈值 —— 调它不改变任何一条断言的松紧。"
     }
   ],
   "$notCovered": {

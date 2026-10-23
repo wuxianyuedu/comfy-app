@@ -145,7 +145,7 @@
  *   pnpm ship --release 2187                   # 结束处理：评论「开发结束」+ 撤 `处理人:` 标签（先评论后撤）
  *   pnpm ship --claims                         # 列出自己领取中（state=open）的单子
  *   pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priority P1
- *                                              # 一步建单：create-issue（正文文件 + 末尾署名）→
+ *                                              # 一步建单：create-issue（正文文件 + 开头署名）→
  *                                              #   补 `提单人:` 标签 → 独立 get-issue 回读；
  *                                              #   标题与正文是判断，脚本不代写
  *   pnpm ship --diagnose [sn]                  # 只读：CI 红了就看那一跑的失败格 + 失败行 +
