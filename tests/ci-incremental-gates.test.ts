@@ -45,6 +45,7 @@ import {
   readCnbConfig,
 } from "../scripts/ci-incremental-gates.mjs";
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
+import { parseStageScripts } from "../scripts/ci-autofix-duties.mjs";
 import {
   INPUT_GLOBS,
   INPUT_RES,
@@ -212,11 +213,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
        *
        *   · `生成态文档与源同步` —— 两侧输入面都能点清（`SCOPED_DOCS` 全在 `docs/**`，
        *     `FACTS` 的提取源是 `src/**` 与三份配置），且它带 `--autofix`（§13.5.19）；
-       *   · `API 文档生成物与源同步` —— 它**自己**就声明了触发面（`check-docs-api.cjs`
+       *   · `API 文档生成与自检` —— 它**自己**就声明了触发面（`check-docs-api.cjs`
        *     的 `INPUT_RES`，文件头第 4 条：「触发面 = typedoc 的输入面」），所以那一档的
        *     globs 由那份常量机械反推，不是第二份会漂的副本。它是本档最贵的一格
        *     （实测 201.8s / 整条 12m14s 的 27.5%），而绝大多数 PR 一行
        *     `src/lib|server|trpc` 都没碰。
+       *     ⚠️ 2026-10-23 起它的**产物面 `docs/api/**` 已从收窄面里去掉**（ISSUE #2231）：
+       *     产物不再进 git ⇒ 既不在变更文件清单里、也不会被谁改坏。
        *   · `文档引用与权威源一致` —— 这一条判的是**全库**文档里的引用与权威源，
        *     域不是某几个目录，收窄成任何子集都是漏判。 */
       "文档引用与权威源一致",
@@ -257,7 +260,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ).toEqual([]);
   });
 
-  it("`API 文档生成物与源同步` 自己占一格、收窄挂在**那一格**上，且输入面只有一处出处", () => {
+  it("`API 文档生成与自检` 自己占一格、收窄挂在**那一格**上，且输入面只有一处出处", () => {
     /* 这一条的三段历史值得留着，因为**每一段都留一个形状**：
      *
      *   · 2026-10-19：那一档被收进聚合档 `重档静态判据`（平台单 stage 20m 硬上限，
@@ -267,32 +270,48 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      *     而聚合档读的是**钩子注册表** —— 那一档 2026-10-16 就已从钩子里撤走 ⇒
      *     **两次搬动方向相反、在中间对穿** ⇒ 那一档从 2026-10-20 起一个执行者都没有
      *     （`docs/api/**` 随后在无人看管下漂了 32 份）。
-     *   · 2026-10-22（现在）：它**恢复成自己的活 stage**，收窄挂在**那一格**上 ——
+     *   · 2026-10-22：它**恢复成自己的活 stage**，收窄挂在**那一格**上 ——
      *     平台的 `ifModify` 只能按格算，而复合执行者一条都不许挂（格内扫描面不同的
      *     判据一起静默放行，见 `scripts/ci-incremental-gates.mjs` 的 `COMPOUND_EXECUTORS`）。
+     *   · 2026-10-23（ISSUE #2231）：它**改了名、也改了判据对象** —— 产物不再进 git ⇒
+     *     不再判「与源同不同步」，改判「这一轮生成的产物可不可用」⇒ **不再带 `--autofix`**，
+     *     而**产物面 `docs/api/**` 也从收窄面里去掉**（产物既不在变更文件清单里、也不会
+     *     被谁改坏）。原来的名字「API 文档生成物与源同步」里的「与源同步」从这一版起
+     *     **没有对象**了 ⇒ 名字改成「API 文档生成与自检」。
      *
      * 于是本条判的是三件事：① 那一格**真的活着**（配置里不是注释形态）；
      * ② 它的收窄**逐字**等于判据自己声明的输入面（不是第二份手抄）；
-     * ③ 判定门是 `--check --autofix`（只写不判 = 恒绿，自动修登记表也按它核对）。 */
-    const stageName = "API 文档生成物与源同步";
+     * ③ 判定门**不带 `--autofix`**（没有「自动修完再提交」的对象了 —— 而
+     * 「自动修 + 再判」正是让「产物陈旧」在 CI 上隐形的那一格，#2231 的现场）。 */
+    const stageName = "API 文档生成与自检";
     const globs = parseStageIfModify(CONFIG).get(stageName);
     expect(
       globs,
       `配置里没有「${stageName}」这一格的 \`ifModify\` —— 它要么被注释掉了（= 没有执行者），` +
         "要么收窄被摘了（那一格会每次都付 201.8s）",
     ).toBeDefined();
-    /* 收窄的形状 = 判据自己那份声明（`INPUT_GLOBS`，**上界**形态）+ 产物面。
-     * 判据改了输入面而这里没跟，当场红 —— 这就是「机械导出」的那道对账。 */
+    /* 收窄的形状 = 判据自己那份声明（`INPUT_GLOBS`，**上界**形态）。
+     * 判据改了输入面而这里没跟，当场红 —— 这就是「机械导出」的那道对账。
+     * ⚠️ **产物面 `docs/api/**` 不在里面**（ISSUE #2231）：产物不再进 git。 */
     expect(
       globs,
       "那一格的收窄与判据自己声明的输入面不一致 —— 改判据的触发面时必须同批改这里",
-    ).toEqual([...INPUT_GLOBS, "docs/api/**"]);
-    /* 判定门逐字在那一格里：只写不判 = 恒绿；少了 `--autofix` 则自动修登记表对不上。 */
+    ).toEqual([...INPUT_GLOBS]);
+    /* 判定门逐字在那一格里：只写不判 = 恒绿；而**不许带 `--autofix`** ——
+     * 产物不进 git ⇒ 没有「自动修完再提交」的对象，自动修登记表也不认它了。
+     * ⚠️ 核的是**那一行的 `script:`**，不是整块 —— 整块里还有注释，而注释里出现
+     * 旗标字面量**不**等于「这一格带着那个旗标」。解析口径复用
+     * `scripts/ci-autofix-duties.mjs` 的 `parseStageScripts()`（自动修登记表核的也是那一行）。 */
     const block = stageBlock(CONFIG, stageName);
     expect(block, `配置里解析不出「${stageName}」这一格`).toBeTruthy();
     expect(block).toContain("scripts/check-docs-api.cjs");
-    expect(block).toContain("--check");
-    expect(block).toContain("--autofix");
+    const scriptLine = parseStageScripts(CONFIG).get(stageName) ?? "";
+    expect(scriptLine, `配置里解析不出「${stageName}」那一行的 script`).not.toBe("");
+    expect(
+      scriptLine,
+      "那一格又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象；" +
+        "而「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）",
+    ).not.toContain("--autofix");
     /* 判据认的每一类输入面（三条 entryPoint 目录 + 两份配置 + 锁文件）都得被认下来 ——
      * 这一半是「判据自己的触发面声明还在」的读数，与它挂在哪一格无关。 */
     for (const f of [

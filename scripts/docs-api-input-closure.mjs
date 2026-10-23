@@ -143,8 +143,13 @@ export function filesUnder(dir, root = ROOT) {
 /**
  * `typedoc.json` 的解析结果（读不到 / 解析失败 ⇒ 空对象，**不抛**）。
  *
+ * 返回的是**整个解析结果**（不是只挑几个键）—— 别的模块要读的键不止
+ * `entryPoints` / `exclude`：`scripts/check-docs-api.cjs` 要读 `cleanOutputDir`
+ * （它判「输出目录有没有被清空过」，见那份判据的「骨架齐全 + 可移植」那节）。
+ * 「typedoc 的配置」的**唯一出处**在这里：别的模块读它，不各自解析一遍。
+ *
  * @param {string} [root] 仓库根
- * @returns {{entryPoints?: unknown, exclude?: unknown}}
+ * @returns {Record<string, unknown>}
  */
 export function typedocConfig(root = ROOT) {
   const raw = readTextFile(path.join(root, TYPEDOC_CONFIG));

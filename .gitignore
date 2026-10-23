@@ -65,6 +65,16 @@ build_log*.txt
 /temp/
 /temp/comfy-cli/
 
+# API 文档产物（typedoc，2600+ 份 HTML/JS，ISSUE #2231）
+# 它**不再进 git**。理由不是「产物太大」，而是「进库就得有人守它」：产物面一旦入库，
+# 「git 里那份与源同不同步」就得靠一道判据守着，而那道判据的形态是「先就地重生成、
+# 再判一次」（平台侧带 `--autofix`）⇒「修好了」与「本来就对」在读数上完全同形 ⇒
+# 漂移在 CI 上隐形（#2231 的现场：master 上差 9 处，平台那一格报绿）。
+# 产物出库之后这个问题**没有对象** —— 没有提交进 git 的产物，就没有「过期」这回事。
+# 本地想看：`pnpm run docs` 生成一份（只在本机，不进 git）；平台侧那一格
+# 「API 文档生成与自检」各跑各的，判的是「这一份可不可用」。
+docs/api/
+
 # PyInstaller launcher build artifacts
 # onedir 模式产物：start-tauri/ 目录（含 start-tauri.exe 与 _internal 依赖）
 # 由 scripts/start_tauri_launcher.py 重建，不入库

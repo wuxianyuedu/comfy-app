@@ -463,6 +463,28 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
     expect(script).toContain("在仓库中不存在");
   });
 
+  /* 运行期产物的**目录形态**同样豁免（2026-10-23，ISSUE #2231 的连带）。
+   *
+   * `docs/api/` 进 `.gitignore` 之后，AGENTS.md 里「产物落在 `docs/api/`」那句话在新克隆里
+   * 指向一个**不存在**的目录 ⇒ `pnpm doc:check` 在 CI 上恒红，而「按提示去改 AGENTS.md」
+   * 是错的 —— 那句话讲的是「产物落在哪」，不是「仓库里有这个目录」。旧实现只豁免根级**单名**
+   * （`db.sqlite`），嵌套形态没有豁免：同一个洞，只是要等第一个嵌套形态出现。
+   *
+   * 为什么必须是**差分**探针：本机跑过 `pnpm run docs` 的话 `docs/api/` 是真存在的 ⇒
+   * 「不红」这件事在本机分不出是「豁免生效了」还是「那个目录真的在」⇒ 探针文件必须是
+   * **一定不存在**的名字，存在性检查本来会红、豁免让它不红 —— 那才有信号。 */
+  it("被 .gitignore 忽略的嵌套目录形态同样豁免（差分探针）", () => {
+    const ignored = withAgentsMdProbe(
+      "临时探针：`docs/api/__probe_not_exists__.md` 用于测试。",
+    );
+    expect(ignored.code, ignored.output).toBe(0);
+    const notIgnored = withAgentsMdProbe(
+      "临时探针：`docs/__probe_not_exists__.md` 用于测试。",
+    );
+    expect(notIgnored.code).not.toBe(0);
+    expect(notIgnored.output).toContain("在仓库中不存在");
+  });
+
   it("路径通配 / 占位符 / range 记法不被误判为路径（零误报回归）", () => {
     // 探针里塞几种典型「看起来像路径但不是路径」的形态，期望 code=0。
     const { code, output } = withAgentsMdProbe(
