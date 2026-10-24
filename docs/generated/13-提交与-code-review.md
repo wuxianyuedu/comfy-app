@@ -3103,11 +3103,16 @@ ffmpeg），而 E2E 真启动的是 headless shell —— 所以 ffmpeg 不是�
 
 ###### 第三件：平台日志的乱码（同一个 PowerShell 的另一面）
 
-那一跑的日志逐字长这样：
+那一跑里有这样一条读数（原文见 `e2e/support/preflight-ports.mjs` 文件头）：
 
 ```
-[e2e-run] 璧� Playwright 鍓嶏細搴旂敤绔彛 绌� / 鏇胯韩绔彛 绌�
+[e2e-run] 起 Playwright 前：应用端口 空 / 替身端口 有人
 ```
+
+而它在**平台日志里呈现为 GBK 误读形态、完全不可读**。（ISSUE #2257 之前，本节曾
+手抄过那份乱码字面并称「逐字长这样」—— 那份手抄其实是**二次转码**的产物：GBK 误读的
+文本再被当 UTF-8 存进仓里，解不出来的字节成了 `�`，比平台原始输出**多**了替换符，
+并不逐字。所以仓里不再存乱码字面；「在平台上是乱码」这件事由这句说明承担。）
 
 这是标准的「**UTF-8 被当 GBK 读了一遍**」。链条在 stage shell 这一层：Node 往管道里
 写 UTF-8 字节 → PowerShell 拿 `[Console]::OutputEncoding`（中文 Windows 上 = CP936）

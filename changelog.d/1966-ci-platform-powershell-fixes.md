@@ -16,18 +16,10 @@
      PowerShell 下都原样传过去），并在 `tests/e2e-python-preflight.test.ts` 里钉住
      「不许写回空格那版」。
 
-  2. **平台日志的中文全是乱码**：
-
-     ```
-     [e2e-run] 璧� Playwright 鍓嶏細搴旂敤绔彛 绌� / 鏇胯韩绔彛 绌�
-     ```
-
-     标准的「UTF-8 被当 GBK 读了一遍」。病在 stage shell 这一层：Node 写 UTF-8
-     字节 → PowerShell 拿 `[Console]::OutputEncoding`（中文 Windows 上 = CP936）去解
-     → 再按同一个编码吐回平台（平台自己那条 `任务执行失败，返回码：1` 是好的，所以
-     不是平台解码侧的问题）。处置：**每个 stage 的脚本都以
-     `[Console]::OutputEncoding=[Text.Encoding]::UTF8` 开头**，`.cnb.yml` 头注新增
-     第 6 条记这条形态与它的现场。
+  2. **平台日志的中文全是乱码**：现场那条「起 Playwright 前」的读数（原文见
+     `e2e/support/preflight-ports.mjs` 文件头）在平台日志里呈现为 GBK 误读形态、
+     完全不可读。（ISSUE #2257 之前这里存着那份乱码字面 —— 后经核对它是**二次转码**
+     产物，并不逐字，已换成本句说明；乱码这件事由说明承担，不由存进去的字面承担。）
 
   3. **`浏览器安装` 绿了（1.1s）**：上一跑自取装好的那一件跨跑还在落点上
      （`ms-playwright` 在 workspace 之外），于是走了「已装，跳过下载」的快路 ——
