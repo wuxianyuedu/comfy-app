@@ -276,6 +276,13 @@ describe("daily-attendance：命令行那一跳", () => {
   function runCli(
     args: string[],
     files?: Record<string, string>,
+    /* 「现在」默认钉在 NOW 上：夹具里的派发时刻是**绝对时刻**，而窗口比的是「距现在多久」
+     * ⇒ 不钉住，这条离线用例会随真实时间推移自己变红（2026-10-24 现场：真实时间到
+     * 10-24 08:21Z 时夹具的 10-22 16:00Z 已隔 40.4h > 36h ⇒ 判成「每日缺勤」，于是
+     * 这一档从「离线单测」变成「随时间漂移的平台状态判据」，并把每个把它拉进受影响
+     * 面的 PR 一起判红）。判据自己不该去摸真实时间（§13.5.13：什么时候算现在，是
+     * 调用者的事）—— 与 `--from` 同一族。传 null 表示「故意不给」，用来钉那条防线。 */
+    now: string | null = String(NOW),
   ): { code: number | null; out: string } {
     const dir = mkdtempSync(path.join(tmpdir(), "daily-attendance-"));
     try {
@@ -284,7 +291,11 @@ describe("daily-attendance：命令行那一跳", () => {
       }
       const got = spawnSync(
         process.execPath,
-        [SCRIPT, ...args.map((a: string) => a.replace("@DIR@", dir))],
+        [
+          SCRIPT,
+          ...args.map((a: string) => a.replace("@DIR@", dir)),
+          ...(now === null ? [] : ["--now", now]),
+        ],
         { encoding: "utf8", cwd: ROOT },
       );
       return {
@@ -340,6 +351,22 @@ describe("daily-attendance：命令行那一跳", () => {
     expect(got.code, got.out).toBe(CODE.NO_VERDICT);
     expect(got.out).toContain("未校验");
     expect(got.out).toContain("--from 那个路径不存在");
+  });
+
+  it("离线档不给「现在」⇒ 退 2 并说清，而不是拿真实时间去判（2026-10-24 现场：它曾随时间推移自己变红）", () => {
+    /* 这条钉的是「不许拿真实时间判一个绝对时刻」：夹具里的派发时刻写死在 10-22，
+     * 而窗口比的是「距现在多久」⇒ 不钉「现在」，它就会在 36h 之后自己红成
+     * 「每日缺勤」（当天现场：真实时间 10-24 08:21Z，夹具已隔 40.4h）。 */
+    const body = JSON.stringify({
+      data: [listed("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT)],
+    });
+    const got = runCli(
+      ["--from", "@DIR@/list.json", "--json"],
+      { "list.json": body },
+      null,
+    );
+    expect(got.code, got.out).toBe(CODE.NO_VERDICT);
+    expect(got.out).toContain("必须同时钉住");
   });
 
   it("readOffline 认得列表与单跑两种形状（第三种要出声）", () => {

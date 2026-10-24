@@ -37,7 +37,7 @@
  * pnpm check:daily-attendance                    # 上网读平台（人 / 代理决定什么时候问）
  * pnpm check:daily-attendance --json             # 机器可读那份
  * pnpm check:daily-attendance --hours 12         # 收紧窗口（默认 36h = 每天一次 + 半天余量）
- * node scripts/check-daily-attendance.mjs --from <文件> # 离线：读一份已取回的构建列表 JSON
+ * node scripts/check-daily-attendance.mjs --from <文件> --now <ISO 时刻>  # 离线：读一份已取回的构建列表 JSON，且把「现在」钉住
  * ```
  *
  * 网络那一跳**只在被要求时发生** —— 判据自身不做网络请求（§13.5.13 同一口径：
@@ -407,12 +407,30 @@ export function main(rawArgv, env = {}) {
   const windowHours = Number(
     flagValue(argv, "--hours") || DEFAULT_WINDOW_HOURS,
   );
-  const now = env.now ?? Date.now();
+  /* 「现在」也要能钉住：夹具里的派发时刻是**绝对时刻**，而窗口比的是「距现在多久」
+   * ⇒ 不钉住 now，这一档就会随真实时间推移自己变红（2026-10-24 现场：夹具写的是
+   * 10-22 16:00Z，真实时间到 10-24 08:21Z 已隔 40.4h > 36h ⇒ 一条本该恒绿的离线
+   * 用例红成「每日缺勤」，并把这一档变成「随时间漂移的平台状态判据」）。
+   * 解析：纯数字当毫秒，其余当 ISO 时刻；解析不出来按「没给」处理。 */
+  const nowFlag = flagValue(argv, "--now");
+  const nowParsed = /^\d+$/.test(nowFlag) ? Number(nowFlag) : Date.parse(nowFlag);
+  const now = env.now ?? (Number.isNaN(nowParsed) ? Date.now() : nowParsed);
   /** @type {{list:any[],details:any[],failure:string|null}} */
   let source;
   const from = flagValue(argv, "--from");
   if (from) {
     source = readOffline(from);
+    /* 离线档**必须**钉住「现在」：不钉就用真实时间去判一个绝对时刻，等于让判据自己
+     * 摸真实时间（§13.5.13 那条：什么时候去问平台、什么时候算现在，都是调用者的事）。
+     * 缺了 ⇒ 落成「未校验」并说清，不猜。 */
+    if (env.now === undefined && Number.isNaN(nowParsed)) {
+      source = {
+        ...source,
+        failure:
+          source.failure ??
+          "--from 那一档必须同时钉住「现在」（--now <ISO 时刻> 或 --now <毫秒>）",
+      };
+    }
   } else {
     const run =
       env.run ?? makeRunner(fileURLToPath(new URL(".", import.meta.url)));
