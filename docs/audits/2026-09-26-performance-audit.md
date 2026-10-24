@@ -57,6 +57,7 @@
 | S13  | P1   | `src/app/(main)/settings/hooks/use-settings-page-comfy.ts`       | `comfyStatus` 改「事件驱动为主、30s 兜底」：新增 `/api/comfy/state` 长轮询推送（五个变化源：启动 / 就绪 / 关闭 / 退出 / 配置写入） | #1874 |
 | F11b | P1   | `src/lib/workflow/workflow-run-store.ts`                         | 日志落盘改合并窗口（250ms）：每来一行整表序列化 → 窗口内只写一次；判重收窄到尾窗 64 条；追加改 `tailWindowAppend`（实测 20s / 2000 行：8109ms → 331ms，落盘 2000 → 80 次） | #1885 |
 | F12  | P1   | `src/components/studio/logs/log-analysis.ts`                     | 时间线去重索引跨轮复用（`TimelineIndex` + `mergeTimelineIndexed` / `trimTimelineIndex`）：每轮重建两张全表 Map → 只在形状变化时建；截断改摘键 | #1887 |
+| L5   | P1   | `src-tauri/src/poll_clock.rs`（新）+ `lib.rs` + `single_instance.rs` | 六处手写 sleep 轮询收敛成 `PollClock`：每拍先 tick 再探测（首绘看护那次「`continue` 跳过循环底 sleep」的事故从结构上消失）；预算改墙钟、退避不缩短它；focus waiter 走 `forever` 形。守事故的 `#[test]` 同批改钉新不变量 | #2315 |
 
 ## B. 判定修正与例外（📝）
 
@@ -117,15 +118,7 @@ _（全部闭环，见 A 表。）_
 
 ### C.4 启动 / 构建 / 桌面壳（P1）
 
-- ⬜ **L5** → **#2192**。壳侧 6 处固定间隔 sleep 轮询，无退避、无统一收口。
-  定位：`src-tauri/src/lib.rs` 搜 `thread::sleep(` / `for _ in 0..` / `const PROBE_`，
-  `single_instance.rs` 搜 `Duration::from_millis(100)`（旧登记那五处 `lib.rs` 行号回读内容后
-  全部指错了东西，而 `single_instance.rs:442-455` 那段区间其实还盖得住 ——
-  这就是单行与区间的区别；另外 `lib.rs` 里那句 `from_secs(150)` 是一次性安全网、不属本条，
-  别按旧话去找它）。
-  方向：收敛到统一的「带退避的等待」工具 —— Node 侧早就是这个形状，
-  搜 `scripts/launcher-core/ready-wait.mjs` 里的「轮询退避」。
-  ⚠️ 壳里有一条 `#[test]` 钉住「`continue` 那一支必须自己 sleep」，换写法要同批改它。
+- _（L5 已闭环，见 A 表。）_
 - _（L8b 已闭环，见 A 表。）_
 
 ### C.5 P2（卫生项，随上一批顺手修）
