@@ -7008,8 +7008,25 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 **落地的这一半**：把「几个并发」从**常数**变成**按现场核数算出来的值**。
 
 - 唯一出处 `scripts/ci-load.mjs`：`resolveCores()`（`CNB_CPUS` → `os.availableParallelism()`
-  → 兜底）、`workersForCores()`（`ceil(cores / 4)`，即「一个 worker 至少 4 核」）、
+  → 兜底）、`workersForCores()`（`ceil(cores / 8)`，即「一个 worker 至少 8 核」）、
   `resolveCiWorkers()`（叠一层人的出口 `COMFY_CI_MAX_WORKERS`）。
+
+**这一档为什么从「至少 4 核」抬到「至少 8 核」（ISSUE #2317）**：抬档买的不是「跑得快」，
+是**单条流水线别把整台机占满**。当场读数：`受影响用例` 一格占这条流水线 37 格合计格时的
+**七成**（1187s / 1660s），而同一格里首跑以负载形态假红（`Test Files 3 failed` ⇒ 隔离复跑
+`95 passed`，两条用例各自 106s / 61s）。16 逻辑核上因此从 **4 个 worker 降到 2 个**，
+代价是该格时长大约翻倍 —— **这是要换的东西，不是回归**。三条边界钉住：
+
+- **判据一个字不动**：用例、`testTimeout` 预算、覆盖率阈值都不放宽（拿放宽预算冒充修好负载
+  是 §13.6.4 明令禁止的那条）；降负载的防线仍在 `run-affected-tests.mjs` 的
+  `--no-file-parallelism` 隔离复跑，降并发只是让它更少触发。
+- **常数不许钉成恒等式**：`tests/ci-load.test.ts` 里那条以前写
+  `toBe(16 / CORES_PER_WORKER)` —— 改成任何常数它都绿。现在逐字钉 `CORES_PER_WORKER=8`
+  与 `workersForCores(16)===2`，改档位必须同时改判断。
+- **读得到才算数**：并发那行原本只打在日志**开头**，而平台对超长 stage 日志截掉的正是
+  开头那一段（实测某跑第 2 行是 `The log length exceeds the limit(102400)`）——
+  所以 `ci-affected-tests.mjs` 现在在**收尾再复述一次** `--maxWorkers / 核数 / 来源 / 子进程退出码`。
+
 - 消费者是 `scripts/full-suite-run.mjs` 的 `planRun()`：`--maxWorkers` 由它拼进
   `pnpm run test:coverage`。**并发不进 `extra`** —— 进了 `isWholeTrackRun()` 会把每一次跑
   判成「跑的不是整档」、于是记账通道整个失效（那比不加并发严重得多）。

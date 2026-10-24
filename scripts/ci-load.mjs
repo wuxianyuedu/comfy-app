@@ -33,12 +33,19 @@
 import os from "node:os";
 
 /**
- * 「一个 worker 至少要几核」—— 4 是实测值（规范 §13.5.3.8）：
- * 16 逻辑核上 `--coverage` 让每份文件多一层插桩（同两文件 6.2s → 9.2s，+50% CPU），
- * 而套件里大量用例**真起子进程**（git / node / prettier / PowerShell），超订的那一份
- * 直接从「等 CPU」变成「等子进程」，表现是 `Test timed out in 30000ms`。
+ * 「一个 worker 至少要几核」—— **8**（规范 §13.5.21）：这一档买的是「单条流水线别把
+ * 整台机占满」，代价是该格时长大约翻倍，而这是**故意换的**、不是回归。
+ *
+ * 为什么从 4 抬到 8：实测 `受影响用例` 一格占整条流水线 37 格合计格时的**七成**，
+ * 且首跑会以负载形态假红（同一份用例隔离复跑立刻全绿 —— 见 §13.6.4 那一档）。
+ * 套件里大量用例**自己再起子进程**（git / node / prettier / PowerShell），所以真实进程数
+ * 远大于 worker 数：4 个 worker 在 16 逻辑核上就是「既不推进也不报错」的那种现场。
+ *
+ * 这条与「不许拿放宽预算冒充修好了负载」不冲突：**用例、预算、覆盖率阈值一个字不动**，
+ * 这里只动并发（与 `COMFY_CI_MAX_WORKERS` 同一口径）。降负载的那一半防线仍在
+ * `run-affected-tests.mjs` 的 `--no-file-parallelism` 隔离复跑。
  */
-export const CORES_PER_WORKER = 4;
+export const CORES_PER_WORKER = 8;
 
 /** 平台池与自托管都不给读数时的兜底（等于按 16 逻辑核这一档算）。 */
 export const FALLBACK_CORES = 16;
@@ -84,10 +91,10 @@ export function resolveCores(env = process.env) {
 /**
  * 核数 → `--maxWorkers`。
  *
- * **不用 `Math.floor(cores / CORES_PER_WORKER)` 的余数去吃零头**：8 核算出 2 是对的，
- * 而 6 核也算 1（floor(1.5)）—— 那一档在实测里是「2 个 worker 才稳」的（§11.13 的
- * 12 核一档给的就是 3）。所以取 `ceil`，宁可多开一个也不把一台 6 核机压成单 worker
- * 跑到墙钟爆掉：**这一档买的是「别把机器压死」，不是「最省 CPU」**。
+ * **不用 `Math.floor(cores / CORES_PER_WORKER)` 的余数去吃零头**：16 核算出 2 是对的，
+ * 而 12 核也算 2（ceil(1.5)）—— 把一台 12 核机压成 1 个 worker 会让墙钟爆掉。
+ * 所以取 `ceil`：宁可多开一个，也不让某一档慢到被读成「没跑起来」。
+ * 单条流水线要更省 CPU 时用人的出口 `COMFY_CI_MAX_WORKERS`，不在公式里再加一档。
  *
  * @param {number} cores
  * @returns {number}
