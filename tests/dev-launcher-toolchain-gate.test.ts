@@ -45,6 +45,7 @@ import {
   usableCommand,
   whichCommand,
 } from "../scripts/launcher-core/shell.mjs";
+import { pnpmCli } from "../scripts/ci-install-deps.mjs";
 import {
   buildTip,
   clearPnpmProbeCache,
@@ -497,8 +498,11 @@ describe("修复提示与自愈判据", () => {
     expect(shouldRepair({ ok: true, reason: "ok" })).toBe(false);
   });
 
-  it("orchestratePnpm：可用时不碰任何全局状态、不给提示", () => {
-    const result = orchestratePnpm({ root: ROOT });
+  /* 这一条判的是「可用时不碰全局状态」—— 前提是**这一跑拿得到 pnpm**。
+   * 平台节点是服务账号会话，PATH 里没有它（ISSUE #2281），那台机上这条前提不成立；
+   * 拿不到就跳过并把原因留在名上，不许把它读成「判据过了」。 */
+  (envWithPnpm() ? it : it.skip)("orchestratePnpm：可用时不碰任何全局状态、不给提示", () => {
+    const result = orchestratePnpm({ root: ROOT, env: envWithPnpm() ?? process.env });
     expect(result.probe.ok).toBe(true);
     expect(result.repaired).toBe(false);
     expect(result.tip).toBeNull();
@@ -599,25 +603,48 @@ describe("编排器与启动页的接线契约", () => {
   });
 });
 
+/**
+ * 在「这一跑确定拿得到 pnpm」的环境里起自查脚本（ISSUE #2281）。
+ *
+ * 为什么要它：这几条用例判的是**自查脚本自己的结论**，而它们此前直接继承宿主的环境。
+ * 平台侧那台机是**服务账号会话**，PATH 里没有 pnpm —— 于是「当前环境 pnpm 可用」
+ * 这条前提在 CI 上不成立，八条用例一起变成「红在宿主」而不是「红在判据」。
+ * 这里用**同一条发现逻辑**（`pnpmCli()`，与产品代码共用一个实现）把落点补进 PATH；
+ * 真的哪儿都没有时**返回 null**，用例据此跳过并把原因说出来 —— 那仍然是「没量到」，
+ * 不许读成「判据过了」。
+ */
+function envWithPnpm() {
+  const cli = pnpmCli({ write: () => undefined });
+  if (!cli.resolved) return null;
+  const dir = path.dirname(cli.command);
+  return {
+    ...process.env,
+    PATH: [dir, process.env.PATH ?? ""].filter(Boolean).join(path.delimiter),
+  };
+}
+
 /** 真跑自查脚本：可用 → 0；PATH 上没有 pnpm → 非 0 且打印修复动作。 */
 describe("pnpm check:toolchain 真跑", () => {
-  it("当前环境（pnpm 可用）退出 0 并报告版本", () => {
+  const env = envWithPnpm();
+  const runIfPnpm = env ? it : it.skip;
+  runIfPnpm("当前环境（pnpm 可用）退出 0 并报告版本", () => {
     const r = spawnSync(
       process.execPath,
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       {
         encoding: "utf8",
+        env: env ?? process.env,
       },
     );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain("pnpm 可用");
   });
 
-  it("依赖已装时，结论里点名 tsc / eslint / vitest 都能跑（不是只报「已装」）", () => {
+  runIfPnpm("依赖已装时，结论里点名 tsc / eslint / vitest 都能跑（不是只报「已装」）", () => {
     const r = spawnSync(
       process.execPath,
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
-      { encoding: "utf8" },
+      { encoding: "utf8", env: env ?? process.env },
     );
     expect(r.status, r.stderr).toBe(0);
     // 这句是判据本身：它把「依赖在」与「三条门禁可跑」连在一起，
@@ -636,7 +663,7 @@ describe("pnpm check:toolchain 真跑", () => {
    * `--deps-root` 只换依赖检查的根（不换工具链探测的根，否则会报一个与本检出无关的
    * pnpm 版本 —— 见脚本里的注释）；给一个空目录即可复现「没装依赖」。
    */
-  it("依赖未装时：说清「能装 / 装多久 / 装完能跑什么」，并点名禁止据此跳过门禁", () => {
+  runIfPnpm("依赖未装时：说清「能装 / 装多久 / 装完能跑什么」，并点名禁止据此跳过门禁", () => {
     const emptyRoot = path.join(tmp, "no-deps");
     fs.mkdirSync(emptyRoot, { recursive: true });
     const r = spawnSync(
@@ -646,7 +673,7 @@ describe("pnpm check:toolchain 真跑", () => {
         "--deps-root",
         emptyRoot,
       ],
-      { encoding: "utf8" },
+      { encoding: "utf8", env: env ?? process.env },
     );
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     // 依赖未装只是「还没装」：自检仍以 0 退出（它判的是工具链可用性），
@@ -829,12 +856,13 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
     }
   });
 
-  it("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {
+  (envWithPnpm() ? it : it.skip)("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {
     const r = spawnSync(
       process.execPath,
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       {
         encoding: "utf8",
+        env: envWithPnpm() ?? process.env,
       },
     );
     expect(r.status, r.stderr).toBe(0);
@@ -1341,13 +1369,13 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     expect(satisfies("22.22.2", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(true);
   });
 
-  it("check:toolchain 在低版本 Node 下 WARN 并点名坏的是哪一档，但退出码仍 0", () => {
+  (envWithPnpm() ? it : it.skip)("check:toolchain 在低版本 Node 下 WARN 并点名坏的是哪一档，但退出码仍 0", () => {
     const r = spawnSync(
       process.execPath,
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       {
         encoding: "utf8",
-        env: { ...process.env, COMFYAPP_NODE_VERSION: "v20.9.0" },
+        env: { ...(envWithPnpm() ?? process.env), COMFYAPP_NODE_VERSION: "v20.9.0" },
       },
     );
     expect(r.status, r.stderr).toBe(0);
@@ -1357,11 +1385,11 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     expect(r.stdout).toContain("建议升到 22.22.2");
   });
 
-  it("当前 Node 合规时打 OK 行（这句是上面那格的对照组）", () => {
+  (envWithPnpm() ? it : it.skip)("当前 Node 合规时打 OK 行（这句是上面那格的对照组）", () => {
     const r = spawnSync(
       process.execPath,
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
-      { encoding: "utf8" },
+      { encoding: "utf8", env: envWithPnpm() ?? process.env },
     );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain("在声明范围内");
