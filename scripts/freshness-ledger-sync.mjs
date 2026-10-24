@@ -89,7 +89,18 @@ export function pushFreshnessLedger({ root, kinds }) {
    * 记录就替主干作了证（那正是「机器账权威」那条要防的倒过来形态）。
    * 每日档那几格带 `COMFY_CI_SUBJECT=master` ⇒ **每日档回写照旧**（这一段刻意放在平台
    * 身份之后：本地那一支的 `reason` 仍是 `not-platform`，两处不能各说一套）。 */
-  if (contextSubject() !== "master") {
+  /* ⚠️ 主体=master 之外还要**事件是每日那一类**：单跑口（`api_trigger_build` /
+   * `web_trigger_*`）跑的是**当前分支**的代码，它跑绿写的是那条分支的账 ——
+   * 回写进机器分支等于让那条分支的记录替主干作证（那正是「机器账权威」要防的
+   * 倒过来形态）。每日三条触发口（定时 / 手点 / API）才回写。
+   * ⚠️ 事件名**按前缀/整串**认，与 `scripts/check-daily-attendance.mjs` 的
+   * `isDailyDispatch()` 同一口径（换时刻不打红它）。 */
+  const event = String(process.env.CNB_EVENT ?? "");
+  const dailyEvent =
+    /^crontab:/.test(event) ||
+    event === "web_trigger_daily" ||
+    event === "api_trigger_daily";
+  if (contextSubject() !== "master" || !dailyEvent) {
     return { pushed: false, reason: "not-master-subject" };
   }
   const branch =
