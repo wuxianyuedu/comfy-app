@@ -286,6 +286,7 @@ const DAILY_GATES = [
   "每日 Python 可用性",
   "每日 Python 探针读数",
   "每日同步数据库表结构",
+  "每日新鲜度账",
   "每日生产构建",
   "每日 ESLint 零警告",
   "每日浏览器安装",
@@ -330,6 +331,14 @@ const PR_MOVED_TO_DAILY: [string, string, string, string][] = [
    * `--max-warnings 0` 都在 `package.json` 的 `lint` 脚本里，见 `eslint.config.js`
    * 顶部那节「命令口径只有一处」）。 */
   ["ESLint 零警告", "每日 ESLint 零警告", "pnpm run lint", ""],
+  /* `新鲜度账` 是**第三种理由**（ISSUE #2300 主体分权）：PR 上下文读的是**主干的账**
+   * （`FRESHNESS_TRACKS[*].subject` 三档都是 `master`，权威副本在机器分支
+   * `ci/freshness-ledger` 上），判的是「这台机器 / 主干怎么被调度」，不是任何一次
+   * PR 的缺陷 ⇒ 留在 PR 上只会把主干的红算到这次 PR 头上。
+   * 第四元组（旗标）留空：这一格**不共用**别的格的脚本，也没有任何分档参数；
+   * 每日那一格与它的差别在 **env**（`COMFY_CI_SUBJECT: "master"`），
+   * 而 env **不在这条判据的比较面里**（它只比 `script:` 那几行）。 */
+  ["新鲜度账", "每日新鲜度账", "scripts/freshness-gate.mjs", ""],
 ];
 
 /**
@@ -2197,6 +2206,47 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         daily,
         `「${stage}」不在 \`COMFYAPP_CI_DAILY_GATES\` 里 —— ${track.label} 这一档` +
           "本地不拦的前提没了。要么把那一格加回定时清单，要么把 ciStage 清空让本地重新拦",
+      ).toContain(stage);
+    }
+  });
+
+  it("主体=master 的档：它的执行者必须在每日清单里（判据主体分权，ISSUE #2300）", () => {
+    /* `FRESHNESS_TRACKS[*].subject` 答的是「**这一次是谁在判**」：`"pr"` = 本 PR
+     * （工作树那份账；PR 流水线与本地钩子都是它），`"master"` = 主干（每日档在
+     * master HEAD 上跑出来的那一份；机器分支 `ci/freshness-ledger` 上是它的权威副本）。
+     *
+     * ⚠️ **主体=master ⇒ 那一档的账是主干的账** ⇒ 它的执行者必须落在**每日档**上：
+     * 主干的账由每天 00:00 那一跑刷新，PR 流水线里没有、也不该有它的执行者。
+     * 少了后半句，「那一档就没人判了」这件事无人回答，而失效形态是「PR 拿主干的账
+     * 判红别人的提交」—— 那正是主体分权要治的那件事。
+     *
+     * ⚠️ 这里**不**断言「它不许出现在 PR 清单里」：`ciStage` 记的是**每日格名**
+     * （`每日生产构建` 之类），它本来就从不在 PR 清单里 ⇒ 那条断言恒真 = 判据空转
+     * （本仓最忌讳的形态）。PR 侧那个格名（`新鲜度账`）不许留在 PR 清单里这件事，
+     * 由本文件 `PR_MOVED_TO_DAILY` 那条与 `tests/doc-check-hook-wiring.test.ts`
+     * 的「每日侧有『每日新鲜度账』这一步」那条判。 */
+    const text = readRegisteredConfig();
+    const dailyOrder = registeredDailyGateOrder(text);
+    expect(
+      dailyOrder.length,
+      "解析不出 COMFYAPP_CI_DAILY_GATES —— 这条判据就没有对象了",
+    ).toBeGreaterThan(0);
+    for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
+      const subject = String(track.subject ?? "").trim();
+      expect(
+        ["pr", "master"],
+        `${kind}.subject 写成了「${subject}」—— 只认 pr / master（主体答的是「这一次是谁在判」）`,
+      ).toContain(subject);
+      const stage = String(track.ciStage ?? "").trim();
+      expect(
+        stage,
+        `\`${kind}\` 没有登记平台侧执行者（ciStage）—— 那一档现在没有任何执行者`,
+      ).toBeTruthy();
+      if (subject !== "master") continue;
+      expect(
+        dailyOrder,
+        `「${stage}」（${kind}，主体=master）不在 \`COMFYAPP_CI_DAILY_GATES\` 里 —— ` +
+          "主干的账只能由每日档那一格刷新与判读；它不在那儿，这一档就没人判了",
       ).toContain(stage);
     }
   });

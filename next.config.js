@@ -142,7 +142,16 @@ const config = {
   // 的产物探针。别把「往这里补一条」当成修好了缺件，也别因为「摘掉它产物没变」就判
   // 那份数产物的检查失效 —— 承重的从来是数产物。定位手法见规范 launch-and-build.md §7.4。
   outputFileTracingIncludes: {
-    "/**": ["./node_modules/next/dist/compiled/next-server/*runtime.prod.js"],
+    "/**": [
+      "./node_modules/next/dist/compiled/next-server/*runtime.prod.js",
+      // pnpm 12 + Next 16.4.3 在 Windows runner 上做 standalone 产物追踪时漏收 styled-jsx
+      // 实体：`.pnpm/node_modules/styled-jsx` 这条 symlink 被复制进了产物，但其真实目录
+      // `styled-jsx@5.1.7_@babel+cor…/node_modules/styled-jsx` 没被追进去，导致
+      // standalone-link-repair 在 Windows 上报断链、每日生产构建挂掉（连带所有 PR 的
+      // check-daily-attendance 一起红）。显式把该变体目录（含其私有 node_modules）收进产物。
+      // 见仓库独立 issue（standalone 构建回归）。
+      "./node_modules/.pnpm/styled-jsx@*/node_modules/**",
+    ],
   },
   // ── dev 期回环两种拼法都要放行（Next 16 的 dev 资源跨源闸门）────────
   // 撞车点：本仓把回环主机统一收成 `127.0.0.1`（硬规则 20 / §12.14，Node fetch

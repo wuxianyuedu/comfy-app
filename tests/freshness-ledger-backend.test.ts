@@ -88,7 +88,7 @@ describe("freshness ledger 机器分支回看（#2247）", () => {
   });
 
   it("readFreshnessLedger 机器账权威：机器有则以机器为准（不取工作树那份）", () => {
-    const ledger = readFreshnessLedger("e2e", ROOT);
+    const ledger = readFreshnessLedger("e2e", ROOT, "master");
     expect(e2eTrack(ledger)?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
   });
 
@@ -104,7 +104,7 @@ describe("freshness ledger 机器分支回看（#2247）", () => {
 
   it("机器分支缺失时回退工作树账（本地自证仍作兜底读数）", () => {
     delete process.env.FRESHNESS_LEDGER_BRANCH;
-    const ledger = readFreshnessLedger("e2e", ROOT);
+    const ledger = readFreshnessLedger("e2e", ROOT, "master");
     expect(e2eTrack(ledger)?.verifiedAt).not.toBe("2099-01-01T00:00:00.000Z");
   });
 });

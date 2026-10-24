@@ -41,6 +41,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { pushSchema } from "./db-push-core.mjs";
+import { pnpmCli, spawnSettled } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
 import {
@@ -138,7 +139,22 @@ function syncSchema() {
    *
    * `--force` 是本命令的既定口径（自动批准「会丢数据」的语句）——启动链路刻意
    * **不**沿用它，见 db-schema-state.mjs 的 `ensureSchemaCurrent`。 */
-  const result = pushSchema(root, { force: true });
+  /* ⚠️ 平台节点上的 PATH 里没有 pnpm（服务账号会话，ISSUE #2281）：先把它的
+   * 落点找出来，再按「绝对路径 + 参数」起 —— 命令形态仍然只有一份实现
+   * （`pnpmCli` → `ensurePnpmOnPath`），这里不自己拼可执行名。 */
+  const cli = pnpmCli();
+  const result = pushSchema(root, {
+    force: true,
+    run: (args, { cwd, env, stdio, timeoutMs }) =>
+      spawnSettled(cli.command, [...cli.prefixArgs, ...args], {
+        cwd,
+        env,
+        stdio,
+        timeout: timeoutMs,
+        encoding: "utf8",
+        windowsHide: true,
+      }),
+  });
 
   /* 注意：这里**刻意不看 drizzle-kit 的退出码**。它在无 TTY 上正是「报错但
    * exit 0」，退出码在这条链路上不是事实来源；下面直接查库。 */

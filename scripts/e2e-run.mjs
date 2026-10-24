@@ -74,6 +74,7 @@ import {
   ensureSchemaBeforeRun,
 } from "./e2e-schema-preflight.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+import { pnpmCli } from "./ci-install-deps.mjs";
 import {
   E2E_PREFLIGHT_ENV_KEY,
   encodePreflight,
@@ -555,6 +556,11 @@ async function main(argv) {
     }
   }
   env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight);
+  /* webServer 起 `pnpm dev|start`，而平台节点（服务账号会话）的 PATH 里没有 pnpm
+   * （ISSUE #2281）。把**这一步解析出来的**可执行文件交给配置 —— 配置那边只读这一个
+   * 变量、不自己扫盘（扫盘只有 `ensurePnpmOnPath()` 一份实现）。 */
+  const pnpm = pnpmCli();
+  env.COMFY_E2E_PNPM = pnpm.command;
 
   process.stdout.write(
     `[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`,
