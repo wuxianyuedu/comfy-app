@@ -966,7 +966,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       [LAUNCHER_PATH, "--full", "--dry-run"],
       { cwd: ROOT, encoding: "utf8" },
     );
-    expect(full.status, full.stderr).toBe(0);
+    expect(full.status, `${full.stdout ?? ""}${full.stderr ?? ""}`).toBe(0);
     expect(full.stderr).toContain("--full：按名字要全量");
     // 增量档那句「N 个用例 / M 次启动」在全量档里**不该出现** —— 出现了说明它先解析了清单。
     expect(full.stdout + full.stderr).not.toMatch(/个用例 \/ \d+ 次启动/);
@@ -975,7 +975,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
       cwd: ROOT,
       encoding: "utf8",
     });
-    expect(inc.status, inc.stderr).toBe(0);
+    expect(inc.status, `${inc.stdout ?? ""}${inc.stderr ?? ""}`).toBe(0);
     expect(inc.stdout, "增量档应当给出清单与启动次数").toMatch(
       /个用例 \/ \d+ 次启动/,
     );
