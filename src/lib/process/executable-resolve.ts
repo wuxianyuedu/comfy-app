@@ -652,6 +652,12 @@ export interface PnpmInvocation {
   candidate: string;
   /** 是否经宿主（PowerShell）起 —— 排障时「为什么多了一层」的答案。 */
   viaHost: boolean;
+  /** PATH 原文——**就是 `env` 里那一串**，不是本判据解析出来的那几段。 */
+  pathRaw: string;
+  /** 按**目标平台**分隔符切出来的 PATH 条目（空串已滤掉）。 */
+  pathEntries: string[];
+  /** 那些条目里 `pnpm<后缀>` 真的落在盘上的（只看「名字在不在」）。 */
+  onDisk: string[];
 }
 
 /** 把 `pnpm <args…>` 解析成「这台机器上真能跑起来」的命令形态。
@@ -668,6 +674,19 @@ export interface PnpmInvocation {
  *
  * 返回 `null` = PATH 上没有任何可用的 pnpm 形态（调用方必须给出可见出口，
  * 不能静默 `null → 0`）。
+ *
+ * ## 为什么非空时还要带三条 `PATH` 读数（ISSUE #2281）
+ *
+ * 「探不到」这个结论在本仓曾经**同时**有三种成因，而日志里只留一句
+ * `PATH 上没有可用的 pnpm`：① 真没装；② 环境变量表里的键名不是 `PATH`
+ * （`{ ...process.env }` 复制品里 Windows 常写作 `Path`），于是判据扫了一个空串；
+ * ③ PATH 那一串的平台形态读错了（`;` 与 `:` 分岔）。三种的下一动作完全不同
+ * （装 / 修键名 / 修分隔符），而那一句对它们逐字同形。
+ *
+ * 所以这里一次把**原文**（`pathRaw`）、**切出来的条目**（`pathEntries`）、
+ * **哪些条目上真有这个名字**（`onDisk`）一起交出去：取证面因此不必再自己读一遍
+ * `env` 并「按它以为的方式」重新解析 —— 而正是那第二份读法把第②③类成因
+ * 藏起来的（`scripts/ci-toolchain-selfcheck.mjs` 的 `pnpmForensics` 用过一份）。
  */
 export function pnpmInvocation(
   args: string[] = [],
@@ -683,11 +702,25 @@ export function pnpmInvocation(
   const invocation = usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
     : { command: candidate, prefixArgs: [] };
+  const pathRaw = String(envVar(env, "PATH", platform) ?? "");
+  const pathEntries = pathRaw
+    .split(isWindows(platform) ? ";" : ":")
+    .filter(Boolean);
+  const onDisk: string[] = [];
+  for (const dir of pathEntries) {
+    for (const ext of executableExts(env, platform)) {
+      const hit = path.join(dir, name + ext);
+      if (isFile(hit)) onDisk.push(hit);
+    }
+  }
   return {
     command: invocation.command,
     args: [...invocation.prefixArgs, ...args],
     candidate,
     viaHost: invocation.command !== candidate,
+    pathRaw,
+    pathEntries,
+    onDisk,
   };
 }
 

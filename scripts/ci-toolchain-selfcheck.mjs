@@ -72,6 +72,48 @@ import {
 } from "./ci-toolchain-browser.mjs";
 
 /**
+ * `env` 里那一串 `PATH` 的**原文**（ISSUE #2281）。
+ *
+ * 两个坑都必须在这里吃掉，且只能吃掉一次：
+ *   · **键名**：Windows 的环境变量表里它常常写作 `Path`，而 `{ ...process.env }`
+ *     的复制品照样只带那个写法 —— 直接读 `env.PATH` 会拿到空串，于是判据判的是
+ *     「一个空的 PATH」，日志里却写成「PATH 上没有可用的 pnpm」（那是另一件事）。
+ *   · **大小写**：只按**目标平台**做不敏感（`platform` 可注入，单测在 POSIX 上判
+ *     Windows 形态），POSIX 上 `Path` 与 `PATH` 是两个不同的变量。
+ *
+ * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>}} [options]
+ * @returns {string} 原文；没有这个变量时是空串
+ */
+export function pnpmPathValue({
+  platform = process.platform,
+  env = process.env,
+} = {}) {
+  if (env.PATH !== undefined) return String(env.PATH);
+  if (platform !== "win32") return "";
+  const key = Object.keys(env).find((k) => k.toUpperCase() === "PATH");
+  return key === undefined ? "" : String(env[key] ?? "");
+}
+
+/**
+ * `PATH` 切出来的条目 —— 分隔符**只按目标平台**取，不按宿主的 `path.delimiter`。
+ *
+ * `platform` 是可注入的，而单测正是在 POSIX 上判 Windows 的形态。拿宿主那个 `:`
+ * 去切一串 `;` 分隔的 Windows PATH，会把整串当成**一条**目录 —— 每个候选都拼成
+ * 不存在的路径，判据静默答「没有」（`ci-toolchain-python.mjs` 的 `pathDrives`
+ * 记过同一格）。`findPnpm()` 与 `pnpmForensics()` 都从这**一份**取（ISSUE #2281：
+ * 两处各读一遍，失败日志就会与应用侧判据分岔）。
+ *
+ * @param {{platform?: NodeJS.Platform, env?: Record<string, string | undefined>}} [options]
+ * @returns {string[]}
+ */
+export function pnpmPathEntries(options = {}) {
+  const platform = options.platform ?? process.platform;
+  return pnpmPathValue(options)
+    .split(platform === "win32" ? ";" : ":")
+    .filter(Boolean);
+}
+
+/**
  * `pnpm -v` 探到了什么 —— **不是**一句裸起名字的 `spawnSync` 能回答的（ISSUE #1961）。
  *
  * ## 为什么裸起一个名字在这里必然不够
@@ -139,9 +181,10 @@ export function findPnpm({
    * 下一个人只能再猜一轮修法 —— 而这条链上连着几轮的红都出在这条缝里，
    * 「候选全对、败在探它的方式」那一轮（`.ps1` 少收了 `-v`）尤其只有它照得出来。 */
   const tried = [];
-  for (const dir of String(env.PATH ?? "")
-    .split(platform === "win32" ? ";" : ":")
-    .filter(Boolean)) {
+  /* `PATH` 的读法**只有一份**（`pnpmPathValue`）：取证那一段不许按「它以为的方式」
+   * 再读一遍 —— 第二份读法与这里一分岔，「键名不是 PATH」「分隔符读错」这两类成因
+   * 就会在失败日志里静默消失（ISSUE #2281）。 */
+  for (const dir of pnpmPathEntries({ platform, env })) {
     for (const ext of exts) {
       const candidate = path.join(dir, `pnpm${ext}`);
       if (!isFile(candidate)) continue;
@@ -211,14 +254,22 @@ export function pnpmForensics({
 } = {}) {
   const lines = ["---- pnpm 探测现场（供定位，非报错）----"];
   lines.push(`platform: ${platform}`);
+  /* **原文先于切分**（ISSUE #2281）：只打印切出来的条目，读者无法判断「判据读到的那一串
+   * 对不对」—— 键名不是 `PATH`（读到空串）与真装了却不在 PATH 上，在条目列表里同形。
+   * 原文那行是这一格唯一能把两者分开的读数。 */
+  const raw = pnpmPathValue({ platform, env });
+  lines.push(
+    raw.trim()
+      ? `PATH 原文（${raw.length} 字符）: ${raw}`
+      : "PATH 原文: （空 —— 这个进程的环境变量表里没有 PATH，或键名是别的写法）",
+  );
   lines.push("PATH 条目:");
   /* ⚠️ 按**目标平台**的分隔符切，不按宿主的 `path.delimiter`
    * （`ci-toolchain-python.mjs` 的 `pathDrives` 记过这一格：本机是 `:` 而 Windows
    * 是 `;`，拿宿主的切会把 `C:\...` 拆成 `C` 与 `\...`）。这条判据的 `platform`
-   * 可注入 —— 单测正是在 POSIX 上判 Windows 的形态。 */
-  const dirs = String(env.PATH ?? "")
-    .split(platform === "win32" ? ";" : ":")
-    .filter(Boolean);
+   * 可注入 —— 单测正是在 POSIX 上判 Windows 的形态。
+   * 切分也只走 `pnpmPathEntries()` 一份：`findPnpm()` 判的和这里打的必须是同一份。 */
+  const dirs = pnpmPathEntries({ platform, env });
   for (const d of dirs) lines.push(`  ${d}`);
   /* 每个 PATH 目录里 `pnpm*` 的命中 —— 判的是「这个目录下真有这个名字吗」，
    * 不判它起不起得起来（那是 `findPnpm` 的事）。两者分开，人才能判出
