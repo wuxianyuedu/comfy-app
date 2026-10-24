@@ -273,11 +273,14 @@ export function registeredDisabledGates(text: string): string[] {
 /**
  * 定时那一跑的清单（与 `.cnb.yml` 的 `COMFYAPP_CI_DAILY_GATES` 同一份，顺序即执行序）。
  *
+ * ⚠️ 第一条是 `每日失败立案` —— 它立案的是**上一跑**，所以必须排在任何可能红的格之前；
+ * 写在后面就会被前面那次红一起 `skipped`，而那正是它要治的形态（ISSUE #2274）。
  * ⚠️ 最后一条是 `每日单元测试` —— 那是刻意的（业主口径「最容易出问题的放最后」：
  * 它是这条上唯一会因本机负载而单条超时的格子，排在中间就把后面三格一起 skip 掉）。
  * 「它必须是最后一条」由下面那条判据钉住，不是这里的一份巧合。
  */
 const DAILY_GATES = [
+  "每日失败立案",
   "每日工具链自证",
   "每日安装依赖",
   "每日 Python 可用性",
@@ -2346,6 +2349,27 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         ).toContain(flag);
       }
     }
+  });
+
+  /**
+   * 「每日档红 ⇒ 自动立案」这一格不能只在清单上有个名字（ISSUE #2274）。
+   *
+   * 上面那条判据管的是「从 PR 撤下来的格还在不在」，这条管的是**新加的那一格点的还是不是
+   * 同一个入口**：名字还在、块被换成别的命令，两边都绿，而自动立案其实谁都不做了 ——
+   * 那正是这一族（判据在场、执行者不在场）唯一的失效形态。
+   * 位置也在这一条里钉：它必须排在所有可能红的格**之前**，因为写在后面就会被前面那次红
+   * 一起 `skipped`（平台没有可依赖的条件语法，本文件里今天只有 `ifModify`）。
+   */
+  it("每日链里必须有一格点的是 `ci-daily-failure-issue.mjs --no-block`，且排在最前", () => {
+    const text = readRegisteredConfig();
+    const lines = executableScriptLines(text, "每日失败立案");
+    expect(lines, "配置文件里没有「每日失败立案」这一格 ⇒ 自动立案没有执行者了").toBeTruthy();
+    expect(lines.join(" ")).toContain("scripts/ci-daily-failure-issue.mjs");
+    expect(lines.join(" ")).toContain("--no-block");
+    expect(
+      DAILY_GATES[0],
+      "`每日失败立案` 必须排在每日清单最前 —— 写在任何红格之后都会被那次红一起 skipped",
+    ).toBe("每日失败立案");
   });
 
   it("判据不是空转：喂进 CI 配置名时必须判成违规", () => {
