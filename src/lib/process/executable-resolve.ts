@@ -656,8 +656,15 @@ export interface PnpmInvocation {
   pathRaw: string;
   /** 按**目标平台**分隔符切出来的 PATH 条目（空串已滤掉）。 */
   pathEntries: string[];
-  /** 那些条目里 `pnpm<后缀>` 真的落在盘上的（只看「名字在不在」）。 */
+  /** 那些条目里 `pnpm<后缀>` 真的落在盘上的（只看「名字在不在」，`.ps1` 无条件在列）。 */
   onDisk: string[];
+  /** 解释器宿主（PowerShell）的绝对路径；POSIX 上恒为 `null`。
+   *
+   *  它只在**多一种解释**时才要紧：`.ps1` 形态在盘上、而 `whichCommand` 复现不出
+   *  它经宿主起的形态时，失败结论必须能说清「宿主在不在」，否则下一个人只能猜
+   *  那是「没装 pnpm」还是「宿主没找到」（ISSUE #2281 那两份日志：一份说
+   *  「一个都没命中」、另一份说「宿主: 找到」，两句话指向完全不同的下一步）。 */
+  osHost: string | null;
 }
 
 /** 把 `pnpm <args…>` 解析成「这台机器上真能跑起来」的命令形态。
@@ -702,15 +709,20 @@ export function pnpmInvocation(
   const invocation = usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
     : { command: candidate, prefixArgs: [] };
+  const osHost = isWindows(platform) ? powershellHost({ env, platform }) : null;
   const pathRaw = String(envVar(env, "PATH", platform) ?? "");
   const pathEntries = pathRaw
     .split(isWindows(platform) ? ";" : ":")
     .filter(Boolean);
   const onDisk: string[] = [];
+  /* `.ps1` **无条件**在列（与 `executableExts` 里那一条同口径）：Windows 默认
+   * `PATHEXT` 从不含它，而 corepack 摆在盘上的三个形态里只有它经宿主起得来 ——
+   * 「盘上有没有这个名字」这一读数漏掉它，就会出现「一个都没命中」而旁边正躺着
+   * 一个能用的 `pnpm.ps1`（ISSUE #2281 那两份日志里的同一处形状）。 */
   for (const dir of pathEntries) {
-    for (const ext of executableExts(env, platform)) {
+    for (const ext of [...executableExts(env, platform), ".ps1"]) {
       const hit = path.join(dir, name + ext);
-      if (isFile(hit)) onDisk.push(hit);
+      if (isFile(hit) && !onDisk.includes(hit)) onDisk.push(hit);
     }
   }
   return {
@@ -721,6 +733,7 @@ export function pnpmInvocation(
     pathRaw,
     pathEntries,
     onDisk,
+    osHost,
   };
 }
 

@@ -689,6 +689,30 @@ describe("pnpm check:toolchain 真跑", () => {
     expect(out).toContain("corepack");
     expect(out).not.toContain("<项目版本>");
   });
+
+  it("pnpm 不可用时把**这一份进程读到的 PATH** 打出来（ISSUE #2281）", () => {
+    /* 反面现场：一份平台日志写着「（一个都没命中）」，而同一台机上 `where pnpm` /
+     * `pnpm -v` / 本脚本重跑三次全部正常 —— 两句话都对，它们说的不是同一件事，
+     * 而日志里没有任何一行能把它们分开。所以探不到的那一刻必须留下原文。 */
+    const badPath = path.join(tmp, "only-here");
+    fs.mkdirSync(badPath, { recursive: true });
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      {
+        encoding: "utf8",
+        env: { ...process.env, PATH: badPath, PATHEXT: "" },
+      },
+    );
+    expect(r.status).not.toBe(0);
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    expect(out, "探不到 pnpm 时没有留下读取到的 PATH 原文").toContain(
+      "PATH 原文",
+    );
+    expect(out).toContain(badPath);
+    // 空目录里一个都没命中，要说清是「这些条目里没有」，不写成「这台机没装」。
+    expect(out).toContain("一个都没命中");
+  });
 });
 
 /** 版本不一致时，自查入口必须与启动器同一条口径：**先对齐、复核通过才算一致**。
