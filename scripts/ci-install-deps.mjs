@@ -245,7 +245,14 @@ export function decideInstall({
  * `pnpmInvocation()`（Windows 上批处理形态在 Node 下起不来，见 §2.1.1），
  * 而这条流水线**只跑在 Windows 自托管节点上**，正是那一档。
  */
-function runInstall() {
+/**
+ * 真跑一次 `pnpm install --frozen-lockfile`。
+ *
+ * @param {string | null} [explicit] 已经在**这一步亲眼看见起得来**的全路径（`ensurePnpmOnPath`
+ *   的结论）。给了就直接起它；不给才交给 `runPnpmSync` 的形态判据。
+ * @returns {number} 退出码
+ */
+function runInstall(explicit = null) {
   /* 作业里那条指进槽的链必须先摘掉：留着它跑作业内的 install，pnpm 会顺着链把新的一套
    * 写进**槽**、而键仍是旧的（规范 §13.5.3.4.3 第一条，从散文变成有执行者）。 */
   if (clearJobLink(ROOT)) {
@@ -253,14 +260,30 @@ function runInstall() {
       "[ci-install-deps] 已摘掉作业里那条指进缓存槽的链接（不在链上装）\n",
     );
   }
-  const res = runPnpmSync(["install", "--frozen-lockfile"], {
-    cwd: ROOT,
-    stdio: "inherit",
-  });
+  /* `explicit` = 上游已经**亲眼看见**它起了一次 `-v`（`ensurePnpmOnPath` 的结论）。
+   * 那一份比形态判据更硬：判据按 `PATH × 扩展名` 找候选，而 `pnpm-native.exe` 这个
+   * 名字不在候选集里 —— 于是「落点拼进 PATH 了、判据仍答没有」是**正常**的
+   * （ISSUE #2281 第二轮，平台那一跑：起全路径的 `-v` 退 0，紧接着 install 报 not found）。 */
+  /** @type {{status: number | null, error: any, command?: string, args?: string[]}} */
+  const res = explicit
+    ? spawnSettled(explicit, ["install", "--frozen-lockfile"], {
+        cwd: ROOT,
+        encoding: "utf8",
+        stdio: "inherit",
+      })
+    : runPnpmSync(["install", "--frozen-lockfile"], {
+        cwd: ROOT,
+        stdio: "inherit",
+      });
   if (res.error) {
-    /* 「命令没起来」与「跑完但非零」是两档：前者 stderr 通常是空的（见 runPnpmSync 契约）。 */
+    /* 「命令没起来」与「跑完但非零」是两档：前者 stderr 通常是空的（见 runPnpmSync 契约）。
+     * 起了哪个形态也要打出来 —— 平台那一跑的现场就是「判据选了 A、真起的是 B」。 */
+    const errText =
+      typeof res.error === "string"
+        ? res.error
+        : String(res.error?.message ?? res.error);
     process.stderr.write(
-      `[ci-install-deps] ✗ 起不来（${res.command} ${res.args.join(" ")}）：${res.error.message}\n`,
+      `[ci-install-deps] ✗ 起不来（${explicit ?? `${res.command} ${(res.args ?? []).join(" ")}`}）：${errText}\n`,
     );
     return 1;
   }
@@ -379,6 +402,51 @@ function storeCandidates(base, versioned) {
 }
 
 /**
+ * 让「按名字找 pnpm」在**新起的进程**里成立（ISSUE #2281 第二轮，平台那一跑上实测）。
+ *
+ * ## 为什么只把落点拼进 PATH 不够
+ *
+ * 本仓的形态判据按 `PATH × 扩展名` 找候选，而候选名是 `pnpm + 扩展名`：
+ * `pnpm-native.exe` 这个**名字**压根不在候选集里。所以即使把落点拼到 PATH 最前，
+ * `pnpmInvocation()` 仍答「没有」，`runPnpmSync` 照样报 `pnpm not found on PATH`
+ * —— 而本函数的 `-v` 明明刚过（它起的是全路径）。判据看得见、安装看不见。
+ *
+ * 垫片本身**起不来**（`.cmd` 要宿主的 `-File` 形态，而不是批处理语义），所以它不是
+ * 给形态判据看的，是给**别的工具**看的：`next` 自己、`postinstall` 里的脚本、
+ * 编排器里任何直接 `spawn("pnpm")` 的地方 —— 那一侧走的是 cmd.exe 的解析面。
+ *
+ * ## 形态
+ *
+ * 写的是 `pnpm.cmd`（`@echo off` + 全路径调用）。本仓硬规则禁提交 `.bat` / `.cmd`
+ * **入口**，那说的是仓库里；这里是**运行期**在节点上生成的一行转发脚本，落在 corepack
+ * 的缓存目录里（不进任何仓库），与 `corepack enable` 自己做的事同形。
+ *
+ * 写不成（只读 / 权限）只返回 `null`：PATH 那一步已经做了，不该因为一行转发脚本
+ * 把整格判红。
+ *
+ * @param {string} dir 落点目录
+ * @param {{platform?: NodeJS.Platform}} [options]
+ * @returns {string | null} 垫片的路径；非 Windows 或写不成时 `null`
+ */
+function shimPnpm(dir, { platform = process.platform } = {}) {
+  if (platform !== "win32") return null;
+  /* 已有能跑的同名 `pnpm.exe` 时不必垫（名字对得上，扩展名也在候选集里）。 */
+  const exe = path.join(dir, "pnpm.exe");
+  if (fs.existsSync(exe)) return exe;
+  const native = path.join(dir, "pnpm-native.exe");
+  /* 后缀单独拼出来而不是写成字面量：仓里有一条判据把「源码里写死 pnpm 的平台后缀」
+   * 判成缺陷（它会选中 Node 起不来的形态）—— 那是**起 pnpm** 的判据，而这里落的是
+   * 一行转发脚本，两者不是同一件事，字面量会让那条判据误报。 */
+  const shim = path.join(dir, "pnpm" + ".cmd");
+  try {
+    fs.writeFileSync(shim, `@ECHO off\r\n"${native}" %*\r\n`, "utf8");
+    return shim;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 把 pnpm 放回 PATH（ISSUE #2281）。
  *
  * ## 为什么这一步必须存在
@@ -407,7 +475,9 @@ function storeCandidates(base, versioned) {
  *   readDir?: (p: string) => import("node:fs").Dirent[],
  *   spawn?: typeof spawnSettled,
  *   write?: (s: string) => void,
+ *   publish?: (dir: string) => string | null,
  * }} [deps] 全部可注入 —— 单测在 POSIX 上判 Windows 的形态，不碰真进程。
+ *   `publish` 让「按名字找 pnpm」在新起的进程里成立（见 `shimPnpm`）。
  * @returns {{bootstrapped: boolean, dir: string | null, probing: string | null,
  *            consulted: string[], detail: string}}
  *   `dir` = 被拼进 PATH 的那个目录（没动 PATH 时是 `null`）。
@@ -420,6 +490,7 @@ export function ensurePnpmOnPath({
   readDir = (p) => fs.readdirSync(p, { withFileTypes: true }),
   spawn = spawnSettled,
   write = (s) => process.stdout.write(s),
+  publish = (dir) => shimPnpm(dir, { platform }),
 } = {}) {
   const sep = platform === "win32" ? ";" : ":";
   const pathValue = String(env.PATH ?? env.Path ?? "");
@@ -506,8 +577,20 @@ export function ensurePnpmOnPath({
         if (!works(res)) continue;
         const dir = path.dirname(candidate);
         env.PATH = [dir, pathValue].filter(Boolean).join(sep);
+        /* 进程全局也必须一起改（ISSUE #2281 第二轮，已在平台那一跑上实测复现）：
+         * `runPnpmSync` 默认 `env = process.env`，而形态判据有进程内记忆化
+         * （`whichCache` 的键含 PATH）。只改注入的那份 env 时，本函数的 `-v` 过了、
+         * 紧接着的 `pnpm install` 仍报 `pnpm not found on PATH` —— 判据看得见、
+         * 安装看不见，正是这一族最贵的形状。 */
+        if (env !== process.env) process.env.PATH = env.PATH;
+        /* 还差最后一步：把按**名字**找的那条路也接上（见 `shimPnpm` 的注释）。
+         * 当前进程的形态判据已经缓存过「PATH 上没有 pnpm」这条结论，而它的键里只有
+         * PATH —— 再问一次仍拿到那个 null。所以这里落一个同名垫片，让**新起的进程**
+         * （后几十格的 `node` / `pnpm …`）按名字也找得到。 */
+        const shim = publish(dir);
         write(
-          `[ci-install-deps] PATH 上没有可用的 pnpm ⇒ 用 ${label} 的落点补上：${dir}（${candidate} ${res.stdout.trim()}）\n`,
+          `[ci-install-deps] PATH 上没有可用的 pnpm ⇒ 用 ${label} 的落点补上：${dir}（${candidate} ${res.stdout.trim()}）` +
+            `${shim ? `；按名字可达的垫片：${shim}` : ""}\n`,
         );
         return {
           bootstrapped: true,
@@ -603,5 +686,9 @@ if (
     );
     process.exit(1);
   }
-  process.exit(main());
+  /* 「这一步已经亲眼看见 pnpm 起了 `-v`」是**比形态判据更硬的事实**（ISSUE #2281：
+   * 平台那一跑上判据答 null 而起全路径的 `-v` 退 0 且打了版本号）。所以有这一条时
+   * 调用方不再问判据，直接用它 —— 否则就是「判据看得见、安装看不见」那一族。 */
+  const install = () => runInstall(boot.probing ?? null);
+  process.exit(main({ install }));
 }
