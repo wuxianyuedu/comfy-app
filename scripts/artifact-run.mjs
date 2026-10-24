@@ -35,6 +35,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+import { pnpmCli } from "./ci-install-deps.mjs";
 import { withBuildCacheSlot } from "./ci-build-cache-slot.mjs";
 import {
   abortedAdvice,
@@ -134,11 +135,15 @@ export function main(argv) {
     );
     return 0;
   }
+  /* 平台节点上 PATH 里没有 pnpm（服务账号会话，ISSUE #2281）：先把落点找出来，
+   * 再按「绝对路径 + 参数」起。形态仍然只有一份实现（`pnpmCli`）。 */
+  const cli = pnpmCli();
   const res = withBuildCacheSlot(
     () =>
       runPnpmSync(run.args, {
         cwd: ROOT,
         stdio: "inherit",
+        command: cli,
         /* 显式给预算：产物档跑的是 `next build` + 数产物，它的缺省 600_000 与全量档
          * 同源、也同病（ISSUE #1834：撞预算时 `status` 为 null，与「判据红」同形）。
          * 30 分钟是「真挂死」与「机器慢」之间那条线，与全量档同一个数。 */

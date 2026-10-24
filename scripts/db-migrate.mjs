@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { runPnpmSync } from "./launcher-core/shell.mjs";
+import { pnpmCli } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { resolveSqlitePath } from "./db-schema-state.mjs";
 
@@ -163,9 +164,11 @@ process.stdout.write(
  * `stdio: "pipe"` 而不是 `inherit`：既要让调用方看到进度，也必须拿到文本 ——
  * 下面判「drizzle 有没有说它启动了」要用（`inherit` 下 stdout 是空的，判据会
  * 静默失效，比不判更糟，与 db-push-core.mjs 同一条理由）。 */
+/* pnpm 的落点先找一遍（ISSUE #2281）：平台节点是服务账号会话，PATH 里没有它。 */
 const run = runPnpmSync(["exec", "drizzle-kit", "migrate"], {
   cwd: root,
   stdio: "pipe",
+  command: pnpmCli(),
   timeoutMs: 600_000,
 });
 const output = `${run.stdout}\n${run.stderr}`;
