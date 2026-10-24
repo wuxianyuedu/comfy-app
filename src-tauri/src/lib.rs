@@ -12,6 +12,9 @@ use tauri_plugin_window_state::StateFlags as WindowStateFlags;
 
 // 保活服务的「脱离 job 拉起」中介：同一个 exe 的 CLI 形态（见模块头）。
 mod detached_spawn;
+// 统一的「轮询等待」工具（audit §C.4 L5 / ISSUE #2192）：六处手写 sleep 轮询
+// 循环的收敛点 —— 每拍先 tick 再探测，`continue` 不可能再跳过 sleep。
+mod poll_clock;
 // 按检出隔离的单实例保护与端口推导（launch-and-build.md §1.4 多检出并行）。
 // 该模块自带平台实现（Windows 具名内核对象 / POSIX 锁文件 + SIGUSR1），
 // 因此**不需要**在模块声明上做 cfg —— 调用点因此不用按平台分叉。
@@ -566,8 +569,10 @@ fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
   }
   std::thread::spawn(move || {
     log::warn!("[ComfyAPP] 应用地址在交换窗口时不可达，进入重导航循环：{}", url);
-    for _ in 0..90 {
-      std::thread::sleep(Duration::from_secs(2));
+    // 2s × 90 ≈ 180s 预算（覆盖 150s 安全网）—— #2192 起统一走 poll_clock。
+    let mut clock = poll_clock::PollClock::new(Duration::from_secs(180), Duration::from_secs(2));
+    while !clock.expired() {
+      clock.tick();
       // 启动页已关闭（安全网强制交换 / 用户退出）则无需再重试
       if handle.get_webview_window("splash").is_none() {
         break;
@@ -1212,9 +1217,14 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
   watch_main_first_paint(handle.clone(), true);
 
   std::thread::spawn(move || {
-    for _ in 0..240 {
+    // 500ms × 240 ≈ 120s 预算 —— #2192 起统一走 poll_clock（每拍先 tick 再探测）。
+    let mut clock =
+      poll_clock::PollClock::new(Duration::from_secs(120), Duration::from_millis(500));
+    while !clock.expired() {
+      clock.tick();
       if TcpStream::connect((host.as_str(), port)).is_ok() {
-        // 端口刚通时 HTTP 未必已能响应，稍等一下再导航
+        // 端口刚通时 HTTP 未必已能响应，稍等一下再导航 —— 这是就绪后的
+        // **沉降等待**，不是轮询拍（拍只有一种，在循环顶上）。
         std::thread::sleep(Duration::from_millis(500));
         if let Some(win) = handle.get_webview_window("main") {
           if let Ok(target) = url.parse::<tauri::Url>() {
@@ -1235,7 +1245,6 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
         }
         return;
       }
-      std::thread::sleep(Duration::from_millis(500));
     }
     log::warn!("[ComfyAPP] 等待应用地址就绪超时：{}", url);
   });
@@ -1315,7 +1324,19 @@ fn watch_main_first_paint(handle: tauri::AppHandle, mut stub_visible: bool) {
     return;
   }
   std::thread::spawn(move || {
-    for _ in 0..PROBE_ATTEMPTS {
+    // 预算 120s 不变（原 250ms × 480）；退避：前 40 拍（10s）每 250ms ——
+    // 首帧大多落在前几秒，别让用户多等 —— 之后 500ms（#2192 统一走 poll_clock）。
+    let mut clock = poll_clock::PollClock::with_backoff(
+      Duration::from_secs(120),
+      Duration::from_millis(PROBE_INTERVAL_MS),
+      40,
+      Duration::from_millis(500),
+    );
+    while !clock.expired() {
+      // 每拍先睡：这一条是首绘看护那次事故的结构性解法 —— 原来睡在循环底、
+      // 「URL 还不是应用地址」那一支 `continue` 会跳过它，480 次探测在微秒内
+      // 烧完（守着这件事的测试在 tests 段：first_paint_watch_never_spins_without_sleeping）。
+      clock.tick();
       let Some(win) = handle.get_webview_window("main") else {
         return;
       };
@@ -1336,11 +1357,8 @@ fn watch_main_first_paint(handle: tauri::AppHandle, mut stub_visible: bool) {
       }
       let url = win.url().map(|u| u.to_string()).unwrap_or_default();
       if !is_app_url(&url) {
-        // 这一支必须自己睡：底部的 `sleep` 会被 `continue` 跳过，于是 480 次探测在
-        // 微秒内烧完 —— 而「主窗还没导航到应用」正是看护最该在场的那段时间。
-        // 现场（standalone 实测）：启动 2 秒日志里就出现「timed out (120s), splash kept」，
-        // 看护提前下班，占位也就再没机会贴上去。
-        std::thread::sleep(Duration::from_millis(PROBE_INTERVAL_MS));
+        // 这一支无需自睡：拍首的 `tick()` 在任何 `continue` 之前（#2192 之前的
+        // 事故现场：sleep 在循环底，这一支把它跳过，看护提前下班、占位再没机会贴上）。
         continue;
       }
       if app_document_shown(&handle) {
@@ -1356,11 +1374,10 @@ fn watch_main_first_paint(handle: tauri::AppHandle, mut stub_visible: bool) {
         }
         stub_visible = false;
       }
-      std::thread::sleep(Duration::from_millis(PROBE_INTERVAL_MS));
     }
     log::warn!(
       "[ComfyAPP] main first paint watch timed out ({}s), splash kept",
-      (PROBE_ATTEMPTS * PROBE_INTERVAL_MS) / 1000
+      clock.budget_secs()
     );
   });
 }
@@ -1680,12 +1697,10 @@ const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 216.0);
 /// 展开日志后的窗口尺寸（对应页面里「展开日志」那一档，见 splash.html）。
 const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);
 
-/// 主窗首帧看护的节奏与上限（见 watch_main_first_paint 的注释）。
-/// 两者类型取同一档（u64）：上限与节奏会相乘，跨类型相乘直接编译不过
-/// （`u32 * u64` 无实现）——「间隔是 u64 / 次数是 u32」这种看着像随手写的
-/// 组合，代价是 release 壳根本编不出来。
+/// 主窗首帧看护的快段间隔（见 watch_main_first_paint 的注释）。
+/// 「上限 × 间隔」的旧形状（PROBE_ATTEMPTS × PROBE_INTERVAL_MS）随 #2192 退役：
+/// 预算由 `poll_clock::PollClock` 按墙钟持有（120s），拍数不再承重。
 const PROBE_INTERVAL_MS: u64 = 250;
-const PROBE_ATTEMPTS: u64 = 480;
 
 /// 注入主窗的加载占位（**纯 ASCII**：与 splash-assets 同一条约束——Tauri 的
 /// asset 处理器按字节切响应体补 nonce，多字节字符会让切片落到字符内部）。
@@ -2385,8 +2400,12 @@ fn spawn_splash_watchdog(app: &mut tauri::App) {
   let handle = app.handle().clone();
   std::thread::spawn(move || {
     // 等启动页创建并拿到基准 URL（= 配置解析出的内嵌资源地址）
+    // 100ms × 50 ≈ 5s 预算 —— #2192 起统一走 poll_clock。
     let mut base: Option<tauri::Url> = None;
-    for _ in 0..50 {
+    let mut base_clock =
+      poll_clock::PollClock::new(Duration::from_secs(5), Duration::from_millis(100));
+    while !base_clock.expired() {
+      base_clock.tick();
       match handle.get_webview_window("splash") {
         None => return, // 启动页已关闭（秒就绪），无需看门狗
         Some(s) => {
@@ -2398,7 +2417,6 @@ fn spawn_splash_watchdog(app: &mut tauri::App) {
           }
         }
       }
-      std::thread::sleep(Duration::from_millis(100));
     }
     let Some(splash_url) = base else {
       /* 启动页的 WebView 没起来（现场：WebView2 建窗报 0x80070057 参数错误）：
@@ -2412,8 +2430,11 @@ fn spawn_splash_watchdog(app: &mut tauri::App) {
       return;
     };
     log::info!("[ComfyAPP] splash watchdog: base url {}", splash_url);
-    for _ in 0..300 {
-      std::thread::sleep(Duration::from_millis(1000));
+    // 1s × 300 ≈ 300s —— 漂移看护是常驻形的（窗口活着就要看），预算给满五分钟。
+    let mut drift_clock =
+      poll_clock::PollClock::new(Duration::from_secs(300), Duration::from_secs(1));
+    while !drift_clock.expired() {
+      drift_clock.tick();
       let Some(s) = handle.get_webview_window("splash") else { return };
       // 判据只有一条：当前 URL 不是内嵌的启动页地址。**必须排除「窗口已不可用」**
       // ——url() 出错（窗口正在销毁）时不能当作「漂移了」再导航回去，否则交接
@@ -2926,26 +2947,39 @@ mod window_startup_tests {
     );
   }
 
-  /// 看护循环里每一条「本轮不判定」的路径都要自己歇一下。
+  /// 看护循环里每一条「本轮不判定」的路径都不可能跳过睡眠。
   ///
   /// 现场（standalone 实测）：日志在启动后 2 秒就出现「main first paint watch
   /// timed out (120s), splash kept」——那句「120s」是假的，480 次探测在微秒内
   /// 烧完了。根因是「主窗 URL 还不是应用地址」那一支 `continue` 跳过了循环底部
   /// 的 `sleep`，而启动期的前几十秒**恰恰**都是这一支：看护在它最该在场的
   /// 时刻已经下班，占位再没机会贴上去。
+  ///
+  /// #2192 把 sleep 收进 [`crate::poll_clock::PollClock::tick`] 并固定在**每拍
+  /// 最前**：`continue` 从结构上不可能再跳过它。这条测试钉住新不变量的三半：
+  /// ① 看护用的是统一拍（`tick()`）；② 拍在「URL 还不是应用地址」那一支
+  /// **之前**；③ 那一支里没有再塞一颗裸 `sleep`（半吊子回潮的形状）。
   #[test]
   fn first_paint_watch_never_spins_without_sleeping() {
     let src = include_str!("lib.rs");
-    let at = src
+    let watch = fn_body("fn watch_main_first_paint");
+    let tick = watch
+      .find("clock.tick();")
+      .expect("看护循环没有用统一拍（poll_clock::PollClock::tick）");
+    let at = watch
       .find("!is_app_url(&url)")
       .expect("找不到「URL 还不是应用地址」那一支");
-    let rest = &src[at..];
+    assert!(
+      tick < at,
+      "拍（tick）必须在这一支之前 —— continue 跳过它的事故就是从这里回来的：{watch}"
+    );
+    let rest = &watch[at..];
     let branch = &rest[..rest
       .find("continue;")
       .expect("这一支的结尾是 continue，判据没命中时要跳过本轮")];
     assert!(
-      branch.contains("std::thread::sleep(Duration::from_millis(PROBE_INTERVAL_MS))"),
-      "continue 会跳过循环底部的 sleep，这一支必须自己歇：{branch}"
+      !branch.contains("std::thread::sleep("),
+      "这一支不许再塞裸 sleep（统一拍之后它是冗余，且是回潮的形状）：{branch}"
     );
   }
 
