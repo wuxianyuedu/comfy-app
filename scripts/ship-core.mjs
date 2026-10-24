@@ -117,6 +117,7 @@ export function parseArgs(argv) {
     priority: null,
     diagnose: false,
     diagnoseSn: null,
+    rerunCi: false,
     only: null,
     unknown: [],
   };
@@ -149,6 +150,8 @@ export function parseArgs(argv) {
       out.diagnose = true;
       const tok = a.slice("--diagnose=".length);
       if (tok !== "") out.diagnoseSn = tok;
+    } else if (a === "--rerun-ci") {
+      out.rerunCi = true;
     } else if (a.startsWith("--new-issue=")) {
       const tok = a.slice("--new-issue=".length);
       if (tok.trim() === "") out.newIssueBad.push("(缺标题)");
