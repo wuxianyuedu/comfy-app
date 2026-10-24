@@ -50,6 +50,46 @@ function run(): { code: number; output: string } {
   return runWith([]);
 }
 
+/**
+ * 判某个外部解释器在**这台机器上**到底能不能用，判不了就返回空串让用例如实 skip。
+ *
+ * 判据是「起得来**且**解释得了参数」两件，不是「spawn 成功」（ISSUE #2316）：
+ * 盘上可能有一个同名的别的可执行文件，spawn 得起来、却把 `-NoProfile` 当成自己的参数，
+ * 以非零码退出。只认「spawn 没抛异常」的旧写法会把这种机器判成「在场」，随后用例照跑、
+ * 断言等满 20s 以超时形态红 —— 一句「我这台机器判不了」被记成了「这条判据红了」。
+ *
+ * 探不到时把**每个候选的失败原因**一次打出来：下一个人只看到一片 skip 时，
+ * 要能说出是没装、还是那个名字被别的东西占了。
+ */
+function probeExecutable(
+  candidates: string[],
+  opts: { args: string[]; label: string },
+): string {
+  const failures: string[] = [];
+  for (const candidate of candidates) {
+    const probe = spawnSync(candidate, opts.args, {
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    // error 非空 = 压根没起来（ENOENT / EACCES / 超时）；status 非 0 = 起来了但不是它。
+    if (probe.error) {
+      failures.push(`${candidate}（${probe.error.message}）`);
+      continue;
+    }
+    if (probe.status !== 0) {
+      failures.push(
+        `${candidate}（退 ${probe.status}：起来了但解释不了参数，盘上是同名的别的东西）`,
+      );
+      continue;
+    }
+    return candidate;
+  }
+  console.log(
+    `[fixture] 本机没有可用的 ${opts.label}，相关用例跳过：${failures.join("，")}`,
+  );
+  return "";
+}
+
 /** 带参数的调用（R5 的翻闸断头用例要传 `--update` 正面证明它不存在，规范 §12.6）。 */
 function runWith(args: string[]): { code: number; output: string } {
   try {
@@ -636,19 +676,14 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   // Windows PowerShell 5.1 与 PowerShell 7 都可用；非 Windows 平台（Linux CI）没有
   // powershell，相关用例跳过，规则本身由 scripts/check-file-structure.cjs 与
   // 本文件其它用例覆盖。
-  const psExe = (() => {
-    for (const candidate of ["powershell", "pwsh"]) {
-      try {
-        execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
-    return "";
-  })();
+  // 「在场」必须由 probeExecutable 判，不能自己写 `try { execFileSync } catch`：只认
+  // 退出码时，盘上一个同名但不是 PowerShell 的可执行文件会让这一格照跑，随后
+  // spawnSync 起来却解释不了参数 —— 断言等满 20s 才以「超时」红，报错行指不到真因
+  // （ISSUE #2316）。探测自己说话，别把「我这台机器判不了」记成「这条判据红了」。
+  const psExe = probeExecutable(["powershell", "pwsh"], {
+    args: ["-NoProfile", "-Command", "exit 0"],
+    label: "PowerShell",
+  });
 
   // 结论在 stdout，守卫的日志（`Log` 被桩件改写到 stderr）要一起收，
   // 否则「回收陈旧桌面壳」「非交互构建」「正在运行的壳进程」这些可见出口断言不到。
@@ -948,19 +983,10 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
    * 锁住这条用户可感知的行为不再回退。
    */
   const FOCUS_SCRIPT = join(process.cwd(), "scripts", "win32-window-focus.py");
-  const python = (() => {
-    for (const candidate of ["python3", "python"]) {
-      try {
-        execFileSync(candidate, ["-c", "import sys; sys.exit(0)"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
-    return "";
-  })();
+  const python = probeExecutable(["python3", "python"], {
+    args: ["-c", "import sys; sys.exit(0)"],
+    label: "Python",
+  });
 
   /** 抽出 decide_handoff 直接断言判决表。 */
   const decide = (call: string): string => {
