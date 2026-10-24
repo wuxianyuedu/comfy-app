@@ -1390,7 +1390,9 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
      * `COMFYAPP_NODE_VERSION`：上一格（低版本 Node 那一档）把它写进了宿主环境，
      * 而 `envWithPnpm()` 是 `{ ...process.env }` —— 照搬过来就变成「用 v20.9.0 判
      * 合规」，本条会在 CI 上以 `expected 1 to be 0` 红。显式清掉它。 */
-    const env = { ...(envWithPnpm() ?? process.env) };
+    const env: NodeJS.ProcessEnv = {
+      ...(envWithPnpm() ?? process.env),
+    };
     delete env.COMFYAPP_NODE_VERSION;
     const r = spawnSync(
       process.execPath,
