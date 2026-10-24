@@ -636,7 +636,7 @@ describe("pnpm check:toolchain 真跑", () => {
         env: env ?? process.env,
       },
     );
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     expect(r.stdout).toContain("pnpm 可用");
   });
 
@@ -646,7 +646,7 @@ describe("pnpm check:toolchain 真跑", () => {
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       { encoding: "utf8", env: env ?? process.env },
     );
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     // 这句是判据本身：它把「依赖在」与「三条门禁可跑」连在一起，
     // 否则读者只会看到「node_modules 已装」这句与门禁无关的话（ISSUE #1568）。
     expect(r.stdout).toContain("tsc / eslint / vitest 都能跑");
@@ -865,7 +865,7 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
         env: envWithPnpm() ?? process.env,
       },
     );
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     expect(`${r.stdout ?? ""}${r.stderr ?? ""}`).toContain("选中的 pnpm：");
   });
 });
@@ -1378,7 +1378,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
         env: { ...(envWithPnpm() ?? process.env), COMFYAPP_NODE_VERSION: "v20.9.0" },
       },
     );
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     expect(r.stdout).toContain("不在声明范围内");
     expect(r.stdout).toContain("坏的是测试档");
     /* 建议必须给「最近的可达档」：对 Node 20 的人推 26 是没人执行的建议。 */
@@ -1399,7 +1399,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
       { encoding: "utf8", env },
     );
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     expect(r.stdout).toContain("在声明范围内");
   });
 });

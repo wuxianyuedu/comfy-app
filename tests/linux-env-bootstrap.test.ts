@@ -126,7 +126,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const r = runEnvInitIn({
       ".env.example": fs.readFileSync(EXAMPLE, "utf8"),
     });
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
 
     const envPath = path.join(tmp, ".env");
     expect(fs.existsSync(envPath), "必须真的产出 .env").toBe(true);
@@ -197,7 +197,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "")
       .replace(/^LOG_LEVEL=.*$/m, 'LOG_LEVEL="debug"');
     const r = runEnvInitIn({ ".env.example": example, ".env": mine });
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
     const parsed = parseEnvFile(after);
     expect(
@@ -229,7 +229,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
       )
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
     const r = runEnvInitIn({ ".env.example": example, ".env": mine });
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
     const parsed = parseEnvFile(after);
     expect(
@@ -247,7 +247,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
       .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, "")
       .replace(/^COMFYAPP_DEV_HANDLE=.*$/m, "");
     const r = runEnvInitIn({ ".env.example": example, ".env": stripped });
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     const parsed = parseEnvFile(
       fs.readFileSync(path.join(tmp, ".env"), "utf8"),
     );
