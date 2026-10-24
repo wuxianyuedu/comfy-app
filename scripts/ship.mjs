@@ -154,6 +154,7 @@
  *   pnpm ship --diagnose [sn]                  # 只读：CI 红了就看那一跑的失败格 + 失败行 +
  *                                              #   末 40 行 + 完整日志链接（不给号按 HEAD 归属）
  *   pnpm ship --diagnose --dry-run             # 只打印它会读的那三条命令
+ *   pnpm ship --rerun-ci                       # CI 挂了想重跑：在当前 PR 分支推一个空提交触发新 build（不去 cnbcli 翻重跑入口）
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge · close-issue · clean-branch
  * （`close-issue` 带号时能单跑 —— 那是「补关」那一路，要平台侧的落地证明；不带号或
@@ -187,7 +188,7 @@ import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
-import { runCommitStage, runPushStage } from "./ship-local.mjs";
+import { runCommitStage, runPushStage, runRerunCiStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
 
 /**
@@ -455,6 +456,7 @@ async function runFlow(deps, tmpFiles) {
       opt.release != null ? "--release" : null,
       opt.claims ? "--claims" : null,
       opt.newIssue != null || opt.newIssueBad.length > 0 ? "--new-issue" : null,
+      opt.rerunCi ? "--rerun-ci" : null,
     ].filter(Boolean);
     if (clashes.length > 0) {
       log(
@@ -471,6 +473,24 @@ async function runFlow(deps, tmpFiles) {
         sn: opt.diagnoseSn,
         headSha: run("git", ["rev-parse", "HEAD"]).stdout.trim(),
         dryRun: opt.dryRun,
+      }),
+    ]);
+  }
+  /* ── 「CI 失败重试」：在当前分支推一个空提交触发平台重新构建（#2289 现场踩出的需求）──
+   * 平台 CI 是 push 触发的，没有「重跑按钮」：唯一能重新派生一条流水线的方式就是再推一次。
+   * 这一格是**写动作**（commit + push），但只读 cnb、不创建 PR、不轮询 —— 与 `--diagnose`
+   * 那种「只读」不同，也和 `--merge` 那一路互斥（排在前、直接返回）。撞红线想重跑的人，
+   * 不用再去 cnbcli 翻有没有重跑入口，一句 `pnpm ship --rerun-ci` 即可。 */
+  if (opt.rerunCi) {
+    return finish([
+      runRerunCiStage({
+        up,
+        branch: localBranch,
+        root,
+        log,
+        run,
+        relay,
+        opt,
       }),
     ]);
   }
