@@ -1386,10 +1386,16 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
   });
 
   (envWithPnpm() ? it : it.skip)("当前 Node 合规时打 OK 行（这句是上面那格的对照组）", () => {
+    /* 本条的输入是「这一跑真的起的那个 node」，所以它**不能**注入
+     * `COMFYAPP_NODE_VERSION`：上一格（低版本 Node 那一档）把它写进了宿主环境，
+     * 而 `envWithPnpm()` 是 `{ ...process.env }` —— 照搬过来就变成「用 v20.9.0 判
+     * 合规」，本条会在 CI 上以 `expected 1 to be 0` 红。显式清掉它。 */
+    const env = { ...(envWithPnpm() ?? process.env) };
+    delete env.COMFYAPP_NODE_VERSION;
     const r = spawnSync(
       process.execPath,
       [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
-      { encoding: "utf8", env: envWithPnpm() ?? process.env },
+      { encoding: "utf8", env },
     );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain("在声明范围内");
