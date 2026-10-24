@@ -114,9 +114,13 @@ describe("Disclosure", () => {
       </Disclosure>,
     );
     const trigger = screen.getByRole("button", { name: /禁用开关/ });
-    /* base-ui 的 disabled 是 `aria-disabled`（不是原生 `disabled`）——
-     * 这样键盘仍能聚焦到它，读屏器会读出「不可用」而不是静默跳过。 */
-    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    /* base-ui 1.9.0 起（#2279 升级连带，ISSUE #2312）disabled Trigger 渲染的是
+     * **原生 `disabled`** + `data-disabled`，不再是 1.8.0 的 `aria-disabled`。
+     * 语义变化如实记录：原生 disabled 键盘不可聚焦、读屏直接跳过（1.8.0 的
+     * `aria-disabled` 可聚焦、读屏报「不可用」）—— 这是上游的行为变更，
+     * 「点了不动」这一保障两条版本都有，钉的是新形态。 */
+    expect(trigger).toHaveAttribute("disabled");
+    expect(trigger).toHaveAttribute("data-disabled");
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
