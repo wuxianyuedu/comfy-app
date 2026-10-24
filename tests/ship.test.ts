@@ -80,6 +80,7 @@ import {
   participantLabel,
   readDevHandle,
   ticketReading,
+  withCommentHeader,
   whoamiLines,
 } from "../scripts/ship-ticket.mjs";
 import {
@@ -1294,6 +1295,51 @@ describe("issueItemShapes：一张单子正文里的条目形态（#2251 —— 
   });
 });
 
+describe("withCommentHeader：开头署名有且只有一行（ISSUE #2268）", () => {
+  it("没有 ⇒ 补本检出那一行；已有 ⇒ 原样保留，不再前插", () => {
+    expect(withCommentHeader("## 症状\n\nCI 红了\n", "yuedu-win")).toBe(
+      "**[评论人：yuedu-win]**\n\n## 症状\n\nCI 红了\n",
+    );
+    const once = "**[评论人：yuedu-win]**\n\n## 症状\n\n正文\n";
+    expect(withCommentHeader(once, "yuedu-win")).toBe(once);
+  });
+
+  it("重复的两行收成一行（#2258 的现场）", () => {
+    const dup =
+      "**[评论人：b-win]**\n**[评论人：b-win]**\n\n## 症状\n\n正文\n";
+    const got = withCommentHeader(dup, "yuedu-win");
+    expect(got.startsWith("**[评论人：b-win]**\n\n## 症状")).toBe(true);
+    expect(got.match(/\*\*\[评论人：/g) ?? []).toHaveLength(1);
+  });
+
+  it("不改写人名：开头那行是谁写的就留谁，工具只管「有且只有一行」", () => {
+    const got = withCommentHeader(
+      "**[评论人：b-win]**\n\n## 症状\n",
+      "yuedu-win",
+    );
+    expect(got).toContain("b-win");
+    expect(got).not.toContain("yuedu-win");
+  });
+
+  it("前导空行与正文中间的同形文字都不误伤", () => {
+    expect(
+      withCommentHeader("\n\n  \n## 症状\n", "h").startsWith(
+        "**[评论人：h]**\n\n## 症状",
+      ),
+    ).toBe(true);
+    /* 中间那行是正文内容（比如文档里在讲这个格式），不算署名、不许被吃掉。 */
+    const mid = "## 说明\n\n**[评论人：x]** 这一行的形状是……\n\n结尾\n";
+    const got = withCommentHeader(mid, "h");
+    expect(got.startsWith("**[评论人：h]**\n\n## 说明")).toBe(true);
+    expect(got).toContain("**[评论人：x]** 这一行的形状是");
+  });
+
+  it("幂等：跑第二遍与第一遍逐字节相同", () => {
+    const once = withCommentHeader("**[评论人：a]**\n**[评论人：a]**\n正文\n", "b");
+    expect(withCommentHeader(once, "b")).toBe(once);
+  });
+});
+
 describe("readDevHandle：进程环境优先，回落本检出 .env，读不到就是「没配」", () => {
   /** 造一份只有 `.env` 的临时检出根。 */
   function envRoot(text: string) {
@@ -1531,11 +1577,13 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
   const opts = (argv: string[]) => parseArgs(argv);
 
   it("评论文案：第一行是粗体署名，正文那句人话在下面 —— 领取 / 结束各一条", () => {
+    /* 尾部那个换行来自 `withCommentHeader` 的统一收口（正文类文字以换行结尾）；
+     * 状态判据走 `handleCommentState` 的 `includes`，不依赖尾部形状。 */
     expect(claimComment(handle)).toBe(
-      `**[评论人：${handle}]**\n\n开发者 ${handle} 已接单，正在开发中。`,
+      `**[评论人：${handle}]**\n\n开发者 ${handle} 已接单，正在开发中。\n`,
     );
     expect(releaseComment(handle)).toBe(
-      `**[评论人：${handle}]**\n\n开发者 ${handle} 开发结束。`,
+      `**[评论人：${handle}]**\n\n开发者 ${handle} 开发结束。\n`,
     );
   });
 
@@ -3877,6 +3925,18 @@ describe("--new-issue：一步建单并回读", () => {
           "**[评论人：未配]**",
         ),
       ).toBe(true);
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("正文文件里自己已写署名行 ⇒ 不再前插第二遍（#2258 那两行的现场）", () => {
+    const tmp = withBody("**[评论人：b-win]**\n\n## 症状\n\n正文\n");
+    try {
+      const got = readIssueBody(tmp.dir, tmp.file, "yuedu-win");
+      expect(got.ok).toBe(true);
+      expect(got.text.match(/\*\*\[评论人：/g) ?? []).toHaveLength(1);
+      expect(got.text).toBe("**[评论人：b-win]**\n\n## 症状\n\n正文\n");
     } finally {
       rmSync(tmp.dir, { recursive: true, force: true });
     }

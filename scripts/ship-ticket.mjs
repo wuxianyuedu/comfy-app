@@ -235,6 +235,71 @@ export function commentHeader(handle) {
   return `**[评论人：${name || "未配"}]**`;
 }
 
+/** 一行正文是不是署名行（只认这一种形状，正文中间的同形文字不算）。 */
+const HEADER_LINE_RE = /^\*\*\[评论人：[^\]\n]*\]\*\*$/;
+
+/**
+ * 给一段要发给平台的文字保证**有且只有一行**开头署名（ISSUE #2268）。
+ *
+ * 为什么必须幂等：这一行从 #2217 起是「写在正文里」的约定，人（或代理）会自己在
+ * 正文文件里写一行；`--new-issue` 再无条件前插一次，`#2258` 的正文因此连着两遍
+ * `**[评论人：b-win]**`。前插式的写法对「读进来的文本」永远不成立。
+ *
+ * 三条口径：
+ *   · **不改写人名** —— 开头已有署名行时保留**第一行原样**，只把后面重复的那些去掉。
+ *     那一行是谁写的由写正文的人决定，工具只保证「有且只有一行」；
+ *   · 只看开头：跳过前导空行，遇到第一行非署名内容就停，正文中间的同形文字不动；
+ *   · 没有时补本检出的那一行（未配就写「未配」，不编名字）。
+ *
+ * @param {string | null | undefined} body 要发出去的正文
+ * @param {string | null | undefined} handle 本检出的留痕短名
+ * @returns {string} 以一行署名开头、且署名只出现一次的正文
+ */
+export function withCommentHeader(body, handle) {
+  const lines = String(body ?? "").split(/\r?\n/);
+  let i = 0;
+  /** @type {string | null} */
+  let kept = null;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = String(line ?? "").trim();
+    if (trimmed === "") {
+      i += 1;
+      continue;
+    }
+    if (!HEADER_LINE_RE.test(trimmed)) break;
+    if (kept === null) kept = trimmed;
+    i += 1;
+  }
+  const rest = lines.slice(i).join("\n").replace(/\s+$/, "");
+  return `${kept ?? commentHeader(handle)}\n\n${rest}\n`;
+}
+
+/**
+ * 一段平台文字的署名**形状**读数（ISSUE #2269，只读审计用）。
+ *
+ * 与 `withCommentHeader` 是一对：那一半保证形状，这一半**量**形状 ——
+ * 约定写在正文里而没有任何一处能回答「现在哪些文字没照做」，就是「在册 ≠ 出勤」那一型
+ * （#2114 的现场：判据在场、执行者不在场，账面全绿）。
+ *
+ * 四档，不合成一个分数：
+ *   · `缺` —— 全文没有署名行；
+ *   · `不在首行` —— 有，但第一段正文在它之前（读者先看到的是没有署名的文字）；
+ *   · `重复` —— 首行是署名行，但全文出现两遍及以上（#2258 的现场）；
+ *   · `正常` —— 首行是署名行且全文只有一遍。
+ *
+ * @param {string | null | undefined} body 正文原样
+ * @returns {"缺" | "不在首行" | "重复" | "正常"}
+ */
+export function headerShape(body) {
+  const lines = String(body ?? "").split(/\r?\n/);
+  const heads = lines.filter((l) => HEADER_LINE_RE.test(String(l).trim()));
+  if (heads.length === 0) return "缺";
+  const first = lines.find((l) => String(l).trim() !== "");
+  if (!HEADER_LINE_RE.test(String(first ?? "").trim())) return "不在首行";
+  return heads.length > 1 ? "重复" : "正常";
+}
+
 /**
  * 「这张单是谁提的、按什么优先级」—— 同样是**只读数，不拦**（ISSUE #2175）。
  *
