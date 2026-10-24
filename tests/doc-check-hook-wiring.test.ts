@@ -33,6 +33,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  registeredDailyGateOrder,
   registeredDisabledGates,
   registeredGateOrder,
   stageBlock,
@@ -84,6 +85,24 @@ function hookGateSteps(hookText: string) {
 function platformStages(): { name: string; stage: string | null }[] {
   const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
   return registeredGateOrder(text).map((name) => ({
+    name,
+    stage: stageBlock(text, name),
+  }));
+}
+
+/**
+ * 每日那一条流水线上的 stage 清单（`COMFYAPP_CI_DAILY_GATES` 那份）。
+ *
+ * 与 `platformStages()` **同一形状、同一份解析器**（`registeredDailyGateOrder` +
+ * `stageBlock`）—— 抄第二份解析器就会漂，而漂的形态是静默的（§12.12 / §12.18）。
+ *
+ * 为什么需要它（ISSUE #2300 主体分权）：「新鲜度账」2026-10-23 从 PR 那一条撤到每日档，
+ * 于是「平台侧那个执行者在不在」要问的是**每日**那一条，而 `platformStages()` 只认
+ * PR 清单 —— 拿它去问会得到「不在」，而真相是「搬走了，不是不存在」。
+ */
+function dailyStages(): { name: string; stage: string | null }[] {
+  const text = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
+  return registeredDailyGateOrder(text).map((name) => ({
     name,
     stage: stageBlock(text, name),
   }));
@@ -866,75 +885,75 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
   const steps = hookGateSteps(hook);
   const config = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
 
-  it("平台侧有「新鲜度账」这一步，且跑的是与钩子同一份脚本", () => {
-    const hit = platformStages().find((x) => x.name === "新鲜度账");
+  it("每日侧有「每日新鲜度账」这一步，跑的是与钩子同一份脚本（主体=master）", () => {
+    const hit = dailyStages().find((x) => x.name === "每日新鲜度账");
     expect(
       hit,
-      "`.cnb.yml` 里没有「新鲜度账」这一步 —— 判据在平台侧没有执行者，而它要拦的" +
+      "`.cnb.yml` 里没有「每日新鲜度账」这一步 —— 判据在平台侧没有执行者，而它要拦的" +
         "正是「谁都没跑它」这个静默形态（§13.5.17 同款两半判法）",
     ).toBeDefined();
     expect(hit?.stage, "那一步的原文块解析不出来（名字被改了？）").toBeTruthy();
     expect(
       hit?.stage,
-      "平台侧那一步跑的不是 scripts/freshness-gate.mjs —— 两处各写一份判据必然分叉，" +
+      "每日侧那一步跑的不是 scripts/freshness-gate.mjs —— 两处各写一份判据必然分叉，" +
         "而分叉之后「本地绿、平台红」（或反过来）读起来像环境差异，不像判据不一致",
     ).toContain("scripts/freshness-gate.mjs");
+    /* ⚠️ 主体那一行是这一格**存在的理由**（ISSUE #2300 主体分权）：主体=master ⇒
+     * 判据读的是机器分支 `ci/freshness-ledger` 上**主干的权威账**；缺了它，每日这一格
+     * 就会以 `"pr"` 上下文跑（读工作树那份），主干的账就没人判了。 */
+    expect(
+      hit?.stage,
+      "每日侧那一步没有带 `COMFY_CI_SUBJECT: \"master\"` —— 主体不是 master ⇒ 它读的是" +
+        "工作树那份账而不是主干的权威账（判据主体分权）",
+    ).toContain("COMFY_CI_SUBJECT");
     expect(
       registeredGateOrder(config),
-      "`新鲜度账` 不在 COMFYAPP_CI_GATES 里（在跑但不登记 = 顺序与在场都没有执行者）",
-    ).toContain("新鲜度账");
+      "`新鲜度账` 还在 COMFYAPP_CI_GATES 里 —— 它 2026-10-23 撤到了每日档：PR 上下文读的是" +
+        "主干的账，判的是「这台机器怎么被调度」而不是这次改动",
+    ).not.toContain("新鲜度账");
   });
 
-  it("PR 那一条上凡刷新新鲜度账的档都排在「新鲜度账」之后（此刻一格都不许有）", () => {
+  it("每日那一条上凡刷新新鲜度账的档都排在「每日新鲜度账」之后（PR 那一条上一格都不许有）", () => {
     /* 这条不是风格：跑法脚本跑绿之后会**刷新自己那笔账**
      * （`artifact-run.mjs` → `scripts/.artifact-freshness.json`，`full-suite-run.mjs` →
-     * `.full-suite-freshness.json`），而同一分支的 stage **共享同一个工作区** ——
-     * 排在 `新鲜度账` 之前时，那一步读到的是「刚被这一次运行改过的账」，
-     * 于是「源分支上账是旧的」永远判不出来（判据在场、结论恒放行，
+     * `.full-suite-freshness.json`，`e2e-run.mjs` → `.e2e-freshness.json`），而同一分支的
+     * stage **共享同一个工作区** —— 排在 `每日新鲜度账` 之前时，那一步读到的是「刚被
+     * 这一次运行改过的账」，于是「账是旧的」永远判不出来（判据在场、结论恒放行，
      * 正是本仓最不能有的静默形态）。
      *
-     * 认的是「这一步的 script 点名了记账入口」这个**语义**，不是行形状：把命令包进
-     * `ci-cp936-exit.mjs`、换 stage 的位置、甚至换 YAML 缩进，这条都还看得见。
-     *
-     * ⚠️ `e2e-run.mjs` **不在这一列**，两个理由现在叠在一起：PR 那条 2026-10-19 起没有
-     *   端到端那一格（整格挪到每日档），而它此前带的 `--grep=@critical` 按
-     *   `isWholeTrackRun()` 也**不构成整档凭证 ⇒ 不记账**（见 `freshness-ledger.mjs`）。
-     *   算进来等于判出一条假冲突；而每日那一格跑的是整档、真的会刷新账，那一半由
-     *   「每日清单 ⇄ `ciStage`」那条判据管，不在这里写第二份。
-     *
-     * 2026-10-18 之后这一列在 PR 上是**空的**：`生产构建` 与 `单元测试` 都只在每日档
-     * （`每日生产构建` / `每日单元测试`）。所以这一条今天判的是第二半 ——
-     * 「PR 清单里不许出现记账入口」，而那是刻意的挪档结论，不是恰好没有。
-     * 谁把某一格加回来，第一半（顺序）自动接管。 */
-    const ledgerRefreshing = [
-      "scripts/artifact-run.mjs",
-      "scripts/full-suite-run.mjs",
-    ];
-    const order = registeredGateOrder(config);
-    expect(order, "`新鲜度账` 不在 GATES 清单里").toContain("新鲜度账");
-    const freshAt = order.indexOf("新鲜度账");
-    const refreshers = platformStages()
-      .map((s, at) => ({ ...s, at }))
-      .filter((s) =>
-        ledgerRefreshing.some((entry) => (s.stage ?? "").includes(entry)),
-      );
+     * ⚠️ 这里**按名字**认那三格，而不是「script 点名了记账入口」：每日那三格跑的是
+     * **跑法脚本的壳**（`ci-daily-build.mjs` / `e2e-run.mjs` / `full-suite-run.mjs` 的入口
+     * 在壳里面，stage 文本里看不到 `artifact-run.mjs` 那一层）⇒ 按 script 认会**认不到**，
+     * 于是这一条变成恒绿的空转（判据在场、什么也不判）。用名字认的代价是「改名要同批
+     * 改这里」，而那正是「谁在刷新账」这件事该被登记的地方。
+     */
+    const ledgerRefreshing = ["每日生产构建", "每日全量E2E", "每日单元测试"];
+    const order = registeredDailyGateOrder(config);
+    expect(order, "`每日新鲜度账` 不在每日清单里").toContain("每日新鲜度账");
+    const freshAt = order.indexOf("每日新鲜度账");
+    const daily = dailyStages().map((s, at) => ({ ...s, at }));
+    const refreshers = daily.filter((s) => ledgerRefreshing.includes(s.name));
+    /* 找到三格这件事本身要判：找不到就是「那一列变了」，而空数组会让下面那条恒绿。 */
+    expect(
+      refreshers.map((s) => s.name),
+      "每日那三格（生产构建 / 全量E2E / 单元测试）没在每日清单里找到 —— 它们的跑法脚本会刷新账，" +
+        "这一条的比较面因此空了（判据恒绿 = 静默失效）",
+    ).toEqual(ledgerRefreshing);
     const beforeGate = refreshers
       .filter((s) => s.at < freshAt)
       .map((s) => s.name);
     expect(
       beforeGate,
-      `这些 stage 排在 \`新鲜度账\` 之前：${beforeGate.join(", ")} —— 它们的跑法脚本会先把账刷新，` +
+      `这些 stage 排在 \`每日新鲜度账\` 之前：${beforeGate.join(", ")} —— 它们的跑法脚本会先把账刷新，` +
         "于是这一步读到的是「刚被本次运行证过的账」，恒放行",
     ).toEqual([]);
-    /* 半边二：`生产构建` 此刻**不许**在 PR 清单里 —— 2026-10-18 的挪档结论要写死成
-     * 断言，而不是靠「恰好解析不出来」。它现在只在每日档，那一格的入口与预算由
-     * `tests/no-platform-ci-config.test.ts` 的「定时那一跑」判。 */
+    /* 半边二：`新鲜度账` 此刻**不许**在 PR 清单里 —— 2026-10-23 的挪档结论要写死成
+     * 断言，而不是靠「恰好解析不出来」。它现在只在每日档（`每日新鲜度账`）。 */
     expect(
-      order,
-      "`生产构建` 又回到 `COMFYAPP_CI_GATES` 了 —— 那是 2026-10-18 撤掉的一格" +
-        "（PR 上再跑一次 `pnpm run build` 是第二次执行同一个判据，不是第二份信息：" +
-        "这一档的机器执行者是每日那一格 `每日生产构建`。要恢复请先改 §13.5.23）",
-    ).not.toContain("生产构建");
+      registeredGateOrder(config),
+      "`新鲜度账` 又回到 `COMFYAPP_CI_GATES` 了 —— 它 2026-10-23 撤到了每日档（ISSUE #2300 " +
+        "主体分权：PR 上下文读的是主干的账，判的不是这次改动）",
+    ).not.toContain("新鲜度账");
   });
 
   it("本地那一半仍在钩子门禁链里（平台侧 squash 合并不跑本地钩子，不能只剩它）", () => {

@@ -269,7 +269,7 @@
     # ⚠️ 这个键**保留而不删除**：它是「停用」这件事的执行者（判据见
     # `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条）。
     COMFYAPP_CI_DISABLED_GATES: >-
-      单元测试, ESLint 零警告
+      单元测试, ESLint 零警告, 新鲜度账
     # 「换了执行者」的登记（ISSUE #2227）：清单里那几个**以注释形态留在 `.gates` 里**的名字
     # （停用形态与换执行者形态在配置里长得一模一样 ⇒ 机器分不出两者），它们的执行者在这里
     # **机器可读**地登记一次。
@@ -328,7 +328,7 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 新鲜度账, 同步数据库表结构,
+      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
       类型检查, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
@@ -398,7 +398,7 @@
     #   `check-pnpm-available.mjs` 判 —— 它一秒就有答案，且每个 PR 都需要。
     COMFYAPP_CI_DAILY_GATES: >-
       每日失败立案, 每日工具链自证, 每日安装依赖, 每日 Python 可用性, 每日 Python 探针读数,
-      每日同步数据库表结构, 每日生产构建, 每日 ESLint 零警告, 每日浏览器安装,
+      每日同步数据库表结构, 每日新鲜度账, 每日生产构建, 每日 ESLint 零警告, 每日浏览器安装,
       每日全量E2E, 每日单元测试
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
     #   （分钟级），而判「装没装成」是零成本的。2026-10-19 起这一格是**唯一**的执行者
@@ -694,6 +694,30 @@
     # 库里要有表：套件里读库的那几条在没有库时的形态是「连不上」，看起来像业务故障
     # （§9.1 那格「页面 200、接口 500」的同一族误诊）。`db-push.mjs` 复核真建出表。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/db-push.mjs
+  # ── 每日新鲜度账（主体=master；判据本体与 PR 那格逐字相同）────────────────
+  #
+  # 这一格是 `scripts/freshness-gate.mjs` 的**每日执行者**（判据一字未改，仍与
+  # `.githooks/pre-commit` 的 D 组「每档都有主」同一份，§13.5.17 同款）。
+  # 它 2026-10-23 从 PR 那一条撤到这里（ISSUE #2300 主体分权）。
+  #
+  # ⚠️ **env 那一行是这一格存在的理由**：主体=master ⇒ 判据读的是**主干的账**
+  # （`FRESHNESS_TRACKS[*].subject` 现在三档都是 `master`；机器分支
+  # `ci/freshness-ledger` 上是那份权威副本）。PR 上下文读的是同一份账，
+  # 判的却是「这台机器 / 主干怎么被调度」，不是任何一次 PR 的缺陷 ——
+  # 所以 PR 那一格撤了，主体这一栏不许省。
+  #
+  # ⚠️ **位置**：必须排在任何会刷新账的跑法脚本之前（`每日生产构建` /
+  # `每日全量E2E` / `每日单元测试` 三格跑绿后会刷新自己那笔账；同一分支的 stage
+  # 共享同一个工作区 ⇒ 排在它后面时读到的是「刚被这一次运行改过的账」，
+  # 「账是旧的」永远判不出来）。
+  - name: 每日新鲜度账
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
+    env:
+      # 主体=master（`scripts/freshness-ledger.mjs` 的 `contextSubject()`：空 ⇒ "pr"，
+      # 写错的值直接抛）。这一行是这一格与 PR 那格**唯一**的差别。
+      COMFY_CI_SUBJECT: "master"
+    # 秒级；给 5m 只是「卡死要早报」那条量级余量（判据本身远小于它，不需要更宽）。
+    timeout: 5m
   # ── 全量单测**不在这里**：它排在整份清单的最后 ──
   # 理由是业主那句「最容易出问题的放最后」：这一档是这条流水线上唯一会因**这台机的
   # 负载**而单条超时的格子（实测 `cnb-b0l-1k59op66t`：775 份里 1 份红在
@@ -1215,30 +1239,42 @@
     timeout: 10m
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/premerge-check.mjs --only=claims
 
-  # ── 新鲜度账判决（平台侧的第二个执行者，ISSUE #1979）──
+  # ── 新鲜度账判决（2026-10-23 从 PR 那一条撤到**每日档**；ISSUE #2300 主体分权）──
   #
-  # 与本仓 `.githooks/pre-commit` 的 D 组「每档都有主」跑的是**同一份**判据
-  # （`scripts/freshness-gate.mjs`，判据一字未改，只是多了一个执行者，§13.5.17 同款）。
+  # 判据本体**一字未改**（仍是 `scripts/freshness-gate.mjs`，与本仓 `.githooks/pre-commit`
+  # 的 D 组「每档都有主」同一份，§13.5.17 同款）；改的只是**它在哪一条流水线上跑**。
   #
-  # 为什么值得在平台侧再判一次：本地那一步只有在「提交那一刻」才会响，而平台侧是
-  # **每条 PR** 都过一遍 —— 于是「这个 PR 的源分支上账是旧的」会在合并之前被机器说出来，
-  # 而不是等到某个人下一次本地提交才被拦（那一次对应的修订号已经不是这个 PR 的了）。
+  # 为什么撤（这一条是主体分权的直接后果）：**PR 上下文读的是主干的账**。
+  # `FRESHNESS_TRACKS` 三档的 `subject` 现在都是 `master`
+  # （`scripts/freshness-ledger.mjs` 的 `contextSubject()` 读 `COMFY_CI_SUBJECT`，
+  # 空 ⇒ `"pr"`），而那一档的**权威账在机器自有分支 `ci/freshness-ledger` 上** ——
+  # 那是**主干**的账（每日档在 master HEAD 上跑出来的那一份）。
+  # 于是 PR 这一格判的是「这台机器 / 主干怎么被调度」，**不是任何一次 PR 的缺陷**
+  # （与 `.gates` 里「工作区复用读数」那段同一句原则）。留在 PR 上，它只会把主干的红
+  # 算到这次 PR 头上 —— 那正是「判据主体分权」要治的那件事。
   #
-  # ⚠️ **位置必须在这条流水线的「跑法脚本」之前**，而且不是风格问题：跑法脚本
-  # （`artifact-run.mjs` / `full-suite-run.mjs`）跑绿之后**会刷新自己那笔账**
-  # （`scripts/.artifact-freshness.json` / `.full-suite-freshness.json`），而同一分支的
-  # stage 共享同一个工作区 —— 排在它后面时这一步读到的是**刚被这一次运行改过的账**，
-  # 于是「源分支上账是旧的」这件事**永远判不出来**（判据在场、结论恒放行，
-  # 正是本仓最不能有的形态）。判据在 `tests/doc-check-hook-wiring.test.ts`：它把
-  # 「PR 清单里凡刷新账的档都排在这一步之后」判成一条，而**此刻 PR 上一格都没有** ——
-  # `生产构建` / `单元测试` / `E2E 关键流程` 三格都在每天 00:00 那一条（其中 E2E 那一格
-  # 是 2026-10-19 被同一件事挤出去的，见下面那段），所以这一步读到的是源分支带进来的那份账，
-  # 比原来判得更纯。纯文本 + 几次 git 调用、
-  # 零依赖，放在这个位置代价是零。
-  - name: 新鲜度账
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
-    # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
-    timeout: 5m
+  # 每日那一格叫 `每日新鲜度账`（`.daily-gates` 里），`script` 与这里**逐字相同**，
+  # env 多带一行 `COMFY_CI_SUBJECT: "master"`（主体=master ⇒ 读机器分支那份权威账）。
+  # 判据钉住这一对：PR 清单里不许再有它、每日清单里必须有那一格、那一格点的仍是
+  # `scripts/freshness-gate.mjs`（`tests/no-platform-ci-config.test.ts` 的
+  # `PR_MOVED_TO_DAILY`；恢复动作与 `ESLint 零警告` 那条同款）。
+  #
+  # ⚠️ **位置约束整套搬到了每日那一条**：跑法脚本
+  # （`artifact-run.mjs` / `full-suite-run.mjs` / `e2e-run.mjs`）跑绿之后**会刷新自己那笔账**，
+  # 而同一分支的 stage 共享同一个工作区 —— 排在它后面时这一步读到的是**刚被这一次
+  # 运行改过的账**，于是「账是旧的」这件事**永远判不出来**（判据在场、结论恒放行，
+  # 正是本仓最不能有的形态）。
+  # 每日档里会刷新账的三格是 `每日生产构建` / `每日全量E2E` / `每日单元测试`
+  # ⇒ `每日新鲜度账` 排在它们**之前**（判据：`tests/doc-check-hook-wiring.test.ts`
+  # 的「每日档里凡刷新账的档都排在它之后」那一组）。
+  #
+  # 恢复动作：取消下面三行注释 → 名字挪回 `COMFYAPP_CI_GATES` → 从
+  # `COMFYAPP_CI_DISABLED_GATES` 删掉 → 删掉 `.daily-gates` 里的 `每日新鲜度账`
+  # 与 `COMFYAPP_CI_DAILY_GATES` 里的名字。
+  #   - name: 新鲜度账
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/freshness-gate.mjs
+  #   # 秒级；给 5m 只是「卡死要早报」这条量级余量（判据本身远小于它，不需要更宽）。
+  #   timeout: 5m
 
   # ── 建库 ──
   # 走 scripts/db-push.mjs —— 它复核库里到底有没有表，失败即非零退出。

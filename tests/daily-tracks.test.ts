@@ -175,6 +175,34 @@ describe("三档的登记形状（§11.8）", () => {
     }
   });
 
+  it("每一档都登记了主体（判据主体分权）：只认 pr / master，且主体=master 的执行者落在每日档", () => {
+    /* 主体答的是「**这一次是谁在判**」：`"pr"` = 本 PR（工作树那份账；PR 流水线与本地钩子
+     * 都是它），`"master"` = 主干（每日档在 master HEAD 上跑出来的那一份；机器分支
+     * `ci/freshness-ledger` 上是它的权威副本）。
+     *
+     * ⚠️ **主体=master ⇒ 那一档的账是主干的账** ⇒ 它的执行者必须落在**每日档**上：
+     * 主干的账由每天 00:00 那一跑刷新，PR 流水线里没有、也不该有它的执行者。
+     *
+     * 这一条只判**登记层**（主体记对了没）；「那一格在不在每日清单里」由
+     * `tests/no-platform-ci-config.test.ts` 的 `PR_MOVED_TO_DAILY` 那条与
+     * `tests/doc-check-hook-wiring.test.ts` 的「每日侧有『每日新鲜度账』这一步」那条判
+     * —— 三处各管一段，不在这里抄第二份清单解析器（§12.12 / §12.18）。 */
+    for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
+      const subject = String(track.subject ?? "").trim();
+      expect(
+        ["pr", "master"],
+        `${kind}.subject 写成了「${subject}」—— 只认 pr / master（主体答的是「这一次是谁在判」）`,
+      ).toContain(subject);
+      if (subject !== "master") continue;
+      expect(
+        String(track.ciStage ?? "").trim().startsWith("每日"),
+        `${kind}（主体=master）的执行者 ${track.ciStage} 不在每日档上 —— 主干的账只能由` +
+          "每日那一跑刷新与判读",
+      ).toBe(true);
+    }
+  });
+
+
   it("三份账**不共用一个文件**，三个键也互不相同", () => {
     // 共用 = 跑 A 档的绿把 B 档的自证覆盖掉，而账面上完全正常（同一个日期、同一个人）。
     const ledgers = Object.values(FRESHNESS_TRACKS).map((t) => t.ledger);
