@@ -22,6 +22,7 @@
  * 口径见规范 §13.5.20。
  */
 import fs from "node:fs";
+import type { Dirent } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -31,6 +32,7 @@ import {
   FINGERPRINT_FILE,
   changedFiles,
   decideInstall,
+  ensurePnpmOnPath,
   main,
   pnpmInstallFingerprint,
   readInstallFingerprint,
@@ -380,5 +382,151 @@ describe("接槽执行档的三条出口", () => {
     } finally {
       delete process.env.COMFY_CI_SLOT;
     }
+  });
+});
+
+/**
+ * pnpm 的落点发现（ISSUE #2281）。
+ *
+ * ## 现场
+ *
+ * 同一台自托管节点、同一个时刻：开发者会话里 `pnpm -v` 一直正常（`C:\Users\…\pnpm`
+ * 在 PATH 上），而平台上十几格齐刷刷写「pnpm 不可用」—— 那些格跑在**服务账号会话**
+ * 里，它的 PATH 一条也不含 pnpm。两句话都对，所以「再补一条判据」读不懂这件事：
+ * 缺的是「把 pnpm 放回 PATH」这一步。
+ *
+ * ## 钉住的四件事
+ *
+ * ① PATH 上本来就能跑 ⇒ **一次都不动 PATH**（不许为了省事无条件前插）；
+ * ② PATH 上一个能跑的都没有、而 corepack 的落点里有 `pnpm-native.exe` ⇒ 把它的
+ *    目录拼到最前，并且**真的起得来**（`-v` 退 0 且打出版本号才算）；
+ * ③ 候选存在但起不来（shebang / `.cmd` 那一族）⇒ 不许当选，继续往后找；
+ * ④ 哪儿都没有 ⇒ 如实报「问过哪几处」，并且**不装**（装是机器上的动作）。
+ */
+describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", () => {
+  /* 「盘上还有哪些**目录**」—— 落点必须先存在，里面才谈得上有没有候选。
+   * `exists` 同时回答这两问（真盘上 `fs.existsSync` 也是同一个判据）。 */
+  const dirs = new Set<string>();
+  /** 一个假的盘：`existing` 是「盘上有这些文件」，`working` 是「这些起得来」。 */
+  const mount = (files: Record<string, { ok: boolean }>) => ({
+    exists: (p: string) => files[p] !== undefined || dirs.has(p),
+    spawn: (cmd: string) => {
+      const hit = files[cmd];
+      if (!hit) return { status: null, stdout: "", stderr: "", error: "ENOENT" };
+      if (!hit.ok) {
+        return { status: 1, stdout: "", stderr: "usage", error: null };
+      }
+      return { status: 0, stdout: "12.4.1\n", stderr: "", error: null };
+    },
+  });
+
+  const LOCAL = path.join("C:", "Users", "svc", "AppData", "Local");
+  const baseEnv = () =>
+    ({ LOCALAPPDATA: LOCAL, PATH: "" }) as unknown as NodeJS.ProcessEnv;
+  /** 只造得出 `isDirectory` 的那几项 —— 被测判据只用它，别的字段与结论无关。 */
+  const dirEntry = (name: string) =>
+    ({ name, isDirectory: () => true }) as unknown as Dirent;
+
+  it("PATH 上本来就能跑 ⇒ 不动 PATH（不许无条件前插）", () => {
+    dirs.clear();
+    const dir = path.join(LOCAL, "pnpm");
+    dirs.add(dir);
+    const exe = path.join(dir, "pnpm.exe");
+    const { exists, spawn } = mount({ [exe]: { ok: true } });
+    const env = { ...baseEnv(), PATH: dir };
+    const before = env.PATH;
+    const r = ensurePnpmOnPath({
+      platform: "win32",
+      env,
+      exists,
+      spawn,
+      write: () => undefined,
+    });
+    expect(r.bootstrapped).toBe(false);
+    expect(r.dir).toBeNull();
+    expect(env.PATH, "本来就能跑却改了 PATH").toBe(before);
+  });
+
+  it("PATH 上只有起不来的形态时，改用 corepack 落点里的 .exe 并拼到最前", () => {
+    /* corepack 摆在盘上的是三个同名不同扩展：无扩展名 `pnpm` 是 shebang（Node 起不了）、
+     * `pnpm-native.exe` 才是真的可执行 —— 而同目录里**没有** `.cmd`。 */
+    dirs.clear();
+    const bin = path.join(LOCAL, "pnpm");
+    const shim = path.join(bin, "pnpm");
+    const store = path.join(LOCAL, "node", "corepack", "v1", "pnpm");
+    const v12 = path.join(store, "12.4.1");
+    const v11 = path.join(store, "11.25.0");
+    dirs.add(bin);
+    dirs.add(store);
+    const native12 = path.join(v12, "pnpm-native.exe");
+    const native11 = path.join(v11, "pnpm-native.exe");
+    const { exists, spawn } = mount({
+      [shim]: { ok: false },
+      [native12]: { ok: true },
+      [native11]: { ok: true },
+    });
+    const env = { ...baseEnv(), PATH: bin };
+    const lines: string[] = [];
+    const r = ensurePnpmOnPath({
+      platform: "win32",
+      env,
+      exists,
+      spawn,
+      readDir: (p: string) =>
+        p === store
+          ? [
+              dirEntry("11.25.0"),
+              dirEntry("12.4.1"),
+            ]
+          : [],
+      write: (s) => lines.push(s),
+    });
+    expect(r.bootstrapped).toBe(true);
+    // 版本取最高那一版（`12.4.1` 而不是字典序更大的 `11.25.0`）。
+    expect(r.dir).toBe(v12);
+    expect(env.PATH.startsWith(`${v12};`), `PATH 没被前插：${env.PATH}`).toBe(true);
+    // 起不来的那个必须留一条读数 —— 否则「为什么没用 PATH 上那个」无从回答。
+    expect(r.consulted.join("\n")).toContain(shim);
+    expect(lines.join("")).toContain("PATH 上没有可用的 pnpm");
+  });
+
+  it("落点里有候选但一个都起不来 ⇒ 不当选，也不装", () => {
+    dirs.clear();
+    const store = path.join(LOCAL, "node", "corepack", "v1", "pnpm");
+    const v12 = path.join(store, "12.4.1");
+    dirs.add(store);
+    const { exists, spawn } = mount({
+      [path.join(v12, "pnpm-native.exe")]: { ok: false },
+      [path.join(v12, "bin", "pnpm.cjs")]: { ok: false },
+    });
+    const env = { ...baseEnv() };
+    const r = ensurePnpmOnPath({
+      platform: "win32",
+      env,
+      exists,
+      spawn,
+      readDir: (p: string) =>
+        p === store ? [dirEntry("12.4.1")] : [],
+      write: () => undefined,
+    });
+    expect(r.bootstrapped).toBe(false);
+    expect(r.probing, "起不来的候选被当成了结论").toBeNull();
+    expect(env.PATH, "什么都没找到却改了 PATH").toBe("");
+    expect(r.consulted.join("\n")).toContain("退 1");
+  });
+
+  it("问过的每一处都留读数（下一动作是照着它去机器上核，不是再猜一轮）", () => {
+    dirs.clear();
+    const r = ensurePnpmOnPath({
+      platform: "win32",
+      env: { ...baseEnv() },
+      exists: () => false,
+      spawn: () => ({ status: null, stdout: "", stderr: "", error: "ENOENT" }),
+      write: () => undefined,
+    });
+    expect(r.probing).toBeNull();
+    const text = r.consulted.join("\n");
+    expect(text).toContain("corepack");
+    expect(text).toContain("目录不在");
   });
 });

@@ -65,9 +65,61 @@ function sameVersion(a, b) {
   return a.replace(/^v/, "") === b.replace(/^v/, "");
 }
 
+/**
+ * corepack 的落点（`%LOCALAPPDATA%\node\corepack\v1\pnpm\<ver>`，取最高那一版）。
+ *
+ * 为什么要它：平台节点走的是**服务账号**会话，PATH 与开发者会话不是同一份 ——
+ * 实测同一台机上 `pnpm -v` 一直正常，而平台那十几格齐刷刷写「pnpm 不可用」。
+ * 那条路径**从不在 PATH 上**，里面的 `pnpm-native.exe` 却是真的可执行（实测
+ * 12.4.1，`-v` 退 0）；把它拼进 PATH 就够了，**不必联网 `corepack prepare`** ——
+ * 后者在节点上还要下一整套，且与「机器上已经有了」是两件事（ISSUE #2281）。
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string | null} 可用的目录（拼进 PATH 用）；找不到时 null
+ */
+function corepackShippedDir(env = process.env) {
+  const store = path.join(
+    String(env.LOCALAPPDATA ?? path.join(env.USERPROFILE ?? "", "AppData", "Local")),
+    "node",
+    "corepack",
+    "v1",
+    "pnpm",
+  );
+  let versions = [];
+  try {
+    versions = fs
+      .readdirSync(store, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && /^\d+\.\d+\.\d+/.test(d.name))
+      .map((d) => d.name)
+      .sort((a, b) => {
+        const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
+        const pb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
+        for (let i = 0; i < 3; i += 1) if (pa[i] !== pb[i]) return pa[i] - pb[i];
+        return 0;
+      })
+      .reverse();
+  } catch {
+    return null;
+  }
+  for (const v of versions) {
+    const dir = path.join(store, v);
+    if (fs.existsSync(path.join(dir, "pnpm-native.exe"))) return dir;
+  }
+  return null;
+}
+
 const result = orchestratePnpm({ root });
 
 if (!result.probe.ok) {
+  const shipped = process.platform === "win32" ? corepackShippedDir() : null;
+  if (shipped) {
+    say("[INFO]", `corepack 的落点上已有 pnpm：${shipped}`);
+    say("[INFO]", "PATH 上没有它（多半是另一个执行账号的会话）。临时用它评估本机：");
+    process.stdout.write(
+      `         [动作] $env:PATH = "${shipped};" + $env:PATH   # PowerShell\n` +
+        `                或把这一条加进该账号的 PATH（持久生效）\n`,
+    );
+  }
   say("[ERROR]", "pnpm 不可用 —— 启动链路会在工具链门禁处停下。");
   process.stdout.write("\n");
   process.stdout.write(result.tip ?? "（没有可用的修复提示，请检查 launcher-core/corepack.mjs 的 buildTip）\n");

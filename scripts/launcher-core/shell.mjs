@@ -242,9 +242,18 @@ export function hostUnsafeArgs(args, viaHost) {
  *     非零退出」分开报 —— 前者 stderr 通常是空的，只报退出码等于没说原因，
  *     而旧写法 `status ?? 0` 会把它读成**成功**（ISSUE #576 的形态）。
  *
+ * `command` 是**已经解析好的形态**（`{command, prefixArgs}`）：给了就照它起，
+ * 不再走 `pnpmInvocation()`。它存在是因为「PATH 上没有 pnpm、但盘上找到了它」
+ * 这条路（平台的服务账号会话，ISSUE #2281）：那一侧的**发现**由
+ * `ci-install-deps.mjs` 的 `ensurePnpmOnPath()` / `pnpmCli()` 做（它真起过 `-v`），
+ * 而这里的形态判据按 `PATH × 扩展名` 找候选、看不到 `pnpm-native.exe` 这种名字 ——
+ * 再把两者串起来只会得到「判据看得见、安装看不见」。**判据仍然只有一份**：
+ * 这里不重新判定，只接受调用方给出的、已经被验证过的形态。
+ *
  * @param {string[]} [args] 接在 pnpm 后面的参数
  * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number,
- *           stdio?: "pipe"|"inherit"|"ignore", name?: string, platform?: NodeJS.Platform }} [options]
+ *           stdio?: "pipe"|"inherit"|"ignore", name?: string, platform?: NodeJS.Platform,
+ *           command?: { command: string, prefixArgs: string[] } | null }} [options]
  * @returns {{ ok: boolean, stdout: string, stderr: string, status: number | null,
  *             error: NodeJS.ErrnoException | null, command: string, args: string[] }}
  *   `status === null && error` = 命令没起来（判据是 `error`，不是退出码）
@@ -258,9 +267,16 @@ export function runPnpmSync(
     stdio = "pipe",
     name = "pnpm",
     platform = process.platform,
+    command = null,
   } = {},
 ) {
-  const invocation = pnpmInvocation(args, { env, platform, name });
+  const invocation = command
+    ? {
+        command: command.command,
+        args: [...command.prefixArgs, ...args],
+        viaHost: command.prefixArgs.length > 0,
+      }
+    : pnpmInvocation(args, { env, platform, name });
   if (!invocation) {
     return {
       ok: false,

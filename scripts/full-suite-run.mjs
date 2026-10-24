@@ -33,6 +33,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { resolveCiWorkers } from "./ci-load.mjs";
+import { pnpmCli } from "./ci-install-deps.mjs";
 /* 分文件耗时的形状与钩子那一档**共用同一份解析**（`parseJunitXml`）：本地账本与 CI 日志
  * 报的是同一个量的两种形状，抄两份解析器就会在「谁把外层 `<testsuites>` 当成一个文件」
  * 这种地方分叉，而那类分叉只会让读数偏，不会让它红。 */
@@ -545,9 +546,13 @@ async function main(argv) {
     return 0;
   }
   const wallStart = Date.now();
+  /* 平台节点上 PATH 里没有 pnpm（服务账号会话，ISSUE #2281）：先找落点再起，
+   * 形态仍只有 `pnpmCli` 一份实现。 */
+  const cli = pnpmCli();
   const res = runPnpmSync(run.args, {
     cwd: ROOT,
     stdio: "inherit",
+    command: cli,
     timeoutMs: FULL_SUITE_TIMEOUT_MS,
   });
   const wallMs = Date.now() - wallStart;
@@ -619,6 +624,7 @@ async function main(argv) {
           const res2 = runPnpmSync(["exec", "vitest", ...args], {
             cwd: ROOT,
             stdio: "pipe",
+            command: cli,
             timeoutMs: RERUN_TIMEOUT_MS,
           });
           const out = `${String(res2.stdout ?? "")}\n${String(res2.stderr ?? "")}`;
