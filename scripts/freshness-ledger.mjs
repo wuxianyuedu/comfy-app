@@ -104,7 +104,7 @@ export function gitUser(fallback) {
  * 加 `ciStage` 那一栏时三处都要记得改，而漏改一处表现为「调用方读不到它」（TS 报
  * 属性不存在）或「判据读到 undefined」（运行时恒不成立）—— 两种都不是配置的样子。
  *
- * @typedef {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number, ciStage: string}} FreshnessTrack
+ * @typedef {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number, ciStage: string, subject: "pr" | "master"}} FreshnessTrack
  */
 
 /**
@@ -142,6 +142,10 @@ export const FRESHNESS_TRACKS = {
      * 还无人知晓」那一格由它守着；整档那一层由「动了面 ⇒ 当天证」与 7 天宽限两道夹住。 */
     graceMs: 7 * 86_400_000,
     ciStage: "每日全量E2E",
+    /* 主体=master：这一档的**权威**账在机器分支 `ci/freshness-ledger` 上（每日档在
+     * master HEAD 上跑出来的那一份）⇒ 它是**主干**的账。PR 上下文不许拿它判红
+     * （那判的是「这台机器 / 主干怎么被调度」，不是任何一次 PR 的缺陷）。 */
+    subject: "master",
   },
   full: {
     ledger: "scripts/.full-suite-freshness.json",
@@ -154,6 +158,8 @@ export const FRESHNESS_TRACKS = {
     dirtyHow: 'node scripts/full-suite-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
     ciStage: "每日单元测试",
+    /* 主体=master：同 e2e 那一档 —— 权威账在机器分支，是主干的账。 */
+    subject: "master",
   },
   artifact: {
     ledger: "scripts/.artifact-freshness.json",
@@ -173,8 +179,35 @@ export const FRESHNESS_TRACKS = {
     dirtyHow: 'node scripts/artifact-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
     ciStage: "每日生产构建",
+    /* 主体=master：同 e2e 那一档 —— 权威账在机器分支，是主干的账。 */
+    subject: "master",
   },
 };
+
+/**
+ * 「这一次判决的主体」—— `COMFY_CI_SUBJECT`（`"pr"` / `"master"`）。
+ *
+ * 主体答的是「这一次是谁在判」：`"pr"` = 本 PR（工作树那份账；PR 流水线与本地钩子都是它），
+ * `"master"` = 主干（每日档在 master HEAD 上跑出来的那一份；机器分支 `ci/freshness-ledger`
+ * 上是它的权威副本）。
+ *
+ * ⚠️ **未设置时取 `"pr"`**：本地 / 开发者上下文不是主干，而「拿主干的账去判红别人的提交」
+ * 正是主体分权要治的那件事（`.cnb.yml` 里「工作区复用读数」那段同一句原则：「它判的是这台
+ * 机器怎么被调度，那不是任何一次 PR 的缺陷」）。
+ * ⚠️ **写错的值抛而不是回落**（沿用下面 `freshnessTrack()` 那条纪律）：拼错的
+ * `COMFY_CI_SUBJECT` 若回落成 `"pr"`，后果是「master 上下文悄悄读不到权威账」——
+ * 账面上完全正常，而那一侧谁都不判了。
+ *
+ * @returns {"pr" | "master"}
+ */
+export function contextSubject() {
+  const raw = String(process.env.COMFY_CI_SUBJECT ?? "").trim();
+  if (raw === "") return "pr";
+  if (raw === "pr" || raw === "master") return raw;
+  throw new Error(
+    `[freshness-ledger] COMFY_CI_SUBJECT 的值不认："${raw}"（只认 pr / master）`,
+  );
+}
 /**
  * 取一档的登记（未知的 kind 是**编码错误**，抛而不是回落 —— 回落会让「新加一档却忘了
  * 登记」表现成「按键名当档名」而照样跑绿）。
