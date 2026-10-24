@@ -113,10 +113,51 @@ if (pythonPreflight?.interpreter && executorEnv[COMFY_CLI_PYTHON_KEY]) {
  */
 const COLD_COMPILE_WORKERS = 2;
 
-/** webServer 能起的两档，逐字就是 Playwright 要执行的命令。 */
+/**
+ * webServer 能起的两档的**参数部分**（可执行文件不在这里，见 {@link pnpmWebServerCommand}）。
+ *
+ * 为什么拆开（ISSUE #2281）：平台节点是服务账号会话，PATH 里没有 pnpm，而
+ * `pnpm-native.exe` 这个名字也不在 `PATH × 扩展名` 的候选集里 —— 直接写 `"pnpm dev"`
+ * 交给 webServer 起，在那一档上必然失败，而且报出来的是「webServer 超时」
+ * （180s），指不到「PATH 上没有 pnpm」。
+ */
+export const E2E_SERVER_ARGS = {
+  dev: ["dev"],
+  start: ["start"],
+} as const;
+
+/**
+ * 一条 webServer 命令：`<解析出来的 pnpm> dev|start`。
+ *
+ * 解析只看 `COMFY_E2E_PNPM`（由 `scripts/e2e-run.mjs` 的 `pnpmCli()` 写进子进程环境）：
+ * **本文件不自己去扫盘** —— 那是 `ci-install-deps.mjs` 的 `ensurePnpmOnPath()` 一份实现，
+ * 而本文件是 Playwright 的入口，加载它只为了拿一条路径会把「怎么找 pnpm」变成两份
+ * （与下面 `resolveWebServerCommand` 那段「两处刻意不互相 import」同一条理由）。
+ * 没有那个变量时退回裸名字 `pnpm`：本地开发机 PATH 上本来就有它。
+ *
+ * @param {"dev" | "start"} mode
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string} 交给 webServer 的命令行
+ */
+export function pnpmWebServerCommand(
+  mode: "dev" | "start",
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const exe = String(env.COMFY_E2E_PNPM ?? "").trim() || "pnpm";
+  /* 空白路径要加引号 —— webServer 的命令行是交给 shell 拼的。 */
+  const quoted = /\s/.test(exe) ? `"${exe}"` : exe;
+  return [quoted, ...E2E_SERVER_ARGS[mode]].join(" ");
+}
+
+/**
+ * 兼容名：两档命令的**默认形态**（没注入 `COMFY_E2E_PNPM` 时就是 `pnpm dev` / `pnpm start`）。
+ *
+ * 保留它是因为它一直是别人 import 的入口（`tests/e2e-runtime-budget.test.ts` 拿它做
+ * 两份实现的对账）；对账比的是**参数部分**，可执行名由 {@link pnpmWebServerCommand} 决定。
+ */
 export const E2E_SERVER_COMMANDS = {
-  dev: "pnpm dev",
-  start: "pnpm start",
+  dev: pnpmWebServerCommand("dev", {} as NodeJS.ProcessEnv),
+  start: pnpmWebServerCommand("start", {} as NodeJS.ProcessEnv),
 } as const;
 
 /**
@@ -164,8 +205,8 @@ export function resolveWebServerCommand(
   const explicit = String(env.COMFY_E2E_SERVER ?? "")
     .trim()
     .toLowerCase();
-  if (explicit === "dev") return E2E_SERVER_COMMANDS.dev;
-  if (explicit === "start") return E2E_SERVER_COMMANDS.start;
+  if (explicit === "dev") return pnpmWebServerCommand("dev", env);
+  if (explicit === "start") return pnpmWebServerCommand("start", env);
   if (explicit !== "") {
     throw new Error(
       `COMFY_E2E_SERVER 的值认不出来："${env.COMFY_E2E_SERVER}"（只认 dev / start）—— ` +
@@ -174,8 +215,8 @@ export function resolveWebServerCommand(
     );
   }
   return env.CI || env.PNPM_START
-    ? E2E_SERVER_COMMANDS.start
-    : E2E_SERVER_COMMANDS.dev;
+    ? pnpmWebServerCommand("start", env)
+    : pnpmWebServerCommand("dev", env);
 }
 
 /**

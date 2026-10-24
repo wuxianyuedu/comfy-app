@@ -333,6 +333,44 @@ export function runInstallWithSlot(_expected, deps = {}) {
 }
 
 /**
+ * 造一个「要跑 pnpm 的那一格」用的命令形态（ISSUE #2281）。
+ *
+ * ## 它治的是哪一格
+ *
+ * 平台节点上**同一份代码**在两种执行上下文里给出相反结论：`Install dependencies`
+ * 经过本文件的 `ensurePnpmOnPath()` 之后能跑通，而后面的 `同步数据库表结构` /
+ * `每日生产构建` / `每日全量E2E` 直接 `pnpm …`，照样报 `pnpm not found on PATH`
+ * —— 它们跑在另一个进程里，没有谁替它们把 pnpm 放回去。
+ *
+ * ## 为什么不是在每一格里再调一次 `ensurePnpmOnPath`
+ *
+ * 那会把「找 pnpm」这件事复制到每一个消费点（§12.18）。这里只做一件事：把
+ * 同一条发现逻辑包成「命令名 + 前缀参数」，让调用方按 `<pnpm> <args…>` 拼即可 ——
+ * 发现仍然只有一份实现。
+ *
+ * ## 返回值
+ *
+ * `command` 一定是绝对路径（不再依赖 PATH，也就不受各个 stage 的 PATH 差异影响）；
+ * `prefixArgs` 恒为空（本文件只认真可执行，不经宿主）。**找不到时 `command` 退回
+ * 裸名字 `pnpm`** —— 与各脚本原来的行为一致，错误由它们自己报，这里不替它们判红。
+ *
+ * @param {{platform?: NodeJS.Platform, env?: NodeJS.ProcessEnv, write?: (s: string) => void}} [deps]
+ * @returns {{command: string, prefixArgs: string[], resolved: boolean}}
+ */
+export function pnpmCli(deps = {}) {
+  const write = deps.write ?? ((s) => process.stdout.write(s));
+  const boot = ensurePnpmOnPath({ ...deps, write });
+  if (boot.probing === null) {
+    write(
+      `[ci-install-deps] ⚠ 这一格没找到可用的 pnpm（${boot.detail}）⇒ 仍按裸名字 \`pnpm\` 起，` +
+        "失败由调用方报\n",
+    );
+    return { command: "pnpm", prefixArgs: [], resolved: false };
+  }
+  return { command: boot.probing, prefixArgs: [], resolved: true };
+}
+
+/**
  * 起进程并收场 —— 平台侧**只有这一条**出口（ISSUE #2281）。
  *
  * 为什么必须自己判「起没起来」：`spawnSync` 返回 `error` 且 `status` 为 `null` 时，
@@ -345,7 +383,7 @@ export function runInstallWithSlot(_expected, deps = {}) {
  * @returns {{status: number | null, stdout: string, stderr: string, error: string | null}}
  *   与 `runPnpmSync` 同形：`error` 非空 = **命令没起来**（不是「跑完但非零」）。
  */
-function spawnSettled(command, args, options) {
+export function spawnSettled(command, args, options) {
   const res = spawnSync(command, args, options);
   const err = res.error
     ? /** @type {Error & {code?:string}} */ (res.error).code ||
