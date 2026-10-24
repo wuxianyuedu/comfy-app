@@ -1417,8 +1417,11 @@
   #   第 2 条），平台也不给「同时跑几条」的旋钮 —— 那么配置里那个常数就与「这台机现在
   #   几个核」**没有任何联系**。节点换规格、或同一台机上多了第二条流水线时，它照旧按
   #   16 核铺开，现场形态是「既不推进也不报错」。现在由 `scripts/ci-load.mjs` 从
-  #   `CNB_CPUS` 与 `os.availableParallelism()` 读现场核数、按「一个 worker 至少 4 核」
-  #   折算（唯一出处，判据见 `tests/ci-load.test.ts`；人还能用
+  #   `CNB_CPUS` 与 `os.availableParallelism()` 读现场核数、按「一个 worker 至少 8 核」
+  #   折算（16 核 ⇒ 2 个 worker；档位从 4 抬到 8 的理由与三条边界见规范 §13.5.21，
+  #   ISSUE #2317：`受影响用例` 一格占整条流水线七成格时，这一档买的是「单条流水线
+  #   别占满整台机」，代价是墙钟大约翻倍 —— 那是要换的东西，不是回归。唯一出处，
+  #   判据见 `tests/ci-load.test.ts`；人还能用
   #   `COMFY_CI_MAX_WORKERS=1` 再压一档）。
   #
   #   ⚠️ **恢复时入口写 `scripts/full-suite-run.mjs`，不是裸 vitest**（ISSUE #1979）：

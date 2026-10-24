@@ -128,12 +128,7 @@ describe("ci-affected-tests — 改动面从哪来", () => {
     });
     expect(calls[0]).toEqual(["merge-base", "origin/master", "HEAD"]);
     /* 兜底档与 PR 档同用 `--name-status -M`：`--name-only` 会把旧路径吃掉。 */
-    expect(calls[1]).toEqual([
-      "diff",
-      "--name-status",
-      "-M",
-      "base123..HEAD",
-    ]);
+    expect(calls[1]).toEqual(["diff", "--name-status", "-M", "base123..HEAD"]);
   });
 
   it("连 fallback 引用都取不到 ⇒ 退 2 的理由说得清", () => {
@@ -200,6 +195,32 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
     });
+    expect(code).toBe(1);
+  });
+
+  it("并发读数在**收尾也念一次**，且带子进程原值退出码（ISSUE #2317）", () => {
+    /* 为什么要有这一条：那行读数原本只在**开头**打 —— 而平台对超长 stage 日志
+     * 截掉的正是开头那一段（实测某跑第 2 行就是 `The log length exceeds the limit(102400)`），
+     * 于是「这一跑开了几个并发」在页面上根本读不回来。尾部必须有同一件事实。 */
+    const { spawn } = fakeSpawn(1);
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = main({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", CNB_CPUS: "16" },
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      writeOut: (t: string) => out.push(t),
+      writeErr: (t: string) => err.push(t),
+    });
+    const tail = err.join("");
+    expect(tail).toContain("收尾复述");
+    /* 档位是 8 核一个 worker：16 核 ⇒ 2（这一档买的是「单条流水线少占 CPU」）。 */
+    expect(tail).toContain("--maxWorkers=2");
+    expect(tail).toContain("16 核，CNB_CPUS");
+    expect(tail).toContain("退出码 1");
+    /* 开头那行同步降档，两处必须是同一个数 —— 并发只有 ci-load 一个出处。 */
+    expect(out.join("")).toContain("--maxWorkers=2");
+    /* 补这一行不改退码。 */
     expect(code).toBe(1);
   });
 
