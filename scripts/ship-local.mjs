@@ -191,9 +191,10 @@ export function runPushStage(ctx) {
  * （普通提交段在干净时会「跳过提交」）。判定只在两处停：推不出远端、或在 master 上。
  * 这一格是写动作（commit + push），但只读 cnb、不创建 PR、不轮询 —— 由 `ship.mjs`
  * 排在 `--diagnose` 之后、preflight 之前直接返回，与 `--merge` 那一路互斥。
+ * 返回的是三态结论（与 `--diagnose` 那一路同口径）：由 `ship.mjs` 直接 `finish([...])`。
  *
  * @param {{up:{remote:string|null}, branch:string, root:string, log:(s:string)=>void, run:PlatformRun, relay:(r:{stdout:string,stderr?:string})=>void, opt:{dryRun:boolean}}} ctx
- * @returns {{stop: boolean, codes: number[]}}
+ * @returns {number} 三态结论（GREEN / RED / NOT_RUN）
  */
 export function runRerunCiStage(ctx) {
   const { up, branch, log, run, relay, opt } = ctx;
@@ -202,26 +203,26 @@ export function runRerunCiStage(ctx) {
       "[ship] 推不出远端名（既没有上游、也不是「唯一远端」）⇒ 没有 push 执行者，" +
         "rerun 没法触发新 build（这一格不是「通过」：NOT_RUN）。",
     );
-    return { stop: true, codes: [CODE.NOT_RUN] };
+    return CODE.NOT_RUN;
   }
   if (branch === "master" || branch === "HEAD") {
     log(
       `[ship] 当前在 ${branch} 上 ⇒ rerun 要在「有 PR 的分支」上跑，跳过（退 2 提醒：换到 PR 分支再试）。`,
     );
-    return { stop: true, codes: [CODE.NOT_RUN] };
+    return CODE.NOT_RUN;
   }
   const msg = "ci: rerun (ship --rerun-ci)";
   if (opt.dryRun) {
     log("[ship] [dry-run] 将执行：");
     log(`[ship]   git commit --allow-empty --message="${msg}"`);
     log(`[ship]   git push -u ${up.remote} ${branch}`);
-    return { stop: false, codes: [CODE.GREEN] };
+    return CODE.GREEN;
   }
   const cm = run("git", ["commit", "--allow-empty", `--message=${msg}`]);
   relay(cm);
   if (cm.status !== 0) {
     log(`[ship] 空提交失败（exit ${cm.status}）。`);
-    return { stop: true, codes: [CODE.RED] };
+    return CODE.RED;
   }
   const ps = run("git", ["push", "-u", up.remote, branch]);
   relay(ps);
@@ -229,10 +230,10 @@ export function runRerunCiStage(ctx) {
     log(
       `[ship] push 失败（exit ${ps.status}）⇒ 多半是 pre-push 的合并前复算没放行。`,
     );
-    return { stop: true, codes: [CODE.RED] };
+    return CODE.RED;
   }
   const sha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
   log(`[ship] ✓ 已在 ${branch} 推一个空提交（${short(sha)}）触发新 build`);
   log("[ship]   稍后用 pnpm ship --diagnose 看这一跑的结果。");
-  return { stop: false, codes: [CODE.GREEN] };
+  return CODE.GREEN;
 }
