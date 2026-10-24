@@ -47,6 +47,7 @@ import { fileURLToPath } from "node:url";
 import {
   FRESHNESS_TRACKS,
   checkFreshnessLedger,
+  contextSubject,
   dirtiesTrack,
   freshnessReading,
   freshnessStamp,
@@ -65,17 +66,31 @@ const ROOT = path.resolve(HERE, "..");
  * 两条账各写一份「读不出怎么办」时，一边会把坏 JSON 当成空账（判红，话术正确）、
  * 另一边会静默放行 —— 而后者不报错，只是少守一条。
  *
+ * ⚠️ **主体分权**（ISSUE #2300）：机器分支 `ci/freshness-ledger` 上那份是**主干**的账
+ * （每日档在 master HEAD 上跑出来的那一份）。**PR 上下文不读它** —— 它判的是
+ * 「这台机器 / 主干怎么被调度」，那不是任何一次 PR 的缺陷（`.cnb.yml` 里
+ * 「工作区复用读数」那段同一句原则）。读了它 ⇒ 一个 PR 会因为**主干的账旧**而红，
+ * 而那笔账与这次改动毫无关系。只有 master 上下文（每日档）读它，且它是那一侧唯一
+ * 的权威来源。
+ *
  * @param {string} kind `FRESHNESS_TRACKS` 的键
  * @param {string} [root]
+ * @param {"pr" | "master"} [subject] 本次判决的主体（`COMFY_CI_SUBJECT`；未设置取 `"pr"`）
  * @returns {Record<string, unknown>}
  */
-export function readFreshnessLedger(kind = "e2e", root = ROOT) {
+export function readFreshnessLedger(
+  kind = "e2e",
+  root = ROOT,
+  subject = contextSubject(),
+) {
   // ISSUE #2247：平台每日跑绿的账只落在机器自有分支 `ci/freshness-ledger`，
   // 工作树那份是最后一次本地跑（可能已在自己分支、带未合并改动），与机器跑的不一定是
   // 同一份。故**机器账权威**：机器分支有这份账就以它为准，缺失才回退工作树。
   const track = freshnessTrack(kind);
-  const machine = readBranchLedger({ root, rel: track.ledger });
-  if (machine && Object.keys(machine).length > 0) return machine;
+  if (subject === "master") {
+    const machine = readBranchLedger({ root, rel: track.ledger });
+    if (machine && Object.keys(machine).length > 0) return machine;
+  }
   return readFreshnessLedgerAt(root, track.ledger);
 }
 
