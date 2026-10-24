@@ -310,6 +310,226 @@ export function runInstallWithSlot(_expected, deps = {}) {
 }
 
 /**
+ * 起进程并收场 —— 平台侧**只有这一条**出口（ISSUE #2281）。
+ *
+ * 为什么必须自己判「起没起来」：`spawnSync` 返回 `error` 且 `status` 为 `null` 时，
+ * 「落点起不来」（ENOENT / EACCES / 环境过长）与「命令不存在」在只看 status 的人眼里
+ * 逐字同形，而两者的下一动作完全不同（换落点 / 装命令）。
+ *
+ * @param {string} command 可执行文件
+ * @param {string[]} args 参数
+ * @param {import("node:child_process").SpawnSyncOptionsWithStringEncoding} options spawn 选项
+ * @returns {{status: number | null, stdout: string, stderr: string, error: string | null}}
+ *   与 `runPnpmSync` 同形：`error` 非空 = **命令没起来**（不是「跑完但非零」）。
+ */
+function spawnSettled(command, args, options) {
+  const res = spawnSync(command, args, options);
+  const err = res.error
+    ? /** @type {Error & {code?:string}} */ (res.error).code ||
+      String(res.error.message ?? res.error)
+    : null;
+  return {
+    status: res.status ?? null,
+    stdout: String(res.stdout ?? ""),
+    stderr: String(res.stderr ?? ""),
+    error: err,
+  };
+}
+
+/**
+ * 版本号按段做数值比较（`11.25.0` < `12.4.1`；字典序会判反）。
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number} <0 / 0 / >0，与 `Array#sort` 的约定一致
+ */
+function compareVersions(a, b) {
+  const pa = a.split(/[.-]/);
+  const pb = b.split(/[.-]/);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const na = Number.parseInt(pa[i] ?? "0", 10);
+    const nb = Number.parseInt(pb[i] ?? "0", 10);
+    if (Number.isNaN(na) || Number.isNaN(nb)) {
+      const cmp = String(pa[i] ?? "").localeCompare(String(pb[i] ?? ""));
+      if (cmp !== 0) return cmp;
+      continue;
+    }
+    if (na !== nb) return na - nb;
+  }
+  return 0;
+}
+
+/**
+ * 某个落点的候选清单（按「最可能起得来」排序）。
+ *
+ * 两个落点的形状**不一样**：
+ *   · corepack（`<落点>/<版本>/`）：`pnpm-native.exe` 与无扩展名 `pnpm` 并排，后者是
+ *     shebang、Node 起不了 —— 先试 `.exe`；
+ *   · pnpm 自己的落地目录（`<落点>/`）：`pnpm.exe` 与无扩展名垫片并排。
+ *
+ * @param {string} base 某一版的落点
+ * @param {boolean} versioned 这个落点是不是 corepack 的版本目录
+ * @returns {string[]} 候选（绝对路径）
+ */
+function storeCandidates(base, versioned) {
+  const names = versioned
+    ? ["pnpm-native.exe", "pnpm.exe"]
+    : ["pnpm.exe", "pnpm-native.exe"];
+  return [...names.map((n) => path.join(base, n)), path.join(base, "bin", "pnpm.cjs")];
+}
+
+/**
+ * 把 pnpm 放回 PATH（ISSUE #2281）。
+ *
+ * ## 为什么这一步必须存在
+ *
+ * 平台节点走的是**服务账号**会话，它的 PATH 与开发者会话不是同一份。实测（本单那两份
+ * 日志）：开发者会话里 `C:\Users\yuedu\AppData\Local\pnpm` 就在 PATH 上、`pnpm -v`
+ * 一直正常；同一个时刻平台那些格读到的 PATH 一条也不含它 ⇒ 判据判的是「这个账号
+ * 看不见」，日志却写成「pnpm 不可用」。两句话都对，所以补判据不解决问题 ——
+ * 缺的是「把 pnpm 放回来」这一步。
+ *
+ * ## 做的是「发现」，不是「装」
+ *
+ * 每条来源只做两件事：读盘、起一次 `pnpm -v` 复核。找不到时**不装**（装是机器上的
+ * 动作，也不该在门禁链里下载东西），而是如实报「问过哪几处、各自是什么形态」。
+ *
+ * ## 为什么改 `process.env` 而不是返回一份 env
+ *
+ * 本文件后面的 `runPnpmSync` 与 `clearJobLink` 读的都是 `process.env`；只把 env 交给
+ * 其中一处，就会出现「判据看得见、安装看不见」—— 那一族最贵的形状。
+ *
+ * @param {{
+ *   platform?: NodeJS.Platform,
+ *   env?: NodeJS.ProcessEnv,
+ *   root?: string,
+ *   exists?: (p: string) => boolean,
+ *   readDir?: (p: string) => import("node:fs").Dirent[],
+ *   spawn?: typeof spawnSettled,
+ *   write?: (s: string) => void,
+ * }} [deps] 全部可注入 —— 单测在 POSIX 上判 Windows 的形态，不碰真进程。
+ * @returns {{bootstrapped: boolean, dir: string | null, probing: string | null,
+ *            consulted: string[], detail: string}}
+ *   `dir` = 被拼进 PATH 的那个目录（没动 PATH 时是 `null`）。
+ */
+export function ensurePnpmOnPath({
+  platform = process.platform,
+  env = process.env,
+  root = ROOT,
+  exists = (p) => fs.existsSync(p),
+  readDir = (p) => fs.readdirSync(p, { withFileTypes: true }),
+  spawn = spawnSettled,
+  write = (s) => process.stdout.write(s),
+} = {}) {
+  const sep = platform === "win32" ? ";" : ":";
+  const pathValue = String(env.PATH ?? env.Path ?? "");
+  const consulted = [];
+  /**
+   * 与 `probeCommand` 同口径：退 0 且打出了版本号才算「起得来」。
+   *
+   * @param {{status: number | null, stdout: string, error: string | null}} res
+   * @returns {boolean}
+   */
+  const works = (res) =>
+    res.error === null && res.status === 0 && /\d+\.\d+/.test(res.stdout);
+  /**
+   * 一条可读的失败读数（「为什么没用它」要有答案，不能只剩「没找到」）。
+   *
+   * @param {{status: number | null, stdout: string, error: string | null}} res
+   * @returns {string}
+   */
+  const verdict = (res) =>
+    res.error ? `起不来（${res.error}）` : `退 ${res.status}，输出 ${JSON.stringify(res.stdout.trim())}`;
+
+  /* 1. PATH 上本来就有：只认**真起得来**的那一个。无扩展名 shim 是 shebang ——
+   *    Node 不解析它（实测 ENOENT），而它与能跑的那个常并排摆着。批处理形态刻意
+   *    不进候选：它只有 cmd.exe 解释，选中它必然起不来（§2.1.1 那条判据的现场）。
+   *    `.ps1` 也不进：这里没有宿主参数，走 `pnpmInvocation` 才是带宿主的那条路。 */
+  for (const dir of pathValue.split(sep).filter(Boolean)) {
+    for (const name of ["pnpm.exe", "pnpm"]) {
+      const candidate = path.join(dir, name);
+      if (!exists(candidate)) continue;
+      const res = spawn(candidate, ["-v"], { cwd: root, encoding: "utf8", windowsHide: true });
+      consulted.push(`PATH 条目 ${candidate} → ${verdict(res)}`);
+      if (works(res)) {
+        return {
+          bootstrapped: false,
+          dir: null,
+          probing: candidate,
+          consulted,
+          detail: `PATH 上已有可用的 pnpm（${candidate}）`,
+        };
+      }
+    }
+  }
+
+  /* 2. 已知落点。顺序有意义：corepack 那一条是这台机当前真正在用的形态（版本由
+   *    package.json 钉死），pnpm 自己的落地目录是独立安装那一形。 */
+  const localAppData = String(env.LOCALAPPDATA ?? "");
+  const home = String(env.USERPROFILE ?? env.HOME ?? "");
+  const stores =
+    platform === "win32"
+      ? [
+          ["corepack", localAppData && path.join(localAppData, "node", "corepack", "v1", "pnpm")],
+          ["pnpm home", localAppData && path.join(localAppData, "pnpm")],
+          ["corepack(~)", home && path.join(home, "AppData", "Local", "node", "corepack", "v1", "pnpm")],
+          ["pnpm home(~)", home && path.join(home, "AppData", "Local", "pnpm")],
+        ]
+      : [["pnpm home", home && path.join(home, ".local", "share", "pnpm")]];
+
+  for (const [label, storeDir] of stores) {
+    if (!storeDir || !exists(storeDir)) {
+      consulted.push(`${label} ${storeDir || "（环境变量未给）"} → 目录不在`);
+      continue;
+    }
+    /* corepack 那一层是 `<落点>/<版本>/…`，取最高那一版；非版本目录就用它自己。 */
+    let bases = [storeDir];
+    let versioned = false;
+    try {
+      const versions = readDir(storeDir)
+        .filter((d) => d.isDirectory() && /^\d+\.\d+\.\d+/.test(d.name))
+        .map((d) => d.name)
+        .sort(compareVersions)
+        .reverse();
+      if (versions.length > 0) {
+        bases = versions.map((v) => path.join(storeDir, v));
+        versioned = true;
+      }
+    } catch {
+      /* 列不出目录就退回把落点本身当根：一个能用的路径比一次美化重要。 */
+    }
+    for (const base of bases) {
+      for (const candidate of storeCandidates(base, versioned)) {
+        if (!exists(candidate)) continue;
+        const res = spawn(candidate, ["-v"], { cwd: root, encoding: "utf8", windowsHide: true });
+        consulted.push(`${label} ${candidate} → ${verdict(res)}`);
+        if (!works(res)) continue;
+        const dir = path.dirname(candidate);
+        env.PATH = [dir, pathValue].filter(Boolean).join(sep);
+        write(
+          `[ci-install-deps] PATH 上没有可用的 pnpm ⇒ 用 ${label} 的落点补上：${dir}（${candidate} ${res.stdout.trim()}）\n`,
+        );
+        return {
+          bootstrapped: true,
+          dir,
+          probing: candidate,
+          consulted,
+          detail: `PATH 上原本没有可用的 pnpm；${candidate} 起得来（${res.stdout.trim()}），已把 ${dir} 拼到 PATH 最前`,
+        };
+      }
+    }
+  }
+
+  return {
+    bootstrapped: false,
+    dir: null,
+    probing: null,
+    consulted,
+    detail: "问过的每一处都不行（逐条见下）",
+  };
+}
+
+/**
  * 入口。
  *
  * @param {{
@@ -367,5 +587,21 @@ if (
   process.argv[1] !== undefined &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
+  /* 装之前先把 pnpm 放回 PATH（ISSUE #2281）：平台节点是服务账号会话，它的 PATH
+   * 与开发者会话不是同一份 —— 实测同一台机上一边 `pnpm -v` 一直正常、另一边十几格
+   * 齐刷刷写「pnpm 不可用」。那两句话都对，所以真相只能来自「这个账号看得见什么」。 */
+  const boot = ensurePnpmOnPath();
+  if (boot.probing === null) {
+    process.stderr.write(
+      [
+        `[ci-install-deps] × PATH 上没有可用的 pnpm，已知落点也没有：${boot.detail}`,
+        ...boot.consulted.map((line) => `[ci-install-deps]   ${line}`),
+        "[ci-install-deps] 下一动作：在**这个执行账号**下 `corepack enable`，",
+        "[ci-install-deps]   或把它的落点加进节点服务账号的 PATH —— 本步不代为安装。",
+        "",
+      ].join("\n"),
+    );
+    process.exit(1);
+  }
   process.exit(main());
 }
