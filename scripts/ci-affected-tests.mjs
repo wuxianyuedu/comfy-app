@@ -68,11 +68,14 @@ const ROOT = path.resolve(HERE, "..");
 /**
  * 主流程。
  *
- * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null, spawn?: (script: string, env: NodeJS.ProcessEnv) => {status: number}}} [deps]
+ * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null, spawn?: (script: string, env: NodeJS.ProcessEnv) => {status: number}, writeOut?: (text: string) => void, writeErr?: (text: string) => void}} [deps]
  * @returns {number} 退出码（0 / 1 / 2，与 base-check、premerge 同口径）
  */
 export function main(deps = {}) {
   const env = deps.env ?? process.env;
+  /** 两件读数走可注入的通道 —— 平台截日志后要能在**尾部**读到它们（ISSUE #2317）。 */
+  const writeOut = deps.writeOut ?? ((t) => process.stdout.write(t));
+  const writeErr = deps.writeErr ?? ((t) => process.stderr.write(t));
   const changed = resolveChangedFiles(deps);
   if (!changed.ok) {
     process.stderr.write(
@@ -88,7 +91,7 @@ export function main(deps = {}) {
     return 2;
   }
   const { workers, cores, source } = resolveCiWorkers({ env });
-  process.stdout.write(
+  writeOut(
     `[ci-affected] 改动面：${changed.files.length} 个文件（${changed.via}）；` +
       `并发 --maxWorkers=${workers}（${cores} 核，${source}）\n`,
   );
@@ -118,6 +121,14 @@ export function main(deps = {}) {
     COMFY_PRECOMMIT_MAX_WORKERS: String(workers),
   };
   const r = spawn(path.join(HERE, "run-affected-tests.mjs"), childEnv);
+  /* 同一件读数在**收尾**再念一次：平台会把超长的 stage 日志截掉中间偏前那一段
+   * （实测某跑的日志第 2 行就是 `The log length exceeds the limit(102400)`），
+   * 而上面那行打在开头 —— 正好落在被截掉的那一段里，于是「这一跑开了几个并发」
+   * 在页面上根本读不回来（ISSUE #2317）。只补一行转述，不改退码。 */
+  writeErr(
+    `[ci-affected] 收尾复述：并发 --maxWorkers=${workers}（${cores} 核，${source}）` +
+      `· 子进程原值退出码 ${r.status}\n`,
+  );
   /* 原值透传，**不改写**（三档：0 通过/已确认全是超时，1 真红，2 未判定）。
    * 平台把非零读成 stage 失败，所以 2 这一档在这一侧**不会被算进绿** —— 那正是
    * ISSUE #2225 要的：旧实现里「同块里一份超时 + 一份真断言红」被块级指纹读成退 0，
