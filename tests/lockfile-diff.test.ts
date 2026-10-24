@@ -238,10 +238,15 @@ describe("renderLockDiff（给人看的措辞）", () => {
 
   it("包名/版本等「机器值」原样透出，不被转义或截断", () => {
     const body = lockBody(LOCK);
-    const next = body.replace(
-      "  '@alloc/quick-lru@5.2.0':\n    resolution:",
-      "  '@scope/pkg@1.0.0':\n    resolution: {integrity: sha512-x}\n\n  '@alloc/quick-lru@5.2.0':\n    resolution:",
-    );
+    /* 锚点从真 lockfile 现取（本文件头注那条约定的又一处落实 —— #2312：
+     * 上一版把 `@alloc/quick-lru@5.2.0` 抄成了字面量，依赖升级到 5.3.0 那天
+     * `replace` 落空、diff 为空，断言跟着红）。取 packages 段第一个快照条目。 */
+    const anchorMatch = /^  '[^']+'?:\n    resolution:/m.exec(body);
+    expect(anchorMatch, "真 lockfile 的 packages 段里没有快照条目可当锚点").toBeTruthy();
+    const anchor = anchorMatch![0];
+    const injected = "  '@scope/pkg@1.0.0':\n    resolution: {integrity: sha512-x}\n\n";
+    const next = body.replace(anchor, `${injected}${anchor}`);
+    expect(next, "替换必须真的发生（锚点失效 = 用例判的是空 diff）").not.toBe(body);
     const lines = renderLockDiff(diffLockfiles(body, next));
     // 包名带 @ 与 /，是给人复制到命令里用的，必须原样出现
     expect(lines.some((l) => l.includes("@scope/pkg@1.0.0"))).toBe(true);
