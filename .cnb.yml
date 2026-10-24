@@ -60,8 +60,11 @@
 # 6. **stage shell 是 PowerShell，而它的输出编码默认是 CP936**（2026-10-16 补）。
 #    Node 往管道里写的是 UTF-8 字节，PowerShell 拿 `[Console]::OutputEncoding`
 #    （中文 Windows 上 = CP936）去解，再按同一个编码吐回给平台 —— 于是**所有中文
-#    日志在平台侧都是乱码**：现场 `[e2e-run] 璧� Playwright 鍓嶏細搴旂敤绔彛 绌�`
-#    就是「UTF-8 被当 GBK 读了一遍」。平台自己那条错误行（`任务执行失败，返回码：1`）
+#    日志在平台侧都是乱码**：那行「起 Playwright 前」的读数（原文见
+#    `e2e/support/preflight-ports.mjs` 文件头）在平台上呈现为 GBK 误读形态、
+#    完全不可读，这就是「UTF-8 被当 GBK 读了一遍」的现场（ISSUE #2257：仓里不存
+#    乱码字面 —— 手抄进来的那份已是二次转码产物，个别字节不可还原，不能冒充
+#    「逐字」）。平台自己那条错误行（`任务执行失败，返回码：1`）
 #    是好好的，所以病不在平台解码侧，在 stage shell 这一层。
 #    故**每个 stage 的脚本都以
 #    `$enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;` 开头**
