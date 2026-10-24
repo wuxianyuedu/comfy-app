@@ -34,8 +34,10 @@ import {
   dropAdoptedShellInputs,
   findCargo,
   freshnessProblem,
+  materializeCargoTestInputs,
   runGate,
 } from "../scripts/shell-gate.mjs";
+import { sidecarFileName } from "../scripts/sidecar-name.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const GATE_SCRIPT = "scripts/shell-gate.mjs";
@@ -748,5 +750,71 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
       mode: "base",
     });
     expect(r.exitCode).toBe(7);
+  });
+});
+
+/**
+ * `cargo test` 的编译前提落位（ISSUE #2192 的平台首跑现场）：
+ * `tauri.conf.json` 声明的 `binaries/node`（externalBin）与 `static/`（resources）
+ * 是 build script 的**存在性校验**对象，而真产物由 build-desktop 组装、被
+ * `src-tauri/.gitignore` 忽略 ⇒ 平台侧全新 clone 上第一次 cargo test 就死在
+ * build script（`resource path binaries\node-… doesn't exist`）。落位的是编译前提
+ * 而不是真产物 —— 真产物归 build-desktop，两路不许互相冒充。
+ */
+describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => {
+  const VERSION_OUT = "cargo 1.98.0 (…)\nrelease: 1.98\nhost: x86_64-pc-windows-msvc\n";
+
+  function fixture() {
+    const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-mat-"));
+    return { dir, srcTauri: path.join(dir, "src-tauri") };
+  }
+
+  it("两侧都缺 ⇒ sidecar（名字带 cargo 报的三元组）与 static 占位都建出来", () => {
+    const { dir, srcTauri } = fixture();
+    /** @type {Array<[string, string]>} */
+    const copies: Array<[string, string]> = [];
+    const r = materializeCargoTestInputs({
+      root: dir,
+      cargo: "cargo",
+      execPath: path.join(dir, "this-node.exe"),
+      versionOutput: VERSION_OUT,
+      copy: (a: string, b: string) => copies.push([a, b]),
+    });
+    expect(r.ok).toBe(true);
+    const sidecar = path.join(srcTauri, "binaries", sidecarFileName("x86_64-pc-windows-msvc"));
+    // 源是**当前正在跑门禁的这个 node**（与 build-desktop 同一来源）。
+    expect(copies).toEqual([[path.join(dir, "this-node.exe"), sidecar]]);
+    expect(existsSync(path.join(srcTauri, "static", ".cargo-test-placeholder"))).toBe(true);
+    expect(r.lines.join("\n")).toContain("sidecar");
+  });
+
+  it("已在场的产物一律不碰（本地跑过 build-desktop 时那是真的）", () => {
+    const { dir, srcTauri } = fixture();
+    const sidecar = path.join(srcTauri, "binaries", sidecarFileName("x86_64-pc-windows-msvc"));
+    mkdirSync(path.dirname(sidecar), { recursive: true });
+    writeFileSync(sidecar, "REAL");
+    const staticDir = path.join(srcTauri, "static");
+    mkdirSync(staticDir, { recursive: true });
+    writeFileSync(path.join(staticDir, "splash.html"), "REAL");
+    const r = materializeCargoTestInputs({
+      root: dir,
+      cargo: "cargo",
+      versionOutput: VERSION_OUT,
+    });
+    expect(r.ok).toBe(true);
+    expect(readFileSync(sidecar, "utf8")).toBe("REAL");
+    expect(existsSync(path.join(staticDir, ".cargo-test-placeholder"))).toBe(false);
+    expect(r.lines.join("\n")).not.toContain("sidecar 不在");
+  });
+
+  it("三元组取不到 ⇒ 明说不落位的理由（不是静默返回 ok）", () => {
+    const { dir } = fixture();
+    const r = materializeCargoTestInputs({
+      root: dir,
+      cargo: "cargo",
+      versionOutput: "cargo 1.98.0\n（没有 host 行）",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.lines.join("\n")).toContain("三元组");
   });
 });
