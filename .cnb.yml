@@ -1735,6 +1735,18 @@
   # 表里写着、格子里没跑，而登记表之间互核全绿）。
   - name: 重档静态判据
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-heavy-gates.mjs
+    # ── 壳门禁那一格（`桌面壳（改了 src-tauri 才跑）` → cargo test）要找得到 cargo ──
+    # runner 走**服务账号会话**：它的 PATH 与 `~/.cargo` 都够不着开发者会话的工具链
+    # （`CARGO_HOME` 是**用户级**变量，见 docs/guides/dev-drive-refs.md「Rust 依赖缓存」；
+    # findCargo 的三处回退在此全空）。两个值**成对**给，缺一探针照样失败：
+    # cargo 本体是 rustup 的代理（`G:\.cargo\bin\cargo.exe`），代理要 `RUSTUP_HOME`
+    # 才解析得到工具链 —— 只给 CARGO_HOME 时实测
+    # `could not create home directory …\.rustup: 拒绝访问`（ISSUE #2192 那条 PR 首跑现场）。
+    # ⚠️ 与上面 TEMP / PLAYWRIGHT_BROWSERS_PATH 同一档：**这两个值是给这台节点的**，
+    # 换节点要跟着换。
+    env:
+      CARGO_HOME: "G:\\.cargo"
+      RUSTUP_HOME: "C:\\Users\\yuedu\\.rustup"
     # 平台单 stage 默认预算 20m 是硬上限（实测强杀形态见上面那段），而这一格装的是原先
     # 那几条各自独立跑的东西 —— 它的**合理**墙钟应当与原几格的总和同级。
     timeout: 45m

@@ -67,6 +67,7 @@ import { defaultShellExe, shellStaleWarning } from "./dev-launcher.mjs";
 import { whichCommand } from "./launcher-core/shell.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
 import { changedFilesForBaseRef } from "./changed-scope.mjs";
+import { hostTripleFromCargoVersion, sidecarFileName } from "./sidecar-name.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -196,10 +197,106 @@ function cargoExeName() {
   return process.platform === "win32" ? "cargo.exe" : "cargo";
 }
 
+/**
+ * `cargo test` 的**编译前提落位**（ISSUE #2192 那条 PR 的平台首跑现场）：
+ * `src-tauri` 的 build script 会校验 `bundle.externalBin` 与 `resources` 声明的
+ * 路径**存在**（`tauri.conf.json` 的 `binaries/node` 与 `static/`），而真产物
+ * 由 `build-desktop.mjs` 组装、被 `src-tauri/.gitignore` 忽略 ⇒ 平台侧每次都是
+ * 全新 clone，第一次 cargo test 就死在 build script 上（实测原文
+ * `resource path … doesn't exist`，指名 `binaries\node-x86_64-pc-windows-msvc.exe`）。
+ *
+ * 落位的是**编译前提**，不是真产物：
+ *   · sidecar = 复制**当前正在跑门禁的这个 node**（与 build-desktop 同一来源；
+ *     测试不执行它，内容只要求是同平台的 node）；
+ *   · static = 缺目录时建一个空目录 + 占位文件（资源打包的真实内容由
+ *     `tauri build` 之前的 build-desktop 组装，两路互不冒充）。
+ *
+ * 已在场的产物**一律不碰**（本地跑过 build-desktop 时是真实的，占位不许覆盖它）。
+ *
+ * @param {{
+ *   root?: string,
+ *   cargo?: string | null,
+ *   execPath?: string,
+ *   versionOutput?: string | null,
+ *   exists?: (p: string) => boolean,
+ *   mkdir?: (p: string, o?: { recursive?: boolean }) => void,
+ *   copy?: (source: string, dest: string) => void,
+ *   chmod?: (p: string, m: number) => void,
+ *   write?: (p: string, s: string) => void,
+ *   platform?: NodeJS.Platform,
+ * }} [deps] 全部可注入 —— 用例据此判「建了什么 / 没动什么」，不碰真盘；
+ *   `versionOutput` 是 `cargo -vV` 的替身（不注入才真起一次）。
+ * @returns {{ ok: boolean, lines: string[] }}
+ *   `ok: false` = 前提落不了位（triple 取不到等），调用方按编译失败收场并把
+ *   `lines` 打出来。
+ */
+export function materializeCargoTestInputs({
+  root = ROOT,
+  cargo = findCargo(),
+  execPath = process.execPath,
+  versionOutput,
+  exists = (p) => fs.existsSync(p),
+  mkdir = (p, o) => fs.mkdirSync(p, o),
+  copy = (a, b) => fs.copyFileSync(a, b),
+  chmod = (p, m) => fs.chmodSync(p, m),
+  write = (p, s) => fs.writeFileSync(p, s, "utf8"),
+  platform = process.platform,
+} = {}) {
+  const srcTauri = path.join(root, "src-tauri");
+  /** @type {string[]} */
+  const lines = [];
+
+  // 三元组从 cargo 自己嘴里问（`cargo -vV` 的 `host:` 行）—— cargo test 按宿主
+  // 三元组编译，sidecar 名里带的是同一个；写死或从 process.arch 翻译都会漂。
+  let triple = null;
+  if (cargo !== null && cargo !== undefined) {
+    const out =
+      versionOutput ??
+      (spawnSync(cargo, ["-vV"], { encoding: "utf8", windowsHide: true }).stdout ?? "");
+    triple = hostTripleFromCargoVersion(out) ?? null;
+  }
+  if (!triple) {
+    return {
+      ok: false,
+      lines: [
+        "[shell-gate] × cargo test 编译前提落不了位：从 `cargo -vV` 取不到目标三元组" +
+          "（sidecar 文件名里必须带它，见 scripts/sidecar-name.mjs）。",
+      ],
+    };
+  }
+
+  const sidecar = path.join(srcTauri, "binaries", sidecarFileName(triple, platform));
+  if (!exists(sidecar)) {
+    mkdir(path.dirname(sidecar), { recursive: true });
+    copy(execPath, sidecar);
+    if (platform !== "win32") chmod(sidecar, 0o755);
+    lines.push(
+      `[shell-gate] cargo test 编译前提：sidecar 不在（全新 clone 的常态）⇒ 复制当前 node 落位 ${sidecar}`,
+    );
+  }
+
+  const staticDir = path.join(srcTauri, "static");
+  if (!exists(staticDir)) {
+    mkdir(staticDir, { recursive: true });
+    write(
+      path.join(staticDir, ".cargo-test-placeholder"),
+      "cargo test 的编译前提占位：resources 声明的 static/ 必须存在。\n" +
+        "真产物由 scripts/build-desktop.mjs 在 tauri build 之前组装；本文件随下一次组装被替换。\n",
+    );
+    lines.push(
+      `[shell-gate] cargo test 编译前提：static/ 不在 ⇒ 建空目录 + 占位（真产物归 build-desktop）`,
+    );
+  }
+  return { ok: true, lines };
+}
+
 /** 跑 cargo test；返回退出码（找不到 cargo 时返回 null，由调用方给指路）。 */
 function runCargoTest() {
   const cargo = findCargo();
   if (!cargo) return null;
+  const prep = materializeCargoTestInputs({ cargo });
+  for (const line of prep.lines) process.stdout.write(`${line}\n`);
+  if (!prep.ok) return 1;
   const r = spawnSync(cargo, ["test"], {
     cwd: path.join(ROOT, "src-tauri"),
     stdio: "inherit",
