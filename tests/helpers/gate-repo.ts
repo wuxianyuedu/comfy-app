@@ -97,12 +97,22 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
  */
 export function copyGateDeps(destScriptAbs: string): void {
   const destDir = path.dirname(destScriptAbs);
-  /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")` 那一形）与
-   *  ESM 的 `import/export … from "./x.mjs"`。 */
+  /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")` 那一形）、
+   *  ESM 的 `import/export … from "./x.mjs"`。
+   *
+   *  **CJS 里 require 一个 ESM 模块**也是一形（Node 24 的 `require(esm)`）——
+   *  `scripts/check-doc-mirror-pairing.cjs` 就是它：那条判据要 `changed-scope.mjs`
+   *  的基线判决面（ISSUE #2265），而 `changed-scope.mjs` 是 ESM。
+   *
+   *  路径里允许 `/`（`./base-check/git-ref.mjs` 那一类）：`changed-scope.mjs` 的
+   *  依赖链会伸进 `scripts/base-check/` 与 `scripts/launcher-core/`，只认平铺的名字
+   *  ⇒ 沙箱里那份 `changed-scope.mjs` 会在 import 时炸掉（模块找不到），
+   *  而那会表现成「这条判据在沙箱里红了」，与它真正在判的东西无关。 */
   const DEP_RES = [
-    /require\w*\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g,
-    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"\.\/([\w.-]+\.mjs)"/g,
-    /(?:^|\n)\s*import\s+"\.\/([\w.-]+\.mjs)"/g,
+    /require\w*\(\s*"\.\/([\w./-]+\.cjs)"\s*\)/g,
+    /require\w*\(\s*"\.\/([\w./-]+\.mjs)"\s*\)/g,
+    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"\.\/([\w./-]+\.mjs)"/g,
+    /(?:^|\n)\s*import\s+"\.\/([\w./-]+\.mjs)"/g,
   ];
   const pending = [destScriptAbs];
   const seen = new Set<string>();
@@ -124,6 +134,8 @@ export function copyGateDeps(destScriptAbs: string): void {
        * `check-test-sleep` 与 `check-test-concurrency` 都在场，而它们共用的
        * `gate-scan-read` 谁都没带进去）。 */
       if (!existsSync(dest)) {
+        /* 子目录（`./base-check/git-ref.mjs` 那一类）要先有目录，否则落盘就失败。 */
+        mkdirSync(path.dirname(dest), { recursive: true });
         copyFileSync(source, dest);
         chmodSync(dest, 0o755);
       }

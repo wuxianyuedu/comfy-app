@@ -92,13 +92,77 @@ describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
     expect(r.output).toContain(TWIN);
   });
 
-  test("暂存区为空时说「没有可判」，不说「已通过」", ({ repo }) => {
+  test("暂存区为空 ⇒ 这一条**没判**（退 2），不算「已通过」", ({ repo }) => {
     const r = repo.run(["--staged"]);
-    expect(r.code).toBe(0);
     /* 这是这条判据的**否定式**要求：空暂存被打印成「OK」时，下一个人在钩子输出里
-     * 就分不出「判过了、没问题」与「压根没有输入可判」。 */
-    expect(r.output).toContain("没有什么可判");
+     * 就分不出「判过了、没问题」与「压根没有输入可判」。
+     * ⇒ 退 2（仓库三态：0 绿 / 1 红 / 2 没跑起来），不是退 0 ——
+     * 「没有判决面」被计成「绿」，那正是 ISSUE #2265 要治的那一格。 */
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("没有判决面");
     expect(r.output).not.toContain("OK：");
+  });
+
+  /* ── `--base` 形态：换判决面的来源，**判决链一字未改**（ISSUE #2265）───────── */
+  test("--base 形态：相对基线改了源、没带镜像 ⇒ 同样拦", ({ repo }) => {
+    repo.write(SOURCE, "# 附录\n\n改了正文。\n");
+    repo.git("add", "--", SOURCE);
+    repo.commit("改了源，没带镜像");
+    const r = repo.run(["--base", "HEAD~1"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain(SOURCE);
+    expect(r.output).toContain(TWIN);
+  });
+
+  test("--base 形态：判决**不因机器的 git 配置而变**（强制 core.quotePath=true）", ({
+    repo,
+  }) => {
+    /* 这一条是 ISSUE #2272 的现场：机器之间本来就有差别 —— runner 的 git 是**全默认**
+     * （`core.quotePath=true`，路径被转义加引号），本机全局配了 `false` ⇒ 同一份代码
+     * 在平台上是「OK：本次没有……」（绿），在本机是红的。
+     * ⇒ 这里强制成 runner 的形态跑一遍，判决必须**一样**。 */
+    repo.write(SOURCE, "# 附录\n\n改了正文。\n");
+    repo.git("add", "--", SOURCE);
+    repo.commit("改了源，没带镜像");
+    const r = repo.run(["--base", "HEAD~1"], {
+      env: {
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.quotepath",
+        GIT_CONFIG_VALUE_0: "true",
+      },
+    });
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain(SOURCE);
+    expect(r.output).toContain(TWIN);
+  });
+
+  test("--base 形态：源与镜像同批 ⇒ 放行", ({ repo }) => {
+    repo.write(SOURCE, "# 附录\n\n改了正文。\n");
+    repo.write(TWIN, "<!-- 生成态镜像 -->\n\n# 附录\n\n改了正文。\n");
+    repo.git("add", "--", SOURCE, TWIN);
+    repo.commit("源与镜像同批");
+    const r = repo.run(["--base", "HEAD~1"]);
+    expect(r.code, r.output).toBe(0);
+    /* 读数里要看得见判决面从哪儿来 —— 换了判决面的判据必须说出来。 */
+    expect(r.output).toContain("判决面：基线");
+  });
+
+  test("--base 形态：基线取不到 ⇒ 这一条**没判**（退 2），不是判红", ({ repo }) => {
+    const r = repo.run(["--base", "no-such-ref-xyz"]);
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("没判");
+    expect(r.output).not.toContain("✗");
+  });
+
+  test("--base 形态：相对基线什么都没改 ⇒ 那是「测得没有改动」，绿并说清楚", ({
+    repo,
+  }) => {
+    const r = repo.run(["--base", "HEAD"]);
+    /* 基线取到了、diff 跑成功了、结果是空 ⇒ 「这次什么都没改」⇒ 没有可判的内容。
+     * 把它读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
+     * 「降档不许被读成全套过了」的忌讳。 */
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("判决面：基线");
   });
 });
 

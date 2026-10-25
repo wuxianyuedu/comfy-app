@@ -228,10 +228,20 @@ function vanishedNote(count) {
  * @returns {string[]|null} 相对仓库根、正斜杠的路径；git 失败时 `null`
  */
 function readStagedPaths(root = process.cwd()) {
-  const res = spawnSync("git", ["diff", "--cached", "--name-only"], {
-    cwd: root,
-    encoding: "utf8",
-  });
+  /* `-c core.quotePath=false`：路径要**原样**（ISSUE #2272，机制见
+   * `scripts/changed-scope.mjs` 的文件头「口径 ④」）。git 默认（`core.quotePath=true`）
+   * 把含非 ASCII 字符的路径按 C 风格转义并**加引号** —— 本仓有 38 份文件名带非 ASCII 的
+   * 文件（全在 `docs/` 下）⇒ 转义过的路径**对不上扫描根前缀** ⇒ `skipUnlessStagedTouches()`
+   * 会**跳过整条判据**：判据在场却没跑，而机器之间还不一样（本机全局配了
+   * `core.quotepath=false`，CI runner 是 git 默认值）。 */
+  const res = spawnSync(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
   if (res.status !== 0) return null;
   return (res.stdout || "")
     .split(/\r?\n/)

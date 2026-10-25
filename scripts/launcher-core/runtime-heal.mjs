@@ -58,10 +58,16 @@ export function readGitHead(root) {
  */
 export function readNameStatusDiff(root, base) {
   try {
-    const r = spawnSync("git", ["diff", "--name-status", "-M", base, "HEAD"], {
-      cwd: root,
-      encoding: "utf8",
-    });
+    /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+     * 的文件头「口径 ④」）。 */
+    const r = spawnSync(
+      "git",
+      ["-c", "core.quotePath=false", "diff", "--name-status", "-M", base, "HEAD"],
+      {
+        cwd: root,
+        encoding: "utf8",
+      },
+    );
     if (r.status !== 0) return null;
     return String(r.stdout ?? "");
   } catch {

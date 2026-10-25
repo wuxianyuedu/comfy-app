@@ -573,7 +573,12 @@ function git(args) {
  * @returns {{paths: string[], renamedFrom: string[]} | null}
  */
 function stagedChanges() {
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+   * 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，而本仓有 38 份文件名带非
+   * ASCII 的文件，全在 `docs/` 下）。 */
   const out = git([
+    "-c",
+    "core.quotePath=false",
     "diff",
     "--cached",
     "--name-status",
@@ -673,7 +678,9 @@ export function isSourcePath(rel) {
  * @returns {string[] | null}
  */
 function trackedPaths() {
-  const out = git(["ls-files"]);
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+   * 的文件头「口径 ④」）。转义过的路径在图里认不出来 ⇒ 按路径消费的用例会漏跑。 */
+  const out = git(["-c", "core.quotePath=false", "ls-files"]);
   if (out === null) return null;
   return out
     .split("\n")

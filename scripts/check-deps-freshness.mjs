@@ -124,7 +124,9 @@ export function matchedDependencyFiles(files) {
 
 /** 读暂存区文件清单（`--staged` 用）。拿不到时返回 `null` = 未触发，不猜。 */
 function stagedFiles(root) {
-  const r = git(["diff", "--cached", "--name-only"], root);
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+   * 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，而机器之间还不一样）。 */
+  const r = git(["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], root);
   if (!r.ok) return null;
   return r.out.split(/\r?\n/).filter(Boolean);
 }
