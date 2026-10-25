@@ -1018,6 +1018,71 @@
       COMFY_CI_SUBJECT: "master"
     timeout: 45m
 
+# ── PR 失败立案：这一跑红了 ⇒ 把红变成**看得见**的东西（ISSUE #2332）─────────────
+#
+# 这一档是 **Pipeline 级**的 `endStages`（不是 `stages` 里的一格），所以它是独立锚点、
+# 由 `pull_request` 那条流水线以 `<<: *pr_fail_stage` 引入。
+#
+# 补的是什么：`pull_request` 是一天里跑得最多的那条，而它的红**没有任何通知**。
+# 平台没有「构建结束 → 主动打你」的通用回调（`cnb event get-events` 只能主动拉、
+# 也不含 build 事件），所以今天知道它红的只有两种人：当场盯着 `pnpm ship` 的
+# （它轮询到终态才收工）、以及事后去翻构建列表的。其余时候「红了」=「没发生」。
+#
+# 为什么不是「挂个 IM 推送插件」：这条件路径上**没有 Docker**（头注第 1 条：带
+# `image:` 的 stage 70ms 就红 `Runner does not enable Docker`），插件镜像还默认要出网。
+# 所以那一档在本仓今天没有执行者，写进来只是一条会红或永远不响的格。这条走的是
+# 同一件事的另一个落点：**PR 的评论区就是通知面** —— 它进列表、有未读、能 @ 人，
+# 不需要任何新凭据，也不需要人先去看某个群。
+#
+# ── 形态：它是 `endStages`，不是 `stages` 的最后一格 ────────────────────
+#
+# 平台原生就有这一档（官方 `zh/build/grammar.md` §endStages 原文）：
+#
+#   「当流水线 prepare 阶段成功，**无论 stages 是否成功，endStages 都将执行**。
+#     且 endStages 是否成功**不影响流水线状态**（即 endStages 失败，流水线状态也可能是成功）。」
+#
+# 这两句正好对上这一格的两条要求，而且**不用**任何没被验证过的条件语法：
+#   · 「无论 stages 是否成功都执行」—— 本仓 `stages` 是串行链，前面哪里一红后面整片
+#     `skipped`（实测 `cnb-dbu-1k5ohq6p4`：`受影响用例` 红 ⇒ 它后面 23 格全是 skipped），
+#     所以「红了要有人知道」这件事**不能长在 `stages` 里**；
+#   · 「不影响流水线状态」—— 这一格自己坏掉不该把一跑绿变红（那会让「它挂了」与
+#     「这一跑红了」在读数上长得一样）。
+#
+# ⚠️ 走过的那条弯路留着当读数：先写成 `stages` 最后一格 + `run: always()`，实测
+# （`cnb-dbu-1k5ohq6p4` / `cnb-2mc-1k5oi9uvh`）那一格仍是 `skipped` —— 本仓 `.cnb.yml`
+# 里**没有任何一处 `when:` / `fail()` / 条件表达式**可供依赖，而 `if:` 这个键不在
+# Stage 的配置项表里（`grammar.md`）。所以「红也要跑」只有平台自己那一档是真有执行者的。
+#
+# ⚠️ 也**没有** `run:` 这个键：`.cnb.yml` 的 Stage / Pipeline 配置项表里都没有它，
+# 写成 `run: always()` 会被当成未知字段静默忽略（那一格就退回「上一格红了就 skipped」，
+# 而屏幕上什么都不会说）。「红也要跑」在本仓只有这一档 `endStages` 是真有执行者的形态。
+#
+# ⚠️ 但**不是 `failStages`**：那一档只在「正常流程失败」时执行，于是「这一跑绿了」
+# 与「这一格自己挂了」两种形态会一起消失，而后者正是最该被看见的（它等于这一格
+# 从此不再报红，而账面全绿）。`endStages` 两种都跑，代价是绿的时候也会跑一次只读：
+# 三次读命令 + 判定「绿的 ⇒ 无事可立」，与 `每日失败立案` 同量级。
+#
+# 其余两条形态决定：
+#   · **不带 `ifModify`**：它判的是这一跑的状态，不是某几棵树的文本。任何收窄都可能
+#     把「真正红了的那一类改动」筛掉，而那正是它唯一的用途。
+#   · **带 `--no-block`**：理由与 `每日失败立案` 逐字相同（自己坏掉不拦路，但失败时
+#     照打红话与手工出口，由 `tests/ci-pr-failure-issue.test.ts` 钉住不许静默）。
+#
+# 判决链一个字都不在这里重写：定性是 `ci-build-readout.mjs` 的 `classifyBuildOutcome()`
+# （与 `pnpm ship --diagnose` / 每日档同一份），取数是它的 `fetchBuildList()` +
+# `check-daily-attendance.mjs` 的 `fetchBuildDetails()`，写单是 `ship-issue-new.mjs`。
+# 落点按「有没有人能收」分两档：`CNB_PULL_REQUEST_IID` 在场上 ⇒ 评论在那张 PR 下
+# （一条诉求一张单，不另开单）；认不出来 ⇒ 按格名去重建单。取舍与两种形状都在
+# `scripts/ci-pr-failure-issue.mjs` 头注里，这里不重抄。
+.pr-fail-stage: &pr_fail_stage
+  endStages:
+    - name: PR 失败立案
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block
+      # 5m：三次读命令（列表 / 逐格详情 / 逐格日志，后者最多三格）+ 一次写 + 一次回读。
+      # 与 `每日失败立案` 同量级（实测那条 1.6s）。给 5m 是留给节点冷启动与平台慢响应，
+      # 不是给「让它多试几次」—— 取不到读数时它**不重试也不写**，退 2 由话术说出来。
+      timeout: 5m
+
 .gates: &gates
   # ── 2026-10-19：环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
   # 撤的是节奏、不是账：`工具链自证` / `Python 可用性` / `Python 探针读数` 现在各有
@@ -2028,7 +2093,14 @@
 master:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
   pull_request:
-    - <<: *common
+    # 两个锚点写在一个合并键里：`*common` 是 runner / lock / env（三条流水线共用），
+    # `*pr_fail_stage` 是**这一条流水线独有**的那一档 `endStages`（形态与理由见那个锚点）。
+    # ⚠️ 不能写成两行 `<<:`：同一层出现两个同名键是**非法 YAML**（`yaml` 解析器当场
+    # `Map keys must be unique`），而它坏掉的方式是静默的 —— 两个键里只有一个生效，
+    # 看上去配置完全正常。形态判据按 `- <<: *x` 数锚点引用（`tests/no-platform-ci-config.test.ts`
+    # 要求引用数等于带 `stages:` 的流水线数），所以流式写法不被那条判据认出来时，
+    # **要改的是判据的解析面，不是把锚点拆回去**。
+    - <<: [*common, *pr_fail_stage]
       name: 质量门禁
       stages: *gates
 

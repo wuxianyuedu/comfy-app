@@ -283,23 +283,26 @@ export function fetchRecentBuilds(run, slug, pageSize = 60) {
 }
 
 /**
- * 对最近几跑里的每日类派发补取逐格详情（最多三跑，够定位「上一次」）。
+ * 给「挑出来的那几跑」补取逐格详情。
  *
  * 返回里**带着列表那一侧的 sn**：`get-build-status -v` 只给 `status` + `pipelinesStatus`
  * （实测），自己说不出它是哪一跑。对齐只能在这里做 —— 让判定去「拿第一条详情凑到最近那次
  * 派发上」是张冠李戴的形状。
  *
+ * ⚠️ 这个函数**只管取，不管挑**（`isDailyDispatch` 那一刀留在 `fetchDailyDetails`）：
+ * 「哪几跑要取详情」在两个消费点上答案不同 —— 每日档按事件认「上一跑」，PR 档取的是
+ * **这一跑自己**（它带着 `CNB_BUILD_ID`，压根不用认事件）。把过滤写死在这里，
+ * 第二个消费点就只能抄一份（§12.12）。
+ *
  * @param {(cmd:string,args:string[])=>any} run 执行者
  * @param {string} slug 仓库路径
- * @param {any[]} builds 列表
+ * @param {any[]} builds 列表（调用方已挑好，按执行顺序）
  * @returns {Array<{sn:string,json:any}>} 详情（取不到的那跑就不出现，不冒充成「跑坏了」）
  */
-export function fetchDailyDetails(run, slug, builds) {
+export function fetchBuildDetails(run, slug, builds) {
   const out = [];
-  for (const build of (Array.isArray(builds) ? builds : [])
-    .filter(isDailyDispatch)
-    .slice(0, 3)) {
-    const sn = String(build.sn ?? "");
+  for (const build of (Array.isArray(builds) ? builds : []).slice(0, 3)) {
+    const sn = String(build?.sn ?? "");
     if (sn === "") continue;
     const res = cnbJson(run, [
       "build",
@@ -313,6 +316,22 @@ export function fetchDailyDetails(run, slug, builds) {
     if (res?.json) out.push({ sn, json: res.json });
   }
   return out;
+}
+
+/**
+ * 最近几跑里**每日类派发**的逐格详情（最多三跑，够定位「上一次」）。
+ *
+ * @param {(cmd:string,args:string[])=>any} run 执行者
+ * @param {string} slug 仓库路径
+ * @param {any[]} builds 列表
+ * @returns {Array<{sn:string,json:any}>} 详情（取不到的那跑就不出现）
+ */
+export function fetchDailyDetails(run, slug, builds) {
+  return fetchBuildDetails(
+    run,
+    slug,
+    (Array.isArray(builds) ? builds : []).filter(isDailyDispatch),
+  );
 }
 
 /**

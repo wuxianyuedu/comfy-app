@@ -78,7 +78,7 @@ import {
   fetchRecentBuilds,
   isDailyDispatch,
 } from "./check-daily-attendance.mjs";
-import { runNewIssue } from "./ship-issue-new.mjs";
+import { runAppendIssueComment, runNewIssue } from "./ship-issue-new.mjs";
 import { commentHeader } from "./ship-ticket.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -268,6 +268,9 @@ export function composeBody({ slug, build, sn, stage, skipped, readout, handle }
 /**
  * 写一条评论（同一格已有 open 单那一支）。
  *
+ * 实现只有一份（`ship-issue-new.mjs` 的 `runAppendIssueComment`）：PR 档那一格要的是
+ * **逐字相同**的一条写后回读，抄一份就得到「两份回读各自漂」（§12.12 / ISSUE #2332）。
+ *
  * @param {{run:any, log:(s:string)=>void}} io
  * @param {string} slug
  * @param {number} number
@@ -276,46 +279,15 @@ export function composeBody({ slug, build, sn, stage, skipped, readout, handle }
  * @returns {boolean}
  */
 export function appendReading(io, slug, number, body, sn) {
-  const file = writeScratch(ROOT, "daily-failure-comment", body);
-  if (!file) {
-    io.log("[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 评论没有落点，这一格没有执行者。");
-    return false;
-  }
-  const res = cnbJson(io.run, [
-    "issues",
-    "post-issue-comment",
-    "--repo",
+  return runAppendIssueComment({
+    run: io.run,
+    log: (line) => io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
     slug,
-    "--number",
-    String(number),
-    "--body-file",
-    file,
-    "-v",
-  ]);
-  if (!res || res.code !== 0) return false;
-  /* 回执不算结论：写完之后回读一次，认的是「最新的自己那条里含这一跑的构建号」。 */
-  const back = cnbJson(io.run, [
-    "issues",
-    "list-issue-comments",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--sort",
-    "-created",
-    "--page-size",
-    "20",
-    "-v",
-  ]);
-  const bodies = back
-    ? (Array.isArray(back.json?.data?.data)
-        ? back.json.data.data
-        : Array.isArray(back.json?.data)
-          ? back.json.data
-          : []
-      ).map((/** @type {any} */ c) => String(c?.body ?? ""))
-    : [];
-  return bodies.some((/** @type {string} */ b) => b.includes(sn));
+    number,
+    body,
+    marker: sn,
+    mkTmp: (name, text) => writeScratch(ROOT, name, text),
+  });
 }
 
 /**

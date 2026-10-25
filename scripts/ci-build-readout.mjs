@@ -538,9 +538,11 @@ export function fetchBuildStatus(run, slug, sn) {
  * @param {string} slug 仓库路径
  * @param {string} event 事件名
  * @param {number} limit 要几条
- * @returns {Array<{sn: string, createTime?: string}> | null} 列表；取不到时 null
+ * @param {{log?: (line: string) => void}} [opts] 取不到时念一行**原因**（只读，不改结论）
+ * @returns {Array<{sn: string, createTime: string, status: string, eventUrl: string}> | null}
+ *   列表；取不到时 null
  */
-export function fetchBuildList(run, slug, event, limit) {
+export function fetchBuildList(run, slug, event, limit, opts = {}) {
   const res = cnbJson(run, [
     "build",
     "get-build-logs",
@@ -552,11 +554,52 @@ export function fetchBuildList(run, slug, event, limit) {
     String(limit),
     "-v",
   ]);
-  const list = res ? asArray(res.json) : null;
-  if (!list) return null;
+  /* 平台在这条命令上有两种信封，实测都出现过：列表直挂 `data`（`{data:[…]}`）与套一层
+   * （`{data:{total,totalCapped,data:[…]}}`）。只认前者会回 `null`，而调用方读到的是
+   * 一句「取不到构建列表」—— 一次**看起来像网络故障**的空读数；而 PR 档那一格正是靠
+   * 这份列表认出「这一跑是谁」的，认不出 ⇒ 一律不写 ⇒ 那一格绿着、红没人知道
+   * （ISSUE #2335 的 `cnb-vko-1k5oj5gb0`）。第二种形状与 `check-daily-attendance.mjs`
+   * 的 `asBuildArray()` 同一口径 —— 那一份是每日档自己发的同形命令留下的读数。 */
+  const list = res ? (asArray(res.json) ?? asArray(res.json?.data)) : null;
+  if (!list) {
+    /* 「取不到」必须自己说清是哪一种取不到（ISSUE #2335 现场：这一格只留下
+     * `取不到构建列表` 六个字，而排障时根本分不出是命令没起来、退码非零（凭据 /
+     * 权限）、还是信封又变了 —— 三种的下一个动作完全不同）。读到一行 stderr 的
+     * 代价远小于一次现场重跑。**只读、不判**：结论仍由调用方按「没有结论」处理。 */
+    if (opts.log) {
+      /* 信封的**内容**也要念：实测 runner 上拿到的是
+       * `{status:200, …, data:{code:401, message:"…"}}` —— 顶层键与本地完全一样
+       * （`status,trace,header,contentType,data`），只念顶层键等于什么都没说。
+       * 截断到 160 字：够看清 `code` / `message`，又不至于把一整份 JSON 倒进流水线。 */
+      const shape = res
+        ? (() => {
+            const d = res.json?.data;
+            const inner = Array.isArray(d)
+              ? "data 是数组但没有 sn 字段"
+              : `data=${JSON.stringify(d ?? null).slice(0, 160)}`;
+            return ` · ${inner}`;
+          })()
+        : "";
+      const why = !res
+        ? "命令没起来或输出不是 JSON（`cnb` 不可用 / 非 JSON 输出）"
+        : `退码 ${res.code}${res.stderr.trim() ? ` · stderr: ${res.stderr.trim().split("\n")[0]}` : ""}` +
+          ` · 信封里认不出列表${shape}`;
+      opts.log(`[build-readout] 构建列表取不到：${why}`);
+    }
+    return null;
+  }
   const builds = list
     .filter((b) => b && typeof b.sn === "string")
-    .map((b) => ({ sn: String(b.sn), createTime: String(b.createTime ?? "") }));
+    /* `status` 与 `eventUrl` 是**列表自带字段的原样透出**（不另立判据）：调用方拿它们
+     * 决定「要不要去取逐格详情」（在跑 / 排队的那几跑先不取），以及把红挂回出问题的那张
+     * PR 上 —— 这两个字段只有列表这一侧有（`get-build-status -v` 只给 `status` +
+     * `pipelinesStatus`，说不出自己是哪一跑，见 `fetchDailyDetails` 那段）。 */
+    .map((b) => ({
+      sn: String(b.sn),
+      createTime: String(b.createTime ?? ""),
+      status: String(b.status ?? ""),
+      eventUrl: String(b.eventUrl ?? ""),
+    }));
   builds.sort((a, b) => b.createTime.localeCompare(a.createTime));
   return builds.slice(0, limit);
 }
