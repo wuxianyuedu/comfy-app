@@ -30,6 +30,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   RUST_SOURCE_RE,
   SHELL_INPUT_RE,
+  cargoBinHomes,
   cargoHomeValue,
   decide,
   dropAdoptedShellInputs,
@@ -38,11 +39,14 @@ import {
   freshnessProblem,
   materializeCargoTestInputs,
   runGate,
+  rustupCargoHomeValue,
 } from "../scripts/shell-gate.mjs";
 import { sidecarFileName } from "../scripts/sidecar-name.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const GATE_SCRIPT = "scripts/shell-gate.mjs";
+/** cargo 的寻址判据（PATH 优先 / 安装位兜底 / 取证）—— 从主文件拆出来的那一段。 */
+const CARGO_MODULE = "scripts/shell-gate-cargo.mjs";
 /* `shellStaleWarning` 的实现随编排器拆分搬到 `launcher-core/preflight.mjs`
  * （ISSUE #1811 拆 R5 超限文件）—— 这个常量只用来读它盯的 targets，直接指实现那份。 */
 const LAUNCHER = "scripts/launcher-core/preflight.mjs";
@@ -423,6 +427,14 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     expect(problem).toContain("--features custom-protocol");
   });
 
+  /** POSIX 上 cargo 无后缀；Windows 上有 `.exe`（与 findCargo 的判据同源）。 */
+  const cargoName = process.platform === "win32" ? "cargo.exe" : "cargo";
+
+  /** 一次性临时目录（用例自己收，别让它留在机器上被下一次读成「装过」）。 */
+  function tempDir(prefix: string): string {
+    return mkdtempSync(path.join(tmpdir(), prefix));
+  }
+
   /**
    * cargo 的寻址判据（ISSUE #1555）。
    *
@@ -440,9 +452,6 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       for (const dir of temps.splice(0))
         rmSync(dir, { recursive: true, force: true });
     });
-
-    /** POSIX 上 cargo 无后缀；Windows 上有 `.exe`（与 findCargo 的判据同源）。 */
-    const cargoName = process.platform === "win32" ? "cargo.exe" : "cargo";
 
     /**
      * 造一个假 home，按 `dirs` 放 `cargo`。
@@ -523,12 +532,18 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       expect(found).not.toContain("1.83.0");
     });
 
-    it("回退面不许越界：只收 rustup 的三处，不做 PATH 式目录递归 / 不读 shell 配置", () => {
-      // 这条守的是「判据越宽越可能选中不该用的 cargo」：回退只收 rustup 的三处。
-      const src = read(GATE_SCRIPT);
-      expect(src).toContain('path.join(home, ".cargo", "bin")');
-      expect(src).toContain('path.join(home, ".rustup", "toolchains")');
-      expect(src).toContain("process.env.CARGO_HOME");
+    it("回退面不许越界：只收 rustup 自己说得出的那几处，不做 PATH 式目录递归 / 不读 shell 配置", () => {
+      // 这条守的是「判据越宽越可能选中不该用的 cargo」：回退面是**有限几个目录**，
+      // 来源只有两路 —— 环境变量（CARGO_HOME）与 rustup 自己记着的事实
+      // （`settings.toml` 的 `cargo_home` + 用户家目录下的 `.cargo/bin`，ISSUE #2374）。
+      /* 判据本体在 `shell-gate-cargo.mjs`（R5 的 900 行硬闸，ISSUE #2374 拆出去的那一段），
+       * 所以这两份都要读：主文件里留的是 re-export（路径不许断），子模块里是候选表。 */
+      const src = read(CARGO_MODULE) + read(GATE_SCRIPT);
+      expect(src).toContain('".cargo"');
+      expect(src).toContain('".rustup"');
+      expect(src).toContain('"toolchains"');
+      expect(src).toContain("CARGO_HOME");
+      expect(src).toContain("cargo_home");
       // 不许为了找 cargo 去递归整个磁盘 / 读 shell 的 rc 文件
       expect(src).not.toMatch(/readdirSync\(["']\/["']\)/);
       expect(src).not.toContain(".bashrc");
@@ -607,8 +622,6 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       for (const dir of temps.splice(0))
         rmSync(dir, { recursive: true, force: true });
     });
-
-    const cargoName = process.platform === "win32" ? "cargo.exe" : "cargo";
 
     /** 造一个假 `CARGO_HOME`（里面放 `bin/cargo`），返回它的绝对路径。 */
     function fakeCargoHome(): string {
@@ -707,6 +720,128 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     it("CARGO_HOME 没设 / 空串 ⇒ 这一处不探（不许拼出 cwd 下的 bin）", () => {
       expect(cargoHomeValue({})).toBeNull();
       expect(cargoHomeValue({ CARGO_HOME: "   " })).toBeNull();
+    });
+
+    /* ── 「装在哪」不许只从环境变量推（ISSUE #2374）─────────────────────────
+     *
+     * 立案现场：用户报了 cargo 的真路径 `G:\.cargo\bin\cargo.exe`，而探针说找不到。
+     * 旧回退面只从环境变量推落点 —— `$CARGO_HOME/bin` 随 `CARGO_HOME` 一起消失，
+     * `~/.cargo/bin` 只按 `os.homedir()` 求；于是「cargo 装在那个用户的
+     * `.cargo\bin`、而 CARGO_HOME 没传进这一格」这一形态**三处全空**，结论与
+     * 「没装」逐字同形，而盘上那份一直在。
+     *
+     * 现在候选多两条**事实来源**：rustup 的 `settings.toml` 记着的 `cargo_home`，
+     * 以及 `USERPROFILE` / `HOME` 与 `os.homedir()` 不一致时的另一种 `~/.cargo/bin`。
+     */
+    describe("「装在哪」读 rustup 记着的事实与用户家目录，不只读环境变量（ISSUE #2374）", () => {
+      const temps: string[] = [];
+      afterEach(() => {
+        for (const dir of temps.splice(0))
+          rmSync(dir, { recursive: true, force: true });
+      });
+
+      /** 造一个「`cargo` 就装在这儿」的目录，返回它的上一级（= `cargo_home`）。 */
+      function seedCargoHome(prefix: string): string {
+        const home = tempDir(prefix);
+        temps.push(home);
+        mkdirSync(path.join(home, "bin"), { recursive: true });
+        writeFileSync(path.join(home, "bin", cargoName), "#!/bin/sh\nexit 0\n");
+        return home;
+      }
+
+      it("CARGO_HOME 没传进来，但 rustup 的 settings.toml 记着 cargo_home ⇒ 命中它", () => {
+        const cargoHome = seedCargoHome("shell-gate-rustup-");
+        const rustupHome = tempDir("shell-gate-rustup-home-");
+        temps.push(rustupHome);
+        const fakeUserHome = tempDir("shell-gate-user-home-");
+        temps.push(fakeUserHome);
+        writeFileSync(
+          path.join(rustupHome, "settings.toml"),
+          [
+            'default_toolchain = "stable-x86_64-pc-windows-msvc"',
+            `cargo_home = "${cargoHome.replace(/\\/g, "\\\\")}"`,
+            'rustup_home = "x"',
+            "",
+          ].join("\n"),
+        );
+        const got = findCargoLookup({
+          env: { PATH: "", RUSTUP_HOME: rustupHome },
+          home: fakeUserHome,
+        });
+        expect(got.path).toBe(path.join(cargoHome, "bin", cargoName));
+        const hit = got.probes.find((p) => p.result === "hit");
+        expect(hit?.where.startsWith("rustup 记着的 cargo_home/bin")).toBe(
+          true,
+        );
+      });
+
+      it("RUSTUP_HOME 没设 ⇒ 读 ~/.rustup/settings.toml（默认落点照样算数）", () => {
+        const cargoHome = seedCargoHome("shell-gate-rustup-def-");
+        const fakeUserHome = tempDir("shell-gate-user-home2-");
+        temps.push(fakeUserHome);
+        mkdirSync(path.join(fakeUserHome, ".rustup"), { recursive: true });
+        writeFileSync(
+          path.join(fakeUserHome, ".rustup", "settings.toml"),
+          `cargo_home = "${cargoHome.replace(/\\/g, "\\\\")}"\n`,
+        );
+        expect(
+          findCargoLookup({
+            env: { PATH: "" },
+            home: fakeUserHome,
+          }).path,
+        ).toBe(path.join(cargoHome, "bin", cargoName));
+      });
+
+      it("os.homedir() 与 $USERPROFILE 不是一个地方 ⇒ 两个 ~/.cargo/bin 都问", () => {
+        const profile = tempDir("shell-gate-profile-");
+        temps.push(profile);
+        mkdirSync(path.join(profile, ".cargo", "bin"), { recursive: true });
+        writeFileSync(
+          path.join(profile, ".cargo", "bin", cargoName),
+          "#!/bin/sh\nexit 0\n",
+        );
+        const other = tempDir("shell-gate-homedir-");
+        temps.push(other);
+        expect(
+          findCargoLookup({
+            env: { PATH: "", USERPROFILE: profile },
+            home: other,
+          }).path,
+        ).toBe(path.join(profile, ".cargo", "bin", cargoName));
+      });
+
+      it("settings.toml 读不到 / 没那一行 / 值是空串 ⇒ 这一处不探（判据一个字不改）", () => {
+        const fakeUserHome = tempDir("shell-gate-user-home3-");
+        temps.push(fakeUserHome);
+        expect(
+          rustupCargoHomeValue({ env: {}, home: fakeUserHome }),
+        ).toBeNull();
+        mkdirSync(path.join(fakeUserHome, ".rustup"), { recursive: true });
+        writeFileSync(
+          path.join(fakeUserHome, ".rustup", "settings.toml"),
+          'default_toolchain = "stable"\n',
+        );
+        expect(
+          rustupCargoHomeValue({ env: {}, home: fakeUserHome }),
+        ).toBeNull();
+        writeFileSync(
+          path.join(fakeUserHome, ".rustup", "settings.toml"),
+          'cargo_home = ""\n',
+        );
+        expect(
+          rustupCargoHomeValue({ env: {}, home: fakeUserHome }),
+        ).toBeNull();
+      });
+
+      it("同一个家目录只探一次（取证那行不许把同一段路径念两遍）", () => {
+        const home = tempDir("shell-gate-dedupe-");
+        temps.push(home);
+        const dirs = cargoBinHomes({
+          env: { USERPROFILE: home, HOME: home },
+          home,
+        });
+        expect(dirs).toHaveLength(1);
+      });
     });
 
     it("找不到 cargo 时那句话要带上探针读数（平台侧那一格靠它定位）", () => {
