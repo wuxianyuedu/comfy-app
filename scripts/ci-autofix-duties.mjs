@@ -87,6 +87,18 @@ import path from "node:path";
 /** @type {ReadonlyArray<AutofixDuty>} */
 export const AUTOFIX_DUTIES = [
   {
+    stage: "prettier 格式",
+    entry: "scripts/ci-format-fixup.mjs",
+    args: ["--check", "--autofix"],
+    outputs: ["src/**", ".storybook/**"],
+    why:
+      "口径变更由业主拍板（ISSUE #2342，2026-10-25）：红 ⇒ 就地 --write 门禁判出的那几个" +
+      "文件、复判全绿后 bot 推 format-only 提交回 PR 源分支。它与下面那档的差别要如实记：" +
+      "它改写的是**源文件**（门禁要判的对象），不是「源 → 产物」的生成物 —— 所以护栏更重：" +
+      "复判必须全绿才继续、HEAD 已是 bot 修复提交而仍红就停（防连环）、永不回写 master、" +
+      "只 add 本轮写过的文件。push 被拒（PR 事件令牌 scope）时如实红并给业主动作，不静默。",
+  },
+  {
     stage: "生成态文档与源同步",
     entry: "scripts/render-doc-placeholders.cjs",
     args: ["--check", "--autofix"],

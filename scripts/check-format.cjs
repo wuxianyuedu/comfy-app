@@ -246,10 +246,7 @@ function stagedFiles() {
     },
   );
   if (res.status !== 0) return null;
-  return (res.stdout || "")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map(toPosix);
+  return (res.stdout || "").split(/\r?\n/).filter(Boolean).map(toPosix);
 }
 
 /**
@@ -389,11 +386,14 @@ async function main() {
 
 if (require.main === module) main();
 
-/** 供测试直接引用:不跑 prettier 的纯判定。 */
+/** 供测试与 ci-format-fixup.mjs 引用:判据实现共用一份(§12.18),不跑 prettier 的
+ * 纯判定入口(main 守卫在,require 本文件不会触发扫描)。 */
 module.exports = {
   globToRegExp,
   isIgnored,
   isScanned,
+  collectUnformatted,
+  resolvePrettierEntry,
   IGNORE_GLOBS,
   GLOBS,
 };
