@@ -154,7 +154,9 @@
  *   pnpm ship --diagnose [sn]                  # 只读：CI 红了就看那一跑的失败格 + 失败行 +
  *                                              #   末 40 行 + 完整日志链接（不给号按 HEAD 归属）
  *   pnpm ship --diagnose --dry-run             # 只打印它会读的那三条命令
- *   pnpm ship --rerun-ci                       # CI 挂了想重跑：在当前 PR 分支推一个空提交触发新 build（不去 cnbcli 翻重跑入口）
+ *   pnpm ship --rerun-ci                       # CI 挂了想重跑：在当前 PR 分支推一个空提交触发新 build（平台侧没有 PR 重跑入口，
+ *                                            # 不去 cnbcli 翻）。它同时带上 COMFY_INTENTIONAL_EMPTY_COMMIT —— D0 里有两步读当场暂存区，
+ *                                            # 空索引本来被它们读成「取不到判决面」；口径与反滥用见规范 §13.5.5 末段
  *
  * 阶段名：preflight · commit · push · pull-request · poll · verdict · merge · close-issue · clean-branch
  * （`close-issue` 带号时能单跑 —— 那是「补关」那一路，要平台侧的落地证明；不带号或

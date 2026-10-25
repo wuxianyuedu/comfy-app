@@ -112,6 +112,8 @@ import {
   stallReadout,
 } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
+import { runRerunCiStage } from "../scripts/ship-local.mjs";
+import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
 const BUILD_ENVELOPE_AND_DATA = {
@@ -5462,5 +5464,78 @@ describe("stallReadout：慢、没推进、没派发起来 是三件事（#2304�
     expect(text).toContain(String(DIAGNOSE_STALL_MINUTES));
     expect(text).not.toContain("疑似");
     expect(text).not.toContain("--rerun-ci");
+  });
+});
+
+/**
+ * `--rerun-ci` 那一格（ISSUE #2354）。
+ *
+ * 现场：平台侧没有 PR 重跑入口（`cnb build` 只有 start/stop，`--event` 只认 api_trigger 前缀），
+ * 于是「红了的 PR 再跑一次」唯一的名字就是这一格；而它推的是**空提交**，D0 里有两步读当场
+ * 暂存区、把空索引写成「取不到判决面 ⇒ 退 2」⇒ 钩子拦下提交，这个入口从写下那天起没走过一次。
+ * 这里钉的不是返回值，是**那一调带没带上说出来的意图** —— 不带，修复就是装饰。
+ */
+describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读成「取不到面」", () => {
+  type RunCall = {
+    cmd: string;
+    args: string[];
+    opts?: { env?: Record<string, string> };
+  };
+
+  function rerunIo(env: { branch?: string; commitStatus?: number; dryRun?: boolean }) {
+    const seen: RunCall[] = [];
+    const log: string[] = [];
+    const run = (
+      cmd: string,
+      args: string[],
+      opts?: { env?: Record<string, string> },
+    ) => {
+      seen.push({ cmd, args, opts });
+      if (args[0] === "commit")
+        return {
+          status: env.commitStatus ?? 0,
+          stdout: "",
+          stderr: env.commitStatus ? "no changes added to commit" : "",
+        };
+      if (args[0] === "rev-parse") return { status: 0, stdout: "abc123\n", stderr: "" };
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    const code = runRerunCiStage({
+      up: { remote: "cnb" },
+      branch: env.branch ?? "feat/x",
+      root: "G:/nowhere",
+      log: (s: string) => log.push(s),
+      run,
+      relay: () => undefined,
+      opt: { dryRun: env.dryRun ?? false },
+    });
+    return { code, log: log.join("\n"), seen };
+  }
+
+  it("提交那一调带上刻意空提交的旗标（不带 = 这条路还是死的）", () => {
+    const { code, seen } = rerunIo({});
+    const commit = seen.find((c) => c.args[0] === "commit");
+    expect(commit, "没有伸手去 commit").toBeTruthy();
+    expect(commit!.args).toContain("--allow-empty");
+    expect(commit!.opts?.env?.[EMPTY_COMMIT_ENV], "旗标没带上，D0 仍会退 2").toBe("1");
+    expect(code).toBe(0);
+    // push 那一跳不带旗标：它是 git 动作，不是门禁的输入。
+    const push = seen.find((c) => c.args[0] === "push");
+    expect(push?.opts?.env?.[EMPTY_COMMIT_ENV]).toBeUndefined();
+  });
+
+  it("dry-run 一个字都不执行，但把「将带哪个旗标」念出来", () => {
+    const { code, log, seen } = rerunIo({ dryRun: true });
+    expect(seen).toHaveLength(0);
+    expect(code).toBe(0);
+    expect(log).toContain(`--allow-empty`);
+    expect(log).toContain(EMPTY_COMMIT_ENV);
+  });
+
+  it("在 master 上不做这件事（那一跳要的是有 PR 的分支）", () => {
+    const { code, log, seen } = rerunIo({ branch: "master" });
+    expect(seen).toHaveLength(0);
+    expect(code).toBe(2);
+    expect(log).toContain("换到 PR 分支");
   });
 });

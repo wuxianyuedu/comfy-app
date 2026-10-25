@@ -31,6 +31,7 @@ pnpm ship --close-issue 2179                     # 只补关：本轮不合，�
 pnpm ship --claim 2187                           # 领取：打 `处理人:` + `参与人:` 标签，评论「已接单」（写后回读）
 pnpm ship --release 2187                         # 结束：评论「开发结束」+ 撤 `处理人:`（`参与人:` 保留）
 pnpm ship --claims                               # 列出自己领取中（state=open）的单子
+pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**当前 PR 分支**推一笔空提交重新派生流水线（平台侧没有 PR 重跑入口）
 pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
 pnpm ship --new-issue "fix(x): …" --issue-body-file .git/issue.md --priority P1   # 一步建单：建 → 补提单人标签 → 独立回读（标题/正文人给）
 pnpm ship --whoami                               # 只读自查：这份检出的留痕短名 + 署名格式 + 手工补 PR 标签的粘贴命令

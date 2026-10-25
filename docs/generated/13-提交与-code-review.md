@@ -4851,9 +4851,29 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
 成本口径：它不读任何文档内容，一次 `git diff --cached --name-only -z` 加一次集合比对，
 实测 0.28s（含 node 启动），与 D0 里那两条 CHANGELOG 判据同量级；「源 → 镜像」那条映射
 也不另写一遍，取 `scripts/doc-facts.cjs` 的 `generatedPathFor()`（渲染器同一个函数）。
-自测：`tests/check-doc-mirror-pairing.test.ts` —— 六个方向（漏带 ⇒ 拦且点名那一对、
+自测：`tests/check-doc-mirror-pairing.test.ts` —— 八个方向（漏带 ⇒ 拦且点名那一对、
 同批 ⇒ 放行、只改镜像 ⇒ 不判、不在 `SCOPED_DOCS` 里 ⇒ 不判、删源 ⇒ 同样要同批、
-暂存为空 ⇒ 说「没有可判」而不是「已通过」）加两条接线（钩子里有这一步；映射只有一处）。
+暂存为空 ⇒ 说「没有可判」而不是「已通过」、**空索引 + 说出来的意图** ⇒ 正面按 0 收、
+**意图旗标在场而索引非空** ⇒ 当场念「作废」并照正常档判）
+加两条接线（钩子里有这一步；映射只有一处）。
+
+**空索引有两种来路，所以这条不猜**（ISSUE #2354）：「忘了 `git add`」与「刻意要一笔空提交」
+在索引上**逐字同形**，而后者是 `pnpm ship --rerun-ci` 的全部机制 —— 平台侧没有 PR 重跑入口
+（`cnb build` 只有 `start-build` / `stop-build`，`--event` 只认 `api_trigger` 前缀），
+红了的 PR 要再跑一次只能重新推一笔。原先这里写着「`git commit` 不许空提交 ⇒ 本地这一跳的
+暂存集永远非空」—— 那句是错的（`--allow-empty` 存在），而它的后果是这个入口从写下那天起
+没走过一次。现在只认**说出来的意图**：旗标 `COMFY_INTENTIONAL_EMPTY_COMMIT` 由那一格自己带，
+口径与反滥用只在 `scripts/intentional-empty-commit.mjs` 一处，两个消费者（这一步与
+「已知基线失败·自证」那一步）共用 ——
+
+- 旗标在场**且**索引真的是空 ⇒ 这两条的问题都**没有对象**（空提交不改任何文件），正面按 `0` 收，
+  并把这句话念出来（不是静默放行）；
+- 旗标在场而索引**非空** ⇒ 旗标**当场作废**并打印，一切照正常判决面判 —— 它不是
+  `--no-verify` 的第二形态（那条是硬规则 7 禁的），也不给「改了源没带镜像」开任何口子；
+- 旗标不在场 ⇒ 与这个口子存在之前**逐字同形**（默认不放松）。
+
+同一份口径的取证在 `tests/ship.test.ts`（那一调带没带上旗标 —— 不带就是装饰）、
+`tests/check-doc-mirror-pairing.test.ts` 与 `tests/known-failed-stale.test.ts`（三个形状各一条）。
 
 ##### 13.5.5.1 同族第二处：API 文档生成与自检（`node scripts/check-docs-api.cjs`）
 

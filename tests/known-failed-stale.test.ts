@@ -318,12 +318,81 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
  *   ② **判决面取不到 ⇒ 退 2**（没判 ≠ 绿），空清单同样算「取不到」；
  *   ③ **没碰到机制也要说一句话** —— 沉默与「真的判过了」逐字同形。
  */
+/**
+ * 把一次调用期间的 **stderr 与 console.log 两条出口**都收在手里。
+ *
+ * 为什么要两条：这一族的「警告」走 stderr、「结论」走 stdout（`console.log`），
+ * 只接一条就会把夹具自己的话术留在报告里 —— 读的人分不清那是夹具的结论还是真跑的结论
+ * （同一件事在 `tests/hook-affected-launch.test.ts` 里由一条判据钉着，这里按同一条口径做）。
+ */
+function captureStreams<T>(fn: () => T): { value: T; text: string } {
+  const chunks: string[] = [];
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const originalLog = console.log;
+  process.stderr.write = (s: string | Uint8Array) => {
+    chunks.push(String(s));
+    return true;
+  };
+  console.log = (line?: unknown) => {
+    chunks.push(String(line));
+  };
+  try {
+    return { value: fn(), text: chunks.join("") };
+  } finally {
+    process.stderr.write = originalWrite;
+    console.log = originalLog;
+  }
+}
 describe("自证档的判决面（ISSUE #2265）", () => {
   it("暂存集为空 ⇒ 这一条**没判**（不是「判过了、没问题」）", () => {
     const got = resolveFace([]);
     expect(got.ok).toBe(false);
     if (got.ok) return;
     expect(got.reason).toContain("暂存区是空的");
+  });
+
+  /* 上面那条的**另一半**（ISSUE #2354）：空索引有两种来路（忘了 stage / 刻意要一笔空提交），
+   * 而这条判据不猜 —— 只认说出来的意图。唯一生产者是 `pnpm ship --rerun-ci`，它要靠空提交
+   * 重新派生一条流水线（平台侧没有 PR 重跑入口）。读不读这枚旗标的口径只有一处：
+   * `scripts/intentional-empty-commit.mjs`，两个消费者共用它。 */
+  it("空索引 + 说出来的意图 ⇒ 走「没碰到机制」那一档（这是答案，不是豁免）", () => {
+    const saved = process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+    process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = "1";
+    let got;
+    try {
+      // 意图那句走 stderr：不接住它就会以「真跑出来的结论」的形态混进 vitest 报告
+      got = captureStreams(() => resolveFace([])).value;
+    } finally {
+      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
+    }
+    expect(got.ok).toBe(true);
+    if (!got.ok) return;
+    expect(got.files).toEqual([]);
+    expect(got.via).toContain("刻意空提交");
+  });
+
+  it("旗标在场而清单非空 ⇒ 旗标作废、照常判（它不是跳过门禁的开关）", () => {
+    const saved = process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+    process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = "1";
+    /* 两个出口都要接住：作废那句走 stderr（它是警告），而「没碰到机制 ⇒ 说一句话」
+     * 走 console.log —— 上面那条既有用例量的就是后者。漏接一个就等于断言里少一半。 */
+    let code = -1;
+    let out = "";
+    try {
+      const ran = captureStreams(() =>
+        main(["--staged", "src/lib/x.ts", "tests/y.test.ts"]),
+      );
+      code = ran.value;
+      out = ran.text;
+    } finally {
+      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
+    }
+    expect(out).toContain("旗标作废");
+    // 旗标不改变这一档的结论：没碰到机制 ⇒ 0，判决面照旧是那份清单。
+    expect(code).toBe(0);
+    expect(out).toContain("手工指定的清单");
   });
 
   it("`--base` 形态：判决面取自「相对那条基线改了什么」", () => {
