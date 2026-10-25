@@ -99,7 +99,13 @@ export function DocumentFrame({
   return (
     <ViewFrame kind="document" className="bg-canvas text-ink">
       {backdrop}
-      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
+      {/* `data-document-scroll`：文档型的滚动锚 —— 视图深处的行虚拟化
+          （如 ProjectOutputs 的产出网格）经 `closest()` 找到它作为
+          `useVirtualizer` 的 scroll element（#2190），不依赖 class 名。 */}
+      <div
+        data-document-scroll
+        className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto"
+      >
         <div className={cn("mx-auto w-full", WIDTH_CLASS[width], className)}>
           {children}
         </div>
