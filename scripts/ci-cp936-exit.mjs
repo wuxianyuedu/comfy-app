@@ -638,9 +638,14 @@ export function runWithCp936Exit(
            * 走 `emit` 的中文会在日志里变成乱码，那正是这一层要治的病。
            * 这句话自己的字符也必须**全是 CP936 编得出来的**（`describeGlyphReplacements`
            * 保证了这一点）。 */
-          const line = `${describeGlyphReplacements(fresh)}\n`;
-          const { ok } = write(line, { stdio: "inherit" });
-          if (!ok) emit(line);
+          const said = describeGlyphReplacements(fresh);
+          /* 空串 = 这批全在登记表里（换法本来就读得出来）⇒ **整行不发**，
+           * 发一个空行比不发更吵（ISSUE #2326）。 */
+          if (said !== "") {
+            const line = `${said}\n`;
+            const { ok } = write(line, { stdio: "inherit" });
+            if (!ok) emit(line);
+          }
         }
       }
       /* 转码成功时**不必再 emit** —— `write()` 已经把 PowerShell 那份 936 字节
@@ -707,9 +712,17 @@ export function runWithCp936Exit(
        * 这一条在**被平台按 stage 超时 kill** 时不会来（`close` 不来）—— 但那时
        * 前面每一次出现的即时读数都已经发出去了，形态不会丢。 */
       if (glyphTotals.size > 0) {
-        const summary = `${describeGlyphReplacements([...glyphTotals.values()], "这一跑")}\n`;
-        const { ok } = write(summary, { stdio: "inherit" });
-        if (!ok) emit(summary);
+        const said = describeGlyphReplacements(
+          [...glyphTotals.values()],
+          "这一跑",
+        );
+        /* 与逐块那条同判据：只有落了 `\uXXXX` 兜底的才值得出声（ISSUE #2326）。
+         * 一整跑都在登记表里 ⇒ 这一行也不发 —— 登记表的形状就应该是「安静地按设计跑完」。 */
+        if (said !== "") {
+          const summary = `${said}\n`;
+          const { ok } = write(summary, { stdio: "inherit" });
+          if (!ok) emit(summary);
+        }
       }
       settle(code ?? 0);
     });

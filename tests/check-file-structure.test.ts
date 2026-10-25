@@ -983,9 +983,6 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
    * 判据要的是「起得来**且**解释得了 `-c`」，所以探测用的就是真跑那一条
    * `["-c", "import sys; sys.exit(0)"]` —— 冒牌同名文件在这里退非零，如实判「不在场」。 */
   const FOCUS_SCRIPT = join(process.cwd(), "scripts", "win32-window-focus.py");
-  /* 与上面 `psExe` 同一入口（ISSUE #2316 的「同形同批」）：这里是 `python` 那一处。
-   * 探测用的就是真跑那一条 `["-c", "import sys; sys.exit(0)"]` —— 冒牌同名文件在那里
-   * 退非零，如实判「不在场」。 */
   const python = firstRunnableOrEmpty({
     candidates: PYTHON_CANDIDATES,
     probeArgs: () => PYTHON_PROBE_ARGS,

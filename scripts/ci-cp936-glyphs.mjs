@@ -313,17 +313,32 @@ export function normalizeCp936Glyphs(text) {
  *
  * @param {Array<{from: string, to: string, count: number}>} replaced
  * @param {string} [scope] 这批的范围（逐块的那条是「这一批」，收尾那条是「这一跑」）
- * @returns {string}
+ * @returns {string} 空串 = 这一批没有需要人看的东西（调用方据此**整行不发**，别发空行）
  */
 export function describeGlyphReplacements(replaced, scope = "这一批") {
   if (!replaced.length) return "";
-  const parts = replaced
+  /* 出声的判据只有一个：**有没有字符只能记成 `\uXXXX`**（登记表里没有它的替代写法）。
+   * 登记过的那些（`✓→√`、`⚠→※`、零宽类直接删）是「按设计已经办完」，日志里本来就读得出来；
+   * 逐次念它们只会教读者忽略这一行 —— 而这一行唯一的对象正是那种需要人看一眼的形态
+   * （业主口径，ISSUE #2326）。总量仍在这句话里说一个数：那不是没发生，是不必逐次念。 */
+  /** @param {{to: string}} r */
+  const isFallback = (r) => /^\\u[0-9A-F]{4,6}$/.test(r.to);
+  const spoken = replaced.filter(isFallback);
+  if (spoken.length === 0) return "";
+  const parts = spoken
     .map((r) => {
       const from = `U+${codePointOf(r.from).toString(16).toUpperCase().padStart(4, "0")}`;
-      const to = r.to === "" ? "(删)" : r.to;
-      return `${from} -> ${to} x${r.count}`;
+      return `${from} -> ${r.to} x${r.count}`;
     })
     .join("、");
-  const total = replaced.reduce((n, r) => n + r.count, 0);
-  return `[cp936-glyph] ${scope}有 ${total} 个字符在 CP936 里没有字形，已换成读得出来的写法：${parts}`;
+  const spokenTotal = spoken.reduce((n, r) => n + r.count, 0);
+  const quietTotal = replaced
+    .filter((r) => !isFallback(r))
+    .reduce((n, r) => n + r.count, 0);
+  return (
+    `[cp936-glyph] ${scope}有 ${spokenTotal} 个字符在 CP936 里没有字形、也没有登记的替代写法，已如实记成 \\uXXXX：${parts}` +
+    (quietTotal > 0
+      ? `；另有 ${quietTotal} 处按登记表换成读得出来的写法（那些不再逐次报）`
+      : "")
+  );
 }
