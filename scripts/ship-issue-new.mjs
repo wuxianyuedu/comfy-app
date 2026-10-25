@@ -54,8 +54,13 @@ const PRIORITY_WORDS = ISSUE_PRIORITIES.split("|");
  * 回执不算结论：写完之后列一次最新评论，认的是「最新的自己那条里含 marker」
  * （marker 通常是构建号 —— 它让「同一条读数写了两遍」与「写成功了」区分得开）。
  *
+ * 落点两档（`path`）：`issue` 是单子的评论区、`pull` 是 PR 的评论区。两档的命令形状
+ * 只差一个词（`issues` / `pulls`），所以实现只有这一份 —— PR 档那一格（ISSUE #2332）
+ * 在这里之前自己抄过一遍「写 + 回读」，两处漂开就是「一边补了回读、另一边没有」。
+ *
  * @param {{run:any, log:(s:string)=>void, slug:string, number:number, body:string,
- *   marker:string, mkTmp:(name:string,text:string)=>string|null}} input
+ *   marker:string, mkTmp:(name:string,text:string)=>string|null,
+ *   path?:"issue"|"pull"}} input
  * @returns {boolean} 写成且回读到 ⇒ true
  */
 export function runAppendIssueComment({
@@ -66,15 +71,17 @@ export function runAppendIssueComment({
   body,
   marker,
   mkTmp,
+  path: route = "issue",
 }) {
-  const file = mkTmp("issue-comment", body);
+  const onPull = route === "pull";
+  const file = mkTmp(onPull ? "pull-comment" : "issue-comment", body);
   if (!file) {
     log("[ship] ✗ 取不到 git 目录 ⇒ 评论没有落点，这一步没有执行者。");
     return false;
   }
   const res = cnbJson(run, [
-    "issues",
-    "post-issue-comment",
+    onPull ? "pulls" : "issues",
+    onPull ? "post-pull-comment" : "post-issue-comment",
     "--repo",
     slug,
     "--number",
@@ -85,8 +92,8 @@ export function runAppendIssueComment({
   ]);
   if (!res || res.code !== 0) return false;
   const back = cnbJson(run, [
-    "issues",
-    "list-issue-comments",
+    onPull ? "pulls" : "issues",
+    onPull ? "list-pull-comments" : "list-issue-comments",
     "--repo",
     slug,
     "--number",

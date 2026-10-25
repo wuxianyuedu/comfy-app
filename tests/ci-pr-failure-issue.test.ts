@@ -475,8 +475,11 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
     expect(block).not.toContain("failStages");
     expect(block).not.toContain("ifModify");
     /* 那两条没被验证过的条件语法也不许回来当「红也跑」的手段 —— 第一版写成
-     * `run: always()`，实测那一格仍然是 `skipped`。 */
+     * `run: always()`，实测那一格仍然是 `skipped`。`run:` 更不是 Stage 的字段
+     * （`grammar.md` 的配置项表里没有它），写上去会被静默忽略（#2335 的 CI 红就是
+     * 配置与断言一起写错了这个词）。 */
     expect(block).not.toContain("always()");
     expect(block).not.toContain("when:");
+    expect(block).not.toContain("run:");
   });
 });

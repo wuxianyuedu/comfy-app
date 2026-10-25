@@ -263,6 +263,10 @@ export function composeBody({ slug, target, stage, skipped, readout, handle }) {
 /**
  * 写一条 PR 评论并**独立回读**（与每日档 `appendReading` 同一形状：回执不算结论）。
  *
+ * 实现只有一份：`runAppendIssueComment()` 的 `path:"pull"` 那一档 —— 与「往单子下追加
+ * 读数」逐字同形，差别只是 `issues` / `pulls` 这一个词。此前这里自己抄过一遍
+ * （写 → 列 → 认 marker 三步），两处漂开就变成「一边补了回读、另一边没有」。
+ *
  * @param {{run:any, log:(s:string)=>void}} io
  * @param {string} slug 仓库路径
  * @param {number} iid PR 号
@@ -271,48 +275,16 @@ export function composeBody({ slug, target, stage, skipped, readout, handle }) {
  * @returns {boolean}
  */
 export function commentPull(io, slug, iid, body, sn) {
-  const file = writeScratch(ROOT, "pr-failure-comment", body);
-  if (!file) {
-    io.log(
-      "[pr-failure-issue] ✗ 取不到 git 目录 ⇒ 评论没有落点，这一格没有执行者。",
-    );
-    return false;
-  }
-  const res = cnbJson(io.run, [
-    "pulls",
-    "post-pull-comment",
-    "--repo",
+  return runAppendIssueComment({
+    run: io.run,
+    log: io.log,
     slug,
-    "--number",
-    String(iid),
-    "--body-file",
-    file,
-    "-v",
-  ]);
-  if (!res || res.code !== 0) return false;
-  const back = cnbJson(io.run, [
-    "pulls",
-    "list-pull-comments",
-    "--repo",
-    slug,
-    "--number",
-    String(iid),
-    "--sort",
-    "-created",
-    "--page-size",
-    "20",
-    "-v",
-  ]);
-  const rows = back
-    ? Array.isArray(back.json?.data?.data)
-      ? back.json.data.data
-      : Array.isArray(back.json?.data)
-        ? back.json.data
-        : []
-    : [];
-  return rows.some((/** @type {any} */ c) =>
-    String(c?.body ?? "").includes(sn),
-  );
+    number: iid,
+    body,
+    marker: sn,
+    mkTmp: (name, text) => writeScratch(ROOT, name, text),
+    path: "pull",
+  });
 }
 
 /**
