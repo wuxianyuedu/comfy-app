@@ -79,6 +79,7 @@ import {
   issueItemShapes,
   participantLabel,
   readDevHandle,
+  readDevHandleWithSource,
   ticketReading,
   withCommentHeader,
   whoamiLines,
@@ -1234,11 +1235,14 @@ describe("issueAuthoring：单子的两格身份（提单人 / 优先级）—�
     expect(all).toContain("env:init");
   });
 
-  it("负控制：非 Windows 没配 ⇒ 同一句事实，但**不点名要求**（本轮口径只管 Windows）", () => {
+  it("负控制：非 Windows 且调用方给了空值 ⇒ 不点名要求，但把取值链与出口都念出来", () => {
+    /* `handle: null` 现在只可能来自装配层显式传空 —— 取值链保证给得出名字。
+     * 这一格钉的是「不点名要求配」（本轮只管 Windows）+「照旧指得出能动的地方」。 */
     const r = issueAuthoring({ handle: null, platform: "linux" });
     expect(r.required).toBe(false);
     const all = r.lines.join("\n");
-    expect(all).toContain("只对 Windows 开发者要求");
+    expect(all).toContain("dev-handle.mjs");
+    expect(all).toContain("COMFYAPP_DEV_HANDLE");
     expect(all).not.toContain("Windows 开发者按规范在");
   });
 
@@ -1375,22 +1379,25 @@ describe("readDevHandle：进程环境优先，回落本检出 .env，读不到�
     }
   });
 
-  it("负控制：`.env.example` 那种**注释掉**的形态不算配了 ⇒ 回 null，不念成一个空短名", () => {
+  it("负控制：`.env.example` 那种**注释掉**的形态不算填了 ⇒ 走取值链，不念成空短名", () => {
     const root = envRoot('# COMFYAPP_DEV_HANDLE="yuedu-win"\n');
     try {
-      expect(readDevHandle({ root, env: {} })).toBeNull();
+      const r = readDevHandleWithSource({ root, env: {} });
+      expect(r.name.trim()).not.toBe("");
+      expect(r.explicit).toBe(false);
+      expect(r.source).not.toBe(".env");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it("没有 `.env`（CI / 干净检出）⇒ null，而不是抛错也不是「读不出来」", () => {
-    expect(
-      readDevHandle({
-        root: path.join(os.tmpdir(), "comfy-no-such-checkout"),
-        env: {},
-      }),
-    ).toBeNull();
+  it("没有 `.env`（CI / 干净检出）⇒ 取值链给一个名字，而不是抛错也不是空串", () => {
+    const r = readDevHandleWithSource({
+      root: path.join(os.tmpdir(), "comfy-no-such-checkout"),
+      env: {},
+    });
+    expect(r.name.trim()).not.toBe("");
+    expect(r.explicit).toBe(false);
   });
 });
 
@@ -1772,7 +1779,8 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       });
       expect(code).toBe(CODE.NOT_RUN);
       expect(f.calls).toEqual([]);
-      expect(f.log.join("\n")).toContain("COMFYAPP_DEV_HANDLE");
+      // 空短名只可能来自装配层显式传空 ⇒ 话术点的是取值链，而不是「去配那个键」。
+      expect(f.log.join("\n")).toContain("dev-handle.mjs");
     } finally {
       s.cleanup();
     }
@@ -4093,7 +4101,7 @@ describe("--new-issue：一步建单并回读", () => {
     }
   });
 
-  it("未配留痕 ⇒ 单子照样建，只是没有 提单人:（读数，不阻断）", async () => {
+  it("短名是取的 ⇒ 单子照样建、不因「回读没有标签」退 2（ISSUE #2355）", async () => {
     const tmp = withBody("## 症状\n\n…\n");
     const f = newIssueIo({
       readback: {
@@ -4115,8 +4123,9 @@ describe("--new-issue：一步建单并回读", () => {
         tmp.dir,
       );
       expect(code).toBe(CODE.GREEN);
-      expect(f.log.join("\n")).toContain("未配留痕短名");
-      expect(f.calls.some((c) => c.includes("post-issue-labels"))).toBe(false);
+      /* 取值链给的短名（`git config user.name` / 兜底 `cnb`）建单时本来就不带标签 ——
+       * 把它读成「你填了却没落上」会让一次正常建单退 2，而这里钉住它不退。 */
+      expect(f.log.join("\n")).toContain("是取的");
     } finally {
       rmSync(tmp.dir, { recursive: true, force: true });
     }
@@ -5269,7 +5278,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     }
   });
 
-  it("复用已有 PR 而未配 handle ⇒ 只念一句，一次标签动作都不伸手", async () => {
+  it("复用已有 PR 而没人填过名字 ⇒ 用取来的短名打标签，并念「这是取的」", async () => {
     const { tmpRoot, gitDir } = proofRoot("author-label-reuse");
     try {
       const heard: string[] = [];
@@ -5293,14 +5302,19 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       const all = heard.join("\n");
       expect(code).toBe(CODE.GREEN);
       expect(all).toContain("复用，不重建");
-      // 未配 ⇒ 不阻断，但要点到**这一份检出**的 .env 与该跑的命令。
-      expect(all).toContain("未配 COMFYAPP_DEV_HANDLE");
-      expect(all).toContain(path.join(tmpRoot, ".env"));
+      // 没填 ⇒ 不阻断：名字由取值链给，但要念出「这是取的」并给出能固定的下一动作。
+      /* 这一跑没有把 `root` 指到临时目录（`main()` 的 root 就是本仓），所以不钉绝对路径 ——
+       * 绝对路径那一形由 `whoamiLines` / `issueAuthoring` 的用例钉着。 */
+      expect(all).toContain("是**取的**");
+      expect(all).toContain("COMFYAPP_DEV_HANDLE");
       expect(all).toContain("pnpm env:init");
+      /* 与「填过」那一支的差别只在话术（谁的名字、是不是取的）：取值链给了短名，
+       * 标签就照打 —— 过去那支要么打 `处理人:undefined`，要么让「这台机器上没人配」
+       * 变成「这张 PR 没有处理人」，两种都更坏。 */
       expect(
-        base.calls.filter((c) => c.includes("pull-labels")),
-        "未配 handle 却伸手打标签了",
-      ).toEqual([]);
+        base.calls.find((c) => c.includes("post-pull-labels")),
+        "取来的短名也要真的落成标签",
+      ).toContain("处理人:");
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }

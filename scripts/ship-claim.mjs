@@ -20,13 +20,10 @@
  *   3. **不替别人说话**：单子在别人名下时既不领取、也不代发「开发结束」。
  */
 
-import path from "node:path";
-
 import { asArray } from "./ship-build.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
-  DEV_HANDLE_ENV_KEY,
   withCommentHeader,
   handlerLabel,
   ISSUE_LABEL_ROLES,
@@ -655,6 +652,7 @@ export function finishIssueWork(ctx) {
  *   slug:string|null,
  *   cnbOk:boolean,
  *   handle:string|null,
+ *   explicitHandle?:string|null,
  *   root:string,
  *   opt:any,
  *   mkTmp:(name:string,text:string)=>string|null,
@@ -664,7 +662,19 @@ export function finishIssueWork(ctx) {
  * @returns {number} `CODE` 之一
  */
 export function runIssueAction(ctx) {
-  const { run, log, slug, cnbOk, handle, root, opt, mkTmp, createIssue, dryRun = false } = ctx;
+  const {
+    run,
+    log,
+    slug,
+    cnbOk,
+    handle,
+    explicitHandle = null,
+    root,
+    opt,
+    mkTmp,
+    createIssue,
+    dryRun = false,
+  } = ctx;
   const claimBad = /** @type {string[]} */ (opt.claimBad ?? []);
   const releaseBad = /** @type {string[]} */ (opt.releaseBad ?? []);
   const newIssueBad = /** @type {string[]} */ (opt.newIssueBad ?? []);
@@ -718,21 +728,33 @@ export function runIssueAction(ctx) {
     );
     return CODE.NOT_RUN;
   }
-  /* 建单**不要求**留痕：未配时照样建，只是没有 `提单人:` 标签（`runNewIssue` 会念出来）。
-   * 领取 / 结束 / 列表则必须有「谁」—— 那三格的动作本体就是「谁在做什么」。 */
+  /* 建单**不要求**留痕（`runNewIssue` 会念）；领取 / 结束 / 列表则必须有「谁」—— 那三格的
+   * 动作本体就是「谁在做什么」。名字由取值链给（`dev-handle.mjs`，ISSUE #2355）：
+   * 人填的 → 平台运行身份 → `git config user.name` → `cnb`。所以这里的空值只可能来自
+   * 调用方显式传空（装配层漏传），话术按「没有来源」念，而不是让照提示做过一遍的人再撞一次墙。 */
   if (wantsNewIssue) {
     if (typeof createIssue !== "function") {
       log("[ship] [ERROR] --new-issue 没有接上执行者（装配层漏传）⇒ 没有结论。");
       return CODE.NOT_RUN;
     }
-    return createIssue({ run, log, slug, handle, root, opt, mkTmp, dryRun });
+    return createIssue({
+      run,
+      log,
+      slug,
+      handle,
+      explicitHandle,
+      root,
+      opt,
+      mkTmp,
+      dryRun,
+    });
   }
   const name = String(handle ?? "").trim();
   if (!name) {
     log(
-      `[ship] 领取 / 结束 / 列表要 ${DEV_HANDLE_ENV_KEY}（这一份检出没配）` +
-        ` ⇒ 现在写不出「谁」。在 \`${path.join(root || ".", ".env")}\` 填一行 ` +
-        `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（整行不在时先跑 \`pnpm env:init\`）。`,
+      "[ship] 领取 / 结束 / 列表要「谁」，而这次一个名字都没取到" +
+        "（取值链 `dev-handle.mjs`：人填的 → `CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → " +
+        "`git config user.name` → `cnb`；走到空只可能是装配层没传） ⇒ 这一格没有执行者。",
     );
     return CODE.NOT_RUN;
   }
