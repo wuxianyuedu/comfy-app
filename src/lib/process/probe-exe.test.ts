@@ -83,7 +83,11 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
         : { ok: false, failure };
 
   it("命中第一个能跑的，且不把后面的候选算成「试过」", () => {
-    const got = firstRunnable(["powershell", "pwsh"], () => [], probeOnly("pwsh"));
+    const got = firstRunnable(
+      ["powershell", "pwsh"],
+      () => [],
+      probeOnly("pwsh"),
+    );
     expect(got.hit).toBe("pwsh");
     // 第一个候选**确实试过**且失败了 —— 这句读数下一次要靠它说清「谁顶掉了谁」。
     expect(got.missed[0]?.candidate).toBe("powershell");
@@ -112,7 +116,10 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
       (candidate) =>
         candidate === "a"
           ? { ok: false, failure: { kind: "timeout", timeoutMs: 30 } }
-          : { ok: false, failure: { kind: "nonzero-exit", status: 2, signal: null } },
+          : {
+              ok: false,
+              failure: { kind: "nonzero-exit", status: 2, signal: null },
+            },
     );
     expect(got.hit).toBeNull();
     expect(got.timeouts.map((t) => t.candidate)).toEqual(["a"]);
@@ -135,7 +142,12 @@ describe("话术：下一个要排障的人得从这一行读出「哪一个候�
 
   it("多个候选时逐个点名，且原因跟在名字后面", () => {
     const text = describeProbeMisses(
-      [{ candidate: "powershell", failure: { kind: "nonzero-exit", status: 2, signal: null } }],
+      [
+        {
+          candidate: "powershell",
+          failure: { kind: "nonzero-exit", status: 2, signal: null },
+        },
+      ],
       [{ candidate: "pwsh", failure: { kind: "timeout", timeoutMs: 20000 } }],
     );
     expect(text).toContain("powershell");
@@ -156,7 +168,10 @@ describe("话术：下一个要排障的人得从这一行读出「哪一个候�
       { command: "python3", failure: { kind: "spawn-error", code: "ENOENT" } },
     ]);
     expect(flat).toEqual([
-      { candidate: "python3", failure: { kind: "spawn-error", code: "ENOENT" } },
+      {
+        candidate: "python3",
+        failure: { kind: "spawn-error", code: "ENOENT" },
+      },
     ]);
     expect(describeProbeMisses(flat)).not.toContain("undefined");
   });

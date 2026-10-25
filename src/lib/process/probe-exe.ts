@@ -80,11 +80,11 @@ export function probeExecutable(
    * 「这一次没量到」，而不是「这个命令起不来」（§13.6.4 那条口径）。 */
   if (probe.error) {
     /* libuv 认不出的失败不给 `code`，`UNKNOWN` 是判据自己兜的那一档 —— 把它读成
-     * 「没有错误」会让一条失败被报成可用（本模块要治的正是那一类）。 */
-    /* `?? ""` 再 `|| "UNKNOWN"` 多此一举 —— 一行写完：
-     * 没有码（`undefined`）与空串在下一步是同一件（都指不到下一步）。 */
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串同样算「没有码」
-    const code: string = (probe.error as NodeJS.ErrnoException).code || "UNKNOWN";
+     * 「没有错误」会让一条失败被报成可用（本模块要治的正是那一类）。空串同样是
+     * 「没有码」（它会打出一句「起不来（）」），所以这里刻意不用 `??`。 */
+    const errno = (probe.error as NodeJS.ErrnoException).code;
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+    const code: string = errno || "UNKNOWN";
     if (code === "ETIMEDOUT") {
       return { ok: false, failure: { kind: "timeout", timeoutMs } };
     }
