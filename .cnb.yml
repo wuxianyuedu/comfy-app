@@ -1657,7 +1657,11 @@
     ifModify:
       - "src/**"
       - ".storybook/**"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-format.cjs
+    # #2342（口径变更，业主拍板）：红 ⇒ 就地 prettier --write 门禁判出的那几个文件、
+    # 复判全绿后由 bot 推一个 format-only 提交回 PR 源分支，流水线在新提交上重跑。
+    # 判据本体一字未改（ci-format-fixup.mjs 内部先原样跑 check-format.cjs；绿时
+    # 一个字节不多写）。四道护栏与凭据说明见脚本头注与规范 §13.5.19 末节。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-format-fixup.mjs --check --autofix
 
   # 收窄（ISSUE #1993）：它判的是「这次提交里有多少个文件只是被 prettier 重排过」，
   # 而判据本体是**逐文件跑 prettier**（每个改动过的源文件一次）。所以面就是
