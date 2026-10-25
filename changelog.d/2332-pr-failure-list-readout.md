@@ -14,3 +14,9 @@
   它自己说不出为什么没读到，等于把「看不见」换了个位置；
 - 用例：`tests/ci-build-readout.test.ts` 补两条（退码非零与服务根本没起来是两种话术），
   负控制是「stderr 第二行不念」。
+
+- **这一格在平台侧暂时还读不到列表**（不是判据的问题）：`cnb-uh5-1k5olev2q` 的读数是
+  `data={"errcode":10023, … Missing required scopes: repo-cnb-history:r}` —— 这一跑的
+  `CNB_TOKEN` 少了「构建历史只读」，而它按事件类型分配（官方 `zh/build/build-in-env.md`
+  §CNB_TOKEN）。已按硬规则 29 立案 **#2339**（配置面，代码改不动）；
+  在那之前这一格的行为是**正确**的：取不到 ⇒ 不写、退 2、并把缺哪个 scope 念出来。

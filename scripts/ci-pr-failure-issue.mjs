@@ -454,7 +454,20 @@ export function main(io = {}) {
      * 否则现场只留一句「取不到构建列表」，三种原因的下一个动作完全不同。 */
     list = fetchBuildList(run, slug, "pull_request", 60, { log });
     if (!list) {
-      log("[pr-failure-issue] 取不到构建列表 ⇒ 没有结论，一次都不写。");
+      /* 这一句是这一格**唯一**的失效形态（它是 `endStages`，退出码不构成流水线结论），
+       * 所以要把「下一次该谁做什么」也写在这里，而不是只留一句「取不到」。
+       * 2026-10-25 的现场读数（`cnb-uh5-1k5olev2q`）：
+       *   `data={"errcode":10023,"errmsg":"The token's authorization scope does not
+       *          match this request. Missing required scopes: repo-cnb-history:r"}`
+       * —— 即**流水线里的 `CNB_TOKEN` 少了「构建历史只读」**这一项。它按事件类型分配
+       * （官方 `zh/build/build-in-env.md` §CNB_TOKEN）：`pull_request` 属可信事件本应有，
+       * 所以这一行读数是配置面的问题，代码改不动它 —— 出路是让这一跑拿到那份 scope。 */
+      log(
+        "[pr-failure-issue] 取不到构建列表 ⇒ 没有结论，一次都不写。" +
+          "原因见上面 `[build-readout]` 那一行；若是 `Missing required scopes: repo-cnb-history:r`，" +
+          "那是这一跑的 `CNB_TOKEN` 权限面（官方 build-in-env.md §CNB_TOKEN 按事件类型分配），" +
+          "不是这一格的判据。",
+      );
       return finish(CODE.NO_FACT, "取不到构建列表");
     }
   }
