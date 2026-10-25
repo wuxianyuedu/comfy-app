@@ -94,9 +94,16 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { CHANGED_SCOPED, readHookSteps, runGate } from "./base-check/hook-steps.mjs";
+import {
+  CHANGED_SCOPED,
+  readHookSteps,
+  runGate,
+} from "./base-check/hook-steps.mjs";
 import { resolveBaseRef, resolveChangedFiles } from "./changed-scope.mjs";
-import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
+import {
+  faceTouched,
+  narrowingEntryForScript,
+} from "./ci-incremental-gates.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -311,6 +318,11 @@ export function runHeavyGates(io = {}) {
   for (const step of steps) {
     /* 按面跳过（ISSUE #2255）：面取自收窄登记表，与平台那一格同一份 glob。 */
     const decision = narrowingDecision(step, io.changedFiles ?? null);
+    /* 「按面未触及」不是「没判」：这一条**本来就不该**在这次改动上跑（ISSUE #2255 的
+     * 全部意义就是省掉它）⇒ 归 `skipped`，与「跳过」逐字同形。
+     * 真正会「跳过了却该报没判」的形态在下一格：拿不到基线（`notJudged`）。
+     * ⚠️ 平台那一格与这一格的收窄面必须**同一份** —— 面碰不到时它在平台上是被
+     * `ifModify` 挡掉的，不是被跳过两次。 */
     if (decision.skip) {
       skipped.push({
         label: step.label,
@@ -469,12 +481,29 @@ export function main(io = {}) {
     }
   }
 
-  const { runs, skipped, notJudged } = runHeavyGates({
+  const { runs, skipped, notJudged, unreadable } = runHeavyGates({
     cwd: io.cwd,
     only,
     env: io.env,
     changedFiles,
   });
+
+  /* **注册表读不出来 ⇒ 这一档没有判决面**（ISSUE #2367）。
+   *
+   * `readHookSteps()` 回空数组，`runHeavyGates()` 交的是 `unreadable: true` —— 而
+   * 上面那句解构此前**没把它接出来**，于是 `runs / skipped / notJudged` 三条全空，
+   * 一路走到最后那句 `return 0`：账面上「合计 0 条、红 0」，读起来像「没有判据要跑」，
+   * 而事实是**一条都没判**。这正是 `main()` 开头那段（`hookSteps.length === 0` ⇒ 退 2）
+   * 要拦的形态，只是它只覆盖了「先自己读一遍」那条路。
+   *
+   * 放在这里而不是继续往上加分支：它是同一条判据的第二个入口，结论必须逐字相同。 */
+  if (unreadable) {
+    log(
+      "[重档] 没跑起来：读不到 `.githooks/pre-commit` 的步骤注册表 —— " +
+        "本档不构成证据，不是「没有判据要跑」",
+    );
+    return 2;
+  }
 
   /* 「没跑起来」有两族：127（命令找不到，这一档的既有约定）与**那一步自己声明的**
    * 退出码（`shell-gate` 报「没跑起来」用 2 —— 仓库三态 0 绿 / 1 红 / 2 没跑起来）。
@@ -492,7 +521,10 @@ export function main(io = {}) {
           notRun: missing.map((r) => r.label),
           /* 「没有判决面」那一档：它们在这一档恒绿且无声 ⇒ 单独列出来，
            * 不许混进 `total` 里冒充「跑过」。 */
-          notJudged: notJudged.map((n) => ({ label: n.label, reason: n.reason })),
+          notJudged: notJudged.map((n) => ({
+            label: n.label,
+            reason: n.reason,
+          })),
           /* 「按面未触及」那一档（ISSUE #2255）：跳过**不是**判过 ⇒ 单独列出来，
            * 不许混进「绿」里冒充「跑过」。 */
           skipped: skipped.map((s) => ({
@@ -516,14 +548,46 @@ export function main(io = {}) {
       );
     }
     runs.forEach((r, i) => {
-      const tag = r.code === 0 ? "ok" : r.code === 127 ? "没跑起来" : "红";
+      /* 三态标签与退出码同口径（`isNotRun` 上面那一段）：把「没跑起来」打成「红」
+       * 是把「没判」说成「判出失败」，读的人会去修一条根本没执行过的判据。 */
+      const tag =
+        r.code === 0
+          ? "ok"
+          : r.code === 127 || r.notRunCodes.includes(r.code)
+            ? "没跑起来"
+            : "红";
       log(`[重档] ${i + 1}/${runs.length} ${tag} ${r.label}（${r.ms}ms）`);
       if (r.code !== 0) {
-        const tail = String(r.output ?? "")
+        /* 红步的输出**不许静默截断**（ISSUE #2367 的现场）：这里此前只转述尾部 12 行，
+         * 而 `重档` 那一档的输出是几百行 —— 红的那一条常常在**前面**（本次现场是
+         * 「改动面来自 …」与 `[deps-freshness] 有漂移` 那几行），平台日志里一个字都没有，
+         * 读的人只能看到一屏无关的绿步读数。尾部仍保留（判据的结论多在末尾），
+         * 但表头与第一条失败行必须念出来。
+         *
+         * 取法三件：**前 3 行**（表头 / 判决面）、**第一条带「红」「✗」「ERROR」的行**
+         * （判据自己的结论），再是尾部 12 行。有省略时**明说省了多少行**。 */
+        const all = String(r.output ?? "")
           .trim()
           .split(/\r?\n/)
-          .slice(-12);
-        for (const line of tail) log(`        ${line}`);
+          .filter((line) => line.trim() !== "");
+        /* 「哪几行是结论」不该由一个词表决定（本次现场的红行是一句普普通通的
+         * `[deps-freshness] 有漂移`，词表里没有它就等于没念）。⇒ **按位置取**：
+         * 前 5 行（表头 / 判决面 / 第一条失败）+ 后 15 行（判据的结论都在末尾）。
+         * 判据的输出通常不到 20 行 ⇒ 一个字都不省。 */
+        const HEAD_LINES = 5;
+        const TAIL_LINES = 15;
+        const picked =
+          all.length <= HEAD_LINES + TAIL_LINES
+            ? all
+            : [...all.slice(0, HEAD_LINES), ...all.slice(-TAIL_LINES)];
+        for (const line of picked) log(`        ${line}`);
+        if (picked.length < all.length) {
+          const omitted = all.length - picked.length;
+          log(
+            `        …（此处省略第 ${HEAD_LINES + 1}~${all.length - TAIL_LINES} 行，共 ${omitted} 行；` +
+              "省略的是中间段，头尾都在上面）",
+          );
+        }
       } else {
         /* 绿步的**读数也要有出口**（ISSUE #2256）：此前只有红步的输出被转述，
          * 于是「exit 0 但自己说了『我没有判任何东西』」那类形状在平台日志里
