@@ -60,8 +60,12 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { runPnpmSync } from "./launcher-core/shell.mjs";
+import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { applySlot, clearJobLink, SLOT_ENABLED_ENV } from "./ci-slot-apply.mjs";
+import {
+  installBudgetMs,
+  runInstallWithBudget,
+} from "./ci-install-deadline.mjs";
 import {
   DEP_FILES,
   FINGERPRINT_FILE,
@@ -139,7 +143,13 @@ export function changedFiles(run) {
   const attempts = [
     /* PR：平台 checkout 的是预合并提交，与目标分支的差集就是本次 PR 的变更面。
      * `CNB_PULL_REQUEST_TARGET_BRANCH` 缺省时退回 `master`（本仓唯一的目标分支）。 */
-    ["-c", "core.quotePath=false", "diff", "--name-only", `origin/${targetBranch()}...HEAD`],
+    [
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--name-only",
+      `origin/${targetBranch()}...HEAD`,
+    ],
     /* push：与上一个提交比（新建分支时这条会失败，落进下面那支）。 */
     ["-c", "core.quotePath=false", "diff", "--name-only", "HEAD^..HEAD"],
     /* 本地 / 还没提交的形态：工作区与暂存区。前两条在「平台侧 checkout 出来的那份」
@@ -241,21 +251,24 @@ export function decideInstall({
 }
 
 /**
- * 真跑一次 `pnpm install --frozen-lockfile`，退出码原样转出去。
+ * 真跑一次 `pnpm install --frozen-lockfile`（**带墙钟与心跳**，见 `ci-install-deadline.mjs`）。
  *
- * 形态**不在这里判定**：走 `runPnpmSync`（`scripts/launcher-core/shell.mjs`）那唯一一条出口。
- * 自己拼 `spawnSync("pnpm", …, { shell: true })` 是错的形态 —— 它绕开了
- * `pnpmInvocation()`（Windows 上批处理形态在 Node 下起不来，见 §2.1.1），
- * 而这条流水线**只跑在 Windows 自托管节点上**，正是那一档。
- */
-/**
- * 真跑一次 `pnpm install --frozen-lockfile`。
+ * 为什么从 `spawnSync` 换成了自带预算的形态（ISSUE #2360）：平台那一跑上它挂到
+ * **8640s 硬上限**才被掐断，整格日志 19 行、pnpm 的输出一行都没有，读出来的话只有
+ * `timeout of 8640000ms exceeded` —— 既不说是谁挂的，也不给下一动作。现在预算用尽
+ * 就退 **2（未判定）** 并打印卡在第几秒；跑完则退出码原样透出，判据一字未改。
  *
  * @param {string | null} [explicit] 已经在**这一步亲眼看见起得来**的全路径（`ensurePnpmOnPath`
- *   的结论）。给了就直接起它；不给才交给 `runPnpmSync` 的形态判据。
- * @returns {number} 退出码
+ *   的结论）。给了就直接起它；不给才交给形态判据。
+ *
+ * 形态判据仍然**只有一处出口**（`pnpmInvocation()` / `runPnpmSync` 那一族，见
+ * `scripts/launcher-core/shell.mjs`）：自己拼 `spawnSync("pnpm", …, { shell: true })` 是
+ * 错的形态 —— Windows 上批处理形态在 Node 下起不来（§2.1.1），而这条流水线**只跑在
+ * Windows 自托管节点上**。本函数换掉的只是**生命周期**，不是那条解析链。
+ *
+ * @returns {Promise<number>} 退出码（超时 / 起不来 ⇒ 2）
  */
-function runInstall(explicit = null) {
+async function runInstall(explicit = null) {
   /* 作业里那条指进槽的链必须先摘掉：留着它跑作业内的 install，pnpm 会顺着链把新的一套
    * 写进**槽**、而键仍是旧的（规范 §13.5.3.4.3 第一条，从散文变成有执行者）。 */
   if (clearJobLink(ROOT)) {
@@ -267,30 +280,42 @@ function runInstall(explicit = null) {
    * 那一份比形态判据更硬：判据按 `PATH × 扩展名` 找候选，而 `pnpm-native.exe` 这个
    * 名字不在候选集里 —— 于是「落点拼进 PATH 了、判据仍答没有」是**正常**的
    * （ISSUE #2281 第二轮，平台那一跑：起全路径的 `-v` 退 0，紧接着 install 报 not found）。 */
-  /** @type {{status: number | null, error: any, command?: string, args?: string[]}} */
-  const res = explicit
-    ? spawnSettled(explicit, ["install", "--frozen-lockfile"], {
-        cwd: ROOT,
-        encoding: "utf8",
-        stdio: "inherit",
-      })
-    : runPnpmSync(["install", "--frozen-lockfile"], {
-        cwd: ROOT,
-        stdio: "inherit",
-      });
-  if (res.error) {
-    /* 「命令没起来」与「跑完但非零」是两档：前者 stderr 通常是空的（见 runPnpmSync 契约）。
-     * 起了哪个形态也要打出来 —— 平台那一跑的现场就是「判据选了 A、真起的是 B」。 */
-    const errText =
-      typeof res.error === "string"
-        ? res.error
-        : String(res.error?.message ?? res.error);
+  const invocation = pnpmInvocation(["install", "--frozen-lockfile"], {
+    env: process.env,
+    platform: process.platform,
+  });
+  if (!invocation) {
     process.stderr.write(
-      `[ci-install-deps] ✗ 起不来（${explicit ?? `${res.command} ${(res.args ?? []).join(" ")}`}）：${errText}\n`,
+      "[ci-install-deps] ✗ 形态判据也找不到可用的 pnpm（PATH × 扩展名）—— " +
+        "上一段自证已经亲眼见过它起得来，这里仍判没有说明两处看的不是同一条解析面。\n",
     );
     return 1;
   }
-  return res.status ?? 1;
+  const budgetMs = installBudgetMs();
+  process.stdout.write(
+    `[ci-install-deps] 起 pnpm install（budget ${Math.round(budgetMs / 1000)}s，` +
+      "每 30s 一行心跳 —— 挂住时读得出第几秒停的）\n",
+  );
+  /* `explicit` 那条路（`ensurePnpmOnPath` 亲眼见过 `-v`）直接起它；否则用形态判据给出的
+   * 结论（`invocation.args` 已经把宿主参数排在前面，**这一层不再拼命令行**）。 */
+  const spec = explicit
+    ? { command: explicit, args: ["install", "--frozen-lockfile"] }
+    : { command: invocation.command, args: invocation.args };
+  const out = await runInstallWithBudget({
+    command: spec.command,
+    args: spec.args,
+    cwd: ROOT,
+    budgetMs,
+  });
+  if (out.error !== null) {
+    /* 「命令没起来」与「跑完但非零」是两档：前者 stderr 通常是空的（见 runPnpmSync 契约）。
+     * 起了哪个形态也要打出来 —— 平台那一跑的现场就是「判据选了 A、真起的是 B」。 */
+    process.stderr.write(
+      `[ci-install-deps] ✗ 起不来（${spec.command} ${spec.args.join(" ")}）：${out.error}\n`,
+    );
+    return out.code;
+  }
+  return out.code;
 }
 
 /**
@@ -311,11 +336,13 @@ function runInstall(explicit = null) {
  * 在日志里分不开，下一个人只能靠猜；而**少一次读数比少一次收益更难查**。
  *
  * @param {string | null} _expected 装之前算出的指纹（成功后由 `main` 落盘，这里不消费它）
- * @param {{env?: Record<string, string | undefined>, write?: (s: string) => void, install?: () => number}} [deps]
+ * @param {{env?: Record<string, string | undefined>, write?: (s: string) => void,
+ *   install?: () => number | Promise<number>}} [deps]
  *   单测据此注入：不碰真安装、不碰真槽、不改真 `process.env`。
- * @returns {number} 退出码
+ *   `install` 允许回 Promise —— 真那一跳自带墙钟（`ci-install-deadline.mjs`）。
+ * @returns {Promise<number>} 退出码
  */
-export function runInstallWithSlot(_expected, deps = {}) {
+export async function runInstallWithSlot(_expected, deps = {}) {
   const env = deps.env ?? process.env;
   const write = deps.write ?? ((s) => process.stdout.write(s));
   const install = deps.install ?? runInstall;
@@ -324,7 +351,7 @@ export function runInstallWithSlot(_expected, deps = {}) {
       "[ci-install-deps] 槽未接管（开关没拨：这一档按策略不接槽 —— 每日档后面背着 next build，" +
         "见 .cnb.yml 里那格的注释与 ISSUE #2081）⇒ 照常装\n",
     );
-    return install();
+    return await install();
   }
   const out = applySlot({ cwd: ROOT, env });
   if (out.handled) {
@@ -332,7 +359,7 @@ export function runInstallWithSlot(_expected, deps = {}) {
     return 0;
   }
   write(`[ci-install-deps] 槽未接管（${out.why}）⇒ 照常装\n`);
-  return install();
+  return await install();
 }
 
 /**
@@ -439,7 +466,10 @@ function storeCandidates(base, versioned) {
   const names = versioned
     ? ["pnpm-native.exe", "pnpm.exe"]
     : ["pnpm.exe", "pnpm-native.exe"];
-  return [...names.map((n) => path.join(base, n)), path.join(base, "bin", "pnpm.cjs")];
+  return [
+    ...names.map((n) => path.join(base, n)),
+    path.join(base, "bin", "pnpm.cjs"),
+  ];
 }
 
 /**
@@ -551,7 +581,9 @@ export function ensurePnpmOnPath({
    * @returns {string}
    */
   const verdict = (res) =>
-    res.error ? `起不来（${res.error}）` : `退 ${res.status}，输出 ${JSON.stringify(res.stdout.trim())}`;
+    res.error
+      ? `起不来（${res.error}）`
+      : `退 ${res.status}，输出 ${JSON.stringify(res.stdout.trim())}`;
 
   /* 1. PATH 上本来就有：只认**真起得来**的那一个。无扩展名 shim 是 shebang ——
    *    Node 不解析它（实测 ENOENT），而它与能跑的那个常并排摆着。批处理形态刻意
@@ -561,7 +593,11 @@ export function ensurePnpmOnPath({
     for (const name of ["pnpm.exe", "pnpm"]) {
       const candidate = path.join(dir, name);
       if (!exists(candidate)) continue;
-      const res = spawn(candidate, ["-v"], { cwd: root, encoding: "utf8", windowsHide: true });
+      const res = spawn(candidate, ["-v"], {
+        cwd: root,
+        encoding: "utf8",
+        windowsHide: true,
+      });
       consulted.push(`PATH 条目 ${candidate} → ${verdict(res)}`);
       if (works(res)) {
         return {
@@ -582,9 +618,25 @@ export function ensurePnpmOnPath({
   const stores =
     platform === "win32"
       ? [
-          ["corepack", localAppData && path.join(localAppData, "node", "corepack", "v1", "pnpm")],
+          [
+            "corepack",
+            localAppData &&
+              path.join(localAppData, "node", "corepack", "v1", "pnpm"),
+          ],
           ["pnpm home", localAppData && path.join(localAppData, "pnpm")],
-          ["corepack(~)", home && path.join(home, "AppData", "Local", "node", "corepack", "v1", "pnpm")],
+          [
+            "corepack(~)",
+            home &&
+              path.join(
+                home,
+                "AppData",
+                "Local",
+                "node",
+                "corepack",
+                "v1",
+                "pnpm",
+              ),
+          ],
           ["pnpm home(~)", home && path.join(home, "AppData", "Local", "pnpm")],
         ]
       : [["pnpm home", home && path.join(home, ".local", "share", "pnpm")]];
@@ -613,7 +665,11 @@ export function ensurePnpmOnPath({
     for (const base of bases) {
       for (const candidate of storeCandidates(base, versioned)) {
         if (!exists(candidate)) continue;
-        const res = spawn(candidate, ["-v"], { cwd: root, encoding: "utf8", windowsHide: true });
+        const res = spawn(candidate, ["-v"], {
+          cwd: root,
+          encoding: "utf8",
+          windowsHide: true,
+        });
         consulted.push(`${label} ${candidate} → ${verdict(res)}`);
         if (!works(res)) continue;
         const dir = path.dirname(candidate);
@@ -658,15 +714,15 @@ export function ensurePnpmOnPath({
  *
  * @param {{
  *   run?: (args: string[]) => {status: number, stdout: string},
- *   install?: (fingerprint: string | null) => number,
+ *   install?: (fingerprint: string | null) => number | Promise<number>,
  *   root?: string,
  * }} [deps]
  *   全部可注入 —— 单测据此跑判定与出口，不碰真网络、不碰真安装。
  *   `install` 收到的是**装之前**算出的指纹（装成功后由本函数落盘）：先算后装，
  *   中途失败留下的半套就不会被记成已验证（文件头第 3 条）。
- * @returns {number} 退出码
+ * @returns {Promise<number>} 退出码（**装那一跳现在是异步的**：它自带墙钟与心跳）
  */
-export function main(deps = {}) {
+export async function main(deps = {}) {
   const run =
     deps.run ??
     ((args) => {
@@ -695,7 +751,7 @@ export function main(deps = {}) {
     return 0;
   }
   process.stdout.write(`[ci-install-deps] 安装：${verdict.why}\n`);
-  const code = install(expected);
+  const code = await install(expected);
   /* 只有装成功才落指纹：非零退出时那一套是半成品，**不许**被下一次判成已验证。 */
   if (code === 0 && expected !== null) {
     if (!writeInstallFingerprint(root, expected)) {
@@ -731,5 +787,5 @@ if (
    * 平台那一跑上判据答 null 而起全路径的 `-v` 退 0 且打了版本号）。所以有这一条时
    * 调用方不再问判据，直接用它 —— 否则就是「判据看得见、安装看不见」那一族。 */
   const install = () => runInstall(boot.probing ?? null);
-  process.exit(main({ install }));
+  void main({ install }).then((code) => process.exit(code));
 }

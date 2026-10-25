@@ -45,6 +45,11 @@ import { fileURLToPath } from "node:url";
 
 import { resolveChangedFiles } from "./changed-scope.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
+import {
+  describeWorktreeDeps,
+  worktreeDepsProblem,
+} from "./ci-worktree-deps.mjs";
+import { existsSync } from "node:fs";
 
 /* 「改动面怎么算」那一跳已经搬进 `scripts/changed-scope.mjs` —— 桌面壳门禁
  * （`scripts/shell-gate.mjs` 的 `--base` 形态）也要问同一个问题，两边各算一次
@@ -68,14 +73,35 @@ const ROOT = path.resolve(HERE, "..");
 /**
  * 主流程。
  *
- * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null, spawn?: (script: string, env: NodeJS.ProcessEnv) => {status: number}, writeOut?: (text: string) => void, writeErr?: (text: string) => void}} [deps]
+ * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null, spawn?: (script: string, env: NodeJS.ProcessEnv) => {status: number}, writeOut?: (text: string) => void, writeErr?: (text: string) => void, installed?: boolean}} [deps]
+ *   `installed` 是依赖面体检的输入（`node_modules/.modules.yaml` 在不在）。注入面是给
+ *   单测的：判据本身不读盘（读盘那一句在下面一行，缺省就地读），而**「读没读到」不许
+ *   被用例进程自己那棵树解释掉**（§11.17 那条「判据与宿主绑死」的同族）。
  * @returns {number} 退出码（0 / 1 / 2，与 base-check、premerge 同口径）
  */
 export function main(deps = {}) {
   const env = deps.env ?? process.env;
+  /* 依赖面那两道体检（`ci-worktree-deps.mjs` 的头注记着它补的是哪一格）：
+   * 依赖没装上时 `vitest` 起不来，输出是几条 `Error:` 加一段 `AggregateError`，
+   * 退出码非零 —— 于是一个**前提不成立**的环境被读成「这次改动有回归」。
+   * 这里把它分开：前提不成立 ⇒ 退 2（没判 ≠ 绿），并说出下一动作。
+   * 判据与 `ci-install-deps.mjs` / 启动器同一份口径（`pnpm` 自己写的
+   * `node_modules/.modules.yaml`），不是「目录在不在」。 */
+  const installed =
+    deps.installed ??
+    existsSync(path.join(ROOT, "node_modules", ".modules.yaml"));
   /** 两件读数走可注入的通道 —— 平台截日志后要能在**尾部**读到它们（ISSUE #2317）。 */
   const writeOut = deps.writeOut ?? ((t) => process.stdout.write(t));
   const writeErr = deps.writeErr ?? ((t) => process.stderr.write(t));
+  /* 依赖面那两道体检的输出也走同一对通道：`main` 里**不许有第二个写 stdout 的出口**，
+   * 否则「平台截日志后尾部还读得到什么」会因为注入面覆盖不到而少一半。 */
+  const depsReadout = worktreeDepsProblem({ installed, env });
+  const depsText = describeWorktreeDeps(depsReadout);
+  if (!depsReadout.ok) {
+    writeErr(depsText);
+    return 2;
+  }
+  writeOut(depsText);
   const changed = resolveChangedFiles(deps);
   if (!changed.ok) {
     process.stderr.write(

@@ -662,6 +662,9 @@
   # 例外不是「可以随便漂」：判据钉死「PR 那一侧必须置着 `COMFY_CI_SLOT`、每日这一侧一个字都不许出现」，
   # 其余各行仍然逐字相同；改这条形状要走判据，不能只改这里。
   - name: 每日安装依赖
+    # 与 PR 那一格同一条链 ⇒ 同一个墙钟（ISSUE #2360）。`timeout` 也在「逐字相同」的
+    # 比对面里：这一行改成别的数，就是三份副本里第一份开始漂。
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -966,6 +969,7 @@
 # 那是**已知的假红**。逐档前提集与理由的一份出处：`scripts/ci-oneshot-gates.mjs`。
 .oneshot-build: &oneshot_build
   - name: 单跑构建·安装依赖
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -992,6 +996,7 @@
     timeout: 30m
 .oneshot-e2e: &oneshot_e2e
   - name: 单跑E2E·安装依赖
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -1013,6 +1018,7 @@
     timeout: 45m
 .oneshot-unit: &oneshot_unit
   - name: 单跑单测·安装依赖
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -1306,6 +1312,28 @@
       # 例外，理由与两臂读数见「每日安装依赖」上面那段。回退 = 摘掉这里这一行**并同批**把
       # 该键从那份名单里删掉：只动一边会被那条判据当场点名（名单过期）。
       COMFY_CI_SLOT: "1"
+    # ── 这一格自己带墙钟（ISSUE #2360）──────────────────────────────────────────
+    #
+    # 现场：`cnb-c6r-1k5osfdl8` 上这一格挂到**平台 8640s 硬上限**才被掐断 —— 整格日志
+    # 19 行、**pnpm 自己的输出一行都没有**（前一步 `check-pnpm-available` 刚在同一秒
+    # 打印过 pnpm 12.4.1），而同机同链的上一跑是 `Done in 2m 42.7s`（`cnb-1mr-1k5p4ihfr`）。
+    # 挂住的形态里 pnpm 的 stdout 是空的（它的进度条只在 TTY 上输出），所以「卡住」与
+    # 「还在跑」在日志上逐字同形 —— 等到平台掐断那一刻，仍然只留下一句
+    # `timeout of 8640000ms exceeded`，既不说是谁挂的，也不给下一动作。
+    #
+    # 两件事同批做掉，**判据一字未改**：
+    #   · 装那一跳自带预算（`scripts/ci-install-deadline.mjs`，默认 12 分钟 ≈ 平台上限的
+    #     1/12、节点读数 169s~275s 的 2.6~4.3 倍），用尽就收回子进程、退 **2（未判定）**，
+    #     并把「卡在第几秒、下一动作是什么」打在脸上；
+    #   · 每 30s 一行心跳，于是同一个死法下一次**读得出它在第几秒停住的**。
+    #
+    # 这一行的 20m 也是为此：要让**自己的**预算（12m）先到，而不是让平台先掐断。
+    # 它不是「抬 timeout 换绿」（§11.13 明令禁止那件事）—— 判据没松，改的是拿不到结论
+    # 时的收场方式；20m 仍然远小于平台的 8640s，卡死形态二十分钟内报出来。
+    # ⚠️ **这一行必须与 `每日安装依赖` / `单跑*·安装依赖` 那几格逐字相同**：判据
+    # `tests/no-platform-ci-config.test.ts` 的 `DAILY_SCRIPT_MIRRORS` 比的是「命令行 + env
+    # 赋值」，`timeout` 也在比对面里（三份副本各漂一份就是这条链最难查的形态）。
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -1430,10 +1458,35 @@
   # ⚠️ 与其它格一样带 `ci-cp936-exit.mjs`：这一格红的时候要读的正是 vitest 的
   #   中文输出（哪几条超时、哪几条未校验）。
   #
+  # ⚠️ **`AggregateError` 不是「这次改动有回归」**：那一屏（一串 `Error:` + 一段
+  #   `AggregateError`）是 worker / 模块装载阶段就炸了 —— 依赖没装上、原生模块版本
+  #   对不上、或环境里串进来的 `npm_config_*` 把解析带歪。一条断言都没红，所以它
+  #   不该被当作用例红去查代码。现在有两道守卫把它分开说清楚：
+  #     · `scripts/ci-affected-tests.mjs` 起跑前先体检（`scripts/ci-worktree-deps.mjs`：
+  #       `node_modules/.modules.yaml` 在不在 + `npm_config_*` 干净不干净）⇒ 不成立退 2；
+  #     · 装载指纹（`isLaunchFailureShaped`）⇒ 那一遍记「没跑起来」、退 2，并把
+  #       「先 `pnpm install`、再清 `npm_config_*`、再重跑」写在脸上。
+  #   两处都是「未判定」而不是红：§13.6.2 那条口径 —— 没判 ≠ 绿，也不等于红。
+  #
   # 45m：本地同一条链 4 worker 实测约 3.5 分钟，而节点是冷工作区 + 现场编译，
   # 且并行 PR 会叠加（`lock` 只掐同一 PR 的旧跑）。与 `每日单元测试` 同档预算口径
   # —— 卡死要早报，而真跑得完的形态离它还有一个量级。
   - name: 受影响用例
+    # ── 日志预算（平台硬上限 102400 字节，超了只留一句「The log length exceeds the limit」）──
+    #
+    # 这一格的输出量由 **vitest 的 reporter** 决定：默认 reporter 会**逐个文件**打一行
+    # 测试清单（`❯ tests/x.test.ts (12 tests)`），一跑 100+ 行是常态，而平台对超长日志
+    # 保留的是尾部 —— 被截掉的恰是**开头**，也就是「跑了哪些、哪份失败、失败原文」那一段。
+    # 现场读到的第 2 行就是 `The log length exceeds the limit(102400)`，然后整屏不可读。
+    #
+    # 处置**只换 reporter，不动任何判据**：`COMFY_AFFECTED_QUIET=1` ⇒
+    # `--reporter=dot`（每行 60~80 个点，失败用例与原文照样打）。退出码、复跑面、
+    # 超时指纹一个字不变（复跑面由 junit 给，本来就不靠这屏文本）。
+    # 开关默认关着：本地人跑这一档时要看逐文件清单（口径同 `COMFYAPP_QUIET_COVERAGE`）。
+    # 「quiet 了没有」在日志里有一行读数（`[affected-launch] reporter：…`）——
+    # 它没生效时的表现不是报错，是「日志又超长」，所以必须读得回来。
+    env:
+      COMFY_AFFECTED_QUIET: "1"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
     timeout: 45m
 
