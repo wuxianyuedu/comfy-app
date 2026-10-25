@@ -8,7 +8,7 @@
  *
  *   ① **在，但版本不对**——解释器够不着 Python 3.10，而门禁的 Python 侧与 E2E 的
  *      假 comfy-cli 都要它（本仓写明的唯一下限就是 3.10，
- *      `scripts/setup-comfy-cli-venv.ps1`）；
+ *      定义在本文件的 PYTHON_MIN_VERSION，setup-comfy-cli-venv.mjs 引用它）；
  *   ② **配错了**——`.cnb.yml` 里有 host 侧 PowerShell 认不了的语法面（`?.` / `??`
  *      是 pwsh 7 才有的），它们**不会在解析期报错**，只会在跑到那一步时整段炸；
  *   ③ **配了一条这条路径根本不支持的路**——某个 stage 带了任务级 `image:`。自托管
@@ -144,8 +144,8 @@ export function ps7OnlySyntaxIn(text) {
 }
 
 /**
- * 本仓写明的解释器下限 —— **Python 3.10**（`scripts/setup-comfy-cli-venv.ps1` 的
- * 「未找到解释器」提示里那一句，也是本仓唯一写明下限的地方）。
+ * 本仓写明的解释器下限 —— **Python 3.10**（ISSUE #2197 起唯一定义就是这里的
+ * `PYTHON_MIN_VERSION`；`scripts/setup-comfy-cli-venv.mjs` 引用它，别处不许另抄）。
  *
  * 为什么这条下限要在流水线上判：版本不够时**没有任何一步会红** ——
  * `check-app-port-vectors.cjs` 探到解释器就把它拉进四侧比对（3.9 上那些纯函数语法
@@ -519,7 +519,7 @@ export function envProbe({
     } else if (!floor.ok) {
       problems.push(
         `解释器 ${python.path ?? python.command} 是 ${floor.triple.join(".")}，` +
-          `低于本仓写明的下限 Python ${PYTHON_MIN_TEXT}（scripts/setup-comfy-cli-venv.ps1）。\n` +
+          `低于本仓写明的下限 Python ${PYTHON_MIN_TEXT}（唯一定义：本文件的 PYTHON_MIN_VERSION）。\n` +
           "      它**不会让哪一步变红**：门禁的 Python 侧会以「探测不到」的名义退出比对、" +
           "几条真跑的用例走 `env` 档跳过并登记 —— 与「装好了」在日志里逐字同形。\n" +
           `      下一动作：在这台节点上装一个 ≥ ${PYTHON_MIN_TEXT} 的解释器并让构建账号的 ` +
