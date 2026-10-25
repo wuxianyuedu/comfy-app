@@ -553,7 +553,13 @@ export function fetchBuildList(run, slug, event, limit) {
     String(limit),
     "-v",
   ]);
-  const list = res ? asArray(res.json) : null;
+  /* 平台在这条命令上有两种信封，实测都出现过：列表直挂 `data`（`{data:[…]}`）与套一层
+   * （`{data:{total,totalCapped,data:[…]}}`）。只认前者会回 `null`，而调用方读到的是
+   * 一句「取不到构建列表」—— 一次**看起来像网络故障**的空读数；而 PR 档那一格正是靠
+   * 这份列表认出「这一跑是谁」的，认不出 ⇒ 一律不写 ⇒ 那一格绿着、红没人知道
+   * （ISSUE #2335 的 `cnb-vko-1k5oj5gb0`）。第二种形状与 `check-daily-attendance.mjs`
+   * 的 `asBuildArray()` 同一口径 —— 那一份是每日档自己发的同形命令留下的读数。 */
+  const list = res ? (asArray(res.json) ?? asArray(res.json?.data)) : null;
   if (!list) return null;
   const builds = list
     .filter((b) => b && typeof b.sn === "string")

@@ -29,6 +29,7 @@ import {
   describeFailedStages,
   downstreamSkipped,
   formatOutcome,
+  fetchBuildList,
   inFlightStages,
   main,
   normalizeStageContent,
@@ -507,6 +508,64 @@ describe("normalizeStageContent：三种形状一处收口", () => {
   });
 });
 
+/**
+ * 构建列表的信封有两种形状（ISSUE #2335 的现场读数）。
+ *
+ * 平台在 `get-build-logs` 上两种都给过：列表直挂 `data`，与套一层
+ * `{data:{total,totalCapped,data:[…]}}`。只认第一种时 `fetchBuildList()` 回 `null`，
+ * 调用方把它念成「取不到构建列表」—— 一次**看起来像网络故障**的空读数；而 PR 档那一格
+ * 正是靠这份列表认出「这一跑是谁」的：认不出 ⇒ 一律不写 ⇒ 那一格绿着、红没人知道
+ * （#2335 的 `cnb-vko-1k5oj5gb0`）。
+ */
+describe("fetchBuildList：两种信封都要认出列表", () => {
+  const ROWS = [
+    {
+      sn: "sn-a",
+      createTime: "2026-10-25T04:07:35.000Z",
+      status: "error",
+      eventUrl: "https://cnb.cool/a/b/-/pulls/1",
+    },
+    {
+      sn: "sn-b",
+      createTime: "2026-10-25T03:07:35.000Z",
+      status: "success",
+      eventUrl: "https://cnb.cool/a/b/-/pulls/1",
+    },
+  ];
+  const runner = (payload: unknown) => () => ({
+    status: 0,
+    stdout: JSON.stringify(payload),
+    stderr: "",
+    error: null,
+  });
+
+  it("套一层（`data.data`）⇒ 认出来，且按时间新到旧排", () => {
+    const got = fetchBuildList(
+      runner({ status: 200, data: { total: "2", data: ROWS } }),
+      "a/b",
+      "pull_request",
+      10,
+    );
+    expect(got?.map((b: { sn: string }) => b.sn)).toEqual(["sn-a", "sn-b"]);
+    expect(got?.[0]?.eventUrl).toBe("https://cnb.cool/a/b/-/pulls/1");
+  });
+
+  it("列表直挂（`data` 就是数组）⇒ 同样认出来", () => {
+    const got = fetchBuildList(
+      runner({ status: 200, data: ROWS }),
+      "a/b",
+      "pull_request",
+      10,
+    );
+    expect(got?.map((b: { sn: string }) => b.sn)).toEqual(["sn-a", "sn-b"]);
+  });
+
+  it("两种都不是 ⇒ null（那是真「取不到」，不许当成空列表）", () => {
+    expect(
+      fetchBuildList(runner({ status: 200, data: {} }), "a/b", "x", 10),
+    ).toBeNull();
+  });
+});
 describe("stageLogExcerpt：失败行带行号 + 尾部，两段都给", () => {
   const LOG = [
     "RUN v1",
