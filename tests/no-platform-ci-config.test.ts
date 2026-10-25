@@ -1224,14 +1224,17 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(runner.tags?.length ?? 0).toBeGreaterThan(0);
     // 每条流水线都必须引用那个锚点：少引用一条 = 那一条悄悄回落到计费的平台池
     // （`runner.namespace: group` + `tags` 就在这个锚点里）。
-    // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。
+    // 引用形态 = 分支键下、事件键下的那一层 `- <<: *anchor`。两个锚点合在一个合并键里
+    // 也算（`- <<: [*common, *pr_fail_stage]`）—— 这条判据问的是「有没有哪条流水线漏接了
+    // `*common`」，而 `<<:` 在同一层写两次是**非法 YAML**（`Map keys must be unique`），
+    // 所以「一条流水线引用两个锚点」只有流式这一种合法写法。
     //
     // ⚠️ 这里**不再钉一个写死的条数**（过去钉的是 5，等于把「今天有几条流水线」当判据）：
     // 加一条流水线（单跑那六条就是）会让它红，而红的不是任何缺陷 —— 这条判据要问的是
     // 「有没有哪条流水线漏了引用」。基准改从文本里现推：一条流水线必然带且只带一个
     // 顶层 `stages:` 键（六空格那一层，引用形态 `stages: *x` 与内联形态都算），
     // 引用数与它对齐才算每条都接上了 runner。把某条的 `stages:` 删了同样红。
-    const refs = text.match(/^\s+-\s*<<:\s*\*\w+/gm) ?? [];
+    const refs = text.match(/^\s+-\s*<<:\s*(?:\[\s*)?\*\w+/gm) ?? [];
     const stageLists = text.match(/^ {6}stages:/gm) ?? [];
     expect(
       refs.length,
