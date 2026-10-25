@@ -65,9 +65,15 @@ export function unverifiedReport(files) {
  * @returns {string} 要打到 stderr 的正文；一块都没复跑时是空串
  */
 export function rerunReport(attempts, budget) {
-  const reran = attempts.filter(
-    (a) => a.outcome !== "first-green" && a.outcome !== "red-no-fingerprint",
-  );
+  /* 「没复跑」的那两档：直接绿，与**第 1 遍就没跑起来**（装载阶段炸了 —— 它从来
+   * 没走到复跑那一跳，所以不许被算进 `reran`，否则「等待累计 / 预算」那一行会为一次
+   * 根本没发生的等待报账）。 */
+  const NOT_RERUN = new Set([
+    "first-green",
+    "red-no-fingerprint",
+    "launch-failed",
+  ]);
+  const reran = attempts.filter((a) => !NOT_RERUN.has(a.outcome));
   if (reran.length === 0) return "";
   /** @type {(outcome: string) => number} */
   const count = (o) => attempts.filter((a) => a.outcome === o).length;
@@ -84,7 +90,11 @@ export function rerunReport(attempts, budget) {
     `  **第 2 遍**的结果：负载假红放行 ${count("rerun-green")} 块、` +
     `**未校验**（每份都只是超时形态）${count("rerun-unverified")} 块、` +
     `**未判定**（有份拿不到自己的读数）${count("rerun-unattributed")} 块、` +
-    `真红 ${count("real-red")} 块。\n` +
+    `真红 ${count("real-red")} 块` +
+    /* 「装载阶段就炸」那一档与上面四档**不同源**：它没有被复跑过，也没有第 2 遍的读数
+     * —— 它说的是「第一遍就没跑起来」。所以它单独念，且只在真的发生时出现
+     * （判据同 `gitDiff` 那条：没有的事不占一行）。 */
+    `；第 1 遍就没跑起来（装载 / 运行时级错误，退 2）${count("launch-failed")} 块。\n` +
     "  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果；" +
     "「未校验」是这次**没测到**（已逐条点名哪几份）；" +
     "「未判定」比它更弱 —— 连「每份都只是超时」都没确认到，退 2（ISSUE #2225）。\n"

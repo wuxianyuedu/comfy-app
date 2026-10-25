@@ -129,11 +129,15 @@ import {
   collectAttribute,
   collectList,
 } from "./affected-launch-changed-list.mjs";
-/* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威）。
- * import 而不是各抄一份文件名：抄两份的漂移形态是静默的 —— 改名那侧照常跑、
- * 这侧读不到，而「读不到」在这一格长得和「这次没有读数」一模一样。 */
+/* 组 C 分文件耗时的**读数出口**（junit 参数 + 清单落盘）住在自己那份文件里 ——
+ * 与话术层、复跑面、日志预算同一刀，理由写在那份文件头（§12.6 R5）。判决与形状
+ * 一个字没改，换的只是它住哪儿。**转出**是为了既有 import 面不变。 */
 import {
-  C_MANIFEST_NAME,
+  junitReportArgs,
+  writeFilesManifest,
+} from "./affected-launch-junit.mjs";
+export { junitReportArgs, writeFilesManifest };
+import {
   cFileXmlName,
   failingSuiteTextsFromJunit,
 } from "./precommit-timing.mjs";
@@ -147,6 +151,7 @@ import {
   mergePerFileReads,
 } from "./affected-launch-retry-verdict.mjs";
 import {
+  isLaunchFailureShaped,
   isTimeoutShaped,
   remainingWaitMs,
   RETRY_BUDGET_MS,
@@ -160,72 +165,17 @@ import {
   rerunReport,
   unverifiedReport,
 } from "./affected-launch-rerun-report.mjs";
+/* 日志预算那一格（reporter 选哪个）住在自己那份文件里 —— 与话术层、复跑面同一刀，
+ * 理由写在那份文件头：机制层再塞第六件事就越过 900 行硬闸，而越闸的形态不是报错，
+ * 是「那一层读不动了」（§12.6 R5）。判据一个字没改，换的只是它住哪儿。 */
+import { announceQuiet, reporterArgs } from "./affected-launch-log-budget.mjs";
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
 import os from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createRequire } from "node:module";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-
-/**
- * 组 C 的**分文件耗时**读数出口（vitest 的 junit reporter）。
- *
- * 为什么要有它：`precommit-timing` 记的是「五个组各自的墙钟 + D 组 51 步的分步账」，
- * 而**组 C（固定清单 90 份 + 受影响用例）在账本里只有一个数** —— 偏偏那一个数就是
- * 整次提交的几乎全部（本机 13 次：总中位 1110s，组 C 中位 1108s）。于是「90 份里谁最贵」
- * 这句要砍线的话，从来没有数据可答，只能靠印象 —— 那正是 §13.5.8.2.1 那条
- * 「代价一律取稳态读数」反对的形态。这一档**只补读数，不改任何判定**。
- *
- * 三个形状都是实测钉住的，不是风格：
- *  · **`--reporter=default` 必须显式保留** —— 只给 junit 会把人类可读的输出顶掉，
- *    而真红那一屏是唯一能读的东西（本档不替代它，只加一层）；
- *  · 明细**走文件不走 stdout** —— 钩子与平台的日志预算都不是给 90 行明细留的位
- *    （同一动机见 `vitest.config.ts` 里覆盖率 reporter 那格：102400 字节的硬上限）；
- *  · **每块、每遍各一个文件** —— 复跑是「更隔离条件下的另一组读数」，与首跑叠进同一个
- *    文件就变成「谁后写谁冒充整体」。读账侧按 `(块, 遍)` 升序合并，第二遍覆盖第一遍。
- *
- * @param {string | undefined} dir 落点目录（钩子里就是导出的 `$LOGD`：每次新建、随 trap
- *   删除、**不在检出内** —— 落进检出就会被 checkout 与结构门禁牵着）
- * @param {number} chunkId 第几块（从 0 起）
- * @param {number} attempt 第几遍（1 = 首跑，2 = `--no-file-parallelism` 隔离复跑）
- * @returns {string[]} 追加给 vitest 的参数；`dir` 为空时**回空数组**（= 今天的形状不变，
- *   人自己跑 `node scripts/run-affected-tests.mjs --full` 时没有 `$LOGD`，不该被塞读数）
- */
-export function junitReportArgs(dir, chunkId, attempt) {
-  if (!dir) return [];
-  return [
-    "--reporter=default",
-    "--reporter=junit",
-    `--outputFile.junit=${cFileXmlName(dir, chunkId, attempt)}`,
-  ];
-}
-
-/**
- * 把这次真正要跑的清单落一份到账本目录里 —— 读账侧拿它做**对账**。
- *
- * 没有它，「junit 里只有 88 份」与「这次清单就是 88 份」在账本里**逐字同形**，
- * 而前者意味着有两份用例根本没跑出读数（加载即炸 / 被跳过 / reporter 没记上）。
- * 「少跑几条没有任何判据会看见」是本仓立案的那一族（§13.5.8.2、§13.5.12），
- * 所以读数必须自带分母。写不进去只少一条对账，不拦提交（与记账同口径）。
- *
- * @param {string} dir
- * @param {string[]} files
- * @returns {boolean} 是否落盘成功
- */
-export function writeFilesManifest(dir, files) {
-  if (!dir) return false;
-  try {
-    writeFileSync(
-      path.join(dir, C_MANIFEST_NAME),
-      `${files.join("\n")}\n`,
-      "utf8",
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 一次 spawn 的命令行长预算（字符）。
@@ -531,6 +481,9 @@ async function main(argv) {
         "  代价是整份套件的墙钟 —— 常态提交仍走增量档。\n",
     );
     if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+    const quietFull = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
+      process.stderr.write(t),
+    );
     if (dryRun) {
       process.stdout.write(
         "[affected-launch] --full：会跑全部用例（vitest 自行收集）\n",
@@ -538,7 +491,7 @@ async function main(argv) {
       return 0;
     }
     // 空清单在这里是**明确意图**（全量），所以复用同一条判决链（超时形态仍会隔离复跑）。
-    return await runChunk([], { entry, workers });
+    return await runChunk([], { entry, workers, quiet: quietFull });
   }
   const files = collectList();
   if (files.length === 0) {
@@ -571,6 +524,9 @@ async function main(argv) {
     resolveCiWorkers().workers,
   );
   if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+  const quiet = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
+    process.stderr.write(t),
+  );
   /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`（每次新建、随 trap 删除、不在检出里）。
    * 没有它（人自己跑这一档 / 不在钩子里）就一个字都不加 —— 这一档是**读数**，
    * 不是这条命令的必经部分；落不进账本目录时宁可不记，也不要往检出里写文件。
@@ -637,6 +593,7 @@ async function main(argv) {
     const code = await runChunk(chunk, {
       entry,
       workers,
+      quiet,
       junitDir,
       chunkId: index,
       waitBudget,
@@ -693,9 +650,17 @@ export async function runChunk(chunk, deps) {
     workers = resolveCiWorkers().workers,
     junitDir,
     chunkId = 0,
+    /* quiet **必须在块内可见**（两遍都要带上同一个 reporter）：只在 `main` 里改第一遍
+     * 的话，复跑那一遍会退回默认 reporter，而它恰恰是打印量最大的那一遍
+     * （同一批用例在更差的条件下再跑一次，失败明细翻倍）。 */
+    quiet = false,
   } = deps;
+  /* reporter：平台那一格 quiet（日志预算），本地默认**一个字都不加** —— 见
+   * `affected-launch-log-budget.mjs` 的头注（那一段记着 102400 字节的截断现场）。 */
+  const reporters = reporterArgs(quiet);
   const res = spawn(entry, [
     "run",
+    ...reporters,
     ...junitReportArgs(junitDir, chunkId, 1),
     `--maxWorkers=${workers}`,
     ...chunk,
@@ -705,10 +670,36 @@ export async function runChunk(chunk, deps) {
     return 0;
   }
 
-  /* 失败分两档（口径见文件头那节）：
+  /* 失败分三档（口径见文件头那节）：
+   *   · **装载阶段就炸**（`AggregateError` / 模块找不到那一族）⇒ 这一遍没跑起来，
+   *     退 2 并指向「修环境」，见下；
    *   · **带超时指纹** ⇒ 这个红首先是一个负载读数（§13.6.4）。换更隔离的条件
-   *     **重测一次**：串行单进程 = 降负载，**不抬任何预算**。
-   *   · 不带指纹（真断言红 / 起不来）⇒ 一次都不复跑，直接阻断。 */
+   *     **重测一次**：串行单进程 = 降负载，**不抬任何预算**；
+   *   · 不带指纹（真断言红）⇒ 一次都不复跑，直接阻断。 */
+  /* 第三档：**这一遍根本没跑起来**（worker / 模块装载阶段就炸 —— 依赖缺失、
+   * 原生模块版本对不上、环境把解析带歪）。它的输出是一串 `Error:` 加一段
+   * `AggregateError`，而**一条断言都没红**；判据在 `isLaunchFailureShaped`。
+   *
+   * 处置与「真断言红」相反：真红是去修代码（一次都不复跑），这一档是去修**环境**
+   * （复跑没有意义 —— 同样的环境再跑一遍，同样的炸）。所以它退 2（未判定）而不是 1，
+   * 并把「修环境」的那一步写在脸上。**不许**把它并进真红那一档：拿它当「这次改动有
+   * 回归」去查代码，查的是一件没发生的事（平台那一格上就是这么被读错的）。 */
+  if (isLaunchFailureShaped(res.output)) {
+    process.stderr.write(
+      `[affected-launch] 第 1 遍**没跑起来**（${
+        res.status === null ? "被信号终止" : `退出码 ${res.status}`
+      }），输出里是装载 / 运行时级错误（AggregateError / 模块找不到那一族），` +
+        "**一条断言都没红**。\n" +
+        "  ⇒ 这一档退 2：既不是绿也不是红，它说的是「这台机器上这批用例没被跑起来」。\n" +
+        "  下一动作（按顺序试，别去查用例代码）：\n" +
+        "    1. `pnpm install --frozen-lockfile`（原生模块与锁文件对不上时就是这个形态）\n" +
+        "    2. 清掉环境里串进来的 `npm_config_*`（前缀 / store / global 那几条带执行期校验）\n" +
+        "    3. 再跑一次同一份清单：`node scripts/run-affected-tests.mjs --full`\n",
+    );
+    report({ outcome: "launch-failed" });
+    return 2;
+  }
+
   if (!isTimeoutShaped(res.output)) {
     process.stderr.write(
       `[affected-launch] vitest 失败：${
@@ -750,6 +741,7 @@ export async function runChunk(chunk, deps) {
   );
   const retry = spawn(entry, [
     "run",
+    ...reporters,
     ...junitReportArgs(junitDir, chunkId, 2),
     "--no-file-parallelism",
     ...scope.files,

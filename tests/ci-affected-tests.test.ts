@@ -175,6 +175,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", COMFY_CI_MAX_WORKERS: "2" },
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\nM\tsrc/b.ts\n" }),
       spawn,
+      installed: true,
     });
     expect(code).toBe(0);
     expect(seen).toHaveLength(1);
@@ -193,6 +194,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
         stdout: "R100\tscripts/old-name.mjs\tscripts/new-name.mjs\n",
       }),
       spawn,
+      installed: true,
     });
     expect(code).toBe(0);
     expect(seen[0]!.env.COMFY_AFFECTED_CHANGED).toBe(
@@ -206,6 +208,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
+      installed: true,
     });
     expect(code).toBe(1);
   });
@@ -221,6 +224,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", CNB_CPUS: "16" },
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
+      installed: true,
       writeOut: (t: string) => out.push(t),
       writeErr: (t: string) => err.push(t),
     });
@@ -242,6 +246,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       runGit: () => ({ ok: true, stdout: "" }),
       spawn,
+      installed: true,
     });
     expect(code).toBe(2);
     expect(seen).toHaveLength(0);
@@ -253,8 +258,76 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       runGit: () => ({ ok: false, stdout: "" }),
       spawn,
+      installed: true,
     });
     expect(code).toBe(2);
     expect(seen).toHaveLength(0);
+  });
+});
+
+/* ── 起跑前的依赖面体检（`scripts/ci-worktree-deps.mjs`）─────────────────────────
+ *
+ * 现场：输出里一串 `Error:` 加一段 `AggregateError`，一条断言都没红，而格子非零
+ * 退出 —— 于是「这台机器上依赖没装上」被读成「这次改动有回归」。这一格现在把它分开：
+ * 前提不成立 ⇒ 退 2（没判 ≠ 绿），而且**一次 vitest 都不起**（起了也只是再读一遍同一屏）。
+ */
+describe("ci-affected-tests — 起跑前的依赖面体检", () => {
+  function fakeSpawn(status: number) {
+    const seen: string[] = [];
+    return {
+      seen,
+      spawn: (script: string) => {
+        seen.push(script);
+        return { status };
+      },
+    };
+  }
+
+  it("依赖没装上 ⇒ 退 2，点名 AggregateError 那一屏，且一次 vitest 都不起", () => {
+    const { spawn, seen } = fakeSpawn(0);
+    const err: string[] = [];
+    const code = main({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      installed: false,
+      writeErr: (t: string) => err.push(t),
+    });
+    expect(code, "前提不成立不是绿 —— 但也不是红（§13.6.2）").toBe(2);
+    expect(seen).toHaveLength(0);
+    expect(err.join("")).toContain("AggregateError");
+    expect(err.join("")).toContain("pnpm install");
+  });
+
+  it("环境里串进 npm_config_* ⇒ 同样退 2（那一族配错时每次 pnpm 都抛）", () => {
+    const { spawn, seen } = fakeSpawn(0);
+    const err: string[] = [];
+    const code = main({
+      env: {
+        CNB_PULL_REQUEST_TARGET_SHA: "abc123",
+        npm_config_store_dir: "D:/pnpm",
+      },
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      installed: true,
+      writeErr: (t: string) => err.push(t),
+    });
+    expect(code).toBe(2);
+    expect(seen).toHaveLength(0);
+    expect(err.join("")).toContain("npm_config_store_dir");
+  });
+
+  it("两道都过了 ⇒ 读数照打（quiet 与否都能在日志里读回来）", () => {
+    const { spawn } = fakeSpawn(0);
+    const out: string[] = [];
+    const code = main({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      installed: true,
+      writeOut: (t: string) => out.push(t),
+    });
+    expect(code).toBe(0);
+    expect(out.join("")).toContain("两道体检都过了");
   });
 });

@@ -1386,10 +1386,35 @@
   # ⚠️ 与其它格一样带 `ci-cp936-exit.mjs`：这一格红的时候要读的正是 vitest 的
   #   中文输出（哪几条超时、哪几条未校验）。
   #
+  # ⚠️ **`AggregateError` 不是「这次改动有回归」**：那一屏（一串 `Error:` + 一段
+  #   `AggregateError`）是 worker / 模块装载阶段就炸了 —— 依赖没装上、原生模块版本
+  #   对不上、或环境里串进来的 `npm_config_*` 把解析带歪。一条断言都没红，所以它
+  #   不该被当作用例红去查代码。现在有两道守卫把它分开说清楚：
+  #     · `scripts/ci-affected-tests.mjs` 起跑前先体检（`scripts/ci-worktree-deps.mjs`：
+  #       `node_modules/.modules.yaml` 在不在 + `npm_config_*` 干净不干净）⇒ 不成立退 2；
+  #     · 装载指纹（`isLaunchFailureShaped`）⇒ 那一遍记「没跑起来」、退 2，并把
+  #       「先 `pnpm install`、再清 `npm_config_*`、再重跑」写在脸上。
+  #   两处都是「未判定」而不是红：§13.6.2 那条口径 —— 没判 ≠ 绿，也不等于红。
+  #
   # 45m：本地同一条链 4 worker 实测约 3.5 分钟，而节点是冷工作区 + 现场编译，
   # 且并行 PR 会叠加（`lock` 只掐同一 PR 的旧跑）。与 `每日单元测试` 同档预算口径
   # —— 卡死要早报，而真跑得完的形态离它还有一个量级。
   - name: 受影响用例
+    # ── 日志预算（平台硬上限 102400 字节，超了只留一句「The log length exceeds the limit」）──
+    #
+    # 这一格的输出量由 **vitest 的 reporter** 决定：默认 reporter 会**逐个文件**打一行
+    # 测试清单（`❯ tests/x.test.ts (12 tests)`），一跑 100+ 行是常态，而平台对超长日志
+    # 保留的是尾部 —— 被截掉的恰是**开头**，也就是「跑了哪些、哪份失败、失败原文」那一段。
+    # 现场读到的第 2 行就是 `The log length exceeds the limit(102400)`，然后整屏不可读。
+    #
+    # 处置**只换 reporter，不动任何判据**：`COMFY_AFFECTED_QUIET=1` ⇒
+    # `--reporter=dot`（每行 60~80 个点，失败用例与原文照样打）。退出码、复跑面、
+    # 超时指纹一个字不变（复跑面由 junit 给，本来就不靠这屏文本）。
+    # 开关默认关着：本地人跑这一档时要看逐文件清单（口径同 `COMFYAPP_QUIET_COVERAGE`）。
+    # 「quiet 了没有」在日志里有一行读数（`[affected-launch] reporter：…`）——
+    # 它没生效时的表现不是报错，是「日志又超长」，所以必须读得回来。
+    env:
+      COMFY_AFFECTED_QUIET: "1"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
     timeout: 45m
 

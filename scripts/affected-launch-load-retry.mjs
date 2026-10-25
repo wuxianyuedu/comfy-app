@@ -57,6 +57,62 @@ export function isTimeoutShaped(output) {
 }
 
 /**
+ * 「这一遍根本没跑起来」的指纹 —— 与超时指纹**不是**一类，处置也完全相反。
+ *
+ * ## 它治的是什么（现场：平台的 `受影响用例` 一格）
+ *
+ * 那一格的输出里出现一串 `Error:` 与一段 `AggregateError`，而**一条断言都没红**：
+ * `AggregateError` 是 Node 对「同一批异步操作里多个错误」的包装，在这个上下文里
+ * 它意味着 **worker / 模块装载阶段就炸了**（依赖缺失、原生模块版本对不上、
+ * 环境变量把解析带歪），而不是「某条用例的期望值不对」。
+ *
+ * 但这一层此前只会把它当**真断言红**（不带超时指纹 ⇒ 一次都不复跑、直接阻断），
+ * 于是「这台机器上根本没跑起来」被写成「这次改动有回归」—— 而被拦下的人照着那屏
+ * 去查代码，查的是一件没发生的事。
+ *
+ * ## 为什么与超时指纹分开列
+ *
+ * 超时指纹的下一动作是**隔离复跑**（换更隔离的条件再测一次，§13.6.4）；
+ * 而装载失败的下一动作是**修环境**（`pnpm install`、清 `npm_config_*`），复跑没有意义
+ * （同样的环境再跑一遍，同样的炸）。所以两者必须各自成档，**不许**并成一个
+ * 「反正不是用例红」的大筐。
+ *
+ * 判据只收**装载 / 运行时级**的那几种原文；`AssertionError` 那一族刻意不收 ——
+ * 一条真回归也可能在栈里带一句 `AggregateError`，而把它读成「环境问题」等于放行。
+ */
+const LAUNCH_FAILURE_SIGNATURES = [
+  /\bAggregateError\b/,
+  /Cannot find module/i,
+  /MODULE_NOT_FOUND/,
+  /ERR_MODULE_NOT_FOUND/,
+  /Failed to load url/i,
+  /Cannot find package/i,
+  /ERR_DLOPEN_FAILED/,
+  /was compiled against a different Node\.js version/i,
+  /* vitest 自己的原文是 `No test files found, exiting with code 1`（实测），
+   * 前缀 `Error:` 留给别的情形 —— 这里只锚后半句。 */
+  /No test files found/i,
+];
+
+/**
+ * 输出里有没有「装载 / 运行时起不来」的指纹（纯函数）。
+ *
+ * ⚠️ 这一档**不是**判据绿：它只说「这一遍没跑起来」，上一句「哪条用例红了」压根没有对象。
+ * 调用方（`runChunk`）据此把结论记成**未判定**，点名的仍然是那批文件。
+ *
+ * @param {string | number | null | undefined} output
+ * @returns {boolean}
+ */
+export function isLaunchFailureShaped(output) {
+  const text = String(output ?? "");
+  if (text === "") return false;
+  /* 真断言红优先：栈里带 `AggregateError` 的断言红不许被读成环境问题
+   * （放行一条真回归比多查一次环境贵得多）。 */
+  if (/AssertionError/.test(text)) return false;
+  return LAUNCH_FAILURE_SIGNATURES.some((re) => re.test(text));
+}
+
+/**
  * 等待负载回落的**全局**预算（毫秒）。
  *
  * 5 分钟：够等一次「占资源的东西」自己退下去（实测从 load≈300 回落到 <8 用了
