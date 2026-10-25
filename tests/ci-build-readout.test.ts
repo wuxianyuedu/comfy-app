@@ -29,6 +29,7 @@ import {
   describeFailedStages,
   downstreamSkipped,
   formatOutcome,
+  fetchBuildList,
   inFlightStages,
   main,
   normalizeStageContent,
@@ -507,6 +508,111 @@ describe("normalizeStageContent：三种形状一处收口", () => {
   });
 });
 
+/**
+ * 构建列表的信封有两种形状（ISSUE #2335 的现场读数）。
+ *
+ * 平台在 `get-build-logs` 上两种都给过：列表直挂 `data`，与套一层
+ * `{data:{total,totalCapped,data:[…]}}`。只认第一种时 `fetchBuildList()` 回 `null`，
+ * 调用方把它念成「取不到构建列表」—— 一次**看起来像网络故障**的空读数；而 PR 档那一格
+ * 正是靠这份列表认出「这一跑是谁」的：认不出 ⇒ 一律不写 ⇒ 那一格绿着、红没人知道
+ * （#2335 的 `cnb-vko-1k5oj5gb0`）。
+ */
+describe("fetchBuildList：两种信封都要认出列表", () => {
+  const ROWS = [
+    {
+      sn: "sn-a",
+      createTime: "2026-10-25T04:07:35.000Z",
+      status: "error",
+      eventUrl: "https://cnb.cool/a/b/-/pulls/1",
+    },
+    {
+      sn: "sn-b",
+      createTime: "2026-10-25T03:07:35.000Z",
+      status: "success",
+      eventUrl: "https://cnb.cool/a/b/-/pulls/1",
+    },
+  ];
+  const runner = (payload: unknown) => () => ({
+    status: 0,
+    stdout: JSON.stringify(payload),
+    stderr: "",
+    error: null,
+  });
+
+  it("套一层（`data.data`）⇒ 认出来，且按时间新到旧排", () => {
+    const got = fetchBuildList(
+      runner({ status: 200, data: { total: "2", data: ROWS } }),
+      "a/b",
+      "pull_request",
+      10,
+    );
+    expect(got?.map((b: { sn: string }) => b.sn)).toEqual(["sn-a", "sn-b"]);
+    expect(got?.[0]?.eventUrl).toBe("https://cnb.cool/a/b/-/pulls/1");
+  });
+
+  it("列表直挂（`data` 就是数组）⇒ 同样认出来", () => {
+    const got = fetchBuildList(
+      runner({ status: 200, data: ROWS }),
+      "a/b",
+      "pull_request",
+      10,
+    );
+    expect(got?.map((b: { sn: string }) => b.sn)).toEqual(["sn-a", "sn-b"]);
+  });
+
+  it("两种都不是 ⇒ null（那是真「取不到」，不许当成空列表）", () => {
+    expect(
+      fetchBuildList(runner({ status: 200, data: {} }), "a/b", "x", 10),
+    ).toBeNull();
+  });
+
+  /**
+   * 「取不到」要自己说清是哪一种（ISSUE #2335 现场：那一格只留下六个字
+   * `取不到构建列表`，而「命令没起来 / 退码非零（凭据、权限）/ 信封又变了」
+   * 三种原因的下一个动作完全不同）。这里判的是**念出声**，结论仍是 `null`。
+   */
+  it("取不到时把原因念出来（退码 + stderr 首行 + 信封的顶层键），结论仍是 null", () => {
+    const heard: string[] = [];
+    const got = fetchBuildList(
+      () => ({
+        status: 1,
+        // 平台那侧真给的形状：`data` 里放的是错误详情，不是列表。
+        stdout: JSON.stringify({
+          status: 200,
+          data: { code: 401, message: "unauthorized" },
+        }),
+        stderr: "凭据已过期\n第二行",
+        error: null,
+      }),
+      "a/b",
+      "pull_request",
+      10,
+      { log: (line: string) => heard.push(line) },
+    );
+    expect(got).toBeNull();
+    const out = heard.join("\n");
+    expect(out).toContain("取不到");
+    expect(out).toContain("退码 1");
+    expect(out).toContain("凭据已过期");
+    // 第二行 stderr 不念：一行足够定性，整段倒进流水线只是噪声。
+    expect(out).not.toContain("第二行");
+    // 信封的**内容**也念（顶层键与本地一样时，只念顶层键等于什么都没说）。
+    expect(out).toContain("data=");
+    expect(out).toContain("unauthorized");
+  });
+
+  it("命令根本没起来 ⇒ 念的是「没起来」，不是退码", () => {
+    const heard: string[] = [];
+    fetchBuildList(
+      () => ({ status: -1, stdout: "", stderr: "", error: "ENOENT" }),
+      "a/b",
+      "x",
+      10,
+      { log: (line: string) => heard.push(line) },
+    );
+    expect(heard.join("\n")).toContain("没起来");
+  });
+});
 describe("stageLogExcerpt：失败行带行号 + 尾部，两段都给", () => {
   const LOG = [
     "RUN v1",
