@@ -629,7 +629,7 @@ async function main(argv) {
  * 第二遍指纹消失（真断言 / 真挂死）也照旧阻断。
  *
  * @param {string[]} chunk 本块的用例路径
- * @param {{entry: string, workers?: number, junitDir?: string, chunkId?: number,
+ * @param {{entry: string, workers?: number, quiet?: boolean, junitDir?: string, chunkId?: number,
  *          spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
  *   `workers` **默认取自唯一出处** `ci-load.mjs`（`resolveCiWorkers().workers`）——
  *   这一层**只读它当首跑的并发**，复跑一律 `--no-file-parallelism`（降负载那一半）。
@@ -637,6 +637,8 @@ async function main(argv) {
  *   是同一句判断的两份副本；常数撤掉后默认值改从 `ci-load` 推导（ISSUE #2324）。
  *   `junitDir` + `chunkId` 是分文件耗时的落点（钩子里传 `$LOGD`；不给就一个字都不加，
  *   见 `junitReportArgs` 那三个被实测钉住的形状）。
+ *   `quiet` 只换 reporter（日志预算，见 `affected-launch-log-budget.mjs`）——**两遍都带**
+ *   同一个值，缺省 `false` = 默认 reporter（今天的形状）。
  *   `waitBudget` 是多块之间**共享**的等待截止时刻（默认单块自己一份，供调用点收成一份）。
  *   `onAttempt` 每块一条判决记录，只喂收尾那份账（`rerunReport`），**不参与退出码**。
  * @returns {Promise<number>}
