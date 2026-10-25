@@ -538,7 +538,8 @@ export function fetchBuildStatus(run, slug, sn) {
  * @param {string} slug 仓库路径
  * @param {string} event 事件名
  * @param {number} limit 要几条
- * @returns {Array<{sn: string, createTime?: string}> | null} 列表；取不到时 null
+ * @returns {Array<{sn: string, createTime: string, status: string, eventUrl: string}> | null}
+ *   列表；取不到时 null
  */
 export function fetchBuildList(run, slug, event, limit) {
   const res = cnbJson(run, [
@@ -556,7 +557,16 @@ export function fetchBuildList(run, slug, event, limit) {
   if (!list) return null;
   const builds = list
     .filter((b) => b && typeof b.sn === "string")
-    .map((b) => ({ sn: String(b.sn), createTime: String(b.createTime ?? "") }));
+    /* `status` 与 `eventUrl` 是**列表自带字段的原样透出**（不另立判据）：调用方拿它们
+     * 决定「要不要去取逐格详情」（在跑 / 排队的那几跑先不取），以及把红挂回出问题的那张
+     * PR 上 —— 这两个字段只有列表这一侧有（`get-build-status -v` 只给 `status` +
+     * `pipelinesStatus`，说不出自己是哪一跑，见 `fetchDailyDetails` 那段）。 */
+    .map((b) => ({
+      sn: String(b.sn),
+      createTime: String(b.createTime ?? ""),
+      status: String(b.status ?? ""),
+      eventUrl: String(b.eventUrl ?? ""),
+    }));
   builds.sort((a, b) => b.createTime.localeCompare(a.createTime));
   return builds.slice(0, limit);
 }

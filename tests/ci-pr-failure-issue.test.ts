@@ -1,0 +1,444 @@
+/**
+ * `scripts/ci-pr-failure-issue.mjs` 的契约（ISSUE #2332）。
+ *
+ * 这一格是「**PR 那一跑红了 ⇒ 有人知道**」的唯一执行者。它的失效形态与每日档那一格同源，
+ * 但多一条：**落点选错**。所以本文件三组对着三个方向：
+ *
+ *   ① **把没结论写成红**（绿 / 被取消 / 认不出哪一格 / 取不到读数 ⇒ 不该写一个字）；
+ *   ② **把红写成静默**（`--no-block` 只许改退码，不许改「那句话有没有被打出来」）；
+ *   ③ **落点**（有 PR ⇒ 评论在 PR 下；没有 ⇒ 建单，且同一格不重复建）。
+ *
+ * 判据与定性都不在这里重写：喂进去的 `details` 就是 `classifyBuildOutcome()` 认的那份
+ * 平台形状，所以断言测的是接线。
+ */
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+import { describe, expect, it } from "vitest";
+
+import {
+  CODE,
+  composeBody,
+  decideAction,
+  issueTitle,
+  main,
+  prIidFromUrl,
+  resolveTarget,
+  titleKey,
+} from "../scripts/ci-pr-failure-issue.mjs";
+
+const ROOT = path.resolve(__dirname, "..");
+const ENTRY = path.join(ROOT, "scripts", "ci-pr-failure-issue.mjs");
+
+type StageRow = { id: string; name: string; status: string };
+
+type Verdict = "green" | "failed" | "cancelled" | "running";
+
+/** 列表里的一项（这一层只用得上这四个字段）。 */
+const build = (
+  sn: string,
+  event = "pull_request",
+  eventUrl = "https://cnb.cool/moon-read/comfy-app-t3/-/pulls/2323",
+) => ({
+  sn,
+  event,
+  eventUrl,
+  createTime: "2026-10-25T03:08:18.000Z",
+  status: "error",
+});
+
+/**
+ * 逐格详情（`classifyBuildOutcome()` 认的形状）。
+ *
+ * ⚠️ 状态词用平台原话：`error` / `cancel` / `skipped` / `start`；构建级在跑是 `pending`。
+ */
+function detail(state: Verdict) {
+  const stages: StageRow[] =
+    state === "green"
+      ? [
+          { id: "stage-1", name: "分支守卫", status: "success" },
+          { id: "stage-2", name: "类型检查", status: "success" },
+        ]
+      : state === "running"
+        ? [
+            { id: "stage-1", name: "分支守卫", status: "success" },
+            { id: "stage-2", name: "类型检查", status: "start" },
+          ]
+        : [
+            { id: "stage-1", name: "分支守卫", status: "success" },
+            {
+              id: "stage-2",
+              name: "类型检查",
+              status: state === "cancelled" ? "cancel" : "error",
+            },
+            { id: "stage-3", name: "受影响用例", status: "skipped" },
+            { id: "stage-4", name: "重档静态判据", status: "skipped" },
+          ];
+  const status =
+    state === "green" ? "success" : state === "running" ? "pending" : "error";
+  return {
+    data: {
+      status,
+      pipelinesStatus: { p1: { id: "p1", name: "质量门禁", status, stages } },
+    },
+  };
+}
+
+describe("认「这一跑是谁」：PR 号只从不猜的字段取", () => {
+  it("环境变量里有 PR 号 ⇒ 直接用它（人推了 PR 才会有它）", () => {
+    const t = resolveTarget({
+      env: { CNB_PULL_REQUEST_IID: "2323" },
+      list: [build("sn-1")],
+      sn: "sn-1",
+    });
+    expect(t.prIid).toBe(2323);
+    expect(t.why).toBeNull();
+  });
+
+  it("环境变量不在场 ⇒ 从列表那一项的 eventUrl 取；两种 URL 形状都认", () => {
+    expect(prIidFromUrl("https://cnb.cool/a/b/-/pulls/2323")).toBe(2323);
+    expect(prIidFromUrl("https://cnb.cool/a/b/-/pull/2323")).toBe(2323);
+    expect(prIidFromUrl("https://cnb.cool/a/b/-/builds/123")).toBeNull();
+    const t = resolveTarget({
+      env: {},
+      list: [build("sn-1")],
+      sn: "sn-1",
+    });
+    expect(t.prIid).toBe(2323);
+  });
+
+  it("push / 定时那几跑不归这一格管，而且给的是原因、不是失败", () => {
+    const t = resolveTarget({
+      env: {},
+      list: [build("sn-2", "push", "")],
+      sn: "sn-2",
+    });
+    expect(t.why).toContain("不是 pull_request");
+    expect(t.why).toContain("没有 PR");
+  });
+
+  it("列表里查不到这一跑、环境变量也没有 ⇒ 不给 PR 号（也不猜一个）", () => {
+    /* 列表里那一条自带 PR 的 eventUrl，但它**不是这一跑**（sn 对不上）⇒ 那条信息
+     * 与 sn-x 无关，不许拿来给 sn-x 记一个 PR 号。 */
+    const t = resolveTarget({ env: {}, list: [build("其他")], sn: "sn-x" });
+    expect(t.prIid).toBeNull();
+    expect(t.why).toContain("不是 pull_request");
+  });
+});
+
+describe("决定写不写：①「没结论」一律不落成红字", () => {
+  it("绿 ⇒ 不写；被取消 ⇒ 不写，且话术不许把「没跑完」说成产物坏了", () => {
+    const g = decideAction({
+      state: "green",
+      failedNames: [],
+      prIid: 1,
+      existing: [],
+    });
+    expect(g.action).toBe("none");
+    expect(g.reason).toContain("绿的");
+    const c = decideAction({
+      state: "cancelled",
+      failedNames: [],
+      prIid: 1,
+      existing: [],
+    });
+    expect(c.action).toBe("none");
+    expect(c.reason).toContain("没有结论");
+  });
+
+  it("判成真失败却认不出是哪一格 ⇒ 不动账（「取不到」不是「没有红」）", () => {
+    const act = decideAction({
+      state: "failed",
+      failedNames: [],
+      prIid: 1,
+      existing: [],
+    });
+    expect(act.action).toBe("no-fact");
+    expect(act.reason).toContain("认不出");
+  });
+
+  it("没有 PR 可挂、又取不到开着的单 ⇒ 不新建（否则多一张重复单）", () => {
+    const act = decideAction({
+      state: "failed",
+      failedNames: ["类型检查"],
+      prIid: null,
+      existing: null,
+    });
+    expect(act.action).toBe("no-fact");
+    expect(act.reason).toContain("不等于");
+  });
+
+  it("unknown（详情那份读不懂）⇒ 同样不写", () => {
+    const act = decideAction({
+      state: "unknown",
+      failedNames: ["类型检查"],
+      prIid: 1,
+      existing: [],
+    });
+    expect(act.action).toBe("no-fact");
+  });
+});
+
+describe("决定写不写：②落点（PR 评论 vs 建单）与去重", () => {
+  it("有 PR ⇒ 评论在那张 PR 下，一格一段（不查开着的单）", () => {
+    const act = decideAction({
+      state: "failed",
+      failedNames: ["类型检查", "受影响用例"],
+      prIid: 2323,
+      existing: null,
+    });
+    expect(act.action).toBe("recommend");
+    expect(act.stages).toEqual([
+      { stage: "类型检查" },
+      { stage: "受影响用例" },
+    ]);
+  });
+
+  it("没有 PR ⇒ 按格名建单；同一格已有 open 单则追加，不新建", () => {
+    const act = decideAction({
+      state: "failed",
+      failedNames: ["类型检查", "受影响用例"],
+      prIid: null,
+      existing: [{ number: 2200, title: issueTitle("类型检查") }],
+    });
+    expect(act.action).toBe("write");
+    expect(act.stages).toEqual([
+      { stage: "类型检查", number: 2200 },
+      { stage: "受影响用例" },
+    ]);
+  });
+
+  it("人工写的单只要带同一串前缀就自动进这一族", () => {
+    const human = "ci(pr): PR 档红在「类型检查」—— 上一跑整格 skipped 的那一笔";
+    expect(human).toContain(titleKey("类型检查"));
+    const act = decideAction({
+      state: "failed",
+      failedNames: ["类型检查"],
+      prIid: null,
+      existing: [{ number: 2201, title: human }],
+    });
+    expect(act.stages[0]?.number).toBe(2201);
+  });
+});
+
+describe("正文只含读数，不含因果", () => {
+  const target = {
+    sn: "cnb-0j2-1k5ogfi0l",
+    event: "pull_request",
+    eventUrl: "",
+    prIid: 2323,
+  };
+  const body = composeBody({
+    slug: "moon-read/comfy-app-t3",
+    target,
+    stage: "类型检查",
+    skipped: ["受影响用例", "重档静态判据"],
+    readout: [
+      "── 失败格：类型检查（stage-2）",
+      "L88 src/x.ts(3,5): error TS2322",
+    ],
+    handle: "ci-pr",
+  });
+
+  it("症状 / 读数 / 出处 / 出口四件都在，且明写「根因未判定」", () => {
+    expect(body.startsWith("**[评论人：ci-pr]**")).toBe(true);
+    expect(body).toContain("cnb-0j2-1k5ogfi0l");
+    expect(body).toContain("PR #2323");
+    expect(body).toContain("「类型检查」");
+    expect(body).toContain(
+      "被它带下去、**根本没跑**的格：受影响用例、重档静态判据",
+    );
+    expect(body).toContain("L88 src/x.ts(3,5): error TS2322");
+    expect(body).toContain("## 根因：**未判定**");
+    expect(body).toContain("pnpm ship --diagnose cnb-0j2-1k5ogfi0l");
+    expect(body).toContain(
+      "https://cnb.cool/moon-read/comfy-app-t3/-/build/logs/cnb-0j2-1k5ogfi0l",
+    );
+    // 落点是 PR 时，那句「一条诉求一张单」必须写出来，不然下一个人会去另开单。
+    expect(body).toContain("落点是这张 PR");
+  });
+
+  it("负控制：不许出现替人说「谁的错 / 为什么红」那类因果句", () => {
+    for (const banned of ["因为", "由于", "根因是", "造成的", "是它的错"]) {
+      expect(body, `正文里出现了未经验证的因果句：${banned}`).not.toContain(
+        banned,
+      );
+    }
+  });
+
+  it("日志取不到时念「取不到」，不许念成「日志里没有失败行」", () => {
+    const empty = composeBody({
+      slug: "s/x",
+      target: { ...target, prIid: null },
+      stage: "类型检查",
+      skipped: [],
+      readout: [],
+      handle: "ci-pr",
+    });
+    expect(empty).toContain("**取不到**");
+    // 没有 PR 那一支要给的是「同一格不重复建单」的口径。
+    expect(empty).toContain("不新建");
+  });
+});
+
+describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
+  /** 每份用例自带目录，别往仓库里落东西。 */
+  function fixture(payload: unknown) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pr-failure-issue-"));
+    const file = path.join(dir, "read.json");
+    fs.writeFileSync(file, JSON.stringify(payload), "utf8");
+    return { dir, file };
+  }
+
+  const run = (args: string[], extraEnv: Record<string, string> = {}) => {
+    const env = { ...process.env, ...extraEnv };
+    for (const [k, v] of Object.entries(extraEnv)) if (v === "") delete env[k];
+    return spawnSync(process.execPath, [ENTRY, ...args], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env,
+    });
+  };
+
+  it("离线档强制只读：念出要评论在哪张 PR 下，一条都不写", () => {
+    const f = fixture({
+      sn: "sn-1",
+      list: [build("sn-1")],
+      details: [{ sn: "sn-1", json: detail("failed") }],
+    });
+    try {
+      const r = run(["--from", f.file]);
+      const out = `${r.stdout}\n${r.stderr}`;
+      expect(r.status, out).toBe(CODE.DONE);
+      expect(out).toContain("强制只读");
+      expect(out).toContain("评论在 PR #2323 下");
+      expect(out).toContain("一条都没写");
+      expect(out).toContain("被带下去 2 格");
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("这一跑是绿的 ⇒ 一句话讲清为什么没写，且不构成「失败」", () => {
+    const f = fixture({
+      sn: "sn-2",
+      list: [build("sn-2")],
+      details: [{ sn: "sn-2", json: detail("green") }],
+    });
+    try {
+      const r = run(["--from", f.file]);
+      expect(r.status).toBe(CODE.DONE);
+      expect(`${r.stdout}${r.stderr}`).toContain("这一跑是绿的");
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * `--no-block` 的全部风险在这里：它把「没结论」的退码改成 0，
+   * 而唯一能挡住它变成静默的东西，是那句话说出来 + 这一条用例钉住。
+   */
+  it("没有 sn ⇒ 不带旗标退 2（没结论），带 `--no-block` 退 0 但那句话照打", () => {
+    /* ⚠️ `CNB_BUILD_ID: ""` 是**必须显式给**的：这一条用例自己的进程本身就活在一条
+     * CI 构建里（平台给每一格都注入了 `CNB_BUILD_ID`），不给它的话「离线档没写 sn」
+     * 会静默落回**这一条用例所在那一跑**的号 —— 那是读别人的读数，也正是本档
+     * 「不猜这一跑是谁」要挡的形状。 */
+    const f = fixture({ list: [], details: [] });
+    try {
+      const strict = run(["--from", f.file], { CNB_BUILD_ID: "" });
+      expect(strict.status, `${strict.stdout}\n${strict.stderr}`).toBe(
+        CODE.NO_FACT,
+      );
+      const loose = run(["--from", f.file, "--no-block"], { CNB_BUILD_ID: "" });
+      expect(loose.status).toBe(CODE.DONE);
+      const out = `${loose.stdout}\n${loose.stderr}`;
+      expect(out).toContain("不拦路");
+      expect(out).toContain("别把它改成静默 return");
+      expect(out).toContain("不按时间挑一条");
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--from 那个路径不存在 ⇒ 退 2，而不是「没有红」", () => {
+    const r = run([
+      "--from",
+      path.join(os.tmpdir(), "definitely-not-here-2332.json"),
+    ]);
+    expect(r.status).toBe(CODE.NO_FACT);
+    expect(`${r.stdout}${r.stderr}`).toContain("不构成结论（不是「没有红」）");
+  });
+
+  /**
+   * 生产网络路径的**默认出口**：注入一台会应答的假执行者，走的是与平台那一跳同一条链
+   * （列表 → 逐格详情 → 逐格日志 → PR 评论），断言 `--dry-run` 一个写命令都不发。
+   */
+  it("--dry-run 走完整条读链，一次 post-pull-comment / create-issue 都不发", () => {
+    const calls: string[] = [];
+    const heard: string[] = [];
+    const code = main({
+      argv: ["--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-live", CNB_PULL_REQUEST_IID: "2323" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: string[]) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) return json([build("sn-live")]);
+        if (key.includes("get-build-status"))
+          return json(detail("failed").data);
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    expect(code).toBe(CODE.DONE);
+    expect(out).toContain("这一跑 sn-live");
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("--dry-run：「类型检查」→ 评论在 PR #2323 下");
+    expect(
+      calls.some(
+        (c) => c.includes("post-pull-comment") || c.includes("create-issue"),
+      ),
+      `dry-run 却发了写命令：${calls.join(" / ")}`,
+    ).toBe(false);
+    // 读链真的走到了逐格日志那一层（不是靠 --from 绕过去的）。
+    expect(calls.some((c) => c.includes("get-build-stage"))).toBe(true);
+  });
+});
+
+describe("平台配置：这一格必须排在最后、带 always()、且不挂 ifModify", () => {
+  const CONFIG = fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
+
+  /* 正控：真的读到了那一格（否则下面两条断言会在「配置里没有它」上以别的名义绿掉）。 */
+  it("`.cnb.yml` 里有这一格，入口是脚本而不是裸命令", () => {
+    expect(CONFIG).toContain("- name: PR 失败立案");
+    const at = CONFIG.indexOf("- name: PR 失败立案");
+    const block = CONFIG.slice(at, at + 1200);
+    expect(block).toContain("node scripts/ci-pr-failure-issue.mjs --no-block");
+    expect(block).toContain("run: always()");
+    expect(block).toContain("timeout: 5m");
+    expect(block).not.toContain("ifModify");
+  });
+
+  /**
+   * 「写在最后」不是排版：前面任何一格红都会把它 `skipped` 掉，
+   * 而那正是它要治的形状（`always()` 挡的是「前面红 ⇒ 整条链停」这一次）。
+   * 判据 = 它在 `.gates` 锚点里之后没有别的 `- name:` 了。
+   */
+  it("它是 `.gates` 锚点的最后一格（后面只剩注释与别的顶层键）", () => {
+    const gatesAt = CONFIG.indexOf(".gates: &gates");
+    const masterAt = CONFIG.indexOf("\nmaster:");
+    const body = CONFIG.slice(gatesAt, masterAt);
+    const names = [...body.matchAll(/^ {2}- name: (.+)$/gm)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThan(3);
+    expect(names[names.length - 1]).toBe("PR 失败立案");
+  });
+});

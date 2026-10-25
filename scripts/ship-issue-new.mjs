@@ -44,6 +44,67 @@ import { readIssue } from "./ship-claim.mjs";
 const PRIORITY_WORDS = ISSUE_PRIORITIES.split("|");
 
 /**
+ * 往一张**已有的** open 单下追加一条读数，并独立回读（ISSUE #2332）。
+ *
+ * 为什么收在这里：这条动作（写 → 回读里认 marker）此前是 `ci-daily-failure-issue.mjs`
+ * 的私有函数 `appendReading`，而 PR 档那一格需要的是**逐字相同**的一条 —— 抄一份就得到
+ * 「两份回读各自漂」（§12.12）。所以实现只留这一处：`ship-issue-new` 已经是「单子这一侧
+ * 的写入口」（建单那三步也在这里），追加评论与它同一族。
+ *
+ * 回执不算结论：写完之后列一次最新评论，认的是「最新的自己那条里含 marker」
+ * （marker 通常是构建号 —— 它让「同一条读数写了两遍」与「写成功了」区分得开）。
+ *
+ * @param {{run:any, log:(s:string)=>void, slug:string, number:number, body:string,
+ *   marker:string, mkTmp:(name:string,text:string)=>string|null}} input
+ * @returns {boolean} 写成且回读到 ⇒ true
+ */
+export function runAppendIssueComment({
+  run,
+  log,
+  slug,
+  number,
+  body,
+  marker,
+  mkTmp,
+}) {
+  const file = mkTmp("issue-comment", body);
+  if (!file) {
+    log("[ship] ✗ 取不到 git 目录 ⇒ 评论没有落点，这一步没有执行者。");
+    return false;
+  }
+  const res = cnbJson(run, [
+    "issues",
+    "post-issue-comment",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "--body-file",
+    file,
+    "-v",
+  ]);
+  if (!res || res.code !== 0) return false;
+  const back = cnbJson(run, [
+    "issues",
+    "list-issue-comments",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "--sort",
+    "-created",
+    "--page-size",
+    "20",
+    "-v",
+  ]);
+  const d = back ? back.json?.data : null;
+  const rows = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+  return rows.some((/** @type {any} */ c) =>
+    String(c?.body ?? "").includes(marker),
+  );
+}
+
+/**
  * 建单前的三道判断 —— 纯函数，不起进程。
  *
  * @param {{title?: string|null, body?: string|null, priority?: string|null}} input
@@ -52,7 +113,9 @@ const PRIORITY_WORDS = ISSUE_PRIORITIES.split("|");
 export function decideNewIssue({ title = null, body = null, priority = null }) {
   const t = String(title ?? "").trim();
   const b = String(body ?? "");
-  const p = String(priority ?? "").trim().toUpperCase();
+  const p = String(priority ?? "")
+    .trim()
+    .toUpperCase();
   if (t === "") {
     return {
       ok: false,
@@ -81,8 +144,7 @@ export function decideNewIssue({ title = null, body = null, priority = null }) {
       code: CODE.NOT_RUN,
       title: t,
       priority: null,
-      reason:
-        `--priority 只认平台原生词表 ${ISSUE_PRIORITIES}（收到「${priority}」）⇒ 不猜一个近似的值。`,
+      reason: `--priority 只认平台原生词表 ${ISSUE_PRIORITIES}（收到「${priority}」）⇒ 不猜一个近似的值。`,
     };
   }
   return { ok: true, code: null, title: t, priority: p || null, reason: "" };
@@ -187,7 +249,9 @@ export function runNewIssue({
     log(
       `[ship] --dry-run：将创建「${plan.title}」（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
         `优先级 ${plan.priority ?? "平台默认"}）` +
-        (label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）") +
+        (label
+          ? `，再按 ${label}，最后 get-issue 回读`
+          : "，不回读标签（未配留痕）") +
         "；一条都没写。",
     );
     return CODE.GREEN;
@@ -209,7 +273,8 @@ export function runNewIssue({
     ...(plan.priority ? ["--priority", plan.priority] : []),
     "-v",
   ]);
-  const d = got && got.json && typeof got.json === "object" ? got.json.data : null;
+  const d =
+    got && got.json && typeof got.json === "object" ? got.json.data : null;
   const number = Number(
     d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN,
   );
@@ -249,7 +314,12 @@ export function runNewIssue({
     );
     return CODE.RED;
   }
-  if (label && !labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(String(handle).trim())) {
+  if (
+    label &&
+    !labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
+      String(handle).trim(),
+    )
+  ) {
     log(
       `[ship] #${number} 回读里没有 ${label} ⇒ 不念「留痕已补上」` +
         "（实测 create-issue --labels 不落地，只能建完再按）。",
