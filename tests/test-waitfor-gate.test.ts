@@ -11,8 +11,12 @@
  *   ③ 假定时器窗口内 → 正当（该放）
  *   ④ 本地同名 helper → 整文件不看（该放）
  *   ⑤ 判据自己的夹具文件 → 跳过
+ *
+ * 还钉**夹具自己**的形状（ISSUE #2329）：`gate()` 交出 `ran / status / code / signal / output`
+ * 五件，**不许**把「判出越界」与「脚本没跑起来」折成一个布尔 —— 后者的退出码也是 1
+ * （node 报 `Cannot find module`），只看退出码必然误判。正反两格都在最后一节里。
  */
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -40,10 +44,34 @@ const { scanFile } = createRequire(import.meta.url)(SCRIPT) as {
   scanFile: (abs: string) => unknown[] | null;
 };
 
+/**
+ * 起一次判据，把**三件事实分开**交出去（ISSUE #2329）。
+ *
+ * 旧写法是 `execFileSync` 包 `try/catch` 折成一个 `ok: boolean`，于是下面三类失败
+ * 在账面上逐字同形 —— 而它们的下一动作完全不同：
+ *   ① 判据跑完了、**判出越界**（退出码 1，这是本文件想判的事）；
+ *   ② 判据**根本没跑起来**：`ENOENT`（node 自身起不来）/ `ENOBUFS`（默认 `maxBuffer`
+ *      1MB，输出超限就抛）/ 被子进程信号杀 ⇒ `error` 有值或 `status` 是 `null`；
+ *   ③ 子进程起来了但脚本没跑到判据：**node 报 `Cannot find module` 退的也是 1**，
+ *      与①同码 —— 所以只看退出码**必然误判**（`scripts/base-check.mjs` 对这一族
+ *      已经写过同一句：`Tests no tests` / `Cannot find package|module` /
+ *      `ERR_MODULE_NOT_FOUND` 那一档要单独判「没跑起来」）。
+ * `output` 一律是两条流拼在一起（#2287 的口径：失败时哪一条有内容没人知道）。
+ */
+const NOT_STARTED_RE =
+  /Cannot find (?:module|package)|ERR_MODULE_NOT_FOUND|ENOBUFS|maxBuffer|heap out of memory/i;
+
 function gate(
   files: Record<string, string>,
   args: string[] = [],
-): { ok: boolean; output: string } {
+  deps: { entry?: string } = {},
+): {
+  ran: boolean;
+  status: number | null;
+  code: string | null;
+  signal: string | null;
+  output: string;
+} {
   const root = mkdtempSync(path.join(tmpdir(), "test-waitfor-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   for (const src of [SCRIPT, DEP]) {
@@ -55,20 +83,45 @@ function gate(
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
-  const entry = path.join(root, "scripts", "check-test-waitfor.cjs");
-  try {
-    return {
-      ok: true,
-      output: execFileSync(process.execPath, [entry, ...args], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
-    };
-  } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
-  }
+  const entry =
+    deps.entry ?? path.join(root, "scripts", "check-test-waitfor.cjs");
+  const res = spawnSync(process.execPath, [entry, ...args], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const err = res.error;
+  const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
+  return {
+    ran: !err && typeof res.status === "number" && !NOT_STARTED_RE.test(output),
+    status: res.status ?? null,
+    /* `error.message` 而不是 `error.code`：Node 的 spawn 失败把 `ENOENT` / `ENOBUFS`
+       写在消息开头（`ENOENT: no such file or directory, spawn …`），而 `code` 在
+       `SpawnSyncReturns.error` 的声明类型上并不存在 —— 取它会让 tsc 与 lint 各说一套。 */
+    code: err ? err.message.slice(0, 80) : null,
+    signal: res.signal ?? null,
+    output,
+  };
+}
+
+/**
+ * 「没跑起来」必须先被单独判掉 —— 它既不许被读成「判据红了」，也不许被读成
+ * 「这个形状放行了」（§13.6.4：拿不到测量 ≠ 测量结果是红的）。
+ * 失败消息里把退出码、`error.code`、信号与两条流原值一起交出去。
+ */
+function expectRan(r: {
+  ran: boolean;
+  status: number | null;
+  code: string | null;
+  signal: string | null;
+  output: string;
+}): void {
+  expect(
+    r.ran,
+    `判据脚本**没跑起来**（status=${String(r.status)} · code=${String(r.code)} · ` +
+      `signal=${String(r.signal)}）⇒ 这一格不构成判决，不是判据红。\n` +
+      `--- 子进程两条流原值 ---\n${r.output}`,
+  ).toBe(true);
 }
 
 const RTL = 'import { renderHook, waitFor } from "@testing-library/react";\n';
@@ -82,7 +135,8 @@ describe("waitFor 边界门禁：该拦的形状（§11.14.3）", () => {
 });
 `,
     });
-    expect(r.ok).toBe(false);
+    expectRan(r);
+    expect(r.status, r.output).toBe(1);
     expect(r.output).toContain("越界：1 处");
     expect(r.output).toContain("src/a.test.ts");
     expect(r.output).toContain("§11.14.3");
@@ -97,7 +151,8 @@ describe("waitFor 边界门禁：该放的形状（§11.14.3）", () => {
 });
 `,
     });
-    expect(r.ok).toBe(true);
+    expectRan(r);
+    expect(r.status, r.output).toBe(0);
     expect(r.output).toContain("等 DOM 1");
   });
 
@@ -114,7 +169,8 @@ ${RTL}it("x", async () => {
 });
 `,
     });
-    expect(r.ok).toBe(true);
+    expectRan(r);
+    expect(r.status, r.output).toBe(0);
     expect(r.output).toContain("假定时器窗口 1");
   });
 
@@ -128,7 +184,8 @@ it("x", async () => {
 });
 `,
     });
-    expect(r.ok).toBe(true);
+    expectRan(r);
+    expect(r.status, r.output).toBe(0);
     expect(r.output).toContain("越界 0 处");
   });
 
@@ -139,7 +196,8 @@ it("x", async () => {
 });
 `,
     });
-    expect(r.ok).toBe(true);
+    expectRan(r);
+    expect(r.status, r.output).toBe(0);
     expect(r.output).toContain("越界 0 处");
   });
 });
@@ -163,5 +221,38 @@ describe("waitFor 边界门禁：扫描期间文件消失（并发探针）", ()
     );
     expect(existsSync(gone), "夹具路径本身不该存在").toBe(false);
     expect(scanFile(gone)).toBeNull();
+  });
+});
+
+/**
+ * 夹具自己的形状 —— 这一节是 #2329 的**正反两半**：
+ * 「没跑起来」与「判出越界」在退出码上**同形**（node 报 `Cannot find module` 也退 1），
+ * 所以只判退出码必然误判；两半各钉一格，防止有人为了「让红少响」把两边一起判掉。
+ */
+describe("夹具自己的形状：「没跑起来」与「判红」不许同形（ISSUE #2329）", () => {
+  it("脚本取不到 ⇒ 退出码同样是 1，但这一格 ran=false（不是判据红）", () => {
+    const r = gate({}, [], {
+      entry: path.join(SCRIPTS_DIR, "check-test-waitfor-no-such-file.cjs"),
+    });
+    /* 先钉「为什么只看退出码不够」：这一格与上面 ① 那一格的 `status` 逐字相同。 */
+    expect(r.status, r.output).toBe(1);
+    expect(r.ran, r.output).toBe(false);
+    expect(r.output).toContain("Cannot find module");
+    /* 而且没跑起来时 `code` / `signal` 得能自证「不是被杀、不是 spawn 失败」，
+       否则下一次又要靠翻整份日志猜。 */
+    expect(r.code, `spawn 的 error 应为空，收到 ${String(r.code)}`).toBeNull();
+    expect(r.signal, `不该是被信号杀，收到 ${String(r.signal)}`).toBeNull();
+  });
+
+  it("真判红那一侧仍然 ran=true ⇒ 两格没被同一条规则一起判掉", () => {
+    const r = gate({
+      "src/a.test.ts": `${RTL}it("x", async () => {
+  await waitFor(() => expect(v).toBe(1));
+});
+`,
+    });
+    expectRan(r);
+    expect(r.status, r.output).toBe(1);
+    expect(r.output).toContain("越界：1 处");
   });
 });
