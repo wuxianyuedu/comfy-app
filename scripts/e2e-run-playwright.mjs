@@ -162,22 +162,57 @@ export function resolvePlaywrightFile(rel, cwd = ROOT) {
  * 不抛：起不来也要把「这一跑没成」如实交出去（调用方转非零退出码），
  * 而失败原因**先打一行**（§4：失败路径必须有日志），否则读日志的人只看到退出码。
  *
+ * ## `origin`：让「判据按设计造的失败」与「这一跑真起不来」在日志里分得开
+ *
+ * 那一行 ENOENT 是**失败路径的取证**，不能收（收了真起不来就没有任何线索）。
+ * 但同一个出口有两个使用者：真实跑法（要给运维找线索）与判据
+ * （`tests/e2e-run.test.ts` 故意塞一个不存在的路径，断言 `status === null` ——
+ * 它**要**的就是这条失败路径）。两者共用一条 stderr，于是 CI 日志里那一行
+ * 长得和真故障一模一样，读的人得先去查「是不是某条用例造的」。
+ *
+ * 修法不是静音（那是把取证一起收掉），而是让那一行**自报家门**：
+ * 调用方声明 `origin`，判据侧声明 `origin: "test"` ⇒ 同一行改由 `[e2e-run/test]`
+ * 打头并追加一句「判据按设计造的失败」。前缀是机器可分辨的（读日志的不必再猜），
+ * 而 `e2e-run` 这一档的形态一个字都没变。
+ *
  * @param {{command: string, args: string[], options: Record<string, unknown>}} invocation
- * @param {{spawnImpl?: typeof spawn}} [ports]
+ * @param {{spawnImpl?: typeof spawn, origin?: "run" | "test"}} [ports]
+ *   `origin` 缺省 `"run"`（真实跑法）；`"test"` 表示调用方自己就是那条负向用例。
  * @returns {Promise<{status: number | null}>}
  */
-export function runChild(invocation, { spawnImpl = spawn } = {}) {
+export function runChild(
+  invocation,
+  { spawnImpl = spawn, origin = "run" } = {},
+) {
   const { command, args, options } = invocation;
   return new Promise((settle) => {
     const child = spawnImpl(command, args, options);
     child.on("error", (err) => {
       const code = /** @type {NodeJS.ErrnoException | undefined} */ (err)?.code;
-      process.stderr.write(
-        `[e2e-run] ✗ 起不了 Playwright（${command}）：失败码 ${code ?? "未知"}` +
-          " —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）\n",
-      );
+      process.stderr.write(spawnFailureLine({ command, code, origin }));
       settle({ status: null });
     });
     child.on("close", (code) => settle({ status: code }));
   });
+}
+
+/**
+ * 起不来那一行的**唯一出处**（`runChild` 的 `error` 出口用，判据也直接断言它）。
+ *
+ * 单独抽出来是为了让「这一行长什么样」成为被测对象 —— 按字符串判进整行输出
+ * 会把前缀、失败码、出处提示三件糊成一句断言，改一个字就得整组重写。
+ *
+ * @param {{command: string, code?: string, origin?: "run" | "test"}} input
+ * @returns {string} 要写到 stderr 的一整行（含行尾换行）
+ */
+export function spawnFailureLine({ command, code, origin = "run" }) {
+  const byTest = origin === "test";
+  const tag = byTest ? "[e2e-run/test]" : "[e2e-run]";
+  return (
+    `${tag} ✗ 起不了 Playwright（${command}）：失败码 ${code ?? "未知"}` +
+    " —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）" +
+    (byTest
+      ? "\n          ↑ 这条是**判据按设计造的失败**（负向用例要的正是这个出口），不是这一跑起不来。\n"
+      : "\n")
+  );
 }

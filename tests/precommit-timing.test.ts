@@ -26,6 +26,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { groupShBody, stepsInGroup } from "./helpers/hook-groups";
 
 const REPO_ROOT = resolve(".");
@@ -111,7 +112,7 @@ afterEach(() => {
 function makeRepo() {
   const dir = mkdtempSync(join(tmpdir(), "precommit-timing-"));
   tmpDirs.push(dir);
-  execFileSync("git", ["init", "--quiet"], { cwd: dir });
+  execFileSync("git", ["init", "--quiet"], { cwd: dir, env: gitSandboxEnv() });
   return dir;
 }
 
