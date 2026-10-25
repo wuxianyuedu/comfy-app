@@ -456,10 +456,9 @@ export function main(io = {}) {
     if (!list) {
       /* 这一句是这一格**唯一**的失效形态（它是 `endStages`，退出码不构成流水线结论），
        * 所以要把「下一次该谁做什么」也写在这里，而不是只留一句「取不到」。
-       * 2026-10-25 的现场读数（`cnb-uh5-1k5olev2q`）：
-       *   `data={"errcode":10023,"errmsg":"The token's authorization scope does not
-       *          match this request. Missing required scopes: repo-cnb-history:r"}`
-       * —— 即**流水线里的 `CNB_TOKEN` 少了「构建历史只读」**这一项。它按事件类型分配
+       * 2026-10-25 的现场读数（`cnb-uh5-1k5olev2q`）：平台原话是 `errcode 10023`
+       * 加一句 `Missing required scopes: repo-cnb-history:r` —— 即**流水线里的
+       * `CNB_TOKEN` 少了「构建历史只读」**这一项。它按事件类型分配
        * （官方 `zh/build/build-in-env.md` §CNB_TOKEN）：`pull_request` 属可信事件本应有，
        * 所以这一行读数是配置面的问题，代码改不动它 —— 出路是让这一跑拿到那份 scope。 */
       log(
