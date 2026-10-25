@@ -9089,6 +9089,16 @@ pnpm ship --diagnose --dry-run           # 只打印它会读的那三条命令
 不重跑、不评论、不改状态。打印的是：
 
 - 整跑的判决（绿 / 真失败 / 被取消 / 还在跑 / 取不到）与平台给的原因原话（被取消那一路）；
+- **还在跑那一支带格子进度**（ISSUE #2304）：`进度（与轮询那行同一份计算）：<sn>/<status>/<done>-<total>+<stageDone>/<stageTotal>`
+  ＋「在飞 N 格：<格名>」。签名**一次算好**（`progressReadout`）—— 过去这一支只念
+  「等它跑完再读一次」，而轮询那行念的是进度，同一个事实两个读者面；看诊断的人只能去翻原始 JSON，
+  而那层嵌套（`data.pipelinesStatus.<sn>-001.stages[]`）读错一次，就会把「在推进」念成「一格都没起」；
+- 「没推进」要**连续两眼**才念得出：基数落在 `.git/comfy-diagnose-last/<sn>.json`（按构建号分文件、
+  不入库）。**三件同时成立**才算「疑似派发未出勤」：签名不变 + 间隔 ≥ `DIAGNOSE_STALL_MINUTES`（10 分钟）
+  + 此刻没有一格在飞 —— 缺一件就仍念「在推进 / 还在跑」（#2184 与 #2172 记的都是「与正在长跑同形」）；
+  念出来时把出口点名成 `pnpm ship --rerun-ci`，并如实说平台**不给执行体归属**
+  （`runner` / `npc` / `node` / `agent` 字段不存在或为空 ⇒ 「排队」与「派发丢了」账面分不开）。
+  这一格是**读数**，不改退码（还在跑仍 `2`）。
 - 每一格红格的名字、所属流水线、`status`、时长，以及**失败行（带完整日志的行号）**与
   **末尾若干行**；最多展开 3 格，其余格给完整日志链接；
 - 完整日志链接 `https://cnb.cool/<组织>/<仓库>/-/build/logs/<sn>`。
@@ -9104,7 +9114,9 @@ pnpm ship --diagnose --dry-run           # 只打印它会读的那三条命令
 （`ci-build-readout.mjs`），独立 CLI 与 `--diagnose` 是它的两个入口，不会对同一跑给出两种答案。
 `ship` 自己的红色判决也会把这一句念出来：「失败格与失败行：`pnpm ship --diagnose <sn>`」。
 回归在 `tests/ci-build-readout.test.ts` 与 `tests/ship.test.ts` 的 `--diagnose` 组（含
-「绿的那一跑一次也不取格日志」「`--diagnose --merge` ⇒ 2 且一条 build 命令都不发」）。
+「绿的那一跑一次也不取格日志」「`--diagnose --merge` ⇒ 2 且一条 build 命令都不发」，
+以及 #2304 那两组：签名与 `buildSignature` 逐字相等、没给 json 就少念那两行、
+`stallReadout` 的五条分支——含「有格在飞时**不许**念停滞」与「未到阈值时先不下判断」）。
 
 ### 13.11 随手改与 TODO 记录规范
 

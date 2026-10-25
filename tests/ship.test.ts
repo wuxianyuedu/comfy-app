@@ -106,6 +106,10 @@ import {
   reapCheckoutInstances,
 } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
+import {
+  DIAGNOSE_STALL_MINUTES,
+  stallReadout,
+} from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -5353,5 +5357,96 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(all).toContain("提单人:yuedu-win");
     expect(all).toContain("cnb pulls post-pull-labels");
     expect(all).toContain("cnb pulls list-pull-labels");
+  });
+});
+
+/**
+ * `--diagnose` 的「还在跑」该念哪句话（ISSUE #2304）。
+ *
+ * 单发读数没有「上一眼」，所以基数落在 `.git/` 下按构建号分文件；这一组只判**纯函数**
+ * 那五条分支 —— 关键是「疑似派发未出勤」要**三件同时成立**（签名不变 + 到阈值 +
+ * 没一格在飞），缺一件就不许念出来：那正是 #2184 / #2172 记过的「与正在长跑同形」。
+ */
+describe("stallReadout：慢、没推进、没派发起来 是三件事（#2304）", () => {
+  const SIG_OLD = "b1/pending/0-1+11/37";
+  const SIG_NEW = "b1/pending/0-1+30/37";
+  const none = { count: 0, names: [] };
+  const one = { count: 1, names: ["受影响用例"] };
+
+  it("第一眼看：只落基数，不评价快慢", () => {
+    const text = stallReadout({
+      signature: SIG_OLD,
+      flying: one,
+      elapsedMinutes: 0,
+      previous: null,
+    }).join("\n");
+    expect(text).toContain("第一眼看这一跑");
+    expect(text).toContain("已落一份基数");
+    expect(text).not.toContain("疑似");
+  });
+
+  it("落不了基数（git 目录取不到）就说落不了，不念「已落」", () => {
+    const text = stallReadout({
+      signature: SIG_OLD,
+      flying: none,
+      elapsedMinutes: 0,
+      previous: null,
+      stored: false,
+    }).join("\n");
+    expect(text).toContain("没有可比基数");
+    expect(text).toContain("不念停滞");
+    expect(text).not.toContain("已落一份基数");
+  });
+
+  it("签名变了 ⇒ 在推进，并把上一眼与这一眼并排给出来", () => {
+    const text = stallReadout({
+      signature: SIG_NEW,
+      flying: one,
+      elapsedMinutes: 30,
+      previous: { signature: SIG_OLD, atMs: 0 },
+    }).join("\n");
+    expect(text).toContain("在推进");
+    expect(text).toContain(SIG_OLD);
+    expect(text).toContain(SIG_NEW);
+    expect(text).not.toContain("疑似");
+  });
+
+  it("签名没变但有格在飞 ⇒ 还在跑（这一档**不许**念成停滞）", () => {
+    const text = stallReadout({
+      signature: SIG_NEW,
+      flying: one,
+      elapsedMinutes: 60,
+      previous: { signature: SIG_NEW, atMs: 0 },
+    }).join("\n");
+    expect(text).toContain("还在跑，继续等");
+    expect(text).toContain("受影响用例");
+    expect(text).not.toContain("疑似");
+    expect(text).not.toContain("--rerun-ci");
+  });
+
+  it("三件同时成立 ⇒ 念「疑似派发未出勤」，并点名平台不给执行体归属 + 出口 --rerun-ci", () => {
+    const text = stallReadout({
+      signature: SIG_NEW,
+      flying: none,
+      elapsedMinutes: DIAGNOSE_STALL_MINUTES,
+      previous: { signature: SIG_NEW, atMs: 0 },
+    }).join("\n");
+    expect(text).toContain("疑似**派发未出勤**");
+    expect(text).toContain("runner");
+    expect(text).toContain("pnpm ship --rerun-ci");
+    expect(text).toContain("仍退 2，不改成红");
+  });
+
+  it("签名没变、没格在飞、但没到阈值 ⇒ 先不下判断（阈值这一档是判断的一部分）", () => {
+    const text = stallReadout({
+      signature: SIG_NEW,
+      flying: none,
+      elapsedMinutes: DIAGNOSE_STALL_MINUTES - 1,
+      previous: { signature: SIG_NEW, atMs: 0 },
+    }).join("\n");
+    expect(text).toContain("未到");
+    expect(text).toContain(String(DIAGNOSE_STALL_MINUTES));
+    expect(text).not.toContain("疑似");
+    expect(text).not.toContain("--rerun-ci");
   });
 });
