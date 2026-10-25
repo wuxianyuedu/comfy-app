@@ -193,6 +193,10 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
     （那是 `base-check.mjs`）；与主流程和单子动作互斥，排在 preflight 之前 —— 在 `master` 上、
     工作树脏时照样能跑（§13.10.13）。两个形状坑（`pipelinesStatus` 是按 id 索引的对象、
     格日志 `content` 是带 ANSI 的行数组）只有一份实现，别再按数组 / 字符串读。
+    「还在跑」那一支现在带格子进度（签名与轮询那行同一份计算，`progressReadout` 一次算好，
+    ISSUE #2304）；「没推进」要连续两眼才念得出 —— 基数落在 `.git/comfy-diagnose-last/<sn>.json`，
+    签名不变 + 间隔 ≥ 10 分钟 + 没有一格在飞，三件同时成立才念「疑似派发未出勤」并把出口点成
+    `pnpm ship --rerun-ci`；缺一件就仍念「还在跑」。它仍是 `2`，不改判据。
 
 ## 它不重复判的东西
 
