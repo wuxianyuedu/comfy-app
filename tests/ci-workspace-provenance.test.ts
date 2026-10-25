@@ -74,11 +74,19 @@ describe("允许写脏的名单", () => {
         { stage: "丙" },
       ]),
     ).toEqual(["docs/generated/", "coverage/"]);
-    /* 现役那份必须与登记表同源（少一档 = 加自动修时忘了登记，本档会当场误报）。 */
-    expect(writerPrefixes()).toEqual([
-      ...new Set(AUTOFIX_DUTIES.flatMap((d) => d.outputs ?? [])),
-    ]);
-    expect(writerPrefixes().length).toBe(AUTOFIX_DUTIES.length);
+    /* 现役那份必须与登记表同源（少一档 = 加自动修时忘了登记，本档会当场误报）。
+     * 长度断的是「去重后的前缀数 == 档数」—— 该等式只在各档 outputs 互不重叠时成立
+     * （#2342 的 prettier 档 outputs=src/**+.storybook/**，与 docs 档无重叠但让
+     * 「档数==前缀数」这个隐含假设显形了）。断言改成真正要守的：**每个登记档的
+     * outputs 都在派生名单里**（一个不少），且名单里没有任何登记外的来源。 */
+    const prefixes = writerPrefixes();
+    for (const duty of AUTOFIX_DUTIES) {
+      for (const out of duty.outputs ?? []) {
+        expect(prefixes, `${duty.stage} 的 ${out} 不在派生名单里`).toContain(
+          out,
+        );
+      }
+    }
   });
 
   it("underWriter 认前缀，也认「就是那个目录本身」，但不认后半截同名", () => {

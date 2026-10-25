@@ -373,7 +373,10 @@ describe("API 文档生成与自检（ISSUE #1329 收尾 → ISSUE #1975 挪执�
     const script = parseStageScripts(
       readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8"),
     ).get("API 文档生成与自检");
-    expect(script, "配置里解析不出「API 文档生成与自检」那一行的 script").toBeDefined();
+    expect(
+      script,
+      "配置里解析不出「API 文档生成与自检」那一行的 script",
+    ).toBeDefined();
     expect(
       script,
       "平台侧那一步又带上了 `--autofix` —— 产物不再进 git，没有「自动修完再提交」的对象",
@@ -595,10 +598,21 @@ describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
       "平台侧那一步带了 `--staged`：那里的工作区就是这次要判的那份源码，" +
         "`--staged` 读的是「本次暂存」、恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
     ).not.toContain("--staged");
+    /* #2342：执行者换成 ci-format-fixup.mjs（红 ⇒ bot 推 format-only 提交回 PR 分支），
+     * 它内部**原样跑** check-format.cjs（判据本体仍是那一份，别处分叉依旧不可能）——
+     * 这里钉两层：stage 点名 fixup 执行者 + fixup 源码里真的调 check-format。 */
     expect(
       stage,
-      "「prettier 格式」跑的不是 scripts/check-format.cjs —— 两处各写一份判据必然分叉",
-    ).toContain("scripts/check-format.cjs");
+      "「prettier 格式」跑的不是 scripts/ci-format-fixup.mjs —— #2342 的执行者",
+    ).toContain("scripts/ci-format-fixup.mjs");
+    const fixupSrc = readFileSync(
+      join(REPO_ROOT, "scripts", "ci-format-fixup.mjs"),
+      "utf8",
+    );
+    expect(
+      fixupSrc,
+      "fixup 内部必须原样跑 check-format.cjs（判据本体一份，不许重写第二份）",
+    ).toContain("check-format.cjs");
   });
 
   it("它不在**停用**清单里（那是另一件事：临时让位，不是挪执行者）", () => {
@@ -903,7 +917,7 @@ describe("新鲜度账：平台侧的第二个执行者（ISSUE #1979）", () =>
      * 就会以 `"pr"` 上下文跑（读工作树那份），主干的账就没人判了。 */
     expect(
       hit?.stage,
-      "每日侧那一步没有带 `COMFY_CI_SUBJECT: \"master\"` —— 主体不是 master ⇒ 它读的是" +
+      '每日侧那一步没有带 `COMFY_CI_SUBJECT: "master"` —— 主体不是 master ⇒ 它读的是' +
         "工作树那份账而不是主干的权威账（判据主体分权）",
     ).toContain("COMFY_CI_SUBJECT");
     expect(
@@ -1208,7 +1222,9 @@ describe("复合执行者 `重档静态判据`：条目表与执行面必须对�
   });
 
   it("钩子里带自动修旗标的步骤必须在条目表里（改工作区只有一处出处）", () => {
-    const autofixSteps = steps.filter((s) => s.argv.join(" ").includes("--autofix"));
+    const autofixSteps = steps.filter((s) =>
+      s.argv.join(" ").includes("--autofix"),
+    );
     const tableCmds = new Set(HEAVY_GATES.map((g) => g.argv.join(" ")));
     for (const step of autofixSteps) {
       expect(
