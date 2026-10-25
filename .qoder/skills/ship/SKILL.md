@@ -102,8 +102,11 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    可优化点 / 漏洞当场建单，**不必马上处理**；动手前若这次改动没有对应的单，先建单再改。
    **单子的另两格（提单人 / 优先级）同样是读数。** 阶段 0 紧接着一行
    `单子身份：提单人=<短名>（标签 提单人:<短名>） · 优先级走平台原生 --priority（P0|P1|P2|P3，本脚本不代填）`。
-   留痕的来源是 `.env` 里的 `COMFYAPP_DEV_HANDLE`（进程环境同名优先），本轮只对
-   **Windows 开发者**要求配它 —— 因为**平台给不了这一格**：issue 是被 token 的账号本体创建的，
+   留痕的来源是一条**取值链**（`scripts/dev-handle.mjs`）：`.env` 的 `COMFYAPP_DEV_HANDLE`
+   （进程环境同名优先）→ `CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → `git config user.name`
+   → 兜底 `cnb`。**没配也有名字**（ISSUE #2355）：「取的」会在身份那一行之后另念一句
+   （换台机器会变），`pnpm ship --whoami` 也念；`pnpm env:init` 会把取到的值写进 `.env`
+   而不是补一个空值。因为**平台给不了这一格**：issue 是被 token 的账号本体创建的，
    这台机器上多份并行检出回读的 `author.username` 与那串 noreply 子地址**逐字相同**（实测五张单、
    跨并行会话），而提交那一侧可分的通道（git author 子地址，见 `docs/guides/git-identity.md` §4）
    在单子上不存在。那一行 `.env` 整行缺失时，下一动作是 `pnpm env:init` —— 它只把

@@ -200,7 +200,10 @@ function labelNames(labels) {
  * @param {any} ctx.run 执行者
  * @param {(s: string) => void} ctx.log 输出通道
  * @param {string} ctx.slug 仓库路径
- * @param {string | null} ctx.handle 留痕短名（未配时不阻断，只是没有 `提单人:`）
+ * @param {string | null} ctx.handle 留痕短名（取值链给的，见 `dev-handle.mjs`）
+ * @param {string | null} [ctx.explicitHandle] **人填过**的那个名字（只读 `COMFYAPP_DEV_HANDLE`）。
+ *   `null` = 这次的短名是取的 ⇒ 建单本来就不带标签，回读里没有它**不是**异常；
+ *   非 `null` = 你填了 ⇒ 回读里没有就算「标签没落地」，退 2（ISSUE #2355）。
  * @param {string} ctx.root 仓库根
  * @param {any} ctx.opt 解析后的参数
  * @param {(name: string, text: string) => string | null} ctx.mkTmp 临时文件落点
@@ -212,6 +215,7 @@ export function runNewIssue({
   log,
   slug,
   handle,
+  explicitHandle = null,
   root,
   opt,
   mkTmp,
@@ -248,8 +252,8 @@ export function runNewIssue({
   }
   if (!label) {
     log(
-      "[ship] 未配留痕短名 ⇒ 单子会建，但不会带 `提单人:` 标签（读数，不阻断）；" +
-        "要留痕就配好 COMFYAPP_DEV_HANDLE 再建。",
+      "[ship] 取不到留痕短名（取值链 `dev-handle.mjs` 走到空，只可能是装配层没传）" +
+        " ⇒ 单子会建，但不带 `提单人:` 标签（读数，不阻断）。",
     );
   }
   if (dryRun) {
@@ -321,7 +325,11 @@ export function runNewIssue({
     );
     return CODE.RED;
   }
+  /* 「标签没落地」只在**你填过**名字时才是一件事：短名是取值链取来的（`explicitHandle`
+   * 为空）时，建单那一路本来就不带标签 —— 把它读成「你填了却没落上」是误判，而且会让一次
+   * 正常的建单退 2（ISSUE #2355）。 */
   if (
+    explicitHandle &&
     label &&
     !labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
       String(handle).trim(),
@@ -332,6 +340,12 @@ export function runNewIssue({
         "（实测 create-issue --labels 不落地，只能建完再按）。",
     );
     return CODE.NOT_RUN;
+  }
+  if (!explicitHandle) {
+    log(
+      `[ship] 留痕短名 ${handle ?? "(空)"} 是取的 ⇒ 这次建单不带 \`提单人:\` 标签` +
+        "（要带就在 `.env` 里填一行 `COMFYAPP_DEV_HANDLE`，再 `pnpm ship --claim` 补上）。",
+    );
   }
   if (plan.priority && back.priority.toUpperCase() !== plan.priority) {
     log(
