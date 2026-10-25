@@ -59,9 +59,24 @@ export function resolveGateCommand(input, hookPath = HOOK) {
       error: `标签「${first}」在钩子里命中 ${hits.length} 条，无法唯一确定`,
     };
   }
-  // 裸脚本名 ⇒ 补 `node`（仓库里 Node 是共同前提，§9.5）。
-  if (input.length === 1 && /\.(cjs|mjs|js)$/.test(first)) {
-    return { ok: true, label: first, argv: ["node", first] };
+  /* 裸脚本名 ⇒ 补 `node`（仓库里 Node 是共同前提，§9.5）。
+   *
+   * 两个形态都要认对，否则每条判据都会被判成「没跑起来」（127）：
+   *   · `scripts/x.cjs` —— 裸文件名；
+   *   · `node scripts/x.cjs --flag` —— **整条命令当参数给进来**时它只有**一个**
+   *     数组元素（`base-check "node scripts/x.cjs"` 与 `--base "…"` 两种走法都是这个
+   *     形状），先按空白切成 argv，**不许**把整串当成一个路径（那会拼出
+   *     `<cwd>/node scripts/x.cjs`、`existsSync` 恒假、整批读数变成 127）。
+   *     分词复用 `tokenize()`（引号语义与其他步骤同一份），不另写切分。 */
+  if (input.length === 1) {
+    const words = tokenize(first);
+    /* 已经是「命令形态」（`node x` / `pnpm exec …`）⇒ 按空白切成 argv。 */
+    if (words.length > 1) {
+      return { ok: true, label: first, argv: words };
+    }
+    if (/\.(cjs|mjs|js)$/.test(first)) {
+      return { ok: true, label: first, argv: ["node", first] };
+    }
   }
   return { ok: true, label: input.join(" "), argv: input };
 }
@@ -445,6 +460,7 @@ export function runGate(argv, cwd) {
     return { code: 127, output: "[base-check] 命令是空的" };
   }
   const invocation = resolveGateInvocation(argv);
+
   if (!invocation) {
     /* 「没跑起来」而不是「跑了且红」：127 让 `judge()` 归 `inconclusive`，
      * 与「命令拼不出来/跑不起来」同档 —— 照旧不构成证据。 */

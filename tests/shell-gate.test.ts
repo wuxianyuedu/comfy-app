@@ -30,9 +30,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   RUST_SOURCE_RE,
   SHELL_INPUT_RE,
+  cargoHomeValue,
   decide,
   dropAdoptedShellInputs,
   findCargo,
+  findCargoLookup,
   freshnessProblem,
   materializeCargoTestInputs,
   runGate,
@@ -589,6 +591,103 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     });
   });
 
+  /**
+   * `CARGO_HOME` 那一处要真的命中（ISSUE #2293 的平台现场）。
+   *
+   * 现场读数：`.cnb.yml` 给 `重档静态判据` 配了 `CARGO_HOME` / `RUSTUP_HOME`，
+   * 而 runner 的 PATH 是**固定的**、不会跟着这两个变量长出来 ⇒ `whichCommand("cargo")`
+   * 必然落空，整格按「没跑起来」收（退 2）。那时唯一的出路就是这条回退。
+   *
+   * 这一组判的是**回退真的命中了那一个文件**，以及「值的形状不许决定命不命中」——
+   * 引号、相对路径、尾部分隔符三种写法都得走到同一个落点。
+   */
+  describe("CARGO_HOME 的落点要真的进判据（ISSUE #2293）", () => {
+    const temps: string[] = [];
+    afterEach(() => {
+      for (const dir of temps.splice(0))
+        rmSync(dir, { recursive: true, force: true });
+    });
+
+    const cargoName = process.platform === "win32" ? "cargo.exe" : "cargo";
+
+    /** 造一个假 `CARGO_HOME`（里面放 `bin/cargo`），返回它的绝对路径。 */
+    function fakeCargoHome(): string {
+      const home = mkdtempSync(path.join(tmpdir(), "shell-gate-ch-"));
+      temps.push(home);
+      const bin = path.join(home, "bin");
+      mkdirSync(bin, { recursive: true });
+      writeFileSync(path.join(bin, cargoName), "#!/bin/sh\nexit 0\n");
+      return home;
+    }
+
+    it("PATH 上没有、CARGO_HOME/bin 有：回退到它，并说出命中的是哪一处", () => {
+      const cargoHome = fakeCargoHome();
+      const got = findCargoLookup({
+        env: { PATH: "", CARGO_HOME: cargoHome },
+      });
+      expect(got.path).toBe(path.join(cargoHome, "bin", cargoName));
+      const hit = got.probes.find((p) => p.result === "hit");
+      expect(hit?.where.startsWith("CARGO_HOME/bin")).toBe(true);
+    });
+
+    it("值的形状不许决定命不命中：带引号 / 带尾分隔符 / 相对路径都解到同一个落点", () => {
+      const cargoHome = fakeCargoHome();
+      const expectPath = path.join(cargoHome, "bin", cargoName);
+      for (const value of [
+        cargoHome,
+        `"${cargoHome}"`,
+        `${cargoHome}${path.sep}`,
+        `${cargoHome}${path.sep}${path.sep}`,
+      ]) {
+        expect(findCargo({ env: { PATH: "", CARGO_HOME: value } })).toBe(
+          expectPath,
+        );
+      }
+    });
+
+    it("找不到时要说得出探了哪几处、每一处为什么没命中（不许只说「找不到」）", () => {
+      const got = findCargoLookup({
+        env: { PATH: "", CARGO_HOME: path.join(tmpdir(), "没有这个目录-xyz") },
+      });
+      expect(got.path).toBeNull();
+      const wheres = got.probes.map((p) => p.where);
+      expect(wheres[0]).toBe("PATH");
+      expect(wheres.some((w) => w.startsWith("CARGO_HOME/bin"))).toBe(true);
+      expect(wheres).toContain("~/.cargo/bin");
+      // 每一处都要留下结论（命中只在 path 非 null 时出现）
+      expect(got.probes.every((p) => p.result !== "hit")).toBe(true);
+    });
+
+    it("CARGO_HOME 没设 / 空串 ⇒ 这一处不探（不许拼出 cwd 下的 bin）", () => {
+      expect(cargoHomeValue({})).toBeNull();
+      expect(cargoHomeValue({ CARGO_HOME: "   " })).toBeNull();
+    });
+
+    it("找不到 cargo 时那句话要带上探针读数（平台侧那一格靠它定位）", () => {
+      const r = runGate({
+        staged: ["src-tauri/src/lib.rs"],
+        root: shellFixture("newer"),
+        cargoRunner: () => ({
+          code: null,
+          probes: [
+            { where: "PATH", result: "absent" },
+            {
+              where: "CARGO_HOME/bin",
+              result: "absent",
+              detail: "/x/bin/cargo",
+            },
+          ],
+        }),
+        mode: "base",
+      });
+      expect(r.exitCode).toBe(2);
+      expect(r.steps[0]?.kind).toBe("cargo");
+      const probes =
+        r.steps[0]?.kind === "cargo" ? r.steps[0].probes : undefined;
+      expect(probes?.map((p) => p.where)).toEqual(["PATH", "CARGO_HOME/bin"]);
+    });
+  });
+
   it("改了 Rust 而 PATH 上没有 cargo：退 1（此前这条只有源码文本断言）", () => {
     const dir = shellFixture("newer");
     const r = runGate({
@@ -609,7 +708,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     const r = runGate({
       staged: ["src-tauri/src/lib.rs"],
       root: dir,
-      cargoRunner: () => 7,
+      cargoRunner: () => ({ code: 7 }),
     });
     expect(r.exitCode).toBe(7);
     expect(r.steps).toHaveLength(1);
@@ -621,7 +720,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     const r = runGate({
       staged: ["src-tauri/src/lib.rs"],
       root: dir,
-      cargoRunner: () => 0,
+      cargoRunner: () => ({ code: 0 }),
     });
     expect(r.exitCode).toBe(0);
     expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
@@ -717,7 +816,9 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
       mode: "base",
     });
     expect(r.exitCode).toBe(2);
-    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual(["cargo:missing"]);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
+      "cargo:missing",
+    ]);
   });
 
   it("本地形态不变：同样「cargo 不在」退 1（那边确实该拦住提交）", () => {
@@ -746,7 +847,7 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
     const r = runGate({
       staged: ["src-tauri/src/lib.rs"],
       root: emptyRoot(),
-      cargoRunner: () => 7,
+      cargoRunner: () => ({ code: 7 }),
       mode: "base",
     });
     expect(r.exitCode).toBe(7);
@@ -762,7 +863,8 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
  * 而不是真产物 —— 真产物归 build-desktop，两路不许互相冒充。
  */
 describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => {
-  const VERSION_OUT = "cargo 1.98.0 (…)\nrelease: 1.98\nhost: x86_64-pc-windows-msvc\n";
+  const VERSION_OUT =
+    "cargo 1.98.0 (…)\nrelease: 1.98\nhost: x86_64-pc-windows-msvc\n";
 
   function fixture() {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-mat-"));
@@ -773,24 +875,50 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
     const { dir, srcTauri } = fixture();
     /** @type {Array<[string, string]>} */
     const copies: Array<[string, string]> = [];
+    /** @type {string[]} */
+    const notes: string[] = [];
+    /** @type {string[]} */
+    const chmods: string[] = [];
     const r = materializeCargoTestInputs({
       root: dir,
       cargo: "cargo",
       execPath: path.join(dir, "this-node.exe"),
       versionOutput: VERSION_OUT,
       copy: (a: string, b: string) => copies.push([a, b]),
+      /* `chmod` / `write` 也得注入：本用例只判「建了哪几件、源是什么」，
+       * 而上游实现的 `copy` 被替成记账之后盘上并没有那个 sidecar —— 默认的
+       * `fs.chmodSync` 会当场 ENOENT；`write` 同理（占位文件也不该真写盘）。
+       * 两笔都记进 `notes`，断言的是「谁被建了」，不是「盘上有没有」。 */
+      /* 记进 `chmods` 而不是空实现：本用例同样要判「执行位是在哪一件上设的」
+       * （`@typescript-eslint/no-empty-function` 也不收空方法）。 */
+      chmod: (p: string) => chmods.push(path.relative(srcTauri, p)),
+      write: (p: string) => notes.push(path.relative(srcTauri, p)),
     });
     expect(r.ok).toBe(true);
-    const sidecar = path.join(srcTauri, "binaries", sidecarFileName("x86_64-pc-windows-msvc"));
+    const sidecar = path.join(
+      srcTauri,
+      "binaries",
+      sidecarFileName("x86_64-pc-windows-msvc"),
+    );
     // 源是**当前正在跑门禁的这个 node**（与 build-desktop 同一来源）。
     expect(copies).toEqual([[path.join(dir, "this-node.exe"), sidecar]]);
-    expect(existsSync(path.join(srcTauri, "static", ".cargo-test-placeholder"))).toBe(true);
+    expect(notes).toEqual([path.join("static", ".cargo-test-placeholder")]);
+    /* 执行位只在 POSIX 上设（Windows 不看这一位）—— 判据两边都得成立。 */
+    expect(chmods).toEqual(
+      process.platform === "win32"
+        ? []
+        : [path.join("binaries", path.basename(sidecar))],
+    );
     expect(r.lines.join("\n")).toContain("sidecar");
   });
 
   it("已在场的产物一律不碰（本地跑过 build-desktop 时那是真的）", () => {
     const { dir, srcTauri } = fixture();
-    const sidecar = path.join(srcTauri, "binaries", sidecarFileName("x86_64-pc-windows-msvc"));
+    const sidecar = path.join(
+      srcTauri,
+      "binaries",
+      sidecarFileName("x86_64-pc-windows-msvc"),
+    );
     mkdirSync(path.dirname(sidecar), { recursive: true });
     writeFileSync(sidecar, "REAL");
     const staticDir = path.join(srcTauri, "static");
@@ -803,7 +931,9 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
     });
     expect(r.ok).toBe(true);
     expect(readFileSync(sidecar, "utf8")).toBe("REAL");
-    expect(existsSync(path.join(staticDir, ".cargo-test-placeholder"))).toBe(false);
+    expect(existsSync(path.join(staticDir, ".cargo-test-placeholder"))).toBe(
+      false,
+    );
     expect(r.lines.join("\n")).not.toContain("sidecar 不在");
   });
 
