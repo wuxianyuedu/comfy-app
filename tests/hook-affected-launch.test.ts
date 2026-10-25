@@ -36,6 +36,7 @@ import { wideFallbackNote } from "../scripts/affected-tests.mjs";
  * 再要一份 `run-affected-tests.mjs` 的同名出口 —— 那等于给拆出去的块留一条「搬走了
  * 但还能从老地方拿到」的假象。 */
 import {
+  isLaunchFailureShaped,
   isTimeoutShaped,
   loadPerCore,
   remainingWaitMs,
@@ -48,6 +49,14 @@ import {
   runChunk,
   SAFE_ARGV_BUDGET,
 } from "../scripts/run-affected-tests.mjs";
+/* 「这一跑用哪个 reporter」住在自己那份文件里（日志预算那一刀）。用例跟着 import 走，
+ * 不从启动器那儿再要一份同名出口 —— 那等于给搬出去的块留一条「搬走了但还能从老地方
+ * 拿到」的假象（与上面 `affected-launch-load-retry.mjs` 同一条处置）。 */
+import {
+  announceQuiet,
+  reporterArgs,
+  resolveQuiet,
+} from "../scripts/affected-launch-log-budget.mjs";
 /* 墙钟判点（ISSUE #2364）：等待有预算而**跑**没有上界，于是负载膨胀时那一格一路开到被
  * 平台掐掉（实测 3240105ms），连「未判定」那句话都没说出来。下面这几条钉两件事：
  * **界只划在「还开不开下一遍」**（已开跑的那一遍永远跑完），以及**「没开」不许长得像
@@ -65,7 +74,8 @@ import {
   wallClockSkipReport,
 } from "../scripts/affected-launch-wallclock.mjs";
 /* junit 取数/落盘形状层拆到自己那份之后（ISSUE #2364 撞上 900 行硬闸那一刀），这里按
- * 真实落点 import —— 判据跟着搬走的符号一起改路径，而不是让机制层转出假出口。 */
+ * 真实落点 import —— 判据跟着搬走的符号一起改路径，而不是让机制层转出假出口。
+ * 「日志预算那一刀」把同名两件事另抽过一份，已并进这份（两侧各抄一份文件名会静默漂开）。 */
 import {
   junitReportArgs,
   writeFilesManifest,
@@ -1017,7 +1027,11 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
     /* 空位置参数在这里是**明确意图**（vitest 自行收集全部），与「谁都没筛过」在代码上
        就是同一行 `runChunk([])`；这条断言把它钉成「有意的复用」而不是巧合。
        复用带来的是超时形态的负载自适应仍然在场 —— 全量档不该成为「机器太满」的结论出口。 */
-    expect(src).toMatch(/return await runChunk\(\[\], \{ entry, workers \}\)/);
+    /* reporter 那一档（`quiet`）是**读数**上的选择，不是另写一套跑法：它跟着同一个
+       `runChunk` 走 —— 所以这条形状判据把 `quiet` 也算进同一行里。 */
+    expect(src).toMatch(
+      /return await runChunk\(\[\], \{ entry, workers, quiet: \w+ \}\)/,
+    );
   });
 
   it("意外空集仍阻断，且话术里指出 `--full` 是另一档（两者不许同形）", () => {
@@ -1630,6 +1644,158 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
       "tests/a.test.ts",
     ]);
     expect(suites[0]!.body).toContain("AssertionError");
+  });
+});
+
+/* ── 「没跑起来」与「跑起来但红了」必须是两件事 ─────────────────────────────────
+ *
+ * 现场（平台的 `受影响用例` 一格）：输出里一串 `Error:` 加一段 `AggregateError`，
+ * 一条断言都没红，而格子非零退出 —— 于是「这台机器上依赖没装上 / worker 起不来」
+ * 被写成「这次改动有回归」。被拦下的人照着那屏去查代码，查的是一件没发生的事。
+ *
+ * 这一档的**下一动作与真断言红相反**：真红去修代码（一次都不复跑），装载失败去修
+ * 环境（复跑没有意义，同样的环境同样的炸）。所以它必须单独成档、退 2（未判定），
+ * 而不是退 1。
+ */
+describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
+  const AGGREGATE = {
+    status: 1,
+    output:
+      "Error: Cannot find module 'vitest'\n" +
+      "    at Module._resolveFilename (node:internal/modules/cjs/loader:1234:15)\n" +
+      "AggregateError: all promises were rejected\n" +
+      "    at Function.allSettled (<anonymous>)\n",
+  };
+  const GREEN = { status: 0, output: "Test Files 2 passed" };
+  const CHUNK = ["tests/a.test.ts", "tests/b.test.ts"];
+
+  /** 起一次 `runChunk` 并把 stderr 收在手里（与上面那节同一个抓取通道）。 */
+  async function runWith(
+    results: { status: number; output: string }[],
+    extra: Partial<Parameters<typeof runChunk>[1]> = {},
+  ) {
+    const calls: string[][] = [];
+    const seen: string[] = [];
+    const { value: code, text } = await captureStderr(() =>
+      runChunk(CHUNK, {
+        entry: "vitest.mjs",
+        spawn: (_entry: string, args: string[]) => {
+          calls.push(args);
+          return results[Math.min(calls.length - 1, results.length - 1)]!;
+        },
+        settle: () =>
+          Promise.resolve({ settled: true, load: 0.1, waitedMs: 0 }),
+        onAttempt: (r: { outcome: string }) => seen.push(r.outcome),
+        ...extra,
+      }),
+    );
+    return { code, text, calls, seen };
+  }
+
+  it("指纹认得 AggregateError / 模块找不到 / 原生模块版本不符", () => {
+    expect(isLaunchFailureShaped(AGGREGATE.output)).toBe(true);
+    expect(isLaunchFailureShaped("Error: Cannot find package 'x'")).toBe(true);
+    expect(
+      isLaunchFailureShaped(
+        "ERR_DLOPEN_FAILED: was compiled against a different Node.js version",
+      ),
+    ).toBe(true);
+    expect(
+      isLaunchFailureShaped("No test files found, exiting with code 1"),
+    ).toBe(true);
+  });
+
+  it("**真断言红优先**：栈里带 AggregateError 的断言失败不许被读成环境问题", () => {
+    /* 放行一条真回归比多查一次环境贵得多 —— 所以这一条是「宁可误判成真红」的方向。 */
+    expect(
+      isLaunchFailureShaped(
+        "AssertionError: expected 3 to be 4\nError: AggregateError",
+      ),
+    ).toBe(false);
+  });
+
+  it("装载失败 ⇒ 退 2（未判定，不是红）、一次都不复跑、下一动作指向环境", async () => {
+    const { code, text, calls, seen } = await runWith([AGGREGATE, GREEN]);
+    expect(code, "把「没跑起来」读成红，就是让提交的人去查一件没发生的事").toBe(
+      2,
+    );
+    expect(calls, "同样的环境再跑一遍没有任何意义").toHaveLength(1);
+    expect(seen).toEqual(["launch-failed"]);
+    expect(text).toContain("没跑起来");
+    expect(text).toContain("pnpm install");
+    expect(text).toContain("npm_config_");
+    /* 不许把它说成用例红。 */
+    expect(text).not.toContain("真红");
+  });
+
+  it("收尾的账把「没跑起来」与「复跑」分开念（不许为一次没发生的等待报账）", async () => {
+    const { text } = await runWith([AGGREGATE]);
+    /* 只跑了一档，没有复跑 ⇒ 那段「等待与复跑账」不该出现（它一块都没复跑）。 */
+    expect(text).not.toContain("本次的等待与复跑账");
+  });
+});
+
+/* ── 日志预算：平台那一格只换 reporter，不动判据 ────────────────────────────────
+ *
+ * 平台对单次构建日志的硬上限是 102400 字节，超了只留一句 `The log length exceeds the
+ * limit(102400)`，且保留的是尾部 —— 被截掉的恰是开头（跑了哪些、哪份失败）。而
+ * `vitest run` 的默认 reporter 会**逐个文件**打一行，一跑 100+ 行是常态。
+ */
+describe("日志预算：quiet 档只换 reporter", () => {
+  it("没置 ⇒ 一个字都不加（本地人跑时要看逐文件清单）", () => {
+    expect(resolveQuiet(undefined)).toEqual({ quiet: false, note: null });
+    expect(resolveQuiet("")).toEqual({ quiet: false, note: null });
+    expect(reporterArgs(false)).toEqual([]);
+  });
+
+  it("置 1 ⇒ dot（每行几十个点，失败明细与原文照样打）", () => {
+    expect(resolveQuiet("1").quiet).toBe(true);
+    expect(reporterArgs(true)).toEqual(["--reporter=dot"]);
+  });
+
+  it("「quiet 了没有」必须在日志里读得回来（它没生效的表现是「日志又超长」）", () => {
+    /* 这一档没生效时**不报错**：表现是平台日志又被截断，而那时读的人只会看到
+     * `The log length exceeds the limit` —— 正是这一档要治的病。所以「用的哪个
+     * reporter」必须是一句读得到的话，不能只存在于代码里（§11.23）。 */
+    const said: string[] = [];
+    expect(announceQuiet("1", (t) => said.push(t))).toBe(true);
+    expect(said.join("")).toContain("dot");
+    const off: string[] = [];
+    expect(announceQuiet(undefined, (t) => off.push(t))).toBe(false);
+    expect(off.join("")).toContain("默认");
+    /* 两档的话术必须**读得出区别**（否则这一格在日志里等于没有）。 */
+    expect(said.join("")).not.toContain("默认");
+    expect(off.join("")).not.toContain("dot");
+  });
+
+  it("非法值按不 quiet 办并提醒（不静默降级）", () => {
+    for (const raw of ["0", "true", "yes"]) {
+      const r = resolveQuiet(raw);
+      expect(r.quiet, `${raw} 不该被读成 quiet`).toBe(false);
+      expect(r.note).toContain("只换 reporter");
+    }
+  });
+
+  it("quiet 真的接进了**两遍**（复跑那一遍的打印量更大）", async () => {
+    const TIMEOUT = { status: 1, output: "Error: Test timed out in 30000ms." };
+    const GREEN = { status: 0, output: "Test Files 1 passed" };
+    const calls: string[][] = [];
+    await captureStderr(() =>
+      runChunk(["tests/a.test.ts"], {
+        entry: "vitest.mjs",
+        quiet: true,
+        spawn: (_e: string, args: string[]) => {
+          calls.push(args);
+          return calls.length === 1 ? TIMEOUT : GREEN;
+        },
+        settle: () =>
+          Promise.resolve({ settled: true, load: 0.1, waitedMs: 0 }),
+      }),
+    );
+    expect(calls).toHaveLength(2);
+    for (const args of calls) {
+      expect(args).toContain("--reporter=dot");
+    }
   });
 });
 
