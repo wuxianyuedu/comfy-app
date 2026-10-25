@@ -135,7 +135,10 @@ export function matchedDependencyFiles(files) {
 function stagedFiles(root) {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，而机器之间还不一样）。 */
-  const r = git(["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], root);
+  const r = git(
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    root,
+  );
   if (!r.ok) return null;
   return r.out.split(/\r?\n/).filter(Boolean);
 }
@@ -625,11 +628,7 @@ export function runFreshnessCheck(root, opts = {}) {
   /* 三态口径（与 `.githooks` 的三态一致）：0 绿 / 1 红 / 2 **没跑起来**。
    * 「没跑起来」排在红**前面** —— 环境不可信时，红与绿都不构成结论，把它读成
    * 任一种都是拿一次故障冒充判决。但它也不许把 ③ 的读数一起吞掉（那一层照旧打出来）。 */
-  const code = envBroken
-    ? 2
-    : remoteDrifts.length || installDrift
-      ? 1
-      : 0;
+  const code = envBroken ? 2 : remoteDrifts.length || installDrift ? 1 : 0;
   if (code === 0) {
     lines.push(
       remoteChecked
