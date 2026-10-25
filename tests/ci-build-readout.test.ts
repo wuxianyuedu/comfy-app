@@ -576,7 +576,11 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
     const got = fetchBuildList(
       () => ({
         status: 1,
-        stdout: JSON.stringify({ status: 401, message: "unauthorized" }),
+        // 平台那侧真给的形状：`data` 里放的是错误详情，不是列表。
+        stdout: JSON.stringify({
+          status: 200,
+          data: { code: 401, message: "unauthorized" },
+        }),
         stderr: "凭据已过期\n第二行",
         error: null,
       }),
@@ -592,7 +596,9 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
     expect(out).toContain("凭据已过期");
     // 第二行 stderr 不念：一行足够定性，整段倒进流水线只是噪声。
     expect(out).not.toContain("第二行");
-    expect(out).toContain("status,message");
+    // 信封的**内容**也念（顶层键与本地一样时，只念顶层键等于什么都没说）。
+    expect(out).toContain("data=");
+    expect(out).toContain("unauthorized");
   });
 
   it("命令根本没起来 ⇒ 念的是「没起来」，不是退码", () => {
