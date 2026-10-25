@@ -43,8 +43,13 @@
  * ⚠️ 两条边界：
  *   · **判决面取不到 ⇒ 退 2，不是退 0**（仓库三态：0 绿 / 1 红 / 2 没跑起来）。
  *     「没有输入可判」与「判过了、没问题」是两件事 —— 退 0 会被复合档计成「绿」。
- *   · **暂存集为空 ⇒ 同样退 2**。本地钩子这一跳的暂存集永远非空（`git commit` 不许空提交），
- *     空的那一档只出现在平台上，而平台上没有暂存区。
+ *   · **暂存集为空 ⇒ 退 2**，除非这一笔是**说出来的**刻意空提交（见下）。
+ *     原先这里写的是「`git commit` 不许空提交 ⇒ 本地这一跳的暂存集永远非空」—— 那句是错的：
+ *     `--allow-empty` 存在，而 `pnpm ship --rerun-ci` 正是要靠它重新派生一条流水线
+ *     （ISSUE #2354）。空索引有两种来路（忘了 stage / 刻意空提交）且逐字同形，所以不猜：
+ *     只认 `scripts/intentional-empty-commit.mjs` 那个唯一口径 —— 旗标在场**且**索引真空
+ *     ⇒ 这一条的问题没有对象（空提交不改任何文件），正面按 0 收；旗标在场而索引非空
+ *     ⇒ 旗标当场作废并打印，照正常档判。它不是跳过门禁的开关。
  *
  * `changed-scope.mjs` 是 ESM，而本文件是 CJS —— Node 24 的 `require(esm)` 认得了（实测）。
  * **惰性 require**：只有真的走 `--base` 形态才加载它（它会拖进一条依赖链），
@@ -53,6 +58,8 @@
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
 const { SCOPED_DOCS, generatedPathFor } = require("./doc-facts.cjs");
+/* 刻意空提交的唯一口径（ESM，Node 的 require(esm) 认得，与下面 changed-scope 同一形态）。 */
+const { intentionalEmptyCommit } = require("./intentional-empty-commit.mjs");
 
 const ROOT = path.resolve(__dirname, "..");
 /**
@@ -117,7 +124,18 @@ function resolveFace(argv) {
     };
   }
   const files = stagedPaths();
+  /* 空暂存区有两条来路，而它们在索引上逐字同形，所以**不猜**：只认说出来的意图
+   * （唯一生产者是 `pnpm ship --rerun-ci`，ISSUE #2354 —— 它要推一笔空提交重新派生
+   * 一条流水线，而 D0 把空索引读成「取不到面」就等于把那条路堵死）。
+   * 两种不一致都要**当场念出来**：不念就留下一个「设了旗标而没人知道它被忽略」的现场。 */
+  const intent = intentionalEmptyCommit({ stagedCount: files.length });
+  if (intent.voidNote)
+    console.error(`[doc-mirror-pairing] ⚠ ${intent.voidNote}`);
   if (files.length === 0) {
+    if (intent.note) console.log(`[doc-mirror-pairing] ${intent.note}`);
+    if (intent.applies) {
+      return { ok: true, files: [], via: "刻意空提交（没有可判的配对）" };
+    }
     return {
       ok: false,
       reason:

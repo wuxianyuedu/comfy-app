@@ -60,6 +60,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { changedFilesForBaseRef } from "./changed-scope.mjs";
+import { intentionalEmptyCommit } from "./intentional-empty-commit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -200,7 +201,20 @@ export function resolveFace(argv) {
   }
   const si = argv.indexOf("--staged");
   const files = si >= 0 ? argv.slice(si + 1) : stagedFiles();
+  /* 空索引有两种来路（忘了 stage / 刻意空提交），而它在索引上逐字同形 ⇒ 不猜，
+   * 只认 `intentional-empty-commit.mjs` 那个唯一口径（ISSUE #2354：
+   * `pnpm ship --rerun-ci` 要推一笔空提交重新派生流水线，而「什么都没碰」在这里
+   * 是**答案**而不是「取不到输入面」—— 走下面既有的「没碰到机制 ⇒ 说一句话」那一档）。
+   * 不一致（旗标在而索引非空）也当场念出来，不留「设了旗标没人知道被忽略」的现场。 */
+  const intent = intentionalEmptyCommit({ stagedCount: files.length });
+  if (intent.voidNote)
+    process.stderr.write(`[known-failed-selftest] ⚠ ${intent.voidNote}\n`);
   if (files.length === 0) {
+    if (intent.note)
+      process.stderr.write(`[known-failed-selftest] ${intent.note}\n`);
+    if (intent.applies) {
+      return { ok: true, files: [], via: "刻意空提交（没碰任何文件）" };
+    }
     return {
       ok: false,
       reason:

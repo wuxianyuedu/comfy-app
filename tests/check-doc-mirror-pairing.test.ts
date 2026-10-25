@@ -190,4 +190,28 @@ describe("接线", () => {
     expect(renderer).toContain("generatedPathFor,");
     expect(pairing).toContain("generatedPathFor");
   });
+
+  /* ── 刻意空提交（ISSUE #2354：`pnpm ship --rerun-ci` 推空提交重新派生流水线）────── */
+  test("空索引 + 说出来的意图 ⇒ 正面按 0 收，且念出为什么没有对象", ({ repo }) => {
+    const r = repo.run(["--staged"], {
+      env: { COMFY_INTENTIONAL_EMPTY_COMMIT: "1" },
+    });
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("刻意的空提交");
+    expect(r.output).toContain("没有可判的配对");
+  });
+
+  test("旗标在场而索引非空 ⇒ 旗标当场作废并念出来，照正常档判（不是跳过门禁的开关）", ({
+    repo,
+  }) => {
+    repo.write(SOURCE, "# 附录\n\n改了正文。\n");
+    repo.git("add", "--", SOURCE);
+    const r = repo.run(["--staged"], {
+      env: { COMFY_INTENTIONAL_EMPTY_COMMIT: "1" },
+    });
+    /* 这一条改的是源而没带镜像 ⇒ 该拦；旗标不许把它放过去。 */
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("旗标作废");
+    expect(r.output).toContain("pnpm doc:render");
+  });
 });

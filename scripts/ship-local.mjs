@@ -20,11 +20,14 @@
 
 /**
  * 一次 `run` 的最小形状（与 `ship.mjs` 注入的那份同源，不在此重新定义判据）。
- * @typedef {(cmd: string, args: string[]) => {status: number, stdout: string, stderr?: string, error?: string | null}} PlatformRun
+ * @typedef {(cmd: string, args: string[], opts?: {env?: Record<string,string>}) => {status: number, stdout: string, stderr?: string, error?: string | null}} PlatformRun
  */
 
 import { CODE, looksNewlineMangled, readProof } from "./ship-core.mjs";
 import { safeRead, short } from "./ship-exec.mjs";
+/* 「这一笔是刻意的空提交」不靠猜索引 —— 由被触发的两条 D0 判据认这个说出来的旗标
+ * （唯一生产者就是下面这一格，口径在 `intentional-empty-commit.mjs`，ISSUE #2354）。 */
+import { EMPTY_COMMIT_ENV } from "./intentional-empty-commit.mjs";
 
 /**
  * 把 `git status --porcelain` 的输出**按列**分成「已暂存 / 未暂存（已修改）/ 未跟踪」三档。
@@ -212,13 +215,24 @@ export function runRerunCiStage(ctx) {
     return CODE.NOT_RUN;
   }
   const msg = "ci: rerun (ship --rerun-ci)";
+  const env = { [EMPTY_COMMIT_ENV]: "1" };
   if (opt.dryRun) {
     log("[ship] [dry-run] 将执行：");
-    log(`[ship]   git commit --allow-empty --message="${msg}"`);
+    log(
+      `[ship]   ${EMPTY_COMMIT_ENV}=1 git commit --allow-empty --message="${msg}"`,
+    );
     log(`[ship]   git push -u ${up.remote} ${branch}`);
+    log(
+      `[ship]   （带这个旗标是因为 D0 里有两步读当场暂存区：空索引本来是「取不到判决面」，` +
+        "而这一笔的空是**说出来的**空 —— 它不改任何文件，那两条的问题没有对象。）",
+    );
     return CODE.GREEN;
   }
-  const cm = run("git", ["commit", "--allow-empty", `--message=${msg}`]);
+  const cm = run(
+    "git",
+    ["commit", "--allow-empty", `--message=${msg}`],
+    { env },
+  );
   relay(cm);
   if (cm.status !== 0) {
     log(`[ship] 空提交失败（exit ${cm.status}）。`);
@@ -234,6 +248,12 @@ export function runRerunCiStage(ctx) {
   }
   const sha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
   log(`[ship] ✓ 已在 ${branch} 推一个空提交（${short(sha)}）触发新 build`);
+  /* 意图这句**由发起方说**：钩子在成功时只汇成一行「入选档位全部通过」，判据自己那句
+   * 只有单独跑它、或它判红时才看得见 —— 所以「谁改的口径」这件事写在这里，不留在注释里。 */
+  log(
+    `[ship]   那一跳带 ${EMPTY_COMMIT_ENV}=1：D0 里读暂存区的两步按「空提交没有可判的对象」收` +
+      "（口径 scripts/intentional-empty-commit.mjs，规范 §13.5.5 末段）。",
+  );
   log("[ship]   稍后用 pnpm ship --diagnose 看这一跑的结果。");
   return CODE.GREEN;
 }
