@@ -287,8 +287,8 @@
     {
       "file": "scripts/affected-launch-wallclock.mjs",
       "const": "STAGE_WALL_CLOCK_MS",
-      "value": 1500000,
-      "unit": "毫秒（`受影响用例` 那一格的自设墙钟预算）",
+      "value": 25,
+      "unit": "分钟（源码字面写 `25 * 60 * 1000`，判据按字面取值）",
       "kind": "report",
       "strictness": "n/a",
       "why": "整次一份、跨块共享，只决定「还开不开下一遍 / 下一份补跑」，不改变任何一条断言的判定。取 25 分钟的两个夹逼读数：要盖得住首遍 + 一遍串行复跑的实测最坏形状（9.2 + 13.6 = 22.8 分钟），又必须明显低于平台那一刀（3240105ms）—— 界在掐点之上就等于这条判点从没机会说话（ISSUE #2364）。"
@@ -310,6 +310,33 @@
       "kind": "report",
       "strictness": "n/a",
       "why": "串行复跑的成本系数。不按「失败了几份」的比例估 —— 实测第 2 遍只跑 2/98 份却比首遍更慢（13.6m vs 9.2m = 1.48 倍，串行去掉了并发优势）。取 2 是往「更早落界」那一侧保守，估高只会少跑一遍，不会把还有希望的一遍拦掉。"
+    },
+    {
+      "file": "scripts/check-daily-attendance.mjs",
+      "const": "DEFAULT_WINDOW_HOURS",
+      "value": 36,
+      "unit": "小时",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "「每天一次 + 半天余量」那把唯一的尺子（#2114 立的档）。放宽它 = 隔更久还算出勤；收紧 = 更容易报缺勤。**取数的覆盖也按它判**（ISSUE #2392）：这一处改小会同时缩短翻页要盖到的地平线，所以两个消费点（出勤档 / 每日失败立案）共用同一个数，不各写一份。"
+    },
+    {
+      "file": "scripts/check-daily-attendance.mjs",
+      "const": "FETCH_PAGE_SIZE",
+      "value": 60,
+      "unit": "条（一页）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "翻页的单位，**不是窗口**：它只决定一次问平台要多少行。实测忙的一天 60 条只回到约 7.5 小时，所以「取最近 N 条」从来盖不住 36h —— 覆盖由 FETCH_MAX_PAGES 那侧翻页达成，改这里动的是往返次数，不是结论。"
+    },
+    {
+      "file": "scripts/check-daily-attendance.mjs",
+      "const": "FETCH_MAX_PAGES",
+      "value": 8,
+      "unit": "页",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "why": "翻页上界。撞不到它才算「取满了窗口」；收紧到盖不住 36h，两个消费点就都落成「没结论」（不是绿、也不是缺勤）—— 那条形状是 ISSUE #2392 修的假缺勤的反面，所以按承重入账。"
     }
   ],
   "$notCovered": {

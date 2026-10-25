@@ -36,9 +36,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   CODE,
+  DEFAULT_WINDOW_HOURS,
+  FETCH_MAX_PAGES,
+  FETCH_PAGE_SIZE,
+  fetchBuildsCoveringWindow,
   isDailyDispatch,
   judgeAttendance,
   latestDailyDispatch,
+  main,
   readOffline,
 } from "../scripts/check-daily-attendance.mjs";
 
@@ -378,5 +383,233 @@ describe("daily-attendance：命令行那一跳", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * 列表项（`createTime` 允许缺 —— 有一条用例判的就是「认不出时刻」这一格）。
+ */
+type PageRow = {
+  sn: string;
+  event: string;
+  createTime?: string;
+  status: string;
+};
+
+/**
+ * 取数按**时间窗**翻页，不按条数翻页（ISSUE #2392）。
+ *
+ * 这一族的形状是「判据声明 36h，而取数只拿最近 60 条」—— 60 条折算多久**由当天多忙
+ * 决定**：实测会话密集的一天里它只回到约 7.5 小时，于是列表里唯一的每日类派发就是
+ * **正在跑的这一跑**，`latestDailyDispatch()` 拿到空 ⇒ 判据念出「缺勤」，而那一跑其实
+ * 出勤了。本组用例把两侧都钉住：盖住了才许判，盖不住必须落在「未校验」而不是「缺勤」。
+ */
+describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
+  /** 造一整页（新→旧）：第一条在 `newestH` 小时前，最后一条在 `oldestH` 小时前。 */
+  function pageRows(newestH: number, oldestH: number, count = FETCH_PAGE_SIZE) {
+    const rows: PageRow[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const h = newestH + ((oldestH - newestH) * i) / Math.max(1, count - 1);
+      rows.push(
+        listed(
+          `pr-${newestH}-${i}`,
+          "pull_request",
+          new Date(NOW - h * 3_600_000).toISOString(),
+        ),
+      );
+    }
+    return rows;
+  }
+
+  /** 按 `--page N` 回答的执行者；`pages` 里没点名的页一律回 `null`（取不到）。 */
+  function pagerByPage(pages: Record<number, PageRow[] | null>) {
+    /** @type {string[]} */
+    const calls: string[] = [];
+    const run = (_cmd: string, args: string[]) => {
+      calls.push(args.join(" "));
+      const at = args.indexOf("--page");
+      const n = Number(args[at + 1] ?? "1");
+      const rows = pages[n] === undefined ? pages[1] : pages[n];
+      if (rows === null || rows === undefined) {
+        return { status: 1, stdout: "", stderr: "boom", error: null };
+      }
+      return {
+        status: 0,
+        stdout: JSON.stringify({ status: 200, data: { total: rows.length, data: rows } }),
+        stderr: "",
+        error: null,
+      };
+    };
+    return { run, calls };
+  }
+
+  it("前两页盖不住 36h ⇒ 翻到第三页才算盖住，且盖住后不多翻", () => {
+    const { run, calls } = pagerByPage({
+      1: pageRows(1, 10),
+      2: pageRows(10, 30),
+      3: pageRows(30, 40),
+      4: pageRows(40, 50),
+    });
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug: "moon-read/comfy-app-t3",
+      windowHours: DEFAULT_WINDOW_HOURS,
+      now: NOW,
+    });
+    expect(win.covered).toBe(true);
+    expect(win.pages).toBe(3);
+    expect(calls.filter((c) => c.includes("get-build-logs"))).toHaveLength(3);
+    expect(win.list).toHaveLength(FETCH_PAGE_SIZE * 3);
+    expect(win.note).toContain("取满窗口");
+  });
+
+  it("不满一页 = 后面没有更多历史 ⇒ 窗口天然盖住，且不再翻页", () => {
+    const { run, calls } = pagerByPage({ 1: pageRows(1, 10, 7) });
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug: "moon-read/comfy-app-t3",
+      windowHours: DEFAULT_WINDOW_HOURS,
+      now: NOW,
+    });
+    expect(win.covered, win.note).toBe(true);
+    expect(win.pages).toBe(1);
+    expect(calls.filter((c) => c.includes("get-build-logs"))).toHaveLength(1);
+    expect(win.note).toContain("已到列表末尾");
+  });
+
+  it("每页都只盖 10 小时 ⇒ 撞页数上界，covered=false（不是「窗口内没有」）", () => {
+    const pages: Record<number, PageRow[] | null> = {};
+    for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1) pages[p] = pageRows(1, 10);
+    const { run } = pagerByPage(pages);
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug: "moon-read/comfy-app-t3",
+      windowHours: DEFAULT_WINDOW_HOURS,
+      now: NOW,
+    });
+    expect(win.covered).toBe(false);
+    expect(win.pages).toBe(FETCH_MAX_PAGES);
+    expect(win.list).not.toBeNull();
+    expect(win.note).toContain("没取满");
+  });
+
+  it("翻到一半取不到 ⇒ 残页不许当完整历史：covered=false 而列表仍在", () => {
+    const { run } = pagerByPage({ 1: pageRows(1, 10), 2: null });
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug: "moon-read/comfy-app-t3",
+      windowHours: DEFAULT_WINDOW_HOURS,
+      now: NOW,
+    });
+    expect(win.covered).toBe(false);
+    expect(win.list).not.toBeNull();
+    expect(win.note).toContain("第 2 页取不到");
+  });
+
+  it("第一页就取不到 ⇒ 列表整体是 null（由调用方念「未校验」）", () => {
+    const { run } = pagerByPage({ 1: null });
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug: "moon-read/comfy-app-t3",
+      windowHours: DEFAULT_WINDOW_HOURS,
+      now: NOW,
+    });
+    expect(win.list).toBeNull();
+    expect(win.covered).toBe(false);
+    expect(win.pages).toBe(0);
+  });
+
+  it("列表里没有可读的 createTime ⇒ 没有覆盖依据，covered=false", () => {
+    const { run } = pagerByPage({
+      1: [{ sn: "x", event: "pull_request", status: "success" }],
+    });
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug: "moon-read/comfy-app-t3",
+      windowHours: DEFAULT_WINDOW_HOURS,
+      now: NOW,
+    });
+    // 不满一页 ⇒ 走的是「到列表末尾」那一支：历史确实取尽了，所以这里 covered 是成立的，
+    // 而下面那条「满页但没有时刻」才是没依据可判的那一格。
+    expect(win.covered).toBe(true);
+    const { run: run2 } = pagerByPage({
+      1: Array.from({ length: FETCH_PAGE_SIZE }, () => ({
+        sn: "x",
+        event: "pull_request",
+        status: "success",
+      })),
+    });
+    const full = fetchBuildsCoveringWindow({
+      run: run2,
+      slug: "moon-read/comfy-app-t3",
+      windowHours: DEFAULT_WINDOW_HOURS,
+      now: NOW,
+    });
+    expect(full.covered).toBe(false);
+    expect(full.oldestMs).toBeNull();
+  });
+
+  it("在线那一跳：条数够而时间不够 ⇒ 退「未校验」而不是退「缺勤」（假缺勤的负控制）", () => {
+    const pages: Record<number, PageRow[] | null> = {};
+    for (let p = 1; p <= FETCH_MAX_PAGES; p += 1) pages[p] = pageRows(1, 10);
+    const { run, calls } = pagerByPage(pages);
+    const heard: string[] = [];
+    const log = (s: string) => heard.push(s);
+    const originalLog = console.log;
+    console.log = log;
+    let code = -1;
+    try {
+      code = main([], { run, now: NOW, slug: "moon-read/comfy-app-t3" });
+    } finally {
+      console.log = originalLog;
+    }
+    const out = heard.join("\n");
+    expect(code, out).toBe(CODE.NO_VERDICT);
+    expect(code, "盖不住窗口时不许念成缺勤").not.toBe(CODE.ABSENT);
+    expect(out).toContain("取数没盖住窗口");
+    expect(calls.filter((c) => c.includes("get-build-logs"))).toHaveLength(
+      FETCH_MAX_PAGES,
+    );
+  });
+
+  it("在线那一跳：翻页把上一跑捞回来 ⇒ 照常判出勤（修复没有把正路弄瞎）", () => {
+    const daily = listed(
+      "sn-daily",
+      "crontab: 0 0 * * *",
+      new Date(NOW - 12 * 3_600_000).toISOString(),
+    );
+    const first = [daily, ...pageRows(1, 10, FETCH_PAGE_SIZE - 1)];
+    const { run } = pagerByPage({ 1: first, 2: pageRows(10, 40) });
+    const statusRun = (cmd: string, args: string[]) => {
+      if (args.includes("get-build-status")) {
+        const one = detail("sn-daily", daily.event, daily.createTime, [
+          ...GREEN_STAGES,
+        ]);
+        return {
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data: one.json.data }),
+          stderr: "",
+          error: null,
+        };
+      }
+      return run(cmd, args);
+    };
+    const heard: string[] = [];
+    const originalLog = console.log;
+    console.log = (s: string) => heard.push(s);
+    let code = -1;
+    try {
+      code = main([], {
+        run: statusRun,
+        now: NOW,
+        slug: "moon-read/comfy-app-t3",
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    const out = heard.join("\n");
+    expect(code, out).toBe(CODE.PRESENT);
+    expect(out).toContain("取数覆盖自证");
+    expect(isDailyDispatch(daily)).toBe(true);
   });
 });
