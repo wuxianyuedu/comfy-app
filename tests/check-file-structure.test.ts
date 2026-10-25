@@ -37,6 +37,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { copyGateDeps } from "./helpers/gate-repo";
+import { stripComments } from "./helpers/strip-comments";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
@@ -1327,8 +1328,10 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
  *
  * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」的错误（报的是
  *    脚本里的尾随逗号与行列号）—— 真正的原因文件根本不在源码里（见下条用例的注释）。
- * 2. `PROBE_ATTEMPTS * PROBE_INTERVAL_MS` 报 `expected u32, found u64`
+ * 2. 「上限 × 间隔」的两个常量相乘报 `expected u32, found u64`
  *    + `cannot multiply u32 by u64` —— 同一处表达式里的两个常量类型不同档。
+ *    这一条随 #2192 退役：首帧看护的预算改由 `poll_clock::PollClock` 以 `Duration`
+ *    持有，拍数不再是一个常量，于是那个相乘的形状从源码里消失了（详见下面那条用例）。
  *
  * 两条的共同点是「本地跑 lint / tsc / 单测全绿，只有真编 release 壳才暴露」，
  * 所以判据只能落在「编译前提」这一层。
@@ -1355,7 +1358,7 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
     ).toContain("src-tauri/target/");
   });
 
-  it("首帧看护的两个常量类型同档（相乘，跨类型编译不过）", () => {
+  it("首帧看护的预算与间隔同档（不再有跨类型相乘的余地）", () => {
     const rust = readFileSync(
       join(process.cwd(), "src-tauri", "src", "lib.rs"),
       "utf8",
@@ -1365,10 +1368,28 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
       if (!m) throw new Error(`lib.rs 里找不到 ${name} 的常量声明`);
       return m[1]!;
     };
-    // 这两条会在首帧看护的超时日志里相乘：u32 * u64 没有实现（E0277），
-    // 同档是编译前提，不是风格偏好。
-    expect(typeOf("PROBE_ATTEMPTS")).toBe(typeOf("PROBE_INTERVAL_MS"));
-    expect(rust).toContain("(PROBE_ATTEMPTS * PROBE_INTERVAL_MS) / 1000");
+    /* 首帧看护的间隔常量仍在（快段 250ms），它单独一个不存在跨类型相乘。
+     * 与 #2192 之前不同：当时它和「上限」相乘（`PROBE_ATTEMPTS * PROBE_INTERVAL_MS`
+     * 报 `expected u32, found u64`），两个常量的类型档必须同档。 */
+    expect(typeOf("PROBE_INTERVAL_MS")).toBe("u64");
+    /* 预算与间隔如今都由 `poll_clock::PollClock` 以 `Duration` 持有 —— 预算那一维
+     * 不再是一个「拍数」常量，于是「上限 × 间隔」这个形状在源码里**不存在**了。
+     * 这正是原来那条用例要防的编译错误（E0277）如今被类型系统直接挡住的形态：
+     * 拍数与间隔不再相乘，就没有跨类型相乘的余地。
+     *
+     * 形状扫的是**剥掉注释后的代码** —— 注释里正当会出现「250ms × 480」这类
+     * 叙述（那是在讲退役前的旧账），拿原文去匹配就是自打自。 */
+    expect(rust).toContain("poll_clock::PollClock::with_backoff(");
+    /* 退役的符号不许回来（它只在注释里出现 —— 剥注释后就该没有）。 */
+    expect(stripComments(rust)).not.toContain("PROBE_ATTEMPTS");
+    /* 首帧看护那一段里不许再有「两个常量相乘」：那正是 E0277 的形状。
+     * 判据只盯首帧看护函数（`watch_main_first_paint`）的函数体 —— 全仓其他位置
+     * 相乘的是别的常量（Windows API 的标志位等），不在这个地雷的范围里。 */
+    const watchBody = /fn watch_main_first_paint[\s\S]*?\n}/.exec(
+      stripComments(rust),
+    );
+    expect(watchBody, "lib.rs 里找不到 watch_main_first_paint").not.toBeNull();
+    expect(watchBody?.[0] ?? "").not.toMatch(/[A-Z_]{3,}\s*\*\s*[A-Z_]{3,}/);
   });
 });
 
