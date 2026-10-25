@@ -160,10 +160,11 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
   const label = handlerLabel(handle);
   if (!label) {
     log(
-      `[ship] 未配 ${DEV_HANDLE_ENV_KEY} ⇒ PR #${number} 没有 \`处理人:\` 标签` +
-        "（这一格是读数，不参与退码）。在 " +
-        `\`${path.join(root, ".env")}\` 填一行 \`${DEV_HANDLE_ENV_KEY}="<短名>"\`` +
-        "（整行不在时先跑 `pnpm env:init`），再 `pnpm ship` 重跑会补上。",
+      `[ship] 取不到留痕短名 ⇒ PR #${number} 没有 \`处理人:\` 标签` +
+        "（这一格是读数，不参与退码）。名字本来有取值链（`dev-handle.mjs`：人填的 → " +
+        "`CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → `git config user.name` → `cnb`），走到空只可能是" +
+        `装配层没传；要人填就写 \`${path.join(root, ".env")}\` 那一行 \`${DEV_HANDLE_ENV_KEY}="<短名>"\`。` +
+        " 再 `pnpm ship` 重跑会补上。",
     );
     return;
   }

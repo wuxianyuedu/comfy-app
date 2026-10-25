@@ -14,6 +14,11 @@
  *
  * ① 用的是本测试**自己 mkdtemp 出来的一份仓库**，不是运行它的那个仓库 ——
  * 判据可以随便污染夹具，但绝不许碰调用方的检出（这正是被测事故本身的形态）。
+ *
+ * 第三档（③）：宿主开着 `core.autocrlf=true` 时，夹具的 `git add` **一条 advice 都不打**。
+ * 那一行 `LF will be replaced by CRLF` 不改变任何结论，却是 CI 里最像「真红」的噪音；
+ * 反向锚点同样是「先证明宿主那一档确实会叫」——不先造一次带噪的 `git add`，
+ * ③ 在「宿主本来就没开 autocrlf」的世界里也照样为绿，那就等于没判。
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -54,6 +59,20 @@ function makeRepo(name: string): string {
   git(["add", "-A"]);
   git(["commit", "-qm", "base"]);
   return dir;
+}
+
+/**
+ * 「没有夹具注入」的那份环境：只剥掉继承的仓库定位变量，**一个 `GIT_CONFIG_*` 都不加**。
+ *
+ * ③ 的反向锚点要用它 —— 先证明宿主的 `autocrlf=true` 确实会让 `git add` 叫一声，
+ * 再证明夹具注入之后一声都不叫。少了这份，那条断言在「宿主本来就没开 autocrlf」
+ * 的世界里同样为绿，等于没判（§13.5.8）。
+ * @returns 可直接交给子进程的 `env`
+ */
+function bareEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of GIT_INHERITED_ENV_KEYS) delete env[key];
+  return env;
 }
 
 /** 在 `scratch` 放一个探针文件并按给定环境 `git add -A`；返回 git 的输出（给断言消息用）。 */
@@ -133,6 +152,51 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     ]) {
       expect(GIT_INHERITED_ENV_KEYS, `清单里没有 ${key}`).toContain(key);
     }
+  });
+
+  it("③ 宿主开了 `autocrlf=true` 时，夹具的 `git add` 一条 advice 都不打", () => {
+    const dir = makeRepo("autocrlf");
+    /* 先把**宿主**那一档配成会叫的形态（写在这份临时仓库自己的 config 里 —— 它就是
+     * 模拟「宿主全局 .gitconfig 带着它」，而夹具注入的那一层要压得住同一份配置的这层）。 */
+    const cfg = spawnSync("git", ["config", "core.autocrlf", "true"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: gitSandboxEnv(),
+    });
+    expect(cfg.status, `配 autocrlf 失败: ${cfg.stderr}`).toBe(0);
+
+    /* 反向锚点：不带夹具注入时，同一句 `git add` **确实**会打那条 warning。
+     * 少了这一半，本条在「宿主本来就没开 autocrlf」的世界里同样为绿。 */
+    writeFileSync(join(dir, "probe.txt"), "probe\n");
+    const raw = spawnSync("git", ["add", "-A"], {
+      cwd: dir,
+      encoding: "utf8",
+      /* 只剥继承变量，**不**注入沙箱配置 —— 这是「没修之前」的形态。 */
+      env: bareEnv(),
+    });
+    const rawOut = `${raw.stdout ?? ""}${raw.stderr ?? ""}`;
+    expect(
+      rawOut,
+      "宿主 autocrlf=true 却一条 warning 都没打 ⇒ 反向锚点失效，本条判不出东西",
+    ).toContain("LF will be replaced by CRLF");
+
+    /* 正面那一档：带上夹具注入，同一条路径一个字节的 advice 都不许留。 */
+    writeFileSync(join(dir, "probe2.txt"), "probe2\n");
+    const sandboxed = spawnSync("git", ["add", "-A"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: gitSandboxEnv(),
+    });
+    expect(sandboxed.status, `git add 失败: ${sandboxed.stderr}`).toBe(0);
+    expect(
+      `${sandboxed.stdout ?? ""}${sandboxed.stderr ?? ""}`,
+      "夹具的 git add 又打起换行 advice 了（CI 日志会被几十条这样的噪音盖满）",
+    ).not.toContain("LF will be replaced by CRLF");
+    /* 也**不**许换个方向叫（`CRLF will be replaced by LF`）—— 那一档说明
+     * `core.autocrlf=false` 没压住宿主的相反设置。 */
+    expect(`${sandboxed.stdout ?? ""}${sandboxed.stderr ?? ""}`).not.toContain(
+      "will be replaced by",
+    );
   });
 
   it("全局那一档挂在 `tests/setup.ts` 上（否则 20 份自起仓库的用例各扫各的）", () => {

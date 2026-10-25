@@ -26,6 +26,7 @@ import {
   resolvePlaywrightInvocation,
   runChild,
   runPreflightReadings,
+  spawnFailureLine,
   shouldRecord,
   stripArgvSeparator,
 } from "../scripts/e2e-run.mjs";
@@ -914,12 +915,46 @@ describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () =>
   });
 
   it("起不来（ENOENT）交 `status: null` 而不是抛 —— 调用方转非零退出码", async () => {
-    const res = await runChild({
-      command: path.join(ROOT, "no-such-playwright-runner"),
-      args: [],
-      options: { stdio: "ignore" },
-    });
+    /* `origin: "test"`：本条**要的就是**那条失败路径，打出来的那一行必须是
+     * `[e2e-run/test]` 一族（见下一条）—— 否则它与「这一跑真起不来」共用一行，
+     * 读 CI 日志的人得先猜这一行是不是某条用例造的。
+     *
+     * `origin` 是 `runChild()` 第二个参数的字段（不是 invocation 的 —— 它不描述
+     * 「起什么」，只描述「**谁**在要它起」）。 */
+    const res = await runChild(
+      {
+        command: path.join(ROOT, "no-such-playwright-runner"),
+        args: [],
+        options: { stdio: "ignore" },
+      },
+      { origin: "test" },
+    );
     expect(res.status).toBeNull();
+  });
+
+  it("起不来那一行自报家门：判据造的失败与真故障前缀不同（`spawnFailureLine`）", () => {
+    const command = path.join(ROOT, "no-such-playwright-runner");
+    const real = spawnFailureLine({ command, code: "ENOENT" });
+    const byTest = spawnFailureLine({
+      command,
+      code: "ENOENT",
+      origin: "test",
+    });
+
+    /* 三件事同时在：真实形态保持原样（运维照旧照这一行找线索）、
+     * 判据形态换前缀、并明说「不是这一跑起不来」。 */
+    expect(real.startsWith("[e2e-run] ✗ 起不了 Playwright")).toBe(true);
+    expect(real).not.toContain("判据按设计造的失败");
+    expect(byTest.startsWith("[e2e-run/test] ✗ 起不了 Playwright")).toBe(true);
+    expect(byTest).toContain("判据按设计造的失败");
+    /* 取证本身一个字都不许少 —— 收掉它才是真把线索丢了。 */
+    for (const line of [real, byTest]) {
+      expect(line).toContain("ENOENT");
+      expect(line).toContain(command);
+      expect(line).toContain("resolveCommandInvocation");
+    }
+    /* 失败码缺失时不编一个出来（`undefined` 会被念成 "undefined"）。 */
+    expect(spawnFailureLine({ command })).toContain("失败码 未知");
   });
 
   it("跑法脚本里不再有 `spawnSync` 起 Playwright 的那一行（缓存就藏在它身上）", () => {

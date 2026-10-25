@@ -175,7 +175,11 @@ import {
   resolveUpstream,
 } from "./ship-core.mjs";
 import { makeRunner, writeScratch } from "./ship-exec.mjs";
-import { readDevHandle, whoamiLines } from "./ship-ticket.mjs";
+import {
+  handleFromProcessEnv,
+  readDevHandleWithSource,
+  whoamiLines,
+} from "./ship-ticket.mjs";
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
 import {
   cleanBranch,
@@ -423,13 +427,18 @@ async function runFlow(deps, tmpFiles) {
   /* 留痕短名在**所有**要它的格子之前取一次：whoami、领取 / 结束 / 列表、preflight 的
    * 单子身份读数、PR 标签、关单后的结束评论。各格自己再读一次会让同一次跑里出现两套答案
    * （进程环境与 `.env` 在两次读之间变过就会分叉）。 */
-  const handle = readDevHandle({ root, env });
+  const who = readDevHandleWithSource({ root, env });
+  /* 这台机器上「有没有人**真的**填过」是另一件事：取值链保证给得出名字，但
+   * 「单子会建、标签打不上」那一档的判据（`ship-issue-new.mjs` 的回读）必须能分辨
+   * 「你填了却没落地」与「这名字是取的、本来就不会有标签」。只看 `COMFYAPP_DEV_HANDLE`。 */
+  const explicitHandle = handleFromProcessEnv({ root, env });
+  const handle = who.name;
   /* ── `--whoami`：只读自查口（ISSUE #2204）─────────────────────
    * 手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 ship，
    * 那两条路的留痕只能靠人照着一条能粘贴的出口做。这个出口一次也不碰平台
    * （甚至不 probe cnb）、不改任何状态，所以在分支守卫与 preflight 之前就返回。 */
   if (opt.whoami) {
-    for (const l of whoamiLines({ handle, root, slug })) {
+    for (const l of whoamiLines({ handle, source: who.source, root, slug })) {
       log(l);
     }
     return CODE.GREEN;
@@ -473,6 +482,9 @@ async function runFlow(deps, tmpFiles) {
         sn: opt.diagnoseSn,
         headSha: run("git", ["rev-parse", "HEAD"]).stdout.trim(),
         dryRun: opt.dryRun,
+        /* 「上一眼」的基数落在 `.git/` 下 —— 没有它，单发的 diagnose 永远只能说「还在跑」，
+           说不出「一格都没推进」（ISSUE #2304）。 */
+        root,
       }),
     ]);
   }
@@ -528,6 +540,7 @@ async function runFlow(deps, tmpFiles) {
         slug,
         cnbOk,
         handle,
+        explicitHandle,
         root,
         opt,
         mkTmp,
@@ -584,6 +597,8 @@ async function runFlow(deps, tmpFiles) {
       slug,
       cnbOk,
       handle,
+      handleSource: who.source,
+      explicitHandle,
       readInstances: deps.readInstances ?? readAppInstances,
     });
     codes.push(...pf.codes);

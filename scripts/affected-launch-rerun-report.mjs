@@ -65,16 +65,27 @@ export function unverifiedReport(files) {
  * @returns {string} 要打到 stderr 的正文；一块都没复跑时是空串
  */
 export function rerunReport(attempts, budget) {
-  /* 「没复跑」的那两档：直接绿，与**第 1 遍就没跑起来**（装载阶段炸了 —— 它从来
-   * 没走到复跑那一跳，所以不许被算进 `reran`，否则「等待累计 / 预算」那一行会为一次
-   * 根本没发生的等待报账）。 */
+  /* 「没复跑」的那三档，各自都有「为什么不算」的具体理由，所以逐个点名而不是留一条
+   * 取反的条件：
+   *   · `first-green` / `red-no-fingerprint` —— 直接绿、真红一次都不复跑；
+   *   · `launch-failed` —— **第 1 遍就没跑起来**（装载阶段炸了），它从来没走到复跑那一跳，
+   *     算进 `reran` 会让「等待累计 / 预算」为一次根本没发生的等待报账；
+   *   · `budget-skipped` —— 第 2 遍**根本没开**（墙钟不够，ISSUE #2364），混进复跑数会让
+   *     账读成「测过两次，两次都只是超时」，而那正是这一档要避开的那句话。
+   * 后两档共用一个后果：**它们本身就是要念出来的读数**，所以即使一块都没复跑，
+   * 只要它们不为零，这份账也必须印 —— 判据是下面那个「三档全零才回空串」。 */
   const NOT_RERUN = new Set([
     "first-green",
     "red-no-fingerprint",
     "launch-failed",
+    "budget-skipped",
   ]);
+  const skipped = attempts.filter((a) => a.outcome === "budget-skipped").length;
+  const launchFailed = attempts.filter(
+    (a) => a.outcome === "launch-failed",
+  ).length;
   const reran = attempts.filter((a) => !NOT_RERUN.has(a.outcome));
-  if (reran.length === 0) return "";
+  if (reran.length === 0 && skipped === 0 && launchFailed === 0) return "";
   /** @type {(outcome: string) => number} */
   const count = (o) => attempts.filter((a) => a.outcome === o).length;
   const waitedMs = reran.reduce((a, r) => a + (r.waitedMs ?? 0), 0);
@@ -94,7 +105,16 @@ export function rerunReport(attempts, budget) {
     /* 「装载阶段就炸」那一档与上面四档**不同源**：它没有被复跑过，也没有第 2 遍的读数
      * —— 它说的是「第一遍就没跑起来」。所以它单独念，且只在真的发生时出现
      * （判据同 `gitDiff` 那条：没有的事不占一行）。 */
-    `；第 1 遍就没跑起来（装载 / 运行时级错误，退 2）${count("launch-failed")} 块。\n` +
+    (launchFailed > 0
+      ? `；第 1 遍就没跑起来（装载 / 运行时级错误，退 2）${launchFailed} 块`
+      : "") +
+    ".\n" +
+    /* 墙钟那一格同理：只在真的跳过时占一行 —— 它是「连第二次测量都没发生」的证据，
+     * 平时恒为 0，写进每一份账会让读者对 0 脱敏。 */
+    (skipped > 0
+      ? `  **墙钟**：第 2 遍因预算不够**根本没开** ${skipped} 块` +
+        "（那是未判定，退 2 —— 连第二次测量都没有发生，不许读成「测过了、都只是超时」）。\n"
+      : "") +
     "  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果；" +
     "「未校验」是这次**没测到**（已逐条点名哪几份）；" +
     "「未判定」比它更弱 —— 连「每份都只是超时」都没确认到，退 2（ISSUE #2225）。\n"

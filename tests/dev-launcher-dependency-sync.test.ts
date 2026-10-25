@@ -198,6 +198,12 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
     // 形态判据的唯一出口（不许自己拼可执行名，见 §2.1.6）
     expect(src).toContain("pnpmInvocation(");
     expect(src).not.toMatch(/["']pnpm\.cmd["']/);
+    /* 「探不到 pnpm」那一格的出口**必须带上这一份进程读到的 PATH**（ISSUE #2281）：
+     * 只有一句「pnpm 不在 PATH 上」时，真没装 / 键名不是 `PATH` / 分隔符读错
+     * 三种成因在日志里逐字同形，而它们的下一动作完全不同。 */
+    expect(src, "探不到 pnpm 的分支没有给出 PATH 读数").toContain(
+      "describePnpmMiss()",
+    );
   });
 
   it("编排主流程真的会调用它，失败即非零退出", () => {

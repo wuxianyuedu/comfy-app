@@ -65,6 +65,7 @@ export {
   resolvePlaywrightFile,
   resolvePlaywrightInvocation,
   runChild,
+  spawnFailureLine,
 } from "./e2e-run-playwright.mjs";
 /* schema 预检那三张卡（判词 / 取证 / 空库建齐）在 `./e2e-schema-preflight.mjs` ——
  * 拆的边界与 `e2e-run-playwright.mjs` 同一条：那一层是**判据与机制**，本文件是

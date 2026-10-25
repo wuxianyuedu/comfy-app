@@ -28,6 +28,7 @@ import {
   POSTINSTALL_SCRIPT,
   checkPostinstall,
 } from "../scripts/launcher-core/node-runner.mjs";
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const ROOT = process.cwd();
 const pkg = JSON.parse(
@@ -125,7 +126,11 @@ describe("postinstall 的入口真跑（模拟 Windows 宿主：不经 shell）"
 
   it("在 git 检出里接上 core.hooksPath，且幂等（第二次只提示已生效）", () => {
     const dir = makeCheckout();
-    execFileSync("git", ["init", "-q"], { cwd: dir, stdio: "ignore" });
+    execFileSync("git", ["init", "-q"], {
+      cwd: dir,
+      stdio: "ignore",
+      env: gitSandboxEnv(),
+    });
     const first = runEntry(dir);
     expect(first.stdout).toContain(".githooks");
     const hooks = execFileSync(

@@ -25,6 +25,8 @@ import { join } from "node:path";
 import { vi } from "vitest";
 
 import { describe, expect, test } from "vitest";
+
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import {
   commandTargetState,
   didNotRunSide,
@@ -61,9 +63,19 @@ vi.setConfig({ hookTimeout: 30_000 });
 const REPO_ROOT = process.cwd();
 const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");
 
-/** 在给定目录跑一条 git 命令。 */
+/** 在给定目录跑一条 git 命令。
+ * @param cwd 工作目录
+ * @param args git 的子命令与参数
+ * @returns stdout */
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" });
+  /* 走 `gitSandboxEnv()`：本文件的夹具仓库里 `git add` 几十次，而宿主若开着
+   * `core.autocrlf=true`，每一次都往 stderr 打一行 `LF will be replaced by CRLF`
+   * —— 那批噪音会盖满 CI 日志，且与任何判据结论无关（见 `git-sandbox-env.ts` 文件头）。 */
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: gitSandboxEnv(),
+  });
 }
 
 /**
@@ -531,6 +543,30 @@ describe("base-check —— 命令解析", () => {
     });
   });
 
+  test("整条命令当一个参数给进来 ⇒ 按空白切成 argv（不许把整串当路径）", () => {
+    /* 现场：`node scripts/base-check.mjs "node scripts/x.cjs"` 与
+     * `--base "…"` 两种走法都只有**一个**数组元素。此前那条「裸脚本名」分支会把它
+     * 当成文件名 → `["node", "node scripts/x.cjs"]` → `commandTargetState` 拼出
+     * `<cwd>/node scripts/x.cjs` → 恒「不存在」→ 每条判据都读成 127（没跑起来），
+     * 于是「复算」这件事给不出任何结论（ISSUE #2293 的现场就是被它挡住的）。 */
+    expect(resolveGateCommand(["node scripts/x.cjs"])).toMatchObject({
+      ok: true,
+      argv: ["node", "scripts/x.cjs"],
+    });
+    expect(
+      resolveGateCommand(["node scripts/x.cjs --base origin/master"]),
+    ).toMatchObject({
+      ok: true,
+      argv: ["node", "scripts/x.cjs", "--base", "origin/master"],
+    });
+    expect(
+      resolveGateCommand(["pnpm exec vitest run tests/x.test.ts"]),
+    ).toMatchObject({
+      ok: true,
+      argv: ["pnpm", "exec", "vitest", "run", "tests/x.test.ts"],
+    });
+  });
+
   test("完整命令原样透传", () => {
     const r = resolveGateCommand([
       "pnpm",
@@ -717,7 +753,7 @@ describe("base-check —— 真仓库上的四态", () => {
       expect(got.why).toContain("基线取的是主干");
       expect(got.why).toContain("up/feat");
 
-      writeFileSync(join(r.work, "green.cjs"), 'process.exit(0);\n');
+      writeFileSync(join(r.work, "green.cjs"), "process.exit(0);\n");
       const { code, stdout, stderr } = runBaseCheck(r.work, [
         "node",
         "green.cjs",

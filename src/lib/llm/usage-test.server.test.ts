@@ -13,6 +13,8 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
+import { REMOTE_MODEL_KINDS } from "~/lib/llm/types";
+
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: vi.fn(async () => ({
     provider: "remote",
@@ -123,8 +125,12 @@ describe("字段读取助手", () => {
     expect(normalizeEndpointPath("v1/x")).toBe("/v1/x");
   });
 
-  it("常量与 kinds 对齐前端契约", () => {
-    expect(USAGE_TEST_KINDS).toEqual(["chat", "image", "video"]);
+  it("常量对齐；kinds 与权威词表是**同一份**（#2170 并成一份：同一引用，非逐字复制）", () => {
+    /* 旧断言 `toEqual(["chat","image","video"])` 是一份逐字复制值的判据 —— 抄的
+     * 那份换任何写法都能过、却证明不了「只有一处定义」。toBe（同一引用）+
+     * 权威词表自身的期望值，两条合起来才是「并成一份」的机器读数。 */
+    expect(USAGE_TEST_KINDS).toBe(REMOTE_MODEL_KINDS);
+    expect(REMOTE_MODEL_KINDS).toEqual(["chat", "image", "video"]);
     expect(CHAT_TIMEOUT_MS).toBe(60_000);
     expect(MEDIA_TIMEOUT_MS).toBe(180_000);
   });

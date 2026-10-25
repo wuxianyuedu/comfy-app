@@ -202,13 +202,20 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const parsed = parseEnvFile(after);
     expect(
       parsed.has("COMFYAPP_DEV_HANDLE"),
-      "缺的可选键要被补上（值照 example 的显式空值）",
+      "缺的可选键要被补上",
     ).toBe(true);
-    expect(parsed.get("COMFYAPP_DEV_HANDLE")).toBe("");
+    // 不再照 example 补一个空值（ISSUE #2355）：补成空串等于「照提示做过一遍仍然没有名字」。
+    // 值来自取值链（本机 `git config user.name` / 兜底 `cnb`），非空且不是密钥。
+    expect(
+      (parsed.get("COMFYAPP_DEV_HANDLE") ?? "").trim(),
+      "留痕短名必须是取到的一个确定名字，不是空值",
+    ).not.toBe("");
     // 「只补缺、绝不覆盖」是这一档唯一的安全前提：用户自己改过的值必须一字不动。
     expect(parsed.get("LOG_LEVEL")).toBe("debug");
     expect(after).toMatch(/^BETTER_AUTH_SECRET="b{64}"$/m);
     expect(r.stdout).toContain("COMFYAPP_DEV_HANDLE");
+    // 名字不是密钥 ⇒ 念出来才可核对（`ship` 念的是同一个值）。
+    expect(r.stdout).toContain(parsed.get("COMFYAPP_DEV_HANDLE")!);
     expect(checkEnvFile(tmp, {})).toBeNull();
   });
 

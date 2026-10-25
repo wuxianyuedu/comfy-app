@@ -70,7 +70,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { asArray } from "./ship-build.mjs";
+import { asArray, buildSignature } from "./ship-build.mjs";
 import { parseSlug } from "./ship-core.mjs";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
 
@@ -453,10 +453,33 @@ export function describeFailedStages(run, { slug, sn, outcome, log = console.log
 }
 
 /**
+ * 「还在跑」那一支的进度读数（ISSUE #2304）：签名 + 在飞格，一次遍历同时给出。
+ *
+ * 为什么要有这一件：诊断与轮询此前是**两个读者面**——轮询那行带 `…/pending/0-1+30/37`，
+ * 而 `--diagnose` 只念「还在跑，等它跑完再读一次」；看诊断的人只能去翻原始 JSON，
+ * 而那层嵌套（`data.pipelinesStatus.<sn>-001.stages[]`）读错一次就会把「在推进」念成
+ * 「一格都没起」。签名本身仍只有 `ship-build.mjs` 一个算法，这里不另数一遍计数。
+ *
+ * @param {unknown} json `get-build-status` 的原值
+ * @param {string} [sn] 构建号（进签名的第一段）
+ * @returns {{signature: string, flyingCount: number, flyingNames: string[]}}
+ */
+export function progressReadout(json, sn = "") {
+  const flying = inFlightStages(json);
+  return {
+    signature: buildSignature(json, sn),
+    flyingCount: flying.count,
+    flyingNames: flying.names,
+  };
+}
+
+/**
  * 把分类结果写成给人看的那几行。
  *
  * @param {ReturnType<typeof classifyBuildOutcome>} outcome
- * @param {{sn?: string, slug?: string, reason?: string | null, prefix?: string}} [extra]
+ * @param {{sn?: string, slug?: string, reason?: string | null, prefix?: string, json?: unknown}} [extra]
+ *   `json` 是 `get-build-status` 的原值 —— 只有「还在跑」那一支要它（用来念格子进度，
+ *   与轮询那行共用 `buildSignature`；不给就少念两行，话术与判定都不变，ISSUE #2304）。
  * @returns {string[]}
  */
 export function formatOutcome(outcome, extra = {}) {
@@ -475,6 +498,21 @@ export function formatOutcome(outcome, extra = {}) {
   for (const p of outcome.pipelines) {
     lines.push(
       `${tag}   流水线：${p.name || "(无名)"}（status=${p.status || "(无)"}）`,
+    );
+  }
+  /* 「还在跑」那一支以前只念一句「等它跑完再读一次」，而**轮询那行念的是格子进度**
+   * （`…/pending/0-1+30/37`）—— 同一个事实两个读者面，看诊断的人只能去翻原始 JSON，
+   * 而那层的嵌套读错一次就会把「在推进」念成「一格都没起」（ISSUE #2304 现场就这么错过一次）。
+   * 所以这里复用它：签名只有 `buildSignature` 一个算法，进度话术与轮询那行不会分叉。 */
+  if (outcome.state === "running" && extra.json) {
+    /* 签名**只算一次**：那一行与「在飞」的判定都取自这里，不让同一份 JSON 被数两遍
+       （两处遍历一旦漂移，念出来的进度就和轮询那行不是同一个数了）。 */
+    const progress = progressReadout(extra.json, sn);
+    lines.push(`${tag}   进度（与轮询那行同一份计算）：${progress.signature}`);
+    lines.push(
+      progress.flyingCount > 0
+        ? `${tag}   在飞 ${progress.flyingCount} 格：${progress.flyingNames.slice(0, 3).join("、")} ⇒ 慢不等于停`
+        : `${tag}   此刻没有一格在飞（只念事实：既没终态，也没有推进中的格）`,
     );
   }
   for (const s of outcome.failed) {

@@ -73,7 +73,7 @@ import { fetchBuildDetails } from "./check-daily-attendance.mjs";
 import { commentHeader } from "./ship-ticket.mjs";
 import { cnbJson, makeRunner, writeScratch } from "./ship-exec.mjs";
 import { runAppendIssueComment, runNewIssue } from "./ship-issue-new.mjs";
-import { gitUser } from "./freshness-ledger.mjs";
+import { machineHandle } from "./dev-handle.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -402,7 +402,8 @@ export function main(io = {}) {
     );
     return finish(CODE.NO_FACT, "推不出仓库 slug");
   }
-  const handle = gitUser("ci-pr");
+  /* 同 `ci-daily`：机器自起的账用自己的名字，不取人的昵称（ISSUE #2355）。 */
+  const handle = machineHandle("ci-pr", env);
 
   const offline = Boolean(from);
   /** @type {any[] | null} */

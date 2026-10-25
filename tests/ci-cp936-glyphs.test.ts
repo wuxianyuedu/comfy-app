@@ -47,6 +47,18 @@ describe("字形归一化：等义替换", () => {
     expect(normalizeCp936Glyphs("⇄").text).toBe("→");
   });
 
+  it("路由表那个 dynamic 标记（U+0192）按登记走 `f`，并且**不再因此出声**（ISSUE #2346）", () => {
+    /* 夹具是 `每日生产构建` 那一格里逐字出现过的一行：`ƒ`（long s）在 CP936 里没有字形，
+     * 而 Next 用它标 dynamic 路由 ⇒ 一跑 51 条路由就是 51 个 `\u0192`。登记成 `f` 之后，
+     * 这一行同时消失两样东西：字面兜底，和那句兜底读数（整批都在表里 ⇒ 出声条件不成立）。 */
+    const got = normalizeCp936Glyphs("├ \u0192 /api/comfy/queue");
+    expect(got.text).toBe("├ f /api/comfy/queue");
+    expect(got.replaced).toEqual([{ from: "\u0192", to: "f", count: 1 }]);
+    expect(describeGlyphReplacements(got.replaced)).toBe("");
+    /* `├` 是制表符，CP936 里有字形 ⇒ 它本来就不该被动。 */
+    expect(normalizeCp936Glyphs(got.text).replaced).toEqual([]);
+  });
+
   it("替代物**全部**落在 CP936 里 —— 否则替换完还要再被吃一次", () => {
     for (const [from, to] of GLYPH_REPLACEMENTS) {
       for (const ch of to) {

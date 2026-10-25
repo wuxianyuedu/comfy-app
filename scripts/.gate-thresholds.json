@@ -283,6 +283,33 @@
       "kind": "report",
       "strictness": "n/a",
       "why": "PR 正文里 diffstat 逐行明细的样本数。它只决定「摘要长多少行」，不决定任何一条判定；正文总长超上限时这个数还会自己减半（ISSUE #2248），所以它是起始值而不是保证值。"
+    },
+    {
+      "file": "scripts/affected-launch-wallclock.mjs",
+      "const": "STAGE_WALL_CLOCK_MS",
+      "value": 1500000,
+      "unit": "毫秒（`受影响用例` 那一格的自设墙钟预算）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "整次一份、跨块共享，只决定「还开不开下一遍 / 下一份补跑」，不改变任何一条断言的判定。取 25 分钟的两个夹逼读数：要盖得住首遍 + 一遍串行复跑的实测最坏形状（9.2 + 13.6 = 22.8 分钟），又必须明显低于平台那一刀（3240105ms）—— 界在掐点之上就等于这条判点从没机会说话（ISSUE #2364）。"
+    },
+    {
+      "file": "scripts/affected-launch-wallclock.mjs",
+      "const": "PLATFORM_STAGE_KILL_MS",
+      "value": 3240000,
+      "unit": "毫秒（平台那一刀的名义落点）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "外部的量纲，不是本仓算出来的旋钮：平台给的原因原文 `timeout of 3240000ms exceeded`，回读该格 duration 是 3240105ms（build cnb-q1c-1k5ora37n）。只用来当上界。注意 .cnb.yml 那一格声明的 `timeout: 45m` **没有承重**（实测掐在 54.0 分钟），所以预算不从声明推、从这个读数推。"
+    },
+    {
+      "file": "scripts/affected-launch-wallclock.mjs",
+      "const": "SERIAL_RERUN_FACTOR",
+      "value": 2,
+      "unit": "倍（相对第 1 遍的真实墙钟）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "串行复跑的成本系数。不按「失败了几份」的比例估 —— 实测第 2 遍只跑 2/98 份却比首遍更慢（13.6m vs 9.2m = 1.48 倍，串行去掉了并发优势）。取 2 是往「更早落界」那一侧保守，估高只会少跑一遍，不会把还有希望的一遍拦掉。"
     }
   ],
   "$notCovered": {

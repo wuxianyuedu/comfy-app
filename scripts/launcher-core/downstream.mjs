@@ -10,6 +10,7 @@
  * `ctx.shutdown`（收尾入口，住在主文件）。
  */
 import process from "node:process";
+import path from "node:path";
 
 import { SKIP_SCHEMA_SYNC_ENV } from "../db-schema-state.mjs";
 import { maybeSpawnExecutorHost } from "./executor-host-spawn.mjs";
@@ -42,6 +43,34 @@ import { renderDriftReport } from "../lockfile/render-lock-diff.mjs";
 // （§9.2 第 4 条：`drizzle-kit push` 那条「报错 + exit 0 + 留空库」是同一族的坑）：
 // 复核走 `verifyInstall()`（`.modules.yaml` + 关键依赖目录 + lockfile 一致），
 // 判据是「目标状态有没有达成」，不是进程怎么退的。
+
+/** 「pnpm 探不到」时的三条 `PATH` 读数（ISSUE #2281）。
+ *
+ *  为什么这一格要单独留出口：失败提示此前只有一句「pnpm 不在 PATH 上」，而这句话
+ *  在本仓**同时**对三种成因成立 —— 真没装、环境变量表里那个键名不是 `PATH`
+ *  （`{ ...process.env }` 复制品里 Windows 常写作 `Path`）、PATH 那一串按错的
+ *  分隔符切。三者下一动作完全不同，而日志里逐字同形（与 `ci-toolchain-selfcheck.mjs`
+ *  的 `pnpmForensics` 同源：只有**这份检出自己看到的**那串才是可核对的事实）。
+ *
+ *  只打**这一份**读到的原文与切分结果，不去猜「应该是什么」。 */
+function describePnpmMiss() {
+  const raw = String(process.env.PATH ?? "");
+  const entries = raw.split(path.delimiter).filter(Boolean);
+  const lines = [
+    `本进程读到的 PATH（原文 ${raw.length} 字符，键名 PATH）:`,
+    raw.trim() ? raw : "  （空 —— 这个进程的环境变量表里 PATH 没有值）",
+    `按 ${JSON.stringify(path.delimiter)} 切出 ${entries.length} 条:`,
+    ...entries.slice(0, 20).map((e) => `  ${e}`),
+  ];
+  if (entries.length > 20) lines.push(`  …（另有 ${entries.length - 20} 条）`);
+  /* 键名若不是 `PATH` 而是别的写法，`whichCommand` 在 Windows 上会自己按大小写
+   * 不敏感再找一遍；把「表里到底有哪几个近似键」打出来，才能把那一种与「真没装」分开。 */
+  const nearKeys = Object.keys(process.env).filter(
+    (k) => k.toUpperCase() === "PATH" && k !== "PATH",
+  );
+  if (nearKeys.length > 0) lines.push(`⚠️ 近似键: ${nearKeys.join(", ")}`);
+  return lines.join("\n");
+}
 
 /** 补装依赖（仅当 lockfile 漂移时）；返回 null = 无需补装或补装成功。
  *
@@ -102,7 +131,10 @@ export async function syncDependencies(ctx, root, deps = {}) {
 
   const invocation = pnpmInvocation(["install"]);
   if (!invocation) {
-    return "pnpm 不在 PATH 上，无法补装依赖（先执行 corepack enable）。";
+    return (
+      "pnpm 不在 PATH 上，无法补装依赖（先执行 corepack enable）。\n" +
+      describePnpmMiss()
+    );
   }
   const result = runSync(invocation.command, invocation.args, {
     cwd: root,
