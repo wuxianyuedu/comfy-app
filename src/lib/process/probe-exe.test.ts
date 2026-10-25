@@ -14,7 +14,7 @@
  * 本体的三条用例覆盖 —— 用的是这台机器上一定存在的 `process.execPath` 与一个
  * 一定不存在的名字）。
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { spawnSync } from "node:child_process";
 
 import {
@@ -234,25 +234,32 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
   });
 
   it("缺省探针（真起进程）那条路也走得通：注入点不给就用 `probeExecutable`", () => {
-    /* 上面两条都注入了探针，于是 `probeExecutable` 那个缺省分支从没被走到 ——
+    /* 上面那条注入了探针，于是 `probeExecutable` 那个缺省分支从没被走到 ——
      * 而它正是两处调用点实际走的那条路。这里喂一个真机上一定不存在的名字：
      * 结论必须是「不在场」，不是抛。 */
     const lines: string[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((line: string) => {
-      lines.push(line);
-    });
-    try {
-      expect(
-        firstRunnableOrEmpty({
-          candidates: ["comfyapp-no-such-command-2316"],
-          probeArgs: () => ["--version"],
-          label: "假解释器",
-        }),
-      ).toBe("");
-    } finally {
-      spy.mockRestore();
-    }
+    expect(
+      firstRunnableOrEmpty({
+        candidates: ["comfyapp-no-such-command-2316"],
+        probeArgs: () => ["--version"],
+        label: "假解释器",
+        report: (line) => lines.push(line),
+      }),
+    ).toBe("");
     expect(lines.join("\n")).toContain("起不来");
+  });
+
+  it("不给 `report` 时一个字都不打（本模块在 `src/lib/**`，不许直接写 console）", () => {
+    /* 判据：这两行输出只在调用方给了出口时才出现 —— `src/lib/**` 是服务端可达的
+     * 库代码，直接 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`
+     * 判的就是这一条）。所以「不注入就静默」是**约定的一部分**，不是省略。 */
+    expect(
+      firstRunnableOrEmpty({
+        candidates: ["comfyapp-no-such-command-2316"],
+        probeArgs: () => ["--version"],
+        label: "假解释器",
+      }),
+    ).toBe("");
   });
 
   it("一个都没有 ⇒ 空串，且**每个候选的名字与原因**都打出来", () => {
@@ -260,26 +267,20 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
      * 在日志里长得一样 —— 区别就在这一行。所以这里连 stdout 一起断言：
      * 候选名、以及「起来了但退非零」这个具体形态，两件都要出现。 */
     const lines: string[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((line: string) => {
-      lines.push(line);
+    const got = firstRunnableOrEmpty({
+      candidates: ["powershell", "pwsh"],
+      probeArgs: () => [],
+      label: "PowerShell",
+      probe: (candidate) =>
+        candidate === "pwsh"
+          ? {
+              ok: false,
+              failure: { kind: "nonzero-exit", status: 2, signal: null },
+            }
+          : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
+      report: (line) => lines.push(line),
     });
-    try {
-      const got = firstRunnableOrEmpty({
-        candidates: ["powershell", "pwsh"],
-        probeArgs: () => [],
-        label: "PowerShell",
-        probe: (candidate) =>
-          candidate === "pwsh"
-            ? {
-                ok: false,
-                failure: { kind: "nonzero-exit", status: 2, signal: null },
-              }
-            : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
-      });
-      expect(got).toBe("");
-    } finally {
-      spy.mockRestore();
-    }
+    expect(got).toBe("");
     const text = lines.join("\n");
     expect(text).toContain("PowerShell");
     expect(text).toContain("powershell");

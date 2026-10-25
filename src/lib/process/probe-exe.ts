@@ -118,6 +118,14 @@ export interface FirstRunnableOptions {
   timeoutMs?: number;
   /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
   probe?: (candidate: string, args: string[]) => ProbeOutcome;
+  /**
+   * 探不到时那一行的出口（缺省不打）。
+   *
+   * 为什么是注入而不是就地 `console.log`：本模块在 `src/lib/**` 里，服务端可达的
+   * 库代码直接写 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`）；
+   * 而 `scripts/**` 与 `e2e/**` 那两个纯 Node 宿主要的就是 stdout 上那一行。
+   */
+  report?: (line: string) => void;
 }
 
 /**
@@ -138,8 +146,13 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
-  console.log(
-    `[probe] 本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
+  /* 走调用方给的出口，**不直接 `console.log`**：`src/lib/**` 是服务端可达的库代码，
+   * 直接写 console 会绕开 redact 脱敏与 ERROR 镜像（规范 07 §7.18.2.1，
+   * `tests/single-logger-channel.test.ts` 判这一条）。本模块的消费方是测试夹具，
+   * 它们要的是 stdout 上那一行，所以出口由调用方注入（缺省什么都不打 ——
+   * 「探不到」这件事仍然如实返回成空串，调用方按 `skipIf(!x)` 处理）。 */
+  options.report?.(
+    `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
       describeProbeMisses(got.missed, got.timeouts),
   );
   return "";
