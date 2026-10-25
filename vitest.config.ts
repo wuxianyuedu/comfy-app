@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
+import { resolveCiWorkers } from "./scripts/ci-load.mjs";
+
 /**
  * `DOM_TEST_GLOBS` —— 进 **DOM 档**（`happy-dom`）的用例面（§11.17）。
  *
@@ -152,17 +154,17 @@ export default defineConfig({
      * 一条 `expect.poll` 走到超时说明被等的事根本没发生 —— 去查它为什么没发生，
      * 别把这个数往上抬。 */
     expect: { poll: { timeout: 4000, interval: 50 } },
-    /* 并发上限：16 逻辑核（约 8 物理核）上默认开 ~15 个 worker，而门禁用例每条
-     * 要再起 Node / git / prettier 子进程 —— 超订的那一份直接从「等 CPU」变成
-     * 「等子进程」，于是要测 5s 的用例排到 30s 以上。取 8 的三档实测与推导过程
-     * **只记在规范 §11.13 那张表里**（数字抄到这儿就会和那份表漂移）。
-     * 这一档买到的是「红得少」，**买不到**「红即可归因」：套件涨到 559 份之后，
-     * 8 档还会出争用形态的红（一条 30s 超时的用例，`--no-file-parallelism` 隔离重跑全绿；
-     * 外加一条 `[vitest-pool]: Failed to start forks worker` 把退出码打成非零）。
-     * ⇒ 红仍然要先隔离重跑定性，别把这一档的失败直接当回归，也别靠继续抬预算掩盖。
-     * pre-commit 的 C 组另配 `--maxWorkers=4`（与 A/B/D 并行时要给它们让路），
-     * 那一档全量实测全绿，代价是墙钟 32m35s —— 所以兜底没翻成全量（理由见 §13.5.8）。 */
-    maxWorkers: 8,
+    /* 并发上限：**取自 `scripts/ci-load.mjs` 那一处**（ISSUE #2324，以前这里是字面 8）。
+     * 为什么不再写数字：同一句「一个 worker 至少 8 核」的判断曾在三个地方各留一份副本
+     * （这里 8、`run-affected-tests.mjs` 的 4、`ci-load.mjs` 的按核折算），结果就是
+     * 「单条链别占满整台机」那一档压住了平台两格，**本地这一跳照旧 8 个 worker**
+     * —— 而本地跑的正是 `pnpm check:all` / `pnpm test` / `quality-gate` 的 vitest 步。
+     * 数字的历史与实测推导（含 8 那一批的三档数据）**只记在规范 §11.13 那张表里**，
+     * 抄到这儿就会和那份表漂移。
+     * ⚠️ 这一档买到的是「红得少 + 峰值占用低」，**买不到**「红即可归因」：红仍然要先
+     * `--no-file-parallelism` 隔离重跑定性（§13.6.4），别靠抬预算掩盖。
+     * 本地要临时快跑：`COMFY_CI_MAX_WORKERS=8 pnpm test`（只调并发，不动任何判据）。 */
+    maxWorkers: resolveCiWorkers().workers,
     /* 环境档：**默认 node，按目录把 jsdom 挂到该用的地方**（§11.17）。
      *
      * 这里曾经是一条全局 `environment: "node"` + 183 份用例各自在文件头写
