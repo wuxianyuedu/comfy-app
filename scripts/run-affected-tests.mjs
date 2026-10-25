@@ -129,14 +129,15 @@ import {
   collectAttribute,
   collectList,
 } from "./affected-launch-changed-list.mjs";
-/* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威）。
- * import 而不是各抄一份文件名：抄两份的漂移形态是静默的 —— 改名那侧照常跑、
- * 这侧读不到，而「读不到」在这一格长得和「这次没有读数」一模一样。 */
+/* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威），而写这套布局的
+ * 三件事现在住在 `affected-launch-junit-io.mjs`：import 而不是各抄一份文件名 —— 抄两份的
+ * 漂移形态是静默的，改名那侧照常跑、这侧读不到，而「读不到」在这一格长得和「这次没有
+ * 读数」一模一样。 */
 import {
-  C_MANIFEST_NAME,
-  cFileXmlName,
-  failingSuiteTextsFromJunit,
-} from "./precommit-timing.mjs";
+  junitReportArgs,
+  readRetrySuiteFailures,
+  writeFilesManifest,
+} from "./affected-launch-junit-io.mjs";
 /* 复跑面（第 2 遍该跑哪几份）住在自己那份文件里 —— 与话术层同一刀，理由写在那份文件头：
  * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。
  * 判决粒度（第 2 遍那份红按文件分开）住在隔壁那份里（`affected-launch-retry-verdict.mjs`）——
@@ -152,6 +153,17 @@ import {
   RETRY_BUDGET_MS,
   waitForLoadToSettle,
 } from "./affected-launch-load-retry.mjs";
+/* 墙钟判点（还开不开下一遍）住在自己那份文件里：等待有预算而**跑**没有上界，负载膨胀时
+ * 重试本身就成了消耗，直到那一格被平台掐掉、连「未判定」都说不出（ISSUE #2364）。 */
+import {
+  affordablePerFileCount,
+  budgetAllows,
+  estimateSerialRerunMs,
+  perFileBudgetStopReport,
+  remainingWallClockMs,
+  wallClockBudget,
+  wallClockSkipReport,
+} from "./affected-launch-wallclock.mjs";
 /* 收尾那两份账与「毫秒→秒」的格式住在**话术层**：本文件是机制层（清单 / 分块 / 起进程 /
  * 判超时指纹 / 定不退不退），那三段只把已经定完的结论排成给人读的账。拆开的理由不是「长」
  * 而是 §12.6 R5 那句 —— 读不动的那一层的失效形态是「判据恒绿」，不是报错。 */
@@ -165,67 +177,8 @@ import { resolveCiWorkers } from "./ci-load.mjs";
 import os from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createRequire } from "node:module";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-
-/**
- * 组 C 的**分文件耗时**读数出口（vitest 的 junit reporter）。
- *
- * 为什么要有它：`precommit-timing` 记的是「五个组各自的墙钟 + D 组 51 步的分步账」，
- * 而**组 C（固定清单 90 份 + 受影响用例）在账本里只有一个数** —— 偏偏那一个数就是
- * 整次提交的几乎全部（本机 13 次：总中位 1110s，组 C 中位 1108s）。于是「90 份里谁最贵」
- * 这句要砍线的话，从来没有数据可答，只能靠印象 —— 那正是 §13.5.8.2.1 那条
- * 「代价一律取稳态读数」反对的形态。这一档**只补读数，不改任何判定**。
- *
- * 三个形状都是实测钉住的，不是风格：
- *  · **`--reporter=default` 必须显式保留** —— 只给 junit 会把人类可读的输出顶掉，
- *    而真红那一屏是唯一能读的东西（本档不替代它，只加一层）；
- *  · 明细**走文件不走 stdout** —— 钩子与平台的日志预算都不是给 90 行明细留的位
- *    （同一动机见 `vitest.config.ts` 里覆盖率 reporter 那格：102400 字节的硬上限）；
- *  · **每块、每遍各一个文件** —— 复跑是「更隔离条件下的另一组读数」，与首跑叠进同一个
- *    文件就变成「谁后写谁冒充整体」。读账侧按 `(块, 遍)` 升序合并，第二遍覆盖第一遍。
- *
- * @param {string | undefined} dir 落点目录（钩子里就是导出的 `$LOGD`：每次新建、随 trap
- *   删除、**不在检出内** —— 落进检出就会被 checkout 与结构门禁牵着）
- * @param {number} chunkId 第几块（从 0 起）
- * @param {number} attempt 第几遍（1 = 首跑，2 = `--no-file-parallelism` 隔离复跑）
- * @returns {string[]} 追加给 vitest 的参数；`dir` 为空时**回空数组**（= 今天的形状不变，
- *   人自己跑 `node scripts/run-affected-tests.mjs --full` 时没有 `$LOGD`，不该被塞读数）
- */
-export function junitReportArgs(dir, chunkId, attempt) {
-  if (!dir) return [];
-  return [
-    "--reporter=default",
-    "--reporter=junit",
-    `--outputFile.junit=${cFileXmlName(dir, chunkId, attempt)}`,
-  ];
-}
-
-/**
- * 把这次真正要跑的清单落一份到账本目录里 —— 读账侧拿它做**对账**。
- *
- * 没有它，「junit 里只有 88 份」与「这次清单就是 88 份」在账本里**逐字同形**，
- * 而前者意味着有两份用例根本没跑出读数（加载即炸 / 被跳过 / reporter 没记上）。
- * 「少跑几条没有任何判据会看见」是本仓立案的那一族（§13.5.8.2、§13.5.12），
- * 所以读数必须自带分母。写不进去只少一条对账，不拦提交（与记账同口径）。
- *
- * @param {string} dir
- * @param {string[]} files
- * @returns {boolean} 是否落盘成功
- */
-export function writeFilesManifest(dir, files) {
-  if (!dir) return false;
-  try {
-    writeFileSync(
-      path.join(dir, C_MANIFEST_NAME),
-      `${files.join("\n")}\n`,
-      "utf8",
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 一次 spawn 的命令行长预算（字符）。
@@ -251,30 +204,6 @@ export const SAFE_ARGV_BUDGET = 24_000;
  * 入账（不是松紧量：调它只改变「要不要多花那几十秒」，不改变任何一条断言的判定）。
  */
 const PER_FILE_RERUN_MAX = 8;
-
-/**
- * 读第 2 遍那份 junit 的**失败 suite 及各自文本**（判决按文件分开的依据）。
- *
- * 读不到就回空数组 —— 空数组在 `classifyRetry` 里会得到「每份都认不出自己」，
- * 那一档的行为是补跑或退 2，**不是**放行。方向刻意只往「多测、少放行」偏：
- * 把「读不到」读成「没有超时指纹」会把真红放大，读成「全是超时」会把真红吞掉，
- * 而吞掉那一型正是 ISSUE #2225 的现场。
- *
- * @param {{junitDir?: string, chunkId: number, read?: (file: string, enc: string) => string}} input
- * @returns {{name: string, body: string}[]}
- */
-export function readRetrySuiteFailures(input) {
-  const dir = input.junitDir ?? "";
-  if (!dir) return [];
-  const read = input.read ?? readFileSync;
-  let xml = "";
-  try {
-    xml = read(cFileXmlName(dir, input.chunkId, 2), "utf8");
-  } catch {
-    return [];
-  }
-  return failingSuiteTextsFromJunit(xml);
-}
 
 /**
  * 从环境变量取一个**显式的**并发覆盖（`COMFY_PRECOMMIT_MAX_WORKERS`）。
@@ -612,6 +541,8 @@ async function main(argv) {
    * （实测 8 块 ⇒ 约 31 分钟，ISSUE #1747 的现场）。用一个可在多块之间共享的
    * `deadline` 表示 —— 第一块等掉的时间，后面的块不会重新拿到一份。 */
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
+  /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
+  const stageBudget = wallClockBudget();
   /** 这一档「没拿到可信读数」的文件（未校验 ≠ 绿，结束时要点名）。 */
   const unverified = [];
   /** 每一块一条判决记录，收尾那份账（`rerunReport`）读它。 */
@@ -640,6 +571,7 @@ async function main(argv) {
       junitDir,
       chunkId: index,
       waitBudget,
+      stageBudget,
       onUnverified: (files) => unverified.push(...files),
       onAttempt: (record) => attempts.push(record),
     });
@@ -673,7 +605,7 @@ async function main(argv) {
  *
  * @param {string[]} chunk 本块的用例路径
  * @param {{entry: string, workers?: number, junitDir?: string, chunkId?: number,
- *          spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
+ *          spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, stageBudget?: {deadline: number, budgetMs: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
  *   `workers` **默认取自唯一出处** `ci-load.mjs`（`resolveCiWorkers().workers`）——
  *   这一层**只读它当首跑的并发**，复跑一律 `--no-file-parallelism`（降负载那一半）。
  *   以前这里默认一条本地常数 `DEFAULT_MAX_WORKERS = 4`，与 `vitest.config.ts` 的 8
@@ -681,6 +613,7 @@ async function main(argv) {
  *   `junitDir` + `chunkId` 是分文件耗时的落点（钩子里传 `$LOGD`；不给就一个字都不加，
  *   见 `junitReportArgs` 那三个被实测钉住的形状）。
  *   `waitBudget` 是多块之间**共享**的等待截止时刻（默认单块自己一份，供调用点收成一份）。
+ *   `stageBudget` 是同形状的**墙钟**截止时刻，只管「还开不开下一遍 / 下一份」（ISSUE #2364）。
  *   `onAttempt` 每块一条判决记录，只喂收尾那份账（`rerunReport`），**不参与退出码**。
  * @returns {Promise<number>}
  */
@@ -694,12 +627,15 @@ export async function runChunk(chunk, deps) {
     junitDir,
     chunkId = 0,
   } = deps;
+  const firstPassStartedAt = Date.now();
   const res = spawn(entry, [
     "run",
     ...junitReportArgs(junitDir, chunkId, 1),
     `--maxWorkers=${workers}`,
     ...chunk,
   ]);
+  // 界要落在哪一侧只能由刚跑完的这一遍说话（常数界在机器空时过严、机器满时过松）。
+  const firstPassMs = Date.now() - firstPassStartedAt;
   if (res.status === 0) {
     report({ outcome: "first-green" });
     return 0;
@@ -724,6 +660,22 @@ export async function runChunk(chunk, deps) {
     "[affected-launch] 本块的红是**超时形态** —— 按规范 §13.6.4 先当负载读数看，\n" +
       "  等机器喘口气，再用 `--no-file-parallelism` 隔离复跑（降负载，不抬任何预算）…\n",
   );
+  /* 复跑面由 `retryScope` 给（只跑第 1 遍里失败的那几份）：这一格**只改跑多少份**，
+   * 旗标 / 预算 / 结论档位一律照旧，而三条退回形态都是「宁可多跑」那一边。算在等待
+   * **之前**：墙钟判点要点名的正是「没拿到第二次测量的那几份」（#2225 那条口径）。 */
+  const scope = retryScope({ chunk, junitDir, chunkId, read: deps.readJunit });
+  /* 界只划在「要不要再开一遍」—— 已开跑的那一遍永远让它跑完（中途 kill 会连一份可能
+   * 已经出来的读数一起丢掉）。不够就是**未判定**退 2：连第二次测量都没发生，不许听得
+   * 像「确认过了」—— 那才是未校验（退 0）。ISSUE #2364。 */
+  const gate = budgetAllows({
+    budget: deps.stageBudget,
+    estimateMs: estimateSerialRerunMs(firstPassMs),
+  });
+  if (!gate.ok) {
+    process.stderr.write(wallClockSkipReport({ ...gate, files: scope.files }));
+    report({ outcome: "budget-skipped" });
+    return 2;
+  }
   /* 等待**只是优化**：让机器喘口气能提高第二遍出可信读数的概率，但它的结论
    * **不再决定退出码**（ISSUE #1747 —— 逐块等 5 分钟且最后仍拦下提交，是病）。
    * 预算由调用点给（多块共享一份 deadline）；不给就单块自己一份。 */
@@ -731,9 +683,6 @@ export async function runChunk(chunk, deps) {
     deps.settle ??
     (() => waitForLoadToSettle({ budgetMs: remainingWaitMs(deps.waitBudget) }));
   const settled = await settle();
-  /* 复跑面由 `retryScope` 给（只跑第 1 遍里失败的那几份）：这一格**只改跑多少份**，
-   * 旗标 / 预算 / 结论档位一律照旧，而三条退回形态都是「宁可多跑」那一边。 */
-  const scope = retryScope({ chunk, junitDir, chunkId, read: deps.readJunit });
   /* 「等了多久」要说出口，而不是只说「在等」：它是**唯一**能区分
    * 「机器空了，所以第二遍与第一遍不同条件」与「一点没等，第二遍和第一遍同条件」的读数
    * —— 后者的复跑只证伪了「真断言红」，并没有排除负载。放在这里（而不只在收尾账里）
@@ -794,8 +743,29 @@ export async function runChunk(chunk, deps) {
     );
     /** @type {{file: string, status: number | null, output: string}[]} */
     const perFile = [];
+    // 单价 = 上一份补跑的真实墙钟；买不起就停，剩下的退回下面既有那条「退 2 并点名」
+    // 出口 —— 不新造一档结论，也不把没跑的那份算进「已确认只是超时」（ISSUE #2364）。
+    let perFileMs = 0;
     for (const file of verdict.unknown) {
+      const pending = verdict.unknown.length - perFile.length;
+      const affordable = affordablePerFileCount({
+        budget: deps.stageBudget,
+        perFileMs,
+        pending,
+      });
+      if (affordable <= 0) {
+        process.stderr.write(
+          perFileBudgetStopReport({
+            remainingMs: remainingWallClockMs(deps.stageBudget) ?? 0,
+            perFileMs,
+            left: pending,
+          }),
+        );
+        break;
+      }
+      const oneStartedAt = Date.now();
       const one = spawn(entry, ["run", "--no-file-parallelism", file]);
+      perFileMs = Date.now() - oneStartedAt;
       perFile.push({ file, status: one.status, output: one.output });
     }
     verdict = mergePerFileReads(verdict, perFile);
