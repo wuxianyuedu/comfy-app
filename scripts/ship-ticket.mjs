@@ -13,10 +13,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { readEnvFileValue } from "./app-port.mjs";
+import {
+  DEV_HANDLE_ENV_KEY,
+  explicitDevHandle,
+  resolveDevHandle,
+} from "./dev-handle.mjs";
 
-/** 提单人这一格读的键名（`.env` 与进程环境同一名）。 */
-export const DEV_HANDLE_ENV_KEY = "COMFYAPP_DEV_HANDLE";
+/** 提单人这一格读的键名（`.env` 与进程环境同一名）—— 定义在 `dev-handle.mjs`，
+ * 这里再导出一次只为了让既有调用点（`ship-platform.mjs` 等）的 import 路径不变。 */
+export { DEV_HANDLE_ENV_KEY };
 
 /** 平台原生的优先级取值（`cnb issues create-issue --priority` 的词表，逐字抄自它的 `--help`）。 */
 export const ISSUE_PRIORITIES = "P0|P1|P2|P3";
@@ -107,31 +112,46 @@ export function ticketReading({ root, fragments = [] }) {
 }
 
 /**
- * 读「这份检出是谁」：先看进程环境（人临时 `COMFYAPP_DEV_HANDLE=… pnpm ship`），再回落到
- * 本检出的 `.env` —— 顺序与 `COMFYAPP_PORT` 那条一致，两份实现共用 `readEnvFileValue` 那一份
- * 最小解析器（§12.18：不在调用点重抄）。
+ * 读「这份检出是谁」—— 取值链在 `dev-handle.mjs`（**唯一实现**，ISSUE #2355）。
  *
- * 读不到就回 `null`，**不拿 git 的 `user.name` 顶上**：issue 不走 git author（见
- * `issueAuthoring` 那段实测），把提交身份当成提单身份是一个看着像事实的假读数。
+ * 为什么不再是「读不到就 `null`」：没配 `COMFYAPP_DEV_HANDLE` 时，那一格过去是空的
+ * ⇒ 单子不带 `提单人:` 标签、正文署名写「未配」、领取直接被拦下（`ship-claim.mjs`），
+ * 而**照提示跑完 `pnpm env:init` 仍然没有名字**（它当时按 `.env.example` 的空值原样补回）。
+ * 现在这条链一直走到一个确定的短名：人填的（进程环境 / `.env`）→ 平台给的运行身份
+ * （`CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME`）→ `git config user.name` → 兜底 `cnb`。
+ *
+ * 仍然**不拿平台的账号昵称**当机器留痕：那一路由机器自起的账自己负责
+ * （`ci-daily-failure-issue.mjs` 传 `ci-daily`），把人的昵称写成「这张单是机器提的」是假读数。
+ *
+ * @param {{root: string, env?: Record<string, string | undefined>}} input
+ * @returns {string} 永不为空
+ */
+export function readDevHandle({ root, env = {} }) {
+  return resolveDevHandle({ root, env }).name;
+}
+
+/**
+ * **人填过没有**（只看 `COMFYAPP_DEV_HANDLE`，不走取值链）—— 见 `dev-handle.mjs` 的
+ * `explicitDevHandle`：它判的是「你指认过没有」，与「名字是什么」是两个问题。
  *
  * @param {{root: string, env?: Record<string, string | undefined>}} input
  * @returns {string | null}
  */
-export function readDevHandle({ root, env = {} }) {
-  const fromEnv = env[DEV_HANDLE_ENV_KEY];
-  if (typeof fromEnv === "string" && fromEnv.trim() !== "") {
-    return fromEnv.trim();
-  }
-  try {
-    const value = readEnvFileValue(
-      fs.readFileSync(path.join(root, ".env"), "utf8"),
-      DEV_HANDLE_ENV_KEY,
-    );
-    return value && value.trim() !== "" ? value.trim() : null;
-  } catch {
-    // 没有 `.env`（CI / 干净检出）是常态 ⇒ 这不是「读不出来」，就是「没配」。
-    return null;
-  }
+export function handleFromProcessEnv({ root, env = {} }) {
+  return explicitDevHandle({ root, env });
+}
+
+/**
+ * 同一格，但把「这个名字是怎么来的」也带出来（`explicit` = 人填的）。
+ *
+ * `--whoami` 与单子身份那一行要念它：`CodeBuddy`（取自 `CNB_NPC_NAME`）与
+ * `yuedu-win`（你填的）对读者是两件事 —— 前者换台机器会变，后者不会。
+ *
+ * @param {{root: string, env?: Record<string, string | undefined>}} input
+ * @returns {{name: string, source: string, explicit: boolean}}
+ */
+export function readDevHandleWithSource({ root, env = {} }) {
+  return resolveDevHandle({ root, env });
 }
 
 /**
@@ -328,7 +348,9 @@ export function issueAuthoring({
   root = "",
   showExits = false,
 } = {}) {
-  const required = platform === "win32";
+  /* `handle` 为空时**不再**有「未配」这一档：取值链（`dev-handle.mjs`）保证给得出一个名字，
+   * 而这里保留空值分支只为一件事 —— 调用方显式传 `""`（比如机器账要自己起名）时如实报空，
+   * 不替它编一个。名字是怎么来的由 `readDevHandleWithSource()` 给，主流程那一路会念。 */
   const name = String(handle ?? "").trim();
   const label = authorLabel(name);
   const lines = [
@@ -339,12 +361,12 @@ export function issueAuthoring({
   if (!name) {
     const where = path.join(root || ".", ".env");
     lines.push(
-      required
-        ? "[ship] 没配提单留痕 ⇒ 出口里那一格留空。Windows 开发者按规范在**这一份检出**的 " +
-            `\`${where}\` 里填一行 \`${DEV_HANDLE_ENV_KEY}="<短名>"\`` +
-            "（整行都不在时先跑 `pnpm env:init` —— 它只补缺失的键、不覆盖你已有的配置，#2186）。" +
-            "它是提单留痕：不进 `src/env.js`、运行期不读、不随包"
-        : `[ship] 没配提单留痕，而本轮只对 Windows 开发者要求这一格 ⇒ 不点名（当前宿主：${platform || "未告知"}；要配就填在 ${where}）`,
+      "[ship] 提单留痕是空的 ⇒ 这一格会留空。名字本来有取值链（`dev-handle.mjs`：人填的 → " +
+        "`CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → `git config user.name` → `cnb`），走到这里说明" +
+        `调用方显式给了空值；要人填就写**这一份检出**的 \`${where}\` 里那一行 ` +
+        `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（整行不在时先跑 \`pnpm env:init\`，` +
+        "它会把一个确定的名字落进去，而不是留个空值）。" +
+        (platform === "win32" ? "Windows 开发者按规范要求配这一格。" : `当前宿主：${platform || "未告知"}。`),
     );
   }
   if (showExits) {
@@ -358,7 +380,7 @@ export function issueAuthoring({
         `\`cnb issues post-issue-labels --repo <组织>/<仓库> --number <号> --labels ${label ?? "提单人:<名称>"}\``,
     );
   }
-  return { handle: name || null, required, lines };
+  return { handle: name || null, required: platform === "win32", lines };
 }
 
 /** 清单条目的四种形态（各数各的，不合成一个「还剩几条」）。 */
@@ -411,21 +433,37 @@ export function issueItemShapes(body) {
  * 所以漏口只能靠「一条能粘贴的出口 + 文档口径」：这里给的就是那条出口，**一次也不碰平台**，
  * 也不改退码（它是读数，和阶段 0 那两行同口径）。
  *
- * @param {{handle?: string | null, root?: string, slug?: string | null}} input
+ * 名字是怎么来的也要念（ISSUE #2355）：人填的（进程环境 / `.env`）与**取的**
+ * （`CNB_NPC_NAME` / `git config user.name` / 兜底 `cnb`）对读者是两件事 ——
+ * 前者换台机器不变，后者会。不念这一句的后果是「我这台机器上明明写的是 A，
+ * 平台上的标签却是 B」变成一条查不下去的读数。
+ *
+ * @param {{handle?: string | null, source?: string | null, root?: string, slug?: string | null}} input
+ *   `source` 取自 `readDevHandleWithSource().source`（`.env` / `CNB_NPC_NAME` / …）。
  * @returns {string[]} 要打印的几行
  */
-export function whoamiLines({ handle = null, root = "", slug = null } = {}) {
+export function whoamiLines({
+  handle = null,
+  source = null,
+  root = "",
+  slug = null,
+} = {}) {
   const name = String(handle ?? "").trim();
   const label = handlerLabel(name);
   const author = authorLabel(name);
   const participant = participantLabel(name);
   const repo = slug || "<组织>/<仓库>";
+  const from = String(source ?? "").trim();
   const lines = [
     `[ship] 本检出的平台留痕：${name || "未配"}` +
       (name
         ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）`
         : "") +
-      `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`,
+      (from === "进程环境" || from === ".env"
+        ? `（你填的：${from === ".env" ? "这一份检出的 `.env`" : "进程环境"}）`
+        : from
+          ? `（**取的**：${from} ⇒ 换台机器 / 换会话会变；要固定就在 \`${path.join(root || ".", ".env")}\` 填一行）`
+          : `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`),
   ];
   if (!name) {
     lines.push(
