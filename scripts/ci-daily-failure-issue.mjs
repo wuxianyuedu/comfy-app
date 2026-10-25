@@ -20,7 +20,8 @@
  *
  * ## 判决链一个字都不另立（§12.18 / §12.12）
  *
- * 取数 = `fetchRecentBuilds()` / `isDailyDispatch()` / `fetchDailyDetails()`；
+ * 取数 = `fetchBuildsCoveringWindow()`（按**时间窗**翻页，不是按条数 —— ISSUE #2392）
+ * / `isDailyDispatch()` / `fetchDailyDetails()`；
  * 定性 = `classifyBuildOutcome()`；被带下去的格 = `downstreamSkipped()`；
  * 失败行摘录 = `describeFailedStages()`；仓库 slug = `resolveRepoSlug()`；
  * 写单 = `runNewIssue()`（建 → 补 `提单人:` → **独立回读**，那份实现只有一处）；
@@ -75,8 +76,9 @@ import {
 } from "./ci-build-readout.mjs";
 import { machineHandle } from "./dev-handle.mjs";
 import {
+  DEFAULT_WINDOW_HOURS,
+  fetchBuildsCoveringWindow,
   fetchDailyDetails,
-  fetchRecentBuilds,
   isDailyDispatch,
 } from "./check-daily-attendance.mjs";
 import { runAppendIssueComment, runNewIssue } from "./ship-issue-new.mjs";
@@ -359,11 +361,28 @@ export function main(io = {}) {
         "**强制只读**（离线那份详情与「开着的单」都不是当场取的，据它写平台就是把过期读数写成事实）",
     );
   } else {
-    list = fetchRecentBuilds(run, slug, 60);
-    if (!list) {
+    /* 取数按**时间窗**翻，不按条数翻（ISSUE #2392）：60 条在忙的一天只回到约 7.5 小时，
+     * 于是列表里唯一的每日类派发就是**正在跑的这一跑**，被排除后得到「有 1 条、无一终态」——
+     * 而这一格带着 `--no-block`，平台读数是一格 success，「每日失败自动立案」在最需要它的
+     * 那一晚上一个字都没写。盖不住窗口就不构成结论，一次都不写。 */
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug,
+      windowHours: DEFAULT_WINDOW_HOURS,
+    });
+    if (win.list === null) {
       log("[daily-failure-issue] 取不到构建列表 ⇒ 没有结论，一次都不写。");
       return finish(CODE.NO_FACT, "取不到构建列表");
     }
+    if (!win.covered) {
+      log(
+        `[daily-failure-issue] 取数没盖住 ${DEFAULT_WINDOW_HOURS}h 窗口（${win.note}）⇒ ` +
+          "「窗口内没有可立的案」这句话没有依据，一次都不写。",
+      );
+      return finish(CODE.NO_FACT, `取数没盖住窗口：${win.note}`);
+    }
+    list = win.list;
+    log(`[daily-failure-issue] 取数覆盖自证：${win.note}`);
     details = fetchDailyDetails(run, slug, list);
   }
 

@@ -56,6 +56,18 @@ import {
 /** 一天一次 + 半天余量：补派与延迟落地（实测有 04:00 事件 08:42 才落的那次）都吃得下。 */
 export const DEFAULT_WINDOW_HOURS = 36;
 
+/**
+ * 翻页的单位（一页几条）。**它不是窗口** —— 窗口只有上面那一把尺子；这条只决定
+ * 「一次问平台要多少行」。忙的一天里 60 条只回到约 7.5 小时，所以它单独盖不住 36h。
+ */
+export const FETCH_PAGE_SIZE = 60;
+
+/**
+ * 往回最多翻几页 —— **上界不是「够了」的结论**：撞到它就拿 `covered=false` 收，
+ * 由调用方念「没取满窗口 ⇒ 不判」。（按实测密度 36h 约 4 页，留一倍余量。）
+ */
+export const FETCH_MAX_PAGES = 8;
+
 /** 0 出勤 / 1 缺勤（真失败或压根没有派发）/ 2 没有结论、没跑到，或取不到读数。 */
 export const CODE = { PRESENT: 0, ABSENT: 1, NO_VERDICT: 2 };
 
@@ -258,28 +270,114 @@ function asBuildArray(json) {
 }
 
 /**
- * 取最近的构建列表（**不按事件过滤** —— 每日类有三个事件名、其中那个 crontab 还带小时，
+ * 取**一页**构建列表（**不按事件过滤** —— 每日类有三个事件名、其中那个 crontab 还带小时，
  * 过滤条件本身就是一条会漂的清单；拿回整份再按前缀认，见 `isDailyDispatch`）。
  *
  * `ci-build-readout.mjs` 的 `fetchBuildList()` 是按单一事件查的，所以这里只能自己发一次
  * 同形状的命令 —— 复用的是它那条 `cnbJson` 通道，不是重拼 `cnb` 的起法。
  *
+ * 平台按 `createTime` **新→旧**返回（实测第 1 页最早 08:59Z、第 2 页 03:06Z 起，中间无空洞），
+ * 所以「翻到某页的最早一条已经早于地平线」就是覆盖判定的依据 —— 不必拿顺序去赌。
+ *
  * @param {(cmd:string,args:string[])=>any} run 执行者
  * @param {string} slug 仓库路径
- * @param {number} pageSize 取几跑
- * @returns {any[] | null} 列表；取不到时 null（由调用方念「未校验」）
+ * @param {number} page 第几页（从 1 起）
+ * @param {number} pageSize 一页几条
+ * @returns {any[] | null} 这一页；取不到时 null（由调用方念「未校验」）
  */
-export function fetchRecentBuilds(run, slug, pageSize = 60) {
+function fetchBuildPage(run, slug, page, pageSize = FETCH_PAGE_SIZE) {
   const res = cnbJson(run, [
     "build",
     "get-build-logs",
     "--repo",
     slug,
+    "--page",
+    String(page),
     "--page-size",
     String(pageSize),
     "-v",
   ]);
   return asBuildArray(res?.json);
+}
+
+/**
+ * 一页里最早那条的时刻（列表新→旧 ⇒ 取最后一项）。认不出来回 null。
+ *
+ * @param {any[]} builds 一页或整份列表
+ * @returns {number | null} 毫秒时刻
+ */
+function oldestCreateTime(builds) {
+  const rows = Array.isArray(builds) ? builds : [];
+  const last = rows[rows.length - 1];
+  const parsed = Date.parse(String(last?.createTime ?? ""));
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * 按**时间地平线**取数：翻页往回取，直到最早一条早于 `now - windowHours`、或翻到列表末尾、
+ * 或撞到页数上界。
+ *
+ * 为什么不是「取最近 N 条就够」（ISSUE #2392）：**N 条折算多久由当天多忙决定，不由判据决定**。
+ * 实测会话密集的一天里 60 条只回到 7.5 小时，而这里声明的窗口是 36 小时 —— 于是
+ * 「窗口内没有每日派发」这句话有一半概率其实是「我没取到」。判据把前者念出来，账上就落成
+ * **假缺勤**（出勤那侧退 1）或**假「无事可立」**（立案那侧被 `--no-block` 按成 0，平台读数是
+ * 一格 success）。盖不住就明说盖不住，这一格按未校验收 —— 「取不到」既不是「没有」也不是「绿」。
+ *
+ * @param {{run:(cmd:string,args:string[])=>any, slug:string, windowHours:number,
+ *   now?:number, pageSize?:number, maxPages?:number}} input 窗口与执行者
+ * @returns {{list:any[]|null, covered:boolean, pages:number, oldestMs:number|null, note:string}}
+ *   `list=null` 是第一页就没取到；`covered=false` 是**没资格判「窗口内没有」**
+ */
+export function fetchBuildsCoveringWindow({
+  run,
+  slug,
+  windowHours,
+  now = Date.now(),
+  pageSize = FETCH_PAGE_SIZE,
+  maxPages = FETCH_MAX_PAGES,
+}) {
+  const horizonMs = now - windowHours * 3_600_000;
+  /** @type {any[]} */
+  const list = [];
+  let pages = 0;
+  /** @type {number | null} */
+  let oldestMs = null;
+  let exhausted = false;
+  /** @type {string | null} 中途断掉的原因（没断就是 null） */
+  let broke = null;
+  while (pages < maxPages) {
+    const batch = fetchBuildPage(run, slug, pages + 1, pageSize);
+    if (batch === null) {
+      broke = `第 ${pages + 1} 页取不到（已翻 ${pages} 页）`;
+      break;
+    }
+    pages += 1;
+    list.push(...batch);
+    oldestMs = oldestCreateTime(batch) ?? oldestMs;
+    /* 不满一页 = 平台后面没有更多历史了：这时窗口**天然被盖住**（再往回是空，不是没取到）。 */
+    if (batch.length < pageSize) {
+      exhausted = true;
+      break;
+    }
+    if (oldestMs !== null && oldestMs <= horizonMs) break;
+  }
+  const covered =
+    broke === null &&
+    (exhausted || (oldestMs !== null && oldestMs <= horizonMs));
+  const span = `${pages} 页 / ${list.length} 条 · 最早 ${
+    oldestMs === null ? "(认不出时刻)" : new Date(oldestMs).toISOString()
+  }`;
+  return {
+    list: pages === 0 && broke !== null ? null : list,
+    covered,
+    pages,
+    oldestMs,
+    note:
+      broke ??
+      (covered
+        ? `取满窗口（${windowHours}h）：${span}${exhausted ? " · 已到列表末尾" : ""}`
+        : `没取满 ${windowHours}h 窗口，撞在页数上界：${span}`),
+  };
 }
 
 /**
@@ -436,9 +534,22 @@ export function main(rawArgv, env = {}) {
   const now = env.now ?? (Number.isNaN(nowParsed) ? Date.now() : nowParsed);
   /** @type {{list:any[],details:any[],failure:string|null}} */
   let source;
+  /**
+   * 覆盖自证（念出「翻了几个窗口、最早一条是什么时候」）：让「窗口内没有派发」这句话
+   * **带着依据出场**，而不是一句孤零零的缺勤（ISSUE #2392）。
+   *
+   * @type {{label:string, text:string} | null}
+   */
+  let coverage = null;
   const from = flagValue(argv, "--from");
   if (from) {
     source = readOffline(from);
+    coverage = {
+      label: "离线档不证明覆盖",
+      text:
+        "这份列表是谁取的谁负责 —— 它盖到多久以前不在判据的量程里，" +
+        "所以「窗口内没有派发」在这一档只能当**候选结论**（要自证就别带 --from）",
+    };
     /* 离线档**必须**钉住「现在」：不钉就用真实时间去判一个绝对时刻，等于让判据自己
      * 摸真实时间（§13.5.13 那条：什么时候去问平台、什么时候算现在，都是调用者的事）。
      * 缺了 ⇒ 落成「未校验」并说清，不猜。 */
@@ -459,19 +570,35 @@ export function main(rawArgv, env = {}) {
     const repoFlag = flagValue(argv, "--repo");
     const slug =
       env.slug ?? (repoFlag === "" ? "moon-read/comfy-app-t3" : repoFlag);
-    const list = fetchRecentBuilds(run, slug);
-    source = list
-      ? {
-          list,
-          details: fetchDailyDetails(run, slug, list),
-          failure: null,
-        }
-      : {
-          list: [],
-          details: [],
-          failure:
-            "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
-        };
+    const win = fetchBuildsCoveringWindow({
+      run,
+      slug,
+      windowHours,
+      now,
+    });
+    if (win.list === null) {
+      source = {
+        list: [],
+        details: [],
+        failure:
+          "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
+      };
+    } else if (!win.covered) {
+      /* 这一格是整个判据最坏的形状在这里：窗口没盖住就往下单念「缺勤」，是把「我没取到」
+       * 写成「它没跑」（ISSUE #2392）。所以这里**不进判决**，落成未校验（退 2 不算绿）。 */
+      source = {
+        list: [],
+        details: [],
+        failure: `取数没盖住窗口 —— ${win.note}；「窗口内没有派发」这句话在这上面不成立`,
+      };
+    } else {
+      source = {
+        list: win.list,
+        details: fetchDailyDetails(run, slug, win.list),
+        failure: null,
+      };
+      coverage = { label: "取数覆盖自证", text: win.note };
+    }
   }
   const out = source.failure
     ? {
@@ -488,9 +615,14 @@ export function main(rawArgv, env = {}) {
         now,
         windowHours,
       });
-  if (asJson) console.log(JSON.stringify(out, null, 2));
+  /** JSON 里多带一句覆盖自证（只有拿得出来的时候才多这个键，形状不凭空长）。 */
+  const payload = coverage ? { ...out, coverage } : out;
+  if (asJson) console.log(JSON.stringify(payload, null, 2));
   else {
     console.log(`[daily-attendance] ${out.headline}`);
+    /* 「窗口内没有派发」这句话必须有依据才能念，而依据是**取数盖到了多久以前**。
+     * 成功路径上把它一起打出来：不印就等于让读者只看见结论（§11.23 那一族）。 */
+    if (coverage) console.log(`[daily-attendance] ${coverage.label}：${coverage.text}`);
     for (const line of out.evidence) console.log(line);
   }
   return out.code;
