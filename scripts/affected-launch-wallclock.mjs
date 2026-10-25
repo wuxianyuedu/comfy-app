@@ -169,6 +169,37 @@ export function perFileBudgetStopReport({ remainingMs, perFileMs, left }) {
 }
 
 /**
+ * 把 `COMFY_AFFECTED_WALL_CLOCK_MS` 的原值收成一份预算（ISSUE #2364）。
+ *
+ * 为什么要有这个口子：界本身是一个**资源**数，不是判据 —— 共享机上「25 分钟够不够」
+ * 由当天有几条流水线决定，而调它**不改变任何一条断言的判定**（与
+ * `COMFY_PRECOMMIT_MAX_WORKERS` 同一条口径：只调资源，不碰判定；也正因如此，它不许被
+ * 当成「让慢用例过关的旋钮」，那条界限见 §11.13 对 `expect.poll` 的说法）。
+ * 第二个用处是**取证**：没有它，「界落下并说出未判定」这一档只能靠注入假时钟的用例
+ * 证明，永远拿不到一次生产入口自己的读数。
+ *
+ * 非法值（非整数 / <1 / 空）一律**落默认值并提醒**，不静默退化成 0 ——
+ * 0 会让界在第一次判决前就已用完，那一档看起来像「这次机器很慢」，实际是配置写错了。
+ *
+ * @param {string | undefined} raw 环境变量的原值
+ * @returns {{budgetMs: number, note: string | null}}
+ */
+export function resolveWallClockMs(raw) {
+  const text = String(raw ?? "").trim();
+  if (text === "") return { budgetMs: STAGE_WALL_CLOCK_MS, note: null };
+  const value = Number(text);
+  if (!Number.isInteger(value) || value < 1) {
+    return {
+      budgetMs: STAGE_WALL_CLOCK_MS,
+      note:
+        `COMFY_AFFECTED_WALL_CLOCK_MS 不是正整数毫秒（收到 ${JSON.stringify(raw)}）` +
+        ` ⇒ 按默认 ${STAGE_WALL_CLOCK_MS}ms 办 —— 这一格只调资源，不改变任何判定。`,
+    };
+  }
+  return { budgetMs: value, note: null };
+}
+
+/**
  * 「第 2 遍因为预算没开」这句话（与 `runChunk` 里其它**判决当场**的话术同层，
  * 不是 `affected-launch-rerun-report.mjs` 那份收尾账）。
  *

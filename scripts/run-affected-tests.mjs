@@ -161,6 +161,7 @@ import {
   estimateSerialRerunMs,
   perFileBudgetStopReport,
   remainingWallClockMs,
+  resolveWallClockMs,
   wallClockBudget,
   wallClockSkipReport,
 } from "./affected-launch-wallclock.mjs";
@@ -542,7 +543,9 @@ async function main(argv) {
    * `deadline` 表示 —— 第一块等掉的时间，后面的块不会重新拿到一份。 */
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
   /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
-  const stageBudget = wallClockBudget();
+  const wallClock = resolveWallClockMs(process.env.COMFY_AFFECTED_WALL_CLOCK_MS);
+  if (wallClock.note) process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
+  const stageBudget = wallClockBudget({ budgetMs: wallClock.budgetMs });
   /** 这一档「没拿到可信读数」的文件（未校验 ≠ 绿，结束时要点名）。 */
   const unverified = [];
   /** 每一块一条判决记录，收尾那份账（`rerunReport`）读它。 */
