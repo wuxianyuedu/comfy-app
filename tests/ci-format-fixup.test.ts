@@ -119,14 +119,24 @@ describe("prettier 自动修复回写（红 ⇒ bot 推 format-only 提交）", 
   });
 
   it("本地形态（无平台身份）⇒ 只修工作区，不提交不推送", () => {
-    const { r, calls } = harness({
-      judgeCode: 1,
-      unformatted: ["src/a.ts"],
-      platformUser: null,
-    });
-    expect(r.exitCode).toBe(0);
-    expect(r.action).toBe("local-fixed");
-    expect(calls.git.filter((args) => args[0] === "commit")).toHaveLength(0);
+    /* platformUser 注入 null 之外还要清环境：脚本缺省读 CNB_BUILD_USER* ——
+     * 平台 CI 进程里这些变量在，缺省会把它读出来，这一用例测的分支就翻转了。 */
+    const saved = { ...process.env };
+    delete process.env.CNB_BUILD_USER_NICKNAME;
+    delete process.env.CNB_COMMITTER;
+    delete process.env.CNB_BUILD_USER;
+    try {
+      const { r, calls } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts"],
+        platformUser: null,
+      });
+      expect(r.exitCode).toBe(0);
+      expect(r.action).toBe("local-fixed");
+      expect(calls.git.filter((args) => args[0] === "commit")).toHaveLength(0);
+    } finally {
+      Object.assign(process.env, saved);
+    }
   });
 
   it("永不回写 master（硬规则 6）", () => {
