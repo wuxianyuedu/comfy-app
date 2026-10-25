@@ -58,6 +58,7 @@ import {
   estimateSerialRerunMs,
   perFileBudgetStopReport,
   PLATFORM_STAGE_KILL_MS,
+  resolveWallClockMs,
   SERIAL_RERUN_FACTOR,
   STAGE_WALL_CLOCK_MS,
   wallClockBudget,
@@ -1719,6 +1720,22 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
     });
     expect(perFile).toContain("一次都没被测量过");
     expect(perFile).toContain("剩下 2 份");
+  });
+
+  it("界可以按现场调（只调资源），非法值落默认并说出口，不退成 0", () => {
+    /* 没有这个口子，「界落下并说出未判定」就只能靠注入假时钟的用例证明，
+     * 生产入口自己永远拿不到那次读数。 */
+    expect(resolveWallClockMs("60000")).toEqual({
+      budgetMs: 60_000,
+      note: null,
+    });
+    expect(resolveWallClockMs(undefined).budgetMs).toBe(STAGE_WALL_CLOCK_MS);
+    expect(resolveWallClockMs("").budgetMs).toBe(STAGE_WALL_CLOCK_MS);
+    for (const bad of ["0", "-1", "abc", "12.5"]) {
+      const got = resolveWallClockMs(bad);
+      expect(got.budgetMs, `非法值 ${bad} 不许退成 0`).toBe(STAGE_WALL_CLOCK_MS);
+      expect(got.note, `非法值 ${bad} 必须说出口`).toContain("正整数毫秒");
+    }
   });
 
   it("起界那份给的是「整次一份」的截止时刻，不是每块一份", () => {
