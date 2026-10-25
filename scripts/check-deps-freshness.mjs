@@ -68,9 +68,17 @@
  *   node scripts/check-deps-freshness.mjs --offline   # 只判 ③（不读 git）——没远端也能跑
  *   node scripts/check-deps-freshness.mjs --root <p>  # 判指定检出（排障 / 契约自测）
  *
- * 退出码：0 = 依赖与远端一致（或未触发 / 远端不可知但本地自身自洽）；
- *         1 = 有漂移（②/③ 任一命中，各自的出口逐条打印）；
- *         2 = 判据坏了（git 调不通这类**环境**故障，不是业务结论）。
+ * 退出码（三态，与 `.githooks` / `base-check.mjs` 逐字同口径）：
+ *   0 = 依赖与远端一致（或未触发 / 远端不可知但本地自身自洽）；
+ *   1 = 有漂移（②/③ 任一命中，各自的出口逐条打印）；
+ *   2 = **没跑起来**（git 调不通这类环境故障）——「没跑起来」排在红前面：
+ *       环境不可信时红与绿都不构成结论，把它读成任一种都是拿一次故障冒充判决。
+ *       ⚠️ 这一档**不顺带 return**：③（本地安装 ⇄ 本检出声明）与 git 无关，
+ *       它照旧判、照旧打印 —— 早退会把「node_modules 没装」这类本地事实
+ *       简化成一句「这里查不了」，而读者问的正是「我的依赖装对了吗」。
+ *
+ * 判的是**当前工作目录那个检出**（`--root` 显式覆盖）：不退回脚本所在仓库根，
+ * 否则在任何别的目录里跑，读数都一样、且不会说出「你问的那个目录没被看过」。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -87,8 +95,9 @@ import {
 import { DEPENDENCY_FILES } from "./dependency-face.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
 
+/* 本脚本所在目录 —— **只用于「脚本自己住哪儿」**，不参与「判哪个检出」：
+ * 那个答案只能来自调用方（`runFreshnessCheck(root)` / `--root` / 当前工作目录）。 */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, "..");
 
 /**
  * 「远端引用还算新鲜」的宽限期（毫秒）。
@@ -169,10 +178,19 @@ export function resolveRemoteMasterRev(root, branch = "master") {
   return preferred ?? [...names].sort()[0];
 }
 
-/** 跑一次 git，返回 `{ ok, out }`（`ok=false` = 命令不可用或非零退出）。 */
+/**
+ * 跑一次 git，返回 `{ ok, out }`（`ok=false` = 命令不可用或非零退出）。
+ *
+ * ⚠️ **不传 `cwd` 时不许退回本模块所在的检出**：那是「判据查哪个检出」的一处
+ * 静默替换 —— 拿一个空目录来问「我的依赖装对了吗」，答案变成了「仓库根那份」，
+ * 于是 `/tmp/xyz` 上的读数与 `/workspace` 上的读数长得一模一样，
+ * 而"没跑起来"这件事一个字都不出现。**取不到 cwd 就是取不到**：
+ * 回 `ok=false`，调用方据此把这一层判成「没跑起来」。
+ */
 function git(args, cwd) {
+  if (typeof cwd !== "string" || cwd === "") return { ok: false, out: "" };
   const res = spawnSync("git", args, {
-    cwd: cwd ?? ROOT,
+    cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   });
@@ -226,9 +244,12 @@ export function remoteRefTimestamp(root, rev = DEFAULT_REMOTE_REV) {
  * `null`（这个 rev 上没这个文件）与空串（文件存在但空）是两件事：前者是
  * 「新增 / 被删」，正是依赖变更的信号之一。合并成一个值会让「远端新增了
  * `pnpm-workspace.yaml`」这种真变更读成「无差异」。
+ * @param {string} rev 读哪个提交
+ * @param {string} rel 仓库相对路径
+ * @param {string} cwd 哪个检出（**必传**：不退回脚本所在的仓库根，理由见 `git()`）
  * @returns {string | null}
  */
-export function readAtRev(rev, rel, cwd = ROOT) {
+export function readAtRev(rev, rel, cwd) {
   const r = git(["show", `${rev}:${rel}`], cwd);
   return r.ok ? r.out : null;
 }
@@ -480,7 +501,7 @@ function renderInstallDrift(drift) {
  * （同 `shell-gate.mjs` 的 `runGate`）。
  * @param {string} root
  * @param {{ offline?: boolean, now?: number, rev?: string }} [opts]
- * @returns {{ code: number, remoteChecked: boolean, remoteAgeMs: number | null, remoteDrifts: object[], installDrift: object | null, lines: string[], remoteRev?: string, remoteAlreadyContained?: boolean }}
+ * @returns {{ code: number, remoteChecked: boolean, remoteAgeMs: number | null, remoteDrifts: object[], installDrift: object | null, lines: string[], remoteRev?: string, remoteAlreadyContained?: boolean, envBroken?: boolean }}
  */
 export function runFreshnessCheck(root, opts = {}) {
   /* 不写死 `origin/master`（R12-01）：远端名是每台克隆机的属性，按引用现算。
@@ -490,22 +511,12 @@ export function runFreshnessCheck(root, opts = {}) {
   const now = opts.now ?? Date.now();
   const lines = [];
 
-  if (
+  /* 不是 git 仓库 / git 不可用：**环境故障，不是业务结论**，这一趟判 2。
+   * 但它**不许**把 ③ 一起吞掉 —— 判据没跑起来，与「本地那一层是对的」是两件事，
+   * 混成一句话的读数是「这里查不了」，而读者问的是「我的依赖装对了吗」。 */
+  const envBroken =
     !opts.offline &&
-    !git(["rev-parse", "--verify", "--quiet", "HEAD"], root).ok
-  ) {
-    // 不是 git 仓库 / git 不可用：**环境故障，不是业务结论**，判 2。
-    return {
-      code: 2,
-      remoteChecked: false,
-      remoteAgeMs: null,
-      remoteDrifts: [],
-      installDrift: null,
-      lines: [
-        "拿不到 git 状态 —— 这里不是一个可信的检出，无法判断依赖是否与远端一致。",
-      ],
-    };
-  }
+    !git(["rev-parse", "--verify", "--quiet", "HEAD"], root).ok;
 
   let remoteChecked = false;
   let remoteAgeMs = null;
@@ -515,8 +526,9 @@ export function runFreshnessCheck(root, opts = {}) {
   /* 合并已解完、尚未落地（`MERGE_HEAD` 在场）：这一态**不是**「没查到」，
    * 是「没什么要查」—— 被合并进来的那个 rev 即将成为 HEAD 的第二个父提交，
    * ② 的那条比对在它落地后自然走 `--is-ancestor` 分支。见 `forkPoint` 的说明。 */
-  const merging = !opts.offline && hasInProgressMerge(root);
+  const merging = !envBroken && !opts.offline && hasInProgressMerge(root);
   if (
+    !envBroken &&
     !opts.offline &&
     !merging &&
     git(["rev-parse", "--verify", "--quiet", rev], root).ok
@@ -540,7 +552,15 @@ export function runFreshnessCheck(root, opts = {}) {
   // ③：本地自身的一致性，与远端无关，任何环境都判。
   const installDrift = detectInstallDrift(root);
 
-  if (opts.offline) {
+  if (envBroken) {
+    /* 这一档**不许**顺手 return：③（本地安装 ⇄ 本检出声明）与 git 无关，任何环境都判
+     * —— 早退会让「node_modules 没装」这类本地事实只剩一句「这里查不了」，
+     * 而它恰恰是 ③ 唯一能回答的那件事。判据没跑起来这件事由退出码与这一行说清。 */
+    lines.push(
+      "[未校验] 拿不到 git 状态 —— 这里不是一个可信的检出，本次没有核对远端依赖（② 与 ① 都不判）。",
+      "         这一行**不是**「依赖没问题」：本地安装那一层照旧判（见下）。",
+    );
+  } else if (opts.offline) {
     lines.push(
       "[未校验] --offline：本次没有核对远端依赖（只看本地自身是否自洽）。",
     );
@@ -602,7 +622,14 @@ export function runFreshnessCheck(root, opts = {}) {
     for (const l of renderInstallDrift(installDrift)) lines.push(`  ${l}`);
   }
 
-  const code = remoteDrifts.length || installDrift ? 1 : 0;
+  /* 三态口径（与 `.githooks` 的三态一致）：0 绿 / 1 红 / 2 **没跑起来**。
+   * 「没跑起来」排在红**前面** —— 环境不可信时，红与绿都不构成结论，把它读成
+   * 任一种都是拿一次故障冒充判决。但它也不许把 ③ 的读数一起吞掉（那一层照旧打出来）。 */
+  const code = envBroken
+    ? 2
+    : remoteDrifts.length || installDrift
+      ? 1
+      : 0;
   if (code === 0) {
     lines.push(
       remoteChecked
@@ -621,6 +648,8 @@ export function runFreshnessCheck(root, opts = {}) {
     lines,
     remoteRev: rev,
     remoteAlreadyContained,
+    /** 环境不可信（拿不到 git 状态）—— ① ② 都没判，结论不成立。 */
+    envBroken,
   };
 }
 
@@ -630,10 +659,15 @@ function main() {
   // `--root <path>`：给排障 / 契约自测用（默认就是本脚本所在的检出）。
   // 收在这里而不是让调用方 `cd`，因为「判据扫的是哪个检出」必须显式可见。
   const rootArg = process.argv.indexOf("--root");
+  /* 判的是**当前工作目录那个检出**，不是本脚本所在的检出。
+   * 此前这里退回 `ROOT`（= 脚本所在仓库根）⇒ 在任何别的目录里跑，读数与仓库根
+   * 一模一样、且**一个字都不说**：拿一个空目录问「我的依赖装对了吗」，答案变成了
+   * 「仓库根那份」，而「你问的那个目录根本没被看过」这件事从不出现。
+   * 钩子与 `pnpm check:deps-freshness` 都在仓库根执行，那条路不受影响。 */
   const root =
     rootArg !== -1 && process.argv[rootArg + 1]
       ? path.resolve(process.argv[rootArg + 1])
-      : ROOT;
+      : process.cwd();
 
   // `--staged`：钩子那一档。未命中依赖面就**立刻退 0、零输出** —— 不给
   // 「只是改了别的文件」的提交加任何时间，也不增加一行噪声。
@@ -666,6 +700,9 @@ function main() {
                 unresolved: result.installDrift.unresolved ?? [],
               }
             : null,
+          /* 环境不可信时 ①② 都没判 —— 结构化读数里也必须有这一格，
+           * 否则 `remoteDrifts: []` 会被读成「远端没改过依赖」。 */
+          envBroken: result.envBroken === true,
         },
         null,
         2,
@@ -673,8 +710,10 @@ function main() {
     );
     return result.code;
   }
+  /* 三态各自的标题**不许同形**：判据没跑起来时写「有漂移」，读的人会去查一遍
+   * 根本没人查过的东西（`base-check.mjs` 那一族同一句话：没跑起来 ≠ 判出失败）。 */
   process.stdout.write(
-    `${result.code === 0 ? "[deps-freshness] OK" : "[deps-freshness] 有漂移"}\n`,
+    `${result.code === 0 ? "[deps-freshness] OK" : result.code === 2 ? "[deps-freshness] 没跑起来" : "[deps-freshness] 有漂移"}\n`,
   );
   for (const l of result.lines) process.stdout.write(`${l}\n`);
   return result.code;
