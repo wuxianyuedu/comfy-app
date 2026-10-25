@@ -42,14 +42,33 @@ import {
   waitForLoadToSettle,
 } from "../scripts/affected-launch-load-retry.mjs";
 import {
-  junitReportArgs,
   planLaunches,
   resolveMaxWorkers,
   resolveVitestEntry,
   runChunk,
   SAFE_ARGV_BUDGET,
-  writeFilesManifest,
 } from "../scripts/run-affected-tests.mjs";
+/* 墙钟判点（ISSUE #2364）：等待有预算而**跑**没有上界，于是负载膨胀时那一格一路开到被
+ * 平台掐掉（实测 3240105ms），连「未判定」那句话都没说出来。下面这几条钉两件事：
+ * **界只划在「还开不开下一遍」**（已开跑的那一遍永远跑完），以及**「没开」不许长得像
+ * 「测过了」**。 */
+import {
+  affordablePerFileCount,
+  budgetAllows,
+  estimateSerialRerunMs,
+  perFileBudgetStopReport,
+  PLATFORM_STAGE_KILL_MS,
+  SERIAL_RERUN_FACTOR,
+  STAGE_WALL_CLOCK_MS,
+  wallClockBudget,
+  wallClockSkipReport,
+} from "../scripts/affected-launch-wallclock.mjs";
+/* junit 取数/落盘形状层拆到自己那份之后（ISSUE #2364 撞上 900 行硬闸那一刀），这里按
+ * 真实落点 import —— 判据跟着搬走的符号一起改路径，而不是让机制层转出假出口。 */
+import {
+  junitReportArgs,
+  writeFilesManifest,
+} from "../scripts/affected-launch-junit-io.mjs";
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
  * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
  * 且看起来像这次没有读数」。 */
@@ -1178,6 +1197,94 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
     }
   });
 
+  it("墙钟界已过 ⇒ 第二遍**根本没开**：退 2（未判定），名单只有复跑面", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "c-clock-"));
+    try {
+      firstPassXml(
+        dir,
+        suite("tests/a.test.ts", 1) +
+          suite("tests/b.test.ts", 0) +
+          suite("tests/c.test.ts", 1),
+      );
+      const TIMEOUT = {
+        status: 1,
+        output: "Error: Test timed out in 30000ms.",
+      };
+      const calls: string[][] = [];
+      const outcomes: string[] = [];
+      const { value: code, text } = await captureStderr(() =>
+        runChunk(CHUNK, {
+          entry: "vitest.mjs",
+          junitDir: dir,
+          chunkId: 0,
+          spawn: (_entry: string, args: string[]) => {
+            calls.push(args.filter((a) => a.endsWith(".test.ts")));
+            return TIMEOUT;
+          },
+          settle: () =>
+            Promise.resolve({ settled: true, load: 0.1, waitedMs: 9_999 }),
+          stageBudget: { deadline: Date.now() - 1, budgetMs: 1 },
+          onAttempt: (r) => outcomes.push(r.outcome),
+        }),
+      );
+      /* 只起了一次进程 = 第二遍根本没开；界已过时连「等机器喘口气」都不该付 ——
+       * 等来的那一遍本来就不会开。 */
+      expect(calls, "界已过时第二遍一次都不许起").toHaveLength(1);
+      expect(code).toBe(2);
+      expect(outcomes).toEqual(["budget-skipped"]);
+      expect(text).toContain("第 2 遍不开");
+      /* 名单必须是复跑面那两份：第一遍就绿的 b 不许被写成没结论。 */
+      expect(text).toContain("· tests/a.test.ts");
+      expect(text).toContain("· tests/c.test.ts");
+      expect(text).not.toContain("· tests/b.test.ts");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("界还够 ⇒ 第二遍照开（反向对照：这条判点不许退化成「永远不开」）", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "c-clock-"));
+    try {
+      firstPassXml(
+        dir,
+        suite("tests/a.test.ts", 1) +
+          suite("tests/b.test.ts", 0) +
+          suite("tests/c.test.ts", 1),
+      );
+      const TIMEOUT = {
+        status: 1,
+        output: "Error: Test timed out in 30000ms.",
+      };
+      const GREEN = { status: 0, output: "Test Files 2 passed" };
+      const calls: string[][] = [];
+      const outcomes: string[] = [];
+      const { value: code } = await captureStderr(() =>
+        runChunk(CHUNK, {
+          entry: "vitest.mjs",
+          junitDir: dir,
+          chunkId: 0,
+          spawn: (_entry: string, args: string[]) => {
+            calls.push(args.filter((a) => a.endsWith(".test.ts")));
+            return calls.length === 1 ? TIMEOUT : GREEN;
+          },
+          settle: () =>
+            Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_000 }),
+          stageBudget: wallClockBudget({
+            startMs: Date.now(),
+            budgetMs: 60 * 60 * 1000,
+          }),
+          onAttempt: (r) => outcomes.push(r.outcome),
+        }),
+      );
+      expect(calls, "界够时必须照旧起第二遍").toHaveLength(2);
+      expect(calls[1]).toEqual(["tests/a.test.ts", "tests/c.test.ts"]);
+      expect(code).toBe(0);
+      expect(outcomes).toEqual(["rerun-green"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("读数里的陌生路径不许进复跑面（它不属于这一块，跑它会改判据的分母）", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "c-scope-"));
     try {
@@ -1522,5 +1629,101 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
       "tests/a.test.ts",
     ]);
     expect(suites[0]!.body).toContain("AssertionError");
+  });
+});
+
+/**
+ * 墙钟判点自己那一份（纯函数层，ISSUE #2364）。
+ *
+ * 为什么这些不进上面的判决链用例：判决链那几条测的是**接没接上**（起不起第二遍、
+ * 退码哪一档、名单点谁），而这里几条测的是**界划在哪一侧**——后者全是算术，
+ * 注入 `startMs` / `nowMs` 就能确定，不需要假进程。
+ */
+describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
+  const MIN = 60_000;
+
+  it("预算必须既盖得住「首遍 + 一遍复跑」，又明显低于平台那一刀", () => {
+    /* 两个数都是当场读数，不是风格：首遍 9.2 分钟 + 串行复跑 13.6 分钟 = 22.8 分钟
+       （build cnb-q1c-1k5ora37n），平台那一刀落在 3240105ms。界漂到掐点之上时这条
+       判点就永远没有机会说话 —— 而那正是本单立的事。 */
+    expect(STAGE_WALL_CLOCK_MS).toBeGreaterThanOrEqual(22.8 * MIN);
+    expect(STAGE_WALL_CLOCK_MS).toBeLessThan(PLATFORM_STAGE_KILL_MS);
+  });
+
+  it("串行复跑按首遍墙钟估，**不**按「失败了几份」的比例估", () => {
+    /* 实测反例：第 2 遍只跑 2/98 份，却比首遍更慢（串行去掉了并发优势，1.48 倍）。
+     * 按比例算会把界划在错的一侧 —— 它会在最需要复跑的那一次说「跑得完」。 */
+    expect(estimateSerialRerunMs(9.2 * MIN)).toBe(9.2 * MIN * SERIAL_RERUN_FACTOR);
+    expect(SERIAL_RERUN_FACTOR).toBeGreaterThanOrEqual(1.48);
+    expect(estimateSerialRerunMs(-5)).toBe(0);
+  });
+
+  it("没设界 ⇒ 照旧全跑，且读数与「还剩很多」可分辨", () => {
+    const open = budgetAllows({ estimateMs: 10 * MIN });
+    expect(open.ok).toBe(true);
+    /* 不许把「没设界」冒充成一个巨大的剩余量：那是两种不同的事实。 */
+    expect(open.remainingMs).toBeNull();
+    const tight = budgetAllows({
+      budget: { deadline: 100 },
+      estimateMs: 200,
+      nowMs: 0,
+    });
+    expect(tight.ok).toBe(false);
+    expect(tight.remainingMs).toBe(100);
+  });
+
+  it("逐文件补跑的份数：没界=全部，界已过=0，没单价=先拿一份的单价", () => {
+    expect(
+      affordablePerFileCount({ perFileMs: 3_000, pending: 5 }),
+    ).toBe(5);
+    expect(
+      affordablePerFileCount({
+        budget: { deadline: 10_000 },
+        perFileMs: 3_000,
+        pending: 5,
+        nowMs: 10_000,
+      }),
+    ).toBe(0);
+    expect(
+      affordablePerFileCount({
+        budget: { deadline: 100_000 },
+        perFileMs: 0,
+        pending: 5,
+        nowMs: 0,
+      }),
+    ).toBe(1);
+    expect(
+      affordablePerFileCount({
+        budget: { deadline: 100_000 },
+        perFileMs: 30_000,
+        pending: 5,
+        nowMs: 0,
+      }),
+    ).toBe(3);
+  });
+
+  it("两句判点话术各自必须说完「界是多少 / 为什么停 / 下一动作」", () => {
+    const second = wallClockSkipReport({
+      remainingMs: 3 * MIN,
+      estimateMs: 18.4 * MIN,
+      files: ["tests/a.test.ts"],
+    });
+    /* 「未判定」与「未校验」不许同形 —— 混了就等于给静默通过开门。 */
+    expect(second).toContain("未判定");
+    expect(second).toContain("--no-file-parallelism");
+    expect(second).not.toContain("已确认");
+    const perFile = perFileBudgetStopReport({
+      remainingMs: 1_200,
+      perFileMs: 4_000,
+      left: 2,
+    });
+    expect(perFile).toContain("一次都没被测量过");
+    expect(perFile).toContain("剩下 2 份");
+  });
+
+  it("起界那份给的是「整次一份」的截止时刻，不是每块一份", () => {
+    const b = wallClockBudget({ startMs: 1_000, budgetMs: STAGE_WALL_CLOCK_MS });
+    expect(b.deadline).toBe(1_000 + STAGE_WALL_CLOCK_MS);
+    expect(b.budgetMs).toBe(STAGE_WALL_CLOCK_MS);
   });
 });
