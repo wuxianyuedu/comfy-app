@@ -39,3 +39,11 @@
   `scripts/affected-launch-junit-io.mjs`（junit 取数/落盘形状层：`junitReportArgs` /
   `writeFilesManifest` / `readRetrySuiteFailures`）—— 与 #2189 / #2199 / #2248 同一刀口径；
   消费者只有一处（该判据文件的 import 路径跟着改），形状知识仍只在 `precommit-timing.mjs` 一处。
+- 界可以按现场调：**`COMFY_AFFECTED_WALL_CLOCK_MS`**（与 `COMFY_PRECOMMIT_MAX_WORKERS` 同一条口径 ——
+  只调资源、不碰任何判据；非法值落默认并说出口，不退成 0，因为 0 会让界在第一次判决前就用完，
+  那一档看起来像「这次机器很慢」而实际是配置写错了）。这个口子还兼一件事：**取证**。
+  没有它，「界落下并说出未判定」只能靠注入假时钟的用例证明，生产入口自己永远拿不到那次读数。
+  现场（可丢弃 worktree，把 vitest 入口换成一份「打印超时指纹后 exit 1」的桩，改动面用真实 PR 形状）：
+  `COMFY_AFFECTED_WALL_CLOCK_MS=1` ⇒ 日志出现「⚠ 这一格的墙钟预算用完了 ⇒ 第 2 遍不开」、
+  收尾那份账多一行「第 2 遍因预算不够**根本没开** 1 块」、子进程原值退出码 `2` 由
+  `ci-affected-tests.mjs` 复述转出。用例 74 → 75 条（覆盖口的采纳 / 非法值那一组）。
