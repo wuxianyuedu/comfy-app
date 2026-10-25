@@ -76,11 +76,23 @@ export const SANDBOX_GIT_IDENTITY = {
 /**
  * 注入给**所有**沙箱内 git 进程的配置项（键 → 值）。
  *
- * `commit.gpgsign` / `tag.gpgsign` 关掉：宿主全局开了签名时，临时仓库里没有可用密钥
- * 与签名器，`git commit` 会当场失败（失败信息指不到夹具，见文件头）。
- * `user.*` 一并给：容器里 HOME 指向不存在的目录时，宿主的全局身份也读不到。
+ * 四组，各有各要压掉的那一类宿主配置：
+ *
+ * 1. `commit.gpgsign` / `tag.gpgsign` 关掉：宿主全局开了签名时，临时仓库里没有可用密钥
+ *    与签名器，`git commit` 会当场失败（失败信息指不到夹具，见文件头）。
+ * 2. `user.*` 一并给：容器里 HOME 指向不存在的目录时，宿主的全局身份也读不到。
+ * 3. **换行三项**（`core.autocrlf` / `core.safecrlf` + `advice.…` 一族）：宿主若开着
+ *    `core.autocrlf=true`，临时仓库里每一次 `git add` 都往 stderr 打一行
+ *    `warning: in the working copy of '…', LF will be replaced by CRLF …`。测试夹具的
+ *    `git add` 是几十次量级，于是那批 warning 盖满 CI 日志 —— 它**不改变任何结论**，
+ *    却是 CI 里最容易被读成「真红」的那一种噪音。这里把仓库口径定在规范 §13.7 那一档
+ *    （LF 入库、不做 autocrlf 改写），行为与 `git -c core.autocrlf=false add` 一致。
+ *    `advice.…` 那一项压的是**其余** advice 出口（`addIgnoredFile` 等），
+ *    临时仓库里它们同样只会变成噪音。
+ * 4. `gc.auto=0`：夹具仓库总量几十个字节，自动 gc 只会给用例添非确定性。
  *
  * ⚠️ 不要往这里加「会被被测判据读到」的项 —— 这一层是**环境隔离**，不是判据输入。
+ * （第 3 组是唯一贴着判据的：判据要验的正是「宿主开了 autocrlf 时夹具仍不出 warning」。）
  */
 export function sandboxGitConfig(): Record<string, string> {
   return {
@@ -88,6 +100,11 @@ export function sandboxGitConfig(): Record<string, string> {
     "user.name": SANDBOX_GIT_IDENTITY.name,
     "commit.gpgsign": "false",
     "tag.gpgsign": "false",
+    "core.autocrlf": "false",
+    "core.safecrlf": "false",
+    "advice.addIgnoredFile": "false",
+    "advice.detachedHead": "false",
+    "gc.auto": "0",
   };
 }
 
@@ -115,7 +132,9 @@ export function gitSandboxEnv(
  * @param env 目标环境（会被原地改写）
  * @returns 同一份 `env`，方便链式使用
  */
-export function withSandboxGitConfig(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function withSandboxGitConfig(
+  env: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
   const injected = sandboxGitConfig();
   const base = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10) || 0;
   let index = base;

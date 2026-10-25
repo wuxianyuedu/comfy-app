@@ -25,6 +25,8 @@ import { join } from "node:path";
 import { vi } from "vitest";
 
 import { describe, expect, test } from "vitest";
+
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import {
   commandTargetState,
   didNotRunSide,
@@ -61,9 +63,19 @@ vi.setConfig({ hookTimeout: 30_000 });
 const REPO_ROOT = process.cwd();
 const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");
 
-/** 在给定目录跑一条 git 命令。 */
+/** 在给定目录跑一条 git 命令。
+ * @param cwd 工作目录
+ * @param args git 的子命令与参数
+ * @returns stdout */
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" });
+  /* 走 `gitSandboxEnv()`：本文件的夹具仓库里 `git add` 几十次，而宿主若开着
+   * `core.autocrlf=true`，每一次都往 stderr 打一行 `LF will be replaced by CRLF`
+   * —— 那批噪音会盖满 CI 日志，且与任何判据结论无关（见 `git-sandbox-env.ts` 文件头）。 */
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: gitSandboxEnv(),
+  });
 }
 
 /**
