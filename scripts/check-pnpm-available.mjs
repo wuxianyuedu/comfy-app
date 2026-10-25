@@ -33,7 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { orchestratePnpm, preparePnpm, probePnpm } from "./launcher-core/corepack.mjs";
-import { commandInvocation } from "./launcher-core/shell.mjs";
+import { commandInvocation, pnpmInvocation, powershellHost } from "./launcher-core/shell.mjs";
 import { checkNodeModules } from "./launcher-core/worktree.mjs";
 import {
   collectDependencyFloors,
@@ -63,6 +63,55 @@ function say(prefix, message) {
 function sameVersion(a, b) {
   if (!a || !b) return false;
   return a.replace(/^v/, "") === b.replace(/^v/, "");
+}
+
+/**
+ * 探不到 pnpm 时的**现场读数**（ISSUE #2281）。
+ *
+ * 读的是 `pnpmInvocation()` 交出来的那一份 —— 判定面与读数面同源，不在这里
+ * 按「本脚本以为的方式」再解析一遍 `env`：第二次读法一旦与判据分岔（键名不是
+ * `PATH`、分隔符读错），失败日志就会指向一个判据根本没看过的目录。
+ *
+ * 探到的时候 `pnpmInvocation()` 返回 `null`，此时只能按同一套口径现场重扫一遍；
+ * 那条分支只在「判据说没有」那一刻走到，所以这里的重扫不会冒充结论。
+ *
+ * @returns {string}
+ */
+function describePnpmProbe() {
+  const invocation = pnpmInvocation(["-v"]);
+  const raw = invocation
+    ? invocation.pathRaw
+    : String(process.env.PATH ?? "");
+  const entries = invocation
+    ? invocation.pathEntries
+    : raw.split(path.delimiter).filter(Boolean);
+  const onDisk = invocation ? invocation.onDisk : [];
+  const host = invocation
+    ? invocation.osHost
+    : powershellHost({ platform: process.platform });
+  const lines = ["---- pnpm 探测现场（供定位，非报错）----"];
+  lines.push(`platform: ${process.platform}`);
+  lines.push(
+    raw.trim()
+      ? `PATH 原文（${raw.length} 字符）: ${raw}`
+      : "PATH 原文: （空 —— 这个进程的环境变量表里没有 PATH，或键名是别的写法）",
+  );
+  lines.push(`PATH 条目（按 ${JSON.stringify(path.delimiter)} 切）: ${entries.length} 条`);
+  for (const e of entries.slice(0, 20)) lines.push(`  ${e}`);
+  if (entries.length > 20) lines.push(`  …（另有 ${entries.length - 20} 条）`);
+  lines.push("PATH 各目录里 pnpm* 的命中:");
+  if (onDisk.length === 0) {
+    lines.push("  （一个都没命中 —— 这些条目里没有 pnpm 的任何形态）");
+  } else {
+    for (const hit of onDisk) lines.push(`  ${hit}`);
+  }
+  lines.push(
+    host
+      ? `解释器宿主: 找到（${host}）`
+      : "解释器宿主: 没找到 —— `.ps1` 形态要 PowerShell 才起得来",
+  );
+  lines.push("------------------------------------");
+  return lines.join("\n");
 }
 
 /**
@@ -124,6 +173,12 @@ if (!result.probe.ok) {
   process.stdout.write("\n");
   process.stdout.write(result.tip ?? "（没有可用的修复提示，请检查 launcher-core/corepack.mjs 的 buildTip）\n");
   process.stdout.write("\n");
+  /* 探不到的时候，**这一份进程读到的 PATH** 就是唯一可核对的事实（ISSUE #2281）。
+   * 反面现场：一份平台日志写着「（一个都没命中）」，而同一台机上 `where pnpm` /
+   * `pnpm -v` / 本脚本重跑三次全部正常 —— 两句话都对，它们说的不是同一件事，
+   * 日志里却没有任何一行能把它们分开。所以这里把原文、切出来的条目与
+   * 「盘上有没有这个名字」一起打出来。 */
+  process.stdout.write(`${describePnpmProbe()}\n`);
   process.stdout.write(
     [
       "自查入口：pnpm check:toolchain",
