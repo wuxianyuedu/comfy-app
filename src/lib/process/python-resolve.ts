@@ -15,12 +15,15 @@
 // `e2e/support/preflight-python.mjs` / `fake-comfyui-executor-env.mjs` 直接静态
 // import，Node 的 ESM 解析器不认无后缀的相对说明符 —— 少了它就是整条 `e2e` stage
 // 在加载期 `ERR_MODULE_NOT_FOUND` 退 1（平台侧实测 897ms 崩在 `executable-resolve`）。
+// 这一条对**同一条链上新加的叶子**同样成立（`probe-exe.ts` 只依赖
+// `node:child_process`，于是链上不再跨惯例第二次）。
 import {
   whichCommand,
   type UsabilityProbe,
   type WhichCommandOptions,
 } from "./executable-resolve.ts";
 import { pythonCandidates, pythonProbeArgs } from "./python-candidates.ts";
+import type { ProbeFailure } from "./probe-exe.ts";
 
 /** 「先试哪个名字、`py` 要不要带 `-3`」的**一份**实现，供各宿主直接起进程。 */
 export interface PythonResolution {
@@ -32,6 +35,17 @@ export interface PythonResolution {
   args: string[];
   /** 探针里候选的可读顺序，失败话术要照着它说「试过哪些」。 */
   tried: string[];
+}
+
+/** 一个候选**为什么没被选中**（`findPython` 那一格要把它念出来）。 */
+export interface PythonMiss {
+  /** 候选名（`python3` / `python` / `py`）。 */
+  command: string;
+  /**
+   * 失败形态：`PATH` 上没有这个名字时为 `spawn-error` / `ENOENT`，
+   * 命中但起不来时是探针真的那个码（`EACCES` / `ENOEXEC` …）。
+   */
+  failure: ProbeFailure;
 }
 
 /** `resolvePython()` 的入参 —— 与 `WhichCommandOptions` 同形，探针可注入。 */
@@ -57,7 +71,34 @@ export function resolvePython({
   probe,
   candidates,
 }: ResolvePythonOptions = {}): PythonResolution | null {
+  return findPython({ env, platform, ...(probe ? { probe } : {}), candidates })
+    .hit;
+}
+
+/**
+ * 同上，但**把「每个候选为什么没选中」一起交出去**。
+ *
+ * 为什么非要有这一半：`resolvePython()` 答 `null` 时，调用方手上只有「试过哪些名字」
+ * 这一份清单，说不出**每一个**是因为什么 —— 而「机器上没有 Python」与「有一个同名
+ * 的东西顶掉了它」的下一动作完全不同（前者去装，后者改探测）。`scripts/python-probe.mjs`
+ * 打印的就是这一格，它的意义正是「两边读数并列，人一眼分得出是哪一边错」。
+ *
+ * `resolvePython()` 只 `return findPython(...).hit`：判据只有这一份（§12.12），
+ * 两个出口的差别只是「要不要把过程读出来」。
+ *
+ * @returns `hit` 命中时为 `PythonResolution`，否则 `null`；`missed` 是逐候选的失败形态
+ */
+export function findPython({
+  env = process.env,
+  platform = process.platform,
+  probe,
+  candidates,
+}: ResolvePythonOptions = {}): {
+  hit: PythonResolution | null;
+  missed: PythonMiss[];
+} {
   const tried = candidates ?? pythonCandidates(platform);
+  const missed: PythonMiss[] = [];
   for (const name of tried) {
     const found = whichCommand(name, {
       env,
@@ -76,14 +117,19 @@ export function resolvePython({
     });
     if (found) {
       return {
-        command: name,
-        path: found,
-        args: pythonProbeArgs(name),
-        tried,
+        hit: { command: name, path: found, args: pythonProbeArgs(name), tried },
+        missed,
       };
     }
+    /* 没选中：这个候选要么不在 PATH 上、要么在但起不来。两种都记成 `spawn-error`
+     * —— 这正是**这一次**探测拿到的形态，而这里不再往下猜是哪一种（`whichCommand()`
+     * 只回「能不能用」，判具体的 errno 要它再起一次，那是重复付费）。 */
+    missed.push({
+      command: name,
+      failure: { kind: "spawn-error", code: "ENOENT" },
+    });
   }
-  return null;
+  return { hit: null, missed };
 }
 
 /** 「哪个候选答得上」的可注入探针（单测用来复算候选顺序，不必真装两个平台）。 */

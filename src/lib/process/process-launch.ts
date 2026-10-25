@@ -32,7 +32,19 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
 import { logger } from "~/lib/core/logger";
+import { elevateLogLevel } from "./probe-exe.ts";
 import { withTimeoutResult } from "~/lib/with-timeout";
+
+/* `probe-exe.ts` 的读数默认写裸 Node 的 `console`（它在那条边界上不能被裸 Node 挂着
+ * `~/lib/core/logger` 加载，见该文件头）；而本模块是**应用侧**，服务端可达的代码只许
+ * 有**一条**日志通道（`tests/single-logger-channel.test.ts`）。所以在这里把它接到唯一
+ * 通道上 —— 加载即生效。说明符带 `.ts`：本模块与 `probe-exe` 是同一条跨宿主边界上的
+ * 邻居（裸 Node 只认带扩展名的相对说明符），这条 value 边是单向的（本模块 → probe-exe），
+ * 不成环、也不改变 `probe-exe` 自己的叶子性。 */
+elevateLogLevel({
+  log: (message) => logger.info(message),
+  warn: (message) => logger.warn(message),
+});
 
 /** 拉起方式：bound = 随应用进程树一起结束；keepAlive = 脱离进程树保活。 */
 export type DetachMode = "bound" | "keepAlive";

@@ -42,7 +42,14 @@ import { findPython, pythonForensics } from "./ci-toolchain-python.mjs";
  * 的读数分不出是哪一边错**。所以这里两边的读数都打 —— 它回答「两条链是不是答同一件事」，
  * 而不只是「这台机器上有什么」。 */
 import { pythonCandidates, pythonProbeArgs } from "../src/lib/process/python-candidates.ts";
-import { resolvePython } from "../src/lib/process/python-resolve.ts";
+import {
+  findPython as findAcrossCandidates,
+  resolvePython,
+} from "../src/lib/process/python-resolve.ts";
+import {
+  describeProbeMisses,
+  toProbedCandidates,
+} from "../src/lib/process/probe-exe.ts";
 
 /** 与 `ci-toolchain-python.mjs` 的 `PY_CANDIDATES` 同口径（那里是唯一出处）。 */
 const CANDIDATES =
@@ -62,10 +69,15 @@ const PROBE_ARGS = /** @type {Record<string, string[]>} */ ({
  * 真机器，同一份用例在不同宿主上给出不同结论（那正是「把宿主长什么样写成恒真性质」）。
  *
  * @param {{run?: (cmd: string, args: string[]) => {ok: boolean, out: string},
- *          resolve?: (options: object) => {command: string, path: string, args: string[]} | null}} [io]
+ *          resolve?: (options: object) => {command: string, path: string, args: string[]} | null,
+ *          find?: (options: object) => {hit: object | null, missed: {command: string, failure: unknown}[]}}} [io]
  * @returns {string[]} 要逐行打印的内容
  */
-export function probeLines({ run, resolve = resolvePython } = {}) {
+export function probeLines({
+  run,
+  resolve = resolvePython,
+  find = findAcrossCandidates,
+} = {}) {
   const lines = [`running: node ${process.version} on ${process.platform}`];
   const usable = [];
   for (const name of CANDIDATES) {
@@ -108,9 +120,23 @@ export function probeLines({ run, resolve = resolvePython } = {}) {
       `ok   ${res.command} ${res.args.join(" ")}  →  ${res.path}`.trim(),
     );
   } else {
+    /* 逐候选的**读数**（`findPython` 的 `missed`）：一句「手工扫不到 / 起不来」在这个
+     * 脚本里等于没说话 —— 它存在的意义正是「两条链的结论摆在一起，人一眼分得出是哪一边
+     * 错」，而分不出「压根没有」与「有一个同名的东西顶掉了它」就等于没分（ISSUE #2316
+     * 的另一半：冒牌同名可执行文件）。`find` 可注入，判据仍是同一份 `findPython`。 */
+    const { missed } = find({});
     for (const name of pythonCandidates()) {
       const args = pythonProbeArgs(name, ["--version"]);
       lines.push(`--   ${name} ${args.join(" ")}  →  手工扫不到 / 起不来`);
+    }
+    if (missed.length > 0) {
+      /* `missed` 的 `failure` 是 `ProbeFailure`（`python-resolve.ts` 的类型），而本文件
+       * 是 `.mjs`、没有类型可写 —— 摊平那一步在 `probe-exe.ts` 里，这里只转交。 */
+      lines.push(
+        `     逐候选：${describeProbeMisses(
+          toProbedCandidates(/** @type {any} */ (missed)),
+        )}`,
+      );
     }
     lines.push(
       "⚠ 上面「ok」而这里「--」= 两条链对同一台机器给了相反结论，" +

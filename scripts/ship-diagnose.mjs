@@ -28,6 +28,10 @@
  *   · 与主流程（提交 / 合并 / 关单）互斥：它在 preflight 之前分派，工作树干不干净、
  *     在 master 上、没有碎片都能跑 —— 红灯现场正是那种状态。
  */
+import fs from "node:fs";
+import path from "node:path";
+
+import { gitScratchPath } from "./git-dir.mjs";
 import { asArray, pickBuildForSha } from "./ship-build.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
@@ -38,7 +42,120 @@ import {
   fetchStageReason,
   formatOutcome,
   pipelineForStage,
+  progressReadout,
 } from "./ci-build-readout.mjs";
+
+/**
+ * 连续两眼签名一致、且此刻没有一格在飞，要隔到多少分钟才念「疑似派发未出勤」。
+ *
+ * 这是**读数档**，不参与退码（ISSUE #2304）。三件要同时成立 —— 签名不变 + 到这一档 +
+ * 没有一格落定，**缺一件就仍念「在飞 / 还在跑」**：#2184 与 #2172 记的都是同一族误判 ——
+ * 「有一格正在长跑」与「整条没推进」在只读构建级状态时长得一模一样。
+ */
+export const DIAGNOSE_STALL_MINUTES = 10;
+
+/** 上一眼读数的落点目录名（在 `.git/` 下，按构建号分文件，不入库）。 */
+export const DIAGNOSE_STATE_DIR = "comfy-diagnose-last";
+
+/**
+ * 上一眼那份基数的路径。`git` 目录取不到时返回 `null`（不往检出里写文件）。
+ *
+ * @param {string} root 仓库根
+ * @param {string} sn 构建号
+ * @param {(cwd?: string) => string | null} [resolve] git 目录解析器（测试可注入）
+ * @returns {string | null}
+ */
+function diagnoseStatePath(root, sn, resolve) {
+  const dir = gitScratchPath(root, DIAGNOSE_STATE_DIR, resolve);
+  if (!dir || !sn) return null;
+  return path.join(dir, `${sn.replace(/[^\w.-]/g, "_")}.json`);
+}
+
+/**
+ * @param {string} root 仓库根
+ * @param {string} sn 构建号
+ * @param {(cwd?: string) => string | null} [resolve] git 目录解析器（测试可注入）
+ * @returns {{signature: string, atMs: number} | null} 读不到就是「没有上一眼」，不当成 0 分钟
+ */
+function readDiagnoseState(root, sn, resolve) {
+  const p = diagnoseStatePath(root, sn, resolve);
+  if (!p) return null;
+  try {
+    const got = JSON.parse(fs.readFileSync(p, "utf8"));
+    return typeof got?.signature === "string" && Number.isFinite(got?.atMs)
+      ? { signature: got.signature, atMs: got.atMs }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} root 仓库根
+ * @param {string} sn 构建号
+ * @param {string} signature 这一眼的签名（`buildSignature` 的原样）
+ * @param {number} atMs 这一眼的时刻（毫秒）
+ * @param {(cwd?: string) => string | null} [resolve] git 目录解析器（测试可注入）
+ * @returns {boolean} 有没有真的落下去（落不下去就别念「已落基线」）
+ */
+function writeDiagnoseState(root, sn, signature, atMs, resolve) {
+  const p = diagnoseStatePath(root, sn, resolve);
+  if (!p) return false;
+  try {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify({ signature, atMs }), "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 「还在跑」这一支该念哪句话 —— 纯函数，五种情形各一条（用例逐条钉）。
+ *
+ * @param {{signature: string, flying: {count: number, names: string[]}, elapsedMinutes: number, previous: {signature: string, atMs: number} | null, stored?: boolean, prefix?: string}} input
+ * @returns {string[]}
+ */
+export function stallReadout({
+  signature,
+  flying,
+  elapsedMinutes,
+  previous,
+  stored = true,
+  prefix = "[build-readout]",
+}) {
+  const tag = prefix;
+  if (!previous) {
+    return [
+      stored
+        ? `${tag}   第一眼看这一跑：已落一份基数（下一眼起，签名相同才谈得上「没推进」）`
+        : `${tag}   这一跑没有可比基数（临时落点取不到）⇒ 只念进度，不念停滞`,
+    ];
+  }
+  if (previous.signature !== signature) {
+    return [
+      `${tag}   上一眼 ${previous.signature} → 这一眼 ${signature} ⇒ 在推进，继续等`,
+    ];
+  }
+  if (flying.count > 0) {
+    return [
+      `${tag}   签名没变（${signature}），但有 ${flying.count} 格在飞：` +
+        `${flying.names.slice(0, 3).join("、")} ⇒ 还在跑，继续等`,
+    ];
+  }
+  if (elapsedMinutes >= DIAGNOSE_STALL_MINUTES) {
+    return [
+      `${tag}   连续两眼签名一致（间隔 ${elapsedMinutes} 分钟）且此刻没有一格在飞（${signature}）`,
+      `${tag}     ⇒ 疑似**派发未出勤**：在册、有构建号，但账面一格都没起 —— 这与「有一格正在长跑」不是一回事`,
+      `${tag}     平台读数里问过了也没有执行体归属（\`runner\` / \`npc\` / \`node\` / \`agent\` 字段不存在或为空）⇒ 分不出「排队等空闲节点」还是「派发丢了」`,
+      `${tag}     下一动作：pnpm ship --rerun-ci（推一个空提交重新派生一条流水线）—— 这一格仍退 2，不改成红`,
+    ];
+  }
+  return [
+    `${tag}   签名没变（${signature}）、也没有格在飞，但间隔 ${elapsedMinutes} 分钟未到 ${DIAGNOSE_STALL_MINUTES} 分钟这一档 ⇒ 先不下「停滞」的判断，下一眼再比`,
+  ];
+}
+
 
 /**
  * `--diagnose --dry-run` 打印的计划 —— 与真跑同一份 argv 的形状。
@@ -70,6 +187,9 @@ export function diagnosePlan(slug, sn) {
  * @param {string | null} [ctx.sn] 人点名的构建号
  * @param {string} [ctx.headSha] 当前 HEAD 的 sha（未点名构建号时用来归属）
  * @param {boolean} [ctx.dryRun] 只打印计划
+ * @param {string} [ctx.root] 仓库根（「上一眼」的基数落在 `.git/` 下，按构建号分文件）
+ * @param {number} [ctx.nowMs] 此刻（测试注入用；不参与任何判定）
+ * @param {(cwd?: string) => string | null} [ctx.resolveGit] git 目录解析器（测试注入用）
  * @returns {number} `CODE` 之一
  */
 export function runDiagnose({
@@ -80,6 +200,9 @@ export function runDiagnose({
   sn = null,
   headSha = "",
   dryRun = false,
+  root = process.cwd(),
+  nowMs = Date.now(),
+  resolveGit = undefined,
 }) {
   if (!slug) {
     log("[ship] --diagnose 取不到仓库路径 ⇒ 没有结论（不猜一个仓库名去读别人的构建）。");
@@ -146,9 +269,31 @@ export function runDiagnose({
     sn: target,
     slug,
     reason,
+    /** 把原值 JSON 一起交给它：「还在跑」那一支要念格子进度，且必须与轮询那行同一份计算。 */
+    json: statusJson,
     prefix: "[ship]",
   })) {
     log(line);
+  }
+  if (outcome.state === "running") {
+    /* 单发读数没有「上一眼」可比 ⇒ 自己留一份基数（`.git/` 下，按构建号分文件，不入库）。
+       三件同时成立才念「疑似派发未出勤」：签名不变 + 到 `DIAGNOSE_STALL_MINUTES` + 没一格在飞。 */
+    const progress = progressReadout(statusJson, target);
+    const previous = readDiagnoseState(root, target, resolveGit);
+    const elapsedMinutes = previous
+      ? Math.max(0, Math.floor((nowMs - previous.atMs) / 60_000))
+      : 0;
+    const stored = writeDiagnoseState(root, target, progress.signature, nowMs, resolveGit);
+    for (const line of stallReadout({
+      signature: progress.signature,
+      flying: { count: progress.flyingCount, names: progress.flyingNames },
+      elapsedMinutes,
+      previous,
+      stored,
+      prefix: "[ship]",
+    })) {
+      log(line);
+    }
   }
   if (outcome.state === "failed") {
     describeFailedStages(run, {

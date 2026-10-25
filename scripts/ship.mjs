@@ -473,6 +473,9 @@ async function runFlow(deps, tmpFiles) {
         sn: opt.diagnoseSn,
         headSha: run("git", ["rev-parse", "HEAD"]).stdout.trim(),
         dryRun: opt.dryRun,
+        /* 「上一眼」的基数落在 `.git/` 下 —— 没有它，单发的 diagnose 永远只能说「还在跑」，
+           说不出「一格都没推进」（ISSUE #2304）。 */
+        root,
       }),
     ]);
   }
