@@ -44,6 +44,8 @@ import {
 import {
   findPnpm,
   pnpmForensics,
+  pnpmPathEntries,
+  pnpmPathValue,
   nodeAllowed,
   parseVersion,
   playwrightInstallHints,
@@ -775,6 +777,50 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
       hostFound: true,
     }).join("\n");
     expect(text).toContain("一个候选都没进到探测这一步");
+  });
+
+  /* ── ISSUE #2281：失败日志必须能分开「三类同形结论」 ───────────────
+   *
+   * 起因是同一个 P0 单里的两处现场：一处日志写「PATH 各目录里 pnpm* 的命中:
+   * （一个都没命中）」，而那份取证**从没打印过它读到的 PATH 原文**；另一处
+   * 「本机 pnpm 忽然不见了」的结论，在同一台机上用 `where pnpm` / `pnpm -v` /
+   * `pnpm check:toolchain` 三次当场复算都不成立。两者共用一个形状：**读数里没有
+   * 「判据看到的那一串」**，于是「真没装」「键名不是 PATH」「分隔符读错」在日志里
+   * 逐字同形 —— 而这三者的下一动作完全不同（装 / 改键名 / 改切分）。 */
+  it("取证里必须打 PATH **原文** —— 只打切出来的条目分不开那三类成因", () => {
+    const text = pnpmForensics({
+      platform: "win32",
+      env: { PATH: "C:\\Windows;C:\\nodejs" },
+      isFile: () => false,
+    }).join("\n");
+    expect(text, "读取到的 PATH 原文没有出现在取证里").toContain("PATH 原文");
+    // 原文是**一整串**（含分隔符），不是逐条再拼一遍。
+    expect(text).toContain("C:\\Windows;C:\\nodejs");
+  });
+
+  it("PATH 为空时明说「读到的是空」，不写成「这个账号上没有 pnpm」", () => {
+    const text = pnpmForensics({
+      platform: "win32",
+      // 键名写作 `Path`：Windows 环境变量表里的常见写法，`env.PATH` 会读成 undefined。
+      env: {},
+      isFile: () => false,
+    }).join("\n");
+    expect(text).toContain("PATH 原文: （空");
+  });
+
+  it("键名是 `Path` 时 Windows 判据照样读到那一串（不因此判成「没装」）", () => {
+    /* 判定面与读数面必须是**同一份**读法：两处各读一遍，就会出现「判据读的是
+     * `Path`、取证打的却是空的 `PATH`」—— 那正是第 2281 号单里读不出根因的那种日志。 */
+    const env = { Path: "C:\\Windows;C:\\nodejs" };
+    expect(pnpmPathValue({ platform: "win32", env })).toBe(
+      "C:\\Windows;C:\\nodejs",
+    );
+    expect(pnpmPathEntries({ platform: "win32", env })).toEqual([
+      "C:\\Windows",
+      "C:\\nodejs",
+    ]);
+    // POSIX 上 `Path` 与 `PATH` 是两个变量：不许把不敏感那一条套过去。
+    expect(pnpmPathValue({ platform: "linux", env })).toBe("");
   });
 
   it("`findPnpm()` 失败时把试过的候选与宿主结论一起交出来", () => {

@@ -177,6 +177,10 @@ export function decide(staged) {
  * `$CARGO_HOME/bin/cargo`，值的形状（`G:\.cargo`、`C:/Users/x/.cargo`、带尾部分隔符）
  * 不许成为「命不命中」的变量。
  *
+ * ⚠️ **回退面的每一处都走 `probeCargoIn()`**（ISSUE #2368）：`$CARGO_HOME` 常常落在
+ * **subst 出来的盘符**上（平台节点就是 `G:`），而那条路径对 Node 的 `fs` 是假阴性。
+ * 只判 `existsSync(<dir>/cargo.exe)` 的形态会在「装好了」的机器上永远探不到。
+ *
  * @param {{env?: Record<string, string | undefined>}} [deps] `env` 可注入（默认 `process.env`）
  * @returns {CargoLookup} `path` = cargo 的绝对路径（PATH 与三处安装位都没有 = `null`）
  */
@@ -243,10 +247,10 @@ export function findCargoLookup({ env = process.env } = {}) {
         continue;
       }
       for (const version of versions) {
-        const exe = path.join(dir, version, "bin", cargoExeName());
-        if (fs.existsSync(exe)) {
-          probes.push({ where, result: "hit", detail: exe });
-          return { path: exe, probes };
+        const found = probeCargoIn(path.join(dir, version, "bin"));
+        if (found.ok) {
+          probes.push({ where, result: "hit", detail: found.detail });
+          return { path: found.path, probes };
         }
       }
       probes.push({
@@ -256,14 +260,67 @@ export function findCargoLookup({ env = process.env } = {}) {
       });
       continue;
     }
-    const exe = path.join(dir, cargoExeName());
-    if (fs.existsSync(exe)) {
-      probes.push({ where, result: "hit", detail: exe });
-      return { path: exe, probes };
+    const found = probeCargoIn(dir);
+    if (found.ok) {
+      probes.push({ where, result: "hit", detail: found.detail });
+      return { path: found.path, probes };
     }
-    probes.push({ where, result: "absent", detail: exe });
+    probes.push({ where, result: found.result, detail: found.detail });
   }
   return { path: null, probes };
+}
+
+/**
+ * 在一个目录里找 `cargo`：**先用 fs 判，再用 dir 本身交叉确认**。
+ *
+ * ── 为什么不只是 `fs.existsSync(<dir>/cargo.exe)`（ISSUE #2368 的平台现场）──────
+ *
+ * 平台 runner 的 `CARGO_HOME` 是 `G:\.cargo`，而 `G:` 是 **subst 出来的盘符**
+ * （`docs/guides/dev-drive-refs.md`；runner 的检出也在 `G:`）。Node 的 `fs` 走
+ * **Win32 long-path 前缀**（`\\?\G:\…`），而 subst 映射是**每登录会话**的 —
+ * 判据以服务账号跑，那一前缀解释不出别的会话里的映射 ⇒ 同一份 cargo 对 `fs`
+ * **不存在**、对 `Get-Command` 存在。表现是「装好了、探不到」，整格按「没跑起来」收。
+ *
+ * 所以回退面的判据退一步问两件事：**这个目录在不在**，以及**目录里有没有这个名字**。
+ * `readdirSync` 走的是同一条路径、同样可能被 subst 骗，因此 `statSync` 失败时
+ * 还要判「错误码是 ENOENT 还是别的」—— 只有「目录确实不在」（ENOENT）才算 absent；
+ * 其余（EPERM / EBUSY / 判据自己根本没走到）一律按 `unreadable` 记，让人去查权限，
+ * 而不是去装第二遍工具链。
+ *
+ * `detail` 里带**目录读数**（有几项、有没有那个名字）：取证那一行于是说得出
+ * 「这条路存在吗、里面有什么」，而不是一句 `absent`。
+ *
+ * @param {string} dir 候选目录（`<CARGO_HOME>/bin` 或某个工具链的 `bin`）
+ * @returns {{ok: true, path: string, detail: string} | {ok: false, result: "absent" | "empty" | "unreadable", detail: string}}
+ */
+export function probeCargoIn(dir) {
+  const exe = path.join(dir, cargoExeName());
+  if (fs.existsSync(exe)) return { ok: true, path: exe, detail: exe };
+  /** @type {string[]} */
+  let names;
+  try {
+    names = fs.readdirSync(dir);
+  } catch (err) {
+    const code = errorCode(err);
+    return isAbsentError(err)
+      ? { ok: false, result: "absent", detail: `${exe}（目录不在）` }
+      : {
+          ok: false,
+          result: "unreadable",
+          detail: `${code ?? "读不了"} —— ${dir}`,
+        };
+  }
+  /* 目录在、而名字不在：把「像 cargo 的那几个」念出来（含 `.exe` 有无两种形态）。
+   * 一条都没有时说清是空目录 —— 那与「文件在但被 fs 骗了」是两种下一步。 */
+  const like = names.filter((n) => n.toLowerCase().startsWith("cargo"));
+  return {
+    ok: false,
+    result: like.length > 0 ? "unreadable" : "empty",
+    detail:
+      like.length > 0
+        ? `目录里有 ${like.join(" / ")}，但 \`fs\` 判 ${cargoExeName()} 不存在（subst 盘上的假阴性？）—— ${dir}`
+        : `目录在（${names.length} 项），但没有 ${cargoExeName()} —— ${dir}`,
+  };
 }
 
 /**
@@ -586,20 +643,26 @@ function probesText(probes) {
   const label = {
     hit: "命中",
     absent: "不在",
-    unreadable: "读不了",
-    empty: "空目录",
+    unreadable: "读不了 / 目录里有这个名字而 `fs` 判它不在",
+    empty: "目录在，但没有那个名字",
   };
   const lines = probes.map(
     (p) =>
       `        · ${p.where}：${label[p.result]}${p.detail ? `（${p.detail}）` : ""}`,
   );
-  const hint = probes.some((p) => p.result === "unreadable")
-    ? "        有落点「读不了」—— 那是权限问题，先查执行账号对那个目录的读权限，别再装一遍工具链。\n"
-    : probes.some(
-          (p) => p.where.startsWith("CARGO_HOME/bin") && p.result !== "hit",
-        )
-      ? "        CARGO_HOME 给了而这一处没命中：那个值下确实没有 bin/cargo，或平台的 PATH 没跟着它长出来。\n"
-      : "";
+  const hint = probes.some(
+    (p) => p.result === "unreadable" && /fs/.test(String(p.detail ?? "")),
+  )
+    ? "        有落点在目录里**看得见那个名字、而 `fs` 判它不存在** —— 那是本判据被路径形态骗了" +
+      "（subst 出来的盘符 / 长路径前缀，见 probeCargoIn 的头注），不是没装工具链。\n" +
+      "        交叉确认一条：在这个目录里跑 `<cargo> --version`，能出版本号就说明判据该让一步。\n"
+    : probes.some((p) => p.result === "unreadable")
+      ? "        有落点「读不了」—— 那是权限问题，先查执行账号对那个目录的读权限，别再装一遍工具链。\n"
+      : probes.some(
+            (p) => p.where.startsWith("CARGO_HOME/bin") && p.result !== "hit",
+          )
+        ? "        CARGO_HOME 给了而这一处没命中：那个值下确实没有 bin/cargo，或平台的 PATH 没跟着它长出来。\n"
+        : "";
   return `        [取证] 探过这 ${probes.length} 处：\n${lines.join("\n")}\n${hint}`;
 }
 

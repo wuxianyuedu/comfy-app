@@ -658,6 +658,52 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       expect(got.probes.every((p) => p.result !== "hit")).toBe(true);
     });
 
+    /* ── 目录在、而 `fs` 判那个名字不存在（ISSUE #2368 的平台现场）───────────
+     *
+     * 平台 runner 的 `CARGO_HOME` 是 `G:\.cargo`，而 `G:` 是 **subst 出来的盘符**：
+     * Node 的 `fs` 走 Win32 long-path 前缀，subst 映射是**每登录会话**的 ⇒ 同一份
+     * cargo 对 `fs` 不存在、对 `Get-Command` 存在。旧判据只做
+     * `existsSync(<dir>/cargo.exe)`，于是在「装好了」的机器上永远「一个都没命中」，
+     * 整格按「没跑起来」收 —— 红的原因是判据自己，不是代码。
+     *
+     * 判据退一步问「这个目录在不在、里面有没有这个名字」：`existsSync` 说没有、
+     * 而 `readdirSync` 里有 ⇒ 记成 `unreadable` 并把目录读数写进取证，**不再**
+     * 冒充「盘上没有这个文件」，也不假装命中（那会拿一个跑不起来的路径去 cargo test）。 */
+    it("目录里有 cargo 而 `fs` 判它不在 ⇒ 取证要说得出，不许写成「盘上没有」", () => {
+      const home = mkdtempSync(path.join(tmpdir(), "shell-gate-subst-"));
+      temps.push(home);
+      const bin = path.join(home, "bin");
+      mkdirSync(bin, { recursive: true });
+      writeFileSync(path.join(bin, cargoName), "#!/bin/sh\nexit 0\n");
+      /* `CARGO_HOME` 收的是 home 那一级（判据自己拼 `bin`）。 */
+      const got = findCargoLookup({ env: { PATH: "", CARGO_HOME: home } });
+      // 本机 `fs` 正常 ⇒ 那就是真命中；判据对「看得见名字」这一格不放松。
+      expect(got.path).toBe(path.join(bin, cargoName));
+    });
+
+    it("目录不在 ⇒ absent；目录在而里面没有那个名字 ⇒ empty（两句要对得上）", () => {
+      const empty = mkdtempSync(path.join(tmpdir(), "shell-gate-empty-"));
+      temps.push(empty);
+      const missing = findCargoLookup({
+        env: { PATH: "", CARGO_HOME: path.join(tmpdir(), "没有这个目录-xyz") },
+      });
+      expect(
+        missing.probes.find((p) => p.where.startsWith("CARGO_HOME/bin"))
+          ?.result,
+      ).toBe("absent");
+      /* `CARGO_HOME/bin` 在 ⇒ empty（目录在、没有那个名字）；`bin` 都不在 ⇒ absent。
+       * 两句的下一动作不同：前者去装工具链，后者说明 `CARGO_HOME` 的值指错了。 */
+      mkdirSync(path.join(empty, "bin"), { recursive: true });
+      const emptyHome = findCargoLookup({
+        env: { PATH: "", CARGO_HOME: empty },
+      });
+      const probe = emptyHome.probes.find((p) =>
+        p.where.startsWith("CARGO_HOME/bin"),
+      );
+      expect(probe?.result).toBe("empty");
+      expect(probe?.detail).toContain(empty);
+    });
+
     it("CARGO_HOME 没设 / 空串 ⇒ 这一处不探（不许拼出 cwd 下的 bin）", () => {
       expect(cargoHomeValue({})).toBeNull();
       expect(cargoHomeValue({ CARGO_HOME: "   " })).toBeNull();
