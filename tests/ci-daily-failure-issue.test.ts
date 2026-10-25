@@ -375,3 +375,145 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
     expect(calls.some((c) => c.includes("get-build-stage"))).toBe(true);
   });
 });
+
+/**
+ * 取数按时间窗翻页 —— 「上一跑真红」必须被捞回来（ISSUE #2392）。
+ *
+ * 今晚的现场：60 条那一页里唯一的每日类派发就是**正在跑的这一跑**，排除之后得到
+ * 「有 1 条、无一终态」⇒ 什么都没写，而那一格带 `--no-block`，平台读数是一格 success。
+ * 这两条用例一根正路（翻页把红的那一跑捞回来 ⇒ 写通道被真的走到），一根负控制
+ * （盖不住窗口 ⇒ 一个字都不写，且不许把「没写」读成「没有红」）。
+ */
+describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
+  /** 若干小时前的 ISO 时刻。 */
+  const hoursAgo = (h: number) =>
+    new Date(Date.now() - h * 3_600_000).toISOString();
+
+  /** 造一整页（新→旧）：默认全是 PR 事件，`extra` 排在最前。 */
+  function pageRows(
+    count: number,
+    newestH: number,
+    oldestH: number,
+    extra: ListBuild[] = [],
+  ) {
+    const rows: ListBuild[] = [...extra];
+    for (let i = rows.length; i < count; i += 1) {
+      const h = newestH + ((oldestH - newestH) * i) / Math.max(1, count - 1);
+      rows.push({
+        sn: `pr-${newestH}-${i}`,
+        event: "pull_request",
+        createTime: hoursAgo(h),
+        status: "success",
+      });
+    }
+    return rows;
+  }
+
+  /** 一整条假平台：列表按页答，详情按 sn 答，写命令记下来。 */
+  function fakePlatform(input: {
+    pages: Record<number, ListBuild[] | null>;
+    detailsBySn: Record<string, Verdict>;
+    openIssues: Array<{ number: number; title: string }>;
+    comments?: string[];
+  }) {
+    /** @type {string[]} */
+    const calls: string[] = [];
+    const run = (_cmd: string, args: string[]) => {
+      const key = args.join(" ");
+      calls.push(key);
+      const json = (data: unknown) => ({
+        status: 0,
+        stdout: JSON.stringify({ status: 200, data }),
+        stderr: "",
+        error: null,
+      });
+      if (key.includes("get-build-logs")) {
+        const at = args.indexOf("--page");
+        const n = Number(args[at + 1] ?? "1");
+        const rows = input.pages[n];
+        if (rows === null || rows === undefined)
+          return { status: 1, stdout: "", stderr: "boom", error: null };
+        return json({ total: rows.length, data: rows });
+      }
+      if (key.includes("get-build-status")) {
+        const sn = String(args[args.indexOf("--sn") + 1] ?? "");
+        return json(detail(input.detailsBySn[sn] ?? "running").data);
+      }
+      if (key.includes("list-issues")) return json(input.openIssues);
+      if (key.includes("list-issue-comments"))
+        return json(
+          (input.comments ?? ["sn-prev"]).map((body) => ({ body })),
+        );
+      return json({});
+    };
+    return { run, calls };
+  }
+
+  it("第 2 页里那条真红 ⇒ 翻进去、认出它、把读数**追加到开着的那张号**上", () => {
+    const live = build("sn-live"); // 正在跑的这一跑（就是列表第一条）
+    const prev: ListBuild = {
+      sn: "sn-prev",
+      event: "crontab: 0 0 * * *",
+      createTime: hoursAgo(24),
+      status: "error",
+    };
+    const { run, calls } = fakePlatform({
+      pages: {
+        1: pageRows(60, 0.1, 8, [live]),
+        2: pageRows(60, 8, 40, [prev]),
+      },
+      detailsBySn: { "sn-live": "running", "sn-prev": "failed" },
+      openIssues: [
+        { number: 2344, title: `${titleKey("每日生产构建")}—— 人工开的那张` },
+      ],
+    });
+    const heard: string[] = [];
+    const code = main({
+      argv: [],
+      slug: "moon-read/comfy-app-t3",
+      log: (s: string) => heard.push(s),
+      run,
+    });
+    const out = heard.join("\n");
+    expect(
+      calls.filter((c) => c.includes("get-build-logs")),
+      `没有翻页：${calls.join(" / ")}`,
+    ).toHaveLength(2);
+    expect(out).toContain("取数覆盖自证");
+    expect(out).toContain("上一跑 sn-prev");
+    expect(out).toContain("判定 failed");
+    expect(
+      calls.some((c) => c.includes("post-issue-comment") && c.includes("--number 2344")),
+      `写通道没被走到：${calls.join(" / ")}`,
+    ).toBe(true);
+    // 去重那一支：同一格已有开着的单 ⇒ 追加，不新建。
+    expect(calls.some((c) => c.includes("create-issue"))).toBe(false);
+    expect(code, out).toBe(CODE.DONE);
+    expect(out).toContain("sn-prev"); // 写后独立回读认的是这一跑的 sn
+  });
+
+  it("翻到上界仍盖不住窗口 ⇒ 一个字都不写，且那句是「没盖住」而不是「没有红」", () => {
+    const live = build("sn-live");
+    const pages: Record<number, ListBuild[] | null> = {};
+    for (let p = 1; p <= 20; p += 1) pages[p] = pageRows(60, 0.1, 8, [live]);
+    const { run, calls } = fakePlatform({
+      pages,
+      detailsBySn: { "sn-live": "running" },
+      openIssues: [],
+    });
+    const heard: string[] = [];
+    const code = main({
+      argv: [],
+      slug: "moon-read/comfy-app-t3",
+      log: (s: string) => heard.push(s),
+      run,
+    });
+    const out = heard.join("\n");
+    expect(code, out).toBe(CODE.NO_FACT);
+    expect(out).toContain("取数没盖住");
+    expect(
+      calls.some((c) => c.includes("post-issue-comment") || c.includes("create-issue")),
+      "盖不住窗口却写了平台",
+    ).toBe(false);
+  });
+});
