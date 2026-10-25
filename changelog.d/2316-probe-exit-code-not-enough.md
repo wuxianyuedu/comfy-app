@@ -45,10 +45,13 @@
       `tests/host-ts-loads-in-node.test.ts`：本模块是 `.mjs` 宿主**直接加载**的跨宿主
       地基层，裸 Node 只认相对说明符 —— 那行 `~/lib/core/logger` 让加载期报
       `ERR_MODULE_NOT_FOUND: Cannot find package '~'`，E2E 崩在起跑线上。
-    - 两条判据不打架，同时满足的形状只有一个：**本模块一个日志实现都不 import**，
-      出口由宿主注入（`elevateLogLevel()`，返回还原函数）。应用侧
-      `process-launch.ts` 在加载时把它接到 `~/lib/core/logger`（服务端可达的那条路上
-      仍然只有一条通道），裸 Node 宿主与用例各注入自己的收集器；没注入时缺省**空转**
-      而不是 `console` —— 后者等于留一条绕过脱敏的后门。`probe-exe.test.ts` 的断言也跟着
-      从「拦 `console` / 拦 `logger`」改成「注入收集器」：出口可换之后，前两种拦法都会
-      **静默收到空**，红出来的会是一句指不到真因的断言。
+    - 两条判据不打架，同时满足的形状只有一个：**本模块一个日志实现都不 import**。
+      出口分两层，答的是两件不同的事 ——
+      `elevateLogLevel()` 注入的是**进程级**那条（应用侧 `process-launch.ts` 在加载时
+      接到 `~/lib/core/logger`，于是服务端可达的那条路上仍然只有一条通道、过 redact、
+      进面板）；`FirstRunnableOptions.report` 是**调用点级**那只眼睛（测试夹具 / 纯 Node
+      宿主要的是屏幕上那一行，logger 写到盘上去了）。没注入时**空转**而不是 `console`
+      —— 后者等于留一条绕过脱敏的后门。
+    - `probe-exe.test.ts` 的断言跟着出口形状走：从「拦 `console` / 拦 `logger`」改成
+      「注入收集器」。出口可换之后，前两种拦法都会**静默收到空**，红出来的会是一句
+      指不到真因的断言。

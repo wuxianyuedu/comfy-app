@@ -680,6 +680,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
     candidates: POWER_SHELL_CANDIDATES,
     probeArgs: () => POWER_SHELL_PROBE_ARGS,
     label: `PowerShell（本组 ${PS_SKIP_COUNT} 条用例按 env 档跳过）`,
+    report: (line) => process.stdout.write(`[probe] ${line}\n`),
   });
 
   // 结论在 stdout，守卫的日志（`Log` 被桩件改写到 stderr）要一起收，
@@ -987,6 +988,7 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
     candidates: PYTHON_CANDIDATES,
     probeArgs: () => PYTHON_PROBE_ARGS,
     label: "Python（前台归属那组用例按 env 档跳过）",
+    report: (line) => process.stdout.write(`[probe] ${line}\n`),
   });
 
   /** 抽出 decide_handoff 直接断言判决表。 */

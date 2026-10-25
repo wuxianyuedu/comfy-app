@@ -266,6 +266,19 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(lines.join("\n")).toContain("起不来");
   });
 
+  it("不给 `report` 时一个字都不打（本模块在 `src/lib/**`，不许直接写 console）", () => {
+    /* 判据：这两行输出只在调用方给了出口时才出现 —— `src/lib/**` 是服务端可达的
+     * 库代码，直接 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`
+     * 判的就是这一条）。所以「不注入就静默」是**约定的一部分**，不是省略。 */
+    expect(
+      firstRunnableOrEmpty({
+        candidates: ["comfyapp-no-such-command-2316"],
+        probeArgs: () => ["--version"],
+        label: "假解释器",
+      }),
+    ).toBe("");
+  });
+
   it("一个都没有 ⇒ 空串，且**每个候选的名字与原因**都打出来", () => {
     /* 这一格是 ISSUE #2316 的另一半：一条判不了的用例被记成红，与「安静地跳过了」
      * 在日志里长得一样 —— 区别就在这一行。所以这里把**写出去的那一行**一起断言：
@@ -289,5 +302,22 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(text).toContain("pwsh");
     expect(text).toContain("exit 2");
     expect(text).toContain("不是通过");
+  });
+
+  it("`report` 给了就照样给一遍（测试夹具要 stdout 上那一眼）", () => {
+    /* 本模块**两条出口并存**：`emit()` 走宿主注入的唯一日志通道（应用侧接
+     * `~/lib/core/logger`，落 `log/` 面板），而跑用例的人在终端上看得见的是 `report`
+     * 那一行。少任何一条都不行 —— 只留前者时 CI 日志里读不到它；只留后者时判据判你
+     * 直接写 console（或绕过脱敏）。 */
+    const reported: string[] = [];
+    firstRunnableOrEmpty({
+      candidates: ["comfyapp-no-such-command-2316"],
+      probeArgs: () => ["--version"],
+      label: "假解释器",
+      report: (line) => reported.push(line),
+    });
+    expect(reported.join("\n")).toContain("起不来");
+    // 同一件事也走了注入的那条通道（上面那组 `lines` 是本用例的收集器）。
+    expect(lines.join("\n")).toContain("起不来");
   });
 });

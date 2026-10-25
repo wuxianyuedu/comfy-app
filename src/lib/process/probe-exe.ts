@@ -67,7 +67,7 @@ let sink: Sink = NO_SINK;
  * （那条边在裸 Node 里加载不起来，见文件头），于是谁注入、按哪一级打，都由宿主决定。
  * 返回一个恢复函数 —— 用例拿它还原，免得一个用例的注入漏到下一个用例。
  *
- * @param next 每个级别一个出口（缺哪个级别就仍走默认的 `console`）
+ * @param next 每个级别一个出口（缺哪个级别就沿用注入前那一份）
  * @returns 还原到注入前那次设置
  */
 export function elevateLogLevel(next: Partial<Sink> = {}): () => void {
@@ -187,6 +187,15 @@ export interface FirstRunnableOptions {
   timeoutMs?: number;
   /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
   probe?: (candidate: string, args: string[]) => ProbeOutcome;
+  /**
+   * 探不到时那一行的**第二只眼睛**（缺省不打）。
+   *
+   * 与 `emit()` 那条唯一日志通道不是二选一：那条走 `log/` 与面板（过 redact、看得见历史），
+   * 这条走调用方自己的终端 —— 测试夹具要的正是后者（跑用例的人盯的是屏幕，不是盘）。
+   * 不就地 `console.log` 的理由见文件头：本模块在 `src/lib/**` 里，服务端可达的库代码
+   * 直写 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`）。
+   */
+  report?: (line: string) => void;
 }
 
 /**
@@ -207,11 +216,21 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
-  emit(
-    "warn",
-    `[probe] 本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
-      describeProbeMisses(got.missed, got.timeouts),
-  );
+  /* 一行读数走**两条出口**，它们答的是两件不同的事：
+   *   · `emit("warn", …)` —— 应用侧的那条唯一日志通道（`process-launch.ts` 注入了
+   *     `~/lib/core/logger`，因此落 `log/` 面板、过 redact）。本模块自己**不** import
+   *     日志实现：那是跨宿主地基层，裸 Node 加载期会 `ERR_MODULE_NOT_FOUND`（见文件头）；
+   *   · `options.report` —— 调用方自己那只眼睛。测试夹具要的是**屏幕上**那一眼，
+   *     logger 写到盘上去了，跑用例的人在终端上是看不见的。 */
+  const line =
+    `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
+    describeProbeMisses(got.missed, got.timeouts);
+  emit("warn", `[probe] ${line}`);
+  try {
+    options.report?.(line);
+  } catch {
+    /* 同 emit：读数写不出去不影响探测结论 */
+  }
   return "";
 }
 
