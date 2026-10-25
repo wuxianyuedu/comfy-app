@@ -14,22 +14,14 @@
  * 本体的三条用例覆盖 —— 用的是这台机器上一定存在的 `process.execPath` 与一个
  * 一定不存在的名字）。
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { spawnSync } from "node:child_process";
-
-/* 那行「探不到」的读数走 `~/lib/core/logger`（唯一日志通道，见
- * `tests/single-logger-channel.test.ts`），所以这里拦的是它、不是 `console`：
- * 拦 `console` 在实现改成 `logger.warn` 之后会**静默收不到任何东西**，
- * 而下面的断言会变成「拿到了空串、于是断言不通过」—— 一条红得指不到真因的用例。 */
-const warn = vi.hoisted(() => vi.fn<(msg: string) => void>());
-vi.mock("~/lib/core/logger", () => ({
-  logger: { warn, info: () => undefined, error: () => undefined },
-}));
 
 import {
   describeProbeFailure,
   describeProbeMisses,
   firstRunnable,
+  elevateLogLevel,
   firstRunnableOrEmpty,
   probeExecutable,
   toProbedCandidates,
@@ -229,8 +221,20 @@ describe("两条 `??` 兜底是判据的一部分，不是排版", () => {
 });
 
 describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的那一行读数", () => {
+  /* 那行读数走 `elevateLogLevel()` 注入的出口（默认是裸 Node 的 `console`，见实现文件头）。
+   * 这里注入一个收集器而不是拦 `console`：出口是可换的，拦 `console` 会在换过之后
+   * **静默收到空**，于是断言失败却说不出是「没打」还是「没收到」。 */
+  const lines: string[] = [];
+  let restore: () => void = () => undefined;
   beforeEach(() => {
-    warn.mockClear();
+    lines.length = 0;
+    restore = elevateLogLevel({
+      log: (m) => lines.push(m),
+      warn: (m) => lines.push(m),
+    });
+  });
+  afterEach(() => {
+    restore();
   });
 
   it("命中就返回候选名（调用点拿它当 `skipIf(!x)` 的守卫）", () => {
@@ -245,7 +249,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     });
     expect(got).toBe("b");
     // 命中时**不打**那行读数：一行「跳过」都没有，却印一句「跳过」，比不印更误导。
-    expect(warn).not.toHaveBeenCalled();
+    expect(lines).toEqual([]);
   });
 
   it("缺省探针（真起进程）那条路也走得通：注入点不给就用 `probeExecutable`", () => {
@@ -259,7 +263,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
         label: "假解释器",
       }),
     ).toBe("");
-    expect(warn.mock.calls.map((c) => c[0]).join("\n")).toContain("起不来");
+    expect(lines.join("\n")).toContain("起不来");
   });
 
   it("一个都没有 ⇒ 空串，且**每个候选的名字与原因**都打出来", () => {
@@ -279,7 +283,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
           : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
     });
     expect(got).toBe("");
-    const text = warn.mock.calls.map((c) => c[0]).join("\n");
+    const text = lines.join("\n");
     expect(text).toContain("PowerShell");
     expect(text).toContain("powershell");
     expect(text).toContain("pwsh");

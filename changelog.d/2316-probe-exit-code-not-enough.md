@@ -36,12 +36,19 @@
     留**地基那一份**（`probe-exe.ts`），master 侧那个文件内夹具删掉 —— 同一条判据不该有
     第二份实现（§12.18），而这份地基的另外两个消费方已经在用它；「探不到时打逐候选读数」
     也随之收进 `firstRunnableOrEmpty()`，两处调用点各写成一行。
-  - **CI 第一跑的读数与修法**（`cnb-ugs-1k5ooa6la`，红在「受影响用例」一格）：上面那句
-    「探不到时打一行读数」写的是 `console.log`，而 `tests/single-logger-channel.test.ts`
-    判的正是「除日志门面外，服务端库代码里没有直接写 console」—— 新增的
-    `src/lib/process/probe-exe.ts` 当场被点名（`expected [ 'src/lib/process/probe-exe.ts' ] to deeply equal []`）。
-    错不在那条判据：`console` 绕开 pino 的 redact 与 ERROR 镜像，这行读数本该走唯一通道。
-    改成 `logger.warn(...)`（`~/lib/core/logger`，它**刻意不带** `server-only`，
-    所以第三类登记的纯 Node 宿主那一侧不被说反）；`probe-exe.test.ts` 的断言随之从
-    「拦 console」改成「拦 logger」—— 拦 console 在实现改走 logger 之后会**静默收到空**，
-    那样红出来的会是一句指向不到真因的断言。
+  - **「那一行读数往哪写」踩了两脚，两次都红在平台侧**（同一条判据的两头）：
+    - 第一跑（`cnb-ugs-1k5ooa6la`）红在 `tests/single-logger-channel.test.ts`：
+      「探不到时打一行读数」写的是裸 `console.log`，而那条判据判的是「除日志门面外，
+      服务端库代码里没有直接写 console」—— `probe-exe.ts` 当场被点名。判据是对的：
+      `console` 绕开 pino 的 redact 与 ERROR 镜像（规范 07 §7.18.2.1）。
+    - 第二跑（`cnb-8a8-1k5op440e`）换成 `logger.warn(...)` 之后红在
+      `tests/host-ts-loads-in-node.test.ts`：本模块是 `.mjs` 宿主**直接加载**的跨宿主
+      地基层，裸 Node 只认相对说明符 —— 那行 `~/lib/core/logger` 让加载期报
+      `ERR_MODULE_NOT_FOUND: Cannot find package '~'`，E2E 崩在起跑线上。
+    - 两条判据不打架，同时满足的形状只有一个：**本模块一个日志实现都不 import**，
+      出口由宿主注入（`elevateLogLevel()`，返回还原函数）。应用侧
+      `process-launch.ts` 在加载时把它接到 `~/lib/core/logger`（服务端可达的那条路上
+      仍然只有一条通道），裸 Node 宿主与用例各注入自己的收集器；没注入时缺省**空转**
+      而不是 `console` —— 后者等于留一条绕过脱敏的后门。`probe-exe.test.ts` 的断言也跟着
+      从「拦 `console` / 拦 `logger`」改成「注入收集器」：出口可换之后，前两种拦法都会
+      **静默收到空**，红出来的会是一句指不到真因的断言。

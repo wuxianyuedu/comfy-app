@@ -27,12 +27,74 @@
 // 「测试侧要用它」这件事说反（那个入口就是一句 throw）。
 import { spawnSync } from "node:child_process";
 
-/* §18.4 三选一与「日志只有一条通道」在这里是**同一件事的两面**（`tests/single-logger-channel.test.ts`）：
- * 本模块登记为第三类（纯 Node 宿主），所以它既不能被 `server-only` 挡住，也不许自己
- * `console.log` —— 那条判据实测把「探不到时打一行读数」判成了直接写 console。
- * `~/lib/core/logger` 同样**刻意不带** `server-only`（解释器探测同样发生在测试与
- * `scripts/*.mjs` 宿主里），因此这条边不会把纯 Node 那一侧说反；代价只是一行 import。 */
-import { logger } from "~/lib/core/logger";
+/* ── 「这行读数往哪写」：本模块**自己不写**，出口由宿主注入 ────────────────
+ *
+ * 这一格踩过两次，两次都红在平台侧，而且看起来互相矛盾：
+ *
+ *   · 第一版写裸 `console.log` ⇒ `tests/single-logger-channel.test.ts` 点名本文件
+ *     （「除日志门面外，服务端库代码里没有直接写 console」）。那条判据是对的：服务端
+ *     可达的代码直写 `console` 就绕开 pino 的 redact 与 ERROR 镜像（规范 07 §7.18.2.1）。
+ *   · 第二版改成 `import { logger } from "~/lib/core/logger"` ⇒ 更隐晦地崩了：本模块是
+ *     `.mjs` 宿主**直接加载**的那条边界上的一员（`tests/host-ts-loads-in-node.test.ts`
+ *     拿真 Node 起一遍），而裸 Node 只认相对说明符 —— 加载期
+ *     `ERR_MODULE_NOT_FOUND: Cannot find package '~'`，E2E 整格崩在起跑线上。
+ *
+ * 两条判据不是打架：一条判「服务端可达的代码不许自建日志通道」，一条判「跨宿主地基层
+ * 必须能被裸 Node 加载」。同时满足的形状只有一个 —— **本模块一个日志实现都不 import**，
+ * 出口由宿主注入（{@link elevateLogLevel}）：应用侧（`process-launch.ts`）在加载时把它
+ * 接到 `~/lib/core/logger`；裸 Node 宿主与用例各注入自己的收集器。
+ *
+ * 没注入时的缺省出口是**空转**，刻意不是 `console`：
+ *   · 空转是「这条路没人接」，而 `console` 是「接了一条绕过脱敏的通道」—— 后者正是
+ *     上面那条判据要治的东西，留它当缺省等于留一个随时会被踩到的后门；
+ *   · 本仓每一处「探不到」都在**应用侧**或**用例里**，两者都已经/可以注入，
+ *     所以缺省空转不会让任何一条真实读数消失（有注入的用例逐条断言那行读数在）。
+ */
+/** `LoggerTag` → 出口。 */
+type Sink = Record<LoggerTag, (message: string) => void>;
+
+/** 这行读数该被当成哪一级（`log` = 中性读数，`warn` = 「这一组没测」这件要人知道的事）。 */
+export type LoggerTag = "log" | "warn";
+
+const NO_SINK: Sink = { log: () => undefined, warn: () => undefined };
+
+let sink: Sink = NO_SINK;
+
+/**
+ * 把本模块的读数接到宿主的唯一日志通道上（应用侧在加载时就调，见 `process-launch.ts`）。
+ *
+ * 注入的是**两个函数**而不是一个 logger：本模块在类型层不认识 `~/lib/core/logger`
+ * （那条边在裸 Node 里加载不起来，见文件头），于是谁注入、按哪一级打，都由宿主决定。
+ * 返回一个恢复函数 —— 用例拿它还原，免得一个用例的注入漏到下一个用例。
+ *
+ * @param next 每个级别一个出口（缺哪个级别就仍走默认的 `console`）
+ * @returns 还原到注入前那次设置
+ */
+export function elevateLogLevel(next: Partial<Sink> = {}): () => void {
+  const previous = sink;
+  sink = {
+    log: next.log ?? previous.log,
+    warn: next.warn ?? previous.warn,
+  };
+  return () => {
+    sink = previous;
+  };
+}
+
+/**
+ * 写一行读数（内部用，不导出）。
+ *
+ * `try` 不是为了吞错：注入进来的出口可能是宿主自己那条链（pino → 文件 / stdout），
+ * 而「这台机器上探不到某个工具」只是**读数**，它失败了也不该让探测本身抛异常 ——
+ * 那会把「判不了」升级成「判据炸了」，正是本模块要治的那一类。
+ */
+function emit(tag: LoggerTag, message: string): void {
+  try {
+    sink[tag](message);
+  } catch {
+    /* 读数写不出去不影响探测结论 */
+  }
+}
 
 /** 一次探测的三种结局（语义见文件头）。 */
 export type ProbeFailure =
@@ -145,7 +207,8 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
-  logger.warn(
+  emit(
+    "warn",
     `[probe] 本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
       describeProbeMisses(got.missed, got.timeouts),
   );
