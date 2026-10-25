@@ -27,6 +27,13 @@
 // 「测试侧要用它」这件事说反（那个入口就是一句 throw）。
 import { spawnSync } from "node:child_process";
 
+/* §18.4 三选一与「日志只有一条通道」在这里是**同一件事的两面**（`tests/single-logger-channel.test.ts`）：
+ * 本模块登记为第三类（纯 Node 宿主），所以它既不能被 `server-only` 挡住，也不许自己
+ * `console.log` —— 那条判据实测把「探不到时打一行读数」判成了直接写 console。
+ * `~/lib/core/logger` 同样**刻意不带** `server-only`（解释器探测同样发生在测试与
+ * `scripts/*.mjs` 宿主里），因此这条边不会把纯 Node 那一侧说反；代价只是一行 import。 */
+import { logger } from "~/lib/core/logger";
+
 /** 一次探测的三种结局（语义见文件头）。 */
 export type ProbeFailure =
   /** 进程压根没起来（`error.code` 是 libuv 给的那个码；它认不出时是 `UNKNOWN`）。 */
@@ -146,15 +153,17 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
-  /* 走调用方给的出口，**不直接 `console.log`**：`src/lib/**` 是服务端可达的库代码，
-   * 直接写 console 会绕开 redact 脱敏与 ERROR 镜像（规范 07 §7.18.2.1，
-   * `tests/single-logger-channel.test.ts` 判这一条）。本模块的消费方是测试夹具，
-   * 它们要的是 stdout 上那一行，所以出口由调用方注入（缺省什么都不打 ——
-   * 「探不到」这件事仍然如实返回成空串，调用方按 `skipIf(!x)` 处理）。 */
-  options.report?.(
+  /* 两条出口，缺一都不行：
+   *   · `logger.warn` 是**唯一日志通道**（`src/lib/**` 不许直接写 console —— 那会绕开
+   *     redact 脱敏与 ERROR 镜像，规范 07 §7.18.2.1，`tests/single-logger-channel.test.ts`
+   *     判这一条）。判据落在这个文件上时，改走 logger 是唯一正解；
+   *   · `report` 是给**测试夹具**的那一眼：它们要的是 stdout 上那一行（`logger` 写到
+   *     `log/` 里去，跑用例的人在终端上看不见）。不注入就只走 logger。 */
+  const line =
     `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
-      describeProbeMisses(got.missed, got.timeouts),
-  );
+    describeProbeMisses(got.missed, got.timeouts);
+  logger.warn(`[probe] ${line}`);
+  options.report?.(line);
   return "";
 }
 
