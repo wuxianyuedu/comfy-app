@@ -424,31 +424,59 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   });
 });
 
-describe("平台配置：这一格必须排在最后、带 always()、且不挂 ifModify", () => {
+describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages` 里的一格", () => {
   const CONFIG = fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
 
-  /* 正控：真的读到了那一格（否则下面两条断言会在「配置里没有它」上以别的名义绿掉）。 */
+  /* 正控：真的读到了那一格（否则下面几条断言会在「配置里没有它」上以别的名义绿掉）。 */
   it("`.cnb.yml` 里有这一格，入口是脚本而不是裸命令", () => {
-    expect(CONFIG).toContain("- name: PR 失败立案");
-    const at = CONFIG.indexOf("- name: PR 失败立案");
-    const block = CONFIG.slice(at, at + 1200);
-    expect(block).toContain("node scripts/ci-pr-failure-issue.mjs --no-block");
-    expect(block).toContain("run: always()");
-    expect(block).toContain("timeout: 5m");
-    expect(block).not.toContain("ifModify");
+    expect(CONFIG).toContain("    - name: PR 失败立案");
+    expect(CONFIG).toContain("node scripts/ci-pr-failure-issue.mjs --no-block");
+    const at = CONFIG.indexOf("    - name: PR 失败立案");
+    expect(CONFIG.slice(at, at + 800)).toContain("timeout: 5m");
   });
 
   /**
-   * 「写在最后」不是排版：前面任何一格红都会把它 `skipped` 掉，
-   * 而那正是它要治的形状（`always()` 挡的是「前面红 ⇒ 整条链停」这一次）。
-   * 判据 = 它在 `.gates` 锚点里之后没有别的 `- name:` 了。
+   * 「红也要跑」这件事**不能**靠 `stages` 里的某一格：本仓 `stages` 是串行链，
+   * 前面哪里一红后面整片 `skipped`（实测 `cnb-dbu-1k5ohq6p4`：`受影响用例` 红 ⇒
+   * 它后面 23 格全是 skipped）。平台原生那一档是 Pipeline 级 `endStages`
+   * （`zh/build/grammar.md`：「无论 stages 是否成功，endStages 都将执行」）。
+   *
+   * 这条判据守的是**位置**：有人把它挪回 `*gates`（那个 stage 数组锚点）里，
+   * 它就又变回「红了 = 不跑」，而这两种形态在 diff 上只差两行缩进。
    */
-  it("它是 `.gates` 锚点的最后一格（后面只剩注释与别的顶层键）", () => {
+  it("它挂在 `endStages` 下，而不是 `stages: *gates` 的那个数组里", () => {
     const gatesAt = CONFIG.indexOf(".gates: &gates");
     const masterAt = CONFIG.indexOf("\nmaster:");
-    const body = CONFIG.slice(gatesAt, masterAt);
-    const names = [...body.matchAll(/^ {2}- name: (.+)$/gm)].map((m) => m[1]);
-    expect(names.length).toBeGreaterThan(3);
-    expect(names[names.length - 1]).toBe("PR 失败立案");
+    expect(gatesAt).toBeGreaterThan(0);
+    expect(masterAt).toBeGreaterThan(gatesAt);
+    expect(
+      CONFIG.slice(gatesAt, masterAt),
+      "`PR 失败立案` 出现在 `*gates` 里 —— 那个数组是串行链，前面一红它就会被 skipped，" +
+        "而「红了要有人知道」正是它唯一的用途。它属于 Pipeline 级 `endStages`。",
+    ).not.toContain("PR 失败立案");
+
+    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
+    expect(anchorAt).toBeGreaterThan(0);
+    expect(CONFIG.slice(anchorAt, anchorAt + 200)).toContain("endStages:");
+  });
+
+  it("PR 那条流水线真的引入了这个锚点（写了锚点却没人引用 = 永远不跑）", () => {
+    const at = CONFIG.indexOf("  pull_request:");
+    const body = CONFIG.slice(at, at + 500);
+    /* 两个独立合并键，不是 `<<: [*a, *b]`：形态判据按 `- <<: *x` 数锚点引用
+     * （`tests/no-platform-ci-config.test.ts` 要求引用数等于带 `stages:` 的流水线数），
+     * 流式写法会被数少一条、当场红。 */
+    expect(body).toContain("    - <<: *common\n      <<: *pr_fail_stage");
+  });
+
+  it("**不是** `failStages`：那一档只在红时跑，「这一格自己挂了」会一起消失", () => {
+    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
+    const block = CONFIG.slice(anchorAt, anchorAt + 400);
+    expect(block).not.toContain("failStages");
+    expect(block).not.toContain("ifModify");
+    /* 那两条没被验证过的条件语法也不许回来当「红也跑」的手段 —— 第一版写成
+     * `run: always()`，实测那一格仍然是 `skipped`。 */
+    expect(block).not.toContain("always()");
+    expect(block).not.toContain("when:");
   });
 });
