@@ -35,8 +35,10 @@ import {
   normalizeStageContent,
   parseArgs,
   pipelineForStage,
+  progressReadout,
   stageLogExcerpt,
 } from "../scripts/ci-build-readout.mjs";
+import { buildSignature } from "../scripts/ship-build.mjs";
 
 /** 被取消那一跑（`cnb-lm1-1k5h1otqt`）：第二格被顶掉，第三格根本没跑。 */
 const CANCELLED_BUILD = {
@@ -734,5 +736,91 @@ describe("formatOutcome：前缀可注入（ship 的 --diagnose 复用同一份�
     });
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) expect(line.startsWith("[ship]")).toBe(true);
+  });
+});
+
+/**
+ * 「还在跑」那一支的进度读数（ISSUE #2304）。
+ *
+ * 防的是这一格：诊断只念「还在跑，等它跑完再读一次」，而轮询那行念的是格子进度 ——
+ * 同一个事实两个读者面，看诊断的人只能去翻原始 JSON，而那层嵌套
+ * （`data.pipelinesStatus.<sn>-001.stages[]`）读错一次就把「在推进」念成「一格都没起」。
+ */
+const RUNNING_BUILD = {
+  status: 200,
+  data: {
+    status: "pending",
+    pipelinesStatus: {
+      "b1-001": {
+        id: "b1-001",
+        name: "质量门禁",
+        status: "pending",
+        stages: [
+          { status: "success", duration: 1, name: "Prepare", id: "s1" },
+          { status: "start", duration: 0, name: "受影响用例", id: "s2" },
+          { status: "pending", duration: 0, name: "类型检查", id: "s3" },
+        ],
+      },
+    },
+  },
+};
+
+describe("progressReadout：诊断与轮询共用同一份计数", () => {
+  it("签名逐字等于 `buildSignature`（不许另数一遍）", () => {
+    const got = progressReadout(RUNNING_BUILD, "b1");
+    expect(got.signature).toBe(buildSignature(RUNNING_BUILD, "b1"));
+    expect(got.signature).toContain("/pending/");
+  });
+
+  it("在飞那一格只算 `start`，完成数把它排除在外（`0-1+1/3`）", () => {
+    const got = progressReadout(RUNNING_BUILD, "b1");
+    expect(got.flyingCount).toBe(1);
+    expect(got.flyingNames).toEqual(["受影响用例"]);
+    expect(got.signature).toBe("b1/pending/0-1+1/3");
+  });
+
+  it("取不到原值时不抛，签名里点名「取不到」", () => {
+    const got = progressReadout(null, "b1");
+    expect(got.flyingCount).toBe(0);
+    expect(got.signature).toContain("(取不到 data)");
+  });
+});
+
+describe("formatOutcome：running 那一支把进度念出来", () => {
+  it("给了 json ⇒ 两行（进度 + 在飞），且进度那行就是同一个签名", () => {
+    const lines = formatOutcome(classifyBuildOutcome(RUNNING_BUILD), {
+      sn: "b1",
+      slug: "org/repo",
+      json: RUNNING_BUILD,
+      prefix: "[ship]",
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("还在跑");
+    expect(text).toContain(`进度（与轮询那行同一份计算）：${buildSignature(RUNNING_BUILD, "b1")}`);
+    expect(text).toContain("在飞 1 格：受影响用例");
+  });
+
+  it("一格都没在飞时念「没有一格在飞」，不念成绿", () => {
+    const idle = structuredClone(RUNNING_BUILD);
+    const stage = idle.data.pipelinesStatus["b1-001"]?.stages?.[1];
+    expect(stage, "夹具形状变了（找不到第二格）").toBeTruthy();
+    if (stage) stage.status = "pending";
+    const text = formatOutcome(classifyBuildOutcome(idle), {
+      sn: "b1",
+      json: idle,
+    }).join("\n");
+    expect(text).toContain("此刻没有一格在飞");
+    expect(text).not.toContain("结论：绿");
+  });
+
+  it("没给 json 就少念那两行 —— 旧行为与判定一字不变（仍是「没有结论」）", () => {
+    const lines = formatOutcome(classifyBuildOutcome(RUNNING_BUILD), {
+      sn: "b1",
+      slug: "org/repo",
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("还在跑");
+    expect(text).not.toContain("进度（");
+    expect(text).not.toContain("在飞 ");
   });
 });
