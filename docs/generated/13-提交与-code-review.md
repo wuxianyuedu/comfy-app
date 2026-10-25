@@ -6964,6 +6964,31 @@ D 组里比它们贵、也同样「不必每次跑」的步骤还有的是（`ch
 > `repo-code:r`）时**可读地红**并点名业主动作 —— 失败不许静默。其余判据的回写
 > 留白照旧。
 
+> **2026-10-25 的第二次订正（ISSUE #2362 / #2365）：PR 事件**只判不推**，回写走
+> `api_trigger`。** 上面那个例外的后半句（「push 被拒就红并点名业主动作」）在平台侧
+> 没有出口：`CNB_TOKEN` 的权限按**事件可信度**分档，`pull_request` 整族
+> （`.update` / `.target` / `.approved` / `.changes_requested` / `.comment` /
+> `.comment@npc`）在「不可信事件」名单里 ⇒ 恒只有 `repo-code:r`，**没有任何 YAML 开关
+> 能翻**；OIDC 也不给 PR / Issue 事件签发 `id_token`。信任单位是「事件 + ref」而不是
+> 「谁在推」，所以同仓、管理员身份一样只读。红路径实测（#2362 的 `cnb-1mr` 那跑）走到
+> 最后一格才撞上：判红 → 就地修 → 复判全绿 → 源分支反查正确 → plumbing 建好 `488837a1`
+> → **push 被拒**。护栏一条没错，缺的是「谁有权推」。
+>
+> 出路**不是**要权限、也不是配一套长期 bot 凭据（多一个轮换面 + 泄漏面），而是**换执行口**：
+> `api_trigger` 是可信事件、令牌 `rw`（同一轮用一条临时流水线实测
+> `git push --dry-run` 得 `PUSH_RC=0`）。落地形状三件：
+>
+> 1. `pull_request` 那一格只做「判 / 修 / 复判」，再把 `cnb build start-build --event
+>    api_trigger_formatfix` 发出去 —— 那一格的绿只说明**委托发出去了**，不说明回写成了；
+> 2. `api_trigger_formatfix`（`.cnb.yml`）带 `--delegate` 跑同一个入口：它是回写口，自己推；
+> 3. 幂等闸是**传进来的 `--sha`** 与 `git ls-remote` 的实时头相等，不是 `CNB_COMMIT`
+>    （后者是触发那一刻的快照，会一直对得上 ⇒ 白推一次非 fast-forward）。参数一律走
+>    `--ref` / `--sha` / `env`：`CNB_BRANCH` 在 `api_trigger` 上是「流水线所在分支」
+>    （实测 `master`），拿它当回写目标正是 #2358 首跑认错分支的同一个根因。
+>
+> 代价是多一格流水线（装依赖 + 一次 prettier），只在该格真红时才发生。这一档的四道护栏
+> （master 恒拒、bot 身份可辨、复判全绿才推、防连环）一条未动 —— 变的只是「谁按下去」。
+
 **「哪几档会自己改工作区」也只有一处出处**（与 §13.5.18 同一条口径）：
 `scripts/ci-autofix-duties.mjs` 的 `AUTOFIX_DUTIES`，`tests/ci-autofix-duties.test.ts`
 （**进固定清单**，每次提交都跑）双向核对 —— 登记表里每条 ⇒ 配置里同名 stage 的 `script`

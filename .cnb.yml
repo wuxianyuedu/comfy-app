@@ -552,6 +552,12 @@
 .lock-oneshot-unit: &lock_oneshot_unit
   key: oneshot-unit
   cancel-in-progress: true
+# `prettier 格式` 的**委托回写**口（见 `.format-fixup-stage` 那段）。它自成一份工作清单，
+# 按上面 R3「同一把锁只给同一份清单」的规则必须独占一把 —— 与单跑三档共用会把
+# 「我要复验构建」和「我要补一笔格式修复」排成互斥。
+.lock-formatfix: &lock_formatfix
+  key: formatfix
+  cancel-in-progress: true
 
 .daily-gates: &daily_gates
   # ── 每日失败立案：排在**整份清单的最前面**，判的是「上一跑」──────────────────
@@ -1017,6 +1023,44 @@
     env:
       COMFY_CI_SUBJECT: "master"
     timeout: 45m
+
+# ── 格式修复的**委托回写**格（ISSUE #2362 / #2365）──────────────────────────────
+#
+# 这一份**不属于**每日档 / 单跑三档，也不许被并进那几张表：它是「一条按需补推」，
+# 由 `pull_request` 那一格的 `start-build --event api_trigger_formatfix` 发出来，
+# 事件键挂在下面不远的 `api_trigger_formatfix` 上（那段头注写着为什么必须换口）。
+#
+# 前提只有一件：`node_modules`。每次构建都是全新 job 目录、`node_modules` 恒不在场
+# （`.cnb.yml` 的 `工作区复用读数` 两跑实测），而判 / 修 / 复判三拍全在这份依赖上。
+#
+# `--sha` 与 `--ref` **必须由调用方代入**（`start-build --env`），这里一格正文都不写死：
+#   · `--ref` = PR 源分支。`CNB_BRANCH` 在这一口是「流水线所在分支」（实测 = `master`），
+#     拿它当回写目标正是 #2358 首跑认错分支的同一个根因；
+#   · `--sha` = 委托那一刻的源分支头。它同时是**幂等闸**：被委托这一跑拿 `git ls-remote`
+#     的实时头与它比，对不上就说明中间有人推过 ⇒ 打一行读数、退 0、不推。
+#     不用 `CNB_COMMIT` 当闸 —— 那是触发那一刻的快照，会一直对得上、白推一次非 fast-forward。
+#
+# ⚠️ `--delegate` 是「我就是回写口」的显式声明：脚本靠它区分「自己是那一格」与
+# 「自己被挂在 PR 那一格上」—— 后者在当前令牌下根本推不动，唯一的出路是再委托一次。
+# 少写这一个旗标的表现是：这一格自己把事件又发回给自己（死循环，且账面全绿）。
+#
+# `timeout: 10m`：装依赖 + 一次 prettier，与 `prettier 格式` 那一格同量级；
+# 给 10m 是「卡死要早报」的余量，不是重试预算（这一格不重试）。
+.format-fixup-delegate: &format_fixup_delegate
+  - name: 委托回写·安装依赖
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $ErrorActionPreference = "Stop"
+      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  - name: 委托回写·判修推
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $args = @("--check", "--autofix", "--delegate")
+      if ($env:COMFYAPP_ACTING_REF) { $args += @("--ref", $env:COMFYAPP_ACTING_REF) }
+      if ($env:COMFYAPP_ACTING_SHA) { $args += @("--sha", $env:COMFYAPP_ACTING_SHA) }
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-format-fixup.mjs @args
+    timeout: 10m
 
 # ── PR 失败立案：这一跑红了 ⇒ 把红变成**看得见**的东西（ISSUE #2332）─────────────
 #
@@ -2230,3 +2274,35 @@ master:
       name: 单跑全量单测（API 触发）
       lock: *lock_oneshot_unit
       stages: *oneshot_unit
+
+  # ── 第四个 API 口：`prettier 格式` 的**委托回写**（ISSUE #2362 / #2365）─────────
+  #
+  # 为什么需要第二条 API 口：`prettier 格式` 那一格现在会自己修（#2342），但它在
+  # `pull_request` 事件上 —— 而 PR 类事件的 `CNB_TOKEN` **只有 `repo-code:r`**（平台按
+  # 「事件 + ref」给权限，`pull_request` 整族在「不可信事件」名单里，没有任何 YAML 开关能翻；
+  # OIDC 也不给 PR / Issue 事件签发 id_token）。红路径实测（#2362 的 `cnb-1mr` 那跑）：
+  # 判红 → 就地修 → 复判全绿 → 源分支反查正确 → plumbing 建好修复提交 `488837a1` →
+  # **push 被拒**。护栏一条没错，缺的是「谁有权推」。
+  #
+  # 出路不是要权限（没有那个开关），也不是配一套长期 bot 凭据（多一个轮换面 + 泄漏面），
+  # 而是**换执行口**：`api_trigger` 是可信事件、令牌 `rw`。同一轮里用一条临时流水线实测过
+  # `git push --dry-run origin HEAD:refs/heads/probe-perm` ⇒ `PUSH_RC=0`、`[new branch]`。
+  #
+  # 于是 `prettier 格式` 那一格在 PR 事件上只做「判 / 修 / 复判」，再把
+  # `cnb build start-build --event api_trigger_formatfix` 发出来；被委托的这一条跑
+  # `--delegate`（它就是回写口，自己推）。两格各跑一次 prettier，多出来的那一遍是
+  # 这个洞的定价。
+  #
+  # ⚠️ 三条形状约束，每一条都不能省：
+  #   · **参数走 `--ref` / `--sha` / `env`，不指望环境变量**：`CNB_BRANCH` 在 `api_trigger`
+  #     上是「这条流水线所在分支」（实测就是 `master`），拿它当回写目标会推错地方 ——
+  #     与 #2358 首跑把它当 PR 源分支是同一个根因；
+  #   · **`lock` 自己一把**（`*lock_formatfix`）：它的 `stages:` 是一份新清单，
+  #     按 R3「同一把锁只给同一份清单」必须独占，否则与单跑三档排成互斥；
+  #   · **不进 `*daily_gates` / `*oneshot_*`**：它是「一条按需补推」，不是每日档、也不是
+  #     那三档重档的任何一档 —— 把它塞进那几张表会让「手点一遍每日档」多跑一次推送。
+  api_trigger_formatfix:
+    - <<: *common
+      name: 格式修复委托回写（API 触发）
+      lock: *lock_formatfix
+      stages: *format_fixup_delegate
