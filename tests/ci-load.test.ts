@@ -41,24 +41,33 @@ describe("现场核数：平台读数优先，读不到才落本机 / 兜底", (
   it("非法读数按本机办并留一句提醒 —— 不许静默变成 0", () => {
     for (const raw of ["0", "-2", "abc", "8.5"]) {
       const r = resolveCores({ CNB_CPUS: raw });
-      expect(r.cores, `CNB_CPUS=${raw} 应当落回本机读数`).toBeGreaterThanOrEqual(1);
+      expect(
+        r.cores,
+        `CNB_CPUS=${raw} 应当落回本机读数`,
+      ).toBeGreaterThanOrEqual(1);
       expect(r.note, `CNB_CPUS=${raw} 必须留一句提醒`).toContain("CNB_CPUS");
     }
   });
 });
 
 describe("核数 → worker 数：方向是降载，不是放宽判据", () => {
-  it("1 个 worker 至少吃 CORES_PER_WORKER 个核（16 核 ⇒ 4，与 §13.5.3.8 一致）", () => {
-    expect(workersForCores(16)).toBe(16 / CORES_PER_WORKER);
+  it("档位是「一个 worker 至少 8 核」：16 核 ⇒ 2（钉住常数本身，不拿公式自证）", () => {
+    /* 这条以前写的是 `toBe(16 / CORES_PER_WORKER)` —— 那是恒等式，把常数改成任何值
+     * 它都绿。档位是**判断**，必须逐字钉在这里：改常数就要同时改这一行。 */
+    expect(CORES_PER_WORKER).toBe(8);
+    expect(workersForCores(16)).toBe(2);
+    expect(workersForCores(8)).toBe(1);
+    expect(workersForCores(12)).toBe(2);
   });
 
   it("核越多 worker 越多（单调不减），小核机不会被算成 0", () => {
     let prev = 0;
     for (const cores of [1, 2, 3, 4, 6, 8, 12, 16, 32]) {
       const w = workersForCores(cores);
-      expect(w, `${cores} 核算不出至少 ${MIN_WORKERS} 个 worker`).toBeGreaterThanOrEqual(
-        MIN_WORKERS,
-      );
+      expect(
+        w,
+        `${cores} 核算不出至少 ${MIN_WORKERS} 个 worker`,
+      ).toBeGreaterThanOrEqual(MIN_WORKERS);
       expect(w).toBeGreaterThanOrEqual(prev);
       prev = w;
     }
@@ -68,29 +77,34 @@ describe("核数 → worker 数：方向是降载，不是放宽判据", () => {
     for (const cores of [Number.NaN, 0, -1]) {
       expect(workersForCores(cores)).toBeGreaterThanOrEqual(MIN_WORKERS);
     }
-    expect(workersForCores(FALLBACK_CORES)).toBeGreaterThanOrEqual(
-      MIN_WORKERS,
-    );
+    expect(workersForCores(FALLBACK_CORES)).toBeGreaterThanOrEqual(MIN_WORKERS);
   });
 });
 
 describe("人的出口：只调并发，不动任何判据", () => {
   it("不设 `COMFY_CI_MAX_WORKERS` 时用核数推出来的那个", () => {
     const r = resolveCiWorkers({ env: { CNB_CPUS: "16" } });
-    expect(r.workers).toBe(4);
+    /* 具体数值由上面那条钉档位；这里钉的是「默认值 == 公式值」这层关系。 */
+    expect(r.workers).toBe(workersForCores(16));
     expect(r.note).toBeNull();
   });
 
   it("设了就用它（机器被别的东西占着时压到 1 是唯一还兑现得了的动作）", () => {
-    const r = resolveCiWorkers({ env: { CNB_CPUS: "16", COMFY_CI_MAX_WORKERS: "1" } });
+    const r = resolveCiWorkers({
+      env: { CNB_CPUS: "16", COMFY_CI_MAX_WORKERS: "1" },
+    });
     expect(r.workers).toBe(1);
     expect(r.note).toContain("只调并发");
   });
 
   it("非法值按默认办并提醒，不许静默降级成 0", () => {
     for (const raw of ["0", "-1", "abc", "2.5"]) {
-      const r = resolveCiWorkers({ env: { CNB_CPUS: "16", COMFY_CI_MAX_WORKERS: raw } });
-      expect(r.workers, `COMFY_CI_MAX_WORKERS=${raw}`).toBe(4);
+      const r = resolveCiWorkers({
+        env: { CNB_CPUS: "16", COMFY_CI_MAX_WORKERS: raw },
+      });
+      expect(r.workers, `COMFY_CI_MAX_WORKERS=${raw}`).toBe(
+        workersForCores(16),
+      );
       expect(r.note, `COMFY_CI_MAX_WORKERS=${raw} 必须留一句提醒`).toContain(
         "COMFY_CI_MAX_WORKERS",
       );
