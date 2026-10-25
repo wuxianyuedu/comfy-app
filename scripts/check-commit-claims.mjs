@@ -196,7 +196,17 @@ const COUNT_ZERO_RE =
  * @returns {Set<string> | null}
  */
 function commitFiles(commit) {
-  const out = git(["show", "--name-only", "--format=", commit]);
+  /* `-c core.quotePath=false`：路径要原样（同本文件 `sectionInTree()` 那条，机制见
+   * `scripts/changed-scope.mjs` 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，
+   * 本仓有 38 份文件名带非 ASCII 的文件，全在 `docs/` 下）。 */
+  const out = git([
+    "-c",
+    "core.quotePath=false",
+    "show",
+    "--name-only",
+    "--format=",
+    commit,
+  ]);
   if (out === null) return null;
   return new Set(
     out

@@ -25,9 +25,30 @@
  *
  * 用法：
  *   node scripts/check-doc-mirror-pairing.cjs [--staged]
+ *   node scripts/check-doc-mirror-pairing.cjs --base <ref>
  *
  * `--staged` 与其它 D0 步骤同形（钩子传这个）；不带它判的也是暂存集 —— 这份工作区里
  * 没有「全量档」可判：镜像与源是否**同批**是提交的属性，不是仓库的属性。
+ *
+ * ── `--base <ref>`：换判决面的来源（ISSUE #2265 的现场）──────────────────────
+ *
+ * 暂存集是**提交的属性**，而平台那一格（干净快照、没有暂存区）上它恒空 ⇒ 这一步在平台上
+ * **恒绿**：它打印「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0，
+ * 被计成绿 —— 而「改了文档源、镜像没同批带上」在平台侧一个执行者都没有。
+ *
+ * `--base <ref>` 把判决面换成「**相对那条基线改了什么**」：平台上拿得到（PR 事件上平台给
+ * `CNB_PULL_REQUEST_TARGET_SHA`，由 `scripts/changed-scope.mjs` 统一选基线，与「受影响用例」
+ * 那一格、`shell-gate` 同一份口径）。**判决链一字未改** —— 还是「改没改源 / 镜像在不在同一批」。
+ *
+ * ⚠️ 两条边界：
+ *   · **判决面取不到 ⇒ 退 2，不是退 0**（仓库三态：0 绿 / 1 红 / 2 没跑起来）。
+ *     「没有输入可判」与「判过了、没问题」是两件事 —— 退 0 会被复合档计成「绿」。
+ *   · **暂存集为空 ⇒ 同样退 2**。本地钩子这一跳的暂存集永远非空（`git commit` 不许空提交），
+ *     空的那一档只出现在平台上，而平台上没有暂存区。
+ *
+ * `changed-scope.mjs` 是 ESM，而本文件是 CJS —— Node 24 的 `require(esm)` 认得了（实测）。
+ * **惰性 require**：只有真的走 `--base` 形态才加载它（它会拖进一条依赖链），
+ * 暂存形态那一跳的加载面一字未变。
  */
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
@@ -56,8 +77,68 @@ function stagedPaths() {
     .map(asKey);
 }
 
+/**
+ * 判决面：这一次「同批」指的是哪一批文件。
+ *
+ * 两个来源，**互斥**（判据只该看到一个来源 —— 两个都挂着，「到底按哪个面判」就变成读代码的事）：
+ *   · `--base <ref>` ⇒ 「相对那条基线改了什么」（平台侧那一档）；
+ *   · 暂存区（本地那一跳；`--staged` 只是把这件事写出来而已）。
+ *
+ * ⚠️ **取不到 ⇒ 这一格没判**（`ok: false`），由调用方退 2 —— 不是退 0。
+ * 「没有输入可判」与「判过了、没问题」是两件事，退 0 会被复合档计成「绿」。
+ *
+ * @param {string[]} argv
+ * @returns {{ok: true, files: string[], via: string} | {ok: false, reason: string}}
+ */
+function resolveFace(argv) {
+  const baseIdx = argv.indexOf("--base");
+  if (baseIdx >= 0) {
+    const baseRef = (argv[baseIdx + 1] ?? "").trim();
+    if (!baseRef) {
+      return {
+        ok: false,
+        reason: "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
+      };
+    }
+    /* 惰性 require：只有走 `--base` 形态才加载它（它会拖进一条依赖链），
+     * 暂存形态那一跳的加载面一字未变。 */
+    const { changedFilesForBaseRef } = require("./changed-scope.mjs");
+    const got = changedFilesForBaseRef(baseRef, { cwd: ROOT });
+    if (!got.ok) return { ok: false, reason: got.reason };
+    /* 改名的两侧都进面：源被搬走了也算「这次改了源」。 */
+    /* ⚠️ **空清单在这里是「成功测得没有改动」**，不是「取不到面」—— 基线取到了、
+     *   diff 跑成功了、结果是空，那就是「这次什么都没改」⇒ 没有可判的内容 ⇒ 绿。
+     *   （把它读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
+     *   「降档不许被读成全套过了」的忌讳。） */
+    return {
+      ok: true,
+      files: [...got.files, ...got.renamedFrom].map(asKey),
+      via: `基线 ${baseRef}`,
+    };
+  }
+  const files = stagedPaths();
+  if (files.length === 0) {
+    return {
+      ok: false,
+      reason:
+        "暂存区是空的 —— 没有判决面（本地这一跳的暂存集永远非空；" +
+        "空的那一档只出现在平台上，而平台上没有暂存区）",
+    };
+  }
+  return { ok: true, files, via: "暂存区" };
+}
+
 function main() {
-  const staged = new Set(stagedPaths());
+  const argv = process.argv.slice(2);
+  const face = resolveFace(argv);
+  if (!face.ok) {
+    console.error(
+      `[doc-mirror-pairing] 这一条**没判**：${face.reason} —— ` +
+        "没有判决面不等于「已通过」，按「没跑起来」收（退 2）。",
+    );
+    return 2;
+  }
+  const staged = new Set(face.files);
   const missing = [...SOURCES]
     .filter((src) => staged.has(src))
     .map((src) => ({ src, twin: asKey(generatedPathFor(src)) }))
@@ -65,9 +146,8 @@ function main() {
 
   if (missing.length === 0) {
     console.log(
-      staged.size === 0
-        ? "[doc-mirror-pairing] 暂存区是空的 —— 没有什么可判（这不是「已通过」）。"
-        : "[doc-mirror-pairing] OK：本次没有「改了文档源、镜像没同批带上」的情形。",
+      "[doc-mirror-pairing] OK：本次没有「改了文档源、镜像没同批带上」的情形" +
+        `（判决面：${face.via}，${face.files.length} 个文件）。`,
     );
     return 0;
   }

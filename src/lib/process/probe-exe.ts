@@ -100,6 +100,51 @@ export function probeExecutable(
   return { ok: false, failure: { kind: "nonzero-exit", status, signal } };
 }
 
+/** `firstRunnable()` 的入参（候选表 + 每个候选要喂的参数 + 探测预算）。 */
+export interface FirstRunnableOptions {
+  /** 依次试的候选名，顺序即优先级。 */
+  candidates: readonly string[];
+  /**
+   * 每个候选要喂的参数：**必须与真跑那一跳同形**。
+   *
+   * 为什么是逐候选的函数而不是一个数组：`py` 启动器必须先给 `-3` 才是「选一个解释器」，
+   * 而它旁边的 `python` 不能带 —— 「同一个命令的可用判据不是统一的」这件事在这一层
+   * 收口（同 `pythonProbeArgs()` 的理由）。
+   */
+  probeArgs: (candidate: string) => string[];
+  /** 人读的名字（`PowerShell` / `Python`）：只在「探不到」那一句话里出现。 */
+  label: string;
+  /** 这一次探测的预算（缺省 `EXE_PROBE_TIMEOUT_MS`）。 */
+  timeoutMs?: number;
+  /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
+  probe?: (candidate: string, args: string[]) => ProbeOutcome;
+}
+
+/**
+ * `firstRunnable().hit ?? ""`，并在探不到时**打印一行「哪个候选、什么原因」**。
+ *
+ * 为什么要把「空串 = 不在场」这个约定也收进来：本仓的用例是拿一个常量当 `skipIf` 守卫
+ * 用的（`it.skipIf(!psExe)`），所以「不在场」必须能直接表达成 `""`。而**判不了与判错了
+ * 只差那一行读数** —— 没有它，下一次只看到一片 `skipped`，说不出是「这台机器没装」
+ * 还是「有个同名的东西把它顶掉了」（ISSUE #2316 的现场）。两处调用点因此都只写一行。
+ *
+ * @param options 见 `FirstRunnableOptions`
+ * @returns 命中的候选名；一个都没命中时为 `""`（沿用 `skipIf(!x)` 的约定）
+ */
+export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
+  const probe =
+    options.probe ??
+    ((candidate: string, args: string[]) =>
+      probeExecutable(candidate, args, options.timeoutMs));
+  const got = firstRunnable(options.candidates, options.probeArgs, probe);
+  if (got.hit) return got.hit;
+  console.log(
+    `[probe] 本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
+      describeProbeMisses(got.missed, got.timeouts),
+  );
+  return "";
+}
+
 /** 一个「试过但没成」的候选（日志与话术里要用它，别把探针喂的参数抄第二遍）。 */
 export interface ProbedCandidate {
   /** 探测里用的那个名字（`powershell` / `python3` / …）。 */
@@ -138,8 +183,8 @@ export function toProbedCandidates(
  * @param probe 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）
  * @returns 命中的候选与「试过但起不来」的那些（后者供一次性话术用）
  */
-export function firstRunnable<T extends readonly string[]>(
-  candidates: T,
+export function firstRunnable(
+  candidates: readonly string[],
   probeArgs: (candidate: string) => string[],
   probe: (candidate: string, args: string[]) => ProbeOutcome = probeExecutable,
 ): {

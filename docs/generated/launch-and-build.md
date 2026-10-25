@@ -8,8 +8,6 @@
 > AI 协作：本仓库根的 `AGENTS.md` 会在编码代理会话开始时自动加载，并把本文列为
 > 强制前置阅读；修改硬规则时必须同步 `AGENTS.md` 的摘要。
 
-> `pnpm doc:check` 检查本文是否有值未同步。
-
 ## 1. 启动链路与分层职责
 
 启动**只有一个入口**：双击 src-tauri\target\release\app.exe

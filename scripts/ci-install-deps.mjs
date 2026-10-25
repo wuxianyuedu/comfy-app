@@ -133,16 +133,19 @@ export function writeInstallFingerprint(root, value) {
  * @returns {string[] | null} 变更清单（相对仓库根、正斜杠）；`null` = 拿不到（要真装）
  */
 export function changedFiles(run) {
+  /* 每条都带 `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见
+   * `scripts/changed-scope.mjs` 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，
+   * 而机器之间还不一样：本机全局配了 `core.quotepath=false`，CI runner 是 git 默认值）。 */
   const attempts = [
     /* PR：平台 checkout 的是预合并提交，与目标分支的差集就是本次 PR 的变更面。
      * `CNB_PULL_REQUEST_TARGET_BRANCH` 缺省时退回 `master`（本仓唯一的目标分支）。 */
-    ["diff", "--name-only", `origin/${targetBranch()}...HEAD`],
+    ["-c", "core.quotePath=false", "diff", "--name-only", `origin/${targetBranch()}...HEAD`],
     /* push：与上一个提交比（新建分支时这条会失败，落进下面那支）。 */
-    ["diff", "--name-only", "HEAD^..HEAD"],
+    ["-c", "core.quotePath=false", "diff", "--name-only", "HEAD^..HEAD"],
     /* 本地 / 还没提交的形态：工作区与暂存区。前两条在「平台侧 checkout 出来的那份」
      * 上必然成立，而这一条让同一条判据在本地也跑得起来（判据只有一处实现，
      * 别让人为了「本地试着跑一次」再抄一遍逻辑）。 */
-    ["diff", "--name-only", "HEAD"],
+    ["-c", "core.quotePath=false", "diff", "--name-only", "HEAD"],
   ];
   /* ⚠️ 判据是「拿到了非空清单」，不是「命令退 0」：PR 事件上 `origin/<target>...HEAD`
    * 在「源分支就基于目标分支」时**退 0 且回空**（三点 diff 的空集形态），照「退 0 就

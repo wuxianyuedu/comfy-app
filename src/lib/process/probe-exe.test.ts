@@ -14,13 +14,14 @@
  * 本体的三条用例覆盖 —— 用的是这台机器上一定存在的 `process.execPath` 与一个
  * 一定不存在的名字）。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { spawnSync } from "node:child_process";
 
 import {
   describeProbeFailure,
   describeProbeMisses,
   firstRunnable,
+  firstRunnableOrEmpty,
   probeExecutable,
   toProbedCandidates,
   type ProbeOutcome,
@@ -215,5 +216,75 @@ describe("两条 `??` 兜底是判据的一部分，不是排版", () => {
     ]) {
       expect(describeProbeFailure(failure)).not.toContain("undefined");
     }
+  });
+});
+
+describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的那一行读数", () => {
+  it("命中就返回候选名（调用点拿它当 `skipIf(!x)` 的守卫）", () => {
+    const got = firstRunnableOrEmpty({
+      candidates: ["a", "b"],
+      probeArgs: () => [],
+      label: "X",
+      probe: (candidate) =>
+        candidate === "b"
+          ? { ok: true, failure: null }
+          : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
+    });
+    expect(got).toBe("b");
+  });
+
+  it("缺省探针（真起进程）那条路也走得通：注入点不给就用 `probeExecutable`", () => {
+    /* 上面两条都注入了探针，于是 `probeExecutable` 那个缺省分支从没被走到 ——
+     * 而它正是两处调用点实际走的那条路。这里喂一个真机上一定不存在的名字：
+     * 结论必须是「不在场」，不是抛。 */
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line: string) => {
+      lines.push(line);
+    });
+    try {
+      expect(
+        firstRunnableOrEmpty({
+          candidates: ["comfyapp-no-such-command-2316"],
+          probeArgs: () => ["--version"],
+          label: "假解释器",
+        }),
+      ).toBe("");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(lines.join("\n")).toContain("起不来");
+  });
+
+  it("一个都没有 ⇒ 空串，且**每个候选的名字与原因**都打出来", () => {
+    /* 这一格是 ISSUE #2316 的另一半：一条判不了的用例被记成红，与「安静地跳过了」
+     * 在日志里长得一样 —— 区别就在这一行。所以这里连 stdout 一起断言：
+     * 候选名、以及「起来了但退非零」这个具体形态，两件都要出现。 */
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line: string) => {
+      lines.push(line);
+    });
+    try {
+      const got = firstRunnableOrEmpty({
+        candidates: ["powershell", "pwsh"],
+        probeArgs: () => [],
+        label: "PowerShell",
+        probe: (candidate) =>
+          candidate === "pwsh"
+            ? {
+                ok: false,
+                failure: { kind: "nonzero-exit", status: 2, signal: null },
+              }
+            : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
+      });
+      expect(got).toBe("");
+    } finally {
+      spy.mockRestore();
+    }
+    const text = lines.join("\n");
+    expect(text).toContain("PowerShell");
+    expect(text).toContain("powershell");
+    expect(text).toContain("pwsh");
+    expect(text).toContain("exit 2");
+    expect(text).toContain("不是通过");
   });
 });
