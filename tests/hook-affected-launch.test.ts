@@ -42,7 +42,6 @@ import {
   waitForLoadToSettle,
 } from "../scripts/affected-launch-load-retry.mjs";
 import {
-  DEFAULT_MAX_WORKERS,
   junitReportArgs,
   planLaunches,
   resolveMaxWorkers,
@@ -893,43 +892,53 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
   });
 });
 
-describe("钩子档并发：默认 4，且有一个只调并发、不碰判据的显式覆盖口", () => {
-  it("默认档是 4（缺省 / 空串都落到它，且不带任何提醒）", () => {
+describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load），且有只调并发的显式覆盖口", () => {
+  it("缺省 / 空串都落到**注入的那个兜底**，且不带任何提醒", () => {
     for (const raw of [undefined, "", "   "]) {
-      expect(resolveMaxWorkers(raw)).toEqual({
-        workers: DEFAULT_MAX_WORKERS,
-        note: null,
-      });
+      expect(resolveMaxWorkers(raw, 3)).toEqual({ workers: 3, note: null });
     }
-    expect(DEFAULT_MAX_WORKERS).toBe(4);
   });
 
-  it("环境变量由调用点读入（纯函数不兜底 process.env）", () => {
+  it("兜底漏传就当**没跑起来** —— 不许静默退回某个数字（ISSUE #2324 收口的那一族）", () => {
+    /* 这里以前是一条 `DEFAULT_MAX_WORKERS = 4`：与 `vitest.config.ts` 的 8、`ci-load.mjs`
+       的按核折算凑成同一句判断的三份副本，于是「单条链别占满整台机」那一档压住了平台
+       两格、本地那一跳照旧铺开。默认值撤掉之后，漏传必须**响**。 */
+    for (const bad of [undefined, null, 0, -1, 2.5, Number.NaN, "2"]) {
+      expect(
+        () => resolveMaxWorkers("2", bad as unknown as number),
+        `兜底 ${String(bad)} 必须停手`,
+      ).toThrow(/兜底/);
+    }
+  });
+
+  it("env 与兜底都由调用点读入（纯函数既不碰 process.env，也不自己算核数）", () => {
     /* 这一格防的是「用例进程自己继承到的环境变量把默认档那一格污染掉」——
        解析器一旦自己兜底 `process.env`，本文件在 `COMFY_PRECOMMIT_MAX_WORKERS=2`
-       下跑时「不给值＝默认 4」会假红，而那种失效长的样子是「判据真的坏了」。 */
+       下跑时「不给值＝走兜底」会假红，而那种失效长的样子是「判据真的坏了」。
+       第二件同理：核数只在 `ci-load.mjs` 读，调用点把结果传进来（#2324）。 */
     const src = readFileSync(LAUNCHER_PATH, "utf8");
     expect(src).toMatch(
-      /resolveMaxWorkers\(\s*\n?\s*process\.env\.COMFY_PRECOMMIT_MAX_WORKERS/,
+      /resolveMaxWorkers\(\s*\n?\s*process\.env\.COMFY_PRECOMMIT_MAX_WORKERS,\s*\n?\s*resolveCiWorkers\(\)\.workers,/,
     );
-    // 函数体里不许再出现一次 process.env（那会让它不再纯）。
+    // 函数体里不许再出现 process.env，也不许自己 import 核数（那会让它不再纯）。
     const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(src);
     expect(body, "解不出 resolveMaxWorkers 的函数体").not.toBeNull();
     expect(body![1]).not.toContain("process.env");
+    expect(body![1]).not.toContain("availableParallelism");
   });
 
   it("显式覆盖生效，且提醒里说清「只调并发」", () => {
-    const r = resolveMaxWorkers("1");
+    const r = resolveMaxWorkers("1", 2);
     expect(r.workers).toBe(1);
     expect(r.note).toContain("只调并发");
-    // 覆盖成默认值本身不提醒：说了等于没说。
-    expect(resolveMaxWorkers(String(DEFAULT_MAX_WORKERS)).note).toBeNull();
+    // 覆盖成兜底值本身不提醒：说了等于没说。
+    expect(resolveMaxWorkers("2", 2).note).toBeNull();
   });
 
-  it("非法值按默认办并提醒 —— 不许静默降级成 0（那会让 vitest 报错指不到真因）", () => {
+  it("非法值按兜底办并提醒 —— 不许静默降级成 0（那会让 vitest 报错指不到真因）", () => {
     for (const raw of ["0", "-2", "abc", "2.5", "NaN"]) {
-      const r = resolveMaxWorkers(raw);
-      expect(r.workers, `${raw} 应落回默认`).toBe(DEFAULT_MAX_WORKERS);
+      const r = resolveMaxWorkers(raw, 2);
+      expect(r.workers, `${raw} 应落回兜底`).toBe(2);
       expect(r.note, `${raw} 应有一条提醒`).toContain("不是 ≥1 的整数");
     }
   });
