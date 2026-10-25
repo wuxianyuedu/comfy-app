@@ -31,6 +31,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { copyGateDeps } from "./helpers/gate-repo";
 
 const REPO_ROOT = resolve(".");
@@ -113,13 +114,18 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
      * 于是一个只在**失败档**才出现的对拍差异**从未被发现**。 */
     const lines = agg.output.split("\n");
     const head = lines.findIndex((l) => l.includes("逐条复验"));
-    expect(head, "失败收尾段不见了 —— 探针没让任何判据红？").toBeGreaterThanOrEqual(0);
+    expect(
+      head,
+      "失败收尾段不见了 —— 探针没让任何判据红？",
+    ).toBeGreaterThanOrEqual(0);
     /* 收尾段 = 「逐条复验」那一行 + 紧随其后的复验命令行（形态固定：
      * `  node scripts/<判据脚本>`）。**只认这一段**，不要拿 `node scripts/check-` 泛匹配 ——
      * 判据自己的输出里也有「先跑 node scripts/check-*.cjs --update」这类提示行，
      * 泛匹配会把它们一起圈进来（实测撞到过）。 */
     const tail = lines.slice(head).filter((l) => l.trim() !== "");
-    const cmds = tail.filter((l) => /^\[ast-gates\]\s+node scripts\/\S+\.cjs$/.test(l));
+    const cmds = tail.filter((l) =>
+      /^\[ast-gates\]\s+node scripts\/\S+\.cjs$/.test(l),
+    );
     expect(cmds.length, "复验命令一行都没有").toBeGreaterThan(0);
     for (const line of tail) {
       expect(
@@ -139,7 +145,9 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
       "[form-field-wiring]",
       "[click-keyboard]",
     ]) {
-      expect(output, `聚合档输出里没有 ${tag} 的行 —— 这一条没跑`).toContain(tag);
+      expect(output, `聚合档输出里没有 ${tag} 的行 —— 这一条没跑`).toContain(
+        tag,
+      );
     }
     expect(output, "ts-duplicate-keys 没跑").toContain("同一属性指定两次");
   });
@@ -183,9 +191,7 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
 
   it("钩子 D 组里 6 条单条脚本不再各占一行，只留聚合档这一行（否则等于跑两遍）", () => {
     const hook = readFileSync(HOOK, "utf8");
-    const runLines = hook
-      .split("\n")
-      .filter((l) => l.startsWith("  run "));
+    const runLines = hook.split("\n").filter((l) => l.startsWith("  run "));
     const aggLines = runLines.filter((l) =>
       l.includes("scripts/run-ast-gates.cjs"),
     );
@@ -201,7 +207,11 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
 function runInScratchGit(rel: string[]) {
   const dir = mkdtempSync(join(tmpdir(), "ast-gates-scratch-"));
   const git = (...args: string[]) =>
-    spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+    spawnSync("git", args, {
+      cwd: dir,
+      encoding: "utf8",
+      env: gitSandboxEnv(),
+    });
   git("init");
   git("config", "user.email", "t@t.t");
   git("config", "user.name", "t");
@@ -238,7 +248,9 @@ function runInScratchGit(rel: string[]) {
  * `typescript` 靠 `NODE_PATH` 指回本仓库（与 `ratchet-update-guards` 的 `AST_ENV` 同一招）——
  * 这 6 条走的是 CJS `require`，`NODE_PATH` 对它们是有效的。
  */
-function probeRepo(): { run: (argv: string[]) => { code: number; output: string } } {
+function probeRepo(): {
+  run: (argv: string[]) => { code: number; output: string };
+} {
   const dir = mkdtempSync(join(tmpdir(), "ast-gates-probe-"));
   const scriptsDir = join(dir, "scripts");
   mkdirSync(scriptsDir, { recursive: true });
@@ -251,14 +263,14 @@ function probeRepo(): { run: (argv: string[]) => { code: number; output: string 
   }
   const probes: Record<string, string> = {
     "src/components/a.tsx":
-      'export function A() { const [v, setV] = useState(0); setV((p) => { sideEffect(); return !p; }); return v; }\n',
+      "export function A() { const [v, setV] = useState(0); setV((p) => { sideEffect(); return !p; }); return v; }\n",
     "src/lib/b.ts": "export const f = (s: string | null) => s!.length;\n",
     "src/lib/c.ts": "export function g() { void someFn(); }\n",
     "src/lib/d.ts": "export const o = { k: 1, k: 2 };\n",
     "src/components/e.tsx":
       'export const E = () => <FormField label="x"><input /></FormField>;\n',
     "src/components/f.tsx":
-      'export const F = () => <div onClick={() => go()}>x</div>;\n',
+      "export const F = () => <div onClick={() => go()}>x</div>;\n",
   };
   for (const [rel, content] of Object.entries(probes)) {
     const abs = join(dir, rel);
@@ -267,13 +279,20 @@ function probeRepo(): { run: (argv: string[]) => { code: number; output: string 
   }
   return {
     run: (argv) => {
-      const r = spawnSync(process.execPath, [join(dir, argv[0]!), ...argv.slice(1)], {
-        cwd: dir,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, NODE_PATH: join(REPO_ROOT, "node_modules") },
-      });
-      return { code: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+      const r = spawnSync(
+        process.execPath,
+        [join(dir, argv[0]!), ...argv.slice(1)],
+        {
+          cwd: dir,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, NODE_PATH: join(REPO_ROOT, "node_modules") },
+        },
+      );
+      return {
+        code: r.status ?? 1,
+        output: `${r.stdout ?? ""}${r.stderr ?? ""}`,
+      };
     },
   };
 }
