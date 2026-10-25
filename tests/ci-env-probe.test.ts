@@ -114,12 +114,22 @@ describe("环境前提：两处判据不许各写一份答案", () => {
 describe("环境前提：解释器版本下限（低于下限时没有任何一步会红）", () => {
   it("下限只有一处定义，且与它的话术对得上", () => {
     expect(PYTHON_MIN_TEXT).toBe("3.10");
-    /* `scripts/setup-comfy-cli-venv.ps1` 是本仓唯一写明下限的地方 —— 漂了就红。 */
-    const venv = read("scripts/setup-comfy-cli-venv.ps1");
+    /* ISSUE #2197 起，下限的**唯一定义**就是本文件 import 的 PYTHON_MIN_VERSION；
+     * setup-comfy-cli-venv.mjs 必须引用它（不许另抄一份数字），.ps1 薄壳不再写数字。 */
+    const venv = read("scripts/setup-comfy-cli-venv.mjs");
     expect(
-      venv.includes(PYTHON_MIN_TEXT),
-      "`setup-comfy-cli-venv.ps1` 里找不到这条下限 —— 两处漂了",
+      venv.includes("PYTHON_MIN_VERSION"),
+      "setup-comfy-cli-venv.mjs 必须引用 PYTHON_MIN_VERSION（下限唯一出处）",
     ).toBe(true);
+    expect(
+      venv.includes("3.10"),
+      "setup-comfy-cli-venv.mjs 里不应另抄下限数字（引用 PYTHON_MIN_VERSION 即可）",
+    ).toBe(false);
+    const ps1 = read("scripts/setup-comfy-cli-venv.ps1");
+    expect(
+      ps1.includes("3.10"),
+      "薄壳 .ps1 里也不许另抄下限数字",
+    ).toBe(false);
   });
 
   it("三档取值分得开：达标 / 不达标 / 解析不出（「不知道」不是「不达标」）", () => {
