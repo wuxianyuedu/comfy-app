@@ -36,7 +36,31 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  describeProbeMisses,
+  firstRunnable,
+  probeExecutable,
+} from "../src/lib/process/probe-exe";
+import { pythonCandidates } from "../src/lib/process/python-candidates";
 import { copyGateDeps } from "./helpers/gate-repo";
+
+/**
+ * 两处「这台机器上有没有某个解释器」的候选表 —— 顺序取自各自的判据，本文件不抄第二份。
+ *
+ * `powershell` 在前：Windows PowerShell 5.1 是每台 Windows 都有的那个，`pwsh`（7）
+ * 是可选安装。反过来先试 `pwsh` 只会在装了 7 的机器上多起一次进程。
+ * `python` 那一条走 `pythonCandidates()`（平台差异在原处回答，见那份模块的头注）。
+ */
+const POWER_SHELL_CANDIDATES = ["powershell", "pwsh"] as const;
+/** 探测与真跑共用同一条参数形态：探测要回答的正是「这条形态跑得通吗」。 */
+const POWER_SHELL_PROBE_ARGS = ["-NoProfile", "-Command", "exit 0"];
+/** 本组用例的条数（`env` 档跳过的登记表里记的就是这个数，见
+ * `tests/conditional-skip-registry.test.ts`）。改动这一组时同批改那里。 */
+const PS_SKIP_COUNT = 6;
+const PYTHON_CANDIDATES = pythonCandidates();
+/** 同 `POWER_SHELL_PROBE_ARGS`：探测用的就是真跑那一条（`-c` 是最小的可执行语句）。 */
+const PYTHON_PROBE_ARGS = ["-c", "import sys; sys.exit(0)"];
 
 const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
@@ -636,17 +660,28 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   // Windows PowerShell 5.1 与 PowerShell 7 都可用；非 Windows 平台（Linux CI）没有
   // powershell，相关用例跳过，规则本身由 scripts/check-file-structure.cjs 与
   // 本文件其它用例覆盖。
+  //
+  // ⚠️ 探测的判据是「起得来**且**解释得了我们要喂的参数」，不是「spawn 没抛错」
+  // （ISSUE #2316 的现场）：只认退出码时，附近一个同名的冒牌可执行文件（发行版附带的
+  // shell 别名之类）退 0 就被认成 PowerShell，而这组用例真跑起来是
+  // `spawnSync(candidate, ["-NoProfile", …])` ⇒ 它退 2、守卫脚本的 `HITS=` 一个都不出现
+  // ⇒ `toContain` 等满 20s 才抛 `Test timed out` —— 一条「这台机器上判不了」被记成了
+  // 「这一格红了」，而报错行指向「超时」。所以这里**两条都要过**：先起一次（探测形态），
+  // 再让**真跑那一条**也过（解释得了参数）。每个候选探完都留一条原因，
+  // 一次性打出来 —— 否则下一次只看到一片 skipped，说不清是安静地跳过还是安静地判错。
   const psExe = (() => {
-    for (const candidate of ["powershell", "pwsh"]) {
-      try {
-        execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
+    // 与 `runGuard()` 逐字同形（同一份 `-NoProfile -Command exit 0`）：探测与真跑
+    // 必须是**同一条参数形态**，否则「探的时候能起」推不出「跑的时候能用」。
+    const got = firstRunnable(
+      POWER_SHELL_CANDIDATES,
+      () => POWER_SHELL_PROBE_ARGS,
+      (candidate, args) => probeExecutable(candidate, args),
+    );
+    if (got.hit) return got.hit;
+    console.log(
+      `[check-file-structure] 这台机器上没有可用的 PowerShell ⇒ 本组 ${PS_SKIP_COUNT} 条` +
+        `用例按 env 档跳过（不是通过）。逐候选读数：${describeProbeMisses(got.missed, got.timeouts)}`,
+    );
     return "";
   })();
 
@@ -947,18 +982,21 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
    * Win32 部分在 Linux CI 上跑不到，这里按本文件既有套路抽出源码打桩后断言判决表，
    * 锁住这条用户可感知的行为不再回退。
    */
+  /* 与上面 `psExe` 同一形态（ISSUE #2316 的「同形同批」）：这里是 `python` 那一处。
+   * 判据要的是「起得来**且**解释得了 `-c`」，所以探测用的就是真跑那一条
+   * `["-c", "import sys; sys.exit(0)"]` —— 冒牌同名文件在这里退非零，如实判「不在场」。 */
   const FOCUS_SCRIPT = join(process.cwd(), "scripts", "win32-window-focus.py");
   const python = (() => {
-    for (const candidate of ["python3", "python"]) {
-      try {
-        execFileSync(candidate, ["-c", "import sys; sys.exit(0)"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
+    const got = firstRunnable(
+      PYTHON_CANDIDATES,
+      () => PYTHON_PROBE_ARGS,
+      (candidate, args) => probeExecutable(candidate, args),
+    );
+    if (got.hit) return got.hit;
+    console.log(
+      `[check-file-structure] 这台机器上没有可用的 Python ⇒ 前台归属那组用例按 env 档` +
+        `跳过（不是通过）。逐候选读数：${describeProbeMisses(got.missed, got.timeouts)}`,
+    );
     return "";
   })();
 

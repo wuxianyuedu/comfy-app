@@ -55,6 +55,7 @@ const CROSS_HOST_MODULES = [
   "src/lib/process/executable-resolve.ts",
   "src/lib/process/python-candidates.ts",
   "src/lib/process/python-resolve.ts",
+  "src/lib/process/probe-exe.ts",
   "src/lib/process/kill-process-tree.ts",
 ];
 
