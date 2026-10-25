@@ -219,9 +219,9 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     expect(fs.existsSync(path.join(tmp, FINGERPRINT_FILE))).toBe(true);
   });
 
-  it("main 先算指纹再装、装成功才落盘（半套不许被记成已验证）", () => {
+  it("main 先算指纹再装、装成功才落盘（半套不许被记成已验证）", async () => {
     const seen: Array<string | null> = [];
-    const failing = main({
+    const failing = await main({
       root: tmp,
       run: gitStub({
         "diff --name-only origin/master...HEAD": {
@@ -241,7 +241,7 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
       "非零退出时不许落指纹：那一套是半成品",
     ).toBeNull();
 
-    const passing = main({
+    const passing = await main({
       root: tmp,
       run: gitStub({
         "diff --name-only origin/master...HEAD": {
@@ -271,9 +271,9 @@ describe("main：装 / 跳过两条出口的退出码", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("跳过时不调用安装，且退 0", () => {
+  it("跳过时不调用安装，且退 0", async () => {
     const inst = installStub();
-    const code = main({
+    const code = await main({
       root: tmp,
       run: gitStub({
         "diff --name-only origin/master...HEAD": {
@@ -288,9 +288,9 @@ describe("main：装 / 跳过两条出口的退出码", () => {
     expect(inst.calls).toBe(0);
   });
 
-  it("要装时调用一次安装，退出码原样透出", () => {
+  it("要装时调用一次安装，退出码原样透出", async () => {
     let calls = 0;
-    const code = main({
+    const code = await main({
       root: tmp,
       run: gitStub({
         "diff --name-only origin/master...HEAD": {
@@ -346,10 +346,10 @@ describe("接槽执行档的三条出口", () => {
     };
   }
 
-  it("开关没拨：照常装，且把「按策略不接槽」打出来", () => {
+  it("开关没拨：照常装，且把「按策略不接槽」打出来", async () => {
     const stub = installStub();
     const out = collector();
-    const code = runInstallWithSlot(null, {
+    const code = await runInstallWithSlot(null, {
       env: {},
       write: out.write,
       install: stub.run,
@@ -362,9 +362,9 @@ describe("接槽执行档的三条出口", () => {
     expect(out.text).toContain("⇒ 照常装");
   });
 
-  it("只有 `1` 算拨开：写成 `0` 走的是同一句策略话术，而不是一句「接不上」", () => {
+  it("只有 `1` 算拨开：写成 `0` 走的是同一句策略话术，而不是一句「接不上」", async () => {
     const out = collector();
-    const code = runInstallWithSlot(null, {
+    const code = await runInstallWithSlot(null, {
       env: { COMFY_CI_SLOT: "0" },
       write: out.write,
       install: () => 0,
@@ -373,11 +373,11 @@ describe("接槽执行档的三条出口", () => {
     expect(out.text).toContain("开关没拨");
   });
 
-  it("env 从注入读，不读进程全局（否则单测会随本机开关变结论）", () => {
+  it("env 从注入读，不读进程全局（否则单测会随本机开关变结论）", async () => {
     process.env.COMFY_CI_SLOT = "not-1";
     try {
       const out = collector();
-      runInstallWithSlot(null, {
+      await runInstallWithSlot(null, {
         env: {},
         write: out.write,
         install: () => 0,
@@ -417,7 +417,8 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
     exists: (p: string) => files[p] !== undefined || dirs.has(p),
     spawn: (cmd: string) => {
       const hit = files[cmd];
-      if (!hit) return { status: null, stdout: "", stderr: "", error: "ENOENT" };
+      if (!hit)
+        return { status: null, stdout: "", stderr: "", error: "ENOENT" };
       if (!hit.ok) {
         return { status: 1, stdout: "", stderr: "usage", error: null };
       }
@@ -478,18 +479,15 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
       exists,
       spawn,
       readDir: (p: string) =>
-        p === store
-          ? [
-              dirEntry("11.25.0"),
-              dirEntry("12.4.1"),
-            ]
-          : [],
+        p === store ? [dirEntry("11.25.0"), dirEntry("12.4.1")] : [],
       write: (s) => lines.push(s),
     });
     expect(r.bootstrapped).toBe(true);
     // 版本取最高那一版（`12.4.1` 而不是字典序更大的 `11.25.0`）。
     expect(r.dir).toBe(v12);
-    expect(env.PATH.startsWith(`${v12};`), `PATH 没被前插：${env.PATH}`).toBe(true);
+    expect(env.PATH.startsWith(`${v12};`), `PATH 没被前插：${env.PATH}`).toBe(
+      true,
+    );
     // 起不来的那个必须留一条读数 —— 否则「为什么没用 PATH 上那个」无从回答。
     expect(r.consulted.join("\n")).toContain(shim);
     expect(lines.join("")).toContain("PATH 上没有可用的 pnpm");
@@ -510,8 +508,7 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
       env,
       exists,
       spawn,
-      readDir: (p: string) =>
-        p === store ? [dirEntry("12.4.1")] : [],
+      readDir: (p: string) => (p === store ? [dirEntry("12.4.1")] : []),
       write: () => undefined,
     });
     expect(r.bootstrapped).toBe(false);

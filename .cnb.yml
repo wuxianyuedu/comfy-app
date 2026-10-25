@@ -656,6 +656,9 @@
   # 例外不是「可以随便漂」：判据钉死「PR 那一侧必须置着 `COMFY_CI_SLOT`、每日这一侧一个字都不许出现」，
   # 其余各行仍然逐字相同；改这条形状要走判据，不能只改这里。
   - name: 每日安装依赖
+    # 与 PR 那一格同一条链 ⇒ 同一个墙钟（ISSUE #2360）。`timeout` 也在「逐字相同」的
+    # 比对面里：这一行改成别的数，就是三份副本里第一份开始漂。
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -960,6 +963,7 @@
 # 那是**已知的假红**。逐档前提集与理由的一份出处：`scripts/ci-oneshot-gates.mjs`。
 .oneshot-build: &oneshot_build
   - name: 单跑构建·安装依赖
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -986,6 +990,7 @@
     timeout: 30m
 .oneshot-e2e: &oneshot_e2e
   - name: 单跑E2E·安装依赖
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -1007,6 +1012,7 @@
     timeout: 45m
 .oneshot-unit: &oneshot_unit
   - name: 单跑单测·安装依赖
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -1262,6 +1268,28 @@
       # 例外，理由与两臂读数见「每日安装依赖」上面那段。回退 = 摘掉这里这一行**并同批**把
       # 该键从那份名单里删掉：只动一边会被那条判据当场点名（名单过期）。
       COMFY_CI_SLOT: "1"
+    # ── 这一格自己带墙钟（ISSUE #2360）──────────────────────────────────────────
+    #
+    # 现场：`cnb-c6r-1k5osfdl8` 上这一格挂到**平台 8640s 硬上限**才被掐断 —— 整格日志
+    # 19 行、**pnpm 自己的输出一行都没有**（前一步 `check-pnpm-available` 刚在同一秒
+    # 打印过 pnpm 12.4.1），而同机同链的上一跑是 `Done in 2m 42.7s`（`cnb-1mr-1k5p4ihfr`）。
+    # 挂住的形态里 pnpm 的 stdout 是空的（它的进度条只在 TTY 上输出），所以「卡住」与
+    # 「还在跑」在日志上逐字同形 —— 等到平台掐断那一刻，仍然只留下一句
+    # `timeout of 8640000ms exceeded`，既不说是谁挂的，也不给下一动作。
+    #
+    # 两件事同批做掉，**判据一字未改**：
+    #   · 装那一跳自带预算（`scripts/ci-install-deadline.mjs`，默认 12 分钟 ≈ 平台上限的
+    #     1/12、节点读数 169s~275s 的 2.6~4.3 倍），用尽就收回子进程、退 **2（未判定）**，
+    #     并把「卡在第几秒、下一动作是什么」打在脸上；
+    #   · 每 30s 一行心跳，于是同一个死法下一次**读得出它在第几秒停住的**。
+    #
+    # 这一行的 20m 也是为此：要让**自己的**预算（12m）先到，而不是让平台先掐断。
+    # 它不是「抬 timeout 换绿」（§11.13 明令禁止那件事）—— 判据没松，改的是拿不到结论
+    # 时的收场方式；20m 仍然远小于平台的 8640s，卡死形态二十分钟内报出来。
+    # ⚠️ **这一行必须与 `每日安装依赖` / `单跑*·安装依赖` 那几格逐字相同**：判据
+    # `tests/no-platform-ci-config.test.ts` 的 `DAILY_SCRIPT_MIRRORS` 比的是「命令行 + env
+    # 赋值」，`timeout` 也在比对面里（三份副本各漂一份就是这条链最难查的形态）。
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
