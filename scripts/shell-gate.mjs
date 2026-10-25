@@ -58,19 +58,38 @@
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { defaultShellExe, shellStaleWarning } from "./dev-launcher.mjs";
-import { whichCommand } from "./launcher-core/shell.mjs";
+import { findCargo, findCargoLookup } from "./shell-gate-cargo.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
 import { changedFilesForBaseRef } from "./changed-scope.mjs";
 import {
   hostTripleFromCargoVersion,
   sidecarFileName,
 } from "./sidecar-name.mjs";
+
+/* cargo 的**寻址判据**（PATH 优先、安装位兜底、探针取证）整段在 `shell-gate-cargo.mjs`
+ * —— R5 的 900 行硬闸不给人留「再挤一挤」的余地，而按职责切的口子在「怎么找 cargo」
+ * 与「找到之后判什么」之间（ISSUE #2374 落地时本文件 925 行）。
+ *
+ * 这里原样转出去，既有调用方与用例的导入路径一字不变（与 `launcher-core/shell.mjs`
+ * re-export `executable-resolve` 同一个做法）。`CargoProbe` 是**类型**，`.mjs` 里不能
+ * `import { type … }`（TS8006），所以它写法上边那条 JSDoc `@typedef` 在本文件重述一次
+ * —— 两份说同一件事，改一处要同批改另一处。 */
+/**
+ * @typedef {{ where: string, result: "hit" | "absent" | "unreadable" | "empty", detail?: string }} CargoProbe
+ */
+export {
+  cargoBinHomes,
+  cargoHomeValue,
+  findCargo,
+  findCargoLookup,
+  probeCargoIn,
+  rustupCargoHomeValue,
+} from "./shell-gate-cargo.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -142,248 +161,6 @@ export function decide(staged) {
     touchesShell: staged.some((f) => SHELL_INPUT_RE.test(f)),
     needsCargoTest: staged.some((f) => RUST_SOURCE_RE.test(f)),
   };
-}
-
-/**
- * `findCargo()` 走过的那几步（顺序即判据）。`probed` 是留给「找不到」时那句话的
- * 取证：**探了哪几处、为什么每一处都没命中** —— 只说「找不到 cargo」的话，
- * 拿 `CARGO_HOME` 配着工具链的人除了猜没有别的路（ISSUE #2293 的现场）。
- *
- * @typedef {{ where: string, result: "hit" | "absent" | "unreadable" | "empty", detail?: string }} CargoProbe
- *   `where` 是给人看的落点（`PATH` / 绝对路径），`result` 三态与 `absent`（不存在）
- *   分开：**目录在但读不了**（服务账号没权限）与**目录不在**是两件事，混成一句会把人
- *   引到「去装 rustup」那条错路上。
- * @typedef {{ path: string | null, probes: CargoProbe[] }} CargoLookup
- */
-
-/**
- * cargo 的寻址判据：**PATH 优先，回退到工具链的默认安装位**。返回落点与走过的每一步。
- *
- * 为什么不能只认 PATH（ISSUE #1555）：CI / 容器镜像是**精修过 PATH** 的 ——
- * `~/.cargo/bin` 常常不在（实测本仓开发容器里 `which cargo` 为空，而同一台机器上
- * `~/.cargo/bin/cargo` 与 `~/.rustup/toolchains/<版本>/bin/cargo` 都在）。那种机器上
- * 改一行 Rust 就被判成「编不了」，而真因只是「探针比 cargo 装得更苛刻」。
- * 单独认安装位也不行：PATH 上那份**才是**要跑的那份（用户可能自选工具链、
- * 或用 distro 包管理器装的那份），越过 PATH 去猜 rustup 的目录 = 拿另一个
- * 版本编壳。两条并成一条判据：先问 PATH，问不到才回退。
- *
- * 回退面刻意**只收 rustup 的三处**（CARGO_HOME/bin、~/.cargo/bin、~/.rustup/），
- * 不做 PATH 式的目录递归 —— 判据越宽，越可能选中一个不该用的 cargo。
- *
- * ⚠️ **`$CARGO_HOME/bin` 要真的进 PATH**（ISSUE #2293 的平台现场）：`.cnb.yml` 给
- * `重档静态判据` 那一格配了 `CARGO_HOME` / `RUSTUP_HOME`，而**平台 runner 的 PATH 是
- * 固定的**、不会跟着这两个变量长出来 ⇒ 下面那条 `PATH` 探针必然落空，一整格按
- * 「没跑起来」收（退 2）。这时唯一的出路就是这条回退 —— 它本来就该命中
- * `$CARGO_HOME/bin/cargo`，值的形状（`G:\.cargo`、`C:/Users/x/.cargo`、带尾部分隔符）
- * 不许成为「命不命中」的变量。
- *
- * ⚠️ **回退面的每一处都走 `probeCargoIn()`**（ISSUE #2368）：`$CARGO_HOME` 常常落在
- * **subst 出来的盘符**上（平台节点就是 `G:`），而那条路径对 Node 的 `fs` 是假阴性。
- * 只判 `existsSync(<dir>/cargo.exe)` 的形态会在「装好了」的机器上永远探不到。
- *
- * @param {{env?: Record<string, string | undefined>}} [deps] `env` 可注入（默认 `process.env`）
- * @returns {CargoLookup} `path` = cargo 的绝对路径（PATH 与三处安装位都没有 = `null`）
- */
-export function findCargoLookup({ env = process.env } = {}) {
-  /** @type {CargoProbe[]} */
-  const probes = [];
-
-  const onPath = whichCommand("cargo", { env });
-  if (onPath) {
-    probes.push({ where: "PATH", result: "hit", detail: onPath });
-    return { path: onPath, probes };
-  }
-  probes.push({ where: "PATH", result: "absent" });
-
-  /* 两处候选**按条件拼**（而不是先塞一个 `false` 再 filter 掉）：`CARGO_HOME` 未设时
-   * `process.env.CARGO_HOME && …` 求值成 `false`，数组就成了 `(string | false)[]`，
-   * 而 `.mjs` 里写不了 `dir is string` 这种谓词（TS8010：类型注解只许出现在 `.ts`），
-   * tsc 也不会从 `typeof dir === "string" && dir.length > 0` 里推 —— 结果是下面整段
-   * 都带着 `string | undefined` 用。改成按条件拼之后类型本身就是 `string[]`，
-   * 不用靠注解断言。 */
-  /** @type {{dir: string, where: string}[]} */
-  const candidates = [];
-  /* 取证那一行要念**原始值**，不是解出来的绝对路径：跨平台的值（Linux 上跑门禁、
-   * 而 `CARGO_HOME` 是 Windows 形态）会被 `path.resolve` 解成 `<cwd>/G:\.cargo`，
-   * 那一行就与平台上真正配着的值对不上了 —— 判据（「不在」）不变，读的人却会走错路。 */
-  const cargoHomeRaw = (env.CARGO_HOME ?? "").trim().replace(/^"(.*)"$/, "$1");
-  const cargoHome = cargoHomeValue(env);
-  if (cargoHome) {
-    candidates.push({
-      dir: path.join(cargoHome, "bin"),
-      where: `CARGO_HOME/bin（${cargoHomeRaw}）`,
-    });
-  }
-  const home = os.homedir();
-  candidates.push({
-    dir: path.join(home, ".cargo", "bin"),
-    where: "~/.cargo/bin",
-  });
-  candidates.push({
-    dir: path.join(home, ".rustup", "toolchains"),
-    where: "~/.rustup/toolchains",
-  });
-
-  for (const { dir, where } of candidates) {
-    if (dir.endsWith("toolchains")) {
-      // rustup 的每个工具链各有一份 cargo：取版本号最大的那个（字典序即版本序，
-      // 1.10 与 1.9 这种少见形态不在此纠偏 —— 只认「挑不到就继续找下一处」。
-      /** @type {string[]} */
-      let versions = [];
-      try {
-        versions = fs.readdirSync(dir).sort().reverse();
-      } catch (err) {
-        // 目录不存在 = 这一处没有，接着看下一处（不是「探到但不可用」）；
-        // 读不了（没权限 / 不是目录）必须分开记 —— 那要人去查权限，不是去装 rustup。
-        probes.push(
-          isAbsentError(err)
-            ? { where, result: "absent" }
-            : { where, result: "unreadable", detail: errorCode(err) },
-        );
-        continue;
-      }
-      if (versions.length === 0) {
-        probes.push({ where, result: "empty", detail: "目录在，但没有工具链" });
-        continue;
-      }
-      for (const version of versions) {
-        const found = probeCargoIn(path.join(dir, version, "bin"));
-        if (found.ok) {
-          probes.push({ where, result: "hit", detail: found.detail });
-          return { path: found.path, probes };
-        }
-      }
-      probes.push({
-        where,
-        result: "absent",
-        detail: `${versions.length} 个工具链里都没有 bin/${cargoExeName()}`,
-      });
-      continue;
-    }
-    const found = probeCargoIn(dir);
-    if (found.ok) {
-      probes.push({ where, result: "hit", detail: found.detail });
-      return { path: found.path, probes };
-    }
-    probes.push({ where, result: found.result, detail: found.detail });
-  }
-  return { path: null, probes };
-}
-
-/**
- * 在一个目录里找 `cargo`：**先用 fs 判，再用 dir 本身交叉确认**。
- *
- * ── 为什么不只是 `fs.existsSync(<dir>/cargo.exe)`（ISSUE #2368 的平台现场）──────
- *
- * 平台 runner 的 `CARGO_HOME` 是 `G:\.cargo`，而 `G:` 是 **subst 出来的盘符**
- * （`docs/guides/dev-drive-refs.md`；runner 的检出也在 `G:`）。Node 的 `fs` 走
- * **Win32 long-path 前缀**（`\\?\G:\…`），而 subst 映射是**每登录会话**的 —
- * 判据以服务账号跑，那一前缀解释不出别的会话里的映射 ⇒ 同一份 cargo 对 `fs`
- * **不存在**、对 `Get-Command` 存在。表现是「装好了、探不到」，整格按「没跑起来」收。
- *
- * 所以回退面的判据退一步问两件事：**这个目录在不在**，以及**目录里有没有这个名字**。
- * `readdirSync` 走的是同一条路径、同样可能被 subst 骗，因此 `statSync` 失败时
- * 还要判「错误码是 ENOENT 还是别的」—— 只有「目录确实不在」（ENOENT）才算 absent；
- * 其余（EPERM / EBUSY / 判据自己根本没走到）一律按 `unreadable` 记，让人去查权限，
- * 而不是去装第二遍工具链。
- *
- * `detail` 里带**目录读数**（有几项、有没有那个名字）：取证那一行于是说得出
- * 「这条路存在吗、里面有什么」，而不是一句 `absent`。
- *
- * @param {string} dir 候选目录（`<CARGO_HOME>/bin` 或某个工具链的 `bin`）
- * @returns {{ok: true, path: string, detail: string} | {ok: false, result: "absent" | "empty" | "unreadable", detail: string}}
- */
-export function probeCargoIn(dir) {
-  const exe = path.join(dir, cargoExeName());
-  if (fs.existsSync(exe)) return { ok: true, path: exe, detail: exe };
-  /** @type {string[]} */
-  let names;
-  try {
-    names = fs.readdirSync(dir);
-  } catch (err) {
-    const code = errorCode(err);
-    return isAbsentError(err)
-      ? { ok: false, result: "absent", detail: `${exe}（目录不在）` }
-      : {
-          ok: false,
-          result: "unreadable",
-          detail: `${code ?? "读不了"} —— ${dir}`,
-        };
-  }
-  /* 目录在、而名字不在：把「像 cargo 的那几个」念出来（含 `.exe` 有无两种形态）。
-   * 一条都没有时说清是空目录 —— 那与「文件在但被 fs 骗了」是两种下一步。 */
-  const like = names.filter((n) => n.toLowerCase().startsWith("cargo"));
-  return {
-    ok: false,
-    result: like.length > 0 ? "unreadable" : "empty",
-    detail:
-      like.length > 0
-        ? `目录里有 ${like.join(" / ")}，但 \`fs\` 判 ${cargoExeName()} 不存在（subst 盘上的假阴性？）—— ${dir}`
-        : `目录在（${names.length} 项），但没有 ${cargoExeName()} —— ${dir}`,
-  };
-}
-
-/**
- * `findCargo()`：只要落点的那一半（判决面只关心「有没有、是哪一份」）。
- *
- * @param {{env?: Record<string, string | undefined>}} [deps]
- * @returns {string | null}
- */
-export function findCargo(deps) {
-  return findCargoLookup(deps).path;
-}
-
-/**
- * `CARGO_HOME` 读成**能拼路径的值**，读不出来就是 `null`（= 这一处不探）。
- *
- * 三件都要管，缺一件这一处就静默落空（ISSUE #2293）：
- *   · **未设 / 空串** ⇒ 没有这一处；
- *   · **环境变量里带的引号**（`CARGO_HOME="G:\.cargo"` 那种写法，值里就带着引号）
- *     先剥掉 —— 否则 `path.join` 拼出的是 `"G:\.cargo"\bin`，一个不存在的路径；
- *   · **相对路径**（`CARGO_HOME=.cargo`）按 cwd 解析成绝对路径 —— `cargo` 自己就是
- *     这么解的，而 `path.join` 出来的相对路径会被 `existsSync` 拿去问 cwd。
- * 尾部分隔符（`G:\.cargo\`）由 `path.join` 自然消化，不用特殊处理。
- *
- * @param {Record<string, string | undefined>} env
- * @returns {string | null}
- */
-export function cargoHomeValue(env) {
-  const raw = (env.CARGO_HOME ?? "")
-    .trim()
-    .replace(/^"(.*)"$/, "$1")
-    .trim();
-  if (!raw) return null;
-  return path.resolve(raw);
-}
-
-/**
- * 这条错误是不是「那个落点根本不存在」（而不是「在、但读不了」）。
- *
- * @param {unknown} err `catch` 到的东西
- * @returns {boolean}
- */
-function isAbsentError(err) {
-  const code = errorCode(err);
-  return code === "ENOENT" || code === undefined;
-}
-
-/**
- * 从 `catch` 到的东西里取错误码（`unknown` 收窄，不在这里 `as`）。
- *
- * @param {unknown} err
- * @returns {string | undefined}
- */
-function errorCode(err) {
-  if (err && typeof err === "object" && "code" in err) {
-    const code = err.code;
-    return typeof code === "string" ? code : undefined;
-  }
-  return undefined;
-}
-
-/** cargo 的文件名（Windows 上带 .exe；其余平台无后缀）。 */
-function cargoExeName() {
-  return process.platform === "win32" ? "cargo.exe" : "cargo";
 }
 
 /**
@@ -662,7 +439,12 @@ function probesText(probes) {
             (p) => p.where.startsWith("CARGO_HOME/bin") && p.result !== "hit",
           )
         ? "        CARGO_HOME 给了而这一处没命中：那个值下确实没有 bin/cargo，或平台的 PATH 没跟着它长出来。\n"
-        : "";
+        : "" +
+          "        PATH 与上面那几处（CARGO_HOME/bin、rustup 记着的 cargo_home/bin、" +
+          "~/.cargo/bin、~/.rustup/toolchains）全都没有 cargo —— 那是「没装 / 装在别处」，" +
+          "不是判据的路径形态问题。\n" +
+          "        装在别处就 `where cargo`（POSIX `which -a cargo`）核一次，把那个目录加进 PATH " +
+          "或设成 CARGO_HOME。\n";
   return `        [取证] 探过这 ${probes.length} 处：\n${lines.join("\n")}\n${hint}`;
 }
 
