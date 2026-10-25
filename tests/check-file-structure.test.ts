@@ -37,7 +37,6 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { logger } from "~/lib/core/logger";
 import { firstRunnableOrEmpty } from "../src/lib/process/probe-exe";
 import { pythonCandidates } from "../src/lib/process/python-candidates";
 import { copyGateDeps } from "./helpers/gate-repo";
@@ -681,9 +680,8 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
     candidates: POWER_SHELL_CANDIDATES,
     probeArgs: () => POWER_SHELL_PROBE_ARGS,
     label: `PowerShell（本组 ${PS_SKIP_COUNT} 条用例按 env 档跳过）`,
-    // 那行读数往哪写由**宿主**决定：`probe-exe.ts` 连日志通道都不碰（它要被真 Node
-    // 直接加载，见那份文件头），这里给唯一通道。
-    report: (line) => logger.warn(line),
+    // 那一行是成品（前缀与「不是通过」都由 `probe-exe.ts` 给全），这里只负责写出去。
+    report: (line) => process.stdout.write(`${line}\n`),
   });
 
   // 结论在 stdout，守卫的日志（`Log` 被桩件改写到 stderr）要一起收，
@@ -991,7 +989,7 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
     candidates: PYTHON_CANDIDATES,
     probeArgs: () => PYTHON_PROBE_ARGS,
     label: "Python（前台归属那组用例按 env 档跳过）",
-    report: (line) => logger.warn(line),
+    report: (line) => process.stdout.write(`${line}\n`),
   });
 
   /** 抽出 decide_handoff 直接断言判决表。 */

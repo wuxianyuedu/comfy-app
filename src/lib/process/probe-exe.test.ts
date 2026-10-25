@@ -17,14 +17,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { spawnSync } from "node:child_process";
 
-/* 那行「探不到」的读数**由宿主注入**（`FirstRunnableOptions.report`），本模块连日志
- * 通道都不碰 —— 它要被真 Node 直接 `import`，而 `~/lib/core/logger` 那条边在那种宿主上
- * 就是加载期 `Cannot find package '~'`（见 `probe-exe.ts` 头注与
- * `tests/host-ts-loads-in-node.test.ts`）。所以这一份用例也不需要 mock 日志通道：
- * 直接注入一个记录器，断言「交出去的那一行」是什么。
+/* 那行「探不到」的读数**由宿主注入出口**（`FirstRunnableOptions.report`），本模块既不
+ * 直接写 `console`（`tests/single-logger-channel.test.ts`），也不静态 import 日志通道
+ * （`tests/host-ts-loads-in-node.test.ts`：真 Node 里没有 `~` 别名解析器，那一行 import
+ * 会把整条链拖崩在加载期）。所以这一份用例既不 mock 通道、也不拦 console ——
+ * 直接断言「交出去的那一行」，那正是本模块承诺的全部。
  *
- * 这同时钉住了两件容易漂的事：命中时**一次也不报**，以及缺省（不注入 `report`）
- * 时**不抛**——探测的结论不该被「这行字往哪写」拖住。 */
+ * `reported` 是注入进去的记录器：断言前要清空，否则上一格的字会串进下一格。 */
 const reported = vi.hoisted(() => [] as string[]);
 const report = vi.hoisted(() => (line: string) => {
   reported.push(line);
@@ -267,6 +266,20 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(reported.join("\n")).toContain("起不来");
   });
 
+  it("不给 `report` 时一个字都不打，结论照给（读数与探测解耦）", () => {
+    /* 「不注入就静默」是**约定的一部分**，不是省略：`src/lib/**` 直接 console 会绕开
+     * 脱敏与 ERROR 镜像，而静态 import 日志通道会让本模块在真 Node 里加载不起来 ——
+     * 所以往哪写只能由宿主说。探测的结论不该被「这行字落不落得下去」拖住。 */
+    expect(
+      firstRunnableOrEmpty({
+        candidates: ["comfyapp-no-such-command-2316"],
+        probeArgs: () => ["--version"],
+        label: "假解释器",
+      }),
+    ).toBe("");
+    expect(reported).toEqual([]);
+  });
+
   it("一个都没有 ⇒ 空串，且**每个候选的名字与原因**都打出来", () => {
     /* 这一格是 ISSUE #2316 的另一半：一条判不了的用例被记成红，与「安静地跳过了」
      * 在日志里长得一样 —— 区别就在这一行。所以这里把**写出去的那一行**一起断言：
@@ -293,20 +306,17 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(text).toContain("不是通过");
   });
 
-  it("不注入 `report` ⇒ 结论照给，不抛（读数与探测结论解耦）", () => {
-    /* 缺省「不写」是刻意的：探测的结论不该因为某个宿主没给出口就崩。真 Node 宿主
-     * （`scripts/python-probe.mjs` 那条链）自己打印，压根不该有这一步的风险。 */
-    expect(
-      firstRunnableOrEmpty({
-        candidates: ["comfyapp-no-such-command-2316"],
-        probeArgs: () => [],
-        label: "假解释器",
-        probe: () => ({
-          ok: false,
-          failure: { kind: "spawn-error", code: "ENOENT" },
-        }),
-      }),
-    ).toBe("");
-    expect(reported).toEqual([]);
+  it("出口拿到的是**带前缀的成品行**（宿主要能原样写出去）", () => {
+    /* 两处调用点注入的都是 `process.stdout.write`，它们只负责写、不负责拼 ——
+     * 所以前缀 `[probe]` 与「不是通过」这句必须由本模块给全，否则终端上那一行
+     * 会因为宿主不同而长得不一样。 */
+    firstRunnableOrEmpty({
+      candidates: ["comfyapp-no-such-command-2316"],
+      probeArgs: () => ["--version"],
+      label: "假解释器",
+      report,
+    });
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toContain("[probe]");
   });
 });

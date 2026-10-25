@@ -27,20 +27,19 @@
 // 「测试侧要用它」这件事说反（那个入口就是一句 throw）。
 import { spawnSync } from "node:child_process";
 
-/* 探不到时那一行读数**不在这里写出去**，尽管「日志只有一条通道」
- * （`tests/single-logger-channel.test.ts`）要求服务端可达的 `lib` 里不许自己 `console`。
+/* 探不到时那一行读数**不在这里写出去**。两条约束同时压在这一格：
  *
- * 两条边都要成立，只剩一种形状：**本模块连通道都不碰**。
- *   · 静态 `import { logger } from "~/lib/core/logger"` ⇒ 真 Node 直接 `import` 本模块时
- *     没有 `~` 别名解析器，整条链在**加载期** `ERR_MODULE_NOT_FOUND`：那个包名就是
- *     `Cannot find package '~'`（`scripts/python-probe.mjs` 与平台侧 `node scripts/e2e-run.mjs`
- *     那一跳，`tests/host-ts-loads-in-node.test.ts` 的现场）；
- *   · 退一步「拿不到通道就 `console.warn` 兜底」⇒ 那就是第二套日志实现，同一条判据当场红。
+ *   · `tests/single-logger-channel.test.ts`：`src/lib/**` 是服务端可达的库代码，
+ *     直接 `console` 会绕开 redact 脱敏与 ERROR 镜像（规范 07 §7.18.2.1）；
+ *   · `tests/host-ts-loads-in-node.test.ts`：本模块要被真 Node **直接 `import`**
+ *     （`scripts/python-probe.mjs`、平台侧 `node scripts/e2e-run.mjs`），而那一跳没有
+ *     `~` 别名解析器 —— 静态 `import { logger } from "~/lib/core/logger"` 在**加载期**
+ *     就是 `ERR_MODULE_NOT_FOUND: Cannot find package '~'`（平台侧 `cnb-8a8-1k5op440e`
+ *     红的就是这一格）。
  *
- * 于是读数走**注入**：`FirstRunnableOptions.report`。本模块只负责把「哪个候选、什么原因」
- * 说清楚（`describeProbeMisses()`），**往哪写由宿主决定** —— 测试侧给 `logger.warn`，
- * `.mjs` 脚本宿主给它自己的出口。探测本身与「这行字落不落得下去」解耦，
- * 加载期也就再没有一条能把它拖崩的边。
+ * 静态写通道、`console` 兜底、两边并存，三条都不成立。只剩一种形状：**本模块只把那一行
+ * 说出来，往哪写由宿主注入**（`FirstRunnableOptions.report`，缺省不写）。
+ * 于是探测结论与「这行字落不落得下去」解耦，加载期再没有一条能把它拖崩的边。
  */
 
 /** 一次探测的三种结局（语义见文件头）。 */
@@ -135,10 +134,12 @@ export interface FirstRunnableOptions {
   /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
   probe?: (candidate: string, args: string[]) => ProbeOutcome;
   /**
-   * 探不到时那一行读数**往哪写**（缺省不写）。
+   * 探不到时那一行的出口（缺省不打）。
    *
-   * 由宿主注入，本模块不碰日志通道（理由见文件头那段）。缺省「不写」是刻意的：
-   * 探测的结论与「这行字落不落得下去」是两件事，后者不该能把前者拖崩。
+   * 为什么是注入而不是就地写：本模块在 `src/lib/**` 里，直接 `console` 会绕开脱敏与
+   * ERROR 镜像（`tests/single-logger-channel.test.ts`），而静态写 `logger` 会让它在真
+   * Node 里加载不起来（`tests/host-ts-loads-in-node.test.ts`）—— 两条判据的交叉处只剩
+   * 「由宿主决定往哪写」。用例与 `.mjs` 脚本要的都是 stdout 上那一行。
    */
   report?: (line: string) => void;
 }
@@ -150,9 +151,7 @@ export interface FirstRunnableOptions {
  * 用的（`it.skipIf(!psExe)`），所以「不在场」必须能直接表达成 `""`。而**判不了与判错了
  * 只差那一行读数** —— 没有它，下一次只看到一片 `skipped`，说不出是「这台机器没装」
  * 还是「有个同名的东西把它顶掉了」（ISSUE #2316 的现场）。两处调用点因此都只写一行。
- *
  * 那一行**不在这里写出去**（往哪写由 `report` 决定，缺省不写），理由见文件头。
- * 命中时一次也不报 —— 一行「跳过」都没有、却印一句「跳过」，比不印更误导。
  *
  * @param options 见 `FirstRunnableOptions`
  * @returns 命中的候选名；一个都没命中时为 `""`（沿用 `skipIf(!x)` 的约定）
@@ -164,6 +163,9 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
+  /* 出口由调用方给（缺省不打 —— 「探不到」仍如实返回成空串，调用方按 `skipIf(!x)` 处理）：
+   * 用例侧要 stdout 上那一眼，`.mjs` 脚本侧也是；两边各自决定，本模块不碰通道，
+   * 理由见文件头那段。命中时一次也不报 —— 一行「跳过」都没有却印一句「跳过」，比不印更误导。 */
   options.report?.(
     `[probe] 本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
       describeProbeMisses(got.missed, got.timeouts),

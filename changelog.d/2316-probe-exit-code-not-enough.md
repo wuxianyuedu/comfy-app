@@ -54,7 +54,9 @@
     两条约束（「`lib` 里不许自己 `console`」与「真 Node 里必须加载得起来」）只剩一种同时成立的
     形状：**本模块连日志通道都不碰**。读数改为注入 —— `FirstRunnableOptions.report`
     （缺省不写），`lib` 只负责说清「哪个候选、什么原因」，往哪写由宿主决定：
-    `tests/check-file-structure.test.ts` 那两处传 `logger.warn`（唯一通道），
-    `.mjs` 宿主自己打印。中间试过的「拿不到通道就 `console.warn` 兜底」被
-    `single-logger-channel` 当场判红，是对的 —— 那就是第二套日志实现。
+    `tests/check-file-structure.test.ts` 那两处 `process.stdout.write` 写出去（跑用例的人
+    要的是终端上那一眼），`.mjs` 宿主按自己的出口来。中间试过的两条弯路都留着当反例：
+    「拿不到通道就 `console.warn` 兜底」被 `single-logger-channel` 当场判红（那就是第二套
+    日志实现），「`logger.warn` 与 `report` 双出口并存」让真 Node 那一跳照旧崩在加载期 ——
+    一条静态 import 就足够把整条链拖死，这与它同时被注入多少个出口无关。
     探测结论与「这行字落不落得下去」由此解耦，加载期少了一条能把它拖崩的边。
