@@ -10,6 +10,7 @@
  * 只提供动作，状态仍归主 hook 一处持有。
  */
 
+import type { RemoteModelKind } from "~/lib/llm/types";
 import type { Dispatch, SetStateAction } from "react";
 
 import { errorText } from "~/lib/error-message";
@@ -30,7 +31,7 @@ import {
  *  （主 hook 要 import 本模块的构造函数），由 `tests/check-circular-deps.test.ts`
  *  拦下。这里按「我需要什么」声明，主 hook 的完整状态**结构上**满足它。 */
 export interface UsageFieldEditorState {
-  kind: "chat" | "image" | "video";
+  kind: RemoteModelKind;
   fields: UsageField[];
 }
 
