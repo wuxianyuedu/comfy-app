@@ -27,6 +27,8 @@ import {
   judgeStillFailing,
 } from "../scripts/check-known-failed-stale.mjs";
 import {
+  main,
+  resolveFace,
   runGate,
   touchesMechanism,
 } from "../scripts/known-failed-selftest-gate.mjs";
@@ -302,5 +304,68 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
     expect(src).toContain("known-failed-stale-probe.test.ts");
     expect(src).toContain("known-failed-stale-probe-green.test.ts");
     expect(src).toContain("期望「已过期」");
+  });
+});
+
+/**
+ * 判决面：这一步的判决面是「**本次改了什么**」（ISSUE #2265）。
+ *
+ * 现场：平台上没有暂存区 ⇒ 这一步恒绿且**一个字都不打** ⇒ 账面全绿，而
+ * 「碰了这套机制就跑一次自证」在平台侧一个执行者都没有。
+ *
+ * 这里钉的是三条：
+ *   ① `--base <ref>` 换一个判决面的来源（相对基线改了什么）；
+ *   ② **判决面取不到 ⇒ 退 2**（没判 ≠ 绿），空清单同样算「取不到」；
+ *   ③ **没碰到机制也要说一句话** —— 沉默与「真的判过了」逐字同形。
+ */
+describe("自证档的判决面（ISSUE #2265）", () => {
+  it("暂存集为空 ⇒ 这一条**没判**（不是「判过了、没问题」）", () => {
+    const got = resolveFace([]);
+    expect(got.ok).toBe(false);
+    if (got.ok) return;
+    expect(got.reason).toContain("暂存区是空的");
+  });
+
+  it("`--base` 形态：判决面取自「相对那条基线改了什么」", () => {
+    const got = resolveFace(["--base", "HEAD"]);
+    /* `HEAD...HEAD` 没有改动 ⇒ **成功测得「这次什么都没改」** ⇒ 没有可判的内容。
+     * 把它读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
+     * 「降档不许被读成全套过了」的忌讳。 */
+    expect(got.ok).toBe(true);
+    if (!got.ok) return;
+    expect(got.files).toEqual([]);
+    expect(got.via).toContain("基线");
+  });
+
+  it("`--base` 形态：基线给不出来 ⇒ 这一条**没判**", () => {
+    const got = resolveFace(["--base", "no-such-ref-xyz"]);
+    expect(got.ok).toBe(false);
+    if (got.ok) return;
+    expect(got.reason).toContain("diff 没跑起来");
+  });
+
+  it("`--base` 形态：没给基线 ⇒ 这一条**没判**", () => {
+    const got = resolveFace(["--base"]);
+    expect(got.ok).toBe(false);
+    if (got.ok) return;
+    expect(got.reason).toContain("要一条基线");
+  });
+
+  it("没碰到机制 ⇒ **说一句话**（不再一个字都不打）", () => {
+    const said: string[] = [];
+    const original = console.log;
+    console.log = (line: string) => {
+      said.push(line);
+    };
+    let code = -1;
+    try {
+      code = main(["--staged", "src/lib/x.ts", "tests/y.test.ts"]);
+    } finally {
+      console.log = original;
+    }
+    expect(code).toBe(0);
+    expect(said.join("\n")).toContain("没碰到");
+    /* 判决面也要说出来 —— 换了判决面的判据必须让人看得见它按哪个面判。 */
+    expect(said.join("\n")).toContain("判决面");
   });
 });

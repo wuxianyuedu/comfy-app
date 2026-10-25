@@ -23,6 +23,13 @@
  *      基线是分叉点时三点与两点等价，所以两档能并成一条命令。
  *   ③ **改名怎么读**：`--name-status -M`，改名的 **R 行两侧都进面**（只给新路径时，
  *      按旧路径读文件的用例会随改名整条漏跑，ISSUE #2226）。
+ *   ④ **路径必须原样**：`git diff` 默认（`core.quotePath=true`，git 的默认值）把**含非 ASCII
+ *      字符**的路径按 C 风格转义并**加引号** —— 实测输出是
+ *      `M\t"docs/standards/15-\351\231\204\345\275\225.md"`。本仓**38 份被跟踪文件的
+ *      文件名带非 ASCII**（全在 `docs/` 下）⇒ 不关掉它，改动面里那一条与真实路径对不上。
+ *      而机器之间还**各不相同**：本机全局配了 `core.quotepath=false`，CI runner 是 git
+ *      默认值 ⇒ **同一份代码在平台与本机是两种判决**（ISSUE #2272）。
+ *      ⇒ 本模块的每一条 `git diff` 都带 `-c core.quotePath=false`。
  *
  * ── 拿不到基线 / 拿不到清单 ⇒ 「没判」而不是「空」 ─────────────────────
  *
@@ -138,7 +145,14 @@ export function resolveBaseRef(deps = {}) {
  * @returns {{ok: true, files: string[], renamedFrom: string[]} | {ok: false, reason: string}}
  */
 export function changedFilesForBaseRef(ref, deps = {}, dots = "...") {
-  const got = gitRun(["diff", "--name-status", "-M", `${ref}${dots}HEAD`], deps);
+  /* `-c core.quotePath=false` 是**必须的**（ISSUE #2272，机制写在本文件头「口径 ④」）：
+   * 不带它，git 会把非 ASCII 路径转义加引号（`"docs/standards/15-\351\231\204..."`），
+   * 改动面里那一条与真实路径对不上 ⇒ 「改了文档源、镜像没同批带上」在平台上永远判不出来，
+   * 而本机（全局配了 `core.quotepath=false`）看不出来 —— 同一份代码两种判决。 */
+  const got = gitRun(
+    ["-c", "core.quotePath=false", "diff", "--name-status", "-M", `${ref}${dots}HEAD`],
+    deps,
+  );
   if (!got.ok) {
     return {
       ok: false,

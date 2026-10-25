@@ -297,7 +297,14 @@ function changedStoryFiles() {
   if (!process.argv.includes("--changed")) return [];
   const result = spawnSync(
     "git",
-    ["diff", "--cached", "--name-only", "--diff-filter=ACM"],
+    [
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--cached",
+      "--name-only",
+      "--diff-filter=ACM",
+    ],
     { cwd: ROOT, encoding: "utf8" },
   );
   if (result.error !== undefined || result.status !== 0) {

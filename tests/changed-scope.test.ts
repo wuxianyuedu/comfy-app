@@ -21,11 +21,14 @@ function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
   const calls: string[][] = [];
   const runGit = (args: string[], _cwd: string) => {
     calls.push(args);
+    /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
+     * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算。 */
+    const shape = args[0] === "-c" ? args.slice(2) : args;
     const key =
-      args[0] === "diff"
-        ? `diff ${args[args.length - 1] ?? ""}`
-        : (args[0] ?? "");
-    const hit = handlers[key] ?? handlers[args[0] ?? ""];
+      shape[0] === "diff"
+        ? `diff ${shape[shape.length - 1] ?? ""}`
+        : (shape[0] ?? "");
+    const hit = handlers[key] ?? handlers[shape[0] ?? ""];
     if (!hit) return { ok: false, stdout: "" };
     return hit;
   };
@@ -102,8 +105,33 @@ describe("changed-scope —— 改动面怎么读", () => {
     });
     changedFilesForBaseRef("abc123", { runGit }, "...");
     changedFilesForBaseRef("base123", { runGit }, "..");
-    expect(calls[0]).toEqual(["diff", "--name-status", "-M", "abc123...HEAD"]);
-    expect(calls[1]).toEqual(["diff", "--name-status", "-M", "base123..HEAD"]);
+    expect(calls[0]).toEqual([
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--name-status",
+      "-M",
+      "abc123...HEAD",
+    ]);
+    expect(calls[1]).toEqual([
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--name-status",
+      "-M",
+      "base123..HEAD",
+    ]);
+  });
+
+  it("路径要原样：`-c core.quotePath=false` 必须在（ISSUE #2272）", () => {
+    /* 不带它，git 默认把非 ASCII 路径转义加引号（`"docs/standards/15-\351\231\204…"`），
+     * 改动面里那一条与真实路径对不上 ⇒ 「改了文档源、镜像没同批带上」在平台上永远
+     * 判不出来；而本机全局配了 `core.quotepath=false` ⇒ 同一份代码两种判决。 */
+    const { runGit, calls } = fakeGit({
+      "diff abc123...HEAD": { ok: true, stdout: "M\tsrc/a.ts\n" },
+    });
+    changedFilesForBaseRef("abc123", { runGit });
+    expect(calls[0]?.slice(0, 2)).toEqual(["-c", "core.quotePath=false"]);
   });
 
   it("git 没跑起来 ⇒ 报「没跑起来」，不当成空清单放行", () => {
