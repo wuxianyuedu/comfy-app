@@ -531,6 +531,30 @@ describe("base-check —— 命令解析", () => {
     });
   });
 
+  test("整条命令当一个参数给进来 ⇒ 按空白切成 argv（不许把整串当路径）", () => {
+    /* 现场：`node scripts/base-check.mjs "node scripts/x.cjs"` 与
+     * `--base "…"` 两种走法都只有**一个**数组元素。此前那条「裸脚本名」分支会把它
+     * 当成文件名 → `["node", "node scripts/x.cjs"]` → `commandTargetState` 拼出
+     * `<cwd>/node scripts/x.cjs` → 恒「不存在」→ 每条判据都读成 127（没跑起来），
+     * 于是「复算」这件事给不出任何结论（ISSUE #2293 的现场就是被它挡住的）。 */
+    expect(resolveGateCommand(["node scripts/x.cjs"])).toMatchObject({
+      ok: true,
+      argv: ["node", "scripts/x.cjs"],
+    });
+    expect(
+      resolveGateCommand(["node scripts/x.cjs --base origin/master"]),
+    ).toMatchObject({
+      ok: true,
+      argv: ["node", "scripts/x.cjs", "--base", "origin/master"],
+    });
+    expect(
+      resolveGateCommand(["pnpm exec vitest run tests/x.test.ts"]),
+    ).toMatchObject({
+      ok: true,
+      argv: ["pnpm", "exec", "vitest", "run", "tests/x.test.ts"],
+    });
+  });
+
   test("完整命令原样透传", () => {
     const r = resolveGateCommand([
       "pnpm",
@@ -717,7 +741,7 @@ describe("base-check —— 真仓库上的四态", () => {
       expect(got.why).toContain("基线取的是主干");
       expect(got.why).toContain("up/feat");
 
-      writeFileSync(join(r.work, "green.cjs"), 'process.exit(0);\n');
+      writeFileSync(join(r.work, "green.cjs"), "process.exit(0);\n");
       const { code, stdout, stderr } = runBaseCheck(r.work, [
         "node",
         "green.cjs",
