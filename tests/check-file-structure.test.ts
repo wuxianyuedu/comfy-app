@@ -1329,20 +1329,20 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
     ).toContain("src-tauri/target/");
   });
 
-  it("首帧看护的两个常量类型同档（相乘，跨类型编译不过）", () => {
+  it("首帧看护的超时预算由 poll_clock 持有 —— 「两常数相乘」的旧形状不得回潮（#2328 / #2192）", () => {
     const rust = readFileSync(
       join(process.cwd(), "src-tauri", "src", "lib.rs"),
       "utf8",
     );
-    const typeOf = (name: string): string => {
-      const m = new RegExp(`const ${name}: ([A-Za-z0-9]+) =`).exec(rust);
-      if (!m) throw new Error(`lib.rs 里找不到 ${name} 的常量声明`);
-      return m[1]!;
-    };
-    // 这两条会在首帧看护的超时日志里相乘：u32 * u64 没有实现（E0277），
-    // 同档是编译前提，不是风格偏好。
-    expect(typeOf("PROBE_ATTEMPTS")).toBe(typeOf("PROBE_INTERVAL_MS"));
-    expect(rust).toContain("(PROBE_ATTEMPTS * PROBE_INTERVAL_MS) / 1000");
+    // 旧形状：`PROBE_ATTEMPTS * PROBE_INTERVAL_MS`（u32 * u64 的 E0277 地雷）与
+    // 「看护只在该支自己睡」的事故同源 —— #2192 把预算收进 poll_clock（墙钟
+    // `Instant`），相乘与手写计数一起退役。这条钉住退役不回潮：
+    // ① 常数不再存在；② 超时日志的秒数来自 `clock.budget_secs()`。
+    expect(rust, "常数声明不得回来").not.toMatch(/const PROBE_ATTEMPTS/);
+    expect(rust, "相乘表达式不得回来").not.toContain(
+      "(PROBE_ATTEMPTS * PROBE_INTERVAL_MS)",
+    );
+    expect(rust).toContain("clock.budget_secs()");
   });
 });
 
