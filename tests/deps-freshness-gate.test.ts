@@ -14,7 +14,7 @@
  *   3. 远端只动 lockfile 的注释 / 顺序 → **不报**（实质 diff，不是字符串比）；
  *   4. 没有远端引用 / 没有取证时间 → `[未校验]`，**不给出**「一致」这个结论；
  *   5. `--offline` 不读 git → 只判本地自洽那一层；
- *   6. 不是 git 检出 → exit 2（环境故障，不是「依赖没问题」）；
+ *   6. 不是 git 检出 → exit 2（环境故障，不是「依赖没问题」），且 ③ 的读数照旧打出来；
  *   7. `--staged` 的触发面：没碰依赖面 → 零输出退 0；碰了 → 照判并点出文件名；
  *   8. **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）→ ② 不判（远端那份依赖面就在
  *      这次合并里），而不是给解冲突的人一条**永远解不开**的红。
@@ -71,6 +71,8 @@ interface FreshnessReport {
   remoteAgeMs: number | null;
   remoteDrifts: { file: string; kind: string }[];
   installDrift: { state: string; unresolved?: string[] } | null;
+  /** 环境不可信（拿不到 git 状态）—— ① ② 都没判，结论不成立。 */
+  envBroken: boolean;
 }
 
 /**
@@ -96,6 +98,7 @@ function parseReport(output: string): FreshnessReport {
     remoteAgeMs: typeof r.remoteAgeMs === "number" ? r.remoteAgeMs : null,
     remoteDrifts: r.remoteDrifts as FreshnessReport["remoteDrifts"],
     installDrift: (r.installDrift ?? null) as FreshnessReport["installDrift"],
+    envBroken: r.envBroken === true,
   };
 }
 
@@ -269,10 +272,25 @@ describe("check-deps-freshness 契约", () => {
     expect(output).not.toContain("origin/master");
   });
 
-  test("不是 git 检出 → exit 2（环境故障，不是「依赖没问题」）", ({ repo }) => {
+  test("不是 git 检出 → exit 2（环境故障，不是「依赖没问题」），但 ③ 的读数照旧打出来", ({
+    repo,
+  }) => {
+    /* 立案现场：`runFreshnessCheck()` 在「拿不到 git 状态」那一支直接 `return`，
+     * 于是 ③（本地安装 ⇄ 本检出声明）一起被吞掉 —— 而 ③ 与 git 无关、任何环境都判。
+     * 实测代价：在一个空目录里跑，屏幕上只有「这里不是一个可信的检出」，
+     * 「node_modules 没装」这件事一个字都没有，读者据此以为「查完了，没问题」。
+     * 三态口径：exit 2 说「没跑起来」，那一行读数说「本地那一层是什么」。 */
     repo.remove(".git");
-    const { code } = repo.run();
+    const { code, output } = repo.run();
     expect(code).toBe(2);
+    expect(output).toContain("没跑起来");
+    // ③ 的读数必须在场（工作区没有 node_modules ⇒ 这一层必红）。
+    expect(output).toContain("本地依赖与当前检出的声明不一致");
+    // 结构化读数里两件事也要分得开：结论不成立（`envBroken`）与本地那一层的状态。
+    const report = parseReport(repo.run(["--json"]).output);
+    expect(report.code).toBe(2);
+    expect(report.envBroken).toBe(true);
+    expect(report.installDrift?.state).toBe("no-install");
   });
 
   /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721）──────────────────────────

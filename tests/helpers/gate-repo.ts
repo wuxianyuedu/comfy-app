@@ -281,7 +281,6 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
   chmodSync(scriptDir, 0o777);
   copyFileSync(scriptSource, path.join(root, scriptRel));
   chmodSync(path.join(root, scriptRel), 0o755);
-  copyGateDeps(path.join(root, scriptRel));
   for (const d of dirs) mkdirSync(path.join(root, d), { recursive: true });
 
   const abs = (rel: string) => path.join(root, rel);
@@ -290,11 +289,24 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     writeFileSync(abs(rel), content);
   };
   for (const [rel, content] of Object.entries(files ?? {})) put(rel, content);
+  /* `copy` 先落，`copyGateDeps` 后补 —— 这个顺序是**判据的一部分**，不是随手排的。
+   *
+   * 两者会指到同一个落点：`copy` 常整目录拷（`{ from: "scripts/lockfile", … }`），
+   * 而 `copyGateDeps` 按 `import "./lockfile/lock-diff.mjs"` 逐个补同名文件。
+   * 反过来的顺序（先 `copyGateDeps` 再 `copy`）实测在 Windows 节点上会留下一份
+   * **NUL 填充**的 `lock-diff.mjs`：`cpSync` 覆盖 `copyFileSync` 刚写过的那个文件时，
+   * 前一个句柄还没刷完，读回来的就是 `"\u0000\u0000…"` + `SyntaxError: Invalid or
+   * unexpected token`，而报错指向的是临时目录里的那一份（读起来像判据坏了，
+   * 实际是夹具自己写重了）。`copyGateDeps` 已有「已存在的目标不覆盖」的守卫，
+   * 所以把 `copy` 提到前面就够：同一条路径只被写一次。
+   *
+   * 它仍然要走进去遍历（守卫只管「不覆盖」，不管「不遍历」），传递依赖照旧补齐。 */
   for (const { from, to } of copy ?? []) {
     const dest = abs(to);
     mkdirSync(path.dirname(dest), { recursive: true });
     cpSync(path.join(REPO_ROOT, from), dest, { recursive: true });
   }
+  copyGateDeps(path.join(root, scriptRel));
 
   const api: GateRepo = {
     dir: root,
