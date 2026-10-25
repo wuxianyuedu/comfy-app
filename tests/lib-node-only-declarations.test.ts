@@ -231,6 +231,14 @@ const PURE_NODE_HOSTS = [
   // 「浏览器图别引我」由 scanner 的 `clientReachable` 判据盯：它的消费方是
   // `console-run.ts`（第三类）与 `scripts/**`，两者都不在 `"use client"` 可达路径上。
   "src/lib/process/executable-resolve.ts",
+  // `process/probe-exe.ts`（ISSUE #2316）：只依赖 `node:child_process` 的**叶子**
+  // —— 一次 `spawnSync` 回答「这个候选真起得来吗、还是只是退非零 / 没量到」。
+  // 消费方横跨三个世界：测试侧（`tests/check-file-structure.test.ts` 的两处「这台机器
+  // 上有没有 PowerShell / Python」）、脚本侧（`scripts/python-probe.mjs` 的逐候选读数）、
+  // 以及 `python-resolve.ts` 的失败形态类型。加 `server-only` 会让测试与纯 Node 脚本
+  // 起进程的那两处直接 throw；`.server.ts` 在那个用法下同样碍事，故按第三类登记。
+  // 「浏览器图别引我」由 scanner 的 `clientReachable` 判据盯（它顶层 import 了 Node 内建）。
+  "src/lib/process/probe-exe.ts",
 ];
 
 type Report = {

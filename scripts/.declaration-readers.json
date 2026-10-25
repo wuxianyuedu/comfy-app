@@ -101,6 +101,17 @@
       "section": "11.17"
     },
     {
+      "id": "skip-probe-reading",
+      "name": "「这台机器上没有某个工具 ⇒ 这一组跳过」时的逐候选读数",
+      "declaredAt": "用例里的 firstRunnable(...) 探测站点（与它配对的那句 describeProbeMisses）",
+      "reader": "scripts/check-skip-probe-readings.mjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "跳过时的逐候选读数（环境缺口要说得清是哪一种）"
+      },
+      "section": "11.17"
+    },
+    {
       "id": "test-concurrency",
       "name": "并发档的隔离声明",
       "declaredAt": "用例文件内的 `// 并发档：…`",

@@ -19,7 +19,7 @@ import {
   type UsabilityProbe,
 } from "./executable-resolve";
 import { pythonCandidates, pythonProbeArgs } from "./python-candidates";
-import { resolvePython } from "./python-resolve";
+import { findPython, resolvePython } from "./python-resolve";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "python-resolve-"));
 let seq = 0;
@@ -169,6 +169,48 @@ describe("resolvePython：在候选里挑出第一个真能跑的", () => {
 
   it("PATH 是空的时候也答 null（不是抛，也不是假装命中）", () => {
     expect(resolvePython({ env: { PATH: "" }, platform: "linux" })).toBeNull();
+  });
+});
+
+describe("findPython：把「每个候选为什么没选中」一起交出去", () => {
+  /* 为什么这半必须有（ISSUE #2316）：`resolvePython()` 答 null 时，调用方手上只有
+   * 「试过哪些名字」这一份清单 —— 那说明不了「机器上没有解释器」还是「有一个同名的
+   * 东西顶掉了它」，而两种的下一动作完全不同（去装 / 改探测）。 */
+  it("命中时按顺序记下之前试过的候选，命中的那个不算「失败过」", () => {
+    const dir = freshDir();
+    writeCandidate(path.join(dir, "python"));
+    const got = findPython({
+      env: { PATH: dir },
+      platform: "linux",
+      candidates: ["python3", "python"],
+      probe: probeOnly("python"),
+    });
+    expect(got.hit?.command).toBe("python");
+    expect(got.missed.map((m) => m.command)).toEqual(["python3"]);
+    expect(got.missed[0]?.failure.kind).toBe("spawn-error");
+  });
+
+  it("一个都不可用时 hit 为 null，而每个候选都留下一条「试过」", () => {
+    const dir = freshDir();
+    const got = findPython({
+      env: { PATH: dir },
+      platform: "linux",
+      candidates: ["python3", "python"],
+      probe: probeOnly(""),
+    });
+    expect(got.hit).toBeNull();
+    expect(got.missed.map((m) => m.command)).toEqual(["python3", "python"]);
+  });
+
+  it("两个出口是同一份判据（`resolvePython` 就是 `findPython().hit`）", () => {
+    const dir = freshDir();
+    writeCandidate(path.join(dir, "python3"));
+    const opts = {
+      env: { PATH: dir },
+      platform: "linux" as const,
+      probe: probeOnly("python3"),
+    };
+    expect(resolvePython(opts)).toEqual(findPython(opts).hit);
   });
 });
 

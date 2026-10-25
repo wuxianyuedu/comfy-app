@@ -253,6 +253,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
 ✅ node scripts/check-test-todo.cjs        # `test.todo` 的消费方在场：退出码 0、不进失败计数，而门禁链只看退出码 —— 一份零成本、没人读的声明；有站点就必须登记「谁读、怎么读」（见 11 §11.24）
+✅ node scripts/check-skip-probe-readings.mjs # 「按环境跳过的那一组，得说得出为什么」：有 `firstRunnable(` 探测站点就必须配 `describeProbeMisses(` —— 机器上真没有（去装）与「有个同名的东西顶掉了它」（改探测）是两个下一动作完全不同的形态，暗下去时说不清是哪一种就红（见 11 §11.17）
 ✅ node scripts/check-known-failed-stale.mjs  # 已知基线失败登记过期：登记项必须指向真实文件、且真的还红着（见 11 §11.12；清单为空时零耗时）
 ✅ node scripts/known-failed-selftest-gate.mjs # 上一条的自证档执行者：**只在暂存命中这套机制
    # （登记表 / 判据本体 / 钩子接线）时**才做事，跑一次 `--self-test`（红侧 + 绿侧对照组）。
