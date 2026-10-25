@@ -65,10 +65,16 @@ export function unverifiedReport(files) {
  * @returns {string} 要打到 stderr 的正文；一块都没复跑时是空串
  */
 export function rerunReport(attempts, budget) {
+  /* `budget-skipped` 不算「复跑」：那一遍**根本没开**（ISSUE #2364）。把它混进复跑数
+   * 会让账读成「测过两次，两次都只是超时」，而那正是这一档要避开的那句话。 */
+  const skipped = attempts.filter((a) => a.outcome === "budget-skipped").length;
   const reran = attempts.filter(
-    (a) => a.outcome !== "first-green" && a.outcome !== "red-no-fingerprint",
+    (a) =>
+      a.outcome !== "first-green" &&
+      a.outcome !== "red-no-fingerprint" &&
+      a.outcome !== "budget-skipped",
   );
-  if (reran.length === 0) return "";
+  if (reran.length === 0 && skipped === 0) return "";
   /** @type {(outcome: string) => number} */
   const count = (o) => attempts.filter((a) => a.outcome === o).length;
   const waitedMs = reran.reduce((a, r) => a + (r.waitedMs ?? 0), 0);
@@ -85,6 +91,8 @@ export function rerunReport(attempts, budget) {
     `**未校验**（每份都只是超时形态）${count("rerun-unverified")} 块、` +
     `**未判定**（有份拿不到自己的读数）${count("rerun-unattributed")} 块、` +
     `真红 ${count("real-red")} 块。\n` +
+    `  **墙钟**：第 2 遍因预算不够**根本没开** ${skipped} 块` +
+    "（那是未判定，退 2 —— 连第二次测量都没有发生，不许读成「测过了、都只是超时」）。\n" +
     "  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果；" +
     "「未校验」是这次**没测到**（已逐条点名哪几份）；" +
     "「未判定」比它更弱 —— 连「每份都只是超时」都没确认到，退 2（ISSUE #2225）。\n"
