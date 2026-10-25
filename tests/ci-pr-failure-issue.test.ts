@@ -309,7 +309,11 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
       details: [{ sn: "sn-1", json: detail("failed") }],
     });
     try {
-      const r = run(["--from", f.file]);
+      /* ⚠️ `CNB_PULL_REQUEST_IID: ""`：这一条跑在平台上的时候，进程本身就带着**这一跑
+       * 所在的 PR 号**。不清掉它，「sn-1 属于哪张 PR」会读成用例所在那一跑 —— 断言就变成
+       * 「跑在哪张 PR 上期望值就跟着变」，本地绿、CI 红（本 PR 首跑就是这么红的）。
+       * 这类「环境变量泄漏进夹具」的形态在本档正是要挡的：PR 号只从**对得上 sn 的**那一项取。 */
+      const r = run(["--from", f.file], { CNB_PULL_REQUEST_IID: "" });
       const out = `${r.stdout}\n${r.stderr}`;
       expect(r.status, out).toBe(CODE.DONE);
       expect(out).toContain("强制只读");
@@ -328,7 +332,7 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
       details: [{ sn: "sn-2", json: detail("green") }],
     });
     try {
-      const r = run(["--from", f.file]);
+      const r = run(["--from", f.file], { CNB_PULL_REQUEST_IID: "" });
       expect(r.status).toBe(CODE.DONE);
       expect(`${r.stdout}${r.stderr}`).toContain("这一跑是绿的");
     } finally {
@@ -347,11 +351,17 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
      * 「不猜这一跑是谁」要挡的形状。 */
     const f = fixture({ list: [], details: [] });
     try {
-      const strict = run(["--from", f.file], { CNB_BUILD_ID: "" });
+      const strict = run(["--from", f.file], {
+        CNB_BUILD_ID: "",
+        CNB_PULL_REQUEST_IID: "",
+      });
       expect(strict.status, `${strict.stdout}\n${strict.stderr}`).toBe(
         CODE.NO_FACT,
       );
-      const loose = run(["--from", f.file, "--no-block"], { CNB_BUILD_ID: "" });
+      const loose = run(["--from", f.file, "--no-block"], {
+        CNB_BUILD_ID: "",
+        CNB_PULL_REQUEST_IID: "",
+      });
       expect(loose.status).toBe(CODE.DONE);
       const out = `${loose.stdout}\n${loose.stderr}`;
       expect(out).toContain("不拦路");

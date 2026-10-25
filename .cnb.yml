@@ -1949,7 +1949,7 @@
   # （一条诉求一张单，不另开单）；认不出来 ⇒ 按格名去重建单。取舍与两种形状都在
   # `scripts/ci-pr-failure-issue.mjs` 头注里，这里不重抄。
   - name: PR 失败立案
-    run: always()
+    if: ${{ always() }}
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block
     # 5m：三次读命令（列表 / 逐格详情 / 逐格日志，后者最多三格）+ 一次写 + 一次回读。
     # 与 `每日失败立案` 同量级（实测那条 1.6s）。给 5m 是留给节点冷启动与平台慢响应，
