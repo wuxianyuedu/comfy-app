@@ -65,10 +65,11 @@ export function cnbSpawn(args) {
  * 工具，这是它能犯的最重的错。
  *
  * @param {string} cwd 工作目录
- * @returns {(cmd:string,args:string[])=>ExecResult} 执行函数
+ * @returns {(cmd:string,args:string[],opts?:{env?:Record<string,string>})=>ExecResult}
+ *   执行函数。第三个入参只用来**叠加**环境变量（见下方实现处那句为什么不是替换）。
  */
 export function makeRunner(cwd) {
-  return (cmd, args) => {
+  return (cmd, args, opts = {}) => {
     const inv = cmd === "cnb" ? cnbSpawn(args) : { command: cmd, args };
     if (!inv) {
       return {
@@ -78,7 +79,14 @@ export function makeRunner(cwd) {
         error: "ENOENT",
       };
     }
-    const r = spawnSync(inv.command, inv.args, { cwd, encoding: "utf8" });
+    /* `opts.env` 是**叠加**而不是替换：换掉整个环境会把 PATH/HOME 一起带走，
+     * 那会让一次「只想多带一个旗标」的调用变成另一件事（且失败形态是 ENOENT，看不出关系）。
+     * 目前唯一的用处是给刻意空提交带 `COMFY_INTENTIONAL_EMPTY_COMMIT`（ISSUE #2354）。 */
+    const r = spawnSync(inv.command, inv.args, {
+      cwd,
+      encoding: "utf8",
+      env: opts.env ? { ...process.env, ...opts.env } : process.env,
+    });
     const err = r.error
       ? /** @type {Error & {code?:string}} */ (r.error).code || String(r.error)
       : null;
