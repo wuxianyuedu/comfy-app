@@ -2,7 +2,9 @@
 
 import { subscribeAppEvent } from "~/lib/app-events";
 import { taskStatusLabel } from "~/lib/task-state";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useElementBox } from "~/components/ui/use-element-box";
 import { Badge } from "~/components/ui/badge";
 import { PageHeader } from "~/components/ui/page-header";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -28,9 +30,231 @@ import {
   type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
 import {
+  type ProjectOutputItem,
   type ProjectOutputImage,
   useProjectOutputs,
 } from "./hooks/use-project-outputs";
+
+/** 单张产出卡（从 `outputs.map` 里原样提出 —— 虚拟化只改「哪几行在场」，
+ * 不改卡本身的任何形态/行为）。 */
+function OutputCard({
+  output,
+  active,
+  onSelect,
+}: {
+  output: ProjectOutputItem;
+  active: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const c = taskCover(output.images);
+  const isVideoOut = c?.mediaType === "video";
+  return (
+    <Button
+      variant="ghost"
+      onClick={() => onSelect(output.id)}
+      className={`group relative h-auto overflow-hidden rounded-2xl border text-left font-normal transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
+        active
+          ? "border-primary-500/70 ring-primary-500/40 ring-1"
+          : "border-border-strong hover:border-ink-fainter"
+      } bg-subtle`}
+    >
+      <div className="bg-canvas-deep relative aspect-square w-full">
+        {c ? (
+          <MediaThumbnail
+            src={c.localPath}
+            alt=""
+            className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
+            autoPlay
+            loop
+          />
+        ) : (
+          <div className="text-ink-fainter grid h-full place-items-center text-xs">
+            {output.status === "FAILED" ? "生成失败" : "无预览"}
+          </div>
+        )}
+
+        {isVideoOut && (
+          <span className="ring-border-strong bg-primary/90 absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full ring-2">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="white"
+              aria-hidden
+            >
+              <path d="M6 4 L16 10 L6 16 Z" />
+            </svg>
+          </span>
+        )}
+        {isVideoOut && (
+          <span className="text-3xs bg-accent/90 absolute top-2 right-2 rounded-md px-1.5 py-0.5 font-semibold text-white">
+            视频
+          </span>
+        )}
+        <StatusBadge
+          status={output.status}
+          label={taskStatusLabel(output.status)}
+          dot={false}
+          className="text-2xs absolute top-2 left-2 px-2 py-0.5"
+        />
+      </div>
+      <div className="p-3">
+        <p className="text-ink-soft line-clamp-1 text-xs font-medium">
+          {TYPE_CHIP[output.type] ?? output.type} ·{""}
+          {displayValue(output.seed)}
+        </p>
+        <p className="text-ink-fainter text-2xs mt-1">
+          {displayValue(timeAgo(output.createdAt))}
+        </p>
+      </div>
+    </Button>
+  );
+}
+
+/**
+ * 产出网格的**行级虚拟化**（audit §C.1 F4a / ISSUE #2190）。
+ *
+ * 产出数随项目历史任务数只增不减、每卡挂一个媒体缩略图（视频那一支还
+ * `autoPlay`）—— 全量 `map` 的首屏挂载成本与 DOM 规模都线性上涨，而一屏
+ * 看得见的只有个位数张。虚拟项 = **一行 2~4 张卡**（响应式多列 grid 不能
+ * 直接照抄 ModelLibrary 那份单列行虚拟器），列数按文档型滚动容器的宽度推
+ * （镜像旧 Tailwind 断点：基础 2 / ≥640 3 / ≥1024 4，宽度取 `useElementBox`
+ * 的 `ResizeObserver`，窗口缩放跟着重算）。
+ *
+ * 滚动容器不是 window：文档型的滚动锚在 `DocumentFrame` 里
+ * （`[data-document-scroll]`，见 ViewContainer 那一段）—— `closest()` 找到它
+ * 交给 `useVirtualizer`；`scrollMargin` 用列表相对该锚的 `offsetTop`
+ * （锚自带 `position: relative`，offsetParent 链直通）。
+ *
+ * 固有取舍（audit 原文「滚出视口即卸载媒体」）：视频缩略图滚出视口即卸载，
+ * 滚回来重新起播 —— 这正是虚拟化换来的「不挂载」，不在视图层另加缓存绕它
+ * （§12.12 / 硬规则 20）。
+ */
+function VirtualizedOutputGrid({
+  outputs,
+  selectedId,
+  onSelect,
+}: {
+  outputs: ProjectOutputItem[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [boxRef, box] = useElementBox();
+
+  /* 找文档型滚动锚（列表的祖先）。列表挂上后找一次即可 —— 锚不随滚动换。 */
+  const setListEl = useCallback(
+    (el: HTMLDivElement | null) => {
+      listRef.current = el;
+      boxRef(el);
+      setScrollEl(el?.closest<HTMLElement>("[data-document-scroll]") ?? null);
+    },
+    [boxRef],
+  );
+
+  const width = box?.clientWidth ?? 0;
+  const cols = width >= 1024 ? 4 : width >= 640 ? 3 : 2;
+  const GAP = 16;
+  /* 卡片文字区（p-3 + 两行文本 + 边框）的固定高度预算：卡片本体是
+   * aspect-square，行高 = 卡宽 + 这一段 —— 量不出宽度时给个保守初值。 */
+  const CARD_TEXT_H = 92;
+  const cardW = width > 0 ? (width - GAP * (cols - 1)) / cols : 160;
+  const rowH = cardW + CARD_TEXT_H;
+
+  const rows = useMemo(() => {
+    const out: { start: number; items: ProjectOutputItem[] }[] = [];
+    for (let i = 0; i < outputs.length; i += cols) {
+      out.push({ start: i, items: outputs.slice(i, i + cols) });
+    }
+    return out;
+  }, [outputs, cols]);
+
+  const scrollMargin = listRef.current?.offsetTop ?? 0;
+  // 与 ModelLibrary 同一条误报豁免：virtualizer 的读数只在本组件 render 内消费，
+  // 不外传给被 memo 的子组件，不存在该规则担心的「跨组件陈旧 UI」风险。
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => rowH + GAP,
+    overscan: 3,
+    gap: GAP,
+    scrollMargin,
+  });
+  /* 量测未就绪（挂载首帧 / ResizeObserver 不可用的 jsdom）⇒ 全量渲染兜底 ——
+   * 与 ModelLibrary 的 `measured` 守卫同一条形状：虚拟器在无读数的环境里
+   * `getVirtualItems()` 是空的，直接用会把网格渲染成一片空白。 */
+  const measured = (scrollEl?.clientHeight ?? 0) > 0 && width > 0;
+
+  if (!measured) {
+    return (
+      <div
+        ref={setListEl}
+        role="list"
+        aria-label="项目产出"
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gap: GAP,
+        }}
+      >
+        {outputs.map((output) => (
+          <OutputCard
+            key={output.id}
+            output={output}
+            active={selectedId === output.id}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={setListEl}
+      role="list"
+      aria-label="项目产出"
+      style={{
+        position: "relative",
+        height: virtualizer.getTotalSize(),
+        width: "100%",
+      }}
+    >
+      {virtualizer.getVirtualItems().map((vi) => {
+        const row = rows[vi.index];
+        if (!row) return null;
+        return (
+          <div
+            key={vi.key}
+            data-index={vi.index}
+            ref={virtualizer.measureElement}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              display: "grid",
+              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+              gap: GAP,
+              transform: `translateY(${vi.start}px)`,
+            }}
+          >
+            {row.items.map((output) => (
+              <OutputCard
+                key={output.id}
+                output={output}
+                active={selectedId === output.id}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
   const img = images.find((image) => image.mediaType === "image");
@@ -231,75 +455,11 @@ export function ProjectOutputs() {
           minHeightClass="min-h-70"
         />
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {outputs.map((output) => {
-            const c = taskCover(output.images);
-            const isVideoOut = c?.mediaType === "video";
-            const active = selectedId === output.id;
-            return (
-              <Button
-                key={output.id}
-                variant="ghost"
-                onClick={() => setSelectedId(output.id)}
-                className={`group relative h-auto overflow-hidden rounded-2xl border text-left font-normal transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
-                  active
-                    ? "border-primary-500/70 ring-primary-500/40 ring-1"
-                    : "border-border-strong hover:border-ink-fainter"
-                } bg-subtle`}
-              >
-                <div className="bg-canvas-deep relative aspect-square w-full">
-                  {c ? (
-                    <MediaThumbnail
-                      src={c.localPath}
-                      alt=""
-                      className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
-                      autoPlay
-                      loop
-                    />
-                  ) : (
-                    <div className="text-ink-fainter grid h-full place-items-center text-xs">
-                      {output.status === "FAILED" ? "生成失败" : "无预览"}
-                    </div>
-                  )}
-
-                  {isVideoOut && (
-                    <span className="ring-border-strong bg-primary/90 absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full ring-2">
-                      <svg
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="white"
-                        aria-hidden
-                      >
-                        <path d="M6 4 L16 10 L6 16 Z" />
-                      </svg>
-                    </span>
-                  )}
-                  {isVideoOut && (
-                    <span className="text-3xs bg-accent/90 absolute top-2 right-2 rounded-md px-1.5 py-0.5 font-semibold text-white">
-                      视频
-                    </span>
-                  )}
-                  <StatusBadge
-                    status={output.status}
-                    label={taskStatusLabel(output.status)}
-                    dot={false}
-                    className="text-2xs absolute top-2 left-2 px-2 py-0.5"
-                  />
-                </div>
-                <div className="p-3">
-                  <p className="text-ink-soft line-clamp-1 text-xs font-medium">
-                    {TYPE_CHIP[output.type] ?? output.type} ·{""}
-                    {displayValue(output.seed)}
-                  </p>
-                  <p className="text-ink-fainter text-2xs mt-1">
-                    {displayValue(timeAgo(output.createdAt))}
-                  </p>
-                </div>
-              </Button>
-            );
-          })}
-        </div>
+        <VirtualizedOutputGrid
+          outputs={outputs}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
       )}
 
       <ProjectOutputsMetadataSheet

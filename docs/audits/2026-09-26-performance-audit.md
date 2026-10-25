@@ -57,6 +57,7 @@
 | S13  | P1   | `src/app/(main)/settings/hooks/use-settings-page-comfy.ts`       | `comfyStatus` 改「事件驱动为主、30s 兜底」：新增 `/api/comfy/state` 长轮询推送（五个变化源：启动 / 就绪 / 关闭 / 退出 / 配置写入） | #1874 |
 | F11b | P1   | `src/lib/workflow/workflow-run-store.ts`                         | 日志落盘改合并窗口（250ms）：每来一行整表序列化 → 窗口内只写一次；判重收窄到尾窗 64 条；追加改 `tailWindowAppend`（实测 20s / 2000 行：8109ms → 331ms，落盘 2000 → 80 次） | #1885 |
 | F12  | P1   | `src/components/studio/logs/log-analysis.ts`                     | 时间线去重索引跨轮复用（`TimelineIndex` + `mergeTimelineIndexed` / `trimTimelineIndex`）：每轮重建两张全表 Map → 只在形状变化时建；截断改摘键 | #1887 |
+| F4a  | P1   | `src/components/studio/ProjectOutputs.tsx` + `ViewContainer.tsx`（滚动锚） | 产出网格行级虚拟化：虚拟项 = 一行 2~4 卡（列数按容器宽推，镜像旧断点）；`useVirtualizer` 挂文档型滚动锚 `data-document-scroll`；未量测环境全量渲染兜底（ModelLibrary 的 `measured` 守卫同形） | #2375 |
 | L5   | P1   | `src-tauri/src/poll_clock.rs`（新）+ `lib.rs` + `single_instance.rs` | 六处手写 sleep 轮询收敛成 `PollClock`：每拍先 tick 再探测（首绘看护那次「`continue` 跳过循环底 sleep」的事故从结构上消失）；预算改墙钟、退避不缩短它；focus waiter 走 `forever` 形。守事故的 `#[test]` 同批改钉新不变量 | #2315 |
 
 ## B. 判定修正与例外（📝）
@@ -97,11 +98,7 @@
 
 ### C.1 前端渲染（P1）
 
-- ⬜ **F4a** → **#2190**。产出网格 `outputs.map` 全量渲染（每卡带一个媒体元素），
-  取数侧既无上限也无分页。定位：`src/components/studio/ProjectOutputs.tsx` 搜 `outputs.map(`，
-  分页问题看同目录 `hooks/use-project-outputs.ts`。方向：行级虚拟化
-  （范式搜 `src/components/studio/ModelLibrary.tsx` 里的 `useVirtualizer`；
-  ⚠️ 那份是单列行虚拟器，本条是响应式多列 grid，不能直接照抄 —— 细节在单里）。
+- _（F4a 已闭环，见 A 表。）_
 - ⬜ **F4b** → **#2191**。节点库三层嵌套 `map`（自定义节点包可含数百~上千类型）。
   定位：`src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx`
   搜 `parentBlocks.map(` / `subs.map(` / `nodeTypeList.map(`。
