@@ -2133,6 +2133,14 @@ imported from …/src/lib/process/python-resolve.ts`。而这一跑前面全绿�
 
 ##### 13.5.3.8 平台侧并发为什么写死 4（不是配置里那个 8）
 
+> ⚠️ **本节的两处数字都是历史条件，不是现状**：那一步后来改走跑法脚本
+> `scripts/full-suite-run.mjs`（#1979），并发不再由 `.cnb.yml` 写死，而是由
+> `scripts/ci-load.mjs` 按现场核数折算（#1993 → §13.5.21）；档位从「一 worker 至少 4 核」
+> 抬到「至少 8 核」（#2317，16 核 ⇒ 2）；而**本节当作对照的那个 `vitest.config.ts` 的 8**
+> 自 #2324 起也改成同一个出处推导 —— 「写死 4 vs 吃配置里的 8」这个**两副本**的问题
+> 已经不存在，剩下的是**一个数**在两个消费点。下面这些读数与推导**保留原样**当账本
+> （它们带的是当时的机器形态与负载条件，改数字就等于毁掉可比性）。
+
 `.cnb.yml` 的「单元测试」一步是 `vitest run --coverage --maxWorkers=4`，
 **显式传 4 而不是吃 `vitest.config.ts` 的 `maxWorkers: 8`** —— 这三个量叠在一起
 才让这一格与本地跑不是同一种负载：
@@ -7024,6 +7032,16 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 - 唯一出处 `scripts/ci-load.mjs`：`resolveCores()`（`CNB_CPUS` → `os.availableParallelism()`
   → 兜底）、`workersForCores()`（`ceil(cores / 8)`，即「一个 worker 至少 8 核」）、
   `resolveCiWorkers()`（叠一层人的出口 `COMFY_CI_MAX_WORKERS`）。
+- **消费点现在有三处，全都从这一处取**（ISSUE #2324 之前是三份副本）：
+  ① `ci-affected-tests.mjs`（PR `受影响用例`）；② `full-suite-run.mjs`（每日 `单元测试`）；
+  ③ `vitest.config.ts` 的根 `maxWorkers` —— 它管的是**所有没带 `--maxWorkers` 的 vitest**，
+  也就是本地那一跳（`pnpm test`、`run-tests.mjs`、`quality-gate.mjs` 的
+  `["exec","vitest","run","--coverage"]`，即 `pnpm check:all`）。
+  同一批里 `run-affected-tests.mjs` 那条 `DEFAULT_MAX_WORKERS = 4` **连常数带
+  `.gate-thresholds.json` 里那一条一起撤掉**，兜底改为调用点注入
+  （`resolveMaxWorkers(raw, resolveCiWorkers().workers)`，**漏传兜底直接 `throw`**；
+  `runChunk` 的默认档同样从 `ci-load` 推导，本地那份常数一并消失）。
+  ⇒ 本地要临时快跑：`COMFY_CI_MAX_WORKERS=8 pnpm test`（一处旋钮管全部，只调并发）。
 
 **这一档为什么从「至少 4 核」抬到「至少 8 核」（ISSUE #2317，代价叙述由 #2320 订正）**：
 抬档买的不是「跑得快」，是**单条流水线别把整台机占满** —— 这一档唯一承诺的是**峰值占用减半**，
@@ -7509,6 +7527,10 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 只放宽扫面会造出「这份文件被扫到了，但账上那条找不到」这种自相矛盾的红，只放宽取值则永远
 不会新抓到东西。放宽当场新吃到两处（`run-affected-tests.mjs` 的 `SAFE_ARGV_BUDGET` /
 `DEFAULT_MAX_WORKERS`），两条都以 `report` 入账 —— 它们是命令行预算与并发旋钮，不是松紧量。
+**其中 `DEFAULT_MAX_WORKERS` 后来被连常数带账上那一条一起撤掉**（ISSUE #2324）：钩子档的兜底
+并发改由调用点从 `ci-load.mjs` 注入，源码里不再有这么一个数 —— 留着账上那一条，
+`check-gate-thresholds.cjs` 会当场报「源码里找不到该常量声明」，而那是**对的**（账与源码
+必须同批），不是判据太严。撤掉后 31 条，地板 `MIN_ENTRIES = 15` 不受影响。
 
 **执行者与档位**：D0 形态前置档（`run "判据自身的数值 ⇄ 账同批"`，纯读文本、零网络）。
 换输入面之后的实测：整步 0.28~0.31s（Node 起动与 `git show origin/master:` 占大头），
