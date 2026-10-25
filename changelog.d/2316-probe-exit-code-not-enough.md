@@ -45,3 +45,16 @@
     所以第三类登记的纯 Node 宿主那一侧不被说反）；`probe-exe.test.ts` 的断言随之从
     「拦 console」改成「拦 logger」—— 拦 console 在实现改走 logger 之后会**静默收到空**，
     那样红出来的会是一句指向不到真因的断言。
+  - **CI 第二跑的读数与修法**（`cnb-8a8-1k5op440e`，仍红在「受影响用例」一格）：上一轮换成
+    `logger.warn` 之后，`tests/host-ts-loads-in-node.test.ts` 当场红 ——
+    `src/lib/process/probe-exe.ts` 在真 Node 里 `ERR_MODULE_NOT_FOUND: Cannot find package '~'`。
+    根因不是 pino 缺 `server-only`（它确实没带），而是**加载形态**：本模块要被
+    `scripts/python-probe.mjs` 与平台侧 `node scripts/e2e-run.mjs` 直接 `import`，那一跳没有
+    `~` 别名解析器 —— 静态 import 写下一行日志的代价，是把整条链拖崩在**加载期**。
+    两条约束（「`lib` 里不许自己 `console`」与「真 Node 里必须加载得起来」）只剩一种同时成立的
+    形状：**本模块连日志通道都不碰**。读数改为注入 —— `FirstRunnableOptions.report`
+    （缺省不写），`lib` 只负责说清「哪个候选、什么原因」，往哪写由宿主决定：
+    `tests/check-file-structure.test.ts` 那两处传 `logger.warn`（唯一通道），
+    `.mjs` 宿主自己打印。中间试过的「拿不到通道就 `console.warn` 兜底」被
+    `single-logger-channel` 当场判红，是对的 —— 那就是第二套日志实现。
+    探测结论与「这行字落不落得下去」由此解耦，加载期少了一条能把它拖崩的边。

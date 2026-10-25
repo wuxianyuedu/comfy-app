@@ -27,12 +27,21 @@
 // 「测试侧要用它」这件事说反（那个入口就是一句 throw）。
 import { spawnSync } from "node:child_process";
 
-/* §18.4 三选一与「日志只有一条通道」在这里是**同一件事的两面**（`tests/single-logger-channel.test.ts`）：
- * 本模块登记为第三类（纯 Node 宿主），所以它既不能被 `server-only` 挡住，也不许自己
- * `console.log` —— 那条判据实测把「探不到时打一行读数」判成了直接写 console。
- * `~/lib/core/logger` 同样**刻意不带** `server-only`（解释器探测同样发生在测试与
- * `scripts/*.mjs` 宿主里），因此这条边不会把纯 Node 那一侧说反；代价只是一行 import。 */
-import { logger } from "~/lib/core/logger";
+/* 探不到时那一行读数**不在这里写出去**，尽管「日志只有一条通道」
+ * （`tests/single-logger-channel.test.ts`）要求服务端可达的 `lib` 里不许自己 `console`。
+ *
+ * 两条边都要成立，只剩一种形状：**本模块连通道都不碰**。
+ *   · 静态 `import { logger } from "~/lib/core/logger"` ⇒ 真 Node 直接 `import` 本模块时
+ *     没有 `~` 别名解析器，整条链在**加载期** `ERR_MODULE_NOT_FOUND`：那个包名就是
+ *     `Cannot find package '~'`（`scripts/python-probe.mjs` 与平台侧 `node scripts/e2e-run.mjs`
+ *     那一跳，`tests/host-ts-loads-in-node.test.ts` 的现场）；
+ *   · 退一步「拿不到通道就 `console.warn` 兜底」⇒ 那就是第二套日志实现，同一条判据当场红。
+ *
+ * 于是读数走**注入**：`FirstRunnableOptions.report`。本模块只负责把「哪个候选、什么原因」
+ * 说清楚（`describeProbeMisses()`），**往哪写由宿主决定** —— 测试侧给 `logger.warn`，
+ * `.mjs` 脚本宿主给它自己的出口。探测本身与「这行字落不落得下去」解耦，
+ * 加载期也就再没有一条能把它拖崩的边。
+ */
 
 /** 一次探测的三种结局（语义见文件头）。 */
 export type ProbeFailure =
@@ -125,15 +134,25 @@ export interface FirstRunnableOptions {
   timeoutMs?: number;
   /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
   probe?: (candidate: string, args: string[]) => ProbeOutcome;
+  /**
+   * 探不到时那一行读数**往哪写**（缺省不写）。
+   *
+   * 由宿主注入，本模块不碰日志通道（理由见文件头那段）。缺省「不写」是刻意的：
+   * 探测的结论与「这行字落不落得下去」是两件事，后者不该能把前者拖崩。
+   */
+  report?: (line: string) => void;
 }
 
 /**
- * `firstRunnable().hit ?? ""`，并在探不到时**打印一行「哪个候选、什么原因」**。
+ * `firstRunnable().hit ?? ""`，并把探不到时那一行「哪个候选、什么原因」交给 `report`。
  *
  * 为什么要把「空串 = 不在场」这个约定也收进来：本仓的用例是拿一个常量当 `skipIf` 守卫
  * 用的（`it.skipIf(!psExe)`），所以「不在场」必须能直接表达成 `""`。而**判不了与判错了
  * 只差那一行读数** —— 没有它，下一次只看到一片 `skipped`，说不出是「这台机器没装」
  * 还是「有个同名的东西把它顶掉了」（ISSUE #2316 的现场）。两处调用点因此都只写一行。
+ *
+ * 那一行**不在这里写出去**（往哪写由 `report` 决定，缺省不写），理由见文件头。
+ * 命中时一次也不报 —— 一行「跳过」都没有、却印一句「跳过」，比不印更误导。
  *
  * @param options 见 `FirstRunnableOptions`
  * @returns 命中的候选名；一个都没命中时为 `""`（沿用 `skipIf(!x)` 的约定）
@@ -145,7 +164,7 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
-  logger.warn(
+  options.report?.(
     `[probe] 本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
       describeProbeMisses(got.missed, got.timeouts),
   );
