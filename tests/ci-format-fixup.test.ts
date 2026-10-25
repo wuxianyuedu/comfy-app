@@ -120,140 +120,197 @@ function harness(options: {
   return { r, calls: stub.calls, delegated: del.got };
 }
 
+/**
+ * PR 事件那几个环境变量在本分组里**必须不在场**：这一组判的是「直推那一支」的
+ * plumbing 与护栏（源分支反查 / master 恒拒 / lease / push 被拒可读），而脚本第 ④ 拍
+ * 只要看见 `CNB_PULL_REQUEST_IID` 就会改走委托（`delegate-failed`）—— 那是「委托」
+ * 那一组的事。不隔离的后果实测：平台 PR 流水线与任何带该变量的壳里（本例是 PR #2366
+ * 自己的 IPD），9 条里有 4 条一律撞在 `delegate-failed` 上。
+ *
+ * ⚠️ **隔离必须落在用例体里，不能落在 `describe` 回调里**：`describe` 的回调在
+ * **收集期**就被跑完了（那时只是把 `it` 注册进去），而用例体要等之后才执行 ——
+ * 套在 describe 上等于「清完立刻恢复、真正跑的时候变量又回来了」，典型的
+ * 「看着改对了、红照旧」。所以这里是 `each` 形态：逐条在用例体内清 / 还原。
+ */
+function isolateLocalEnv(): { restore: () => void } {
+  const keys = ["CNB_PULL_REQUEST_IID", "CNB_REPO_SLUG", "CNB_REPO_URL"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  for (const k of keys) delete process.env[k];
+  return {
+    restore: () => {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    },
+  };
+}
+
+/** 用例体包一层：这一条的全程都看不见 PR 事件变量。 */
+function withLocalEnv<T>(body: () => T): T {
+  const { restore } = isolateLocalEnv();
+  try {
+    return body();
+  } finally {
+    restore();
+  }
+}
+
 describe("prettier 自动修复回写（红 ⇒ bot 推 format-only 提交）", () => {
+  /* 这一组判的是**直推**那一支：每一条用例体自己包 `withLocalEnv`（见它的头注 ——
+   * 收集期包裹是无效的，那样写看着对、红照旧）。
+   */
   it("绿 ⇒ 原样返回，一个字节不多写", () => {
-    const { r, calls } = harness({ judgeCode: 0, unformatted: [] });
-    expect(r.exitCode).toBe(0);
-    expect(r.action).toBe("green");
-    expect(calls).toHaveLength(0);
+    withLocalEnv(() => {
+      const { r, calls } = harness({ judgeCode: 0, unformatted: [] });
+      expect(r.exitCode).toBe(0);
+      expect(r.action).toBe("green");
+      expect(calls).toHaveLength(0);
+    });
   });
 
   it("判据没跑成（exit 2）⇒ 原样转 2，不冒充结论", () => {
-    const { r } = harness({ judgeCode: 2, unformatted: [] });
-    expect(r.exitCode).toBe(2);
-    expect(r.action).toBe("judge-didnt-run");
+    withLocalEnv(() => {
+      const { r } = harness({ judgeCode: 2, unformatted: [] });
+      expect(r.exitCode).toBe(2);
+      expect(r.action).toBe("judge-didnt-run");
+    });
   });
 
   it("红 ⇒ 复判全绿后用 plumbing 建提交并推到**源分支**（不推 HEAD / 不用 merge 检出）", () => {
-    const { r, calls } = harness({
-      judgeCode: 1,
-      unformatted: ["src/a.ts", "src/deep/b.tsx"],
-      platformUser: "月读",
+    withLocalEnv(() => {
+      const { r, calls } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts", "src/deep/b.tsx"],
+        platformUser: "月读",
+      });
+      expect(r.exitCode).toBe(0);
+      expect(r.action).toBe("pushed");
+      /* plumbing 链：每个文件一次 hash-object，然后 read-tree → update-index×N
+       * → write-tree → commit-tree（带 bot 身份与消息）→ push。全程不出现
+       * `git add` / `git commit`（那会提交整棵 merge 检出树）。 */
+      expect(calls.some((a) => a[0] === "add")).toBe(false);
+      expect(
+        calls.some((a) => a[0] === "commit"),
+        "不许 porcelain commit（会提交整棵 merge 检出树）",
+      ).toBe(false);
+      const tree = calls.find((a) => a[0] === "read-tree");
+      expect(tree?.[1]).toBe("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"); // 基 = 源分支 head
+      const commitTree = calls.find((a) => a.includes("commit-tree"));
+      expect(commitTree!.join(" ")).toContain(FIXUP_AUTHOR_NAME);
+      expect(commitTree!.join(" ")).toContain(
+        `${FIXUP_SUBJECT_PREFIX}prettier 自动修复`,
+      );
+      const push = calls.find((a) => a[0] === "push");
+      /* 推的是 plumbing 产出的提交 sha，不是 HEAD —— HEAD 在 PR 检出上是 merge 提交。 */
+      expect(push!.join(" ")).toContain("refs/heads/feat/x");
+      expect(push!.join(" ")).not.toContain("HEAD");
+      expect(push!.join(" ")).toContain(
+        "f000000000000000000000000000000000000000",
+      );
     });
-    expect(r.exitCode).toBe(0);
-    expect(r.action).toBe("pushed");
-    /* plumbing 链：每个文件一次 hash-object，然后 read-tree → update-index×N
-     * → write-tree → commit-tree（带 bot 身份与消息）→ push。全程不出现
-     * `git add` / `git commit`（那会提交整棵 merge 检出树）。 */
-    expect(calls.some((a) => a[0] === "add")).toBe(false);
-    expect(
-      calls.some((a) => a[0] === "commit"),
-      "不许 porcelain commit（会提交整棵 merge 检出树）",
-    ).toBe(false);
-    const tree = calls.find((a) => a[0] === "read-tree");
-    expect(tree?.[1]).toBe("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"); // 基 = 源分支 head
-    const commitTree = calls.find((a) => a.includes("commit-tree"));
-    expect(commitTree!.join(" ")).toContain(FIXUP_AUTHOR_NAME);
-    expect(commitTree!.join(" ")).toContain(
-      `${FIXUP_SUBJECT_PREFIX}prettier 自动修复`,
-    );
-    const push = calls.find((a) => a[0] === "push");
-    /* 推的是 plumbing 产出的提交 sha，不是 HEAD —— HEAD 在 PR 检出上是 merge 提交。 */
-    expect(push!.join(" ")).toContain("refs/heads/feat/x");
-    expect(push!.join(" ")).not.toContain("HEAD");
-    expect(push!.join(" ")).toContain(
-      "f000000000000000000000000000000000000000",
-    );
   });
 
   it("复判仍红（--write 修不明白）⇒ 照旧红，不提交不推送", () => {
-    const { r, calls } = harness({
-      judgeCode: 1,
-      unformatted: ["src/a.ts"],
-      afterUnformatted: ["src/a.ts"],
-      platformUser: "月读",
-    });
-    expect(r.exitCode).toBe(1);
-    expect(r.action).toBe("unfixable");
-    expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
-  });
-
-  it("本地形态（无平台身份）⇒ 只修工作区，不提交不推送", () => {
-    /* 平台 CI 进程带 CNB_BUILD_USER* ⇒ 必须显式清掉，测的才是「无平台身份」。
-     * platformUser 注入 null 之外还要清环境 —— 脚本缺省读那三个变量。 */
-    const saved = { ...process.env };
-    delete process.env.CNB_BUILD_USER_NICKNAME;
-    delete process.env.CNB_COMMITTER;
-    delete process.env.CNB_BUILD_USER;
-    try {
+    withLocalEnv(() => {
       const { r, calls } = harness({
         judgeCode: 1,
         unformatted: ["src/a.ts"],
-        platformUser: null,
+        afterUnformatted: ["src/a.ts"],
+        platformUser: "月读",
       });
-      expect(r.exitCode).toBe(0);
-      expect(r.action).toBe("local-fixed");
+      expect(r.exitCode).toBe(1);
+      expect(r.action).toBe("unfixable");
       expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
-    } finally {
-      Object.assign(process.env, saved);
-    }
+    });
+  });
+
+  it("本地形态（无平台身份）⇒ 只修工作区，不提交不推送", () => {
+    withLocalEnv(() => {
+      /* 平台 CI 进程带 CNB_BUILD_USER* ⇒ 必须显式清掉，测的才是「无平台身份」。
+       * platformUser 注入 null 之外还要清环境 —— 脚本缺省读那三个变量。 */
+      const saved = { ...process.env };
+      delete process.env.CNB_BUILD_USER_NICKNAME;
+      delete process.env.CNB_COMMITTER;
+      delete process.env.CNB_BUILD_USER;
+      try {
+        const { r, calls } = harness({
+          judgeCode: 1,
+          unformatted: ["src/a.ts"],
+          platformUser: null,
+        });
+        expect(r.exitCode).toBe(0);
+        expect(r.action).toBe("local-fixed");
+        expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
+      } finally {
+        Object.assign(process.env, saved);
+      }
+    });
   });
 
   it("判不出唯一源分支（0 个 / 多个远端头同 sha）⇒ 可读地红，不猜目标", () => {
-    const { r, calls } = harness({
-      judgeCode: 1,
-      unformatted: ["src/a.ts"],
-      resolveSource: () => ({
-        kind: "error",
-        reason: "按 CNB_COMMIT=0cf58f5d… 反查源分支得 2 个（a, b）",
-      }),
-      platformUser: "月读",
+    withLocalEnv(() => {
+      const { r, calls } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts"],
+        resolveSource: () => ({
+          kind: "error",
+          reason: "按 CNB_COMMIT=0cf58f5d… 反查源分支得 2 个（a, b）",
+        }),
+        platformUser: "月读",
+      });
+      expect(r.exitCode).toBe(1);
+      expect(r.action).toBe("source-unresolved");
+      expect(r.lines.join("\n")).toContain("反查源分支");
+      expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
     });
-    expect(r.exitCode).toBe(1);
-    expect(r.action).toBe("source-unresolved");
-    expect(r.lines.join("\n")).toContain("反查源分支");
-    expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
   });
 
   it("永不回写 master（硬规则 6）", () => {
-    const { r, calls } = harness({
-      judgeCode: 1,
-      unformatted: ["src/a.ts"],
-      resolveSource: () => ({
-        kind: "ok",
-        branch: "master",
-        baseSha: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-      }),
-      platformUser: "月读",
+    withLocalEnv(() => {
+      const { r, calls } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts"],
+        resolveSource: () => ({
+          kind: "ok",
+          branch: "master",
+          baseSha: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        }),
+        platformUser: "月读",
+      });
+      expect(r.exitCode).toBe(1);
+      expect(r.action).toBe("master-refused");
+      expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
     });
-    expect(r.exitCode).toBe(1);
-    expect(r.action).toBe("master-refused");
-    expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
   });
 
   it("防连环：源分支头已是 bot 的修复提交（复判仍红）⇒ 停", () => {
-    const { r, calls } = harness({
-      judgeCode: 1,
-      unformatted: ["src/a.ts"],
-      afterUnformatted: ["src/a.ts"],
-      baseSubject: `${FIXUP_SUBJECT_PREFIX}prettier 自动修复（bot · ISSUE #2342）· 3 个文件`,
-      platformUser: "月读",
+    withLocalEnv(() => {
+      const { r, calls } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts"],
+        afterUnformatted: ["src/a.ts"],
+        baseSubject: `${FIXUP_SUBJECT_PREFIX}prettier 自动修复（bot · ISSUE #2342）· 3 个文件`,
+        platformUser: "月读",
+      });
+      expect(r.exitCode).toBe(1);
+      expect(r.action).toBe("loop-guard");
+      expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
     });
-    expect(r.exitCode).toBe(1);
-    expect(r.action).toBe("loop-guard");
-    expect(calls.filter((a) => a[0] === "push")).toHaveLength(0);
   });
 
   it("push 被拒 ⇒ 可读地红（不把拒绝读成绿），并点名业主动作", () => {
-    const { r } = harness({
-      judgeCode: 1,
-      unformatted: ["src/a.ts"],
-      platformUser: "月读",
-      pushStatus: 1,
+    withLocalEnv(() => {
+      const { r } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts"],
+        platformUser: "月读",
+        pushStatus: 1,
+      });
+      expect(r.exitCode).toBe(1);
+      expect(r.action).toBe("push-failed");
+      expect(r.lines.join("\n")).toContain("repo-code");
     });
-    expect(r.exitCode).toBe(1);
-    expect(r.action).toBe("push-failed");
-    expect(r.lines.join("\n")).toContain("repo-code");
   });
 });
 
@@ -374,6 +431,40 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
       }
     }
   }
+
+  /* 这四条（#2366 的现场）是「这一组对 PR 事件环境变量的隔离是不是真的」的判据本身：
+   * 平台 PR 流水线的进程里 `CNB_PULL_REQUEST_IID` 恒在场，而上一版把 `withLocalEnv` 套在
+   * `describe` 回调上 —— 收集期清、用例体之前就还原，于是脚本第 ④ 拍照样走委托，
+   * 4 条红齐刷刷变成 `delegate-failed`。隔离挪进用例体之后才真的成立，这里逐条钉住：
+   * 变量在场、`--delegate` 不在场时，直推那一支**仍然**走得通。 */
+  it("PR 事件变量在场 ⇒ 不包 withLocalEnv 就改道去委托（这正是 #2366 那 4 条红的机理）", () => {
+    withPrEnv("2366", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", () => {
+      /* 对照组：故意**不**包。判的是「隔离不是可有可无的装饰，而是这一组能不能成立的前提」——
+       * 哪天有人把 withLocalEnv 从某条用例上摘掉，它的 action 会当场变成 delegate-failed。 */
+      const { r } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts"],
+        platformUser: "月读",
+      });
+      expect(r.action).toBe("delegate-failed");
+    });
+  });
+
+  it("PR 事件变量在场 + 包了 withLocalEnv ⇒ 仍走直推那一支，一次委托都不发", () => {
+    withPrEnv("2366", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", () => {
+      const { r, calls, delegated } = withLocalEnv(() =>
+        harness({
+          judgeCode: 1,
+          unformatted: ["src/a.ts"],
+          platformUser: "月读",
+        }),
+      );
+      expect(r.exitCode).toBe(0);
+      expect(r.action).toBe("pushed");
+      expect(delegated).toHaveLength(0);
+      expect(calls.filter((a) => a[0] === "push")).toHaveLength(1);
+    });
+  });
 
   it("PR 事件 ⇒ 一个字节都不推，交出「哪条分支 / 哪个 sha」", () => {
     withPrEnv("2359", SHA, () => {
