@@ -24,6 +24,9 @@
     有 `firstRunnable(` 站点却没有 `describeProbeMisses(` 即红；零站点时它自己报「空转」
     （读不到输入 ≠ 没有问题）。登记进 `scripts/.declaration-readers.json` 的
     「声明 ⇄ 读者」索引（读者 / 执行者双向核）。
+  - 钩子那一格另有它的清单读者面：`docs/standards/13-提交与-code-review.md` 的 §13.1
+    命令清单同批补上这一步 —— 那份清单是「手跑全套」的唯一入口，漏一格 = 照着清单跑的人
+    以为它不存在（`pnpm doc:check` 双向核）。
   - 顺带的一格：`scripts/python-probe.mjs` 的「手工扫 PATH」那一节原先只打一句
     「扫不到 / 起不来」，现在带上逐候选的失败形态（`findPython()` 的 `missed`）——
     那个脚本存在的意义正是「两条链的读数摆在一起分得出是哪一边错」，而分不出
