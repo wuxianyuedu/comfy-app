@@ -565,6 +565,47 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
       fetchBuildList(runner({ status: 200, data: {} }), "a/b", "x", 10),
     ).toBeNull();
   });
+
+  /**
+   * 「取不到」要自己说清是哪一种（ISSUE #2335 现场：那一格只留下六个字
+   * `取不到构建列表`，而「命令没起来 / 退码非零（凭据、权限）/ 信封又变了」
+   * 三种原因的下一个动作完全不同）。这里判的是**念出声**，结论仍是 `null`。
+   */
+  it("取不到时把原因念出来（退码 + stderr 首行 + 信封的顶层键），结论仍是 null", () => {
+    const heard: string[] = [];
+    const got = fetchBuildList(
+      () => ({
+        status: 1,
+        stdout: JSON.stringify({ status: 401, message: "unauthorized" }),
+        stderr: "凭据已过期\n第二行",
+        error: null,
+      }),
+      "a/b",
+      "pull_request",
+      10,
+      { log: (line: string) => heard.push(line) },
+    );
+    expect(got).toBeNull();
+    const out = heard.join("\n");
+    expect(out).toContain("取不到");
+    expect(out).toContain("退码 1");
+    expect(out).toContain("凭据已过期");
+    // 第二行 stderr 不念：一行足够定性，整段倒进流水线只是噪声。
+    expect(out).not.toContain("第二行");
+    expect(out).toContain("status,message");
+  });
+
+  it("命令根本没起来 ⇒ 念的是「没起来」，不是退码", () => {
+    const heard: string[] = [];
+    fetchBuildList(
+      () => ({ status: -1, stdout: "", stderr: "", error: "ENOENT" }),
+      "a/b",
+      "x",
+      10,
+      { log: (line: string) => heard.push(line) },
+    );
+    expect(heard.join("\n")).toContain("没起来");
+  });
 });
 describe("stageLogExcerpt：失败行带行号 + 尾部，两段都给", () => {
   const LOG = [

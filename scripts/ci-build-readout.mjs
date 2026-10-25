@@ -538,10 +538,11 @@ export function fetchBuildStatus(run, slug, sn) {
  * @param {string} slug 仓库路径
  * @param {string} event 事件名
  * @param {number} limit 要几条
+ * @param {{log?: (line: string) => void}} [opts] 取不到时念一行**原因**（只读，不改结论）
  * @returns {Array<{sn: string, createTime: string, status: string, eventUrl: string}> | null}
  *   列表；取不到时 null
  */
-export function fetchBuildList(run, slug, event, limit) {
+export function fetchBuildList(run, slug, event, limit, opts = {}) {
   const res = cnbJson(run, [
     "build",
     "get-build-logs",
@@ -560,7 +561,20 @@ export function fetchBuildList(run, slug, event, limit) {
    * （ISSUE #2335 的 `cnb-vko-1k5oj5gb0`）。第二种形状与 `check-daily-attendance.mjs`
    * 的 `asBuildArray()` 同一口径 —— 那一份是每日档自己发的同形命令留下的读数。 */
   const list = res ? (asArray(res.json) ?? asArray(res.json?.data)) : null;
-  if (!list) return null;
+  if (!list) {
+    /* 「取不到」必须自己说清是哪一种取不到（ISSUE #2335 现场：这一格只留下
+     * `取不到构建列表` 六个字，而排障时根本分不出是命令没起来、退码非零（凭据 /
+     * 权限）、还是信封又变了 —— 三种的下一个动作完全不同）。读到一行 stderr 的
+     * 代价远小于一次现场重跑。**只读、不判**：结论仍由调用方按「没有结论」处理。 */
+    if (opts.log) {
+      const why = !res
+        ? "命令没起来或输出不是 JSON（`cnb` 不可用 / 非 JSON 输出）"
+        : `退码 ${res.code}${res.stderr.trim() ? ` · stderr: ${res.stderr.trim().split("\n")[0]}` : ""}` +
+          ` · 信封里认不出列表（顶层键：${Object.keys(res.json ?? {}).join(",") || "(空)"}）`;
+      opts.log(`[build-readout] 构建列表取不到：${why}`);
+    }
+    return null;
+  }
   const builds = list
     .filter((b) => b && typeof b.sn === "string")
     /* `status` 与 `eventUrl` 是**列表自带字段的原样透出**（不另立判据）：调用方拿它们

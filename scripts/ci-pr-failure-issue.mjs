@@ -450,7 +450,9 @@ export function main(io = {}) {
   }
 
   if (!list) {
-    list = fetchBuildList(run, slug, "pull_request", 60);
+    /* 带上 `log`：取不到时要念出**哪一种取不到**（退码 / stderr / 信封），
+     * 否则现场只留一句「取不到构建列表」，三种原因的下一个动作完全不同。 */
+    list = fetchBuildList(run, slug, "pull_request", 60, { log });
     if (!list) {
       log("[pr-failure-issue] 取不到构建列表 ⇒ 没有结论，一次都不写。");
       return finish(CODE.NO_FACT, "取不到构建列表");
