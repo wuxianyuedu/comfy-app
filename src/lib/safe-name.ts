@@ -34,7 +34,7 @@
  *  确定性的形态。**要给用户看的名字不要走这里**（那走 `safeDisplayName`）。 */
 export function safeFileNameSegment(raw: string | null | undefined): string {
   if (!raw) return "";
-  return raw.replace(/[^\w.-]+/g, "_");
+  return raw.replace(/[^\w.-]+/g,"_");
 }
 
 /** 展示名片段：在 ASCII 片段的基础上**额外保留 CJK**（中文/日文/韩文）。
