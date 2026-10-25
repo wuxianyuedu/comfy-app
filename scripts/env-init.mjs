@@ -36,6 +36,9 @@ import {
   missingEnvKeys,
   parseEnvFile,
 } from "./env-preflight.mjs";
+// 留痕短名（`COMFYAPP_DEV_HANDLE`）的取值链也只有一处（`dev-handle.mjs`，ISSUE #2355）：
+// 这里写的值与 `ship` 念的值必须同源，否则「跑过 env:init」之后两边各说各的名字。
+import { DEV_HANDLE_ENV_KEY, devHandleForEnvFile } from "./dev-handle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = path.join(root, ".env");
@@ -81,6 +84,13 @@ export function hasRequiredValues(content) {
 function missingLines({ example, current }) {
   const exampleValues = parseEnvFile(example);
   return missingEnvKeys({ example, current }).map((key) => {
+    // 留痕短名**不留空**（ISSUE #2355）：过去照 example 的空值写回去，于是「跑过
+    // env:init」的人看到的仍是 `COMFYAPP_DEV_HANDLE=""` —— 补了跟没补念出来是同一句话。
+    // 现在照同一条取值链取一个确定的名字（NPC 用 `CNB_NPC_NAME`、本地用 `git config
+    // user.name`、都没有用 `cnb`），人想换就改这一行。
+    if (key === DEV_HANDLE_ENV_KEY) {
+      return `${key}="${devHandleForEnvFile({ root, env: process.env }).name}"`;
+    }
     // 必填三项的值由那一份单一定义点负责 —— 不在这里造第二个密钥来源。
     if (!REQUIRED_ENV_KEYS.includes(key)) {
       return `${key}="${exampleValues.get(key) ?? ""}"`;
@@ -156,9 +166,20 @@ process.stdout.write(
     ...additions.map((line) => {
       const key = line.split("=", 1)[0] ?? line;
       // 必填三项的值是密钥/占位值：只说补了哪个键，不回显值（值不进日志）。
-      return REQUIRED_ENV_KEYS.includes(key)
-        ? `[env:init]   · 补上缺失的必填项 ${key}（值由本脚本生成，不打出来）`
-        : `[env:init]   · 补上缺失的键 ${key}（值照 .env.example；填你自己的再启动）`;
+      if (REQUIRED_ENV_KEYS.includes(key)) {
+        return `[env:init]   · 补上缺失的必填项 ${key}（值由本脚本生成，不打出来）`;
+      }
+      if (key === DEV_HANDLE_ENV_KEY) {
+        /* 名字不是密钥，念出来才可核对（`ship` 念的是同一个值）。「取的」与「填的」
+         * 是两件事：自动取的那个换机器 / 换会话会变，值得提醒一句。 */
+        const picked = devHandleForEnvFile({ root, env: process.env });
+        return (
+          `[env:init]   · 补上缺失的键 ${key}="${picked.name}"（${picked.source}` +
+          (picked.source === "进程环境" ? "" : " ⇒ 自动取的，要固定就改这一行") +
+          "）"
+        );
+      }
+      return `[env:init]   · 补上缺失的键 ${key}（值照 .env.example；填你自己的再启动）`;
     }),
   ].join("\n") + "\n",
 );

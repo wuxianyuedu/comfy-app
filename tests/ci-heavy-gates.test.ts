@@ -15,11 +15,20 @@
  * 同一份 glob）⇒ 那 13 条「在平台那一格被 `ifModify` 跳过」的判据不再在这一格照跑全量。
  * 收窄的两条边界在这里钉住：**改动面取不到 ⇒ 一条都不跳**、**跳过的逐条点名且不计入绿**。
  */
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { CHANGED_SCOPED } from "../scripts/base-check/hook-steps.mjs";
 import {
   heavyGateArgv,
   judgmentScriptOf,
@@ -226,7 +235,10 @@ describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () 
     const lines: string[] = [];
     const code = main({
       cwd: ROOT,
-      argv: ["--only=文档源"],
+      /* 这一条**不依赖分支状态**（ISSUE #2265 之后「文档源 ⇄ 生成态镜像同批」要按基线
+       * 判，而基线相对本分支的改动面是逐次不同的 —— 拿它当例子，这条用例会在
+       * 「分支上恰好改了个文档源而没带镜像」时红，而那与它要钉的东西无关）。 */
+      argv: ["--only=判据自身"],
       env: {},
       log: (line: string) => lines.push(line),
       changedFiles: null,
@@ -234,7 +246,7 @@ describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () 
     const all = lines.join("\n");
     expect(code).toBe(0);
     /* 这一步是绿的（退出 0），但它自己打了读数 —— 那行读数必须在场。 */
-    expect(all).toContain("[doc-mirror-pairing]");
+    expect(all).toContain("[gate-thresholds]");
   });
 
   it("红步的转述口径不变（尾部若干行）", () => {
@@ -244,5 +256,92 @@ describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () 
       "utf8",
     );
     expect(src).toContain(".slice(-12)");
+  });
+});
+
+/**
+ * 形态档在平台上**没有判决面**（ISSUE #2265，#2256 的另一半）。
+ *
+ * 现场（空暂存区 = 平台同形态，`node scripts/ci-heavy-gates.mjs --no-narrow` 逐条读数）：
+ * 56 条里**只有 2 条**的判决面不成立，而它们都被计成了「绿」——
+ *   · `文档源 ⇄ 生成态镜像同批`：自认「暂存区是空的 —— 没有什么可判」并退 0；
+ *   · `已知基线失败登记·自证`：**一个字都不打**就退 0。
+ *
+ * 这里钉的是三条处置：
+ *   ① **换判决面**：这一族拿 `--base <ref>`（相对基线改了什么），判决链一字未改；
+ *   ② **没判不是绿**：判决面取不到 ⇒ 退 2 ⇒ 单列「没判」，不许计入「绿」；
+ *   ③ **机械兜底**：绿步一个字都不打 ⇒ 那一格没判（这条不靠逐条核对）。
+ */
+describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
+  it("这一族拿 `--base`，而且**把 `--staged` 一起剥掉**（判据只该有一个判决面来源）", () => {
+    const got = heavyGateArgv([
+      "node",
+      "scripts/check-doc-mirror-pairing.cjs",
+      "--staged",
+    ], { env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" } });
+    expect(got.ok).toBe(true);
+    if (!got.ok) return;
+    /* `--staged` 必须不在：这条判据「剥掉旗标之后判的仍是暂存集」，两个都挂着
+     * 就分不清它到底按哪个面判。 */
+    expect(got.argv).toEqual([
+      "node",
+      "scripts/check-doc-mirror-pairing.cjs",
+      "--base",
+      "abc123",
+    ]);
+    expect(got.argv).not.toContain("--staged");
+  });
+
+  it("「已知基线失败登记·自证」也在这一族里（它连旗标都没有）", () => {
+    const got = heavyGateArgv(["node", "scripts/known-failed-selftest-gate.mjs"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+    });
+    expect(got.ok).toBe(true);
+    if (!got.ok) return;
+    expect(got.argv).toEqual([
+      "node",
+      "scripts/known-failed-selftest-gate.mjs",
+      "--base",
+      "abc123",
+    ]);
+  });
+
+  it("登记表是**一处**出处：三条都在 `CHANGED_SCOPED` 里", () => {
+    /* 反查：这两条判据若没登记，复合档就会对它们走「剥旗标 ⇒ 判全仓」那一手，
+     * 而那对它们**无效**（剥掉旗标之后判的仍是暂存集）。 */
+    expect(CHANGED_SCOPED).toContain("scripts/check-doc-mirror-pairing.cjs");
+    expect(CHANGED_SCOPED).toContain("scripts/known-failed-selftest-gate.mjs");
+    expect(CHANGED_SCOPED).toContain("scripts/shell-gate.mjs");
+  });
+
+  it("绿步一个字都不打 ⇒ 那一格**没判**（退 2，不许计入绿）", () => {
+    /* 造一条「退 0 但一个字都不打」的步骤：判据在场、结论静默变成放行 ——
+     * 这一档必须自己把它认出来，而不是靠人逐条核对。 */
+    const dir = dirWithHook();
+    writeFileSync(
+      path.join(dir, "silent.mjs"),
+      "process.exit(0);\n",
+      "utf8",
+    );
+    const hookPath = path.join(dir, ".githooks", "pre-commit");
+    appendFileSync(
+      hookPath,
+      '  run "静默那一步" node silent.mjs\n',
+      "utf8",
+    );
+    const lines: string[] = [];
+    const code = main({
+      cwd: dir,
+      argv: ["--only=静默那一步"],
+      env: {},
+      log: (line: string) => lines.push(line),
+      changedFiles: null,
+    });
+    expect(code).toBe(2);
+    const all = lines.join("\n");
+    expect(all).toContain("没判");
+    expect(all).toContain("静默那一步");
+    /* 没判不许混进「绿」里。 */
+    expect(all).not.toContain("绿 1");
   });
 });

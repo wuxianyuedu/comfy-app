@@ -113,7 +113,12 @@ describe("historyByFile —— 一次遍历换掉逐文件 git log", () => {
     /* 路径带空格也必须认得：旧写法逐文件传 pathspec，批量读法靠比对整行。 */
     expect(out.get("src/deep/nested file.ts")).toEqual([SHA_B]);
     expect(run).toHaveBeenCalledTimes(1);
+    /* `-c core.quotePath=false` 是取证层的前缀（ISSUE #2272）：git 默认会把含非 ASCII
+     * 的路径转义加引号，转义后与真实路径对不上 ⇒ 判成「没改」而恒绿。断言把前缀一起钉住，
+     * 免得它被顺手摘掉时这一层看不见。 */
     expect(run.mock.calls[0]?.[0]).toEqual([
+      "-c",
+      "core.quotePath=false",
       "log",
       "--format=@%H",
       "--name-only",

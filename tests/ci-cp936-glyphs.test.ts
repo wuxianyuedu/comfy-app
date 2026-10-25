@@ -47,6 +47,18 @@ describe("字形归一化：等义替换", () => {
     expect(normalizeCp936Glyphs("⇄").text).toBe("→");
   });
 
+  it("路由表那个 dynamic 标记（U+0192）按登记走 `f`，并且**不再因此出声**（ISSUE #2346）", () => {
+    /* 夹具是 `每日生产构建` 那一格里逐字出现过的一行：`ƒ`（long s）在 CP936 里没有字形，
+     * 而 Next 用它标 dynamic 路由 ⇒ 一跑 51 条路由就是 51 个 `\u0192`。登记成 `f` 之后，
+     * 这一行同时消失两样东西：字面兜底，和那句兜底读数（整批都在表里 ⇒ 出声条件不成立）。 */
+    const got = normalizeCp936Glyphs("├ \u0192 /api/comfy/queue");
+    expect(got.text).toBe("├ f /api/comfy/queue");
+    expect(got.replaced).toEqual([{ from: "\u0192", to: "f", count: 1 }]);
+    expect(describeGlyphReplacements(got.replaced)).toBe("");
+    /* `├` 是制表符，CP936 里有字形 ⇒ 它本来就不该被动。 */
+    expect(normalizeCp936Glyphs(got.text).replaced).toEqual([]);
+  });
+
   it("替代物**全部**落在 CP936 里 —— 否则替换完还要再被吃一次", () => {
     for (const [from, to] of GLYPH_REPLACEMENTS) {
       for (const ch of to) {
@@ -112,7 +124,7 @@ describe("字形归一化：幂等与读数", () => {
   it("读数里的字符**全是 CP936 编得出来的**（读数自己不许变成问号）", () => {
     /* 这条是本文件最要紧的不变式：读数走的是同一条转码链，它自己带一个编不出来的
      * 字符，就等于「换掉了别人的问号、自己又造了一个」。 */
-    const out = normalizeCp936Glyphs("✓ ⇒ ⚠ ✗ ⌘ 📂 ※");
+    const out = normalizeCp936Glyphs("✓ ⇒ ⚠ 🐧");
     const line = describeGlyphReplacements(out.replaced);
     expect(line.length).toBeGreaterThan(0);
     for (const ch of line) {
@@ -126,12 +138,37 @@ describe("字形归一化：幂等与读数", () => {
     }
   });
 
-  it("读数说得清「换了什么」与「几处」", () => {
-    const out = normalizeCp936Glyphs("✓✓ ✓");
+  /**
+   * 出声的条件（ISSUE #2326，业主口径）：**登记表里有的那些不再逐次报**。
+   *
+   * 这一条钉的不是措辞，是「谁需要看这行日志」：登记过的替换在日志里本来就读得出来
+   * （`✓→√`、`⇒→→`、零宽类删掉），每跑念一次只会教读者忽略它 —— 而它唯一的对象是
+   * 「只能记成 `\uXXXX`、需要人去看一眼」那一类。
+   */
+  it("全批都在登记表里 ⇒ 这一行整条不发（不是发一行「按设计办完了」）", () => {
+    const out = normalizeCp936Glyphs("✓✓ ✓ ⇒ ⚠ ✗ ​");
+    expect(out.replaced.length, "夹具该产生几条替换").toBeGreaterThan(0);
+    expect(describeGlyphReplacements(out.replaced)).toBe("");
+  });
+
+  it("只有落了 `\\uXXXX` 兜底的才点名，并把「另有多少按表换过」说成一个数", () => {
+    const out = normalizeCp936Glyphs("✓ ⇒ 🐧");
     const line = describeGlyphReplacements(out.replaced);
-    expect(line).toContain("U+2713");
-    expect(line).toContain("√");
-    expect(line).toContain("x3");
+    expect(line).toContain("U+1F427");
+    expect(line).toContain("\\u1F427");
+    expect(line).toContain("有 1 个字符");
+    // 兜底那一个单独点名；登记过的两个只留总数，不逐字念出来。
+    expect(line).toContain("另有 2 处按登记表换成读得出来的写法");
+    expect(line).not.toContain("U+2713");
+    expect(line).not.toContain("U+21D2");
+  });
+
+  it("收尾那条同一判据：全是登记过的 ⇒ 也不发", () => {
+    const out = normalizeCp936Glyphs("✓ ⇒");
+    expect(
+      describeGlyphReplacements(out.replaced, "这一跑"),
+      "「这一跑」那条不许成为唯一还在吵的那一处",
+    ).toBe("");
   });
 });
 
@@ -180,14 +217,19 @@ describe("转码外壳：接上了归一化", () => {
     expect(normalizeAt).toBeLessThan(writeAt);
   });
 
-  it("读数走的是转码那条路（`write`），不是本进程 stdout 直写（`emit`）", () => {
+  it("两处读数都走转码那条路（`write`），且**空串就整行不发**", () => {
     /* `emit` 写的是 UTF-8 字节，而平台按 CP936 解一切 ⇒ 走 `emit` 的中文会变乱码，
-     * 那正是这一层要治的病。 */
+     * 那正是这一层要治的病。
+     * 而「空串不发」是 ISSUE #2326 那一刀的落点：判据在 `describeGlyphReplacements` 里，
+     * **两处调用点都得尊重它** —— 只改一处会出现「逐块安静、收尾照吵」，
+     * 那种半静默比原来更糟（读者以为它不报了）。 */
     const source = read("scripts/ci-cp936-exit.mjs");
     expect(source).toContain("describeGlyphReplacements");
-    const summaryAt = source.indexOf("describeGlyphReplacements([...glyphTotals.values()]");
-    expect(summaryAt).toBeGreaterThan(-1);
-    const summaryChunk = source.slice(summaryAt, summaryAt + 240);
+    const guards = source.match(/if \(said !== ""\)/g) ?? [];
+    expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);
+    const summaryAt = source.indexOf('describeGlyphReplacements(\n');
+    expect(summaryAt, "认不出收尾那条调用；它的形状变了要同批改这里").toBeGreaterThan(-1);
+    const summaryChunk = source.slice(summaryAt, summaryAt + 320);
     expect(summaryChunk).toContain("write(summary");
   });
 });

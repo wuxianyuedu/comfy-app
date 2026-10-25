@@ -234,15 +234,19 @@ function isScanned(rel) {
 
 /** 暂存改动清单(仓库根相对 POSIX 路径)。git 拿不到时返回 null —— 由调用方 fail-closed。 */
 function stagedFiles() {
-  const res = spawnSync("git", ["diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  /* `-c core.quotePath=false`:路径要原样(ISSUE #2272,机制见 scripts/changed-scope.mjs 的
+   * 文件头「口径 ④」)。git 默认把含非 ASCII 字符的路径转义加引号,而本仓有 38 份文件名
+   * 带非 ASCII 的文件(全在 docs/ 下)⇒ 转义过的路径认不出来,那些文件会**不进 prettier**。 */
+  const res = spawnSync(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+    },
+  );
   if (res.status !== 0) return null;
-  return (res.stdout || "")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map(toPosix);
+  return (res.stdout || "").split(/\r?\n/).filter(Boolean).map(toPosix);
 }
 
 /**
@@ -382,11 +386,14 @@ async function main() {
 
 if (require.main === module) main();
 
-/** 供测试直接引用:不跑 prettier 的纯判定。 */
+/** 供测试与 ci-format-fixup.mjs 引用:判据实现共用一份(§12.18),不跑 prettier 的
+ * 纯判定入口(main 守卫在,require 本文件不会触发扫描)。 */
 module.exports = {
   globToRegExp,
   isIgnored,
   isScanned,
+  collectUnformatted,
+  resolvePrettierEntry,
   IGNORE_GLOBS,
   GLOBS,
 };

@@ -59,9 +59,24 @@ export function resolveGateCommand(input, hookPath = HOOK) {
       error: `标签「${first}」在钩子里命中 ${hits.length} 条，无法唯一确定`,
     };
   }
-  // 裸脚本名 ⇒ 补 `node`（仓库里 Node 是共同前提，§9.5）。
-  if (input.length === 1 && /\.(cjs|mjs|js)$/.test(first)) {
-    return { ok: true, label: first, argv: ["node", first] };
+  /* 裸脚本名 ⇒ 补 `node`（仓库里 Node 是共同前提，§9.5）。
+   *
+   * 两个形态都要认对，否则每条判据都会被判成「没跑起来」（127）：
+   *   · `scripts/x.cjs` —— 裸文件名；
+   *   · `node scripts/x.cjs --flag` —— **整条命令当参数给进来**时它只有**一个**
+   *     数组元素（`base-check "node scripts/x.cjs"` 与 `--base "…"` 两种走法都是这个
+   *     形状），先按空白切成 argv，**不许**把整串当成一个路径（那会拼出
+   *     `<cwd>/node scripts/x.cjs`、`existsSync` 恒假、整批读数变成 127）。
+   *     分词复用 `tokenize()`（引号语义与其他步骤同一份），不另写切分。 */
+  if (input.length === 1) {
+    const words = tokenize(first);
+    /* 已经是「命令形态」（`node x` / `pnpm exec …`）⇒ 按空白切成 argv。 */
+    if (words.length > 1) {
+      return { ok: true, label: first, argv: words };
+    }
+    if (/\.(cjs|mjs|js)$/.test(first)) {
+      return { ok: true, label: first, argv: ["node", first] };
+    }
   }
   return { ok: true, label: input.join(" "), argv: input };
 }
@@ -212,8 +227,27 @@ export function groupSteps(hookPath = HOOK) {
  * 「本次改动」上」—— 合并前复算据此**不收**它（`mayDecideOnCleanSnapshot`），
  * 平台复合档据此**换判决面**或**单列成没判**（`scripts/ci-heavy-gates.mjs`）。
  * 两处各写一份名单就会漂开，而漂开的形态是「一处判了、另一处没判」。
+ *
+ * ⚠️ **这一族是「按参数形态识别」抓不到的那一半**（ISSUE #2265 的现场）：
+ *   · `shell-gate` —— 钩子行里**连 `--staged` 都没有**，它自己读暂存区；
+ *   · `check-doc-mirror-pairing.cjs` —— 带 `--staged`，但**剥掉那个旗标之后它判的
+ *     仍是暂存集**（它自己的文件头写着「不带它判的也是暂存集」：镜像与源是否**同批**
+ *     是提交的属性，不是仓库的属性）⇒ 剥旗标这一手对它**无效**；
+ *   · `known-failed-selftest-gate.mjs` —— 同样**连旗标都没有**（钩子行是
+ *     `node scripts/known-failed-selftest-gate.mjs`），它自己读暂存区。
+ *
+ * 后两条在平台那一格（干净快照、没有暂存区）上**恒绿**：
+ *   · 前者自认「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0；
+ *   · 后者**一个字都不打**就退 0。
+ * ⇒ 两条都登记进来，让复合档给它们 `--base <ref>`（换判决面），
+ * 也让合并前复算**不收**它们（`mayDecideOnCleanSnapshot`）—— 那条复算在干净快照上
+ * 同样没有暂存区，收进去只会多一行恒绿。
  */
-export const CHANGED_SCOPED = ["scripts/shell-gate.mjs"];
+export const CHANGED_SCOPED = [
+  "scripts/shell-gate.mjs",
+  "scripts/check-doc-mirror-pairing.cjs",
+  "scripts/known-failed-selftest-gate.mjs",
+];
 
 /**
  * 一条指令**能不能在干净的上游快照上判决** —— 判据是它的**参数形态**，不是名字。
@@ -426,6 +460,7 @@ export function runGate(argv, cwd) {
     return { code: 127, output: "[base-check] 命令是空的" };
   }
   const invocation = resolveGateInvocation(argv);
+
   if (!invocation) {
     /* 「没跑起来」而不是「跑了且红」：127 让 `judge()` 归 `inconclusive`，
      * 与「命令拼不出来/跑不起来」同档 —— 照旧不构成证据。 */

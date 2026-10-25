@@ -36,7 +36,29 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { firstRunnableOrEmpty } from "../src/lib/process/probe-exe";
+import { pythonCandidates } from "../src/lib/process/python-candidates";
 import { copyGateDeps } from "./helpers/gate-repo";
+import { stripComments } from "./helpers/strip-comments";
+
+/**
+ * 两处「这台机器上有没有某个解释器」的候选表与探测参数 —— 顺序取自各自的判据，
+ * 本文件不抄第二份。
+ *
+ * `powershell` 在前：Windows PowerShell 5.1 是每台 Windows 都有的那个，`pwsh`（7）
+ * 是可选安装。反过来先试 `pwsh` 只会在装了 7 的机器上多起一次进程。
+ * `python` 那一条走 `pythonCandidates()`（平台差异在原处回答，见那份模块的头注）。
+ */
+const POWER_SHELL_CANDIDATES = ["powershell", "pwsh"] as const;
+/** 探测与真跑共用同一条参数形态：探测要回答的正是「这条形态跑得通吗」。 */
+const POWER_SHELL_PROBE_ARGS = ["-NoProfile", "-Command", "exit 0"];
+/** 本组用例的条数（`env` 档跳过的登记表里记的就是这个数，见
+ * `tests/conditional-skip-registry.test.ts`）。改动这一组时同批改那里。 */
+const PS_SKIP_COUNT = 6;
+const PYTHON_CANDIDATES = pythonCandidates();
+/** 同 `POWER_SHELL_PROBE_ARGS`：探测用的就是真跑那一条（`-c` 是最小的可执行语句）。 */
+const PYTHON_PROBE_ARGS = ["-c", "import sys; sys.exit(0)"];
 
 const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
@@ -49,6 +71,18 @@ let workdir = "";
 function run(): { code: number; output: string } {
   return runWith([]);
 }
+
+/**
+ * 「这台机器上有没有某个解释器」的判据与它的读数 —— **收在 `src/lib/process/probe-exe.ts`**。
+ *
+ * 此前这里是本文件自己写的一份 `try { execFileSync } catch`，只认「spawn 抛没抛错」。
+ * 判据其实要「起得来**且**解释得了参数」两件：盘上一个同名的别的可执行文件 spawn 得起来、
+ * 却把 `-NoProfile` 当成自己的参数退 2，旧写法把它判成「在场」，随后用例照跑、断言等满
+ * 20s 以超时形态红 —— 一句「我这台机器判不了」被记成了「这条判据红了」（ISSUE #2316）。
+ * 那份实现搬到地基层是**复用**而不是搬屋：`scripts/python-probe.mjs` 与
+ * `python-resolve.ts` 的失败形态同用一条判据；`tests/skip-probe-readings-gate` 守的正是
+ * 「探不到时要打逐候选读数」这件事（本文件两处调用点都走同一个入口，没有第二份写法）。
+ */
 
 /** 带参数的调用（R5 的翻闸断头用例要传 `--update` 正面证明它不存在，规范 §12.6）。 */
 function runWith(args: string[]): { code: number; output: string } {
@@ -636,19 +670,20 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   // Windows PowerShell 5.1 与 PowerShell 7 都可用；非 Windows 平台（Linux CI）没有
   // powershell，相关用例跳过，规则本身由 scripts/check-file-structure.cjs 与
   // 本文件其它用例覆盖。
-  const psExe = (() => {
-    for (const candidate of ["powershell", "pwsh"]) {
-      try {
-        execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
-    return "";
-  })();
+  // 「在场」必须由 `firstRunnableOrEmpty()` 判 —— 判据是「起得来**且**解释得了参数」，
+  // 不是「spawn 没抛错」（ISSUE #2316）：盘上一个同名但不是 PowerShell 的可执行文件
+  // 让这一格照跑，随后 `spawnSync(candidate, ["-NoProfile", …])` 起来却退 2，守卫脚本的
+  // `HITS=` 一个都不出现 ⇒ 断言等满 20s 才以「超时」红，报错行指不到真因。
+  // 探不到时它打一行**逐候选读数**：下一个人只看到一片 skip 时要能说出是没装、
+  // 还是那个名字被别的东西占了（两者下一动作不同）。
+  const psExe = firstRunnableOrEmpty({
+    candidates: POWER_SHELL_CANDIDATES,
+    probeArgs: () => POWER_SHELL_PROBE_ARGS,
+    label: `PowerShell（本组 ${PS_SKIP_COUNT} 条用例按 env 档跳过）`,
+    // 那一行是成品（`[probe]` 前缀与「不是通过」都由 `probe-exe.ts` 给全），这里只写出去 ——
+    // 调用点再拼一次前缀会让终端上出现两个 `[probe]`。
+    report: (line) => process.stdout.write(`${line}\n`),
+  });
 
   // 结论在 stdout，守卫的日志（`Log` 被桩件改写到 stderr）要一起收，
   // 否则「回收陈旧桌面壳」「非交互构建」「正在运行的壳进程」这些可见出口断言不到。
@@ -947,20 +982,18 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
    * Win32 部分在 Linux CI 上跑不到，这里按本文件既有套路抽出源码打桩后断言判决表，
    * 锁住这条用户可感知的行为不再回退。
    */
+  /* 与上面 `psExe` 同一形态（ISSUE #2316 的「同形同批」）：这里是 `python` 那一处。
+   * 判据要的是「起得来**且**解释得了 `-c`」，所以探测用的就是真跑那一条
+   * `["-c", "import sys; sys.exit(0)"]` —— 冒牌同名文件在这里退非零，如实判「不在场」。 */
   const FOCUS_SCRIPT = join(process.cwd(), "scripts", "win32-window-focus.py");
-  const python = (() => {
-    for (const candidate of ["python3", "python"]) {
-      try {
-        execFileSync(candidate, ["-c", "import sys; sys.exit(0)"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
-    return "";
-  })();
+  const python = firstRunnableOrEmpty({
+    candidates: PYTHON_CANDIDATES,
+    probeArgs: () => PYTHON_PROBE_ARGS,
+    label: "Python（前台归属那组用例按 env 档跳过）",
+    // 那一行是成品（`[probe]` 前缀与「不是通过」都由 `probe-exe.ts` 给全），这里只写出去 ——
+    // 调用点再拼一次前缀会让终端上出现两个 `[probe]`。
+    report: (line) => process.stdout.write(`${line}\n`),
+  });
 
   /** 抽出 decide_handoff 直接断言判决表。 */
   const decide = (call: string): string => {
@@ -1301,8 +1334,10 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
  *
  * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」的错误（报的是
  *    脚本里的尾随逗号与行列号）—— 真正的原因文件根本不在源码里（见下条用例的注释）。
- * 2. `PROBE_ATTEMPTS * PROBE_INTERVAL_MS` 报 `expected u32, found u64`
+ * 2. 「上限 × 间隔」的两个常量相乘报 `expected u32, found u64`
  *    + `cannot multiply u32 by u64` —— 同一处表达式里的两个常量类型不同档。
+ *    这一条随 #2192 退役：首帧看护的预算改由 `poll_clock::PollClock` 以 `Duration`
+ *    持有，拍数不再是一个常量，于是那个相乘的形状从源码里消失了（详见下面那条用例）。
  *
  * 两条的共同点是「本地跑 lint / tsc / 单测全绿，只有真编 release 壳才暴露」，
  * 所以判据只能落在「编译前提」这一层。
@@ -1329,20 +1364,24 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
     ).toContain("src-tauri/target/");
   });
 
-  it("首帧看护的两个常量类型同档（相乘，跨类型编译不过）", () => {
+  it("首帧看护的超时预算由 poll_clock 持有 —— 「两常数相乘」的旧形状不得回潮（#2328 / #2192）", () => {
     const rust = readFileSync(
       join(process.cwd(), "src-tauri", "src", "lib.rs"),
       "utf8",
     );
-    const typeOf = (name: string): string => {
-      const m = new RegExp(`const ${name}: ([A-Za-z0-9]+) =`).exec(rust);
-      if (!m) throw new Error(`lib.rs 里找不到 ${name} 的常量声明`);
-      return m[1]!;
-    };
-    // 这两条会在首帧看护的超时日志里相乘：u32 * u64 没有实现（E0277），
-    // 同档是编译前提，不是风格偏好。
-    expect(typeOf("PROBE_ATTEMPTS")).toBe(typeOf("PROBE_INTERVAL_MS"));
-    expect(rust).toContain("(PROBE_ATTEMPTS * PROBE_INTERVAL_MS) / 1000");
+    // 旧形状：`PROBE_ATTEMPTS * PROBE_INTERVAL_MS`（u32 * u64 的 E0277 地雷）与
+    // 「看护只在该支自己睡」的事故同源 —— #2192 把预算收进 poll_clock（墙钟
+    // `Instant`），相乘与手写计数一起退役。这条钉住退役不回潮：
+    // ① 常数不再存在；② 超时日志的秒数来自 `clock.budget_secs()`。
+    /* 形状扫的是**剥掉注释后的代码** —— 注释里正当会出现「PROBE_ATTEMPTS ×
+     * PROBE_INTERVAL_MS」这类退役前的旧账叙述（那是在讲它为什么退役），
+     * 拿原文去匹配就是自打自。 */
+    const code = stripComments(rust);
+    expect(code, "常数声明不得回来").not.toMatch(/const PROBE_ATTEMPTS/);
+    expect(code, "相乘表达式不得回来").not.toContain(
+      "(PROBE_ATTEMPTS * PROBE_INTERVAL_MS)",
+    );
+    expect(rust).toContain("clock.budget_secs()");
   });
 });
 

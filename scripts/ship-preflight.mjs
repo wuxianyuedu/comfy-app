@@ -27,7 +27,12 @@
 import process from "node:process";
 
 import { CODE, decideCreateBranch, planCommands } from "./ship-core.mjs";
-import { issueAuthoring, ticketReading } from "./ship-ticket.mjs";
+import { HANDLE_SOURCES } from "./dev-handle.mjs";
+import {
+  DEV_HANDLE_ENV_KEY,
+  issueAuthoring,
+  ticketReading,
+} from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
 import { parsePorcelain } from "./ship-local.mjs";
 import { envInitHint } from "./env-preflight.mjs";
@@ -53,6 +58,8 @@ import { envInitHint } from "./env-preflight.mjs";
  *   slug: string|null,
  *   cnbOk: boolean,
  *   handle: string|null,
+ *   handleSource?: string|null,
+ *   explicitHandle?: string|null,
  *   readInstances: (root:string)=>Promise<InstanceReading>,
  *   platform?: string,
  * }} ctx
@@ -79,6 +86,7 @@ export async function runPreflightStage(ctx) {
     slug,
     cnbOk,
     handle,
+    handleSource = null,
     readInstances,
     platform = process.platform,
   } = ctx;
@@ -164,7 +172,7 @@ export async function runPreflightStage(ctx) {
   }
   const shaRes = run("git", ["rev-parse", "HEAD"]);
   const sha = shaRes.stdout.trim();
-  const dirty = run("git", ["status", "--porcelain"]);
+  const dirty = run("git", ["-c", "core.quotePath=false", "status", "--porcelain"]);
   const { staged, unstagedModified, untracked } = parsePorcelain(dirty.stdout);
   /* 「单 PR 单变更」数的是**这条分支相对上游带进来的**碎片。这一格错过两次，
    * 两次都是「挑了最省事的那个取数面」：
@@ -176,6 +184,8 @@ export async function runPreflightStage(ctx) {
    * 「同一条分支上重跑要还能过」这一向是 ② 的修法自己带出来的，见用例。 */
   const branchFragRes = baseRef
     ? run("git", [
+        "-c",
+        "core.quotePath=false",
         "diff",
         "--name-only",
         `${baseRef}...HEAD`,
@@ -184,6 +194,8 @@ export async function runPreflightStage(ctx) {
       ])
     : { stdout: "" };
   const workFragRes = run("git", [
+    "-c",
+    "core.quotePath=false",
     "status",
     "--porcelain",
     "--",
@@ -225,7 +237,16 @@ export async function runPreflightStage(ctx) {
    * 「提单人」这一格平台给不了：issue 是被 token 的账号本体创建的，多份并行检出回读到的
    * `author` 逐字相同（实测），而提交那一侧的通道（git author 子地址）在单子上不存在
    * —— 见 `docs/guides/git-identity.md` §4。留痕因此只能写在单子上。
-   * 出口那两句只在「缺单」或「没配留痕」时念：都在场时不必每次刷屏。 */
+   * 名字是**人填的还是取的**（ISSUE #2355）另念一行：`CodeBuddy`（取自 `CNB_NPC_NAME`）
+   * 与 `yuedu-win`（你填的）对读者是两件事，而这一行是唯一能让人发现自己被自动命名的地方。
+   * 出口那两句只在「缺单」或没配留痕时念：都在场时不必每次刷屏。 */
+  if (handle && handleSource && !HANDLE_SOURCES.explicit.has(handleSource)) {
+    log(
+      `[ship] 留痕短名 ${handle} 是**取的**（${handleSource}），不是你填的 ⇒ ` +
+        `换台机器 / 换会话会变。要固定就在这一份检出的 \`.env\` 里写一行 ` +
+        `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（下一动作：\`pnpm env:init\` 会照这条链把值落下去）。`,
+    );
+  }
   for (const l of issueAuthoring({
     handle,
     platform,
@@ -246,8 +267,8 @@ export async function runPreflightStage(ctx) {
     );
   }
   /* `.env` 缺键的读数与启动器**同一份实现**（`envInitHint`，ISSUE #2205）：`pnpm dev` /
-   * `pnpm start` 两个入口都会念，而 `pnpm ship` 这条常走的路此前不念 —— 没配
-   * `COMFYAPP_DEV_HANDLE` 的人在这里只看到「未配」，看不到「跑一次 `env:init` 会补哪些键」。
+   * `pnpm start` 两个入口都会念，而 `pnpm ship` 这条常走的路此前不念 —— `.env` 缺键的人
+   * 在这里只看到别的读数，看不到「跑一次 `env:init` 会补哪些键」（其中就有留痕那一行）。
    * 与上面那两格同口径：**只念不改**，不写文件、不参与退码。 */
   const envHint = envInitHint(root);
   if (envHint) log(`[ship] 环境配置提醒：${envHint}`);

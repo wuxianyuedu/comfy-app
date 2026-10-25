@@ -44,6 +44,74 @@ import { readIssue } from "./ship-claim.mjs";
 const PRIORITY_WORDS = ISSUE_PRIORITIES.split("|");
 
 /**
+ * 往一张**已有的** open 单下追加一条读数，并独立回读（ISSUE #2332）。
+ *
+ * 为什么收在这里：这条动作（写 → 回读里认 marker）此前是 `ci-daily-failure-issue.mjs`
+ * 的私有函数 `appendReading`，而 PR 档那一格需要的是**逐字相同**的一条 —— 抄一份就得到
+ * 「两份回读各自漂」（§12.12）。所以实现只留这一处：`ship-issue-new` 已经是「单子这一侧
+ * 的写入口」（建单那三步也在这里），追加评论与它同一族。
+ *
+ * 回执不算结论：写完之后列一次最新评论，认的是「最新的自己那条里含 marker」
+ * （marker 通常是构建号 —— 它让「同一条读数写了两遍」与「写成功了」区分得开）。
+ *
+ * 落点两档（`path`）：`issue` 是单子的评论区、`pull` 是 PR 的评论区。两档的命令形状
+ * 只差一个词（`issues` / `pulls`），所以实现只有这一份 —— PR 档那一格（ISSUE #2332）
+ * 在这里之前自己抄过一遍「写 + 回读」，两处漂开就是「一边补了回读、另一边没有」。
+ *
+ * @param {{run:any, log:(s:string)=>void, slug:string, number:number, body:string,
+ *   marker:string, mkTmp:(name:string,text:string)=>string|null,
+ *   path?:"issue"|"pull"}} input
+ * @returns {boolean} 写成且回读到 ⇒ true
+ */
+export function runAppendIssueComment({
+  run,
+  log,
+  slug,
+  number,
+  body,
+  marker,
+  mkTmp,
+  path: route = "issue",
+}) {
+  const onPull = route === "pull";
+  const file = mkTmp(onPull ? "pull-comment" : "issue-comment", body);
+  if (!file) {
+    log("[ship] ✗ 取不到 git 目录 ⇒ 评论没有落点，这一步没有执行者。");
+    return false;
+  }
+  const res = cnbJson(run, [
+    onPull ? "pulls" : "issues",
+    onPull ? "post-pull-comment" : "post-issue-comment",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "--body-file",
+    file,
+    "-v",
+  ]);
+  if (!res || res.code !== 0) return false;
+  const back = cnbJson(run, [
+    onPull ? "pulls" : "issues",
+    onPull ? "list-pull-comments" : "list-issue-comments",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "--sort",
+    "-created",
+    "--page-size",
+    "20",
+    "-v",
+  ]);
+  const d = back ? back.json?.data : null;
+  const rows = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+  return rows.some((/** @type {any} */ c) =>
+    String(c?.body ?? "").includes(marker),
+  );
+}
+
+/**
  * 建单前的三道判断 —— 纯函数，不起进程。
  *
  * @param {{title?: string|null, body?: string|null, priority?: string|null}} input
@@ -52,7 +120,9 @@ const PRIORITY_WORDS = ISSUE_PRIORITIES.split("|");
 export function decideNewIssue({ title = null, body = null, priority = null }) {
   const t = String(title ?? "").trim();
   const b = String(body ?? "");
-  const p = String(priority ?? "").trim().toUpperCase();
+  const p = String(priority ?? "")
+    .trim()
+    .toUpperCase();
   if (t === "") {
     return {
       ok: false,
@@ -81,8 +151,7 @@ export function decideNewIssue({ title = null, body = null, priority = null }) {
       code: CODE.NOT_RUN,
       title: t,
       priority: null,
-      reason:
-        `--priority 只认平台原生词表 ${ISSUE_PRIORITIES}（收到「${priority}」）⇒ 不猜一个近似的值。`,
+      reason: `--priority 只认平台原生词表 ${ISSUE_PRIORITIES}（收到「${priority}」）⇒ 不猜一个近似的值。`,
     };
   }
   return { ok: true, code: null, title: t, priority: p || null, reason: "" };
@@ -131,7 +200,10 @@ function labelNames(labels) {
  * @param {any} ctx.run 执行者
  * @param {(s: string) => void} ctx.log 输出通道
  * @param {string} ctx.slug 仓库路径
- * @param {string | null} ctx.handle 留痕短名（未配时不阻断，只是没有 `提单人:`）
+ * @param {string | null} ctx.handle 留痕短名（取值链给的，见 `dev-handle.mjs`）
+ * @param {string | null} [ctx.explicitHandle] **人填过**的那个名字（只读 `COMFYAPP_DEV_HANDLE`）。
+ *   `null` = 这次的短名是取的 ⇒ 建单本来就不带标签，回读里没有它**不是**异常；
+ *   非 `null` = 你填了 ⇒ 回读里没有就算「标签没落地」，退 2（ISSUE #2355）。
  * @param {string} ctx.root 仓库根
  * @param {any} ctx.opt 解析后的参数
  * @param {(name: string, text: string) => string | null} ctx.mkTmp 临时文件落点
@@ -143,6 +215,7 @@ export function runNewIssue({
   log,
   slug,
   handle,
+  explicitHandle = null,
   root,
   opt,
   mkTmp,
@@ -179,15 +252,17 @@ export function runNewIssue({
   }
   if (!label) {
     log(
-      "[ship] 未配留痕短名 ⇒ 单子会建，但不会带 `提单人:` 标签（读数，不阻断）；" +
-        "要留痕就配好 COMFYAPP_DEV_HANDLE 再建。",
+      "[ship] 取不到留痕短名（取值链 `dev-handle.mjs` 走到空，只可能是装配层没传）" +
+        " ⇒ 单子会建，但不带 `提单人:` 标签（读数，不阻断）。",
     );
   }
   if (dryRun) {
     log(
       `[ship] --dry-run：将创建「${plan.title}」（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
         `优先级 ${plan.priority ?? "平台默认"}）` +
-        (label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）") +
+        (label
+          ? `，再按 ${label}，最后 get-issue 回读`
+          : "，不回读标签（未配留痕）") +
         "；一条都没写。",
     );
     return CODE.GREEN;
@@ -209,7 +284,8 @@ export function runNewIssue({
     ...(plan.priority ? ["--priority", plan.priority] : []),
     "-v",
   ]);
-  const d = got && got.json && typeof got.json === "object" ? got.json.data : null;
+  const d =
+    got && got.json && typeof got.json === "object" ? got.json.data : null;
   const number = Number(
     d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN,
   );
@@ -249,12 +325,27 @@ export function runNewIssue({
     );
     return CODE.RED;
   }
-  if (label && !labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(String(handle).trim())) {
+  /* 「标签没落地」只在**你填过**名字时才是一件事：短名是取值链取来的（`explicitHandle`
+   * 为空）时，建单那一路本来就不带标签 —— 把它读成「你填了却没落上」是误判，而且会让一次
+   * 正常的建单退 2（ISSUE #2355）。 */
+  if (
+    explicitHandle &&
+    label &&
+    !labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
+      String(handle).trim(),
+    )
+  ) {
     log(
       `[ship] #${number} 回读里没有 ${label} ⇒ 不念「留痕已补上」` +
         "（实测 create-issue --labels 不落地，只能建完再按）。",
     );
     return CODE.NOT_RUN;
+  }
+  if (!explicitHandle) {
+    log(
+      `[ship] 留痕短名 ${handle ?? "(空)"} 是取的 ⇒ 这次建单不带 \`提单人:\` 标签` +
+        "（要带就在 `.env` 里填一行 `COMFYAPP_DEV_HANDLE`，再 `pnpm ship --claim` 补上）。",
+    );
   }
   if (plan.priority && back.priority.toUpperCase() !== plan.priority) {
     log(

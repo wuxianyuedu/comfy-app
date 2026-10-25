@@ -57,6 +57,7 @@
 | S13  | P1   | `src/app/(main)/settings/hooks/use-settings-page-comfy.ts`       | `comfyStatus` 改「事件驱动为主、30s 兜底」：新增 `/api/comfy/state` 长轮询推送（五个变化源：启动 / 就绪 / 关闭 / 退出 / 配置写入） | #1874 |
 | F11b | P1   | `src/lib/workflow/workflow-run-store.ts`                         | 日志落盘改合并窗口（250ms）：每来一行整表序列化 → 窗口内只写一次；判重收窄到尾窗 64 条；追加改 `tailWindowAppend`（实测 20s / 2000 行：8109ms → 331ms，落盘 2000 → 80 次） | #1885 |
 | F12  | P1   | `src/components/studio/logs/log-analysis.ts`                     | 时间线去重索引跨轮复用（`TimelineIndex` + `mergeTimelineIndexed` / `trimTimelineIndex`）：每轮重建两张全表 Map → 只在形状变化时建；截断改摘键 | #1887 |
+| L5   | P1   | `src-tauri/src/poll_clock.rs`（新）+ `lib.rs` + `single_instance.rs` | 六处手写 sleep 轮询收敛成 `PollClock`：每拍先 tick 再探测（首绘看护那次「`continue` 跳过循环底 sleep」的事故从结构上消失）；预算改墙钟、退避不缩短它；focus waiter 走 `forever` 形。守事故的 `#[test]` 同批改钉新不变量 | #2315 |
 
 ## B. 判定修正与例外（📝）
 
@@ -68,6 +69,8 @@
 | F6 raw-cli 弹窗 `key={index}`              | **降级暂缓**   | 追加场景下 index + 稳定 entry 引用 + `memo` 已够用；根治需给服务端缓冲（`runner-state.appendRawCli` 存裸 `string[]`）加稳定行号，属数据结构改动，收益/成本不划算                                                |
 | S9 `project.listByUser` 拉 `nodes`/`edges` | **有意保留**   | `canvas-store.hydrateFromServer` 依赖列表里的画布 JSON 与本地对账（跨设备/换端口恢复）；裁列需重新设计「延迟拉取 + 离线合并」语义，属功能改动而非性能修，项目数量级小                                           |
 | L10 `shellStaleWarning` 全量 stat          | **不值得**     | 每次启动仅调用一次、目标树（Rust 源码 + splash 资源）文件数有限，全量 stat 毫秒级；免 stat 的目录级 mtime 会漏掉「编辑已有文件」这一最常见场景、把旧壳误判为新，判据退化                                        |
+| L14a 门禁聚合的串行 `spawnSync`            | **维持现状**   | 平台逐格墙钟（`cnb-ac2-1k5n5pftv` / `cnb-cid-1k5naje7o` 的 stage-30）：不含 cargo test 时 47 条合计 **45.1s**（占该 PR 流水线 ~25 分钟的 ≈3%），短格（<1.2s，spawn 启动税承重区）36 条合计 17.6s。并行化的理论收益 ≈25-30s，代价是 47 个 node 进程同时压这台**既跑 PR 又跑每日还跑开发会话**的共享机 —— 那正是 §13.5.21「全量单测不进 PR 档」要防的「超订把读数变不可信」形态；且聚合档有顺序与工作区前提（D0 先行 / 部分格写指纹账），并行要重排。收益面本身比 2026-09-26 小得多（本地默认档只剩 D0，实测 5.7s）。付费者：PR 平台那格（每条 PR 3%）与本地 `check:all` / `premerge --full`（人工触发） |
+| L14b 覆盖率面 124 条 glob + 三份 reporter  | **维持现状**   | 与 `thresholds` 的**逐条配对**是判据（只写门槛不进 `include` 会让门槛静默失效，`ui/file-picker.tsx` 前车之鉴）—— 任何「合并 glob」都在没有回归信号的情况下改了棘轮分母（§18.6：门槛取实测值只升不降）；`--shard` 与「重档归平台每日档」是同一个执行面决定（§13.5.21），不是配置里加一行。coverage 的墙钟占比没有独立读数 —— 它随 `每日单元测试` 一起跑（该格 779s，主体是 3000+ 用例本身），单拆 reporter/glob 的税在总账里读不出来，先记账不动手 | 量级一路在缩：2026-10-22 复量 87 文件 / 50-58ms 每遍；2026-10-24 复量（#2315 后的树上，含 build-desktop 产物）106 文件 / 暖态 6.4-8.5ms 每遍 —— 每 30s 轮询 ≈ 16ms 同步 IO，噪声级。目录级 mtime 的失效形态与 L10 同款（漏「编辑已有文件」），`fs.watch` 要处理长驻进程的句柄漂移，两者都不值这 16ms。**「同步 IO」那一半同族归 M12 / #2193 的异步化那轮顺带**，不单独立项 |
 | L12b Rust 侧日志逐条 open/write/close      | **有意保留**   | `append_line` 每条开/关文件与 Node 侧同源——**不持有句柄**：残留进程握住日志文件会锁死下次启动的重定向（历史事故）；BufWriter 常驻句柄会重新引入该风险，壳侧日志频率低，成本可接受                               |
 | L13 `Build-Guard.ps1` 500ms + 三轮 CIM     | **有意保留**   | 500ms 是 `taskkill /T /F` 异步生效后的必要复查间隔；三轮 CIM 各对应一个判定点（初始 / 回收后复查 / AutoClose 后复查），正常路径仅首轮 1 次 CIM 即返回 0                                                         |
 | F11b 复核（#1885）                         | **成立并已修** | 与 F11 同一条链的**落盘侧**：F11 / M9 修的是「窗口写法」与「判重」，而 `workflow-run-store` 每次 `notify()` 都整表 `JSON.stringify` + 同步 `localStorage.setItem`（实测 4.2ms / 683KB），这笔开销此前没人看。列表要立刻更新、能合并的只有落盘那一半 |
@@ -117,15 +120,7 @@ _（全部闭环，见 A 表。）_
 
 ### C.4 启动 / 构建 / 桌面壳（P1）
 
-- ⬜ **L5** → **#2192**。壳侧 6 处固定间隔 sleep 轮询，无退避、无统一收口。
-  定位：`src-tauri/src/lib.rs` 搜 `thread::sleep(` / `for _ in 0..` / `const PROBE_`，
-  `single_instance.rs` 搜 `Duration::from_millis(100)`（旧登记那五处 `lib.rs` 行号回读内容后
-  全部指错了东西，而 `single_instance.rs:442-455` 那段区间其实还盖得住 ——
-  这就是单行与区间的区别；另外 `lib.rs` 里那句 `from_secs(150)` 是一次性安全网、不属本条，
-  别按旧话去找它）。
-  方向：收敛到统一的「带退避的等待」工具 —— Node 侧早就是这个形状，
-  搜 `scripts/launcher-core/ready-wait.mjs` 里的「轮询退避」。
-  ⚠️ 壳里有一条 `#[test]` 钉住「`continue` 那一支必须自己 sleep」，换写法要同批改它。
+- _（L5 已闭环，见 A 表。）_
 - _（L8b 已闭环，见 A 表。）_
 
 ### C.5 P2（卫生项，随上一批顺手修）
@@ -150,22 +145,8 @@ _（全部闭环，见 A 表。）_
 - _（L9 已闭环，见 A 表。）_
 - _（L10 已判定为不值得（见 B 表）；L11 已闭环，见 A 表。）_
 - _（L12b / L13 已判定为有意保留（见 B 表）。）_
-- ⬜ **L14** → **#2195**。两道税分开看：门禁串行 `spawnSync`（`scripts/quality-gate.mjs`
-  搜 `spawnSync(`，旧登记的 `:229-232` 已漂）；`vitest.config.ts` 的覆盖率面与并发形状
-  （glob 条目搜 `include: [`，reporter 搜 `reporter:`）。
-  **两处读数都已变**：glob 已从登记的「60+」长到 124 条（2026-10-22 复算，复算命令在单里，
-  这里不重抄），而「4 道门禁」那个数字**故意不再写** —— 步数由注册表承重，抄一次就漂一次。
-  **定性要先走一步**：本地默认档只剩形态档、重档交平台（§13.5.25），
-  所以这笔串行税现在由 `pnpm check:all` / `check:premerge --full` / 每日那一跑付，
-  收益面比 2026-09-26 小。
-- ⬜ **L15** → **#2196**。前端 30s 轮询（搜 `UPDATE_CHECK_POLL_MS`），服务端同步递归遍历
-  `src-tauri`（搜 `function walkFiles(` / `SKIP_DIRS`；旧登记那两段区间其实还盖得住，
-  本节只是按统一口径改成检索式），
-  每次 GET 两遍、首次请求定基线时四遍。方向：目录级粗粒度比对或 `fs.watch`。
-  **备注**：`SKIP_DIRS` 剪枝是手写递归的核心价值（`recursive: true` 的 readdir 无法中途剪枝、会把 `target` 扫进去）；
-  2026-10-22 复量剪掉 `target` 后是 **87 个文件**（旧话「仅数百文件」也偏大），同进程连续四遍
-  58.2 / 55.6 / 48.8 / 57.7 ms ⇒ 「收益与风险不成比例」这句**比当年更强**，
-  建议与 L5（Rust 轮询收敛）同轮一起评估。
+- _（L14 已定性为两半都维持现状（见 B 表；读数出处在那两行里）。）_
+- _（L15 已判定为维持现状（见 B 表；同步 IO 那一半归 M12 / #2193 的那一轮）。）_
 - _（E6 已闭环，见 A 表。）_
 
 ## D. 维护说明

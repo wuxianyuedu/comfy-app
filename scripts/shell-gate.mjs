@@ -67,6 +67,10 @@ import { defaultShellExe, shellStaleWarning } from "./dev-launcher.mjs";
 import { whichCommand } from "./launcher-core/shell.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
 import { changedFilesForBaseRef } from "./changed-scope.mjs";
+import {
+  hostTripleFromCargoVersion,
+  sidecarFileName,
+} from "./sidecar-name.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -79,10 +83,16 @@ export const RUST_SOURCE_RE = /^src-tauri\/src\/.*\.rs$/;
 
 /** 读暂存区文件清单（相对仓库根、正斜杠）。 */
 export function stagedFiles() {
-  const out = spawnSync("git", ["diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+   * 的文件头「口径 ④」）。 */
+  const out = spawnSync(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+    },
+  );
   if (out.status !== 0) return [];
   return out.stdout.split(/\r?\n/).filter(Boolean);
 }
@@ -135,7 +145,19 @@ export function decide(staged) {
 }
 
 /**
- * cargo 的寻址判据：**PATH 优先，回退到工具链的默认安装位**。
+ * `findCargo()` 走过的那几步（顺序即判据）。`probed` 是留给「找不到」时那句话的
+ * 取证：**探了哪几处、为什么每一处都没命中** —— 只说「找不到 cargo」的话，
+ * 拿 `CARGO_HOME` 配着工具链的人除了猜没有别的路（ISSUE #2293 的现场）。
+ *
+ * @typedef {{ where: string, result: "hit" | "absent" | "unreadable" | "empty", detail?: string }} CargoProbe
+ *   `where` 是给人看的落点（`PATH` / 绝对路径），`result` 三态与 `absent`（不存在）
+ *   分开：**目录在但读不了**（服务账号没权限）与**目录不在**是两件事，混成一句会把人
+ *   引到「去装 rustup」那条错路上。
+ * @typedef {{ path: string | null, probes: CargoProbe[] }} CargoLookup
+ */
+
+/**
+ * cargo 的寻址判据：**PATH 优先，回退到工具链的默认安装位**。返回落点与走过的每一步。
  *
  * 为什么不能只认 PATH（ISSUE #1555）：CI / 容器镜像是**精修过 PATH** 的 ——
  * `~/.cargo/bin` 常常不在（实测本仓开发容器里 `which cargo` 为空，而同一台机器上
@@ -148,27 +170,57 @@ export function decide(staged) {
  * 回退面刻意**只收 rustup 的三处**（CARGO_HOME/bin、~/.cargo/bin、~/.rustup/），
  * 不做 PATH 式的目录递归 —— 判据越宽，越可能选中一个不该用的 cargo。
  *
- * @returns {string | null} cargo 的绝对路径；PATH 与三处安装位都没有 = `null`
+ * ⚠️ **`$CARGO_HOME/bin` 要真的进 PATH**（ISSUE #2293 的平台现场）：`.cnb.yml` 给
+ * `重档静态判据` 那一格配了 `CARGO_HOME` / `RUSTUP_HOME`，而**平台 runner 的 PATH 是
+ * 固定的**、不会跟着这两个变量长出来 ⇒ 下面那条 `PATH` 探针必然落空，一整格按
+ * 「没跑起来」收（退 2）。这时唯一的出路就是这条回退 —— 它本来就该命中
+ * `$CARGO_HOME/bin/cargo`，值的形状（`G:\.cargo`、`C:/Users/x/.cargo`、带尾部分隔符）
+ * 不许成为「命不命中」的变量。
+ *
+ * @param {{env?: Record<string, string | undefined>}} [deps] `env` 可注入（默认 `process.env`）
+ * @returns {CargoLookup} `path` = cargo 的绝对路径（PATH 与三处安装位都没有 = `null`）
  */
-export function findCargo() {
-  const onPath = whichCommand("cargo");
-  if (onPath) return onPath;
-  const home = os.homedir();
-  /* 三处候选**按条件拼**（而不是先塞一个 `false` 再 filter 掉）：`CARGO_HOME` 未设时
+export function findCargoLookup({ env = process.env } = {}) {
+  /** @type {CargoProbe[]} */
+  const probes = [];
+
+  const onPath = whichCommand("cargo", { env });
+  if (onPath) {
+    probes.push({ where: "PATH", result: "hit", detail: onPath });
+    return { path: onPath, probes };
+  }
+  probes.push({ where: "PATH", result: "absent" });
+
+  /* 两处候选**按条件拼**（而不是先塞一个 `false` 再 filter 掉）：`CARGO_HOME` 未设时
    * `process.env.CARGO_HOME && …` 求值成 `false`，数组就成了 `(string | false)[]`，
    * 而 `.mjs` 里写不了 `dir is string` 这种谓词（TS8010：类型注解只许出现在 `.ts`），
    * tsc 也不会从 `typeof dir === "string" && dir.length > 0` 里推 —— 结果是下面整段
    * 都带着 `string | undefined` 用。改成按条件拼之后类型本身就是 `string[]`，
    * 不用靠注解断言。 */
-  /** @type {string[]} */
+  /** @type {{dir: string, where: string}[]} */
   const candidates = [];
-  if (process.env.CARGO_HOME) {
-    candidates.push(path.join(process.env.CARGO_HOME, "bin"));
+  /* 取证那一行要念**原始值**，不是解出来的绝对路径：跨平台的值（Linux 上跑门禁、
+   * 而 `CARGO_HOME` 是 Windows 形态）会被 `path.resolve` 解成 `<cwd>/G:\.cargo`，
+   * 那一行就与平台上真正配着的值对不上了 —— 判据（「不在」）不变，读的人却会走错路。 */
+  const cargoHomeRaw = (env.CARGO_HOME ?? "").trim().replace(/^"(.*)"$/, "$1");
+  const cargoHome = cargoHomeValue(env);
+  if (cargoHome) {
+    candidates.push({
+      dir: path.join(cargoHome, "bin"),
+      where: `CARGO_HOME/bin（${cargoHomeRaw}）`,
+    });
   }
-  candidates.push(path.join(home, ".cargo", "bin"));
-  candidates.push(path.join(home, ".rustup", "toolchains"));
+  const home = os.homedir();
+  candidates.push({
+    dir: path.join(home, ".cargo", "bin"),
+    where: "~/.cargo/bin",
+  });
+  candidates.push({
+    dir: path.join(home, ".rustup", "toolchains"),
+    where: "~/.rustup/toolchains",
+  });
 
-  for (const dir of candidates) {
+  for (const { dir, where } of candidates) {
     if (dir.endsWith("toolchains")) {
       // rustup 的每个工具链各有一份 cargo：取版本号最大的那个（字典序即版本序，
       // 1.10 与 1.9 这种少见形态不在此纠偏 —— 只认「挑不到就继续找下一处」。
@@ -176,19 +228,100 @@ export function findCargo() {
       let versions = [];
       try {
         versions = fs.readdirSync(dir).sort().reverse();
-      } catch {
-        continue; // 目录不存在 = 这一处没有，接着看下一处（不是「探到但不可用」）
+      } catch (err) {
+        // 目录不存在 = 这一处没有，接着看下一处（不是「探到但不可用」）；
+        // 读不了（没权限 / 不是目录）必须分开记 —— 那要人去查权限，不是去装 rustup。
+        probes.push(
+          isAbsentError(err)
+            ? { where, result: "absent" }
+            : { where, result: "unreadable", detail: errorCode(err) },
+        );
+        continue;
+      }
+      if (versions.length === 0) {
+        probes.push({ where, result: "empty", detail: "目录在，但没有工具链" });
+        continue;
       }
       for (const version of versions) {
         const exe = path.join(dir, version, "bin", cargoExeName());
-        if (fs.existsSync(exe)) return exe;
+        if (fs.existsSync(exe)) {
+          probes.push({ where, result: "hit", detail: exe });
+          return { path: exe, probes };
+        }
       }
+      probes.push({
+        where,
+        result: "absent",
+        detail: `${versions.length} 个工具链里都没有 bin/${cargoExeName()}`,
+      });
       continue;
     }
     const exe = path.join(dir, cargoExeName());
-    if (fs.existsSync(exe)) return exe;
+    if (fs.existsSync(exe)) {
+      probes.push({ where, result: "hit", detail: exe });
+      return { path: exe, probes };
+    }
+    probes.push({ where, result: "absent", detail: exe });
   }
-  return null;
+  return { path: null, probes };
+}
+
+/**
+ * `findCargo()`：只要落点的那一半（判决面只关心「有没有、是哪一份」）。
+ *
+ * @param {{env?: Record<string, string | undefined>}} [deps]
+ * @returns {string | null}
+ */
+export function findCargo(deps) {
+  return findCargoLookup(deps).path;
+}
+
+/**
+ * `CARGO_HOME` 读成**能拼路径的值**，读不出来就是 `null`（= 这一处不探）。
+ *
+ * 三件都要管，缺一件这一处就静默落空（ISSUE #2293）：
+ *   · **未设 / 空串** ⇒ 没有这一处；
+ *   · **环境变量里带的引号**（`CARGO_HOME="G:\.cargo"` 那种写法，值里就带着引号）
+ *     先剥掉 —— 否则 `path.join` 拼出的是 `"G:\.cargo"\bin`，一个不存在的路径；
+ *   · **相对路径**（`CARGO_HOME=.cargo`）按 cwd 解析成绝对路径 —— `cargo` 自己就是
+ *     这么解的，而 `path.join` 出来的相对路径会被 `existsSync` 拿去问 cwd。
+ * 尾部分隔符（`G:\.cargo\`）由 `path.join` 自然消化，不用特殊处理。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {string | null}
+ */
+export function cargoHomeValue(env) {
+  const raw = (env.CARGO_HOME ?? "")
+    .trim()
+    .replace(/^"(.*)"$/, "$1")
+    .trim();
+  if (!raw) return null;
+  return path.resolve(raw);
+}
+
+/**
+ * 这条错误是不是「那个落点根本不存在」（而不是「在、但读不了」）。
+ *
+ * @param {unknown} err `catch` 到的东西
+ * @returns {boolean}
+ */
+function isAbsentError(err) {
+  const code = errorCode(err);
+  return code === "ENOENT" || code === undefined;
+}
+
+/**
+ * 从 `catch` 到的东西里取错误码（`unknown` 收窄，不在这里 `as`）。
+ *
+ * @param {unknown} err
+ * @returns {string | undefined}
+ */
+function errorCode(err) {
+  if (err && typeof err === "object" && "code" in err) {
+    const code = err.code;
+    return typeof code === "string" ? code : undefined;
+  }
+  return undefined;
 }
 
 /** cargo 的文件名（Windows 上带 .exe；其余平台无后缀）。 */
@@ -196,16 +329,124 @@ function cargoExeName() {
   return process.platform === "win32" ? "cargo.exe" : "cargo";
 }
 
-/** 跑 cargo test；返回退出码（找不到 cargo 时返回 null，由调用方给指路）。 */
+/**
+ * `cargo test` 的**编译前提落位**（ISSUE #2192 那条 PR 的平台首跑现场）：
+ * `src-tauri` 的 build script 会校验 `bundle.externalBin` 与 `resources` 声明的
+ * 路径**存在**（`tauri.conf.json` 的 `binaries/node` 与 `static/`），而真产物
+ * 由 `build-desktop.mjs` 组装、被 `src-tauri/.gitignore` 忽略 ⇒ 平台侧每次都是
+ * 全新 clone，第一次 cargo test 就死在 build script 上（实测原文
+ * `resource path … doesn't exist`，指名 `binaries\node-x86_64-pc-windows-msvc.exe`）。
+ *
+ * 落位的是**编译前提**，不是真产物：
+ *   · sidecar = 复制**当前正在跑门禁的这个 node**（与 build-desktop 同一来源；
+ *     测试不执行它，内容只要求是同平台的 node）；
+ *   · static = 缺目录时建一个空目录 + 占位文件（资源打包的真实内容由
+ *     `tauri build` 之前的 build-desktop 组装，两路互不冒充）。
+ *
+ * 已在场的产物**一律不碰**（本地跑过 build-desktop 时是真实的，占位不许覆盖它）。
+ *
+ * @param {{
+ *   root?: string,
+ *   cargo?: string | null,
+ *   execPath?: string,
+ *   versionOutput?: string | null,
+ *   exists?: (p: string) => boolean,
+ *   mkdir?: (p: string, o?: { recursive?: boolean }) => void,
+ *   copy?: (source: string, dest: string) => void,
+ *   chmod?: (p: string, m: number) => void,
+ *   write?: (p: string, s: string) => void,
+ *   platform?: NodeJS.Platform,
+ * }} [deps] 全部可注入 —— 用例据此判「建了什么 / 没动什么」，不碰真盘；
+ *   `versionOutput` 是 `cargo -vV` 的替身（不注入才真起一次）。
+ * @returns {{ ok: boolean, lines: string[] }}
+ *   `ok: false` = 前提落不了位（triple 取不到等），调用方按编译失败收场并把
+ *   `lines` 打出来。
+ */
+export function materializeCargoTestInputs({
+  root = ROOT,
+  cargo = findCargo(),
+  execPath = process.execPath,
+  versionOutput,
+  exists = (p) => fs.existsSync(p),
+  mkdir = (p, o) => fs.mkdirSync(p, o),
+  copy = (a, b) => fs.copyFileSync(a, b),
+  chmod = (p, m) => fs.chmodSync(p, m),
+  write = (p, s) => fs.writeFileSync(p, s, "utf8"),
+  platform = process.platform,
+} = {}) {
+  const srcTauri = path.join(root, "src-tauri");
+  /** @type {string[]} */
+  const lines = [];
+
+  // 三元组从 cargo 自己嘴里问（`cargo -vV` 的 `host:` 行）—— cargo test 按宿主
+  // 三元组编译，sidecar 名里带的是同一个；写死或从 process.arch 翻译都会漂。
+  let triple = null;
+  if (cargo !== null && cargo !== undefined) {
+    const out =
+      versionOutput ??
+      spawnSync(cargo, ["-vV"], { encoding: "utf8", windowsHide: true })
+        .stdout ??
+      "";
+    triple = hostTripleFromCargoVersion(out) ?? null;
+  }
+  if (!triple) {
+    return {
+      ok: false,
+      lines: [
+        "[shell-gate] × cargo test 编译前提落不了位：从 `cargo -vV` 取不到目标三元组" +
+          "（sidecar 文件名里必须带它，见 scripts/sidecar-name.mjs）。",
+      ],
+    };
+  }
+
+  const sidecar = path.join(
+    srcTauri,
+    "binaries",
+    sidecarFileName(triple, platform),
+  );
+  if (!exists(sidecar)) {
+    mkdir(path.dirname(sidecar), { recursive: true });
+    copy(execPath, sidecar);
+    if (platform !== "win32") chmod(sidecar, 0o755);
+    lines.push(
+      `[shell-gate] cargo test 编译前提：sidecar 不在（全新 clone 的常态）⇒ 复制当前 node 落位 ${sidecar}`,
+    );
+  }
+
+  const staticDir = path.join(srcTauri, "static");
+  if (!exists(staticDir)) {
+    mkdir(staticDir, { recursive: true });
+    write(
+      path.join(staticDir, ".cargo-test-placeholder"),
+      "cargo test 的编译前提占位：resources 声明的 static/ 必须存在。\n" +
+        "真产物由 scripts/build-desktop.mjs 在 tauri build 之前组装；本文件随下一次组装被替换。\n",
+    );
+    lines.push(
+      `[shell-gate] cargo test 编译前提：static/ 不在 ⇒ 建空目录 + 占位（真产物归 build-desktop）`,
+    );
+  }
+  return { ok: true, lines };
+}
+
+/**
+ * 跑 cargo test。
+ *
+ * @returns {{code: number | null, probes?: CargoProbe[]}} `code === null` = 找不到 cargo
+ *   （由调用方给指路），此时**带上探针读数** —— 那一句「找不到」必须说得出探了哪几处。
+ */
 function runCargoTest() {
-  const cargo = findCargo();
-  if (!cargo) return null;
+  const lookup = findCargoLookup();
+  const cargo = lookup.path;
+  if (!cargo) return { code: null, probes: lookup.probes };
+  const prep = materializeCargoTestInputs({ cargo });
+  for (const line of prep.lines) process.stdout.write(`${line}\n`);
+  if (!prep.ok) return { code: 1 };
   const r = spawnSync(cargo, ["test"], {
     cwd: path.join(ROOT, "src-tauri"),
     stdio: "inherit",
     windowsHide: true,
   });
-  return r.status ?? 1;
+  return { code: r.status ?? 1 };
 }
 
 /**
@@ -247,7 +488,11 @@ export function freshnessProblem(root = ROOT) {
  * `freshness` 的 `skipped` 只出现在 `--base` 形态下：平台上没有编出来的壳，
  * 时效判据没有对象（原因见文件头那一段）。
  *
- * @typedef {{ kind: "cargo", state: "skipped" | "missing" | "ok" | "failed", code?: number }
+ * `cargo` 的 `missing` 还带 `probes`：探了哪几处、每一处为什么没命中（见
+ * `findCargoLookup`）。那句话是「找不到 cargo」唯一的取证面 —— 没有它，拿
+ * `CARGO_HOME` 配着工具链的人只能猜（ISSUE #2293）。
+ *
+ * @typedef {{ kind: "cargo", state: "skipped" | "missing" | "ok" | "failed", code?: number, probes?: CargoProbe[] }
  *   | { kind: "freshness", state: "ok" | "blocked" | "skipped", problem?: string }} GateStep
  */
 
@@ -261,8 +506,12 @@ export function freshnessProblem(root = ROOT) {
  * 形状沿用 `check-dependency-audit.mjs` 的 `runAudit({ cwd, runner, fixtureFile })`：
  * 注入只是让分支可测，出厂行为不变（§12.18，不再发明第二套）。
  *
- * @param {{staged?: string[], root?: string, cargoRunner?: () => number | null, mode?: "staged" | "base"}} [options]
+ * @param {{staged?: string[], root?: string,
+ *   cargoRunner?: () => ({code: number | null, probes?: CargoProbe[]} | null),
+ *   mode?: "staged" | "base"}} [options]
  *   `mode` = `"staged"`（默认，本地那一跳）/ `"base"`（平台侧以 PR diff 为判决面）。
+ *   `cargoRunner` 的 `null` = 这台机器上找不到 cargo（≈ `findCargoLookup().path === null`），
+ *   它顺带把探针读数交上来，好让调用方那句话能说出「探了哪几处」。
  * @returns {{ exitCode: number, steps: GateStep[] }}
  */
 export function runGate({
@@ -280,14 +529,17 @@ export function runGate({
   /** @type {GateStep[]} */
   const steps = [];
   if (needsCargoTest) {
-    const code = cargoRunner();
-    if (code === null) {
-      steps.push({ kind: "cargo", state: "missing" });
+    /* `null` 与 `{code: null}` 都收：注入的 runner 可能什么都不给（老形态），
+     * 出厂实现给的是后者（它才带得出探针读数）。 */
+    const got = cargoRunner() ?? { code: null };
+    if (got.code === null) {
+      steps.push({ kind: "cargo", state: "missing", probes: got.probes });
       /* `--base` 形态（平台侧）：这台机器上没有 cargo ⇒ **这一格没跑起来**（2），
        * 不是「判据判出失败」（1）—— 判据在场、执行者不在，这两件事必须分开说
        * （§13.5.25 的三态口径）。本地形态保持退 1：那边确实该拦住提交。 */
       return { exitCode: mode === "base" ? 2 : 1, steps };
     }
+    const code = got.code;
     if (code !== 0) {
       steps.push({ kind: "cargo", state: "failed", code });
       // 顺序也是判据：编不过就不再往下判时效 —— 时效消息会把真因（Rust 侧编译/单测坏了）
@@ -317,6 +569,41 @@ export function runGate({
 }
 
 /**
+ * 「找不到 cargo」那一句的取证段：**探了哪几处、每一处为什么没命中**。
+ *
+ * 只念结论的话，拿 `CARGO_HOME` 配着工具链的人（服务账号 / 容器 / 自托管 runner
+ * 都长这样）除了猜没有别的路 —— 而真因往往就是「变量给了，PATH 没跟着长出来」
+ * （ISSUE #2293 的平台现场：`.cnb.yml` 配了 `CARGO_HOME`，而 runner 的 PATH 是固定的）。
+ * 探针为空（注入的 runner 什么都不给）时念一句「未取证」，不冒充「探过了」。
+ *
+ * @param {CargoProbe[] | undefined} probes
+ * @returns {string} 每一行都以 8 个空格开头（与上下那几行同形）
+ */
+function probesText(probes) {
+  if (!probes || probes.length === 0) {
+    return "        [取证] 这一跑没拿到探针读数（注入的 runner 不含它）。\n";
+  }
+  const label = {
+    hit: "命中",
+    absent: "不在",
+    unreadable: "读不了",
+    empty: "空目录",
+  };
+  const lines = probes.map(
+    (p) =>
+      `        · ${p.where}：${label[p.result]}${p.detail ? `（${p.detail}）` : ""}`,
+  );
+  const hint = probes.some((p) => p.result === "unreadable")
+    ? "        有落点「读不了」—— 那是权限问题，先查执行账号对那个目录的读权限，别再装一遍工具链。\n"
+    : probes.some(
+          (p) => p.where.startsWith("CARGO_HOME/bin") && p.result !== "hit",
+        )
+      ? "        CARGO_HOME 给了而这一处没命中：那个值下确实没有 bin/cargo，或平台的 PATH 没跟着它长出来。\n"
+      : "";
+  return `        [取证] 探过这 ${probes.length} 处：\n${lines.join("\n")}\n${hint}`;
+}
+
+/**
  * 把 `runGate` 的走格打成人类可读的行（打印只在 `main`，判决不在这里）。
  *
  * @param {{ exitCode: number, steps: GateStep[] }} result
@@ -332,6 +619,7 @@ function linesFor(result, mode = "staged") {
           to: "err",
           text:
             "[shell-gate] 找不到 cargo（PATH 与 rustup 的默认安装位都没有）—— 改了 Rust 壳却编不了，等于没验证。\n" +
+            probesText(step.probes) +
             "        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）\n" +
             "        已装却仍探不到时：PATH 里加上 $CARGO_HOME/bin（rustup 默认 <home>/.cargo/bin）" +
             (mode === "base"

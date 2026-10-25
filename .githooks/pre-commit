@@ -461,7 +461,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(56 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(57 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
@@ -649,6 +649,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 把 jsdom 档里的文件头改成 node、把 `.test.tsx` 的文件头改成 node、
   # 把判据③（冗余文件头）改永假或放宽成「有头就报」—— 四条都当场红。
   run "用例环境档（环境早退 / 目录档矛盾 / 冗余文件头）" node scripts/check-test-environment.cjs
+  # 「这台机器上没有某个工具 ⇒ 这一组跳过」的站点，必须把**逐候选的读数**打出来
+  # （ISSUE #2316）。条件性 skip 早有登记表（`tests/conditional-skip-registry.test.ts`），
+  # 但它只记「有几条会暗、为什么暗」，管不到「暗的时候说不说得清是哪一种暗」——
+  # 而那是两个下一动作完全不同的形态：机器上真没有（去装）vs. 有一个同名的东西顶掉了它
+  # （改探测）。现场就是后者：探测只认退出码时，一个冒牌的同名可执行文件退 0 就被
+  # 认成 PowerShell，这一组不再跳过、转以 `Test timed out in 20000ms` 红掉
+  # （同一份种子在另一台 Linux 上整组 skipped，结论相反）。
+  # 判据是**纯文本、零子进程、< 0.1s**（扫描面 `src/**` 与 `tests/**` 的用例文件）：
+  # 有 `firstRunnable(` 站点却没有 `describeProbeMisses(` 即红。零站点时它自己报
+  # 「空转」（读不到输入 ≠ 没有问题）。
+  run "跳过时的逐候选读数（环境缺口要说得清是哪一种）" node scripts/check-skip-probe-readings.mjs
   # 软断言（`expect.soft`）用在哪儿（规范 §11.18）。**形状判据**：它必须落在
   # **循环体里**（一张清单逐项判、一项失败不影响下一项）。落在循环外的软断言
   # 会把真正的原因吞掉 —— 实测：软断言失败后下一行照跑，依赖前提的语句当场抛

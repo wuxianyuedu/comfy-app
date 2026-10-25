@@ -439,7 +439,11 @@ pub fn spawn_focus_waiter(app: tauri::AppHandle) {
     // 这里改用「轮询唤起标记」——信号处理器只置位，线程负责落地。
     // 轮询而非阻塞的原因：信号处理器里不能调 tauri API（非异步信号安全），
     // 而 crossbeam 等通道会引入新依赖；100ms 粒度的可见延迟对「唤醒窗口」足够。
+    // #2192：这一处是 poll_clock 的**常驻形**（`forever`，无预算）—— 它等的
+    // 是进程内标记、不是外部状态就绪，永不过期，也不退避（可见延迟就是它的间隔）。
+    let mut clock = crate::poll_clock::PollClock::forever(std::time::Duration::from_millis(100));
     loop {
+      clock.tick();
       if FOCUS_FLAG.swap(false, std::sync::atomic::Ordering::SeqCst) {
         // run_on_main_thread 借 &self，而闭包里还要用同一个 AppHandle
         // 查窗口/give focus —— 因此再 clone 一份给闭包，避免 move 出借用的对象。
@@ -451,7 +455,6 @@ pub fn spawn_focus_waiter(app: tauri::AppHandle) {
           }
         });
       }
-      std::thread::sleep(std::time::Duration::from_millis(100));
     }
   });
   // 信号处理器：只置位，不做任何其它事（异步信号安全约束）。

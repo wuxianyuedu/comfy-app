@@ -29,6 +29,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
+
 const SCRIPT = path.resolve(
   import.meta.dirname,
   "../scripts/merge-changelog-fragments.mjs",
@@ -56,7 +58,11 @@ function fixture(
     writeFileSync(path.join(root, "changelog.d", name), body);
   }
   const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: root, encoding: "utf8" });
+    execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      env: gitSandboxEnv(),
+    });
   git("init", "-q", ".");
   git("add", "-A");
   git(

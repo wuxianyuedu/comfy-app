@@ -12,7 +12,7 @@ import { safeFileNameSegment } from "~/lib/safe-name";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { sleep } from "~/lib/with-timeout";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "~/lib/endpoints";
-import { promises as fs, readFileSync } from "node:fs";
+import { promises as fs, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -34,19 +34,111 @@ interface ComfySettings {
   videoWorkflow?: unknown;
 }
 
-let settingsCache: ComfySettings | null = null;
 let resolvedBase: string | null = null;
 
-function loadSettings(): ComfySettings {
-  if (settingsCache) return settingsCache;
-  let parsed: ComfySettings = {};
+/** settings 文件的 size+mtimeMs 指纹；文件不存在 ⇒ `null`（与缓存键比对，也是合法状态）。 */
+function settingsFileFingerprint(file: string): string | null {
   try {
-    parsed = JSON.parse(readFileSync(SETTINGS_FILE, "utf-8")) as ComfySettings;
+    const st = statSync(file);
+    return `${st.size}:${st.mtimeMs}`;
   } catch {
-    parsed = {};
+    return null;
   }
-  settingsCache = parsed;
-  return parsed;
+}
+
+/** settings 文件 IO 的注入面（真实形状；用例换临时目录）。 */
+export interface SettingsFileIo {
+  read(file: string): string;
+  fingerprint(file: string): string | null;
+  write(file: string, content: string): Promise<void>;
+}
+
+const realSettingsFileIo: SettingsFileIo = {
+  read: (file) => readFileSync(file, "utf-8"),
+  fingerprint: settingsFileFingerprint,
+  write: async (file, content) => {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, content, "utf-8");
+  },
+};
+
+/**
+ * settings 文件的指纹 memo（ISSUE #2194）。
+ *
+ * 为什么是**指纹比对**而不是显式 `reset`：**用户被本模块的话术指着手改这个文件**
+ * （搜「comfyui 视频通道需要 i2v 工作流模板」），而显式 reset 需要一个「文件被改了」
+ * 的执行者 —— 那只能是一个 watcher（为 397 行的模块引一套 fs.watch）或「没人按的按钮」。
+ * size+mtime 指纹让**手改这个动作本身**成为执行者：改完的下一次读取必然 miss。
+ * 指纹形状与 custom-nodes manifest 摘要（audit E6）/ lockfile 漂移（L11）同一族；
+ * 一次 statSync，微秒级。
+ *
+ * 导出仅为用例（注入 io 不碰真盘）；模块自己用 `settingsMemo` 那一份。
+ */
+export function createSettingsFileMemo(
+  file: string,
+  io: SettingsFileIo = realSettingsFileIo,
+) {
+  let cache: ComfySettings | null = null;
+  let fingerprint: string | null = null;
+  return {
+    load(): ComfySettings {
+      const fp = io.fingerprint(file);
+      if (cache && fp === fingerprint) return cache;
+      let parsed: ComfySettings = {};
+      try {
+        parsed = JSON.parse(io.read(file)) as ComfySettings;
+      } catch {
+        parsed = {};
+      }
+      cache = parsed;
+      fingerprint = fp;
+      return parsed;
+    },
+    save(patch: Partial<ComfySettings>): Promise<ComfySettings> {
+      const next = { ...this.load(), ...patch };
+      return io.write(file, JSON.stringify(next, null, 2)).then(() => {
+        cache = next;
+        fingerprint = io.fingerprint(file);
+        return next;
+      });
+    },
+  };
+}
+
+/** 模块自己用的那份（真实落点）。 */
+const settingsMemo = createSettingsFileMemo(SETTINGS_FILE);
+
+function loadSettings(): ComfySettings {
+  return settingsMemo.load();
+}
+
+/**
+ * 丢掉缓存的 ComfyUI base，让下一次 `resolveComfyBase()` 重新探测。
+ *
+ * 与 `~/lib/comfyui/client.ts` 的 `resetComfyBase()` 同一条语义（同维度两份缓存、
+ * 此前只有那一侧带出口 —— ISSUE #2194）：ComfyUI 重启后可能落在**另一个**端口
+ * （配置端口被占用时它会自己 +1），不清缓存就会在整个进程生命周期里钉死在
+ * 一个已经死掉的端口上。
+ *
+ * **执行者**是本模块自己的网络层失败路径（`guardNetworkFailure`）——
+ * 没有执行者的失效出口只是一层没人按的按钮（#2194 原话）。
+ */
+export function resetWorkshopComfyBase(): void {
+  resolvedBase = null;
+}
+
+/** fetch 抛出的网络层错误（连接被拒 / 主机不可达 / DNS）在这一侧全是 `TypeError`；
+ *  HTTP 状态失败走 `res.ok` 分支、不是异常 —— 由此把「连不上」（该复位）与
+ *  「连上了但实例报错」（GPU OOM 的 500 也是活实例，#685，**不该**复位）分开。 */
+function isNetworkFailure(e: unknown): boolean {
+  return e instanceof TypeError;
+}
+
+/** 网络层失败时复位 base 缓存再把错误抛出去（重新探测交给下一次调用的
+ * `resolveComfyBase` —— 本模块的调用链里它是每个提交 / 上传动作的第一跳）。 */
+function guardNetworkFailure(e: unknown): never {
+  if (isNetworkFailure(e)) resetWorkshopComfyBase();
+  throw e;
 }
 
 /** 解析 ComfyUI base（含端口探测，落 127.0.0.1 避免 localhost→IPv6 解析失败）。
@@ -65,8 +157,7 @@ export async function resolveComfyBase(): Promise<string> {
     host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
     port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
-    resolvedBase = raw;
-    return raw;
+    return raw; /* 探测没法做就不缓存：实例随时可能起来（与 client.ts 同一句语义） */
   }
   for (let offset = 0; offset <= 5; offset++) {
     const base = `http://${host}:${port + offset}`;
@@ -75,7 +166,9 @@ export async function resolveComfyBase(): Promise<string> {
       return base;
     }
   }
-  resolvedBase = raw;
+  /* 探测全落空 ⇒ **不缓存**：缓存会把通道在进程生命周期里钉死在一个连不上的
+   * 地址上（client.ts 那侧的注释原文：「谁都没应答」不缓存 —— 实例随时可能起来）。
+   * 此前这里 `resolvedBase = raw`，探空结果同样首读即定终身（ISSUE #2194）。 */
   return raw;
 }
 
@@ -96,29 +189,37 @@ export async function postComfyPrompt(
   prompt: unknown,
 ): Promise<ComfyPromptResult> {
   const base = await resolveComfyBase();
-  const res = await fetch(`${base}/api/prompt`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, client_id: randomUUID() }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `ComfyUI /api/prompt 失败 (${res.status}): ${await res.text().catch(() => "")}`,
-    );
+  try {
+    const res = await fetch(`${base}/api/prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, client_id: randomUUID() }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `ComfyUI /api/prompt 失败 (${res.status}): ${await res.text().catch(() => "")}`,
+      );
+    }
+    return (await res.json()) as ComfyPromptResult;
+  } catch (e) {
+    guardNetworkFailure(e);
   }
-  return (await res.json()) as ComfyPromptResult;
 }
 
 export async function getComfyHistory(
   promptId: string,
 ): Promise<Record<string, unknown>> {
   const base = comfyBase();
-  const res = await fetch(`${base}/api/history/${promptId}`, {
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
-  return (await res.json()) as Record<string, unknown>;
+  try {
+    const res = await fetch(`${base}/api/history/${promptId}`, {
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
+    return (await res.json()) as Record<string, unknown>;
+  } catch (e) {
+    guardNetworkFailure(e);
+  }
 }
 
 export async function getComfyView(
@@ -131,11 +232,15 @@ export async function getComfyView(
   url.searchParams.set("filename", filename);
   url.searchParams.set("subfolder", subfolder ?? "");
   url.searchParams.set("type", type ?? "");
-  const res = await fetch(url.toString(), {
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
-  return Buffer.from(await res.arrayBuffer());
+  try {
+    const res = await fetch(url.toString(), {
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
+    return Buffer.from(await res.arrayBuffer());
+  } catch (e) {
+    guardNetworkFailure(e);
+  }
 }
 
 export async function uploadComfyImage(
@@ -146,18 +251,22 @@ export async function uploadComfyImage(
   const form = new FormData();
   form.append("image", new Blob([new Uint8Array(buffer)]), filename);
   form.append("type", "input");
-  const res = await fetch(`${base}/api/upload/image`, {
-    method: "POST",
-    body: form,
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok)
-    throw new Error(
-      `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
-    );
-  const data = (await res.json()) as { name?: string };
-  if (!data.name) throw new Error("ComfyUI 上传未返回文件名");
-  return data.name;
+  try {
+    const res = await fetch(`${base}/api/upload/image`, {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok)
+      throw new Error(
+        `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
+      );
+    const data = (await res.json()) as { name?: string };
+    if (!data.name) throw new Error("ComfyUI 上传未返回文件名");
+    return data.name;
+  } catch (e) {
+    guardNetworkFailure(e);
+  }
 }
 
 /** 解析某工坊会话（项目）的产出目录：data/workshop-outputs/{safeSessionId}。
@@ -191,12 +300,7 @@ export async function fetchToBuffer(ref: string): Promise<Buffer> {
 export async function saveComfySettings(
   patch: Partial<ComfySettings>,
 ): Promise<ComfySettings> {
-  const current = loadSettings();
-  const next: ComfySettings = { ...current, ...patch };
-  settingsCache = next;
-  await fs.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf-8");
-  return next;
+  return settingsMemo.save(patch);
 }
 
 /** 尺寸表达 → 内置 SDXL 图的宽高。

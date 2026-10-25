@@ -27,10 +27,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createVitest, type Vitest } from "vitest/node";
 
+import { resolveCiWorkers } from "../scripts/ci-load.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG = path.join(ROOT, "vitest.config.ts");
+
+/**
+ * 根配置**自己**那一档并发：来自唯一出处 `scripts/ci-load.mjs`（ISSUE #2324），
+ * 不是这里写死的数字。表里放推导值仍然抓得住漂移 —— 谁把 `vitest.config.ts`
+ * 改回字面常数（例如 8），配置读数与这一格就不相等，当场红。
+ */
+const ROOT_WORKERS = resolveCiWorkers().workers;
 
 /**
  * 共享项 ⇒ 期望值。**这就是「一处定义」的那张表**：
@@ -41,7 +49,7 @@ const SHARED_EXPECTATIONS = {
   globals: false,
   testTimeout: 30_000,
   hookTimeout: 45_000,
-  maxWorkers: 8,
+  maxWorkers: ROOT_WORKERS,
 } as const;
 
 /** `expect.poll` 的预算（对象形状，单独比）。 */

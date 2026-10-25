@@ -102,8 +102,11 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    可优化点 / 漏洞当场建单，**不必马上处理**；动手前若这次改动没有对应的单，先建单再改。
    **单子的另两格（提单人 / 优先级）同样是读数。** 阶段 0 紧接着一行
    `单子身份：提单人=<短名>（标签 提单人:<短名>） · 优先级走平台原生 --priority（P0|P1|P2|P3，本脚本不代填）`。
-   留痕的来源是 `.env` 里的 `COMFYAPP_DEV_HANDLE`（进程环境同名优先），本轮只对
-   **Windows 开发者**要求配它 —— 因为**平台给不了这一格**：issue 是被 token 的账号本体创建的，
+   留痕的来源是一条**取值链**（`scripts/dev-handle.mjs`）：`.env` 的 `COMFYAPP_DEV_HANDLE`
+   （进程环境同名优先）→ `CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → `git config user.name`
+   → 兜底 `cnb`。**没配也有名字**（ISSUE #2355）：「取的」会在身份那一行之后另念一句
+   （换台机器会变），`pnpm ship --whoami` 也念；`pnpm env:init` 会把取到的值写进 `.env`
+   而不是补一个空值。因为**平台给不了这一格**：issue 是被 token 的账号本体创建的，
    这台机器上多份并行检出回读的 `author.username` 与那串 noreply 子地址**逐字相同**（实测五张单、
    跨并行会话），而提交那一侧可分的通道（git author 子地址，见 `docs/guides/git-identity.md` §4）
    在单子上不存在。那一行 `.env` 整行缺失时，下一动作是 `pnpm env:init` —— 它只把
@@ -193,6 +196,10 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
     （那是 `base-check.mjs`）；与主流程和单子动作互斥，排在 preflight 之前 —— 在 `master` 上、
     工作树脏时照样能跑（§13.10.13）。两个形状坑（`pipelinesStatus` 是按 id 索引的对象、
     格日志 `content` 是带 ANSI 的行数组）只有一份实现，别再按数组 / 字符串读。
+    「还在跑」那一支现在带格子进度（签名与轮询那行同一份计算，`progressReadout` 一次算好，
+    ISSUE #2304）；「没推进」要连续两眼才念得出 —— 基数落在 `.git/comfy-diagnose-last/<sn>.json`，
+    签名不变 + 间隔 ≥ 10 分钟 + 没有一格在飞，三件同时成立才念「疑似派发未出勤」并把出口点成
+    `pnpm ship --rerun-ci`；缺一件就仍念「还在跑」。它仍是 `2`，不改判据。
 
 ## 它不重复判的东西
 
