@@ -680,7 +680,8 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
     candidates: POWER_SHELL_CANDIDATES,
     probeArgs: () => POWER_SHELL_PROBE_ARGS,
     label: `PowerShell（本组 ${PS_SKIP_COUNT} 条用例按 env 档跳过）`,
-    // 那一行是成品（前缀与「不是通过」都由 `probe-exe.ts` 给全），这里只负责写出去。
+    // 那一行是成品（`[probe]` 前缀与「不是通过」都由 `probe-exe.ts` 给全），这里只写出去 ——
+    // 调用点再拼一次前缀会让终端上出现两个 `[probe]`。
     report: (line) => process.stdout.write(`${line}\n`),
   });
 
@@ -989,6 +990,8 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
     candidates: PYTHON_CANDIDATES,
     probeArgs: () => PYTHON_PROBE_ARGS,
     label: "Python（前台归属那组用例按 env 档跳过）",
+    // 那一行是成品（`[probe]` 前缀与「不是通过」都由 `probe-exe.ts` 给全），这里只写出去 ——
+    // 调用点再拼一次前缀会让终端上出现两个 `[probe]`。
     report: (line) => process.stdout.write(`${line}\n`),
   });
 

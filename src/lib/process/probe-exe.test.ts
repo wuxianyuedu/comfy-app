@@ -14,25 +14,14 @@
  * 本体的三条用例覆盖 —— 用的是这台机器上一定存在的 `process.execPath` 与一个
  * 一定不存在的名字）。
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { spawnSync } from "node:child_process";
-
-/* 那行「探不到」的读数**由宿主注入出口**（`FirstRunnableOptions.report`），本模块既不
- * 直接写 `console`（`tests/single-logger-channel.test.ts`），也不静态 import 日志通道
- * （`tests/host-ts-loads-in-node.test.ts`：真 Node 里没有 `~` 别名解析器，那一行 import
- * 会把整条链拖崩在加载期）。所以这一份用例既不 mock 通道、也不拦 console ——
- * 直接断言「交出去的那一行」，那正是本模块承诺的全部。
- *
- * `reported` 是注入进去的记录器：断言前要清空，否则上一格的字会串进下一格。 */
-const reported = vi.hoisted(() => [] as string[]);
-const report = vi.hoisted(() => (line: string) => {
-  reported.push(line);
-});
 
 import {
   describeProbeFailure,
   describeProbeMisses,
   firstRunnable,
+  elevateLogLevel,
   firstRunnableOrEmpty,
   probeExecutable,
   toProbedCandidates,
@@ -232,8 +221,20 @@ describe("两条 `??` 兜底是判据的一部分，不是排版", () => {
 });
 
 describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的那一行读数", () => {
+  /* 那行读数走 `elevateLogLevel()` 注入的出口（默认是裸 Node 的 `console`，见实现文件头）。
+   * 这里注入一个收集器而不是拦 `console`：出口是可换的，拦 `console` 会在换过之后
+   * **静默收到空**，于是断言失败却说不出是「没打」还是「没收到」。 */
+  const lines: string[] = [];
+  let restore: () => void = () => undefined;
   beforeEach(() => {
-    reported.length = 0;
+    lines.length = 0;
+    restore = elevateLogLevel({
+      log: (m) => lines.push(m),
+      warn: (m) => lines.push(m),
+    });
+  });
+  afterEach(() => {
+    restore();
   });
 
   it("命中就返回候选名（调用点拿它当 `skipIf(!x)` 的守卫）", () => {
@@ -248,7 +249,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     });
     expect(got).toBe("b");
     // 命中时**不打**那行读数：一行「跳过」都没有，却印一句「跳过」，比不印更误导。
-    expect(reported).toEqual([]);
+    expect(lines).toEqual([]);
   });
 
   it("缺省探针（真起进程）那条路也走得通：注入点不给就用 `probeExecutable`", () => {
@@ -260,16 +261,15 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
         candidates: ["comfyapp-no-such-command-2316"],
         probeArgs: () => ["--version"],
         label: "假解释器",
-        report,
       }),
     ).toBe("");
-    expect(reported.join("\n")).toContain("起不来");
+    expect(lines.join("\n")).toContain("起不来");
   });
 
-  it("不给 `report` 时一个字都不打，结论照给（读数与探测解耦）", () => {
-    /* 「不注入就静默」是**约定的一部分**，不是省略：`src/lib/**` 直接 console 会绕开
-     * 脱敏与 ERROR 镜像，而静态 import 日志通道会让本模块在真 Node 里加载不起来 ——
-     * 所以往哪写只能由宿主说。探测的结论不该被「这行字落不落得下去」拖住。 */
+  it("不给 `report` 时一个字都不打（本模块在 `src/lib/**`，不许直接写 console）", () => {
+    /* 判据：这两行输出只在调用方给了出口时才出现 —— `src/lib/**` 是服务端可达的
+     * 库代码，直接 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`
+     * 判的就是这一条）。所以「不注入就静默」是**约定的一部分**，不是省略。 */
     expect(
       firstRunnableOrEmpty({
         candidates: ["comfyapp-no-such-command-2316"],
@@ -277,7 +277,6 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
         label: "假解释器",
       }),
     ).toBe("");
-    expect(reported).toEqual([]);
   });
 
   it("一个都没有 ⇒ 空串，且**每个候选的名字与原因**都打出来", () => {
@@ -295,10 +294,9 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
               failure: { kind: "nonzero-exit", status: 2, signal: null },
             }
           : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
-      report,
     });
     expect(got).toBe("");
-    const text = reported.join("\n");
+    const text = lines.join("\n");
     expect(text).toContain("PowerShell");
     expect(text).toContain("powershell");
     expect(text).toContain("pwsh");
@@ -306,17 +304,20 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(text).toContain("不是通过");
   });
 
-  it("出口拿到的是**带前缀的成品行**（宿主要能原样写出去）", () => {
-    /* 两处调用点注入的都是 `process.stdout.write`，它们只负责写、不负责拼 ——
-     * 所以前缀 `[probe]` 与「不是通过」这句必须由本模块给全，否则终端上那一行
-     * 会因为宿主不同而长得不一样。 */
+  it("`report` 给了就照样给一遍（测试夹具要 stdout 上那一眼）", () => {
+    /* 本模块**两条出口并存**：`emit()` 走宿主注入的唯一日志通道（应用侧接
+     * `~/lib/core/logger`，落 `log/` 面板），而跑用例的人在终端上看得见的是 `report`
+     * 那一行。少任何一条都不行 —— 只留前者时 CI 日志里读不到它；只留后者时判据判你
+     * 直接写 console（或绕过脱敏）。 */
+    const reported: string[] = [];
     firstRunnableOrEmpty({
       candidates: ["comfyapp-no-such-command-2316"],
       probeArgs: () => ["--version"],
       label: "假解释器",
-      report,
+      report: (line) => reported.push(line),
     });
-    expect(reported).toHaveLength(1);
-    expect(reported[0]).toContain("[probe]");
+    expect(reported.join("\n")).toContain("起不来");
+    // 同一件事也走了注入的那条通道（上面那组 `lines` 是本用例的收集器）。
+    expect(lines.join("\n")).toContain("起不来");
   });
 });

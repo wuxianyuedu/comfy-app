@@ -36,27 +36,27 @@
     留**地基那一份**（`probe-exe.ts`），master 侧那个文件内夹具删掉 —— 同一条判据不该有
     第二份实现（§12.18），而这份地基的另外两个消费方已经在用它；「探不到时打逐候选读数」
     也随之收进 `firstRunnableOrEmpty()`，两处调用点各写成一行。
-  - **CI 第一跑的读数与修法**（`cnb-ugs-1k5ooa6la`，红在「受影响用例」一格）：上面那句
-    「探不到时打一行读数」写的是 `console.log`，而 `tests/single-logger-channel.test.ts`
-    判的正是「除日志门面外，服务端库代码里没有直接写 console」—— 新增的
-    `src/lib/process/probe-exe.ts` 当场被点名（`expected [ 'src/lib/process/probe-exe.ts' ] to deeply equal []`）。
-    错不在那条判据：`console` 绕开 pino 的 redact 与 ERROR 镜像，这行读数本该走唯一通道。
-    改成 `logger.warn(...)`（`~/lib/core/logger`，它**刻意不带** `server-only`，
-    所以第三类登记的纯 Node 宿主那一侧不被说反）；`probe-exe.test.ts` 的断言随之从
-    「拦 console」改成「拦 logger」—— 拦 console 在实现改走 logger 之后会**静默收到空**，
-    那样红出来的会是一句指向不到真因的断言。
-  - **CI 第二跑的读数与修法**（`cnb-8a8-1k5op440e`，仍红在「受影响用例」一格）：上一轮换成
-    `logger.warn` 之后，`tests/host-ts-loads-in-node.test.ts` 当场红 ——
-    `src/lib/process/probe-exe.ts` 在真 Node 里 `ERR_MODULE_NOT_FOUND: Cannot find package '~'`。
-    根因不是 pino 缺 `server-only`（它确实没带），而是**加载形态**：本模块要被
-    `scripts/python-probe.mjs` 与平台侧 `node scripts/e2e-run.mjs` 直接 `import`，那一跳没有
-    `~` 别名解析器 —— 静态 import 写下一行日志的代价，是把整条链拖崩在**加载期**。
-    两条约束（「`lib` 里不许自己 `console`」与「真 Node 里必须加载得起来」）只剩一种同时成立的
-    形状：**本模块连日志通道都不碰**。读数改为注入 —— `FirstRunnableOptions.report`
-    （缺省不写），`lib` 只负责说清「哪个候选、什么原因」，往哪写由宿主决定：
-    `tests/check-file-structure.test.ts` 那两处 `process.stdout.write` 写出去（跑用例的人
-    要的是终端上那一眼），`.mjs` 宿主按自己的出口来。中间试过的两条弯路都留着当反例：
-    「拿不到通道就 `console.warn` 兜底」被 `single-logger-channel` 当场判红（那就是第二套
-    日志实现），「`logger.warn` 与 `report` 双出口并存」让真 Node 那一跳照旧崩在加载期 ——
-    一条静态 import 就足够把整条链拖死，这与它同时被注入多少个出口无关。
-    探测结论与「这行字落不落得下去」由此解耦，加载期少了一条能把它拖崩的边。
+  - **「那一行读数往哪写」踩了两脚，两次都红在平台侧**（同一条判据的两头）：
+    - 第一跑（`cnb-ugs-1k5ooa6la`）红在 `tests/single-logger-channel.test.ts`：
+      「探不到时打一行读数」写的是裸 `console.log`，而那条判据判的是「除日志门面外，
+      服务端库代码里没有直接写 console」—— `probe-exe.ts` 当场被点名。判据是对的：
+      `console` 绕开 pino 的 redact 与 ERROR 镜像（规范 07 §7.18.2.1）。
+    - 第二跑（`cnb-8a8-1k5op440e`）换成 `logger.warn(...)` 之后红在
+      `tests/host-ts-loads-in-node.test.ts`：本模块是 `.mjs` 宿主**直接加载**的跨宿主
+      地基层，裸 Node 只认相对说明符 —— 那行 `~/lib/core/logger` 让加载期报
+      `ERR_MODULE_NOT_FOUND: Cannot find package '~'`，E2E 崩在起跑线上。
+    - 两条判据不打架，同时满足的形状只有一个：**本模块一个日志实现都不 import**。
+      出口分两层，答的是两件不同的事 ——
+      `elevateLogLevel()` 注入的是**进程级**那条（应用侧 `process-launch.ts` 在加载时
+      接到 `~/lib/core/logger`，于是服务端可达的那条路上仍然只有一条通道、过 redact、
+      进面板）；`FirstRunnableOptions.report` 是**调用点级**那只眼睛（测试夹具 / 纯 Node
+      宿主要的是屏幕上那一行，logger 写到盘上去了）。没注入时**空转**而不是 `console`
+      —— 后者等于留一条绕过脱敏的后门。
+    - `probe-exe.test.ts` 的断言跟着出口形状走：从「拦 `console` / 拦 `logger`」改成
+      「注入收集器」。出口可换之后，前两种拦法都会**静默收到空**，红出来的会是一句
+      指不到真因的断言。
+    - 同批的两处收口：调用点 `report` 只写 `${line}` 加换行，**不再拼一次 `[probe]` 前缀**
+      —— 那一行是成品（前缀与「不是通过」由本模块给全），两边各拼一次会在终端上出现两个
+      `[probe]`。另有一条取舍被实测推翻、留作反例：「`logger.warn` 与 `report` **双出口
+      并存**」看似两全，但**一条静态 import 就足够**把整条跨宿主链拖死在加载期，与它同时
+      被注入了多少个出口无关 —— 出口的数量救不了加载期的说明符形态。

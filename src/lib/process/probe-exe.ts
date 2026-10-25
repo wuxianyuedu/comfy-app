@@ -27,20 +27,74 @@
 // 「测试侧要用它」这件事说反（那个入口就是一句 throw）。
 import { spawnSync } from "node:child_process";
 
-/* 探不到时那一行读数**不在这里写出去**。两条约束同时压在这一格：
+/* ── 「这行读数往哪写」：本模块**自己不写**，出口由宿主注入 ────────────────
  *
- *   · `tests/single-logger-channel.test.ts`：`src/lib/**` 是服务端可达的库代码，
- *     直接 `console` 会绕开 redact 脱敏与 ERROR 镜像（规范 07 §7.18.2.1）；
- *   · `tests/host-ts-loads-in-node.test.ts`：本模块要被真 Node **直接 `import`**
- *     （`scripts/python-probe.mjs`、平台侧 `node scripts/e2e-run.mjs`），而那一跳没有
- *     `~` 别名解析器 —— 静态 `import { logger } from "~/lib/core/logger"` 在**加载期**
- *     就是 `ERR_MODULE_NOT_FOUND: Cannot find package '~'`（平台侧 `cnb-8a8-1k5op440e`
- *     红的就是这一格）。
+ * 这一格踩过两次，两次都红在平台侧，而且看起来互相矛盾：
  *
- * 静态写通道、`console` 兜底、两边并存，三条都不成立。只剩一种形状：**本模块只把那一行
- * 说出来，往哪写由宿主注入**（`FirstRunnableOptions.report`，缺省不写）。
- * 于是探测结论与「这行字落不落得下去」解耦，加载期再没有一条能把它拖崩的边。
+ *   · 第一版写裸 `console.log` ⇒ `tests/single-logger-channel.test.ts` 点名本文件
+ *     （「除日志门面外，服务端库代码里没有直接写 console」）。那条判据是对的：服务端
+ *     可达的代码直写 `console` 就绕开 pino 的 redact 与 ERROR 镜像（规范 07 §7.18.2.1）。
+ *   · 第二版改成 `import { logger } from "~/lib/core/logger"` ⇒ 更隐晦地崩了：本模块是
+ *     `.mjs` 宿主**直接加载**的那条边界上的一员（`tests/host-ts-loads-in-node.test.ts`
+ *     拿真 Node 起一遍），而裸 Node 只认相对说明符 —— 加载期
+ *     `ERR_MODULE_NOT_FOUND: Cannot find package '~'`，E2E 整格崩在起跑线上。
+ *
+ * 两条判据不是打架：一条判「服务端可达的代码不许自建日志通道」，一条判「跨宿主地基层
+ * 必须能被裸 Node 加载」。同时满足的形状只有一个 —— **本模块一个日志实现都不 import**，
+ * 出口由宿主注入（{@link elevateLogLevel}）：应用侧（`process-launch.ts`）在加载时把它
+ * 接到 `~/lib/core/logger`；裸 Node 宿主与用例各注入自己的收集器。
+ *
+ * 没注入时的缺省出口是**空转**，刻意不是 `console`：
+ *   · 空转是「这条路没人接」，而 `console` 是「接了一条绕过脱敏的通道」—— 后者正是
+ *     上面那条判据要治的东西，留它当缺省等于留一个随时会被踩到的后门；
+ *   · 本仓每一处「探不到」都在**应用侧**或**用例里**，两者都已经/可以注入，
+ *     所以缺省空转不会让任何一条真实读数消失（有注入的用例逐条断言那行读数在）。
  */
+/** `LoggerTag` → 出口。 */
+type Sink = Record<LoggerTag, (message: string) => void>;
+
+/** 这行读数该被当成哪一级（`log` = 中性读数，`warn` = 「这一组没测」这件要人知道的事）。 */
+export type LoggerTag = "log" | "warn";
+
+const NO_SINK: Sink = { log: () => undefined, warn: () => undefined };
+
+let sink: Sink = NO_SINK;
+
+/**
+ * 把本模块的读数接到宿主的唯一日志通道上（应用侧在加载时就调，见 `process-launch.ts`）。
+ *
+ * 注入的是**两个函数**而不是一个 logger：本模块在类型层不认识 `~/lib/core/logger`
+ * （那条边在裸 Node 里加载不起来，见文件头），于是谁注入、按哪一级打，都由宿主决定。
+ * 返回一个恢复函数 —— 用例拿它还原，免得一个用例的注入漏到下一个用例。
+ *
+ * @param next 每个级别一个出口（缺哪个级别就沿用注入前那一份）
+ * @returns 还原到注入前那次设置
+ */
+export function elevateLogLevel(next: Partial<Sink> = {}): () => void {
+  const previous = sink;
+  sink = {
+    log: next.log ?? previous.log,
+    warn: next.warn ?? previous.warn,
+  };
+  return () => {
+    sink = previous;
+  };
+}
+
+/**
+ * 写一行读数（内部用，不导出）。
+ *
+ * `try` 不是为了吞错：注入进来的出口可能是宿主自己那条链（pino → 文件 / stdout），
+ * 而「这台机器上探不到某个工具」只是**读数**，它失败了也不该让探测本身抛异常 ——
+ * 那会把「判不了」升级成「判据炸了」，正是本模块要治的那一类。
+ */
+function emit(tag: LoggerTag, message: string): void {
+  try {
+    sink[tag](message);
+  } catch {
+    /* 读数写不出去不影响探测结论 */
+  }
+}
 
 /** 一次探测的三种结局（语义见文件头）。 */
 export type ProbeFailure =
@@ -134,24 +188,23 @@ export interface FirstRunnableOptions {
   /** 注入点：缺省真起进程（单测用它钉两个平台的候选顺序，不必装两套解释器）。 */
   probe?: (candidate: string, args: string[]) => ProbeOutcome;
   /**
-   * 探不到时那一行的出口（缺省不打）。
+   * 探不到时那一行的**第二只眼睛**（缺省不打）。
    *
-   * 为什么是注入而不是就地写：本模块在 `src/lib/**` 里，直接 `console` 会绕开脱敏与
-   * ERROR 镜像（`tests/single-logger-channel.test.ts`），而静态写 `logger` 会让它在真
-   * Node 里加载不起来（`tests/host-ts-loads-in-node.test.ts`）—— 两条判据的交叉处只剩
-   * 「由宿主决定往哪写」。用例与 `.mjs` 脚本要的都是 stdout 上那一行。
+   * 与 `emit()` 那条唯一日志通道不是二选一：那条走 `log/` 与面板（过 redact、看得见历史），
+   * 这条走调用方自己的终端 —— 测试夹具要的正是后者（跑用例的人盯的是屏幕，不是盘）。
+   * 不就地 `console.log` 的理由见文件头：本模块在 `src/lib/**` 里，服务端可达的库代码
+   * 直写 console 会绕开脱敏与 ERROR 镜像（`tests/single-logger-channel.test.ts`）。
    */
   report?: (line: string) => void;
 }
 
 /**
- * `firstRunnable().hit ?? ""`，并把探不到时那一行「哪个候选、什么原因」交给 `report`。
+ * `firstRunnable().hit ?? ""`，并在探不到时**打印一行「哪个候选、什么原因」**。
  *
  * 为什么要把「空串 = 不在场」这个约定也收进来：本仓的用例是拿一个常量当 `skipIf` 守卫
  * 用的（`it.skipIf(!psExe)`），所以「不在场」必须能直接表达成 `""`。而**判不了与判错了
  * 只差那一行读数** —— 没有它，下一次只看到一片 `skipped`，说不出是「这台机器没装」
  * 还是「有个同名的东西把它顶掉了」（ISSUE #2316 的现场）。两处调用点因此都只写一行。
- * 那一行**不在这里写出去**（往哪写由 `report` 决定，缺省不写），理由见文件头。
  *
  * @param options 见 `FirstRunnableOptions`
  * @returns 命中的候选名；一个都没命中时为 `""`（沿用 `skipIf(!x)` 的约定）
@@ -163,13 +216,21 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
   if (got.hit) return got.hit;
-  /* 出口由调用方给（缺省不打 —— 「探不到」仍如实返回成空串，调用方按 `skipIf(!x)` 处理）：
-   * 用例侧要 stdout 上那一眼，`.mjs` 脚本侧也是；两边各自决定，本模块不碰通道，
-   * 理由见文件头那段。命中时一次也不报 —— 一行「跳过」都没有却印一句「跳过」，比不印更误导。 */
-  options.report?.(
-    `[probe] 本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
-      describeProbeMisses(got.missed, got.timeouts),
-  );
+  /* 一行读数走**两条出口**，它们答的是两件不同的事：
+   *   · `emit("warn", …)` —— 应用侧的那条唯一日志通道（`process-launch.ts` 注入了
+   *     `~/lib/core/logger`，因此落 `log/` 面板、过 redact）。本模块自己**不** import
+   *     日志实现：那是跨宿主地基层，裸 Node 加载期会 `ERR_MODULE_NOT_FOUND`（见文件头）；
+   *   · `options.report` —— 调用方自己那只眼睛。测试夹具要的是**屏幕上**那一眼，
+   *     logger 写到盘上去了，跑用例的人在终端上是看不见的。 */
+  const line =
+    `本机没有可用的 ${options.label}，相关用例跳过（不是通过）：` +
+    describeProbeMisses(got.missed, got.timeouts);
+  emit("warn", `[probe] ${line}`);
+  try {
+    options.report?.(line);
+  } catch {
+    /* 同 emit：读数写不出去不影响探测结论 */
+  }
   return "";
 }
 
