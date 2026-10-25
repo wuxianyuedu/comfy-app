@@ -4,7 +4,12 @@
  * 密钥解析在服务端：浏览器只传条目名，留空的 apiKey 由服务端取已保存值。
  */
 
-export type UsageTestKind = "chat" | "image" | "video";
+/* 与「可标注的用途」同一张词表（ISSUE #2170「并成一份」）：本文件是浏览器侧
+ * 类型层、引不得 server 那份（它拉 getLLMConfig 与 node:fs），所以从双方都能
+ * 引的叶子 ~/lib/llm/types 派生 —— 值与类型都只有一处定义，别名不会再漂。 */
+import type { RemoteModelKind } from "~/lib/llm/types";
+
+export type UsageTestKind = RemoteModelKind;
 
 export interface UsageTestInput {
   kind: UsageTestKind;

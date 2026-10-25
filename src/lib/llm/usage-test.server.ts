@@ -26,15 +26,22 @@ import {
   saveMediaToLocalTemp,
 } from "~/lib/llm/video-task-util";
 import { isRecord } from "~/lib/is-record";
+import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "~/lib/llm/types";
 
 /** chat / 生图 / 生视频的单次调用超时（生视频提交后若走任务制则由
  *  video-task-util 轮询取回，不受此上限约束，见 VIDEO_POLL_TOTAL_MS）。 */
 export const CHAT_TIMEOUT_MS = 60_000;
 export const MEDIA_TIMEOUT_MS = 180_000;
 
-/** 允许的用途。 */
-export const USAGE_TEST_KINDS = ["chat", "image", "video"] as const;
-export type UsageTestKind = (typeof USAGE_TEST_KINDS)[number];
+/** 允许的用途 —— **与「可标注的用途」是同一张词表**（ISSUE #2170 业主拍板「并成一份」）。
+ *
+ *  此前这里是三份独立真相之一（另两份在 usage-test-client / usage-field-editor），
+ *  三处恰好等值全靠人记。并成一份的自动护栏：下方按 `Record<UsageTestKind,…>`
+ *  建的模板表（本文件按 kind 的分支、设置页弹窗的默认参数/标签表）在 tsc 下
+ *  **必须穷尽** —— 往 REMOTE_MODEL_KINDS 加一种（如 audio）而不同批补端点模板，
+ *  类型检查当场红，而不是运行时悄悄少一档。 */
+export const USAGE_TEST_KINDS = REMOTE_MODEL_KINDS;
+export type UsageTestKind = RemoteModelKind;
 
 /** 取一个 trim 过的字符串字段（缺省/类型不对一律给空串）。 */
 export function strField(rec: Record<string, unknown>, key: string): string {
