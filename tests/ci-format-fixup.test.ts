@@ -86,6 +86,8 @@ function harness(options: {
   args?: { delegate: boolean; ref: string; sha: string };
   delegateStatus?: number;
   lsRemote?: string;
+  /** PR 事件的合成环境；`null`（缺省）= 把 CNB_PULL_REQUEST_IID 清掉。 */
+  prEnv?: { iid: string; commit: string } | null;
 }) {
   const stub = makeGitStub({
     pushStatus: options.pushStatus,
@@ -93,31 +95,68 @@ function harness(options: {
   });
   const del = makeDelegateStub(options.delegateStatus);
   let listCalls = 0;
-  const r = runFormatFixup({
-    judge: () => options.judgeCode,
-    listUnformatted: () => {
-      listCalls += 1;
-      return listCalls === 1
-        ? options.unformatted
-        : (options.afterUnformatted ?? []);
-    },
-    write: () => true,
-    git: stub.git,
-    delegate: del.delegate,
-    /* 缺省是「不是委托口」：不传 args 时脚本会去读 process.argv，而 vitest 的 argv
-     * 里带 `--run` 那类参数 —— 那会让「本地形态」这类用例的行为随运行方式变。 */
-    args: options.args ?? { delegate: false, ref: "", sha: "" },
-    resolveSource:
-      options.resolveSource ??
-      (() => ({
-        kind: "ok" as const,
-        branch: "feat/x",
-        baseSha: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-      })),
-    baseSubject: options.baseSubject ?? "feat: something",
-    platformUser: options.platformUser ?? null,
-  });
+  const r = withCnbEnv(options.prEnv ?? null, () =>
+    runFormatFixup({
+      judge: () => options.judgeCode,
+      listUnformatted: () => {
+        listCalls += 1;
+        return listCalls === 1
+          ? options.unformatted
+          : (options.afterUnformatted ?? []);
+      },
+      write: () => true,
+      git: stub.git,
+      delegate: del.delegate,
+      /* 缺省是「不是委托口」：不传 args 时脚本会去读 process.argv，而 vitest 的 argv
+       * 里带 `--run` 那类参数 —— 那会让「本地形态」这类用例的行为随运行方式变。 */
+      args: options.args ?? { delegate: false, ref: "", sha: "" },
+      resolveSource:
+        options.resolveSource ??
+        (() => ({
+          kind: "ok" as const,
+          branch: "feat/x",
+          baseSha: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        })),
+      baseSubject: options.baseSubject ?? "feat: something",
+      platformUser: options.platformUser ?? null,
+    }),
+  );
   return { r, calls: stub.calls, delegated: del.got };
+}
+
+/**
+ * 在**受控的 CNB 环境**里跑一段。
+ *
+ * ⚠️ 这不是洁癖：`runFormatFixup` 的「哪条口」判据读 `CNB_PULL_REQUEST_IID`，而平台
+ * 侧跑用例时那个变量**就在进程环境里** —— 不隔离的话同一份用例本地绿、CI 上红
+ * （PR #2366 的 `cnb-l3e` 那一跑：本地的「直推」用例在平台上全走成了委托）。
+ * 判据要的是「给定这个环境得到那个动作」，所以环境由用例自己给。
+ *
+ * @param {{iid: string, commit: string} | null} pr PR 事件的合成环境；null = 清掉
+ * @param {() => T} body
+ * @returns {T}
+ */
+function withCnbEnv<T>(
+  pr: { iid: string; commit: string } | null,
+  body: () => T,
+): T {
+  const keys = ["CNB_PULL_REQUEST_IID", "CNB_COMMIT"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  if (pr) {
+    process.env.CNB_PULL_REQUEST_IID = pr.iid;
+    process.env.CNB_COMMIT = pr.commit;
+  } else {
+    delete process.env.CNB_PULL_REQUEST_IID;
+    delete process.env.CNB_COMMIT;
+  }
+  try {
+    return body();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 }
 
 describe("prettier 自动修复回写（红 ⇒ bot 推 format-only 提交）", () => {
@@ -352,8 +391,18 @@ describe("resolveSourceTarget：ls-remote 按 CNB_COMMIT 反查源分支", () =>
 describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix）", () => {
   const SHA = "0cf58f5dde4af9a4d4aba48a7f8e4d089a08e0d5";
 
-  /** PR 事件的那几个环境变量（同一个 try/finally 收回去，别泄给别的用例）。 */
-  function withPrEnv<T>(iid: string, sha: string, body: () => T): T {
+  /**
+   * PR 事件的合成环境（同一个 try/finally 收回去，别泄给别的用例）。
+   *
+   * ⚠️ 它必须包在 `harness()` **外面**：`harness` 内部按 `prEnv` 再收一次环境，
+   * 而它收回的是「进 `harness` 那一刻的值」—— 写在里面等于把自己写的那份盖掉。
+   */
+  function withPrEnv<T>(
+    iid: string,
+    sha: string,
+    body: () => T,
+    opts: { slug?: boolean } = {},
+  ): T {
     const keys = [
       "CNB_PULL_REQUEST_IID",
       "CNB_COMMIT",
@@ -363,8 +412,13 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
     const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
     process.env.CNB_PULL_REQUEST_IID = iid;
     process.env.CNB_COMMIT = sha;
-    process.env.CNB_REPO_SLUG = "moon-read/comfy-app-t3";
-    process.env.CNB_REPO_URL = "";
+    if (opts.slug === false) {
+      delete process.env.CNB_REPO_SLUG;
+      delete process.env.CNB_REPO_URL;
+    } else {
+      process.env.CNB_REPO_SLUG = "moon-read/comfy-app-t3";
+      process.env.CNB_REPO_URL = "";
+    }
     try {
       return body();
     } finally {
@@ -375,6 +429,9 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
     }
   }
 
+  /** PR 事件那几条用例的合成环境（同时喂给 `harness` 的 `prEnv`）。 */
+  const prEnvOf = (sha: string) => ({ iid: "2359", commit: sha });
+
   it("PR 事件 ⇒ 一个字节都不推，交出「哪条分支 / 哪个 sha」", () => {
     withPrEnv("2359", SHA, () => {
       /* 委托前仍要反查分支名（`resolveSource` 只给直推那一支用，委托这一支走的是
@@ -384,6 +441,7 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
         unformatted: ["src/a.ts"],
         platformUser: "月读",
         lsRemote: `${SHA}\trefs/heads/feat/x\n`,
+        prEnv: prEnvOf(SHA),
       });
       expect(r.exitCode).toBe(0);
       expect(r.action).toBe("delegated");
@@ -411,6 +469,7 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
         platformUser: "月读",
         args: { delegate: true, ref: "feat/x", sha: SHA },
         lsRemote: `${SHA}\trefs/heads/feat/x\n`,
+        prEnv: prEnvOf(SHA),
       });
       expect(r.exitCode).toBe(0);
       expect(r.action).toBe("pushed");
@@ -430,6 +489,7 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
         unformatted: ["src/a.ts"],
         platformUser: "月读",
         args: { delegate: true, ref: "", sha: "" },
+        prEnv: prEnvOf(SHA),
       });
       expect(r.exitCode).toBe(1);
       expect(r.action).toBe("source-unresolved");
@@ -446,6 +506,7 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
         platformUser: "月读",
         delegateStatus: 1,
         lsRemote: `${SHA}\trefs/heads/feat/x\n`,
+        prEnv: prEnvOf(SHA),
       });
       expect(r.exitCode).toBe(1);
       expect(r.action).toBe("delegate-failed");
@@ -454,24 +515,23 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
   });
 
   it("没有 repo slug ⇒ 委托发不出去，可读地红（不静默跳过回写）", () => {
-    withPrEnv("2359", SHA, () => {
-      const saved = { ...process.env };
-      delete process.env.CNB_REPO_SLUG;
-      delete process.env.CNB_REPO_URL;
-      try {
+    withPrEnv(
+      "2359",
+      SHA,
+      () => {
         const { r, delegated } = harness({
           judgeCode: 1,
           unformatted: ["src/a.ts"],
           platformUser: "月读",
+          prEnv: prEnvOf(SHA),
         });
         expect(r.exitCode).toBe(1);
         expect(r.action).toBe("delegate-failed");
         expect(delegated).toHaveLength(0);
         expect(r.lines.join("\n")).toContain("CNB_REPO_SLUG");
-      } finally {
-        Object.assign(process.env, saved);
-      }
-    });
+      },
+      { slug: false },
+    );
   });
 });
 

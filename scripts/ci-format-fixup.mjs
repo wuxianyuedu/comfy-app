@@ -317,6 +317,11 @@ export function delegatePush(params) {
  * @returns {{ kind: "ok", branch: string, baseSha: string } | { kind: "error", reason: string }}
  */
 export function resolveSourceTarget(gitFn) {
+  /* 「哪条口」只有 `CNB_PULL_REQUEST_IID` 能答（它只在 PR 事件上有值）。但要注意：
+   * **本地环境里也可能有它**（人导出过、或某个包装脚本带进来），而那种场合
+   * 「我不推、替你去发一条 start-build」是错的 —— 委托的目标是平台上的那条流水线，
+   * 本地既没有它要的 sha 也没有权限面。所以委托这一支还要求 `platformUser`（本地形态
+   * 已经在上面 return 了，这里再点名一次，让「谁有资格委托」不必读者自己推）。 */
   const iid = String(process.env.CNB_PULL_REQUEST_IID ?? "").trim();
   const cnbCommit = String(process.env.CNB_COMMIT ?? "").trim();
   if (iid) {
@@ -606,7 +611,7 @@ export function runFormatFixup(deps = {}) {
    *   · `--delegate`（`api_trigger_formatfix` 那一格）⇒ **它就是回写口**，自己推；
    *   · PR 事件 ⇒ 令牌只有 `repo-code:r`，不推 —— 委托给上面那一条；
    *   · `push` 事件 ⇒ 令牌 `rw`，与委托口同一套直推。 */
-  if (iid && !args.delegate) {
+  if (iid && platformUser && !args.delegate) {
     if (!delegateSupportsSlug()) {
       log(
         "[format-fixup] × 委托发不出去：CNB_REPO_SLUG / CNB_REPO_URL 都不在场（判不出 repo）。\n" +
