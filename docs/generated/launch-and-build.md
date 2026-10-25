@@ -175,11 +175,15 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
 ### 1.2 comfy-cli 运行环境（脚本侧，按需执行）
 
 raw UI-format（liblib 子图）工作流由 `src/lib/comfyui/executor-cli.ts` 交给项目内的
-comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comfy-cli\Scripts\python.exe`。
-`scripts/setup-comfy-cli-venv.ps1` 负责建 venv / 升级 / 节流，判断逻辑全部在脚本里。
-原先由 Python 启动器在每次启动时后台触发它；启动器移除后按需手工执行
-（`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv.ps1`，
-加 `-Force` 跳过节流）：
+comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comfy-cli` 下的解释器
+（读侧 `src/lib/comfyui/comfy-cli-python.ts` 按平台认 `Scripts\python.exe` / `bin\python`）。
+**逻辑全部在 `scripts/setup-comfy-cli-venv.mjs`**（跨平台唯一实现，ISSUE #2197）；
+`scripts/setup-comfy-cli-venv.ps1` 是 Windows 薄壳入口（定位项目根 → 调用 .mjs，
+硬规则 12 形状）。原先由 Python 启动器在每次启动时后台触发它；启动器移除后按需手工执行
+（`pnpm setup:comfy-cli-venv`，或双击入口；`--force` / `-Force` 跳过节流）：
+POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `python3-venv` 包里）
+时，脚本打印可复制的安装指引后非零退出 —— **不静默安装**（装系统包要 sudo，不是脚本
+该做的事；Windows 侧的 Python 安装同样由人做，两侧对称）。
 
 | 环境状态                         | 动作                                                      |
 | -------------------------------- | --------------------------------------------------------- |
@@ -3170,6 +3174,7 @@ sidecar」两种不同形态的失败。
 | 端口推导跨语言自检                                                            | `scripts/check-app-port-vectors.ps1`                                                                | `scripts/check-app-port-vectors.cjs`                                                                                                                                           |
 | 生成 / 补齐 `.env`                                                            | `scripts/prepare-local-run.ps1`（第 4 步）                                                          | `scripts/env-init.mjs`（`pnpm env:init`）                                                                                                                                      |
 | 建库（Drizzle 表结构同步）                                                    | `scripts/prepare-local-run.ps1`（前置）/ 编排器预检                                                 | `scripts/db-push.mjs`（`pnpm db:push`）                                                                                                                                        |
+| comfy-cli 的 Python venv（建 / 升级 / 节流，#2197 前只有 Windows 侧）         | `scripts/setup-comfy-cli-venv.ps1`（薄壳 → 调用 .mjs）                                              | `scripts/setup-comfy-cli-venv.mjs`（`pnpm setup:comfy-cli-venv`；解释器下限唯一定义在 `scripts/ci-env-probe.mjs` 的 `PYTHON_MIN_VERSION`）                                      |
 | 节点镜像的操作计划（造镜像 / 装进宿主机 / 钉身份，装机提速）                  | `scripts/prepare-local-run.ps1`（跑门禁链时一并给出读数）                                           | `scripts/ci-image-plan.mjs`（`pnpm ci:image-plan`，契约测试 `tests/ci-image-plan.test.ts`）                                                                                    |
 | `pnpm` 可用性自检与修复（工具链门禁的独立入口）                               | `scripts/prepare-local-run.ps1`（第 2/3 步）                                                        | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`）                                                                                                                   |
 | `src/lib` 的 Node-only 声明与可达性（规范 §18.4）                             | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`）                                                 |

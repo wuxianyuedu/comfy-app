@@ -160,6 +160,8 @@ import {
   rerunReport,
   unverifiedReport,
 } from "./affected-launch-rerun-report.mjs";
+/* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
+import { resolveCiWorkers } from "./ci-load.mjs";
 import os from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createRequire } from "node:module";
@@ -236,16 +238,6 @@ export function writeFilesManifest(dir, files) {
 export const SAFE_ARGV_BUDGET = 24_000;
 
 /**
- * 钩子档的并发（全量 `pnpm test` 仍走 `vitest.config.ts` 里的 8，不受这里影响）。
- *
- * 为什么是 4：钩子里 A(tsc)、B(eslint)、D(组内串行的静态判据) 与 C 并行，
- * 再按配置里的 8 起 forks 就会抢不过来 —— 现场不是用例红而是
- * `Failed to start forks worker / Timeout waiting for worker to respond`
- * （几百条全过、退出码非零）。口径与推导见规范 §13.5.8。
- */
-export const DEFAULT_MAX_WORKERS = 4;
-
-/**
  * 「分不出哪份是超时」时逐文件补跑的**上限**（份数）。
  *
  * 为什么要有上限：逐文件补跑是一份一次进程启动（约 1–3s），而这条路只在
@@ -303,27 +295,42 @@ export function readRetrySuiteFailures(input) {
  *
  * ⚠️ 这一层是**纯函数**：环境变量由调用点读进来（`main` 那一处），不在这里兜底 ——
  * 否则用例里「不给值 = 走默认」这一格会被用例进程自己继承到的环境变量污染，
- * 而那种失效是「判据看着跑过、其实测的是外部环境」。
+ * 而那种失效是「判据看着跑过、其实测的是外部环境」。**兜底并发同样由调用点注入**
+ * （`resolveCiWorkers().workers`，唯一出处 `scripts/ci-load.mjs`）—— 这里以前自带
+ * 一条 `DEFAULT_MAX_WORKERS = 4`，与 `vitest.config.ts` 的 8、`ci-load.mjs` 的按核折算
+ * 凑成同一句判断的三份副本，于是「单条链别占满整台机」那一档压住了平台两格、
+ * 本地那一跳照旧铺开；收口见 ISSUE #2324。
+ *
+ * @param {string | undefined} raw `COMFY_PRECOMMIT_MAX_WORKERS` 的原值
+ * @param {number} fallback 调用点给的兜底并发（必须 ≥1 的整数）
+ * @returns {{workers: number, note: string | null}}
  */
-export function resolveMaxWorkers(raw) {
+export function resolveMaxWorkers(raw, fallback) {
+  /* 兜底不是可选参数：漏传就当**没跑起来**，不许悄悄退回某个默认并发 ——
+   * 那会正好像这次修的那三副本一样，再长出一处没人管的数字。 */
+  if (!Number.isInteger(fallback) || fallback < 1) {
+    throw new Error(
+      `resolveMaxWorkers 需要调用点注入兜底并发（≥1 的整数），收到 ${String(fallback)}`,
+    );
+  }
   if (raw === undefined || raw.trim() === "") {
-    return { workers: DEFAULT_MAX_WORKERS, note: null };
+    return { workers: fallback, note: null };
   }
   const parsed = Number(raw.trim());
   if (!Number.isInteger(parsed) || parsed < 1) {
     return {
-      workers: DEFAULT_MAX_WORKERS,
-      note: `COMFY_PRECOMMIT_MAX_WORKERS="${raw}" 不是 ≥1 的整数，按默认 ${DEFAULT_MAX_WORKERS} 办`,
+      workers: fallback,
+      note: `COMFY_PRECOMMIT_MAX_WORKERS="${raw}" 不是 ≥1 的整数，按默认 ${fallback} 办`,
     };
   }
-  if (parsed === DEFAULT_MAX_WORKERS) {
-    return { workers: DEFAULT_MAX_WORKERS, note: null };
+  if (parsed === fallback) {
+    return { workers: fallback, note: null };
   }
   return {
     workers: parsed,
     note:
       `按 COMFY_PRECOMMIT_MAX_WORKERS 用 --maxWorkers=${parsed}` +
-      `（默认 ${DEFAULT_MAX_WORKERS}；这只调并发，不动任何判据）`,
+      `（默认 ${fallback}；这只调并发，不动任何判据）`,
   };
 }
 
@@ -516,6 +523,7 @@ async function main(argv) {
     const entry = resolveVitestEntry();
     const { workers, note } = resolveMaxWorkers(
       process.env.COMFY_PRECOMMIT_MAX_WORKERS,
+      resolveCiWorkers().workers,
     );
     process.stderr.write(
       "[affected-launch] --full：按名字要全量（**不经**暂存区解析、不拼位置参数，\n" +
@@ -560,6 +568,7 @@ async function main(argv) {
   const entry = resolveVitestEntry();
   const { workers, note } = resolveMaxWorkers(
     process.env.COMFY_PRECOMMIT_MAX_WORKERS,
+    resolveCiWorkers().workers,
   );
   if (note) process.stderr.write(`[affected-launch] ${note}\n`);
   /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`（每次新建、随 trap 删除、不在检出里）。
@@ -665,8 +674,10 @@ async function main(argv) {
  * @param {string[]} chunk 本块的用例路径
  * @param {{entry: string, workers?: number, junitDir?: string, chunkId?: number,
  *          spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>, waitBudget?: {deadline: number}, onUnverified?: (files: string[]) => void, onAttempt?: (record: {outcome: string, waitedMs?: number, settled?: boolean}) => void}} deps
- *   `workers` 默认 `DEFAULT_MAX_WORKERS`（调用点由 `resolveMaxWorkers` 给出）——
+ *   `workers` **默认取自唯一出处** `ci-load.mjs`（`resolveCiWorkers().workers`）——
  *   这一层**只读它当首跑的并发**，复跑一律 `--no-file-parallelism`（降负载那一半）。
+ *   以前这里默认一条本地常数 `DEFAULT_MAX_WORKERS = 4`，与 `vitest.config.ts` 的 8
+ *   是同一句判断的两份副本；常数撤掉后默认值改从 `ci-load` 推导（ISSUE #2324）。
  *   `junitDir` + `chunkId` 是分文件耗时的落点（钩子里传 `$LOGD`；不给就一个字都不加，
  *   见 `junitReportArgs` 那三个被实测钉住的形状）。
  *   `waitBudget` 是多块之间**共享**的等待截止时刻（默认单块自己一份，供调用点收成一份）。
@@ -677,7 +688,12 @@ export async function runChunk(chunk, deps) {
   const spawn = deps.spawn ?? spawnVitest;
   // 每一块都往收尾那份账里记一条（`rerunReport`）；调用点不给就不记，判决本身不受影响。
   const report = deps.onAttempt ?? (() => {});
-  const { entry, workers = DEFAULT_MAX_WORKERS, junitDir, chunkId = 0 } = deps;
+  const {
+    entry,
+    workers = resolveCiWorkers().workers,
+    junitDir,
+    chunkId = 0,
+  } = deps;
   const res = spawn(entry, [
     "run",
     ...junitReportArgs(junitDir, chunkId, 1),

@@ -1358,38 +1358,24 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
     ).toContain("src-tauri/target/");
   });
 
-  it("首帧看护的预算与间隔同档（不再有跨类型相乘的余地）", () => {
+  it("首帧看护的超时预算由 poll_clock 持有 —— 「两常数相乘」的旧形状不得回潮（#2328 / #2192）", () => {
     const rust = readFileSync(
       join(process.cwd(), "src-tauri", "src", "lib.rs"),
       "utf8",
     );
-    const typeOf = (name: string): string => {
-      const m = new RegExp(`const ${name}: ([A-Za-z0-9]+) =`).exec(rust);
-      if (!m) throw new Error(`lib.rs 里找不到 ${name} 的常量声明`);
-      return m[1]!;
-    };
-    /* 首帧看护的间隔常量仍在（快段 250ms），它单独一个不存在跨类型相乘。
-     * 与 #2192 之前不同：当时它和「上限」相乘（`PROBE_ATTEMPTS * PROBE_INTERVAL_MS`
-     * 报 `expected u32, found u64`），两个常量的类型档必须同档。 */
-    expect(typeOf("PROBE_INTERVAL_MS")).toBe("u64");
-    /* 预算与间隔如今都由 `poll_clock::PollClock` 以 `Duration` 持有 —— 预算那一维
-     * 不再是一个「拍数」常量，于是「上限 × 间隔」这个形状在源码里**不存在**了。
-     * 这正是原来那条用例要防的编译错误（E0277）如今被类型系统直接挡住的形态：
-     * 拍数与间隔不再相乘，就没有跨类型相乘的余地。
-     *
-     * 形状扫的是**剥掉注释后的代码** —— 注释里正当会出现「250ms × 480」这类
-     * 叙述（那是在讲退役前的旧账），拿原文去匹配就是自打自。 */
-    expect(rust).toContain("poll_clock::PollClock::with_backoff(");
-    /* 退役的符号不许回来（它只在注释里出现 —— 剥注释后就该没有）。 */
-    expect(stripComments(rust)).not.toContain("PROBE_ATTEMPTS");
-    /* 首帧看护那一段里不许再有「两个常量相乘」：那正是 E0277 的形状。
-     * 判据只盯首帧看护函数（`watch_main_first_paint`）的函数体 —— 全仓其他位置
-     * 相乘的是别的常量（Windows API 的标志位等），不在这个地雷的范围里。 */
-    const watchBody = /fn watch_main_first_paint[\s\S]*?\n}/.exec(
-      stripComments(rust),
+    // 旧形状：`PROBE_ATTEMPTS * PROBE_INTERVAL_MS`（u32 * u64 的 E0277 地雷）与
+    // 「看护只在该支自己睡」的事故同源 —— #2192 把预算收进 poll_clock（墙钟
+    // `Instant`），相乘与手写计数一起退役。这条钉住退役不回潮：
+    // ① 常数不再存在；② 超时日志的秒数来自 `clock.budget_secs()`。
+    /* 形状扫的是**剥掉注释后的代码** —— 注释里正当会出现「PROBE_ATTEMPTS ×
+     * PROBE_INTERVAL_MS」这类退役前的旧账叙述（那是在讲它为什么退役），
+     * 拿原文去匹配就是自打自。 */
+    const code = stripComments(rust);
+    expect(code, "常数声明不得回来").not.toMatch(/const PROBE_ATTEMPTS/);
+    expect(code, "相乘表达式不得回来").not.toContain(
+      "(PROBE_ATTEMPTS * PROBE_INTERVAL_MS)",
     );
-    expect(watchBody, "lib.rs 里找不到 watch_main_first_paint").not.toBeNull();
-    expect(watchBody?.[0] ?? "").not.toMatch(/[A-Z_]{3,}\s*\*\s*[A-Z_]{3,}/);
+    expect(rust).toContain("clock.budget_secs()");
   });
 });
 
