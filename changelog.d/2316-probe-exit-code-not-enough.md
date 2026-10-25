@@ -36,3 +36,12 @@
     留**地基那一份**（`probe-exe.ts`），master 侧那个文件内夹具删掉 —— 同一条判据不该有
     第二份实现（§12.18），而这份地基的另外两个消费方已经在用它；「探不到时打逐候选读数」
     也随之收进 `firstRunnableOrEmpty()`，两处调用点各写成一行。
+  - **CI 第一跑的读数与修法**（`cnb-ugs-1k5ooa6la`，红在「受影响用例」一格）：上面那句
+    「探不到时打一行读数」写的是 `console.log`，而 `tests/single-logger-channel.test.ts`
+    判的正是「除日志门面外，服务端库代码里没有直接写 console」—— 新增的
+    `src/lib/process/probe-exe.ts` 当场被点名（`expected [ 'src/lib/process/probe-exe.ts' ] to deeply equal []`）。
+    错不在那条判据：`console` 绕开 pino 的 redact 与 ERROR 镜像，这行读数本该走唯一通道。
+    改成 `logger.warn(...)`（`~/lib/core/logger`，它**刻意不带** `server-only`，
+    所以第三类登记的纯 Node 宿主那一侧不被说反）；`probe-exe.test.ts` 的断言随之从
+    「拦 console」改成「拦 logger」—— 拦 console 在实现改走 logger 之后会**静默收到空**，
+    那样红出来的会是一句指向不到真因的断言。
