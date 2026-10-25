@@ -2093,13 +2093,14 @@
 master:
   # PR 端的全套门禁：PR 不合并就不该结束，这里一步不省。
   pull_request:
-    # 两个 `<<:` 是有意分开写的：`*common` 是 runner / lock / env（三条流水线共用），
+    # 两个锚点写在一个合并键里：`*common` 是 runner / lock / env（三条流水线共用），
     # `*pr_fail_stage` 是**这一条流水线独有**的那一档 `endStages`（形态与理由见那个锚点）。
-    # ⚠️ 别合并成 `<<: [*common, *pr_fail_stage]`：形态判据按 `- <<: *x` 这一行数锚点引用
-    # （`tests/no-platform-ci-config.test.ts`：引用数必须等于带 `stages:` 的流水线数），
-    # 流式写法会让它数少一条、当场红 —— 那条红问的是「有没有哪条流水线漏接 `*common`」。
-    - <<: *common
-      <<: *pr_fail_stage
+    # ⚠️ 不能写成两行 `<<:`：同一层出现两个同名键是**非法 YAML**（`yaml` 解析器当场
+    # `Map keys must be unique`），而它坏掉的方式是静默的 —— 两个键里只有一个生效，
+    # 看上去配置完全正常。形态判据按 `- <<: *x` 数锚点引用（`tests/no-platform-ci-config.test.ts`
+    # 要求引用数等于带 `stages:` 的流水线数），所以流式写法不被那条判据认出来时，
+    # **要改的是判据的解析面，不是把锚点拆回去**。
+    - <<: [*common, *pr_fail_stage]
       name: 质量门禁
       stages: *gates
 

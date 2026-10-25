@@ -30,6 +30,7 @@ import {
 } from "../scripts/ci-pr-failure-issue.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
+
 const ENTRY = path.join(ROOT, "scripts", "ci-pr-failure-issue.mjs");
 
 type StageRow = { id: string; name: string; status: string };
@@ -463,10 +464,43 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
   it("PR 那条流水线真的引入了这个锚点（写了锚点却没人引用 = 永远不跑）", () => {
     const at = CONFIG.indexOf("  pull_request:");
     const body = CONFIG.slice(at, at + 500);
-    /* 两个独立合并键，不是 `<<: [*a, *b]`：形态判据按 `- <<: *x` 数锚点引用
-     * （`tests/no-platform-ci-config.test.ts` 要求引用数等于带 `stages:` 的流水线数），
-     * 流式写法会被数少一条、当场红。 */
-    expect(body).toContain("    - <<: *common\n      <<: *pr_fail_stage");
+    /* 两个锚点合在**一个**合并键里：同一层写两行 `<<:` 是非法 YAML（`yaml` 解析器当场
+     * `Map keys must be unique`），而它坏掉的方式是静默的 —— 两个键只有一个生效。
+     * 所以这里钉的是流式形态，不是「两行」。 */
+    expect(body).toContain("- <<: [*common, *pr_fail_stage]");
+  });
+
+  it("锚点真的落在流水线项那一层（写了锚点却没人引用 = 永远不跑）", () => {
+    const at = CONFIG.indexOf("  pull_request:");
+    expect(at).toBeGreaterThan(0);
+    const body = CONFIG.slice(at, CONFIG.indexOf("\n  push:", at));
+    expect(
+      body,
+      "`pull_request` 那条流水线没有引用 `*pr_fail_stage` —— 锚点写了也是白写",
+    ).toContain("- <<: [*common, *pr_fail_stage]");
+    expect(body, "`*gates`（串行链）也不许把它带回来").not.toContain(
+      "PR 失败立案",
+    );
+  });
+
+  /**
+   * 缩进是**语义**：`endStages:` 挂在哪一层，决定平台认不认它是这条流水线的收尾档。
+   *
+   * 前面那些断言判的是「文本里有那段字」，而缩进错一格在它们眼里是**绿**的 ——
+   * 它会变成一个谁也不认识的字段，平台照读照跑，这一格永远不执行。
+   * 判据按锚点里那一层的缩进认：`endStages:` 是 2 空格（锚点展开进流水线项那一层），
+   * 它的格是 4 空格。
+   */
+  it("锚点里 `endStages:` 的缩进是流水线项那一层，格在它下面一层", () => {
+    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
+    expect(anchorAt).toBeGreaterThan(0);
+    const lines = CONFIG.slice(anchorAt).split("\n");
+    const endAt = lines.findIndex((l) => l === "  endStages:");
+    expect(
+      endAt,
+      "`*pr_fail_stage` 里没有 2 空格的 `endStages:` —— 它被挂到了错的那一层",
+    ).toBeGreaterThan(0);
+    expect(lines[endAt + 1]).toBe("    - name: PR 失败立案");
   });
 
   it("**不是** `failStages`：那一档只在红时跑，「这一格自己挂了」会一起消失", () => {
