@@ -248,6 +248,12 @@ export function runRerunCiStage(ctx) {
   }
   const sha = run("git", ["rev-parse", "HEAD"]).stdout.trim();
   log(`[ship] ✓ 已在 ${branch} 推一个空提交（${short(sha)}）触发新 build`);
+  /* 意图这句**由发起方说**：钩子在成功时只汇成一行「入选档位全部通过」，判据自己那句
+   * 只有单独跑它、或它判红时才看得见 —— 所以「谁改的口径」这件事写在这里，不留在注释里。 */
+  log(
+    `[ship]   那一跳带 ${EMPTY_COMMIT_ENV}=1：D0 里读暂存区的两步按「空提交没有可判的对象」收` +
+      "（口径 scripts/intentional-empty-commit.mjs，规范 §13.5.5 末段）。",
+  );
   log("[ship]   稍后用 pnpm ship --diagnose 看这一跑的结果。");
   return CODE.GREEN;
 }

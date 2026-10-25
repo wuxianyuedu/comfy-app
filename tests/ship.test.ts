@@ -5513,12 +5513,14 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
   }
 
   it("提交那一调带上刻意空提交的旗标（不带 = 这条路还是死的）", () => {
-    const { code, seen } = rerunIo({});
+    const { code, seen, log } = rerunIo({});
     const commit = seen.find((c) => c.args[0] === "commit");
     expect(commit, "没有伸手去 commit").toBeTruthy();
     expect(commit!.args).toContain("--allow-empty");
     expect(commit!.opts?.env?.[EMPTY_COMMIT_ENV], "旗标没带上，D0 仍会退 2").toBe("1");
     expect(code).toBe(0);
+    // 成功时钩子只留一行「入选档位全部通过」⇒ 这枚旗标由发起方在回执里说出口（读者在那一屏）。
+    expect(log).toContain(EMPTY_COMMIT_ENV);
     // push 那一跳不带旗标：它是 git 动作，不是门禁的输入。
     const push = seen.find((c) => c.args[0] === "push");
     expect(push?.opts?.env?.[EMPTY_COMMIT_ENV]).toBeUndefined();
