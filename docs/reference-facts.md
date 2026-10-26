@@ -162,7 +162,8 @@
 ## 3. 校验范围
 
 > `pnpm doc:check` 校验纳入 `SCOPED_DOCS` 的文档集合，现已**全量纳入** `docs/standards/`
-> 的规范正文（01~18 章）与 `docs/guides/` 的规范指南。**篇数不在这里记账**：
+> 的规范正文（01~18 章）、`docs/guides/` 的规范指南与 `docs/product/` 的产品需求文档。
+> **篇数不在这里记账**：
 > `scripts/doc-facts.cjs` 的 `SCOPED_DOCS` 就是那份清单，多一篇少一篇都以它为准
 > （「全量」由 §3.1 的校验范围守卫机器判定：新增规范文档未登记即报错，不再靠人记得）：
 >
@@ -179,6 +180,9 @@
 > - **guides 功能流程图**：`feature-workshop-flow.md`、`feature-workflow-library-flow.md`
 >   （与规范同样纳入：图里出现的路径 / 值若与源码脱钩，读者会照着**一张过期的图**
 >   把控方向，比没有这张图更糟）
+> - **product 产品需求文档**：`README.md`、`overview.md`、`feature-catalog.md`、
+>   `feature-specs.md`（ISSUE #2421：与流程图同理由纳入 —— 需求条目大量引用代码落点，
+>   漂了就会指着一个不存在的实现说「需求已上线」）
 >
 > **不纳入**：`docs/audits/`（过程文件 —— 它**不是**「没人管」：台账的引用漂移由
 > `tests/audits-doc-references.test.ts` 管，判的是「点名一份**已删的棘轮基线**时必须在
@@ -210,7 +214,7 @@
 > **未登记的新文档会被静默跳过**——里面写死过期端口也不会报错。现在由脚本硬性
 > 判定，不再依赖人记得登记。
 
-`pnpm doc:check` 会遍历 `docs/standards/` 与 `docs/guides/` 下的每个 `.md`：
+`pnpm doc:check` 会遍历 `docs/standards/`、`docs/guides/` 与 `docs/product/` 下的每个 `.md`：
 
 | 情形                                                                     | 结果                                             |
 | ------------------------------------------------------------------------ | ------------------------------------------------ |
