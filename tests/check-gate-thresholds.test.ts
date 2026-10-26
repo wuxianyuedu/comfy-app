@@ -391,3 +391,41 @@ describe("真仓自证：这本账现在必须与源码一致", () => {
     expect(ledger.entries.length).toBeGreaterThanOrEqual(15);
   });
 });
+
+describe("扫描根：门禁链按名字调起的判定脚本也要进面（ISSUE #2383）", () => {
+  const root = path.resolve(__dirname, "..");
+  const chain = new Set(
+    (
+      require("../scripts/gate-chain-scripts.cjs") as {
+        gateChainScripts: () => Set<string>;
+      }
+    ).gateChainScripts(),
+  );
+
+  it("共享实现只有一份：两个消费方都 require gate-chain-scripts.cjs（§12.12）", () => {
+    for (const consumer of [
+      "scripts/check-gate-executors.cjs",
+      "scripts/check-gate-thresholds.cjs",
+    ]) {
+      expect(
+        readFileSync(path.join(root, consumer), "utf8"),
+        `${consumer} 应当从 gate-chain-scripts.cjs 取链`,
+      ).toContain('require("./gate-chain-scripts.cjs")');
+    }
+  });
+
+  it("名字不叫 check- 的链上判据在扫描根里（#1444 残活 A / #1451 的那两份）", () => {
+    expect(chain.has("shell-gate.mjs")).toBe(true);
+    expect(chain.has("storybook-check.mjs")).toBe(true);
+    /* 链上的每份脚本都应被 scanJudgeFiles 收进 —— 用真仓的判定脚本入口跑一遍，
+     * 断的是「扩面之后链外没有藏带顶层数值的判据」这一格由共享实现保证。 */
+    const filesToScan = new Set([
+      ...[...chain].map((n) => `scripts/${n}`),
+      ...readdirSync(path.join(root, "scripts"))
+        .filter((f) => /^check-.*\.cjs$/.test(f))
+        .map((f) => `scripts/${f}`),
+    ]);
+    expect(filesToScan.has("scripts/shell-gate.mjs")).toBe(true);
+    expect(filesToScan.has("scripts/check-file-structure.cjs")).toBe(true);
+  });
+});

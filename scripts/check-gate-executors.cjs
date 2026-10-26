@@ -60,6 +60,7 @@ const {
   walkForScan,
   vanishedNote,
 } = require("./gate-scan-read.cjs");
+const { gateChainScripts } = require("./gate-chain-scripts.cjs");
 
 /** 扫描期间消失的 `tests/` 文件数（由 `executorSources` 累加，结论行打印）。 */
 let vanishedTests = 0;
@@ -109,68 +110,6 @@ const GATE_NAME_PREFIXES = [
   "render-doc-placeholders",
   "lib-node-only-scan",
 ];
-
-/**
- * 门禁链里被按名字调起的 `scripts/<x>` 全表（口径 ① 的输入）。
- *
- * **只读「门禁步骤位置」，不读文件全文** —— 这一条是实测撞出来的：全文匹配会把
- * 注释里提到的、被本地 import 的、以及散文里当占位符举例的（`x.cjs` / `xxx.cjs`）
- * 一网打进，于是 `affected-tests.mjs`（清单库）、`install-git-hooks.mjs`（postinstall）、
- * `quality-gate.mjs`（编排器）、`quality-gate-shared.mjs`（共享常量）全被当成判据。
- * 下面三个位置才是「判据被当判据用」的事实：
- *   · `.githooks/pre-commit` 的 `run "<标签>" node scripts/<x>` 步骤行；
- *   · `scripts/quality-gate.mjs` 的 `args: ["../scripts/<x>"]` gate 表项；
- *   · `scripts/quality-gate.ps1` 的 `$Blocks` 表项（`Args` 栏）。
- * 比对 basename 而不是整条命令：三种写法（`scripts/x`、`../scripts/x`、
- * `scripts\x`）落点相同，而整条命令一比就会随引号 / 反斜杠 / 参数顺序漂移。
- * @returns {Set<string>}
- */
-function gateChainScripts() {
-  const out = new Set();
-  /**
-   * 从一段文本里收 `scripts/<x>` 的 basename。
-   * @param {string} text
-   */
-  const collect = (text) => {
-    for (const m of text.matchAll(
-      /scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g,
-    )) {
-      out.add(m[1]);
-    }
-  };
-
-  // ① 钩子的 `run "<标签>" <命令>` 步骤行（与 tests/doc-check-hook-wiring.test.ts 同款解析）。
-  const hook = path.join(ROOT, ".githooks/pre-commit");
-  if (fs.existsSync(hook)) {
-    for (const m of fs
-      .readFileSync(hook, "utf8")
-      .matchAll(/^ {2}run "[^"]+" (.+)$/gm)) {
-      collect(m[1] ?? "");
-    }
-  }
-
-  // ② `quality-gate.mjs` 的 gate 表项。
-  const qm = path.join(ROOT, "scripts/quality-gate.mjs");
-  if (fs.existsSync(qm)) {
-    for (const m of fs
-      .readFileSync(qm, "utf8")
-      .matchAll(/args:\s*\[([^\]]*)\]/g)) {
-      collect(m[1] ?? "");
-    }
-  }
-
-  // ③ `quality-gate.ps1` 的 `$Blocks` 表项（`Cmd = "node"; Args = @("scripts\x.cjs")`）。
-  const qp = path.join(ROOT, "scripts/quality-gate.ps1");
-  if (fs.existsSync(qp)) {
-    for (const m of fs
-      .readFileSync(qp, "utf8")
-      .matchAll(/Args\s*=\s*@\(([^)]*)\)/g)) {
-      collect(m[1] ?? "");
-    }
-  }
-
-  return out;
-}
 
 /**
  * 「步骤位置」口径的**反向判据**：只作散文举例 / 被 import 的脚本不算判据。
