@@ -31,13 +31,15 @@
  *
  * ## 去重键是**标题里的格名**，不是标签
  *
- * 只用一个键 `ci(daily): 每日档红在「<格名>」`（`titleKey()`）：动态标签词表要先在平台侧存在
+ * 只用一个键 `红在「<格名>」`（`titleKey()`）：动态标签词表要先在平台侧存在
  * 才落得下来，而「按标签筛单」这件事需要一个读者 —— 本档自己用标题就能查，加一枚没人筛的标签
  * 就是 §11.23 点名的「写了没有读者」。同一格再次红 ⇒ 在旧单下评论一条新读数，**不新建**
  * （硬规则 29 那条「一条诉求一张单」；号一关，欠着的东西连可见性都没了）。
  *
- * 键取的是**前缀 + 格名**而不是整条标题：人工写的那张单只要带同一串前缀，就自动进这一族、
+ * 键取的是**格名**而不是整条标题：人工写的那张单只要带同一串，就自动进这一族、
  * 被同一套去重接住（现场：#2273 是人按 §13.5.4 的读数手写的，标题对齐后机器不再重复建单）。
+ * **构建号 / 事件 / 时刻不进键**（#2399）：它们让标题能自证「是哪一跑」，进键就等于
+ * 「同一格每天都是新的一张」—— 那正是去重那道坎要挡的形状。
  *
  * ## 三态退码，但平台那一跳**不拦路**（取舍写在明处）
  *
@@ -90,26 +92,41 @@ const ROOT = path.resolve(HERE, "..");
 /** 三态与仓内其余档同口径（`0` 有结论 / `1` 该写的没写成 / `2` 取不到读数）。 */
 export const CODE = { DONE: 0, WRITE_FAILED: 1, NO_FACT: 2 };
 
-/** 去重键的前缀：格名进标题，同一格 ⇄ 同一张 open 单。 */
-export const TITLE_PREFIX = "ci(daily): 每日档红在「";
+/**
+ * 标题前缀（`ci(daily): `）—— 它**不进键**，只有下面 `titleKey()` 那一段进键。
+ *
+ * 前缀从「`ci(daily): 每日档红在「`」收成「`ci(daily): `」是因为标题里要塞进
+ * 构建号 / 事件 / 时刻（#2399）：「每日档红在」那五个字之后紧跟的不再是格名，
+ * 留着它就成了「前缀 + 半句话」的拼接。人工按旧形状写的单照样认（键只认格名那一段）。
+ */
+export const TITLE_PREFIX = "ci(daily): ";
 
 /** 优先级是判断，这一格只带一个**写死并说明**的值：每日档红挡住的是全链唯一的执行者。 */
 export const AUTO_PRIORITY = "P1";
 
 /**
  * @param {string} stageName 红的那一格的格名
- * @returns {string} 去重键 —— 标题里必须以它开头（人工写的单只要带它，就自动进这一族）
+ * @returns {string} 去重键 —— 标题里必须带它（人工写的单只要带它，就自动进这一族）
  */
 export function titleKey(stageName) {
-  return `${TITLE_PREFIX}${stageName}」`;
+  return `红在「${stageName}」`;
 }
 
 /**
- * @param {string} stageName 红的那一格的格名
- * @returns {string} 标题（去重靠上面的 `titleKey`，后缀只是给读者看的说明）
+ * 标题：**去哪儿看**（构建号）+ **哪一跑**（事件 + 时刻）+ **红在哪一步**（格名）。
+ *
+ * 为什么这三件必须进标题（#2399）：同一格红了五六次，列表里五张标题逐字相同 ——
+ * 想回答「这张是哪一跑的」只能点进去看正文第一行。三件**只进标题，不进键**：
+ * 进键就等于「同一格每天都是新的一张」，那正是 `titleKey()` 那道去重坎要挡的形状。
+ *
+ * @param {{sn:string, event:string, at:string, stage:string}} input 三件原值与格名
+ * @returns {string} 标题
  */
-export function issueTitle(stageName) {
-  return `${titleKey(stageName)}—— 自动立案（只含读数，不含因果）`;
+export function issueTitle({ sn, event, at, stage }) {
+  return (
+    `${TITLE_PREFIX}构建 ${sn} · 事件 ${event || "(无事件)"} · 时刻 ${at || "(无时刻)"}` +
+    ` · ${titleKey(stage)}`
+  );
 }
 
 /**
@@ -442,12 +459,18 @@ export function main(io = {}) {
       readout,
       handle,
     });
+    const title = issueTitle({
+      sn,
+      event: String(build.event ?? ""),
+      at: String(build.createTime ?? ""),
+      stage: s.stage,
+    });
     if (willWrite) {
       log(
         `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」` +
           (s.number
             ? `→ 在 #${s.number} 下追加一条读数（不新建）`
-            : `→ 新建一张：${issueTitle(s.stage)}`) +
+            : `→ 新建一张：${title}`) +
           ` · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
       );
       continue;
@@ -479,7 +502,7 @@ export function main(io = {}) {
        * 它走的是「取 git 目录、取不到就不往工作区猜落点」那套口径，不另写第二份。 */
       mkTmp: (name, text) => writeScratch(ROOT, name, text),
       opt: {
-        newIssue: issueTitle(s.stage),
+        newIssue: title,
         issueBodyFile: path.relative(ROOT, file),
         priority: AUTO_PRIORITY,
       },
