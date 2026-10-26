@@ -1057,6 +1057,107 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
 });
 
 /**
+ * 平台合成 merge 提交上的 `--base` 形态（ISSUE #2325 的现场）。
+ *
+ * 那一跑的读数：`HEAD 86a5a3b8864d (detached)` 而 `CNB_COMMIT = e1f8ea4f…`
+ * ⇒ 平台检出的是「本 PR 并进目标分支（那一刻）」的 merge 提交，而基线是
+ * `CNB_PULL_REQUEST_TARGET_SHA`。两者错位时三点 diff 的 merge-base 就是基线自己
+ * ⇒ 「目标分支在基线之后自己落地的壳改动」进了本 PR 的改动面 ⇒ 要求 cargo ⇒
+ * 那台 runner 没有 ⇒ 退 2。红与 PR 的代码无关，任何人撞上那个窗口都会中。
+ *
+ * 用例真造 git 仓库与真起 CLI：假 git 回放不出 merge 拓扑，而这一族判的就是拓扑。
+ */
+describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改动算进来（#2325）", () => {
+  const temps: string[] = [];
+  afterEach(() => {
+    for (const dir of temps.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function git(dir: string, ...args: string[]): string {
+    return execFileSync("git", ["-C", dir, ...args], {
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+  }
+
+  function write(dir: string, rel: string, body: string): void {
+    const full = path.join(dir, rel);
+    mkdirSync(path.dirname(full), { recursive: true });
+    writeFileSync(full, body);
+  }
+
+  function commit(dir: string, msg: string): void {
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", msg);
+  }
+
+  /**
+   * ISSUE #2325 的拓扑：基线 B → 目标分支上别人的壳改动 T → 本 PR 只改前端 →
+   * 平台把 PR 并进 T 生成合并提交（`--no-ff`）。
+   */
+  function syntheticMerge(): { dir: string; base: string; source: string } {
+    const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-merge-"));
+    temps.push(dir);
+    git(dir, "init", "-q", "-b", "main");
+    git(dir, "config", "user.email", "t@t.t");
+    git(dir, "config", "user.name", "t");
+    git(dir, "config", "commit.gpgsign", "false");
+    write(dir, "README.md", "x\n");
+    commit(dir, "base");
+    const base = git(dir, "rev-parse", "HEAD").trim();
+
+    git(dir, "checkout", "-q", "-b", "feat");
+    write(dir, "src/lib/x.ts", "1\n");
+    commit(dir, "feat: 前端");
+    const source = git(dir, "rev-parse", "HEAD").trim();
+
+    git(dir, "checkout", "-q", "main");
+    write(dir, "src-tauri/src/lib.rs", "fn main() {}\n");
+    commit(dir, "perf(shell): 别人的壳改动");
+
+    git(dir, "merge", "--no-ff", "-q", "-m", "Merge feat into main", "feat");
+    return { dir, base, source };
+  }
+
+  /** 在这个检出里起一次真 CLI（`scripts/shell-gate.mjs --base <基线>`）。 */
+  function runCli(cwd: string, baseRef: string, env = process.env) {
+    return spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--base", baseRef],
+      { cwd, encoding: "utf8", env },
+    );
+  }
+
+  it("对得上账（CNB_COMMIT 是 merge 的某一父）⇒ 判「没有壳改动」并念出剔掉了谁", () => {
+    const { dir, base, source } = syntheticMerge();
+    /* 先自证现场：**不带** CNB_COMMIT 时这一步确实命中壳 —— 那就是 #2325 的红。 */
+    const withoutEnv = { ...process.env };
+    delete withoutEnv.CNB_COMMIT;
+    expect(runCli(dir, base, withoutEnv).stdout).toContain("命中 src-tauri");
+
+    const ok = runCli(dir, base, { ...process.env, CNB_COMMIT: source });
+    expect(ok.status).toBe(0);
+    expect(ok.stdout).toContain("本次没有壳改动");
+    /* 剔掉了谁必须念出来：静默丢改动面与静默放行是同一族病。 */
+    expect(ok.stdout).toContain("剔掉基线之后别人自己落地的 1 条");
+    expect(ok.stdout).toContain("src-tauri/src/lib.rs");
+    expect(ok.stdout).toContain("对过账");
+  });
+
+  it("对不上账（没有 CNB_COMMIT）⇒ 照旧判，但把「没能对账」说出来（不猜）", () => {
+    const { dir, base } = syntheticMerge();
+    const env = { ...process.env };
+    delete env.CNB_COMMIT;
+    const cli = runCli(dir, base, env);
+    expect(cli.stdout).toContain("没能对账合成合并提交");
+    expect(cli.stdout).toContain("CNB_COMMIT");
+    /* 判决面一个字也没改：壳仍然命中（这正是「不猜」的形态）。 */
+    expect(cli.stdout).toContain("命中 src-tauri");
+  });
+});
+
+/**
  * `cargo test` 的编译前提落位（ISSUE #2192 的平台首跑现场）：
  * `tauri.conf.json` 声明的 `binaries/node`（externalBin）与 `static/`（resources）
  * 是 build script 的**存在性校验**对象，而真产物由 build-desktop 组装、被
