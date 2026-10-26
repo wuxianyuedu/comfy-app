@@ -4392,9 +4392,14 @@ describe("--new-issue：一步建单并回读", () => {
         tmp.dir,
       );
       expect(code).toBe(CODE.GREEN);
-      /* 取值链给的短名（`git config user.name` / 兜底 `cnb`）建单时本来就不带标签 ——
-       * 把它读成「你填了却没落上」会让一次正常建单退 2，而这里钉住它不退。 */
-      expect(f.log.join("\n")).toContain("是取的");
+      /* 取值链给的短名（`git config user.name` / 兜底 `cnb`）建单时**会**按标签
+       * （名字非空就按，ISSUE #2387）：回读里没有它时念一条 ⚠ 读数并给出
+       * `--claim` 补上的出口，但**不**退 2 —— 把它读成「你填了却没落上」是
+       * ISSUE #2355 拦的那个误判，旧实现那句「是取的 ⇒ 不带标签」与回读互相推翻。 */
+      const text = f.log.join("\n");
+      expect(text).toContain("没在回读里");
+      expect(text).toContain("--claim 2222");
+      expect(text).not.toContain("这次建单不带");
     } finally {
       rmSync(tmp.dir, { recursive: true, force: true });
     }
