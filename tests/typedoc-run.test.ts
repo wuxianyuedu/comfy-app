@@ -15,7 +15,7 @@
  *
  * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
  */
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -23,7 +23,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   PROBE_REL,
   judgeRun,
-  resolveTypedocBin,
+  resolveTypedocEntry,
   runTypedoc,
   snapshotOutput,
 } from "../scripts/typedoc-run.mjs";
@@ -205,9 +205,28 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
   });
 });
 
-describe("resolveTypedocBin", () => {
-  it("仓库里有本地 typedoc；没有 node_modules 的根给 null", () => {
-    expect(resolveTypedocBin()).toBeTruthy();
-    expect(resolveTypedocBin(tempDir("typedoc-run-bare-"))).toBeNull();
+describe("resolveTypedocEntry", () => {
+  it("仓库里有本地 typedoc（JS 入口，不是 .cmd 垫片）；没有 node_modules 的根给 null", () => {
+    const entry = resolveTypedocEntry();
+    expect(entry).toBeTruthy();
+    /* ISSUE #2445：起的是包真身（`typedoc/bin/typedoc`），不是 `node_modules/.bin`
+     * 下的垫片 —— 垫片要 shell 层（DEP0190），真身用 `process.execPath` 直起。 */
+    expect(entry!.replace(/\\/g, "/")).toContain("typedoc/bin/typedoc");
+    expect(entry!.replace(/\\/g, "/")).not.toContain(".bin/");
+    expect(resolveTypedocEntry(tempDir("typedoc-run-bare-"))).toBeNull();
+  });
+});
+
+describe("spawnTypedoc 不经 shell 层（ISSUE #2445）", () => {
+  it("模块源码里不再有 shell 选项与手工括引号（DEP0190 的形状判据）", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), "scripts/typedoc-run.mjs"),
+      "utf8",
+    );
+    /* spawn 的 args 数组 + shell:true 是 Node 26 的 DEP0190 弃用形态；且 shell 一开
+     * Node 就不转义参数，引号要自己括。两个形状都不许回来 —— 用例层测不到真 spawn
+     * 的选项面，源码形状是那层覆盖的唯一口径（#2444 同款）。 */
+    expect(source).not.toMatch(/shell\s*:/);
+    expect(source).not.toMatch(/windowsVerbatimArguments|const q = /);
   });
 });
