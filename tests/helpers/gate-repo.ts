@@ -7,8 +7,9 @@
  *
  *   ① `let workdir = ""` + `beforeEach` 里 `mkdtempSync` → `copyFileSync(脚本）`
  *      → 建几个被扫目录；
- *   ② `function run(args = [])`：`execFileSync(process.execPath, [join(workdir, …脚本), …])`，
- *      catch 里把 `{status, stdout, stderr}` 归一成 `{ code, output }`；
+ *   ② `function run(args = [])`：`execFileSync(process.execPath, [join(workdir, …脚本), …])`
+ *      包一层 `try/catch`，把子进程的 `{status, stdout, stderr}` 折成用例读的那两个数
+ *      （共享件现在归一成六件 —— 下面「第四条收口理由」就是这件事为什么要六件）；
  *   ③ `function write(rel, content)`：`mkdirSync(join(full, ".."))` + `writeFileSync`；
  *   ④ `afterEach` 里 `rmSync(workdir, { recursive: true, force: true })`。
  *
@@ -17,7 +18,7 @@
  * `status` 当 `1` 兜底、忘了 `stdio: pipe`（子进程 stderr 直接漏进 vitest 输出），
  * 而每份单看都「没毛病」。
  *
- * ## 三条收口理由（不是「短一点」）
+ * ## 四条收口理由（不是「短一点」）
  *
  * 1. **收尾由 vitest 保证**，不再靠手写 `afterEach`。fixture 的收尾挂在 `await use()`
  *    之后，用例中途 throw 也照样恢复（§11.16 对 `test.extend` 的那条口径）——
@@ -29,10 +30,21 @@
  *    它**是有语义的**：判据脚本有的用 `__dirname/..` 定扫描根（必须落在 `scripts/` 下），
  *    有的用 `process.cwd()`（落哪都一样）。这条差异收进 `dir` 选项，别再让第十六个人
  *    靠读脚本源码猜。
+ * 4. **三件事实分开交，不在夹具层折叠**（ISSUE #2405）：旧形状是
+ *    `catch { return { code: typeof e.status === "number" ? e.status : 1 } }` ——
+ *    「判据判出违规（真红）」「脚本**没跑起来**（`ENOENT` / `ENOBUFS` / `Cannot find module`，
+ *    它退的**也是 1**）」「被子进程信号杀」三类压成同一个数字，于是 `expect(code).toBe(1)`
+ *    在第二类上**照样绿**、`expect(code).toBe(0)` 在第二类上红成「门禁拦了本该放行的形状」。
+ *    `ran` + `status` + `spawnError` + `signal` 就是为了让这三类在账面上长得不一样，
+ *    并由 `expectGateRan()` 单独判掉（口径同 §13.6.4「拿不到测量 ≠ 测量结果是红的」）。
+ *    ⚠️ `code` / `output` 两个字段的**值一字未改**（成功仍只给 stdout）——
+ *    这上面挂着全仓门禁自测的断言，改它们的读法等于改所有门禁自测，不在本单范围。
  *
  * ## 用法
  *
  * ```ts
+ * import { defineGateRepo, expectGateRan } from "./helpers/gate-repo"; // 两件同取
+ *
  * const { test, expect } = defineGateRepo({
  *   script: "check-function-length.cjs",   // scripts/ 下那份（相对仓库根写全路径）
  *   dirs: ["src"],                          // 被扫目录，建空的即可
@@ -41,8 +53,9 @@
  *
  * test("超长函数被拦住", ({ repo }) => {
  *   repo.write("src/a.ts", "export function big() {…}");
- *   const { code, output } = repo.run();
- *   expect(code).toBe(1);
+ *   const r = repo.run();
+ *   expectGateRan(r); // **先判「跑起来了」**，再判退码 —— 顺序反了就把②折回①
+ *   expect(r.code, r.output).toBe(1);
  * });
  * ```
  *
@@ -53,7 +66,7 @@
  *
  * @module tests/helpers/gate-repo — 门禁自测的临时仓库 fixture（测试基建，不触碰 src 源码）
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -203,10 +216,57 @@ function normalizeRel(rel: string): string {
     .replace(/^\.?\//, "");
 }
 
-/** 跑一次判据脚本的结果 —— `code` 是子进程退出码，`output` 是 stdout+stderr 合并。 */
+/**
+ * 子进程「**根本没跑到判据**」那一档的形状（ISSUE #2405）。
+ *
+ * 只看退出码必然误判：`node` 报 `Cannot find module` 退的也是 **1**，与「判据判出违规」
+ * 逐字同码 —— 于是「夹具没配齐 / 脚本没拷进去 / 输出超 `maxBuffer`」全部长成「门禁红了一个」，
+ * 而它的下一动作完全不同（修夹具 vs 修被测形状）。`scripts/base-check.mjs` 对这一族
+ * 早就写过同一条区分（`Cannot find package|module` / `ERR_MODULE_NOT_FOUND` 那一档）。
+ */
+const NOT_STARTED_RE =
+  /Cannot find (?:module|package)|ERR_MODULE_NOT_FOUND|ENOBUFS|maxBuffer|heap out of memory/i;
+
+/**
+ * 跑一次判据脚本的结果。
+ *
+ * ⚠️ `code` 单独**不构成判决** —— 「判出越界」与「根本没跑起来」退的是同一个 1，
+ * 断言前先过 `expectGateRan()`，看 `ran` / `status` / `spawnError` / `signal`。
+ */
 export interface GateRunResult {
+  /** 退出码（`status` 取不到时兜 `1` —— **所以它单独不能当判决**，看 `ran`）。 */
   code: number;
+  /** 跑成功时是 stdout；失败时是两条流合并（#2287：失败时哪一条有内容没人知道）。 */
   output: string;
+  /**
+   * 子进程**真的跑到过判据脚本**。`false` ⇒ 这一格**不构成判决**：
+   * 既不许被读成「判据红了」，也不许被读成「这个形状放行了」（§13.6.4）。
+   */
+  ran: boolean;
+  /** 原样退出码（`null` = 被信号杀或没起来）。 */
+  status: number | null;
+  /** spawn 层的错误原文（取 `error.message` 头 80 字符；`error.code` 在类型上并不存在）。 */
+  spawnError: string | null;
+  /** 结束它的信号名（win32 上一般为 `null` —— 那一平台上终止不产生信号退出码）。 */
+  signal: string | null;
+}
+
+/**
+ * 「没跑起来」必须**先被单独判掉**（ISSUE #2405，形状取自 #2329 的参照实现）。
+ * 失败消息里把退出码、spawn 错误、信号与两条流原值一起交出去 ——
+ * 只留 `expected 1 to be 0` 那种断言，红的原因读不出来（#2287 那一族）。
+ *
+ * 用法：判「放行」那一类断言（`code === 0`）之前先 `expectGateRan(r)`；
+ * 判「拦住」那类（`code === 1`）**更要**先调它 —— 没跑起来时 `code` 恰好也是 1。
+ */
+export function expectGateRan(r: GateRunResult): void {
+  /** vitest 的 `expect` 在这里直接用（不依赖 fixture 实例）。 */
+  expect(
+    r.ran,
+    `判据脚本**没跑起来**（status=${String(r.status)} · spawnError=${String(r.spawnError)} · ` +
+      `signal=${String(r.signal)}）⇒ 这一格不构成判决，不是判据红。\n` +
+      `--- 子进程两条流原值 ---\n${r.output}`,
+  ).toBe(true);
 }
 
 /** 一个临时的「门禁工作区」：`dir` 是它，`write` 往里放文件，`run` 在里面跑那个脚本。 */
@@ -464,29 +524,36 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
        * `GIT_CONFIG_*`（合法用法），不能把这一层挤掉 —— 少了它被测判据脚本内部
        * 自己起的 git 就又回到「宿主开了签名 ⇒ 提交失败」那一档。 */
       withSandboxGitConfig(callEnv);
-      try {
-        const output = execFileSync(
-          process.execPath,
-          [abs(scriptRel), ...args],
-          {
-            cwd: root,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "pipe"],
-            env: callEnv,
-          },
-        );
-        return { code: 0, output };
-      } catch (error) {
-        const e = error as {
-          status?: number;
-          stdout?: string;
-          stderr?: string;
-        };
-        return {
-          code: typeof e.status === "number" ? e.status : 1,
-          output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-        };
-      }
+      /* `spawnSync` 而不是 `execFileSync`：后者在非零退出时只交出 `{status, stdout, stderr}`
+       * 的一份错误，拿不到「被信号杀」那一格（ISSUE #2405 要分开的三件事之一）。
+       * `code` / `output` 两格的**值与形状逐字保持原样**（成功 ⇒ stdout；失败 ⇒ 两流合并，
+       * 退出码兜 `1`）—— 这上面挂着全仓门禁自测的断言，改它的读法就是改所有门禁自测。 */
+      const res = spawnSync(process.execPath, [abs(scriptRel), ...args], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: callEnv,
+      });
+      const stdout = res.stdout ?? "";
+      const stderr = res.stderr ?? "";
+      const both = `${stdout}${stderr}`;
+      const status = typeof res.status === "number" ? res.status : null;
+      return {
+        code: status ?? 1,
+        /* **退出码非 0 就合并两条流** —— 不是「只在 spawn 失败时合并」。
+         * 本仓多数断言的形状是 `expect(code).toBe(1)` 之后再 `toContain(违规原文)`，
+         * 而违规原文常常在 **stderr**（`console.error` 那一条路）。旧实现是
+         * `execFileSync` 抛错才进 catch，非 0 退出**一定**抛 ⇒ 两条流天然被合过；
+         * 换成 `spawnSync` 后非 0 退出**不算错误**（`res.error` 是 `undefined`），
+         * 若照 `res.error` 判，这一格就静默只剩 stdout —— 于是消费者会红成
+         * 「门禁没报出该有的那句话」，而它其实是夹具丢了 stderr
+         * （硬规则 27 那句「效应不许只转述自己的 stdout」—— 丢 stderr 是这一族最重的事故）。 */
+        output: status === 0 && !res.error ? stdout : both,
+        ran: !res.error && status !== null && !NOT_STARTED_RE.test(both),
+        status,
+        spawnError: res.error ? res.error.message.slice(0, 80) : null,
+        signal: res.signal ?? null,
+      };
     },
   };
   setup?.(api);
