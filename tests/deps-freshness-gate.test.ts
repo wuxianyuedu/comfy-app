@@ -209,6 +209,11 @@ describe("check-deps-freshness 契约", () => {
     expect(output).not.toContain("依赖与远端一致");
     // 远端不看，但本地自洽那一层照判。
     expect(output).toContain("本地依赖与当前检出的声明不一致");
+    // 摘要行分得开「没装」与「有漂移」（ISSUE #2382）：夹具没装 node_modules、
+    // 远端引用已删 ⇒ 唯一的事实是 `no-install`，那行字必须说「还没装」，
+    // 不许把硬规则 26 的「还没装」印成「判据判出一条事实」。
+    expect(output).toContain("[deps-freshness] 依赖还没装");
+    expect(output).not.toContain("[deps-freshness] 有漂移");
   });
 
   /**
