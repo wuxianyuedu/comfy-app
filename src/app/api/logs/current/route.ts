@@ -41,21 +41,50 @@ const SHELL_CHAIN_PATHS = launchPaths(process.cwd());
 const TAIL_BYTES = 1024 * 1024;
 
 /**
+ * 文件的当前字节数；**不存在**回 null，其它错误照抛。
+ *
+ * 分成两档是有原因的（也是它替代 `existsSync` + `statSync` 那一对的边界）：
+ * 「没有这个文件」是空切片（面板显示「还没有输出」），而「读不到」（权限 / 磁盘）
+ * 是接口挂了 ⇒ 必须走 500 那条出口，不许被并成同一个 null 冒充「没有日志」。
+ * 一次 `stat` 同时回答这两件事，比原来两次系统调用还少一次。
+ */
+async function sizeOrNull(file: string): Promise<number | null> {
+  try {
+    const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
+    return stat.size;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+/**
  * 读文件的某一段字节。只读请求区间，不把整文件读进内存——日志文件可能很大。
  * 返回 null 表示文件不存在。
+ *
+ * 异步（ISSUE #2193）：这条端点被日志面板**每 2s 打六路来源**（`LogProvider` 的
+ * `POLL_SOURCES`；面板侧那句「4 路」的旧说法按同一条账订正过，见
+ * `src/components/studio/logs/log-analysis.ts`），
+ * 而同步 IO 占住的是事件循环线程 —— 代价由当时所有并发请求一起付，不只是这一条
+ * 轮询。`turbopackIgnore` 那枚标记逐处跟着调用点搬（它管的是构建期产物
+ * tracing，漏搬的表现是「构建期过、出厂件缺件」，硬规则 17 / 18 那一族）。
  */
-function readBytes(file: string, start: number, length: number): Buffer | null {
-  if (!fs.existsSync(/*turbopackIgnore: true*/ file)) return null;
-  const size = fs.statSync(/*turbopackIgnore: true*/ file).size;
+async function readBytes(
+  file: string,
+  start: number,
+  length: number,
+): Promise<Buffer | null> {
+  const size = await sizeOrNull(file);
+  if (size === null) return null;
   const from = clamp(start, 0, size);
   const len = clamp(length, 0, size - from);
   if (len === 0) return Buffer.alloc(0);
   const buf = Buffer.alloc(len);
-  const fd = fs.openSync(/*turbopackIgnore: true*/ file, "r");
+  const handle = await fs.promises.open(/*turbopackIgnore: true*/ file, "r");
   try {
-    fs.readSync(fd, buf, 0, len, from);
+    await handle.read(buf, 0, len, from);
   } finally {
-    fs.closeSync(fd);
+    await handle.close();
   }
   return buf;
 }
@@ -82,17 +111,19 @@ function alignToLineStart(
  * 读不到锚点（非双击链路启动）时返回 null：客户端退化为不做时间线截断，
  * 多显示几条历史行也好过凭空丢掉本次日志。
  */
-function sessionStartMs(): number | null {
-  return resolveSessionStart(fileMtimeMs(DEV_LAUNCHER_LOG));
+async function sessionStartMs(): Promise<number | null> {
+  return resolveSessionStart(await fileMtimeMs(DEV_LAUNCHER_LOG));
 }
 
-function resolveCurrentLog(source: string): string {
+async function resolveCurrentLog(source: string): Promise<string> {
   if (source === "launcher") return LAUNCHER_LOG_FILE;
   try {
-    const sentinel = fs
-      .readFileSync(/*turbopackIgnore: true*/ SENTINEL_FILE, "utf8")
-      .trim();
-    if (sentinel && fs.existsSync(/*turbopackIgnore: true*/ sentinel)) {
+    const raw = await fs.promises.readFile(
+      /*turbopackIgnore: true*/ SENTINEL_FILE,
+      "utf8",
+    );
+    const sentinel = raw.trim();
+    if (sentinel && (await sizeOrNull(sentinel)) !== null) {
       return sentinel;
     }
   } catch {
@@ -138,7 +169,7 @@ interface Slice {
  * - 游标无效（首帧 / 文件被新运行覆盖重建 / 文件变小）→ 回尾部窗口；
  * - 尾部窗口再掐头对齐到完整行。
  */
-function readLogSlice(
+async function readLogSlice(
   logFile: string,
   requestedOffset: number,
   bootId: string,
@@ -148,12 +179,12 @@ function readLogSlice(
    * 会话起点；覆盖重建的来源恒为 null，客户端据此不做任何行时刻裁剪。
    */
   resumable: boolean,
-): Slice {
-  const sessionStart = resumable ? sessionStartMs() : null;
-  if (!fs.existsSync(/*turbopackIgnore: true*/ logFile)) {
+): Promise<Slice> {
+  const sessionStart = resumable ? await sessionStartMs() : null;
+  const fileSize = await sizeOrNull(logFile);
+  if (fileSize === null) {
     return { content: "", size: 0, offset: 0, sessionStart, bootId, mismatch };
   }
-  const fileSize = fs.statSync(/*turbopackIgnore: true*/ logFile).size;
   const cursorValid =
     Number.isFinite(requestedOffset) &&
     requestedOffset > 0 &&
@@ -173,7 +204,8 @@ function readLogSlice(
     ? requestedOffset
     : Math.max(0, fileSize - TAIL_BYTES);
 
-  const buf = readBytes(logFile, start, fileSize - start) ?? Buffer.alloc(0);
+  const buf =
+    (await readBytes(logFile, start, fileSize - start)) ?? Buffer.alloc(0);
   /* 只有「滑动窗口」分支才需要掐头对齐：游标来自上一次响应的 `size`，
    * 它本身就在行边界上（或者是文件末尾）。 */
   if (!cursorValid) {
@@ -199,9 +231,9 @@ function readLogSlice(
 }
 
 /** 解析某个日志来源对应的文件；来源不被识别 / 文件不存在时返回 null。 */
-function resolveSourceFile(
+async function resolveSourceFile(
   source: string,
-): { file: string; resumable: boolean } | null {
+): Promise<{ file: string; resumable: boolean } | null> {
   /* 四份 runtime 日志（comfyui / drizzle-studio / ollama / app-runtime）现在是
    * **一次启动一份文件**（ISSUE #1326），因此这里取「最新那一份」：
    *   - 面板要跟随的是**正在写的那一份** —— 最新就是它（正在写的 mtime 最大，
@@ -212,14 +244,14 @@ function resolveSourceFile(
    *     `dev-launcher.log` 的 mtime 当起点，锚点比真实启动时刻晚，会把启动早期的
    *     行误判成历史，见 §4.1 的四审）。 */
   if ((RUNTIME_LOG_SOURCES as readonly string[]).includes(source)) {
-    const latest = latestRuntimeLogFile(source as RuntimeLogSource);
+    const latest = await latestRuntimeLogFile(source as RuntimeLogSource);
     return latest
       ? { file: latest.file, resumable: false }
       : { file: "", resumable: false };
   }
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
   if (source === "app") {
-    const file = latestPanelLogFile();
+    const file = await latestPanelLogFile();
     return file ? { file, resumable: true } : null;
   }
   /* 壳侧两路（shell = 壳自持日志；shell-launch = 壳侧编排链路）：双击启动的
@@ -236,7 +268,7 @@ function resolveSourceFile(
   }
   /* 启动链路日志（launcher / dev-launcher）每次运行覆盖重建，天然只有本次
    * 内容，不需要会话起点；切片规则一致。 */
-  return { file: resolveCurrentLog(source), resumable: false };
+  return { file: await resolveCurrentLog(source), resumable: false };
 }
 
 export async function GET(request: Request) {
@@ -251,7 +283,7 @@ export async function GET(request: Request) {
   const mismatch = clientBootId !== "" && clientBootId !== bootId;
 
   try {
-    const resolved = resolveSourceFile(source);
+    const resolved = await resolveSourceFile(source);
     if (resolved?.file === "") {
       /* 该来源本机一次也没启动过：**明确的空切片**（不是 404/500）——
        * 面板据此显示「还没有输出」，与「接口挂了」分开。 */
@@ -279,7 +311,7 @@ export async function GET(request: Request) {
       });
     }
     return NextResponse.json(
-      readLogSlice(
+      await readLogSlice(
         resolved.file,
         mismatch ? 0 : requestedOffset,
         bootId,

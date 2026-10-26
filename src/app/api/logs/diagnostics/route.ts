@@ -53,7 +53,7 @@ export async function POST() {
       path: file,
       /** 相对 log/ 的路径：面板空间窄，展示这一截即可。 */
       relativePath: toDisplayPath(file, LOG_ROOT),
-      bytes: fileSize(file),
+      bytes: await fileSize(file),
     });
   } catch (error) {
     // 失败如实回 500 + 原因（诊断包打不出来通常意味着 log/ 权限或磁盘问题，
@@ -65,10 +65,16 @@ export async function POST() {
   }
 }
 
-/** 读产物大小（读不到回 null，不因它把成功打成失败）。 */
-function fileSize(file: string): number | null {
+/**
+ * 读产物大小（读不到回 null，不因它把成功打成失败）。
+ *
+ * 异步（ISSUE #2193）：这一格整包 zip 已经是异步的（`await exportDiagnostics`），
+ * 末尾这一次 `stat` 没有理由单独把线程压住。`turbopackIgnore` 标记跟着调用点搬。
+ */
+async function fileSize(file: string): Promise<number | null> {
   try {
-    return fs.statSync(/*turbopackIgnore: true*/ file).size;
+    const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
+    return stat.size;
   } catch {
     return null;
   }

@@ -122,15 +122,33 @@ _（全部闭环，见 A 表。）_
 
 ### C.5 P2（卫生项，随上一批顺手修）
 
-- ⬜ **M12** → **#2193**。高频轮询路由的同步 IO（`/api/logs/current` 被面板每 2s 打一遍，
-  节奏搜 `log-analysis.ts` 里的「面板每 2s 轮询一次」）。
-  定位（复算露面比这里原点的两处更多）：
-  `grep -rn "statSync\|readFileSync\|readdirSync" src/app/api/logs --include=route.ts`。
-  **备注**：`current` 那条已是游标增量 + 尾部窗口（窗口大小搜 `TAIL_BYTES`，
-  `sessions` 那份搜 `MAX_TEXT_BYTES` —— 本台账旧版写「4MiB 尾窗」是**抄走的数值**，
-  复量是 40 万字节那一档，这正是「绝对数值不进台账」这条口径的由来）。
-  异步化 `fs.promises` 需通读会话边界逻辑（`src/lib/log/log-session-scope.ts`）后谨慎做，
-  单独一轮处理。
+- ~~**M12** → **#2193**。高频轮询路由的同步 IO~~ **已闭环（#2193）**：原点那句「`/api/logs/current`
+  被面板每 2s 打一遍」低估了面 —— `POLL_SOURCES` 是**六路**来源，每 2s 各一次；而按原登记的那条
+  检索式（`statSync|readFileSync|readdirSync`）复算，`src/app/api/logs` 下是**五份** route 在场
+  （`current` / `sessions` / `diagnostics` / `history` / `list`，台账只点了前两份），
+  改成判据现算时又抓到**第六份** `export`（它用的是 `mkdirSync` / `writeFileSync`，
+  不在那条 grep 的量程里 —— 「清单点数」与「按目录现算」的差就是这么出现的）。
+  处置：六份 route 的读写全部换 `fs.promises`；轮询链真正经过的四个读侧 helper
+  （`fileMtimeMs` / `latestPanelLogFile` / `listRuntimeLogFiles`+`latestRuntimeLogFile` / `scanRunPacks`）
+  一并异步化，**写侧**（`appendFileSync` 落盘、`prune*` 的 `rmSync`、启动期 `mkdirSync`）刻意不动 ——
+  它们不在被轮询的那条链上，异步化会把 lifecycle 整条签名拖进来（那是另一轮）。
+  两条原登记点名的风险都按处处置：`turbopackIgnore` 标记**逐处跟着调用点搬**（`current` 那
+  7 枚变 3 枚是因为 `existsSync` + `statSync` 合并成一次 `stat`，不是漏搬；`history` / `list`
+  原本不带，也**没有**给它们补 —— 加标记同样是改 tracing）；会话边界那层的顺序假设按
+  「逐包 await、不 `Promise.all`」保住（`scanRunPacks` 的输出顺序就是判据）。
+  判据：`tests/log-routes-no-sync-fs.test.ts`（面按目录取，新加一份 route 自动进面；
+  先剥注释再匹配，所以注释里可以说 `statSync`；另附两条负控制 —— 真同步形态抓得到、
+  `fs.promises.*` 不误伤）。验证：既有读取契约用例一字未改并全绿
+  （`current/route.test.ts` 12 条、`sessions/route.test.ts` 23 条、四个 helper 的 39 条），
+  真机 dev server 上六路各一次 200 且游标增量成立（第二帧 `offset` = 第一帧 `size`）；
+  `pnpm run build` EXIT=0，产物判据绿（3152 文件、无缺件无私件），路由表里六条 logs 路由仍全为动态。
+  **本轮不主张省了多少毫秒**：dev 模式首帧含按需编译，跨档不可比；承重的是
+  「请求路径上的同步系统调用清零」这条可判的形状。顺带在真机复算时撞上另一条，已单独立案
+  （**#2417**：`isPanelSelfPollingLine` 的端点集合停在 `logs/current` + `dev/server-id` 两个名字上，
+  每 30s 一拍的 `/api/dev/build-id` 回声行不滤）。
+  **备注（保留原登记那条口径，它自己是账）**：`current` 早已是游标增量 + 尾部窗口
+  （窗口大小搜 `TAIL_BYTES`，`sessions` 那份搜 `MAX_TEXT_BYTES` —— 本台账旧版写「4MiB 尾窗」是
+  **抄走的数值**，复量是 40 万字节那一档，这正是「绝对数值不进台账」这条口径的由来）。
 - ~~**S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询~~ **已闭环（#1874）**：5s 那一拍当初是为「外部拉起的实例要被及时认出来」而收紧的，现在改成**事件驱动为主**（服务端一发现运行态变化就经 `/api/comfy/state` 推过来，设置页收到立刻重问），兜底那一拍从 5s 放到 30s 且只剩「通道自己坏了」这一件事。**复核进展（#1873）**：快照链路已核实——TTL `1.5s` / 未绑定端口 `0s`（`COMFY_UNBOUND_PORT_TTL_MS`），且动作后会 `reset`，所以这 5s 不是「兜住一个永不过期的缓存」而是纯轮询节奏；核实中翻出的那条「启动了却读到旧结论」的窗口已单独闭环（S14a，见 A 表）。
 - ⬜ **S14** → **#2194**（只剩 `src/server/workshop/comfyui.ts` 那一半，定位搜 `settingsCache` /
   `resolvedBase`；旧登记的 `:36-49` 其实还盖得住，改写成检索式是按本节的统一口径，不是因为它错了）。
@@ -143,7 +161,7 @@ _（全部闭环，见 A 表。）_
 - _（L10 已判定为不值得（见 B 表）；L11 已闭环，见 A 表。）_
 - _（L12b / L13 已判定为有意保留（见 B 表）。）_
 - _（L14 已定性为两半都维持现状（见 B 表；读数出处在那两行里）。）_
-- _（L15 已判定为维持现状（见 B 表；同步 IO 那一半归 M12 / #2193 的那一轮）。）_
+- _（L15 已判定为维持现状（见 B 表；同步 IO 那一半已随 M12 / #2193 闭环，见本节上面那条）。）_
 - _（E6 已闭环，见 A 表。）_
 
 ## D. 维护说明

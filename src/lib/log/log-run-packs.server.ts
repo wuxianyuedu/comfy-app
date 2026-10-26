@@ -55,12 +55,12 @@ export interface ScanRunPacksOptions {
 }
 
 /** 读一个包目录的 `run.json`（无 / 坏 → null，不让一个坏包把整个列表带崩）。 */
-function readPackMeta(
+async function readPackMeta(
   dir: string,
   runJsonName: string,
-): Record<string, unknown> | null {
+): Promise<Record<string, unknown> | null> {
   try {
-    const text = fs.readFileSync(
+    const text = await fs.promises.readFile(
       /*turbopackIgnore: true*/ path.join(dir, runJsonName),
       "utf8",
     );
@@ -85,15 +85,15 @@ function startedAtMs(meta: Record<string, unknown> | null): number | null {
  * `current/services/` 下**逐字同源**（归档是整目录复制），两边各写一套解析
  * 必然漂开，而漂开的表现是「某些包里的份从下拉里消失」。
  */
-function listPackSourceFiles(
+async function listPackSourceFiles(
   packDir: string,
   sourceDir: string,
   source: RuntimeLogSource,
-): PackLogFile[] {
+): Promise<PackLogFile[]> {
   const dir = path.join(/*turbopackIgnore: true*/ packDir, sourceDir);
   let names: string[];
   try {
-    names = fs.readdirSync(/*turbopackIgnore: true*/ dir);
+    names = await fs.promises.readdir(/*turbopackIgnore: true*/ dir);
   } catch {
     return []; // 这一包没有该来源的目录：那次运行没启动过这个服务
   }
@@ -122,16 +122,24 @@ function listPackSourceFiles(
  *
  * 返回 `{ packs, total }`：`total` 是该来源跨包**一共有几份**（不受 `maxPacks`
  * 影响），界面据此说明「更早的不在列表里」（硬规则 4：必须有用户可见出口）。
+ *
+ * 异步（ISSUE #2193）：一次请求最多翻 `MAX_PACKS` 个包，同步写法是
+ * 「一次 `readdir` + 每包一次 `readdir` + 每包一次 `readFileSync`」全压在事件
+ * 循环上。**逐包顺序 await**（不是 `Promise.all`）—— 输出列表的顺序与
+ * `sortPackNames` 的次序就是判据本身，并发完成顺序会把它打乱。
  */
-export function scanRunPacks(options: ScanRunPacksOptions): {
+export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
   packs: RunPack[];
   total: number;
-} {
+}> {
   const { runsDir, sourceDir, runJsonName, maxPacks, source } = options;
   let names: string[];
   try {
-    names = fs
-      .readdirSync(/*turbopackIgnore: true*/ runsDir, { withFileTypes: true })
+    names = (
+      await fs.promises.readdir(/*turbopackIgnore: true*/ runsDir, {
+        withFileTypes: true,
+      })
+    )
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);
   } catch {
@@ -144,10 +152,10 @@ export function scanRunPacks(options: ScanRunPacksOptions): {
   let total = 0;
   for (const name of sortPackNames(names)) {
     const dir = path.join(/*turbopackIgnore: true*/ runsDir, name);
-    const files = listPackSourceFiles(dir, sourceDir, source);
+    const files = await listPackSourceFiles(dir, sourceDir, source);
     if (files.length === 0) continue;
     total += files.length;
-    const meta = readPackMeta(dir, runJsonName);
+    const meta = await readPackMeta(dir, runJsonName);
     packs.push({
       name,
       /* `run.json` 的更准（它是写进去的启动时刻）；读不到时退回名字里那个

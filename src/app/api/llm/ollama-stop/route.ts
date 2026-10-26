@@ -37,9 +37,13 @@ function localTimestamp(): string {
  * 因此不能自己新开一份（那会产出一份只有 `[action] 关闭` 两行的空文件，
  * 而用户要看的「为什么关得掉 / 关不掉」本该和那次启动的输出连在一起）。
  * 找不到任何既有文件时（跨重启来关一个别处拉起的实例）退回新建一份。
+ *
+ * 异步是跟着 `latestRuntimeLogFile` 的签名过来的（ISSUE #2193）。**逐行 await**
+ * 而不是 fire-and-forget：这份文件的价值就在行的先后（`[action] 关闭` 必须排在
+ * `■ 已手动关闭` 之前），并发完成顺序会把它写乱。
  */
-function writerForStop(): RuntimeLogWriter {
-  const latest = latestRuntimeLogFile("ollama-runtime");
+async function writerForStop(): Promise<RuntimeLogWriter> {
+  const latest = await latestRuntimeLogFile("ollama-runtime");
   if (latest) {
     return {
       file: latest.file,
@@ -62,8 +66,8 @@ function appendTo(file: string, line: string): void {
 }
 
 /** 追加一行到本次（或最近一次）启动的文件（失败不影响主流程）。 */
-function appendOllamaLog(line: string): void {
-  writerForStop().write(line);
+async function appendOllamaLog(line: string): Promise<void> {
+  (await writerForStop()).write(line);
 }
 
 async function ollamaUp(): Promise<boolean> {
@@ -88,29 +92,29 @@ async function ollamaUp(): Promise<boolean> {
 export async function POST(_req: NextRequest) {
   if (!(await requireRequestUser())) return unauthorizedResponse();
   if (!(await ollamaUp())) {
-    appendOllamaLog("[state] Ollama 未在运行，跳过关闭");
+    await appendOllamaLog("[state] Ollama 未在运行，跳过关闭");
     return NextResponse.json({ ok: true, detail: "Ollama 未在运行" });
   }
 
   // 按映像名杀整棵进程树（平台机制由 kill-process-tree 选）。
   const killed = await killProcessTreeByImage(OLLAMA_IMAGE);
-  appendOllamaLog(`[action] 关闭 Ollama：${killed.via}`);
+  await appendOllamaLog(`[action] 关闭 Ollama：${killed.via}`);
   if (!killed.ok) {
     const msg = `关闭 Ollama 失败：${killed.via}`;
-    appendOllamaLog(`[err] ${msg}`);
+    await appendOllamaLog(`[err] ${msg}`);
     return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
   }
   // 等端口真正释放，给界面状态行一个确定的结果 —— 次数与间隔走
   // `~/lib/retry-policy` 的 OLLAMA_STOP_PROBE（10 次 × 500ms = 5s，见 §16.2.4.49）。
   for (let i = 0; i < OLLAMA_STOP_PROBE.maxAttempts; i++) {
     if (!(await ollamaUp())) {
-      appendOllamaLog("■ Ollama 已手动关闭");
-      appendOllamaLog("[state] Ollama 已关闭");
+      await appendOllamaLog("■ Ollama 已手动关闭");
+      await appendOllamaLog("[state] Ollama 已关闭");
       return NextResponse.json({ ok: true, detail: "Ollama 已关闭" });
     }
     await sleep(500);
   }
   const msg = "关闭命令已发送，但 Ollama 仍在响应，请手动确认进程已退出";
-  appendOllamaLog(`[err] ${msg}`);
+  await appendOllamaLog(`[err] ${msg}`);
   return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
 }

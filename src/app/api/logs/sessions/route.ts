@@ -110,14 +110,20 @@ function emptyPayload(error?: string): LogSessionsPayload & { error?: string } {
  * 乱码行（同 `GET /api/logs/current` 的尾部窗口规则）。一次启动一份文件之后
  * 正文不再需要「减去前一份」，但**窗口**这条约束不变 —— 一次很长的启动
  * （挂着 ComfyUI 跑一下午）照样能写出几 MB。
+ *
+ * 异步（ISSUE #2193）：本端点与 `GET /api/logs/current` 共用「最新那一份」那条
+ * 判据，而同步 `stat` / `open` / `read` 压的是事件循环线程。读取契约（窗口大小、
+ * 掐头对齐、`windowed` / `size` 的语义）一字未改 —— 钉它的 `route.test.ts` 是
+ * 这一轮改动的**判据**，不是要绕过去的东西。
  */
-function readTail(
+async function readTail(
   file: string,
   maxBytes: number,
-): { text: string; windowed: boolean; size: number } {
+): Promise<{ text: string; windowed: boolean; size: number }> {
   let size: number;
   try {
-    size = fs.statSync(/*turbopackIgnore: true*/ file).size;
+    const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
+    size = stat.size;
   } catch {
     return { text: "", windowed: false, size: 0 };
   }
@@ -129,11 +135,11 @@ function readTail(
   const length = size - start;
   if (length <= 0) return { text: "", windowed: false, size };
   const buf = Buffer.alloc(length);
-  const fd = fs.openSync(/*turbopackIgnore: true*/ file, "r");
+  const handle = await fs.promises.open(/*turbopackIgnore: true*/ file, "r");
   try {
-    fs.readSync(fd, buf, 0, length, start);
+    await handle.read(buf, 0, length, start);
   } finally {
-    fs.closeSync(fd);
+    await handle.close();
   }
   const raw = buf.toString("utf8");
   if (start === 0) return { text: raw, windowed: false, size };
@@ -197,14 +203,16 @@ export async function GET(request: Request) {
     /* 本次运行：目录与命名规则都从写方那一侧拿（`runtime-log-pack.server`）——
      * 读方自己拼 `log/current/services/<source>-*.log` 就会与写方漂开，而漂开的
      * 表现是「日志在磁盘上、界面上看不到」（两边各自都「看起来是对的」）。 */
-    const currentEntries = listRuntimeLogFiles(source as RuntimeLogSource);
+    const currentEntries = await listRuntimeLogFiles(
+      source as RuntimeLogSource,
+    );
 
     /* 历史归档：`runs/` 与包内相对目录同样从写方那一侧取，端点不写 `log/runs`
      * 字面量。交给 `scanRunPacks` 的是**日志根的父目录**（`runsDir()` 自己拼
      * `log/runs`）—— 与 `POST /api/logs/diagnostics` 把 `path.dirname(LOG_ROOT)`
      * 交给 `exportDiagnostics()` 是同一手法。 */
     const root = path.dirname(LOG_ROOT);
-    const { packs, total: archivedTotal } = scanRunPacks({
+    const { packs, total: archivedTotal } = await scanRunPacks({
       runsDir: runsDir(root),
       sourceDir: LOG_DIRS.services,
       runJsonName: LOG_LAYOUT.runJson,
@@ -239,7 +247,7 @@ export async function GET(request: Request) {
       resolveArchivedFile(selected.id, root);
     if (!file) return NextResponse.json(emptyPayload());
 
-    const { text, windowed, size } = readTail(file, MAX_TEXT_BYTES);
+    const { text, windowed, size } = await readTail(file, MAX_TEXT_BYTES);
     return NextResponse.json({
       sessions,
       selectedId: selected.id,

@@ -37,14 +37,14 @@ describe("fileMtimeMs", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it("返回文件修改时间（毫秒）", () => {
-    const mtime = fileMtimeMs(file);
+  it("返回文件修改时间（毫秒）", async () => {
+    const mtime = await fileMtimeMs(file);
     expect(mtime).not.toBeNull();
     expect(Math.abs((mtime ?? 0) - fs.statSync(file).mtimeMs)).toBeLessThan(1);
   });
 
-  it("文件不存在返回 null（不抛错）", () => {
-    expect(fileMtimeMs(path.join(dir, "missing.log"))).toBeNull();
+  it("文件不存在返回 null（不抛错）", async () => {
+    expect(await fileMtimeMs(path.join(dir, "missing.log"))).toBeNull();
   });
 });
 
