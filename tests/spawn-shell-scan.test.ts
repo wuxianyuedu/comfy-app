@@ -26,9 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import {
-  stripComments,
-} from "../scripts/spawn-shell-scan.mjs";
+import { stripComments } from "./helpers/strip-comments";
 import {
   binRelativePath,
   resolvePackageBinEntry,
@@ -51,15 +49,21 @@ describe("scripts/spawn-shell-scan.mjs", () => {
     expect(stdout).toContain("OK");
   });
 
-  it("剥注释：块注释与行注释都不算违例（教人别这么写的那句话不许被判）", () => {
+  it("剥注释：整行 / 块 / 行尾三种都不算违例（教人别这么写的那句话不许被判）", () => {
     const src = [
-      "const a = 1; // shell: true  ← 行注释里的话不算",
+      "// shell: true  ← 整行注释里的话不算",
       "/* shell: true ← 块注释里的话不算 */",
-      "const b = 2;",
+      "const a = 1; // shell: true ← 行尾注释里的话也不算",
+      'const url = "http://a"; keepThis(); // 收尾',
     ].join("\n");
-    expect(stripComments(src)).not.toContain("shell");
+    const stripped = stripComments(src, { trailing: true });
+    expect(stripped).not.toContain("shell");
+    // 行尾那一刀不许咬坏字符串里的 URL（咬坏了 `keepThis` 就没了 ⇒ 判据会假绿）
+    expect(stripped).toContain("keepThis()");
     // 代码里那一句**要**留着
-    expect(stripComments("spawn(x, { shell: true });")).toContain("shell: true");
+    expect(stripComments("spawn(x, { shell: true });", { trailing: true })).toContain(
+      "shell: true",
+    );
   });
 
   it("明确关掉的那几种不被判（shell: false / null / 字符串值）", () => {
@@ -94,7 +98,7 @@ const SHELL_OPTION_RE = /\bshell\s*:(?!\s*(?:false\b|null\b|undefined\b|["'`]))/
  * @returns 违例行
  */
 function findShellOptionsIn(src: string): string[] {
-  return stripComments(src)
+  return stripComments(src, { trailing: true })
     .split("\n")
     .filter((l) => SHELL_OPTION_RE.test(l));
 }

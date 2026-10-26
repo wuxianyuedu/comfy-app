@@ -38,6 +38,16 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+/* 剥注释**不自己写**（§12.18）：唯一实现是 `tests/helpers/strip-comments.ts`，
+ * `tests/strip-comments-single-source.test.ts` 那条台账按「文件里有没有那段本地定义」
+ * 判 —— **连在注释里原样复述那段定义都会命中**（本文件第一版就是这么红的）。
+ * 它剥块注释与整行 `//`，再加 `trailing: true` 连行尾注释一起剥：对本判据够用 ——
+ * 违例只可能写在**代码**里，而注释里那几处「开 shell 是错的形态」正是要被剥掉的
+ * （不剥就是自打自：把正在教人别这么写的那句话判成违例）。
+ * 代价与边界：这份脚本因此依赖 Node 的类型剥离（直接 import `.ts`，
+ * `package.json` 的 `engines` 三档都在默认开启的那一档上）。 */
+import { stripComments } from "../tests/helpers/strip-comments.ts";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
@@ -54,81 +64,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  * 于是 `(?!false)` 永远成立 —— 那是一句**什么都不排**的排除，写它的人以为排掉了）。
  * 把 `\s*` 挪进预查之后，`shell: false` 才会真的被排掉。 */
 const SHELL_OPTION_RE = /\bshell\s*:(?!\s*(?:false\b|null\b|undefined\b|["'`]))/;
-
-/**
- * 剥掉注释（行注释 / 块注释），保留字符串里同形的那些字符。
- *
- * 为什么要认真剥：`scripts/ci-install-deps.mjs` 那几份文件的注释里写着
- * 「自己拼 spawnSync(…, { 开 shell }) 是错的形态」—— 那句话是在**教人别这么写**，
- * 把它判成违例是判据自己没读懂源码，代价是下一次有人给判据加白名单、从此什么也拦不住。
- *
- * **为什么逐行、且每行重置引号状态**（这一条是踩出来的）：第一版写成了「整个文件一个
- * 状态机」，结果 `base-check/hook-steps.mjs` 里一处游离的引号把它卡在「单引号字符串」
- * 状态里再也出不来 —— 之后几百行**全被当成字符串**，块注释也不再被认，判据报出一堆
- * 注释里的假违例。整文件状态机的失效形态是**跑飞且无声**（它不报错，只是少读了内容），
- * 而本模块要治的那一族正是「少读 ⇒ 漏判」。逐行之后，一处游离引号最多毁掉**一行**，
- * 块注释用跨行的 `inBlock` 单独跟踪 —— 那才是注释真正的跨行形态。
- *
- * 边界（如实写）：不识别正则字面量；模板串里的 `${}` 当字符串内容处理。
- * 本仓这批脚本没有这两种写法；真出现了，毁掉的也只是那一行。
- *
- * @param {string} src
- * @returns {string}
- */
-export function stripComments(src) {
-  /** @type {string[]} */
-  const out = [];
-  let inBlock = false;
-  for (const line of src.split("\n")) {
-    /** @type {string[]} */
-    const kept = [];
-    /** @type {null | "'" | '"' | "`" } */
-    let quote = null;
-    let i = 0;
-    while (i < line.length) {
-      /* `?? ""`：索引访问在 `noUncheckedIndexedAccess` 下是 `string | undefined`，
-       * 而这里 `i < line.length` 已经保证了它存在 —— 用空串兜住类型面，
-       * 不靠 `!`（本仓 src 侧禁 `!`，脚本侧同口径）。 */
-      const c = line[i] ?? "";
-      const two = line.slice(i, i + 2);
-      if (inBlock) {
-        if (two === "*/") {
-          inBlock = false;
-          i += 2;
-          continue;
-        }
-        i += 1;
-        continue;
-      }
-      if (quote !== null) {
-        if (c === "\\") {
-          i += 2;
-          continue;
-        }
-        if (c === quote) quote = null;
-        kept.push(c);
-        i += 1;
-        continue;
-      }
-      if (two === "//") break; // 行注释：这一行到此为止
-      if (two === "/*") {
-        inBlock = true;
-        i += 2;
-        continue;
-      }
-      if (c === "'" || c === '"' || c === "`") {
-        quote = c;
-        kept.push(c);
-        i += 1;
-        continue;
-      }
-      kept.push(c);
-      i += 1;
-    }
-    out.push(kept.join(""));
-  }
-  return out.join("\n");
-}
 
 /**
  * 递归收集 `scripts/**` 下的 .mjs / .cjs（跳过 node_modules）。
@@ -162,7 +97,11 @@ export function findShellOptions(root = ROOT) {
   const offenders = [];
   for (const file of collect(path.join(root, "scripts"))) {
     const rel = path.relative(root, file).split(path.sep).join("/");
-    const stripped = stripComments(fs.readFileSync(file, "utf8"));
+    /* `trailing: true`：默认档只去整行注释，会把 `const a = 1; // 别写 shell: true`
+     * 这种**行尾**注释留着 ⇒ 判据红在一段正在教人别这么写的注释上（自打自）。 */
+    const stripped = stripComments(fs.readFileSync(file, "utf8"), {
+      trailing: true,
+    });
     stripped.split("\n").forEach((line, idx) => {
       if (SHELL_OPTION_RE.test(line)) offenders.push(`${rel}:${idx + 1}: ${line.trim()}`);
     });
