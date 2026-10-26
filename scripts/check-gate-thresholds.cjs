@@ -27,9 +27,10 @@
  *   1. 账 ⇄ 源码 数值相等（漂移即红，并说出是**变松**还是变严）；
  *   2. 同组必须同数（R5 与 infra 那两把 900 —— 只改一把 = 半边失效）；
  *   3. 这些判据文件里出现、而账里没有的顶层数值 ⇒ 红（不承重的也以 `kind:"report"` 入账：
- *      入账这个动作本身就是那次判断）。**扫描根是磁盘上的 `scripts/check-*.cjs`**，不是
- *      「账上点名的文件」—— 后者让整份没进账的新判据永远不被扫（ISSUE #2188 的立案现场）；
- *      而"顶层具名"两向都认 `export`（ISSUE #2236：可见性不是承重与否的分界）。
+ *      入账这个动作本身就是那次判断）。**扫描根是磁盘现算的「门禁链按名字调起的判定脚本」
+ *      ∪ `scripts/check-*.cjs` 名字族兜底**（ISSUE #2383），不是「账上点名的文件」—— 后者
+ *      让整份没进账的新判据永远不被扫（ISSUE #2188 的立案现场）；而"顶层具名"两向都认
+ *      `export`（ISSUE #2236：可见性不是承重与否的分界）。
  *   4. 相对主干账变松而未签字（`movedFrom` + `movedIssue`）⇒ 红；
  *   5. 自证：账非空、每条都定位得到 —— 正则写漂会让「比对了 0 条」与「全部一致」长得一样。
  *
@@ -41,6 +42,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+
+const { gateChainScripts } = require("./gate-chain-scripts.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const LEDGER_REL = "scripts/.gate-thresholds.json";
@@ -61,6 +64,9 @@ const CONST_HEAD = "^(?:export\\s+)?const\\s+";
 /**
  * 顶层具名数值常量：`const NAME = 123;` / `export const NAME = 0.75;` / `10_000`。
  * 数值分隔写法要一起认，否则账上写 10000 会永远「找不到」；多行表达式不算，也不该入账。
+ * 单行算术表达式（`const X = 7 * 24 * …`）会读到**表达式头上的那个数** —— 这是既定约定
+ * 而不是 bug：账上同以「头数」记（unit 写明源码字面），两侧同一把尺（先例：
+ * STAGE_WALL_CLOCK_MS 那条，kind 是 report 只报不拦）。
  */
 const CONST_DECL = new RegExp(
   `${CONST_HEAD}([A-Z][A-Z0-9_]{2,})\\s*=\\s*(-?\\d[\\d_]*(?:\\.\\d+)?)(?=[;,\\s])`,
@@ -287,7 +293,8 @@ function realReadSource(file) {
 }
 
 /**
- * 扫描根 —— `scripts/check-*.cjs` 这一族，**从磁盘现算**。
+ * 扫描根 —— 「门禁链里被按名字调起的判定脚本」∪ `scripts/check-*.cjs` 名字族兜底，
+ * **从磁盘现算**（ISSUE #2383）。
  *
  * 这一行就是 ISSUE #2188 的全部内容：旧写法的输入面是「账上点名的文件」，于是**整份没进账
  * 的判据文件根本不进循环**，它那几个顶层数值一个字都不被判 —— 而这条判据的本职恰恰是
@@ -295,18 +302,26 @@ function realReadSource(file) {
  * 作者**自己记得**去入账的；没记得的话，这一格当场也是绿的（同 #2156 文件头那一型的第二次
  * 出现，对象换成了它自己）。
  *
- * 刻意**不**按「哪些文件算判据」再抄一份清单：那是第二份账，漂移形态是静默的（清单少一份 ⇒
- * 那份永远不被扫，而账面一条红都没有）—— 同 `check-format.cjs` 文件头那条「判据面由
- * `IGNORE_GLOBS` 自己现算」的理由。`*-check.mjs` / `ship-*.mjs` / `quality-gate.mjs` 这些
- * 形状**本轮刻意不纳入**，写在账的 `$notCovered` 里明说，不悄悄扩大也不悄悄缩小。
+ * #2383 补的那一半：`check-*.cjs` 名字族之外，**凡是门禁链按名字调起的判据**（`shell-gate.mjs`
+ * / `storybook-check.mjs` 这些名字不叫 check- 的，#1444 残活 A / #1451）数值同样要有人守。
+ * 链的现算**只有一份实现**（`gate-chain-scripts.cjs`，与 `check-gate-executors.cjs` 共用）
+ * —— 两处各算一份必然漂（§12.12），漂的形态就是「这条判据有执行者、它的数值却没人看」。
+ *
+ * 链外的两类**刻意不进**，边界写在账的 `$notCovered` 里：
+ *   · 只在平台档（`.cnb.yml`）调起的 `ci-*.mjs` —— 门禁链口径刻意不读 `.cnb.yml`
+ *     （AGENTS 硬规则 7），与 `check-gate-executors.cjs` 同一条边界；
+ *   · 编排器与流程件（`quality-gate.mjs` / `ship-*.mjs`）—— 它们不是判据，
+ *     没有自己「什么算违规」的数值。
  *
  * @returns {string[]} 相对仓库根的路径
  */
 function scanJudgeFiles() {
-  return fs
+  const chain = [...gateChainScripts()].map((name) => `scripts/${name}`);
+  const checkFamily = fs
     .readdirSync(path.join(ROOT, "scripts"), { withFileTypes: true })
     .filter((e) => e.isFile() && /^check-.*\.cjs$/.test(e.name))
     .map((e) => `scripts/${e.name}`);
+  return [...new Set([...chain, ...checkFamily])];
 }
 
 function readLedger() {

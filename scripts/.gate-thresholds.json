@@ -337,11 +337,27 @@
       "kind": "threshold",
       "strictness": "larger-is-stricter",
       "why": "翻页上界。撞不到它才算「取满了窗口」；收紧到盖不住 36h，两个消费点就都落成「没结论」（不是绿、也不是缺勤）—— 那条形状是 ISSUE #2392 修的假缺勤的反面，所以按承重入账。"
+    },
+    {
+      "file": "scripts/check-dependency-audit.mjs",
+      "const": "RULE_VERSION",
+      "value": 1,
+      "unit": "版本戳",
+      "kind": "report",
+      "why": "审计台账的规则版本号：收窄规则时 +1，让旧账与新规则可分（#2383 扩扫描根后入账，入账动作本身就是那次判断）。"
+    },
+    {
+      "file": "scripts/check-deps-freshness.mjs",
+      "const": "REMOTE_REF_GRACE_MS",
+      "value": 7,
+      "unit": "天（源码字面写 `7 * 24 * 60 * 60 * 1000`，判据按字面取头数）",
+      "kind": "report",
+      "why": "远端引用陈旧的宽限窗：超过它才打 [未校验] 而不是判红（#2383 扩扫描根后入账，入账动作本身就是那次判断）。"
     }
   ],
   "$notCovered": {
     "vitest-config-thresholds": "vitest.config.ts 里那一大片覆盖率门槛项由 scripts/ci-coverage-report.mjs 从实测生成，再抄一份进这本账必然脱钩（规范 §11.7 那条棘轮有自己的账）。条数随文件变，所以这里也不写死它。",
     "unnamed-inline-numbers": "写进表达式里的内联数值（如 check-theme-colors.cjs 判短写法 hex 的 `v.length <= 5`）本判据扫不到 —— 它只认顶层具名常量。把它们先提成具名常量属于改判据本身，另案；不写「约 N 处」这种数，因为没有任何一格会随它过期而红。",
-    "scan-root-is-check-cjs": "「整份未入账」那一判的扫描根是磁盘上的 `scripts/check-*.cjs`（ISSUE #2188 起从磁盘现算，不再从账里推）。`*-check.mjs` / `ship-*.mjs` / `quality-gate.mjs` 这些形状**本轮刻意不进扫描根**：账可以点名它们（现在就有一条 `ship-platform.mjs`），被点名的那些数照样逐判核，但不会因为这份文件整体没入账而红 —— 给它们入账的门槛与 check-* 相同，只是没有人替它们现算覆盖面。这一档从「隐含盲区」变成「已声明的边界」，要扩面就连这句一起改。"
+    "scan-root-not-cnb-yml": "扫描根自 #2383 起是「门禁链按名字调起的判定脚本（gate-chain-scripts.cjs，与 check-gate-executors.cjs 共用一份实现）∪ check-*.cjs 名字族兜底」。仍在链外的两类是**口径**不是漏：① 只在平台档（.cnb.yml）调起的 ci-*.mjs —— 门禁链口径刻意不读 .cnb.yml（AGENTS 硬规则 7，平台清单与本地钩子不是同一份），与执行者台账同一条边界；② 编排器与流程件（quality-gate.mjs / ship-*.mjs）—— 不是判据，没有自己「什么算违规」的数值。账上点名链外文件的条目照样逐判核（被点名的数不因扫描根而免检）。"
   }
 }
