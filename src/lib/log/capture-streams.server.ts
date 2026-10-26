@@ -61,14 +61,23 @@ export function panelCaptureLogPath(): string {
  * 与启动器侧 `scripts/launcher-core/orchestrator.mjs` 的 `latestPanelTranscript`
  * 同一口径（那边一直按 mtime 取），只是它服务于失败诊断、这边服务于面板。
  *
- * 本函数是「最新一份转录文件」在**服务端进程内**的唯一事实来源：读（路由）与
- * 轮转（下面的 prune）都问它，两处各写一份必然漂移。
+ * 本函数是「最新一份转录文件」在**服务端进程内**的唯一事实来源：读（路由）问它。
+ * 轮转那一侧（`pruneOldFiles`）按同一条「前缀 + `.log`」判据**自己扫目录**，
+ * 并没有调用本函数（原话「读与轮转都问它」与代码不符，按实读改掉 —— 两份筛选
+ * 各写一遍是漂移位，已另立一条单，不在本轮改）。
+ *
+ * 异步（ISSUE #2193）：调用它的那条路由在面板**每 2s 轮询链**上，而同步
+ * `readdir` + 每份一次 `stat` 占住的是事件循环线程（转录目录里的份数随保留
+ * 策略增长，代价也跟着长）。逐份 `stat` 的语义一字未改：读不到就跳过
+ * （正在被轮转删掉那一格），全部读不到才回 null。
  */
-export function latestPanelLogFile(dir = NEXTJS_LOG_DIR): string | null {
+export async function latestPanelLogFile(
+  dir = NEXTJS_LOG_DIR,
+): Promise<string | null> {
   let best: { file: string; mtimeMs: number } | null = null;
   let names: string[];
   try {
-    names = fs.readdirSync(/*turbopackIgnore: true*/ dir);
+    names = await fs.promises.readdir(/*turbopackIgnore: true*/ dir);
   } catch {
     return null; // 目录还不存在（应用服务从未启动过）——不是错误
   }
@@ -79,7 +88,8 @@ export function latestPanelLogFile(dir = NEXTJS_LOG_DIR): string | null {
     const file = path.join(dir, name);
     let mtimeMs: number;
     try {
-      mtimeMs = fs.statSync(/*turbopackIgnore: true*/ file).mtimeMs;
+      const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
+      mtimeMs = stat.mtimeMs;
     } catch {
       continue; // 正在被轮转删掉
     }

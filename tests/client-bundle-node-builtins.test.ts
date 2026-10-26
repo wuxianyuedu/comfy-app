@@ -64,36 +64,43 @@ function stripComments(src: string): string {
 describe("客户端可达图中不得出现顶层 import Node 内建的模块", () => {
   const report = scan();
 
-  it(
-    "全仓扫描为绿（无客户端可达的 Node-only 模块）",
-    () => {
-      const hits = report.clientReachable;
-      const detail = hits
-        .map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`)
-        .join("\n");
-      expect(
-        hits,
-        `以下模块被客户端组件（或其依赖）静态引用，且顶层 import 了 Node 内建模块——\n` +
-          `Turbopack 会以 "does not support external modules" 让整页 500。\n` +
-          `修法：把纯逻辑（客户端要用的）与 IO（Node-only）拆成两个文件，\n` +
-          `IO 那个放 <name>.server.ts（见 ISSUE #282 / #317 与规范 07 §7.12）。\n${detail}`,
-      ).toEqual([]);
-    },
-    // 扫描器要逐文件读盘 + 解析（600+ 模块），全量并行负载下 5s 默认值不够
-    30_000,
-  );
+  it("全仓扫描为绿（无客户端可达的 Node-only 模块）", () => {
+    const hits = report.clientReachable;
+    const detail = hits
+      .map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`)
+      .join("\n");
+    expect(
+      hits,
+      `以下模块被客户端组件（或其依赖）静态引用，且顶层 import 了 Node 内建模块——\n` +
+        `Turbopack 会以 "does not support external modules" 让整页 500。\n` +
+        `修法：把纯逻辑（客户端要用的）与 IO（Node-only）拆成两个文件，\n` +
+        `IO 那个放 <name>.server.ts（见 ISSUE #282 / #317 与规范 07 §7.12）。\n${detail}`,
+    ).toEqual([]);
+  }, // 扫描器要逐文件读盘 + 解析（600+ 模块），全量并行负载下 5s 默认值不够
+  30_000);
 
   it("log-session-scope 已分层：纯函数模块不含 fs，IO 在 .server 模块", () => {
     // 这是本测试要守住的具体回归（ISSUE #317 的 P0）。
-    const pure = readFileSync(join(SRC, "lib", "log", "log-session-scope.ts"), "utf8");
+    const pure = readFileSync(
+      join(SRC, "lib", "log", "log-session-scope.ts"),
+      "utf8",
+    );
     expect(stripComments(pure)).not.toMatch(/from\s+["']node:fs["']/);
     // 纯函数仍可被客户端 import（clampLogTime 是 LogProvider 在用的）
     expect(pure).toContain("export function clampLogTime");
     expect(pure).toContain("export function resolveSessionStart");
 
-    const server = readFileSync(join(SRC, "lib", "log", "log-session-scope.server.ts"), "utf8");
+    const server = readFileSync(
+      join(SRC, "lib", "log", "log-session-scope.server.ts"),
+      "utf8",
+    );
     expect(server).toMatch(/from\s+["']node:fs["']/);
-    expect(server).toContain("export function fileMtimeMs");
+    /**
+     * 钉的是「IO 在这一层、以这个名字出口」，不是它同不同步（ISSUE #2193 把它
+     * 改成 `async` 之后，原来那条 `toContain("export function fileMtimeMs")`
+     * 会在**与契约无关**的形状上红 —— 判据钉语义不钉行形状）。
+     */
+    expect(server).toMatch(/^export (?:async )?function fileMtimeMs/m);
   });
 
   it("入口是全 src/** 的 use client（不限于 app/components）", () => {
