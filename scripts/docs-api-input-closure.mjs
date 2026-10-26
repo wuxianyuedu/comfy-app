@@ -221,6 +221,21 @@ export function negatedBasenamePattern(entryPoint) {
 }
 
 /**
+ * 这条 entryPoint 是不是 **glob 形态**（含通配符）。
+ *
+ * typedoc 的 `entryPoints` 有两种合法形态：目录 glob（`src/lib/**\/*.ts`）与
+ * **单文件**（`scripts/db-backup-core.mjs`，ISSUE #2444）。两种都真读，但只有
+ * glob 形态有「根」—— 单文件入口不划根（否则 `scripts/` 整个目录会被划进去），
+ * 它自己就是一个「根外叶子」。
+ *
+ * @param {string} entryPoint
+ * @returns {boolean}
+ */
+export function isGlobEntryPoint(entryPoint) {
+  return /[*?[{]/.test(entryPoint);
+}
+
+/**
  * 一条 entryPoint 的**根** = 第一个通配符之前的那段静态前缀。
  *
  * `src/lib/**\/!(*.test).ts` → `src/lib`。
@@ -244,7 +259,10 @@ export function rootOfEntryPoint(entryPoint) {
  * @returns {string[]}
  */
 export function typedocRoots(root = ROOT) {
-  const roots = typedocEntryPoints(root).map(rootOfEntryPoint).filter((r) => r !== "");
+  const roots = typedocEntryPoints(root)
+    .filter(isGlobEntryPoint)
+    .map(rootOfEntryPoint)
+    .filter((r) => r !== "");
   return [...new Set(roots)].sort();
 }
 
@@ -321,6 +339,17 @@ export function closureOutsideRoots(root = ROOT) {
   const seen = new Set();
   /** @type {Set<string>} */
   const outside = new Set();
+  /* **单文件入口**（ISSUE #2444）：typedoc 真读它，而它不在任何根里 ⇒ 它自己就是
+   * 一个「根外叶子」（改它产物就变），它的可达集也要走。不收的话，把
+   * `scripts/db-backup-core.mjs` 加进 entryPoints 反而会让它**掉出**叶子集 ——
+   * 面罩不住它，恰好是本模块要治的那一族。 */
+  for (const ep of entryPoints) {
+    if (isGlobEntryPoint(ep)) continue;
+    if (!fs.existsSync(path.join(root, ep))) continue;
+    if (isExcluded(ep)) continue;
+    if (!isUnderRoots(ep, roots)) outside.add(ep);
+    queue.push(ep);
+  }
   while (queue.length > 0) {
     const rel = queue.pop();
     if (rel === undefined || seen.has(rel)) continue;

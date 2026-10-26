@@ -37,6 +37,7 @@ import { CLOSURE_LEAVES, INPUT_GLOBS } from "../scripts/check-docs-api.cjs";
 import {
   docsApiInputClosure,
   entryPointExtension,
+  isGlobEntryPoint,
   negatedBasenamePattern,
   rootOfEntryPoint,
   typedocEntryPoints,
@@ -97,7 +98,16 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
     expect(c.rootGlobs).toEqual(typedocRootGlobs());
     /* 每条 entryPoint 的根都落在 roots 里 —— 根集合与 entryPoints 一一对应，
      * 否则「根」就是另一份手抄的东西。 */
-    const rootsOfEntryPoints = [...new Set(typedocEntryPoints().map(rootOfEntryPoint))];
+    /* 只有 **glob 形态**的 entryPoint 划根（ISSUE #2444）：单文件入口没有「根」
+     * （否则 `scripts/db-backup-core.mjs` 会把 `scripts` 整个目录划进去），
+     * 它自己是一个根外叶子。 */
+    const rootsOfEntryPoints = [
+      ...new Set(
+        typedocEntryPoints()
+          .filter(isGlobEntryPoint)
+          .map(rootOfEntryPoint),
+      ),
+    ];
     expect(rootsOfEntryPoints.sort()).toEqual(c.roots);
     /* 三根的 glob 形态必须都在收窄面里：面罩不住根 = 根下的改动全漏判。 */
     for (const g of c.rootGlobs) {
@@ -109,11 +119,21 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
     const eps = typedocEntryPoints();
     expect(eps.length, "typedoc.json 里一条 entryPoint 都没有 —— 根算出来是空的").toBeGreaterThan(0);
     for (const ep of eps) {
-      expect(
-        negatedBasenamePattern(ep),
-        `${ep} 里没有取反括号 —— 取反失效会让测试文件变成入口点`,
-      ).not.toBeNull();
-      expect(entryPointExtension(ep), `${ep} 的扩展名认错了`).toBe(".ts");
+      if (isGlobEntryPoint(ep)) {
+        expect(
+          negatedBasenamePattern(ep),
+          `${ep} 里没有取反括号 —— 取反失效会让测试文件变成入口点`,
+        ).not.toBeNull();
+        expect(
+          [".ts", ".tsx"],
+          `${ep} 的扩展名认错了`,
+        ).toContain(entryPointExtension(ep));
+      } else {
+        /* 单文件入口（ISSUE #2444）：没有取反括号形态可言，但它本身必须
+         * 在盘上且带扩展名 —— typedoc 真读它，读不到就是配置漂了。 */
+        expect(entryPointExtension(ep), `${ep} 的扩展名认错了`).not.toBe("");
+        expect(fs.existsSync(path.join(ROOT, ep)), `单文件入口 ${ep} 不在盘上`).toBe(true);
+      }
     }
     expect(typedocExcludes()).toContain("**/*.test.ts");
   });
