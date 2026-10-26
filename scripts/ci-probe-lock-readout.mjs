@@ -76,7 +76,10 @@ export function readBuild(repo, sn) {
     status: String(data.status ?? "(取不到)"),
     createTime: startMs.length > 0 ? isoOf(Math.min(...startMs)) : "",
     startTime: startMs.length > 0 ? isoOf(Math.min(...startMs)) : "",
-    endTime: endMs.length === pipes.length && endMs.length > 0 ? isoOf(Math.max(...endMs)) : "",
+    endTime:
+      endMs.length === pipes.length && endMs.length > 0
+        ? isoOf(Math.max(...endMs))
+        : "",
     title: names.join(" / "),
     note: "",
   };
@@ -108,7 +111,9 @@ export function readRunWindow(repo, sn) {
   try {
     const rows = JSON.parse(raw)?.data?.data ?? [];
     const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {};
-    const create = Number(row.createTime ? Date.parse(row.createTime) : Number.NaN);
+    const create = Number(
+      row.createTime ? Date.parse(row.createTime) : Number.NaN,
+    );
     const durationMs = Number(row.duration ?? Number.NaN);
     const ended = Number.isFinite(create) && Number.isFinite(durationMs);
     return {
@@ -116,7 +121,10 @@ export function readRunWindow(repo, sn) {
       /* 还在跑的那一跑**没有** endTime —— 给空串，由 `overlap()` 按「此刻」收口并
        * 在答案里带 `stillRunning`。拿 `create + duration` 编一个假的结束时刻，
        * 等于把「正在跑」写成「已经停了」。 */
-      endTime: ended && durationMs > 0 ? new Date(create + durationMs).toISOString() : "",
+      endTime:
+        ended && durationMs > 0
+          ? new Date(create + durationMs).toISOString()
+          : "",
       title: String(row.title ?? ""),
       event: String(row.event ?? ""),
     };

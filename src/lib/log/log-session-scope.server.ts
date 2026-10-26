@@ -13,10 +13,15 @@ import fs from "node:fs";
 /**
  * 读取文件 mtime（毫秒）；不存在/不可读返回 null。
  * 调用方负责拼路径——本模块留在 `src/lib`（逻辑层），不做路径解析。
+ *
+ * 异步（ISSUE #2193）：它的调用点在 `GET /api/logs/current` 那条**每 2s 一轮**的
+ * 轮询链上，而同步 `stat` 占住的是事件循环线程 —— 代价由当时所有并发请求一起付，
+ * 不只是这一条轮询。语义一字未改（读不到仍回 null，不替调用方编一个起点）。
  */
-export function fileMtimeMs(file: string): number | null {
+export async function fileMtimeMs(file: string): Promise<number | null> {
   try {
-    return fs.statSync(/*turbopackIgnore: true*/ file).mtimeMs;
+    const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
+    return stat.mtimeMs;
   } catch {
     return null;
   }

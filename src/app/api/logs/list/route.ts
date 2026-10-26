@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiErrorBody } from "~/lib/api-error";
 import { requireRequestUser } from "~/server/auth/request-user";
 import fs from "node:fs";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { toDisplayPath } from "~/lib/path-display";
@@ -15,26 +16,45 @@ interface LogFileInfo {
   size: number;
 }
 
-function scanLogFiles(dir: string, base: string): LogFileInfo[] {
-  if (!fs.existsSync(dir)) return [];
-  const out: LogFileInfo[] = [];
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    const rel = path.join(base, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...scanLogFiles(full, rel));
-    } else if (entry.isFile() && entry.name.endsWith(".log")) {
-      const stat = fs.statSync(full);
-      out.push({
-        name: entry.name,
-        relativePath: toDisplayPath(rel),
-        mtimeMs: stat.mtimeMs,
-        size: stat.size,
-      });
-    }
+/**
+ * 递归列 `log/` 下的 `.log`。异步（ISSUE #2193）：这一份是整棵日志树
+ * 「一次 `readdir` + 每个文件一次 `stat`」，同步写法把全部系统调用压在
+ * 事件循环线程上；日志文件随运行次数增长，代价也跟着长。
+ *
+ * 两处语义按原样保住，没有顺手「改进」：
+ *   - 目录不存在 ⇒ 空列表（第一次运行 / 从没写过日志）；
+ *   - **其它**读故障（权限 / 磁盘 / readdir 与 stat 之间文件被换掉）⇒ 照旧上抛，
+ *     由 `GET` 那一层回 500 —— 「读不到」不许被并成「没有」。
+ * 这里原本不带 `turbopackIgnore` 标记，改完也不带（加标记会改变构建期 tracing）。
+ */
+async function scanLogFiles(dir: string, base: string): Promise<LogFileInfo[]> {
+  let entries: Dirent[];
+  try {
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
   }
-  return out;
+  const perEntry = await Promise.all(
+    entries.map(async (entry): Promise<LogFileInfo[]> => {
+      const full = path.join(dir, entry.name);
+      const rel = path.join(base, entry.name);
+      if (entry.isDirectory()) {
+        return scanLogFiles(full, rel);
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".log")) return [];
+      const stat = await fs.promises.stat(full);
+      return [
+        {
+          name: entry.name,
+          relativePath: toDisplayPath(rel),
+          mtimeMs: stat.mtimeMs,
+          size: stat.size,
+        },
+      ];
+    }),
+  );
+  return perEntry.flat();
 }
 
 export async function GET() {
@@ -44,7 +64,7 @@ export async function GET() {
   }
 
   try {
-    const files = scanLogFiles(LOG_DIR, "")
+    const files = (await scanLogFiles(LOG_DIR, ""))
       .filter((f) => f.name !== "dev-launcher.log")
       .sort((a, b) => b.mtimeMs - a.mtimeMs);
     return NextResponse.json({ files });

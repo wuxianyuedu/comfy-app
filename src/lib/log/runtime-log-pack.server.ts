@@ -75,17 +75,40 @@ export interface RuntimeLogFileEntry {
  *     用户盘上已有它 —— 改名迁移把历史丢掉比留着一条「更早的日志」糟得多。
  *   - 排序按名字（字典序 = 时间序），**不按 mtime**：外部拷贝、备份还原都会改
  *     mtime，而名字里的时刻是写进去的。
+ *
+ * 返回顺序是**旧→新**（本行原写「新→旧」，与 `runtime-log-pack.server.test.ts`
+ * 那两条断言、以及纯判据层 `log-run-packs.ts` 里「与 `listRuntimeLogFiles` 同序」
+ * 那句话都对不上 —— 顺手按实读改掉它，不改代码）。异步化（ISSUE #2193）的理由：
+ * 它是 `GET /api/logs/current` 每次轮询都要走的一次 `readdir`，而面板**
+ * 每 2s 打六路来源**（`LogProvider` 的 `POLL_SOURCES`）。同步 `readdir` 占的是事件循环线程，代价由当时所有并发请求一起付。
+ * 形态与顺序判据一字未改。
  */
-export function listRuntimeLogFiles(
+export async function listRuntimeLogFiles(
   source: RuntimeLogSource,
   dir: string = SERVICES_LOG_DIR,
-): RuntimeLogFileEntry[] {
+): Promise<RuntimeLogFileEntry[]> {
   let names: string[];
   try {
-    names = fs.readdirSync(/*turbopackIgnore: true*/ dir);
+    names = await fs.promises.readdir(/*turbopackIgnore: true*/ dir);
   } catch {
     return []; // 目录还不存在（这个服务从没在本机启动过）——不是错误
   }
+  return toRuntimeLogEntries(source, dir, names);
+}
+
+/**
+ * 「一次目录列表」→「该来源的份（旧→新）」的**唯一一份**映射判据。
+ *
+ * 它被拆出来是为了让异步化和同步版**不各写一套**（§12.12）：轮询链走
+ * {@link listRuntimeLogFiles}，启动期的轮转走 {@link listRuntimeLogFilesSync}，
+ * 两边只剩「怎么把名字取回来」这一件不同的事。顺序漂开的表现是下拉里
+ * 「最近几次」变成「最旧几次」，而两边各自都看起来是对的。
+ */
+function toRuntimeLogEntries(
+  source: RuntimeLogSource,
+  dir: string,
+  names: string[],
+): RuntimeLogFileEntry[] {
   const out: RuntimeLogFileEntry[] = [];
   for (const name of names) {
     if (!name.endsWith(".log")) continue;
@@ -112,12 +135,32 @@ export function listRuntimeLogFiles(
   });
 }
 
-/** 某个来源当前**最新**那一份（写方在「不新建、续写上一份」时用它）。 */
-export function latestRuntimeLogFile(
+/**
+ * 同步版：**只给启动路径上的清理用**（{@link pruneRuntimeLogFiles} /
+ * {@link countRuntimeLogFiles}），它们处在同步的 lifecycle 链里，异步化那一层
+ * 不属于本轮（ISSUE #2193 判的是**被轮询**的那条链）。轮询链一律不许调用它。
+ */
+function listRuntimeLogFilesSync(
   source: RuntimeLogSource,
   dir: string = SERVICES_LOG_DIR,
-): RuntimeLogFileEntry | null {
-  const all = listRuntimeLogFiles(source, dir);
+): RuntimeLogFileEntry[] {
+  try {
+    return toRuntimeLogEntries(
+      source,
+      dir,
+      fs.readdirSync(/*turbopackIgnore: true*/ dir),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** 某个来源当前**最新**那一份（写方在「不新建、续写上一份」时用它）。 */
+export async function latestRuntimeLogFile(
+  source: RuntimeLogSource,
+  dir: string = SERVICES_LOG_DIR,
+): Promise<RuntimeLogFileEntry | null> {
+  const all = await listRuntimeLogFiles(source, dir);
   return all.length > 0 ? (all[all.length - 1] ?? null) : null;
 }
 
@@ -201,7 +244,7 @@ export function pruneRuntimeLogFiles(
 ): number {
   let removed = 0;
   for (const source of RUNTIME_LOG_SOURCES) {
-    const files = listRuntimeLogFiles(source, dir);
+    const files = listRuntimeLogFilesSync(source, dir);
     for (const entry of files.slice(0, Math.max(0, files.length - keep))) {
       try {
         fs.rmSync(/*turbopackIgnore: true*/ entry.file, { force: true });
@@ -219,7 +262,7 @@ export function countRuntimeLogFiles(
   source: RuntimeLogSource,
   dir: string = SERVICES_LOG_DIR,
 ): number {
-  return listRuntimeLogFiles(source, dir).length;
+  return listRuntimeLogFilesSync(source, dir).length;
 }
 
 /** 名字形态的再导出一层（调用方从 `.server` 拿写入器时常常也要判形态）。 */
