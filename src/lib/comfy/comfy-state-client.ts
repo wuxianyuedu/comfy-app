@@ -25,7 +25,7 @@ import type { ComfyStateChange } from "~/lib/comfyui/state-watch";
 /** 单次长轮询的请求上限：比服务端的窗口（25s）宽一点，只兜住病态挂死的连接。 */
 const REQUEST_TIMEOUT_MS = 35_000;
 
-type Listener = (change: ComfyStateChange) => void;
+export type Listener = (change: ComfyStateChange) => void;
 
 type StateClientGlobal = {
   seenSeq?: number;

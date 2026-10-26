@@ -3,11 +3,14 @@
   "entryPoints": [
     "src/lib/**/!(*.test).ts",
     "src/server/**/!(*.test).ts",
-    "src/trpc/**/!(*.test).ts"
+    "src/trpc/**/!(*.test).ts",
+    "src/trpc/**/!(*.test).tsx",
+    "scripts/db-backup-core.mjs"
   ],
   "out": "docs/api",
   "exclude": [
     "**/*.test.ts",
+    "**/*.test.tsx",
     "**/node_modules/**",
     "**/workflows/**"
   ],
@@ -15,5 +18,10 @@
   "excludeProtected": true,
   "excludeInternal": true,
   "readme": "none",
-  "searchInComments": true
+  "searchInComments": true,
+  "externalSymbolLinkMappings": {
+    "@types/node": {
+      "\"child_process\".spawn": "#"
+    }
+  }
 }

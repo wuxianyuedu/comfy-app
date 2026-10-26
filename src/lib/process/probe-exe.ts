@@ -51,7 +51,7 @@ import { spawnSync } from "node:child_process";
  *     所以缺省空转不会让任何一条真实读数消失（有注入的用例逐条断言那行读数在）。
  */
 /** `LoggerTag` → 出口。 */
-type Sink = Record<LoggerTag, (message: string) => void>;
+export type Sink = Record<LoggerTag, (message: string) => void>;
 
 /** 这行读数该被当成哪一级（`log` = 中性读数，`warn` = 「这一组没测」这件要人知道的事）。 */
 export type LoggerTag = "log" | "warn";

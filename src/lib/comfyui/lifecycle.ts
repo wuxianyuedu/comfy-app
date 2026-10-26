@@ -93,7 +93,7 @@ export type ComfyUiStatus = {
   via?: string | null;
 };
 
-type EnsureResult = { ok: boolean; base: string | null; detail: string };
+export type EnsureResult = { ok: boolean; base: string | null; detail: string };
 
 type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;

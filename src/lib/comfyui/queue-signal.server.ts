@@ -24,7 +24,7 @@ import type { ComfyQueueStatus } from "./queue-status-types";
 /** 服务端 diff 节奏：与旧客户端 2s 轮询同频，保证 ComfyUI 全局队列的变化延迟不退化。 */
 const QUEUE_EVENTS_POLL_MS = 2000;
 
-type Listener = () => void;
+export type Listener = () => void;
 interface Subscription {
   onChange: Listener;
 }

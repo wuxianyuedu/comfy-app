@@ -47,7 +47,7 @@ export interface ComfyLivenessSnapshot {
   last: ComfyLivenessSignal | null;
 }
 
-type Listener = (signal: ComfyLivenessSignal) => void;
+export type Listener = (signal: ComfyLivenessSignal) => void;
 
 /**
  * 订阅者集合里**存一个包装对象**，而不是直接把回调塞进 `Set`：同一个回调订阅

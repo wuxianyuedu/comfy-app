@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ComfyUI 工作流「原始 / 控件顺序」兼容层
  *
  * 本应用只接受 **ComfyUI 的原始工作流格式**（工作流 / RAW / UI 格式，
@@ -284,10 +284,10 @@ export function extractPositions(
  *   "sampler_name": [["euler", "euler_ancestral", …], {}]   ← COMBO：首项是候选数组
  * 少数新版（V3 schema）会给对象形式 `{ type: "INT", … }`，这里两种都兼容。
  */
-type ObjectInfoInputSpec =
+export type ObjectInfoInputSpec =
   [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
-interface ObjectInfoClassDef {
+export interface ObjectInfoClassDef {
   input_order?: { required?: string[]; optional?: string[] };
   input?: {
     required?: Record<string, ObjectInfoInputSpec>;
@@ -319,7 +319,7 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
   return { type: null, options: {} };
 }
 
-type ObjectInfo = Record<string, ObjectInfoClassDef>;
+export type ObjectInfo = Record<string, ObjectInfoClassDef>;
 
 /** `/object_info` 响应的**形状契约**（外部 HTTP 边界，规范 §5.5）。
  *
@@ -446,7 +446,7 @@ export function pairWidgetValues(
 
 /** 画布 raw_inputs 配对用的「classType → 控件名顺序表」。
  *
- *  object_info 可达时逐类解析，否则退回内置的 {@link FALLBACK_WIDGETS}。
+ *  object_info 可达时逐类解析，否则退回内置的 `FALLBACK_WIDGETS`。
  *  表中每一项对应 `widgets_values` 的一个下标（含 control_after_generate
  *  哨兵槽）。
  *

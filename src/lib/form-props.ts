@@ -29,8 +29,8 @@
 export type ValueHandler<T = string> = (value: T) => void;
 
 /** 本模块所有适配器接受的「事件」形状（只读它真正用到的字段）。 */
-type ValueEvent = { target: { value: string } };
-type CheckedEvent = { target: { checked: boolean } };
+export type ValueEvent = { target: { value: string } };
+export type CheckedEvent = { target: { checked: boolean } };
 
 /**
  * 文本类控件（`input[type=text]` / `textarea` / `select`）的 `onChange` 适配器。
