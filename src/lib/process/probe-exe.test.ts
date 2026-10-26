@@ -49,17 +49,38 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
     expect(got.failure?.kind).toBe("spawn-error");
   });
 
-  it("被信号结束（`status` 为 null）⇒ nonzero-exit，且话术说出是哪个信号", () => {
-    /* 这一档是「起来了但不是可用形态」的另一种落法：`spawnSync` 给 `status: null` +
-     * `signal`。它与「退非零」在**下一动作**上同一件（不能用），但话术必须说得出来 ——
-     * 只打 `exit ?` 的现场分不出「自己退的」与「被别人杀的」。 */
+  it("被杀掉这一档按平台分开钉：POSIX 给信号，win32 只给退出码（ISSUE #2403）", () => {
+    /* 这一档是「起来了但不是可用形态」的另一种落法，话术必须说得出来 —— 只打 `exit ?`
+     * 的现场分不出「自己退的」与「被别人杀的」。但**两个平台的原值不同**（当场实测）：
+     *   · POSIX：`status: null` + `signal: "SIGKILL"`；
+     *   · win32 ：`status: 1` + `signal: null` —— 这一平台上终止不产生信号退出码，
+     *     所以「被杀掉」与「自己退 1」**就是不可分**的。那是平台事实，不是判据放松。
+     * 旧写法把 POSIX 那一半当通用前提 ⇒ 在 Windows 节点上恒红（每日全量是它的执行者）。 */
     const got = probeExecutable(process.execPath, [
       "-e",
       "process.kill(process.pid, 'SIGKILL')",
     ]);
     expect(got.ok).toBe(false);
-    expect(got.failure).toMatchObject({ kind: "nonzero-exit", status: null });
-    expect(describeProbeFailure(got.failure!)).toContain("SIGKILL");
+    expect(got.failure?.kind).toBe("nonzero-exit");
+    const said = describeProbeFailure(got.failure!);
+    if (process.platform === "win32") {
+      expect(got.failure).toMatchObject({
+        kind: "nonzero-exit",
+        status: 1,
+        signal: null,
+      });
+      expect(said).toContain("exit 1");
+      /* 这一句才是本格的要点：话术**不许**在拿不到信号时编一个出来 ——
+         「被信号结束」在 win32 上无从谈起，编出来就是一条假归因。 */
+      expect(said).not.toContain("信号");
+      return;
+    }
+    expect(got.failure).toMatchObject({
+      kind: "nonzero-exit",
+      status: null,
+      signal: "SIGKILL",
+    });
+    expect(said).toContain("SIGKILL");
   });
 
   it("撞上探测预算 ⇒ timeout，不许混进「起不来」", () => {
@@ -202,6 +223,18 @@ describe("边界：没有码的那种形态也不许编一个数出来充数", (
     });
     expect(text).toContain("没有读数");
     expect(text).not.toContain("exit 0");
+  });
+
+  it("被信号杀掉那一形用注入来钉（win32 上真 spawn 拿不到它，话术仍得有）", () => {
+    /* 上面的真进程那一格在 Windows 上走的是「只剩退出码」那一支，POSIX 那一支如果不注入
+     * 就**永远没有执行者** —— 而它正是「自己退的 vs 被别人杀的」分得开的那一半（ISSUE #2403）。 */
+    const text = describeProbeFailure({
+      kind: "nonzero-exit",
+      status: null,
+      signal: "SIGKILL",
+    });
+    expect(text).toContain("被信号 SIGKILL 结束");
+    expect(text).not.toContain("exit");
   });
 });
 
