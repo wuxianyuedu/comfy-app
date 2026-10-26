@@ -710,9 +710,18 @@ function main() {
     return result.code;
   }
   /* 三态各自的标题**不许同形**：判据没跑起来时写「有漂移」，读的人会去查一遍
-   * 根本没人查过的东西（`base-check.mjs` 那一族同一句话：没跑起来 ≠ 判出失败）。 */
+   * 根本没人查过的东西（`base-check.mjs` 那一族同一句话：没跑起来 ≠ 判出失败）。
+   * 「没装」与「有漂移」也不许同形（ISSUE #2382）：两者都落 1（都要动作），但
+   * 前者是「还没装」（出口 `pnpm install`；硬规则 26：node_modules 缺失只表示
+   * 『还没装』），后者是「判据判出一条事实」。数据层（`installDrift.state`）早已
+   * 分开，摘要层只按 `code` 取词会把「没装」印成「有漂移」。远端真漂移在场时
+   * 仍念「有漂移」—— 那半边是判据判出的，不是「没测」。 */
+  const noInstallOnly =
+    result.code === 1 &&
+    result.remoteDrifts.length === 0 &&
+    result.installDrift?.state === "no-install";
   process.stdout.write(
-    `${result.code === 0 ? "[deps-freshness] OK" : result.code === 2 ? "[deps-freshness] 没跑起来" : "[deps-freshness] 有漂移"}\n`,
+    `${result.code === 0 ? "[deps-freshness] OK" : result.code === 2 ? "[deps-freshness] 没跑起来" : noInstallOnly ? "[deps-freshness] 依赖还没装（出口：pnpm install）" : "[deps-freshness] 有漂移"}\n`,
   );
   for (const l of result.lines) process.stdout.write(`${l}\n`);
   return result.code;
