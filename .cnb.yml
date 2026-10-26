@@ -523,6 +523,15 @@
 # 就退化」这条路；#1981 那条教训正是别指望变量在某个事件上有值）：
 #
 #   · `push`     —— 仍然只有 `master 合并复核` 一条，它本来就该「一条就够」；
+#                   ⚠️ 但它**不掐旧的那一跑**（`cancel-in-progress: false`，ISSUE #2396）：
+#                   这一格判的是「落到 master 的是不是 PR 合并形态」，**逐提交**给读数，
+#                   而被掐掉的那一跑等于没有读数；重跑它的成本整条只有 20~35 秒
+#                   （大头是全量 clone 的 Prepare）⇒ 「互斥省时间」在这里没有收益，
+#                   只留下「前一笔的读数被销毁」这一条代价。真出现两条排队时，
+#                   逐笔复核也应当逐笔给结论（现场两对，间隔都在 12 秒内：
+#                   `cnb-9qi-1k5qojle1` / `cnb-qta-1k5ptts6m` 被判 `cancel`，
+#                   prepare 里的原文是 `The current pipeline is terminated`，
+#                   而反过来那一跑写着 `the ongoing pipeline is terminated: cnb-9qi-…`）。
 #   · `daily`    —— 定时 / 手点 / API 那三条**同一档**，「后起的掐掉先跑的」一字未改地保留
 #                   （§13.5.3.10 想要的就是这份互斥：同一台机上不要同时压两遍那七格）；
 #   · `oneshot-build` / `oneshot-e2e` / `oneshot-unit` —— 每档自己一把：同一档被连点两次
@@ -539,7 +548,9 @@
 # 并逐条带坏形态的反向复算（含「有人忘了写覆盖 ⇒ 退回 `pr-`」那一种）。
 .lock-push: &lock_push
   key: push
-  cancel-in-progress: true
+  # 唯一一把**排队而不终止**的类锁（ISSUE #2396，理由见上面 `push` 那一行）：
+  # 这一格逐提交给读数，「只留最新那一笔」等于把前一笔的结论删掉。
+  cancel-in-progress: false
 .lock-daily: &lock_daily
   key: daily
   cancel-in-progress: true

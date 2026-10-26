@@ -932,11 +932,11 @@ export function resolveLockKey(
   );
 }
 
-/** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, 有没有 cancel-in-progress: true }`。 */
+/** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文 }`（`null` = 没写）。 */
 export function lockAnchorDefinitions(
   text: string,
-): Map<string, { key: string; cancelInProgress: boolean }> {
-  const out = new Map<string, { key: string; cancelInProgress: boolean }>();
+): Map<string, { key: string; cancelInProgress: boolean | null }> {
+  const out = new Map<string, { key: string; cancelInProgress: boolean | null }>();
   const def =
     /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
@@ -944,11 +944,15 @@ export function lockAnchorDefinitions(
     const body = m[2] ?? "";
     const key = /^[ \t]+key:[ \t]*(\S.*?)[ \t]*$/m.exec(body)?.[1];
     if (name === undefined || key === undefined) continue;
+    /* `null` = 这一行**没写**；`false` 是「写了、值是 false」—— 两者不同：
+     * 漏写会让同一件事重复排队，而 `false` 是有意的取舍（逐笔留读数，见 R2）。 */
+    const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(
+      body,
+    )?.[1];
     out.set(name, {
       key,
-      cancelInProgress: /^[ \t]+cancel-in-progress:[ \t]*true[ \t]*$/m.test(
-        body,
-      ),
+      cancelInProgress:
+        rawCancel === undefined ? null : rawCancel === "true",
     });
   }
   return out;
@@ -1029,14 +1033,20 @@ export function pipelineLockAssignments(text: string): Array<{
  * 无关 push 掐掉，与那条 push 的 `createTime` 差 0.2 秒）。所以这里要钉住的是：
  *
  *  · **R1** 非 PR 的每条都显式写 `lock:` —— 靠 `<<: *common` 继承就是那次退化的入口；
- *  · **R2** 引用的那把类锁在场、带 `cancel-in-progress: true`、且 key 是**字面量**
- *    （带变量 = 又一次「某个事件上它无值就退化」，正是 #1981 那条教训）；
+ *  · **R2** 引用的那把类锁在场、**显式写了** `cancel-in-progress`、且 key 是**字面量**
+ *    （带变量 = 又一次「某个事件上它无值就退化」，正是 #1981 那条教训）。
+ *    「显式写了」与「值是 true」是两件事（ISSUE #2396）：`push` 那一档要的是
+ *    **排队而不是终止**，它的判据是下面那条 R6；
  *  · **R3** 同一把锁只许给**同一份工作清单**（`stages:` 引用相同）——
  *    这条把「互掐」限制在「同一件事被重复排队」上：三条每日触发口允许（同一份
  *    `*daily_gates`），而「单跑构建」与「单跑 E2E」共用一把就是本条要拦的形态；
  *  · **R4** 任何一条非 PR 的 key 都不许等于退化后的那个 `pr-`，也不许等于 `pr-<iid>`；
  *  · **R5** PR 那一条仍然用带 `CNB_PULL_REQUEST_IID` 的模板（PR 粒度不许回退成
- *    「全仓一把」，那是 #1981 修掉的第一个 bug）。
+ *    「全仓一把」，那是 #1981 修掉的第一个 bug）；
+ *  · **R6** `push` 那把锁必须是 `cancel-in-progress: false`（ISSUE #2396）。
+ *    这一档守的是「落到 master 的是不是 PR 合并形态」，读数**逐提交**给：终止旧的一跑
+ *    = 把前一笔的结论删掉，而重跑它的成本整条只有 20~35 秒。若哪天它扩成多格、
+ *    成本上去了，先改这一条与规范 §13.5.3.10，而不是把 `true` 悄悄写回来。
  *
  * @param text `.cnb.yml` 原文
  * @param prIid 用来模拟一次 PR 事件的编号（默认任取一个，只用于比对形状）
@@ -1095,9 +1105,9 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
       bad.push(`「${row.name}」引用了不存在的锁锚点 *${row.lockRef}`);
       continue;
     }
-    if (!def.cancelInProgress) {
+    if (def.cancelInProgress === null) {
       bad.push(
-        `锁 *${row.lockRef} 没有 cancel-in-progress: true —— 重复排队收不成一条`,
+        `锁 *${row.lockRef} 没有显式写 cancel-in-progress —— 漏写与「有意排队」在配置里长得一样，重复排队就收不成一条（要排队的那一档写 false 并说明理由）`,
       );
     }
     /* R2：类锁的 key 必须是字面量。 */
@@ -1115,6 +1125,19 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
     const seen = lockToWork.get(def.key);
     if (seen === undefined) lockToWork.set(def.key, new Set([row.stagesRef]));
     else seen.add(row.stagesRef);
+  }
+  /* R6：`push` 那一档逐提交卖读数，「只留最新那一笔」等于删掉前一笔的结论。
+   * 判的是**代出来的 key**，不是锚点名 —— 改名 / 换锚点都逃不掉。 */
+  for (const row of rows) {
+    if (row.lockRef === null) continue;
+    const def = defs.get(row.lockRef);
+    if (def === undefined || def.key !== "push") continue;
+    if (def.cancelInProgress !== false) {
+      bad.push(
+        `锁 *${row.lockRef}（key「${def.key}」）的 cancel-in-progress 不是 false —— ` +
+          "「master 合并复核」的读数是逐提交给的，终止旧的一跑等于把前一笔的结论删掉（ISSUE #2396）",
+      );
+    }
   }
   for (const [key, works] of lockToWork) {
     if (works.size > 1) {
@@ -1856,7 +1879,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "    cancel-in-progress: true",
       ".lock-push: &lock_push",
       "  key: push",
-      "  cancel-in-progress: true",
+      "  cancel-in-progress: false",
       ".lock-daily: &lock_daily",
       "  key: daily",
       "  cancel-in-progress: true",
@@ -1917,13 +1940,22 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "份不同的 stage 清单共用",
     );
 
-    // ③ R2 的前半：类锁漏掉 `cancel-in-progress` ⇒ 重复排队收不成一条，而不报错。
+    // ③ R2：类锁**漏写** `cancel-in-progress` ⇒ 重复排队收不成一条，而不报错。
     const noCancel = fixture.replace(
       ".lock-daily: &lock_daily\n  key: daily\n  cancel-in-progress: true\n",
       ".lock-daily: &lock_daily\n  key: daily\n",
     );
     expect(lockClassViolations(noCancel).join("\n")).toContain(
-      "没有 cancel-in-progress",
+      "没有显式写 cancel-in-progress",
+    );
+
+    // ③′ R6：`push` 那把写回 `true` ⇒ 前一笔 push 的复核读数被销毁（ISSUE #2396 的形态）。
+    const pushCancels = fixture.replace(
+      "  key: push\n  cancel-in-progress: false",
+      "  key: push\n  cancel-in-progress: true",
+    );
+    expect(lockClassViolations(pushCancels).join("\n")).toContain(
+      "cancel-in-progress 不是 false",
     );
 
     // ④ R2 的后半：key 里放进变量 ⇒ 换个事件它就无值，退化这件事又回来了。
@@ -1935,8 +1967,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     // ⑤ R4 / R5：R4 —— 类锁写成那个退化形状本身；R5 —— PR 那把不再随编号变。
     const degenerate = fixture.replace(
-      "  key: push\n  cancel-in-progress: true",
-      "  key: pr-\n  cancel-in-progress: true",
+      "  key: push\n  cancel-in-progress: false",
+      "  key: pr-\n  cancel-in-progress: false",
     );
     expect(lockClassViolations(degenerate).join("\n")).toContain(
       "与非 PR 退化 / PR 那把逐字相同",
