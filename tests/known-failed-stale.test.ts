@@ -267,7 +267,11 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
   it("起不来（status 为 null 但拿到了读数对象）⇒ 同样阻断", () => {
     const res = runGate({
       staged: ["scripts/quality-gate-shared.mjs"],
-      selfTest: { status: null, stdout: "", stderr: "起自证失败：spawn ENOENT" },
+      selfTest: {
+        status: null,
+        stdout: "",
+        stderr: "起自证失败：spawn ENOENT",
+      },
     });
     expect(res.exitCode).toBe(1);
     expect(res.problem).toContain("自证红了");
@@ -310,8 +314,12 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
 /**
  * 判决面：这一步的判决面是「**本次改了什么**」（ISSUE #2265）。
  *
- * 现场：平台上没有暂存区 ⇒ 这一步恒绿且**一个字都不打** ⇒ 账面全绿，而
- * 「碰了这套机制就跑一次自证」在平台侧一个执行者都没有。
+ * 现场：平台那一格**读不到暂存集**（干净快照上索引是空的）⇒ 这一步恒绿且**一个字都不打**
+ * ⇒ 账面全绿，而「碰了这套机制就跑一次自证」在平台侧一个执行者都没有。
+ * （⚠️ 这句过去写的是「平台上没有暂存区」——那是错的，而且错得能骗过用例本身：
+ * ISSUE #2344 实测到平台的索引**可以非空**，上一格回写失败就会往里留东西。
+ * 两件事别混：这一格要的是「平台拿不到本次改动面」，那是 `--base` 的理由；
+ * 而「索引永远空」从来不是。）
  *
  * 这里钉的是三条：
  *   ① `--base <ref>` 换一个判决面的来源（相对基线改了什么）；
@@ -344,11 +352,46 @@ function captureStreams<T>(fn: () => T): { value: T; text: string } {
   }
 }
 describe("自证档的判决面（ISSUE #2265）", () => {
+  /* ⚠️ 这一组**一律显式交清单**（`--staged` 后面不带名字 = 空清单），不写 `resolveFace([])`。
+   * 后者读的是「**此刻这个仓库的索引**」，那是生产入口（钩子）要的形态，不是用例的前提。
+   * ISSUE #2344 的现场：每日那一跑里上一格 `新鲜度账` 回写失败，把两份**入库的**账本
+   * （`scripts/.artifact-freshness.json`、`scripts/.e2e-freshness.json`）留在了索引里
+   * ⇒ `ok` 成了 true ⇒ 账面是 `expected true to be false`，一次与代码无关的假红，
+   * 而同一份树在本地隔离复跑全绿。断言消息位（同 #2287 那一族）让下一次红能读出声。 */
+  /** 一旦这一支还去读当场索引，这个执行者就当场炸 —— 用例不许再拿这台机器的状态当前提。 */
+  const ambientReaderForbidden = () => {
+    throw new Error("用例侧不许读当场索引（ISSUE #2344）");
+  };
+
   it("暂存集为空 ⇒ 这一条**没判**（不是「判过了、没问题」）", () => {
-    const got = resolveFace([]);
-    expect(got.ok).toBe(false);
+    const got = resolveFace(["--staged"], {
+      readStaged: ambientReaderForbidden,
+    });
+    expect(got.ok, JSON.stringify(got)).toBe(false);
     if (got.ok) return;
     expect(got.reason).toContain("暂存区是空的");
+  });
+
+  /**
+   * 上面那两条的**量具那一半**（ISSUE #2344）：注入点必须真的生效。
+   * 没有这一条，「用例不读当场索引」就只是把两行写法改对了，
+   * 下一个人把它改回 `resolveFace([])` 时没有任何东西会红。
+   */
+  it("清单可由调用方交进来 ⇒ 「索引被上一格弄脏」这个现场在进程内就造得出", () => {
+    const dirty = [
+      "scripts/.artifact-freshness.json",
+      "scripts/.e2e-freshness.json",
+    ];
+    const dirtyFace = resolveFace([], { readStaged: () => dirty });
+    expect(dirtyFace, JSON.stringify(dirtyFace)).toEqual({
+      ok: true,
+      files: dirty,
+      via: "暂存区",
+    });
+    /* 反向那一半同样要钉：注入的是**空**清单时才走「没有判决面」那一档 ——
+     * 这两条合起来才说明这一格的输入来自注入，而不是来自这台机器。 */
+    const emptyFace = resolveFace([], { readStaged: () => [] });
+    expect(emptyFace.ok, JSON.stringify(emptyFace)).toBe(false);
   });
 
   /* 上面那条的**另一半**（ISSUE #2354）：空索引有两种来路（忘了 stage / 刻意要一笔空提交），
@@ -361,12 +404,15 @@ describe("自证档的判决面（ISSUE #2265）", () => {
     let got;
     try {
       // 意图那句走 stderr：不接住它就会以「真跑出来的结论」的形态混进 vitest 报告
-      got = captureStreams(() => resolveFace([])).value;
+      got = captureStreams(() =>
+        resolveFace(["--staged"], { readStaged: ambientReaderForbidden }),
+      ).value;
     } finally {
-      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      if (saved === undefined)
+        delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
       else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
     }
-    expect(got.ok).toBe(true);
+    expect(got.ok, JSON.stringify(got)).toBe(true);
     if (!got.ok) return;
     expect(got.files).toEqual([]);
     expect(got.via).toContain("刻意空提交");
@@ -386,7 +432,8 @@ describe("自证档的判决面（ISSUE #2265）", () => {
       code = ran.value;
       out = ran.text;
     } finally {
-      if (saved === undefined) delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
+      if (saved === undefined)
+        delete process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
       else process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = saved;
     }
     expect(out).toContain("旗标作废");
