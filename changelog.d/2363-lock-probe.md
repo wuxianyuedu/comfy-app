@@ -39,3 +39,10 @@
     `key` / `wait` / `expires` / `timeout`，那一格只存在于 `definitions.pipelineLock`。
     也就是说「stage 级锁会不会顺手把别的跑掐停」这个问题**在配置面就不成立**，
     能问的只剩「它认不认、认了是不是只串这一格」。
+- **起跑那一跳的两处修正（都是当场读数逼出来的，不是预判）**：探针的 `runner.tags`
+  第一版抄成了 `cnb`（节点声明的是 `win`），四跑全红在 `Pipeline prepare error: No runner
+  for namespace: group tags: cnb` —— Prepare 96ms、一格都没跑，红的形态与锁毫无关系；
+  取数那一半则把 `cnb … -v` 的响应当成 YAML 逐行取键（它其实是 **JSON**），于是每一跑都
+  读成「(取不到)」，而那一屏看上去与「还在排队」一模一样。整跑的时间线（`createTime` /
+  `endTime`）也不在 `get-build-status` 里（那一层只有**流水线**粒度），改从
+  `build get-build-logs --sn <号>` 取 —— 缺这一路，「两跑相交没有」这个问题根本没有读数。
