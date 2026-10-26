@@ -90,7 +90,11 @@ export const AUTOFIX_DUTIES = [
     stage: "prettier 格式",
     entry: "scripts/ci-format-fixup.mjs",
     args: ["--check", "--autofix"],
-    outputs: ["src/**", ".storybook/**"],
+    /* ⚠️ 字面目录前缀，不是 glob（ISSUE #2378）：消费方 `underWriter()` 是
+     * `startsWith` 的字面匹配，`src/**` 放行不了任何文件（`src/components/…`
+     * 不以字面 `src/**` 开头）⇒ prettier 档写的文件永远进不了允许名单。
+     * 与下面 `docs/generated/` 一档同形。 */
+    outputs: ["src/", ".storybook/"],
     why:
       "口径变更由业主拍板（ISSUE #2342，2026-10-25）：红 ⇒ 就地 --write 门禁判出的那几个" +
       "文件、复判全绿后 bot 推 format-only 提交回 PR 源分支。它与下面那档的差别要如实记：" +
