@@ -11,6 +11,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { analyze, isLooser, num } from "../scripts/check-gate-thresholds.cjs";
+import { gateChainScripts } from "../scripts/gate-chain-scripts.cjs";
 
 /** 账里一条的形状（`group` / `movedFrom` / `movedIssue` 都是可选位）。 */
 type Entry = {
@@ -394,13 +395,7 @@ describe("真仓自证：这本账现在必须与源码一致", () => {
 
 describe("扫描根：门禁链按名字调起的判定脚本也要进面（ISSUE #2383）", () => {
   const root = path.resolve(__dirname, "..");
-  const chain = new Set(
-    (
-      require("../scripts/gate-chain-scripts.cjs") as {
-        gateChainScripts: () => Set<string>;
-      }
-    ).gateChainScripts(),
-  );
+  const chain = new Set(gateChainScripts());
 
   it("共享实现只有一份：两个消费方都 require gate-chain-scripts.cjs（§12.12）", () => {
     for (const consumer of [
