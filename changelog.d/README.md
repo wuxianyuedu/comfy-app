@@ -15,7 +15,11 @@
 ## 怎么用
 
 1. 按 `<issue号>-<slug>.md` 建文件，例如 `408-changelog-conflict-free.md`。
-   没有 ISSUE 号时用 `0-` 开头。
+   没有 ISSUE 号时用 `0-` 开头 —— **但 `## Fixed` 段落没有这条出口**：修缺陷先立案
+   （AGENTS 硬规则 29 / 规范 §13.10.9，那张单就是问题报告本体）。`0-` 只覆盖
+   确实没有诉求单的变更（纯排版、纯机械跟随）。谁在念这件事：`pnpm ship` 阶段 0
+   会对「`0-` + `## Fixed`」点名「先立案」—— 那是读数不是闸，`check-changelog-fragments.cjs`
+   不判这一格。
 2. 首行写段落标题（`## Added` / `## Changed` / `## Fixed` / `## Deprecated` /
    `## Removed` / `## Security`），下面写条目正文。
    写法与原先写在 `CHANGELOG.md` 里完全一致（Markdown、一行一条、`- ` 开头）。
