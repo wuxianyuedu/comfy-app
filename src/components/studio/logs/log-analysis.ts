@@ -16,6 +16,7 @@
  * store → 本文件，无回环。
  */
 import { upperToken } from "~/lib/upper-token";
+import { PANEL_SELF_POLL_ENDPOINTS } from "~/lib/log/panel-self-poll";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { nextId as nextEntryId } from "~/lib/unique-id";
 import { splitLogRecords, stripSgr } from "./log-record";
@@ -319,26 +320,41 @@ export function isRoutineRpcTimingLine(line: string): boolean {
   return /^\S+\s+\d+ms(\s*\{.*\})?$/i.test(body);
 }
 
+/** `GET <目标>` 那一格的开头：面板自用请求都从这里取目标路径。 */
+const GET_REQUEST_TARGET = /^\s*GET\s+(\S+)/;
+
 /**
  * 过滤面板**自轮询**产生的访问日志行（Next dev server 的请求日志）。
  *
- * 面板每 2s 轮询一次 4 路日志来源（`GET /api/logs/current?source=…`）与
- * `GET /api/dev/server-id`，dev server 把每个请求打到 stdout，被转录进
+ * 面板每 2s 轮询六路日志来源（`GET /api/logs/current?source=…`）与
+ * `GET /api/dev/server-id`，另有每 30s 一拍的 `GET /api/dev/build-id`
+ * （代码更新检测，`pauseWhenHidden: false` ⇒ 页面切后台也照打）；
+ * dev server 把每个请求打到 stdout，被转录进
  * nextjs-panel 文件（app 来源）——下一轮轮询又把它读回来。这是一条**自我
  * 反馈回路**：不滤掉就以每轮数行的速度无限累积，而且这些行读不到行内时刻、
  * 只能钳到解析当时，于是成批挤在同一毫秒里把真正的日志淹没。时间线此前封顶
  * 2000 条时，它们正是把「启动 / 启动器」的行全部挤出面板的推手；现在不设
  * 上限，不滤掉的话同样会让时间线变成只剩回声。
  *
- * 只匹配面板自用的这两条端点：业务请求（tRPC / 页面路由 / 生成接口）照常显示。
- * 端点名取自 LogProvider 的轮询实现（fetchFileLogSlice / server-id 探测），
- * 两边改名要同步。带时间戳前缀的形态（`[HH:mm:ss] [INFO] GET …`）由
+ * 端点集合取自 `~/lib/log/panel-self-poll` 那份清单 —— 请求方也 import 它，
+ * 所以「新增一个自用请求」与「过滤它的回声」是同一处改动。此前这里手抄了两个
+ * 名字，于是端点族长出第三个时账面一条都不红（ISSUE #2417）。
+ * 只匹配清单里的端点：业务请求（tRPC / 页面路由 / 生成接口）照常显示 ——
+ * 把集合写宽了会把真日志滤没，那比多几行回声坏得多。
+ * 带时间戳前缀的形态（`[HH:mm:ss] [INFO] GET …`）由
  * parseFileLogs 在拆出正文后再问一次本函数。
  */
 export function isPanelSelfPollingLine(line: string): boolean {
-  return /^\s*GET\s+\/api\/(?:logs\/current|dev\/server-id)(?:\?|\s|$)/.test(
-    line,
-  );
+  const match = GET_REQUEST_TARGET.exec(line);
+  const target = match?.[1];
+  if (!target) return false;
+  return PANEL_SELF_POLL_ENDPOINTS.some((endpoint) => {
+    if (!target.startsWith(endpoint)) return false;
+    /* 端点后必须是「查询串 / 到此为止」之一：`/api/logs/currentX` 不是这条
+     * 端点，不能顺手被滤掉。 */
+    const rest = target.slice(endpoint.length);
+    return rest === "" || rest.startsWith("?");
+  });
 }
 
 function parseLogLevel(level: string): LogLevel {

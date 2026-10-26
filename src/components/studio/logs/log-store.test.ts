@@ -1260,8 +1260,9 @@ describe("isRoutineRpcTimingLine 文件行侧过滤（#294）", () => {
 
 /* ── isPanelSelfPollingLine：面板自轮询行不进面板 ────────────────────────
  *
- * 面板每 2s 轮询 4 路来源与 server-id，dev server 的访问日志把这些请求原样
- * 打进 app 转录——下一轮轮询又读回来，是一条自我反馈回路。不滤掉就会以每轮
+ * 面板每 2s 轮询六路来源与 server-id，另有每 30s 一拍的 build-id；dev server 的
+ * 访问日志把这些请求原样打进 app 转录——下一轮轮询又读回来，是一条自我反馈回路。
+ * 不滤掉就会以每轮
  * 数行的速度无限累积（此前还把「启动 / 启动器」的行从 2000 条缓冲里全部挤出去，
  * 用户看到那两个来源恒为空）。业务请求不是回声，必须照常进面板。 */
 describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
@@ -1277,6 +1278,21 @@ describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
     expect(isPanelSelfPollingLine("GET /api/dev/server-id 200 in 3ms")).toBe(
       true,
     );
+    /* build-id 是端点族后来长出的第三个（代码更新检测，每 30s 一拍且切后台照打）。
+     * 判据此前手抄了两个名字，它因此稳定漏滤 —— 集合改成从
+     * `~/lib/log/panel-self-poll` 那份清单推之后，新增自用端点与过滤它是同一处
+     * 改动（ISSUE #2417）。 */
+    expect(isPanelSelfPollingLine("GET /api/dev/build-id 200 in 7ms")).toBe(
+      true,
+    );
+    /* 转录文件里的**原样形状**（行首一个空格 + 尾部的分段耗时）：
+     * `log/current/nextjs/nextjs-panel-*.log` 里这样的一行有 472 条（一次约 5 小时的
+     * dev 会话，每 30s 一拍），全部在改前稳定漏滤。 */
+    expect(
+      isPanelSelfPollingLine(
+        " GET /api/dev/build-id 200 in 255ms (next.js: 135ms, proxy.ts: 19ms, application-code: 101ms)",
+      ),
+    ).toBe(true);
     /* 业务请求与面板之外的可观测端点不是回声 */
     expect(
       isPanelSelfPollingLine("GET /api/trpc/workflow.list 200 in 12ms"),
@@ -1285,6 +1301,9 @@ describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
       false,
     );
     expect(isPanelSelfPollingLine("GET /api/logs/history?q=x 200")).toBe(false);
+    /* 前缀相同但不是那条端点：`currentX` 不是 `/api/logs/current` 的查询形态，
+     * 集合写宽会把真日志滤没 —— 那比多几行回声坏得多。 */
+    expect(isPanelSelfPollingLine("GET /api/logs/currentX 200")).toBe(false);
   });
 
   it("parseFileLogs 丢弃裸形态与带时间戳前缀形态的自轮询行", () => {
@@ -1293,6 +1312,8 @@ describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
         "GET /api/logs/current?source=app&offset=1 200 in 12ms",
         "[10:22:24] [INFO ] GET /api/logs/current?source=dev 200 in 9ms",
         "GET /api/dev/server-id 200 in 3ms",
+        "GET /api/dev/build-id 200 in 24ms",
+        "[10:22:25] [INFO ] GET /api/dev/build-id 200 in 22ms",
         "业务日志照常保留",
       ].join("\n"),
       new Date(2026, 8, 13),
