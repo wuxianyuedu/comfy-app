@@ -49,6 +49,20 @@
  * 统一选基线，与「受影响用例」那一格同一份口径）。判决链一字未改：还是
  * 「碰没碰壳 → 要不要 cargo test → 壳时效」。
  *
+ * ⚠️ **平台合成的 merge 提交上，三点 diff 会退化成两点**（ISSUE #2325 的现场）：
+ * 平台检出的是「本 PR 并进目标分支（那一刻）」的 merge 提交，而基线是
+ * `CNB_PULL_REQUEST_TARGET_SHA` —— 两者错位时（平台给的基线比合成时的目标侧旧），
+ * `git diff <基线>...HEAD` 的 merge-base 就是**基线自己**，于是「目标分支在基线之后
+ * 自己落地的壳改动」被算成「这个 PR 改了壳」⇒ 要求 cargo ⇒ 那台 runner 没有 ⇒ 退 2。
+ * PR #2283 的现场就是这条（8 份改动、没有一份在 `src-tauri/`）。
+ *
+ * 处置与本地合并态同源：本地那一半读 `MERGE_HEAD`、只剔除「原样采纳对方那侧」的壳输入
+ * （`dropAdoptedShellInputs()`）；平台侧没有 `MERGE_HEAD`，于是改用**合成提交的父关系**
+ * 对账（`changed-scope.mjs` 的 `reconcileSyntheticMergeFace()`：`CNB_COMMIT` 必须是 HEAD
+ * 的某一父）⇒ 改动面取「第一父..HEAD」（= 这个 PR 真带进来的），并把「剔掉了谁」念出来。
+ * 对不上账（没 `CNB_COMMIT` / HEAD 不是 merge 提交 / 两段历史不相交）⇒ **照旧判**，
+ * 但把「这一格没能对账」念出来 —— 不猜、也不静默。
+ *
  * 这一形态下有**两处与本地形态不同**，且两处都因为「平台上没有那件东西」：
  *   · **壳时效不判** —— 判据比的是「编出来的 exe 比源码旧」，而平台检出里**没有**
  *     编出来的壳（exe 不入库）。硬判的结果是「这个 PR 只要碰了壳就必红」，而那条红
@@ -65,7 +79,10 @@ import { fileURLToPath } from "node:url";
 import { defaultShellExe, shellStaleWarning } from "./dev-launcher.mjs";
 import { findCargo, findCargoLookup } from "./shell-gate-cargo.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
-import { changedFilesForBaseRef } from "./changed-scope.mjs";
+import {
+  changedFilesForBaseRef,
+  reconcileSyntheticMergeFace,
+} from "./changed-scope.mjs";
 import {
   hostTripleFromCargoVersion,
   sidecarFileName,
@@ -529,7 +546,11 @@ function main() {
       );
       return 2;
     }
-    const got = changedFilesForBaseRef(baseRef);
+    /* ⚠️ 基线（sha / ref）与 `cwd` 必须**同源**：`changedFilesForBaseRef()` 不传 `cwd`
+     * 时在**本模块所在的检出**里跑 git，而基线是**平台那一跑**给的 sha —— 两个仓库一凑，
+     * 表现是「<sha> 不在本地对象库里」。这条在 #2325 的用例里当场现形（夹具造的仓库里
+     * 起 CLI，基线只在那个仓库里）；平台上 `cwd` 就是本检出，行为一字不变。 */
+    const got = changedFilesForBaseRef(baseRef, { cwd: process.cwd() });
     if (!got.ok) {
       console.error(
         `[shell-gate] ${got.reason} —— 这一格按「没跑起来」收（退 2）。`,
@@ -539,6 +560,29 @@ function main() {
     /* 改名的两侧都进面：旧路径上的壳文件被搬走了，也算「这次改了壳」。 */
     staged = [...got.files, ...got.renamedFrom];
     via = `基线 ${baseRef}`;
+    /* 平台合成的 merge 提交上，三点 diff 会把「目标分支在基线之后自己落地的改动」
+     * 算成本 PR 的（ISSUE #2325）⇒ 能对账就用「这个 PR 真带进来的」那一份，
+     * 并把剔掉了谁念出来。对不上账就不动判决面，只把这件事说出来。 */
+    const face = reconcileSyntheticMergeFace(baseRef, { cwd: process.cwd() });
+    if (face.used) {
+      staged = [...face.files, ...face.renamedFrom];
+      via = `基线 ${baseRef} 与合成合并提交的父关系对过账`;
+      /** @type {string[]} */
+      const dropped = face.deduped.filter((f) => SHELL_INPUT_RE.test(f));
+      console.log(
+        `[shell-gate] 这一跑的检出是平台合成的 merge 提交（首父 ${face.firstParent.slice(0, 8)}）：` +
+          `改动面取「首父..HEAD」（${face.files.length} 条），并剔掉基线之后别人自己落地的 ` +
+          `${face.deduped.length} 条` +
+          (dropped.length > 0
+            ? `（其中壳输入 ${dropped.length} 条：${dropped.join(" ")}）`
+            : "") +
+          "。",
+      );
+    } else {
+      console.log(
+        `[shell-gate] 没能对账合成合并提交：${face.why}。照旧按三点 diff 判。`,
+      );
+    }
   } else if (stagedIdx >= 0) {
     // 显式清单（`--staged a b c`）是调试 / 覆写通道，调用方说了算，不过采纳过滤；
     // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件

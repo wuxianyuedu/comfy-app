@@ -8,10 +8,15 @@
  * 这里钉的是**基线怎么选**与**diff 形态**两件事：前者决定「这个 PR 改了什么」，
  * 后者决定「改名那一行的两侧是不是都在面里」（ISSUE #2226）。
  */
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   changedFilesForBaseRef,
+  reconcileSyntheticMergeFace,
   resolveBaseRef,
   resolveChangedFiles,
 } from "../scripts/changed-scope.mjs";
@@ -159,5 +164,174 @@ describe("changed-scope —— 改动面怎么读", () => {
       renamedFrom: ["old.ts"],
       via: "CNB_PULL_REQUEST_TARGET_SHA（三点 diff）",
     });
+  });
+});
+
+/**
+ * 平台**合成 merge 提交**上的对账（口径 ⑤，ISSUE #2325）。
+ *
+ * 这一族治的是「与壳无关的 PR 被判成改了壳」：平台检出的是「本 PR 并进目标分支（那一刻）」
+ * 的 merge 提交，而基线是 `CNB_PULL_REQUEST_TARGET_SHA` —— 两者错位时三点 diff 的
+ * merge-base 就是**基线自己**，目标分支在基线之后自己落地的改动进了本 PR 的改动面。
+ *
+ * 用例**真造 git 仓库**（假 git 回放不出 merge 拓扑，而这一族判的就是拓扑）：
+ *   基线 B → 目标分支上别人的改动 T（改了 `src-tauri/src/lib.rs`）
+ *   → 本 PR 只改 `src/lib/x.ts` → 平台把 PR 并进 T 生成 M（合成提交）。
+ * 期望：`<B>...M` 里**有**别人的 `lib.rs`（这就是 bug），而对账之后只剩 PR 自己那条。
+ */
+describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）", () => {
+  const temps: string[] = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** 建一个临时仓库；返仓库根。`git` 用户名/邮箱按仓库级设，不污染全局。 */
+  function initRepo(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "changed-scope-merge-"));
+    temps.push(dir);
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "t@t.t");
+    git("config", "user.name", "t");
+    git("config", "commit.gpgsign", "false");
+    return dir;
+  }
+
+  function git(dir: string, ...args: string[]): string {
+    return execFileSync("git", ["-C", dir, ...args], {
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+  }
+
+  function write(dir: string, rel: string, body: string): void {
+    const full = path.join(dir, rel);
+    mkdirSync(path.dirname(full), { recursive: true });
+    writeFileSync(full, body);
+  }
+
+  function commit(dir: string, msg: string): string {
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", msg);
+    return git(dir, "rev-parse", "HEAD").trim();
+  }
+
+  /**
+   * 造出 ISSUE #2325 的拓扑，返回三条 sha：
+   * `base`（平台给的基线）/ `theirs`（目标分支自己落地的）/ `merged`（合成提交）。
+   */
+  function syntheticMerge(): {
+    dir: string;
+    base: string;
+    theirs: string;
+    source: string;
+    merged: string;
+  } {
+    const dir = initRepo();
+    write(dir, "README.md", "x\n");
+    commit(dir, "base");
+    const base = git(dir, "rev-parse", "HEAD").trim();
+
+    /* 源分支：只改前端。 */
+    git(dir, "checkout", "-q", "-b", "feat");
+    write(dir, "src/lib/x.ts", "1\n");
+    const source = commit(dir, "feat: 前端");
+
+    /* 目标分支：基线之后，**别人**改了 Rust 壳。 */
+    git(dir, "checkout", "-q", "main");
+    write(dir, "src-tauri/src/lib.rs", "fn main() {}\n");
+    const theirs = commit(dir, "perf(shell): 别人的壳改动");
+
+    /* 平台合成：把 feat 并进 main（不冲突 ⇒ 自动生成 merge 提交）。 */
+    git(dir, "merge", "--no-ff", "-q", "-m", "Merge feat into main", "feat");
+    const merged = git(dir, "rev-parse", "HEAD").trim();
+    return { dir, base, theirs, source, merged };
+  }
+
+  it("BUG 现场：三点 diff 会把「目标分支在基线之后自己落地的壳改动」算进本 PR", () => {
+    const { dir, base } = syntheticMerge();
+    const got = changedFilesForBaseRef(base, { cwd: dir });
+    expect(got.ok).toBe(true);
+    if (!got.ok) return;
+    /* 这一行就是 ISSUE #2325 的现场读数：PR 没有碰过 `src-tauri/`，面里却有它。 */
+    expect(got.files).toContain("src-tauri/src/lib.rs");
+  });
+
+  it("对账之后（CNB_COMMIT 是 HEAD 的某一父）⇒ 面里只剩本 PR 带进来的，别人的改动被念出来", () => {
+    const { dir, base, source } = syntheticMerge();
+    const face = reconcileSyntheticMergeFace(base, {
+      cwd: dir,
+      env: { CNB_COMMIT: source },
+    });
+    expect(face.used).toBe(true);
+    if (!face.used) return;
+    expect(face.files).toEqual(["src/lib/x.ts"]);
+    expect(face.deduped).toEqual(["src-tauri/src/lib.rs"]);
+  });
+
+  it("常态（基线就是合成时的目标侧）⇒ 对账是恒等变换：一条都不剔", () => {
+    const { dir, theirs, source } = syntheticMerge();
+    const face = reconcileSyntheticMergeFace(theirs, {
+      cwd: dir,
+      env: { CNB_COMMIT: source },
+    });
+    expect(face.used).toBe(true);
+    if (!face.used) return;
+    expect(face.files).toEqual(["src/lib/x.ts"]);
+    expect(face.deduped).toEqual([]);
+  });
+
+  it("没有 CNB_COMMIT（本地 / 手工触发）⇒ 不做减法，说明理由", () => {
+    const { dir, base } = syntheticMerge();
+    const face = reconcileSyntheticMergeFace(base, { cwd: dir, env: {} });
+    expect(face.used).toBe(false);
+    if (face.used) return;
+    expect(face.why).toContain("CNB_COMMIT");
+  });
+
+  it("HEAD 不是 merge 提交（有人覆盖了 HEAD / 不是合成形态）⇒ 不做减法", () => {
+    const { dir, base, source } = syntheticMerge();
+    /* 在源分支上直接看（HEAD = 那条普通提交）。 */
+    git(dir, "checkout", "-q", "feat");
+    expect(git(dir, "rev-parse", "HEAD").trim()).toBe(source);
+    const face = reconcileSyntheticMergeFace(base, {
+      cwd: dir,
+      env: { CNB_COMMIT: source },
+    });
+    expect(face.used).toBe(false);
+    if (face.used) return;
+    expect(face.why).toContain("不是 merge 提交");
+  });
+
+  it("CNB_COMMIT 对不上任何一父（形态认不出来）⇒ 不做减法", () => {
+    const { dir, base } = syntheticMerge();
+    const face = reconcileSyntheticMergeFace(base, {
+      cwd: dir,
+      env: { CNB_COMMIT: "0".repeat(40) },
+    });
+    expect(face.used).toBe(false);
+    if (face.used) return;
+    expect(face.why).toContain("父提交里没有");
+  });
+
+  it("两段历史不相交（合成提交的父与基线无关）⇒ 不做减法，也不许静默", () => {
+    const { dir } = syntheticMerge();
+    /* 另起一条与 HEAD 完全无关的历史，充作基线。 */
+    git(dir, "checkout", "-q", "--orphan", "island");
+    write(dir, "island.txt", "1\n");
+    const island = commit(dir, "island");
+    git(dir, "checkout", "-q", "main");
+    const face = reconcileSyntheticMergeFace(island, {
+      cwd: dir,
+      env: { CNB_COMMIT: git(dir, "rev-parse", "main^2").trim() },
+    });
+    expect(face.used).toBe(false);
+    if (face.used) return;
+    /* 两份历史不相交时三点 diff 本身就拼不出来 —— 与「两段清单不重合」是同一类
+     * 「这一份检出拿不出对照」，只是更早一步。两条都念「不做减法」。 */
+    expect(face.why).toContain("不做减法");
   });
 });
