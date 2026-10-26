@@ -785,7 +785,15 @@ if (
   }
   /* 「这一步已经亲眼看见 pnpm 起了 `-v`」是**比形态判据更硬的事实**（ISSUE #2281：
    * 平台那一跑上判据答 null 而起全路径的 `-v` 退 0 且打了版本号）。所以有这一条时
-   * 调用方不再问判据，直接用它 —— 否则就是「判据看得见、安装看不见」那一族。 */
-  const install = () => runInstall(boot.probing ?? null);
+   * 调用方不再问判据，直接用它 —— 否则就是「判据看得见、安装看不见」那一族。
+   *
+   * 探测事实要**传进**槽闸，不许替掉槽闸（ISSUE #2439）：#2286 一度把这里的
+   * `install` 覆盖成裸 `runInstall` 直接传给 `main` —— `.cnb.yml` 的
+   * `COMFY_CI_SLOT: "1"` 还置着，`applySlot` 却一次都不被问，平台侧每一格都退回
+   * 全量安装，且 `runInstallWithSlot` 的三种槽出口话术从日志里整段消失。 */
+  const install = () =>
+    runInstallWithSlot(boot.probing ?? null, {
+      install: () => runInstall(boot.probing ?? null),
+    });
   void main({ install }).then((code) => process.exit(code));
 }
