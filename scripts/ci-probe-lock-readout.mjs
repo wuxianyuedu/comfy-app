@@ -25,6 +25,8 @@
  */
 
 import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** 终态集合 —— 平台 `status` 的原值（`pending` / `running` 之外的都算停了）。 */
 const TERMINAL = new Set(["success", "failed", "cancel", "timeout", "skipped"]);
@@ -287,7 +289,10 @@ function parseFlags(argv) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+) {
   const [, , cmd, ...rest] = process.argv;
   const f = parseFlags(rest);
   const positional = rest.filter(

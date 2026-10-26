@@ -21,6 +21,11 @@
     「类锁必须 `cancel-in-progress: true`」两条规则 —— 例外名单是字面量、
     **过了 `PROBE_BY`（2026-11-09）当场转红要求删掉**，而三条一旦不在配置里，用例照样绿
     （删探针不留下一条只能靠改用例才能过的判据）。
+- **`scripts/ci-probe-lock-readout.mjs` 的直执行守卫改用 `fileURLToPath` 规范化比较**。
+  第一版抄的是 `import.meta.url === \`file://${process.argv[1]}\``，它在 Windows 上恒不成立
+  （三斜杠 vs 两斜杠、正反斜杠），于是 `main()` 一次都不跑、**退出码恒 0 且零输出** ——
+  「这一步没跑」被读成了「这一步过了」。这条由 `tests/script-main-guard.test.ts`
+  （ISSUE #1961）当场钉住，修法与 `scripts/ci-toolchain-selfcheck.mjs` 同形。
 - **两条当场读数（都来自 `start-build` 的实测回包，不是推演）**，它们直接把「怎么测」
   的形状定死了：
   - `start-build --config` **不能凭空定义一个新事件**。带 `--config` 与把 `config` 塞进
