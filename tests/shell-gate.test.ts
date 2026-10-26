@@ -659,16 +659,37 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     });
 
     it("找不到时要说得出探了哪几处、每一处为什么没命中（不许只说「找不到」）", () => {
+      /* 这一格的被测形状是「候选**全部**没命中」，所以它必须把候选的每一条来源都注入掉
+         （ISSUE #2416）。候选有四处：`PATH` → `CARGO_HOME/bin` → rustup 记着的
+         `cargo_home/bin` → `~/.cargo/bin`（`home` 与 `$USERPROFILE` / `$HOME` 各一份）
+         → `~/.rustup/toolchains`，而后三处**都从家目录派生**。过去这里只注了 `PATH`
+         与 `CARGO_HOME`，`home` 取了进程的真实家目录 ⇒ 在装过 rustup 的开发机上
+         `~/.rustup/toolchains` 必然命中，这一格恒红；而 runner 的服务账号下那个目录
+         不存在，它反倒恒绿。「本地红 / 平台绿」这种**方向相反**的组合最容易被读成
+         「我这边环境坏了」而没人立案 —— 判据侧（#2376 加第三处候选）是对的，
+         缺的是用例侧的隔离。 */
+      const fakeUserHome = tempDir("shell-gate-no-cargo-home-");
+      temps.push(fakeUserHome);
       const got = findCargoLookup({
         env: { PATH: "", CARGO_HOME: path.join(tmpdir(), "没有这个目录-xyz") },
+        home: fakeUserHome,
       });
-      expect(got.path).toBeNull();
+      expect(got.path, JSON.stringify(got.probes)).toBeNull();
       const wheres = got.probes.map((p) => p.where);
       expect(wheres[0]).toBe("PATH");
-      expect(wheres.some((w) => w.startsWith("CARGO_HOME/bin"))).toBe(true);
+      expect(got.probes.some((p) => p.where.startsWith("CARGO_HOME/bin"))).toBe(
+        true,
+      );
       expect(wheres).toContain("~/.cargo/bin");
       // 每一处都要留下结论（命中只在 path 非 null 时出现）
       expect(got.probes.every((p) => p.result !== "hit")).toBe(true);
+      /* 自证「这一格走的确实是注入的那个家」：`~/.cargo/bin` 那一处的 detail 带着它的
+         绝对路径。少了这一句，把 `home` 改回默认（= 真实家目录）在**没装 rust 的机器上
+         照样绿** —— 隔离的丢失又是静默的，正是本单的形状。 */
+      expect(
+        got.probes.some((p) => (p.detail ?? "").includes(fakeUserHome)),
+        `探针里没有任何一处指向注入的家目录 ${fakeUserHome} ⇒ 家目录这一路没被注入掉\n${JSON.stringify(got.probes)}`,
+      ).toBe(true);
     });
 
     /* ── 目录在、而 `fs` 判那个名字不存在（ISSUE #2368 的平台现场）───────────
