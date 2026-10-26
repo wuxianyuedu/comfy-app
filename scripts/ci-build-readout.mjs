@@ -81,6 +81,11 @@ import { fileURLToPath } from "node:url";
 import { asArray, buildSignature } from "./ship-build.mjs";
 import { parseSlug } from "./ship-core.mjs";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
+/* 时长档位用 `~/lib/time-format` 那一份定义（与 ComfyUI 退出记录同一件事）。
+   本文件此前把平台的 `duration` 字段**当秒**印（`${duration}s`），而它是毫秒 ——
+   一次 15m30s 的格子被念成 `930916s`（≈ 10.7 天，ISSUE #2442）。同仓另一个消费者
+   一直按毫秒用它：`scripts/ci-probe-lock-readout.mjs` 的 `create + durationMs`。 */
+import { formatDurationMs } from "../src/lib/time-format.ts";
 import {
   CODE,
   cancelledCause,
@@ -329,7 +334,9 @@ export function describeFailedStages(
     const detail = fetchStageDetail(run, slug, sn, pipeline.id, s.id);
     const status = (detail && detail.status) || s.status;
     const duration =
-      detail && detail.duration !== null ? ` · ${detail.duration}s` : "";
+      detail && detail.duration !== null
+        ? ` · ${formatDurationMs(detail.duration) ?? "未知"}`
+        : "";
     log(
       `${prefix}   ── 失败格：${s.name || s.id}（${s.id} · ${pipeline.name || pipeline.id} · status=${status}${duration}）`,
     );

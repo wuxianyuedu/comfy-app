@@ -28,6 +28,7 @@
 // Node 内建 `fs` + `./proc-detect` 的 type-only import，登记进
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import fs from "node:fs";
+import { formatDurationMs } from "~/lib/time-format";
 import type { PidLookup } from "./proc-detect";
 
 export interface ComfyExitFacts {
@@ -56,14 +57,11 @@ export interface ComfyExitReport {
   advice: string | null;
 }
 
-/** 时长 → `1h02m` / `3m20s` / `42s`（日志里读着顺即可，不做精度承诺）。 */
+/** 时长 → `1h02m` / `3m20s` / `42s`（日志里读着顺即可，不做精度承诺）。
+ *  档位定义在 `~/lib/time-format`（同一件事只有一处），这里只补本模块的话术：
+ *  拿不到时长就明说「未知」，不写 `0s` —— 那会被读成「起来就死了」。 */
 export function formatUptime(ms: number | null): string {
-  if (ms === null || !Number.isFinite(ms) || ms < 0) return "未知";
-  const sec = Math.round(ms / 1000);
-  if (sec < 60) return `${sec}s`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m${String(sec % 60).padStart(2, "0")}s`;
-  return `${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}m`;
+  return formatDurationMs(ms) ?? "未知";
 }
 
 /** 判断「被信号杀掉」时，最值得提醒用户去查的那几种。 */
