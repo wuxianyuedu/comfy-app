@@ -671,6 +671,55 @@ describe("stageLogExcerpt：失败行带行号 + 尾部，两段都给", () => {
   });
 });
 
+describe("stageLogExcerpt：判据锚优先，夹具噪声降级成一句计数（ISSUE #2443）", () => {
+  /* 形状照抄 build `cnb-phl-1k5rscpsg` 的「受影响用例」：清单按行号排，
+   * 噪声（夹具驱动的产品日志 + teardown 时被 abort 的真请求）排在真读数前面。 */
+  const NOISY = [
+    "stdout | src/components/workshop/hooks/x.test.ts > 某条用例",
+    "[canvas-sync] 这份画布没能存进服务端（暂时性，下一次自动保存会再试）：… TRPCClientError — cause=Error: Stream closed before head was received",
+    "",
+    "    Error: connect ECONNREFUSED ::1:3000",
+    "    Error: connect ECONNREFUSED 127.0.0.1:3000",
+    "",
+    " FAIL   node  tests/ci-env-probe.test.ts > 环境前提 > 读数与判据分得开",
+    "Error: Test timed out in 30000ms.",
+    " > tests/ci-env-probe.test.ts:284:3",
+    " FAIL   node  tests/storybook-tsc-input.test.ts > ④ 缺了生成件时 tsc 真的退 0",
+    "Error: Test timed out in 120000ms.",
+    " Test Files  2 failed | 226 passed (228)",
+    "      Tests  2 failed | 2674 passed | 3 skipped (2679)",
+  ].join("\n");
+
+  it("有锚点 ⇒ 只列锚点，带错误字样的噪声行只计数", () => {
+    const ex = stageLogExcerpt(NOISY);
+    const listed = ex.failure.map((l) => l.text).join("\n");
+    for (const want of [
+      "tests/ci-env-probe.test.ts > 环境前提",
+      "Test timed out in 30000ms",
+      "tests/storybook-tsc-input.test.ts",
+      "Test timed out in 120000ms",
+      "Test Files  2 failed",
+    ]) {
+      expect(listed).toContain(want);
+    }
+    expect(listed).not.toContain("canvas-sync");
+    expect(listed).not.toContain("ECONNREFUSED");
+    expect(ex.anchored).toBe(true);
+    expect(ex.demoted).toBe(3);
+    /* 行号仍是完整日志的行号（人能拿着它跳进去） */
+    expect(ex.failure[0]!.line).toBe(7);
+  });
+
+  it("负控制：没有锚点的格（构建类）保持宽松指纹，不降级", () => {
+    const ex = stageLogExcerpt("RUN build\nError: Cannot find module 'x'\n");
+    expect(ex.anchored).toBe(false);
+    expect(ex.failure.map((l) => l.text)).toEqual([
+      "Error: Cannot find module 'x'",
+    ]);
+    expect(ex.demoted).toBe(0);
+  });
+});
+
 describe("describeFailedStages：红格的头、失败行、尾部与日志链接", () => {
   const STAGE_DETAIL = {
     status: 200,
@@ -743,6 +792,34 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
     const text = log.join("\n");
     expect(text).toContain("· 15m31s");
     expect(text).not.toContain("930916");
+  });
+
+  it("夹具噪声不占失败行清单，只念一句计数（ISSUE #2443）", () => {
+    const log: string[] = [];
+    const detail = {
+      ...STAGE_DETAIL,
+      data: {
+        ...STAGE_DETAIL.data,
+        /* 真实形状：噪声按行号在前面，锚点（`×` / 汇总）在后面。 */
+        content: [
+          "stdout | src/a.test.ts > 某条用例",
+          "[canvas-sync] 这份画布没能存进服务端：… cause=Error: Stream closed before head was received",
+          " × 缺键时念 pnpm env:init 5ms",
+          " Test Files  1 failed (1)",
+        ],
+      },
+    };
+    describeFailedStages(fakeRun(detail), {
+      slug: "org/repo",
+      sn: "b1",
+      outcome: classifyBuildOutcome(FAILED_BUILD),
+      log: (s) => log.push(s),
+    });
+    const text = log.join("\n");
+    /* 尾部是**不过滤**的（它就是「最后那一屏」），所以噪声仍出现在末 4 行里；
+     * 判的是失败行清单不再给它留位置。 */
+    expect(text).toContain("L3  × 缺键时念 pnpm env:init");
+    expect(text).toContain("另有 1 行含错误形状文本，未列出");
   });
 
   it("取不到正文 ⇒ 念「没有结论」，不念「日志里没有失败行」", () => {
