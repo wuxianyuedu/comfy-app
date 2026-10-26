@@ -563,6 +563,14 @@
 .lock-oneshot-unit: &lock_oneshot_unit
   key: oneshot-unit
   cancel-in-progress: true
+# 探针 A 的锁（ISSUE #2363，一次性）。`cancel-in-progress: false` **就是被测的那个东西**：
+# 第二条在第一条活着时到达，到底是排队、被跳过、还是照样并行 —— 写 `true` 等于把问题掐掉。
+# 「锁按类分开」那一族的 R2（类锁必须带 `cancel-in-progress: true`）因此在这把锁上**刻意
+# 不成立**，它是 `PROBE_PIPELINES` 那段有期限例外的一部分（判据与到期日见
+# `tests/no-platform-ci-config.test.ts`），不是漏写。
+.lock-probe-a: &lock_probe_a
+  key: probe-2363-a
+  cancel-in-progress: false
 # `prettier 格式` 的**委托回写**口（见 `.format-fixup-stage` 那段）。它自成一份工作清单，
 # 按上面 R3「同一把锁只给同一份清单」的规则必须独占一把 —— 与单跑三档共用会把
 # 「我要复验构建」和「我要补一笔格式修复」排成互斥。
@@ -2370,3 +2378,87 @@ master:
       name: 格式修复委托回写（API 触发）
       lock: *lock_formatfix
       stages: *format_fixup_delegate
+
+  # ── 锁编排探针（ISSUE #2363）：三条**一次性**流水线，读数取完即**整段删掉** ─────
+  #
+  # ⚠️ 三条都**不吃 `*common`**（没有 `- <<: *common`），`runner: group + tags: cnb` 逐字
+  # 抄在这里。两件事各自都是刻意的：
+  #   · 那条锚点自带的 `lock.key: pr-$CNB_PULL_REQUEST_IID` 在 `api_trigger` 上没有值 ⇒
+  #     三条探针会落回同一把字面 `pr-` 并**互相掐停**，测出来的「相交/错开」就不再是
+  #     探针自己那把锁的读数（探针先得自己不成为变量）；
+  #   · 而「每条流水线都要引用 `*common`」那条判据（`tests/no-platform-ci-config.test.ts`
+  #     的 `runner 是锚点展开后…`）会因为这三条而红 —— 这三条是**一次性**的，所以不放开
+  #     那条判据，改为一段**有期限的例外 + 自毁判据**：`PROBE_PIPELINES` / `PROBE_BY`
+  #     在那一刻之前是允许的例外，过了那一刻用例会点名要求删掉这一段。到期自动转红的
+  #     形状，是为了让「临时」两个字不靠人的记性。
+  #
+  # 为什么它们必须写进 `.cnb.yml`、而不能靠 `start-build --config` 内联：
+  # `--config` 只覆盖**被选中的那条流水线**的内容，不替代整份配置 —— 事件名本身要先在
+  # 配置里存在。实测两次（带 `--config` / 把 `config` 塞进 `--data` 请求体）都是同一句
+  # `[CONFIG_EVENT_EMPTY] … no api_trigger_probe_a event config for branch master and $`。
+  # 所以探针脚下这一份配置是**必要条件**，不是图省事。
+  #
+  # 挂在 `master:` 下而不是另开 `$:` 段：平台允许 Issue / NPC 事件挂 `$:`，但**本仓
+  # 这份配置里没有那一层**，而 `master:` 重复出现会静默吃掉后面那一段（同文件已有判据
+  # 在拦）。`api_trigger` 从任意分支都能触发这里的事件名，所以探针照样不必等合入 master
+  # 就能起跑。
+  #
+  # ⚠️ 三条各自要答的问题（Issue 第 1 节）：
+  #   · `probe-2363-a` —— 同 key、`cancel-in-progress: false` + `wait: true`。第二条到达时是
+  #     **排队**（等第一条跑完再进）/ **跳过** / **照样并行**，只有时间线能分开它；
+  #     注意 `wait` 与 `cancel-in-progress` **不能同时写**（官方 schema 原文），所以这里
+  #     写的是 `cancel-in-progress: false` 这个显式值 + `wait: true`；
+  #   · `probe-2363-b` —— **stage 级** `lock`（`wait: true`）。schema 认不认、认了之后
+  #     是不是**只**串这一格而流水线其余部分照跑，是「只串行重档」那条出路的前提；
+  #   · `probe-2363-c` —— 一条锁都不写，作**对照**：没有它，前两条的「相交/错开」
+  #     分不清是锁造成的还是节点本来就排队。
+  #
+  # 休眠时**不会跑**（没有事件推它们）；代价是配置多一小段、以及上面那条判据的例外。
+  # 取数/起跑入口：`node scripts/ci-probe-lock-readout.mjs --help`。
+  api_trigger_probe_a:
+    # ⚠️ 每项都必须写全 `name:` 六空格那一层 —— 判定「换了一条流水线」的解析器认的是
+    # 这个名字键（`pipelineLockAssignments()`）；省掉它的坏形态是：这三条会被**算进上一条**
+    # 的锁归属里，于是「同一把锁给了不同的 stage 清单」当场误报（实测过）。
+    - name: 探针A（同 key · wait:true · cancel-in-progress:false）
+      runner:
+        namespace: group
+        tags:
+          - cnb
+      lock: *lock_probe_a
+      stages:
+        - name: 探针A-填满时间窗
+          script: |
+            echo "[probe-a] start sn=$env:CNB_BUILD_SN t=$(Get-Date -Format o)"
+            Start-Sleep -Seconds 90
+            echo "[probe-a] end t=$(Get-Date -Format o)"
+          timeout: 20m
+  api_trigger_probe_b:
+    - name: 探针B（stage 级 lock · wait:true）
+      runner:
+        namespace: group
+        tags:
+          - cnb
+      stages:
+        - name: 探针B-填满时间窗
+          lock:
+            key: probe-2363-b-stage
+            wait: true
+            timeout: 900
+          script: |
+            echo "[probe-b] start sn=$env:CNB_BUILD_SN t=$(Get-Date -Format o)"
+            Start-Sleep -Seconds 90
+            echo "[probe-b] end t=$(Get-Date -Format o)"
+          timeout: 20m
+  api_trigger_probe_c:
+    - name: 探针C（对照 · 一条锁都不写）
+      runner:
+        namespace: group
+        tags:
+          - cnb
+      stages:
+        - name: 探针C-填满时间窗
+          script: |
+            echo "[probe-c] start sn=$env:CNB_BUILD_SN t=$(Get-Date -Format o)"
+            Start-Sleep -Seconds 90
+            echo "[probe-c] end t=$(Get-Date -Format o)"
+          timeout: 20m
