@@ -510,18 +510,18 @@ describe("主题色豁免台账", () => {
  */
 describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」）", () => {
   it("注释里写「与 --color-primary 同值」→ 阻断并点名是哪一行", () => {
-    /* 夹具路径挑一份**真在豁免表上、且按整文件放行**的（model-cover：exports 为空 =
-     * 文件级作用域），这样那颗裸值本身不红，红的只可能是新闸 —— 否则「棘轮新增」与
-     * 「主张」两种红在这一条里分不开。 */
+    /* 夹具路径挑一份**真在豁免表上、且按整文件放行**的（water-fill-progress：
+     * exports 为空 = 文件级作用域），这样那颗裸值本身不红，红的只可能是新闸 ——
+     * 否则「棘轮新增」与「主张」两种红在这一条里分不开。 */
     const { run } = scanner({
-      "src/components/model/model-cover.ts":
+      "src/components/ui/water-fill-progress.tsx":
         'export const S = { outline: "2px solid #7C5CFC" }; // 与 --color-primary 同值\n',
       "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
     });
     const { ok, output } = run();
     expect(ok).toBe(false);
     expect(output).toContain("背书");
-    expect(output).toContain("src/components/model/model-cover.ts:1");
+    expect(output).toContain("src/components/ui/water-fill-progress.tsx:1");
   });
 
   it("豁免登记理由里写同样的话也算命中（判据扫 src，也扫它自己）", () => {
@@ -569,7 +569,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
 
   it("对照：同一份夹具只删那句主张，裸值走正常豁免便不再红", () => {
     const { run } = scanner({
-      "src/components/model/model-cover.ts":
+      "src/components/ui/water-fill-progress.tsx":
         'export const S = { outline: "2px solid #7C5CFC" }; // 独立的内容类型色\n',
       "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
     });
@@ -675,11 +675,11 @@ describe("已定义 token 上的装饰性兜底（var(--color-x, #hex)，§3.6.1
     "@theme {\n  --color-canvas: #0a0a0f;\n  --color-ink: #ededf2;\n}\n";
 
   it("token 有定义却带色值兜底 → 阻断，且**豁免文件里也照判**（「未豁免写死色值」在那儿是闭嘴的）", () => {
-    /* 夹具挑一份**整文件豁免**的类型色表（model-cover）：第一行那颗裸 hex 由豁免层放行
+    /* 夹具挑一份**整文件豁免**的类型色表（water-fill-progress）：第一行那颗裸 hex 由豁免层放行
      * （顺带让这条豁免保持「活着」，否则先红的是死豁免负债），第二行的兜底那条写死色值
      * 判据同样不看 —— 红的只可能是新闸，而这正是它相对那条判据的唯一覆盖。 */
     const { run } = scanner({
-      "src/components/model/model-cover.ts":
+      "src/components/ui/water-fill-progress.tsx":
         'export const SEED = "#7C5CFC";\n' +
         'export const S = { edge: "var(--color-ink, #EDEDF2)" };\n',
       "src/app/globals.css": FIXTURE_CSS,
@@ -687,7 +687,7 @@ describe("已定义 token 上的装饰性兜底（var(--color-x, #hex)，§3.6.1
     const { ok, output } = run();
     expect(ok).toBe(false);
     expect(output).toContain("兜底永远取不到");
-    expect(output).toContain("src/components/model/model-cover.ts:2");
+    expect(output).toContain("src/components/ui/water-fill-progress.tsx:2");
     /* 同一条夹具不该 ALSO 报「未豁免写死色值」—— 报了就是这条闸与判定层的职责边界没守住，
      * 而「不看豁免表」恰恰是它存在的理由。 */
     expect(output).not.toContain("未豁免的写死色值");

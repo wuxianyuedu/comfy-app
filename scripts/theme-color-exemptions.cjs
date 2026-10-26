@@ -216,16 +216,6 @@ const EXEMPT_TABLES = [
       "换成浅色会与浅色内容糊在一起；百分比那行白字的 drop-shadow 与字色同层、同判据；条目同时登记进 globals.css 的固定暗色清单",
   },
   {
-    file: "src/components/model/model-cover.ts",
-    exports: [],
-    reason:
-      "模型封面的装饰渐变表（六支互不相同的色对，按 id 哈希取一支，同一模型每次同色）。" +
-      "**刻意不跟品牌走**：查过这张表里没有「品牌封面」那个特权位——`#7C5CFC` 只出现在其中一支与" +
-      "空表兜底里，跟另外四支（蓝/绿/琥珀/青）是平级的装饰色；把它焊进 `--color-primary` 会让今后任何一次" +
-      "品牌调整只带走六分之一张表，用户看到的是「有几分变了、有几分没变」，比全不跟手更难解释。" +
-      "色表原先长在 ModelCard.tsx 里，现收在这一个出口，卡片与详情弹窗共用同一支兜底色",
-  },
-  {
     file: "src/components/studio/debug/DebugChainFooter.tsx",
     exports: [],
     reason: "调试链路条的类型色（琥珀描边 + 底色），色值即「调试态」语义",
