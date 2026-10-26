@@ -26,7 +26,12 @@
  */
 import process from "node:process";
 
-import { CODE, decideCreateBranch, planCommands } from "./ship-core.mjs";
+import {
+  CODE,
+  decideCreateBranch,
+  planCommands,
+  readFreshnessState,
+} from "./ship-core.mjs";
 import { HANDLE_SOURCES } from "./dev-handle.mjs";
 import {
   DEV_HANDLE_ENV_KEY,
@@ -332,15 +337,54 @@ export async function runPreflightStage(ctx) {
     );
   }
 
-  const fresh = run("node", ["scripts/check-deps-freshness.mjs"]);
-  if (fresh.status !== 0) {
+  /* ── 依赖新鲜度（硬规则 25 / 规范 §13.5.13）────────────────────────
+   * 判据自己就把三件不同的事分得很清（`--json` 的 `installDrift.state` / `envBroken`），
+   * 但**退出码只有一个非零值同时盖住它们**。此前这里只看退出码，于是「依赖压根没装」
+   * 被念成「新鲜度红了」—— 而「红了」在本仓的口径里是**事实**（三态码 1），
+   * 与硬规则 26 / §13.6.3 正面冲突：`node_modules` 缺失只表示「还没装」，
+   * **不表示「本机跑不了门禁」**。判据的措辞反过来教人做那条明令禁止的事，
+   * 后果是新克隆 / 评审容器 / NPC 工作区里整条 ship 链一步都走不了（ISSUE #2390）。
+   *
+   * 所以这一格读**判据自己的原值**，只读退出码这一条不够（红线③：结论来自既有执行者）：
+   *   · `no-install` ⇒ 2（没跑起来，且不构成结论）：本地两段与平台两段照跑，
+   *     它们不需要 `node_modules`；
+   *   · `envBroken`（拿不到 git 状态）⇒ 2：出口是修 git 读数，`pnpm install` 治不了；
+   *   · 真漂移（②/③ 任一命中）⇒ 保持 1：那才是「有事实是红的」。 */
+  const fresh = run("node", ["scripts/check-deps-freshness.mjs", "--json"]);
+  const freshState = readFreshnessState(fresh);
+  if (freshState === "clean") {
+    codes.push(CODE.GREEN);
+  } else if (freshState === "drift") {
     log(
       "[ship] 依赖新鲜度红了（硬规则 25）⇒ 先 `git pull` + `pnpm install` 再回来。",
     );
     codes.push(CODE.RED);
     return { action: "finish", codes };
+  } else if (freshState === "no-install") {
+    log(
+      "[ship] 依赖还没装（判据原值 `installDrift.state = no-install`）⇒ 下一动作：" +
+        "`pnpm install`。",
+    );
+    log(
+      "[ship] 这不是「新鲜度红了」，也不是「本机跑不了门禁」—— 硬规则 26：`node_modules` " +
+        "缺失只表示还没装。提交 / push / 平台那几段都不需要它，照跑。",
+    );
+    codes.push(CODE.NOT_RUN);
+  } else if (freshState === "env") {
+    log(
+      "[ship] 依赖新鲜度判据没跑起来（判据原值 `envBroken`：拿不到 git 状态）" +
+        " ⇒ 出口是修 git 读数，`pnpm install` 治不了这一格。",
+    );
+    codes.push(CODE.NOT_RUN);
+  } else {
+    /* 判据没给出可读的结论（起不来 / 退了非零而 `--json` 的形状对不上）——
+     * 照样不许念成「红了」，也不许念成「没问题」。 */
+    log(
+      `[ship] 依赖新鲜度判据没有给出可读的结论（exit ${fresh.status}，` +
+        "`--json` 的读数不完整）⇒ 这一格没跑起来，不构成结论，也不念成「红了」。",
+    );
+    codes.push(CODE.NOT_RUN);
   }
-  codes.push(CODE.GREEN);
 
   return {
     action: "continue",
