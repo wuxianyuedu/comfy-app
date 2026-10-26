@@ -22,6 +22,11 @@
  *   失败  = 任一碎片不合形态,或脚本无法读取碎片目录(路径写错等)。
  * 退出码 0 = 通过,1 = 阻断。
  *
+ * 边界（ISSUE #2384）：本脚本只判文件名形态与段落词表，`0-` 开头的碎片在
+ * `## Fixed` 段落上**不是**「没有 ISSUE 号」的合法出口 —— 那半句归 `pnpm ship`
+ * 阶段 0 的单子读数念（§13.10.9「修缺陷先立案」），这里刻意不判（做成闸的后果见
+ * 那条读数自己的文件头）。读者别把本脚本的绿读成「`0-` + Fixed 也可以」。
+ *
  * 用法:node scripts/check-changelog-fragments.cjs
  */
 const fs = require("node:fs");
@@ -30,7 +35,14 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const FRAGMENT_DIR = "changelog.d";
 /** 允许的段落标题 —— Keep a Changelog 的固定段落集(规范 §13.10.4)。 */
-const SECTIONS = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"];
+const SECTIONS = [
+  "Added",
+  "Changed",
+  "Deprecated",
+  "Removed",
+  "Fixed",
+  "Security",
+];
 /** 碎片文件名:`<issue号>-<slug>.md`;issue 号允许 `#` 前缀,slug 用小写字母数字与连字符。 */
 const FILE_RE = /^#?(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 /** 非「一条变更」的文件:目录说明文档不参与形态校验。 */
@@ -53,7 +65,7 @@ function checkFragment(name, text) {
   if (!FILE_RE.test(name)) {
     fileProblems.push(
       `${FRAGMENT_DIR}/${name}:文件名应为 <issue号>-<slug>.md(如 408-changelog-conflict-free.md)。` +
-        `issue 号取本次变更的 ISSUE,slug 用「-」分隔的小写英文;无 ISSUE 时用 0。`
+        `issue 号取本次变更的 ISSUE,slug 用「-」分隔的小写英文;无 ISSUE 时用 0。`,
     );
   }
   const lines = text.split("\n").map((l) => l.trimEnd());
@@ -63,7 +75,7 @@ function checkFragment(name, text) {
     fileProblems.push(
       `${FRAGMENT_DIR}/${name}:首行须是段落标题(## Added / ## Changed / ## Deprecated / ` +
         `## Removed / ## Fixed / ## Security),当前是「${firstContent || "(空文件)"}」。` +
-        `段落标题决定条目并入 [Unreleased] 的哪一节,不能省。`
+        `段落标题决定条目并入 [Unreleased] 的哪一节,不能省。`,
     );
   }
   const body = lines
@@ -73,7 +85,7 @@ function checkFragment(name, text) {
   if (!body) {
     fileProblems.push(
       `${FRAGMENT_DIR}/${name}:只有段落标题、没有条目正文。写清「升级方会看到什么不同」` +
-        `(判据见 13.10.2),空碎片会在发布时并入一个空段落。`
+        `(判据见 13.10.2),空碎片会在发布时并入一个空段落。`,
     );
   }
   return fileProblems.length ? fileProblems : null;
@@ -84,11 +96,15 @@ function main() {
   if (!entries) {
     // 目录可以不存在(尚未启用碎片流的仓库)——此时不做任何断言,直接放行。
     // 但一旦存在就必须自洽,避免「目录建了一半」的静默状态。
-    console.log(`[changelog] 未启用碎片目录 ${FRAGMENT_DIR}/,跳过(见规范 13.10.5)`);
+    console.log(
+      `[changelog] 未启用碎片目录 ${FRAGMENT_DIR}/,跳过(见规范 13.10.5)`,
+    );
     return;
   }
 
-  const files = entries.filter((e) => e.isFile() && e.name.endsWith(".md") && !IGNORED_FILES.has(e.name));
+  const files = entries.filter(
+    (e) => e.isFile() && e.name.endsWith(".md") && !IGNORED_FILES.has(e.name),
+  );
   for (const f of files) {
     const text = fs.readFileSync(path.join(ROOT, FRAGMENT_DIR, f.name), "utf8");
     const p = checkFragment(f.name, text);
@@ -99,7 +115,7 @@ function main() {
     console.error("\n[changelog] CHANGELOG 碎片不合规:\n");
     for (const p of problems) console.error("  ✗ " + p);
     console.error(
-      `\n共 ${problems.length} 项。碎片约定见 docs/standards/13-提交与-code-review.md §13.10.5。`
+      `\n共 ${problems.length} 项。碎片约定见 docs/standards/13-提交与-code-review.md §13.10.5。`,
     );
     process.exit(1);
   }
@@ -107,6 +123,12 @@ function main() {
 }
 
 /** 供测试直接引用:不执行 IO 的纯判定。 */
-module.exports = { checkFragment, FILE_RE, SECTIONS, FRAGMENT_DIR, IGNORED_FILES };
+module.exports = {
+  checkFragment,
+  FILE_RE,
+  SECTIONS,
+  FRAGMENT_DIR,
+  IGNORED_FILES,
+};
 
 if (require.main === module) main();
