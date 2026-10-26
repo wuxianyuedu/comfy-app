@@ -7828,6 +7828,73 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
   配置的格，念它们只会把读数变成噪声；而若平台改了 id 形状（一个 `stage-N` 都匹配不上），
   判据退回「全收」，宁可多念几行也不把证据一起丢掉。
 
+##### 13.5.27.1 那一档**读漏了一半**：一格都没跑到的那一形被判成了真失败（ISSUE #2406）
+
+上面那张表落地后 `cancel` 与 `failed` 在**有格 `cancel`** 的那一形上分开了，
+而 2026-10-26 的现场证明还有另一半完全没被覆盖：
+
+```
+Error reading `git config`: ... exit status 0xc0000142
+Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 got lock:
+  moon-read/comfy-app-t3-push. The current pipeline is terminated
+```
+
+`cnb-9qi-1k5qojle1` / `cnb-qta-1k5ptts6m` 两条 `push` 构建连着被同一把锁顶掉，
+`get-build-status -v` 读回来是这样：构建级 `data.status = error`、流水线 `status = cancel`、
+**`Prepare` 格 `status = error`**（`12855ms` / `10325ms`）、`stage-0 合并形态复核` 是
+`skipped`（`0ms`，没跑）、`End` 反而 `success`。
+
+三件叠在一起，判据就**判错了方向**：
+
+1. `classifyStages()` 只收 `stage-N` —— `Prepare` 被当成「平台自带的噪声」丢掉，
+   而这一跑里它是**唯一**有读数的格；
+2. `stage-0` 是 `skipped` ⇒ `cancelled` 集合也是空的；
+3. 流水线级 `cancel` 的兜底被写在「有格被取消」之后，而它那一条恰好
+   `cancelled.length === 0` 也进不去 ⇒ 一路落到构建级 `error` ⇒ **`failed`**。
+
+于是「被取消」被念成「去查产物」，那条路上没有产物可查。同一个漏读还顺着
+`ci-pr-failure-issue.mjs` / `ci-daily-failure-issue.mjs` 变成**写一张红单**
+（那两处的 `cancelled ⇒ 不立案` 判据一行没错，缺的是判对）。
+
+**根因有两处，第二处才是关键**：
+
+- **格口径**：`prepare` 必须算「工作格」。它不是噪声 —— 全量 clone 在它里面跑，
+  而「一格都没跑到」时它是唯一的证人。`end` / `beforeEnd` / `debugDetection` 仍不认。
+- **原话不在那一层**：`get-build-status -v` 的 `stages[]` **没有 `error` 这一栏**
+  （实测那一格只有 `status/duration/name/id`），而「被顶掉」与「真失败」的分界就在那句话上。
+  同一格用 `get-build-stage -v` 取回来才带 `error`：
+
+  | 构建 | 格 | `status` | `get-build-stage -v` 的 `data.error` |
+  | --- | --- | --- | --- |
+  | `cnb-9qi-1k5qojle1` | `prepare` | error | `Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 got lock: …-push. The current pipeline is terminated` |
+  | `cnb-4hp-1k5pkjjhe` | `stage-6 提交声明核对` | cancel | `The pipeline has been manually terminated or terminated by another pipeline.` |
+  | `cnb-ico-1k5r2letb` | `stage-9 受影响用例` | error | `任务执行失败，返回码：1, signal: -1` |
+
+  前两行是**被终止**（第三行不是）—— 而前两行里只有第一行需要靠原话才分得出来
+  （`cancel` 那一行的状态自己就说了；`prepare` 那种格平台只记 `error`）。
+
+**落成四件**（判定仍只有一份实现）：
+
+- `classifyStages()` 的工作格口径 = `stage-N` ∪ `prepare`，且**分池按原话判**
+  （格状态是 `error` 但原话是被终止的，进 `cancelled` 而不是 `failed`）；
+- `cancelledCause()` 是「这一格属于哪一边」的唯一实现，返回
+  `{kind, reason, holder, sn}` —— `holder` / `sn` 是抢锁那一跑（`pipelineSn()` 把
+  `cnb-jpf-1k5qok15v-001` 收成 `cnb-jpf-1k5qok15v`），认不出就 `null`，**不猜**；
+- `enrichStageErrors()`：分类之前只对**非绿非 skipped** 的那几格补取原话（上限三格），
+  返回新对象、**不改入参** —— 「只读平台原值」那条纪律在执行面上也成立；
+- `outcome.reasons` 把「哪一格 / 哪条流水线 / 构建级」被终止逐条念出来，
+  `formatOutcome()` 先念原因再念「下一动作」。
+
+**边界照旧**：退码 `被取消 = 2`（没有结论），不是 `1`；平台状态词本身
+（`data.status=error` 而流水线 `cancel`）改不了，那是平台语义；「谁抢到锁谁留下」
+这件事也不在本节的量程里（`push` 那一把已改成排队，见 §13.5.3.10，但先到的那一跑
+仍然会被终止 —— 那是平台对 `lock` 的实现，不是 `.cnb.yml` 能改的）。
+
+**判据**：`tests/ci-build-readout.test.ts` 的 `cancelledCause` / `enrichStageErrors` /
+「现场那一形」三组，样本照真机两份读数抄（`get-build-status` 那份**没有** `error`、
+`get-build-stage` 那份**有**），反向样本是「真失败那条原话 ⇒ 仍然 `failed`」与
+「没补原话时不许被念成绿」。
+
 #### 13.5.28 登记面 ⇄ 执行面：两次搬动方向相反，在中间对穿（2026-10-22）
 
 **症状**：`docs/api/**` 与源脱节了 32 份（落后 / 缺失 17 / 多余 1 三类都报）。本地
