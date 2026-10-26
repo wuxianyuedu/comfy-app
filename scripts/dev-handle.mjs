@@ -49,6 +49,21 @@ export const HANDLE_SOURCES = Object.freeze({
 });
 
 /**
+ * 「这个 source 是**人填的**吗」—— 「名字稳不稳」那半问的共用谓词（ISSUE #2387）。
+ *
+ * 「去哪读名字」（source 分档）与「标签打不打得上」（名字在不在）是两个问题：
+ * 话术里凡是要按 source 分支的，都必须经由这个谓词，不许各处手写字面量比对
+ * —— `whoamiLines()` 与 `runNewIssue()` 曾各写一份 `from === "进程环境" || from === ".env"`，
+ * 词表一变就是两处静默失效。
+ *
+ * @param {string | null | undefined} source `resolveDevHandle().source`
+ * @returns {boolean}
+ */
+export function isExplicitSource(source) {
+  return HANDLE_SOURCES.explicit.has(String(source ?? ""));
+}
+
+/**
  * 平台侧那几个候选键，按可信度排序（NPC 名先于 token 用户名：前者是**这次会话是谁**，
  * 后者只是「拿谁的 token」—— 一台机器多份检出的 token 用户名是同一个）。
  */
@@ -114,7 +129,8 @@ export function resolveDevHandle({ root, env = {} }) {
     if (value !== "") return { name: value, source: key, explicit: false };
   }
   const name = gitName(root);
-  if (name !== "") return { name, source: "git config user.name", explicit: false };
+  if (name !== "")
+    return { name, source: "git config user.name", explicit: false };
   return { name: SETTLED_FALLBACK, source: "兜底", explicit: false };
 }
 
@@ -124,8 +140,9 @@ export function resolveDevHandle({ root, env = {} }) {
  * 这一格与「名字是什么」是两个问题，别合并：
  *   · `resolveDevHandle` 回答「这份检出该自称谁」—— 它保证有答案；
  *   · 这个回答「有没有人**指认过**这个名字」—— 建单回读判「标签没落地」时要用它：
- *     取来的名字本来就不该有 `提单人:` 标签（建单那一路不带标签），把它读成
- *     「你填了、但没落上」是一次误判，而且会让一次正常建单退 2。
+ *     建单那一路对**取的**名字也按标签（名字非空就按，ISSUE #2387），只有**你填的**
+ *     名字没落上才算「留痕没落地」退 2（ISSUE #2355）—— 把取的读成「你填了却没落上」
+ *     是误判，会让一次正常建单退 2。
  *
  * @param {{root: string, env?: Record<string, string | undefined>}} input
  * @returns {string | null} 填的那个名字；没填过回 `null`
