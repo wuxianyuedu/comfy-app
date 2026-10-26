@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-10-24",
+  "generatedAt": "2026-10-26",
   "note": "client chunk 体积预算（规范 §13.5.4，ISSUE #1781）。判定看 gzip 与文件数两个总量（raw 一并量、一并打，但不判）；逐文件账是诊断输出，按 sha256 对齐，不进基线。棘轮只许下降，抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
-  "baselineRev": "eab86a3db0cf799b2e12dafa9e6deafa7e33d644",
+  "baselineRev": "2b3986a3e0b18edd77c83a7bdb8fd34795094138",
   "metric": {
     "scope": ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
-    "raw": 9567243,
-    "gzip": 2252847,
-    "files": 222
+    "raw": 9538156,
+    "gzip": 2243830,
+    "files": 224
   },
   "entries": [
     {
@@ -20,18 +20,6 @@
       "sha": "1e1f0f3ae30adc8a7b9ace7e7791a54bc6e5612e2f2074555d866542151deea5",
       "raw": 22776,
       "gzip": 4283
-    },
-    {
-      "name": "02ikw6w0370ez.js",
-      "sha": "2e6b96c050e0e33e6e7bf9ae27d759a64eeb4467d55b5fd9f120f87bb1bf0233",
-      "raw": 28803,
-      "gzip": 10141
-    },
-    {
-      "name": "0403w76x7nqc2.js",
-      "sha": "6f269f2de128824e9d5e4e4668febe6d1e5bdb61918f287b07be70b1c6a98975",
-      "raw": 55108,
-      "gzip": 20167
     },
     {
       "name": "04zd3a7o4gord.js",
@@ -86,12 +74,6 @@
       "sha": "d2e1c9610df076b847b91c071d50d28d098fef0aae74c5425536dcc9cea784b5",
       "raw": 13813,
       "gzip": 3155
-    },
-    {
-      "name": "082mgng6yhpmj.js",
-      "sha": "be3e47b4e21dd140c0af5e512d37e427d650a293dbc67227156dfc92620fd38c",
-      "raw": 14995,
-      "gzip": 5966
     },
     {
       "name": "08i4ccy0vjq4-.js",
@@ -202,28 +184,10 @@
       "gzip": 3368
     },
     {
-      "name": "0jexao5a3dr5h.js",
-      "sha": "e074424ef40e49cefec1904364da59cf86e64156fc592c9d556d7065ef2e1b9d",
-      "raw": 50915,
-      "gzip": 16088
-    },
-    {
       "name": "0k4rl7i4bdrq5.js",
       "sha": "f46c1b5121498b4fe6e7428875eafb356acfdb357fad23638ad372c066037eb2",
       "raw": 1363,
       "gzip": 529
-    },
-    {
-      "name": "0lwbj8do0g2o0.js",
-      "sha": "94a63d7a51c383f76fc6bc7d5455aee0d1931817342954fabb66ad9360da59ab",
-      "raw": 18859,
-      "gzip": 6824
-    },
-    {
-      "name": "0mfaog5n5nch6.js",
-      "sha": "75b34fd18e3137aed1b07cd6193757bf6bd0b8e9b97a805de15cd49a16b9ab32",
-      "raw": 3279,
-      "gzip": 877
     },
     {
       "name": "0mp_wq043jw_x.js",
@@ -286,12 +250,6 @@
       "gzip": 8756
     },
     {
-      "name": "0tpl3u4r13990.js",
-      "sha": "426959e61b11e0cbe272a9f69b567efb08624448f8ca079fd4dc57a7469c4bff",
-      "raw": 345839,
-      "gzip": 108562
-    },
-    {
       "name": "0twl3owegtm4n.js",
       "sha": "cd6eff976d26e15a8497d4d6f69150a0f21fb93b8f861bebd52787f10665df7c",
       "raw": 9430,
@@ -314,6 +272,12 @@
       "sha": "2f6e70473d327c4e703a354a1685c304f4006517dcddcb80a430576dc6db67db",
       "raw": 18771,
       "gzip": 3226
+    },
+    {
+      "name": "0ww1eofs4epyn.js",
+      "sha": "35b3a7043891794c70cb6e6a8ba7086852030073a6be41c6f6223c5dd27a1ffe",
+      "raw": 19716,
+      "gzip": 7785
     },
     {
       "name": "0x-urjx1qyr1p.js",
@@ -382,10 +346,22 @@
       "gzip": 1997
     },
     {
+      "name": "12zb--e_6jucs.js",
+      "sha": "1069b2e5c2a92ea91ef1de031039376a59fc9e53461a79b8affa83d099e62fa8",
+      "raw": 105797,
+      "gzip": 30624
+    },
+    {
       "name": "13v6uw90ndky9.js",
       "sha": "d041acd0b54a4ace4e584d4ed33be4896367354d2e77fb8d87ffe1f79d6d71d7",
       "raw": 14813,
       "gzip": 5705
+    },
+    {
+      "name": "13ybe6h-je1_0.js",
+      "sha": "48dfeec2fbc86845d15fb1281556db8bf62a3120a4f0cdbaee70fe5bdc4d7237",
+      "raw": 41386,
+      "gzip": 14851
     },
     {
       "name": "1412p4wq_hpji.js",
@@ -428,6 +404,12 @@
       "sha": "b1315228b7c169394c61339622d924e6231e77da3ad024bf3b7e6d981418fcb2",
       "raw": 786442,
       "gzip": 53300
+    },
+    {
+      "name": "18o3yqzwb06mj.js",
+      "sha": "4fcf2c86322ea4c1ff482b64af52c0f1f144e308d498c905f7c2666b77f8f6de",
+      "raw": 18805,
+      "gzip": 6977
     },
     {
       "name": "18rdmt5thyger.js",
@@ -496,6 +478,12 @@
       "gzip": 14256
     },
     {
+      "name": "1g25m0aem3mfb.js",
+      "sha": "9855e28c4f2e037c7552ee27df376eae38031d6ba81e777a7712d31f9b02e779",
+      "raw": 14257,
+      "gzip": 3695
+    },
+    {
       "name": "1g7e-c322v9-0.js",
       "sha": "015a73908f5e245db94c8393efba7806bef2579c9aad197eee2314bed07e9a73",
       "raw": 18770,
@@ -508,16 +496,16 @@
       "gzip": 2286
     },
     {
-      "name": "1hguy5jof26kg.js",
-      "sha": "3d20e0ea4183c872b8f28d96c7fc1e77e7a337cfe544eb5048d9e22012e3656a",
-      "raw": 42667,
-      "gzip": 15436
+      "name": "1i9sps3qek03z.js",
+      "sha": "dd21909d84b42f6c0f1d36e38ed1054fc6ab99830250023a64575388be87201f",
+      "raw": 24493,
+      "gzip": 9135
     },
     {
-      "name": "1jk95_5eq_9qq.js",
-      "sha": "cd1769454870236e1235ea948370c01dbfb3f7800192ef11cbcd7a829a2f52a6",
-      "raw": 24444,
-      "gzip": 9115
+      "name": "1imos0gmdwcru.js",
+      "sha": "2d4fe65483bae9916db3ff3dedc1f985366ab834528bc81d6951599b12824308",
+      "raw": 54980,
+      "gzip": 16820
     },
     {
       "name": "1k2t57vu2p-rj.js",
@@ -542,6 +530,12 @@
       "sha": "2cccf54cc5e0d5982f5c7a363d68f6384a143c5e1c37c9bdec43b1f68e7e903a",
       "raw": 2297,
       "gzip": 999
+    },
+    {
+      "name": "1n-bo083wb447.js",
+      "sha": "fd377c624e77f9c21b0684d16df2df02decd07577444fce870508b993135ec53",
+      "raw": 37311,
+      "gzip": 13392
     },
     {
       "name": "1n4_m6izpq2h6.js",
@@ -580,10 +574,10 @@
       "gzip": 1752
     },
     {
-      "name": "1qxc3kmyosty5.js",
-      "sha": "74d72bcc69594e10df714feeef2fd2019fef0f25fed7b0b957dca379a1225e46",
-      "raw": 25287,
-      "gzip": 8959
+      "name": "1pzu7xrl5i-0m.js",
+      "sha": "1b4e4344ca779f5f15d1e9d1050efa95da6516bbeff6c5e63070ab29b86629a8",
+      "raw": 21981,
+      "gzip": 7981
     },
     {
       "name": "1r6edrcwegkcp.js",
@@ -658,10 +652,16 @@
       "gzip": 294
     },
     {
-      "name": "1xfl-bd1ooqm0.js",
-      "sha": "4966618442693bdb9498c682a9806be15109ce12d6837ca7ed56ba5736c55056",
-      "raw": 70476,
-      "gzip": 23573
+      "name": "1x02luvqmqi15.js",
+      "sha": "92ee1175d0d0531f0f2013dbc403c1b6defb09b4271b8e42b3918be7327fd48e",
+      "raw": 16499,
+      "gzip": 6259
+    },
+    {
+      "name": "1xf2wo48zqftd.js",
+      "sha": "91f83d76e4dffc3619c80dafdcce88f0d81ad8d8d10ba6f3ad35516d875f36c9",
+      "raw": 29583,
+      "gzip": 10649
     },
     {
       "name": "1xpd21ls4-fly.js",
@@ -674,6 +674,18 @@
       "sha": "44b684eaa2a20d486e522c66a7b36c69d06f7656fd481212f449690cf6a757e9",
       "raw": 23802,
       "gzip": 7568
+    },
+    {
+      "name": "1xxm6fjz1154z.js",
+      "sha": "e4350d6793fdcc2d4974bbbe6b78ce08a5401f7d72a318f9b8eb698d60a05ab6",
+      "raw": 15241,
+      "gzip": 6030
+    },
+    {
+      "name": "1y-rv_cgbzszh.js",
+      "sha": "6760fa83fb0eb697dee4f4746172609e5c0acb056b943ea4e38fc9ea350d5891",
+      "raw": 70839,
+      "gzip": 23743
     },
     {
       "name": "1y7ajd0u0z_9s.js",
@@ -700,22 +712,10 @@
       "gzip": 49218
     },
     {
-      "name": "1zkuq7ot7cr8i.js",
-      "sha": "4b7f4d6e411f8bf5c67db7dbc2eeff41e5eda903fd4d28f2accd44a3c1bb1b3a",
-      "raw": 37262,
-      "gzip": 13365
-    },
-    {
       "name": "1zm9h37ks221g.js",
       "sha": "de7a88c2affc6d357eecfaee48ae23982b9ed950b1a5b1f4a17cdadac9f587c2",
       "raw": 40100,
       "gzip": 14901
-    },
-    {
-      "name": "2-7ftd8mqmwiu.js",
-      "sha": "883274ff0af08f452d3cd2e7da5ef36bec53524e39eb1a16dabd97a5151b0f0c",
-      "raw": 21186,
-      "gzip": 8412
     },
     {
       "name": "2-awt8u6ibve_.js",
@@ -746,6 +746,12 @@
       "sha": "386d6a3bc1cde0c003bd26538a7268531028b6581512454fc9b46dc750c755c2",
       "raw": 105029,
       "gzip": 28234
+    },
+    {
+      "name": "23octnf3x4yg_.js",
+      "sha": "6af9efab3facd77994810cf5b7a3af8117ce9ff8b0ca9961a41e3fbe9e2073bc",
+      "raw": 3279,
+      "gzip": 876
     },
     {
       "name": "25affw_igo-_l.js",
@@ -790,12 +796,6 @@
       "gzip": 1488
     },
     {
-      "name": "28v5tocdc1jqr.js",
-      "sha": "cdda82bae3be2805986788056c3f86245895ea563108c222246aa4ebbad97e5b",
-      "raw": 104596,
-      "gzip": 30169
-    },
-    {
       "name": "29i0u4pdamtfu.js",
       "sha": "f86f078f345974da1e689a4ebe98206e34d4fb497016d89fe3acbd306bb919fc",
       "raw": 6874,
@@ -824,6 +824,18 @@
       "sha": "91d755ded92479600b5506f841cad34faa54752535b81e0e7a6cc36d2ae24221",
       "raw": 3241,
       "gzip": 881
+    },
+    {
+      "name": "2c16m6p8jfgfy.js",
+      "sha": "1642bdfffa5fa7b0ae6f4d48da02974eb725bc80383ab9da33e8314a5d4dbaa7",
+      "raw": 289069,
+      "gzip": 91872
+    },
+    {
+      "name": "2c3bqjf2jaly0.js",
+      "sha": "56f316927b70cac735ed673cb4ba607214300105e24b20ae3c1a29d677db7a7e",
+      "raw": 21287,
+      "gzip": 8439
     },
     {
       "name": "2c93b7a48arq0.js",
@@ -862,12 +874,6 @@
       "gzip": 3998
     },
     {
-      "name": "2fo8dk82xzdmp.js",
-      "sha": "d9c1643ef2e5b08651a31738fed1579a0d57a3c28c9107dbb3cffa4eba8c847a",
-      "raw": 28758,
-      "gzip": 9470
-    },
-    {
       "name": "2gx-97wql14rx.js",
       "sha": "8a60f19808f6fc3bfc29e7e3396a1f22efa1d300cbad488c3e39955073963ae2",
       "raw": 23094,
@@ -890,6 +896,18 @@
       "sha": "d3129444497b20e466802f6481b5b6889af4cfbccbadbdb9077cac4c12299d8f",
       "raw": 9816,
       "gzip": 1938
+    },
+    {
+      "name": "2i9xn5nm3_zvr.js",
+      "sha": "6cbd080c352ca704b2d519034d8b2475fef40db21a5181cb820db1108b730030",
+      "raw": 55104,
+      "gzip": 20173
+    },
+    {
+      "name": "2k_yc0q1ifu7o.js",
+      "sha": "81e2c2287b52e8cd14852be97861e0514552a006d4fa460902e7212d08df2b90",
+      "raw": 25313,
+      "gzip": 8968
     },
     {
       "name": "2kahxyd3gop3g.js",
@@ -982,6 +1000,12 @@
       "gzip": 2367
     },
     {
+      "name": "2wr_pcifgbc5x.js",
+      "sha": "c406f1e884e01dc1aa6aad10e4d0327496d5276c2447464e4129058ff0b6ebf0",
+      "raw": 30715,
+      "gzip": 10652
+    },
+    {
       "name": "2xh0ny51d1a2-.js",
       "sha": "29160f1bed40d8d2dd3ee8b276e4a3f82f404d6e005461b1ff2842e27eebb62c",
       "raw": 2956,
@@ -1036,12 +1060,6 @@
       "gzip": 16186
     },
     {
-      "name": "34aq-qviss1rn.js",
-      "sha": "a066e8c1da7d652da762bb6dfb8f69d8100b1626c4010376c3deb0426ade46fb",
-      "raw": 18755,
-      "gzip": 6825
-    },
-    {
       "name": "34bo4bb8h92m1.js",
       "sha": "3aecffb4fd18fc4f60d34ad08afaf3d178964e5b963fafbd42e8e1e6cccb1357",
       "raw": 37192,
@@ -1072,12 +1090,6 @@
       "gzip": 10048
     },
     {
-      "name": "36jbaygjsfw40.js",
-      "sha": "e4c606b41562d5727157ce4434d0bac995d6f6f60bc151f7677d6a4af38378f6",
-      "raw": 30007,
-      "gzip": 10346
-    },
-    {
       "name": "36xzfrl1d3wji.js",
       "sha": "882b2f72494835097a6f316ad434db08fc5182546690f020922da0aa56d31ed0",
       "raw": 8120,
@@ -1088,12 +1100,6 @@
       "sha": "08a5a0bc73f56d0c02e39889e13b6349013eb5a53f2eac69d0b9184aa68917f9",
       "raw": 12869,
       "gzip": 2076
-    },
-    {
-      "name": "37ylkx3cr_boq.js",
-      "sha": "a417721654876587847a97d12971ce032370211c3caf1c2e92a403513904c60a",
-      "raw": 18149,
-      "gzip": 7330
     },
     {
       "name": "38l7di7ffo_tb.js",
@@ -1198,6 +1204,12 @@
       "gzip": 16127
     },
     {
+      "name": "3hgzsehgxblro.js",
+      "sha": "ae8ad62c917341c8f270c8d5c8d3ceb6e79e4993c4f66a38b049b76e29a371d8",
+      "raw": 21054,
+      "gzip": 7804
+    },
+    {
       "name": "3iore-g1hh2nv.js",
       "sha": "1c390d4fd0594283ebcc779c28f45225ea761162ab694e7dffab8c1c12a013d8",
       "raw": 3743,
@@ -1252,16 +1264,10 @@
       "gzip": 6181
     },
     {
-      "name": "3o_607rxbeegi.js",
-      "sha": "614d197af8caccdd84773523454cbd69be162d0953e2abfa5804c5aa550547f4",
-      "raw": 30797,
-      "gzip": 10659
-    },
-    {
-      "name": "3s4pp7i30elx5.js",
-      "sha": "3a5844ee781fda257934d304f79649245676c9ffeeea84ff5a6d2cf1ee0075ee",
-      "raw": 22319,
-      "gzip": 8150
+      "name": "3t24g84rv4b1_.js",
+      "sha": "7b01c3d7a2fb6695fc63e09cb158144c8fe7ad12dd047dcef5e3852af8b9a7c7",
+      "raw": 50117,
+      "gzip": 15861
     },
     {
       "name": "3u2-y1ul5q-bt.js",
@@ -1292,6 +1298,12 @@
       "sha": "cf4def7dfb3537a07ee550a83f1bb6409be24e8a8d052050ce79d77e8bbda022",
       "raw": 96011,
       "gzip": 30781
+    },
+    {
+      "name": "3yzqin4bhmrwk.js",
+      "sha": "cbad49766be8a666b790bce4c1243f07ee861caa245371597b66998a3a7b17a0",
+      "raw": 16236,
+      "gzip": 5331
     },
     {
       "name": "4057h0szp149d.js",
@@ -1330,10 +1342,10 @@
       "gzip": 3923
     },
     {
-      "name": "44bhg_i1-eeno.js",
-      "sha": "a5c16a5e84d7535f20ba99686a1c24fb1cfca39a473b542e064ca628686598bd",
-      "raw": 44309,
-      "gzip": 14956
+      "name": "4555jkg0w3itb.js",
+      "sha": "3ca3ff1fed8f75f497f7be5bdfc531580c8f7e1f07cfb81dd1be4b2e38e04950",
+      "raw": 24661,
+      "gzip": 8456
     },
     {
       "name": "turbopack-2c3mg3r-05n1w.js",
