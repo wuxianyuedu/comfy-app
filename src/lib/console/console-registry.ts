@@ -25,7 +25,7 @@ export interface ConsoleHistoryEntry {
   finishedAt: number;
 }
 
-interface ConsoleSlot {
+export interface ConsoleSlot {
   runner: ConsoleRunner;
   history: ConsoleHistoryEntry[];
 }

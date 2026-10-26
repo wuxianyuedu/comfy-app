@@ -28,7 +28,7 @@ const SETTINGS_FILE = path.join(
   "workshop-comfy-settings.json",
 );
 
-interface ComfySettings {
+export interface ComfySettings {
   checkpoint?: string;
   imageWorkflow?: unknown;
   videoWorkflow?: unknown;

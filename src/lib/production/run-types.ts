@@ -194,7 +194,7 @@ export interface ProductionRunView {
 }
 
 /** production 行的最浅读法（字段都可能是未知 JSON，这里宽容读）。 */
-interface ProductionLike {
+export interface ProductionLike {
   scriptMarkdown?: unknown;
   characters?: unknown;
   shots?: unknown;

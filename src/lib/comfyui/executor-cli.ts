@@ -1,4 +1,4 @@
-/**
+﻿/**
  * `executor-cli.ts` — comfy-cli 执行路径（**两种格式统一**）
  * ===========================================================================
  *
@@ -62,18 +62,18 @@ import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST } from "../endpoints";
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·第三步·执行批） ────────────────────── */
 
-type LoggerLike = { warn(msg: string): void };
-async function loadRealTaskRepo() {
+export type LoggerLike = { warn(msg: string): void };
+export async function loadRealTaskRepo() {
   return (await import("../core/repository")).taskRepository;
 }
 async function loadRealResolveComfyBase() {
   return (await import("./client")).resolveComfyBase;
 }
-type TaskRepoForCli = Pick<
+export type TaskRepoForCli = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
   "markRunning" | "updateProgress"
 >;
-type ResolveComfyBaseFn = () => Promise<string>;
+export type ResolveComfyBaseFn = () => Promise<string>;
 
 /** 本模块用到的三条 server-only 侧依赖的最小形状。host（Next 侧无需、executor
  *  host 必用）通过 `configureExecutorCli` 覆盖任一条；未覆盖的走 lazy 兜底。 */
