@@ -185,7 +185,7 @@ export interface HomePageProps {
   onNewProject?: () => void;
   recentProjects?: RecentProject[];
   onOpenProject?: (id: string) => void;
-  /** 打开一个画布项目（跳到画布视图，而不是 /create/{id}）。 */
+  /** 打开一个画布项目（设为活跃 + 跳到项目主页）。 */
   onOpenCanvasProject?: (id: string) => void;
   /** 跳到一个工作区视图（模型 / 工作流 / 画布等） */
   onNavigate?: (view: WorkspaceView) => void;
@@ -202,7 +202,11 @@ export function HomePage({
   onShowAllProjects,
 }: HomePageProps) {
   /**
-   * 打开一个最近项目 —— 画布项目要进画布视图，其余走 `/create/{id}`。
+   * 打开一个最近项目 —— 一律落到项目主页。
+   *
+   * 「其余走 /create/{id}」这条岔路随独立详情路由一起退役（#2422）：
+   * 最近项目的 kind 恒为 "canvas"（Task.type 不收画布项目），非 canvas 分支
+   * 现在也落在项目主页 —— 两条回调只是历史分工，在役落点已经并轨。
    *
    * 收成一处是因为现在有两个入口会用这条规则（「继续最近项目」大卡与下面的小卡
    * 栅格）：此前它内联在小卡的 onClick 里，大卡要复用就得再抄一遍 —— 而两个入口
