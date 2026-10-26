@@ -1,4 +1,4 @@
-// 面向外部的任务操作入口：日志读取 / 取消，服务 ComfyUI 执行器。
+﻿// 面向外部的任务操作入口：日志读取 / 取消，服务 ComfyUI 执行器。
 //
 // 从历史上的单文件 `runner.ts` 拆出。本模块持有 API 路由与编排方用的
 // **公开入口**；真正的 WS 执行机制在 executor.ts，孤儿回收在 reaper.ts。
@@ -32,10 +32,10 @@ import { kickQueue } from "./executor-continuation";
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 reaper / enqueue 也能被纯
    Node executor host 加载，不再撞 `../core/repository` 的 server-only throw） ── */
 
-async function loadRealTaskRepo() {
+export async function loadRealTaskRepo() {
   return (await import("../core/repository")).taskRepository;
 }
-type TaskRepoForEnqueue = Pick<
+export type TaskRepoForEnqueue = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
   "findStatusAndPromptById" | "cancel"
 >;

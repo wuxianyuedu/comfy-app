@@ -4,7 +4,7 @@ import type { LLMMessage, LLMRequestOptions } from "./types";
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { errorMessage } from "~/lib/error-message";
 
-interface ChatArgs {
+export interface ChatArgs {
   messages: LLMMessage[];
   opts?: LLMRequestOptions;
   /** 每收到一个流式 token 就回调一次（仅流式模式）。 */

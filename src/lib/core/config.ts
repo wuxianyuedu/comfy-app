@@ -68,7 +68,7 @@ export interface AppConfig {
   readonly isProd: boolean;
   /** 是否测试环境。 */
   readonly isTest: boolean;
-  /** 日志级别（见 {@link ./logger}）。 */
+  /** 日志级别（见 `core/logger`）。 */
   readonly logLevel: "debug" | "info" | "warn" | "error";
   /** `DATABASE_URL`（SQLite 文件路径或远程连接串）。 */
   readonly databaseUrl: string;
@@ -85,7 +85,7 @@ export interface AppConfig {
 /**
  * 各变量的**默认值**（唯一事实源）。
  *
- * 与 {@link configSchema} 共用这一份，是为了让「同一变量在别处也要读」的场景
+ * 与 `configSchema` 共用这一份，是为了让「同一变量在别处也要读」的场景
  * 有处可取：前端设置页（浏览器侧，拿不到服务端 config 实例）与后端在读到空值时
  * 都必须落到同一个默认端口 / 回环地址，否则就是规范 §12.14 禁止的多份口径。
  */

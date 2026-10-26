@@ -50,7 +50,7 @@ export type DrizzleStudioStatus = {
   pid?: number;
 };
 
-type EnsureResult = { ok: boolean; port: number; detail: string };
+export type EnsureResult = { ok: boolean; port: number; detail: string };
 
 type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;

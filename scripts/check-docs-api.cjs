@@ -113,7 +113,7 @@ function exactPathRe(p) {
 const INPUT_RES = [
   /^src\/lib\/.*\.ts$/,
   /^src\/server\/.*\.ts$/,
-  /^src\/trpc\/.*\.ts$/,
+  /^src\/trpc\/.*\.tsx?$/,
   /^typedoc\.json$/,
   /^package\.json$/,
   /^pnpm-lock\.yaml$/,
@@ -330,6 +330,47 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
   return { problems, files: files.size, modulePages };
 }
 
+/**
+ * typedoc 收尾日志的**结论判读**（ISSUE #2444）：注释质量的红不许静默放行。
+ *
+ * typedoc 把 JSDoc 漂移（@param 对不上签名）、死链（{@link} 解析失败）、被引用却
+ * 收不进文档的符号全记成 warning —— 退出 0、产物照出，于是它们曾经 61 条无账地
+ * 漂着。typedoc 的退出码不可信，所以按**日志**判。总结行
+ * 「Found … errors and … warnings」只在**有账可报**时才打（0/0 的干净收尾是
+ * 「[info] html generated」一句带过）⇒ 两种干净形态都要认：总结行在场且为 0/0，
+ * 或总结行缺席而 `html generated` 在场（证明读到的是一次真跑的尾巴）；两者都缺 =
+ * 读不到结论，与「全是 warning」同罪。`[info]` / `[warning]` 标签带 ANSI 色，
+ * 判读前先剥色。
+ *
+ * @param {string} log typedoc 的日志尾巴（原样，含 ANSI 色码）
+ * @returns {{problems: string[]}}
+ */
+function judgeTypedocTail(log) {
+  const cleanLog = (log ?? "").replace(/\x1b\[[0-9;]*m/g, "");
+  const summary = /Found (\d+) errors and (\d+) warnings/.exec(cleanLog);
+  const generated = /\[info\] html generated/.test(cleanLog);
+  if (summary) {
+    const errors = Number(summary[1]);
+    const warnings = Number(summary[2]);
+    if (errors > 0 || warnings > 0) {
+      return {
+        problems: [
+          `typedoc 报了 ${errors} errors / ${warnings} warnings —— JSDoc 漂移、死链与收不进文档的符号不许静默漂（修法见 ISSUE #2444）`,
+        ],
+      };
+    }
+    return { problems: [] };
+  }
+  if (!generated) {
+    return {
+      problems: [
+        "typedoc 的日志里既没有「Found … errors and … warnings」总结行、也没有「html generated」收尾 —— 读不到这一格结论与「全是 warning」同罪",
+      ],
+    };
+  }
+  return { problems: [] };
+}
+
 /** typedoc 生成失败时的取证与修法（话术与「退出码不可信」那条现场绑在一起）。 */
 function reportTypedocFailure(reason, log) {
   console.error(`${TAG} ✗ typedoc 生成失败（拿不到可用的产物）：${reason}`);
@@ -377,6 +418,12 @@ async function main() {
     process.exit(1);
   }
 
+  const verdict = judgeTypedocTail(res.log);
+  if (verdict.problems.length > 0) {
+    console.error(`${TAG} ✗ ${verdict.problems.join("；")}`);
+    process.exit(1);
+  }
+
   const typedocCfg = await loadTypedocConfig();
   const { problems, files, modulePages } = judgeProduct(OUT_ABS, ROOT, typedocCfg);
   if (problems.length > 0) {
@@ -405,5 +452,6 @@ module.exports = {
   matchedInputs,
   walk,
   judgeProduct,
+  judgeTypedocTail,
   OUT_REL,
 };

@@ -17,7 +17,7 @@
 // 「展示需求」（要 2s 刷新的是 UI 上的数字），与「存活判断需求」是两件事，
 // 混在一个 store 里会让人以为降压就等于不展示进度（进度走 WS 推送，零成本）。
 
-type Listener = () => void;
+export type Listener = () => void;
 
 type BusyGlobal = {
   state?: { busy: boolean; since: number };

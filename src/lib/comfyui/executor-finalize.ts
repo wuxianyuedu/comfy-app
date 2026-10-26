@@ -1,16 +1,16 @@
-/**
+﻿/**
  * `executor-finalize.ts` — 任务终态收口（成功下载 / 失败落库）
  * ===========================================================================
  *
  * 终态收口：把一次执行的结束（成功下载 / 失败落库）收到一处。
- *   - {@link complete}         完成入口：抢终态 → completeInner → 兜底失败
- *   - {@link completeInner}    拉 history、收集产物、下载落盘、双写 DB、
+ *   - {@link complete}         完成入口：抢终态 → `completeInner` → 兜底失败
+ *   - `completeInner`          拉 history、收集产物、下载落盘、双写 DB、
  *                              写 manifest / workflow.json 快照
  *   - {@link fail}             对外失败入口（先抢终态再收口）
  *   - {@link finalizeFailure}  真正失败收口（不做 settled 判断）
  *
- * 依赖的通道层（claimSettle / fetchHistoryEntry）在 {@link ./executor-ws}，
- * 派发（领取 + 提交）在 {@link ./executor-dispatch}。
+ * 依赖的通道层（claimSettle / fetchHistoryEntry）在 `executor-ws`，
+ * 派发（领取 + 提交）在 `executor-dispatch`。
  *
  * @module comfyui/executor-finalize — 任务终态收口（成功下载 / 失败落库）
  */
@@ -57,19 +57,19 @@ import type { ValidationError } from "./validation";
  *  `configureExecutorFinalize` 覆盖任一条；未覆盖的走 dynamic import 兜底。
  *  类型通过 `Awaited<ReturnType<typeof loadRealTaskRepo>>` 从真实例反推，
  *  避开 eslint `consistent-type-imports` 对 `typeof import(...)` 型位的禁用。 */
-async function loadRealTaskRepo() {
+export async function loadRealTaskRepo() {
   return (await import("../core/repository")).taskRepository;
 }
-type TaskRepoLike = Pick<
+export type TaskRepoLike = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
   "findExecutionMeta" | "finalizeSuccess" | "createImages" | "finalizeFailure"
 >;
-type GetViewLike = (
+export type GetViewLike = (
   filename: string,
   subfolder: string,
   type: string,
 ) => Promise<Buffer>;
-type RuntimeLoggerLike = {
+export type RuntimeLoggerLike = {
   info(msg: string, ctx?: unknown): void;
   error(msg: string, ctx?: unknown): void;
 };

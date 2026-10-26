@@ -94,7 +94,7 @@ export interface WorkshopExposedValues {
  *  在类型上**不**从 size-presets 取 `SizeSpec`：本模块的入参来自调用方拼装的
  *  plain object（工坊表单 / 服务端编排），用结构子集能少一层耦合；规范化由
  *  `normalizeSizeSpec` 在运行期做。 */
-interface SizeSpecValue {
+export interface SizeSpecValue {
   ratio?: unknown;
   clarity?: unknown;
   multiple?: unknown;
@@ -369,13 +369,14 @@ export function pruneEmptyExposedValues(
  *   • 用户给了值却落不下去（未连线 / 断开 / 端口已消失）：记进 `unmatched`，
  *     不凭空造端口。
  *
- *  @param io         工作流详情里的 IO 映射（服务端已 enrich）。
- *  @param paramMap   作者的连线表（`paramMap` 原始形状，内部走 `parseParamMapping`）。
- *  @param mode       当前模式码；连线按模式分开存放，未开启模式传 null。
- *  @param values     工坊这次要落下去的对外参数。
- *  @param contractIds 该模式**生效的契约口清单**（含作者自定义的口）。不传 =
- *    内置默认契约：自定义口不在其中，作者给它的值就落不下去（会如实进
- *    `unmatched`，不会静默丢）。有契约注册表的调用方必须传。
+ *  @param args — 全部入参收在一个对象里（`args` 的字段）：
+ *    · `io` 工作流详情里的 IO 映射（服务端已 enrich）；
+ *    · `paramMap` 作者的连线表（`paramMap` 原始形状，内部走 `parseParamMapping`）；
+ *    · `mode` 当前模式码；连线按模式分开存放，未开启模式传 null；
+ *    · `values` 工坊这次要落下去的对外参数；
+ *    · `contractIds` 该模式**生效的契约口清单**（含作者自定义的口）。不传 =
+ *      内置默认契约：自定义口不在其中，作者给它的值就落不下去（会如实进
+ *      `unmatched`，不会静默丢）。有契约注册表的调用方必须传。
  */
 export function buildEncapsulatedInputs(args: {
   io: WorkflowIOMap | null | undefined;

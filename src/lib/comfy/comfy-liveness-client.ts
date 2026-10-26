@@ -39,7 +39,7 @@ function parseSignal(raw: unknown): ComfyLivenessSignal | null {
   };
 }
 
-type Listener = (signal: ComfyLivenessSignal) => void;
+export type Listener = (signal: ComfyLivenessSignal) => void;
 
 type LivenessClientGlobal = {
   seenSeq?: number;

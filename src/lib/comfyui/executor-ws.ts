@@ -1,12 +1,12 @@
-/**
+﻿/**
  * `executor-ws.ts` — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  * ===========================================================================
  *
  * 事件通道层：负责建立并维持 ComfyUI WS 连接、统一消息分发（协议差异交给
  * comfyProtocol Adapter）、终态抢占（claimSettle）与活动看门狗（armWatchdog）。
  *
- * 消息的终态处理（complete / fail）在 {@link ./executor-finalize}，
- * 派发（领取 + 提交）在 {@link ./executor-dispatch}，本层只做路由。
+ * 消息的终态处理（complete / fail）在 `executor-finalize`，
+ * 派发（领取 + 提交）在 `executor-dispatch`，本层只做路由。
  *
  * **当前拓扑下这条通道承载什么（ISSUE #1315 的取证结论，读数在 ADR §28）**：
  * 自 4-B3「唯一提交实现 = comfy-cli」之后，ComfyUI 只把**执行帧**（`executing` /
@@ -15,7 +15,7 @@
  * （本机一轮实测 35 条 = `status`×4 / `kaytool.resources`×16 / `dasiwa.system_monitor`×15，
  * **一条执行帧都没有**，inline 与 host 两种形态同形）。
  * ⇒ 下面那几段按节点分支（`node-started` / `node-finished` / `progress`）**今天是零消费的**，
- * 面板里的按节点现场只可能来自 {@link ./executor-cli-stream}。
+ * 面板里的按节点现场只可能来自 `executor-cli-stream`。
  * **但别删它们**：它们是给「直连 `/prompt`」那种形态留的正确实现，帧哪天回来就得是对的；
  * 要在这条通道上补新功能，先照 ADR §28 的架子数一遍帧型，别写完发现测不出效果。
  *
@@ -70,10 +70,10 @@ export { claimSettle };
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 executor-ws 也能被纯 Node host 加载） ── */
 
-async function loadRealTaskRepo() {
+export async function loadRealTaskRepo() {
   return (await import("../core/repository")).taskRepository;
 }
-type TaskRepoForWs = Pick<
+export type TaskRepoForWs = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
   "updateProgress"
 >;

@@ -1,4 +1,4 @@
-// 孤儿任务回收（reaper），服务于 ComfyUI 执行器。
+﻿// 孤儿任务回收（reaper），服务于 ComfyUI 执行器。
 //
 // 从历史的单文件 `runner.ts` 里拆出来的。本模块负责两个 DB 侧的清扫器：
 //   • reapStaleQueuedTasks()  —— QUEUED 超过 30s 且没有 promptId → FAILED
@@ -32,10 +32,10 @@ import type { TaskClaimMode } from "../core/repository-task-impl";
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步） ───────────────────────────── */
 
-async function loadRealTaskRepo() {
+export async function loadRealTaskRepo() {
   return (await import("../core/repository")).taskRepository;
 }
-type TaskRepoForReaper = Pick<
+export type TaskRepoForReaper = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
   | "listStaleUnownedQueued"
   | "listStaleRunning"

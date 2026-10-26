@@ -65,7 +65,7 @@ export type ComfyStateChangeKind =
   /** 配置变更（路径 / 端口 / 启动参数被写入）。 */
   | "config";
 
-type Listener = () => void;
+export type Listener = () => void;
 
 /**
  * 订阅者集合里**存一个包装对象**，而不是直接把回调塞进 `Set`：同一个回调订阅

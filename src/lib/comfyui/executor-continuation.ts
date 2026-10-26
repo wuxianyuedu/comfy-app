@@ -36,13 +36,13 @@ import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { logger } from "~/lib/core/logger";
 import type { LogEntry } from "./runner-state-shape";
 
-type KickQueue = () => void | Promise<void>;
+export type KickQueue = () => void | Promise<void>;
 
 let kick: KickQueue | null = null;
 let warnedMissing = false;
 
 /** 往「还在库里排队」的任务上写一行广播的实现（由调度层注册）。 */
-type Announce = (msg: string, level: LogEntry["level"]) => Promise<void>;
+export type Announce = (msg: string, level: LogEntry["level"]) => Promise<void>;
 
 let announce: Announce | null = null;
 
