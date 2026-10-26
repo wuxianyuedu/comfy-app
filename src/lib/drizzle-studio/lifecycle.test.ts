@@ -12,6 +12,8 @@
 // 于是「哪个分支给出哪句可行动文案」可以直接断言，不必起真进程。
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import fs from "node:fs";
+import { EventEmitter } from "node:events";
 
 /* 端口探测：`probeDrizzleStudio` 走 `net.connect`。默认「没人应答」，
  * 需要「已就绪 / 已关闭」的用例再单独编排（见 `mockConnect`）。 */
@@ -39,9 +41,15 @@ vi.mock("~/lib/shell/open-in-browser", () => ({
 
 /* 日志：落盘路径换到临时目录，且别让运行日志真的写进仓库 log/。
  * 一次启动一份文件（ISSUE #1326）之后 `log-paths` 只剩目录常量，文件名由
- * `runtime-log-pack` 按时刻拼 —— 因此这里 mock 那一个的写入器。 */
+ * `runtime-log-pack` 按时刻拼 —— 因此这里 mock 那一个的写入器。
+ * 写入的行收集在 `logLines` 里：退出记录「写了谁的名字、给了什么排查建议」
+ * 只有读回落盘的那几行才判得了（ISSUE #2435）。 */
+const logLines = vi.hoisted(() => [] as string[]);
 vi.mock("~/lib/log/runtime-log-pack.server", () => ({
-  openRuntimeLogWriter: () => ({ file: "/tmp/x.log", write: vi.fn() }),
+  openRuntimeLogWriter: () => ({
+    file: "/tmp/x.log",
+    write: (line: string) => logLines.push(line),
+  }),
   pruneRuntimeLogFiles: () => 0,
 }));
 vi.mock("~/lib/core/logger", () => ({
@@ -51,6 +59,7 @@ vi.mock("~/lib/core/logger", () => ({
 import {
   DRIZZLE_STUDIO_DEFAULT_PORT,
   DRIZZLE_STUDIO_HOST,
+  ensureDrizzleStudioUp,
   getDrizzleStudioStatus,
   isDrizzleStudioStarting,
   openDrizzleStudio,
@@ -86,6 +95,14 @@ beforeEach(() => {
   killProcessTreeMock.mockResolvedValue({ ok: true, via: "stub" });
   openUrlMock.mockReset();
   openUrlMock.mockResolvedValue({ ok: true, detail: "opened" });
+  logLines.length = 0;
+  // 子进程句柄与「用户要求停止」标记挂在 globalThis 上（HMR 安全），用例之间
+  // 必须清干净，否则上一例留下的 child 会让「未在运行」那两条读出 pid。
+  // 注意是**就地清空**而不是换新对象：模块里的 `st` 抓的是同一个引用。
+  const shared = (globalThis.__drizzleStudioLifecycle_v1 ??= {});
+  shared.child = undefined;
+  shared.starting = undefined;
+  shared.stopRequested = undefined;
   // 探测结论是模块级缓存（同步状态读它），不清会让用例之间互相污染。
   resetDrizzleStudioProbeCache();
   mockConnect(false);
@@ -139,6 +156,78 @@ describe("openDrizzleStudio — 未运行时不打开空页面", () => {
     expect(openUrlMock).toHaveBeenCalledWith(
       `${DRIZZLE_STUDIO_HOST}?port=${DRIZZLE_STUDIO_DEFAULT_PORT}`,
     );
+  });
+});
+
+describe("退出记录的归属（ISSUE #2435）", () => {
+  /** 假子进程：只给到本模块真会碰到的那几样（pid、两条输出流、事件）。 */
+  function fakeChild(pid: number) {
+    const child = new EventEmitter() as EventEmitter & {
+      pid: number;
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+    };
+    child.pid = pid;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    return child;
+  }
+
+  /** 落盘行里「为什么退出」那几行（横幅 + `[exit]`）。写入器带时间戳前缀，
+   *  所以按包含取，不按行首取。 */
+  const exitText = () =>
+    logLines.filter((l) => l.includes("■") || l.includes("[exit]")).join("\n");
+
+  /** 拉起一个「永远没就绪」的 Studio：只为拿到挂好的 child 与 exit 回调。
+   *  `timeoutMs: 0` 让等待循环第一轮就收尾，不起真进程也不等 500ms。 */
+  async function launchFakeStudio(pid: number, onLog: (m: string) => void) {
+    const child = fakeChild(pid);
+    spawnMock.mockReturnValue(child);
+    const kitSpy = vi.spyOn(fs, "existsSync").mockReturnValue(true);
+    await ensureDrizzleStudioUp({ timeoutMs: 0, onLog });
+    kitSpy.mockRestore();
+    expect(spawnMock).toHaveBeenCalled();
+    return child;
+  }
+
+  it("用户点「关闭」：写「用户主动关闭」，不写成一次异常退出", async () => {
+    const seen: string[] = [];
+    const child = await launchFakeStudio(4321, (m) => seen.push(m));
+    // 真实顺序：taskkill 返回 → 子进程以 code=1、signal=null 消失
+    //（Windows 上被杀就是这一对值，与它自己崩溃长得一模一样）。
+    killProcessTreeMock.mockImplementation(async () => {
+      child.emit("exit", 1, null);
+      return { ok: true, via: "taskkill" };
+    });
+
+    const r = await stopDrizzleStudio();
+
+    expect(killProcessTreeMock).toHaveBeenCalledWith({
+      pid: 4321,
+      detached: false,
+    });
+    expect(r.ok).toBe(true);
+    expect(exitText()).toContain("Drizzle Studio 进程已退出：用户主动关闭");
+    expect(exitText()).not.toContain("异常退出");
+    expect(seen.join("\n")).toContain("Drizzle Studio 进程退出：用户主动关闭");
+  });
+
+  it("没人点关闭而它自己退了：主语仍是 Drizzle Studio，建议不提 Python / 显存", async () => {
+    const seen: string[] = [];
+    const child = await launchFakeStudio(4711, (m) => seen.push(m));
+
+    child.emit("exit", 1, null);
+
+    const text = exitText();
+    expect(text).toContain("Drizzle Studio 进程已退出：异常退出（exit 1）");
+    expect(text).not.toContain("ComfyUI");
+    expect(text).not.toContain("显存");
+    expect(text).toContain("drizzle.config.ts");
+    // 进 pino 的那句是面板/日志检索的主入口，主语同样不能串
+    expect(seen.join("\n")).toContain(
+      "Drizzle Studio 进程退出：异常退出（exit 1）",
+    );
+    expect(seen.join("\n")).not.toContain("ComfyUI");
   });
 });
 

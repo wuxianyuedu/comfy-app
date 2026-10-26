@@ -78,6 +78,27 @@ describe("describeComfyExit", () => {
     expect(r.advice).toContain("最后几行输出");
   });
 
+  it("非零码的建议按模式分：Studio 是 Node 包，不该被念 Python / 显存", () => {
+    const crash = describeComfyExit(facts({ mode: "studio", code: 1 }));
+    expect(crash.reason).toContain("异常退出（exit 1）");
+    expect(crash.advice).toContain("drizzle.config.ts");
+    expect(crash.advice).not.toContain("Python");
+    expect(crash.advice).not.toContain("显存");
+  });
+
+  it("ComfyUI 那一侧仍给 Python / 显存那几个方向（分模式不等于把它改掉）", () => {
+    const r = describeComfyExit(facts({ mode: "bound", code: 1 }));
+    expect(r.advice).toContain("显存");
+  });
+
+  it("studio 模式下用户主动关闭优先于退出码", () => {
+    const r = describeComfyExit(
+      facts({ mode: "studio", code: 1, stopRequested: true }),
+    );
+    expect(r.reason).toBe("用户主动关闭");
+    expect(r.advice).toBeNull();
+  });
+
   it("保活模式拿不到 code/signal：如实说，不编一个 0", () => {
     const r = describeComfyExit(
       facts({ mode: "keepAlive", signal: null, code: null }),
