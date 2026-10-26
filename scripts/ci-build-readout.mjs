@@ -134,6 +134,24 @@ export function normalizeStageContent(content) {
   return raw.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").replace(/\r\n?/g, "\n");
 }
 
+/**
+ * **判据锚**：测试运行器 / 脚本自己写下的「哪条用例红了、哪一格超时」。
+ *
+ * 与下面的宽松指纹差的是语义而不是宽窄：锚点行由运行器**为失败而写**，
+ * 宽松指纹认的是「这行里出现了 `Error` / `FAIL` 字样」—— 后者在被测代码正常
+ * 打日志时也会命中（夹具驱动出来的 `TRPCClientError` 就是这一类）。
+ */
+const FAILURE_ANCHORS = [
+  /^\s*FAIL\b/,
+  /\bTest Files\s+\d+\s+failed\b/,
+  /\bTests\s+\d+\s+failed\b/,
+  /\bTest timed out in \d+(?:\.\d+)?\s*m?s\b/,
+  /\bAssertionError\b/,
+  /^\s*[×✗]\s/,
+  /^\s*Failed Tests\b/,
+  /\[ELIFECYCLE\]/,
+];
+
 /** 一行像不像「失败证据」。只做**认出**，不解释它为什么失败。 */
 const FAILURE_MARKERS = [
   /\bFAIL\b/,
@@ -154,23 +172,42 @@ const FAILURE_MARKERS = [
  * 失败行**下面**的上下文（期望/实际、退出码、`[affected-launch] …`）才是判断材料。
  * 两段都给，且都带行号 —— 人能拿它直接跳进完整日志，不用再搜一遍。
  *
+ * 失败行**分两档**（ISSUE #2443）。日志里一旦有判据锚（`FAIL … > 用例` / 超时），
+ * 就只列锚点，其余只带错误字样的行降级成一句计数：清单按行号排，前者的数量决定
+ * 「第一眼看到什么」。当场读数（build `cnb-phl-1k5rscpsg`，格「受影响用例」）：
+ * 前 12 条是夹具驱动 `recordSyncFailure()` 时产品代码自己打的 `[canvas-sync]` 日志，
+ * 接着 8 条 `connect ECONNREFUSED :3000`，而这一跑**唯一**的两条真读数
+ * （两份用例各自超时）在 L1003 / L1016 —— 前 25 条全被噪声占满，锚点一条没进清单。
+ * 没有锚点时（构建类格子的 `pnpm` 失败、整块没跑起来）保持原来的宽松口径：
+ * 那时 `Error:` 那几行就是唯一证据，降级它们等于把「没认出」写成「没有红」。
+ *
  * @param {string} text 归一后的日志正文
  * @param {{maxFailureLines?: number, tailLines?: number}} [opts]
- * @returns {{failure: Array<{line: number, text: string}>, tail: Array<{line: number, text: string}>, totalLines: number}}
+ * @returns {{failure: Array<{line: number, text: string}>, tail: Array<{line: number, text: string}>, totalLines: number, demoted: number, anchored: boolean}}
+ *   `demoted` 是「含错误字样但没列出来」的行数（`anchored` 为真时它们多数是正常日志）
  */
 export function stageLogExcerpt(text, opts = {}) {
   const maxFailureLines = opts.maxFailureLines ?? 25;
   const tailLines = opts.tailLines ?? 40;
   const lines = String(text ?? "").split("\n");
-  const failure = [];
+  /** @type {Array<{line: number, text: string}>} */
+  const anchors = [];
+  /** @type {Array<{line: number, text: string}>} */
+  const loose = [];
   for (let i = 0; i < lines.length; i += 1) {
-    if (failure.length >= maxFailureLines) break;
     const line = lines[i];
     if (!line || !line.trim()) continue;
-    if (FAILURE_MARKERS.some((re) => re.test(line))) {
-      failure.push({ line: i + 1, text: line.trimEnd() });
+    if (FAILURE_ANCHORS.some((re) => re.test(line))) {
+      anchors.push({ line: i + 1, text: line.trimEnd() });
+    } else if (FAILURE_MARKERS.some((re) => re.test(line))) {
+      loose.push({ line: i + 1, text: line.trimEnd() });
     }
   }
+  const anchored = anchors.length > 0;
+  const failure = (anchored ? anchors : loose).slice(0, maxFailureLines);
+  const demoted = anchored
+    ? loose.length
+    : Math.max(0, loose.length - failure.length);
   let end = lines.length;
   while (end > 0 && !(lines[end - 1] ?? "").trim()) end -= 1;
   const start = Math.max(0, end - tailLines);
@@ -181,7 +218,7 @@ export function stageLogExcerpt(text, opts = {}) {
     if (!line.trim()) continue;
     tail.push({ line: i + 1, text: line.trimEnd() });
   }
-  return { failure, tail, totalLines: lines.length };
+  return { failure, tail, totalLines: lines.length, demoted, anchored };
 }
 
 /**
@@ -357,6 +394,14 @@ export function describeFailedStages(
       log(`${prefix}      失败行（行号即完整日志的行号）：`);
       for (const l of excerpt.failure)
         log(`${prefix}      L${l.line} ${l.text}`);
+    }
+    if (excerpt.demoted > 0) {
+      const why = excerpt.anchored
+        ? "（有 FAIL / 超时锚点时只列锚点，那批多是夹具驱动的正常日志）"
+        : "";
+      log(
+        `${prefix}      另有 ${excerpt.demoted} 行含错误形状文本，未列出${why} —— 完整日志见下一动作那行链接。`,
+      );
     }
     log(`${prefix}      末 ${excerpt.tail.length} 行：`);
     for (const l of excerpt.tail) log(`${prefix}      L${l.line} ${l.text}`);
