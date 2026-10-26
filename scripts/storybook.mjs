@@ -18,16 +18,23 @@
 // Node，`.ps1` 只能是它的调用入口（AGENTS 硬规则 12）。
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import process from "node:process";
 
 import { resolveRepoRoot } from "./app-port.mjs";
+import { resolvePackageBinEntry } from "./package-bin-entry.mjs";
 import {
   ensureStorybookAssets,
   writeStorybookAppOrigin,
 } from "./storybook-assets.mjs";
 
 const root = resolveRepoRoot();
-const binName = process.platform === "win32" ? "storybook.cmd" : "storybook";
-const bin = path.join(root, "node_modules", ".bin", binName);
+/* 起的是 storybook **包真身**的入口（`node_modules/storybook/dist/bin/dispatcher.js`），
+ * 不是 `node_modules/.bin/storybook(.cmd)` 那个垫片（ISSUE #2453，与 #2445 同族）：
+ * 垫片是给宿主 shell 用的，Node 直起它 `EINVAL` ⇒ 只能开一层 shell，而那同时带来
+ * ① Node 26 的 DEP0190 弃用（args 数组 + 开 shell）与 ② 参数要自己括引号
+ * （开了 shell Node 就不转义）。绕开垫片、用 `process.execPath` 直起真身，两件事一起消失。
+ * 解析只有一份实现：`scripts/package-bin-entry.mjs`（typedoc 与 vitest 两处也走它）。 */
+const entry = resolvePackageBinEntry("storybook", { root });
 
 /* 开发期资源（注入层 `media` 值源要指向的真图）在这里现生成。
  *
@@ -53,14 +60,22 @@ const [subcommand = "dev", ...rest] = process.argv.slice(2);
 const args =
   subcommand === "dev" ? ["dev", "-p", "6006", "--no-open"] : [subcommand];
 
-const result = spawnSync(bin, [...args, ...rest], {
+/* 解析不到 = 依赖没装：给一句能照做的出口，别让它在 spawn 那一层变成 ENOENT
+ * （`.bin` 下的垫片在 Windows 上起不来也是同一个读数，那种读法看不出是没装）。 */
+if (!entry) {
+  process.stderr.write(
+    "[ERROR] 解析不到本地 storybook 的入口（依赖没装？）: 先跑 pnpm install\n",
+  );
+  process.exit(1);
+}
+
+const result = spawnSync(process.execPath, [entry, ...args, ...rest], {
   cwd: root,
   stdio: "inherit",
   env: {
     ...process.env,
     SKIP_ENV_VALIDATION: process.env.SKIP_ENV_VALIDATION ?? "1",
   },
-  shell: process.platform === "win32",
 });
 
 if (result.error) {

@@ -40,8 +40,9 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+
+import { resolvePackageBinEntry } from "./package-bin-entry.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -70,30 +71,18 @@ export const PROBE_REL = "index.html";
  * `.cmd` 垫片底下本来就一行 `node …/typedoc/bin/typedoc %*` —— 直接起那行真身，
  * 引号与弃用两件事同时消失。
  *
- * 解析口径**复用** `run-affected-tests.mjs` 的 `resolveVitestEntry` 同款（那里为
- * vitest 写过一遍，理由在那份文件头）：走 `require.resolve("typedoc/package.json")`
- * 而不是写死 `node_modules/typedoc/…`（pnpm 布局里顶层那个是链接，写死会在换版本
- * 或换安装方式时指到空气上）；取 `bin.typedoc` 的相对段而不是猜文件名，入口名由
- * 包自己定义。
+ * 解析口径**只有一份实现**：`scripts/package-bin-entry.mjs` 的
+ * `resolvePackageBinEntry`（ISSUE #2453）。它原先在这里与 `run-affected-tests.mjs`
+ * 的 `resolveVitestEntry` 各写了一遍（同算法两份副本），加上 storybook 那一处就是三份
+ * —— 抄一份的漂移形态是「换安装方式后其中一份指到空气上，另外两份还绿」。
+ * 三条理由（为什么走 `require.resolve("<pkg>/package.json")` 而不是拼
+ * `node_modules/<pkg>/…`）写在那个模块的文件头，此处不重抄。
  *
  * @param {string} root 仓库根
  * @returns {string | null}
  */
 export function resolveTypedocEntry(root = ROOT) {
-  try {
-    const require = createRequire(path.join(root, "noop.js"));
-    const pkgPath = require.resolve("typedoc/package.json");
-    const pkgDir = path.dirname(pkgPath);
-    const bin = JSON.parse(fs.readFileSync(pkgPath, "utf8"))?.bin;
-    const rel = typeof bin === "string" ? bin : bin?.typedoc;
-    if (typeof rel !== "string") return null;
-    const entry = path.resolve(pkgDir, rel.replace(/^\.\//, ""));
-    return fs.existsSync(entry) ? entry : null;
-  } catch {
-    // 没装（resolve 抛 ENOENT / MODULE_NOT_FOUND）：与「装了但入口缺席」同归 null，
-    // 调用方只认「起不起来」，不区分「为什么起不来」（区分了也只是措辞不同）
-    return null;
-  }
+  return resolvePackageBinEntry("typedoc", { root });
 }
 
 /**

@@ -183,9 +183,11 @@ import { announceQuiet, reporterArgs } from "./affected-launch-log-budget.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
 import os from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
-import { createRequire } from "node:module";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
+
+/* vitest 的入口解析与 typedoc / storybook 共用一份实现（ISSUE #2453）。 */
+import { resolvePackageBinEntry } from "./package-bin-entry.mjs";
 
 /**
  * 一次 spawn 的命令行长预算（字符）。
@@ -331,22 +333,18 @@ export function planLaunches(files, budget = SAFE_ARGV_BUDGET) {
 /**
  * 解析 vitest 的 ESM 入口。
  *
- * 走 `require.resolve("vitest/package.json")` 而不是写死 `node_modules/vitest/…`：
- * pnpm 的布局里真身在 `node_modules/.pnpm/vitest@<ver>_…/node_modules/vitest/`，
- * 顶层那个是链接；写死路径会在换版本或换安装方式时指到空气上。
- * 取 `bin.vitest` 的相对段而不是猜文件名，是因为入口名由包自己定义。
+ * 实现**只有一份**：`scripts/package-bin-entry.mjs` 的 `resolvePackageBinEntry`
+ * （ISSUE #2453）。三条理由（pnpm 布局里真身在 `.pnpm/…` 下、顶层那个是链接；
+ * 入口名由包的 `bin` 字段定义；`require.resolve` 顺带把「装没装」问出来）写在那个模块的
+ * 文件头 —— 这里只保留**抛错**那一层语义：本模块的调用方是门禁链路，解析不到要**当场停**
+ * （不是拿到 null 继续走），而「停的时候说什么」仍然要分辨「包没有 bin」与「入口不在盘上」。
  */
 export function resolveVitestEntry(cwd = process.cwd()) {
-  const require = createRequire(path.join(cwd, "noop.js"));
-  const pkgPath = require.resolve("vitest/package.json");
-  const pkgDir = path.dirname(pkgPath);
-  const bin = JSON.parse(readFileSync(pkgPath, "utf8"))?.bin?.vitest;
-  if (typeof bin !== "string") {
-    throw new Error(`[affected-launch] vitest 包没有 bin.vitest：${pkgPath}`);
-  }
-  const entry = path.resolve(pkgDir, bin.replace(/^\.\//, ""));
-  if (!existsSync(entry)) {
-    throw new Error(`[affected-launch] vitest 入口不存在：${entry}`);
+  const entry = resolvePackageBinEntry("vitest", { root: cwd });
+  if (!entry) {
+    throw new Error(
+      `[affected-launch] 解析不到本地 vitest 的入口（包没有 bin.vitest，或入口不在盘上；cwd=${cwd}）`,
+    );
   }
   return entry;
 }
