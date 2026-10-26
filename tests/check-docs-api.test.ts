@@ -29,6 +29,7 @@ import {
   INPUT_RES,
   SKELETON,
   judgeProduct,
+  judgeTypedocTail,
   matchedInputs,
   walk,
 } from "../scripts/check-docs-api.cjs";
@@ -112,6 +113,12 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
       "src/lib/endpoints.test.ts",
     ]);
     expect(INPUT_RES.some((re) => re.test("src/lib/x.ts"))).toBe(true);
+  });
+
+  it("src/trpc 的 .tsx 也在面内（typedoc 入口含 .tsx —— 它的导出被产物引用，#2444）", () => {
+    // react.tsx 的 RouterInputs 被 workflow-mutations 引用；入口 glob 此前不收 .tsx
+    // ⇒ 符号页不存在、typedoc 报 warning。入口扩了，输入面必须同批扩（#2223 的对账纪律）。
+    expect(matchedInputs(["src/trpc/react.tsx"])).toEqual(["src/trpc/react.tsx"]);
   });
 
   it("多文件清单只回命中项，顺序保持", () => {
@@ -223,5 +230,38 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
     }
     expect(code).toBe(1);
     expect(out).toContain("--autofix");
+  });
+});
+
+/**
+ * typedoc 收尾日志的结论判读（ISSUE #2444）—— 四种形态各一条：
+ * 总结行在场有账（红）、总结行 0/0（绿）、总结行缺席但有 html generated（绿，
+ * 0 warning 时 typedoc 不打总结行 —— 本地实测过）、两者都缺（红）。
+ * ANSI 色码是平台日志的原生形态，夹具里带上它，判读必须先剥色。
+ */
+describe("judgeTypedocTail：typedoc 收尾日志的结论判读（#2444）", () => {
+  it("总结行报了 errors / warnings ⇒ 红，且红话里带数", () => {
+    const log = "\x1b[93m[warning]\x1b[0m 某个死链\n" +
+      "[warning] Found 0 errors and 61 warnings\n";
+    const got = judgeTypedocTail(log);
+    expect(got.problems).toHaveLength(1);
+    expect(got.problems[0]).toContain("0 errors / 61 warnings");
+  });
+
+  it("总结行 0 errors / 0 warnings ⇒ 绿", () => {
+    expect(
+      judgeTypedocTail("[warning] Found 0 errors and 0 warnings\n").problems,
+    ).toEqual([]);
+  });
+
+  it("总结行缺席但 html generated 在场 ⇒ 绿（0 warning 时不打总结行）", () => {
+    const log = "\x1b[96m[info]\x1b[0m html generated at ./docs/api\n";
+    expect(judgeTypedocTail(log).problems).toEqual([]);
+  });
+
+  it("总结行与 html generated 都缺 ⇒ 红（读不到结论与全是 warning 同罪）", () => {
+    const got = judgeTypedocTail("typedoc: some unrelated line\n");
+    expect(got.problems).toHaveLength(1);
+    expect(got.problems[0]).toContain("读不到这一格结论");
   });
 });

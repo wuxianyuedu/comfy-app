@@ -24,7 +24,7 @@
  *
  * 配合 {@link toErrorEnvelope}：错误被序列化为
  * `{ error: { code, message, details? } }`，**绝不**把堆栈下发到客户端。
- * REST Route Handler 用 `~/server/lib/error-response` 的 {@link errorResponse}
+ * REST Route Handler 用 `~/server/lib/error-response` 的 `errorResponse`
  * 一步产出该信封（含 HTTP 状态），不要各自手写 `{ error: { code, message } }`
  * 字面量。
  *

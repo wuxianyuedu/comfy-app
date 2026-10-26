@@ -68,7 +68,7 @@ import type { TaskClaimMode, TaskRepoImpl } from "../core/repository-task-impl";
 export const DISPATCH_TICK_MS = 2_000;
 
 /** 本模块要的那三条仓储能力（结构化最小，方便宿主注入自己的 impl 实例）。 */
-type DispatchRepo = Pick<
+export type DispatchRepo = Pick<
   TaskRepoImpl,
   "claimNextQueued" | "findExecJob" | "finalizeFailure" | "listQueuedIds"
 >;

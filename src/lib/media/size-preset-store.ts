@@ -27,7 +27,7 @@ import {
 /** localStorage 键（带版本后缀，表结构变更时换版本而不是写迁移）。 */
 export const SIZE_PRESET_STORAGE_KEY = "comfyapp:size-presets:v1";
 
-type Listener = () => void;
+export type Listener = () => void;
 
 /** 单格宽高是否合法（正整数且在常识范围内）。 */
 function isValidDims(value: unknown): value is SizeDims {

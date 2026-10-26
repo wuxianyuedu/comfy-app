@@ -89,7 +89,7 @@ export function formatClock(
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** 入参：毫秒数 / ISO 串 / `Date`（比 {@link timeAgo} 宽一档，`Date` 直接用）。 */
-type TimeInput = string | number | Date;
+export type TimeInput = string | number | Date;
 
 /** 统一的入参归一 —— 调用处不必自己 `new Date(...)`。 */
 const toDate = (value: TimeInput): Date =>

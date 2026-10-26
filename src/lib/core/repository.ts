@@ -13,7 +13,7 @@
  * 新增消费方直接 `import { <x>Repository } from "~/lib/core/repository"`。
  *
  * 模块划分：
- *   - {@link ./repository-base}            契约接口 + 泛型基类（Identifiable /
+ *   - `core/repository-base`              契约接口 + 泛型基类（Identifiable /
  *                                          Repository / DrizzleRepository /
  *                                          TaskWithCover）
  *   项目仓储（repository-project）、任务仓储（repository-task）、
