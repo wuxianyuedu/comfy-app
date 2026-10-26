@@ -65,7 +65,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { cnbSpawn } from "./ship-exec.mjs";
+import { buildSnFromOutput, cnbSpawn } from "./ship-exec.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -264,9 +264,11 @@ export function resolveDelegateTarget(args, gitFn) {
  *     「在 master 上跑一遍、判不出目标」的形态），`--sha` 钉在委托那一刻的分支头上，
  *     让被委托那一跑复盘出的就是**判红的同一棵树**；`--env` 把「回写哪条分支、哪张 PR」
  *     原样传下去 —— 被委托那一口的环境里没有可信的等价物（头注事实 ①）；
- *   · **返回码就是 start-build 的返回码**：它退非零 ⇒ 委托没发出去（照旧红）；
- *     退 0 只说明「发出去了」，**不说明回写成功了** —— 那一半的结论在被委托那一跑的日志里。
- *     把 0 读成「已修好」是本格最贵的误读，所以话术里逐字写明。
+ *   · **返回码不是结论**：它退非零 ⇒ 委托没发出去（照旧红）；退 0 也**不**说明
+ *     「发出去了」—— 403 / scope 不足那一族 cnb 照旧退 0（ISSUE #2378 的现场），
+ *     调用方必须用 `buildSnFromOutput()` 回读到 `sn` 才算数（与 `ship-exec.mjs`
+ *     那句「退出码 0 不读成写成功」同一条纪律）。回写成功的另一半结论在被委托
+ *     那一跑的日志里。把 0 读成「已修好」是本格最贵的误读，所以话术里逐字写明。
  *   · **不起 shell**：`cnb` 在 Windows 上是三个垫片，直接 `spawnSync` 会 ENOENT / EINVAL
  *     （ISSUE #2347 那族）—— 走 `ship-exec.mjs` 的 `cnbSpawn`，它已经解决过同一件事。
  *
@@ -479,6 +481,18 @@ function delegateRun(ctx) {
   if (r.status !== 0) {
     log(
       `[format-fixup] × 委托没发出去（start-build 退出码 ${r.status}）—— 照旧红。`,
+    );
+    if (r.output) log(`[format-fixup]   平台读数：${r.output.slice(0, 800)}`);
+    return { exitCode: 1, action: "delegate-failed", lines };
+  }
+  /* 退出码 0 不读成「发出去」（ISSUE #2378 的现场：start-build 撞 403 时 cnb
+   * 照旧退 0，这一格念着「委托已发出」退 0，工作区留脏、红移到六格之后）。
+   * 「发出去」的唯一证据是回读到 `sn`；读不到 ⇒ 按没发出去收（fail-closed）。 */
+  const sn = buildSnFromOutput(`${r.output ?? ""}`);
+  if (!sn) {
+    log(
+      "[format-fixup] × start-build 退了 0 但读不回 sn —— 委托没发出去（403 / " +
+        "scope 不足那一族），照旧红。修复留在工作区，不冒充「已处理」。",
     );
     if (r.output) log(`[format-fixup]   平台读数：${r.output.slice(0, 800)}`);
     return { exitCode: 1, action: "delegate-failed", lines };

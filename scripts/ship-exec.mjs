@@ -100,6 +100,23 @@ export function makeRunner(cwd) {
 }
 
 /**
+ * 从 `start-build` 的输出里读回构建号（`cnb-…`）。
+ *
+ * 「写动作成没成」只认回读到的对象，不认退出码：start-build 真起了一跑时，
+ * 输出里必有一个 `sn`；起不成（403 / scope 不足那一族，ISSUE #2378 的现场）时
+ * cnb 可能**照旧退 0** —— 把退出码 0 读成「发出去」正是让那条红静默的通道
+ * （与 ISSUE #2436 的教训同源：退出码 0 既不许读成「写成功」）。取不到 ⇒ null，
+ * 调用方按「没发出去」收（fail-closed：宁可红，不可放行）。
+ *
+ * @param {string} raw start-build 的 stdout + stderr 原文
+ * @returns {string | null} 构建号；读不到时 null
+ */
+export function buildSnFromOutput(raw) {
+  const m = /"?sn"?\s*[:=]\s*"?(cnb-[A-Za-z0-9-]+)"?/.exec(String(raw ?? ""));
+  return m ? (m[1] ?? null) : null;
+}
+
+/**
  * 跑一次 `cnb … -v` 并把 stdout 当 JSON 解析。
  *
  * 解析失败**返回 null 而不是抛**：调用方据此判「没跑起来」（`CODE.NOT_RUN`），

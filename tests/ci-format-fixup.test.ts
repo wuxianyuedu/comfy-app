@@ -57,8 +57,9 @@ function makeGitStub(options: { pushStatus?: number; lsRemote?: string } = {}) {
   return { git, calls };
 }
 
-/** 委托桩：记下每次收到的参数，按 `delegateStatus` 答（默认发出去了）。 */
-function makeDelegateStub(status = 0) {
+/** 委托桩：记下每次收到的参数，按 `delegateStatus` 答（默认发出去了）。
+ * `output` 可覆盖回读原文 —— 「退 0 但读不回 sn」那一族（ISSUE #2378）要用它模拟。 */
+function makeDelegateStub(status = 0, output?: string) {
   const got: Array<{ slug: string; ref: string; sha: string; iid: string }> =
     [];
   const delegate = (p: {
@@ -68,7 +69,10 @@ function makeDelegateStub(status = 0) {
     iid: string;
   }) => {
     got.push(p);
-    return { status, output: status === 0 ? "sn: cnb-probe-format" : "403" };
+    return {
+      status,
+      output: output ?? (status === 0 ? "sn: cnb-probe-format" : "403"),
+    };
   };
   return { delegate, got };
 }
@@ -85,6 +89,8 @@ function harness(options: {
   pushStatus?: number;
   args?: { delegate: boolean; ref: string; sha: string };
   delegateStatus?: number;
+  /** 委托回读原文的覆盖（缺省按 `delegateStatus` 给）。 */
+  delegateOutput?: string;
   lsRemote?: string;
   /** PR 事件的合成环境；`null`（缺省）= 把 CNB_PULL_REQUEST_IID 清掉。 */
   prEnv?: { iid: string; commit: string } | null;
@@ -93,7 +99,7 @@ function harness(options: {
     pushStatus: options.pushStatus,
     lsRemote: options.lsRemote,
   });
-  const del = makeDelegateStub(options.delegateStatus);
+  const del = makeDelegateStub(options.delegateStatus, options.delegateOutput);
   let listCalls = 0;
   const r = withCnbEnv(options.prEnv ?? null, () =>
     runFormatFixup({
@@ -511,6 +517,26 @@ describe("委托回写（PR 事件只判不推，回写走 api_trigger_formatfix
       expect(r.exitCode).toBe(1);
       expect(r.action).toBe("delegate-failed");
       expect(r.lines.join("\n")).toContain("委托没发出去");
+    });
+  });
+
+  it("start-build 退 0 但读不回 sn ⇒ 照旧红（403 那一族不许被读成「已发出」，ISSUE #2378）", () => {
+    withPrEnv("2359", SHA, () => {
+      const { r } = harness({
+        judgeCode: 1,
+        unformatted: ["src/a.ts"],
+        platformUser: "月读",
+        delegateStatus: 0,
+        /* 平台 403 的现场：cnb 照旧退 0，输出里只有错误信封、没有 sn。 */
+        delegateOutput:
+          '{"status":403,"data":{"errcode":10023,"errmsg":"..."}}',
+        lsRemote: `${SHA}\trefs/heads/feat/x\n`,
+        prEnv: prEnvOf(SHA),
+      });
+      expect(r.exitCode).toBe(1);
+      expect(r.action).toBe("delegate-failed");
+      expect(r.lines.join("\n")).toContain("读不回 sn");
+      expect(r.lines.join("\n")).not.toContain("✓ 委托已发出");
     });
   });
 
