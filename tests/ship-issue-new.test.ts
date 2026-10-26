@@ -105,7 +105,7 @@ function newIssue(
     root: process.cwd(),
     opt: { newIssue: TITLE, issueBodyFile: bodyFile, priority: "P2" },
     mkTmp,
-  } as Parameters<typeof runNewIssue>[0]);
+  });
 }
 
 describe("--new-issue 的留痕话术（ISSUE #2387）", () => {
