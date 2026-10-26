@@ -26,6 +26,7 @@ import { describe, expect, it } from "vitest";
 import {
   decideBaseAttribution,
   decidePremergePush,
+  exitForNotRun,
   mergeCandidates,
   parseRefLines,
   readProof,
@@ -76,7 +77,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
         verifiedAt: "2026-01-01T00:00:00.000Z",
       },
     });
-    expect(verdict.run).toBe(false);
+    expect(verdict.verdict).toBe("skip");
   });
 
   it("本机从没复算过 ⇒ 跑", () => {
@@ -86,7 +87,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
       upstreamSha: UPSTREAM,
       proof: null,
     });
-    expect(verdict.run).toBe(true);
+    expect(verdict.verdict).toBe("run");
     expect(verdict.reasons.join("；")).toContain("没有过合并前复算的记录");
   });
 
@@ -101,7 +102,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
         verifiedAt: "2026-01-01T00:00:00.000Z",
       },
     });
-    expect(verdict.run).toBe(true);
+    expect(verdict.verdict).toBe("run");
     expect(verdict.reasons.join("；")).toContain(HEAD.slice(0, 8));
   });
 
@@ -116,7 +117,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
         verifiedAt: "2026-01-01T00:00:00.000Z",
       },
     });
-    expect(verdict.run).toBe(true);
+    expect(verdict.verdict).toBe("run");
     expect(verdict.reasons.join("；")).toContain("上游");
   });
 
@@ -132,7 +133,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
         verifiedAt: "2026-01-01T00:00:00.000Z",
       },
     });
-    expect(verdict.run).toBe(true);
+    expect(verdict.verdict).toBe("run");
     expect(verdict.reasons.join("；")).toContain("不在当前 HEAD 上");
   });
 
@@ -145,7 +146,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
       upstreamSha: UPSTREAM,
       proof: null,
     });
-    expect(verdict.run).toBe(false);
+    expect(verdict.verdict).toBe("skip");
     expect(verdict.reasons[0]).toContain("没有要合进 master 的分支");
   });
 
@@ -156,8 +157,70 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
       upstreamSha: null,
       proof: null,
     });
-    expect(verdict.run).toBe(false);
+    expect(verdict.verdict).toBe("unavailable");
     expect(verdict.reasons[0]).toMatch(/^取不到/);
+  });
+});
+
+describe("「不跑」那两档的退出码（ISSUE #2386：skip 与 unavailable 不许撞在同一个值上）", () => {
+  it("unavailable ⇒ 退 2 —— 跑不了不算绿，出口是 git fetch 而不是免检", () => {
+    const verdict = decidePremergePush({
+      candidates: mergeCandidates(parseRefLines(refLine())),
+      headSha: HEAD,
+      upstreamSha: null,
+      proof: null,
+    });
+    const got = exitForNotRun(verdict, {
+      proof: null,
+      candidates: mergeCandidates(parseRefLines(refLine())),
+      headSha: HEAD,
+      upstreamSha: null,
+    });
+    expect(got?.code).toBe(2);
+    expect(got?.err).toContain("退 2");
+  });
+
+  it("skip 且证明仍成立 ⇒ 退 0 并念「跳过」（这才是「没必要跑」的原义）", () => {
+    const verdict = decidePremergePush({
+      candidates: mergeCandidates(parseRefLines(refLine())),
+      headSha: HEAD,
+      upstreamSha: UPSTREAM,
+      proof: {
+        headSha: HEAD,
+        upstreamSha: UPSTREAM,
+        verifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    const got = exitForNotRun(verdict, {
+      proof: {
+        headSha: HEAD,
+        upstreamSha: UPSTREAM,
+        verifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+      candidates: mergeCandidates(parseRefLines(refLine())),
+      headSha: HEAD,
+      upstreamSha: UPSTREAM,
+    });
+    expect(got?.code).toBe(0);
+    expect(got?.out).toContain("跳过合并前复算");
+  });
+
+  it("run ⇒ 不接（null）：复算那半段归 runFromStdin，不在这一档冒充结论", () => {
+    const verdict = decidePremergePush({
+      candidates: mergeCandidates(parseRefLines(refLine())),
+      headSha: HEAD,
+      upstreamSha: UPSTREAM,
+      proof: null,
+    });
+    expect(verdict.verdict).toBe("run");
+    expect(
+      exitForNotRun(verdict, {
+        proof: null,
+        candidates: mergeCandidates(parseRefLines(refLine())),
+        headSha: HEAD,
+        upstreamSha: UPSTREAM,
+      }),
+    ).toBeNull();
   });
 });
 
@@ -412,7 +475,7 @@ describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许�
         upstreamSha: rev.upstreamSha,
         proof: null,
       });
-      expect(verdict.run).toBe(false);
+      expect(verdict.verdict).toBe("unavailable");
       expect(verdict.reasons[0]).toMatch(/^取不到/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
