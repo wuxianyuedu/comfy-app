@@ -19,6 +19,9 @@
 
 - 前端业务 / 组件 / 状态 / 性能 / 类型 / 样式 / 测试 → `docs/standards/README.md`
   总览，按主题进入 `docs/standards/01~18` 对应章节；
+- 产品功能 / 需求口径（做功能开发前对齐「这个功能是什么、验收是什么、什么状态」）
+  → `docs/product/README.md`（索引：overview / feature-catalog / feature-specs，
+  需求条目编号化；改用户可见行为的功能同批更新它，规则见该 README §5）；
 - 启动链路 / Tauri 壳 / 构建打包 / ComfyUI 生命周期 → `docs/standards/launch-and-build.md`
   （§4.3「陈旧实例：运行图落后于源码」= 长开窗口 + 拉新代码导致的白屏及其通知；
   改 store 动作、或新增会被已挂载实例调用到的模块时必读；用户侧说明见
