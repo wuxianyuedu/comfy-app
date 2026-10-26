@@ -164,3 +164,24 @@ export function formatCompactStamp(
     (opts.millis ? `-${String(d.getMilliseconds()).padStart(3, "0")}` : "")
   );
 }
+
+/**
+ * 时长（**毫秒**）→ `42s` / `2m17s` / `1h02m`（日志与读数里的那一档）。
+ *
+ * 收这一处的理由不是「省三行」，而是单位本身：平台与 Node 给的时长字段都是毫秒，
+ * 而读的人按秒读 —— `--diagnose` 就把一次 15m30s 的格子念成 `930916s`（≈ 10.7 天，
+ * ISSUE #2442），而那条读数的用途正是判断「这格慢在哪、还是卡死了」。
+ *
+ * 不可解析（`null` / `NaN` / 负数）返回 `null`，**由调用方决定念什么**：
+ * 「未知」是 ComfyUI 退出记录那一处的话术，不属于这一层。
+ */
+export function formatDurationMs(ms: number | null | undefined): string | null {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) {
+    return null;
+  }
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m${pad2(sec % 60)}s`;
+  return `${Math.floor(min / 60)}h${pad2(min % 60)}m`;
+}

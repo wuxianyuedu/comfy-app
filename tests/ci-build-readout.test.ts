@@ -713,7 +713,10 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
     const text = log.join("\n");
     expect(noted).toBe(1);
     expect(text).toContain("失败格：单跑构建·生产构建");
-    expect(text).toContain("100418s");
+    expect(text).toContain("· 1m40s");
+    // 毫秒原值不许出现在时长那一格里：`100418s` 是这条判据上线前的实际读数
+    // （平台的 `duration` 是毫秒，旧实现硬接了一个字面量 `s`，ISSUE #2442）。
+    expect(text).not.toContain("100418s");
     expect(text).toContain("L2  × 缺键时念 pnpm env:init");
     expect(text).toContain("末 4 行");
     // 完整日志链接由 `formatOutcome` 的下一动作那句给出（不是这里重复一遍）。
@@ -723,6 +726,23 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
         slug: "org/repo",
       }).join("\n"),
     ).toContain("https://cnb.cool/org/repo/-/build/logs/cnb-723-1k5h25hkt");
+  });
+
+  it("当场那份读数：930916 毫秒念成 15m31s，不念成 930916s（≈10.7 天）", () => {
+    const log: string[] = [];
+    const detail = {
+      ...STAGE_DETAIL,
+      data: { ...STAGE_DETAIL.data, duration: 930_916 },
+    };
+    describeFailedStages(fakeRun(detail), {
+      slug: "org/repo",
+      sn: "cnb-phl-1k5rscpsg",
+      outcome: classifyBuildOutcome(FAILED_BUILD),
+      log: (s) => log.push(s),
+    });
+    const text = log.join("\n");
+    expect(text).toContain("· 15m31s");
+    expect(text).not.toContain("930916");
   });
 
   it("取不到正文 ⇒ 念「没有结论」，不念「日志里没有失败行」", () => {

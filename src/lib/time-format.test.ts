@@ -4,6 +4,7 @@ import {
   formatClock,
   formatCompactStamp,
   formatDate,
+  formatDurationMs,
   formatLocalStamp,
   formatShortDate,
   timeAgo,
@@ -124,5 +125,33 @@ describe("formatCompactStamp（文件名档，§16.2.4.50）", () => {
 
   it("millis 档补 -SSS（同一秒内多份产物不互相覆盖）", () => {
     expect(formatCompactStamp(d, { millis: true })).toBe("20260905-080503-250");
+  });
+});
+
+describe("formatDurationMs（时长那一档：输入是毫秒，ISSUE #2442）", () => {
+  it("秒 / 分秒 / 时分三档", () => {
+    expect(formatDurationMs(42_000)).toBe("42s");
+    expect(formatDurationMs(137_000)).toBe("2m17s");
+    expect(formatDurationMs(3_725_000)).toBe("1h02m");
+  });
+
+  it("念的是人话而不是原始毫秒 —— 那正是 930916 被读成 10.7 天的那一格", () => {
+    expect(formatDurationMs(930_000)).toBe("15m30s");
+    // 四舍五入到秒：平台给 930916ms，节点那行念 15m30s，两者同量级（不承诺逐字）
+    expect(formatDurationMs(930_916)).toBe("15m31s");
+    expect(formatDurationMs(930_916)).not.toContain("930916");
+  });
+
+  it("跨分钟边界补零（`1m00s` 不是 `1m0s`），不满一秒给 `0s`", () => {
+    expect(formatDurationMs(59_999)).toBe("1m00s");
+    expect(formatDurationMs(0)).toBe("0s");
+    expect(formatDurationMs(420)).toBe("0s");
+  });
+
+  it("拿不到就说拿不到：null / undefined / NaN / 负数一律 null（话术归调用方）", () => {
+    expect(formatDurationMs(null)).toBeNull();
+    expect(formatDurationMs(undefined)).toBeNull();
+    expect(formatDurationMs(Number.NaN)).toBeNull();
+    expect(formatDurationMs(-1)).toBeNull();
   });
 });
