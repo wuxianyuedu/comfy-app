@@ -25,6 +25,7 @@ AIGC:
 | 前端工程规范文档集（standards v1.2） | [standards/README.md](standards/README.md)                                                                                 | 前端工程深度细则：状态管理、性能、样式、组件设计、类型安全、a11y、日志、异步、路由、错误处理、测试、代码组织、提交与 Code Review、反模式、附录                                                                                                                                                                                                    | **强制细则**（与主规范冲突时以主规范为准）                                 |
 | 功能流程图 · 工坊                    | [guides/feature-workshop-flow.md](guides/feature-workshop-flow.md)                                                         | 工坊全链路流程：六阶段主干 / 两条生成通道 / 草稿持久化 / 服务端编排 / 失败出口（**先看流程图把控方向，再看判据表核对实现**）                                                                                                                                                                                                                      | **功能方向口径**（改工坊流程时以本图为准）                                 |
 | 功能流程图 · 工作流库                | [guides/feature-workflow-library-flow.md](guides/feature-workflow-library-flow.md)                                         | 工作流库全链路流程：列表与磁盘跟踪 / 三条导入路径 / 详情三页签 / 对外参数落点 / 就地运行 / 交付给谁                                                                                                                                                                                                                                               | **功能方向口径**（改工作流库流程时以本图为准）                             |
+| 产品需求文档（四篇）                 | [product/README.md](product/README.md)（索引：overview / feature-catalog / feature-specs）                                   | 产品功能与需求的唯一口径：产品概述与信息架构 / 14 个功能域 76 条编号化需求 / 逐条行为与验收口径；**后续开发以此为准**（变更控制见该 README §5）                                                                                                                                                                                                     | **产品需求口径**（做功能开发前以此对齐；与规范的分工见该 README §3）                                                                                                                               |
 | 测试说明                             | [TESTING.md](guides/TESTING.md)                                                                                            | 单测聚焦范围与测试体系说明                                                                                                                                                                                                                                                                                                                        | 配套                                                                       |
 | 拉取更新后环境同步指南               | [guides/sync-after-pull.md](guides/sync-after-pull.md)                                                                     | 远端改了 pnpm 配置/依赖后，本地拉取代码如何同步环境                                                                                                                                                                                                                                                                                               | 配套                                                                       |
 | CI 构建节点镜像与预装计划            | [guides/ci-node-image.md](guides/ci-node-image.md)                                                                         | 「换台构建机器就要重来一遍」怎么快起来：`node scripts/ci-image-plan.mjs` 打印的三条命令（造镜像 / 装进宿主机 / 钉身份），以及这份指南**不**替你做的事（仓库不碰 docker）                                                                                                                                                                          | 配套                                                                       |
@@ -48,7 +49,7 @@ AIGC:
 | 设计系统契约                         | [DESIGN.md](DESIGN.md)                                                                                                     | 从 `src/app/globals.css` 的 Tailwind v4 主题 + `src/components/ui` 基元**实测**反推的机器可读设计契约（token 两态取值、组件形态、Do/Don't、实测出的冲突与未决项）；Design QA / 设计债 / a11y / 组件对齐这几类评审的基准。**它不是 token 的权威源**——取值冲突一律以 `globals.css` 为准，样式判据仍以 [03 章](standards/03-样式与-tailwind.md) 为准 | 配套（评审基准）                                                           |
 | 审计整改报告                         | `docs/audits/`（性能排查台账 + 性能审计报告 + 架构风险审查，均带未闭环条目，按 §7 保留；份数以目录 `ls` 为准，本表不记数） | 规范/代码审计发现的整改跟踪（逐项记录违规、规则、严重度与状态）                                                                                                                                                                                                                                                                                   | 过程跟踪（闭环后删除，见 §7）                                              |
 
-> 本文档集成的范围为：**主规范 + standards 文档集（README + 01~18 章，共 19 篇）**。两者共同构成项目开发规范的"总纲 + 细则"双层体系，其余 docs/api、superpowers 等为配套产物。
+> 本文档集成的范围为：**主规范 + standards 文档集（README + 01~18 章，共 19 篇）**。两者共同构成项目开发规范的"总纲 + 细则"双层体系；**产品需求文档（`docs/product/` 四篇）是第三层**——它定「要实现什么、怎么算做完」，与规范（「怎么实现」）分工见该目录 README §3。其余 docs/api、superpowers 等为配套产物。
 
 ---
 
@@ -139,6 +140,9 @@ AIGC:
 - **核对某个功能的方向对不对**：先看对应的**功能流程图**（工坊 / 工作流库），
   按图确认流向与阶段边界，再看图后的判据表逐条核对实现落点；两篇都是
   `pnpm doc:check` 纳管文档，图里引用的路径与值不会静默过期。
+- **做功能开发 / 对齐需求**：先读 [产品需求文档](product/README.md) ——
+  catalog 定位需求编号、specs 读「行为与验收」，状态四态（已上线 / 灰度 /
+  计划中 / 已退役）以它为准；改用户可见行为的功能同批更新它。
 - **说术语/写 Issue/起 PR 标题**：先查 [术语表](glossary.md)——`画布`/`节点`/`运行`/`项目`/`视图` 这类一词多指的词必须带限定词（判别口诀见 glossary §2）。
 - **提交前自查**：按 [13.1 提交前自查清单](standards/13-提交与-code-review.md#131-提交前自查清单) 逐条对照；换行符 LF 与 git-lfs 参数见 [13.7/13.8](standards/13-提交与-code-review.md#137-换行符与提交噪声lf对齐主规范-112)。
 - **Code Review**：对照 [14 反模式速查表](standards/14-反模式速查表.md) + [13.4 Review 维度](standards/13-提交与-code-review.md#134-code-review-重点维度) 逐项检查。
@@ -202,6 +206,7 @@ AIGC:
 | 文档引用事实登记表 | [reference-facts.md](reference-facts.md)               | 硬编码值的单一事实映射，由 `pnpm doc:check` 动态核对 |
 | 评审归档           | [guides/reviews/](guides/reviews/)                     | 一次性审查结论，历史快照                             |
 | 规范正文           | [standards/](standards/)（01~18 章）                   | 强制细则，随代码同步演进                             |
+| 产品需求文档       | [product/](product/)（README + 三篇）                  | 需求口径：状态四态随代码同步，防「文档说做了、代码没做」 |
 
 > **不引入新的过程文件目录**：巡检结论写回上述**既有文件**（台账就地勾销 / 删除），
 > 不新建 `docs/audits/2026-Qx-巡检.md` 之类的季度过程文件——那等于把问题换个地方沉底。

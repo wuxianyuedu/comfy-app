@@ -62,6 +62,13 @@ const SCOPED_DOCS = [
    * 谁会被平台流程改写」都是从 git 与平台行为实测来的，写错了不会报错、只会照着
    * 一个失效的配置去配 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
   "docs/guides/git-identity.md",
+  /* 产品需求文档（ISSUE #2421）：产品功能与需求的唯一口径。里面大量引用代码落点
+   * （router / 组件 / 表名）与功能状态，漂了就会指着一个不存在的实现说需求 ——
+   * 与功能流程图同类，纳入校验。 */
+  "docs/product/README.md",
+  "docs/product/overview.md",
+  "docs/product/feature-catalog.md",
+  "docs/product/feature-specs.md",
 ];
 function readJson(p) {
   return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
@@ -470,8 +477,8 @@ const FACTS = [
  * 新增文档时的动作因此只有两种：登记进 SCOPED_DOCS，或写进豁免名单附理由。
  */
 
-/** 规范文档目录：其中的 .md 默认全部纳入校验。 */
-const SCOPED_DOC_DIRS = ["docs/standards", "docs/guides"];
+/** 规范文档目录：其中的 .md 默认全部纳入校验（产品需求文档同批纳入，ISSUE #2421）。 */
+const SCOPED_DOC_DIRS = ["docs/standards", "docs/guides", "docs/product"];
 
 /**
  * 豁免名单：不纳入 doc:check 的规范目录文档，key 为相对路径，value 为理由。
