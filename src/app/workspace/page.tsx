@@ -2,7 +2,6 @@
 
 import { subscribeAppEvent } from "~/lib/app-events";
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { VideoQueueModal, AppShell } from "~/components/studio";
 import {
   WORKSPACE_VIEWS,
@@ -26,8 +25,6 @@ import {
 /* ── 工作区页面 —— Updream 风全屏编辑器 ── */
 
 export default function WorkspacePage() {
-  const router = useRouter();
-
   // ── Layout state ──
   /* 页签状态、恢复/落盘、打开/选中/关闭都在 `useWorkspaceTabs`（§12.13：组件已经
      在函数长度阈值附近，按职责拆而不是在里面加注释分段）。 */
@@ -209,11 +206,15 @@ export default function WorkspacePage() {
         refreshActiveProject();
         navigateTo("project");
       } else {
-        // 真实作品：跳转作品详情页（溯源 + 执行日志）
-        router.push(`/create/${id}`);
+        // 打开一个真实项目：设为活跃并落到**项目主页**（与 handleOpenCanvasProject
+        // 同一在役落点）。曾经的「作品详情页（溯源 + 执行日志）」是独立路由
+        // /create/[id]，该路由已退役（#2422）—— 任务详情弹层（HistoryDetailModal）
+        // 挂在历史视图里，项目自身的在役入口就是项目主页。
+        setActive(id);
+        navigateTo("project");
       }
     },
-    [navigateTo, router, refreshActiveProject],
+    [navigateTo, refreshActiveProject],
   );
 
   // 从工作流库「使用」一条工作流 → 跳到无限画布
@@ -333,10 +334,13 @@ export default function WorkspacePage() {
         <VideoQueueModal
           open={videoQueueOpen}
           onClose={() => setVideoQueueOpen(false)}
-          onOpenTask={(id) => {
+          onOpenTask={() => {
             setVideoQueueOpen(false);
-            // 直接跳转到作品详情页（溯源 + 执行日志）
-            router.push(`/create/${id}`);
+            // 任务详情弹层（HistoryDetailModal）挂在历史视图里 —— 在视频队列
+            // 重开入口之前，详情入口以历史视图为准（曾经的独立路由 /create/[id]
+            // 已退役，#2422）。这里不直接开弹层：队列弹窗目前没有打开者，
+            // 为不可达回调接整套详情取数不划算，切到历史视图就是等价在役入口。
+            navigateTo("history");
           }}
         />
       </>
