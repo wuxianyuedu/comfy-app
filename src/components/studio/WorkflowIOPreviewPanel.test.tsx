@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
@@ -20,6 +20,24 @@ import type { WorkflowIOParam } from "./workflow-types";
 type IOMap = Record<string, WorkflowIOParam>;
 
 afterEach(cleanup);
+
+/* 面板把 seed 模式写进 store 的同时会落库一次（`~/lib/workflow/workflow-mutations`
+ * 经 `vanillaApi.workflow.update`，一条 batch 三个字段）。不换桩的话「选递增值」
+ * 那一步就真发 `POST /api/trpc/workflow.update`，在本机撞 `localhost:3000` 的
+ * ECONNREFUSED —— happy-dom 还会把连接失败当成窗口级错误打两遍（ISSUE #2458：
+ * 本文件一条断言都没红，噪声挂在别人的日志里）。本文件只断言 store 里的模式覆盖，
+ * 落库结果不在断言面上，故给「永不 resolve」的桩（同 CanvasNode.test.tsx 的写法）。 */
+vi.mock("~/trpc/vanilla", () => {
+  const pending = <T,>() =>
+    // 永不 resolve：落库结果不影响本文件的断言
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- never-resolve pending 桩
+    new Promise<T>(() => {});
+  return {
+    vanillaApi: {
+      workflow: { update: { mutate: vi.fn(() => pending()) } },
+    },
+  };
+});
 
 /* jsdom 无布局：getBoundingClientRect 恒全 0 → 拖拽 positionOf 会因 height<=0 一律退
  * 回 "before"，指针上/下半区（插入点）无从验证。统一给一个 20px 高、top:0 的盒，
