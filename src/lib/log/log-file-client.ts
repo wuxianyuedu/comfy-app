@@ -8,6 +8,7 @@
  */
 
 import { withQuery } from "~/lib/query-string";
+import { LOG_SLICE_ENDPOINT } from "./panel-self-poll";
 import type { LogSessionsPayload } from "./log-sessions";
 
 export interface FileLogSlice {
@@ -61,7 +62,7 @@ export async function fetchFileLogSlice(
   bootId?: string,
 ): Promise<FileLogSlice | null> {
   const res = await fetch(
-    withQuery("/api/logs/current", {
+    withQuery(LOG_SLICE_ENDPOINT, {
       source: sourceQuery(source),
       /* `offset` 是**游标**：`0` 表示「从头上读」，是真实的值不是缺值
        *（省略它服务端会按自己的默认游标回答，那是另一件事）。 */

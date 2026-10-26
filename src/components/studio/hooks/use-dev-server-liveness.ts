@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
+import { SERVER_ID_ENDPOINT } from "~/lib/log/panel-self-poll";
 import {
   describeAppServiceExit,
   fetchAppServiceExit,
@@ -209,7 +210,7 @@ type ProbeResult =
  *  分成两次请求会在「服务刚恢复」那一刻还拿着旧 runId，把恢复那条消息盖错启动组。 */
 async function probeBootId(): Promise<ProbeResult> {
   try {
-    const res = await fetch("/api/dev/server-id", {
+    const res = await fetch(SERVER_ID_ENDPOINT, {
       cache: "no-store",
       signal: AbortSignal.timeout(2500),
     });
