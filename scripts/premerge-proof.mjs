@@ -90,8 +90,16 @@ export function mergeCandidates(refs, targetBranch = "master") {
 /**
  * 判决本体（纯函数，便于逐条边界都被用例走到）。
  *
+ * 三态取代过去的 `{run: boolean}`（ISSUE #2386）：一个布尔承担不了
+ * 「不需要跑」与「跑不了」两种语义 —— 后者靠 reason 文案前缀（`startsWith("取不到")`）
+ * 从 skip 里分出来，改一句话的措辞就会把「没法复算」静默读成「没必要跑」。
+ * 消费方按 `verdict` 分流：
+ *   · `"run"` ⇒ 跑合并前复算；
+ *   · `"skip"` ⇒ 不跑也不拦（没有要合进 master 的分支 ref / 证明仍成立）；
+ *   · `"unavailable"` ⇒ **跑不了**（取不到上游引用）⇒ 退 2，「不算绿」。
+ *
  * @param {{candidates: ReturnType<typeof mergeCandidates>, headSha: string, upstreamSha: string | null, proof: {headSha?: string, upstreamSha?: string, verifiedAt?: string} | null}} input
- * @returns {{run: boolean, reasons: string[]}}
+ * @returns {{verdict: "run" | "skip" | "unavailable", reasons: string[]}}
  */
 export function decidePremergePush({
   candidates,
@@ -100,11 +108,14 @@ export function decidePremergePush({
   proof,
 }) {
   if (candidates.length === 0) {
-    return { run: false, reasons: ["本次 push 没有要合进 master 的分支 ref"] };
+    return {
+      verdict: "skip",
+      reasons: ["本次 push 没有要合进 master 的分支 ref"],
+    };
   }
   if (!upstreamSha) {
     return {
-      run: false,
+      verdict: "unavailable",
       reasons: [
         "取不到上次 fetch 看到的上游引用 —— 复算没有可比的那条线（按「各 remote 的 `master` → 本地 " +
           "`master`」依次找过，远端名不假定叫 origin；先 `git fetch` 再推）",
@@ -132,7 +143,42 @@ export function decidePremergePush({
       `本次还带了不在当前 HEAD 上的分支（${others.map((o) => o.remoteRef.replace("refs/heads/", "")).join(" / ")}）`,
     );
   }
-  return { run: reasons.length > 0, reasons };
+  return { verdict: reasons.length > 0 ? "run" : "skip", reasons };
+}
+
+/**
+ * 「不跑」那两档的退出码与读数（`runFromStdin` 的接线，抽成纯函数给用例钉）。
+ *
+ * 返回 `null` = `verdict` 是 `"run"`，调用方走复算那半段。
+ *
+ * @param {{verdict: "run" | "skip" | "unavailable", reasons: string[]}} verdict
+ * @param {{proof: {headSha?: string, upstreamSha?: string, verifiedAt?: string} | null, candidates: ReturnType<typeof mergeCandidates>, headSha: string, upstreamSha: string | null}} ctx
+ * @returns {{code: number, out?: string, err?: string} | null}
+ */
+export function exitForNotRun(verdict, ctx) {
+  if (verdict.verdict === "unavailable") {
+    return {
+      code: 2,
+      err:
+        `[pre-push] ✗ ${verdict.reasons.join("；")}（退 2 —— 这一跳没有被复算过，` +
+        `也不能确认它没必要）\n`,
+    };
+  }
+  if (verdict.verdict !== "skip") return null;
+  /* 唯一「不跑但也不拦」的形态：确实没什么要复算的（没有目标分支 ref），
+   * 或已经有一份仍然成立的证明。其余不跑都是**没法跑**，得拦下来。 */
+  if (ctx.proof?.verifiedAt && ctx.candidates.length > 0) {
+    return {
+      code: 0,
+      out:
+        `[pre-push] ✓ 跳过合并前复算：HEAD ${shortSha(ctx.headSha)} 与上游 ${shortSha(ctx.upstreamSha)} ` +
+        `自上次自证（${ctx.proof.verifiedAt}）以来都没变。\n`,
+    };
+  }
+  return {
+    code: 0,
+    out: `[pre-push] 不跑合并前复算：${verdict.reasons.join("；")}\n`,
+  };
 }
 
 /**
@@ -355,27 +401,16 @@ export function runFromStdin(stdinText) {
     proof,
   });
 
-  if (!verdict.run) {
-    /* 唯一「不跑但也不拦」的形态：确实没什么要复算的（没有目标分支 ref），
-     * 或已经有一份仍然成立的证明。其余不跑都是**没法跑**，得拦下来。 */
-    if (verdict.reasons.some((r) => r.startsWith("取不到"))) {
-      process.stderr.write(
-        `[pre-push] ✗ ${verdict.reasons.join("；")}（退 2 —— 这一跳没有被复算过，` +
-          `也不能确认它没必要）\n`,
-      );
-      return 2;
-    }
-    if (proof?.verifiedAt && candidates.length > 0) {
-      process.stdout.write(
-        `[pre-push] ✓ 跳过合并前复算：HEAD ${shortSha(headSha)} 与上游 ${shortSha(upstreamSha)} ` +
-          `自上次自证（${proof.verifiedAt}）以来都没变。\n`,
-      );
-      return 0;
-    }
-    process.stdout.write(
-      `[pre-push] 不跑合并前复算：${verdict.reasons.join("；")}\n`,
-    );
-    return 0;
+  const notRun = exitForNotRun(verdict, {
+    proof,
+    candidates,
+    headSha,
+    upstreamSha,
+  });
+  if (notRun) {
+    if (notRun.out) process.stdout.write(notRun.out);
+    if (notRun.err) process.stderr.write(notRun.err);
+    return notRun.code;
   }
 
   process.stdout.write(
