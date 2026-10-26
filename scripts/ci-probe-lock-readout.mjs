@@ -28,6 +28,8 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { buildSnFromOutput } from "./ship-exec.mjs";
+
 /** 终态集合 —— 平台 `status` 的原值（`pending` / `running` 之外的都算停了）。 */
 const TERMINAL = new Set(["success", "failed", "cancel", "timeout", "skipped"]);
 
@@ -328,11 +330,11 @@ export function startProbe(repo, event, title) {
     ],
     { encoding: "utf8" },
   );
-  const m = /"?sn"?\s*[:=]\s*"?(cnb-[A-Za-z0-9-]+)"?/.exec(raw);
-  if (!m) {
+  const sn = buildSnFromOutput(raw);
+  if (!sn) {
     throw new Error(`起跑失败（没读回 sn）：\n${raw}`);
   }
-  return m[1];
+  return sn;
 }
 
 /** 轮询到终态；超时返回最后一读（`status` 原值照给，不替它编结论）。 */

@@ -99,6 +99,22 @@ describe("允许写脏的名单", () => {
     expect(underWriter("docs/generated-notes/x.md", allow)).toBe(false);
   });
 
+  it("现役名单放行得了 prettier 档实际写过的文件（outputs 曾写成 glob 而放行不了任何文件，ISSUE #2378）", () => {
+    /* 本单的现场：prettier 档修的 `src/components/…` 不在允许名单里 ⇒ 工作区出处
+     * 那一格红在「名单外的写者」，而真凶是登记表里 `src/**` 这个 glob 形态
+     * （`underWriter` 是字面前缀匹配）。这条断的是**现役名单对真文件的资格**，
+     * 登记表再改回 glob 会当场红。 */
+    const prefixes = writerPrefixes();
+    expect(
+      underWriter("src/components/studio/ProjectOutputs.test.tsx", prefixes),
+    ).toBe(true);
+    expect(underWriter(".storybook/preview.ts", prefixes)).toBe(true);
+    /* 生成物档的既有前缀不受影响。 */
+    expect(underWriter("docs/generated/launch-and-build.md", prefixes)).toBe(
+      true,
+    );
+  });
+
   it("登记名单为空 ⇒ 任何 tracked 改动都是名单外（不许「名单没配 ⇒ 一律放行」）", () => {
     expect(underWriter("docs/generated/13.md", [])).toBe(false);
     const got = provenanceVerdict({
@@ -270,7 +286,10 @@ describe("出口", () => {
         cwd: path.sep,
         env: { CNB_COMMIT: sha, COMFYAPP_CI_PROBE_DIR: dir },
         run,
-        spawn: spawnOk(" M src/app/page.tsx\0"),
+        /* 样本必须落在**现役名单外**（登记前缀是 src/ / .storybook/ / docs/generated/）：
+         * 曾用 `src/app/page.tsx` 当名单外样本，ISSUE #2378 把 src/ 收进名单后它成了
+         * 合法写者 ⇒ 那条「红 ⇒ 退非零」的断言失效 —— 换 tools/ 并点名这个前提。 */
+        spawn: spawnOk(" M tools/foo.ts\0"),
         ledgerDir: dir,
       }),
     ).toBe(1);
