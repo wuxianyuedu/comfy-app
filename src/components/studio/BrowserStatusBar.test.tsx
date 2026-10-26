@@ -1,13 +1,16 @@
 // 状态栏视图的可见行为：断言用户能看到什么，不断言内部 state/hook 调用细节
 // （规范 11.2 行为测试优先）。依赖 useComfyReadiness（指标）/ useDevServerStatus
-// （应用服务那一格）/ useFps（FPS 归属），逐个换桩。
+// （应用服务那一格）/ useFps（FPS 归属）/ useSchemaSyncStatus、useComfyQueue
+// （两个周期源），逐个换桩。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import { BrowserStatusBar } from "./BrowserStatusBar";
+import type * as ComfyQueueModule from "./hooks/use-comfy-queue";
 import type { ComfyStatusViewModel } from "./hooks/use-comfy-readiness";
 import type * as FpsModule from "./hooks/use-fps";
+import type * as SchemaSyncModule from "./hooks/use-schema-sync-status";
 import type { DevServerStatusViewModel } from "./hooks/use-dev-server-status";
 
 const readinessMock = vi.hoisted(() => vi.fn());
@@ -19,6 +22,36 @@ vi.mock("./hooks/use-comfy-readiness", () => ({
 vi.mock("./hooks/use-fps", async (importOriginal) => {
   const actual = await importOriginal<typeof FpsModule>();
   return { ...actual, useFps: fpsMock };
+});
+/* 状态栏还挂着两个周期源：schema 同步状态（每挂载一次就 `GET /api/schema`）与
+ * 队列快照（订阅即拉起 `GET /api/comfy/queue` 的轮询）。两者各有自己的用例
+ * （`use-schema-sync-status.test.ts` / `use-comfy-queue.test.ts`），这里换桩 ——
+ * 不换的话每一条用例都会真发两笔请求，在本机撞 `localhost:3000` 的
+ * ECONNREFUSED，并在 happy-dom 拆窗时把这些在飞的请求打成一片 AbortError
+ * （ISSUE #2458：它们是**别的文件**打印的噪声，这条用例自己一条断言都没红）。 */
+vi.mock("./hooks/use-schema-sync-status", async (importOriginal) => {
+  const actual = await importOriginal<typeof SchemaSyncModule>();
+  return {
+    ...actual,
+    useSchemaSyncStatus: (): SchemaSyncModule.SchemaSyncStatus => ({
+      phase: "ready",
+      detail: null,
+      canPush: false,
+    }),
+  };
+});
+vi.mock("./hooks/use-comfy-queue", async (importOriginal) => {
+  const actual = await importOriginal<typeof ComfyQueueModule>();
+  return {
+    ...actual,
+    useComfyQueue: (): ComfyQueueModule.ComfyQueueView => ({
+      online: false,
+      comfy: { running: 0, pending: 0 },
+      running: null,
+      queued: 0,
+      elapsedMs: null,
+    }),
+  };
 });
 // 状态栏需要 LogProvider 上下文；这里只关心指标项，换成透传壳。
 vi.mock("./logs/LogProvider", () => ({
