@@ -512,6 +512,45 @@ function trunkFromRemoteHead(remote, remoteHead) {
 }
 
 /**
+ * 读依赖新鲜度判据（`check-deps-freshness.mjs --json`）的**原值**，给出这一格该怎么念。
+ *
+ * 为什么要读原值而不是只看退出码（ISSUE #2390）：那份判据的三件不同的事**共用一个
+ * 非零码** —— 「远端在依赖面上前进过」（真漂移，`git pull` + `pnpm install` 是出口）、
+ * 「依赖压根没装」（`installDrift.state = no-install`，出口同样是装，但它**不是漂移**）、
+ * 「拿不到 git 状态」（`envBroken`，出口是修环境）。只看退出码就必然把后两种念成
+ * 「红了」，而「红了」在本仓三态码里的意思是**有事实是红的** —— 与硬规则 26 /
+ * §13.6.3 正面冲突：`node_modules` 缺失只表示「还没装」，**不表示「本机跑不了门禁」**。
+ *
+ * 五种回答，**一个都不许合并**（「没测」与「测出来是红的」分开是本条的全部要害）：
+ *
+ * @param {{status?:number, stdout?:string, stderr?:string, error?:string|null}|null} res 执行者回来的原值
+ * @returns {"clean"|"drift"|"no-install"|"env"|"unknown"}
+ *   `clean` 一致 · `drift` 真漂移（②/③ 命中）· `no-install` 还没装 ·
+ *   `env` 判据自己没跑起来 · `unknown` 读数不完整（起不来 / 形状对不上）
+ */
+export function readFreshnessState(res) {
+  let json = null;
+  try {
+    json = JSON.parse((res && res.stdout) || "");
+  } catch {
+    return "unknown";
+  }
+  if (!json || typeof json !== "object") return "unknown";
+  /* 判据自己的「没跑起来」压过一切（与它的退出码顺序同口径：环境不可信时
+   * 红与绿都不构成结论）。 */
+  if (json.envBroken === true) return "env";
+  if (!("code" in json)) return "unknown";
+  const state = json.installDrift && json.installDrift.state;
+  /* `no-install` 与「远端漂移」可能同时成立（没装 + 远端改过依赖）：那时要念的是**漂移**，
+   * 因为它的出口（先 pull 再装）才是完整动作 —— 只说「没装」会让人在旧基线上装一套旧依赖。 */
+  if (state === "no-install" && !(json.remoteDrifts || []).length) {
+    return "no-install";
+  }
+  if (Number(json.code) === 0) return "clean";
+  return "drift";
+}
+
+/**
  * 读 PR JSON 的判决字段（同样只读 `data.*`）。
  *
  * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string}} | null} json 解析结果

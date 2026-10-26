@@ -21,11 +21,22 @@
  *
  * `readBuildVerdict` 那组里刻意各有一条「只有信封字段」与「data 是别的形状」的负控制 ——
  * 判据若被写成 `json.status ?? json.data.status`，正样本照样绿，只有负样本会红。
+ *
+ * ## `-t <字串>` 筛出来的绿不等于「这一组跑过了」
+ *
+ * vitest 5 里 `-t` **不跳过未命中的 `it()` 函数体**：未命中的用例是 `mode=skip` /
+ * `result=null`（= **没跑**），而函数体照旧执行。于是「筛着跑一组」时，屏幕上那几行
+ * `passed` 混着**根本没有断言过筛选目标**的绿 —— 拿它当证据就是在给「没测」发一张
+ * 「测过了」的证书（§13.6.4.1 那条「拿不到测量 ≠ 测量结果是红的」的同族）。
+ *
+ * 所以本文件里新增的用例组在**第一步**就问 \`getCurrentTest()?.result?.state\`：
+ * 不是 `skip` 才算真跑。判据只有这一份，不按 `mode` 判 —— 未命中与手写 `.skip`
+ * 在 `mode` 上同形，而它们不该被同一句话盖住。
  */
 import fs, { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, TestRunner } from "vitest";
 
 /* 与 `ship-exec.mjs` 的 `ExecResult` 同形（`error` 是**必需**的：把它写成可选，
  * 注入时就过不了类型 —— 而那正是这层接缝唯一的形状约束）。放在模块层是因为
@@ -36,6 +47,16 @@ type FakeResult = {
   stderr: string;
   error: string | null;
 };
+
+/** `check-deps-freshness.mjs --json` 的「一致」读数（阶段 0 读它，见 ISSUE #2390）。 */
+const FRESH_OK = JSON.stringify({
+  code: 0,
+  remoteChecked: true,
+  remoteAgeMs: 1000,
+  remoteDrifts: [],
+  installDrift: null,
+  envBroken: false,
+});
 
 import {
   asArray,
@@ -56,6 +77,7 @@ import {
   parseIssueNumberToken,
   parseSlug,
   planCommands,
+  readFreshnessState,
   readPullCreateError,
   readPullVerdict,
   resolveUpstream,
@@ -3595,6 +3617,251 @@ describe("ship 阶段 0：`.env` 缺键的读数与启动器同一份实现（IS
   });
 });
 
+/**
+ * 依赖新鲜度那一格（ISSUE #2390）：判据的三件不同的事共用一个非零码，
+ * 只看退出码就必然把「还没装」念成「红了」—— 而那正是硬规则 26 明令禁止的误读。
+ */
+/**
+ * 依赖新鲜度那一格（ISSUE #2390）：判据的三件不同的事共用一个非零码，
+ * 只看退出码就必然把「还没装」念成「红了」—— 而那正是硬规则 26 明令禁止的误读。
+ */
+describe("readFreshnessState：判据原值里三件不同的事必须分开读", () => {
+  /** 这一条用例这次**真跑了**吗。见文件头「`-t` 筛出来的绿」那一节。 */
+  function ranThisCase(): boolean {
+    return TestRunner.getCurrentTest()?.result?.state !== "skip";
+  }
+
+  const json = (o: unknown): FakeResult => ({
+    status: Number((o as { code?: number }).code ?? 0),
+    stdout: JSON.stringify(o),
+    stderr: "",
+    error: null,
+  });
+
+  it("干净 ⇒ clean", () => {
+    if (!ranThisCase()) return;
+    expect(
+      readFreshnessState(
+        json({
+          code: 0,
+          remoteChecked: true,
+          remoteDrifts: [],
+          installDrift: null,
+          envBroken: false,
+        }),
+      ),
+    ).toBe("clean");
+  });
+
+  it("远端漂移 ⇒ drift（唯一该念成「红了」的那一档）", () => {
+    if (!ranThisCase()) return;
+    expect(
+      readFreshnessState(
+        json({
+          code: 1,
+          remoteChecked: true,
+          remoteDrifts: [{ file: "pnpm-lock.yaml", kind: "modified" }],
+          installDrift: null,
+          envBroken: false,
+        }),
+      ),
+    ).toBe("drift");
+  });
+
+  it("依赖没装 ⇒ no-install（不是漂移，更不是「跑不了门禁」）", () => {
+    if (!ranThisCase()) return;
+    expect(
+      readFreshnessState(
+        json({
+          code: 1,
+          remoteChecked: true,
+          remoteDrifts: [],
+          installDrift: { state: "no-install", unresolved: [] },
+          envBroken: false,
+        }),
+      ),
+    ).toBe("no-install");
+  });
+
+  it("没装 + 远端也改过依赖 ⇒ drift：先 pull 再装才是完整动作", () => {
+    if (!ranThisCase()) return;
+    // 只说「没装」会让人在旧基线上装一套旧依赖，出口漏掉前半步。
+    expect(
+      readFreshnessState(
+        json({
+          code: 1,
+          remoteChecked: true,
+          remoteDrifts: [{ file: "package.json", kind: "modified" }],
+          installDrift: { state: "no-install", unresolved: [] },
+          envBroken: false,
+        }),
+      ),
+    ).toBe("drift");
+  });
+
+  it("envBroken 压过其余（环境不可信时红与绿都不构成结论）", () => {
+    if (!ranThisCase()) return;
+    expect(
+      readFreshnessState(
+        json({
+          code: 2,
+          remoteChecked: false,
+          remoteDrifts: [],
+          installDrift: { state: "no-install", unresolved: [] },
+          envBroken: true,
+        }),
+      ),
+    ).toBe("env");
+  });
+
+  it("负控制：起不来 / 形状对不上 ⇒ unknown，既不念「红了」也不念「没问题」", () => {
+    if (!ranThisCase()) return;
+    expect(
+      readFreshnessState({ status: 1, stdout: "", stderr: "", error: null }),
+    ).toBe("unknown");
+    expect(
+      readFreshnessState({
+        status: 1,
+        stdout: "not json",
+        stderr: "",
+        error: "ENOENT",
+      }),
+    ).toBe("unknown");
+    // 有 JSON 但没有判据自己的 `code`：读出来的不是那份判据的结论。
+    expect(
+      readFreshnessState(json({ remoteDrifts: [], installDrift: null })),
+    ).toBe("unknown");
+  });
+});
+
+describe("ship 阶段 0 的依赖新鲜度那一格：读数分档，不再只看退出码（ISSUE #2390）", () => {
+  /** 这一条用例这次**真跑了**吗。见文件头「`-t` 筛出来的绿」那一节。 */
+  function ranThisCase(): boolean {
+    return TestRunner.getCurrentTest()?.result?.state !== "skip";
+  }
+
+  /** 阶段 0 需要的几跳：分支 / sha / 一份碎片；依赖判据那一跳由用例给。 */
+  function preflightIo(fresh: FakeResult) {
+    const logs: string[] = [];
+    const run = (cmd: string, args: string[]): FakeResult => {
+      const key = args.join(" ");
+      if (cmd === "node" && key.includes("check-deps-freshness")) return fresh;
+      if (cmd === "git" && key === "rev-parse --abbrev-ref HEAD")
+        return { status: 0, stdout: "feat/x\n", stderr: "", error: null };
+      if (cmd === "git" && key === "rev-parse HEAD")
+        return { status: 0, stdout: "abc1234\n", stderr: "", error: null };
+      if (cmd === "git" && key.includes("status --porcelain -- changelog.d"))
+        return {
+          status: 0,
+          stdout: "?? changelog.d/2390-x.md\n",
+          stderr: "",
+          error: null,
+        };
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    return { run, logs };
+  }
+
+  async function stage(fresh: FakeResult) {
+    const { run, logs } = preflightIo(fresh);
+    const res = await runPreflightStage({
+      run,
+      log: (l: string) => logs.push(l),
+      relay: () => undefined,
+      opt: parseArgs([]),
+      root: os.tmpdir(),
+      up: { remote: "origin", base: "master", source: "remote-head" },
+      baseRef: "origin/master",
+      baseBranch: "master",
+      slug: "moon-read/comfy-app-t3",
+      cnbOk: true,
+      handle: null,
+      readInstances: async () => ({ running: false }),
+      platform: "linux",
+    });
+    return { res, text: logs.join("\n") };
+  }
+
+  it("依赖没装 ⇒ 落 2 并念「还没装」，而不是「红」，且后面的阶段照跑", async () => {
+    if (!ranThisCase()) return;
+    const { res, text } = await stage({
+      status: 1,
+      stdout: JSON.stringify({
+        code: 1,
+        remoteChecked: true,
+        remoteDrifts: [],
+        installDrift: { state: "no-install", unresolved: [] },
+        envBroken: false,
+      }),
+      stderr: "",
+      error: null,
+    });
+    // 这是本条的立案现场：过去这一格 action=finish + CODE.RED，整条链一步都走不了。
+    expect(res.action).toBe("continue");
+    expect(res.codes).toContain(CODE.NOT_RUN);
+    expect(res.codes).not.toContain(CODE.RED);
+    expect(text).toContain("依赖还没装");
+    expect(text).toContain("pnpm install");
+    expect(text).toContain("硬规则 26");
+    // 那句最该被撤掉的话一个字都不许留（它教的正是硬规则 26 禁止的事）。
+    expect(text).not.toContain("依赖新鲜度红了");
+  });
+
+  it("真漂移 ⇒ 保持 1 且停在阶段 0（该拦的仍然拦）", async () => {
+    if (!ranThisCase()) return;
+    const { res, text } = await stage({
+      status: 1,
+      stdout: JSON.stringify({
+        code: 1,
+        remoteChecked: true,
+        remoteDrifts: [{ file: "pnpm-lock.yaml", kind: "modified" }],
+        installDrift: null,
+        envBroken: false,
+      }),
+      stderr: "",
+      error: null,
+    });
+    expect(res.action).toBe("finish");
+    expect(res.codes).toContain(CODE.RED);
+    expect(text).toContain("依赖新鲜度红了");
+  });
+
+  it("envBroken ⇒ 2，出口指向 git 读数而不是 `pnpm install`", async () => {
+    if (!ranThisCase()) return;
+    const { res, text } = await stage({
+      status: 2,
+      stdout: JSON.stringify({
+        code: 2,
+        remoteChecked: false,
+        remoteDrifts: [],
+        installDrift: null,
+        envBroken: true,
+      }),
+      stderr: "",
+      error: null,
+    });
+    expect(res.action).toBe("continue");
+    expect(res.codes).toContain(CODE.NOT_RUN);
+    expect(res.codes).not.toContain(CODE.RED);
+    expect(text).toContain("git 状态");
+    expect(text).not.toContain("依赖新鲜度红了");
+  });
+
+  it("判据起不来（读数是空的）⇒ 2，既不念「红了」也不念「没问题」", async () => {
+    if (!ranThisCase()) return;
+    const { res, text } = await stage({
+      status: -1,
+      stdout: "",
+      stderr: "",
+      error: "ENOENT",
+    });
+    expect(res.action).toBe("continue");
+    expect(res.codes).toContain(CODE.NOT_RUN);
+    expect(text).toContain("没有给出可读的结论");
+    expect(text).not.toContain("依赖新鲜度红了");
+  });
+});
+
 describe("main() 的单子动作：独立于主流程，在 master 上、没碎片时也能跑", () => {
   /** 只答单子动作需要的那几跳 —— 别的一律空响应（走了就是用例失败）。 */
   function issueMainIo(rows: { number: number; priority: string; title: string }[]) {
@@ -4318,8 +4585,10 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         };
       if (cmd === "git" && key.includes("get-url"))
         return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      /* 依赖新鲜度那一格读的是**判据自己的 `--json` 原值**（ISSUE #2390），
+       * 所以夹具要答那份形状：只回一句 "OK" 会被读成「读数不完整」（`unknown` ⇒ 落 2）。 */
       if (cmd === "node" && key.includes("check-deps-freshness"))
-        return ok("OK");
+        return ok(FRESH_OK);
       /* ── 整链形状（`chain: true` 才答）───────────────────────────
        * 默认不答，是为了不惊动已有那些用例：它们中好几条判的正是「建 PR 那一跳的
        * 各种失败出口」，一旦 list-pulls 有了可解析的响应就会改走「复用」那条支路。 */
