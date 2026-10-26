@@ -8007,6 +8007,19 @@ Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 go
 `ship-platform` / `ship-claim` 等分模块同族）；**代理侧的执行说明**在 project Skill
 `.qoder/skills/ship/SKILL.md`。规范各处不重抄旗标清单——抄一份，下一个旗标加进来时它就是第二次脱钩。
 
+**同一把尺还有第三种误读：`cnb` 的退出码 `0` 不等于「这条命令做了事」**（ISSUE #2436）。
+认不出的子命令打印的是**模块 usage**，而退出码是 `0` —— 于是「一次也没写」在终端上与
+「写成功」逐字同形。现场：手工补落地评论时把命令名敲成 `cnb issues create-comment`
+（仓里既有的正确形状是 **`post-issue-comment`**，`scripts/ship-claim.mjs` 用的就是它），
+`POST_EXIT=0` 当场被读成「写了」；独立回读 `list-issue-comments --sort -created` 才给出真相
+—— 条数一条也没多（换正确名字后才 2 → 3）。
+**脚本侧对这一族早有防线，而且是刻意的**：`scripts/ship-exec.mjs` 的 `cnbJson` 以
+「输出必须是可解析 JSON」为在场条件，拿不到 JSON 就落 `NOT_RUN`（= 那一格**没有结论**，
+既不是绿也不是红，见上面退出码三态）。所以暴露面只剩**人手工那一跳**与任何绕开 `cnbJson`
+新写的一次性脚本，而这一条**不新写门禁**（§12.20）：要买的是一句读数口径，不是第二轮子。
+口径就一句 —— **`cnb … -v` 的结论只认 JSON 里的 `data.*`；退出码 `0` 既不许读成「写成功」，
+也不许读成「取到了空结果」，要下结论必须独立回读对象本身一次。**
+
 **「同一条分支上再跑一次」的两种情形分开判**（ISSUE #2250）。旧形状只有一格幂等：在
 `list-pulls --state open` 里按 `head.ref` 找，找到就复用、**找不到就建**。但 squash 合并成功会把
 PR 转 `closed`，那一格因此恰好在「已经合过」的那一刻失效，于是同一条分支上再跑一次会长出一条
