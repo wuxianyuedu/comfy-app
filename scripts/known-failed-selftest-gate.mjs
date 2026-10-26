@@ -174,17 +174,26 @@ function runSelfTest() {
  * ⚠️ **取不到 ⇒ 这一格没判**（`ok: false`），由调用方退 2 —— 不是退 0。
  * **空清单同样算「取不到」**：空清单若放行，「这次什么都没改」与「拿不到清单」就分不开了。
  *
+ * ⚠️ 不带 `--staged` 也不带 `--base` 时，这一格读的是**当场这个仓库的索引** ——
+ * 那是生产入口（钩子）要的形态，**不是用例该依赖的东西**（ISSUE #2344：每日那一跑里
+ * 上一格的新鲜度账回写失败，把两份入库的账本留在索引里，于是「断言 `ok === false`」
+ * 那条用例把自己的前提建在了别人的事故上，红成一个与代码无关的假红）。
+ * 所以清单可由 `deps.readStaged` 注入 —— 形状与 `runGate({staged, selfTest})` 同源，
+ * 目的都是「让判决可被执行，而不必先造一个现场」。
+ *
  * @param {string[]} argv
+ * @param {{readStaged?: () => string[]}} [deps] 只有「不带旗标 ⇒ 读当场索引」那一支用得到
  * @returns {{ok: true, files: string[], via: string} | {ok: false, reason: string}}
  */
-export function resolveFace(argv) {
+export function resolveFace(argv, { readStaged = stagedFiles } = {}) {
   const baseIdx = argv.indexOf("--base");
   if (baseIdx >= 0) {
     const baseRef = (argv[baseIdx + 1] ?? "").trim();
     if (!baseRef) {
       return {
         ok: false,
-        reason: "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
+        reason:
+          "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
       };
     }
     const got = changedFilesForBaseRef(baseRef, { cwd: ROOT });
@@ -200,7 +209,7 @@ export function resolveFace(argv) {
     };
   }
   const si = argv.indexOf("--staged");
-  const files = si >= 0 ? argv.slice(si + 1) : stagedFiles();
+  const files = si >= 0 ? argv.slice(si + 1) : readStaged();
   /* 空索引有两种来路（忘了 stage / 刻意空提交），而它在索引上逐字同形 ⇒ 不猜，
    * 只认 `intentional-empty-commit.mjs` 那个唯一口径（ISSUE #2354：
    * `pnpm ship --rerun-ci` 要推一笔空提交重新派生流水线，而「什么都没碰」在这里
@@ -218,8 +227,8 @@ export function resolveFace(argv) {
     return {
       ok: false,
       reason:
-        "暂存区是空的 —— 没有判决面（本地这一跳的暂存集永远非空；" +
-        "空的那一档只出现在平台上，而平台上没有暂存区）",
+        "暂存区是空的 —— 没有判决面（本地可能忘了 stage，平台上也可能有非空的索引 —— " +
+        "上一格的账回写失败就会把账本留在里面，ISSUE #2344）",
     };
   }
   return { ok: true, files, via: si >= 0 ? "手工指定的清单" : "暂存区" };
