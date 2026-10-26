@@ -14,10 +14,15 @@
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { pushFreshnessLedger, readBranchLedger } from "../scripts/freshness-ledger.mjs";
+import {
+  FRESHNESS_TRACKS,
+  pushFreshnessLedger,
+  readBranchLedger,
+} from "../scripts/freshness-ledger.mjs";
 import { readFreshnessLedger } from "../scripts/freshness-gate.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -64,11 +69,16 @@ beforeAll(() => {
     },
   };
   // 只改 E2E_REL 工作树 + 暂存，造一个「机器分支」提交，但**不切换工作树**。
-  fs.writeFileSync(path.join(ROOT, E2E_REL), `${JSON.stringify(machine, null, 2)}\n`);
+  fs.writeFileSync(
+    path.join(ROOT, E2E_REL),
+    `${JSON.stringify(machine, null, 2)}\n`,
+  );
   gitNoHook(`add ${E2E_REL}`);
   const tree = gitNoHook(`write-tree`).trim();
   const parent = git(`rev-parse HEAD`).trim();
-  const sha = gitNoHook(`commit-tree ${tree} -p ${parent} -m "test: machine ledger"`).trim();
+  const sha = gitNoHook(
+    `commit-tree ${tree} -p ${parent} -m "test: machine ledger"`,
+  ).trim();
   git(`update-ref refs/heads/${BRANCH} ${sha}`);
   // 还原工作树 E2E_REL（回到 master 那份真实账），保持测试环境干净。
   git(`checkout HEAD -- ${E2E_REL}`);
@@ -83,7 +93,11 @@ afterAll(() => {
 
 describe("freshness ledger 机器分支回看（#2247）", () => {
   it("readBranchLedger 能从指定 ref 读出账", () => {
-    const ledger = readBranchLedger({ root: ROOT, rel: E2E_REL, branch: BRANCH });
+    const ledger = readBranchLedger({
+      root: ROOT,
+      rel: E2E_REL,
+      branch: BRANCH,
+    });
     expect(e2eTrack(ledger)?.verifiedAt).toBe("2099-01-01T00:00:00.000Z");
   });
 
@@ -106,5 +120,171 @@ describe("freshness ledger 机器分支回看（#2247）", () => {
     delete process.env.FRESHNESS_LEDGER_BRANCH;
     const ledger = readFreshnessLedger("e2e", ROOT, "master");
     expect(e2eTrack(ledger)?.verifiedAt).not.toBe("2099-01-01T00:00:00.000Z");
+  });
+});
+
+/**
+ * 回写**失败**那两格的形状（ISSUE #2344）。
+ *
+ * 这一组全部走注入的 `run`，一次 git 都不真跑 —— 要钉的是「失败之后做什么」，
+ * 而那种现场在真仓库里造出来就得污染这台机器（本文件的既有用例已经证明了造出来
+ * 会红：每日那一跑就是它的现场）。
+ *
+ * 三条钉子各挡一件事：
+ *   ① `commit` 失败 ⇒ 原因里必须带 git 的原文（过去只有 `commit-failed` 那个词，
+ *      「为什么失败」在日志里**不存在**，硬规则 27 那一族）；
+ *   ② 同一条路径 ⇒ 必须把 `add` 撤回去，否则同一跑后面**按暂存区判**的判据读的都是
+ *      这一格留下的面（账面只红一条用例，脏的是整跑的输入）；
+ *   ③ 撤回本身失败也要念出来 —— 那时索引仍然是脏的，不念就等于把第二件事藏起来。
+ *   ④ 反向：`push` 失败时**不许**撤回（提交已经落地、索引是干净的，撤了会把已成功的
+ *      改动重新 stage 成待提交 —— 那是第二次错）。
+ */
+describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () => {
+  const LEDGER_ENV = {
+    CNB_BUILD_USER_NICKNAME: "ci-bot",
+    CNB_EVENT: "api_trigger_daily",
+    COMFY_CI_SUBJECT: "master",
+  };
+  const KEYS = [...Object.keys(LEDGER_ENV), "FRESHNESS_LEDGER_BRANCH"];
+
+  /** 在「平台身份 + 每日事件 + 主体 master」这套现场里跑一次。 */
+  function onPlatform<T>(fn: () => T): T {
+    const saved = new Map<string, string | undefined>(
+      KEYS.map((k) => [k, process.env[k]]),
+    );
+    try {
+      for (const [k, v] of Object.entries(LEDGER_ENV)) process.env[k] = v;
+      delete process.env.FRESHNESS_LEDGER_BRANCH;
+      return fn();
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }
+
+  /** 记账式 git：按脚本给的回执依次返回，并把每次的参数留下来。 */
+  function fakeGit(
+    script: Array<{ status: number; stdout?: string; stderr?: string }>,
+  ) {
+    const calls: string[][] = [];
+    const run = (args: string[]) => {
+      const step = script[calls.length] ?? { status: 0 };
+      calls.push(args);
+      return { ...step, stdout: step.stdout ?? "", stderr: step.stderr ?? "" };
+    };
+    return { run, calls };
+  }
+
+  /** 一份与生产同形的工作树根（`readBranchLedger` 会在这里取另外两份账，取不到就 null）。 */
+  function scratchRoot() {
+    return fs.mkdtempSync(path.join(os.tmpdir(), "freshness-push-"));
+  }
+
+  const resetArgs = (calls: string[][]) =>
+    calls.find((a) => a[0] === "reset" && a[1] === "-q");
+
+  it("commit 被拒 ⇒ 原因带 git 的 stderr 原文，并把 add 撤回", () => {
+    const { run, calls } = fakeGit([
+      { status: 0 }, // fetch
+      { status: 0 }, // add
+      {
+        status: 1,
+        stderr:
+          "[pre-commit] ✗ 被门槛拦下：本次提交没有 changelog.d/ 碎片\n" +
+          "husky - pre-commit script failed (code 1)",
+      },
+      { status: 0 }, // reset
+    ]);
+    const r = onPlatform(() =>
+      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
+    );
+    expect(r.pushed).toBe(false);
+    expect(r.reason).toContain("commit-failed");
+    /* 这一条就是验收的第二格：那一行后面要能跟着 git 给的原因，而不是只剩那个词。 */
+    expect(r.reason).toContain("pre-commit script failed");
+    expect(r.reason).toContain("没有 changelog.d/ 碎片");
+    expect(resetArgs(calls), JSON.stringify(calls)).toBeDefined();
+    /* 撤回的对象是那几份账本，不是整个索引 —— 别把别人 stage 的东西一起撤走。
+     * 名单从 `FRESHNESS_TRACKS` 取（与生产同一个出处），新增一档时这条不用改。 */
+    const reset = resetArgs(calls);
+    expect(reset?.slice(3)).toEqual([
+      ...new Set(Object.values(FRESHNESS_TRACKS).map((t) => t.ledger)),
+    ]);
+  });
+
+  it("撤回也失败 ⇒ 当场念出「索引仍然是脏的」，不静默", () => {
+    const { run } = fakeGit([
+      { status: 0 },
+      { status: 0 },
+      { status: 1, stderr: "commit blocked by hook" },
+      {
+        status: 128,
+        stderr: "fatal: Unable to create index.lock: File exists",
+      },
+    ]);
+    const r = onPlatform(() =>
+      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
+    );
+    expect(r.reason).toContain("撤回暂存也失败");
+    expect(r.reason).toContain("index.lock");
+  });
+
+  it("add 自己失败 ⇒ 同样带原文（这一支过去也只念一个词）", () => {
+    const { run } = fakeGit([
+      { status: 0 },
+      {
+        status: 1,
+        stderr: "The following path is ignored by one of your .gitignore files",
+      },
+    ]);
+    const r = onPlatform(() =>
+      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
+    );
+    expect(r.reason).toContain("add-failed");
+    expect(r.reason).toContain("ignored by one of your .gitignore files");
+  });
+
+  it("push 失败 ⇒ 带原文，但**不**撤回 —— 提交已经落地，撤回是第二次错", () => {
+    const { run, calls } = fakeGit([
+      { status: 0 }, // fetch
+      { status: 0 }, // add
+      { status: 0 }, // commit
+      { status: 1, stderr: "remote rejected: update-policy-hook" },
+    ]);
+    const r = onPlatform(() =>
+      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
+    );
+    expect(r.reason).toContain("push-failed");
+    expect(r.reason).toContain("remote rejected");
+    expect(resetArgs(calls)).toBeUndefined();
+  });
+
+  it("全绿那一跑 ⇒ 不撤回（撤回只属于失败路径）", () => {
+    const { run, calls } = fakeGit([
+      { status: 0 },
+      { status: 0 },
+      { status: 0 },
+      { status: 0 },
+    ]);
+    const r = onPlatform(() =>
+      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
+    );
+    expect(r.pushed).toBe(true);
+    expect(resetArgs(calls)).toBeUndefined();
+  });
+
+  it("非平台身份那一支的 reason 逐字不变（不许被这次改动带跑）", () => {
+    const saved = process.env.CNB_BUILD_USER_NICKNAME;
+    delete process.env.CNB_BUILD_USER_NICKNAME;
+    delete process.env.CNB_COMMITTER;
+    delete process.env.CNB_BUILD_USER;
+    try {
+      const r = pushFreshnessLedger({ root: ROOT, kinds: ["e2e"] });
+      expect(r.reason).toBe("not-platform");
+    } finally {
+      if (saved !== undefined) process.env.CNB_BUILD_USER_NICKNAME = saved;
+    }
   });
 });
