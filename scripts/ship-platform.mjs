@@ -27,11 +27,7 @@
  */
 import path from "node:path";
 
-import {
-  asArray,
-  buildSignature,
-  pickBuildForSha,
-} from "./ship-build.mjs";
+import { asArray, buildSignature, pickBuildForSha } from "./ship-build.mjs";
 import {
   CODE,
   combineShipCodes,
@@ -42,12 +38,14 @@ import {
   readPullCreateError,
   readPullVerdict,
 } from "./ship-core.mjs";
-import {
-  buildPullBody,
-  PULL_BODY_LIMIT,
-} from "./ship-pull-body.mjs";
+import { buildPullBody, PULL_BODY_LIMIT } from "./ship-pull-body.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
-import { classifyBuildOutcome, inFlightStages } from "./ci-build-readout.mjs";
+import {
+  classifyBuildOutcome,
+  downstreamSkipped,
+  enrichStageErrors,
+  inFlightStages,
+} from "./ci-build-readout.mjs";
 import { DEV_HANDLE_ENV_KEY, handlerLabel } from "./ship-ticket.mjs";
 
 /**
@@ -503,8 +501,15 @@ export async function pollUntilTerminal(ctx) {
       statusJson = st ? st.json : null;
       /* 逐格读数优先于构建级状态 —— 平台把「被取消」记成构建级 `error`，而它与
        * 「真失败」的处置完全不同（前者重跑，后者查产物）。分类只有一份，
-       * 在 `ci-build-readout.mjs`（ISSUE #2158 第 2 条 / 规范 §13.5.26）。 */
-      const outcome = st ? classifyBuildOutcome(st.json) : null;
+       * 在 `ci-build-readout.mjs`（ISSUE #2158 第 2 条 / 规范 §13.5.27）。
+       * ⚠️ 分界那句**原话**只在 `get-build-stage -v` 的 `data.error` 里，`get-build-status`
+       * 的 `stages[]` 没有这一栏 ⇒ 分类之前先补（ISSUE #2406）。这一跳只对**非绿非 skipped**
+       * 的那几格发请求，且**只在逐格读数已到终态时**才有意义 —— 在飞那几格还没原话。 */
+      const outcome = st
+        ? classifyBuildOutcome(
+            picked ? enrichStageErrors(run, slug, picked.sn, st.json) : st.json,
+          )
+        : null;
       /** @type {{state:"green"|"red"|"cancelled"|"running"|"unknown",raw:string|null}} */
       const v = outcome
         ? { state: toShipBuildState(outcome.state), raw: outcome.raw }
@@ -513,15 +518,20 @@ export async function pollUntilTerminal(ctx) {
       log(`[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`);
       if (v.state === "cancelled" && outcome) {
         const first = outcome.cancelled[0];
-        const skipped = outcome.skipped
-          .filter((s) => (first ? s.index > first.index : true))
-          .map((s) => s.name || s.id);
+        const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
         log(
           `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"}` +
-            " 被顶掉 ⇒ 下面那几格根本没跑" +
+            " 被终止 ⇒ 下面那几格根本没跑" +
             (skipped.length > 0 ? `（${skipped.join("、")}）` : "") +
             "，这一跑没有 CI 结论",
         );
+        /* 「被谁顶掉的」是这一档唯一能让人**不去**查产物的那句话（ISSUE #2406）：
+         * 原话与抢锁那一跑都来自平台，本仓一个字不代写。 */
+        for (const r of outcome.reasons) {
+          const who = r.sn ? `（抢锁的那一跑：${r.sn}）` : "";
+          if (r.reason) log(`[ship]   平台原话${who}：${r.reason}`);
+          else if (r.sn) log(`[ship]   抢走锁的那一跑：${r.sn}`);
+        }
       }
       if (v.state !== "running" && v.state !== "unknown") break;
     }

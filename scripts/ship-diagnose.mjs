@@ -38,6 +38,7 @@ import { cnbJson, short } from "./ship-exec.mjs";
 import {
   classifyBuildOutcome,
   describeFailedStages,
+  enrichStageErrors,
   fetchBuildStatus,
   fetchStageReason,
   formatOutcome,
@@ -156,7 +157,6 @@ export function stallReadout({
   ];
 }
 
-
 /**
  * `--diagnose --dry-run` 打印的计划 —— 与真跑同一份 argv 的形状。
  *
@@ -205,27 +205,26 @@ export function runDiagnose({
   resolveGit = undefined,
 }) {
   if (!slug) {
-    log("[ship] --diagnose 取不到仓库路径 ⇒ 没有结论（不猜一个仓库名去读别人的构建）。");
+    log(
+      "[ship] --diagnose 取不到仓库路径 ⇒ 没有结论（不猜一个仓库名去读别人的构建）。",
+    );
     return CODE.NOT_RUN;
   }
   if (dryRun) {
-    for (const line of diagnosePlan(slug, sn)) log(`[ship] --dry-run 计划：${line}`);
+    for (const line of diagnosePlan(slug, sn))
+      log(`[ship] --dry-run 计划：${line}`);
     log("[ship] --dry-run：只打印计划，一条都没执行。");
     return CODE.GREEN;
   }
   if (!cnbOk) {
-    log("[ship] --diagnose 没有执行者（cnb 不在）⇒ 没有结论，不猜这一跑绿没绿。");
+    log(
+      "[ship] --diagnose 没有执行者（cnb 不在）⇒ 没有结论，不猜这一跑绿没绿。",
+    );
     return CODE.NOT_RUN;
   }
   let target = typeof sn === "string" && sn.trim() !== "" ? sn.trim() : null;
   if (!target) {
-    const got = cnbJson(run, [
-      "build",
-      "get-build-logs",
-      "--repo",
-      slug,
-      "-v",
-    ]);
+    const got = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
     const list = got ? asArray(got.json) : null;
     if (!list) {
       log(
@@ -250,15 +249,19 @@ export function runDiagnose({
       `[ship] 按 HEAD ${short(headSha)} 归属到构建 ${target}（列表里 sha 逐字相同，取最新一条）。`,
     );
   }
-  const statusJson = fetchBuildStatus(run, slug, target);
-  if (!statusJson) {
+  const rawStatus = fetchBuildStatus(run, slug, target);
+  if (!rawStatus) {
     log(`[ship] 构建 ${target} 取不到状态 ⇒ 没有结论（不念绿也不念红）。`);
     return CODE.NOT_RUN;
   }
+  /* 「被取消」与「真失败」的唯一分界线是平台那句**原话**，而它只在 `get-build-stage -v`
+   * 的 `data.error` 里（`get-build-status` 的 `stages[]` 没有这一栏）⇒ 分类之前先把原话
+   * 问回来（ISSUE #2406）。这一跳是只读的，取不到就照旧按状态判、只是念不出原话。 */
+  const statusJson = enrichStageErrors(run, slug, target, rawStatus);
   const outcome = classifyBuildOutcome(statusJson);
   /** 被取消时平台给的原因原话（真红那一路由 `describeFailedStages` 逐格取）。 */
-  let reason = null;
-  if (outcome.state === "cancelled") {
+  let reason = outcome.reasons.find((r) => r.reason)?.reason ?? null;
+  if (!reason && outcome.state === "cancelled") {
     const first = outcome.cancelled[0];
     const pipeline = first ? pipelineForStage(outcome, first.id) : null;
     if (first && pipeline) {
@@ -283,7 +286,13 @@ export function runDiagnose({
     const elapsedMinutes = previous
       ? Math.max(0, Math.floor((nowMs - previous.atMs) / 60_000))
       : 0;
-    const stored = writeDiagnoseState(root, target, progress.signature, nowMs, resolveGit);
+    const stored = writeDiagnoseState(
+      root,
+      target,
+      progress.signature,
+      nowMs,
+      resolveGit,
+    );
     for (const line of stallReadout({
       signature: progress.signature,
       flying: { count: progress.flyingCount, names: progress.flyingNames },
