@@ -87,10 +87,10 @@ export function parseIssueNumberToken(token) {
  *     （那会被读成「没要那个动作」），也不许往后吃掉本该属于别的旗标的参数。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -111,6 +111,7 @@ export function parseArgs(argv) {
     release: null,
     releaseBad: [],
     claims: false,
+    branches: false,
     newIssue: null,
     newIssueBad: [],
     issueBodyFile: null,
@@ -126,6 +127,7 @@ export function parseArgs(argv) {
     if (a === "--merge") out.merge = true;
     else if (a === "--whoami") out.whoami = true;
     else if (a === "--claims") out.claims = true;
+    else if (a === "--branches") out.branches = true;
     /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
      * 那一形）。所以下一个 token 只在不像旗标时才当构建号收下。 */
     else if (a === "--diagnose") {
@@ -591,6 +593,33 @@ export function readPullCreateError(json) {
 }
 
 /**
+ * 从 `cnb pulls list-pulls -v` 的 JSON 里按 head 分支名找**那条 PR 记录**。
+ *
+ * 匹配形状只在这里有一份：平台给的是 **`head.ref = "refs/heads/<分支名>"`**，
+ * 拿裸分支名去比会**全条落空**，而那份空读数的长相与「这些分支没提过 PR」逐字相同
+ * （实测九条已合并分支第一次就这么被判成「都没找到」—— ISSUE #2427）。
+ *
+ * @param {any} json 解析结果（外部形状，可能是裸数组也可能是 `{data:[…]}`）
+ * @param {string} branch 源分支名（不含 `refs/heads/`）
+ * @returns {any | null} 命中的那条记录（`number` / `is_merged` / `state` / `merged_by` 都从它读）
+ */
+export function pullRecordForBranch(json, branch) {
+  const raw = json && json.data;
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && Array.isArray(raw.data)
+      ? raw.data
+      : Array.isArray(json)
+        ? json
+        : [];
+  for (const p of list) {
+    const ref = String((p && p.head && p.head.ref) || "");
+    if (ref === `refs/heads/${branch}`) return p;
+  }
+  return null;
+}
+
+/**
  * 从 `cnb pulls list-pulls -v` 的 JSON 里按 head 分支名找已存在的 PR（幂等用）。
  *
  * @param {any} json 解析结果（外部形状，可能是裸数组也可能是 `{data:[…]}`）
@@ -598,17 +627,8 @@ export function readPullCreateError(json) {
  * @returns {number | null} 命中则给 PR 号
  */
 export function findPullForBranch(json, branch) {
-  const raw = json && json.data;
-  const list = Array.isArray(raw)
-    ? raw
-    : raw && Array.isArray(raw.data)
-      ? raw.data
-      : [];
-  for (const p of list) {
-    const ref = String((p && p.head && p.head.ref) || "");
-    if (ref === `refs/heads/${branch}`) return Number(p.number);
-  }
-  return null;
+  const rec = pullRecordForBranch(json, branch);
+  return rec ? Number(rec.number) : null;
 }
 
 /**
@@ -674,7 +694,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,newIssue?:boolean,diagnose?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -761,6 +781,15 @@ export function planCommands(st) {
     const who = st.handle || "<短名>";
     p.push(
       `cnb issues list-issues --repo ${st.slug} --labels 处理人:${who} --state open --page <p> --page-size 100 -v`,
+    );
+  }
+  /* 分支落地读数（ISSUE #2427）：计划里连翻带 git 的取数一起念出来 ——
+   * `--dry-run` 教的执行面要和真跑的一样大，否则它教的是另一件事。 */
+  if (st.branches) {
+    p.push(`git for-each-ref --format=… refs/heads`);
+    p.push(`git ls-remote --heads ${st.remote || "origin"}`);
+    p.push(
+      `cnb pulls list-pulls --repo ${st.slug} --state all --page <p> --page-size 100 -v（翻页到窗口取满或到顶）`,
     );
   }
   /* 建单是**两条**命令：实测 `create-issue --labels` 不落地（回读 labels 为空），
