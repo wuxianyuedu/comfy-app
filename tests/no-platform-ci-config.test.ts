@@ -133,6 +133,29 @@ const PROBE_PIPELINES = [
 /** 探针的到期日：过了这一刻，本文件的用例当场要求把那三条与这段例外一起删掉。 */
 const PROBE_BY = "2026-11-09T00:00:00Z";
 
+/**
+ * 探针里**被测的锁形态**逐条点名放过哪条规则（与 `PROBE_PIPELINES` 同一天到期）。
+ *
+ *   · `api_trigger_probe_a` —— `cancelFalse`: 那把锁要的正是 `cancel-in-progress: false`
+ *     （问「第二条到达时是排队还是被掐掉」），而 R2 默认把「漏写」判红；
+ *   · `api_trigger_probe_b` / `api_trigger_probe_c` —— `noLock`: 对照组**一条锁都不写**
+ *     才是它的条件，写上一把就量不到「没有锁时会不会并行」。
+ *
+ * ⚠️ 这两件事都不是「放宽 R1/R2」：名单是字面量、逐条写明放过哪一条规则，
+ * 且**判据仍然会问**另外那几条（key 字面量 / 不撞退化形状 / 一把锁只给一份清单）。
+ */
+const PROBE_LOCK_EXEMPT: Array<{
+  event: string;
+  /** 这一条的锁**故意**不写 `cancel-in-progress`，锚点名写在这里（其余一条都不许借）。 */
+  cancelFalse?: string;
+  /** 这一条**故意**一条锁都不写（对照组）。 */
+  noLock?: boolean;
+}> = [
+  { event: "api_trigger_probe_a", cancelFalse: "lock_probe_a" },
+  { event: "api_trigger_probe_b", noLock: true },
+  { event: "api_trigger_probe_c", noLock: true },
+];
+
 /** 取某个事件键下那一段原文（到下一个 2 空格事件键为止）；取不到给空串。 */
 function configEventBlock(text: string, event: string): string {
   const lines = text.split(/\r?\n/);
@@ -965,10 +988,7 @@ export function resolveLockKey(
 export function lockAnchorDefinitions(
   text: string,
 ): Map<string, { key: string; cancelInProgress: boolean | null }> {
-  const out = new Map<
-    string,
-    { key: string; cancelInProgress: boolean | null }
-  >();
+  const out = new Map<string, { key: string; cancelInProgress: boolean | null }>();
   const def =
     /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
@@ -978,11 +998,13 @@ export function lockAnchorDefinitions(
     if (name === undefined || key === undefined) continue;
     /* `null` = 这一行**没写**；`false` 是「写了、值是 false」—— 两者不同：
      * 漏写会让同一件事重复排队，而 `false` 是有意的取舍（逐笔留读数，见 R2）。 */
-    const rawCancel =
-      /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(body)?.[1];
+    const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(
+      body,
+    )?.[1];
     out.set(name, {
       key,
-      cancelInProgress: rawCancel === undefined ? null : rawCancel === "true",
+      cancelInProgress:
+        rawCancel === undefined ? null : rawCancel === "true",
     });
   }
   return out;
@@ -1029,6 +1051,19 @@ export function pipelineLockAssignments(text: string): Array<{
     const eventKey = /^ {2}(\S.*):[ \t]*$/.exec(raw);
     if (eventKey?.[1] !== undefined) {
       event = eventKey[1].replace(/^"|"$/g, "").trim();
+      continue;
+    }
+    /* 新的一项从**它自己的 `name:`** 起 —— 「判定换了一条流水线」认的是 `name:`，
+     * 而 `lock:` / `stages:` 只在**当前这一项之内**算数。少了这句，上一条流水线的
+     * `lock:` 会被带进下一条（探针那三条自己写 `runner`、不吃锚点，并且都带 `lock:`，
+     * 于是它们会各自继承**上一条**的锁归属 —— ISSUE #2363 那段注释早就点了这个
+     * 坏形态，判据这一侧到 2026-10-26 才算真的堵上）。
+     * 显式清空之后，「没写 `lock:` 的项」落到 R1 该有的读数上，不再看上一项的运气。 */
+    const itemStart = /^ {4}-[ \t]*(?:<<:)?[ \t]*/.exec(raw) !== null;
+    if (itemStart) {
+      name = "";
+      lockRef = null;
+      stagesRef = null;
       continue;
     }
     const nameKey = /^ {6}name:[ \t]*(.+?)[ \t]*$/.exec(raw);
@@ -1105,17 +1140,26 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
   /** 同一把工作清单 → 允许共用它的那些锁；反过来锁 → 它只能给一份清单。 */
   const lockToWork = new Map<string, Set<string | null>>();
 
-  /* 探针（ISSUE #2363）里**被测的就是锁本身**：`cancel-in-progress: false` 是它要问的
-   * 那个问题，不是漏写的配置。所以 R2 那一半对它不成立 —— 但它仍然要过「key 是字面量」
-   * 「不撞退化形状」「一把锁只给一份清单」，且**例外本身有到期日**（见下面那条用例）。
-   * 判的不是「探针在不在」，而是「在的那几条各自被点名放过哪一条规则」。 */
-  const probeLocks = new Set(
-    rows
-      .filter((row) =>
-        (PROBE_PIPELINES as readonly string[]).includes(row.event),
-      )
-      .map((row) => row.lockRef)
-      .filter((ref): ref is string => typeof ref === "string"),
+  /* 探针（ISSUE #2363）里**被测的就是锁本身**：A 的 `cancel-in-progress: false` 是它要问的
+   * 那个问题、B/C 的「一条锁都不写」是它的对照组 —— 两者都不是漏写的配置。所以 R1（必须
+   * 显式写 `lock:`）与 R2 的「必须显式写 `cancel-in-progress`」这一半对它们不成立。
+   *
+   * 但豁免是**逐条点名**的，不是「探针都放行」：
+   *   · `PROBE_PIPELINES` 是**到期日**与**不许吃锚点**那一半的名单（见下面那条用例）；
+   *   · `PROBE_LOCK_EXEMPT` 是**这一层**的名单，逐条写清「放过哪一条规则」。
+   * 探针仍然要过「key 是字面量」「不撞退化形状」「一把锁只给一份清单」。
+   *
+   * ⚠️ `cancel-in-progress: true` 在 A 那把锁上**不会**被本函数点名，而这是刻意的：
+   * 「写了 `true` 就等于终止旧的一跑」这条判据（R6）只对 `push` 那把锁成立，因为它
+   * 守的是「逐提交给读数」那一档。A 要的是 `false`，写成 `true` 等于把问题掐掉 ——
+   * 那一半由**下面那条用例**守着（它直接读配置原文断言 `cancel-in-progress: false`），
+   * 不在这里重复一遍。
+   *
+   * 两份名单都是字面量而不是 `PROBE_PIPELINES` 的投影：B/C 不吃锚点却也不该拿到
+   * 「A 那把 `false` 的锁」那张通行证 —— 投影会让「C 有了锁」与「A 的锁错了」在读数上
+   * 变成同一件事。 */
+  const probeExempt = new Map(
+    PROBE_LOCK_EXEMPT.map((e) => [e.event, e]),
   );
 
   for (const row of rows) {
@@ -1136,7 +1180,11 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
       }
       continue;
     }
-    /* R1：非 PR 的一条都不许靠继承拿锁 —— 那次退化就是从继承进来的。 */
+    /* R1：非 PR 的一条都不许靠继承拿锁 —— 那次退化就是从继承进来的。
+     * 例外只有「对照组」那一形（探针 C：一条锁都不写才是它的对照条件）。 */
+    if (row.lockRef === null && probeExempt.get(row.event)?.noLock === true) {
+      continue;
+    }
     if (row.lockRef === null) {
       bad.push(
         `非 PR 流水线「${row.name}」（事件 ${row.event}）没有显式的 lock 覆盖 —— 它会继承 .common 那条模板，而该模板在非 PR 事件上退化成一把共用锁`,
@@ -1148,9 +1196,11 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
       bad.push(`「${row.name}」引用了不存在的锁锚点 *${row.lockRef}`);
       continue;
     }
-    /* 探针（#2363）那一把刻意不写 `cancel-in-progress` 以外的任何东西：
-     * 「不终止旧跑」正是它要问的那个问题，见 `PROBE_PIPELINES` 那段有期限例外。 */
-    if (def.cancelInProgress === null && !probeLocks.has(row.lockRef)) {
+    /* R2 的「必须显式写」这一半：`cancel-in-progress: false` 与「漏写」在配置里长得
+     * 一样，所以漏写默认判红；只有**点名要 `false`** 的那一把（探针 A）放过。 */
+    const exemptCancel =
+      probeExempt.get(row.event)?.cancelFalse === row.lockRef;
+    if (def.cancelInProgress === null && !exemptCancel) {
       bad.push(
         `锁 *${row.lockRef} 没有显式写 cancel-in-progress —— 漏写与「有意排队」在配置里长得一样，重复排队就收不成一条（要排队的那一档写 false 并说明理由）`,
       );
@@ -1331,9 +1381,6 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      *
      * 处置方式刻意选了「例外 + 自毁」，不是「把判据放宽」：
      *   · 例外的**名单**是字面量（`PROBE_PIPELINES`），不是「任何自带 runner 的都放行」；
-     *   · 例外覆盖的**面**也很窄（合并 `origin/master` 时对过口径）：R2 在 #2396 之后
-     *     只判「有没有显式写」（`null` 才红），所以探针 A 那把写 `false` 的锁本来就不在
-     *     R2 的拦截面里 —— 这里放过的只剩「必须引用 `*common`」那一条；
      *   · 例外**有到期日**（`PROBE_BY`），过了那一刻本用例当场变红、要求把整段删掉 ——
      *     「临时」两个字不靠人的记性；
      *   · 现役配置里**这三条一旦消失**，本用例照样绿（名单里没有 = 没有例外要判）
@@ -2032,6 +2079,87 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "lock_daily",
     ]);
     expect(lockClassViolations(fixture)).toEqual([]);
+
+    /* ⑦ 探针那三条**不吃锚点**、各自带 `runner`，而 `lock:` 只在**当前这一项之内**
+     * 算数：解析器必须在它自己的 `name:` 上收口。少了这一句，上一条流水线的 `lock:`
+     * 会被带进下一条 —— 探针 A/B/C 会各自继承**上一条**的锁归属，于是「B/C 故意
+     * 一条锁都不写」这条例外根本没有对象，而探针 A 的 `false` 也测不到它自己要测的
+     * 那把锁（`.cnb.yml` 那段注释早就点了这个坏形态，判据这一侧据此补上）。
+     * 顺带钉住例外的**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
+    const probeFixture = (o: {
+      cancel?: string | null;
+      probeB?: string;
+      extra?: string;
+    }) =>
+      [
+        ".common: &common",
+        "  lock:",
+        "    key: pr-$CNB_PULL_REQUEST_IID",
+        "    cancel-in-progress: true",
+        ".lock-push: &lock_push",
+        "  key: push",
+        "  cancel-in-progress: false",
+        ".lock-probe-a: &lock_probe_a",
+        "  key: probe-2363-a",
+        ...(o.cancel === null ? [] : [`  cancel-in-progress: ${o.cancel ?? "false"}`]),
+        ...(o.extra === undefined ? [] : o.extra.split("\n")),
+        "master:",
+        "  pull_request:",
+        "    - <<: *common",
+        "      name: 质量门禁",
+        "      stages: *gates",
+        "  push:",
+        "    - <<: *common",
+        "      name: master 合并复核",
+        "      lock: *lock_push",
+        "      stages: *push_stages",
+        "  api_trigger_probe_a:",
+        "    - name: 探针A",
+        "      lock: *lock_probe_a",
+        "      stages:",
+        "        - name: 探针A-填满时间窗",
+        "          script: echo a",
+        "  api_trigger_probe_b:",
+        "    - name: 探针B",
+        ...(o.probeB === undefined ? [] : [o.probeB]),
+        "      stages:",
+        "        - name: 探针B-填满时间窗",
+        "          script: echo b",
+        "",
+      ].join("\n");
+    /* A 拿到的是**它自己**那把锁（不是上一条的 `lock_push`），B 落到「一条都不写」。 */
+    expect(
+      pipelineLockAssignments(probeFixture({})).map(
+        (r) => `${r.event}|${r.lockRef ?? "(没写)"}`,
+      ),
+    ).toContain("api_trigger_probe_a|lock_probe_a");
+    expect(
+      pipelineLockAssignments(probeFixture({})).map(
+        (r) => `${r.event}|${r.lockRef ?? "(没写)"}`,
+      ),
+    ).toContain("api_trigger_probe_b|(没写)");
+    expect(lockClassViolations(probeFixture({}))).toEqual([]);
+    expect(
+      lockClassViolations(probeFixture({ cancel: null })),
+      "A 漏写 `cancel-in-progress` 也该放过 —— 它就是被测的那把锁",
+    ).toEqual([]);
+    /* B 自己拿一把锁（还是**一把没写 `cancel-in-progress` 的**）就没在当对照组了：
+     * 豁免只覆盖「一条都不写」，这一形照旧被 R2 点名。 */
+    expect(
+      lockClassViolations(
+        probeFixture({
+          extra: ".lock-probe-b: &lock_probe_b\n  key: probe-2363-b",
+          probeB: "      lock: *lock_probe_b",
+        }),
+      ).join("\n"),
+      "B 自己拿一把锁就没在当对照组了，而豁免的只是「一条都不写」",
+    ).toContain("没有显式写 cancel-in-progress");
+    expect(
+      lockClassViolations(probeFixture({}).replace("  key: probe-2363-a", "  key: probe-$CNB_BRANCH")).join(
+        "\n",
+      ),
+      "例外不覆盖 key 形态：带变量照旧点名",
+    ).toContain("带变量");
 
     // ① R1：有人**忘了写覆盖** ⇒ 那条流水线静默回落到 `pr-`，正是被修掉的那个形态。
     const forgotten = fixture.replace("      lock: *lock_push\n", "");

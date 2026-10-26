@@ -563,9 +563,6 @@
 .lock-oneshot-unit: &lock_oneshot_unit
   key: oneshot-unit
   cancel-in-progress: true
-# `prettier 格式` 的**委托回写**口（见 `.format-fixup-stage` 那段）。它自成一份工作清单，
-# 按上面 R3「同一把锁只给同一份清单」的规则必须独占一把 —— 与单跑三档共用会把
-# 「我要复验构建」和「我要补一笔格式修复」排成互斥。
 # 探针 A 的锁（ISSUE #2363，一次性）。`cancel-in-progress: false` **就是被测的那个东西**：
 # 第二条在第一条活着时到达，到底是排队、被跳过、还是照样并行 —— 写 `true` 等于把问题掐掉。
 # 「锁按类分开」那一族的 R2（类锁必须带 `cancel-in-progress: true`）因此在这把锁上**刻意
@@ -574,6 +571,9 @@
 .lock-probe-a: &lock_probe_a
   key: probe-2363-a
   cancel-in-progress: false
+# `prettier 格式` 的**委托回写**口（见 `.format-fixup-stage` 那段）。它自成一份工作清单，
+# 按上面 R3「同一把锁只给同一份清单」的规则必须独占一把 —— 与单跑三档共用会把
+# 「我要复验构建」和「我要补一笔格式修复」排成互斥。
 .lock-formatfix: &lock_formatfix
   key: formatfix
   cancel-in-progress: true
