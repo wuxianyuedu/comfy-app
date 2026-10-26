@@ -25,6 +25,7 @@ import fs from "node:fs";
 import type { Dirent } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -530,5 +531,29 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
     const text = r.consulted.join("\n");
     expect(text).toContain("corepack");
     expect(text).toContain("目录不在");
+  });
+});
+
+/**
+ * 入口层不许绕过槽闸（ISSUE #2439）。
+ *
+ * 这条判据读的是**源码形状**，因为出事的那一笔（#2286）恰好是单测测不到的形态：
+ * `main` 的 `install` 依赖有默认值（`runInstallWithSlot`），而入口层用 `{ install }`
+ * 把它覆盖成裸 `runInstall` —— 单测都在测注入路径，谁也没传这个覆盖，于是
+ * `.cnb.yml` 的开关还置着、`applySlot` 却在平台侧一次都不被问，每格退回全量安装。
+ * 源码形状在这里是唯一测得到的现场。
+ */
+describe("入口层不许绕过槽闸", () => {
+  const source = fs.readFileSync(
+    fileURLToPath(new URL("../scripts/ci-install-deps.mjs", import.meta.url)),
+    "utf8",
+  );
+
+  it("入口层的 install 必须是 runInstallWithSlot 的包装，探测结果作为依赖传进去", () => {
+    expect(source).toContain("runInstallWithSlot(boot.probing ?? null");
+  });
+
+  it("不许再把裸 runInstall 直接当 main 的 install 依赖（#2286 的出事形状）", () => {
+    expect(source).not.toMatch(/install = \(\) => runInstall\(/);
   });
 });
