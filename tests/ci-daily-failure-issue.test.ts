@@ -55,6 +55,10 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
 type PickedLike = { sn?: string; none?: string; outcome?: { state: string } };
 const asPicked = (p: unknown): PickedLike => p as PickedLike;
 
+/** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
+const titleOf = (stage: string, sn = "sn-t", at = "2026-10-24T11:40:05.000Z") =>
+  issueTitle({ sn, event: "crontab: 0 0 * * *", at, stage });
+
 /** 一条每日派发的列表项。 */
 const build = (sn: string, event = "crontab: 0 0 * * *"): ListBuild => ({
   sn,
@@ -182,17 +186,17 @@ describe("决定写不写：①「没结论」一律不落成红字", () => {
   });
 });
 
-describe("决定写不写：②去重键是「前缀 + 格名」，不是整条标题", () => {
+describe("决定写不写：②去重键是「格名」，不是整条标题", () => {
   it("同一格已有 open 单 ⇒ 只追加读数，不新建", () => {
     const act = decideAction({
       state: "failed",
       failedNames: ["每日生产构建"],
-      existing: [{ number: 2273, title: issueTitle("每日生产构建") }],
+      existing: [{ number: 2273, title: titleOf("每日生产构建") }],
     });
     expect(act.stages).toEqual([{ stage: "每日生产构建", number: 2273 }]);
   });
 
-  it("人工按规范写的那张单，只要带同一串前缀就自动进这一族（#2273 的真实标题）", () => {
+  it("人工写的那张单，只要带同一串格名就自动进这一族（#2273 的真实标题）", () => {
     const human =
       "ci(daily): 每日档红在「每日生产构建」—— bundle-budget +33 B（六天内第五笔同类账）";
     expect(human).toContain(titleKey("每日生产构建"));
@@ -204,11 +208,40 @@ describe("决定写不写：②去重键是「前缀 + 格名」，不是整条�
     expect(act.stages[0]?.number).toBe(2273);
   });
 
+  /**
+   * ISSUE #2399：同一格**每天**都红的时候，标题必须能自证是哪一跑。
+   * 两条一起才是完整判据 —— 一条钉「换了构建号仍认得出同一张单」，
+   * 一条钉「标题里真的带上了那三件原值」。
+   */
+  it("标题带构建号 / 事件 / 时刻，但键只认格名 ⇒ 同一格的第二天不新建第二张", () => {
+    const day1 = titleOf("每日单元测试", "cnb-aaa-111", "2026-10-24T11:40:05.000Z");
+    const day2 = titleOf("每日单元测试", "cnb-bbb-222", "2026-10-25T16:00:22.000Z");
+    expect(day2).not.toBe(day1);
+    for (const want of [
+      "cnb-bbb-222",
+      "crontab: 0 0 * * *",
+      "2026-10-25T16:00:22.000Z",
+    ])
+      expect(day2).toContain(want);
+    expect(day2).toContain(titleKey("每日单元测试"));
+    const act = decideAction({
+      state: "failed",
+      failedNames: ["每日单元测试"],
+      existing: [{ number: 2314, title: day1 }],
+    });
+    expect(act.stages).toEqual([{ stage: "每日单元测试", number: 2314 }]);
+  });
+
+  it("去重键里不含构建号 / 事件 / 时刻（它们只能进标题）", () => {
+    for (const part of ["cnb-", "crontab", "T11:40"])
+      expect(titleKey("每日单元测试")).not.toContain(part);
+  });
+
   it("换了另一格红 ⇒ 新建一张（一格一单，不往别人的单上记）", () => {
     const act = decideAction({
       state: "failed",
       failedNames: ["每日全量E2E", "每日单元测试"],
-      existing: [{ number: 2273, title: issueTitle("每日生产构建") }],
+      existing: [{ number: 2273, title: titleOf("每日生产构建") }],
     });
     expect(act.stages).toEqual([{ stage: "每日全量E2E" }, { stage: "每日单元测试" }]);
   });
