@@ -354,3 +354,47 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(lines.join("\n")).toContain("起不来");
   });
 });
+
+/**
+ * 「谁都没注入」那一档（ISSUE #2408 的读数点名的就是这里）。
+ *
+ * 上面那组的夹具在 `beforeEach` 里**总是**注入收集器，于是实现文件头那句
+ * 「缺省空转不会让任何一条真实读数消失」从写下那天起**没有执行者** ——
+ * `NO_SINK` 里那两个函数在全量 `--coverage` 里一次都没被调用（它和
+ * `process-launch.ts` 那两个注入出口一起，把 `src/lib/process/**` 的函数覆盖
+ * 从登记值 96% 拉到 95.34%）。
+ *
+ * ⚠️ 这一组只补得上 `warn` 那一半，而且是**有意的**：本模块今天没有任何
+ * `emit("log", …)` 调用点，所以 `NO_SINK.log` 与 `process-launch.ts` 的 `log:`
+ * 是「今天走不到的空位」而不是漏网 —— 按 §18.6 的口径，这里选择把走不到的那半句
+ * 写出来，而不是把门槛往下挪。
+ */
+describe("谁都没注入时：读数落进缺省空转（ISSUE #2408）", () => {
+  it("不抛、结论照旧（那个空串），而调用方那只眼睛照样收到读数", () => {
+    const reported: string[] = [];
+    expect(
+      firstRunnableOrEmpty({
+        candidates: ["comfyapp-no-such-command-2408"],
+        probeArgs: () => ["--version"],
+        label: "假解释器",
+        report: (line) => reported.push(line),
+      }),
+    ).toBe("");
+    expect(reported.join("\n")).toContain("起不来");
+  });
+
+  it("注入过再还原 ⇒ 回到的是**可调用的**缺省出口，不是 null", () => {
+    /* 还原把 `sink` 换回前一份。若那一份是 `null`（一个看起来更省事的写法），
+     * 下一次探测会在 `emit()` 里抛 —— 而 `emit` 外面那圈 try 只护注入进来的出口，
+     * 于是「一次用例的还原动作」变成「下一格探测炸」。 */
+    const restore = elevateLogLevel({ warn: () => undefined });
+    restore();
+    expect(() =>
+      firstRunnableOrEmpty({
+        candidates: ["comfyapp-no-such-command-2408"],
+        probeArgs: () => ["--version"],
+        label: "假解释器",
+      }),
+    ).not.toThrow();
+  });
+});

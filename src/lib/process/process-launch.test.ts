@@ -50,6 +50,7 @@ import {
   waitForDetachMediator,
   type ManagedSpawnOptions,
 } from "./process-launch";
+import { firstRunnableOrEmpty } from "./probe-exe";
 
 /**
  * 造一次「抛的不是 Error」的失败。
@@ -619,5 +620,39 @@ describe("waitForDetachMediator —— 中介的退出码与 stderr", () => {
     const p = waitForDetachMediator(bare, 1000);
     bare.emit("exit", 3);
     await expect(p).resolves.toEqual({ code: 3, stderr: "" });
+  });
+});
+
+/**
+ * 加载期那条注入（`elevateLogLevel({ log, warn })`）的**运行时**一面（ISSUE #2408）。
+ *
+ * `tests/single-logger-channel.test.ts` 判的是形状 —— 「`src/lib/process/**` 里
+ * 有且只有一条把读数交给 `~/lib/core/logger` 的边」。而那条边的**内容**（读数真流过去、
+ * 且带着 `[probe]` 那一行的原文）此前没有执行者：本文件的夹具每次都重新注入收集器，
+ * 全量 `--coverage` 里这两个出口一次都没被调用，正是把 `src/lib/process/**` 的函数覆盖
+ * 从登记值 96% 拉到 95.34% 的四分之一。
+ */
+describe("加载期注入的日志出口：探测读数真的走唯一通道（ISSUE #2408）", () => {
+  it("探不到时那一行进 `logger.warn`，且带着 `[probe]` 前缀与「不是通过」那句", () => {
+    /* 注入探针而不是走缺省：本文件的 `child_process` 只 mock 了 `spawn`，
+     * 缺省那条路要 `spawnSync`（vitest 会报「No "spawnSync" export is defined」）。
+     * 这一格要判的是**读数往哪儿流**，不是真去探一台机器。 */
+    firstRunnableOrEmpty({
+      candidates: ["comfyapp-no-such-command-2408"],
+      probeArgs: () => ["--version"],
+      label: "假解释器",
+      probe: () => ({
+        ok: false,
+        failure: { kind: "spawn-error", code: "ENOENT" },
+      }),
+      report: () => undefined,
+    });
+    expect(warnMock).toHaveBeenCalled();
+    const text = warnMock.mock.calls
+      .map(([m]) => m)
+      .filter((m) => m.includes("[probe]"))
+      .join("\n");
+    expect(text).toContain("本机没有可用的 假解释器");
+    expect(text).toContain("不是通过");
   });
 });
