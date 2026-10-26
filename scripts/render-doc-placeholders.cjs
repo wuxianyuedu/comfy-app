@@ -30,15 +30,26 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  ROOT,
-  SCOPED_DOCS,
-  FACTS,
-  GENERATED_DOCS_DIR,
-  generatedPathFor,
-  readText,
-  exists,
-} = require("./doc-facts.cjs");
+const docFacts = require("./doc-facts.cjs");
+
+/* 夹具注入（tests/check-doc-references.test.ts 的 autofix 组在用，ISSUE #2415）：
+ * 设了 DOC_RENDER_ROOT 时，源文档与生成态目录都落在那个临时夹具仓库里，
+ * SCOPED_DOCS 取 DOC_RENDER_SCOPED（逗号分隔）给的子集 —— 用例由此一次也不写
+ * 真仓库的入库文件。没设环境变量时行为与从前逐字相同（取 doc-facts 的全量）。
+ * FACTS 仍来自真仓库：占位符提取只**读**配置，不会往夹具外的任何地方写。 */
+const ENV_ROOT = process.env.DOC_RENDER_ROOT;
+const ROOT = ENV_ROOT || docFacts.ROOT;
+const SCOPED_DOCS = ENV_ROOT
+  ? (process.env.DOC_RENDER_SCOPED ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  : docFacts.SCOPED_DOCS;
+const FACTS = docFacts.FACTS;
+const GENERATED_DOCS_DIR = docFacts.GENERATED_DOCS_DIR;
+const generatedPathFor = docFacts.generatedPathFor;
+const readText = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const exists = (p) => fs.existsSync(path.join(ROOT, p));
 
 // 生成文档顶部 banner：标注为自动生成 + 指向源文件
 function bannerFor(docRel) {

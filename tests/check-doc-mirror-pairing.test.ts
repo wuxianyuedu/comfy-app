@@ -185,9 +185,11 @@ describe("接线", () => {
     const pairing = read("scripts/check-doc-mirror-pairing.cjs");
     expect(facts).toContain("function generatedPathFor(");
     /* 渲染器**不再自己写一遍**这条映射 —— 两份 `path.join(产物目录, basename)`
-     * 早晚会在「两份源映射到同一个产物名」那类形状上分叉，而那正是这条判据的对象。 */
+     * 早晚会在「两份源映射到同一个产物名」那类形状上分叉，而那正是这条判据的对象。
+     * 取用形态是 `docFacts.generatedPathFor`（夹具注入那批改动后，渲染器顶部统一
+     * 从 doc-facts 取值，见 ISSUE #2415）。 */
     expect(renderer).not.toContain("function generatedPathFor(");
-    expect(renderer).toContain("generatedPathFor,");
+    expect(renderer).toContain("docFacts.generatedPathFor");
     expect(pairing).toContain("generatedPathFor");
   });
 

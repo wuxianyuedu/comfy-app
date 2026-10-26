@@ -16,9 +16,17 @@
  * 复用同一调用方式才等价于真实校验（脚本内部用 __dirname 定位仓库根）。
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
 const REPO_ROOT = process.cwd();
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
@@ -58,6 +66,64 @@ function runCheck(): { code: number; output: string } {
 }
 
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
+
+/* ── 探针收尾的最后一道网（ISSUE #2415）────────────────────────────────
+ * 本文件多数组的现场是「真仓库文件上改 → 判 → 还原」（判据读的是整仓扫描面，
+ * 夹具仓库喂不饱它们；autofix 组已改成夹具仓库，见文件尾）。还原靠重试式写入，
+ * 但 Windows 上它仍可能八次全抛（实测 UNKNOWN）。这一网保证：**即便还原没做成，
+ * 脏工作区也不会悄悄留给下一个 `git add -A`** —— 未跟踪的探针新文件直接删、
+ * 被改过的入库文件从 git 索引拉回原样（自愈），然后把事故路径点名成红。
+ * 红要能说得出原因：是「探针留脏」而不是别的，路径就在消息里。 */
+const PROBE_TARGETS = [
+  "AGENTS.md",
+  "docs/reference-facts.md",
+  "docs/standards/13-提交与-code-review.md",
+  "docs/guides/DEV-QUERIES.md",
+  "docs/generated/DEV-QUERIES.md",
+  "docs/standards/99-temp-unregistered.md",
+  "changelog.d/zz-step-index-probe.md",
+];
+
+function gitStatusPorcelain(paths: string[]): string {
+  try {
+    return execFileSync("git", ["status", "--porcelain", "--", ...paths], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    return ""; // git 不可用时不挡路：各组的还原与断言仍在
+  }
+}
+
+afterEach(() => {
+  const dirty = gitStatusPorcelain(PROBE_TARGETS);
+  if (!dirty.trim()) return;
+  const touched = dirty
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.slice(3).trim());
+  for (const rel of touched) {
+    const abs = join(REPO_ROOT, rel);
+    if (dirty.includes(`?? ${rel}`)) {
+      rmSync(abs, { force: true }); // 未跟踪的探针新文件：直接删
+    } else {
+      try {
+        execFileSync("git", ["checkout", "--", rel], {
+          cwd: REPO_ROOT,
+          stdio: "ignore",
+        });
+      } catch {
+        // 拉不回就让下面的断言红 —— 红里点名的路径就是人要去看的地方
+      }
+    }
+  }
+  const rest = gitStatusPorcelain(PROBE_TARGETS).trim();
+  expect(
+    rest,
+    `探针把仓库文件留脏了（已尝试 git 自愈仍未清干净）：${rest}`,
+  ).toBe("");
+});
 
 /**
  * 探针用的写文件：写完**读回来核对**，被占用或内容不符就重试。
@@ -866,7 +932,9 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
       "docs/guides/DEV-QUERIES.md",
       "门禁的步数别再写进文档（`.githooks/pre-commit`（24 步）这种数字会静默过期）。",
     );
-    expect(code).toBe(0);
+    /* 红要分得清「判据真拦了说明句」还是「探针没还原把文件留脏了」——
+     * 把现场证据带进断言（ISSUE #2415；自愈兜底见文件头的 afterEach）。 */
+    expect(code, `放行失败，doc:check 的现场：${output}`).toBe(0);
     expect(output).toContain("[doc:check] ✓");
   });
 
@@ -909,14 +977,19 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
  *      但如果产物**多余**（源已不在 `SCOPED_DOCS` 里），重渲染并不会删它 ——
  *      这一档必须如实报红，而不是「跑过写入模式就当我赢了」。
  *
- * 用子进程跑真脚本（与 `runCheck` 同一条口径）：它按 `__dirname` 定位仓库根，
- * 只有真起一次才是那一步在平台侧会走的路径。探针一律用 try/finally 还原 ——
- * 这些用例会临时改真实文件，残留一次就会把整个仓库的文档面写脏。
+ * 用子进程跑真脚本（与 `runCheck` 同一条口径）。与这一文件里其它「真文件探针」
+ * 组不同，本组的现场是**临时目录里的夹具仓库**（ISSUE #2415）：渲染器按
+ * `DOC_RENDER_ROOT` / `DOC_RENDER_SCOPED` 把输入输出根注入到夹具上 ——
+ * 本组一次也不写真仓库的入库文件，也不再有「改 → 判 → 改回来」的待恢复状态
+ * （写入曾经失败过一次，探针句就留在了主干文档与它的镜像里）。
  */
 describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () => {
   const RENDER = join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs");
   const EDIT = "docs/guides/DEV-QUERIES.md";
-  const GENERATED = "docs/generated/DEV-QUERIES.md";
+
+  let fixtureRoot = "";
+  const editAbs = () => join(fixtureRoot, EDIT);
+  const genAbs = () => join(fixtureRoot, "docs", "generated", "DEV-QUERIES.md");
 
   function runRender(args: string[]): { code: number; output: string } {
     try {
@@ -924,6 +997,11 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
         cwd: REPO_ROOT,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          DOC_RENDER_ROOT: fixtureRoot,
+          DOC_RENDER_SCOPED: EDIT,
+        },
       });
       return { code: 0, output };
     } catch (err) {
@@ -935,73 +1013,81 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
     }
   }
 
-  /** 在还原保护下改一处文件、跑一次自动修档，再把两份文件都还原。 */
-  function withDrift<T>(fn: () => T): T {
-    const editAbs = join(REPO_ROOT, EDIT);
-    const genAbs = join(REPO_ROOT, GENERATED);
-    const editText = readFileSync(editAbs, "utf8");
-    const genText = readFileSync(genAbs, "utf8");
-    try {
-      return fn();
-    } finally {
-      restoreText(editAbs, editText);
-      restoreText(genAbs, genText);
-    }
+  /** 立一份「源与生成态一致」的底座：写入模式只落在夹具里。 */
+  function seedFixture(): void {
+    fixtureRoot = mkdtempSync(join(tmpdir(), "doc-render-fixture-"));
+    mkdirSync(dirname(editAbs()), { recursive: true });
+    writeFileSync(
+      editAbs(),
+      [
+        "# DEV-QUERIES（夹具）",
+        "",
+        "> **占位符约定**：占位符由 doc:check 动态核对。",
+        "",
+        "## 查询",
+        "",
+        "- ComfyUI 端口：{{comfyui.port}}",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const seeded = runRender([]);
+    expect(seeded.code, seeded.output).toBe(0);
+    expect(existsSync(genAbs()), seeded.output).toBe(true);
   }
 
+  afterEach(() => {
+    if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true });
+    fixtureRoot = "";
+  });
+
   it("绿的时候不多写：判定通过时一句「重新生成」都不打", () => {
+    seedFixture();
+    const before = readFileSync(genAbs(), "utf8");
     const { code, output } = runRender(["--check", "--autofix"]);
-    expect(code).toBe(0);
+    expect(code, output).toBe(0);
     expect(output).toContain("[doc:render --check] ✓");
     /* 这条是关键：没有这一格，「自动修」退化成「每次都跑一遍写入模式」也照样全绿，
      * 而那意味着每个 PR 都在改工作区（并且掩盖了「它到底修了什么」）。 */
-    expect(output).not.toContain("重渲染");
+    expect(
+      output,
+      `夹具（${fixtureRoot}）已 seed 成一致，仍打出「重渲染」就是多写了：${output}`,
+    ).not.toContain("重渲染");
+    /* 不多写的实物证据：产物字节不变（mtime 不可靠，比内容）。 */
+    expect(readFileSync(genAbs(), "utf8")).toBe(before);
   });
 
   it("编辑态改了、生成物没跟着 → 自动重渲染修好，并如实说明修了什么", () => {
     /* 探针插在标题行紧后面，而不是文末：`renderDocContent()` 会先剥掉编辑文档里
      * 那段「占位符约定」引用块，文末追加的文本会落在它的匹配范围里、被一起剥掉 ——
      * 那样「源改了」这件事根本传不到生成物，这一格就测不到它要测的东西。 */
-    withDrift(() => {
-      const editAbs = join(REPO_ROOT, EDIT);
-      const original = readFileSync(editAbs, "utf8");
-      const [head, ...rest] = original.split("\n");
-      writeText(
-        editAbs,
-        `${head}\n\n自动修探针：这一行只在编辑态。\n${rest.join("\n")}`,
-      );
-      const { code, output } = runRender(["--check", "--autofix"]);
-      expect(output).toContain("落后于源");
-      expect(output).toContain("重渲染");
-      expect(code).toBe(0);
-      /* 修的是生成物：探针文本应当出现在产物里（它就是「源 → 生成物」那一份计算的
-       * 结果），而**源那一份不许被改**（判据的红话里那句「不要手改生成物」在这里的
-       * 镜像：自动修也不许反过来改源）。 */
-      expect(readFileSync(join(REPO_ROOT, GENERATED), "utf8")).toContain(
-        "自动修探针：这一行只在编辑态。",
-      );
-    });
+    seedFixture();
+    const original = readFileSync(editAbs(), "utf8");
+    const [head, ...rest] = original.split("\n");
+    const probed = `${head}\n\n自动修探针：这一行只在编辑态。\n${rest.join("\n")}`;
+    writeFileSync(editAbs(), probed, "utf8");
+    const { code, output } = runRender(["--check", "--autofix"]);
+    expect(output).toContain("落后于源");
+    expect(output).toContain("重渲染");
+    expect(code, output).toBe(0);
+    /* 修的是生成物：探针文本应当出现在产物里（它就是「源 → 生成物」那一份计算的
+     * 结果），而**源那一份不许被改**（判据的红话里那句「不要手改生成物」在这里的
+     * 镜像：自动修也不许反过来改源）。 */
+    expect(readFileSync(genAbs(), "utf8")).toContain(
+      "自动修探针：这一行只在编辑态。",
+    );
+    expect(readFileSync(editAbs(), "utf8")).toBe(probed);
   });
 
   it("修不好时必须红：多余产物（源已不在 SCOPED_DOCS 里）不由重渲染收拾", () => {
-    withDrift(() => {
-      /* 「多余」的成因不是「忘了重渲染」，写入模式也不会删文件 —— 这一档必须把它
-       * 如实报回来，而不是「跑过写入模式就当我赢了」。 */
-      const orphan = join(
-        REPO_ROOT,
-        "docs",
-        "generated",
-        "99-不存在于-SCOPED_DOCS.md",
-      );
-      writeText(orphan, "# 自动修探针\n");
-      try {
-        const { code, output } = runRender(["--check", "--autofix"]);
-        expect(code).toBe(1);
-        expect(output).toContain("重渲染之后仍不一致");
-        expect(output).toContain("多余");
-      } finally {
-        rmSync(orphan, { force: true });
-      }
-    });
+    seedFixture();
+    /* 「多余」的成因不是「忘了重渲染」，写入模式也不会删文件 —— 这一档必须把它
+     * 如实报回来，而不是「跑过写入模式就当我赢了」。 */
+    const orphan = join(fixtureRoot, "docs", "generated", "99-孤儿产物.md");
+    writeFileSync(orphan, "# 自动修探针\n", "utf8");
+    const { code, output } = runRender(["--check", "--autofix"]);
+    expect(code, output).toBe(1);
+    expect(output).toContain("重渲染之后仍不一致");
+    expect(output).toContain("多余");
   });
 });
