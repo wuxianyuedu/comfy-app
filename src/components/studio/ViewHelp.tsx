@@ -16,9 +16,9 @@ import type { WorkspaceView } from "./NavItems";
  * 与队列那句曾经只差一个句号，却没人发现）。名字也从 `NavItems` 的注册表取，
  * 与侧栏 / 页签同一个出处。
  *
- * 注意与 `/models` 独立路由页的区别：那一页不在 `AppShell` 里、没有顶栏，
- * 它的说明仍走 `PageHeader` 的 `help` prop（见 `components/model/ModelLibrary`），
- * 不登记在这里。
+ * 注意 `/models` 独立路由页：那一页不在 `AppShell` 里、没有顶栏 —— 它挂的就是
+ * 工作区这份实现（浏览版退役后两处同源），说明按钮只渲染在壳内的顶栏上，
+ * 壳外不渲染（`models` 的说明已登记在上面）。
  */
 const VIEW_HELP: Partial<Record<WorkspaceView, ReactNode>> = {
   history: "所有生成任务与执行日志，按时间倒序排列。",

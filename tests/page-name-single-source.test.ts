@@ -62,10 +62,10 @@ const RETIRED_SCREEN_NAMES = [
  * 读这份清单的人不该以为它是全库判据。
  */
 const PAGE_HEADER_CONSUMERS = [
-  /* 路由壳 `app/(main)/models/page.tsx` 只留 `metadata` + 挂载 —— 页头在
-   * 实现侧（`pageHeaderTitle` 是 client 侧的函数，server 壳调不到它）。 */
-  "src/components/model/ModelLibrary.tsx",
   "src/components/console/ConsoleView.tsx",
+  /* 路由壳 `app/(main)/models/page.tsx` 只留 `metadata` + 挂载 —— 页头在
+   * 实现侧（`pageHeaderTitle` 是 client 侧的函数，server 壳调不到它）。
+   * 浏览版退役后，壳上挂的就是这一份（`studio/ModelLibrary`）。 */
   "src/components/studio/ModelLibrary.tsx",
   "src/components/studio/ProjectOutputs.tsx",
   "src/components/studio/WorksGallery.tsx",

@@ -106,8 +106,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
           `border-b-2 border-accent`，**未选中档根本没有那条边框** —— 于是
           未选中的那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是
-          「一排里选一个」的又一处手搓（与上面类型筛选、以及 `model/` 与
-          `studio/` 的两个 ModelLibrary 同源）。
+          「一排里选一个」的又一处手搓（与上面类型筛选同一族）。
           改用 `ui/tabs` 的 `line` 档：它就是这一类「下划线页签」的全库实现，
           选中态由 `data-active` 驱动（字色 / 下划线两层），两枚同高同基线。 */}
       {projectId && (
