@@ -99,7 +99,7 @@ describe("开写入器", () => {
 });
 
 describe("列文件", () => {
-  it("只列本来源（同一目录里四个来源并存）", () => {
+  it("只列本来源（同一目录里四个来源并存）", async () => {
     fs.writeFileSync(path.join(dir, "comfyui-runtime-20261005-090000.log"), "");
     fs.writeFileSync(path.join(dir, "comfyui-runtime-20261005-093612.log"), "");
     fs.writeFileSync(path.join(dir, "ollama-runtime-20261005-093612.log"), "");
@@ -108,36 +108,38 @@ describe("列文件", () => {
     fs.writeFileSync(path.join(dir, "comfyui-trace.log"), "");
 
     expect(
-      listRuntimeLogFiles("comfyui-runtime", dir).map((f) => f.name),
+      (await listRuntimeLogFiles("comfyui-runtime", dir)).map((f) => f.name),
     ).toEqual([
       "comfyui-runtime-20261005-090000.log",
       "comfyui-runtime-20261005-093612.log",
     ]);
   });
 
-  it("旧固定名排在最前（「更早」是对它的定义）", () => {
+  it("旧固定名排在最前（「更早」是对它的定义）", async () => {
     fs.writeFileSync(path.join(dir, "ollama-runtime.log"), "迁移前\n");
     fs.writeFileSync(path.join(dir, "ollama-runtime-20261005-093612.log"), "");
-    const names = listRuntimeLogFiles("ollama-runtime", dir).map((f) => f.name);
+    const names = (await listRuntimeLogFiles("ollama-runtime", dir)).map(
+      (f) => f.name,
+    );
     expect(names).toEqual([
       "ollama-runtime.log",
       "ollama-runtime-20261005-093612.log",
     ]);
   });
 
-  it("目录不存在时回空（这个服务从没启动过，不是错误）", () => {
-    expect(listRuntimeLogFiles("app-runtime", path.join(dir, "nope"))).toEqual(
-      [],
-    );
+  it("目录不存在时回空（这个服务从没启动过，不是错误）", async () => {
+    expect(
+      await listRuntimeLogFiles("app-runtime", path.join(dir, "nope")),
+    ).toEqual([]);
   });
 
-  it("latest 取最新那一份（写方要跟随的就是它）", () => {
+  it("latest 取最新那一份（写方要跟随的就是它）", async () => {
     fs.writeFileSync(path.join(dir, "app-runtime-20261005-090000.log"), "");
     fs.writeFileSync(path.join(dir, "app-runtime-20261005-093612.log"), "");
-    expect(latestRuntimeLogFile("app-runtime", dir)?.name).toBe(
+    expect((await latestRuntimeLogFile("app-runtime", dir))?.name).toBe(
       "app-runtime-20261005-093612.log",
     );
-    expect(latestRuntimeLogFile("ollama-runtime", dir)).toBeNull();
+    expect(await latestRuntimeLogFile("ollama-runtime", dir)).toBeNull();
   });
 });
 
@@ -176,7 +178,7 @@ describe("跨进程补齐：续写同一份（launcher 写提醒 → dev server 
 });
 
 describe("保留策略", () => {
-  it("每个来源留最近 N 份，超出的删最旧（一次启动一份之后这是必需的）", () => {
+  it("每个来源留最近 N 份，超出的删最旧（一次启动一份之后这是必需的）", async () => {
     for (let i = 0; i < RUNTIME_LOG_KEEP_FILES + 5; i += 1) {
       const s = String(i).padStart(2, "0");
       const mm = String(i % 60).padStart(2, "0");
@@ -191,7 +193,9 @@ describe("保留策略", () => {
       RUNTIME_LOG_KEEP_FILES,
     );
     /* 留下的是**最新**那几份 */
-    const left = listRuntimeLogFiles("comfyui-runtime", dir).map((f) => f.name);
+    const left = (await listRuntimeLogFiles("comfyui-runtime", dir)).map(
+      (f) => f.name,
+    );
     expect(left).not.toContain("comfyui-runtime-20261005-000000.log");
   });
 

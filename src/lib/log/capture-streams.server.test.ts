@@ -197,13 +197,15 @@ describe("转录文件的取最新与轮转（ISSUE #1365）", () => {
     const base = Date.now();
     const older = writePanel(9876, base - 60_000, "上一次运行\n");
     const newer = writePanel(12345, base, "本次运行\n");
-    expect(mod.latestPanelLogFile(tmp)).toBe(newer);
-    expect(mod.latestPanelLogFile(tmp)).not.toBe(older);
+    expect(await mod.latestPanelLogFile(tmp)).toBe(newer);
+    expect(await mod.latestPanelLogFile(tmp)).not.toBe(older);
   });
 
   it("目录不存在时返回 null（不是抛错）", async () => {
     const mod = await freshInstall();
-    expect(mod.latestPanelLogFile(path.join(tmp, "no-such-dir"))).toBeNull();
+    expect(
+      await mod.latestPanelLogFile(path.join(tmp, "no-such-dir")),
+    ).toBeNull();
   });
 
   it("轮转按 mtime 保留最近 5 份，跨 bootId 也算同族", async () => {

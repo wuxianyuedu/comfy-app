@@ -75,9 +75,19 @@ export async function POST(request: Request) {
     const rawLabel = typeof body.label === "string" ? body.label : "all";
     const label = ALLOWED_LABELS.has(rawLabel) ? rawLabel : "all";
 
-    fs.mkdirSync(/*turbopackIgnore: true*/ LOG_EXPORT_DIR, { recursive: true });
+    /* 异步（ISSUE #2193 复算时抓出来的第六处 —— 立案那份 grep 只点了
+     * `stat|readFile|readdir` 三种形态，写侧的两处不在它的量程里）：
+     * 一次导出的正文可以是整屏日志，同步落盘把线程压住的是一起等的所有请求。
+     * `turbopackIgnore` 两枚标记跟着调用点搬。 */
+    await fs.promises.mkdir(/*turbopackIgnore: true*/ LOG_EXPORT_DIR, {
+      recursive: true,
+    });
     const file = path.join(LOG_EXPORT_DIR, exportFileName(label));
-    fs.writeFileSync(/*turbopackIgnore: true*/ file, content, "utf-8");
+    await fs.promises.writeFile(
+      /*turbopackIgnore: true*/ file,
+      content,
+      "utf-8",
+    );
 
     return NextResponse.json({
       ok: true,
