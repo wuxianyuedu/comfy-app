@@ -167,8 +167,12 @@ export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
 }
 
 export interface ChildExitDeps {
-  /** 退出横幅文案（含 ANSI）。 */
-  banner: (report: ComfyExitReport) => string;
+  /** 这次的进程叫什么（`ComfyUI` / `Drizzle Studio`）。
+   *
+   * 横幅与进 pino 那行**都由它拼**，不在原语里写死主语：Studio 复用同一套退出
+   * 原语（ISSUE #570 第 6 项），而原语里的句子此前固定说「ComfyUI 进程退出」，
+   * 于是 Studio 的崩溃被记在了 ComfyUI 名下（ISSUE #2435）。 */
+  subject: string;
   /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
    *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
   appendRuntimeLog: (line: string) => void;
@@ -200,11 +204,11 @@ export function createChildExitHandler(
 ): (code: number | null, signal: NodeJS.Signals | null) => void {
   return (code: number | null, signal: NodeJS.Signals | null = null) => {
     const report = describeComfyExit({ code, signal, ...deps.context() });
-    deps.appendRuntimeLog(deps.banner(report));
+    deps.appendRuntimeLog(`■ ${deps.subject} 进程已退出：${report.reason}`);
     deps.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
     if (report.advice !== null)
       deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
-    deps.log(`ComfyUI 进程退出：${report.reason}`);
+    deps.log(`${deps.subject} 进程退出：${report.reason}`);
     deps.onExitReport?.(report);
     deps.clearChild();
   };

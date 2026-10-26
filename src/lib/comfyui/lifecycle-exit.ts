@@ -74,6 +74,18 @@ const SIGNAL_ADVICE: Record<string, string> = {
   SIGINT: "SIGINT 来自 Ctrl+C：通常是有人在跑它的窗口里按了中断。",
 };
 
+/** 非零退出码那一行的「下一步看什么」——按会话模式分。
+ *
+ * ComfyUI 是 Python 进程、Studio 是纯 Node 包：把「显存不足」念给 Studio 听，
+ * 会让人去查一个它根本没有的方向（ISSUE #2435）。 */
+function nonZeroExitAdvice(mode: ComfyExitFacts["mode"]): string {
+  const lead = "看它崩溃前的最后几行输出（本文件上方与本行的 [out]/[err]）：";
+  if (mode === "studio") {
+    return `${lead}drizzle.config.ts 解析失败、数据库连接串不可用、端口已被占用都会以非零码退出。`;
+  }
+  return `${lead}Python 侧异常、缺依赖、显存不足都会以非零码退出。`;
+}
+
 /**
  * 把退出事实翻成「为什么退出」。
  *
@@ -117,8 +129,7 @@ export function describeComfyExit(facts: ComfyExitFacts): ComfyExitReport {
     return {
       reason: `异常退出（exit ${facts.code}）`,
       detail: tail,
-      advice:
-        "看它崩溃前的最后几行输出（本文件上方与本行的 [out]/[err]），Python 侧异常、缺依赖、显存不足都会以非零码退出。",
+      advice: nonZeroExitAdvice(facts.mode),
     };
   }
 

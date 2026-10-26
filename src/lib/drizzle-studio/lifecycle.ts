@@ -55,6 +55,9 @@ type EnsureResult = { ok: boolean; port: number; detail: string };
 type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;
   starting?: Promise<EnsureResult>;
+  /** 用户点了「关闭 Drizzle Studio」。与 comfyui 同一格语义：杀树发生在它之后，
+   *  于是退出回调必须能读到这次意图，否则主动关闭会被记成「异常退出」（ISSUE #2435）。 */
+  stopRequested?: boolean;
 };
 
 declare global {
@@ -186,6 +189,9 @@ export async function ensureDrizzleStudioUp(
     // 含 node_modules 的项目根，保证它能解析自身传递依赖。
     const nodeExe = process.execPath;
     const args = [bin, "studio", "--port", String(port), "--host", "127.0.0.1"];
+    /* 新会话开始：清掉上一次「用户要求停止」的标记。留着它会让这一轮里任何一次
+     * 真崩溃都被读成「用户主动关闭」，而那是关不掉的一条线索。 */
+    st.stopRequested = false;
     /* 先换本次启动的日志文件，再写第一条 —— 顺序反了会把本次的头几行写进
      * 上一次的文件里（表现是「日志看起来少了一次」，没有报错）。 */
     beginRuntimeSession();
@@ -221,7 +227,7 @@ export async function ensureDrizzleStudioUp(
     child.on(
       "exit",
       createChildExitHandler({
-        banner: (report) => `■ Drizzle Studio 进程已退出：${report.reason}`,
+        subject: "Drizzle Studio",
         appendRuntimeLog,
         log: note,
         clearChild: () => {
@@ -230,9 +236,7 @@ export async function ensureDrizzleStudioUp(
         context: () => ({
           pid: child.pid ?? null,
           uptimeMs: Date.now() - spawnedAt,
-          /* studio 侧没有「用户主动关」的标记：它的关闭路径直接杀子进程并清
-           * 句柄，退出记录因此表现为信号 / 非零码而不是「主动关闭」。 */
-          stopRequested: false,
+          stopRequested: st.stopRequested === true,
           mode: "studio",
         }),
       }),
@@ -287,6 +291,11 @@ export async function stopDrizzleStudio(
   // 平台判据集中在 kill-process-tree。旧实现的 POSIX 分支直接单杀 —— 虽然
   // drizzle-kit 多为单进程，但 pnpm/npm 外壳之下仍可能带出 node 子进程，
   // 单杀会留下锁端口的孤儿。
+  /* 先落「用户要求停止」再杀树：杀树产生的退出在 Windows 上是
+   * `code=1 signal=null`，与它自己崩溃长得一模一样 —— 没有这一格，用户点一下
+   * 「关闭」就会在日志里读到一次 Studio「异常退出」外加一句 Python/显存的
+   * 排查建议（ISSUE #2435）。 */
+  st.stopRequested = true;
   const kill = await killProcessTree({ pid, detached: false });
   logger.info(`[drizzle-studio] 回收进程树：${kill.via}`);
   st.child = undefined;

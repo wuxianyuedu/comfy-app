@@ -125,13 +125,14 @@ describe("createRecentOutputLedger（进程秒退时报错来源）", () => {
 describe("createChildExitHandler（退出回调可单测）", () => {
   function handler(over: {
     stopRequested?: boolean;
+    subject?: string;
     onBanner?: (b: string) => void;
   }) {
     const lines: string[] = [];
     const logs: string[] = [];
     let cleared = 0;
     const onExit = createChildExitHandler({
-      banner: (report) => `■ ComfyUI 进程已退出：${report.reason}`,
+      subject: over.subject ?? "ComfyUI",
       appendRuntimeLog: (l) => {
         lines.push(l);
         if (l.startsWith("■")) over.onBanner?.(l);
@@ -192,5 +193,17 @@ describe("createChildExitHandler（退出回调可单测）", () => {
     h.onExit(null, null);
     expect(h.banners()[0]).toContain("拿不到退出码");
     expect(h.banners()[0]).not.toContain("exit 0");
+  });
+
+  it("主语由宿主给：复用这套原语的 Studio 不得被记成 ComfyUI", () => {
+    const h = handler({ subject: "Drizzle Studio" });
+    h.onExit(1, null);
+    expect(h.banners()[0]).toBe(
+      "■ Drizzle Studio 进程已退出：异常退出（exit 1）",
+    );
+    expect(h.logs[0]).toBe("Drizzle Studio 进程退出：异常退出（exit 1）");
+    // 原语里不留任何写死的主语（落盘行与 pino 行都不能出现 ComfyUI）
+    expect(h.lines.join("\n")).not.toContain("ComfyUI");
+    expect(h.logs.join("\n")).not.toContain("ComfyUI");
   });
 });

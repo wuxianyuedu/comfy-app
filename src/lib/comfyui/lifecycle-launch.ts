@@ -808,7 +808,7 @@ async function launchBoundMode(
     createChildExitHandler({
       /* 横幅直接写「为什么退出」：此前只有 `code=...`，而用户的问题是
        * 「它是由什么退出的」—— 结论该出现在日志里，不该留给读者去推。 */
-      banner: (report) => `■ ComfyUI 进程已退出：${report.reason}`,
+      subject: "ComfyUI",
       appendRuntimeLog,
       log: note,
       clearChild: () => {
