@@ -39,7 +39,8 @@ export function readBranchLedger({ root, rel, branch }) {
     cwd: root,
     encoding: "utf8",
   });
-  if (res.error || res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+    return null;
   try {
     const parsed = JSON.parse(res.stdout);
     if (
@@ -56,6 +57,29 @@ export function readBranchLedger({ root, rel, branch }) {
 }
 
 /**
+ * 把一次 git 调用的两条流收成**一行**读数。
+ *
+ * 为什么必须有这一件（ISSUE #2344）：回写失败那三个出口过去只念一个词
+ * （`add-failed` / `commit-failed` / `push-failed`），git 的 stderr 一个字都没转发 ——
+ * 于是「commit 为什么失败」这件事在那一跑的日志里**不存在**，下一次撞上还得从头查。
+ * 这是硬规则 27 那句「效应不许只转述自己的 stdout（丢 stderr 是这一族最重的事故）」
+ * 在同一段代码上的第二次发生。
+ *
+ * @param {{stdout?: string, stderr?: string} | null} res
+ * @returns {string}
+ */
+function gitTail(res) {
+  const text = `${res?.stderr ?? ""}${res?.stdout ?? ""}`
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" / ");
+  /* 只留尾部：git 的结论在最后一行，而钩子失败时前面是一整屏逐步骤输出 ——
+   * 这一句要进「回写未执行」那一行，不许把整段日志顶进那格。 */
+  return text === "" ? "(git 没给出任何输出)" : text.slice(-400);
+}
+
+/**
  * 把当前工作树里已刷新（跑绿）的新鲜度账回写到机器自有分支 `ci/freshness-ledger`（#2247）。
  *
  * 仅在 `FRESHNESS_LEDGER_PUSH=1` 时真正推（由 `.cnb.yml` 每日档三格显式带上），
@@ -68,10 +92,17 @@ export function readBranchLedger({ root, rel, branch }) {
  * 回写失败（没权限 / 没 fetch 到 / 冲突）只返回 `{pushed:false, reason}`，**不**让跑法
  * 脚本的结论被污染（`writeFreshness` 已经拿到了跑绿结论）。
  *
- * @param {{root: string, kinds: string[]}} args
+ * ⚠️ **失败之前先把 `git add` 撤回去**（ISSUE #2344）：`add` 成功而 `commit` 失败时，
+ * 索引里留着的就是那两份**入库的**账本文件，而同一跑后面每一格「按暂存区判」的判据
+ * （`--staged` 那一族）读的都是这个面 —— 一次不成功的回写污染的是**整跑**的输入，
+ * 账面却只红一条用例。撤回本身失败也要念出来：那说明索引仍然是脏的。
+ *
+ * @param {{root: string, kinds: string[], run?: (args: string[]) => {status: number | null, stdout?: string, stderr?: string, error?: unknown}}} args
+ *        `run` 是 git 的执行者（默认 `spawnSync("git", …)` 于 `root`）—— 注入它是为了让
+ *        「commit 被钩子拒掉」这一支有执行者，而不是要人再造一次现场（同 `runGate` 的取舍）。
  * @returns {{pushed: boolean, reason?: string}}
  */
-export function pushFreshnessLedger({ root, kinds }) {
+export function pushFreshnessLedger({ root, kinds, run }) {
   // 只在平台侧（CNB 流水线）真正推：本地 `build:tracked`、开发者自己分支跑都不会动账；
   // PR 流水线本来就不跑这三格（跑法脚本只在「每日档 / 单跑口」里被调用）。
   // 用 CNB 的平台身份环境变量判定（与 `gitUser` 同源），**不**在 `.cnb.yml` 逐格写 env——
@@ -103,8 +134,7 @@ export function pushFreshnessLedger({ root, kinds }) {
   if (contextSubject() !== "master" || !dailyEvent) {
     return { pushed: false, reason: "not-master-subject" };
   }
-  const branch =
-    process.env.FRESHNESS_LEDGER_BRANCH || FRESHNESS_LEDGER_BRANCH;
+  const branch = process.env.FRESHNESS_LEDGER_BRANCH || FRESHNESS_LEDGER_BRANCH;
   const allRels = [
     ...new Set(Object.values(FRESHNESS_TRACKS).map((t) => t.ledger)),
   ];
@@ -127,33 +157,58 @@ export function pushFreshnessLedger({ root, kinds }) {
     }
   }
   /* 拉取分支最新（拿到前面 stage 已推的账），让本次提交基于它、避免互相覆盖。 */
-  spawnSync("git", ["fetch", "origin", branch], { cwd: root, encoding: "utf8" });
+  const git =
+    run ?? ((args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }));
+  /* 「撤回」只在这之后有意义：`add` 一旦成功，索引里就留下了这两三份账本，
+   * 而失败的那一步把整跑后面所有格的输入面换成了它们（ISSUE #2344）。 */
+  const unstage = () => {
+    const res = git(["reset", "-q", "--", ...allRels]);
+    if (res && res.status === 0) return "";
+    return (
+      "；⚠ 撤回暂存也失败了 ⇒ **索引仍然是脏的**，同一跑后面按暂存区判的那几条" +
+      `读的是这一格留下的面（撤回的 git 原文：${gitTail(res)}）`
+    );
+  };
+  git(["fetch", "origin", branch]);
   const who = gitUser("ci");
   const date = new Date().toISOString().slice(0, 10);
-  const addRes = spawnSync("git", ["add", ...allRels], {
-    cwd: root,
-    encoding: "utf8",
-  });
-  if (addRes.status !== 0) return { pushed: false, reason: "add-failed" };
-  const commitRes = spawnSync(
-    "git",
-    [
-      "-c",
-      `user.name=${who}`,
-      "-c",
-      `user.email=${who}@noreply.ci`,
-      "commit",
-      "-m",
-      `chore(freshness): record ${date} [ci skip]`,
-    ],
-    { cwd: root, encoding: "utf8" },
-  );
-  if (commitRes.status !== 0) return { pushed: false, reason: "commit-failed" };
-  const pushRes = spawnSync(
-    "git",
-    ["push", "--force-with-lease", "origin", `HEAD:refs/heads/${branch}`],
-    { cwd: root, encoding: "utf8" },
-  );
-  if (pushRes.status !== 0) return { pushed: false, reason: "push-failed" };
+  const addRes = git(["add", ...allRels]);
+  if (addRes.status !== 0) {
+    return {
+      pushed: false,
+      reason: `add-failed —— git 原文：${gitTail(addRes)}${unstage()}`,
+    };
+  }
+  const commitRes = git([
+    "-c",
+    `user.name=${who}`,
+    "-c",
+    `user.email=${who}@noreply.ci`,
+    "commit",
+    "-m",
+    `chore(freshness): record ${date} [ci skip]`,
+  ]);
+  if (commitRes.status !== 0) {
+    /* 这一支是 #2344 的当事形态：`add` 已经做完、`commit` 被拒（钩子、身份、
+     * 「没有东西可提交」都算），过去到这里就**直接返回**，把 add 留下的暂存区不清回去。 */
+    return {
+      pushed: false,
+      reason: `commit-failed —— git 原文：${gitTail(commitRes)}${unstage()}`,
+    };
+  }
+  const pushRes = git([
+    "push",
+    "--force-with-lease",
+    "origin",
+    `HEAD:refs/heads/${branch}`,
+  ]);
+  if (pushRes.status !== 0) {
+    /* 提交已经落地 ⇒ 索引是干净的，这里**不许**再撤回（撤了就把已经成功的提交
+     * 的改动重新 stage 成「待提交」，那是第二次错）。原因照旧要带原文。 */
+    return {
+      pushed: false,
+      reason: `push-failed —— git 原文：${gitTail(pushRes)}`,
+    };
+  }
   return { pushed: true };
 }

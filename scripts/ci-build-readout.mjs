@@ -57,6 +57,14 @@
  * 缺席时**不许**把「取不到逐格读数」当成「没出问题」，那正是「取不到 ⇒ 未知」
  * 这条纪律（§13.6.4.1）。
  *
+ * ## 这一份负责什么（判断在隔壁）
+ *
+ * **判断**（三档分类、取消原因）全在 `ci-build-classify.mjs`；这一份负责**取数**与
+ * **念给人看**：拉平台 JSON、把 `get-build-stage` 的原话补进逐格读数
+ * （`enrichStageErrors()`，ISSUE #2406 的关键一跳）、把结论写成那几行、以及那个 CLI。
+ * 分开的原因是 `check-infra-file-size.cjs` 的 900 行硬闸 —— 那一闸说的是「出口只有拆」，
+ * 而拆法按职责：判断跟着「平台 JSON 的形状」变，取数跟着「问平台的那几条命令」变。
+ *
  * ## 用法
  *
  *   node scripts/ci-build-readout.mjs --repo moon-read/comfy-app-t3 --sn cnb-lm1-1k5h1otqt
@@ -73,199 +81,31 @@ import { fileURLToPath } from "node:url";
 import { asArray, buildSignature } from "./ship-build.mjs";
 import { parseSlug } from "./ship-core.mjs";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
+import {
+  CODE,
+  cancelledCause,
+  classifyBuildOutcome,
+  classifyStages,
+  downstreamSkipped,
+  inFlightStages,
+  pipelineSn,
+} from "./ci-build-classify.mjs";
+
+/* 判断全在 `ci-build-classify.mjs`，这里只是**转发**给既有调用点（`ship-platform` /
+ * `ship-diagnose` / 两个失败立案脚本 / 独立 CLI 都按这一份导入）。转发而不是让各处改
+ * import：拆文件是「压回 900 行硬闸」这一件事的代价，不该让五个消费口各改一行去承担
+ * —— 那五处会开始漂。 */
+export {
+  CODE,
+  cancelledCause,
+  classifyBuildOutcome,
+  classifyStages,
+  downstreamSkipped,
+  inFlightStages,
+  pipelineSn,
+};
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-/** 退出码三态（与 `ship-core.mjs` 的 `CODE` 同一口径）。 */
-export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
-
-/** 「真失败」族：某一格自己跑挂了（产物 / 代码 / 环境的问题）。 */
-const FAILED_STATES = new Set(["error", "failed", "failure"]);
-
-/** 「被取消」族：这一格没跑完，原因在人或同一把锁上的另一跑，不在产物。 */
-const CANCELLED_STATES = new Set(["cancel", "cancelled", "canceled"]);
-
-/** 「还在跑」族。 */
-const RUNNING_STATES = new Set([
-  "running",
-  "pending",
-  "queued",
-  "waiting",
-  "created",
-]);
-
-/**
- * 平台自己那几格（`Prepare` / `End` / `DebugDetection` / `BeforeEnd`）**不是**本仓
- * 配置的格 —— 念它们只会把读数变成噪声。这里按 id 形状认出「本仓配置的那几格」。
- */
-const CONFIGURED_STAGE_ID = /^stage-\d+$/;
-
-/**
- * 一格的读数。
- *
- * @typedef {Object} StageRef
- * @property {string} id 平台给的格 id（`stage-1` 那种）
- * @property {string} name 格名（中文那一句）
- * @property {string} status 格状态（小写）
- * @property {number} index 它在平台给的那份列表里的序号（执行顺序）
- */
-
-/**
- * 逐格分类。
- *
- * ⚠️ 只收**本仓配置的那几格**（id 形如 `stage-N`）。若一份读数里一个都匹配不上
- * （平台改了 id 形状），就退回「全收」—— 宁可多念几行平台自带的格，也不许因为
- * 认不出形状而把证据一起丢掉。
- *
- * @param {any} stages 平台给的 stage 数组
- * @returns {{failed: StageRef[], cancelled: StageRef[], skipped: StageRef[], configured: StageRef[]}}
- */
-export function classifyStages(stages) {
-  /** @type {{failed: StageRef[], cancelled: StageRef[], skipped: StageRef[], configured: StageRef[]}} */
-  const out = { failed: [], cancelled: [], skipped: [], configured: [] };
-  if (!Array.isArray(stages)) return out;
-  /** @type {StageRef[]} */
-  const all = [];
-  stages.forEach((s, index) => {
-    if (!s || typeof s !== "object") return;
-    const status = typeof s.status === "string" ? s.status.toLowerCase() : "";
-    all.push({
-      id: String(s.id ?? ""),
-      name: String(s.name ?? ""),
-      status,
-      index,
-    });
-  });
-  const configured = all.filter((s) => CONFIGURED_STAGE_ID.test(s.id));
-  const pool = configured.length > 0 ? configured : all;
-  for (const ref of pool) {
-    out.configured.push(ref);
-    if (FAILED_STATES.has(ref.status)) out.failed.push(ref);
-    else if (CANCELLED_STATES.has(ref.status)) out.cancelled.push(ref);
-    else if (ref.status === "skipped") out.skipped.push(ref);
-  }
-  return out;
-}
-
-/**
- * 整条构建的分类。
- *
- * @param {any} json `cnb build get-build-status -v` 的解析结果
- * @returns {{
- *   state: "green" | "failed" | "cancelled" | "running" | "unknown",
- *   raw: string | null,
- *   pipelines: Array<{
- *     id: string, name: string, status: string,
- *     failed: StageRef[], cancelled: StageRef[], skipped: StageRef[], configured: StageRef[],
- *   }>,
- *   failed: StageRef[],
- *   cancelled: StageRef[],
- *   skipped: StageRef[],
- *   configured: StageRef[],
- * }}
- */
-export function classifyBuildOutcome(json) {
-  const data = json && typeof json === "object" ? json.data : null;
-  const raw = data && typeof data.status === "string" ? data.status : null;
-  /** @type {ReturnType<typeof classifyStages>["configured"]} */
-  const failed = [];
-  /** @type {ReturnType<typeof classifyStages>["configured"]} */
-  const cancelled = [];
-  /** @type {ReturnType<typeof classifyStages>["configured"]} */
-  const skipped = [];
-  /** @type {ReturnType<typeof classifyStages>["configured"]} */
-  const configured = [];
-  const pipelines = [];
-  const table =
-    data && data.pipelinesStatus && typeof data.pipelinesStatus === "object"
-      ? data.pipelinesStatus
-      : {};
-  for (const key of Object.keys(table)) {
-    const p = table[key];
-    if (!p || typeof p !== "object") continue;
-    const c = classifyStages(p.stages);
-    const pipeline = {
-      id: String(p.id ?? key),
-      name: String(p.name ?? ""),
-      status: typeof p.status === "string" ? p.status.toLowerCase() : "",
-      failed: c.failed,
-      cancelled: c.cancelled,
-      skipped: c.skipped,
-      configured: c.configured,
-    };
-    pipelines.push(pipeline);
-    failed.push(...c.failed);
-    cancelled.push(...c.cancelled);
-    skipped.push(...c.skipped);
-    configured.push(...c.configured);
-  }
-
-  const low = raw === null ? "" : raw.toLowerCase();
-  /** @type {"green"|"failed"|"cancelled"|"running"|"unknown"} */
-  let state = "unknown";
-  if (failed.length > 0) {
-    /* ① 真红的那格最该被看见 —— 即便同一跑里还有别的格被取消。 */
-    state = "failed";
-  } else if (
-    cancelled.length > 0 ||
-    pipelines.some((p) => CANCELLED_STATES.has(p.status))
-  ) {
-    /* ② 逐格读到「被取消」⇒ 这一跑没跑完，产物没被验证过。 */
-    state = "cancelled";
-  } else if (low === "success") {
-    state = "green";
-  } else if (FAILED_STATES.has(low)) {
-    state = "failed";
-  } else if (CANCELLED_STATES.has(low)) {
-    state = "cancelled";
-  } else if (RUNNING_STATES.has(low)) {
-    state = "running";
-  }
-  return { state, raw, pipelines, failed, cancelled, skipped, configured };
-}
-
-/**
- * 「被取消 / 真失败」那一格**下面**那些根本没跑的格。
- *
- * 「下面」按平台给的那份列表的序号判定（那份列表就是执行顺序）—— 只有排在出问题
- * 那格之后的 `skipped` 才是「被它带下去的」；排在它之前的 `skipped` 是**平台自带**
- * 那一档（如 `DebugDetection`），与本次无关。
- *
- * @param {ReturnType<typeof classifyBuildOutcome>} outcome
- * @returns {StageRef[]}
- */
-export function downstreamSkipped(outcome) {
-  const blockers = [...outcome.failed, ...outcome.cancelled];
-  if (blockers.length === 0) return [];
-  const from = Math.min(...blockers.map((s) => s.index));
-  return outcome.skipped.filter((s) => s.index > from);
-}
-
-/**
- * 「某一格**正在跑**」的词汇表（ISSUE #2184）。
- *
- * 它与上面那份 `RUNNING_STATES` **不是同一维**，也不是抄来的第二份：那份作用在**构建级**
- * `data.status`（实测那一层在跑时回的是 `pending`），而平台给**逐格**的运行中状态用的词是
- * `start`（#2167 实测：整跑期间 `data.status` 恒 `pending`，格与格之间靠 `start` 标在飞）。
- * 判「这条流水线此刻有没有一格在动」只认这一份 —— 拿 `RUNNING_STATES` 去数格会把 `start`
- * 读成「没在跑」，而那正是 #2184 断错的那一形。
- */
-const STAGE_IN_FLIGHT_STATES = new Set(["start", "running", "processing"]);
-
-/**
- * 这一眼里**在飞的格数**与最久的那一格 —— 轮询用它把「一格都没起来」与「一格跑了很久」分开。
- *
- * 只数**本仓配置的那几格**（`classifyStages` 那条 id 形状口径），平台自带的
- * `Prepare` / `End` 不算 —— 它们在跑不代表本仓的判据在推进。
- *
- * @param {any} json `cnb build get-build-status -v` 的解析结果（null / 畸形都当「读到 0 格」）
- * @returns {{count: number, names: string[]}}
- */
-export function inFlightStages(json) {
-  const configured = classifyBuildOutcome(json).configured;
-  const flying = configured.filter((s) => STAGE_IN_FLIGHT_STATES.has(s.status));
-  return { count: flying.length, names: flying.map((s) => s.name || s.id) };
-}
 
 /**
  * 把那一格的日志正文归一成一段文本。
@@ -286,9 +126,7 @@ export function normalizeStageContent(content) {
     : typeof content === "string"
       ? content
       : "";
-  return raw
-    .replace(/\u001b\[[0-9;]*[A-Za-z]/g, "")
-    .replace(/\r\n?/g, "\n");
+  return raw.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").replace(/\r\n?/g, "\n");
 }
 
 /** 一行像不像「失败证据」。只做**认出**，不解释它为什么失败。 */
@@ -380,6 +218,66 @@ export function fetchStageDetail(run, slug, sn, pipelineId, stageId) {
 }
 
 /**
+ * 把每一格的**平台原话**填进 `get-build-status` 那份读数（ISSUE #2406）。
+ *
+ * 为什么必须有这一步：`get-build-status -v` 的 `stages[]` **没有 `error` 这一栏**
+ * （实测 `cnb-9qi-1k5qojle1` 的 `prepare` 只有 `status/duration/name/id`），
+ * 而「被抢锁」与「真失败」的唯一分界线就在那句话上 —— 同一格用 `get-build-stage -v`
+ * 取回来才带 `error`。所以「这一跑是被取消还是真红」这个问题的答案，**不可能**只靠
+ * 构建级那次调用拿到。
+ *
+ * 取哪几格：**非 success / skipped 的那几格**（绿的那几格原话没有意义，多问一次就是白花
+ * 一次请求），上限 `MAX_DETAIL_STAGES` 格。取不到的那格就留空串 —— **空不等于「没有异常」**，
+ * 分类会照 `status` 判，只是念不出原话（这一点写进 `formatOutcome` 的那一行里）。
+ *
+ * 返回**新的对象**（不改入参）：调用方可能还要拿原值去比对，就地改会让「读到的」与
+ * 「被改过的」分不开，而这一族判据的全部价值就在「只读平台原值」。
+ *
+ * @param {(cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult} run 执行者
+ * @param {string} slug 仓库路径
+ * @param {string} sn 构建号
+ * @param {any} json `get-build-status -v` 的原值
+ * @returns {any} 填过原话的那一份（形状不变，只多 `stages[].error`）
+ */
+export function enrichStageErrors(run, slug, sn, json) {
+  const data = json && typeof json === "object" ? json.data : null;
+  const table =
+    data && data.pipelinesStatus && typeof data.pipelinesStatus === "object"
+      ? data.pipelinesStatus
+      : null;
+  if (!table) return json;
+  let asked = 0;
+  /** @type {Record<string, any>} */
+  const pipelinesStatus = {};
+  for (const key of Object.keys(table)) {
+    const p = table[key];
+    if (!p || typeof p !== "object" || !Array.isArray(p.stages)) {
+      pipelinesStatus[key] = p;
+      continue;
+    }
+    const stages = p.stages.map((/** @type {any} */ st) => {
+      if (!st || typeof st !== "object") return st;
+      const status =
+        typeof st.status === "string" ? st.status.toLowerCase() : "";
+      if (status === "success" || status === "skipped") return st;
+      if (asked >= MAX_DETAIL_STAGES) return st;
+      asked += 1;
+      const detail = fetchStageDetail(
+        run,
+        slug,
+        sn,
+        String(p.id ?? key),
+        String(st.id ?? ""),
+      );
+      if (!detail || detail.error === "") return st;
+      return { ...st, error: detail.error };
+    });
+    pipelinesStatus[key] = { ...p, stages };
+  }
+  return { ...json, data: { ...data, pipelinesStatus } };
+}
+
+/**
  * 某一格在哪条流水线里（同一跑里格 id 在流水线内唯一）。
  *
  * @param {ReturnType<typeof classifyBuildOutcome>} outcome
@@ -414,32 +312,44 @@ export const MAX_DETAIL_STAGES = 3;
  * @param {string} [deps.prefix] 每行前缀
  * @returns {number} 真正取到日志正文的格数（取不到不算「没有失败行」）
  */
-export function describeFailedStages(run, { slug, sn, outcome, log = console.log, prefix = "[build-readout]" }) {
+export function describeFailedStages(
+  run,
+  { slug, sn, outcome, log = console.log, prefix = "[build-readout]" },
+) {
   let detailed = 0;
   const shown = outcome.failed.slice(0, MAX_DETAIL_STAGES);
   for (const s of shown) {
     const pipeline = pipelineForStage(outcome, s.id);
     if (!pipeline) {
-      log(`${prefix}   失败格：${s.name || s.id}（${s.id}）不在任何一条流水线的读数里 ⇒ 取不到日志。`);
+      log(
+        `${prefix}   失败格：${s.name || s.id}（${s.id}）不在任何一条流水线的读数里 ⇒ 取不到日志。`,
+      );
       continue;
     }
     const detail = fetchStageDetail(run, slug, sn, pipeline.id, s.id);
     const status = (detail && detail.status) || s.status;
     const duration =
       detail && detail.duration !== null ? ` · ${detail.duration}s` : "";
-    log(`${prefix}   ── 失败格：${s.name || s.id}（${s.id} · ${pipeline.name || pipeline.id} · status=${status}${duration}）`);
+    log(
+      `${prefix}   ── 失败格：${s.name || s.id}（${s.id} · ${pipeline.name || pipeline.id} · status=${status}${duration}）`,
+    );
     if (!detail) {
-      log(`${prefix}      取不到这一格的日志正文 ⇒ 没有结论（不是「日志里没有失败行」）。`);
+      log(
+        `${prefix}      取不到这一格的日志正文 ⇒ 没有结论（不是「日志里没有失败行」）。`,
+      );
       continue;
     }
     detailed += 1;
     if (detail.error) log(`${prefix}      平台给的原因：${detail.error}`);
     const excerpt = stageLogExcerpt(detail.text);
     if (excerpt.failure.length === 0) {
-      log(`${prefix}      没认出失败行（正文共 ${excerpt.totalLines} 行）—— 看下面的尾部与完整日志。`);
+      log(
+        `${prefix}      没认出失败行（正文共 ${excerpt.totalLines} 行）—— 看下面的尾部与完整日志。`,
+      );
     } else {
       log(`${prefix}      失败行（行号即完整日志的行号）：`);
-      for (const l of excerpt.failure) log(`${prefix}      L${l.line} ${l.text}`);
+      for (const l of excerpt.failure)
+        log(`${prefix}      L${l.line} ${l.text}`);
     }
     log(`${prefix}      末 ${excerpt.tail.length} 行：`);
     for (const l of excerpt.tail) log(`${prefix}      L${l.line} ${l.text}`);
@@ -525,13 +435,32 @@ export function formatOutcome(outcome, extra = {}) {
       `${tag}   被取消的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`,
     );
   }
+  /* 被终止的**原话**必须先于「下一动作」被念出来：这一档的全部价值就是让人不用去翻
+   * 完整日志就能回答「是取消还是真红，被谁顶掉的」（ISSUE #2406）。 */
+  for (const r of outcome.reasons) {
+    const where =
+      r.kind === "pipeline-cancel"
+        ? `流水线「${r.stage}」被终止`
+        : r.kind === "build-cancel"
+          ? "构建级状态就是 cancel（逐格没给读数）"
+          : `「${r.stage}」被终止`;
+    const who = r.sn
+      ? ` · 抢走锁的那一跑：${r.sn}`
+      : r.holder
+        ? ` · 抢走锁的流水线：${r.holder}`
+        : "";
+    lines.push(`${tag}   ${where}${who}`);
+    if (r.reason) lines.push(`${tag}   平台原话：${r.reason}`);
+  }
   const skipped = downstreamSkipped(outcome);
   for (const s of skipped) {
     lines.push(
       `${tag}   下面这些格根本没跑：${s.name || s.id}（${s.id}，status=skipped）`,
     );
   }
-  if (extra.reason) {
+  /* `extra.reason` 是 `fetchStageReason()` 单独取回来的那份原话。上面 `reasons` 已经
+   * 逐条念过它了 ⇒ 这里只在**上面一条都没念到**时兜底，避免同一句原话念两遍。 */
+  if (extra.reason && outcome.reasons.every((r) => r.reason !== extra.reason)) {
     lines.push(`${tag}   平台给的原因：${extra.reason}`);
   }
   if (outcome.state === "failed") {
@@ -651,6 +580,10 @@ export function fetchBuildList(run, slug, event, limit, opts = {}) {
  * @param {string} pipelineId 流水线 id
  * @param {string} stageId 格 id
  * @returns {string | null} 原因原文；取不到时 null
+ *
+ * ⚠️ 走 `enrichStageErrors()` 补过原话之后，`outcome.reasons` 里已经有这句话了
+ * （ISSUE #2406）——调用方应当先用 `reasons`，这里只是「那一格没被分类覆盖到」时的
+ * 补充入口（它多问一次平台，别当成常规路径）。
  */
 export function fetchStageReason(run, slug, sn, pipelineId, stageId) {
   const detail = fetchStageDetail(run, slug, sn, pipelineId, stageId);
@@ -803,20 +736,21 @@ export function main({
   }
   let worst = CODE.GREEN;
   for (const sn of sns) {
-    const statusJson = fetchBuildStatus(run, slug, sn);
-    if (!statusJson) {
+    const rawStatus = fetchBuildStatus(run, slug, sn);
+    if (!rawStatus) {
       log(`[build-readout] build ${sn} ⇒ 取不到状态 ⇒ 没有结论。`);
       worst = CODE.NOT_RUN;
       continue;
     }
+    /* 分类之前先补原话：`get-build-status` 的 `stages[]` 没有 `error` 这一栏，
+     * 而「被顶掉」与「真失败」的分界就在那句话上（ISSUE #2406）。 */
+    const statusJson = enrichStageErrors(run, slug, sn, rawStatus);
     const outcome = classifyBuildOutcome(statusJson);
     /** @type {string | null} */
-    let reason = null;
-    if (outcome.state === "cancelled") {
+    let reason = outcome.reasons.find((r) => r.reason)?.reason ?? null;
+    if (!reason && outcome.state === "cancelled") {
       const first = outcome.cancelled[0];
-      const pipeline = outcome.pipelines.find((p) =>
-        p.cancelled.some((s) => s.id === (first ? first.id : "")),
-      );
+      const pipeline = first ? pipelineForStage(outcome, first.id) : null;
       if (first && pipeline) {
         reason = fetchStageReason(run, slug, sn, pipeline.id, first.id);
       }

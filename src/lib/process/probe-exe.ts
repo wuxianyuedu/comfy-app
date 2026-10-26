@@ -325,7 +325,10 @@ export function describeProbeFailure(failure: ProbeFailure): string {
   if (failure.kind === "timeout") {
     return `没在预算内给出读数（${failure.timeoutMs}ms，属「没量到」而不是「起不来」）`;
   }
-  /* `signal !== null` 那一支说明它是**被杀的**（`status` 此时恒为 `null`）；否则给退出码。
+  /* `signal !== null` 那一支说明它是**被杀的**（POSIX 上如此，此时 `status` 为 `null`）；
+   * win32 不产生信号退出码 —— 被杀掉也只剩一个数字 `status`，与「自己退非零」在这一平台上
+   * 无从分辨。所以这里**不许**替它猜一个信号出来（ISSUE #2403：把 POSIX 的形状当通用前提，
+   * 后果是 Windows 节点上每日一跑恒红）。否则给退出码。
    * 两种都没有的形态（libuv 既不给码也不给信号）写「没有读数」—— 不许编一个 `0`
    * 出来充数（那会被读成「成功了」）。 */
   if (failure.signal !== null) return `起来了但被信号 ${failure.signal} 结束`;

@@ -144,9 +144,11 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
     expect(got.code, got.headline).toBe(CODE.PRESENT);
     expect(got.verdict).toBe("present");
     expect(got.headline).toContain("出勤 ✓");
-    /* 「几格有结论」只数本仓那几格（`stage-N` 那一族）：平台自带的 Prepare / BeforeEnd /
-     * End / DebugDetection 不计入，否则读数会把「十一格」念成永远对不上的数。 */
-    expect(got.evidence.join("\n")).toContain("10 格有结论");
+    /* 「几格有结论」只数工作格：`stage-N` 那一族 + `prepare`（11 格）。
+     * `prepare` 从 ISSUE #2406 起算在里面 —— 它不是「平台自带的噪声」，而是
+     * 「一格都没跑到」时唯一有读数的格；`BeforeEnd` / `End` / `DebugDetection`
+     * 仍然不计入，否则读数会把「十一格」念成永远对不上的数。 */
+    expect(got.evidence.join("\n")).toContain("11 格有结论");
     /* `DebugDetection` 是平台自带那一档（永远 skipped），不许被算成「有格没跑」。 */
     expect(got.evidence.join("\n")).not.toContain("DebugDetection");
   });
@@ -435,7 +437,10 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
       }
       return {
         status: 0,
-        stdout: JSON.stringify({ status: 200, data: { total: rows.length, data: rows } }),
+        stdout: JSON.stringify({
+          status: 200,
+          data: { total: rows.length, data: rows },
+        }),
         stderr: "",
         error: null,
       };
@@ -479,7 +484,8 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
 
   it("每页都只盖 10 小时 ⇒ 撞页数上界，covered=false（不是「窗口内没有」）", () => {
     const pages: Record<number, PageRow[] | null> = {};
-    for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1) pages[p] = pageRows(1, 10);
+    for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1)
+      pages[p] = pageRows(1, 10);
     const { run } = pagerByPage(pages);
     const win = fetchBuildsCoveringWindow({
       run,

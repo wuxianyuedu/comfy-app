@@ -2445,6 +2445,11 @@ POSIX **不走这条退路**：那边裸名字本来就解析得了（内核认�
 互不影响。**这不是「跳过门禁」**—— 被终止的那条对应的修订号已经不在分支上了，
 它的读数本来就没有意义。
 
+> ⚠️ 「它的读数本来就没有意义」这句**对 PR 成立、对 `push` 不成立**（ISSUE #2396）：
+> `master 合并复核` 判的是落到 master 的那**一笔**，不是「分支现在的样子」——
+> 被终止即那笔没有结论。所以那一把改成排队（`cancel-in-progress: false`），
+> 理由与现场读数见本章 §13.5.3.10 的「`push` 那一把排队而不终止」。
+
 > **与「降并发不抬预算」那条（§13.5.3.8）是同一句话的两个面**：那边降的是**单条流水线
 > 内部的宽度**（`--maxWorkers=4`），这边收的是**同时在跑的流水线条数**。
 > 两条都不动用例、预算、覆盖率阈值。
@@ -2504,6 +2509,46 @@ lock:
 `push` / `daily`（三条每日触发口，那份互斥是刻意保留的）/ `oneshot-build` / `oneshot-e2e` /
 `oneshot-unit`。PR 那一把（`pr-$CNB_PULL_REQUEST_IID`）一字未动。
 
+###### `push` 那一把**排队而不终止**：它判的是逐提交的读数（ISSUE #2396）
+
+分锁之后仍然有一处「掐掉旧的一跑」，而且它掐的是一个**逐提交**的判据。
+`master 合并复核`（`check-branch-guard.cjs --merge-commit`）回答的是「落到 master 的
+这笔是不是 PR 合并形态」，一个提交一个结论；被终止的那一跑 `status: cancel`、
+那一格 `skipped` —— **前一笔提交从此没有读数**，而 `cancel` 在界面上看起来就是「挂了」。
+
+现场是同一晚的两对，间隔都在 12 秒以内：
+
+| 构建 | createTime | 时长 | 终态 |
+| --- | --- | --- | --- |
+| `cnb-9qi-1k5qojle1` | 16:08:50Z | 13910ms | cancel |
+| `cnb-jpf-1k5qok15v` | 16:09:02Z | 23584ms | success |
+| `cnb-qta-1k5ptts6m` | 16:22:33Z | 12195ms | cancel |
+| `cnb-bt0-1k5ptu59c` | 16:22:42Z | 30470ms | success |
+
+两条 prepare 里的原文互相印证（`cnb-9qi` 写 `The current pipeline is terminated`，
+`cnb-jpf` 写 `the ongoing pipeline is terminated: cnb-9qi-1k5qojle1`）——
+`cancel-in-progress: true` 的语义就是「同 key 上后到的终止先到的」，而 `key: push`
+是仓库级字面量，没有分支 / sha 维度。
+
+推论的依据只有一条：**这条流水线不吃「互斥省时间」那一套收益**。整条 20~35 秒，
+大头是全量 clone 的 Prepare；它没有「几格挤一台机」的问题（只有一格），
+所以终止换来的不是省时间，是**销毁读数**。于是它成为唯一一把
+`cancel-in-progress: false` 的类锁（同 key 上排队，逐笔给结论）。
+
+⚠️ 这是**这一档**的取舍，不是「`cancel-in-progress` 不好」：`daily` 与 `oneshot-*`
+那几档照旧终止（同一台机上不要同时压两遍那几格重档，见 §13.5.3.8 / §13.5.21）。
+若哪天 `push` 扩成多格、成本上去了，先改判据与本节，而不是把 `true` 悄悄写回来。
+
+⚠️ 与用户报告的现象要对上：**不同分支的两笔 push 不会被这条互掐**（key 是字面量
+`push`，但 PR 走的是 `pr-<iid>` 那一把，合并进 master 之后的 push 也各自从头到尾
+只与自己的前一跑竞争）。真正的灭点是「同一个 master 上连着来两笔」——
+squash 不同分支 = 连续两次落 master = 两条 `push` 流水线，第二笔终止第一笔。
+
+判据在同一条用例里：**R2** 从「必须 `cancel-in-progress: true`」改成「必须**显式写了**
+这一行」（`null` = 漏写，两件事不同），**R6** 判 `key: push` 那把必须是 `false`。
+反向复算两种：把 `push` 那把写回 `true` ⇒ 点名「逐提交读数被销毁」；
+把 `daily` 那把的 `cancel-in-progress` 删掉 ⇒ 点名「没有显式写」。
+
 **它不推翻 §13.5.21 那条「不动 `lock.key`、先有车道再分锁」的决定** —— 那条拒的是
 **按车道分锁**（给一台机造出并行容量），这里做的是相反的一件事：把「一件工作被另一件
 不相干的工作掐掉」修回去。同一台机上几条重档会叠加这件事**本来就存在**（PR 之间各用
@@ -2518,14 +2563,15 @@ lock:
 算平台会得到的 key —— 只看原文判不出「两条 PR 会不会撞」，必须代。后两条把每条流水线
 的**有效锁**与它引用的 stage 清单收出来，判五件事：
 **R1** 非 PR 每条都有显式 `lock:`（靠继承 = 那次退化的入口）；**R2** 引用的类锁在场、
-带 `cancel-in-progress: true`、key 是字面量；**R3** 同一把锁只许给同一份工作清单
+**显式写了** `cancel-in-progress`、key 是字面量；**R3** 同一把锁只许给同一份工作清单
 （一把锁挡的是「同一件事被重复排队」，不是「所有非 PR 的事」）；
 **R4** 任何一条非 PR 的 key 都不许等于退化形状 `pr-` 或 PR 那把；
-**R5** PR 那一条的 key 仍随 PR 编号变（#1981 那一半不许回退）。
-反向复算实测过七种红形态：删掉 `key` 那一行 / 换回 `$CNB_BRANCH-质量门禁` /
+**R5** PR 那一条的 key 仍随 PR 编号变（#1981 那一半不许回退）；
+**R6** `key: push` 那把必须是 `cancel-in-progress: false`（#2396，理由见上一节）。
+反向复算实测过八种红形态：删掉 `key` 那一行 / 换回 `$CNB_BRANCH-质量门禁` /
 **去掉某条的 `lock:` 覆盖** / 两类并成一把 / 类锁漏掉 `cancel-in-progress` /
-类锁里放变量 / 类锁写成 `pr-` —— 以及「解析器收不出流水线时必须出声」（恒空转的判据
-比没有判据更坏，见 §13.5.12）。
+`push` 那把写回 `cancel-in-progress: true` / 类锁里放变量 / 类锁写成 `pr-` ——
+以及「解析器收不出流水线时必须出声」（恒空转的判据比没有判据更坏，见 §13.5.12）。
 
 ###### 同一族的一个面：**探针参数**不合格，「有 Python」会被判成「没有」
 
@@ -4079,6 +4125,16 @@ ci.skip`）—— 官方口径，**在 `push` / `commit.add` / `branch.create` �
   随检出状态漂的东西，而这正是 §11.23 那一族要拦的静默降级。
   · 回写的那一笔是**机器写的**，所以 `who` 走 `CNB_BUILD_USER_NICKNAME` 那一组
   （`gitUserCandidates()`，见 `freshness-ledger.mjs`），不是检出器的占位名。
+  · **回写失败要做两件事，缺一件都不算收干净**（ISSUE #2344，2026-10-26）：
+  ① 原因里带 git 的**原文** —— 那三个出口过去只念一个词（`add-failed` / `commit-failed` /
+  `push-failed`），「commit 为什么失败」在整跑日志里**不存在**，下一次撞上还得从头查
+  （硬规则 27 那句「效应不许只转述自己的 stdout」在同一段代码上的第二次发生）；
+  ② `add` 已成而 `commit` 失败时，**把那几份账本从暂存区撤回** —— 不撤的话，同一跑
+  后面每一条「按暂存区判」的判据（`--staged` 那一族）读的都是这一格留下的面，
+  **脏的是整跑的输入，账面只红一条用例**。撤回只属于失败路径：`push` 失败时提交已落地、
+  索引是干净的，再撤就是把成功的改动重新 stage 成待提交（第二次错）。撤回本身失败也要念出来。
+  判据：`tests/freshness-ledger-backend.test.ts` 的那一组（注入 `run`，一次 git 都不真跑 ——
+  这四种现场在真仓库里造出来就得污染这台机器，而每日那一跑正是它的现场）。
 
 三档「每天首次自证」现在**同形**、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：都按「**当天动过这一档的输入面就必须今天证一次，没动过以 7 天为宽限**」判。
@@ -4880,6 +4936,22 @@ CI 往返，且红话指着那个人根本没碰过的文件 —— 与 §13.6.2
 - 旗标在场而索引**非空** ⇒ 旗标**当场作废**并打印，一切照正常判决面判 —— 它不是
   `--no-verify` 的第二形态（那条是硬规则 7 禁的），也不给「改了源没带镜像」开任何口子；
 - 旗标不在场 ⇒ 与这个口子存在之前**逐字同形**（默认不放松）。
+
+**同一句里还有半句也是错的，而且它能骗过用例自己**（ISSUE #2344，2026-10-26）：那两条 reason
+过去写的是「本地这一跳的暂存集永远非空；**空的那一档只出现在平台上，而平台上没有暂存区**」。
+前半句由 #2354 订正过，后半句一直没人碰 —— 而每日那一跑的实测是：**平台上有索引，而且它可以非空**
+（上一格 `新鲜度账` 回写失败，把两份**入库的**账本留在里面）。被这句话骗到的地方正是钉它的用例：
+`tests/known-failed-stale.test.ts` 那两格当时写 `resolveFace([])`，于是它们判的其实是
+「**此刻这台机器的索引是不是空的**」——一个与代码无关的前提，被别人的事故决定 ⇒
+`expected true to be false` 那种假红，而同一份树本地隔离复跑全绿。
+
+⇒ 两条口径同时落地：① 这一族的用例**显式交清单**（`--staged` 后面不带名字 = 空清单）或注入
+`readStaged`，**不读当场索引**；判决面的输入必须可由调用方交进来，这与
+`runGate({ staged, selfTest })` 是同一个取舍 —— 不然「造得出那个现场」就只能在真仓库里污染一台机器。
+② 「平台那一格拿不到本次改动面」这句**仍然成立**（那正是 `--base` 存在的理由），
+但它从来推不出「平台上没有暂存区」——复述这句话的四处（`known-failed-selftest-gate.mjs` 与
+`check-doc-mirror-pairing.cjs` 的 reason 原文、`ci-heavy-gates.mjs` 与
+`tests/ci-heavy-gates.test.ts` 的叙述）已按实测一并订正。
 
 同一份口径的取证在 `tests/ship.test.ts`（那一调带没带上旗标 —— 不带就是装饰）、
 `tests/check-doc-mirror-pairing.test.ts` 与 `tests/known-failed-stale.test.ts`（三个形状各一条）。
@@ -7401,8 +7473,8 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 | 哪一跑算「上一跑」       | `fetchBuildsCoveringWindow()` / `isDailyDispatch()` / `fetchDailyDetails()` 同一份取数，再**排除没有终态的那一跑** —— 此刻正在跑的这条恰好是列表里最新那条，拿它立案等于给一条还没出结果的链写红字。**取数按时间窗翻页，不按条数**（下面第 4 条）                                                          |
 | 这一跑红没红             | `classifyBuildOutcome()` 的绿 / 真失败 / 被取消 / 没结论四档原样接过来。**被取消与没结论一律不写**：把「没拿到测量」写成红是 #1747 明令禁止的那一型                                                                                                 |
 | 红在哪一格、失败行是什么 | `downstreamSkipped()` + `describeFailedStages()`（与 `pnpm ship --diagnose` 同一条链，不是第二份取数）                                                                                                                                              |
-| 这张单是不是已经有了     | 标题里那串 `ci(daily): 每日档红在「<格名>」`（`titleKey()`）。同一格再次红 ⇒ 在旧单下追加一条读数、**不新建**（硬规则 29「一条诉求一张单」）。人工按 §13.5.4 写的那张单只要带同一串前缀，就自动进这一族、被同一套去重接住（#2273 就是这么并进来的） |
-| 怎么写进去               | `runNewIssue()`：建 → 补 `提单人:` → **独立回读**（回执不算结论）；执行身份取 `gitUser()`（#1979：平台侧身份取 `CNB_BUILD_USER_NICKNAME` 原值，不冒充成人）                                                                                         |
+| 这张单是不是已经有了     | 标题里那段 `红在「<格名>」`（`titleKey()`）。标题另外带构建号 / 事件 / 时刻（#2399：同一格每天红时，只差格名的标题在列表里分不出哪张是哪天的），但**那三件不进键** —— 进键就等于「同一格每天都是新的一张」。同一格再次红 ⇒ 在旧单下追加一条读数、**不新建**（硬规则 29「一条诉求一张单」）。人工按 §13.5.4 写的那张单只要带同一串，就自动进这一族、被同一套去重接住（#2273 就是这么并进来的） |
+| 怎么写进去               | `runNewIssue()`：建 → 补 `提单人:` → **独立回读**（回执不算结论）；执行身份 = `machineHandle("ci-daily")`（**不取** `CNB_BUILD_USER_NICKNAME` —— 那是人的昵称，#2355 的现场是机器建的单被读成「月读提的」）                                                                                         |
 
 四条口径要说在明处：
 
@@ -7781,6 +7853,73 @@ PR 一轮的墙钟按上面的数约 ~20 分钟，且 `单元测试` 那格的 4
 - **不念平台自带那几格**（`Prepare` / `End` / `DebugDetection` / `BeforeEnd`）：它们不是本仓
   配置的格，念它们只会把读数变成噪声；而若平台改了 id 形状（一个 `stage-N` 都匹配不上），
   判据退回「全收」，宁可多念几行也不把证据一起丢掉。
+
+##### 13.5.27.1 那一档**读漏了一半**：一格都没跑到的那一形被判成了真失败（ISSUE #2406）
+
+上面那张表落地后 `cancel` 与 `failed` 在**有格 `cancel`** 的那一形上分开了，
+而 2026-10-26 的现场证明还有另一半完全没被覆盖：
+
+```
+Error reading `git config`: ... exit status 0xc0000142
+Pipeline prepare error: Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 got lock:
+  moon-read/comfy-app-t3-push. The current pipeline is terminated
+```
+
+`cnb-9qi-1k5qojle1` / `cnb-qta-1k5ptts6m` 两条 `push` 构建连着被同一把锁顶掉，
+`get-build-status -v` 读回来是这样：构建级 `data.status = error`、流水线 `status = cancel`、
+**`Prepare` 格 `status = error`**（`12855ms` / `10325ms`）、`stage-0 合并形态复核` 是
+`skipped`（`0ms`，没跑）、`End` 反而 `success`。
+
+三件叠在一起，判据就**判错了方向**：
+
+1. `classifyStages()` 只收 `stage-N` —— `Prepare` 被当成「平台自带的噪声」丢掉，
+   而这一跑里它是**唯一**有读数的格；
+2. `stage-0` 是 `skipped` ⇒ `cancelled` 集合也是空的；
+3. 流水线级 `cancel` 的兜底被写在「有格被取消」之后，而它那一条恰好
+   `cancelled.length === 0` 也进不去 ⇒ 一路落到构建级 `error` ⇒ **`failed`**。
+
+于是「被取消」被念成「去查产物」，那条路上没有产物可查。同一个漏读还顺着
+`ci-pr-failure-issue.mjs` / `ci-daily-failure-issue.mjs` 变成**写一张红单**
+（那两处的 `cancelled ⇒ 不立案` 判据一行没错，缺的是判对）。
+
+**根因有两处，第二处才是关键**：
+
+- **格口径**：`prepare` 必须算「工作格」。它不是噪声 —— 全量 clone 在它里面跑，
+  而「一格都没跑到」时它是唯一的证人。`end` / `beforeEnd` / `debugDetection` 仍不认。
+- **原话不在那一层**：`get-build-status -v` 的 `stages[]` **没有 `error` 这一栏**
+  （实测那一格只有 `status/duration/name/id`），而「被顶掉」与「真失败」的分界就在那句话上。
+  同一格用 `get-build-stage -v` 取回来才带 `error`：
+
+  | 构建 | 格 | `status` | `get-build-stage -v` 的 `data.error` |
+  | --- | --- | --- | --- |
+  | `cnb-9qi-1k5qojle1` | `prepare` | error | `Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 got lock: …-push. The current pipeline is terminated` |
+  | `cnb-4hp-1k5pkjjhe` | `stage-6 提交声明核对` | cancel | `The pipeline has been manually terminated or terminated by another pipeline.` |
+  | `cnb-ico-1k5r2letb` | `stage-9 受影响用例` | error | `任务执行失败，返回码：1, signal: -1` |
+
+  前两行是**被终止**（第三行不是）—— 而前两行里只有第一行需要靠原话才分得出来
+  （`cancel` 那一行的状态自己就说了；`prepare` 那种格平台只记 `error`）。
+
+**落成四件**（判定仍只有一份实现）：
+
+- `classifyStages()` 的工作格口径 = `stage-N` ∪ `prepare`，且**分池按原话判**
+  （格状态是 `error` 但原话是被终止的，进 `cancelled` 而不是 `failed`）；
+- `cancelledCause()` 是「这一格属于哪一边」的唯一实现，返回
+  `{kind, reason, holder, sn}` —— `holder` / `sn` 是抢锁那一跑（`pipelineSn()` 把
+  `cnb-jpf-1k5qok15v-001` 收成 `cnb-jpf-1k5qok15v`），认不出就 `null`，**不猜**；
+- `enrichStageErrors()`：分类之前只对**非绿非 skipped** 的那几格补取原话（上限三格），
+  返回新对象、**不改入参** —— 「只读平台原值」那条纪律在执行面上也成立；
+- `outcome.reasons` 把「哪一格 / 哪条流水线 / 构建级」被终止逐条念出来，
+  `formatOutcome()` 先念原因再念「下一动作」。
+
+**边界照旧**：退码 `被取消 = 2`（没有结论），不是 `1`；平台状态词本身
+（`data.status=error` 而流水线 `cancel`）改不了，那是平台语义；「谁抢到锁谁留下」
+这件事也不在本节的量程里（`push` 那一把已改成排队，见 §13.5.3.10，但先到的那一跑
+仍然会被终止 —— 那是平台对 `lock` 的实现，不是 `.cnb.yml` 能改的）。
+
+**判据**：`tests/ci-build-readout.test.ts` 的 `cancelledCause` / `enrichStageErrors` /
+「现场那一形」三组，样本照真机两份读数抄（`get-build-status` 那份**没有** `error`、
+`get-build-stage` 那份**有**），反向样本是「真失败那条原话 ⇒ 仍然 `failed`」与
+「没补原话时不许被念成绿」。
 
 #### 13.5.28 登记面 ⇄ 执行面：两次搬动方向相反，在中间对穿（2026-10-22）
 

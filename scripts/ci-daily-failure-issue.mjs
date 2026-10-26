@@ -31,13 +31,15 @@
  *
  * ## 去重键是**标题里的格名**，不是标签
  *
- * 只用一个键 `ci(daily): 每日档红在「<格名>」`（`titleKey()`）：动态标签词表要先在平台侧存在
+ * 只用一个键 `红在「<格名>」`（`titleKey()`）：动态标签词表要先在平台侧存在
  * 才落得下来，而「按标签筛单」这件事需要一个读者 —— 本档自己用标题就能查，加一枚没人筛的标签
  * 就是 §11.23 点名的「写了没有读者」。同一格再次红 ⇒ 在旧单下评论一条新读数，**不新建**
  * （硬规则 29 那条「一条诉求一张单」；号一关，欠着的东西连可见性都没了）。
  *
- * 键取的是**前缀 + 格名**而不是整条标题：人工写的那张单只要带同一串前缀，就自动进这一族、
+ * 键取的是**格名**而不是整条标题：人工写的那张单只要带同一串，就自动进这一族、
  * 被同一套去重接住（现场：#2273 是人按 §13.5.4 的读数手写的，标题对齐后机器不再重复建单）。
+ * **构建号 / 事件 / 时刻不进键**（#2399）：它们让标题能自证「是哪一跑」，进键就等于
+ * 「同一格每天都是新的一张」—— 那正是去重那道坎要挡的形状。
  *
  * ## 三态退码，但平台那一跳**不拦路**（取舍写在明处）
  *
@@ -72,6 +74,7 @@ import {
   classifyBuildOutcome,
   describeFailedStages,
   downstreamSkipped,
+  enrichStageErrors,
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
 import { machineHandle } from "./dev-handle.mjs";
@@ -90,26 +93,41 @@ const ROOT = path.resolve(HERE, "..");
 /** 三态与仓内其余档同口径（`0` 有结论 / `1` 该写的没写成 / `2` 取不到读数）。 */
 export const CODE = { DONE: 0, WRITE_FAILED: 1, NO_FACT: 2 };
 
-/** 去重键的前缀：格名进标题，同一格 ⇄ 同一张 open 单。 */
-export const TITLE_PREFIX = "ci(daily): 每日档红在「";
+/**
+ * 标题前缀（`ci(daily): `）—— 它**不进键**，只有下面 `titleKey()` 那一段进键。
+ *
+ * 前缀从「`ci(daily): 每日档红在「`」收成「`ci(daily): `」是因为标题里要塞进
+ * 构建号 / 事件 / 时刻（#2399）：「每日档红在」那五个字之后紧跟的不再是格名，
+ * 留着它就成了「前缀 + 半句话」的拼接。人工按旧形状写的单照样认（键只认格名那一段）。
+ */
+export const TITLE_PREFIX = "ci(daily): ";
 
 /** 优先级是判断，这一格只带一个**写死并说明**的值：每日档红挡住的是全链唯一的执行者。 */
 export const AUTO_PRIORITY = "P1";
 
 /**
  * @param {string} stageName 红的那一格的格名
- * @returns {string} 去重键 —— 标题里必须以它开头（人工写的单只要带它，就自动进这一族）
+ * @returns {string} 去重键 —— 标题里必须带它（人工写的单只要带它，就自动进这一族）
  */
 export function titleKey(stageName) {
-  return `${TITLE_PREFIX}${stageName}」`;
+  return `红在「${stageName}」`;
 }
 
 /**
- * @param {string} stageName 红的那一格的格名
- * @returns {string} 标题（去重靠上面的 `titleKey`，后缀只是给读者看的说明）
+ * 标题：**去哪儿看**（构建号）+ **哪一跑**（事件 + 时刻）+ **红在哪一步**（格名）。
+ *
+ * 为什么这三件必须进标题（#2399）：同一格红了五六次，列表里五张标题逐字相同 ——
+ * 想回答「这张是哪一跑的」只能点进去看正文第一行。三件**只进标题，不进键**：
+ * 进键就等于「同一格每天都是新的一张」，那正是 `titleKey()` 那道去重坎要挡的形状。
+ *
+ * @param {{sn:string, event:string, at:string, stage:string}} input 三件原值与格名
+ * @returns {string} 标题
  */
-export function issueTitle(stageName) {
-  return `${titleKey(stageName)}—— 自动立案（只含读数，不含因果）`;
+export function issueTitle({ sn, event, at, stage }) {
+  return (
+    `${TITLE_PREFIX}构建 ${sn} · 事件 ${event || "(无事件)"} · 时刻 ${at || "(无时刻)"}` +
+    ` · ${titleKey(stage)}`
+  );
 }
 
 /**
@@ -230,7 +248,15 @@ export function decideAction({ state, failedNames, existing }) {
  *   readout:string[], handle:string}} input
  * @returns {string}
  */
-export function composeBody({ slug, build, sn, stage, skipped, readout, handle }) {
+export function composeBody({
+  slug,
+  build,
+  sn,
+  stage,
+  skipped,
+  readout,
+  handle,
+}) {
   return [
     commentHeader(handle),
     "",
@@ -284,7 +310,8 @@ export function composeBody({ slug, build, sn, stage, skipped, readout, handle }
 export function appendReading(io, slug, number, body, sn) {
   return runAppendIssueComment({
     run: io.run,
-    log: (line) => io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+    log: (line) =>
+      io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
     slug,
     number,
     body,
@@ -323,7 +350,9 @@ export function main(io = {}) {
 
   const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
   if (!slug) {
-    log("[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
+    log(
+      "[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。",
+    );
     return finish(CODE.NO_FACT, "推不出仓库 slug");
   }
   /* 机器自起的账用**自己的**名字，不取平台账号昵称（ISSUE #2355）：`gitUser()` 的第一顺位是
@@ -340,7 +369,9 @@ export function main(io = {}) {
   const offline = Boolean(from);
   if (offline) {
     if (!from || !fs.existsSync(from)) {
-      log(`[daily-failure-issue] --from 那个路径不存在：${from ?? "(空)"} ⇒ 不构成结论（不是「没有红」）`);
+      log(
+        `[daily-failure-issue] --from 那个路径不存在：${from ?? "(空)"} ⇒ 不构成结论（不是「没有红」）`,
+      );
       return finish(CODE.NO_FACT, "--from 读不到");
     }
     const parsed = JSON.parse(fs.readFileSync(from, "utf8"));
@@ -395,10 +426,29 @@ export function main(io = {}) {
   /* 判别靠**字段在不在**，不靠 cast 成 any：cast 会把联合的收窄整条弄丢，
    * 之后每一处 `.sn` / `.outcome` 都变成没人守的自由点。 */
   if ("none" in picked) {
-    log(`[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`);
+    log(
+      `[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`,
+    );
     return finish(CODE.NO_FACT, picked.none);
   }
-  const { build, sn, outcome } = picked;
+  const { build, sn } = picked;
+  /* 「被取消」与「真失败」的分界那句原话只在 `get-build-stage -v` 的 `data.error` 里，
+   * 而 `get-build-status` 的 `stages[]` 没有这一栏 —— 所以「这一跑是被顶掉还是真红」
+   * 这件事必须**先补原话再判**（ISSUE #2406）。离线档不联网（那是这一档的规矩），
+   * 分类退回只看状态：念得出「被取消」但念不出「谁抢的锁」。
+   *
+   * `pickPreviousDaily()` 只回答「挑哪一跑」（它用的是**状态**那一层，够用），
+   * 判「这一跑该不该立案」用的是下面这一份带原话的分类。 */
+  const outcome = offline
+    ? picked.outcome
+    : classifyBuildOutcome(
+        enrichStageErrors(
+          run,
+          slug,
+          sn,
+          details.find((d) => String(d.sn) === sn)?.json ?? null,
+        ),
+      );
   const failedNames = outcome.failed.map((f) => f.name || f.id);
   const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
   log(
@@ -421,7 +471,11 @@ export function main(io = {}) {
   }
 
   const existing = offline ? [] : openDailyIssues(run, slug);
-  const decision = decideAction({ state: outcome.state, failedNames, existing });
+  const decision = decideAction({
+    state: outcome.state,
+    failedNames,
+    existing,
+  });
   if (decision.action === "none" || decision.action === "no-fact") {
     const why = decision.reason ?? "(没给出原因)";
     log(
@@ -442,12 +496,18 @@ export function main(io = {}) {
       readout,
       handle,
     });
+    const title = issueTitle({
+      sn,
+      event: String(build.event ?? ""),
+      at: String(build.createTime ?? ""),
+      stage: s.stage,
+    });
     if (willWrite) {
       log(
         `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」` +
           (s.number
             ? `→ 在 #${s.number} 下追加一条读数（不新建）`
-            : `→ 新建一张：${issueTitle(s.stage)}`) +
+            : `→ 新建一张：${title}`) +
           ` · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
       );
       continue;
@@ -458,20 +518,23 @@ export function main(io = {}) {
         ok
           ? `[daily-failure-issue] ✓ 同一格又红了一次 ⇒ 已在 #${s.number} 追加一条读数并回读到（不新建）`
           : `[daily-failure-issue] ✗ #${s.number} 的评论没写成或回读不到 ⇒ 手工出口：` +
-            `cnb issues post-issue-comment --repo ${slug} --number ${s.number} --body-file <正文文件> -v`,
+              `cnb issues post-issue-comment --repo ${slug} --number ${s.number} --body-file <正文文件> -v`,
       );
       if (!ok) wrote = false;
       continue;
     }
     const file = writeScratch(ROOT, "daily-failure-issue", body);
     if (!file) {
-      log("[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。");
+      log(
+        "[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。",
+      );
       wrote = false;
       continue;
     }
     const code = runNewIssue({
       run,
-      log: (line) => log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+      log: (line) =>
+        log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
       slug,
       handle,
       root: ROOT,
@@ -479,18 +542,22 @@ export function main(io = {}) {
        * 它走的是「取 git 目录、取不到就不往工作区猜落点」那套口径，不另写第二份。 */
       mkTmp: (name, text) => writeScratch(ROOT, name, text),
       opt: {
-        newIssue: issueTitle(s.stage),
+        newIssue: title,
         issueBodyFile: path.relative(ROOT, file),
         priority: AUTO_PRIORITY,
       },
       dryRun: false,
     });
     if (code !== CODE.DONE) {
-      log(`[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`);
+      log(
+        `[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`,
+      );
       wrote = false;
       continue;
     }
-    log(`[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`);
+    log(
+      `[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`,
+    );
   }
   if (willWrite) return CODE.DONE;
   return wrote ? CODE.DONE : finish(CODE.WRITE_FAILED, "该写的没写成");

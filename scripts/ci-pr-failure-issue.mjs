@@ -66,6 +66,7 @@ import {
   classifyBuildOutcome,
   describeFailedStages,
   downstreamSkipped,
+  enrichStageErrors,
   fetchBuildList,
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
@@ -494,7 +495,11 @@ export function main(io = {}) {
   /* 详情取不到 ⇒ 拿**空读数**过同一个分类器（不是手搓一个形状像的「unknown」对象：
    * 那份判决只有一处实现，手搓一份就在下一个人改分类器时静默变成另一个答案）。 */
   const firstDetail = details[0];
-  const outcome = classifyBuildOutcome(firstDetail ? firstDetail.json : null);
+  /* 「被取消」与「真失败」的分界那句原话只在 `get-build-stage -v` 的 `data.error` 里
+   * ⇒ 分类之前先补（ISSUE #2406）。取不到就照旧按状态判，只是念不出原话。 */
+  const outcome = classifyBuildOutcome(
+    firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
+  );
   const failedNames = outcome.failed.map(
     (/** @type {any} */ f) => f.name || f.id,
   );

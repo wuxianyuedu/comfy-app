@@ -24,10 +24,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cancelledCause,
   classifyBuildOutcome,
   classifyStages,
   describeFailedStages,
   downstreamSkipped,
+  enrichStageErrors,
   formatOutcome,
   fetchBuildList,
   inFlightStages,
@@ -35,6 +37,7 @@ import {
   normalizeStageContent,
   parseArgs,
   pipelineForStage,
+  pipelineSn,
   progressReadout,
   stageLogExcerpt,
 } from "../scripts/ci-build-readout.mjs";
@@ -168,26 +171,40 @@ const GREEN_BUILD = {
   },
 };
 
-describe("逐格分类：平台自带那几格不是本仓配置的那几格", () => {
-  it("只收 id 形如 stage-N 的那几格", () => {
+describe("逐格分类：工作格 = stage-N 与 prepare，平台其余那几格不算", () => {
+  it("收 stage-N 与 prepare，不收 BeforeEnd / DebugDetection / End", () => {
     const stages = classifyStages(
       CANCELLED_BUILD.data.pipelinesStatus["cnb-lm1-1k5h1otqt-001"].stages,
     );
     expect(stages.configured.map((s) => s.id)).toEqual([
+      "prepare",
       "stage-0",
       "stage-1",
       "stage-2",
     ]);
-    expect(stages.configured.map((s) => s.name)).not.toContain("Prepare");
+    /* `prepare` 必须在里面（ISSUE #2406）：prepare 期就被终止的那一跑里，它是唯一
+     * 有读数的格 —— 丢掉它等于把那一整类读数交给构建级 `error` 去顶替。 */
+    expect(stages.configured.map((s) => s.name)).toContain("Prepare");
+    for (const noise of ["BeforeEnd", "DebugDetection", "End"]) {
+      expect(stages.configured.map((s) => s.name)).not.toContain(noise);
+    }
   });
 
   it("认不出 id 形状时退回「全收」—— 宁可多念几行，也不把证据一起丢掉", () => {
     const stages = classifyStages([
       { status: "cancel", name: "某格", id: "weird-id" },
-      { status: "success", name: "平台那格", id: "prepare" },
+      { status: "success", name: "另一格", id: "another-weird-id" },
     ]);
     expect(stages.configured).toHaveLength(2);
     expect(stages.cancelled.map((s) => s.name)).toEqual(["某格"]);
+    /* 反向：只要**有一格**认得出形状，就按那个口径收 —— 认得出的时候不退回「全收」，
+     * 否则 `BeforeEnd` / `End` 这些平台自带格会被当成工作格念进读数。 */
+    const mixed = classifyStages([
+      { status: "cancel", name: "某格", id: "weird-id" },
+      { status: "success", name: "Prepare", id: "prepare" },
+      { status: "success", name: "End", id: "end" },
+    ]);
+    expect(mixed.configured.map((s) => s.name)).toEqual(["Prepare"]);
   });
 
   it("形状不对（不是数组）⇒ 空读数，不是「没出问题」", () => {
@@ -401,7 +418,10 @@ describe("入口：三档各退各的码", () => {
       log: (s) => log.push(s),
     });
     expect(cancelled).toBe(2);
-    expect(log.join("\n")).toContain("平台给的原因");
+    /* 原话从现在起走 `outcome.reasons` 那一栏（它先于兜底那行被念），话术从
+     * 「平台给的原因」改成「平台原话」—— 同一件事，不再念两遍（ISSUE #2406）。 */
+    expect(log.join("\n")).toContain("平台原话");
+    expect(log.join("\n")).toContain("terminated by another pipeline");
   });
 
   it("取不到状态 ⇒ 没有结论（2），不是绿", () => {
@@ -796,7 +816,9 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
     });
     const text = lines.join("\n");
     expect(text).toContain("还在跑");
-    expect(text).toContain(`进度（与轮询那行同一份计算）：${buildSignature(RUNNING_BUILD, "b1")}`);
+    expect(text).toContain(
+      `进度（与轮询那行同一份计算）：${buildSignature(RUNNING_BUILD, "b1")}`,
+    );
     expect(text).toContain("在飞 1 格：受影响用例");
   });
 
@@ -822,5 +844,335 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
     expect(text).toContain("还在跑");
     expect(text).not.toContain("进度（");
     expect(text).not.toContain("在飞 ");
+  });
+});
+
+/**
+ * ⚠️ 下面这一族是 ISSUE #2406 的现场（2026-10-26）：**prepare 期就被另一条流水线抢走锁**。
+ *
+ * 它此前被判成「真失败」，理由是漏了整整一层读数：
+ *   · `get-build-status` 的 `stages[]` **没有 `error` 这一栏**（真机取回来只有
+ *     `status/duration/name/id`），而「被顶掉」与「真失败」的分界线就在那句原话上；
+ *   · `prepare` 那一格平台记的是 `error`（不是 `cancel`），它又曾被当成
+ *     「平台自带的噪声」丢掉 ⇒ `failed` / `cancelled` 两个集合都空 ⇒ 落到构建级 `error`。
+ *
+ * 所以这一族的样本必须**两层都给**：`get-build-status` 那份（没 `error`）
+ * 与 `get-build-stage` 那份（有 `error`），而 `enrichStageErrors()` 就是中间那一步。
+ */
+
+/** `get-build-status -v` 的 `data` 那一段（用例只用到 `pipelinesStatus[*].stages[]`）。 */
+interface BuildJson {
+  data: {
+    status?: string;
+    pipelinesStatus: Record<
+      string,
+      { id?: string; name?: string; status?: string; stages: StageJson[] }
+    >;
+  };
+}
+
+/** 一格（`error` 那一栏只有 `get-build-stage -v` 才给，`get-build-status` 里没有）。 */
+interface StageJson {
+  id?: string;
+  name?: string;
+  status?: string;
+  duration?: number;
+  error?: string;
+}
+
+/** 取 `prepare` 那一格 —— 这一族样本里它是主角（唯一有读数的那一格）。 */
+function prepareStage(
+  json: BuildJson,
+  key = "cnb-9qi-1k5qojle1-001",
+): StageJson {
+  /* `noUncheckedIndexedAccess` 在本仓开着。样本是我们自己造的形状，取不到就是样本坏了 ——
+     抛出比静默给出 `undefined` 更早暴露，且与「生产代码 0 处 `!`」那条判据不冲突。 */
+  const stage = json.data.pipelinesStatus[key]?.stages[0];
+  if (!stage) throw new Error(`样本里没有 ${key} 的第一格`);
+  return stage;
+}
+
+const LOCK_TERMINATED_MESSAGE =
+  "Pipeline was stoped，Pipeline: cnb-jpf-1k5qok15v-001 got lock: moon-read/comfy-app-t3-push. The current pipeline is terminated";
+
+/** `cnb-9qi-1k5qojle1` 的真形状：构建级 error、流水线 cancel、prepare 报 error 且**没有** error 栏。 */
+const KILLED_AT_PREPARE = {
+  status: 200,
+  data: {
+    status: "error",
+    pipelinesStatus: {
+      "cnb-9qi-1k5qojle1-001": {
+        id: "cnb-9qi-1k5qojle1-001",
+        name: "master 合并复核",
+        status: "cancel",
+        duration: 12855,
+        stages: [
+          { status: "error", duration: 12856, name: "Prepare", id: "prepare" },
+          {
+            status: "skipped",
+            duration: 0,
+            name: "合并形态复核",
+            id: "stage-0",
+          },
+          {
+            status: "success",
+            duration: 3,
+            name: "BeforeEnd",
+            id: "beforeEnd",
+          },
+          {
+            status: "skipped",
+            duration: 0,
+            name: "DebugDetection",
+            id: "debugDetection",
+          },
+          { status: "success", duration: 77, name: "End", id: "end" },
+        ],
+      },
+    },
+  },
+};
+
+/** 同一跑、`prepare` 那一格用 `get-build-stage -v` 取回来的形状（**带** error）。 */
+const KILLED_AT_PREPARE_STAGE = {
+  status: 200,
+  data: {
+    duration: 12856,
+    content: ["…", "Pipeline prepare error: …"],
+    endTime: 1792973342893,
+    error: LOCK_TERMINATED_MESSAGE,
+    status: "error",
+    name: "Prepare",
+    startTime: 1792973330037,
+    id: "prepare",
+  },
+};
+
+/** 真失败的那一跑（`cnb-ico-1k5r2letb`）：Prepare 绿、`受影响用例` 红在一条断言上。 */
+const REAL_FAILURE = {
+  status: 200,
+  data: {
+    status: "error",
+    pipelinesStatus: {
+      "cnb-ico-1k5r2letb-001": {
+        id: "cnb-ico-1k5r2letb-001",
+        name: "质量门禁",
+        status: "error",
+        stages: [
+          {
+            status: "success",
+            duration: 30000,
+            name: "Prepare",
+            id: "prepare",
+          },
+          {
+            status: "error",
+            duration: 239752,
+            name: "受影响用例",
+            id: "stage-9",
+            error: "任务执行失败，返回码：1, signal: -1",
+          },
+          {
+            status: "skipped",
+            duration: 0,
+            name: "标题行让位",
+            id: "stage-10",
+          },
+          {
+            status: "success",
+            duration: 3,
+            name: "BeforeEnd",
+            id: "beforeEnd",
+          },
+          { status: "success", duration: 81, name: "End", id: "end" },
+        ],
+      },
+    },
+  },
+};
+
+describe("cancelledCause：被终止与真失败在原话上分得开（ISSUE #2406）", () => {
+  it("抢锁那条原话 ⇒ cancelled，并读出抢锁的是哪一跑", () => {
+    const c = cancelledCause({
+      status: "error",
+      error: LOCK_TERMINATED_MESSAGE,
+    });
+    expect(c.kind).toBe("cancelled");
+    expect(c.holder).toBe("cnb-jpf-1k5qok15v");
+    expect(c.sn).toBe("cnb-jpf-1k5qok15v");
+  });
+
+  it("人为终止那条原话 ⇒ cancelled，但认不出「谁」时不编一个号出来", () => {
+    const c = cancelledCause({
+      status: "cancel",
+      error:
+        "The pipeline has been manually terminated or terminated by another pipeline.",
+    });
+    expect(c.kind).toBe("cancelled");
+    expect(c.holder).toBeNull();
+    expect(c.sn).toBeNull();
+  });
+
+  it("格状态是 error 而原话是被终止 ⇒ 仍然 cancelled（prepare 那种格平台只记 error）", () => {
+    expect(
+      cancelledCause({ status: "error", error: LOCK_TERMINATED_MESSAGE }).kind,
+    ).toBe("cancelled");
+  });
+
+  it("负控制：真失败那一条原话 ⇒ failed（判据自己的退出码，不是终止语）", () => {
+    const c = cancelledCause({
+      status: "error",
+      error: "任务执行失败，返回码：1, signal: -1",
+    });
+    expect(c.kind).toBe("failed");
+  });
+
+  it("负控制：没有原话时按状态判，不因为「读不到原话」就把它读成终止", () => {
+    expect(cancelledCause({ status: "error" }).kind).toBe("failed");
+    expect(cancelledCause({ status: "cancel" }).kind).toBe("cancelled");
+    expect(cancelledCause({ status: "success" }).kind).toBe("clean");
+  });
+
+  it("pipelineSn：流水线 id 收成构建号；认不出就原样回（不猜）", () => {
+    expect(pipelineSn("cnb-jpf-1k5qok15v-001")).toBe("cnb-jpf-1k5qok15v");
+    expect(pipelineSn("cnb-9qi-1k5qojle1-002")).toBe("cnb-9qi-1k5qojle1");
+    expect(pipelineSn("某条没见过的形状")).toBe("某条没见过的形状");
+  });
+});
+
+describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须先补", () => {
+  /** 假执行者：`get-build-stage` 回那一格的详情，别的一概不答。 */
+  function stageRun(detail: unknown, asked: string[][] = []) {
+    return (_cmd: string, args: string[]) => {
+      if (args[1] === "get-build-stage") {
+        asked.push(args);
+        return {
+          status: 0,
+          stdout: JSON.stringify(detail),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+  }
+
+  it("非绿非 skipped 的那一格被补上原话，且不改入参（原值要留给比对）", () => {
+    const run = stageRun(KILLED_AT_PREPARE_STAGE);
+    const enriched = enrichStageErrors(
+      run,
+      "org/repo",
+      "cnb-9qi-1k5qojle1",
+      KILLED_AT_PREPARE,
+    ) as BuildJson;
+    expect(prepareStage(enriched).error).toBe(LOCK_TERMINATED_MESSAGE);
+    /* 原值一个字节都没改 —— 这是「只读平台读数」那条纪律的执行面。 */
+    expect(prepareStage(KILLED_AT_PREPARE)).not.toHaveProperty("error");
+  });
+
+  it("绿格与 skipped 格不去问平台（一次请求都不多花）", () => {
+    const asked: string[][] = [];
+    enrichStageErrors(stageRun({ data: {} }, asked), "org/repo", "b1", {
+      data: {
+        status: "success",
+        pipelinesStatus: {
+          p: {
+            id: "p",
+            status: "success",
+            stages: [
+              { status: "success", name: "Prepare", id: "prepare" },
+              { status: "skipped", name: "某格", id: "stage-0" },
+              { status: "success", name: "End", id: "end" },
+            ],
+          },
+        },
+      },
+    });
+    expect(asked).toEqual([]);
+  });
+
+  it("取不到原话 ⇒ 那一格保持原样（空 ≠ 「没有异常」，分类照状态判）", () => {
+    const enriched = enrichStageErrors(
+      stageRun({ data: { code: 204, message: "没有查询到该stage信息。" } }),
+      "org/repo",
+      "b1",
+      KILLED_AT_PREPARE,
+    ) as BuildJson;
+    expect(prepareStage(enriched)).toEqual({
+      status: "error",
+      duration: 12856,
+      name: "Prepare",
+      id: "prepare",
+    });
+  });
+
+  it("形状不对（没有 pipelinesStatus）⇒ 原样回，不抛", () => {
+    expect(
+      enrichStageErrors(stageRun(null), "o/r", "b", { status: 200 }),
+    ).toEqual({ status: 200 });
+  });
+});
+
+describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查产物」", () => {
+  it("只给 get-build-status（没有原话）时不会谎报绿或真红 —— 构建级 error 仍然是 error", () => {
+    /* 这一条钉的是**边界**：原话没补上时，分类只能按状态与流水线级 cancel 兜底。
+     * 它不许被念成绿（那一跑一个字都没验证过）。 */
+    const o = classifyBuildOutcome(KILLED_AT_PREPARE);
+    expect(o.state).not.toBe("green");
+  });
+
+  it("补上原话之后 ⇒ cancelled，并点名「谁抢了锁」与「下面那几格根本没跑」", () => {
+    const run = (_cmd: string, args: string[]) => ({
+      status: 0,
+      stdout:
+        args[1] === "get-build-stage"
+          ? JSON.stringify(KILLED_AT_PREPARE_STAGE)
+          : "",
+      stderr: "",
+      error: null,
+    });
+    const enriched = enrichStageErrors(
+      run,
+      "org/repo",
+      "cnb-9qi-1k5qojle1",
+      KILLED_AT_PREPARE,
+    ) as BuildJson;
+    const o = classifyBuildOutcome(enriched);
+    expect(o.state).toBe("cancelled");
+    expect(o.failed).toEqual([]);
+    expect(o.reasons.map((r) => r.sn)).toEqual(["cnb-jpf-1k5qok15v"]);
+    const text = formatOutcome(o, {
+      sn: "cnb-9qi-1k5qojle1",
+      slug: "org/repo",
+    }).join("\n");
+    expect(text).toContain("被取消");
+    expect(text).toContain("抢走锁的那一跑：cnb-jpf-1k5qok15v");
+    expect(text).toContain("平台原话");
+    expect(text).toContain("合并形态复核");
+    expect(text).not.toContain("查那一格的日志");
+  });
+
+  it("真失败那一跑照旧 ⇒ failed，一个字都不许被挪进「被取消」", () => {
+    const run = (_cmd: string, args: string[]) => ({
+      status: 0,
+      stdout:
+        args[1] === "get-build-stage"
+          ? JSON.stringify({
+              data: { status: "error", error: "任务执行失败，返回码：1" },
+            })
+          : "",
+      stderr: "",
+      error: null,
+    });
+    const enriched = enrichStageErrors(
+      run,
+      "org/repo",
+      "cnb-ico-1k5r2letb",
+      REAL_FAILURE,
+    ) as BuildJson;
+    const o = classifyBuildOutcome(enriched);
+    expect(o.state).toBe("failed");
+    expect(o.failed.map((s) => s.name)).toEqual(["受影响用例"]);
+    expect(o.reasons).toEqual([]);
   });
 });
