@@ -44,21 +44,97 @@ export function readBuild(repo, sn) {
     ["build", "get-build-status", "--repo", repo, "--sn", sn, "-v"],
     { encoding: "utf8" },
   );
-  // `cnb … -v` 打的是 YAML（不是 JSON），`data:` 下面是缩进块 —— 逐行取键值即可，
-  // 不引 YAML 解析器：这一件只认那几个固定的标量键，而解析器会把「取不到」变成
-  // 「取到一个空结构」，那正是本项目反复记过的失明形态（§13.6.2：没判 ≠ 绿）。
-  const data = {};
-  for (const line of raw.split("\n")) {
-    const m = /^\s{2}([A-Za-z_]+):\s*(.*)$/.exec(line);
-    if (m) data[m[1]] = m[2].trim().replace(/^"|"$/g, "");
+  /* `-v` 打的是 **JSON**（实测 `{ "status": 200, "data": { "status": "error", … } }`），
+   * 不是 YAML —— 第一版按 YAML 逐行取键，取到的是「(取不到)」，而那一屏看上去与
+   * 「还在排队」一模一样。这正是本项目反复记过的失明形态（§13.6.2：没判 ≠ 绿）。 */
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return emptyReading(sn, `响应不是 JSON（前 120 字：${raw.slice(0, 120)}）`);
   }
+  const data = parsed?.data;
+  if (data == null || typeof data !== "object") {
+    return emptyReading(sn, "响应里没有 data");
+  }
+  /* 平台**只有**流水线粒度的时间：一跑里可以是多个 pipeline（本仓每条流水线各一个），
+   * 取整跑的最早开始与最晚结束作为它的时间窗 —— 相交判据问的是「这一跑在不在跑」，
+   * 而它不是 stage 粒度的问题。`createTime` / `endTime` 在整跑这一层平台不给，
+   * 所以缺它们时**不编**（`startTime` 取不到就是取不到，由上面的「取不到时间线」兜）。 */
+  const pipes = Object.values(data.pipelinesStatus ?? {}).filter(
+    (p) => p && typeof p === "object",
+  );
+  const startMs = pipes
+    .map((p) => Number(p.createTime ?? p.startTime ?? Number.NaN))
+    .filter((n) => Number.isFinite(n));
+  const endMs = pipes
+    .map((p) => Number(p.endTime ?? Number.NaN))
+    .filter((n) => Number.isFinite(n));
+  const names = pipes.map((p) => String(p.name ?? "")).filter(Boolean);
   return {
     sn,
     status: String(data.status ?? "(取不到)"),
-    createTime: String(data.createTime ?? ""),
-    startTime: String(data.startTime ?? ""),
-    endTime: String(data.endTime ?? ""),
-    title: String(data.title ?? ""),
+    createTime: startMs.length > 0 ? isoOf(Math.min(...startMs)) : "",
+    startTime: startMs.length > 0 ? isoOf(Math.min(...startMs)) : "",
+    endTime: endMs.length === pipes.length && endMs.length > 0 ? isoOf(Math.max(...endMs)) : "",
+    title: names.join(" / "),
+    note: "",
+  };
+}
+
+/** 毫秒 → ISO（取不到就是空串，不拿「此刻」冒充）。 */
+function isoOf(ms) {
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
+}
+
+/**
+ * **整跑**那一层的时间线（`createTime` / `endTime`）—— 从 `build get-build-logs --sn <号>`
+ * 取。
+ *
+ * 为什么必须从这一路取：`get-build-status` 只给**流水线**粒度，而一跑里可以是多个
+ * pipeline；整跑的这一格只在这一份列表里有。第一版只读了 status 那一路，于是
+ * 「这一跑在什么时候活着」整格是空的 —— 而空读数在屏幕上与「还在排队」长得一样。
+ *
+ * @param {string} repo
+ * @param {string} sn
+ * @returns {{createTime: string, endTime: string, title: string, event: string}}
+ */
+export function readRunWindow(repo, sn) {
+  const raw = execFileSync(
+    "cnb",
+    ["build", "get-build-logs", "--repo", repo, "--sn", sn, "-v"],
+    { encoding: "utf8" },
+  );
+  try {
+    const rows = JSON.parse(raw)?.data?.data ?? [];
+    const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {};
+    const create = Number(row.createTime ? Date.parse(row.createTime) : Number.NaN);
+    const durationMs = Number(row.duration ?? Number.NaN);
+    const ended = Number.isFinite(create) && Number.isFinite(durationMs);
+    return {
+      createTime: Number.isFinite(create) ? new Date(create).toISOString() : "",
+      /* 还在跑的那一跑**没有** endTime —— 给空串，由 `overlap()` 按「此刻」收口并
+       * 在答案里带 `stillRunning`。拿 `create + duration` 编一个假的结束时刻，
+       * 等于把「正在跑」写成「已经停了」。 */
+      endTime: ended && durationMs > 0 ? new Date(create + durationMs).toISOString() : "",
+      title: String(row.title ?? ""),
+      event: String(row.event ?? ""),
+    };
+  } catch {
+    return { createTime: "", endTime: "", title: "", event: "" };
+  }
+}
+
+/** 读数取不到时的形态：`status` 照实说「取不到」，附一句原因（不静默、不冒充绿）。 */
+function emptyReading(sn, note) {
+  return {
+    sn,
+    status: "(取不到)",
+    createTime: "",
+    startTime: "",
+    endTime: "",
+    title: "",
+    note,
   };
 }
 
@@ -110,7 +186,12 @@ export function overlap(a, b, now = Date.now()) {
  */
 export function report(repo, sns) {
   const now = Date.now();
-  const rows = sns.map((sn) => readBuild(repo, sn));
+  /* 两路拼成一行：`get-build-status` 给 `status`（终态只认它的原值），
+   * `get-build-logs --sn` 给整跑的时间线。缺一路就如实说缺，不拿另一路顶。 */
+  const rows = sns.map((sn) => {
+    const run = readRunWindow(repo, sn);
+    return { ...readBuild(repo, sn), ...run };
+  });
   for (const r of rows) {
     console.log(
       `[probe] ${r.sn}  status=${r.status}  create=${r.createTime}  start=${r.startTime}  end=${r.endTime}  title=${r.title}`,

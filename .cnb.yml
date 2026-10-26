@@ -2419,11 +2419,16 @@ master:
     # ⚠️ 每项都必须写全 `name:` 六空格那一层 —— 判定「换了一条流水线」的解析器认的是
     # 这个名字键（`pipelineLockAssignments()`）；省掉它的坏形态是：这三条会被**算进上一条**
     # 的锁归属里，于是「同一把锁给了不同的 stage 清单」当场误报（实测过）。
+    # ⚠️ `runner.tags` 必须是 `win`，**不是** `cnb` —— 逐字抄 `.common` 那段。写成
+    # `cnb` 的现场读数（四跑全中）：Prepare 96ms 就红在
+    # `Pipeline prepare error: No runner for namespace: group tags: cnb, cpus: -1`，
+    # 一格都没跑、也没有任何「锁」的读数。这条是「抄 `runner` 而不引用锚点」要付的
+    # 代价：锚点里那两个值一起被抄对，否则探针连起跑都做不到，而红的形态与锁无关。
     - name: 探针A（同 key · wait:true · cancel-in-progress:false）
       runner:
         namespace: group
         tags:
-          - cnb
+          - win
       lock: *lock_probe_a
       stages:
         - name: 探针A-填满时间窗
@@ -2437,7 +2442,7 @@ master:
       runner:
         namespace: group
         tags:
-          - cnb
+          - win
       stages:
         - name: 探针B-填满时间窗
           lock:
@@ -2454,7 +2459,7 @@ master:
       runner:
         namespace: group
         tags:
-          - cnb
+          - win
       stages:
         - name: 探针C-填满时间窗
           script: |
