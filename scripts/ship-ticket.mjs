@@ -16,6 +16,7 @@ import path from "node:path";
 import {
   DEV_HANDLE_ENV_KEY,
   explicitDevHandle,
+  isExplicitSource,
   resolveDevHandle,
 } from "./dev-handle.mjs";
 
@@ -366,7 +367,9 @@ export function issueAuthoring({
         `调用方显式给了空值；要人填就写**这一份检出**的 \`${where}\` 里那一行 ` +
         `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（整行不在时先跑 \`pnpm env:init\`，` +
         "它会把一个确定的名字落进去，而不是留个空值）。" +
-        (platform === "win32" ? "Windows 开发者按规范要求配这一格。" : `当前宿主：${platform || "未告知"}。`),
+        (platform === "win32"
+          ? "Windows 开发者按规范要求配这一格。"
+          : `当前宿主：${platform || "未告知"}。`),
     );
   }
   if (showExits) {
@@ -459,7 +462,7 @@ export function whoamiLines({
       (name
         ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）`
         : "") +
-      (from === "进程环境" || from === ".env"
+      (isExplicitSource(from)
         ? `（你填的：${from === ".env" ? "这一份检出的 `.env`" : "进程环境"}）`
         : from
           ? `（**取的**：${from} ⇒ 换台机器 / 换会话会变；要固定就在 \`${path.join(root || ".", ".env")}\` 填一行）`

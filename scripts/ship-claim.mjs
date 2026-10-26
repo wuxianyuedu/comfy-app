@@ -99,7 +99,11 @@ export function decideClaim({ number, state, labels, handle }) {
   const name = String(handle ?? "").trim();
   const empty = { act: false, already: false, others: [], reason: "" };
   if (!name) {
-    return { ...empty, code: CODE.NOT_RUN, reason: "没配留痕短名 ⇒ 写不出「谁接单」" };
+    return {
+      ...empty,
+      code: CODE.NOT_RUN,
+      reason: "没配留痕短名 ⇒ 写不出「谁接单」",
+    };
   }
   if (state !== "open") {
     return {
@@ -260,7 +264,9 @@ function ensureComment(ctx) {
   const text = kind === "claim" ? claimComment(handle) : releaseComment(handle);
   const file = mkTmp("ship-issue-comment", text);
   if (!file) {
-    log(`[ship] #${number} 取不到 git 目录 ⇒ 评论正文没有落点，这一格没有执行者`);
+    log(
+      `[ship] #${number} 取不到 git 目录 ⇒ 评论正文没有落点，这一格没有执行者`,
+    );
     return CODE.NOT_RUN;
   }
   cnbJson(run, [
@@ -339,7 +345,9 @@ function applyClaimLabels(ctx) {
     log(`[ship] #${number} 的回读里没有 ${label} ⇒ 不念「已打上」`);
     return { code: CODE.NOT_RUN, others };
   }
-  if (!labelValues(back.labels, ISSUE_LABEL_ROLES.participant).includes(handle)) {
+  if (
+    !labelValues(back.labels, ISSUE_LABEL_ROLES.participant).includes(handle)
+  ) {
     log(`[ship] #${number} 的回读里没有 ${participant} ⇒ 不念「已打上」`);
     return { code: CODE.NOT_RUN, others };
   }
@@ -422,8 +430,14 @@ function runClaim(ctx) {
   const participant = participantLabel(handle);
   /* 两枚标签的生命周期不同：`处理人:` 结束即撤，`参与人:` 只增不删。所以「要不要写」
    * 分开判 —— 旧单（本功能之前领的）只有 `处理人:`，重跑一次要把 `参与人:` 补齐。 */
-  const haveHandler = labelValues(issue.labels, ISSUE_LABEL_ROLES.handler).includes(handle);
-  const haveParticipant = labelValues(issue.labels, ISSUE_LABEL_ROLES.participant).includes(handle);
+  const haveHandler = labelValues(
+    issue.labels,
+    ISSUE_LABEL_ROLES.handler,
+  ).includes(handle);
+  const haveParticipant = labelValues(
+    issue.labels,
+    ISSUE_LABEL_ROLES.participant,
+  ).includes(handle);
   if (dryRun) {
     const planned = [
       ...(haveHandler ? [] : [`打上 ${label}`]),
@@ -454,7 +468,15 @@ function runClaim(ctx) {
       `[ship] #${number} 已经挂着 ${label} 与 ${participant} ⇒ 不重复打标签（幂等）`,
     );
   }
-  return ensureComment({ run, log, slug, number, handle, kind: "claim", mkTmp });
+  return ensureComment({
+    run,
+    log,
+    slug,
+    number,
+    handle,
+    kind: "claim",
+    mkTmp,
+  });
 }
 
 /**
@@ -550,7 +572,9 @@ function runClaims(ctx) {
       "-v",
     ]);
     if (!got) {
-      log(`[ship] 取不到单子列表（第 ${page} 页）⇒ 这一格没有结论，不念「没有领取中的单子」`);
+      log(
+        `[ship] 取不到单子列表（第 ${page} 页）⇒ 这一格没有结论，不念「没有领取中的单子」`,
+      );
       return CODE.NOT_RUN;
     }
     const list = asArray(got.json);
@@ -652,6 +676,7 @@ export function finishIssueWork(ctx) {
  *   slug:string|null,
  *   cnbOk:boolean,
  *   handle:string|null,
+ *   handleSource?:string|null,
  *   explicitHandle?:string|null,
  *   root:string,
  *   opt:any,
@@ -668,6 +693,7 @@ export function runIssueAction(ctx) {
     slug,
     cnbOk,
     handle,
+    handleSource = null,
     explicitHandle = null,
     root,
     opt,
@@ -734,7 +760,9 @@ export function runIssueAction(ctx) {
    * 调用方显式传空（装配层漏传），话术按「没有来源」念，而不是让照提示做过一遍的人再撞一次墙。 */
   if (wantsNewIssue) {
     if (typeof createIssue !== "function") {
-      log("[ship] [ERROR] --new-issue 没有接上执行者（装配层漏传）⇒ 没有结论。");
+      log(
+        "[ship] [ERROR] --new-issue 没有接上执行者（装配层漏传）⇒ 没有结论。",
+      );
       return CODE.NOT_RUN;
     }
     return createIssue({
@@ -742,6 +770,7 @@ export function runIssueAction(ctx) {
       log,
       slug,
       handle,
+      handleSource,
       explicitHandle,
       root,
       opt,

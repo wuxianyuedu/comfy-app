@@ -29,6 +29,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { isExplicitSource } from "./dev-handle.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
@@ -201,9 +202,12 @@ function labelNames(labels) {
  * @param {(s: string) => void} ctx.log 输出通道
  * @param {string} ctx.slug 仓库路径
  * @param {string | null} ctx.handle 留痕短名（取值链给的，见 `dev-handle.mjs`）
+ * @param {string | null} [ctx.handleSource] 短名**取自哪里**（`resolveDevHandle().source`，
+ *   `ship.mjs` 传 `who.source`）。只管「这个名字稳不稳」那一句话术；「标签打不打得上」
+ *   按**名字在不在**判（ISSUE #2387）。
  * @param {string | null} [ctx.explicitHandle] **人填过**的那个名字（只读 `COMFYAPP_DEV_HANDLE`）。
- *   `null` = 这次的短名是取的 ⇒ 建单本来就不带标签，回读里没有它**不是**异常；
- *   非 `null` = 你填了 ⇒ 回读里没有就算「标签没落地」，退 2（ISSUE #2355）。
+ *   `null` = 这次的短名是取的；非 `null` = 你填了 ⇒ 回读里没有标签就算「标签没落地」，退 2
+ *   （ISSUE #2355）。
  * @param {string} ctx.root 仓库根
  * @param {any} ctx.opt 解析后的参数
  * @param {(name: string, text: string) => string | null} ctx.mkTmp 临时文件落点
@@ -215,6 +219,7 @@ export function runNewIssue({
   log,
   slug,
   handle,
+  handleSource = null,
   explicitHandle = null,
   root,
   opt,
@@ -325,26 +330,41 @@ export function runNewIssue({
     );
     return CODE.RED;
   }
-  /* 「标签没落地」只在**你填过**名字时才是一件事：短名是取值链取来的（`explicitHandle`
-   * 为空）时，建单那一路本来就不带标签 —— 把它读成「你填了却没落上」是误判，而且会让一次
-   * 正常的建单退 2（ISSUE #2355）。 */
-  if (
-    explicitHandle &&
+  /* 话术按**名字在不在**分支、回读为准（ISSUE #2387）：「标签打不打得上」只取决于
+   * 名字有没有（名字非空时上一段就会去按，与取的还是填的无关）；「取的 / 填的」
+   * 只管**这个名稳不稳**。把「取的」念成「这次不带标签」会与下一行回读互相推翻，
+   * 还给人一条错误指令（名字不空，标签已经在了）。 */
+  const landed =
     label &&
-    !labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
+    labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
       String(handle).trim(),
-    )
-  ) {
+    );
+  if (label && !landed && explicitHandle) {
+    /* 你填的却没落地 ⇒ 不念「留痕已补上」（ISSUE #2355）。 */
     log(
       `[ship] #${number} 回读里没有 ${label} ⇒ 不念「留痕已补上」` +
         "（实测 create-issue --labels 不落地，只能建完再按）。",
     );
     return CODE.NOT_RUN;
   }
-  if (!explicitHandle) {
+  if (label && landed) {
     log(
-      `[ship] 留痕短名 ${handle ?? "(空)"} 是取的 ⇒ 这次建单不带 \`提单人:\` 标签` +
-        "（要带就在 `.env` 里填一行 `COMFYAPP_DEV_HANDLE`，再 `pnpm ship --claim` 补上）。",
+      `[ship] ✓ 留痕已补：${label}` +
+        (explicitHandle || isExplicitSource(handleSource)
+          ? "（你填的）。"
+          : handleSource
+            ? `（短名取自 ${handleSource}，换机器会变；要固定就在 .env 里填一行 \`COMFYAPP_DEV_HANDLE\`。）`
+            : "。"),
+    );
+  } else if (label) {
+    log(
+      `[ship] ⚠ ${label} 没在回读里 ⇒ 留痕没落上；` +
+        `下一动作：pnpm ship --claim ${number} 补上。`,
+    );
+  } else {
+    log(
+      "[ship] 取不到留痕短名 ⇒ 单子会建，但不带 `提单人:` 标签（读数，不阻断）；" +
+        "下一动作：`pnpm env:init` 配好留痕再来。",
     );
   }
   if (plan.priority && back.priority.toUpperCase() !== plan.priority) {
