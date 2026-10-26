@@ -200,7 +200,11 @@ import { runIssueAction } from "./ship-claim.mjs";
 import { runBranches } from "./ship-branches.mjs";
 import { runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
-import { runCommitStage, runPushStage, runRerunCiStage } from "./ship-local.mjs";
+import {
+  runCommitStage,
+  runPushStage,
+  runRerunCiStage,
+} from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
 
 /**
@@ -585,6 +589,7 @@ async function runFlow(deps, tmpFiles) {
         slug,
         cnbOk,
         handle,
+        handleSource: who.source,
         explicitHandle,
         root,
         opt,
