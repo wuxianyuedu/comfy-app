@@ -147,6 +147,11 @@
  *   pnpm ship --claim 2187                     # 领取单子：评论「已接单」+ 打 `处理人:` 标签（写后回读）
  *   pnpm ship --release 2187                   # 结束处理：评论「开发结束」+ 撤 `处理人:` 标签（先评论后撤）
  *   pnpm ship --claims                         # 列出自己领取中（state=open）的单子
+ *   pnpm ship --branches                       # 只读：逐条本地分支给「落地了没有」的读数 ——
+ *                                              #   判据只有 PR 的 `is_merged` 原值（`git diff
+ *                                              #   master…branch` 与 `branch -d` 在 squash 拓扑下
+ *                                              #   恒假，不是判据，见 `scripts/ship-branches.mjs` 文件头）。
+ *                                              #   它一次也不删；与任何显式动作同行退 2
  *   pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priority P1
  *                                              # 一步建单：create-issue（正文文件 + 开头署名）→
  *                                              #   补 `提单人:` 标签 → 独立 get-issue 回读；
@@ -192,6 +197,7 @@ import {
 } from "./ship-platform.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
+import { runBranches } from "./ship-branches.mjs";
 import { runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
 import { runCommitStage, runPushStage, runRerunCiStage } from "./ship-local.mjs";
@@ -466,6 +472,7 @@ async function runFlow(deps, tmpFiles) {
       opt.claim != null ? "--claim" : null,
       opt.release != null ? "--release" : null,
       opt.claims ? "--claims" : null,
+      opt.branches ? "--branches" : null,
       opt.newIssue != null || opt.newIssueBad.length > 0 ? "--new-issue" : null,
       opt.rerunCi ? "--rerun-ci" : null,
     ].filter(Boolean);
@@ -520,6 +527,42 @@ async function runFlow(deps, tmpFiles) {
         "单独给它们不会建任何单子。",
     );
     return CODE.NOT_RUN;
+  }
+
+  /* ── 分支落地读数（规范 §13.6.5，ISSUE #2427）────────────────────
+   * **只读**：它一次也不删。所以它既不需要干净工作树，也不许和任何「显式动作」同行 ——
+   * 一起给出会让人以为「看过 = 清过」，而红线 ①（显式动作不许被推断）反过来也成立：
+   * 读数不许被推断成动作。 */
+  if (opt.branches) {
+    const withAction = [
+      opt.merge ? "--merge" : null,
+      opt.cleanBranch ? "--clean-branch" : null,
+      opt.reap ? "--reap" : null,
+      opt.rerunCi ? "--rerun-ci" : null,
+      opt.claim != null ? "--claim" : null,
+      opt.release != null ? "--release" : null,
+      opt.newIssue != null ? "--new-issue" : null,
+      opt.adds.length > 0 ? "--add" : null,
+      opt.claims ? "--claims" : null,
+      opt.whoami ? "--whoami" : null,
+      opt.only ? "--only" : null,
+    ].filter(Boolean);
+    if (withAction.length > 0) {
+      log(
+        `[ship] [ERROR] --branches 是只读读数，不能和 ${withAction.join(" / ")} 同行 —— ` +
+          `要删请逐条点名，或把 --branches 单独跑一遍再决定。`,
+      );
+      return CODE.NOT_RUN;
+    }
+    return finish([
+      runBranches({
+        run,
+        log,
+        slug,
+        remote: up.remote ?? "origin",
+        trunk: up.base ?? "master",
+      }),
+    ]);
   }
 
   /* ── 单子的领取 / 结束 / 列表（规范 §13.10.11）──────────────────

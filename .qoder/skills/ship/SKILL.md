@@ -31,6 +31,7 @@ pnpm ship --close-issue 2179                     # 只补关：本轮不合，�
 pnpm ship --claim 2187                           # 领取：打 `处理人:` + `参与人:` 标签，评论「已接单」（写后回读）
 pnpm ship --release 2187                         # 结束：评论「开发结束」+ 撤 `处理人:`（`参与人:` 保留）
 pnpm ship --claims                               # 列出自己领取中（state=open）的单子
+pnpm ship --branches                             # 只读：逐条本地分支给「落地了没有」（判据只有 PR 的 `is_merged`）—— 一次也不删，与任何显式动作同行退 2
 pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**当前 PR 分支**推一笔空提交重新派生流水线（平台侧没有 PR 重跑入口）
 pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
 pnpm ship --new-issue "fix(x): …" --issue-body-file .git/issue.md --priority P1   # 一步建单：建 → 补提单人标签 → 独立回读（标题/正文人给）
@@ -214,6 +215,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 | 合没合上                   | PR 的 `is_merged` **且**回读解析出的主干基线顶端有没有那份碎片                                                          |
 | 这次变更挂在哪张单子上     | 阶段 0 的 `ticketReading()`：碎片文件名的号 + 首行段落（**读数，不改退码**）                                            |
 | 单子关没关上               | 本轮号跟验真的合并；人点名的号在本轮没合并时反查 `pulls list-pulls`（`closed` 里**逐条认 `is_merged`**，标题先剥 PR 尾数）。关完一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |
+| 分支**删之前**：它落地了没有 | `pnpm ship --branches`（只读）。判据只有 PR 的 `is_merged` 原值 —— `git diff origin/master…<分支>`（三点，起点是 merge-base）与 `git branch -d` 的祖先判据在 squash 拓扑下**恒假/恒非空**，都不是判据（实测九条已合并分支被三点 diff 判成「都没合」）。窗口取没取满会自证；取不到的那条给「没结论」，不是「没合并」（§13.6.5） |
 | 分支收干净没有             | `--clean-branch` 之后各问一次事实：`git ls-remote --heads` 与 `git show-ref --verify`（push / branch 的退码都不算结论） |
 | 进程收干净没有             | 阶段 0 念 `runningAppInstances()` 的归属读数；`--reap` 只发 `reap-process.mjs`，**收完再读一次同一份判据**才算数        |
 | 这条流水线还在不在动       | 轮询的签名 `(sn, data.status, pipeline 完成数, stage 完成数)` **加上「此刻有没有一格在飞」**（`inFlightStages`）—— 两件同时成立才断流，不做无新读数的等待 |
