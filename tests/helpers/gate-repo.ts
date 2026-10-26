@@ -63,6 +63,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -93,9 +94,20 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
  * 只认 `require` 时它们跑起来就是 `ERR_MODULE_NOT_FOUND` + 一叠加载栈，
  * 长得像「判据坏了」，实际是夹具少带了一个文件（与第一段说的问题同一族）。
  *
- * 落点固定在被引脚本自己所在的目录。已存在的目标不覆盖（用例自己写的夹具优先）。
+ * 落点固定在被引脚本自己所在的目录。**已存在的目标不覆盖**（用例自己写的夹具优先，
+ * 见 `place` 那条）。
+ *
+ * @param destScriptAbs 工作区里那份判据脚本的绝对路径
+ * @param place 落盘一条源文件（**目标绝对路径** → 源码绝对路径）。
+ *   `createGateRepo` 传它自己的收口版本（用例声明的 `copy` 已经占过的路径不再写）；
+ *   直接调本函数的命令式调用点（`check-file-structure` / AST 聚合那几份）不传，
+ *   退回「临时工作区里已经有的就不覆盖」——两者判据同一条，只是前者的「已经有的」
+ *   还包含**同一轮刚要落的那些**（ISSUE #2380 记的那条双写）。
  */
-export function copyGateDeps(destScriptAbs: string): void {
+export function copyGateDeps(
+  destScriptAbs: string,
+  place?: (destAbs: string, sourceAbs: string) => void,
+): void {
   const destDir = path.dirname(destScriptAbs);
   /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")` 那一形）、
    *  ESM 的 `import/export … from "./x.mjs"`。
@@ -134,14 +146,61 @@ export function copyGateDeps(destScriptAbs: string): void {
        * `check-test-sleep` 与 `check-test-concurrency` 都在场，而它们共用的
        * `gate-scan-read` 谁都没带进去）。 */
       if (!existsSync(dest)) {
-        /* 子目录（`./base-check/git-ref.mjs` 那一类）要先有目录，否则落盘就失败。 */
-        mkdirSync(path.dirname(dest), { recursive: true });
-        copyFileSync(source, dest);
-        chmodSync(dest, 0o755);
+        if (place) {
+          /* 交出**绝对目标路径**而不是名字：`name` 是相对被引脚本所在目录的
+           * （`./lockfile/lock-diff.mjs`），由 `place` 自己换算成工作区相对路径 ——
+           * 只有它知道工作区根在哪（`copy` 的 `to` 本来就是工作区相对路径，
+           * 两条来路的坐标系不同，收口在一处才换算得对）。 */
+          place(dest, source);
+        } else {
+          /* 子目录（`./base-check/git-ref.mjs` 那一类）要先有目录，否则落盘就失败。 */
+          mkdirSync(path.dirname(dest), { recursive: true });
+          copyFileSync(source, dest);
+          chmodSync(dest, 0o755);
+        }
       }
       pending.push(dest);
     }
   }
+}
+
+/**
+ * 「这些路径已经被谁写过了」—— **目录级**判断，不是整串相等。
+ *
+ * 为什么必须按目录算：用例声明的 `copy` 常整目录拷（`{ from: "scripts/lockfile", … }`），
+ * 而依赖链要的是目录里的某一个文件（`scripts/lockfile/lock-diff.mjs`）。只比整串相等时
+ * 两者永远不相交，于是那个文件被写两遍 —— 正是 ISSUE #2380 那条 NUL 填充的来源。
+ *
+ * 反方向也认：先落的是文件、后到的是它的父目录（`copy` 里同时列了单文件与它所在的
+ * 目录时）→ 那条目录不许再整棵铺一遍，否则刚落的文件又被覆盖一次。
+ */
+function claims(initial: string[]): {
+  covers: (rel: string) => boolean;
+  add: (rel: string) => void;
+} {
+  const owned: string[] = [...initial].map(normalizeRel);
+  return {
+    covers: (rel) => {
+      const target = normalizeRel(rel);
+      return owned.some(
+        (o) =>
+          target === o ||
+          target.startsWith(`${o}/`) ||
+          o.startsWith(`${target}/`),
+      );
+    },
+    add: (rel) => {
+      owned.push(normalizeRel(rel));
+    },
+  };
+}
+
+/** 统一成 `a/b/c` 形状（`path.join` 在 Windows 上给 `a\b\c`，比较时会对不上）。 */
+function normalizeRel(rel: string): string {
+  return rel
+    .split(path.sep)
+    .join("/")
+    .replace(/^\.?\//, "");
 }
 
 /** 跑一次判据脚本的结果 —— `code` 是子进程退出码，`output` 是 stdout+stderr 合并。 */
@@ -223,6 +282,10 @@ export interface GateRepoOptions {
   /**
    * 从源码仓库再拷贝进来的路径（`from` 是相对仓库根，`to` 是工作区相对路径；
    * 目录会递归拷）。`.cjs` / `.mjs` 这类**同级动态导入**的模块只能这么来。
+   *
+   * ⚠️ **它与 `copyGateDeps` 会指到同一个落点**，而两条路径同时写一份文件是
+   * Windows 上那份 NUL 填充脚本的来源（ISSUE #2380，见 `createGateRepo` 里那段）。
+   * 现在由 `placeSources()` 一处收口：**一条路径只写一次**，后到的那条不许覆盖。
    */
   copy?: Array<{ from: string; to: string }>;
   /**
@@ -289,24 +352,45 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     writeFileSync(abs(rel), content);
   };
   for (const [rel, content] of Object.entries(files ?? {})) put(rel, content);
-  /* `copy` 先落，`copyGateDeps` 后补 —— 这个顺序是**判据的一部分**，不是随手排的。
+  /* 两条来路的源文件（用例声明的 `copy` + 按 import 追出来的同目录依赖）在这里
+   * 一次落盘 —— **同一条路径只写一次**。
    *
-   * 两者会指到同一个落点：`copy` 常整目录拷（`{ from: "scripts/lockfile", … }`），
-   * 而 `copyGateDeps` 按 `import "./lockfile/lock-diff.mjs"` 逐个补同名文件。
-   * 反过来的顺序（先 `copyGateDeps` 再 `copy`）实测在 Windows 节点上会留下一份
-   * **NUL 填充**的 `lock-diff.mjs`：`cpSync` 覆盖 `copyFileSync` 刚写过的那个文件时，
-   * 前一个句柄还没刷完，读回来的就是 `"\u0000\u0000…"` + `SyntaxError: Invalid or
-   * unexpected token`，而报错指向的是临时目录里的那一份（读起来像判据坏了，
-   * 实际是夹具自己写重了）。`copyGateDeps` 已有「已存在的目标不覆盖」的守卫，
-   * 所以把 `copy` 提到前面就够：同一条路径只被写一次。
+   * 为什么不能「先 `copy` 再 `copyGateDeps`、或者反过来」了事：两者本来就指得到
+   * 同一个落点（`copy` 常整目录拷 `{ from: "scripts/lockfile", … }`，而依赖链
+   * 里写着 `./lockfile/lock-diff.mjs`），于是**只要两条路径都伸手，那个文件就被写
+   * 两遍**。反过来的顺序在 Windows 节点上留下的是一份 **NUL 填充**的
+   * `lock-diff.mjs`（`cpSync` 覆盖 `copyFileSync` 刚写过的那个文件），报错指向临时目录
+   * 里的那一份、形态是 `SyntaxError: Invalid or unexpected token` —— 读起来像判据坏了，
+   * 实际是夹具自己写重了（ISSUE #2380）。而正过来的顺序只是把这颗雷埋起来：
+   * 判据将来在 `lockfile/` 里加一个 import，同一条路径又会被写两遍。
    *
-   * 它仍然要走进去遍历（守卫只管「不覆盖」，不管「不遍历」），传递依赖照旧补齐。 */
-  for (const { from, to } of copy ?? []) {
-    const dest = abs(to);
+   * 所以收口点不是顺序，是「谁拥有这条路径」：**用例声明的 `copy` / `files` 先落、
+   * 拥有它**；依赖链只补**还没有人写过**的那些（判据新增一层依赖时照旧自动补齐）。
+   * 落盘按「先到先写」计一次数，于是「同一路径写两遍」在结构上不可能再发生。
+   *
+   * 归属是**目录级**的（`claims()` 看祖先链）：`copy` 常只写 `scripts/lockfile/`
+   * 这个**目录**，而依赖链要的是 `scripts/lockfile/lock-diff.mjs` —— 只比整串路径
+   * 相等，那个文件就会被写第二遍，正是这条判据要拦下的形状。 */
+  const claimed = claims(Object.keys(files ?? {}));
+  /* 收口点：**一条工作区路径只写一次**。进来的两种传参坐标系不同（`copy` 给的是
+   * 工作区相对路径、`copyGateDeps` 给的是绝对目标路径），这里统一折成工作区相对路径
+   * 再判归属 —— 坐标系没收在一处时，「同一个文件写两遍」就永远判不出来。 */
+  const place = (destAbs: string, sourceAbs: string) => {
+    const rel = path.relative(root, destAbs);
+    if (claimed.covers(rel)) return;
+    claimed.add(rel);
+    const dest = abs(rel);
     mkdirSync(path.dirname(dest), { recursive: true });
-    cpSync(path.join(REPO_ROOT, from), dest, { recursive: true });
+    cpSync(sourceAbs, dest, { recursive: true });
+    /* 只有文件要补权限位：`--update` 那条路会就地落盘基线（与上面 `scriptDir`
+     * 同一条理由 —— 受限 umask 下 EACCES 会被误读成「门禁坏了」）；补到目录上是
+     * `EACCES`，所以判一下类型。 */
+    if (statSync(dest).isFile()) chmodSync(dest, 0o755);
+  };
+  for (const { from, to } of copy ?? []) {
+    place(abs(to), path.join(REPO_ROOT, from));
   }
-  copyGateDeps(path.join(root, scriptRel));
+  copyGateDeps(path.join(root, scriptRel), place);
 
   const api: GateRepo = {
     dir: root,
@@ -314,7 +398,10 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     mkdir: (rel) => mkdirSync(abs(rel), { recursive: true }),
     installDep: (name, version = "1.0.0") => {
       mkdirSync(abs(path.join("node_modules", name)), { recursive: true });
-      put(path.join("node_modules", name, "package.json"), `{"name":"${name}","version":"${version}"}\n`);
+      put(
+        path.join("node_modules", name, "package.json"),
+        `{"name":"${name}","version":"${version}"}\n`,
+      );
     },
     remove: (rel) => rmSync(abs(rel), { recursive: true, force: true }),
     read: (rel) => readFileSync(abs(rel), "utf8"),
@@ -340,7 +427,11 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
           env: gitSandboxEnv(),
         });
       } catch (error) {
-        const e = error as { stderr?: string; stdout?: string; status?: number };
+        const e = error as {
+          stderr?: string;
+          stdout?: string;
+          status?: number;
+        };
         throw new Error(
           `夹具里 git ${args.join(" ")} 失败（cwd=${root}，退出码 ${e.status ?? "?"}）：` +
             `${(e.stderr ?? e.stdout ?? "").trim() || "git 没有输出"}`,
