@@ -17,8 +17,8 @@ import type { WorkspaceView } from "./NavItems";
  * 与侧栏 / 页签同一个出处。
  *
  * 注意 `/models` 独立路由页：那一页不在 `AppShell` 里、没有顶栏 —— 它挂的就是
- * 工作区这份实现（`studio/ModelLibrary`，#2424 退役浏览版后两处同源），说明
- * 按钮只渲染在壳内的顶栏上，壳外不渲染（`models` 的说明已登记在上面）。
+ * 工作区这份实现（浏览版退役后两处同源），说明按钮只渲染在壳内的顶栏上，
+ * 壳外不渲染（`models` 的说明已登记在上面）。
  */
 const VIEW_HELP: Partial<Record<WorkspaceView, ReactNode>> = {
   history: "所有生成任务与执行日志，按时间倒序排列。",
