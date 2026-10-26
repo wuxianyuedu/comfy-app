@@ -1131,7 +1131,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
   for (const row of rows) {
     if (row.lockRef === null) continue;
     const def = defs.get(row.lockRef);
-    if (def === undefined || def.key !== "push") continue;
+    if (def?.key !== "push") continue;
     if (def.cancelInProgress !== false) {
       bad.push(
         `锁 *${row.lockRef}（key「${def.key}」）的 cancel-in-progress 不是 false —— ` +
