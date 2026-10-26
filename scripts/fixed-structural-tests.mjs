@@ -634,6 +634,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 「检出目录在哪」只许 scripts/git-dir.mjs 一处知道（ISSUE #2072）：四处硬拼那一族
   // 回归时没有任何 import 图能替它兜底（改那些脚本不会把这条带进受影响集），必须固定跑。
   "tests/git-dir-literal-scan.test.ts",
+  // 「起子进程不许开 shell」（ISSUE #2453，与 #2445 同族）：`shell: true` 那一族是
+  // Node 26 的 DEP0190，且开了 shell 参数要自己括引号 —— 两件事都只在换机器 / 换 Node
+  // 大版本时才响。改某个 `scripts/*.mjs` 加一句 `shell:` **不会**把这条带进受影响集
+  // （它不在本文件的 import 图里），所以必须固定跑：#2445 修完 typedoc，第二处
+  //（storybook）是靠 grep 肉眼找到的，那一族正是「发现第三处靠运气」。
+  "tests/spawn-shell-scan.test.ts",
   // 「`docs/api/**` 的产物到底由哪些文件决定」（ISSUE #2223）：收窄面原先只有三根
   // （`src/lib` / `src/server` / `src/trpc`），而 typedoc 沿 import 走 —— 三根之外的
   // 文件也会进产物（`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在
