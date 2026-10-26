@@ -74,6 +74,7 @@ import {
   classifyBuildOutcome,
   describeFailedStages,
   downstreamSkipped,
+  enrichStageErrors,
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
 import { machineHandle } from "./dev-handle.mjs";
@@ -247,7 +248,15 @@ export function decideAction({ state, failedNames, existing }) {
  *   readout:string[], handle:string}} input
  * @returns {string}
  */
-export function composeBody({ slug, build, sn, stage, skipped, readout, handle }) {
+export function composeBody({
+  slug,
+  build,
+  sn,
+  stage,
+  skipped,
+  readout,
+  handle,
+}) {
   return [
     commentHeader(handle),
     "",
@@ -301,7 +310,8 @@ export function composeBody({ slug, build, sn, stage, skipped, readout, handle }
 export function appendReading(io, slug, number, body, sn) {
   return runAppendIssueComment({
     run: io.run,
-    log: (line) => io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+    log: (line) =>
+      io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
     slug,
     number,
     body,
@@ -340,7 +350,9 @@ export function main(io = {}) {
 
   const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
   if (!slug) {
-    log("[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
+    log(
+      "[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。",
+    );
     return finish(CODE.NO_FACT, "推不出仓库 slug");
   }
   /* 机器自起的账用**自己的**名字，不取平台账号昵称（ISSUE #2355）：`gitUser()` 的第一顺位是
@@ -357,7 +369,9 @@ export function main(io = {}) {
   const offline = Boolean(from);
   if (offline) {
     if (!from || !fs.existsSync(from)) {
-      log(`[daily-failure-issue] --from 那个路径不存在：${from ?? "(空)"} ⇒ 不构成结论（不是「没有红」）`);
+      log(
+        `[daily-failure-issue] --from 那个路径不存在：${from ?? "(空)"} ⇒ 不构成结论（不是「没有红」）`,
+      );
       return finish(CODE.NO_FACT, "--from 读不到");
     }
     const parsed = JSON.parse(fs.readFileSync(from, "utf8"));
@@ -412,10 +426,29 @@ export function main(io = {}) {
   /* 判别靠**字段在不在**，不靠 cast 成 any：cast 会把联合的收窄整条弄丢，
    * 之后每一处 `.sn` / `.outcome` 都变成没人守的自由点。 */
   if ("none" in picked) {
-    log(`[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`);
+    log(
+      `[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`,
+    );
     return finish(CODE.NO_FACT, picked.none);
   }
-  const { build, sn, outcome } = picked;
+  const { build, sn } = picked;
+  /* 「被取消」与「真失败」的分界那句原话只在 `get-build-stage -v` 的 `data.error` 里，
+   * 而 `get-build-status` 的 `stages[]` 没有这一栏 —— 所以「这一跑是被顶掉还是真红」
+   * 这件事必须**先补原话再判**（ISSUE #2406）。离线档不联网（那是这一档的规矩），
+   * 分类退回只看状态：念得出「被取消」但念不出「谁抢的锁」。
+   *
+   * `pickPreviousDaily()` 只回答「挑哪一跑」（它用的是**状态**那一层，够用），
+   * 判「这一跑该不该立案」用的是下面这一份带原话的分类。 */
+  const outcome = offline
+    ? picked.outcome
+    : classifyBuildOutcome(
+        enrichStageErrors(
+          run,
+          slug,
+          sn,
+          details.find((d) => String(d.sn) === sn)?.json ?? null,
+        ),
+      );
   const failedNames = outcome.failed.map((f) => f.name || f.id);
   const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
   log(
@@ -438,7 +471,11 @@ export function main(io = {}) {
   }
 
   const existing = offline ? [] : openDailyIssues(run, slug);
-  const decision = decideAction({ state: outcome.state, failedNames, existing });
+  const decision = decideAction({
+    state: outcome.state,
+    failedNames,
+    existing,
+  });
   if (decision.action === "none" || decision.action === "no-fact") {
     const why = decision.reason ?? "(没给出原因)";
     log(
@@ -481,20 +518,23 @@ export function main(io = {}) {
         ok
           ? `[daily-failure-issue] ✓ 同一格又红了一次 ⇒ 已在 #${s.number} 追加一条读数并回读到（不新建）`
           : `[daily-failure-issue] ✗ #${s.number} 的评论没写成或回读不到 ⇒ 手工出口：` +
-            `cnb issues post-issue-comment --repo ${slug} --number ${s.number} --body-file <正文文件> -v`,
+              `cnb issues post-issue-comment --repo ${slug} --number ${s.number} --body-file <正文文件> -v`,
       );
       if (!ok) wrote = false;
       continue;
     }
     const file = writeScratch(ROOT, "daily-failure-issue", body);
     if (!file) {
-      log("[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。");
+      log(
+        "[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。",
+      );
       wrote = false;
       continue;
     }
     const code = runNewIssue({
       run,
-      log: (line) => log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+      log: (line) =>
+        log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
       slug,
       handle,
       root: ROOT,
@@ -509,11 +549,15 @@ export function main(io = {}) {
       dryRun: false,
     });
     if (code !== CODE.DONE) {
-      log(`[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`);
+      log(
+        `[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`,
+      );
       wrote = false;
       continue;
     }
-    log(`[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`);
+    log(
+      `[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`,
+    );
   }
   if (willWrite) return CODE.DONE;
   return wrote ? CODE.DONE : finish(CODE.WRITE_FAILED, "该写的没写成");
