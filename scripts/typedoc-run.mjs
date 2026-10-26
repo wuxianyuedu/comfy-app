@@ -40,6 +40,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,16 +61,39 @@ const FRESH_SKEW_MS = 2000;
 export const PROBE_REL = "index.html";
 
 /**
- * 本地 typedoc 可执行文件的路径；没有装就给 null（调用方据此提示 `pnpm install`）。
- * 走本地 bin 而不是 `pnpm exec`：`pnpm` 在某些环境要经 corepack 解析，而这里只需要
- * 一个已安装的 typedoc，多一层进程只增加失败面（诊断见规范 §2.1）。
+ * 本地 typedoc 的 **JS 入口**（绝对路径）；没有装就给 null（调用方据此提示 `pnpm install`）。
+ *
+ * 为什么不是 `node_modules/.bin/typedoc(.cmd)`（ISSUE #2445）：垫片是给宿主 shell
+ * 用的 —— Windows 上经 `.cmd` 就得开一层 shell，而那既是 Node 26 的
+ * DEP0190 弃用形态（args 数组 + 开 shell），又要手工括引号（开了 shell Node 就
+ * 不给参数转义，含空格的路径自己括，括错就是「换台机器跑不起来」）。
+ * `.cmd` 垫片底下本来就一行 `node …/typedoc/bin/typedoc %*` —— 直接起那行真身，
+ * 引号与弃用两件事同时消失。
+ *
+ * 解析口径**复用** `run-affected-tests.mjs` 的 `resolveVitestEntry` 同款（那里为
+ * vitest 写过一遍，理由在那份文件头）：走 `require.resolve("typedoc/package.json")`
+ * 而不是写死 `node_modules/typedoc/…`（pnpm 布局里顶层那个是链接，写死会在换版本
+ * 或换安装方式时指到空气上）；取 `bin.typedoc` 的相对段而不是猜文件名，入口名由
+ * 包自己定义。
+ *
  * @param {string} root 仓库根
  * @returns {string | null}
  */
-export function resolveTypedocBin(root = ROOT) {
-  const name = process.platform === "win32" ? "typedoc.cmd" : "typedoc";
-  const bin = path.join(root, "node_modules", ".bin", name);
-  return fs.existsSync(bin) ? bin : null;
+export function resolveTypedocEntry(root = ROOT) {
+  try {
+    const require = createRequire(path.join(root, "noop.js"));
+    const pkgPath = require.resolve("typedoc/package.json");
+    const pkgDir = path.dirname(pkgPath);
+    const bin = JSON.parse(fs.readFileSync(pkgPath, "utf8"))?.bin;
+    const rel = typeof bin === "string" ? bin : bin?.typedoc;
+    if (typeof rel !== "string") return null;
+    const entry = path.resolve(pkgDir, rel.replace(/^\.\//, ""));
+    return fs.existsSync(entry) ? entry : null;
+  } catch {
+    // 没装（resolve 抛 ENOENT / MODULE_NOT_FOUND）：与「装了但入口缺席」同归 null，
+    // 调用方只认「起不起来」，不区分「为什么起不来」（区分了也只是措辞不同）
+    return null;
+  }
 }
 
 /**
@@ -156,21 +180,19 @@ export function judgeRun(run, { after, startedAt }) {
 
 /**
  * 起一次 typedoc：日志**原样透传**（给使用者看），同时攒一份尾巴（给结论用）。
- * @param {string} bin typedoc 可执行文件
+ * @param {string} entry typedoc 的 JS 入口（`resolveTypedocEntry` 的产出）
  * @param {string} outDir 输出目录（绝对路径）
  * @param {string} root 仓库根（typedoc.json 在这里）
  */
-async function spawnTypedoc(bin, outDir, root) {
+async function spawnTypedoc(entry, outDir, root) {
   return new Promise((resolve) => {
-    // Windows 的 `.cmd` 不是可执行文件，不经 shell 起它直接 EINVAL；而 shell:true
-    // 意味着 Node **不给参数加引号**（`windowsVerbatimArguments` 在指定 shell 时
-    // 自动为真），所以含空格的路径要自己括起来 —— 仓库被放在带空格的目录下时，
-    // 不括就是「换台机器就跑不起来」。
-    const q = (p) => (/\s/.test(p) ? `"${p}"` : p);
-    const child = spawn(q(bin), ["--out", q(outDir)], {
+    // 直接以 node 起 typedoc 的 JS 入口（ISSUE #2445）：不经 `.cmd` 垫片就没有
+    // shell 层 —— DEP0190（args 数组 + 开 shell）与「含空格路径自己括引号」
+    // 两个形态一起消失，参数由 Node 原生转义（与 `run-affected-tests.mjs` /
+    // `check-format.cjs` 那批 `spawnSync(process.execPath, [entry, …])` 同一链路）。
+    const child = spawn(process.execPath, [entry, "--out", outDir], {
       cwd: root,
       env: { ...process.env },
-      shell: process.platform === "win32",
     });
     /** @type {string[]} */
     const lines = [];
@@ -211,7 +233,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @param {string} [opts.root] 仓库根
  * @param {number} [opts.attempts] 最大尝试次数
  * @param {number[]} [opts.backoff] 两次尝试之间的等待
- * @param {(bin: string, outDir: string, root: string) => Promise<{status: number|null, signal?: string|null, error?: Error|null, log: string}>} [opts.spawnImpl]
+ * @param {(entry: string, outDir: string, root: string) => Promise<{status: number|null, signal?: string|null, error?: Error|null, log: string}>} [opts.spawnImpl]
  *        起进程的注入缝：typedoc 冷跑实测 31s，契约测试不可能真跑它，于是把
  *        「起了但没写」这种现场直接喂进来（见 `tests/typedoc-run.test.ts`）。
  * @param {(msg: string) => void} [opts.onProgress] 每次尝试的结论（默认打到 stderr）
@@ -226,16 +248,16 @@ export async function runTypedoc({
   onProgress = (msg) => console.error(`[typedoc] ${msg}`),
 }) {
   const total = Math.max(1, attempts);
-  const bin = resolveTypedocBin(root);
+  const entry = resolveTypedocEntry(root);
   const empty = () => ({ exists: false, files: 0, probeMtimeMs: null });
-  if (!bin) {
+  if (!entry) {
     return {
       ok: false,
       outDir,
       attempt: 0,
       total,
       files: 0,
-      reason: `typedoc not found under node_modules/.bin -- run pnpm install first`,
+      reason: `typedoc not installed (no resolvable entry) -- run pnpm install first`,
       log: "",
       before: empty(),
       after: empty(),
@@ -247,7 +269,7 @@ export async function runTypedoc({
   for (let attempt = 1; attempt <= total; attempt += 1) {
     const before = snapshotOutput(outDir);
     const startedAt = Date.now();
-    const run = await spawnImpl(bin, outDir, root);
+    const run = await spawnImpl(entry, outDir, root);
     const after = snapshotOutput(outDir);
     const verdict = judgeRun(run, { after, startedAt });
     last = { attempt, run, before, after, verdict };
