@@ -117,6 +117,35 @@ function repoTopLevel(): string[] {
  * 以文本形态核对（不引 YAML 解析器：本文件在提交门槛的固定清单里，每次提交都跑，
  * 加依赖的代价与收益不成比例；下面每条的匹配面都窄到不会误伤注释里的措辞）。
  */
+/**
+ * 探针流水线（ISSUE #2363）的**有期限例外** —— 与上面 `CONFIG_SHAPE` 那条
+ * 「每条流水线都要引用 `*common`」的判据配成一对，理由写在用到它的那条用例里。
+ *
+ * 两条都是字面量：名单不许泛化成「自带 runner 的都放行」（那等于把判据关掉），
+ * 日期不许省（省了它，「临时」就只剩注释里的一句话）。
+ */
+const PROBE_PIPELINES = [
+  "api_trigger_probe_a",
+  "api_trigger_probe_b",
+  "api_trigger_probe_c",
+] as const;
+
+/** 探针的到期日：过了这一刻，本文件的用例当场要求把那三条与这段例外一起删掉。 */
+const PROBE_BY = "2026-11-09T00:00:00Z";
+
+/** 取某个事件键下那一段原文（到下一个 2 空格事件键为止）；取不到给空串。 */
+function configEventBlock(text: string, event: string): string {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((l) => l === `  ${event}:`);
+  if (start < 0) return "";
+  const out: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^ {2}\S/.test(line)) break;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
   {
     mustMatch: /^master:\s*$/m,
@@ -1065,6 +1094,19 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
   /** 同一把工作清单 → 允许共用它的那些锁；反过来锁 → 它只能给一份清单。 */
   const lockToWork = new Map<string, Set<string | null>>();
 
+  /* 探针（ISSUE #2363）里**被测的就是锁本身**：`cancel-in-progress: false` 是它要问的
+   * 那个问题，不是漏写的配置。所以 R2 那一半对它不成立 —— 但它仍然要过「key 是字面量」
+   * 「不撞退化形状」「一把锁只给一份清单」，且**例外本身有到期日**（见下面那条用例）。
+   * 判的不是「探针在不在」，而是「在的那几条各自被点名放过哪一条规则」。 */
+  const probeLocks = new Set(
+    rows
+      .filter((row) =>
+        (PROBE_PIPELINES as readonly string[]).includes(row.event),
+      )
+      .map((row) => row.lockRef)
+      .filter((ref): ref is string => typeof ref === "string"),
+  );
+
   for (const row of rows) {
     if (row.event === "pull_request") {
       /* R5：PR 那一条的 key 必须随 PR 编号变。用两个编号各代一次、比结果 ——
@@ -1095,7 +1137,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
       bad.push(`「${row.name}」引用了不存在的锁锚点 *${row.lockRef}`);
       continue;
     }
-    if (!def.cancelInProgress) {
+    if (!def.cancelInProgress && !probeLocks.has(row.lockRef)) {
       bad.push(
         `锁 *${row.lockRef} 没有 cancel-in-progress: true —— 重复排队收不成一条`,
       );
@@ -1236,8 +1278,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     // 引用数与它对齐才算每条都接上了 runner。把某条的 `stages:` 删了同样红。
     const refs = text.match(/^\s+-\s*<<:\s*(?:\[\s*)?\*\w+/gm) ?? [];
     const stageLists = text.match(/^ {6}stages:/gm) ?? [];
+    /* 有期限的探针例外（ISSUE #2363）从两边**同额**扣掉：探针不吃锚点、也不吃
+     * `*common` 那条锁（理由见下面那条用例）。同额扣除必须两头都有 —— 只减一边
+     * 会让「漏接锚点」与「探针在跑」在读数上变成同一个数字。 */
+    const probing = PROBE_PIPELINES.filter((name) =>
+      text.includes(`  ${name}:\n`),
+    );
     expect(
-      refs.length,
+      refs.length + probing.length,
       `锚点引用数（${refs.length}）与带 \`stages:\` 的流水线数（${stageLists.length}）对不上 —— ` +
         "有一条流水线没接上 `*common`，它会静默回落到计费的平台池",
     ).toBe(stageLists.length);
@@ -1245,6 +1293,60 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       refs.length,
       "一条流水线都没引用锚点（`.common` 被删了或换了形状）",
     ).toBeGreaterThanOrEqual(5);
+  });
+
+  it("探针例外有期限：在册的探针流水线不许吃 `*common`，且过了 `PROBE_BY` 必须删掉", () => {
+    /* 这一条是**有期限的例外**，不是放宽判据（ISSUE #2363 的探针）。
+     *
+     * 为什么那三条探针不许吃 `*common`：锚点自带的 `lock.key: pr-$CNB_PULL_REQUEST_IID`
+     * 在 `api_trigger` 上无值 ⇒ 三条会落回同一把字面 `pr-` 并互相掐停，那正是探针要量
+     * 的东西 —— 探针先得自己不成为变量。于是它们逐字写 `runner`，而上面那条
+     * 「每条都要引用锚点」的判据就没法同时成立。
+     *
+     * 处置方式刻意选了「例外 + 自毁」，不是「把判据放宽」：
+     *   · 例外的**名单**是字面量（`PROBE_PIPELINES`），不是「任何自带 runner 的都放行」；
+     *   · 例外**有到期日**（`PROBE_BY`），过了那一刻本用例当场变红、要求把整段删掉 ——
+     *     「临时」两个字不靠人的记性；
+     *   · 现役配置里**这三条一旦消失**，本用例照样绿（名单里没有 = 没有例外要判）
+     *     ⇒ 删掉探针不会留下一条只能靠改用例才能过的判据。
+     */
+    const text = readRegisteredConfig();
+    const alive = PROBE_PIPELINES.filter((name) =>
+      text.includes(`  ${name}:\n`),
+    );
+    if (alive.length === 0) return;
+    expect(
+      Date.parse(PROBE_BY),
+      `探针已经过期（PROBE_BY=${PROBE_BY}）—— 读数早该取完了，把 .cnb.yml 里那三条探针` +
+        `（${PROBE_PIPELINES.join(" / ")}）与这一段例外一起删掉`,
+    ).toBeGreaterThan(Date.now());
+    /* 例外只覆盖「不吃锚点」这一件事：探针仍然必须在自托管节点上跑、仍然必须有 tags ——
+     * 少了它们，探针量到的是平台池的时序，与这件事无关。 */
+    for (const name of alive) {
+      const block = configEventBlock(text, name);
+      expect(block, `探针 ${name} 在配置里但没有可解析的流水线体`).not.toBe("");
+      expect(
+        block,
+        `探针 ${name} 没有 namespace: group（会回落到计费平台池）`,
+      ).toMatch(/namespace:\s*group\b/);
+      expect(block, `探针 ${name} 没有非空 tags`).toMatch(
+        /^\s*tags:\s*\n\s+-\s*\S+/m,
+      );
+      expect(
+        block,
+        `探针 ${name} 引用了 \`*common\` —— 它会继承那条 PR 模板锁，三条互相掐停，探针自己成了变量`,
+      ).not.toMatch(/<<:\s*(?:\[\s*)?\*\w+/);
+    }
+    /* 例外只覆盖「不吃锚点」与「A 那把锁刻意 `cancel-in-progress: false`」两件事：
+     * 别的一条都不许借道。至少有一条探针必须留着那把 `false` 的锁 —— 它是被测对象本身，
+     * 三条都删了就等于探针没在测任何东西，而用例会静静地全绿。 */
+    const aBlock = configEventBlock(text, "api_trigger_probe_a");
+    if (aBlock !== "") {
+      expect(
+        aBlock,
+        "探针 A 的锁定义里没有 `cancel-in-progress: false` —— 它测的就是这个值，改成 `true` 等于把问题掐掉",
+      ).toMatch(/cancel-in-progress:\s*false/);
+    }
   });
 
   it("定时 / 手点 / API 三个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
@@ -2416,7 +2518,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("每日链里必须有一格点的是 `ci-daily-failure-issue.mjs --no-block`，且排在最前", () => {
     const text = readRegisteredConfig();
     const lines = executableScriptLines(text, "每日失败立案");
-    expect(lines, "配置文件里没有「每日失败立案」这一格 ⇒ 自动立案没有执行者了").toBeTruthy();
+    expect(
+      lines,
+      "配置文件里没有「每日失败立案」这一格 ⇒ 自动立案没有执行者了",
+    ).toBeTruthy();
     expect(lines.join(" ")).toContain("scripts/ci-daily-failure-issue.mjs");
     expect(lines.join(" ")).toContain("--no-block");
     expect(
