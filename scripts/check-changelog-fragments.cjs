@@ -29,6 +29,7 @@
  *
  * 用法:node scripts/check-changelog-fragments.cjs
  */
+const { gateFail, gatePass, gateSkip } = require("./ci-log.mjs");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -96,8 +97,11 @@ function main() {
   if (!entries) {
     // 目录可以不存在(尚未启用碎片流的仓库)——此时不做任何断言,直接放行。
     // 但一旦存在就必须自洽,避免「目录建了一半」的静默状态。
-    console.log(
-      `[changelog] 未启用碎片目录 ${FRAGMENT_DIR}/,跳过(见规范 13.10.5)`,
+    // ⚠️ 这是 **skip 不是 pass**:没判过的目录与「判过且干净」在屏幕上必须分得开
+    // (ISSUE #2506 —— 从前两者都打成一行绿色,读者只能靠猜)。
+    gateSkip(
+      "CHANGELOG 碎片",
+      `未启用碎片目录 ${FRAGMENT_DIR}/（规范 13.10.5）`,
     );
     return;
   }
@@ -112,14 +116,15 @@ function main() {
   }
 
   if (problems.length > 0) {
-    console.error("\n[changelog] CHANGELOG 碎片不合规:\n");
-    for (const p of problems) console.error("  ✗ " + p);
-    console.error(
-      `\n共 ${problems.length} 项。碎片约定见 docs/standards/13-提交与-code-review.md §13.10.5。`,
-    );
+    gateFail("CHANGELOG 碎片", problems, {
+      detail: `共 ${problems.length} 项不合规`,
+      hint: "碎片约定见 docs/standards/13-提交与-code-review.md §13.10.5",
+    });
     process.exit(1);
   }
-  console.log(`[changelog] ✓ ${files.length} 个碎片形态正确(${FRAGMENT_DIR}/)`);
+  gatePass("CHANGELOG 碎片", `${files.length} 个碎片形态正确`, {
+    subject: FRAGMENT_DIR + "/",
+  });
 }
 
 /** 供测试直接引用:不执行 IO 的纯判定。 */

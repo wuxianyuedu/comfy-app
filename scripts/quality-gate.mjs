@@ -31,6 +31,7 @@ import {
 } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
+import { renderVerdict } from "./ci-log.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -183,12 +184,14 @@ const GATES = {
    * / `pnpm check:all --mode dailyAttendance`。
    */
   dailyAttendance: {
-    label: "Daily tier attendance (did the last scheduled run actually execute)",
+    label:
+      "Daily tier attendance (did the last scheduled run actually execute)",
     args: ["../scripts/check-daily-attendance.mjs"],
     run: false,
   },
   premerge: {
-    label: "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
+    label:
+      "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
     args: ["../scripts/premerge-check.mjs"],
     run: false,
   },
@@ -202,12 +205,26 @@ function parseArgs(argv) {
   return out;
 }
 
-function info(msg) {
-  console.log(`[INFO] ${msg}`);
-}
-
-function fail(msg) {
-  console.error(`[ERROR] ${msg}`);
+/**
+ * 这一档判决的打印**只有一处出处**：`scripts/ci-log.mjs` 的三态出口（ISSUE #2506）。
+ *
+ * 从前这里用 `==> 标题` 打段头、`  [OK] … passed` / `  [FAIL] … failed (exit N)` 打结论，
+ * 而同一台机上的钩子打的是 `── check: <标签>` + `  [ok] ── …`、跑批打的是 `[重档] … ok`。
+ * 三段话术说同一件事，且「这一档没跑」在三种形状里没有位置。
+ */
+function reportVerdict(gate, code) {
+  const lines = renderVerdict({
+    state: code === 0 ? "ok" : "red",
+    gate: gate.label,
+    detail: code === 0 ? "通过" : `退出码 ${code}`,
+    hint:
+      code === 0
+        ? ""
+        : "先修这一档，再重跑 `pnpm check:all`（`--mode <档名>` 可以只重跑它）",
+  });
+  /* 绿走 stdout、红走 stderr：红的那些行要能从一屏绿里被 `2>` 单独捞出来。 */
+  for (const line of code === 0 ? lines : []) console.log(line);
+  for (const line of code === 0 ? [] : lines) console.error(line);
 }
 
 /**
@@ -274,8 +291,6 @@ function runGate(pnpm, key) {
   // pnpm 参数（`pnpm ../scripts/x.mjs`），表现是一句看不懂的「command not found」。
   if (/\.(?:c|m)?js$/.test(gate.args[0] ?? "")) {
     const script = path.resolve(ROOT, "scripts", path.basename(gate.args[0]));
-    console.log("");
-    console.log(`==> ${gate.label}`);
     // 回显解释器与脚本的**真实**路径（不写成 `node scripts/x.cjs` 的近似形态）：
     // 这一步用的是 `process.execPath`，与 PATH 上的 `node` 未必是同一个。
     echoCommandLine(process.execPath, [script, ...gate.args.slice(1)]);
@@ -285,8 +300,7 @@ function runGate(pnpm, key) {
       windowsHide: true,
     });
     const code = r.status ?? 1;
-    if (code === 0) console.log(`  [OK] ${gate.label} passed`);
-    else console.log(`  [FAIL] ${gate.label} failed (exit ${code})`);
+    reportVerdict(gate, code);
     return code;
   }
   const args = [...gate.args];
@@ -296,8 +310,6 @@ function runGate(pnpm, key) {
       args.push("--exclude", f);
     }
   }
-  console.log("");
-  console.log(`==> ${gate.label}`);
   // 回显真正被执行的那条（`pnpm.command` 可能是经 PowerShell 宿主的 `.ps1`），
   // 而不是把参数拼到「pnpm」这个字面名后面 —— 后者在 Windows 上常常不是同一条。
   const [command, ...argv] = invocation(args);
@@ -317,8 +329,7 @@ function runGate(pnpm, key) {
     return 1;
   }
   const code = result.status ?? 1;
-  if (code === 0) console.log(`  [OK] ${gate.label} passed`);
-  else console.log(`  [FAIL] ${gate.label} failed (exit ${code})`);
+  reportVerdict(gate, code);
   return code;
 }
 
@@ -362,13 +373,31 @@ function main() {
   if (!pnpm) return 1;
 
   let exitCode = 0;
+  const red = [];
   for (const k of keys) {
     const code = runGate(pnpm, k);
-    if (code !== 0) exitCode = code;
+    if (code !== 0) {
+      exitCode = code;
+      red.push(GATES[k].label);
+    }
   }
   console.log("");
-  if (exitCode === 0) console.log("All quality gates passed OK");
-  else fail("Quality gates have failures; please fix and re-run.");
+  /* 整轮末尾按「跑了几档、红了几档、红的是谁」说一次：各档自己那几行只回答
+   * 「我这一档怎么了」，回答不了「这一轮全跑完没有」。 */
+  const lines = renderVerdict({
+    state: exitCode === 0 ? "ok" : "red",
+    gate: "一键门禁",
+    detail:
+      exitCode === 0
+        ? `${keys.length} 档全绿`
+        : `${keys.length} 档里红 ${red.length} 档`,
+    hint:
+      exitCode === 0
+        ? ""
+        : "依次修上面那几档；只重跑其中一档用 `--mode <档名>`（可选：pnpm check:all --mode lint）",
+  });
+  for (const line of lines) console.log(line);
+  for (const name of red) console.log(`    · ${name}`);
   return exitCode;
 }
 

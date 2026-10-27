@@ -98,6 +98,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { createRequire } = require("node:module");
+const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
 
 /* prettier 的调用**不再经 pnpm 层**（口径同台账 E10：平台 shim 那一层正是
  * 「命令没跑成却被读成没问题」的藏身处）。三级解析：
@@ -364,24 +365,25 @@ async function main() {
   const current = collectUnformatted(entry);
 
   if (REPORT_ONLY) {
-    console.log(`[format] 未过 prettier:${current.length} 个文件`);
-    for (const f of current) console.log(`  · ${f}`);
+    gatePass(
+      "prettier 格式",
+      `未过 prettier ${current.length} 个文件（只出清单）`,
+    );
+    for (const line of indentItems(current)) console.log(line);
     process.exit(0);
   }
 
-  console.log(`[format] 扫描完成:未过 prettier ${current.length} 个文件`);
-
   if (current.length) {
-    console.error(
-      `[format] ${current.length} 个文件未过 prettier（规范 §13.5 格式门禁）:\n` +
-        current.map((f) => `  · ${f}`).join("\n") +
-        "\n  本判据是硬闸（无基线、无 --update）:存量已清零,新增即阻断。" +
-        "\n  修复:pnpm exec prettier --write <上面列出的文件>（只格式化你改过的,别全库跑）。",
-    );
+    gateFail("prettier 格式", current, {
+      detail: `${current.length} 个文件未过`,
+      hint:
+        "本判据是硬闸（无基线、无 --update）:存量已清零,新增即阻断（规范 §13.5）。\n" +
+        "修复:pnpm exec prettier --write <上面列出的文件>（只格式化你改过的,别全库跑）。",
+    });
     process.exit(1);
   }
 
-  console.log("[format] OK");
+  gatePass("prettier 格式", `扫描完成：命中 0 个`);
 }
 
 if (require.main === module) main();

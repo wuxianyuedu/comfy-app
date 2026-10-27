@@ -8,12 +8,23 @@
  * 规范：docs/standards/13-提交与-code-review.md §13.10.5
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-changelog-fragments.cjs");
+import { copyGateDeps } from "./helpers/gate-repo";
+
+const SCRIPT = path.resolve(
+  __dirname,
+  "../scripts/check-changelog-fragments.cjs",
+);
 const tempDirs: string[] = [];
 
 /**
@@ -25,6 +36,10 @@ function scanner(files: Record<string, string>) {
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  /* 判据的结论行走 `require("./ci-log.mjs")` 的共用出口（ISSUE #2506）——
+   * 临时仓库只放被测那一份时跑起来是 `Cannot find module './ci-log.mjs'`，
+   * 那条红长得像「判据坏了」，实际是夹具少带一个文件。 */
+  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -49,13 +64,15 @@ function scanner(files: Record<string, string>) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0))
+    rmSync(dir, { recursive: true, force: true });
 });
 
 describe("check-changelog-fragments", () => {
   it("放过形态正确的碎片", () => {
     const { run } = scanner({
-      "changelog.d/408-changelog-conflict-free.md": "## Changed\n\n- 条目正文。\n",
+      "changelog.d/408-changelog-conflict-free.md":
+        "## Changed\n\n- 条目正文。\n",
       "changelog.d/0-no-issue-fragment.md": "## Fixed\n\n- 条目正文。\n",
     });
     const res = run();
@@ -71,14 +88,18 @@ describe("check-changelog-fragments", () => {
   });
 
   it("拦住首行不是固定段落的碎片", () => {
-    const { run } = scanner({ "changelog.d/408-freeform.md": "# 我的改动\n\n- 条目。\n" });
+    const { run } = scanner({
+      "changelog.d/408-freeform.md": "# 我的改动\n\n- 条目。\n",
+    });
     const res = run();
     expect(res.ok).toBe(false);
     expect(res.output).toContain("首行须是段落标题");
   });
 
   it("拦住文件名不带 issue 号与 slug 的碎片", () => {
-    const { run } = scanner({ "changelog.d/fix-bug.md": "## Fixed\n\n- 条目。\n" });
+    const { run } = scanner({
+      "changelog.d/fix-bug.md": "## Fixed\n\n- 条目。\n",
+    });
     const res = run();
     expect(res.ok).toBe(false);
     expect(res.output).toContain("<issue号>-<slug>.md");
