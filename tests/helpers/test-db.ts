@@ -524,6 +524,9 @@ export interface SeedTaskInput {
   images?: Row[];
   workflowSnapshot?: unknown;
   referenceImages?: unknown;
+  /** 提交时刻的 RAW 执行载荷（task.retry 用例要区分「有载荷可原样重跑」与
+   *  「execPayload 为空的历史遗留行」两态）。 */
+  execPayload?: unknown;
   progress?: number;
   error?: string | null;
   createdAt?: Date;
@@ -543,6 +546,7 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
     projectId: input.projectId ?? null,
     workflowSnapshot: input.workflowSnapshot ?? null,
     referenceImages: input.referenceImages ?? null,
+    execPayload: input.execPayload ?? null,
     progress: input.progress ?? 0,
     error: input.error ?? null,
     createdAt: input.createdAt ?? new Date(),
