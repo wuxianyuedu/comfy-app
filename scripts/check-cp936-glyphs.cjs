@@ -47,6 +47,7 @@
  */
 const path = require("node:path");
 const { readForScan, walkForScan } = require("./gate-scan-read.cjs");
+const { gateFail, gatePass } = require("./ci-log.mjs");
 
 /** 门禁脚本所在仓库的根。 */
 const ROOT = path.resolve(__dirname, "..");
@@ -179,22 +180,24 @@ async function main() {
     }
   }
 
+  /* 判决行的形状只有一处出处：`scripts/ci-log.mjs`（ISSUE #2506）。 */
   if (!problems.length) {
-    console.log(
-      `[cp936-glyph] 扫描面 ${scanned} 个文件：没有「CP936 编不出来且没登记」的字符`,
+    gatePass(
+      "CP936 字形登记",
+      `扫描面 ${scanned} 个文件：没有「编不出来且没登记」的字符`,
     );
     return 0;
   }
 
-  console.log(
-    `[cp936-glyph] ${problems.length} 种字符在 CP936 里没有字形、且没有登记替代：`,
-  );
-  for (const p of problems) {
-    console.log(`  ${p.rel}:${p.firstLine}  ${label(p.ch)}  x${p.count}`);
-  }
-  console.log(
-    "  处置：登记到 scripts/ci-cp936-glyphs.mjs 的 GLYPH_REPLACEMENTS（写下它在日志里\n" +
-      "  显示成什么），或换一个 CP936 编得出来的字符。",
+  gateFail(
+    "CP936 字形登记",
+    problems.map((p) => `${p.rel}:${p.firstLine}  ${label(p.ch)}  x${p.count}`),
+    {
+      detail: `${problems.length} 种字符在 CP936 里没有字形、且没有登记替代`,
+      hint:
+        "登记到 scripts/ci-cp936-glyphs.mjs 的 GLYPH_REPLACEMENTS（写下它在日志里\n" +
+        "显示成什么），或换一个 CP936 编得出来的字符。",
+    },
   );
   return reportOnly ? 0 : 1;
 }

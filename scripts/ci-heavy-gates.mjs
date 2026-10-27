@@ -106,6 +106,7 @@ import {
   faceTouched,
   narrowingEntryForScript,
 } from "./ci-incremental-gates.mjs";
+import { gateFail, gatePass, gateSkip, looksSkipped } from "./ci-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -283,7 +284,7 @@ export function narrowingDecision(step, changed) {
  * 跑完整张注册表。
  *
  * @param {{cwd?: string, only?: string | null, env?: Record<string, string | undefined>, changedFiles?: {files: readonly string[]} | null}} [io]
- * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[]}[], skipped: {label: string, stage: string, globs: readonly string[]}[], notJudged: {label: string, reason: string}[], unreadable: boolean}}
+ * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[], noJudgement?: boolean}[], skipped: {label: string, stage: string, globs: readonly string[]}[], notJudged: {label: string, reason: string}[], unreadable: boolean}}
  *   `unreadable` = 注册表本身没读出来（钩子文件不在 / 解析零条）—— 那是
  *   「本档不构成证据」，不是「没有档要跑」。
  *   `notJudged` = **没有判决面**的那些步骤（它们在这一档恒绿且无声）——
@@ -311,7 +312,7 @@ export function runHeavyGates(io = {}) {
           s.argv.join(" ").includes(only),
       )
     : all;
-  /** @type {{label: string, code: number, output: string, ms: number, notRunCodes: number[]}[]} */
+  /** @type {{label: string, code: number, output: string, ms: number, notRunCodes: number[], noJudgement: boolean}[]} */
   const runs = [];
   /** @type {{label: string, stage: string, globs: readonly string[]}[]} */
   const skipped = [];
@@ -363,9 +364,83 @@ export function runHeavyGates(io = {}) {
       output: r.output,
       ms,
       notRunCodes: resolved.notRunCodes,
+      /* 「绿」还要再分一层：判据退 0、也打了字，而**它自己说的是「这一轮没判」**
+       * （暂存区空 / 改动面不适用）。那是 `skip`，不是「判过了」——
+       * 与 `notJudged` 分开：那一档是「一个字都没说」，这一档是「说了，说的是没判」。
+       * 判法共用 `scripts/ci-log.mjs` 的 `looksSkipped()`（同一张说法表），
+       * 并在打印时与判据自己的输出**并排**念出来。 */
+      noJudgement: r.code === 0 && looksSkipped(String(r.output ?? "").trim()),
     });
   }
   return { runs, skipped, notJudged, unreadable: false };
+}
+
+/** 红步输出的取舍口径：头 5 行 + 尾 15 行（见 `main()` 里那段理由）。 */
+const HEAD_LINES = 5;
+const TAIL_LINES = 15;
+
+/** 绿步引用判据自己的话时留多少字（一行判决要读得下去）。 */
+const CONCLUSION_MAX = 90;
+
+/**
+ * 把判据的结论句压成**一行里读得完**的长度。
+ *
+ * 判据的结论常常是一整段（`[test-sleep] OK —— 裸 sleep 0 处 / 声明豁免 18 处。` 之后
+ * 还有口径说明）。一行判决的价值就在于「一条一眼」，所以超长时截断并显式写
+ * 「又 N 字」—— 省略必须被读出来，这是一整条链上反复的规矩。
+ *
+ * @param {string} line
+ * @returns {string}
+ */
+export function compact(line) {
+  const s = String(line ?? "").trim();
+  if (s.length <= CONCLUSION_MAX) return s;
+  return `${s.slice(0, CONCLUSION_MAX)}…（又 ${s.length - CONCLUSION_MAX} 字）`;
+}
+
+/**
+ * 判据输出的**最后一行非空行** —— 也就是它自己那句结论。
+ *
+ * 判据的结论都在末尾（这是本仓所有 `check-*.cjs` 的既成写法，也是红步取尾部
+ * 那一半的同一口径）。整段没有内容时回空串，由调用方决定拿什么兜。
+ *
+ * @param {string | undefined} output
+ * @returns {string}
+ */
+export function lastLine(output) {
+  return (
+    String(output ?? "")
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim() !== "")
+      .pop()
+      ?.trim() ?? ""
+  );
+}
+
+/**
+ * 红步输出的取舍：头 `HEAD_LINES` 行 + 尾 `TAIL_LINES` 行，中间那段**报数不吞**。
+ *
+ * 按**位置**取而不是按词表猜「哪一行是结论」：本次现场的红行是一句普普通通的
+ * `[deps-freshness] 有漂移`，任何词表都不会命中它，那就等于没念。判据的输出通常
+ * 不到 20 行 ⇒ 一个字都不省。
+ *
+ * @param {string | undefined} output
+ * @returns {{lines: string[], total: number, omitted: number}}
+ */
+export function clipOutput(output) {
+  const all = String(output ?? "")
+    .trim()
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "");
+  if (all.length <= HEAD_LINES + TAIL_LINES) {
+    return { lines: all, total: all.length, omitted: 0 };
+  }
+  return {
+    lines: [...all.slice(0, HEAD_LINES), ...all.slice(-TAIL_LINES)],
+    total: all.length,
+    omitted: all.length - HEAD_LINES - TAIL_LINES,
+  };
 }
 
 /**
@@ -514,6 +589,12 @@ export function main(io = {}) {
   const isNotRun = (r) => r.code === 127 || r.notRunCodes.includes(r.code);
   const red = runs.filter((r) => r.code !== 0 && !isNotRun(r));
   const missing = runs.filter(isNotRun);
+  /* 「按面未触及」与「判据自己说没判」都是 `skip` 一档（判过 / 没判 / 红三态里
+   * 中间那一档）：它们**都不是**「判过了」，也**都不是**「判出失败」。
+   * 名字必须念出来 —— 静默跳过与静默放行是同一族病（ISSUE #2255 / #2256）。 */
+  const noJudgement = runs.filter((r) => r.noJudgement && r !== undefined);
+  const green = runs.filter((r) => r.code === 0 && !noJudgement.includes(r));
+
   if (argv.includes("--json")) {
     log(
       JSON.stringify(
@@ -541,88 +622,88 @@ export function main(io = {}) {
       ),
     );
   } else {
-    /* 「按面未触及」的那些**逐条点名**（ISSUE #2255）：静默跳过与静默放行是同一族病 ——
-     * 平台那一格以同一组 glob 收窄，这一格也收窄，但**跳过了哪几条必须说出来**。 */
+    /* ── 判决的打印**只有一条路**：`scripts/ci-log.mjs` 的三态出口 ──────────
+     *
+     * 此前这一档自己拼标签（`ok` / `红` / `没跑起来` 各在一处），于是同一个跑批里
+     * 「这条算了数」与「这条其实没判」在屏幕上逐字同形（ISSUE #2506 的当场读数）。
+     * 现在每条判决都过 `gatePass` / `gateSkip` / `gateFail`，三态用同一列前缀，
+     * 而「没判」的那一档有自己的名字。 */
+    /** @param {string} line */
+    const say = (line) => log(line);
     for (const s of skipped) {
-      log(
-        `[重档] 按面未触及 ⇒ 跳过：${s.label}` +
-          `（面 ${s.globs.join(" / ")}；平台那一格：${s.stage}）`,
+      gateSkip(
+        s.label,
+        `按面未触及：面 ${s.globs.join(" / ")}（平台那一格：${s.stage}）`,
+        { out: say },
       );
     }
-    runs.forEach((r, i) => {
-      /* 三态标签与退出码同口径（`isNotRun` 上面那一段）：把「没跑起来」打成「红」
-       * 是把「没判」说成「判出失败」，读的人会去修一条根本没执行过的判据。 */
-      const tag =
-        r.code === 0
-          ? "ok"
-          : r.code === 127 || r.notRunCodes.includes(r.code)
-            ? "没跑起来"
-            : "红";
-      log(`[重档] ${i + 1}/${runs.length} ${tag} ${r.label}（${r.ms}ms）`);
-      if (r.code !== 0) {
-        /* 红步的输出**不许静默截断**（ISSUE #2367 的现场）：这里此前只转述尾部 12 行，
-         * 而 `重档` 那一档的输出是几百行 —— 红的那一条常常在**前面**（本次现场是
-         * 「改动面来自 …」与 `[deps-freshness] 有漂移` 那几行），平台日志里一个字都没有，
-         * 读的人只能看到一屏无关的绿步读数。尾部仍保留（判据的结论多在末尾），
-         * 但表头与第一条失败行必须念出来。
-         *
-         * 取法三件：**前 3 行**（表头 / 判决面）、**第一条带「红」「✗」「ERROR」的行**
-         * （判据自己的结论），再是尾部 12 行。有省略时**明说省了多少行**。 */
-        const all = String(r.output ?? "")
-          .trim()
-          .split(/\r?\n/)
-          .filter((line) => line.trim() !== "");
-        /* 「哪几行是结论」不该由一个词表决定（本次现场的红行是一句普普通通的
-         * `[deps-freshness] 有漂移`，词表里没有它就等于没念）。⇒ **按位置取**：
-         * 前 5 行（表头 / 判决面 / 第一条失败）+ 后 15 行（判据的结论都在末尾）。
-         * 判据的输出通常不到 20 行 ⇒ 一个字都不省。 */
-        const HEAD_LINES = 5;
-        const TAIL_LINES = 15;
-        const picked =
-          all.length <= HEAD_LINES + TAIL_LINES
-            ? all
-            : [...all.slice(0, HEAD_LINES), ...all.slice(-TAIL_LINES)];
-        for (const line of picked) log(`        ${line}`);
-        if (picked.length < all.length) {
-          const omitted = all.length - picked.length;
-          log(
-            `        …（此处省略第 ${HEAD_LINES + 1}~${all.length - TAIL_LINES} 行，共 ${omitted} 行；` +
-              "省略的是中间段，头尾都在上面）",
-          );
-        }
-      } else {
-        /* 绿步的**读数也要有出口**（ISSUE #2256）：此前只有红步的输出被转述，
-         * 于是「exit 0 但自己说了『我没有判任何东西』」那类形状在平台日志里
-         * **一个字都不打** —— 那一格与「真的判过了」逐字同形。
-         * 取**最后一行非空行**：判据的结论都在末尾（红步那边取的是尾部若干行，
-         * 同一口径）。 */
-        const conclusion = String(r.output ?? "")
-          .split(/\r?\n/)
-          .map((line) => line.trimEnd())
-          .filter((line) => line.trim() !== "")
-          .pop();
-        if (conclusion) log(`        ${conclusion.trim()}`);
+    runs.forEach((r) => {
+      if (isNotRun(r)) {
+        /* 「没跑起来」（127 / 判据自己声明的 2）既不是绿也不是红 —— 把它打成红
+         * 就等于宣布「判据判出失败」，读的人会去修一条根本没执行过的判据。 */
+        gateSkip(r.label, `没跑起来（退出码 ${r.code}），不等于通过`, {
+          out: say,
+        });
+        return;
       }
+      if (r.code === 0) {
+        const conclusion = lastLine(r.output);
+        if (r.noJudgement) {
+          gateSkip(r.label, conclusion || "判据自己说这一轮没有要判的东西", {
+            out: say,
+          });
+          return;
+        }
+        /* 绿步的读数从 `[ok]` 那一行的括号里读**判据自己的话**（ISSUE #2256：
+         * 「exit 0 但自己说了什么都没判」曾经一个字都不打）。
+         * 墙钟跟在读数后面：这一档的 24s 与逐条分布只有在同一行里才读得出来
+         * （只给总数 ⇒ 无从判断该优化谁）。 */
+        gatePass(r.label, compact(conclusion) || `判过 · ${r.ms}ms`, {
+          out: say,
+        });
+        return;
+      }
+      /* 红步的输出**不许静默截断**（ISSUE #2367 的现场）：判据的输出常常几百行，
+       * 而红的那一条结论**不一定在末尾**。取法按**位置**（前 5 行 + 后 15 行），
+       * 不按词表猜「哪一行是结论」—— 本次现场的红行是一句普普通通的
+       * `[deps-freshness] 有漂移`，词表里没有它就等于没念。 */
+      const picked = clipOutput(r.output);
+      gateFail(r.label, picked.lines, {
+        detail: `退出码 ${r.code} · ${picked.total} 行输出 · ${r.ms}ms`,
+        hint:
+          picked.omitted > 0
+            ? `上面是头 5 行 + 尾 15 行，中间省略 ${picked.omitted} 行（完整日志：${r.label}）`
+            : "",
+        max: 0,
+        out: say,
+      });
     });
     /* 「没判」的那些**逐条点名**：恒绿且无声是这一族最贵的形态（判据在场、
      * 结论静默变成放行）—— 名字不念出来，就等于它还在绿里。 */
     for (const n of notJudged) {
-      log(`[重档] ? ${n.label} —— 这一条**没判**：${n.reason}`);
+      gateSkip(n.label, `这一条没判：${n.reason}`, { out: say });
     }
   }
   const totalMs = runs.reduce((sum, r) => sum + r.ms, 0);
+  const skippedTotal =
+    skipped.length + notJudged.length + noJudgement.length + missing.length;
+  /* 合计行按**同一套三态**措辞：「判过 / 没判 / 红」对得上上面逐条那三列前缀。
+   * 条数是这几档之和 —— 谁都不许从总账里消失（少算一条就是「这一条没判」被
+   * 静默地折成绿）。 */
   log(
-    `[重档] 合计 ${runs.length + skipped.length} 条：红 ${red.length}、没跑起来 ${missing.length}、` +
-      `没判 ${notJudged.length}、按面未触及 ${skipped.length}、` +
-      `绿 ${runs.length - red.length - missing.length}；墙钟合计 ${totalMs}ms`,
+    `[重档] 合计：红 ${red.length}、没判 ${skippedTotal}、` +
+      `判过 ${green.length}（共 ${green.length + skippedTotal + red.length} 条）；` +
+      `墙钟合计 ${totalMs}ms`,
   );
   if (red.length > 0) {
-    for (const r of red) log(`[重档] ✗ ${r.label}`);
+    for (const r of red)
+      log(`[重档] 下一动作：先修「${r.label}」这一条（上面有证据）`);
     return 1;
   }
   if (missing.length > 0) {
     // 127 单列一档并退 2：把它并进「红」就等于宣布「判据判出失败」，而事实是它没判。
-    for (const r of missing) log(`[重档] ? ${r.label} —— 没跑起来，不等于通过`);
+    for (const r of missing)
+      log(`[重档] 下一动作：查「${r.label}」为什么没跑起来（不是通过）`);
     return 2;
   }
   if (notJudged.length > 0) {

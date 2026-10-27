@@ -83,6 +83,7 @@ const {
   walkForScan,
   vanishedNote,
 } = require("./gate-scan-read.cjs");
+const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
 
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, "src");
@@ -367,33 +368,36 @@ function main() {
   const note = vanishedNote(vanishedFiles);
 
   if (REPORT_ONLY) {
-    console.log(
-      `扫描 ${checkedFiles} 个地基模块(src/lib + src/trpc):零消费导出 ${dead.length} 个` +
+    gatePass(
+      "零消费导出",
+      `扫描 ${checkedFiles} 个模块：零消费导出 ${dead.length} 个（只出清单）` +
         note,
+      {
+        subject: "地基层",
+      },
     );
-    for (const d of dead) console.log(`  · ${d}`);
+    for (const line of indentItems(dead)) console.log(line);
     return;
   }
 
   /* 「消失数」必须进结论：少读一份就会把 `dead` 报小 —— 看着像「干净」，实际是这一轮
      没读。（口径在 `gate-scan-read.cjs`：只降级 ENOENT、不许静默。） */
   if (dead.length) {
-    console.error(
-      `✗ 发现 ${dead.length} 个零消费导出（地基层 src/lib + src/trpc 的值导出必须在生产路径被引用）：`,
-    );
-    for (const d of dead) console.error(`    ${d}`);
-    console.error(
-      "\n修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由" +
-        "\n     必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。" +
-        "\n     本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。" +
+    gateFail("零消费导出", dead, {
+      subject: "地基层",
+      detail: `${dead.length} 个零消费导出`,
+      hint:
+        "修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由\n" +
+        "必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。\n" +
+        "本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。" +
         note,
-    );
+    });
     process.exit(1);
   }
 
-  console.log(
-    `✓ 无零消费导出(§12.16;扫描 ${checkedFiles} 个模块)` + note,
-  );
+  gatePass("零消费导出", `扫描 ${checkedFiles} 个模块：命中 0 条` + note, {
+    subject: "地基层",
+  });
 }
 
 main();

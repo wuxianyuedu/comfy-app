@@ -35,6 +35,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
+const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -44,10 +45,13 @@ const STAGED = ARGS.has("--staged");
 /** 扫描范围：应用源码。 */
 const SCAN_DIR = "src";
 
-if (STAGED && !REPORT_ONLY) skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[function-length]" });
+if (STAGED && !REPORT_ONLY)
+  skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[function-length]" });
 const SOURCE_EXT = /\.(ts|tsx)$/;
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) ||
+  /\.snap$/.test(rel) ||
+  rel.includes("/__tests__/");
 
 /** 超过这个行数的函数进「拆分候选」清单(与 R5 的文件阈值同性质：提示级)。
  *
@@ -132,7 +136,10 @@ function walk(dir, out = []) {
 }
 
 const relOf = (p) =>
-  p.split(path.sep).join("/").replace(ROOT.split(path.sep).join("/") + "/", "");
+  p
+    .split(path.sep)
+    .join("/")
+    .replace(ROOT.split(path.sep).join("/") + "/", "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -356,39 +363,47 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
 
 longFunctions.sort((a, b) => b.lines - a.lines || a.rel.localeCompare(b.rel));
 
-const fmt = (f) => `  · ${f.lines} 行  ${f.rel}:${f.line}  ${f.name}`;
+const fmt = (f) => `${f.lines} 行  ${f.rel}:${f.line}  ${f.name}`;
 
 /* ── 报告 / 判定 ────────────────────────────────────────── */
+/* 判决行的形状只有一处出处：`scripts/ci-log.mjs`（ISSUE #2506）。
+ * 从前这一份自己拼了四种形状（`扫描…N 个：` 表头 / `--report 模式 …✓` /
+ * `[function-length] OK` / 红的 `巨型函数（规范 §12.13）：`），同一个跑批里
+ * 与别的判据并排放着，读者要逐条认。 */
 
 if (REPORT_ONLY) {
-  console.log(
-    `[function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个：`,
-  );
-  console.log(longFunctions.map(fmt).join("\n") || "  （无）");
-  console.log("[function-length] --report 模式：只出清单，不判失败 ✓");
+  if (longFunctions.length) {
+    gatePass(
+      "函数长度",
+      `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个（只出清单）`,
+      {
+        subject: `${SCAN_DIR}/**`,
+        out: (line) => console.log(line),
+      },
+    );
+    for (const line of indentItems(longFunctions.map(fmt))) console.log(line);
+  } else {
+    gatePass("函数长度", `超过 ${HINT_LINES} 行的函数 0 个`, {
+      subject: `${SCAN_DIR}/**`,
+    });
+  }
   process.exit(0);
 }
 
-/* 清单始终打印：这是「排期拆分」时唯一要看的那张表。 */
 if (longFunctions.length) {
-  console.log(
-    `[function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个：`,
-  );
-  console.log("[function-length] 拆分候选（按行数降序）：\n" + longFunctions.map(fmt).join("\n"));
-} else {
-  console.log(`[function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 0 个`);
-}
-
-if (longFunctions.length) {
-  console.error(
-    "[function-length] 巨型函数（规范 §12.13）：\n" +
-      "  判据：函数体超过 " +
+  gateFail("函数长度", longFunctions.map(fmt), {
+    subject: `${SCAN_DIR}/**`,
+    detail: `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个`,
+    hint:
+      "判据：函数体超过 " +
       HINT_LINES +
       " 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n" +
-      "  不是靠「在一个函数里加注释分段」。\n" +
-      "  本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。",
-  );
+      "不是靠「在一个函数里加注释分段」（规范 §12.13）。\n" +
+      "本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。",
+  });
   process.exit(1);
 }
 
-console.log("[function-length] OK");
+gatePass("函数长度", `超过 ${HINT_LINES} 行的函数 0 个`, {
+  subject: `${SCAN_DIR}/**`,
+});

@@ -62,7 +62,7 @@ describe("check-function-length.cjs（函数长度门禁）", () => {
   test("小函数不进清单（阈值防噪音）", ({ repo }) => {
     writeFunction(repo, "src/small.ts", "tiny", 20);
     const { output } = repo.run(["--report"]);
-    expect(output).toContain("（无）");
+    expect(output).toContain("[ok] 函数长度");
   });
 
   test("任何巨型函数都阻断（无「已登记的存量」这一档）", ({ repo }) => {
@@ -221,7 +221,7 @@ describe("匿名块体（IIFE / 回调 / 闭包）同受约束（ISSUE #570 第 
     );
     repo.write(rel, `export const CONFIG = {\n${body}\n};\n`);
     const { output } = repo.run(["--report"]);
-    expect(output).toContain("（无）");
+    expect(output).toContain("[ok] 函数长度");
   });
 
   test("注释与模板字符串里的 `() => {` 不算函数体", ({ repo }) => {

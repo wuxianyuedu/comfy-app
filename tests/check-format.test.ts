@@ -62,7 +62,7 @@ describe("prettier 格式判据（硬闸）", () => {
     repo.write("src/lib/keep.ts", CLEAN);
     const r = repo.run();
     expect(r.code).toBe(0);
-    expect(r.output).toContain("[format] OK");
+    expect(r.output).toContain("[ok] prettier 格式");
   });
 
   test("未过格式的文件 → 阻断，并指出是哪个文件", ({ repo }) => {
@@ -71,7 +71,7 @@ describe("prettier 格式判据（硬闸）", () => {
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/fresh.ts");
-    expect(r.output).toContain("未过 prettier");
+    expect(r.output).toContain("个文件未过");
   });
 
   test("把原本干净的文件弄脏 → 同样阻断（没有存量额度）", ({ repo }) => {
@@ -81,7 +81,9 @@ describe("prettier 格式判据（硬闸）", () => {
     expect(r.output).toContain("src/lib/keep.ts");
   });
 
-  test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({ repo }) => {
+  test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({
+    repo,
+  }) => {
     /* 少了这一格，「删了 --update」与「--update 还在但没人调」看起来一样。 */
     repo.write("src/lib/fresh.ts", DIRTY);
     for (const flag of ["--update", "--strict"]) {
@@ -89,7 +91,9 @@ describe("prettier 格式判据（硬闸）", () => {
       expect(r.code, `${flag} 不该放行脏文件`).toBe(1);
       /* 出路不该是「跑 --update 收紧基线」——那条路已经不存在（判据的输出里
        * 只能出现「本判据是硬闸（无基线、无 --update）」这半句声明）。 */
-      expect(r.output, `${flag} 的出路不该指向 --update`).not.toContain("--update 收紧");
+      expect(r.output, `${flag} 的出路不该指向 --update`).not.toContain(
+        "--update 收紧",
+      );
     }
   });
 
@@ -103,7 +107,7 @@ describe("prettier 格式判据（硬闸）", () => {
     const r = repo.run([], { env: { COMFYAPP_PRETTIER_ENTRY: undefined } });
     expect(r.code).toBe(2);
     expect(r.output).toContain("找不到 prettier 入口");
-    expect(r.output).not.toContain("[format] OK");
+    expect(r.output).not.toContain("[ok] prettier 格式");
   });
 
   test("prettier 退出 1 却一行都没列出来 → exit 2（「没跑成」与「有差异」分开）", ({
@@ -118,7 +122,7 @@ describe("prettier 格式判据（硬闸）", () => {
     const r = repo.run([], { env: { COMFYAPP_PRETTIER_ENTRY: stub } });
     expect(r.code).toBe(2);
     expect(r.output).toContain("不是「全库干净」");
-    expect(r.output).not.toContain("[format] OK");
+    expect(r.output).not.toContain("[ok] prettier 格式");
   });
 
   test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({
