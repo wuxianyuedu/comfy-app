@@ -11,9 +11,14 @@
   `ship-diagnose` / `ship-stage-log` / 两个失败立案脚本 / 独立 CLI 都照旧从
   `ci-build-readout.mjs` 导入。`describeFailedStages()` **刻意留下**：它边取正文边念
   （要多问一次 `get-build-stage`），搬到 print 那份就把「零 IO」的那一份变成也摸 IO 的。
-- 行为面读数不变（同一跑不许给出两种答案）：`node scripts/ci-build-readout.mjs --sn
-  cnb-sd5-1k5ui2bb3` 与 `pnpm ship --diagnose cnb-sd5-1k5ui2bb3` 在拆分前后各跑一次，
-  话术逐字相同（「结论：绿（这一跑有结论）」+ 流水线那行）。
+- 行为面读数不变（同一跑不许给出两种答案）：`pnpm ship --diagnose cnb-sd5-1k5ui2bb3` 在**拆分
+  前后各跑过一次**，两次话术逐字相同（「结论：绿（这一跑有结论）」+ 流水线那行）。独立 CLI
+  `node scripts/ci-build-readout.mjs --sn cnb-sd5-1k5ui2bb3` **只在拆后跑过一次**（同一份两行）——
+  所以「没改话术」这一格真正的执行者不是那一次手点，而是既有那 7 条逐字钉着 `formatOutcome`
+  话术的用例（`读出来的那几行…` 3 条 / `formatOutcome：前缀可注入` 1 条 /
+  `formatOutcome：running 那一支把进度念出来` 3 条），它们拆前拆后都绿。
+  （这条订正本身是 #2526 收口时补的：上一版这句写成了「两个入口拆分前后各跑一次」，
+  而我并没有在拆前跑过 CLI —— 见该单的回执评论。）
 - 新增形状档 `tests/ci-build-readout.test.ts` 的「切分之后：ci-build 这一族的读数各只有一份定义」：
   钉「每个名字恰有一个定义点」+「搬走的那两个仍由 readout 转发、定义只在 print 那一份里」。
   这条不是凑数 —— `check-code-duplication.cjs` 的量程是 `src/**`，扫不到 `scripts/`，
