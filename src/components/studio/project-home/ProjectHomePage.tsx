@@ -24,6 +24,7 @@ import { RunControlBar } from "~/components/agent-run/RunControlBar";
 import { cn } from "~/lib/utils";
 import type { WorkspaceView } from "../NavItems";
 import { ProjectHomeStatus } from "./ProjectHomeStatus";
+import { SeriesOrganizer } from "./SeriesOrganizer";
 import { useProjectHome } from "./hooks/use-project-home";
 
 /** 一处「去这个视图继续」的入口。 */
@@ -45,11 +46,14 @@ export interface ProjectHomePageProps {
   projectName: string;
   /** 切到项目内的某个页签。 */
   onNavigate: (view: WorkspaceView) => void;
+  /** 当前项目 id（活跃项目）—— 供「系列归层」面板把本项目挂到某集。 */
+  projectId?: string;
 }
 
 export function ProjectHomePage({
   projectName,
   onNavigate,
+  projectId,
 }: ProjectHomePageProps) {
   const controller = useProjectHome();
   const { overview, headline, loading } = controller;
@@ -121,6 +125,9 @@ export function ProjectHomePage({
           ))}
         </div>
       </section>
+
+      {/* ── 系列归层：FR-SR-01/02（#2477）────────────────── */}
+      <SeriesOrganizer projectId={projectId} />
     </DocumentFrame>
   );
 }

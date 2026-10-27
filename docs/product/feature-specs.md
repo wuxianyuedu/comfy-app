@@ -807,39 +807,46 @@
 ## 15. 系列与剧集结构（FR-SR）
 
 > 北极星「多剧集影视动漫」的结构承载（[overview §1.2 / §5.2](overview.md)）。
-> **本域整体计划中**：当前没有 Series / Season / Episode 实体，角色与镜头是 JSON 列
-> （`src/server/db/schema.ts` 的 `production` / `workshopDraft`），本次只立需求、不动代码。
+> **容器层已实现（#2477）**：`series` / `season` / `episode` 三表 + `episode.projectId`
+> 外链 + tRPC `series` router + 项目主页「系列/季/集」面板。角色库（`character` 实体表）
+> 已在 schema 落地，**系列角色库 router + UI + 与 `production.characters` 双向同步**为下一切片。
+> 角色与镜头目前仍是 `production` 的 JSON 列（破坏性抽取走 `db:migrate`，单列处理）。
 
 #### FR-SR-01 系列（Series）实体与层级
 
-- 状态：计划中
+- 状态：已实现（容器层，#2477）
 - 需求：一部作品 = 一个系列；层级为 **系列 → 季 → 集 → 创作链路**（剧本 / 角色 /
   分镜 / 镜头）。系列持有跨集共享的东西（角色库、风格锚、场景设定）。
 - 行为与验收：① schema 里有 `series` 表，且 `episode` 经外键链到它（不是靠名字匹配）；
-  ② 新建一集时可直接**引用**所属系列的角色与风格，不需要重新生成；
-  ③ 删除系列时，其它系列的资产不受影响（外键行为显式声明，不靠默认）；
-  ④ 现有数据可迁移：既有的 `project` / `production` 归入一个默认系列，迁移后**不丢**。
-- 落点（现状）：`src/server/db/schema.ts`（`project` / `production`，无系列层）
+  ② 新建一集时可直接**引用**所属系列的角色与风格，不需要重新生成（角色引用待 PR2 角色库）；
+  ③ 删除系列时，其它系列的资产不受影响（`onDelete: "cascade"` 仅清本系列子树，不波及他系列）；
+  ④ 现有数据可迁移：既有的 `project` / `production` 归入一个默认系列，迁移后**不丢**（未做自动回填，
+  由用户在新面板手动归属，零数据风险）。
+- 落点（现状）：`src/server/db/schema.ts`（`series` / `season` / `episode` 三表）、
+  `src/server/api/routers/series.ts`、`src/components/studio/project-home/SeriesOrganizer.tsx`
 
 #### FR-SR-02 季（Season）与集（Episode）
 
-- 状态：计划中
+- 状态：已实现（容器层，#2477）；集号唯一约束与单集时长校验待补
 - 需求：集有**季号 / 集号 / 排序 / 单集目标时长**；一集 = 一次完整创作链路 + 一部成片。
-- 行为与验收：① 列表按 (季号, 集号) 排序，且同一系列内集号唯一（唯一约束，不是界面约定）；
-  ② 单集目标时长进入分镜阶段的**总量校验**（各镜时长之和与目标时长差一个数量级时给出可见提示）；
-  ③ 集号可调整且调整后顺序与成片导出顺序一致。
-- 落点（现状）：`filmProject` / `filmShot` 只能表达「一部片含多个镜头」，无季 / 集字段
-  （`src/server/db/schema.ts`）
+- 行为与验收：① 列表按 (季号, 集号) 排序（`seasons`/`episodes` 查询已 `orderBy`）；
+  **同一系列内集号唯一约束**尚未加（目前是界面约定，待补唯一索引）；② 单集目标时长
+  （`targetDurationSec`）字段已落，但其进入分镜阶段的总量校验**待做**；
+  ③ 集号可调整且调整后顺序与成片导出顺序一致（字段已支持）。
+- 落点（现状）：`src/server/db/schema.ts` 的 `episode`（`seasonId`/`episodeNumber`/
+  `targetDurationSec`/`status`）、`src/server/api/routers/series.ts`
 
 #### FR-SR-03 跨集资产复用（角色库 / 风格锚 / 场景库）
 
-- 状态：计划中
+- 状态：计划中（实体表已落地，库 router + UI + 双向同步待 #2477 后续切片）
 - 需求：角色、风格、场景成为**可被多集引用**的实体（引用，不是拷贝）。
 - 行为与验收：① 在 B 集引用 A 集的角色后，改 A 集角色卡时给出「该角色被 N 集引用」的提示，
   **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；
   ② 引用关系可查（能列出「这个角色被哪些集用了」）；
   ③ **拷贝即失去一致性**：以「复制一份到本集」实现的复用不算本条达标。
-- 落点（现状）：角色是 `production.characters` 的 JSON 列 ⇒ 无法被跨集引用
+- 落点（现状）：`character` 实体表与 `episode_character` 关联表已在 `src/server/db/schema.ts`
+  落地（`series` 级角色库，字段对齐 `Character`）；系列角色库的 tRPC router + UI 面板 +
+  与 `production.characters` 的双向同步为下一切片（#2477 续）。当前仍靠 `production.characters` JSON 列。
 
 #### FR-SR-04 剧集级排期与批量（整季调度 / 断点续跑）
 

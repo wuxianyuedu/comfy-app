@@ -51,6 +51,8 @@ const jsonColumns = new Set<string>([
   "shots",
   "progress",
   "run",
+  "styleTags",
+  "portraits",
 ]);
 
 const TABLES = [
@@ -77,6 +79,11 @@ const TABLES = [
   "workshopSession",
   "workshopDraft",
   "production",
+  "series",
+  "season",
+  "episode",
+  "character",
+  "episode_character",
 ];
 
 const CREATE_SQL = `
@@ -186,6 +193,33 @@ CREATE TABLE IF NOT EXISTS production (
   progress TEXT NOT NULL DEFAULT '{}', run TEXT NOT NULL DEFAULT '{}', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS series (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, title TEXT NOT NULL DEFAULT '未命名系列',
+  description TEXT NOT NULL DEFAULT '', coverUrl TEXT, styleSlug TEXT,
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS season (
+  id TEXT PRIMARY KEY, seriesId TEXT NOT NULL, seasonNumber INTEGER NOT NULL DEFAULT 1,
+  title TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS episode (
+  id TEXT PRIMARY KEY, seasonId TEXT NOT NULL, projectId TEXT, episodeNumber INTEGER NOT NULL DEFAULT 1,
+  title TEXT NOT NULL DEFAULT '', synopsis TEXT NOT NULL DEFAULT '', coverUrl TEXT,
+  targetDurationSec INTEGER, status TEXT NOT NULL DEFAULT 'draft',
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "character" (
+  id TEXT PRIMARY KEY, seriesId TEXT NOT NULL, name TEXT NOT NULL, ageGender TEXT NOT NULL DEFAULT '',
+  appearance TEXT NOT NULL DEFAULT '', costume TEXT NOT NULL DEFAULT '', personality TEXT NOT NULL DEFAULT '',
+  temperament TEXT NOT NULL DEFAULT '', styleTags TEXT NOT NULL DEFAULT '[]', skillSlug TEXT,
+  positivePrompt TEXT NOT NULL DEFAULT '', negativePrompt TEXT NOT NULL DEFAULT '',
+  params TEXT NOT NULL DEFAULT '{}', portraitUrl TEXT, portraits TEXT NOT NULL DEFAULT '[]',
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS episode_character (
+  id TEXT PRIMARY KEY, episodeId TEXT NOT NULL, characterId TEXT NOT NULL, role TEXT NOT NULL DEFAULT '',
+  createdAt TEXT NOT NULL
+);
 
 -- 与 schema.ts 对齐的唯一索引（缺了它们，仓储的 onConflictDoUpdate 会直接抛
 -- ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint）：
@@ -194,6 +228,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS model_file_folder_uniq ON model (fileName, fol
 CREATE UNIQUE INDEX IF NOT EXISTS skill_slug_uniq ON skill (slug);
 CREATE UNIQUE INDEX IF NOT EXISTS wmt_user_name_uniq ON workflowModelTag (userId, name);
 CREATE UNIQUE INDEX IF NOT EXISTS remoteModel_name_uniq ON remoteModel (name);
+CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
+CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
 `;
 
 export interface TestTables {
@@ -261,7 +297,7 @@ function serializeValue(col: string, v: unknown): unknown {
 function allRows(table: string): Row[] {
   if (!currentSqlite) throw new Error("test db 未初始化");
   return (
-    currentSqlite.prepare(`SELECT * FROM ${table}`).all() as Record<
+    currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Record<
       string,
       unknown
     >[]
@@ -274,14 +310,14 @@ function insertInto(table: string, obj: Record<string, unknown>): void {
   const cols = entries.map(([k]) => k);
   const vals = entries.map(([k, v]) => serializeValue(k, v));
   const placeholders = cols.map(() => "?").join(",");
-  const sql = `INSERT INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`;
+  const sql = `INSERT INTO "${table}" (${cols.join(",")}) VALUES (${placeholders})`;
   currentSqlite.prepare(sql).run(...vals);
 }
 
 function getRow(table: string, id: string): Row {
   if (!currentSqlite) throw new Error("test db 未初始化");
   const raw = currentSqlite
-    .prepare(`SELECT * FROM ${table} WHERE id = ?`)
+    .prepare(`SELECT * FROM "${table}" WHERE id = ?`)
     .get(id) as Record<string, unknown> | undefined;
   if (!raw) throw new Error(`row not found: ${table} ${id}`);
   return parseRow(table, raw);
@@ -357,7 +393,7 @@ export function createTestDb(): TestDb {
   };
 
   const reset = (): void => {
-    for (const t of TABLES) sqlite.prepare(`DELETE FROM ${t}`).run();
+    for (const t of TABLES) sqlite.prepare(`DELETE FROM "${t}"`).run();
   };
 
   // 把 $reset / $tables 挂到 drizzle 实例上，供测试与 vi.mock 共用同一对象

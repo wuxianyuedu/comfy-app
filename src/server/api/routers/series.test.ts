@@ -1,0 +1,183 @@
+/**
+ * series.router 集成测试（FR-SR-01/02，#2477）。
+ *
+ * 覆盖：系列 / 季 / 集 的 CRUD + 项目挂载（assignProject / byProject），
+ * 以及跨用户归属（FORBIDDEN）—— 与 project.test.ts 同一套越权判据口径。
+ * 同时让 `tests/trpc-surface-executors.test.ts` 的「每条 procedure 都有执行者」
+ * 判据对本 router 全部通过。
+ *
+ * mock 边界：~/server/db（内存库 + 真 Drizzle）、~/server/better-auth、~/lib/core/logger。
+ *
+ * 注意：`createCaller(seriesRouter)` 的 procedure 在本 router 内是**顶层命名**
+ * （`caller.create` / `caller.createSeason` …），挂载到 root 后才成为 `series.create` 路径。
+ */
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+vi.mock("~/server/db", async () => {
+  const { createTestDb } = await import("../../../../tests/helpers/test-db");
+  return { db: createTestDb() };
+});
+vi.mock("~/server/better-auth", () => ({
+  auth: { api: { getSession: vi.fn(async () => null) } },
+}));
+vi.mock("~/lib/core/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+import { createCallerFactory } from "~/server/api/trpc";
+import { seriesRouter } from "./series";
+import { getTestDb, seedUser, seedProject } from "../../../../tests/helpers/test-db";
+import { makeCtx } from "../../../../tests/helpers/trpc";
+
+const createCaller = createCallerFactory(seriesRouter);
+const tdb = getTestDb();
+const userCaller = () => createCaller(makeCtx());
+const otherCaller = () => createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));
+
+/** 断言非空的种子 helper（create 类 procedure 返回 `T | undefined`）。 */
+async function addSeries(caller = userCaller(), title = "S") {
+  const s = await caller.create({ title });
+  if (!s) throw new Error("seed series failed");
+  return s;
+}
+async function addSeason(seriesId: string, caller = userCaller()) {
+  const se = await caller.createSeason({ seriesId });
+  if (!se) throw new Error("seed season failed");
+  return se;
+}
+async function addEpisode(seasonId: string, caller = userCaller()) {
+  const ep = await caller.createEpisode({ seasonId });
+  if (!ep) throw new Error("seed ep failed");
+  return ep;
+}
+
+/** 造 系列→季→集 三级，返回各级（已断言非空）。 */
+async function makeHierarchy(caller = userCaller()) {
+  const s = await addSeries(caller, "S1");
+  const se = await addSeason(s.id, caller);
+  const ep = await addEpisode(se.id, caller);
+  return { s, se, ep };
+}
+
+beforeEach(() => {
+  tdb.$reset();
+  vi.clearAllMocks();
+  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+});
+
+describe("series.list / create", () => {
+  it("新建后出现在自己的列表", async () => {
+    await userCaller().create({ title: "我的系列" });
+    const list = await userCaller().list();
+    expect(list.map((x) => x.title)).toContain("我的系列");
+  });
+  it("空库返回空列表", async () => {
+    expect(await userCaller().list()).toEqual([]);
+  });
+});
+
+describe("series.update / delete", () => {
+  it("改名生效", async () => {
+    const s = await addSeries(userCaller(), "旧");
+    const updated = await userCaller().update({ id: s.id, title: "新" });
+    expect(updated?.title).toBe("新");
+  });
+  it("删除后列表不再含它", async () => {
+    const s = await addSeries(userCaller(), "要删");
+    await userCaller().delete({ id: s.id });
+    const list = await userCaller().list();
+    expect(list.find((x) => x.id === s.id)).toBeUndefined();
+  });
+  it("他人系列 → FORBIDDEN，且对方行不变", async () => {
+    const s = await addSeries(otherCaller(), "别人的");
+    await expect(
+      userCaller().update({ id: s.id, title: "偷改" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(userCaller().delete({ id: s.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
+
+describe("season 列表 / 增改删", () => {
+  it("createSeason 落在正确系列下", async () => {
+    const s = await addSeries(userCaller(), "S");
+    const se = await addSeason(s.id, userCaller());
+    expect(se.seriesId).toBe(s.id);
+    const list = await userCaller().seasons({ seriesId: s.id });
+    expect(list.map((x) => x.id)).toContain(se.id);
+  });
+  it("updateSeason 改名、deleteSeason 删除", async () => {
+    const s = await addSeries(userCaller(), "S");
+    const se = await addSeason(s.id, userCaller());
+    const updated = await userCaller().updateSeason({ id: se.id, title: "秋" });
+    expect(updated?.title).toBe("秋");
+    await userCaller().deleteSeason({ id: se.id });
+    expect(await userCaller().seasons({ seriesId: s.id })).toEqual([]);
+  });
+  it("他人系列的季 → FORBIDDEN", async () => {
+    const s = await addSeries(otherCaller(), "别人的");
+    await expect(userCaller().createSeason({ seriesId: s.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
+
+describe("episode 列表 / 增改删", () => {
+  it("createEpisode 落在正确季下，可列可改可删", async () => {
+    const s = await addSeries(userCaller(), "S");
+    const se = await addSeason(s.id, userCaller());
+    const ep = await addEpisode(se.id, userCaller());
+    expect(ep.seasonId).toBe(se.id);
+    const list = await userCaller().episodes({ seasonId: se.id });
+    expect(list.map((x) => x.id)).toContain(ep.id);
+    const updated = await userCaller().updateEpisode({
+      id: ep.id,
+      title: "E-改",
+      status: "producing",
+    });
+    expect(updated?.title).toBe("E-改");
+    expect(updated?.status).toBe("producing");
+    await userCaller().deleteEpisode({ id: ep.id });
+    expect(await userCaller().episodes({ seasonId: se.id })).toEqual([]);
+  });
+  it("他人季下的集 → FORBIDDEN", async () => {
+    const s = await addSeries(otherCaller(), "别人的");
+    const se = await addSeason(s.id, otherCaller());
+    await expect(userCaller().createEpisode({ seasonId: se.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
+
+describe("episode.byProject / assignProject（项目挂载）", () => {
+  it("把项目挂到集后，byProject 能定位回来", async () => {
+    seedProject(tdb, { id: "p1", userId: "user-a", name: "项目1" });
+    const { se } = await makeHierarchy();
+    const ep = await addEpisode(se.id, userCaller());
+    await userCaller().assignProject({ episodeId: ep.id, projectId: "p1" });
+    const found = await userCaller().byProject({ projectId: "p1" });
+    expect(found?.id).toBe(ep.id);
+  });
+  it("未挂载的项目 → byProject 返回 null", async () => {
+    seedProject(tdb, { id: "p2", userId: "user-a", name: "项目2" });
+    expect(await userCaller().byProject({ projectId: "p2" })).toBeNull();
+  });
+  it("他人不可读我项目的归属（byProject 不越权泄漏）", async () => {
+    seedProject(tdb, { id: "p3", userId: "user-a", name: "项目3" });
+    const { se } = await makeHierarchy();
+    const ep = await addEpisode(se.id, userCaller());
+    await userCaller().assignProject({ episodeId: ep.id, projectId: "p3" });
+    expect(await otherCaller().byProject({ projectId: "p3" })).toBeNull();
+  });
+  it("assignProject 改挂为 null 后 byProject 不再命中", async () => {
+    seedProject(tdb, { id: "p4", userId: "user-a", name: "项目4" });
+    const { se } = await makeHierarchy();
+    const ep = await addEpisode(se.id, userCaller());
+    await userCaller().assignProject({ episodeId: ep.id, projectId: "p4" });
+    await userCaller().assignProject({ episodeId: ep.id, projectId: null });
+    expect(await userCaller().byProject({ projectId: "p4" })).toBeNull();
+  });
+});
