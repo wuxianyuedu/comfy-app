@@ -12,10 +12,6 @@ import { runAsyncAction, type ActionReport } from "~/lib/async-action";
  * `useMutation(trpc.task.cancel.mutationOptions())`，于是「取消失败怎么提示」在历史面板与画布
  * 面板各说一套（§12.14 端点收口）。取消的服务端语义见 ADR §14 D2。 */
 import { cancelTask } from "~/lib/task-cancel-client";
-import {
-  copyFailureText,
-  useCopyResult,
-} from "~/components/ui/use-copy-feedback";
 import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
@@ -243,34 +239,31 @@ export function useHistoryList(): HistoryListController {
     [deleteTask, detailId, report, queryClient, trpc],
   );
 
-  /* 「重试」的实际动作是**复制参数到剪贴板**（后端从来没有重试接口，见下）。
-   * 反馈走 `runAsyncAction` 的文案通道，而「复制成不成」是它的**输入** —— 所以
-   * 这里用出口把一个 Promise 化的复制结果接出来喂给动作（规范 16 §16.2.4.43）。 */
-  /* 只拿成败、不报反馈 —— 反馈由下面的 `runAsyncAction` 统一给。 */
-  const copyForRetry = useCopyResult();
+  /* 「重试」= `task.retry` 的**原样重跑**（#2481）：后端按原任务的 execPayload +
+   * 参数 / 参考图重建一个 QUEUED 任务，返回新 taskId。成功文案带上新任务号
+   * （经信封 `detail` 传给 runAsyncAction 的 successText），失败走同一通道。 */
+  const retryTask = useMutation(trpc.task.retry.mutationOptions());
   const retry = useCallback(
     async (task: TaskItem) => {
       await retryAction.run(task.id, async () => {
-        // 原 REST /api/tasks/[id]/retry 从未实现（历史一直 404）；后端无
-        // 重试接口，复制参数到剪贴板，请到创作台手动重跑。
-        const params = JSON.stringify(task.params ?? {}, null, 2);
-        /* 剪贴板的成败由出口的返回值表达（它不抛）：失败时走
-         * `runAsyncAction` 的失败分支，而不是让「复制失败」被 `try` 当成成功。 */
-        const copied = await copyForRetry(
-          `prompt: ${task.prompt ?? ""}\nworkflow: ${task.workflowName}\ntype: ${task.type}\nparams: ${params}`,
+        await runAsyncAction(
+          async () => {
+            const { taskId } = await retryTask.mutateAsync({ id: task.id });
+            return { ok: true, detail: taskId };
+          },
+          {
+            report,
+            failureText: "重试失败",
+            successText: (r) =>
+              `已原样重新入队：新任务 ${r.detail}，可在队列或历史观察进度`,
+          },
         );
-        await runAsyncAction(async () => copied, {
-          report,
-          failureText: copyFailureText("创作台的参数区"),
-          successText:
-            "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
-        });
       });
       /* 忙标记由出口的 `finally` 清；这里只负责刷新（失败也要刷新，
        * 用户可能是在别处重跑成功的）。 */
       refresh();
     },
-    [refresh, report, retryAction, copyForRetry],
+    [refresh, report, retryAction, retryTask],
   );
 
   return {
