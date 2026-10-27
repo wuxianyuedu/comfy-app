@@ -144,6 +144,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     saveScriptEditor,
     openModelAdapters,
     markRendered,
+    goToFilm,
     dismissNotice,
     showNotice,
     cancelShotTask,
@@ -442,6 +443,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 onShotsChange={setShots}
                 rendered={rendered}
                 onRendered={markRendered}
+                onComposeFilm={goToFilm}
               />
             </StageBoundary>
           </section>

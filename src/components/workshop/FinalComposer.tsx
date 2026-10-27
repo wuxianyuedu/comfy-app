@@ -24,9 +24,11 @@ interface Props {
   title: string;
   /** 镜头列表所有者回调（时长 / 转场 / 运动编辑）。 */
   onShotsChange: (shots: Shot[]) => void;
-  /** Raised when the user exports the composition plan (成片产出物完成). */
+  /** Raised when the user exports the composition plan (合成清单已导出，非成片). */
   onRendered: () => void;
   rendered: boolean;
+  /** 跳到「成片」视图（真出 MP4）。由父组件注入（内部走 workspace:navigate 广播）。 */
+  onComposeFilm?: () => void;
 }
 
 const TRANSITIONS: Transition[] = ["cut", "dissolve", "fade"];
@@ -61,6 +63,7 @@ export function FinalComposer({
   onShotsChange,
   onRendered,
   rendered,
+  onComposeFilm,
 }: Props) {
   const [playing, setPlaying] = React.useState(false);
   const [currentIdx, setCurrentIdx] = React.useState(0);
@@ -228,11 +231,24 @@ export function FinalComposer({
         </div>
       </div>
 
-      {rendered && (
-        <div className="bg-success/10 text-success-strong rounded-xl px-4 py-2 text-xs">
-          ✓ 合成清单已导出，成片产物完成。可在右侧资源库下载。
-        </div>
-      )}
+      <div className="border-border bg-subtle text-ink flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2 text-xs">
+        <span>
+          {rendered
+            ? "合成清单已导出（这是 JSON 清单，"
+            : "导出合成清单只是 JSON 规划，"}
+          <span className="font-semibold">还不是成片 MP4</span>
+          。真出片请到「成片」视图。
+        </span>
+        {onComposeFilm && (
+          <Button
+            variant="primary-solid"
+            onClick={onComposeFilm}
+            className="h-auto rounded-lg px-3 py-1.5 font-semibold"
+          >
+            去成片合成 MP4
+          </Button>
+        )}
+      </div>
 
       {/* Preview player */}
       {playing && current && (
