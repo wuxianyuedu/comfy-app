@@ -679,7 +679,9 @@ export const production = sqliteTable(
      *  形状 `{ review, reviewHistory }`，归一在 `~/lib/production/review-types` 的
      *  `normalizeScriptReviewState`；写入口是 `server/agent/review.ts` 的 `reviewScript`
      *  （经 `patchContent` 的 `scriptReview`）。工坊自动保存不碰这列（字段所有权同 run）。 */
-    scriptReview: text("scriptReview", { mode: "json" }).notNull().default("{}"),
+    scriptReview: text("scriptReview", { mode: "json" })
+      .notNull()
+      .default("{}"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

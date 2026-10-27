@@ -79,8 +79,7 @@ export class ProductionRepository extends DrizzleRepository<Production> {
       set.scriptMarkdown = patch.scriptMarkdown;
     if (patch.characters !== undefined) set.characters = patch.characters;
     if (patch.shots !== undefined) set.shots = patch.shots;
-    if (patch.scriptReview !== undefined)
-      set.scriptReview = patch.scriptReview;
+    if (patch.scriptReview !== undefined) set.scriptReview = patch.scriptReview;
     const rows = await db
       .update(production)
       .set(set)

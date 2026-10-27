@@ -239,7 +239,10 @@ ${sourceText}
 
 请评审这份${kindLabel}是否合格。`;
   return [
-    { role: "system", content: REVIEW_SYSTEM + scoringAddendum(rubricText ?? "") },
+    {
+      role: "system",
+      content: REVIEW_SYSTEM + scoringAddendum(rubricText ?? ""),
+    },
     { role: "user", content: user },
   ];
 }

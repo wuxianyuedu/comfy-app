@@ -83,16 +83,26 @@ describe("normalizeReviewVerdict", () => {
 
   it("旧数据无 scores / scores 为空对象 → 不挂键（读作「未评分」不报错）", () => {
     expect(normalizeReviewVerdict({ pass: true })?.scores).toBeUndefined();
-    expect(normalizeReviewVerdict({ pass: true, scores: {} })?.scores).toBeUndefined();
+    expect(
+      normalizeReviewVerdict({ pass: true, scores: {} })?.scores,
+    ).toBeUndefined();
     expect(
       normalizeReviewVerdict({ pass: true, scores: "垃圾" })?.scores,
     ).toBeUndefined();
   });
 
   it("rubricVersion：非空字符串才挂键", () => {
-    expect(normalizeReviewVerdict({ pass: true, rubricVersion: "v1" })?.rubricVersion).toBe("v1");
-    expect(normalizeReviewVerdict({ pass: true, rubricVersion: "  " })?.rubricVersion).toBeUndefined();
-    expect(normalizeReviewVerdict({ pass: true, rubricVersion: 3 })?.rubricVersion).toBeUndefined();
+    expect(
+      normalizeReviewVerdict({ pass: true, rubricVersion: "v1" })
+        ?.rubricVersion,
+    ).toBe("v1");
+    expect(
+      normalizeReviewVerdict({ pass: true, rubricVersion: "  " })
+        ?.rubricVersion,
+    ).toBeUndefined();
+    expect(
+      normalizeReviewVerdict({ pass: true, rubricVersion: 3 })?.rubricVersion,
+    ).toBeUndefined();
   });
 });
 
@@ -202,7 +212,12 @@ describe("reviewScoreMean", () => {
       }),
     ).toBe(3.5);
     expect(
-      reviewScoreMean({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+      reviewScoreMean({
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scoredAt: "t",
+      }),
     ).toBeNull();
   });
 });

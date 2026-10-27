@@ -29,7 +29,10 @@ import {
   type ReviewMode,
   type ReviewVerdict,
 } from "~/lib/production/review-types";
-import { renderRubricForPrompt, rubricFor } from "~/lib/production/review-rubrics";
+import {
+  renderRubricForPrompt,
+  rubricFor,
+} from "~/lib/production/review-rubrics";
 import { applyReprompt, applyShotRedo } from "~/lib/production/sync";
 import type { Production } from "~/server/db/schema";
 

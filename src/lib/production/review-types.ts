@@ -63,7 +63,9 @@ export function normalizeReviewMode(raw: unknown): ReviewMode {
  * 可缺省依据」的条目，分越界夹取到 1~5、key 去空白后非空；非法条目丢弃，不抛。
  * 返回 undefined = 入参里没有可用的 scores（旧数据 / 模型没给）。
  */
-function normalizeScores(raw: unknown): Record<string, ReviewScore> | undefined {
+function normalizeScores(
+  raw: unknown,
+): Record<string, ReviewScore> | undefined {
   const obj = asRecord(raw);
   if (!obj) return undefined;
   const out: Record<string, ReviewScore> = {};
@@ -71,7 +73,8 @@ function normalizeScores(raw: unknown): Record<string, ReviewScore> | undefined 
     const trimmedKey = key.trim();
     const item = asRecord(value);
     if (!item || trimmedKey === "") continue;
-    if (typeof item.score !== "number" || !Number.isFinite(item.score)) continue;
+    if (typeof item.score !== "number" || !Number.isFinite(item.score))
+      continue;
     out[trimmedKey] = {
       score: Math.min(5, Math.max(1, item.score)),
       note: typeof item.note === "string" ? item.note.trim() : "",

@@ -60,8 +60,8 @@ describe("renderRubricForPrompt", () => {
   });
 
   it("无维度 → 空串（调用方据此省略该块）", () => {
-    expect(renderRubricForPrompt({ kind: "shot", version: "x", dimensions: [] })).toBe(
-      "",
-    );
+    expect(
+      renderRubricForPrompt({ kind: "shot", version: "x", dimensions: [] }),
+    ).toBe("");
   });
 });

@@ -172,7 +172,9 @@ describe("reviewScript", () => {
     expect(verdict.rubricVersion).toBe(REVIEW_RUBRICS.script.version);
     expect(verdict.scores?.structure).toEqual({ score: 2, note: "无高潮" });
     const row = await productionRepository.getForUser(USER, PROJ);
-    expect(normalizeScriptReviewState(row?.scriptReview).review).toEqual(verdict);
+    expect(normalizeScriptReviewState(row?.scriptReview).review).toEqual(
+      verdict,
+    );
     // 温度档同 review
     expect(getLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
   });
