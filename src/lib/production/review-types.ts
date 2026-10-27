@@ -143,8 +143,9 @@ export function applyReview(
   const next = entities.map((raw) => {
     if (!isRecord(raw) || raw.id !== id) return raw;
     hit = true;
-    const prevHistory = Array.isArray(raw.reviewHistory)
-      ? raw.reviewHistory
+    // Array.isArray 把 unknown 收窄成 any[]：显式标 unknown[] 再展开，避免 any 混入数组。
+    const prevHistory: unknown[] = Array.isArray(raw.reviewHistory)
+      ? (raw.reviewHistory as unknown[])
       : [];
     const prevVerdict = normalizeReviewVerdict(raw.review);
     const history = prevVerdict

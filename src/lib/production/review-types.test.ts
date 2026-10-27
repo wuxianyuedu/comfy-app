@@ -171,7 +171,7 @@ describe("applyReview", () => {
 
   it("轮次历史：旧判定无效（缺 pass）时不塞垃圾；历史超上限从头裁剪", () => {
     let entities: unknown[] = [{ id: "a", review: { nope: true } }];
-    entities = applyReview(entities, "a", verdict) as unknown[];
+    entities = applyReview(entities, "a", verdict);
     expect(
       (entities[0] as Record<string, unknown>).reviewHistory,
     ).toBeUndefined();
