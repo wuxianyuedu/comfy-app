@@ -96,7 +96,7 @@ import {
   pipelineSn,
 } from "./ci-build-classify.mjs";
 
-/* 判断全在 `ci-build-classify.mjs`，这里只是**转发**给既有调用点（`ship-platform` /
+/* 判断全在 `ci-build-classify.mjs`，这里只是**转发**给既有调用点（`ship-poll` /
  * `ship-diagnose` / 两个失败立案脚本 / 独立 CLI 都按这一份导入）。转发而不是让各处改
  * import：拆文件是「压回 900 行硬闸」这一件事的代价，不该让五个消费口各改一行去承担
  * —— 那五处会开始漂。 */
