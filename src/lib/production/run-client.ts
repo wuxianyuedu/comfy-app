@@ -107,6 +107,21 @@ export async function reviewScript(projectId: string): Promise<{
 }
 
 /**
+ * 视觉评审一个分镜镜头的生图（P8-2 · #2479），返回判定（服务端已落库到 `shot.imageReview`）。
+ * 没图 / 找不到镜头时服务端抛可行动错误。
+ */
+export async function reviewShotImage(
+  projectId: string,
+  shotId: string,
+): Promise<ReviewVerdict> {
+  const res = await vanillaApi.run.reviewShotImage.mutate({
+    projectId,
+    shotId,
+  });
+  return res.verdict;
+}
+
+/**
  * 按评审判定定向改写剧本（FR-QA-07 ④ · #2478），返回改写后的完整剧本 Markdown
  * （旧版服务端已留档到 `scriptReview.revisions`；调用方负责把新剧本喂回编辑器）。
  */

@@ -5,7 +5,7 @@ import {
   type Scene,
   type ShotType,
 } from "~/lib/workshop/types";
-import type { LLMMessage } from "./types";
+import type { LLMContentPart, LLMMessage } from "./types";
 import { extractJson, extractJsonArray } from "./parse";
 
 // ─────────────────────────────────────────────────────────────
@@ -350,6 +350,72 @@ ${lowScores}
   return [
     { role: "system", content: SCRIPT_REVISION_SYSTEM },
     { role: "user", content: user },
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Shot image review（P8-2：生图视觉评审 —— 多模态，看图 + 定妆照）
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 生图视觉评审系统提示：看一张（或几张）图，对照提示词与角色定妆照给判定。
+ * 维度与 `shotImage` rubric 对齐（与提示词对齐 / 角色一致性 / 构图景别 / 画面瑕疵），
+ * 但**只看图**——文本提示词的对错由文本评审负责，这里评「图本身对不对题、崩没崩」。
+ */
+export const SHOT_IMAGE_REVIEW_SYSTEM = `你是严格的 AI 生图质检评审（多模态）。用户会给你一张生成的镜头图（可能还有该镜头出场角色的定妆照作参照），以及该镜头的提示词与景别设定。请**只看图**判断它是否合格：
+- 与提示词对齐：画面是否还原了提示词的主体、动作、风格与关键元素；
+- 角色一致性：出镜角色是否与定妆照一致（外貌 / 服装 / 发色等）；
+- 构图景别：景别是否与设定相符、构图是否合格（主体出框 / 比例失调即不合格）；
+- 画面瑕疵：是否有崩坏（手部 / 肢体畸形、多余肢体、可读文字水印、明显模糊）。
+只输出严格 JSON 对象，不要任何解释或代码围栏：
+{ "pass": true 或 false, "issues": ["逐条列出具体缺陷，合格则给空数组"], "suggestion": "不合格时给一句话改进方向（合格可留空）" }
+全程使用中文，判断从严但务实：主题清楚、角色认得出、没崩即可算合格，不因风格偏好判不合格。`;
+
+/** 视觉评审输入：图（镜头图 + 角色定妆照）+ 该镜的文本上下文。 */
+export interface ShotImageReviewInput {
+  /** 镜头产物图 URL（HTTP / data: base64）。 */
+  imageUrl: string;
+  /** 该镜出场角色的生效定妆照 URL（可能为空数组）。 */
+  portraitUrls: string[];
+  /** 镜头提示词（文本评审评它写得好不好，这里只作对照）。 */
+  prompt: string;
+  /** 景别（如「中景」「特写」）。 */
+  shotType: string;
+  /** 出场角色名（用于角色一致性对照说明）。 */
+  characterNames: string[];
+}
+
+/**
+ * 组装「看图评审生图」的消息：system = 视觉评审系统提示 + 维度评分加段（rubric）；
+ * user = 文本上下文（提示词 / 景别 / 角色名）+ 图块（镜头图 + 定妆照）。多模态内容块
+ * 由 `messagesToWire` 按 provider 落地（OpenAI content 数组 / Ollama images）。
+ */
+export function buildShotImageReviewMessages(
+  input: ShotImageReviewInput,
+  rubricText?: string,
+): LLMMessage[] {
+  const context = `【镜头设定】
+提示词：${input.prompt || "（无）"}
+景别：${input.shotType || "未指定"}
+出场角色：${input.characterNames.join("、") || "（无）"}
+
+请对照上面的提示词与定妆照，评审这张图是否合格（重点看：对不对题、角色认不认得出、景别对不对、有没有崩）。`;
+  const imageParts: LLMContentPart[] = [
+    { type: "image_url", image_url: { url: input.imageUrl } },
+    ...input.portraitUrls
+      .filter((url) => url.trim() !== "")
+      .map((url) => ({ type: "image_url" as const, image_url: { url } })),
+  ];
+  return [
+    {
+      role: "system",
+      content: SHOT_IMAGE_REVIEW_SYSTEM + scoringAddendum(rubricText ?? ""),
+    },
+    {
+      role: "user",
+      // 文本上下文在前、图在后：多数多模态模型按「先读文再读图」理解更稳定。
+      content: [{ type: "text", text: context }, ...imageParts],
+    },
   ];
 }
 

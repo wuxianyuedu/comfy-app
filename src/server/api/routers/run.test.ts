@@ -17,32 +17,46 @@ vi.mock("~/server/agent/run-engine", () => ({
   advanceRunLoop: vi.fn(async () => undefined),
 }));
 // 评审 / 重生成的落库逻辑在 review.test.ts 覆盖；此处只验端点的入参校验 + 委派 seam。
-const { reviewContent, regenerateShot, reviewScript, reviseScript } =
-  vi.hoisted(() => ({
-    reviewContent: vi.fn(async () => ({
-      pass: false,
-      issues: ["含混"],
-      suggestion: "更具体",
-      scoredAt: "t",
-    })),
-    regenerateShot: vi.fn(async () => undefined),
-    reviewScript: vi.fn(async () => ({
-      verdict: {
-        pass: true,
-        issues: [],
-        suggestion: "",
-        scoredAt: "t2",
-        scores: { structure: { score: 4, note: "结构完整" } },
-        rubricVersion: "script-v1",
-      },
-      history: [],
-    })),
-    reviseScript: vi.fn(async () => "# 改写后的剧本"),
-  }));
+const {
+  reviewContent,
+  regenerateShot,
+  reviewScript,
+  reviewShotImage,
+  reviseScript,
+} = vi.hoisted(() => ({
+  reviewContent: vi.fn(async () => ({
+    pass: false,
+    issues: ["含混"],
+    suggestion: "更具体",
+    scoredAt: "t",
+  })),
+  regenerateShot: vi.fn(async () => undefined),
+  reviewScript: vi.fn(async () => ({
+    verdict: {
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "t2",
+      scores: { structure: { score: 4, note: "结构完整" } },
+      rubricVersion: "script-v1",
+    },
+    history: [],
+  })),
+  reviewShotImage: vi.fn(async () => ({
+    pass: true,
+    issues: [],
+    suggestion: "",
+    scoredAt: "t3",
+    scores: { artifacts: { score: 4, note: "无崩" } },
+    rubricVersion: "shotImage-v1",
+  })),
+  reviseScript: vi.fn(async () => "# 改写后的剧本"),
+}));
 vi.mock("~/server/agent/review", () => ({
   reviewContent,
   regenerateShot,
   reviewScript,
+  reviewShotImage,
   reviseScript,
 }));
 
@@ -212,6 +226,18 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
     });
     expect(reviseScript).toHaveBeenCalledWith("user-a", "proj_r");
     expect(res.markdown).toBe("# 改写后的剧本");
+  });
+
+  it("reviewShotImage → 委派视觉评审执行器（P8-2）并回显 verdict（落库到 shot.imageReview）", async () => {
+    const res = await createCaller(makeCtx()).reviewShotImage({
+      projectId: "proj_r",
+      shotId: "s1",
+    });
+    expect(reviewShotImage).toHaveBeenCalledWith("user-a", "proj_r", "s1");
+    expect(res.verdict).toMatchObject({
+      pass: true,
+      rubricVersion: "shotImage-v1",
+    });
   });
 
   it("regenerateShot(gacha) → 委派重生成，mode 透传，返回 ok", async () => {

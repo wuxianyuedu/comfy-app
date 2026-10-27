@@ -5,19 +5,22 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
-  completeLLM: vi.fn(
-    async (_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版",
-  ),
-  completeLLMStructured: vi.fn<
-    (cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown>
-  >(async () => ({ pass: true, issues: [], suggestion: "" })),
-  getLLMConfig: vi.fn(async () => ({})),
-}));
+const { completeLLM, completeLLMStructured, getLLMConfig, getVisionLLMConfig } =
+  vi.hoisted(() => ({
+    completeLLM: vi.fn(
+      async (_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版",
+    ),
+    completeLLMStructured: vi.fn<
+      (cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown>
+    >(async () => ({ pass: true, issues: [], suggestion: "" })),
+    getLLMConfig: vi.fn(async () => ({})),
+    getVisionLLMConfig: vi.fn(async () => ({ model: "vision" })),
+  }));
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig,
   completeLLMStructured,
   completeLLM,
+  getVisionLLMConfig,
 }));
 
 vi.mock("~/server/db", async () => {
@@ -35,6 +38,7 @@ import {
   regenerateShot,
   reviewContent,
   reviewScript,
+  reviewShotImage,
   reviseScript,
 } from "~/server/agent/review";
 import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
@@ -82,6 +86,7 @@ beforeEach(() => {
   });
   completeLLM.mockReset();
   getLLMConfig.mockResolvedValue({});
+  getVisionLLMConfig.mockResolvedValue({ model: "vision" });
 });
 
 describe("reviewContent", () => {
@@ -351,5 +356,66 @@ describe("regenerateShot", () => {
     await expect(
       regenerateShot(USER, PROJ, "missing", "gacha"),
     ).rejects.toThrow(/找不到要重生成的镜头/);
+  });
+});
+
+describe("reviewShotImage（P8-2 生图视觉评审）", () => {
+  it("看图标定写回 shot.imageReview（与文本 shot.review 分开），并带生图 rubric 版本", async () => {
+    await seed({
+      characters: [{ id: "c1", name: "司机", portraitUrl: "/portrait.png" }],
+      shots: [
+        {
+          id: "s1",
+          prompt: "雨中司机",
+          shotType: "中景",
+          characterIds: ["c1"],
+          imageUrl: "/shot.png",
+        },
+      ],
+    });
+    completeLLMStructured.mockResolvedValueOnce({
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scores: { promptAlignment: { score: 4, note: "对题" } },
+    });
+    const verdict = await reviewShotImage(USER, PROJ, "s1");
+    expect(verdict.pass).toBe(true);
+    expect(verdict.rubricVersion).toBe(REVIEW_RUBRICS.shotImage.version);
+    expect(verdict.scores?.promptAlignment).toEqual({ score: 4, note: "对题" });
+    const [shot] = await rows("shots");
+    // 视觉判定独立落 imageReview，不污染文本 review
+    expect(shot?.imageReview).toEqual(verdict);
+    expect(shot?.review).toBeUndefined();
+    // 视觉评审走独立视觉模型配置通道
+    expect(getVisionLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
+    // 消息里带图：镜头图 + 定妆照都进了 image_url 块
+    const [, userMsg] = completeLLMStructured.mock.calls[0]![1] as Array<{
+      role: string;
+      content: unknown;
+    }>;
+    const parts = userMsg!.content as Array<{
+      type: string;
+      image_url?: unknown;
+    }>;
+    const imageUrls = parts
+      .filter((p) => p.type === "image_url")
+      .map((p) => (p.image_url as { url: string }).url);
+    expect(imageUrls).toEqual(["/shot.png", "/portrait.png"]);
+  });
+
+  it("没图（imageUrl 空）→ 抛可行动错误，不调模型", async () => {
+    await seed({ shots: [{ id: "s1", prompt: "x" }] });
+    await expect(reviewShotImage(USER, PROJ, "s1")).rejects.toThrow(
+      /还没有生成图/,
+    );
+    expect(completeLLMStructured).not.toHaveBeenCalled();
+  });
+
+  it("镜头 id 不存在 → 抛可行动错误", async () => {
+    await seed({ shots: [{ id: "s1", imageUrl: "/x" }] });
+    await expect(reviewShotImage(USER, PROJ, "missing")).rejects.toThrow(
+      /找不到要评审的镜头/,
+    );
   });
 });

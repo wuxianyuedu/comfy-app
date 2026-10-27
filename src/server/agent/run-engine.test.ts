@@ -29,13 +29,28 @@ vi.mock("~/server/film/orchestrator", () => ({
   createFilmFromProject: vi.fn(async () => ({ id: "film-1", shots: 1 })),
   startFilm: vi.fn(async () => undefined),
 }));
-// 自动评审执行器调 reviewContent / reviewScript / reviseScript（LLM 判定与改写）——mock 掉，按用例返回。
+// 自动评审执行器调 reviewContent / reviewScript / reviseScript / reviewShotImage（LLM 判定与改写）——
+// mock 掉，按用例返回。默认文本与视觉都通过，只测「循环控制」本身；双裁判语义见下方专用用例。
 const reviewContent = vi.hoisted(() =>
   vi.fn(
     async (
       _u: string,
       _p: string,
       _k: string,
+      _id: string,
+    ): Promise<{
+      pass: boolean;
+      issues: string[];
+      suggestion: string;
+      scoredAt: string;
+    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+  ),
+);
+const reviewShotImage = vi.hoisted(() =>
+  vi.fn(
+    async (
+      _u: string,
+      _p: string,
       _id: string,
     ): Promise<{
       pass: boolean;
@@ -71,6 +86,7 @@ vi.mock("~/server/agent/review", () => ({
   reviewContent,
   reviewScript,
   reviseScript,
+  reviewShotImage,
 }));
 
 vi.mock("~/server/db", async () => {
@@ -355,6 +371,45 @@ describe("advanceRunLoop · 自动评审", () => {
     // REVIEW_MAX_RETRY=2 → 评审 3 次（fail→抽卡、fail→抽卡、达上限保留），抽卡 2 次。
     expect(reviewContent).toHaveBeenCalledTimes(3);
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(2);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.reviewAttempts).toEqual({ a: 2 });
+    expect(run.reviewedShotRev).toEqual({ a: 3 }); // 第 3 轮 rev 定稿
+    expect(run.status).toBe("done");
+  });
+
+  it("双裁判（P8-2）：文本过但视觉不过 → 镜头判不合格、抽卡重出直到达上限收敛", async () => {
+    // 文本评审明明说「过」，但视觉评审说「崩了」——判不合格的唯一来源是图。
+    reviewContent.mockResolvedValue({
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "t",
+    });
+    reviewShotImage.mockResolvedValue({
+      pass: false,
+      issues: ["手畸"],
+      suggestion: "修手",
+      scoredAt: "t",
+    });
+    await seed(
+      {
+        scriptMarkdown: SCRIPT,
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
+        rendered: true,
+      },
+      {
+        status: "running",
+        approvalMode: "auto",
+        autoReview: true,
+        imageWorkflowId: "wf-img",
+        processedShotRev: { a: 1 },
+        ...settled(SCRIPT),
+      },
+    );
+    await advanceRunLoop(USER, PROJ);
+    // 文本全过却仍被反复抽卡 ⇒ 视觉评审是唯一的判不合格轴；达上限后保留、收敛到 done。
+    expect(reviewShotImage).toHaveBeenCalled();
     const run = normalizeProductionRun((await readRow())!.run);
     expect(run.reviewAttempts).toEqual({ a: 2 });
     expect(run.reviewedShotRev).toEqual({ a: 3 }); // 第 3 轮 rev 定稿

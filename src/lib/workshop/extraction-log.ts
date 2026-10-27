@@ -42,15 +42,22 @@ export function makeExtractLog(
   return { ts: nowTs(), kind, summary, detail };
 }
 
+/** 把一条消息的 content（纯文本或多模态块）压成可记录的纯文本。 */
+function messageText(content: LLMMessage["content"]): string {
+  if (typeof content === "string") return content;
+  return content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
+}
+
 /** 请求消息 → 适合放进日志正文的多行文本（截断超长剧本，避免面板过载）。 */
 export function formatRequestMessages(messages: LLMMessage[]): string {
   const MAX_USER_CHARS = 4000;
   return messages
     .map((m) => {
+      const text = messageText(m.content);
       const body =
-        m.content.length > MAX_USER_CHARS
-          ? `${m.content.slice(0, MAX_USER_CHARS)}…(已截断 ${m.content.length} 字)`
-          : m.content;
+        text.length > MAX_USER_CHARS
+          ? `${text.slice(0, MAX_USER_CHARS)}…(已截断 ${text.length} 字)`
+          : text;
       return `── ${m.role} ──\n${body}`;
     })
     .join("\n\n");

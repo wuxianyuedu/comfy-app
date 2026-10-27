@@ -44,6 +44,7 @@ import { displayValue } from "~/lib/display-value";
 import {
   reviewContent,
   reviewScript,
+  reviewShotImage,
   reviseScript,
 } from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
@@ -391,13 +392,17 @@ async function execReviseScript(
 }
 
 /**
- * 自动评审执行器（Phase 8 · P8-1c）：逐镜调 `reviewContent` 出判定（同时落库 `shot.review`），据此：
+ * 自动评审执行器（Phase 8 · P8-1c + P8-2）：逐镜做「文本 + 图」双裁判——
+ *   · 文本评审（`reviewContent` → `shot.review`）：评提示词写得好不好；
+ *   · 视觉评审（`reviewShotImage` → `shot.imageReview`，仅镜头已出图时）：看图评对题/崩没崩；
+ *   两者**都过**才算通过（图没过 = 不过，FR-QA-07⑤）。
+ * 据此：
  *   · 通过 → 记 `reviewedShotRev[id]=rev`（定稿，规划器不再纳入）；
- *   · 不合格且未达重试上限 → `reviewAttempts[id]++` + `applyShotRedo`（清图 + rev 自增）→ 该镜回到
- *     待生图，重跑时由 `execImages` 带一个新的随机 seed（走「种子」对外参数）换图后再次评审；
- *   · 不合格但已达 `REVIEW_MAX_RETRY` → 记 `reviewedShotRev[id]=rev` 保留当前结果、停止返工（保证收敛）。
- * 评审只写 `shot.review`（`reviewContent` 内部），退回重出走一次 `patchContent`；重出前重读一次，
- * 避免用评审前的旧快照覆盖掉刚写入的判定。
+ *   · 不合格且未达重试上限 → `reviewAttempts[id]++` + `applyShotRedo`（清图 + rev 自增）→ 回到待生图，
+ *     重出后文本+视觉再双审，直到通过或达上限；
+ *   · 不合格但已达 `REVIEW_MAX_RETRY` → 记 `reviewedShotRev[id]=rev` 保留当前结果、停止返工（保证收敛，转人工）。
+ * 任一侧评审失败（传输/模型异常）按「定稿保留」兜底，避免反复重试坏镜；真的图崩会由模型给出
+ * pass=false 触发返工。文本意见仍供 reprompt 改写用。
  */
 async function execReviewShots(
   userId: string,
@@ -412,14 +417,35 @@ async function execReviewShots(
   const rerollIds: string[] = [];
   let passed = 0;
   let exhausted = 0;
+  let imageReviewed = 0;
 
   for (const shotId of shotIds) {
     const rev = revById.get(shotId) ?? 0;
+    const shotView = view.shots.find((s) => s.id === shotId);
+    const hasImage = shotView?.hasImage ?? false;
     let pass: boolean;
     try {
-      pass = (await reviewContent(userId, projectId, "shot", shotId)).pass;
+      const textVerdict = await reviewContent(
+        userId,
+        projectId,
+        "shot",
+        shotId,
+      );
+      // 视觉裁判：仅镜头已出图时跑（没图就只看文本，退化回旧行为）。
+      let imagePass: boolean | null = null;
+      if (hasImage) {
+        try {
+          imagePass = (await reviewShotImage(userId, projectId, shotId)).pass;
+          imageReviewed++;
+        } catch {
+          // 视觉评审传输/模型异常：不阻断、不当作「图没过」，按「未拿到图判据」处理
+          // （与文本同口径）—— 真的图崩会由模型给 pass=false 触发返工。
+          imagePass = null;
+        }
+      }
+      pass = textVerdict.pass && (imagePass ?? true);
     } catch {
-      // 单镜评审本身失败：不阻断流水线，按「定稿保留」处理，避免反复重试坏镜。
+      // 文本评审本身失败：不阻断流水线，按「定稿保留」处理，避免反复重试坏镜。
       reviewed[shotId] = rev;
       continue;
     }
@@ -430,7 +456,7 @@ async function execReviewShots(
       attempts[shotId] = (attempts[shotId] ?? 0) + 1;
       rerollIds.push(shotId);
     } else {
-      reviewed[shotId] = rev; // 达上限：保留当前结果、定稿，停止返工
+      reviewed[shotId] = rev; // 达上限：保留当前结果、定稿，停止返工，转人工
       exhausted++;
     }
   }
@@ -446,6 +472,7 @@ async function execReviewShots(
   const parts = [`${passed} 通过`];
   if (rerollIds.length > 0) parts.push(`${rerollIds.length} 抽卡重出`);
   if (exhausted > 0) parts.push(`${exhausted} 达上限保留`);
+  if (imageReviewed > 0) parts.push(`${imageReviewed} 已视觉评审`);
   return {
     ok: true,
     summary: `逐镜评审：${parts.join(" / ")}`,
