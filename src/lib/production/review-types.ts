@@ -12,6 +12,7 @@
 // 持久化 —— 新增字段无需迁移（与角色定妆照 `portraits` 挂角色本身同套路）。
 import { asRecord, isRecord } from "~/lib/is-record";
 import { tailWindow } from "~/lib/page-window";
+import { clamp } from "~/lib/clamp";
 
 /** 单个维度的评分：1~5 分 + 一句话依据（人读，中文）。 */
 export interface ReviewScore {
@@ -76,7 +77,7 @@ function normalizeScores(
     if (typeof item.score !== "number" || !Number.isFinite(item.score))
       continue;
     out[trimmedKey] = {
-      score: Math.min(5, Math.max(1, item.score)),
+      score: clamp(item.score, 1, 5),
       note: typeof item.note === "string" ? item.note.trim() : "",
     };
   }
