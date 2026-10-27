@@ -394,6 +394,24 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
     ).toBe("inconclusive");
   });
 
+  test("「跑了但 0 条用例、退 0」⇒ inconclusive —— 不许与真绿同形（ISSUE #2400）", () => {
+    expect(
+      judge({ currentCode: 0, baseCode: 1, currentOutput: NO_TESTS }),
+    ).toBe("inconclusive");
+    expect(
+      judge({ currentCode: 0, baseCode: 1, currentOutput: "all good" }),
+    ).toBe("current-green");
+  });
+
+  test("整批：段绿 + 逐条里混着一条「0 码没收集到」 ⇒ inconclusive（ISSUE #2400）", () => {
+    expect(
+      summarizeRows([
+        { currentCode: 0, baseCode: 0, output: "8 checks ok" },
+        { currentCode: 0, baseCode: 1, output: NO_TESTS },
+      ]),
+    ).toBe("inconclusive");
+  });
+
   test("这一态的下一步动作给出环境侧出口（依赖链法 / Windows 形态）", () => {
     const text = nextSteps("inconclusive", { ref: "origin/master" }).join("\n");
     expect(text).toContain("pnpm install --frozen-lockfile");
