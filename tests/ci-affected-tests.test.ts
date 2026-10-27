@@ -15,6 +15,9 @@
  *      `ci-load.mjs` 收敛（不在这里另写一个 worker 数），退出码原样透传。
  *
  * 不起真 vitest：`spawn` 注入假实现，只核「起了哪个脚本、带了什么 env、退了什么码」。
+ * 每一处 `main` 调用都要把两条读数出口接住（`...silent()` 或显式注入）—— 夹具打出的
+ * 「造不出读数目录 / 没有落点 / 改动面为空」会在平台日志里与这一跑的真实读数并排，
+ * 读的人分不出哪份是夹具（#2074 那两行 5.00 / 3.75 就是这么被误读的）。
  */
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,6 +30,14 @@ import {
   makeLedgerDir,
   resolveChangedFiles,
 } from "../scripts/ci-affected-tests.mjs";
+
+/** 接住 `main` 的两条读数出口（夹具话术不进报告，见文件头）。 */
+function silent() {
+  return {
+    writeOut: (_t: string) => undefined,
+    writeErr: (_t: string) => undefined,
+  };
+}
 
 /** 假 git：按调用顺序回放预置结果（diff 的键取最后一个参数 —— 前面是 name-status / -M 这类选项）。 */
 function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
@@ -180,6 +191,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   it("起的是 run-affected-tests.mjs，改动面与并发都经 env 递进去", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
+      ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", COMFY_CI_MAX_WORKERS: "2" },
       ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\nM\tsrc/b.ts\n" }),
@@ -197,6 +209,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   it("改名那一路：旧路径也经 env 递进判决链（#2226）", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
+      ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
       runGit: () => ({
@@ -215,6 +228,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   it("退出码原样透传（红就是红，不在入口里翻译）", () => {
     const { spawn } = fakeSpawn(1);
     const code = main({
+      ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
@@ -255,6 +269,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   it("清单为空 ⇒ 退 2，并且一次 vitest 都不起", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
+      ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "" }),
@@ -268,6 +283,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   it("改动面取不到 ⇒ 退 2，并且一次 vitest 都不起", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
+      ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
       runGit: () => ({ ok: false, stdout: "" }),
@@ -337,6 +353,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
     const { spawn } = fakeSpawn(0);
     const out: string[] = [];
     const code = main({
+      ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
@@ -426,6 +443,7 @@ describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
         spawn,
         installed: true,
         ledgerDir: ledger,
+        writeOut: () => undefined,
         writeErr: (t: string) => err.push(t),
       });
       expect(seen[0]!.env.LOGD).toBe(ledger);
@@ -446,6 +464,7 @@ describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
       spawn,
       installed: true,
       makeLedgerDir: () => null,
+      writeOut: () => undefined,
       writeErr: (t: string) => err.push(t),
     });
     /* 空串而不是「没有这个键」：进程环境里可能已经有一份旧 `LOGD`，继承过去就落错地方。 */

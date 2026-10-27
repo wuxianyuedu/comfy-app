@@ -162,13 +162,13 @@ export function main(deps = {}) {
   writeOut(depsText);
   const changed = resolveChangedFiles(deps);
   if (!changed.ok) {
-    process.stderr.write(
+    writeErr(
       `[ci-affected] ✗ ${changed.reason}（退 2 —— 这一格没判，不构成证据）\n`,
     );
     return 2;
   }
   if (changed.files.length === 0) {
-    process.stderr.write(
+    writeErr(
       `[ci-affected] ✗ 改动面为空（${changed.via}）—— 退 2。空清单若放行，` +
         "启动器会把 vitest 跑成全量，而全量绿在 PR 这一跳上是被 §13.5.21 否掉的读数。\n",
     );
@@ -180,7 +180,7 @@ export function main(deps = {}) {
       `并发 --maxWorkers=${workers}（${cores} 核，${source}）\n`,
   );
   if (changed.renamedFrom.length > 0) {
-    process.stdout.write(
+    writeOut(
       `[ci-affected] 其中 ${changed.renamedFrom.length} 处是改名：旧路径也进了改动面` +
         `（${changed.renamedFrom.join(" ")}）—— 按旧路径引用那个文件的用例靠这一条才选得中\n`,
     );
