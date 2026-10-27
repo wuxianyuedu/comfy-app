@@ -301,6 +301,32 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         })),
       );
     },
+
+    /** 人工评分 / 收藏写回一张产物图（#2480）。rating 给 null = 清除评分；
+     *  favorite 必给布尔。行按 id 命中；不命中（0 行更新）不报错，由调用方
+     *  决定要不要把「图不存在」说给用户。 */
+    async patchImageFeedback(
+      imageId: string,
+      data: { humanRating: number | null; isFavorite: boolean },
+    ): Promise<void> {
+      await db
+        .update(taskImage)
+        .set({ humanRating: data.humanRating, isFavorite: data.isFavorite })
+        .where(eq(taskImage.id, imageId));
+    },
+
+    /** 按 id 读一张产物图（连带 task 的归属 userId 做归属校验）；不存在 → null。 */
+    async findImageById(
+      imageId: string,
+    ): Promise<{ id: string; userId: string } | null> {
+      const rows = await db
+        .select({ id: taskImage.id, userId: task.userId })
+        .from(taskImage)
+        .innerJoin(task, eq(taskImage.taskId, task.id))
+        .where(eq(taskImage.id, imageId))
+        .limit(1);
+      return rows[0] ?? null;
+    },
   };
 }
 /**

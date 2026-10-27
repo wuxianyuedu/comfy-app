@@ -204,7 +204,7 @@ export function applyReview(
 // 剧本不是实体数组里的一条记录，判定与历史落在 production 自己的一列上；
 // 上面实体那套「review + reviewHistory」的语义在这里用列形状复刻。
 
-/** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定 + 改写前留档。 */
+/** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定 + 改写前留档 + 人工裁决。 */
 export interface ScriptReviewState {
   /** 当前有效判定；没评过 / 列里判定非法 → null。 */
   review: ReviewVerdict | null;
@@ -212,6 +212,8 @@ export interface ScriptReviewState {
   history: ReviewVerdict[];
   /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
   revisions: ScriptRevision[];
+  /** 人工裁决（#2480）：`digest` 记裁决时剧本指纹，剧本变过 → 裁决作废。 */
+  humanVerdict: HumanVerdict | null;
 }
 
 /** 一次 AI 改写留档：改写发生的时间 + 改写前的完整剧本。 */
@@ -225,7 +227,8 @@ export interface ScriptRevision {
 /** 宽容读取 `production.scriptReview` 列（未知 JSON → 形状）；缺省/畸形不抛，回落「没评过」。 */
 export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
   const obj = asRecord(raw);
-  if (!obj) return { review: null, history: [], revisions: [] };
+  if (!obj)
+    return { review: null, history: [], revisions: [], humanVerdict: null };
   const history = (Array.isArray(obj.history) ? obj.history : [])
     .map((item) => normalizeReviewVerdict(item))
     .filter((item): item is ReviewVerdict => item !== null)
@@ -242,7 +245,12 @@ export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
     })
     .filter((item): item is ScriptRevision => item !== null)
     .slice(-SCRIPT_REVISION_LIMIT);
-  return { review: normalizeReviewVerdict(obj.review), history, revisions };
+  return {
+    review: normalizeReviewVerdict(obj.review),
+    history,
+    revisions,
+    humanVerdict: normalizeHumanVerdict(obj.humanVerdict),
+  };
 }
 
 /** 写回剧本评审（纯函数）：prev 的有效判定进 history（尾部追加、超上限从头裁剪）。 */
@@ -254,7 +262,24 @@ export function applyScriptReview(
   const history = state.review
     ? tailWindow([...state.history, state.review], REVIEW_HISTORY_LIMIT)
     : state.history;
-  return { review: verdict, history, revisions: state.revisions };
+  return {
+    review: verdict,
+    history,
+    revisions: state.revisions,
+    humanVerdict: state.humanVerdict,
+  };
+}
+
+/**
+ * 写回剧本人工裁决（纯函数，#2480）：只动 `humanVerdict`，AI 判定与曲线原样保留。
+ * 裁决快照带当前剧本指纹（`digest` 由调用方传入）—— 之后剧本变过（指纹不等）裁决作废。
+ */
+export function applyScriptHumanVerdict(
+  prev: unknown,
+  verdict: HumanVerdict,
+): ScriptReviewState {
+  const state = normalizeScriptReviewState(prev);
+  return { ...state, humanVerdict: verdict };
 }
 
 /**
@@ -290,4 +315,103 @@ export function weakScoreEntries(
     .filter(([, item]) => item.score <= maxScore)
     .map(([key, item]) => ({ key, score: item.score, note: item.note }))
     .sort((a, b) => a.score - b.score);
+}
+
+// ── 人工裁决（FR-QA-07 人工侧 · #2480）──────────────────────────────────────
+// 人工裁决与 AI 判定同挂记录（`humanVerdict`），但语义**优先于 AI**（FR-AG-02
+// 「质量停点由人拍板」）：人判废的镜头不因 AI 判过而放行进下一阶段；人判过的镜头
+// AI 再红也定稿。裁决快照用于失效判断——实体在裁决之后又被改过（`rev` 变了 /
+// 剧本指纹变了）→ 旧裁决不再作数，回到 AI 评审循环。
+
+/** 一次人工裁决：通过 / 否决 + 一句话理由 + 裁决时的实体快照（失效判据）。 */
+export interface HumanVerdict {
+  /** 人拍板的结果：true = 定稿放行；false = 否决（触发重出 / 转人改）。 */
+  pass: boolean;
+  /** 一句话理由（人读，中文；可空——点个按钮不写字也合法）。 */
+  note: string;
+  /** ISO 裁决时间戳。 */
+  at: string;
+  /** 裁决时的实体 rev（镜头 / 角色侧）；实体此后被改过（rev 变大）→ 裁决作废。 */
+  rev?: number;
+  /** 裁决时的剧本指纹（仅剧本侧，`scriptDigestOf`）；剧本此后变过 → 裁决作废。 */
+  digest?: string;
+}
+
+/** 宽容解析人工裁决；缺 `pass` 布尔判据 → null（没裁决过 / 脏数据，不硬造）。不抛。 */
+export function normalizeHumanVerdict(raw: unknown): HumanVerdict | null {
+  const obj = asRecord(raw);
+  if (!obj || typeof obj.pass !== "boolean") return null;
+  return {
+    pass: obj.pass,
+    note: typeof obj.note === "string" ? obj.note.trim() : "",
+    at: typeof obj.at === "string" ? obj.at : "",
+    ...(typeof obj.rev === "number" && Number.isFinite(obj.rev)
+      ? { rev: obj.rev }
+      : {}),
+    ...(typeof obj.digest === "string" && obj.digest.trim() !== ""
+      ? { digest: obj.digest.trim() }
+      : {}),
+  };
+}
+
+/** 读某条记录上已存的人工裁决；没裁决过 → null。 */
+export function getRecordHumanVerdict(raw: unknown): HumanVerdict | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  return normalizeHumanVerdict(rec.humanVerdict);
+}
+
+/**
+ * 把人工裁决写回一批记录里 `id` 命中的那条（不可变返回新数组）。与 `applyReview`
+ * 同口径：认 id、不认实体类型（镜头 / 角色卡共用）。无命中 → 原样返回入参引用。
+ * 只动 `humanVerdict`，不碰 AI 的 `review` / `imageReview` —— 两套判定并存，
+ * 优先级由消费方（规划器 / 评审收敛）按「人工优先」裁决。
+ */
+export function applyHumanVerdict(
+  entities: unknown[],
+  id: string,
+  verdict: HumanVerdict,
+): unknown[] {
+  let hit = false;
+  const next = entities.map((raw) => {
+    if (!isRecord(raw) || raw.id !== id) return raw;
+    hit = true;
+    return { ...raw, humanVerdict: verdict };
+  });
+  return hit ? next : entities;
+}
+
+/**
+ * 人工评分（0~5，整档；null = 未评 / 清除）。越界夹取、非有限数 → null。
+ * 挂在镜头记录上（`shot.humanRating`），是校准读数的人侧输入（对比 AI 维度分）。
+ */
+export function normalizeHumanRating(raw: unknown): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  return Math.round(clamp(raw, 0, 5));
+}
+
+/** 读某条记录上已存的人评分；没评过 → null。 */
+export function getRecordHumanRating(raw: unknown): number | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  return normalizeHumanRating(rec.humanRating);
+}
+
+/** 把人评分写回一批记录里 `id` 命中的那条（不可变返回新数组）；null = 清除。 */
+export function applyHumanRating(
+  entities: unknown[],
+  id: string,
+  rating: number | null,
+): unknown[] {
+  let hit = false;
+  const next = entities.map((raw) => {
+    if (!isRecord(raw) || raw.id !== id) return raw;
+    hit = true;
+    const value = normalizeHumanRating(rating);
+    // undefined 键不落：序列化后 null 与缺省在宽容读下等价，这里保留 null 显式语义。
+    return value === null
+      ? { ...raw, humanRating: null }
+      : { ...raw, humanRating: value };
+  });
+  return hit ? next : entities;
 }

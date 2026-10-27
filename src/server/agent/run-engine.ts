@@ -423,32 +423,45 @@ async function execReviewShots(
     const rev = revById.get(shotId) ?? 0;
     const shotView = view.shots.find((s) => s.id === shotId);
     const hasImage = shotView?.hasImage ?? false;
+    // 人工裁决优先（#2480 · FR-AG-02）：裁决快照与当前 rev 相等才新鲜（有效）——
+    // 人通过 → 直接定稿（不花 AI 评审的调用）；人否决 → 判不合格走抽卡重出
+    // （rev 抬高后旧裁决自然失效，AI 评审兜底接管）。不新鲜 → AI 双裁判。
+    const human = shotView?.humanVerdict ?? null;
+    const humanFresh = human !== null && human.rev === rev;
     let pass: boolean;
-    try {
-      const textVerdict = await reviewContent(
-        userId,
-        projectId,
-        "shot",
-        shotId,
-      );
-      // 视觉裁判：仅镜头已出图时跑（没图就只看文本，退化回旧行为）。
-      let imagePass: boolean | null = null;
-      if (hasImage) {
-        try {
-          imagePass = (await reviewShotImage(userId, projectId, shotId)).pass;
-          imageReviewed++;
-        } catch {
-          // 视觉评审传输/模型异常：不阻断、不当作「图没过」，按「未拿到图判据」处理
-          // （与文本同口径）—— 真的图崩会由模型给 pass=false 触发返工。
-          imagePass = null;
-        }
-      }
-      pass = textVerdict.pass && (imagePass ?? true);
-    } catch {
-      // 文本评审本身失败：不阻断流水线，按「定稿保留」处理，避免反复重试坏镜。
+    if (humanFresh && human.pass) {
       reviewed[shotId] = rev;
+      passed++;
       continue;
     }
+    if (humanFresh && !human.pass) {
+      pass = false;
+    } else
+      try {
+        const textVerdict = await reviewContent(
+          userId,
+          projectId,
+          "shot",
+          shotId,
+        );
+        // 视觉裁判：仅镜头已出图时跑（没图就只看文本，退化回旧行为）。
+        let imagePass: boolean | null = null;
+        if (hasImage) {
+          try {
+            imagePass = (await reviewShotImage(userId, projectId, shotId)).pass;
+            imageReviewed++;
+          } catch {
+            // 视觉评审传输/模型异常：不阻断、不当作「图没过」，按「未拿到图判据」处理
+            // （与文本同口径）—— 真的图崩会由模型给 pass=false 触发返工。
+            imagePass = null;
+          }
+        }
+        pass = textVerdict.pass && (imagePass ?? true);
+      } catch {
+        // 文本评审本身失败：不阻断流水线，按「定稿保留」处理，避免反复重试坏镜。
+        reviewed[shotId] = rev;
+        continue;
+      }
     if (pass) {
       reviewed[shotId] = rev;
       passed++;

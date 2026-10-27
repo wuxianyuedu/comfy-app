@@ -423,3 +423,63 @@ describe("task.delete（rateLimitedProcedure）", () => {
     });
   }, 30_000);
 });
+
+// ───────────────────── setImageFeedback（人工侧 #2480） ─────────────────────
+
+describe("task.setImageFeedback（人工评分 / 收藏）", () => {
+  it("打分 + 收藏 → detail 里可见；null 评分 = 清除", async () => {
+    seedTask(tdb, {
+      id: "task-fb",
+      userId: "user-a",
+      status: "COMPLETED",
+      images: [COVER("img-fb", "/generated/task-fb/1.png")],
+      progress: 1,
+    });
+    const caller = createCaller(makeCtx());
+    await caller.setImageFeedback({
+      imageId: "img-fb",
+      humanRating: 4,
+      isFavorite: true,
+    });
+    const detail = await createCaller(makeCtx()).detail({ id: "task-fb" });
+    expect(detail?.images[0]).toMatchObject({
+      id: "img-fb",
+      humanRating: 4,
+      isFavorite: true,
+    });
+    await caller.setImageFeedback({
+      imageId: "img-fb",
+      humanRating: null,
+      isFavorite: false,
+    });
+    const cleared = await createCaller(makeCtx()).detail({ id: "task-fb" });
+    expect(cleared?.images[0]).toMatchObject({
+      humanRating: null,
+      isFavorite: false,
+    });
+  });
+
+  it("他人任务的图 / 图不存在 → NOT_FOUND", async () => {
+    seedTask(tdb, {
+      id: "task-fb-b",
+      userId: "user-b",
+      status: "COMPLETED",
+      images: [COVER("img-b", "/generated/x/1.png")],
+      progress: 1,
+    });
+    await expect(
+      createCaller(makeCtx()).setImageFeedback({
+        imageId: "img-b",
+        humanRating: 3,
+        isFavorite: false,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      createCaller(makeCtx()).setImageFeedback({
+        imageId: "missing",
+        humanRating: 3,
+        isFavorite: false,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});

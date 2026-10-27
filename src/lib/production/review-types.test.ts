@@ -2,17 +2,24 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyHumanRating,
+  applyHumanVerdict,
   applyImageReview,
   applyReview,
+  applyScriptHumanVerdict,
   applyScriptReview,
+  getRecordHumanVerdict,
   getRecordImageReview,
   getRecordReview,
+  normalizeHumanRating,
+  normalizeHumanVerdict,
   normalizeReviewMode,
   normalizeReviewVerdict,
   normalizeScriptReviewState,
   recordScriptRevision,
   reviewScoreMean,
   weakScoreEntries,
+  type HumanVerdict,
   type ReviewVerdict,
 } from "./review-types";
 
@@ -332,5 +339,103 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
         scoredAt: "t",
       }),
     ).toEqual([]);
+  });
+});
+
+// ───────────────── 人工裁决与人工评分（FR-QA-07 人工侧 · #2480） ─────────────────
+
+describe("人工裁决 / 人评分（#2480）", () => {
+  const verdict: HumanVerdict = {
+    pass: false,
+    note: "构图崩了",
+    at: "t1",
+    rev: 3,
+  };
+
+  it("normalizeHumanVerdict：缺 pass 布尔 → null；note 裁边 / rev / digest 宽容收", () => {
+    expect(normalizeHumanVerdict(null)).toBeNull();
+    expect(normalizeHumanVerdict({ note: "x" })).toBeNull();
+    expect(normalizeHumanVerdict({ pass: true, note: "  可以  " })).toEqual({
+      pass: true,
+      note: "可以",
+      at: "",
+    });
+    expect(
+      normalizeHumanVerdict({ pass: false, rev: 2.7, digest: " d " }),
+    ).toEqual({ pass: false, note: "", at: "", rev: 2.7, digest: "d" });
+  });
+
+  it("applyHumanVerdict：写 humanVerdict 不碰 AI 判定；无命中原样返回入参引用", () => {
+    const entities = [
+      {
+        id: "a",
+        review: { pass: true, issues: [], suggestion: "", scoredAt: "x" },
+        imageReview: { pass: true, issues: [], suggestion: "", scoredAt: "y" },
+      },
+    ];
+    const out = applyHumanVerdict(entities, "a", verdict) as Array<
+      Record<string, unknown>
+    >;
+    expect(out[0]?.humanVerdict).toEqual(verdict);
+    // AI 的两套判定原样保留
+    expect(out[0]?.review).toMatchObject({ pass: true });
+    expect(out[0]?.imageReview).toMatchObject({ pass: true });
+    expect(applyHumanVerdict(entities, "missing", verdict)).toBe(entities);
+  });
+
+  it("getRecordHumanVerdict：宽容读；没裁决过 → null", () => {
+    expect(getRecordHumanVerdict({ humanVerdict: verdict })).toEqual(verdict);
+    expect(getRecordHumanVerdict({})).toBeNull();
+    expect(
+      getRecordHumanVerdict({ humanVerdict: { note: "缺 pass" } }),
+    ).toBeNull();
+  });
+
+  it("normalizeHumanRating：夹取 0~5 取整；非有限数 → null", () => {
+    expect(normalizeHumanRating(3)).toBe(3);
+    expect(normalizeHumanRating(7)).toBe(5);
+    expect(normalizeHumanRating(-1)).toBe(0);
+    expect(normalizeHumanRating(4.6)).toBe(5);
+    expect(normalizeHumanRating("4")).toBeNull();
+    expect(normalizeHumanRating(Number.NaN)).toBeNull();
+  });
+
+  it("applyHumanRating：写 / 清（null）；无命中原样返回入参引用", () => {
+    const entities = [{ id: "a" }];
+    expect(
+      (applyHumanRating(entities, "a", 4) as Array<Record<string, unknown>>)[0]
+        ?.humanRating,
+    ).toBe(4);
+    expect(
+      (
+        applyHumanRating(entities, "a", null) as Array<Record<string, unknown>>
+      )[0]?.humanRating,
+    ).toBeNull();
+    expect(applyHumanRating(entities, "missing", 4)).toBe(entities);
+  });
+
+  it("剧本裁决：applyScriptHumanVerdict 只动 humanVerdict，AI 判定 / 曲线 / 留档保留", () => {
+    let state = normalizeScriptReviewState(null);
+    state = applyScriptReview(state, {
+      pass: false,
+      issues: ["高潮缺失"],
+      suggestion: "",
+      scoredAt: "t1",
+    });
+    state = recordScriptRevision(state, "v0", "t0");
+    state = applyScriptHumanVerdict(state, {
+      pass: true,
+      note: "人拍板过",
+      at: "t2",
+      digest: "d1",
+    });
+    expect(state.humanVerdict).toMatchObject({ pass: true, digest: "d1" });
+    expect(state.review?.pass).toBe(false);
+    expect(state.revisions.map((r) => r.markdown)).toEqual(["v0"]);
+    // normalize 往返：脏 JSON 里的人工裁决也能宽容读回
+    expect(
+      normalizeScriptReviewState({ humanVerdict: verdict }).humanVerdict,
+    ).toEqual(verdict);
+    expect(normalizeScriptReviewState({}).humanVerdict).toBeNull();
   });
 });
