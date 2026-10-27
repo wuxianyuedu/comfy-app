@@ -93,6 +93,30 @@ describe("FinalComposer 时间线呈现", () => {
   });
 });
 
+describe("FinalComposer 成片出口（#2476）", () => {
+  it("传入 onComposeFilm 时显示「去成片合成 MP4」且点击调用回调", () => {
+    const onComposeFilm = vi.fn();
+    render(
+      <FinalComposer
+        shots={[makeShot({ clipUrl: "/api/generated/1.mp4" })]}
+        title="测试项目"
+        onShotsChange={vi.fn()}
+        onRendered={vi.fn()}
+        rendered
+        onComposeFilm={onComposeFilm}
+      />,
+    );
+    const btn = screen.getByRole("button", { name: /去成片合成 MP4/ });
+    fireEvent.click(btn);
+    expect(onComposeFilm).toHaveBeenCalledTimes(1);
+  });
+
+  it("未传入 onComposeFilm 时不渲染出口按钮", () => {
+    renderComposer([makeShot({ clipUrl: "/api/generated/1.mp4" })], true);
+    expect(screen.queryByRole("button", { name: /去成片合成 MP4/ })).toBeNull();
+  });
+});
+
 describe("FinalComposer 导出合成清单", () => {
   it("导出：产物按时间线序携带镜头字段，并记账 rendered", () => {
     const { onRendered } = renderComposer([

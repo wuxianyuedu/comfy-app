@@ -251,6 +251,11 @@ export interface WorkshopPipelineController {
    *  此前它是 `openApiSettings` + 一个 `apiSettingsOpen` 布尔 + 工坊内部一层弹窗 ——
    *  同一件事现在只有页签那一个落点。 */
   openModelAdapters: () => void;
+  /** 切到「成片」视图页签（广播 `workspace:navigate`，与 `openModelAdapters`
+   *  同一条通道）：阶段⑥导出合成清单后，把用户送到真出 MP4 的成片工坊。
+   *  成片工坊已能从活跃项目读镜头并一键成片（`createFromProject`），这条出口
+   *  就是让阶段⑥不再「导个清单就当做完」（ISSUE #2476）。 */
+  goToFilm: () => void;
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
   /** 写一条用户可见的提示（错误 / 门禁 / 未生效警告）：stage 组件内部的
@@ -643,6 +648,12 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     [],
   );
 
+  /* 阶段⑥「去成片合成 MP4」出口：复用上一条广播，view 换成 "film"。 */
+  const goToFilm = React.useCallback(
+    () => emitAppEvent("workspace:navigate", { view: "film" }),
+    [],
+  );
+
   const handleApiChannelsSaved = React.useCallback(
     (channels: ApiChannelsView) => {
       setApiChannels(channels);
@@ -713,6 +724,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     dismissNotice,
     showNotice,
     markRendered,
+    goToFilm,
     activeProjectId,
   };
 }
