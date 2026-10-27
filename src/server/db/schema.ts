@@ -28,7 +28,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { cuid, dateNotNull } from "./schema-common";
+import { cuid, dateNotNull, user } from "./schema-common";
 import { type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
@@ -44,23 +44,9 @@ const dateNull = customType<{ data: Date | null; driverData: string | null }>({
 });
 
 // ── Better Auth 表（表名单数，对齐 better-auth 的默认命名）─────────
-export const user = sqliteTable("user", {
-  id: cuid(),
-  name: text("name"),
-  email: text("email").notNull().unique(),
-  emailVerified: integer("emailVerified", { mode: "boolean" })
-    .notNull()
-    .default(false),
-  image: text("image"),
-  password: text("password"),
-  createdAt: dateNotNull("createdAt")
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: dateNotNull("updatedAt")
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdate(() => new Date()),
-});
+// `user` 表本体在 schema-common.ts（零依赖叶子）；本文件其余表与 schema-series.ts
+// 都经 FK 惰性回调引用它。这里原样再导出，`~/server/db/schema` 的导入面不变。
+export { user };
 
 export const session = sqliteTable("session", {
   id: text("id").primaryKey(),

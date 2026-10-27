@@ -31,8 +31,7 @@ import {
   type InferInsertModel,
   type InferSelectModel,
 } from "drizzle-orm";
-import { cuid, dateNotNull } from "./schema-common";
-import { user } from "./schema";
+import { cuid, dateNotNull, user } from "./schema-common";
 
 export const series = sqliteTable(
   "series",

@@ -8,7 +8,12 @@
  * 则不同：它在 `() => user.id` 惰性回调里才被触碰，留在 schema.ts 没有问题。
  */
 
-import { customType, text } from "drizzle-orm/sqlite-core";
+import {
+  customType,
+  integer,
+  sqliteTable,
+  text,
+} from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
 
 export const dateNotNull = customType<{ data: Date; driverData: string }>({
@@ -23,3 +28,27 @@ export const cuid = () =>
   text("id")
     .$defaultFn(() => createId())
     .primaryKey();
+
+/**
+ * Better Auth 的 `user` 表（表名单数，对齐 better-auth 的默认命名）也放在这份叶子：
+ * schema.ts 与 schema-series.ts 都要在 FK 回调里引用它（`() => user.id`），而
+ * schema.ts 经 `export *` 先加载拆分件 —— `user` 只有住在零依赖叶子，依赖图才能
+ * 保持单向（§12.7 禁环；schema.ts 原样再导出，既有导入方无损）。
+ */
+export const user = sqliteTable("user", {
+  id: cuid(),
+  name: text("name"),
+  email: text("email").notNull().unique(),
+  emailVerified: integer("emailVerified", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  image: text("image"),
+  password: text("password"),
+  createdAt: dateNotNull("createdAt")
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: dateNotNull("updatedAt")
+    .notNull()
+    .$defaultFn(() => new Date())
+    .$onUpdate(() => new Date()),
+});
