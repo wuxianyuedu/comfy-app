@@ -11,8 +11,17 @@
 // 判定直接挂在实体记录上（`shot.review` / `character.review`），随 `production` 的 JSON 列一起
 // 持久化 —— 新增字段无需迁移（与角色定妆照 `portraits` 挂角色本身同套路）。
 import { asRecord, isRecord } from "~/lib/is-record";
+import { tailWindow } from "~/lib/page-window";
 
-/** 一次评审判定：过 / 不过 + 缺陷清单 + 改进建议 + 打分时间。 */
+/** 单个维度的评分：1~5 分 + 一句话依据（人读，中文）。 */
+export interface ReviewScore {
+  /** 维度分（1~5，越界在归一时夹取）。 */
+  score: number;
+  /** 打这个分的一句话依据；模型漏给时为空串。 */
+  note: string;
+}
+
+/** 一次评审判定：过 / 不过 + 缺陷清单 + 改进建议 + 维度评分 + 打分时间。 */
 export interface ReviewVerdict {
   /** 是否合格。false → 触发抽卡 / 改提示词重生成的入口对用户可见。 */
   pass: boolean;
@@ -22,7 +31,18 @@ export interface ReviewVerdict {
   suggestion: string;
   /** ISO 打分时间戳。 */
   scoredAt: string;
+  /**
+   * 维度评分（FR-QA-07 地基）：rubric 维度 key → 分 + 依据。**可选**——P8-1a 时代的
+   * 旧判定没有这层，读作「未评分」，不硬造分数；新判定按 rubric（`review-rubrics.ts`）
+   * 给出。分数与 `pass` 判定相互独立：低分但勉强可用可以 pass=true。
+   */
+  scores?: Record<string, ReviewScore>;
+  /** 评分所用的 rubric 版本（口径演进后旧分数仍可解释）；未评分时缺省。 */
+  rubricVersion?: string;
 }
+
+/** 实体上保留的历次判定上限（`reviewHistory` 只存**本轮之前**的判定；当前判定在 `review`）。 */
+export const REVIEW_HISTORY_LIMIT = 9;
 
 /**
  * 不合格时的重生成方式（Phase 8 决策：抽卡默认「同提示词 + 换种子」，另给「改提示词」）。
@@ -39,9 +59,32 @@ export function normalizeReviewMode(raw: unknown): ReviewMode {
 }
 
 /**
+ * 宽容解析维度评分（未知 JSON → `Record<string, ReviewScore>`）：只收「有限数字分 +
+ * 可缺省依据」的条目，分越界夹取到 1~5、key 去空白后非空；非法条目丢弃，不抛。
+ * 返回 undefined = 入参里没有可用的 scores（旧数据 / 模型没给）。
+ */
+function normalizeScores(raw: unknown): Record<string, ReviewScore> | undefined {
+  const obj = asRecord(raw);
+  if (!obj) return undefined;
+  const out: Record<string, ReviewScore> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const trimmedKey = key.trim();
+    const item = asRecord(value);
+    if (!item || trimmedKey === "") continue;
+    if (typeof item.score !== "number" || !Number.isFinite(item.score)) continue;
+    out[trimmedKey] = {
+      score: Math.min(5, Math.max(1, item.score)),
+      note: typeof item.note === "string" ? item.note.trim() : "",
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
  * 把未知值归一成 `ReviewVerdict`；缺 `pass` 布尔判据 → 视为「没有有效判定」返回 null
  * （评审是可选字段，读不到就当没评过，不硬造一个默认判定误导展示）。issues 只收非空字符串、
- * suggestion / scoredAt 缺省回落空串。不抛。
+ * suggestion / scoredAt 缺省回落空串；scores / rubricVersion 有合法值才挂键（旧数据
+ * 读作「未评分」）。不抛。
  */
 export function normalizeReviewVerdict(raw: unknown): ReviewVerdict | null {
   const obj = asRecord(raw);
@@ -52,12 +95,26 @@ export function normalizeReviewVerdict(raw: unknown): ReviewVerdict | null {
         .map((item) => item.trim())
         .filter((item) => item !== "")
     : [];
+  const scores = normalizeScores(obj.scores);
   return {
     pass: obj.pass,
     issues,
     suggestion: typeof obj.suggestion === "string" ? obj.suggestion : "",
     scoredAt: typeof obj.scoredAt === "string" ? obj.scoredAt : "",
+    ...(scores ? { scores } : {}),
+    ...(typeof obj.rubricVersion === "string" && obj.rubricVersion.trim() !== ""
+      ? { rubricVersion: obj.rubricVersion }
+      : {}),
   };
+}
+
+/** 维度均分（收敛判据的输入）；未评分 / 无有效维度 → null（调用方据此走「不过」旧路）。 */
+export function reviewScoreMean(verdict: ReviewVerdict): number | null {
+  const scores = verdict.scores;
+  if (!scores) return null;
+  const values = Object.values(scores).map((item) => item.score);
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 /** 读某条记录（分镜镜头 / 角色卡的未知记录）上已存的评审判定；没评过 → null。 */
@@ -72,6 +129,10 @@ export function getRecordReview(raw: unknown): ReviewVerdict | null {
  * `production.characters` 这类 unknown 记录数组 —— 与 `applyShotRedo` 同口径：认 id、不认具体
  * 实体类型，因此镜头与角色卡共用一个 reducer。无命中 → 原样返回入参引用（调用方据此判断
  * 「找不到目标、无需落库」）。
+ *
+ * 同时维护轮次历史（FR-QA-07：每轮分数落库留痕）：记录上**已有的**有效判定进
+ * `reviewHistory`（尾部追加、超上限从头裁剪），当前判定始终在 `review` ——
+ * 曲线 = `[...reviewHistory, review]`。旧判定无效（缺 pass）时不往历史塞垃圾。
  */
 export function applyReview(
   entities: unknown[],
@@ -82,7 +143,53 @@ export function applyReview(
   const next = entities.map((raw) => {
     if (!isRecord(raw) || raw.id !== id) return raw;
     hit = true;
-    return { ...raw, review: verdict };
+    const prevHistory = Array.isArray(raw.reviewHistory)
+      ? raw.reviewHistory
+      : [];
+    const prevVerdict = normalizeReviewVerdict(raw.review);
+    const history = prevVerdict
+      ? tailWindow([...prevHistory, prevVerdict], REVIEW_HISTORY_LIMIT)
+      : prevHistory;
+    return {
+      ...raw,
+      review: verdict,
+      ...(history.length > 0 ? { reviewHistory: history } : {}),
+    };
   });
   return hit ? next : entities;
+}
+
+// ── 剧本评审位（production.scriptReview 列，FR-QA-07 ② · #2477）──────────────
+// 剧本不是实体数组里的一条记录，判定与历史落在 production 自己的一列上；
+// 上面实体那套「review + reviewHistory」的语义在这里用列形状复刻。
+
+/** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定。 */
+export interface ScriptReviewState {
+  /** 当前有效判定；没评过 / 列里判定非法 → null。 */
+  review: ReviewVerdict | null;
+  /** 本轮之前的历次判定（旧→新，超限裁剪）；曲线 = `[...history, review]`。 */
+  history: ReviewVerdict[];
+}
+
+/** 宽容读取 `production.scriptReview` 列（未知 JSON → 形状）；缺省/畸形不抛，回落「没评过」。 */
+export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
+  const obj = asRecord(raw);
+  if (!obj) return { review: null, history: [] };
+  const history = (Array.isArray(obj.history) ? obj.history : [])
+    .map((item) => normalizeReviewVerdict(item))
+    .filter((item): item is ReviewVerdict => item !== null)
+    .slice(-REVIEW_HISTORY_LIMIT);
+  return { review: normalizeReviewVerdict(obj.review), history };
+}
+
+/** 写回剧本评审（纯函数）：prev 的有效判定进 history（尾部追加、超上限从头裁剪）。 */
+export function applyScriptReview(
+  prev: unknown,
+  verdict: ReviewVerdict,
+): ScriptReviewState {
+  const state = normalizeScriptReviewState(prev);
+  const history = state.review
+    ? tailWindow([...state.history, state.review], REVIEW_HISTORY_LIMIT)
+    : state.history;
+  return { review: verdict, history };
 }

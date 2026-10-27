@@ -22,6 +22,8 @@ export interface ProductionInput {
   characters?: unknown;
   shots?: unknown;
   progress?: unknown;
+  /** 剧本评审位（FR-QA-07）：形状见 `~/lib/production/review-types` 的 ScriptReviewState。 */
+  scriptReview?: unknown;
 }
 
 export class ProductionRepository extends DrizzleRepository<Production> {
@@ -68,6 +70,8 @@ export class ProductionRepository extends DrizzleRepository<Production> {
       scriptMarkdown?: string;
       characters?: unknown;
       shots?: unknown;
+      /** 剧本评审位（FR-QA-07）：评审器写判定与轮次历史；工坊自动保存不传 = 不碰。 */
+      scriptReview?: unknown;
     },
   ): Promise<boolean> {
     const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -75,6 +79,8 @@ export class ProductionRepository extends DrizzleRepository<Production> {
       set.scriptMarkdown = patch.scriptMarkdown;
     if (patch.characters !== undefined) set.characters = patch.characters;
     if (patch.shots !== undefined) set.shots = patch.shots;
+    if (patch.scriptReview !== undefined)
+      set.scriptReview = patch.scriptReview;
     const rows = await db
       .update(production)
       .set(set)

@@ -200,12 +200,31 @@ export const REVIEW_SYSTEM = `你是严格的 AI 生成内容质检评审。用�
 { "pass": true 或 false, "issues": ["逐条列出具体缺陷，合格则给空数组"], "suggestion": "不合格时给一句话改进方向（合格可留空）" }
 全程使用中文，判断从严但务实：能拍、贴合剧本即算合格，不因风格偏好判不合格。`;
 
+/**
+ * 评分加段（FR-QA-07）：给了 rubric 文本时追加到评审系统提示词之后，要求模型按
+ * 维度打分并输出 `scores`。分数与 `pass` 相互独立（低分但勉强可用可 pass=true）。
+ * rubric 文本由调用方用 `renderRubricForPrompt` 渲染（本文件不 import production 域，
+ * 避免跨域耦合——与 `RepromptFeedback` 同一口径）。
+ */
+export function scoringAddendum(rubricText: string): string {
+  if (!rubricText.trim()) return "";
+  return `
+
+另外，按下面的评分量表（rubric）逐维度打分：scores 的键必须用维度 key，每个维度给 1~5 分与一句打分依据。分数与 pass 相互独立——低分但勉强可用仍可 pass=true，每档按锚点描述对号入座。
+scores 形状：
+{ "scores": { "<维度key>": { "score": 1到5的整数, "note": "打分依据一句话" } } }
+【评分量表】
+${rubricText}`;
+}
+
 /** 组装「评审一条内容」的消息。`kindLabel` 是人读实体名（"分镜镜头" / "角色卡"），
- *  `sourceText` 是该实体的可评审文本（由调用方从记录提炼，纯文本、不含结构）。 */
+ *  `sourceText` 是该实体的可评审文本（由调用方从记录提炼，纯文本、不含结构）。
+ *  `rubricText` 可选：传入时系统提示词追加维度评分要求（FR-QA-07）。 */
 export function buildReviewMessages(
   kindLabel: string,
   sourceText: string,
   ctx: ContentReviewContext,
+  rubricText?: string,
 ): LLMMessage[] {
   const user = `【创作上下文】
 项目标题：${ctx.title || "未命名"}
@@ -220,7 +239,45 @@ ${sourceText}
 
 请评审这份${kindLabel}是否合格。`;
   return [
-    { role: "system", content: REVIEW_SYSTEM },
+    { role: "system", content: REVIEW_SYSTEM + scoringAddendum(rubricText ?? "") },
+    { role: "user", content: user },
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Script review（FR-QA-07 ②：剧本评审 —— production.scriptReview 列）
+// ─────────────────────────────────────────────────────────────
+
+export const SCRIPT_REVIEW_SYSTEM = `你是严格的剧本质检评审。用户会给出项目信息（类型 / 基调 / 梗概）与一份完整剧本 Markdown。判断它是否合格：
+- 结构：场景齐全、开头-发展-高潮清晰，场景交代可拍；
+- 具象：动作 / 画面描述具体可执行，不是空泛套话；
+- 一致：贴合项目类型、基调与梗概，不自相矛盾；
+- 台词：口语、有信息量、能区分人物。
+只输出严格 JSON 对象，不要任何解释或代码围栏：
+{ "pass": true 或 false, "issues": ["逐条列出具体缺陷，合格则给空数组"], "suggestion": "不合格时给一句话改进方向（合格可留空）" }
+全程使用中文，判断从严但务实：能拍、贴合项目意图即算合格，不因风格偏好判不合格。`;
+
+/** 组装「评审整份剧本」的消息。`sourceText` 是完整剧本 Markdown（调用方裁长）。 */
+export function buildScriptReviewMessages(
+  sourceText: string,
+  ctx: ContentReviewContext,
+  rubricText?: string,
+): LLMMessage[] {
+  const user = `【项目信息】
+项目标题：${ctx.title || "未命名"}
+类型：${ctx.type || "未指定"}
+基调：${ctx.tone || "未指定"}
+梗概：${ctx.logline || "无"}
+
+【待评审的剧本】
+${sourceText || "（空）"}
+
+请评审这份剧本是否合格。`;
+  return [
+    {
+      role: "system",
+      content: SCRIPT_REVIEW_SYSTEM + scoringAddendum(rubricText ?? ""),
+    },
     { role: "user", content: user },
   ];
 }

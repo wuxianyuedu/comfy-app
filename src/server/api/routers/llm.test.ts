@@ -179,6 +179,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
             chat: 0.3,
             code: 0.2,
             creative: 0.8,
+            review: 0.1,
           },
         }),
       ),

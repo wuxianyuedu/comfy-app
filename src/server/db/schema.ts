@@ -675,6 +675,11 @@ export const production = sqliteTable(
     /** AI 自主执行 run 的协调状态（审批粒度 / 生命周期 / 每镜已处理 rev 快照，Phase 6）。
      *  由 run 控制端点单独写，不进工坊的 production 自动保存载荷（字段所有权）。 */
     run: text("run", { mode: "json" }).notNull().default("{}"),
+    /** 整份剧本的 AI 评审判定 + 轮次历史（FR-QA-07 ② · #2477 的「剧本评审位」）。
+     *  形状 `{ review, reviewHistory }`，归一在 `~/lib/production/review-types` 的
+     *  `normalizeScriptReviewState`；写入口是 `server/agent/review.ts` 的 `reviewScript`
+     *  （经 `patchContent` 的 `scriptReview`）。工坊自动保存不碰这列（字段所有权同 run）。 */
+    scriptReview: text("scriptReview", { mode: "json" }).notNull().default("{}"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

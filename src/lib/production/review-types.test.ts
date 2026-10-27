@@ -6,6 +6,7 @@ import {
   getRecordReview,
   normalizeReviewMode,
   normalizeReviewVerdict,
+  reviewScoreMean,
   type ReviewVerdict,
 } from "./review-types";
 
@@ -62,6 +63,37 @@ describe("normalizeReviewVerdict", () => {
     expect(v?.issues).toEqual(["缺陷A", "缺陷B"]);
     expect(v?.suggestion).toBe("");
   });
+
+  it("scores：合法维度收下、越界分夹取 1~5、note trim；非法条目丢弃（FR-QA-07）", () => {
+    const v = normalizeReviewVerdict({
+      pass: false,
+      scores: {
+        画面: { score: 9, note: " 太空 " },
+        一致性: { score: -1 },
+        节奏: { score: "4" },
+        废维度: { nope: true },
+      },
+    });
+    expect(v?.scores).toEqual({
+      画面: { score: 5, note: "太空" },
+      一致性: { score: 1, note: "" },
+      // 「节奏」给了字符串分 → 非有限 number，整条丢弃（不硬转，防模型噪声）
+    });
+  });
+
+  it("旧数据无 scores / scores 为空对象 → 不挂键（读作「未评分」不报错）", () => {
+    expect(normalizeReviewVerdict({ pass: true })?.scores).toBeUndefined();
+    expect(normalizeReviewVerdict({ pass: true, scores: {} })?.scores).toBeUndefined();
+    expect(
+      normalizeReviewVerdict({ pass: true, scores: "垃圾" })?.scores,
+    ).toBeUndefined();
+  });
+
+  it("rubricVersion：非空字符串才挂键", () => {
+    expect(normalizeReviewVerdict({ pass: true, rubricVersion: "v1" })?.rubricVersion).toBe("v1");
+    expect(normalizeReviewVerdict({ pass: true, rubricVersion: "  " })?.rubricVersion).toBeUndefined();
+    expect(normalizeReviewVerdict({ pass: true, rubricVersion: 3 })?.rubricVersion).toBeUndefined();
+  });
 });
 
 describe("getRecordReview", () => {
@@ -106,5 +138,71 @@ describe("applyReview", () => {
   it("无命中 / 非记录项 → 原样返回入参引用（调用方据此判断无需落库）", () => {
     const entities = ["字符串项", { id: "a" }];
     expect(applyReview(entities, "missing", verdict)).toBe(entities);
+  });
+
+  it("轮次历史：记录上已有的有效判定进 reviewHistory，当前判定始终在 review", () => {
+    const first: ReviewVerdict = {
+      pass: false,
+      issues: ["第一轮缺陷"],
+      suggestion: "改",
+      scoredAt: "t1",
+      scores: { 画面: { score: 2, note: "差" } },
+    };
+    const second: ReviewVerdict = {
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "t2",
+      scores: { 画面: { score: 4, note: "好了" } },
+    };
+    const out = applyReview(
+      applyReview([{ id: "a" }], "a", first),
+      "a",
+      second,
+    ) as Array<Record<string, unknown>>;
+    expect(out[0]?.review).toEqual(second);
+    // history 只存「本轮之前」的判定；曲线 = [...reviewHistory, review]（旧→新）
+    expect(out[0]?.reviewHistory).toEqual([first]);
+    expect([...(out[0]?.reviewHistory as ReviewVerdict[]), second]).toEqual([
+      first,
+      second,
+    ]);
+  });
+
+  it("轮次历史：旧判定无效（缺 pass）时不塞垃圾；历史超上限从头裁剪", () => {
+    let entities: unknown[] = [{ id: "a", review: { nope: true } }];
+    entities = applyReview(entities, "a", verdict) as unknown[];
+    expect(
+      (entities[0] as Record<string, unknown>).reviewHistory,
+    ).toBeUndefined();
+
+    let chain: unknown[] = [{ id: "a" }];
+    for (let i = 0; i < 12; i++) {
+      chain = applyReview(chain, "a", { ...verdict, scoredAt: `t${i}` });
+    }
+    const history = (chain[0] as Record<string, unknown>)
+      .reviewHistory as ReviewVerdict[];
+    expect(history).toHaveLength(9); // REVIEW_HISTORY_LIMIT
+    expect(history[0]?.scoredAt).toBe("t2"); // 最早的 2 轮被裁掉
+    expect((chain[0] as Record<string, unknown>).review).toMatchObject({
+      scoredAt: "t11",
+    });
+  });
+});
+
+describe("reviewScoreMean", () => {
+  it("维度均分；未评分 / 空评分 → null（调用方走「不过」旧路）", () => {
+    expect(
+      reviewScoreMean({
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scoredAt: "t",
+        scores: { a: { score: 2, note: "" }, b: { score: 5, note: "" } },
+      }),
+    ).toBe(3.5);
+    expect(
+      reviewScoreMean({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+    ).toBeNull();
   });
 });

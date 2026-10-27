@@ -20,7 +20,7 @@ import {
   type ProductionRun,
   type RunAction,
 } from "~/lib/production/run-types";
-import { regenerateShot, reviewContent } from "~/server/agent/review";
+import { regenerateShot, reviewContent, reviewScript } from "~/server/agent/review";
 
 const approvalModeEnum = z.enum(["auto", "stage", "shot"]);
 const reviewModeEnum = z.enum(["gacha", "reprompt"]);
@@ -205,6 +205,17 @@ export const runRouter = createTRPCRouter({
         "character",
         input.characterId,
       );
+      return { verdict };
+    }),
+
+  /**
+   * 评审整份剧本（FR-QA-07 ② · #2477）：判定写回 `production.scriptReview` 列
+   * （含轮次历史）。项目级内容、无实体 id；无剧本时抛可行动错误。
+   */
+  reviewScript: authedProcedure
+    .input(z.object({ projectId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const verdict = await reviewScript(ctx.user.id, input.projectId);
       return { verdict };
     }),
 
