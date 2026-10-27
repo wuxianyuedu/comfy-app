@@ -1,4 +1,5 @@
 import type * as TanStackQuery from "@tanstack/react-query";
+import type * as CustomNodesModule from "~/config/custom-nodes";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -47,6 +48,36 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       isError: false,
       reset: vi.fn(),
     }),
+  };
+});
+
+/* 上面替换的只是 `~/trpc/react` 那一路；挂载期还有两条**不经它**的数据入口：
+ *   · `useWorkflowDetailLoader` 的冷路径直调 `~/trpc/vanilla` 的
+ *     `workflow.detailFull.query`（`~/trpc/react` 的桩覆盖不到）；
+ *   · 组件挂载即调 `~/config/custom-nodes` 的 `refreshCustomNodes()`（GET 清单）。
+ * 两条都会真打到 `localhost:3000`：本机是 ECONNREFUSED，且 happy-dom 会把连接失败
+ * 当成窗口级错误再打一遍（ISSUE #2458）。本用例只断言首帧加载态，故详情查询给
+ * 「永不 resolve」的桩、清单刷新给 resolve 桩 —— 二者都不改动被测路径的选择。 */
+vi.mock("~/trpc/vanilla", () => {
+  const pending = <T,>() =>
+    // 永不 resolve：本用例只断言加载态，不等详情返回
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- never-resolve pending 桩
+    new Promise<T>(() => {});
+  const query = () => vi.fn(() => pending());
+  return {
+    vanillaApi: {
+      workflow: {
+        detailFull: { query: query() },
+        subgraph: { query: query() },
+      },
+    },
+  };
+});
+vi.mock("~/config/custom-nodes", async (importOriginal) => {
+  const actual = await importOriginal<typeof CustomNodesModule>();
+  return {
+    ...actual,
+    refreshCustomNodes: vi.fn().mockResolvedValue(undefined),
   };
 });
 
