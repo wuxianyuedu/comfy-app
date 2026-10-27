@@ -51,6 +51,11 @@
  *   · `ship-close.mjs`    —— **关单那一格**：要不要关、关哪几张、凭什么关（本轮验真合并 /
  *     平台侧落地证明），以及关完的独立回读。它跟着「单子的落地证明口径」动，不跟 build 状态机走；
  *     叠进 `ship-core` 会把它推过 900 行（#2199 现场量的 917 行）。
+ *   · `ship-args.mjs`     —— **命令行那一层**：`parseArgs` 认哪些旗标、号「像不像号」只在这一处判。
+ *     它跟着「命令行长什么样」动（新加一枚旗标、多认一种写法、把不合法输入当场点名），
+ *     而 `ship-core` 跟着「外部执行者的读数形状」动。拆的直接原因是 #2491：加 `--as-merged`
+ *     之前 `ship-core` 已 877 行，加上它就 **907** —— 同一道 900 硬闸、同一个出口（拆），
+ *     与上面 #2189 / #2248 / #2199 三次同一条纪律，所以这里量的是一行行的**行数**而不是印象。
  *   · `ship-claim.mjs`    —— **单子的领取 / 结束释放 / 我的领取列表**：`--claim` /
  *     `--release` / `--claims`，以及关单之后那一步收尾评论与撤标签。它跟着「单子上
  *     谁在做」这一维动，与合并那一路互斥。
@@ -131,6 +136,12 @@
  *                                              #  前提换成「平台查得到它随某条已合并 PR 落地」
  *                                              #  （查不到 ⇒ 退 2；「查不到」不等于「没落地」）
  *   pnpm ship --merge --close-issue 2179       # 本轮号（标题里那批）+ 人点名的号，并集去重
+ *   pnpm ship --close-issue 2488 --as-merged 2487
+ *                                              # 补关的第二条凭据入口（ISSUE #2491）：每日档自动
+ *                                              # 立案的单子里没有 (#号) 可反查 ⇒ 人只点名**一条凭据**，
+ *                                              # 合并与否仍由脚本回读 data.is_merged：true ⇒ 关，
+ *                                              # false ⇒ 退 1（前提被推翻），取不到 ⇒ 退 2。
+ *                                              # 它**不是** --force-close，也不替代本轮验真的合并。
  *   pnpm ship --merge --clean-branch           # 合上之后删掉**这次那一条**分支（远端 + 本地）
  *   pnpm ship --reap                           # 这一轮结束时收掉本检出**端口上那批**残留进程
  *                                              #  （阶段 0 每轮都念一行归属读数；`via:"session"`
@@ -173,10 +184,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveGitDir } from "./git-dir.mjs";
+/* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
+ * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
+import { parseArgs } from "./ship-args.mjs";
 import {
   CODE,
   combineShipCodes,
-  parseArgs,
   parseSlug,
   PHASES,
   resolveUpstream,
@@ -352,6 +365,31 @@ async function runFlow(deps, tmpFiles) {
     );
     log(
       "[ship] 一个都不认 ⇒ 不动任何单子；这一格没有结论（不是「已经关好了」）。",
+    );
+    return CODE.NOT_RUN;
+  }
+  /* `--as-merged` 收的是 **PR 号**（ISSUE #2491）。它自己不做任何动作，只给「只补关」那一路
+   * 供凭据（合没合并仍由 `ship-close.mjs` 去平台回读）。两种误用都得当场点名、共用同一个出口：
+   * 不像号（打错或把标题粘进来），以及**没带 `--close-issue`** —— 那时它没有任何执行者，
+   * 而屏幕上会留下一句看起来像「已经处理过了」的沉默。 */
+  if (
+    opt.asMergedBad.length > 0 ||
+    (opt.asMerged !== null && !opt.closeIssue)
+  ) {
+    if (opt.asMergedBad.length > 0) {
+      log(
+        `[ship] [ERROR] --as-merged 收的是 PR 号（2 位以上数字，可写 #2487），` +
+          `这里不像：${opt.asMergedBad.join(" ")}`,
+      );
+    } else {
+      log(
+        `[ship] [ERROR] --as-merged ${opt.asMerged} 是**给关单那一格供凭据**的，` +
+          "而这一跳没要 --close-issue ⇒ 它没有任何执行者。",
+      );
+    }
+    log(
+      "[ship] 要补关就两条一起写：pnpm ship --close-issue <单号> --as-merged <PR号>" +
+        "（单号 = 要关的那张，PR号 = 平台回读 is_merged 的那条）⇒ 这一格没有结论。",
     );
     return CODE.NOT_RUN;
   }
@@ -629,6 +667,7 @@ async function runFlow(deps, tmpFiles) {
         explicit: opt.closeIssueNumbers,
         handle,
         mkTmp,
+        asMerged: opt.asMerged,
       }),
     ]);
   }
@@ -775,6 +814,15 @@ async function runFlow(deps, tmpFiles) {
        * 别人也看得见、且不会自动回退的地方，与合并本身同一档，所以同一个口径 ——
        * 默认不开。没合并成而带着它跑，落的是 2 并说明（不是静默跳过、更不是绿）。 */
       if (opt.closeIssue) {
+        /* 本轮合并已验真时，`--as-merged` 不参与判决（那一条比"人点名的某条 PR"更强）。
+         * 这一句是**读数**、不改退码，但它必须出现：缺了它，下一行念的「依据：本轮落地
+         * 那一行点名的」会让人以为旗标被吃掉了 —— 静默忽略别人的旗标正是这一族反复在收的形状。 */
+        if (opt.asMerged !== null && landed?.verified === true) {
+          log(
+            `[ship] --as-merged ${opt.asMerged} 这一跳**不参与判决**：本轮合并已验真` +
+              "（比一条点名的 PR 更强的证明）⇒ 号仍从落地那一行的标题本体取。",
+          );
+        }
         codes.push(
           closeIssues({
             run,
@@ -785,6 +833,7 @@ async function runFlow(deps, tmpFiles) {
             explicit: opt.closeIssueNumbers,
             handle,
             mkTmp,
+            asMerged: opt.asMerged,
           }),
         );
       }

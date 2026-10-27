@@ -20,6 +20,11 @@
  *   2. **不许把「查不到」念成「没落地」**，也不许把「cnb 没跑起来」念成「查不到」
  *      （三态：结论 / 没有结论 / 没跑起来）。
  *   3. **不加 `--force-close` 这类绕过口**：查不到该去修标题约定，不是把单子标成完成。
+ *      `--as-merged <PR>`（ISSUE #2491）**不是**绕过口，别把它读成同一个东西：它不接受
+ *      「人说什么就是什么」，人只许点名**一条凭据**，而那条 PR 合没合并仍由本文件去平台
+ *      回读 `data.is_merged` 原值 —— 判断权还在执行者手里。它补的是另一个缺口：
+ *      每日档**自动立案**的单子（提单人 `ci-daily`，标题里没有 `(#号)`）从不出现在任何 PR
+ *      标题里，所以「按标题反查」那一路对它**结构上**永远查不到证明，只能人工绕过关单。
  */
 
 /** 一次 `run` 的形状直接借 `ship-exec.mjs` 那份（`ExecResult` 的必填项在那边定，这里不另立一套）。 */
@@ -93,7 +98,10 @@ export function pullTitleBody(title, prNumber) {
  *   proofs?: Map<number, {prNumber: number, title: string}>,
  *   proofScanned?: number,
  *   proofRan?: boolean,
- * }} input `proofRan` = 那一趟反查**跑起来了没有**（false ⇒ 取不到列表，不构成结论）
+ *   asMerged?: {state: "merged" | "not-merged" | "unreadable", title: string, prNumber: number} | null,
+ * }} input `proofRan` = 那一趟反查**跑起来了没有**（false ⇒ 取不到列表，不构成结论）；
+ *   `asMerged` = 人点名那条 PR 的**平台回读结果**（ISSUE #2491，见 `fetchPullMergeProof`）——
+ *   给了它就不必再走「按标题反查」那一路，三种状态各有出口
  * @returns {{act: boolean, code: number | null, numbers: number[], sources: Map<number, string>, unproven: number[], reason: string}}
  */
 export function decideCloseIssue({
@@ -104,6 +112,7 @@ export function decideCloseIssue({
   proofs = new Map(),
   proofScanned = 0,
   proofRan = true,
+  asMerged = null,
 }) {
   /** @type {Map<number, string>} */
   const sources = new Map();
@@ -162,6 +171,46 @@ export function decideCloseIssue({
         "人也没点名要补关哪张 ⇒ 单子不能标成完成",
     };
   }
+  /** @type {number[]} */
+  const unproven = [];
+  /* 人点名了一条凭据（`--as-merged`，ISSUE #2491）⇒ 三态各有一条出口，且**不再**走标题反查。
+   * `not-merged` 落 RED 而不是 NOT_RUN：那是「人给的前提被平台推翻」，是**事实**，不是缺执行者；
+   * 反过来 `unreadable` 落 NOT_RUN —— 取不到那条 PR **不等于**它没合并（同一句口径不许两头吃）。 */
+  if (asMerged) {
+    if (asMerged.state === "not-merged") {
+      return {
+        act: false,
+        code: CODE.RED,
+        numbers: [],
+        sources,
+        unproven: [...explicit],
+        reason:
+          `人点名 PR #${asMerged.prNumber} 作为落地证明，但平台回读 is_merged=false` +
+          `（标题「${asMerged.title || "(空)"}」）⇒ 前提不成立，一张也不关`,
+      };
+    }
+    if (asMerged.state === "unreadable") {
+      return {
+        act: false,
+        code: CODE.NOT_RUN,
+        numbers: [],
+        sources,
+        unproven: [...explicit],
+        reason:
+          `取不到人点名那条 PR #${asMerged.prNumber} 的读数（命令没起来 / 输出不是 JSON / ` +
+          "回读里没有 data.is_merged 那一格）⇒ 这一格没有结论，既不关，也不判它没合并",
+      };
+    }
+    for (const n of explicit) {
+      sources.set(
+        n,
+        `人点名的落地证明：PR #${asMerged.prNumber} 经平台回读 is_merged=true` +
+          `（标题「${asMerged.title || "(空)"}」）`,
+      );
+      numbers.push(n);
+    }
+    return { act: true, code: null, numbers, sources, unproven, reason: "" };
+  }
   if (!proofRan) {
     return {
       act: false,
@@ -174,8 +223,6 @@ export function decideCloseIssue({
         ` ⇒ #${explicit.join("、")} 这一格没有结论，不猜它落没落地`,
     };
   }
-  /** @type {number[]} */
-  const unproven = [];
   for (const n of explicit) {
     const p = proofs.get(n);
     if (!p) {
@@ -266,6 +313,48 @@ export function findMergedPullProofs(ctx) {
 }
 
 /**
+ * 人点名「随哪条 PR 落地」时，那条 PR 合没合并**仍去问平台**（ISSUE #2491）。
+ *
+ * 这一格存在的原因：`findMergedPullProofs` 那一路只认「PR 标题里点名的 `(#号)`」，而每日档
+ * 自动立案的单子（提单人 `ci-daily`，标题是「构建 sn · 事件 · 时刻 · 红在哪一格」）
+ * 从不被任何 PR 标题点名 —— 于是**修法来自另一张人立的单**时，这张自动单结构上拿不到证明，
+ * 只能人工绕过关单（本仓实测绕过一次）。人给的不是一条结论，只是一条**凭据编号**；
+ * 结论仍从这里出：`pulls get-pull -v` 的 `data.is_merged` 原值。
+ *
+ * 三态出口（口径同 §13.6.4「拿不到测量 ≠ 测量结果是红的」）：
+ *   · `merged`     —— `data.is_merged === true`（**只认这一格**；信封上的 HTTP `status` 与它无关）；
+ *   · `not-merged` —— 取到了这条 PR 而 `is_merged` 是 `false` ⇒ 前提被推翻（那是**事实**，落红）；
+ *   · `unreadable` —— 命令没起来 / 输出不是 JSON / 回读里没有 `is_merged` 那一格
+ *     （含「那条 PR 不存在」这种平台不给对象的形状）⇒ **没有结论**，不猜。
+ *
+ * @param {{run: CloseRun, slug: string, prNumber: number}} ctx
+ * @returns {{state: "merged" | "not-merged" | "unreadable", title: string, prNumber: number}}
+ */
+export function fetchPullMergeProof({ run, slug, prNumber }) {
+  /** @type {{state: "merged" | "not-merged" | "unreadable", title: string, prNumber: number}} */
+  const unreadable = { state: "unreadable", title: "", prNumber };
+  if (!slug || !prNumber) return unreadable;
+  const got = cnbJson(run, [
+    "pulls",
+    "get-pull",
+    "--repo",
+    slug,
+    "--number",
+    String(prNumber),
+    "-v",
+  ]);
+  const d = got?.json?.data ?? null;
+  if (!d || typeof d !== "object") return unreadable;
+  /* 标题喂 `pullTitleBody` 剥掉平台末尾拼的 `(#<PR号>)` 再念：编号空间是共用的，
+   * 原样念会把「这条 PR」与「同号的那张单子」混成一句话（与 `findMergedPullProofs` 同一条纪律）。 */
+  const title = pullTitleBody(String(d.title ?? ""), prNumber);
+  if (d.is_merged === true) return { state: "merged", title, prNumber };
+  if (typeof d.is_merged === "boolean")
+    return { state: "not-merged", title, prNumber };
+  return unreadable;
+}
+
+/**
  * 阶段 7：把点名的单子置成 `closed / completed`，然后**独立回读**三件原值。
  *
  * `explicit`（人在命令行上点名的号）与本轮号的差别只在**前提**：本轮号跟着验真的合并，
@@ -288,9 +377,12 @@ export function findMergedPullProofs(ctx) {
  *   explicit?: number[],
  *   handle?: string | null,
  *   mkTmp?: ((name: string, text: string) => string | null) | null,
+ *   asMerged?: number | null,
  * }} ctx
  *   `handle` / `mkTmp` 是「关完之后补结束评论并撤处理人标签」那一格的执行面：
  *   未配留痕、或调用方没给临时文件落点时，那一格**跳过**（关单本身照常）。
+ *   `asMerged` 是人点名的**凭据编号**（不是结论）—— 给了它就去回读那条 PR 的 `is_merged`，
+ *   并**不再**扫「已合并 PR」那份列表（ISSUE #2491）。
  * @returns {number} `CODE` 之一
  */
 export function closeIssues(ctx) {
@@ -303,12 +395,24 @@ export function closeIssues(ctx) {
     explicit = [],
     handle = null,
     mkTmp = null,
+    asMerged = null,
   } = ctx;
   const landedVerified = landed?.verified === true;
   const title = landed?.title ?? "";
   let scan = { proofs: new Map(), scanned: 0, ran: true };
+  /** @type {{state: "merged" | "not-merged" | "unreadable", title: string, prNumber: number} | null} */
+  let asMergedProof = null;
   if (!landedVerified && explicit.length > 0) {
-    scan = findMergedPullProofs({ run, slug, numbers: explicit });
+    if (asMerged) {
+      asMergedProof = fetchPullMergeProof({ run, slug, prNumber: asMerged });
+      log(
+        `[ship] 落地证明改由人点名那条 PR 出：PR #${asMerged} 回读 is_merged=` +
+          `${asMergedProof.state === "merged" ? "true" : asMergedProof.state === "not-merged" ? "false" : "(取不到)"}` +
+          `（标题「${asMergedProof.title || "(空/取不到)"}」）`,
+      );
+    } else {
+      scan = findMergedPullProofs({ run, slug, numbers: explicit });
+    }
   }
   const plan = decideCloseIssue({
     requested: closeIssue === true,
@@ -318,11 +422,18 @@ export function closeIssues(ctx) {
     proofs: scan.proofs,
     proofScanned: scan.scanned,
     proofRan: scan.ran,
+    asMerged: asMergedProof,
   });
   if (!plan.act) {
     if (plan.code === CODE.NOT_RUN) {
       log(`[ship] 关单这一格**没有执行**：${plan.reason}`);
       return CODE.NOT_RUN;
+    }
+    /* 人点名的那条 PR **没有**合并 ⇒ 前提被平台推翻。这一格落红是有意的：
+     * 它不是「没跑起来」，而是「跑起来了、结论说你不能关」。 */
+    if (plan.code === CODE.RED) {
+      log(`[ship] 关单这一格**拒绝执行**：${plan.reason}`);
+      return CODE.RED;
     }
     return CODE.GREEN;
   }
@@ -385,7 +496,9 @@ export function closeIssues(ctx) {
     /* 「回读里没有正文这一格」与「正文是空的」必须分开念：前者不能念成「零条」
      * （拿缺字段当结论，正是这一族反复在收的那一型）。 */
     if (typeof d?.body !== "string") {
-      log(`[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`);
+      log(
+        `[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`,
+      );
     } else {
       const s = issueItemShapes(d.body);
       log(
@@ -400,9 +513,7 @@ export function closeIssues(ctx) {
       /* 关单成功之后才做「开发结束」评论与撤处理人标签：单子还没关成就先放掉标签，
        * 等于在「还在开着的单」上宣布结束。评论失败时 `finishIssueWork` 会保留标签。 */
       if (handle && mkTmp) {
-        codes.push(
-          finishIssueWork({ run, log, slug, handle, number, mkTmp }),
-        );
+        codes.push(finishIssueWork({ run, log, slug, handle, number, mkTmp }));
       }
     } else {
       codes.push(CODE.RED);
