@@ -31,7 +31,8 @@ Extend / maintain - how to add a new gate:
   - Cmd 只写命令本名（pnpm / npm / node）。Windows 侧按候选顺序 `<name>.cmd` → `<name>`
     解析第一个真存在的：pnpm/npm 是 .cmd 外壳，而 **node 是真 exe**（本机没有 node.cmd），
     无差别拼 .cmd 会让那条门禁连进程都不起却被读成通过 —— 见 ISSUE #1345 与 Invoke-Check。
-    解析不到会打 `[FAIL][GATE-NOEXEC]` 并退 127，绝不进 `[OK] ... passed`。
+    解析不到会打 `[skip] <档名>（没跑起来：命令没找到）` 并退 127，
+    **绝不进 `[ok] ...（通过）`** —— 「没跑起来」与「跑了且通过」必须分两档（ISSUE #2506）。
   - New test files under the vitest include pattern are picked up automatically.
   - Known baseline failures live in KNOWN_FAILED_FILES; once fixed, delete the
     entry and it is enforced again.
@@ -160,14 +161,17 @@ function Invoke-Check {
   param([hashtable]$Block)
 
   Write-Host ""
-  Write-Host "==> $($Block.Label)" -ForegroundColor Cyan
+  # 段头只作视觉分隔（**不带判决**）：判决在末尾那**一行**，三态措辞与 Node 侧
+  # （`scripts/ci-log.mjs` 的三态出口，ISSUE #2506）逐字同形 —— 同一个仓库里
+  # 一键门禁的两个宿主说同一件事，读者才不必逐份认。
+  Write-Host "· $($Block.Label)" -ForegroundColor DarkGray
 
   # 命令解析按**候选顺序**来，取第一个真存在的：Windows 上 pnpm/npm 是 `.cmd` 外壳（裸名会
   # 解析到同名 `.ps1`，受执行策略摆布，所以 `.cmd` 排在前面），而 **node 是真 exe** ——
   # 旧代码对 `^(pnpm|npm|node)$` 一律拼 `.cmd`，本机 `node.cmd` 压根不存在
   # （`Get-Command node.cmd` → NOT FOUND，node 走 `D:\Program Files\nodejs\node.exe`），
   # 于是 `format` 与 `dependencyAudit` 这两条 `Cmd = "node"` 的门禁**连进程都没起**，
-  # 却照打 `[OK] ... passed`（ISSUE #1345，两个宿主实测一致）。
+  # 却照打一行「通过」（ISSUE #1345，两个宿主实测一致）。
   $candidates = @($Block.Cmd)
   if ($env:OS -and $env:OS -like "Windows*") {
     $candidates = @("$($Block.Cmd).cmd", $Block.Cmd)
@@ -178,9 +182,10 @@ function Invoke-Check {
   }
   if (-not $exe) {
     # 这条与「跑了且退非 0」分开：前者是**这一步没有执行**，说成「失败」会让人去查
-    # 子脚本的报错，而真正要查的是这台机器的 PATH。ASCII 标签同 [DEP-*] 的理由
-    # （powershell.exe 5.1 的管道走 GBK，认中文子串的用例随宿主变红）。
-    Write-Host "  [FAIL][GATE-NOEXEC] 命令没找到：$($Block.Cmd) —— 这一步**没有执行**，不是「执行了且通过」。" -ForegroundColor Red
+    # 子脚本的报错，而真正要查的是这台机器的 PATH。用 `[skip]` 前缀（不是 `[红]`）：
+    # 仓库的三态是 `0 绿 / 1 红 / 2 没跑起来`，说「没跑起来」的那一档必须有自己
+    # 的名字（ISSUE #2506）。前缀是纯 ASCII，认它的用例不会随宿主代码页变红。
+    Write-Host "[skip] $($Block.Label)（没跑起来：命令没找到 $($Block.Cmd)）" -ForegroundColor Red
     Write-Host "        先确认它在 PATH 上（Node 侧同源门禁 scripts\quality-gate.mjs 不受这条影响，可拿它对照）。" -ForegroundColor Yellow
     return 127
   }
@@ -202,22 +207,26 @@ function Invoke-Check {
   # 调用前把 $LASTEXITCODE 清空 —— 这是本条事故的另一半：`&` 起不来时 PowerShell 只发一条
   # 非终止错误、**不会写** $LASTEXITCODE，于是下一步读到的是**上一步留下的值**。本机上一步
   # 恰好是依赖预检那次成功的 `& node diff-cli.mjs`（值 0），于是「没跑起来」被读成
-  # `[OK] passed`（ISSUE #1345）。实测（pwsh 7 与 powershell 5.1 一致）：置 $null 之后，
+  # 「通过」那一行（ISSUE #1345）。实测（pwsh 7 与 powershell 5.1 一致）：置 $null 之后，
   # 失败启动仍是 $null，成功启动一定写入真实退出码 —— 所以 $null 就是「一个进程都没起来」。
   $global:LASTEXITCODE = $null
   # `| Out-Host` 不是排版偏好，是**判决正确性**：调用者写的是 `$code = Invoke-Check ...`，
   # 子进程的 stdout 默认会进函数的输出流、于是和 `return $code` 拼成一个数组
   # （实测 `Object[] ["child-marker-line", 0]`）—— `if ($code -eq 0)` 对数组是逐元素比较、
-  # 非空数组为真，整体总结会既打 `[OK]` 又说「have failures」，而门禁的输出被人吞进变量里
+  # 非空数组为真，整体总结会既打「通过」又说「有红的」，而门禁的输出被人吞进变量里
   # 看不见（ISSUE #1345 的同一条链上）。Out-Host 直接写宿主、不进输出流，返回值就只剩退出码。
   & $exe @argsAll | Out-Host
   if ($null -eq $LASTEXITCODE) {
-    Write-Host "  [FAIL][GATE-NOEXEC] 进程没起来（$exe）—— 同样不是「执行了且通过」。" -ForegroundColor Red
+    Write-Host "[skip] $($Block.Label)（没跑起来：进程没起来 $exe）" -ForegroundColor Red
     return 127
   }
   $code = $LASTEXITCODE
-  if ($code -eq 0) { Write-Host "  [OK] $($Block.Label) passed" -ForegroundColor Green }
-  else             { Write-Host "  [FAIL] $($Block.Label) failed (exit $code)" -ForegroundColor Red }
+  if ($code -eq 0) {
+    Write-Host "[ok] $($Block.Label)（通过）" -ForegroundColor Green
+  } else {
+    Write-Host "[红] $($Block.Label)（退出码 $code）" -ForegroundColor Red
+    Write-Host "      → 先修这一档，再重跑 pnpm check:all（-Mode <档名> 可以只重跑它）" -ForegroundColor Red
+  }
   return $code
 }
 
@@ -326,9 +335,11 @@ foreach ($b in $toRun) {
 }
 
 Write-Host ""
+# 整轮末尾按「跑了几档、红了几档」说一次：各档自己那几行只回答「我这一档怎么了」。
 if ($exitCode -eq 0) {
-  Write-Host "All quality gates passed OK" -ForegroundColor Green
+  Write-Host "[ok] 一键门禁（$($toRun.Count) 档全绿）" -ForegroundColor Green
 } else {
-  Write-Host "Quality gates have failures; please fix and re-run." -ForegroundColor Red
+  Write-Host "[红] 一键门禁（$($toRun.Count) 档里有红的，退出码 $exitCode）" -ForegroundColor Red
+  Write-Host "      → 同一次运行里 Node 侧那个宿主给的是同一套判决（scripts/quality-gate.mjs）" -ForegroundColor Red
 }
 exit $exitCode

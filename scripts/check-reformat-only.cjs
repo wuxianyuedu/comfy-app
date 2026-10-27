@@ -78,6 +78,7 @@ async function loadShell() {
 }
 
 const { discernRoots } = require("./gate-scan-read.cjs");
+const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
@@ -425,7 +426,6 @@ function classifyReformatOnly(entries) {
   return reformatOnly;
 }
 
-
 /**
  * 收集「建议比对」的一批文件:两侧内容都取得到(新增 / 删除 / 改名不判定 ——
  * 本门禁只判「既有的文件被重排」)。
@@ -555,42 +555,49 @@ async function main() {
 
 /** 输出结论并按阈值决定是否阻断(两个口径共用,避免两份会各自漂移的判定)。 */
 function report(files, reformatOnly, limit) {
-  console.log(
-    `[reformat] 本次提交改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）`,
-  );
-
+  /* 判决行的形状只有一处出处：`scripts/ci-log.mjs`（ISSUE #2506）。 */
   if (reformatOnly.size >= limit) {
-    console.error(
-      `\n[reformat] 本次提交混入了 ${reformatOnly.size} 个「只改格式」的文件（规范 §13.5）:\n` +
-        [...reformatOnly]
-          .sort()
-          .slice(0, 20)
-          .map((f) => `  · ${f.after}`)
-          .join("\n") +
-        (reformatOnly.size > 20
-          ? `\n  … 其余 ${reformatOnly.size - 20} 个省略`
-          : "") +
-        "\n\n  为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效," +
-        "\n  评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。" +
-        "\n\n  修法:拆成两次提交。" +
-        "\n    git reset --soft HEAD~1" +
-        "\n    git restore --staged ." +
-        '\n    git add <仅功能相关的文件> && git commit -m "fix(scope): <本次改动>"' +
-        "\n    # 用 pnpm exec prettier --write <文件> 格式化（别对全库跑 format:write）" +
-        '\n    git add -A && git commit -m "style: 格式化 <范围>"' +
-        "\n\n  若确实要一次性格式化某批文件（清理存量），那就**单独一个提交/PR**做它。" +
-        "\n  （`check-format.cjs` 已是硬闸、没有 `--update`：存量清零后删掉了那条通道，见 ISSUE #1811。）",
+    gateFail(
+      "格式化提交分离",
+      [...reformatOnly].sort().map((f) => f.after),
+      {
+        detail: `本次改动 ${files.length} 个源文件，纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）`,
+        hint:
+          "为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效,\n" +
+          "评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。\n" +
+          "修法:拆成两次提交。\n" +
+          "  git reset --soft HEAD~1\n" +
+          "  git restore --staged .\n" +
+          '  git add <仅功能相关的文件> && git commit -m "fix(scope): <本次改动>"\n' +
+          "  # 用 pnpm exec prettier --write <文件> 格式化（别对全库跑 format:write）\n" +
+          '  git add -A && git commit -m "style: 格式化 <范围>"\n' +
+          "若确实要一次性格式化某批文件（清理存量），那就**单独一个提交/PR**做它。\n" +
+          "（`check-format.cjs` 已是硬闸、没有 `--update`：存量清零后删掉了那条通道，见 ISSUE #1811。）",
+      },
     );
     process.exit(1);
   }
 
+  /* 放行但不必点名的那一档，读数要带上「为什么不必点名」——
+   * 一行判决里说不完的，跟在后面缩进（判过仍然是判过了）。 */
   if (reformatOnly.size > 0) {
-    console.log(
-      `  （未达阈值，放行）${[...reformatOnly].sort().slice(0, 5).join(", ")}` +
-        (reformatOnly.size > 5 ? " …" : ""),
+    gatePass(
+      "格式化提交分离",
+      `本次改动 ${files.length} 个源文件，纯格式化 ${reformatOnly.size} 个（阈值 ${limit}，未达阈值）`,
     );
+    for (const line of indentItems([
+      "放行但不计入噪声的：" +
+        [...reformatOnly].sort().slice(0, 5).join(", ") +
+        (reformatOnly.size > 5 ? " …" : ""),
+    ])) {
+      console.log(line);
+    }
+    return;
   }
-  console.log("[reformat] OK");
+  gatePass(
+    "格式化提交分离",
+    `本次改动 ${files.length} 个源文件，没有纯格式化的`,
+  );
 }
 
 if (require.main === module) main();

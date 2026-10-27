@@ -105,13 +105,11 @@ const {
   SCAN_EXCLUDED,
   GIT_TRANSIENT_ROOT_FILES,
 } = require("./file-structure-rules.cjs");
+const { gateFail, gatePass } = require("./ci-log.mjs");
 
 /* 无 `--update` / `--strict`:R5 已是硬闸(ISSUE #1811 收掉那两条通道),
  * 而它们是这份脚本里唯一读 ARGS 的地方 —— 旗标整个删掉,不留「传了也没用」的
  * 参数契约(那种形态会让人以为还能登记存量)。 */
-
-
-
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */
 (function checkLibDomainDiscipline() {
@@ -148,7 +146,6 @@ const {
     );
   }
 })();
-
 
 (function walk(dir) {
   const entries = readdirForScan(dir);
@@ -524,7 +521,9 @@ const {
 // 一条 problem 一个文件,报的是「哪一份、多少行」,出口只有一个:拆。
 // 不设排除清单:一份「这些文件不受本条约束」的白名单正是最容易静默失效的形状
 // (改名 / 挪目录就看不见 = 假绿;同 `check-infra-file-size.cjs` 的口径)。
-for (const [f, n] of Object.entries(oversizedFiles).sort((a, b) => b[1] - a[1])) {
+for (const [f, n] of Object.entries(oversizedFiles).sort(
+  (a, b) => b[1] - a[1],
+)) {
   problems.push(
     "R5 超限文件(" +
       f +
@@ -536,20 +535,20 @@ for (const [f, n] of Object.entries(oversizedFiles).sort((a, b) => b[1] - a[1]))
   );
 }
 
-if (problems.length) {
-  /* 消失数两条出口都要给：只在绿色那一行给，等于「判据报红时覆盖范围不可见」——
-   * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */
-  console.error(
-    "[structure] 违规(阻断提交):\n  " +
-      problems.join("\n  ") +
-      vanishedNote(vanished),
-  );
-  console.error(
-    "规范见 docs/standards/12-代码组织与文件结构.md §12.6/§12.8/§12.11",
-  );
-  console.error(
-    "      以及 docs/standards/launch-and-build.md §8(Windows 入口 .ps1 化)",
-  );
-  process.exit(1);
-}
-console.log("[structure] OK" + vanishedNote(vanished));
+/* 判决行的形状只有一处出处：`scripts/ci-log.mjs` 的三态出口（ISSUE #2506）。
+ * 从前这里自己拼 `[structure] 违规(阻断提交):` 与 `[structure] OK`，而同一个跑批里
+ * 另一条判据打的是 `✓ …`、第三条打的是 `[x] 扫描 N 个文件：没有…` —— 同一件事三种写法，
+ * 且「跳过」与「判过」在屏幕上也分不开。 */
+gateFail("文件结构硬规则", problems, {
+  subject: "R1-R12",
+  hint:
+    "规范见 docs/standards/12-代码组织与文件结构.md §12.6 / §12.8 / §12.11，\n" +
+    "以及 docs/standards/launch-and-build.md §8（Windows 入口 .ps1 化）",
+});
+if (problems.length) process.exit(1);
+
+/* 消失数必须进结论：只在绿那一行给，等于「判据报红时覆盖范围不可见」——
+ * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */
+gatePass("文件结构硬规则", "R1-R12 全过" + vanishedNote(vanished), {
+  subject: "R1-R12",
+});

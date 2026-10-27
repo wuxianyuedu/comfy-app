@@ -24,6 +24,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { gateFail, gatePass } = require("./ci-log.mjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -192,9 +193,8 @@ const hintLines = Object.entries(now.hints).map(
   ([r, c]) => `  ${r}（内联 async ${c.S4} 处）`,
 );
 
-console.log(
-  `[ui-logic] 当前违规合计 ${total(now.ratchet)} 处，涉及 ${Object.keys(now.ratchet).length} 个文件`,
-);
+/* 判决行只有一处出处（`scripts/ci-log.mjs`，ISSUE #2506）。提示行留在判决**之前** ——
+ * 它讲的是「不计入的那些」，排在红之后会被读成「也是这次要修的东西」。 */
 if (hintLines.length) {
   console.log(
     "[ui-logic] 内联 async 处理器（仅提示，不计入）：\n" + hintLines.join("\n"),
@@ -202,12 +202,13 @@ if (hintLines.length) {
 }
 
 if (problems.length) {
-  console.error("[ui-logic] 违规（阻断）：\n  " + problems.join("\n  "));
-  console.error(
-    "  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。\n" +
-      "  规范见 docs/standards/17-UI与逻辑分离.md；修法是把逻辑搬进 <feature>/hooks/\n" +
-      "  或 src/lib/<domain>-client.ts（搬完指标自动归零）。",
-  );
+  gateFail("UI/逻辑分离", problems, {
+    detail: `违规 ${total(now.ratchet)} 处 · ${Object.keys(now.ratchet).length} 个文件`,
+    hint:
+      "判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。\n" +
+      "规范见 docs/standards/17-UI与逻辑分离.md；修法是把逻辑搬进 <feature>/hooks/\n" +
+      "或 src/lib/<domain>-client.ts（搬完指标自动归零）。",
+  });
   process.exit(1);
 }
-console.log("[ui-logic] OK");
+gatePass("UI/逻辑分离", "扫描面内 0 处违规");
