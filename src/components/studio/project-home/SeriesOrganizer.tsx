@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { textHandler } from "~/lib/form-props";
 import { cn } from "~/lib/utils";
 import { useSeriesOrganizer } from "./hooks/use-series-organizer";
 
@@ -83,7 +84,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               </Button>
               <Button
                 variant="ghost"
-                className="h-7 px-2 text-xs text-red-400"
+                className="text-destructive h-7 px-2 text-xs"
                 onClick={() => c.deleteSeries(s.id)}
               >
                 删除
@@ -96,7 +97,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
             className="border-border bg-surface-1 flex-1 rounded-lg border px-2 py-1 text-sm outline-none"
             placeholder="新系列名称"
             value={newSeries}
-            onChange={(e) => setNewSeries(e.target.value)}
+            onChange={textHandler(setNewSeries)}
           />
           <Button
             variant="primary-solid"
@@ -150,7 +151,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="h-7 px-2 text-xs text-red-400"
+                  className="text-destructive h-7 px-2 text-xs"
                   onClick={() => c.deleteSeason(se.id)}
                 >
                   删除
@@ -163,7 +164,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               className="border-border bg-surface-1 flex-1 rounded-lg border px-2 py-1 text-sm outline-none"
               placeholder="新季名称（可空）"
               value={newSeason}
-              onChange={(e) => setNewSeason(e.target.value)}
+              onChange={textHandler(setNewSeason)}
             />
             <Button
               variant="primary-solid"
@@ -221,7 +222,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 )}
                 <Button
                   variant="ghost"
-                  className="h-7 px-2 text-xs text-red-400"
+                  className="text-destructive h-7 px-2 text-xs"
                   onClick={() => c.deleteEpisode(e.id)}
                 >
                   删除
@@ -234,7 +235,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               className="border-border bg-surface-1 flex-1 rounded-lg border px-2 py-1 text-sm outline-none"
               placeholder="新集标题（可空）"
               value={newEpisode}
-              onChange={(e) => setNewEpisode(e.target.value)}
+              onChange={textHandler(setNewEpisode)}
             />
             <Button
               variant="primary-solid"
@@ -253,7 +254,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
             <Button
               variant="primary-solid"
               className="mt-1 h-8"
-              onClick={() => c.assignCurrentProject(c.episodeId!)}
+              onClick={() => {
+                if (c.episodeId) c.assignCurrentProject(c.episodeId);
+              }}
             >
               把当前项目归入此集
             </Button>
