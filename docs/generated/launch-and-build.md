@@ -2799,7 +2799,7 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 叠上去得到的不是两条结论，是一份不可信的读数 —— **并发在场时墙钟不可读**（§13.6.4.1），
 这条口径在这里同样成立，别拿这一档的耗时去校准别的档。
 
-**这一档不重抄任何判据**：清单是「装依赖 → `pnpm tauri build` → 发布」，而
+**这一档不重抄任何判据**：清单是「装依赖 → 壳工具链自证 → 工具预置 → `pnpm tauri build` → 发布」，而
 `tauri build` 的 `beforeBuildCommand` 就是 `scripts/build-desktop.mjs`，它内部那条
 `pnpm build` 链带着硬规则 17/18 的产物级两道防线（`check-standalone-contents.cjs` 数两层
 产物 / `check-bundle-budget.cjs` 体积棘轮）。**发布只能排在它绿之后** —— 也不许带
@@ -2850,6 +2850,37 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 （`ba63dffc…` / `5ba143b5…`；bundler 自己也会再验一次哈希）。但 29.5s **仍然在它那个 22–23s 预算之上**
 ⇒ 镜像把「偶然红」的概率压低，**没有变成绿**。红了先分岔：日志里有 `timeout: global` = 这台机
 今天取不到工具（走 #2525）；没有 = 这条链坏了。
+
+**落地的形状是「仓库侧一个有名字的工具镜像入口」**（`scripts/tauri-tools-cache.mjs`，ISSUE #2525）：
+工具树按内容镜像在常驻根的**第四个目录**（`resolveToolRoot` ⇒ `<卷>\ci-tools\<包名>`，
+同样由 `pnpm store path` 推卷、**不写盘符**；与两份槽根分开是必须的 —— 那里的淘汰器按 TTL
+删键位，而这一份删了**今天就没包**，它不是缓存）。两条动作、都不删任何东西：
+
+| 动作 | 做什么 | 三态 |
+| --- | --- | --- |
+| `--seed`（本机，成功打过包之后跑一次） | 把 bundler 自己下好的那棵树连**逐件 sha256 清单**种进 `<工具根>/nsis/<版本>`；先写 staging 再整目录改名过去，所以那里「要么没有、要么齐全」 | 0 种成 ／ 1 dll 的哈希与被钉的那件对不上（版本升了，或内容被换过）／ 2 种源不齐 —— **空手种一份残缺树比不种更坏** |
+| 缺省（作业起手那一格 `打包·桌包工具预置`） | 必需件已在场 ⇒ **一个字都不动**；不在场 ⇒ 按清单拷过去并**逐件复算哈希** | 0 在场或补齐 ／ 1 拷过去复算不过（镜像坏了，不许留半棵树继续打包）／ 2 两边都没有 ⇒「没有结论」并念出出口 |
+
+版本升上去时红的是**该升镜像**那句话（`ensure` 判「常驻根里没有这一份」⇒ 退 2），
+而不是「今天取不到工具」—— 这就是把 `NSIS_PLAN` 里那两个哈希钉死的用处；
+同批改 `NSIS_PLAN` 是唯一出路，别在作业里顺手装一个旧版本上去。
+
+**这一格自己的实测读数**（2026-10-27 本机：删空缓存 → 跑 `ensure` → 只出 nsis 打一次包）：
+
+```
+[工具缓存] 缺 6 件：NSIS.exe, makensis.exe, Include/MUI2.nsh, Include/FileFunc.nsh,
+                     Stubs/lzma_solid-x86-unicode, Plugins/x86-unicode/additional/nsis_tauri_utils.dll
+[工具缓存] 用镜像补：G:\ci-tools\comfy-app-t3\nsis\3.13·442 件·6.8 MiB
+[工具缓存] ✓ 已补齐，必需件在场。                    ⇒ 退 0，实测 2.5s（含 442 件逐件复算哈希）
+6.0s   Running makensis → nsis\ComfyAPP_0.1.0_x64-setup.exe
+137.8s Finished 1 bundle … (62.32 MiB)               ⇒ 打包段 131.8s，退 0
+```
+
+日志里**没有** `Downloading`、没有 `Recreating it`、也没有 `timeout: global` —— 这三行缺不缺
+就是「工具在场与否」的凭证。用例 `tests/tauri-tools-cache.test.ts` 钉的是它的**形状**
+（补齐 / 不动 / 退 2 的出口话术 / 镜像被改过必须红），平台侧那一格的**顺序**由
+`tests/no-platform-ci-config.test.ts` 钉：预置必须在 `pnpm tauri build` 之前 ——
+排在它后面等于没有，那一刻 bundler 已经自己去撞那条下载预算了。
 
 **发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，本地与平台**同一个入口**）：
 
