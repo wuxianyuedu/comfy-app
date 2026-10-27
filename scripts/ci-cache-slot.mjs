@@ -37,6 +37,9 @@ const ROOT = path.resolve(HERE, "..");
 /** 槽根由环境变量给出：没配就是「不设槽」，这一档不猜路径。 */
 export const CACHE_ROOT_ENV = "COMFY_CI_CACHE_ROOT";
 
+/** 成品目录（安装包）的根由环境变量给出；没配就从 store 所在卷推导（见 `resolveArtifactRoot`）。 */
+export const ARTIFACT_ROOT_ENV = "COMFY_CI_ARTIFACT_ROOT";
+
 /** 计划里三种关系的名字（会出现在平台日志里，改名等于换掉一条可 grep 的口径）。 */
 export const SLOT_ACTIONS = ["reuse", "install-into-slot", "no-cache"];
 
@@ -299,6 +302,38 @@ export function resolveBuildCacheRoot(io) {
   if (!facts.volumeRoot) return { root: null, from: facts.from };
   return {
     root: path.join(facts.volumeRoot, "ci-build-cache", facts.name),
+    from: facts.from,
+  };
+}
+
+/**
+ * **成品目录**的根（`scripts/publish-desktop-bundle.mjs` 用它，ISSUE #2503）。
+ *
+ * 与两份缓存槽同卷、第三个目录（`ci-artifacts/<包名>`）。必须是第三个目录而不是复用
+ * 前两者的根：那两套的淘汰器（`listSlots` / `pruneSlots`）把**槽根下的每个目录都当成
+ * 一个键**，成品目录放进去就会出现在它们的候选集里 —— 一个 TTL 到期的键位就能把人
+ * 要取的安装包删掉（而安装包不是缓存：删了就没了，缓存删了只是下一次慢）。
+ *
+ * 显式出口 `COMFY_CI_ARTIFACT_ROOT` 优先（与 `COMFY_CI_CACHE_ROOT` 分开：那两个变量
+ * 各自只管自己那一套根，一个变量管三套就会让「搬依赖槽」顺带搬走成品，而那是两个决定）。
+ *
+ * @param {{cwd: string, env?: Record<string, string | undefined>,
+ *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} io
+ * @returns {{root: string | null, from: string}}
+ */
+export function resolveArtifactRoot(io) {
+  const explicit = String(io.env?.[ARTIFACT_ROOT_ENV] ?? "").trim();
+  if (explicit) return { root: explicit, from: `环境变量 ${ARTIFACT_ROOT_ENV}` };
+  const facts = cacheRootFacts(io);
+  if (facts.explicit) {
+    return {
+      root: null,
+      from: `${facts.from}（该变量只覆盖依赖面那套槽，成品目录不跟着它走）`,
+    };
+  }
+  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  return {
+    root: path.join(facts.volumeRoot, "ci-artifacts", facts.name),
     from: facts.from,
   };
 }

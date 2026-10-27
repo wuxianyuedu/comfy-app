@@ -29,6 +29,7 @@
  *
  *   node scripts/ci-toolchain-selfcheck.mjs               整机自证（流水线第一步）
  *   node scripts/ci-toolchain-selfcheck.mjs --python-only 只答 Python 那一格（E2E 之前那一步）
+ *   node scripts/ci-toolchain-selfcheck.mjs --rust-only   只答 Rust/cargo 那一格（打桌包之前那一步）
  *
  * 后者不是第二套判据：它调的是同一份 `findPython` / `installPython` / `pythonForensics`，
  * 只是把「整机」那几格让给已经答过它的第一步（§12.18）。
@@ -658,9 +659,42 @@ export function pythonOnly() {
   return 1;
 }
 
+/**
+ * 只答「Rust 工具链在不在」这一格（`.cnb.yml` 的 `打包·壳工具链自证`，ISSUE #2503）。
+ *
+ * 为什么这一档单独要有：`pnpm tauri build` 的编译段是整条链里唯一由 cargo 承担的一格，
+ * 而缺件时的报错长在两分钟之后（`cargo: The term 'cargo' is not recognized` 混在 tauri
+ * 自己的输出里，那一刻安装依赖的账已经花掉了）。本机实测那一段的墙钟：冷 5m01s ／
+ * 暖 1m41s —— 先问一句是三秒，跑到一半才发现是两分钟起。
+ *
+ * 判据本身不重抄（`run()` / `section()` 是这份文件原有的），这里只是换一层壳（§12.18）。
+ *
+ * @returns {number}
+ */
+export function rustOnly() {
+  section("rust");
+  const cargo = run("cargo", ["--version"]);
+  console.log(cargo.out || "(cargo 不可用)");
+  if (!cargo.ok) {
+    console.error(
+      "\n打桌包那一档要有 cargo（`pnpm tauri build` 的编译段就是它）。这一跑不装任何东西：" +
+        "壳工具链不是 pnpm 依赖，装它走 rustup，而它落在哪个账号的 PATH 上，" +
+        "与上面 Python 那一格是同一条岔路（§13.5.3.5）。",
+    );
+    return 1;
+  }
+  const rustc = run("rustc", ["--version"]);
+  console.log(
+    rustc.out || "(rustc 不可用 —— cargo 在而 rustc 不在，工具链是残缺的)",
+  );
+  return rustc.ok ? 0 : 1;
+}
+
 export function main() {
   /* 只答 Python 那一格（`.cnb.yml` 里 E2E 之前那一步用它）。 */
   if (process.argv.includes("--python-only")) return pythonOnly();
+  /* 只答「打桌面成品包那一档要用的 Rust 工具链在不在」（ISSUE #2503）。 */
+  if (process.argv.includes("--rust-only")) return rustOnly();
   /* 只答「Playwright 要用的浏览器在不在」（同一条链上更后面的那一格，见下）。 */
   if (process.argv.includes("--playwright-only")) {
     /* 两件注入面是本文件本来就有的判据与起进程那一步 —— 那份模块自己不 import
