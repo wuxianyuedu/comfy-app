@@ -140,7 +140,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       Buffer.concat([BOM, Buffer.from('Write-Host "中文提示"\n')]),
     );
     const { code, output } = run();
-    expect(output).toContain("[structure] OK");
+    expect(output).toContain("[ok] 文件结构硬规则");
     expect(code).toBe(0);
   });
 
@@ -162,7 +162,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       Buffer.concat([BOM, Buffer.from('Write-Host "启动"\n')]),
     );
     const { code, output } = run();
-    expect(output).toContain("[structure] OK");
+    expect(output).toContain("[ok] 文件结构硬规则");
     expect(code).toBe(0);
   });
 
@@ -171,7 +171,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     writeFileSync(join(workdir, "package.json"), "{}\n");
     writeFileSync(join(workdir, "README.md"), "# demo\n");
     const { code, output } = run();
-    expect(output).toContain("[structure] OK");
+    expect(output).toContain("[ok] 文件结构硬规则");
     expect(code).toBe(0);
   });
 
@@ -200,7 +200,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     writeFileSync(join(workdir, "merge-msg-notes.md"), "设计说明\n");
     writeFileSync(join(workdir, ".prettierignore"), "dist\n");
     const { code, output } = run();
-    expect(output).toContain("[structure] OK");
+    expect(output).toContain("[ok] 文件结构硬规则");
     expect(code).toBe(0);
   });
 
@@ -448,7 +448,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       writeSrc("b.ts", "export const a = 1;\r\n\tconst b = 2;\n");
       const { code, output } = run();
       expect(code).toBe(0);
-      expect(output).not.toContain("R12");
+      expect(output).not.toMatch(/^ {4}R12 /m);
     });
 
     it("正文里的**转义写法** `\\u0000` 是普通字符，放行", () => {
@@ -458,7 +458,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       writeSrc("c.ts", 'export const ESCAPED = "\\u0000";\n');
       const { code, output } = run();
       expect(code).toBe(0);
-      expect(output).not.toContain("R12");
+      expect(output).not.toMatch(/^ {4}R12 /m);
     });
 
     it("普通注释里的中文与 emoji 不是控制字符，放行", () => {
@@ -468,7 +468,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       );
       const { code, output } = run();
       expect(code).toBe(0);
-      expect(output).not.toContain("R12");
+      expect(output).not.toMatch(/^ {4}R12 /m);
     });
   });
 

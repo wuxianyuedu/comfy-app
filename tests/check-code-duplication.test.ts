@@ -52,7 +52,7 @@ describe("check-code-duplication.cjs（跨文件重复门禁）", () => {
     writeModule(repo, "src/a.ts", 80, "a");
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("[duplication] OK");
+    expect(output).toContain("[ok] 跨文件重复块");
   });
 
   test("两份逐行相同的实现被识别为孪生对（--report 出清单）", ({ repo }) => {

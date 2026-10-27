@@ -535,11 +535,26 @@ for (const [f, n] of Object.entries(oversizedFiles).sort(
   );
 }
 
+/**
+ * 消失数进**红的证据行**：`vanishedNote()` 是一段带换行与缩进的散文，直接塞进证据
+ * 会渲染成两行、还把缩进打乱（`ci-log.mjs` 的 `indentItems` 只负责加前缀）。
+ * 这里折成一行 —— 它本来也只是一句话。
+ *
+ * @param {number} count
+ * @returns {string[]}
+ */
+function vanishedLine(count) {
+  const note = vanishedNote(count).trim();
+  return note ? [note] : [];
+}
+
 /* 判决行的形状只有一处出处：`scripts/ci-log.mjs` 的三态出口（ISSUE #2506）。
  * 从前这里自己拼 `[structure] 违规(阻断提交):` 与 `[structure] OK`，而同一个跑批里
  * 另一条判据打的是 `✓ …`、第三条打的是 `[x] 扫描 N 个文件：没有…` —— 同一件事三种写法，
  * 且「跳过」与「判过」在屏幕上也分不开。 */
-gateFail("文件结构硬规则", problems, {
+/* 消失数两条出口都要给：只在绿那一行给，等于「判据报红时覆盖范围不可见」——
+ * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */
+gateFail("文件结构硬规则", problems.concat(vanishedLine(vanished)), {
   subject: "R1-R12",
   hint:
     "规范见 docs/standards/12-代码组织与文件结构.md §12.6 / §12.8 / §12.11，\n" +
@@ -547,8 +562,6 @@ gateFail("文件结构硬规则", problems, {
 });
 if (problems.length) process.exit(1);
 
-/* 消失数必须进结论：只在绿那一行给，等于「判据报红时覆盖范围不可见」——
- * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */
 gatePass("文件结构硬规则", "R1-R12 全过" + vanishedNote(vanished), {
   subject: "R1-R12",
 });
