@@ -483,7 +483,7 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
  * ⚠️ `check-format.cjs` 那一半**已随 ISSUE #2010 整体挪到平台侧**（题面那句
  * 「prettier 只是格式化，不影响功能」）—— 它不再只是「加个 `--staged`」，而是
  * 「不在提交这一档上跑」。所以本组现在只钉 `check-ui-primitives`，格式那一条的
- * 两半判据在下面 `prettier 格式：执行者在平台侧` 那一组里。
+ * 两半判据在下面 `oxfmt 格式：执行者在平台侧` 那一组里。
  *
  * 同族里 **`--staged` 就是这一步能存在的前提**（与上面 docs-api 那条同一口径）：
  * 抹掉 flag 在本文件里与「让全库扫描回到无条件执行」等价，而**没有任何别的判据**
@@ -541,7 +541,7 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
 });
 
 /**
- * prettier 格式：**执行者在平台侧**（ISSUE #2010）。
+ * oxfmt 格式：**执行者在平台侧**（ISSUE #2010）。
  *
  * 立案现场是用户的一句话：「prettier 只是格式化，不影响功能，挪到 ci 执行」。
  * 这句话之所以成立，是因为它正落在 §13.5.17 那条尺子上 —— **结论挡不挡得住一次
@@ -561,7 +561,7 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
  * ⑤ 与 ① 是同一条口径的反向两半：脚本文本与钩子步骤**同时**改错时（一起闭嘴）没有任何
  * 别的判据会红，所以两半都要正面钉住。
  */
-describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
+describe("oxfmt 格式：执行者在平台侧（ISSUE #2010）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
   const config = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
@@ -570,29 +570,29 @@ describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
     const hit = steps.find((s) => s.cmd.includes("scripts/check-format.cjs"));
     expect(
       hit,
-      `门禁链 ${steps.length} 步里又有 prettier 格式硬闸了 —— 它已随 ISSUE #2010 ` +
-        "挪到平台侧（`.cnb.yml` 的「prettier 格式」）。要么把它从钩子里去掉，" +
+      `门禁链 ${steps.length} 步里又有 oxfmt 格式硬闸了 —— 它已随 ISSUE #2010 ` +
+        "挪到平台侧（`.cnb.yml` 的「oxfmt 格式」）。要么把它从钩子里去掉，" +
         "要么同步改本判据（外加 §13.5.1.1 与 `.githooks/pre-commit` 头注那笔账）",
     ).toBeUndefined();
   });
 
   it("平台侧 `.cnb.yml` 真的有这一步（挪走 ≠ 没人跑）", () => {
     expect(
-      platformStages().some((x) => x.name === "prettier 格式"),
-      "`.cnb.yml` 里没有「prettier 格式」这一步 —— 钩子撤掉 + 平台侧没加 = " +
+      platformStages().some((x) => x.name === "oxfmt 格式"),
+      "`.cnb.yml` 里没有「oxfmt 格式」这一步 —— 钩子撤掉 + 平台侧没加 = " +
         "这条判据一个执行者都没有（§13.5.1.1 与 §13.5.17 同一条两半判法）",
     ).toBe(true);
     expect(
       registeredGateOrder(config),
-      "`prettier 格式` 不在 COMFYAPP_CI_GATES 里（在跑但不登记 = 在场没有执行者）",
-    ).toContain("prettier 格式");
+      "`oxfmt 格式` 不在 COMFYAPP_CI_GATES 里（在跑但不登记 = 在场没有执行者）",
+    ).toContain("oxfmt 格式");
   });
 
   it("平台侧那一步是**全量档**，且点名的就是这份脚本", () => {
     const stage = platformStages().find(
-      (x) => x.name === "prettier 格式",
+      (x) => x.name === "oxfmt 格式",
     )?.stage;
-    expect(stage, "`.cnb.yml` 里解析不出「prettier 格式」这一步").toBeTruthy();
+    expect(stage, "`.cnb.yml` 里解析不出「oxfmt 格式」这一步").toBeTruthy();
     expect(
       stage,
       "平台侧那一步带了 `--staged`：那里的工作区就是这次要判的那份源码，" +
@@ -603,7 +603,7 @@ describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
      * 这里钉两层：stage 点名 fixup 执行者 + fixup 源码里真的调 check-format。 */
     expect(
       stage,
-      "「prettier 格式」跑的不是 scripts/ci-format-fixup.mjs —— #2342 的执行者",
+      "「oxfmt 格式」跑的不是 scripts/ci-format-fixup.mjs —— #2342 的执行者",
     ).toContain("scripts/ci-format-fixup.mjs");
     const fixupSrc = readFileSync(
       join(REPO_ROOT, "scripts", "ci-format-fixup.mjs"),
@@ -623,9 +623,9 @@ describe("prettier 格式：执行者在平台侧（ISSUE #2010）", () => {
     const disabled = registeredDisabledGates(config);
     expect(
       disabled,
-      "`prettier 格式` 同时出现在 GATES 与 DISABLED_GATES 里 —— 它此刻是这条判据的" +
+      "`oxfmt 格式` 同时出现在 GATES 与 DISABLED_GATES 里 —— 它此刻是这条判据的" +
         "唯一执行者，停用清单里那一项是 2026-10-16 的临时让位，已随 ISSUE #2010 出网",
-    ).not.toContain("prettier 格式");
+    ).not.toContain("oxfmt 格式");
   });
 
   it("本地出口还在（`pnpm check:all` 的 format 项）—— 挪执行者不等于删能力", () => {

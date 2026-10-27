@@ -56,7 +56,7 @@ const GATES = {
    * 的话，用 `--no-verify` 或被未启用钩子的检出提交就绕过去了 —— 那恰好是它要防的。
    */
   format: {
-    label: "Prettier format ratchet",
+    label: "oxfmt format ratchet",
     args: ["../scripts/check-format.cjs"],
   },
   test: {

@@ -95,7 +95,7 @@ $Blocks = @(
   # `--cache-strategy content` 的理由见 eslint.config.js 顶部那节）。
   @{ Name = "lint";      Label = "ESLint zero error / zero warning";
      Cmd = "pnpm"; Args = @("run","lint"); Run = $true }
-  @{ Name = "format";    Label = "Prettier format ratchet (scripts/check-format.cjs)";
+  @{ Name = "format";    Label = "oxfmt format ratchet (scripts/check-format.cjs)";
      Cmd = "node"; Args = @("scripts\check-format.cjs"); Run = $true }
   # 覆盖率门槛此前是**死配置**：`vitest.config.ts` 的 `coverage.thresholds` 写了
   # 几十条按实测定的门槛，而这一步是裸 `vitest run`，不带 `--coverage` —— 没有任何
