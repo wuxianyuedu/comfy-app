@@ -19,15 +19,18 @@ import {
   completeLLM,
   completeLLMStructured,
   getLLMConfig,
+  getVisionLLMConfig,
 } from "~/lib/llm/server";
 import {
   buildReviewMessages,
   buildScriptReviewMessages,
   buildScriptRevisionMessages,
+  buildShotImageReviewMessages,
   buildShotRepromptMessages,
   type ContentReviewContext,
 } from "~/lib/llm/prompts";
 import {
+  applyImageReview,
   applyReview,
   applyScriptReview,
   normalizeReviewVerdict,
@@ -198,6 +201,76 @@ export async function reviewContent(
     projectId,
     kind === "shot" ? { shots: nextList } : { characters: nextList },
   );
+  return verdict;
+}
+
+/**
+ * 视觉评审一条镜头的**生图**（P8-2 多模态评审）：看图 + 该镜出场角色定妆照，按生图
+ * rubric（与提示词对齐 / 角色一致性 / 构图景别 / 画面瑕疵）打分，判定写回 `shot.imageReview`
+ * （与文本 `shot.review` 分开存，互不打扰）。输入 = 产物图 + 提示词 + 定妆照 + 景别设定。
+ * 没图 / 找不到镜头 → 抛可行动错误（不静默）。
+ */
+export async function reviewShotImage(
+  userId: string,
+  projectId: string,
+  shotId: string,
+): Promise<ReviewVerdict> {
+  const row = await loadRow(userId, projectId);
+  const shots = listForKind(row, "shot");
+  const rec = findRecord(shots, shotId);
+  if (!rec) throw new Error(`找不到要评审的镜头（id=${shotId}）`);
+  const imageUrl = str(rec, "imageUrl");
+  if (!imageUrl.trim())
+    throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
+
+  // 出场角色的生效定妆照（角色一致性对照用）。
+  const characterIds = Array.isArray(rec.characterIds)
+    ? (rec.characterIds as unknown[]).filter(
+        (x): x is string => typeof x === "string",
+      )
+    : [];
+  const characters = Array.isArray(row.characters) ? row.characters : [];
+  const portraitUrls: string[] = [];
+  const characterNames: string[] = [];
+  for (const raw of characters) {
+    const c = asRecord(raw);
+    if (!c || !characterIds.includes(String(c.id))) continue;
+    if (typeof c.portraitUrl === "string" && c.portraitUrl.trim() !== "")
+      portraitUrls.push(c.portraitUrl);
+    if (typeof c.name === "string" && c.name.trim() !== "")
+      characterNames.push(c.name);
+  }
+
+  const cfg = await getVisionLLMConfig({ taskType: "review" });
+  const rubric = rubricFor("shotImage");
+  const raw = await completeLLMStructured(
+    cfg,
+    buildShotImageReviewMessages(
+      {
+        imageUrl,
+        portraitUrls,
+        prompt: str(rec, "prompt") || str(rec, "description"),
+        shotType: str(rec, "shotType"),
+        characterNames,
+      },
+      rubric ? renderRubricForPrompt(rubric) : undefined,
+    ),
+    VERDICT_SCHEMA,
+  );
+  const verdict = normalizeReviewVerdict({
+    pass: raw.pass,
+    issues: raw.issues,
+    suggestion: raw.suggestion,
+    scoredAt: nowIso(),
+    ...(raw.scores ? { scores: raw.scores } : {}),
+    ...(rubric ? { rubricVersion: rubric.version } : {}),
+  });
+  if (!verdict)
+    throw new Error("模型视觉评审返回缺 pass 判据（无法归一成判定）");
+  const nextShots = applyImageReview(shots, shotId, verdict);
+  await productionRepository.patchContent(userId, projectId, {
+    shots: nextShots,
+  });
   return verdict;
 }
 

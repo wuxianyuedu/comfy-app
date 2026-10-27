@@ -34,8 +34,8 @@ export interface ReviewRubric {
   dimensions: ReviewRubricDimension[];
 }
 
-/** 评审对象：剧本 / 角色卡 / 分镜镜头（视觉评审 P8-2 另行扩展，不在此表）。 */
-export type ReviewRubricKind = "script" | "character" | "shot";
+/** 评审对象：剧本 / 角色卡 / 分镜镜头文本 / 生图（视觉评审 P8-2）。 */
+export type ReviewRubricKind = "script" | "character" | "shot" | "shotImage";
 
 /** 剧本 rubric：结构完整、具象可拍、基调一致、节奏张力（#2478 剧本评审闭环的判据面）。 */
 const SCRIPT_RUBRIC: ReviewRubric = {
@@ -181,11 +181,70 @@ const SHOT_RUBRIC: ReviewRubric = {
   ],
 };
 
+/** 生图 rubric（P8-2 视觉评审）：看图打分 —— 与提示词对齐 / 角色一致性 / 构图景别 / 画面瑕疵。
+ *  与文本镜头 rubric（subject/consistency/promptability）是两套：文本评「提示词写得好不好」，
+ *  视觉评「图本身对不对题、有没有崩」。两者都挂镜头，但维度不同、各打各的分。 */
+const SHOT_IMAGE_RUBRIC: ReviewRubric = {
+  kind: "shotImage",
+  version: "shotImage-v1",
+  dimensions: [
+    {
+      key: "promptAlignment",
+      label: "与提示词对齐",
+      description: "画面是否还原了镜头提示词的主体、动作、风格与关键元素",
+      anchors: {
+        1: "画面与提示词完全无关或大量缺失主体",
+        2: "主体在但关键元素（风格/动作/服饰）明显偏离",
+        3: "大体还原，个别元素有出入或细节丢失",
+        4: "高度还原提示词，仅极细微差异",
+        5: "完全贴合提示词，主体动作风格俱在",
+      },
+    },
+    {
+      key: "characterConsistency",
+      label: "角色一致性",
+      description: "出镜角色是否与该角色的生效定妆照一致（外貌/服装/发色等）",
+      anchors: {
+        1: "角色与定妆照毫无关联或张冠李戴",
+        2: "能认出角色但外貌/服装有明显错位",
+        3: "整体像角色，局部特征（发色/五官）有出入",
+        4: "与定妆照一致，仅光影/姿态差异",
+        5: "严格一致，定妆照可认作同一人",
+      },
+    },
+    {
+      key: "composition",
+      label: "构图景别",
+      description: "景别（特写/中景/全景等）与镜头设定是否相符、构图是否合格",
+      anchors: {
+        1: "景别完全不符或构图崩坏（主体出框/比例失调）",
+        2: "景别有偏差或构图明显失衡",
+        3: "景别基本符合，构图尚可但有拥挤/留白不当",
+        4: "景别符合、构图舒适",
+        5: "景别精准、构图专业",
+      },
+    },
+    {
+      key: "artifacts",
+      label: "画面瑕疵",
+      description: "是否有崩坏：手部/肢体畸形、多余肢体、文字水印、模糊噪点",
+      anchors: {
+        1: "严重崩坏（多手多脚/肢体扭曲/满屏水印）",
+        2: "明显瑕疵（手畸/肢体断裂/可读水印）",
+        3: "轻微瑕疵（偶发畸形或模糊，不影响主体识别）",
+        4: "基本干净，极难察觉的小瑕疵",
+        5: "无崩坏，画面干净",
+      },
+    },
+  ],
+};
+
 /** 全部 rubric（按 kind 取用；新增评审对象在这里登记）。 */
 export const REVIEW_RUBRICS: Record<ReviewRubricKind, ReviewRubric> = {
   script: SCRIPT_RUBRIC,
   character: CHARACTER_RUBRIC,
   shot: SHOT_RUBRIC,
+  shotImage: SHOT_IMAGE_RUBRIC,
 };
 
 /** 取某评审对象的 rubric；未知 kind → null（调用方回落「无评分」旧路，不抛）。 */

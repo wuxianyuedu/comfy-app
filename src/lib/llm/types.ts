@@ -298,9 +298,20 @@ export interface LLMConfigView {
   hasApiKey: boolean;
 }
 
+/**
+ * 多模态消息内容块（P8-2 视觉评审地基）：文本块 + 图块。OpenAI 兼容接口用 content
+ * 数组表达（`{type:"text"}` + `{type:"image_url"}`），Ollama 把图收进消息的 `images`
+ * 字段（`messagesToWire` 按 provider 分派，见 `~/lib/llm/server`）。`url` 接受 http(s)
+ * 与 `data:` base64；本地 Ollama 可直接喂 `http://localhost:…` 的图，远端模型喂公网可达址。
+ */
+export type LLMContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 export interface LLMMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  /** 纯文本（历史用法）或多模态内容块数组（带图时用）。两者都合法。 */
+  content: string | LLMContentPart[];
   /** 仅 role === "assistant" 时可能出现：携带 tool_calls 的消息回灌。 */
   tool_calls?: Array<{
     id: string;
@@ -350,4 +361,26 @@ export interface LLMRequestOptions {
   taskType?: TaskType;
   /** OpenAI 兼容 function calling 的工具列表（可选，Agent 指挥用）。 */
   tools?: LLMTool[];
+  /**
+   * 视觉评审专用模型（P8-2）：不传时回落到「远端候选里 kind=image 的那条」或主 `model`。
+   * 多模态评审需要的模型往往与文本对话模型不同（如 Ollama 的 llava / 远端 gpt-4o），
+   * 因此给它一个独立指定通道，缺省不强行要求用户配置。
+   */
+  visionModel?: string;
+}
+
+/**
+ * 选视觉评审模型名（P8-2）：优先级 = 调用方显式指定 → 远端候选里 `kind=image` 的那条
+ * → 主 `model`（未单独配视觉模型时，同一模型既出文也出图，Ollama 多模态模型即此形态）。
+ * 仅挑名字；连接参数（baseUrl / apiKey）由 `getVisionLLMConfig` 按名字回查远端条目补。
+ */
+export function pickVisionModelName(
+  cfg: LLMConfig,
+  override?: { visionModel?: string | null },
+): string {
+  const explicit = override?.visionModel?.trim();
+  if (explicit) return explicit;
+  const imageEntry = cfg.extraModels?.find((e) => e.kind === "image");
+  if (imageEntry) return imageEntry.name;
+  return cfg.model;
 }

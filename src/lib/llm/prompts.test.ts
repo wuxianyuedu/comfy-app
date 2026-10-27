@@ -6,6 +6,7 @@ import {
   buildScriptMarkdownMessages,
   buildScriptReviewMessages,
   buildScriptRevisionMessages,
+  buildShotImageReviewMessages,
   buildShotRepromptMessages,
   buildStoryboardMessages,
   parseCharacter,
@@ -55,7 +56,7 @@ describe("buildCharacterMessages", () => {
 
   it("信息全空时给出兜底指令，而不是发一条空消息", () => {
     const [, user] = buildCharacterMessages({ name: "" });
-    expect(user!.content.trim()).toBe("请帮我设计一个原创角色");
+    expect(String(user!.content).trim()).toBe("请帮我设计一个原创角色");
   });
 
   it("风格标签用顿号连接", () => {
@@ -348,5 +349,64 @@ describe("buildShotRepromptMessages", () => {
     );
     expect(user!.content).toContain("（未逐条列出）");
     expect(user!.content).toContain("【改进建议】（无）");
+  });
+});
+
+describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
+  it("user 消息用内容块数组：文本上下文在前，图在后（镜头图 + 定妆照都进 image_url）", () => {
+    const msgs = buildShotImageReviewMessages({
+      imageUrl: "/shot.png",
+      portraitUrls: ["/p1.png", "/p2.png"],
+      prompt: "雨中司机",
+      shotType: "中景",
+      characterNames: ["司机"],
+    });
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0]!.role).toBe("system");
+    const user = msgs[1]!;
+    expect(user!.role).toBe("user");
+    const content = user!.content as Array<{
+      type: string;
+      text?: string;
+      image_url?: { url: string };
+    }>;
+    expect(Array.isArray(content)).toBe(true);
+    // 首块是文本上下文（含提示词与景别）
+    expect(content[0]).toMatchObject({ type: "text" });
+    expect(content[0]!.text).toContain("雨中司机");
+    expect(content[0]!.text).toContain("中景");
+    // 之后是图块：镜头图 + 两张定妆照
+    const imageUrls = content
+      .filter((p) => p.type === "image_url")
+      .map((p) => p.image_url!.url);
+    expect(imageUrls).toEqual(["/shot.png", "/p1.png", "/p2.png"]);
+  });
+
+  it("没有定妆照时只带镜头图一张", () => {
+    const content = buildShotImageReviewMessages({
+      imageUrl: "/shot.png",
+      portraitUrls: [],
+      prompt: "x",
+      shotType: "",
+      characterNames: [],
+    })[1]!.content as Array<{ type: string; image_url?: { url: string } }>;
+    const imageUrls = content
+      .filter((p) => p.type === "image_url")
+      .map((p) => p.image_url!.url);
+    expect(imageUrls).toEqual(["/shot.png"]);
+  });
+
+  it("传生图 rubric 文本时，system 追加维度评分要求", () => {
+    const system = buildShotImageReviewMessages(
+      {
+        imageUrl: "/s",
+        portraitUrls: [],
+        prompt: "x",
+        shotType: "",
+        characterNames: [],
+      },
+      "维度要求文本",
+    )[0]!.content as string;
+    expect(system).toContain("维度要求文本");
   });
 });
