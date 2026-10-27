@@ -12,6 +12,7 @@ import {
   reviewScript,
   reviewShot,
   resumeRun,
+  reviseScript,
   startRun,
 } from "./run-client";
 
@@ -27,6 +28,7 @@ vi.mock("~/trpc/vanilla", () => ({
       reviewShot: { mutate: vi.fn() },
       reviewCharacter: { mutate: vi.fn() },
       reviewScript: { mutate: vi.fn() },
+      reviseScript: { mutate: vi.fn() },
       regenerateShot: { mutate: vi.fn() },
     },
   },
@@ -41,6 +43,7 @@ const cancelMutate = vi.mocked(vanillaApi.run.cancel.mutate);
 const reviewShotMutate = vi.mocked(vanillaApi.run.reviewShot.mutate);
 const reviewCharacterMutate = vi.mocked(vanillaApi.run.reviewCharacter.mutate);
 const reviewScriptMutate = vi.mocked(vanillaApi.run.reviewScript.mutate);
+const reviseScriptMutate = vi.mocked(vanillaApi.run.reviseScript.mutate);
 const regenerateShotMutate = vi.mocked(vanillaApi.run.regenerateShot.mutate);
 
 beforeEach(() => {
@@ -136,7 +139,7 @@ describe("评审 / 重生成封装（P8-1b）", () => {
     expect(r.pass).toBe(true);
   });
 
-  it("reviewScript 透传 projectId（剧本无实体 id），回 verdict", async () => {
+  it("reviewScript 透传 projectId（剧本无实体 id），回判定与完整曲线", async () => {
     const verdict = {
       pass: false,
       issues: ["高潮缺失"],
@@ -144,10 +147,20 @@ describe("评审 / 重生成封装（P8-1b）", () => {
       scoredAt: "t",
       rubricVersion: "script-v1",
     };
-    reviewScriptMutate.mockResolvedValue({ verdict });
+    reviewScriptMutate.mockResolvedValue({ verdict, history: [verdict] });
     const r = await reviewScript("proj_1");
     expect(reviewScriptMutate).toHaveBeenCalledWith({ projectId: "proj_1" });
-    expect(r.rubricVersion).toBe("script-v1");
+    expect(r.verdict.rubricVersion).toBe("script-v1");
+    expect(r.history).toHaveLength(1);
+  });
+
+  it("reviseScript 透传 projectId，回改写后的完整剧本（#2478）", async () => {
+    reviseScriptMutate.mockResolvedValue({
+      markdown: "## 场景1 · 改写后的剧本",
+    });
+    const md = await reviseScript("proj_1");
+    expect(reviseScriptMutate).toHaveBeenCalledWith({ projectId: "proj_1" });
+    expect(md).toBe("## 场景1 · 改写后的剧本");
   });
 
   it("regenerateShot(gacha) 不带 newPrompt 时不塞该字段", async () => {

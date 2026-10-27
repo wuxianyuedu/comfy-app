@@ -5,13 +5,20 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
+const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
+  completeLLM: vi.fn(
+    async (_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版",
+  ),
   completeLLMStructured: vi.fn<
     (cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown>
   >(async () => ({ pass: true, issues: [], suggestion: "" })),
   getLLMConfig: vi.fn(async () => ({})),
 }));
-vi.mock("~/lib/llm/server", () => ({ getLLMConfig, completeLLMStructured }));
+vi.mock("~/lib/llm/server", () => ({
+  getLLMConfig,
+  completeLLMStructured,
+  completeLLM,
+}));
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../tests/helpers/test-db");
@@ -28,6 +35,7 @@ import {
   regenerateShot,
   reviewContent,
   reviewScript,
+  reviseScript,
 } from "~/server/agent/review";
 import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
 
@@ -72,6 +80,7 @@ beforeEach(() => {
     issues: [],
     suggestion: "",
   });
+  completeLLM.mockReset();
   getLLMConfig.mockResolvedValue({});
 });
 
@@ -159,7 +168,7 @@ describe("reviewContent", () => {
 });
 
 describe("reviewScript", () => {
-  it("评审判定写回 production.scriptReview 列（含 rubric 版本与维度评分）", async () => {
+  it("评审判定写回 production.scriptReview 列（含 rubric 版本与维度评分），并回完整曲线", async () => {
     await seed({ scriptMarkdown: "## 场景1 · 街道（夜）" });
     completeLLMStructured.mockResolvedValueOnce({
       pass: false,
@@ -167,29 +176,33 @@ describe("reviewScript", () => {
       suggestion: "补一场对峙",
       scores: { structure: { score: 2, note: "无高潮" } },
     });
-    const verdict = await reviewScript(USER, PROJ);
-    expect(verdict.pass).toBe(false);
-    expect(verdict.rubricVersion).toBe(REVIEW_RUBRICS.script.version);
-    expect(verdict.scores?.structure).toEqual({ score: 2, note: "无高潮" });
+    const outcome = await reviewScript(USER, PROJ);
+    expect(outcome.verdict.pass).toBe(false);
+    expect(outcome.verdict.rubricVersion).toBe(REVIEW_RUBRICS.script.version);
+    expect(outcome.verdict.scores?.structure).toEqual({
+      score: 2,
+      note: "无高潮",
+    });
+    expect(outcome.history).toEqual([outcome.verdict]); // 首评曲线只含本轮
     const row = await productionRepository.getForUser(USER, PROJ);
     expect(normalizeScriptReviewState(row?.scriptReview).review).toEqual(
-      verdict,
+      outcome.verdict,
     );
     // 温度档同 review
     expect(getLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
   });
 
-  it("二次评审：上轮判定进 reviewHistory（轮次曲线可回看）", async () => {
+  it("二次评审：上轮判定进 reviewHistory，回包曲线 = [...history, review]", async () => {
     await seed({ scriptMarkdown: "# 剧本" });
     completeLLMStructured
       .mockResolvedValueOnce({ pass: false, issues: ["a"], suggestion: "s" })
       .mockResolvedValueOnce({ pass: true, issues: [], suggestion: "" });
-    const v1 = await reviewScript(USER, PROJ);
-    const v2 = await reviewScript(USER, PROJ);
+    const first = await reviewScript(USER, PROJ);
+    const second = await reviewScript(USER, PROJ);
     const row = await productionRepository.getForUser(USER, PROJ);
     const state = normalizeScriptReviewState(row?.scriptReview);
-    expect(state.review).toEqual(v2);
-    expect(state.history).toEqual([v1]); // 曲线 = [...history, review]
+    expect(state.review).toEqual(second.verdict);
+    expect(second.history).toEqual([first.verdict, second.verdict]);
   });
 
   it("无剧本 → 抛可行动错误，不调模型", async () => {
@@ -200,6 +213,60 @@ describe("reviewScript", () => {
 
   it("无生产数据行 → 抛可行动错误", async () => {
     await expect(reviewScript(USER, "proj_none")).rejects.toThrow(
+      /还没有生产数据/,
+    );
+  });
+});
+
+describe("reviseScript", () => {
+  it("消费低分维度定向改写：新剧本落 scriptMarkdown，旧版留档 revisions", async () => {
+    await seed({ scriptMarkdown: "## 场景1 · 旧版剧本" });
+    completeLLMStructured.mockResolvedValueOnce({
+      pass: false,
+      issues: ["高潮缺失"],
+      suggestion: "补一场对峙",
+      scores: { structure: { score: 2, note: "无高潮" } },
+    });
+    await reviewScript(USER, PROJ);
+    completeLLM.mockResolvedValueOnce("## 场景1 · 改写后的剧本");
+    const md = await reviseScript(USER, PROJ);
+    expect(md).toBe("## 场景1 · 改写后的剧本");
+    const row = await productionRepository.getForUser(USER, PROJ);
+    expect(row?.scriptMarkdown).toBe("## 场景1 · 改写后的剧本");
+    const state = normalizeScriptReviewState(row?.scriptReview);
+    expect(state.revisions).toHaveLength(1);
+    expect(state.revisions[0]?.markdown).toBe("## 场景1 · 旧版剧本");
+    expect(state.revisions[0]?.at).toBeTruthy();
+    // 判定与轮次曲线不受留档影响
+    expect(state.review).not.toBeNull();
+    // 改写也走 review 温度档
+    expect(getLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
+  });
+
+  it("没评过（无评审位）→ 拒改并给可行动原因，不调模型", async () => {
+    await seed({ scriptMarkdown: "# 剧本" });
+    await expect(reviseScript(USER, PROJ)).rejects.toThrow(/还没有评审判定/);
+    expect(completeLLM).not.toHaveBeenCalled();
+  });
+
+  it("模型空返回 → 抛错保留原剧本，不落库", async () => {
+    await seed({ scriptMarkdown: "# 原剧本" });
+    completeLLMStructured.mockResolvedValueOnce({
+      pass: false,
+      issues: ["x"],
+      suggestion: "y",
+    });
+    await reviewScript(USER, PROJ);
+    completeLLM.mockResolvedValueOnce("   ");
+    await expect(reviseScript(USER, PROJ)).rejects.toThrow(/模型未返回/);
+    const row = await productionRepository.getForUser(USER, PROJ);
+    expect(row?.scriptMarkdown).toBe("# 原剧本");
+  });
+
+  it("无剧本 / 无生产数据行 → 抛可行动错误", async () => {
+    await seed({ scriptMarkdown: " " });
+    await expect(reviseScript(USER, PROJ)).rejects.toThrow(/还没有剧本/);
+    await expect(reviseScript(USER, "proj_none")).rejects.toThrow(
       /还没有生产数据/,
     );
   });

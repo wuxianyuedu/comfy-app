@@ -17,27 +17,33 @@ vi.mock("~/server/agent/run-engine", () => ({
   advanceRunLoop: vi.fn(async () => undefined),
 }));
 // 评审 / 重生成的落库逻辑在 review.test.ts 覆盖；此处只验端点的入参校验 + 委派 seam。
-const { reviewContent, regenerateShot, reviewScript } = vi.hoisted(() => ({
-  reviewContent: vi.fn(async () => ({
-    pass: false,
-    issues: ["含混"],
-    suggestion: "更具体",
-    scoredAt: "t",
-  })),
-  regenerateShot: vi.fn(async () => undefined),
-  reviewScript: vi.fn(async () => ({
-    pass: true,
-    issues: [],
-    suggestion: "",
-    scoredAt: "t2",
-    scores: { structure: { score: 4, note: "结构完整" } },
-    rubricVersion: "script-v1",
-  })),
-}));
+const { reviewContent, regenerateShot, reviewScript, reviseScript } =
+  vi.hoisted(() => ({
+    reviewContent: vi.fn(async () => ({
+      pass: false,
+      issues: ["含混"],
+      suggestion: "更具体",
+      scoredAt: "t",
+    })),
+    regenerateShot: vi.fn(async () => undefined),
+    reviewScript: vi.fn(async () => ({
+      verdict: {
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scoredAt: "t2",
+        scores: { structure: { score: 4, note: "结构完整" } },
+        rubricVersion: "script-v1",
+      },
+      history: [],
+    })),
+    reviseScript: vi.fn(async () => "# 改写后的剧本"),
+  }));
 vi.mock("~/server/agent/review", () => ({
   reviewContent,
   regenerateShot,
   reviewScript,
+  reviseScript,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -188,7 +194,7 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
     );
   });
 
-  it("reviewScript → 委派剧本评审执行器并回显 verdict（FR-QA-07 ②）", async () => {
+  it("reviewScript → 委派剧本评审执行器并回显 verdict + 曲线（FR-QA-07 ②）", async () => {
     const res = await createCaller(makeCtx()).reviewScript({
       projectId: "proj_r",
     });
@@ -197,6 +203,15 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
       pass: true,
       rubricVersion: "script-v1",
     });
+    expect(res.history).toEqual([]);
+  });
+
+  it("reviseScript → 委派定向改写执行器并回显新剧本（FR-QA-07 ④ · #2478）", async () => {
+    const res = await createCaller(makeCtx()).reviseScript({
+      projectId: "proj_r",
+    });
+    expect(reviseScript).toHaveBeenCalledWith("user-a", "proj_r");
+    expect(res.markdown).toBe("# 改写后的剧本");
   });
 
   it("regenerateShot(gacha) → 委派重生成，mode 透传，返回 ok", async () => {

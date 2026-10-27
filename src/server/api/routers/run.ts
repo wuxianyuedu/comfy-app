@@ -24,6 +24,7 @@ import {
   regenerateShot,
   reviewContent,
   reviewScript,
+  reviseScript,
 } from "~/server/agent/review";
 
 const approvalModeEnum = z.enum(["auto", "stage", "shot"]);
@@ -215,12 +216,24 @@ export const runRouter = createTRPCRouter({
   /**
    * 评审整份剧本（FR-QA-07 ② · #2477）：判定写回 `production.scriptReview` 列
    * （含轮次历史）。项目级内容、无实体 id；无剧本时抛可行动错误。
+   * 回包带完整分数曲线（`history` 旧→新含本轮，FR-QA-07「每轮分数可回看」）。
    */
   reviewScript: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const verdict = await reviewScript(ctx.user.id, input.projectId);
-      return { verdict };
+      const outcome = await reviewScript(ctx.user.id, input.projectId);
+      return outcome;
+    }),
+
+  /**
+   * 按评审判定定向改写剧本（FR-QA-07 ④ · #2478）：消费上一轮评审的低分维度产出新剧本，
+   * 旧版留档 `scriptReview.revisions`。没评过 / 无剧本时抛可行动错误。
+   */
+  reviseScript: authedProcedure
+    .input(z.object({ projectId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const markdown = await reviseScript(ctx.user.id, input.projectId);
+      return { markdown };
     }),
 
   /**

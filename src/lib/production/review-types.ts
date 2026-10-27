@@ -46,6 +46,13 @@ export interface ReviewVerdict {
 export const REVIEW_HISTORY_LIMIT = 9;
 
 /**
+ * 剧本改写前留档的旧版本上限（FR-QA-07 ④ · #2478）：`scriptReview.revisions` 只保留
+ * 最近 N 次改写前的剧本全文 —— 人可随时回看/接管，AI 下一轮从人改的版本继续。
+ * 剧本全文很占列宽，上限取小（3 份）。
+ */
+export const SCRIPT_REVISION_LIMIT = 3;
+
+/**
  * 不合格时的重生成方式（Phase 8 决策：抽卡默认「同提示词 + 换种子」，另给「改提示词」）。
  *   · gacha    —— 保留提示词，换随机种子重出一版（靠 ComfyUI 种子随机化产生差异）；
  *   · reprompt —— 据评审意见改写提示词，再重出（提示词变了 = 画面必然不同）。
@@ -168,23 +175,45 @@ export function applyReview(
 // 剧本不是实体数组里的一条记录，判定与历史落在 production 自己的一列上；
 // 上面实体那套「review + reviewHistory」的语义在这里用列形状复刻。
 
-/** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定。 */
+/** `production.scriptReview` 列的形状：当前判定 + 本轮之前的历次判定 + 改写前留档。 */
 export interface ScriptReviewState {
   /** 当前有效判定；没评过 / 列里判定非法 → null。 */
   review: ReviewVerdict | null;
   /** 本轮之前的历次判定（旧→新，超限裁剪）；曲线 = `[...history, review]`。 */
   history: ReviewVerdict[];
+  /** 改写前的旧剧本全文（旧→新，超限从头裁剪）；缺省 = 还没有过 AI 改写。 */
+  revisions: ScriptRevision[];
+}
+
+/** 一次 AI 改写留档：改写发生的时间 + 改写前的完整剧本。 */
+export interface ScriptRevision {
+  /** ISO 时间戳（改写发生时）。 */
+  at: string;
+  /** 改写前的完整剧本 Markdown。 */
+  markdown: string;
 }
 
 /** 宽容读取 `production.scriptReview` 列（未知 JSON → 形状）；缺省/畸形不抛，回落「没评过」。 */
 export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
   const obj = asRecord(raw);
-  if (!obj) return { review: null, history: [] };
+  if (!obj) return { review: null, history: [], revisions: [] };
   const history = (Array.isArray(obj.history) ? obj.history : [])
     .map((item) => normalizeReviewVerdict(item))
     .filter((item): item is ReviewVerdict => item !== null)
     .slice(-REVIEW_HISTORY_LIMIT);
-  return { review: normalizeReviewVerdict(obj.review), history };
+  const revisions = (Array.isArray(obj.revisions) ? obj.revisions : [])
+    .map((item) => {
+      const rec = asRecord(item);
+      if (!rec || typeof rec.markdown !== "string" || rec.markdown === "")
+        return null;
+      return {
+        at: typeof rec.at === "string" ? rec.at : "",
+        markdown: rec.markdown,
+      };
+    })
+    .filter((item): item is ScriptRevision => item !== null)
+    .slice(-SCRIPT_REVISION_LIMIT);
+  return { review: normalizeReviewVerdict(obj.review), history, revisions };
 }
 
 /** 写回剧本评审（纯函数）：prev 的有效判定进 history（尾部追加、超上限从头裁剪）。 */
@@ -196,5 +225,40 @@ export function applyScriptReview(
   const history = state.review
     ? tailWindow([...state.history, state.review], REVIEW_HISTORY_LIMIT)
     : state.history;
-  return { review: verdict, history };
+  return { review: verdict, history, revisions: state.revisions };
+}
+
+/**
+ * 改写前留档（纯函数）：把改写前的剧本全文压进 `revisions`（尾部追加、超限从头裁剪），
+ * 判定与轮次历史原样保留 —— 旧版本可回看，人可据此接管。
+ */
+export function recordScriptRevision(
+  prev: unknown,
+  markdown: string,
+  at: string,
+): ScriptReviewState {
+  const state = normalizeScriptReviewState(prev);
+  return {
+    ...state,
+    revisions: tailWindow(
+      [...state.revisions, { at, markdown }],
+      SCRIPT_REVISION_LIMIT,
+    ),
+  };
+}
+
+/**
+ * 低分维度提取（收敛判据与定向改写共用）：从判定里挑出 `score <= maxScore` 的维度，
+ * 按分升序（最差的先改）。未评分 / 无低分维度 → 空数组。
+ */
+export function weakScoreEntries(
+  verdict: ReviewVerdict,
+  maxScore = 3,
+): { key: string; score: number; note: string }[] {
+  const scores = verdict.scores;
+  if (!scores) return [];
+  return Object.entries(scores)
+    .filter(([, item]) => item.score <= maxScore)
+    .map(([key, item]) => ({ key, score: item.score, note: item.note }))
+    .sort((a, b) => a.score - b.score);
 }

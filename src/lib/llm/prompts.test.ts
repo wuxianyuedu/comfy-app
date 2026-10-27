@@ -5,6 +5,7 @@ import {
   buildReviewMessages,
   buildScriptMarkdownMessages,
   buildScriptReviewMessages,
+  buildScriptRevisionMessages,
   buildShotRepromptMessages,
   buildStoryboardMessages,
   parseCharacter,
@@ -272,6 +273,50 @@ describe("buildScriptReviewMessages", () => {
       "- 结构（structure）：x。1=a；5=b",
     );
     expect(system!.content).toContain("structure");
+  });
+});
+
+describe("buildScriptRevisionMessages", () => {
+  const ctx = {
+    title: "夜班车",
+    type: "微电影",
+    tone: "冷峻",
+    logline: "司机与乘客",
+    scriptExcerpt: "",
+  };
+  it("system 是定向改写规范；user 带当前剧本 + 缺陷 + 低分维度（带依据）+ 建议", () => {
+    const [system, user] = buildScriptRevisionMessages(
+      "## 场景1",
+      {
+        issues: ["高潮缺失"],
+        suggestion: "补一场对峙",
+        lowScores: [
+          { key: "structure", score: 2, note: "无高潮" },
+          { key: "pacing", score: 3, note: "推进平" },
+        ],
+      },
+      ctx,
+    );
+    expect(system!.content).toContain("剧本打磨助手");
+    expect(user!.content).toContain("夜班车");
+    expect(user!.content).toContain("【当前剧本】");
+    expect(user!.content).toContain("## 场景1");
+    expect(user!.content).toContain("- 高潮缺失");
+    expect(user!.content).toContain("- structure：2 分（无高潮）");
+    expect(user!.content).toContain("- pacing：3 分（推进平）");
+    expect(user!.content).toContain("补一场对峙");
+  });
+  it("无缺陷 / 无低分维度 / 无建议 → 可读占位，不产出 undefined", () => {
+    const [, user] = buildScriptRevisionMessages(
+      "",
+      { issues: [], suggestion: "", lowScores: [] },
+      ctx,
+    );
+    expect(user!.content).toContain("（空）");
+    expect(user!.content).toContain("（未逐条列出）");
+    expect(user!.content).toContain("（本判定未带维度评分）");
+    expect(user!.content).toContain("（无）");
+    expect(user!.content).not.toContain("undefined");
   });
 });
 
