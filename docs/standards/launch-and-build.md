@@ -2817,14 +2817,41 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 | 总墙钟 | `pnpm tauri build`（那一跑只出 msi） | **579.2s** |
 | 发布段 | `node scripts/publish-desktop-bundle.mjs` | **1.5s**（拷 84.9 MiB + 写 manifest + 指针 + 轮转） |
 
-⚠️ **打包段（nsis）到今天为止没有读数 = 没有结论**。那一格要现下两件 GitHub release 资产
-（`nsis-3.13.zip` ≈1.3 MiB、`nsis_tauri_utils.dll` ≈0.05 MiB），本机两跑都落在
-`failed to bundle project: timeout: global`（一次 zip 下完、dll 超时；一次连 zip 都在 21.8s
-超时；随后那一跑 `github.com:443` 直接连不上）。**还有一条更坏的**：tauri 判定工具缓存目录
-不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动会把这台机的工具缓存
-一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。这两件事都记在这里而不是写成
-「以后一定绿」；红了要区分「这条链坏了」与「这台机今天取不到工具」，判据是那一跑的日志里
-有没有 `timeout: global`。
+⚠️ **打包段（nsis）红的不是这条链，而是「工具要在构建期现下 GitHub release」**。那一格要
+两件资产（`nsis-3.13.zip` 实测 **2,363,925 B**、`nsis_tauri_utils.dll` **34,304 B**），
+而 bundler 的下载预算在 **22–23s 量级**：本机两跑分别停在 21.8s 与 22.5s
+（`failed to bundle project: timeout: global`），同一次里 zip 直连下载实测 **48.4s**
+（同一 URL 的 HEAD 只要 2.0s ⇒ 不是 DNS/连接问题，是正文吞吐）。**还有一条更坏的**：
+tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动
+把这台机的工具缓存一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。
+
+**把工具预置进缓存之后，nsis 那格第一次有了读数**（同一台机、`pnpm exec tauri bundle` ——
+只重打包不重装配，跑前先 `check-standalone-contents.cjs` 确认两层干净，见 §7.6 那条警告）：
+
+| 段 | 读数 |
+| --- | --- |
+| 打包段（nsis） | **250.5s** ⇒ `ComfyAPP_0.1.0_x64-setup.exe` **62.31 MiB** |
+| 打包段（msi，同一跑内） | **308.0s** ⇒ `…en-US.msi` **84.86 MiB** |
+| 该跑总墙钟 | **577.8s**，退 0，**日志里没有 `Downloading` / `Recreating it` 任何一行** |
+
+预置的布局就是 tauri 自己那一套：zip 解包后**去掉一层顶层目录** `nsis-3.13/`，内容落到
+`%LOCALAPPDATA%\tauri\NSIS\`；dll 落 `NSIS\Plugins\x86-unicode\additional\nsis_tauri_utils.dll`。
+少任何一件都会触发那句「先删整个目录再下」——CLI 二进制里那串必查清单能看到
+`Stubs/lzma_solid-x86-unicode`、`Include/MUI2.nsh`、`Include/FileFunc.nsh` 与上面那个 dll 路径
+挨在一起（本机种完之后逐件 `stat` 过，六件都在位）。
+
+**为什么「种目录」救不了节点**（这条是 #2525 的核心事实）：`orange-runner` 是 Windows 服务、
+**StartName = LocalSystem**，所以作业眼里的 `%LOCALAPPDATA%` 是
+`C:\Windows\System32\config\systemprofile\AppData\Local` —— 普通会话**进不去**
+（`ls` / `touch` 探针都 `Permission denied`）；而 bundler 走 `SHGetKnownFolderPath`
+（不读 `LOCALAPPDATA` 环境变量），所以在 stage 里改那个变量也不会把缓存根挪走。
+
+**镜像那一档值得配、但不许当结案**：官方键是 `TAURI_BUNDLER_TOOLS_GITHUB_MIRROR` /
+`TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLATE`（与 `PLAYWRIGHT_DOWNLOAD_HOST` 同形状）。
+本机实测 `gh-proxy.com` 前缀镜像：dll **0.96s**、zip **29.5s**，且两份的 sha256 与直连**逐字同值**
+（`ba63dffc…` / `5ba143b5…`；bundler 自己也会再验一次哈希）。但 29.5s **仍然在它那个 22–23s 预算之上**
+⇒ 镜像把「偶然红」的概率压低，**没有变成绿**。红了先分岔：日志里有 `timeout: global` = 这台机
+今天取不到工具（走 #2525）；没有 = 这条链坏了。
 
 **发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，本地与平台**同一个入口**）：
 
