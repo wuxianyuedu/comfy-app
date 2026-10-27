@@ -156,8 +156,6 @@ export {
   runState,
 } from "./base-check/verdict.mjs";
 
-
-
 /**
  * 复算一次（编排本体）。
  *
@@ -467,20 +465,21 @@ export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
  */
 export function summarizeRows(rows) {
   if (rows.length === 0) return "inconclusive";
-  if (rows.every((r) => r.currentCode === 0)) return "current-green";
-  const verdicts = rows
-    .filter((r) => r.currentCode !== 0)
-    .map((r) =>
-      judge({
-        currentCode: r.currentCode,
-        baseCode: r.baseCode,
-        /* 两个来源都收：行里显式给了 `currentOutput` 就用它，否则回落到
-         * `output`（本检出那一次的全文，见上面 rows.push 的注释）。 */
-        currentOutput: r.currentOutput ?? r.output,
-        baseOutput: r.baseOutput,
-      }),
-    );
+  /* 逐条全走同一份 `judge()`（ISSUE #2400）：0 码但「一条用例都没收集到」的行
+   * 在 judge 里落 inconclusive，「段绿 + 逐条里混着一条没判的」在整批这里就折成
+   * inconclusive（段码 2），不再只在 baseline-red 那一支才被读出来。 */
+  const verdicts = rows.map((r) =>
+    judge({
+      currentCode: r.currentCode,
+      baseCode: r.baseCode,
+      /* 两个来源都收：行里显式给了 `currentOutput` 就用它，否则回落到
+       * `output`（本检出那一次的全文，见上面 rows.push 的注释）。 */
+      currentOutput: r.currentOutput ?? r.output,
+      baseOutput: r.baseOutput,
+    }),
+  );
   if (verdicts.includes("inconclusive")) return "inconclusive";
+  if (verdicts.every((v) => v === "current-green")) return "current-green";
   /* 混着「别线的红」与「你的红」时，**按更严重的那一档报**（`yours`）——
    * 别线的红可以就地收掉或登记，而你自己引入的那条必须改代码，两者都要人看见；
    * 报成 `baseline-red` 会让人以为整批都与自己无关。 */
