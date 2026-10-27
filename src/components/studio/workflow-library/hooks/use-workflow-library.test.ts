@@ -356,6 +356,17 @@ describe("useWorkflowLibrary", () => {
     expect(result.current.loadStalled).toBe(true);
     expect(result.current.loading).toBe(true);
 
+    /* 让那条「装死」的列表请求在用例结束前落地（ISSUE #2458）：留到拆除阶段的话，
+     * happy-dom 会在拆窗时 abort 在飞的请求并打出一片 AbortError —— 而这条用例
+     * 自己一条断言都没红。请求本身是在推进虚拟时钟时才发出去的，所以用
+     * `advanceTimersByTimeAsync` 把 mock 的延迟一路推到返回；恢复真实时钟后再让出
+     * 一个宏任务，确保响应已在拆除前处理完。 */
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(behavior.listDelayMs ?? 0);
+    });
     vi.useRealTimers();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
   });
 });
