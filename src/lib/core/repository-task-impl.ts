@@ -93,7 +93,10 @@ function isOwnedBy(claimedBy: string | null, owner: TaskClaimMode): boolean {
  * 动它）」走的是两条完全不同的排障路径，混成一个 false 就只能靠日志猜。
  */
 export type TaskWriteOutcome =
-  "written" | "skipped-terminal" | "skipped-not-owned" | "skipped-missing";
+  | "written"
+  | "skipped-terminal"
+  | "skipped-not-owned"
+  | "skipped-missing";
 
 /**
  * 「队列领取 / 孤儿扫描 / 产物落表」这一组从工厂里切出来放这里（规范 §12.13）。
