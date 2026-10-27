@@ -1508,9 +1508,9 @@
   而被「只收 violations」这一档丢掉，那是结构性假通过。这三条的判点是 Storybook 的
   a11y 面板（真浏览器 + CSS 生效，人现场看某一棵树），**机器那一格仍按空记**（本条目的
   这一行不因为它被关了就声称覆盖到了）。
-  另两格仍是空的：bundle **只有分析没有门禁**（`scripts/analyze-bundle.mjs` 靠
-  `@next/bundle-analyzer`、强制 `next build --webpack`、`pnpm analyze` 手动跑；
-  阈值 / 棘轮全库零命中）；变异测试**无任何工具**，仓内现况是「每条判据配人工反向变异并记档」
+  另两格仍是空的：bundle **只有分析没有门禁**（`pnpm analyze` 走 Next 16 内置
+  Turbopack 分析器 `next analyze`，#2538；曾是 webpack 上的 `@next/bundle-analyzer`，
+  已删）；变异测试**无任何工具**，仓内现况是「每条判据配人工反向变异并记档」
   的口径（本条目 E5 那批与 §11.18.4 都是这么做的），自动化变异这一格的落点与成本分层
   （跑不动进钩子）需要先定口径。
 - [ ] **F1 零 i18n**（中文硬编码、`lang` 写死）。证据：`src/app/layout.tsx:36`。

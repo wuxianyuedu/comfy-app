@@ -1559,7 +1559,7 @@ zustand 队列，而不是再加一个模块级单例。
 
 | 侧                     | 回显出口                                                                                                                                                                                                                                                                                                                                                                                                              | 覆盖面                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Node（`.mjs`/`.cjs`）  | `scripts/launcher-core/command-echo.mjs` 的 `echoCommandLine()` —— **唯一出口**；`shell.mjs`（`spawnInGroup` / `runSync` / `runPnpmSync`）、`procs.mjs`（`runCapture` 探测）、`corepack.mjs`（工具链探测与重建）在出口处调用；其余入口里直连 spawn 的地方（`dev.mjs` / `start.mjs` / `analyze-bundle.mjs` / `build-desktop.mjs` / `db-schema-state.mjs` / `quality-gate.mjs` / `dev-launcher.mjs`）显式调用同一个出口 | 起服务 / 装依赖 / 跑门禁 / 构建 / 端口与进程探测 / 工具链探测 |
+| Node（`.mjs`/`.cjs`）  | `scripts/launcher-core/command-echo.mjs` 的 `echoCommandLine()` —— **唯一出口**；`shell.mjs`（`spawnInGroup` / `runSync` / `runPnpmSync`）、`procs.mjs`（`runCapture` 探测）、`corepack.mjs`（工具链探测与重建）在出口处调用；其余入口里直连 spawn 的地方（`dev.mjs` / `start.mjs` / `build-desktop.mjs` / `db-schema-state.mjs` / `quality-gate.mjs` / `dev-launcher.mjs`）显式调用同一个出口 | 起服务 / 装依赖 / 跑门禁 / 构建 / 端口与进程探测 / 工具链探测 |
 | Windows 入口（`.ps1`） | 同一 `>>> ` 前缀**手工回显**（`.ps1` 无法 import 上面的模块）：`dev-launcher.ps1`、`entry-common.ps1`、`sync-lint.ps1`、`generate-docs.ps1`、`prepare-local-run.ps1`；`quality-gate.ps1` / `run-tests.ps1` 原本就有                                                                                                                                                                                                   | 双击入口转交、`.ps1` 侧直接跑的 pnpm 子命令                   |
 
 三条口径：
@@ -2799,7 +2799,7 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 叠上去得到的不是两条结论，是一份不可信的读数 —— **并发在场时墙钟不可读**（§13.6.4.1），
 这条口径在这里同样成立，别拿这一档的耗时去校准别的档。
 
-**这一档不重抄任何判据**：清单是「装依赖 → `pnpm tauri build` → 发布」，而
+**这一档不重抄任何判据**：清单是「装依赖 → 壳工具链自证 → 工具预置 → `pnpm tauri build` → 发布」，而
 `tauri build` 的 `beforeBuildCommand` 就是 `scripts/build-desktop.mjs`，它内部那条
 `pnpm build` 链带着硬规则 17/18 的产物级两道防线（`check-standalone-contents.cjs` 数两层
 产物 / `check-bundle-budget.cjs` 体积棘轮）。**发布只能排在它绿之后** —— 也不许带
@@ -2815,14 +2815,72 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 | 总墙钟 | `pnpm tauri build`（那一跑只出 msi） | **579.2s** |
 | 发布段 | `node scripts/publish-desktop-bundle.mjs` | **1.5s**（拷 84.9 MiB + 写 manifest + 指针 + 轮转） |
 
-⚠️ **打包段（nsis）到今天为止没有读数 = 没有结论**。那一格要现下两件 GitHub release 资产
-（`nsis-3.13.zip` ≈1.3 MiB、`nsis_tauri_utils.dll` ≈0.05 MiB），本机两跑都落在
-`failed to bundle project: timeout: global`（一次 zip 下完、dll 超时；一次连 zip 都在 21.8s
-超时；随后那一跑 `github.com:443` 直接连不上）。**还有一条更坏的**：tauri 判定工具缓存目录
-不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动会把这台机的工具缓存
-一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。这两件事都记在这里而不是写成
-「以后一定绿」；红了要区分「这条链坏了」与「这台机今天取不到工具」，判据是那一跑的日志里
-有没有 `timeout: global`。
+⚠️ **打包段（nsis）红的不是这条链，而是「工具要在构建期现下 GitHub release」**。那一格要
+两件资产（`nsis-3.13.zip` 实测 **2,363,925 B**、`nsis_tauri_utils.dll` **34,304 B**），
+而 bundler 的下载预算在 **22–23s 量级**：本机两跑分别停在 21.8s 与 22.5s
+（`failed to bundle project: timeout: global`），同一次里 zip 直连下载实测 **48.4s**
+（同一 URL 的 HEAD 只要 2.0s ⇒ 不是 DNS/连接问题，是正文吞吐）。**还有一条更坏的**：
+tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动
+把这台机的工具缓存一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。
+
+**把工具预置进缓存之后，nsis 那格第一次有了读数**（同一台机、`pnpm exec tauri bundle` ——
+只重打包不重装配，跑前先 `check-standalone-contents.cjs` 确认两层干净，见 §7.6 那条警告）：
+
+| 段 | 读数 |
+| --- | --- |
+| 打包段（nsis） | **250.5s** ⇒ `ComfyAPP_0.1.0_x64-setup.exe` **62.31 MiB** |
+| 打包段（msi，同一跑内） | **308.0s** ⇒ `…en-US.msi` **84.86 MiB** |
+| 该跑总墙钟 | **577.8s**，退 0，**日志里没有 `Downloading` / `Recreating it` 任何一行** |
+
+预置的布局就是 tauri 自己那一套：zip 解包后**去掉一层顶层目录** `nsis-3.13/`，内容落到
+`%LOCALAPPDATA%\tauri\NSIS\`；dll 落 `NSIS\Plugins\x86-unicode\additional\nsis_tauri_utils.dll`。
+少任何一件都会触发那句「先删整个目录再下」——CLI 二进制里那串必查清单能看到
+`Stubs/lzma_solid-x86-unicode`、`Include/MUI2.nsh`、`Include/FileFunc.nsh` 与上面那个 dll 路径
+挨在一起（本机种完之后逐件 `stat` 过，六件都在位）。
+
+**为什么「种目录」救不了节点**（这条是 #2525 的核心事实）：`orange-runner` 是 Windows 服务、
+**StartName = LocalSystem**，所以作业眼里的 `%LOCALAPPDATA%` 是
+`C:\Windows\System32\config\systemprofile\AppData\Local` —— 普通会话**进不去**
+（`ls` / `touch` 探针都 `Permission denied`）；而 bundler 走 `SHGetKnownFolderPath`
+（不读 `LOCALAPPDATA` 环境变量），所以在 stage 里改那个变量也不会把缓存根挪走。
+
+**镜像那一档值得配、但不许当结案**：官方键是 `TAURI_BUNDLER_TOOLS_GITHUB_MIRROR` /
+`TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLATE`（与 `PLAYWRIGHT_DOWNLOAD_HOST` 同形状）。
+本机实测 `gh-proxy.com` 前缀镜像：dll **0.96s**、zip **29.5s**，且两份的 sha256 与直连**逐字同值**
+（`ba63dffc…` / `5ba143b5…`；bundler 自己也会再验一次哈希）。但 29.5s **仍然在它那个 22–23s 预算之上**
+⇒ 镜像把「偶然红」的概率压低，**没有变成绿**。红了先分岔：日志里有 `timeout: global` = 这台机
+今天取不到工具（走 #2525）；没有 = 这条链坏了。
+
+**落地的形状是「仓库侧一个有名字的工具镜像入口」**（`scripts/tauri-tools-cache.mjs`，ISSUE #2525）：
+工具树按内容镜像在常驻根的**第四个目录**（`resolveToolRoot` ⇒ `<卷>\ci-tools\<包名>`，
+同样由 `pnpm store path` 推卷、**不写盘符**；与两份槽根分开是必须的 —— 那里的淘汰器按 TTL
+删键位，而这一份删了**今天就没包**，它不是缓存）。两条动作、都不删任何东西：
+
+| 动作 | 做什么 | 三态 |
+| --- | --- | --- |
+| `--seed`（本机，成功打过包之后跑一次） | 把 bundler 自己下好的那棵树连**逐件 sha256 清单**种进 `<工具根>/nsis/<版本>`；先写 staging 再整目录改名过去，所以那里「要么没有、要么齐全」 | 0 种成 ／ 1 dll 的哈希与被钉的那件对不上（版本升了，或内容被换过）／ 2 种源不齐 —— **空手种一份残缺树比不种更坏** |
+| 缺省（作业起手那一格 `打包·桌包工具预置`） | 必需件已在场 ⇒ **一个字都不动**；不在场 ⇒ 按清单拷过去并**逐件复算哈希** | 0 在场或补齐 ／ 1 拷过去复算不过（镜像坏了，不许留半棵树继续打包）／ 2 两边都没有 ⇒「没有结论」并念出出口 |
+
+版本升上去时红的是**该升镜像**那句话（`ensure` 判「常驻根里没有这一份」⇒ 退 2），
+而不是「今天取不到工具」—— 这就是把 `NSIS_PLAN` 里那两个哈希钉死的用处；
+同批改 `NSIS_PLAN` 是唯一出路，别在作业里顺手装一个旧版本上去。
+
+**这一格自己的实测读数**（2026-10-27 本机：删空缓存 → 跑 `ensure` → 只出 nsis 打一次包）：
+
+```
+[工具缓存] 缺 6 件：NSIS.exe, makensis.exe, Include/MUI2.nsh, Include/FileFunc.nsh,
+                     Stubs/lzma_solid-x86-unicode, Plugins/x86-unicode/additional/nsis_tauri_utils.dll
+[工具缓存] 用镜像补：G:\ci-tools\comfy-app-t3\nsis\3.13·442 件·6.8 MiB
+[工具缓存] ✓ 已补齐，必需件在场。                    ⇒ 退 0，实测 2.5s（含 442 件逐件复算哈希）
+6.0s   Running makensis → nsis\ComfyAPP_0.1.0_x64-setup.exe
+137.8s Finished 1 bundle … (62.32 MiB)               ⇒ 打包段 131.8s，退 0
+```
+
+日志里**没有** `Downloading`、没有 `Recreating it`、也没有 `timeout: global` —— 这三行缺不缺
+就是「工具在场与否」的凭证。用例 `tests/tauri-tools-cache.test.ts` 钉的是它的**形状**
+（补齐 / 不动 / 退 2 的出口话术 / 镜像被改过必须红），平台侧那一格的**顺序**由
+`tests/no-platform-ci-config.test.ts` 钉：预置必须在 `pnpm tauri build` 之前 ——
+排在它后面等于没有，那一刻 bundler 已经自己去撞那条下载预算了。
 
 **发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，本地与平台**同一个入口**）：
 

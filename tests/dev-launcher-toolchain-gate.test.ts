@@ -979,12 +979,8 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     expect(inv!.command).toBe(path.join(dir, "pnpm"));
   });
 
-  it("dev.mjs / start.mjs / analyze-bundle.mjs 不再各自拼 pnpm 可执行名", () => {
-    for (const rel of [
-      "scripts/dev.mjs",
-      "scripts/start.mjs",
-      "scripts/analyze-bundle.mjs",
-    ]) {
+  it("dev.mjs / start.mjs 不再各自拼 pnpm 可执行名", () => {
+    for (const rel of ["scripts/dev.mjs", "scripts/start.mjs"]) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
       expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain(
         "pnpmInvocation",
@@ -1405,8 +1401,9 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
     expect(r.stdout).toContain("不在声明范围内");
     expect(r.stdout).toContain("坏的是测试档");
-    /* 建议必须给「最近的可达档」：对 Node 20 的人推 26 是没人执行的建议。 */
-    expect(r.stdout).toContain("建议升到 22.22.2");
+    /* 建议必须给「最近的可达档」：engines.node 收紧成 `>=26.12.1`（#2531）后，
+     * 唯一的可达档就是 26.12.1 本身 —— 曾经的 `^22.22.2 || …` 时代才会建议 22。 */
+    expect(r.stdout).toContain("建议升到 26.12.1");
   });
 
   (envWithPnpm() ? it : it.skip)("当前 Node 合规时打 OK 行（这句是上面那格的对照组）", () => {

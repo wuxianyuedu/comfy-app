@@ -14,6 +14,10 @@
  * 「原话从 `get-build-stage` 取」那一跳属于取数，在 `ci-build-readout.mjs` 的
  * `enrichStageErrors()` 里 —— 分类只吃它填好的形状。
  *
+ * 「这一刻有没有格在飞、这一眼与上一眼是不是同一件事」（`inFlightStages` / `progressReadout`）
+ * 也在这里：它们是 JSON 的纯函数，而签名那一个算法仍只有 `ship-build.mjs` 一份（这里只调它，
+ * 不另数一遍计数）。念成那几行的工作在 `ci-build-print.mjs`（#2526 切出去的那一半）。
+ *
  * ## 三档与判据顺序
  *
  * ① 任何一格**真失败** ⇒ 真失败（真红那格永远最该被看见，即便同跑还有格被取消）；
@@ -24,6 +28,8 @@
  * 那一格平台记的正是 `error`，而它一个字都没验证过。归属由 `cancelledCause()` 按
  * **平台原话**判 —— 它是这件事的唯一实现。
  */
+
+import { buildSignature } from "./ship-build.mjs";
 
 /** 退出码三态（与 `ship-core.mjs` 的 `CODE` 同一口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
@@ -484,4 +490,25 @@ export function inFlightStages(json) {
   const configured = classifyBuildOutcome(json).configured;
   const flying = configured.filter((s) => STAGE_IN_FLIGHT_STATES.has(s.status));
   return { count: flying.length, names: flying.map((s) => s.name || s.id) };
+}
+
+/**
+ * 「还在跑」那一支的进度读数（ISSUE #2304）：签名 + 在飞格，一次遍历同时给出。
+ *
+ * 为什么要有这一件：诊断与轮询此前是**两个读者面**——轮询那行带 `…/pending/0-1+30/37`，
+ * 而 `--diagnose` 只念「还在跑，等它跑完再读一次」；看诊断的人只能去翻原始 JSON，
+ * 而那层嵌套（`data.pipelinesStatus.<sn>-001.stages[]`）读错一次就会把「在推进」念成
+ * 「一格都没起」。签名本身仍只有 `ship-build.mjs` 一个算法，这里不另数一遍计数。
+ *
+ * @param {unknown} json `get-build-status` 的原值
+ * @param {string} [sn] 构建号（进签名的第一段）
+ * @returns {{signature: string, flyingCount: number, flyingNames: string[]}}
+ */
+export function progressReadout(json, sn = "") {
+  const flying = inFlightStages(json);
+  return {
+    signature: buildSignature(json, sn),
+    flyingCount: flying.count,
+    flyingNames: flying.names,
+  };
 }

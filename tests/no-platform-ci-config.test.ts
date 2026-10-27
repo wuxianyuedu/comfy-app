@@ -2405,6 +2405,27 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "打包那一格必须点既有的执行者 `pnpm tauri build`（本单只补发布那一格，不抄第二份打桌包脚本）",
     )?.toContain("pnpm tauri build");
 
+    /* 工具预置那一格（ISSUE #2525）：它在不在、点的是谁、以及**排在真打包之前**。
+     * 顺序是判据的一部分 —— 预置跑在 `pnpm tauri build` 之后等于没有：那一格的
+     * `timeout: global` 已经先把 nsis 判红了，而这一格退的是「没有结论」。 */
+    const prefetch = stageBlock(text, "打包·桌包工具预置");
+    expect(prefetch, "`.cnb.yml` 里找不到「打包·桌包工具预置」那一格").toBeTruthy();
+    const prefetchEntry = "scripts/tauri-tools-cache.mjs";
+    expect(prefetch, `预置那一格点的应是 ${prefetchEntry}`).toContain(prefetchEntry);
+    expect(existsSync(path.join(ROOT, prefetchEntry)), `${prefetchEntry} 不在盘上`).toBe(
+      true,
+    );
+    const packageStages = pipelineStageNames(text, "桌面成品包");
+    expect(
+      packageStages.indexOf("打包·桌包工具预置"),
+      "「打包·桌包工具预置」没在清单里 —— 那一格丢了就等于回到「构建期现下 GitHub release」",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      packageStages.indexOf("打包·桌包工具预置") <
+        packageStages.indexOf("打包·桌面成品构建"),
+      "工具预置排到了真打包之后 —— 那一刻 bundler 已经自己去撞那条下载预算了",
+    ).toBe(true);
+
     const rows = pipelineLockAssignments(text).filter(
       (r) => r.stagesRef === "*package_gates",
     );
