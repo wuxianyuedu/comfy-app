@@ -17,7 +17,7 @@ vi.mock("~/server/agent/run-engine", () => ({
   advanceRunLoop: vi.fn(async () => undefined),
 }));
 // 评审 / 重生成的落库逻辑在 review.test.ts 覆盖；此处只验端点的入参校验 + 委派 seam。
-const { reviewContent, regenerateShot } = vi.hoisted(() => ({
+const { reviewContent, regenerateShot, reviewScript } = vi.hoisted(() => ({
   reviewContent: vi.fn(async () => ({
     pass: false,
     issues: ["含混"],
@@ -25,8 +25,20 @@ const { reviewContent, regenerateShot } = vi.hoisted(() => ({
     scoredAt: "t",
   })),
   regenerateShot: vi.fn(async () => undefined),
+  reviewScript: vi.fn(async () => ({
+    pass: true,
+    issues: [],
+    suggestion: "",
+    scoredAt: "t2",
+    scores: { structure: { score: 4, note: "结构完整" } },
+    rubricVersion: "script-v1",
+  })),
 }));
-vi.mock("~/server/agent/review", () => ({ reviewContent, regenerateShot }));
+vi.mock("~/server/agent/review", () => ({
+  reviewContent,
+  regenerateShot,
+  reviewScript,
+}));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { runRouter } from "~/server/api/routers/run";
@@ -174,6 +186,17 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
       "character",
       "c1",
     );
+  });
+
+  it("reviewScript → 委派剧本评审执行器并回显 verdict（FR-QA-07 ②）", async () => {
+    const res = await createCaller(makeCtx()).reviewScript({
+      projectId: "proj_r",
+    });
+    expect(reviewScript).toHaveBeenCalledWith("user-a", "proj_r");
+    expect(res.verdict).toMatchObject({
+      pass: true,
+      rubricVersion: "script-v1",
+    });
   });
 
   it("regenerateShot(gacha) → 委派重生成，mode 透传，返回 ok", async () => {

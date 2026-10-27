@@ -22,7 +22,13 @@ vi.mock("~/server/better-auth", () => ({
 }));
 
 import { productionRepository } from "~/lib/core/repository-production";
-import { regenerateShot, reviewContent } from "~/server/agent/review";
+import { normalizeScriptReviewState } from "~/lib/production/review-types";
+import { REVIEW_RUBRICS } from "~/lib/production/review-rubrics";
+import {
+  regenerateShot,
+  reviewContent,
+  reviewScript,
+} from "~/server/agent/review";
 import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
@@ -122,6 +128,80 @@ describe("reviewContent", () => {
     await expect(
       reviewContent(USER, "proj_none", "shot", "s1"),
     ).rejects.toThrow(/还没有生产数据/);
+  });
+
+  it("评审温度走 review 档：getLLMConfig 收到 taskType=review（FR-QA-07 ③）", async () => {
+    await seed({ shots: [{ id: "s1", description: "x" }] });
+    await reviewContent(USER, PROJ, "shot", "s1");
+    expect(getLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
+  });
+
+  it("判定带维度评分与 rubric 版本（FR-QA-07 ①）：scores 落库、越界分夹取", async () => {
+    await seed({ characters: [{ id: "c1", name: "司机" }] });
+    completeLLMStructured.mockResolvedValueOnce({
+      pass: false,
+      issues: [],
+      suggestion: "",
+      scores: {
+        visual: { score: 9, note: "很具象" },
+        costume: { score: 2 },
+      },
+    });
+    const verdict = await reviewContent(USER, PROJ, "character", "c1");
+    expect(verdict.rubricVersion).toBe(REVIEW_RUBRICS.character.version);
+    expect(verdict.scores).toEqual({
+      visual: { score: 5, note: "很具象" },
+      costume: { score: 2, note: "" },
+    });
+    const [c] = await rows("characters");
+    expect(c?.review).toEqual(verdict);
+  });
+});
+
+describe("reviewScript", () => {
+  it("评审判定写回 production.scriptReview 列（含 rubric 版本与维度评分）", async () => {
+    await seed({ scriptMarkdown: "## 场景1 · 街道（夜）" });
+    completeLLMStructured.mockResolvedValueOnce({
+      pass: false,
+      issues: ["高潮缺失"],
+      suggestion: "补一场对峙",
+      scores: { structure: { score: 2, note: "无高潮" } },
+    });
+    const verdict = await reviewScript(USER, PROJ);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.rubricVersion).toBe(REVIEW_RUBRICS.script.version);
+    expect(verdict.scores?.structure).toEqual({ score: 2, note: "无高潮" });
+    const row = await productionRepository.getForUser(USER, PROJ);
+    expect(normalizeScriptReviewState(row?.scriptReview).review).toEqual(
+      verdict,
+    );
+    // 温度档同 review
+    expect(getLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
+  });
+
+  it("二次评审：上轮判定进 reviewHistory（轮次曲线可回看）", async () => {
+    await seed({ scriptMarkdown: "# 剧本" });
+    completeLLMStructured
+      .mockResolvedValueOnce({ pass: false, issues: ["a"], suggestion: "s" })
+      .mockResolvedValueOnce({ pass: true, issues: [], suggestion: "" });
+    const v1 = await reviewScript(USER, PROJ);
+    const v2 = await reviewScript(USER, PROJ);
+    const row = await productionRepository.getForUser(USER, PROJ);
+    const state = normalizeScriptReviewState(row?.scriptReview);
+    expect(state.review).toEqual(v2);
+    expect(state.history).toEqual([v1]); // 曲线 = [...history, review]
+  });
+
+  it("无剧本 → 抛可行动错误，不调模型", async () => {
+    await seed({ scriptMarkdown: "   " });
+    await expect(reviewScript(USER, PROJ)).rejects.toThrow(/还没有剧本/);
+    expect(completeLLMStructured).not.toHaveBeenCalled();
+  });
+
+  it("无生产数据行 → 抛可行动错误", async () => {
+    await expect(reviewScript(USER, "proj_none")).rejects.toThrow(
+      /还没有生产数据/,
+    );
   });
 });
 
