@@ -316,6 +316,13 @@ export const taskImage = sqliteTable(
     height: integer("height"),
     isCover: integer("isCover", { mode: "boolean" }).notNull().default(false),
     sortIndex: integer("sortIndex").notNull().default(0),
+    /** 人工评分 0~5（#2480，人判「这张好 / 这张废」的落点）；null = 还没评过。 */
+    humanRating: integer("humanRating"),
+    /** 人工收藏（#2480）：「优秀样本进 few-shot」沉淀机制的输入（与模型库的
+     *  `favorite` 表无关——那张表挂 user↔model，这张列挂产物本身）。 */
+    isFavorite: integer("isFavorite", { mode: "boolean" })
+      .notNull()
+      .default(false),
   },
   (t) => [
     // 每次 task.list / history 带 includeImages 都按 taskId IN(...) 回表；

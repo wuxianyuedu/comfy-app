@@ -16,10 +16,17 @@ import { productionRepository } from "~/lib/core/repository-production";
 import {
   normalizeProductionRun,
   planNextRunAction,
+  scriptDigestOf,
   toRunView,
   type ProductionRun,
   type RunAction,
 } from "~/lib/production/run-types";
+import {
+  applyHumanRating,
+  applyHumanVerdict,
+  applyScriptHumanVerdict,
+} from "~/lib/production/review-types";
+import { calibrateFromShots } from "~/lib/production/review-calibration";
 import {
   regenerateShot,
   reviewContent,
@@ -277,5 +284,135 @@ export const runRouter = createTRPCRouter({
         input.newPrompt,
       );
       return { ok: true };
+    }),
+
+  /* ── 人工裁决与人工评分（FR-QA-07 人工侧 · #2480）─────────────────────────
+   * 人工裁决**优先于 AI 判定**（FR-AG-02「质量停点由人拍板」）：裁决快照（rev /
+   * 剧本指纹）由规划器与评审收敛判据消费——人判废的不因 AI 判过而放行，人判过的
+   * AI 再红也定稿。人评分（0~5）同时是校准读数的人侧输入。 */
+
+  /** 人工裁决一条镜头 / 角色卡（approved / rejected + 一句话理由）。 */
+  setHumanVerdict: authedProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        kind: z.enum(["shot", "character"]),
+        targetId: z.string().min(1),
+        pass: z.boolean(),
+        note: z.string().max(200).default(""),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const row = await productionRepository.getForUser(
+        ctx.user.id,
+        input.projectId,
+      );
+      if (!row)
+        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+      const rawList = input.kind === "shot" ? row.shots : row.characters;
+      const list: unknown[] = Array.isArray(rawList) ? rawList : [];
+      const rec = list.find(
+        (item) =>
+          typeof item === "object" &&
+          item !== null &&
+          (item as { id?: unknown }).id === input.targetId,
+      );
+      if (!rec)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
+        });
+      const revRaw = (rec as { rev?: unknown }).rev;
+      const rev =
+        typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
+      const verdict = {
+        pass: input.pass,
+        note: input.note.trim(),
+        at: new Date().toISOString(),
+        rev,
+      };
+      const nextList = applyHumanVerdict(list, input.targetId, verdict);
+      await productionRepository.patchContent(ctx.user.id, input.projectId, {
+        ...(input.kind === "shot"
+          ? { shots: nextList }
+          : { characters: nextList }),
+      });
+      return { humanVerdict: verdict };
+    }),
+
+  /** 人工评分一个镜头（0~5；null = 清除）。写 `shot.humanRating`。 */
+  setHumanRating: authedProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        shotId: z.string().min(1),
+        rating: z.number().int().min(0).max(5).nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const row = await productionRepository.getForUser(
+        ctx.user.id,
+        input.projectId,
+      );
+      if (!row)
+        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+      const shots: unknown[] = Array.isArray(row.shots) ? row.shots : [];
+      const nextShots = applyHumanRating(shots, input.shotId, input.rating);
+      if (nextShots === shots)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "找不到要评分的镜头",
+        });
+      await productionRepository.patchContent(ctx.user.id, input.projectId, {
+        shots: nextShots,
+      });
+      return { ok: true };
+    }),
+
+  /** 人工裁决整份剧本（approved / rejected + 理由）；裁决快照带当前剧本指纹。 */
+  setScriptHumanVerdict: authedProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        pass: z.boolean(),
+        note: z.string().max(200).default(""),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const row = await productionRepository.getForUser(
+        ctx.user.id,
+        input.projectId,
+      );
+      if (!row)
+        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+      const script =
+        typeof row.scriptMarkdown === "string" ? row.scriptMarkdown : "";
+      const verdict = {
+        pass: input.pass,
+        note: input.note.trim(),
+        at: new Date().toISOString(),
+        digest: scriptDigestOf(script),
+      };
+      const next = applyScriptHumanVerdict(row.scriptReview, verdict);
+      await productionRepository.patchContent(ctx.user.id, input.projectId, {
+        scriptReview: next,
+      });
+      return { humanVerdict: verdict };
+    }),
+
+  /**
+   * 校准读数（只读，#2480）：扫镜头上「AI 视觉判定 + 人评分」都齐全的样本，
+   * 聚合总体偏差（AI 均分 vs 人评、MAE、判定一致率）与按维度偏差——调 rubric /
+   * 评审提示词的依据。不写任何状态；样本不足时各读数 null。
+   */
+  reviewCalibration: authedProcedure
+    .input(z.object({ projectId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const row = await productionRepository.getForUser(
+        ctx.user.id,
+        input.projectId,
+      );
+      const shots: unknown[] = row && Array.isArray(row.shots) ? row.shots : [];
+      return calibrateFromShots(shots);
     }),
 });

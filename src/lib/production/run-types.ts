@@ -16,6 +16,11 @@ import {
 } from "~/lib/production/progress";
 import { tailWindow } from "~/lib/page-window";
 import { asRecord } from "~/lib/is-record";
+import {
+  normalizeHumanRating,
+  normalizeHumanVerdict,
+  type HumanVerdict,
+} from "~/lib/production/review-types";
 
 /** 点头粒度：全自动 / 每阶段确认 / 逐镜确认。默认 `stage`。 */
 export type ApprovalMode = "auto" | "stage" | "shot";
@@ -223,6 +228,10 @@ export interface ShotRunView {
   rev: number;
   hasImage: boolean;
   hasClip: boolean;
+  /** 人工裁决（#2480）：`rev` 快照与镜头当前 rev 相等才新鲜（有效）。没裁决过 → null/缺省。 */
+  humanVerdict?: HumanVerdict | null;
+  /** 人工评分 0~5（#2480，校准读数的人侧输入）；没评 → null/缺省。 */
+  humanRating?: number | null;
 }
 
 /** 由整份 production 归一的规划视图。 */
@@ -233,6 +242,8 @@ export interface ProductionRunView {
   characterCount: number;
   shots: ShotRunView[];
   filmRendered: boolean;
+  /** 剧本人工裁决（#2480）：`digest` 快照与当前剧本指纹相等才新鲜（有效）。没裁决过 → null/缺省。 */
+  scriptHumanVerdict?: HumanVerdict | null;
 }
 
 /** production 行的最浅读法（字段都可能是未知 JSON，这里宽容读）。 */
@@ -241,6 +252,7 @@ export interface ProductionLike {
   characters?: unknown;
   shots?: unknown;
   progress?: unknown;
+  scriptReview?: unknown;
 }
 
 /**
@@ -271,6 +283,8 @@ export function toRunView(
         typeof rec.rev === "number" && Number.isFinite(rec.rev) ? rec.rev : 0,
       hasImage: Boolean(rec.imageUrl),
       hasClip: Boolean(rec.clipUrl),
+      humanVerdict: normalizeHumanVerdict(rec.humanVerdict),
+      humanRating: normalizeHumanRating(rec.humanRating),
     });
   }
   const characters =
@@ -281,12 +295,14 @@ export function toRunView(
     typeof production?.scriptMarkdown === "string"
       ? production.scriptMarkdown
       : "";
+  const scriptReviewRaw = asRecord(production?.scriptReview);
   return {
     hasScript: script.trim().length > 0,
     scriptDigest: scriptDigestOf(script),
     characterCount: characters.length,
     shots,
     filmRendered: normalizeProductionProgress(production?.progress).rendered,
+    scriptHumanVerdict: normalizeHumanVerdict(scriptReviewRaw?.humanVerdict),
   };
 }
 
@@ -333,9 +349,15 @@ export function planNextRunAction(
   // 剧本质量闭环（FR-QA-07 ④ · #2478）：剧本指纹 ≠ 评审收口快照 → 待评审（首评 =
   // 快照还是空串，同样命中）；评审提出改写 → 先定向改写（改完剧本变 → 指纹变 → 回到待评审）。
   // 「人机接力」靠同一把指纹：人改剧本 → 指纹变 → AI 从人改的版本继续评。
+  // 人工裁决优先（#2480）：人拍板「通过」且剧本此后没变过（裁决快照 digest = 当前指纹）
+  // → 视为已收口，AI 不再评；人否决不产生豁免（不收口，AI 循环照跑——改写后指纹变，
+  // 旧裁决自然失效）。
   if (run.autoReview) {
     if (run.scriptRevisionPending) return { kind: "revise_script" };
-    if (run.scriptReviewDigest !== view.scriptDigest)
+    const humanApproved =
+      view.scriptHumanVerdict?.pass === true &&
+      view.scriptHumanVerdict.digest === view.scriptDigest;
+    if (run.scriptReviewDigest !== view.scriptDigest && !humanApproved)
       return { kind: "review_script" };
   }
   if (view.characterCount === 0) return { kind: "extract_characters" };
@@ -359,9 +381,27 @@ export function planNextRunAction(
     return { kind: "render_images", shotIds: needImage };
   // 自动评审：图齐后，把「已出图但评审定稿快照落后于当前 rev」的镜头纳入待评审。
   // 评审不合格的抽卡会抬高该镜 rev → 重新出现在 needImage → 重出后再评，直到通过或达上限。
+  // 人工裁决优先（#2480 · FR-AG-02 质量停点由人拍板）：
+  //   · 人通过且快照新鲜（humanVerdict.rev = 当前 rev）→ 定稿，AI 不再评（AI 再红也算过）；
+  //   · 人否决且快照新鲜 → 即使 AI 已定稿也拉回评审循环——执行器把否决当不合格、
+  //     抽卡重出（抬 rev）→ 旧裁决随 rev 失效、AI 评审兜底接管，不会死循环；
+  //     达 `REVIEW_MAX_RETRY` 上限后保留当前结果（与 AI 侧「达上限转人工」同口径），
+  //     人的出路是改镜头（rev 变 → 裁决失效）或点「通过」（定稿放行）。
   if (run.autoReview) {
     const needReview = view.shots
-      .filter((s) => s.hasImage && (run.reviewedShotRev[s.id] ?? -1) < s.rev)
+      .filter((s) => {
+        if (!s.hasImage) return false;
+        const human = s.humanVerdict;
+        if (human?.pass === true && human.rev === s.rev) return false;
+        if ((run.reviewedShotRev[s.id] ?? -1) >= s.rev) {
+          return (
+            human?.pass === false &&
+            human.rev === s.rev &&
+            (run.reviewAttempts[s.id] ?? 0) < REVIEW_MAX_RETRY
+          );
+        }
+        return true;
+      })
       .map((s) => s.id);
     if (needReview.length > 0)
       return { kind: "review_shots", shotIds: needReview };
