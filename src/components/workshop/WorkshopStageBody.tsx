@@ -23,6 +23,7 @@ import { ErrorBoundary } from "~/components/ui/error-boundary";
 import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
+import { ScriptReviewButton } from "~/components/workshop/ScriptReviewButton";
 import { StageHint } from "~/components/workshop/StageHint";
 import { DraftIntegrityHint } from "~/components/workshop/DraftIntegrityHint";
 import { STAGE_DEFS } from "~/components/workshop/stage-config";
@@ -227,6 +228,8 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       场景 {scenes.length}
                     </span>
                   )}
+                  {/* 剧本评审闭环入口（FR-QA-07 ④ · #2478）：改写成功把新剧本喂回编辑器。 */}
+                  <ScriptReviewButton onScriptRevised={setScriptMarkdown} />
                   <Button
                     type="button"
                     variant="gradient"
