@@ -56,6 +56,20 @@ describe("resolveTaskTemperature", () => {
     expect(TASK_TYPES.code.defaultTemperature).not.toBe(0.7);
   });
 
+  it("review 档（FR-QA-07）：低温档位存在，评审走它的推荐默认/用户覆盖", () => {
+    expect(TASK_TYPES.review.defaultTemperature).toBeLessThanOrEqual(0.2);
+    expect(
+      resolveTaskTemperature({ taskType: "review", overrides, fallback: 0.7 }),
+    ).toBe(TASK_TYPES.review.defaultTemperature);
+    expect(
+      resolveTaskTemperature({
+        taskType: "review",
+        overrides: { ...overrides, review: 0.05 },
+        fallback: 0.7,
+      }),
+    ).toBe(0.05);
+  });
+
   it("没传任务类型 → 显式温度优先于全局默认；都没有则回落全局", () => {
     expect(
       resolveTaskTemperature({ explicitTemperature: 0.5, fallback: 0.7 }),

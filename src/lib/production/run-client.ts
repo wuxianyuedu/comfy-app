@@ -98,6 +98,12 @@ export async function reviewCharacter(
   return res.verdict;
 }
 
+/** 评审整份剧本（FR-QA-07 ② · #2477），返回判定（服务端已落库到 `production.scriptReview` 列）。 */
+export async function reviewScript(projectId: string): Promise<ReviewVerdict> {
+  const res = await vanillaApi.run.reviewScript.mutate({ projectId });
+  return res.verdict;
+}
+
 /**
  * 评审不合格后的重生成（镜头）：gacha=同提示词换种子重出，reprompt=据评审意见改写提示词再重出。
  * 服务端把镜头退回（rev 自增）交规划器重新纳入；本函数只负责发起 + 落库，不主动起 run。
