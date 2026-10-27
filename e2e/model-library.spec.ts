@@ -1,29 +1,28 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * 模型库在真浏览器里的冒烟（@critical）。
+ * 模型库在真浏览器里的冒烟（@critical）——挂的是 `studio/ModelLibrary`
+ * （工作区管理版，ISSUE #2433 之后 /models 只此一份实现）。
  *
- * 只判**不依赖模型数据**的事：这一屏装配起来了、筛选档位齐不缺、页面上不再存在
- * 指向不存在路由的卡片链接。「没有可用模型」与「有一堆模型」两种库状态下这两条
- * 都必须成立，所以不写 if 分支 —— 分支型断言在另一支上会静默不跑。
+ * 只判**不依赖模型数据**的事。E2E 环境的模型库是空的（数据来自批量 tRPC 查询，
+ * `route.fulfill` 喂不进客户端 —— 试过三种形状都不落地，记在旧版文件头的那堵墙；
+ * 真端点在本机也返回空列表），而筛选排**有意只在有数据时渲染**（空库时它只剩
+ * 孤零零一枚「全部 (0)」—— `ModelLibrary.tsx` 里那行注释），所以这里锚的是
+ * 空库状态下仍然成立的形状：页头在、顶栏动作在、空态与它唯一的出口在、
+ * 页面上不存在指向不存在路由的卡片链接。筛选档位的角色语义由 jsdom 侧
+ * `studio/ModelLibrary.test.tsx` 承担 —— 它能桩数据，锚的是同一套 role。
  *
- * 为什么没有「点卡片开详情」这条：这一屏的数据来自**批量** tRPC 查询（URL 形状是
- * `/api/trpc/model.list,model.list?batch=1`，两个调用者共用一批），而 `route.fulfill`
- * 喂不进客户端。实测试过三种形状都不落地，记在这里免得重复试：
- *   · 单对象 `{result:{data:{json}}}` → 卡片 0；
- *   · 数组、长度 = 批内调用数 → 卡片 0；
- *   · 下标对象 `{0:…,1:…}` → 卡片 0。
- * 真端点在本机也返回空列表（库里没有 `isAvailable=true` 的行），所以「看到空列表」
- * 不能用来证明桩生效。与队列屏 e2e 卡住的是同一堵墙。
+ * 此前这里断的是已退役的浏览版（筛选档位七枚 + 「同步模型」按钮）—— #2433
+ * 换页没带 E2E 同批更新，而这一格的唯一执行者在每日档（§13.5.21），PR 上不跑，
+ * 红被 stage-7 生产构建的红（#2464）遮了两晚才露出来（ISSUE #2486）。
  *
- * 卡片 → 详情这条接线由 jsdom 那侧守着，而且守得更硬：
- *   `ModelCard.test.tsx` 断言渲染结果里不存在 `a[href^="/models/"]`（那条路由从来
- *   不存在，此前每张卡都是 404），并断言点卡片会把这一条模型交出去；
- *   `ModelLibrary.test.tsx` 断言点「放大」下发 `UPSCALE`、点卡片后弹窗里是**这一条**
- *   的文件名与「不知道」的基座。
+ * 「没有可用模型」与「有一堆模型」两种库状态下，死链那条都必须成立，所以它
+ * 不写 if 分支 —— 分支型断言在另一支上会静默不跑。
  */
 test.describe("模型库 @critical", () => {
-  test("这一屏装配起来了，且筛选档位里「放大」在", async ({ page }) => {
+  test("这一屏装配起来了：页头、顶栏动作与内容区（空态或筛选排）都在", async ({
+    page,
+  }) => {
     await page.goto("/models");
     /* 页头名字**只有一处能改**：注册表 `NavItems.tsx` 里这一项
      * `label: "模型"`（`viewLabel` 缺省），`pageHeaderTitle()` 出的就是它。
@@ -32,39 +31,36 @@ test.describe("模型库 @critical", () => {
      * `tests/page-name-single-source.test.ts` 守着（ISSUE #1423）。 */
     await expect(page.getByRole("heading", { name: "模型" })).toBeVisible();
 
-    /* 「放大」此前只存在于类型标签表、筛选档位里没有它 —— 那一类模型看得见却筛不出来。
-       档位由标签表派生之后它才出现在界面上。逐档点名，少一档即红。
+    /* 顶栏动作（`ViewActions`；本页不在 AppShell 里，它退化成屏内右对齐一行）：
+     * 目录配置入口与搜索框。空库与有数据两种状态下这两颗**都在** —— 找不到
+     * 目录是配置问题，入口不能跟着数据一起消失。 */
+    await expect(
+      page.getByRole("button", { name: "模型目录配置" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "搜索模型名称" }),
+    ).toBeVisible();
 
-       锚的是**单选语义那一层**：一排里只能选一个，所以这排是
-       `role="radiogroup"`（带 `aria-label`）+ 每枚 `role="radio"` + `aria-checked`，
-       角色由 `ui/select-chip` 写死、不随外观档变。与 jsdom 那侧
-       `ModelLibrary.test.tsx` 用的是同一个口径 —— 两侧都锚角色，样式换档不会假红，
-       而语义真的掉了会红。默认选中档必须是「全部」，否则进屏就看不全列表。 */
-    const filters = page.getByRole("radiogroup", { name: "按类型筛选模型" });
-    for (const label of [
-      "全部",
-      "大模型",
-      "LoRA",
-      "控制网",
-      "VAE",
-      "嵌入",
-      "放大",
-    ]) {
-      await expect(
-        filters.getByRole("radio", { name: label }),
-        `缺筛选档位「${label}」`,
-      ).toBeVisible();
-    }
-    await expect(filters.getByRole("radio", { name: "全部" })).toBeChecked();
+    /* 内容区的形状随库状态分两支，`or()` 让两支都写进断言、哪支在场判哪支
+     * （不写 if —— 分支型断言在另一支上会静默不跑）：
+     *   · 空库 ⇒ 空态（说「为什么空」）+「去配置目录」出口（同步走后台自动，
+     *     没有「同步模型」钮 —— 那是浏览版的形状，ISSUE #2486）；
+     *   · 有数据 ⇒ 筛选排（radiogroup「按类型筛选模型」，空库时它有意不渲染
+     *     —— 空库只剩一枚「全部 (0)」，`ModelLibrary.tsx` 里那行注释）。 */
+    await expect(
+      page
+        .getByText("模型库还没有内容")
+        .or(page.getByRole("radiogroup", { name: "按类型筛选模型" })),
+    ).toBeVisible();
   });
 
   test("页面上不存在指向 /models/xxx 的链接（那条路由不存在）", async ({
     page,
   }) => {
     await page.goto("/models");
-    /* 有数据时卡片是按钮、没数据时压根没有卡 —— 两种库状态下这条都该成立。 */
+    /* 有数据时卡片是按钮、没数据时压根没有卡 —— 两种库状态下这条都该成立。
+     * `studio/ModelLibrary` 的卡片同样不下发 `/models/<id>` 链接
+     * （jsdom 侧的对应断言随浏览版一起退役了，这条在真浏览器里接着守）。 */
     await expect(page.locator('a[href^="/models/"]')).toHaveCount(0);
-    /* 「同步模型」这一出口恒在：空库时它是用户唯一能做的事。 */
-    await expect(page.getByRole("button", { name: "同步模型" })).toBeVisible();
   });
 });
