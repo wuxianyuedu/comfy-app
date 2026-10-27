@@ -30,7 +30,7 @@ import { useScriptReview } from "./hooks/use-script-review";
 
 /** 剧本 rubric 的维度 key → 人读名（分数条与曲线的展示用）。 */
 const SCRIPT_DIMENSIONS = new Map(
-  rubricFor("script").dimensions.map((d) => [d.key, d.label]),
+  (rubricFor("script")?.dimensions ?? []).map((d) => [d.key, d.label]),
 );
 
 /** 一条判定里的维度分数条：key 有 rubric 名用名，没有（模型自造维度）就原样展示。 */

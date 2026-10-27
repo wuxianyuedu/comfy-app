@@ -234,9 +234,9 @@ describe("reviseScript", () => {
     const row = await productionRepository.getForUser(USER, PROJ);
     expect(row?.scriptMarkdown).toBe("## 场景1 · 改写后的剧本");
     const state = normalizeScriptReviewState(row?.scriptReview);
-    expect(state.revisions).toEqual([
-      { at: expect.any(String), markdown: "## 场景1 · 旧版剧本" },
-    ]);
+    expect(state.revisions).toHaveLength(1);
+    expect(state.revisions[0]?.markdown).toBe("## 场景1 · 旧版剧本");
+    expect(state.revisions[0]?.at).toBeTruthy();
     // 判定与轮次曲线不受留档影响
     expect(state.review).not.toBeNull();
     // 改写也走 review 温度档
