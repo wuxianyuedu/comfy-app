@@ -36,6 +36,7 @@ import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
+/** @param {string[]} argv */
 function parseArgs(argv) {
   let full = false;
   const passthrough = [];
@@ -47,17 +48,16 @@ function parseArgs(argv) {
 }
 
 /**
- * Detect a test-name filter in passthrough args (`-t <pat>` / `-t=<pat>` /
- * `--testNamePattern[=<pat>]`). A zero-hit filter exits 0 in vitest — the same
- * shape as a real green (ISSUE #2400), so the runner pairs the run with a junit
- * file to tell "N executed, all passed" apart from "nothing matched".
+ * 透传参数里有没有名称过滤（`-t <pat>` / `-t=<pat>` / `--testNamePattern[=<pat>]`）。
+ *
+ * vitest 对「一条都没命中」照退 0 —— 与真绿在退出码上逐字同形（ISSUE #2400）。
+ * 所以带过滤的一跑要配一份 junit，把「执行了 N 条全过」与「根本没命中」分开。
  *
  * @param {string[]} args
  * @returns {boolean}
  */
 export function hasNameFilter(args) {
-  for (let i = 0; i < args.length; i += 1) {
-    const a = args[i];
+  for (const a of args) {
     if (a === "-t" || a === "--testNamePattern") return true;
     if (a.startsWith("-t=") || a.startsWith("--testNamePattern=")) return true;
   }
@@ -65,10 +65,9 @@ export function hasNameFilter(args) {
 }
 
 /**
- * Executed (= collected − skipped) test count from a vitest junit XML.
- * With a name filter, non-matching tests are reported as skipped, so a zero-hit
- * filter reads as `tests === skipped` while exit code is 0. Returns null when
- * the file holds no suite node (parse failure must not fake a count).
+ * junit 里的「执行了几条」= Σ tests − Σ skipped。带名称过滤时，未命中的用例被
+ * vitest 记成 skipped（实测形状：`tests="9" skipped="9"` 而退出码 0），所以
+ * 0 命中读作 0。suite 节点都不在 ⇒ null —— 解析失败不许冒充 0。
  *
  * @param {string} xml
  * @returns {number | null}
@@ -98,10 +97,9 @@ function main() {
     return 1;
   }
   const args = ["exec", "vitest", "run"];
-  /* Zero-hit name filters exit 0 (ISSUE #2400): pair the run with a junit file
-   * (default reporter keeps the live terminal output) so the runner can tell
-   * "0 matched" apart from a real green. Skipped when the caller brings their
-   * own reporter/outputFile — rewriting those would change what they asked for. */
+  /* 「-t 零命中也退 0」（ISSUE #2400）：这一跑配一份 junit（default reporter 保住
+   * 实时终端输出），跑完回读才知道是「0 条命中」还是真绿。调用方自带
+   * reporter / outputFile 时不改写 —— 那是人家点名要的形态，改了就是另一件事。 */
   const filterUsed = hasNameFilter(passthrough);
   const ownReporter =
     passthrough.some((a) => a.startsWith("--reporter")) ||
@@ -157,8 +155,8 @@ function main() {
   const code = result.status ?? 1;
   console.log("");
   if (code === 0) {
-    /* Name-filter runs: read the paired junit back before saying "green" —
-     * a zero-hit filter would otherwise be indistinguishable from a pass. */
+    /* 带过滤的一跑：说「绿」之前先回读配对的 junit ——
+     * 不然「0 条命中」与「全过」在终端里逐字同形。 */
     if (filterUsed && !ownReporter) {
       let xml = null;
       try {
@@ -169,7 +167,7 @@ function main() {
       try {
         fs.rmSync(junitPath, { force: true });
       } catch {
-        /* Best-effort cleanup; the read above already got what we need. */
+        /* 尽力清理；上面那一步读到了就够用，删不掉不值得拦路。 */
       }
       const executed = xml === null ? null : junitExecutedCount(xml);
       if (executed === 0) {
@@ -194,11 +192,9 @@ function main() {
   return code;
 }
 
-/* Only run main when executed directly. Importing this module (tests read the
- * pure helpers above) must not spawn a nested vitest run — the unguarded
- * process.exit(main()) used to do exactly that inside the importing worker
- * (ISSUE #2400 test harness hit it live: the "full suite" was a vitest run
- * nested inside another vitest worker). */
+/* 只在被直接执行时跑 main。被 import 时（测试要读上面的纯函数）不得再起
+ * 一轮嵌套的 vitest —— 此前没有这道守卫，import 它会在导入方 worker 里
+ * process.exit(main())：本单开发时真撞上（那两轮"全量套件"就是嵌套跑的输出）。 */
 if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
