@@ -75,7 +75,7 @@
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@formkit/auto-animate": "^0.10.0",
-    "@hookform/resolvers": "^5.9.2",
+    "@hookform/resolvers": "^6.0.1",
     "@libsql/client": "^0.18.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@paralleldrive/cuid2": "^3.3.0",
@@ -94,10 +94,10 @@
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.4.0",
-    "dompurify": "3.4.16",
+    "dompurify": "3.4.17",
     "drizzle-orm": "^0.45.4",
     "lucide-react": "^1.61.0",
-    "marked": "18.0.14",
+    "marked": "18.1.2",
     "next": "^16.4.3",
     "next-themes": "^0.4.6",
     "pino": "^10.4.0",
@@ -120,10 +120,10 @@
     "@eslint/compat": "2.1.1",
     "@next/bundle-analyzer": "^16.4.3",
     "@playwright/test": "^1.64.1",
-    "@storybook/addon-a11y": "10.6.1",
-    "@storybook/addon-docs": "10.6.1",
-    "@storybook/addon-themes": "10.6.1",
-    "@storybook/nextjs": "10.6.1",
+    "@storybook/addon-a11y": "10.6.4",
+    "@storybook/addon-docs": "10.6.4",
+    "@storybook/addon-themes": "10.6.4",
+    "@storybook/nextjs": "10.6.4",
     "@tailwindcss/postcss": "^4.3.3",
     "@tauri-apps/cli": "^2.12.4",
     "@testing-library/dom": "^10.4.2",
@@ -152,7 +152,7 @@
     "prettier": "^3.9.10",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "shadcn": "^4.22.1",
-    "storybook": "10.6.1",
+    "storybook": "10.6.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typedoc": "^0.28.20",
@@ -165,6 +165,6 @@
   },
   "packageManager": "pnpm@12.4.1",
   "engines": {
-    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+    "node": ">=26.12.1"
   }
 }

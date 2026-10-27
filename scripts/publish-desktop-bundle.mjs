@@ -149,7 +149,7 @@ export function collectBundles(bundleDir) {
  *
  * CI 上 `CNB_BUILD_ID` 就是那一跑的身份；本机没有它，退到 UTC 时刻（可排序、不会撞）。
  *
- * @param {{sha?: string, buildId?: string, now?: Date}}
+ * @param {{sha?: string, buildId?: string, now?: Date}} [input]
  * @returns {string}
  */
 export function buildLabel({ sha, buildId, now = new Date() } = {}) {
