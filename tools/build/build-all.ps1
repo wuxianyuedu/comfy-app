@@ -2,11 +2,18 @@
 <#
 build-all.ps1 — 一键发布构建入口（原 tools\build\build-all.bat，逻辑在 tools\scripts\）
 
-编排一步：
-  1) tools\scripts\build-tauri-release.ps1 —— 构建 release 版 Tauri 壳（app.exe）
+编排两步（逻辑在 tools\scripts\build-all.ps1，口径见规范 launch-and-build.md §7.0 / §7.7）：
+  1) `pnpm tauri build` —— 整条桌包链：`build-desktop.mjs`（`pnpm build` → 装配 static
+     → sidecar）→ cargo 编译 → bundle，产出**安装包**（nsis / msi）
+  2) `node scripts/publish-desktop-bundle.mjs` —— 把安装包发布到**常驻目录**
+     （`<store 所在卷>\ci-artifacts\<包名>`）：一份一个目录 + `manifest.json`，
+     `latest.txt` 只是指针文件，轮转留最近 2 份
 
-产物 `src-tauri\target\release\app.exe` 就是**唯一**的启动入口：编排（dev server /
-端口 / 缓存 / 回收）由壳自己承担，不再打包第二层启动器 exe（ISSUE #784）。
+产物：`src-tauri\target\release\app.exe`（启动入口）+ `src-tauri\target\release\bundle\**`
+（安装包）+ 常驻目录里那一份（构建结束后仍然取得到）。
+
+`app.exe` 仍是**唯一**的启动入口：编排（dev server / 端口 / 缓存 / 回收）由壳自己承担，
+安装包只是它的分发形态，不再打包第二层启动器 exe（ISSUE #784）。
 
 用法：
   双击 <项目根>\tools\build\build-all.ps1
