@@ -119,9 +119,9 @@ import {
 import {
   cleanBranch,
   createOrReusePull,
-  pollUntilTerminal,
   reportVerdict,
 } from "../scripts/ship-platform.mjs";
+import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
 import { closeIssues } from "../scripts/ship-close.mjs";
 import { readIssueBody } from "../scripts/ship-issue-new.mjs";
 import {
