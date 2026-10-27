@@ -26,14 +26,21 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  COLORS,
   SKIP_MARKERS,
   TAGS,
+  bandLine,
+  colorEnabled,
+  colorizeLine,
   gateFail,
   gatePass,
   gateSkip,
   indentItems,
   looksSkipped,
+  paint,
+  renderTally,
   renderVerdict,
+  stateOfLine,
   summarize,
 } from "../scripts/ci-log.mjs";
 
@@ -165,5 +172,97 @@ describe("没有证据就不打红（屏幕上不许出现「命中 0 条」的�
 
   it("只有空白项时按空清单算（它渲染出来也是一行空的）", () => {
     expect(gateFail("x", ["", "  "])).toBe("ok");
+  });
+});
+
+describe("颜色：只是附加，删掉色号必须逐字等于不着色的那一份", () => {
+  it("三态各自的色号与标签同键，且互不相同", () => {
+    expect(Object.keys(COLORS).sort()).toEqual(Object.keys(TAGS).sort());
+    expect(new Set(Object.values(COLORS)).size).toBe(3);
+  });
+
+  it("着色不碰内容（删光 SGR 序列后与原文逐字相同）", () => {
+    const text = "[红] 跨文件重复块 · src/**（命中 2 条）";
+    const colored = paint(text, COLORS.red, true);
+    expect(colored).not.toBe(text);
+    expect(colored.replace(/\u001b\[[\d;]*m/g, "")).toBe(text);
+  });
+
+  it("色带只加一个前导竖线与一格空白，不动行内任何一格", () => {
+    const { line } = bandLine("[skip] 生成态文档与源同步（没判）");
+    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe(
+      "▌ [skip] 生成态文档与源同步（没判）",
+    );
+  });
+
+  it("色带认三态前缀取色，认不出的行用中性灰（不沿用上一条的颜色）", () => {
+    expect(bandLine("[红] x").color).toBe(COLORS.red);
+    expect(bandLine("[ok] x").color).toBe(COLORS.ok);
+    expect(bandLine("    a.ts ⇄ b.ts").color).toBe("90");
+  });
+
+  it("关掉着色时一个字节都不加（重定向 / NO_COLOR 那一档）", () => {
+    expect(paint("x", COLORS.red, false)).toBe("x");
+    expect(bandLine("[红] x", { enabled: false }).line).toBe("[红] x");
+    expect(colorizeLine("[cp936] OK", false)).toBe("[cp936] OK");
+    expect(renderTally({ red: ["a"] }, { enabled: false }).line).toBe(
+      "[红] 合计 1 条：判过 0、没判 0、红 1\n      红  a",
+    );
+  });
+
+  it("colorEnabled：NO_COLOR 与「不是 TTY」都不上色", () => {
+    expect(colorEnabled({ env: {}, isTTY: true })).toBe(true);
+    expect(colorEnabled({ env: { NO_COLOR: "" }, isTTY: true })).toBe(false);
+    expect(colorEnabled({ env: {}, isTTY: false })).toBe(false);
+  });
+
+  it("逐行上色只染标签，不改变「这一行是不是判决」", () => {
+    const line = colorizeLine("[info] 命中输入面 3 个文件，生成并自检中…");
+    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe(
+      "[info] 命中输入面 3 个文件，生成并自检中…",
+    );
+    expect(line).not.toBe("[info] 命中输入面 3 个文件，生成并自检中…");
+  });
+
+  it("stateOfLine 认得出三态与判据自己的说法，`[warn]` 不算判决", () => {
+    expect(stateOfLine("[ok] x")).toBe("ok");
+    expect(stateOfLine("[skip] x")).toBe("skip");
+    expect(stateOfLine("[红] x")).toBe("red");
+    expect(stateOfLine("  √ [format] OK")).toBe("ok");
+    expect(stateOfLine("  × 3 处违规")).toBe("red");
+    expect(stateOfLine("[warn] 只是读得出来")).toBeNull();
+  });
+
+  it("调用方给了 out ⇒ 交出去的仍是干净文本（跑批靠它读回结论句）", () => {
+    const lines: string[] = [];
+    gatePass("a", "命中 0 条", { out: (l: string) => lines.push(l) });
+    expect(lines).toEqual(["[ok] a（命中 0 条）"]);
+  });
+});
+
+describe("收尾清单：一次跑批在最后把自己这一轮的账念成一块", () => {
+  it("红在里面时整块按红算，且逐个点名", () => {
+    const { line, color } = renderTally(
+      { ok: ["格式化"], skip: ["镜像同批"], red: ["函数长度", "跨文件重复块"] },
+      { enabled: false },
+    );
+    expect(line.split("\n")).toEqual([
+      "[红] 合计 4 条：判过 1、没判 1、红 2",
+      "      红  函数长度",
+      "      红  跨文件重复块",
+      "      没判  镜像同批",
+    ]);
+    expect(color).toBe(COLORS.red);
+  });
+
+  it("没判不许被折进「判过」那一格里数掉", () => {
+    const { line } = renderTally({ skip: ["a"] }, { enabled: false });
+    expect(line.split("\n")[0]).toBe("[skip] 合计 1 条：判过 0、没判 1、红 0");
+  });
+
+  it("全绿时是 [ok]，且不点任何名字", () => {
+    expect(renderTally({ ok: ["a", "b"] }, { enabled: false }).line).toBe(
+      "[ok] 合计 2 条：判过 2、没判 0、红 0",
+    );
   });
 });
