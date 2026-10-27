@@ -66,6 +66,14 @@ const OUT_REL = "docs/api";
 const OUT_ABS = path.join(ROOT, OUT_REL);
 const TAG = "[docs-api]";
 
+/* 判决行（绿 / 没跑 / 红）走 `scripts/ci-log.mjs` 的三态出口（ISSUE #2506 的收口，
+ * 同族判据早已迁过去）；中间读数（命中输入面 / typedoc 进度）走 `[info]` 一档 ——
+ * 标签本身带色，而结论行按三态带色与色带，一屏里不必逐字读就知道哪一行是判决。
+ * 这一格的 `[info]` 从前是裸 `console.log`，在平台日志里与「通过」同一种灰。 */
+const { gateFail, gatePass, gateSkip } = require("./ci-log.mjs");
+/** 中间读数：不是判决，但也不是噪音（`[info]` 标签在色带里认得出）。 */
+const info = (text) => console.log(`[info] ${text}`);
+
 /**
  * **闭包叶子集** —— typedoc 输入面的「根外」那一部分（ISSUE #2223）。
  *
@@ -373,16 +381,20 @@ function judgeTypedocTail(log) {
 
 /** typedoc 生成失败时的取证与修法（话术与「退出码不可信」那条现场绑在一起）。 */
 function reportTypedocFailure(reason, log) {
-  console.error(`${TAG} ✗ typedoc 生成失败（拿不到可用的产物）：${reason}`);
+  /* 诊断（「退出码不可信」那条注 + typedoc 自己的日志）**打在上面**，判决扫一眼就在
+   * 最后一行 —— 三态出口的规矩是「一条判决一行」，而这里给读者的第一动作是「先跑一遍
+   * generate-api-docs.mjs 看真因」，所以 `hint` 跟着判决走。 */
   console.error(
-    `${TAG} 注：typedoc 的退出码不可信 —— 「退出 0 + 日志写 html generated +` +
-      ` 产物一个没更新」是见过的现场，所以这里按产物判、失败自动重试。`,
+    `${TAG} 注：typedoc 的退出码不可信 —— 退出 0 而产物一个没更新是见过的现场。`,
   );
   if (log) console.error(log);
-  console.error(
-    `${TAG} 修法：先 node scripts/generate-api-docs.mjs 单独跑一遍看原因` +
-      `（占用类失败等一等就过）。`,
-  );
+  gateFail("API 文档生成与自检", [reason], {
+    subject: "docs/api/**",
+    detail: "typedoc 生成失败（拿不到可用的产物）",
+    hint:
+      "先 node scripts/generate-api-docs.mjs 单独跑一遍看真因" +
+      "（占用类失败等一等就过）。",
+  });
 }
 
 async function main() {
@@ -394,7 +406,9 @@ async function main() {
     console.error(
       `${TAG} 而「自动修 + 再判」这个形状，正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）。`,
     );
-    console.error(`${TAG} 现在这一格是「生成一份 + 自检」，判的是产物本身可不可用。`);
+    console.error(
+      `${TAG} 现在这一格是「生成一份 + 自检」，判的是产物本身可不可用。`,
+    );
     process.exit(1);
   }
 
@@ -402,11 +416,16 @@ async function main() {
   if (staged) {
     const hits = matchedInputs(stagedFiles());
     if (!hits.length) {
-      console.log(`${TAG} ✓ 本次提交未触及 typedoc 输入面，跳过。`);
+      /* 「未触及输入面」是**这一轮没判**，不是「判过且干净」—— 三态里它是 `skip`
+       * （判据的读数里带「按面未触及」时 `gatePass()` 也会自动降级，这里显式打）。 */
+      gateSkip(
+        "API 文档生成与自检",
+        "按面未触及：本次改动不在 typedoc 输入面里",
+      );
       return;
     }
-    console.log(
-      `${TAG} 命中输入面 ${hits.length} 个文件（${hits
+    info(
+      `命中输入面 ${hits.length} 个文件（${hits
         .slice(0, 3)
         .join(", ")}${hits.length > 3 ? ", …" : ""}），生成并自检中…`,
     );
@@ -420,20 +439,31 @@ async function main() {
 
   const verdict = judgeTypedocTail(res.log);
   if (verdict.problems.length > 0) {
-    console.error(`${TAG} ✗ ${verdict.problems.join("；")}`);
+    gateFail("API 文档生成与自检", verdict.problems, {
+      subject: "docs/api/**",
+      detail: "typedoc 的日志里读不到这一格的结论",
+    });
     process.exit(1);
   }
 
   const typedocCfg = await loadTypedocConfig();
-  const { problems, files, modulePages } = judgeProduct(OUT_ABS, ROOT, typedocCfg);
+  const { problems, files, modulePages } = judgeProduct(
+    OUT_ABS,
+    ROOT,
+    typedocCfg,
+  );
   if (problems.length > 0) {
-    console.error(`${TAG} ✗ 生成成功，但这份产物不可用（${problems.length} 处）：`);
-    for (const p of problems) console.error(`${TAG}   · ${p}`);
+    gateFail("API 文档生成与自检", problems, {
+      subject: "docs/api/**",
+      detail: `生成成功，但产物不可用（${problems.length} 处）`,
+      hint: "产物不进 git ⇒ 没有「自动修完再提交」的对象；修的是生成侧（typedoc 配置 / 源文件的类型）。",
+    });
     process.exit(1);
   }
-  console.log(
-    `${TAG} ✓ API 文档已生成并自检通过：${files} 份产物（${modulePages} 个模块页）` +
-      ` → ${OUT_REL}/（不在 git 里，CI 各跑各的）`,
+  gatePass(
+    "API 文档生成与自检",
+    `已生成并自检通过：${files} 份产物（${modulePages} 个模块页）→ ${OUT_REL}/（不在 git 里）`,
+    { subject: "docs/api/**" },
   );
 }
 
