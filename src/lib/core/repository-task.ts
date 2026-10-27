@@ -473,6 +473,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   createImages: TaskRepoImpl["createImages"] = (taskId, images) =>
     impl.createImages(taskId, images);
+
+  /** 按 id 读一张产物图（连带 task 归属校验用）；不存在 → null。（#2480） */
+  findImageById: TaskRepoImpl["findImageById"] = (imageId) =>
+    impl.findImageById(imageId);
+
+  patchImageFeedback: TaskRepoImpl["patchImageFeedback"] = (imageId, data) =>
+    impl.patchImageFeedback(imageId, data);
 }
 
 export const taskRepository = new TaskRepository();

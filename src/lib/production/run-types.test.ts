@@ -7,6 +7,7 @@ import {
   markActionProcessed,
   normalizeProductionRun,
   planNextRunAction,
+  REVIEW_MAX_RETRY,
   RUN_LOG_LIMIT,
   scriptDigestOf,
   toRunView,
@@ -96,6 +97,7 @@ describe("toRunView", () => {
       characterCount: 0,
       shots: [],
       filmRendered: false,
+      scriptHumanVerdict: null,
     });
   });
 
@@ -113,8 +115,22 @@ describe("toRunView", () => {
     expect(v.characterCount).toBe(3);
     expect(v.filmRendered).toBe(true);
     expect(v.shots).toEqual([
-      { id: "a", rev: 3, hasImage: true, hasClip: false },
-      { id: "b", rev: 0, hasImage: false, hasClip: true },
+      {
+        id: "a",
+        rev: 3,
+        hasImage: true,
+        hasClip: false,
+        humanVerdict: null,
+        humanRating: null,
+      },
+      {
+        id: "b",
+        rev: 0,
+        hasImage: false,
+        hasClip: true,
+        humanVerdict: null,
+        humanRating: null,
+      },
     ]);
   });
 
@@ -127,7 +143,14 @@ describe("toRunView", () => {
     expect(v.hasScript).toBe(false);
     expect(v.characterCount).toBe(0);
     expect(v.shots).toEqual([
-      { id: "a", rev: 0, hasImage: false, hasClip: false },
+      {
+        id: "a",
+        rev: 0,
+        hasImage: false,
+        hasClip: false,
+        humanVerdict: null,
+        humanRating: null,
+      },
     ]);
   });
 });
@@ -364,6 +387,141 @@ describe("planNextRunAction · 自动评审", () => {
         }),
       ),
     ).toEqual({ kind: "review_shots", shotIds: ["a"] });
+  });
+
+  // ── 人工裁决优先（FR-QA-07 人工侧 · #2480） ──
+  it("人工通过且快照新鲜 → 定稿（不纳入评审，AI 不再评）", () => {
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          characterCount: 1,
+          shots: [
+            {
+              id: "a",
+              rev: 1,
+              hasImage: true,
+              hasClip: false,
+              humanVerdict: { pass: true, note: "", at: "t", rev: 1 },
+            },
+          ],
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 1 },
+        }),
+      ),
+    ).toEqual({ kind: "render_film" });
+  });
+
+  it("人工否决且快照新鲜 → 即使 AI 已定稿也拉回评审（重出）", () => {
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          characterCount: 1,
+          shots: [
+            {
+              id: "a",
+              rev: 1,
+              hasImage: true,
+              hasClip: false,
+              humanVerdict: { pass: false, note: "崩了", at: "t", rev: 1 },
+            },
+          ],
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 1 },
+          reviewedShotRev: { a: 1 }, // AI 已定稿
+        }),
+      ),
+    ).toEqual({ kind: "review_shots", shotIds: ["a"] });
+  });
+
+  it("人工否决但已达重试上限 → 不再拉回（保留，转人工改/通过）", () => {
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          characterCount: 1,
+          shots: [
+            {
+              id: "a",
+              rev: 1,
+              hasImage: true,
+              hasClip: false,
+              humanVerdict: { pass: false, note: "还是崩", at: "t", rev: 1 },
+            },
+          ],
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 1 },
+          reviewedShotRev: { a: 1 },
+          reviewAttempts: { a: REVIEW_MAX_RETRY },
+        }),
+      ),
+    ).toEqual({ kind: "render_film" });
+  });
+
+  it("人工否决但镜头此后被改过（rev 变）→ 裁决作废，走 AI 评审循环", () => {
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          characterCount: 1,
+          shots: [
+            {
+              id: "a",
+              rev: 2,
+              hasImage: true,
+              hasClip: false,
+              humanVerdict: { pass: false, note: "崩了", at: "t", rev: 1 },
+            },
+          ],
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 2 },
+        }),
+      ),
+    ).toEqual({ kind: "review_shots", shotIds: ["a"] });
+  });
+
+  it("人工通过且剧本没变（digest 相等）→ 豁免剧本评审；剧本变过 → 不豁免", () => {
+    const viewFactory = (verdictDigest: string, scriptDigest: string) =>
+      view({
+        hasScript: true,
+        scriptDigest,
+        characterCount: 1,
+        shots,
+        scriptHumanVerdict: {
+          pass: true,
+          note: "",
+          at: "t",
+          digest: verdictDigest,
+        },
+      });
+    // 人拍板过且剧本此后没变 → 视为已收口（脚本指纹 = 收口快照 = 裁决快照）：
+    // 评审被跳过，规划器落到下一动作（补分镜）而不是 review_script
+    expect(
+      planNextRunAction(
+        viewFactory("d1", "d1"),
+        run({ status: "running", autoReview: true, scriptReviewDigest: "d1" }),
+      ),
+    ).toEqual({ kind: "plan_storyboard" });
+    // 剧本改过：裁决的 digest 落后（d1 ≠ 当前 d2）→ 重新评审
+    expect(
+      planNextRunAction(
+        viewFactory("d1", "d2"),
+        run({ status: "running", autoReview: true, scriptReviewDigest: "d1" }),
+      ),
+    ).toEqual({ kind: "review_script" });
   });
 });
 

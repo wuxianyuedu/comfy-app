@@ -251,4 +251,31 @@ export const taskRouter = createTRPCRouter({
       await taskRepository.delete(input.id);
       return { ok: true };
     }),
+
+  /**
+   * 人工评分 / 收藏一张产物图（FR-QA-07 人工侧 · #2480）：rating 0~5（null = 清除）、
+   * favorite 布尔。rating 是校准读数（`run.reviewCalibration`）的人侧输入；
+   * favorite 是「优秀样本进 few-shot」沉淀机制的输入。图不存在 → NOT_FOUND。
+   */
+  setImageFeedback: authedProcedure
+    .input(
+      z.object({
+        imageId: z.string().min(1),
+        humanRating: z.number().int().min(0).max(5).nullable(),
+        isFavorite: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const image = await taskRepository.findImageById(input.imageId);
+      if (image?.userId !== ctx.user.id)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "找不到这张产物图",
+        });
+      await taskRepository.patchImageFeedback(input.imageId, {
+        humanRating: input.humanRating,
+        isFavorite: input.isFavorite,
+      });
+      return { ok: true };
+    }),
 });

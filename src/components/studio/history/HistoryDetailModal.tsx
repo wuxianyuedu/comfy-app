@@ -19,6 +19,7 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
+import { ImageFeedbackRow } from "./ImageFeedbackRow";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -270,10 +271,19 @@ export function HistoryDetailModal({
                         <a
                           href={img.localPath}
                           download
-                          className="bg-surface-2 text-ink hover:bg-surface-2 text-2xs absolute right-2 bottom-2 rounded px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                          className="bg-surface-2 text-ink hover:bg-surface-2 text-2xs absolute top-2 right-2 rounded px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                         >
                           {isVideo(img.localPath) ? "下载视频" : "下载"}
                         </a>
+                        {/* 人工评分 + 收藏（FR-QA-07 人工侧 · #2480）：评分是校准
+                            读数的人侧输入，收藏是 few-shot 沉淀机制的输入。 */}
+                        <ImageFeedbackRow
+                          image={{
+                            id: img.id,
+                            humanRating: img.humanRating ?? null,
+                            isFavorite: img.isFavorite,
+                          }}
+                        />
                       </div>
                     ))}
                   </div>
