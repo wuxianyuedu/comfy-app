@@ -9,7 +9,7 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 它的边界在哪、以及哪几格仍然要人判断。要看全部旗标与阶段名就读 `scripts/ship.mjs` 的文件头
 （那里列了这一族各自的职责：`-core` 判断、`-args` 旗标层、`-build` build 取数、`-exec` 效应适配、`-platform` 平台侧三段 + 分支清理、
 `-poll` 轮询那一格、`-pull-body` PR 正文那一格、`-local` 本地两段、`-close` 关单、`-claim` 领取 / 结束 / 列表 / 建单分派、`-issue-new` 一步建单、
-`-diagnose` 只读诊断、`-preflight` 阶段 0，入口只做装配与收口）。
+`-diagnose` 只读诊断、`-stage-log` 只读取某一格的日志正文、`-preflight` 阶段 0，入口只做装配与收口）。
 
 ## 什么时候用
 
@@ -34,6 +34,7 @@ pnpm ship --claims                               # 列出自己领取中（state
 pnpm ship --branches                             # 只读：逐条本地分支给「落地了没有」（判据只有 PR 的 `is_merged`）—— 一次也不删，与任何显式动作同行退 2
 pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**当前 PR 分支**推一笔空提交重新派生流水线（平台侧没有 PR 重跑入口）
 pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
+pnpm ship --stage-log [cnb-xxx-yyy] <格名|格 id>   # 只读：念出某一格的日志正文（绿跑也能用）——按格名反查 stageId，认不出/命中多格退 2，不替你挑一格
 pnpm ship --new-issue "fix(x): …" --issue-body-file .git/issue.md --priority P1   # 一步建单：建 → 补提单人标签 → 独立回读（标题/正文人给）
 pnpm ship --whoami                               # 只读自查：这份检出的留痕短名 + 署名格式 + 手工补 PR 标签的粘贴命令
 pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上那批**残留进程（默认只念读数）
@@ -217,6 +218,11 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
     ISSUE #2304）；「没推进」要连续两眼才念得出 —— 基数落在 `.git/comfy-diagnose-last/<sn>.json`，
     签名不变 + 间隔 ≥ 10 分钟 + 没有一格在飞，三件同时成立才念「疑似派发未出勤」并把出口点成
     `pnpm ship --rerun-ci`；缺一件就仍念「还在跑」。它仍是 `2`，不改判据。
+    **绿跑里某一格念了什么**走同一读者的第二个入口：`pnpm ship --stage-log [<sn>] <格名|格 id>`
+    （#2455）。它按**格名逐字**反查 `stageId` —— 认不出或多格同名时退 `2` 并列出候选，
+    **不替你挑一格**（挑错的那一格也有日志、也带行号，看起来就像证据）。`0` 念的是
+    「正文取到了」，不等于「这一格绿了」；取数、归一与「按 sha 归属哪一跑」都和
+    `--diagnose` 共用同一份（§13.10.13）。
 
 ## 等 CI 那一格别空等：做一次回顾（规范 §13.10.14）
 
@@ -237,6 +243,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 | 「这条红是我的还是主干的」 | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                         |
 | 流水线终态                 | 平台 build 的 `data.status`                                                                                             |
 | CI 红在哪一格、失败行是什么 | `pnpm ship --diagnose [sn]`（只读取回；取数/归一只有 `ci-build-readout.mjs` 一份实现，归因仍归 `base-check.mjs`）        |
+| 绿跑里某一格念了什么 | `pnpm ship --stage-log [<sn>] <格名\|格 id>`（只读；按格名逐字反查，认不出/命中多格退 2 且列出候选，不替你挑一格；与 `--diagnose` 共用同一份取数与「按 sha 归属」）  |
 | 合没合上                   | PR 的 `is_merged` **且**回读解析出的主干基线顶端有没有那份碎片                                                          |
 | 这次变更挂在哪张单子上     | 阶段 0 的 `ticketReading()`：碎片文件名的号 + 首行段落（**读数，不改退码**）                                            |
 | 单子关没关上               | 本轮号跟验真的合并；人点名的号在本轮没合并时反查 `pulls list-pulls`（`closed` 里**逐条认 `is_merged`**，标题先剥 PR 尾数）。关完一次**独立的** `get-issue`：`state` / `state_reason` / `closed_at`（`update-issue` 的回执不算结论） |

@@ -21,6 +21,16 @@
  * @module scripts/ship-args — `pnpm ship` 的旗标解析层（纯函数，不摸世界）
  */
 /**
+ * 平台构建号的形状（`cnb-<短码>-<轮次>`，实测 `cnb-68q-1k5sc5kgq`）。
+ *
+ * `--stage-log` 靠它分「第一段是构建号还是格名」：构建号总是以 `cnb-` 打头并带第二个
+ * 连字符，而格名是中文/英文短语（`受影响用例`、`API 文档生成与自检`）或格 id（`stage-27`）。
+ * 认不出形状就**整串当格名** ⇒ 走「按 HEAD 归属」那一路，最坏落点是「没找到 pull_request
+ * 构建」那句明说的 2，而不是悄悄把构建号读成格名。
+ */
+const BUILD_SN_SHAPE = /^cnb-[a-z0-9]{2,}-[a-z0-9]{4,}$/i;
+
+/**
  * 一个命令行 token 是不是合法的 issue 号（`2179` 或 `#2179`）。不是就回 `null`。
  *
  * 「像不像号」只在这一处判：`--close-issue 2179` 与 `--close-issue=2179,2186` 两种写法共用它 ——
@@ -53,11 +63,17 @@ export function parseIssueNumberToken(token) {
  * 人点名这条 PR 之后，脚本仍去平台**回读那条 PR 的 `is_merged` 原值**才关 ⇒ 结论来自执行者，
  * 不来自人的断言（红线 ③：不另立判定）。号共用一套编号空间，所以复用 `parseIssueNumberToken`。
  *
+ * **`--stage-log [<sn>] <格名|格 id>`**（ISSUE #2455）：只读取「某一格念了什么」，绿跑也能用。
+ * 它后面跟的是**自由文本**（格名里有空格），所以把紧跟的非旗标 token 全收进来再拼 ——
+ * 只取一个 token 的话，未加引号的 `API 文档生成与自检` 会被切成两截，反查必然落空，
+ * 而落空给出的那句「这一跑没有这一格」会把人引去怀疑单子，不是怀疑命令行。
+ * 首段像构建号形状（`BUILD_SN_SHAPE`）才当构建号收下，否则整串都是格名（走按 HEAD 归属）。
+ *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],rerunCi:boolean,only:string|null,unknown:string[]}} */
   const out = {
     message: null,
     messageFile: null,
@@ -87,6 +103,10 @@ export function parseArgs(argv) {
     priority: null,
     diagnose: false,
     diagnoseSn: null,
+    stageLog: false,
+    stageLogSn: null,
+    stageLogRef: null,
+    stageLogBad: [],
     rerunCi: false,
     only: null,
     unknown: [],
@@ -121,6 +141,25 @@ export function parseArgs(argv) {
       out.diagnose = true;
       const tok = a.slice("--diagnose=".length);
       if (tok !== "") out.diagnoseSn = tok;
+    } else if (a === "--stage-log" || a.startsWith("--stage-log=")) {
+      /* 紧跟的是**自由文本**（格名里有空格：`API 文档生成与自检`），所以把非旗标的 token
+       * 全收进来再拼 —— 只取一个的话，未加引号的格名会被切成两截，反查必然落空，而落空
+       * 那句「这一跑没有这一格」会把人引去怀疑单子，不是怀疑命令行。
+       * 首段像构建号形状才当构建号（见 `BUILD_SN_SHAPE`）；否则整串都是格名 ⇒ 走按 HEAD 归属。 */
+      out.stageLog = true;
+      const toks = a.startsWith("--stage-log=")
+        ? [a.slice("--stage-log=".length)]
+        : [];
+      while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
+        toks.push(String(argv[++i] ?? ""));
+      }
+      if (toks.length > 0 && BUILD_SN_SHAPE.test(toks[0] ?? "")) {
+        out.stageLogSn = toks[0] ?? null;
+        toks.shift();
+      }
+      const ref = toks.join(" ").trim();
+      if (ref === "") out.stageLogBad.push("(缺点名哪一格)");
+      else out.stageLogRef = ref;
     } else if (a === "--rerun-ci") {
       out.rerunCi = true;
     } else if (a.startsWith("--new-issue=")) {

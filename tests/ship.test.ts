@@ -6026,3 +6026,289 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
     expect(log).toContain("换到 PR 分支");
   });
 });
+
+/**
+ * `--stage-log`（ISSUE #2455）：绿跑里取「某一格到底念了什么」。
+ *
+ * 判据落在四件事：
+ *   ① 按**格名**就能取到正文，带完整日志的行号（不必再手工拼 `pipelineId` / `stageId`，
+ *      那两条拼错不报错、读到的是另一格的日志）；
+ *   ② 认不出 / 命中多格 ⇒ 2，且**不替你挑一格**；
+ *   ③ 只读：一条写动作都不发；点了名就不再问构建列表（少一次平台请求，也少一处可能错的归属）；
+ *   ④ 缺格名 / 与写动作同行 ⇒ 2，且一条 build 命令都不发。
+ */
+describe("--stage-log：只读取某一格的日志正文（绿跑也能用）", () => {
+  const GREEN_BUILD = {
+    status: 200,
+    data: {
+      status: "success",
+      pipelinesStatus: {
+        "cnb-ggg-1k5q00001-001": {
+          id: "cnb-ggg-1k5q00001-001",
+          name: "质量门禁",
+          status: "success",
+          stages: [
+            { status: "success", name: "Prepare", id: "prepare" },
+            { status: "success", name: "受影响用例", id: "stage-9" },
+            { status: "skipped", name: "API 文档生成与自检", id: "stage-27" },
+          ],
+        },
+      },
+    },
+  };
+  /* 两条流水线各有一格同名同 id：这是「不挑一个」那一支的样本（平台给的名字并不唯一）。 */
+  const TWICE = {
+    status: 200,
+    data: {
+      status: "success",
+      pipelinesStatus: {
+        "cnb-ggg-1k5q00001-001": {
+          id: "cnb-ggg-1k5q00001-001",
+          name: "质量门禁",
+          status: "success",
+          stages: [{ status: "success", name: "受影响用例", id: "stage-9" }],
+        },
+        "cnb-ggg-1k5q00001-002": {
+          id: "cnb-ggg-1k5q00001-002",
+          name: "每日档",
+          status: "success",
+          stages: [{ status: "success", name: "受影响用例", id: "stage-9" }],
+        },
+      },
+    },
+  };
+  /* `content` 是**行数组**且带 ANSI：归一不收口就会念出 `[31mRUN…`，而行号要靠它数。 */
+  const STAGE = {
+    status: 200,
+    data: {
+      status: "success",
+      duration: 470_000,
+      error: "",
+      content: [
+               "\u001b[31m RUN v5.0.5\u001b[0m",
+        " ✓ 缺键时念 pnpm env:init 5ms",
+        "Finished, code: 0",
+      ],
+    },
+  };
+
+  function stageIo(opts: {
+    build?: unknown;
+    stage?: unknown;
+    builds?: unknown[];
+    headSha?: string;
+  }) {
+    const calls: string[] = [];
+    const log: string[] = [];
+    const ok = (stdout: string): FakeResult => ({
+      status: 0,
+      stdout,
+      stderr: "",
+      error: null,
+    });
+    const run = (cmd: string, args: string[]): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
+      if (cmd === "git" && key.includes("@{u}")) return ok("");
+      if (cmd === "git" && key === "remote") return ok("origin\n");
+      if (cmd === "git" && key.includes("symbolic-ref"))
+        return ok("refs/remotes/origin/master");
+      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("feat/x");
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet"))
+        return ok("d02ec9");
+      if (cmd === "git" && key.includes("get-url"))
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      if (cmd === "git" && key.includes("rev-parse HEAD"))
+        return ok(opts.headSha ?? "d02ec96364d5f3713b77c91b0d3fe789878f1747");
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-logs")
+        return ok(JSON.stringify({ status: 200, data: opts.builds ?? [] }));
+      if (
+        cmd === "cnb" &&
+        args[0] === "build" &&
+        args[1] === "get-build-status"
+      )
+        return ok(JSON.stringify(opts.build ?? null));
+      if (cmd === "cnb" && args[0] === "build" && args[1] === "get-build-stage")
+        return ok(JSON.stringify(opts.stage ?? {}));
+      return ok("");
+    };
+    return { run, calls, log };
+  }
+
+  const runStage = (f: ReturnType<typeof stageIo>, args: string[]) =>
+    main({
+      args,
+      run: f.run,
+      log: (l: string) => f.log.push(l),
+    });
+
+  it("绿跑的某一格：按格名取到正文，带完整日志行号，且不写平台", async () => {
+    const f = stageIo({ build: GREEN_BUILD, stage: STAGE });
+    const code = await runStage(f, [
+      "--stage-log",
+      "cnb-ggg-1k5q00001",
+      "受影响用例",
+    ]);
+    const text = f.log.join("\n");
+    expect(code).toBe(CODE.GREEN);
+    expect(text).toContain("这一格：受影响用例（id=stage-9");
+    // 行号是这件事的全部价值：拿它能直接跳进完整日志，不用再搜一遍。
+    expect(text).toContain("L2  ✓ 缺键时念 pnpm env:init");
+    expect(text).toContain("L3 Finished, code: 0");
+    // ANSI 剥掉了（带着它就没法比行内容，也没法 grep）。
+    expect(text).not.toContain("[31m");
+    // 平台的 `duration` 是毫秒（#2442 同一格）：印成人读的时长而不是 `470000s`。
+    expect(text).toContain("耗时：7m50s");
+    expect(text).toContain("build/logs/cnb-ggg-1k5q00001");
+    expect(text).toContain("不判这一跑绿没绿");
+    // 点了名就不问构建列表：少一次平台请求，也少一处可能错的归属。
+    expect(f.calls.some((c) => c.includes("get-build-logs"))).toBe(false);
+    for (const write of [
+      "post-",
+      "merge-pull",
+      "update-issue",
+      "delete-",
+      "create-issue",
+    ]) {
+      expect(f.calls.some((c) => c.includes(write)), `发了写动作：${write}`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("不给构建号 ⇒ 与 --diagnose 同一份归属算法（同一跑不许给出两种答案）", async () => {
+    const f = stageIo({
+      build: GREEN_BUILD,
+      stage: STAGE,
+      builds: [
+        {
+          sn: "cnb-old-1k5q00000",
+          sha: "0000000000000000000000000000000000000000",
+          event: "pull_request",
+          createTime: "2026-10-27T01:00:00Z",
+        },
+        {
+          sn: "cnb-mine-1k5q00002",
+          sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+          event: "pull_request",
+          createTime: "2026-10-27T02:00:00Z",
+        },
+      ],
+    });
+    const code = await runStage(f, ["--stage-log", "受影响用例"]);
+    expect(code).toBe(CODE.GREEN);
+    expect(f.log.join("\n")).toContain("归属到构建 cnb-mine-1k5q00002");
+  });
+
+  it("格名认不出 ⇒ 2：念出「比过几格」，且不发按格取日志那一条", async () => {
+    const f = stageIo({ build: GREEN_BUILD, stage: STAGE });
+    const code = await runStage(f, [
+      "--stage-log",
+      "cnb-ggg-1k5q00001",
+      "单元测试",
+    ]);
+    expect(code).toBe(CODE.NOT_RUN);
+    const text = f.log.join("\n");
+    expect(text).toContain("没有**逐字**叫「单元测试」的格");
+    expect(text).toContain("3 格");
+    expect(f.calls.some((c) => c.includes("get-build-stage"))).toBe(false);
+  });
+
+  it("命中两格 ⇒ 2 且不替你挑一格（挑错的那一格读起来同样像证据）", async () => {
+    const f = stageIo({ build: TWICE, stage: STAGE });
+    const code = await runStage(f, [
+      "--stage-log",
+      "cnb-ggg-1k5q00001",
+      "受影响用例",
+    ]);
+    expect(code).toBe(CODE.NOT_RUN);
+    const text = f.log.join("\n");
+    expect(text).toContain("命中 2 格");
+    expect(text).toContain("质量门禁");
+    expect(text).toContain("每日档");
+    expect(f.calls.some((c) => c.includes("get-build-stage"))).toBe(false);
+  });
+
+  it("正文取不到 ⇒ 2，念的是「没取到」而不是「这一格没念任何话」", async () => {
+    const f = stageIo({ build: GREEN_BUILD });
+    const code = await runStage(f, [
+      "--stage-log",
+      "cnb-ggg-1k5q00001",
+      "stage-9",
+    ]);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.log.join("\n")).toContain("不是「这一格没念任何话」");
+  });
+
+  it("没点名哪一格 ⇒ 2，且一条 build 命令都不发", async () => {
+    const f = stageIo({});
+    const code = await runStage(f, ["--stage-log"]);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.log.join("\n")).toContain("没点名要读哪一格");
+    expect(f.calls.some((c) => c.includes("get-build"))).toBe(false);
+  });
+
+  it("与 --merge 同行 ⇒ 2，且一条 build 命令都不发（只读、一次只做一件）", async () => {
+    const f = stageIo({});
+    const code = await runStage(f, [
+      "--stage-log",
+      "cnb-ggg-1k5q00001",
+      "受影响用例",
+      "--merge",
+    ]);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(f.log.join("\n")).toContain("不与 --merge 同跑");
+    expect(f.calls.some((c) => c.includes("get-build"))).toBe(false);
+  });
+
+  it("--dry-run 只打印那三条读命令，不读平台", async () => {
+    const f = stageIo({});
+    const code = await runStage(f, [
+      "--stage-log",
+      "cnb-ggg-1k5q00001",
+      "受影响用例",
+      "--dry-run",
+    ]);
+    expect(code).toBe(CODE.GREEN);
+    const text = f.log.join("\n");
+    expect(text).toContain("get-build-status");
+    expect(text).toContain("--stageId <stageId>");
+    expect(f.calls.some((c) => c.includes("get-build"))).toBe(false);
+  });
+});
+
+describe("parseArgs：--stage-log 的形状（自由文本 + 可选构建号）", () => {
+  it("只给格名 ⇒ 不设构建号（走按 HEAD 归属那一路）", () => {
+    const got = parseArgs(["--stage-log", "受影响用例"]);
+    expect(got.stageLog).toBe(true);
+    expect(got.stageLogSn).toBeNull();
+    expect(got.stageLogRef).toBe("受影响用例");
+    expect(got.stageLogBad).toEqual([]);
+  });
+
+  it("构建号 + 格名 ⇒ 各归各位", () => {
+    const got = parseArgs(["--stage-log", "cnb-68q-1k5sc5kgq", "受影响用例"]);
+    expect(got.stageLogSn).toBe("cnb-68q-1k5sc5kgq");
+    expect(got.stageLogRef).toBe("受影响用例");
+  });
+
+  it("格名**没加引号**带空格 ⇒ 拼回完整一串（切一截就必然反查落空）", () => {
+    const got = parseArgs(["--stage-log", "cnb-68q-1k5sc5kgq", "API", "文档生成与自检"]);
+    expect(got.stageLogSn).toBe("cnb-68q-1k5sc5kgq");
+    expect(got.stageLogRef).toBe("API 文档生成与自检");
+  });
+
+  it("等号写法与空格写法同形，且不吞后面的旗标", () => {
+    expect(parseArgs(["--stage-log=stage-27"]).stageLogRef).toBe("stage-27");
+    const next = parseArgs(["--stage-log", "stage-27", "--dry-run"]);
+    expect(next.stageLogRef).toBe("stage-27");
+    expect(next.dryRun).toBe(true);
+  });
+
+  it("只给构建号、没给格名 ⇒ 记进 bad（不能默默去读一格不存在的东西）", () => {
+    const got = parseArgs(["--stage-log", "cnb-68q-1k5sc5kgq"]);
+    expect(got.stageLogSn).toBe("cnb-68q-1k5sc5kgq");
+    expect(got.stageLogBad).toEqual(["(缺点名哪一格)"]);
+  });
+});
