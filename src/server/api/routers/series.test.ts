@@ -27,13 +27,20 @@ vi.mock("~/lib/core/logger", async (importOriginal) => ({
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { seriesRouter } from "./series";
-import { getTestDb, seedUser, seedProject } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedUser,
+  seedProject,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(seriesRouter);
 const tdb = getTestDb();
 const userCaller = () => createCaller(makeCtx());
-const otherCaller = () => createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));
+const otherCaller = () =>
+  createCaller(
+    makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }),
+  );
 
 /** 断言非空的种子 helper（create 类 procedure 返回 `T | undefined`）。 */
 async function addSeries(caller = userCaller(), title = "S") {
@@ -119,7 +126,9 @@ describe("season 列表 / 增改删", () => {
   });
   it("他人系列的季 → FORBIDDEN", async () => {
     const s = await addSeries(otherCaller(), "别人的");
-    await expect(userCaller().createSeason({ seriesId: s.id })).rejects.toMatchObject({
+    await expect(
+      userCaller().createSeason({ seriesId: s.id }),
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
@@ -146,7 +155,9 @@ describe("episode 列表 / 增改删", () => {
   it("他人季下的集 → FORBIDDEN", async () => {
     const s = await addSeries(otherCaller(), "别人的");
     const se = await addSeason(s.id, otherCaller());
-    await expect(userCaller().createEpisode({ seasonId: se.id })).rejects.toMatchObject({
+    await expect(
+      userCaller().createEpisode({ seasonId: se.id }),
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });

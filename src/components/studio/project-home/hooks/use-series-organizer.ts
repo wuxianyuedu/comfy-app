@@ -50,7 +50,9 @@ export interface SeriesOrganizerController {
   assignCurrentProject: (episodeId: string) => void;
 }
 
-export function useSeriesOrganizer(projectId?: string): SeriesOrganizerController {
+export function useSeriesOrganizer(
+  projectId?: string,
+): SeriesOrganizerController {
   const trpc = useTRPC();
   const qc = useQueryClient();
 
@@ -78,13 +80,21 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     ),
   );
 
-  const invalidateSeries = () => void qc.invalidateQueries(trpc.series.list.queryFilter());
+  const invalidateSeries = () =>
+    void qc.invalidateQueries(trpc.series.list.queryFilter());
   const invalidateSeasons = (sid: string) =>
-    void qc.invalidateQueries(trpc.series.seasons.queryFilter({ seriesId: sid }));
+    void qc.invalidateQueries(
+      trpc.series.seasons.queryFilter({ seriesId: sid }),
+    );
   const invalidateEpisodes = (sid: string) =>
-    void qc.invalidateQueries(trpc.series.episodes.queryFilter({ seasonId: sid }));
+    void qc.invalidateQueries(
+      trpc.series.episodes.queryFilter({ seasonId: sid }),
+    );
   const invalidateCurrent = () => {
-    if (projectId) void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
+    if (projectId)
+      void qc.invalidateQueries(
+        trpc.series.byProject.queryFilter({ projectId }),
+      );
   };
 
   const createSeries = useMutation(
@@ -177,7 +187,8 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     createSeason: (sid, title) => createSeason.mutate({ seriesId: sid, title }),
     renameSeason: (id, title) => updateSeason.mutate({ id, title }),
     deleteSeason: (id) => deleteSeason.mutate({ id }),
-    createEpisode: (sid, title) => createEpisode.mutate({ seasonId: sid, title }),
+    createEpisode: (sid, title) =>
+      createEpisode.mutate({ seasonId: sid, title }),
     renameEpisode: (id, title) => updateEpisode.mutate({ id, title }),
     deleteEpisode: (id) => deleteEpisode.mutate({ id }),
     assignCurrentProject: (epid) => {

@@ -58,11 +58,13 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               key={s.id}
               className={cn(
                 "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
-                c.seriesId === s.id ? "border-border-strong bg-surface-2" : "border-border",
+                c.seriesId === s.id
+                  ? "border-border-strong bg-surface-2"
+                  : "border-border",
               )}
             >
               <input
-                className="bg-transparent flex-1 text-sm outline-none"
+                className="flex-1 bg-transparent text-sm outline-none"
                 defaultValue={s.title}
                 onBlur={(e) => {
                   if (e.target.value && e.target.value !== s.title) {
@@ -73,7 +75,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               <Button
                 variant="ghost"
                 className="h-7 px-2 text-xs"
-                onClick={() => c.selectSeries(c.seriesId === s.id ? null : s.id)}
+                onClick={() =>
+                  c.selectSeries(c.seriesId === s.id ? null : s.id)
+                }
               >
                 {c.seriesId === s.id ? "收起" : "展开"}
               </Button>
@@ -110,7 +114,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
 
       {/* ── 季（选中系列后）─────────────────────────── */}
       {c.seriesId && (
-        <div className="flex flex-col gap-2 border-l-2 border-border pl-3">
+        <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
           <div className="text-ink-muted text-sm font-medium">季</div>
           <div className="flex flex-col gap-1.5">
             {c.seasons?.map((se) => (
@@ -118,12 +122,16 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 key={se.id}
                 className={cn(
                   "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
-                  c.seasonId === se.id ? "border-border-strong bg-surface-2" : "border-border",
+                  c.seasonId === se.id
+                    ? "border-border-strong bg-surface-2"
+                    : "border-border",
                 )}
               >
-                <span className="text-ink-faint w-6 text-xs">S{se.seasonNumber}</span>
+                <span className="text-ink-faint w-6 text-xs">
+                  S{se.seasonNumber}
+                </span>
                 <input
-                  className="bg-transparent flex-1 text-sm outline-none"
+                  className="flex-1 bg-transparent text-sm outline-none"
                   defaultValue={se.title}
                   onBlur={(e) => {
                     if (e.target.value !== se.title) {
@@ -134,7 +142,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 <Button
                   variant="ghost"
                   className="h-7 px-2 text-xs"
-                  onClick={() => c.selectSeason(c.seasonId === se.id ? null : se.id)}
+                  onClick={() =>
+                    c.selectSeason(c.seasonId === se.id ? null : se.id)
+                  }
                 >
                   {c.seasonId === se.id ? "收起" : "展开"}
                 </Button>
@@ -173,7 +183,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
 
       {/* ── 集（选中季后）───────────────────────────── */}
       {c.seasonId && (
-        <div className="flex flex-col gap-2 border-l-2 border-border pl-3">
+        <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
           <div className="text-ink-muted text-sm font-medium">集</div>
           <div className="flex flex-col gap-1.5">
             {c.episodes?.map((e) => (
@@ -181,12 +191,16 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 key={e.id}
                 className={cn(
                   "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
-                  c.episodeId === e.id ? "border-border-strong bg-surface-2" : "border-border",
+                  c.episodeId === e.id
+                    ? "border-border-strong bg-surface-2"
+                    : "border-border",
                 )}
               >
-                <span className="text-ink-faint w-6 text-xs">E{e.episodeNumber}</span>
+                <span className="text-ink-faint w-6 text-xs">
+                  E{e.episodeNumber}
+                </span>
                 <input
-                  className="bg-transparent flex-1 text-sm outline-none"
+                  className="flex-1 bg-transparent text-sm outline-none"
                   defaultValue={e.title}
                   onBlur={(ev) => {
                     if (ev.target.value !== e.title) {
@@ -198,7 +212,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                   <Button
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() => c.selectEpisode(c.episodeId === e.id ? null : e.id)}
+                    onClick={() =>
+                      c.selectEpisode(c.episodeId === e.id ? null : e.id)
+                    }
                   >
                     {c.episodeId === e.id ? "已选" : "选定"}
                   </Button>
