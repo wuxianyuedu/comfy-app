@@ -66,6 +66,13 @@ export const SLOT_TTL_MS = 26 * 60 * 60 * 1000;
 export const SLOT_USED_FILE = ".ci-slot-used";
 
 /**
+ * 写锁的文件名 —— 「有人正在往里装」的唯一出处（执行档 `acquireSlotLock` 写它）。
+ *
+ * 住在读数侧是因为**空壳谓词要用它**，而那份谓词必须只有一处（见 `isUselessShell`）。
+ */
+export const SLOT_LOCK_FILE = ".ci-slot.lock";
+
+/**
  * 槽目录 = `<槽根>/<键>`。
  *
  * 键是 sha256 十六进制，直接当目录名：跨作业比较只需要「同一个键 → 同一个目录」，
@@ -371,6 +378,50 @@ export function readSlotState(slot) {
 }
 
 /**
+ * 这个槽是不是一个**没人要的空壳**（崩在半路的安装留下的那种）。
+ *
+ * 三个条件缺一不可：
+ * - **没有产物也没有指纹** —— 里面没有可用依赖树 ⇒ 没有任何作业会命中它；
+ * - **没有锁** —— 锁是「有人正在往里装」的唯一出处（`acquireSlotLock` 写的）；
+ * - **目录 mtime 过了 TTL** —— 「建目录」与「拿锁」之间有一个窗口，一个刚建出来的
+ *   空目录不该被当成垃圾。
+ *
+ * ⚠️ **mtime 在这一档里是可用的**，而在「按最近使用淘汰」那一档里不可用 ——
+ * 差别在于**这一档只判空壳**：没有产物的目录里没有任何东西值得保护，而目录自己
+ * 的 mtime 就是「它从哪儿来」的证据。上一档（按 mtime 做 LRU）栽的坑是
+ * 「天天被命中的热键看起来最旧」—— 那是在**有产物**的目录上按 mtime 排序。
+ *
+ * ⚠️ **谓词只有这一份，且住在读数侧**：执行档 `ci-slot-apply.mjs` 的 `pruneSlots`
+ * 从这里 import，读数 `listSlots` 也用它。依赖方向本来就是执行 → 读数（反过来成环）。
+ * 两处各写一份的形状是「读数说这几个被 TTL 挡着、执行却把它们无条件回收」——
+ * 两句结论会在同一份盘上同时打印出来（ISSUE #2494 的现场）。
+ *
+ * @param {string} abs 槽目录的绝对路径
+ * @param {number} now @param {number} ttlMs
+ * @param {{treePresent: boolean, fingerprint: string | null, unreadable: boolean}} [state]
+ *   调用方已经读过现状时传进来，省掉同一趟的第二次读（`readSlotState`）
+ * @returns {boolean}
+ */
+export function isUselessShell(abs, now, ttlMs, state = readSlotState(abs)) {
+  /* 有产物、有指纹、或读不动 ⇒ 一律不碰（读不动尤其不能碰：那是「不知道」）。 */
+  if (state.treePresent || state.fingerprint !== null || state.unreadable) {
+    return false;
+  }
+  try {
+    if (fs.existsSync(path.join(abs, SLOT_LOCK_FILE))) return false;
+  } catch {
+    return false;
+  }
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(abs).mtimeMs;
+  } catch {
+    return false;
+  }
+  return now - mtime >= ttlMs;
+}
+
+/**
  * 槽根下**现在**有什么 —— 配额那一格读数的唯一出处。
  *
  * ## 它答的是哪一问
@@ -386,8 +437,9 @@ export function readSlotState(slot) {
  * - `overQuota` —— 超出配额的那几个（配额按「个」定，见 `MAX_SLOT_KEYS`）。口径是
  *   **这一跑之后**：配额的最后一格留给当前键，当前键已在盘上时不再重复占一格
  *   （`pruneSlots` 在入口处就剔掉了它，读数必须与执行同口径 —— ISSUE #2490）；
- * - `heldByTtl` —— 超额里**被 TTL 挡着**的那几个（它们还在闸门内 ⇒ 可能正被人用，
- *   **用空间换正确性**，方向只许这么换）；
+ * - `heldByTtl` —— 超额里**执行档真会因为 TTL 留着**的那几个（它们还在闸门内 ⇒ 可能正被人用，
+ *   **用空间换正确性**，方向只许这么换）；**空壳不算** —— 执行档对空壳无条件回收
+ *   （`isUselessShell`），把空壳数进来就是「读数说被挡着、执行却删了」（ISSUE #2494）；
  * - `emptyCount` —— **里面没有产物也没有指纹**的那几个（崩在半路的安装留下的空壳；
  *   它们既不好用、也永远不会自己好起来 —— 执行档那一档就是专门回收它们的）；
  * - `currentOnDisk` —— 当前键在不在盘上。打印那一行靠它把「键数 ≤ 配额却报超额」
@@ -399,7 +451,7 @@ export function readSlotState(slot) {
  *   root: string, quota: number, count: number, overQuota: number, heldByTtl: number,
  *   emptyCount: number, currentOnDisk: boolean,
  *   keys: Array<{key: string, lastUsed: number | null, expired: boolean,
- *     usable: boolean, unreadable: boolean}>,
+ *     uselessShell: boolean, usable: boolean, unreadable: boolean}>,
  * }}
  */
 export function listSlots(io) {
@@ -436,6 +488,7 @@ export function listSlots(io) {
         key: e.name,
         lastUsed,
         expired: lastUsed !== null && now - lastUsed >= ttlMs,
+        uselessShell: isUselessShell(abs, now, ttlMs, state),
         usable: state.treePresent || state.fingerprint !== null,
         unreadable: state.unreadable,
       };
@@ -455,7 +508,9 @@ export function listSlots(io) {
     quota,
     count: keys.length,
     overQuota: over.length,
-    heldByTtl: over.filter((k) => !k.expired).length,
+    /* 空壳不算「被 TTL 挡着」：执行档看的是同一份谓词，而它对这些目录**不看配额与邮票**地回收
+       （ISSUE #2494 —— 两处各算一份时，这两个数会在同一份盘上给出相反的话）。 */
+    heldByTtl: over.filter((k) => !k.uselessShell && !k.expired).length,
     emptyCount: keys.filter((k) => !k.usable).length,
     currentOnDisk,
     keys,
@@ -504,7 +559,8 @@ export function main(io = {}) {
           : "未落盘（它要占一格）";
     log(
       `[缓存槽读数] 键数 ${slots.count}（配额 ${slots.quota}）·超配额 ${slots.overQuota} 个` +
-        `（其中被 TTL 挡着 ${slots.heldByTtl} 个 ⇒ 它们可能正被人用，这是用空间换正确性）` +
+        `（其中被 TTL 挡着 ${slots.heldByTtl} 个 ⇒ 它们可能正被人用，这是用空间换正确性；` +
+        `空壳不在其中，执行档无条件回收它们）` +
         `·空槽 ${slots.emptyCount} 个·当前键${current}`,
     );
     log(
