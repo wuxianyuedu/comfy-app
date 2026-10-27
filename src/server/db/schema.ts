@@ -28,18 +28,13 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
+import { cuid, dateNotNull, user } from "./schema-common";
 import { type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 // ── 自定义 DateTime 列（库文件里存 ISO 字符串）──────────────────
-const dateNotNull = customType<{ data: Date; driverData: string }>({
-  dataType() {
-    return "text";
-  },
-  fromDriver: (v) => new Date(v),
-  toDriver: (v) => v.toISOString(),
-});
-
+// `dateNotNull` 与 `cuid` 在 schema-common.ts（schema.ts 与 schema-series.ts
+// 共用的叶子模块；拆分件先于本模块体求值，构造器必须放在零依赖处）。
 const dateNull = customType<{ data: Date | null; driverData: string | null }>({
   dataType() {
     return "text";
@@ -48,29 +43,10 @@ const dateNull = customType<{ data: Date | null; driverData: string | null }>({
   toDriver: (v) => (v == null ? null : v.toISOString()),
 });
 
-const cuid = () =>
-  text("id")
-    .$defaultFn(() => createId())
-    .primaryKey();
-
 // ── Better Auth 表（表名单数，对齐 better-auth 的默认命名）─────────
-export const user = sqliteTable("user", {
-  id: cuid(),
-  name: text("name"),
-  email: text("email").notNull().unique(),
-  emailVerified: integer("emailVerified", { mode: "boolean" })
-    .notNull()
-    .default(false),
-  image: text("image"),
-  password: text("password"),
-  createdAt: dateNotNull("createdAt")
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: dateNotNull("updatedAt")
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdate(() => new Date()),
-});
+// `user` 表本体在 schema-common.ts（零依赖叶子）；本文件其余表与 schema-series.ts
+// 都经 FK 惰性回调引用它。这里原样再导出，`~/server/db/schema` 的导入面不变。
+export { user };
 
 export const session = sqliteTable("session", {
   id: text("id").primaryKey(),
@@ -744,3 +720,8 @@ export type ProjectInsert = InferInsertModel<typeof project>;
 export type SkillInsert = InferInsertModel<typeof skill>;
 export type FilmProjectInsert = InferInsertModel<typeof filmProject>;
 export type WorkflowTemplateInsert = InferInsertModel<typeof workflowTemplate>;
+
+// ── FR-SR（#2477）：系列 / 季 / 集 / 角色库五表在本文件触到 900 行文件行数
+// 硬闸（规范 §12.6）后拆到 schema-series.ts，这里原样再导出，故
+// `~/server/db/schema` 的既有导入方与 drizzle-kit push 的导出面均无损。
+export * from "./schema-series";

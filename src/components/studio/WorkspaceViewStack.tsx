@@ -260,6 +260,7 @@ export function WorkspaceViewStack({
               "未命名项目"
             }
             onNavigate={onNavigate}
+            projectId={activeProjectId ?? ""}
           />
         );
 
