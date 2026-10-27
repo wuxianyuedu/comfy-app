@@ -394,7 +394,7 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
       role: string;
       content: unknown;
     }>;
-    const parts = userMsg.content as Array<{
+    const parts = userMsg!.content as Array<{
       type: string;
       image_url?: unknown;
     }>;

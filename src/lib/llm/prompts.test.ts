@@ -56,7 +56,7 @@ describe("buildCharacterMessages", () => {
 
   it("信息全空时给出兜底指令，而不是发一条空消息", () => {
     const [, user] = buildCharacterMessages({ name: "" });
-    expect(String(user!.content).trim()).toBe("请帮我设计一个原创角色");
+    expect((user!.content as string).trim()).toBe("请帮我设计一个原创角色");
   });
 
   it("风格标签用顿号连接", () => {
@@ -364,8 +364,8 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
     expect(msgs).toHaveLength(2);
     expect(msgs[0]!.role).toBe("system");
     const user = msgs[1]!;
-    expect(user!.role).toBe("user");
-    const content = user!.content as Array<{
+    expect(user.role).toBe("user");
+    const content = user.content as Array<{
       type: string;
       text?: string;
       image_url?: { url: string };
