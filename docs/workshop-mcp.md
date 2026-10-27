@@ -96,5 +96,11 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
   `render: true` 且本地有 `ffmpeg`（或 `FFMPEG_PATH`）时，把本地片段（视频按 duration 截断、
   仅图片镜头以静帧占位，统一缩放 1280x720）合成为 mp4。
 - 会话持久化在 `workshopSession` 表，与界面共享同一项目（界面侧接入待后续）。
+- **剧本评审不暴露为 MCP 工具（#2478 评估结论）**：剧本质量闭环（`FR-QA-07`④）的
+  执行器（`run.reviewScript` / `run.reviseScript`）落在 **production 统一项目**的
+  `scriptReview` 列，而本 MCP 工具层只有 `sessionId` 语境（工坊会话与 production
+  是两套存储，见上一条），没有把判定写回 production 列的归属口径；外部 AI 要指挥
+  剧本打磨，走 run 控制面（`run.start` 的自动闭环已含剧本评审/改写轮次；按需控制面
+  的 MCP 暴露见 `FR-AG-05` 的缺口单），不在本服务器复制第二份评审工具。
 - 本地 ComfyUI 必须**正在运行**（启动器会自动拉起；或手动启动），MCP 进程通过
   `COMFYUI_BASE`（默认 `http://127.0.0.1:{{comfyui.port}}`，带端口探测）连接。

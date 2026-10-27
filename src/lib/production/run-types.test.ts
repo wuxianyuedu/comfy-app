@@ -8,6 +8,7 @@ import {
   normalizeProductionRun,
   planNextRunAction,
   RUN_LOG_LIMIT,
+  scriptDigestOf,
   toRunView,
   type ProductionRun,
   type ProductionRunView,
@@ -19,6 +20,7 @@ function run(over: Partial<ProductionRun> = {}): ProductionRun {
 function view(over: Partial<ProductionRunView> = {}): ProductionRunView {
   return {
     hasScript: false,
+    scriptDigest: "",
     characterCount: 0,
     shots: [],
     filmRendered: false,
@@ -90,6 +92,7 @@ describe("toRunView", () => {
   it("null → 全空视图（连剧本都还没有）", () => {
     expect(toRunView(null)).toEqual({
       hasScript: false,
+      scriptDigest: scriptDigestOf(""),
       characterCount: 0,
       shots: [],
       filmRendered: false,
@@ -381,5 +384,142 @@ describe("normalizeProductionRun · 自动评审字段", () => {
     expect(r.autoReview).toBe(false);
     expect(r.reviewedShotRev).toEqual({});
     expect(r.reviewAttempts).toEqual({});
+  });
+
+  it("剧本闭环字段（#2478）：类型不符回落默认；轮数只收非负有限数", () => {
+    const r = normalizeProductionRun({
+      scriptReviewDigest: 5,
+      scriptReviewAttempts: -1,
+      scriptRevisionPending: "yes",
+      storyboardScriptDigest: null,
+    });
+    expect(r).toMatchObject({
+      scriptReviewDigest: "",
+      scriptReviewAttempts: 0,
+      scriptRevisionPending: false,
+      storyboardScriptDigest: "",
+    });
+    expect(
+      normalizeProductionRun({
+        scriptReviewDigest: "abc",
+        scriptReviewAttempts: 2.9,
+        scriptRevisionPending: true,
+        storyboardScriptDigest: "def",
+      }),
+    ).toMatchObject({
+      scriptReviewDigest: "abc",
+      scriptReviewAttempts: 2,
+      scriptRevisionPending: true,
+      storyboardScriptDigest: "def",
+    });
+  });
+});
+
+describe("scriptDigestOf", () => {
+  it("同一内容指纹一致；内容一变指纹就变", () => {
+    expect(scriptDigestOf("# 剧本")).toBe(scriptDigestOf("# 剧本"));
+    expect(scriptDigestOf("# 剧本")).not.toBe(scriptDigestOf("# 剧本 v2"));
+    // 空串也有确定指纹（评审收口快照的「没评过」形态不是空指纹）
+    expect(scriptDigestOf("")).toMatch(/^[0-9a-f]{8}$/);
+  });
+});
+
+describe("planNextRunAction · 剧本评审闭环（FR-QA-07 ④ · #2478）", () => {
+  const digest = scriptDigestOf("# 剧本");
+
+  it("autoReview 开 + 剧本指纹 ≠ 评审收口快照（含没评过）→ review_script", () => {
+    expect(
+      planNextRunAction(
+        view({ hasScript: true, scriptDigest: digest }),
+        run({ status: "running", autoReview: true }),
+      ),
+    ).toEqual({ kind: "review_script" });
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          scriptDigest: scriptDigestOf("# 人改过的新版本"),
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          scriptReviewDigest: digest, // AI/人改过剧本 → 快照落后
+        }),
+      ),
+    ).toEqual({ kind: "review_script" });
+  });
+
+  it("评审收口（指纹相等）→ 放行后续阶段；autoReview 关 → 不评审", () => {
+    expect(
+      planNextRunAction(
+        view({ hasScript: true, scriptDigest: digest }),
+        run({
+          status: "running",
+          autoReview: true,
+          scriptReviewDigest: digest,
+        }),
+      ),
+    ).toEqual({ kind: "extract_characters" });
+    expect(
+      planNextRunAction(
+        view({ hasScript: true, scriptDigest: digest }),
+        run({ status: "running" }),
+      ),
+    ).toEqual({ kind: "extract_characters" });
+  });
+
+  it("评审提出改写（pending）→ 先 revise_script（优先于 review_script）", () => {
+    expect(
+      planNextRunAction(
+        view({ hasScript: true, scriptDigest: digest }),
+        run({
+          status: "running",
+          autoReview: true,
+          scriptRevisionPending: true,
+        }),
+      ),
+    ).toEqual({ kind: "revise_script" });
+  });
+
+  it("分镜联动：分镜后剧本变过（storyboard 快照落后）→ 重排 plan_storyboard", () => {
+    const shots = [{ id: "a", rev: 1, hasImage: true, hasClip: false }];
+    const newDigest = scriptDigestOf("# 改写定稿后的剧本");
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          scriptDigest: newDigest,
+          characterCount: 1,
+          shots,
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          scriptReviewDigest: newDigest, // 剧本质量节点已收口
+          storyboardScriptDigest: digest, // 分镜还停在旧版剧本上
+          processedShotRev: { a: 1 },
+          reviewedShotRev: { a: 1 },
+        }),
+      ),
+    ).toEqual({ kind: "plan_storyboard" });
+    // 快照一致 → 正常走到出片，不重排
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          scriptDigest: digest,
+          characterCount: 1,
+          shots,
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          scriptReviewDigest: digest,
+          storyboardScriptDigest: digest,
+          processedShotRev: { a: 1 },
+          reviewedShotRev: { a: 1 },
+        }),
+      ),
+    ).toEqual({ kind: "render_film" });
   });
 });

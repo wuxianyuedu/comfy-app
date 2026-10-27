@@ -28,15 +28,24 @@ import {
   markActionProcessed,
   normalizeProductionRun,
   planNextRunAction,
+  scriptDigestOf,
   toRunView,
   appendRunStep,
   REVIEW_MAX_RETRY,
+  SCRIPT_REVIEW_SCORE_THRESHOLD,
   type ProductionRun,
   type ProductionRunView,
   type RunAction,
 } from "~/lib/production/run-types";
 import { applyShotRedo } from "~/lib/production/sync";
-import { reviewContent } from "~/server/agent/review";
+import { reviewScoreMean } from "~/lib/production/review-types";
+import { fixed } from "~/lib/number-format";
+import { displayValue } from "~/lib/display-value";
+import {
+  reviewContent,
+  reviewScript,
+  reviseScript,
+} from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage } from "~/lib/error-message";
 import type { Character, ProjectType, Shot } from "~/lib/workshop/types";
@@ -63,6 +72,10 @@ function actionLabel(action: RunAction): string {
   switch (action.kind) {
     case "generate_script":
       return "生成剧本";
+    case "review_script":
+      return "剧本评审";
+    case "revise_script":
+      return "按评审意见改写剧本";
     case "extract_characters":
       return "提取角色";
     case "plan_storyboard":
@@ -82,6 +95,8 @@ function actionLabel(action: RunAction): string {
 function gateStageFor(action: RunAction): ProductionStage | null {
   switch (action.kind) {
     case "generate_script":
+    case "review_script":
+    case "revise_script":
       return "script";
     case "extract_characters":
       return "character";
@@ -185,6 +200,7 @@ async function execCharacters(
 async function execStoryboard(
   userId: string,
   projectId: string,
+  run: ProductionRun,
   row: Production,
 ): Promise<ExecResult> {
   if (!row.scriptMarkdown.trim())
@@ -226,7 +242,13 @@ async function execStoryboard(
     }));
   if (shots.length === 0) return { ok: false, error: "未解析出分镜镜头" };
   await productionRepository.patchContent(userId, projectId, { shots });
-  return { ok: true, summary: `已规划 ${shots.length} 个镜头` };
+  // 记下「这次分镜是按哪版剧本拆的」：之后剧本变（AI 改写定稿 / 人手改）→
+  // 规划器按指纹差把分镜重新纳入（#2478 ④ 的分镜联动）。
+  return {
+    ok: true,
+    summary: `已规划 ${shots.length} 个镜头`,
+    run: { ...run, storyboardScriptDigest: scriptDigestOf(row.scriptMarkdown) },
+  };
 }
 
 async function execImages(
@@ -281,6 +303,90 @@ async function execImages(
     ok: true,
     summary: `逐镜生图：${doneCount} 成功${failedCount > 0 ? ` / ${failedCount} 失败` : ""}`,
     run: markActionProcessed(run, view, { kind: "render_images", shotIds }),
+  };
+}
+
+/**
+ * 剧本评审执行器（FR-QA-07 ④ · #2478）：调 `reviewScript` 出判定（同时落库
+ * `production.scriptReview` 列，含轮次历史），按「pass 且维度均分达线」判达标：
+ *   · 达标 / 已达 `REVIEW_MAX_RETRY` 上限 → 写剧本指纹快照（收口，规划器不再纳入；
+ *     达上限保留当前结果与镜头评审同口径）；
+ *   · 不达标且未达上限 → `scriptRevisionPending=true`，规划器下一步出 `revise_script`；
+ *     改写后剧本变（指纹变）→ 又回到待评审，直到达标或轮次封顶。
+ * 每轮判定与分数已由 `reviewScript` 落库，曲线可回看。
+ */
+async function execReviewScript(
+  userId: string,
+  projectId: string,
+  run: ProductionRun,
+  row: Production,
+): Promise<ExecResult> {
+  let outcome;
+  try {
+    outcome = await reviewScript(userId, projectId);
+  } catch (e: unknown) {
+    return { ok: false, error: errorMessage(e, "剧本评审失败") };
+  }
+  const attempts = run.scriptReviewAttempts + 1;
+  const mean = reviewScoreMean(outcome.verdict);
+  const qualified =
+    outcome.verdict.pass &&
+    (mean === null || mean >= SCRIPT_REVIEW_SCORE_THRESHOLD);
+  // 「均分 X.X」是给人读的：数字精度格式化走唯一出口（P50），缺值占位走
+  // displayValue（P8）—— 都是「这组判据只有一份口径」的收口。
+  const meanText =
+    mean === null ? "未评分" : `均分 ${displayValue(fixed(mean, 1))}`;
+  // 收口（达标或封顶）→ 写指纹快照；未收口 → 挂「待改写」，改完剧本变会再回评审。
+  const settle = {
+    scriptReviewAttempts: attempts,
+    scriptRevisionPending: false,
+    scriptReviewDigest: scriptDigestOf(row.scriptMarkdown),
+  };
+  if (qualified) {
+    return {
+      ok: true,
+      summary: `剧本评审通过（${meanText}）`,
+      run: { ...run, ...settle },
+    };
+  }
+  if (attempts > REVIEW_MAX_RETRY) {
+    return {
+      ok: true,
+      summary: `剧本评审未达标（${meanText}），已达改写上限、保留当前版本`,
+      run: { ...run, ...settle },
+    };
+  }
+  return {
+    ok: true,
+    summary: `剧本评审未达标（${meanText}）→ 按低分维度定向改写（第 ${attempts}/${REVIEW_MAX_RETRY} 轮）`,
+    run: {
+      ...run,
+      scriptReviewAttempts: attempts,
+      scriptRevisionPending: true,
+    },
+  };
+}
+
+/**
+ * 剧本定向改写执行器（#2478 ④）：`reviseScript` 消费上一轮评审的低分维度产出新剧本
+ * （旧版留档 `scriptReview.revisions`），写 `scriptRevisionPending=false` —— 改写后
+ * 剧本指纹已变，下一 tick 规划器自动回到 `review_script` 复评，有界循环由此闭合。
+ */
+async function execReviseScript(
+  userId: string,
+  projectId: string,
+  run: ProductionRun,
+): Promise<ExecResult> {
+  let md: string;
+  try {
+    md = await reviseScript(userId, projectId);
+  } catch (e: unknown) {
+    return { ok: false, error: errorMessage(e, "剧本定向改写失败") };
+  }
+  return {
+    ok: true,
+    summary: `已按评审意见改写剧本（${md.length} 字，旧版已留档）`,
+    run: { ...run, scriptRevisionPending: false },
   };
 }
 
@@ -414,11 +520,17 @@ export async function advanceRunLoop(
         case "generate_script":
           res = await execScript(userId, projectId, run, row);
           break;
+        case "review_script":
+          res = await execReviewScript(userId, projectId, run, row);
+          break;
+        case "revise_script":
+          res = await execReviseScript(userId, projectId, run);
+          break;
         case "extract_characters":
           res = await execCharacters(userId, projectId, row);
           break;
         case "plan_storyboard":
-          res = await execStoryboard(userId, projectId, row);
+          res = await execStoryboard(userId, projectId, run, row);
           break;
         case "render_images":
           res = await execImages(

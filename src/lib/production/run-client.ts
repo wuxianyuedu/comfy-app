@@ -98,10 +98,21 @@ export async function reviewCharacter(
   return res.verdict;
 }
 
-/** 评审整份剧本（FR-QA-07 ② · #2477），返回判定（服务端已落库到 `production.scriptReview` 列）。 */
-export async function reviewScript(projectId: string): Promise<ReviewVerdict> {
-  const res = await vanillaApi.run.reviewScript.mutate({ projectId });
-  return res.verdict;
+/** 评审整份剧本（FR-QA-07 ② · #2477），返回判定与完整分数曲线（服务端已落库 `production.scriptReview` 列）。 */
+export async function reviewScript(projectId: string): Promise<{
+  verdict: ReviewVerdict;
+  history: ReviewVerdict[];
+}> {
+  return vanillaApi.run.reviewScript.mutate({ projectId });
+}
+
+/**
+ * 按评审判定定向改写剧本（FR-QA-07 ④ · #2478），返回改写后的完整剧本 Markdown
+ * （旧版服务端已留档到 `scriptReview.revisions`；调用方负责把新剧本喂回编辑器）。
+ */
+export async function reviseScript(projectId: string): Promise<string> {
+  const res = await vanillaApi.run.reviseScript.mutate({ projectId });
+  return res.markdown;
 }
 
 /**

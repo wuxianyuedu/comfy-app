@@ -933,7 +933,7 @@
 
 #### FR-QA-07 质量评审与评分闭环
 
-- 状态：部分落地（评分地基 #2477 已落；承接中：剧本循环 #2478 · 图像评审 #2479）
+- 状态：大部分落地（评分地基 #2477 + 剧本闭环 #2478 已落；承接中：图像评审 #2479）
 - 需求：让 FR-QA-01 ~ 06 的静态口径**可执行**——评审产出**维度化数字评分**
   （每维度 1~5 分 + 分值锚点 + rubric 版本号），判定与每轮分数落库留痕，
   收敛条件是「分数阈值达线」而不是只有过 / 不过；剧本、角色、分镜、生图四环节
@@ -945,14 +945,25 @@
   角色卡 / 分镜各有一张 rubric（每分值有锚点描述），评审温度走 `temperatureByTask`
   的 `review` 档（**#2477 已落地**：`TASK_TYPES.review` + 路由白名单 + 评审器接入）；
   ④ run 引擎按「低分维度定向改写 → 再评」
-  迭代，有界收敛（复用 `REVIEW_MAX_RETRY` 的有界思路），每轮分数可回看（分数曲线可查）；
+  迭代，有界收敛（复用 `REVIEW_MAX_RETRY` 的有界思路），每轮分数可回看（分数曲线可查）
+  （**#2478 已落地**：引擎 `review_script` / `revise_script` 两动作——剧本指纹
+  （`scriptDigestOf`）≠ 评审收口快照即待评审，人改剧本同判据触发（人机接力）；达标 =
+  pass 且维度均分 ≥ `SCRIPT_REVIEW_SCORE_THRESHOLD`；改写前旧版留档
+  `scriptReview.revisions`（最近 3 版）；分镜联动 = `storyboardScriptDigest` 落后即重排
+  分镜（FR-QA-01「改剧本重跑分镜，镜头描述随之改变」的执行面）；工坊剧本面板
+  「AI 评审剧本」入口（分数条 + 轮次曲线 + 按意见改写）；MCP 侧评估结论：本轮不暴露
+  `workshop_review_script` / `workshop_revise_script`——MCP 工坊会话与 production
+  统一项目仍是两套存储，评审执行器落在 production 列而 MCP 工具层只有 sessionId 语境；
+  外部 AI 打磨走 run 控制面（`FR-AG-05` 的缺口另立））；
   ⑤ 视觉评审可用：生图后按生图 rubric 打分（与提示词对齐 / 角色一致性对照定妆照 /
   构图景别 / 画面瑕疵），不合格自动走 `gacha` / `reprompt`，达上限不再自动重试、
   转人工（`src/server/agent/review.ts` 头注自证的 P8-2 由本条闭环）。
 - 落点（现状）：`src/lib/production/review-types.ts`（判定形状）、
   `src/lib/production/review-rubrics.ts`（rubric 注册表）、
   `src/server/agent/review.ts`（评审执行器）、`src/server/agent/run-engine.ts`
-  （自动评审阶段）、`src/lib/llm/prompts.ts`（评审 / 改写提示词）
+  （自动评审阶段 + 剧本质量闭环）、`src/lib/llm/prompts.ts`（评审 / 改写提示词）、
+  `src/lib/production/run-types.ts`（剧本指纹与规划器判据）、
+  `src/components/workshop/ScriptReviewButton.tsx`（工坊评审入口）
 
 #### FR-QA-08 人工评分与校准
 

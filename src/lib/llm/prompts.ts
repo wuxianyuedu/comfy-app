@@ -289,6 +289,70 @@ export const REPROMPT_SYSTEM = `你是提示词改写助手。给定一条镜头
 只输出严格 JSON 对象，不要任何解释或代码围栏：
 { "prompt": "改进后的镜头提示词（中文，具象、可拍）" }`;
 
+// ─────────────────────────────────────────────────────────────
+// Script revision（FR-QA-07 ④ · #2478：剧本定向改写 —— 消费低分维度意见产出新版剧本）
+// ─────────────────────────────────────────────────────────────
+
+export const SCRIPT_REVISION_SYSTEM = `你是剧本打磨助手。用户会给出项目信息、一份**当前剧本** Markdown 与一轮评审意见（逐条缺陷、低分维度及其打分依据、总建议）。请产出一版**定向改进后**的完整剧本：
+- 只动评审点名的部分：低分维度与逐条缺陷是必改项，其余结构、场次、台词尽量保留原样；
+- 打分依据（note）说的是「为什么低分」，改法要对着它来，不要笼统重写；
+- 保持剧本 Markdown 格式：「## 场景N · 地点（时间）」场景标题、「Δ 」动作行、「V1 角色名: 台词」台词行；
+- 改完的剧本必须仍是完整可拍的成稿，不要输出修改说明。
+只输出改写后的剧本 Markdown 正文，不要任何解释、前言或代码围栏。全程使用中文。`;
+
+/**
+ * 剧本改写消费的评审意见（与 `ReviewVerdict` 结构兼容；本文件不 import production 域，
+ * 避免跨域耦合——与 `RepromptFeedback` 同一口径）。`lowScores` 由调用方从判定里
+ * 挑出低分维度（`~/lib/production/review-types` 的 `weakScoreEntries`），按分升序。
+ */
+export interface ScriptRevisionFeedback {
+  issues: string[];
+  suggestion: string;
+  /** 低分维度：key + 分 + 打分依据；未评分（旧判定）时为空数组。 */
+  lowScores: { key: string; score: number; note: string }[];
+}
+
+/** 组装「按评审意见定向改写剧本」的消息。`sourceText` 是完整剧本 Markdown（调用方裁长）。 */
+export function buildScriptRevisionMessages(
+  sourceText: string,
+  feedback: ScriptRevisionFeedback,
+  ctx: ContentReviewContext,
+): LLMMessage[] {
+  const defects =
+    feedback.issues.length > 0
+      ? feedback.issues.map((issue) => `- ${issue}`).join("\n")
+      : "（未逐条列出）";
+  const lowScores =
+    feedback.lowScores.length > 0
+      ? feedback.lowScores
+          .map(
+            (item) =>
+              `- ${item.key}：${item.score} 分${item.note ? `（${item.note}）` : ""}`,
+          )
+          .join("\n")
+      : "（本判定未带维度评分）";
+  const user = `【项目信息】
+项目标题：${ctx.title || "未命名"}
+类型：${ctx.type || "未指定"}
+基调：${ctx.tone || "未指定"}
+梗概：${ctx.logline || "无"}
+
+【当前剧本】
+${sourceText || "（空）"}
+
+【评审指出的缺陷】
+${defects}
+【低分维度】
+${lowScores}
+【总建议】${feedback.suggestion || "（无）"}
+
+请产出定向改进后的完整剧本。`;
+  return [
+    { role: "system", content: SCRIPT_REVISION_SYSTEM },
+    { role: "user", content: user },
+  ];
+}
+
 /** 评审意见的最小形状（与 `ReviewVerdict` 结构兼容；这里不 import production 域，避免跨域耦合）。 */
 export interface RepromptFeedback {
   issues: string[];

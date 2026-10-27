@@ -3,10 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyReview,
+  applyScriptReview,
   getRecordReview,
   normalizeReviewMode,
   normalizeReviewVerdict,
+  normalizeScriptReviewState,
+  recordScriptRevision,
   reviewScoreMean,
+  weakScoreEntries,
   type ReviewVerdict,
 } from "./review-types";
 
@@ -219,5 +223,71 @@ describe("reviewScoreMean", () => {
         scoredAt: "t",
       }),
     ).toBeNull();
+  });
+});
+
+describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
+  const verdict: ReviewVerdict = {
+    pass: false,
+    issues: ["高潮缺失"],
+    suggestion: "补对峙",
+    scoredAt: "t1",
+    scores: {
+      structure: { score: 2, note: "无高潮" },
+      concreteness: { score: 4, note: "尚可" },
+    },
+  };
+
+  it("recordScriptRevision：改写前旧版进 revisions（尾部追加、超限从头裁剪）", () => {
+    let state = normalizeScriptReviewState(null);
+    state = recordScriptRevision(state, "v0", "t0");
+    state = applyScriptReview(state, verdict);
+    state = recordScriptRevision(state, "v1", "t1");
+    expect(state.revisions.map((r) => r.markdown)).toEqual(["v0", "v1"]);
+    expect(state.revisions[1]).toMatchObject({ at: "t1" });
+    // 评审位不受留档影响：判定与历史原样保留
+    expect(state.review?.scoredAt).toBe("t1");
+  });
+
+  it("recordScriptRevision 超 SCRIPT_REVISION_LIMIT(3) 从头裁剪；畸形条目丢弃", () => {
+    let state = normalizeScriptReviewState(null);
+    for (let i = 0; i < 5; i++)
+      state = recordScriptRevision(state, `v${i}`, `t${i}`);
+    expect(state.revisions.map((r) => r.markdown)).toEqual(["v2", "v3", "v4"]);
+    // 畸形留档（缺 markdown / 空串）在读取时被丢弃
+    const dirty = normalizeScriptReviewState({
+      revisions: [{ at: "t" }, { markdown: "" }, { at: "t2", markdown: "ok" }],
+    });
+    expect(dirty.revisions).toEqual([{ at: "t2", markdown: "ok" }]);
+  });
+
+  it("weakScoreEntries：低分维度升序（最差先改）；未评分 → 空数组", () => {
+    expect(weakScoreEntries(verdict)).toEqual([
+      { key: "structure", score: 2, note: "无高潮" },
+    ]);
+    expect(
+      weakScoreEntries({
+        pass: false,
+        issues: [],
+        suggestion: "",
+        scoredAt: "t",
+        scores: {
+          b: { score: 3, note: "bb" },
+          a: { score: 2, note: "aa" },
+          c: { score: 4, note: "" },
+        },
+      }),
+    ).toEqual([
+      { key: "a", score: 2, note: "aa" },
+      { key: "b", score: 3, note: "bb" },
+    ]);
+    expect(
+      weakScoreEntries({
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scoredAt: "t",
+      }),
+    ).toEqual([]);
   });
 });
