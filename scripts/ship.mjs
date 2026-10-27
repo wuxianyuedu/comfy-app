@@ -62,6 +62,10 @@
  *   · `ship-preflight.mjs`—— **阶段 0**：本检出自己的读数与本地门（分支守卫、碎片、
  *     单子读数、实例归属、依赖新鲜度）。它判的都是「这一份检出」的事实，与平台侧那几段
  *     正相反；叠在本文件里会把装配层推过 900 行（第二次撞上，首次见 #2189）。
+ *   · `ship-standalone.mjs`—— **与主流程互斥的单件动作**：`--whoami` / `--diagnose` /
+ *     `--rerun-ci` / `--branches` / 单子的领取与结束 / 只补关。它们的共同形状是
+ *     「一次只做一件、不进主流程」，变化方向也不在阶段顺序上 —— 加一个独立动作不动阶段表。
+ *     搬出去的直接原因：#2504 量的 898 行（900 硬闸余量 2 行，同一出口：拆）。
  *   · 本文件              —— **装配**：阶段顺序、读数的落点，
  *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
  *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
@@ -198,7 +202,6 @@ import { makeRunner, writeScratch } from "./ship-exec.mjs";
 import {
   handleFromProcessEnv,
   readDevHandleWithSource,
-  whoamiLines,
 } from "./ship-ticket.mjs";
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
 import {
@@ -209,16 +212,9 @@ import {
 } from "./ship-platform.mjs";
 import { pollUntilTerminal } from "./ship-poll.mjs";
 import { closeIssues } from "./ship-close.mjs";
-import { runIssueAction } from "./ship-claim.mjs";
-import { runBranches } from "./ship-branches.mjs";
-import { runNewIssue } from "./ship-issue-new.mjs";
-import { runDiagnose } from "./ship-diagnose.mjs";
-import {
-  runCommitStage,
-  runPushStage,
-  runRerunCiStage,
-} from "./ship-local.mjs";
+import { runCommitStage, runPushStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
+import { runStandaloneAction } from "./ship-standalone.mjs";
 
 /**
  * 对外入口：跑一遍编排，**无论走到哪个出口都清掉自己写的临时文件**。
@@ -483,194 +479,28 @@ async function runFlow(deps, tmpFiles) {
    * 「你填了却没落地」与「这名字是取的、本来就不会有标签」。只看 `COMFYAPP_DEV_HANDLE`。 */
   const explicitHandle = handleFromProcessEnv({ root, env });
   const handle = who.name;
-  /* ── `--whoami`：只读自查口（ISSUE #2204）─────────────────────
-   * 手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 ship，
-   * 那两条路的留痕只能靠人照着一条能粘贴的出口做。这个出口一次也不碰平台
-   * （甚至不 probe cnb）、不改任何状态，所以在分支守卫与 preflight 之前就返回。 */
-  if (opt.whoami) {
-    for (const l of whoamiLines({ handle, source: who.source, root, slug })) {
-      log(l);
-    }
-    return CODE.GREEN;
-  }
-  const cnbOk = probeCnb();
-
-  /* ── `--diagnose`：CI 红了之后的只读取回（ISSUE #2217，规范 §13.10.13）──
-   * 排在 preflight 之前、与主流程互斥：红灯现场常常就在 master 上、工作树脏、
-   * 也没有新碎片 —— 那些阻塞对「读一跑构建」不成立。它一次也不写平台。 */
-  if (opt.diagnose) {
-    const clashes = [
-      opt.whoami ? "--whoami" : null,
-      opt.merge ? "--merge" : null,
-      opt.closeIssue ? "--close-issue" : null,
-      opt.cleanBranch ? "--clean-branch" : null,
-      opt.branch ? "--branch" : null,
-      opt.message != null ? "--message" : null,
-      opt.messageFile != null ? "--message-file" : null,
-      opt.title != null ? "--title" : null,
-      opt.adds.length > 0 ? "--add" : null,
-      opt.only ? "--only" : null,
-      opt.reap ? "--reap" : null,
-      opt.claim != null ? "--claim" : null,
-      opt.release != null ? "--release" : null,
-      opt.claims ? "--claims" : null,
-      opt.branches ? "--branches" : null,
-      opt.newIssue != null || opt.newIssueBad.length > 0 ? "--new-issue" : null,
-      opt.rerunCi ? "--rerun-ci" : null,
-    ].filter(Boolean);
-    if (clashes.length > 0) {
-      log(
-        `[ship] [ERROR] --diagnose 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`,
-      );
-      return CODE.NOT_RUN;
-    }
-    return finish([
-      runDiagnose({
-        run,
-        log,
-        slug,
-        cnbOk,
-        sn: opt.diagnoseSn,
-        headSha: run("git", ["rev-parse", "HEAD"]).stdout.trim(),
-        dryRun: opt.dryRun,
-        /* 「上一眼」的基数落在 `.git/` 下 —— 没有它，单发的 diagnose 永远只能说「还在跑」，
-           说不出「一格都没推进」（ISSUE #2304）。 */
-        root,
-      }),
-    ]);
-  }
-  /* ── 「CI 失败重试」：在当前分支推一个空提交触发平台重新构建（#2289 现场踩出的需求）──
-   * 平台 CI 是 push 触发的，没有「重跑按钮」：唯一能重新派生一条流水线的方式就是再推一次。
-   * 这一格是**写动作**（commit + push），但只读 cnb、不创建 PR、不轮询 —— 与 `--diagnose`
-   * 那种「只读」不同，也和 `--merge` 那一路互斥（排在前、直接返回）。撞红线想重跑的人，
-   * 不用再去 cnbcli 翻有没有重跑入口，一句 `pnpm ship --rerun-ci` 即可。 */
-  if (opt.rerunCi) {
-    return finish([
-      runRerunCiStage({
-        up,
-        branch: localBranch,
-        root,
-        log,
-        run,
-        relay,
-        opt,
-      }),
-    ]);
-  }
-  /* `--issue-body-file` / `--priority` 是 --new-issue 的两格输入。单独给它们等于
-   * 「想建单却漏了旗标」—— 静默忽略会让这一跑退回主流程，而人以为单子建好了。 */
-  if (
-    (opt.issueBodyFile !== null || opt.priority !== null) &&
-    opt.newIssue == null &&
-    opt.newIssueBad.length === 0
-  ) {
-    log(
-      "[ship] [ERROR] --issue-body-file / --priority 只跟 --new-issue 一起用；" +
-        "单独给它们不会建任何单子。",
-    );
-    return CODE.NOT_RUN;
-  }
-
-  /* ── 分支落地读数（规范 §13.6.5，ISSUE #2427）────────────────────
-   * **只读**：它一次也不删。所以它既不需要干净工作树，也不许和任何「显式动作」同行 ——
-   * 一起给出会让人以为「看过 = 清过」，而红线 ①（显式动作不许被推断）反过来也成立：
-   * 读数不许被推断成动作。 */
-  if (opt.branches) {
-    const withAction = [
-      opt.merge ? "--merge" : null,
-      opt.cleanBranch ? "--clean-branch" : null,
-      opt.reap ? "--reap" : null,
-      opt.rerunCi ? "--rerun-ci" : null,
-      opt.claim != null ? "--claim" : null,
-      opt.release != null ? "--release" : null,
-      opt.newIssue != null ? "--new-issue" : null,
-      opt.adds.length > 0 ? "--add" : null,
-      opt.claims ? "--claims" : null,
-      opt.whoami ? "--whoami" : null,
-      opt.only ? "--only" : null,
-    ].filter(Boolean);
-    if (withAction.length > 0) {
-      log(
-        `[ship] [ERROR] --branches 是只读读数，不能和 ${withAction.join(" / ")} 同行 —— ` +
-          `要删请逐条点名，或把 --branches 单独跑一遍再决定。`,
-      );
-      return CODE.NOT_RUN;
-    }
-    return finish([
-      runBranches({
-        run,
-        log,
-        slug,
-        remote: up.remote ?? "origin",
-        trunk: up.base ?? "master",
-      }),
-    ]);
-  }
-
-  /* ── 单子的领取 / 结束 / 列表（规范 §13.10.11）──────────────────
-   * 三条动作都**独立于主流程**：领一张单不需要干净工作树，也不该顺手合并什么。
-   * 互斥与前置（cnb / slug / 留痕）在 `runIssueAction` 里判；这里只做分派，
-   * 且排在 preflight 之前 —— 否则在 master 上或没有碎片时连「领取」都跑不了。 */
-  if (
-    opt.claim != null ||
-    opt.release != null ||
-    opt.claims ||
-    opt.newIssue != null ||
-    opt.claimBad.length > 0 ||
-    opt.releaseBad.length > 0 ||
-    opt.newIssueBad.length > 0
-  ) {
-    return finish([
-      runIssueAction({
-        run,
-        log,
-        slug,
-        cnbOk,
-        handle,
-        handleSource: who.source,
-        explicitHandle,
-        root,
-        opt,
-        mkTmp,
-        createIssue: runNewIssue,
-        dryRun: opt.dryRun,
-      }),
-    ]);
-  }
-
-  /* ── 「只补关」那一路（ISSUE #2199）───────────────────────────
-   * 人在命令行上点名的号**而本轮没要合并** ⇒ 这一跑的目的就是把早已落地、却没关掉的单子关上
-   * （现场是 #2179：内容在 `1a05cd40` 上，单子还挂着）。判据用人自己给的 `--merge`，
-   * 不去猜「工作树干不干净」那种间接信号：要连本次改动一起交出去，就照旧
-   * `--merge … --close-issue <号>`，那时这些号跟在本轮验真的合并之后一起关。
-   * 「凭什么可以关」仍由 `decideCloseIssue` 判 —— 这一路要有一份平台侧的落地证明，
-   * 没有证明就退 2，而不是把单子标成完成。 */
-  if (opt.closeIssue && opt.closeIssueNumbers.length > 0 && !opt.merge) {
-    if (!cnbOk || !slug) {
-      log(
-        `[ship] 补关这一格没有执行者（${cnbOk ? "仓库 slug 取不到" : "cnb 不在"}）` +
-          " ⇒ 不动任何单子，也不猜它关没关。",
-      );
-      return CODE.NOT_RUN;
-    }
-    log(
-      `[ship] 本轮只补关：人点名 ${opt.closeIssueNumbers.map((n) => `#${n}`).join(" ")}` +
-        " 而没要 --merge ⇒ 不跑 preflight / commit / push。",
-    );
-    return finish([
-      closeIssues({
-        run,
-        log,
-        slug,
-        closeIssue: true,
-        landed: null,
-        explicit: opt.closeIssueNumbers,
-        handle,
-        mkTmp,
-        asMerged: opt.asMerged,
-      }),
-    ]);
-  }
+  /* ── 与主流程互斥的单件动作（`--whoami` / `--diagnose` / `--rerun-ci` /
+   * `--branches` / 单子那几格 / 只补关）—— 分派与各自的互斥守卫都收在
+   * `ship-standalone.mjs`，这里只决定「这一跳还要不要往下走」以及把**这一次** probe 的
+   * cnb 在场性带出去（后面每段都要它，别 probe 第二遍）。 */
+  const standalone = runStandaloneAction({
+    opt,
+    run,
+    log,
+    relay,
+    probeCnb,
+    slug,
+    up,
+    localBranch,
+    root,
+    handle,
+    whoSource: who.source,
+    explicitHandle,
+    mkTmp,
+    settle: (cs) => finish(cs),
+  });
+  if (standalone.handled) return standalone.code;
+  const cnbOk = standalone.cnbOk;
 
   // ── 阶段 0：preflight（实现见 `ship-preflight.mjs`）──────────────
   if (want("preflight")) {
