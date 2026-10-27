@@ -4,6 +4,7 @@ import {
   buildCharacterMessages,
   buildReviewMessages,
   buildScriptMarkdownMessages,
+  buildScriptReviewMessages,
   buildShotRepromptMessages,
   buildStoryboardMessages,
   parseCharacter,
@@ -226,6 +227,51 @@ describe("buildReviewMessages", () => {
     });
     expect(user!.content).toContain("未命名");
     expect(user!.content).toContain("剧本节选：\n（无）");
+  });
+
+  it("给 rubric 文本 → system 追加评分要求（scores 形状 + 锚点）；不给 → 不出现", () => {
+    const [plain] = buildReviewMessages("分镜镜头", "x", ctx);
+    expect(plain!.content).not.toContain("评分量表");
+    const [scored] = buildReviewMessages(
+      "分镜镜头",
+      "x",
+      ctx,
+      "- 主体（subject）：评主体。1=差；5=好",
+    );
+    expect(scored!.content).toContain("评分量表");
+    expect(scored!.content).toContain("scores");
+    expect(scored!.content).toContain("1=差");
+  });
+});
+
+describe("buildScriptReviewMessages", () => {
+  const ctx = {
+    title: "夜班车",
+    type: "微电影",
+    tone: "冷峻",
+    logline: "司机与乘客",
+    scriptExcerpt: "",
+  };
+  it("system 是剧本评审规范；user 带项目信息与完整剧本", () => {
+    const [system, user] = buildScriptReviewMessages("## 场景1", ctx);
+    expect(system!.content).toContain("剧本质检评审");
+    expect(user!.content).toContain("夜班车");
+    expect(user!.content).toContain("【待评审的剧本】");
+    expect(user!.content).toContain("## 场景1");
+  });
+  it("rubric 文本进 system；空剧本不产出 undefined", () => {
+    const [, user] = buildScriptReviewMessages(
+      "",
+      ctx,
+      "- 结构（structure）：x。1=a；5=b",
+    );
+    expect(user!.content).toContain("（空）");
+    const [system] = buildScriptReviewMessages(
+      "s",
+      ctx,
+      "- 结构（structure）：x。1=a；5=b",
+    );
+    expect(system!.content).toContain("structure");
   });
 });
 

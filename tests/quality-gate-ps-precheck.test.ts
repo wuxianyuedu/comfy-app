@@ -276,7 +276,7 @@ describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", 
  * 上面那组管的是**预检**这一层；这一组管**门禁本体**那一层，两层的失效形状不同：
  * `Invoke-Check` 旧代码对 `pnpm|npm|node` 一律拼 `.cmd`（本机 `node.cmd` 不存在，node 是
  * 真 exe），`&` 起不来时 PowerShell 只发一条非终止错误、**不写 `$LASTEXITCODE`**，于是读到
- * 预检那次成功调用留下的 0 ⇒ 零子进程输出却打 `[OK] ... passed`、整体退 0。
+ * 预检那次成功调用留下的 0 ⇒ 零子进程输出却打「通过」（那一行从未执行过）、整体退 0。
  * 同一条链上还有第三层：子进程的 stdout 默认进函数输出流，和 `return $code` 拼成数组，
  * 所以判决既不是纯退出码、输出也看不见 —— 实测 `Object[] ["child-marker-line", 0]`。
  */
@@ -286,8 +286,11 @@ const NOEXEC_MUTATION = {
 };
 
 describe("运行器：命令解析与「没跑起来」（静态）", () => {
-  it("「没执行」有自己的 ASCII 标签，且不再有「对 node 也拼 .cmd」那一步", () => {
-    expect(gateSrc).toContain("[GATE-NOEXEC]");
+  it("「没执行」有自己的标签（`[skip]`，与「通过」不在同一档），且不再有「对 node 也拼 .cmd」那一步", () => {
+    /* ISSUE #2506：这一档从前用 `[FAIL]` 前缀 —— 「没跑起来」与「跑了且失败」
+     * 用了同一个词。仓库的三态口径是 `0 绿 / 1 红 / 2 没跑起来`（`premerge-check.mjs`），
+     * 说「没跑起来」的那一档在屏幕上必须是 `[skip]`，与 `[ok]` / `[红]` 都分开。 */
+    expect(gateSrc).toContain("[skip] $($Block.Label)（没跑起来：命令没找到");
     expect(gateSrc).not.toMatch(
       /\$Block\.Cmd -match "\^\(pnpm\|npm\|node\)\$"/,
     );
@@ -320,18 +323,20 @@ describe.skipIf(!hasPs)(
       );
       const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
       expect(out).toContain("[dep-audit]");
-      expect(out).not.toContain("[GATE-NOEXEC]");
+      expect(out).not.toContain("（没跑起来：");
       // 不锁 status：真有基线外新增时它该退 1（那是 #1331 的判据），本条只问「跑没跑」。
     }, 240_000);
 
-    it("命令拼不出来：判 [GATE-NOEXEC]、退非 0，且整份输出里不许出现 passed", () => {
+    it("命令拼不出来：判「没跑起来」（不是红、不是通过），退非 0", () => {
       const { root } = makeFakeRepo({
         patchGateText: (src) =>
           src.replace(NOEXEC_MUTATION.from, NOEXEC_MUTATION.to),
       });
       const r = runGate(root);
-      expect(r.out).toContain("[GATE-NOEXEC]");
-      expect(r.out).not.toContain("passed");
+      /* 「没跑起来」必须打在自己的那一档上：从前它与「跑了且失败」共用 `[FAIL]`，
+       * 读的人会去查一条根本没有执行过的判据的报错（ISSUE #2506）。 */
+      expect(r.out).toContain("（没跑起来：命令没找到");
+      expect(r.out).not.toContain("[ok]");
       expect(r.status).not.toBe(0);
     });
 
@@ -349,8 +354,8 @@ describe.skipIf(!hasPs)(
           ),
       });
       const r = runGate(root);
-      expect(r.out).toContain("failed (exit 1)");
-      expect(r.out).not.toContain("passed");
+      expect(r.out).toContain("（退出码 1）");
+      expect(r.out).not.toContain("[ok]");
       expect(r.status).toBe(1);
     });
   },

@@ -933,21 +933,24 @@
 
 #### FR-QA-07 质量评审与评分闭环
 
-- 状态：计划中（承接：评分地基 #2477 · 剧本循环 #2478 · 图像评审 #2479）
+- 状态：部分落地（评分地基 #2477 已落；承接中：剧本循环 #2478 · 图像评审 #2479）
 - 需求：让 FR-QA-01 ~ 06 的静态口径**可执行**——评审产出**维度化数字评分**
   （每维度 1~5 分 + 分值锚点 + rubric 版本号），判定与每轮分数落库留痕，
   收敛条件是「分数阈值达线」而不是只有过 / 不过；剧本、角色、分镜、生图四环节
   用**同一套判定形状**（`ReviewVerdict` 扩展），剧本补上评审位（当前完全不在评审面）。
 - 行为与验收：① `ReviewVerdict` 带 `scores`（维度 → 分 + 一句话依据）与 rubric 版本，
-  旧数据（无 scores）读作「未评分」不报错；② `run.reviewScript` 可用，判定写回
-  `production` 的剧本评审位（当前无 `reviewScript`，全仓可 grep 验证）；③ 剧本 /
+  旧数据（无 scores）读作「未评分」不报错（**#2477 已落地**：`review-types.ts` +
+  `review-rubrics.ts`）；② `run.reviewScript` 可用，判定写回 `production` 的
+  `scriptReview` 列（**#2477 已落地**：列 + 执行器 + 路由 + 轮次历史）；③ 剧本 /
   角色卡 / 分镜各有一张 rubric（每分值有锚点描述），评审温度走 `temperatureByTask`
-  的 `review` 档（`TASK_TYPES` 现无此档）；④ run 引擎按「低分维度定向改写 → 再评」
+  的 `review` 档（**#2477 已落地**：`TASK_TYPES.review` + 路由白名单 + 评审器接入）；
+  ④ run 引擎按「低分维度定向改写 → 再评」
   迭代，有界收敛（复用 `REVIEW_MAX_RETRY` 的有界思路），每轮分数可回看（分数曲线可查）；
   ⑤ 视觉评审可用：生图后按生图 rubric 打分（与提示词对齐 / 角色一致性对照定妆照 /
   构图景别 / 画面瑕疵），不合格自动走 `gacha` / `reprompt`，达上限不再自动重试、
   转人工（`src/server/agent/review.ts` 头注自证的 P8-2 由本条闭环）。
 - 落点（现状）：`src/lib/production/review-types.ts`（判定形状）、
+  `src/lib/production/review-rubrics.ts`（rubric 注册表）、
   `src/server/agent/review.ts`（评审执行器）、`src/server/agent/run-engine.ts`
   （自动评审阶段）、`src/lib/llm/prompts.ts`（评审 / 改写提示词）
 

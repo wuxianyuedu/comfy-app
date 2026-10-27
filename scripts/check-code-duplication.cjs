@@ -40,6 +40,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
+const { gateFail, gatePass } = require("./ci-log.mjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -49,7 +50,8 @@ const STAGED = ARGS.has("--staged");
 /** 扫描范围：应用源码。 */
 const SCAN_DIR = "src";
 
-if (STAGED && !REPORT_ONLY) skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[duplication]" });
+if (STAGED && !REPORT_ONLY)
+  skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[duplication]" });
 const SOURCE_EXT = /\.(ts|tsx)$/;
 
 /** 判据阈值。
@@ -80,7 +82,9 @@ const MIN_SIMILARITY = 0.75;
  * 所以 `src/` 里那几百份 `.test.ts` 与快照同样不在面上。
  */
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) ||
+  /\.snap$/.test(rel) ||
+  rel.includes("/__tests__/");
 
 /** 归一化：去首尾空白；丢掉空行与整行注释(缩进/注释差异不构成差异)。 */
 function normalizedLines(text) {
@@ -88,7 +92,13 @@ function normalizedLines(text) {
   for (const raw of text.split("\n")) {
     const t = raw.trim();
     if (!t) continue;
-    if (t.startsWith("//") || t.startsWith("/*") || t.startsWith("*") || t === "*/") continue;
+    if (
+      t.startsWith("//") ||
+      t.startsWith("/*") ||
+      t.startsWith("*") ||
+      t === "*/"
+    )
+      continue;
     out.push(t);
   }
   return out;
@@ -106,7 +116,10 @@ function walk(dir, out = []) {
 }
 
 const relOf = (p) =>
-  p.split(path.sep).join("/").replace(ROOT.split(path.sep).join("/") + "/", "");
+  p
+    .split(path.sep)
+    .join("/")
+    .replace(ROOT.split(path.sep).join("/") + "/", "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -126,7 +139,11 @@ function similarity(a, b) {
   const [small, big] = a.lines.length <= b.lines.length ? [a, b] : [b, a];
   let hit = 0;
   for (const line of small.lines) if (big.set.has(line)) hit++;
-  return { ratio: hit / small.lines.length, hits: hit, total: small.lines.length };
+  return {
+    ratio: hit / small.lines.length,
+    hits: hit,
+    total: small.lines.length,
+  };
 }
 
 const twins = [];
@@ -155,20 +172,17 @@ if (REPORT_ONLY) {
 }
 
 if (twins.length) {
-  console.error(
-    `[duplication] 发现 ${twins.length} 对跨文件孪生（重复代码，规范 §12.12）：\n` +
-      twins.map(listLine).join("\n") +
-      "\n  判据：两份实现逐行重合 ≥" +
-      MIN_SIMILARITY * 100 +
-      "%。修法是把共享逻辑抽到一个模块（两份各自只留自己的差异），\n" +
-      "  而不是「两边一起改」。共享内核里不许放任何一侧的传输层代码（§18.4）。\n" +
-      "  本判据是硬闸（无基线、无 --update）：孪生对的存量已清零，新增一对即阻断。",
-  );
+  gateFail("跨文件重复块", twins.map(listLine), {
+    subject: "src/**",
+    detail: `${twins.length} 对跨文件孪生（逐行重合 ≥${MIN_SIMILARITY * 100}%，§12.12）`,
+    hint:
+      "修法是把共享逻辑抽到一个模块（两份各自只留自己的差异），而不是「两边一起改」。\n" +
+      "共享内核里不许放任何一侧的传输层代码（§18.4）。\n" +
+      "本判据是硬闸（无基线、无 --update）：孪生对的存量已清零，新增一对即阻断。",
+  });
   process.exit(1);
 }
 
-console.log(
-  `[duplication] 扫描 ${files.length} 个文件（≥${MIN_LINES} 行）；无跨文件孪生对`,
-);
-
-console.log("[duplication] OK");
+gatePass("跨文件重复块", `${files.length} 个文件（≥${MIN_LINES} 行）无孪生对`, {
+  subject: "src/**",
+});

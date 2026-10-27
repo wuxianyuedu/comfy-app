@@ -7,8 +7,8 @@ description: 把「分支 → 提交 → push → PR → 等 CI → 绿了合并
 
 **逻辑只有一份，在 `scripts/ship*.mjs` 这一族里。** 本 Skill 不重抄流程，只说什么时候用它、
 它的边界在哪、以及哪几格仍然要人判断。要看全部旗标与阶段名就读 `scripts/ship.mjs` 的文件头
-（那里列了这一族各自的职责：`-core` 判断、`-args` 旗标层、`-build` build 取数、`-exec` 效应适配、`-platform` 平台侧四段、
-`-pull-body` PR 正文那一格、`-local` 本地两段、`-close` 关单、`-claim` 领取 / 结束 / 列表 / 建单分派、`-issue-new` 一步建单、
+（那里列了这一族各自的职责：`-core` 判断、`-args` 旗标层、`-build` build 取数、`-exec` 效应适配、`-platform` 平台侧三段 + 分支清理、
+`-poll` 轮询那一格、`-pull-body` PR 正文那一格、`-local` 本地两段、`-close` 关单、`-claim` 领取 / 结束 / 列表 / 建单分派、`-issue-new` 一步建单、
 `-diagnose` 只读诊断、`-preflight` 阶段 0，入口只做装配与收口）。
 
 ## 什么时候用

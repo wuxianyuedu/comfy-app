@@ -38,6 +38,12 @@ export const TASK_TYPES = {
     hint: "0.9~1.2",
     defaultTemperature: 1.0,
   },
+  review: {
+    label: "内容评审",
+    desc: "低温稳定，判定与评分可复现",
+    hint: "0.05~0.2",
+    defaultTemperature: 0.1,
+  },
 } as const;
 
 export type TaskType = keyof typeof TASK_TYPES;

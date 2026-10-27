@@ -18,14 +18,21 @@ import { asRecord } from "~/lib/is-record";
 import { completeLLMStructured, getLLMConfig } from "~/lib/llm/server";
 import {
   buildReviewMessages,
+  buildScriptReviewMessages,
   buildShotRepromptMessages,
   type ContentReviewContext,
 } from "~/lib/llm/prompts";
 import {
   applyReview,
+  applyScriptReview,
+  normalizeReviewVerdict,
   type ReviewMode,
   type ReviewVerdict,
 } from "~/lib/production/review-types";
+import {
+  renderRubricForPrompt,
+  rubricFor,
+} from "~/lib/production/review-rubrics";
 import { applyReprompt, applyShotRedo } from "~/lib/production/sync";
 import type { Production } from "~/server/db/schema";
 
@@ -37,17 +44,27 @@ const KIND_LABEL: Record<ReviewKind, string> = {
   character: "角色卡",
 };
 
-/** 模型评审输出：`issues` / `suggestion` 容忍缺省（部分模型会漏字段）。 */
+/** 模型评审输出：`issues` / `suggestion` 容忍缺省（部分模型会漏字段）；
+ *  `scores` 是维度评分（FR-QA-07，rubric 在提示词里给了锚点才要求）——模型漏给时
+ *  仍是有效判定（scores 缺省 undefined = 未评分），单维度畸形分由归一层夹取。 */
 const VERDICT_SCHEMA = z.object({
   pass: z.boolean(),
   issues: z.array(z.string()).default([]),
   suggestion: z.string().default(""),
+  scores: z
+    .record(
+      z.string(),
+      z.object({ score: z.number(), note: z.string().default("") }),
+    )
+    .optional(),
 });
 
 /** reprompt 输出：改进后的镜头提示词。 */
 const REPROMPT_SCHEMA = z.object({ prompt: z.string() });
 
 const SCRIPT_EXCERPT_MAX = 4000;
+/** 剧本评审时送进模型的整份剧本上限（剧本本身是评审对象，比一致性节选放宽一倍）。 */
+const SCRIPT_REVIEW_MAX = 8000;
 const nowIso = () => new Date().toISOString();
 
 function str(rec: Record<string, unknown>, key: string): string {
@@ -137,28 +154,77 @@ export async function reviewContent(
   if (!rec)
     throw new Error(`找不到要评审的${KIND_LABEL[kind]}（id=${targetId}）`);
 
-  const cfg = await getLLMConfig();
+  const cfg = await getLLMConfig({ taskType: "review" });
+  // 评审温度走 temperatureByTask 的 review 档（FR-QA-07 ③）：用户覆盖 → review 推荐
+  // 默认（0.1）→ 全局。判定类任务要低温可复现，不再吃全局温度。
+  const rubric = rubricFor(kind);
   const raw = await completeLLMStructured(
     cfg,
     buildReviewMessages(
       KIND_LABEL[kind],
       reviewTextOf(kind, rec),
       reviewContext(row),
+      rubric ? renderRubricForPrompt(rubric) : undefined,
     ),
     VERDICT_SCHEMA,
   );
-  const verdict: ReviewVerdict = {
+  // scores 畸形分夹取复用归一层；rubricVersion 记「打分那一刻的量表版本」。
+  const verdict = normalizeReviewVerdict({
     pass: raw.pass,
     issues: raw.issues,
     suggestion: raw.suggestion,
     scoredAt: nowIso(),
-  };
+    ...(raw.scores ? { scores: raw.scores } : {}),
+    ...(rubric ? { rubricVersion: rubric.version } : {}),
+  });
+  if (!verdict) throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
   const nextList = applyReview(list, targetId, verdict);
   await productionRepository.patchContent(
     userId,
     projectId,
     kind === "shot" ? { shots: nextList } : { characters: nextList },
   );
+  return verdict;
+}
+
+/**
+ * 评审整份剧本（FR-QA-07 ② · #2477 地基）：调模型给判定 → 写回 `production.scriptReview`
+ * 列（含轮次历史，`applyScriptReview`）→ 返回判定。剧本是项目级内容，没有实体 id；
+ * 路由形态见 `run.reviewScript`。「低分维度定向改写 → 再评」的 run 内闭环由 #2478 接。
+ */
+export async function reviewScript(
+  userId: string,
+  projectId: string,
+): Promise<ReviewVerdict> {
+  const row = await loadRow(userId, projectId);
+  if (!row.scriptMarkdown.trim())
+    throw new Error("该项目还没有剧本（先在工坊产出剧本再评审）");
+
+  const cfg = await getLLMConfig({ taskType: "review" });
+  const rubric = rubricFor("script");
+  const raw = await completeLLMStructured(
+    cfg,
+    buildScriptReviewMessages(
+      row.scriptMarkdown.slice(0, SCRIPT_REVIEW_MAX),
+      // 剧本本身就是评审对象：上下文里不再带剧本节选（避免同一段文本进两遍）。
+      { ...reviewContext(row), scriptExcerpt: "" },
+      rubric ? renderRubricForPrompt(rubric) : undefined,
+    ),
+    VERDICT_SCHEMA,
+  );
+  const verdict = normalizeReviewVerdict({
+    pass: raw.pass,
+    issues: raw.issues,
+    suggestion: raw.suggestion,
+    scoredAt: nowIso(),
+    ...(raw.scores ? { scores: raw.scores } : {}),
+    ...(rubric ? { rubricVersion: rubric.version } : {}),
+  });
+  if (!verdict) throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
+
+  await productionRepository.patchContent(userId, projectId, {
+    scriptReview: applyScriptReview(row.scriptReview, verdict),
+  });
   return verdict;
 }
 
@@ -209,7 +275,7 @@ async function revisePrompt(
     : [];
   const suggestion =
     review && typeof review.suggestion === "string" ? review.suggestion : "";
-  const cfg = await getLLMConfig();
+  const cfg = await getLLMConfig({ taskType: "review" });
   const { prompt } = await completeLLMStructured(
     cfg,
     buildShotRepromptMessages(

@@ -66,4 +66,20 @@ describe("ProductionRepository", () => {
       await productionRepository.getForUser("u1", "proj_1"),
     ).not.toBeNull();
   });
+
+  it("patchContent 支持 scriptReview（FR-QA-07）：JSON 列序列化落库且还原为对象", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    await productionRepository.upsertForUser("u1", { id: "proj_1" });
+    const state = {
+      review: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
+      history: [],
+    };
+    expect(
+      await productionRepository.patchContent("u1", "proj_1", {
+        scriptReview: state,
+      }),
+    ).toBe(true);
+    const got = await productionRepository.getForUser("u1", "proj_1");
+    expect(got?.scriptReview).toEqual(state);
+  });
 });

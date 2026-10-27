@@ -549,6 +549,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
          * 「门禁没报出该有的那句话」，而它其实是夹具丢了 stderr
          * （硬规则 27 那句「效应不许只转述自己的 stdout」—— 丢 stderr 是这一族最重的事故）。 */
         output: status === 0 && !res.error ? stdout : both,
+        raw: { stdout, stderr },
         ran: !res.error && status !== null && !NOT_STARTED_RE.test(both),
         status,
         spawnError: res.error ? res.error.message.slice(0, 80) : null,

@@ -231,7 +231,7 @@
       "why": "账本格式的版本戳，不是判红阈值；入账只为「别处新增承重数值时这格不装看不见」。"
     },
     {
-      "file": "scripts/ship-platform.mjs",
+      "file": "scripts/ship-poll.mjs",
       "const": "POLL_STALL_MAX",
       "value": 10,
       "unit": "眼（每眼 20 秒）",

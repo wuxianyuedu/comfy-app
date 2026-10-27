@@ -38,9 +38,8 @@ describe("三条指标与三类豁免（此前从未被执行过）", () => {
     put(repo, "src/components/Probe.tsx", DIRTY);
     const r = repo.run();
     expect(r.code).toBe(1);
-    expect(r.output).toContain("当前违规合计 3 处，涉及 1 个文件");
-    for (const id of ["S1", "S2", "S3"])
-      expect(r.output).toContain(id);
+    expect(r.output).toContain("违规 3 处 · 1 个文件");
+    for (const id of ["S1", "S2", "S3"]) expect(r.output).toContain(id);
   });
 
   test("Route Handler / hooks/ / 测试文件三类豁免都不计入", ({ repo }) => {
@@ -60,7 +59,7 @@ describe("三条指标与三类豁免（此前从未被执行过）", () => {
       "export const T = () => fetch('/t');\n",
     );
     const r = repo.run();
-    expect(r.output).toContain("当前违规合计 0 处");
+    expect(r.output).toContain("[ok] UI/逻辑分离");
     expect(r.code).toBe(0);
   });
 
@@ -120,7 +119,7 @@ describe("检查路径（硬闸）", () => {
     put(repo, "src/components/A.tsx", "export const A = 1;\n");
     const r = repo.run();
     expect(r.code).toBe(0);
-    expect(r.output).toContain("[ui-logic] OK");
+    expect(r.output).toContain("[ok] UI/逻辑分离");
   });
 
   test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({
