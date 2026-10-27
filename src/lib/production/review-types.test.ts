@@ -2,8 +2,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyImageReview,
   applyReview,
   applyScriptReview,
+  getRecordImageReview,
   getRecordReview,
   normalizeReviewMode,
   normalizeReviewVerdict,
@@ -201,6 +203,47 @@ describe("applyReview", () => {
     expect((chain[0] as Record<string, unknown>).review).toMatchObject({
       scoredAt: "t11",
     });
+  });
+});
+
+describe("applyImageReview / getRecordImageReview（P8-2 视觉评审写回）", () => {
+  const verdict: ReviewVerdict = {
+    pass: false,
+    issues: ["手畸"],
+    suggestion: "修手",
+    scoredAt: "t",
+    scores: { artifacts: { score: 2, note: "畸形" } },
+  };
+
+  it("写回 shot.imageReview，不污染 shot.review（两者独立）", () => {
+    const out = applyImageReview(
+      [
+        {
+          id: "a",
+          review: { pass: true, issues: [], suggestion: "", scoredAt: "x" },
+        },
+      ],
+      "a",
+      verdict,
+    ) as Array<Record<string, unknown>>;
+    expect(out[0]?.imageReview).toEqual(verdict);
+    expect(out[0]?.review).toEqual({
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "x",
+    });
+  });
+
+  it("读回：imageReview 经 normalizeReviewVerdict 宽容解析；无则 null", () => {
+    expect(getRecordImageReview({ imageReview: verdict })).toEqual(verdict);
+    expect(getRecordImageReview({})).toBeNull();
+    expect(getRecordImageReview({ imageReview: { pass: "错" } })).toBeNull();
+  });
+
+  it("id 不命中 → 原样返回入参引用", () => {
+    const entities = [{ id: "a" }];
+    expect(applyImageReview(entities, "missing", verdict)).toBe(entities);
   });
 });
 

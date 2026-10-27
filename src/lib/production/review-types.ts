@@ -136,6 +136,35 @@ export function getRecordReview(raw: unknown): ReviewVerdict | null {
 }
 
 /**
+ * 读某条记录上已存的**视觉**评审判定（P8-2 生图评审，挂在 `imageReview`，与文本
+ * `review` 分开存）；没评过 → null。两者独立：文本评提示词、视觉评图，互不打扰。
+ */
+export function getRecordImageReview(raw: unknown): ReviewVerdict | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  return normalizeReviewVerdict(rec.imageReview);
+}
+
+/**
+ * 把视觉评审判定写回一批记录里 `id` 命中的那条（不可变返回新数组）。与 `applyReview`
+ * 同口径：认 id、不认具体实体类型（P8-2 只用于镜头，但 reducer 保持通用）。
+ * 无命中 → 原样返回入参引用。只动 `imageReview`，不动 `review` / `reviewHistory`。
+ */
+export function applyImageReview(
+  entities: unknown[],
+  id: string,
+  verdict: ReviewVerdict,
+): unknown[] {
+  let hit = false;
+  const next = entities.map((raw) => {
+    if (!isRecord(raw) || raw.id !== id) return raw;
+    hit = true;
+    return { ...raw, imageReview: verdict };
+  });
+  return hit ? next : entities;
+}
+
+/**
  * 把评审判定写回一批记录里 `id` 命中的那条（不可变返回新数组）。作用于 `production.shots` /
  * `production.characters` 这类 unknown 记录数组 —— 与 `applyShotRedo` 同口径：认 id、不认具体
  * 实体类型，因此镜头与角色卡共用一个 reducer。无命中 → 原样返回入参引用（调用方据此判断

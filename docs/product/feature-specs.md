@@ -933,7 +933,7 @@
 
 #### FR-QA-07 质量评审与评分闭环
 
-- 状态：大部分落地（评分地基 #2477 + 剧本闭环 #2478 已落；承接中：图像评审 #2479）
+- 状态：已落地（评分地基 #2477 + 剧本闭环 #2478 + 图像评审 #2479 已落）
 - 需求：让 FR-QA-01 ~ 06 的静态口径**可执行**——评审产出**维度化数字评分**
   （每维度 1~5 分 + 分值锚点 + rubric 版本号），判定与每轮分数落库留痕，
   收敛条件是「分数阈值达线」而不是只有过 / 不过；剧本、角色、分镜、生图四环节
@@ -955,13 +955,15 @@
   `workshop_review_script` / `workshop_revise_script`——MCP 工坊会话与 production
   统一项目仍是两套存储，评审执行器落在 production 列而 MCP 工具层只有 sessionId 语境；
   外部 AI 打磨走 run 控制面（`FR-AG-05` 的缺口另立））；
-  ⑤ 视觉评审可用：生图后按生图 rubric 打分（与提示词对齐 / 角色一致性对照定妆照 /
-  构图景别 / 画面瑕疵），不合格自动走 `gacha` / `reprompt`，达上限不再自动重试、
-  转人工（`src/server/agent/review.ts` 头注自证的 P8-2 由本条闭环）。
-- 落点（现状）：`src/lib/production/review-types.ts`（判定形状）、
-  `src/lib/production/review-rubrics.ts`（rubric 注册表）、
-  `src/server/agent/review.ts`（评审执行器）、`src/server/agent/run-engine.ts`
-  （自动评审阶段 + 剧本质量闭环）、`src/lib/llm/prompts.ts`（评审 / 改写提示词）、
+  ⑤ 视觉评审可用（#2479 · P8-2 已落）：生图后按生图 rubric 打分（与提示词对齐 /
+  角色一致性对照定妆照 / 构图景别 / 画面瑕疵），判定写回 `shot.imageReview`；自动 run 的
+  `review_shots` 升级为「文本 + 图」双裁判（图没过 = 不过），不合格自动走 `gacha` /
+  `reprompt`，达 `REVIEW_MAX_RETRY` 上限不再自动重试、转人工（`FR-QA-08` 的裁决入口）。
+- 落点（现状）：`src/lib/production/review-types.ts`（判定形状 + `applyImageReview`）、
+  `src/lib/production/review-rubrics.ts`（`shotImage` 量表）、
+  `src/server/agent/review.ts`（`reviewShotImage` 执行器）、`src/server/agent/run-engine.ts`
+  （`review_shots` 双裁判阶段）、`src/lib/llm/server.ts`（多模态 `messagesToWire` +
+  `getVisionLLMConfig`）、`src/lib/llm/prompts.ts`（视觉评审提示词）、
   `src/lib/production/run-types.ts`（剧本指纹与规划器判据）、
   `src/components/workshop/ScriptReviewButton.tsx`（工坊评审入口）
 

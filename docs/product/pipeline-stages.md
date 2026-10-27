@@ -86,8 +86,9 @@
 | **AI 的用法** | MCP `workshop_generate_image`；自主 run 的 `render_images` + 可选 `review_shots` |
 | **质量验收口径** | ① 镜头按 `characterIds` 收集**选中的定妆照**（至多两张）上传为 `referenceImages`，生图请求里能查到该字段；② `seed` 可固定：同一 seed + 同一工作流 + 同一参考图重跑，产出图一致（复现性；**本地 ComfyUI 通道**判此条，API 直连通道在上游声明同 seed 确定性时才判）；③ 失败只重跑失败那一镜，已完成的不被动；④ 每张图都能从产出 / 历史追回 `taskId` 与参数快照 |
 | **当前状态** | 已上线（本地 ComfyUI 通道 `FR-WP-03`）；API 直连通道 `FR-WP-04` 已上线，**远端生图**运行时未接（`FR-LM-06` 计划中） |
-| **已知缺口** | **无视觉评审**（AI 不知道这张图能不能用，只能靠人看；由 `FR-QA-07` 承接，#2479）；无「抽卡 N 选 1」的自动优选（依赖视觉评审，`FR-QA-04`④）；无角色 ↔ LoRA 绑定；失败重试策略不成文（靠人手动；任务级原样重跑见 #2481，带修改的重跑见 `FR-QA-09`） |
-| **代码落点** | `src/components/workshop/ShotStudio.tsx`；参考图注入 `src/lib/workshop/generation-client.ts`；编排 `src/server/workshop/orchestrator.ts` |
+| **已知缺口** | 无「抽卡 N 选 1」的自动优选（依赖视觉评审 + 评分阈值，`FR-QA-04`④）；无角色 ↔ LoRA 绑定；失败重试策略不成文（靠人手动；任务级原样重跑见 #2481，带修改的重跑见 `FR-QA-09`） |
+| **代码落点** | `src/components/workshop/ShotStudio.tsx`；参考图注入 `src/lib/workshop/generation-client.ts`；编排 `src/server/workshop/orchestrator.ts`；视觉评审 `src/server/agent/review.ts`（`reviewShotImage`）+ 生图 rubric `src/lib/production/review-rubrics.ts`（`shotImage`） |
+| **视觉评审（#2479 · P8-2）** | 已落地：LLM 层加多模态消息形态（`src/lib/llm/server.ts` 的 `messagesToWire`，OpenAI content 数组 / Ollama images 二选一，按 provider）+ 视觉模型通道（`getVisionLLMConfig`，可配远端 `kind=image` 模型或回落主模型）；生图后按生图 rubric（与提示词对齐 / 角色一致性 / 构图景别 / 画面瑕疵）**看图打分**，判定写回 `shot.imageReview`（与文本 `shot.review` 分开）；自动 run 的 `review_shots` 升级为「文本 + 图」双裁判——图没过 = 不过，不合格走 gacha / reprompt，达 `REVIEW_MAX_RETRY` 上限转人工（`FR-QA-07`⑤） |
 
 ---
 
