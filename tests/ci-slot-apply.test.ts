@@ -121,6 +121,26 @@ describe("槽的输入面与落位", () => {
     );
     expect(written.some((line) => line.includes("已摘 scripts"))).toBe(true);
   });
+
+  it("键面与复制面同源：槽里那份输入的键 == 作业的键（ISSUE #2489）", () => {
+    /* 复制面写进去的是 `normalizePackageJson(原文)`，键面对同一份文件再规范一次是幂等的
+     * ⇒ 两侧键必须相等。不相等就说明两个面各写了一份规范化（或只有一侧摘了 scripts）。 */
+    materializeSlotInputs({ jobRoot: job, slot });
+    expect(pnpmInstallFingerprint(slot)).toBe(pnpmInstallFingerprint(job));
+    /* 只往 scripts 加一行：两侧都不动。旧实现（键对原文取哈希）里这一行会换键，
+     * 而槽里那份副本逐字不变 —— 白付一次整装（`Done in 3m 41.4s`）。 */
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(job, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    pkg.scripts["setup:comfy-cli-venv"] =
+      "node scripts/setup-comfy-cli-venv.mjs";
+    fs.writeFileSync(
+      path.join(job, "package.json"),
+      `${JSON.stringify(pkg, null, 2)}\n`,
+    );
+    expect(pnpmInstallFingerprint(job)).toBe(key);
+    expect(pnpmInstallFingerprint(slot)).toBe(key);
+  });
 });
 
 describe("空闲与锁：两条「不够就不做」的闸", () => {

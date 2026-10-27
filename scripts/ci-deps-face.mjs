@@ -58,6 +58,24 @@ export function readPatchesDigest(root) {
 }
 
 /**
+ * `package.json` 进依赖面之前的那一份规范化：摘掉 `scripts`，再按固定缩进序列化。
+ *
+ * 根 `package.json` 的 `scripts` 不在安装闭包里（`postinstall` 写的是检出的
+ * `.git/config`，接槽接不过来 ⇒ 由作业侧 `runJobLifecycle` 补），所以它变与
+ * `node_modules` 长什么样无关。**键面与复制面必须逐字用这一份**：两处各写一份时，
+ * 「输入副本逐字相同、键却不同」那一型会回来 —— ISSUE #2489 的现场就是它，
+ * 白付了一次整装。
+ *
+ * @param {string} raw 读到的 `package.json` 原文
+ * @returns {string} 规范化之后的内容（非法 JSON 会抛 —— 调用方按「读不到依赖面」处理）
+ */
+export function normalizePackageJson(raw) {
+  const pkg = JSON.parse(raw);
+  delete pkg.scripts;
+  return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
+/**
  * 依赖面的**内容**指纹：锁文件 + 三份配置 + 补丁目录。
  *
  * 为什么不直接复用 `DEP_FILES` 的 mtime / 存在性：全新 clone 上它们全都「存在且
@@ -67,15 +85,24 @@ export function readPatchesDigest(root) {
  * `pnpm install` 的产物就不同，而它不在 `DEP_FILES` 里（那是**变更清单**的判据，
  * 两份清单职责不同）。
  *
+ * `package.json` 先走 `normalizePackageJson` 再哈希：摘掉 `scripts` 之后它就是
+ * 写进槽的那一份（复制面调的是同一函数）—— 见 ISSUE #2489。
+ *
  * @param {string} root 仓库根
- * @returns {string | null} 算不出来（读不到锁文件 / 配置）时 null —— 调用方据此真装
+ * @returns {string | null} 算不出来（读不到锁文件 / 配置，或 `package.json` 不是 JSON）时
+ *   null —— 调用方据此真装
  */
 export function pnpmInstallFingerprint(root) {
   const hash = crypto.createHash("sha256");
   for (const file of DEP_FILES) {
     try {
       hash.update(file);
-      hash.update(fs.readFileSync(path.join(root, file)));
+      const raw = fs.readFileSync(path.join(root, file));
+      hash.update(
+        file === "package.json"
+          ? Buffer.from(normalizePackageJson(raw.toString("utf8")), "utf8")
+          : raw,
+      );
     } catch {
       return null;
     }
