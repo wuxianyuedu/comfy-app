@@ -36,9 +36,9 @@
 | **输出契约** | `scriptMarkdown`（正文 Markdown）；服务端编排另解析出 `Scene[]`（场景列表，供分镜阶段消费） |
 | **人的用法** | 工坊阶段①：填创意 → 生成 / 手写 / 导入 → 就地编辑成稿 |
 | **AI 的用法** | MCP `workshop_generate_script` / `workshop_set_script`；自主 run 的第一步 `generate_script` |
-| **质量验收口径** | ① 产物能被下游**自动拆出** `Scene[]`（拆不出 = 剧本不可用）；② 类型 / 基调进入后续所有阶段的提示词构造（`src/lib/workshop/prompt-builder.ts`），改剧本后重跑分镜，镜头描述必须随之改变；③ 同一 `idea` + 同一温度重跑，产出结构与场景数一致 |
+| **质量验收口径** | ① 产物能被下游**自动拆出** `Scene[]`（拆不出 = 剧本不可用）；② 类型 / 基调进入后续所有阶段的提示词构造（`src/lib/workshop/prompt-builder.ts`），改剧本后重跑分镜，镜头描述必须随之改变；③ 产物**内在结构**有效：拆出的 `Scene[]` 非空、每场景有可定位的标题与正文、类型 / 基调字段非空（LLM 生成不具跨次确定性，验收不依赖「重跑两次结果一致」） |
 | **当前状态** | 已上线（`FR-WP-01` / `FR-WP-03` / `FR-WP-04` 两条通道：本地 ComfyUI 工作流 / API 直连） |
-| **已知缺口** | 无**剧本评审**环节（长度失控、重复段落无人判）；剧本与「集」结构无关（多集剧本无容器，见 `FR-SR-03`）；无版本对比与回退 |
+| **已知缺口** | 无**剧本评审**环节（长度失控、重复段落无人判；评审与定向改写由 `FR-QA-07` 承接，#2478）；剧本与「集」结构无关（多集剧本无容器，见 `FR-SR-03`）；无版本对比与回退 |
 | **代码落点** | `src/components/workshop/ScriptGenerator.tsx`；编排侧场景解析 `src/server/workshop/orchestrator.ts`；自主 run `src/server/agent/run-engine.ts` |
 
 ---
@@ -54,7 +54,7 @@
 | **AI 的用法** | MCP `workshop_extract_characters` / `workshop_set_characters`；自主 run 的 `extract_characters`（**当前只生成角色文本，不出定妆照**） |
 | **质量验收口径** | ① 每个角色有且仅有一张**生效定妆照**（`portraitUrl`），缺锚定时下游生图给出可见提示；② 同一角色在**不同镜头**里被引用时，`characterIds` 一致且参考图同源（换镜头不该换脸）；③ 角色卡改动后重跑生图，结果图必须变化（证明角色卡真的进了提示词） |
 | **当前状态** | 已上线（角色卡 + 定妆照上传 `FR-WP-06`）；**一致性只到「参考图」这一层** |
-| **已知缺口** | 无「角色 ↔ LoRA / 模型」绑定（LoRA 只能由所选工作流内部承载）；无跨集角色库（`FR-SR-03`）；AI 自主链路不产定妆照；**视觉一致性评审未实现**（`src/server/agent/review.ts` 只评审文本，等后续多模态能力） |
+| **已知缺口** | 无「角色 ↔ LoRA / 模型」绑定（LoRA 只能由所选工作流内部承载）；无跨集角色库（`FR-SR-03`）；AI 自主链路不产定妆照；**视觉一致性评审未实现**（`src/server/agent/review.ts` 只评审文本，等后续多模态能力；由 `FR-QA-07` 承接，#2479） |
 | **代码落点** | `src/lib/workshop/types.ts`（`Character`）；`src/components/workshop/WorkshopStageBody.tsx`；参考图上传与注入 `src/lib/workshop/generation-client.ts` |
 
 ---
@@ -84,9 +84,9 @@
 | **输出契约** | 回填 `Shot.status` / `Shot.taskId` / `Shot.imageUrl`，产物落盘并在产出视图可见 |
 | **人的用法** | 工坊阶段④：选工作流 / 通道 → 单镜或批量生成（项目内批量并发上限 2）→ 不满意可固定或换 seed 重出 |
 | **AI 的用法** | MCP `workshop_generate_image`；自主 run 的 `render_images` + 可选 `review_shots` |
-| **质量验收口径** | ① 镜头按 `characterIds` 收集**选中的定妆照**（至多两张）上传为 `referenceImages`，生图请求里能查到该字段；② `seed` 可固定：同一 seed + 同一工作流 + 同一参考图重跑，产出图一致（复现性）；③ 失败只重跑失败那一镜，已完成的不被动；④ 每张图都能从产出 / 历史追回 `taskId` 与参数快照 |
+| **质量验收口径** | ① 镜头按 `characterIds` 收集**选中的定妆照**（至多两张）上传为 `referenceImages`，生图请求里能查到该字段；② `seed` 可固定：同一 seed + 同一工作流 + 同一参考图重跑，产出图一致（复现性；**本地 ComfyUI 通道**判此条，API 直连通道在上游声明同 seed 确定性时才判）；③ 失败只重跑失败那一镜，已完成的不被动；④ 每张图都能从产出 / 历史追回 `taskId` 与参数快照 |
 | **当前状态** | 已上线（本地 ComfyUI 通道 `FR-WP-03`）；API 直连通道 `FR-WP-04` 已上线，**远端生图**运行时未接（`FR-LM-06` 计划中） |
-| **已知缺口** | **无视觉评审**（AI 不知道这张图能不能用，只能靠人看）；无「抽卡 N 选 1」的自动优选；无角色 ↔ LoRA 绑定；失败重试策略不成文（靠人手动） |
+| **已知缺口** | **无视觉评审**（AI 不知道这张图能不能用，只能靠人看；由 `FR-QA-07` 承接，#2479）；无「抽卡 N 选 1」的自动优选（依赖视觉评审，`FR-QA-04`④）；无角色 ↔ LoRA 绑定；失败重试策略不成文（靠人手动；任务级原样重跑见 #2481，带修改的重跑见 `FR-QA-09`） |
 | **代码落点** | `src/components/workshop/ShotStudio.tsx`；参考图注入 `src/lib/workshop/generation-client.ts`；编排 `src/server/workshop/orchestrator.ts` |
 
 ---
