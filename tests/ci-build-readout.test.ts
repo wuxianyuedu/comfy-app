@@ -21,6 +21,8 @@
  * ② 逐格读数缺席 ⇒ 退回构建级状态，而不是「没发现问题」；
  * ③ 真红的那一格与被取消的那一格同时出现 ⇒ **真红优先**（那一格才是最该被看见的）。
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -1445,5 +1447,67 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
     const out = h.lines.join("\n");
     expect(out).toContain("pnpm ship --stage-log <sn>");
     expect(out).not.toContain("--diagnose");
+  });
+});
+
+/**
+ * 「一族读数只允许有一份定义」（ISSUE #2526 切分之后的形状档）。
+ *
+ * 为什么要单独钉这一条：#2526 把 `formatOutcome` / `stageLogExcerpt` 搬到
+ * `ci-build-print.mjs`，而 `ci-build-readout.mjs` 继续**转发**它们（消费口一字不改）。
+ * 那个形状一旦被人「顺手在原处再补一份」，两份会同时存在、被不同调用点各读一份，
+ * 漂移形态恰恰是**账面全绿而两个入口给出两种话术**（与 #2455 那条「同一跑不许给出两种答案」
+ * 同一个方向）。而 `scripts/` 不在 `check-code-duplication.cjs` 的量程里（它扫 `src/**`），
+ * 这一族没有别的执行者会响。
+ */
+describe("切分之后：ci-build 这一族的读数各只有一份定义", () => {
+  const dir = path.resolve(process.cwd(), "scripts");
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => /^ci-build.*\.mjs$/.test(f))
+    .map((f) => ({ name: f, src: fs.readFileSync(path.join(dir, f), "utf8") }));
+  const names = [
+    "classifyBuildOutcome",
+    "formatOutcome",
+    "progressReadout",
+    "stageLogExcerpt",
+    "normalizeStageContent",
+    "resolveBuildSn",
+  ];
+  const definedIn = (name: string) =>
+    files
+      .filter((f) => new RegExp(`^export function ${name}\\(`, "m").test(f.src))
+      .map((f) => f.name);
+
+  it("前置：文件在、每个名字都抓得到一个定义点（正则写漂会两侧都成空集、于是恒绿）", () => {
+    for (const need of [
+      "ci-build-classify.mjs",
+      "ci-build-print.mjs",
+      "ci-build-readout.mjs",
+    ]) {
+      expect(files.map((f) => f.name), `少了 ${need}`).toContain(need);
+    }
+    for (const name of names) {
+      expect(definedIn(name), `${name} 的定义点`).toHaveLength(1);
+    }
+  });
+
+  it("搬走的那两个由 readout 转发出去，而定义只在 print 那一份里", () => {
+    const readout = files.find((f) => f.name === "ci-build-readout.mjs");
+    /* ⚠️ 锚在**行首**：`readout` 的文件头里有一句正写着「见下面那个 `export { … }`」，
+     * 不锚行首的写法会从那句注释起、一路吞到真的转发块，于是清单里少转发一个名字也照样绿
+     * （变异自证踩过：把 `formatOutcome` 从清单里删掉，这条当时没红）。 */
+    const block =
+      /^export \{([\s\S]*?)\};/m.exec(readout?.src ?? "")?.[1] ?? "(没有转发块)";
+    for (const name of ["formatOutcome", "stageLogExcerpt", "progressReadout"]) {
+      expect(block, `转发清单里没有 ${name}`).toContain(name);
+    }
+    /* 转发 ≠ 再定义：定义点各归各的一份，谁也没被复制。 */
+    expect(definedIn("formatOutcome")).toEqual(["ci-build-print.mjs"]);
+    expect(definedIn("stageLogExcerpt")).toEqual(["ci-build-print.mjs"]);
+    expect(definedIn("classifyBuildOutcome")).toEqual(["ci-build-classify.mjs"]);
+    expect(definedIn("progressReadout")).toEqual(["ci-build-classify.mjs"]);
+    expect(definedIn("normalizeStageContent")).toEqual(["ci-build-readout.mjs"]);
+    expect(definedIn("resolveBuildSn")).toEqual(["ci-build-readout.mjs"]);
   });
 });
