@@ -58,7 +58,10 @@ const reviewScript = vi.hoisted(() =>
         scoredAt: string;
       };
       history: unknown[];
-    }> => ({ verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" }, history: [] }),
+    }> => ({
+      verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
+      history: [],
+    }),
   ),
 );
 const reviseScript = vi.hoisted(() =>
@@ -454,9 +457,7 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
         },
         history: [],
       });
-    completeLLMStructured.mockResolvedValueOnce([
-      { description: "日景街拍" },
-    ]); // plan_storyboard（新剧本；角色步因已有角色被规划器跳过）
+    completeLLMStructured.mockResolvedValueOnce([{ description: "日景街拍" }]); // plan_storyboard（新剧本；角色步因已有角色被规划器跳过）
     await seed(
       {
         scriptMarkdown: revised,

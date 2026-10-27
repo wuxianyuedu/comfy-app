@@ -39,7 +39,11 @@ import {
 } from "~/lib/production/run-types";
 import { applyShotRedo } from "~/lib/production/sync";
 import { reviewScoreMean } from "~/lib/production/review-types";
-import { reviewContent, reviewScript, reviseScript } from "~/server/agent/review";
+import {
+  reviewContent,
+  reviewScript,
+  reviseScript,
+} from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage } from "~/lib/error-message";
 import type { Character, ProjectType, Shot } from "~/lib/workshop/types";
@@ -350,7 +354,11 @@ async function execReviewScript(
   return {
     ok: true,
     summary: `剧本评审未达标（${meanText}）→ 按低分维度定向改写（第 ${attempts}/${REVIEW_MAX_RETRY} 轮）`,
-    run: { ...run, scriptReviewAttempts: attempts, scriptRevisionPending: true },
+    run: {
+      ...run,
+      scriptReviewAttempts: attempts,
+      scriptRevisionPending: true,
+    },
   };
 }
 
