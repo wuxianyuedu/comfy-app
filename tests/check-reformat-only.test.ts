@@ -203,7 +203,7 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
     commitAll(repo, "format only");
     const r = repo.run();
     expect(r.code).toBe(1);
-    expect(r.output).toContain("只改格式");
+    expect(r.output).toContain("格式化提交分离");
     expect(r.output).toContain("git reset --soft HEAD~1");
   });
 
@@ -225,7 +225,7 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
     commitAll(repo, "behaviour change");
     const r = repo.run();
     expect(r.code).toBe(0);
-    expect(r.output).toContain("纯格式化 0 个");
+    expect(r.output).toContain("没有纯格式化的");
   });
 
   test("prettier 的重新断行也算纯格式化（逐行比对会漏报的那一档）", ({
@@ -243,7 +243,7 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
     commitAll(repo, "reflow");
     const r = repo.run(["--strict"]);
     expect(r.code).toBe(1);
-    expect(r.output).toContain("只改格式");
+    expect(r.output).toContain("格式化提交分离");
   });
 
   test("没有父提交（首次提交 / 浅克隆）→ 跳过，不阻断", ({ repo }) => {
@@ -261,7 +261,7 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
     commitAll(repo, "add files");
     const r = repo.run();
     expect(r.code).toBe(0);
-    expect(r.output).toContain("纯格式化 0 个");
+    expect(r.output).toContain("没有纯格式化的");
   });
 });
 
@@ -295,7 +295,7 @@ describe(
       expect(r.code).toBe(0);
       // 判的是暂存区：只有 1 个改动文件，且它不是「重排既有文件」。
       expect(r.output).toContain("改动 1 个源文件");
-      expect(r.output).toContain("纯格式化 0 个");
+      expect(r.output).toContain("没有纯格式化的");
     });
 
     test("暂存区里一次格式化 12 个既有文件 → 仍然阻断（该拦的照样拦）", ({
@@ -325,7 +325,7 @@ describe(
 
       const r = repo.run();
       expect(r.code).toBe(0);
-      expect(r.output).toContain("纯格式化 0 个");
+      expect(r.output).toContain("没有纯格式化的");
     });
 
     test("无暂存改动时回落到「判 HEAD 这一次提交」（本地事后复盘口径不变）", ({

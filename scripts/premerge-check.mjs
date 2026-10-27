@@ -63,6 +63,7 @@ import {
   resolveMergeBatch,
 } from "./base-check.mjs";
 import { localTierLabels } from "./base-check/hook-steps.mjs";
+import { renderVerdict } from "./ci-log.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -493,14 +494,39 @@ function main(argv) {
     return total;
   }
 
+  /* 判决行的形状只有一处出处：`scripts/ci-log.mjs` 的三态出口（ISSUE #2506）。
+   * 这一跳的**段判**与它自己的三态退出码逐字同口径（`0` 绿 / `1` 红 / `2` 没跑起来）——
+   * 从前段头打 `── 段名：绿|红|没跑起来`，与跑批的 `[重档] …红/没跑起来`、
+   * 钩子的 `  [ok] ── …` 又是三种说法。 */
   for (const r of results) {
-    const mark = r.code === 0 ? "绿" : r.code === 1 ? "红" : "没跑起来";
-    process.stdout.write(`\n[premerge] ── ${r.label}：${mark}\n`);
+    const state = r.code === 0 ? "ok" : r.code === 1 ? "red" : "skip";
+    const detail =
+      state === "ok"
+        ? "这一段的判据全过"
+        : state === "red"
+          ? "有判据红了（退出码 1）"
+          : "没跑起来（退出码 2）—— 不构成证据，不是红";
+    for (const line of renderVerdict({
+      state,
+      gate: r.label,
+      subject: "premerge 段",
+      detail,
+    })) {
+      process.stdout.write(`${line}\n`);
+    }
     process.stdout.write(r.output);
   }
-  process.stdout.write(
-    `\n[premerge] 结论：${total === 0 ? "全绿" : total === 1 ? "有段红了" : "有段没跑起来（不构成证据）"}\n`,
-  );
+  /** @type {"ok" | "red" | "skip"} */
+  const state = total === 0 ? "ok" : total === 1 ? "red" : "skip";
+  const detail =
+    state === "ok"
+      ? "三段全绿"
+      : state === "red"
+        ? "有段红了"
+        : "有段没跑起来（不构成证据）";
+  for (const line of renderVerdict({ state, gate: "合并前复算", detail })) {
+    process.stdout.write(`\n${line}\n`);
+  }
   if (total !== 0) {
     process.stdout.write(
       "[premerge] 这一跳是「我的分支绿 → master 绿」之间唯一的判据（平台侧 squash 不跑本地钩子）。\n" +

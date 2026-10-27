@@ -78,6 +78,7 @@ async function loadShell() {
 }
 
 const { discernRoots } = require("./gate-scan-read.cjs");
+const { gateFail, gatePass, gateSkip, indentItems } = require("./ci-log.mjs");
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
@@ -425,7 +426,6 @@ function classifyReformatOnly(entries) {
   return reformatOnly;
 }
 
-
 /**
  * 收集「建议比对」的一批文件:两侧内容都取得到(新增 / 删除 / 改名不判定 ——
  * 本门禁只判「既有的文件被重排」)。
@@ -453,8 +453,9 @@ async function main() {
    *  仅当**没有**走 `--range`（CI 盘点按范围判，与合并现场无关）时豁免。 */
   const mergeHeadPresent = fs.existsSync(path.join(ROOT, ".git", "MERGE_HEAD"));
   if (!process.argv.includes("--range") && mergeHeadPresent) {
-    console.log(
-      "[reformat] 合并提交（MERGE_HEAD 存在），跳过「格式化与行为改动分离」判定",
+    gateSkip(
+      "格式化提交分离",
+      "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用",
     );
     return;
   }
@@ -489,8 +490,9 @@ async function main() {
     if (
       gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === ""
     ) {
-      console.log(
-        `[reformat] 无可比父提交（${beforeRev} 不存在，首次提交或浅克隆），跳过`,
+      gateSkip(
+        "格式化提交分离",
+        `无可比父提交（${beforeRev} 不存在，首次提交或浅克隆）`,
       );
       return;
     }
@@ -501,14 +503,14 @@ async function main() {
       `${beforeRev}..${afterRev}`,
     ]);
     if (!patch.trim()) {
-      console.log("[reformat] 本次提交没有文件改动，跳过");
+      gateSkip("格式化提交分离", "本次提交没有文件改动");
       return;
     }
     const files = collectChangedFiles(patch);
     const pairs = collectPairs(files, beforeRev, (f) =>
       gitOrEmpty(["show", `${afterRev}:${f.after}`]),
     );
-    report(files, classifyReformatOnly(pairs), limit);
+    process.exit(report(files, classifyReformatOnly(pairs), limit));
     return;
   }
 
@@ -522,8 +524,9 @@ async function main() {
     range &&
     gitOrEmpty(["rev-parse", "--verify", "--quiet", rangeBefore]).trim() === ""
   ) {
-    console.log(
-      `[reformat] 无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆），跳过`,
+    gateSkip(
+      "格式化提交分离",
+      `无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆）`,
     );
     return;
   }
@@ -538,7 +541,9 @@ async function main() {
     : staged;
 
   if (!patch.trim()) {
-    console.log("[reformat] 本次提交没有文件改动，跳过");
+    /* 「没有改动」是**这一轮没判**（skip），不是「判过且干净」—— 两件事在
+     * 屏幕上是两档（ISSUE #2506）。 */
+    gateSkip("格式化提交分离", "本次提交没有文件改动");
     return;
   }
 
@@ -550,47 +555,54 @@ async function main() {
     // 暂存区口径:改动后的内容在 index 里,`:<path>` 正是它的取法。
     gitOrEmpty(["show", range ? `${rangeAfter}:${f.after}` : `:${f.after}`]),
   );
-  report(files, classifyReformatOnly(pairs), limit);
+  process.exit(report(files, classifyReformatOnly(pairs), limit));
 }
 
 /** 输出结论并按阈值决定是否阻断(两个口径共用,避免两份会各自漂移的判定)。 */
 function report(files, reformatOnly, limit) {
-  console.log(
-    `[reformat] 本次提交改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）`,
-  );
-
+  /* 判决行的形状只有一处出处：`scripts/ci-log.mjs`（ISSUE #2506）。
+   * ⚠️ 两条分支**都要交回退出码**，调用点是 `process.exit(report(…))`：从前红的那
+   * 一支就地 `process.exit(1)`，搬进出口之后若就地退，`report()` 之后的收尾就再没有
+   * 执行者 —— 退 0 = 判据恒绿（这一条在把红那一支改成 `return 1` 时当场验过）。 */
   if (reformatOnly.size >= limit) {
-    console.error(
-      `\n[reformat] 本次提交混入了 ${reformatOnly.size} 个「只改格式」的文件（规范 §13.5）:\n` +
-        [...reformatOnly]
-          .sort()
-          .slice(0, 20)
-          .map((f) => `  · ${f.after}`)
-          .join("\n") +
-        (reformatOnly.size > 20
-          ? `\n  … 其余 ${reformatOnly.size - 20} 个省略`
-          : "") +
-        "\n\n  为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效," +
-        "\n  评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。" +
-        "\n\n  修法:拆成两次提交。" +
-        "\n    git reset --soft HEAD~1" +
-        "\n    git restore --staged ." +
-        '\n    git add <仅功能相关的文件> && git commit -m "fix(scope): <本次改动>"' +
-        "\n    # 用 pnpm exec prettier --write <文件> 格式化（别对全库跑 format:write）" +
-        '\n    git add -A && git commit -m "style: 格式化 <范围>"' +
-        "\n\n  若确实要一次性格式化某批文件（清理存量），那就**单独一个提交/PR**做它。" +
-        "\n  （`check-format.cjs` 已是硬闸、没有 `--update`：存量清零后删掉了那条通道，见 ISSUE #1811。）",
-    );
-    process.exit(1);
+    gateFail("格式化提交分离", [...reformatOnly].sort(), {
+      detail: `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）`,
+      hint:
+        "为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效,\n" +
+        "评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。\n" +
+        "修法:拆成两次提交。\n" +
+        "  git reset --soft HEAD~1\n" +
+        "  git restore --staged .\n" +
+        '  git add <仅功能相关的文件> && git commit -m "fix(scope): <本次改动>"\n' +
+        "  # 用 pnpm exec prettier --write <文件> 格式化（别对全库跑 format:write）\n" +
+        '  git add -A && git commit -m "style: 格式化 <范围>"\n' +
+        "若确实要一次性格式化某批文件（清理存量），那就**单独一个提交/PR**做它。\n" +
+        "（`check-format.cjs` 已是硬闸、没有 `--update`：存量清零后删掉了那条通道，见 ISSUE #1811。）",
+    });
+    return 1;
   }
 
+  /* 放行但不必点名的那一档，读数要带上「为什么不必点名」——
+   * 一行判决里说不完的，跟在后面缩进（判过仍然是判过了）。 */
   if (reformatOnly.size > 0) {
-    console.log(
-      `  （未达阈值，放行）${[...reformatOnly].sort().slice(0, 5).join(", ")}` +
-        (reformatOnly.size > 5 ? " …" : ""),
+    gatePass(
+      "格式化提交分离",
+      `本次改动 ${files.length} 个源文件，纯格式化 ${reformatOnly.size} 个（阈值 ${limit}，未达阈值）`,
     );
+    for (const line of indentItems([
+      "放行但不计入噪声的：" +
+        [...reformatOnly].sort().slice(0, 5).join(", ") +
+        (reformatOnly.size > 5 ? " …" : ""),
+    ])) {
+      console.log(line);
+    }
+    return 0;
   }
-  console.log("[reformat] OK");
+  gatePass(
+    "格式化提交分离",
+    `本次改动 ${files.length} 个源文件，没有纯格式化的`,
+  );
+  return 0;
 }
 
 if (require.main === module) main();

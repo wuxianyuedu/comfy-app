@@ -187,7 +187,9 @@ describe("重档 —— 「没有结论」不许走成「全绿」（ISSUE #2367
     const all = lines.join("\n");
     expect(all, "头几行被省掉了").toContain("1");
     expect(all, "结论被省掉了").toContain("这一条红了");
-    expect(all, "省略了多少行要说出来").toMatch(/省略第 \d+~\d+ 行/);
+    /* 省略必须被读出来（ISSUE #2506：判决行走 `scripts/ci-log.mjs` 之后那句话是
+     * 「上面是头 5 行 + 尾 15 行，中间省略 N 行」）—— 判的是**有那一句**，不是逐字。 */
+    expect(all, "省略了多少行要说出来").toMatch(/中间省略 \d+ 行/);
   });
 });
 
@@ -221,29 +223,31 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
 
   it("改动面没碰到那条的面 ⇒ 这一条被跳过，且**逐条点名**", () => {
     const got = one("主题色扫描", { files: ["docs/README.md"] });
-    expect(got.out).toMatch(/按面未触及 ⇒ 跳过：主题色扫描/);
+    /* 三态出口之后，跳过的那一行是 `[skip] <名字>（按面未触及：…）`——
+     * 前缀本身就在说「这一条没判」（ISSUE #2506）。 */
+    expect(got.out).toMatch(/\[skip\] 主题色扫描（按面未触及：/);
     /* 跳过不是判过 ⇒ 那一格不许把它算成绿。 */
-    expect(got.out).toContain("绿 0");
+    expect(got.out).toContain("判过 0");
     expect(got.code).toBe(0);
   });
 
   it("改动面碰到了那条的面 ⇒ 这一条照跑（不跳）", () => {
     const got = one("主题色扫描", { files: ["src/app/x.tsx"] });
-    expect(got.out).toContain("ok 主题色扫描");
-    expect(got.out).not.toMatch(/按面未触及 ⇒ 跳过/);
-    expect(got.out).toContain("绿 1");
+    expect(got.out).toMatch(/\[ok\] 主题色扫描/);
+    expect(got.out).not.toMatch(/按面未触及/);
+    expect(got.out).toContain("判过 1");
   });
 
   it("改动面**取不到** ⇒ 一条都不跳（“不知道” ≠ “没改”）", () => {
     const got = one("主题色扫描", null);
-    expect(got.out).toContain("ok 主题色扫描");
-    expect(got.out).not.toMatch(/按面未触及 ⇒ 跳过/);
+    expect(got.out).toMatch(/\[ok\] 主题色扫描/);
+    expect(got.out).not.toMatch(/按面未触及/);
   });
 
   it("改动面是**空清单** ⇒ 一条都不跳（空清单也是“不知道”）", () => {
     const got = one("主题色扫描", { files: [] });
-    expect(got.out).toContain("ok 主题色扫描");
-    expect(got.out).not.toMatch(/按面未触及 ⇒ 跳过/);
+    expect(got.out).toMatch(/\[ok\] 主题色扫描/);
+    expect(got.out).not.toMatch(/按面未触及/);
   });
 
   it("面取自**收窄登记表**，不是手抄的第二份", () => {
