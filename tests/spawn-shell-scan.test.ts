@@ -20,8 +20,19 @@
  * 报成违例（`hook-steps.mjs` 那几行）。那条假阳性的代价不是「多修一次」，而是
  * 「下一个人学会给判据加白名单」。所以这里钉两件事：注释真的被剥掉、以及
  * `shell: false` 这类**明确关掉**的写法不被判（判它就是把写清楚的人一起罚）。
+ *
+ * ── ISSUE #2513：判据面收在调用点上，两侧都要证 ────────────────────────────
+ *
+ * 第一版按**行的字面形态**认（任意 `shell:` 键）：`ci-cache-slot.mjs` 里一个普通读数
+ * 字段就把 PR 判红，而那一行没有任何 `spawn`。收窄之后**两个方向都要有用例** ——
+ * 只把误报压下去、把真形状一起放走，是更坏的结果（规范 §13.5.4 那一族）：
+ *   · 真违规仍然判得出来（含多行选项对象、临时树端到端）；
+ *   · 普通数据对象的同名键（哪怕值不是 `false`）、`re.exec(...)` 的实参、
+ *     字符串里写着 `shell:` 的那几个反例，一个都不判。
  */
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -31,6 +42,10 @@ import {
   binRelativePath,
   resolvePackageBinEntry,
 } from "../scripts/package-bin-entry.mjs";
+import {
+  findShellOptions,
+  findShellOptionsIn,
+} from "../scripts/spawn-shell-scan.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -66,42 +81,101 @@ describe("scripts/spawn-shell-scan.mjs", () => {
     );
   });
 
-  it("明确关掉的那几种不被判（shell: false / null / 字符串值）", () => {
+  it("明确关掉的那几种不被判（shell: false / null / undefined / 字符串值）", () => {
     const cases = [
       "spawn(a, b, { shell: false });",
       "spawn(a, b, { shell: null });",
-      "const kinds = { shell: \"shell\" };",
+      "spawn(a, b, { shell: undefined });",
+      'spawn(a, b, { shell: "shell" });',
     ];
-    for (const line of cases) {
-      expect(findShellOptionsIn(line), line).toEqual([]);
+    for (const src of cases) {
+      expect(findShellOptionsIn(src), src).toEqual([]);
     }
   });
 
-  it("真要拦的那三种形状会被判出来", () => {
-    for (const line of [
+  it("真要拦的那三种形状会被判出来（含多行选项对象）", () => {
+    const cases = [
       "spawn(a, b, { shell: true });",
-      "spawn(a, b, { shell: process.platform === \"win32\" });",
+      'spawn(a, b, { shell: process.platform === "win32" });',
       "spawnSync(bin, args, { shell: needsShell(cmd) });",
-    ]) {
-      expect(findShellOptionsIn(line).length, line).toBe(1);
+      'execFileSync("git", ["status"], { shell: needsShell(cmd) });',
+      'fork(mod, [a], { shell: true });',
+      'exec(cmd, { shell: requiresShell });',
+      [
+        "spawnSync(invocation.command, invocation.args, {",
+        "  cwd,",
+        '  encoding: "utf8",',
+        "  shell: needsShell(cmd),",
+        "});",
+      ].join("\n"),
+    ];
+    for (const src of cases) {
+      expect(findShellOptionsIn(src), src).toHaveLength(1);
+    }
+  });
+
+  it("#2513：普通数据对象的同名键不判（哪怕值不是 false）", () => {
+    const cases = [
+      // #2494 现场那一行的形状：每键读数对象里的字段
+      ["const slot = {", '  key: "k",', "  shell: isUselessShell(abs),", "};"].join(
+        "\n",
+      ),
+      // launcher-core/log.mjs 的日志分区表
+      'export const LOG_DIRS = { shell: "shell" };',
+      // 返回值对象（launcher-core/shell-stage.mjs）
+      "return { ok: true, shell: child, staleShell: null };",
+    ];
+    for (const src of cases) {
+      expect(findShellOptionsIn(src), src).toEqual([]);
+    }
+  });
+
+  it("#2513：`re.exec(...)` / 成员调用 / 字符串内容 / 嵌套对象都不是本判据的面", () => {
+    const cases = [
+      "const m = /x/.exec({ shell: flag });",
+      "const m = re.exec(line, { shell: true });",
+      'spawnSync(cmd, args, { cwd: "shell: true" });',
+      "spawn(cmd, args, { env: { shell: true } });",
+      "spawn(cmd, args, opts);",
+    ];
+    for (const src of cases) {
+      expect(findShellOptionsIn(src), src).toEqual([]);
+    }
+  });
+
+  it("#2513：端到端 —— 临时树里的真违规被点名，「同名数据字段」不陪着红", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "spawn-shell-scan-"));
+    try {
+      fs.mkdirSync(path.join(root, "scripts"));
+      fs.writeFileSync(
+        path.join(root, "scripts", "violation.mjs"),
+        [
+          "export function run(bin, args) {",
+          '  return spawn(bin, args, {',
+          '    stdio: "inherit",',
+          "    shell: true,",
+          "  });",
+          "}",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(root, "scripts", "data.mjs"),
+        [
+          "// 同名数据字段，与子进程无关",
+          "export const slot = {",
+          "  shell: isUselessShell(abs),",
+          "};",
+        ].join("\n"),
+      );
+      const offenders = findShellOptions(root);
+      expect(offenders).toHaveLength(1);
+      expect(offenders[0]).toContain("scripts/violation.mjs:4:");
+      expect(offenders[0]).toContain("shell: true");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 });
-
-/** 与 `spawn-shell-scan.mjs` 同一口径：剥注释 → 逐行过那一条正则。 */
-const SHELL_OPTION_RE = /\bshell\s*:(?!\s*(?:false\b|null\b|undefined\b|["'`]))/;
-
-/**
- * 一段源码里的违例行（形状用例走字符串，不必落盘成临时脚本）。
- *
- * @param src 源码
- * @returns 违例行
- */
-function findShellOptionsIn(src: string): string[] {
-  return stripComments(src, { trailing: true })
-    .split("\n")
-    .filter((l) => SHELL_OPTION_RE.test(l));
-}
 
 describe("scripts/package-bin-entry.mjs", () => {
   it("本仓三个 CLI 都解析得到包真身（不在 .bin 垫片下）", () => {
