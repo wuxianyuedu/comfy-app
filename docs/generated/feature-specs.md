@@ -936,7 +936,7 @@
 
 #### FR-QA-07 质量评审与评分闭环
 
-- 状态：已落地（评分地基 #2477 + 剧本闭环 #2478 + 图像评审 #2479 已落）
+- 状态：已上线（评分地基 #2477 + 剧本闭环 #2478 + 图像评审 #2479）
 - 需求：让 FR-QA-01 ~ 06 的静态口径**可执行**——评审产出**维度化数字评分**
   （每维度 1~5 分 + 分值锚点 + rubric 版本号），判定与每轮分数落库留痕，
   收敛条件是「分数阈值达线」而不是只有过 / 不过；剧本、角色、分镜、生图四环节
@@ -972,18 +972,33 @@
 
 #### FR-QA-08 人工评分与校准
 
-- 状态：计划中（承接：#2480）
-- 需求：人的判断**留痕且优先**——产物级人工评分 / 收藏（当前 `taskImage` 无任何
-  评分字段，`favorite` 表只挂模型库），实体级人工裁决（approved / rejected + 理由）
-  **优先于 AI 判定**；人评过的样本成为 AI 评审的校准基准。
-- 行为与验收：① 历史页与工坊镜头卡可直接给产物打分 / 收藏，评分可查
-  （`taskImage` 有评级字段且进产物元数据面板）；② 人判废的镜头 / 角色 / 剧本
-  不因 AI 判过而放行进下一阶段（与 FR-AG-02「质量停点由人拍板」同口径）；
-  ③ 能按维度聚合出「人评分 vs AI 评分」的偏差读数（只读查询即可），
-  作为调 rubric 提示词的依据；④ 图像评审（FR-QA-07⑤）达上限转人工时，
-  落到本条的裁决入口而不是无处可去。
-- 落点（现状）：`src/server/db/schema.ts`（`taskImage` / `favorite`）、
-  `src/components/studio/history/`、`src/components/workshop/ShotStudio.tsx`
+- 状态：已上线（#2480）
+- 需求：人的判断**留痕且优先**——产物级人工评分 / 收藏，实体级人工裁决
+  （approved / rejected + 理由）**优先于 AI 判定**；人评过的样本成为 AI 评审的校准基准。
+- 行为与验收：① 历史页产物卡与镜头评审弹窗可直接给产物打分 / 收藏，评分可查
+  （`taskImage.humanRating` / `isFavorite` 列 + `task.setImageFeedback`（带归属校验）；
+  历史页 `ImageFeedbackRow` 挂进 `HistoryDetailModal`）；② 人判废的镜头 / 剧本
+  不因 AI 判过而放行进下一阶段（与 FR-AG-02「质量停点由人拍板」同口径）：人工裁决是
+  **快照式**——镜头带 `rev`、剧本带内容指纹（`scriptDigestOf`），快照与当前内容一致
+  才新鲜生效（人再改内容 → 裁决自然失效）；人通过且新鲜 → 定稿豁免 AI 评审，
+  人否决且新鲜 → 即使 AI 已定稿也拉回评审循环（达 `REVIEW_MAX_RETRY` 上限保留，
+  人的出路是改内容后重新纳入或点通过放行）（规划器 `run-types.ts` +
+  引擎 `run-engine.ts`；端点 `run.setHumanVerdict` / `run.setScriptHumanVerdict`）；
+  ③ 按维度聚合「人评分 vs AI 维度分」的偏差读数（只读）：人评 0~5 → 1~5 映射
+  （达线口径 `HUMAN_PASS_THRESHOLD`），MAE / 判定一致率 / 按维度偏差
+  （`review-calibration.ts` 纯函数 + `run.reviewCalibration` 端点，读数内嵌镜头
+  评审弹窗），作为调 rubric 提示词的依据；④ 图像评审（FR-QA-07⑤）达上限转人工时，
+  落到本条的裁决入口（`ShotReviewDialog` 内嵌 `HumanVerdictRow`）而不是无处可去。
+- 边界：人工裁决当前覆盖**镜头与剧本**（角色卡没有独立裁决入口——角色无 rev 快照
+  机制，需要时另立）；收藏复用 `taskImage` 字段，`favorite` 表仍只挂模型库。
+- 落点（现状）：`src/lib/production/review-types.ts`（`HumanVerdict` 形状 + 宽容解析 +
+  `applyHumanVerdict` / `applyHumanRating` / `applyScriptHumanVerdict`）、
+  `src/lib/production/review-calibration.ts`（校准纯函数）、
+  `src/lib/production/run-types.ts`（规划器人工裁决优先）、
+  `src/server/api/routers/run.ts`（四端点）、`src/server/api/routers/task.ts` +
+  `src/lib/core/repository-task-impl.ts`（`setImageFeedback`）、
+  `src/components/workshop/HumanVerdictRow.tsx`（共享裁决 + 星评行）、
+  `src/components/studio/history/ImageFeedbackRow.tsx`（历史页评分 / 收藏）
 
 #### FR-QA-09 带修改的重跑（局部重绘 / 放大）
 
