@@ -1296,6 +1296,24 @@
         与 MCP 入参 schema 是两份互不引用的声明；`workflow-param-map` 的读边界与
         写边界少一条「同读数」判据；`Subgraph*` 那两份**不适用** —— 它们自己就是那一侧的
         运行时判据，对端是 ComfyUI 导出的 JSON，不是仓内另一份声明）。
+        **本轮收掉第二档（#2171）**：第七格 =
+        `tests/workflow-param-map-wire-contract.test.ts` —— `workflowParamMapInputSchema`（写边界）
+        与 `parseWorkflowParamMap`（读边界）此前**各有各的单测、谁都不判对方**，所以「一枚作者
+        画好的合法条目，过完两侧字段是否还是那一套」没有执行者。形状照第五格（#2160）：
+        同读数那一半 + **该不同的那一半**（库里存着一行脏值 → 写侧原样透传、读侧整列折 `null`）
+        各钉一格 —— 两侧并成一份的话，那两行里必有一行站不住。
+        **第一档当场量过改动面，本轮不做**（另立 **ISSUE #2499**，P2 —— 按 §13.10.9
+        「一条诉求一张单」在关 #2171 之前拆出，不随那张单一起关掉）：把 `Character` /
+        `CharacterPortrait` / `Shot`
+        三份接口换成 `z.output<typeof …>` 之后 `tsc` 报 **25 处错、散在 17 份文件**
+        （`TS2322` 13 / `TS2741` 7 / `TS2739` 3 / `TS2345` 2），而**根因不是字段清单不一致**，
+        是两侧对「谁可选」的编码不同：`characterInputSchema` 的外层 `.transform` 无条件写
+        `portraits: character.portraits?.map(…)` ⇒ 派生出来的那一侧把它读成「必带这个键
+        （值可为 `undefined`）」，而接口写的是 `portraits?:`；`TS2322` 那 13 处的原文全是
+        「某字段一边走 `?`、另一边必填」这一形（例：`Property 'motion' is optional in type …`）。
+        所以那一刀的正确顺序是**先对齐 schema 侧的可选性**（把 `createdAt` 的默认值下沉进
+        `characterPortraitInputSchema`、外层 transform 改条件展开），再换派生 ——
+        直接换派生等于用 17 份文件的签名变更，去换一条本来就该改的默认值语义。
         同族还有一格不在 schema 面上：**ISSUE #2173** —— 这一族测试的 mock 边界样板
         已在五份文件里各写一遍，而孪生判据的扫描根只有 `src`，`tests/**` 里的重复永远不红。
       · **`normalizeExtraModels` 那一类手写逐字段判型收了（第六格）**。立案时说它是
