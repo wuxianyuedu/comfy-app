@@ -11,7 +11,8 @@ import { Star } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useBusyAction } from "~/components/ui/use-busy-action";
-import { errorMessage } from "~/lib/error-message";
+import { runAsyncAction, type ActionReport } from "~/lib/async-action";
+import { textHandler } from "~/lib/form-props";
 import type { HumanVerdict } from "~/lib/production/review-types";
 
 /** 0~5 星：星级按钮组（点第 n 颗 = n 分；再点当前分 = 清除）。 */
@@ -37,6 +38,7 @@ function RatingStars({
           onClick={() => onPick(value === star ? null : star)}
         >
           <Star
+            data-icon="inline-start"
             size={14}
             className={
               value !== null && star <= value
@@ -91,27 +93,31 @@ export function HumanVerdictRow({
     setNote("");
   }
 
+  // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
+  const report: ActionReport = (kind, detail) =>
+    setError(kind === "err" ? detail : "");
+
   const submit = (pass: boolean) =>
     busy.run(async () => {
       setError("");
-      try {
-        await onSubmit(pass, note.trim());
-        setNote("");
-      } catch (e) {
-        setError(errorMessage(e, "裁决失败"));
-      }
+      const result = await runAsyncAction(() => onSubmit(pass, note.trim()), {
+        report,
+        failureText: "裁决失败",
+        readResultEnvelope: false,
+      });
+      if (result.ok) setNote("");
     });
 
   const pickRating = async (value: number | null) => {
     const prev = localRating;
     setLocalRating(value);
     if (!onRatingChange) return;
-    try {
-      await onRatingChange(value);
-    } catch (e) {
-      setLocalRating(prev);
-      setError(errorMessage(e, "评分失败"));
-    }
+    const result = await runAsyncAction(() => onRatingChange(value), {
+      report,
+      failureText: "评分失败",
+      readResultEnvelope: false,
+    });
+    if (!result.ok) setLocalRating(prev);
   };
 
   return (
@@ -140,7 +146,7 @@ export function HumanVerdictRow({
           value={note}
           maxLength={200}
           disabled={disabled || busy.busy}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={textHandler(setNote)}
         />
         <Button
           type="button"

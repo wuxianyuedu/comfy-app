@@ -10,6 +10,7 @@
 // 量纲：AI 维度分 1~5，人评 0~5（0 起步是「这张废」的显式档）。对比前把人分线性
 // 映射到 1~5（`1 + rating × 0.8`）：0→1、5→5，MAE 才有可比性；人评原值也照实
 // 输出，映射口径写在字段注释里，不藏在代码里。
+import { compareText } from "~/lib/ordered-set";
 import { isRecord } from "~/lib/is-record";
 import {
   getRecordHumanRating,
@@ -136,7 +137,7 @@ export function calibrateFromShots(shots: unknown[]): CalibrationReport {
       humanAvg: acc.humanCount > 0 ? acc.humanSum / acc.humanCount : null,
       samples: acc.aiCount,
     }))
-    .sort((a, b) => a.key.localeCompare(b.key));
+    .sort((a, b) => compareText(a.key, b.key));
 
   return {
     samples,
