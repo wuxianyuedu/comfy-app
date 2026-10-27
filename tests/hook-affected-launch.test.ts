@@ -1129,6 +1129,43 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
     expect(first.at(-1)).not.toBe(retry.at(-1));
   });
 
+  it("quiet 档 + 账本 ⇒ 只叠 junit，不再塞 default（同一跑不打两遍）", () => {
+    const dir = tempDir();
+    /* quiet 已经给了人读的出口（`--reporter=dot`）；再叠一个 default 会把整屏打印两遍，
+     * 而那正是 102400 字节日志预算要压掉的那一屏（ISSUE #2074 的连带缺陷）。 */
+    const args = junitReportArgs(dir, 0, 1, { withDefaultReporter: false });
+    expect(args).toContain("--reporter=junit");
+    expect(args).not.toContain("--reporter=default");
+  });
+
+  it("quiet + 账本：两遍的 reporter 都是 dot + junit，且没有 default", async () => {
+    const dir = tempDir();
+    const calls: string[][] = [];
+    await captureStderr(() =>
+      runChunk(["tests/a.test.ts"], {
+        entry: "vitest.mjs",
+        quiet: true,
+        junitDir: dir,
+        chunkId: 3,
+        spawn: (_e: string, args: string[]) => {
+          calls.push(args);
+          return calls.length === 1
+            ? { status: 1, output: "Test timed out in 30000ms" }
+            : { status: 0, output: "" };
+        },
+        settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
+      }),
+    );
+    expect(calls).toHaveLength(2);
+    for (const args of calls) {
+      expect(args).toContain("--reporter=dot");
+      expect(args).toContain("--reporter=junit");
+      expect(args).not.toContain("--reporter=default");
+    }
+    expect(calls[0]?.join(" ")).toContain("comfy-c-3-1.xml");
+    expect(calls[1]?.join(" ")).toContain("comfy-c-3-2.xml");
+  });
+
   it("runChunk 真的把这两段拼进两次 spawn，清单仍在最后", async () => {
     const dir = tempDir();
     const calls: { entry: string; args: string[] }[] = [];
