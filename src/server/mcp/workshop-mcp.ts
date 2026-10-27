@@ -74,7 +74,8 @@ const SERVER_INSTRUCTIONS = `工坊（Workshop）创作流水线工具集。标�
 4) workshop_build_storyboard 拆分分镜（或 workshop_set_storyboard 直接写入）
 5) workshop_generate_image 为镜头 / 角色生图（channel: "api"）
 6) workshop_submit_video + workshop_poll_video 生成视频片段（channel: "api"）
-所有写操作都需要 sessionId 参数（来自 create_session 的返回）。成片合成暂未提供。`;
+7) workshop_compose_final 把分镜按序合成为成片（JSON 清单，render=true 且 ffmpeg 可用时合成 mp4）
+所有写操作都需要 sessionId 参数（来自 create_session 的返回）。`;
 
 /** 构造并注册全部工坊工具的 MCP server。 */
 export function buildWorkshopMcpServer(): McpServer {
