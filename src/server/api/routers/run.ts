@@ -24,6 +24,7 @@ import {
   regenerateShot,
   reviewContent,
   reviewScript,
+  reviewShotImage,
   reviseScript,
 } from "~/server/agent/review";
 
@@ -190,6 +191,23 @@ export const runRouter = createTRPCRouter({
         ctx.user.id,
         input.projectId,
         "shot",
+        input.shotId,
+      );
+      return { verdict };
+    }),
+
+  /**
+   * 视觉评审一个分镜镜头的生图（P8-2 多模态评审）：看图 + 出场角色定妆照，按生图 rubric
+   * 打分，判定写回 `shot.imageReview`。没图 / 找不到镜头时抛可行动错误。
+   */
+  reviewShotImage: authedProcedure
+    .input(
+      z.object({ projectId: z.string().min(1), shotId: z.string().min(1) }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const verdict = await reviewShotImage(
+        ctx.user.id,
+        input.projectId,
         input.shotId,
       );
       return { verdict };

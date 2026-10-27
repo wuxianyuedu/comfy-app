@@ -13,10 +13,12 @@ import {
   splitExtraModels,
   foldRemoteToLocal,
   isLoopbackBaseUrl,
+  pickVisionModelName,
 } from "./types";
 import type {
   LLMConfig,
   LLMMessage,
+  LLMContentPart,
   LLMRequestOptions,
   LLMProviderType,
   RemoteModelEntry,
@@ -227,6 +229,79 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   return `调用远端模型失败（${base}）：${causeMsg || errorMessage(e, "未知错误")}。请检查 Base URL / API Key / 网络。`;
 }
 
+/**
+ * 把内部 `LLMMessage` 序列化成上游 `/chat/completions` 的 wire 形状。统一处理多模态：
+ *   · 纯文本 content（历史用法）→ `{role, content}`；
+ *   · 内容块数组：
+ *     - 远端（OpenAI 兼容，provider=remote）→ content 数组：`{type:"text"}` + `{type:"image_url"}`；
+ *     - 本地（Ollama，provider=local）→ 文本拼进 `content`、图收进消息级 `images` 字段
+ *       （Ollama 的视觉输入形态，与 OpenAI content 数组不同）。
+ * 图块的 `url` 接受 http(s) 或 `data:` base64；本地 Ollama 可直接喂本机可达址。
+ */
+function messagesToWire(
+  cfg: LLMConfig,
+  messages: LLMMessage[],
+): Array<Record<string, unknown>> {
+  const local = cfg.provider === "local";
+  return messages.map((m) => {
+    const base: Record<string, unknown> = { role: m.role };
+    if (typeof m.content === "string") {
+      base.content = m.content;
+    } else if (local) {
+      const texts = m.content
+        .filter(
+          (p): p is Extract<LLMContentPart, { type: "text" }> =>
+            p.type === "text",
+        )
+        .map((p) => p.text)
+        .join("\n");
+      const images = m.content
+        .filter(
+          (p): p is Extract<LLMContentPart, { type: "image_url" }> =>
+            p.type === "image_url",
+        )
+        .map((p) => p.image_url.url);
+      base.content = texts;
+      if (images.length > 0) base.images = images;
+    } else {
+      base.content = m.content.map((p) =>
+        p.type === "text"
+          ? { type: "text", text: p.text }
+          : { type: "image_url", image_url: p.image_url },
+      );
+    }
+    if (m.tool_calls) base.tool_calls = m.tool_calls;
+    if (m.tool_call_id) base.tool_call_id = m.tool_call_id;
+    return base;
+  });
+}
+
+/**
+ * 取「视觉评审」生效配置（P8-2）：模型名走 `pickVisionModelName`（显式指定 → 候选里
+ * kind=image 那条 → 主 model），并按名字回查远端条目的连接参数（baseUrl / apiKey）。
+ * 未单独配视觉模型时回落主 model，连接参数沿用主配置。
+ */
+export async function getVisionLLMConfig(
+  override?: LLMRequestOptions,
+): Promise<LLMConfig> {
+  const cfg = await getLLMConfig(override);
+  const visionModel = pickVisionModelName(cfg, override);
+  if (visionModel === cfg.model) return cfg;
+  const entry = cfg.extraModels?.find(
+    (e) => e.name === visionModel && !!(e.baseUrl ?? e.apiKey),
+  );
+  return {
+    ...cfg,
+    model: visionModel,
+    ...(entry
+      ? {
+          baseUrl: entry.baseUrl ?? cfg.baseUrl,
+          apiKey: entry.apiKey ?? cfg.apiKey,
+        }
+      : {}),
+  };
+}
+
 /** 统一的上游 /chat/completions 请求：网络层失败给出可读原因，HTTP 非 2xx 带状态码与响应片段。 */
 async function upstreamChat(
   cfg: LLMConfig,
@@ -274,7 +349,7 @@ export async function completeLLM(
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
     model: cfg.model,
-    messages,
+    messages: messagesToWire(cfg, messages),
     temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
     stream: false,
@@ -299,7 +374,7 @@ export async function streamLLM(
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
     model: cfg.model,
-    messages,
+    messages: messagesToWire(cfg, messages),
     temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
     stream: true,
@@ -356,7 +431,7 @@ export async function completeLLMStructured<T>(
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
     model: cfg.model,
-    messages,
+    messages: messagesToWire(cfg, messages),
     temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
     stream: false,
@@ -399,7 +474,7 @@ export async function completeLLMTools(
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
     model: cfg.model,
-    messages,
+    messages: messagesToWire(cfg, messages),
     temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
     stream: false,

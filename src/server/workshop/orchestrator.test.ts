@@ -66,7 +66,8 @@ vi.mock("./llm", () => ({
       _cfg: WorkshopLLMConfig,
       messages: LLMMessage[],
     ): Promise<string> => {
-      const sys = messages[0]?.content ?? "";
+      const sys =
+        typeof messages[0]?.content === "string" ? messages[0].content : "";
       if (sys.includes("编剧")) {
         return "# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。";
       }

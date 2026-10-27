@@ -9,7 +9,7 @@ import {
   rubricFor,
 } from "./review-rubrics";
 
-const KINDS = ["script", "character", "shot"] as const;
+const KINDS = ["script", "character", "shot", "shotImage"] as const;
 
 describe("REVIEW_RUBRICS", () => {
   it("剧本 / 角色卡 / 分镜三张量表齐全，各带版本号", () => {
