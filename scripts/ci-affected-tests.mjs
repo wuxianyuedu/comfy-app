@@ -17,7 +17,7 @@
  * 判决链一个字没改：本脚本只做三件事（算改动面 → 起 `run-affected-tests.mjs` →
  * 把退出码转出去），判据与启动逻辑仍是那一份（§12.18 / §12.12：不发明第二套编排）。
  *
- * ── 三件口径，都与既有机制逐字同源 ─────────────────────────────────────
+ * ── 四件口径，都与既有机制逐字同源 ─────────────────────────────────────
  *
  *   ① **改动面**：PR 事件上平台给 `CNB_PULL_REQUEST_TARGET_SHA`（官方
  *      `build-in-env.md`；`.cnb.yml` 的分支守卫一格早已在用同一族变量），按
@@ -34,6 +34,12 @@
  *      这个变量只调并发、不碰任何判据（`resolveMaxWorkers()` 的注释写明）。
  *      超时形态的「等待负载回落 → 隔离复跑 → 仍超时则点名未校验」话术仍由
  *      `run-affected-tests.mjs` 自己负责，本脚本不重写一遍。
+ *   ④ **分文件读数的落点由本脚本造**（ISSUE #2074）：`$LOGD` 此前只有钩子 export，
+ *      所以平台这一格从来不写 junit ⇒ 超时形态的复跑永远退回整块串行，而「清单 ⇄
+ *      实到」的对账根本没做成。现在这里造一份同布局的目录（`makeLedgerDir`），
+ *      经 `LOGD` 交给子进程，跑完删掉；收尾那行复述会念出「分文件读数 N 份」——
+ *      「第一遍到底有没有写出读数」从日志读得回来。造不出来时**明说退回整块**，
+ *      而不是让那 170s 长得像一次普通的复跑原因。
  *
  * 退出码与 `base-check` / `premerge` 逐字同口径：0 全绿（或未校验但已点名）/
  * 1 有档红 / 2 没跑起来。
@@ -49,7 +55,13 @@ import {
   describeWorktreeDeps,
   worktreeDepsProblem,
 } from "./ci-worktree-deps.mjs";
-import { existsSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
 
 /* 「改动面怎么算」那一跳已经搬进 `scripts/changed-scope.mjs` —— 桌面壳门禁
  * （`scripts/shell-gate.mjs` 的 `--base` 形态）也要问同一个问题，两边各算一次
@@ -59,6 +71,50 @@ export { resolveChangedFiles };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
+
+/**
+ * 造一份**这一次跑**的分文件读数目录（与钩子 `$LOGD` 同一个布局）。
+ *
+ * 为什么平台这一格也要有：`run-affected-tests.mjs` 只在「账本目录存在」时才让 vitest
+ * 写 junit，而 junit 是**复跑面**（只重跑失败的那几份）与「清单 ⇄ 实到」对账的唯一
+ * 来源。此前 `LOGD` 只由钩子 export，平台这一格一个都没有 ⇒ 超时形态的复跑永远退化成
+ * 整块串行（实测 170~178s，买不到任何新证据），而对账那一格根本没做成（ISSUE #2074）。
+ *
+ * 落点选**仓库内**的 `node_modules/.cache/`（已被 gitignore、随 job 目录一起消失），
+ * 与 `full-suite-run.mjs` 同一条理由：宿主是 PowerShell，`--outputFile.junit=C:\…`
+ * 那种「破折号 + `=` + 值里带冒号」会在第一个冒号处被切成两个参数（§13.5.8.3）。
+ * 造不出来就回 `null`：这一跑照旧，只是退回整块复跑 —— 调用点会把它**说出口**，
+ * 「拿不到测量」不许长得像「没有这一格」。
+ *
+ * @param {string} [root] 检出根（用例注入临时根，不碰真 repo）
+ * @returns {string | null}
+ */
+export function makeLedgerDir(root = ROOT) {
+  try {
+    const cache = path.join(root, "node_modules", ".cache");
+    mkdirSync(cache, { recursive: true });
+    return mkdtempSync(path.join(cache, "comfy-affected-"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 账本里这一跑写出了几份 junit。
+ *
+ * 读不到回 `null`（「取不到」），**不是 0** —— 0 份是一个可读的结论（这一遍没写出读数），
+ * 而读不到目录说明这一跑压根没有落点（§13.6.4.1 那条「拿不到测量 ≠ 测量结果是 0」）。
+ *
+ * @param {string} dir
+ * @returns {number | null}
+ */
+function countJunitFiles(dir) {
+  try {
+    return readdirSync(dir).filter((name) => name.endsWith(".xml")).length;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 这一次要判的改动面（仓库相对路径清单）。
@@ -73,7 +129,9 @@ const ROOT = path.resolve(HERE, "..");
 /**
  * 主流程。
  *
- * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null, spawn?: (script: string, env: NodeJS.ProcessEnv) => {status: number}, writeOut?: (text: string) => void, writeErr?: (text: string) => void, installed?: boolean}} [deps]
+ * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null, spawn?: (script: string, env: NodeJS.ProcessEnv) => {status: number}, writeOut?: (text: string) => void, writeErr?: (text: string) => void, installed?: boolean, ledgerDir?: string | null, makeLedgerDir?: () => string | null}} [deps]
+ *   `ledgerDir` / `makeLedgerDir` 是账本目录的注入面（用例给临时目录、或显式 `null`
+ *   表示这条用例不关心账本）；不注入就自己造一份，跑完删掉 —— 见 `makeLedgerDir`。
  *   `installed` 是依赖面体检的输入（`node_modules/.modules.yaml` 在不在）。注入面是给
  *   单测的：判据本身不读盘（读盘那一句在下面一行，缺省就地读），而**「读没读到」不许
  *   被用例进程自己那棵树解释掉**（§11.17 那条「判据与宿主绑死」的同族）。
@@ -127,6 +185,23 @@ export function main(deps = {}) {
         `（${changed.renamedFrom.join(" ")}）—— 按旧路径引用那个文件的用例靠这一条才选得中\n`,
     );
   }
+  /* 分文件读数目录（ISSUE #2074）：不造它，`run-affected-tests.mjs` 就不会让 vitest
+   * 写 junit ⇒ 超时形态的复跑面每次都退回整块串行、「清单 ⇄ 实到」对账也没做成。
+   * 造不出来不阻断（档位不变），但必须说出口 —— 那一跑的代价与对账面都变了。 */
+  const ownLedger = deps.ledgerDir === undefined;
+  const ledgerDir = ownLedger
+    ? (deps.makeLedgerDir ?? (() => makeLedgerDir(ROOT)))()
+    : deps.ledgerDir;
+  if (ledgerDir) {
+    writeOut(
+      `[ci-affected] 分文件读数落点 ${ledgerDir}（junit + 清单；随本次跑清理）\n`,
+    );
+  } else {
+    writeErr(
+      "[ci-affected] ⚠ 造不出分文件读数目录 ⇒ 这一跑没有 junit：" +
+        "超时形态的复跑会退回整块串行（档位不受影响，代价与对账面受影响）\n",
+    );
+  }
   const spawn =
     deps.spawn ??
     ((/** @type {string} */ script, /** @type {NodeJS.ProcessEnv} */ e) => {
@@ -137,23 +212,46 @@ export function main(deps = {}) {
       });
       return { status: typeof r.status === "number" ? r.status : 2 };
     });
-  /* 子进程 env：以进程环境为底，补两件（改动面 + 并发），注入的 env 覆盖同名项。
+  /* 子进程 env：以进程环境为底，补三件（改动面 + 并发 + 分文件读数落点），注入的 env
+   * 覆盖同名项。`LOGD` 那一格**显式写空串**：没有落点时若只做「不加这个键」，从进程环境
+   * 继承来的旧 `LOGD`（钩子 export 的那份）会漏进子进程，读数就落去一个这一跑不知道的目录。
    * （.mjs 里写不了 `as`，收窄成 ProcessEnv 用 JSDoc 声明 —— spawnSync 的形参要它。） */
   /** @type {NodeJS.ProcessEnv} */
   const childEnv = {
     ...process.env,
     ...env,
+    ...(ledgerDir ? { LOGD: ledgerDir } : { LOGD: "" }),
     COMFY_AFFECTED_CHANGED: changed.files.join("\n"),
     COMFY_PRECOMMIT_MAX_WORKERS: String(workers),
   };
-  const r = spawn(path.join(HERE, "run-affected-tests.mjs"), childEnv);
+  /** 这一跑写出的 junit 份数（收尾读数；`null` = 取不到）。 */
+  let junitCount = null;
+  /* 跑完就清账本（注入目录时由用例自己清）—— 收尾读数必须在删之前取，所以清理挂在
+   * `finally` 里、计数写在里面。 */
+  const r = (() => {
+    try {
+      return spawn(path.join(HERE, "run-affected-tests.mjs"), childEnv);
+    } finally {
+      if (ledgerDir) junitCount = countJunitFiles(ledgerDir);
+      if (ownLedger && ledgerDir) {
+        rmSync(ledgerDir, { recursive: true, force: true });
+      }
+    }
+  })();
   /* 同一件读数在**收尾**再念一次：平台会把超长的 stage 日志截掉中间偏前那一段
    * （实测某跑的日志第 2 行就是 `The log length exceeds the limit(102400)`），
    * 而上面那行打在开头 —— 正好落在被截掉的那一段里，于是「这一跑开了几个并发」
    * 在页面上根本读不回来（ISSUE #2317）。只补一行转述，不改退码。 */
   writeErr(
     `[ci-affected] 收尾复述：并发 --maxWorkers=${workers}（${cores} 核，${source}）` +
-      `· 子进程原值退出码 ${r.status}\n`,
+      `· 子进程原值退出码 ${r.status}· 分文件读数 ` +
+      `${
+        junitCount === null
+          ? ledgerDir
+            ? "取不到"
+            : "没有落点"
+          : `${junitCount} 份`
+      }\n`,
   );
   /* 原值透传，**不改写**（三档：0 通过/已确认全是超时，1 真红，2 未判定）。
    * 平台把非零读成 stage 失败，所以 2 这一档在这一侧**不会被算进绿** —— 那正是

@@ -16,9 +16,17 @@
  *
  * 不起真 vitest：`spawn` 注入假实现，只核「起了哪个脚本、带了什么 env、退了什么码」。
  */
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { main, resolveChangedFiles } from "../scripts/ci-affected-tests.mjs";
+import {
+  main,
+  makeLedgerDir,
+  resolveChangedFiles,
+} from "../scripts/ci-affected-tests.mjs";
 
 /** 假 git：按调用顺序回放预置结果（diff 的键取最后一个参数 —— 前面是 name-status / -M 这类选项）。 */
 function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
@@ -173,6 +181,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", COMFY_CI_MAX_WORKERS: "2" },
+      ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\nM\tsrc/b.ts\n" }),
       spawn,
       installed: true,
@@ -189,6 +198,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
       runGit: () => ({
         ok: true,
         stdout: "R100\tscripts/old-name.mjs\tscripts/new-name.mjs\n",
@@ -206,6 +216,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     const { spawn } = fakeSpawn(1);
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
       installed: true,
@@ -222,6 +233,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     const err: string[] = [];
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", CNB_CPUS: "16" },
+      ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
       installed: true,
@@ -244,6 +256,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "" }),
       spawn,
       installed: true,
@@ -256,6 +269,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
       runGit: () => ({ ok: false, stdout: "" }),
       spawn,
       installed: true,
@@ -288,6 +302,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
     const err: string[] = [];
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
       installed: false,
@@ -307,6 +322,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
         CNB_PULL_REQUEST_TARGET_SHA: "abc123",
         npm_config_store_dir: "D:/pnpm",
       },
+      ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
       installed: true,
@@ -322,6 +338,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
     const out: string[] = [];
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
       spawn,
       installed: true,
@@ -329,5 +346,112 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
     });
     expect(code).toBe(0);
     expect(out.join("")).toContain("两道体检都过了");
+  });
+});
+
+/* ── 分文件读数目录（ISSUE #2074）─────────────────────────────────────────────
+ *
+ * 现场：这一格此前拿不到 junit —— `$LOGD` 只由 `.githooks/pre-commit` export，平台
+ * 入口一个都没有 ⇒ 超时形态的复跑永远退回整块串行（实测 170~178s，买不到新证据），
+ * 「清单 ⇄ 实到」的对账也没做成。这一组钉的是补救本身的三件事：目录造在哪、
+ * 经 `LOGD` 递进去、收尾那行把份数念出来；造不出来时念「没有落点」，不许静默。
+ */
+describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
+  function fakeSpawn(status: number) {
+    const seen: { script: string; env: Record<string, string | undefined> }[] =
+      [];
+    return {
+      seen,
+      spawn: (script: string, env: Record<string, string | undefined>) => {
+        seen.push({ script, env });
+        return { status };
+      },
+    };
+  }
+
+  function tempDir() {
+    return mkdtempSync(path.join(tmpdir(), "comfy-affected-test-"));
+  }
+
+  it("makeLedgerDir 造在 <root>/node_modules/.cache 下、带 comfy-affected- 前缀", () => {
+    const root = tempDir();
+    try {
+      const dir = makeLedgerDir(root);
+      expect(dir).not.toBeNull();
+      expect(path.dirname(dir!)).toBe(
+        path.join(root, "node_modules", ".cache"),
+      );
+      expect(path.basename(dir!).startsWith("comfy-affected-")).toBe(true);
+      expect(existsSync(dir!)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("自己造的账本经 LOGD 交给子进程，跑完删掉，收尾念份数", () => {
+    const ledger = tempDir();
+    writeFileSync(path.join(ledger, "comfy-c-0-1.xml"), "<testsuite/>");
+    writeFileSync(path.join(ledger, "comfy-c-0-2.xml"), "<testsuite/>");
+    /* 只数 xml：同一目录里的清单（`comfy-c-files.txt`）不是读数份数。 */
+    writeFileSync(path.join(ledger, "comfy-c-files.txt"), "a.test.ts\n");
+    const { spawn, seen } = fakeSpawn(1);
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = main({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      installed: true,
+      makeLedgerDir: () => ledger,
+      writeOut: (t: string) => out.push(t),
+      writeErr: (t: string) => err.push(t),
+    });
+    expect(seen[0]!.env.LOGD).toBe(ledger);
+    expect(out.join("")).toContain(ledger);
+    expect(existsSync(ledger), "自己造的目录随这一跑清理").toBe(false);
+    expect(err.join("")).toContain("分文件读数 2 份");
+    /* 读数是附加的，不改退码。 */
+    expect(code).toBe(1);
+  });
+
+  it("注入账本目录 ⇒ 不删它（清理由调用方负责），份数照读", () => {
+    const ledger = tempDir();
+    try {
+      writeFileSync(path.join(ledger, "comfy-c-0-1.xml"), "<testsuite/>");
+      const { spawn, seen } = fakeSpawn(0);
+      const err: string[] = [];
+      const code = main({
+        env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+        runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+        spawn,
+        installed: true,
+        ledgerDir: ledger,
+        writeErr: (t: string) => err.push(t),
+      });
+      expect(seen[0]!.env.LOGD).toBe(ledger);
+      expect(existsSync(ledger)).toBe(true);
+      expect(err.join("")).toContain("分文件读数 1 份");
+      expect(code).toBe(0);
+    } finally {
+      rmSync(ledger, { recursive: true, force: true });
+    }
+  });
+
+  it("造不出账本 ⇒ LOGD 显式清空、明说退回整块，退码照透传", () => {
+    const { spawn, seen } = fakeSpawn(0);
+    const err: string[] = [];
+    const code = main({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      installed: true,
+      makeLedgerDir: () => null,
+      writeErr: (t: string) => err.push(t),
+    });
+    /* 空串而不是「没有这个键」：进程环境里可能已经有一份旧 `LOGD`，继承过去就落错地方。 */
+    expect(seen[0]!.env.LOGD).toBe("");
+    expect(err.join("")).toContain("造不出分文件读数目录");
+    expect(err.join("")).toContain("没有落点");
+    expect(code).toBe(0);
   });
 });

@@ -28,24 +28,34 @@ import {
  * 「代价一律取稳态读数」反对的形态。这一档**只补读数，不改任何判定**。
  *
  * 三个形状都是实测钉住的，不是风格：
- *  · **`--reporter=default` 必须显式保留** —— 只给 junit 会把人类可读的输出顶掉，
- *    而真红那一屏是唯一能读的东西（本档不替代它，只加一层）；
+ *  · **人类可读的那个 reporter 必须显式在场** —— 只给 junit 会把整屏顶掉，而真红那一屏
+ *    是唯一能读的东西（本档不替代它，只加一层）。调用点已经给了 console reporter
+ *    （`quiet` 档的 `--reporter=dot`）时传 `withDefaultReporter: false`：再叠一个
+ *    `default` 会让同一跑打两遍，正好把日志预算那一档省下来的东西还回去（ISSUE #2074
+ *    —— 这两个开关此前从未同时打开，平台那格拿到账本目录之后才第一次相遇）；
  *  · 明细**走文件不走 stdout** —— 钩子与平台的日志预算都不是给 90 行明细留的位
  *    （同一动机见 `vitest.config.ts` 里覆盖率 reporter 那格：102400 字节的硬上限）；
  *  · **每块、每遍各一个文件** —— 复跑是「更隔离条件下的另一组读数」，与首跑叠进同一个
  *    文件就变成「谁后写谁冒充整体」。读账侧按 `(块, 遍)` 升序合并，第二遍覆盖第一遍。
  *
- * @param {string | undefined} dir 落点目录（钩子里就是导出的 `$LOGD`：每次新建、随 trap
- *   删除、**不在检出内** —— 落进检出就会被 checkout 与结构门禁牵着）
+ * @param {string | undefined} dir 落点目录（钩子里就是导出的 `$LOGD`；平台那一格由
+ *   `ci-affected-tests.mjs` 自己造一份 —— 两处都**不在检出里**，落进检出就会被
+ *   checkout 与结构门禁牵着）
  * @param {number} chunkId 第几块（从 0 起）
  * @param {number} attempt 第几遍（1 = 首跑，2 = `--no-file-parallelism` 隔离复跑）
+ * @param {{withDefaultReporter?: boolean}} [options] 见上面第一条；默认 `true`
  * @returns {string[]} 追加给 vitest 的参数；`dir` 为空时**回空数组**（= 今天的形状不变，
  *   人自己跑 `node scripts/run-affected-tests.mjs --full` 时没有 `$LOGD`，不该被塞读数）
  */
-export function junitReportArgs(dir, chunkId, attempt) {
+export function junitReportArgs(
+  dir,
+  chunkId,
+  attempt,
+  { withDefaultReporter = true } = {},
+) {
   if (!dir) return [];
   return [
-    "--reporter=default",
+    ...(withDefaultReporter ? ["--reporter=default"] : []),
     "--reporter=junit",
     `--outputFile.junit=${cFileXmlName(dir, chunkId, attempt)}`,
   ];

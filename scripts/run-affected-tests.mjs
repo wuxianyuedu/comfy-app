@@ -511,9 +511,10 @@ async function main(argv) {
   const quiet = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
     process.stderr.write(t),
   );
-  /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`（每次新建、随 trap 删除、不在检出里）。
-   * 没有它（人自己跑这一档 / 不在钩子里）就一个字都不加 —— 这一档是**读数**，
-   * 不是这条命令的必经部分；落不进账本目录时宁可不记，也不要往检出里写文件。
+  /* 分文件耗时的落点：钩子 `export` 出来的 `$LOGD`，或平台入口 `ci-affected-tests.mjs`
+   * 自己造的一份（同一份布局，随本次跑清理 —— 那一格此前拿不到 junit，复跑面每次都
+   * 退回整块，ISSUE #2074）。没有它（人自己跑这一档 / 不在执行者里）就一个字都不加 ——
+   * 这一档是**读数**，不是这条命令的必经部分；落不进账本目录时宁可不记，也不要往检出里写文件。
    *
    * ⚠️ 路径要**当场 resolve 并说出口**：钩子由 sh 起，`$LOGD` 在 MSYS 下可能是
    * `/tmp/…` 这种「shell 与 Windows Node 各解各的」写法。两个 Node 进程（这里与
@@ -526,7 +527,7 @@ async function main(argv) {
   if (junitDir) {
     writeFilesManifest(junitDir, files);
     process.stderr.write(
-      `[affected-launch] 分文件耗时读数落在 ${junitDir}（组 C 账本，随钩子结束清理）\n`,
+      `[affected-launch] 分文件耗时读数落在 ${junitDir}（组 C 账本，随本次跑清理）\n`,
     );
   }
   /* 改动面归因只在**面大到值得说**时才去算：它是给「拆小」用的（见 `scopeAdvice`），
@@ -656,7 +657,9 @@ export async function runChunk(chunk, deps) {
   const res = spawn(entry, [
     "run",
     ...reporters,
-    ...junitReportArgs(junitDir, chunkId, 1),
+    ...junitReportArgs(junitDir, chunkId, 1, {
+      withDefaultReporter: reporters.length === 0,
+    }),
     `--maxWorkers=${workers}`,
     ...chunk,
   ]);
@@ -752,7 +755,9 @@ export async function runChunk(chunk, deps) {
   const retry = spawn(entry, [
     "run",
     ...reporters,
-    ...junitReportArgs(junitDir, chunkId, 2),
+    ...junitReportArgs(junitDir, chunkId, 2, {
+      withDefaultReporter: reporters.length === 0,
+    }),
     "--no-file-parallelism",
     ...scope.files,
   ]);
