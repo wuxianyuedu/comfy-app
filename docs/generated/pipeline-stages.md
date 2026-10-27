@@ -121,7 +121,7 @@
 | **AI 的用法** | MCP `workshop_compose_final`（写 `data/workshop-compositions`，可选 ffmpeg）；自主 run 的 `render_film` 走服务端 `film` 实体链 |
 | **质量验收口径** | ① 两条链路的**产物与实体不同**这一点在文档与界面上都写清楚（工坊⑥ = 清单；`film` = 真 MP4），不混用；② 服务端合成做了逐镜归一化 + concat + 字幕 + BGM 混音，产出文件能播、时长等于各镜之和（含转场）；③ 合成失败能定位到「哪一镜没就绪」；④ 成片落盘路径可寻址、可打开（`FR-OP-05`） |
 | **当前状态** | 两条链路均**已上线**：服务端 ffmpeg 合成 `FR-OP-04`；工坊⑥清单已上线（`FR-WP-01`） |
-| **已知缺口** | 工坊⑥**不产 MP4**（用户点完「导出清单」会以为成片做完了 —— 出口指引缺失）；MCP 的 `compose_final` 与 `film` 实体链是**两套落盘**，机器面与界面面不能互通；无字幕自动生成与校对；无 BGM 素材管理；无成片**质量校验**（黑帧 / 静音 / 分辨率不符无人判） |
+| **已知缺口** | 工坊⑥**不产 MP4**（界面已补「去成片合成 MP4」出口：导出清单后引导跳「成片」视图，该视图能从活跃项目读镜头并一键成片；出口缺失这条缺口已闭环，见 #2476）；MCP 的 `compose_final` 与 `film` 实体链是**两套落盘**，机器面与界面面不能互通；无字幕自动生成与校对；无 BGM 素材管理；无成片**质量校验**（黑帧 / 静音 / 分辨率不符无人判） |
 | **代码落点** | `src/components/workshop/FinalComposer.tsx`（清单）；`src/server/film/orchestrator.ts` + `src/server/film/compose-film.ts`（真合成）；`src/server/workshop/final-compose.ts`（MCP 侧） |
 
 ---
