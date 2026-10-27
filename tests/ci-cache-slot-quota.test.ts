@@ -199,7 +199,7 @@ describe("缓存槽的配额与淘汰（契约）", () => {
 
       expect(slots.count).toBe(5);
       expect(slots.emptyCount).toBe(1);
-      expect(slots.keys.find((k) => k.key === "空壳")?.shell).toBe(true);
+      expect(slots.keys.find((k) => k.key === "空壳")?.uselessShell).toBe(true);
       expect(slots.overQuota).toBe(2);
       /* 两份读数说的是同一件事：执行档只留下 d（还在闸门内），空壳当场回收。 */
       expect(slots.heldByTtl).toBe(1);

@@ -451,7 +451,7 @@ export function isUselessShell(abs, now, ttlMs, state = readSlotState(abs)) {
  *   root: string, quota: number, count: number, overQuota: number, heldByTtl: number,
  *   emptyCount: number, currentOnDisk: boolean,
  *   keys: Array<{key: string, lastUsed: number | null, expired: boolean,
- *     shell: boolean, usable: boolean, unreadable: boolean}>,
+ *     uselessShell: boolean, usable: boolean, unreadable: boolean}>,
  * }}
  */
 export function listSlots(io) {
@@ -488,7 +488,7 @@ export function listSlots(io) {
         key: e.name,
         lastUsed,
         expired: lastUsed !== null && now - lastUsed >= ttlMs,
-        shell: isUselessShell(abs, now, ttlMs, state),
+        uselessShell: isUselessShell(abs, now, ttlMs, state),
         usable: state.treePresent || state.fingerprint !== null,
         unreadable: state.unreadable,
       };
@@ -510,7 +510,7 @@ export function listSlots(io) {
     overQuota: over.length,
     /* 空壳不算「被 TTL 挡着」：执行档看的是同一份谓词，而它对这些目录**不看配额与邮票**地回收
        （ISSUE #2494 —— 两处各算一份时，这两个数会在同一份盘上给出相反的话）。 */
-    heldByTtl: over.filter((k) => !k.shell && !k.expired).length,
+    heldByTtl: over.filter((k) => !k.uselessShell && !k.expired).length,
     emptyCount: keys.filter((k) => !k.usable).length,
     currentOnDisk,
     keys,
