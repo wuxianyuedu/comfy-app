@@ -1,5 +1,8 @@
 "use client";
 
+import { useCallback, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -14,6 +17,138 @@ import { NodePreviewCard } from "./NodePreviewCard";
 import { ManifestSummary, ParseProgressBanner } from "./SettingsParts";
 import { lastSegments } from "~/lib/path-display";
 import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-settings";
+
+/** 单包节点卡窗口化列表的三个常量（ISSUE #2191）。 */
+/** 折叠态卡片的行高估计：一行标题（px-2.5 + 文本行）—— 展开后由
+ * `measureElement` 实测接管，估计值只影响首帧与滚动条预算。 */
+const CARD_ROW_ESTIMATE_PX = 44;
+/** 卡间距，与 fallback 档的 `gap-1` 同一个值。 */
+const CARD_GAP_PX = 4;
+/** 卡列表的滚动视口上限：超过就容器内滚，不再把页面撑成几千像素。 */
+const CARD_LIST_MAX_H_CLASS = "max-h-[480px] overflow-y-auto";
+
+/** 单张卡（从层 3 的 `nodeTypeList.map` 里原样提出 —— 窗口化只改「哪几张在场」，
+ * 不改卡本身的任何形态/行为）。 */
+function CardRow({
+  ct,
+  manifestByNode,
+  nodeCardExpansion,
+}: {
+  ct: string;
+  manifestByNode: CustomNodesSettingsController["manifestByNode"];
+  nodeCardExpansion: CustomNodesSettingsController["nodeCardExpansion"];
+}) {
+  return (
+    <NodePreviewCard
+      data={manifestByNode[ct]}
+      fallbackName={ct}
+      expanded={nodeCardExpansion.isExpanded(ct)}
+      onToggle={() => nodeCardExpansion.toggle(ct)}
+    />
+  );
+}
+
+/**
+ * 单包节点卡的**窗口化列表**（ISSUE #2191，audit §C.1 F4b 剩下的那一格）。
+ *
+ * 现场数量级（本机真实节点包目录 D:/Comfy-Desktop/ComfyUI-CustomNode 实测）：15 个
+ * 子包、最大单包 233 个节点类型、全开合计 ~503 张卡。三层里前两层已门控
+ * （展开才挂载），这一层是最后一处「点开就全量 map」—— 大包一开就是两三百张
+ * 交互卡（每张还是自己的 Disclosure）。
+ *
+ * 形态与取舍：
+ *   · **窗口化用独立滚动容器**（`max-h-[480px] overflow-y-auto`），不用
+ *     ModelLibrary / ProjectOutputs 那种「文档滚动锚 + scrollMargin」—— 那份
+ *     模式适合页面顶层的单列表；这里列表嵌在树面板里、多包可**同时**展开，
+ *     各自的 offsetTop 随其它面板开合漂移，页面锚方案要做跨列表的 margin 对账。
+ *     容器内滚的代价是「长列表在这一格内部滚」——对嵌在树里的清单这反而更可扫读。
+ *   · **`TreeChildren` 原样保留**（P36 硬闸的完整样本）：窗口化视口是它的
+ *     **子内容**，不替换行容器，也不新增手写缩进 / 引导线。
+ *   · 未量测环境（jsdom：clientHeight 恒 0）⇒ **全量渲染兜底**，与
+ *     ModelLibrary / ProjectOutputs 的 `measured` 守卫同一条形状 —— 虚拟器在
+ *     无读数环境里 `getVirtualItems()` 为空，直接用会把清单渲染成一片空白。
+ */
+function NodeCardList({
+  nodeTypeList,
+  manifestByNode,
+  nodeCardExpansion,
+}: {
+  nodeTypeList: string[];
+  manifestByNode: CustomNodesSettingsController["manifestByNode"];
+  nodeCardExpansion: CustomNodesSettingsController["nodeCardExpansion"];
+}) {
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  // 与 ModelLibrary / ProjectOutputs 同一条误报豁免：virtualizer 的读数只在
+  // 本组件 render 内消费，不外传给被 memo 的子组件。
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: nodeTypeList.length,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => CARD_ROW_ESTIMATE_PX + CARD_GAP_PX,
+    overscan: 6,
+    gap: CARD_GAP_PX,
+  });
+  const measured = (scrollEl?.clientHeight ?? 0) > 0;
+
+  const renderCard = useCallback(
+    (ct: string) => (
+      <CardRow
+        key={ct}
+        ct={ct}
+        manifestByNode={manifestByNode}
+        nodeCardExpansion={nodeCardExpansion}
+      />
+    ),
+    [manifestByNode, nodeCardExpansion],
+  );
+
+  if (!measured) {
+    return (
+      <div
+        ref={setScrollEl}
+        className={cn("flex flex-col gap-1", CARD_LIST_MAX_H_CLASS)}
+      >
+        {nodeTypeList.map(renderCard)}
+      </div>
+    );
+  }
+  return (
+    <div ref={setScrollEl} className={CARD_LIST_MAX_H_CLASS}>
+      <div
+        style={{
+          position: "relative",
+          height: virtualizer.getTotalSize(),
+          width: "100%",
+        }}
+      >
+        {virtualizer.getVirtualItems().map((vi) => {
+          const ct = nodeTypeList[vi.index];
+          if (ct === undefined) return null;
+          return (
+            <div
+              key={vi.key}
+              data-index={vi.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${vi.start}px)`,
+              }}
+            >
+              <CardRow
+                ct={ct}
+                manifestByNode={manifestByNode}
+                nodeCardExpansion={nodeCardExpansion}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
   const {
@@ -352,8 +487,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                           </div>
                           {/* 可展开的 ComfyUI 风节点预览。只在
  用户点击计数单元时渲染。
- 每张卡片都是自己的收起 / 展开目标，好让
- 一个 146 节点的包仍可扫读。 */}
+ 每张卡片都是自己的收起 / 展开目标；卡多时由
+ `NodeCardList` 窗口化（ISSUE #2191）——
+ 一个 233 节点的包挂载成本不再线性涨。 */}
                           {nodesAreLoaded && nodeListOpen && (
                             <TreeChildren
                               depth={1}
@@ -365,17 +501,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   此包的清单中没有列出节点类型
                                 </div>
                               ) : (
-                                nodeTypeList.map((ct) => (
-                                  <NodePreviewCard
-                                    key={ct}
-                                    data={manifestByNode[ct]}
-                                    fallbackName={ct}
-                                    expanded={nodeCardExpansion.isExpanded(ct)}
-                                    onToggle={() =>
-                                      nodeCardExpansion.toggle(ct)
-                                    }
-                                  />
-                                ))
+                                <NodeCardList
+                                  nodeTypeList={nodeTypeList}
+                                  manifestByNode={manifestByNode}
+                                  nodeCardExpansion={nodeCardExpansion}
+                                />
                               )}
                             </TreeChildren>
                           )}
