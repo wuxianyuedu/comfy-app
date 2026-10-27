@@ -411,6 +411,67 @@ export function downstreamSkipped(outcome) {
 const STAGE_IN_FLIGHT_STATES = new Set(["start", "running", "processing"]);
 
 /**
+ * 「这一格此刻还没有终态」—— 给要念「正文是截到此刻的」那一格的调用方用（ISSUE #2455：
+ * `--stage-log` 在在飞的格上取到的日志不是完整日志，不说这一句就会被读成「它就念这么多」）。
+ *
+ * @param {string | null | undefined} status 平台给的格状态
+ * @returns {boolean}
+ */
+export function stageInFlight(status) {
+  return STAGE_IN_FLIGHT_STATES.has(
+    typeof status === "string" ? status.toLowerCase() : "",
+  );
+}
+
+/**
+ * 「人说的那一格」在这份读数里对应哪几格（ISSUE #2455，`--stage-log` 的反查）。
+ *
+ * 只认两种**逐字**命中：格 id 相同，或格名去空白后相同（不分大小写）。刻意不做
+ * 「模糊匹配就替你挑一个」：本仓一条流水线有三十几格，其中若干格名互为子串
+ * （`生产构建` ⇄ `每日生产构建`、`受影响用例` ⇄ `全量单元测试` 那类），挑错一格
+ * **不会报错**，只会念出另一格的日志 —— 而另一格也有日志，看起来就像证据。
+ * 这正是 #2455 现场那条手工命令的坑（`stageId` 拼错就读到别的格）。
+ *
+ * 命中多格时如实给出多格（由人改用 id 点名），不挑一个。
+ *
+ * @param {ReturnType<typeof classifyBuildOutcome>} outcome
+ * @param {string} ref 人给的格名或格 id
+ * @returns {{hits: Array<{pipeline: ReturnType<typeof classifyBuildOutcome>["pipelines"][number], stage: StageRef}>, near: StageRef[], examined: number}}
+ *   `hits` 逐字命中的那些；`hits` 为空时 `near` 是子串相近的候选（**只作提示，不构成结论**）；
+ *   `examined` 是比过几格 —— 念出来才能把「这一跑没这一格」与「没取到这一跑的格表」分开
+ */
+export function findStageMatches(outcome, ref) {
+  const want = String(ref ?? "")
+    .trim()
+    .toLowerCase();
+  /** @type {Array<{pipeline: ReturnType<typeof classifyBuildOutcome>["pipelines"][number], stage: StageRef}>} */
+  const hits = [];
+  /** @type {StageRef[]} */
+  const near = [];
+  for (const pipeline of outcome.pipelines) {
+    for (const stage of pipeline.configured) {
+      const name = stage.name.trim().toLowerCase();
+      if (
+        stage.id.toLowerCase() === want ||
+        (name !== "" && name === want)
+      ) {
+        hits.push({ pipeline, stage });
+        continue;
+      }
+      if (want === "") continue;
+      /* 候选只用于「念回去让人改正点名」：格名包含所给词、或所给词包含格名，都算相近。 */
+      if (
+        (name !== "" && (name.includes(want) || want.includes(name))) ||
+        stage.id.toLowerCase().includes(want)
+      ) {
+        near.push(stage);
+      }
+    }
+  }
+  return { hits, near, examined: outcome.configured.length };
+}
+
+/**
  * 这一眼里**在飞的格数**与最久的那一格 —— 轮询用它把「一格都没起来」与「一格跑了很久」分开。
  *
  * 只数**本仓配置的那几格**（`classifyStages` 那条 id 形状口径），平台自带的

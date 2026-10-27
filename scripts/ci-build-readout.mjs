@@ -78,9 +78,9 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { asArray, buildSignature } from "./ship-build.mjs";
+import { asArray, buildSignature, pickBuildForSha } from "./ship-build.mjs";
 import { parseSlug } from "./ship-core.mjs";
-import { cnbJson, makeRunner } from "./ship-exec.mjs";
+import { cnbJson, makeRunner, short } from "./ship-exec.mjs";
 /* 时长档位用 `~/lib/time-format` 那一份定义（与 ComfyUI 退出记录同一件事）。
    本文件此前把平台的 `duration` 字段**当秒**印（`${duration}s`），而它是毫秒 ——
    一次 15m30s 的格子被念成 `930916s`（≈ 10.7 天，ISSUE #2442）。同仓另一个消费者
@@ -92,8 +92,10 @@ import {
   classifyBuildOutcome,
   classifyStages,
   downstreamSkipped,
+  findStageMatches,
   inFlightStages,
   pipelineSn,
+  stageInFlight,
 } from "./ci-build-classify.mjs";
 
 /* 判断全在 `ci-build-classify.mjs`，这里只是**转发**给既有调用点（`ship-poll` /
@@ -106,8 +108,10 @@ export {
   classifyBuildOutcome,
   classifyStages,
   downstreamSkipped,
+  findStageMatches,
   inFlightStages,
   pipelineSn,
+  stageInFlight,
 };
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -621,6 +625,63 @@ export function fetchBuildList(run, slug, event, limit, opts = {}) {
     }));
   builds.sort((a, b) => b.createTime.localeCompare(a.createTime));
   return builds.slice(0, limit);
+}
+
+/**
+ * 「要读哪一跑」：人点名就照点名，没点名就按 HEAD 的 sha 在 `pull_request` 列表里**逐字**归属。
+ *
+ * `--diagnose` 与 `--stage-log` 是同一个读者的两个入口，而归属这件事只能有一份算法：
+ * 两边各写一遍的漂移形态是「同一个 sha 在两条命令里落到不同的跑」，那两条读数就会被
+ * 当成互相矛盾的证据（ISSUE #2455 要的正是「同一跑不许给出两种答案」）。
+ *
+ * ⚠️ 归属不到就回 `null` 并念出原因，**不拿「最新那条」顶上** —— 那会把别人的绿灯 /
+ * 红灯读成自己的（与 `ship-build.mjs` 的 `pickBuildForSha` 同一条纪律）。
+ *
+ * @param {object} io
+ * @param {(cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult} io.run 执行者
+ * @param {(line: string) => void} io.log 输出通道
+ * @param {string} io.slug 仓库路径
+ * @param {string | null} [io.sn] 人点名的构建号
+ * @param {string} [io.headSha] 当前 HEAD 的 sha（未点名时用来归属）
+ * @param {string} [io.command] 念「下一动作」时引用的那条命令（默认 `pnpm ship --diagnose`）
+ * @param {string} [io.prefix] 每行前缀
+ * @returns {string | null} 要读的那个构建号；归不到时 null
+ */
+export function resolveBuildSn({
+  run,
+  log,
+  slug,
+  sn = null,
+  headSha = "",
+  command = "pnpm ship --diagnose",
+  prefix = "[ship]",
+}) {
+  const target = typeof sn === "string" && sn.trim() !== "" ? sn.trim() : null;
+  if (target) return target;
+  const got = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
+  const list = got ? asArray(got.json) : null;
+  if (!list) {
+    log(
+      `${prefix} 取不到 build 列表 ⇒ 没有结论（不是「没有构建」）；` +
+        `要读哪一跑就点名：${command} <sn>`,
+    );
+    return null;
+  }
+  const hit = pickBuildForSha(list, headSha);
+  if (!hit) {
+    log(
+      `${prefix} 按 HEAD ${short(headSha)} 没找到 pull_request 构建（还没推 / CI 还没起 / 构建挂在别的 sha 上）` +
+        " ⇒ 没有结论。",
+    );
+    log(
+      `${prefix} 下一动作：在 PR 上确认构建已创建后重跑，或点名构建号：${command} <sn>`,
+    );
+    return null;
+  }
+  log(
+    `${prefix} 按 HEAD ${short(headSha)} 归属到构建 ${hit.sn}（列表里 sha 逐字相同，取最新一条）。`,
+  );
+  return hit.sn;
 }
 
 /**
