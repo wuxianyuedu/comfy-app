@@ -383,17 +383,21 @@ export function readSlotState(slot) {
  * ## 四档读数各自是什么意思
  *
  * - `count` —— 槽根下有几个键目录；
- * - `overQuota` —— 超出配额的那几个（配额按「个」定，见 `MAX_SLOT_KEYS`）；
+ * - `overQuota` —— 超出配额的那几个（配额按「个」定，见 `MAX_SLOT_KEYS`）。口径是
+ *   **这一跑之后**：配额的最后一格留给当前键，当前键已在盘上时不再重复占一格
+ *   （`pruneSlots` 在入口处就剔掉了它，读数必须与执行同口径 —— ISSUE #2490）；
  * - `heldByTtl` —— 超额里**被 TTL 挡着**的那几个（它们还在闸门内 ⇒ 可能正被人用，
  *   **用空间换正确性**，方向只许这么换）；
  * - `emptyCount` —— **里面没有产物也没有指纹**的那几个（崩在半路的安装留下的空壳；
- *   它们既不好用、也永远不会自己好起来 —— 执行档那一档就是专门回收它们的）。
+ *   它们既不好用、也永远不会自己好起来 —— 执行档那一档就是专门回收它们的）；
+ * - `currentOnDisk` —— 当前键在不在盘上。打印那一行靠它把「键数 ≤ 配额却报超额」
+ *   解释清楚：未落盘时当前键还要占一格。
  *
  * @param {{cacheRoot: string, now?: number, ttlMs?: number, quota?: number,
  *   currentKey?: string | null}} io
  * @returns {{
  *   root: string, quota: number, count: number, overQuota: number, heldByTtl: number,
- *   emptyCount: number,
+ *   emptyCount: number, currentOnDisk: boolean,
  *   keys: Array<{key: string, lastUsed: number | null, expired: boolean,
  *     usable: boolean, unreadable: boolean}>,
  * }}
@@ -413,6 +417,7 @@ export function listSlots(io) {
     overQuota: 0,
     heldByTtl: 0,
     emptyCount: 0,
+    currentOnDisk: false,
     keys: [],
   };
   let entries;
@@ -436,8 +441,15 @@ export function listSlots(io) {
       };
     })
     .sort((a, b) => (b.lastUsed ?? 0) - (a.lastUsed ?? 0));
+  const currentOnDisk = currentKey !== null && keys.some((k) => k.key === currentKey);
+  /* 与 `pruneSlots` 同口径：当前键先剔出候选、再按 `quota - 1` 切。
+   * 只扣预算不剔候选时，当前键最旧的那份盘会被算成「超额」（执行档却永远不删它）——
+   * ISSUE #2490。 */
+  const candidates = currentOnDisk
+    ? keys.filter((k) => k.key !== currentKey)
+    : keys;
   const budget = Math.max(0, quota - (currentKey ? 1 : 0));
-  const over = keys.slice(budget);
+  const over = candidates.slice(budget);
   return {
     root: cacheRoot,
     quota,
@@ -445,6 +457,7 @@ export function listSlots(io) {
     overQuota: over.length,
     heldByTtl: over.filter((k) => !k.expired).length,
     emptyCount: keys.filter((k) => !k.usable).length,
+    currentOnDisk,
     keys,
   };
 }
@@ -483,10 +496,16 @@ export function main(io = {}) {
   log(`[缓存槽读数]   ${plan.why}`);
   if (cacheRoot) {
     const slots = listSlots({ cacheRoot, currentKey: key });
+    const current =
+      key === null
+        ? "未知"
+        : slots.currentOnDisk
+          ? "已在盘上"
+          : "未落盘（它要占一格）";
     log(
       `[缓存槽读数] 键数 ${slots.count}（配额 ${slots.quota}）·超配额 ${slots.overQuota} 个` +
         `（其中被 TTL 挡着 ${slots.heldByTtl} 个 ⇒ 它们可能正被人用，这是用空间换正确性）` +
-        `·空槽 ${slots.emptyCount} 个`,
+        `·空槽 ${slots.emptyCount} 个·当前键${current}`,
     );
     log(
       "[缓存槽读数]   配额按「个」定：一个键的**净**盘约 52 MiB（表观 ~1 GB 里绝大部分是" +
