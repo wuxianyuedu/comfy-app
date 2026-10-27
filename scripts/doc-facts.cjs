@@ -69,6 +69,9 @@ const SCOPED_DOCS = [
   "docs/product/overview.md",
   "docs/product/feature-catalog.md",
   "docs/product/feature-specs.md",
+  /* 六阶段规格（ISSUE #2473）：创作主链路的验收基准。里面逐阶段写死代码落点与现状
+   * 判断（角色/分镜是 JSON 列、工坊阶段⑥不产 MP4），漂了就会指着一个不存在的实现说需求。 */
+  "docs/product/pipeline-stages.md",
 ];
 function readJson(p) {
   return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
