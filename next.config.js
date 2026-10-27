@@ -6,7 +6,6 @@ import "./src/env.js";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import withBundleAnalyzer from "@next/bundle-analyzer";
 
 // ── 生产级安全响应头（OWASP 2025 A05/A08）────────────────────
 // 全站生效，同时覆盖 /api/*（tRPC、better-auth、文件流等）。
@@ -284,15 +283,9 @@ const config = {
   },
 };
 
-// ── @next/bundle-analyzer（可选体积分析）────────────────────────────
-// 仅当 ANALYZE=true 时启用（先跑 `pnpm analyze`，由 scripts/analyze-bundle.mjs 注入该变量）。
-// 注意：@next/bundle-analyzer 挂在 webpack 上，Turbopack 不支持；因此分析时
-// 必须强制走 webpack（analyze 脚本内 `next build --webpack`），默认
-// `next build`（Turbopack）不受影响。构建完成后输出可视化报告到
-// .next/analyze/*.html（client / nodejs / edge 三份），并监听
-// http://127.0.0.1:8888 供浏览器查看。
-const withBundleAnalyzerConfig = withBundleAnalyzer({
-  enabled: process.env.ANALYZE === "true",
-});
+// 体积分析走 Next 16 内置的 Turbopack 分析器：`pnpm analyze`（= `next analyze`），
+// 与默认构建链同链（#2538）。老的 @next/bundle-analyzer 挂在 webpack 上、产物形状
+// 与 Turbopack 不可比，已随本改动删除。快照与 JSONL 导出见 `next analyze --help`
+// （`--snapshot` 命名快照 / `analyze export` 流式导出给脚本或 AI）。
 
-export default withBundleAnalyzerConfig(config);
+export default config;

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "next build && node scripts/standalone-link-repair.mjs && node scripts/build-executor-host.mjs && node scripts/standalone-private-inputs.mjs && node scripts/check-standalone-contents.cjs && node scripts/check-bundle-budget.cjs && node scripts/smoke-executor-host-standalone.mjs",
-    "analyze": "node scripts/analyze-bundle.mjs",
+    "analyze": "next analyze",
     "check:bundle": "node scripts/check-bundle-budget.cjs",
     "agent:film": "node scripts/agent-film.mjs",
     "check": "pnpm run lint && tsc --noEmit",
@@ -118,7 +118,6 @@
   },
   "devDependencies": {
     "@eslint/compat": "2.1.1",
-    "@next/bundle-analyzer": "^16.4.3",
     "@playwright/test": "^1.64.1",
     "@storybook/addon-a11y": "10.6.4",
     "@storybook/addon-docs": "10.6.4",
