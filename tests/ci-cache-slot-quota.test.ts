@@ -210,11 +210,11 @@ describe("缓存槽的配额与淘汰（契约）", () => {
     }
   });
 
-  it("读数那一格答得出「键数 / 配额 / 超额的几个被闸门挡着 / 空槽几个」", () => {
+  it("当前键已经在盘上时不再重复占一格（读数与执行同口径，ISSUE #2490）", () => {
     const cache = mkdtempSync(path.join(tmpdir(), "slot-read-"));
     try {
       const now = 10 * 24 * 60 * 60 * 1000;
-      /* 三个可用的键 + 一个空壳。 */
+      /* 三个可用的键 + 一个空壳；当前键 `c` 就在盘上。 */
       for (const [i, k] of ["a", "b", "c"].entries()) {
         makeSlot(cache, k, {
           tree: true,
@@ -224,14 +224,73 @@ describe("缓存槽的配额与淘汰（契约）", () => {
       }
       makeSlot(cache, "空壳", { mtime: now - SLOT_TTL_MS - 60_000 });
       const slots = listSlots({ cacheRoot: cache, now, currentKey: "c" });
+      expect(slots.currentOnDisk).toBe(true);
       expect(slots.count).toBe(4);
       expect(slots.quota).toBe(MAX_SLOT_KEYS);
-      /* 配额 4、当前键占一个 ⇒ 预算 3 ⇒ 超额 1 个。 */
-      expect(slots.overQuota).toBe(1);
+      /* 4 个键里含当前键 ⇒ 配额之内；`pruneSlots` 对同一份盘一个都不删。
+       * 早先这里扣了两次（keys 里数一次、预算里再扣一次）⇒ 报「超配额 1 个」。 */
+      expect(slots.overQuota).toBe(0);
+      expect(slots.heldByTtl).toBe(0);
       expect(slots.emptyCount).toBe(1);
-      /* 闸门内的那个超额键被挡着（不是被淘汰了）。 */
-      expect(slots.heldByTtl).toBe(1);
       expect(slots.keys.map((k) => k.key)).toContain("空壳");
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
+  });
+
+  it("当前键还没落盘时它要占一格（键数 = 配额 ⇒ 超配额 1 个）", () => {
+    const cache = mkdtempSync(path.join(tmpdir(), "slot-read-"));
+    try {
+      const now = 10 * 24 * 60 * 60 * 1000;
+      const names = ["a", "b", "c", "d"];
+      for (const [i, k] of names.entries()) {
+        makeSlot(cache, k, {
+          tree: true,
+          fingerprint: k,
+          stamp: now - (i + 1) * 60_000,
+        });
+      }
+      const slots = listSlots({
+        cacheRoot: cache,
+        now,
+        currentKey: "还没建的键",
+      });
+      expect(slots.currentOnDisk).toBe(false);
+      expect(slots.count).toBe(MAX_SLOT_KEYS);
+      /* 盘上 4 个 + 当前键还要占一格 ⇒ 预算 3 ⇒ 最旧的那个落在配额之外。 */
+      expect(slots.overQuota).toBe(1);
+      expect(slots.heldByTtl).toBe(1);
+      expect(slots.emptyCount).toBe(0);
+      expect(slots.keys[slots.keys.length - 1]?.key).toBe("d");
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
+  });
+
+  it("当前键最旧也不许把它算成超额（执行档永远不删它）", () => {
+    const cache = mkdtempSync(path.join(tmpdir(), "slot-read-"));
+    try {
+      const now = 10 * 24 * 60 * 60 * 1000;
+      /* a~d 都新鲜；当前键 e 最旧且过了 TTL —— 超额的那一个必须是 d（候选里最旧的），
+       * 不是 e。只扣预算、不剔候选时，`keys.slice(quota)` 会正好落在 e 上。 */
+      for (const [i, k] of ["a", "b", "c", "d"].entries()) {
+        makeSlot(cache, k, {
+          tree: true,
+          fingerprint: k,
+          stamp: now - (i + 1) * 60_000,
+        });
+      }
+      makeSlot(cache, "e", {
+        tree: true,
+        fingerprint: "e",
+        stamp: now - SLOT_TTL_MS - 60_000,
+      });
+      const slots = listSlots({ cacheRoot: cache, now, currentKey: "e" });
+      expect(slots.currentOnDisk).toBe(true);
+      expect(slots.count).toBe(MAX_SLOT_KEYS + 1);
+      expect(slots.overQuota).toBe(1);
+      /* d 还在闸门内 ⇒ 被留着；若把 e 当成超额，它已过 TTL ⇒ 这一格会变成 0。 */
+      expect(slots.heldByTtl).toBe(1);
     } finally {
       rmSync(cache, { recursive: true, force: true });
     }
