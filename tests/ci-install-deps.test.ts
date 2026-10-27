@@ -187,17 +187,67 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     ]) {
       fs.writeFileSync(path.join(tmp, f), "# " + f + "\n");
     }
+    /* `package.json` 是真 JSON：键面要解析它才能摘 `scripts`（ISSUE #2489）。 */
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "fixture",
+          dependencies: { leftpad: "1.0.0" },
+          scripts: { postinstall: "node scripts/install-git-hooks.mjs" },
+        },
+        null,
+        2,
+      )}\n`,
+    );
   });
 
   afterEach(() => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
+  const readPkg = () =>
+    JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+
   it("同一份依赖面 ⇒ 同一个指纹；锁文件改一个字 ⇒ 变", () => {
     const a = pnpmInstallFingerprint(tmp);
     expect(a).toBe(pnpmInstallFingerprint(tmp));
     fs.appendFileSync(path.join(tmp, "pnpm-lock.yaml"), "changed\n");
     expect(pnpmInstallFingerprint(tmp)).not.toBe(a);
+  });
+
+  it("只改 scripts ⇒ 指纹不变：它不在安装闭包里（ISSUE #2489）", () => {
+    const before = pnpmInstallFingerprint(tmp);
+    const pkg = readPkg();
+    pkg.scripts["setup:comfy-cli-venv"] =
+      "node scripts/setup-comfy-cli-venv.mjs";
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      `${JSON.stringify(pkg, null, 2)}\n`,
+    );
+    expect(
+      pnpmInstallFingerprint(tmp),
+      "scripts 变也换键 ⇒ 白付一次整装，而槽的内容逐字不变",
+    ).toBe(before);
+  });
+
+  it("改依赖 ⇒ 指纹变（判宽只是少省，判窄是拿旧树跑门禁）", () => {
+    const before = pnpmInstallFingerprint(tmp);
+    const pkg = readPkg();
+    pkg.dependencies.leftpad = "1.0.1";
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      `${JSON.stringify(pkg, null, 2)}\n`,
+    );
+    expect(pnpmInstallFingerprint(tmp)).not.toBe(before);
+  });
+
+  it("package.json 读不动（非法 JSON）⇒ null —— 与「读不到」同一出口，不猜成「没变」", () => {
+    fs.writeFileSync(path.join(tmp, "package.json"), "{ not json\n");
+    expect(pnpmInstallFingerprint(tmp)).toBeNull();
   });
 
   it("patches/ 也算依赖面（换一个补丁，装出来的产物就不同）", () => {
@@ -321,6 +371,11 @@ function makeInstalledRoot(): string {
   ]) {
     fs.writeFileSync(path.join(root, f), "# " + f + "\n");
   }
+  /* `package.json` 要是真 JSON：键面会解析它来摘 `scripts`（ISSUE #2489）。 */
+  fs.writeFileSync(
+    path.join(root, "package.json"),
+    `${JSON.stringify({ name: "installed-fixture" }, null, 2)}\n`,
+  );
   fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
   fs.writeFileSync(path.join(root, "node_modules", ".modules.yaml"), "{}");
   writeInstallFingerprint(root, pnpmInstallFingerprint(root)!);
