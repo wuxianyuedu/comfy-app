@@ -61,187 +61,6 @@ export function combineShipCodes(codes) {
 }
 
 /**
- * 一个命令行 token 是不是合法的 issue 号（`2179` 或 `#2179`）。不是就回 `null`。
- *
- * 「像不像号」只在这一处判：`--close-issue 2179` 与 `--close-issue=2179,2186` 两种写法共用它 ——
- * 各写一份正则的漂移形态是「一种写法能关、另一种不能，而两边都不报错」。
- * 两位是刻意下限：`--close-issue 1` 那种一眼就是打错的输入应当被点名，而不是被当成
- * 「存在一张一号单子」（个位数在本仓是早期真 issue，猜错的代价比多问一句高）。
- *
- * @param {string} token 命令行上的一个 token
- * @returns {number | null}
- */
-export function parseIssueNumberToken(token) {
-  const bare = String(token ?? "").replace(/^#/, "");
-  return /^\d{2,}$/.test(bare) ? Number(bare) : null;
-}
-
-/**
- * 解析命令行。未知旗标**不静默忽略** —— 拼错的旗标会被读成「没要那个动作」，
- * 而这里最贵的误读是「以为会合、其实没合」或反之。
- *
- * **`--close-issue` 的两种写法**（ISSUE #2199）：
- *   · 裸旗标 = 从本轮落地那一行的标题本体取号（#2070 那批的口径，一字未改）；
- *   · `--close-issue 2179` / `--close-issue #2179` / `--close-issue=2179,2186` = 人点名。
- *     紧跟的 token 只要不像号就停手并把它记进 `closeIssueBad` —— 既不许当未知旗标静默收下
- *     （那会被读成「没要那个动作」），也不许往后吃掉本该属于别的旗标的参数。
- *
- * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} 解析结果
- */
-export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],merge:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],cleanBranch:boolean,reap:boolean,dryRun:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,branches:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,rerunCi:boolean,only:string|null,unknown:string[]}} */
-  const out = {
-    message: null,
-    messageFile: null,
-    title: null,
-    branch: null,
-    adds: [],
-    merge: false,
-    closeIssue: false,
-    closeIssueNumbers: [],
-    closeIssueBad: [],
-    cleanBranch: false,
-    reap: false,
-    dryRun: false,
-    wait: true,
-    whoami: false,
-    claim: null,
-    claimBad: [],
-    release: null,
-    releaseBad: [],
-    claims: false,
-    branches: false,
-    newIssue: null,
-    newIssueBad: [],
-    issueBodyFile: null,
-    priority: null,
-    diagnose: false,
-    diagnoseSn: null,
-    rerunCi: false,
-    only: null,
-    unknown: [],
-  };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i] ?? "";
-    if (a === "--merge") out.merge = true;
-    else if (a === "--whoami") out.whoami = true;
-    else if (a === "--claims") out.claims = true;
-    else if (a === "--branches") out.branches = true;
-    /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
-     * 那一形）。所以下一个 token 只在不像旗标时才当构建号收下。 */
-    else if (a === "--diagnose") {
-      out.diagnose = true;
-      const tok =
-        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
-          ? String(argv[++i] ?? "")
-          : "";
-      if (tok !== "") out.diagnoseSn = tok;
-    } else if (a === "--new-issue") {
-      const tok =
-        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
-          ? String(argv[++i] ?? "")
-          : "";
-      if (tok.trim() === "") out.newIssueBad.push("(缺标题)");
-      else out.newIssue = tok;
-    } else if (a === "--issue-body-file") {
-      out.issueBodyFile = argv[++i] ?? "";
-    } else if (a === "--priority") {
-      out.priority = argv[++i] ?? "";
-    } else if (a.startsWith("--diagnose=")) {
-      out.diagnose = true;
-      const tok = a.slice("--diagnose=".length);
-      if (tok !== "") out.diagnoseSn = tok;
-    } else if (a === "--rerun-ci") {
-      out.rerunCi = true;
-    } else if (a.startsWith("--new-issue=")) {
-      const tok = a.slice("--new-issue=".length);
-      if (tok.trim() === "") out.newIssueBad.push("(缺标题)");
-      else out.newIssue = tok;
-    } else if (a.startsWith("--issue-body-file=")) {
-      out.issueBodyFile = a.slice("--issue-body-file=".length);
-    } else if (a.startsWith("--priority=")) {
-      out.priority = a.slice("--priority=".length);
-    } else if (a === "--claim" || a === "--release") {
-      const isClaim = a === "--claim";
-      const tok =
-        i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
-          ? String(argv[++i] ?? "")
-          : "";
-      const n = parseIssueNumberToken(tok);
-      if (n === null) {
-        if (isClaim) out.claimBad.push(tok || "(缺号)");
-        else out.releaseBad.push(tok || "(缺号)");
-      } else if (isClaim) {
-        /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
-         * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
-        if (out.claim !== null) {
-          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
-        } else out.claim = n;
-      } else if (out.release !== null) {
-        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
-      } else out.release = n;
-    } else if (a === "--close-issue") {
-      out.closeIssue = true;
-      while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
-        const tok = String(argv[++i] ?? "");
-        const n = parseIssueNumberToken(tok);
-        if (n === null) {
-          out.closeIssueBad.push(tok);
-          break;
-        }
-        out.closeIssueNumbers.push(n);
-      }
-    } else if (a === "--clean-branch") out.cleanBranch = true;
-    else if (a === "--reap") out.reap = true;
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--no-wait") out.wait = false;
-    else if (a === "--message" || a === "-m") out.message = argv[++i] ?? "";
-    else if (a === "--message-file") out.messageFile = argv[++i] ?? "";
-    else if (a === "--title") out.title = argv[++i] ?? "";
-    else if (a === "--branch") out.branch = argv[++i] ?? "";
-    else if (a === "--add") out.adds.push(argv[++i] ?? "");
-    else if (a.startsWith("--message="))
-      out.message = a.slice("--message=".length);
-    else if (a.startsWith("--message-file="))
-      out.messageFile = a.slice("--message-file=".length);
-    else if (a.startsWith("--title=")) out.title = a.slice("--title=".length);
-    else if (a.startsWith("--branch="))
-      out.branch = a.slice("--branch=".length);
-    else if (a.startsWith("--add=")) out.adds.push(a.slice("--add=".length));
-    else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
-    else if (a.startsWith("--claim=") || a.startsWith("--release=")) {
-      const isClaim = a.startsWith("--claim=");
-      const tok = a.slice(a.indexOf("=") + 1);
-      const n = parseIssueNumberToken(tok);
-      if (n === null) {
-        if (isClaim) out.claimBad.push(tok || "(缺号)");
-        else out.releaseBad.push(tok || "(缺号)");
-      } else if (isClaim) {
-        /* 第二次 `--claim` 不静默覆盖第一张：那会把「领两张」读成「领最后那张」，
-         * 而屏幕上不会有任何提示。记进 bad，由执行层点名后停手。 */
-        if (out.claim !== null) {
-          out.claimBad.push(`重复的 --claim（前一张 #${out.claim}）`);
-        } else out.claim = n;
-      } else if (out.release !== null) {
-        out.releaseBad.push(`重复的 --release（前一张 #${out.release}）`);
-      } else out.release = n;
-    } else if (a.startsWith("--close-issue=")) {
-      out.closeIssue = true;
-      for (const tok of (a.slice("--close-issue=".length) || "").split(
-        /[,\s]+/,
-      )) {
-        if (tok === "") continue;
-        const n = parseIssueNumberToken(tok);
-        if (n === null) out.closeIssueBad.push(tok);
-        else out.closeIssueNumbers.push(n);
-      }
-    } else out.unknown.push(a);
-  }
-  return out;
-}
-
-/**
  * 「这次要不要先把分支建出来」—— 判断与效应分家（与 `decideCloseIssue` 同一形状）。
  *
  * 四条口径：
@@ -694,7 +513,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -737,9 +556,7 @@ export function planCommands(st) {
    * 写标签 / 评论一律**后跟独立回读** —— 回执不算结论。 */
   if (st.claim != null) {
     const who = st.handle || "<短名>";
-    p.push(
-      `cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v`,
-    );
+    p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v`);
     p.push(
       `cnb issues post-issue-labels --repo ${st.slug} --number ${st.claim} --labels 处理人:${who} -v`,
     );
@@ -758,9 +575,7 @@ export function planCommands(st) {
   }
   if (st.release != null) {
     const who = st.handle || "<短名>";
-    p.push(
-      `cnb issues get-issue --repo ${st.slug} --number ${st.release} -v`,
-    );
+    p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.release} -v`);
     p.push(
       `cnb issues list-issue-comments --repo ${st.slug} --number ${st.release} --sort -created --page-size 100 -v`,
     );
@@ -803,7 +618,9 @@ export function planCommands(st) {
         `cnb issues post-issue-labels --repo ${st.slug} --number <n> --labels 提单人:${st.handle} -v`,
       );
     }
-    p.push(`cnb issues get-issue --repo ${st.slug} --number <n> -v（建后回读：标题 / 优先级 / 标签）`);
+    p.push(
+      `cnb issues get-issue --repo ${st.slug} --number <n> -v（建后回读：标题 / 优先级 / 标签）`,
+    );
   }
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);
@@ -823,6 +640,14 @@ export function planCommands(st) {
    * 不显式给 `--close-issue` 就不出现。`get-issue` 那一条是回读（独立一问），
    * 它不在 WRITE_SHAPES 里，但同样要出现在计划中，否则 dry-run 教的执行面是缺一块的。 */
   if (st.closeIssue) {
+    /* 人点名「随哪条 PR 落地」（`--as-merged`，ISSUE #2491）时，这一跳**先去回读那条 PR 的
+     * `is_merged`** 再决定关不关 —— 计划里必须看得见这一问，否则 dry-run 教的执行面
+     * 又缺了一块（与下面那句 `get-issue` 是同一条理由：只写动作不写回读，就是把
+     * 「回执即结论」教给读者）。 */
+    if (st.asMerged)
+      p.push(
+        `cnb pulls get-pull --repo ${st.slug} --number ${st.asMerged} -v（认 data.is_merged 原值，不当结论直接用）`,
+      );
     p.push(
       `cnb issues update-issue --repo ${st.slug} --number <n> --state closed --state-reason completed -v`,
     );
