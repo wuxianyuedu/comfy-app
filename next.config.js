@@ -3,7 +3,9 @@
  * for Docker builds.
  */
 import "./src/env.js";
+import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 
 // ── 生产级安全响应头（OWASP 2025 A05/A08）────────────────────
@@ -22,6 +24,46 @@ const IS_DEV = process.env.NODE_ENV !== "production";
 const SCRIPT_SRC = IS_DEV
   ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
   : "script-src 'self' 'unsafe-inline'";
+
+/**
+ * 依赖缓存槽的根目录（与 `scripts/ci-cache-slot.mjs` 的 `resolveCacheRoot` 同源）：
+ * `<store 卷>/ci-cache/<包名小写>`。Turbopack 需要它作为附加根，是因为接槽后作业的
+ * `node_modules` 是**指向该根之下某个指纹键目录的 junction**（出项目根），不登记
+ * Turbopack 会硬拒 `next build`（见 changelog.d/2081-* 与 issue #2521）。
+ *
+ * 这里**内联**一份最小推导、不 import 槽脚本：next.config 在每次构建/开发都被加载，
+ * 把会 spawn `pnpm` 的槽脚本拖进配置加载面不划算，且会让非 CI 场景也跑那段逻辑。
+ * 仅当 `COMFY_CI_SLOT === "1"`（CI 接槽）时调用；任意失败都返回 `null`，由调用方
+ * 配 `ignoreIfMissing` 兜底（路径存疑时只告警忽略，不阻断构建）。
+ *
+ * ⚠️ 与 `resolveCacheRoot` 漂移的责任同 §12.12：改这里必须同步改那里。
+ *
+ * @returns {string | null}
+ */
+function resolveCiSlotCacheRoot() {
+  try {
+    const res = spawnSync("pnpm", ["store", "path"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    const store = String(res.stdout ?? "").trim();
+    if (res.status !== 0 || !store) return null;
+    const volumeRoot = path.parse(store).root;
+    let name = "repo";
+    try {
+      name = String(
+        JSON.parse(
+          fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+        ).name ?? "repo",
+      ).toLowerCase();
+    } catch {
+      /* 读不到包名用中性目录名，与 resolveCacheRoot 同口径 */
+    }
+    return path.join(volumeRoot, "ci-cache", name);
+  } catch {
+    return null;
+  }
+}
 
 const CSP = [
   "default-src 'self'",
@@ -68,6 +110,24 @@ const config = {
   // lib/typescript.js API）；类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证。
   experimental: {
     useTypeScriptCli: false,
+    // #2081 后续（issue #2521）：依赖缓存槽把作业 node_modules 接成指向项目根外的
+    // junction，Turbopack 对 next build 硬拒（Symlink ... is invalid, it points out of
+    // the filesystem root）。Next 16.4.3 起提供 experimental.turbopackAdditionalRoots，
+    // 把「symlinked dependencies 可能解析进的那份槽根」登记为附加根，Turbopack 即顺着
+    // 链解析而不再拒。仅当 CI 接槽（COMFY_CI_SLOT=1）时登记；其余场景无出根 junction，
+    // 配 ignoreIfMissing 仅告警忽略。槽根推导与 ci-cache-slot.mjs 同源（不在此另抄事实）。
+    ...(process.env.COMFY_CI_SLOT === "1"
+      ? (() => {
+          const root = resolveCiSlotCacheRoot();
+          return root
+            ? {
+                turbopackAdditionalRoots: {
+                  "ci-cache": { path: root, ignoreIfMissing: true },
+                },
+              }
+            : {};
+        })()
+      : {}),
   },
   // 整治 standalone file tracing 把非 Next 运行时的根级目录纳入 .next/standalone
   // （此前实验键位写错导致完全不生效；Next 16 已把 outputFileTracingExcludes 移为顶层键）。
