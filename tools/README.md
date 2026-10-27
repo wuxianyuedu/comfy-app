@@ -65,7 +65,7 @@
 | `start/Create-AppShortcut.ps1` | start/ | 一次性配置 | 在仓库根生成 `Comfy APP.lnk` 启动快捷方式（由 `build-tauri-release.ps1` 构建成功后自动调用；手动 `cargo build --release --features custom-protocol` 之后想单独补生成时也可直接双击） |
 | `build/build-tauri-release.ps1` | build/ | 壳 | 构建 `src-tauri/target/release/app.exe`（唯一入口；prebuilt / tauri dev 都用它） |
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
-| `build/build-all.ps1` | build/ | 一键编排 | 构建 release 壳（= 唯一入口 `app.exe`） |
+| `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 发布到常驻目录留 2 份（规范 §7.7） |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
 | `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/generate-docs.ps1` / `scripts/generate-docs.mjs`） |
 | `docs/generate-api-docs.ps1` | docs/ | 文档 | 一键重生成 API 文档 `docs/api/**`（跨平台等价：`pnpm run docs`；逻辑在 `scripts/generate-api-docs.mjs`，跑 + 验 + 重试在 `scripts/typedoc-run.mjs`） |
@@ -263,10 +263,13 @@ cargo build --release --features custom-protocol
 
 ### 两种运行模式（重要）
 
-> **流程已统一（推荐）**：直接双击 `tools\build\build-tauri-release.ps1` 或
-> `tools\build\build-all.ps1` 即可，脚本会在 `cargo build --release` **之前自动同步前端资源**
-> ——`src-tauri/static` 缺失时跑完整 `build-desktop.mjs`（含 `pnpm build` + Node sidecar），
-> 已存在时仅增量同步 `splash.html` / `index.html`。**无需再手动 `cp`**。
+> **流程已统一（推荐）**：直接双击 `tools\build\build-tauri-release.ps1` 即可，脚本会在
+> `cargo build --release` **之前同步启动页资源**（`splash.html` / `index.html`）。
+> 它**不跑 `build-desktop.mjs`**：整树装配会把整个项目（`node_modules` / `python-venv`）
+> 拷进 `static` 并嵌进 exe（实测 8GB+），故那条路改成只同步启动页 —— 要完整装配就走
+> `build-standalone.ps1` 或 `build-all.ps1`（见规范 §7.0 / §7.6 那段「全新克隆上必挂」的成因）。
+> （`tools\build\build-all.ps1` 走的是 `pnpm tauri build`，装配由它的 `beforeBuildCommand`
+> 负责，见规范 launch-and-build.md §7.7。）
 
 跑出来的 `app.exe` 是同一个文件，形态由**壳自己**按「检出里有没有编排器」决定：
 
@@ -287,12 +290,19 @@ cargo build --release --features custom-protocol
 
 ## 一键发布构建
 
-需要「最快启动」的完整发布包时，直接双击 `tools\build\build-all.ps1`：
+需要「能装到别人机器上」的完整发布包时，直接双击 `tools\build\build-all.ps1`：
 
-1. 自动调用 `build/build-tauri-release.ps1` 构建 release Tauri 壳（脚本内部已自动同步前端资源，无需手动 build-desktop）；
-2. 产物就是唯一入口 `src-tauri\target\release\app.exe` —— **没有第二步打包**（原先那一步做的
-   「再包一层启动器 exe」已随 ISSUE #784 移除）；
-3. 全部完成后由入口统一收尾（双击场景等待按键，终端调用直接返回退出码）。
+1. `pnpm tauri build` —— 整条桌包链：`build-desktop.mjs`（`pnpm build` → 装配 `static`
+   → Node sidecar）→ cargo 编译 → bundle，产出 **nsis / msi 安装包**；
+2. `node scripts/publish-desktop-bundle.mjs` —— 把安装包发布到**常驻目录**
+   （`<store 所在卷>\ci-artifacts\<包名>`，盘符由 `pnpm store path` 推导）：一份一个目录
+   + `manifest.json`，`latest.txt` 是指针文件，轮转留最近 2 份；
+3. 产物仍是唯一入口 `src-tauri\target\release\app.exe`（安装包只是它的分发形态，
+   **没有第二层启动器 exe** —— 那一步已随 ISSUE #784 移除）；
+4. 全部完成后由入口统一收尾（双击场景等待按键，终端调用直接返回退出码）。
+
+耗时与形状的读数（冷/暖、msi 84.86 MiB、nsis 那格今天没有结论）都在规范
+launch-and-build.md §7.7，那里也写了平台侧那条独立流水线（`02:00` 定时 + 手点按钮）。
 
 结束时报告耗时：入口打印整轮总耗时（双击场景里它是关窗口前最后一行），
 编排层汇总里给出「总耗时」（失败中止时也报已用时间），两个子步骤各报本步耗时；
