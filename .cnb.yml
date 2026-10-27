@@ -1111,6 +1111,15 @@
     # 那一刻安装依赖的账已经花完）。壳工具链**不是** pnpm 依赖，这一跑不顺手装任何东西。
     timeout: 5m
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --rust-only
+  - name: 打包·桌包工具预置
+    # nsis 那一格要的两件 GitHub release 资产，**不在这条链上现下**（bundler 的下载预算实测
+    # 在 22–23s，而本机直连取那份 zip 要 48.4s ⇒ 红的是网络、看起来像链坏了；镜像键实测
+    # 29.5s，仍在那条预算之上，所以配镜像不是结案）。这一格从常驻根的工具镜像补缓存，
+    # 补不上就退 **2「没有结论」**并念出出口 —— 放行给 bundler 去撞预算，得到的是一跑看不懂的白跑。
+    # 读数：空缓存 + 这一格补齐 ⇒ `tauri bundle` 只出 nsis 那一个目标用时 131.8s、成品 62.32 MiB、
+    # 日志里没有 `Downloading` / `Recreating it`（2026-10-27 本机实测，见规范 §7.7）。
+    timeout: 5m
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/tauri-tools-cache.mjs
   - name: 打包·桌面成品构建
     # 整条链：`beforeBuildCommand`（`build-desktop.mjs` → `pnpm build` → 数产物 → 体积护栏）
     # → cargo release 编译 → bundle（nsis + msi）。判据一个字都不在这里重写，也不带 `--no-bundle`
