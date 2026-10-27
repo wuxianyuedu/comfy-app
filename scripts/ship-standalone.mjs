@@ -1,6 +1,6 @@
 /**
- * 「**与主流程互斥的单件动作**」那一段：`--whoami` / `--diagnose` / `--rerun-ci` /
- * `--branches` / 单子的领取与结束 / 只补关。
+ * 「**与主流程互斥的单件动作**」那一段：`--whoami` / `--diagnose` / `--stage-log` /
+ * `--rerun-ci` / `--branches` / 单子的领取与结束 / 只补关。
  *
  * ## 为什么它们单独一层
  *
@@ -17,7 +17,8 @@
  * 这一段的先后不是随意的，改动前先读每一格自己的注释：
  *
  * 1. `--whoami` 排在最前，且**不 probe cnb**（它一次也不碰平台）；
- * 2. `--diagnose` / `--branches` 各自带着「不能和谁同行」的守卫；
+ * 2. `--diagnose` / `--stage-log` / `--branches` 各自带着「不能和谁同行」的守卫
+ *    （只读读数与写动作同屏，会让人以为「看过 = 做过」）；
  * 3. 单子那格（领取 / 结束 / 列表 / 建单）排在 preflight 之前 —— 领一张单不需要
  *    干净工作树，也不该顺手合并什么；
  * 4. 「只补关」只在**没要 `--merge`** 时接管，且要平台侧的落地证明。
@@ -28,8 +29,48 @@ import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
+import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
+
+/**
+ * 「这一跑里人还点名了哪些动作」—— 只读动作的互斥守卫共用这一份清单（排掉自己那一条）。
+ *
+ * 为什么要共用：`--diagnose` 与 `--stage-log` 是同一条纪律的两个入口（只读、一次只做一件），
+ * 清单各抄一份的漂移形态是「新加一枚旗标时只补进其中一份」，于是那一跑会把两个动作
+ * 一起接下来、屏幕上只念一个的结论（#2504 拆这一族就是为了让加动作只改一处表）。
+ *
+ * @param {ReturnType<typeof import("./ship-args.mjs").parseArgs>} opt 解析结果
+ * @param {string} self 这一条自己的键名（不进自己那份清单）
+ * @returns {string[]} 点名的旗标（人读形态）
+ */
+function namedActions(opt, self) {
+  /** @type {Array<[string, unknown, string]>} */
+  const table = [
+    ["whoami", opt.whoami, "--whoami"],
+    ["diagnose", opt.diagnose, "--diagnose"],
+    ["stageLog", opt.stageLog, "--stage-log"],
+    ["merge", opt.merge, "--merge"],
+    ["closeIssue", opt.closeIssue, "--close-issue"],
+    ["cleanBranch", opt.cleanBranch, "--clean-branch"],
+    ["branch", opt.branch != null, "--branch"],
+    ["message", opt.message != null, "--message"],
+    ["messageFile", opt.messageFile != null, "--message-file"],
+    ["title", opt.title != null, "--title"],
+    ["add", opt.adds.length > 0, "--add"],
+    ["only", opt.only, "--only"],
+    ["reap", opt.reap, "--reap"],
+    ["claim", opt.claim != null, "--claim"],
+    ["release", opt.release != null, "--release"],
+    ["claims", opt.claims, "--claims"],
+    ["branches", opt.branches, "--branches"],
+    ["newIssue", opt.newIssue != null || opt.newIssueBad.length > 0, "--new-issue"],
+    ["rerunCi", opt.rerunCi, "--rerun-ci"],
+  ];
+  return table
+    .filter(([key, on]) => on && key !== self)
+    .map(([, , label]) => label);
+}
 
 /**
  * @param {{
@@ -85,25 +126,7 @@ export function runStandaloneAction(io) {
    * 排在 preflight 之前、与主流程互斥：红灯现场常常就在 master 上、工作树脏、
    * 也没有新碎片 —— 那些阻塞对「读一跑构建」不成立。它一次也不写平台。 */
   if (opt.diagnose) {
-    const clashes = [
-      opt.whoami ? "--whoami" : null,
-      opt.merge ? "--merge" : null,
-      opt.closeIssue ? "--close-issue" : null,
-      opt.cleanBranch ? "--clean-branch" : null,
-      opt.branch ? "--branch" : null,
-      opt.message != null ? "--message" : null,
-      opt.messageFile != null ? "--message-file" : null,
-      opt.title != null ? "--title" : null,
-      opt.adds.length > 0 ? "--add" : null,
-      opt.only ? "--only" : null,
-      opt.reap ? "--reap" : null,
-      opt.claim != null ? "--claim" : null,
-      opt.release != null ? "--release" : null,
-      opt.claims ? "--claims" : null,
-      opt.branches ? "--branches" : null,
-      opt.newIssue != null || opt.newIssueBad.length > 0 ? "--new-issue" : null,
-      opt.rerunCi ? "--rerun-ci" : null,
-    ].filter(Boolean);
+    const clashes = namedActions(opt, "diagnose");
     if (clashes.length > 0) {
       log(
         `[ship] [ERROR] --diagnose 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`,
@@ -124,6 +147,41 @@ export function runStandaloneAction(io) {
           /* 「上一眼」的基数落在 `.git/` 下 —— 没有它，单发的 diagnose 永远只能说「还在跑」，
              说不出「一格都没推进」（ISSUE #2304）。 */
           root,
+        }),
+      ]),
+    };
+  }
+  /* ── 取某一格的日志（ISSUE #2455，规范 §13.10.13）──────────────────
+   * 与 `--diagnose` 同一条纪律：只读、一次只做一件、排在 preflight 之前 —— 要看绿跑
+   * 某一格念了什么的人，常常正在 master 上、工作树脏、也没有碎片，那些阻塞对
+   * 「读一格日志」都不成立。它一次也不写平台。 */
+  if (opt.stageLog || opt.stageLogBad.length > 0) {
+    const clashes = namedActions(opt, "stageLog");
+    if (clashes.length > 0) {
+      log(
+        `[ship] [ERROR] --stage-log 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.stageLogBad.length > 0) {
+      log(
+        `[ship] [ERROR] --stage-log 没点名要读哪一格（${opt.stageLogBad.join(" / ")}）：` +
+          "格名或格 id 给一个，例如 pnpm ship --stage-log 受影响用例。",
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([
+        runStageLog({
+          run,
+          log,
+          slug,
+          cnbOk,
+          sn: opt.stageLogSn,
+          stageRef: opt.stageLogRef ?? "",
+          headSha: run("git", ["rev-parse", "HEAD"]).stdout.trim(),
+          dryRun: opt.dryRun,
         }),
       ]),
     };

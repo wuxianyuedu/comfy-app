@@ -21,6 +21,8 @@
  * ② 逐格读数缺席 ⇒ 退回构建级状态，而不是「没发现问题」；
  * ③ 真红的那一格与被取消的那一格同时出现 ⇒ **真红优先**（那一格才是最该被看见的）。
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -32,6 +34,7 @@ import {
   enrichStageErrors,
   formatOutcome,
   fetchBuildList,
+  findStageMatches,
   inFlightStages,
   main,
   normalizeStageContent,
@@ -39,6 +42,8 @@ import {
   pipelineForStage,
   pipelineSn,
   progressReadout,
+  resolveBuildSn,
+  stageInFlight,
   stageLogExcerpt,
 } from "../scripts/ci-build-readout.mjs";
 import { buildSignature } from "../scripts/ship-build.mjs";
@@ -1271,5 +1276,238 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
     expect(o.state).toBe("failed");
     expect(o.failed.map((s) => s.name)).toEqual(["受影响用例"]);
     expect(o.reasons).toEqual([]);
+  });
+});
+
+/**
+ * `--stage-log` 那三件（ISSUE #2455）：按格名反查、在飞判定、「要读哪一跑」的归属。
+ *
+ * 它们与 `--diagnose` 共用同一份实现，所以样本钉的是「两个入口不会给出两种答案」：
+ * 反查只认**逐字**（三十几格里互为子串的格名不少，挑错一格读的是另一格的日志，
+ * 而它同样带行号、看起来就像证据 —— #2455 现场那条手工拼 `stageId` 的命令正是这个坑）；
+ * 归属不到就 null，不拿「最新那条」顶上。
+ */
+describe("findStageMatches：格名反查只认逐字，认不出就停手", () => {
+  const TWO_PIPELINES = {
+    status: 200,
+    data: {
+      status: "success",
+      pipelinesStatus: {
+        "cnb-aaa-1k5q00001-001": {
+          id: "cnb-aaa-1k5q00001-001",
+          name: "质量门禁",
+          status: "success",
+          stages: [
+            { status: "success", name: "Prepare", id: "prepare" },
+            { status: "success", name: "受影响用例", id: "stage-9" },
+            { status: "skipped", name: "API 文档生成与自检", id: "stage-27" },
+            { status: "success", name: "生产构建", id: "stage-30" },
+          ],
+        },
+        "cnb-aaa-1k5q00001-002": {
+          id: "cnb-aaa-1k5q00001-002",
+          name: "每日档",
+          status: "success",
+          stages: [{ status: "success", name: "受影响用例", id: "stage-9" }],
+        },
+      },
+    },
+  };
+  const outcome = classifyBuildOutcome(TWO_PIPELINES);
+
+  it("格名逐字相同 ⇒ 命中那一格，并带出它在哪条流水线", () => {
+    const { hits, examined } = findStageMatches(outcome, "API 文档生成与自检");
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.stage.id).toBe("stage-27");
+    expect(hits[0]?.pipeline.name).toBe("质量门禁");
+    // 比过几格要念得出：「这一跑没这一格」与「没取到格表」是两种下一动作。
+    expect(examined).toBe(5);
+  });
+
+  it("格 id 也认，且前后空白与大小写不算差异", () => {
+    expect(findStageMatches(outcome, " stage-27 ").hits).toHaveLength(1);
+    expect(findStageMatches(outcome, "STAGE-27").hits[0]?.stage.name).toBe(
+      "API 文档生成与自检",
+    );
+  });
+
+  it("互为子串的两格 ⇒ 如实给出多格，不替你挑一个", () => {
+    const { hits } = findStageMatches(outcome, "受影响用例");
+    expect(hits).toHaveLength(2);
+    expect(hits.map((h) => h.pipeline.name)).toEqual(["质量门禁", "每日档"]);
+  });
+
+  it("只给片段 ⇒ 零命中 + 相近候选（候选只是提示，不构成结论）", () => {
+    const { hits, near } = findStageMatches(outcome, "生产");
+    expect(hits).toEqual([]);
+    expect(near.map((s) => s.name)).toContain("生产构建");
+  });
+
+  it("空点名 ⇒ 什么都不判（不把「没给名字」读成「这一跑没格」）", () => {
+    const { hits, near, examined } = findStageMatches(outcome, "   ");
+    expect(hits).toEqual([]);
+    expect(near).toEqual([]);
+    expect(examined).toBeGreaterThan(0);
+  });
+
+  it("stageInFlight：只有平台那两个在飞的词算「还没终态」", () => {
+    expect(stageInFlight("start")).toBe(true);
+    expect(stageInFlight("Running")).toBe(true);
+    expect(stageInFlight("success")).toBe(false);
+    expect(stageInFlight("skipped")).toBe(false);
+    expect(stageInFlight(null)).toBe(false);
+  });
+});
+
+describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（两个入口共用）", () => {
+  const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
+  const fake = (rows: unknown) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      run: (cmd: string, args: string[]) => {
+        calls.push([cmd, ...args].join(" "));
+        return {
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data: rows }),
+          stderr: "",
+          error: null,
+        };
+      },
+    };
+  };
+  const hear = () => {
+    const lines: string[] = [];
+    return { lines, log: (l: string) => lines.push(l) };
+  };
+
+  it("人点了名 ⇒ 照点名，一条命令也不发", () => {
+    const f = fake([]);
+    const h = hear();
+    expect(
+      resolveBuildSn({
+        run: f.run,
+        log: h.log,
+        slug: "a/b",
+        sn: "cnb-aaa-1k5q00001",
+        headSha: SHA,
+      }),
+    ).toBe("cnb-aaa-1k5q00001");
+    expect(f.calls).toEqual([]);
+  });
+
+  it("没点名 ⇒ 按 sha 逐字命中那条，并把归属念出来", () => {
+    const f = fake([
+      {
+        sn: "cnb-old-1k5q00000",
+        sha: "0000000000000000000000000000000000000000",
+        event: "pull_request",
+        createTime: "2026-10-27T01:00:00Z",
+      },
+      {
+        sn: "cnb-mine-1k5q00002",
+        sha: SHA,
+        event: "pull_request",
+        createTime: "2026-10-27T02:00:00Z",
+      },
+    ]);
+    const h = hear();
+    expect(
+      resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA }),
+    ).toBe("cnb-mine-1k5q00002");
+    expect(h.lines.join("\n")).toContain("归属到构建 cnb-mine-1k5q00002");
+  });
+
+  it("列表里只有别人的跑 ⇒ null，并念「没找到」——不拿最新那条顶上", () => {
+    const f = fake([
+      {
+        sn: "cnb-other-1k5q00003",
+        sha: "1111111111111111111111111111111111111111",
+        event: "pull_request",
+        createTime: "2026-10-27T09:00:00Z",
+      },
+    ]);
+    const h = hear();
+    expect(
+      resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA }),
+    ).toBeNull();
+    expect(h.lines.join("\n")).toContain("没找到 pull_request 构建");
+  });
+
+  it("下一动作那行念的是**调用方那枚旗标**（--stage-log 不该被教成 --diagnose）", () => {
+    const f = fake([]);
+    const h = hear();
+    resolveBuildSn({
+      run: f.run,
+      log: h.log,
+      slug: "a/b",
+      headSha: SHA,
+      command: "pnpm ship --stage-log",
+    });
+    const out = h.lines.join("\n");
+    expect(out).toContain("pnpm ship --stage-log <sn>");
+    expect(out).not.toContain("--diagnose");
+  });
+});
+
+/**
+ * 「一族读数只允许有一份定义」（ISSUE #2526 切分之后的形状档）。
+ *
+ * 为什么要单独钉这一条：#2526 把 `formatOutcome` / `stageLogExcerpt` 搬到
+ * `ci-build-print.mjs`，而 `ci-build-readout.mjs` 继续**转发**它们（消费口一字不改）。
+ * 那个形状一旦被人「顺手在原处再补一份」，两份会同时存在、被不同调用点各读一份，
+ * 漂移形态恰恰是**账面全绿而两个入口给出两种话术**（与 #2455 那条「同一跑不许给出两种答案」
+ * 同一个方向）。而 `scripts/` 不在 `check-code-duplication.cjs` 的量程里（它扫 `src/**`），
+ * 这一族没有别的执行者会响。
+ */
+describe("切分之后：ci-build 这一族的读数各只有一份定义", () => {
+  const dir = path.resolve(process.cwd(), "scripts");
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => /^ci-build.*\.mjs$/.test(f))
+    .map((f) => ({ name: f, src: fs.readFileSync(path.join(dir, f), "utf8") }));
+  const names = [
+    "classifyBuildOutcome",
+    "formatOutcome",
+    "progressReadout",
+    "stageLogExcerpt",
+    "normalizeStageContent",
+    "resolveBuildSn",
+  ];
+  const definedIn = (name: string) =>
+    files
+      .filter((f) => new RegExp(`^export function ${name}\\(`, "m").test(f.src))
+      .map((f) => f.name);
+
+  it("前置：文件在、每个名字都抓得到一个定义点（正则写漂会两侧都成空集、于是恒绿）", () => {
+    for (const need of [
+      "ci-build-classify.mjs",
+      "ci-build-print.mjs",
+      "ci-build-readout.mjs",
+    ]) {
+      expect(files.map((f) => f.name), `少了 ${need}`).toContain(need);
+    }
+    for (const name of names) {
+      expect(definedIn(name), `${name} 的定义点`).toHaveLength(1);
+    }
+  });
+
+  it("搬走的那两个由 readout 转发出去，而定义只在 print 那一份里", () => {
+    const readout = files.find((f) => f.name === "ci-build-readout.mjs");
+    /* ⚠️ 锚在**行首**：`readout` 的文件头里有一句正写着「见下面那个 `export { … }`」，
+     * 不锚行首的写法会从那句注释起、一路吞到真的转发块，于是清单里少转发一个名字也照样绿
+     * （变异自证踩过：把 `formatOutcome` 从清单里删掉，这条当时没红）。 */
+    const block =
+      /^export \{([\s\S]*?)\};/m.exec(readout?.src ?? "")?.[1] ?? "(没有转发块)";
+    for (const name of ["formatOutcome", "stageLogExcerpt", "progressReadout"]) {
+      expect(block, `转发清单里没有 ${name}`).toContain(name);
+    }
+    /* 转发 ≠ 再定义：定义点各归各的一份，谁也没被复制。 */
+    expect(definedIn("formatOutcome")).toEqual(["ci-build-print.mjs"]);
+    expect(definedIn("stageLogExcerpt")).toEqual(["ci-build-print.mjs"]);
+    expect(definedIn("classifyBuildOutcome")).toEqual(["ci-build-classify.mjs"]);
+    expect(definedIn("progressReadout")).toEqual(["ci-build-classify.mjs"]);
+    expect(definedIn("normalizeStageContent")).toEqual(["ci-build-readout.mjs"]);
+    expect(definedIn("resolveBuildSn")).toEqual(["ci-build-readout.mjs"]);
   });
 });

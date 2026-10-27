@@ -32,9 +32,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { gitScratchPath } from "./git-dir.mjs";
-import { asArray, pickBuildForSha } from "./ship-build.mjs";
 import { CODE } from "./ship-core.mjs";
-import { cnbJson, short } from "./ship-exec.mjs";
 import {
   classifyBuildOutcome,
   describeFailedStages,
@@ -44,6 +42,7 @@ import {
   formatOutcome,
   pipelineForStage,
   progressReadout,
+  resolveBuildSn,
 } from "./ci-build-readout.mjs";
 
 /**
@@ -222,33 +221,17 @@ export function runDiagnose({
     );
     return CODE.NOT_RUN;
   }
-  let target = typeof sn === "string" && sn.trim() !== "" ? sn.trim() : null;
-  if (!target) {
-    const got = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
-    const list = got ? asArray(got.json) : null;
-    if (!list) {
-      log(
-        "[ship] 取不到 build 列表 ⇒ 没有结论（不是「没有构建」）；" +
-          "要读哪一跑就点名：pnpm ship --diagnose <sn>",
-      );
-      return CODE.NOT_RUN;
-    }
-    const hit = pickBuildForSha(list, headSha);
-    if (!hit) {
-      log(
-        `[ship] 按 HEAD ${short(headSha)} 没找到 pull_request 构建（还没推 / CI 还没起 / 构建挂在别的 sha 上）` +
-          " ⇒ 没有结论。",
-      );
-      log(
-        "[ship] 下一动作：在 PR 上确认构建已创建后重跑，或点名构建号：pnpm ship --diagnose <sn>",
-      );
-      return CODE.NOT_RUN;
-    }
-    target = hit.sn;
-    log(
-      `[ship] 按 HEAD ${short(headSha)} 归属到构建 ${target}（列表里 sha 逐字相同，取最新一条）。`,
-    );
-  }
+  /* 「要读哪一跑」与 `--stage-log` 共用一份归属算法（`resolveBuildSn`）—— 两个入口
+   * 各写一遍的漂移形态是「同一个 sha 落到不同的跑」，那两条读数就成了互相矛盾的证据。 */
+  const target = resolveBuildSn({
+    run,
+    log,
+    slug,
+    sn,
+    headSha,
+    command: "pnpm ship --diagnose",
+  });
+  if (!target) return CODE.NOT_RUN;
   const rawStatus = fetchBuildStatus(run, slug, target);
   if (!rawStatus) {
     log(`[ship] 构建 ${target} 取不到状态 ⇒ 没有结论（不念绿也不念红）。`);

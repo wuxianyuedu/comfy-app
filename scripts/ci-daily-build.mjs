@@ -61,9 +61,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { imageIdentity } from "./ci-image-identity.mjs";
-import { ARTIFACT_TIMEOUT_MS, main as artifactMain } from "./artifact-run.mjs";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+import { main as artifactMain } from "./artifact-run.mjs";
 
 /**
  * 这一次是不是「定时那一跑」—— 只看平台给的事件变量（官方 `build-in-env.md`）。

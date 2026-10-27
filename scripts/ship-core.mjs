@@ -513,7 +513,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -625,8 +625,9 @@ export function planCommands(st) {
   p.push(`cnb build get-build-logs --repo ${st.slug} -v`);
   p.push(`cnb build get-build-status --repo ${st.slug} --sn <sn> -v`);
   /* 红格的日志正文只有按格取得到（`get-build-stage` 的 `data.content`）。它只在
-   * `--diagnose` 下被执行 —— 默认那份计划里不出现，否则 dry-run 教的执行面比请求的大。 */
-  if (st.diagnose) {
+   * `--diagnose` 或 `--stage-log` 下被执行 —— 默认那份计划里不出现，否则 dry-run 教的
+   * 执行面比请求的大。（`--stage-log`，ISSUE #2455：按格名取也是同一条命令、同一格读。） */
+  if (st.diagnose || st.stageLog) {
     p.push(
       `cnb build get-build-stage --repo ${st.slug} --sn <sn> --pipelineId <pipelineId> --stageId <stageId> -v`,
     );
