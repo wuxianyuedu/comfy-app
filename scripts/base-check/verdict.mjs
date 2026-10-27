@@ -162,7 +162,13 @@ export function isDidNotRunShaped(output) {
  * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"}
  */
 export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
-  if (currentCode === 0) return "current-green";
+  /* 「跑了但一条用例都没收集到」那一形退的是 **0**（vitest 过滤器语义，ISSUE #2400），
+   * 与真绿在退出码上逐字同形 —— 只看码会把「没判」折成「判过了且没问题」。
+   * 指纹与 127 / 退 1 那两形共用同一份（`isDidNotRunShaped`），判点仍是这一处：
+   * 行 verdict、`didNotRun` 标注与整批 `summarizeRows` 由此保持同一句话。 */
+  if (currentCode === 0) {
+    return isDidNotRunShaped(currentOutput) ? "inconclusive" : "current-green";
+  }
   /* 「跑不起来」两条入口都在最前面：127（找不到模块 / 命令）与「一条用例都没收集到」。
    * 两侧都要看 —— 本检出那一侧收集不到时，这一次复算问的根本不是「谁的红」。 */
   const current = runState({ code: currentCode, output: currentOutput });
