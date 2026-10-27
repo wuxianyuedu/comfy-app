@@ -1930,7 +1930,8 @@ dev server 一侧的固有事实：懒加载的 `import()` **不是**在页面�
 | 场景                                             | 命令                                                                                                         | 说明                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页               | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                    | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目                     |
-| 生产构建（standalone + 安装包）                  | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB + 装配后再数一次产物，§7.6「装配之后必须再数一次产物」）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                                                                                                                                                                                                     |
+| 生产构建（standalone，**不出安装包**）           | `tools\build\build-standalone.ps1`（内部 `pnpm tauri build --no-bundle`）                                   | build-desktop.mjs 组装 static（含体积护栏 1.5GB + 装配后再数一次产物，§7.6「装配之后必须再数一次产物」）+ Node sidecar，再 `pnpm tauri build --no-bundle`。`--no-bundle` 那一档**不产 nsis/msi** —— 只要「能跑的壳」时走这条                                                                                                                                                                                     |
+| 桌包成品（**含安装包**）+ 发布到常驻目录         | `tools\build\build-all.ps1`（`pnpm tauri build` → `node scripts/publish-desktop-bundle.mjs`）               | 与平台那条桌包流水线同一份实现（§7.7）。收尾报各步与总耗时（§7.0），并把安装包拷到常驻目录留最近 2 份。**过去这一行写的是「build-standalone → build-tauri-release → build-all 出安装包」，而 `build-all` 当时只跑 `cargo build`（产不出安装包）—— 正文与代码不一致，§7.7 那批把它改齐了**                                                                                                            |
 | 前端/standalone 体积分析                         | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物 `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听 `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 前端 bundle 体积预算（判定档，ISSUE #1781）      | `pnpm check:bundle`（`node scripts/check-bundle-budget.cjs`；也挂在 `pnpm build` 收尾）                      | client chunk（`.next/static/chunks` 下 `.js`）的 **gzip 总量 + 文件数**棘轮，基线 `scripts/.bundle-budget-baseline.json`（另存逐文件 `sha256` 指纹，只服务诊断：诊断按**内容**对齐，同内容换名不计变化）。量的是**默认 Turbopack 链**的产物（与 `pnpm analyze` 的强制 `--webpack` 别混着比）；抬高基线要在 PR 里贴 before/after 两档读数 + 理由，**由造成这批字节的那条 PR 同批** `--allow-increase --update`（ISSUE #2149）。规范 §13.5.4。     |
 | 页面级运行时读数（e2e 档，ISSUE #1781 的右半边） | `pnpm test:e2e`（随全量 e2e 一起跑；`e2e/runtime-budget.spec.ts` + `e2e/support/runtime-budget.ts`）         | 首页 `/workspace` 首屏的 `loadEventEnd` / `FCP`，口径是**每轮开新 page + 弃前 4 轮取 `min`**（同一 page 反复导航时 FCP 结构性缺失，成因与实测见规范 11 §11.8.1）。阈值 = 基线 × 2，基线读数与口径常量同源（`scripts/.runtime-budget-baseline.json`）。**不新增档/账/入口** —— 与全量 e2e 是同一笔开销（起 webServer + 浏览器）                                                                              |
@@ -2696,7 +2697,7 @@ Cannot find package 'promise-limit' imported from …\.next\standalone\…
 > 它也变成了 cargo 的编译期前提。** 在 #1216 之前没人声明 `bundle.resources`，
 > `src-tauri/static` 存不存在与 `cargo build` 无关；声明之后 tauri-build 每次编译都校验
 > 它（与 `externalBin` 同一条判据），而「只编壳、不装配载荷」的那条路
-> （`build-tauri-release.ps1` / `build-all.ps1`）刻意不跑 `build-desktop.mjs` ——
+> （`build-tauri-release.ps1`）刻意不跑 `build-desktop.mjs` ——
 > 于是在**全新克隆**上必挂，报错还落在 build script 里、与载荷无关的样子。
 > 这也解释了为什么它没在 #1216 当场暴露：#1216 的验收全程在**已装配**的检出上跑
 > （`scripts/build-desktop.mjs` 已把 `static/` 建出来），而干净检出的路径没人走过。
@@ -2778,6 +2779,83 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 > 这类运行期写入物，直接 `pnpm exec tauri bundle` 会把它们一起装进安装包——**开发库与密钥
 > 变成出厂内容**（硬规则 17）。所以分发包必须由 `pnpm tauri build` 产出（它先重装配），
 > 中间态要打包时先跑 `node scripts/build-desktop.mjs` 或 `node scripts/check-standalone-contents.cjs`。
+
+---
+
+### 7.7 桌包成品档：独立流水线 + 常驻目录发布（ISSUE #2503）
+
+**这一节答的是「安装包在哪儿」**。§7.0 那张表与 §7.6 讲的是怎么把包打出来，而打完之后
+它只活在工作区里：平台每次构建都新建 job 目录、收尾整目录删（实测不穿符号链接，见
+`scripts/ci-build-cache-slot.mjs` 头注），而常驻槽只接了 Turbopack 的 `.next/cache`
+——**不含任何成品**。所以「今天的 master 能不能打成包」与「今天的那个包现在能不能拿到」
+是两件事，过去只有前者有执行者。
+
+**独立一条流水线，不进 `.daily-gates`**（业主口径）。`.cnb.yml` 里那张 `.package-gates`
+锚点 + `.lock-package` 那把锁 + 两个事件键（`"crontab: 0 2 * * *"` 与 `web_trigger_package`，
+按钮在 `.cnb/web_trigger.yml`）。三处都各有判据（`tests/no-platform-ci-config.test.ts`）：
+桌包那几格不许出现在 `COMFYAPP_CI_DAILY_GATES` 里、两个触发口必须引用同一个
+`*package_gates`、而两条 crontab 的时刻不许相同。
+
+**为什么与 00:00 那一跑错开两小时**：这一档会把这台机压到满载（cargo 一段 + WiX `light`
+一段），而每日清单的最后那一格 `每日单元测试` 正是「唯一会因这台机器的负载而红的格子」。
+叠上去得到的不是两条结论，是一份不可信的读数 —— **并发在场时墙钟不可读**（§13.6.4.1），
+这条口径在这里同样成立，别拿这一档的耗时去校准别的档。
+
+**这一档不重抄任何判据**：清单是「装依赖 → `pnpm tauri build` → 发布」，而
+`tauri build` 的 `beforeBuildCommand` 就是 `scripts/build-desktop.mjs`，它内部那条
+`pnpm build` 链带着硬规则 17/18 的产物级两道防线（`check-standalone-contents.cjs` 数两层
+产物 / `check-bundle-budget.cjs` 体积棘轮）。**发布只能排在它绿之后** —— 也不许带
+`--no-bundle`（带上就回到「只有 `{{shell.app.exe}}`、没有安装包」的原点）。
+
+**实测读数（2026-10-27 本机，同一次运行内分段计时；不是预估）**：
+
+| 段 | 入口 | 读数 |
+| --- | --- | --- |
+| 产物装配 | `build-desktop.mjs` 的 `1/4`→`4/4` | **225.9s**（其中 `1/4` 那条 `pnpm build` 链 152.9s、`2/4` 组装 `static` 72.8s、`3/4` 复制 100.4 MB sidecar 0.2s） |
+| Rust 编译 | cargo 自报 | 暖 **3m12s**（194.7s）／**冷 5m01s**（`cargo clean` 之后整棵依赖树；`src-tauri/target` 不在任何缓存槽里，冷态是常态） |
+| 打包段（msi） | WiX candle + `light` | **151.4s** ⇒ `ComfyAPP_0.1.0_x64_en-US.msi` **84.86 MiB** |
+| 总墙钟 | `pnpm tauri build`（那一跑只出 msi） | **579.2s** |
+| 发布段 | `node scripts/publish-desktop-bundle.mjs` | **1.5s**（拷 84.9 MiB + 写 manifest + 指针 + 轮转） |
+
+⚠️ **打包段（nsis）到今天为止没有读数 = 没有结论**。那一格要现下两件 GitHub release 资产
+（`nsis-3.13.zip` ≈1.3 MiB、`nsis_tauri_utils.dll` ≈0.05 MiB），本机两跑都落在
+`failed to bundle project: timeout: global`（一次 zip 下完、dll 超时；一次连 zip 都在 21.8s
+超时；随后那一跑 `github.com:443` 直接连不上）。**还有一条更坏的**：tauri 判定工具缓存目录
+不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动会把这台机的工具缓存
+一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。这两件事都记在这里而不是写成
+「以后一定绿」；红了要区分「这条链坏了」与「这台机今天取不到工具」，判据是那一跑的日志里
+有没有 `timeout: global`。
+
+**发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，本地与平台**同一个入口**）：
+
+- **常驻根由推导给**：`ci-cache-slot.mjs` 的 `resolveArtifactRoot` —— 问 `pnpm store path`
+  拿它所在的卷，拼 `<卷>\ci-artifacts\<包名>`（本机实测落点 `G:\ci-artifacts\comfy-app-t3`）。
+  **配置与脚本里都不写盘符**。它是两份缓存槽的**第三个兄弟目录**，不许放进 `ci-build-cache/`：
+  那两套的淘汰器把槽根下的**每个目录都当成一个键**，成品混进去就是「一个 TTL 到期的键位
+  删掉人要取的安装包」。
+- **一份一个目录 + `manifest.json`**（sha / 构建号 / 事件键 / 时刻 / 体积 / 文件清单），
+  目录名 = 标签；**`latest.txt` 只是指针文件**，不原地覆盖同名目录 —— 覆盖之后「这一份是
+  什么时候的东西」就只能靠 mtime 猜，那是 §4.3「运行图落后于源码」那一族的第二个源。
+  同标签再来一次判**失败**（退 1），因为那意味着有人拿第二次构建去冒充第一次。
+- **轮转留 2 份**，排序键是 manifest 的 `builtAt`；读不到时按目录 mtime 退档**并念出来**
+  （没有 manifest 的目录是缺陷，但把轮转停在那里等于让盘无限长）。
+- **退出码三态**：0 发布完成 / 1 没有成品（构建那格没打出来）或写盘被拒 / 2 **没有结论**
+  （问不出常驻根、或目标卷不够）。「今天没有新包」与「没能把包放出去」在日志里逐字不同，
+  后两档一律不许退 0 —— 静默降级成「今天没包」正是本单点名不许的形态。
+
+**本地那条链同批改**（`tools\build\build-all.ps1` → `tools/scripts/build-all.ps1`）：它过去
+只跑 `build-tauri-release.ps1`（`cargo build` + 占位 `static`），**产不出安装包**，而 §7.0
+那张表一直写着它产得出 —— 这一节把正文改成与代码一致：`[1/3]` 壳未在运行 → `[2/3]`
+`pnpm tauri build` → `[3/3]` 发布（同一个入口）。`build-standalone.ps1` 的 `--no-bundle`
+形态不变（那是「只要能跑的壳」那条路）。
+
+**自查入口**（不点按钮、不等定时）：
+
+```bash
+pnpm tauri build                                  # 整条链（本机实测见上面那张表）
+node scripts/publish-desktop-bundle.mjs --dry-run # 只打印会往哪儿落、会删谁
+node scripts/publish-desktop-bundle.mjs           # 真发布；常驻根会打在第一行
+```
 
 ---
 

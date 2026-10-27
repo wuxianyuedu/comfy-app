@@ -61,7 +61,7 @@ Comfy-APP-T3/
 │  │  ├─ sync-lint.ps1           # 同步依赖 + pnpm lint（拉取更新/改码后日常自检）
 │  │  └─ register-comfyapp-protocol.ps1  # 注册 comfyapp:// 协议（免管理员）
 │  ├─ build/                # 构建打包入口
-│  │  ├─ build-all.ps1            # 一键发布构建（release 壳 = 唯一入口 app.exe）
+│  │  ├─ build-all.ps1            # 一键发布构建（安装包 + 常驻目录留 2 份；入口仍是 app.exe）
 │  │  ├─ build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
 │  │  └─ rebuild-static.ps1       # 清理并重建 src-tauri/static
 │  ├─ shadcn-registry/      # 团队 shadcn Registry（start-shadcn-registry.ps1）
@@ -318,14 +318,16 @@ pnpm tauri build
 双击 tools\build\build-all.ps1
 ```
 
-它执行 `tools\build\build-tauri-release.ps1` → 编译出
-`src-tauri/target/release/app.exe`。编译前会：
-
-- 同步 `splash.html` 进 `src-tauri/splash-assets/`（启动页是编译期嵌入的）；
-- 补齐 Node sidecar（`src-tauri/binaries/node-<triple>.exe`，`externalBin` 在编译期被校验）。
+它执行 `pnpm tauri build` → 编译出 `src-tauri/target/release/app.exe` **并打出安装包**
+（nsis / msi），收尾把安装包发布到常驻目录（留最近 2 份，`latest.txt` 只是指针文件）。
+装配由 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）负责：`pnpm build` 出
+standalone → 组装 `src-tauri/static`（数产物 + 体积护栏两道防线都在那条链上）→
+同步 `splash.html` 进 `src-tauri/splash-assets/`（启动页是编译期嵌入的）→
+补齐 Node sidecar（`src-tauri/binaries/node-<triple>.exe`，`externalBin` 在编译期被校验）。
 
 完成后**双击 `src-tauri\target\release\app.exe`** 即可启动
-（或用入口 `tools\start\start-tauri.ps1`）。
+（或用入口 `tools\start\start-tauri.ps1`）。耗时读数与那条平台侧独立流水线见规范
+launch-and-build.md §7.7。
 
 ### 方式二：仅构建 release 壳
 
@@ -333,7 +335,8 @@ pnpm tauri build
 双击 tools\build\build-tauri-release.ps1
 ```
 
-产物同上一节。适合只想替换壳的场合。
+产物是 `src-tauri/target/release/app.exe`（**不含安装包** —— 它只 `cargo build`，
+装配与 bundle 都不在它那一格）。适合只想替换壳的场合。
 
 ### 方式三：完整安装包与 standalone 资源
 
@@ -381,10 +384,11 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 | --------------------------------- | --------------------------------------------------------- |
 | 浏览器开发                        | `pnpm dev`                                                |
 | 桌面壳开发（热重载）              | `pnpm tauri dev` 或双击 `tools\start\start-tauri-dev.ps1` |
-| 一键构建（release 壳 = 唯一入口） | `tools\build\build-all.ps1`                               |
-| 仅 release 壳                     | `tools\build\build-tauri-release.ps1`                     |
+| 一键构建（安装包 + 发布到常驻目录）   | `tools\build\build-all.ps1`                               |
+| 仅 release 壳（不含安装包）           | `tools\build\build-tauri-release.ps1`                     |
 | 独立模式资源（standalone）        | `tools\build\build-standalone.ps1`                        |
-| 完整安装包                        | `pnpm tauri build`                                        |
+| 完整安装包（不发布）              | `pnpm tauri build`                                        |
+| 把打好的安装包发布到常驻目录      | `node scripts/publish-desktop-bundle.mjs`                 |
 | 清理重建前端资源                  | `tools\build\rebuild-static.ps1`                          |
 
 更详细的脚本职责、启动入口对比（`start-tauri.ps1` / `start-tauri-dev.ps1` / 壳自身）、CSP 与 standalone 模式说明，

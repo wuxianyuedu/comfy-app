@@ -2304,35 +2304,41 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const events = crontabEvents(text);
     expect(
       events.length,
-      '`.cnb.yml` 里没有 `"crontab: …"` 事件键 —— 生产构建又只剩 PR 那一条了' +
-        "（`pull_request` 上那条答的是「这次改动能不能构建」，「今天能不能构建」没人答）",
-    ).toBe(1);
-    const event = events[0];
-    if (!event) throw new Error("解析不出 crontab 事件键");
+      '`.cnb.yml` 里的 `"crontab: …"` 事件键应恰好两条：每日那 12 格 + 桌包那一档' +
+        "（ISSUE #2503 要求它**独立成档**，既不进 `.daily-gates` 那张表，也不与每日档共用一把锁）。" +
+        "少一条 = 生产构建又只剩 PR 那一条，或桌包档被并进了每日档；多一条 = 有第二条没人认领的定时任务",
+    ).toBe(2);
     expect(
-      event.branch,
-      "定时任务的分支键必须是明确的单一分支名（官方：不支持 glob）—— 这里要的是 master",
-    ).toBe("master");
-    const cron = event.cron.split(/\s+/);
-    expect(cron, `cron 表达式不是五段：${event.cron}`).toHaveLength(5);
-    const [minute, hour, dom, month, dow] = cron;
-    /* 每天一次 = 分钟固定、小时固定，日 / 月 / 周都是通配。 */
-    for (const [field, name] of [
-      [minute, "分钟"],
-      [hour, "小时"],
-    ] as const) {
+      new Set(events.map((e) => e.cron)).size,
+      `两条定时任务的 cron 逐字相同（${events.map((e) => e.cron).join(" / ")}）—— 那一跑会同时起两条，` +
+        "而桌包那一档要的是「与每日那一跑**错开**」（它会把这台机压到满载）",
+    ).toBe(events.length);
+    for (const event of events) {
       expect(
-        /^\d+$/.test(field ?? ""),
-        `cron 的${name}段（"${field}"）不是单值 —— 「每天 1 次」要求它固定到一个点上；` +
-          `写成 \`*\` / 列表 / 区间都意味着一天跑多次`,
-      ).toBe(true);
-    }
-    for (const [field, name] of [
-      [dom, "日"],
-      [month, "月"],
-      [dow, "周"],
-    ] as const) {
-      expect(field, `cron 的${name}段应当是 \`*\`：${event.cron}`).toBe("*");
+        event.branch,
+        "定时任务的分支键必须是明确的单一分支名（官方：不支持 glob）—— 这里要的是 master",
+      ).toBe("master");
+      const cron = event.cron.split(/\s+/);
+      expect(cron, `cron 表达式不是五段：${event.cron}`).toHaveLength(5);
+      const [minute, hour, dom, month, dow] = cron;
+      /* 每天一次 = 分钟固定、小时固定，日 / 月 / 周都是通配。 */
+      for (const [field, name] of [
+        [minute, "分钟"],
+        [hour, "小时"],
+      ] as const) {
+        expect(
+          /^\d+$/.test(field ?? ""),
+          `cron 的${name}段（"${field}"）不是单值 —— 「每天 1 次」要求它固定到一个点上；` +
+            `写成 \`*\` / 列表 / 区间都意味着一天跑多次`,
+        ).toBe(true);
+      }
+      for (const [field, name] of [
+        [dom, "日"],
+        [month, "月"],
+        [dow, "周"],
+      ] as const) {
+        expect(field, `cron 的${name}段应当是 \`*\`：${event.cron}`).toBe("*");
+      }
     }
 
     /* ③ 那一跑跑的是每日清单那七格（四格前提 + 三档重档），每一格都是**跑法脚本**
@@ -2368,6 +2374,52 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       budget,
       "「每日生产构建」没有 `timeout` 预算 —— 平台默认 Job 上限是 2 小时，卡死要等满才有人知道",
     ).toBeTruthy();
+  });
+
+  it("桌包那一档独立成档：自己的清单 + 自己的锁 + 两个触发口同一份（ISSUE #2503）", () => {
+    /* 业主口径是「不与现有那 12 格混在 `.daily-gates` 那张表里」。这句话在配置里落成
+     * 三件各自会静默失效的事实：
+     *   ① 清单是**另一张锚点** —— 并进 `.daily-gates` 之后每日那一跑会多背一次 cargo 编译；
+     *   ② 锁是**另一把** —— 共用 `*lock_daily` 会让「手点一次桌包」把当日那一跑的某一格
+     *      掐停（#2114 记的那条死因换了个方向复发）；
+     *   ③ 定时与手点两个触发口引用**同一个锚点** —— 抄第二份的那一刻就开始漂。 */
+    const text = readRegisteredConfig();
+    const stages = pipelineStageNames(text, "桌面成品包");
+    expect(
+      stages.length,
+      "「桌面成品包」那条流水线解析不出 stage —— 锚点没接上，或者流水线名被改了",
+    ).toBeGreaterThan(0);
+    for (const name of stages) {
+      expect(
+        DAILY_GATES.includes(name),
+        `桌包那一档的「${name}」同时出现在 \`COMFYAPP_CI_DAILY_GATES\` 里 —— 那就不叫独立一档了`,
+      ).toBe(false);
+    }
+    const publish = stageBlock(text, "打包·发布到常驻目录");
+    expect(publish, "`.cnb.yml` 里找不到「打包·发布到常驻目录」那一格").toBeTruthy();
+    const entry = "scripts/publish-desktop-bundle.mjs";
+    expect(publish, `发布那一格点的应是 ${entry}，不是第二份打包脚本`).toContain(entry);
+    expect(existsSync(path.join(ROOT, entry)), `${entry} 不在盘上`).toBe(true);
+    expect(
+      stageBlock(text, "打包·桌面成品构建"),
+      "打包那一格必须点既有的执行者 `pnpm tauri build`（本单只补发布那一格，不抄第二份打桌包脚本）",
+    )?.toContain("pnpm tauri build");
+
+    const rows = pipelineLockAssignments(text).filter(
+      (r) => r.stagesRef === "*package_gates",
+    );
+    expect(
+      rows.map((r) => r.event).sort(),
+      "桌包档应有两个触发口：`crontab` 与 `web_trigger_package`（按钮在 `.cnb/web_trigger.yml`）",
+    ).toEqual(["crontab: 0 2 * * *", "web_trigger_package"]);
+    expect(
+      new Set(rows.map((r) => r.lockRef)).size,
+      "两个触发口点的不是同一把锁 —— 同一件事会被排成两次互掐",
+    ).toBe(1);
+    expect(
+      rows.every((r) => r.lockRef === "lock_package"),
+      "桌包档的锁不是自己那把 `lock_package` —— 与每日档共用一把会互相掐停",
+    ).toBe(true);
   });
 
   it("每日单元测试：整档 + 跑法脚本 + 预算大于脚本自己的墙钟预算", () => {
