@@ -39,6 +39,8 @@ import {
 } from "~/lib/production/run-types";
 import { applyShotRedo } from "~/lib/production/sync";
 import { reviewScoreMean } from "~/lib/production/review-types";
+import { fixed } from "~/lib/number-format";
+import { displayValue } from "~/lib/display-value";
 import {
   reviewContent,
   reviewScript,
@@ -330,7 +332,10 @@ async function execReviewScript(
   const qualified =
     outcome.verdict.pass &&
     (mean === null || mean >= SCRIPT_REVIEW_SCORE_THRESHOLD);
-  const meanText = mean === null ? "未评分" : `均分 ${mean.toFixed(1)}`;
+  // 「均分 X.X」是给人读的：数字精度格式化走唯一出口（P50），缺值占位走
+  // displayValue（P8）—— 都是「这组判据只有一份口径」的收口。
+  const meanText =
+    mean === null ? "未评分" : `均分 ${displayValue(fixed(mean, 1))}`;
   // 收口（达标或封顶）→ 写指纹快照；未收口 → 挂「待改写」，改完剧本变会再回评审。
   const settle = {
     scriptReviewAttempts: attempts,

@@ -19,6 +19,9 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Hint } from "~/components/ui/hint";
+import { ProgressBar } from "~/components/ui/progress-bar";
+import { displayValue } from "~/lib/display-value";
+import { fixed } from "~/lib/number-format";
 import {
   reviewScoreMean,
   type ReviewVerdict,
@@ -42,18 +45,20 @@ function ScoreBars({
           <span className="text-ink-faint w-16 shrink-0 text-right">
             {labels.get(key) ?? key}
           </span>
-          <span className="bg-subtle relative h-1.5 flex-1 overflow-hidden rounded-full">
-            <span
-              className={`absolute inset-y-0 left-0 rounded-full ${
-                item.score >= 4
-                  ? "bg-success"
-                  : item.score >= 3
-                    ? "bg-warning"
-                    : "bg-destructive"
-              }`}
-              style={{ width: `${(item.score / 5) * 100}%` }}
-            />
-          </span>
+          <ProgressBar
+            value={(item.score / 5) * 100}
+            showValue={false}
+            ariaLabel={labels.get(key) ?? key}
+            fillClassName={
+              item.score >= 4
+                ? "bg-success"
+                : item.score >= 3
+                  ? "bg-warning"
+                  : "bg-destructive"
+            }
+            trackClassName="h-1.5 flex-1"
+            className="flex-1"
+          />
           <span className="text-ink-subtle w-8 shrink-0">{item.score} 分</span>
           {item.note && (
             <span className="text-ink-faintest min-w-0 flex-1 truncate">
@@ -75,7 +80,13 @@ function HistoryCurve({ history }: { history: ReviewVerdict[] }) {
       {history
         .map((item, index) => {
           const mean = reviewScoreMean(item);
-          return `第${index + 1}轮 ${mean === null ? (item.pass ? "过" : "不过") : mean.toFixed(1)}`;
+          return `第${index + 1}轮 ${
+            mean === null
+              ? item.pass
+                ? "过"
+                : "不过"
+              : displayValue(fixed(mean, 1))
+          }`;
         })
         .join(" → ")}
     </div>
@@ -173,7 +184,7 @@ export function ReviewVerdictDialogButton({
                   </span>
                   {mean !== null && (
                     <span className="text-ink-faintest text-xs">
-                      维度均分 {mean.toFixed(1)} / 5
+                      维度均分 {displayValue(fixed(mean, 1))} / 5
                     </span>
                   )}
                   {verdict.issues.length > 0 && (
