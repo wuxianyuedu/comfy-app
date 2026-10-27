@@ -590,6 +590,10 @@ export const workshopSession = sqliteTable(
     characters: text("characters", { mode: "json" }).notNull().default("[]"),
     shots: text("shots", { mode: "json" }).notNull().default("[]"),
     stage: text("stage").notNull().default("script"),
+    /** 绑定的界面项目（#2482）：proj_* 即 production.id。非空 = 会话与界面共享
+     *  同一份真值（权威读在 production，会话内容列退化为写时镜像）；
+     *  NULL = 桥之前的遗留会话，首次写时桥接（写时建/绑项目）。 */
+    projectId: text("projectId"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

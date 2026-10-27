@@ -75,7 +75,9 @@ const SERVER_INSTRUCTIONS = `工坊（Workshop）创作流水线工具集。标�
 5) workshop_generate_image 为镜头 / 角色生图（channel: "api"）
 6) workshop_submit_video + workshop_poll_video 生成视频片段（channel: "api"）
 7) workshop_compose_final 把分镜按序合成为成片（JSON 清单，render=true 且 ffmpeg 可用时合成 mp4）
-所有写操作都需要 sessionId 参数（来自 create_session 的返回）。`;
+所有写操作都需要 sessionId 参数（来自 create_session 的返回）。
+每个会话绑定一个界面项目（projectId）：人与 AI 读写同一份 production——
+外部 AI 写入的内容在界面刷新即见，界面里的改动 AI 下一次 get_session 就能读到。`;
 
 /** 构造并注册全部工坊工具的 MCP server。 */
 export function buildWorkshopMcpServer(): McpServer {
@@ -116,7 +118,17 @@ export function buildWorkshopMcpServer(): McpServer {
           .string()
           .nullable()
           .optional()
-          .describe("可选：关联用户 id（AI 会话通常留空）"),
+          .describe(
+            "可选：关联用户 id（AI 会话通常留空，缺省落本机最早创建的用户）",
+          ),
+        projectId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "可选：绑定界面侧既有项目（proj_*，来自界面项目列表）。缺省新建一个项目；" +
+              "绑定后人与 AI 读写同一份 production（界面刷新即见 AI 的写入）",
+          ),
       },
     },
     async (args) => {
@@ -127,8 +139,9 @@ export function buildWorkshopMcpServer(): McpServer {
         logline: args.logline,
         idea: args.idea,
         userId: args.userId,
+        projectId: args.projectId,
       });
-      return json({ sessionId: id });
+      return json({ sessionId: id, projectId: args.projectId ?? null });
     },
   );
 
