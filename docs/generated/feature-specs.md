@@ -902,9 +902,11 @@
 
 - 状态：计划中
 - 需求：关键帧可复现、可追溯，且失败能只重跑失败项。
-- 行为与验收：① 同一 seed + 同一工作流 + 同一参考图重跑产出一致（复现性可验）；
-  ② 每张图能追回 `taskId` 与参数快照；③ 只重跑失败镜，已完成的不被动；
-  ④ **自动优选（抽卡 N 选 1）**可用 ⇒ 当前未实现。
+- 行为与验收：① 同一 seed + 同一工作流 + 同一参考图重跑产出一致（复现性可验；
+  **本地 ComfyUI 通道**判此条，API 直连通道在上游声明同 seed 确定性时才判）；
+  ② 每张图能追回 `taskId` 与参数快照；③ 只重跑失败镜，已完成的不被动
+  （历史面的任务级原样重跑见 #2481，带修改的重跑见 FR-QA-09）；
+  ④ **自动优选（抽卡 N 选 1）**可用 ⇒ 当前未实现（依赖 FR-QA-07 的视觉评审）。
 
 #### FR-QA-05 生视频质量口径
 
@@ -924,6 +926,55 @@
   ⑤ 工坊阶段⑥（客户端清单）与 `film`（服务端 MP4）**两条链路不混用**，且⑥有「去成片」的出口指引。
 - 落点（现状）：`src/server/film/compose-film.ts`（真合成）、
   `src/components/workshop/FinalComposer.tsx`（清单）
+
+#### FR-QA-07 质量评审与评分闭环
+
+- 状态：计划中（承接：评分地基 #2477 · 剧本循环 #2478 · 图像评审 #2479）
+- 需求：让 FR-QA-01 ~ 06 的静态口径**可执行**——评审产出**维度化数字评分**
+  （每维度 1~5 分 + 分值锚点 + rubric 版本号），判定与每轮分数落库留痕，
+  收敛条件是「分数阈值达线」而不是只有过 / 不过；剧本、角色、分镜、生图四环节
+  用**同一套判定形状**（`ReviewVerdict` 扩展），剧本补上评审位（当前完全不在评审面）。
+- 行为与验收：① `ReviewVerdict` 带 `scores`（维度 → 分 + 一句话依据）与 rubric 版本，
+  旧数据（无 scores）读作「未评分」不报错；② `run.reviewScript` 可用，判定写回
+  `production` 的剧本评审位（当前无 `reviewScript`，全仓可 grep 验证）；③ 剧本 /
+  角色卡 / 分镜各有一张 rubric（每分值有锚点描述），评审温度走 `temperatureByTask`
+  的 `review` 档（`TASK_TYPES` 现无此档）；④ run 引擎按「低分维度定向改写 → 再评」
+  迭代，有界收敛（复用 `REVIEW_MAX_RETRY` 的有界思路），每轮分数可回看（分数曲线可查）；
+  ⑤ 视觉评审可用：生图后按生图 rubric 打分（与提示词对齐 / 角色一致性对照定妆照 /
+  构图景别 / 画面瑕疵），不合格自动走 `gacha` / `reprompt`，达上限不再自动重试、
+  转人工（`src/server/agent/review.ts` 头注自证的 P8-2 由本条闭环）。
+- 落点（现状）：`src/lib/production/review-types.ts`（判定形状）、
+  `src/server/agent/review.ts`（评审执行器）、`src/server/agent/run-engine.ts`
+  （自动评审阶段）、`src/lib/llm/prompts.ts`（评审 / 改写提示词）
+
+#### FR-QA-08 人工评分与校准
+
+- 状态：计划中（承接：#2480）
+- 需求：人的判断**留痕且优先**——产物级人工评分 / 收藏（当前 `taskImage` 无任何
+  评分字段，`favorite` 表只挂模型库），实体级人工裁决（approved / rejected + 理由）
+  **优先于 AI 判定**；人评过的样本成为 AI 评审的校准基准。
+- 行为与验收：① 历史页与工坊镜头卡可直接给产物打分 / 收藏，评分可查
+  （`taskImage` 有评级字段且进产物元数据面板）；② 人判废的镜头 / 角色 / 剧本
+  不因 AI 判过而放行进下一阶段（与 FR-AG-02「质量停点由人拍板」同口径）；
+  ③ 能按维度聚合出「人评分 vs AI 评分」的偏差读数（只读查询即可），
+  作为调 rubric 提示词的依据；④ 图像评审（FR-QA-07⑤）达上限转人工时，
+  落到本条的裁决入口而不是无处可去。
+- 落点（现状）：`src/server/db/schema.ts`（`taskImage` / `favorite`）、
+  `src/components/studio/history/`、`src/components/workshop/ShotStudio.tsx`
+
+#### FR-QA-09 带修改的重跑（局部重绘 / 放大）
+
+- 状态：计划中（承接：#2483；原样重跑的历史面落点见 #2481，不占本条）
+- 需求：图「方向对、局部有瑕疵」时不必整张重抽——产物 / 关键帧上可发起
+  **局部重绘（inpaint）**与**放大（upscale）**，两者都是「带修改的重跑」，
+  走既有 task 链路。
+- 行为与验收：① 产物 / 镜头关键帧可画蒙版（画笔粗细级即可）并发起局部重绘，
+  任务照走 `task` 链路（复用工作流模板 + 参考图注入）；② 产物有「放大重出」动作；
+  ③ 重绘 / 放大的产物与原任务**可追溯**（能看出这是哪张改出来的，parentId 或等价）；
+  ④ INPAINT / UPSCALE 不再只是 taskType 标签（现状：仅文案与模式猜测，
+  无蒙版编辑器与专用入口）。
+- 落点（现状）：`src/lib/workflow/model-mode-contract.ts:112`（仅模式标签）、
+  `src/components/studio/outputs/ProjectOutputsMetadataSheet.tsx:29`（仅文案）
 
 ---
 
@@ -983,7 +1034,8 @@
 - 行为与验收：① `run` 控制面已提供 `status` / `start` / `pause` / `resume` /
   `approve` / `cancel` / `reviewShot` / `regenerateShot`（`src/server/api/routers/run.ts`）；
   ② 每个阶段有可读状态与停下的原因（不是只有一个「进行中」）；
-  ③ **MCP 侧同样可查状态** ⇒ 当前 MCP 无状态查询工具，是本条的缺口；
+  ③ **MCP 侧同样可查 run 控制面状态**（运行中 / 停在哪一步 / 停点原因 / 待审批）
+  ⇒ 当前 MCP 只能查会话状态（`workshop_get_session`），查不到 run 控制面，是本条的缺口；
   ④ 干预只影响被干预的那一镜（不牵连已完成项）。
 - 落点：`src/server/api/routers/run.ts`、`src/server/agent/run-engine.ts`、
   `src/server/mcp/workshop-mcp.ts`
