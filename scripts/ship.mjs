@@ -33,8 +33,10 @@
  *     哪一格才是终态。纯函数，不起进程、不读文件之外的事实。
  *   · `ship-exec.mjs`     —— **效应适配**：`cnb` 垫片怎么起、stderr 怎么接、
  *     一次性临时文件落在 git 目录哪儿。只因宿主而变。
- *   · `ship-platform.mjs` —— **平台侧四段**：PR / 轮询 / verdict / 合并并回读。
+ *   · `ship-platform.mjs` —— **平台侧三段 + 阶段 8 分支清理**：PR / verdict / 合并并回读、删 ref 那一格。
  *     只经注入的 `run` 摸世界，所以整段可被假执行者跑完。
+ *   · `ship-poll.mjs`     —— **轮询那一格**（阶段 4）：跟着「一条 build 怎么被读」动，与上面三段
+ *     「平台对我们动作的应答」不是一个方向（ISSUE #2258 定的落点）。
  *   · `ship-reap.mjs`     —— **进程那一格**：本检出的归属读数与 `--reap` 的收尾回收。
  *     两半都不自己判 —— 归属只问 `launcher-core/port-reap.mjs` 的 `runningAppInstances()`
  *     （硬规则 9 唯一实现），回收只发 `scripts/reap-process.mjs`（硬规则 3 唯一入口）。
@@ -44,7 +46,7 @@
  *     它只回答「发给平台的正文长什么样」，与 `ship-core` 那些「外部执行者的形状」各自变化；
  *     #2248 落地时 `ship-core` 又到了 906 行，按上面 #2189 那条同一口径拆（拆法按职责）。
  *   · `ship-local.mjs`    —— **本地两段**：commit 与 push（含工作树三列状态的读法）。
- *     不碰 cnb、不需要平台回读，动的是本地 ref 与远端同名分支 —— 与 `ship-platform` 那四段
+ *     不碰 cnb、不需要平台回读，动的是本地 ref 与远端同名分支 —— 与 `ship-platform` 那几段
  *     正相反。（搬出去的直接原因是 #2189：加上「只补关」那格之后本文件 928 行，
  *     被 `check-infra-file-size.cjs` 的 900 硬闸拦下 —— 那一闸说的是「出口只有一个：拆」，
  *     拆法按职责、不按行数，见该模块文件头。）
@@ -52,22 +54,20 @@
  *     平台侧落地证明），以及关完的独立回读。它跟着「单子的落地证明口径」动，不跟 build 状态机走；
  *     叠进 `ship-core` 会把它推过 900 行（#2199 现场量的 917 行）。
  *   · `ship-args.mjs`     —— **命令行那一层**：`parseArgs` 认哪些旗标、号「像不像号」只在这一处判。
- *     它跟着「命令行长什么样」动（新加一枚旗标、多认一种写法、把不合法输入当场点名），
- *     而 `ship-core` 跟着「外部执行者的读数形状」动。拆的直接原因是 #2491：加 `--as-merged`
- *     之前 `ship-core` 已 877 行，加上它就 **907** —— 同一道 900 硬闸、同一个出口（拆），
- *     与上面 #2189 / #2248 / #2199 三次同一条纪律，所以这里量的是一行行的**行数**而不是印象。
+ *     它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的读数形状」动（#2491 拆它时
+ *     `ship-core` 已 877 行、加上 `--as-merged` 就是 907 —— 同一道 900 硬闸、同一个出口：拆）。
  *   · `ship-claim.mjs`    —— **单子的领取 / 结束释放 / 我的领取列表**：`--claim` /
  *     `--release` / `--claims`，以及关单之后那一步收尾评论与撤标签。它跟着「单子上
  *     谁在做」这一维动，与合并那一路互斥。
  *   · `ship-preflight.mjs`—— **阶段 0**：本检出自己的读数与本地门（分支守卫、碎片、
- *     单子读数、实例归属、依赖新鲜度）。它判的都是「这一份检出」的事实，与平台侧四段
+ *     单子读数、实例归属、依赖新鲜度）。它判的都是「这一份检出」的事实，与平台侧那几段
  *     正相反；叠在本文件里会把装配层推过 900 行（第二次撞上，首次见 #2189）。
  *   · 本文件              —— **装配**：阶段顺序、读数的落点，
  *     以及「谁跑了、各段结论是什么」的那一处记账（`codes` + `finish`）；
  *     收尾回收挂在 `main` 的唯一出口上（一轮可以从七八个出口结束，见那里）。
  *
- * 拆的是**变化方向**：加一个阶段只动本文件与 `ship-platform.mjs`，改 Windows 垫片
- * 只动 `ship-exec.mjs`。对外行为、命令行、退出码、打印原文一字不改。
+ * 拆的是**变化方向**：加一个阶段只动本文件与 `ship-platform.mjs` / `ship-poll.mjs`，
+ * 改 Windows 垫片只动 `ship-exec.mjs`。对外行为、命令行、退出码、打印原文一字不改。
  *
  * ── 三条写进代码的纪律（不是文档承诺）──────────────────────────
  *
@@ -205,9 +205,9 @@ import {
   cleanBranch,
   createOrReusePull,
   mergeAndVerify,
-  pollUntilTerminal,
   reportVerdict,
 } from "./ship-platform.mjs";
+import { pollUntilTerminal } from "./ship-poll.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runBranches } from "./ship-branches.mjs";
