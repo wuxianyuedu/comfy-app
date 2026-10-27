@@ -62,6 +62,7 @@ import { fileURLToPath } from "node:url";
 import {
   DEP_FILES,
   FINGERPRINT_FILE,
+  normalizePackageJson,
   pnpmInstallFingerprint,
 } from "./ci-deps-face.mjs";
 import { linkDependencies, unlinkDependencies } from "./base-check.mjs";
@@ -133,7 +134,11 @@ export function slotInputs(jobRoot) {
 }
 
 /**
- * 把输入落进槽目录；`package.json` 去掉 `scripts`（理由见文件头第三条实测）。
+ * 把输入落进槽目录；`package.json` 走 `normalizePackageJson`（摘 `scripts`，
+ * 理由见文件头第 4 条实测）。
+ *
+ * ⚠️ 这一份规范化与算键那一侧**必须是同一个函数**：两边各写一份，sha 就会随
+ * 「有没有摘 scripts」漂（ISSUE #2489）。
  *
  * @param {{jobRoot: string, slot: string, log?: (line: string) => void}} input
  * @returns {string[]} 实际写进去的条目（`package.json` 那条带「已摘 scripts」）
@@ -151,9 +156,8 @@ export function materializeSlotInputs(input) {
       written.push(rel);
       continue;
     }
-    const pkg = JSON.parse(fs.readFileSync(path.join(jobRoot, rel), "utf8"));
-    delete pkg.scripts;
-    fs.writeFileSync(to, `${JSON.stringify(pkg, null, 2)}\n`);
+    const raw = fs.readFileSync(path.join(jobRoot, rel), "utf8");
+    fs.writeFileSync(to, normalizePackageJson(raw));
     written.push(`${rel}（已摘 scripts）`);
   }
   say(`[缓存槽] 输入落位 ${written.length} 份：${written.join(", ")}`);
