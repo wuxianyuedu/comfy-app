@@ -165,6 +165,8 @@ describe("键的来源与读数形态", () => {
       log: (l) => lines.push(l),
     });
     expect(lines.join("\n")).toContain("结论 reuse");
+    /* 读数里要明说当前键就在盘上 —— 否则「键数 = 配额却报超额」看不出成因（ISSUE #2490）。 */
+    expect(lines.join("\n")).toContain("当前键已在盘上");
   });
 });
 
