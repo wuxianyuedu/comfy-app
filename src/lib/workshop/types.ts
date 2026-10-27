@@ -32,44 +32,9 @@ export interface Scene {
   shotCount: number; // suggested number of shots
 }
 
-/* 一份能产出 ComfyUI 提示词的角色设定。 */
-export interface Character {
-  id: string;
-  name: string;
-  ageGender: string; // 年龄/性别
-  appearance: string; // 外貌特征
-  costume: string; // 服装
-  personality: string; // 性格
-  temperament: string; // 气质
-  styleTags: string[]; // free style keywords (e.g. ["皮克斯", "厚涂"])
-  skillSlug?: string; // linked Skill for art style
-  positivePrompt: string; // generated ComfyUI positive prompt
-  negativePrompt: string; // generated negative prompt
-  params: Record<string, unknown>; // recommended generation params
-  /** 定妆照候选（多次生成 / 外部导入累积，供挑选；上限见 character-portrait.ts）。
-   *  存在角色本身而非独立表 —— 角色随草稿 JSON 列一起持久化，新增字段无需迁移。 */
-  portraits?: CharacterPortrait[];
-  /** 已选定的定妆照（portraits 里的一张），后续分镜图以此作为参考图。 */
-  portraitUrl?: string;
-}
-
 /** 定妆照来源通道：本机 ComfyUI 工作流 / 远端 API 直连 / 外部导入的现成图。 */
 export type PortraitSource = "local" | "remote" | "import";
 
-/** 一张角色定妆照候选。 */
-export interface CharacterPortrait {
-  /** 浏览器可直接引用的图片地址（本机产物走 /api/generated，导入走素材库）。 */
-  url: string;
-  source: PortraitSource;
-  /** 生成时使用的模型（本机 checkpoint / 远端 API 模型名），导入来源没有。 */
-  model?: string;
-  /** 本机通道的 ComfyUI 任务 id，便于回溯任务历史。 */
-  taskId?: string;
-  /** 生成/导入时间戳（ms），用于排序与同图去重。 */
-  createdAt: number;
-}
-
-/* 一个分镜镜头，对应一次图片生成任务（之后还会对应一段视频片段）。 */
 /**
  * 生成状态（图片与视频片段共用同一套）。写成联合类型三遍就是三份事实
  * （§12.12）：`Shot.status`、`Shot.clipStatus`、`Asset.status` 现在都指向这里，
@@ -84,33 +49,6 @@ export const SHOT_STATUSES = [
   "stale",
 ] as const;
 export type ShotStatus = (typeof SHOT_STATUSES)[number];
-
-export interface Shot {
-  id: string;
-  index: number; // 镜号
-  sceneId: string; // source scene
-  sceneHeading: string;
-  shotType: ShotType; // 景别
-  description: string; // 画面描述
-  characterIds: string[]; // linked characters
-  skillSlug?: string; // style skill
-  prompt: string; // final ComfyUI prompt
-  negativePrompt: string;
-  params: Record<string, unknown>;
-  status: ShotStatus;
-  taskId?: string;
-  imageUrl?: string;
-  // ── 视频生成计划 ──
-  dialogue?: string; // 对白 / 字幕文本
-  motion?: MotionLevel; // 运动强度（I2V）
-  duration?: number; // 镜头时长（秒）
-  transition?: Transition; // 与下一镜的转场
-  clipStatus?: ShotStatus;
-  clipUrl?: string; // 生成的视频片段地址
-  /** 本机视频任务的 id（同 `taskId`：随草稿持久化，重挂载后据此恢复失联任务）。
-   *  API 直连通道的 remoteTaskId 是另一套体系，不落这里。 */
-  clipTaskId?: string;
-}
 
 export const MOTION_LEVELS = ["low", "medium", "high"] as const;
 export type MotionLevel = (typeof MOTION_LEVELS)[number];
@@ -266,14 +204,20 @@ const stringList = z
   .union([z.array(z.string()), z.string()])
   .transform((value) => (typeof value === "string" ? [value] : value));
 
-/** 可选枚举：认不出的值一律当成「没给」（见上方口径第三条）。 */
+/**
+ * 可选枚举：认不出的值一律当成「没给」（见上方口径第三条）。
+ *
+ * `.optional()` 必须包在 `.transform()` **外面**：它决定输出侧这个键是否可选。
+ * 写在里面时输出类型是「必带这个键（值可为 undefined）」，与消费侧 `motion?:`
+ * 那一类声明正好反过来，派生出来的类型就会让所有字面量集体报 `TS2741`。
+ */
 function optionalEnum<const T extends readonly string[]>(values: T) {
   return z
     .unknown()
-    .optional()
     .transform((value) =>
       values.includes(value as string) ? (value as T[number]) : undefined,
-    );
+    )
+    .optional();
 }
 
 /** 只收对象：`params` 是必填字段，非对象（含缺省）一律换成空对象。 */
@@ -284,44 +228,54 @@ function paramsObject(value: unknown): Record<string, unknown> {
 }
 
 export const characterPortraitInputSchema = z.object({
+  /** 浏览器可直接引用的图片地址（本机产物走 /api/generated，导入走素材库）。 */
   url: z.string().min(1),
   source: z.enum(["local", "remote", "import"]),
+  /** 生成时使用的模型（本机 checkpoint / 远端 API 模型名），导入来源没有。 */
   model: z.string().optional(),
+  /** 本机通道的 ComfyUI 任务 id，便于回溯任务历史。 */
   taskId: z.string().optional(),
-  /** 缺省时补当下时间戳（0 会让它永远排在最前，排序是这张卡的用途之一）。 */
-  createdAt: z.number().int().nonnegative().optional(),
+  /** 缺省时补当下时间戳（0 会让它永远排在最前，排序是这张卡的用途之一）。
+   *  默认值落在这一层：外层 `.transform` 里补会把「输入可缺」写成
+   *  「输出必带这个键（值可为 undefined）」，与消费侧的可选声明正好反过来。 */
+  createdAt: z
+    .number()
+    .int()
+    .nonnegative()
+    .default(() => Date.now()),
 });
 
+/** 一份能产出 ComfyUI 提示词的角色设定。 */
 export const characterInputSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
-    ageGender: z.string().default(""),
-    appearance: z.string().default(""),
-    costume: z.string().default(""),
-    personality: z.string().default(""),
-    temperament: z.string().default(""),
-    styleTags: stringList.default([]),
-    skillSlug: z.string().optional(),
+    ageGender: z.string().default(""), // 年龄/性别
+    appearance: z.string().default(""), // 外貌特征
+    costume: z.string().default(""), // 服装
+    personality: z.string().default(""), // 性格
+    temperament: z.string().default(""), // 气质
+    styleTags: stringList.default([]), // 自由风格关键词（如 ["皮克斯", "厚涂"]）
+    skillSlug: z.string().optional(), // 关联的画风 Skill
+    /** 定妆照候选（多次生成 / 外部导入累积，供挑选；上限见 character-portrait.ts）。
+     *  存在角色本身而非独立表 —— 角色随草稿 JSON 列一起持久化，新增字段无需迁移。 */
     portraits: z.array(characterPortraitInputSchema).optional(),
+    /** 已选定的定妆照（portraits 里的一张），后续分镜图以此作为参考图。 */
     portraitUrl: z.string().optional(),
-    params: z.unknown().optional().transform(paramsObject),
+    params: z.unknown().optional().transform(paramsObject), // 推荐生成参数
   })
   .transform((character) => ({
     ...character,
     positivePrompt: "",
     negativePrompt: "",
-    portraits: character.portraits?.map((portrait) => ({
-      ...portrait,
-      createdAt: portrait.createdAt ?? Date.now(),
-    })),
   }));
 
+/** 一个分镜镜头，对应一次图片生成任务（之后还会对应一段视频片段）。 */
 export const shotInputSchema = z
   .object({
     id: z.string().min(1),
-    index: z.number().int(),
-    sceneId: z.string().default(""),
+    index: z.number().int(), // 镜号
+    sceneId: z.string().default(""), // 来源场景
     sceneHeading: z.string().default(""),
     /**
      * 景别走**既有归一器**（脏值落默认档，不原样落库）。
@@ -337,18 +291,21 @@ export const shotInputSchema = z
       .string()
       .default(DEFAULT_SHOT_TYPE)
       .transform((value) => normalizeShotType(value)),
-    description: z.string().default(""),
-    characterIds: stringList.default([]),
-    skillSlug: z.string().optional(),
+    description: z.string().default(""), // 画面描述
+    characterIds: stringList.default([]), // 关联角色
+    skillSlug: z.string().optional(), // 风格 Skill
     status: z.enum(SHOT_STATUSES).default("idle"),
     taskId: z.string().optional(),
     imageUrl: z.string().optional(),
-    dialogue: z.string().optional(),
-    motion: optionalEnum(MOTION_LEVELS),
-    duration: z.number().optional(),
-    transition: optionalEnum(TRANSITIONS),
+    // ── 视频生成计划 ──
+    dialogue: z.string().optional(), // 对白 / 字幕文本
+    motion: optionalEnum(MOTION_LEVELS), // 运动强度（I2V）
+    duration: z.number().optional(), // 镜头时长（秒）
+    transition: optionalEnum(TRANSITIONS), // 与下一镜的转场
     clipStatus: optionalEnum(SHOT_STATUSES),
-    clipUrl: z.string().optional(),
+    clipUrl: z.string().optional(), // 生成的视频片段地址
+    /** 本机视频任务的 id（同 `taskId`：随草稿持久化，重挂载后据此恢复失联任务）。
+     *  API 直连通道的 remoteTaskId 是另一套体系，不落这里。 */
     clipTaskId: z.string().optional(),
     params: z.unknown().optional().transform(paramsObject),
   })
@@ -358,3 +315,14 @@ export const shotInputSchema = z
 export const characterListInputSchema = z.array(characterInputSchema);
 /** 一份镜头数组（MCP `workshop_set_storyboard` 的入参形状）。 */
 export const shotListInputSchema = z.array(shotInputSchema);
+
+/* ── 消费侧类型：由写侧 schema 派生，不再另写一份声明 ─────────────────
+ *
+ * 两份互不引用的声明加一个字段时谁也不红，而它们喂的是同一条草稿（MCP 写入 /
+ * 画布 / 仓储 / 草稿镜像）—— 于是「类型层漂移编译期看不见、运行时才炸」
+ * （ISSUE #2499）。这里让 schema 成为唯一事实：类型由 `z.output` 派生，
+ * 字段语义见上面 schema 内的注释。
+ */
+export type Character = z.output<typeof characterInputSchema>;
+export type CharacterPortrait = z.output<typeof characterPortraitInputSchema>;
+export type Shot = z.output<typeof shotInputSchema>;
