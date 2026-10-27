@@ -75,9 +75,7 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
     expect(dims.promptAlignment?.humanAvg).toBeCloseTo((5 + 3.4) / 2, 5);
     expect(dims.promptAlignment?.samples).toBe(2);
     // 同一判定里的两个维度读数一致
-    expect(dims.characterConsistency?.aiAvg).toBe(
-      dims.promptAlignment?.aiAvg,
-    );
+    expect(dims.characterConsistency?.aiAvg).toBe(dims.promptAlignment?.aiAvg);
     expect(dims.characterConsistency?.humanAvg).toBe(
       dims.promptAlignment?.humanAvg,
     );
