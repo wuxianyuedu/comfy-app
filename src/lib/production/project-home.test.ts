@@ -13,6 +13,7 @@ import type { ProductionRunView } from "./run-types";
 function view(over: Partial<ProductionRunView> = {}): ProductionRunView {
   return {
     hasScript: false,
+    scriptDigest: "",
     characterCount: 0,
     shots: [],
     filmRendered: false,

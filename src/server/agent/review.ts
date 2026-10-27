@@ -15,10 +15,15 @@ import { z } from "zod";
 
 import { productionRepository } from "~/lib/core/repository-production";
 import { asRecord } from "~/lib/is-record";
-import { completeLLMStructured, getLLMConfig } from "~/lib/llm/server";
+import {
+  completeLLM,
+  completeLLMStructured,
+  getLLMConfig,
+} from "~/lib/llm/server";
 import {
   buildReviewMessages,
   buildScriptReviewMessages,
+  buildScriptRevisionMessages,
   buildShotRepromptMessages,
   type ContentReviewContext,
 } from "~/lib/llm/prompts";
@@ -26,6 +31,9 @@ import {
   applyReview,
   applyScriptReview,
   normalizeReviewVerdict,
+  normalizeScriptReviewState,
+  recordScriptRevision,
+  weakScoreEntries,
   type ReviewMode,
   type ReviewVerdict,
 } from "~/lib/production/review-types";
@@ -38,6 +46,12 @@ import type { Production } from "~/server/db/schema";
 
 /** 评审目标实体类型。文本评审当前覆盖镜头（分镜）与角色卡。 */
 export type ReviewKind = "shot" | "character";
+
+/** 一次剧本评审的产出：判定 + 完整分数曲线（旧→新，含本轮；FR-QA-07「每轮分数可回看」）。 */
+export interface ScriptReviewOutcome {
+  verdict: ReviewVerdict;
+  history: ReviewVerdict[];
+}
 
 const KIND_LABEL: Record<ReviewKind, string> = {
   shot: "分镜镜头",
@@ -189,13 +203,13 @@ export async function reviewContent(
 
 /**
  * 评审整份剧本（FR-QA-07 ② · #2477 地基）：调模型给判定 → 写回 `production.scriptReview`
- * 列（含轮次历史，`applyScriptReview`）→ 返回判定。剧本是项目级内容，没有实体 id；
- * 路由形态见 `run.reviewScript`。「低分维度定向改写 → 再评」的 run 内闭环由 #2478 接。
+ * 列（含轮次历史，`applyScriptReview`）→ 返回判定与完整分数曲线（`[...history, review]`，
+ * 供 UI「每轮分数可回看」）。剧本是项目级内容，没有实体 id；路由形态见 `run.reviewScript`。
  */
 export async function reviewScript(
   userId: string,
   projectId: string,
-): Promise<ReviewVerdict> {
+): Promise<ScriptReviewOutcome> {
   const row = await loadRow(userId, projectId);
   if (!row.scriptMarkdown.trim())
     throw new Error("该项目还没有剧本（先在工坊产出剧本再评审）");
@@ -222,10 +236,59 @@ export async function reviewScript(
   });
   if (!verdict) throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
 
+  const next = applyScriptReview(row.scriptReview, verdict);
   await productionRepository.patchContent(userId, projectId, {
-    scriptReview: applyScriptReview(row.scriptReview, verdict),
+    scriptReview: next,
   });
-  return verdict;
+  return {
+    verdict,
+    history: [...next.history, next.review ?? verdict],
+  };
+}
+
+/**
+ * 按评审判定**定向改写**剧本（FR-QA-07 ④ · #2478）：消费上一轮评审的低分维度与逐条缺陷，
+ * 让模型产出一版改进后的完整剧本；改写前的旧版本压进 `scriptReview.revisions` 留档
+ * （人可回看/接管，AI 下一轮从人改的版本继续）。没有可依据的评审位（没评过）时拒改——
+ * 定向改写的「定向」来自评审意见，凭空改 = 退化成整篇重生成。
+ */
+export async function reviseScript(
+  userId: string,
+  projectId: string,
+): Promise<string> {
+  const row = await loadRow(userId, projectId);
+  if (!row.scriptMarkdown.trim())
+    throw new Error("该项目还没有剧本（先在工坊产出剧本再改写）");
+  const state = normalizeScriptReviewState(row.scriptReview);
+  if (!state.review)
+    throw new Error("这份剧本还没有评审判定（先评审、拿到低分维度再定向改写）");
+
+  const cfg = await getLLMConfig({ taskType: "review" });
+  const md = (
+    await completeLLM(
+      cfg,
+      buildScriptRevisionMessages(
+        row.scriptMarkdown.slice(0, SCRIPT_REVIEW_MAX),
+        {
+          issues: state.review.issues,
+          suggestion: state.review.suggestion,
+          lowScores: weakScoreEntries(state.review),
+        },
+        { ...reviewContext(row), scriptExcerpt: "" },
+      ),
+    )
+  ).trim();
+  if (!md) throw new Error("模型未返回改写后的剧本（保留原剧本，可重试）");
+
+  await productionRepository.patchContent(userId, projectId, {
+    scriptMarkdown: md,
+    scriptReview: recordScriptRevision(
+      row.scriptReview,
+      row.scriptMarkdown,
+      nowIso(),
+    ),
+  });
+  return md;
 }
 
 /**

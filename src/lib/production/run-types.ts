@@ -69,6 +69,21 @@ export interface ProductionRun {
   reviewedShotRev: Record<string, number>;
   /** 每个镜头已被自动抽卡重出的次数；达 `REVIEW_MAX_RETRY` 后保留当前结果、停止返工（避免无限循环）。 */
   reviewAttempts: Record<string, number>;
+  /**
+   * 剧本质量闭环（FR-QA-07 ④ · #2478）：上次剧本评审收口时的剧本指纹
+   * （`scriptDigestOf`）。与当前剧本指纹不等 → 剧本变过（AI 改写 / 人手改）→ 待（再）评审；
+   * 相等 → 剧本质量节点已收口。空串 = 还没评过。
+   */
+  scriptReviewDigest: string;
+  /** 已完成的剧本评审轮数（与镜头 `reviewAttempts` 同口径：达上限保留、停止返工）。 */
+  scriptReviewAttempts: number;
+  /** 评审提出改写、尚未改写 → true；规划器先出 `revise_script`，改完剧本变 → 回到待评审。 */
+  scriptRevisionPending: boolean;
+  /**
+   * 分镜联动：上次规划分镜时的剧本指纹。与当前不等 → 剧本在分镜之后变过
+   * （AI 改写定稿 / 人手改）→ 重排分镜，让下游真的吃到新剧本（仅 autoReview 生效）。
+   */
+  storyboardScriptDigest: string;
   /** 执行日志（引擎每步追加，有界；见 appendRunStep）。 */
   log: RunStep[];
   error: string | null;
@@ -88,6 +103,10 @@ export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   autoReview: false,
   reviewedShotRev: {},
   reviewAttempts: {},
+  scriptReviewDigest: "",
+  scriptReviewAttempts: 0,
+  scriptRevisionPending: false,
+  storyboardScriptDigest: "",
   log: [],
   error: null,
   updatedAt: "",
@@ -98,6 +117,14 @@ export const RUN_LOG_LIMIT = 80;
 
 /** 自动评审不合格时，每镜最多抽卡重出几次（超过则保留当前结果，避免无限返工）。 */
 export const REVIEW_MAX_RETRY = 2;
+
+/**
+ * 剧本评审的分数阈值（FR-QA-07 ④ · #2478）：`pass=true` 且维度均分达线才算「达标」。
+ * pass 与分数相互独立（低分但勉强可用可 pass=true），收敛判据两者都要——否则
+ * 「全 1 分却 pass」的剧本会一路直达 done，闭环形同虚设。未评分（旧判定 / 模型没给）
+ * 时只看 pass，不硬造分数。
+ */
+export const SCRIPT_REVIEW_SCORE_THRESHOLD = 3.5;
 
 /** 追加一条执行日志（不可变，尾部追加、超上限从头裁剪）。 */
 export function appendRunStep(
@@ -170,6 +197,19 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     autoReview: obj.autoReview === true,
     reviewedShotRev: parseRevMap(obj.reviewedShotRev),
     reviewAttempts: parseRevMap(obj.reviewAttempts),
+    scriptReviewDigest:
+      typeof obj.scriptReviewDigest === "string" ? obj.scriptReviewDigest : "",
+    scriptReviewAttempts:
+      typeof obj.scriptReviewAttempts === "number" &&
+      Number.isFinite(obj.scriptReviewAttempts) &&
+      obj.scriptReviewAttempts >= 0
+        ? Math.floor(obj.scriptReviewAttempts)
+        : 0,
+    scriptRevisionPending: obj.scriptRevisionPending === true,
+    storyboardScriptDigest:
+      typeof obj.storyboardScriptDigest === "string"
+        ? obj.storyboardScriptDigest
+        : "",
     log,
     error: typeof obj.error === "string" ? obj.error : null,
     updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : "",
@@ -188,6 +228,8 @@ export interface ShotRunView {
 /** 由整份 production 归一的规划视图。 */
 export interface ProductionRunView {
   hasScript: boolean;
+  /** 当前剧本的指纹（`scriptDigestOf`）：剧本变了指纹就变，是「基于改动续跑」的剧本侧判据。 */
+  scriptDigest: string;
   characterCount: number;
   shots: ShotRunView[];
   filmRendered: boolean;
@@ -199,6 +241,18 @@ export interface ProductionLike {
   characters?: unknown;
   shots?: unknown;
   progress?: unknown;
+}
+
+/**
+ * 剧本指纹（轻量 djb2 十六进制，纯 JS、无 Node 依赖——本文件同时被客户端消费）：
+ * 只用于「变没变」的相等比较，不追求防碰撞加密强度。
+ */
+export function scriptDigestOf(markdown: string): string {
+  let hash = 5381;
+  for (let i = 0; i < markdown.length; i++) {
+    hash = ((hash << 5) + hash + markdown.charCodeAt(i)) | 0;
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 /** 把 production 行归一成规划视图（无行 → 全空，等价「连剧本都还没有」）。 */
@@ -223,11 +277,13 @@ export function toRunView(
     production && Array.isArray(production.characters)
       ? production.characters
       : [];
+  const script =
+    typeof production?.scriptMarkdown === "string"
+      ? production.scriptMarkdown
+      : "";
   return {
-    hasScript:
-      typeof production?.scriptMarkdown === "string"
-        ? production.scriptMarkdown.trim().length > 0
-        : false,
+    hasScript: script.trim().length > 0,
+    scriptDigest: scriptDigestOf(script),
     characterCount: characters.length,
     shots,
     filmRendered: normalizeProductionProgress(production?.progress).rendered,
@@ -240,6 +296,8 @@ export type RunAction =
   | { kind: "done" }
   | { kind: "await_approval"; stage: ProductionStage }
   | { kind: "generate_script" }
+  | { kind: "review_script" }
+  | { kind: "revise_script" }
   | { kind: "extract_characters" }
   | { kind: "plan_storyboard" }
   | { kind: "render_images"; shotIds: string[] }
@@ -272,8 +330,22 @@ export function planNextRunAction(
       return { kind: "idle" };
   }
   if (!view.hasScript) return { kind: "generate_script" };
+  // 剧本质量闭环（FR-QA-07 ④ · #2478）：剧本指纹 ≠ 评审收口快照 → 待评审（首评 =
+  // 快照还是空串，同样命中）；评审提出改写 → 先定向改写（改完剧本变 → 指纹变 → 回到待评审）。
+  // 「人机接力」靠同一把指纹：人改剧本 → 指纹变 → AI 从人改的版本继续评。
+  if (run.autoReview) {
+    if (run.scriptRevisionPending) return { kind: "revise_script" };
+    if (run.scriptReviewDigest !== view.scriptDigest)
+      return { kind: "review_script" };
+  }
   if (view.characterCount === 0) return { kind: "extract_characters" };
   if (view.shots.length === 0) return { kind: "plan_storyboard" };
+  // 分镜联动（#2478 ④）：分镜之后剧本变过（AI 改写定稿 / 人手改）→ 重排分镜，
+  // 让下游真的吃到新剧本（FR-QA-01「改剧本重跑分镜，镜头描述随之改变」）。
+  // 分镜是整幅覆盖（既有语义），因此只在 autoReview 的自动链路里生效；快照在
+  // 引擎执行 plan_storyboard 时写入 —— 没变过的剧本不会反复重排。
+  if (run.autoReview && run.storyboardScriptDigest !== view.scriptDigest)
+    return { kind: "plan_storyboard" };
   const needImage = view.shots
     .filter((s) => {
       if (!s.hasImage) return true;

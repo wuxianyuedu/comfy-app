@@ -38,10 +38,10 @@
 | **输入契约** | `ProjectMeta`（标题 / 类型 / 基调）+ `idea`（一句话创意）；也可直接手写或导入 Markdown |
 | **输出契约** | `scriptMarkdown`（正文 Markdown）；服务端编排另解析出 `Scene[]`（场景列表，供分镜阶段消费） |
 | **人的用法** | 工坊阶段①：填创意 → 生成 / 手写 / 导入 → 就地编辑成稿 |
-| **AI 的用法** | MCP `workshop_generate_script` / `workshop_set_script`；自主 run 的第一步 `generate_script` |
+| **AI 的用法** | MCP `workshop_generate_script` / `workshop_set_script`；自主 run 的第一步 `generate_script`，以及剧本质量闭环（`FR-QA-07`④ · #2478）：`review_script`（rubric 维度评分）→ 不达标时 `revise_script`（按低分维度定向改写，旧版留档）→ 复评，有界收敛（`REVIEW_MAX_RETRY` + 分数阈值） |
 | **质量验收口径** | ① 产物能被下游**自动拆出** `Scene[]`（拆不出 = 剧本不可用）；② 类型 / 基调进入后续所有阶段的提示词构造（`src/lib/workshop/prompt-builder.ts`），改剧本后重跑分镜，镜头描述必须随之改变；③ 产物**内在结构**有效：拆出的 `Scene[]` 非空、每场景有可定位的标题与正文、类型 / 基调字段非空（LLM 生成不具跨次确定性，验收不依赖「重跑两次结果一致」） |
 | **当前状态** | 已上线（`FR-WP-01` / `FR-WP-03` / `FR-WP-04` 两条通道：本地 ComfyUI 工作流 / API 直连） |
-| **已知缺口** | 无**剧本评审**环节（长度失控、重复段落无人判；评审与定向改写由 `FR-QA-07` 承接，#2478）；剧本与「集」结构无关（多集剧本无容器，见 `FR-SR-03`）；无版本对比与回退 |
+| **已知缺口** | ~~无剧本评审环节~~ 已落地（`FR-QA-07`④ · #2478：`run.reviewScript` / `run.reviseScript` + 引擎闭环 + 工坊「AI 评审剧本」入口）；剧本与「集」结构无关（多集剧本无容器，见 `FR-SR-03`）；改写留档只保最近 3 版（`scriptReview.revisions`），无完整版本对比与回退 |
 | **代码落点** | `src/components/workshop/ScriptGenerator.tsx`；编排侧场景解析 `src/server/workshop/orchestrator.ts`；自主 run `src/server/agent/run-engine.ts` |
 
 ---

@@ -29,7 +29,7 @@ vi.mock("~/server/film/orchestrator", () => ({
   createFilmFromProject: vi.fn(async () => ({ id: "film-1", shots: 1 })),
   startFilm: vi.fn(async () => undefined),
 }));
-// 自动评审执行器调 reviewContent（LLM 判定）——mock 掉，按用例返回过/不过。
+// 自动评审执行器调 reviewContent / reviewScript / reviseScript（LLM 判定与改写）——mock 掉，按用例返回。
 const reviewContent = vi.hoisted(() =>
   vi.fn(
     async (
@@ -45,7 +45,33 @@ const reviewContent = vi.hoisted(() =>
     }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
-vi.mock("~/server/agent/review", () => ({ reviewContent }));
+const reviewScript = vi.hoisted(() =>
+  vi.fn(
+    async (
+      _u: string,
+      _p: string,
+    ): Promise<{
+      verdict: {
+        pass: boolean;
+        issues: string[];
+        suggestion: string;
+        scoredAt: string;
+      };
+      history: unknown[];
+    }> => ({
+      verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
+      history: [],
+    }),
+  ),
+);
+const reviseScript = vi.hoisted(() =>
+  vi.fn(async (_u: string, _p: string) => "# 改写后的剧本"),
+);
+vi.mock("~/server/agent/review", () => ({
+  reviewContent,
+  reviewScript,
+  reviseScript,
+}));
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../tests/helpers/test-db");
@@ -58,6 +84,7 @@ vi.mock("~/server/better-auth", () => ({
 import { productionRepository } from "~/lib/core/repository-production";
 import {
   normalizeProductionRun,
+  scriptDigestOf,
   type ProductionRun,
 } from "~/lib/production/run-types";
 import { advanceRunLoop } from "~/server/agent/run-engine";
@@ -263,6 +290,13 @@ describe("advanceRunLoop", () => {
 });
 
 describe("advanceRunLoop · 自动评审", () => {
+  const SCRIPT = "# 剧本";
+  /** 剧本质量节点已收口的 run 侧快照（下面两个用例只测逐镜评审，先把剧本指纹对齐）。 */
+  const settled = (script: string) => ({
+    scriptReviewDigest: scriptDigestOf(script),
+    storyboardScriptDigest: scriptDigestOf(script),
+  });
+
   it("评审通过：定稿 reviewedShotRev，不再重出，直达 done", async () => {
     reviewContent.mockResolvedValue({
       pass: true,
@@ -272,7 +306,7 @@ describe("advanceRunLoop · 自动评审", () => {
     });
     await seed(
       {
-        scriptMarkdown: "# 剧本",
+        scriptMarkdown: SCRIPT,
         characters: [{ id: "c1" }],
         shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
         rendered: true,
@@ -282,10 +316,12 @@ describe("advanceRunLoop · 自动评审", () => {
         approvalMode: "auto",
         autoReview: true,
         processedShotRev: { a: 1 },
+        ...settled(SCRIPT),
       },
     );
     await advanceRunLoop(USER, PROJ);
     expect(reviewContent).toHaveBeenCalledWith(USER, PROJ, "shot", "a");
+    expect(reviewScript).not.toHaveBeenCalled(); // 剧本指纹已收口，不再触发剧本评审
     expect(synthesizeFirstFrame).not.toHaveBeenCalled(); // 通过 → 不抽卡
     const run = normalizeProductionRun((await readRow())!.run);
     expect(run.reviewedShotRev).toEqual({ a: 1 });
@@ -301,7 +337,7 @@ describe("advanceRunLoop · 自动评审", () => {
     });
     await seed(
       {
-        scriptMarkdown: "# 剧本",
+        scriptMarkdown: SCRIPT,
         characters: [{ id: "c1" }],
         shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
         rendered: true,
@@ -312,6 +348,7 @@ describe("advanceRunLoop · 自动评审", () => {
         autoReview: true,
         imageWorkflowId: "wf-img",
         processedShotRev: { a: 1 },
+        ...settled(SCRIPT),
       },
     );
     await advanceRunLoop(USER, PROJ);
@@ -322,5 +359,127 @@ describe("advanceRunLoop · 自动评审", () => {
     expect(run.reviewAttempts).toEqual({ a: 2 });
     expect(run.reviewedShotRev).toEqual({ a: 3 }); // 第 3 轮 rev 定稿
     expect(run.status).toBe("done");
+  });
+});
+
+describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () => {
+  const SCRIPT = "# 剧本";
+
+  it("未达标 → revise_script → 复评达标：写收口快照、按 pass 收敛", async () => {
+    reviewScript
+      .mockResolvedValueOnce({
+        verdict: {
+          pass: false,
+          issues: ["高潮缺失"],
+          suggestion: "补对峙",
+          scoredAt: "t1",
+        },
+        history: [],
+      })
+      .mockResolvedValueOnce({
+        verdict: {
+          pass: true,
+          issues: [],
+          suggestion: "",
+          scoredAt: "t2",
+        },
+        history: [],
+      });
+    reviseScript.mockResolvedValue("# 改写后的剧本");
+    await seed(
+      { scriptMarkdown: SCRIPT },
+      {
+        status: "running",
+        approvalMode: "auto",
+        autoReview: true,
+      },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(reviewScript).toHaveBeenCalledTimes(2); // 首评 + 改写后复评
+    expect(reviseScript).toHaveBeenCalledTimes(1);
+    const row = await readRow();
+    const run = normalizeProductionRun(row!.run);
+    expect(run.scriptReviewAttempts).toBe(2);
+    expect(run.scriptRevisionPending).toBe(false);
+    expect(run.scriptReviewDigest).toBe(scriptDigestOf(SCRIPT)); // 收口快照 = 当前剧本指纹
+    // 改写真的写回了剧本列（reviseScript 执行器在真实评审器里落库；这里 mock 掉，
+    // 剧本列不变 → 收口快照与指纹一致即可收敛）
+    expect(row!.scriptMarkdown).toBe(SCRIPT);
+  });
+
+  it("持续不达标：改写轮次封顶 REVIEW_MAX_RETRY 后保留当前版本、不再返工", async () => {
+    reviewScript.mockResolvedValue({
+      verdict: {
+        pass: false,
+        issues: ["弱"],
+        suggestion: "加强",
+        scoredAt: "t",
+      },
+      history: [],
+    });
+    reviseScript.mockResolvedValue("# 又一版剧本");
+    await seed(
+      { scriptMarkdown: SCRIPT },
+      {
+        status: "running",
+        approvalMode: "auto",
+        autoReview: true,
+      },
+    );
+    await advanceRunLoop(USER, PROJ);
+    // REVIEW_MAX_RETRY=2 → 评审 3 次（fail→改写、fail→改写、达上限保留），改写 2 次。
+    expect(reviewScript).toHaveBeenCalledTimes(3);
+    expect(reviseScript).toHaveBeenCalledTimes(2);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.scriptReviewAttempts).toBe(3);
+    expect(run.scriptRevisionPending).toBe(false);
+    expect(run.scriptReviewDigest).toBe(scriptDigestOf(SCRIPT)); // 达上限：保留并收口
+  });
+
+  it("分镜联动：剧本评审收口后指纹落后于分镜快照 → 重排分镜（下游吃到新剧本）", async () => {
+    const revised = "# 改写定稿后的剧本";
+    reviewScript
+      .mockResolvedValueOnce({
+        verdict: {
+          pass: true,
+          issues: [],
+          suggestion: "",
+          scoredAt: "t1",
+        },
+        history: [],
+      })
+      .mockResolvedValueOnce({
+        verdict: {
+          pass: true,
+          issues: [],
+          suggestion: "",
+          scoredAt: "t2",
+        },
+        history: [],
+      });
+    completeLLMStructured.mockResolvedValueOnce([{ description: "日景街拍" }]); // plan_storyboard（新剧本；角色步因已有角色被规划器跳过）
+    await seed(
+      {
+        scriptMarkdown: revised,
+        characters: [{ id: "c1" }],
+        shots: [{ id: "old", index: 0, prompt: "旧剧本的镜", rev: 0 }],
+        rendered: false,
+      },
+      {
+        status: "running",
+        approvalMode: "auto",
+        autoReview: true,
+        storyboardScriptDigest: scriptDigestOf("# 旧剧本"), // 分镜还停在旧版
+      },
+    );
+    await advanceRunLoop(USER, PROJ);
+    // 首个动作就是 review_script（指纹 ≠ 收口快照），收口后分镜被重排。
+    expect(reviewScript).toHaveBeenCalledTimes(1);
+    expect(scriptDigestOf(revised)).not.toBe(scriptDigestOf("# 旧剧本"));
+    const row = await readRow();
+    const shots = row!.shots as { id: string; prompt: string }[];
+    expect(shots.some((s) => s.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
+    const run = normalizeProductionRun(row!.run);
+    expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));
   });
 });
