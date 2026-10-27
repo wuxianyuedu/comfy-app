@@ -110,6 +110,12 @@ describe("缓存槽的配额与淘汰（契约）", () => {
     ).toBe(false);
     expect(/export const SLOT_TTL_MS\s*=/.test(src)).toBe(false);
     expect(/export const SLOT_USED_FILE\s*=/.test(src)).toBe(false);
+    /* 空壳谓词同理：两处各写一份的表现是「读数说这几个被 TTL 挡着、执行却无条件回收」
+     * （ISSUE #2494）—— 所以它也只能住在读数侧，执行档按名字 import。 */
+    expect(
+      /function isUselessShell\s*\(/.test(src),
+      "`ci-slot-apply.mjs` 里又写了一份空壳谓词 —— 它该从读数那一侧取（`ci-cache-slot.mjs`）",
+    ).toBe(false);
     expect(src).toContain('from "./ci-cache-slot.mjs"');
     /* 数字本身也钉住：改它是**改策略**，得走人，不许悄悄改。 */
     expect(MAX_SLOT_KEYS).toBe(4);
@@ -160,6 +166,46 @@ describe("缓存槽的配额与淘汰（契约）", () => {
       expect(existsSync(path.join(cache, "空壳"))).toBe(false);
       expect(existsSync(path.join(cache, "有锁的空壳"))).toBe(true);
       expect(existsSync(path.join(cache, "新的空壳"))).toBe(true);
+    } finally {
+      rmSync(cache, { recursive: true, force: true });
+    }
+  });
+
+  it("超额切片里的空壳不算「被 TTL 挡着」（执行档对它无条件回收，ISSUE #2494）", () => {
+    const cache = mkdtempSync(path.join(tmpdir(), "slot-shell-held-"));
+    try {
+      const now = 10 * 24 * 60 * 60 * 1000;
+      /* 四个可用键都在闸门内；空壳没有邮票（`expired=false`），旧读数把它也念成
+       * 「被 TTL 挡着」。当前键不在盘上 ⇒ 预算 = 配额 - 1 = 3 ⇒ 超额切片是 [d, 空壳]。 */
+      for (const [i, k] of ["a", "b", "c", "d"].entries()) {
+        makeSlot(cache, k, {
+          tree: true,
+          fingerprint: k,
+          stamp: now - (i + 1) * 60_000,
+        });
+      }
+      makeSlot(cache, "空壳", { mtime: now - SLOT_TTL_MS - 60_000 });
+
+      const slots = listSlots({
+        cacheRoot: cache,
+        now,
+        currentKey: "还没建的键",
+      });
+      const out = pruneSlots({
+        cacheRoot: cache,
+        currentKey: "还没建的键",
+        now,
+      });
+
+      expect(slots.count).toBe(5);
+      expect(slots.emptyCount).toBe(1);
+      expect(slots.keys.find((k) => k.key === "空壳")?.shell).toBe(true);
+      expect(slots.overQuota).toBe(2);
+      /* 两份读数说的是同一件事：执行档只留下 d（还在闸门内），空壳当场回收。 */
+      expect(slots.heldByTtl).toBe(1);
+      expect(out.held).toEqual(["d"]);
+      expect(out.evicted).toEqual(["空壳"]);
+      expect(slots.heldByTtl).toBe(out.held.length);
     } finally {
       rmSync(cache, { recursive: true, force: true });
     }

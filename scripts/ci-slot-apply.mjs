@@ -67,6 +67,7 @@ import {
 } from "./ci-deps-face.mjs";
 import { linkDependencies, unlinkDependencies } from "./base-check.mjs";
 import {
+  isUselessShell,
   MAX_SLOT_KEYS,
   planSlot,
   readSlotState,
@@ -74,13 +75,14 @@ import {
   sameVolumeAs,
   slotLastUsed,
   slotPath,
+  SLOT_LOCK_FILE,
   SLOT_TTL_MS,
   SLOT_USED_FILE,
 } from "./ci-cache-slot.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
-/* 「配额是几个」「TTL 是多久」「读一个槽的现状」这几份**策略与读数**住在读数那一侧
- * （`ci-cache-slot.mjs`）—— 执行档从那里取，不另抄一份。漂了之后的表现是
+/* 「配额是几个」「TTL 是多久」「读一个槽的现状」「空壳怎么判」这几份**策略与读数**住在读数
+ * 那一侧（`ci-cache-slot.mjs`）—— 执行档从那里取，不另抄一份。漂了之后的表现是
  * 「读数说够、执行按另一份算」，而淘汰那一刀是**会删盘**的动作。
  * 旧调用点不必跟着改：这三个名字照旧从这里转出。 */
 export {
@@ -103,7 +105,6 @@ export const FREE_SPACE_FLOOR_BYTES = 20 * 1024 ** 3;
 /** 锁的失效时刻（毫秒）：拿着一把没主的锁比没有锁更坏，所以给一个明确的过期。 */
 export const LOCK_STALE_MS = 20 * 60 * 1000;
 
-const LOCK_FILE = ".ci-slot.lock";
 const JOB_HOOK_SCRIPT = path.join("scripts", "install-git-hooks.mjs");
 
 /**
@@ -241,7 +242,7 @@ function errCode(err) {
 export function acquireSlotLock(io) {
   const { slot, staleMs = LOCK_STALE_MS } = io;
   const now = io.now ? io.now() : Date.now();
-  const file = path.join(slot, LOCK_FILE);
+  const file = path.join(slot, SLOT_LOCK_FILE);
   const release = () => {
     try {
       fs.rmSync(file, { force: true });
@@ -371,42 +372,11 @@ export function markSlotUsed(slot, now = Date.now()) {
  */
 
 /**
- * 这个槽是不是一个**没人要的空壳**（崩在半路的安装留下的那种）。
- *
- * 三个条件缺一不可：
- * - **没有产物也没有指纹** —— 里面没有可用依赖树 ⇒ 没有任何作业会命中它；
- * - **没有锁** —— 锁是「有人正在往里装」的唯一出处（`acquireSlotLock` 写的）；
- * - **目录 mtime 过了 TTL** —— 「建目录」与「拿锁」之间有一个窗口，一个刚建出来的
- *   空目录不该被当成垃圾。
- *
- * ⚠️ **mtime 在这一档里是可用的**，而在「按最近使用淘汰」那一档里不可用 ——
- * 差别在于**这一档只判空壳**：没有产物的目录里没有任何东西值得保护，而目录自己
- * 的 mtime 就是「它从哪儿来」的证据。上一档（按 mtime 做 LRU）栽的坑是
- * 「天天被命中的热键看起来最旧」—— 那是在**有产物**的目录上按 mtime 排序。
- *
- * @param {string} abs 槽目录的绝对路径
- * @param {number} now @param {number} ttlMs
- * @returns {boolean}
+ * **空壳谓词**（`isUselessShell`）也搬到了读数那一侧（`ci-cache-slot.mjs`）—— 它是同一份
+ * 策略，而读数 `listSlots` 现在要用它把空壳从 `heldByTtl` 里剔掉（ISSUE #2494：
+ * 读数说「被 TTL 挡着」、执行却无条件回收，两句结论同时打印在同一份盘上）。
+ * 本文件按名字从那里 import，`pruneSlots` 的回收行为一个字没变。
  */
-function isUselessShell(abs, now, ttlMs) {
-  const state = readSlotState(abs);
-  /* 有产物、有指纹、或读不动 ⇒ 一律不碰（读不动尤其不能碰：那是「不知道」）。 */
-  if (state.treePresent || state.fingerprint !== null || state.unreadable) {
-    return false;
-  }
-  try {
-    if (fs.existsSync(path.join(abs, LOCK_FILE))) return false;
-  } catch {
-    return false;
-  }
-  let mtime = 0;
-  try {
-    mtime = fs.statSync(abs).mtimeMs;
-  } catch {
-    return false;
-  }
-  return now - mtime >= ttlMs;
-}
 
 /**
  * 删一个槽目录。删不掉就回 `false` —— 调用方把「删不掉」记成「留着」，
