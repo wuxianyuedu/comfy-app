@@ -99,16 +99,20 @@ describe("允许写脏的名单", () => {
     expect(underWriter("docs/generated-notes/x.md", allow)).toBe(false);
   });
 
-  it("现役名单放行得了 prettier 档实际写过的文件（outputs 曾写成 glob 而放行不了任何文件，ISSUE #2378）", () => {
-    /* 本单的现场：prettier 档修的 `src/components/…` 不在允许名单里 ⇒ 工作区出处
-     * 那一格红在「名单外的写者」，而真凶是登记表里 `src/**` 这个 glob 形态
-     * （`underWriter` 是字面前缀匹配）。这条断的是**现役名单对真文件的资格**，
-     * 登记表再改回 glob 会当场红。 */
+  it("现役名单只放行「源 → 产物」那档；**源文件不再有任何合法写者**（ISSUE #2610）", () => {
+    /* 这条以前断的是反面：prettier 档修的 `src/components/…` **必须**在名单里 ——
+     * 当时它红在「名单外的写者」，而真凶是登记表里把 outputs 写成 glob 形态
+     * （`underWriter` 是字面前缀匹配，`src/**` 放行不了任何文件，ISSUE #2378）。
+     * #2610 之后那个写者被整个摘掉（委托回写在 PR 事件上发不出去），于是这里翻成
+     * 一条**更严**的断言：平台再没有任何一格有资格写 `src/` 或 `.storybook/`。
+     * 谁把 autofix 请回来，这条会红 —— 那正是它现在的作用。 */
     const prefixes = writerPrefixes();
     expect(
       underWriter("src/components/studio/ProjectOutputs.test.tsx", prefixes),
-    ).toBe(true);
-    expect(underWriter(".storybook/preview.ts", prefixes)).toBe(true);
+      "src/ 又出现在「CI 会改写的面」名单里 —— #2610 之后平台不许写源文件，" +
+        "要恢复自动修先得有能推出去的凭据（ISSUE #2551）",
+    ).toBe(false);
+    expect(underWriter(".storybook/preview.ts", prefixes)).toBe(false);
     /* 生成物档的既有前缀不受影响。 */
     expect(underWriter("docs/generated/launch-and-build.md", prefixes)).toBe(
       true,
