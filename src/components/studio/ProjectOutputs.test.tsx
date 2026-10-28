@@ -33,6 +33,7 @@ function makeOutputs(n: number): ProjectOutputItem[] {
       cfg: null,
       checkpoint: null,
       referenceImages: [],
+      parentId: null,
       images: [],
     }),
   );
