@@ -204,7 +204,7 @@ export function cancelledCause(stage) {
       kind: "cancelled",
       reason: error || null,
       holder,
-      sn: holder && /^cnb-/.test(holder) ? holder : null,
+      sn: holder && holder.startsWith("cnb-") ? holder : null,
     };
   }
   /* ② 状态是 error，但原话是「被另一条流水线拿走了锁 / 被终止」⇒ 仍然是取消。
@@ -214,7 +214,7 @@ export function cancelledCause(stage) {
       kind: "cancelled",
       reason: error || null,
       holder,
-      sn: holder && /^cnb-/.test(holder) ? holder : null,
+      sn: holder && holder.startsWith("cnb-") ? holder : null,
     };
   }
   if (FAILED_STATES.has(status)) {

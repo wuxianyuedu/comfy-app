@@ -64,7 +64,7 @@ const HINT_LINES = 400;
  *  字符以便定位)。 */
 function bracketDepths(lines) {
   /** 每行结束时的括号深度(从函数起始行开始累计)。 */
-  const depthAtLine = new Array(lines.length).fill(0);
+  const depthAtLine = Array.from({ length: lines.length }, () => 0);
   let depth = 0;
   /** 跨行的块注释/模板字符串状态。 */
   let inBlock = false;

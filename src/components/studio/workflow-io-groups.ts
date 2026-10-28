@@ -418,7 +418,7 @@ export function inferGroups(widgets: EnrichedWidget[]): {
   }
   const rest = widgets.filter((widget) => !dimKeys.has(widget.ioKey));
   const video = inferVideoGroup(rest);
-  const groupedKeys = new Set<string>([...dimKeys]);
+  const groupedKeys = new Set<string>(dimKeys);
   if (video) {
     if (video.length) groupedKeys.add(video.length.ioKey);
     if (video.aspect) groupedKeys.add(video.aspect.ioKey);

@@ -304,7 +304,8 @@ export function imagePlan({
     `# 由 node scripts/ci-image-plan.mjs 生成 —— 别手改这份文件：`,
     `# 版本号全部现读（engines.node / packageManager / pnpm-lock.yaml），改哪一件都回这里重跑。`,
     `# 文档：docs/guides/ci-node-image.md（口径见规范 §13.5.3.4.1.2）`,
-    ...[...dockerfileHint(), ""],
+    ...dockerfileHint(),
+    "",
   ];
   const lines = [
     ...header,

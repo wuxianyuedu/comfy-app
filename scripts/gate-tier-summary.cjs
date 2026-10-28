@@ -105,15 +105,13 @@ function summaryLines({ ran, skipped, moved, labels }) {
       "[pre-commit] ⚠ 本地要 A/B/D 全套：COMFY_HEAVY_GATES=1 git commit …（或 pnpm check:all）。",
     );
   }
-  if (moved.length > 0) {
-    for (const id of moved) {
-      out.push(
-        `[pre-commit] ⚠ 组 ${id}（受影响用例）本地不再执行：执行者是平台侧 PR 流水线的「受影响用例」一格`,
-      );
-      out.push(
-        "[pre-commit] ⚠   （scripts/ci-affected-tests.mjs → run-affected-tests.mjs，同一条判决链）。",
-      );
-    }
+  for (const id of moved) {
+    out.push(
+      `[pre-commit] ⚠ 组 ${id}（受影响用例）本地不再执行：执行者是平台侧 PR 流水线的「受影响用例」一格`,
+    );
+    out.push(
+      "[pre-commit] ⚠   （scripts/ci-affected-tests.mjs → run-affected-tests.mjs，同一条判决链）。",
+    );
   }
   /* 「重档见平台」这一句只在**真把重档降下来**的时候念；跑了的就直接列出跑了哪几组。 */
   const heavySkipped = skipped.length > 0;

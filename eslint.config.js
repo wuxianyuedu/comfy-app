@@ -4,6 +4,7 @@ import tseslint from "typescript-eslint";
 import next from "eslint-config-next/core-web-vitals";
 import unusedImports from "eslint-plugin-unused-imports";
 import boundaries from "eslint-plugin-boundaries";
+import unicorn from "eslint-plugin-unicorn";
 
 /** 视图层做**精确订阅**的 store hook 名单（单一出处）。
  *
@@ -546,6 +547,28 @@ export default tseslint.config(
     files: ["scripts/**/*.d.{ts,mts,cts}"],
     rules: {
       "no-unused-vars": "off",
+    },
+  },
+  /* unicorn **部分**收编（#2541 第三批，用户拍板「保留 unicorn 信号」）：
+   * oxlint 评估（见 #2541 第五条评论）后不引第二道 gate，改为在本仓唯一的
+   * eslint 门禁里按需单条引入 unicorn 规则 —— 豁免体系只有一份，规则随
+   * `eslint-plugin-unicorn` 升级自动跟上游。只开 4 条，作用面与 core
+   * recommended 的 scripts 档一致（LINT_FILES + scripts js 面）。
+   *
+   * `unicorn/no-useless-fallback-in-spread` **不开**（台账）：它拦的
+   * `{...(x ?? {})}` / `{...(x || [])}` 在本仓是**刻意的防御兜底**——
+   * 「这个来源可能是 null/undefined」是写在现场的 self-documentation
+   * （22 条现场全在 workflow 参数接线等判据-bearing 的业务代码里），
+   * 删掉运行时等价但丢信息、降防御性。何时可开：若本仓改用显式
+   * `Array.isArray(x) ? x : []` 那类形态表达兜底，再评估。 */
+  {
+    files: [...LINT_FILES, "scripts/**/*.{js,mjs,cjs}"],
+    plugins: { unicorn },
+    rules: {
+      "unicorn/prefer-string-starts-ends-with": "error",
+      "unicorn/no-useless-spread": "error",
+      "unicorn/no-new-array": "error",
+      "unicorn/no-useless-length-check": "error",
     },
   },
   {

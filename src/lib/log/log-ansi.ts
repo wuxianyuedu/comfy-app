@@ -240,8 +240,8 @@ function applySgr(
     .map((p) => (p === "" ? 0 : Number.parseInt(p, 10)))
     .filter((n) => Number.isFinite(n));
 
-  /* 空参数 \x1b[m 等价 \x1b[0m */
-  if (parts.length === 0 || parts.every((n) => n === 0)) {
+  /* 空参数 \x1b[m 等价 \x1b[0m（every() 对空数组返回 true，同档覆盖） */
+  if (parts.every((n) => n === 0)) {
     set({ bold: false, dim: false, italic: false, underline: false });
     return;
   }
