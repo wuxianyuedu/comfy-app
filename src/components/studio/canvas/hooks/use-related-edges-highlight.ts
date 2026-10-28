@@ -203,7 +203,8 @@ export function useRelatedEdgesHighlight(
         }
         const data = node.data as Record<string, unknown> | undefined;
         const previousTable = data?.[NODE_PORT_FOCUS_DATA_KEY] as
-          Record<string, EdgeFocusRole> | undefined;
+          | Record<string, EdgeFocusRole>
+          | undefined;
         /* 没有端口标记且本来就没有字段 → 原样返回，不制造无意义的新对象。 */
         const previousActive = data?.[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
         const activeUpToDate = focusActive ? previousActive : !previousActive;

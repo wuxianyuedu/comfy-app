@@ -154,7 +154,8 @@ describe("uploadMaterial", () => {
     });
     const fd2 = (
       (fetchMock.mock.calls[1] as unknown[] | undefined)?.[1] as
-        RequestInit | undefined
+        | RequestInit
+        | undefined
     )?.body as FormData;
     expect(fd2.get("shared")).toBe("true");
   });

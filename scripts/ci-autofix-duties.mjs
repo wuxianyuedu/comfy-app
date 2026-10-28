@@ -87,7 +87,7 @@ import path from "node:path";
 /** @type {ReadonlyArray<AutofixDuty>} */
 export const AUTOFIX_DUTIES = [
   {
-    stage: "prettier 格式",
+    stage: "oxfmt 格式",
     entry: "scripts/ci-format-fixup.mjs",
     args: ["--check", "--autofix"],
     /* ⚠️ 字面目录前缀，不是 glob（ISSUE #2378）：消费方 `underWriter()` 是

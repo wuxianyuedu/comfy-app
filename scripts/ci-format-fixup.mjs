@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ci-format-fixup.mjs — `prettier 格式` 一格的**自动修复 + 回写 PR 分支**执行者
+ * ci-format-fixup.mjs — `oxfmt 格式` 一格的**自动修复 + 回写 PR 分支**执行者
  * （ISSUE #2342；口径变更由业主拍板：§13.5.19 的「CI 回写分支」留白在本档解除）。
  *
  * ## 形状（§13.5.19 的「--check --autofix = 先判、红就修、结论永远来自第二次判定」；
@@ -115,7 +115,7 @@ function defaultJudge() {
 /** 默认的「列出未过文件」：门禁自己的 collectUnformatted（白名单过滤同源）。 */
 function defaultListUnformatted() {
   const fmt = requireCheckFormat();
-  const entry = fmt.resolvePrettierEntry();
+  const entry = fmt.resolveOxfmtEntry();
   if (!entry) return null;
   return fmt.collectUnformatted(entry);
 }
@@ -133,14 +133,9 @@ function defaultWrite(files, entry) {
     const chunk = files.slice(i, i + 50);
     const r = spawnSync(
       process.execPath,
-      [
-        entry,
-        "--write",
-        "--cache",
-        "--cache-location",
-        path.join(ROOT, "node_modules", ".cache", "prettier-gate.json"),
-        ...chunk,
-      ],
+      // oxfmt 默认就是写盘（不带 --check 即写），没有 --cache / --cache-location
+      // 这一档（全量 ~1s，缓存键不划算）；分片仍为 50 个一块（Windows 命令行长度上限）。
+      [entry, ...chunk],
       {
         cwd: ROOT,
         encoding: "utf8",
@@ -578,16 +573,16 @@ export function runFormatFixup(deps = {}) {
     return { exitCode: 1, action: "inconsistent", lines };
   }
   const fmt = requireCheckFormat();
-  const entry = fmt.resolvePrettierEntry();
+  const entry = fmt.resolveOxfmtEntry();
   if (!entry) {
     /* 与门禁本体同一条 fail-closed：取不到 prettier = 判据没跑成，不是「干净」。 */
     log(
-      "[format-fixup] × 找不到 prettier 入口 —— 修不了也判不了，转 2（不冒充任何结论）。",
+      "[format-fixup] × 找不到 oxfmt 入口 —— 修不了也判不了，转 2（不冒充任何结论）。",
     );
-    return { exitCode: 2, action: "no-prettier-entry", lines };
+    return { exitCode: 2, action: "no-oxfmt-entry", lines };
   }
   if (!write(files, entry)) {
-    log("[format-fixup] × prettier --write 失败 —— 照旧红，不提交不推送。");
+    log("[format-fixup] × oxfmt 写盘失败 —— 照旧红，不提交不推送。");
     return { exitCode: 1, action: "write-failed", lines };
   }
 

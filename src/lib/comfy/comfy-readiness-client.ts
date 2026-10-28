@@ -25,7 +25,8 @@ export const COMFY_READY_TIMEOUT_MS = 180_000;
 export const COMFY_READY_POLL_MS = 2_000;
 
 export type ComfyReadyResult =
-  { ok: true } | { ok: false; pending: boolean; message: string };
+  | { ok: true }
+  | { ok: false; pending: boolean; message: string };
 
 interface EnsureBody {
   ok?: unknown;

@@ -71,7 +71,8 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
     await expect.poll(() => onCharactersChange.mock.calls.length).toBe(1);
 
     const listArg = onCharactersChange.mock.calls[0]?.[0] as
-      Character[] | undefined;
+      | Character[]
+      | undefined;
     expect(listArg).toBeDefined();
     const first = listArg?.[0];
     expect(first).toBeDefined();

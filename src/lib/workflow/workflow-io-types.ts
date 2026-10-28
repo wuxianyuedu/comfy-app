@@ -110,7 +110,8 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
      * 往返 —— 下游读哪个都能读通，于是「谁是权威」永远说不清（而 `.loose()`
      * 会让它一路透传回写库）。 */
     const legacy = rec.modes as
-      Record<string, WorkflowIOModeOverride> | undefined;
+      | Record<string, WorkflowIOModeOverride>
+      | undefined;
     delete rec.modes;
     if (entry.modeOverrides === undefined && legacy !== undefined) {
       entry.modeOverrides = legacy;

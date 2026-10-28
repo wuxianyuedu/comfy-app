@@ -208,7 +208,8 @@ export function RgthreePowerLoraLoaderBody({
             typeof widget === "string"
               ? widget
               : (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as
-                  string | undefined) ?? "");
+                  | string
+                  | undefined) ?? "");
           const modelStr = isObj
             ? fmtStrength(
                 rec?.model_strength ?? rec?.model_str ?? rec?.strength,

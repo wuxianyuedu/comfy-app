@@ -28,7 +28,12 @@ export const SCHEMA_SYNC_IDLE_MS = 30_000;
 
 /** 与 `scripts/db-schema-state.mjs` 的 `ensureSchemaCurrent` 返回值一一对应。 */
 export type SchemaSyncPhase =
-  "syncing" | "ready" | "synced" | "missing" | "stale" | "unknown";
+  | "syncing"
+  | "ready"
+  | "synced"
+  | "missing"
+  | "stale"
+  | "unknown";
 
 export interface SchemaSyncStatus {
   phase: SchemaSyncPhase;

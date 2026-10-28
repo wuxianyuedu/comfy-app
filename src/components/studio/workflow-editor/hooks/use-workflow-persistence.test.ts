@@ -85,7 +85,8 @@ function readWrittenPositions(
   detail: WorkflowDetail,
 ) {
   const updater = setDetail.mock.calls.at(-1)?.[0] as
-    ((prev: WorkflowDetail | null) => WorkflowDetail | null) | undefined;
+    | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
+    | undefined;
   if (!updater) return undefined;
   return updater(detail)?.positions;
 }

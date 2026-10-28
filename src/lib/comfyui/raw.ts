@@ -285,7 +285,8 @@ export function extractPositions(
  * 少数新版（V3 schema）会给对象形式 `{ type: "INT", … }`，这里两种都兼容。
  */
 export type ObjectInfoInputSpec =
-  [unknown, Record<string, unknown>?] | Record<string, unknown>;
+  | [unknown, Record<string, unknown>?]
+  | Record<string, unknown>;
 
 export interface ObjectInfoClassDef {
   input_order?: { required?: string[]; optional?: string[] };

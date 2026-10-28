@@ -164,7 +164,8 @@ export function useHistoryList(): HistoryListController {
     }),
   );
   const modeContracts = (contractsQ.data?.contracts ?? null) as
-    readonly ModeContract[] | null;
+    | readonly ModeContract[]
+    | null;
 
   const filtered = useMemo(
     () => sortTasks(filterTasks(tasks, filter), sort),
