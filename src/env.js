@@ -4,19 +4,41 @@ import { z } from "zod";
 // ── 缺 .env 时给出一句人话，而不是一屏 zod 校验明细 ────────────
 // 仅 Node.js runtime 执行（Edge runtime 无文件系统与 node:* 内置模块，
 // 环境变量由平台注入，不存在本地 .env 文件）。
-if (process.env.NEXT_RUNTIME !== "edge") {
+//
+// ⚠️ `SKIP_ENV_VALIDATION` 的短路**必须排在路径计算之前**（ISSUE #2599）：这一格的
+// 语义是「整段跳过」，而原来写成「先算路径、只在用结果时看旗标」—— 于是被打包后
+// 路径那一句自己就抛 `ERR_INVALID_ARG_TYPE`，两个显式设了这枚旗标的执行者
+// （`.cnb.yml` 的构建、`standalone-runtime-env.mjs` 的桌包运行期）一个都躲不掉。
+if (process.env.NEXT_RUNTIME !== "edge" && !process.env.SKIP_ENV_VALIDATION) {
   const { existsSync } = await import("node:fs");
-  const { join } = await import("node:path");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
 
   // 本文件位于 <项目根>/src/env.js，据此定位项目根以探测 .env。
-  const envFilePath = join(import.meta.dirname, "..", ".env");
-  if (!process.env.SKIP_ENV_VALIDATION && !existsSync(envFilePath)) {
+  //
+  // ⚠️ 形态只能是 `import.meta.url`，**不能是 `import.meta.dirname` /
+  // `import.meta.filename`**：那两位是 Node 的 **ESM 运行时**属性，而本文件会被
+  // Turbopack 打包重写 —— 产物里只给它合成一个 `url` 取值器
+  // （`__turbopack_context__.F("src/env.js")`），`dirname` 是 `undefined`，
+  // `join(undefined, …)` 直接死在 collect page data 上（ISSUE #2599）。
+  // `scripts/**` 里用 `import.meta.dirname` 是对的（纯 Node 宿主，不进打包图），
+  // 这条边界由 `tests/env-import-meta-shape.test.ts` 钉着。
+  const envFilePath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    ".env",
+  );
+  if (!existsSync(envFilePath)) {
     // 提示必须跨平台（ISSUE #489）：这里原本指着「双击 tools/start/run-local.ps1」，
     // 而那是 Windows 专属入口 —— Linux / macOS / CI 上并不存在（规范 §9 的
     // Web-only 模式明确不依赖任何 .ps1）。`pnpm env:init` 三平台同一条命令。
     const err = new Error(
       [
         "缺少 .env 环境配置文件，应用无法启动。",
+        // 念出**探测的是哪一个目录**：这句话的语义是「本模块源文件所在 src 的父目录」，
+        // 而出厂件里 `SKIP_ENV_VALIDATION` 由装配注入 —— 真报出这一句说明那条注入没生效
+        //（规范 §7.6 那一族的现场），路径就是分诊要的第一样东西。
+        `（探测的路径：${envFilePath}）`,
         "",
         "生成它（三平台同一条命令，跨平台、无需任何 .ps1）：",
         "  pnpm env:init",
