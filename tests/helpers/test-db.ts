@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS workshopSession (
   id TEXT PRIMARY KEY, userId TEXT, title TEXT NOT NULL DEFAULT '未命名工坊项目', type TEXT NOT NULL DEFAULT 'short_video',
   tone TEXT NOT NULL DEFAULT '', logline TEXT NOT NULL DEFAULT '', idea TEXT NOT NULL DEFAULT '',
   scriptMarkdown TEXT NOT NULL DEFAULT '', scenes TEXT NOT NULL DEFAULT '[]', characters TEXT NOT NULL DEFAULT '[]',
-  shots TEXT NOT NULL DEFAULT '[]', stage TEXT NOT NULL DEFAULT 'script', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+  shots TEXT NOT NULL DEFAULT '[]', stage TEXT NOT NULL DEFAULT 'script', projectId TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS workshopDraft (
   id TEXT PRIMARY KEY, userId TEXT, title TEXT NOT NULL DEFAULT '未命名工坊项目', type TEXT NOT NULL DEFAULT 'short_video',
