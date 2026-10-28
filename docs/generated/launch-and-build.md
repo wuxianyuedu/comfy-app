@@ -2866,7 +2866,12 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 产物 / `check-bundle-budget.cjs` 体积棘轮）。**发布只能排在它绿之后** —— 也不许带
 `--no-bundle`（带上就回到「只有 `app.exe`、没有安装包」的原点）。
 
-**实测读数（2026-10-27 本机，同一次运行内分段计时；不是预估）**：
+**实测读数（基线 `47c8d99a`，2026-10-27 本机，同一次运行内分段计时；不是预估）**：
+
+> ⚠️ **这张表的数不带到今天**。同日落地的 `dbea217c`（ISSUE #2542）把 Turbopack 的插件运行时
+> 换成 `workerThreads`，它自己记的读数是 **`next build` 冷 88s→43s / 暖 83s→36s** ——
+> 也就是下面「产物装配 225.9s（其中 `1/4` 那条链 152.9s）」这一行今天会明显偏大。
+> 要今天的数就照本节末那两条命令再跑一次，**别引用本表**（AGENTS「文档里的秒数都要带出处问一句」）。
 
 | 段 | 入口 | 读数 |
 | --- | --- | --- |
@@ -2884,7 +2889,7 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动
 把这台机的工具缓存一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。
 
-**把工具预置进缓存之后，nsis 那格第一次有了读数**（同一台机、`pnpm exec tauri bundle` ——
+**把工具预置进缓存之后，nsis 那格第一次有了读数**（基线 `1ed9074d`；同一台机、`pnpm exec tauri bundle` ——
 只重打包不重装配，跑前先 `check-standalone-contents.cjs` 确认两层干净，见 §7.6 那条警告）：
 
 | 段 | 读数 |
@@ -2926,7 +2931,7 @@ tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri
 而不是「今天取不到工具」—— 这就是把 `NSIS_PLAN` 里那两个哈希钉死的用处；
 同批改 `NSIS_PLAN` 是唯一出路，别在作业里顺手装一个旧版本上去。
 
-**这一格自己的实测读数**（2026-10-27 本机：删空缓存 → 跑 `ensure` → 只出 nsis 打一次包）：
+**这一格自己的实测读数**（基线 `f772059b`，2026-10-27 本机：删空缓存 → 跑 `ensure` → 只出 nsis 打一次包）：
 
 ```
 [工具缓存] 缺 6 件：NSIS.exe, makensis.exe, Include/MUI2.nsh, Include/FileFunc.nsh,

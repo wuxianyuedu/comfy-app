@@ -50,7 +50,7 @@ describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
     expect(r.output).toContain(SOURCE);
     expect(r.output).toContain(TWIN);
     /* 出路必须是执行者写得下的那一条命令，不是「检查一下」这类无从落地的话。 */
-    expect(r.output).toContain("pnpm doc:render");
+    expect(r.output).toContain("doc:render -- --only");
     expect(r.output).toContain("不要手改生成物");
   });
 
@@ -214,6 +214,6 @@ describe("接线", () => {
     /* 这一条改的是源而没带镜像 ⇒ 该拦；旗标不许把它放过去。 */
     expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("旗标作废");
-    expect(r.output).toContain("pnpm doc:render");
+    expect(r.output).toContain("doc:render -- --only");
   });
 });
