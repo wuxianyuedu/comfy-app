@@ -617,6 +617,31 @@ export function registeredDailyGateOrder(text: string): string[] {
 }
 
 /**
+ * push 档（`master 合并复核` 流水线）的清单（`COMFYAPP_CI_PUSH_GATES`，顺序即执行序）。
+ *
+ * 2026-10-28 起 push 档从「只有合并形态复核一格」扩成「树级校验档」（形态 + 前提安装 +
+ * 文档链三格 + 工作区出处），判的是**合并后的树**，不是「这次改动」（PR 档）也不是
+ * 「今天的 master 全量健康」（每日档）。与每日清单同一份解析形态、同一个坑：
+ * 声明与事实（`pipelineStageNames(text, "master 合并复核")`）双向核对，只读一份时
+ * 另一份漂了没人红。
+ *
+ * @param text `.cnb.yml` 原文
+ * @returns stage 名（已 trim）；`[]` = 键不在（调用方据此判红）
+ */
+export function registeredPushGateOrder(text: string): string[] {
+  const m =
+    /^[ \t]*COMFYAPP_CI_PUSH_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
+      text,
+    );
+  const body = m?.[1];
+  if (body === undefined) return [];
+  return body
+    .split(",")
+    .map((n) => n.trim())
+    .filter(Boolean);
+}
+
+/**
  * 某个**流水线**块里 `stages:` 的直接子项名字（按出现顺序）。
  *
  * 为什么要单独一个解析器：`registeredGateOrder()` 读的是 `env` 里那份**声明**，
@@ -1111,9 +1136,11 @@ export function pipelineLockAssignments(text: string): Array<{
  *  · **R5** PR 那一条仍然用带 `CNB_PULL_REQUEST_IID` 的模板（PR 粒度不许回退成
  *    「全仓一把」，那是 #1981 修掉的第一个 bug）；
  *  · **R6** `push` 那把锁必须是 `cancel-in-progress: false`（ISSUE #2396）。
- *    这一档守的是「落到 master 的是不是 PR 合并形态」，读数**逐提交**给：终止旧的一跑
- *    = 把前一笔的结论删掉，而重跑它的成本整条只有 20~35 秒。若哪天它扩成多格、
- *    成本上去了，先改这一条与规范 §13.5.3.10，而不是把 `true` 悄悄写回来。
+ *    这一档的读数**逐提交**给：终止旧的一跑 = 把前一笔的结论删掉。2026-10-28 起
+ *    这一档扩成了「树级校验档」（形态 + 安装 + 文档链 + 工作区出处，见
+ *    `COMFYAPP_CI_PUSH_GATES`），重跑成本不再是当年的 20~35 秒 —— 这让 R6 **更不能松**：
+ *    成本越高，终止销毁的结论越贵。（当年那句「若哪天它扩成多格、成本上去了，
+ *    先改这一条与规范 §13.5.3.10」指的就是这次：判据本身不变，规范与本注释同批订正。）
  *
  * @param text `.cnb.yml` 原文
  * @param prIid 用来模拟一次 PR 事件的编号（默认任取一个，只用于比对形状）
@@ -1425,6 +1452,53 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "探针 A 的锁定义里没有 `cancel-in-progress: false` —— 它测的就是这个值，改成 `true` 等于把问题掐掉",
       ).toMatch(/cancel-in-progress:\s*false/);
     }
+  });
+
+  it("push 档跑的就是 `COMFYAPP_CI_PUSH_GATES` 那几格（声明与事实双向核对）", () => {
+    /* 2026-10-28 起 push 档从「只有合并形态复核一格」扩成「树级校验档」：
+     * 形态复核 + 前提安装 + 文档链三格 + 工作区出处，判的是**合并后的树**。
+     * 与每日清单同一套双向核对：声明（env 里的清单）与事实（流水线里真的在跑的
+     * stage）只读一份时另一份漂了没人红 —— 名字留在清单、格子被删，账面全绿而
+     * 执行面是空的，正是本仓最不能有的形态。 */
+    const text = readRegisteredConfig();
+    const declared = registeredPushGateOrder(text);
+    expect(
+      declared.length,
+      "解析不出 COMFYAPP_CI_PUSH_GATES —— 键被删了或换了形状，这条判据就没有对象了",
+    ).toBeGreaterThan(0);
+    const actual = pipelineStageNames(text, "master 合并复核");
+    expect(
+      actual,
+      "push 流水线的 stage 名单与 `COMFYAPP_CI_PUSH_GATES` 不一致" +
+        "（缺一格 = 声明在吹牛；多一格 = 没登记就上了线）",
+    ).toEqual(declared);
+
+    /* 顺序约束（前提格先于吃 node_modules 的格子，与每日档同一族）：
+     * `API 文档生成与自检` 要跑 typedoc，而 push 是全新 job 目录、`node_modules`
+     * 恒不在场 —— 安装格必须排在它前面。两个名字都必须取到：取不到就是这一格
+     * 被从清单里删了，顺序判据会退化成永远成立的空判。 */
+    const installAt = declared.indexOf("安装依赖");
+    const apiDocsAt = declared.indexOf("API 文档生成与自检");
+    expect(
+      installAt,
+      "push 清单里没有「安装依赖」—— 前提格被删了",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      apiDocsAt,
+      "push 清单里没有「API 文档生成与自检」—— 这一格如今谁都不判",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      installAt < apiDocsAt,
+      "「安装依赖」必须排在「API 文档生成与自检」之前 —— 否则 typedoc 跑在没有 node_modules 的检出上",
+    ).toBe(true);
+
+    /* `覆盖率上报` 刻意不在这份清单里：它读的是同跑 `受影响用例` 产出的
+     * coverage/lcov.info，push 档不跑测试 ⇒ 挪过去是「报告不在 → 自己跳过」的
+     * 静默空转（红在没人声明过的东西上）。 */
+    expect(
+      declared,
+      "「覆盖率上报」不该出现在 push 清单里 —— push 档没有产出 lcov.info 的格子，它在那里只会静默跳过",
+    ).not.toContain("覆盖率上报");
   });
 
   it("定时 / 手点 / API 三个触发口跑的是同一份清单，而按钮与事件键两两对上", () => {
