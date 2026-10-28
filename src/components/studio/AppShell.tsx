@@ -96,10 +96,10 @@ export interface AppShellProps {
   /** 新建项目 → 建一条 proj_* 并进画布。 */
   onNewProject: () => void;
   /** 主内容。各视图只往这里塞东西，外壳细节（侧栏 / 顶栏 / 滚动容器）不归它们管。 */
-  children: ReactNode; /**
+  children: ReactNode /**
    * 视图页签（浏览器 / dev 形态下由外壳渲染在内容列最顶端的栏，位于 TopBar 之上）。
    * 不传时外壳行为与从前一致。
-   */
+   */;
   viewTabs?: ViewTab[];
   activeViewKey?: string;
   projectNameOf?: (projectId: string | null) => string | null | undefined;

@@ -362,6 +362,12 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       if (/\.(ts|tsx|css)$/.test(e.name)) files.push(p);
     }
   })("src");
+  // ⚠️ 扫描根刻意只有 `src`，**不含** `scripts/**` 与 `tools/**`（ISSUE #2388 的
+  // 显式边界，别当漏补）：判据层注释里的日期绝大多数是**立案现场与实测时点**——
+  // 「这条判据为什么存在、当时量到什么」的证据本身就是带日期的，按 R10 拦掉等于
+  // 把证据链剪掉。业务代码（src）的注释讲「这段代码现在为什么这样」，日期归 git；
+  // 判据层讲「这条规则当时怎么立起来的」，日期是内容。两类注释的时效语义不同，
+  // 不共用一把尺。判据层里真正的历史流水（与证据无关的进度记录）靠 review 把关。
   for (const rel of files) {
     const text = readForScan(rel);
     if (text === null) {

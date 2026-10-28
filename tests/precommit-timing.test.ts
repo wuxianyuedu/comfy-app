@@ -218,7 +218,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
           "--group",
           "C=10000",
           "--step",
-          "prettier 格式硬闸=2900",
+          "oxfmt 格式硬闸=2900",
         ],
         repo,
       );
@@ -227,7 +227,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
     expect(view.code).toBe(0);
     expect(view.out).toContain("总时长：中位数 30.0s");
     expect(view.out).toContain("组 C");
-    expect(view.out).toContain("prettier 格式硬闸");
+    expect(view.out).toContain("oxfmt 格式硬闸");
   });
 
   it("--last N 只展示最近 N 次（但总数照报）", () => {

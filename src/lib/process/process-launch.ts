@@ -50,7 +50,8 @@ elevateLogLevel({
 export type DetachMode = "bound" | "keepAlive";
 
 export type ManagedSpawnResult =
-  { child: ChildProcess; error?: never } | { child?: never; error: string };
+  | { child: ChildProcess; error?: never }
+  | { child?: never; error: string };
 
 export interface ManagedSpawnOptions {
   command: string;

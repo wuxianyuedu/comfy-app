@@ -1,5 +1,5 @@
 /**
- * 提交门槛自检：prettier 格式判据（ISSUE #575 第 9 项 / #1811 收尾 / 规范 §13.5）。
+ * 提交门槛自检：oxfmt 格式判据（ISSUE #575 第 9 项 / #1811 收尾 / 规范 §13.5）。
  *
  * 这一条在 ISSUE #1811 收尾时**从棘轮翻成硬闸**：存量已清零，于是棘轮车道没有
  * 成员 —— `--update` 写回去的永远是一份空账，留下的却是「手改 JSON 就能把新
@@ -15,7 +15,7 @@
  * 规范：docs/standards/13-提交与-code-review.md §13.5
  */
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 import { vi } from "vitest";
 
@@ -30,9 +30,13 @@ import { vi } from "vitest";
  * 仓库 + 基线），所以只能放宽整文件的超时。放宽只影响本文件。 */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
-/** 真实仓里 prettier 的入口（沙箱用例通过 `COMFYAPP_PRETTIER_ENTRY` 借给它）。 */
-const PRETTIER_ENTRY = createRequire(join(process.cwd(), "noop.js")).resolve(
-  "prettier/bin/prettier.cjs",
+/** 真实仓里 oxfmt 的入口（沙箱用例通过 `COMFYAPP_OXFMT_ENTRY` 借给它）。 */
+const OXFMT_ENTRY = join(
+  dirname(
+    createRequire(join(process.cwd(), "noop.js")).resolve("oxfmt/package.json"),
+  ),
+  "bin",
+  "oxfmt",
 );
 
 const { test, expect } = defineGateRepo({
@@ -40,9 +44,9 @@ const { test, expect } = defineGateRepo({
   dirs: ["src/lib"],
   /* 沙箱里没有 `node_modules`，不借这条接缝就会走「入口解析不到 → exit 2」
    * 那一档（那是脚本**正确**的 fail-closed 行为，不是本文件要验的形态）。
-   * 「借不到」那一档由 `run(..., { env: { COMFYAPP_PRETTIER_ENTRY: undefined } })`
+   * 「借不到」那一档由 `run(..., { env: { COMFYAPP_OXFMT_ENTRY: undefined } })`
    * 单独造（见下面两条 fail-closed 用例）。 */
-  env: { COMFYAPP_PRETTIER_ENTRY: PRETTIER_ENTRY },
+  env: { COMFYAPP_OXFMT_ENTRY: OXFMT_ENTRY, COMFYAPP_FORMAT_DEBUG: "1" },
   /* `--staged` 那批用例要读 `git diff --cached` —— 临时工作区必须是个真的 git 仓库。 */
   setup: (repo) => {
     repo.git("init", "-q");
@@ -53,23 +57,24 @@ const { test, expect } = defineGateRepo({
   },
 });
 
-// 脏内容：多余空格 + 多余空行，prettier 一定会改它。
+// 脏内容：多余空格 + 多余空行，oxfmt 一定会改它。
 const DIRTY = "export const PROBE={a:1,\n\n\n  b:2};\n";
 const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 
-describe("prettier 格式判据（硬闸）", () => {
+describe("oxfmt 格式判据（硬闸）", () => {
   test("全库格式干净 → 通过", ({ repo }) => {
     repo.write("src/lib/keep.ts", CLEAN);
     const r = repo.run();
     expect(r.code).toBe(0);
-    expect(r.output).toContain("[ok] prettier 格式");
+    expect(r.output).toContain("[ok] oxfmt 格式");
   });
 
   test("未过格式的文件 → 阻断，并指出是哪个文件", ({ repo }) => {
     repo.write("src/lib/keep.ts", CLEAN);
     repo.write("src/lib/fresh.ts", DIRTY);
     const r = repo.run();
-    expect(r.code).toBe(1);
+    /* 失败信息带上判据自己的读数：本地绿 / CI 红的形态差，没有这批输出只能猜。 */
+    expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/fresh.ts");
     expect(r.output).toContain("个文件未过");
   });
@@ -77,7 +82,7 @@ describe("prettier 格式判据（硬闸）", () => {
   test("把原本干净的文件弄脏 → 同样阻断（没有存量额度）", ({ repo }) => {
     repo.write("src/lib/keep.ts", DIRTY);
     const r = repo.run();
-    expect(r.code).toBe(1);
+    expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/keep.ts");
   });
 
@@ -104,10 +109,10 @@ describe("prettier 格式判据（硬闸）", () => {
      * 命令找不到时退出 1、stdout 为空，而脚本把「空清单」当成「0 个文件未过」
      * 并打 `[format] OK` 退出 0 —— 依赖缺失 / 形态选错的机器上门禁就这样瞎掉。 */
     repo.write("src/lib/keep.ts", CLEAN);
-    const r = repo.run([], { env: { COMFYAPP_PRETTIER_ENTRY: undefined } });
+    const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: undefined } });
     expect(r.code).toBe(2);
-    expect(r.output).toContain("找不到 prettier 入口");
-    expect(r.output).not.toContain("[ok] prettier 格式");
+    expect(r.output).toContain("找不到 oxfmt 入口");
+    expect(r.output).not.toContain("[ok] oxfmt 格式");
   });
 
   test("prettier 退出 1 却一行都没列出来 → exit 2（「没跑成」与「有差异」分开）", ({
@@ -116,19 +121,45 @@ describe("prettier 格式判据（硬闸）", () => {
     /* 沙箱里放一个「只按退出码说话」的假入口：`--list-different` 返回 1 的含义是
      * 「有差异，清单在 stdout」，清单为空就说明这句话不可信。 */
     repo.write("src/lib/keep.ts", CLEAN);
-    const stubRel = "scripts/fake-prettier.cjs";
+    const stubRel = "scripts/fake-oxfmt.cjs";
     repo.write(stubRel, "process.exit(1);\n");
     const stub = join(repo.dir, stubRel);
-    const r = repo.run([], { env: { COMFYAPP_PRETTIER_ENTRY: stub } });
+    const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: stub } });
     expect(r.code).toBe(2);
     expect(r.output).toContain("不是「全库干净」");
-    expect(r.output).not.toContain("[ok] prettier 格式");
+    expect(r.output).not.toContain("[ok] oxfmt 格式");
+  });
+
+  test("oxfmt 清单带 ANSI 颜色码 → 照样认出文件（CI 侧 stdout 着色的形态）", ({
+    repo,
+  }) => {
+    /* 真实发生的失效：CI 侧 oxfmt 给文件名上色
+     * （`\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」过不了
+     * 白名单的路径形态，整张清单被悄悄滤成空 —— 门禁当场读成「命中 0 个」。
+     * 这条用例用假入口复刻那批字节，钉住「剥码在解析之前」。 */
+    const stubRel = "scripts/fake-oxfmt-color.cjs";
+    repo.write(
+      stubRel,
+      'process.stdout.write("' +
+        '\\u001b[38;2;244;191;117;1m' +
+        "src/lib/fresh.ts" +
+        '\\u001b[0m (1ms)\\n"' +
+        ');\nprocess.exit(1);\n',
+    );
+    const stub = join(repo.dir, stubRel);
+    const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: stub } });
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/fresh.ts");
   });
 
   test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({
     repo,
   }) => {
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
+    // 夹具预建了空的 `src/lib`：oxfmt 对「存在但一个可扫文件都没有」的根报
+    // `Expected at least one target file`（exit 2），所以这里放一份干净源文件
+    // —— 让 oxfmt 真扫起来，验证的才是「白名单里的脏文件不被误报」。
+    repo.write("src/lib/keep.ts", CLEAN);
     repo.write("tests/fresh.test.ts", DIRTY);
     repo.write("scripts/fresh.mjs", DIRTY);
     repo.write("e2e/fresh.spec.ts", DIRTY);
@@ -192,7 +223,7 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
  * 一个退出码，只看退出码的话，一条把 `--staged` 实现成「永远跳过」的改动能全绿
  * 通过 —— 那正是门禁静默失效的形态（§11.23 的「声明 ⇄ 读者」）。
  */
-describe("prettier 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
+describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
   test("暂存文件全在扫描面外 → 跳过（不起 prettier）", ({ repo }) => {
     repo.write("src/lib/dirty.ts", DIRTY);
     repo.git("add", "-A");
@@ -203,7 +234,7 @@ describe("prettier 格式判据 --staged 输入面跳过（ISSUE #1747）", () =
     const r = repo.run(["--staged"]);
     expect(r.code).toBe(0);
     expect(r.output).toContain("未触及扫描面");
-    expect(r.output).not.toContain("运行 prettier");
+    expect(r.output).not.toContain("运行 oxfmt");
   });
 
   test("暂存文件落在扫描面内 → 真扫（脏文件照旧阻断）", ({ repo }) => {
@@ -213,7 +244,7 @@ describe("prettier 格式判据 --staged 输入面跳过（ISSUE #1747）", () =
     repo.write("src/lib/dirty.ts", DIRTY);
     repo.git("add", "src/lib/dirty.ts");
     const r = repo.run(["--staged"]);
-    expect(r.code).toBe(1);
+    expect(r.code, r.output).toBe(1);
     expect(r.output).not.toContain("未触及扫描面");
     expect(r.output).toContain("src/lib/dirty.ts");
   });

@@ -79,7 +79,8 @@ function fakeChild(): EmitterChild {
 /** 最近一次 `spawn` 的三元参数（命令 / 参数 / 选项）。 */
 function lastSpawn(): [string, string[], Record<string, unknown>] {
   const call = spawnMock.mock.calls.at(-1) as
-    [string, string[], Record<string, unknown>] | undefined;
+    | [string, string[], Record<string, unknown>]
+    | undefined;
   if (!call) throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
   return call;
 }

@@ -30,6 +30,7 @@ vi.mock("./repository", () => {
       characters: [],
       shots: [],
       stage: "script",
+      projectId: null,
     };
     store.set(id, state);
     return id;

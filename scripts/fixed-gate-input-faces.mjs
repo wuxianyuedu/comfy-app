@@ -85,12 +85,11 @@ export const INPUT_FACES = [
     test: "tests/check-bundle-budget.test.ts",
     face: [
       "scripts/check-bundle-budget.cjs",
-      "scripts/analyze-bundle.mjs",
       "scripts/.bundle-budget-baseline.json",
       "tests/check-bundle-budget.test.ts",
       "tests/helpers/gate-repo.ts",
     ],
-    why: "把判据当黑盒跑在**临时工作区**里（它内部按 `__dirname/..` 找 `.next/static/chunks`）—— 本仓真实产物不在它的读取面上，它读的是脚本自己、分析器与基线 JSON",
+    why: "把判据当黑盒跑在**临时工作区**里（它内部按 `__dirname/..` 找 `.next/static/chunks`）—— 本仓真实产物不在它的读取面上，它读的是脚本自己与基线 JSON",
   },
   {
     test: "tests/a11y-rules-gate.test.ts",

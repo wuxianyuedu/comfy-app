@@ -11,6 +11,8 @@ import { logger } from "~/lib/core/logger";
 import { errorMessage } from "~/lib/error-message";
 import { taskOutputDir } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
+import { kickQueue } from "~/lib/comfyui/executor-continuation";
+import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { isVideo, kindOf } from "~/lib/media/media-kind";
 
 /* 扩展名判据已收敛到 `media-kind.ts`（ISSUE #571）。此前这里自带一份清单，
@@ -152,7 +154,61 @@ export const taskRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  /** POST /api/tasks/[id]/open-folder 鈥?returns comfyapp:// URL for the task output dir */
+  /* 「原样重跑」（#2481 · FR-QA-04③ 的历史面落点）：按**原任务行**重建一个
+   * QUEUED 任务（新 taskId，不复活旧行）。执行载荷用原行的 `execPayload`
+   * （提交时刻的 RAW 原件），语义是「复现当时那次提交」——模板后来改了 / 删了
+   * 都不影响这一格；要用新模板语义请去创作台重新生成。提示词 / 参数 / 归属
+   * （project / shot）/ 参考图逐字复制。
+   *
+   * 参考图语义（如实）：`referenceImages` 存的是 ComfyUI input 侧的持久文件名，
+   * 重跑原样复用；ComfyUI 侧文件被清理时任务会在 LoadImage 节点失败并进任务
+   * 日志 —— 失败可见，不是静默缺图（原始本地文件只在客户端，服务端没有可重传的源）。
+   *
+   * 只放行**终态**任务：QUEUED / RUNNING 本来就在跑，重跑是制造第二份。
+   */
+  retry: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const original = await taskRepository.findByIdForUser(
+        ctx.user.id,
+        input.id,
+      );
+      if (!original) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+      }
+      if (original.status === "QUEUED" || original.status === "RUNNING") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "任务还在排队或执行中，不需要重试（可在队列监视里观察）",
+        });
+      }
+      if (!original.execPayload) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "这一行没有执行载荷（execPayload 为空的历史遗留行），无法原样重跑：请到创作台重新生成",
+        });
+      }
+      const created = await taskRepository.createQueued({
+        userId: ctx.user.id,
+        type: original.type,
+        prompt: original.prompt,
+        negativePrompt: original.negativePrompt,
+        params: original.params,
+        workflowName: original.workflowName,
+        projectId: original.projectId,
+        shotId: original.shotId,
+        referenceImages: original.referenceImages ?? undefined,
+        workflowSnapshot: original.workflowSnapshot ?? undefined,
+        claimedBy: resolveExecutorClaim(),
+        execPayload: original.execPayload,
+      });
+      /* 与 generate 同一口径：只写行，kick 只是省掉等派发节拍（ADR §14 D1）。 */
+      kickQueue();
+      return { taskId: created.id };
+    }),
+
+  /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */
   openFolder: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -249,6 +305,33 @@ export const taskRouter = createTRPCRouter({
           );
       }
       await taskRepository.delete(input.id);
+      return { ok: true };
+    }),
+
+  /**
+   * 人工评分 / 收藏一张产物图（FR-QA-07 人工侧 · #2480）：rating 0~5（null = 清除）、
+   * favorite 布尔。rating 是校准读数（`run.reviewCalibration`）的人侧输入；
+   * favorite 是「优秀样本进 few-shot」沉淀机制的输入。图不存在 → NOT_FOUND。
+   */
+  setImageFeedback: authedProcedure
+    .input(
+      z.object({
+        imageId: z.string().min(1),
+        humanRating: z.number().int().min(0).max(5).nullable(),
+        isFavorite: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const image = await taskRepository.findImageById(input.imageId);
+      if (image?.userId !== ctx.user.id)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "找不到这张产物图",
+        });
+      await taskRepository.patchImageFeedback(input.imageId, {
+        humanRating: input.humanRating,
+        isFavorite: input.isFavorite,
+      });
       return { ok: true };
     }),
 });

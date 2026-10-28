@@ -404,7 +404,8 @@ export async function runComfyWorkflow(
   while (Date.now() < deadline) {
     history = await getComfyHistory(promptId).catch(() => ({}));
     const entry = history[promptId] as
-      { status?: { completed?: boolean; status_str?: string } } | undefined;
+      | { status?: { completed?: boolean; status_str?: string } }
+      | undefined;
     const done =
       entry?.status?.completed === true ||
       entry?.status?.status_str === "success";
@@ -414,7 +415,8 @@ export async function runComfyWorkflow(
   }
 
   const entry = history[promptId] as
-    { outputs?: Record<string, unknown> } | undefined;
+    | { outputs?: Record<string, unknown> }
+    | undefined;
   const outputs = entry?.outputs ?? {};
   const files: string[] = [];
   const outDir = outputDirForSession(opts?.sessionId);

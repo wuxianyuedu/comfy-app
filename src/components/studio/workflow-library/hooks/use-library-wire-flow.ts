@@ -474,7 +474,9 @@ export function libraryConnectionRefusal(
 
 /** `onConnectEnd` 交回来的两端（只取还原连接需要的字段）。 */
 type DropHandle =
-  { id?: string | null; nodeId?: string; type?: string } | null | undefined;
+  | { id?: string | null; nodeId?: string; type?: string }
+  | null
+  | undefined;
 
 /** 从松手现场还原这次连接的形状（`null` = 有一端没落在端点上）。
  *

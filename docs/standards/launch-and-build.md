@@ -637,6 +637,10 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
 > `.CMD` 一侧的回退永远找不到，等于没修 —— 这正是第二轮现场里提示说
 > 「未发现可回退形态」而 `pnpm.ps1` 明明就在旁边的原因。
 
+> **「起得来」的几种形态之间还有一层先后**（ISSUE #2562）：JS 入口 → 直接可执行 →
+> `.ps1` 经宿主，见 §2.1.9。上表回答的是「哪些形态 Node 起得来」，那张表回答
+> 「起得来的里面先挑哪个」—— 代价差一个数量级，Windows 上尤其明显。
+
 **同一个形态必须一路走到起服务**：`spawnDevServer()` 经 `commandInvocation()`
 拿 `{ command, prefixArgs }`，不再自己拼可执行名 —— 否则会出现「门禁探测通过了，
 起 dev server 时换一种方式又失败一次」。
@@ -840,6 +844,63 @@ Node 下限抬上去、而本仓的 `engines` 没跟着走，这一格会直接�
 形状解析只覆盖真实出现的三种写法：`^X.Y.Z`、`>=X.Y[.Z]`（含 `>= 10` 这种操作符后带空格）、
 一档内并排两个比较符（`>=22.12.0 <23.0.0`）以及它们的 `||` 并集。读不懂的返回 `null`
 ⇒ 判「没跑起来」，**不许**读成「没有违规」（同 `merged-side-loss-git.mjs` 的口径，§11.23.6.2）。
+
+#### 2.1.9 形态的优先顺序：JS 入口 → 直接可执行 → PowerShell 宿主（ISSUE #2562）
+
+§2.1.1 那张候选表回答的是「**哪些形态 Node 起得来**」。它没有回答的是「**起得来**的
+那几种里该先挑哪一个」—— 而它们的代价差一个数量级：
+
+| 形态                                                          | Node 起得来吗                    | 每条 `pnpm …` 的代价                          |
+| ------------------------------------------------------------- | -------------------------------- | --------------------------------------------- |
+| `<落点>/…/pnpm/<bin 指向的入口>` 经 `process.execPath`        | 能，**全平台同一条路**           | 一次 node 启动                                |
+| `pnpm.exe` / `pnpm-native.exe` / POSIX 无扩展名               | 能                               | 一次进程启动（**没有** Node 进程）            |
+| `.ps1` 经 PowerShell 宿主                                     | 能                               | 一次 node **+ 一次 PowerShell 冷启动**（0.6~3s） |
+| 无扩展名 shim / `.cmd` / `.bat`                               | **不能**（shebang 与批处理 Node 都不解释，`EINVAL` 与 Node 版本无关） | ——                                            |
+
+Windows 上 corepack 那三个垫片里**只有 `.ps1` 起得来**，于是「起得来」这一档挑出来的
+永远是它：一次启动里十来条 `pnpm …`（`dev-launch` 的依赖同步、`check:all` 的每一格、
+`ship` 的每一跳、`base-check` 复算的那条）就付十来次 PowerShell。而**包真身就摆在旁边**
+—— corepack 的版本目录与 pnpm 自己的落地目录都带完整的 `node_modules/pnpm/`。
+
+所以 `pnpmInvocation()` 的形态顺序改成三段，且第一段与平台**无关**
+（POSIX 上只是少起一层进程，行为零改动）：
+
+1. **包真身 JS 入口** —— `spawn(process.execPath, [<入口>, …])`，`shell: false` 恒定、
+   不需要宿主、不需要为 win32 开第二条代码路径。判据是 `pnpmJsEntry()`：
+   入口**从包的 `bin` 字段读**（不猜文件名）；`bin` 指向原生二进制时（pnpm 11+ 把
+   `pnpm` 写成 `{ "pnpm": "pnpm" }`，那个文件是 MZ / ELF）改用 Corepack 对 pnpm ≥ 11
+   写死的 `bin/pnpm.mjs`。落点的两种形状都接（`<落点>/node_modules/pnpm/` 与
+   落点自己就是包）—— 后者正是 `corepack enable` 之后 PATH 上那一格的形状。
+2. **直接可执行**（§2.1.1 的候选表，`.ps1` 除外）。
+3. **`.ps1` 经宿主** —— 前两段都拿不到形态时的出口。
+
+⚠️ **这一簇必须住在一个文件里**，别把它拆成 `pnpm-js-entry.ts` 那种"更清爽"的形态：
+`executable-resolve.ts` 在 `tests/esm-cross-host-imports.test.ts` 的跨宿主清单里
+（`shell.mjs` 静态 import 它），而那条链要求**每个节点都是叶子**（只 import 同批清单内
+的模块）。判"这份文件能不能被 node 起"的唯一实现是那边的 `executableKind()`，所以拆出去
+的那一半必然要回 import 它 —— 要么成静态依赖环（环上按声明顺序取值，`executableKind()`
+可能在第一次被调用时仍是未初始化绑定），要么那份模块不是叶子、**整条链在加载阶段就
+`ERR_MODULE_NOT_FOUND`**。后者实测过：`shell.mjs` 拷进临时仓库的那些用例（`check-reformat-only`
+/ `dependency-audit` / `linux-env-bootstrap`）加两份真加载用例，4 个文件 20 条一起红，而
+报错读起来跟本判据毫无关系。文件长度这一侧由 R5 那 900 行顶着 —— 要挤出空间就压注释，
+不要把判据搬出去。
+
+`viaHost` 的语义跟着收口：判据是「**真正要 spawn 的那个文件是不是宿主**」，
+不是「它等不等于 `candidate`」。走 JS 入口时 `command` 是 `process.execPath`、
+`candidate` 是落点目录，两者本来就不相等 —— 用旧式子会把它读成「经宿主」，
+而 `runPnpmSync` 里那道 PS 参数切分防线（`hostUnsafeArgs`）正是按这个布尔值决定
+要不要拦 `--x=…:…`。**同一个布尔值既当排障读数又当防线开关，判据错一次就两处一起错。**
+
+自检（§2.1.4）与流水线第一步的工具链自证（`scripts/ci-toolchain-pnpm.mjs` 的
+`findPnpm()`）都跟同一条顺序。后者刻意不 import 仓库内模块（它要能在「Node 模块链
+还没被证明可用」的机器上给出可读输出），所以这是**同一件事的两份实现** ——
+一致性由 `tests/ci-toolchain-selfcheck.test.ts` 的一组对账用例钉着，两处都钉：
+垫片与包真身并存时选中前者，以及 `bin` 指向原生二进制时改用 `bin/pnpm.mjs`。
+
+> 现场代价的量级（同一台 Windows 开发机、同一份检出）：`pnpmInvocation()` 走 `.ps1`
+> 时单次 0.6~3s（corepack shim 起 node 再起 pnpm，外加一次 PowerShell 冷启动）；
+> 走 JS 入口时是一条 `node <入口>`，与 POSIX 上同一个量级。启动链路里这条路径被
+> 调用 4~6 次（§2.1 结尾的「一次启动只探一次」那段也是为同一件事减了一次）。
 
 ### 2.2 完整依赖预检（壳窗口出现后）
 
@@ -1561,7 +1622,7 @@ zustand 队列，而不是再加一个模块级单例。
 
 | 侧                     | 回显出口                                                                                                                                                                                                                                                                                                                                                                                                              | 覆盖面                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Node（`.mjs`/`.cjs`）  | `scripts/launcher-core/command-echo.mjs` 的 `echoCommandLine()` —— **唯一出口**；`shell.mjs`（`spawnInGroup` / `runSync` / `runPnpmSync`）、`procs.mjs`（`runCapture` 探测）、`corepack.mjs`（工具链探测与重建）在出口处调用；其余入口里直连 spawn 的地方（`dev.mjs` / `start.mjs` / `analyze-bundle.mjs` / `build-desktop.mjs` / `db-schema-state.mjs` / `quality-gate.mjs` / `dev-launcher.mjs`）显式调用同一个出口 | 起服务 / 装依赖 / 跑门禁 / 构建 / 端口与进程探测 / 工具链探测 |
+| Node（`.mjs`/`.cjs`）  | `scripts/launcher-core/command-echo.mjs` 的 `echoCommandLine()` —— **唯一出口**；`shell.mjs`（`spawnInGroup` / `runSync` / `runPnpmSync`）、`procs.mjs`（`runCapture` 探测）、`corepack.mjs`（工具链探测与重建）在出口处调用；其余入口里直连 spawn 的地方（`dev.mjs` / `start.mjs` / `build-desktop.mjs` / `db-schema-state.mjs` / `quality-gate.mjs` / `dev-launcher.mjs`）显式调用同一个出口 | 起服务 / 装依赖 / 跑门禁 / 构建 / 端口与进程探测 / 工具链探测 |
 | Windows 入口（`.ps1`） | 同一 `>>> ` 前缀**手工回显**（`.ps1` 无法 import 上面的模块）：`dev-launcher.ps1`、`entry-common.ps1`、`sync-lint.ps1`、`generate-docs.ps1`、`prepare-local-run.ps1`；`quality-gate.ps1` / `run-tests.ps1` 原本就有                                                                                                                                                                                                   | 双击入口转交、`.ps1` 侧直接跑的 pnpm 子命令                   |
 
 三条口径：
@@ -2801,7 +2862,7 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 叠上去得到的不是两条结论，是一份不可信的读数 —— **并发在场时墙钟不可读**（§13.6.4.1），
 这条口径在这里同样成立，别拿这一档的耗时去校准别的档。
 
-**这一档不重抄任何判据**：清单是「装依赖 → `pnpm tauri build` → 发布」，而
+**这一档不重抄任何判据**：清单是「装依赖 → 壳工具链自证 → 工具预置 → `pnpm tauri build` → 发布」，而
 `tauri build` 的 `beforeBuildCommand` 就是 `scripts/build-desktop.mjs`，它内部那条
 `pnpm build` 链带着硬规则 17/18 的产物级两道防线（`check-standalone-contents.cjs` 数两层
 产物 / `check-bundle-budget.cjs` 体积棘轮）。**发布只能排在它绿之后** —— 也不许带
@@ -2817,14 +2878,72 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 | 总墙钟 | `pnpm tauri build`（那一跑只出 msi） | **579.2s** |
 | 发布段 | `node scripts/publish-desktop-bundle.mjs` | **1.5s**（拷 84.9 MiB + 写 manifest + 指针 + 轮转） |
 
-⚠️ **打包段（nsis）到今天为止没有读数 = 没有结论**。那一格要现下两件 GitHub release 资产
-（`nsis-3.13.zip` ≈1.3 MiB、`nsis_tauri_utils.dll` ≈0.05 MiB），本机两跑都落在
-`failed to bundle project: timeout: global`（一次 zip 下完、dll 超时；一次连 zip 都在 21.8s
-超时；随后那一跑 `github.com:443` 直接连不上）。**还有一条更坏的**：tauri 判定工具缓存目录
-不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动会把这台机的工具缓存
-一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。这两件事都记在这里而不是写成
-「以后一定绿」；红了要区分「这条链坏了」与「这台机今天取不到工具」，判据是那一跑的日志里
-有没有 `timeout: global`。
+⚠️ **打包段（nsis）红的不是这条链，而是「工具要在构建期现下 GitHub release」**。那一格要
+两件资产（`nsis-3.13.zip` 实测 **2,363,925 B**、`nsis_tauri_utils.dll` **34,304 B**），
+而 bundler 的下载预算在 **22–23s 量级**：本机两跑分别停在 21.8s 与 22.5s
+（`failed to bundle project: timeout: global`），同一次里 zip 直连下载实测 **48.4s**
+（同一 URL 的 HEAD 只要 2.0s ⇒ 不是 DNS/连接问题，是正文吞吐）。**还有一条更坏的**：
+tauri 判定工具缓存目录不完整时会**先删掉** `%LOCALAPPDATA%\tauri\NSIS` 再下 —— 一次网络抖动
+把这台机的工具缓存一并清走（`WixTools314` 那一侧不受影响，msi 那格是热的）。
+
+**把工具预置进缓存之后，nsis 那格第一次有了读数**（同一台机、`pnpm exec tauri bundle` ——
+只重打包不重装配，跑前先 `check-standalone-contents.cjs` 确认两层干净，见 §7.6 那条警告）：
+
+| 段 | 读数 |
+| --- | --- |
+| 打包段（nsis） | **250.5s** ⇒ `ComfyAPP_0.1.0_x64-setup.exe` **62.31 MiB** |
+| 打包段（msi，同一跑内） | **308.0s** ⇒ `…en-US.msi` **84.86 MiB** |
+| 该跑总墙钟 | **577.8s**，退 0，**日志里没有 `Downloading` / `Recreating it` 任何一行** |
+
+预置的布局就是 tauri 自己那一套：zip 解包后**去掉一层顶层目录** `nsis-3.13/`，内容落到
+`%LOCALAPPDATA%\tauri\NSIS\`；dll 落 `NSIS\Plugins\x86-unicode\additional\nsis_tauri_utils.dll`。
+少任何一件都会触发那句「先删整个目录再下」——CLI 二进制里那串必查清单能看到
+`Stubs/lzma_solid-x86-unicode`、`Include/MUI2.nsh`、`Include/FileFunc.nsh` 与上面那个 dll 路径
+挨在一起（本机种完之后逐件 `stat` 过，六件都在位）。
+
+**为什么「种目录」救不了节点**（这条是 #2525 的核心事实）：`orange-runner` 是 Windows 服务、
+**StartName = LocalSystem**，所以作业眼里的 `%LOCALAPPDATA%` 是
+`C:\Windows\System32\config\systemprofile\AppData\Local` —— 普通会话**进不去**
+（`ls` / `touch` 探针都 `Permission denied`）；而 bundler 走 `SHGetKnownFolderPath`
+（不读 `LOCALAPPDATA` 环境变量），所以在 stage 里改那个变量也不会把缓存根挪走。
+
+**镜像那一档值得配、但不许当结案**：官方键是 `TAURI_BUNDLER_TOOLS_GITHUB_MIRROR` /
+`TAURI_BUNDLER_TOOLS_GITHUB_MIRROR_TEMPLATE`（与 `PLAYWRIGHT_DOWNLOAD_HOST` 同形状）。
+本机实测 `gh-proxy.com` 前缀镜像：dll **0.96s**、zip **29.5s**，且两份的 sha256 与直连**逐字同值**
+（`ba63dffc…` / `5ba143b5…`；bundler 自己也会再验一次哈希）。但 29.5s **仍然在它那个 22–23s 预算之上**
+⇒ 镜像把「偶然红」的概率压低，**没有变成绿**。红了先分岔：日志里有 `timeout: global` = 这台机
+今天取不到工具（走 #2525）；没有 = 这条链坏了。
+
+**落地的形状是「仓库侧一个有名字的工具镜像入口」**（`scripts/tauri-tools-cache.mjs`，ISSUE #2525）：
+工具树按内容镜像在常驻根的**第四个目录**（`resolveToolRoot` ⇒ `<卷>\ci-tools\<包名>`，
+同样由 `pnpm store path` 推卷、**不写盘符**；与两份槽根分开是必须的 —— 那里的淘汰器按 TTL
+删键位，而这一份删了**今天就没包**，它不是缓存）。两条动作、都不删任何东西：
+
+| 动作 | 做什么 | 三态 |
+| --- | --- | --- |
+| `--seed`（本机，成功打过包之后跑一次） | 把 bundler 自己下好的那棵树连**逐件 sha256 清单**种进 `<工具根>/nsis/<版本>`；先写 staging 再整目录改名过去，所以那里「要么没有、要么齐全」 | 0 种成 ／ 1 dll 的哈希与被钉的那件对不上（版本升了，或内容被换过）／ 2 种源不齐 —— **空手种一份残缺树比不种更坏** |
+| 缺省（作业起手那一格 `打包·桌包工具预置`） | 必需件已在场 ⇒ **一个字都不动**；不在场 ⇒ 按清单拷过去并**逐件复算哈希** | 0 在场或补齐 ／ 1 拷过去复算不过（镜像坏了，不许留半棵树继续打包）／ 2 两边都没有 ⇒「没有结论」并念出出口 |
+
+版本升上去时红的是**该升镜像**那句话（`ensure` 判「常驻根里没有这一份」⇒ 退 2），
+而不是「今天取不到工具」—— 这就是把 `NSIS_PLAN` 里那两个哈希钉死的用处；
+同批改 `NSIS_PLAN` 是唯一出路，别在作业里顺手装一个旧版本上去。
+
+**这一格自己的实测读数**（2026-10-27 本机：删空缓存 → 跑 `ensure` → 只出 nsis 打一次包）：
+
+```
+[工具缓存] 缺 6 件：NSIS.exe, makensis.exe, Include/MUI2.nsh, Include/FileFunc.nsh,
+                     Stubs/lzma_solid-x86-unicode, Plugins/x86-unicode/additional/nsis_tauri_utils.dll
+[工具缓存] 用镜像补：G:\ci-tools\comfy-app-t3\nsis\3.13·442 件·6.8 MiB
+[工具缓存] ✓ 已补齐，必需件在场。                    ⇒ 退 0，实测 2.5s（含 442 件逐件复算哈希）
+6.0s   Running makensis → nsis\ComfyAPP_0.1.0_x64-setup.exe
+137.8s Finished 1 bundle … (62.32 MiB)               ⇒ 打包段 131.8s，退 0
+```
+
+日志里**没有** `Downloading`、没有 `Recreating it`、也没有 `timeout: global` —— 这三行缺不缺
+就是「工具在场与否」的凭证。用例 `tests/tauri-tools-cache.test.ts` 钉的是它的**形状**
+（补齐 / 不动 / 退 2 的出口话术 / 镜像被改过必须红），平台侧那一格的**顺序**由
+`tests/no-platform-ci-config.test.ts` 钉：预置必须在 `pnpm tauri build` 之前 ——
+排在它后面等于没有，那一刻 bundler 已经自己去撞那条下载预算了。
 
 **发布那一格的形状**（`scripts/publish-desktop-bundle.mjs`，本地与平台**同一个入口**）：
 
@@ -3260,7 +3379,7 @@ sidecar」两种不同形态的失败。
 | `src/lib` 的 Node-only 声明与可达性（规范 §18.4）                             | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`）                                                 |
 | UI 基元复用棘轮（规范 16 §16.2.3）                                            | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-ui-primitives.cjs`（`pnpm ui:primitives`，契约测试 `tests/check-ui-primitives.test.ts`）                                                                        |
 | 浮层层级刻度棘轮（规范 16 §16.2.5）                                           | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-overlay-z.cjs`（`pnpm ui:overlay-z`，契约测试 `tests/check-overlay-z.test.ts`）                                                                                 |
-| prettier 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项；执行者 2026-10 起在平台侧，§13.5.1.1） | `scripts/quality-gate.ps1`（`-Mode format`）/ 平台侧 `.cnb.yml` 的「prettier 格式」                  | `scripts/check-format.cjs`（`pnpm format:ratchet`，契约测试 `tests/check-format.test.ts`）                                                                                     |
+| oxfmt 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项；执行者 2026-10 起在平台侧，§13.5.1.1） | `scripts/quality-gate.ps1`（`-Mode format`）/ 平台侧 `.cnb.yml` 的「oxfmt 格式」                  | `scripts/check-format.cjs`（`pnpm format:ratchet`，契约测试 `tests/check-format.test.ts`）                                                                                     |
 | 格式化提交与行为改动分离（规范 §13.5）                                        | `scripts/quality-gate.ps1`（`-Mode format`）                                                        | `scripts/check-reformat-only.cjs`（`pnpm format:reformat-guard`，契约测试 `tests/check-reformat-only.test.ts`）                                                                |
 | 依赖漏洞扫描棘轮（规范 §13.5 / ISSUE #1331）                                  | `scripts/quality-gate.ps1`（`-Mode dependencyAudit`）                                               | `scripts/check-dependency-audit.mjs`（`node scripts/check-dependency-audit.mjs`，契约测试 `tests/dependency-audit.test.ts`；刻意**不**进 pre-commit —— 它是网络请求）          |
 | `src/lib` 的零消费值导出硬闸（规范 §12.16）                                   | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）                                                         |

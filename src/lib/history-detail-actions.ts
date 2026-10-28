@@ -62,3 +62,15 @@ export async function fetchTaskWorkflow(taskId: string): Promise<{
   const result = await vanillaApi.task.workflow.query({ id: taskId });
   return { workflow: result?.workflow ?? undefined };
 }
+
+/**
+ * 人工评分 / 收藏一张产物图（FR-QA-07 人工侧 · #2480）：rating 0~5（null = 清除）、
+ * favorite 布尔。rating 是校准读数（`run.reviewCalibration`）的人侧输入；
+ * favorite 是「优秀样本进 few-shot」沉淀机制的输入。
+ */
+export async function setImageFeedback(
+  imageId: string,
+  data: { humanRating: number | null; isFavorite: boolean },
+): Promise<void> {
+  await vanillaApi.task.setImageFeedback.mutate({ imageId, ...data });
+}

@@ -237,6 +237,81 @@ describe("task.cancel", () => {
   });
 });
 
+// ─────────────────────────────── retry（原样重跑，#2481） ───────────────────────────────
+
+describe("task.retry", () => {
+  const seedFailedTask = () =>
+    seedTask(tdb, {
+      id: "task-old",
+      userId: "user-a",
+      type: "TXT2IMG",
+      status: "FAILED",
+      prompt: "一只猫",
+      negativePrompt: "低质量",
+      params: { checkpoint: "sdxl.safetensors", seed: 42 },
+      workflowName: "sdxl-txt2img",
+      projectId: "proj-1",
+      referenceImages: ["ref-a.png"],
+      execPayload: { nodes: { "1": { class_type: "KSampler" } } },
+    });
+
+  it("终态任务重跑：按原行字段新建 QUEUED 行（新 id），原行不动", async () => {
+    seedFailedTask();
+    const res = await createCaller(makeCtx()).retry({ id: "task-old" });
+    expect(res.taskId).not.toBe("task-old");
+    const created = tdb.$tables.tasks.find((t) => t.id === res.taskId)!;
+    expect(created).toBeTruthy();
+    expect(created.status).toBe("QUEUED");
+    expect(created.userId).toBe("user-a");
+    expect(created.type).toBe("TXT2IMG");
+    expect(created.prompt).toBe("一只猫");
+    expect(created.negativePrompt).toBe("低质量");
+    expect(created.workflowName).toBe("sdxl-txt2img");
+    expect(created.projectId).toBe("proj-1");
+    expect(created.params).toEqual({
+      checkpoint: "sdxl.safetensors",
+      seed: 42,
+    });
+    expect(created.referenceImages).toEqual(["ref-a.png"]);
+    expect(created.execPayload).toEqual({
+      nodes: { "1": { class_type: "KSampler" } },
+    });
+    // 原行保持 FAILED：重跑是新建，不是复活。
+    const original = tdb.$tables.tasks.find((t) => t.id === "task-old")!;
+    expect(original.status).toBe("FAILED");
+  });
+
+  it("越权:非归属者重跑他人任务抛 NOT_FOUND 且不建新行", async () => {
+    seedFailedTask();
+    await expect(
+      createCaller(
+        makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }),
+      ).retry({ id: "task-old" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(tdb.$tables.tasks.length).toBe(1);
+  });
+
+  it("非终态（RUNNING / QUEUED）拒绝重跑，给可行动错误", async () => {
+    seedTask(tdb, { id: "task-run", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "task-queued", userId: "user-a", status: "QUEUED" });
+    await expect(
+      createCaller(makeCtx()).retry({ id: "task-run" }),
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(
+      createCaller(makeCtx()).retry({ id: "task-queued" }),
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(tdb.$tables.tasks.length).toBe(2);
+  });
+
+  it("execPayload 为空的历史遗留行拒绝重跑并指路（到创作台重新生成）", async () => {
+    seedTask(tdb, { id: "task-legacy", userId: "user-a", status: "FAILED" });
+    await expect(
+      createCaller(makeCtx()).retry({ id: "task-legacy" }),
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(tdb.$tables.tasks.length).toBe(1);
+  });
+});
+
 // ─────────────────────────────── workflow snapshot ───────────────────────────────
 
 describe("task.workflow", () => {
@@ -422,4 +497,64 @@ describe("task.delete（rateLimitedProcedure）", () => {
       code: "TOO_MANY_REQUESTS",
     });
   }, 30_000);
+});
+
+// ───────────────────── setImageFeedback（人工侧 #2480） ─────────────────────
+
+describe("task.setImageFeedback（人工评分 / 收藏）", () => {
+  it("打分 + 收藏 → detail 里可见；null 评分 = 清除", async () => {
+    seedTask(tdb, {
+      id: "task-fb",
+      userId: "user-a",
+      status: "COMPLETED",
+      images: [COVER("img-fb", "/generated/task-fb/1.png")],
+      progress: 1,
+    });
+    const caller = createCaller(makeCtx());
+    await caller.setImageFeedback({
+      imageId: "img-fb",
+      humanRating: 4,
+      isFavorite: true,
+    });
+    const detail = await createCaller(makeCtx()).detail({ id: "task-fb" });
+    expect(detail?.images[0]).toMatchObject({
+      id: "img-fb",
+      humanRating: 4,
+      isFavorite: true,
+    });
+    await caller.setImageFeedback({
+      imageId: "img-fb",
+      humanRating: null,
+      isFavorite: false,
+    });
+    const cleared = await createCaller(makeCtx()).detail({ id: "task-fb" });
+    expect(cleared?.images[0]).toMatchObject({
+      humanRating: null,
+      isFavorite: false,
+    });
+  });
+
+  it("他人任务的图 / 图不存在 → NOT_FOUND", async () => {
+    seedTask(tdb, {
+      id: "task-fb-b",
+      userId: "user-b",
+      status: "COMPLETED",
+      images: [COVER("img-b", "/generated/x/1.png")],
+      progress: 1,
+    });
+    await expect(
+      createCaller(makeCtx()).setImageFeedback({
+        imageId: "img-b",
+        humanRating: 3,
+        isFavorite: false,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      createCaller(makeCtx()).setImageFeedback({
+        imageId: "missing",
+        humanRating: 3,
+        isFavorite: false,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 });

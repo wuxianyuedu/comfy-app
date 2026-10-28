@@ -14,7 +14,12 @@
 
 /** 成片状态。`COMPOSING` 是「ffmpeg 正在出片」那一格（服务端合成，不是客户端时间线）。 */
 export type FilmStatus =
-  "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
+  | "PARSING"
+  | "GENERATING"
+  | "COMPOSING"
+  | "DONE"
+  | "FAILED"
+  | "CANCELLED";
 
 /** 单个镜头的状态。`IDLE` 与「提交前就崩的 QUEUED」都算「还没有人在跑它」。 */
 export type ShotStatus = "IDLE" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";

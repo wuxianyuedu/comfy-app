@@ -594,6 +594,51 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
   });
 
   /**
+   * `event` 为空 ⇒ 发命令时**不带 `--event`**（什么事件的都要）。
+   *
+   * 这一形是 ISSUE #2550 加的：桌面成品包那一档的立案口要按「我自己这一跑」查列表，
+   * 而那一档挂在 `crontab` / 手点上 —— 沿用「只查 `pull_request`」的过滤就查不到自己
+   * （现场：事件念成 `(取不到)`、`self` 为 null，连「还没到终态」那一道都跳过了）。
+   */
+  it("`event` 为空 ⇒ 命令里不带 `--event`（查得到自己那一跑）", () => {
+    const seen: string[][] = [];
+    const got = fetchBuildList(
+      (cmd: string, args: string[]) => {
+        seen.push([cmd, ...args]);
+        return {
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data: ROWS }),
+          stderr: "",
+          error: null,
+        };
+      },
+      "a/b",
+      "",
+      10,
+    );
+    expect(got?.map((b: { sn: string }) => b.sn)).toEqual(["sn-a", "sn-b"]);
+    expect(seen[0]?.join(" ")).not.toContain("--event");
+    expect(seen[0]?.join(" ")).toContain("--repo a/b");
+    /* 而给了事件名时**必须**带上 —— 那一侧的过滤是「只挑这一族」的意思，不能悄悄松开。 */
+    seen.length = 0;
+    fetchBuildList(
+      (cmd: string, args: string[]) => {
+        seen.push([cmd, ...args]);
+        return {
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data: ROWS }),
+          stderr: "",
+          error: null,
+        };
+      },
+      "a/b",
+      "pull_request",
+      10,
+    );
+    expect(seen[0]?.join(" ")).toContain("--event pull_request");
+  });
+
+  /**
    * 「取不到」要自己说清是哪一种（ISSUE #2335 现场：那一格只留下六个字
    * `取不到构建列表`，而「命令没起来 / 退码非零（凭据、权限）/ 信封又变了」
    * 三种原因的下一个动作完全不同）。这里判的是**念出声**，结论仍是 `null`。

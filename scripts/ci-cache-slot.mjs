@@ -40,6 +40,9 @@ export const CACHE_ROOT_ENV = "COMFY_CI_CACHE_ROOT";
 /** 成品目录（安装包）的根由环境变量给出；没配就从 store 所在卷推导（见 `resolveArtifactRoot`）。 */
 export const ARTIFACT_ROOT_ENV = "COMFY_CI_ARTIFACT_ROOT";
 
+/** 第三方构建工具镜像的根（见 `resolveToolRoot`）——它不是缓存，删了今天就没包。 */
+export const TOOLS_ROOT_ENV = "COMFY_CI_TOOLS_ROOT";
+
 /** 计划里三种关系的名字（会出现在平台日志里，改名等于换掉一条可 grep 的口径）。 */
 export const SLOT_ACTIONS = ["reuse", "install-into-slot", "no-cache"];
 
@@ -334,6 +337,36 @@ export function resolveArtifactRoot(io) {
   if (!facts.volumeRoot) return { root: null, from: facts.from };
   return {
     root: path.join(facts.volumeRoot, "ci-artifacts", facts.name),
+    from: facts.from,
+  };
+}
+
+/**
+ * **第三方构建工具镜像**的根（`scripts/tauri-tools-cache.mjs` 用它，ISSUE #2525）。
+ *
+ * 与上面三套同卷、第四个目录（`ci-tools/<包名>`）。它**不是缓存**：缓存删了只是下一次慢，
+ * 这一份删了那条流水线今天就打不出包 —— 所以它同样不许住在两份槽根之下（槽根的淘汰器
+ * 把每个目录都当成一个键，并按 TTL 删）。
+ *
+ * 显式出口 `COMFY_CI_TOOLS_ROOT` 优先（与依赖槽那个变量分工一样：一个变量只管自己那一套根）。
+ *
+ * @param {{cwd: string, env?: Record<string, string | undefined>,
+ *   run?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} io
+ * @returns {{root: string | null, from: string}}
+ */
+export function resolveToolRoot(io) {
+  const explicit = String(io.env?.[TOOLS_ROOT_ENV] ?? "").trim();
+  if (explicit) return { root: explicit, from: `环境变量 ${TOOLS_ROOT_ENV}` };
+  const facts = cacheRootFacts(io);
+  if (facts.explicit) {
+    return {
+      root: null,
+      from: `${facts.from}（该变量只覆盖依赖面那套槽，工具镜像不跟着它走）`,
+    };
+  }
+  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  return {
+    root: path.join(facts.volumeRoot, "ci-tools", facts.name),
     from: facts.from,
   };
 }

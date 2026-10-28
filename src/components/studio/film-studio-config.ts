@@ -104,7 +104,7 @@ export function productionShotsToShotList(shots: unknown[]): ShotListItem[] {
 export interface TimelineClip {
   id: string;
   label: string;
-  width: number; /* px proportion */
+  width: number /* px proportion */;
   colorClass: string;
   textColorClass: string;
 }
