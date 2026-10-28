@@ -35,7 +35,11 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
  *  时长是秒数选择。`number` 是自定义口的「数字」类型（普通数值输入框）。 */
 export type EncapsulationControl =
-  "text" | "size" | "image" | "duration" | "number";
+  | "text"
+  | "size"
+  | "image"
+  | "duration"
+  | "number";
 
 export interface EncapsulationEntryStatus {
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */

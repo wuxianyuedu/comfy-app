@@ -6,7 +6,7 @@
 // 判定与动作由调用方注入：带维度评分的场景（剧本）自动展示分数条与轮次曲线；
 // 提供 `revise` 的场景多一个「按意见改写」按钮。共享内核不放任何一侧的业务写回
 // （剧本改写后的编辑器回填等由各壳的 hook 装配，§18.4 同口径）。
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ClipboardCheck } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -117,6 +117,9 @@ export interface ReviewVerdictDialogButtonProps {
   controller: ReviewVerdictController;
   /** 分数条的维度 key → 人读名（带 rubric 的场景注入；不给就展示原 key）。 */
   dimensionLabels?: ReadonlyMap<string, string>;
+  /** 人工裁决插槽（#2480）：场景要给「人拍板」入口时传 `HumanVerdictRow`
+   *  （渲染在动作按钮上方）；不给 = 该场景没有人工裁决（如角色卡）。 */
+  footerExtra?: ReactNode;
 }
 
 const EMPTY_LABELS: ReadonlyMap<string, string> = new Map();
@@ -128,6 +131,7 @@ export function ReviewVerdictDialogButton({
   busyText,
   controller,
   dimensionLabels = EMPTY_LABELS,
+  footerExtra,
 }: ReviewVerdictDialogButtonProps) {
   const [open, setOpen] = useState(false);
   const { verdict, history, busy, error } = controller;
@@ -210,6 +214,8 @@ export function ReviewVerdictDialogButton({
               </>
             )}
           </div>
+
+          {footerExtra}
 
           <DialogFooter>
             {controller.revise && (

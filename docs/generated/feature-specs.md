@@ -761,15 +761,18 @@
 
 #### FR-MC-01 工坊 MCP
 
-- 状态：已上线（界面侧会话共享待后续）
+- 状态：已上线（会话与界面共享同一份 production，#2482）
 - 需求：外部 AI 客户端可经 MCP 端到端指挥工坊创作：17 个工具
   （会话 / 元信息 / 剧本 / 角色 / 分镜 / 生图 / 视频 / 合成 / 绑工作流）。
 - 行为与验收：两个 transport（stdio / http，`pnpm mcp:stdio` /
   `pnpm mcp:http`）；**只可达本机回环**；HTTP origin 逐条登记
-  （`MCP_HTTP_ALLOWED_ORIGINS`，不做通配）；会话落 `workshopSession` 表。
-  边界：MCP 与界面**目前不共享会话**（界面侧接入待后续）。
-- 落点：`src/server/mcp/workshop-mcp.ts`、`tools/workshop-mcp-stdio.ts`、
-  `tools/workshop-mcp-http.ts`、`docs/workshop-mcp.md`
+  （`MCP_HTTP_ALLOWED_ORIGINS`，不做通配）。会话绑定界面项目
+  （`workshop_create_session` 可带 `projectId` 绑既有项目，缺省新建一对
+  project + production 行）：**同一份 production**——AI 写入界面刷新即见、
+  界面改动 AI 下一次 `workshop_get_session` 就能读到；桥之前的遗留会话
+  首次写时桥接，只读不写的保持原样。
+- 落点：`src/server/mcp/workshop-mcp.ts`、`src/server/workshop/production-bridge.ts`（桥）、
+  `tools/workshop-mcp-stdio.ts`、`tools/workshop-mcp-http.ts`、`docs/workshop-mcp.md`
 
 #### FR-MC-02 comfyapp:// 深链
 
@@ -912,7 +915,9 @@
 - 行为与验收：① 同一 seed + 同一工作流 + 同一参考图重跑产出一致（复现性可验；
   **本地 ComfyUI 通道**判此条，API 直连通道在上游声明同 seed 确定性时才判）；
   ② 每张图能追回 `taskId` 与参数快照；③ 只重跑失败镜，已完成的不被动
-  （历史面的任务级原样重跑见 #2481，带修改的重跑见 FR-QA-09）；
+  （历史面的任务级原样重跑**已落地** #2481：`task.retry` 按原行 `execPayload` +
+  参数 / 参考图原样新建 QUEUED 行，只放行终态任务，历史页「重试」直调；
+  带修改的重跑见 FR-QA-09）；
   ④ **自动优选（抽卡 N 选 1）**可用 ⇒ 当前未实现（依赖 FR-QA-07 的视觉评审）。
 
 #### FR-QA-05 生视频质量口径
@@ -936,7 +941,7 @@
 
 #### FR-QA-07 质量评审与评分闭环
 
-- 状态：已落地（评分地基 #2477 + 剧本闭环 #2478 + 图像评审 #2479 已落）
+- 状态：已上线（评分地基 #2477 + 剧本闭环 #2478 + 图像评审 #2479）
 - 需求：让 FR-QA-01 ~ 06 的静态口径**可执行**——评审产出**维度化数字评分**
   （每维度 1~5 分 + 分值锚点 + rubric 版本号），判定与每轮分数落库留痕，
   收敛条件是「分数阈值达线」而不是只有过 / 不过；剧本、角色、分镜、生图四环节
@@ -972,32 +977,54 @@
 
 #### FR-QA-08 人工评分与校准
 
-- 状态：计划中（承接：#2480）
-- 需求：人的判断**留痕且优先**——产物级人工评分 / 收藏（当前 `taskImage` 无任何
-  评分字段，`favorite` 表只挂模型库），实体级人工裁决（approved / rejected + 理由）
-  **优先于 AI 判定**；人评过的样本成为 AI 评审的校准基准。
-- 行为与验收：① 历史页与工坊镜头卡可直接给产物打分 / 收藏，评分可查
-  （`taskImage` 有评级字段且进产物元数据面板）；② 人判废的镜头 / 角色 / 剧本
-  不因 AI 判过而放行进下一阶段（与 FR-AG-02「质量停点由人拍板」同口径）；
-  ③ 能按维度聚合出「人评分 vs AI 评分」的偏差读数（只读查询即可），
-  作为调 rubric 提示词的依据；④ 图像评审（FR-QA-07⑤）达上限转人工时，
-  落到本条的裁决入口而不是无处可去。
-- 落点（现状）：`src/server/db/schema.ts`（`taskImage` / `favorite`）、
-  `src/components/studio/history/`、`src/components/workshop/ShotStudio.tsx`
+- 状态：已上线（#2480）
+- 需求：人的判断**留痕且优先**——产物级人工评分 / 收藏，实体级人工裁决
+  （approved / rejected + 理由）**优先于 AI 判定**；人评过的样本成为 AI 评审的校准基准。
+- 行为与验收：① 历史页产物卡与镜头评审弹窗可直接给产物打分 / 收藏，评分可查
+  （`taskImage.humanRating` / `isFavorite` 列 + `task.setImageFeedback`（带归属校验）；
+  历史页 `ImageFeedbackRow` 挂进 `HistoryDetailModal`）；② 人判废的镜头 / 剧本
+  不因 AI 判过而放行进下一阶段（与 FR-AG-02「质量停点由人拍板」同口径）：人工裁决是
+  **快照式**——镜头带 `rev`、剧本带内容指纹（`scriptDigestOf`），快照与当前内容一致
+  才新鲜生效（人再改内容 → 裁决自然失效）；人通过且新鲜 → 定稿豁免 AI 评审，
+  人否决且新鲜 → 即使 AI 已定稿也拉回评审循环（达 `REVIEW_MAX_RETRY` 上限保留，
+  人的出路是改内容后重新纳入或点通过放行）（规划器 `run-types.ts` +
+  引擎 `run-engine.ts`；端点 `run.setHumanVerdict` / `run.setScriptHumanVerdict`）；
+  ③ 按维度聚合「人评分 vs AI 维度分」的偏差读数（只读）：人评 0~5 → 1~5 映射
+  （达线口径 `HUMAN_PASS_THRESHOLD`），MAE / 判定一致率 / 按维度偏差
+  （`review-calibration.ts` 纯函数 + `run.reviewCalibration` 端点，读数内嵌镜头
+  评审弹窗），作为调 rubric 提示词的依据；④ 图像评审（FR-QA-07⑤）达上限转人工时，
+  落到本条的裁决入口（`ShotReviewDialog` 内嵌 `HumanVerdictRow`）而不是无处可去。
+- 边界：人工裁决当前覆盖**镜头与剧本**（角色卡没有独立裁决入口——角色无 rev 快照
+  机制，需要时另立）；收藏复用 `taskImage` 字段，`favorite` 表仍只挂模型库。
+- 落点（现状）：`src/lib/production/review-types.ts`（`HumanVerdict` 形状 + 宽容解析 +
+  `applyHumanVerdict` / `applyHumanRating` / `applyScriptHumanVerdict`）、
+  `src/lib/production/review-calibration.ts`（校准纯函数）、
+  `src/lib/production/run-types.ts`（规划器人工裁决优先）、
+  `src/server/api/routers/run.ts`（四端点）、`src/server/api/routers/task.ts` +
+  `src/lib/core/repository-task-impl.ts`（`setImageFeedback`）、
+  `src/components/workshop/HumanVerdictRow.tsx`（共享裁决 + 星评行）、
+  `src/components/studio/history/ImageFeedbackRow.tsx`（历史页评分 / 收藏）
 
 #### FR-QA-09 带修改的重跑（局部重绘 / 放大）
 
-- 状态：计划中（承接：#2483；原样重跑的历史面落点见 #2481，不占本条）
+- 状态：已上线（#2483；原样重跑的历史面落点见 #2481 的 `task.retry`，不占本条）
 - 需求：图「方向对、局部有瑕疵」时不必整张重抽——产物 / 关键帧上可发起
   **局部重绘（inpaint）**与**放大（upscale）**，两者都是「带修改的重跑」，
   走既有 task 链路。
-- 行为与验收：① 产物 / 镜头关键帧可画蒙版（画笔粗细级即可）并发起局部重绘，
-  任务照走 `task` 链路（复用工作流模板 + 参考图注入）；② 产物有「放大重出」动作；
-  ③ 重绘 / 放大的产物与原任务**可追溯**（能看出这是哪张改出来的，parentId 或等价）；
-  ④ INPAINT / UPSCALE 不再只是 taskType 标签（现状：仅文案与模式猜测，
-  无蒙版编辑器与专用入口）。
-- 落点（现状）：`src/lib/workflow/model-mode-contract.ts:112`（仅模式标签）、
-  `src/components/studio/outputs/ProjectOutputsMetadataSheet.tsx:29`（仅文案）
+- 行为与验收：① 历史详情的图片产物可画蒙版（画笔三档 + 清空，白 = 重绘区）
+  并发起局部重绘，任务照走 `task` 链路；② 产物有「放大重出」动作；
+  ③ 重绘 / 放大的产物与原任务**可追溯**：`task.parentId` 落库，
+  产物元数据面板显示「来源任务」；④ 提交形状 = 原图进参考图槽
+  （重绘：第一槽原图、第二槽蒙版）+ `parentId`，选模板时有口径提示。
+  边界（与立案文案的偏差，如实）：**不内置硬编码 inpaint / upscale 工作流模板**
+  ——工作流库是唯一模板来源（`generate.ts` 注释自证「内置模板已移除」），
+  模板由用户从库中选；选了没有图像输入口的模板时，执行侧的 unmatched 读数
+  会说明值没落上。
+- 落点：`src/components/studio/history/ImageRedrawPanel.tsx`（面板）、
+  `src/components/studio/history/MaskCanvas.tsx`（蒙版画布）、
+  `src/components/studio/history/hooks/use-image-redraw.ts`（动作逻辑）、
+  `src/server/db/schema.ts`（`task.parentId`）、
+  `src/components/studio/ProjectOutputsMetadataSheet.tsx`（来源任务展示）
 
 ---
 
@@ -1009,12 +1036,16 @@
 
 #### FR-AG-01 双操作者同一能力面
 
-- 状态：计划中
+- 状态：已上线（#2482 补齐最后一格：MCP 会话绑定界面项目）
 - 需求：人与 AI 读写**同一份状态与产物**，不存在第二套真值。
 - 行为与验收：① 人在界面改了镜头，AI 接着跑读到的是改动后的版本（同一 `production.id`
   两侧读出一致的 `shots`）；② AI 改了内容，界面刷新后可见（不需要重开应用）；
-  ③ MCP 会话与界面会话**共享**（当前不共享 —— `FR-MC-01` 明写的边界）⇒ 未共享即本条未达标。
-- 落点：`src/server/api/routers/run.ts`、`src/server/mcp/workshop-mcp.ts`、
+  ③ MCP 会话与界面**共享**：每个会话绑定一个 proj_*（缺省新建、可显式绑定既有项目），
+  内容权威读在 production——`workshop_get_session` 读到的就是界面侧同一份；
+  归属口径：userId 显式给必须存在，缺省落本机最早创建的用户。
+- 落点：`src/server/workshop/production-bridge.ts`（桥：建/绑项目 + 内容读写）、
+  `src/server/workshop/repository.ts`（get 读 production、update 写 production）、
+  `src/server/mcp/workshop-mcp.ts`、`src/server/api/routers/run.ts`、
   `src/components/workshop/hooks/use-workshop-pipeline.ts`
 
 #### FR-AG-02 自主编排含独立视频阶段与审批停点

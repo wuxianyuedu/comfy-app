@@ -15,13 +15,23 @@
  * 而**第二处**（`scripts/storybook.mjs`）是靠 grep 肉眼找到的 —— 这正说明缺一条判据：
  * 「第三处还会长出来」这件事，靠人记得不如靠机器念。
  *
- * ── 它判什么（ISSUE #2513 把面收在调用点上）───────────────────────────────
+ * ── 它判什么（ISSUE #2513 把面收在调用点上；ISSUE #2562 扩规则与覆盖面）──────
  *
- * `scripts/**` 下的 `.mjs` / `.cjs` 里，**剥掉注释、并在实参里跳过字符串内容之后**，
- * `spawn` / `spawnSync` / `exec` / `execFile` / `execFileSync` / `fork` 这几类调用的
- * **实参中的对象字面量**，不许带「不是明确不开」的 `shell` 属性（哪几种取值算「明确不开」
- * 见下方 `SHELL_OPTION_RE`）。只判这个对象的**顶层键** —— 嵌在它里面的同名键（比如
- * `{ env: { shell: … } }`）不是 spawn 的选项，不判。
+ * `scripts/` / `tools/` / `.storybook/` / `e2e/` 下的 `.mjs` `.cjs` `.ts` `.tsx` `.jsx` 里，
+ * **剥掉注释、并在实参里跳过字符串内容之后**，收三类「起子进程走 shell」的形态：
+ *
+ *   ① `spawn` / `spawnSync` / `exec` / `execFile` / `execFileSync` / `fork` 的**实参对象字面量**
+ *      里出现 `shell` 属性，且值**不是明确不开**（只排 `false` / `null` / `undefined`，
+ *      见 `SHELL_OPTION_RE`）。只判**顶层键** —— 嵌在里面的同名键（如 `{ env: { shell: … } }`）
+ *      不是 spawn 的选项，不判。**truthy 字符串值算违例**：`shell: 'cmd.exe'` /
+ *      `shell: process.env.ComSpec` 这类（Node 拿到字符串是「拿它当 shell 可执行文件」，
+ *      仍然开 shell，旧版误当「不是布尔开关」放过，正是 #2562 的盲区）。
+ *   ② `exec` / `execSync` 裸调用 —— 它们**天然走 shell**（没有 `shell: false` 这一说），
+ *      调用点里一个 `shell` 字样都不会出现，按字面量扫描永远看不见；单独一条规则收。
+ *      （`execFile` / `execFileSync` 默认不走 shell，不在这里一棍打死，留给 ① 的选项规则。）
+ *   ③ **反向信号**（#2562 缺口 3）：`spawn` / `spawnSync` / `fork` 的**命令参数**里出现
+ *      `.cmd` / `.bat` —— 这是「为修 EINVAL 而加 `shell: true`」的前一步，源头收掉，
+ *      改走 `spawn(process.execPath, [resolvePackageBinEntry(pkg), …])` 直起包真身。
  *
  * 为什么收在调用点上（#2513 的现场）：第一版按**行的字面形态**认（任意 `shell:` 键），
  * 于是 `ci-cache-slot.mjs` 里一个跟子进程毫无关系的读数字段就能让 PR 红在「受影响用例」，
@@ -41,11 +51,14 @@
  *   · 不判「该不该起这个进程」（那是各调用方的事）；
  *   · 不做 AST（括号配平 + 跳过字符串对本仓这批扁平的选项对象足够，而 AST 会把这份判据
  *     钉在某个 parser 版本上）；
- *   · 不扫 `src/**`（那一侧的进程动作归硬规则 3 的 `kill-process-tree` 那一族，另有判据）。
+ *   · 不扫 `src/**`（那一侧的进程动作归硬规则 3 的 `kill-process-tree` 那一族，另有判据）；
+ *   · 不追运行时拼出来的 `.cmd`/`.bat` 命令（如 `path.join(dir, "pnpm" + ".cmd")`，
+ *     与整份脚本「不 AST」的取向一致 —— 那是判据的已知边界，静态面里它看不见）。
  *
  * 用法：
- *   node scripts/spawn-shell-scan.mjs            # 人读报告，有违例即非零退出
- *   node scripts/spawn-shell-scan.mjs --json     # 机器读（供契约测试）
+ *   node scripts/spawn-shell-scan.mjs                  # 人读报告，有违例即非零退出
+ *   node scripts/spawn-shell-scan.mjs --root <dir>     # 阳性对照：扫指定根（canary 用）
+ *   node scripts/spawn-shell-scan.mjs --json           # 机器读（供契约测试）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -76,14 +89,62 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  */
 /* ⚠️ 空白要在**预查里面**（`\s*` 放在预查前面时，正则会回溯到「不吃空白」那一步，
  * 于是 `(?!false)` 永远成立 —— 那是一句**什么都不排**的排除，写它的人以为排掉了）。
- * 把 `\s*` 挪进预查之后，`shell: false` 才会真的被排掉。 */
-const SHELL_OPTION_RE = /\bshell\s*:(?!\s*(?:false\b|null\b|undefined\b|["'`]))/;
+ * 把 `\s*` 挪进预查之后，`shell: false` 才会真的被排掉。
+ *
+ * 排除项**只留 `false` / `null` / `undefined` 这三种**（它们都是「明确不开」），
+ * 一律**不排字符串值** —— 见 ISSUE #2562：旧版把任意字符串值都当成「不是布尔开关」
+ * 放过，于是 `shell: 'cmd.exe'` / `shell: process.env.ComSpec` 这类 **truthy 字符串**
+ * 漏了（Node 拿到字符串值是「拿它当 shell 可执行文件」，**仍然开 shell**）。
+ * 改动后这些都算违例；`shell: "shell"` 这种恰好与字段同名的字符串也一并被收
+ * （在 spawn 选项对象里它就是「用名叫 shell 的程序当 shell」，truthy ⇒ 开 shell）。 */
+const SHELL_OPTION_RE = /\bshell\s*:(?!\s*(?:false\b|null\b|undefined\b))/;
 
 /* 起子进程的那几个调用，且必须是**裸标识符**：前面有 `.` / 标识符字符就不认 ——
  * 那一格是 `re.exec(...)` 与 `cp.spawn(...)`，前者是正则、后者是本判据刻意不追的
  * 成员调用形态（见文件头「收窄的代价」）。 */
 const SPAWN_CALLEE_SOURCE =
   "(?<![\\w$.])(?:spawnSync|spawn|execFileSync|execFile|exec|fork)\\s*\\(";
+
+/* `exec` / `execSync` **天然走 shell**（没有 `shell: false` 这一说）—— 这正是
+ * ISSUE #2562 的盲区：它们的调用点里**一个 `shell` 字样都不会出现**，按字面量扫描
+ * 永远看不见。单独一条规则收。但**只认从 `node:child_process` import 出来的那一个**：
+ * 仓内有 `const exec = …`（局部函数，如 `ci-cp936-exit.mjs` 的转码入口）和注入的
+ * `exec` 端口（如 `ci-toolchain-browser.mjs` 的 `exec` 形参），裸 `exec(` 一律算违例
+ * 会把它们一并红掉 —— 那正是「误报教会人加白名单」的那一档。所以先抠 import
+ * 名单，只有文件真的 `import { exec } from "node:child_process"` 才判（见
+ * `childProcessImports`）。`.exec(` 这种成员调用被负向预查排掉；`execFile` /
+ * `execFileSync` 默认不走 shell，不在这里一棍打死，留给上面的 `shell:` 选项规则。 */
+const EXEC_CALLEE_RE = /(?<![\\w$.])(?:execSync|exec)\s*\(/;
+
+/* 反向信号（ISSUE #2562 缺口 3）：spawn / spawnSync / fork 的**命令参数**是一个
+ * 「以 `.cmd` / `.bat` 结尾的引号字面量」—— 这正是「为了修 EINVAL 而加上 `shell: true`」
+ * 的前一步。命中它 = 这一处将来会被「合规地」加上 shell 修好，所以直接在源头收掉：
+ * 走 `spawn(process.execPath, [resolvePackageBinEntry(pkg), …])` 直起包真身。
+ * 必须整段就是一个引号字面量（不是运行时 `path.join(dir, "pnpm" + ".cmd")` 那种拼接 ——
+ * 那条是判据已知的静态边界，本仓「不 AST」的取向一致），且**不脱敏**原文（脱敏会把
+ * `.cmd` 抹成空格，判据就看不见了）。 */
+const ARG_LITERAL_CMD_RE = /^["'`][^"'`]*\.(?:cmd|bat)\b["'`]$/i;
+
+/**
+ * 一个文件从 `node:child_process` 里 import 了哪些名字（用于精确判定 `exec`/`execSync`
+ * 是不是真的 child_process，而不是局部函数 / 注入端口）。
+ *
+ * @param {string} src 已剥注释的源码
+ * @returns {Set<string>}
+ */
+function childProcessImports(src) {
+  /** @type {Set<string>} */
+  const names = new Set();
+  for (const m of src.matchAll(
+    /import\s*\{([^}]*)\}\s*from\s*["']node:child_process["']/g,
+  )) {
+    for (const part of (m[1] ?? "").split(",")) {
+      const name = (part.trim().split(/\s+as\s+/)[0] ?? "").trim();
+      if (name) names.add(name);
+    }
+  }
+  return names;
+}
 
 /**
  * 从调用处的 `(` 起按**顶层逗号**切实参区间。
@@ -199,6 +260,9 @@ export function findShellOptionsIn(src, rel = "(inline)") {
   const lines = src.split("\n");
   const lineOf = (/** @type {number} */ index) =>
     src.slice(0, index).split("\n").length;
+  /* `exec` / `execSync` 只认 child_process 那一个（见 `childProcessImports` 头注）：
+   * 局部函数 / 注入端口同名不算。 */
+  const cpNames = childProcessImports(src);
   for (const call of src.matchAll(new RegExp(SPAWN_CALLEE_SOURCE, "g"))) {
     const open = (call.index ?? 0) + call[0].length - 1;
     const spans = argumentSpans(src, open);
@@ -206,6 +270,16 @@ export function findShellOptionsIn(src, rel = "(inline)") {
     for (const span of spans) {
       const text = src.slice(span.start, span.end);
       const trimmed = text.trim();
+      /* 反向信号（缺口 3）：命令参数是一个「以 .cmd/.bat 结尾的引号字面量」—— 这是
+       * 「为修 EINVAL 而加 shell: true」的前一步，源头收掉。不脱敏（否则 .cmd 被抹掉）。 */
+      const rawArg = text.trim();
+      if (ARG_LITERAL_CMD_RE.test(rawArg)) {
+        const line = lineOf(span.start);
+        offenders.add(
+          `${rel}:${line}: ${(lines[line - 1] ?? "").trim()} ` +
+            `（命令参数带 .cmd/.bat ⇒ 直接起会 EINVAL，应走 resolvePackageBinEntry 直起包真身）`,
+        );
+      }
       /* 只有**对象字面量**才是选项对象：字符串 / 数组 / 变量 / 回调都不是本判据的面 */
       if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
       const masked = maskStringContents(text);
@@ -218,11 +292,26 @@ export function findShellOptionsIn(src, rel = "(inline)") {
       }
     }
   }
+  /* `exec` / `execSync` **天然走 shell**：调用点里一个 `shell` 字样都不会出现，按字面量
+   * 扫描永远看不见（缺口 2）。这里单独收，但只认 child_process 那个绑定。 */
+  for (const call of src.matchAll(new RegExp(EXEC_CALLEE_RE, "g"))) {
+    const fn = call[0].replace(/\s*\($/, "");
+    if (!cpNames.has(fn)) continue;
+    const line = lineOf(call.index ?? 0);
+    offenders.add(
+      `${rel}:${line}: ${(lines[line - 1] ?? "").trim()} ` +
+        `（exec/execSync 天然走 shell，等同 shell:true —— 改用 spawn 直起命令）`,
+    );
+  }
   return [...offenders];
 }
 
 /**
- * 递归收集 `scripts/**` 下的 .mjs / .cjs（跳过 node_modules）。
+ * 递归收集某目录下的脚本（跳过 node_modules）。
+ *
+ * 扩展名覆盖 `.mjs` / `.cjs` / `.ts` / `.tsx` / `.jsx` —— 起子进程的判据不挑语言，
+ * 且 `.storybook/` 的配置是 `.ts`、e2e 与 tools 里有 `.mjs`（ISSUE #2562 把面从
+ * 只扫 `scripts/**` 扩到 `tools/` `.storybook/` `e2e/`）。
  *
  * @param {string} dir
  * @param {string[]} [out]
@@ -237,10 +326,15 @@ function collect(dir, out = []) {
       collect(full, out);
       continue;
     }
-    if (name.endsWith(".mjs") || name.endsWith(".cjs")) out.push(full);
+    if (/\.(?:mjs|cjs|ts|tsx|jsx)$/.test(name)) out.push(full);
   }
   return out;
 }
+
+/* 要扫的根下子目录（ISSUE #2562：从只扫 `scripts/` 扩到 `tools/` `.storybook/` `e2e/`）。
+ * `src/**` 仍**不扫** —— 那一侧的进程动作归硬规则 3 的 `kill-process-tree` 那一族，
+ * 另有判据；把两条判据的扫描面并到一起只会让它们互相污染。 */
+const SCAN_SUBDIRS = ["scripts", "tools", ".storybook", "e2e"];
 
 /**
  * 扫一遍，给出违例清单。
@@ -251,36 +345,43 @@ function collect(dir, out = []) {
 export function findShellOptions(root = ROOT) {
   /** @type {string[]} */
   const offenders = [];
-  for (const file of collect(path.join(root, "scripts"))) {
-    const rel = path.relative(root, file).split(path.sep).join("/");
-    /* `trailing: true`：默认档只去整行注释，会把 `const a = 1; // 别写 shell: true`
-     * 这种**行尾**注释留着 ⇒ 判据红在一段正在教人别这么写的注释上（自打自）。 */
-    const stripped = stripComments(fs.readFileSync(file, "utf8"), {
-      trailing: true,
-    });
-    offenders.push(...findShellOptionsIn(stripped, rel));
+  for (const sub of SCAN_SUBDIRS) {
+    const base = path.join(root, sub);
+    if (!fs.existsSync(base)) continue;
+    for (const file of collect(base)) {
+      const rel = path.relative(root, file).split(path.sep).join("/");
+      /* `trailing: true`：默认档只去整行注释，会把 `const a = 1; // 别写 shell: true`
+       * 这种**行尾**注释留着 ⇒ 判据红在一段正在教人别这么写的注释上（自打自）。 */
+      const stripped = stripComments(fs.readFileSync(file, "utf8"), {
+        trailing: true,
+      });
+      offenders.push(...findShellOptionsIn(stripped, rel));
+    }
   }
   return offenders;
 }
 
-/* 直接执行时给人读的报告（`node scripts/spawn-shell-scan.mjs`）。 */
+/* 直接执行时给人读的报告（`node scripts/spawn-shell-scan.mjs [--root <dir>]`）。
+ * `--root` 供阳性对照（canary）：在临时树里放一个已知违例，确认本脚本退出码非 0。 */
 if (
   process.argv[1] !== undefined &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  const offenders = findShellOptions();
+  const rootFlag = process.argv.indexOf("--root");
+  const scanRoot = rootFlag !== -1 ? process.argv[rootFlag + 1] : ROOT;
+  const offenders = findShellOptions(scanRoot);
   if (offenders.length > 0) {
     process.stderr.write(
-      "[spawn-shell-scan] scripts/** 出现「起子进程开 shell」的形态" +
-        "（Node 26 的 DEP0190，且开了 shell 参数要自己括引号）—— 改用" +
+      "[spawn-shell-scan] 起子进程开 shell 的形态（Node 26 的 DEP0190，" +
+        "且开了 shell 参数要自己括引号）—— 改用" +
         "`spawn(process.execPath, [resolvePackageBinEntry(pkg), …])` 直起包真身：\n",
     );
     for (const o of offenders) process.stderr.write(`  ${o}\n`);
     process.exit(1);
   }
-  const msg = "[spawn-shell-scan] OK：scripts/** 里没有开 shell 起子进程的形态";
+  const msg = "[spawn-shell-scan] OK：scripts/ tools/ .storybook/ e2e/ 里没有起子进程走 shell 的形态（含 exec/execSync 与 .cmd/.bat 直接 spawn）";
   if (process.argv.includes("--json")) {
-    process.stdout.write(JSON.stringify({ ok: true, offenders: [] }));
+    process.stdout.write(JSON.stringify({ ok: true, offenders }));
   } else {
     process.stdout.write(msg + "\n");
   }

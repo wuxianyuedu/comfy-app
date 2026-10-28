@@ -200,6 +200,20 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
     ).toBe(WORKFLOW_ID);
   });
 
+  it("重绘 / 放大的追溯载荷（parentId）被 router 收下并落到任务行", async () => {
+    const input = {
+      workflow: WORKFLOW_ID,
+      prompt: "重绘",
+      referenceImages: ["origin.png", "mask.png"],
+      projectId: "proj-1",
+      parentId: "task-old",
+    };
+    const res = await createCaller(makeCtx()).generate(input);
+    const row = tdb.$tables.tasks.find((task) => task.id === res.taskId)!;
+    expect(row.parentId).toBe("task-old");
+    expect(row.shotId ?? null).toBeNull();
+  });
+
   it("旧形状被拒时给的是能读的中文，不是 zod 的英文原文", () => {
     /* `workflowInputs` 在历史行里有过写成对象的（库里那一列是自由 JSON 文本）。
      * 过去的表现是服务端 BAD_REQUEST 的 flatten 原文（`Expected array, received

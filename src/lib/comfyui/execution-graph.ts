@@ -68,7 +68,8 @@ function isLinkRef(
 }
 
 type ResolvedOrigin =
-  { kind: "link"; value: [string, number] } | { kind: "value"; value: unknown };
+  | { kind: "link"; value: [string, number] }
+  | { kind: "value"; value: unknown };
 
 /** 剔除旁路 / 静音 / 纯前端节点，并把断掉的连线穿透到上游。 */
 export function prepareGraphForExecution(

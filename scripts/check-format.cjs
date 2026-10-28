@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @ts-nocheck -- prettier 格式判据(判定型;执行者 = 平台侧 .cnb.yml 的「prettier 格式」,本地出口 pnpm check:all)
+// @ts-nocheck -- oxfmt 格式判据(判定型;执行者 = 平台侧 .cnb.yml 的「oxfmt 格式」,本地出口 pnpm check:all)
 /**
  * prettier 格式判据（**硬闸**）—— 规范见 docs/standards/13-提交与-code-review.md §13.5.1。
  *
@@ -111,17 +111,22 @@ const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
  * 取 ESM 判据模块（`launcher-core/shell.mjs`）的那段动态 import 随之删除：
  * 本脚本不再需要 pnpm 形态判定，`main()` 保持 async 只为收尾顺序不变。 */
 
-/** prettier 入口的三级解析（见上）。取不到返回 null，由 `main()` 以 exit 2 收尾。 */
-function resolvePrettierEntry() {
-  const fromEnv = process.env.COMFYAPP_PRETTIER_ENTRY;
+/** oxfmt 入口的三级解析（见上）。取不到返回 null，由 `main()` 以 exit 2 收尾。 */
+function resolveOxfmtEntry() {
+  const fromEnv = process.env.COMFYAPP_OXFMT_ENTRY;
   if (fromEnv) return fs.existsSync(fromEnv) ? fromEnv : null;
   try {
-    // 按扫描根解析：门禁在仓库根被调用，本地 `node_modules/prettier` 就是它的依赖。
-    return createRequire(path.join(ROOT, "noop.js")).resolve(
-      "prettier/bin/prettier.cjs",
+    // 按扫描根解析：门禁在仓库根被调用，本地 `node_modules/oxfmt` 就是它的依赖。
+    // 取 `oxfmt/package.json` 而不是直接 resolve `oxfmt/bin/oxfmt`：后者可能被包的
+    // `exports` 字段挡住（子路径不导出），前者是常见可解析面；两者都失败时退回按
+    // 扫描根拼路径（与 prettier 时代「任何一档都不许回落成 0 个未过」同口径）。
+    const pkg = createRequire(path.join(ROOT, "noop.js")).resolve(
+      "oxfmt/package.json",
     );
+    return path.join(path.dirname(pkg), "bin", "oxfmt");
   } catch {
-    return null;
+    const fallback = path.join(ROOT, "node_modules", "oxfmt", "bin", "oxfmt");
+    return fs.existsSync(fallback) ? fallback : null;
   }
 }
 
@@ -134,6 +139,12 @@ const STAGED = ARGS.has("--staged");
 
 /** 扫描范围与 package.json 的 format:check 逐字一致。 */
 const GLOBS = ["**/*.{ts,tsx,js,jsx,mdx}"];
+
+/** oxfmt 的扫描根：`GLOBS` 减白名单后收口出的面就是 `src/**` + `.storybook/**`
+ * （根上的 `*.config.*` / `scripts/**` / `tests/**` 等都在 IGNORE_GLOBS 里）。
+ * 传目录而非 glob：oxfmt 认 glob，但 glob 形态会把白名单里的目录也带进来，
+ * 交给下面的 `isScanned()` 收口更直白（同一份真源，不另抄一份名单）。 */
+const SCAN_ROOTS = ["src", ".storybook"];
 
 /** 白名单(glob,相对仓库根):① 高频 churn 路径;② 非源码产物(构建输出)。见文件头注释。 */
 const IGNORE_GLOBS = [
@@ -265,14 +276,18 @@ function stagedFiles() {
  */
 function collectUnformatted(entry) {
   const found = new Set();
-  for (const glob of GLOBS) {
-    const args = [
-      "--list-different",
-      "--cache",
-      "--cache-location",
-      CACHE_FILE,
-      glob,
-    ];
+  for (const root of SCAN_ROOTS) {
+    /* 不存在的根直接跳过：oxfmt 对「一个目标文件都没有」的根会报
+     * `Expected at least one target file...` 并以退出 2 收场 —— 那不是「有差异」
+     * 也不是「没跑成」，而是「这一根没有账可算」（判据自测的临时仓库就没有
+     * `.storybook`，实测把整条门打成了 fail-closed 的 exit 2）。真实仓两个根都在，
+     * 这条跳过不改真实仓的判决面。 */
+    if (!fs.existsSync(path.join(ROOT, root))) continue;
+    /* oxfmt 只列**有差异**的文件（形如 `src/foo.ts (12ms)`），随后给一行
+     * `Format issues found in above N files.`；退出码 1 = 有差异、0 = 全干净。
+     * 没有 `--cache` 这一档：oxfmt 在本仓实测 1.9s（prettier 全热 234s），
+     * 为它再养一套缓存键不划算 —— 何况 prettier 那条缓存键本就因绝对路径恒 miss。 */
+    const args = ["--check", root];
     const res = spawnSync(process.execPath, [entry, ...args], {
       cwd: ROOT,
       encoding: "utf8",
@@ -283,31 +298,58 @@ function collectUnformatted(entry) {
     });
     if (res.error) {
       console.error(
-        `[format] 无法执行 prettier（${res.error.code ?? "UNKNOWN"}）：${res.error.message}\n` +
+        `[format] 无法执行 oxfmt（${res.error.code ?? "UNKNOWN"}）：${res.error.message}\n` +
           `[format]   实际命令：${process.execPath} ${entry} ${args.join(" ")}`,
       );
       process.exit(2);
     }
     if (res.status === null) {
       console.error(
-        `[format] prettier 被信号终止（${res.signal ?? "unknown"}），不是「没有差异」。\n` +
-          `[format]   入口 ${entry}，缓存 ${CACHE_FILE}。`,
+        `[format] oxfmt 被信号终止（${res.signal ?? "unknown"}），不是「没有差异」。\n` +
+          `[format]   入口 ${entry}，扫描根 ${root}。`,
       );
       process.exit(2);
     }
+    /* 排查逃生口（默认关）：`COMFYAPP_FORMAT_DEBUG=1` 时把 oxfmt 的原始读数
+     * 原样吐出来 —— 判据自测在「本地绿、CI 红」的形态下，没有这批读数就只能猜
+     * （脏文件被判干净时，到底是没扫到还是没认出来，两种修法完全不同）。
+     * 走 **stdout** 而不是 stderr：夹具把成功那档的 `output` 折成纯 stdout，
+     * 打 stderr 这批读数在「判据成功退出」的用例里永远看不见。 */
+    if (process.env.COMFYAPP_FORMAT_DEBUG) {
+      const ver = spawnSync(process.execPath, [entry, "--version"], {
+        encoding: "utf8",
+      });
+      console.log(
+        `[format][debug] ROOT=${ROOT}\n` +
+          `[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +
+          `[format][debug] oxfmt status=${res.status} stdout=${JSON.stringify(res.stdout)}\n` +
+          `[format][debug] oxfmt stderr=${JSON.stringify(res.stderr)}`,
+      );
+    }
     const lines = (res.stdout || "")
+      // **先剥 ANSI 颜色码再解析**：oxfmt 会给文件名上色（实测 CI 侧
+      // `\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」
+      // 过不了 `isScanned` 的路径形态，整张清单会被悄悄滤成空 —— 门禁当场读成
+      // 「命中 0 个」（本地 stdout 不着色，所以这一档只在 CI 形态下暴露）。
+      .replace(/\u001b\[[0-9;]*m/g, "")
       .split("\n")
       .map((line) => line.trim())
+      // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /
+      // `Format issues found in above N files.` / `Finished in ...` 这类摘要行，
+      // 认不出的行一律丢掉（宁可漏报也不许把摘要行当成文件名）。
+      .map(
+        (line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null,
+      )
       .filter((line) => line && !line.startsWith("["));
     if (res.status !== 0 && res.status !== 1) {
       console.error(
-        `[format] prettier 执行失败(exit ${res.status}):\n${res.stderr || res.stdout || ""}`,
+        `[format] oxfmt 执行失败(exit ${res.status}):\n${res.stderr || res.stdout || ""}`,
       );
       process.exit(2);
     }
     if (res.status === 1 && lines.length === 0) {
       console.error(
-        "[format] prettier 退出 1（「有差异」）却没有列出任何文件 —— 按 fail-closed 判定为\n" +
+        "[format] oxfmt 退出 1（「有差异」）却没有列出任何文件 —— 按 fail-closed 判定为\n" +
           "[format]   「命令没跑成」，不是「全库干净」。真实仓里出现这一行请贴出入口与\n" +
           "[format]   下面这段 stderr。",
       );
@@ -317,7 +359,9 @@ function collectUnformatted(entry) {
     }
     for (const f of lines) {
       const rel = toPosix(path.relative(ROOT, path.resolve(ROOT, f)));
-      if (isIgnored(rel)) continue;
+      // 传目录给 oxfmt 会把它认识的语言（含 md / json / css）一并扫到，
+      // 本格的面仍是 ts/tsx/js/jsx/mdx 减白名单 —— 用 isScanned 收口。
+      if (!isScanned(rel)) continue;
       found.add(rel);
     }
   }
@@ -347,43 +391,41 @@ async function main() {
     }
   }
 
-  const entry = resolvePrettierEntry();
+  const entry = resolveOxfmtEntry();
   if (!entry) {
     /* 「取不到 prettier」与「全库都格式化好了」是两种结论，必须走不同的门。
      * 旧代码在这一档会一路走到 `[format] OK`（空清单 = 0 个未过），
      * 也就是门禁在依赖缺失 / 形态选错的机器上**静默放行**（台账 E11）。 */
     console.error(
-      "[format] 找不到 prettier 入口：本地 node_modules 里没有它，" +
-        "`COMFYAPP_PRETTIER_ENTRY` 也没给。\n" +
+      "[format] 找不到 oxfmt 入口：本地 node_modules 里没有它，" +
+        "`COMFYAPP_OXFMT_ENTRY` 也没给。\n" +
         "[format]   以 exit 2 结束 —— 判据没跑成不许读成「全库干净」。",
     );
     process.exit(2);
   }
-  console.log(
-    "[format] 运行 prettier --list-different（首次较慢，之后走缓存）…",
-  );
+  console.log("[format] 运行 oxfmt --check（无缓存档，全量约 2s）…");
   const current = collectUnformatted(entry);
 
   if (REPORT_ONLY) {
     gatePass(
-      "prettier 格式",
-      `未过 prettier ${current.length} 个文件（只出清单）`,
+      "oxfmt 格式",
+      `未过 oxfmt ${current.length} 个文件（只出清单）`,
     );
     for (const line of indentItems(current)) console.log(line);
     process.exit(0);
   }
 
   if (current.length) {
-    gateFail("prettier 格式", current, {
+    gateFail("oxfmt 格式", current, {
       detail: `${current.length} 个文件未过`,
       hint:
         "本判据是硬闸（无基线、无 --update）:存量已清零,新增即阻断（规范 §13.5）。\n" +
-        "修复:pnpm exec prettier --write <上面列出的文件>（只格式化你改过的,别全库跑）。",
+        "修复:pnpm exec oxfmt <上面列出的文件>（只格式化你改过的,别全库跑）。",
     });
     process.exit(1);
   }
 
-  gatePass("prettier 格式", `扫描完成：命中 0 个`);
+  gatePass("oxfmt 格式", `扫描完成：命中 0 个`);
 }
 
 if (require.main === module) main();
@@ -395,7 +437,7 @@ module.exports = {
   isIgnored,
   isScanned,
   collectUnformatted,
-  resolvePrettierEntry,
+  resolveOxfmtEntry,
   IGNORE_GLOBS,
   GLOBS,
 };

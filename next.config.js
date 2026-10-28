@@ -6,7 +6,6 @@ import "./src/env.js";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import withBundleAnalyzer from "@next/bundle-analyzer";
 
 // ── 生产级安全响应头（OWASP 2025 A05/A08）────────────────────
 // 全站生效，同时覆盖 /api/*（tRPC、better-auth、文件流等）。
@@ -110,6 +109,11 @@ const config = {
   // lib/typescript.js API）；类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证。
   experimental: {
     useTypeScriptCli: false,
+    // #2542 第一格：Turbopack 插件运行时从默认的 childProcesses 换成 workerThreads
+    // （Next 16.4.3 config-shared.d.ts L691：'workerThreads' | 'childProcesses' |
+    // 'forceWorkerThreads'，默认 childProcesses）。动机是子进程冷启开销：每个插件
+    // 作业起一个真进程（Windows 上进程冷启最贵），换 worker 线程省掉进程冷启与
+    // IPC 序列化。判法见 issue #2542：冷/暖 next build 墙钟前后对比，不达标即回退。
     // #2081 后续（issue #2521）：依赖缓存槽把作业 node_modules 接成指向项目根外的
     // junction，Turbopack 对 next build 硬拒（Symlink ... is invalid, it points out of
     // the filesystem root）。Next 16.4.3 起提供 experimental.turbopackAdditionalRoots，
@@ -284,15 +288,9 @@ const config = {
   },
 };
 
-// ── @next/bundle-analyzer（可选体积分析）────────────────────────────
-// 仅当 ANALYZE=true 时启用（先跑 `pnpm analyze`，由 scripts/analyze-bundle.mjs 注入该变量）。
-// 注意：@next/bundle-analyzer 挂在 webpack 上，Turbopack 不支持；因此分析时
-// 必须强制走 webpack（analyze 脚本内 `next build --webpack`），默认
-// `next build`（Turbopack）不受影响。构建完成后输出可视化报告到
-// .next/analyze/*.html（client / nodejs / edge 三份），并监听
-// http://127.0.0.1:8888 供浏览器查看。
-const withBundleAnalyzerConfig = withBundleAnalyzer({
-  enabled: process.env.ANALYZE === "true",
-});
+// 体积分析走 Next 16 内置的 Turbopack 分析器：`pnpm analyze`（= `next analyze`），
+// 与默认构建链同链（#2538）。老的 @next/bundle-analyzer 挂在 webpack 上、产物形状
+// 与 Turbopack 不可比，已随本改动删除。快照与 JSONL 导出见 `next analyze --help`
+// （`--snapshot` 命名快照 / `analyze export` 流式导出给脚本或 AI）。
 
-export default withBundleAnalyzerConfig(config);
+export default config;

@@ -21,6 +21,7 @@ describe("workshop repository 映射", () => {
     characters: [],
     shots: [],
     stage: "script",
+    projectId: null,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-02"),
   };

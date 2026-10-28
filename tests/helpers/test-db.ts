@@ -127,12 +127,13 @@ CREATE TABLE IF NOT EXISTS favorite (
 CREATE TABLE IF NOT EXISTS task (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, type TEXT NOT NULL, prompt TEXT NOT NULL, negativePrompt TEXT,
   params TEXT NOT NULL, workflowName TEXT NOT NULL, workflowSnapshot TEXT, projectId TEXT, shotId TEXT, referenceImages TEXT,
-  status TEXT NOT NULL DEFAULT 'QUEUED', promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
+  status TEXT NOT NULL DEFAULT 'QUEUED', parentId TEXT, promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
   logs TEXT, error TEXT, validationErrors TEXT, createdAt TEXT NOT NULL, finishedAt TEXT, claimedBy TEXT, execPayload TEXT, progressNode TEXT, claimedAt TEXT, rawCli TEXT
 );
 CREATE TABLE IF NOT EXISTS taskImage (
   id TEXT PRIMARY KEY, taskId TEXT NOT NULL, localPath TEXT NOT NULL, mediaType TEXT NOT NULL DEFAULT 'image',
-  seed TEXT, width INTEGER, height INTEGER, isCover INTEGER NOT NULL DEFAULT 0, sortIndex INTEGER NOT NULL DEFAULT 0
+  seed TEXT, width INTEGER, height INTEGER, isCover INTEGER NOT NULL DEFAULT 0, sortIndex INTEGER NOT NULL DEFAULT 0,
+  humanRating INTEGER, isFavorite INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS workflowTemplate (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, taskType TEXT NOT NULL DEFAULT 'TXT2IMG',
@@ -179,7 +180,7 @@ CREATE TABLE IF NOT EXISTS workshopSession (
   id TEXT PRIMARY KEY, userId TEXT, title TEXT NOT NULL DEFAULT '未命名工坊项目', type TEXT NOT NULL DEFAULT 'short_video',
   tone TEXT NOT NULL DEFAULT '', logline TEXT NOT NULL DEFAULT '', idea TEXT NOT NULL DEFAULT '',
   scriptMarkdown TEXT NOT NULL DEFAULT '', scenes TEXT NOT NULL DEFAULT '[]', characters TEXT NOT NULL DEFAULT '[]',
-  shots TEXT NOT NULL DEFAULT '[]', stage TEXT NOT NULL DEFAULT 'script', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+  shots TEXT NOT NULL DEFAULT '[]', stage TEXT NOT NULL DEFAULT 'script', projectId TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS workshopDraft (
   id TEXT PRIMARY KEY, userId TEXT, title TEXT NOT NULL DEFAULT '未命名工坊项目', type TEXT NOT NULL DEFAULT 'short_video',
@@ -523,6 +524,11 @@ export interface SeedTaskInput {
   images?: Row[];
   workflowSnapshot?: unknown;
   referenceImages?: unknown;
+  /** 来源任务（重绘 / 放大的追溯用例用）。 */
+  parentId?: string | null;
+  /** 提交时刻的 RAW 执行载荷（task.retry 用例要区分「有载荷可原样重跑」与
+   *  「execPayload 为空的历史遗留行」两态）。 */
+  execPayload?: unknown;
   progress?: number;
   error?: string | null;
   createdAt?: Date;
@@ -542,6 +548,8 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
     projectId: input.projectId ?? null,
     workflowSnapshot: input.workflowSnapshot ?? null,
     referenceImages: input.referenceImages ?? null,
+    parentId: input.parentId ?? null,
+    execPayload: input.execPayload ?? null,
     progress: input.progress ?? 0,
     error: input.error ?? null,
     createdAt: input.createdAt ?? new Date(),

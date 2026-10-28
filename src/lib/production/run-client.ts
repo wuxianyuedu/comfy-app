@@ -10,7 +10,11 @@ import {
   type ProductionRun,
   type RunAction,
 } from "~/lib/production/run-types";
-import type { ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
+import type {
+  HumanVerdict,
+  ReviewMode,
+  ReviewVerdict,
+} from "~/lib/production/review-types";
 
 export interface RunSnapshot {
   run: ProductionRun;
@@ -119,6 +123,54 @@ export async function reviewShotImage(
     shotId,
   });
   return res.verdict;
+}
+
+/* ── 人工裁决与人工评分（FR-QA-07 人工侧 · #2480）─────────────────────────── */
+
+/** 人工裁决一条镜头 / 角色卡（approved / rejected + 一句话理由），返回落库后的裁决。 */
+export async function setHumanVerdict(
+  projectId: string,
+  kind: "shot" | "character",
+  targetId: string,
+  pass: boolean,
+  note = "",
+): Promise<HumanVerdict> {
+  const res = await vanillaApi.run.setHumanVerdict.mutate({
+    projectId,
+    kind,
+    targetId,
+    pass,
+    note,
+  });
+  return res.humanVerdict;
+}
+
+/** 人工评分一个镜头（0~5；null = 清除）。写 `shot.humanRating`。 */
+export async function setHumanRating(
+  projectId: string,
+  shotId: string,
+  rating: number | null,
+): Promise<void> {
+  await vanillaApi.run.setHumanRating.mutate({ projectId, shotId, rating });
+}
+
+/** 人工裁决整份剧本；裁决快照带当前剧本指纹（规划器据此豁免 AI 复评）。 */
+export async function setScriptHumanVerdict(
+  projectId: string,
+  pass: boolean,
+  note = "",
+): Promise<HumanVerdict> {
+  const res = await vanillaApi.run.setScriptHumanVerdict.mutate({
+    projectId,
+    pass,
+    note,
+  });
+  return res.humanVerdict;
+}
+
+/** 校准读数（只读）：人评分 ⇄ AI 评分的偏差聚合（调 rubric 的依据）。 */
+export async function fetchReviewCalibration(projectId: string) {
+  return vanillaApi.run.reviewCalibration.query({ projectId });
 }
 
 /**

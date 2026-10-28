@@ -278,7 +278,7 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
       "⚠️ 新增第五侧实现或换向量文件时**必须同批回来看这一行**，否则那一侧的漂移不再被这条闸看见。",
   },
   {
-    name: "prettier 格式",
+    name: "oxfmt 格式",
     globs: ["src/**", ".storybook/**"],
     script: "scripts/check-format.cjs",
     why:

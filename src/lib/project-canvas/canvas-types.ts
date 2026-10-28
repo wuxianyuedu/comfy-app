@@ -197,7 +197,8 @@ export function asCanvasNodeData(data: unknown): StrictCanvasNodeData {
  * 接不住它（持久化层就撞在这上面，见 `canvas-persistence-types.ts`）。语义改由
  * `isCanvasNode` 守卫与 `type` 字段承载，类型层面让两支同形。 */
 export type CanvasNodeType =
-  Node<CanvasNodeData, "canvasNode"> | Node<CanvasNodeData, "workflowArdot">;
+  | Node<CanvasNodeData, "canvasNode">
+  | Node<CanvasNodeData, "workflowArdot">;
 
 /** 类型守卫：是否是带 CanvasNodeData 的逻辑节点（排除 workflowArdot 纯视觉节点）。 */
 export function isCanvasNode(

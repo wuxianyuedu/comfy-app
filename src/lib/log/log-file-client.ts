@@ -88,7 +88,9 @@ export async function fetchFileLogSlice(
  * 这个动作，界面上没有可切的东西；它的历史由日志面板自己那一路覆盖。
  */
 export type RuntimeLogSourceKind =
-  "comfyui-runtime" | "drizzle-studio-runtime" | "ollama-runtime";
+  | "comfyui-runtime"
+  | "drizzle-studio-runtime"
+  | "ollama-runtime";
 
 /**
  * 拉取某来源的启动列表 + 指定一次（缺省取最新那一份）的正文。

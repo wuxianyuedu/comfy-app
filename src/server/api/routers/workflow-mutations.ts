@@ -243,7 +243,9 @@ export const workflowMutationProcedures = {
                 /* IO 的类型 / 默认值从 RAW 原件的字面量与 object_info 富化，
                  * 存库不再有第二份可执行的 API 图。 */
                 (existing.rawJson as
-                  Record<string, unknown> | null | undefined) ?? null,
+                  | Record<string, unknown>
+                  | null
+                  | undefined) ?? null,
                 parseWorkflowIOMap(rest.workflowIO),
               )
             : undefined,

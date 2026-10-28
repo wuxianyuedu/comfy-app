@@ -63,6 +63,8 @@ vi.mock("~/server/agent/review", () => ({
 import { createCallerFactory } from "~/server/api/trpc";
 import { runRouter } from "~/server/api/routers/run";
 import { productionRepository } from "~/lib/core/repository-production";
+import { scriptDigestOf } from "~/lib/production/run-types";
+import { normalizeScriptReviewState } from "~/lib/production/review-types";
 import { getTestDb, seedUser } from "../../../../tests/helpers/test-db";
 import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
 
@@ -280,5 +282,133 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
         mode: "乱" as "gacha",
       }),
     ).rejects.toThrow();
+  });
+});
+
+// ───────────────── 人工裁决与人工评分（FR-QA-07 人工侧 · #2480） ─────────────────
+
+describe("run 人工侧（#2480）", () => {
+  it("setHumanVerdict → 写回 shot.humanVerdict（裁决快照带 rev）", async () => {
+    await seedProduction("proj_h", {
+      shots: [{ id: "s1", rev: 2, imageUrl: "/x.png" }],
+    });
+    const res = await createCaller(makeCtx()).setHumanVerdict({
+      projectId: "proj_h",
+      kind: "shot",
+      targetId: "s1",
+      pass: false,
+      note: "崩了",
+    });
+    expect(res.humanVerdict).toMatchObject({
+      pass: false,
+      note: "崩了",
+      rev: 2,
+    });
+    const row = await productionRepository.getForUser("user-a", "proj_h");
+    const shot = (row?.shots as Array<Record<string, unknown>>)[0];
+    expect(shot?.humanVerdict).toMatchObject({ pass: false, rev: 2 });
+  });
+
+  it("setHumanVerdict → 角色卡同型；目标不存在 → NOT_FOUND", async () => {
+    await seedProduction("proj_h", {
+      characters: [{ id: "c1", rev: 1 }],
+    });
+    const res = await createCaller(makeCtx()).setHumanVerdict({
+      projectId: "proj_h",
+      kind: "character",
+      targetId: "c1",
+      pass: true,
+      note: "",
+    });
+    expect(res.humanVerdict).toMatchObject({ pass: true, rev: 1 });
+    await expect(
+      createCaller(makeCtx()).setHumanVerdict({
+        projectId: "proj_h",
+        kind: "shot",
+        targetId: "missing",
+        pass: true,
+        note: "",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("setHumanRating → 写回 shot.humanRating；不存在的镜头 → NOT_FOUND", async () => {
+    await seedProduction("proj_h", { shots: [{ id: "s1" }] });
+    await createCaller(makeCtx()).setHumanRating({
+      projectId: "proj_h",
+      shotId: "s1",
+      rating: 3,
+    });
+    let row = await productionRepository.getForUser("user-a", "proj_h");
+    expect((row?.shots as Array<Record<string, unknown>>)[0]?.humanRating).toBe(
+      3,
+    );
+    await createCaller(makeCtx()).setHumanRating({
+      projectId: "proj_h",
+      shotId: "s1",
+      rating: null,
+    });
+    row = await productionRepository.getForUser("user-a", "proj_h");
+    expect(
+      (row?.shots as Array<Record<string, unknown>>)[0]?.humanRating,
+    ).toBeNull();
+    await expect(
+      createCaller(makeCtx()).setHumanRating({
+        projectId: "proj_h",
+        shotId: "missing",
+        rating: 2,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("setScriptHumanVerdict → 写 scriptReview.humanVerdict（digest = 当前剧本指纹）", async () => {
+    await seedProduction("proj_h", { scriptMarkdown: "# 剧本" });
+    const res = await createCaller(makeCtx()).setScriptHumanVerdict({
+      projectId: "proj_h",
+      pass: true,
+      note: "可以",
+    });
+    expect(res.humanVerdict).toMatchObject({
+      pass: true,
+      digest: scriptDigestOf("# 剧本"),
+    });
+    const row = await productionRepository.getForUser("user-a", "proj_h");
+    const state = normalizeScriptReviewState(row?.scriptReview);
+    expect(state.humanVerdict).toMatchObject({
+      pass: true,
+      digest: scriptDigestOf("# 剧本"),
+    });
+  });
+
+  it("reviewCalibration → 只读聚合「AI 视觉判定 × 人评分」", async () => {
+    await seedProduction("proj_h", {
+      shots: [
+        {
+          id: "a",
+          imageUrl: "/a.png",
+          humanRating: 4,
+          imageReview: {
+            pass: true,
+            issues: [],
+            suggestion: "",
+            scoredAt: "t",
+            scores: {
+              promptAlignment: { score: 4, note: "" },
+              characterConsistency: { score: 3, note: "" },
+            },
+          },
+        },
+        { id: "b", imageUrl: "/b.png" }, // 没人评分也没判定 → 不进样本
+      ],
+    });
+    const report = await createCaller(makeCtx()).reviewCalibration({
+      projectId: "proj_h",
+    });
+    expect(report.samples).toBe(1);
+    expect(report.decisionAgreement).toBe(1);
+    expect(report.perDimension.map((d) => d.key)).toEqual([
+      "characterConsistency",
+      "promptAlignment",
+    ]);
   });
 });

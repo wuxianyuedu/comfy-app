@@ -1,17 +1,17 @@
 /**
  * 提交门槛自检：格式化提交必须与行为改动分离（ISSUE #575 第 9 项 / 规范 §13.5）。
  *
- * 这条门禁的判据是「把改动前的**整份文件**交给 prettier 重排，看是否逐字等于
+ * 这条门禁的判据是「把改动前的**整份文件**交给 oxfmt 重排，看是否逐字等于
  * 改动后」—— 踩过两个坑，用例把两坑都钉住：
- *   ① 判据若用「抹掉空白后逐行比对」，prettier 的**重新断行**与
- *      `prettier-plugin-tailwindcss` 的**类名重排**都看不见（实测漏报）；
- *   ② 若把 `git diff` 的 **hunk 片段**单独交给 prettier，会 `SyntaxError`
+ *   ① 判据若用「抹掉空白后逐行比对」，格式化器的**重新断行**与 Tailwind 类名重排
+ *      （prettier 时代靠 `prettier-plugin-tailwindcss`，oxfmt 内置）都看不见（实测漏报）；
+ *   ② 若把 `git diff` 的 **hunk 片段**单独交给格式化器，会 `SyntaxError`
  *      （片段不是完整的语法单元）—— 那样每个文件都「无法判定」，门禁静默失效。
- * 所以这里必须真跑 git + prettier（临时仓库 + 真提交），不能靠桩。
+ * 所以这里必须真跑 git + oxfmt（临时仓库 + 真提交），不能靠桩。
  *
  * 临时仓库走共享夹具 `defineGateRepo`（§11.16.1）—— 手搓的那套四件套收在一处。
  * 本文件的形状比多数门禁自测重：既要 `git init` + 真提交，又要把仓库的
- * `node_modules` 软链进工作区（脚本按「向上找 node_modules」解析 prettier）。
+ * `node_modules` 软链进工作区（脚本按「向上找 node_modules」解析 oxfmt）。
  * 两项都通过夹具的 `setup` / `copy` 选项声明，不回到「自己 beforeEach 里搭」。
  *
  * 规范：docs/standards/13-提交与-code-review.md §13.5
@@ -26,7 +26,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { vi } from "vitest";
 
 import {
@@ -38,29 +39,32 @@ import {
 } from "./helpers/gate-repo";
 import { symlinkDir } from "./helpers/symlink-dir";
 
-/* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 prettier
- * （门禁按「整批一次 prettier」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
+/* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 oxfmt
+ * （门禁按「整批一次 oxfmt」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
  * 5s 的用例超时在全量并行满载时会被击穿（CI 实测过一次 `Test timed out in 5000ms`，
  * 报在 `tests/check-format.test.ts` 的同类用例上）。整文件放宽到 30s——只影响本文件，
  * 不掩盖其它文件的真实挂起。 */
-/* prettier 全仓扫描是本套件最慢的用例族：满载下 30s 不够（实测越线）。 */
-/* 本文件的每个用例都要反复 spawn prettier（全仓扫描 + 逐文件格式化）：
+/* oxfmt 全仓扫描是本套件最慢的用例族：满载下 30s 不够（实测越线）。 */
+/* 本文件的每个用例都要反复 spawn oxfmt（全仓扫描 + 逐文件格式化）：
    全量满载下 60s 仍不够（实测 683s 跑完 17 例）——这是套件里最重的
    合法用例族；vitest 5 升级后全量并发下「12 文件阻断」单例实测又顶穿
    120s，预算给到 300s（与 storybook-tsc-input ④ 同档）。 */
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 /**
- * prettier 的 **JS 入口**（不是 `node_modules/.bin/prettier`）。
+ * oxfmt 的 **JS 入口**（不是 `node_modules/.bin/oxfmt`）。
  *
  * `.bin/` 下那个是启动 shell 包装（Windows 上是 .cmd），`node <它>` 会
  * `SyntaxError: Invalid or unexpected token`；而临时目录里没有 node_modules，
- * 也不能直接执行它。走 `require.resolve` 拿真实脚本路径，`node <它>` 才成立。
+ * 也不能直接执行它。走 `require.resolve` 拿真实包根再拼 `bin/oxfmt`（`bin/oxfmt`
+ * 本身不在包的 `exports` 里，直接 resolve 会被挡），`node <它>` 才成立。
  */
-const PRETTIER = require.resolve("prettier/bin/prettier.cjs");
-const TAILWIND_PLUGIN = require.resolve("prettier-plugin-tailwindcss");
+const OXFMT_PKG_DIR = dirname(require.resolve("oxfmt/package.json"));
+const OXFMT_ENTRY = join(OXFMT_PKG_DIR, "bin", "oxfmt");
+/** `bin/oxfmt` 只是一行 `import "../dist/cli.js"`，计数 wrapper 要转发的是**真身**。 */
+const OXFMT_CLI = join(OXFMT_PKG_DIR, "dist", "cli.js");
 
-/** 探针 prettier 配置的落点（在临时仓库**之外**，避免被 `git add -A` 一并提交）。 */
+/** 探针 / wrapper 的落点（在临时仓库**之外**，避免被 `git add -A` 一并提交）。 */
 let configDir = "";
 
 beforeEach(() => {
@@ -76,7 +80,7 @@ afterEach(() => {
  *
  * `copy` 的两项都是「不带就 exit 2」的硬依赖（缺了的表现是「门禁坏了」，
  * 实际是夹具少一块）：
- *   · `scripts/launcher-core/` —— prettier 形态判据模块按**相对脚本的路径**动态
+ *   · `scripts/launcher-core/` —— 格式化器形态判据模块按**相对脚本的路径**动态
  *     `import()`（`launcher-core/shell.mjs`），缺了脚本以 exit 2 结束；
  *     递归拷整个目录而不是软链单文件（`shell.mjs` 还依赖同目录的 `command-echo.mjs`，
  *     且 Windows 下 `fs.symlink(文件)` 普通用户 100% EPERM）。
@@ -106,9 +110,9 @@ const { test, expect } = defineGateRepo({
     },
   ],
   setup: (repo) => {
-    /* 临时仓库也要能解析 prettier：真实场景里门禁在**源码仓库**里跑
+    /* 临时仓库也要能解析 oxfmt：真实场景里门禁在**源码仓库**里跑
      * （node_modules 就在旁边），临时仓库没有 —— 软链过来最贴近真实的解析路径，
-     * 也让脚本的「向上找 prettier」这一档被真正走到（而不是悄悄退回 pnpm 兜底）。
+     * 也让脚本的「向上找 oxfmt」这一档被真正走到（而不是悄悄退回 pnpm 兜底）。
      * `symlinkDir` 内部按平台选 junction / dir（Windows 下目录软链需特权，
      * junction 是 NTFS 内建、无需特权且语义等价）。 */
     symlinkDir(
@@ -151,35 +155,97 @@ function commitAll(repo: GateRepo, message: string): void {
 }
 
 /**
- * 在临时仓库里对文件跑 prettier —— 用**仓库真实的那套插件行为**。
+ * 在临时仓库里对文件跑 oxfmt —— 用**仓库真实那一版**格式化器。
  *
- * 临时目录没有 node_modules，而仓库的 `prettier.config.js` 按**包名**加载
- * `prettier-plugin-tailwindcss`（从配置文件所在目录向上找）—— 直接指过去会
- * `Cannot find package`。这里写一份**只把插件换成绝对路径**的等价配置，
- * 于是「尾随类名重排」这一档覆盖不会丢。
+ * 夹具造出来的「改动后」这一侧必须是**格式化器真的给出的形态**：手写一份（prettier
+ * 时代就是这么写的）在换格式化器之后会变成「手写的那一份」，判据与夹具各说一套，
+ * 而用例还全绿 —— 那是最难看的一类失效。所以夹具与判据走**同一个入口**。
  */
 function formatInPlace(repo: GateRepo, rel: string | string[]): void {
-  // 探针配置写在临时目录**之外**：写在仓库里会被 `git add -A` 一并提交，
-  // 把用例变成「格式化 + 新增一个配置文件」的混合提交（判据就不再是纯格式化了）。
-  const config = join(configDir, "prettier.probe.config.mjs");
-  writeFileSync(
-    config,
-    `export default {\n  plugins: [${JSON.stringify(TAILWIND_PLUGIN)}],\n};\n`,
-  );
-  /* 路径可以是**一批**：`prettier --write a b c…` 一次做完，而每条路径各起一次
-   * 进程是本文件最大的那笔开销（prettier 冷启 + 插件加载实测 108ms/次，
-   * Linux 上裸 `node -e 0` 就已 37ms，Windows 更贵）。「12 个文件各起一次」
-   * 与「一次做完」在**判据上等价** —— 被测的是「这些文件有没有被重排」，
-   * 不是「prettier 被起了几次」。
+  /* 路径可以是**一批**：`oxfmt a b c…` 一次做完，而每条路径各起一次进程是本文件
+   * 最大的那笔开销（格式化器冷启实测百毫秒级，与文件大小几乎无关）。「12 个文件
+   * 各起一次」与「一次做完」在**判据上等价** —— 被测的是「这些文件有没有被重排」，
+   * 不是「格式化器被起了几次」。
    * 仍逐条调用的用例（单文件那一族）语义不变，形参收一个字符串即可。 */
   const paths = Array.isArray(rel) ? rel : [rel];
-  execFileSync("node", [PRETTIER, "--config", config, "--write", ...paths], {
+  execFileSync("node", [OXFMT_ENTRY, ...paths], {
     cwd: repo.dir,
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
-/** 生成 n 个未过 prettier 的源文件并提交成基线。 */
+/**
+ * 把一段源码交给 oxfmt，拿回它的规范形态（不落进仓库）。
+ *
+ * 直接喂 `classifyReformatOnly` 的那几条用例要自己给「改动后」这一侧，理由同
+ * `formatInPlace`：**那一侧必须是格式化器真给的形态**。
+ */
+function oxfmtText(text: string, ext = "ts"): string {
+  const dir = mkdtempSync(join(tmpdir(), "reformat-probe-"));
+  try {
+    const target = join(dir, `probe.${ext}`);
+    writeFileSync(target, text);
+    execFileSync("node", [OXFMT_ENTRY, target], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return readFileSync(target, "utf8");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 把临时仓库里那份 oxfmt 换成一个**计数 wrapper**：命中一次 = 「格式化器被起了一次」。
+ *
+ * 为什么能换掉：脚本按「从自己所在目录向上找 `node_modules`」解析 `oxfmt/package.json`
+ * 再拼 `bin/oxfmt`，而**被检查的那份脚本**就放在临时仓库的 `scripts/` 下 —— 于是临时
+ * 仓库里的 `node_modules` 才是它命中的那一处（真仓库那一份换不掉，`HERE` 就是真仓库；
+ * 这正是这几条用例要把脚本从临时仓库里 `require` 进来的原因）。
+ *
+ * `failFirst`:整批那一次故意以非 0 退出 —— 用来验「批量没给结论时，是不是每个文件
+ * 都退回了逐文件那一档」。`bin/oxfmt` 只有一行 `import "../dist/cli.js"`，所以
+ * wrapper 转发的是 `dist/cli.js` 这个真身（ESM，用 `type: "module"` 让 extensionless
+ * 的入口按 ESM 加载 —— 真的那份就是这么跑起来的）。
+ *
+ * @returns 读调用次数的函数
+ */
+function instrumentOxfmt(repo: GateRepo, failFirst = false): () => number {
+  const counter = join(configDir, "oxfmt-calls.txt");
+  const flag = join(configDir, "oxfmt-failed-once");
+  writeFileSync(counter, "");
+  const wrapper = join(configDir, "oxfmt-instrumented.mjs");
+  writeFileSync(
+    wrapper,
+    [
+      'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
+      `appendFileSync(${JSON.stringify(counter)}, "call\\n");`,
+      ...(failFirst
+        ? [
+            `if (!existsSync(${JSON.stringify(flag)})) {`,
+            `  writeFileSync(${JSON.stringify(flag)}, "1");`,
+            "  process.exit(1);",
+            "}",
+          ]
+        : []),
+      `await import(${JSON.stringify(pathToFileURL(OXFMT_CLI).href)});`,
+    ].join("\n"),
+  );
+  rmSync(join(repo.dir, "node_modules"), { recursive: true, force: true });
+  mkdirSync(join(repo.dir, "node_modules", "oxfmt", "bin"), {
+    recursive: true,
+  });
+  copyFileSync(
+    wrapper,
+    join(repo.dir, "node_modules", "oxfmt", "bin", "oxfmt"),
+  );
+  writeFileSync(
+    join(repo.dir, "node_modules", "oxfmt", "package.json"),
+    JSON.stringify({ name: "oxfmt", version: "0.0.0", type: "module" }),
+  );
+  return () => readFileSync(counter, "utf8").split("\n").filter(Boolean).length;
+}
+
+/** 生成 n 个未过 oxfmt 的源文件并提交成基线。 */
 function seedDirty(repo: GateRepo, n: number): string[] {
   const files: string[] = [];
   for (let i = 0; i < n; i++) {
@@ -228,12 +294,12 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
     expect(r.output).toContain("没有纯格式化的");
   });
 
-  test("prettier 的重新断行也算纯格式化（逐行比对会漏报的那一档）", ({
+  test("格式化器的重新断行也算纯格式化（逐行比对会漏报的那一档）", ({
     repo,
   }) => {
     seedDirty(repo, 1);
     const rel = "src/lib/dirty-0.ts";
-    // 超宽对象 → prettier 一定把它拆成多行：断行变了，内容没变。
+    // 超宽对象 → 格式化器一定把它拆成多行：断行变了，内容没变。
     repo.write(
       rel,
       'export const PROBE_0={aLongFieldName:"x",anotherLongFieldName:"y",third:"z"};\n',
@@ -262,6 +328,98 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
     const r = repo.run();
     expect(r.code).toBe(0);
     expect(r.output).toContain("没有纯格式化的");
+  });
+});
+
+/**
+ * 换格式化器那一笔的显式出口：`format-migration:` 尾注（#2541）。
+ *
+ * 两条硬闸在这件事上**互锁**：格式判据是硬闸且没有基线 ⇒ 全量重排必须与切换同批；
+ * 而本判据的阈值又会拦住同批里的重排 —— 迁移没有可落地的形状。所以给了声明这条
+ * 路，但**它是两道护栏之后才成立**的，这组用例锁的正是「护栏真的会拦」：
+ *   ① 区间里**每个**提交都要声明（漏一条就不认）；
+ *   ② **逐提交**看，重排要么不到阈值、要么那条提交整条都是重排。
+ * 少任何一道都回到阻断那一支 —— 否则这条尾注就成了「格式化随便夹带」的万能钥匙。
+ */
+describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_000 }, () => {
+  /** 一条带迁移尾注的提交正文（尾注写在正文里，与标题分行）。 */
+  const declared = (title: string) => `${title}\n\nformat-migration: prettier → oxfmt`;
+
+  test("每条提交都声明 + 重排独占一条 ⇒ 按迁移放行（读数照报）", ({ repo }) => {
+    seedDirty(repo, 12);
+    // 第一条：切换本身（功能改动 + 零重排）。
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("migrate the formatter"));
+    // 第二条：重排独占。
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+
+    const r = repo.run(["--range", "HEAD~2..HEAD"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+    expect(r.output).toContain("纯格式化 12 个");
+  });
+
+  test("重排与功能改动混在**同一条**提交里 ⇒ 声明了照样拦（护栏 ②）", ({
+    repo,
+  }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("reformat and sneak a change in"));
+
+    const r = repo.run(["--range", "HEAD~1..HEAD"]);
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("不按迁移读");
+  });
+
+  test("漏了一个提交没声明 ⇒ 不按迁移读（护栏 ①）", ({ repo }) => {
+    seedDirty(repo, 12);
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, "migrate the formatter"); // 这一条**没**写尾注
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+
+    const r = repo.run(["--range", "HEAD~2..HEAD"]);
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("格式化提交分离");
+  });
+
+  /* 平台侧那条流水线跑的是**合并预览**：`HEAD` 是合并提交，于是 `HEAD~1..HEAD`
+   * 覆盖的是**整个 PR 区间**而不是「一条提交」（这正是 CI 那一格的现场 —— 不带
+   * `--range`、也没有暂存区，脚本落到「判 HEAD~1..HEAD」那一支）。
+   *
+   * 合并提交相对第一父提交的 diff 就是整份 PR：把它算进「逐提交」那张表，等于把
+   * 汇总又请回分母（切换那一笔的判据脚本 / 文档进分母 ⇒ 32/56），护栏 ② 当场自锁；
+   * 它自动生成的正文也不会带尾注 ⇒ 护栏 ① 同样不成立。所以两条都按 `--no-merges`
+   * 摘掉它，只判区间里那些真有人做了改动的提交。 */
+  test("合并预览（HEAD 是合并提交）⇒ 合并提交不进逐提交那张表", ({ repo }) => {
+    seedDirty(repo, 12);
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("migrate the formatter"));
+
+    repo.git("checkout", "-b", "reformat");
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+    repo.git("checkout", "-");
+    repo.git("merge", "--no-ff", "-q", "reformat", "-m", "Merge reformat");
+
+    // 合并预览那一支：没有 --range、也没有暂存改动 ⇒ 判 `HEAD~1..HEAD`。
+    const r = repo.run();
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
   });
 });
 
@@ -381,21 +539,21 @@ describe(
 );
 
 describe(
-  "判定成本：整批一次 prettier，不按文件各起一次",
+  "判定成本：整批一次 oxfmt，不按文件各起一次",
   { timeout: 300_000 },
   () => {
     /* 这条用例守的是一条**真实发生过的**失效：早先的实现对每个文件各起一次
-     * `prettier --stdin-filepath`，而 prettier 的启动 + 插件加载是主要成本
+     * `prettier --stdin-filepath`，而格式化器的启动 + 插件加载是主要成本
      * （实测单文件约 400ms，与文件大小几乎无关）—— 12 个文件 ≈ 5s，正好把
      * vitest 默认的 testTimeout 顶穿。现场表现是 `Test timed out in 5000ms`，
      * 报在别的门禁用例上，看起来像「测试写得慢」，实际是门禁自身的调用形态
      * 在文件数上线性叠加（真人「批量格式化」提交改几十个文件时只会更慢）。
      *
-     * 判据用**计数**而不是耗时：耗时在负载波动下必然抖动，而「prettier 起了
-     * 几次」是确定的。整批口径下 batch 恰好一次（外加退回 stdin 的兜底，正常
-     * 路径上为 0），逐文件口径下是「文件数 + 1」。用包装脚本记调用次数，
+     * 判据用**计数**而不是耗时：耗时在负载波动下必然抖动，而「格式化器起了
+     * 几次」是确定的。整批口径下 batch 恰好一次（外加逐文件兜底，正常路径上为 0），
+     * 逐文件口径下是「文件数 + 1」。用包装脚本记调用次数，
      * 断言与阈值无关的形态：次数远小于文件数。 */
-    test("12 个文件的改动 → prettier 调用次数远小于文件数（整批口径）", ({
+    test("12 个文件的改动 → oxfmt 调用次数远小于文件数（整批口径）", ({
       repo,
     }) => {
       seedDirty(repo, 12);
@@ -404,200 +562,79 @@ describe(
         Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
       );
       commitAll(repo, "format only");
-
-      const real = require.resolve("prettier/bin/prettier.cjs", {
-        paths: [process.cwd()],
-      });
-      const wrapper = join(configDir, "prettier-count.cjs");
-      const counter = join(configDir, "prettier-calls.txt");
-      writeFileSync(
-        wrapper,
-        [
-          'const { appendFileSync } = require("node:fs");',
-          `appendFileSync(${JSON.stringify(counter)}, "call\\n");`,
-          `require(${JSON.stringify(real)});`,
-        ].join("\n"),
-      );
-      // 把 wrapper 放到临时仓库的 node_modules 下：脚本按「向上找 node_modules」
-      // 解析 prettier，命中它即等于「prettier 被起了几次」+1。
-      rmSync(join(repo.dir, "node_modules"), { recursive: true, force: true });
-      mkdirSync(join(repo.dir, "node_modules", "prettier", "bin"), {
-        recursive: true,
-      });
-      copyFileSync(
-        wrapper,
-        join(repo.dir, "node_modules", "prettier", "bin", "prettier.cjs"),
-      );
-      symlinkDir(
-        join(process.cwd(), "node_modules", "prettier-plugin-tailwindcss"),
-        join(repo.dir, "node_modules", "prettier-plugin-tailwindcss"),
-      );
-      writeFileSync(
-        join(repo.dir, "node_modules", "prettier", "package.json"),
-        '{"name":"prettier","version":"0.0.0"}',
-      );
       writeFileSync(join(repo.dir, ".gitignore"), "node_modules\n");
+
+      const calls = instrumentOxfmt(repo);
 
       const r = repo.run();
       expect(r.code).toBe(1);
       expect(r.output).toContain("纯格式化 12 个");
 
-      const calls = readFileSync(counter, "utf8").trim().split("\n").length;
       // 逐文件口径下这里会是 13；整批口径下是 1（兜底最多再补几次）。
-      expect(calls).toBeLessThanOrEqual(3);
+      expect(calls()).toBeLessThanOrEqual(3);
     });
   },
 );
 
 /**
- * 「批量结果里没被 prettier 改过」不是一个结论，而是**两件事**叠在一起：
- * 文件本来就规范，或 prettier 自己的 ignore 规则把它跳过了。只有前者能推出
- * 「这次提交不是纯格式化」。这组用例锁的就是「后者必须回落到 stdin 口径」——
- * 判据漏掉它，纯格式化提交会被放行（`git blame` 永久失真，正是本门禁存在的理由）。
+ * 「回读比对」这一档的两端（真起 oxfmt，不打桩 —— 被锁的正是「谁来给答案」）。
  *
- * 真起 prettier 而不打桩：被锁的正是「谁来给答案」，桩一打就锁不住了。
+ * oxfmt 时代没有「格式化器输出了什么」可解析（prettier 时代那份 `(unchanged)` 标记就是
+ * 这一类 —— 它把判据绑死在输出文案上，换一次工具就得重写一次）。现在判的是**写盘前
+ * 留快照、写盘后回读比对**：结论只依赖文件内容。于是「改动前本来就规范」与「改动后
+ * 正是它的规范形态」这两种形状都必须由**格式化器真给出来的形态**造 —— 手写一份
+ * （旧用例就是这么写的）在换格式化器之后会变成「手写的那一份」，判据与夹具各说一套，
+ * 而用例还全绿。
  */
-describe("批量口径的缺项退回逐文件 stdin 判定", { timeout: 300_000 }, () => {
-  /* 「批量结果里没被 prettier 改过」不是一个结论，而是**两件事**叠在一起：
-   * 文件本来就规范，或 prettier 自己的忽略规则把它跳过了。只有前者能推出
-   * 「这次提交不是纯格式化」—— 判据漏掉后者，纯格式化提交会被放行，
-   * `git blame` 永久失真（正是本门禁存在的理由）。
-   *
-   * 忽略规则的判据必须取 prettier 自己的那一套（它以 cwd 为根读 `.gitignore`），
-   * 不能用 `git check-ignore` 代判 —— 实测两者不一致：目录名被 `.gitignore`
-   * 命中时，prettier 连**显式点名**的路径也一并跳过（`--write <file>` 静默返回
-   * 空输出），而 `git check-ignore` 对**已跟踪**的路径报「未被忽略」。真实历史
-   * 里的形态正是这样（`.workbuddy/skills/build-guard/guard.js` 被格式化后，
-   * 在 #619 的合并提交里落成了「纯格式化」）。
-   *
-   * 判据本体是「谁来给答案」：`classifyReformatOnly` 会真起 prettier，用桩就锁不住。
-   */
-  test("落在 prettier 忽略路径下的源码被跳过 → 仍按 stdin 口径判为纯格式化", ({
-    repo,
-  }) => {
-    seedEmpty(repo);
-    repo.write(".gitignore", "node_modules\n.workbuddy\n");
-    commitAll(repo, "ignore the dir");
-
-    // 这一批全部落在被忽略的目录下：批量口径一个都不会回读（`--write <dir>`
-    // 整目录跳过它），于是每个文件都只剩「本来就规范」这一种解释 —— 而 stdin
-    // 口径明明白白给出「prettier 会把它改成下面那样」。真结论是后者。
-    const before = "export const P={a:1,\n\n\n  b:2};\n";
-    const after = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
-    repo.write(".workbuddy/probe.ts", before);
-
+describe("回读比对：本来就规范 / 改动后正是规范形态", { timeout: 300_000 }, () => {
+  /** 真仓库里那份判据（`HERE` 就是真仓库，oxfmt 解析不受临时仓库影响）。 */
+  function realJudge() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("../scripts/check-reformat-only.cjs") as {
+    return require("../scripts/check-reformat-only.cjs") as {
       classifyReformatOnly: (
         entries: Array<{ file: string; before: string; after: string }>,
       ) => Set<string>;
     };
-    const verdict = mod.classifyReformatOnly([
-      { file: ".workbuddy/probe.ts", before, after },
-    ]);
-    expect(
-      [...verdict],
-      "文件没出现在批量结果里 —— 那不代表「它本来就规范」，仍要按 stdin 口径判",
-    ).toEqual([".workbuddy/probe.ts"]);
-  });
+  }
 
-  test("批量口径判为「本来就规范」的文件不再起 stdin（常见路径不为兜底付账）", ({
-    repo,
-  }) => {
+  test("改动前不规范、改动后正是 oxfmt 给的形态 → 判为纯格式化", ({ repo }) => {
     seedEmpty(repo);
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("../scripts/check-reformat-only.cjs") as {
-      classifyReformatOnly: (
-        entries: Array<{ file: string; before: string; after: string }>,
-      ) => Set<string>;
-    };
-    // 改动前的内容**已经规范**：prettier 不会改写它，批量结果里没有这项，
-    // 但它本来就没有「被跳过」的可能（不在忽略路径下），兜底不该被触发 ——
-    // 判定为「不是纯格式化」靠的是 stdin 给的回文与改动后不同。
-    const clean = "export const P = { a: 1, b: 2 };\n";
-    const changed = "export const P = { a: 1, b: 3 };\n";
-    expect([
-      ...mod.classifyReformatOnly([
-        { file: "src/lib/p.ts", before: clean, after: changed },
-      ]),
-    ]).toEqual([]);
-    // 同一个文件若是「改动前就不规范、改动后是它的规范形态」→ 纯格式化。
     const messy = "export const P={a:1,\n\n\n  b:2};\n";
-    const tidy = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+    const tidy = oxfmtText(messy);
+    expect(tidy, "夹具造出来的形态必须与改动前不同").not.toBe(messy);
     expect([
-      ...mod.classifyReformatOnly([
+      ...realJudge().classifyReformatOnly([
         { file: "src/lib/p.ts", before: messy, after: tidy },
       ]),
     ]).toEqual(["src/lib/p.ts"]);
   });
+
+  test("改动前本来就规范、改动后是真实改动 → 不判为纯格式化", ({ repo }) => {
+    seedEmpty(repo);
+    const clean = oxfmtText("export const P = { a: 1, b: 2 };\n");
+    const changed = "export const P = { a: 1, b: 3 };\n";
+    expect([
+      ...realJudge().classifyReformatOnly([
+        { file: "src/lib/p.ts", before: clean, after: changed },
+      ]),
+    ]).toEqual([]);
+  });
 });
 
 /**
- * `--write <目录>` 的逐行输出是**三档不同语义**（脚本文件头那张表）：改写 /
- * 未改写的结论 / 没有结论。「没有结论」这一档必须退回逐文件 stdin（忽略路径下的
- * 源码被格式化过就是历史先例）；而 `(unchanged)` **是结论**、不许退回 —— 退回去
- * 等于让每一个「本来就规范」的文件都白起一次 prettier，而实际提交里绝大多数文件
- * 都在这一档（实测 59 个改动文件里 49 个 `(unchanged)`）。
+ * 批量那一档的两件事：**退出 0 ⇒ 每个文件都拿到了结论**（改写与否交给回读比对），
+ * **非 0 ⇒ 没有结论**，此时每个文件都要退回逐文件那一档再判一次。
  *
- * 这组用例锁的就是「三档有没有被分对」，判据是**prettier 被起了几次**而不是耗时：
- * 次数在负载波动下是确定的，耗时不是。
+ * 判据是**格式化器被起了几次**而不是耗时：次数在负载波动下是确定的，耗时不是。
+ * 计数靠换掉**临时仓库里那份 oxfmt 的入口**（见 `instrumentOxfmt`），而**被检查的
+ * 那份脚本也要从临时仓库里 `require`** —— 真仓库那一份的 `HERE` 就是真仓库，换不掉。
  *
- * 计数走**子进程调用计数**（把 `spawnSync` 打点），而不是包装 prettier 入口：
- * 后者要靠「向上找 node_modules」命中 wrapper，而这里脚本是从真仓库加载的
- * （HERE 就是真仓库），换不掉。打点的是「起没起子进程」，正是成本本体。
- *
- * 真起 prettier 而不打桩：被锁的正是「谁来给答案」。
+ * 真起 oxfmt 而不打桩：被锁的正是「谁来给答案」。
  */
 describe(
-  "批量输出的三档语义：改写 / 未改写的结论 / 没有结论",
+  "批量那一档：退出 0 一次给全部结论，非 0 逐文件兜底",
   { timeout: 300_000 },
   () => {
-    /**
-     * 数 prettier 起了几次：把「prettier 入口」的解析结果换成一个自增计数后
-     * 转发给真入口的 wrapper。
-     *
-     * 每个用例在自己的**临时工作区**里跑（`scripts/` 下的脚本副本 +
-     * `node_modules/prettier`）：脚本按「从自己所在目录向上找 node_modules」
-     * 解析 prettier，命中 wrapper 即等于「prettier 被起了一次」。
-     * 这正是上面那条「调用次数」用例的手法 —— 换不掉真仓库的 prettier，就换掉
-     * 「被检查的那份脚本」所在的位置。
-     */
-    function instrumentPrettier(repo: GateRepo): () => number {
-      const real = require.resolve("prettier/bin/prettier.cjs", {
-        paths: [process.cwd()],
-      });
-      const counter = join(configDir, "prettier-called.txt");
-      writeFileSync(counter, "");
-      const wrapper = join(configDir, "prettier-instrumented.cjs");
-      writeFileSync(
-        wrapper,
-        [
-          'const { appendFileSync } = require("node:fs");',
-          `appendFileSync(${JSON.stringify(counter)}, "call\\n");`,
-          `require(${JSON.stringify(real)});`,
-        ].join("\n"),
-      );
-      rmSync(join(repo.dir, "node_modules"), { recursive: true, force: true });
-      mkdirSync(join(repo.dir, "node_modules", "prettier", "bin"), {
-        recursive: true,
-      });
-      copyFileSync(
-        wrapper,
-        join(repo.dir, "node_modules", "prettier", "bin", "prettier.cjs"),
-      );
-      symlinkDir(
-        join(process.cwd(), "node_modules", "prettier-plugin-tailwindcss"),
-        join(repo.dir, "node_modules", "prettier-plugin-tailwindcss"),
-      );
-      writeFileSync(
-        join(repo.dir, "node_modules", "prettier", "package.json"),
-        JSON.stringify({ name: "prettier", version: "0.0.0" }),
-      );
-      return () =>
-        readFileSync(counter, "utf8").split("\n").filter(Boolean).length;
-    }
-
     /**
      * 在临时仓库里加载**那一份**脚本（而不是真仓库的），再把一批文件喂给它 ——
      * 于是 wrapper 命中、计数有意义。
@@ -617,14 +654,12 @@ describe(
       return tempMod.classifyReformatOnly(entries);
     }
 
-    test("`(unchanged)` 是结论：本来就规范的文件不再起 stdin（整批口径只起一次）", ({
-      repo,
-    }) => {
+    test("本来就规范的文件：整批一次就够，不再为它另起一次", ({ repo }) => {
       seedEmpty(repo);
-      const before = "export const P = { a: 1, b: 2 };\n";
+      const before = oxfmtText("export const P = { a: 1, b: 2 };\n");
       const after = "export const P = { a: 1, b: 3 };\n";
 
-      const calls = instrumentPrettier(repo);
+      const calls = instrumentOxfmt(repo);
       const value = verdictViaTempRepo(repo, [
         { file: "src/lib/keep-clean.ts", before, after },
       ]);
@@ -632,58 +667,44 @@ describe(
       expect([...value], "改动后不是它的规范形态 → 不是纯格式化").toEqual([]);
       expect(
         calls(),
-        "整批 `--write` 一次就够：`(unchanged)` 已经是结论，再起 stdin 是白付" +
-          "（实际提交里绝大多数文件都在这一档）",
+        "整批那一次已经给了结论（回读没变），再起一次是白付 —— 实际提交里" +
+          "绝大多数文件都在这一档",
       ).toBe(1);
     });
 
-    test("没有结论的那一档仍退回 stdin（忽略路径下的源码不许被放行）", ({
-      repo,
-    }) => {
-      seedEmpty(repo);
-      repo.write(".gitignore", "node_modules\n.workbuddy\n");
-      commitAll(repo, "ignore the dir");
-
-      // `.workbuddy/` 被 `.gitignore` 命中 ⇒ prettier 连显式点名的路径也跳过，
-      // `--write` 输出里**没有它这一行** = 没有结论。而 stdin 口径明明白白给出
-      // 「prettier 会把它改成下面那样」。真结论是后者。
-      const before = "export const P={a:1,\n\n\n  b:2};\n";
-      const after = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
-      repo.write(".workbuddy/skipped.ts", before);
-
-      const calls = instrumentPrettier(repo);
-      const value = verdictViaTempRepo(repo, [
-        { file: ".workbuddy/skipped.ts", before, after },
-      ]);
-
-      expect(
-        [...value],
-        "它没出现在整批输出里 —— 那不代表「本来就规范」，仍要按 stdin 口径判",
-      ).toEqual([".workbuddy/skipped.ts"]);
-      expect(
-        calls(),
-        "整批那一次之外，还要为「没有结论」的这一个文件补一次 stdin",
-      ).toBe(2);
-    });
-
-    test("被改写的那一档：规范形态取自 prettier 写完的正文，不再起 stdin", ({
+    test("整批没跑起来 ⇒ 每个文件各退一次兜底（没结论不许当成「本来就规范」）", ({
       repo,
     }) => {
       seedEmpty(repo);
       const messy = "export const P={a:1,\n\n\n  b:2};\n";
-      const tidy = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+      const tidy = oxfmtText(messy);
 
-      const calls = instrumentPrettier(repo);
+      // 整批那一次故意以非 0 退出 ⇒ 没有结论，必须退回逐文件那一档。
+      const calls = instrumentOxfmt(repo, true);
       const value = verdictViaTempRepo(repo, [
         { file: "src/lib/messy.ts", before: messy, after: tidy },
       ]);
 
-      expect([...value], "改动后正是 prettier 给出的形态 → 纯格式化").toEqual([
+      expect([...value], "兜底那一档照样给出正确答案").toEqual([
         "src/lib/messy.ts",
       ]);
-      expect(calls(), "改写过的文件由整批那一次给出结论，不必再起 stdin").toBe(
-        1,
-      );
+      expect(calls(), "整批那一次失败后，这一个文件补了一次逐文件判定").toBe(2);
+    });
+
+    test("被改写的那一档：规范形态取自回读，不再另起一次", ({ repo }) => {
+      seedEmpty(repo);
+      const messy = "export const P={a:1,\n\n\n  b:2};\n";
+      const tidy = oxfmtText(messy);
+
+      const calls = instrumentOxfmt(repo);
+      const value = verdictViaTempRepo(repo, [
+        { file: "src/lib/messy.ts", before: messy, after: tidy },
+      ]);
+
+      expect([...value], "改动后正是格式化器给出的形态 → 纯格式化").toEqual([
+        "src/lib/messy.ts",
+      ]);
+      expect(calls(), "改写过的文件由整批那一次给出结论").toBe(1);
     });
   },
 );
@@ -720,14 +741,14 @@ describe("补丁解析（纯函数，不跑 git）", () => {
  * `--staged` 的扫描面（ISSUE #1993 / 规范 §13.5.21）。
  *
  * 这条判据在**只改文档 / 只改 `changelog.d/`** 的提交上一份源文件都列不出来，却仍要
- * 把暂存区与 `HEAD` 各取一遍、对每个文件跑一次 prettier。收窄之后那些提交直接跳过。
+ * 把暂存区与 `HEAD` 各取一遍、对每个文件跑一次 oxfmt。收窄之后那些提交直接跳过。
  *
  * 收窄最坏的失效形态是**静默漏判**：根清单写窄了，某一处的纯格式化提交从此不再触发
  * 这条判据，而没有任何东西会红。所以这里不做「清单里有几个元素」这种空转断言 ——
  * 每条用例都**真起脚本**，看它判没判到。
  */
 describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判", () => {
-  test("只暂存文档 / 碎片 ⇒ 跳过，而且不碰 prettier", ({ repo }) => {
+  test("只暂存文档 / 碎片 ⇒ 跳过，而且不碰格式化器", ({ repo }) => {
     seedEmpty(repo);
     repo.write("docs/note.md", "# 随手笔记\n");
     repo.write("changelog.d/1993-x.md", "## Added\n\n- 一条\n");
@@ -763,8 +784,8 @@ describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判
     for (const rel of ["src/lib/probe.ts", "scripts/probe.mjs"]) {
       repo.write(rel, "export const A={a:1};\n");
       /* **点名 add 这一份**，不用 `-A`：`.gitignore` 里 `node_modules` 是一条
-       * 目录规则，它会连带忽略 `node_modules/prettier` 这一整棵（含夹具软链进来的
-       * `prettier-plugin-tailwindcss`），于是 `add -A` 之后暂存清单可能只剩一个
+       * 目录规则，它会连带忽略 `node_modules/oxfmt` 这一整棵（含夹具软链进来的
+       * 那些包），于是 `add -A` 之后暂存清单可能只剩一个
        * 「什么都没加」的空集 —— 断言「面被碰到」的前提就不成立了。 */
       repo.git("add", rel);
       const r = repo.run(["--staged"]);

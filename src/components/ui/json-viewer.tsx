@@ -52,7 +52,12 @@ const MemoJsonView = memo(JsonView);
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
 type JsonValue =
-  null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [k: string]: JsonValue };
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path

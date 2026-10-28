@@ -59,6 +59,8 @@ export const generateInputSchema = z.object({
   /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */
   shotId: z.string().optional(),
   referenceImages: z.array(z.string()).optional(),
+  /** 来源任务（#2483 FR-QA-09）：重绘 / 放大指回原任务，只作追溯展示。 */
+  parentId: z.string().optional(),
 });
 
 /**
@@ -73,7 +75,8 @@ export type GenerateInput = z.input<typeof generateInputSchema>;
 
 /** 一份来源不定的载荷解析成入参的结果：`ok: false` 时带着**能直接给用户看**的一句。 */
 export type GenerateInputResult =
-  { ok: true; input: GenerateInput } | { ok: false; message: string };
+  | { ok: true; input: GenerateInput }
+  | { ok: false; message: string };
 
 /**
  * 把一份**来源不定**的载荷解析成可发送的入参。两个生产者：

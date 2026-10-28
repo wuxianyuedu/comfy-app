@@ -354,7 +354,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     }
   });
 
-  it("`prettier 格式` 的扫描面就是 `check-format.cjs` 剩下的那两棵树（ISSUE #2010）", () => {
+  it("`oxfmt 格式` 的扫描面就是 `check-format.cjs` 剩下的那两棵树（ISSUE #2010）", () => {
     /* 这一档是 ISSUE #2010 从本地钩子**挪过来**的，它的 globs 是**手写的上界**：
      * `check-format.cjs` 的判据面是「`GLOBS` 展成候选 → `IGNORE_GLOBS` 剔掉」,
      * 剩下 `src/**` 与 `.storybook/**` 两棵 —— globs 写窄了就是「改了却没人查格式」，
@@ -363,10 +363,10 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      * 判法不走「读实现」：把 `IGNORE_GLOBS` 里每一条逐个喂给 `isScanned()`，
      * 断言它们确实在面外；再把两棵树的样本喂进去，断言它们确实在面内 ——
      * 于是「`IGNORE_GLOBS` 增删目录」这个动作会在这里当场红（要求同批回来看 globs）。 */
-    const gate = INCREMENTAL_GATES.find((g) => g.name === "prettier 格式");
+    const gate = INCREMENTAL_GATES.find((g) => g.name === "oxfmt 格式");
     expect(
       gate,
-      "登记表里没有「prettier 格式」这一档 —— 它已随 ISSUE #2010 挪到平台侧，" +
+      "登记表里没有「oxfmt 格式」这一档 —— 它已随 ISSUE #2010 挪到平台侧，" +
         "却没有登记收窄面 = 每一个 PR 都白付一次全库扫描（或反过来，改了却没人查）",
     ).toBeDefined();
     expect(gate?.script).toBe("scripts/check-format.cjs");

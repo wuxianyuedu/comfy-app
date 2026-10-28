@@ -398,7 +398,11 @@ function isFile(candidate: string): boolean {
 
 /** 候选的**执行形态**：决定「要不要先确认它能跑」「跑不起来时怎么回退」。 */
 export type ExecutableKind =
-  "shebang" | "batch" | "script" | "binary" | "unknown";
+  | "shebang"
+  | "batch"
+  | "script"
+  | "binary"
+  | "unknown";
 
 /**
  * 读文件头几个字节而不是看扩展名 —— Windows 上 `.CMD` 与 `pnpm`（shim）后缀

@@ -238,6 +238,9 @@ export const task = sqliteTable(
      */
     shotId: text("shotId"),
     referenceImages: text("referenceImages", { mode: "json" }),
+    /** 来源任务（#2483 · FR-QA-09）：重绘 / 放大等「带修改的重跑」指回原任务。
+     *  只作追溯展示（产物面板「来源任务」），不参与执行；常规提交为 NULL。 */
+    parentId: text("parentId"),
     status: text("status").notNull().default("QUEUED"),
     promptId: text("promptId"),
     progress: integer("progress").notNull().default(0),
@@ -316,6 +319,13 @@ export const taskImage = sqliteTable(
     height: integer("height"),
     isCover: integer("isCover", { mode: "boolean" }).notNull().default(false),
     sortIndex: integer("sortIndex").notNull().default(0),
+    /** 人工评分 0~5（#2480，人判「这张好 / 这张废」的落点）；null = 还没评过。 */
+    humanRating: integer("humanRating"),
+    /** 人工收藏（#2480）：「优秀样本进 few-shot」沉淀机制的输入（与模型库的
+     *  `favorite` 表无关——那张表挂 user↔model，这张列挂产物本身）。 */
+    isFavorite: integer("isFavorite", { mode: "boolean" })
+      .notNull()
+      .default(false),
   },
   (t) => [
     // 每次 task.list / history 带 includeImages 都按 taskId IN(...) 回表；
@@ -583,6 +593,10 @@ export const workshopSession = sqliteTable(
     characters: text("characters", { mode: "json" }).notNull().default("[]"),
     shots: text("shots", { mode: "json" }).notNull().default("[]"),
     stage: text("stage").notNull().default("script"),
+    /** 绑定的界面项目（#2482）：proj_* 即 production.id。非空 = 会话与界面共享
+     *  同一份真值（权威读在 production，会话内容列退化为写时镜像）；
+     *  NULL = 桥之前的遗留会话，首次写时桥接（写时建/绑项目）。 */
+    projectId: text("projectId"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

@@ -11,8 +11,16 @@
 
 - `src/server/mcp/workshop-mcp.ts` — `buildWorkshopMcpServer()`：注册全部工坊工具的
   `McpServer`（同一份工具定义，双 transport 共用）。
+- `src/server/workshop/production-bridge.ts` — **会话 ⇄ 界面真值桥（#2482）**：
+  每个会话绑定一个 proj_*（即 `production.id`），内容权威读在 production——
+  外部 AI 写入的内容界面刷新即见，界面里的改动 AI 下一次 `workshop_get_session`
+  就能读到（`FR-AG-01③`）。`workshopSession` 的内容列退化为写时镜像，
+  idea / stage / projectId 才是会话行自己的权威字段；桥之前的遗留会话
+  首次写时桥接，只读不写的保持原样。归属口径：`userId` 显式给必须存在，
+  缺省落本机最早创建的用户（一个用户都没有时给可行动错误）。
 - `src/server/workshop/orchestrator.ts` — 5 阶段流水线逻辑（脚本/角色/分镜/生图/生视频）。
-- `src/server/workshop/repository.ts` — `workshopSession` 会话 CRUD（纯映射函数可单测）。
+- `src/server/workshop/repository.ts` — `workshopSession` 会话 CRUD（纯映射函数可单测）；
+  create/get/update 三口经桥读写 production。
 - `src/server/workshop/db.ts` `llm.ts` `api-channel.ts` — **刻意不依赖 `server-only` /
   `~/env`** 的工坊本地模块，复用同一份 Drizzle schema 与 `llmConfig` 表、API 通道配置，
   因此 stdio（独立 Node 进程）与 Next HTTP 路由都能直接复用。
@@ -55,7 +63,7 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
 
 | 工具 | 作用 |
 |---|---|
-| `workshop_create_session` | 新建会话，返回 `sessionId` |
+| `workshop_create_session` | 新建会话（可带 `projectId` 绑定界面侧**既有**项目；缺省新建一对 project + production 行），返回 `sessionId` |
 | `workshop_list_sessions` | 列出会话摘要 |
 | `workshop_get_session` | 取完整状态（idea/剧本/场景/角色/分镜/阶段） |
 | `workshop_delete_session` | 删除会话 |
@@ -93,7 +101,11 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
 - **成片合成**：`workshop_compose_final` 默认产出合成清单 JSON（与界面 FinalComposer 对齐）；
   `render: true` 且本地有 `ffmpeg`（或 `FFMPEG_PATH`）时，把本地片段（视频按 duration 截断、
   仅图片镜头以静帧占位，统一缩放 1280x720）合成为 mp4。
-- 会话持久化在 `workshopSession` 表，与界面共享同一项目（界面侧接入待后续）。
+- 会话与界面共享同一份 production（#2482）：`workshopSession` 行带 `projectId`，
+  内容权威读在 production；**推荐用 `workshop_create_session` 的 `projectId`
+  绑定界面侧已有项目**——不绑就新建一个（界面的项目列表里能看到它）。注意
+  绑定后的第一次写动作以会话内容落库（会覆盖该项目原有内容，操作者自己把握；
+  审批停点见 `FR-AG-02`）。
 - **剧本评审不暴露为 MCP 工具（#2478 评估结论）**：剧本质量闭环（`FR-QA-07`④）的
   执行器（`run.reviewScript` / `run.reviseScript`）落在 **production 统一项目**的
   `scriptReview` 列，而本 MCP 工具层只有 `sessionId` 语境（工坊会话与 production

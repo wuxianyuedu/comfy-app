@@ -85,9 +85,9 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
           <strong className="text-ink/80">会丢结构的同步之前</strong>
           发生一次（<code className="text-ink/80">
             pnpm db:push
-          </code> 那条带 <code className="text-ink/80">--force</code>{" "}
-          的路，会跑删列 / 重建表）。日常启动不带{" "}
-          <code className="text-ink/80">--force</code>
+          </code> 那条带{" "}
+          <code className="text-ink/80">--force</code> 的路，会跑删列 /
+          重建表）。日常启动不带 <code className="text-ink/80">--force</code>
           ，只应用建表 / 建索引 / 加列，不会丢数据，因此不备份。
         </p>
         <div className="flex items-center gap-3">

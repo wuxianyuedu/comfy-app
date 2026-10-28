@@ -37,7 +37,11 @@ import { Badge } from "~/components/ui/badge";
  * 这类字面量。
  */
 export type ListBadgeTone =
-  "neutral" | "success" | "warning" | "danger" | "primary";
+  | "neutral"
+  | "success"
+  | "warning"
+  | "danger"
+  | "primary";
 
 export function ListBadge({
   children,
