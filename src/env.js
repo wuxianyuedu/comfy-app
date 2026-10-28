@@ -9,11 +9,7 @@ if (process.env.NEXT_RUNTIME !== "edge") {
   const { join } = await import("node:path");
 
   // 本文件位于 <项目根>/src/env.js，据此定位项目根以探测 .env。
-  const envFilePath = join(
-    import.meta.dirname,
-    "..",
-    ".env",
-  );
+  const envFilePath = join(import.meta.dirname, "..", ".env");
   if (!process.env.SKIP_ENV_VALIDATION && !existsSync(envFilePath)) {
     // 提示必须跨平台（ISSUE #489）：这里原本指着「双击 tools/start/run-local.ps1」，
     // 而那是 Windows 专属入口 —— Linux / macOS / CI 上并不存在（规范 §9 的
