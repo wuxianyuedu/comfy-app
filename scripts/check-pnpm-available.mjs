@@ -134,7 +134,7 @@ function corepackShippedDir(env = process.env) {
     "v1",
     "pnpm",
   );
-  let versions = [];
+  let versions;
   try {
     versions = fs
       .readdirSync(store, { withFileTypes: true })

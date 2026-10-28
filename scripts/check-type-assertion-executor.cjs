@@ -319,14 +319,17 @@ function readTsconfigInclude() {
   try {
     raw = fs.readFileSync(abs, "utf8");
   } catch (e) {
-    throw new Error(`读不到 tsconfig.json：${e.message}`);
+    throw new Error(`读不到 tsconfig.json：${e.message}`, { cause: e });
   }
   const stripped = blankJsonComments(raw).replace(/,(\s*[}\]])/g, "$1");
   let json;
   try {
     json = JSON.parse(stripped);
   } catch (e) {
-    throw new Error(`解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${e.message}`);
+    throw new Error(
+      `解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${e.message}`,
+      { cause: e },
+    );
   }
   if (!Array.isArray(json?.include)) {
     throw new Error("tsconfig.json 的 `include` 不是数组（形状不在预期内）");

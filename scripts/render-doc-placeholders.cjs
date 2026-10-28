@@ -76,7 +76,7 @@ function buildPlaceholderMap() {
     try {
       realValue = f.extract();
     } catch (e) {
-      throw new Error(`无法提取 ${f.key}（${e.message}）`);
+      throw new Error(`无法提取 ${f.key}（${e.message}）`, { cause: e });
     }
     const vals = Array.isArray(realValue) ? realValue : [realValue];
     for (const v of vals) {

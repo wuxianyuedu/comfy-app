@@ -182,7 +182,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("extract_characters：围栏里的 JSON 数组被解析并补齐必填字段", async () => {
     streamChat.mockResolvedValue(
-      '好的，结果如下：\n\`\`\`json\n[{"name":"阿宁","appearance":"短发"},"nonsense",{"appearance":"无名字"}]\n\`\`\`',
+      '好的，结果如下：\n```json\n[{"name":"阿宁","appearance":"短发"},"nonsense",{"appearance":"无名字"}]\n```',
     );
     const { state, handlers } = makeMockContext();
     state.scriptMarkdown = "剧本内容";

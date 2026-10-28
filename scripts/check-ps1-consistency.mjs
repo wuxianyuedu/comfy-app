@@ -172,7 +172,7 @@ function checkPairs() {
  */
 function definesLiteral(text) {
   const NAME = "KNOWN_" + "FAILED_FILES";
-  const re = new RegExp(`(?:export\\s+const\\s+)?\\$?${NAME}\\s*=\\s*(?:@\\s*\\(\\s*)?[\"']`, "g");
+  const re = new RegExp(`(?:export\\s+const\\s+)?\\$?${NAME}\\s*=\\s*(?:@\\s*\\(\\s*)?["']`, "g");
   return re.test(text);
 }
 

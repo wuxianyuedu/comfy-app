@@ -1,4 +1,5 @@
 import { fixupPluginRules } from "@eslint/compat";
+import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import next from "eslint-config-next/core-web-vitals";
 import unusedImports from "eslint-plugin-unused-imports";
@@ -495,6 +496,107 @@ export default tseslint.config(
     files: ["tests/helpers/**/*.{ts,tsx}"],
     rules: {
       "react-hooks/rules-of-hooks": "off",
+    },
+  },
+  /* ── core recommended 补齐（#2541）──────────────────────────────
+   *
+   * `tseslint.configs.recommended` **不含** `eslint:recommended` 的 core 面
+   * （它只带 TS 等价规则 + `eslint-recommended` 的关停块）——本仓此前的
+   * 「0 警」是**空集意义上的 0**：`no-control-regex` / `no-useless-escape` /
+   * `no-unsafe-optional-chaining` 这批 core 规则从未跑过。实测（`@eslint/js`
+   * 的 recommended 面全量跑一遍）：175 条 / 101 文件，含 1 条真 bug
+   * （`"\."` 该是 `"\\."` 的 no-op replace）。
+   *
+   * 顺序**不能动**：`js.configs.recommended` 必须在前、下面的关停块在后 ——
+   * flat config 后者覆盖前者，反了就是把 tseslint 刻意关掉的 19 条又打开
+   * （与 TS 等价规则重复计费，no-undef 在 TS 文件上是纯噪音）。
+   * 随 `@eslint/js` 升级新增的 core 规则会自动生效 —— 这是有意的（跟上游
+   * recommended 对齐），新增档位出读数时按同批流程裁决。
+   *
+   * 作用面**不是**全文件而是 `LINT_FILES + scripts 的 js 面`：`.mjs` / `.cjs`
+   * 门禁脚本也吃 core recommended（否则本批修过的 no-useless-escape /
+   * no-regex-spaces / no-useless-assignment / preserve-caught-error /
+   * no-irregular-whitespace 在 scripts 里的现场修完就没人判了），但两条例外：
+   *  · `no-undef` —— scripts 在 tsc 的 checkJs 判决面里（undefined 全局由 tsc
+   *    判），core 版再判一遍只会撞 Node 全局（console / process / __dirname）
+   *    出 790 条纯噪音；
+   *  · `no-unused-vars` —— scripts 里 68 条历史死代码（gate 脚本演进残留），
+   *    逐条裁决是独立单子的活，本 PR 不扩面；TS 面的 unused 由
+   *    `@typescript-eslint/no-unused-vars` 守，不受此影响。
+   */
+  {
+    files: [...LINT_FILES, "scripts/**/*.{js,mjs,cjs}"],
+    rules: {
+      ...js.configs.recommended.rules,
+      "no-undef": "off",
+      "no-unused-vars": "off",
+    },
+  },
+  {
+    files: LINT_FILES,
+    rules: {
+      /* tseslint `eslint-recommended` 接管的 19 条 core 规则：TS 等价规则在管，
+       * core 版保持关停（避免 TS 文件上重复计费）。 */
+      "constructor-super": "off",
+      "getter-return": "off",
+      "no-class-assign": "off",
+      "no-const-assign": "off",
+      "no-dupe-args": "off",
+      "no-dupe-class-members": "off",
+      "no-dupe-keys": "off",
+      "no-func-assign": "off",
+      "no-import-assign": "off",
+      "no-new-native-nonconstructor": "off",
+      "no-new-symbol": "off",
+      "no-obj-calls": "off",
+      "no-redeclare": "off",
+      "no-setter-return": "off",
+      "no-this-before-super": "off",
+      "no-undef": "off",
+      "no-unreachable": "off",
+      "no-unsafe-negation": "off",
+      "no-with": "off",
+      /* 本仓用 `@typescript-eslint/no-unused-vars`（带 `^_` 豁免）接管，core 版关停。 */
+      "no-unused-vars": "off",
+    },
+  },
+  /* `no-control-regex` 文件级豁免台账（#2541 探测后抽查 6/6 全是功能而非事故）：
+   * 这些文件的正则**本来就是匹配/剥离控制字符的**——文件名消毒（`\x00-\x1f`）、
+   * ANSI 转义序列剥离（`\x1b`）、CI 日志控制符读数。规则要拦的「意外混入控制
+   * 字符」在这些文件里是刻意行为。豁免到**文件级**而不是规则级：新增文件里
+   * 真写出意外的控制字符正则时依然会被拦。何时可移除：若某文件改用非正则
+   * 方案（逐字符过滤）处理控制字符，可把该文件从这里摘掉。 */
+  {
+    files: [
+      "scripts/check-docs-api.cjs",
+      "scripts/check-format.cjs",
+      "scripts/check-theme-colors.cjs",
+      "scripts/ci-build-readout.mjs",
+      "scripts/file-structure-rules.cjs",
+      "src/lib/llm/video-task-util.test.ts",
+      "src/lib/llm/video-task-util.ts",
+      "src/lib/log/log-ansi.ts",
+      "src/lib/media/materials.ts",
+      "src/lib/process/executable-resolve.ts",
+      "tests/ci-log.test.ts",
+      "tests/no-platform-ci-config.test.ts",
+    ],
+    rules: {
+      "no-control-regex": "off",
+    },
+  },
+  /* `no-irregular-whitespace` 选项档（#2541 探测后逐条核实 9 处现场）：
+   *  · 注释里的零宽空格（U+200B）是**刻意的**：`check-tsc-diagnostic-executors.cjs`
+   *    的 `**​/*.ts`（glob 拆写）、`turbopack-tracing-excludes.test.ts` 的
+   *    `*​/`（防块注释提前闭合）、`app-port-vectors-…` 的 `…​.exe` —— 都是
+   *    「注释里必须写出这段记号又不能让记号生效」的同一惯用法 → skipComments；
+   *  · 模板串里的全角空格（U+3000）是**刻意的**：`precommit-timing.mjs` 与
+   *    `use-comfy-queue.ts` 的中文输出列对齐 → skipTemplates。
+   * 字符串字面量里的不规则空白默认已跳过（skipStrings 默认 true），不动。
+   * 何时可收紧：若上述文件改用显式转义（`\u200b`）或放弃全角对齐，可收掉对应选项。 */
+  {
+    rules: {
+      "no-irregular-whitespace": ["error", { skipComments: true, skipTemplates: true }],
     },
   },
   {

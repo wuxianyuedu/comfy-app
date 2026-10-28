@@ -373,7 +373,7 @@ if (entries) {
     }
     const seenFace = new Set();
     const readerPath = path.join(ROOT, e.reader);
-    let readerSrc = "";
+    let readerSrc;
     try {
       readerSrc = fs.readFileSync(readerPath, "utf8");
     } catch (err) {

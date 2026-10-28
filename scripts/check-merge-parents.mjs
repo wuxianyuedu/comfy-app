@@ -76,7 +76,7 @@ function pendingParentCount() {
 
 /** 消息文件的前若干行里的首行声明（跳过后面的注释与空行）。 */
 function readMergeClaim(messageFile) {
-  let text = "";
+  let text;
   try {
     text = fs.readFileSync(messageFile, "utf8");
   } catch {

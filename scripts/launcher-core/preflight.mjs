@@ -103,7 +103,7 @@ export function reconcilePnpmVersion(ctx, root = process.cwd()) {
  *  暂存改动命中壳输入时，它从「启动时 WARN」升成「阻断未重编的提交」，见规范 §11.10.4。 */
 /** @param {string} shellExe @param {string} [root] @returns {string | null} */
 export function shellStaleWarning(shellExe, root = process.cwd()) {
-  let exeTime = 0;
+  let exeTime;
   try {
     exeTime = fs.statSync(shellExe).mtimeMs;
   } catch {
@@ -117,7 +117,7 @@ export function shellStaleWarning(shellExe, root = process.cwd()) {
   ];
   let newest = 0;
   for (const target of targets) {
-    let stat = null;
+    let stat;
     try {
       stat = fs.statSync(target);
     } catch {
@@ -147,7 +147,7 @@ export function shellStaleWarning(shellExe, root = process.cwd()) {
 function walkFiles(dir) {
   /** @type {string[]} */
   const out = [];
-  let entries = [];
+  let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {

@@ -140,7 +140,7 @@ function buildHint(v) {
 function main() {
   const argv = process.argv.slice(2);
   const fileIdx = argv.indexOf("--file");
-  let text = "";
+  let text;
   try {
     text = fs.readFileSync(
       fileIdx >= 0 && argv[fileIdx + 1] ? argv[fileIdx + 1] : 0,

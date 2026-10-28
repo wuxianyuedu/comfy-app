@@ -168,7 +168,7 @@ export function decideNewIssue({ title = null, body = null, priority = null }) {
  */
 export function readIssueBody(root, file, handle) {
   const where = path.resolve(root || ".", file);
-  let text = "";
+  let text;
   try {
     text = fs.readFileSync(where, "utf8");
   } catch {

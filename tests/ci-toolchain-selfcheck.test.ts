@@ -803,7 +803,7 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
     expect(text).toContain("C:\\Windows");
     expect(text).toContain("C:\\nodejs");
     // 拆坏之后会留下孤立的 `C` 与 `\Windows` 两行。
-    expect(text).not.toMatch(/^  C$/m);
+    expect(text).not.toMatch(/^ {2}C$/m);
   });
 
   it("失败时按候选逐条报「在盘上但没起来」，并给宿主的结论", () => {
@@ -1599,7 +1599,7 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
           //    ⚠️ 锚点取**调用开头那半句**（后面是换行的参数列表），
           //    把 `runPlaywrightInstall({` 到它闭合的那一段整块换掉。
           .replace(
-            /  const install = runPlaywrightInstall\(\{[\s\S]*?^  \}\);\n/m,
+            / {2}const install = runPlaywrightInstall\(\{[\s\S]*?^ {2}\}\);\n/m,
             '  const install = { ok: true, out: "(probe: 假装 install 退 0)" };\n',
           )
           // ①′ 「已装就跳过下载」那一支也要让开：它按**真落点**判，而这一条的现场

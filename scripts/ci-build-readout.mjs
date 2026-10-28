@@ -642,7 +642,7 @@ export function main({
     return CODE.NOT_RUN;
   }
   /** @type {string[]} */
-  let sns = [];
+  let sns;
   if (parsed.sn) {
     sns = [parsed.sn];
   } else {

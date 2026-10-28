@@ -158,7 +158,7 @@ function main() {
     /* 带过滤的一跑：说「绿」之前先回读配对的 junit ——
      * 不然「0 条命中」与「全过」在终端里逐字同形。 */
     if (filterUsed && !ownReporter) {
-      let xml = null;
+      let xml;
       try {
         xml = fs.readFileSync(junitPath, "utf8");
       } catch {

@@ -217,7 +217,7 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
      * 在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。 */
     const script = path.resolve(__dirname, "..", "scripts", "check-docs-api.cjs");
     let code = 0;
-    let out = "";
+    let out;
     try {
       out = execFileSync(process.execPath, [script, "--autofix"], {
         encoding: "utf8",

@@ -360,8 +360,8 @@ function main(argv = process.argv.slice(2), deps = {}) {
   const ALL = !STAGED;
 
   /** @type {Array<{file: string, rows: Array<{line: number, text: string}>}>} */
-  let inputs = [];
-  let scanned = 0;
+  let inputs;
+  let scanned;
   let unreadable = [];
   try {
     if (ALL) {

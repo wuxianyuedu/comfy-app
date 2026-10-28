@@ -64,7 +64,7 @@ export function resolveNodePackage(
  *  （「这个节点哪来的」与「它跑在服务端吗」）。样式对齐 ComfyUI 自己的
  *  暗色斜体标签。 */
 export function extractNoteTitle(text: string, fallback?: string): string {
-  let raw = "";
+  let raw;
   if (fallback?.trim()) {
     raw = fallback.trim();
     // 剥掉 ComfyUI 给某些转换流程烤进去的 "Note:" / "Note : " 前缀，
@@ -660,7 +660,7 @@ export function buildConnectedOutputs(
       const slotNames = outSlotNameById?.[srcId];
       const staticOuts = Object.keys(inferOutputTypeAll(node.class_type));
       const rawOuts = rawMetaById[srcId]?.outputs ?? [];
-      let name: string | null = null;
+      let name: string | null;
       if (slotNames && slot < slotNames.length) {
         name = slotNames[slot] ?? null;
       } else {

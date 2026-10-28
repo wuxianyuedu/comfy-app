@@ -328,11 +328,11 @@ async function runFlow(deps, tmpFiles) {
   const want = (/** @type {string} */ p) => !opt.only || opt.only === p;
   /** 下面几段共用的远端/基线，在两道守卫之后解析（见 `resolveUpstream` 那一段的注释）。 */
   /** @type {{remote: string | null, base: string | null, source: string}} */
-  let up = { remote: null, base: null, source: "none" };
+  let up;
   /** @type {string | null} */
-  let baseRef = null;
+  let baseRef;
   /** @type {string | null} */
-  let baseBranch = null;
+  let baseBranch;
   /**
    * 把一个外部命令的输出**原样**转述出来 —— **含 stderr**。
    * 钩子与 git 都把关键的话写在 stderr，只转 stdout 等于把理由丢掉、

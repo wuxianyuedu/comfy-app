@@ -121,7 +121,7 @@ function coverageViolations() {
         "基线是 " +
         baseline.covered +
         "（只许升不许降）\n" +
-        "    → 先看 `git status` 里有没有被删 / 改名的 \`.stories.tsx\`，" +
+        "    → 先看 `git status` 里有没有被删 / 改名的 `.stories.tsx`，" +
         "或组件文件改名后 story 的 import 没跟着改。\n" +
         "    → 确属有意收窄（真的删掉了某个组件的 story）时，同批把 " +
         rel(COVERAGE_BASELINE) +

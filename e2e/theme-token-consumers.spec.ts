@@ -433,7 +433,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
           page.evaluate(() => {
             let n = 0;
             for (const sheet of Array.from(document.styleSheets)) {
-              let rules: CSSRuleList | null = null;
+              let rules: CSSRuleList | null;
               try {
                 rules = sheet.cssRules;
               } catch {

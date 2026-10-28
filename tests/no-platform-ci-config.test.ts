@@ -192,7 +192,7 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
   },
   {
     mustMatch:
-      /^ {2}"crontab: [0-9*,\/-]+ [0-9*,\/-]+ [0-9*,\/-]+ [0-9*,\/-]+ [0-9*,\/-]+":\s*$/m,
+      /^ {2}"crontab: [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+":\s*$/m,
     why:
       "必须挂一条 crontab（生产构建每天一次，ISSUE #2010）：定时任务的分支键只认**明确的单一分支名**，" +
       '而事件键必须写成 `"crontab: <5 段 POSIX cron>"` —— 写成 `crontab:` 映射或 `schedule` 都不会报错，只是永远不触发',
@@ -1038,7 +1038,7 @@ export function pipelineLockAssignments(text: string): Array<{
   let event = "";
   let name = "";
   let lockRef: string | null = null;
-  let stagesRef: string | null = null;
+  let stagesRef: string | null;
   for (const raw of text.split(/\r?\n/)) {
     if (/^master:[ \t]*$/.test(raw)) {
       inMaster = true;
@@ -1063,14 +1063,12 @@ export function pipelineLockAssignments(text: string): Array<{
     if (itemStart) {
       name = "";
       lockRef = null;
-      stagesRef = null;
       continue;
     }
     const nameKey = /^ {6}name:[ \t]*(.+?)[ \t]*$/.exec(raw);
     if (nameKey?.[1] !== undefined) {
       name = nameKey[1];
       lockRef = null;
-      stagesRef = null;
       continue;
     }
     const lockKey = /^ {6}lock:[ \t]*\*(\w+)[ \t]*$/.exec(raw);

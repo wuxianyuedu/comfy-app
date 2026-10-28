@@ -119,7 +119,7 @@ describe("check-rust-function-length.cjs（Rust 函数长度门禁）", () => {
     expect(output).toContain("after_tricky");
     // `tricky()` 本体只有 6 行，不该进清单（注意别用 "tricky" 子串断言：
     // `after_tricky` 也含它，会误判 —— 用「行数 名字」的清单格式精确匹配）。
-    expect(output).not.toMatch(/\b\d+ 行  .*  tricky\b/);
+    expect(output).not.toMatch(/\b\d+ 行 {2}.* {2}tricky\b/);
   });
 
   test("生命周期与泛型尖括号不破坏配对（`&'a str` / `Vec<Option<T>>`）", ({

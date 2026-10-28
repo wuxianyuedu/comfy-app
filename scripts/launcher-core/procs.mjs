@@ -108,7 +108,7 @@ async function listeningPidsWindows(port) {
 async function listeningPidsPosix(port) {
   const inodes = new Set();
   for (const file of ["/proc/net/tcp", "/proc/net/tcp6"]) {
-    let text = "";
+    let text;
     try {
       text = fs.readFileSync(file, "utf8");
     } catch {
@@ -127,7 +127,7 @@ async function listeningPidsPosix(port) {
   if (inodes.size === 0) return [];
   /** @type {number[]} */
   const pids = [];
-  let entries = [];
+  let entries;
   try {
     entries = fs.readdirSync("/proc");
   } catch {
@@ -135,14 +135,14 @@ async function listeningPidsPosix(port) {
   }
   for (const entry of entries) {
     if (!/^\d+$/.test(entry)) continue;
-    let fds = [];
+    let fds;
     try {
       fds = fs.readdirSync(path.join("/proc", entry, "fd"));
     } catch {
       continue; // 已退出 / 权限不足
     }
     for (const fd of fds) {
-      let link = "";
+      let link;
       try {
         link = fs.readlinkSync(path.join("/proc", entry, "fd", fd));
       } catch {

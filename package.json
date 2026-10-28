@@ -119,6 +119,7 @@
   },
   "devDependencies": {
     "@eslint/compat": "2.1.1",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.64.1",
     "@storybook/addon-a11y": "10.6.4",
     "@storybook/addon-docs": "10.6.4",
@@ -150,7 +151,6 @@
     "msw": "^3.0.3",
     "oxfmt": "^0.75.0",
     "postcss": "^8.5.31",
-
     "shadcn": "^4.22.1",
     "storybook": "10.6.4",
     "tailwindcss": "^4.3.3",

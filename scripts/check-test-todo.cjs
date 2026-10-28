@@ -232,7 +232,7 @@ function readLedger() {
   try {
     json = JSON.parse(fs.readFileSync(abs, "utf8"));
   } catch (e) {
-    throw new Error(`解析 ${LEDGER} 失败：${e.message}`);
+    throw new Error(`解析 ${LEDGER} 失败：${e.message}`, { cause: e });
   }
   if (!Array.isArray(json?.consumers)) {
     throw new Error(`${LEDGER} 的 \`consumers\` 不是数组（形状不在预期内）`);

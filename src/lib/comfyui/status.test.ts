@@ -312,7 +312,7 @@ describe("配置端口只探一次 — 失败路径不重复付超时", () => {
     // 配置端口，`resolvePortFast` 若再探一次，失败路径每次都要等满 1.5s 超时
     // ——「没在跑」这个主场景下就是白加一整条链（ISSUE #346 的耗时代价）。
     vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: "C:\Comfy",
+      comfyuiPath: "C:\\Comfy",
       comfyuiPort: 8188,
     } as never);
     // 进程表命中，但配置端口没人应答（实例在别处 / 还没绑端口）。
@@ -335,7 +335,7 @@ describe("配置端口只探一次 — 失败路径不重复付超时", () => {
     setBoundChildPidReader(() => 4242);
     try {
       vi.mocked(getSettingsSync).mockReturnValue({
-        comfyuiPath: "C:\Comfy",
+        comfyuiPath: "C:\\Comfy",
         comfyuiPort: 8188,
       } as never);
       vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");

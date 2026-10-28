@@ -84,7 +84,7 @@ export function createSettingsFileMemo(
     load(): ComfySettings {
       const fp = io.fingerprint(file);
       if (cache && fp === fingerprint) return cache;
-      let parsed: ComfySettings = {};
+      let parsed: ComfySettings;
       try {
         parsed = JSON.parse(io.read(file)) as ComfySettings;
       } catch {
@@ -150,8 +150,8 @@ function guardNetworkFailure(e: unknown): never {
 export async function resolveComfyBase(): Promise<string> {
   if (resolvedBase) return resolvedBase;
   const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
-  let host = LOOPBACK_HOST;
-  let port = COMFYUI_DEFAULT_PORT;
+  let host;
+  let port;
   try {
     const u = new URL(raw);
     host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;

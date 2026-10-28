@@ -20,7 +20,7 @@ import {
 /** 一个 emoji / 符号「干净」的判据：没有任何括号、控制字符或代理项残留。 */
 function isCleanIcon(icon: string): boolean {
   if (icon.length === 0) return true;
-  if (/[{}()\[\]]/.test(icon)) return false;
+  if (/[{}()[]\]]/.test(icon)) return false;
   // 未配对的代理项：期望不会有，出现即为「码点写错」。
   return !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(
     icon,

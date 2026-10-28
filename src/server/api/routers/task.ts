@@ -229,7 +229,7 @@ export const taskRouter = createTRPCRouter({
         );
         throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
       }
-      let exists = false;
+      let exists;
       try {
         const st = await fsPromises.stat(dir);
         exists = st.isDirectory();

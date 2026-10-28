@@ -37,7 +37,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   const file = path.join(process.cwd(), "run", APP_SERVICE_EXIT_FILE);
-  let record: unknown = null;
+  let record: unknown;
   try {
     const raw = fs.readFileSync(/*turbopackIgnore: true*/ file, "utf8");
     record = raw.trim() === "" ? null : JSON.parse(raw);

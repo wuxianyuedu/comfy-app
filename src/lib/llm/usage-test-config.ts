@@ -290,7 +290,7 @@ export function buildVideoPollUrls(
 ): VideoPollUrl {
   const base = baseUrl.replace(/\/+$/, "");
   const dir = videoEndpointDir(path);
-  let agnes: string | null = null;
+  let agnes: string | null;
   try {
     /* 上游供应商的地址模板也走查询串出口：编码与省略口径同一处
      *（规范 16 §16.2.4.32）—— 它是跨域地址，但参数拼装是同一件事。 */

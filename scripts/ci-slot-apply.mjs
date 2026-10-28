@@ -290,7 +290,7 @@ export function acquireSlotLock(io) {
 export function hasRoomForSlot(io) {
   const floor = io.floorBytes ?? FREE_SPACE_FLOOR_BYTES;
   const probe = io.probe ?? statfsFreeBytes;
-  let free = null;
+  let free;
   try {
     free = probe(io.path);
   } catch {

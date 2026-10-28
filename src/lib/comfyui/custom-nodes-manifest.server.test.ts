@@ -203,11 +203,11 @@ describe("三相互斥：同一份磁盘只可能给出一个结论", () => {
     // 清单位置的祖先是个普通文件 → ENOTDIR。它归「拿不到」而不是「读得到」，
     // 但**不许抛出去**：抛了就把 404 变成 500，而调用方按状态码分档说话。
     fs.writeFileSync(path.join(root, "src"), "x");
-    let kind = "";
+    let kind;
     try {
       kind = readCustomNodesManifest(root).kind;
     } catch (e) {
-      throw new Error(`不该抛出：${String(e)}`);
+      throw new Error(`不该抛出：${String(e)}`, { cause: e });
     }
     expect(["missing", "unreadable"]).toContain(kind);
   });

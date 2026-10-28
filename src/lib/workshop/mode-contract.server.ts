@@ -77,7 +77,9 @@ export async function saveModeContracts(
      *  实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
      * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
      *  它是这条路唯一能定位的东西。 */
-    throw new Error(errorText(err, `模式契约写入失败（${file}）`));
+    throw new Error(errorText(err, `模式契约写入失败（${file}）`), {
+      cause: err,
+    });
   }
   return normalized;
 }

@@ -102,7 +102,7 @@ export function readRetrySuiteFailures(input) {
   const dir = input.junitDir ?? "";
   if (!dir) return [];
   const read = input.read ?? readFileSync;
-  let xml = "";
+  let xml;
   try {
     xml = read(cFileXmlName(dir, input.chunkId, 2), "utf8");
   } catch {
