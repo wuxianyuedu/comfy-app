@@ -19,6 +19,15 @@
  *      —— `check-comment-language.cjs` 的事故就是这句话本身。
  *   ③ **台账双向拦**：登记了却其实有执行者 ⇒ 红（台账是负债，不是赦免名单）；
  *      有执行者却仍登记 ⇒ 同一条。
+ *   ④ **入口级登记要验**（ISSUE #2530）：台账 `entrypoints` 里写下的「脚本 + 那串旗标」的每一形，
+ *      都必须在那个执行者文件里**真找得到一行以这串旗标调起它** —— 找不到就红。
+ *      它补的是 ① 的一条已知盲区：`hasExecutor()` 按 **basename** 比（刻意的：整命令逐字比会随
+ *      引号与参数顺序漂），于是同一份脚本的两个入口在账上**塌成一个**，而这两档可能判的根本
+ *      不是同一件事（`check-deps-freshness.mjs --staged` 只判「这次动了依赖面」，无参数那一档
+ *      把整个「远端引用 / 装没装对」判一遍 —— #2385 的现场）。
+ *      ⚠️ 这一层**只验人登记过的**，不自动发现「还有哪些脚本有多形没登记」：那是一台启发式机器，
+ *      探针实测把转述型包装器（`ci-cp936-exit.mjs -- node 别的 --json`）数成 11 形，误报一片 ——
+ *      本仓对这类机器的纪律就是不写（硬规则 24 末句）。未登记那一格由 `--report` 的计数念出来。
  *
  * **「报告档⇄判定档」是两件事，别混成一句「没有自动执行者」**：
  *   · 报告档按定义不判失败 —— 把它接进钩子 = 接一个恒 `exit(0)` 的东西（接了个寂寞）；
@@ -254,12 +263,142 @@ function claimsPreCommit(src) {
 /* ── 台账 ────────────────────────────────────────────────────── */
 
 /**
- * @returns {{onDemand: Record<string, {why: string, who: string}>}}
+ * @returns {{onDemand: Record<string, {why: string, who: string}>, entrypoints: Record<string, Array<{flags: string[], judges: string, executors: string[]}>>}}
  */
 function readLedger() {
-  if (!fs.existsSync(LEDGER)) return { onDemand: {} };
+  if (!fs.existsSync(LEDGER)) return { onDemand: {}, entrypoints: {} };
   const parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
-  return { onDemand: parsed.onDemand ?? {} };
+  return { onDemand: parsed.onDemand ?? {}, entrypoints: parsed.entrypoints ?? {} };
+}
+
+/**
+ * 一行命令里，**属于这个脚本自己**的那串旗标。
+ *
+ * 为什么要切到 `--` 分隔符为止：转述型包装器（`ci-cp936-exit.mjs -- node 别的脚本 --json`）
+ * 把别人的旗标写在同一行上，按整行收就会把「包装器的一种形」数成十一种（实测探针：
+ * 那份包装器在 `.cnb.yml` 里被读出 11 形，而它自己只有「无旗标」与 `--no-block` 两形）。
+ * 这些旗标**不是判据的输入面**，误收的后果是让入口台账去要求一堆不存在的登记。
+ *
+ * @param {string} line
+ * @param {string} scriptName 脚本文件名（`check-deps-freshness.mjs`）
+ * @returns {Set<string> | null} 这一行没调起这个脚本时 null
+ */
+function ownFlags(line, scriptName) {
+  const at = line.indexOf(scriptName);
+  if (at === -1) return null;
+  let rest = line.slice(at + scriptName.length);
+  const sep = rest.search(/(?:^|\s)--(?:\s|$)/);
+  if (sep >= 0) rest = rest.slice(0, sep);
+  return new Set([...rest.matchAll(/--[\w-]+/g)].map((m) => m[0]));
+}
+
+/**
+ * 那一行是不是**调用**（而不是提到）。
+ *
+ * 只剔掉整行注释：判据按文本解析钩子与 YAML，而那些文件里「怎么写」的说明就在注释里
+ * （`.githooks/pre-commit:175` 那句正写着本脚本的名字）。不剔，注释会冒充执行者。
+ * 边界：不认块注释中间的行 —— 台账条目真写错时这一层挡不住，但挡不住的方向是
+ * **报红**（找不到调用行），不是放行。
+ */
+function isCallLine(line) {
+  const t = line.trim();
+  if (t === "") return false;
+  return !(t.startsWith("#") || t.startsWith("//") || t.startsWith("*"));
+}
+
+/**
+ * 校验台账里每一个**入口**（`脚本 + 那串旗标` 的组合）是不是真有执行者。
+ *
+ * 为什么要有这一层（ISSUE #2530 / 立案现场 #2385）：`hasExecutor()` 按 basename 比 ——
+ * 同一份脚本的两种入口在账上塌成一个，而这两档判的**不是同一件事**
+ * （`--staged` 只看这次是否动了依赖面，无参数那一档把整个 ② 判一遍）。于是
+ * 「账面说有主」与「主场景那一档没人跑」可以同时为真，而后者不会让任何东西红。
+ *
+ * 这里刻意**不做自动发现**（不扫出「还有哪些脚本有多形而没登记」）：那是一台启发式机器，
+ * 探针实测会把转述型包装器数成 11 形、误报一片，而本仓对这种机器的纪律就是不写
+ * （硬规则 24 末句）。这一层只判**人登记过的入口**：登记了就验，验不到就红。
+ * 未登记的那一格由 `--report` 那行的计数看得见（「账上入口级登记 N 条形 M」——
+ * 0 也会说出来，不静默）。
+ *
+ * @param {ReturnType<typeof readLedger>["entrypoints"]} entrypoints
+ * @param {string[]} names 判据脚本名单（反向核对用）
+ * @returns {{problems: string[], forms: number}}
+ */
+function checkEntrypoints(entrypoints, names) {
+  const problems = [];
+  const cache = new Map();
+  const readLines = (rel) => {
+    if (!cache.has(rel)) {
+      const src = readForScan(path.join(ROOT, rel));
+      cache.set(rel, src === null ? null : src.split("\n").filter(isCallLine));
+    }
+    return cache.get(rel);
+  };
+  let forms = 0;
+  for (const [script, entries] of Object.entries(entrypoints)) {
+    if (!names.includes(script)) {
+      problems.push(
+        `入口台账登记了「${script}」，但 scripts/ 下没有这个判据脚本 —— ` +
+          `改名 / 删除时把条目一起摘掉（与 onDemand 那半边同一条反向判据）`,
+      );
+      continue;
+    }
+    if (!Array.isArray(entries) || entries.length < 2) {
+      problems.push(
+        `「${script}」的入口登记只有 ${Array.isArray(entries) ? entries.length : 0} 形 —— ` +
+          `入口这层存在的理由就是「同一脚本的几形判的不同」：一形就别登记，` +
+          `按 basename 的那条判据已经覆盖它了`,
+      );
+      continue;
+    }
+    /* 「无旗标那一形」的判据要排除**其它形点名的旗标**，否则同一行 `--staged` 会被
+     * 读成「无旗标那一形也有人跑」—— 那正是本层要拦的那种塌成。 */
+    const declaredFlags = new Set(
+      entries.flatMap((e) => (Array.isArray(e?.flags) ? e.flags : [])),
+    );
+    for (const entry of entries) {
+      forms += 1;
+      const flags = Array.isArray(entry?.flags) ? entry.flags : [];
+      const label = flags.length > 0 ? flags.join(" ") : "(无旗标)";
+      if (typeof entry?.judges !== "string" || entry.judges.trim() === "") {
+        problems.push(
+          `「${script}」那一形（${label}）没写「它判的是什么」—— 入口登记的全部价值` +
+            `就在「这两形判的不是同一件事」那句，空着等于没登记`,
+        );
+      }
+      const executors = Array.isArray(entry?.executors) ? entry.executors : [];
+      if (executors.length === 0) {
+        problems.push(`「${script}」那一形（${label}）一个执行者都没写`);
+        continue;
+      }
+      for (const rel of executors) {
+        const lines = readLines(rel);
+        if (lines === null) {
+          problems.push(
+            `「${script}」那一形（${label}）写的执行者「${rel}」读不到 —— ` +
+              `文件不在，那条命令也就不在`,
+          );
+          continue;
+        }
+        const hit = lines.some((line) => {
+          const mine = ownFlags(line, script);
+          if (mine === null) return false;
+          if (flags.length === 0) {
+            return [...declaredFlags].every((f) => !mine.has(f));
+          }
+          return flags.every((f) => mine.has(f));
+        });
+        if (!hit) {
+          problems.push(
+            `「${script}」登记了那一形（${label}）说执行者是「${rel}」，` +
+              `但那一份文件里没有一行**以这串旗标**调起它 —— ` +
+              `要么那行命令改了形状（把台账跟着改），要么这一形现在其实没人跑（那就是本案）`,
+          );
+        }
+      }
+    }
+  }
+  return { problems, forms };
 }
 
 /* ── 主流程 ──────────────────────────────────────────────────── */
@@ -346,6 +485,11 @@ for (const key of Object.keys(ledger.onDemand)) {
   }
 }
 
+/* ④ 入口级登记（ISSUE #2530）：登记过的**每一形**都要在写明的执行者里找到那行命令。
+ * 放在反向核对之后、`--update` 之前 —— 它报的每一条都指得回台账那一处。 */
+const entryAudit = checkEntrypoints(ledger.entrypoints, names);
+problems.push(...entryAudit.problems);
+
 if (UPDATE) {
   const next = { onDemand: {} };
   for (const name of report.judgeOrphaned) {
@@ -354,6 +498,10 @@ if (UPDATE) {
       who: "（谁按需跑）",
     };
   }
+  /* ⚠️ `entrypoints` 必须原样带过去：`--update` 是「诊疗后重写台账」那一步，
+   * 只写 onDemand 会把入口那一半**整块抹掉**，而入口条目是人一条条核出来的 ——
+   * 一次随手 --update 就把 #2530 这层判据变成空转（账面连红都不会红，因为没东西可验）。 */
+  next.entrypoints = ledger.entrypoints;
   fs.writeFileSync(LEDGER, `${JSON.stringify(next, null, 2)}\n`);
   console.log(`台账已重写：scripts/.gate-executor-ledger.json`);
   process.exit(0);
@@ -364,6 +512,13 @@ if (REPORT_ONLY) {
     `判据脚本 ${names.length} 份：判定型有执行者 ${report.judgeWithExecutor.length}` +
       ` / 判定型无执行者 ${report.judgeOrphaned.length}` +
       ` / 报告型自称供 pre-commit ${report.reportClaiming.length}`,
+  );
+  /* 入口这一层单独念，且**0 也要念出来**：它不是一张自动生成的清单，而是人逐条登记的；
+   * 念成「0 形」就是明说「同一脚本的多形在账上还塌成一个」，静默才是这台判据自己的失效形态。 */
+  console.log(
+    `  入口级登记：${Object.keys(ledger.entrypoints).length} 份脚本 / ${entryAudit.forms} 形` +
+      `（判定型判据共 ${report.judgeWithExecutor.length + report.judgeOrphaned.length} 份按名字有主 ——` +
+      ` 多形而没登记的，这一行不会自动发现，见 §13.5.12 那条「不写启发式扫描器」的口径）`,
   );
   if (report.judgeOrphaned.length > 0)
     console.log(`  无执行者：${report.judgeOrphaned.join("、")}`);
@@ -379,7 +534,8 @@ if (problems.length > 0) {
   for (const p of problems) console.log(`  ✗ ${p}`);
   console.log(
     `\n规范 §13.5.12 的口径：判定型「要么有执行者、要么登记按需召唤」，` +
-      `报告型不许自称供 pre-commit 调用，台账双向拦。`,
+      `报告型不许自称供 pre-commit 调用，台账双向拦，` +
+      `而登记成入口的每一形都要在那个执行者里真找得到那行命令（#2530）。`,
   );
   process.exit(1);
 }
@@ -388,6 +544,7 @@ console.log(
   `判据执行者台账：${names.length} 份判据脚本 —— ` +
     `判定型有执行者 ${report.judgeWithExecutor.length}、` +
     `按需召唤 ${report.judgeOrphaned.length}、` +
+    `入口级登记 ${Object.keys(ledger.entrypoints).length} 份 ${entryAudit.forms} 形、` +
     `报告型自称在跑 0 ✓` +
     vanishedNote(vanishedTests),
 );
