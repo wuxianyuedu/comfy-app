@@ -269,7 +269,7 @@ export function dirFact(target, nowMs, fsLike = realFs) {
   const absent = { present: false, ageS: null, bornMs: null, from: "-" };
   if (target == null) return absent;
   /** @type {{birthtimeMs: number, mtimeMs: number} | null} */
-  let st = null;
+  let st;
   try {
     st = fsLike.statSync(target);
   } catch {
@@ -532,7 +532,7 @@ export function workspaceProbeLines(io = {}) {
   lines.push("== 自取检出的前提（只报在场性）==");
   lines.push(...envReadout(env));
 
-  let ledgerNote = "";
+  let ledgerNote;
   /** 账本里**比本次更早**的那几条 —— 对照只能拿它们做，本次自己不算证据。 */
   /** @type {ProbeEntry[]} */
   let history = [];

@@ -592,6 +592,7 @@ async function postRelay(
     ) {
       throw new Error(
         "API 通道请求超时（10 分钟无响应），请检查通道地址或稍后重试",
+        { cause: e },
       );
     }
     throw e;

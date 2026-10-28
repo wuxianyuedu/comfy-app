@@ -121,7 +121,7 @@ function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
     .replace(/^\d{1,2}[.、)]\s*/, "");
   if (!seg) return null;
 
-  let name = "";
+  let name;
   let ageGender = "";
   let rest = "";
   const open = seg.search(/[(（]/);
@@ -492,7 +492,7 @@ export function parseImportedCharacterCards(
   } catch {
     throw new Error("文件不是有效的 JSON");
   }
-  let items: unknown[] = [];
+  let items: unknown[];
   if (Array.isArray(data)) {
     items = data;
   } else if (isRecord(data) && Array.isArray(data.characters)) {

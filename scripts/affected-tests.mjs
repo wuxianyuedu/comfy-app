@@ -608,7 +608,7 @@ function stdinPaths() {
     );
     return null;
   }
-  let raw = "";
+  let raw;
   try {
     raw = fs.readFileSync(0, "utf8");
   } catch {

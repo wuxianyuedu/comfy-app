@@ -101,11 +101,7 @@ export async function waitForComfyReady(
    * 传超大值又会让别的地方白等，故下限 1、上限取超时窗口本身。 */
   const pollMs = clamp(opts.pollMs ?? COMFY_READY_POLL_MS, 1, timeoutMs);
   const deadline = Date.now() + timeoutMs;
-  let last: ComfyReadyResult = {
-    ok: false,
-    pending: true,
-    message: "ComfyUI 未就绪",
-  };
+  let last: ComfyReadyResult;
   let announced = false;
 
   for (;;) {

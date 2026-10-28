@@ -423,8 +423,8 @@ describe("自证档的判决面（ISSUE #2265）", () => {
     process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = "1";
     /* 两个出口都要接住：作废那句走 stderr（它是警告），而「没碰到机制 ⇒ 说一句话」
      * 走 console.log —— 上面那条既有用例量的就是后者。漏接一个就等于断言里少一半。 */
-    let code = -1;
-    let out = "";
+    let code;
+    let out;
     try {
       const ran = captureStreams(() =>
         main(["--staged", "src/lib/x.ts", "tests/y.test.ts"]),
@@ -473,7 +473,7 @@ describe("自证档的判决面（ISSUE #2265）", () => {
     console.log = (line: string) => {
       said.push(line);
     };
-    let code = -1;
+    let code;
     try {
       code = main(["--staged", "src/lib/x.ts", "tests/y.test.ts"]);
     } finally {

@@ -25,7 +25,7 @@ export const skillRouter = createTRPCRouter({
       });
       const parsed = skills.map((skill) => {
         const obj = skill as unknown as Record<string, unknown>;
-        let tags: unknown = [];
+        let tags: unknown;
         try {
           tags = JSON.parse((obj.tags as string) ?? "[]");
         } catch {

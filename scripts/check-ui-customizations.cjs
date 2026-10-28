@@ -57,7 +57,7 @@ const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
 /** 扫描范围内的 ui/ 文件(相对仓库根,正斜杠)。 */
 function listUiFiles() {
   const dir = path.join(ROOT, UI_DIR);
-  let entries = [];
+  let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {

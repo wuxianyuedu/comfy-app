@@ -307,7 +307,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
      * 阻断的那一份在钩子里，两个读者各有各的出口（§13.5.12：别让一条读数线变成必经之路）。 */
     const src = readText("scripts/freshness-gate.mjs");
     const ledgerBranch =
-      /if \(ledgerOnly\) \{[\s\S]*?\n    \}/.exec(src)?.[0] ?? "";
+      /if \(ledgerOnly\) \{[\s\S]*?\n {4}\}/.exec(src)?.[0] ?? "";
     expect(ledgerBranch, "读不出 --ledger 那一支").not.toBe("");
     // ① 判决要进去（`result.exitCode` 或 `problems` 被读出来才算「欠不欠」）
     expect(ledgerBranch).toContain("result.exitCode");

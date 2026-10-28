@@ -241,7 +241,7 @@ describe("renderLockDiff（给人看的措辞）", () => {
     /* 锚点从真 lockfile 现取（本文件头注那条约定的又一处落实 —— #2312：
      * 上一版把 `@alloc/quick-lru@5.2.0` 抄成了字面量，依赖升级到 5.3.0 那天
      * `replace` 落空、diff 为空，断言跟着红）。取 packages 段第一个快照条目。 */
-    const anchorMatch = /^  '[^']+'?:\n    resolution:/m.exec(body);
+    const anchorMatch = /^ {2}'[^']+'?:\n {4}resolution:/m.exec(body);
     expect(anchorMatch, "真 lockfile 的 packages 段里没有快照条目可当锚点").toBeTruthy();
     const anchor = anchorMatch![0];
     const injected = "  '@scope/pkg@1.0.0':\n    resolution: {integrity: sha512-x}\n\n";

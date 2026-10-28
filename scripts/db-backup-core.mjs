@@ -186,7 +186,7 @@ export function listBackups(root) {
     const parsed = parseBackupFileName(name);
     if (parsed === null) continue;
     const file = path.join(dir, name);
-    let size = 0;
+    let size;
     try {
       size = fs.statSync(file).size;
     } catch {
@@ -304,7 +304,7 @@ export function createBackup(root, options = {}) {
  * @returns {{ ok: true, size: number, tables: number } | { ok: false, reason: string }}
  */
 export function verifyBackupFile(file) {
-  let size = 0;
+  let size;
   try {
     size = fs.statSync(file).size;
   } catch (error) {

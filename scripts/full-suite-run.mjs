@@ -557,7 +557,7 @@ async function main(argv) {
   const wallMs = Date.now() - wallStart;
   /* 榜打在**三态分流之前**：红的那一次与被预算砍的那一次，恰恰是最需要知道
    * 「是哪几份在吃时间」的两次。读不到只打一句「没有」，不抛 —— 它是读数。 */
-  let junitText = "";
+  let junitText;
   try {
     junitText = fs.readFileSync(junitFile, "utf8");
   } catch {

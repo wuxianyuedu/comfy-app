@@ -94,7 +94,7 @@ let retiredCache: string[] | null = null;
 
 function retiredBaselineNames(): string[] {
   if (retiredCache) return retiredCache;
-  let out = "";
+  let out;
   try {
     out = execFileSync(
       "git",

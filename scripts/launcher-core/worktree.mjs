@@ -167,7 +167,7 @@ export function syncNextCache(
     return { cleaned: false, reason: "配置指纹未变，保留缓存" };
   }
   const changed = Object.keys(fingerprint.files).filter((rel) => {
-    let previous = "";
+    let previous;
     try {
       previous = JSON.parse(fs.readFileSync(filesFile, "utf8"))[rel] ?? "";
     } catch {
@@ -196,7 +196,7 @@ export function brokenKeyDeps(root) {
   const broken = [];
   for (const rel of KEY_DEPS) {
     const dir = path.join(root, "node_modules", rel);
-    let real = null;
+    let real;
     try {
       real = fs.realpathSync(dir);
     } catch {
@@ -227,7 +227,7 @@ export function checkNodeModules(root) {
     reasons.push("缺 .modules.yaml（依赖从未装好）");
   }
   const binDir = path.join(root, "node_modules", ".bin");
-  let hasNext = false;
+  let hasNext;
   try {
     hasNext = fs.readdirSync(binDir).some((name) => name.startsWith("next"));
   } catch {
@@ -247,7 +247,7 @@ export function checkNodeModules(root) {
  * @param {number} [keep]
  */
 export function pruneTimestampedLogs(dir, prefixes, keep = 5) {
-  let entries = [];
+  let entries;
   try {
     entries = fs.readdirSync(dir);
   } catch {

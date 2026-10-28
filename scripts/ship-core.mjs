@@ -350,7 +350,7 @@ function trunkFromRemoteHead(remote, remoteHead) {
  *   `env` 判据自己没跑起来 · `unknown` 读数不完整（起不来 / 形状对不上）
  */
 export function readFreshnessState(res) {
-  let json = null;
+  let json;
   try {
     json = JSON.parse((res && res.stdout) || "");
   } catch {

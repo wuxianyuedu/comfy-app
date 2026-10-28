@@ -390,22 +390,26 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     } catch (e) {
       setSaveErr(errorText(e, "读取配置失败"));
     } finally {
-      if (!aliveRef.current) return;
-      setLoading(false);
-      // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-      if (progressHideTimerRef.current)
-        clearTimeout(progressHideTimerRef.current);
-      progressHideTimerRef.current = setTimeout(() => {
-        if (!aliveRef.current) return;
-        setProgress({
-          phase: "",
-          done: 0,
-          total: 0,
-          discovered: 0,
-          parent: "",
-          msg: "",
-        });
-      }, 800);
+      /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
+       * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）；
+       * 定时器回调自带 aliveRef 检查，组件卸载后触发也只是空转。 */
+      if (aliveRef.current) {
+        setLoading(false);
+        // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
+        if (progressHideTimerRef.current)
+          clearTimeout(progressHideTimerRef.current);
+        progressHideTimerRef.current = setTimeout(() => {
+          if (!aliveRef.current) return;
+          setProgress({
+            phase: "",
+            done: 0,
+            total: 0,
+            discovered: 0,
+            parent: "",
+            msg: "",
+          });
+        }, 800);
+      }
     }
   }, [seedParentDefaults]);
 

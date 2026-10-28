@@ -89,6 +89,7 @@ export async function completeWorkshopLLM(
       reach
         ? `连不上 LLM 服务（${cfg.baseUrl}）：请确认本地服务已启动或 Base URL 正确（${cause || "连接被拒绝"}）。`
         : `LLM 请求失败：${msg}`,
+      { cause: e },
     );
   }
   if (!res.ok) {

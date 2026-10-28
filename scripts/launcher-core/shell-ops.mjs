@@ -125,7 +125,7 @@ export function resetShellPidFile(root = process.cwd()) {
  * @param {string} [root] @returns {Promise<boolean>} */
 export async function killShellFromPidFile(ctx, root = process.cwd()) {
   const file = path.join(currentDirOf("launcher", root), "tauri-shell.pid");
-  let pid = Number.NaN;
+  let pid;
   try {
     pid = Number.parseInt(fs.readFileSync(file, "utf8").trim(), 10);
   } catch {

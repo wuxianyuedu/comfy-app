@@ -44,7 +44,7 @@ const LOGGER_SELF_RE =
   /(?:^|\/)logs\/(?:log-[\w.-]+\.(?:tsx?|jsx?)|LogProvider\.tsx?)\b/i;
 /** 框架 / 编译产物的特征帧（找业务帧时跳过）。 */
 const FRAMEWORK_FRAME_RE =
-  /node_modules|react-dom|react\.production|react\.development|next\/(?:dist|server|client)|@tauri-apps|scheduler|webpack[\/](?:runtime|bootstrap)|\[native code\]/i;
+  /node_modules|react-dom|react\.production|react\.development|next\/(?:dist|server|client)|@tauri-apps|scheduler|webpack[/](?:runtime|bootstrap)|\[native code\]/i;
 /** 项目源码以 TS 编写；dev 期只有映射回 .ts/.tsx 的帧才算「可读业务位置」。 */
 const PROJECT_SOURCE_RE = /\.(?:tsx?|mts|cts)$/i;
 

@@ -448,7 +448,7 @@ describe("真历史（本仓库）", () => {
   vitestTest.skipIf(!hasCommit("ad81a912"))(
     "ad81a912 那句「§13.5.13 / §13.6.3 两节照旧保留」被判成反事实",
     () => {
-      let out = "";
+      let out;
       let code = 0;
       try {
         /* `stdio` **必须显式给**：不给的时候 `execFileSync` 会把子进程的 stderr

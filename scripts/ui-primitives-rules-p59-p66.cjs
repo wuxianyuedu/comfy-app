@@ -136,12 +136,12 @@ module.exports = {
       if (/from "~\/lib\/form-props"/.test(t2)) return 0;
       const value = (
         t2.match(
-          /=>\s*[A-Za-z_$][\w$.\[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.value\s*\)/g,
+          /=>\s*[A-Za-z_$][\w$.[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.value\s*\)/g,
         ) || []
       ).length;
       const checked = (
         t2.match(
-          /=>\s*[A-Za-z_$][\w$.\[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.checked\s*\)/g,
+          /=>\s*[A-Za-z_$][\w$.[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.checked\s*\)/g,
         ) || []
       ).length;
       return value + checked;
@@ -178,17 +178,17 @@ module.exports = {
       if (/from "~\/lib\/page-window"/.test(t2)) return 0;
       const offset = (
         t2.match(
-          /\.length\s*-\s*[A-Za-z_$][\w$.\[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.\[\]?]*/g,
+          /\.length\s*-\s*[A-Za-z_$][\w$.[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.[\]?]*/g,
         ) || []
       ).length;
       const ceilDiv = (
         t2.match(
-          /Math\.ceil\s*\(\s*[A-Za-z_$][\w$.\[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.\[\]?]*\s*\)/g,
+          /Math\.ceil\s*\(\s*[A-Za-z_$][\w$.[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.[\]?]*\s*\)/g,
         ) || []
       ).length;
       const tail = (
         t2.match(
-          /\b(?!Date\b)(?:logs?|items?|entries|rows?|lines?|list|arr|all|values?|records?|history|sessions?|segments?|collected|out)\b[\w$.\[\]?]*\.slice\(\s*-\s*(?:[A-Za-z_$][\w$]*|\d+)\s*\)/g,
+          /\b(?!Date\b)(?:logs?|items?|entries|rows?|lines?|list|arr|all|values?|records?|history|sessions?|segments?|collected|out)\b[\w$.[\]?]*\.slice\(\s*-\s*(?:[A-Za-z_$][\w$]*|\d+)\s*\)/g,
         ) || []
       ).length;
       return offset + ceilDiv + tail;

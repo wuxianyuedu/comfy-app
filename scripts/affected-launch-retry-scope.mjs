@@ -43,7 +43,7 @@ export function retryScope(input) {
   if (!junitDir) {
     return { files: chunk, why: "没有账本目录（不在钩子里跑）⇒ 整块复跑" };
   }
-  let xml = "";
+  let xml;
   try {
     xml = read(cFileXmlName(junitDir, chunkId, 1), "utf8");
   } catch (e) {

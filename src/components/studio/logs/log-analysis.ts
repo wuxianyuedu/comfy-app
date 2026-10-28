@@ -228,7 +228,7 @@ export function isReactQueryLog(args: unknown[]): boolean {
   // 合并成带 "[[" 前缀的单串（形如 `[[ << mutation #43 ]workflow.update {}`），
   // 并经由 LogProvider 转发帧以 "Console Error" 冒到面板。同属无害框架噪音。
   const text = serialize(args);
-  return /^[\s\[]*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(text);
+  return /^[\s[]*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(text);
 }
 
 /**

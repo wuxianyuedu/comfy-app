@@ -290,7 +290,7 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
       'export default { test: { environment: "node" } };\n',
     );
     let ok = true;
-    let output = "";
+    let output;
     try {
       output = execFileSync(
         process.execPath,

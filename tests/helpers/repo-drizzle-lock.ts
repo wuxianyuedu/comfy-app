@@ -87,8 +87,9 @@ export async function acquireRepoDrizzle(label: string): Promise<() => void> {
         throw new Error(
           `拿不到真仓库 \`drizzle/\` 的独占锁（等了 ${Math.round((Date.now() - started) / 1000)}s，` +
             `回收过 ${reclaimed} 次陈旧锁）。占用者：${ownerText()}；本方：${label}。` +
-            "\n  这不是超时类抖动，别靠重跑碰运气 —— 要判的是「谁在该等的这一段里改了 \`drizzle/\`」：" +
+            "\n  这不是超时类抖动，别靠重跑碰运气 —— 要判的是「谁在该等的这一段里改了 `drizzle/`」：" +
             "挪开真迁移集的用例与需要真迁移集在场的用例必须串到同一把锁上。",
+          { cause: error },
         );
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));

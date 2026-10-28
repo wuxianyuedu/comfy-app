@@ -331,7 +331,7 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
     );
 
     let code = 0;
-    let output = "";
+    let output;
     try {
       output = execFileSync(
         process.execPath,

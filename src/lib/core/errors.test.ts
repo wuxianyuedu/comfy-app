@@ -88,7 +88,7 @@ describe("errors — 错误类清单：每个导出都必须有生产调用方",
 
   /** 生产代码里出现 `new <name>(` 的次数（排除测试文件与本文件）。 */
   function productionCallSites(name: string): number {
-    let out = "";
+    let out;
     try {
       out = execFileSync(
         "git",

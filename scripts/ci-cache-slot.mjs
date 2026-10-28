@@ -380,7 +380,7 @@ function readSlot(slot, cwd) {
   if (!slot) return { slotPresent: false, slotFingerprint: null };
   const abs = path.resolve(cwd, slot);
   if (!fs.existsSync(abs)) return { slotPresent: false, slotFingerprint: null };
-  let fp = null;
+  let fp;
   try {
     fp = fs.readFileSync(path.join(abs, FINGERPRINT_FILE), "utf8").trim();
   } catch {
@@ -479,7 +479,7 @@ export function isUselessShell(abs, now, ttlMs, state = readSlotState(abs)) {
   } catch {
     return false;
   }
-  let mtime = 0;
+  let mtime;
   try {
     mtime = fs.statSync(abs).mtimeMs;
   } catch {
