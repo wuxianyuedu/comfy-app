@@ -27,7 +27,11 @@
  * 指纹清单沿用 `affected-launch-load-retry.mjs` 的那一份（与 `base-check/verdict.mjs`
  * 同源，由 `tests/hook-affected-launch.test.ts` 逐条核对不漂移）—— 这里不抄第二份。
  */
-import { isTimeoutShaped } from "./affected-launch-load-retry.mjs";
+import {
+  failureSectionOf,
+  isLaunchFailureShaped,
+  isTimeoutShaped,
+} from "./affected-launch-load-retry.mjs";
 
 /**
  * 第 2 遍的读数按文件分开。
@@ -112,4 +116,65 @@ export function mergePerFileReads(verdict, perFile) {
         ? "unattributed"
         : "unverified";
   return { kind, timedOut, hardFail, unknown, green };
+}
+
+/**
+ * 第 1 遍那个红的**三档判决**（装载失败 / 真断言红 / 值得复跑）。
+ *
+ * 为什么住在这里而不是 `runChunk` 里：`runChunk` 越过 900 行硬闸（`check-infra-file-size.cjs`，
+ * 无基线、无 `--update`），而这一段与上面 `classifyRetry` 判的是**同一件事的两个时机** ——
+ * 「这个红是什么形态」在第 1 遍问一次（决定要不要复跑）、在第 2 遍再问一次（决定放过还是阻断）。
+ * 拆开另有一个直接收益：三档的话术与档位现在是**同一份**，调用点只剩 report + return。
+ *
+ * ## 三个档位与它们的判别式
+ *
+ *   · `launch-failed` —— `isLaunchFailureShaped(整块输出)`：worker / 模块装载阶段就炸
+ *     （`AggregateError` / 模块找不到那一族），**一条断言都没红**。下一动作是修**环境**
+ *     （复跑没有意义：同样的环境再跑一遍，同样的炸），所以退 2。
+ *     ⚠️ 这一档读**整块**输出，而下面 `timeout` / `red` 两档只读**失败段**
+ *     （`failureSectionOf`）—— 两者刻意不同源：`AggregateError` 恰出现在失败明细**之前**
+ *     那一大段装载噪声里，收窄成失败段等于把这一档整条关掉（ISSUE #2601）。
+ *   · `timeout` —— 失败段带超时指纹：这个红首先是一个负载读数（§13.6.4），换更隔离的
+ *     条件重测一次。
+ *   · `red` —— 失败段不带指纹：真断言红，一次都不复跑，直接阻断。
+ *
+ * @param {{status: number | null, output: string}} firstPass
+ * @returns {{kind: "launch-failed" | "timeout" | "red", code: number, note: string}}
+ *   `code` 是这一档当场要退的码（`timeout` 那一档的 0 只是占位：调用点会继续往下走）。
+ */
+export function classifyFirstPass({ status, output }) {
+  /** @param {string} what */
+  const how = (what) =>
+    status === null ? "被信号终止" : `退出码 ${status}${what}`;
+  if (isLaunchFailureShaped(output)) {
+    return {
+      kind: "launch-failed",
+      code: 2,
+      note:
+        `[affected-launch] 第 1 遍**没跑起来**（${how("")}），` +
+        "输出里是装载 / 运行时级错误（AggregateError / 模块找不到那一族），" +
+        "**一条断言都没红**。\n" +
+        "  ⇒ 这一档退 2：既不是绿也不是红，它说的是「这台机器上这批用例没被跑起来」。\n" +
+        "  下一动作（按顺序试，别去查用例代码）：\n" +
+        "    1. `pnpm install --frozen-lockfile`（原生模块与锁文件对不上时就是这个形态）\n" +
+        "    2. 清掉环境里串进来的 `npm_config_*`（前缀 / store / global 那几条带执行期校验）\n" +
+        "    3. 再跑一次同一份清单：`node scripts/run-affected-tests.mjs --full`\n",
+    };
+  }
+  /* 指纹只读**失败段**：整块输出里住着全部用例的全部输出，那里按设计写着的
+   * `Test timed out` 不能替这一次的红签字（ISSUE #2601 的现场）。 */
+  if (isTimeoutShaped(failureSectionOf(output))) {
+    return {
+      kind: "timeout",
+      code: 0,
+      note:
+        "[affected-launch] 本块的红是**超时形态** —— 按规范 §13.6.4 先当负载读数看，\n" +
+        "  等机器喘口气，再用 `--no-file-parallelism` 隔离复跑（降负载，不抬任何预算）…\n",
+    };
+  }
+  return {
+    kind: "red",
+    code: status ?? 1,
+    note: `[affected-launch] vitest 失败：${how("")}\n`,
+  };
 }

@@ -109,17 +109,82 @@ export function estimateSerialRerunMs(firstPassMs) {
 /**
  * 还开不开下一遍。
  *
- * @param {{budget?: {deadline: number} | null, estimateMs: number, nowMs?: number}} args
- * @returns {{ok: boolean, remainingMs: number | null, estimateMs: number}}
+ * ## 买不起那一遍时，界要落到哪一侧（2026-10-28 的读数订正）
+ *
+ * 界原来只有一条：`剩余 < 估计` ⇒ 第 2 遍**不开**，当场按未判定退 2。它治的是
+ * 「用第三遍去赌一个本来就不会有的结论」，但它在**估计失真**时会做相反的事 ——
+ * 而那正是本仓唯一一次实测到的形状：
+ *
+ * | 读数（build `cnb-u2e-1k619gnro`，PR #2598） | 值 |
+ * | -- | -- |
+ * | 第 1 遍（94 份固定清单 / 2 worker） | **16.1 分钟** |
+ * | 估计（`estimateSerialRerunMs` = 首遍 × 2） | 32.4 分钟 |
+ * | 剩余 | 8.8 分钟 |
+ * | 实际：同机隔离跑那**一份**失败文件（`--no-file-parallelism`） | **0.4 秒** |
+ *
+ * 于是这一格连「一次真实测量」都没发生，却对着那一份文件说了「拿不到结论」。而
+ * `runChunk` 里本来就有**逐文件补跑**那条更便宜的路：只跑失败的那几份、一份一个
+ * 退出码、拿到的就是那一份自己的结论。两边要的东西不同 ——
+ * `estimateSerialRerunMs` 估的是「**整块**在串行条件下重测」，而这里的 `probeFiles`
+ * 只是「**失败的那几份**各跑一次」。
+ *
+ * ⇒ 两句都算，**任一成立**就开：`整块预算` 够，或 `补跑单价` 够。
+ *   单价还不知道时（第一份）只放**一份**过去 —— 它跑出来的耗时就是后面那些的单价
+ *   （与 `affordablePerFileCount` 同一条口径：不许用一个常数界替负载说话）。
+ *
+ * 这一格**不新增结论档、不碰任何预算档、不判哪一份红**：它改的只是「界落下之后是
+ * 一句话都没有，还是先去量一份」。买不起那一份时那句话里要带上**逐文件补跑**这条
+ * 下一动作（见 `wallClockSkipReport`）。
+ *
+ * @param {{budget?: {deadline: number} | null, estimateMs: number, nowMs?: number,
+ *   probeFiles?: number, probePerFileMs?: number}} 入参 —— 前三个是整块判点，
+ *   后两个是「逐文件补跑」那一档（份数与上一份的实测单价）
+ *   `probeFiles` = 逐文件补跑要跑的份数（0 / 不给 ⇒ 按原来的整块判点）；`probePerFileMs`
+ *   = 上一份实测单价（0 = 还没有单价）。
+ * @returns {{ok: boolean, remainingMs: number | null, estimateMs: number,
+ *   via: "block" | "probe", probeCount?: number}} 判决 —— 开不开、开哪一种、剩多少
+ *   `via` 说的是「开的是哪一种」：`block` = 整块那一遍，`probe` = 逐文件补跑里先量的
+ *   那几份（`probeCount` 是放过去的份数）；`ok` 是这一档到底开不开。
  */
 export function budgetAllows({
   budget,
   estimateMs,
   nowMs = Date.now(),
+  probeFiles = 0,
+  probePerFileMs = 0,
 }) {
   const remainingMs = remainingWallClockMs(budget, nowMs);
-  if (remainingMs === null) return { ok: true, remainingMs: null, estimateMs };
-  return { ok: remainingMs >= estimateMs, remainingMs, estimateMs };
+  if (remainingMs === null) {
+    return { ok: true, remainingMs: null, estimateMs, via: "block" };
+  }
+  if (remainingMs >= estimateMs) {
+    return { ok: true, remainingMs, estimateMs, via: "block" };
+  }
+  /* 界已经**过**了（剩余 ≤ 0）⇒ 一份都不开，连「先去拿个单价」也不许 —— 与
+   * `affordablePerFileCount` 那一档同口径：这一刻开的任何一份都是在赌。
+   * 读数上它对应的是「第 1 遍把预算全吃光」，与下面那一档（还剩一点、但买不起整块）
+   * 是两件事。 */
+  if (remainingMs <= 0) {
+    return { ok: false, remainingMs, estimateMs, via: "block" };
+  }
+  /* 还剩一点、但买不起**整块**：先量**一份**。这一份的产出就是后面那些的单价 ——
+   * 省掉它，界就永远只剩「一次测量都没有」这一种收场（现场：剩 8.8 分钟 < 整块估的
+   * 32.4 分钟，而那一份实测 0.4 秒）。有单价之后按剩余量算份数，不凭常数。 */
+  const probeCount =
+    probeFiles <= 0
+      ? 0
+      : probePerFileMs > 0
+        ? affordablePerFileCount({
+            budget,
+            perFileMs: probePerFileMs,
+            pending: probeFiles,
+            nowMs,
+          })
+        : Math.min(probeFiles, 1);
+  if (probeCount > 0) {
+    return { ok: true, remainingMs, estimateMs, via: "probe", probeCount };
+  }
+  return { ok: false, remainingMs, estimateMs, via: "block" };
 }
 
 /**
@@ -200,6 +265,68 @@ export function resolveWallClockMs(raw) {
 }
 
 /**
+ * `runChunk` 那一段「界落在哪一侧」的**整份判决**（判点 + 那句「开的是什么」的话术）。
+ *
+ * 为什么要收成一处：这一段在 `runChunk` 里长成了「两个 `if` + 两个跨函数的变量」——
+ * 而它判的是一件事（还开不开下一遍），拆成两段读的人就得自己把读数拼回去。放到这里
+ * 还顺带让它可单独钉住（纯函数，不读盘、不读时钟：`firstPassMs` 由调用点量好传进来）。
+ *
+ * @param {{budget?: {deadline: number, budgetMs: number} | null, firstPassMs: number,
+ *   retryFiles: number, nowMs?: number}} 入参 —— 首遍墙钟、要复跑的份数、当下时刻
+ * @returns {{ok: boolean, via: "block" | "probe", probeCount?: number,
+ *   remainingMs: number | null, estimateMs: number, note: string}} 判决与那句话
+ *   （`via` 说的是「开的是哪一种」，与 `budgetAllows` 的同一格逐字同源）
+ *   `via` 说的是「开的是哪一种」（整块 / 逐文件补跑里的 n 份）；`note` 是要打到 stderr
+ *   的那段正文（空串 = 这一档什么都不用说）。
+ */
+export function gateRerunByWallClock({
+  budget,
+  firstPassMs,
+  retryFiles,
+  nowMs = Date.now(),
+}) {
+  const estimateMs = estimateSerialRerunMs(firstPassMs);
+  const remainingMs = remainingWallClockMs(budget, nowMs);
+  const gate = budgetAllows({
+    budget,
+    /* 首遍墙钟可能是 0（假时钟 / 极快的一遍）—— `0 >= 0` 会把「买不起」判成
+     * 「买得起整块」，所以下界取 1（估算那一格本来就是个量级读数）。 */
+    estimateMs: Math.max(1, estimateMs),
+    probeFiles: retryFiles,
+    /* 单价在这一层还未知（第一次走到这里），按「还没有单价 ⇒ 只放一份」那一档办。 */
+    probePerFileMs: 0,
+    nowMs,
+  });
+  /** @param {number} ms */
+  const fmt = (ms) => `${(Number(ms) / 1000).toFixed(1)}s`;
+  if (gate.via === "probe") {
+    return {
+      ...gate,
+      note:
+        "[affected-launch] 墙钟买不起**整块**串行复跑，但买得起**逐文件补跑** ——\n" +
+        `  剩余 ${fmt(gate.remainingMs ?? 0)}、整块估计 ${fmt(estimateMs)}；` +
+        `这一轮先量 ${gate.probeCount} 份，量出来的单价决定还放不放下一份\n` +
+        "  （整块估计是按第 1 遍墙钟 ×2 推的，而实测里失败的那一份往往几秒钟就跑完，\n" +
+        "   两者差一个量级 —— 所以这里不省掉那次真实的测量）。\n",
+    };
+  }
+  /* 剩余 **≤ 0** 那一档与「还剩一点、但连一份都买不起」是两件事，话要分开说：
+   * 前者是「第 1 遍把预算全吃光」，后者是「账上还剩钱，但只够买整块的那张票」。 */
+  const broke = (remainingMs ?? 0) <= 0;
+  return {
+    ...gate,
+    note: gate.ok
+      ? ""
+      : "[affected-launch] " +
+        (broke
+          ? "墙钟已经用完"
+          : `墙钟买不起**整块**串行复跑（剩余 ${fmt(remainingMs ?? 0)} < 估计 ${fmt(estimateMs)}）`) +
+        (broke ? "" : "，而**逐文件补跑**也一份都买不起") +
+        " ⇒\n  第 2 遍不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，ISSUE #2364）。\n",
+  };
+}
+
+/**
  * 「第 2 遍因为预算没开」这句话（与 `runChunk` 里其它**判决当场**的话术同层，
  * 不是 `affected-launch-rerun-report.mjs` 那份收尾账）。
  *
@@ -217,6 +344,9 @@ export function wallClockSkipReport({ remainingMs, estimateMs, files }) {
     `  剩余 ${remainingMs === null ? "(没设界)" : fmt(remainingMs)}、` +
     `估计要 ${fmt(estimateMs)}（串行复跑按第 1 遍墙钟 ×${SERIAL_RERUN_FACTOR} 估 —— ` +
     "实测串行那一遍比并行那一遍更慢，所以不按比例算）。\n" +
+    "  连**逐文件补跑**也买不起（那一档的单价还不知道时放一份过去，这里连那一份都没有）：\n" +
+    "  逐文件补跑只跑失败的那几份、一份一个退出码，它比整块串行便宜得多 ——\n" +
+    "  所以这句话之前本应先量过一份（见 `budgetAllows` 的 `probeFiles`）。\n" +
     "  这不是红，也不是绿，也不是「未校验」：未校验是**两次测量都只给超时指纹**，\n" +
     "  而这里连第二次测量都没有发生 ⇒ 按**未判定**收（退 2，规范 §13.6.4）。\n" +
     `  下面这 ${files.length} 份文件这次没有结论：\n` +
