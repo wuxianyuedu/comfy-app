@@ -27,6 +27,7 @@ import { mkdtempSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 
 const REPO_ROOT = resolve(process.cwd());
 const CHECK = join(REPO_ROOT, "scripts", "check-scripts-typecheck.cjs");
@@ -199,6 +200,12 @@ describe("脚本档棘轮 —— 只降不升", () => {
     const updated = runCheck(["--update"]);
     expect(updated.code, updated.output).toBe(1);
     expect(updated.output).toContain("拒绝 --update");
+    /* 拒涨那句话必须给出**上涨态里可执行的下一步**（四种自洽写法见
+     * `tests/helpers/ratchet-refusal.ts`）—— 这一条由 `tests/ratchet-update-guards.test.ts`
+     * 的「COVERED_LOCALLY 点名的那份用例必须真判过」那一格要求：本账本被归进
+     * 「本地已覆盖」，所以「出路是不是死路」必须在这里被真判过一次，
+     * 否则「表里点名了 = 判过了」又是一句没有执行者的声明（§11.2.1 那一族）。 */
+    expectActionableRefusal(updated.output, "check-scripts-typecheck.cjs");
     /* 这条是关键：拒涨如果只「拒判」不「拒写」，账本会被上涨那一跑悄悄改掉。 */
     expect(readFileSync(baselinePath(), "utf8")).toBe(before);
     write(join("scripts", "dirty.mjs"), "const dead = 1;\nexport const b = 2;\n");

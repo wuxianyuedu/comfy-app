@@ -117,6 +117,13 @@ const COVERED_LOCALLY: Record<string, string> = {
    * 由本地用例 `tests/check-bundle-budget.test.ts` 覆盖（造够下限的 chunk 后
    * 先 --update 落一份基线的等价形态）。 */
   ".bundle-budget-baseline.json": "tests/check-bundle-budget.test.ts",
+  /* 脚本档类型检查的账本（ISSUE #2524 / 规范 §13.5.14.1）：它的沙箱**不是**这张表那五步的
+   * 形状 —— 那五步把判据脚本**拷进**临时工作区再跑，而这一档的工具本体必须留在真仓库里
+   * （`typescript` 与它的 `lib/tsc.js` 按脚本自己的位置解析），跟着拷走的只有「被判决的那棵树」
+   * （`COMFY_SCRIPTS_TYPECHECK_ROOT` 注入根，口径同 `DOC_RENDER_ROOT` / ISSUE #2415）。
+   * 本地用例实测过「新增格子 ⇒ 红」「`--update` 拒涨 ⇒ 红且**一个字节都不写回基线**」，
+   * 并调 `expectActionableRefusal` 判那句话给出路（那五步与这一半都齐，只是换了载体）。 */
+  ".scripts-typecheck-baseline.json": "tests/scripts-typecheck-ratchet.test.ts",
 };
 
 /**
