@@ -321,11 +321,22 @@ function inspectScript(file) {
 }
 
 /** `scripts/` 下的判据脚本（顶层，不含机制层子目录）。 */
+/**
+ * 全仓脚本文清单（一次进程内只 `readdir` 一次）。
+ *
+ * 这一份判据有四趟遍历都要它，而 `readdirSync` + 正则过滤在负载高的机器上不是零钱。
+ * 缓存在这里是安全的：`ROOT` 取自 `__dirname/..`（用例把本脚本拷进临时工作区再 spawn，
+ * 一个进程一个根），所以不存在「同一进程内两次答案不同」这条路。
+ */
+let scriptFilesCache = null;
 function scriptFiles() {
-  return fs
-    .readdirSync(path.join(ROOT, SCRIPT_DIR))
-    .filter((f) => /\.(cjs|mjs)$/.test(f))
-    .sort();
+  if (scriptFilesCache === null) {
+    scriptFilesCache = fs
+      .readdirSync(path.join(ROOT, SCRIPT_DIR))
+      .filter((f) => /\.(cjs|mjs)$/.test(f))
+      .sort();
+  }
+  return scriptFilesCache;
 }
 
 /** 读出 `tests/ratchet-update-guards.test.ts` 里某张表的函数体。 */
@@ -474,6 +485,31 @@ const COMMAND_RE = (script, flag) =>
   );
 
 /**
+ * 每条「(翻闸脚本, 旗标)」的正量**只编译一次**。
+ *
+ * 原先它在最内层构造 —— 量级是「目标文件 × 每份的行数 × 翻闸脚本数 × 2」，
+ * 本机 `--cpu-prof` 空载实测吃掉了 **78%**（`COMMAND_RE` 50.1% + `escapeRe` 27.8%）。
+ * 判定内容一字未改（同一个模板、同一组量、同一个 `test`），改的只是「什么时候构造」。
+ *
+ * @param {string[]} flips
+ */
+function commandMatchers(flips) {
+  return flips.flatMap((script) =>
+    FLIP_FLAGS.map((flag) => ({ script, flag, re: COMMAND_RE(script, flag) })),
+  );
+}
+
+/**
+ * 行里「有任何一个被管的旗标」这一条便宜前置门。
+ *
+ * 由 `FLIP_FLAGS` 派生，不在这里再抄一份字面量 —— 抄一份就等于给将来加旗标的人
+ * 留一条「加了旗标、前置门不认，于是那一族永远扫不到」的静默缝。
+ */
+const SOME_FLIP_FLAG = new RegExp(
+  `(?:${FLIP_FLAGS.map((flag) => escapeRe(flag)).join("|")})(?![\\w-])`,
+);
+
+/**
  * 找「仍叫人跑已翻闸脚本的旧旗标」的行。
  *
  * 两个落点同一条判定：命令清单（`.githooks/pre-commit` 与 `docs/standards/13`）
@@ -487,6 +523,7 @@ function staleFlipCommands(flips) {
     ...COMMAND_LISTS,
     ...scriptFiles().map((f) => `${SCRIPT_DIR}/${f}`),
   ];
+  const matchers = commandMatchers(flips);
   const found = [];
   for (const rel of targets) {
     const abs = path.join(ROOT, rel);
@@ -500,22 +537,20 @@ function staleFlipCommands(flips) {
          * （`check-doc-references.cjs` 的 `EXEMPT` 同款），且只豁免这一份文件、
          * 不是「凡是描述历史就不判」。 */
         if (rel === `${SCRIPT_DIR}/check-gate-flag-claims.cjs`) return;
-        for (const script of flips) {
-          for (const flag of FLIP_FLAGS) {
-            const re = COMMAND_RE(script, flag);
-            if (!re.test(line)) continue;
-            /* ② 那一类进一步要求它落在**字符串字面量**里（红话 / 命令清单里的
-             * 反引号引用都算）——裸的散文行不算。 */
-            const inString = /["'`]/.test(line);
-            if (!inString) continue;
-            found.push({
-              rel,
-              line: i + 1,
-              script,
-              flag,
-              text: line.trim().slice(0, 160),
-            });
-          }
+        /* 下面两道前置门都是**原判定里就有的条件**，只是被挪到跑「翻闸脚本 × 旗标」
+         * 那一圈正则之前：命中必须落在字符串字面量里（原式在 `re.test` 之后才看这个），
+         * 而命令形态必然带旗标字面量。筛掉的是不可能命中的行，结论逐字不变。 */
+        if (!/["'`]/.test(line)) return;
+        if (!SOME_FLIP_FLAG.test(line)) return;
+        for (const m of matchers) {
+          if (!m.re.test(line)) continue;
+          found.push({
+            rel,
+            line: i + 1,
+            script: m.script,
+            flag: m.flag,
+            text: line.trim().slice(0, 160),
+          });
         }
       });
   }
