@@ -20,7 +20,12 @@ export interface TaskItem {
 }
 
 export type FilterKey =
-  "ALL" | "SUCCEEDED" | "RUNNING" | "FAILED" | "CANCELLED" | "QUEUED";
+  | "ALL"
+  | "SUCCEEDED"
+  | "RUNNING"
+  | "FAILED"
+  | "CANCELLED"
+  | "QUEUED";
 
 export type SortKey = "newest" | "oldest";
 

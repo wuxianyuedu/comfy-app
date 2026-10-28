@@ -566,7 +566,8 @@ export function createNodeJsonViewerStore(
           nodes?: Array<Record<string, unknown>>;
         };
         let subDef: RawSubgraphDef | undefined = subs?.[targetUid] as
-          RawSubgraphDef | undefined;
+          | RawSubgraphDef
+          | undefined;
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs
             ? Object.keys(subs).find(

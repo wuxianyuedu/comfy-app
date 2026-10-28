@@ -180,7 +180,8 @@ export function httpFailureDetail(
 export function parseExtraJson(
   extraJson: string,
 ):
-  { ok: true; extra: Record<string, unknown> } | { ok: false; detail: string } {
+  | { ok: true; extra: Record<string, unknown> }
+  | { ok: false; detail: string } {
   if (extraJson === "") return { ok: true, extra: {} };
   try {
     const parsed: unknown = JSON.parse(extraJson);

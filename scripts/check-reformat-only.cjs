@@ -105,6 +105,100 @@ const HERE = path.resolve(__dirname, "..");
 /** 触发阻断的纯格式化文件数(见文件头注释:1 会变成噪声源)。 */
 const LIMIT = 10;
 
+/** 迁移声明的尾注:`format-migration: <一句话说明>`(写在提交正文里)。 */
+const MIGRATION_RE = /^format-migration:/m;
+
+/**
+ * 「格式化迁移」声明:区间里**每一个**提交的正文都带 `format-migration:` 尾注。
+ *
+ * 为什么需要这一扇门:换格式化器时(2026-10-28 prettier → oxfmt),格式判据是**硬闸
+ * 且没有基线** ⇒ 全量重排必须**和切换同批**落地;而本判据的阈值(10)又会拦住同批里
+ * 的重排 —— 两条硬闸互锁,迁移没有可落地的形状。于是给迁移一条**显式的、一次性的**
+ * 声明:声明了就按「这是一次格式化器迁移」读,不阻断,但清单照打、读数照报(可审计)。
+ *
+ * 两道护栏(不许拿它当万能钥匙):
+ *   ① 区间里**每个**提交都要声明(漏一个就不认 —— 迁移是整件事的性质,不是某一笔的);
+ *   ② 区间里**每个**提交本身都满足「重排独占」:要么纯格式化不到阈值(顺手那几份),
+ *      要么这一条提交**整条都是重排**(`reformatOnly.size === files.length`)。
+ * 想借声明把重排与功能改动埋进同一条提交,第 ② 关会把你拦回 `gateFail` 那一支
+ * (这里不留「占比 90% 就放行」那种缝 —— 那条缝等于允许每 10 份重排夹带 1 份功能改动)。
+ */
+function migrationDeclaration(revRange) {
+  /* `--no-merges`:平台侧跑的是**合并预览**(HEAD 是合并提交),而合并提交那一条
+   * 自动生成的正文不会带尾注 —— 把它算进「每个提交都要声明」等于这条门在 CI 上
+   * 永远不成立。合并提交本来就是本门禁豁免的那一档(见 `perCommitShape` 的头注)。*/
+  const bodies = gitOrEmpty(["log", "--no-merges", "--format=%B%x00", revRange]);
+  const commits = bodies
+    .split("\0")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!commits.length) return { declared: false, commits: 0 };
+  return { declared: commits.every((b) => MIGRATION_RE.test(b)), commits: commits.length };
+}
+
+/**
+ * 护栏 ② 的取数:区间里**逐提交**各判一遍「纯格式化占多少」。
+ *
+ * 为什么只按「每条提交各自的形态」判:换格式化器那一笔本身要改判据脚本、文档、
+ * 依赖清单 —— 它们**不是**纯格式化,却必须和重排同批落地(格式判据是硬闸且无基线)。
+ * 若按区间汇总取「占比」,这些文件进分母把占比稀释(实测 32 份重排 / 56 份源文件
+ * = 57%),于是「重排独占一条」这种**正确形态**反而被自己的护栏拦死 —— 那正是
+ * 这道门要解的互锁,不能换一副样子又锁回去。判「每个提交各自干不干净」才是这件事
+ * 的真形状:重排独占的提交整条都是重排,迁移那一笔的重排量又在阈值以下,两边都干净。
+ *
+ * 成本按提交数线性叠加(每个提交一次 oxfmt 批量调用),只在**命中阈值**时才付 ——
+ * 未命中的区间根本走不到这里。
+ *
+ * **合并提交不进这一张表**:平台侧那条流水线跑的是**合并预览**(HEAD 是合并提交,
+ * `HEAD~1..HEAD` 于是覆盖整个 PR 区间),而合并提交相对第一父提交的 diff 就是整份
+ * PR —— 把它算进来等于把汇总又请回分母,护栏 ② 当场自锁。合并提交本来就是本门禁
+ * 豁免的那一档(上游形态已定死在历史里,见 `main()` 里 `MERGE_HEAD` 那一支),
+ * 所以这里按**父提交数 ≥ 2** 跳过它,只判区间里那些**真有人做了改动**的提交。
+ *
+ * @param {string} range `A..B` 区间
+ * @param {number} limit 触发阈值(与 `LIMIT` 同义,由调用方传,便于按 `--strict` 走)
+ * @returns `{{commits: Array<{rev: string, files: number, reformatOnly: number}>, ok: boolean, offenders: string[]}}`
+ */
+function perCommitShape(range, limit) {
+  /* `%H %P`:提交 + 它的父提交(差分要的是**第一父提交**);`--no-merges` 把合并
+   * 提交整条摘出去 —— 理由见上面头注与 `migrationDeclaration` 里同一条。 */
+  const revs = gitOrEmpty(["log", "--reverse", "--no-merges", "--format=%H %P", range])
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [rev, ...parents] = line.split(/\s+/);
+      return { rev, parents };
+    });
+  const commits = [];
+  const offenders = [];
+  for (const { rev, parents } of revs) {
+    if (parents.length === 0) {
+      // 没有可比父提交(根提交 / 浅克隆):拿不到读数就不是「干净」,fail-closed。
+      commits.push({ rev, files: 0, reformatOnly: 0, unknown: true });
+      offenders.push(`${rev.slice(0, 8)}(无可比父提交)`);
+      continue;
+    }
+    const parent = parents[0];
+    const patch = gitOrEmpty(["diff", "--no-color", "--unified=0", `${parent}..${rev}`]);
+    if (!patch.trim()) continue;
+    const files = collectChangedFiles(patch);
+    const pairs = collectPairs(files, parent, (f) =>
+      gitOrEmpty(["show", `${rev}:${f.after}`]),
+    );
+    const reformatOnly = classifyReformatOnly(pairs);
+    commits.push({ rev, files: files.length, reformatOnly: reformatOnly.size });
+    const clean =
+      reformatOnly.size < limit ||
+      (files.length > 0 && reformatOnly.size === files.length);
+    if (!clean)
+      offenders.push(
+        `${rev.slice(0, 8)}(${files.length} 个源文件里 ${reformatOnly.size} 个纯格式化)`,
+      );
+  }
+  return { commits, ok: commits.length > 0 && offenders.length === 0, offenders };
+}
+
 /** 只看这些扩展名:其余(图片、锁文件)不参与格式判定。 */
 const SOURCE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|css|scss|json|md|mdx)$/;
 
@@ -243,6 +337,14 @@ let runner = undefined;
 function resolveRunner() {
   if (runner !== undefined) return runner;
 
+  // oxfmt 入口的接缝(与 check-format.cjs 同口径):用例在临时仓库里跑,
+  // 那里的 cwd 没有 node_modules,不给这条缝就只能撞「找不到格式化器」。
+  const fromEnv = process.env.COMFYAPP_OXFMT_ENTRY;
+  if (fromEnv && fs.existsSync(fromEnv)) {
+    runner = { kind: "entry", entry: fromEnv, cwd: HERE };
+    return runner;
+  }
+
   const candidates = [path.dirname(__dirname), __dirname];
   let dir = path.dirname(__dirname);
   for (;;) {
@@ -255,11 +357,12 @@ function resolveRunner() {
   runner = null;
   for (const base of candidates) {
     try {
-      runner = {
-        kind: "entry",
-        entry: require.resolve("prettier/bin/prettier.cjs", { paths: [base] }),
-        cwd: base,
-      };
+      // 取 `oxfmt/package.json` 再拼 bin:直接 resolve `oxfmt/bin/oxfmt` 可能被
+      // 包的 `exports` 字段挡住(子路径不导出)。
+      const pkg = require.resolve("oxfmt/package.json", { paths: [base] });
+      const entry = path.join(path.dirname(pkg), "bin", "oxfmt");
+      if (!fs.existsSync(entry)) throw new Error("oxfmt entry missing");
+      runner = { kind: "entry", entry, cwd: base };
       break;
     } catch {
       /* 换下一个基准目录 */
@@ -273,7 +376,7 @@ function resolveRunner() {
 function runnerPrefix() {
   const r = resolveRunner();
   const cmd = r.kind === "entry" ? process.execPath : "pnpm";
-  const head = r.kind === "entry" ? [r.entry] : ["exec", "prettier"];
+  const head = r.kind === "entry" ? [r.entry] : ["exec", "oxfmt"];
   return { kind: r.kind, cmd, head, cwd: r.cwd };
 }
 
@@ -285,7 +388,7 @@ function runnerPrefix() {
  *     Windows 上批处理文件只有 cmd.exe 会解释,Node 起它必 EINVAL,
  *     而这一档的失败形态是**静默**的(每个文件都退回「无法判定」)。
  */
-function runPrettier(args, cwd, input) {
+function runOxfmt(args, cwd, input) {
   const { kind, head } = runnerPrefix();
   if (kind === "entry") {
     return spawnSync(process.execPath, [...head, ...args], {
@@ -308,29 +411,25 @@ function runPrettier(args, cwd, input) {
 }
 
 /**
- * 解析 `--write <目录>` 的 stdout:分拣出「prettier 改写过的」与「给过结论的」
- * 两批文件(三档语义见文件头那段表)。
+ * 回读比对:分拣出「oxfmt 改写过的」文件,返回 `相对路径 → 规范形态`。
  *
- * 颜色码必须先剥掉:prettier 把 `(unchanged)` 那行整段涂灰,带色时
- * `/\(unchanged\)$/` 永远匹配不上 —— 那一档会被误判成「改写过的」。
+ * 与 prettier 时代的口径**不同**:那时是解析 `--write` 的 stdout,靠行尾的
+ * `(unchanged)` 标记区分(没标记 = 改写过);oxfmt 的写盘输出没有这个标记,
+ * 于是改为**写盘前留快照、写盘后回读比对正文** —— 判定只依赖文件内容本身,
+ * 不再依赖任何格式化器的输出文案(将来再换工具也不会因为文案变一次而漂)。
  *
- * 耗时的位置不固定(`<path> <ms>ms` 与 `<path> <ms>ms (unchanged)`),所以从
- * **行尾**剥它、而不是按固定列取路径。
- *
- * @returns {{rewritten: Set<string>, settled: Set<string>}} 绝对路径集合
+ * @param {{file: string}[]} entries
+ * @param {string} dir 临时目录根
+ * @param {Map<string, string>} before 写盘前正文(相对路径 → 内容,已归一化行尾)
+ * @returns {Map<string, string>} 被改写文件的 `相对路径 → 规范形态`
  */
-function parseWriteOutput(stdout, cwd) {
-  const rewritten = new Set();
-  const settled = new Set();
-  for (const raw of (stdout ?? "").split(/\r?\n/)) {
-    const line = raw.replace(/\u001b\[[0-9;]*m/g, "").trim();
-    if (!line) continue;
-    const at = line.replace(/\s+\d+ms(?: \(unchanged\))?$/, "");
-    const abs = path.resolve(cwd, at.split(/\s+/)[0] ?? at);
-    settled.add(abs);
-    if (!/\(unchanged\)$/.test(line)) rewritten.add(abs);
+function collectRewritten(entries, dir, before) {
+  const out = new Map();
+  for (const { file } of entries) {
+    const after = fs.readFileSync(path.join(dir, file), "utf8");
+    if (after !== before.get(file)) out.set(file, after);
   }
-  return { rewritten, settled };
+  return out;
 }
 
 /**
@@ -345,34 +444,29 @@ function parseWriteOutput(stdout, cwd) {
 function formatMany(entries) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reformat-ref-"));
   try {
+    const before = new Map();
     for (const { file, text } of entries) {
       const target = path.join(dir, file);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       // 归一化行尾的理由见文件头那段:副本保持 CRLF 会让每个 CRLF 文件都进
       // 「被改写」,等于把成本又放回去。
-      fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
+      const normalized = text.replace(/\r\n/g, "\n");
+      fs.writeFileSync(target, normalized);
+      before.set(file, normalized);
     }
     const { cwd } = runnerPrefix();
-    const res = runPrettier(["--write", dir], cwd);
+    // oxfmt 默认就是写盘(不带 `--check` 即写),没有 `--write` / 缓存那一档。
+    const res = runOxfmt([dir], cwd);
     if (res.error || res.status !== 0 || typeof res.status !== "number") {
       return { ok: false, rewritten: new Map(), settled: new Set() };
     }
-
-    const { rewritten, settled } = parseWriteOutput(res.stdout, cwd);
-    const out = new Map();
-    const settledRel = new Set();
-    for (const { file } of entries) {
-      // prettier 报告的是「相对它 cwd 的路径」(临时目录在 cwd 之外,于是带
-      // `../` 前缀),统一解析成绝对路径再比对。
-      const abs = path.join(dir, file);
-      if (!settled.has(abs)) continue;
-      settledRel.add(file);
-      // 只回读**确实被改写**的文件:实际提交里绝大多数文件是「本来就规范」的,
-      // 回读它们纯属白付(旧口径在这里白读了 49 份)。回读的内容就是 prettier
-      // 写完后的正文,正是判定要的「规范形态」。
-      if (rewritten.has(abs)) out.set(file, fs.readFileSync(abs, "utf8"));
-    }
-    return { ok: true, rewritten: out, settled: settledRel };
+    // 整批退出 0 ⇒ 每个文件都拿到了结论(与 prettier 时代「出现在输出里」同义);
+    // 改写与否交给回读比对(见 `collectRewritten` 的口径说明)。
+    return {
+      ok: true,
+      rewritten: collectRewritten(entries, dir, before),
+      settled: new Set(entries.map((e) => e.file)),
+    };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -388,11 +482,20 @@ function formatMany(entries) {
  */
 function formatOne(text, file) {
   const ext = path.extname(file).slice(1);
-  const { cwd } = runnerPrefix();
-  const res = runPrettier(["--stdin-filepath", `probe.${ext}`], cwd, text);
-  if (res.error || typeof res.stdout !== "string" || res.status !== 0)
-    return null;
-  return res.stdout;
+  // oxfmt 没有 `--stdin-filepath` 那一档;单文件兜底改为落到临时目录再跑一次 ——
+  // 语义与 stdin 同(无条件按扩展名格式化),判定口径不变。
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reformat-one-"));
+  try {
+    const target = path.join(dir, `probe.${ext}`);
+    fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
+    const { cwd } = runnerPrefix();
+    const res = runOxfmt([dir], cwd);
+    if (res.error || res.status !== 0 || typeof res.status !== "number")
+      return null;
+    return fs.readFileSync(target, "utf8");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -510,7 +613,21 @@ async function main() {
     const pairs = collectPairs(files, beforeRev, (f) =>
       gitOrEmpty(["show", `${afterRev}:${f.after}`]),
     );
-    process.exit(report(files, classifyReformatOnly(pairs), limit));
+    process.exit(
+      report(
+        files,
+        classifyReformatOnly(pairs),
+        limit,
+        migrationDeclaration(`${beforeRev}..${afterRev}`),
+        /* 这一支也要**逐提交**取数，不能拿汇总当分母：`HEAD~1..HEAD` 在**合并预览**
+         * 那一档（平台侧 PR 流水线把分支合进主干后跑判据，此时 HEAD 是合并提交）
+         * 覆盖的是**整个 PR 的区间**，而不是「一条提交」—— 汇总口径下切换那一笔
+         * 的判据脚本 / 文档 / 依赖清单照样进分母（实测 32/56），护栏 ② 会把
+         * 「重排独占一条」这个正确形态判成夹带。区间口径同一把尺，见
+         * `perCommitShape` 的头注。 */
+        perCommitShape(`${beforeRev}..${afterRev}`, limit),
+      ),
+    );
     return;
   }
 
@@ -555,18 +672,68 @@ async function main() {
     // 暂存区口径:改动后的内容在 index 里,`:<path>` 正是它的取法。
     gitOrEmpty(["show", range ? `${rangeAfter}:${f.after}` : `:${f.after}`]),
   );
-  process.exit(report(files, classifyReformatOnly(pairs), limit));
+  process.exit(
+    report(
+      files,
+      classifyReformatOnly(pairs),
+      limit,
+      // 区间口径:按传入的 A..B 读声明;暂存区口径(range 为空)按 HEAD 那一次读。
+      migrationDeclaration(range ?? "HEAD~1..HEAD"),
+      // 护栏 ② 只在区间口径下逐提交取数:暂存区口径下「这一次提交」就是汇总本身,
+      // 由 `report()` 按汇判定(迁那一支读 `reformatOnly.size === files.length`)。
+      range ? perCommitShape(range, limit) : null,
+    ),
+  );
 }
 
 /** 输出结论并按阈值决定是否阻断(两个口径共用,避免两份会各自漂移的判定)。 */
-function report(files, reformatOnly, limit) {
+function report(files, reformatOnly, limit, migration, perCommit) {
   /* 判决行的形状只有一处出处：`scripts/ci-log.mjs`（ISSUE #2506）。
    * ⚠️ 两条分支**都要交回退出码**，调用点是 `process.exit(report(…))`：从前红的那
    * 一支就地 `process.exit(1)`，搬进出口之后若就地退，`report()` 之后的收尾就再没有
    * 执行者 —— 退 0 = 判据恒绿（这一条在把红那一支改成 `return 1` 时当场验过）。 */
   if (reformatOnly.size >= limit) {
+    /* 「格式化迁移」声明成立 ⇒ 按迁移读（不阻断），但清单与读数照打（可审计）。
+     * 护栏 ② 是第二道锁：逐提交看「重排占不占得住这一条」（`perCommitShape`），
+     * 声明不是万能钥匙 —— 把重排与功能改动埋进同一条提交，这一关照样拦。 */
+    const isolated = perCommit
+      ? perCommit.ok
+      : files.length > 0 && reformatOnly.size === files.length;
+    if (migration?.declared === true && isolated) {
+      gatePass(
+        "格式化提交分离",
+        `格式化器迁移：本次改动 ${files.length} 个源文件，纯格式化 ` +
+          `${reformatOnly.size} 个（阈值 ${limit}，按迁移放行）`,
+      );
+      const basis = [
+        `依据：区间 ${migration.commits} 个提交**都**带 \`format-migration:\` 尾注，` +
+          "且**逐提交**看过去重排都是独占的（或不到阈值）—— " +
+          "这是换格式化器的重排，不是把功能改动埋进格式 diff。",
+      ];
+      if (perCommit) {
+        for (const c of perCommit.commits) {
+          const pct = c.files ? ((c.reformatOnly / c.files) * 100).toFixed(0) : "0";
+          basis.push(
+            `· ${c.rev.slice(0, 8)}：${c.files} 个源文件里 ${c.reformatOnly} 个纯格式化（${pct}%）`,
+          );
+        }
+      }
+      basis.push(
+        "重排的文件（照常点名，可审计）：" +
+          [...reformatOnly].sort().slice(0, 5).join(", ") +
+          (reformatOnly.size > 5 ? " …" : ""),
+      );
+      for (const line of indentItems(basis)) {
+        console.log(line);
+      }
+      return 0;
+    }
     gateFail("格式化提交分离", [...reformatOnly].sort(), {
-      detail: `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）`,
+      detail:
+        `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）` +
+        (migration?.declared === true
+          ? `；声明了 \`format-migration:\`，但**逐提交**看有提交把重排与功能改动混在一条里（${perCommit?.offenders.join("、") ?? "重排没有独占本次改动"}）⇒ 不按迁移读`
+          : ""),
       hint:
         "为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效,\n" +
         "评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。\n" +
@@ -574,7 +741,7 @@ function report(files, reformatOnly, limit) {
         "  git reset --soft HEAD~1\n" +
         "  git restore --staged .\n" +
         '  git add <仅功能相关的文件> && git commit -m "fix(scope): <本次改动>"\n' +
-        "  # 用 pnpm exec prettier --write <文件> 格式化（别对全库跑 format:write）\n" +
+        "  # 用 pnpm exec oxfmt <文件> 格式化（别对全库跑 format:write）\n" +
         '  git add -A && git commit -m "style: 格式化 <范围>"\n' +
         "若确实要一次性格式化某批文件（清理存量），那就**单独一个提交/PR**做它。\n" +
         "（`check-format.cjs` 已是硬闸、没有 `--update`：存量清零后删掉了那条通道，见 ISSUE #1811。）",

@@ -73,7 +73,8 @@ export type GenerateInput = z.input<typeof generateInputSchema>;
 
 /** 一份来源不定的载荷解析成入参的结果：`ok: false` 时带着**能直接给用户看**的一句。 */
 export type GenerateInputResult =
-  { ok: true; input: GenerateInput } | { ok: false; message: string };
+  | { ok: true; input: GenerateInput }
+  | { ok: false; message: string };
 
 /**
  * 把一份**来源不定**的载荷解析成可发送的入参。两个生产者：

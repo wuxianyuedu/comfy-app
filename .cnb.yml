@@ -319,7 +319,7 @@
     #      其中 `ESLint 零警告` 与 `单元测试` 2026-10-19 起在每日档上，那两格的
     #      `script` 同样带这层（`每日 ESLint 零警告` / `每日单元测试`）。
     #
-    # ⚠️ `prettier 格式` 已从停用清单里出网（ISSUE #2010），但它不是按上面那套恢复动作
+    # ⚠️ `oxfmt 格式` 已从停用清单里出网（ISSUE #2010），但它不是按上面那套恢复动作
     # 回来的 —— 它是**从本地钩子挪过来接管**的（执行者关系变了），别拿上面两条条件去
     # 判断它。同一族的事实在 §13.5.25 又出现一次：本地钩子的 A/B/C/D 四档这一批整体
     # 挪到平台，走的也不是「停用/恢复」那套，而是「步骤留在钩子里当注册表、由档位决定
@@ -335,7 +335,7 @@
       类型检查, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, prettier 格式, 格式化提交分离, 生成态文档与源同步,
+      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 生成态文档与源同步,
       API 文档生成与自检, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
       零消费导出, core 出口纪律与基类纯度, 工作区出处, 重档静态判据
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
@@ -464,7 +464,7 @@
 #   · `Install dependencies` 的**装的那一跳** —— 依赖面（锁文件 / `package.json` /
 #     `pnpm-workspace.yaml` / `next.config.js`）一项都没碰就不装，判定在
 #     `scripts/ci-install-deps.mjs`（`pnpm` 自证照旧每次都跑，判据见 §13.5.20）；
-#   · `prettier 格式` 的**扫描面** —— `src/**` + `.storybook/**` 是手写 glob，
+#   · `oxfmt 格式` 的**扫描面** —— `src/**` + `.storybook/**` 是手写 glob，
 #     与 `check-format.cjs` 的 `IGNORE_GLOBS` 是两件事（`IGNORE_GLOBS` 是**排除**面）。
 #     ⚠️ 但 `IGNORE_GLOBS` 增删目录时**必须同批回来看这两行**；
 #   · 判据脚本**自己的触发面** —— `API 文档生成与自检` 的 globs 由
@@ -577,7 +577,7 @@
 .lock-probe-a: &lock_probe_a
   key: probe-2363-a
   cancel-in-progress: false
-# `prettier 格式` 的**委托回写**口（见 `.format-fixup-stage` 那段）。它自成一份工作清单，
+# `oxfmt 格式` 的**委托回写**口（见 `.format-fixup-stage` 那段）。它自成一份工作清单，
 # 按上面 R3「同一把锁只给同一份清单」的规则必须独占一把 —— 与单跑三档共用会把
 # 「我要复验构建」和「我要补一笔格式修复」排成互斥。
 .lock-formatfix: &lock_formatfix
@@ -804,7 +804,7 @@
   # 而节点只有一台、平台不给并发旋钮 ⇒ 并行 PR 下它的墙钟读数不可信。红的地方也
   # 不是「这次改动违规」，而是「这台机当时腾不出核」。
   #
-  # ⚠️ 这**不是**把 lint 整个挪出 PR 这一档：`prettier 格式` / `格式化提交分离` /
+  # ⚠️ 这**不是**把 lint 整个挪出 PR 这一档：`oxfmt 格式` / `格式化提交分离` /
   #   一批 `check-*.cjs` 仍在 PR 上，`tsc --noEmit` 也在 —— 只有这一格撤，
   #   因为只有它同时满足「起一堆子进程」与「本地有等价执行者」两条。
   #
@@ -1153,7 +1153,7 @@
 # 「自己被挂在 PR 那一格上」—— 后者在当前令牌下根本推不动，唯一的出路是再委托一次。
 # 少写这一个旗标的表现是：这一格自己把事件又发回给自己（死循环，且账面全绿）。
 #
-# `timeout: 10m`：装依赖 + 一次 prettier，与 `prettier 格式` 那一格同量级；
+# `timeout: 10m`：装依赖 + 一次 prettier，与 `oxfmt 格式` 那一格同量级；
 # 给 10m 是「卡死要早报」的余量，不是重试预算（这一格不重试）。
 .format-fixup-delegate: &format_fixup_delegate
   - name: 委托回写·安装依赖
@@ -1832,7 +1832,7 @@
   - name: lib Node-only 声明
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
 
-  # prettier 格式硬闸（规范 §13.5.1）：**从本地钩子挪到这里**（ISSUE #2010）。
+  # oxfmt 格式硬闸（规范 §13.5.1）：**从本地钩子挪到这里**（ISSUE #2010）。
   #
   # 判据一个字没改，挪的只是执行者 —— 与 §13.5.17 那三条文档面判据同一条口径：
   # **它的结论挡不住任何一次代码回归**。prettier 只格式化，格式漂了没有任何运行时
@@ -1853,7 +1853,7 @@
   # 历史：它曾在这份清单里**被临时停用**（随 `ESLint 零警告` 一起让位给 E2E 调试，
   # 见 `COMFYAPP_CI_DISABLED_GATES` 的注释），本轮不是"恢复"而是"接管" —— 停用档的
   # 恢复条件（E2E 一绿 + 平台日志中文可读）与这条无关，钩子那边同时也撤了。
-  - name: prettier 格式
+  - name: oxfmt 格式
     ifModify:
       - "src/**"
       - ".storybook/**"
@@ -2459,9 +2459,9 @@ master:
       lock: *lock_oneshot_unit
       stages: *oneshot_unit
 
-  # ── 第四个 API 口：`prettier 格式` 的**委托回写**（ISSUE #2362 / #2365）─────────
+  # ── 第四个 API 口：`oxfmt 格式` 的**委托回写**（ISSUE #2362 / #2365）─────────
   #
-  # 为什么需要第二条 API 口：`prettier 格式` 那一格现在会自己修（#2342），但它在
+  # 为什么需要第二条 API 口：`oxfmt 格式` 那一格现在会自己修（#2342），但它在
   # `pull_request` 事件上 —— 而 PR 类事件的 `CNB_TOKEN` **只有 `repo-code:r`**（平台按
   # 「事件 + ref」给权限，`pull_request` 整族在「不可信事件」名单里，没有任何 YAML 开关能翻；
   # OIDC 也不给 PR / Issue 事件签发 id_token）。红路径实测（#2362 的 `cnb-1mr` 那跑）：
@@ -2472,7 +2472,7 @@ master:
   # 而是**换执行口**：`api_trigger` 是可信事件、令牌 `rw`。同一轮里用一条临时流水线实测过
   # `git push --dry-run origin HEAD:refs/heads/probe-perm` ⇒ `PUSH_RC=0`、`[new branch]`。
   #
-  # 于是 `prettier 格式` 那一格在 PR 事件上只做「判 / 修 / 复判」，再把
+  # 于是 `oxfmt 格式` 那一格在 PR 事件上只做「判 / 修 / 复判」，再把
   # `cnb build start-build --event api_trigger_formatfix` 发出来；被委托的这一条跑
   # `--delegate`（它就是回写口，自己推）。两格各跑一次 prettier，多出来的那一遍是
   # 这个洞的定价。
