@@ -1091,3 +1091,120 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
     expect(output).toContain("多余");
   });
 });
+
+/**
+ * `--only`：只写点名那几份镜像（ISSUE #2527）。
+ *
+ * 这一格治的是**代改别人的**那个形状：写入档是**无条件**重生成所有镜像的，而 D0 那格
+ * 「改了源就得带上镜像」逼人跑它 —— 于是「带上自己那一份」顺带把别人留在 HEAD 上的
+ * 陈旧镜像一起改脏进自己这批（真仓库实测一例：改 1 份规范带出另一份镜像 126 行整表重排）。
+ * 分得很开才谈得上处置：`--only` 答「我这批该写哪几份」，`--check` 答「全量漂了谁」。
+ */
+describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
+  const RENDER = join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs");
+  const MINE = "docs/guides/DEV-QUERIES.md";
+  const OTHERS = "docs/guides/TESTING.md";
+
+  let fixtureRoot = "";
+  const editAbs = (rel: string) => join(fixtureRoot, rel);
+  const genAbs = (name: string) => join(fixtureRoot, "docs", "generated", name);
+
+  function runRender(args: string[]): { code: number; output: string } {
+    try {
+      const output = execFileSync(process.execPath, [RENDER, ...args], {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          DOC_RENDER_ROOT: fixtureRoot,
+          DOC_RENDER_SCOPED: `${MINE},${OTHERS}`,
+        },
+      });
+      return { code: 0, output };
+    } catch (err) {
+      const e = err as { status?: number; stdout?: string; stderr?: string };
+      return {
+        code: typeof e.status === "number" ? e.status : 1,
+        output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      };
+    }
+  }
+
+  /** 两份源 + 两份一致的镜像。 */
+  function seedPair(): void {
+    fixtureRoot = mkdtempSync(join(tmpdir(), "doc-render-only-"));
+    for (const rel of [MINE, OTHERS]) {
+      mkdirSync(dirname(editAbs(rel)), { recursive: true });
+      writeFileSync(
+        editAbs(rel),
+        [`# ${rel}（夹具）`, "", "> **占位符约定**：占位符由 doc:check 动态核对。", "", "- ComfyUI 端口：{{comfyui.port}}", ""].join(
+          "\n",
+        ),
+        "utf8",
+      );
+    }
+    const seeded = runRender([]);
+    expect(seeded.code, seeded.output).toBe(0);
+    expect(existsSync(genAbs("DEV-QUERIES.md")), seeded.output).toBe(true);
+    expect(existsSync(genAbs("TESTING.md")), seeded.output).toBe(true);
+  }
+
+  afterEach(() => {
+    if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true });
+    fixtureRoot = "";
+  });
+
+  it("只写点名的那一份：别人留在镜像上的漂移一个字都不动", () => {
+    seedPair();
+    const STALE = "<!-- 别人留下的陈旧标记 -->";
+    const othersBefore = `${readFileSync(genAbs("TESTING.md"), "utf8")}\n${STALE}\n`;
+    writeFileSync(genAbs("TESTING.md"), othersBefore, "utf8");
+    /* 自己的源也改一笔，让「该写」这件事真的成立（不然「没动」只是没活干）。 */
+    const original = readFileSync(editAbs(MINE), "utf8");
+    writeFileSync(
+      editAbs(MINE),
+      original.replace("- ComfyUI 端口：{{comfyui.port}}", "- 探针：只写我自己那份。\n- ComfyUI 端口：{{comfyui.port}}"),
+      "utf8",
+    );
+
+    const { code, output } = runRender(["--only", MINE]);
+    expect(code, output).toBe(0);
+    expect(readFileSync(genAbs("DEV-QUERIES.md"), "utf8")).toContain(
+      "只写我自己那份",
+    );
+    /* 本格的主断言：别人那份**没有被顺手重渲染**（内容逐字仍是脏的那版）。 */
+    expect(readFileSync(genAbs("TESTING.md"), "utf8")).toBe(othersBefore);
+    /* 降档要被念出来：这一批写了 1 份、全量是 2 份 —— 不写这行就成了「只跑了一遍渲染」
+     * 而没人知道它跳过了几份（同 AGENTS 硬规则 7 那句「降档永远要被读出来」）。 */
+    expect(output).toContain("全量是 2 份，这一批只写了 1 份");
+  });
+
+  it("漂了谁由 --check 点名：--only 之后仍如实报回别人那一格，且它一个字都不写", () => {
+    seedPair();
+    const stale = `${readFileSync(genAbs("TESTING.md"), "utf8")}\n<!-- 陈旧 -->\n`;
+    writeFileSync(genAbs("TESTING.md"), stale, "utf8");
+    expect(runRender(["--only", MINE]).code).toBe(0);
+    const { code, output } = runRender(["--check"]);
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("TESTING.md 落后于源");
+    /* `--check` 那条路**只判不写**（写了就成了「没让人看见就代改了别人那份」——
+     * 正是本单要分开的两个方向）。断言落在内容上，不落在那句**给人指路的**提示语上：
+     * 报告里本来就该出现「重渲染」这个词，判它不许出现是我读错了判据。 */
+    expect(readFileSync(genAbs("TESTING.md"), "utf8")).toBe(stale);
+  });
+
+  it("认不出的名字当场停，且一份都不写（否则「以为写了自己那份」与「什么都没写」同形）", () => {
+    seedPair();
+    const mineBefore = readFileSync(genAbs("DEV-QUERIES.md"), "utf8");
+    const othersBefore = readFileSync(genAbs("TESTING.md"), "utf8");
+    const { code, output } = runRender([
+      "--only",
+      "docs/guides/根本不存在.md",
+    ]);
+    expect(code, output).toBe(1);
+    expect(output).toContain("不在 SCOPED_DOCS 的名字");
+    expect(readFileSync(genAbs("DEV-QUERIES.md"), "utf8")).toBe(mineBefore);
+    expect(readFileSync(genAbs("TESTING.md"), "utf8")).toBe(othersBefore);
+  });
+});
