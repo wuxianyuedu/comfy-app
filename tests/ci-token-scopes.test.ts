@@ -282,8 +282,17 @@ describe("main：读数档的退码与「不打凭据」", () => {
 });
 
 describe("起 `cnb` 的形态：CI 上那条「全部没拿到答复」的根因", () => {
-  it("POSIX 上原样起（不套宿主、不改参数）", () => {
+  it("非 Windows 上原样起（不套宿主、不改参数）", () => {
+    /* 判据自己跑在两边的宿主上（本地 Linux、平台 Windows），所以这里**按平台分叉**
+     * 而不是写死 POSIX 那一支 —— 第一版写死过一次，平台那一格当场红（实测
+     * `cnb-597-1k60g2d2g` 的 `受影响用例`：expected 'powershell' to be 'cnb'）。 */
     const inv = invocationFor("cnb", ["git", "get-head"]);
+    if (process.platform === "win32") {
+      // Windows 上唯一的正确答案是「要么交宿主、要么原样」，永不裸起一个 .ps1。
+      expect(["powershell", "pwsh", "cnb", "cnb.cmd"]).toContain(inv.command);
+      expect(inv.argv.at(-1)).toBe("get-head");
+      return;
+    }
     expect(inv.command).toBe("cnb");
     expect(inv.argv).toEqual(["git", "get-head"]);
   });
