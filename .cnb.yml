@@ -632,7 +632,12 @@
   # 伪装成这次 PR 的缺陷。
   #
   # ⚠️ 它**不打令牌值**（硬规则 17）：打的是「哪些能力够得着」，不是「凭什么够得着」。
-  # OIDC 兑换那一问的入参含 `cnb_token`，所以默认不发、只有 `--probe-oidc` 显式点名才发。
+  # OIDC 兑换那一问的请求体含 `cnb_token`，所以默认不发、只有 `--probe-oidc` 显式点名才发。
+  #
+  # ⚠️ **它走 HTTP，不起 `cnb`**（第五跑读数）：自托管 runner 的宿主 PATH 上**没有 cnb**
+  # （`Install dependencies` 那一格的日志里只有 node / pnpm / git），前四跑因此全落
+  # 「输出里没有平台信封」。这一格只要平台无条件注入的两件：`CNB_TOKEN` +
+  # `CNB_API_ENDPOINT`，加宿主 Node 自带的 `fetch` —— 所以它能在装依赖之前就跑。
   - name: 每日令牌权限读数
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
     timeout: 2m
