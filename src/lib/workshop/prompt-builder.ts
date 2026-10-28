@@ -21,8 +21,6 @@ export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
   // 关联的技能模板（充当美术指导的外包装）
   if (style?.promptTemplate) {
     parts.push(style.promptTemplate);
-  } else if (c.skillSlug && style?.promptTemplate) {
-    parts.push(style.promptTemplate);
   }
 
   return parts.filter(Boolean).join(", ");

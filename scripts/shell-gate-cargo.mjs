@@ -128,7 +128,7 @@ export function findCargoLookup({
       // rustup 的每个工具链各有一份 cargo：取版本号最大的那个（字典序即版本序，
       // 1.10 与 1.9 这种少见形态不在此纠偏 —— 只认「挑不到就继续找下一处」。
       /** @type {string[]} */
-      let versions = [];
+      let versions;
       try {
         versions = fs.readdirSync(dir).sort().reverse();
       } catch (err) {

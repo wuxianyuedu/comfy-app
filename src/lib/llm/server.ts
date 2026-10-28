@@ -315,7 +315,7 @@ async function upstreamChat(
       body: JSON.stringify(body),
     });
   } catch (e) {
-    throw new Error(describeFetchFailure(e, cfg));
+    throw new Error(describeFetchFailure(e, cfg), { cause: e });
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

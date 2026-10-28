@@ -196,7 +196,7 @@ async function resolveAndApplyCpuLimitForKeepAlive(input: {
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, KEEPALIVE_CPU_PID_INTERVAL_MS));
     }
-    let pid: number | null = null;
+    let pid: number | null;
     try {
       pid = (await findPidForMainPyDetailed(input.mainPy)).pid;
     } catch {

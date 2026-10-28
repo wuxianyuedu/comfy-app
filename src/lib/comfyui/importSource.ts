@@ -64,9 +64,9 @@ export async function readLocalFile(
       code?: string;
     };
     if (err.code === "ENOENT") {
-      throw new Error("本地文件不存在");
+      throw new Error("本地文件不存在", { cause: e });
     }
-    throw new Error(errorText(e, "无法读取本地文件"));
+    throw new Error(errorText(e, "无法读取本地文件"), { cause: e });
   }
   const text = await fs.readFile(absPath, "utf-8");
   return { text, mtimeMs: stat.mtimeMs };

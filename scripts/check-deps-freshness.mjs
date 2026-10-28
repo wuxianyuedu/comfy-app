@@ -393,7 +393,7 @@ export function detectRemoteDrift(
       drifts.push({ file: rel, kind: "远端改过内容", detail: [] });
       continue;
     }
-    let diff = null;
+    let diff;
     try {
       diff = diffLockfiles(baseText, remoteText);
     } catch {

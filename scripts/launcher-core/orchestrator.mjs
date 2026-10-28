@@ -237,7 +237,7 @@ export function latestPanelTranscript(
   { prefix = NEXTJS_PANEL_LOG_PREFIX, since = 0 } = {},
 ) {
   let best = null;
-  let names = [];
+  let names;
   try {
     names = fs.readdirSync(dir).filter((name) => name.startsWith(prefix));
   } catch {
@@ -245,7 +245,7 @@ export function latestPanelTranscript(
   }
   for (const name of names) {
     const file = path.join(dir, name);
-    let mtimeMs = 0;
+    let mtimeMs;
     try {
       mtimeMs = fs.statSync(file).mtimeMs;
     } catch {

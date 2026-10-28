@@ -149,7 +149,7 @@ function isGuardOnly(init) {
   const expr = ts.isJsxExpression(init) ? init.expression : null;
   if (!expr) return false;
   // 箭头 / 函数表达式，体里只允许守卫调用
-  let body = null;
+  let body;
   if (ts.isArrowFunction(expr) || ts.isFunctionExpression(expr)) {
     body = expr.body;
   } else {

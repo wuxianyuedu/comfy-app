@@ -271,7 +271,7 @@ export function createCliEnvelopeParser(
 
   const handleLine = (line: string): void => {
     if (!line) return;
-    let ev: unknown = null;
+    let ev: unknown;
     try {
       ev = JSON.parse(line);
     } catch {

@@ -333,8 +333,8 @@ describe("useModelLibrary 卸载后不再 setState", () => {
     };
     Object.defineProperty(globalThis, "window", spy);
 
-    let baseline = 0;
-    let after = 0;
+    let baseline;
+    let after;
     try {
       // 基线：卸载前把这一瞬间的调度读取数记下来
       baseline = scheduleReads;

@@ -246,7 +246,7 @@ function findAnonHeads(codeLines, i) {
   const heads = [];
   const arrow = /=>\s*\{/g;
   let m;
-  while ((m = arrow.exec(text)) !== null) {
+  while (arrow.exec(text) !== null) {
     heads.push({ decl: i, body: i, name: null });
   }
   const fnAnon = /(?:^|[\s(=,:;[{])(?:async\s+)?function\s*\(/g;

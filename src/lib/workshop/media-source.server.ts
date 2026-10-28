@@ -67,7 +67,7 @@ export async function resolveMediaBytes(
     try {
       res = await fetch(src, { signal: AbortSignal.timeout(30_000) });
     } catch (e) {
-      throw new Error(errorText(e, "拉取参考图失败"));
+      throw new Error(errorText(e, "拉取参考图失败"), { cause: e });
     }
     if (!res.ok) throw new Error(`拉取参考图失败 (${res.status})`);
     const buffer = Buffer.from(await res.arrayBuffer());

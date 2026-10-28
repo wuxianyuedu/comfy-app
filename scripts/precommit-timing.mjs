@@ -168,7 +168,7 @@ export function appendRun({ gitDir, record }) {
 export function readRuns(gitDir) {
   const file = ledgerPath(gitDir);
   if (!file) return [];
-  let text = "";
+  let text;
   try {
     text = fs.readFileSync(file, "utf8");
   } catch {
@@ -354,7 +354,7 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
   /** @type {Map<string, number>} */
   const byName = new Map();
   let dropped = 0;
-  let names = [];
+  let names;
   try {
     names = fsLike.readdirSync(dir);
   } catch {
@@ -369,7 +369,7 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
       return Number(pa[1]) - Number(pb[1]) || Number(pa[2]) - Number(pb[2]);
     });
   for (const file of xmls) {
-    let text = "";
+    let text;
     try {
       text = fsLike.readFileSync(path.join(dir, file), "utf8");
     } catch {
@@ -383,7 +383,7 @@ export function collectFileTimings({ dir, fsLike = realFs }) {
   const files = [...byName.entries()].map(([name, ms]) => ({ name, ms }));
   /* 清单读不到 ⇒ `expected = 0`，而**不是**「等于取到读数的份数」。
    * 「拿不到结论」与「结论是一致」必须分开（§13.5.20 那条空清单同口径）。 */
-  let expected = 0;
+  let expected;
   try {
     expected = fsLike
       .readFileSync(path.join(dir, C_MANIFEST_NAME), "utf8")

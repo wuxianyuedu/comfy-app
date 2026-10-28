@@ -138,7 +138,7 @@ export async function reapCheckoutInstances({
   read = readAppInstances,
 }) {
   /** @type {{running?: boolean, pids?: number[], via?: string | null} | null} */
-  let live = null;
+  let live;
   try {
     live = await read(root);
   } catch (e) {
@@ -180,7 +180,7 @@ export async function reapCheckoutInstances({
   }
 
   /** @type {{running?: boolean, pids?: number[]} | null} */
-  let after = null;
+  let after;
   try {
     after = await read(root);
   } catch (e) {

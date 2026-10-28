@@ -558,12 +558,12 @@ module.exports = {
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/media\/data-url"/.test(t2)) return 0;
       const writes = t2.match(/data:\$\{[^}]{0,40}\};base64,\$\{/g) || [];
-      const cuts = t2.match(/indexOf\(",\"\)/g) || [];
+      const cuts = t2.match(/indexOf\(","\)/g) || [];
       /* ③ 两个条件同时成立才计：`split(",")` 与 `data:` 前缀同现
        *（`split(",")` 在本仓库另有 CSV 解析的用法）。 */
       const splitCuts =
         t2.includes('startsWith("data:")') || t2.includes("data:${")
-          ? t2.match(/split\(",\"\)/g) || []
+          ? t2.match(/split\(","\)/g) || []
           : [];
       return writes.length + cuts.length + splitCuts.length;
     },

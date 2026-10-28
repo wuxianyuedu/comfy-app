@@ -562,7 +562,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
     const log = (s: string) => heard.push(s);
     const originalLog = console.log;
     console.log = log;
-    let code = -1;
+    let code;
     try {
       code = main([], { run, now: NOW, slug: "moon-read/comfy-app-t3" });
     } finally {
@@ -602,7 +602,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
     const heard: string[] = [];
     const originalLog = console.log;
     console.log = (s: string) => heard.push(s);
-    let code = -1;
+    let code;
     try {
       code = main([], {
         run: statusRun,
