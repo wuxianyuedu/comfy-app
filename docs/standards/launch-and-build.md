@@ -3353,6 +3353,26 @@ Next」，用户要盯着空窗等半分钟才看到页面；现在等待时间�
      `exitIfEnvNotReady` 上），缺 `.env.example` 里未注释的键就打一行
      `pnpm env:init` 的提醒——只读、不写文件、不改退码，且与补齐面共用
      `missingEnvKeys`（判据只有一份）。
+   - **`src/env.js` 里那段探测「项目根在不在 `.env`」的形态只有 `import.meta.url` 是活的**
+     （ISSUE #2599，本仓唯一一条被打包器看到的这类语句）：`import.meta.dirname` /
+     `import.meta.filename` 是 **Node 的 ESM 运行时**属性，而本文件会被 Turbopack 重写 ——
+     产物里 `import.meta` 只被合成一个取值器（实测读数
+     `var __TURBOPACK__import$2e$meta__ = { get url () { return __turbopack_context__.F("src/env.js") } }`，
+     读物是 `.next/dev/server/chunks/src_env*.js`），`dirname` 那一位是 `undefined`，
+     `join(undefined, …)` 当场 `ERR_INVALID_ARG_TYPE`，而炸的时机是 `next build` 的
+     **collect page data** ⇒ 表现是「`pnpm build` 整档红」而不是「`.env` 没找到」。
+     `scripts/**` 里那 141 处 `import.meta.dirname` **是对的**（纯 Node 宿主，不进打包图），
+     所以这条边界的口径是「**在会被打包的那一侧**（`src/**` 非测试）不许用那两位」，
+     不是全仓禁用 —— 判据 `tests/env-import-meta-shape.test.ts` 双向钉着（它读磁盘文本、
+     不在 import 图里，故登记进固定清单，见 §13.5.8 那一族的「在册 ⇄ 出勤」）。
+     **第二个形态更要紧**：`SKIP_ENV_VALIDATION` 的短路必须排在**任何 fs/path 动作之前**。
+     原来写的是「先算路径、只在用结果时看旗标」，于是两个**显式声明跳过校验**的执行者
+     （`.cnb.yml` 的构建档、`standalone-runtime-env.mjs` 的桌包运行期）照样在那一行上炸 ——
+     表现是「我按你说的跳过了，却红在你没跳过的那一步」。旗标语义是「整段跳过」，
+     连 `await import("node:fs")` 都不该发生；出厂件那一侧因此根本不去探
+     「构建机上那份 checkout 的 `.env`」在用户机上存不存在（那条探针对桌包是没有意义的，
+     §7.3 的减法本就不让 `.env` 进包）。缺文件那句现在**带出探测的绝对路径**，
+     真报出这一句时第一样要看的证据就在同一行（§5「桌包启动即报 `MissingEnvFileError`」那一族）。
 
 ### 9.3 桌面壳的跨平台（`pnpm tauri build`）
 
