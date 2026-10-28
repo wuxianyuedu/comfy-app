@@ -59,9 +59,11 @@ function mkRepo(): string {
     // `shell.mjs` 静态 import 它（ISSUE #1327）：可执行形态判据的唯一实现。
     // 漏了同样在加载阶段就断，见上面那条注释。
     "src/lib/process/executable-resolve.ts",
-    // 上面那一份**自己**的依赖（现在是个叶子 `platform.ts`，ISSUE #1961）：
+    // 上面那一份**自己**的依赖（`platform.ts` 是叶子、`pnpm-js-entry.ts` 是 #2562 加的
+    // pnpm 包真身入口判据）：
     // 它的依赖闭包同样要整条在场 —— 只抄上一份等于把「链」抄成「一个点」。
     "src/lib/process/platform.ts",
+    "src/lib/process/pnpm-js-entry.ts",
   ]) {
     // 必须**按原相对路径**落位：脚本里 import 的是 `./launcher-core/shell.mjs`，
     // 拷成 `scripts/shell.mjs` 会让子进程在加载阶段就 ERR_MODULE_NOT_FOUND ——

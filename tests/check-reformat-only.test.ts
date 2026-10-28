@@ -85,7 +85,8 @@ afterEach(() => {
  *     递归拷整个目录而不是软链单文件（`shell.mjs` 还依赖同目录的 `command-echo.mjs`，
  *     且 Windows 下 `fs.symlink(文件)` 普通用户 100% EPERM）。
  *   · `src/lib/process/executable-resolve.ts` 与它自己的依赖
- *     `src/lib/process/platform.ts` —— `shell.mjs` 静态 import 前者
+ *     `src/lib/process/platform.ts` / `src/lib/process/pnpm-js-entry.ts`
+ *     —— `shell.mjs` 静态 import 前者
  *     （ISSUE #1327），而前者又 import 后者：**链上的每一份都要在**
  *     （只抄第一份等于把「链」抄成「一个点」，漏的那一份同样让临时仓库里的
  *     `shell.mjs` 在**加载阶段**就 `ERR_MODULE_NOT_FOUND` —— 实测踩过，见
@@ -107,6 +108,14 @@ const { test, expect } = defineGateRepo({
     {
       from: "src/lib/process/platform.ts",
       to: "src/lib/process/platform.ts",
+    },
+    /* 同一个闭包里的第三份（ISSUE #2562）：`executable-resolve.ts` 现在静态 import
+     * `pnpm-js-entry.ts`（pnpm 的包真身 JS 入口判据）。漏了它，临时仓库里的
+     * `shell.mjs` 照样在**加载阶段**就 `ERR_MODULE_NOT_FOUND` —— 表现是这 19 条
+     * 「格式化判据」用例齐刷刷 exit 2，而它们要判的东西一件都没跑到。 */
+    {
+      from: "src/lib/process/pnpm-js-entry.ts",
+      to: "src/lib/process/pnpm-js-entry.ts",
     },
   ],
   setup: (repo) => {

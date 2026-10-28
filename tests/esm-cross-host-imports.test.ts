@@ -53,6 +53,10 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const CROSS_HOST_MODULES = [
   "src/lib/process/platform.ts",
   "src/lib/process/executable-resolve.ts",
+  // `executable-resolve.ts` 的兄弟件（ISSUE #2562）：pnpm 的包真身 JS 入口判据。
+  // 它被前者静态 import，而前者是 `.mjs` 宿主（`shell.mjs`）的依赖 —— 所以它同样
+  // 在这条跨宿主的链上，同样要带 `.ts` 说明符。
+  "src/lib/process/pnpm-js-entry.ts",
   "src/lib/process/python-candidates.ts",
   "src/lib/process/python-resolve.ts",
   "src/lib/process/probe-exe.ts",
