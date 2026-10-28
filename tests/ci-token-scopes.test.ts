@@ -85,6 +85,21 @@ describe("classifyReply：三句话的判据顺序", () => {
     expect(classifyReply("Error: spawn cnb ENOENT").state).toBe("unknown");
   });
 
+  it("「没拿到答复」的四种成因各自念得出来（否则读数让人猜，ISSUE #2551 第四跑）", () => {
+    /* 这一格存在的意义就是让人看出「是哪一种没量到」，所以那句话不许只有一种形状。 */
+    expect(classifyReply("", { error: "ENOENT" }).why).toContain("起不来");
+    expect(classifyReply("", { status: 1 }).why).toContain("没有输出");
+    expect(classifyReply("not an envelope", { status: 0 }).why).toContain(
+      "认不出形状",
+    );
+    expect(
+      classifyReply(
+        envelope(403, { errcode: 10023, errmsg: "scope mismatch" }),
+        { status: 0 },
+      ).why,
+    ).toContain("403");
+  });
+
   it("说了「缺 scope」但没写出名字 ⇒ denied，且如实标出「原话里没写出来」", () => {
     const r = classifyReply("Missing required scopes");
     expect(r.state).toBe("denied");

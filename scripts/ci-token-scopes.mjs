@@ -61,6 +61,21 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+/**
+ * 一次探针的执行结果。`error` / `command` / `outLen` 三格是**给读数用的诊断面**：
+ * 「没拿到答复」的四种成因在只看 `out` 时长得一样，而这一格的用处正是让人分出是哪一种。
+ * 三格都不含凭据（命令名或宿主路径 / `ENOENT` 那类码 / 长度）。
+ *
+ * @typedef {{
+ *   ok: boolean,
+ *   status: number,
+ *   out: string,
+ *   error?: string | null,
+ *   command?: string,
+ *   outLen?: number,
+ * }} RunResult
+ */
+
 /** 三态退码与仓内其余档同口径（`0` 有结论 / `2` 没拿到测量）。 */
 export const CODE = { OK: 0, NO_FACT: 2 };
 
@@ -191,7 +206,7 @@ export const PROBES = [
  *
  * @typedef {{
  *   repo: string,
- *   run: (cmd: string, args: string[]) => {ok: boolean, status: number, out: string},
+ *   run: (cmd: string, args: string[]) => RunResult,
  *   only?: string[],
  *   oidc?: boolean,
  * }} ProbeOptions
@@ -241,13 +256,24 @@ export const OIDC_PROBE = {
  *
  * @param {string} cmd
  * @param {string[]} args
- * @returns {{ok: boolean, status: number, out: string}}
+ * @returns {RunResult}
  */
 export function run(cmd, args) {
   const { command, argv } = invocationFor(cmd, args);
   const r = spawnSync(command, argv, { encoding: "utf8", windowsHide: true });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
-  return { ok: r.status === 0 && !r.error, status: r.status ?? -1, out };
+  return {
+    ok: r.status === 0 && !r.error,
+    status: r.status ?? -1,
+    out,
+    /* 「没拿到答复」有四种成因（起不来 / 超时 / 空输出 / 输出认不出），而它们
+     * **在读数上长得一样** —— 这一格存在的意义是让人看出是哪一种，所以把 spawn
+     * 层的三件事实带出去。它们都不含凭据（`command` 是命令名或宿主路径，`error`
+     * 是 `ENOENT` 那类码，`outLen` 是长度）。 */
+    error: r.error ? String(/** @type {any} */ (r.error).code ?? r.error) : null,
+    command,
+    outLen: out.length,
+  };
 }
 
 /**
@@ -311,10 +337,11 @@ export function invocationFor(cmd, args, { platform = process.platform } = {}) {
  *    「读得到 vs 读得到但对象不在」在读数里必须分开，否则这条探针答的是另一个问题；
  * ③ 其余（`cnb` 不在、网络断、信封里没有 `status`）⇒ **没结论**，不是「够得着」。
  *
- * @param {string} raw
+ * @param {string} raw 平台回的信封原文（stdout + stderr）
+ * @param {{error?: string | null, status?: number}} [spawn] 起这一条时 spawn 层的事实
  * @returns {{state: "denied" | "granted" | "unknown", scope?: string, status?: number, why?: string}}
  */
-export function classifyReply(raw) {
+export function classifyReply(raw, spawn = {}) {
   const text = String(raw ?? "");
   const missing = SCOPE_PATTERN.exec(text);
   if (missing) {
@@ -331,7 +358,20 @@ export function classifyReply(raw) {
     /^\s*"?status"?\s*:\s*(\d{3})/m.exec(text) ??
     /"status"\s*:\s*(\d{3})/.exec(text);
   const status = http ? Number(http[1]) : null;
-  if (status === null) return { state: "unknown" };
+  if (status === null) {
+    /* 平台没回信封 ⇒ 这一条根本没走到平台。三种成因各自给一句，别让读的人
+     * 在「没拿到答复」面前猜（ISSUE #2551 的第四跑现场就是这样）。 */
+    if (spawn.error) {
+      return { state: "unknown", why: `起不来（${spawn.error}）` };
+    }
+    if (text === "") {
+      return {
+        state: "unknown",
+        why: `没有输出（退出码 ${spawn.status ?? "?"}）`,
+      };
+    }
+    return { state: "unknown", why: "输出里没有平台信封（认不出形状）" };
+  }
   if (status === 200) return { state: "granted", status };
   /* 非 200 而原话里没有那句 `Missing required scopes` —— 是**另一种**拒绝（或业务错误）。
    * 这类不许落进「够得着」：平台没答应这次请求，而那枚 scope 在不在没人说得准。
@@ -384,7 +424,7 @@ export function probeAll(opts) {
       why: probe.why,
       note: probe.note,
       args,
-      reply: classifyReply(r.out),
+      reply: classifyReply(r.out, r),
     };
   });
 }
@@ -459,7 +499,7 @@ export function formatReadout(rows, ctx) {
  * @typedef {{
  *   argv?: string[],
  *   env?: Record<string, string | undefined>,
- *   run?: (cmd: string, args: string[]) => {ok: boolean, status: number, out: string},
+ *   run?: (cmd: string, args: string[]) => RunResult,
  *   log?: (s: string) => void,
  * }} MainOptions
  */
