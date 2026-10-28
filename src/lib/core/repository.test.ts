@@ -44,8 +44,10 @@ import {
   parseAdaptersJson,
 } from "~/lib/core/repository-user";
 import { decryptLlmKey } from "~/lib/llm/secrets";
+import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { postRepository } from "~/lib/core/repository-post";
 import {
+  armStatementFailure,
   getTestDb,
   seedUser,
   seedRemoteModel,
@@ -1568,6 +1570,88 @@ describe("RemoteModelRepository", () => {
     expect(decryptLlmKey(await cipherOf())).toBe("sk-again");
     await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "   " }]);
     expect(await cipherOf()).toBeNull();
+  });
+
+  /* ── 事务性（ISSUE #2586）──────────────────────────────────────────
+   * 这三条是本仓**第一处事务站点**的锚点，没有现成形状可照抄，所以每条自带反证：
+   * 「中途失败」与「撞锁」都必须由测试宿主的语句钩子造出来（`armStatementFailure`），
+   * 而不是靠构造某种会让 SQL 失败的输入 —— 约束面已经被仓储自己去重挡掉了，
+   * 拿巧合当夹具的话，这条用例会在某一天因为仓储变好而静默失去意义。 */
+  it("replaceAll 把读、删、写三条语句都放进同一个事务（顺序由宿主的 SQL trace 判）", async () => {
+    await remoteModelRepository.replaceAll([{ name: "甲" }]);
+    tdb.$sqlTrace.length = 0;
+    await remoteModelRepository.replaceAll([{ name: "乙" }]);
+
+    const head = (s: string) => (s.trim().split(/\s+/)[0] ?? "").toLowerCase();
+    const heads = tdb.$sqlTrace.map(head);
+    const commit = heads.indexOf("commit");
+    expect(commit, "事务要收在 commit 上").toBeGreaterThan(0);
+    /* begin 与 commit **之间**只许有那三条：读（继承来源）、删、批量 upsert。
+     * 写成整段等式而不是逐条 toBeGreaterThan，是因为「多一条藏在事务里」与
+     * 「少一条被挪到外面」都必须当场红——只比顺序的话，把 commit 之前塞进
+     * 一次额外读也照样绿。 */
+    expect(heads.slice(0, commit + 1)).toEqual([
+      "begin",
+      "select",
+      "delete",
+      "insert",
+      "commit",
+    ]);
+    expect(heads.at(-1), "返回给调用方的那份是 commit **之后**重读的").toBe(
+      "select",
+    );
+  });
+
+  it("第二条写失败 ⇒ 第一条不残留：整份配置与其中的密钥都还在（#2586 的正案）", async () => {
+    await remoteModelRepository.replaceAll([
+      { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-lost" },
+      { name: "丙", baseUrl: "https://c/v1" },
+    ]);
+    /* 注入一个**非锁族**错误：那样有界重试会「认不出原因就原样抛」，
+     * 这条用例测到的才是回滚，而不是重试成功后又落了一遍。 */
+    const gate = armStatementFailure((sql) =>
+      sql.toLowerCase().startsWith("insert"),
+    );
+    const failure = await remoteModelRepository
+      .replaceAll([{ name: "乙" }])
+      .then(() => null)
+      .catch(
+        (e: unknown) => e as { message: string; cause?: { message?: string } },
+      );
+    expect(failure, "第二条写失败必须让整条调用失败得看得见").not.toBeNull();
+    /* drizzle 会把宿主抛的东西包成 `Failed query: …`，原因挂在 `cause` 上——
+     * 比的正是这两段合起来（只看 message 会读不到注入的那句，那正是 #1250 记的形态）。
+     * `failure` 若真是 null，拼出来的是空串、下面那条照样红，所以这里用 `?.` 不是放宽断言。 */
+    expect(
+      `${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`,
+      "包装层不许把原因吞掉",
+    ).toContain("测试注入");
+    expect(gate.hits(), "非锁族错误不许重试，只该撞一次").toBe(1);
+
+    const rows = await remoteModelRepository.list();
+    expect(rows.map((r) => r.name).sort()).toEqual(["丙", "甲"]);
+    expect(
+      decryptLlmKey(rows.find((r) => r.name === "甲")?.apiKey ?? null),
+      "删掉的那条带着加密密钥，回滚不成就会永久找不回来",
+    ).toBe("sk-lost");
+  });
+
+  it("起事务撞锁 ⇒ 按 SETTINGS_DB_WRITE 的预算重试，成功后一次落定", async () => {
+    const busy = () => {
+      const e = new Error("database is locked");
+      (e as { code?: string }).code = "SQLITE_BUSY";
+      return e;
+    };
+    /* 前 maxAttempts-1 次让 `begin` 撞锁，第三次放行：既验「认锁码才重试」，
+     * 也验重试的是**整条事务**而不是某一条语句（每次重试都重新起一次 begin）。 */
+    const gate = armStatementFailure(
+      (sql) => sql.trim().toLowerCase() === "begin",
+      busy,
+      SETTINGS_DB_WRITE.maxAttempts - 1,
+    );
+    const rows = await remoteModelRepository.replaceAll([{ name: "甲" }]);
+    expect(gate.hits()).toBe(SETTINGS_DB_WRITE.maxAttempts - 1);
+    expect(rows.map((r) => r.name)).toEqual(["甲"]);
   });
 
   it("findByName / 适配器读写 / 模型不存在时的空返回", async () => {

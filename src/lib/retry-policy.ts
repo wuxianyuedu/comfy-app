@@ -176,3 +176,24 @@ export const SQLITE_PRAGMA_BOOT = {
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 5,
 } as const;
+
+/**
+ * 用户在等的那一次设置保存撞锁：最多 3 次、指数退避基数 40ms、封顶 200ms
+ * （累计等待 40 + 80 = 120ms）。
+ *
+ * 对手是**另一个正占着写锁的事务**：`BEGIN IMMEDIATE` 撞锁时是**立刻**抛
+ * `SQLITE_BUSY`（不是「等一会儿再抛」），因为 Next 侧刻意不给 `createClient({ timeout })`
+ * —— libsql 的语句执行是同步的，等锁多少毫秒就是本进程停摆多少毫秒（实测与理由见
+ * 规范 §7.6 与 `sqlite-pragmas` 文件头）。所以这一族的等待预算只能落在重试这一层。
+ *
+ * 比 `TERMINAL_DB_WRITE` 少一次（3 vs 4）：那一族收的是「一行任务的终态」，拖在库里
+ * 没人看得见，多等 160ms 换来的是少一次回收器对账；这一条是界面上的一次点击，
+ * 穷尽之后**把错误呈现给用户**比让界面卡着更诚实（失败路径必须有用户可见出口，硬规则 4）。
+ */
+export const SETTINGS_DB_WRITE = {
+  shape: "exponential",
+  baseMs: 40,
+  maxMs: 200,
+  /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
+  maxAttempts: 3,
+} as const;

@@ -2006,9 +2006,41 @@ dev server 一侧的固有事实：懒加载的 `import()` **不是**在页面�
   实测只有 `better-sqlite3 / bun-sqlite / durable-sqlite / expo-sqlite / op-sqlite / sqlite-core /
   sqlite-proxy`）⇒ 只能走 `sqlite-proxy`，而它是**异步**形状；
 - 测试基建要的恰好是**同步**形状。这条不是推测，是本仓拍板过的：
-  `src/lib/core/repository-user.ts:264` 那句「不包事务：测试基建跑 better-sqlite3（同步驱动）
-  不接受 async 事务回调」——同步宿主上 async 事务回调会在 continuation 之前 COMMIT，
-  **原子性静默失效**（执行宿主设计文档里那次改签记的就是这个）。
+  `src/lib/core/repository-user.ts` 里那句「不包事务：测试基建跑 better-sqlite3（同步驱动）
+  不接受 async 事务回调」（当时在 :264，下面的 #2586 把它删了）——同步宿主上 async 事务回调会在
+  continuation 之前 COMMIT，**原子性静默失效**（执行宿主设计文档里那次改签记的就是这个）。
+
+**上面那一条在同一天被自己推翻了（ISSUE #2586，2026-10-28）**：它把**测试宿主的形状**
+当成了生产的约束。那句注释所在的 `replaceAll` 是一条「整份覆盖」，删与写分两次落库，
+第二条失败时第一条已提交 ⇒ 用户整份远端模型配置消失，而其中的密钥是密文、删掉就找不回来
+——「不能包事务」从来不是生产事实，运行时那一侧一直拿得到带写锁的事务
+（`drizzle-orm/libsql` → `client.transaction()`，默认 mode `write` ⇒ `BEGIN IMMEDIATE`，
+整条事务绑在池里同一条连接上）。这一格落地之后，`src/lib/core/repository-user.ts` 是本仓
+**第一处事务站点**（此前 `db.transaction(` 在 `src/` 与 `scripts/` 下零命中）。
+
+换宿主实测只动了 **一处调用点 + 一个宿主回调**，不是当初记的那半条「同步 seed 要改异步」：
+`tests/helpers/test-db.ts` 的 drizzle 层换成 `drizzle-orm/sqlite-proxy`（宿主仍是同一个
+better-sqlite3 实例），而 `$reset` / `$tables` / 六个 `seed*` 本来就打裸实例
+（实测调用点 38 / 75 / 217 处，一处没动）。留在这一节的是下次谈「换驱动」必须从这儿出发的三条读数：
+
+1. **宿主回调的返回形状**：`get` ⇒ `{ rows: 单行 }`、`all` / `values` ⇒ `{ rows: 行数组 }`、
+   `run` ⇒ 原样透传（`RemotePreparedQuery` 没覆写 `mapRunResult`）。而且**行必须是位置数组**——
+   `mapResultRow` 取的是 `row[columnIndex]`；返回列名对象时的表现不是「查不到」而是
+   `SyntaxError: "undefined" is not valid JSON`（JSON 列的 decoder 先炸），看着像数据坏了。
+   另：`raw()` 只能对会返数据的语句调，`run` 那一支调它会抛
+   `The raw() method is only for statements that return data`。
+2. **`config.behavior` 两侧不对称**：`libsql/session.cjs:85` 是
+   `async transaction(transaction, _config)` —— 第二参数整个被丢；而
+   `sqlite-proxy/session.cjs:71-73` **读** 它（把 `begin` 加上 behavior 拼成一条语句送进回调）。
+   所以本仓口径是**两侧都不显式传 `behavior`**：传与不传的差别只存在于测试宿主那一侧，
+   不传才能让同一个调用形状只依赖「回调被 await」这一件事。
+3. **等锁预算只能落在重试层**：`BEGIN IMMEDIATE` 撞上并发写事务时是**立刻**抛 `SQLITE_BUSY`
+   （Next 侧刻意不给 `createClient({ timeout })`，理由见 §7.6：libsql 的语句执行是同步的，
+   等锁多少毫秒就是本进程停摆多少毫秒）。这一族的具名预算是 `SETTINGS_DB_WRITE`
+   （3 次、基数 40ms、封顶 200ms），循环体的唯一实现是 `src/lib/sqlite-busy-retry.ts`
+   —— 同一段八行循环此前在 `sqlite-pragmas.ts` 与 `comfyui/executor-write-retry.ts` 各写一遍，
+   第三处不再写（§12.18）。它抽的只是三处逐字相同的那一半，**不是** `retryAsync`
+   那种把域逻辑塞进回调的通用件（`retry-policy.ts` 文件头反对的正是后者）。
 
 **而真正该评估的那一格，不是这张单问的那一个**：`node:sqlite` 在本仓**已经在生产路径上跑着**——
 `src/lib/db-schema-ready.ts:58`（表就绪探针，§18.4 第三形态的纯 Node 宿主件）与
