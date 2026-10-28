@@ -51,7 +51,6 @@ import {
 const ROOT = path.resolve(import.meta.dirname, "..");
 /** 扫描面：与 `vitest.config.ts` 的 `include` 同口径（`src/**` + `tests/**`）。 */
 const SCAN_DIRS = ["src", "tests"];
-const TEST_FILE_RE = /\.test\.tsx?$/;
 /** 「这台机器上有没有」的探测站点（`firstRunnable` 是那条判据的唯一入口）。 */
 const PROBE_SITE_RE = /\b(?:const|let)\s+\w+\s*=\s*firstRunnable\(/;
 /** 「逐候选为什么没成」的出口。 */

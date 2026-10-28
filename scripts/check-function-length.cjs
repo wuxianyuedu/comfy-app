@@ -260,7 +260,6 @@ function findAnonHeads(codeLines, i) {
 /** 扫描一个文件里的全部函数头。具名头的签名区间不再参与匿名识别 ——
  *  否则 `(msg: string) => void` 这种类型注解会被当成回调。 */
 function collectHeads(codeLines) {
-  const heads = [];
   const byPos = new Map();
   /* 同一个函数体只留一条（键 = 函数体所在行）：签名跨行时声明行与函数体行不同，
    *  但函数体只有一个。具名优先于匿名（名字比「(匿名块体)」有信息量），

@@ -11,16 +11,12 @@
  * 把它和「实现住在哪一份」绑在一起，会让「改判据所属档位」变成跨文件搬家。
  * 合并顺序即对象键顺序，与拆分前逐字一致。
  */
+/* 引擎 helper 按本片实际用量解构（core no-unused-vars 守着）；跨片搬规则时同步增删。 */
 const {
   stripCommentsCached,
   stripP71AllowBlocks,
-  countNestedMinMax,
-  countNonContainment,
-  scanJsxAttrs,
   readJsxAttrsPastTag,
-  parseJsxProps,
   countButtonTitle,
-  isBusySlotName,
   isP81IconName,
 } = require("./ui-primitives-engine.cjs");
 
@@ -696,8 +692,7 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       let n = 0;
       const re = /<h1(?=[\s/>])/g;
-      let m;
-      while ((m = re.exec(t2)) !== null) {
+      while (re.exec(t2) !== null) {
         const attrs = readJsxAttrsPastTag(t2, re.lastIndex);
         if (attrs === null) continue;
         /* `sr-only` = 只给读屏的跳转锚点，不占视觉空间、不冒充可见标题 ——

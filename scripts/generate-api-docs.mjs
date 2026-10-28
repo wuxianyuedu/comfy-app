@@ -53,7 +53,7 @@ export function parseArgs(argv) {
   const opts = { out: DEFAULT_OUT, attempts: DEFAULT_ATTEMPTS };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    const value = (/** @type {string} */ name) => {
+    const value = () => {
       const eq = arg.indexOf("=");
       if (eq > 0) return arg.slice(eq + 1);
       return argv[++i] ?? "";

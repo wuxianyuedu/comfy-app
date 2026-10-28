@@ -181,8 +181,6 @@ import {
 import { announceQuiet, reporterArgs } from "./affected-launch-log-budget.mjs";
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
-import os from "node:os";
-import { setTimeout as sleep } from "node:timers/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 

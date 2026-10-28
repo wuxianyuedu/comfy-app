@@ -77,7 +77,6 @@ function collectFiles(dir, out = []) {
   if (!fs.existsSync(abs)) return out;
   for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
     const rel = path.join(dir, entry.name).split(path.sep).join("/");
-    const full = path.join(ROOT, rel);
     if (entry.isDirectory()) {
       collectFiles(rel, out);
       continue;
