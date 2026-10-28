@@ -46,7 +46,7 @@ const { test, expect } = defineGateRepo({
    * 那一档（那是脚本**正确**的 fail-closed 行为，不是本文件要验的形态）。
    * 「借不到」那一档由 `run(..., { env: { COMFYAPP_OXFMT_ENTRY: undefined } })`
    * 单独造（见下面两条 fail-closed 用例）。 */
-  env: { COMFYAPP_OXFMT_ENTRY: OXFMT_ENTRY },
+  env: { COMFYAPP_OXFMT_ENTRY: OXFMT_ENTRY, COMFYAPP_FORMAT_DEBUG: "1" },
   /* `--staged` 那批用例要读 `git diff --cached` —— 临时工作区必须是个真的 git 仓库。 */
   setup: (repo) => {
     repo.git("init", "-q");
@@ -73,7 +73,8 @@ describe("oxfmt 格式判据（硬闸）", () => {
     repo.write("src/lib/keep.ts", CLEAN);
     repo.write("src/lib/fresh.ts", DIRTY);
     const r = repo.run();
-    expect(r.code).toBe(1);
+    /* 失败信息带上判据自己的读数：本地绿 / CI 红的形态差，没有这批输出只能猜。 */
+    expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/fresh.ts");
     expect(r.output).toContain("个文件未过");
   });
@@ -81,7 +82,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
   test("把原本干净的文件弄脏 → 同样阻断（没有存量额度）", ({ repo }) => {
     repo.write("src/lib/keep.ts", DIRTY);
     const r = repo.run();
-    expect(r.code).toBe(1);
+    expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/keep.ts");
   });
 
@@ -129,10 +130,36 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).not.toContain("[ok] oxfmt 格式");
   });
 
+  test("oxfmt 清单带 ANSI 颜色码 → 照样认出文件（CI 侧 stdout 着色的形态）", ({
+    repo,
+  }) => {
+    /* 真实发生的失效：CI 侧 oxfmt 给文件名上色
+     * （`\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」过不了
+     * 白名单的路径形态，整张清单被悄悄滤成空 —— 门禁当场读成「命中 0 个」。
+     * 这条用例用假入口复刻那批字节，钉住「剥码在解析之前」。 */
+    const stubRel = "scripts/fake-oxfmt-color.cjs";
+    repo.write(
+      stubRel,
+      'process.stdout.write("' +
+        '\\u001b[38;2;244;191;117;1m' +
+        "src/lib/fresh.ts" +
+        '\\u001b[0m (1ms)\\n"' +
+        ');\nprocess.exit(1);\n',
+    );
+    const stub = join(repo.dir, stubRel);
+    const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: stub } });
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/fresh.ts");
+  });
+
   test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({
     repo,
   }) => {
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
+    // 夹具预建了空的 `src/lib`：oxfmt 对「存在但一个可扫文件都没有」的根报
+    // `Expected at least one target file`（exit 2），所以这里放一份干净源文件
+    // —— 让 oxfmt 真扫起来，验证的才是「白名单里的脏文件不被误报」。
+    repo.write("src/lib/keep.ts", CLEAN);
     repo.write("tests/fresh.test.ts", DIRTY);
     repo.write("scripts/fresh.mjs", DIRTY);
     repo.write("e2e/fresh.spec.ts", DIRTY);
@@ -217,7 +244,7 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
     repo.write("src/lib/dirty.ts", DIRTY);
     repo.git("add", "src/lib/dirty.ts");
     const r = repo.run(["--staged"]);
-    expect(r.code).toBe(1);
+    expect(r.code, r.output).toBe(1);
     expect(r.output).not.toContain("未触及扫描面");
     expect(r.output).toContain("src/lib/dirty.ts");
   });

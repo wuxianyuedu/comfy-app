@@ -1174,6 +1174,73 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
  * `whichCommand()` 同一套；下判的是「`.ps1` 这一形态能不能被它找到并给出
  * 可 spawn 的命令」。
  */
+/**
+ * 工具链自证那一格与主判据的**形态选择必须一致**（ISSUE #2562）。
+ *
+ * `findPnpm()` 刻意不 import 仓库内模块（理由见文件头：它要能在「Node 模块链还没被
+ * 证明可用」的机器上给出可读输出），所以「包真身 JS 入口优先」这一条在两边各有一份
+ * 实现。两份漂移的形态是**静默的**：一条链走 `process.execPath` + 入口，另一条继续走
+ * PowerShell 宿主 —— 两边都绿，只是其中一边每跑一条命令都付一次宿主冷启动。
+ */
+describe("工具链自证：pnpm 优先跑包真身的 JS 入口（ISSUE #2562）", () => {
+  /** 造一个「只有垫片 + 包真身」的落点（Windows 现场的形状）。 */
+  function makePnpmDropIn(opts: { bin: unknown; entryName: string }) {
+    const dir = mkdtempSync(path.join(tmpdir(), "pnpm-js-entry-"));
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", version: "12.4.1", bin: opts.bin }),
+    );
+    const entry = path.join(pkgDir, opts.entryName);
+    writeFileSync(entry, '#!/usr/bin/env node\nprocess.stdout.write("12.4.1\\n");\n');
+    // PATH 上那三个垫片（Node 一个都起不来）
+    writeFileSync(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
+    writeFileSync(path.join(dir, "pnpm.CMD"), "@ECHO off\r\n");
+    writeFileSync(path.join(dir, "pnpm.PS1"), "Write-Output '12.4.1'\n");
+    return { dir, entry };
+  }
+
+  it("垫片都在、包真身也在：选中 node + 入口，而不是 `.ps1` 宿主", () => {
+    const { dir, entry } = makePnpmDropIn({
+      bin: "./bin/pnpm.cjs",
+      entryName: "bin/pnpm.cjs",
+    });
+    const r = findPnpm({
+      platform: "win32",
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      // 宿主**在**：这一格要证明的是「即使宿主可用也不走它」
+      host: () => "/host/pwsh.EXE",
+      probeRun: (cmd, args) => ({ command: cmd, args, out: "12.4.1" }),
+    });
+    expect(r.ok).toBe(true);
+    expect(r.command).toBe(process.execPath);
+    expect(r.prefixArgs).toEqual([entry]);
+    expect(r.out).toBe("12.4.1");
+  });
+
+  it("`bin` 指向原生二进制时改用同包的 Corepack 入口（bin/pnpm.mjs）", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "pnpm-js-entry-native-"));
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+    );
+    writeFileSync(path.join(pkgDir, "pnpm"), Buffer.from([0x4d, 0x5a, 0x90, 0x00]));
+    const mjs = path.join(pkgDir, "bin", "pnpm.mjs");
+    writeFileSync(mjs, '#!/usr/bin/env node\nprocess.stdout.write("12.4.1");\n');
+    const r = findPnpm({
+      platform: "win32",
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      host: () => "/host/pwsh.EXE",
+      probeRun: (cmd, args) => ({ command: cmd, args, out: "12.4.1" }),
+    });
+    expect(r.command).toBe(process.execPath);
+    expect(r.prefixArgs).toEqual([mjs]);
+  });
+});
+
 describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
   /** 造一个「只有某个候选在盘上」的注入现场。 */
   const winEnv = (dir: string): Record<string, string | undefined> => ({

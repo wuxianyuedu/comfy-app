@@ -51,11 +51,21 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-/** 取一个 `.mjs` 里的**相对** import 说明符（`./x` / `../x`）。 */
+/**
+ * 取一个脚本里的**相对** import 说明符（`./x` / `../x`）。
+ *
+ * 后缀面要比 `\.mjs` 宽（ISSUE #2562 的现场）：`scripts/launcher-core/shell.mjs` 早就
+ * `import … from "../../src/lib/process/executable-resolve.ts"`（Node 的类型擦除让它能
+ * 静态 import `.ts`），而那份 `.ts` 自己又 import 同目录的兄弟模块。只收 `.mjs` 的话，
+ * 拷进临时检出的那一份会在**加载阶段**报 `ERR_MODULE_NOT_FOUND` —— 于是这条用例看到的
+ * 是一段 ESM 解析栈，而不是它要判的「预检结论」。收 `.ts` / `.tsx` 之后闭包按事实走。
+ */
 function relativeImportsOf(entryFile: string): string[] {
   const src = fs.readFileSync(entryFile, "utf8");
   const found = new Set<string>();
-  for (const match of src.matchAll(/from\s+"(\.{1,2}\/[^"]+\.mjs)"/g)) {
+  for (const match of src.matchAll(
+    /from\s+"(\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g,
+  )) {
     const spec = match[1];
     if (spec !== undefined) found.add(spec);
   }
@@ -71,8 +81,12 @@ function relativeImportsOf(entryFile: string): string[] {
  * 「exit 1」。按闭包复制之后，这类漂移不会再以同一种令人误解的方式红。
  */
 function copyScriptWithRelativeClosure(entryRel: string): string {
-  const scriptsRoot = path.join(ROOT, "scripts");
-  const entrySrc = path.join(scriptsRoot, entryRel);
+  /* 落点按**仓库根**相对计算，不是按 `scripts/` 相对（ISSUE #2562 的现场）：这条闭包
+   * 从 `scripts/**` 走进了 `src/lib/process/**`（`shell.mjs` 静态 import 那份 `.ts`），
+   * 而按 `scripts/` 算相对会得到 `../src/…` —— 拷到的是 `tmp/src/…` 没问题，但
+   * 再往下一层 `src/lib/process/platform.ts` 这样的兄弟依赖就按**它自己那份**相对名
+   * 解析，落进一个没被建出来的目录里。按仓库根算，临时检出与真检出同形。 */
+  const entrySrc = path.join(ROOT, "scripts", entryRel);
   const pending = [entrySrc];
   const seen = new Set<string>();
   while (pending.length > 0) {
@@ -80,7 +94,9 @@ function copyScriptWithRelativeClosure(entryRel: string): string {
     if (file === undefined || seen.has(file)) continue;
     seen.add(file);
     if (!fs.existsSync(file)) continue;
-    const dest = path.join(tmp, "scripts", path.relative(scriptsRoot, file));
+    const rel = path.relative(ROOT, file);
+    if (rel.startsWith("..")) continue; // 仓外依赖（node_modules 之类）不拷
+    const dest = path.join(tmp, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(file, dest);
     for (const spec of relativeImportsOf(file)) {
