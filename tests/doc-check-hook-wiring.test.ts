@@ -590,7 +590,7 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
         "这一格是它唯一的本地执行者；不在 D0，格式红就又要白跑一次 CI",
     ).toBeTruthy();
     expect(
-      hit.cmd,
+      hit?.cmd,
       "钩子那一步没带 `--staged`：只改文档 / 只动 `scripts/` 的提交会白扫一遍全库",
     ).toContain("--staged");
     /* 反向也钉：它不许在别的组里再出现一次（D0 已经付过 2s，D 组再跑一遍是纯重复，
