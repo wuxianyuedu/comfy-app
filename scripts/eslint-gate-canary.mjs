@@ -118,6 +118,12 @@ if (process.argv.includes("--sabotage")) {
   }
 }
 
+/**
+ * 用本仓配置真跑一次 eslint（CLI 级，不走 API —— 覆盖的就是门禁走的那一跳）。
+ *
+ * @param {readonly string[]} files 样本文件的绝对路径
+ * @returns {{diagnostics: {filePath: string, messages?: readonly {ruleId?: string}[]}[], status: number | null}}
+ */
 function runEslint(files) {
   const cliRules = SABOTAGE ? ["--rule", JSON.stringify({ [SABOTAGE]: "off" })] : [];
   const res = spawnSync(
@@ -136,8 +142,12 @@ function runEslint(files) {
   return { diagnostics: parsed, status: res.status };
 }
 
+/**
+ * @param {{messages?: readonly {ruleId?: string}[]} | undefined} entry
+ * @returns {Set<string | undefined>}
+ */
 function rulesOf(entry) {
-  return new Set((entry?.messages ?? []).map((m) => m.ruleId).filter(Boolean));
+  return new Set((entry?.messages ?? []).map((m) => m?.ruleId).filter(Boolean));
 }
 
 function main() {
@@ -159,8 +169,11 @@ function main() {
      * （要它照旧绿，证明闸门不误伤）。 */
     const inTs = TS_SAMPLES.find((s) => s.rule === SABOTAGE);
     const inScripts = SCRIPTS_SAMPLES.find((s) => s.rule === SABOTAGE);
-    const probeTs = SABOTAGE ? inTs ?? TS_SAMPLES[0] : undefined;
-    const tsSet = SABOTAGE ? [probeTs] : TS_SAMPLES;
+    /* noUncheckedIndexedAccess 下 `TS_SAMPLES[0]` 是 T|undefined —— 索引里的
+     * 第一份样本是**常量表**写死的，取不到是这张表被掏空，那属于本脚本自身的
+     * 故障（不该靠 `??` 静默降级），所以这里显式断言而不是再兜一层。 */
+    const firstTs = /** @type {(typeof TS_SAMPLES)[number]} */ (TS_SAMPLES[0]);
+    const tsSet = SABOTAGE ? [inTs ?? firstTs] : TS_SAMPLES;
     const scriptSet = SABOTAGE ? (inScripts ? SCRIPTS_SAMPLES : []) : SCRIPTS_SAMPLES;
 
     for (const dir of dirs) fs.mkdirSync(dir, { recursive: true });
