@@ -1285,6 +1285,16 @@ export default defineConfig({
           statements: 100,
           branches: 80,
         },
+        /* #2586 收进来的那一份撞锁循环体：四个分支（首次成 / 锁族重试 / 非锁族原样抛 /
+         * 穷尽）各有用例，实测 11 statements、4 branches、1 function 全覆盖 ⇒ 按满档钉住。
+         * 这条门槛要留的原因与 `sqlite-error` 同族：它是**判决路径**，掉一条分支就意味着
+         * 某个「认不出原因就原样抛」的纪律没人再验了。 */
+        "src/lib/sqlite-busy-retry.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         /* 本批三条新出口（规范 16 §16.2.4.63 ~ §16.2.4.65），门槛按实测值设满档：
          *   · P59 对面 `~/lib/clamp` —— `NaN` 与 `±Infinity` 分两种处理、
          *     「先夹后整」的顺序、`min > max` 不换序都是判据，逐条钉住；
