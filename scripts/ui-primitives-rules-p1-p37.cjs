@@ -11,18 +11,8 @@
  * 把它和「实现住在哪一份」绑在一起，会让「改判据所属档位」变成跨文件搬家。
  * 合并顺序即对象键顺序，与拆分前逐字一致。
  */
-const {
-  stripCommentsCached,
-  stripP71AllowBlocks,
-  countNestedMinMax,
-  countNonContainment,
-  scanJsxAttrs,
-  readJsxAttrsPastTag,
-  parseJsxProps,
-  countButtonTitle,
-  isBusySlotName,
-  isP81IconName,
-} = require("./ui-primitives-engine.cjs");
+/* 引擎 helper 按本片实际用量解构（core no-unused-vars 守着）；跨片搬规则时同步增删。 */
+const { stripCommentsCached, isBusySlotName } = require("./ui-primitives-engine.cjs");
 
 
 module.exports = {

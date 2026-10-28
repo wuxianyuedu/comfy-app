@@ -29,7 +29,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const SRC = path.join(ROOT, "src");
 
 const argv = process.argv.slice(2);
 const asJson = argv.includes("--json");

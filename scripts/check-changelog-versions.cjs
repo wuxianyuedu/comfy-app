@@ -92,16 +92,6 @@ const ANCHOR_RE = /<!--\s*since:\s*([0-9a-f]{7,40})\s*(?:—|--|-)\s*(.+?)\s*-->
  */
 const LOOSE_ANCHOR_RE = /<!--\s*since:/;
 
-/** Keep a Changelog 的固定段落集(与 check-changelog-fragments.cjs 同源)。 */
-const SECTIONS = [
-  "Added",
-  "Changed",
-  "Deprecated",
-  "Removed",
-  "Fixed",
-  "Security",
-];
-
 /** 条目里点名的 ISSUE 号 —— 与 §13.10 的写法一致(`ISSUE #1234` / `(#1234)` / `#1234`)。 */
 const ISSUE_RE = /#(\d{1,5})\b/g;
 

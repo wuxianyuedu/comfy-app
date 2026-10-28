@@ -93,7 +93,6 @@
  * 退出码：0 = 名单覆盖齐全（或未触及依赖面而跳过）；1 = 有带构建脚本的依赖未登记，
  * 或扫描面读不到；2 = `--staged` 下读不到暂存清单（判据没跑成，不冒充跳过）。
  */
-const fs = require("node:fs");
 const path = require("node:path");
 const {
   dirExists,

@@ -57,8 +57,6 @@ const withTests = argv.includes("--with-tests");
 const shouldCheck = argv.includes("--check");
 const explicit = argv.filter((a) => !a.startsWith("--"));
 
-/** 一批送进 canonicalize 的规模（首次调用要建全量 class list，约 10 秒，之后很快）。 */
-const BATCH = 800;
 /* JS/TS 的字符串字面量一律走 `tw4-scan-core.mjs` 的 `stringLiterals()` —— 它先在
  * **注释之外**扫描（注释里用反引号引的示例与 className 同形，不剥会让 `--check`
  * 报出不存在的候选、`--write` 去改注释）。下面这条正则只剩一个用途：`.css` / `.snap`

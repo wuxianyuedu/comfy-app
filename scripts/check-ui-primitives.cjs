@@ -329,27 +329,16 @@ const STRICT = ARGS.has("--strict");
 const BASELINE = path.join(__dirname, ".ui-primitives-baseline.json");
 
 /* 文本引擎（剥注释 / JSX 平衡扫描 / 属性解析）单独立一份 —— 见那条文件头的
- * 「分层」说明。判据（85 条 rule）全留在本脚本里，这里只借机器。 */
-const {
-  stripCommentsCached,
-  stripP71AllowBlocks,
-  countNestedMinMax,
-  countNonContainment,
-  scanJsxAttrs,
-  readJsxAttrsPastTag,
-  parseJsxProps,
-  countButtonTitle,
-  isBusySlotName,
-  isP81IconName,
-} = require("./ui-primitives-engine.cjs");
+ * 「分层」说明。判据（85 条 rule）按 ISSUE #1811 拆在 ui-primitives-rules-*.cjs
+ * 四份分片里，本脚本只借机器与合并后的 RULES。 */
+/* 引擎 helper 按本脚本实际用量解构（core no-unused-vars 守着）。 */
+const { countButtonTitle } = require("./ui-primitives-engine.cjs");
 
 const {
-  VIEW_SCAN_DIRS,
   SCAN_DIRS,
   LIB_SCANNED_RULES,
   UI_ALSO_SCANNED,
   HOOKS_ALSO_SCANNED,
-  EXEMPT_DIRS,
   UI_ONLY_RULES,
   EXEMPT_FILES,
   RULES,

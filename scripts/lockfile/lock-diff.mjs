@@ -14,7 +14,6 @@
  *
  * 用法示例：node scripts/lockfile/lock-diff.mjs --installed <路径> --root <路径>
  */
-import fs from "node:fs";
 
 /**
  * @typedef {Object} DepEntry 解析后的依赖项

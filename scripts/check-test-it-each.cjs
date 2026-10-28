@@ -57,7 +57,6 @@
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
-const fs = require("node:fs");
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
 const {

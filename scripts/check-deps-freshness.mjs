@@ -94,10 +94,6 @@ import {
 import { DEPENDENCY_FILES } from "./dependency-face.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
 
-/* 本脚本所在目录 —— **只用于「脚本自己住哪儿」**，不参与「判哪个检出」：
- * 那个答案只能来自调用方（`runFreshnessCheck(root)` / `--root` / 当前工作目录）。 */
-const HERE = import.meta.dirname;
-
 /**
  * 「远端引用还算新鲜」的宽限期（毫秒）。
  *
