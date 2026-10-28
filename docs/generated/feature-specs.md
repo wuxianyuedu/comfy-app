@@ -1007,17 +1007,24 @@
 
 #### FR-QA-09 带修改的重跑（局部重绘 / 放大）
 
-- 状态：计划中（承接：#2483；原样重跑的历史面落点已由 #2481 落地（`task.retry`），不占本条）
+- 状态：已上线（#2483；原样重跑的历史面落点见 #2481 的 `task.retry`，不占本条）
 - 需求：图「方向对、局部有瑕疵」时不必整张重抽——产物 / 关键帧上可发起
   **局部重绘（inpaint）**与**放大（upscale）**，两者都是「带修改的重跑」，
   走既有 task 链路。
-- 行为与验收：① 产物 / 镜头关键帧可画蒙版（画笔粗细级即可）并发起局部重绘，
-  任务照走 `task` 链路（复用工作流模板 + 参考图注入）；② 产物有「放大重出」动作；
-  ③ 重绘 / 放大的产物与原任务**可追溯**（能看出这是哪张改出来的，parentId 或等价）；
-  ④ INPAINT / UPSCALE 不再只是 taskType 标签（现状：仅文案与模式猜测，
-  无蒙版编辑器与专用入口）。
-- 落点（现状）：`src/lib/workflow/model-mode-contract.ts:112`（仅模式标签）、
-  `src/components/studio/outputs/ProjectOutputsMetadataSheet.tsx:29`（仅文案）
+- 行为与验收：① 历史详情的图片产物可画蒙版（画笔三档 + 清空，白 = 重绘区）
+  并发起局部重绘，任务照走 `task` 链路；② 产物有「放大重出」动作；
+  ③ 重绘 / 放大的产物与原任务**可追溯**：`task.parentId` 落库，
+  产物元数据面板显示「来源任务」；④ 提交形状 = 原图进参考图槽
+  （重绘：第一槽原图、第二槽蒙版）+ `parentId`，选模板时有口径提示。
+  边界（与立案文案的偏差，如实）：**不内置硬编码 inpaint / upscale 工作流模板**
+  ——工作流库是唯一模板来源（`generate.ts` 注释自证「内置模板已移除」），
+  模板由用户从库中选；选了没有图像输入口的模板时，执行侧的 unmatched 读数
+  会说明值没落上。
+- 落点：`src/components/studio/history/ImageRedrawPanel.tsx`（面板）、
+  `src/components/studio/history/MaskCanvas.tsx`（蒙版画布）、
+  `src/components/studio/history/hooks/use-image-redraw.ts`（动作逻辑）、
+  `src/server/db/schema.ts`（`task.parentId`）、
+  `src/components/studio/ProjectOutputsMetadataSheet.tsx`（来源任务展示）
 
 ---
 

@@ -60,6 +60,7 @@ export const generateRouter = createTRPCRouter({
           : undefined,
         claimedBy: executorClaim,
         execPayload: tpl.rawJson,
+        parentId: data.parentId ?? null,
       });
       /* 提交只写库里那一行，派发动作不在这里（P3 §5 ADR §14 D1 第二刀）：
        * 这里过去对 inline 片直接 `enqueue()` 推进进程内存队列，于是「队列」有两份

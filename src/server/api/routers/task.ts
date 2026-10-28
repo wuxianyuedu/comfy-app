@@ -208,7 +208,7 @@ export const taskRouter = createTRPCRouter({
       return { taskId: created.id };
     }),
 
-  /** POST /api/tasks/[id]/open-folder 鈥?returns comfyapp:// URL for the task output dir */
+  /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */
   openFolder: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
