@@ -311,17 +311,27 @@ function collectUnformatted(entry) {
       process.exit(2);
     }
     /* 排查逃生口（默认关）：`COMFYAPP_FORMAT_DEBUG=1` 时把 oxfmt 的原始读数
-     * 原样吐到 stderr —— 判据自测在「本地绿、CI 红」的形态下，没有这批读数
-     * 就只能靠猜（脏文件被判干净时，stdout 里到底是空清单还是清单没被认出来，
-     * 两种修法完全不同）。不设这个量时一个字节不多打。 */
+     * 原样吐出来 —— 判据自测在「本地绿、CI 红」的形态下，没有这批读数就只能猜
+     * （脏文件被判干净时，到底是没扫到还是没认出来，两种修法完全不同）。
+     * 走 **stdout** 而不是 stderr：夹具把成功那档的 `output` 折成纯 stdout，
+     * 打 stderr 这批读数在「判据成功退出」的用例里永远看不见。 */
     if (process.env.COMFYAPP_FORMAT_DEBUG) {
-      console.error(
+      const ver = spawnSync(process.execPath, [entry, "--version"], {
+        encoding: "utf8",
+      });
+      console.log(
         `[format][debug] ROOT=${ROOT}\n` +
+          `[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +
           `[format][debug] oxfmt status=${res.status} stdout=${JSON.stringify(res.stdout)}\n` +
           `[format][debug] oxfmt stderr=${JSON.stringify(res.stderr)}`,
       );
     }
     const lines = (res.stdout || "")
+      // **先剥 ANSI 颜色码再解析**：oxfmt 会给文件名上色（实测 CI 侧
+      // `\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」
+      // 过不了 `isScanned` 的路径形态，整张清单会被悄悄滤成空 —— 门禁当场读成
+      // 「命中 0 个」（本地 stdout 不着色，所以这一档只在 CI 形态下暴露）。
+      .replace(/\u001b\[[0-9;]*m/g, "")
       .split("\n")
       .map((line) => line.trim())
       // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /

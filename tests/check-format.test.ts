@@ -130,6 +130,28 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).not.toContain("[ok] oxfmt 格式");
   });
 
+  test("oxfmt 清单带 ANSI 颜色码 → 照样认出文件（CI 侧 stdout 着色的形态）", ({
+    repo,
+  }) => {
+    /* 真实发生的失效：CI 侧 oxfmt 给文件名上色
+     * （`\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」过不了
+     * 白名单的路径形态，整张清单被悄悄滤成空 —— 门禁当场读成「命中 0 个」。
+     * 这条用例用假入口复刻那批字节，钉住「剥码在解析之前」。 */
+    const stubRel = "scripts/fake-oxfmt-color.cjs";
+    repo.write(
+      stubRel,
+      'process.stdout.write("' +
+        '\\u001b[38;2;244;191;117;1m' +
+        "src/lib/fresh.ts" +
+        '\\u001b[0m (1ms)\\n"' +
+        ');\nprocess.exit(1);\n',
+    );
+    const stub = join(repo.dir, stubRel);
+    const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: stub } });
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/fresh.ts");
+  });
+
   test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({
     repo,
   }) => {
