@@ -104,11 +104,11 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .from(workshopSession)
       .where(eq(workshopSession.id, sessionId));
     const prodId = rows[0]?.projectId;
-    expect(prodId).toBeTruthy();
+    if (!prodId) throw new Error("绑定失败：会话行没有 projectId");
     const prod = await workshopDb
       .select()
       .from(production)
-      .where(eq(production.id, prodId!));
+      .where(eq(production.id, prodId));
     expect(prod[0]).toBeTruthy();
   });
 
@@ -135,6 +135,7 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .where(eq(workshopSession.id, sessionId));
     const row = rows[0]!;
     const prodId = row.projectId;
+    if (!prodId) throw new Error("绑定失败：会话行没有 projectId");
     const prod = await workshopDb
       .select()
       .from(production)
@@ -178,11 +179,11 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .from(workshopSession)
       .where(eq(workshopSession.id, "sess-legacy"));
     const prodId = rows[0]?.projectId;
-    expect(prodId).toBeTruthy();
+    if (!prodId) throw new Error("绑定失败：会话行没有 projectId");
     const prod = await workshopDb
       .select()
       .from(production)
-      .where(eq(production.id, prodId!));
+      .where(eq(production.id, prodId));
     expect(prod[0]?.scriptMarkdown).toBe("# 新剧本");
     const state = await repo.getSession("sess-legacy");
     expect(state?.stage).toBe("character");
