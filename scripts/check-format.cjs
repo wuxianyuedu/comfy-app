@@ -161,24 +161,6 @@ const IGNORE_GLOBS = [
   "*.js",
 ];
 
-/**
- * prettier 缓存放在**本次检出**的构建输出目录下，不再是一个 `os.tmpdir()` 里的
- * 机器全局路径（实测语义：prettier 3.9 把 `--cache-location` 当**文件**用，
- * 那个路径下长出来的是一份 JSON 缓存，不是目录）。
- *
- * 换成本地路径有两个理由：① 门禁自己的用例会并发搭临时沙箱，共用机器全局路径时
- * 多个进程往同一份缓存里写，读数不可信；② 缓存跟着用户走 → 换一台机器、
- * 换一个 worktree 都是同一份，出问题时没法按检出隔离（本仓库有并行会话在同一台
- * 机器上跑，这条是实测过的）。仍然不进仓库根：只在 `node_modules/.cache/` 下，
- * 已被 git 忽略，也就不进基线。
- */
-const CACHE_FILE = path.join(
-  ROOT,
-  "node_modules",
-  ".cache",
-  "prettier-gate.json",
-);
-
 function toPosix(p) {
   return p.split(path.sep).join("/");
 }

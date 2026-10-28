@@ -13,7 +13,6 @@
 // db-push、门禁链全在 Node 上），用它接钩子不需要任何平台分支。
 
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");

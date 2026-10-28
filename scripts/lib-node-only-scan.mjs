@@ -192,7 +192,6 @@ function analyze() {
    * 它引到声明过的模块 = 声明没生效（这才叫假声明）。
    * 声明过的模块之间互相引是正常的（服务端代码引服务端代码），
    * 因此**不从声明过的模块继续往下走** —— 否则会把整个服务端图都算成命中。 */
-  const isPureModuleEntry = (file) => decls.get(file) === "none";
   const libOnlyReachable = reach(
     libEntries,
     (file) => decls.get(file) === "server-only" || decls.get(file) === "server-suffix",

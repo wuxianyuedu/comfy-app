@@ -69,27 +69,6 @@ const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const AS_JSON = ARGS.has("--json");
 
-/** 每次枚举只列目录一次（与 `check-circular-deps.cjs` 同一口径，避免多一次会失败的 syscall）。 */
-function walk(dir, out = []) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries) {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next" || e.name === ".git")
-        continue;
-      walk(full, out);
-      continue;
-    }
-    if (/\.(ts|tsx)$/.test(e.name)) out.push(full);
-  }
-  return out;
-}
-
 function toPosix(p) {
   return p.split(path.sep).join("/");
 }
