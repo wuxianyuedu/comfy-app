@@ -18,20 +18,17 @@
  *
  * @module comfyui/executor-write-retry — 终态库写的重试与穷尽处置
  */
-import { backoffDelayMs, TERMINAL_DB_WRITE } from "~/lib/retry-policy";
-import {
-  describeSqliteWriteError,
-  isSqliteBusyError,
-} from "~/lib/sqlite-error";
-import { sleep } from "~/lib/with-timeout";
+import { TERMINAL_DB_WRITE } from "~/lib/retry-policy";
+import { describeSqliteWriteError } from "~/lib/sqlite-error";
+import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 import { kickQueue } from "./executor-continuation";
 import { forgetTaskClaimEntirely, log } from "./runner-state";
 
-/** `maxAttempts` 是循环边界，剩下的三项喂给退避算法（定义只有一处，见 retry-policy）。 */
-const { maxAttempts, ...TERMINAL_DB_BACKOFF } = TERMINAL_DB_WRITE;
-
 /**
  * 跑一次终态库写，撞锁就按预算重试。
+ *
+ * 循环体在 `~/lib/sqlite-busy-retry`（ISSUE #2586 收的那一份），这里只留域逻辑：
+ * 撞锁时念一行、穷尽后摘足迹、抛出时带上 SQLite 的原因。
  *
  * @param label 给人看的分支名（「成功收口」/「失败收口」），同时进行日志与抛错文案。
  * @throws 穷尽（或本就不可重试）后抛出**带 SQLite 原因**的错误 —— 调用处的
@@ -43,27 +40,25 @@ export async function writeTerminal<T>(
   label: string,
   write: () => Promise<T>,
 ): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await write();
-    } catch (err) {
-      const lastTry = attempt + 1 >= maxAttempts;
-      if (!isSqliteBusyError(err) || lastTry) {
-        giveUp(taskId, label, err, attempt + 1);
-        throw new Error(describeSqliteWriteError(err, `终态${label}写库失败`), {
-          cause: err,
-        });
-      }
-      if (attempt === 0) {
-        // 只在第一次重试时写一行：撞锁是同一件事，逐次写会把行日志刷成噪音。
-        log(
-          taskId,
-          "warn",
-          `终态${label}写库撞锁，按预算重试（最多 ${maxAttempts} 次）`,
-        );
-      }
-      await sleep(backoffDelayMs({ ...TERMINAL_DB_BACKOFF, attempt }));
-    }
+  try {
+    return await runWithSqliteBusyRetry(write, {
+      policy: TERMINAL_DB_WRITE,
+      onBusy: (attempt) => {
+        if (attempt === 0) {
+          // 只在第一次重试时写一行：撞锁是同一件事，逐次写会把行日志刷成噪音。
+          log(
+            taskId,
+            "warn",
+            `终态${label}写库撞锁，按预算重试（最多 ${TERMINAL_DB_WRITE.maxAttempts} 次）`,
+          );
+        }
+      },
+      onGiveUp: (err, tries) => giveUp(taskId, label, err, tries),
+    });
+  } catch (err) {
+    throw new Error(describeSqliteWriteError(err, `终态${label}写库失败`), {
+      cause: err,
+    });
   }
 }
 

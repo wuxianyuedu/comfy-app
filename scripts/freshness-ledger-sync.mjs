@@ -128,7 +128,7 @@ export function pushFreshnessLedger({ root, kinds, run }) {
    * `isDailyDispatch()` 同一口径（换时刻不打红它）。 */
   const event = String(process.env.CNB_EVENT ?? "");
   const dailyEvent =
-    /^crontab:/.test(event) ||
+    event.startsWith("crontab:") ||
     event === "web_trigger_daily" ||
     event === "api_trigger_daily";
   if (contextSubject() !== "master" || !dailyEvent) {

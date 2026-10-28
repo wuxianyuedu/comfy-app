@@ -60,9 +60,8 @@
  *
  * @module sqlite-pragmas
  */
-import { backoffDelayMs, SQLITE_PRAGMA_BOOT } from "~/lib/retry-policy";
-import { isSqliteBusyError } from "~/lib/sqlite-error";
-import { sleep } from "~/lib/with-timeout";
+import { SQLITE_PRAGMA_BOOT } from "~/lib/retry-policy";
+import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 
 /** Lock-waiting budget for one connection, in ms. Applied through the libsql
  *  client's `timeout` option, never through a PRAGMA (see the note above). */
@@ -112,17 +111,15 @@ export async function applySqlitePragmas(
   target: SqlitePragmaTarget,
   pragmas: readonly string[] = SQLITE_PRAGMAS,
 ): Promise<void> {
-  const { maxAttempts, ...backoff } = SQLITE_PRAGMA_BOOT;
   for (const pragma of pragmas) {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await target.execute(pragma);
-        break;
-      } catch (err) {
-        /* 穷尽后如实抛：切 WAL 切不掉也可能是真故障，不许在这里被吞掉。 */
-        if (!isSqliteBusyError(err) || attempt + 1 >= maxAttempts) throw err;
-        await sleep(backoffDelayMs({ ...backoff, attempt }));
-      }
-    }
+    /* The loop body moved into `~/lib/sqlite-busy-retry` (ISSUE #2586) — the same
+     * eight lines were written a second time there and a third time at the new
+     * transaction site. Rationale unchanged: rethrow as-is when the budget is
+     * exhausted or the cause is not a lock, because "could not switch to WAL"
+     * may be a read-only mount / full disk, and that must fail visibly.
+     * Written in English: the NOTE at the top of this file says keep it ASCII. */
+    await runWithSqliteBusyRetry(() => target.execute(pragma), {
+      policy: SQLITE_PRAGMA_BOOT,
+    });
   }
 }

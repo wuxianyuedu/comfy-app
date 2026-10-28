@@ -183,7 +183,7 @@ export function resolveTarget({ env, list, sn, lane = null }) {
   const declaredLane =
     lane !== null && String(lane).trim() !== "" ? String(lane).trim() : null;
   const yesPR =
-    /^pull_request/.test(event) ||
+    event.startsWith("pull_request") ||
     prIid !== null ||
     fromEnv !== "" ||
     declaredLane !== null;

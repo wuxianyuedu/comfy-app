@@ -634,7 +634,7 @@ const DOWNLOAD_PROBE_SCRIPT = `
  */
 export function probeGrade(verdict) {
   const text = String(verdict ?? "").trim();
-  if (/^超时/.test(text)) return "timeout";
+  if (text.startsWith("超时")) return "timeout";
   const m = /^HTTP\s+(\d{3})\b/.exec(text);
   if (!m) return "worse";
   const code = Number(m[1]);
