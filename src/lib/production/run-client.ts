@@ -199,3 +199,31 @@ export async function regenerateShot(
     ...(newPrompt !== undefined ? { newPrompt } : {}),
   });
 }
+
+/** 抽卡优选的候选判定（FR-QA-04④ · #2612）：服务端逐张视觉评审后的原值。 */
+export interface AutoselectCandidateScore {
+  taskId: string;
+  imageUrl: string | null;
+  verdict: ReviewVerdict | null;
+}
+
+export interface AutoselectShotResult {
+  winnerTaskId: string;
+  winnerImageUrl: string;
+  winnerVerdict: ReviewVerdict;
+  candidates: AutoselectCandidateScore[];
+}
+
+/** 对同一镜头的 2~4 个候选任务做抽卡优选（run.autoselectShot）；回写由调用方
+ *  经镜头草稿完成（字段所有权见 #2615）。 */
+export async function autoselectShot(
+  projectId: string,
+  shotId: string,
+  taskIds: string[],
+): Promise<AutoselectShotResult> {
+  return vanillaApi.run.autoselectShot.mutate({
+    projectId,
+    shotId,
+    taskIds,
+  });
+}

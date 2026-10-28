@@ -910,7 +910,7 @@
 
 #### FR-QA-04 生图质量口径
 
-- 状态：计划中
+- 状态：已上线（视觉评审 #2479 + 原样重跑 #2481 + 自动优选 #2612）
 - 需求：关键帧可复现、可追溯，且失败能只重跑失败项。
 - 行为与验收：① 同一 seed + 同一工作流 + 同一参考图重跑产出一致（复现性可验；
   **本地 ComfyUI 通道**判此条，API 直连通道在上游声明同 seed 确定性时才判）；
@@ -918,7 +918,13 @@
   （历史面的任务级原样重跑**已落地** #2481：`task.retry` 按原行 `execPayload` +
   参数 / 参考图原样新建 QUEUED 行，只放行终态任务，历史页「重试」直调；
   带修改的重跑见 FR-QA-09）；
-  ④ **自动优选（抽卡 N 选 1）**可用 ⇒ 当前未实现（依赖 FR-QA-07 的视觉评审）。
+  ④ **自动优选（抽卡 N 选 1）**可用（#2612 已落）：镜头卡「抽卡 ×N」（2~4）
+  连发 → `run.autoselectShot` 逐张按生图 rubric 视觉评审 → 均分最高者上镜
+  （服务端不直写 imageUrl/taskId，赢家经镜头草稿回写，字段所有权见 #2615；
+  赢家判定落 `shot.imageReview`）。
+- 落点（现状）：`src/server/agent/review.ts`（`autoselectShotImage` 编排 + 评审内核）、
+  `src/components/workshop/ShotStudio.tsx`（抽卡入口）、
+  `src/lib/production/run-client.ts`（封装）
 
 #### FR-QA-05 生视频质量口径
 
