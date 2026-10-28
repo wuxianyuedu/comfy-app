@@ -379,7 +379,7 @@ const QUOTE_PAIRS = [
  * @returns {boolean[]}
  */
 function quotedMask(text) {
-  const mask = new Array(text.length).fill(false);
+  const mask = Array.from({ length: text.length }, () => false);
   for (const [open, close] of QUOTE_PAIRS) {
     let from = 0;
     for (;;) {

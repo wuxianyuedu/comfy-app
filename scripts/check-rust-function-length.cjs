@@ -58,7 +58,7 @@ const DECLARATION = /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:
  *  只认 `()` `{}` `[]`;尖括号(`<` `>`)不参与配对 —— Rust 的泛型参数
  *  (`Vec<Option<T>>`) 与比较运算符都会让尖括号不配平,累计深度必然漂负。 */
 function bracketDepths(lines) {
-  const depthAtLine = new Array(lines.length).fill(0);
+  const depthAtLine = Array.from({ length: lines.length }, () => 0);
   let depth = 0;
   let inBlockComment = false;
   for (let i = 0; i < lines.length; i++) {

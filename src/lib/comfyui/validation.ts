@@ -90,7 +90,6 @@ export function extractValidationErrors(
   // `res` 本身就是列表承载者（comfy-cli 信封这条路径）。
   const isListCarrier =
     Array.isArray(res) &&
-    res.length > 0 &&
     res.some((r: unknown): boolean => {
       if (!r || typeof r !== "object") return false;
       const rec = r as Record<string, unknown>;
