@@ -169,8 +169,10 @@
    依赖面**（`package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml`）时才扫全树，
    未命中会打印「未触及依赖面」而不是冒充结论。口径、为什么不读 lockfile、以及「缺 `node_modules`
    判红而不是跳过」见 §13.5.15。
-9. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
-   锁定会 EPERM 连锁失败）。**这条现在有现场执行者**：判据是
+9. **dev server 运行期间不要执行 `pnpm install`**（运行时驱动 `@libsql/client` 的原生件
+   `@libsql/win32-x64-msvc/index.node` 被活进程锁定会 EPERM 连锁失败；`better-sqlite3` 早已
+   退成 dev-only 测试基建，只有跑测试的 worker 会锁它 —— 举例别再拿它当运行时那件，见 §6.1）。
+   **这条现在有现场执行者**：判据是
    `scripts/launcher-core/port-reap.mjs` 的 `runningAppInstances(root)`，按**归属**回答
    「本检出的应用服务在不在跑」（会话锚点心跳 + 端口上进程的命令行命中本检出的
    `dev.mjs` / `start.mjs`），两个消费点：编排器补装前（`launcher-core/downstream.mjs`
