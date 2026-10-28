@@ -133,6 +133,10 @@ describe("oxfmt 格式判据（硬闸）", () => {
     repo,
   }) => {
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
+    // 夹具预建了空的 `src/lib`：oxfmt 对「存在但一个可扫文件都没有」的根报
+    // `Expected at least one target file`（exit 2），所以这里放一份干净源文件
+    // —— 让 oxfmt 真扫起来，验证的才是「白名单里的脏文件不被误报」。
+    repo.write("src/lib/keep.ts", CLEAN);
     repo.write("tests/fresh.test.ts", DIRTY);
     repo.write("scripts/fresh.mjs", DIRTY);
     repo.write("e2e/fresh.spec.ts", DIRTY);

@@ -277,6 +277,12 @@ function stagedFiles() {
 function collectUnformatted(entry) {
   const found = new Set();
   for (const root of SCAN_ROOTS) {
+    /* 不存在的根直接跳过：oxfmt 对「一个目标文件都没有」的根会报
+     * `Expected at least one target file...` 并以退出 2 收场 —— 那不是「有差异」
+     * 也不是「没跑成」，而是「这一根没有账可算」（判据自测的临时仓库就没有
+     * `.storybook`，实测把整条门打成了 fail-closed 的 exit 2）。真实仓两个根都在，
+     * 这条跳过不改真实仓的判决面。 */
+    if (!fs.existsSync(path.join(ROOT, root))) continue;
     /* oxfmt 只列**有差异**的文件（形如 `src/foo.ts (12ms)`），随后给一行
      * `Format issues found in above N files.`；退出码 1 = 有差异、0 = 全干净。
      * 没有 `--cache` 这一档：oxfmt 在本仓实测 1.9s（prettier 全热 234s），
