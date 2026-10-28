@@ -37,12 +37,17 @@
  *
  * 它起那条命令（stdout/stderr 合并抓）、把抓到的 UTF-8 文本交给 PowerShell 以 936
  * 重发，再把**子进程的退出码原样转出去**（转码是外壳，退出码是那条命令的结论 ——
- * 外壳不许吞它，这正是 `ci-toolchain-selfcheck.mjs` 踩过的那个坑）。
+ * 外壳不许吞它，这正是 `ci-toolchain-selfcheck.mjs` 踩过的那个坑；也不许**编出**一个，
+ * 那是 ISSUE #2571 修的那一格：子进程被信号终止时 `code` 是 `null`，按 `?? 0` 落进
+ * 「成功」等于替那条从没退出过的命令报了一条通过 —— 折算规则在
+ * `exitCodeFromTermination()`）。
  *
  * ## 边界（刻意不做的事）
  *
- *   · **非 Windows 直通**：CP936 是中文 Windows 的事，别处没有这一跳；此时原样起子进程、
- *     原样转出退出码（不静默、也不多起一层 PowerShell）。
+ *   · **非 Windows 直通**：CP936 是中文 Windows 的事，别处没有**转码**这一跳；此时
+ *     原样起子进程、原样转出退出码（不静默、也不多起一层 PowerShell）。
+ *     ⚠️ 这里直通的只有转码：**退出码那一条链两个平台是同一个 `close` 回调**，
+ *     所以 ISSUE #2571 那一格在 Linux 上同样成立（不是「Windows 专属」）。
  *   · **转码失败不回退成「看起来成功」**：PowerShell 起不来时把原文照打一遍并说明
  *     （日志继续乱，但那是对的现象），退出码仍是子进程的。
  *   · **不做第二份「有没有乱码」的判据**：抓取端怎么解码本进程看不到，能判的只有
@@ -102,20 +107,27 @@
  *     `err.code`（`ENOENT` 与 `EACCES` / `EINVAL` 要做的处置完全不同）、解析口
  *     交回的**绝对路径**、以及**当前目录 + 调用方的原文**（相对路径是相对谁的，
  *     不写出来只能猜；`cwd` 由调用方注入，见 `process.cwd()`）。
- *   · **输出攒到 `close` 才发**（第六次上平台，2026-10-16）：`close` 那个回调在
- *     **被平台按 stage 超时 kill** 的进程上**永远不会来**，而它原来是把整轮
- *     `chunks.join("")` 一次性发出的那次调用 —— 于是 `E2E 关键流程` 跑了 36 分钟、
- *     平台日志**零行**，读到的唯一结论是平台那句
+ *   · **输出攒到 `close` 才发**（第六次上平台，2026-10-16）：那时 `close` 是唯一
+ *     的发送点，而**外壳自己被平台按 stage 墙钟掐掉**时它不会来 —— 于是
+ *     `E2E 关键流程` 跑了 36 分钟、平台日志**零行**，读到的唯一结论是平台那句
  *     `timeout of 2160000ms exceeded`（与真因无关）。
  *     「输出被吞」在长跑这一格上的形态**不是「发不出去」，是「发得太晚」**：
  *     秒级 stage 上完全看不出来（命令退出了，输出就发出去了），分钟级 stage 上
  *     代价是**整轮日志**。处置是**边到边发**（`splitStreamChunk()` 按 `\n` 切整行、
  *     行尾残余留到下一块）—— 按块发会在多字节字符中间截断，GBK 是变长的，编出来
  *     就是乱码字节。
- *     ⚠️ 判据（`tests/ci-cp936-exit.test.ts`）**只能判「第一块到的时候有没有发出去」**：
- *     「被 kill 之后还能不能读到」在单测里没有对应的时刻，那件事由流式本身保证。
+ *     ⚠️ **这一条当时给出的因果是错的**（ISSUE #2571 当场复现推翻）：写的理由是
+ *     「被 kill 的进程上 `close` 永远不会来」，而实测**子进程**被信号终止时 `close`
+ *     照来，带的是 `code=null` + `signal=SIGTERM`。不来的那一档是**外壳自己被杀**
+ *     —— 那一档里本文件没有任何一句会执行。错前提的代价不止是一句注释：它让
+ *     `settle(code ?? 0)` 看起来「只在正常路径上被读到」，于是「被终止的一跑」在
+ *     这台机器上被转成了**退出 0**（假绿）。折算规则现在收在 `exitCodeFromTermination()`，
+ *     判据也补了「信号终止 ⇒ 非零」那一格（真起子进程再 kill，不是假执行者）。
+ *     「第一块到就发出去」那条判据仍然只判时机 —— 「被 kill 之后还能不能读到」
+ *     在单测里没有对应的时刻，那件事由流式本身保证。
  */
 import { spawn, spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
@@ -484,11 +496,42 @@ export function formatSpawnFailure({ err, command, realCommand, cwd }) {
   return lines.join("\n");
 }
 
+/** 「怎么结束的」没交代到号时转出去的那个非零退出码。 */
+export const UNKNOWN_TERMINATION_EXIT = 128;
+
 /**
- * 起命令、抓输出、以 CP936 重发、转出退出码 —— 编排那一层（`main()` 调它）。
+ * 把子进程的结束方式折算成外壳要转出去的退出码（ISSUE #2571）。
  *
- * **退出码走 `resolve` / `reject` 的第二个值**：`main()` 里那句 `process.exit(code)`
- * 是本文件唯一把结论转出去的地方（下游 stage 靠它判红绿）。
+ * `code === null` **不是一档结果，而是「没有结果」**：它只说明这条命令不是自己退出的
+ * （被信号终止，或连终止方式都没交代）。把它按 `?? 0` 落进「成功」，外壳就从
+ * 「不替子进程编结论」变成「替它编了一条通过」—— 与 §13.6.4.1 那句
+ * 「拿不到测量 ≠ 测量结果是红的」是同一条区分，只是方向反过来：拿到的既不是红、
+ * 也不该被念成绿。
+ *
+ * 号按 POSIX 惯例折算（`128 + 信号号`，与 shell 报给调用方的那套一致），查表用
+ * `os.constants.signals`；查不到号时**仍然不许落回 0** —— 退到 `UNKNOWN_TERMINATION_EXIT`，
+ * 让「被终止但号拿不到」与「干净退出」在账面上是两件事。
+ *
+ * @param {number | null} code
+ * @param {string | null} signal —— 声明成 `string` 而**不是** `NodeJS.Signals`：那个联合是
+ *   按 POSIX 列的，而 Windows 上 libuv 能报出没登记的号。把「查不到」写进类型之外，
+ *   这一档就只在类型里存在、在运行时不存在 —— 而它恰恰是本函数要保证非零的那一档。
+ * @returns {number}
+ */
+export function exitCodeFromTermination(code, signal) {
+  if (typeof code === "number") return code;
+  if (!signal) return UNKNOWN_TERMINATION_EXIT;
+  const table = /** @type {Record<string, number | undefined>} */ (
+    os.constants.signals
+  );
+  return 128 + (table[signal] ?? 0);
+}
+
+/**
+ * 起命令、抓输出、以 CP936 重发、转出退出码 —— 编排那一层（文件尾的直接执行入口调它）。
+ *
+ * **退出码是这条 Promise 的唯一值**：入口里那句 `process.exit(code)` 是本文件唯一把
+ * 结论转出去的地方（下游 stage 靠它判红绿）。
  *
  * @param {string[]} argv
  * @param {{platform?: NodeJS.Platform,
@@ -575,8 +618,10 @@ export function runWithCp936Exit(
       windowsHide: true,
     });
     /* **边到边发**，不是攒到 `close` 再发一次（见 `splitStreamChunk()` 的文件头）：
-     * 攒着的那一版在**分钟级 + 被平台按 stage 超时 kill** 的 stage 上会把整轮日志
-     * 一起带走（`close` 不再来）—— `E2E 关键流程` 那 36 分钟零行就是这么来的。
+     * 攒着的那一版在**分钟级 + 外壳被平台按 stage 墙钟掐掉**的 stage 上会把整轮日志
+     * 一起带走（那一档里本文件一句都不会执行）—— `E2E 关键流程` 那 36 分钟零行
+     * 就是这么来的。⚠️ 当时归因为「被 kill 时 `close` 不再来」是**错的**：子进程被
+     * 信号终止时 `close` 照来，见头注那一条与 ISSUE #2571。
      *
      * `carry` 是**行尾那半截**：按 `\n` 切而不是按块切，是因为一块可能正好截在
      * 多字节字符中间，按 CP936 编出去就是乱码字节（GBK 变长）。
@@ -695,10 +740,16 @@ export function runWithCp936Exit(
       );
       settle(127);
     });
-    child.on("close", (code) => {
-      /* 行尾那份残余（**没有换行符收尾的最后一个片段**）在这里补发：正常结束时
-       * `close` 一定会来，它是那一行的终点。被 kill 时来不了 —— 但那时前面每一行
-       * 都已经发出去了，这正是流式要买的东西。 */
+    child.on("close", (code, signal) => {
+      /* 行尾那份残余（**没有换行符收尾的最后一个片段**）在这里补发：`close` 一到，
+       * 那一行就到底了。
+       *
+       * ⚠️ 「被 kill 时 `close` 不会来」是本文件挂着的一条**错前提**（ISSUE #2571
+       * 当场复现推翻）：子进程被信号终止时 `close` **照来**，带的是 `code=null` +
+       * `signal=SIGTERM`。真「什么都不会来」的那一档是**外壳自己被杀** —— 平台按
+       * stage 墙钟掐掉这一跳时，下面这几句根本没有执行者，而那时读到的结论是平台
+       * 自己那句 `timeout … exceeded`（不是这里的退出码）。流式改造买的正是前一档
+       * 之外的东西：被 kill 之前每一行都已经发出去了。 */
       flush(carry);
       carry = "";
       /* 收尾打一条**总数**：逐块那条只对第一次出现的字符说「这个被换过」，而
@@ -708,8 +759,8 @@ export function runWithCp936Exit(
        * ⚠️ 同样走 `write`（CP936 那一跳）—— `emit` 那条路是 UTF-8 直写，
        * 平台按 CP936 解，中文会在那里变成乱码。
        *
-       * 这一条在**被平台按 stage 超时 kill** 时不会来（`close` 不来）—— 但那时
-       * 前面每一次出现的即时读数都已经发出去了，形态不会丢。 */
+       * 子进程被终止时这一条**照样打**（`close` 会来，见上面那段）—— 只有外壳
+       * 自己被杀那一档才没有它，而那一档本来就没有任何一行是外壳写的。 */
       if (glyphTotals.size > 0) {
         const said = describeGlyphReplacements(
           [...glyphTotals.values()],
@@ -723,7 +774,22 @@ export function runWithCp936Exit(
           if (!ok) emit(summary);
         }
       }
-      settle(code ?? 0);
+      const exitCode = exitCodeFromTermination(code, signal);
+      /* `code === null` = 「这条命令不是自己退出的」，而转出去的码是**外壳折算的**、
+       * 不是子进程给的那个 ⇒ 必须念一行出声：不然读日志的人拿着 143 去查「哪条命令
+       * 退 143」，而那条命令一次都没退出过。
+       *
+       * 同样走 `write`（CP936 那一跳）—— 这一行有中文，`emit` 那条 UTF-8 直写的路
+       * 在平台上会被解成乱码（与上面那条总数同一个口径，ISSUE #1977）。 */
+      if (code === null) {
+        const how = signal ? `子进程被 ${signal} 终止` : "子进程没有交代结束方式";
+        const line =
+          `${how}（没有跑到结论）⇒ 外壳退出 ${exitCode}；` +
+          "这不是那条命令自己退的码\n";
+        const { ok } = write(line, { stdio: "inherit" });
+        if (!ok) emit(line);
+      }
+      settle(exitCode);
     });
   });
 }
