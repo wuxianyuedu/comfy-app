@@ -109,9 +109,10 @@ if (!invocation) {
 maybeSpawnExecutorHost({
   root,
   runTimestamp: runStamp(),
-  logLine: (message, level = "INFO") =>
+  logLine: (message, _level = "INFO") =>
     process.stdout.write(`[start.mjs] ${message}\n`),
-  // level 目前只用于调用方的可读性：本入口的通道是 stdout，不区分级别。
+  // _level 是接口形态的占位（调用方按级别挑通道时才有用）：本入口的通道是
+  // stdout，不区分级别 —— 下划线前缀 = core no-unused-vars 的 argsIgnorePattern。
 });
 
 // 与 dev.mjs 同一口径：起服务前先回显真正要跑的那条命令行。

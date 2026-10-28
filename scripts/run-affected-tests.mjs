@@ -145,12 +145,11 @@ export { junitReportArgs, writeFilesManifest };
  * 取数按文件而判决按块，粗的那一份会把细的那一份的真红一起吞掉（ISSUE #2225）。 */
 import { retryScope } from "./affected-launch-retry-scope.mjs";
 import {
+  classifyFirstPass,
   classifyRetry,
   mergePerFileReads,
 } from "./affected-launch-retry-verdict.mjs";
 import {
-  isLaunchFailureShaped,
-  isTimeoutShaped,
   remainingWaitMs,
   RETRY_BUDGET_MS,
   waitForLoadToSettle,
@@ -159,8 +158,7 @@ import {
  * 重试本身就成了消耗，直到那一格被平台掐掉、连「未判定」都说不出（ISSUE #2364）。 */
 import {
   affordablePerFileCount,
-  budgetAllows,
-  estimateSerialRerunMs,
+  gateRerunByWallClock,
   perFileBudgetStopReport,
   remainingWallClockMs,
   resolveWallClockMs,
@@ -181,8 +179,6 @@ import {
 import { announceQuiet, reporterArgs } from "./affected-launch-log-budget.mjs";
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
-import os from "node:os";
-import { setTimeout as sleep } from "node:timers/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -554,8 +550,11 @@ async function main(argv) {
    * `deadline` 表示 —— 第一块等掉的时间，后面的块不会重新拿到一份。 */
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
   /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
-  const wallClock = resolveWallClockMs(process.env.COMFY_AFFECTED_WALL_CLOCK_MS);
-  if (wallClock.note) process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
+  const wallClock = resolveWallClockMs(
+    process.env.COMFY_AFFECTED_WALL_CLOCK_MS,
+  );
+  if (wallClock.note)
+    process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
   const stageBudget = wallClockBudget({ budgetMs: wallClock.budgetMs });
   /** 这一档「没拿到可信读数」的文件（未校验 ≠ 绿，结束时要点名）。 */
   const unverified = [];
@@ -670,51 +669,26 @@ export async function runChunk(chunk, deps) {
     return 0;
   }
 
-  /* 失败分三档（口径见文件头那节）：
-   *   · **装载阶段就炸**（`AggregateError` / 模块找不到那一族）⇒ 这一遍没跑起来，
-   *     退 2 并指向「修环境」，见下；
-   *   · **带超时指纹** ⇒ 这个红首先是一个负载读数（§13.6.4）。换更隔离的条件
-   *     **重测一次**：串行单进程 = 降负载，**不抬任何预算**；
-   *   · 不带指纹（真断言红）⇒ 一次都不复跑，直接阻断。 */
-  /* 第三档：**这一遍根本没跑起来**（worker / 模块装载阶段就炸 —— 依赖缺失、
-   * 原生模块版本对不上、环境把解析带歪）。它的输出是一串 `Error:` 加一段
-   * `AggregateError`，而**一条断言都没红**；判据在 `isLaunchFailureShaped`。
-   *
-   * 处置与「真断言红」相反：真红是去修代码（一次都不复跑），这一档是去修**环境**
-   * （复跑没有意义 —— 同样的环境再跑一遍，同样的炸）。所以它退 2（未判定）而不是 1，
-   * 并把「修环境」的那一步写在脸上。**不许**把它并进真红那一档：拿它当「这次改动有
-   * 回归」去查代码，查的是一件没发生的事（平台那一格上就是这么被读错的）。 */
-  if (isLaunchFailureShaped(res.output)) {
-    process.stderr.write(
-      `[affected-launch] 第 1 遍**没跑起来**（${
-        res.status === null ? "被信号终止" : `退出码 ${res.status}`
-      }），输出里是装载 / 运行时级错误（AggregateError / 模块找不到那一族），` +
-        "**一条断言都没红**。\n" +
-        "  ⇒ 这一档退 2：既不是绿也不是红，它说的是「这台机器上这批用例没被跑起来」。\n" +
-        "  下一动作（按顺序试，别去查用例代码）：\n" +
-        "    1. `pnpm install --frozen-lockfile`（原生模块与锁文件对不上时就是这个形态）\n" +
-        "    2. 清掉环境里串进来的 `npm_config_*`（前缀 / store / global 那几条带执行期校验）\n" +
-        "    3. 再跑一次同一份清单：`node scripts/run-affected-tests.mjs --full`\n",
-    );
+  /* 第 1 遍那个红是什么形态，三档各配一个退码（判据与话术住在
+   * `affected-launch-retry-verdict.mjs` 的 `classifyFirstPass` —— 与第 2 遍那份
+   * `classifyRetry` 是同一件事的两个时机）。 */
+  const firstPass = classifyFirstPass(res);
+  process.stderr.write(
+    firstPass.kind === "red"
+      ? `${firstPass.note}` +
+          `  （入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ` +
+          `${chunk.join(" ").length} 字符）\n`
+      : firstPass.note,
+  );
+  if (firstPass.kind === "launch-failed") {
     report({ outcome: "launch-failed" });
     return 2;
   }
-
-  if (!isTimeoutShaped(res.output)) {
-    process.stderr.write(
-      `[affected-launch] vitest 失败：${
-        res.status === null ? "被信号终止" : `退出码 ${res.status}`
-      }（入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ` +
-        `${chunk.join(" ").length} 字符）\n`,
-    );
+  if (firstPass.kind === "red") {
     report({ outcome: "red-no-fingerprint" });
-    return res.status ?? 1;
+    return firstPass.code;
   }
 
-  process.stderr.write(
-    "[affected-launch] 本块的红是**超时形态** —— 按规范 §13.6.4 先当负载读数看，\n" +
-      "  等机器喘口气，再用 `--no-file-parallelism` 隔离复跑（降负载，不抬任何预算）…\n",
-  );
   /* 复跑面由 `retryScope` 给（只跑第 1 遍里失败的那几份）：这一格**只改跑多少份**，
    * 旗标 / 预算 / 结论档位一律照旧，而三条退回形态都是「宁可多跑」那一边。算在等待
    * **之前**：墙钟判点要点名的正是「没拿到第二次测量的那几份」（#2225 那条口径）。 */
@@ -722,10 +696,16 @@ export async function runChunk(chunk, deps) {
   /* 界只划在「要不要再开一遍」—— 已开跑的那一遍永远让它跑完（中途 kill 会连一份可能
    * 已经出来的读数一起丢掉）。不够就是**未判定**退 2：连第二次测量都没发生，不许听得
    * 像「确认过了」—— 那才是未校验（退 0）。ISSUE #2364。 */
-  const gate = budgetAllows({
+  /* 界落在哪一侧：`estimateSerialRerunMs` 估的是「**整块**在串行条件下重测」，而实际
+   * 要跑的往往只是失败的那几份 —— 两者差一个量级（实测：整块 16.1 分钟 ⇒ ×2 = 32.4 分钟，
+   * 而失败的那**一份**隔离跑 0.4 秒）。买不起整块时先去量一份，别连一次真实测量都不发生
+   * 就宣布「拿不到结论」（`budgetAllows` 的 `probeFiles` 那一段记着这次读数）。 */
+  const gate = gateRerunByWallClock({
     budget: deps.stageBudget,
-    estimateMs: estimateSerialRerunMs(firstPassMs),
+    firstPassMs,
+    retryFiles: scope.files.length,
   });
+  if (gate.note !== "") process.stderr.write(gate.note);
   if (!gate.ok) {
     process.stderr.write(wallClockSkipReport({ ...gate, files: scope.files }));
     report({ outcome: "budget-skipped" });
@@ -752,6 +732,14 @@ export async function runChunk(chunk, deps) {
             : " 没等到回落"
         } —— 起第 2 遍：${scope.why}、--no-file-parallelism\n`,
   );
+  /* 走「先量一份」那一支时，第 2 遍只跑它买得起的那几份：`classifyRetry` 只看
+   * **这次真的复跑过的那几份**（`scope.files` 之外的本来就归不进来），而剩下的文件
+   * 会走下面那条逐文件补跑（同一份判据 `affordablePerFileCount` 算份数）——
+   * 两条路的分工是「一份一个退出码」对「多份一次启动」，结论档位一模一样。 */
+  const retryFiles =
+    gate.via === "probe"
+      ? scope.files.slice(0, gate.probeCount ?? 1)
+      : scope.files;
   const retry = spawn(entry, [
     "run",
     ...reporters,
@@ -759,7 +747,7 @@ export async function runChunk(chunk, deps) {
       withDefaultReporter: reporters.length === 0,
     }),
     "--no-file-parallelism",
-    ...scope.files,
+    ...retryFiles,
   ]);
   if (retry.status === 0) {
     process.stderr.write(
@@ -789,7 +777,20 @@ export async function runChunk(chunk, deps) {
     chunkId,
     read: deps.readJunit,
   });
-  let verdict = classifyRetry({ files: scope.files, readSuites });
+  let verdict = classifyRetry({ files: retryFiles, readSuites });
+  /* 第 2 遍只量了一部分（`probe` 那一支）⇒ 剩下的文件既没跑过也没被确认过，它们按
+   * 「认不出自己」走下面那条逐文件补跑，**不许**因为「不在这一遍的名单里」而消失。 */
+  if (retryFiles.length < scope.files.length) {
+    const measured = new Set(retryFiles);
+    verdict = {
+      ...verdict,
+      unknown: [
+        ...scope.files.filter((f) => !measured.has(f)),
+        ...verdict.unknown,
+      ],
+      kind: verdict.hardFail.length > 0 ? "hard-fail" : "unattributed",
+    };
+  }
   if (
     verdict.kind === "unattributed" &&
     verdict.unknown.length > 0 &&

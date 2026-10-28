@@ -516,12 +516,15 @@ export default tseslint.config(
    * 作用面**不是**全文件而是 `LINT_FILES + scripts 的 js 面`：`.mjs` / `.cjs`
    * 门禁脚本也吃 core recommended（否则本批修过的 no-useless-escape /
    * no-regex-spaces / no-useless-assignment / preserve-caught-error /
-   * no-irregular-whitespace 在 scripts 里的现场修完就没人判了），但两条例外：
-   *  · `no-undef` —— scripts 在 tsc 的 checkJs 判决面里（undefined 全局由 tsc
-   *    判），core 版再判一遍只会撞 Node 全局（console / process / __dirname）
+   * no-irregular-whitespace 在 scripts 里的现场修完就没人判了），例外与选项：
+   *  · `no-undef` 关停 —— scripts 在 tsc 的 checkJs 判决面里（undefined 全局由
+   *    tsc 判），core 版再判一遍只会撞 Node 全局（console / process / __dirname）
    *    出 790 条纯噪音；
-   *  · `no-unused-vars` —— scripts 里 68 条历史死代码（gate 脚本演进残留），
-   *    逐条裁决是独立单子的活，本 PR 不扩面；TS 面的 unused 由
+   *  · `no-unused-vars` 开（#2541 第二批：84 条历史死代码逐条清零后收编），
+   *    两个选项各有出处：`ignoreRestSiblings` 是「rest 解构剥字段」的惯用法
+   *    （check-function-length 的 `({ start, end, named, ...rest }) => rest`）；
+   *    `argsIgnorePattern: "^_"` 给「接口形态的占位形参」（start.mjs 的 logLine
+   *    签名，调用方按级别挑通道时才有用）。TS 面的 unused 由
    *    `@typescript-eslint/no-unused-vars` 守，不受此影响。
    */
   {
@@ -529,6 +532,19 @@ export default tseslint.config(
     rules: {
       ...js.configs.recommended.rules,
       "no-undef": "off",
+      "no-unused-vars": [
+        "error",
+        { ignoreRestSiblings: true, argsIgnorePattern: "^_" },
+      ],
+    },
+  },
+  /* `.d.ts` / `.d.mts` 手写声明文件豁免 no-unused-vars（#2541 第二批）：
+   * 声明里的参数名是 API 面 documentation，本就「不使用」——
+   * scripts/lockfile/lock-diff.d.mts 与 render-lock-diff.d.mts 的 16 条全是这一类。
+   * 何时可收紧：无 —— 声明文件永远不会消费自己的参数。 */
+  {
+    files: ["scripts/**/*.d.{ts,mts,cts}"],
+    rules: {
       "no-unused-vars": "off",
     },
   },
@@ -565,19 +581,15 @@ export default tseslint.config(
    * ANSI 转义序列剥离（`\x1b`）、CI 日志控制符读数。规则要拦的「意外混入控制
    * 字符」在这些文件里是刻意行为。豁免到**文件级**而不是规则级：新增文件里
    * 真写出意外的控制字符正则时依然会被拦。何时可移除：若某文件改用非正则
-   * 方案（逐字符过滤）处理控制字符，可把该文件从这里摘掉。 */
+   * 方案（逐字符过滤）处理控制字符，可把该文件从这里摘掉。
+   * #2541 第二批顺带收编 `ci-toolchain-pnpm.mjs`：判「文本脚本 vs 二进制」的
+   * `/^[\x09\x0a\x0d\x20-\x7e]{2,}$/`（ISSUE #2563 的回归现场），同一功能类。 */
   {
     files: [
       "scripts/check-docs-api.cjs",
       "scripts/check-format.cjs",
       "scripts/check-theme-colors.cjs",
       "scripts/ci-build-readout.mjs",
-      /* 它的 `looksLikeScript()` 里那一条「是不是可打印文本」的正则与下面
-       * `src/lib/process/executable-resolve.ts` 的 `executableKind()` **逐字同形** ——
-       * 这两份是 ISSUE #2562 里刻意各留的实现（自证那一格不许 import 仓库内模块）。
-       * 进来晚了（ISSUE #2607）：函数被抄过去的时候没把这条登记一起抄，于是
-       * `ESLint 零警告` 从那份文件落主干那天起就是红的，而它挂在每日档 ⇒ 表现是
-       * 「每天念一条」而不是「谁都提交不了」。同一条判据的同批含义**包括豁免台账**。 */
       "scripts/ci-toolchain-pnpm.mjs",
       "scripts/file-structure-rules.cjs",
       "src/lib/llm/video-task-util.test.ts",

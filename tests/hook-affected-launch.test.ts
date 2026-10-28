@@ -35,6 +35,7 @@ import { wideFallbackNote } from "../scripts/affected-tests.mjs";
  * 再要一份 `run-affected-tests.mjs` 的同名出口 —— 那等于给拆出去的块留一条「搬走了
  * 但还能从老地方拿到」的假象。 */
 import {
+  failureSectionOf,
   isLaunchFailureShaped,
   isTimeoutShaped,
   loadPerCore,
@@ -64,6 +65,7 @@ import {
   affordablePerFileCount,
   budgetAllows,
   estimateSerialRerunMs,
+  gateRerunByWallClock,
   perFileBudgetStopReport,
   PLATFORM_STAGE_KILL_MS,
   resolveWallClockMs,
@@ -92,6 +94,7 @@ import { retryScope } from "../scripts/affected-launch-retry-scope.mjs";
 /* 判决粒度那一层（第 2 遍的红按文件分开）—— #2225 之后它不再住在 runChunk 的那一句
  * `isTimeoutShaped(整块输出)` 里，所以它的三档结论要能被单独钉住。 */
 import {
+  classifyFirstPass,
   classifyRetry,
   mergePerFileReads,
 } from "../scripts/affected-launch-retry-verdict.mjs";
@@ -389,23 +392,39 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
   });
 
   it("触发面：不带指纹时**先于复跑**返回（真断言红一次都不复跑）", () => {
-    /* 只切 `runChunk` 里「拿指纹做判断 → 复跑」那一小段：整段数会把上面那条提示
-     * 话术一起圈进来，而那句话术里也写着同一个旗标名 —— 于是「复跑被摘掉」
-     * 与「只剩日志文字」长得一样。
-     * 整条链的**行为**由下一节用注入的假 spawn 整个跑一遍（两向都断退出码），
-     * 这里只补一条形状：指纹判在复跑**之前**。 */
+    /* 判决（「这个红是什么形态」）跟着 `classifyFirstPass` 搬到了
+     * `affected-launch-retry-verdict.mjs`（`runChunk` 撞 900 行硬闸那一刀），所以形状
+     * 要**分两处**判：那一处判「指纹怎么读、三档怎么分」，这一处判「挡在复跑之前」。
+     * 整条链的**行为**由下一节用注入的假 spawn 整个跑一遍（两向都断退出码）。 */
+    const verdictSrc = readFileSync(
+      path.join(ROOT, "scripts/affected-launch-retry-verdict.mjs"),
+      "utf8",
+    );
+    const judge = /export function classifyFirstPass\([\s\S]*?\n\}/.exec(
+      verdictSrc,
+    )?.[0];
+    expect(judge, "classifyFirstPass 还在吗？").toBeTruthy();
+    /* 指纹的取值面**只许**是失败段，不许回到整块输出（ISSUE #2601）：整块里住着
+     * 全部用例的全部输出，那里按设计写着的 `Test timed out` 会替这一次的红签字。 */
+    expect(judge, "指纹又在整块输出上判了？").not.toMatch(
+      /isTimeoutShaped\(output\)/,
+    );
+    expect(judge).toContain("failureSectionOf(output)");
+    /* 装载失败那一档**必须**继续读整块：`AggregateError` 恰在失败明细之前那一段里。 */
+    expect(judge).toContain("isLaunchFailureShaped(output)");
+
     const chunkFn = /export async function runChunk\([\s\S]*?\n\}/.exec(
       src,
     )?.[0];
     expect(chunkFn, "runChunk 还在吗？").toBeTruthy();
-    const guard = chunkFn?.indexOf("if (!isTimeoutShaped(res.output))") ?? -1;
+    const guard = chunkFn?.indexOf("classifyFirstPass(res)") ?? -1;
     const retry = chunkFn?.indexOf(`"--no-file-parallelism"`) ?? -1;
     expect(guard).toBeGreaterThan(-1);
     expect(retry).toBeGreaterThan(-1);
     expect(guard, "指纹判断必须在复跑之前").toBeLessThan(retry);
     // 不带指纹那一支必须**返回非零**（不许静默继续）。
     const earlyReturn =
-      /if \(!isTimeoutShaped\(res\.output\)\) \{[\s\S]*?return res\.status \?\? 1;/.exec(
+      /if \(firstPass\.kind === "red"\) \{[\s\S]*?return firstPass\.code;/.exec(
         chunkFn ?? "",
       );
     expect(earlyReturn, "不带指纹时应当直接阻断").toBeTruthy();
@@ -421,6 +440,118 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     expect(spawn).toMatch(/process\.stdout\.write/);
     expect(spawn).toMatch(/process\.stderr\.write/);
     expect(spawn).not.toMatch(/stdio:\s*"inherit"/);
+  });
+});
+
+/**
+ * 指纹的**取值面**：只读失败段，不读整块输出（ISSUE #2599）。
+ *
+ * 现场（build `cnb-u2e-1k619gnro`，PR #2598）：一块里有一份文件的 3 条用例
+ * `Test timed out in 30000ms`，于是**整块**被读成「超时形态」并进了隔离复跑那一支；
+ * 复跑买不起（墙钟）⇒ 整块按「未判定」退 2。可那三份文件的结论第一遍就写在那儿了
+ * —— 不是红、不是没测到，是「把一次现成的读数丢了」。
+ *
+ * 这一节钉的是**取数面**（判据没变：带指纹 ⇒ 隔离复跑，不带 ⇒ 真红阻断）。
+ */
+/**
+ * 第 1 遍那个红的**三档判决**（`classifyFirstPass`）：装载失败 / 值得复跑 / 真断言红。
+ *
+ * 这一层与第 2 遍的 `classifyRetry` 是同一件事的两个时机，所以「装载失败读整块、
+ * 超时读失败段」那一对不同源必须各判一次都站得住 —— 那是最容易在一处改坏、而
+ * 另一处仍绿的地方。
+ */
+describe("受影响用例的启动器 —— 第 1 遍的三档判决", () => {
+  const FAILED = "\nTest Files  1 failed | 1 passed (2)\n";
+  const sectioned = (body: string) =>
+    `噪声\nError: Test timed out in 30000ms.\n${FAILED}\n------- Failed Tests 1 -------\n\n FAIL  node  tests/a.test.ts > x\n${body}\n`;
+
+  it("装载阶段就炸 ⇒ 退 2，且指向「修环境」而不是「查代码」", () => {
+    const got = classifyFirstPass({
+      status: 1,
+      output:
+        "AggregateError: Cannot find module 'better-sqlite3'\n" +
+        "    at Module._resolveFilename",
+    });
+    expect(got.kind).toBe("launch-failed");
+    expect(got.code).toBe(2);
+    expect(got.note).toContain("pnpm install --frozen-lockfile");
+    expect(got.note).toContain("一条断言都没红");
+  });
+
+  it("失败段带指纹 ⇒ 值得复跑（这一档不自己退码，交给判决链继续走）", () => {
+    const got = classifyFirstPass({
+      status: 1,
+      output: sectioned("Error: Test timed out in 30000ms."),
+    });
+    expect(got.kind).toBe("timeout");
+    expect(got.note).toContain("隔离复跑");
+  });
+
+  it("失败段不带指纹、整块里却有别人的超时文本 ⇒ **真红**（更严的一侧）", () => {
+    const got = classifyFirstPass({
+      status: 1,
+      output: sectioned("AssertionError: expected 1 to be 2"),
+    });
+    expect(got.kind).toBe("red");
+    expect(got.code).toBe(1);
+  });
+
+  it("被信号终止时退码不冒充成 0（那是「通过」）", () => {
+    const got = classifyFirstPass({
+      status: null,
+      output: sectioned("AssertionError: boom"),
+    });
+    expect(got.kind).toBe("red");
+    expect(got.code).toBe(1);
+    expect(got.note).toContain("被信号终止");
+  });
+});
+
+describe("受影响用例的启动器 —— 超时指纹只读失败段（ISSUE #2601）", () => {
+  /* 一段**形状**取自现场日志：装载 / 其它文件噪声 → 汇总行 → 失败明细。 */
+  const withNoise = (failingBody: string) =>
+    [
+      "stderr | tests/other.test.ts > 某条用例",
+      "Error: Test timed out in 30000ms.",
+      "    at somewhere/else.ts:1:1",
+      "",
+      "Test Files  1 failed | 107 passed (108)",
+      "     Tests  1 failed | 1853 passed (1857)",
+      "",
+      "------- Failed Tests 1 -------",
+      "",
+      " FAIL  node  tests/other.test.ts > 某条用例 > 子标题",
+      failingBody,
+      "------------------------[1/1]-",
+      "",
+    ].join("\n");
+
+  it("失败段之前的超时文本不许替这一次的红签字", () => {
+    const out = withNoise("AssertionError: expected 1 to be 2");
+    /* 整块读 ⇒ 假阳性（这就是现场那个错误结论）。 */
+    expect(isTimeoutShaped(out)).toBe(true);
+    /* 失败段读 ⇒ 真断言红。 */
+    expect(isTimeoutShaped(failureSectionOf(out))).toBe(false);
+  });
+
+  it("失败段**自己**是超时 ⇒ 照旧读成超时形态（这一档一个字没改）", () => {
+    const out = withNoise("Error: Test timed out in 30000ms.");
+    expect(isTimeoutShaped(failureSectionOf(out))).toBe(true);
+  });
+
+  it("认不出失败段时退回整块（宁可多复跑一次，也不把真超时读成断言红）", () => {
+    const bare = "Test timed out in 30000ms.\nFATAL: 没有汇总行";
+    expect(failureSectionOf(bare)).toBe(bare);
+    expect(failureSectionOf("")).toBe("");
+    expect(failureSectionOf(null)).toBe("");
+  });
+
+  it("失败段从行首那一行开始 —— 不许从词中间切开", () => {
+    const out = withNoise("Error: boom");
+    const section = failureSectionOf(out);
+    expect(section.startsWith("------- Failed Tests")).toBe(true);
+    expect(section).toContain("Error: boom");
+    expect(section).not.toContain("tests/other.test.ts > 某条用例\n");
   });
 });
 
@@ -1293,6 +1424,59 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
     }
   });
 
+  it("界买不起整块 ⇒ 仍先量一份（现场：整块估 32.4 分钟，那一份 0.4 秒）", async () => {
+    /* ISSUE #2599 的另一半：界落下时**连一次真实测量都没发生**。这里的假 spawn 让
+     * 第 1 遍耗掉「16 分钟」（`stageBudget` 直接给一个已经过期的截止时刻），于是
+     * 整块串行估 32.4 分钟必然买不起 —— 但那一份失败文件的隔离复跑必须照跑。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "c-probe-"));
+    try {
+      firstPassXml(dir, suite("tests/a.test.ts", 1));
+      const TIMEOUT = {
+        status: 1,
+        output: "Error: Test timed out in 30000ms.",
+      };
+      const GREEN = { status: 0, output: "Test Files 1 passed" };
+      const calls: string[][] = [];
+      const outcomes: string[] = [];
+      /* 首遍墙钟由假 spawn 决定：`Date.now()` 在假进程里不会走，所以要让「整块估计」
+       * （首遍 ×2）真的**大于**剩余量 —— 否则这一条测的是「界还够」那一支。 */
+      let fakeNow = 0;
+      const realNow = Date.now;
+      Date.now = () => fakeNow;
+      const { value: code, text } = await captureStderr(async () => {
+        const p = runChunk(["tests/a.test.ts"], {
+          entry: "vitest.mjs",
+          junitDir: dir,
+          chunkId: 0,
+          spawn: (_entry: string, args: string[]) => {
+            calls.push(args.filter((a) => a.endsWith(".test.ts")));
+            /* 首遍「耗时」16 分钟（现场读数），第 2 遍只花 0.4 秒。 */
+            fakeNow += calls.length === 1 ? 16 * 60_000 : 400;
+            return calls.length === 1 ? TIMEOUT : GREEN;
+          },
+          settle: () =>
+            Promise.resolve({ settled: true, load: 0.1, waitedMs: 500 }),
+          /* 还剩一点、但买不起整块（现场：剩 8.8 分钟、整块估 32.4 分钟）——
+           * 预算在**首遍开始前**就起，首遍那 16 分钟从里面扣。截止时刻**不许**已经
+           * 过去：那一档一份都不开，是另一条判点（与这条各判各的）。 */
+          stageBudget: { deadline: 24.8 * 60_000, budgetMs: 1 },
+          onAttempt: (r) => outcomes.push(r.outcome),
+        });
+        const out = await p;
+        Date.now = realNow;
+        return out;
+      });
+      /* 第 1 遍整块、第 2 遍**仍然起了一次**（只带那 1 份失败文件）。 */
+      expect(calls, "买不起整块也要先量一份").toHaveLength(2);
+      expect(calls[1]).toEqual(["tests/a.test.ts"]);
+      expect(code).toBe(0);
+      expect(outcomes).toEqual(["rerun-green"]);
+      expect(text, "省掉的是什么必须说出口").toContain("逐文件补跑");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("界还够 ⇒ 第二遍照开（反向对照：这条判点不许退化成「永远不开」）", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "c-clock-"));
     try {
@@ -1856,7 +2040,9 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
   it("串行复跑按首遍墙钟估，**不**按「失败了几份」的比例估", () => {
     /* 实测反例：第 2 遍只跑 2/98 份，却比首遍更慢（串行去掉了并发优势，1.48 倍）。
      * 按比例算会把界划在错的一侧 —— 它会在最需要复跑的那一次说「跑得完」。 */
-    expect(estimateSerialRerunMs(9.2 * MIN)).toBe(9.2 * MIN * SERIAL_RERUN_FACTOR);
+    expect(estimateSerialRerunMs(9.2 * MIN)).toBe(
+      9.2 * MIN * SERIAL_RERUN_FACTOR,
+    );
     expect(SERIAL_RERUN_FACTOR).toBeGreaterThanOrEqual(1.48);
     expect(estimateSerialRerunMs(-5)).toBe(0);
   });
@@ -1875,10 +2061,101 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
     expect(tight.remainingMs).toBe(100);
   });
 
-  it("逐文件补跑的份数：没界=全部，界已过=0，没单价=先拿一份的单价", () => {
+  it("买不起**整块**时先去量一份（实测：整块 ×2 = 32.4 分钟，那一份 0.4 秒）", () => {
+    /* 现场（build `cnb-u2e-1k619gnro`）：剩余 8.8 分钟 < 整块估计 32.4 分钟 ⇒ 旧判点
+     * 直接说「第 2 遍不开」，于是**一次真实测量都没发生**。而那一份失败文件隔离跑
+     * 只需要 0.4 秒 —— 逐文件补跑与整块串行差一个量级，界必须落在后者上。 */
+    const budget = { deadline: 8.8 * MIN, budgetMs: STAGE_WALL_CLOCK_MS };
+    const blockOnly = budgetAllows({
+      budget,
+      estimateMs: 32.4 * MIN,
+      nowMs: 0,
+    });
+    expect(blockOnly.ok, "整块买不起").toBe(false);
+    const withProbe = budgetAllows({
+      budget,
+      estimateMs: 32.4 * MIN,
+      probeFiles: 1,
+      nowMs: 0,
+    });
+    /* 单价还不知道时只放**一份**过去 —— 它的产出就是后面那些的单价。 */
+    expect(withProbe.ok).toBe(true);
+    expect(withProbe.via).toBe("probe");
+    expect(withProbe.probeCount).toBe(1);
+    /* 有单价之后按剩余量算份数，不是凭常数。 */
     expect(
-      affordablePerFileCount({ perFileMs: 3_000, pending: 5 }),
+      budgetAllows({
+        budget,
+        estimateMs: 32.4 * MIN,
+        probeFiles: 5,
+        probePerFileMs: MIN,
+        nowMs: 0,
+      }).probeCount,
     ).toBe(5);
+    /* 连一份都买不起 ⇒ 仍是不开（那句话里要点名逐文件补跑这条下一动作）。 */
+    const nothing = budgetAllows({
+      budget: { deadline: 0 },
+      estimateMs: 32.4 * MIN,
+      probeFiles: 5,
+      probePerFileMs: MIN,
+      nowMs: 0,
+    });
+    expect(nothing.ok).toBe(false);
+    expect(nothing.via).toBe("block");
+  });
+
+  it("那一段整份只剩一句：`gateRerunByWallClock` 同时给档位与话术", () => {
+    /* 判点与话术拆开过一次，读的人得自己把读数拼回去（「开的是什么」与「开不开」
+     * 本来是同一个结论）。这里钉的是**合成**：档位、份数、那句话出自同一次计算。 */
+    const MIN = 60_000;
+    const probe = gateRerunByWallClock({
+      budget: { deadline: 24.8 * MIN, budgetMs: 1 },
+      firstPassMs: 16.1 * MIN,
+      retryFiles: 1,
+      nowMs: 16.1 * MIN,
+    });
+    expect(probe.ok).toBe(true);
+    expect(probe.via).toBe("probe");
+    expect(probe.probeCount).toBe(1);
+    expect(probe.note).toContain("逐文件补跑");
+
+    /* 剩余已用完 ⇒ 不开，话里点的成因是「墙钟已经用完」（不是「还剩一点但不够」）——
+     * 两者是两件事，混写会让读的人去查一个不存在的余量。 */
+    const broke = gateRerunByWallClock({
+      budget: { deadline: 10 * MIN, budgetMs: 1 },
+      firstPassMs: 16.1 * MIN,
+      retryFiles: 1,
+      nowMs: 16.1 * MIN,
+    });
+    expect(broke.ok).toBe(false);
+    expect(broke.note).toContain("墙钟已经用完");
+    expect(broke.note).toContain("未判定");
+
+    /* 界够 ⇒ 一句话都不说（绿的那一大半不该为这段付输出）。 */
+    const roomy = gateRerunByWallClock({
+      budget: { deadline: 120 * MIN, budgetMs: 1 },
+      firstPassMs: MIN,
+      retryFiles: 1,
+      nowMs: 0,
+    });
+    expect(roomy.ok).toBe(true);
+    expect(roomy.via).toBe("block");
+    expect(roomy.note).toBe("");
+  });
+
+  it("整块买得起时**不**走 probe 那一支（读数不许在有余量时说自己在省）", () => {
+    const got = budgetAllows({
+      budget: { deadline: 40 * MIN },
+      estimateMs: 32.4 * MIN,
+      probeFiles: 3,
+      nowMs: 0,
+    });
+    expect(got.ok).toBe(true);
+    expect(got.via).toBe("block");
+  });
+
+  it("逐文件补跑的份数：没界=全部，界已过=0，没单价=先拿一份的单价", () => {
+    expect(affordablePerFileCount({ perFileMs: 3_000, pending: 5 })).toBe(5);
     expect(
       affordablePerFileCount({
         budget: { deadline: 10_000 },
@@ -1935,13 +2212,18 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
     expect(resolveWallClockMs("").budgetMs).toBe(STAGE_WALL_CLOCK_MS);
     for (const bad of ["0", "-1", "abc", "12.5"]) {
       const got = resolveWallClockMs(bad);
-      expect(got.budgetMs, `非法值 ${bad} 不许退成 0`).toBe(STAGE_WALL_CLOCK_MS);
+      expect(got.budgetMs, `非法值 ${bad} 不许退成 0`).toBe(
+        STAGE_WALL_CLOCK_MS,
+      );
       expect(got.note, `非法值 ${bad} 必须说出口`).toContain("正整数毫秒");
     }
   });
 
   it("起界那份给的是「整次一份」的截止时刻，不是每块一份", () => {
-    const b = wallClockBudget({ startMs: 1_000, budgetMs: STAGE_WALL_CLOCK_MS });
+    const b = wallClockBudget({
+      startMs: 1_000,
+      budgetMs: STAGE_WALL_CLOCK_MS,
+    });
     expect(b.deadline).toBe(1_000 + STAGE_WALL_CLOCK_MS);
     expect(b.budgetMs).toBe(STAGE_WALL_CLOCK_MS);
   });

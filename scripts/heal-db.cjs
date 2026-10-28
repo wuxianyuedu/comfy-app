@@ -51,7 +51,7 @@ async function clearTempTables() {
       const t = row.name;
       try {
         await db.execute('DROP TABLE IF EXISTS "' + t + '"');
-      } catch (e) {
+      } catch {
         /* 忽略个别残留表的删除失败 */
       }
     }
@@ -125,7 +125,7 @@ async function healIndexes(out) {
             ")",
         );
         changed = true;
-      } catch (e) {
+      } catch {
         /* 列不存在等情形忽略，交由下一轮补列后再试 */
       }
     }
