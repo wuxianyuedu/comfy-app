@@ -307,9 +307,10 @@ describe("main：读数档的退码与「不打凭据」", () => {
 });
 
 describe("起 `cnb` 的形态：CI 上那条「全部没拿到答复」的根因", () => {
-  /* 平台**必须显式传**（ISSUE #2551 的第三跑读数）：此前这几条拿宿主平台当判据，
-   * 在 POSIX 上写用例、在 Windows 节点上跑 —— `expected 'powershell' to be 'cnb'`。
-   * 用例问的是「POSIX 上怎么起」，那件事与跑它的机器无关。 */
+  /* 平台**必须显式传**（ISSUE #2551 的第三跑读数）：判据自己跑在两边的宿主上
+   * （本地 POSIX、平台 Windows），此前这几条读的是 `process.platform` —— 于是
+   * 「POSIX 上怎么起」这条断言在 Windows 节点上恒假（`expected 'powershell'
+   * to be 'cnb'`）。用例问的那件事与跑它的机器无关，判据就不该问机器。 */
   it("POSIX 上原样起（不套宿主、不改参数）", () => {
     const inv = invocationFor("cnb", ["git", "get-head"], {
       platform: "linux",
