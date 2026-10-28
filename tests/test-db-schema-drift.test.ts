@@ -42,23 +42,31 @@ function tableNameOf(table: Table): string {
 /** 读一张表的实际列名。
  *  `TestDb` 把 `$reset` / `$tables` 挂在 drizzle 实例上、因此带一条
  *  `[key: string]: unknown` 的索引签名，`tdb.all` 在类型层面是 unknown——
- *  这里一次性收窄，而不是在循环里到处 cast。 */
-function columnsOf(name: string): string[] | null {
+ *  这里一次性收窄，而不是在循环里到处 cast。
+ *
+ *  两个形状是测试宿主换成 `sqlite-proxy` 之后才有的（ISSUE #2586）：
+ *  - **要 `await`**：代理宿主的 `resultKind` 是 `async`，`db.all()` 返回的是 thenable
+ *    而不是同步数组（`sqlite-core/db.cjs:281` 那三分叉）。同步宿主时代它直接给数组，
+ *    所以这里曾经可以不 await 就成立。
+ *  - **按下标取列**：`mapResultRow` 取值是 `row[columnIndex]`（`utils.cjs:62`），
+ *    而这一条走的是「无 fields 的原样透传」，拿到的就是宿主给的**位置数组**。
+ *    `PRAGMA table_info` 的列序是 `cid, name, type, notnull, dflt_value, pk` ⇒ 名字在 1。 */
+async function columnsOf(name: string): Promise<string[] | null> {
   const session = tdb as unknown as {
-    all(query: ReturnType<typeof sql.raw>): unknown;
+    all(query: ReturnType<typeof sql.raw>): Promise<unknown>;
   };
   try {
-    const rows = session.all(sql.raw(`PRAGMA table_info("${name}")`)) as Array<{
-      name: string;
-    }>;
-    return rows.map((row) => row.name);
+    const rows = (await session.all(
+      sql.raw(`PRAGMA table_info("${name}")`),
+    )) as unknown[][];
+    return rows.map((row) => String(row[1]));
   } catch {
     return null;
   }
 }
 
 describe("测试库的表结构与 schema.ts 同步", () => {
-  it("schema 里每一张表的每一列，测试库的 DDL 都有", () => {
+  it("schema 里每一张表的每一列，测试库的 DDL 都有", async () => {
     const offenders: string[] = [];
     let checkedTables = 0;
 
@@ -66,7 +74,7 @@ describe("测试库的表结构与 schema.ts 同步", () => {
       if (!(table instanceof Table)) continue;
       const name = tableNameOf(table);
       const columns = Object.keys(getTableColumns(table as never));
-      const present = columnsOf(name);
+      const present = await columnsOf(name);
       if (present === null) {
         offenders.push(`${name}：测试库里没有这张表`);
         continue;
