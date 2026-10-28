@@ -94,11 +94,14 @@ describe("runWithSqliteBusyRetry", () => {
     (phraseOnly as { cause?: unknown }).cause = new Error("database is locked");
     let calls = 0;
     await expect(
-      runWithSqliteBusyRetry(async () => {
-        calls += 1;
-        if (calls === 1) throw phraseOnly;
-        return calls;
-      }, { policy: POLICY }),
+      runWithSqliteBusyRetry(
+        async () => {
+          calls += 1;
+          if (calls === 1) throw phraseOnly;
+          return calls;
+        },
+        { policy: POLICY },
+      ),
     ).resolves.toBe(2);
   });
 

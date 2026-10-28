@@ -244,7 +244,9 @@ export class RemoteModelRepository {
             .select()
             .from(remoteModel)
             .orderBy(remoteModel.createdAt);
-          const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
+          const keyByName = new Map(
+            rows.map((r) => [r.name, r.apiKey ?? null]),
+          );
           const seen = new Set<string>();
           const cleaned: Array<{
             name: string;

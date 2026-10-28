@@ -1597,7 +1597,9 @@ describe("RemoteModelRepository", () => {
       "insert",
       "commit",
     ]);
-    expect(heads.at(-1), "返回给调用方的那份是 commit **之后**重读的").toBe("select");
+    expect(heads.at(-1), "返回给调用方的那份是 commit **之后**重读的").toBe(
+      "select",
+    );
   });
 
   it("第二条写失败 ⇒ 第一条不残留：整份配置与其中的密钥都还在（#2586 的正案）", async () => {
@@ -1613,7 +1615,9 @@ describe("RemoteModelRepository", () => {
     const failure = await remoteModelRepository
       .replaceAll([{ name: "乙" }])
       .then(() => null)
-      .catch((e: unknown) => e as { message: string; cause?: { message?: string } });
+      .catch(
+        (e: unknown) => e as { message: string; cause?: { message?: string } },
+      );
     expect(failure, "第二条写失败必须让整条调用失败得看得见").not.toBeNull();
     /* drizzle 会把宿主抛的东西包成 `Failed query: …`，原因挂在 `cause` 上——
      * 比的正是这两段合起来（只看 message 会读不到注入的那句，那正是 #1250 记的形态）。
