@@ -347,6 +347,20 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
   });
 
   /**
+   * `src/` 逐文件白名单两侧同源（ISSUE #2567）：剔除侧 `RUNTIME_SRC`
+   * （standalone-private-inputs.mjs）决定产物里留哪些 `src/` 叶子，检查侧
+   * `ALLOWED_SRC_FILES`（check-standalone-contents.cjs）决定产物里出现哪些
+   * 算违规。两侧必须逐字相等，否则新增跨宿主链节点会静默漏登一侧 ——
+   * PR #2565 的 `pnpm-js-entry.ts` 就双侧都漏了，只因那一笔整体回滚才没出事故。
+   * 退化防护：任一侧自己空掉时下面「相等」会静默变成「什么都没核对」。
+   */
+  it("src 逐文件白名单两侧同源（RUNTIME_SRC ↔ ALLOWED_SRC_FILES）", () => {
+    const { ALLOWED_SRC_FILES } = checkerExports();
+    expect(ALLOWED_SRC_FILES.length).toBeGreaterThan(0);
+    expect(new Set(RUNTIME_SRC)).toEqual(new Set(ALLOWED_SRC_FILES));
+  });
+
+  /**
    * 清单的判据是**编排器的相对 import 闭包**，不是「看着像运行时的都写上」：
    * `dev-launcher.mjs` 顶层是静态 import，ESM 加载期解析整张图 —— 少一份不是
    * 「那一步跳过」，而是整个编排器起不来。此前 `env-preflight` / `corepack` /
