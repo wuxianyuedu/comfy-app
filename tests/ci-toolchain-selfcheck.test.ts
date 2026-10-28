@@ -1238,6 +1238,37 @@ describe("工具链自证：pnpm 优先跑包真身的 JS 入口（ISSUE #2562�
     expect(r.command).toBe(process.execPath);
     expect(r.prefixArgs).toEqual([mjs]);
   });
+
+  it("`bin` 指向 Corepack 的**占位文本**（首行是 `#` 注释）时，同样改用 bin/pnpm.mjs（ISSUE #2597）", () => {
+    /* 本机现场：`…\corepack\v1\pnpm\<ver>\pnpm` 在 `install.js` 跑过之前只是占位文件，
+     * 第一行是一条 `#` 注释（**不是** shebang）。它两个字节都可打印 ⇒ 「像脚本」⇒
+     * 从前会被当成交付形态选中，于是每条 pnpm 门禁都退 1（node 解析出 `SyntaxError`），
+     * 而那一行读数会把自己报成 `[OK]`。与 `executable-resolve.ts` 那一侧同一条规则、
+     * 同一份现场 —— 两份实现各判一次，是因为这一格不许 import 仓库内模块。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "pnpm-js-entry-placeholder-"));
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+    );
+    writeFileSync(
+      path.join(pkgDir, "pnpm"),
+      "# pnpm's native binary replaces this file during installation.\n" +
+        "# Until then this hands over to ./bin/pnpm.mjs.\n",
+    );
+    const mjs = path.join(pkgDir, "bin", "pnpm.mjs");
+    writeFileSync(mjs, '#!/usr/bin/env node\nprocess.stdout.write("12.4.1");\n');
+    const r = findPnpm({
+      platform: "win32",
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      host: () => "/host/pwsh.EXE",
+      probeRun: (cmd, args) => ({ command: cmd, args, out: "12.4.1" }),
+    });
+    expect(r.ok).toBe(true);
+    expect(r.command).toBe(process.execPath);
+    expect(r.prefixArgs).toEqual([mjs]);
+  });
 });
 
 describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
