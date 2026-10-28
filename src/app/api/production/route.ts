@@ -8,6 +8,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { productionRepository } from "~/lib/core/repository-production";
+import {
+  inheritDerivedFields,
+  CHARACTER_DERIVED_FIELDS,
+  SHOT_DERIVED_FIELDS,
+} from "~/lib/production/payload";
 import { apiErrorBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/is-record";
 import { unauthorizedResponse } from "~/server/lib/error-response";
@@ -62,6 +67,28 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "production 不能为空" }, { status: 400 });
   }
   try {
+    // 机器衍生字段的保存继承（#2615）：草稿不携带评审 / 裁决 / rev——
+    // 整列 upsert 前从库中同 id 记录继承缺键的位，否则工坊里编辑任何东西
+    // 的下一次自动保存就会把它们抹掉。
+    const existing = await productionRepository.getForUser(user.id, project);
+    const existingShots =
+      existing && Array.isArray(existing.shots) ? existing.shots : [];
+    const existingCharacters =
+      existing && Array.isArray(existing.characters) ? existing.characters : [];
+    const shots = Array.isArray(production.shots)
+      ? inheritDerivedFields(
+          production.shots,
+          existingShots,
+          SHOT_DERIVED_FIELDS,
+        )
+      : production.shots;
+    const characters = Array.isArray(production.characters)
+      ? inheritDerivedFields(
+          production.characters,
+          existingCharacters,
+          CHARACTER_DERIVED_FIELDS,
+        )
+      : production.characters;
     await productionRepository.upsertForUser(user.id, {
       id: project,
       title:
@@ -75,8 +102,8 @@ export async function PUT(req: NextRequest) {
           ? production.scriptMarkdown
           : undefined,
       scenes: production.scenes,
-      characters: production.characters,
-      shots: production.shots,
+      characters,
+      shots,
       progress: production.progress,
     });
     return NextResponse.json({ ok: true });
