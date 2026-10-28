@@ -475,6 +475,38 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     expect(pnpmJsEntry(dir)).toBe(mjs);
   });
 
+  it("bin 指向 Corepack 的**占位文件**（首行是 `#` 注释）：不算入口，改用 bin/pnpm.mjs", () => {
+    /* 本机现场（ISSUE #2597）：`%LOCALAPPDATA%\node\corepack\v1\pnpm\<ver>\` 里
+     * `package.json` 的 `bin.pnpm` 指向同目录那个 `pnpm` —— 那一份在 `install.js`
+     * 跑过之前只是**占位文本**，第一行是一条 `#` 注释（不是 shebang）。
+     * `executableKind()` 只看「可打印 ASCII」把它判成 `script`，于是选中它 ⇒
+     * 每一条 pnpm 形态的门禁退 1（`SyntaxError`），并被上游误读成「判据红了」。 */
+    const dir = freshDir();
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+    );
+    fs.writeFileSync(
+      path.join(pkgDir, "pnpm"),
+      "# pnpm's native binary replaces this file during installation.\n" +
+        "# Until then this hands over to ./bin/pnpm.mjs.\n",
+    );
+    const mjs = path.join(pkgDir, "bin", "pnpm.mjs");
+    writeExec(mjs, "#!/usr/bin/env node\nprocess.stdout.write('12.4.1');\n");
+    expect(pnpmJsEntry(dir)).toBe(mjs);
+    /* 占位文件**单独**放在落点上时也不能被选中 —— 否则回退那一条 for 根本走不到。 */
+    const bare = freshDir();
+    fs.mkdirSync(path.join(bare, "bin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(bare, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+    );
+    fs.writeFileSync(path.join(bare, "pnpm"), "# not a shebang, not JS\nfoo\n");
+    expect(pnpmJsEntry(bare)).toBeNull();
+  });
+
   it("落点自己就是那个包（corepack 的 <ver> 目录）：也算数", () => {
     /* `corepack enable` 之后 PATH 上那个 `…/corepack/v1/pnpm/<ver>/` **本身**就是
      * 解开的 pnpm 包根 —— 少了这一形，Windows 上就只剩 `.ps1` 那条路。 */
