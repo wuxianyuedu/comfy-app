@@ -874,6 +874,17 @@ Windows 上 corepack 那三个垫片里**只有 `.ps1` 起得来**，于是「�
 2. **直接可执行**（§2.1.1 的候选表，`.ps1` 除外）。
 3. **`.ps1` 经宿主** —— 前两段都拿不到形态时的出口。
 
+⚠️ **这一簇必须住在一个文件里**，别把它拆成 `pnpm-js-entry.ts` 那种"更清爽"的形态：
+`executable-resolve.ts` 在 `tests/esm-cross-host-imports.test.ts` 的跨宿主清单里
+（`shell.mjs` 静态 import 它），而那条链要求**每个节点都是叶子**（只 import 同批清单内
+的模块）。判"这份文件能不能被 node 起"的唯一实现是那边的 `executableKind()`，所以拆出去
+的那一半必然要回 import 它 —— 要么成静态依赖环（环上按声明顺序取值，`executableKind()`
+可能在第一次被调用时仍是未初始化绑定），要么那份模块不是叶子、**整条链在加载阶段就
+`ERR_MODULE_NOT_FOUND`**。后者实测过：`shell.mjs` 拷进临时仓库的那些用例（`check-reformat-only`
+/ `dependency-audit` / `linux-env-bootstrap`）加两份真加载用例，4 个文件 20 条一起红，而
+报错读起来跟本判据毫无关系。文件长度这一侧由 R5 那 900 行顶着 —— 要挤出空间就压注释，
+不要把判据搬出去。
+
 `viaHost` 的语义跟着收口：判据是「**真正要 spawn 的那个文件是不是宿主**」，
 不是「它等不等于 `candidate`」。走 JS 入口时 `command` 是 `process.execPath`、
 `candidate` 是落点目录，两者本来就不相等 —— 用旧式子会把它读成「经宿主」，
