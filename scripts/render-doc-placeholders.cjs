@@ -16,6 +16,9 @@
  * 用法（三种档，都共用 `renderDocContent()` 这一份「源 → 生成物」计算）：
  *
  *   · `pnpm doc:render`（写入）—— 人的动作，写完照常一并提交；
+ *   · `pnpm doc:render -- --only docs/standards/x.md[,…]`（**只写点名那几份**）——
+ *     满足 D0「文档源 ⇄ 生成态镜像同批」时用它：全量那一档会无条件重生成**所有**镜像，
+ *     于是别人留在 HEAD 上的陈旧镜像会被顺带改脏进自己这批（ISSUE #2527）；
  *   · `--check`（只比对不写入）—— **平台侧 `.cnb.yml` 的「生成态文档与源同步」**在用
  *     （ISSUE #1975 起；此前挂在 `.githooks/pre-commit` 的 D 组）；
  *   · `--check --autofix` —— 同一份判定，但**红了就地重渲染、再判一次**（ISSUE #1981）。
@@ -118,18 +121,34 @@ function normalizeEol(text) {
  * `--autofix` 复用的正是它（判定红之后的修复动作 = 跑一遍写入模式）——
  * 「修法」与「写入模式」由同一份实现承担，不另写一条只会漂移的修复路径。
  */
-function writeAll() {
+function writeAll(onlyList) {
   const map = buildPlaceholderMap();
   if (!map.size) {
     console.error("[doc:render] 未找到任何占位符事实，无法生成。");
     process.exit(1);
   }
 
+  /* `--only` 的名单先对账再生成：**认不出的名字必须当场停**，否则「以为只写了自己那份、
+   * 实际一个都没写」与「写完了」在日志里同形（那是本仓最贵的一类静默不落地）。 */
+  let targets = SCOPED_DOCS;
+  if (onlyList && onlyList.length > 0) {
+    const scoped = new Set(SCOPED_DOCS);
+    const unknown = onlyList.filter((item) => !scoped.has(item));
+    if (unknown.length > 0) {
+      console.error(
+        `[doc:render] --only 里有不在 SCOPED_DOCS 的名字：${unknown.join(", ")}\n` +
+          `[doc:render]   可写的源一共 ${SCOPED_DOCS.length} 份：${SCOPED_DOCS.join(", ")}`,
+      );
+      process.exit(1);
+    }
+    targets = onlyList;
+  }
+
   const outDir = path.join(ROOT, GENERATED_DOCS_DIR);
   fs.mkdirSync(outDir, { recursive: true });
 
   let generated = 0;
-  for (const docRel of SCOPED_DOCS) {
+  for (const docRel of targets) {
     if (!exists(docRel)) {
       console.warn(`[doc:render] 跳过不存在的编辑文档：${docRel}`);
       continue;
@@ -141,7 +160,11 @@ function writeAll() {
   }
 
   console.log(
-    `[doc:render] ✓ 已生成 ${generated} 份原文文档到 ${GENERATED_DOCS_DIR}/。`,
+    `[doc:render] ✓ 已生成 ${generated} 份原文文档到 ${GENERATED_DOCS_DIR}/` +
+      (targets.length < SCOPED_DOCS.length
+        ? `（--only：全量是 ${SCOPED_DOCS.length} 份，这一批只写了 ${targets.length} 份）`
+        : "") +
+      "。",
   );
   return generated;
 }
@@ -262,12 +285,36 @@ function checkOrAutofix() {
   return false;
 }
 
-const ARGS = new Set(process.argv.slice(2));
+const RAW_ARGS = process.argv.slice(2);
+const ARGS = new Set(RAW_ARGS);
 const AUTOFIX = ARGS.has("--autofix");
+/**
+ * `--only <源相对路径[,…]>`（可重复）：**只写点名那几份**。
+ *
+ * 存在的理由（ISSUE #2527）：本脚本的全量档是**无条件**重生成所有镜像 —— 于是「按 D0 那格
+ * 的要求带上自己那份镜像」这个动作，会顺带把别人留在 HEAD 上的陈旧镜像一起改掉
+ * （实测一例：改 1 份规范、`doc:render` 带出另一份镜像的 126 行整表重排）。
+ * 那两个方向各自要有人答：`--only` 答「我这批该写哪几份」，`--check` 答「全量现在漂了谁」。
+ */
+const ONLY = RAW_ARGS.reduce((acc, arg, index) => {
+  if (arg === "--only") {
+    const next = RAW_ARGS[index + 1] ?? "";
+    for (const item of next.split(",")) {
+      const trimmed = item.trim();
+      if (trimmed !== "") acc.push(trimmed);
+    }
+  } else if (arg.startsWith("--only=")) {
+    for (const item of arg.slice("--only=".length).split(",")) {
+      const trimmed = item.trim();
+      if (trimmed !== "") acc.push(trimmed);
+    }
+  }
+  return acc;
+}, []);
 
 if (ARGS.has("--check")) {
   const ok = AUTOFIX ? checkOrAutofix() : runCheck().ok;
   if (!ok) process.exit(1);
 } else {
-  writeAll();
+  writeAll(ONLY);
 }
