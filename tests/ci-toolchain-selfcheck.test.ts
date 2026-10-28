@@ -1173,6 +1173,73 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
  * `whichCommand()` 同一套；下判的是「`.ps1` 这一形态能不能被它找到并给出
  * 可 spawn 的命令」。
  */
+/**
+ * 工具链自证那一格与主判据的**形态选择必须一致**（ISSUE #2562）。
+ *
+ * `findPnpm()` 刻意不 import 仓库内模块（理由见文件头：它要能在「Node 模块链还没被
+ * 证明可用」的机器上给出可读输出），所以「包真身 JS 入口优先」这一条在两边各有一份
+ * 实现。两份漂移的形态是**静默的**：一条链走 `process.execPath` + 入口，另一条继续走
+ * PowerShell 宿主 —— 两边都绿，只是其中一边每跑一条命令都付一次宿主冷启动。
+ */
+describe("工具链自证：pnpm 优先跑包真身的 JS 入口（ISSUE #2562）", () => {
+  /** 造一个「只有垫片 + 包真身」的落点（Windows 现场的形状）。 */
+  function makePnpmDropIn(opts: { bin: unknown; entryName: string }) {
+    const dir = mkdtempSync(path.join(tmpdir(), "pnpm-js-entry-"));
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", version: "12.4.1", bin: opts.bin }),
+    );
+    const entry = path.join(pkgDir, opts.entryName);
+    writeFileSync(entry, '#!/usr/bin/env node\nprocess.stdout.write("12.4.1\\n");\n');
+    // PATH 上那三个垫片（Node 一个都起不来）
+    writeFileSync(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
+    writeFileSync(path.join(dir, "pnpm.CMD"), "@ECHO off\r\n");
+    writeFileSync(path.join(dir, "pnpm.PS1"), "Write-Output '12.4.1'\n");
+    return { dir, entry };
+  }
+
+  it("垫片都在、包真身也在：选中 node + 入口，而不是 `.ps1` 宿主", () => {
+    const { dir, entry } = makePnpmDropIn({
+      bin: "./bin/pnpm.cjs",
+      entryName: "bin/pnpm.cjs",
+    });
+    const r = findPnpm({
+      platform: "win32",
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      // 宿主**在**：这一格要证明的是「即使宿主可用也不走它」
+      host: () => "/host/pwsh.EXE",
+      probeRun: (cmd, args) => ({ command: cmd, args, out: "12.4.1" }),
+    });
+    expect(r.ok).toBe(true);
+    expect(r.command).toBe(process.execPath);
+    expect(r.prefixArgs).toEqual([entry]);
+    expect(r.out).toBe("12.4.1");
+  });
+
+  it("`bin` 指向原生二进制时改用同包的 Corepack 入口（bin/pnpm.mjs）", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "pnpm-js-entry-native-"));
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+    );
+    writeFileSync(path.join(pkgDir, "pnpm"), Buffer.from([0x4d, 0x5a, 0x90, 0x00]));
+    const mjs = path.join(pkgDir, "bin", "pnpm.mjs");
+    writeFileSync(mjs, '#!/usr/bin/env node\nprocess.stdout.write("12.4.1");\n');
+    const r = findPnpm({
+      platform: "win32",
+      env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      host: () => "/host/pwsh.EXE",
+      probeRun: (cmd, args) => ({ command: cmd, args, out: "12.4.1" }),
+    });
+    expect(r.command).toBe(process.execPath);
+    expect(r.prefixArgs).toEqual([mjs]);
+  });
+});
+
 describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
   /** 造一个「只有某个候选在盘上」的注入现场。 */
   const winEnv = (dir: string): Record<string, string | undefined> => ({
@@ -2643,51 +2710,64 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     },
   );
 
-  it("**断了接着来**：已落盘的前缀不被重下（第二次调用从半路接）", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-resume-"));
-    const dest = path.join(dir, "x.bin");
-    try {
-      /* 第一次：只在盘上放前 64 KiB（模拟「上一次走到一半就被掐了」）。 */
-      writeFileSync(dest, Buffer.alloc(64 * 1024, 5));
-      const TOTAL = 128 * 1024;
-      await withStallingLink(TOTAL, 16 * 1024, async (base) => {
-        /** @type {number[]} */
-        const offsets: number[] = [];
-        const res = fetchUrlResumable(`${base}/x.zip`, dest, {
-          chunkBytes: 64 * 1024,
-          chunkTimeoutMs: 700,
-          retries: 2,
-          fetchChunk: (
-            /** @type {string} */ url,
-            /** @type {string} */ d,
-            /** @type {number} */ offset,
-            /** @type {number} */ size,
-            /** @type {number} */ timeoutMs,
-            /** @type {{probeOnly?: boolean}} */ opts = {},
-          ) => {
-            /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
-             * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
-            if (!opts.probeOnly) offsets.push(offset);
-            return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);
-          },
+  /* 这一格的墙钟成本同样 = **停顿的片数 × `chunkTimeoutMs`**（同上面那一格），而它没有
+   * 自己的预算登记 ⇒ 用的是全局 `testTimeout` 30s。「已落盘 64 KiB / 整包 128 KiB」这个
+   * 用量决定了它要退两轮（64 KiB → 32 KiB → 16 KiB），从半路接时 16 KiB 一片正好 8 片、
+   * 每片 2 次 × 700ms ⇒ 本机空载就 **11.2s**，负载下的平台机器直接撞上 30s 那一档
+   * （`cnb-7t8-1k60klj0p` 的「受影响用例」一格，唯一一条红）。
+   * 处置与上一格同一形状：**先降成本**（`chunkTimeoutMs` 700ms → 200ms，判据一字未改 ——
+   * 这条判的是「第一次请求的偏移没有回到 0」「已落盘的前缀没被覆盖」，与超时是 700 还是
+   * 200 无关；片数与内容断言照样量得到），**再登记预算**（120s，与同一 describe 里那些
+   * 「真起子进程」的格同档）。§11.13 明令禁止的是拿预算换绿，不是禁止登记量到的成本。 */
+  it(
+    "**断了接着来**：已落盘的前缀不被重下（第二次调用从半路接）",
+    { timeout: 120_000 },
+    async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-resume-"));
+      const dest = path.join(dir, "x.bin");
+      try {
+        /* 第一次：只在盘上放前 64 KiB（模拟「上一次走到一半就被掐了」）。 */
+        writeFileSync(dest, Buffer.alloc(64 * 1024, 5));
+        const TOTAL = 128 * 1024;
+        await withStallingLink(TOTAL, 16 * 1024, async (base) => {
+          /** @type {number[]} */
+          const offsets: number[] = [];
+          const res = fetchUrlResumable(`${base}/x.zip`, dest, {
+            chunkBytes: 64 * 1024,
+            chunkTimeoutMs: 200,
+            retries: 2,
+            fetchChunk: (
+              /** @type {string} */ url,
+              /** @type {string} */ d,
+              /** @type {number} */ offset,
+              /** @type {number} */ size,
+              /** @type {number} */ timeoutMs,
+              /** @type {{probeOnly?: boolean}} */ opts = {},
+            ) => {
+              /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
+               * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
+              if (!opts.probeOnly) offsets.push(offset);
+              return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);
+            },
+          });
+          expect(res.ok, "接不上").toBe(true);
+          expect(readFileSync(dest).length).toBe(TOTAL);
+          expect(
+            Math.min(...offsets),
+            "第一次请求的偏移回到了 0 —— 已落盘的那 64 KiB 被重下了（那就不是「续传」）",
+          ).toBeGreaterThanOrEqual(64 * 1024);
+          expect(
+            readFileSync(dest)
+              .subarray(0, 64 * 1024)
+              .every((b) => b === 5),
+            "已落盘的前缀被后下的字节覆盖了",
+          ).toBe(true);
         });
-        expect(res.ok, "接不上").toBe(true);
-        expect(readFileSync(dest).length).toBe(TOTAL);
-        expect(
-          Math.min(...offsets),
-          "第一次请求的偏移回到了 0 —— 已落盘的那 64 KiB 被重下了（那就不是「续传」）",
-        ).toBeGreaterThanOrEqual(64 * 1024);
-        expect(
-          readFileSync(dest)
-            .subarray(0, 64 * 1024)
-            .every((b) => b === 5),
-          "已落盘的前缀被后下的字节覆盖了",
-        ).toBe(true);
-      });
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("取不到总长时如实说「交给老路」，且一个字节都不落盘", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-nolen-"));

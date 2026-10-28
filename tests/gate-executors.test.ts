@@ -412,3 +412,277 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     }
   });
 });
+
+/**
+ * ④ 入口级登记要验（ISSUE #2530）。
+ *
+ * 这一层存在的理由：`hasExecutor()` 按 **basename** 比，所以「同一份脚本的两个入口」
+ * 在账上塌成一个 —— 而这两档可能判的根本不是同一件事（#2385 的现场：钩子里跑的是
+ * `--staged` 那一窄档，硬规则 25 说的「开工前跑一次」判的是整个 ②）。
+ * 用例钉四个方向：登记了就要在写明的执行者里真找得到那行；**无旗标那一形不许被带旗标的那行
+ * 冒充**（那是塌成的另一种写法）；转述型包装器把别人的旗标算到自己头上也不行；
+ * 台账条目自己不许空着（`judges` 缺失 / 只登记一形 / 脚本已改名）。
+ */
+describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #2530）", () => {
+  /** 临时区里那份判据脚本本体（它只要名字在 `check-` 族里就进扫描面）。 */
+  const PROBE = "check-probe-entry.cjs";
+  const withProbe = (repo: { write: (p: string, s: string) => void }) =>
+    repo.write(
+      `scripts/${PROBE}`,
+      `#!/usr/bin/env node\n// @ts-nocheck -- 探针\nconsole.log("entry");\nprocess.exit(0);\n`,
+    );
+  const ledgerWith = (entrypoints: unknown) =>
+    JSON.stringify({ onDemand: {}, entrypoints });
+
+  test("两形都真有那行命令 ⇒ 不报入口问题（计数那一行由真仓库那条验）", ({
+    repo,
+  }) => {
+    withProbe(repo);
+    repo.write(
+      ".githooks/pre-commit",
+      '  run "窄档" node scripts/' + PROBE + " --staged\n",
+    );
+    repo.write(
+      "package.json",
+      JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }),
+    );
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          {
+            flags: ["--staged"],
+            judges: "只判动了输入面的那一次",
+            executors: [".githooks/pre-commit"],
+          },
+          {
+            flags: [],
+            judges: "整档全判（开工前那一档）",
+            executors: ["package.json"],
+          },
+        ],
+      }),
+    );
+    const { output } = repo.run();
+    /* 临时区里**其它**拷进来的判据必然没有执行者（夹具刻意不放 `.githooks/` 等来源），
+     * 所以整条一定红 —— 这里要断言的不是退码，而是「入口那一层没有贡献任何一条红」。 */
+    expect(output).not.toContain("登记了那一形");
+    expect(output).not.toContain("没写「它判的是什么」");
+    expect(output).not.toContain("一形就别登记");
+  });
+
+  test("登记的某一形在执行者里没有那行命令 ⇒ 红并点名那一形", ({ repo }) => {
+    withProbe(repo);
+    repo.write(
+      ".githooks/pre-commit",
+      '  run "窄档" node scripts/' + PROBE + " --staged\n",
+    );
+    repo.write(
+      "package.json",
+      JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }),
+    );
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          {
+            flags: ["--nope"],
+            judges: "那一形其实没被接上",
+            executors: [".githooks/pre-commit"],
+          },
+          {
+            flags: [],
+            judges: "整档全判",
+            executors: ["package.json"],
+          },
+        ],
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code, "登记的形没有执行者必须阻断").toBe(1);
+    expect(output).toContain("--nope");
+    expect(output).toContain(".githooks/pre-commit");
+  });
+
+  test("「无旗标那一形」不许被带旗标的那行冒充（塌成的另一种写法）", ({
+    repo,
+  }) => {
+    withProbe(repo);
+    // 唯一的一行调用带着 --staged：窄档确实有人跑，宽档（无旗标）没有。
+    repo.write(
+      ".githooks/pre-commit",
+      '  run "窄档" node scripts/' + PROBE + " --staged\n",
+    );
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          {
+            flags: ["--staged"],
+            judges: "只判动了输入面的那一次",
+            executors: [".githooks/pre-commit"],
+          },
+          {
+            flags: [],
+            judges: "整档全判（这一形其实没人跑）",
+            executors: [".githooks/pre-commit"],
+          },
+        ],
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code, "无旗标那一形被 --staged 那行冒充 ⇒ 必须红").toBe(1);
+    expect(output).toContain("(无旗标)");
+  });
+
+  test("转述型包装器：`--` 之后是别人的命令，那些旗标不算这一形", ({
+    repo,
+  }) => {
+    withProbe(repo);
+    /* 现场形状（`ci-cp936-exit.mjs -- node 别的脚本 --json`）：包装器把真命令跟在
+     * 一个独立的 `--` 之后。按整行收旗标的话，包装器会被数出「--json 那一形」，
+     * 而它自己从没带过那个旗标 —— 入口台账就会去要求一堆不存在的登记。
+     * 所以这里探针是**外层**：`--` 之前没有旗标 ⇒ 无旗标那一形认得到；
+     * 而登记 `--json` 那一形必须认不到。 */
+    repo.write(
+      ".cnb.yml",
+      `      转述=node scripts/${PROBE} -- node scripts/inner.cjs --json\n`,
+    );
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          {
+            flags: [],
+            judges: "被包装器转述的那一形（自己不带旗标）",
+            executors: [".cnb.yml"],
+          },
+          {
+            flags: ["--json"],
+            judges: "这一形并没有人跑",
+            executors: [".cnb.yml"],
+          },
+        ],
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code, "--json 那一形不该被算成有执行者").toBe(1);
+    expect(output, "无旗标那一形该被认出来（不该连它一起红）").not.toContain(
+      "(无旗标)",
+    );
+    expect(output).toContain("--json");
+  });
+
+  test("台账条目自己不许空着：没写 judges ⇒ 红", ({ repo }) => {
+    withProbe(repo);
+    repo.write("package.json", JSON.stringify({ scripts: { a: "x" } }));
+    repo.write(
+      `scripts/.gate-executor-ledger.json`,
+      ledgerWith({
+        [PROBE]: [
+          { flags: [], judges: "", executors: ["package.json"] },
+          { flags: ["--wide"], judges: "另一形", executors: ["package.json"] },
+        ],
+      }),
+    );
+    repo.write(
+      "package.json",
+      JSON.stringify({
+        scripts: { a: `node scripts/${PROBE}`, b: `node scripts/${PROBE} --wide` },
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code, "空 judges 等于没登记").toBe(1);
+    expect(output).toContain("没写「它判的是什么」");
+  });
+
+  test("只登记一形 ⇒ 红（入口这层的理由就是「多形判的不同」）", ({ repo }) => {
+    withProbe(repo);
+    repo.write(
+      "package.json",
+      JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }),
+    );
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [{ flags: [], judges: "只有一形", executors: ["package.json"] }],
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code).toBe(1);
+    expect(output).toContain("一形就别登记");
+  });
+
+  test("登记了脚本已不在的入口 ⇒ 红（与 onDemand 同一条反向判据）", ({
+    repo,
+  }) => {
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        "check-already-renamed.cjs": [
+          { flags: [], judges: "x", executors: ["package.json"] },
+          { flags: ["--y"], judges: "y", executors: ["package.json"] },
+        ],
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code).toBe(1);
+    expect(output).toContain("check-already-renamed.cjs");
+  });
+
+  test("本仓库的台账：登记的每一形都真验得过（不是把红留在下一跳）", () => {
+    // 在真仓库根跑：临时区里没有 `.githooks/` / `.cnb.yml` / `package.json` 的**原样**，
+    // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
+    const ledger = JSON.parse(
+      readFileSync(
+        join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
+        "utf8",
+      ),
+    ) as { entrypoints?: Record<string, Array<{ flags?: string[] }>> };
+    const entrypoints = ledger.entrypoints ?? {};
+    const forms = Object.values(entrypoints).reduce(
+      (n, list) => n + list.length,
+      0,
+    );
+    expect(forms, "入口这层一条都没登记，就是 #2530 没办").toBeGreaterThan(0);
+    const output = execFileSync(
+      process.execPath,
+      [join(REPO_ROOT, "scripts", SCRIPT_NAME)],
+      { cwd: REPO_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    // 计数从台账现算，不写死（写死一份就等于再造一条会漂的账）。
+    expect(output).toContain(
+      `入口级登记 ${Object.keys(entrypoints).length} 份 ${forms} 形`,
+    );
+  });
+
+  test("--update 不许把入口那一半抹掉", ({ repo }) => {
+    withProbe(repo);
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          { flags: [], judges: "整档", executors: ["package.json"] },
+          { flags: ["--staged"], judges: "窄档", executors: ["package.json"] },
+        ],
+      }),
+    );
+    repo.write(
+      "package.json",
+      JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }),
+    );
+    const { code, output } = repo.run(["--update"]);
+    expect(output, output).toContain("台账已重写");
+    expect(code).toBe(0);
+    const after = JSON.parse(
+      readFileSync(
+        join(repo.dir, "scripts", ".gate-executor-ledger.json"),
+        "utf8",
+      ),
+    ) as { entrypoints?: Record<string, unknown[]> };
+    expect(
+      after.entrypoints?.[PROBE]?.length,
+      "--update 之后入口条目必须原样还在",
+    ).toBe(2);
+  });
+});

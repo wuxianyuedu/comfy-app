@@ -32,7 +32,7 @@ import process from "node:process";
 import path from "node:path";
 
 import { orchestratePnpm, preparePnpm, probePnpm } from "./launcher-core/corepack.mjs";
-import { commandInvocation, pnpmInvocation, powershellHost } from "./launcher-core/shell.mjs";
+import { pnpmInvocation, powershellHost } from "./launcher-core/shell.mjs";
 import { checkNodeModules } from "./launcher-core/worktree.mjs";
 import {
   collectDependencyFloors,
@@ -195,11 +195,16 @@ say("[OK]  ", `pnpm 可用：${result.probe.version}（${result.probe.command}�
 // 「本机版本为什么是 10.34.5」成了无解的问题（ISSUE #576 第四轮）。两件事分开列：
 // 选中的文件 = PATH 上命中的那个；实际命令 = 探测时它究竟怎么被起起来。
 if (result.probe.command) {
-  const invocation = commandInvocation(result.probe.command, ["-v"]);
-  const viaHost = invocation.command !== result.probe.command;
+  /* 判据只有一处：`pnpmInvocation()` 的 `viaHost` 回答「这一跳经不经宿主」，
+   * 而它同时给出**包真身 JS 入口**那条路（ISSUE #2562：`process.execPath` + 入口，
+   * 全平台同一条、不要宿主）。此前这里按「`command !== candidate`」自己判一次宿主，
+   * 那条式子对 JS 入口恒为真 —— 会把它印成「经宿主执行：node …, 而一个宿主也没有」。 */
+  const invocation = pnpmInvocation(["-v"]);
   say("[INFO]", `选中的 pnpm：${result.probe.command}`);
-  if (viaHost) {
-    say("[INFO]", `经宿主执行：${invocation.command} ${invocation.prefixArgs.join(" ")} → ${result.probe.command}`);
+  if (invocation?.viaHost) {
+    say("[INFO]", `经宿主执行：${invocation.command} ${invocation.args.join(" ")} → ${invocation.candidate}`);
+  } else if (invocation && invocation.command === process.execPath) {
+    say("[INFO]", `经 JS 入口执行：${invocation.command} ${invocation.args.join(" ")}`);
   }
 }
 if (result.repaired || result.tip) say("[INFO]", result.tip);

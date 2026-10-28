@@ -109,6 +109,11 @@ const config = {
   // lib/typescript.js API）；类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证。
   experimental: {
     useTypeScriptCli: false,
+    // #2542 第一格：Turbopack 插件运行时从默认的 childProcesses 换成 workerThreads
+    // （Next 16.4.3 config-shared.d.ts L691：'workerThreads' | 'childProcesses' |
+    // 'forceWorkerThreads'，默认 childProcesses）。动机是子进程冷启开销：每个插件
+    // 作业起一个真进程（Windows 上进程冷启最贵），换 worker 线程省掉进程冷启与
+    // IPC 序列化。判法见 issue #2542：冷/暖 next build 墙钟前后对比，不达标即回退。
     // #2081 后续（issue #2521）：依赖缓存槽把作业 node_modules 接成指向项目根外的
     // junction，Turbopack 对 next build 硬拒（Symlink ... is invalid, it points out of
     // the filesystem root）。Next 16.4.3 起提供 experimental.turbopackAdditionalRoots，
