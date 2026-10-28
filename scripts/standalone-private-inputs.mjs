@@ -311,10 +311,6 @@ export const RUNTIME_SRC = [
    * 它，缺了同样让整个编排器**加载即断** —— 逐文件放行的语义是「一个都不能少」，
    * 不是「放行了它的父模块就够」。 */
   "lib/process/platform.ts",
-  /* pnpm-js-entry.ts（ISSUE #2562）：`executable-resolve.ts` 的头号依赖 —— pnpm 的包真身
-   * JS 入口判据（`pnpmJsEntry` / `pnpmJsInvocation`）。它同样是被 `.mjs` 静态 import
-   * 的那条链上的一节，缺了同样让编排器**加载即断**；同样走类型擦除。 */
-  "lib/process/pnpm-js-entry.ts",
 ];
 
 /**

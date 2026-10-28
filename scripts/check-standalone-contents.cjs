@@ -220,9 +220,6 @@ const ALLOWED_SRC_FILES = [
   "lib/process/kill-process-tree.ts",
   "lib/process/executable-resolve.ts",
   "lib/process/platform.ts",
-  // pnpm-js-entry.ts（ISSUE #2562）：`executable-resolve.ts` 的头号依赖。
-  // 与剔除侧那份名单**必须同批**改，由 tests/dist-artifact-hygiene.test.ts 核对。
-  "lib/process/pnpm-js-entry.ts",
 ];
 
 /** 该层允许的顶层条目。 */

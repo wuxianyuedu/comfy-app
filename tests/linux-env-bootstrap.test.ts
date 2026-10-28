@@ -84,7 +84,7 @@ function copyScriptWithRelativeClosure(entryRel: string): string {
   /* 落点按**仓库根**相对计算，不是按 `scripts/` 相对（ISSUE #2562 的现场）：这条闭包
    * 从 `scripts/**` 走进了 `src/lib/process/**`（`shell.mjs` 静态 import 那份 `.ts`），
    * 而按 `scripts/` 算相对会得到 `../src/…` —— 拷到的是 `tmp/src/…` 没问题，但
-   * 再往下一层 `src/lib/process/pnpm-js-entry.ts` 的兄弟依赖就按**它自己那份**相对名
+   * 再往下一层 `src/lib/process/platform.ts` 这样的兄弟依赖就按**它自己那份**相对名
    * 解析，落进一个没被建出来的目录里。按仓库根算，临时检出与真检出同形。 */
   const entrySrc = path.join(ROOT, "scripts", entryRel);
   const pending = [entrySrc];
@@ -590,10 +590,7 @@ describe("dev/start 在起 Next 之前预检", () => {
     const processDir = path.join(ROOT, "src", "lib", "process");
     const resolveTo = path.join(tmp, "src", "lib", "process");
     fs.mkdirSync(resolveTo, { recursive: true });
-    /* 名单跟着 `executable-resolve.ts` 的静态 import 走（ISSUE #2562 加了
-     * `pnpm-js-entry.ts`：pnpm 的包真身 JS 入口判据）。少一份的形态与本门禁无关 ——
-     * 它是在**加载阶段**断的，报出来的是一段 ESM 解析栈。 */
-    for (const name of ["executable-resolve.ts", "pnpm-js-entry.ts", "platform.ts"]) {
+    for (const name of ["executable-resolve.ts", "platform.ts"]) {
       fs.copyFileSync(path.join(processDir, name), path.join(resolveTo, name));
     }
     const r = spawnSync(process.execPath, [path.join(scriptsDir, "dev.mjs")], {
