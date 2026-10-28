@@ -425,8 +425,11 @@ async function main() {
 
 if (require.main === module) main();
 
-/** 供测试与 ci-format-fixup.mjs 引用:判据实现共用一份(§12.18),不跑 prettier 的
- * 纯判定入口(main 守卫在,require 本文件不会触发扫描)。 */
+/** 供测试引用:判据实现共用一份(§12.18),不跑 oxfmt 的纯判定入口
+ *  (main 守卫在,require 本文件不会触发扫描)。三个消费方都在 tests/ 下：
+ *  `check-format.test.ts`（判据本体）、`ci-incremental-gates.test.ts`（收窄面 ⇄ 登记表）、
+ *  `coverage-targets-exist.test.ts`（借 `globToRegExp` 同一把尺子）。
+ *  这里曾另有一个消费方 —— 会「就地改文件」的那个外壳，已随 ISSUE #2610 删除。 */
 module.exports = {
   globToRegExp,
   isIgnored,
