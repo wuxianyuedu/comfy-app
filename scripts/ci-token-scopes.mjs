@@ -222,14 +222,71 @@ export const OIDC_PROBE = {
  * `spawnSync` 的十行包装（与 `ci-workspace-probe.mjs` 里那份**刻意不共享**：这一格要能在
  * 「同事刚 clone、还没装依赖」的机器上跑，共用换来的那点重复抵不上这条加载前提）。
  *
+ * ⚠️ **起 `cnb` 不能直接 `spawnSync("cnb", …)`**（ISSUE #2551 的第一跑现场）：
+ * CI 上 14 条探针全部「没拿到答复」，而同一跑的 `PR 失败立案` 好得很 —— 差别就在
+ * 它走的是 `ship-exec.mjs` 的 `cnbSpawn()`。Windows 上 `cnb` 是三个垫片（无扩展名
+ * 那份 node 不认、`cnb.cmd` 在无 shell 下被 Node 直接拒、没有 `cnb.exe`），所以
+ * `spawnSync("cnb")` 失败**不等于**这台机器没有 cnb。
+ *
+ * 出路是那份**已经为 pnpm 解决过同一件事**的唯一实现 `pnpmInvocation(args, {name})`
+ * —— 但本文件刻意**不 import 它**：`ship-exec.mjs` 会把 `ship` 那一族整条加载链拖进来，
+ * 而这一格的前提是「刚 clone 完、还没装依赖的机器上也能跑」。这里只认出 Windows 上
+ * **有** `cnb.ps1` 这一种形态（`shell: false` 下唯一起得来的那份），交 PowerShell 宿主；
+ * 其余平台照旧直接起命令名。判据 `tests/ci-token-scopes.test.ts` 钉住这条接线。
+ *
  * @param {string} cmd
  * @param {string[]} args
  * @returns {{ok: boolean, status: number, out: string}}
  */
 export function run(cmd, args) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  const { command, argv } = invocationFor(cmd, args);
+  const r = spawnSync(command, argv, { encoding: "utf8", windowsHide: true });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, status: r.status ?? -1, out };
+}
+
+/**
+ * 「命令名 + 参数」→ 这台机器上**起得来**的那一形态。
+ *
+ * 只管 `cnb` 一个名字（这一格只起它），其余原样。非 Windows 直接起（与 `ship-exec.mjs`
+ * 的 `cnbSpawn()` 同一结论：那边 `pnpmInvocation` 在 POSIX 上也返回空 prefixArgs）。
+ *
+ * Windows 上的判定顺序照 `usableCommand()` 的既有结论抄一遍**最小面**：先找
+ * `cnb.ps1`（corepack 摆的三个垫片里唯一经宿主起得来的那份），找到就交 PowerShell；
+ * 找不到则退回 `cnb.cmd`（cmd.exe 解释的那一份）；都没有才原样起 —— 那时 `spawn`
+ * 会给一个可读的 ENOENT，读数把它记成「没拿到答复」，不冒充结论。
+ *
+ * ⚠️ 不 import `ship-exec.mjs` 的 `cnbSpawn()`：那会把 `ship` 那一族整条加载链拖进来，
+ * 而这一格的前提是「刚 clone 完、还没装依赖的机器上也能跑」。
+ *
+ * @param {string} cmd
+ * @param {string[]} args
+ * @returns {{command: string, argv: string[]}}
+ */
+export function invocationFor(cmd, args) {
+  if (cmd !== "cnb" || process.platform !== "win32") {
+    return { command: cmd, argv: args };
+  }
+  /** @param {string} name 要查的命令名（带扩展名） @returns {boolean} 在不在 PATH 上 */
+  const onPath = (name) =>
+    spawnSync("where", [name], { encoding: "utf8", windowsHide: true }).status === 0;
+  if (onPath("cnb.ps1")) {
+    return {
+      command: "powershell",
+      argv: [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "cnb.ps1",
+        ...args,
+      ],
+    };
+  }
+  if (onPath("cnb.cmd")) {
+    return { command: "cnb.cmd", argv: args };
+  }
+  return { command: cmd, argv: args };
 }
 
 /**

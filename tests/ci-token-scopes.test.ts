@@ -24,6 +24,7 @@ import {
   PROBES,
   classifyReply,
   formatReadout,
+  invocationFor,
   main,
   probeAll,
 } from "../scripts/ci-token-scopes.mjs";
@@ -277,6 +278,27 @@ describe("main：读数档的退码与「不打凭据」", () => {
     const text = heard.join("\n");
     expect(text).toContain("repo-issue");
     expect(text).not.toContain("repo-manage");
+  });
+});
+
+describe("起 `cnb` 的形态：CI 上那条「全部没拿到答复」的根因", () => {
+  it("POSIX 上原样起（不套宿主、不改参数）", () => {
+    const inv = invocationFor("cnb", ["git", "get-head"]);
+    expect(inv.command).toBe("cnb");
+    expect(inv.argv).toEqual(["git", "get-head"]);
+  });
+
+  it("非 `cnb` 的命令一律原样（这一格只起它，别顺手改了别的调用）", () => {
+    expect(invocationFor("node", ["-v"]).command).toBe("node");
+  });
+
+  it("源码里不许回到裸 spawnSync 起 cnb —— 那是 CI 上 14 条探针全空的根因（ISSUE #2551）", () => {
+    /* Windows 上 `cnb` 是三个垫片，`spawnSync("cnb")` 必 ENOENT / EINVAL，
+     * 而失败形态是「没拿到答复」—— 读数看起来像权限问题，实际是这一格起不来。
+     * 判据读源码：`run()` 必须经 `invocationFor()`。 */
+    const src = readFileSync(SCRIPT, "utf8");
+    expect(src).toContain("invocationFor(cmd, args)");
+    expect(src).not.toMatch(/spawnSync\(cmd,\s*args/);
   });
 });
 
