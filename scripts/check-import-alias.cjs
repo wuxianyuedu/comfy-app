@@ -43,8 +43,6 @@ const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 const SCAN_DIRS = ["src", "e2e"];
 const SOURCE_EXT = /\.(ts|tsx)$/;
 
-/** 别名判据:模块说明符以 `@/` 开头。 */
-const AT_ALIAS = /^(?:\.\.?\/)+.*|@\//;
 const SPEC_PATTERNS = [
   /\bfrom\s*["']([^"']+)["']/g,
   /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,

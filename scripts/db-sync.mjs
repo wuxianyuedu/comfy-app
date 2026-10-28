@@ -21,7 +21,6 @@
 // 是唯一会跑「删列 / 重建表」的那条路，也是唯一一次失误不可逆的时刻，而它此前
 // **零备份**。备份失败**不阻断**同步（那是用户已经确认过的动作），但会把原因讲
 // 出来 —— 让「这次变更万一丢了数据、目前没有退路」这件事至少是可读的。
-import fs from "node:fs";
 import path from "node:path";
 
 import { backupNotice, createBackup } from "./db-backup-core.mjs";
