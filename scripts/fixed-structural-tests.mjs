@@ -674,4 +674,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `tests/spawn-shell-scan.test.ts`（改完静态闸要补阳性对照，ISSUE #2562 缺口 1）
   // 同因，必须固定跑。
   "tests/eslint-gate-canary.test.ts",
+  // 「`src/**` 那一侧的 `import.meta` 只有 `url` 是活的」（ISSUE #2599）：这条读的是
+  // **磁盘文本**（`readdirSync` + 正则扫 `src/**`），不在任何 import 图里 —— 把
+  // `import.meta.dirname` 带进 `src/env.js` 的那笔改动，增量面一条都不会把它带上去。
+  // 而它的表现是「`pnpm build` 整档红在 collect page data」，本地默认档不跑构建
+  // （§13.5.25），于是唯一执行者只剩**每日那一跑**：从落地到被看见隔了一次派发。
+  // 进固定清单 = 这笔改动**当场**红，不再等每日（#2114 那一族的处置方向）。
+  "tests/env-import-meta-shape.test.ts",
 ];
