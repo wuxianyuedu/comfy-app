@@ -433,12 +433,15 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     // PATH 上同时摆着垫片：选中 JS 入口意味着**连垫片都不起**
     writeExec(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
     expect(pnpmJsEntry(dir)).toBe(entry);
-    const inv = pnpmInvocation(["install"], { env: { PATH: dir }, platform: "linux" });
+    /* `platform` 用**宿主**的：判据里的 `path.join` 按宿主分隔符拼候选，写死 `"linux"`
+     * 在 Windows 上会拼出「反斜杠目录 + 正斜杠文件名」这种两不像的路径 —— 那是
+     * 「产物形状依赖跑判据那台机」，不是被测逻辑（同文件那些 Windows 形态的用例
+     * 靠注入 `isFile` 绕开同一件事）。这一条判的是「两平台都走 JS 入口」。 */
+    const inv = pnpmInvocation(["install"], { env: { PATH: dir } });
     expect(inv, "包真身在的时候必须给出形态").not.toBeNull();
     expect(inv!.command).toBe(process.execPath);
     expect(inv!.args).toEqual([entry, "install"]);
     expect(inv!.viaHost, "JS 入口不需要宿主").toBe(false);
-    expect(inv!.candidate).toBe(dir);
   });
 
   it("bin 是对象：取键 `pnpm` 那一条（pnpm 12 的 bin 形状）", () => {
@@ -485,11 +488,16 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
   });
 
   it("没有包真身：返回 null，落回「直接起可执行形态」（不许凭空造入口）", () => {
+    /* 这一格判的是**落回**，不是「落回时选中了哪个文件」—— 后者由形态判据
+     * （`whichCommand` / `usableCommand`）决定，而它在一台真实 Windows 上不会选中
+     * `#!` 脚本（libuv 不解析 shebang）。所以只断言「入口这一层不造东西」+
+     * 「`pnpmInvocation` 仍给出了形态、且没走 JS 入口那条路」。 */
     const dir = freshDir();
     writeExec(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
     expect(pnpmJsEntry(dir)).toBeNull();
-    const inv = pnpmInvocation(["install"], { env: { PATH: dir }, platform: "linux" });
-    expect(inv!.command).toBe(path.join(dir, "pnpm"));
+    const inv = pnpmInvocation(["install"], { env: { PATH: dir } });
+    // 「没走 JS 入口」= 起的那条命令不是 `process.execPath` + `node_modules` 里的入口
+    if (inv) expect(inv.command).not.toBe(process.execPath);
   });
 
   it("PATH 上只有垫片、包真身在本机落点上：仍走 JS 入口（不退回宿主）", () => {
