@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-10-28",
+  "ruleVersion": 1,
+  "note": "脚本档（`tsconfig.scripts.json` 展开的 `**/*.mjs`）里 tsc 报出的存量红，按 `(文件, TS 码)` 记账的**棘轮**，只许降不许升（ISSUE #2524 / 规范 §13.5.14.1）。登记时实测 320 处 / 31 份；合并并行那批 #2585（scripts 的 84 条死代码逐条清零）之后重测 310 处 / 29 份 —— 其中 `TS6133`（声明了没用到）已被那一批当场清零、**账上 0 格**，所以本档从一开始就不给死代码留额度。为什么剩下的不清零：约一半是 `TS7006` 隐式 any 参数（要给 JSDoc 补类型），另一半是 `TS2339` / `TS18048` / `TS2532` 那一族要在启动链与构建链上加守卫的真改动 —— 同批做完等于把「覆盖面收口」押在一份改动最大的 PR 上。逐条清的账是 #2589，读数由 `pnpm check:scripts-types -- --report` 现算。规则版本变了必须同步改脚本常数。",
+  "face": 210,
+  "total": 310,
+  "files": {
+    "e2e/support/fake-comfyui-server.mjs": {
+      "TS7006": 12,
+      "TS7034": 1,
+      "TS7005": 1,
+      "TS2345": 1,
+      "TS2464": 1,
+      "TS7053": 1
+    },
+    "scripts/build-desktop.mjs": {
+      "TS7006": 4,
+      "TS18047": 10,
+      "TS2339": 2
+    },
+    "scripts/check-deps-freshness.mjs": {
+      "TS7006": 8,
+      "TS2322": 2,
+      "TS2345": 2,
+      "TS7034": 1,
+      "TS7005": 2,
+      "TS2339": 5
+    },
+    "scripts/check-merge-parents.mjs": {
+      "TS7006": 2
+    },
+    "scripts/check-merged-side-loss.mjs": {
+      "TS7006": 6,
+      "TS7031": 2,
+      "TS2532": 1
+    },
+    "scripts/check-pending-merge-loss.mjs": {
+      "TS7006": 4,
+      "TS2532": 1
+    },
+    "scripts/check-pnpm-available.mjs": {
+      "TS2345": 1,
+      "TS7006": 4,
+      "TS2532": 2,
+      "TS2339": 1,
+      "TS18048": 1
+    },
+    "scripts/check-ps1-consistency.mjs": {
+      "TS7034": 2,
+      "TS7006": 6,
+      "TS2532": 4,
+      "TS18048": 2,
+      "TS2345": 2,
+      "TS7023": 1,
+      "TS7005": 2
+    },
+    "scripts/ci-probe-lock-readout.mjs": {
+      "TS2353": 1,
+      "TS7006": 15,
+      "TS2532": 2
+    },
+    "scripts/db-migrate.mjs": {
+      "TS7006": 1,
+      "TS18048": 2,
+      "TS2532": 1
+    },
+    "scripts/db-push.mjs": {
+      "TS18048": 1,
+      "TS7006": 1,
+      "TS2322": 1,
+      "TS2339": 4,
+      "TS2488": 1
+    },
+    "scripts/dev.mjs": {
+      "TS7006": 1,
+      "TS2339": 1
+    },
+    "scripts/env-init.mjs": {
+      "TS7006": 2
+    },
+    "scripts/executor-host.mjs": {
+      "TS7006": 5,
+      "TS7034": 2,
+      "TS7005": 5,
+      "TS2339": 1
+    },
+    "scripts/generate-api-docs.mjs": {
+      "TS18048": 4,
+      "TS2339": 2
+    },
+    "scripts/generate-docs.mjs": {
+      "TS7006": 1
+    },
+    "scripts/git-dir-literal-scan.mjs": {
+      "TS7006": 2,
+      "TS7034": 1,
+      "TS7005": 1
+    },
+    "scripts/install-git-hooks.mjs": {
+      "TS7006": 2
+    },
+    "scripts/lib-node-only-scan.mjs": {
+      "TS7006": 19,
+      "TS2532": 1,
+      "TS2345": 1
+    },
+    "scripts/lockfile/diff-cli.mjs": {
+      "TS7006": 1
+    },
+    "scripts/lockfile/lock-diff.mjs": {
+      "TS7006": 22,
+      "TS7034": 2,
+      "TS7005": 2,
+      "TS2532": 1,
+      "TS2538": 2,
+      "TS2339": 1,
+      "TS2739": 1,
+      "TS7053": 2
+    },
+    "scripts/lockfile/render-lock-diff.mjs": {
+      "TS7006": 9,
+      "TS2339": 10,
+      "TS7053": 1
+    },
+    "scripts/merge-changelog-fragments.mjs": {
+      "TS7034": 1,
+      "TS2345": 4,
+      "TS7005": 1,
+      "TS18047": 4,
+      "TS18048": 5,
+      "TS2532": 2,
+      "TS7053": 1,
+      "TS18046": 1
+    },
+    "scripts/merged-side-loss-core.mjs": {
+      "TS7006": 1
+    },
+    "scripts/quality-gate.mjs": {
+      "TS7006": 6,
+      "TS2304": 4,
+      "TS7053": 4,
+      "TS2339": 1
+    },
+    "scripts/setup-comfy-cli-venv.mjs": {
+      "TS7006": 13,
+      "TS2339": 1
+    },
+    "scripts/start.mjs": {
+      "TS2339": 1
+    },
+    "scripts/tw4-canonical-report.mjs": {
+      "TS7006": 14,
+      "TS7023": 1,
+      "TS18048": 1,
+      "TS7053": 2
+    },
+    "scripts/tw4-spacing-canonical.mjs": {
+      "TS7006": 6,
+      "TS2345": 1,
+      "TS18048": 2,
+      "TS7023": 1
+    }
+  }
+}

@@ -13,6 +13,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { taskRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { asRecord } from "~/lib/is-record";
 import {
@@ -36,6 +37,7 @@ import {
   normalizeReviewVerdict,
   normalizeScriptReviewState,
   recordScriptRevision,
+  reviewScoreMean,
   weakScoreEntries,
   type ReviewMode,
   type ReviewVerdict,
@@ -210,19 +212,15 @@ export async function reviewContent(
  * （与文本 `shot.review` 分开存，互不打扰）。输入 = 产物图 + 提示词 + 定妆照 + 景别设定。
  * 没图 / 找不到镜头 → 抛可行动错误（不静默）。
  */
-export async function reviewShotImage(
-  userId: string,
-  projectId: string,
-  shotId: string,
+/**
+ * 评审内核（#2612 自动优选抽出）：给定镜头上下文与**任意一张**图 → 判定。
+ * 无写副作用——调用方决定判定落到哪（原入口写 `shot.imageReview`，优选只取分）。
+ */
+async function scoreShotImage(
+  row: Production,
+  rec: Record<string, unknown>,
+  imageUrl: string,
 ): Promise<ReviewVerdict> {
-  const row = await loadRow(userId, projectId);
-  const shots = listForKind(row, "shot");
-  const rec = findRecord(shots, shotId);
-  if (!rec) throw new Error(`找不到要评审的镜头（id=${shotId}）`);
-  const imageUrl = str(rec, "imageUrl");
-  if (!imageUrl.trim())
-    throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
-
   // 出场角色的生效定妆照（角色一致性对照用）。
   const characterIds = Array.isArray(rec.characterIds)
     ? (rec.characterIds as unknown[]).filter(
@@ -267,11 +265,112 @@ export async function reviewShotImage(
   });
   if (!verdict)
     throw new Error("模型视觉评审返回缺 pass 判据（无法归一成判定）");
+  return verdict;
+}
+
+export async function reviewShotImage(
+  userId: string,
+  projectId: string,
+  shotId: string,
+): Promise<ReviewVerdict> {
+  const row = await loadRow(userId, projectId);
+  const shots = listForKind(row, "shot");
+  const rec = findRecord(shots, shotId);
+  if (!rec) throw new Error(`找不到要评审的镜头（id=${shotId}）`);
+  const imageUrl = str(rec, "imageUrl");
+  if (!imageUrl.trim())
+    throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
+
+  const verdict = await scoreShotImage(row, rec, imageUrl);
   const nextShots = applyImageReview(shots, shotId, verdict);
   await productionRepository.patchContent(userId, projectId, {
     shots: nextShots,
   });
   return verdict;
+}
+
+// ── 自动优选：抽卡 N 选 1（FR-QA-04④ · #2612）──────────────────
+
+/** 单个候选的评分记录；verdict 为 null = 该候选没有产物可评（跳过）。 */
+export interface AutoselectCandidate {
+  taskId: string;
+  imageUrl: string | null;
+  verdict: ReviewVerdict | null;
+}
+
+export interface AutoselectResult {
+  winnerTaskId: string;
+  winnerImageUrl: string;
+  winnerVerdict: ReviewVerdict;
+  candidates: AutoselectCandidate[];
+}
+
+/**
+ * 抽卡优选：对同一镜头的 2~4 个候选任务逐张打分（评审内核），均分最高者为
+ * 赢家（平分取提交序在先者）。**不写 production**——赢家 imageUrl / taskId 由
+ * 客户端经镜头草稿回写（草稿自动保存是镜头内容真值，服务端直写会被反向覆盖）；
+ * 赢家判定另经 `applyImageReview` 落 `shot.imageReview`（与原入口同一落点、
+ * 同受 #2615 记录的工坊覆盖隐患约束）。
+ */
+export async function autoselectShotImage(
+  userId: string,
+  projectId: string,
+  shotId: string,
+  taskIds: string[],
+): Promise<AutoselectResult> {
+  if (taskIds.length < 2 || taskIds.length > 4) {
+    throw new Error("抽卡候选数量须在 2~4 张");
+  }
+  const row = await loadRow(userId, projectId);
+  const shots = listForKind(row, "shot");
+  const rec = findRecord(shots, shotId);
+  if (!rec) throw new Error(`找不到要优选的镜头（id=${shotId}）`);
+
+  const seen = new Set<string>();
+  const candidates: AutoselectCandidate[] = [];
+  for (const taskId of taskIds) {
+    if (seen.has(taskId)) continue;
+    seen.add(taskId);
+    const task = await taskRepository.findByIdWithImages(taskId);
+    if (!task || task.userId !== userId) {
+      throw new Error(`候选任务不存在或不属于当前用户：${taskId}`);
+    }
+    const image = task.images.find((i) => i.isCover) ?? task.images[0];
+    if (!image) {
+      candidates.push({ taskId, imageUrl: null, verdict: null });
+      continue;
+    }
+    const verdict = await scoreShotImage(row, rec, image.localPath);
+    candidates.push({ taskId, imageUrl: image.localPath, verdict });
+  }
+  // 判定与图地址在同一步收窄（predicate），后续消费点不再需要非空断言。
+  const scored = candidates.filter(
+    (
+      c,
+    ): c is AutoselectCandidate & {
+      verdict: ReviewVerdict;
+      imageUrl: string;
+    } => c.verdict !== null && c.imageUrl !== null,
+  );
+  if (scored.length === 0) {
+    throw new Error("所有候选都没有产物可评审（先生成，再优选）");
+  }
+  const winner = scored.reduce((best, c) =>
+    (reviewScoreMean(c.verdict) ?? 0) > (reviewScoreMean(best.verdict) ?? 0)
+      ? c
+      : best,
+  );
+  // 赢家判定落到镜头（与 reviewShotImage 同一落点；字段所有权见 #2615）。
+  const nextShots = applyImageReview(shots, shotId, winner.verdict);
+  await productionRepository.patchContent(userId, projectId, {
+    shots: nextShots,
+  });
+  return {
+    winnerTaskId: winner.taskId,
+    winnerImageUrl: winner.imageUrl,
+    winnerVerdict: winner.verdict,
+    candidates,
+  };
 }
 
 /**

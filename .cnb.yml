@@ -111,7 +111,7 @@
 #
 #   质量门禁        pull_request（不合并就不该结束）
 #   master 合并复核  push（只复核「确实是 PR 合并进来的」，不重跑全套）
-#   每日生产构建     "crontab: 0 0 * * *"（每天 00:00；机器空着、没有并发 PR、
+#   每日生产构建     "crontab: 0 1 * * *"（每天 01:00；机器空着、没有并发 PR、
 #                    **且这台机那时刻醒着**才拿得到的那一跑（出勤实测见 ISSUE #2114）
 #                    —— 全量单测 / 构建 / 全量 E2E 都在这条上，
 #                    口径见 §13.5.23。「今天 master 的 HEAD 行不行」与
@@ -258,7 +258,7 @@
     #     （同一台节点的 `每日单元测试` 长期跑绿，`Python 可用性` / `Python 探针读数` 有读数），
     #     本批一度把它恢复成 PR 档；
     #   · 恢复之后撞上的是另一条**仍然成立**的决定：会自己起一堆子进程的那两档（全量单测、
-    #     `next build`）只在每天 00:00 那一跑（§13.5.21 / #2018）—— 同一台机上并行 PR 会把
+    #     `next build`）只在每天 01:00 那一跑（§13.5.21 / #2018）—— 同一台机上并行 PR 会把
     #     带超时的读数弄成不可信的红，而 `full-suite-run.mjs` 跑绿还要刷 `整档凭证`
     #     （`.full-suite-freshness.json`）：拿一次并发下的绿去刷那张账，比不刷更坏。
     #   · 2026-10-19 把**增量那一档**临时安在本地推送那一跳（`check:premerge` 的
@@ -335,13 +335,22 @@
       类型检查, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 生成态文档与源同步,
-      API 文档生成与自检, 覆盖率上报, 文档引用与权威源一致, core 骨架单一事实源,
-      零消费导出, core 出口纪律与基类纯度, 工作区出处, 重档静态判据
+      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 覆盖率上报,
+      core 骨架单一事实源, 零消费导出, core 出口纪律与基类纯度, 重档静态判据
+    # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
+    # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
+    # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
+    # 也不是「今天的 master 全量健康」（那由每日档判）。撤进来的四格入口与旗标一字未改，
+    # 只是换了档位。`覆盖率上报` 刻意**不**在挪动名单里：它读的是同跑 `受影响用例` 产出的
+    # coverage/lcov.info，push 档不跑测试 ⇒ 挪过去就是「报告不在 → 自己跳过」的静默空转。
+    # 名字在这儿 = 那一格必须一字不差地出现在 `master 合并复核` 流水线里（判据
+    # `tests/no-platform-ci-config.test.ts` 双向核对：缺一格红、多一格红）。
+    COMFYAPP_CI_PUSH_GATES: >-
+      合并形态复核, 安装依赖, 生成态文档与源同步, API 文档生成与自检, 文档引用与权威源一致, 工作区出处
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
     # 而这两问的答案如今分在两处：会自己起一堆子进程的那两档（全量单测、`next build`）
-    # 只在每天 00:00 这一跑，同一台机上并发 PR 会让它们的读数不可信（§13.5.21），
+    # 只在每天 01:00 这一跑，同一台机上并发 PR 会让它们的读数不可信（§13.5.21），
     # 机器空着才是唯一能拿到可信墙钟的时刻。逐条理由与两次决定（#2010 立每日档、
     # 2026-10-18 把构建与单测都收进来）见 §13.5.23。
     # 名字在这儿 = 那一格必须一字不差地出现在 crontab 流水线里（判据
@@ -361,7 +370,7 @@
     #   · 套件里大量用例**真起子进程**（git / node / prettier / PowerShell），超订的那一份
     #     从「等 CPU」变成「等子进程」，形态就是 `Test timed out in 30000ms` 而单跑全绿。
     #
-    # 放到每天 00:00 那一跑，这两个前提同时消失：**没有并发的 PR**、机器是空的，
+    # 放到每天 01:00 那一跑，这两个前提同时消失：**没有并发的 PR**、机器是空的，
     # 而这正是「负载读数不可信」这一族唯一的解法（抬超时预算与降门槛都被 §11.13 / §13.6.4
     # 明令禁止）。代价说在明处：最晚 24 小时才发现 —— 与 `生产构建` 那条是**同一个取舍**
     # （2026-10-18 起两档都只在这条上，PR 上一条都不剩），而本仓已有「每日档有主」那套新鲜度账（`daily-run.mjs` /
@@ -377,7 +386,7 @@
     #
     # ⚠️ **前面五格是前提，不是装饰**：每次构建都是全新 job 目录、`node_modules` 恒不在场
     #   （`工作区复用读数` 两跑实测，形态①）。定时那一跑此前**只有构建那一格**，而
-    #   `artifact-run.mjs` 跑的是 `pnpm run build` —— 它没有安装档就会在 00:00 以
+    #   `artifact-run.mjs` 跑的是 `pnpm run build` —— 它没有安装档就会在 01:00 以
     #   「找不到 next」的形态红。顺序有判据：安装必须先于任何吃 `node_modules` 的格子，
     #   而 `每日浏览器安装` 必须先于 `每日全量E2E`（缺件时 E2E 只红在 launch 那一跳，
     #   指不到真正缺的那一格）。
@@ -483,13 +492,13 @@
 # ── 每日那七格：定时与手动触发**共用这一份**（`.daily-gates` 锚点）────────────
 #
 # 为什么做成锚点而不是两处各写一遍：这条清单现在有**三个触发口** ——
-# ① `"crontab: 0 0 * * *"`（每天 00:00，无人值守）；② `web_trigger_daily`
+# ① `"crontab: 0 1 * * *"`（每天 01:00，无人值守）；② `web_trigger_daily`
 # （人在页面上手点，按钮定义在 `.cnb/web_trigger.yml`）；③ `api_trigger_daily`
 # （CLI / API：`cnb build start-build --event api_trigger_daily`，服务端只认
 # `api_trigger` 前缀，所以那个按钮**点不动**自动化这条路 —— 见下面那格的注释）。
 # 三条跑的是**同一件事**：
 # 「现在就把这份清单跑一遍」。写成几份的时刻就是它们开始各漂的时刻（哪天给每日档加一格、
-# 忘了加到手点那条，「手点一遍每日档」得到的就不是每天 00:00 那一跑）——
+# 忘了加到手点那条，「手点一遍每日档」得到的就不是每天 01:00 那一跑）——
 # §12.12 的孪生形态，只是它长在配置里。判据钉的是「三条解析出来的 stage 名单**逐字相同**
 # 且等于 `COMFYAPP_CI_DAILY_GATES`」（`tests/no-platform-ci-config.test.ts`）。
 #
@@ -584,11 +593,75 @@
   key: formatfix
   cancel-in-progress: true
 
+# ── push 档（`master 合并复核`）的格子：树级校验档 ────────────────────────────
+#
+# 2026-10-28 起扩格（此前整条只有 `合并形态复核` 一格、20~35 秒）。撤进来的四格判的都是
+# 「**合并后的树**一致不一致 / 这次运行的事实是什么」，不是「这次 PR 改了什么」——
+# 那一类留在 PR 档（判据面在 `ci-incremental-gates.mjs` 的登记里逐条写着为什么收窄安全）。
+# 顺序有讲究：
+#   · `合并形态复核` 排最前：形态不对（非合并提交）时后面全部 skipped，
+#     别在没资格的工作区上花 typedoc 的钱；
+#   · `安装依赖` 是前提格：`API 文档生成与自检` 要跑 typedoc，而 push 是全新 job 目录、
+#     `node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
+#     缺了它，这一档会以「找不到 typedoc」的形态红 —— 与每日档当年「找不到 next」同一族。
+#     它**不接槽**（`COMFY_CI_SLOT` 只在 PR 那一格置着，`DAILY_ENV_ONLY_ON_PR` 同款口径）；
+#   · 四格保持 PR 档时的**同一入口、同一旗标、同一 `ifModify`** —— 撤档不等于换判据。
+#     `ifModify` 在 push 事件上的语义由平台按合并提交的差异面算；平台不认时恒跑，
+#     方向是「多跑」不是「漏跑」，安全侧。
+.push-stages: &push_stages
+  - name: 合并形态复核
+    # 这一格曾有「唯一没钉控制台编码」的历史（规范 §13.5.3.9）：补上那层 `$enc=…`
+    # 不改变读数，但让它不依赖「控制台代码页恰好是多少」这个**继承来的**状态。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
+  - name: 安装依赖
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $ErrorActionPreference = "Stop"
+      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
+  - name: 生成态文档与源同步
+    ifModify:
+      - "docs/**"
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
+  - name: API 文档生成与自检
+    # 收窄面（17 条）**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出，
+    # 由 `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、
+    # 而这里没有它 ⇒ 当场红。别在这里手加一条（那正是 ISSUE #2223 的漏判形态）。
+    # ⚠️ 产物面 `docs/api/**` 不在收窄面里（ISSUE #2231）；这一格不带 `--autofix`：
+    # 产物不再进 git，没有「自动修完再提交」的对象，而「自动修 + 再判」正是让
+    # 「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
+    # 判据的形状见 `scripts/check-docs-api.cjs` 的文件头。
+    ifModify:
+      - "src/lib/**"
+      - "src/server/**"
+      - "src/trpc/**"
+      - "typedoc.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "scripts/check-docs-api.cjs"
+      - "scripts/typedoc-run.mjs"
+      - "scripts/db-backup-core.mjs"
+      - "scripts/db-push-core.mjs"
+      - "scripts/db-schema-state.mjs"
+      - "scripts/launcher-core/command-echo.mjs"
+      - "scripts/launcher-core/shell.mjs"
+      - "scripts/launcher-core/worktree.mjs"
+      - "scripts/lockfile/lock-diff.d.mts"
+      - "scripts/lockfile/lock-diff.mjs"
+      - "src/config/custom-nodes.ts"
+      - "src/env.js"
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
+  - name: 文档引用与权威源一致
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
+  - name: 工作区出处
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs
+    timeout: 5m
+
 .daily-gates: &daily_gates
   # ── 每日失败立案：排在**整份清单的最前面**，判的是「上一跑」──────────────────
   #
   # 为什么在这一格（ISSUE #2274）：`check-daily-attendance` 那条判据要有人跑才出结论，
-  # 于是「每天 00:00 那一跑红了」这件事在没人问的日子里等于没发生 —— 而它一红就带下去
+  # 于是「每天 01:00 那一跑红了」这件事在没人问的日子里等于没发生 —— 而它一红就带下去
   # 后面四格整片 `skipped`，其中 `每日单元测试` / `每日全量E2E` 的唯一执行者就在这条链上。
   # 这一格把「红了」自动变成一张单（或在同一格的旧单下追加一条读数），不依赖有人想起来去问。
   #
@@ -869,7 +942,7 @@
   # 所以**两行 env 也必须一起带**：下载根与连接超时是那两次读数换来的
   # （`cnb-gt1-1k513ill4` 起），只镜像命令行不镜像 env 时，「Playwright 换版本的那个
   # 早上」定时那一跑会从默认根去取那 120 MiB —— 而默认根在这台节点上取不到，
-  # 红只在第二天 00:00 出现。镜像判据现在两处都比（命令行 + `env` 的赋值行）。
+  # 红只在第二天 01:00 出现。镜像判据现在两处都比（命令行 + `env` 的赋值行）。
   # 幂等：落点已有那一件时这一格是 1~5s（实测 `cnb-cdt-1k51s6mf1`）。
   # ── 浏览器安装（2026-10-19 起这是**唯一**的执行者：PR 上那一格撤到这里）──
   #
@@ -1005,7 +1078,7 @@
 # ── 单跑口：三档重档各自一条，前提自动带上 ────────────────────────────────
 #
 # 每档两条流水线（手点 + API），两条都引用**同一张整表锚点**：
-# 「单独验一次某一档」此前只能等 00:00 或整档手点，而修完东西想立刻复验一次的人
+# 「单独验一次某一档」此前只能等 01:00 或整档手点，而修完东西想立刻复验一次的人
 # 不该为另外九格付费。六条定义都在文件末尾那个**已有的** `master:` 块里 ——
 # 这里不再开第二个 `master:`（同名顶层键会让 YAML 静默丢掉前一处，crontab 那条
 # 就是这么没的；判据 `topLevelKeys()` 现在也判这件事）。前提集的取证与
@@ -1329,7 +1402,7 @@
 
 # ── 桌面成品包那一档的失败立案（ISSUE #2550）──────────────────────────────────────
 #
-# 这一档为什么也要有：桌包那两个触发口（下面 `crontab: 0 2 * * *` 与 `web_trigger_package`）
+# 这一档为什么也要有：桌包那两个触发口（下面 `crontab: 0 3 * * *` 与 `web_trigger_package`）
 # 此前**只**引了 `*common` —— 没有 `endStages` 立案格。于是 02:00 那一跑红了之后，
 # 知道这件事的唯一办法是去翻构建列表：2026-10-28 那一跑（`cnb-5j8-1k5v8acjd`）红在
 # `打包·壳工具链自证`、后面三格整片 `skipped`，当天没有成品包，而账上一张单都没有。
@@ -1343,7 +1416,7 @@
 #     的跑的保护，今天仍然要留着）；
 #   · 这一档**写不写得动**是另一件事、答案是「写得动」：桌包那一跑挂在 `crontab` /
 #     手点这两个事件上（不在「不可信事件」那一族），而 #2472 / #2462 那两张单就是
-#     `crontab: 0 0 * * *` 那一跑自己建出来的。PR 那一族今天只有 `repo-code:r`
+#     `crontab: 0 1 * * *` 那一跑自己建出来的。PR 那一族今天只有 `repo-code:r`
 #     （#2339），那是平台按事件可信度分配的口径、本仓改不动 ——
 #     与本锚点是两种不同的形状，别拿同一句话概括。
 #
@@ -1824,7 +1897,7 @@
   #
   # ⚠️ 这一格**留在注释形态 = 停用**（名字在 `COMFYAPP_CI_DISABLED_GATES` 里，两处同批才成立）。
   #   本批一度把它取消注释当「重档挪到 CI」的承接者，随后撞上并行会话那条决定：会自己起
-  #   一堆子进程的那两档只在每天 00:00 那一跑（§13.5.21）—— 同一台机上并行 PR 会把带超时的
+  #   一堆子进程的那两档只在每天 01:00 那一跑（§13.5.21）—— 同一台机上并行 PR 会把带超时的
   #   读数变成不可信的红，而它跑绿还要刷 `整档凭证`，拿并发下的绿去刷那张账比不刷更坏。
   #   ⇒ **全量**单测归 `每日单元测试`；**增量**那一档（受影响用例）2026-10-20 起由本文件里的
   #   `受影响用例` 一格执行（跑增量面、不刷整档凭证），本地两个执行者同日撤销。
@@ -2011,57 +2084,18 @@
   #
   # 收窄的形状与理由只有一处出处：`scripts/ci-incremental-gates.mjs` 的 `INCREMENTAL_GATES`
   # （那里逐条写着「它守的是哪份脚本、为什么这条收窄是安全的」）。
-  - name: 生成态文档与源同步
-    ifModify:
-      - "docs/**"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
-  - name: API 文档生成与自检
-    # ⚠️ 这 10 条**不在三根里**，但改它们会改 `docs/api/**`（ISSUE #2223）：typedoc 沿
-    # import 走，而根外的文件里有**被产物引用**的类型 —— `BackupResult` 定义在
-    # `scripts/db-backup-core.mjs`，它出现在 `docs/api/**` 里。面判窄了 = **漏判**，
-    # 而漏判是静默的（这一格被 `ifModify` 跳过，与「判过且通过」在读数上无差别）。
-    # 这份名单**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出
-    # （从 `typedoc.json` 的 `entryPoints` 出发沿静态 import 走），由
-    # `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、
-    # 而这里没有它 ⇒ 当场红。**别在这里手加一条**：加错了没人知道（那正是 #2223）。
-    #
-    # ⚠️ **产物面 `docs/api/**` 不在收窄面里**（ISSUE #2231）：产物不再进 git ⇒ 它既不在
-    # 变更文件清单里、也不会被谁改坏 ⇒ 把它当收窄面只是白占一行。
-    ifModify:
-      - "src/lib/**"
-      - "src/server/**"
-      - "src/trpc/**"
-      - "typedoc.json"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "scripts/check-docs-api.cjs"
-      - "scripts/typedoc-run.mjs"
-      - "scripts/db-backup-core.mjs"
-      - "scripts/db-push-core.mjs"
-      - "scripts/db-schema-state.mjs"
-      - "scripts/launcher-core/command-echo.mjs"
-      - "scripts/launcher-core/shell.mjs"
-      - "scripts/launcher-core/worktree.mjs"
-      - "scripts/lockfile/lock-diff.d.mts"
-      - "scripts/lockfile/lock-diff.mjs"
-      - "src/config/custom-nodes.ts"
-      - "src/env.js"
-    # 这一格现在判的是「**生成一份 + 这份可不可用**」，不是「与源同不同步」——
-    # 产物不再进 git（ISSUE #2231），于是「提交进 git 的那份」不存在了，那个问题
-    # **没有对象**。所以这一格不再带 `--autofix`：没有「自动修完再提交」的对象，
-    # 而「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：
-    # master 上差 9 处而平台报绿）。判据的形状见 `scripts/check-docs-api.cjs` 的文件头。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs
+  # ── 2026-10-28：文档链三格撤到 push 档（树级校验）────────────────────────────
+  # `生成态文档与源同步` / `API 文档生成与自检` / `文档引用与权威源一致` 判的是
+  # 「**合并后的树**」一致不一致，不是「这次改动」⇒ 每次合并判一次就够，不必每个 PR
+  # 各判一遍。三格原文（入口、旗标、`ifModify`）整体搬到 `.push-stages` 锚点
+  # （清单在 `COMFYAPP_CI_PUSH_GATES`，判据双向核对），判据一字未改。
+  # ⚠️ `覆盖率上报` **不挪**：它读的是同跑 `受影响用例` 产出的 coverage/lcov.info，
+  # push 档不跑测试 ⇒ 挪过去是「报告不在 → 自己跳过」的静默空转。
   # 覆盖率上报是**报告型**（它不判任何东西，只把 coverage/lcov.info 交给平台的上报通道；
   # 报告不在时它自己跳过而不判红）。它没有 `ifModify`：它读的不是「本次改动」，
   # 收窄它等于「只在某类改动上才记覆盖率」。
   - name: 覆盖率上报
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
-  # 文档引用与权威源一致：判的是**全库**文档里的引用与权威源（域不是某几个目录），
-  # 收窄成任何子集都是漏判；而它自己只要 0.42s ⇒ 每跑必跑不贵，不挂 `ifModify`。
-  - name: 文档引用与权威源一致
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-doc-references.cjs
-
   # ── 下面这几格**没有自己的 stage**：它们的执行者在别处 ──────────────────────
   #
   # 「停用 ≠ 删除」机制在**页内**的第四种形态（前三种见 `COMFYAPP_CI_DISABLED_GATES`
@@ -2302,11 +2336,11 @@
   # 逻辑不在这里写：与 `工具链自证` / `工作区复用读数` 同一条口径 —— 配置里的逻辑
   # 一条判据都测不到它，判定全部在 `scripts/ci-workspace-provenance.mjs`
   # （`tests/ci-workspace-provenance.test.ts` 判它）。
-  - name: 工作区出处
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs
-    # 秒级（两次 git 调用 + 一次追加写）。给 5m 与 `工作区复用读数` 同款：只是
-    # 「卡死要早报」的量级余量，判据本身远小于它。
-    timeout: 5m
+
+  # ── `工作区出处` 也离开这一档了（2026-10-28，随文档链三格同批）──────────────
+  # 它判的是「这次运行的事实」（哪份源码、谁写的盘上文件），不是「这次改动」——
+  # 与 2026-10-19 撤 `工具链自证` / `Python 可用性` 那批同一条理由（「只判节点/运行
+  # 事实的格子不再每个 PR 都判」）。原文搬到 `.push-stages` 锚点，判据一字未改。
 
   # ── E2E：这一格也离开 PR 了（2026-10-19，被上面那次挪档**逼出来的**，不是新决定）──
   #
@@ -2364,7 +2398,7 @@
   #     「今天没人推」的日子，这些一概看不见。
   #   · 空转的形态是**最贵**的那种：构建链坏了两周而没人推代码，谁都不知道。
   #     PR 上跑那一格的时候，它要等**下一次有人提交**才炸出来，而那时已经很难分清
-  #     是不是他改坏的；撤掉之后看见它的时机换成第二天 00:00 —— 两者都晚，区别是
+  #     是不是他改坏的；撤掉之后看见它的时机换成第二天 01:00 —— 两者都晚，区别是
   #     定时那一跑的归因不用猜（跑的就是 master 的 HEAD，那两周的账全在这一条上）。
   #
   # ── 形态：能机械导出的就与 PR 那条共用，不导出的一字不差地写清楚 ─────────
@@ -2373,8 +2407,8 @@
   #   尤其 `runner.namespace: group` + `tags`：漏掉它这条会静默回落到计费的平台池，
   #   而定时任务是一天一条、**不会有人盯着**的那一类（形态判据见
   #   `tests/no-platform-ci-config.test.ts`：三条流水线的 `<<: *anchor` 引用数必须是 3）。
-  # · 事件键是 `"crontab: 0 0 * * *"`（官方 `zh/build/crontab.md`）：
-  #   平台按 `Asia/Shanghai` 解释，即**每天 00:00**。这个点换过两次：`0 4` →（2026-10-22 上午）
+  # · 事件键是 `"crontab: 0 1 * * *"`（官方 `zh/build/crontab.md`）：
+  #   平台按 `Asia/Shanghai` 解释，即**每天 01:00**。这个点换过两次：`0 4` →（2026-10-22 上午）
   #   `0 2` →（同日业主再拍）`0 0`。
   #   挑 04:00 那句理由是「离有人开工还有几个小时，红了有人在上班时看见」——它漏了半个前提：
   #   **这台机在那个时刻得醒着**（节点就是这台开发笔记本，夜里睡眠是默认状态而不是异常）。
@@ -2407,7 +2441,7 @@
   # 于是它现在是「四格前提（安装 / Python / 建库 / 浏览器）+ 三档重档（单测 / 构建 /
   # 全量 E2E）」—— 也正是 `FRESHNESS_TRACKS` 那三档在平台侧的执行者。前提那几格不是装饰：
   # 每次构建都是全新 job 目录、`node_modules` 恒不在场（`工作区复用读数` 两跑实测，
-  # 形态①），缺了它们这一条会在 00:00 以「找不到 next / 连不上库 / Executable doesn't
+  # 形态①），缺了它们这一条会在 01:00 以「找不到 next / 连不上库 / Executable doesn't
   # exist」的形态红 —— 而它一天只红这一次，等于当天没结论。
   #
   # `node scripts/ci-daily-build.mjs` 就是 `artifact-run.mjs`（同一个判据、同一份记账）
@@ -2431,30 +2465,25 @@ master:
       name: 质量门禁
       stages: *gates
 
-  # 合并后的 push：不重跑全套。合并提交由平台按**已被门禁验过的源分支 SHA**
-  # 生成，不引入新代码；保留的这条是形态复核 —— 落到 master 的必须是 PR 合并
-  # 形态。若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了 PR
-  # 与门禁，那要拦下。
+  # 合并后的 push：**不重跑全套**（全套是 PR 那条的事；「不引入新代码」的前提依旧 ——
+  # 合并提交由平台按**已被门禁验过的源分支 SHA** 生成）。这一档 2026-10-28 起是
+  # 「树级校验档」：形态复核 + 前提安装 + 文档链三格 + 工作区出处，判的是合并后的树
+  # 一致不一致（清单与顺序在 `.push-stages` 锚点 / `COMFYAPP_CI_PUSH_GATES`，
+  # 判据双向核对）。若出现非合并提交（本地 --no-verify 就能做到），说明有变更绕过了
+  # PR 与门禁 —— `合并形态复核` 一格红，失败即停，后面全部 skipped。
   push:
     - <<: *common
       name: master 合并复核
       lock: *lock_push
-      stages:
-        - name: 合并形态复核
-          # ⚠️ 这一格是**唯一**没钉控制台编码的 stage（其余每个 `script` 都以
-          # `$enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc;` 开头）。
-          # 补上它**不改变今天的读数**（抓取端按宿主 ANSI 代码页解，钉什么都被它按
-          # 936 读一遍），但它让这一步不再依赖「控制台代码页恰好是多少」这个**继承
-          # 来的**状态 —— 那正是这台机器上刚刚变过一次的东西（936 → 65001）。
-          script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
+      stages: *push_stages
 
-  # 每天一次的定时任务（官方 `zh/build/crontab.md`）：`0 0 * * *` = 每天 00:00
+  # 每天一次的定时任务（官方 `zh/build/crontab.md`）：`0 0 * * *` = 每天 01:00
   # （平台时区 `Asia/Shanghai`）。分支键必须是**明确的单一分支名** —— 定时任务
   # 不支持 glob，挂多分支会静默失效。所以它挂在 `master:` 下，取的是 master 的 HEAD。
   #
   # ⚠️ 这一条的 stage 清单是 `env.COMFYAPP_CI_DAILY_GATES`（不是上面那份 `GATES`）：
   # 两份清单对应两条不同的事件，混成一份之后「谁在什么时候跑」就再也读不出来了。
-  "crontab: 0 0 * * *":
+  "crontab: 0 1 * * *":
     - <<: *common
       name: 每日生产构建
       lock: *lock_daily
@@ -2463,7 +2492,7 @@ master:
   # ── 桌包那一档的定时口（ISSUE #2503）：02:00，与上面那一条**错开两小时** ──────────
   #
   # 为什么错开、而不是紧接着：这一档会把这台机压到满载（cargo 一段 + WiX `light` 一段，
-  # 而 `src-tauri/target` 不在任何缓存槽里 ⇒ 每跑都是整棵依赖树的冷编译）。00:00 那一跑
+  # 而 `src-tauri/target` 不在任何缓存槽里 ⇒ 每跑都是整棵依赖树的冷编译）。01:00 那一跑
   # 的 `每日单元测试` 是「唯一会因这台机器的负载而红的格子」（业主口径把它排在最后），
   # 两跑叠在一起得到的不是两条结论，是一份不可信的读数（§13.6.4.1「并发在场时墙钟不可读」）。
   #
@@ -2475,13 +2504,13 @@ master:
   # `*package_fail_stage` 是这一档**独有**的那一格 `endStages`（ISSUE #2550：这一档红了
   # 以前没有任何自动立案口）。写法与 `pull_request` 那条同形 —— 两个锚点写在一个合并键里，
   # 拆成两行 `<<:` 是非法 YAML（理由见 `pull_request` 那条同一处注释）。
-  "crontab: 0 2 * * *":
+  "crontab: 0 3 * * *":
     - <<: [*common, *package_fail_stage]
       name: 桌面成品包
       lock: *lock_package
       stages: *package_gates
 
-  # ── 手动触发那一条：与 00:00 那一跑**同一份七格**（按钮在 `.cnb/web_trigger.yml`）──
+  # ── 手动触发那一条：与 01:00 那一跑**同一份七格**（按钮在 `.cnb/web_trigger.yml`）──
   #
   # 为什么要有它：每日档回答的是「master 的 HEAD 今天行不行」，而**想知道答案的人不该
   # 等到下一次定时那一跑** —— 刚合完一笔碰构建链的改动、或夜里那次红的东西修好了想立刻复验时，
@@ -2497,7 +2526,7 @@ master:
   #     在那之后没动过。
   #   · `lock` 与定时那一条**同一把** `*lock_daily`（不是靠 `<<: *common` 落回 `pr-`，
   #     那正是 ISSUE #2114 的第二条死因），所以两条不会同时在同一台机上
-  #     压一遍七格：00:00 那一跑还在跑时手点，会被新一跑掐掉旧的一跑（`cancel-in-progress`）。
+  #     压一遍七格：01:00 那一跑还在跑时手点，会被新一跑掐掉旧的一跑（`cancel-in-progress`）。
   web_trigger_daily:
     - <<: *common
       name: 每日档（手动触发）
@@ -2510,7 +2539,7 @@ master:
   # 改动已经进 master，而自动化这边既打不开那个按钮、服务端也**拒绝**用 CLI 发
   # `web_trigger_daily`（`start-build` 的 `--event` 只认 `api_trigger` 或其前缀，实测 400
   # `Event must be 'api_trigger' or start with 'api_trigger_'.`）。于是「四格依次过」这件事
-  # 的机器证明只能等人手点，或等到第二天 00:00 —— 这两条都不是修法，是把这个洞留给下一个人。
+  # 的机器证明只能等人手点，或等到第二天 01:00 —— 这两条都不是修法，是把这个洞留给下一个人。
   #
   # 与 `web_trigger_daily` 的三点差别，都在这段配置里，不写在注释之外的任何地方：
   #   · **没有按钮声明文件**：那个口靠 `.cnb/web_trigger.yml` 与事件名成对；这一条不需要，

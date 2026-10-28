@@ -31,6 +31,7 @@ import {
   regenerateShot,
   reviewContent,
   reviewScript,
+  autoselectShotImage,
   reviewShotImage,
   reviseScript,
 } from "~/server/agent/review";
@@ -259,6 +260,26 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const markdown = await reviseScript(ctx.user.id, input.projectId);
       return { markdown };
+    }),
+
+  /** 抽卡优选（FR-QA-04④ · #2612）：对同一镜头的 2~4 个候选任务逐张视觉评审，
+   *  均分最高者为赢家。返回赢家与全部候选分数；imageUrl / taskId 由客户端经
+   *  镜头草稿回写（字段所有权见 #2615）。 */
+  autoselectShot: authedProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        shotId: z.string().min(1),
+        taskIds: z.array(z.string().min(1)).min(2).max(4),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return autoselectShotImage(
+        ctx.user.id,
+        input.projectId,
+        input.shotId,
+        input.taskIds,
+      );
     }),
 
   /**

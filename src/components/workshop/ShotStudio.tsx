@@ -4,6 +4,7 @@ import { randomSeed } from "~/lib/comfyui/random-seed";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { useItemAction } from "~/components/ui/use-item-action";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
@@ -11,6 +12,9 @@ import { SelectChip } from "~/components/ui/select-chip";
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
+import { autoselectShot } from "~/lib/production/run-client";
+import { reviewScoreMean } from "~/lib/production/review-types";
+import { fixed } from "~/lib/number-format";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import {
   buildShotNegative,
@@ -234,10 +238,11 @@ export function ShotStudio({
     );
   }
 
-  async function generateShot(shot: Shot): Promise<void> {
+  /** 返回本机任务的 taskId（抽卡优选要收集候选；API 直连与门禁早退为 null）。 */
+  async function generateShot(shot: Shot): Promise<string | null> {
     if (!shot.prompt.trim()) {
       setShotError(shot.id, "提示词为空,请先填写或完成上一阶段提取");
-      return;
+      return null;
     }
     /* 本地通道没有内置模板可回落：必须先在工作流库选好一个生图工作流。
      * 门禁放在入口，避免带着空 workflow id 去拉详情（会得到一条无落点的请求）。 */
@@ -246,7 +251,7 @@ export function ShotStudio({
         shot.id,
         "本地通道需要先在右侧「生成资源」选择一个生图工作流；或切到远端 API 通道",
       );
-      return;
+      return null;
     }
     setShotError(shot.id, undefined);
     patchShot(shot.id, { status: "running" });
@@ -292,6 +297,7 @@ export function ShotStudio({
         );
         patchShot(shot.id, { taskId, status: "running" });
         await runLocalTask(shot.id, taskId);
+        return taskId;
       } else {
         const url = await apiGenerateImage({
           prompt: shot.prompt,
@@ -306,12 +312,49 @@ export function ShotStudio({
           ...shotSizeToRelay(shotSize),
         });
         patchShot(shot.id, { status: "done", imageUrl: url });
+        return null;
       }
     } catch (e: unknown) {
       patchShot(shot.id, { status: "failed" });
       setShotError(shot.id, errorMessage(e, "生成失败"));
+      return null;
     }
   }
+
+  /** 抽卡优选（FR-QA-04④ · #2612）：连发 N 次单镜生成收集候选任务号，
+   *  服务端逐张视觉评审选均分最高者；赢家 imageUrl / taskId / 评审判定
+   *  patch 回镜头草稿（草稿自动保存落 production）。仅本地通道有任务行可评。
+   *  忙标记走 useItemAction（P37 出口），不自己养一条「某一条在忙」。 */
+  const gachaAction = useItemAction();
+  const gachaShot = (shot: Shot, count: number): Promise<void> =>
+    gachaAction.run(shot.id, async () => {
+      const taskIds: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const tid = await generateShot(shot);
+        if (tid) taskIds.push(tid);
+      }
+      if (taskIds.length < 2) {
+        onNotice("有效候选不足 2 张（生成失败或无任务行），无法优选");
+        return;
+      }
+      try {
+        const res = await autoselectShot(projectId, shot.id, taskIds);
+        patchShot(shot.id, {
+          taskId: res.winnerTaskId,
+          imageUrl: res.winnerImageUrl,
+          status: "done",
+        });
+        const summary = res.candidates
+          .map((c) => {
+            const mean = c.verdict ? reviewScoreMean(c.verdict) : null;
+            return `${c.taskId.slice(-4)}：${mean === null ? "无产物" : (fixed(mean, 1) ?? "?")}`;
+          })
+          .join(" / ");
+        onNotice(`优选完成：…${res.winnerTaskId.slice(-4)} 胜出（${summary}）`);
+      } catch (e: unknown) {
+        onNotice(errorMessage(e, "优选失败"));
+      }
+    });
 
   async function generateBatch() {
     if (pending.length === 0) return;
@@ -450,6 +493,8 @@ export function ShotStudio({
               workflowId={workflowId}
               apiReady={apiReady}
               onGenerate={(s) => void generateShot(s)}
+              onGacha={(s, n) => void gachaShot(s, n)}
+              gachaBusy={gachaAction.isBusy(shot.id)}
               onCancel={(s) => void onCancelShot(s)}
               onPromptChange={(id, prompt) => {
                 editedRef.current.add(id);
@@ -499,6 +544,10 @@ interface ShotCardRowProps {
   workflowId: string;
   apiReady: boolean;
   onGenerate: (shot: Shot) => void;
+  /** 抽卡优选（仅本地通道有任务行可评）：连发 N 张后服务端选最优。 */
+  onGacha: (shot: Shot, count: number) => void;
+  /** 本条抽卡进行中（按钮禁用 + 文案）。 */
+  gachaBusy: boolean;
   /** 取消本条进行中的本机任务（有 taskId 才显示按钮）。 */
   onCancel: (shot: Shot) => void;
   /** 提示词被手改：父层记入 editedRef（自动预填不再覆盖）并写回镜头。 */
@@ -514,9 +563,12 @@ function ShotCardRow({
   workflowId,
   apiReady,
   onGenerate,
+  onGacha,
+  gachaBusy,
   onCancel,
   onPromptChange,
 }: ShotCardRowProps) {
+  const [gachaCount, setGachaCount] = React.useState(2);
   return (
     <div
       data-shot-index={shot.index}
@@ -585,6 +637,43 @@ function ShotCardRow({
               ? "重新生成"
               : "生成此镜头"}
         </Button>
+        {channel === "local" && (
+          /* 抽卡优选（FR-QA-04④）：本地通道才有任务行可评；N=连发张数。 */
+          <div
+            role="radiogroup"
+            aria-label="抽卡张数"
+            className="flex items-center gap-1"
+          >
+            {[2, 3, 4].map((n) => (
+              <SelectChip
+                key={n}
+                shape="segment"
+                selected={gachaCount === n}
+                onClick={() => setGachaCount(n)}
+                disabled={gachaBusy || shot.status === "running"}
+                className="text-2xs"
+              >
+                ×{n}
+              </SelectChip>
+            ))}
+          </div>
+        )}
+        {channel === "local" && (
+          <Button
+            variant="secondary"
+            size="xs"
+            onClick={() => onGacha(shot, gachaCount)}
+            disabled={
+              gachaBusy ||
+              shot.status === "running" ||
+              !shot.prompt ||
+              (channel === "local" && !workflowId)
+            }
+            className="h-auto rounded-lg px-3 py-1.5"
+          >
+            {gachaBusy ? "优选中…" : "抽卡优选"}
+          </Button>
+        )}
         {shot.status === "running" && shot.taskId && (
           /* 只对本机任务可取消（API 直连没有可取消的任务 id）：
              点击后 task.cancel 置 CANCELLED，观察循环收终态收尾。 */

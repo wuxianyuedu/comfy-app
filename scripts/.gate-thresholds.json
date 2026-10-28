@@ -231,6 +231,15 @@
       "why": "账本格式的版本戳，不是判红阈值；入账只为「别处新增承重数值时这格不装看不见」。"
     },
     {
+      "file": "scripts/check-scripts-typecheck.cjs",
+      "const": "RULE_VERSION",
+      "value": 1,
+      "unit": "版本戳",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "脚本档棘轮账本（按 (文件, TS 码) 记账）的格式版本戳，不是判红阈值；入账只为「别处新增承重数值时这格不装看不见」。"
+    },
+    {
       "file": "scripts/ship-poll.mjs",
       "const": "POLL_STALL_MAX",
       "value": 10,

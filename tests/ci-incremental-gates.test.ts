@@ -483,28 +483,37 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
   });
 
   it("每条被收窄的 stage 在 .cnb.yml 里都真实存在且能跑（不是登记了一条不存在的）", () => {
-    /* `checkIncrementalGates` 只核对 `ifModify`，不核对「这条 stage 还在不在
-     * `COMFYAPP_CI_GATES` 的顺序清单里」—— 有人把某条 stage 从 GATES 摘掉、
-     * 又把 ifModify 留在原地时，上面几条会一起绿，而配置里多了一段死 YAML。 */
+    /* `checkIncrementalGates` 只核对 `ifModify`，不核对「这条 stage 还在不在哪一份
+     * 顺序清单里」—— 有人把某条 stage 从清单摘掉、又把 ifModify 留在原地时，
+     * 上面几条会一起绿，而配置里多了一段死 YAML。 */
     /* 解析形态与 `tests/no-platform-ci-config.test.ts` 的 `registeredGateOrder` 同构 ——
      * 那里是它的**唯一权威**（本判据只借这份读数核对一行事实，不另立第二份清单定义）。
      * 写成显式两段而不是可选链连写：`?.[1].split()` 在 `noUncheckedIndexedAccess` 下
-     * 会被判成「$1 可能是 undefined」，而它在正则命中时必然存在（tsc 抓不到这层语义）。 */
-    const gateListBody =
-      /^[ \t]*COMFYAPP_CI_GATES:[ \t]*>?-?[ \t]*\r?\n((?:[ \t]+(?!#)\S[^\n]*\r?\n)+)/m.exec(
-        CONFIG,
-      )?.[1];
-    const order =
-      gateListBody === undefined
+     * 会被判成「$1 可能是 undefined」，而它在正则命中时必然存在（tsc 抓不到这层语义）。
+     * 2026-10-28 起核对面是**三份档位清单的并集**（PR / push / 每日）：带 ifModify 的
+     * 格子合法地活在哪个档都行，「死配置」指的是三份里都不在，不是「不在 PR 那份」。 */
+    const folded = (key: string): string[] => {
+      const body =
+        new RegExp(
+          `^[ \\t]*${key}:[ \\t]*>?-?[ \\t]*\\r?\\n((?:[ \\t]+(?!#)\\S[^\\n]*\\r?\\n)+)`,
+          "m",
+        ).exec(CONFIG)?.[1];
+      return body === undefined
         ? []
-        : gateListBody
+        : body
             .split(",")
             .map((n) => n.trim())
             .filter(Boolean);
+    };
+    const order = new Set([
+      ...folded("COMFYAPP_CI_GATES"),
+      ...folded("COMFYAPP_CI_PUSH_GATES"),
+      ...folded("COMFYAPP_CI_DAILY_GATES"),
+    ]);
     for (const gate of INCREMENTAL_GATES) {
       expect(
-        order.includes(gate.name),
-        `\`${gate.name}\` 带着 ifModify，却不在 COMFYAPP_CI_GATES 的顺序清单里（死配置）`,
+        order.has(gate.name),
+        `\`${gate.name}\` 带着 ifModify，却不在 PR / push / 每日任何一份顺序清单里（死配置）`,
       ).toBe(true);
     }
   });
