@@ -85,7 +85,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { asArray, pickBuildForSha } from "./ship-build.mjs";
 import { parseSlug } from "./ship-core.mjs";
@@ -130,7 +129,7 @@ export {
   stageLogExcerpt,
 };
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 把那一格的日志正文归一成一段文本。
@@ -694,7 +693,7 @@ export function main({
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }

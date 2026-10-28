@@ -59,7 +59,6 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
@@ -67,8 +66,8 @@ import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
 import { parseDiffEntries } from "./launcher-core/sync-attribution.mjs";
 import { stripComments } from "./tw4-scan-core.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SELF = fileURLToPath(import.meta.url);
+const HERE = import.meta.dirname;
+const SELF = import.meta.filename;
 const ROOT = path.resolve(HERE, "..");
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

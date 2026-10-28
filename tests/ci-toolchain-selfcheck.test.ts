@@ -30,7 +30,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
@@ -1124,7 +1123,7 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
   it("Windows 分支的每个调用点都带 noExternalAction()", () => {
     /* 只判 **Windows** 分支：POSIX 那条只经 `run` 起包管理器，没有网络与解压
      * 那两截 —— 只注入 `run` 在那里是真的够，判它等于误报。 */
-    const self = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    const self = readFileSync(import.meta.filename, "utf8");
     const calls = [
       ...self.matchAll(/installPython\(\{([\s\S]*?)\n\s{0,6}\}\);/g),
     ].map((m) => m[1] ?? "");
@@ -1564,7 +1563,7 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
     );
     /* 按源码形状钉：末尾那一段里必须有 `process.exit(main())`。
      * 裸 `main();` 正是被吞码的形态 —— 它的表现是「打了未通过、退出码 0」。 */
-    const guard = src.slice(src.indexOf("fileURLToPath(import.meta.url)"));
+    const guard = src.slice(src.indexOf("import.meta.filename"));
     expect(
       /process\.exit\(\s*main\(\)\s*\)/.test(guard),
       "守卫又写成裸 `main();` 了 —— `--python-only` / `--playwright-only` 的 `return 1` 会被吞掉，进程恒退 0",

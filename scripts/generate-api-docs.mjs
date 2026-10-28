@@ -37,11 +37,10 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { DEFAULT_ATTEMPTS, runTypedoc } from "./typedoc-run.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 /** 与 `typedoc.json` 的 `out` 同一个目录。 */
 const DEFAULT_OUT = "docs/api";
 

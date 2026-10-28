@@ -26,8 +26,7 @@
  * `.next/standalone`；被 import 时导出 `stripPrivateInputs(dir)` 供复用。
  */
 import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 /**
  * 不得随分发包出去的开发机私有输入（相对产物根）。
@@ -735,7 +734,7 @@ function pruneNotWhitelisted(absDir, prefix, allowed, removed, onRemoved) {
 
 /** 作为脚本直接执行：清理 `.next/standalone`。 */
 function main() {
-  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const root = join(import.meta.dirname, "..");
   const standalone = join(root, ".next", "standalone");
   if (!existsSync(standalone)) {
     // 产物不存在不是错误：本步骤是 `next build` 的收尾，跳过即可。
@@ -790,5 +789,5 @@ function main() {
 }
 
 const invokedDirectly =
-  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+  process.argv[1] && import.meta.filename === process.argv[1];
 if (invokedDirectly) process.exit(main());

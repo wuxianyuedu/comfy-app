@@ -57,7 +57,6 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   DEP_FILES,
@@ -93,7 +92,7 @@ export {
   SLOT_USED_FILE,
 } from "./ci-cache-slot.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 开关：不打开时本模块一次都不该被调用（见文件头「为什么带开关」）。 */
@@ -636,7 +635,7 @@ export function applySlot(io = {}) {
 
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   applySlot();
   process.exit(0);

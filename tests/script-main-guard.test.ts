@@ -210,16 +210,18 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
 
   it("三个曾经栽在这上面的入口是**跑得动**的（不是靠注释记得）", () => {
     /* 反向钉住「修好了」这一侧：这三份是本次改过的文件，它们都必须带
-     * `fileURLToPath` 的规范化比较。少了它 = 又变回拼串那一形态。 */
+     * `import.meta.dirname` / `import.meta.filename` 的规范化比较（由
+     * `fileURLToPath(import.meta.url)` 迁移而来）。少了它 = 又变回拼串那一形态。 */
     for (const rel of [
       "scripts/ci-toolchain-selfcheck.mjs",
       "scripts/python-probe.mjs",
       "scripts/db-legacy-sweep.mjs",
     ]) {
       const src = readFileSync(path.join(ROOT, rel), "utf8");
-      expect(src, `${rel} 丢了 fileURLToPath 的规范化比较`).toMatch(
-        /fileURLToPath\(import\.meta\.url\)/,
-      );
+      expect(
+        src,
+        `${rel} 丢了 import.meta 的规范化比较（import.meta.dirname / import.meta.filename）`,
+      ).toMatch(/import\.meta\.(dirname|filename)/);
       // 也可以两侧都过 path.resolve；无论哪种，都不许再出现拼串比较。
       for (const { re, what } of BAD_PATTERNS) {
         expect(re.test(stripCommentsAndStrings(src)), `${rel} 又出现 ${what}`).toBe(
@@ -243,7 +245,7 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
     expect(BAD_PATTERNS.some(({ re }) => re.test(bad2))).toBe(true);
 
     const good = stripCommentsAndStrings(
-      "if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) { main(); }",
+      "if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) { main(); }",
     );
     expect(BAD_PATTERNS.some(({ re }) => re.test(good))).toBe(false);
 

@@ -26,7 +26,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -104,7 +103,7 @@ import {
 } from "../scripts/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK_PATH = ".githooks/pre-commit";
 const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
 
@@ -834,7 +833,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
    * 所以判的是**调用点的形状**：本文件里不许有「直接 await 这两个函数」那种写法 ——
    * 走了 `runCapturing` / `captureStderr` 的那几处都不是这个形状。 */
   it("本文件不许出现没接住 stderr 的调用点（夹具话术不许进报告）", () => {
-    const self = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    const self = readFileSync(import.meta.filename, "utf8");
     /* 针尖按**拼接**构造：把它整段写成字面量的话，这条断言会命中它自己（恒红 ——
      * 而恒红的判据比没有更坏，下一个人学到的动作是「先把它删掉」）。 */
     const leaky = new RegExp(

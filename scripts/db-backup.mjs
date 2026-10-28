@@ -7,11 +7,10 @@
 // 输出分两路：给人看的进度走 stdout（含失败原因与下一步），一份状态走退出码
 // （0 = 备份好了且验通了，1 = 没有）。
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { BACKUP_KEEP, backupNotice, createBackup } from "./db-backup-core.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(import.meta.dirname, "..");
 
 const result = createBackup(root, {
   /* 轮转删不掉时也要说一句（硬规则 4）：它不是备份失败，但磁盘上确实多留了。 */

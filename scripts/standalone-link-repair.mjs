@@ -60,7 +60,6 @@ import {
   symlinkSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 /**
  * 一条链接的可跟随性：`stat` 走得通就是 `follow`。
@@ -370,7 +369,7 @@ export function runLinkRepair(nodeModules, deps = {}) {
 
 /** 作为脚本直接执行：修 `.next/standalone/node_modules`。 */
 function main() {
-  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const root = join(import.meta.dirname, "..");
   const result = runLinkRepair(
     join(root, ".next", "standalone", "node_modules"),
   );
@@ -382,5 +381,5 @@ function main() {
 }
 
 const invokedDirectly =
-  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+  process.argv[1] && import.meta.filename === process.argv[1];
 if (invokedDirectly) process.exit(main());

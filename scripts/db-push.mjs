@@ -37,7 +37,6 @@
 // docs/standards/launch-and-build.md §9.1）。
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { pushSchema } from "./db-push-core.mjs";
@@ -51,7 +50,7 @@ import {
   writeSchemaFingerprint,
 } from "./db-schema-state.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(import.meta.dirname, "..");
 
 /* 本入口**不接受任何参数**，所以认不出的旗标一律退非零，而不是默默吞掉（ISSUE #1956）。
  *

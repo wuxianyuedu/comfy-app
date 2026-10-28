@@ -47,7 +47,6 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { resolveChangedFiles } from "./changed-scope.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
@@ -69,7 +68,7 @@ import {
  * 这里是**转出**，不是复制一份实现（§12.12 / §12.18）。 */
 export { resolveChangedFiles };
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
@@ -266,7 +265,7 @@ export function main(deps = {}) {
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }

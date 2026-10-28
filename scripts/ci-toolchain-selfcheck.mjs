@@ -45,7 +45,6 @@
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 /* Python 那一层（候选探测 / 三条装通道 / 安装根 / winget 落点）在
  * `./ci-toolchain-python.mjs` —— 拆出去是按 §12.6 R5 的取向：本文件涨到 900 行以上，
@@ -466,7 +465,7 @@ export function main() {
 
 /* 只在被直接执行时跑 —— 单测要 import 上面那几个函数，import 不该顺手退进程。
  *
- * **判「是不是直接执行」必须走 `path.resolve(进程参数) ⇄ path.resolve(fileURLToPath(import.meta.url))`，
+ * **判「是不是直接执行」必须走 `path.resolve(进程参数) ⇄ path.resolve(import.meta.filename)`，
  * 不许拼 `file://${path.resolve(argv[1])}`**：`import.meta.url` 在 Windows 上是
  * `file:///F:/…/x.mjs`（三斜杠 + 正斜杠 + 盘符），而拼出来的那份是
  * `file://F:\…\x.mjs`（两斜杠 + 反斜杠）—— **两者恒不相等**，于是 `main()`
@@ -509,7 +508,7 @@ export {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }

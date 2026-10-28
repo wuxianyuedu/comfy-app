@@ -48,7 +48,6 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 
 import { specifiersOf } from "./affected-tests.mjs";
 
@@ -57,7 +56,7 @@ import { specifiersOf } from "./affected-tests.mjs";
  * 抄一份就会漂，而漂的形态是「面罩不住闭包」＝静默漏判）。它是 CJS，用 createRequire 引。 */
 const { globToRe } = createRequire(import.meta.url)("./vitest-projects.cjs");
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** typedoc 的配置 —— 根的**唯一出处**。 */
@@ -387,7 +386,7 @@ export function docsApiInputClosure(root = ROOT) {
  * `node scripts/docs-api-input-closure.mjs` */
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   const c = docsApiInputClosure();
   process.stdout.write(`[docs-api 闭包] 根：${c.roots.join(", ") || "(取不到 typedoc.json)"}\n`);

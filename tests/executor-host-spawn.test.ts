@@ -28,7 +28,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -41,7 +40,7 @@ import {
 import { launcherChainSource } from "./helpers/launcher-source";
 
 const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
+  import.meta.dirname,
   "..",
 );
 

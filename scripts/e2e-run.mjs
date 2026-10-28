@@ -47,7 +47,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
 /* 「怎么起 Playwright」那一族在 `e2e-run-playwright.mjs`（拆件理由见它的文件头：
@@ -677,7 +676,7 @@ async function main(argv) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   process.exit(await main(process.argv.slice(2)));
 }

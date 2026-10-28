@@ -29,7 +29,6 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 import { spawnInGroup } from "./launcher-core/shell.mjs";
 import { pruneTimestampedLogs } from "./launcher-core/worktree.mjs";
@@ -45,7 +44,7 @@ import {
  *  自定位而不是信传入的 cwd——Next 的 server 启动即 `process.chdir(__dirname)`，
  *  任何依赖 cwd 的锚点在它手里都会漂。 */
 const APP_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
+  import.meta.dirname,
   "..",
 );
 const SERVER = path.join(APP_ROOT, "server.js");

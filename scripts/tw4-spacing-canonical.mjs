@@ -33,13 +33,12 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { __unstable__loadDesignSystem } from "tailwindcss";
 
 import { rewriteLiterals } from "./tw4-scan-core.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const SRC = path.join(ROOT, "src");
 
 const argv = process.argv.slice(2);

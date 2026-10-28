@@ -26,12 +26,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { FINGERPRINT_FILE, pnpmInstallFingerprint } from "./ci-deps-face.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 槽根由环境变量给出：没配就是「不设槽」，这一档不猜路径。 */
@@ -645,7 +644,7 @@ export function main(io = {}) {
 
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   process.exit(main());
 }

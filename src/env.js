@@ -6,12 +6,11 @@ import { z } from "zod";
 // 环境变量由平台注入，不存在本地 .env 文件）。
 if (process.env.NEXT_RUNTIME !== "edge") {
   const { existsSync } = await import("node:fs");
-  const { dirname, join } = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
+  const { join } = await import("node:path");
 
   // 本文件位于 <项目根>/src/env.js，据此定位项目根以探测 .env。
   const envFilePath = join(
-    dirname(fileURLToPath(import.meta.url)),
+    import.meta.dirname,
     "..",
     ".env",
   );

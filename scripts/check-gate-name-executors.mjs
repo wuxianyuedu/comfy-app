@@ -27,7 +27,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { readHookSteps } from "./base-check/hook-steps.mjs";
 import { HEAVY_GATES } from "./ci-heavy-gates.mjs";
@@ -35,7 +34,7 @@ import { gateNameExecutorProblems } from "./ci-gate-names.mjs";
 import { parseStageScripts, readCnbConfig } from "./ci-autofix-duties.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 入口。
@@ -76,7 +75,7 @@ export function main(io = {}) {
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }

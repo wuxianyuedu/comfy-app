@@ -37,9 +37,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
@@ -101,7 +100,7 @@ export function resolvePackageBinEntry(pkgName, opts = {}) {
  * `node scripts/package-bin-entry.mjs typedoc storybook vitest` */
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   const names = process.argv.slice(2);
   if (names.length === 0) {

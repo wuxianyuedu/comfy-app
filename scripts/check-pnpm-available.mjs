@@ -30,7 +30,6 @@
 import fs from "node:fs";
 import process from "node:process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { orchestratePnpm, preparePnpm, probePnpm } from "./launcher-core/corepack.mjs";
 import { commandInvocation, pnpmInvocation, powershellHost } from "./launcher-core/shell.mjs";
@@ -40,7 +39,7 @@ import {
   describeNodeAgainstFloor,
 } from "./node-engines.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(import.meta.dirname, "..");
 
 /**
  * `--deps-root <path>`：**只给契约测试**用 —— 让用例能指一个「没有 node_modules」的

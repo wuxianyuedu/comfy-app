@@ -69,11 +69,10 @@ import {
 } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /** 仓库根 —— 本脚本住在 `scripts/` 下。 */
 export const ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
+  import.meta.dirname,
   "..",
 );
 
@@ -760,7 +759,7 @@ export function main({
  * 两侧都过 `path.resolve` 比较，别拼 `file://${argv[1]}` —— 它在 Windows 上恒不相等）。 */
 const invokedDirectly =
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
 
 if (invokedDirectly) {
   try {

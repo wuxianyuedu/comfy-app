@@ -40,11 +40,10 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { resolveMergeBaseRef } from "./base-check.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 const PROVEN_FILE_NAME = "comfy-premerge-proof.json";
 const ZERO_SHA = /^0+$/;
@@ -500,7 +499,7 @@ export function runFromStdin(stdinText) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const stdin = fs.readFileSync(0, "utf8");
   process.exit(runFromStdin(stdin));

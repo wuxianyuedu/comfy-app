@@ -62,7 +62,6 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /**
  * 想钉上的目标代码页 —— UTF-8。
@@ -214,7 +213,7 @@ export function codePageIsUtf8(codePage) {
  */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const apply = process.argv.includes("--apply");
   if (apply) {

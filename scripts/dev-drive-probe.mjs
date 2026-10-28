@@ -15,12 +15,11 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+export const ROOT = path.resolve(import.meta.dirname, "..");
 
 /* ------------------------------------------------------------------ *
  * 类型定义（JSDoc）：本文件在 `checkJs` 下被类型检查，用例也从这里取类型

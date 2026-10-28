@@ -26,7 +26,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
 import { writeAppServiceExit } from "./app-service-exit.mjs";
@@ -813,7 +812,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 // 直跑（被 import 时不执行）：供测试复用上面这些纯函数。
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   if (process.env.COMFYAPP_LAUNCHER_DRY_RUN === "1") {
     process.stdout.write("dry-run：未启动任何进程\n");

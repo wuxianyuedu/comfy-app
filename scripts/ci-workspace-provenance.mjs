@@ -41,7 +41,6 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { AUTOFIX_DUTIES } from "./ci-autofix-duties.mjs";
 import {
@@ -52,7 +51,7 @@ import {
   writeLedger,
 } from "./ci-workspace-probe.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 本档的账文件名（与 `comfyapp-ci-workspace-probe.json` 同目录、不同本）。 */
@@ -397,7 +396,7 @@ export function main(io = {}) {
 
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   process.exit(main());
 }

@@ -52,7 +52,6 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /* 容器计划的读数与**同一个事实**的另一个出口（ISSUE #1993）：哪几格进容器、它们挂的
  * 卷能不能让浏览器落点跨容器存活、runner 是不是自托管。本档只**打**它，判据在
@@ -71,7 +70,7 @@ export const IMAGE_ENV = "COMFYAPP_NODE_IMAGE";
 /** 那一次的 digest（`sha256:…`）—— 标签可以被移动，digest 不会。 */
 export const DIGEST_ENV = "COMFYAPP_NODE_IMAGE_DIGEST";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 /** 仓库根 —— 本脚本住在 `scripts/` 下。 */
 export const ROOT = path.resolve(HERE, "..");
 
@@ -302,7 +301,7 @@ export function imageIdentity({
  * 上恒不相等，于是这一段一次都不跑、退出码恒 0 且零输出）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   /* 本步要在**装依赖之前**跑（那时 `node_modules` 还没有），所以只走 `node:*`
    * —— 与 `ci-env-probe.mjs` 同口径，不起子进程、不 import 仓内模块。 */

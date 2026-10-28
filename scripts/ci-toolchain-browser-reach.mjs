@@ -33,7 +33,6 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 /**
  * 候选下载**根** —— **只用来探测**（不参与「装」那一步的选择）。
@@ -197,7 +196,7 @@ function playwrightBrowserJsonCandidates(base) {
  */
 export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
   const base =
-    root ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    root ?? path.resolve(import.meta.dirname, "..");
   /** @type {string | null} */
   let text = null;
   for (const candidate of playwrightBrowserJsonCandidates(base)) {

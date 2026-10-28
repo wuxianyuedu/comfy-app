@@ -37,9 +37,8 @@
  *   · `gateNameExecutorProblems(deps)` —— 判据本体（纯函数）
  */
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**

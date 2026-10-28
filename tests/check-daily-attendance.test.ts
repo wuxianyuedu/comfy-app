@@ -32,7 +32,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   CODE,
@@ -47,7 +46,7 @@ import {
   readOffline,
 } from "../scripts/check-daily-attendance.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts/check-daily-attendance.mjs");
 
 /** 2026-10-23 00:00 那一跑的真形状（第一次 `0 0` 派发，11 格全 success）。 */

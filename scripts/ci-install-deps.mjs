@@ -59,7 +59,6 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { applySlot, clearJobLink, SLOT_ENABLED_ENV } from "./ci-slot-apply.mjs";
 import {
@@ -72,7 +71,7 @@ import {
   pnpmInstallFingerprint,
 } from "./ci-deps-face.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
@@ -765,7 +764,7 @@ export async function main(deps = {}) {
 
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   /* 装之前先把 pnpm 放回 PATH（ISSUE #2281）：平台节点是服务账号会话，它的 PATH
    * 与开发者会话不是同一份 —— 实测同一台机上一边 `pnpm -v` 一直正常、另一边十几格

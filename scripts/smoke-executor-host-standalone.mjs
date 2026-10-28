@@ -34,9 +34,8 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { builtinModules } from "node:module";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_TARGET = path.join(ROOT, ".next", "standalone");
 const BUNDLE_REL = path.join("scripts", "executor-host.runtime.mjs");
 const MANIFEST_REL = path.join("scripts", "executor-host.build.json");
@@ -166,7 +165,7 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
 const invokedDirectly =
   process.argv[1] &&
   path.resolve(process.argv[1]) ===
-    path.resolve(fileURLToPath(import.meta.url));
+    path.resolve(import.meta.filename);
 
 if (invokedDirectly) {
   const target = process.argv[2]

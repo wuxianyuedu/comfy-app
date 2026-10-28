@@ -84,7 +84,6 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 import { diffLockfiles, isEmptyDiff } from "./lockfile/lock-diff.mjs";
 import { renderLockDiff } from "./lockfile/render-lock-diff.mjs";
@@ -97,7 +96,7 @@ import { resolveGitDir } from "./git-dir.mjs";
 
 /* 本脚本所在目录 —— **只用于「脚本自己住哪儿」**，不参与「判哪个检出」：
  * 那个答案只能来自调用方（`runFreshnessCheck(root)` / `--root` / 当前工作目录）。 */
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 
 /**
  * 「远端引用还算新鲜」的宽限期（毫秒）。
@@ -730,7 +729,7 @@ function main() {
 // 只在被直接运行时执行 CLI（被 import 时不跑）。
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }
