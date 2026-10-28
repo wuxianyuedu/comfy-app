@@ -391,6 +391,25 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   # 成本实测：读 196 个文件、零网络、零子进程，与 check-app-version / check-a11y-rules 同档。
   # `--staged` 见下 13.5.8.2：暂存改动没碰扫描面时按输入面跳过。
   run "基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)" node scripts/check-infra-file-size.cjs --staged
+  # 格式判据挪回**本地**（ISSUE #2610，业主口径 2026-10-29：本地判 + 本地修，CI 只判）。
+  # 它当年被挪走（ISSUE #2010 那一批）的理由是成本：命中扫描面时它得扫全库，`--staged`
+  # 只省掉「没命中」那 ~30ms。接回来不是因为成本变了（全量档实测约 2s，仍由脚本自己念），
+  # 而是**平台那一格修不了任何东西**：它当时走 `ci-format-fixup.mjs --check --autofix`，
+  # 红 ⇒ 就地写文件 ⇒ 复判全绿 ⇒ 把修复提交「委托」给 `api_trigger_formatfix` 回写；
+  # 而 PR 那一类事件的令牌只有 `repo-code:r`，`start-build` 当场被拒
+  # （`errcode 10023 · Missing required scopes: repo-cnb-trigger:rw`，2026-10-28 实测，
+  # build `cnb-tb0-1k61hpvhf` 的 `oxfmt 格式` 那格）。⇒ 那条委托路在**唯一会用它的事件类型**
+  # 上恒发不出去，实际流程退化成「本地全绿 → 白跑一次 CI 拿红 → 人回来补一次 oxfmt」，
+  # 那一次往返什么也没买到，而它买到的东西（自动回写）本来就不存在。
+  # 现在：提交那一刻就判（`--staged`：没动 `src/` `.storybook/` 就按输入面跳过并明说「跳过」），
+  # 红了唯一的出口是 `pnpm exec oxfmt <它点名的那几个文件>` —— **只点本次改的文件**，
+  # 全库 `--write` 会产出与本次改动无关的整文件重排（违 §13.7，且「格式化提交分离」那格
+  # 判的就是这个）。平台那一格**保留判定**（同一份 `check-format.cjs`、不带 `--staged`，
+  # 判据一字未改）：这条不是「从 CI 撤回来没人判」，是**多了一个执行者**（§13.5.12 的口径）。
+  # ⚠️ 紧邻的 `格式化提交分离` 不许跟着挪 —— 它判的是「这次提交有没有把真实改动埋进
+  # 几百个文件的重排里」，后果不可逆（blame 永久失真、squash 后没有拆分的机会），
+  # 必须留在提交那一刻，而且它本来就在这里。
+  run "oxfmt 格式（动了 src/.storybook 才扫全库，红了只格式化点名的文件）" node scripts/check-format.cjs --staged
 '
 
 # 立刻等这一组 —— 它存在的全部意义就是「在 A/B/C 启动之前先拿到结论」；往下继续并行
@@ -461,7 +480,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(57 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(58 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里

@@ -86,26 +86,13 @@ import path from "node:path";
 
 /** @type {ReadonlyArray<AutofixDuty>} */
 export const AUTOFIX_DUTIES = [
-  {
-    stage: "oxfmt 格式",
-    entry: "scripts/ci-format-fixup.mjs",
-    args: ["--check", "--autofix"],
-    /* ⚠️ 字面目录前缀，不是 glob（ISSUE #2378）：消费方 `underWriter()` 是
-     * `startsWith` 的字面匹配，`src/**` 放行不了任何文件（`src/components/…`
-     * 不以字面 `src/**` 开头）⇒ prettier 档写的文件永远进不了允许名单。
-     * 与下面 `docs/generated/` 一档同形。 */
-    outputs: ["src/", ".storybook/"],
-    why:
-      "口径变更由业主拍板（ISSUE #2342，2026-10-25）：红 ⇒ 就地 --write 门禁判出的那几个" +
-      "文件、复判全绿后 bot 推 format-only 提交回 PR 源分支。它与下面那档的差别要如实记：" +
-      "它改写的是**源文件**（门禁要判的对象），不是「源 → 产物」的生成物 —— 所以护栏更重：" +
-      "复判必须全绿才继续、HEAD 已是 bot 修复提交而仍红就停（防连环）、永不回写 master、" +
-      "只 add 本轮写过的文件。⚠️ 2026-10-25 订正（ISSUE #2362 / #2365）：PR 事件那一格" +
-      "**只判不推**（那类事件的令牌恒只有 repo-code:r，没有开关可改），回写委托给 " +
-      "`api_trigger_formatfix`（可信事件、令牌 rw），由那一格带 `--delegate` 直推；" +
-      "幂等闸是传进去的 `--sha` 与 ls-remote 实时头相等。所以「谁也不推」不会发生，" +
-      "而 `--autofix` 的两个旗标在本档与委托口两侧都逐字在场。",
-  },
+  /* 这里曾有 `oxfmt 格式` 一条（entry `scripts/ci-format-fixup.mjs`，
+   * outputs `src/` + `.storybook/`，ISSUE #2342 的「红 ⇒ 就地修 + bot 推 format-only
+   * 提交」）。ISSUE #2610（业主口径 2026-10-29）把它整条摘了：委托回写那一跳在 PR
+   * 事件上恒发不出去（令牌缺 `repo-cnb-trigger:rw`，实测 403/errcode 10023），
+   * 判与修都挪到本地 D0。**副作用是好的**：`src/` 与 `.storybook/` 从此不在
+   * 「CI 会改写的面」名单里，`ci-workspace-provenance.mjs` 少一个合法写者 ——
+   * 平台再没有任何一格会写源文件，只有下面这些「源 → 产物」的生成档。 */
   {
     stage: "生成态文档与源同步",
     entry: "scripts/render-doc-placeholders.cjs",

@@ -551,29 +551,59 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
  * 扫描面」那一半，而 `src/**` 是最高频的提交类别）。
  *
  * 判五件事，**每一件都是「没有任何别的判据会看见」的静默形态**：
- *   ① 钩子里不再有它（有 = 挪了个寂寞，提交照旧付那一笔）；
- *   ② 平台侧有这一步（它判的是「谁都没跑它」这一格 —— 钩子撤掉 + 平台侧没加 = 判据消失）；
- *   ③ 平台侧那一步**不带 `--staged`**（带 = 在平台侧恒跳过，挂了等于没挂）；
+ *   ① 钩子里**有**它、在 D0、且带 `--staged`（没有 = 提交那一刻没人判，红要等一次 CI
+ *      往返；不在 D0 = 先付完别的组的墙钟才知道自己格式漂了；不带 `--staged` = 只改
+ *      文档的提交也白扫一遍）；
+ *   ② 平台侧**仍**有这一步（本地加了不等于撤平台 —— 别人 `--no-verify`、以及平台侧
+ *      squash 合并那条路上，只有这一层在判）；
+ *   ③ 平台侧那一步**不带 `--staged`、也不带 `--autofix`**（带 `--staged` = 恒跳过、
+ *      挂了等于没挂；带 `--autofix` = 修完推不回去还自称处理过，#2610 摘的就是这一半）；
  *   ④ 它在本地的**出口**还在（`pnpm check:all` 的 `format` 项）—— 挪执行者不等于删能力；
- *   ⑤ 脚本头那句自我介绍指向平台侧（「自称在哪跑」⇄「真在哪跑」不一致，
+ *   ⑤ 脚本头那句自我介绍指向**两边**（「自称在哪跑」⇄「真在哪跑」不一致，
  *      正是 `tests/gate-executors.test.ts` 立案的那族形态）。
  *
  * ⑤ 与 ① 是同一条口径的反向两半：脚本文本与钩子步骤**同时**改错时（一起闭嘴）没有任何
  * 别的判据会红，所以两半都要正面钉住。
+ *
+ * 口径历史（这条档换过三次落点，每一半都留着，是因为「谁在跑它」正是这些用例判的东西）：
+ * #2010 从钩子挪到平台侧 ⇒ #2342 让平台那一格「就地修 + bot 推 format-only 回 PR 分支」
+ * ⇒ #2362/#2365 因 PR 事件令牌推不动，改成「委托可信事件 `api_trigger_formatfix` 回写」
+ * ⇒ **#2610（业主口径 2026-10-29）**：那一跳实测恒发不出去（`403 / errcode 10023 /
+ * Missing required scopes: repo-cnb-trigger:rw`），于是**委托与 autofix 整条摘掉，
+ * 判与修回到本地 D0，平台只判**。
  */
-describe("oxfmt 格式：执行者在平台侧（ISSUE #2010）", () => {
+describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
   const config = readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8");
 
-  it("钩子 D 组里已经没有它了（挪走 = 提交那一刻不再付这笔）", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-format.cjs"));
+  it("钩子 D0 里有它、带 `--staged`，且**只在这一档**", () => {
+    const d0Body = groupShBody(hook, "D0");
+    expect(d0Body, "解析不出 D0 的 sh 正文 —— 判空是必须的：「读不到」当成「里面没步骤」" +
+      "会让这一条永远绿（§13.5.12 那一族的静默降级）").not.toBe("");
+    const hit = stepsInGroup(hook, "D0").find((s) =>
+      s.cmd.includes("scripts/check-format.cjs"),
+    );
     expect(
       hit,
-      `门禁链 ${steps.length} 步里又有 oxfmt 格式硬闸了 —— 它已随 ISSUE #2010 ` +
-        "挪到平台侧（`.cnb.yml` 的「oxfmt 格式」）。要么把它从钩子里去掉，" +
-        "要么同步改本判据（外加 §13.5.1.1 与 `.githooks/pre-commit` 头注那笔账）",
-    ).toBeUndefined();
+      "D0 里找不到 `node scripts/check-format.cjs` —— #2610 的口径是「本地判 + 本地修」，" +
+        "这一格是它唯一的本地执行者；不在 D0，格式红就又要白跑一次 CI",
+    ).toBeTruthy();
+    expect(
+      hit.cmd,
+      "钩子那一步没带 `--staged`：只改文档 / 只动 `scripts/` 的提交会白扫一遍全库",
+    ).toContain("--staged");
+    /* 反向也钉：它不许在别的组里再出现一次（D0 已经付过 2s，D 组再跑一遍是纯重复，
+     * 而「同一判据两个执行者各写一份参数」正是漂移的起点）。 */
+    const elsewhere = steps.filter(
+      (s) =>
+        s.cmd.includes("scripts/check-format.cjs") &&
+        !d0Body.includes(s.cmd),
+    );
+    expect(
+      elsewhere.map((s) => s.cmd),
+      "check-format 在 D0 之外还有一步 —— 同一档两个执行者，改参数时必漏一处",
+    ).toEqual([]);
   });
 
   it("平台侧 `.cnb.yml` 真的有这一步（挪走 ≠ 没人跑）", () => {
@@ -588,31 +618,44 @@ describe("oxfmt 格式：执行者在平台侧（ISSUE #2010）", () => {
     ).toContain("oxfmt 格式");
   });
 
-  it("平台侧那一步是**全量档**，且点名的就是这份脚本", () => {
+  it("平台侧那一步是**只判的全量档**：直接跑判据本体，不带 --staged、也不带 --autofix", () => {
     const stage = platformStages().find(
       (x) => x.name === "oxfmt 格式",
     )?.stage;
     expect(stage, "`.cnb.yml` 里解析不出「oxfmt 格式」这一步").toBeTruthy();
+    /* 断言取的是**那一行 `script:`**，不是整个 stage 块：块里现在写满了历史（为什么
+     * 撤掉 `--autofix`、当年那个旗标叫什么），拿整块去 `not.toContain("--autofix")`
+     * 会红在自己的解释文字上 —— 这正是「判据钉行形状而不是钉语义」那一族的老毛病。 */
+    const scriptLine = stage?.match(/^[ \t]*script:.*$/m)?.[0] ?? "";
     expect(
-      stage,
+      scriptLine,
+      "「oxfmt 格式」那一格里找不到 `script:` 行 —— 读不到命令就当没带旗标，" +
+        "是这条判据最坏的失效形态（它会把「挂了等于没挂」念成绿）",
+    ).not.toBe("");
+    expect(
+      scriptLine,
       "平台侧那一步带了 `--staged`：那里的工作区就是这次要判的那份源码，" +
         "`--staged` 读的是「本次暂存」、恒为空 ⇒ 这一步恒跳过（挂了等于没挂）",
     ).not.toContain("--staged");
-    /* #2342：执行者换成 ci-format-fixup.mjs（红 ⇒ bot 推 format-only 提交回 PR 分支），
-     * 它内部**原样跑** check-format.cjs（判据本体仍是那一份，别处分叉依旧不可能）——
-     * 这里钉两层：stage 点名 fixup 执行者 + fixup 源码里真的调 check-format。 */
     expect(
-      stage,
-      "「oxfmt 格式」跑的不是 scripts/ci-format-fixup.mjs —— #2342 的执行者",
-    ).toContain("scripts/ci-format-fixup.mjs");
-    const fixupSrc = readFileSync(
-      join(REPO_ROOT, "scripts", "ci-format-fixup.mjs"),
-      "utf8",
-    );
+      scriptLine,
+      "平台侧那一步不再点名判据本体 —— #2610 起它直接跑 check-format.cjs，" +
+        "中间不再隔一层会写工作区的壳",
+    ).toContain("scripts/check-format.cjs");
+    /* #2610：`--autofix` 与它的委托回写整条摘掉。实测那一跳在 PR 事件上恒发不出去
+     * （令牌只有 repo-code:r，`start-build` 回 403 / errcode 10023，缺
+     * repo-cnb-trigger:rw），于是「就地修好」的那几格改动每次都被丢在工作区里，
+     * 而账面只留下一句「委托没发出去」。**修了但没人负责**比不修更坏（ISSUE #2231 同型：
+     * 「自动修 + 再判」正是让陈旧在 CI 上隐形的那一格）。这两行钉的是「别把它请回来」——
+     * 要恢复自动修，先得有能推出去的凭据（那是 ISSUE #2551 那件事）。 */
     expect(
-      fixupSrc,
-      "fixup 内部必须原样跑 check-format.cjs（判据本体一份，不许重写第二份）",
-    ).toContain("check-format.cjs");
+      scriptLine,
+      "平台侧又挂上 `--autofix` 了：委托回写没有能推出去的凭据，它就是「修了但没人负责」",
+    ).not.toContain("--autofix");
+    expect(
+      scriptLine,
+      "平台侧的命令又指向那个会写工作区的 format-fixup 外壳（已随 #2610 删除）",
+    ).not.toMatch(/format-fixup|formatfix/);
   });
 
   it("它不在**停用**清单里（那是另一件事：临时让位，不是挪执行者）", () => {
@@ -640,18 +683,26 @@ describe("oxfmt 格式：执行者在平台侧（ISSUE #2010）", () => {
     ).toContain("scripts/check-format.cjs");
   });
 
-  it("脚本头写明执行者在平台侧（自称 ⇄ 实际，别让两份承诺一起过期）", () => {
+  it("脚本头把**两个**执行者都写明白（自称 ⇄ 实际，别让两份承诺一起过期）", () => {
     const script = readFileSync(FORMAT_GATE, "utf8");
     expect(
       script,
       "check-format.cjs 的头部没写明它由平台侧 `.cnb.yml` 调用 —— " +
-        "脚本自称的执行者与实际不一致时，读的人会被指到钩子里去找一步不存在的步骤",
+        "脚本自称的执行者与实际不一致时，读的人会被指到别处去找一步不存在的步骤",
     ).toContain(".cnb.yml");
+    /* #2610 反转了这条的第二半：以前它要求头部**不许**说钩子里有这一步（那时真没有）。
+     * 现在 D0 有它，所以判据换成同一条纪律的正向版 —— 头部必须点名 `.githooks/pre-commit`，
+     * 否则「只在平台跑」那句旧自我介绍会把下一个人支到错误的一档去改参数。 */
     expect(
-      script.includes("供 `.githooks/pre-commit` 调用"),
-      "check-format.cjs 的头部又写回「供 .githooks/pre-commit 调用」了 —— 钩子里" +
-        "已经没有这一步，那就是一句假承诺（§13.5.12 的立案形态）",
-    ).toBe(false);
+      script,
+      "check-format.cjs 的头部没写明它也在 `.githooks/pre-commit` 的 D0 里跑（带 --staged）" +
+        " —— #2610 之后这是它的**第一个**执行者，头部只写平台侧就是一句过期的自我介绍",
+    ).toMatch(/\.githooks\/pre-commit/);
+    expect(
+      script,
+      "头部没写 `--staged` 那一半：两边只差这一个旗标，而它恰好是「平台侧带了就恒跳过」" +
+        "「本地不带就白扫全库」的那处分野，写在头上比让读者去猜命令",
+    ).toContain("--staged");
   });
 
   it("判据面仍由扫描配置现算（没有第二份手抄的目录清单）", () => {
@@ -1050,6 +1101,13 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
   [
     "基础设施层文件长度硬闸(scripts+tools，§12.6 R5 姊妹档)",
     "node scripts/check-infra-file-size.cjs --staged",
+  ],
+  /* 格式判据回到本地（ISSUE #2610，业主口径 2026-10-29「本地判 + 本地修，平台只判」）。
+   * 排最后是有意的：它命中时要扫全库（实测 ~2s），是本档最贵的一条，而这一档串行 ——
+   * 前面那些毫秒级的先给结论，它殿后。红的出口是 `pnpm exec oxfmt <点名的文件>`。 */
+  [
+    "oxfmt 格式（动了 src/.storybook 才扫全库，红了只格式化点名的文件）",
+    "node scripts/check-format.cjs --staged",
   ],
 ];
 
