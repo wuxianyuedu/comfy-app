@@ -601,8 +601,15 @@
   # 拦路等于用「后面四格没有读数」换「红被承认」。所以非零都落成退 0，但那句红话原样打在
   # 屏幕上并给出可粘贴的手工出口 —— 由用例钉住「不许改成静默 return」（`--no-block` 不带时
   # 仍是仓内三态口径 0/1/2，本地与判据档用那一档）。
+  #
+  # ⚠️ `--lane 每日生产构建` 是**必给**的（ISSUE #2595）：定性与日志取回来之后，
+  # 还要认得出「红的那一格是不是这一档的流水线」—— 02:00 那条定时口的事件名同样是
+  # `crontab:` 前缀，只按事件名挑「上一跑」，就会把桌包那一跑的红记到每日档头上
+  # （2026-10-28 的现场：`cnb-7g8-1k60e2jk5` 红在 `打包·壳工具链自证`，标题却写成
+  # `ci(daily): … 红在「打包·壳工具链自证」`）。流水线名就是平台自己写的归属，
+  # 不必猜事件与档的对应关系；给了它之后，不是这一档的那几跑一律「不归本格管」。
   - name: 每日失败立案
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-failure-issue.mjs --no-block
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-daily-failure-issue.mjs --no-block --lane 每日生产构建
     # 5m：三条读命令（构建列表 / 逐格详情 / 逐格日志）+ 最多一次建单。实测本地跑同一入口
     # （`--dry-run`，含逐格日志摘录）1.6s。给 5m 是留给节点冷启动与平台慢响应，
     # 而不是给「让它多试几次」—— 这一格拿不到读数时**不重试也不写**，退 2 由话术说出来。
