@@ -23,6 +23,8 @@ import {
   clearWhichCommandCache,
   executableExts,
   executableKind,
+  pnpmInvocation,
+  pnpmJsEntry,
   resolveCommandInvocation,
   usableCommand,
   whichCommand,
@@ -108,6 +110,29 @@ describe("executableExts：候选顺序即判据", () => {
 });
 
 describe("executableKind：读内容形态，不看扩展名", () => {
+  it("可打印 ASCII 起头的脚本判 `script`，长度不限于 2（ISSUE #2563）", () => {
+    /* 判据读的是**最多 16 字节**的文件头，而量词曾写成 `{2}`（= 恰好两个字符）
+     * ⇒ 只有长度恰好 2 的文件才算脚本，其余全被判成 `binary`。长度 2 / 3 / 16
+     * 三档都要是 `script`：把量词改回 `{2}`，后两档立刻红。 */
+    const dir = freshDir();
+    const bodies = [
+      "ab",
+      "abc",
+      'process.stdout.write("x");\n',
+      "#!/usr/bin/env node\n", // 这一档由 `#!` 那一支先接走，此处只是对照组
+    ];
+    const kinds = bodies.map((body, i) => {
+      const file = path.join(dir, `s${i}.js`);
+      fs.writeFileSync(file, body);
+      return executableKind(file);
+    });
+    expect(kinds[0]).toBe("script");
+    expect(kinds[1]).toBe("script");
+    expect(kinds[2]).toBe("script");
+    expect(kinds[3]).toBe("shebang");
+  });
+
+
   it("`#!` 开头判 shebang（corepack 的无扩展名 shim）", () => {
     const dir = freshDir();
     const f = path.join(dir, "pnpm");
@@ -371,5 +396,135 @@ describe("whichCommand：环境变量的键大小写（Windows 的 `Path`）", (
         probe: passthrough(),
       }),
     ).toBeNull();
+  });
+});
+
+/**
+ * `pnpmInvocation()` 的第一优先是**包真身的 JS 入口**（ISSUE #2562）。
+ *
+ * 现场：Windows 上 `pnpm` 那三个垫片里 Node 一个都起不来（无扩展名是 shebang、`.cmd`
+ * 是批处理 ⇒ `EINVAL`，与 Node 版本无关），于是唯一能走的路是 `.ps1` 经 PowerShell 宿主
+ * —— 一次启动里十来条 `pnpm …` 就付十来次 PowerShell 冷启动。而**包真身就摆在旁边**：
+ * `spawn(process.execPath, [<入口>, …])` 全平台同一条路、`shell: false` 恒定、不要宿主。
+ *
+ * 这几条盯三件事，缺一条这个形态就会退化回宿主：
+ *   ① 入口**从包的 `bin` 字段读**（不猜文件名），两种 `bin` 形状都接得住；
+ *   ② 选出来的是 `process.execPath` + 入口，`viaHost === false`；
+ *   ③ 包真身不在 / `bin` 指向原生二进制时**老实落回**「直接起可执行形态」。
+ */
+describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", () => {
+  /** 造一个带包真身的 pnpm 落点。`bin` 用字符串形态（corepack 那一形）。 */
+  function writePnpmPackage(dir: string, opts: { bin: unknown; entry?: string }) {
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", version: "12.4.1", bin: opts.bin }),
+    );
+    const entry = path.join(pkgDir, opts.entry ?? "bin/pnpm.cjs");
+    fs.mkdirSync(path.dirname(entry), { recursive: true });
+    writeExec(entry, 'process.stdout.write("12.4.1\\n");\n');
+    return { pkgDir, entry };
+  }
+
+  it("bin 是字符串：读它、用 process.execPath 起，不经宿主", () => {
+    const dir = freshDir();
+    const { entry } = writePnpmPackage(dir, { bin: "./bin/pnpm.cjs" });
+    // PATH 上同时摆着垫片：选中 JS 入口意味着**连垫片都不起**
+    writeExec(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
+    expect(pnpmJsEntry(dir)).toBe(entry);
+    /* `platform` 用**宿主**的：判据里的 `path.join` 按宿主分隔符拼候选，写死 `"linux"`
+     * 在 Windows 上会拼出「反斜杠目录 + 正斜杠文件名」这种两不像的路径 —— 那是
+     * 「产物形状依赖跑判据那台机」，不是被测逻辑（同文件那些 Windows 形态的用例
+     * 靠注入 `isFile` 绕开同一件事）。这一条判的是「两平台都走 JS 入口」。 */
+    const inv = pnpmInvocation(["install"], { env: { PATH: dir } });
+    expect(inv, "包真身在的时候必须给出形态").not.toBeNull();
+    expect(inv!.command).toBe(process.execPath);
+    expect(inv!.args).toEqual([entry, "install"]);
+    expect(inv!.viaHost, "JS 入口不需要宿主").toBe(false);
+  });
+
+  it("bin 是对象：取键 `pnpm` 那一条（pnpm 12 的 bin 形状）", () => {
+    const dir = freshDir();
+    const { entry } = writePnpmPackage(dir, {
+      bin: { pnpm: "bin/pnpm.cjs", pnpx: "bin/pnpx.cjs" },
+    });
+    expect(pnpmJsEntry(dir)).toBe(entry);
+  });
+
+  it("bin 指向原生二进制：改用同包的 Corepack 入口 bin/pnpm.mjs", () => {
+    /* pnpm 11+ 把 `bin` 写成 `{ "pnpm": "pnpm" }`，那个文件是 MZ / ELF。拿
+     * `process.execPath` 去起它就是 `SyntaxError: Invalid or unexpected token`；
+     * 而 Corepack 对 pnpm ≥ 11 写死的入口 `bin/pnpm.mjs` 就在同一个包里。 */
+    const dir = freshDir();
+    const pkgDir = path.join(dir, "node_modules", "pnpm");
+    fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: { pnpm: "pnpm" } }),
+    );
+    // 原生二进制的最小复刻：MZ 头 + 一串不可打印字节
+    fs.writeFileSync(
+      path.join(pkgDir, "pnpm"),
+      Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]),
+    );
+    const mjs = path.join(pkgDir, "bin", "pnpm.mjs");
+    writeExec(mjs, "#!/usr/bin/env node\nprocess.stdout.write('12.4.1');\n");
+    expect(pnpmJsEntry(dir)).toBe(mjs);
+  });
+
+  it("落点自己就是那个包（corepack 的 <ver> 目录）：也算数", () => {
+    /* `corepack enable` 之后 PATH 上那个 `…/corepack/v1/pnpm/<ver>/` **本身**就是
+     * 解开的 pnpm 包根 —— 少了这一形，Windows 上就只剩 `.ps1` 那条路。 */
+    const root = freshDir();
+    fs.mkdirSync(path.join(root, "bin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: "./bin/pnpm.cjs" }),
+    );
+    const entry = path.join(root, "bin", "pnpm.cjs");
+    writeExec(entry, 'process.stdout.write("12.4.1\\n");\n');
+    expect(pnpmJsEntry(root)).toBe(entry);
+  });
+
+  it("没有包真身：返回 null，落回「直接起可执行形态」（不许凭空造入口）", () => {
+    /* 这一格判的是**落回**，不是「落回时选中了哪个文件」—— 后者由形态判据
+     * （`whichCommand` / `usableCommand`）决定，而它在一台真实 Windows 上不会选中
+     * `#!` 脚本（libuv 不解析 shebang）。所以只断言「入口这一层不造东西」+
+     * 「`pnpmInvocation` 仍给出了形态、且没走 JS 入口那条路」。 */
+    const dir = freshDir();
+    writeExec(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
+    expect(pnpmJsEntry(dir)).toBeNull();
+    const inv = pnpmInvocation(["install"], { env: { PATH: dir } });
+    // 「没走 JS 入口」= 起的那条命令不是 `process.execPath` + `node_modules` 里的入口
+    if (inv) expect(inv.command).not.toBe(process.execPath);
+  });
+
+  it("PATH 上只有垫片、包真身在本机落点上：仍走 JS 入口（不退回宿主）", () => {
+    /* Windows 现场的形态：PATH 上是 corepack 的三个垫片，包真身在
+     * `%LOCALAPPDATA%\pnpm\node_modules\pnpm\`。这一格必须在**没有 PATH 命中**时也成立，
+     * 否则 `pnpmInvocation` 会退回 `.ps1` 宿主那一跳。 */
+    const bin = freshDir();
+    writeExec(path.join(bin, "pnpm"), "#!/bin/sh\nexit 0\n");
+    fs.writeFileSync(path.join(bin, "pnpm.CMD"), "@ECHO off\r\necho 12.4.1\r\n");
+    const home = freshDir();
+    const home2 = freshDir();
+    const localAppData = freshDir();
+    const dropIn = path.join(localAppData, "pnpm");
+    const pkgDir = path.join(dropIn, "node_modules", "pnpm");
+    fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name: "pnpm", bin: "./bin/pnpm.cjs" }),
+    );
+    const entry = path.join(pkgDir, "bin", "pnpm.cjs");
+    writeExec(entry, 'process.stdout.write("12.4.1\\n");\n');
+    const inv = pnpmInvocation(["install"], {
+      env: { PATH: bin, PATHEXT: ".COM;.EXE;.BAT;.CMD", LOCALAPPDATA: localAppData, USERPROFILE: home, HOME: home2 },
+      platform: "win32",
+    });
+    expect(inv!.command).toBe(process.execPath);
+    expect(inv!.args).toEqual([entry, "install"]);
+    expect(inv!.viaHost).toBe(false);
   });
 });
