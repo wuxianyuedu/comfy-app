@@ -572,6 +572,13 @@ export default tseslint.config(
       "scripts/check-format.cjs",
       "scripts/check-theme-colors.cjs",
       "scripts/ci-build-readout.mjs",
+      /* 它的 `looksLikeScript()` 里那一条「是不是可打印文本」的正则与下面
+       * `src/lib/process/executable-resolve.ts` 的 `executableKind()` **逐字同形** ——
+       * 这两份是 ISSUE #2562 里刻意各留的实现（自证那一格不许 import 仓库内模块）。
+       * 进来晚了（ISSUE #2607）：函数被抄过去的时候没把这条登记一起抄，于是
+       * `ESLint 零警告` 从那份文件落主干那天起就是红的，而它挂在每日档 ⇒ 表现是
+       * 「每天念一条」而不是「谁都提交不了」。同一条判据的同批含义**包括豁免台账**。 */
+      "scripts/ci-toolchain-pnpm.mjs",
       "scripts/file-structure-rules.cjs",
       "src/lib/llm/video-task-util.test.ts",
       "src/lib/llm/video-task-util.ts",
