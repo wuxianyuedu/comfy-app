@@ -50,9 +50,16 @@ const denied = (scope: string): string =>
 /** 按参数里的子命令分流；`mapping` 没点到的走 `fallback`。 */
 function fakeRun(mapping: Record<string, string>, fallback = granted()): Run {
   return (_cmd, args) => {
-    const key = args.filter((a) => !a.startsWith("-")).slice(0, 2).join(" ");
+    const key = args
+      .filter((a) => !a.startsWith("-"))
+      .slice(0, 2)
+      .join(" ");
     const out = mapping[key] ?? fallback;
-    return { ok: !out.includes("10023"), status: out.includes("10023") ? 1 : 0, out };
+    return {
+      ok: !out.includes("10023"),
+      status: out.includes("10023") ? 1 : 0,
+      out,
+    };
   };
 }
 
@@ -65,7 +72,9 @@ describe("classifyReply：三句话的判据顺序", () => {
   });
 
   it("信封 200 ⇒ granted（业务层的 404 也走这一档：平台认了这次请求）", () => {
-    expect(classifyReply(envelope(200, { errcode: 404, errmsg: "not found" }))).toEqual({
+    expect(
+      classifyReply(envelope(200, { errcode: 404, errmsg: "not found" })),
+    ).toEqual({
       state: "granted",
       status: 200,
     });
@@ -83,7 +92,9 @@ describe("classifyReply：三句话的判据顺序", () => {
   });
 
   it("非 200 而原话里没有「缺 scope」⇒ unknown（既不是缺权限，也不是够得着），并把平台那句话带出来", () => {
-    const r = classifyReply(envelope(403, { errcode: 10023, errmsg: "scope mismatch" }));
+    const r = classifyReply(
+      envelope(403, { errcode: 10023, errmsg: "scope mismatch" }),
+    );
     expect(r.state).toBe("unknown");
     expect(r.status).toBe(403);
     // 下一动作要靠这句原话才读得出来 —— 只念「没拿到答复」等于什么都没说。
@@ -105,10 +116,13 @@ describe("classifyReply：三句话的判据顺序", () => {
 
 describe("probeAll：每一条探针都只读，且仓库占位真的被替换", () => {
   it("表里没有一条写命令（这一格会在 PR / 每日 / 桌包三种触发口上跑）", () => {
-    const WRITE = /^(create|put|post|patch|delete|update|add|close|open|transfer|archive|set)/i;
+    const WRITE =
+      /^(create|put|post|patch|delete|update|add|close|open|transfer|archive|set)/i;
     for (const probe of PROBES) {
       const verb = probe.cmd[1] ?? "";
-      expect(WRITE.test(verb), `${probe.cmd.join(" ")} 看起来是写命令`).toBe(false);
+      expect(WRITE.test(verb), `${probe.cmd.join(" ")} 看起来是写命令`).toBe(
+        false,
+      );
     }
   });
 
@@ -121,7 +135,9 @@ describe("probeAll：每一条探针都只读，且仓库占位真的被替换",
     probeAll({ repo: "a/b", run });
     for (const args of seen) {
       expect(args).not.toContain("*");
-      expect(args.filter((a) => a === "--repo" || a === "--slug").length).toBe(1);
+      expect(args.filter((a) => a === "--repo" || a === "--slug").length).toBe(
+        1,
+      );
       // 每条都带 `-v`：不带的时候平台只回摘要，403 的原话就没有 `errcode` 可读。
       expect(args).toContain("-v");
     }
@@ -141,7 +157,11 @@ describe("formatReadout：分组与「未获授权」的措辞", () => {
 
   it("缺权限读成「未获授权 · 平台点名缺 X」，不是红", () => {
     const text = formatReadout(
-      rows(fakeRun({ "git-settings get-pipeline-settings": denied("repo-manage:r") })),
+      rows(
+        fakeRun({
+          "git-settings get-pipeline-settings": denied("repo-manage:r"),
+        }),
+      ),
       { repo: "a/b", event: "pull_request", branch: "feat/x" },
     ).join("\n");
     expect(text).toContain("未获授权 · 平台点名缺 repo-manage:r");
@@ -187,7 +207,10 @@ describe("main：读数档的退码与「不打凭据」", () => {
   const run: Run = fakeRun({
     "git-settings get-pipeline-settings": denied("repo-manage:r"),
   });
-  const invoke = (argv: string[], env: Record<string, string | undefined> = {}) => {
+  const invoke = (
+    argv: string[],
+    env: Record<string, string | undefined> = {},
+  ) => {
     heard.length = 0;
     return main({
       argv,
@@ -225,7 +248,9 @@ describe("main：读数档的退码与「不打凭据」", () => {
     expect(code).toBe(CODE.NO_FACT);
 
     const config = readFileSync(CONFIG, "utf8");
-    const lines = config.split("\n").filter((l) => l.includes("ci-token-scopes.mjs"));
+    const lines = config
+      .split("\n")
+      .filter((l) => l.includes("ci-token-scopes.mjs"));
     expect(lines.length, "三个入口各有一格，`.cnb.yml` 里应当出现三次").toBe(3);
     for (const line of lines) {
       expect(
@@ -282,14 +307,32 @@ describe("main：读数档的退码与「不打凭据」", () => {
 });
 
 describe("起 `cnb` 的形态：CI 上那条「全部没拿到答复」的根因", () => {
+  /* 平台**必须显式传**（ISSUE #2551 的第三跑读数）：此前这几条拿宿主平台当判据，
+   * 在 POSIX 上写用例、在 Windows 节点上跑 —— `expected 'powershell' to be 'cnb'`。
+   * 用例问的是「POSIX 上怎么起」，那件事与跑它的机器无关。 */
   it("POSIX 上原样起（不套宿主、不改参数）", () => {
-    const inv = invocationFor("cnb", ["git", "get-head"]);
+    const inv = invocationFor("cnb", ["git", "get-head"], {
+      platform: "linux",
+    });
     expect(inv.command).toBe("cnb");
     expect(inv.argv).toEqual(["git", "get-head"]);
   });
 
   it("非 `cnb` 的命令一律原样（这一格只起它，别顺手改了别的调用）", () => {
-    expect(invocationFor("node", ["-v"]).command).toBe("node");
+    for (const platform of ["win32", "linux"] as const) {
+      expect(invocationFor("node", ["-v"], { platform }).command).toBe("node");
+      expect(invocationFor("node", ["-v"], { platform }).argv).toEqual(["-v"]);
+    }
+  });
+
+  it("Windows 上的形态来自盘上那三个垫片之一，且原始参数一个不改", () => {
+    /* 这条不断言「一定不交裸名字」：三种垫片一个都找不到时它**必须**退回原样起
+     * （那时 spawn 给一个可读的 ENOENT，读数记成「没拿到答复」，不冒充结论）。
+     * 它钉的是另一件更要紧的事 —— 探针参数不被任何一路改写。 */
+    const inv = invocationFor("cnb", ["git", "get-head"], {
+      platform: "win32",
+    });
+    expect(inv.argv.slice(-2)).toEqual(["git", "get-head"]);
   });
 
   it("源码里不许回到裸 spawnSync 起 cnb —— 那是 CI 上 14 条探针全空的根因（ISSUE #2551）", () => {

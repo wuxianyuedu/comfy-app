@@ -214,7 +214,12 @@ export const PROBES = [
 export const OIDC_PROBE = {
   domain: "authentication",
   scope: "repo-basic-info:r",
-  cmd: ["authentication", "exchange-oidc-id-token", "--data", '{"cnb_token":"*","aud":"ci-token-scopes"}'],
+  cmd: [
+    "authentication",
+    "exchange-oidc-id-token",
+    "--data",
+    '{"cnb_token":"*","aud":"ci-token-scopes"}',
+  ],
   why: "用 cnb_token 兑换 id_token（只放行流水线 token；PR / Issue 事件不签发）",
 };
 
@@ -259,17 +264,23 @@ export function run(cmd, args) {
  * ⚠️ 不 import `ship-exec.mjs` 的 `cnbSpawn()`：那会把 `ship` 那一族整条加载链拖进来，
  * 而这一格的前提是「刚 clone 完、还没装依赖的机器上也能跑」。
  *
+ * 平台是入参而不是 `process.platform`：判据问的是「这台机器怎么起」，而用例要能把
+ * 两种形态都判一遍 —— 拿宿主平台当判据，POSIX 上那几条断言在 Windows 节点上恒假
+ * （CI 那一跑的现场：`expected 'powershell' to be 'cnb'`）。
+ *
  * @param {string} cmd
  * @param {string[]} args
+ * @param {{platform?: NodeJS.Platform}} [options]
  * @returns {{command: string, argv: string[]}}
  */
-export function invocationFor(cmd, args) {
-  if (cmd !== "cnb" || process.platform !== "win32") {
+export function invocationFor(cmd, args, { platform = process.platform } = {}) {
+  if (cmd !== "cnb" || platform !== "win32") {
     return { command: cmd, argv: args };
   }
   /** @param {string} name 要查的命令名（带扩展名） @returns {boolean} 在不在 PATH 上 */
   const onPath = (name) =>
-    spawnSync("where", [name], { encoding: "utf8", windowsHide: true }).status === 0;
+    spawnSync("where", [name], { encoding: "utf8", windowsHide: true })
+      .status === 0;
   if (onPath("cnb.ps1")) {
     return {
       command: "powershell",
@@ -316,7 +327,9 @@ export function classifyReply(raw) {
   }
   /* 信封上那个 200 是**取到了答复**的意思，与「流程过没过」无关；这一格要的正是它：
    * 平台没有拒这次请求 ⇒ 这枚 scope 在不在，只能由 403 自己说（① 那一支）。 */
-  const http = /^\s*"?status"?\s*:\s*(\d{3})/m.exec(text) ?? /"status"\s*:\s*(\d{3})/.exec(text);
+  const http =
+    /^\s*"?status"?\s*:\s*(\d{3})/m.exec(text) ??
+    /"status"\s*:\s*(\d{3})/.exec(text);
   const status = http ? Number(http[1]) : null;
   if (status === null) return { state: "unknown" };
   if (status === 200) return { state: "granted", status };
@@ -416,13 +429,18 @@ export function formatReadout(rows, ctx) {
             : `部分答得清（${granted.length}/${list.length} 条有明确答复，其余没量到）`;
     lines.push(`  ${domain.padEnd(20)} ${verdict}`);
     for (const r of list) {
-      const mark = r.reply.state === "denied" ? "×  " : r.reply.state === "granted" ? "ok " : "?  ";
+      const mark =
+        r.reply.state === "denied"
+          ? "×  "
+          : r.reply.state === "granted"
+            ? "ok "
+            : "?  ";
       const tail =
         r.reply.state === "denied"
           ? `缺 ${r.reply.scope}`
           : r.reply.state === "granted"
             ? "平台认了这次请求"
-            : r.reply.why ?? "没拿到答复";
+            : (r.reply.why ?? "没拿到答复");
       const note = r.note ? `（${r.note}）` : "";
       lines.push(`    ${mark}${r.why} → ${tail}${note}`);
     }
@@ -473,7 +491,9 @@ export function main(opts = {}) {
 
   const repo = value("--repo", env.CNB_REPO_SLUG ?? "");
   if (!repo) {
-    log("[token-scopes] 认不出仓库（`--repo` 与 `CNB_REPO_SLUG` 都不在场）⇒ 没量到任何东西。");
+    log(
+      "[token-scopes] 认不出仓库（`--repo` 与 `CNB_REPO_SLUG` 都不在场）⇒ 没量到任何东西。",
+    );
     return flag("--strict") ? CODE.NO_FACT : CODE.OK;
   }
   const only = value("--only", "")
@@ -497,7 +517,9 @@ export function main(opts = {}) {
     (r) => r.reply.state === "granted" || r.reply.state === "denied",
   ).length;
   if (measured === 0 && flag("--strict")) {
-    log("[token-scopes] 一条探针都没拿到平台的明确答复 ⇒ 这一格自己坏了（退 2）。");
+    log(
+      "[token-scopes] 一条探针都没拿到平台的明确答复 ⇒ 这一格自己坏了（退 2）。",
+    );
     return CODE.NO_FACT;
   }
   return CODE.OK;
