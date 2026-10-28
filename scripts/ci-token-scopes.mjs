@@ -199,6 +199,7 @@ export const OIDC_PROBE = {
  *   body: string,
  *   error?: string | null,
  *   bodyLen?: number,
+ *   ms?: number,
  * }} FetchResult
  */
 
@@ -215,6 +216,7 @@ export const OIDC_PROBE = {
  */
 export async function fetchFact(ctx, subPath, extra = {}) {
   const url = `${ctx.base.replace(/\/+$/, "")}/${ctx.repo}/-/${subPath}`;
+  const t0 = Date.now();
   try {
     const res = await fetch(url, {
       method: extra.method ?? "GET",
@@ -233,6 +235,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
       body,
       error: null,
       bodyLen: body.length,
+      ms: Date.now() - t0,
     };
   } catch (err) {
     /* 网络层失败只记**错误码**（`ENOTFOUND` / `TimeoutError` 那类），
@@ -244,6 +247,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
       body: "",
       error: String(/** @type {any} */ (err)?.name ?? err),
       bodyLen: 0,
+      ms: Date.now() - t0,
     };
   }
 }
@@ -338,6 +342,7 @@ export function classifyReply(raw, transport = {}) {
  *   note?: string,
  *   path: string,
  *   reply: ReturnType<typeof classifyReply>,
+ *   ms: number | null,
  * }} ProbeRow
  */
 
@@ -353,21 +358,34 @@ export async function probeAll(opts) {
     ? probes.filter((p) => only.includes(p.domain))
     : probes;
   const ctx = { base: opts.base, token: opts.token, repo: opts.repo };
+  /* **并发跑，不是串行**（第五跑的现场：读数全跑完了却撞上 2m 的平台预算）。十四条探针
+   * 互不依赖，串行只把「一次慢请求」乘成十四条；而平台那一格的预算是整跑算的。
+   * 并发度取 6：比「全放」慢不了多少，又不会在同一次构建里朝平台打 14 发。 */
+  const CONCURRENCY = 6;
   /** @type {ProbeRow[]} */
   const rows = [];
-  for (const probe of picked) {
-    /* `oidc` 那一问的请求体含令牌 ⇒ 只有它带 `body`，且**只从 env 取、不回显**。 */
-    const extra = probe === OIDC_PROBE ? { method: "POST", body: '{"aud":"ci-token-scopes"}' } : {};
-    const r = await opts.fetchFact(ctx, probe.path, extra);
-    rows.push({
-      domain: probe.domain,
-      scope: probe.scope,
-      why: probe.why,
-      note: probe.note,
-      path: probe.path,
-      reply: classifyReply(r.body, r),
-    });
-  }
+  const queue = [...picked];
+  /** @returns {Promise<void>} */
+  const worker = async () => {
+    for (let probe = queue.shift(); probe; probe = queue.shift()) {
+      /* `oidc` 那一问的请求体含令牌 ⇒ 只有它带 `body`，且**只从 env 取、不回显**。 */
+      const extra =
+        probe === OIDC_PROBE
+          ? { method: "POST", body: '{"aud":"ci-token-scopes"}' }
+          : {};
+      const r = await opts.fetchFact(ctx, probe.path, extra);
+      rows.push({
+        domain: probe.domain,
+        scope: probe.scope,
+        why: probe.why,
+        note: probe.note,
+        path: probe.path,
+        reply: classifyReply(r.body, r),
+        ms: r.ms ?? null,
+      });
+    }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   return rows;
 }
 
@@ -421,6 +439,21 @@ export function formatReadout(rows, ctx) {
       lines.push(`    ${mark}${r.why} → ${tail}${note}`);
     }
   }
+  /* 耗时那一行是**给预算用的读数**：第五跑读数全跑完了却撞上平台 2m 预算，
+   * 而屏幕上一个字都没说「时间花在哪」。取最慢的三条点名，下一跑就不用猜。 */
+  const slowest = [...rows]
+    .filter((r) => typeof r.ms === "number")
+    .sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0))
+    .slice(0, 3);
+  const totalMs = rows.reduce((sum, r) => sum + (r.ms ?? 0), 0);
+  lines.push(
+    `耗时：${rows.length} 条探针合计 ${totalMs}ms` +
+      (slowest.length
+        ? `，最慢的 ${slowest.length} 条 ${slowest
+            .map((r) => `${r.path}=${r.ms}ms`)
+            .join(" · ")}`
+        : ""),
+  );
   lines.push(
     "读数不做判据：这一格量的是平台怎么给权限，红了不构成任何结论（恒退 0）。" +
       "「未获授权」不代表这一跑有问题 —— 平台按「事件 + ref」分配，PR 那一族本来就只有 repo-code:r。",

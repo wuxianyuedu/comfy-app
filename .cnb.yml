@@ -640,7 +640,10 @@
   # `CNB_API_ENDPOINT`，加宿主 Node 自带的 `fetch` —— 所以它能在装依赖之前就跑。
   - name: 每日令牌权限读数
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
-    timeout: 2m
+    # 5m：14 条只读请求**并发**跑（实测本机合计 0.45s）。第五跑给的是 2m，而那一跑
+    # 撞上了这个数 —— 读数全跑完了、却整格被判超时。预算按「卡死要早报」的量级给，
+    # 不按那次读数调：并发之后单条慢请求已经被掩盖掉，剩下的风险是平台整体慢。
+    timeout: 5m
   # ── 前提三格：script 行与 PR 那条流水线上的同名档**逐字相同** ──────────
   # 为什么不共用 YAML 锚点：`pipelineStageNames()` / `stageBlock()` 是按名字在文本里
   # 取块的，两格重名会让「哪一条流水线的读数」变成解析器的运气。所以这里各起一个
@@ -1312,10 +1315,10 @@
     # `endStages` 里的顺序不是执行顺序的保证（平台并发/顺序由平台定），所以这里不靠
     # 「读数在前」传达什么 —— 它只是与每日档同形，读的人不必在两处用两套心智模型。
     #
-    # 2m：十四条只读接口各一次（实测本机整条 4s 量级）、零写命令。
+    # 5m：14 条只读请求**并发**跑（实测本机合计 0.45s）、零写命令。与每日那一格同量级。
     - name: 令牌权限读数
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
-      timeout: 2m
+      timeout: 5m
 
 # ── 桌面成品包那一档的失败立案（ISSUE #2550）──────────────────────────────────────
 #
@@ -1347,7 +1350,7 @@
     # 令牌权限读数：与 PR 那一格同一个入口、同一份理由（ISSUE #2551）。
     - name: 令牌权限读数
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
-      timeout: 2m
+      timeout: 5m
 
 .gates: &gates
   # ── 2026-10-19：环境类前提三格从这一条上撤到**每日档**（`COMFYAPP_CI_DAILY_GATES`）──
