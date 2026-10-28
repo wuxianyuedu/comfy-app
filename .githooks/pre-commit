@@ -461,7 +461,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(57 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(58 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里
@@ -517,6 +517,19 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # `EXEMPT_SITES` 里逐条写理由，`--report` 会把它们打出来（豁免是「认下这一档」，
   # 不是「这一档不存在」）。
   run "AST 判据聚合（6 条共享一次解析）" node scripts/run-ast-gates.cjs --staged
+  # 脚本档的类型层（规范 §13.5.14 / ISSUE #2524）：主 `tsconfig.json` 的 include 里
+  # 有 `**/*.cjs` / `**/*.js` 却**没有 `**/*.mjs`** —— 于是一份从未被 import 的脚本
+  # 整个不在判决面上（实测 210 份非点目录 `.mjs` 里只有 169 份在场），它的类型错误与
+  # `noUnusedLocals` 那条死代码判据一个字都不报：`scripts/ci-daily-build.mjs` 那两处
+  # 死声明就是这么在主干上躺下来的。这一档把缺的那半面补上（`tsconfig.scripts.json`
+  # 的 include = 全量 `**/*.mjs`），并按 `(文件, TS 码)` 记账做**只降不升**的棘轮
+  # （实测存量 320 处）。
+  # ⚠️ 它与组 A 那条 `tsc --noEmit` **不是同一条判据**：A 判的是主配置的覆盖面，
+  # 这一条判的是 `.mjs` 那一格 —— 两边各有一格盖不住对方，合并任何一边都会把另一边的
+  # 面弄没（本案的根因正是「以为一条 tsc 就代表了全部」）。
+  # 代价：本档自己起一次 tsc（本机实测 12.5–17.9s，含读配置与对账），所以它在**重档**里
+  # （`COMFY_HEAVY_GATES`）；默认那一次（D0 形态档）不跑它，与 A 组同档。
+  run "脚本档类型检查(tsc 的 .mjs 全量面)" node scripts/check-scripts-typecheck.cjs
   # 标题行(页签栏)让位：页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会
   # 把页签和右上角窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。
   run "标题行让位硬规则" node scripts/check-title-bar-clearance.cjs --staged
