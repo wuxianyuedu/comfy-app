@@ -45,7 +45,7 @@
  *     「默认值写错 / 只覆盖了一半形状」这两类在它下面全看不出来。⇒ 这里有两组
  *     **不注入 `resolve`** 的判据（默认解析口真的接在编排上、路径真的过分态判据）。
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -56,12 +56,14 @@ import { commandInvocation } from "../src/lib/process/executable-resolve.ts";
 import {
   CP936_CODE_PAGE,
   encodeCp936Plan,
+  exitCodeFromTermination,
   formatSpawnFailure,
   parseInvocation,
   resolveShellInvocation,
   runWithCp936Exit,
   splitStreamChunk,
   TRANSCODE_TIMEOUT_MS,
+  UNKNOWN_TERMINATION_EXIT,
   writeCp936,
 } from "../scripts/ci-cp936-exit.mjs";
 
@@ -244,9 +246,15 @@ describe("CP936 出口：编排与退出码", () => {
     resolved: true,
   });
 
-  /** 一条只发数据、不落盘的假子进程 —— `runWithCp936Exit` 的注入面。 */
-  const fakeChild = (out: string, code: number | null) => {
-    const handlers: Record<string, (arg: unknown) => void> = {};
+  /** 一条只发数据、不落盘的假子进程 —— `runWithCp936Exit` 的注入面。
+   *  `close` 那两形参**都要能给**（ISSUE #2571）：只喂 `code` 的话，「被信号终止」
+   *  那一档在这一层根本不存在，而它恰恰是 `code === null` 的唯一来源。 */
+  const fakeChild = (
+    out: string,
+    code: number | null,
+    signal: string | null = null,
+  ) => {
+    const handlers: Record<string, (a?: unknown, b?: unknown) => void> = {};
     const stream = {
       on: (ev: string, fn: (d: unknown) => void) => {
         if (ev === "data") fn(out);
@@ -256,12 +264,12 @@ describe("CP936 出口：编排与退出码", () => {
     return {
       stdout: stream,
       stderr: { on: () => stream },
-      on: (ev: string, fn: (arg: unknown) => void) => {
+      on: (ev: string, fn: (a?: unknown, b?: unknown) => void) => {
         handlers[ev] = fn;
         return undefined;
       },
       /* 触发 `close`：编排就是靠它收尾的。 */
-      emitClose: () => handlers.close?.(code),
+      emitClose: () => handlers.close?.(code, signal),
     };
   };
 
@@ -323,6 +331,143 @@ describe("CP936 出口：编排与退出码", () => {
       out: () => undefined,
     });
     expect(code).toBe(3);
+  });
+
+  /** 编排那几条的公共注入面：`close` 由假子进程手动触发，输出不落 PowerShell。 */
+  const closeWith = (child: { emitClose: () => void }) => {
+    queueMicrotask(() => child.emitClose());
+    return child;
+  };
+
+  it("**没有退出码 ≠ 退出码是 0** —— 被信号终止的一转不许念成通过（ISSUE #2571）", async () => {
+    /* 本文件最坏的一格：`close` 的第二个形参没人接，于是 `code ?? 0` 把「这条命令
+     * 不是自己退出的」直接落成「通过」。当场复现（本机 Node 26.12.1，见下面那条
+     * 「真起子进程再 kill」）：子进程被 SIGTERM 终止时 `close` **照来**，带的是
+     * `code=null` + `signal=SIGTERM` —— 旧写法在那里转出去的是 **0**。
+     *
+     * 与 §13.6.4.1 那句「拿不到测量 ≠ 测量结果是红的」是同一条区分，只是方向相反：
+     * 拿到的既不是红，**也不许被念成绿**。 */
+    const printed: string[] = [];
+    const child = fakeChild("半行输出", null, "SIGTERM");
+    const code = await runWithCp936Exit(["--", "做点事"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      spawnProc: (() => closeWith(child)) as never,
+      write: () => ({ ok: false }),
+      out: (chunk) => printed.push(chunk),
+    });
+    expect(code).not.toBe(0);
+    expect(code).toBe(128 + os.constants.signals.SIGTERM);
+    /* **念一行出声**：转出去的那个码是外壳折算的、不是子进程给的。不写明，读日志的人
+     * 会拿 143 去查「哪条命令退 143」，而那条命令一次都没退出过。 */
+    const text = printed.join("");
+    expect(text).toContain("SIGTERM");
+    expect(text).toContain(String(code));
+  });
+
+  it("`code` 与 `signal` **双 null** 也不许当 0（「没交代结束方式」是第三档，不是成功）", async () => {
+    /* 只把「有 signal」当非零，剩下的漏网形态是**两个都拿不到**（宿主给的终止信息
+     * 被截断、`close` 在 stdio 排空前就触发的那一类）。那一档同样「没有跑到结论」，
+     * 落回 0 就是上面那一格的同一个 bug 换了个触发条件。 */
+    const printed: string[] = [];
+    const child = fakeChild("x\n", null, null);
+    const code = await runWithCp936Exit(["--", "做点事"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      spawnProc: (() => closeWith(child)) as never,
+      write: () => ({ ok: false }),
+      out: (chunk) => printed.push(chunk),
+    });
+    expect(code).toBe(UNKNOWN_TERMINATION_EXIT);
+    expect(code).not.toBe(0);
+    expect(printed.join("")).toContain("没有交代结束方式");
+  });
+
+  it("干净退出**照旧不念**那句「外壳退出」—— 成功路径不许被写成一条像红的提示", async () => {
+    /* 反向那一半：新加的这行出声如果无条件打，每一次正常 stage 末尾都多一条
+     * 「退出 0」，读的人要在里面找真红 —— 与 ISSUE #2326（只在该出声时才出声）同一条口径。 */
+    const printed: string[] = [];
+    const child = fakeChild("正常收尾\n", 0, null);
+    const code = await runWithCp936Exit(["--", "做点事"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      spawnProc: (() => closeWith(child)) as never,
+      write: () => ({ ok: false }),
+      out: (chunk) => printed.push(chunk),
+    });
+    expect(code).toBe(0);
+    expect(printed.join("")).not.toContain("外壳退出");
+  });
+
+  it("那行终止读数走 **CP936 那个通道**（`write`），不是 UTF-8 直写的 `emit`", async () => {
+    /* 上面那条总数走的就是 `write`：`emit` 是 UTF-8 直写，平台按 CP936 解，中文在那
+     * 里会变乱码（ISSUE #1977）。这一格判「新加的那句有没有跟着同一条口径」——
+     * 写错的形态是**本地全绿、平台上那行读不出中文**，所以两边都要钉：`write` 收到它、
+     * `emit` 没收到它。 */
+    const written: string[] = [];
+    const printed: string[] = [];
+    const child = fakeChild("x\n", null, "SIGKILL");
+    const code = await runWithCp936Exit(["--", "做点事"], {
+      platform: "win32",
+      resolve: passthroughResolve,
+      spawnProc: (() => closeWith(child)) as never,
+      write: (text: string) => {
+        written.push(text);
+        return { ok: true };
+      },
+      out: (chunk) => printed.push(chunk),
+    });
+    expect(code).toBe(128 + os.constants.signals.SIGKILL);
+    expect(written.join("")).toContain("SIGKILL");
+    expect(printed.join("")).not.toContain("SIGKILL");
+  });
+
+  it("**真起一条长跑子进程再 kill** ⇒ 外壳转出的不是 0（假执行者判不到这一格）", async () => {
+    /* 这条是本档的**现场**，不是形状：`spawnProc` 交回的是真 `spawn` 出来的进程，
+     * 信号从外面发进去，收尾走的是生产那一条 `close` 回调。用它替换掉上面几条的
+     * 假子进程，是因为「`close` 到底带什么」这件事只有真进程能回答 —— 本文件的
+     * 头注此前就答错过一次（写的「被 kill 时 `close` 不会来」，实测会来）。
+     *
+     * `resolve` 注入「原样放行」：这里要判的是终止 → 退出码那一条链，不是解析层。 */
+    let handle: ReturnType<typeof spawn> | undefined;
+    const code = await runWithCp936Exit(
+      [
+        "--",
+        process.execPath,
+        "-e",
+        "console.log('第一条读数');setInterval(() => {}, 999)",
+      ],
+      {
+        platform: "linux",
+        resolve: passthroughResolve,
+        spawnProc: ((cmd: string, args: string[], opts: never) => {
+          handle = spawn(cmd, args, opts);
+          setTimeout(() => handle?.kill("SIGTERM"), 300);
+          return handle;
+        }) as never,
+        write: () => ({ ok: false }),
+        out: () => undefined,
+      },
+    );
+    expect(code).toBe(128 + os.constants.signals.SIGTERM);
+  });
+
+  it("折算表本体：有码照原样、有号折 128+号、号查不到仍非零", () => {
+    /* 纯函数那一层单独钉一遍：上面几条判的是「编排有没有用它」，这条判「表对不对」。
+     * 特别是**未知信号名也要非零** —— 查不到号时落回 0 就等于把整条修复在最冷的一档
+     * 上撤销掉（Windows 上 libuv 能报出 POSIX 没有的号，那一族就在这格里）。 */
+    expect(exitCodeFromTermination(3, null)).toBe(3);
+    expect(exitCodeFromTermination(127, null)).toBe(127);
+    expect(exitCodeFromTermination(0, null)).toBe(0);
+    expect(exitCodeFromTermination(null, "SIGKILL")).toBe(137);
+    expect(exitCodeFromTermination(null, "SIGTERM")).toBe(143);
+    expect(exitCodeFromTermination(null, "SIG不存在的")).toBe(
+      UNKNOWN_TERMINATION_EXIT,
+    );
+    expect(exitCodeFromTermination(null, null)).toBe(
+      UNKNOWN_TERMINATION_EXIT,
+    );
+    expect(exitCodeFromTermination(null, "SIG不存在的")).not.toBe(0);
   });
 
   it("非 Windows：原样转出（不假装转过一次 CP936）", async () => {
