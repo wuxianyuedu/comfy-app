@@ -108,7 +108,7 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
     const prod = await workshopDb
       .select()
       .from(production)
-      .where(eq(production.id, prodId as string));
+      .where(eq(production.id, prodId!));
     expect(prod[0]).toBeTruthy();
   });
 
@@ -133,7 +133,8 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .select()
       .from(workshopSession)
       .where(eq(workshopSession.id, sessionId));
-    const prodId = rows[0]?.projectId as string;
+    const row = rows[0]!;
+    const prodId = row.projectId;
     const prod = await workshopDb
       .select()
       .from(production)
@@ -181,7 +182,7 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
     const prod = await workshopDb
       .select()
       .from(production)
-      .where(eq(production.id, prodId as string));
+      .where(eq(production.id, prodId!));
     expect(prod[0]?.scriptMarkdown).toBe("# 新剧本");
     const state = await repo.getSession("sess-legacy");
     expect(state?.stage).toBe("character");
