@@ -31,6 +31,23 @@
  * `=X.Y.Z`，加 `||` 并集与一档内并排多个比较符（AND）；操作符与版本号之间的空格先吃掉。
  * 读不懂的形状（如 `20.x`、pre-release 段、`0.x` 的 caret）**返回 `null`**，由调用方转成
  * 「没跑起来」而不是「判绿」—— 与 `merged-side-loss-git.mjs` 同一口径（§11.23.6.2）。
+ * ⚠️ 独立上界（`>=22.12.0` 这类有下界 OK，但 `<23.0.0` 这种**无下界**的单独一段）**也返回
+ * `null`**（下界缺失 ⇒ 整条 `parseRange` 退 null）—— 方向是 fail-closed（漏判成「没跑起来」
+ * 而非「放行」），但文档上别把它写成「支持 `<X.Y`」：它是读不懂的形状之一。
+ *
+ * ── 为什么手写、不引 `semver` ───────────────────────────────────────
+ *
+ * 两条都站得住，且互相独立：
+ *   ① **自举性**：本文件被 `check-pnpm-available.mjs` 在「装依赖之前」那一步调用
+ *      （`.cnb.yml` 的 `Install dependencies` 里它排在 `ci-install-deps.mjs` 之前，是
+ *      前提步骤），即「环境还没装好」时它就得能跑——一旦 `import "semver"`，node_modules
+ *      缺失 / 损坏 / 版本装错时检查脚本自己先崩，而那恰是它最该跑的时机。
+ *   ② **三态语义**：`semver.satisfies()` 只给 `boolean`——「读不懂」和「不满足」都是 `false`；
+ *      本文件 `satisfies()` 给 `true | false | null`，**拒解**是第三态（`20.x` / `^0.2.3` /
+ *      `*` 一律 `null`，由调用方转成「没跑起来」而非「判绿」）。semver 给不出这个，它永远
+ *      会返回一个 bool。这是主动收紧，不是省依赖。
+ *   ⚠️「少一个依赖」**不是**理由：`semver` 自身零依赖、约 15KB，且 npm 几乎必带一份——
+ *      以「减依赖」为名手写它等于没减到任何东西。
  *
  * @module scripts/node-engines — Node 版本范围的解析、满足判定与「声明被每条依赖接受」判据
  */
@@ -215,10 +232,15 @@ export function satisfies(version, range) {
  * @param {Interval} inner @param {Interval} outer @returns {boolean}
  */
 function within(inner, outer) {
+  /* 下界包容性：inner 的下界必须落在 outer 下界「之上（含）」。
+   * 同值时，inner ⊆ outer 当且仅当「outer 含边界 或 inner 不含边界」——
+   * 即 `(outer.lowerInclusive || !inner.lowerInclusive)`；写成
+   * `(!outer.lowerInclusive || inner.lowerInclusive)` 是反的（实测 4 行中 2 行错：
+   * outer `>20`、inner `>=20` 是真实 gap，旧式会误报 true 放过）。
+   * 现网形状两端皆 inclusive（^ 与 >=），故此前休眠；一旦写 `>26.0.0` 即活。 */
+  const lowCmp = compareVersions(inner.lower, outer.lower);
   const lowOk =
-    compareVersions(inner.lower, outer.lower) > 0 ||
-    (compareVersions(inner.lower, outer.lower) === 0 &&
-      (!outer.lowerInclusive || inner.lowerInclusive));
+    lowCmp > 0 || (lowCmp === 0 && (outer.lowerInclusive || !inner.lowerInclusive));
   if (!lowOk) return false;
   if (outer.upper === null) return true;
   if (inner.upper === null) return false;
@@ -277,8 +299,13 @@ export function collectDependencyFloors(root) {
     try {
       manifest = requireFromRoot.resolve(`${name}/package.json`);
     } catch {
-      continue;
+      /* 包装了但 `exports` 不暴露 `./package.json` 时 `require.resolve` 会抛 ——
+       * 退回直接读盘，否则它会静默退出扫描范围（`continue` 既不计入 resolved、
+       * 也不算失败，只有全部失败才判红 ⇒ 部分依赖悄悄漏扫）。 */
+      const direct = path.join(root, "node_modules", name, "package.json");
+      if (fs.existsSync(direct)) manifest = direct;
     }
+    if (!manifest) continue;
     resolved++;
     const json = readJson(manifest);
     const range = json?.engines?.node;
@@ -377,7 +404,7 @@ export function describeNodeAgainstFloor({ version, range, floors }) {
     kind: ok ? "ok" : "outside",
     version: clean,
     range,
-    recommend: recommendFrom(range, parsed),
+    recommend: ok ? null : recommendFrom(range, parsed),
     violated: (floors ?? [])
       .filter((f) => satisfies(version, f.range) === false)
       .map((f) => f.pkg),

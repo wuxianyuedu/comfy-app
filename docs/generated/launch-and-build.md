@@ -635,6 +635,10 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
 > `.CMD` 一侧的回退永远找不到，等于没修 —— 这正是第二轮现场里提示说
 > 「未发现可回退形态」而 `pnpm.ps1` 明明就在旁边的原因。
 
+> **「起得来」的几种形态之间还有一层先后**（ISSUE #2562）：JS 入口 → 直接可执行 →
+> `.ps1` 经宿主，见 §2.1.9。上表回答的是「哪些形态 Node 起得来」，那张表回答
+> 「起得来的里面先挑哪个」—— 代价差一个数量级，Windows 上尤其明显。
+
 **同一个形态必须一路走到起服务**：`spawnDevServer()` 经 `commandInvocation()`
 拿 `{ command, prefixArgs }`，不再自己拼可执行名 —— 否则会出现「门禁探测通过了，
 起 dev server 时换一种方式又失败一次」。
@@ -838,6 +842,63 @@ Node 下限抬上去、而本仓的 `engines` 没跟着走，这一格会直接�
 形状解析只覆盖真实出现的三种写法：`^X.Y.Z`、`>=X.Y[.Z]`（含 `>= 10` 这种操作符后带空格）、
 一档内并排两个比较符（`>=22.12.0 <23.0.0`）以及它们的 `||` 并集。读不懂的返回 `null`
 ⇒ 判「没跑起来」，**不许**读成「没有违规」（同 `merged-side-loss-git.mjs` 的口径，§11.23.6.2）。
+
+#### 2.1.9 形态的优先顺序：JS 入口 → 直接可执行 → PowerShell 宿主（ISSUE #2562）
+
+§2.1.1 那张候选表回答的是「**哪些形态 Node 起得来**」。它没有回答的是「**起得来**的
+那几种里该先挑哪一个」—— 而它们的代价差一个数量级：
+
+| 形态                                                          | Node 起得来吗                    | 每条 `pnpm …` 的代价                          |
+| ------------------------------------------------------------- | -------------------------------- | --------------------------------------------- |
+| `<落点>/…/pnpm/<bin 指向的入口>` 经 `process.execPath`        | 能，**全平台同一条路**           | 一次 node 启动                                |
+| `pnpm.exe` / `pnpm-native.exe` / POSIX 无扩展名               | 能                               | 一次进程启动（**没有** Node 进程）            |
+| `.ps1` 经 PowerShell 宿主                                     | 能                               | 一次 node **+ 一次 PowerShell 冷启动**（0.6~3s） |
+| 无扩展名 shim / `.cmd` / `.bat`                               | **不能**（shebang 与批处理 Node 都不解释，`EINVAL` 与 Node 版本无关） | ——                                            |
+
+Windows 上 corepack 那三个垫片里**只有 `.ps1` 起得来**，于是「起得来」这一档挑出来的
+永远是它：一次启动里十来条 `pnpm …`（`dev-launch` 的依赖同步、`check:all` 的每一格、
+`ship` 的每一跳、`base-check` 复算的那条）就付十来次 PowerShell。而**包真身就摆在旁边**
+—— corepack 的版本目录与 pnpm 自己的落地目录都带完整的 `node_modules/pnpm/`。
+
+所以 `pnpmInvocation()` 的形态顺序改成三段，且第一段与平台**无关**
+（POSIX 上只是少起一层进程，行为零改动）：
+
+1. **包真身 JS 入口** —— `spawn(process.execPath, [<入口>, …])`，`shell: false` 恒定、
+   不需要宿主、不需要为 win32 开第二条代码路径。判据是 `pnpmJsEntry()`：
+   入口**从包的 `bin` 字段读**（不猜文件名）；`bin` 指向原生二进制时（pnpm 11+ 把
+   `pnpm` 写成 `{ "pnpm": "pnpm" }`，那个文件是 MZ / ELF）改用 Corepack 对 pnpm ≥ 11
+   写死的 `bin/pnpm.mjs`。落点的两种形状都接（`<落点>/node_modules/pnpm/` 与
+   落点自己就是包）—— 后者正是 `corepack enable` 之后 PATH 上那一格的形状。
+2. **直接可执行**（§2.1.1 的候选表，`.ps1` 除外）。
+3. **`.ps1` 经宿主** —— 前两段都拿不到形态时的出口。
+
+⚠️ **这一簇必须住在一个文件里**，别把它拆成 `pnpm-js-entry.ts` 那种"更清爽"的形态：
+`executable-resolve.ts` 在 `tests/esm-cross-host-imports.test.ts` 的跨宿主清单里
+（`shell.mjs` 静态 import 它），而那条链要求**每个节点都是叶子**（只 import 同批清单内
+的模块）。判"这份文件能不能被 node 起"的唯一实现是那边的 `executableKind()`，所以拆出去
+的那一半必然要回 import 它 —— 要么成静态依赖环（环上按声明顺序取值，`executableKind()`
+可能在第一次被调用时仍是未初始化绑定），要么那份模块不是叶子、**整条链在加载阶段就
+`ERR_MODULE_NOT_FOUND`**。后者实测过：`shell.mjs` 拷进临时仓库的那些用例（`check-reformat-only`
+/ `dependency-audit` / `linux-env-bootstrap`）加两份真加载用例，4 个文件 20 条一起红，而
+报错读起来跟本判据毫无关系。文件长度这一侧由 R5 那 900 行顶着 —— 要挤出空间就压注释，
+不要把判据搬出去。
+
+`viaHost` 的语义跟着收口：判据是「**真正要 spawn 的那个文件是不是宿主**」，
+不是「它等不等于 `candidate`」。走 JS 入口时 `command` 是 `process.execPath`、
+`candidate` 是落点目录，两者本来就不相等 —— 用旧式子会把它读成「经宿主」，
+而 `runPnpmSync` 里那道 PS 参数切分防线（`hostUnsafeArgs`）正是按这个布尔值决定
+要不要拦 `--x=…:…`。**同一个布尔值既当排障读数又当防线开关，判据错一次就两处一起错。**
+
+自检（§2.1.4）与流水线第一步的工具链自证（`scripts/ci-toolchain-pnpm.mjs` 的
+`findPnpm()`）都跟同一条顺序。后者刻意不 import 仓库内模块（它要能在「Node 模块链
+还没被证明可用」的机器上给出可读输出），所以这是**同一件事的两份实现** ——
+一致性由 `tests/ci-toolchain-selfcheck.test.ts` 的一组对账用例钉着，两处都钉：
+垫片与包真身并存时选中前者，以及 `bin` 指向原生二进制时改用 `bin/pnpm.mjs`。
+
+> 现场代价的量级（同一台 Windows 开发机、同一份检出）：`pnpmInvocation()` 走 `.ps1`
+> 时单次 0.6~3s（corepack shim 起 node 再起 pnpm，外加一次 PowerShell 冷启动）；
+> 走 JS 入口时是一条 `node <入口>`，与 POSIX 上同一个量级。启动链路里这条路径被
+> 调用 4~6 次（§2.1 结尾的「一次启动只探一次」那段也是为同一件事减了一次）。
 
 ### 2.2 完整依赖预检（壳窗口出现后）
 
