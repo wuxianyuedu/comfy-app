@@ -81,15 +81,25 @@ describe("scripts/spawn-shell-scan.mjs", () => {
     );
   });
 
-  it("明确关掉的那几种不被判（shell: false / null / undefined / 字符串值）", () => {
+  it("明确关掉的那几种不被判（shell: false / null / undefined）", () => {
     const cases = [
       "spawn(a, b, { shell: false });",
       "spawn(a, b, { shell: null });",
       "spawn(a, b, { shell: undefined });",
-      'spawn(a, b, { shell: "shell" });',
     ];
     for (const src of cases) {
       expect(findShellOptionsIn(src), src).toEqual([]);
+    }
+  });
+
+  it("truthy 字符串 shell 也算违例（#2562 盲区：'cmd.exe' / ComSpec 同样开 shell）", () => {
+    const cases = [
+      "spawn(a, b, { shell: 'cmd.exe' });",
+      'spawn(a, b, { shell: process.env.ComSpec });',
+      'spawn(a, b, { shell: "shell" });',
+    ];
+    for (const src of cases) {
+      expect(findShellOptionsIn(src), src).toHaveLength(1);
     }
   });
 
@@ -101,6 +111,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
       'execFileSync("git", ["status"], { shell: needsShell(cmd) });',
       'fork(mod, [a], { shell: true });',
       'exec(cmd, { shell: requiresShell });',
+      'spawn(a, b, { shell: "cmd.exe" });',
       [
         "spawnSync(invocation.command, invocation.args, {",
         "  cwd,",
@@ -112,6 +123,48 @@ describe("scripts/spawn-shell-scan.mjs", () => {
     for (const src of cases) {
       expect(findShellOptionsIn(src), src).toHaveLength(1);
     }
+  });
+
+  it("#2562 缺口 2：exec/execSync 天然走 shell —— 只认 child_process 那个绑定", () => {
+    // 真 child_process：应判
+    expect(
+      findShellOptionsIn(
+        'import { exec } from "node:child_process";\nexec("pnpm install");',
+      ),
+    ).toHaveLength(1);
+    expect(
+      findShellOptionsIn(
+        'import { execSync } from "node:child_process";\nexecSync("git status");',
+      ),
+    ).toHaveLength(1);
+    // 局部函数 / 注入端口同名：不判（否则误报教会人加白名单）
+    expect(
+      findShellOptionsIn('const exec = run ?? (() => ({}));\nexec("x");'),
+    ).toEqual([]);
+    expect(findShellOptionsIn("function f({ exec }) { exec(cmd, args); }")).toEqual(
+      [],
+    );
+    // execFile / execFileSync 默认不走 shell：不在这里一棍打死
+    expect(
+      findShellOptionsIn(
+        'import { execFile } from "node:child_process";\nexecFile("x", []);',
+      ),
+    ).toEqual([]);
+  });
+
+  it("#2562 缺口 3：spawn 命令参数带 .cmd/.bat 是反向信号（将来会被加 shell 修好）", () => {
+    const cases = [
+      'spawnSync("pnpm.cmd", ["install"]);',
+      'spawn("build.bat", ["all"]);',
+      'fork("run.cmd");',
+    ];
+    for (const src of cases) {
+      const hits = findShellOptionsIn(src);
+      expect(hits, src).toHaveLength(1);
+      expect(hits[0], src).toContain(".cmd/.bat");
+    }
+    // 没有扩展名的命令参数不判（也顺带验证不会和 shell: 规则叠加成两条）
+    expect(findShellOptionsIn('spawn("pnpm", ["install"]);')).toEqual([]);
   });
 
   it("#2513：普通数据对象的同名键不判（哪怕值不是 false）", () => {
@@ -171,6 +224,57 @@ describe("scripts/spawn-shell-scan.mjs", () => {
       expect(offenders).toHaveLength(1);
       expect(offenders[0]).toContain("scripts/violation.mjs:4:");
       expect(offenders[0]).toContain("shell: true");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("#2562 缺口 1（阳性对照 / canary）：`node scripts/spawn-shell-scan.mjs` 撞到已知违例必须非零退出", () => {
+    // 「0 命中」只证明此刻没有违规，不能证明闸能拦违规。这一条造一个已知坏文件，
+    // 直接跑扫描器二进制（不是调库函数），确认它 exit != 0 且把违例点名出来。
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "spawn-shell-canary-"));
+    try {
+      fs.mkdirSync(path.join(root, "scripts"));
+      fs.writeFileSync(
+        path.join(root, "scripts", "violation.mjs"),
+        [
+          "export function run(bin, args) {",
+          '  return spawn(bin, args, { stdio: "inherit", shell: true });',
+          "}",
+        ].join("\n"),
+      );
+      let stderr = "";
+      let code = 0;
+      try {
+        execFileSync(process.execPath, ["scripts/spawn-shell-scan.mjs", "--root", root], {
+          cwd: ROOT,
+          encoding: "utf8",
+          stdio: ["ignore", "ignore", "pipe"],
+        });
+      } catch (err) {
+        const e = err as { status?: number; stderr?: string | Buffer };
+        code = e.status ?? 1;
+        stderr = String(e.stderr ?? "");
+      }
+      expect(code, "撞到违例却绿了 ⇒ 闸没在拦").not.toBe(0);
+      expect(stderr, "没把违例点名出来").toContain("scripts/violation.mjs");
+      expect(stderr).toContain("shell: true");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("#2562 覆盖面：违例落在 tools/ 也抓得到（不止 scripts/）", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "spawn-shell-tools-"));
+    try {
+      fs.mkdirSync(path.join(root, "tools"));
+      fs.writeFileSync(
+        path.join(root, "tools", "violation.mjs"),
+        'spawn("x", [], { shell: true });',
+      );
+      const offenders = findShellOptions(root);
+      expect(offenders, "tools/ 下的违例没被扫到").toHaveLength(1);
+      expect(offenders[0]).toContain("tools/violation.mjs");
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
