@@ -40,8 +40,20 @@
 import { spawnSync } from "node:child_process";
 
 import { isWindows } from "./platform.ts";
+import { pnpmJsEntry as pnpmJsEntryIo, pnpmJsInvocation, type PnpmEntryIo } from "./pnpm-js-entry.ts";
 import fs from "node:fs";
 import path from "node:path";
+
+/* 本模块对 `pnpm-js-entry.ts` 交出的**注入面**：判「这份文件是不是脚本」的唯一实现
+ * 就在下面（`executableKind()`），那一层不自己再写一份（孪生判据，硬规则 24）。 */
+const PNPM_ENTRY_IO: PnpmEntryIo = {
+  envVar,
+  isFile,
+  isScript: (candidate) => {
+    const kind = executableKind(candidate);
+    return kind !== "binary" && kind !== "batch";
+  },
+};
 
 /** 「这个候选在这台机器上到底起不起得来」的那一次 OS 交互。 */
 export interface UsabilityProbe {
@@ -437,7 +449,10 @@ export function executableKind(candidate: string): ExecutableKind {
       return "batch";
     }
     // 可打印 ASCII 起头 → 文本脚本；其余按二进制（含 Windows 的 MZ 头）。
-    return /^[\x09\x0a\x0d\x20-\x7e]{2}$/.test(text) ? "script" : "binary";
+    // 量词是 `{2,}`（**至少**两个可打印字节）而不是 `{2}`：`text` 是最多 16 字节的
+    // 文件头，写 `{2}` 就成了「长度恰好为 2 才算脚本」，于是每一份真脚本都被判成
+    // `binary`（ISSUE #2563 —— 它一直没红，是因为此前没有调用点依赖 `script` 这一支）。
+    return /^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(text) ? "script" : "binary";
   } catch {
     return "unknown";
   } finally {
@@ -646,6 +661,20 @@ export function commandInvocation(
     : { command: candidate, prefixArgs: [] };
 }
 
+/**
+ * 「这个落点上 pnpm 的包真身 JS 入口在哪」—— `pnpm-js-entry.ts` 那份判据，
+ * 带好本模块的注入面（`isFile` / `isScript` / `envVar` 的唯一实现都在这里）。
+ *
+ * 单列这个薄壳是为了让排障与用例有一个**稳定的入口名**：直接 import 那个模块时要自己
+ * 拼三个注入面，而「判据只有一处」这件事不该变成「调用点各拼一次」。
+ *
+ * @param {string} dropIn 装着 pnpm 的落点目录
+ * @returns {string | null}
+ */
+export function pnpmJsEntry(dropIn: string): string | null {
+  return pnpmJsEntryIo(dropIn, PNPM_ENTRY_IO);
+}
+
 /** `pnpmInvocation()` 的结论。 */
 export interface PnpmInvocation {
   /** 真正要 spawn 的可执行文件（可能是 PowerShell 宿主）。 */
@@ -654,7 +683,11 @@ export interface PnpmInvocation {
   args: string[];
   /** PATH 上选中的候选（`.ps1` 回退时是那个脚本，不是宿主）。 */
   candidate: string;
-  /** 是否经宿主（PowerShell）起 —— 排障时「为什么多了一层」的答案。 */
+  /** 这一跳是不是**经宿主（PowerShell）**起的 —— 排障时「为什么多了一层」的答案。
+   *
+   *  判据是「真正要 spawn 的那个可执行文件是不是宿主」，**不是**「它等不等于
+   *  `candidate`」：走包真身 JS 入口时 `command` 是 `process.execPath`、`candidate`
+   *  是落点目录，两者本来就不相等，而那条路上一个宿主也没有（ISSUE #2562）。 */
   viaHost: boolean;
   /** PATH 原文——**就是 `env` 里那一串**，不是本判据解析出来的那几段。 */
   pathRaw: string;
@@ -686,6 +719,21 @@ export interface PnpmInvocation {
  * 返回 `null` = PATH 上没有任何可用的 pnpm 形态（调用方必须给出可见出口，
  * 不能静默 `null → 0`）。
  *
+ * ## 形态的优先顺序：JS 入口 → 直接可执行 → PowerShell 宿主（ISSUE #2562）
+ *
+ * 「算得上可用」的形态不止一种，而它们的**代价**差一个数量级：
+ *
+ * | 形态 | 起得来吗 | 代价 |
+ * | ---- | -------- | ---- |
+ * | `<落点>/node_modules/pnpm/<bin>` 经 `process.execPath` | 能，全平台同一条路 | 一次 node 启动 |
+ * | `pnpm.exe` / `pnpm-native.exe` / POSIX 无扩展名 | 能 | 一次进程启动（**没有** Node 进程） |
+ * | `.ps1` 经 PowerShell 宿主 | 能 | 一次 node + **一次 PowerShell 冷启动** |
+ * | 无扩展名 shim / `.cmd` / `.bat` | **不能**（shebang 与批处理 Node 都不解释） | —— |
+ *
+ * 所以 `pnpmJsEntry()` 排在 `whichCommand()` 之前：能绕开垫片就直接绕开。这一格
+ * 不是优化而是**形态判据的补全** —— 此前 corepack 目录上「包真身在、只有 `.ps1` 起得来」
+ * 的现场被判成「只能走宿主」，一次启动里十来条 `pnpm …` 就付十来次 PowerShell。
+ *
  * ## 为什么非空时还要带三条 `PATH` 读数（ISSUE #2281）
  *
  * 「探不到」这个结论在本仓曾经**同时**有三种成因，而日志里只留一句
@@ -707,9 +755,15 @@ export function pnpmInvocation(
     name = "pnpm",
   }: WhichCommandOptions & { name?: string } = {},
 ): PnpmInvocation | null {
-  const candidate = whichCommand(name, { env, platform });
+  /* ① 能直接跑包真身的 JS 入口时，连垫片都不起（ISSUE #2562）：`process.execPath` +
+   * 入口，`shell: false` 恒定、不需要宿主 —— 每一条 `pnpm …` 少付一次 PowerShell
+   * 冷启动（实测那一跳 0.6~3s，见规范 §2.1.9）。判据只有 `pnpmJsEntry()` 一处。 */
+  const js = pnpmJsInvocation({ name, env, platform, io: PNPM_ENTRY_IO });
+  const candidate = js?.candidate ?? whichCommand(name, { env, platform });
   if (!candidate) return null;
-  const usable = usableCommand(candidate, ["-v"], { env, platform });
+  const usable = js
+    ? { ok: true, command: js.command, prefixArgs: js.prefixArgs, reason: null }
+    : usableCommand(candidate, ["-v"], { env, platform });
   const invocation = usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
     : { command: candidate, prefixArgs: [] };
@@ -733,7 +787,10 @@ export function pnpmInvocation(
     command: invocation.command,
     args: [...invocation.prefixArgs, ...args],
     candidate,
-    viaHost: invocation.command !== candidate,
+    /* `osHost` 非空**且**真正 spawn 的就是它，才算「经宿主」。用 `candidate` 比会
+     * 把「跑 JS 入口」（command = node，candidate = 落点）误读成经宿主 —— 而 PS 参数
+     * 切分那道防线（`runPnpmSync` 的 `hostUnsafeArgs`）正是按这个布尔值决定要不要拦。 */
+    viaHost: Boolean(osHost) && invocation.command === osHost,
     pathRaw,
     pathEntries,
     onDisk,
