@@ -293,15 +293,26 @@ export function cargoForensics({
     .trim()
     .replace(/^"(.*)"$/, "$1");
   if (cargoHome) {
-    const exts = platform === "win32" ? ["", ".exe", ".EXE"] : [""];
+    /* 候选扩展名**串行拼接**：`.exe` 排在无扩展名之前 —— 写成 `["", ".exe"]` 时无扩展名
+     * 那个候选（`cargo`）会先入列，去重之后 `.exe` 那一份反而被挡掉，于是「盘上有哪个代理」
+     * 这条读数指向一个**不带扩展名**的路径（Windows 上 `cargo` 不是可执行代理，`cargo.exe`
+     * 才是）。`.EXE` 仍然在列：它不是第二个候选，而是用例要判的那一格（大小写不敏感 ⇒ 只算一个）。 */
+    const exts = platform === "win32" ? [".exe", ".EXE", ""] : [""];
     /* Windows 的文件系统不分大小写 ⇒ `.exe` / `.EXE` 会命中**同一个**文件；逐去重才不会
      * 把「一个代理」读成「两个候选」（那是另一种形式的噪声）。 */
     const seen = new Set();
     const hits = [];
     for (const ext of exts) {
-      const candidate = path.join(cargoHome, "bin", `cargo${ext}`);
-      if (seen.has(candidate.toLowerCase()) || !isFile(candidate)) continue;
-      seen.add(candidate.toLowerCase());
+      /* 按**目标平台**拼：这条判据在 POSIX 上判 win32 形态，用宿主的 `path.join` 会拼出
+       * `G:\\.cargo/bin/cargo` —— 一个两种平台都不认的形状（用例那条断言就断在这里）。 */
+      const sep = platform === "win32" ? "\\" : "/";
+      const candidate = [cargoHome, "bin", `cargo${ext}`].join(sep);
+      /* 去重**按目标平台**的大小写语义（不按宿主）：这条判据在 POSIX 上判 win32 形态，
+       * 拿宿主的语义去比会把 Windows 那一格读成两个候选 —— 而那个结论只在 Windows 上
+       * 才成立，这正是「在错误的平台上判出一条看起来像真的读数」。 */
+      const key = platform === "win32" ? candidate.toLowerCase() : candidate;
+      if (seen.has(key) || !isFile(candidate)) continue;
+      seen.add(key);
       hits.push(candidate);
     }
     lines.push(

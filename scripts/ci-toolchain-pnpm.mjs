@@ -9,7 +9,7 @@
  * 工具链自证是流水线第一步，它必须在「什么都还没装好」的机器上也能给出可读输出。
  */
 import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -122,6 +122,27 @@ export function findPnpm({
    * 下一个人只能再猜一轮修法 —— 而这条链上连着几轮的红都出在这条缝里，
    * 「候选全对、败在探它的方式」那一轮（`.ps1` 少收了 `-v`）尤其只有它照得出来。 */
   const tried = [];
+  /* ① **包真身的 JS 入口优先**（ISSUE #2562）：`process.execPath` + 入口，全平台同一条路、
+   * 不要宿主。这一格与本仓 `src/lib/process/executable-resolve.ts` 的 `pnpmJsEntry()`
+   * 是同一件事的两份实现（本脚本刻意不 import 仓库内模块，理由见文件头），一致性由
+   * `tests/ci-toolchain-selfcheck.test.ts` 对账。少了它，Windows 节点上每一条 `pnpm …`
+   * 都要付一次 PowerShell 冷启动 —— 而包真身就摆在 corepack 的落点旁边。 */
+  for (const dir of pnpmPathEntries({ platform, env })) {
+    const entry = pnpmJsEntryIn(dir, { isFile });
+    if (!entry) continue;
+    const probed = probeRun(process.execPath, [entry, "-v"]);
+    if (!probed) {
+      tried.push(entry);
+      continue;
+    }
+    return {
+      command: process.execPath,
+      prefixArgs: [entry],
+      args: [entry, "-v"],
+      out: `${probed.out}`.trim(),
+      ok: true,
+    };
+  }
   /* `PATH` 的读法**只有一份**（`pnpmPathValue`）：取证那一段不许按「它以为的方式」
    * 再读一遍 —— 第二份读法与这里一分岔，「键名不是 PATH」「分隔符读错」这两类成因
    * 就会在失败日志里静默消失（ISSUE #2281）。 */
@@ -266,6 +287,84 @@ export function pnpmForensics({
  * 这里表达的是**候选面**而不是「选谁」，所以按后缀拼出来：既是同一份事实，
  * 也不会被那条按文本扫的判据误伤（它剥行注释但不剥块注释）。
  *
+ * @param {NodeJS.Platform} platform
+ * @returns {string[]}
+ */
+/**
+ * 这个落点上 pnpm 的**包真身 JS 入口**（`process.execPath` 能直接起的那份）；没有给 `null`。
+ *
+ * 与 `src/lib/process/executable-resolve.ts` 的 `pnpmJsEntry()` 同一条判据（本脚本不 import
+ * 仓库内模块，理由见文件头）：
+ *   · 落点自己就是包（corepack 的 `<ver>/`）与 `<落点>/node_modules/pnpm/` 两种形状；
+ *   · 入口从包的 `bin` 字段读，不猜文件名；`bin` 指向原生二进制时改用 Corepack 对
+ *     pnpm ≥ 11 写死的 `bin/pnpm.mjs`。
+ *
+ * @param {string} dropIn
+ * @param {{isFile: (p: string) => boolean}} ctx
+ * @returns {string | null}
+ */
+function pnpmJsEntryIn(dropIn, { isFile }) {
+  const candidates = [path.join(dropIn, "node_modules", "pnpm")];
+  /* 落点自己是包时读它自己的清单 —— 但 PATH 上随便一个目录也可能有 package.json，
+   * 名字对不上就不算。 */
+  /** @param {string} dir @returns {Record<string, any> | null} */
+  const manifestOf = (dir) => {
+    try {
+      return JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
+    } catch {
+      return null;
+    }
+  };
+  const own = manifestOf(dropIn);
+  if (own && own.name === "pnpm") candidates.push(dropIn);
+  for (const pkgDir of candidates) {
+    const manifest = manifestOf(pkgDir);
+    if (!manifest) continue;
+    const bin = manifest.bin;
+    const rel =
+      typeof bin === "string"
+        ? bin
+        : bin && typeof bin === "object"
+          ? bin.pnpm
+          : null;
+    if (typeof rel === "string" && rel !== "") {
+      const target = path.resolve(pkgDir, rel);
+      if (isFile(target) && looksLikeScript(target)) return target;
+    }
+    for (const name of ["pnpm.mjs", "pnpm.cjs"]) {
+      const corepackEntry = path.join(pkgDir, "bin", name);
+      if (isFile(corepackEntry) && looksLikeScript(corepackEntry)) return corepackEntry;
+    }
+  }
+  return null;
+}
+
+/**
+ * 这份文件是「能被 node 起的脚本」吗（不是二进制、不是批处理）—— 读文件头，不看扩展名。
+ *
+ * @param {string} candidate
+ * @returns {boolean}
+ */
+function looksLikeScript(candidate) {
+  let head;
+  try {
+    const fd = openSync(candidate, "r");
+    const buf = Buffer.alloc(16);
+    const read = readSync(fd, buf, 0, buf.length, 0);
+    closeSync(fd);
+    head = buf.subarray(0, read).toString("latin1");
+  } catch {
+    return false;
+  }
+  if (head.length < 2) return false;
+  if (head.startsWith("#!")) return true;
+  if (/^@?\s*(echo|setlocal)\b/i.test(head) || head.startsWith("@")) return false;
+  /* 可打印 ASCII 起头即文本脚本；MZ / ELF 那类二进制落到 else（`{2}` 会退化成
+   * 「长度恰好为 2」，ISSUE #2563 就是那个形状）。 */
+  return /^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(head);
+}
+
+/**
  * @param {NodeJS.Platform} platform
  * @returns {string[]}
  */
