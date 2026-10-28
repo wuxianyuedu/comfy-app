@@ -343,26 +343,32 @@ export async function autoselectShotImage(
     const verdict = await scoreShotImage(row, rec, image.localPath);
     candidates.push({ taskId, imageUrl: image.localPath, verdict });
   }
-  const scored = candidates.filter((c) => c.verdict !== null);
+  // 判定与图地址在同一步收窄（predicate），后续消费点不再需要非空断言。
+  const scored = candidates.filter(
+    (
+      c,
+    ): c is AutoselectCandidate & {
+      verdict: ReviewVerdict;
+      imageUrl: string;
+    } => c.verdict !== null && c.imageUrl !== null,
+  );
   if (scored.length === 0) {
     throw new Error("所有候选都没有产物可评审（先生成，再优选）");
   }
-  let winner = scored[0]!;
-  for (const c of scored) {
-    const best = reviewScoreMean(winner.verdict!) ?? 0;
-    const cur = reviewScoreMean(c.verdict!) ?? 0;
-    if (cur > best) winner = c;
-  }
-  const winnerVerdict = winner.verdict!;
+  const winner = scored.reduce((best, c) =>
+    (reviewScoreMean(c.verdict) ?? 0) > (reviewScoreMean(best.verdict) ?? 0)
+      ? c
+      : best,
+  );
   // 赢家判定落到镜头（与 reviewShotImage 同一落点；字段所有权见 #2615）。
-  const nextShots = applyImageReview(shots, shotId, winnerVerdict);
+  const nextShots = applyImageReview(shots, shotId, winner.verdict);
   await productionRepository.patchContent(userId, projectId, {
     shots: nextShots,
   });
   return {
     winnerTaskId: winner.taskId,
-    winnerImageUrl: winner.imageUrl!,
-    winnerVerdict,
+    winnerImageUrl: winner.imageUrl,
+    winnerVerdict: winner.verdict,
     candidates,
   };
 }
