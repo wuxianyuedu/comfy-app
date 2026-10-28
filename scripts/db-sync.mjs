@@ -23,7 +23,6 @@
 // 出来 —— 让「这次变更万一丢了数据、目前没有退路」这件事至少是可读的。
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { backupNotice, createBackup } from "./db-backup-core.mjs";
 import {
@@ -31,7 +30,7 @@ import {
   writeSchemaSyncStatus,
 } from "./db-schema-state.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(import.meta.dirname, "..");
 
 /* `--force`：跳过 dry-run 白名单按 `pnpm db:push` 的口径直接应用（含丢数据语句）。
  * 唯一调用方是 POST /api/schema/push —— 用户已在状态栏的确认弹窗里知情并确认；

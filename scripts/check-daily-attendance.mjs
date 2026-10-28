@@ -628,6 +628,6 @@ export function main(rawArgv, env = {}) {
   return out.code;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && import.meta.filename === process.argv[1]) {
   process.exit(main());
 }

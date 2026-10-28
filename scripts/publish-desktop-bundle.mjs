@@ -43,14 +43,13 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { runContext } from "./ci-daily-build.mjs";
 import { ARTIFACT_ROOT_ENV, resolveArtifactRoot } from "./ci-cache-slot.mjs";
 import { hasRoomForSlot } from "./ci-slot-apply.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 安装包扩展名（跨平台都收：Windows 的 nsis/msi 是本档主形，其余是同一条链在别的卷上的产物）。 */
@@ -431,7 +430,7 @@ export function main(io = {}) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }

@@ -20,7 +20,6 @@
 // （详见 normalizeRootForPort 的注释：拼 cwd 会让平台/目录差异改变端口）。
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 export const FALLBACK_PORT = 3100;
 export const DERIVED_PORT_BASE = 3200;
@@ -165,7 +164,7 @@ export function readEnvPort(root) {
  *
  * @returns {string} 仓库根绝对路径 */
 export function resolveRepoRoot() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  return path.resolve(import.meta.dirname, "..");
 }
 
 /** 最终端口：`.env` 显式值优先，否则按检出路径推导，异常时兜底。

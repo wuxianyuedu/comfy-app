@@ -50,12 +50,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { parseEnvFile } from "./env-preflight.mjs";
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const argv = process.argv.slice(2);
 const runOnce = argv.includes("--once");
 const claimOnce = argv.includes("--claim-once");

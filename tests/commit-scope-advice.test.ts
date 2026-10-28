@@ -15,13 +15,12 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import { scopeAdvice } from "../scripts/run-affected-tests.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const LAUNCHER_PATH = path.join(ROOT, "scripts", "run-affected-tests.mjs");
 
 describe("受影响用例的启动器 —— 「大改动拆小」这条建议的执行者", () => {

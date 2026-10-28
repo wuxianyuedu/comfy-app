@@ -47,7 +47,6 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   browserExecutableExists,
@@ -58,7 +57,7 @@ import {
 import { codePageIsUtf8, readConsoleEncoding } from "./ci-console-encoding.mjs";
 import { findPython } from "./ci-toolchain-python.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 /** 仓库根 —— 本脚本住在 `scripts/` 下。 */
 export const ROOT = path.resolve(HERE, "..");
 
@@ -796,7 +795,7 @@ export function envProbe({
  * 18 分钟后的 E2E 才暴露）。判据见 `tests/script-main-guard.test.ts`。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(envProbe());
 }

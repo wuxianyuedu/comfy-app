@@ -77,7 +77,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
 import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
 
@@ -250,7 +249,7 @@ function main() {
 // 拼 `file://${argv[1]}` 在 Windows 上恒不相等，那会让 main() 一次都不跑、退出码恒 0。
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   main();
 }

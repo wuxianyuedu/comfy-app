@@ -32,7 +32,6 @@ import {
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   echoCommandLine,
@@ -54,7 +53,7 @@ import {
   pruneStaticToAllowList,
 } from "./standalone-private-inputs.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = import.meta.dirname;
 const root = join(__dirname, "..");
 const nextOut = join(root, ".next", "standalone");
 const staticDir = join(root, "src-tauri", "static");

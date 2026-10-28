@@ -16,7 +16,6 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   FRESHNESS_TRACKS,
@@ -25,7 +24,7 @@ import {
 } from "../scripts/freshness-ledger.mjs";
 import { readFreshnessLedger } from "../scripts/freshness-gate.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 const E2E_REL = "scripts/.e2e-freshness.json";
 const BRANCH = "ci/freshness-ledger-test";

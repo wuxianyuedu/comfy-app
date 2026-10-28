@@ -41,7 +41,6 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /**
  * git 自己会写下的合并信息形态（首行）。
@@ -197,7 +196,7 @@ function main() {
 // `scripts/check-deps-freshness.mjs`。
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   main();
 }

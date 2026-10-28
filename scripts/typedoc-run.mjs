@@ -40,11 +40,10 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { resolvePackageBinEntry } from "./package-bin-entry.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 默认尝试次数（含第一次）。占用类失败等一等就过，所以默认不是 1。 */
 export const DEFAULT_ATTEMPTS = 3;

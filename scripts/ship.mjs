@@ -192,7 +192,6 @@
 import fs from "node:fs";
 import process from "node:process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { resolveGitDir } from "./git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
@@ -729,7 +728,7 @@ async function runFlow(deps, tmpFiles) {
 
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   main().then((code) => process.exit(code));
 }

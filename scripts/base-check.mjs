@@ -108,7 +108,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /* git 与 ref 层、钩子解析层、判决层各自拆成同目录模块（ISSUE #1811 拆 R5
  * 超限文件）：主文件只留编排与 CLI。下面**只 import 编排层真正用到的**，
@@ -691,7 +690,7 @@ function main(argv) {
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
 if (
   process.argv[1] &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  import.meta.filename === path.resolve(process.argv[1])
 ) {
   process.exit(main(process.argv.slice(2)));
 }

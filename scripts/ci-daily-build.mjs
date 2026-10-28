@@ -58,7 +58,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { imageIdentity } from "./ci-image-identity.mjs";
 import { main as artifactMain } from "./artifact-run.mjs";
@@ -118,7 +117,7 @@ export function main({
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }

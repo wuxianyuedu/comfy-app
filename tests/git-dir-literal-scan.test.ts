@@ -1,9 +1,8 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 describe("scripts/git-dir-literal-scan.mjs", () => {
   it('scripts/** 除 git-dir.mjs 外没有硬编码的 ".git" 路径拼接', () => {

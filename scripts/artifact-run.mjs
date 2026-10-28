@@ -32,7 +32,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import { pnpmCli } from "./ci-install-deps.mjs";
@@ -51,7 +50,7 @@ import {
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 本档的墙钟预算（`next build` + 数产物，分钟级；与全量档同一条理由）。 */
@@ -211,7 +210,7 @@ export function main(argv) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   process.exit(main(process.argv.slice(2)));
 }

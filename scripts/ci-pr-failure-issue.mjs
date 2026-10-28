@@ -66,7 +66,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   classifyBuildOutcome,
@@ -82,7 +81,7 @@ import { cnbJson, makeRunner, writeScratch } from "./ship-exec.mjs";
 import { runAppendIssueComment, runNewIssue } from "./ship-issue-new.mjs";
 import { machineHandle } from "./dev-handle.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 三态与仓内其余档同口径（`0` 有结论 / `1` 该写的没写成 / `2` 取不到读数）。 */
 export const CODE = { DONE: 0, WRITE_FAILED: 1, NO_FACT: 2 };
@@ -725,7 +724,7 @@ export function main(io = {}) {
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const exit = main();
   if (exit !== CODE.DONE) {

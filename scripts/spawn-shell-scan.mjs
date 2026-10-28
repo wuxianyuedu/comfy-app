@@ -63,7 +63,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /* 剥注释**不自己写**（§12.18）：唯一实现是 `tests/helpers/strip-comments.ts`，
  * `tests/strip-comments-single-source.test.ts` 那条台账按「文件里有没有那段本地定义」
@@ -75,7 +74,7 @@ import { fileURLToPath } from "node:url";
  * `package.json` 的 `engines` 三档都在默认开启的那一档上）。 */
 import { stripComments } from "../tests/helpers/strip-comments.ts";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 违例形状：`shell:` 且值**不是**「明确不开」的那几种。
@@ -365,7 +364,7 @@ export function findShellOptions(root = ROOT) {
  * `--root` 供阳性对照（canary）：在临时树里放一个已知违例，确认本脚本退出码非 0。 */
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   const rootFlag = process.argv.indexOf("--root");
   const scanRoot = rootFlag !== -1 ? process.argv[rootFlag + 1] : ROOT;

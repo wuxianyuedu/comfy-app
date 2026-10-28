@@ -50,13 +50,12 @@ import fs from "node:fs";
 import { parseArgs } from "node:util";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
 import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
 
 /** 仓库根：本条判据是本仓的钩子件，扫描面就是本检出（`scripts/` 的上一级）。 */
 const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
+  import.meta.dirname,
   "..",
 );
 
@@ -354,7 +353,7 @@ function main() {
 // Windows 上恒不相等 ⇒ `main()` 一次都不跑而退出码恒 0（判据在场、却什么都不做）。
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   main();
 }

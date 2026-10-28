@@ -74,7 +74,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 const ROOT = process.cwd();
 
@@ -740,7 +739,7 @@ function main(argv) {
 
 if (
   process.argv[1] &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  import.meta.filename === path.resolve(process.argv[1])
 ) {
   process.exit(main(process.argv.slice(2)));
 }

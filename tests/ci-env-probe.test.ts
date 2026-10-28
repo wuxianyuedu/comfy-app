@@ -29,7 +29,6 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -60,7 +59,7 @@ import {
   playwrightReachabilityVerdicts,
 } from "../scripts/ci-toolchain-browser.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
 /** 一份「什么都没有」的假注入面（用例只关心它自己造的那一格）。 */

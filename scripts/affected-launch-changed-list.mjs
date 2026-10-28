@@ -30,10 +30,9 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /** 本模块所在目录 —— 定位同目录的 `affected-tests.mjs`（**不靠 cwd**，见下）。 */
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 
 /**
  * 改动面清单（来自 `COMFY_AFFECTED_CHANGED`，换行或空格分隔）。

@@ -64,7 +64,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { resolveGitDir } from "./git-dir.mjs";
 
 /** 账本文件名（住在 `COMFYAPP_CI_PROBE_DIR` 或宿主 `LOCALAPPDATA` 下，**不在检出目录里**）。 */
@@ -566,7 +565,7 @@ export function workspaceProbeLines(io = {}) {
  * 在 Windows 上恒不相等，于是本脚本一行都不打就退 0 —— 而它存在的意义正是把这一格打出来。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   for (const line of workspaceProbeLines()) console.log(line);
   process.exit(0);

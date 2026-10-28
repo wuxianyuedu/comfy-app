@@ -24,7 +24,6 @@
 // 时它照样先建库文件**。所以第 1 步是**前置判决**，不是事后复核。
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { runPnpmSync } from "./launcher-core/shell.mjs";
@@ -32,7 +31,7 @@ import { pnpmCli } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { resolveSqlitePath } from "./db-schema-state.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(import.meta.dirname, "..");
 const dbPath = resolveSqlitePath(root);
 
 /** 迁移文件目录（与 `drizzle.config.ts` 的 `out` 同源，写死一处便于核对）。 */

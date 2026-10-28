@@ -20,7 +20,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
@@ -41,7 +40,7 @@ import {
   storySurfaces,
 } from "./storybook-checks/story-surface.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const COMPONENTS = path.join(ROOT, "src", "components");
 const COVERAGE_BASELINE = path.join(
   ROOT,

@@ -34,9 +34,8 @@
 import childProcess from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const FRAGMENT_DIR = path.join(ROOT, "changelog.d");
 const CHANGELOG = path.join(ROOT, "CHANGELOG.md");
 /** Keep a Changelog 的固定段落顺序 —— 并入时按它重排,不按文件名字母序。 */

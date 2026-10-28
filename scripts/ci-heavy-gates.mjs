@@ -94,7 +94,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   CHANGED_SCOPED,
@@ -108,7 +107,7 @@ import {
 } from "./ci-incremental-gates.mjs";
 import { gateFail, gatePass, gateSkip, looksSkipped } from "./ci-log.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 条目表 —— 「这一格里到底跑哪些判据」的唯一出处。
@@ -719,7 +718,7 @@ export function main(io = {}) {
  * 而那件事的形态是「用例一条都没跑、套件却红了」，读起来与真红完全两样。 */
 if (
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   process.exit(main());
 }
