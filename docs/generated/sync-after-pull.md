@@ -17,7 +17,7 @@
 |---|---|
 | `minimumReleaseAge: 0` | 关闭 pnpm 默认的「新包 24h 拒装」供应链门槛 |
 | `verifyDepsBeforeRun: false` | 关闭 pnpm 命令前的隐式自动 `pnpm install` |
-| `allowBuilds` | 显式批准含 postinstall 构建脚本的依赖（如 better-sqlite3、esbuild、msw） |
+| `allowBuilds` | 逐条回答含 postinstall 构建脚本的依赖：`true` 批准（如 esbuild、msw）、`false` **显式拒绝**（如 `better-sqlite3` —— v13 起随包附带 `prebuilds/`，install 阶段没有可跑的构建脚本，见规范 §6.1） |
 | `package.json` → `packageManager: pnpm@12.4.1` | 钉死 pnpm 版本（由 corepack 管理） |
 
 这些配置**只影响新执行的 `pnpm install`**，不会自动作用到已装好的 `node_modules`。
