@@ -238,6 +238,9 @@ export const task = sqliteTable(
      */
     shotId: text("shotId"),
     referenceImages: text("referenceImages", { mode: "json" }),
+    /** 来源任务（#2483 · FR-QA-09）：重绘 / 放大等「带修改的重跑」指回原任务。
+     *  只作追溯展示（产物面板「来源任务」），不参与执行；常规提交为 NULL。 */
+    parentId: text("parentId"),
     status: text("status").notNull().default("QUEUED"),
     promptId: text("promptId"),
     progress: integer("progress").notNull().default(0),

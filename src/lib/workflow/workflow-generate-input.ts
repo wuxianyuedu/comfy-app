@@ -59,6 +59,8 @@ export const generateInputSchema = z.object({
   /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */
   shotId: z.string().optional(),
   referenceImages: z.array(z.string()).optional(),
+  /** 来源任务（#2483 FR-QA-09）：重绘 / 放大指回原任务，只作追溯展示。 */
+  parentId: z.string().optional(),
 });
 
 /**

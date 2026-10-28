@@ -170,6 +170,7 @@ export function ProjectOutputsMetadataSheet({
                         key: "时间",
                         value: displayValue(timeAgo(selected.createdAt)),
                       },
+                      { key: "来源任务", raw: selected.parentId },
                     ]}
                   />
                 </section>

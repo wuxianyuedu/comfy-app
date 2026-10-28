@@ -96,6 +96,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
     /** 提交时刻的 RAW 执行载荷（ADR §13-3B1 决定 1）：host 由它重建 Job，
      *  不经 workflowName 回查模板（模板改/删不影响在队任务）。 */
     execPayload?: unknown;
+    /** 来源任务（#2483 FR-QA-09）：重绘 / 放大指回原任务，只作追溯。 */
+    parentId?: string | null;
   }): Promise<Task> {
     const rows = await db
       .insert(task)
@@ -112,6 +114,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
         workflowSnapshot: input.workflowSnapshot ?? undefined,
         claimedBy: input.claimedBy ?? null,
         execPayload: input.execPayload ?? null,
+        parentId: input.parentId ?? null,
         status: "QUEUED",
       })
       .returning();

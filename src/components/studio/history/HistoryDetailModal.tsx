@@ -20,6 +20,9 @@ import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
 import { ImageFeedbackRow } from "./ImageFeedbackRow";
+import { ImageRedrawPanel } from "./ImageRedrawPanel";
+import { useToast } from "../ToastProvider";
+import type { ActionReport } from "~/lib/async-action";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -64,6 +67,11 @@ export function HistoryDetailModal({
     openFolder: openTaskFolder,
     fetchWorkflow: fetchTaskWorkflow,
   });
+  const toast = useToast();
+  /* 重绘 / 放大的反馈通道（与 use-history-detail-actions 的 toast 适配同一形状，
+   * 那份是模块私有，这里就近再接一次 —— 表现层选择归调用处，规范 16 §16.2.4.30）。 */
+  const redrawReport: ActionReport = (kind, detail) =>
+    kind === "ok" ? toast.success(detail) : toast.error(detail);
 
   if (!detailId) return null;
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
@@ -289,6 +297,24 @@ export function HistoryDetailModal({
                   </div>
                 ) : (
                   <p className="text-ink-muted text-sm">该任务没有生成图像。</p>
+                )}
+
+                {/* 放大 / 局部重绘（#2483 · FR-QA-09）：只对图片产物开放（视频
+                    产物没有这一族修复动作）。模板取自用户工作流库。 */}
+                {firstImage && !isVideo(firstImage.localPath) && (
+                  <Disclosure
+                    trigger={
+                      <span className="u-title text-sm">放大 / 局部重绘</span>
+                    }
+                  >
+                    <ImageRedrawPanel
+                      prompt={current?.prompt ?? ""}
+                      projectId={current?.projectId ?? null}
+                      parentTaskId={current?.id ?? ""}
+                      imageUrl={firstImage.localPath}
+                      toastReport={redrawReport}
+                    />
+                  </Disclosure>
                 )}
 
                 {/* 提示词与「生成参数」（种子 / 步数 / CFG）都走下面的参数块：
