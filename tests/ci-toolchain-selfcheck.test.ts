@@ -2711,51 +2711,64 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     },
   );
 
-  it("**断了接着来**：已落盘的前缀不被重下（第二次调用从半路接）", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-resume-"));
-    const dest = path.join(dir, "x.bin");
-    try {
-      /* 第一次：只在盘上放前 64 KiB（模拟「上一次走到一半就被掐了」）。 */
-      writeFileSync(dest, Buffer.alloc(64 * 1024, 5));
-      const TOTAL = 128 * 1024;
-      await withStallingLink(TOTAL, 16 * 1024, async (base) => {
-        /** @type {number[]} */
-        const offsets: number[] = [];
-        const res = fetchUrlResumable(`${base}/x.zip`, dest, {
-          chunkBytes: 64 * 1024,
-          chunkTimeoutMs: 700,
-          retries: 2,
-          fetchChunk: (
-            /** @type {string} */ url,
-            /** @type {string} */ d,
-            /** @type {number} */ offset,
-            /** @type {number} */ size,
-            /** @type {number} */ timeoutMs,
-            /** @type {{probeOnly?: boolean}} */ opts = {},
-          ) => {
-            /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
-             * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
-            if (!opts.probeOnly) offsets.push(offset);
-            return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);
-          },
+  /* 这一格的墙钟成本同样 = **停顿的片数 × `chunkTimeoutMs`**（同上面那一格），而它没有
+   * 自己的预算登记 ⇒ 用的是全局 `testTimeout` 30s。「已落盘 64 KiB / 整包 128 KiB」这个
+   * 用量决定了它要退两轮（64 KiB → 32 KiB → 16 KiB），从半路接时 16 KiB 一片正好 8 片、
+   * 每片 2 次 × 700ms ⇒ 本机空载就 **11.2s**，负载下的平台机器直接撞上 30s 那一档
+   * （`cnb-7t8-1k60klj0p` 的「受影响用例」一格，唯一一条红）。
+   * 处置与上一格同一形状：**先降成本**（`chunkTimeoutMs` 700ms → 200ms，判据一字未改 ——
+   * 这条判的是「第一次请求的偏移没有回到 0」「已落盘的前缀没被覆盖」，与超时是 700 还是
+   * 200 无关；片数与内容断言照样量得到），**再登记预算**（120s，与同一 describe 里那些
+   * 「真起子进程」的格同档）。§11.13 明令禁止的是拿预算换绿，不是禁止登记量到的成本。 */
+  it(
+    "**断了接着来**：已落盘的前缀不被重下（第二次调用从半路接）",
+    { timeout: 120_000 },
+    async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-resume-"));
+      const dest = path.join(dir, "x.bin");
+      try {
+        /* 第一次：只在盘上放前 64 KiB（模拟「上一次走到一半就被掐了」）。 */
+        writeFileSync(dest, Buffer.alloc(64 * 1024, 5));
+        const TOTAL = 128 * 1024;
+        await withStallingLink(TOTAL, 16 * 1024, async (base) => {
+          /** @type {number[]} */
+          const offsets: number[] = [];
+          const res = fetchUrlResumable(`${base}/x.zip`, dest, {
+            chunkBytes: 64 * 1024,
+            chunkTimeoutMs: 200,
+            retries: 2,
+            fetchChunk: (
+              /** @type {string} */ url,
+              /** @type {string} */ d,
+              /** @type {number} */ offset,
+              /** @type {number} */ size,
+              /** @type {number} */ timeoutMs,
+              /** @type {{probeOnly?: boolean}} */ opts = {},
+            ) => {
+              /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
+               * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
+              if (!opts.probeOnly) offsets.push(offset);
+              return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);
+            },
+          });
+          expect(res.ok, "接不上").toBe(true);
+          expect(readFileSync(dest).length).toBe(TOTAL);
+          expect(
+            Math.min(...offsets),
+            "第一次请求的偏移回到了 0 —— 已落盘的那 64 KiB 被重下了（那就不是「续传」）",
+          ).toBeGreaterThanOrEqual(64 * 1024);
+          expect(
+            readFileSync(dest)
+              .subarray(0, 64 * 1024)
+              .every((b) => b === 5),
+            "已落盘的前缀被后下的字节覆盖了",
+          ).toBe(true);
         });
-        expect(res.ok, "接不上").toBe(true);
-        expect(readFileSync(dest).length).toBe(TOTAL);
-        expect(
-          Math.min(...offsets),
-          "第一次请求的偏移回到了 0 —— 已落盘的那 64 KiB 被重下了（那就不是「续传」）",
-        ).toBeGreaterThanOrEqual(64 * 1024);
-        expect(
-          readFileSync(dest)
-            .subarray(0, 64 * 1024)
-            .every((b) => b === 5),
-          "已落盘的前缀被后下的字节覆盖了",
-        ).toBe(true);
-      });
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("取不到总长时如实说「交给老路」，且一个字节都不落盘", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-nolen-"));

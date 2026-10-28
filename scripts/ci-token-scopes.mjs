@@ -5,193 +5,328 @@
  *
  * ## 它要回答的那一格
  *
- * 「PR 那一族只有 `repo-code:r`」这句话在本仓被引用过无数次（#2339 / #2362 / #2365 /
- * #2472 / #2550），而出处始终是**别人先撞上 403 之后抄下来的那句话**：
+ * 「PR 那一族只有 `repo-code:r`」这句话在本仓被引用过十几次（#2339 / #2362 / #2365 /
+ * #2472 / #2550），而出处始终是**别人先撞上 403 之后抄下来的那句话** —— 平台原话是
+ * 「授权范围与本请求不匹配」加一句点名缺哪一枚（#2332 抄下来的那句
+ * `Missing required scopes: repo-cnb-history:r` 就是它）。
  *
- *     平台原话是「授权范围与本请求不匹配」+ 一句点名缺哪一枚（原文里那句
- *     `Missing required scopes: repo-cnb-history:r` 就是 #2332 抄下来的）。
- *
- * 也就是说，直到某一格真去写、真被拒，这一跑的权限面才在日志里出现一次 —— 而且只出现
+ * 也就是说，直到某一格真去写、真被拒，这一跑的权限面才在日志里出现一次，而且只出现
  * **缺的那一项**。想知道「PR 上到底有没有 `repo-issue:r`」，过去只能翻官方文档的权限表
  * 再猜平台实现。这一格把「猜」换成「量」：拿一串**只读**接口挨个问一遍，403 里平台会
- * 自己点名缺什么 scope，于是**平台自报的授权面**就落进了构建日志。
+ * 自己点名缺什么 scope，于是**平台自报的授权面**落进构建日志。
  *
- * ## 它刻意不做的事
+ * ## 为什么是 HTTP 而不是 `cnb` CLI（五跑读数换来的）
  *
- * - **不打令牌值**，一个字节都不打（硬规则 17 / 拉取请求 §7.3）。打的是「哪些能力够得着」，
- *   不是「凭什么够得着」。唯一的例外是 `authentication exchange-oidc-id-token` 那一问的
- *   入参：`oci` 渠道要求把 `cnb_token` 原样放进请求体，那一问的值**从不回显、从不落盘**，
- *   且只在 `--probe-oidc` 显式点名时才发生（默认不发）。
- * - **不当判据**：恒退 0（除非 `--strict`，而平台那一跳**不许带**它 —— 理由见 `strictHint()`）。
- *   它量的是**平台怎么给权限**，而那不是仓库能改的东西 ⇒ 判红只会把「节点的形态」伪装成
- *   「这次 PR 的缺陷」（与 `ci-workspace-probe.mjs` 同一口径）。
- * - **不引新依赖**：一行 `run` 用 `spawnSync` 现写（复用 `ship-exec.mjs` 的 `makeRunner`
- *   会把 `ship` 那一族的整条加载链拖进来，而这一格要在刚 clone 完的机器上也能跑）。
+ * 第一版每条探针都起 `cnb <子命令> -v`。四跑下来都是一整片「没拿到答复」，直到把
+ * 「没拿到答复」拆成四种成因才看清：**自托管 runner 的宿主 PATH 上没有 `cnb`**
+ * （`Install dependencies` 那一格的日志里只有 node / pnpm / git）。同一跑的
+ * `PR 失败立案` 好得很，是因为它在**装完依赖之后**由 `ship-exec.mjs` 的 `cnbSpawn()`
+ * 解析到包真身 —— 而这一格要在装依赖之前就能跑（读数越早越有用）。
  *
- * ## 三档与退出码
+ * 所以它只用两件平台**无条件注入**的东西：`CNB_TOKEN` 与 `CNB_API_ENDPOINT`
+ * （官方 build-in-env.md）+ 宿主 Node 自带的 `fetch`。形状：
  *
- * | 档       | 判据                                   | 退出码          |
- * | -------- | -------------------------------------- | --------------- |
- * | 量到了   | 至少一条探针拿到了平台明确答复         | 0               |
- * | 没量到   | 一条明确答复都没有                     | 0（默认）/ 2（`--strict`）|
+ * 请求形态：`GET {CNB_API_ENDPOINT}/{repo}/-/{path}`，两个请求头分别是
+ * `Authorization: Bearer <CNB_TOKEN>` 与 `Accept: application/json`。
  *
- * 默认**恒退 0**：这是读数档，红了不构成任何结论（与 `ci-workspace-probe.mjs` 一致）。
+ * ## 五条边界，每一条都是刻意的
  *
- * ⚠️ **「没量到」不能读成「这一格坏了」**（ISSUE #2551 的第一跑读数）：`pr_fail_stage`
- * 上那一跑（`cnb-vv9-1k60eb6vl`）14 条探针全部落进「没拿到答复」，而原因是**平台侧**
- * —— 那一跑的令牌连 `repo-cnb-history:r` 都没有（同跑的 `PR 失败立案` 自己读构建列表时
- * 撞的就是这一句），于是每条探针都以 403 收场，而 403 的原话里没写那句
- * `Missing required scopes`（原文是「授权范围与本请求不匹配」），判据只能落进 unknown。
- * 那不是这一格坏了，**那正是这一格要量的东西**。所以平台那一跳**不带** `--strict`：
- * 否则 PR 上会有一条永远红、且**没有任何人能修**的格子（要修得平台改授权口径）。
+ * 1. **不打令牌值，一个字节都不打**（硬规则 17）。打的是「哪些能力够得着」，
+ *    不是「凭什么够得着」。唯一的例外是 `oidc` 那一问的**请求体**含 `cnb_token`：
+ *    它默认**不发**，只有 `--probe-oidc` 显式点名才进清单，且请求体从不回显。
+ * 2. **权限本身从不构成红**。默认恒退 0；`--strict` 只把「一条明确答复都没有」提到 2
+ *    —— 而平台那一跳**不带它**（理由见下）。平台按「事件 + ref」分配，缺
+ *    `repo-manage:r` 是预期形态，判它红等于把平台形态伪装成这次 PR 的缺陷
+ *    （与 `ci-workspace-probe.mjs` / `镜像身份` 同一口径）。
+ * 3. **业务层 404 读成「平台认了这次请求」**，不读成缺权限：PR #1 不存在、仓库没建
+ *    知识库都走这一档 —— 「读得到」与「读得到但对象不在」必须分开，否则探针答的是
+ *    另一个问题。
+ * 4. **取不到 ≠ 够得着**（§13.6.4.1）：没配 token / 网络断 / 输出不是平台信封，
+ *    一律 `unknown`，且**各自念一句成因**（这是第四跑补的：把四种成因印成同一句
+ *    「没拿到答复」，等于把「不知道什么原因」写成「没有权限」的形状）。
+ * 5. **`--strict` 不许进 `.cnb.yml`**：第一跑带了它，PR 上那条 14 条探针全 403 的格子
+ *    红了 7.5s，而红的原因**没有任何人能修**（要修得平台改授权口径）。判据
+ *    `tests/ci-token-scopes.test.ts` 读配置钉住这一条。
  *
  * ## 用法
  *
  * ```text
- * node scripts/ci-token-scopes.mjs                 # 对着当前仓库问一遍，打印读数
- * node scripts/ci-token-scopes.mjs --repo a/b      # 指定仓库
- * node scripts/ci-token-scopes.mjs --json          # 机器可读
- * node scripts/ci-token-scopes.mjs --strict        # 一条都没量到 ⇒ 退 2
- * node scripts/ci-token-scopes.mjs --only repo-issue   # 只问点名的族
- * node scripts/ci-token-scopes.mjs --probe-oidc    # 额外问一次 OIDC 兑换（入参含 cnb_token）
+ * node scripts/ci-token-scopes.mjs                  # 对着 CNB_REPO_SLUG 问一遍
+ * node scripts/ci-token-scopes.mjs --repo a/b       # 指定仓库
+ * node scripts/ci-token-scopes.mjs --json           # 机器可读
+ * node scripts/ci-token-scopes.mjs --strict         # 一条明确答复都没有 ⇒ 退 2（只给手工自查）
+ * node scripts/ci-token-scopes.mjs --only repo-issue  # 只问点名的族
+ * node scripts/ci-token-scopes.mjs --probe-oidc     # 额外问一次 OIDC 兑换（请求体含 cnb_token）
  * ```
  */
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 /** 三态退码与仓内其余档同口径（`0` 有结论 / `2` 没拿到测量）。 */
 export const CODE = { OK: 0, NO_FACT: 2 };
 
 /** 平台「scope 不够」的那一句原话里，缺项就在冒号后面。 */
-/* 「缺哪一枚」与「缺了但没写名字」是**同一档**（都是平台拒了这次请求），区别只在读数里
- * 能不能把那一枚抄下来 —— 所以这里匹配的是那句话本身，名字是可选捕获组。
- * 只认 `Missing required scope` 这两个词：它是平台在 403 上的固定措辞，而「errcode 10023」
- * 还可能是别的原因，拿它当判据会把「其他授权错误」读成缺 scope。 */
 const SCOPE_PATTERN = /Missing required scopes?:?\s*([^\s",}]*)/i;
 
 /**
- * 探针表：**只读**接口 + 它背后那枚 scope。
+ * 一条探针：`domain` 是读数里的分组，`scope` 是它背后那枚权限（**已知需要**，
+ * 来自官方权限表 + 本仓撞过的现场），`path` 是只读子路径，`why` 是「这条答什么」，
+ * `note` 是「这条为什么可能回一个与权限无关的答复」。
  *
- * 表里那枚 scope 是**已知需要**（官方权限表 + 本仓撞过的现场），不是从平台问来的 ——
- * 它只用来在读数里把「平台回的是哪一枚」写清楚。真正的结论仍以 403 的原话为准：
- * 探针与表里的 scope 对不上时，念的是平台自己的那句话，不是这张表。
- *
- * `domain` 是给读者分组用的（会话里「这些 repo-code:r」那句话真正问的是「这一族还有谁」）。
- *
- * ⚠️ 每一条都必须是**只读**：这一格会在 PR、每日、桌包三种触发口上跑，任何一条写命令
- * 都会让「量一下权限」变成「动一下平台」。
- *
- */
-/**
- * 一条探针：`domain` 是读数里的分组，`scope` 是它背后那枚权限，`cmd` 是**只读**子命令，
- * `why` 是「这条答的是什么」，`note` 是「这条为什么可能回一个与权限无关的答复」。
+ * ⚠️ 每一条都必须是**只读**：这一格会在 PR、每日、桌包三种触发口上跑。
  *
  * @typedef {{
  *   domain: string,
  *   scope: string,
- *   cmd: string[],
+ *   path: string,
  *   why: string,
  *   note?: string,
  * }} Probe
  */
-/** @type {Array<{domain: string, scope: string, cmd: string[], why: string, note?: string}>} */
+/** @type {Probe[]} */
 export const PROBES = [
   {
     domain: "repo-code",
     scope: "repo-code:r",
-    cmd: ["git", "list-branches", "--page", "1", "--page-size", "1"],
+    path: "git/branches?page=1&pageSize=1",
     why: "读分支列表（最基础的一条，探针自身的前提）",
   },
   {
     domain: "repo-code",
     scope: "repo-code:r",
-    cmd: ["git", "get-head"],
+    path: "git/head",
     why: "读默认分支",
   },
   {
-    domain: "repo-basic-info",
-    scope: "repo-basic-info:r",
-    cmd: ["repositories", "get-by-id"],
-    why: "读仓库元信息",
+    domain: "repo-code",
+    scope: "repo-code:r",
+    path: "git/commits?page=1&pageSize=1",
+    why: "读提交列表",
   },
   {
     domain: "repo-issue",
     scope: "repo-issue:r",
-    cmd: ["issues", "list-issues", "--page", "1", "--page-size", "1"],
+    path: "issues?page=1&pageSize=1",
     why: "读 Issue 列表（立案那一族的前提）",
   },
   {
     domain: "repo-issue",
     scope: "repo-issue:r",
-    cmd: ["issues", "get-issue-properties", "--number", "1"],
+    path: "issues/1/properties",
     why: "读 Issue 自定义属性",
+    note: "编号 1 不存在时回 404，与权限无关",
   },
   {
     domain: "repo-pr",
     scope: "repo-pr:r",
-    cmd: ["pulls", "list-pulls", "--page", "1", "--page-size", "1"],
+    path: "pulls?page=1&pageSize=1",
     why: "读 PR 列表（回写型自动修的前提）",
   },
   {
     domain: "repo-pr",
     scope: "repo-pr:r",
-    cmd: ["pulls", "list-labels", "--number", "1"],
+    path: "pulls/1/labels",
     why: "读 PR 标签",
     note: "编号 1 不存在时回 404 `not found`，与权限无关",
   },
   {
     domain: "repo-cnb-history",
     scope: "repo-cnb-history:r",
-    cmd: ["build", "get-build-logs", "--page", "1", "--page-size", "1"],
+    path: "build/logs?page=1&pageSize=1",
     why: "读构建历史（失败立案 / `--diagnose` 的前提，#2332 撞过这一枚）",
   },
   {
     domain: "repo-notes",
     scope: "repo-notes:r",
-    cmd: ["releases", "list-releases"],
+    path: "releases",
     why: "读发行版列表",
   },
   {
     domain: "registry-package",
     scope: "registry-package:r",
-    cmd: ["registries", "list-packages", "--slug", "*", "--type", "all"],
+    path: "packages?type=all",
     why: "读制品列表",
   },
   {
     domain: "knowledge-base",
     scope: "repo-code:r",
-    cmd: ["knowledge-base", "get-knowledge-base-info"],
+    path: "knowledge/base",
     why: "读知识库信息",
     note: "本仓没建知识库 ⇒ 恒回 KnowledgeBase Not Found，与权限无关",
   },
   {
     domain: "repo-manage",
     scope: "repo-manage:r",
-    cmd: ["git-settings", "get-pipeline-settings"],
+    path: "settings/cloud-native-build",
     why: "读流水线设置（管理面）",
   },
   {
     domain: "repo-manage",
     scope: "repo-manage:r",
-    cmd: ["members", "list-all-members", "--slug", "*", "--page", "1"],
+    path: "members?page=1",
     why: "读仓库有效成员（管理面）",
   },
   {
     domain: "repo-security",
     scope: "repo-security:r",
-    cmd: ["security", "get-repo-security-overview"],
+    path: "security/overview",
     why: "读仓库安全概览（管理面）",
   },
 ];
 
 /**
- * `probeAll()` 的入参。
+ * OIDC 兑换那一问：**请求体含 `cnb_token`**，所以只有 `--probe-oidc` 显式点名才发。
+ *
+ * 它的价值是回答「这一跑拿不拿得到 `id_token`」（官方口径：只有流水线 token 能兑换，
+ * PR / Issue 事件不签发）—— 而请求体里那枚值从**回显、从落盘**都不经过这里。
+ */
+export const OIDC_PROBE = {
+  domain: "authentication",
+  scope: "repo-basic-info:r",
+  path: "id_token",
+  why: "用 cnb_token 兑换 id_token（只放行流水线 token；PR / Issue 事件不签发）",
+};
+
+/**
+ * 一次探针的执行结果。`error` / `status` / `bodyLen` 三格是**给读数用的诊断面**：
+ * 「没拿到答复」的四种成因在只看 `body` 时长得一样，而这一格的用处正是让人分出是哪一种。
+ * 三格都不含凭据（错误码 / HTTP 状态 / 长度）。
+ *
+ * @typedef {{
+ *   ok: boolean,
+ *   status: number,
+ *   body: string,
+ *   error?: string | null,
+ *   bodyLen?: number,
+ *   ms?: number,
+ * }} FetchResult
+ */
+
+/**
+ * 取一件平台事实（注入面：用例整份替换它，一条网络请求都不发）。
+ *
+ * 只有一次尝试、**不重试**：这一格量的是「这一刻够不够得着」，重试会把一次网络抖动
+ * 抹成一个看起来稳定的读数。超时 15s —— 比 `cnb` CLI 那一版的整格预算小一个量级。
+ *
+ * @param {{base: string, token: string, repo: string}} ctx 平台地址 / 令牌 / 仓库
+ * @param {string} subPath 只读子路径（`git/head` 那种）
+ * @param {{method?: string, body?: string}} [extra] 仅 `oidc` 那一问带 `body`
+ * @returns {Promise<FetchResult>}
+ */
+export async function fetchFact(ctx, subPath, extra = {}) {
+  const url = `${ctx.base.replace(/\/+$/, "")}/${ctx.repo}/-/${subPath}`;
+  const t0 = Date.now();
+  try {
+    const res = await fetch(url, {
+      method: extra.method ?? "GET",
+      headers: {
+        Authorization: `Bearer ${ctx.token}`,
+        Accept: "application/json",
+        ...(extra.body ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(extra.body ? { body: extra.body } : {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = await res.text();
+    return {
+      ok: res.ok,
+      status: res.status,
+      body,
+      error: null,
+      bodyLen: body.length,
+      ms: Date.now() - t0,
+    };
+  } catch (err) {
+    /* 网络层失败只记**错误码**（`ENOTFOUND` / `TimeoutError` 那类），
+     * 不记 message —— message 里可能带 URL，而 URL 里有仓库名（那没问题），
+     * 但把它拼进读数只会让读的人去查一个不存在的「格式问题」。 */
+    return {
+      ok: false,
+      status: -1,
+      body: "",
+      error: String(/** @type {any} */ (err)?.name ?? err),
+      bodyLen: 0,
+      ms: Date.now() - t0,
+    };
+  }
+}
+
+/**
+ * 把一次探针的原文读成三档：`denied` / `granted` / `unknown`。
+ *
+ * 判据只有三句话，顺序不能换：
+ *
+ * ① 原文里有 `Missing required scopes` ⇒ **缺权限**（平台自己点名了缺哪一枚）；
+ * ② 否则 HTTP 2xx ⇒ **够得着**。⚠️ 业务层的 404（PR #1 不存在、仓库没建知识库）
+ *    走的正是这一档：**平台认了这次请求**，只是那个对象没有 —— 它不是「缺权限」；
+ * ③ 其余 ⇒ **没结论**，且按四种成因各念一句（起不来 / 非 2xx 且原话里没有 scope 名 /
+ *    空响应 / 输出不是平台信封）。这一档绝不落进「够得着」。
+ *
+ * @param {string} raw 平台回的响应原文
+ * @param {{error?: string | null, status?: number}} [transport] 取这一条时的传输层事实
+ * @returns {{state: "denied" | "granted" | "unknown", scope?: string, status?: number, why?: string}}
+ */
+export function classifyReply(raw, transport = {}) {
+  const text = String(raw ?? "");
+  const missing = SCOPE_PATTERN.exec(text);
+  if (missing) {
+    /* 空捕获（原话只到 `Missing required scopes` 就断了）与没捕获是同一件事：
+     * 平台拒了这次请求，但没把那枚 scope 的名字写出来。 */
+    return {
+      state: "denied",
+      scope: missing[1] || "（原话里没写出 scope 名）",
+    };
+  }
+  const status = typeof transport.status === "number" ? transport.status : null;
+  /* 2xx = 平台认了这次请求。业务层的 404 走 `status` 是 404 那一档 —— 见 ③ 里的分支，
+   * 而它的**判据不是状态码本身**：下面先判「有没有平台信封」，再看码。 */
+  const envelope = /"errcode"\s*:\s*(\d+)/.exec(text);
+  /* ⚠️ 业务层的「对象不在」有两种码：`errcode: 5`（`Resource not found.`）与
+   * `errcode: 404`（`not found`，PR #1 不存在走的就是这一支）。两者都是**平台认了
+   * 这次请求、只是那个对象没有** —— 判据是「不是权限问题」而不是「码等于几」，
+   * 所以这里认的是 `5` 与 `4xx` 两族，且都要求**没有**那句 `Missing required scopes`
+   * （有的话上面那一支已经返回了）。 */
+  const code = envelope ? Number(envelope[1]) : null;
+  if (code === 5 || (code !== null && code >= 400 && code < 500)) {
+    return { state: "granted", status: status ?? code };
+  }
+  if (status !== null && status >= 200 && status < 300) {
+    return { state: "granted", status };
+  }
+  /* 以下都是「没量到」，四支各念一句 —— 别让读的人在同一个形状面前猜。 */
+  if (transport.error) {
+    return { state: "unknown", why: `起不来（${transport.error}）` };
+  }
+  if (text === "") {
+    return {
+      state: "unknown",
+      why: `没有响应正文（HTTP ${status ?? "?"}）`,
+    };
+  }
+  const errmsg = /"errmsg"\s*:\s*"([^"]{1,160})"/.exec(text);
+  if (errmsg) {
+    return {
+      state: "unknown",
+      status: status ?? undefined,
+      why: `平台回了 ${status ?? "?"}：${errmsg[1]?.replace(/"/g, "'")}`,
+    };
+  }
+  return {
+    state: "unknown",
+    status: status ?? undefined,
+    why: `响应里既没有信封也没有 errmsg（HTTP ${status ?? "?"}，${text.length} 字节）`,
+  };
+}
+
+/**
+ * 探针清单过一遍（注入 `fetchFact` 让用例一条网络请求都不发）。
  *
  * @typedef {{
  *   repo: string,
- *   run: (cmd: string, args: string[]) => {ok: boolean, status: number, out: string},
+ *   base: string,
+ *   token: string,
+ *   fetchFact: (ctx: {base: string, token: string, repo: string}, subPath: string, extra?: {method?: string, body?: string}) => Promise<FetchResult>,
  *   only?: string[],
  *   oidc?: boolean,
  * }} ProbeOptions
@@ -205,192 +340,57 @@ export const PROBES = [
  *   scope: string,
  *   why: string,
  *   note?: string,
- *   args: string[],
+ *   path: string,
  *   reply: ReturnType<typeof classifyReply>,
+ *   ms: number | null,
  * }} ProbeRow
  */
 
-/** OIDC 兑换那一问：入参含 `cnb_token`，所以**只有显式点名才发**。 */
-export const OIDC_PROBE = {
-  domain: "authentication",
-  scope: "repo-basic-info:r",
-  cmd: [
-    "authentication",
-    "exchange-oidc-id-token",
-    "--data",
-    '{"cnb_token":"*","aud":"ci-token-scopes"}',
-  ],
-  why: "用 cnb_token 兑换 id_token（只放行流水线 token；PR / Issue 事件不签发）",
-};
-
 /**
- * `spawnSync` 的十行包装（与 `ci-workspace-probe.mjs` 里那份**刻意不共享**：这一格要能在
- * 「同事刚 clone、还没装依赖」的机器上跑，共用换来的那点重复抵不上这条加载前提）。
- *
- * ⚠️ **起 `cnb` 不能直接 `spawnSync("cnb", …)`**（ISSUE #2551 的第一跑现场）：
- * CI 上 14 条探针全部「没拿到答复」，而同一跑的 `PR 失败立案` 好得很 —— 差别就在
- * 它走的是 `ship-exec.mjs` 的 `cnbSpawn()`。Windows 上 `cnb` 是三个垫片（无扩展名
- * 那份 node 不认、`cnb.cmd` 在无 shell 下被 Node 直接拒、没有 `cnb.exe`），所以
- * `spawnSync("cnb")` 失败**不等于**这台机器没有 cnb。
- *
- * 出路是那份**已经为 pnpm 解决过同一件事**的唯一实现 `pnpmInvocation(args, {name})`
- * —— 但本文件刻意**不 import 它**：`ship-exec.mjs` 会把 `ship` 那一族整条加载链拖进来，
- * 而这一格的前提是「刚 clone 完、还没装依赖的机器上也能跑」。这里只认出 Windows 上
- * **有** `cnb.ps1` 这一种形态（`shell: false` 下唯一起得来的那份），交 PowerShell 宿主；
- * 其余平台照旧直接起命令名。判据 `tests/ci-token-scopes.test.ts` 钉住这条接线。
- *
- * @param {string} cmd
- * @param {string[]} args
- * @returns {{ok: boolean, status: number, out: string}}
+ * @param {ProbeOptions} opts 仓库、平台地址、注入的取数口、两个可选开关
+ * @returns {Promise<ProbeRow[]>}
  */
-export function run(cmd, args) {
-  const { command, argv } = invocationFor(cmd, args);
-  const r = spawnSync(command, argv, { encoding: "utf8", windowsHide: true });
-  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
-  return { ok: r.status === 0 && !r.error, status: r.status ?? -1, out };
-}
-
-/**
- * 「命令名 + 参数」→ 这台机器上**起得来**的那一形态。
- *
- * 只管 `cnb` 一个名字（这一格只起它），其余原样。非 Windows 直接起（与 `ship-exec.mjs`
- * 的 `cnbSpawn()` 同一结论：那边 `pnpmInvocation` 在 POSIX 上也返回空 prefixArgs）。
- *
- * Windows 上的判定顺序照 `usableCommand()` 的既有结论抄一遍**最小面**：先找
- * `cnb.ps1`（corepack 摆的三个垫片里唯一经宿主起得来的那份），找到就交 PowerShell；
- * 找不到则退回 `cnb.cmd`（cmd.exe 解释的那一份）；都没有才原样起 —— 那时 `spawn`
- * 会给一个可读的 ENOENT，读数把它记成「没拿到答复」，不冒充结论。
- *
- * ⚠️ 不 import `ship-exec.mjs` 的 `cnbSpawn()`：那会把 `ship` 那一族整条加载链拖进来，
- * 而这一格的前提是「刚 clone 完、还没装依赖的机器上也能跑」。
- *
- * 平台是入参而不是 `process.platform`：判据问的是「这台机器怎么起」，而用例要能把
- * 两种形态都判一遍 —— 拿宿主平台当判据，POSIX 上那几条断言在 Windows 节点上恒假
- * （CI 那一跑的现场：`expected 'powershell' to be 'cnb'`）。
- *
- * @param {string} cmd
- * @param {string[]} args
- * @param {{platform?: NodeJS.Platform}} [options]
- * @returns {{command: string, argv: string[]}}
- */
-export function invocationFor(cmd, args, { platform = process.platform } = {}) {
-  if (cmd !== "cnb" || platform !== "win32") {
-    return { command: cmd, argv: args };
-  }
-  /** @param {string} name 要查的命令名（带扩展名） @returns {boolean} 在不在 PATH 上 */
-  const onPath = (name) =>
-    spawnSync("where", [name], { encoding: "utf8", windowsHide: true })
-      .status === 0;
-  if (onPath("cnb.ps1")) {
-    return {
-      command: "powershell",
-      argv: [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "cnb.ps1",
-        ...args,
-      ],
-    };
-  }
-  if (onPath("cnb.cmd")) {
-    return { command: "cnb.cmd", argv: args };
-  }
-  return { command: cmd, argv: args };
-}
-
-/**
- * 把一次探针的原文读成三档：`denied` / `granted` / `unknown`。
- *
- * 判据只有三句话，顺序不能换：
- *
- * ① 原文里有 `Missing required scopes:` ⇒ **缺权限**（平台自己点名了缺哪一枚）；
- * ② 否则信封里 `status: 200` ⇒ **够得着**。⚠️ 业务层的 404（PR #1 不存在、仓库没建知识库）
- *    走的正是这一档：**平台认了这次请求**，只是那个对象没有 —— 它不是「缺权限」。
- *    「读得到 vs 读得到但对象不在」在读数里必须分开，否则这条探针答的是另一个问题；
- * ③ 其余（`cnb` 不在、网络断、信封里没有 `status`）⇒ **没结论**，不是「够得着」。
- *
- * @param {string} raw
- * @returns {{state: "denied" | "granted" | "unknown", scope?: string, status?: number, why?: string}}
- */
-export function classifyReply(raw) {
-  const text = String(raw ?? "");
-  const missing = SCOPE_PATTERN.exec(text);
-  if (missing) {
-    /* 空捕获（原话只到 `Missing required scopes` 就断了）与没捕获是同一件事：
-     * 平台拒了这次请求，但没把那枚 scope 的名字写出来。两者都念成同一句。 */
-    return {
-      state: "denied",
-      scope: missing[1] || "（原话里没写出 scope 名）",
-    };
-  }
-  /* 信封上那个 200 是**取到了答复**的意思，与「流程过没过」无关；这一格要的正是它：
-   * 平台没有拒这次请求 ⇒ 这枚 scope 在不在，只能由 403 自己说（① 那一支）。 */
-  const http =
-    /^\s*"?status"?\s*:\s*(\d{3})/m.exec(text) ??
-    /"status"\s*:\s*(\d{3})/.exec(text);
-  const status = http ? Number(http[1]) : null;
-  if (status === null) return { state: "unknown" };
-  if (status === 200) return { state: "granted", status };
-  /* 非 200 而原话里没有那句 `Missing required scopes` —— 是**另一种**拒绝（或业务错误）。
-   * 这类不许落进「够得着」：平台没答应这次请求，而那枚 scope 在不在没人说得准。
-   * 把平台那句 `errmsg` 原样带出去，下一动作才读得出来（CI 上 PR 那一族就落这里：
-   * 403 + 「授权范围与本请求不匹配」，没给 scope 名）。 */
-  const errmsg = /"errmsg"\s*:\s*"([^"]{1,160})"/.exec(text);
-  return {
-    state: "unknown",
-    status,
-    why: `平台回了 ${status}${errmsg ? `：${errmsg[1]?.replace(/"/g, "'")}` : "（原话里没有 errmsg）"}`,
-  };
-}
-
-/**
- * 探针的完整参数：表里的命令 + 仓库（有的子命令不接受 `--repo`，按需给）。
- *
- * @param {Probe} probe
- * @param {string} repo
- * @returns {string[]}
- */
-export function probeArgs(probe, repo) {
-  const args = [...probe.cmd];
-  if (!args.includes("--repo") && !args.includes("--slug")) {
-    args.push("--repo", repo);
-  }
-  /* `--slug` / `--repo` 那一格在表里写的是字面 `*`：那是「沿用本次的仓库」的占位，
-   * 具体值在这里补 —— 表里写死仓库名等于把探针钉死在一个仓上。 */
-  return args.map((a) => (a === "*" ? repo : a));
-}
-
-/**
- * 探针清单过一遍（注入 `run` 便于用例不连平台）。
- *
- * @param {ProbeOptions} opts 仓库、注入的执行者、以及两个可选开关
- * @returns {ProbeRow[]}
- */
-export function probeAll(opts) {
+export async function probeAll(opts) {
   /** @type {Probe[]} */
   const probes = opts.oidc ? [...PROBES, OIDC_PROBE] : PROBES;
   const only = opts.only ?? [];
   const picked = only.length
     ? probes.filter((p) => only.includes(p.domain))
     : probes;
-  return picked.map((probe) => {
-    const args = probeArgs(probe, opts.repo);
-    const r = opts.run("cnb", [...args, "-v"]);
-    return {
-      domain: probe.domain,
-      scope: probe.scope,
-      why: probe.why,
-      note: probe.note,
-      args,
-      reply: classifyReply(r.out),
-    };
-  });
+  const ctx = { base: opts.base, token: opts.token, repo: opts.repo };
+  /* **并发跑，不是串行**（第五跑的现场：读数全跑完了却撞上 2m 的平台预算）。十四条探针
+   * 互不依赖，串行只把「一次慢请求」乘成十四条；而平台那一格的预算是整跑算的。
+   * 并发度取 6：比「全放」慢不了多少，又不会在同一次构建里朝平台打 14 发。 */
+  const CONCURRENCY = 6;
+  /** @type {ProbeRow[]} */
+  const rows = [];
+  const queue = [...picked];
+  /** @returns {Promise<void>} */
+  const worker = async () => {
+    for (let probe = queue.shift(); probe; probe = queue.shift()) {
+      /* `oidc` 那一问的请求体含令牌 ⇒ 只有它带 `body`，且**只从 env 取、不回显**。 */
+      const extra =
+        probe === OIDC_PROBE
+          ? { method: "POST", body: '{"aud":"ci-token-scopes"}' }
+          : {};
+      const r = await opts.fetchFact(ctx, probe.path, extra);
+      rows.push({
+        domain: probe.domain,
+        scope: probe.scope,
+        why: probe.why,
+        note: probe.note,
+        path: probe.path,
+        reply: classifyReply(r.body, r),
+        ms: r.ms ?? null,
+      });
+    }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  return rows;
 }
 
 /**
- * 读数：哪一族够得着、哪一族被平台点名缺什么。
+ * 读数：哪一族够得着、哪一族被平台点名缺什么、哪一族没量到。
  *
  * @param {ProbeRow[]} rows
  * @param {{repo: string, event: string | null, branch: string | null}} ctx
@@ -415,10 +415,8 @@ export function formatReadout(rows, ctx) {
     /* 三档的措辞各自代表一个**不同的事实**，顺序与 `classifyReply()` 同源：
      * ① 缺权限（平台点名了）→「未获授权」；
      * ② 整族都拿到答复 →「获授权」；
-     * ③ 一条答复都没有 → **「没量到」**。⚠️ 这一档绝不能念成「获授权」：平台没拒
-     *    不等于允许，那正是 §13.6.4.1 那条「取不到 ≠ 测出来是好的」。CI 上的现场是
-     *    PR 那一族连 `repo-cnb-history:r` 都没有 ⇒ 每一条探针都以 403 收场，而
-     *    403 的原话里**没写** `Missing required scopes` 时只能落进 ③。 */
+     * ③ 一条答复都没有 → **「没量到」**。⚠️ 这一档绝不能念成「获授权」：
+     *    平台没拒 ≠ 允许，那正是 §13.6.4.1 那条「取不到 ≠ 测出来是好的」。 */
     const verdict =
       denied.length > 0
         ? `未获授权 · 平台点名缺 ${[...new Set(denied.map((r) => r.reply.scope))].join(" / ")}`
@@ -430,21 +428,32 @@ export function formatReadout(rows, ctx) {
     lines.push(`  ${domain.padEnd(20)} ${verdict}`);
     for (const r of list) {
       const mark =
-        r.reply.state === "denied"
-          ? "×  "
-          : r.reply.state === "granted"
-            ? "ok "
-            : "?  ";
+        r.reply.state === "denied" ? "×  " : r.reply.state === "granted" ? "ok " : "?  ";
       const tail =
         r.reply.state === "denied"
           ? `缺 ${r.reply.scope}`
           : r.reply.state === "granted"
             ? "平台认了这次请求"
-            : (r.reply.why ?? "没拿到答复");
+            : r.reply.why ?? "没拿到答复";
       const note = r.note ? `（${r.note}）` : "";
       lines.push(`    ${mark}${r.why} → ${tail}${note}`);
     }
   }
+  /* 耗时那一行是**给预算用的读数**：第五跑读数全跑完了却撞上平台 2m 预算，
+   * 而屏幕上一个字都没说「时间花在哪」。取最慢的三条点名，下一跑就不用猜。 */
+  const slowest = [...rows]
+    .filter((r) => typeof r.ms === "number")
+    .sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0))
+    .slice(0, 3);
+  const totalMs = rows.reduce((sum, r) => sum + (r.ms ?? 0), 0);
+  lines.push(
+    `耗时：${rows.length} 条探针合计 ${totalMs}ms` +
+      (slowest.length
+        ? `，最慢的 ${slowest.length} 条 ${slowest
+            .map((r) => `${r.path}=${r.ms}ms`)
+            .join(" · ")}`
+        : ""),
+  );
   lines.push(
     "读数不做判据：这一格量的是平台怎么给权限，红了不构成任何结论（恒退 0）。" +
       "「未获授权」不代表这一跑有问题 —— 平台按「事件 + ref」分配，PR 那一族本来就只有 repo-code:r。",
@@ -453,28 +462,29 @@ export function formatReadout(rows, ctx) {
 }
 
 /**
- * `main()` 的入参：`argv` / `env` / `run` / `log` 四件各留一个注入点，用例因此
- * **一条平台命令都不发**（真实入口那几行只填默认值）。
+ * `main()` 的入参：`argv` / `env` / `fetchFact` / `log` 四件各留一个注入点，
+ * 用例因此**一条网络请求都不发**（真实入口那几行只填默认值）。
  *
  * @typedef {{
  *   argv?: string[],
  *   env?: Record<string, string | undefined>,
- *   run?: (cmd: string, args: string[]) => {ok: boolean, status: number, out: string},
+ *   fetchFact?: typeof fetchFact,
  *   log?: (s: string) => void,
  * }} MainOptions
  */
 
 /**
- * CLI 那一格。
+ * `main()` 的判决：`--only` / `--json` / `--strict` / `--probe-oidc`，
+ * 以及「这一跑有没有量出任何东西」那一档。
  *
- * @param {MainOptions} [opts] 命令行参数、环境、注入的执行者与打印口（用例全靠它注入）
- * @returns {number}
+ * @param {MainOptions} [opts]
+ * @returns {Promise<number>}
  */
-export function main(opts = {}) {
+export async function main(opts = {}) {
   const argv = opts.argv ?? process.argv.slice(2);
   const env = opts.env ?? process.env;
   const log = opts.log ?? ((/** @type {string} */ s) => console.log(s));
-  const exec = opts.run ?? run;
+  const fetchOne = opts.fetchFact ?? fetchFact;
 
   /** @param {string} name 旗标名 @returns {boolean} */
   const flag = (name) => argv.includes(name);
@@ -490,9 +500,15 @@ export function main(opts = {}) {
   };
 
   const repo = value("--repo", env.CNB_REPO_SLUG ?? "");
-  if (!repo) {
+  const token = env.CNB_TOKEN ?? "";
+  const base = value("--base", env.CNB_API_ENDPOINT ?? "");
+  if (!repo || !token || !base) {
+    const missing = [!repo && "仓库", !token && "CNB_TOKEN", !base && "CNB_API_ENDPOINT"]
+      .filter(Boolean)
+      .join(" / ");
     log(
-      "[token-scopes] 认不出仓库（`--repo` 与 `CNB_REPO_SLUG` 都不在场）⇒ 没量到任何东西。",
+      `[token-scopes] 认不出 ${missing} ⇒ 没量到任何东西。` +
+        "（这一格只要这两件平台无条件注入的东西，`--repo` / `CNB_REPO_SLUG` 可补仓库名。）",
     );
     return flag("--strict") ? CODE.NO_FACT : CODE.OK;
   }
@@ -501,9 +517,22 @@ export function main(opts = {}) {
     .map((/** @type {string} */ s) => s.trim())
     .filter(Boolean);
 
-  const rows = probeAll({ repo, run: exec, only, oidc: flag("--probe-oidc") });
+  const rows = await probeAll({
+    repo,
+    base,
+    token,
+    fetchFact: fetchOne,
+    only,
+    oidc: flag("--probe-oidc"),
+  });
   if (flag("--json")) {
-    log(JSON.stringify({ repo, event: env.CNB_EVENT ?? null, rows }, null, 1));
+    log(
+      JSON.stringify(
+        { repo, event: env.CNB_EVENT ?? null, branch: env.CNB_BRANCH ?? null, rows },
+        null,
+        1,
+      ),
+    );
   } else {
     log(
       formatReadout(rows, {
@@ -517,9 +546,7 @@ export function main(opts = {}) {
     (r) => r.reply.state === "granted" || r.reply.state === "denied",
   ).length;
   if (measured === 0 && flag("--strict")) {
-    log(
-      "[token-scopes] 一条探针都没拿到平台的明确答复 ⇒ 这一格自己坏了（退 2）。",
-    );
+    log("[token-scopes] 一条探针都没拿到平台的明确答复 ⇒ 这一格自己坏了（退 2）。");
     return CODE.NO_FACT;
   }
   return CODE.OK;
@@ -531,5 +558,5 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
 ) {
-  process.exit(main());
+  process.exit(await main());
 }
