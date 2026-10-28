@@ -21,6 +21,8 @@ import {
   type RemoteModel,
 } from "~/server/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
+import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
+import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 import type { RemoteModelKind } from "~/lib/llm/types";
 
 export class UserRepository {
@@ -202,6 +204,8 @@ export class RemoteModelRepository {
    * 设置页保存整份远端清单时调用，保证服务端只认这一份真相。
    * ⚠️ `apiKey` 是**三态**的（缺键 = 继承既有、`null`/空 = 清空、非空串 = 写入新值），
    *   `workshopAdapters` 一律从既有行继承 —— 见下面循环里的注释与台账 A11。
+   * 读、删、写三条语句在同一个事务内（`BEGIN IMMEDIATE`）：这份「整份覆盖」中途
+   * 失败必须整体回滚，否则未给出的行已删而新清单没落库，用户会丢整份配置与其中的密钥。
    */
   async replaceAll(
     entries: Array<{
@@ -211,83 +215,110 @@ export class RemoteModelRepository {
       kind?: RemoteModelKind | null;
     }>,
   ): Promise<RemoteModel[]> {
-    /* 既有行先取一次：`workshopAdapters` 与 `apiKey` 都要从它继承。这个接口是
-     * 「整份覆盖」，而调用点（设置页保存）手里的清单来自 `getConfigForClient` ——
-     * 那份是**脱敏过的**（条目不带 apiKey）。把「没带」读成「用户要清空」，就是
-     * 台账 A11：原样保存一次设置，所有远端模型的密钥没了。 */
-    const rows = await this.list();
-    const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
-    const seen = new Set<string>();
-    const cleaned: Array<{
-      name: string;
-      baseUrl: string | null;
-      apiKey: string | null;
-      kind: string;
-    }> = [];
-    for (const e of entries) {
-      const name = e.name.trim();
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
-      /* `apiKey` 的三态（与 `~/lib/llm/types` 的 `normalizeEntryApiKey` 同一语义）：
-       *   · `undefined`（缺键）→ 继承库里那把，不二次加密、也不清空；
-       *   · `null` / 空串 / 全空白 → 用户显式清空；
-       *   · 非空串 → 加密后写入。加密这一步 `llmConfig` 那条路径一直有做，而这里
-       *     此前直接落明文 —— `db.sqlite` 会被 `next build` 整份复制进 standalone
-       *     产物（硬规则 17），明文密钥就是这么跟着桌包分发的。读取侧
-       *     `decryptLlmKey` 对历史明文值原样透传，所以老数据不受影响。 */
-      const apiKey =
-        e.apiKey === undefined
-          ? (keyByName.get(name) ?? null)
-          : e.apiKey === null || e.apiKey.trim() === ""
-            ? null
-            : encryptLlmKey(e.apiKey.trim());
-      cleaned.push({
-        name,
-        baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
-        apiKey,
-        kind: e.kind ?? "chat",
-      });
-    }
-    const removed = rows.filter((r) => !seen.has(r.name));
-    if (removed.length > 0) {
-      await db.delete(remoteModel).where(
-        inArray(
-          remoteModel.name,
-          removed.map((r) => r.name),
-        ),
-      );
-    }
-    if (cleaned.length > 0) {
-      /* 单条语句批量 upsert（P2：替代原先循环内逐条 update/insert）。
-       * 以唯一索引 remoteModel_name_uniq 为冲突目标：已存在则更新、不存在则插入；
-       * workshopAdapters 从既有行继承（本接口不覆盖它）。
-       * 不包事务：测试基建跑 better-sqlite3（同步驱动）不接受 async 事务回调，
-       * 且原实现本就非原子，故只批量化、不改原子性语义。 */
-      const adaptersByName = new Map(
-        rows.map((r) => [r.name, r.workshopAdapters]),
-      );
-      await db
-        .insert(remoteModel)
-        .values(
-          cleaned.map((e) => ({
-            name: e.name,
-            baseUrl: e.baseUrl,
-            apiKey: e.apiKey,
-            kind: e.kind,
-            workshopAdapters: adaptersByName.get(e.name) ?? null,
-          })),
-        )
-        .onConflictDoUpdate({
-          target: remoteModel.name,
-          set: {
-            baseUrl: sql`excluded.baseUrl`,
-            apiKey: sql`excluded.apiKey`,
-            kind: sql`excluded.kind`,
-            workshopAdapters: sql`excluded.workshopAdapters`,
-            updatedAt: new Date(),
-          },
-        });
-    }
+    /* 三条语句在**同一个事务**里（ISSUE #2586）：读（`apiKey` / `workshopAdapters` 的继承
+     * 来源）+ 删 + 批量 upsert。此前删与写分两次落库，而第二条失败时第一条已经提交 ⇒
+     * 用户整份远端模型配置消失（那些密钥是加密存的，删掉就找不回来）；那次读也留在
+     * 两个 await 点之间的交叠窗口里。
+     *
+     * 运行时这一侧本来就拿得到带写锁的事务：`db.transaction` 走 `drizzle-orm/libsql`
+     * → `client.transaction()`，默认 mode 是 `write`（= `BEGIN IMMEDIATE`），且整条事务
+     * 绑在连接池里的**同一条**连接上（正好避开 §7.6 那条「开机 PRAGMA 只覆盖当时借到的
+     * 那条连接」）。两侧都不显式传 `behavior`：libsql 会话把第二个参数整个丢掉，
+     * 而测试宿主那一侧（`drizzle-orm/sqlite-proxy`）会真把它拼进 `begin` —— 不传，
+     * 这条调用才在两侧都只依赖「回调被 await」这一件事。
+     *
+     * 旧注释里那句「测试基建跑 better-sqlite3（同步驱动）不接受 async 事务回调」描述的是
+     * 换宿主之前的形状，那是**测试的形状、不是生产的约束**；测试宿主现在也接得住 async
+     * 回调了（见 `tests/helpers/test-db.ts` 文件头），所以这条通道没有理由继续空着。 */
+    await runWithSqliteBusyRetry(
+      () =>
+        db.transaction(async (tx) => {
+          /* 既有行在这里取：`workshopAdapters` 与 `apiKey` 都要从它继承。这个接口是
+           * 「整份覆盖」，而调用点（设置页保存）手里的清单来自 `getConfigForClient` ——
+           * 那份是**脱敏过的**（条目不带 apiKey）。把「没带」读成「用户要清空」，就是
+           * 台账 A11：原样保存一次设置，所有远端模型的密钥没了。
+           * 读放在事务**内**而不是复用 `this.list()`：事务外读到的快照可以被另一次保存
+           * 插队改掉，那时这里会按一份已经不存在的状态去继承（#2586 的期望 1 明确
+           * 不许「只把两条写塞进事务、读仍留在外面」）。 */
+          const rows = await tx
+            .select()
+            .from(remoteModel)
+            .orderBy(remoteModel.createdAt);
+          const keyByName = new Map(
+            rows.map((r) => [r.name, r.apiKey ?? null]),
+          );
+          const seen = new Set<string>();
+          const cleaned: Array<{
+            name: string;
+            baseUrl: string | null;
+            apiKey: string | null;
+            kind: string;
+          }> = [];
+          for (const e of entries) {
+            const name = e.name.trim();
+            if (!name || seen.has(name)) continue;
+            seen.add(name);
+            /* `apiKey` 的三态（与 `~/lib/llm/types` 的 `normalizeEntryApiKey` 同一语义）：
+             *   · `undefined`（缺键）→ 继承库里那把，不二次加密、也不清空；
+             *   · `null` / 空串 / 全空白 → 用户显式清空；
+             *   · 非空串 → 加密后写入。加密这一步 `llmConfig` 那条路径一直有做，而这里
+             *     此前直接落明文 —— `db.sqlite` 会被 `next build` 整份复制进 standalone
+             *     产物（硬规则 17），明文密钥就是这么跟着桌包分发的。读取侧
+             *     `decryptLlmKey` 对历史明文值原样透传，所以老数据不受影响。 */
+            const apiKey =
+              e.apiKey === undefined
+                ? (keyByName.get(name) ?? null)
+                : e.apiKey === null || e.apiKey.trim() === ""
+                  ? null
+                  : encryptLlmKey(e.apiKey.trim());
+            cleaned.push({
+              name,
+              baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
+              apiKey,
+              kind: e.kind ?? "chat",
+            });
+          }
+          const removed = rows.filter((r) => !seen.has(r.name));
+          if (removed.length > 0) {
+            await tx.delete(remoteModel).where(
+              inArray(
+                remoteModel.name,
+                removed.map((r) => r.name),
+              ),
+            );
+          }
+          if (cleaned.length > 0) {
+            /* 单条语句批量 upsert（P2：替代原先循环内逐条 update/insert）。
+             * 以唯一索引 remoteModel_name_uniq 为冲突目标：已存在则更新、不存在则插入；
+             * workshopAdapters 从既有行继承（本接口不覆盖它）。 */
+            const adaptersByName = new Map(
+              rows.map((r) => [r.name, r.workshopAdapters]),
+            );
+            await tx
+              .insert(remoteModel)
+              .values(
+                cleaned.map((e) => ({
+                  name: e.name,
+                  baseUrl: e.baseUrl,
+                  apiKey: e.apiKey,
+                  kind: e.kind,
+                  workshopAdapters: adaptersByName.get(e.name) ?? null,
+                })),
+              )
+              .onConflictDoUpdate({
+                target: remoteModel.name,
+                set: {
+                  baseUrl: sql`excluded.baseUrl`,
+                  apiKey: sql`excluded.apiKey`,
+                  kind: sql`excluded.kind`,
+                  workshopAdapters: sql`excluded.workshopAdapters`,
+                  updatedAt: new Date(),
+                },
+              });
+          }
+        }),
+      { policy: SETTINGS_DB_WRITE },
+    );
     return this.list();
   }
 

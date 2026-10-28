@@ -195,6 +195,13 @@ const DOMAIN_EXEMPT = new Set([
    * **驱动的错误码族**、不是执行域的形状 —— 放进 `comfyui/` 会让「锁」这个 SQLite
    * 概念变成某个域的私有语义，下一个直连库的写路径就无法复用同款判断。同款顶层单例。 */
   "src/lib/sqlite-error.ts",
+  /* 「撞锁了就按预算再试一次」那一段循环体的唯一实现（ISSUE #2586）：
+   * 开机 PRAGMA（`sqlite-pragmas.ts`）、终态库写（`comfyui/executor-write-retry.ts`）、
+   * 远端模型整份同步的事务（`core/repository-user.ts`）三处都要它，而三处各自的
+   * 域逻辑不同（逐条 PRAGMA / 穷尽后摘掉本进程足迹 / 用户点的一次保存）——
+   * 放进任何一侧都会让另两侧反向依赖那个域。与 `sqlite-error` / `retry-policy`
+   * 同款：判据是** SQLite 的锁族错误 + 具名退避预算**这一对，不是某个域的形状。 */
+  "src/lib/sqlite-busy-retry.ts",
   /* 「把一个数夹进一个区间」的唯一出口（ISSUE #672）：视图层（滑块填充比例、
    * 数值步进器、图片缩放倍数、画布缩放、镜头时长）与 `src/lib` / `src/server`
    *（日志字节切片、日志会话时间戳、序号夹取、VRAM 读数、影片镜头数、落库前
