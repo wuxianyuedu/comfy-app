@@ -54,6 +54,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 走一遍解析链，与既有三条不是同一条解析链 —— 列进固定清单是因为它守的是
   // 「别的判据看不见的那条路」，只在受影响时才跑等于让它随下一次新增 `.mjs` 消费方过去。
   "tests/mjs-node-esm-resolution.test.ts",
+  // 脚本档类型检查的棘轮（ISSUE #2524 / 规范 §13.5.14.1）：它守的是「判决面有没有把
+  // 未被 import 的 `.mjs` 收进来」+「存量账只降不升」。这两件事的回潮形态都**不在
+  // 改动面上** —— 改窄 `tsconfig.scripts.json`、或把 `--update` 实现成「照被截断的一跑
+  // 重写基线」，都不会把这份用例拉进受影响清单（它 import 不到判据，靠子进程跑真脚本），
+  // 而漂了的表现正是本案那一格：面小了、账清了、账面全绿。与上面那几条同因进固定清单。
+  "tests/scripts-typecheck-ratchet.test.ts",
   // 条件性 skip 的登记表：全绿里的 `N skipped` 不说明「绿的是哪一种」，尤其产物级探针
   // （没构建过的检出上整块不判）。这条守住「每个暗掉的站点都有人登记它为什么暗」。
   "tests/conditional-skip-registry.test.ts",
