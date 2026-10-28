@@ -761,15 +761,18 @@
 
 #### FR-MC-01 工坊 MCP
 
-- 状态：已上线（界面侧会话共享待后续）
+- 状态：已上线（会话与界面共享同一份 production，#2482）
 - 需求：外部 AI 客户端可经 MCP 端到端指挥工坊创作：17 个工具
   （会话 / 元信息 / 剧本 / 角色 / 分镜 / 生图 / 视频 / 合成 / 绑工作流）。
 - 行为与验收：两个 transport（stdio / http，`pnpm mcp:stdio` /
   `pnpm mcp:http`）；**只可达本机回环**；HTTP origin 逐条登记
-  （`MCP_HTTP_ALLOWED_ORIGINS`，不做通配）；会话落 `workshopSession` 表。
-  边界：MCP 与界面**目前不共享会话**（界面侧接入待后续）。
-- 落点：`src/server/mcp/workshop-mcp.ts`、`tools/workshop-mcp-stdio.ts`、
-  `tools/workshop-mcp-http.ts`、`docs/workshop-mcp.md`
+  （`MCP_HTTP_ALLOWED_ORIGINS`，不做通配）。会话绑定界面项目
+  （`workshop_create_session` 可带 `projectId` 绑既有项目，缺省新建一对
+  project + production 行）：**同一份 production**——AI 写入界面刷新即见、
+  界面改动 AI 下一次 `workshop_get_session` 就能读到；桥之前的遗留会话
+  首次写时桥接，只读不写的保持原样。
+- 落点：`src/server/mcp/workshop-mcp.ts`、`src/server/workshop/production-bridge.ts`（桥）、
+  `tools/workshop-mcp-stdio.ts`、`tools/workshop-mcp-http.ts`、`docs/workshop-mcp.md`
 
 #### FR-MC-02 comfyapp:// 深链
 
@@ -1026,12 +1029,16 @@
 
 #### FR-AG-01 双操作者同一能力面
 
-- 状态：计划中
+- 状态：已上线（#2482 补齐最后一格：MCP 会话绑定界面项目）
 - 需求：人与 AI 读写**同一份状态与产物**，不存在第二套真值。
 - 行为与验收：① 人在界面改了镜头，AI 接着跑读到的是改动后的版本（同一 `production.id`
   两侧读出一致的 `shots`）；② AI 改了内容，界面刷新后可见（不需要重开应用）；
-  ③ MCP 会话与界面会话**共享**（当前不共享 —— `FR-MC-01` 明写的边界）⇒ 未共享即本条未达标。
-- 落点：`src/server/api/routers/run.ts`、`src/server/mcp/workshop-mcp.ts`、
+  ③ MCP 会话与界面**共享**：每个会话绑定一个 proj_*（缺省新建、可显式绑定既有项目），
+  内容权威读在 production——`workshop_get_session` 读到的就是界面侧同一份；
+  归属口径：userId 显式给必须存在，缺省落本机最早创建的用户。
+- 落点：`src/server/workshop/production-bridge.ts`（桥：建/绑项目 + 内容读写）、
+  `src/server/workshop/repository.ts`（get 读 production、update 写 production）、
+  `src/server/mcp/workshop-mcp.ts`、`src/server/api/routers/run.ts`、
   `src/components/workshop/hooks/use-workshop-pipeline.ts`
 
 #### FR-AG-02 自主编排含独立视频阶段与审批停点
