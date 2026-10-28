@@ -83,12 +83,19 @@ function write(rel: string, body: string): string {
   return abs;
 }
 
+/** 账本的形状（判据写出去的那一份，读侧只认这三格）。 */
+type Ledger = {
+  face: number;
+  total: number;
+  files: Record<string, Record<string, number>>;
+};
+
 /** 夹具里那份账本（判「`--update` 到底写没写」的唯一证据来源）。 */
 function baselinePath(): string {
   return join(fixture, "scripts", ".scripts-typecheck-baseline.json");
 }
-function readFixtureBaseline(): { total: number; files: Record<string, Record<string, number>> } {
-  return JSON.parse(readFileSync(baselinePath(), "utf8"));
+function readFixtureBaseline(): Ledger {
+  return JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
 }
 
 beforeAll(() => {
@@ -255,7 +262,10 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       };
       diskFace: (list: string[], excludes: string[]) => { all: string[]; missed: string[] };
     };
-    const ts = createRequire(import.meta.url)("typescript");
+    /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
+     * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
+     * 所以落成 `unknown`，不在用例这一侧再抄一份 TS 的类型面。 */
+    const ts = createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
     const face = cfg.mjs ?? [];
