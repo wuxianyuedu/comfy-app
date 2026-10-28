@@ -44,6 +44,12 @@ const EXEMPT_TABLES = [
     reason: "节点注册表的类别 `color` 字段：整表就是节点类别色常量",
   },
   {
+    file: "src/components/studio/history/MaskCanvas.tsx",
+    exports: [],
+    reason:
+      "重绘蒙版的**协议色**（黑 = 保留、白 = 重绘）：色值即 ComfyUI LoadImage 蒙版通道的语义，不是主题表面——换成任何 token 都会改变送进工作流的像素",
+  },
+  {
     file: "src/lib/project-canvas/canvas-types.ts",
     exports: ["NODE_META"],
     reason: "项目画布节点类别色（生图/生视频/剧本… 的 color 字段）",
