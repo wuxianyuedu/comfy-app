@@ -57,6 +57,46 @@ export function isTimeoutShaped(output) {
 }
 
 /**
+ * 块输出的**失败段**（从 `------- Failed Tests N -------` 那一行的行首起，到末尾）。
+ *
+ * ## 为什么指纹不许在整块输出上判（2026-10-28 的读数订正，ISSUE #2599）
+ *
+ * `isTimeoutShaped(res.output)` 读的是**整块**输出，而那一块里住着全部用例的全部
+ * 输出 —— 包括**按设计**流出来的超时文本。现场（build `cnb-u2e-1k619gnro`，PR #2598）：
+ * 一份失败文件里 3 条用例是 `Test timed out in 30000ms`，于是整块被读成「超时形态」
+ * ⇒ 进隔离复跑那一支；复跑买不起（见 `budgetAllows`）⇒ 整块按**未判定**退 2，
+ * 而那三份文件的结论其实**第一遍就已经写在那儿**了。不是红，也不是没测到，是
+ * 「把一次现成的读数丢了」。
+ *
+ * 本条**不新增任何结论档**：它只把「这次红是不是超时形态」这句话的取值面，从
+ * 「整块输出」缩到「**失败**那一段」。两档后果都不是放行：
+ *   · 失败段带指纹 ⇒ 照旧走隔离复跑（负载归因那一支，一个字没改）；
+ *   · 失败段不带指纹、而整块里恰好有别的超时文本 ⇒ 走**真红**那一支（`return 非零`）。
+ *     那是**更严**的一侧：原来这一档会被读成「超时形态」而进复跑，复跑绿了就放行，
+ *     现在直接阻断并点名 —— 「超时文本是别人的，别拿它替这一次的红签字」。
+ *     唯一要盯的形状是**逐文件补跑**：一份带超时的文件被单跑时，它的超时明细照样落在
+ *     失败段里，所以「未校验」那一档的判定一个字没变（实测那份 3 条 `Test timed out
+ *     in 30000ms` 的文件单跑出来仍是超时形态，`tests/hook-affected-launch.test.ts` 逐条钉住）。
+ *
+ * 取不到失败段（vitest 换了排版的极端形态）⇒ 退回整块那份**原行为**：这是刻意留的
+ * 保守出口，宁可多复跑一次，也不许因为解析不到而把一次真的超时读成真断言红。
+ *
+ * @param {string | number | null | undefined} output vitest 的完整输出
+ * @returns {string} 失败段正文；认不出时原样回整块输出
+ */
+export function failureSectionOf(output) {
+  const text = String(output ?? "");
+  const start = text.indexOf("Failed Tests");
+  if (start === -1) return text;
+  /* 必须**从行首**的那一行开始算：`indexOf("Failed Tests")` 会命中汇总行
+   * `Test Files 1 failed` 之外的第一处出现，也就是 `------- Failed Tests 3 -------`。
+   * 从那一行往下取到末尾 —— 失败明细只会越写越多，而**上面**那一段才是噪声
+   * （其余用例的 stderr / 按设计打出来的超时文本就住在那里）。宁可取宽也不错切。 */
+  const lineStart = text.lastIndexOf("\n", start) + 1;
+  return text.slice(lineStart);
+}
+
+/**
  * 「这一遍根本没跑起来」的指纹 —— 与超时指纹**不是**一类，处置也完全相反。
  *
  * ## 它治的是什么（现场：平台的 `受影响用例` 一格）

@@ -22,6 +22,7 @@ import {
   composeBody,
   decideAction,
   issueTitle,
+  laneStages,
   main,
   pickPreviousDaily,
   titleKey,
@@ -146,6 +147,93 @@ describe("挑「上一跑」：正在跑的那一跑不能当对象", () => {
       }),
     );
     expect(picked.none).toContain("没有每日类派发");
+  });
+});
+
+/**
+ * ISSUE #2595：02:00 那条流水线的事件名同样是 `crontab:` 前缀 —— 只按事件名挑「上一跑」，
+ * 桌包那一档的红就会被记到每日档头上（现场：`cnb-7g8-1k60e2jk5` 红在 `打包·壳工具链自证`，
+ * 标题写成 `ci(daily): … 红在「打包·壳工具链自证」`）。归属取平台自己写的流水线名。
+ */
+describe("按流水线名认「这一跑是不是这一档的」", () => {
+  /** 一份桌包档的读数（流水线名与 `.cnb.yml` 的 `桌面成品包` 逐字相同）。 */
+  const packageDetail = (): DetailJson => ({
+    data: {
+      status: "error",
+      pipelinesStatus: {
+        p1: {
+          id: "p1",
+          name: "桌面成品包",
+          status: "error",
+          stages: [
+            { id: "stage-0", name: "打包·安装依赖", status: "success" },
+            { id: "stage-1", name: "打包·壳工具链自证", status: "error" },
+            { id: "stage-2", name: "打包·桌包工具预置", status: "skipped" },
+          ],
+        },
+      },
+    },
+  });
+
+  it("桌包那一跑的事件名同样是 `crontab:` ⇒ 不按档过滤时会误挑它（现场形状）", () => {
+    const pkg = build("cnb-7g8", "crontab: 0 2 * * *");
+    const picked = asPicked(
+      pickPreviousDaily({
+        list: [pkg],
+        details: [{ sn: "cnb-7g8", json: packageDetail() }],
+      }),
+    );
+    // 这就是缺陷本身：不给 lane 时它会把桌包那一跑当成每日档的「上一跑」。
+    expect(picked.sn).toBe("cnb-7g8");
+  });
+
+  it("给了 lane ⇒ 桌包那一跑不算，且那句是「别的档」，不是「没有红」", () => {
+    const pkg = build("cnb-7g8", "crontab: 0 2 * * *");
+    const picked = asPicked(
+      pickPreviousDaily({
+        list: [pkg],
+        details: [{ sn: "cnb-7g8", json: packageDetail() }],
+        lanes: laneStages("每日生产构建"),
+      }),
+    );
+    expect(picked.sn).toBeUndefined();
+    expect(picked.none).toContain("别的档");
+    expect(picked.none).toContain("每日生产构建");
+  });
+
+  it("每日档那一跑照旧被认出来（正路没被过滤掉）", () => {
+    const picked = asPicked(
+      pickPreviousDaily({
+        list: [build("sn-previous")],
+        details: [d("sn-previous", "failed")],
+        lanes: laneStages("每日生产构建"),
+      }),
+    );
+    expect(picked.sn).toBe("sn-previous");
+  });
+
+  it("两跑都在 ⇒ 只挑本档的那一跑，不挑更新的那条别人的", () => {
+    const picked = asPicked(
+      pickPreviousDaily({
+        list: [
+          build("cnb-pkg", "crontab: 0 2 * * *"),
+          build("cnb-daily", "crontab: 0 0 * * *"),
+        ],
+        details: [
+          { sn: "cnb-pkg", json: packageDetail() },
+          d("cnb-daily", "failed"),
+        ],
+        lanes: laneStages("每日生产构建"),
+      }),
+    );
+    expect(picked.sn).toBe("cnb-daily");
+    expect(picked.outcome?.state).toBe("failed");
+  });
+
+  it("`--lane` 的值词表只有一处：认得出每日档，认不出的给空名单", () => {
+    expect(laneStages("每日生产构建")).toEqual(["每日生产构建"]);
+    expect(laneStages("每日构建")).toEqual([]);
+    expect(laneStages(null)).toEqual([]);
   });
 });
 

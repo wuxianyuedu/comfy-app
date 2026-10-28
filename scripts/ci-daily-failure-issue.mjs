@@ -55,6 +55,19 @@
  * ISSUE #2149 否掉过的形状（「净差小于 N 就自动抬 + 留痕」被否的那一条是同一家族）：
  * 这一格的价值是**看得见**，不是替有人说「这是谁的错」。
  *
+ * ## `--lane`：事件名认不出「这是哪一档」（ISSUE #2595）
+ *
+ * 「每日类派发」是按**事件名**认的（`crontab:` 前缀 / `web_trigger_daily` /
+ * `api_trigger_daily`），而 02:00 那条流水线（桌面成品包）的事件名同样是 `crontab:` 前缀
+ * （`.cnb.yml` 的 `"crontab: 0 2 * * *"`）。于是「上一跑」这条链会把**桌包那一跑**挑进来：
+ * 2026-10-28 的现场是 `cnb-7g8-1k60e2jk5` 红在 `打包·壳工具链自证`、后面三格 `skipped`，
+ * 标题却写成 `ci(daily): … 红在「打包·壳工具链自证」`，正文还替它说「其中
+ * `每日单元测试` / `每日全量E2E` 的唯一执行者就在这条链上」。
+ *
+ * 归属不再靠事件名猜一次：`--lane` 给出**这一档的流水线名**，`pickPreviousDaily()` 拿
+ * 平台自己写进 `get-build-status -v` 的 `pipelinesStatus[*].name` 再核一次。给不出
+ * （名字写错）就退 2「没有结论」——**不许**退化成「不过滤」，那正是上面那一形。
+ *
  * ## 用法
  *
  * ```text
@@ -62,6 +75,7 @@
  * node scripts/ci-daily-failure-issue.mjs --dry-run            # 只打印将要写什么，一条都不写
  * node scripts/ci-daily-failure-issue.mjs --from <列表 JSON>    # 离线复现（强制只读，不写平台）
  * node scripts/ci-daily-failure-issue.mjs --no-block           # 平台那一跳：失败也不拦路
+ * node scripts/ci-daily-failure-issue.mjs --lane 每日生产构建    # 平台那一跳必给：这一档的流水线名
  * ```
  */
 import fs from "node:fs";
@@ -137,27 +151,74 @@ export function issueTitle({ sn, event, at, stage }) {
  * `running` / `unknown`」，而不是「不是这一跑的 sn」：`CNB_BUILD_ID` 与列表里 `sn` 是否逐字相等
  * **未核**，靠状态判既不需要那个前提，也顺带把「被取消」留在集合里（由调用方按 `cancelled` 不写）。
  *
- * @param {{list:any[], details:Array<{sn:string,json:any}>}} input 两份原样读数
+ * ⚠️ **事件名不足以认「这是哪一档」**（ISSUE #2595）：02:00 那条流水线（桌面成品包）
+ * 的事件名同样是 `crontab:` 前缀，只按事件名挑，就会把桌包那一跑的红记到每日档头上 ——
+ * 现场是 `cnb-7g8-1k60e2jk5` 红在 `打包·壳工具链自证`，标题却写成
+ * `ci(daily): … 红在「打包·壳工具链自证」`。所以给了 `lanes` 之后，还要再问一次
+ * 「这一跑的流水线名在不在这一档的名单里」—— 流水线名是平台自己写进
+ * `get-build-status -v` 的归属，不必猜事件与档的对应关系。
+ *
+ * @param {{list:any[], details:Array<{sn:string,json:any}>, lanes?:string[]}} input
+ *   两份原样读数；`lanes` 是这一档的流水线名（空 ⇒ 退回「只按事件认」，只为旧调用点保留）
  * @returns {{build:any, sn:string, outcome:ReturnType<typeof classifyBuildOutcome>} | {none:string}} 挑不着时给一句原因
  */
-export function pickPreviousDaily({ list, details }) {
+export function pickPreviousDaily({ list, details, lanes = [] }) {
   const daily = (Array.isArray(list) ? list : []).filter(isDailyDispatch);
   if (daily.length === 0)
     return { none: "列表里没有每日类派发（定时 / 手点 / API 三种事件都没有）" };
   const bySn = new Map((details ?? []).map((d) => [String(d.sn), d.json]));
+  /** 与 `ci-pr-failure-issue` 的 `--lane` 同一口径：名单为空 = 不按档过滤。 */
+  const wanted = new Set(
+    (Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()),
+  );
+  let stray = 0;
   for (const build of daily) {
     const sn = String(build.sn ?? "");
     const json = bySn.get(sn);
     if (!json) continue;
     const outcome = classifyBuildOutcome(json);
     if (outcome.state === "running" || outcome.state === "unknown") continue;
+    if (wanted.size > 0 && !outcome.pipelines.some((p) => wanted.has(p.name))) {
+      stray += 1;
+      continue;
+    }
     return { build, sn, outcome };
+  }
+  if (stray > 0) {
+    return {
+      none:
+        `每日类派发有 ${daily.length} 条，最近那条有终态的属于别的档` +
+        `（流水线不在 ${[...wanted].join(" / ")} 里 —— 桌包那一档的定时口事件名同样是 ` +
+        "`crontab:` 前缀，按事件名认就会把它的红记到这一档头上）",
+    };
   }
   return {
     none:
       `每日类派发有 ${daily.length} 条，但没有一条拿得到**终态**的逐格读数` +
       "（在跑的那一跑排除在外；取不到 ≠ 没红，也 ≠ 绿）",
   };
+}
+
+/**
+ * `--lane` 的值 → 这一档的流水线名（`get-build-status -v` 的 `pipelinesStatus[*].name`）。
+ *
+ * 与 `ci-pr-failure-issue.mjs` 的 `--lane` 是**同一个形状**（那一档用它分 PR / 桌包）：
+ * 区别是那一档靠它决定「认不认非 PR 事件」，这一档靠它决定「这一跑是不是我的」。
+ * 两边都只有一个显式声明口，没有一处按事件名去猜档。
+ *
+ * 缺省（不给 `--lane`）= 空名单 = 不按档过滤，只为旧调用点与 `--from` 离线复现保留。
+ */
+export const LANE_STAGES = /** @type {Record<string, string[]>} */ ({
+  每日生产构建: ["每日生产构建"],
+});
+
+/**
+ * @param {string | null | undefined} lane `--lane` 的原值
+ * @returns {string[]} 这一档的流水线名；认不出时给空数组（⇒ 不按档过滤，且由调用方念出来）
+ */
+export function laneStages(lane) {
+  const key = String(lane ?? "").trim();
+  return key === "" ? [] : (LANE_STAGES[key] ?? []).slice();
 }
 
 /**
@@ -333,6 +394,9 @@ export function main(io = {}) {
   const noBlock = argv.includes("--no-block");
   const at = argv.indexOf("--from");
   const from = at >= 0 ? argv[at + 1] : undefined;
+  const laneAt = argv.indexOf("--lane");
+  const laneValue = laneAt >= 0 ? String(argv[laneAt + 1] ?? "").trim() : "";
+  const lane = laneValue === "" ? null : laneValue;
 
   /** @type {(code:number, why:string)=>number} 退码出口：`--no-block` 只改码，不改话术。 */
   const finish = (code, why) => {
@@ -418,9 +482,20 @@ export function main(io = {}) {
 
   /* 形状不对（不是数组）就当空列表：往下那句「列表里没有每日类派发」是它诚实的读法，
    * 比在这里补一条「取不到」的假分支更准 —— 空与坏在这条链上是同一个答案：不动账。 */
+  const lanes = laneStages(lane);
+  if (lane !== null && lanes.length === 0) {
+    /* 认不出的 `--lane` **不许**退化成「不过滤」：那正是 #2595 的形态 —— 名字写错了，
+     * 而这一格照样把别的档的红记到自己头上，账面看不出来。宁可没有结论。 */
+    const why = `--lane「${lane}」认不出是哪一档（认得的是 ${Object.keys(LANE_STAGES).join(" / ")}）`;
+    log(`[daily-failure-issue] ${why} ⇒ 不写。`);
+    return finish(CODE.NO_FACT, why);
+  }
+  if (lanes.length > 0)
+    log(`[daily-failure-issue] 这一档的流水线名：${lanes.join(" / ")}`);
   const picked = pickPreviousDaily({
     list: Array.isArray(list) ? list : [],
     details,
+    lanes,
   });
   /* 判别靠**字段在不在**，不靠 cast 成 any：cast 会把联合的收窄整条弄丢，
    * 之后每一处 `.sn` / `.outcome` 都变成没人守的自由点。 */
