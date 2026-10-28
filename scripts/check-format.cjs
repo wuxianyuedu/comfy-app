@@ -277,6 +277,12 @@ function stagedFiles() {
 function collectUnformatted(entry) {
   const found = new Set();
   for (const root of SCAN_ROOTS) {
+    /* 不存在的根直接跳过：oxfmt 对「一个目标文件都没有」的根会报
+     * `Expected at least one target file...` 并以退出 2 收场 —— 那不是「有差异」
+     * 也不是「没跑成」，而是「这一根没有账可算」（判据自测的临时仓库就没有
+     * `.storybook`，实测把整条门打成了 fail-closed 的 exit 2）。真实仓两个根都在，
+     * 这条跳过不改真实仓的判决面。 */
+    if (!fs.existsSync(path.join(ROOT, root))) continue;
     /* oxfmt 只列**有差异**的文件（形如 `src/foo.ts (12ms)`），随后给一行
      * `Format issues found in above N files.`；退出码 1 = 有差异、0 = 全干净。
      * 没有 `--cache` 这一档：oxfmt 在本仓实测 1.9s（prettier 全热 234s），
@@ -304,7 +310,28 @@ function collectUnformatted(entry) {
       );
       process.exit(2);
     }
+    /* 排查逃生口（默认关）：`COMFYAPP_FORMAT_DEBUG=1` 时把 oxfmt 的原始读数
+     * 原样吐出来 —— 判据自测在「本地绿、CI 红」的形态下，没有这批读数就只能猜
+     * （脏文件被判干净时，到底是没扫到还是没认出来，两种修法完全不同）。
+     * 走 **stdout** 而不是 stderr：夹具把成功那档的 `output` 折成纯 stdout，
+     * 打 stderr 这批读数在「判据成功退出」的用例里永远看不见。 */
+    if (process.env.COMFYAPP_FORMAT_DEBUG) {
+      const ver = spawnSync(process.execPath, [entry, "--version"], {
+        encoding: "utf8",
+      });
+      console.log(
+        `[format][debug] ROOT=${ROOT}\n` +
+          `[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +
+          `[format][debug] oxfmt status=${res.status} stdout=${JSON.stringify(res.stdout)}\n` +
+          `[format][debug] oxfmt stderr=${JSON.stringify(res.stderr)}`,
+      );
+    }
     const lines = (res.stdout || "")
+      // **先剥 ANSI 颜色码再解析**：oxfmt 会给文件名上色（实测 CI 侧
+      // `\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」
+      // 过不了 `isScanned` 的路径形态，整张清单会被悄悄滤成空 —— 门禁当场读成
+      // 「命中 0 个」（本地 stdout 不着色，所以这一档只在 CI 形态下暴露）。
+      .replace(/\u001b\[[0-9;]*m/g, "")
       .split("\n")
       .map((line) => line.trim())
       // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /
