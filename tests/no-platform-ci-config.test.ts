@@ -333,6 +333,10 @@ export function registeredDisabledGates(text: string): string[] {
  */
 const DAILY_GATES = [
   "每日失败立案",
+  /* ISSUE #2551：这一格是**读数**（这一跑的 `CNB_TOKEN` 够得着哪些能力）。
+   * 它排在立案格**之后** —— 那一格立案的是上一跑、必须排在任何可能红的格前面，
+   * 而这一格自己没有理由让位。 */
+  "每日令牌权限读数",
   "每日工具链自证",
   "每日安装依赖",
   "每日 Python 可用性",
