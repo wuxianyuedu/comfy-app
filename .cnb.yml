@@ -620,14 +620,21 @@
   # 那个形态）。这一格虽然是读数、自己也几乎不会红，但要挪到它前面就得先回答「为什么
   # 立案那一格可以让位」—— 答案是没有理由让位，所以顺序就是这样。
   #
-  # ⚠️ `--strict` 只提「一条探针都没拿到答复」（`cnb` 不在 / 全超时）那一档：它是这一格
-  # 自己坏了，值得在流水线上留下痕迹。**权限本身从不构成红** —— 平台按「事件 + ref」分配，
-  # 「缺 repo-manage:r」是预期形态，事件可信度变了才该有人看出来（那是读数的事）。
+  # ⚠️ **不带 `--strict`**，而且这是踩过一脚之后的结论（ISSUE #2551 的第一跑
+  # `cnb-vv9-1k60eb6vl`）：带了之后这一格在 `pr_fail_stage` 上**红**了，而红的原因是
+  # **平台侧** —— 那一跑的令牌连 `repo-cnb-history:r` 都没有（同跑的 `PR 失败立案`
+  # 撞的就是这一句），于是 14 条探针全落「没拿到答复」，`--strict` 把「一条明确答复
+  # 都没有」提成退 2。于是 PR 上会出现一条**永远红、且没有任何人能修**的格子 ——
+  # 「没量到」不是这一格坏了，那正是这一格要量的东西。
+  #
+  # 于是这一格**任何情况都不构成红**（`--strict` 只留给手工自查）。这与
+  # `工作区复用读数` / `镜像身份` 同一口径：量的是平台怎么给权限，判它红等于把平台形态
+  # 伪装成这次 PR 的缺陷。
   #
   # ⚠️ 它**不打令牌值**（硬规则 17）：打的是「哪些能力够得着」，不是「凭什么够得着」。
   # OIDC 兑换那一问的入参含 `cnb_token`，所以默认不发、只有 `--probe-oidc` 显式点名才发。
   - name: 每日令牌权限读数
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs --strict
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
     timeout: 2m
   # ── 前提三格：script 行与 PR 那条流水线上的同名档**逐字相同** ──────────
   # 为什么不共用 YAML 锚点：`pipelineStageNames()` / `stageBlock()` 是按名字在文本里
@@ -1302,7 +1309,7 @@
     #
     # 2m：十四条只读接口各一次（实测本机整条 4s 量级）、零写命令。
     - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs --strict
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 2m
 
 # ── 桌面成品包那一档的失败立案（ISSUE #2550）──────────────────────────────────────
@@ -1334,7 +1341,7 @@
       timeout: 5m
     # 令牌权限读数：与 PR 那一格同一个入口、同一份理由（ISSUE #2551）。
     - name: 令牌权限读数
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs --strict
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 2m
 
 .gates: &gates

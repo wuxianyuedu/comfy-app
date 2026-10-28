@@ -22,21 +22,28 @@
  *   不是「凭什么够得着」。唯一的例外是 `authentication exchange-oidc-id-token` 那一问的
  *   入参：`oci` 渠道要求把 `cnb_token` 原样放进请求体，那一问的值**从不回显、从不落盘**，
  *   且只在 `--probe-oidc` 显式点名时才发生（默认不发）。
- * - **不当判据**：恒退 0（除非 `--strict`）。它量的是**平台怎么给权限**，而那不是仓库能改的
- *   东西 ⇒ 判红只会把「节点的形态」伪装成「这次 PR 的缺陷」（与 `ci-workspace-probe.mjs`
- *   同一口径）。
+ * - **不当判据**：恒退 0（除非 `--strict`，而平台那一跳**不许带**它 —— 理由见 `strictHint()`）。
+ *   它量的是**平台怎么给权限**，而那不是仓库能改的东西 ⇒ 判红只会把「节点的形态」伪装成
+ *   「这次 PR 的缺陷」（与 `ci-workspace-probe.mjs` 同一口径）。
  * - **不引新依赖**：一行 `run` 用 `spawnSync` 现写（复用 `ship-exec.mjs` 的 `makeRunner`
  *   会把 `ship` 那一族的整条加载链拖进来，而这一格要在刚 clone 完的机器上也能跑）。
  *
  * ## 三档与退出码
  *
- * | 档       | 判据                                   | 退出码       |
- * | -------- | -------------------------------------- | ------------ |
- * | 量到了   | 至少一条探针拿到了平台明确答复         | 0            |
- * | 没量到   | 一条都问不出来（`cnb` 不在 / 全超时）  | 2（`--strict`）|
+ * | 档       | 判据                                   | 退出码          |
+ * | -------- | -------------------------------------- | --------------- |
+ * | 量到了   | 至少一条探针拿到了平台明确答复         | 0               |
+ * | 没量到   | 一条明确答复都没有                     | 0（默认）/ 2（`--strict`）|
  *
  * 默认**恒退 0**：这是读数档，红了不构成任何结论（与 `ci-workspace-probe.mjs` 一致）。
- * `--strict` 只把「一条都没量到」提到 2 —— 那说明这一格自己坏了，值得在流水线上留下痕迹。
+ *
+ * ⚠️ **「没量到」不能读成「这一格坏了」**（ISSUE #2551 的第一跑读数）：`pr_fail_stage`
+ * 上那一跑（`cnb-vv9-1k60eb6vl`）14 条探针全部落进「没拿到答复」，而原因是**平台侧**
+ * —— 那一跑的令牌连 `repo-cnb-history:r` 都没有（同跑的 `PR 失败立案` 自己读构建列表时
+ * 撞的就是这一句），于是每条探针都以 403 收场，而 403 的原话里没写那句
+ * `Missing required scopes`（原文是「授权范围与本请求不匹配」），判据只能落进 unknown。
+ * 那不是这一格坏了，**那正是这一格要量的东西**。所以平台那一跳**不带** `--strict`：
+ * 否则 PR 上会有一条永远红、且**没有任何人能修**的格子（要修得平台改授权口径）。
  *
  * ## 用法
  *
@@ -237,7 +244,7 @@ export function run(cmd, args) {
  * ③ 其余（`cnb` 不在、网络断、信封里没有 `status`）⇒ **没结论**，不是「够得着」。
  *
  * @param {string} raw
- * @returns {{state: "denied" | "granted" | "unknown", scope?: string, status?: number}}
+ * @returns {{state: "denied" | "granted" | "unknown", scope?: string, status?: number, why?: string}}
  */
 export function classifyReply(raw) {
   const text = String(raw ?? "");
@@ -250,12 +257,22 @@ export function classifyReply(raw) {
       scope: missing[1] || "（原话里没写出 scope 名）",
     };
   }
-  /* 信封上那个 200 是**取到了答复**的意思，与「流水线过没过」无关；这一格要的正是它：
+  /* 信封上那个 200 是**取到了答复**的意思，与「流程过没过」无关；这一格要的正是它：
    * 平台没有拒这次请求 ⇒ 这枚 scope 在不在，只能由 403 自己说（① 那一支）。 */
   const http = /^\s*"?status"?\s*:\s*(\d{3})/m.exec(text) ?? /"status"\s*:\s*(\d{3})/.exec(text);
   const status = http ? Number(http[1]) : null;
   if (status === null) return { state: "unknown" };
-  return { state: "granted", status };
+  if (status === 200) return { state: "granted", status };
+  /* 非 200 而原话里没有那句 `Missing required scopes` —— 是**另一种**拒绝（或业务错误）。
+   * 这类不许落进「够得着」：平台没答应这次请求，而那枚 scope 在不在没人说得准。
+   * 把平台那句 `errmsg` 原样带出去，下一动作才读得出来（CI 上 PR 那一族就落这里：
+   * 403 + 「授权范围与本请求不匹配」，没给 scope 名）。 */
+  const errmsg = /"errmsg"\s*:\s*"([^"]{1,160})"/.exec(text);
+  return {
+    state: "unknown",
+    status,
+    why: `平台回了 ${status}${errmsg ? `：${errmsg[1]?.replace(/"/g, "'")}` : "（原话里没有 errmsg）"}`,
+  };
 }
 
 /**
@@ -325,12 +342,21 @@ export function formatReadout(rows, ctx) {
   for (const [domain, list] of byDomain) {
     const denied = list.filter((r) => r.reply.state === "denied");
     const granted = list.filter((r) => r.reply.state === "granted");
+    /* 三档的措辞各自代表一个**不同的事实**，顺序与 `classifyReply()` 同源：
+     * ① 缺权限（平台点名了）→「未获授权」；
+     * ② 整族都拿到答复 →「获授权」；
+     * ③ 一条答复都没有 → **「没量到」**。⚠️ 这一档绝不能念成「获授权」：平台没拒
+     *    不等于允许，那正是 §13.6.4.1 那条「取不到 ≠ 测出来是好的」。CI 上的现场是
+     *    PR 那一族连 `repo-cnb-history:r` 都没有 ⇒ 每一条探针都以 403 收场，而
+     *    403 的原话里**没写** `Missing required scopes` 时只能落进 ③。 */
     const verdict =
       denied.length > 0
         ? `未获授权 · 平台点名缺 ${[...new Set(denied.map((r) => r.reply.scope))].join(" / ")}`
         : granted.length === list.length
           ? "获授权"
-          : `获授权（${granted.length}/${list.length} 条有明确答复）`;
+          : granted.length === 0
+            ? `没量到（${list.length} 条一条都没有明确答复）`
+            : `部分答得清（${granted.length}/${list.length} 条有明确答复，其余没量到）`;
     lines.push(`  ${domain.padEnd(20)} ${verdict}`);
     for (const r of list) {
       const mark = r.reply.state === "denied" ? "×  " : r.reply.state === "granted" ? "ok " : "?  ";
@@ -339,7 +365,7 @@ export function formatReadout(rows, ctx) {
           ? `缺 ${r.reply.scope}`
           : r.reply.state === "granted"
             ? "平台认了这次请求"
-            : "没拿到答复";
+            : r.reply.why ?? "没拿到答复";
       const note = r.note ? `（${r.note}）` : "";
       lines.push(`    ${mark}${r.why} → ${tail}${note}`);
     }

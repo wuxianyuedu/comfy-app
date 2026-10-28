@@ -15,6 +15,7 @@
  */
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -29,6 +30,7 @@ import {
 
 const ROOT = path.resolve(__dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "ci-token-scopes.mjs");
+const CONFIG = path.join(ROOT, ".cnb.yml");
 
 type RunResult = { ok: boolean; status: number; out: string };
 type Run = (cmd: string, args: string[]) => RunResult;
@@ -79,10 +81,24 @@ describe("classifyReply：三句话的判据顺序", () => {
     expect(r.scope).toContain("没写出");
   });
 
-  it("403 但原话不是「缺 scope」⇒ 不读成缺权限（那是另一种授权错误）", () => {
+  it("非 200 而原话里没有「缺 scope」⇒ unknown（既不是缺权限，也不是够得着），并把平台那句话带出来", () => {
     const r = classifyReply(envelope(403, { errcode: 10023, errmsg: "scope mismatch" }));
-    expect(r.state).toBe("granted");
+    expect(r.state).toBe("unknown");
     expect(r.status).toBe(403);
+    // 下一动作要靠这句原话才读得出来 —— 只念「没拿到答复」等于什么都没说。
+    expect(r.why).toContain("scope mismatch");
+    // 中文引号 / 双引号都不许漏成 JSON 片段（读数里那不是给人看的形状）。
+    expect(r.why).not.toContain('"');
+  });
+
+  it("CI 上的现场：403 + 授权范围不匹配（没给 scope 名）⇒ unknown，不是获授权", () => {
+    const raw = envelope(403, {
+      errcode: 10023,
+      errmsg: "The token's authorization scope does not match this request.",
+    });
+    const r = classifyReply(raw);
+    expect(r.state).toBe("unknown");
+    expect(r.why).toContain("403");
   });
 });
 
@@ -132,6 +148,24 @@ describe("formatReadout：分组与「未获授权」的措辞", () => {
     expect(text).toContain("红了不构成任何结论");
   });
 
+  it("一条明确答复都没有的那一族念「没量到」，不许念成「获授权」（取不到 ≠ 够得着）", () => {
+    const noReply: Run = () => ({
+      ok: false,
+      status: 1,
+      out: envelope(403, { errcode: 10023, errmsg: "scope mismatch" }),
+    });
+    const lines = formatReadout(rows(noReply), {
+      repo: "a/b",
+      event: "pull_request",
+      branch: "master",
+    });
+    const groupLines = lines.filter((l) => /^ {2}\S+\s{2,}/.test(l));
+    expect(groupLines.length).toBeGreaterThan(5);
+    for (const line of groupLines) {
+      expect(line, `「${line}」把「没量到」念成了别的结论`).toContain("没量到");
+    }
+  });
+
   it("全部答「平台认了」⇒ 每一族念「获授权」，一项「缺 X」都不出现", () => {
     const lines = formatReadout(rows(fakeRun({})), {
       repo: "a/b",
@@ -165,6 +199,39 @@ describe("main：读数档的退码与「不打凭据」", () => {
   it("缺权限不构成红：默认退 0（--strict 也不该因为「缺 repo-manage:r」退非零）", () => {
     expect(invoke([])).toBe(CODE.OK);
     expect(invoke(["--strict"])).toBe(CODE.OK);
+  });
+
+  it("平台那一跳不带 --strict：`--strict` 全是 403（PR 上的现场）时退 2 是它自己坏了 —— 所以平台的 .cnb.yml 不许带它", () => {
+    /* ISSUE #2551 的第一跑读数（`cnb-vv9-1k60eb6vl`）：PR 那一族的令牌连
+     * `repo-cnb-history:r` 都没有 ⇒ 14 条探针全 403、原话不带 `Missing required scopes`
+     * ⇒ 全落 unknown ⇒ 带了 `--strict` 就红。那不是这一格坏了，那是它要量的东西。
+     * 于是判据分两层：行为（`--strict` 确实退 2，留给手工自查）与**接线**（平台不许带）。 */
+    const allDenied403: Run = () => ({
+      ok: false,
+      status: 1,
+      out: envelope(403, {
+        errcode: 10023,
+        errmsg: "The token's authorization scope does not match this request.",
+      }),
+    });
+    heard.length = 0;
+    const code = main({
+      argv: ["--strict"],
+      env: { CNB_REPO_SLUG: "a/b" },
+      run: allDenied403,
+      log: (s) => heard.push(s),
+    });
+    expect(code).toBe(CODE.NO_FACT);
+
+    const config = readFileSync(CONFIG, "utf8");
+    const lines = config.split("\n").filter((l) => l.includes("ci-token-scopes.mjs"));
+    expect(lines.length, "三个入口各有一格，`.cnb.yml` 里应当出现三次").toBe(3);
+    for (const line of lines) {
+      expect(
+        line,
+        "平台那一跳带上 `--strict` 之后，PR 上会有一条永远红且没人能修的格子（ISSUE #2551）",
+      ).not.toContain("--strict");
+    }
   });
 
   it("一条探针都没拿到答复 ⇒ --strict 退 2（这一格自己坏了），默认仍退 0", () => {
