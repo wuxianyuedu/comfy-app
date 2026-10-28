@@ -550,7 +550,7 @@ function stageScriptLine(text: string, name: string): string {
 }
 
 /**
- * `.cnb.yml` 里的**定时任务事件键**（`"crontab: 0 2 * * *"`）原文清单。
+ * `.cnb.yml` 里的**定时任务事件键**（`"crontab: 0 3 * * *"`）原文清单。
  *
  * 为什么它要有判据：定时任务的键与 `push:` / `pull_request:` 不同 —— 它是**带引号的
  * 字符串键**，而且必须包含完整的五段 cron。写成 `crontab:`（映射）、`schedule:`、
@@ -1306,7 +1306,7 @@ export function missingAnchors(
  * `.cnb.yml` 的**顶层键**清单（缩进 0、非注释、非空行，取第一个 `:` 之前的部分）。
  *
  * 为什么要判这个：`master:` 这类事件容器出现**两次**时，YAML 不报错 —— 后一处静默
- * 覆盖前一处。而这份配置里 `master:` 下面挂着 `"crontab: 0 2 * * *"`，所以
+ * 覆盖前一处。而这份配置里 `master:` 下面挂着 `"crontab: 0 3 * * *"`，所以
  * 「新开一个 `master:` 好加几条流水线」这个动作会**当场让定时那一跑消失**，
  * 配置读起来却完全正常（与 ISSUE #2114 那句「账面认为有人判」同族的失效形态）。
  * 判据只判一件事：同一个顶层键不许出现第二行 —— 新事件一律作为已有 `master:` 的子键加。
@@ -2508,7 +2508,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       rows.map((r) => r.event).sort(),
       "桌包档应有两个触发口：`crontab` 与 `web_trigger_package`（按钮在 `.cnb/web_trigger.yml`）",
-    ).toEqual(["crontab: 0 2 * * *", "web_trigger_package"]);
+    ).toEqual(["crontab: 0 3 * * *", "web_trigger_package"]);
     expect(
       new Set(rows.map((r) => r.lockRef)).size,
       "两个触发口点的不是同一把锁 —— 同一件事会被排成两次互掐",
