@@ -46,7 +46,7 @@ const { test, expect } = defineGateRepo({
    * 那一档（那是脚本**正确**的 fail-closed 行为，不是本文件要验的形态）。
    * 「借不到」那一档由 `run(..., { env: { COMFYAPP_OXFMT_ENTRY: undefined } })`
    * 单独造（见下面两条 fail-closed 用例）。 */
-  env: { COMFYAPP_OXFMT_ENTRY: OXFMT_ENTRY },
+  env: { COMFYAPP_OXFMT_ENTRY: OXFMT_ENTRY, COMFYAPP_FORMAT_DEBUG: "1" },
   /* `--staged` 那批用例要读 `git diff --cached` —— 临时工作区必须是个真的 git 仓库。 */
   setup: (repo) => {
     repo.git("init", "-q");
@@ -73,7 +73,8 @@ describe("oxfmt 格式判据（硬闸）", () => {
     repo.write("src/lib/keep.ts", CLEAN);
     repo.write("src/lib/fresh.ts", DIRTY);
     const r = repo.run();
-    expect(r.code).toBe(1);
+    /* 失败信息带上判据自己的读数：本地绿 / CI 红的形态差，没有这批输出只能猜。 */
+    expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/fresh.ts");
     expect(r.output).toContain("个文件未过");
   });
@@ -81,7 +82,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
   test("把原本干净的文件弄脏 → 同样阻断（没有存量额度）", ({ repo }) => {
     repo.write("src/lib/keep.ts", DIRTY);
     const r = repo.run();
-    expect(r.code).toBe(1);
+    expect(r.code, r.output).toBe(1);
     expect(r.output).toContain("src/lib/keep.ts");
   });
 
@@ -221,7 +222,7 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
     repo.write("src/lib/dirty.ts", DIRTY);
     repo.git("add", "src/lib/dirty.ts");
     const r = repo.run(["--staged"]);
-    expect(r.code).toBe(1);
+    expect(r.code, r.output).toBe(1);
     expect(r.output).not.toContain("未触及扫描面");
     expect(r.output).toContain("src/lib/dirty.ts");
   });

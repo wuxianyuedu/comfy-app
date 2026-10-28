@@ -310,6 +310,17 @@ function collectUnformatted(entry) {
       );
       process.exit(2);
     }
+    /* 排查逃生口（默认关）：`COMFYAPP_FORMAT_DEBUG=1` 时把 oxfmt 的原始读数
+     * 原样吐到 stderr —— 判据自测在「本地绿、CI 红」的形态下，没有这批读数
+     * 就只能靠猜（脏文件被判干净时，stdout 里到底是空清单还是清单没被认出来，
+     * 两种修法完全不同）。不设这个量时一个字节不多打。 */
+    if (process.env.COMFYAPP_FORMAT_DEBUG) {
+      console.error(
+        `[format][debug] ROOT=${ROOT}\n` +
+          `[format][debug] oxfmt status=${res.status} stdout=${JSON.stringify(res.stdout)}\n` +
+          `[format][debug] oxfmt stderr=${JSON.stringify(res.stderr)}`,
+      );
+    }
     const lines = (res.stdout || "")
       .split("\n")
       .map((line) => line.trim())
