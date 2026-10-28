@@ -330,7 +330,7 @@ export function localTierLabels(hookPath = HOOK) {
   const out = new Set();
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    if (/^'/.test(line)) break; // D0 那个 `sh -c '…'` 的收尾引号
+    if (line.startsWith("'")) break; // D0 那个 `sh -c '…'` 的收尾引号
     const m = line.match(/^\s*run\s+"([^"]+)"/);
     if (m && m[1] !== undefined) out.add(m[1]);
   }

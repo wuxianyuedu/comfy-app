@@ -185,6 +185,10 @@ async function claimTickOnce(options = {}) {
  *  的迟到回写由 impl 的终态守卫挡下（§14 D4）。 */
 async function reconcileCancelled() {
   const { hostRepo, cliProcs } = hostRuntime;
+  /* 快照迭代是**刻意的**：循环体内会 `cliProcs.delete(taskId)`，直接迭代活的
+   * Map 会在删除时跳键。unicorn/no-useless-spread 不看循环体的突变，属误报，
+   * 禁用一行（台账：全仓此形态仅本处）。 */
+  // eslint-disable-next-line unicorn/no-useless-spread -- 快照，见上
   for (const taskId of [...cliProcs.keys()]) {
     try {
       const st = await hostRepo.findStatusAndPromptById(taskId);

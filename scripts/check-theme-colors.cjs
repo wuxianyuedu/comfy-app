@@ -230,7 +230,7 @@ for (const entry of [...EXEMPT_TABLES, ...EXEMPT_FIXED_DARK]) {
  */
 function scopeResolver(text) {
   const lines = text.split("\n");
-  const scopeAtLine = new Array(lines.length).fill(null);
+  const scopeAtLine = Array.from({ length: lines.length }, () => null);
   let current = null;
   let depth = 0;
   /* 顶层声明名：`export const NODE_META: Record<` 这类**跨行声明**必须能认出来 ——
