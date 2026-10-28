@@ -1,0 +1,32 @@
+{
+  /* 脚本档的判决面 —— `tsc` 对 `**\/*.mjs` 的**全量**覆盖（ISSUE #2524 / 规范 §13.5.14）。
+   *
+   * 为什么单独一份：主 `tsconfig.json` 的 `include` 里列的是 `**\/*.ts`、`**\/*.tsx`、
+   * `**\/*.cjs`、`**\/*.js`，**没有 `**\/*.mjs`**。于是一份从未被任何入口 import 的
+   * `.mjs` 根本进不了 program —— 它的类型错误与死代码（`noUnusedLocals`）一个字都不报。
+   * 实测（2026-10-28 本机）：磁盘上非点目录的 `.mjs` 共 210 份，主 program 里只在场的
+   * 有 169 份 ⇒ **41 份从来不在判决面上**（`scripts/**` 40 份 + `e2e/**` 1 份）。
+   *
+   * `compilerOptions` 一律**继承主配置**（`extends`），不在这里改任何严格度：脚本档与
+   * 应用档必须是同一把尺，否则「脚本过了」与「业务过了」是两个不同的命题。
+   * `exclude` 同样继承（`node_modules` / `docs` / `generated` / `python-venv` / 构建产物
+   * 那一整串），所以这里只写 `include`。
+   *
+   * ⚠️ `**\/*.mjs` 按 TS 的 glob 语义**不穿以点开头的目录**（与主配置那两条显式列出的
+   *    `.storybook/**` 同一条规则）—— 因此 `.next/standalone/**` 与 `.git/**` 里的
+   *    第三方 / 临时件不会进来。这一条不是巧合而是判决面的边界，写在这里防止下一个人
+   *    把它读成「漏配」。
+   *
+   * ⚠️ **这份配置本身不判任何东西**：tsc 只会退出非零，而存量红（实测 310 处）需要的是
+   *    「只降不升」而不是「当场全红」。执行者是
+   *    `node scripts/check-scripts-typecheck.cjs`（棘轮 + 判决面自证），登记见
+   *    `.githooks/pre-commit` 的 D 组与 `scripts/ci-heavy-gates.mjs` 的条目表。 */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /* 这一档由执行者现跑现判，不留 `.tsbuildinfo`：增量缓存的键含配置绝对路径，
+     * 平台每跑都是新目录 ⇒ 恒定失效（与 `eslint --cache` 同一件事），而它在这里
+     * 只会多写一份没人读的文件。 */
+    "incremental": false
+  },
+  "include": ["**/*.mjs"]
+}

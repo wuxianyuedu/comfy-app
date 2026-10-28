@@ -97,6 +97,9 @@ const WIDE_TRIGGERS = [
     why: WIDE_REASON.deps,
   },
   { test: (p) => p === "tsconfig.json", why: WIDE_REASON.types },
+  /* 脚本档那份配置与主配置是**同一把尺**（`extends` 过去），它一改，210 份脚本的
+   * 判决面就跟着变（ISSUE #2524）—— 与 `tsconfig.json` 同一格理由，不另立新话术。 */
+  { test: (p) => p === "tsconfig.scripts.json", why: WIDE_REASON.types },
   { test: (p) => p.startsWith(".githooks/"), why: WIDE_REASON.hooks },
 ];
 

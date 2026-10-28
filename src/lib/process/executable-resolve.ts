@@ -789,10 +789,14 @@ function pnpmPackageDir(dropIn: string): string | null {
 }
 
 /** 这份文件能不能被 `process.execPath` 起 —— 判「是不是脚本」只有 `executableKind()`
- *  一处（硬规则 24），这里只把结论翻成布尔：批处理与原生二进制筛掉，其余都算。 */
+ *  一处（硬规则 24），这里只把结论翻成布尔：批处理与原生二进制筛掉，其余都算。
+ *  ⚠️ 另挡一种（ISSUE #2597）：`#` 起头而**非** `#!` 的是 Corepack 缓存里的**占位文本**
+ *  （首行注释自己写着「请走 ./bin/pnpm.mjs」），node 起它必然 `SyntaxError` 而退的是 1。 */
 function isPnpmEntryScript(candidate: string): boolean {
   const kind = executableKind(candidate);
-  return isFile(candidate) && kind !== "binary" && kind !== "batch";
+  if (!isFile(candidate) || kind === "binary" || kind === "batch") return false;
+  const first = fs.readFileSync(candidate).subarray(0, 2).toString("latin1");
+  return !first.startsWith("#") || first.startsWith("#!");
 }
 
 /** `pnpmInvocation()` 的第一优先：能跑包真身的 JS 入口时就不起垫片（ISSUE #2562）。

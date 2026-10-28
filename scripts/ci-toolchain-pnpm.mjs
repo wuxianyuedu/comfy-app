@@ -359,6 +359,11 @@ function looksLikeScript(candidate) {
   if (head.length < 2) return false;
   if (head.startsWith("#!")) return true;
   if (/^@?\s*(echo|setlocal)\b/i.test(head) || head.startsWith("@")) return false;
+  /* `#` 起头而**非** `#!`：Corepack 缓存里的**占位文本**（首行注释写着「请走
+   * ./bin/pnpm.mjs」）。node 起它必然 `SyntaxError` 而退的是 1 —— 与「判据跑了且红」
+   * 同形（ISSUE #2597）。与 `executable-resolve.ts` 的 `isPnpmEntryScript()` 同一条规则，
+   * 这两份是 ISSUE #2562 里刻意各留的（自证那一格不许 import 仓库内模块）⇒ 必须同批改。 */
+  if (head.startsWith("#")) return false;
   /* 可打印 ASCII 起头即文本脚本；MZ / ELF 那类二进制落到 else（`{2}` 会退化成
    * 「长度恰好为 2」，ISSUE #2563 就是那个形状）。 */
   return /^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(head);

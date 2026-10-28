@@ -58,9 +58,9 @@ export function parseArgs(argv) {
       if (eq > 0) return arg.slice(eq + 1);
       return argv[++i] ?? "";
     };
-    if (arg === "--out" || arg.startsWith("--out=")) opts.out = value("out");
+    if (arg === "--out" || arg.startsWith("--out=")) opts.out = value();
     else if (arg === "--attempts" || arg.startsWith("--attempts=")) {
-      const n = Number.parseInt(value("attempts"), 10);
+      const n = Number.parseInt(value(), 10);
       if (Number.isFinite(n) && n > 0) opts.attempts = n;
     }
   }
