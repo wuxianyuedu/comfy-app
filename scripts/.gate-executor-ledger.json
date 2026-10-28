@@ -8,5 +8,36 @@
       "why": "同上：起 Tailwind 引擎、幂等改写器，判的是 px ↔ spacing 倍数的等价性而非正确性。判定档是 --check（候选数须为 0，命中即退 1）—— 同上一家的翻闸（删基线、删 --update）。",
       "who": "新增一批视图 / story 文件后，或编辑器提示 min-h-[22px] → min-h-5.5 这类时：node scripts/tw4-spacing-canonical.mjs --check（红了就 --write）"
     }
+  },
+  "entrypoints": {
+    "check-deps-freshness.mjs": [
+      {
+        "flags": ["--staged"],
+        "judges": "只判「这次提交有没有动依赖面」那一小档（输入面收窄；未触发即退 0、零输出）。这一形不代表整条判据在开工前跑过 —— 立案现场（ISSUE #2385 / #2530）就是有人把它读成了全部。",
+        "executors": [".githooks/pre-commit"]
+      },
+      {
+        "flags": ["--json"],
+        "judges": "同一个全档判定，换成机器读的输出：由 `pnpm ship` 阶段 0 取 `code` / `installDrift.state` / `envBroken` 念一行，并把结论并进退出码三态。",
+        "executors": ["scripts/ship-preflight.mjs"]
+      },
+      {
+        "flags": [],
+        "judges": "硬规则 25 那句「开工前跑一次」那一档：②（分叉点基准的依赖漂移）+ ③（装了没装对）全判，不收窄输入面。",
+        "executors": ["package.json", "scripts/quality-gate.mjs"]
+      }
+    ],
+    "check-dead-exports.cjs": [
+      {
+        "flags": ["--staged"],
+        "judges": "输入面收窄那一档：只在本次提交动了地基层时扫全树（本地提交档与 CI 的重档预演同一形）。",
+        "executors": [".githooks/pre-commit", "scripts/ci-heavy-gates.mjs"]
+      },
+      {
+        "flags": [],
+        "judges": "整档扫，不收窄 —— 由每日那一跑的「零消费导出」格执行（PR 档不跑它，所以这一形的执行者只能在 `.cnb.yml` 的格表里找到）。",
+        "executors": [".cnb.yml"]
+      }
+    ]
   }
 }
