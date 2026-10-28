@@ -380,17 +380,15 @@ export function fetchBuildStatus(run, slug, sn) {
  *   列表；取不到时 null
  */
 export function fetchBuildList(run, slug, event, limit, opts = {}) {
-  const res = cnbJson(run, [
-    "build",
-    "get-build-logs",
-    "--repo",
-    slug,
-    "--event",
-    event,
-    "--page-size",
-    String(limit),
-    "-v",
-  ]);
+  /* `event` 为空 ⇒ **不带 `--event`**，也就是「什么事件的都要」。
+   * 为什么要有这个形态（ISSUE #2550）：`ci-pr-failure-issue.mjs` 那一格按「我自己这一跑」
+   * 查列表，而它服务的那一档**不是** `pull_request`（桌包那一档挂在 `crontab` / 手点上）——
+   * 沿用「只查 pull_request」的过滤，`pickSelf()` 就找不到自己那一行 ⇒ 事件念成
+   * `(取不到)`、`self` 为 null ⇒ 连「还没到终态」那一道都跳过了。 */
+  const args = event
+    ? ["build", "get-build-logs", "--repo", slug, "--event", event]
+    : ["build", "get-build-logs", "--repo", slug];
+  const res = cnbJson(run, [...args, "--page-size", String(limit), "-v"]);
   /* 平台在这条命令上有两种信封，实测都出现过：列表直挂 `data`（`{data:[…]}`）与套一层
    * （`{data:{total,totalCapped,data:[…]}}`）。只认前者会回 `null`，而调用方读到的是
    * 一句「取不到构建列表」—— 一次**看起来像网络故障**的空读数；而 PR 档那一格正是靠

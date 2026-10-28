@@ -129,6 +129,93 @@ describe("认「这一跑是谁」：PR 号只从不猜的字段取", () => {
   });
 });
 
+/**
+ * `--lane`：桌面成品包那一档（ISSUE #2550）。
+ *
+ * 这一单例外是**显式声明**的那一半：定时 / 手点那两跑没有 PR 可挂，而它们同样要有人
+ * 把红说出来。所以这里钉的是三件事 —— ① 不给 `--lane` 时那些跑仍然一概不写；
+ * ② 给了才认进来；③ 标题与去重键按档分开（两族混起来就是「同一格各红一次只立一张」）。
+ */
+describe("`--lane`：只有显式声明的那一档才认非 PR 事件", () => {
+  it("不给 `--lane` ⇒ 定时那一跑照旧不归这一格管（那一刀今天仍然要留着）", () => {
+    const t = resolveTarget({
+      env: {},
+      list: [build("sn-pkg", "crontab: 0 2 * * *", "")],
+      sn: "sn-pkg",
+    });
+    expect(t.why).toContain("不是 pull_request");
+    expect(t.lane).toBeNull();
+  });
+
+  it("给了 `--lane package` ⇒ 认进来，且没有 PR 号（PR 那一支路仍然走不到）", () => {
+    const t = resolveTarget({
+      env: {},
+      list: [build("sn-pkg", "crontab: 0 2 * * *", "")],
+      sn: "sn-pkg",
+      lane: "package",
+    });
+    expect(t.why).toBeNull();
+    expect(t.lane).toBe("package");
+    expect(t.prIid).toBeNull();
+  });
+
+  it("标题与去重键按档分开：同一格在两档各红一次 ⇒ 两件事、两张单", () => {
+    const pr = titleKey("类型检查");
+    const pkg = titleKey("打包·桌面成品构建", "package");
+    expect(pr).toBe("ci(pr): PR 档红在「类型检查」");
+    expect(pkg).toBe("ci(package): 桌包档红在「打包·桌面成品构建」");
+    /* 反过来：PR 那一族的旧形状不许被改写（历史单子还在同一族里）。 */
+    expect(issueTitle("类型检查")).toContain("ci(pr): PR 档红在「类型检查」");
+    expect(issueTitle("打包·桌面成品构建", "package")).toContain(
+      "ci(package): 桌包档红在「打包·桌面成品构建」",
+    );
+  });
+
+  it("落点：这一档没有 PR 可挂 ⇒ 按格名建单（同一格已有 open 单则追加，不新建）", () => {
+    const fresh = decideAction({
+      state: "failed",
+      failedNames: ["打包·桌面成品构建"],
+      prIid: null,
+      existing: [],
+      lane: "package",
+    });
+    expect(fresh.action).toBe("write");
+    expect(fresh.stages[0]?.number).toBeUndefined();
+    const again = decideAction({
+      state: "failed",
+      failedNames: ["打包·桌面成品构建"],
+      prIid: null,
+      existing: [{ number: 9, title: issueTitle("打包·桌面成品构建", "package") }],
+      lane: "package",
+    });
+    expect(again.action).toBe("write");
+    expect(again.stages[0]?.number).toBe(9);
+  });
+
+  it("正文要说得出是哪一档的哪一跑（不写「PR 那一跑」，也不许多说一句因果）", () => {
+    const body = composeBody({
+      slug: "moon-read/comfy-app-t3",
+      target: {
+        sn: "sn-pkg",
+        event: "crontab: 0 2 * * *",
+        eventUrl: "",
+        prIid: null,
+        lane: "package",
+      },
+      stage: "打包·壳工具链自证",
+      skipped: ["打包·桌面成品构建"],
+      readout: ["L3 (cargo 不可用)"],
+      handle: "ci-pr",
+    });
+    expect(body).toContain("## 症状（这一跑红了，本段只含读数）");
+    expect(body).not.toContain("PR 那一跑红了");
+    expect(body).toContain("没有 PR 可挂");
+    expect(body).toContain("crontab: 0 2 * * *");
+    expect(body).toContain("打包·壳工具链自证");
+    expect(body).toContain("根因：**未判定**");
+  });
+});
+
 describe("决定写不写：①「没结论」一律不落成红字", () => {
   it("绿 ⇒ 不写；被取消 ⇒ 不写，且话术不许把「没跑完」说成产物坏了", () => {
     const g = decideAction({
@@ -380,6 +467,78 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
     ]);
     expect(r.status).toBe(CODE.NO_FACT);
     expect(`${r.stdout}${r.stderr}`).toContain("不构成结论（不是「没有红」）");
+  });
+
+  /**
+   * `--lane` 的两种坏形状（ISSUE #2550）：档名进去重键，所以「写在 .cnb.yml 里、
+   * 但没在此常量下登记」会得到一个随机的标题前缀 —— 同一格在各跑各红一次，账上却是两张
+   * 互不相认的单。它必须是**入口自己的退 2**，而不是变成「默认落到 pr 那一族」。
+   */
+  it("`--lane` 没给值 / 没登记 ⇒ 退 2 且一次都不写（不许退化成默认那档）", () => {
+    const heard: string[] = [];
+    const boom = () => {
+      throw new Error("这一行走到我 ⇒ 这一格在还没判完之前就联网了");
+    };
+    const noValue = main({
+      argv: ["--lane"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-pkg" },
+      log: (s: string) => heard.push(s),
+      run: boom,
+    });
+    expect(noValue).toBe(CODE.NO_FACT);
+    expect(heard.join("\n")).toContain("`--lane` 没给值");
+    const unknown = main({
+      argv: ["--lane", "desktop"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-pkg" },
+      log: (s: string) => heard.push(s),
+      run: boom,
+    });
+    expect(unknown).toBe(CODE.NO_FACT);
+    expect(heard.join("\n")).toContain("不在 LANE_PREFIX 那张表里");
+    /* 而登记过的那一档要能往下走：这一跑的事件是 `crontab: 0 2 * * *`，没有 `--lane`
+     * 会被判成「不归本格管」，给了它就该继续往下读（详情那份刻意不含 `pipelinesStatus`
+     * ⇒ 认不出格名 ⇒ 落在「没结论」，同样不是「不写」）。 */
+    heard.length = 0;
+    const calls: string[] = [];
+    const ok = main({
+      argv: ["--lane", "package", "--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-pkg", CNB_PULL_REQUEST_IID: "" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: string[]) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const data = key.includes("get-build-logs")
+          ? [build("sn-pkg", "crontab: 0 2 * * *", "")]
+          : key.includes("get-build-status")
+            ? { status: "error", pipelinesStatus: {} }
+            : {};
+        return {
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        };
+      },
+    });
+    /* 列表那一跳**不带** `--event`：那一档没有 PR 事件可查，按 `pull_request` 过滤
+     * 就等于查不到自己（ISSUE #2550 的现场：事件念成 `(取不到)`、`self` 为 null）。 */
+    const listCall = calls.find((c) => c.includes("get-build-logs"));
+    expect(listCall, `没有查列表：${calls.join(" / ")}`).toBeTruthy();
+    expect(listCall).not.toContain("--event");
+    /* 读链真的走了（不是靠 `--from` 绕过去的），且一个写命令都没发。 */
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("create-issue")),
+      `写了平台：${calls.join(" / ")}`,
+    ).toBe(false);
+    /* 详情喂的是一份「没有 pipelinesStatus」的形状 ⇒ 格名认不出，落在 no-fact
+     * 而不是「不归本格管」 —— 差别就是「我不知道该不该写」与「我不写」。 */
+    expect(ok).toBe(CODE.NO_FACT);
+    expect(heard.join("\n")).toContain("档 package");
+    expect(heard.join("\n")).not.toContain("不是 pull_request");
   });
 
   /**

@@ -55,7 +55,13 @@
  * node scripts/ci-pr-failure-issue.mjs --dry-run           # 只打印将写什么，一条都不写
  * node scripts/ci-pr-failure-issue.mjs --from <读数 JSON>   # 离线复现（强制只读）
  * node scripts/ci-pr-failure-issue.mjs --no-block          # 平台那一跳：失败也不拦路
+ * node scripts/ci-pr-failure-issue.mjs --lane package --no-block  # 桌面成品包那一档
  * ```
+ *
+ * `--lane` 是 ISSUE #2550 加的：同一份读写链今天也被桌面成品包那两个触发口
+ * （`crontab: 0 2 * * *` / `web_trigger_package`）引用，而那一档**没有 PR 可挂**。
+ * 不给它就照旧只认 `pull_request` 那一族（那一族今天因为令牌限制写不动，见 #2339），
+ * 给了它这一格才把非 PR 事件也算进来，并且标题 / 去重键按档分开。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -84,6 +90,25 @@ export const CODE = { DONE: 0, WRITE_FAILED: 1, NO_FACT: 2 };
 /** 去重键的前缀：只在「没有 PR 可挂、只能建单」那一支用得上（格名进标题）。 */
 export const TITLE_PREFIX = "ci(pr): PR 档红在「";
 
+/**
+ * 每一档自己的标题前缀（`--lane` 的值 → 前缀）。
+ *
+ * 为什么多这一张表（ISSUE #2550）：这一份实现最早只服务于 PR 那一档，而
+ * **同一份读写链**现在也被桌面成品包那一档（`crontab: 0 2 * * *` / `web_trigger_package`）
+ * 引用 —— 那一档的红挂在 `ci(pr): PR 档红在「…」` 这个标题下会直接误导读者
+ * （那一跑根本没有 PR）。前缀同时也是**去重键的一部分**，所以它顺手把两档的单子
+ * 分开：同一格在两档各红一次，是两件事（欠的东西不同，要去找的人也不同）。
+ */
+export const LANE_PREFIX = /** @type {Record<string,string>} */ ({
+  pr: TITLE_PREFIX,
+  package: "ci(package): 桌包档红在「",
+});
+
+/** @param {string | null | undefined} lane @returns {string} 未知档一概落到 PR 那一档（不发明第二份默认） */
+export function lanePrefix(lane) {
+  return LANE_PREFIX[String(lane ?? "").trim()] ?? TITLE_PREFIX;
+}
+
 /** 优先级：PR 档红挡的是「这一笔能不能进 master」，所以与每日档同档。 */
 export const PRIORITY = "P1";
 
@@ -99,18 +124,20 @@ const NOT_FINAL = new Set([
 
 /**
  * @param {string} stage 格名
+ * @param {string} [lane] 这一格服务哪一档（`pr` / `package`；缺省 `pr`）
  * @returns {string} 去重键 —— 标题里必须以它开头
  */
-export function titleKey(stage) {
-  return `${TITLE_PREFIX}${stage}」`;
+export function titleKey(stage, lane = "pr") {
+  return `${lanePrefix(lane)}${stage}」`;
 }
 
 /**
  * @param {string} stage 格名
+ * @param {string} [lane] 这一格服务哪一档（同上）
  * @returns {string} 建单时的标题（去重靠 `titleKey`，后缀只是给读者看的说明）
  */
-export function issueTitle(stage) {
-  return `${titleKey(stage)}—— 自动立案（只含读数，不含因果）`;
+export function issueTitle(stage, lane = "pr") {
+  return `${titleKey(stage, lane)}—— 自动立案（只含读数，不含因果）`;
 }
 
 /**
@@ -133,11 +160,13 @@ export function prIidFromUrl(url) {
  * 内置）优先，认不出来时回落到构建列表里那一跑自带的 `event` / `eventUrl`。
  * 回落不是猜：列表那一项就是**同一个 sn** 的记录，它的 `event` 是平台自己写的。
  *
- * @param {{env:Record<string,string|undefined>, list:any[]|null, sn:string}} input
- * @returns {{sn:string, event:string, eventUrl:string, prIid:number|null, why:string|null}}
+ * @param {{env:Record<string,string|undefined>, list:any[]|null, sn:string,
+ *   lane?:string|null}} input
+ * @returns {{sn:string, event:string, eventUrl:string, prIid:number|null,
+ *   lane:string|null, why:string|null}}
  *   `why` 非空表示「这一跑不归本格管」的原因（不是失败）
  */
-export function resolveTarget({ env, list, sn }) {
+export function resolveTarget({ env, list, sn, lane = null }) {
   const fromEnv = String(env.CNB_PULL_REQUEST_IID ?? "").trim();
   const row = (Array.isArray(list) ? list : []).find(
     (b) => String(b?.sn ?? "") === sn,
@@ -147,29 +176,47 @@ export function resolveTarget({ env, list, sn }) {
   const prIid = /^\d+$/.test(fromEnv)
     ? Number(fromEnv)
     : prIidFromUrl(eventUrl);
-  const yesPR = /^pull_request/.test(event) || prIid !== null || fromEnv !== "";
+  /* `--lane` 是「这一档的立案口就是我」的显式声明（ISSUE #2550）：给了它，非
+   * `pull_request` 事件同样归本格管 —— 桌面成品包那一档（`crontab: 0 2 * * *` /
+   * `web_trigger_package`）没有 PR 可挂，它的红今天是**一点都看不见**的
+   * （PR 那一档是另一种形状：格子有、写不动 —— 令牌只有 `repo-code:r`，见 #2339）。
+   * 没有 `--lane` 时那些跑仍然一律不写 —— 那一处才知道两种形状的区别。 */
+  const declaredLane =
+    lane !== null && String(lane).trim() !== "" ? String(lane).trim() : null;
+  const yesPR =
+    /^pull_request/.test(event) ||
+    prIid !== null ||
+    fromEnv !== "" ||
+    declaredLane !== null;
   if (!yesPR)
     return {
       sn,
       event,
       eventUrl,
       prIid: null,
+      lane: null,
       why:
         `这一跑的事件是「${event || "(取不到)"}」，不是 pull_request —— ` +
         "「PR 红了」这件事对 push / 定时那几跑不成立（它们的 sha 上没有 PR）",
     };
-  return { sn, event, eventUrl, prIid, why: null };
+  return { sn, event, eventUrl, prIid, lane: declaredLane, why: null };
 }
 
 /**
  * 这一次要做什么。**纯函数**（不碰网络），每种失效形态都能被用例直接钉住。
  *
  * @param {{state:string, failedNames:string[], prIid:number|null,
- *   existing:Array<{number:number,title:string}>|null}} input
+ *   existing:Array<{number:number,title:string}>|null, lane?:string|null}} input
  * @returns {{action:"none"|"no-fact"|"recommend"|"write", reason?:string,
  *   stages:Array<{stage:string, number?:number}>}}
  */
-export function decideAction({ state, failedNames, prIid, existing }) {
+export function decideAction({
+  state,
+  failedNames,
+  prIid,
+  existing,
+  lane = null,
+}) {
   if (state === "green")
     return { action: "none", stages: [], reason: "这一跑是绿的 ⇒ 无事可立" };
   if (state === "cancelled")
@@ -209,7 +256,9 @@ export function decideAction({ state, failedNames, prIid, existing }) {
   return {
     action: "write",
     stages: failedNames.map((stage) => {
-      const hit = existing.find((e) => e.title.includes(titleKey(stage)));
+      const hit = existing.find((e) =>
+        e.title.includes(titleKey(stage, lane ?? undefined)),
+      );
       return hit ? { stage, number: hit.number } : { stage };
     }),
   };
@@ -218,17 +267,25 @@ export function decideAction({ state, failedNames, prIid, existing }) {
 /**
  * 拼正文：只有事实与出口。
  *
- * @param {{slug:string, target:{sn:string,event:string,eventUrl:string,prIid:number|null},
+ * @param {{slug:string, target:{sn:string,event:string,eventUrl:string,
+ *   prIid:number|null, lane?:string|null},
  *   stage:string, skipped:string[], readout:string[], handle:string}} input
  * @returns {string}
  */
 export function composeBody({ slug, target, stage, skipped, readout, handle }) {
+  const lane = target.lane ?? null;
   const where =
-    target.prIid !== null ? `PR #${target.prIid}` : "（没有 PR 可挂）";
+    target.prIid !== null
+      ? `PR #${target.prIid}`
+      : lane
+        ? `事件 \`${target.event || "(取不到)"}\`（没有 PR 可挂 ⇒ 落到「${lane}」这一族）`
+        : "（没有 PR 可挂）";
   return [
     commentHeader(handle),
     "",
-    "## 症状（PR 那一跑红了，本段只含读数）",
+    lane && target.prIid === null
+      ? "## 症状（这一跑红了，本段只含读数）"
+      : "## 症状（PR 那一跑红了，本段只含读数）",
     "",
     `- 构建：\`${target.sn}\` · 事件 \`${target.event || "(取不到)"}\` · ${where}`,
     `- 红在：**「${stage}」**`,
@@ -376,6 +433,12 @@ export function main(io = {}) {
   const noBlock = argv.includes("--no-block");
   const at = argv.indexOf("--from");
   const from = at >= 0 ? argv[at + 1] : undefined;
+  /* `--lane <名>`：这一格服务哪一档（缺省 pr）。它是**显式声明**而不是从事件推出来的：
+   * 「这一跑归不归本格管」不该由平台给的事件名猜（猜错就是那一档永远不立案，而这一格
+   * 自己在记账上还是绿的 —— 桌面成品包那一档今天就是这个形状，见 ISSUE #2550）。 */
+  const laneAt = argv.indexOf("--lane");
+  const laneArg = laneAt >= 0 ? String(argv[laneAt + 1] ?? "").trim() : "";
+  const lane = laneArg !== "" ? laneArg : null;
 
   /**
    * 退码出口：`--no-block` 只改码，不改话术。
@@ -395,6 +458,24 @@ export function main(io = {}) {
     }
     return code;
   };
+
+  /* 写在 `finish` 之后（`const` 的 TDZ）：这两句退码要靠它把 `--no-block` 那一层套上。 */
+  if (laneAt >= 0 && laneArg === "") {
+    log(
+      "[pr-failure-issue] `--lane` 没给值 ⇒ 不知道这一格服务哪一档，一次都不写" +
+        "（档名进标题与去重键，随手写就把两档的单子混成一族）。",
+    );
+    return finish(CODE.NO_FACT, "--lane 缺值");
+  }
+  if (lane !== null && !(lane in LANE_PREFIX)) {
+    log(
+      `[pr-failure-issue] 「${lane}」不在 LANE_PREFIX 那张表里（有：${Object.keys(
+        LANE_PREFIX,
+      ).join(" / ")}）⇒ 一次都不写。` +
+        "新加一档要先在同一个常量里登记它，否则去重键会拆成两族 —— 那正是 #2399 记过的形状。",
+    );
+    return finish(CODE.NO_FACT, `--lane 未登记：${lane}`);
+  }
 
   const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
   if (!slug) {
@@ -453,8 +534,18 @@ export function main(io = {}) {
 
   if (!list) {
     /* 带上 `log`：取不到时要念出**哪一种取不到**（退码 / stderr / 信封），
-     * 否则现场只留一句「取不到构建列表」，三种原因的下一个动作完全不同。 */
-    list = fetchBuildList(run, slug, "pull_request", 60, { log });
+     * 否则现场只留一句「取不到构建列表」，三种原因的下一个动作完全不同。
+     *
+     * 过滤条件：默认只查 `pull_request`（这一格的出身）；而给了 `--lane`（且不是 pr）
+     * 时**不带事件过滤** —— 那一档没有 PR 事件可查，按 PR 过滤就等于查不到自己
+     * （ISSUE #2550 的现场：事件念成 `(取不到)`、`self` 为 null，连终态那一道都跳过）。 */
+    list = fetchBuildList(
+      run,
+      slug,
+      lane && lane !== "pr" ? "" : "pull_request",
+      60,
+      { log },
+    );
     if (!list) {
       /* 这一句是这一格**唯一**的失效形态（它是 `endStages`，退出码不构成流水线结论），
        * 所以要把「下一次该谁做什么」也写在这里，而不是只留一句「取不到」。
@@ -474,7 +565,7 @@ export function main(io = {}) {
   }
 
   const self = pickSelf(list, sn);
-  const target = resolveTarget({ env, list, sn });
+  const target = resolveTarget({ env, list, sn, lane });
   if (target.why) {
     log(`[pr-failure-issue] ${target.why} ⇒ 不写。`);
     return finish(CODE.DONE, target.why);
@@ -508,6 +599,7 @@ export function main(io = {}) {
   );
   log(
     `[pr-failure-issue] 这一跑 ${sn} · 事件 ${target.event || "(取不到)"} · ` +
+      `档 ${target.lane ?? "pr"} · ` +
       `PR ${target.prIid ?? "(无)"} · 判定 ${outcome.state} · ` +
       `红格 ${failedNames.length} 个${failedNames.length ? `（${failedNames.join("、")}）` : ""} · ` +
       `被带下去 ${skipped.length} 格`,
@@ -532,6 +624,7 @@ export function main(io = {}) {
     failedNames,
     prIid: target.prIid,
     existing: target.prIid !== null ? [] : existing,
+    lane,
   });
   if (decision.action === "none" || decision.action === "no-fact") {
     const why = decision.reason ?? "(没给出原因)";
@@ -560,7 +653,7 @@ export function main(io = {}) {
             ? `评论在 PR #${target.prIid} 下（不新建单）`
             : s.number
               ? `在 #${s.number} 下追加一条读数（不新建）`
-              : `新建一张：${issueTitle(s.stage)}`) +
+              : `新建一张：${issueTitle(s.stage, lane ?? "pr")}`) +
           ` · 正文 ${body.length} 字 · 一条都没写`,
       );
       continue;

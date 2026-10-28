@@ -1055,6 +1055,27 @@
       COMFY_CI_SUBJECT: "master"
     timeout: 45m
 
+# ── 壳工具链那一对环境变量：`CARGO_HOME` + `RUSTUP_HOME`（ISSUE #2549）────────────
+#
+# 为什么要有它：runner 走**服务账号会话**（`orange-runner` 是 `LocalSystem`），它的 `Path`
+# 与开发者会话不是同一份 —— `CARGO_HOME` 在这台机上是**用户级**变量，`G:\.cargo\bin` 也只在
+# 用户级 `Path` 上。所以流水线里凡是要点 cargo 的格，都必须**自己把这两个值带进场**；
+# 否则那一格看到的就是「一台没装 Rust 的机器」（与 Python / pnpm 那两次是同一条岔路）。
+#
+# 为什么收成一个锚点而不是写两遍（§12.12）：这一对是**这台节点**的事实、出现在三处
+# （`重档静态判据` + 桌面成品包那两格），写成三份的那一刻就是它们开始漂的那一刻 ——
+# 而漂的那一形正是 #2549 今天的读数：桌包那一档新加的两格没带这对值，第二格 2.2s 就红、
+# 后面三格整片 `skipped`，当天没有成品包。
+#
+# 为什么必须**成对**给：cargo 本体是 rustup 的代理（`G:\.cargo\bin\cargo.exe`），代理要
+# `RUSTUP_HOME` 才解析得到工具链 —— 只给 `CARGO_HOME` 时实测
+# `could not create home directory …\.rustup: 拒绝访问`（ISSUE #2192 那条 PR 首跑现场）。
+#
+# ⚠️ 换节点要跟着换这两个值（与上面 TEMP / PLAYWRIGHT_BROWSERS_PATH 同一档）。
+.cargo-env: &cargo_env
+  CARGO_HOME: "G:\\.cargo"
+  RUSTUP_HOME: "C:\\Users\\yuedu\\.rustup"
+
 # ── 桌包那一档（ISSUE #2503）：装依赖 → 打真安装包 → 发布到常驻目录 ────────────────
 #
 # **为什么是独立一条**：业主口径「每日档另开一条独立流水线真打桌面成品包」，而它不进
@@ -1109,8 +1130,16 @@
     # 只答「cargo / rustc 在不在」。这一格在三秒内给答案，而缺件时的报错会长在两分钟之后
     # 的 cargo 段里（`cargo: The term 'cargo' is not recognized` 混在 tauri 的输出里，
     # 那一刻安装依赖的账已经花完）。壳工具链**不是** pnpm 依赖，这一跑不顺手装任何东西。
+    #
+    # ⚠️ 这一格要的那一对变量（`env: *cargo_env`）只有一半用场：探针是按名字起 `cargo` 的，
+    # 所以还得把 `$env:CARGO_HOME\bin` 前置到 `Path` —— 只给变量而 PATH 上没有它，
+    # 得到的仍是 `#2549` 那一格 2.2 秒的红（这正是今天那一跑的读数）。
+    env: *cargo_env
     timeout: 5m
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --rust-only
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $env:Path = "$env:CARGO_HOME\bin;$env:Path"
+      node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs --rust-only
   - name: 打包·桌包工具预置
     # nsis 那一格要的两件 GitHub release 资产，**不在这条链上现下**（bundler 的下载预算实测
     # 在 22–23s，而本机直连取那份 zip 要 48.4s ⇒ 红的是网络、看起来像链坏了；镜像键实测
@@ -1124,8 +1153,16 @@
     # 整条链：`beforeBuildCommand`（`build-desktop.mjs` → `pnpm build` → 数产物 → 体积护栏）
     # → cargo release 编译 → bundle（nsis + msi）。判据一个字都不在这里重写，也不带 `--no-bundle`
     # —— 那一带就等于回到「只有 app.exe，没有安装包」的原点（§7.0 那张表今天的形态）。
+    #
+    # ⚠️ 同样要那一对变量 **并且**把 `$env:CARGO_HOME\bin` 前置到 `Path`：这一格是
+    # `pnpm tauri build`，它按名字 spawn `cargo` —— 变量只是「工具链住哪」，
+    # PATH 上没有那个代理，就还是 `#2549` 那一形。
+    env: *cargo_env
     timeout: 30m
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- pnpm tauri build
+    script: |
+      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
+      $env:Path = "$env:CARGO_HOME\bin;$env:Path"
+      node scripts/ci-cp936-exit.mjs -- pnpm tauri build
   - name: 打包·发布到常驻目录
     # 落 `<常驻根>/<sha-构建号>` 一个目录 + `manifest.json` + `latest.txt` 指针，轮转留 2 份。
     # 退出码三态：0 发布完成 / 1 没有成品（构建那一格没打出来）/ 2 **没有结论**（问不出常驻根、
@@ -1234,6 +1271,34 @@
       # 5m：三次读命令（列表 / 逐格详情 / 逐格日志，后者最多三格）+ 一次写 + 一次回读。
       # 与 `每日失败立案` 同量级（实测那条 1.6s）。给 5m 是留给节点冷启动与平台慢响应，
       # 不是给「让它多试几次」—— 取不到读数时它**不重试也不写**，退 2 由话术说出来。
+      timeout: 5m
+
+# ── 桌面成品包那一档的失败立案（ISSUE #2550）──────────────────────────────────────
+#
+# 这一档为什么也要有：桌包那两个触发口（下面 `crontab: 0 2 * * *` 与 `web_trigger_package`）
+# 此前**只**引了 `*common` —— 没有 `endStages` 立案格。于是 02:00 那一跑红了之后，
+# 知道这件事的唯一办法是去翻构建列表：2026-10-28 那一跑（`cnb-5j8-1k5v8acjd`）红在
+# `打包·壳工具链自证`、后面三格整片 `skipped`，当天没有成品包，而账上一张单都没有。
+#
+# 形态与 PR 那一格逐字同族（`endStages` 而不是 `stages` 的最后一格；理由见上面那个锚点），
+# 入口也是**同一个脚本**加一个 `--lane package`：
+#   · 那份读写链（定性 / 取逐格 / 摘录失败行 / 建单 → 补标签 → 独立回读）只写了一次，
+#     这里不抄第二份（§12.12）；
+#   · `--lane` 是「我就是这一档的立案口」的**显式声明** —— 不给它，脚本按老规矩把非
+#     `pull_request` 事件判成「不归本格管」（那一刀是对 push / 定时那些「没有 PR 可挂」
+#     的跑的保护，今天仍然要留着）；
+#   · 这一档**写不写得动**是另一件事、答案是「写得动」：桌包那一跑挂在 `crontab` /
+#     手点这两个事件上（不在「不可信事件」那一族），而 #2472 / #2462 那两张单就是
+#     `crontab: 0 0 * * *` 那一跑自己建出来的。PR 那一族今天只有 `repo-code:r`
+#     （#2339），那是平台按事件可信度分配的口径、本仓改不动 ——
+#     与本锚点是两种不同的形状，别拿同一句话概括。
+#
+# 去重键跟着 `--lane` 走 ⇒ 标题是 `ci(package): 桌包档红在「…」`，与 PR 那一族互不相混。
+.package-fail-stage: &package_fail_stage
+  endStages:
+    - name: 桌包失败立案
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-pr-failure-issue.mjs --no-block --lane package
+      # 与 `PR 失败立案` 同一量级（三次读命令 + 一次写 + 一次回读）。
       timeout: 5m
 
 .gates: &gates
@@ -2015,11 +2080,11 @@
     # cargo 本体是 rustup 的代理（`G:\.cargo\bin\cargo.exe`），代理要 `RUSTUP_HOME`
     # 才解析得到工具链 —— 只给 CARGO_HOME 时实测
     # `could not create home directory …\.rustup: 拒绝访问`（ISSUE #2192 那条 PR 首跑现场）。
-    # ⚠️ 与上面 TEMP / PLAYWRIGHT_BROWSERS_PATH 同一档：**这两个值是给这台节点的**，
-    # 换节点要跟着换。
-    env:
-      CARGO_HOME: "G:\\.cargo"
-      RUSTUP_HOME: "C:\\Users\\yuedu\\.rustup"
+    #
+    # ⚠️ 2026-10-28 起这两个值收进 `.cargo-env` 锚点（`#2549`）：桌面成品包那两格要的是
+    # **同一对**（同一台节点、同一个原因），写成两份就是它们开始漂的那一刻 ——
+    # 而今天那一跑的红恰好就是「那一档没带这对值」。换节点仍要跟着换。
+    env: *cargo_env
     # 平台单 stage 默认预算 20m 是硬上限（实测强杀形态见上面那段），而这一格装的是原先
     # 那几条各自独立跑的东西 —— 它的**合理**墙钟应当与原几格的总和同级。
     timeout: 45m
@@ -2348,8 +2413,12 @@ master:
   # （`.package-gates` / `.lock-package`，理由写在那两个锚点头注里）—— 判据
   # `tests/no-platform-ci-config.test.ts` 双向钉：桌包那几格不许出现在每日清单里，
   # 而定时与手点两个触发口必须引用同一个 `*package_gates`。
+  #
+  # `*package_fail_stage` 是这一档**独有**的那一格 `endStages`（ISSUE #2550：这一档红了
+  # 以前没有任何自动立案口）。写法与 `pull_request` 那条同形 —— 两个锚点写在一个合并键里，
+  # 拆成两行 `<<:` 是非法 YAML（理由见 `pull_request` 那条同一处注释）。
   "crontab: 0 2 * * *":
-    - <<: *common
+    - <<: [*common, *package_fail_stage]
       name: 桌面成品包
       lock: *lock_package
       stages: *package_gates
@@ -2438,8 +2507,10 @@ master:
   # master」。手点这一口取的是**按下时刻的 master HEAD** —— 与每日档那两条触发口同一条口径，
   # 不是「重跑历史那一跑」。锁与定时那一条共用 `*lock_package`（同一件事不排两次），
   # 而它**不与每日档互掐**：两件事各自要结论。
+  # 立案那一口与定时那条同一份（同 `*package_fail_stage`，ISSUE #2550）—— 手点这一跑
+  # 的红同样要有人看得见，按钮按下的人就是这一跑的执行身份。
   web_trigger_package:
-    - <<: *common
+    - <<: [*common, *package_fail_stage]
       name: 桌面成品包（手动触发）
       lock: *lock_package
       stages: *package_gates
