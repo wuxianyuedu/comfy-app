@@ -43,9 +43,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 报告文件（相对项目根）—— 与 `vitest.config.ts` 的 `lcov` reporter 是同一份口径。 */
 export const REPORT_REL = "coverage/lcov.info";
@@ -104,7 +103,7 @@ function main() {
 /* 只在被直接执行时跑 `main()`；被判据 import 时只拿纯函数。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   main();
 }

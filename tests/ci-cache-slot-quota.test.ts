@@ -38,7 +38,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -53,7 +52,7 @@ import {
   SLOT_ENABLED_ENV,
 } from "../scripts/ci-slot-apply.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 造一个槽目录（可带产物、指纹、邮票、锁）。

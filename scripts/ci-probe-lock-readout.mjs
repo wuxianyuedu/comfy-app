@@ -26,7 +26,6 @@
 
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { buildSnFromOutput } from "./ship-exec.mjs";
 
@@ -382,7 +381,7 @@ function parseFlags(argv) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const [, , cmd, ...rest] = process.argv;
   const f = parseFlags(rest);

@@ -32,7 +32,6 @@
  * 退出码恒为 0：它是**打印**，不是判据。判据那一份只有 `--python-only` 一个。
  */
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { findPython, pythonForensics } from "./ci-toolchain-python.mjs";
 /* **第二条链的读数**（ISSUE #1961）。`findPython` 与 `resolvePython` 是「同一台机器上
@@ -151,7 +150,7 @@ export function probeLines({
  * 就退 0 —— 而它存在的意义正是「缺件时把论据打出来」。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   for (const line of probeLines()) console.log(line);
   process.exit(0);

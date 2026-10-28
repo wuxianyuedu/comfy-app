@@ -54,7 +54,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   baseCheckMany,
@@ -65,7 +64,7 @@ import {
 import { localTierLabels } from "./base-check/hook-steps.mjs";
 import { renderVerdict } from "./ci-log.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
@@ -592,7 +591,7 @@ export function lastSummary(output) {
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main(process.argv.slice(2)));
 }

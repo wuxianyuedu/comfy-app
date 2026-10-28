@@ -37,7 +37,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /* 落点的四个名字全从 `ci-toolchain-browser.mjs` 取 —— 它把落点模块那三个名字原样
@@ -51,7 +50,7 @@ import {
 } from "../scripts/ci-toolchain-browser.mjs";
 import { ensureDir } from "../scripts/ci-env-probe.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const CNB = path.join(ROOT, ".cnb.yml");
 
 /** 读仓库根的 `.cnb.yml`。 */

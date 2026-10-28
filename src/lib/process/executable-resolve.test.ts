@@ -132,7 +132,6 @@ describe("executableKind：读内容形态，不看扩展名", () => {
     expect(kinds[3]).toBe("shebang");
   });
 
-
   it("`#!` 开头判 shebang（corepack 的无扩展名 shim）", () => {
     const dir = freshDir();
     const f = path.join(dir, "pnpm");
@@ -414,7 +413,10 @@ describe("whichCommand：环境变量的键大小写（Windows 的 `Path`）", (
  */
 describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", () => {
   /** 造一个带包真身的 pnpm 落点。`bin` 用字符串形态（corepack 那一形）。 */
-  function writePnpmPackage(dir: string, opts: { bin: unknown; entry?: string }) {
+  function writePnpmPackage(
+    dir: string,
+    opts: { bin: unknown; entry?: string },
+  ) {
     const pkgDir = path.join(dir, "node_modules", "pnpm");
     fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
     fs.writeFileSync(
@@ -506,7 +508,10 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
      * 否则 `pnpmInvocation` 会退回 `.ps1` 宿主那一跳。 */
     const bin = freshDir();
     writeExec(path.join(bin, "pnpm"), "#!/bin/sh\nexit 0\n");
-    fs.writeFileSync(path.join(bin, "pnpm.CMD"), "@ECHO off\r\necho 12.4.1\r\n");
+    fs.writeFileSync(
+      path.join(bin, "pnpm.CMD"),
+      "@ECHO off\r\necho 12.4.1\r\n",
+    );
     const home = freshDir();
     const home2 = freshDir();
     const localAppData = freshDir();
@@ -520,7 +525,13 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     const entry = path.join(pkgDir, "bin", "pnpm.cjs");
     writeExec(entry, 'process.stdout.write("12.4.1\\n");\n');
     const inv = pnpmInvocation(["install"], {
-      env: { PATH: bin, PATHEXT: ".COM;.EXE;.BAT;.CMD", LOCALAPPDATA: localAppData, USERPROFILE: home, HOME: home2 },
+      env: {
+        PATH: bin,
+        PATHEXT: ".COM;.EXE;.BAT;.CMD",
+        LOCALAPPDATA: localAppData,
+        USERPROFILE: home,
+        HOME: home2,
+      },
       platform: "win32",
     });
     expect(inv!.command).toBe(process.execPath);

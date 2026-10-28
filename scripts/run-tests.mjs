@@ -27,13 +27,12 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** @param {string[]} argv */
@@ -197,7 +196,7 @@ function main() {
  * process.exit(main())：本单开发时真撞上（那两轮"全量套件"就是嵌套跑的输出）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   process.exit(main());
 }

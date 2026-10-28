@@ -31,9 +31,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** eslint 缓存目录（与 `package.json` 的 `--cache-location` 逐字一致）。 */
@@ -211,6 +210,6 @@ function main() {
 // 被 import 时不做任何事（`tests/*` 直接调函数）；只有作为入口才跑 main。
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 )
   main();

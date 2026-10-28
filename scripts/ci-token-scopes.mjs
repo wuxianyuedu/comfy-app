@@ -61,7 +61,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /** 三态退码与仓内其余档同口径（`0` 有结论 / `2` 没拿到测量）。 */
 export const CODE = { OK: 0, NO_FACT: 2 };
@@ -556,7 +555,7 @@ export async function main(opts = {}) {
  * 在 Windows 上恒不相等，于是本脚本一行都不打就退 0 —— 而它存在的意义正是把这一格打出来。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   process.exit(await main());
 }

@@ -35,9 +35,8 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const CNB_CONFIG = ".cnb.yml";
 
 /** 自托管节点的标签 —— **仓里唯一一处**（判据与文档都从这里取）。 */

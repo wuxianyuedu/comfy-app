@@ -67,7 +67,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { cnbJson, makeRunner, writeScratch } from "./ship-exec.mjs";
 import {
@@ -87,7 +86,7 @@ import {
 import { runAppendIssueComment, runNewIssue } from "./ship-issue-new.mjs";
 import { commentHeader } from "./ship-ticket.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 三态与仓内其余档同口径（`0` 有结论 / `1` 该写的没写成 / `2` 取不到读数）。 */
@@ -566,7 +565,7 @@ export function main(io = {}) {
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const exit = main();
   if (exit !== CODE.DONE) {

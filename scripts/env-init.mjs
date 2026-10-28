@@ -19,7 +19,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 // 密钥与占位值的**单一定义点**在 launcher-core 那份（桌包 standalone 运行期也用它）：
 // 两侧各写一份的后果不是重复代码，而是「dev 检出的鉴权配置形状」与「桌包里的」悄悄
@@ -40,7 +39,7 @@ import {
 // 这里写的值与 `ship` 念的值必须同源，否则「跑过 env:init」之后两边各说各的名字。
 import { DEV_HANDLE_ENV_KEY, devHandleForEnvFile } from "./dev-handle.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(import.meta.dirname, "..");
 const envPath = path.join(root, ".env");
 const examplePath = path.join(root, ".env.example");
 

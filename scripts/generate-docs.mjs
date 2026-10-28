@@ -20,11 +20,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 跑一条 `pnpm run <script>`，返回退出码；`null` = 前置条件不满足（已打印原因）。

@@ -118,7 +118,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 /* ⚠️ **可执行形态的唯一判据**（ISSUE #638 / §2.1.1）：Windows 上 `pnpm` 是 `.cmd`/`.ps1`
  * 垫片，Node 直接 `spawn("pnpm")` **起不来**（`.cmd` 只有 cmd.exe 会解释，Node 给
@@ -734,7 +733,7 @@ export function runWithCp936Exit(
  * /`python-probe.mjs` 同一条处置，它们的头注记着这个形态）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const code = await runWithCp936Exit(process.argv.slice(2));
   /* 退出码**必须**转出去：外壳吞掉它等于把被包那条命令的结论一起吞掉

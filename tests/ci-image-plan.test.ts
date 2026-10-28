@@ -158,7 +158,8 @@ describe("版本号现读：锁文件里只认根 importer", () => {
     const facts = diskFacts({ root: ROOT });
     expect(facts.missingNpm).toEqual([]);
     expect(facts.pnpmVersion).toMatch(/^\d+\.\d+\.\d+/);
-    expect(facts.enginesRange).toContain("^24.15.0");
+    // 与 package.json 的 engines.node（>=26.12.1，#2531/#2552 钉死）同源；别写死旧值
+    expect(facts.enginesRange).toContain(">=26.12.1");
   });
 });
 

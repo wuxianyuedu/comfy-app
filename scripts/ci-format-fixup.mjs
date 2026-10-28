@@ -63,11 +63,10 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { buildSnFromOutput, cnbSpawn } from "./ship-exec.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** bot 提交的固定身份（blame 可辨：这一族的提交都是机器写的格式修复）。 */
@@ -698,7 +697,7 @@ export function runFormatFixup(deps = {}) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const r = runFormatFixup({ args: parseArgs() });
   for (const line of r.lines) process.stdout.write(`${line}\n`);

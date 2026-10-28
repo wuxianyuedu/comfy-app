@@ -44,7 +44,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { resolveGitDir } from "./git-dir.mjs";
 
@@ -704,7 +703,7 @@ function viewRun(argv) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   /* `record` 是唯一的子命令，其余一切 argv 都是「看账」的参数 —— 所以**不能**把
    * 第一个位置参数一律当子命令剥掉：`--clear` / `--json` / `--last` 都是看账的开关，

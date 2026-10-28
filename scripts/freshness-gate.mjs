@@ -42,7 +42,6 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   FRESHNESS_TRACKS,
@@ -56,7 +55,7 @@ import {
   readFreshnessLedgerAt,
 } from "./freshness-ledger.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
@@ -444,7 +443,7 @@ function main() {
 if (
   process.argv[1] &&
   fs.realpathSync(process.argv[1]) ===
-    fs.realpathSync(fileURLToPath(import.meta.url))
+    fs.realpathSync(import.meta.filename)
 ) {
   process.exit(main());
 }

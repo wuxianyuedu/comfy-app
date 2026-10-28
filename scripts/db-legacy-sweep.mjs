@@ -163,13 +163,12 @@ export function sweepLegacyTimestamps(
  * 守着全仓不许再出现拼串的那一形态。 */
 {
   const path = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
   const invokedDirectly =
     process.argv[1] &&
-    path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+    path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
   if (invokedDirectly) {
     const root = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
+      import.meta.dirname,
       "..",
     );
     const url = process.env.DATABASE_URL ?? "file:./db.sqlite";

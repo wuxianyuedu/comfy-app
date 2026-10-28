@@ -24,10 +24,9 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
-import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
+  import.meta.dirname,
   "..",
 );
 const HOST_SCRIPT = path.join(REPO_ROOT, "scripts", "executor-host.mjs");

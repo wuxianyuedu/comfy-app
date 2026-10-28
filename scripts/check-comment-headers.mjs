@@ -33,7 +33,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { CODE, parseSlug } from "./ship-core.mjs";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
@@ -182,7 +181,7 @@ export function main(deps = {}) {
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const argv = process.argv.slice(2);
   const pi = argv.indexOf("--pages");

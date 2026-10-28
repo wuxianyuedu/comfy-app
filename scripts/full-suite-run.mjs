@@ -30,7 +30,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { pnpmCli } from "./ci-install-deps.mjs";
@@ -66,7 +65,7 @@ import {
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 本档的登记（账文件 / 键 / 名字 / 「怎么跑」那条命令）。 */
@@ -717,7 +716,7 @@ async function main(argv) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.resolve(process.argv[1]) === import.meta.filename
 ) {
   process.exit(await main(process.argv.slice(2)));
 }

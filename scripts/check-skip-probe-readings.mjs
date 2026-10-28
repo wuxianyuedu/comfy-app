@@ -40,7 +40,6 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   dirExists,
@@ -49,7 +48,7 @@ import {
   walkForScan,
 } from "./gate-scan-read.cjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 /** 扫描面：与 `vitest.config.ts` 的 `include` 同口径（`src/**` + `tests/**`）。 */
 const SCAN_DIRS = ["src", "tests"];
 const TEST_FILE_RE = /\.test\.tsx?$/;
@@ -80,7 +79,7 @@ export function judgeSkipProbeReadings(rel, src) {
 
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
 ) {
   const reportOnly = new Set(process.argv.slice(2)).has("--report");
   const problems = [];

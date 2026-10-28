@@ -1,7 +1,6 @@
 import type { StorybookConfig } from "@storybook/nextjs";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 /* 相对 import 一律**带文件后缀**（`.ts` / `.tsx`），不写 `./x`。
  *
@@ -44,7 +43,7 @@ import { APP_ORIGIN_ENV_KEYS, parseOverride } from "./app-origin-reader.ts";
 function readAppOriginEnv(): Record<string, string> {
   /* ESM 里没有 `__dirname`（Storybook 用 import 加载本文件），按 `import.meta.url`
      定位 —— 生成件与本文件同在 `.storybook/` 下。 */
-  const here = path.dirname(fileURLToPath(import.meta.url));
+  const here = import.meta.dirname;
   const file = path.join(here, "generated", "app-origin.json");
   let parsed = null;
   try {

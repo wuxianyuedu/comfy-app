@@ -35,7 +35,6 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /* 每个 stage 现在外面都包着 `ci-cp936-exit.mjs`（ISSUE #1977 的 CP936 出口），
@@ -48,7 +47,7 @@ import {
   UTF8_CODE_PAGE,
 } from "../scripts/ci-console-encoding.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
 describe("控制台输出编码：读数（只读，不改任何东西）", () => {
