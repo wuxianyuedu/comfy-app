@@ -479,9 +479,35 @@ function checkDir(dir, label) {
   const topEntries = fs
     .readdirSync(dir, { withFileTypes: true })
     .map((e) => e.name);
-  const strayTop = topEntries.filter(
-    (name) => name !== "src" && !allowedTop.includes(name),
-  );
+  /* **只有真的是装配产物时才数顶层**（ISSUE #2629）：`src-tauri/static/` 由
+   * `build-desktop.mjs` 装配，判据本仓里唯一能认出「装配过」的事实就是那一层有没有
+   * `server.js` —— 上面那三条「缺件」检查早就是这道门（见 `files.includes("server.js")`
+   * 那两处），只有这一条漏了。漏掉的后果是**开发机专属的恒红**：没跑过
+   * `pnpm build:desktop` 的机器上那层可能是空的、或只剩别人留下的一件开发期文件，
+   * 于是报「顶层出现白名单外的条目」，读起来像有人把脏文件塞进了出厂件。
+   * 实测一例：本机跑过一次壳的 `cargo test` 之后 `pnpm build` 就红在那一句上
+   * （挪开那个文件 ⇒ 两层全绿、退 0；放回 ⇒ 又退 1）。
+   *
+   * ⚠️ 这不是放宽：装配过的层（有 `server.js`）照旧逐个顶层条目判，白名单一个字没改。 */
+  const assembled = label !== "static" || files.includes("server.js");
+  const strayTop = assembled
+    ? topEntries.filter((name) => name !== "src" && !allowedTop.includes(name))
+    : [];
+  if (!assembled) {
+    /* 这一句**不管目录里有没有东西都要打**：空目录时它曾是 `[static] ✓ 产物干净
+     * （共 0 个文件）` —— 一句「干净」把「从来没装配过」说成了「检查过且通过」，
+     * 而这两种读数在出厂链上的下一步动作完全不同（§13.5.25 那条「降档/跳过不许被读成
+     * 全套过了」在同一件事上的应用）。 */
+    console.log(
+      `[${label}] 这一层还没装配过（没有 \`server.js\`）⇒ **顶层这一格不判**，` +
+        `不是「已检查通过」。当前目录里有 ${topEntries.length} 项` +
+        (topEntries.length > 0
+          ? `：${topEntries.slice(0, 6).join(" / ")}${topEntries.length > 6 ? " …" : ""}`
+          : "") +
+        "。\n  要数出厂件这一层，先跑 pnpm build:desktop（装配发生在这道检查之后，" +
+        "规范 §7.3「产物要数两层」）。",
+    );
+  }
   if (strayTop.length > 0) {
     failed = true;
     console.error(
@@ -527,7 +553,7 @@ function checkDir(dir, label) {
       );
     }
   }
-  if (!failed) {
+  if (!failed && assembled) {
     console.log(
       `[${label}] ✓ 产物干净（共 ${files.length} 个文件，无测试 / 文档 / 变更碎片 / 开发机私有输入 / 开发期文件与门禁脚本）`,
     );
