@@ -15,6 +15,9 @@
  * 第二格判的是**流别**（ISSUE #2653）：#2588 把 `fail()` 补上时取了「形状收进
  * `renderVerdict()`」那一半、流别按调用点原本的 `console.log` 保留，于是同文件里
  * 「红走哪条流」有两份答案，失败路径与整轮小结的红行都留在 stdout。
+ *
+ * 第三、四格是 #2709：`--mode` 只认空格形式，等号形式与缺值都被读成「没提要求」，
+ * 而「没提要求」= 跑完整套默认档。它们判的是**有没有开始跑**，不是有没有那句中文。
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -66,5 +69,43 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
       "[红] quality-gate（未知门禁：definitely-not-a-gate",
     );
     expect(r.stdout ?? "").not.toContain("[红]");
+  });
+
+  /**
+   * `--mode=<值>` 这一族（ISSUE #2709）。
+   *
+   * 现场：原 `parseArgs` 只匹配 `argv[i] === "--mode"`，等号形式落不进任何分支、
+   * 而循环对不认识的参数一个字都不做 ⇒ `mode` 保持初值 `"all"` ⇒
+   * **以为在重跑一档，实际把整套默认档跑完**（含 `vitest --coverage`，
+   * 实测 10 分钟 / 1209 行被我停掉）。所以这两格断的不是「有没有那句中文」，
+   * 而是「**一档都没跑**」：整轮小结那一行（`一键门禁`）在任何一档都没跑时不会出现，
+   * 它在不在，就是这个入口有没有真的开始跑的行为证据。
+   */
+  it("--mode=<不存在的档名> ⇒ 退 2 走未知门禁，且不跑任何一档（旧形态是静默全量）", () => {
+    const r = spawnSync(
+      process.execPath,
+      [GATE, "--mode=definitely-not-a-gate"],
+      { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+    );
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    expect(r.status, out).toBe(2);
+    expect(out).toContain("未知门禁：definitely-not-a-gate");
+    expect(out).not.toContain("一键门禁");
+  });
+
+  it("不认识的参数（含提了 `--mode` 没给值）⇒ 退 2 并念出认识的形态，一档都不跑", () => {
+    for (const arg of ["--nonsense", "--mode"]) {
+      const r = spawnSync(process.execPath, [GATE, arg], {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 60_000,
+      });
+      const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+      expect(r.status, `${arg} ⇒ ${out}`).toBe(2);
+      expect(out).toContain("不认识的参数：");
+      expect(out).toContain("--mode=<档名>");
+      /* 「没提要求」在这份入口里意味着最重的一档 —— 缺值不许被读成它 */
+      expect(out).not.toContain("一键门禁");
+    }
   });
 });
