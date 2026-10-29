@@ -148,6 +148,8 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
       "negative",
       "size",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     /* 展示名与契约表同一份（「尺寸」写明工坊控件的两类写法）。 */
     expect(entries.map((e) => e.label)).toEqual([
@@ -155,6 +157,8 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
       exposedParamDisplayLabel("negative"),
       exposedParamDisplayLabel("size"),
       exposedParamDisplayLabel("seed"),
+      exposedParamDisplayLabel("lora-name"),
+      exposedParamDisplayLabel("lora-strength"),
     ]);
   });
 

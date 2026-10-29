@@ -239,6 +239,14 @@ export const MODE_CONTRACT_INPUT_TYPES = [
    * 这里不同步认它的话，契约一旦走归一化 / 保存链路，seed 口会被静默过滤掉
    *（isModeContractInputId 判 false），编辑器里也看不到这一口。 */
   { type: "seed", label: EXPOSED_PARAM_DISPLAY_LABEL.seed },
+  /* 角色 LoRA 口（FR-QA-02③ · #2622）同款内置：exposedParamsForMode 对每个
+   * 模式都产它，这里不同步认的话保存链路会静默过滤（isModeContractInputId
+   * 判 false），编辑器里也看不到。 */
+  { type: "lora-name", label: EXPOSED_PARAM_DISPLAY_LABEL["lora-name"] },
+  {
+    type: "lora-strength",
+    label: EXPOSED_PARAM_DISPLAY_LABEL["lora-strength"],
+  },
   {
     type: "reference-image",
     label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],
