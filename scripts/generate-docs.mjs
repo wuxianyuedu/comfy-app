@@ -33,6 +33,9 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * **批处理**形态（只有 cmd.exe 解释它，Node 起它 EINVAL）；能跑的 `.ps1` 形态
  * 还得连 PowerShell 宿主与 `-File` 参数一起给，那件事只有 `pnpmInvocation()`
  * 知道（ISSUE #638）。
+ *
+ * @param {string} script `package.json` 里那条脚本名
+ * @returns {number | null}
  */
 function runPnpm(script) {
   if (!fs.existsSync(path.join(ROOT, "node_modules", ".bin"))) {
