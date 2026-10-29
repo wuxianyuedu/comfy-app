@@ -51,6 +51,18 @@
   少掉的只是「非要经一层宿主才能起一个仓里的编译器」这一跳，`commandInvocation` 的
   `.ps1` 回退仍是 corepack / 启动编排那几处的现役形态（`src/lib/process/executable-resolve.ts`
   的头注就此写明：那是「起不起得来」的手段，不是「该不该这么起」的推荐形态）。
+- **连带记两笔与本平台跑有关的账**（都是这一格在平台上红出来的）：
+  · 脚本档账本 `scripts/.scripts-typecheck-baseline.json` 的 `face` 由 210 记成 211 ——
+    新增一份 `scripts/*.mjs` 就会让「面 ⇄ 账」那一格红。走的是判据自己那唯一的写入口
+    （`check-scripts-typecheck.cjs --update`），**事后逐字对过 diff**：只动了 `face` 这一行，
+    `total`（206）与逐文件格子表一个字节没改 —— 这不是「把新增登记成已知」（那才是被禁止的形态），
+    存量那一格新脚本实测 0 处。
+  · `tests/scripts-typecheck-ratchet.test.ts` 的红话术补了 `driftReading()`：除了两个数，
+    还把**「面里有、`git ls-files` 里没有」的那几份点名**，并据此说清该记账还是该归 exclude。
+    判决一个字没改（只在数不上时才多算一次 git），加这一半的原因是平台那一跑只给
+    「212 vs 210」两个数：本地展开是 211、入库清单也是 211，而平台上多 1 份且指不出是哪一份 ——
+    「差一份」有两种相反的修法，只给数就是在逼人猜。**剩下那一半（判决面按磁盘 glob 展开，
+    与「这份提交里有什么」不是同一件事）另立 ISSUE #2681**，不在本单里顺手改别人的判据口径。
 - **范围外（刻意不做，都写在单子里）**：不绕 pnpm / corepack —— `packageManager` 钉死的
   `pnpm@12.4.1` 仍按原路起（`require.resolve("pnpm/bin/pnpm.cjs")` 在本仓拿不到入口，
   那不是本单要修的事）；`.ps1` 那一跳不吃机器 ExecutionPolicy（`-ExecutionPolicy Bypass`

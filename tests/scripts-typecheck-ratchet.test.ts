@@ -257,6 +257,38 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     return out;
   }
 
+  /**
+   * 「面里有、git 清单里没有」的那几份 —— 只在数不上时才算（正常绿跑不付这次 git 调用）。
+   *
+   * 为什么需要它：只给「账上 210 / 展开 212」两个数时，读的人分不出这是
+   * 「谁新加了一份没记账」还是「磁盘上多了一份没入库的产物」—— 而这两者的修法相反
+   * （前者记账、后者归到 exclude 或删掉）。ISSUE #2572 撞的就是第二种形态。
+   */
+  function driftReading(face: string[]): string {
+    let tracked: Set<string>;
+    try {
+      tracked = new Set(
+        execFileSync("git", ["ls-files", "-z", "--", "*.mjs"], {
+          cwd: REPO_ROOT,
+          encoding: "utf8",
+        })
+          .split("\0")
+          .filter(Boolean),
+      );
+    } catch (e) {
+      return `；git 清单取不到，定位不了是哪几份：${(e as Error).message}`;
+    }
+    const stray = face
+      .map((p) => String(p).replaceAll("\\", "/"))
+      .filter((p) => !tracked.has(p));
+    return (
+      `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）` +
+      (stray.length > 0
+        ? `：${stray.slice(0, 10).join(", ")} —— 修法是把它归进 exclude 或删掉，不是往账上记`
+        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本没记账，修法是把账记上`)
+    );
+  }
+
   it("账本里的 `face` 与 `total` 与配置展开同数（面与账不许两份口径）", () => {
     const judge = createRequire(import.meta.url)(
       "../scripts/check-scripts-typecheck.cjs",
@@ -281,9 +313,15 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     ) as { face: number; total: number; files: Record<string, Record<string, number>> };
     /* 面收了、账没跟着记（或反过来）都会在这一格现形 —— 那两种形态在账面读数上
      * 长得一模一样，只有拿配置原值对才分得开。 */
-    expect(baseline.face, `配置展开 ${face.length} 份，账上写 ${baseline.face}`).toBe(
-      face.length,
-    );
+    expect(
+      baseline.face,
+      `配置展开 ${face.length} 份，账上写 ${baseline.face}` +
+        /* 只给两个数不够用（ISSUE #2572 的现场：本地面 211 = 入库的 `.mjs` 全量，
+         * 平台同一份代码展开成 212）。**差一份**读不出是「谁新加了一份没记账」还是
+         * 「磁盘上多了一份没入库的产物」，而这两者的修法相反 —— 所以红了要当场把
+         * 「面里有、git 清单里没有」的那几份点名（判据一个字不变，只补指路）。 */
+        (baseline.face === face.length ? "" : driftReading(face)),
+    ).toBe(face.length);
     const summed = Object.values(baseline.files).reduce(
       (acc, codes) => acc + Object.values(codes).reduce((a, b) => a + b, 0),
       0,
