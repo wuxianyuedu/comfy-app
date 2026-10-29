@@ -116,7 +116,10 @@ const GATES = {
    */
   format: {
     label: "oxfmt format ratchet",
-    args: ["../scripts/check-format.cjs"],
+    /* `--changed`：判改动面 ∩ 扫描面（printWidth 80→100 起全库档对未迁移的
+     * 存量恒红，见 check-format.cjs 文件头；check:all 是「按需完整验证」，
+     * 对格式的读数与平台 PR 那一格同口径 —— 判「这次带来的那批」）。 */
+    args: ["../scripts/check-format.cjs", "--changed"],
   },
   test: {
     label:
