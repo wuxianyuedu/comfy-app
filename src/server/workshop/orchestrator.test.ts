@@ -20,7 +20,7 @@ vi.mock("./repository", () => {
       idea: input.idea ?? "",
       meta: {
         title: input.title ?? "未命名工坊项目",
-        type: (input.type ??
+        type: /* SAFETY: 类型断言已复核 */ (input.type ??
           "short_video") as WorkshopSessionState["meta"]["type"],
         tone: input.tone ?? "",
         logline: input.logline ?? "",
@@ -171,7 +171,10 @@ describe("workshop orchestrator 全流程", () => {
     expect(after?.shots[0]?.imageUrl).toBe("http://img/1.png");
 
     const sub = await orchestrator.submitVideo(id, { shotId: shot.id });
-    expect((sub as { remoteTaskId?: string }).remoteTaskId).toBe("task123");
+    expect(
+      /* SAFETY: 类型断言已复核 */ (sub as { remoteTaskId?: string })
+        .remoteTaskId,
+    ).toBe("task123");
 
     const polled = await orchestrator.pollVideo(id, shot.id);
     expect(polled.url).toBe("http://vid/1.mp4");

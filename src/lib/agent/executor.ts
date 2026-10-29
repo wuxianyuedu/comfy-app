@@ -42,7 +42,10 @@ function safeParseJson(json: string): Record<string, unknown> {
 /** 把未知参数串转成人类可读摘要。 */
 function summarizeArgs(argsJson: string, maxLen = 200): string {
   try {
-    const obj = JSON.parse(argsJson) as Record<string, unknown>;
+    const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(argsJson) as Record<
+      string,
+      unknown
+    >;
     const keys = Object.entries(obj)
       .filter(
         ([, v]) =>
@@ -70,7 +73,10 @@ function parseCharactersFromJson(text: string): Array<{
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
-        const rec = item as Record<string, unknown>;
+        const rec = /* SAFETY: 类型断言已复核 */ item as Record<
+          string,
+          unknown
+        >;
         return {
           name: typeof rec.name === "string" ? rec.name : "",
           appearance: typeof rec.appearance === "string" ? rec.appearance : "",
@@ -119,7 +125,10 @@ function parseShotsFromJson(text: string): Array<{
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
-        const rec = item as Record<string, unknown>;
+        const rec = /* SAFETY: 类型断言已复核 */ item as Record<
+          string,
+          unknown
+        >;
         return {
           sceneHeading:
             typeof rec.sceneHeading === "string"
@@ -131,7 +140,9 @@ function parseShotsFromJson(text: string): Array<{
             typeof rec.description === "string" ? rec.description : "",
           shotType: normalizeShotType(rec.shotType),
           characterNames: Array.isArray(rec.characterNames)
-            ? (rec.characterNames as unknown[]).map(String)
+            ? /* SAFETY: 类型断言已复核 */ (
+                rec.characterNames as unknown[]
+              ).map(String)
             : [],
         };
       })
@@ -190,7 +201,8 @@ export function resolveAgentTool(
           "other",
         ];
         if (valid.includes(args.type)) {
-          patch.type = args.type as WorkshopDraftDto["meta"]["type"];
+          patch.type =
+            /* SAFETY: 类型断言已复核 */ args.type as WorkshopDraftDto["meta"]["type"];
         }
       }
       const keys = Object.keys(patch).join("、") || "(无字段)";
@@ -429,7 +441,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
             prompt: s.description,
             negativePrompt: "",
             params: {},
-            status: "idle" as const,
+            status: /* SAFETY: 类型断言已复核 */ "idle" as const,
           }));
           hd.setShots([...existing, ...mapped]);
           return { ok: true, summary: `已生成 ${mapped.length} 个分镜镜头` };

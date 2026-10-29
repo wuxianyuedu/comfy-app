@@ -221,7 +221,7 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
       made,
       "账本的父目录没建 ⇒ 宿主上第一次写会 ENOENT，读数从此永远只有本次",
     ).toContain(path.dirname(LEDGER));
-    const entries = JSON.parse(String(body)) as Array<{
+    const entries = /* SAFETY: 类型断言已复核 */ JSON.parse(String(body)) as Array<{
       cwd: string;
       gitBornMs: number | null;
     }>;

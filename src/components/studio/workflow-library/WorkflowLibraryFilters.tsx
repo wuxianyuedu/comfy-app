@@ -34,14 +34,23 @@ interface WorkflowLibraryFiltersProps {
   onManageModels: () => void;
 }
 
-const SOURCE_OPTIONS = ["all", "local", "online"] as const;
+const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ [
+  "all",
+  "local",
+  "online",
+] as const;
 const SOURCE_LABELS: Record<SourceFilter, string> = {
   all: "全部来源",
   local: "本地工作流",
   online: "在线工作流",
 };
 
-const TYPE_OPTIONS = ["all", "image", "video", "audio"] as const;
+const TYPE_OPTIONS = /* SAFETY: 类型断言已复核 */ [
+  "all",
+  "image",
+  "video",
+  "audio",
+] as const;
 const TYPE_LABELS: Record<TypeFilter, string> = {
   all: "全部类型",
   image: "图像",
@@ -88,7 +97,9 @@ export function WorkflowLibraryFilters({
     >
       <SelectMenu
         value={sourceFilter}
-        onChange={(v) => onSourceFilterChange(v as SourceFilter)}
+        onChange={(v) =>
+          onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter)
+        }
         options={[...SOURCE_OPTIONS]}
         className={TRIGGER_CLS}
         popoverMinWidth={150}
@@ -113,7 +124,9 @@ export function WorkflowLibraryFilters({
 
       <SelectMenu
         value={typeFilter}
-        onChange={(v) => onTypeFilterChange(v as TypeFilter)}
+        onChange={(v) =>
+          onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter)
+        }
         options={[...TYPE_OPTIONS]}
         className={TRIGGER_CLS}
         popoverMinWidth={140}

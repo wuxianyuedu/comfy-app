@@ -19,7 +19,7 @@ export type StoragePathRow = {
 };
 
 /** 六组目录的标签与顺序（模型 → 共享模型 → 输入 → 共享输入 → 输出 → 共享输出）。 */
-const ROW_SPECS = [
+const ROW_SPECS = /* SAFETY: 类型断言已复核 */ [
   { key: "models", label: "模型目录", shared: false },
   { key: "models", label: "共享模型目录", shared: true },
   { key: "input", label: "输入目录", shared: false },

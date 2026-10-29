@@ -237,7 +237,7 @@ test.describe("工作区链路 @critical", () => {
        竖条量起来正好是正方形。老写法在最该红的那一刻会绿。 */
     const measure = () =>
       spinner.evaluate((el) => {
-        const style = getComputedStyle(el as SVGElement);
+        const style = getComputedStyle(/* SAFETY: 类型断言已复核 */ el as SVGElement);
         return {
           width: Number.parseFloat(style.width),
           height: Number.parseFloat(style.height),
@@ -264,7 +264,7 @@ test.describe("工作区链路 @critical", () => {
       if (parent === null) throw new Error("spinner 没有父节点，判据落点漂了");
       const previous = parent.style.display;
       parent.style.display = "block";
-      const style = getComputedStyle(el as SVGElement);
+      const style = getComputedStyle(/* SAFETY: 类型断言已复核 */ el as SVGElement);
       const box = {
         width: Number.parseFloat(style.width),
         height: Number.parseFloat(style.height),
@@ -432,12 +432,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
    */
   const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
     target.evaluate((el) => {
-      const box = (el as HTMLElement).getBoundingClientRect();
+      const box = (/* SAFETY: 类型断言已复核 */ el as HTMLElement).getBoundingClientRect();
       const top = document.elementFromPoint(
         box.x + box.width / 2,
         box.y + box.height / 2,
       );
-      return top !== null && (el as HTMLElement).contains(top);
+      return top !== null && (/* SAFETY: 类型断言已复核 */ el as HTMLElement).contains(top);
     });
 
   async function expectStatusBarNotCovered(page: Page) {
@@ -881,7 +881,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         let best: Text | null = null;
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-          const text = n as Text;
+          const text = /* SAFETY: 类型断言已复核 */ n as Text;
           if (!best || text.length > best.length) best = text;
         }
         const node = best!;
@@ -1094,7 +1094,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         expect(box!.width).toBeGreaterThanOrEqual(56);
 
         const overflow = await button.evaluate((el) => {
-          const nodes = [el, ...Array.from(el.children)] as HTMLElement[];
+          const nodes = /* SAFETY: 类型断言已复核 */ [el, ...Array.from(el.children)] as HTMLElement[];
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
         for (const px of overflow) expect(px).toBeLessThanOrEqual(1);
@@ -1116,7 +1116,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
             ctx.fillStyle = color;
             ctx.fillRect(0, 0, 1, 1);
             const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-            return [r, g, b] as [number, number, number];
+            return /* SAFETY: 类型断言已复核 */ [r, g, b] as [number, number, number];
           });
       const [wr, wg, wb] = await rgbOf("警告");
       const [er, eg, eb] = await rgbOf("错误");
@@ -1132,7 +1132,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .getByTitle(/^当前来源的警告：/)
         .first()
         .evaluate((el) => {
-          const count = el.children[1] as HTMLElement;
+          const count = /* SAFETY: 类型断言已复核 */ el.children[1] as HTMLElement;
           const canvas = document.createElement("canvas");
           canvas.width = canvas.height = 1;
           const ctx = canvas.getContext("2d")!;

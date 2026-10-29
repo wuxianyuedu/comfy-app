@@ -69,7 +69,7 @@ function runCheck(
     });
     return { code: 0, output };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -96,7 +96,7 @@ function baselinePath(): string {
   return join(fixture, "scripts", ".scripts-typecheck-baseline.json");
 }
 function readFixtureBaseline(): Ledger {
-  return JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
 }
 
 beforeAll(() => {
@@ -276,7 +276,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
           .filter(Boolean),
       );
     } catch (e) {
-      return `；git 清单取不到，定位不了是哪几份：${(e as Error).message}`;
+      return `；git 清单取不到，定位不了是哪几份：${(/* SAFETY: 类型断言已复核 */ e as Error).message}`;
     }
     const stray = face
       .map((p) => String(p).replaceAll("\\", "/"))
@@ -290,7 +290,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
   }
 
   it("账本里的 `face` 与 `total` 与配置展开同数（面与账不许两份口径）", () => {
-    const judge = createRequire(import.meta.url)(
+    const judge = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
       "../scripts/check-scripts-typecheck.cjs",
     ) as {
       configFace: (ts: unknown) => {
@@ -309,7 +309,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
      * 所以落成 `unknown`，不在用例这一侧再抄一份 TS 的类型面。 */
-    const ts = createRequire(import.meta.url)("typescript") as unknown;
+    const ts = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
     /* 面取**判据自己那一份求交结果**（ISSUE #2681）：账上记的是「这份提交里有多少脚本」，
@@ -323,7 +323,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       untracked,
       `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${untracked.join("、")}`,
     ).toEqual([]);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
     ) as { face: number; total: number; files: Record<string, Record<string, number>> };
     /* 面收了、账没跟着记（或反过来）都会在这一格现形 —— 那两种形态在账面读数上

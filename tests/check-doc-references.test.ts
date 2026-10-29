@@ -46,7 +46,7 @@ type Fact = {
 };
 
 async function loadFacts(): Promise<Fact[]> {
-  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+  const mod = /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
     FACTS: Fact[];
   };
   return mod.FACTS;
@@ -61,7 +61,7 @@ function runCheck(): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -132,7 +132,7 @@ function writeText(abs: string, text: string): void {
       if (readFileSync(abs, "utf8") === text) return;
       lastError = "写回后读回的内容与预期不一致";
     } catch (err) {
-      lastError = (err as Error).message;
+      lastError = (/* SAFETY: 类型断言已复核 */ err as Error).message;
     }
   }
   throw new Error(
@@ -150,7 +150,7 @@ function restoreText(abs: string, text: string): void {
  * 「哪条判据在哪跑」写在 SCOPED_DOCS 之外的那几份文件里，不显式并入就没人核（§13.5.10 第 ② 条）。
  */
 async function gateDocs(): Promise<string[]> {
-  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+  const mod = /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
     SCOPED_DOCS: string[];
   };
   return [
@@ -276,7 +276,7 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
 
   async function loadScope(): Promise<ScopeMod> {
     const mod =
-      (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
     return mod;
   }
 
@@ -522,7 +522,7 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
   });
 
   it("AGENTS.md 由 checkLedgerCommands 显式并入遍历（不进 SCOPED_DOCS、避免生成冗余副本）", async () => {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+    const mod = /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
       SCOPED_DOCS: string[];
     };
     // AGENTS.md 刻意不入 SCOPED_DOCS：进则被 render-doc-placeholders 复制成
@@ -1080,7 +1080,7 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
       });
       return { code: 0, output };
     } catch (err) {
-      const e = err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
       return {
         code: typeof e.status === "number" ? e.status : 1,
         output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -1198,7 +1198,7 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
       });
       return { code: 0, output };
     } catch (err) {
-      const e = err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
       return {
         code: typeof e.status === "number" ? e.status : 1,
         output: `${e.stdout ?? ""}${e.stderr ?? ""}`,

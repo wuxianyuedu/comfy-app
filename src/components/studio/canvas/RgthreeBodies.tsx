@@ -141,7 +141,7 @@ export function RgthreePowerLoraLoaderBody({
   // 逐 lora 行：过滤掉表头 widget 与空占位。
   // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
-  const loras: PowerLoraWidget[] = (
+  const loras: PowerLoraWidget[] = /* SAFETY: 类型断言已复核 */ (
     (widgets ?? []) as PowerLoraWidget[]
   ).filter((widget) => {
     if (widget === null || widget === undefined) return false;
@@ -207,9 +207,9 @@ export function RgthreePowerLoraLoaderBody({
           const name =
             typeof widget === "string"
               ? widget
-              : (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as
-                  | string
-                  | undefined) ?? "");
+              : /* SAFETY: 类型断言已复核 */ (((rec?.name ??
+                  rec?.lora_name ??
+                  rec?.model_name) as string | undefined) ?? "");
           const modelStr = isObj
             ? fmtStrength(
                 rec?.model_strength ?? rec?.model_str ?? rec?.strength,

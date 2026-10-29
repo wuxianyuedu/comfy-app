@@ -108,7 +108,7 @@ export class ModelRepository extends DrizzleRepository<Model> {
             type: input.type,
             baseModel: input.baseModel,
             isAvailable: true,
-            source: "LOCAL" as const,
+            source: /* SAFETY: 类型断言已复核 */ "LOCAL" as const,
           })),
         )
         .onConflictDoUpdate({

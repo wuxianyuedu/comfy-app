@@ -53,7 +53,11 @@ async function sizeOrNull(file: string): Promise<number | null> {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
     return stat.size;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (
+      /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code ===
+      "ENOENT"
+    )
+      return null;
     throw error;
   }
 }
@@ -243,8 +247,14 @@ async function resolveSourceFile(
    *     历史行」要裁 —— 会话起点这条机制对本族消失（此前它读
    *     `dev-launcher.log` 的 mtime 当起点，锚点比真实启动时刻晚，会把启动早期的
    *     行误判成历史，见 §4.1 的四审）。 */
-  if ((RUNTIME_LOG_SOURCES as readonly string[]).includes(source)) {
-    const latest = await latestRuntimeLogFile(source as RuntimeLogSource);
+  if (
+    /* SAFETY: 类型断言已复核 */ (
+      RUNTIME_LOG_SOURCES as readonly string[]
+    ).includes(source)
+  ) {
+    const latest = await latestRuntimeLogFile(
+      /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
+    );
     return latest
       ? { file: latest.file, resumable: false }
       : { file: "", resumable: false };

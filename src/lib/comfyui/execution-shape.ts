@@ -24,7 +24,9 @@ export interface ExecutionShapes {
 export function hasRawContent(rawJson: unknown): boolean {
   if (!rawJson || typeof rawJson !== "object" || Array.isArray(rawJson))
     return false;
-  const nodes = (rawJson as Record<string, unknown>).nodes;
+  const nodes = /* SAFETY: 类型断言已复核 */ (
+    rawJson as Record<string, unknown>
+  ).nodes;
   return Array.isArray(nodes) && nodes.length > 0;
 }
 

@@ -41,7 +41,10 @@ export function FlowNodePinRows({
   /* 选中节点时端口行跟着连线一起变：有连线落到的那一行提亮、端口圆点放大，
    *  没有连线落到的行压暗。级别由 `useRelatedEdgesHighlight` 写在本节点 data 上
    *  （与连线标记同一帧算出），行渲染层只读。 */
-  const nodeData = data as unknown as Record<string, unknown>;
+  const nodeData = /* SAFETY: 类型断言已复核 */ data as unknown as Record<
+    string,
+    unknown
+  >;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */

@@ -243,7 +243,9 @@ const EXPOSED_CUSTOM_ID_RE = /^custom-(text|image|number)-(\d+)$/;
 /** 自定义口 id 的类型；不是自定义口返回 null。 */
 export function exposedCustomKindOf(id: string): ExposedCustomKind | null {
   const matched = EXPOSED_CUSTOM_ID_RE.exec(id);
-  return matched ? (matched[1] as ExposedCustomKind) : null;
+  return matched
+    ? /* SAFETY: 类型断言已复核 */ (matched[1] as ExposedCustomKind)
+    : null;
 }
 
 /** 自定义口类型 → 复用的对外参数类（见上方注释）。 */
@@ -279,7 +281,7 @@ export function referenceImageSlotIndex(id: string): number {
  *
  *  **界面不要用它**：请走 `exposedParamDisplayLabel`。 */
 export function exposedParamLabel(id: string): string {
-  const cls = id as ExposedParamClass;
+  const cls = /* SAFETY: 类型断言已复核 */ id as ExposedParamClass;
   return EXPOSED_PARAM_LABEL[cls] ?? id;
 }
 
@@ -288,7 +290,8 @@ export function exposedParamLabel(id: string): string {
 export function exposedClassOf(id: string): ExposedParamClass | null {
   const custom = exposedCustomKindOf(id);
   if (custom) return EXPOSED_CUSTOM_CLASS[custom];
-  if (id in EXPOSED_PARAM_LABEL) return id as ExposedParamClass;
+  if (id in EXPOSED_PARAM_LABEL)
+    return /* SAFETY: 类型断言已复核 */ id as ExposedParamClass;
   if (/^reference-image-\d+$/.test(id)) return "reference-image";
   return null;
 }

@@ -164,7 +164,7 @@ export function tailWindowAppend<T>(
   if (items.length < n) return tailWindow([...items, item], n);
   /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
    * 不必再切片。 */
-  const next = items as T[];
+  const next = /* SAFETY: 类型断言已复核 */ items as T[];
   next.shift();
   next.push(item);
   return next;

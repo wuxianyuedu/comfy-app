@@ -96,7 +96,7 @@ export function HistoryDetailModal({
   const firstImage = Array.isArray(current?.images)
     ? current.images[0]
     : undefined;
-  const snapSource = (
+  const snapSource = /* SAFETY: 类型断言已复核 */ (
     current?.workflowSnapshot as { source?: string } | null | undefined
   )?.source;
   const sourceLabel =

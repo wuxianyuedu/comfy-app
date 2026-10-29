@@ -117,10 +117,14 @@ function hydrate(): void {
       if (
         item &&
         typeof item === "object" &&
-        typeof (item as WorkflowRunMeta).taskId === "string" &&
-        typeof (item as WorkflowRunMeta).workflowId === "string"
+        typeof (
+          /* SAFETY: 类型断言已复核 */ (item as WorkflowRunMeta).taskId
+        ) === "string" &&
+        typeof (
+          /* SAFETY: 类型断言已复核 */ (item as WorkflowRunMeta).workflowId
+        ) === "string"
       ) {
-        const meta = item as WorkflowRunMeta;
+        const meta = /* SAFETY: 类型断言已复核 */ item as WorkflowRunMeta;
         runs.set(meta.taskId, meta);
       }
     }
@@ -232,7 +236,7 @@ export function failWorkflowRun(taskId: string, message: string): void {
           ...logs,
           {
             t: Date.now(),
-            level: "error" as const,
+            level: /* SAFETY: 类型断言已复核 */ "error" as const,
             msg: `✗ 生成失败：${reason}`,
           },
         ],

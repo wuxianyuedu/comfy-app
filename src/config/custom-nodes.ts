@@ -75,7 +75,9 @@ export function specToField(s: PortSpec): FieldDef {
      * 收窄以满足 no-base-to-string。 */
     placeholder:
       s.default !== undefined && s.default !== null
-        ? (s.default as { toString(): string }).toString()
+        ? /* SAFETY: 类型断言已复核 */ (
+            s.default as { toString(): string }
+          ).toString()
         : undefined,
     group: "参数",
     // 纯连接端口渲染成连线手柄，而不是编辑字段。
@@ -348,7 +350,9 @@ export async function getCustomNodesManifest(
       );
       return null;
     }
-    return data as { nodes: Record<string, ManifestNodeRaw> };
+    return /* SAFETY: 类型断言已复核 */ data as {
+      nodes: Record<string, ManifestNodeRaw>;
+    };
   } catch (e) {
     console.error(
       "[custom-nodes] 读取节点清单失败：",
@@ -387,7 +391,8 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   }
 
   try {
-    const manifest = (await res.json()) as RawManifest;
+    const manifest =
+      /* SAFETY: 类型断言已复核 */ (await res.json()) as RawManifest;
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);

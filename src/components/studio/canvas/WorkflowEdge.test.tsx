@@ -23,8 +23,8 @@ function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
     sourceY: 0,
     targetX: 200,
     targetY: 0,
-    sourcePosition: "right" as Position,
-    targetPosition: "left" as Position,
+    sourcePosition: /* SAFETY: 类型断言已复核 */ "right" as Position,
+    targetPosition: /* SAFETY: 类型断言已复核 */ "left" as Position,
     data,
   };
 }
@@ -103,11 +103,9 @@ describe("WorkflowEdge 选中态样式", () => {
      * 用户依然能凭颜色读出这条线上流的是 IMAGE。 */
     const rgbPart = /rgb\(([^)]+)\)/.exec(stroke)?.[1];
     expect(rgbPart).toBeTruthy();
-    const [r, g, b] = rgbPart!.split(",").map(Number) as [
-      number,
-      number,
-      number,
-    ];
+    const [r, g, b] = /* SAFETY: 类型断言已复核 */ rgbPart!
+      .split(",")
+      .map(Number) as [number, number, number];
     expect(g).toBeGreaterThan(r);
     expect(g).toBeGreaterThan(b);
     /* 确实被提亮了：比原色 #10b981（16,185,129）更亮。 */

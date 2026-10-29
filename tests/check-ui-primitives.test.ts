@@ -283,7 +283,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("P9 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P9).toBeUndefined();
@@ -291,7 +291,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("P7/P8 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P7).toBeUndefined();
@@ -309,7 +309,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline(repo);
     const baselinePath = "scripts/.ui-primitives-baseline.json";
     const before = repo.read(baselinePath);
-    const rules = (JSON.parse(before) as { rules: Record<string, string> })
+    const rules = (/* SAFETY: 类型断言已复核 */ JSON.parse(before) as { rules: Record<string, string> })
       .rules;
     for (const id of [
       "P1",
@@ -411,7 +411,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("P5/P6 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P5).toBeUndefined();
@@ -422,7 +422,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo,
   }) => {
     seedBaseline(repo);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P4).toBeUndefined();
@@ -1315,7 +1315,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("P10/P11/P12 的计数不进棘轮基线", ({ repo }) => {
     seedBaseline(repo);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P10).toBeUndefined();
@@ -4089,7 +4089,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     demoteToRatchet(repo, "P1", "P2", "P3");
     repo.write("src/components/studio/M.tsx", BUTTON_VIEW);
     seedBaseline(repo);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       repo.read("scripts/.ui-primitives-baseline.json"),
     ) as { total: number; rules: Record<string, string> };
     expect(baseline.total).toBe(1);

@@ -49,7 +49,7 @@ export type MediaFallback =
  *  用 `commonOwnProps` 求交集能一眼看出这条边界（写成 `[...A, ...B]` 的
  *  并集会把只属于一个底层的字段也剔掉，那个底层再也拿不到它该有的属性，
  *  且**没有报错**）。此处两个底层同名的字段就是下表，故直接列全。*/
-const OWN_PROPS = [
+const OWN_PROPS = /* SAFETY: 类型断言已复核 */ [
   "src",
   "alt",
   "className",

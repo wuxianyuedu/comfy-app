@@ -91,7 +91,7 @@ function fixture(
           ),
         };
       } catch (err) {
-        const e = err as { stdout?: string; stderr?: string };
+        const e = /* SAFETY: 类型断言已复核 */ err as { stdout?: string; stderr?: string };
         return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
       }
     },

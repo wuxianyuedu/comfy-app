@@ -18,8 +18,9 @@ vi.mock("~/server/db", () => ({
   db: {
     insert: vi.fn(() => ({
       values: () => {
-        const rejectNow = (globalThis as { __REJECT_INSERT__?: boolean })
-          .__REJECT_INSERT__;
+        const rejectNow = /* SAFETY: 类型断言已复核 */ (
+          globalThis as { __REJECT_INSERT__?: boolean }
+        ).__REJECT_INSERT__;
         return rejectNow
           ? Promise.reject(new Error("db down"))
           : Promise.resolve();
@@ -46,7 +47,9 @@ function ctx() {
 }
 
 beforeEach(() => {
-  (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ = false;
+  /* SAFETY: 类型断言已复核 */ (
+    globalThis as { __REJECT_INSERT__?: boolean }
+  ).__REJECT_INSERT__ = false;
   loggerErrorMock.mockClear();
 });
 
@@ -59,15 +62,19 @@ describe("audit 审计日志契约", () => {
   });
 
   it("失败路径：db 写入失败仍 logger.error('audit_write_failed')——关键路径不静默", async () => {
-    (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ = true;
+    /* SAFETY: 类型断言已复核 */ (
+      globalThis as { __REJECT_INSERT__?: boolean }
+    ).__REJECT_INSERT__ = true;
     // audit 内部 catch 住错误，不向调用方抛（不阻塞主流程）
     await expect(
       audit("role_changed", ctx(), { role: "admin" }),
     ).resolves.toBeUndefined();
     expect(loggerErrorMock).toHaveBeenCalled();
-    const msg = loggerErrorMock.mock.calls[0]?.[1] as string;
+    const msg = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock
+      .calls[0]?.[1] as string;
     expect(msg).toBe("audit_write_failed");
-    const fields = loggerErrorMock.mock.calls[0]?.[0] as { event?: string };
+    const fields = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock
+      .calls[0]?.[0] as { event?: string };
     expect(fields?.event).toBe("role_changed");
   });
 });

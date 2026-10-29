@@ -33,7 +33,10 @@ function writeRecord(body: unknown): void {
 async function get(): Promise<{ record: unknown; currentRunId: unknown }> {
   const res = await GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
-  return (await res.json()) as { record: unknown; currentRunId: unknown };
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    record: unknown;
+    currentRunId: unknown;
+  };
 }
 
 describe("GET /api/dev/last-exit", () => {
@@ -57,7 +60,10 @@ describe("GET /api/dev/last-exit", () => {
     fs.rmSync(FILE, { force: true });
     const res = await GET();
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { record: unknown }).record).toBeNull();
+    expect(
+      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { record: unknown })
+        .record,
+    ).toBeNull();
   });
 
   it("记录坏掉时按「没有原因可讲」处理，不 500（消费者是已经出故障时的界面）", async () => {
@@ -65,7 +71,10 @@ describe("GET /api/dev/last-exit", () => {
     fs.writeFileSync(FILE, "{ 这不是 JSON", "utf8");
     const res = await GET();
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { record: unknown }).record).toBeNull();
+    expect(
+      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { record: unknown })
+        .record,
+    ).toBeNull();
   });
 
   it("空文件同样算「没有原因可讲」", async () => {

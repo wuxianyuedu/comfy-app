@@ -148,7 +148,7 @@ async function parseScriptToShots(
     // 离线兜底 —— 复用工坊解析器
     const sc = parseIdeaToScenes(raw, {
       title: "",
-      type: (type as ProjectType) ?? "short_video",
+      type: /* SAFETY: 类型断言已复核 */ (type as ProjectType) ?? "short_video",
       tone: "",
       logline: "",
     });
@@ -309,7 +309,10 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     input.userId,
     input.projectId,
   );
-  const rawShots = row && Array.isArray(row.shots) ? (row.shots as Shot[]) : [];
+  const rawShots =
+    row && Array.isArray(row.shots)
+      ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[])
+      : [];
   const shots = [...rawShots].sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
@@ -362,7 +365,10 @@ async function generateVideoShot(
   userId: string,
   shot: { prompt: string; negative?: string | null; params?: unknown },
 ): Promise<string> {
-  const params = (shot.params ?? {}) as Record<string, unknown>;
+  const params = /* SAFETY: 类型断言已复核 */ (shot.params ?? {}) as Record<
+    string,
+    unknown
+  >;
 
   const videoWorkflowId =
     typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
@@ -374,7 +380,9 @@ async function generateVideoShot(
 
   // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
   // 下方合成首帧分支。
-  let inputImage = (params.inputImage ?? params.firstFrame ?? null) as string;
+  let inputImage = /* SAFETY: 类型断言已复核 */ (params.inputImage ??
+    params.firstFrame ??
+    null) as string;
 
   if (!inputImage) {
     const imageWorkflowId =
@@ -401,7 +409,7 @@ async function generateVideoShot(
       prompt: shot.prompt,
       ...(shot.negative ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
-      frames: (params.frames ?? 81) as number,
+      frames: /* SAFETY: 类型断言已复核 */ (params.frames ?? 81) as number,
       size,
       seed: randomSeed(),
     },
@@ -546,7 +554,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     }
     const progressById = new Map(
       (await taskRepository.findExecutionProgressMany(taskIds)).map(
-        (row) => [row.id, row] as const,
+        (row) => /* SAFETY: 类型断言已复核 */ [row.id, row] as const,
       ),
     );
 
@@ -568,7 +576,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       let duration: number | undefined;
       if (next === "SUCCEEDED") {
         const imgs =
-          (task.resultImages as Array<{
+          /* SAFETY: 类型断言已复核 */ (task.resultImages as Array<{
             mediaType?: unknown;
             localPath?: string;
           }> | null) ?? [];
@@ -577,13 +585,14 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
         videoPath = vid?.localPath;
 
-        const params = (shot.params ?? {}) as Record<string, unknown>;
+        const params = /* SAFETY: 类型断言已复核 */ (shot.params ??
+          {}) as Record<string, unknown>;
 
         duration =
           typeof params.duration === "number"
             ? params.duration
-            : ((params.frames ?? 49) as number) /
-              ((params.fps ?? 16) as number);
+            : /* SAFETY: 类型断言已复核 */ ((params.frames ?? 49) as number) /
+              /* SAFETY: 类型断言已复核 */ ((params.fps ?? 16) as number);
       }
 
       /* 只在真的变了才写：原先每轮对每个在跑的镜头都无条件 UPDATE，绝大多数

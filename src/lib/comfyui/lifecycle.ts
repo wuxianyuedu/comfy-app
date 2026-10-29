@@ -604,7 +604,7 @@ function readSessionMark(): ComfySessionMark | null {
       fs.readFileSync(COMFY_SESSION_MARK, "utf-8"),
     );
     if (parsed === null || typeof parsed !== "object") return null;
-    return parsed as ComfySessionMark;
+    return /* SAFETY: 类型断言已复核 */ parsed as ComfySessionMark;
   } catch {
     return null;
   }

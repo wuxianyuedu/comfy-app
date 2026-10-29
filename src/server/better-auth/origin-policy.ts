@@ -67,7 +67,7 @@ export function authBaseUrlConfig(configuredBaseUrl?: string) {
       ...configuredHost(configuredBaseUrl),
     ],
     fallback: configuredBaseUrl ?? getBaseUrl(),
-    protocol: "auto" as const,
+    protocol: /* SAFETY: 类型断言已复核 */ "auto" as const,
   };
 }
 

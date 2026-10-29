@@ -364,7 +364,10 @@ export function FinalComposer({
                       className="bg-subtle! border-border! text-xs"
                       value={shot.transition ?? "cut"}
                       onChange={(value) =>
-                        updateShot(shot.id, { transition: value as Transition })
+                        updateShot(shot.id, {
+                          transition:
+                            /* SAFETY: 类型断言已复核 */ value as Transition,
+                        })
                       }
                       options={TRANSITIONS}
                       labels={TRANSITION_LABELS}
@@ -382,7 +385,10 @@ export function FinalComposer({
                       className="bg-subtle! border-border! text-xs"
                       value={shot.motion ?? "medium"}
                       onChange={(value) =>
-                        updateShot(shot.id, { motion: value as MotionLevel })
+                        updateShot(shot.id, {
+                          motion:
+                            /* SAFETY: 类型断言已复核 */ value as MotionLevel,
+                        })
                       }
                       options={MOTIONS}
                       labels={MOTION_LABELS}

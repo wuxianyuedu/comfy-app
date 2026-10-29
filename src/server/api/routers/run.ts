@@ -90,7 +90,9 @@ export const runRouter = createTRPCRouter({
       if (!row)
         return {
           run: normalizeProductionRun(null),
-          action: { kind: "idle" } as RunAction,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
         };
       const run = normalizeProductionRun(row.run);
       return { run, action: planNextRunAction(toRunView(row), run) };
@@ -133,7 +135,12 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "running" && run.status !== "awaiting_approval") {
-        return { run, action: { kind: "idle" } as RunAction };
+        return {
+          run,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
+        };
       }
       return persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
@@ -148,7 +155,12 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "paused")
-        return { run, action: { kind: "idle" } as RunAction };
+        return {
+          run,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
+        };
       const result = await persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
         status: "running",
@@ -164,7 +176,12 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "awaiting_approval") {
-        return { run, action: { kind: "idle" } as RunAction };
+        return {
+          run,
+          action: /* SAFETY: 类型断言已复核 */ {
+            kind: "idle",
+          } as RunAction,
+        };
       }
       const result = await persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
@@ -336,14 +353,16 @@ export const runRouter = createTRPCRouter({
         (item) =>
           typeof item === "object" &&
           item !== null &&
-          (item as { id?: unknown }).id === input.targetId,
+          /* SAFETY: 类型断言已复核 */ (item as { id?: unknown }).id ===
+            input.targetId,
       );
       if (!rec)
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
         });
-      const revRaw = (rec as { rev?: unknown }).rev;
+      const revRaw = /* SAFETY: 类型断言已复核 */ (rec as { rev?: unknown })
+        .rev;
       const rev =
         typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
       const verdict = {

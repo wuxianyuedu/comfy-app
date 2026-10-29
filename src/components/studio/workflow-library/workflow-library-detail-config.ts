@@ -18,7 +18,7 @@ import type { WorkflowRow } from "./workflow-library-config";
  *  拉起来**，而多数时候用户只是想看一眼「工坊会怎么驱动它」。
  *  「编辑对外参数 / 实际使用」那一份常驻实例另见视图层的**首次访问才挂载**
  *  （`WorkflowLibraryDetailView`）：切这两页时只下载一次，之后常驻不重建。 */
-export const DETAIL_TABS = [
+export const DETAIL_TABS = /* SAFETY: 类型断言已复核 */ [
   { key: "params", label: "工坊封装" },
   { key: "canvas", label: "编辑对外参数" },
   { key: "use", label: "实际使用" },
@@ -75,7 +75,7 @@ export interface DetailTemplate {
 /** workflowIO 在旧数据里可能存成数组或非对象，这里收紧成 Map 或 null。 */
 export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
   if (!raw || Array.isArray(raw) || typeof raw !== "object") return null;
-  return raw as WorkflowIOMap;
+  return /* SAFETY: 类型断言已复核 */ raw as WorkflowIOMap;
 }
 
 /** 「源文件」展示磁盘上的原始导入 JSON（用户当初导入的那个文件）：库里的

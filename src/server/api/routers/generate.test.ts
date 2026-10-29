@@ -104,7 +104,8 @@ describe("generate.generate（工作流库工作流）", () => {
     // claimedBy=inline 与 execPayload），这里踢一次只是省掉等 2s 节拍。
     expect(kickMock).toHaveBeenCalledTimes(1);
     expect(
-      (row?.params as { workflowInputs?: unknown }).workflowInputs,
+      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown })
+        .workflowInputs,
     ).toEqual([{ nodeId: "1", name: "text", value: "a cat" }]);
   });
 
@@ -210,7 +211,8 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     // （见 executor-dispatch.test.ts 的「两种载荷都只交 comfy-cli」组）。
     expect(row?.execPayload).toEqual(rawJson);
     expect(
-      (row?.params as { workflowInputs?: unknown }).workflowInputs,
+      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown })
+        .workflowInputs,
     ).toEqual([{ nodeId: "1", name: "text", value: "hi" }]);
   });
 

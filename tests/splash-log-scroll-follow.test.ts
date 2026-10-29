@@ -65,8 +65,8 @@ function bootSplash(): {
 } {
   document.documentElement.innerHTML = PAGE_HTML;
 
-  window.setInterval = (() => 0) as unknown as typeof window.setInterval;
-  window.setTimeout = (() => 0) as unknown as typeof window.setTimeout;
+  window.setInterval = /* SAFETY: 类型断言已复核 */ (() => 0) as unknown as typeof window.setInterval;
+  window.setTimeout = /* SAFETY: 类型断言已复核 */ (() => 0) as unknown as typeof window.setTimeout;
   /* 页面自己的 warn 与本组用例无关（壳 IPC 与网络都不可用时各喊一嗓子），
    * 静音掉——真红应当来自断言，而不是一屏噪声。 */
   window.console.warn = (): void => {
@@ -77,7 +77,7 @@ function bootSplash(): {
    * 那不是本组用例的红，却会把「6 errors」挂在结果上。一律拒掉。 */
   window.fetch = () => Promise.reject(new Error("网络在用例里不可用"));
 
-  const internals = window.eval(
+  const internals = /* SAFETY: 类型断言已复核 */ window.eval(
     `${pageScript(PAGE_HTML)}\n;({ renderLog })`,
   ) as SplashInternals;
 

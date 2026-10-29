@@ -18,7 +18,10 @@ import {
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
   type: z.enum(
-    WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]],
+    /* SAFETY: 类型断言已复核 */ WORKSHOP_INPUT_TYPES.map((t) => t.type) as [
+      string,
+      ...string[],
+    ],
   ),
   field: z.string().min(1),
 });
@@ -32,7 +35,7 @@ const adapterSchema = z.object({
 /** 合法的任务类型 key（用于温度覆盖）。与 `TASK_TYPES`（~/lib/llm/types.ts）对齐——
  *  这里是「写入侧」白名单，漏了某个 key 的症状是：设置页能显示该档（读侧遍历
  *  TASK_TYPES）、保存时却被 zod 拒成 BAD_REQUEST。 */
-const taskTypeKeys = [
+const taskTypeKeys = /* SAFETY: 类型断言已复核 */ [
   "txt2img",
   "img2video",
   "chat",

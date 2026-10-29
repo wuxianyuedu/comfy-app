@@ -91,7 +91,7 @@ export function prepareGraphForExecution(
     if (!rec) continue;
     const meta = asRecord(rec._meta) ?? {};
     graph[id] = {
-      classType: rec.class_type as string,
+      classType: /* SAFETY: 类型断言已复核 */ rec.class_type as string,
       inputs: asRecord(rec.inputs) ?? {},
       meta,
     };

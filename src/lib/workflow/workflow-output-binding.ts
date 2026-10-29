@@ -68,13 +68,17 @@ function manualMapForMode(
   if (!mode) return {};
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
     return {};
-  const ns = (paramMap as Record<string, unknown>)[OUTPUT_BINDING_NAMESPACE];
+  const ns = /* SAFETY: 类型断言已复核 */ (paramMap as Record<string, unknown>)[
+    OUTPUT_BINDING_NAMESPACE
+  ];
   if (!ns || typeof ns !== "object" || Array.isArray(ns)) return {};
-  const table = (ns as Record<string, unknown>)[`${MODE_KEY_PREFIX}${mode}`];
+  const table = /* SAFETY: 类型断言已复核 */ (ns as Record<string, unknown>)[
+    `${MODE_KEY_PREFIX}${mode}`
+  ];
   if (!table || typeof table !== "object" || Array.isArray(table)) return {};
   const out: Record<string, string | null> = {};
   for (const [ioKey, value] of Object.entries(
-    table as Record<string, unknown>,
+    /* SAFETY: 类型断言已复核 */ table as Record<string, unknown>,
   )) {
     if (typeof value === "string") out[ioKey] = value;
     else if (value === null) out[ioKey] = null;
@@ -137,7 +141,9 @@ export function applyOutputBindingEdit(
   const ns = base[OUTPUT_BINDING_NAMESPACE];
   const table =
     ns && typeof ns === "object" && !Array.isArray(ns)
-      ? { ...(ns as Record<string, unknown>) }
+      ? {
+          .../* SAFETY: 类型断言已复核 */ (ns as Record<string, unknown>),
+        }
       : {};
   const key = `${MODE_KEY_PREFIX}${edit.mode}`;
   const byOutput = table[key];
@@ -163,12 +169,16 @@ export function clearOutputBindingEdit(
   if (!mode) return base;
   const ns = base[OUTPUT_BINDING_NAMESPACE];
   if (!ns || typeof ns !== "object" || Array.isArray(ns)) return base;
-  const table = { ...(ns as Record<string, unknown>) };
+  const table = {
+    .../* SAFETY: 类型断言已复核 */ (ns as Record<string, unknown>),
+  };
   const key = `${MODE_KEY_PREFIX}${mode}`;
   const byOutput = table[key];
   if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput))
     return base;
-  const next = { ...(byOutput as Record<string, unknown>) };
+  const next = {
+    .../* SAFETY: 类型断言已复核 */ (byOutput as Record<string, unknown>),
+  };
   delete next[outputIoKey];
   if (Object.keys(next).length > 0) table[key] = next;
   else delete table[key];

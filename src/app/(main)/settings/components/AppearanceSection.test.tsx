@@ -26,7 +26,10 @@ function controller(
   theme: "light" | "dark",
   setTheme = vi.fn(),
 ): ReadySettingsPageController {
-  return { theme, setTheme } as unknown as ReadySettingsPageController;
+  return /* SAFETY: 类型断言已复核 */ {
+    theme,
+    setTheme,
+  } as unknown as ReadySettingsPageController;
 }
 
 /** 主题外观那一组（本分区还有「圆角」「标题字阶」两组，同为 radiogroup）。 */

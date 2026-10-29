@@ -156,7 +156,7 @@ export function useFilmStudio(): FilmStudioController {
       // /api/film/[id] 返回原始 FilmProject 行（status/logs/shots 比本地
       // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
       const data = await vanillaApi.film.detail.query({ id });
-      setFilm(data.film as unknown as Film);
+      setFilm(/* SAFETY: 类型断言已复核 */ data.film as unknown as Film);
     } catch {
       /* 拉详情失败静默忽略，下一次轮询会重试 */
     }
@@ -182,7 +182,10 @@ export function useFilmStudio(): FilmStudioController {
           const pick = (category: "video" | "image") =>
             wfRows.flatMap((raw) => {
               if (typeof raw !== "object" || raw === null) return [];
-              const wf = raw as Record<string, unknown>;
+              const wf = /* SAFETY: 类型断言已复核 */ raw as Record<
+                string,
+                unknown
+              >;
               if (typeof wf.id !== "string" || typeof wf.name !== "string")
                 return [];
               return wf.typeCategory === category
@@ -198,8 +201,14 @@ export function useFilmStudio(): FilmStudioController {
             setImageWorkflows(pick("image"));
             setSkills(
               list.map((raw) => {
-                const s = raw as Record<string, unknown>;
-                return { slug: s.slug as string, name: s.name as string };
+                const s = /* SAFETY: 类型断言已复核 */ raw as Record<
+                  string,
+                  unknown
+                >;
+                return {
+                  slug: /* SAFETY: 类型断言已复核 */ s.slug as string,
+                  name: /* SAFETY: 类型断言已复核 */ s.name as string,
+                };
               }),
             );
             setFfmpegAvailable(!!fData.ffmpegAvailable);

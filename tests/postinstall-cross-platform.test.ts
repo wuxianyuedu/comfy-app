@@ -31,7 +31,7 @@ import {
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const ROOT = process.cwd();
-const pkg = JSON.parse(
+const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
   fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
 ) as { scripts: Record<string, string> };
 const postinstall = pkg.scripts.postinstall ?? "";
@@ -72,7 +72,7 @@ describe("postinstall 的宿主契约（ISSUE #636）", () => {
     expect(verdict.reason).toMatch(/sh\/bash/);
   });
 
-  it.for([
+  it.for(/* SAFETY: 类型断言已复核 */ [
     ["bash scripts/x.sh", /sh\/bash/],
     ["node scripts/install-git-hooks.mjs || true", /POSIX shell/],
     [

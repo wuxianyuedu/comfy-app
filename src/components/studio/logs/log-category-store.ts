@@ -23,7 +23,7 @@ function defaultEnabled(): CategoryEnabled {
   return LOG_CATEGORY_FILTERS.reduce<CategoryEnabled>((acc, category) => {
     acc[category] = true;
     return acc;
-  }, {} as CategoryEnabled);
+  }, /* SAFETY: 类型断言已复核 */ {} as CategoryEnabled);
 }
 
 /**

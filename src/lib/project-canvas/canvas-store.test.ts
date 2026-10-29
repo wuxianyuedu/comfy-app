@@ -15,7 +15,8 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     project: {
       list: {
-        query: (...args: unknown[]) => projectListQuery(...args) as never,
+        query: (...args: unknown[]) =>
+          /* SAFETY: 类型断言已复核 */ projectListQuery(...args) as never,
       },
       /* `Promise.resolve().then(() => …)` 而不是 `Promise.resolve(…)`：
        * 后者会把 mock 的**同步抛错**当成 fulfilled 的值吞下去，

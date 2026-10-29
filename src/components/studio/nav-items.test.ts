@@ -147,7 +147,9 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
     );
     expect(actual.sort()).toEqual([...TRANSIENT_IDS].sort());
     for (const id of ["home", "canvas", "workshop", "models", "console"]) {
-      expect(isTransientView(id as WorkspaceView)).toBe(false);
+      expect(
+        isTransientView(/* SAFETY: 类型断言已复核 */ id as WorkspaceView),
+      ).toBe(false);
     }
   });
 

@@ -50,7 +50,10 @@ describe("schemaSyncNotice", () => {
   });
 
   it("missing / stale 给出口而不是安慰（规范 §9.2 第 3 条）", () => {
-    for (const phase of ["missing", "stale"] as const) {
+    for (const phase of /* SAFETY: 类型断言已复核 */ [
+      "missing",
+      "stale",
+    ] as const) {
       const n = notice(phase);
       expect(n?.tone).toBe("error");
       expect(n?.refreshable).toBe(false);
@@ -60,7 +63,10 @@ describe("schemaSyncNotice", () => {
   });
 
   it("本机有执行件（canPush）→ 给「立即同步」按钮，文案不再复述命令", () => {
-    for (const phase of ["missing", "stale"] as const) {
+    for (const phase of /* SAFETY: 类型断言已复核 */ [
+      "missing",
+      "stale",
+    ] as const) {
       const n = notice(phase, null, true);
       expect(n?.actionable).toBe(true);
       expect(n?.text).not.toContain("pnpm db:push");
@@ -72,7 +78,10 @@ describe("schemaSyncNotice", () => {
   });
 
   it("没有执行件（桌包）→ 回落成「跑 pnpm db:push」的纯提示，不给死按钮", () => {
-    for (const phase of ["missing", "stale"] as const) {
+    for (const phase of /* SAFETY: 类型断言已复核 */ [
+      "missing",
+      "stale",
+    ] as const) {
       const n = notice(phase, null, false);
       expect(n?.actionable).toBe(false);
       expect(n?.text).toContain("pnpm db:push");

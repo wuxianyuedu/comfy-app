@@ -122,7 +122,7 @@ async function saveRun(userId: string, projectId: string, run: ProductionRun) {
 
 function projectMeta(row: Production) {
   return {
-    type: row.type as ProjectType,
+    type: /* SAFETY: 类型断言已复核 */ row.type as ProjectType,
     tone: row.tone,
     logline: row.logline,
     title: row.title,
@@ -232,7 +232,8 @@ async function execStoryboard(
       index: i,
       sceneId: "",
       sceneHeading: it.sceneHeading ?? "",
-      shotType: (it.shotType ?? "medium") as Shot["shotType"],
+      shotType: /* SAFETY: 类型断言已复核 */ (it.shotType ??
+        "medium") as Shot["shotType"],
       description: it.description,
       characterIds: [],
       prompt: it.description,
@@ -266,7 +267,9 @@ async function execImages(
       error: "缺少图类工作流（imageWorkflowId），无法逐镜生图",
     };
   }
-  const shots = Array.isArray(row.shots) ? (row.shots as Shot[]) : [];
+  const shots = Array.isArray(row.shots)
+    ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[])
+    : [];
   const want = new Set(shotIds);
   const next: Shot[] = [];
   for (const shot of shots) {

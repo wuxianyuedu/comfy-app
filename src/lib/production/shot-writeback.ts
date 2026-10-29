@@ -31,7 +31,7 @@ import { fireAndForget } from "~/lib/async-action";
 import type { Shot } from "~/lib/workshop/types";
 
 function asShots(raw: unknown): Shot[] {
-  return Array.isArray(raw) ? (raw as Shot[]) : [];
+  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as Shot[]) : [];
 }
 
 /** 把某镜头的生成态补丁回写进该项目（草稿 + 两张服务端镜像）。静默失败、不阻塞画布。 */
@@ -78,7 +78,10 @@ export async function requestShotRedo(
   const draft = readWorkshopDraft(projectId);
   const nextShots = applyShotRedo(draft.shots, shotId);
   if (nextShots !== draft.shots) {
-    const nextDraft = { ...draft, shots: nextShots as Shot[] };
+    const nextDraft = {
+      ...draft,
+      shots: /* SAFETY: 类型断言已复核 */ nextShots as Shot[],
+    };
     writeWorkshopDraft(projectId, nextDraft);
     fireAndForget(pushServerDraft(projectId, nextDraft), () => {
       /* 静默：pushServerDraft 自带 catch，草稿本地缓存已兜底 */

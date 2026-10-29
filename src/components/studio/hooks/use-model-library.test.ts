@@ -328,7 +328,7 @@ describe("useModelLibrary 卸载后不再 setState", () => {
         ) {
           scheduleReads += 1;
         }
-        return realWindow?.value as unknown;
+        return /* SAFETY: 类型断言已复核 */ realWindow?.value as unknown;
       },
     };
     Object.defineProperty(globalThis, "window", spy);

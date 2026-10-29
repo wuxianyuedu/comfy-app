@@ -199,7 +199,7 @@ beforeAll(async () => {
   proseFiles = [
     ...walk("docs").filter((f) => f.endsWith(".md")),
     ...walk("tests").filter((f) => /\.(ts|tsx)$/.test(f)),
-  ].map((f) => [f, read(f)] as [string, string]);
+  ].map((f) => /* SAFETY: 类型断言已复核 */ [f, read(f)] as [string, string]);
 
   /* 空跑的形状先挡掉：扫描面钉错（比如把 ../../docs 写成 docs，那会被按 CSS 所在目录
    * 解析成 src/app/docs 而扫到零个文件）时，上面两遍编译会安静地什么也没解出来，

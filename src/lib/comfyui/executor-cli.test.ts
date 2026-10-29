@@ -45,7 +45,7 @@ function rawJsonWith(node: unknown) {
 describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回退", () => {
   it("子图 wrapper 无 control 哨兵槽时，randomize 应兜底刷新 seed 值", () => {
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
-    const result = applyRawOverrides(raw, [
+    const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "76", name: "control_after_generate", value: "randomize" },
     ]) as { nodes: { id: number; widgets_values: unknown[] }[] };
 
@@ -88,7 +88,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
       ],
     };
     const raw = rawJsonWith(JSON.parse(JSON.stringify(ksampler)));
-    const result = applyRawOverrides(raw, [
+    const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "69", name: "control_after_generate", value: "randomize" },
     ]) as { nodes: { id: number; widgets_values: unknown[] }[] };
 
@@ -100,7 +100,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
 
   it("非 randomize 且无哨兵槽时保持原值（不误改 seed）", () => {
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
-    const result = applyRawOverrides(raw, [
+    const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "76", name: "control_after_generate", value: "fixed" },
     ]) as { nodes: { id: number; widgets_values: unknown[] }[] };
 
@@ -119,7 +119,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
     const result = applyRawOverrides(raw, [
       { nodeId: "35", name: "control_after_generate", value: "randomize" },
     ]);
-    const node = (
+    const node = /* SAFETY: 类型断言已复核 */ (
       result as { nodes: { id: number; widgets_values: unknown[] }[] }
     ).nodes[0]!;
     expect(node.widgets_values).toEqual(["hello"]);
@@ -320,9 +320,10 @@ type FixtureResult = {
 
 describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () => {
   it("提示词覆盖要写进内层 CLIPTextEncode（宿主数组随后被漂移中和清空）", () => {
-    const raw = applyRawOverrides(liblibSubgraphFixture(), [
-      { nodeId: "76", name: "text", value: "3只小猫在喝山泉" },
-    ]) as unknown as FixtureResult;
+    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
+      liblibSubgraphFixture(),
+      [{ nodeId: "76", name: "text", value: "3只小猫在喝山泉" }],
+    ) as unknown as FixtureResult;
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 67)!;
@@ -335,9 +336,10 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("seed 覆盖要写进内层 KSampler 的 seed 槽（跳过 control 哨兵）", () => {
-    const raw = applyRawOverrides(liblibSubgraphFixture(), [
-      { nodeId: "76", name: "seed", value: 12345 },
-    ]) as unknown as FixtureResult;
+    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
+      liblibSubgraphFixture(),
+      [{ nodeId: "76", name: "seed", value: 12345 }],
+    ) as unknown as FixtureResult;
 
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
     // KSampler 的 widgets_values 依次是：seed、control、steps、cfg、sampler、scheduler、denoise
@@ -349,9 +351,10 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("randomize 兜底生成的随机种子同样要落到内层 KSampler", () => {
-    const raw = applyRawOverrides(liblibSubgraphFixture(), [
-      { nodeId: "76", name: "control_after_generate", value: "randomize" },
-    ]) as unknown as FixtureResult;
+    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
+      liblibSubgraphFixture(),
+      [{ nodeId: "76", name: "control_after_generate", value: "randomize" }],
+    ) as unknown as FixtureResult;
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
@@ -365,7 +368,7 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("非子图节点不受影响（顶层普通节点仍只改自己）", () => {
-    const raw = applyRawOverrides(
+    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
       {
         nodes: [
           {

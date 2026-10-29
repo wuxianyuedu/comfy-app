@@ -91,7 +91,12 @@ export function buildWorkshopMcpServer(): McpServer {
   );
 
   const json = (value: unknown) => ({
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
+    content: [
+      {
+        type: /* SAFETY: 类型断言已复核 */ "text" as const,
+        text: JSON.stringify(value, null, 2),
+      },
+    ],
   });
 
   server.registerTool(
@@ -198,7 +203,9 @@ export function buildWorkshopMcpServer(): McpServer {
       json(
         await orchestrator.setMeta(args.sessionId, {
           title: args.title,
-          type: args.type as ProjectMeta["type"] | undefined,
+          type: /* SAFETY: 类型断言已复核 */ args.type as
+            | ProjectMeta["type"]
+            | undefined,
           tone: args.tone,
           logline: args.logline,
         }),

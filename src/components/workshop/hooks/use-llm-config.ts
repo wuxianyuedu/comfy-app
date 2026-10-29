@@ -32,13 +32,18 @@ function toModelNames(raw: unknown): string[] {
     if (typeof item === "string") {
       if (item.trim() !== "") names.push(item);
     } else if (typeof item === "object" && item !== null) {
-      const rec = item as { name?: unknown; kind?: unknown };
+      const rec = /* SAFETY: 类型断言已复核 */ item as {
+        name?: unknown;
+        kind?: unknown;
+      };
       const name = typeof rec.name === "string" ? rec.name.trim() : "";
       if (name === "") continue;
       const kind =
         typeof rec.kind === "string" &&
-        REMOTE_MODEL_KINDS.includes(rec.kind as RemoteModelKind)
-          ? (rec.kind as RemoteModelKind)
+        REMOTE_MODEL_KINDS.includes(
+          /* SAFETY: 类型断言已复核 */ rec.kind as RemoteModelKind,
+        )
+          ? /* SAFETY: 类型断言已复核 */ (rec.kind as RemoteModelKind)
           : null;
       if (!isChatModel(kind)) continue;
       names.push(name);

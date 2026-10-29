@@ -218,12 +218,17 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       //（upscale / inpaint / img2img），建议默认 I2I；否则 T2I。
       try {
         let suggested = "T2I";
-        const obj = parsed as Record<string, unknown>;
-        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as unknown[]) : [];
+        const obj = /* SAFETY: 类型断言已复核 */ parsed as Record<
+          string,
+          unknown
+        >;
+        const nodes = Array.isArray(obj.nodes)
+          ? /* SAFETY: 类型断言已复核 */ (obj.nodes as unknown[])
+          : [];
         for (const n of nodes) {
           const t =
             n && typeof n === "object"
-              ? (n as { type?: unknown }).type
+              ? /* SAFETY: 类型断言已复核 */ (n as { type?: unknown }).type
               : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";

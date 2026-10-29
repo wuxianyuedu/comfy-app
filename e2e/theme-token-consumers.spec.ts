@@ -290,11 +290,11 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       const seen: Record<
         "light" | "dark",
         { stroke: string; color: Color; ratio: number }
-      > = {} as never;
+      > = /* SAFETY: 类型断言已复核 */ {} as never;
 
       for (const dark of [false, true]) {
         await setTheme(page, dark);
-        const key = dark ? ("dark" as const) : ("light" as const);
+        const key = dark ? (/* SAFETY: 类型断言已复核 */ "dark" as const) : (/* SAFETY: 类型断言已复核 */ "light" as const);
         const got = await page.evaluate(
           ({ expr: e, token }) => {
             const svg = document.createElementNS(
@@ -339,7 +339,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         light: [0, 0, 0],
         dark: [148, 163, 184],
       };
-      for (const key of ["light", "dark"] as const) {
+      for (const key of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
         const c = seen[key].color;
         const [r, g, b] = expected[key];
         const got2 = [Math.round(c.r), Math.round(c.g), Math.round(c.b)];

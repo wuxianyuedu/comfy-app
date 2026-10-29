@@ -80,7 +80,7 @@ export type LogOriginFilter =
  * 单独取个名字而不是在各处散写 `"console"` 字面量：它就是这条归类规则的唯一
  * 事实来源，视图、计数、过滤三处都问它。
  */
-export const CONSOLE_ORIGIN = "console" as const;
+export const CONSOLE_ORIGIN = /* SAFETY: 类型断言已复核 */ "console" as const;
 
 /** 有文件来源的行 → 它自己的来源；没有的 → 「控制台 / 全局错误」桶。 */
 export function bucketOf(entry: Pick<LogEntry, "origin">): LogOriginFilter {

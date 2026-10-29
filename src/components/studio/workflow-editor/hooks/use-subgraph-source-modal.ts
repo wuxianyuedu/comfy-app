@@ -31,7 +31,7 @@ export function useSubgraphSourceModal(params: {
       /* sub 视图：源文件 = 父 rawJson 的 definitions.subgraphs[subUid]。 */
       const ctx = subgraphRawContext;
       if (!ctx) return null;
-      const subs = (
+      const subs = /* SAFETY: 类型断言已复核 */ (
         ctx.parentRawJson as {
           definitions?: { subgraphs?: Record<string, unknown> };
         } | null
@@ -40,7 +40,9 @@ export function useSubgraphSourceModal(params: {
       return (
         subs[ctx.subUid] ??
         Object.values(subs).find(
-          (s) => (s as { id?: unknown } | null)?.id === ctx.subUid,
+          (s) =>
+            /* SAFETY: 类型断言已复核 */ (s as { id?: unknown } | null)?.id ===
+            ctx.subUid,
         ) ??
         null
       );

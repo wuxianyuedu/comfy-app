@@ -29,7 +29,7 @@ import {
 
 /** 把文件塞进 input 的 `files` 并派发 `change`（jsdom 不允许直接赋值）。 */
 function pick(input: HTMLInputElement, ...files: File[]) {
-  const list = {
+  const list = /* SAFETY: 类型断言已复核 */ {
     ...files,
     length: files.length,
     item: (i: number) => files[i],
@@ -68,7 +68,10 @@ describe("FilePicker", () => {
     pick(fileInput(), A, B);
 
     expect(onPick).toHaveBeenCalledTimes(1);
-    const call = onPick.mock.calls[0] as [File, FileList];
+    const call = /* SAFETY: 类型断言已复核 */ onPick.mock.calls[0] as [
+      File,
+      FileList,
+    ];
     expect(call[0]).toBe(A);
     expect(Array.from(call[1])).toEqual([A, B]);
   });

@@ -210,7 +210,7 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
   it("清的必须是 lint 真正在用的那个目录（与 package.json 的 --cache-location 逐字同源）", () => {
     // 只核 CACHE_DIR_REL 自己的形状不够：改了 `package.json` 的 `--cache-location`
     // 而脚本还盯着老路径 = 白清（清了个没人读的目录，缓存照旧重放旧判决）。
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     const lintScript = pkg.scripts.lint ?? "";

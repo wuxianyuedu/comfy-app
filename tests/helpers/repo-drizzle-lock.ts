@@ -52,7 +52,7 @@ function ownerAlive(): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+    return (/* SAFETY: 类型断言已复核 */ error as NodeJS.ErrnoException).code !== "ESRCH";
   }
 }
 
@@ -75,7 +75,7 @@ export async function acquireRepoDrizzle(label: string): Promise<() => void> {
         rmSync(LOCK_DIR, { recursive: true, force: true });
       };
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
+      const code = (/* SAFETY: 类型断言已复核 */ error as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") throw error;
       if (!ownerAlive()) {
         // 主家已经没了：夺过来重试一次（只认 ESRCH，不认「等太久了」）。

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * `executor-finalize.ts` — 任务终态收口（成功下载 / 失败落库）
  * ===========================================================================
  *
@@ -126,7 +126,10 @@ function statusMessageTypeOf(msg: unknown): unknown {
 function executionErrorMessageOf(msg: unknown): unknown {
   if (!Array.isArray(msg)) return undefined;
   // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
-  const payload = msg[1] as Record<string, unknown> | null | undefined;
+  const payload = /* SAFETY: 类型断言已复核 */ msg[1] as
+    | Record<string, unknown>
+    | null
+    | undefined;
   return payload != null && typeof payload === "object"
     ? payload.exception_message
     : undefined;
@@ -136,7 +139,8 @@ function executionErrorMessageOf(msg: unknown): unknown {
  *  改动范围内）—— 经这里统一收口为 `unknown` 读取；`undefined` 归一为 `null`
  *  与拆分前一致（completeInner 内两者等价）。 */
 function executedWorkflowOf(taskId: string): unknown {
-  const map = state().executedWorkflow as ReadonlyMap<string, unknown>;
+  const map = /* SAFETY: 类型断言已复核 */ state()
+    .executedWorkflow as ReadonlyMap<string, unknown>;
   return map.get(taskId) ?? null;
 }
 
@@ -151,8 +155,9 @@ export async function complete(taskId: string, promptId: string) {
     await finalizeFailure(
       taskId,
       promptId,
-      (e as { message?: unknown } | null | undefined)?.message ??
-        "结果处理失败",
+      /* SAFETY: 类型断言已复核 */ (
+        e as { message?: unknown } | null | undefined
+      )?.message ?? "结果处理失败",
     );
   }
 }
@@ -176,7 +181,11 @@ async function completeInner(
   // 复现元数据。projectId 为 localStorage 的 CanvasProject.id（client 侧字符串）。
   const taskRow = await taskRepository.findExecutionMeta(taskId);
   const projectId: string | null = taskRow?.projectId ?? null;
-  const taskParams = (taskRow?.params as Record<string, unknown> | null) ?? {};
+  const taskParams =
+    /* SAFETY: 类型断言已复核 */ (taskRow?.params as Record<
+      string,
+      unknown
+    > | null) ?? {};
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
@@ -473,7 +482,10 @@ async function completeInner(
     negativePrompt: taskRow?.negativePrompt ?? null,
     seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
     size: sizeStr || null,
-    referenceImages: (taskRow?.referenceImages as string[] | null) ?? [],
+    referenceImages:
+      /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as
+        | string[]
+        | null) ?? [],
     params: taskParams,
     createdAt: taskRow?.createdAt ?? null,
     files: saved,

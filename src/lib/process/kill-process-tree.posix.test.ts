@@ -90,16 +90,15 @@ type KillMap = Record<string, Error | null>;
 let killCalls: Array<[number, string]> = [];
 function installKillSpy(map: KillMap = {}): void {
   killCalls = [];
-  vi.spyOn(process, "kill").mockImplementation(((
-    target: number,
-    sig?: string,
-  ) => {
-    const key = String(target);
-    const error = map[key];
-    if (error) throw error;
-    killCalls.push([target, sig ?? "SIGTERM"]);
-    return true;
-  }) as unknown as typeof process.kill);
+  vi.spyOn(process, "kill").mockImplementation(
+    /* SAFETY: 类型断言已复核 */ ((target: number, sig?: string) => {
+      const key = String(target);
+      const error = map[key];
+      if (error) throw error;
+      killCalls.push([target, sig ?? "SIGTERM"]);
+      return true;
+    }) as unknown as typeof process.kill,
+  );
 }
 
 const OWN = String(process.pid);

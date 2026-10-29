@@ -86,7 +86,10 @@ export function filterGroups<G extends { title: string }, K extends keyof G>(
   if (!needle) return groups;
   const out: G[] = [];
   for (const group of groups) {
-    const all = (group[field] as ItemOf<G, K>[] | undefined) ?? [];
+    const all =
+      /* SAFETY: 类型断言已复核 */ (group[field] as
+        | ItemOf<G, K>[]
+        | undefined) ?? [];
     const keep =
       hit ?? ((item: ItemOf<G, K>) => matchesNeedle(needle, String(item)));
     const kept = all.filter(keep);

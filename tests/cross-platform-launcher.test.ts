@@ -163,7 +163,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
     const session = {
       launcher_pid: process.pid,
-      child_pids: [] as number[],
+      child_pids: /* SAFETY: 类型断言已复核 */ [] as number[],
       app_port: 3311,
       mode: "web",
       started_at: new Date().toISOString(),

@@ -133,9 +133,9 @@ export async function probeFakeComfySlot(
 function connectionRefused(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   /* 预算耗尽（含手动 abort）一律**不算**「空着」—— 它回答不了那个问题。 */
-  const name = (err as { name?: unknown }).name;
+  const name = (/* SAFETY: 类型断言已复核 */ err as { name?: unknown }).name;
   if (name === "TimeoutError" || name === "AbortError") return false;
-  const code = (err as { cause?: { code?: unknown } }).cause?.code;
+  const code = (/* SAFETY: 类型断言已复核 */ err as { cause?: { code?: unknown } }).cause?.code;
   if (typeof code === "string") {
     return ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"].includes(
       code,

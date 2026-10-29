@@ -43,7 +43,7 @@ function renderTopBar() {
       <WorkflowEditorTopBar
         onClose={noop}
         detail={
-          {
+          /* SAFETY: 类型断言已复核 */ {
             name: "wf",
             nodes: [],
             edges: [],
@@ -54,11 +54,11 @@ function renderTopBar() {
         }
         rootWorkflowName="wf"
         subgraphStack={[]}
-        setSubgraphStack={noop as never}
+        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
         fetchDetail={vi.fn(async () => undefined)}
         onExitSubgraph={noop}
         forceReloadDetail={noop}
-        setViewJsonOpen={noop as never}
+        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
         resetLayout={noop}
         viewHostNodeId=""
         handleSave={noop}

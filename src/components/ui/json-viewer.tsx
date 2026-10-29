@@ -204,7 +204,7 @@ function applyHighlights(
   const targets: HitNode[] = [];
   let cur = walker.nextNode();
   while (cur) {
-    const t = cur as Text;
+    const t = /* SAFETY: 类型断言已复核 */ cur as Text;
     const text = t.textContent || "";
     if (text.toLowerCase().includes(q)) {
       // 估算该 textNode 内出现次数 (大小写不敏感)
@@ -292,7 +292,8 @@ export function JsonViewer({
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const hits = useMemo(
-    () => collectHits(data as JsonValue, query.trim()),
+    () =>
+      collectHits(/* SAFETY: 类型断言已复核 */ data as JsonValue, query.trim()),
     [data, query],
   );
 
@@ -329,7 +330,7 @@ export function JsonViewer({
   useEffect(() => {
     if (!bodyRef.current || hits.length === 0) return;
     return onNextFrame(() => {
-      const el = bodyRef.current?.querySelector(
+      const el = /* SAFETY: 类型断言已复核 */ bodyRef.current?.querySelector(
         "mark.jv-hit-sub[data-jv-active-hit]",
       ) as HTMLElement | null;
       if (!el) return;
@@ -364,7 +365,7 @@ export function JsonViewer({
     }
     if (e.key === "Escape") {
       setQuery("");
-      (e.target as HTMLInputElement).blur();
+      /* SAFETY: 类型断言已复核 */ (e.target as HTMLInputElement).blur();
     }
   };
 

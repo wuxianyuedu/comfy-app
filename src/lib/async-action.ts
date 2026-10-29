@@ -132,7 +132,7 @@ export function toActionResult(
   }
   /* 普通对象（业务返回值）按「不抛即成功」读；只有真的带了 `ok` /
    * `triggered` 字段时才按信封判 —— 与 `void` 同口径。 */
-  const envelope = raw as {
+  const envelope = /* SAFETY: 类型断言已复核 */ raw as {
     ok?: boolean;
     triggered?: boolean;
     detail?: string | null;

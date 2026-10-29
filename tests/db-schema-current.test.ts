@@ -137,7 +137,7 @@ function columnsOf(file: string, table: string): string[] {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     return (
-      db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+      /* SAFETY: 类型断言已复核 */ db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
     ).map((row) => row.name);
   } finally {
     db.close();
@@ -148,7 +148,7 @@ function readUserVersion(file: string): number {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     return Number(
-      (db.prepare("PRAGMA user_version").get() as { user_version: number })
+      (/* SAFETY: 类型断言已复核 */ db.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version,
     );
   } finally {

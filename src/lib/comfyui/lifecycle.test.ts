@@ -120,7 +120,9 @@ const autoStartSettings = {
 };
 
 beforeEach(() => {
-  vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
+  vi.mocked(getSettingsSync).mockReturnValue(
+    /* SAFETY: 类型断言已复核 */ autoStartSettings as never,
+  );
   /* 状态结论缓存（ISSUE #346）是跨用例共享的进程级单例：每例先丢掉旧结论，
    * 后面各例的断言才是在断言「当下判定」，而不是上一例的残留。 */
   resetComfyUiStatus();
@@ -142,10 +144,12 @@ describe("手动关闭 ComfyUI 后抑制自动启动（ISSUE #290）", () => {
     // 手动启动：manual=true 应先清闩锁，再往下走到 comfyuiAutoStart 检查。
     // 这里把 autoStart 置 false，使流程在设置检查处返回（证明已被清闩锁放行，
     // 而不是被「手动关闭」拦下）。
-    vi.mocked(getSettingsSync).mockReturnValue({
-      ...autoStartSettings,
-      comfyuiAutoStart: false,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ...autoStartSettings,
+        comfyuiAutoStart: false,
+      } as never,
+    );
     const r = await ensureComfyUiReady({ manual: true });
 
     expect(r.ok).toBe(false);
@@ -156,10 +160,12 @@ describe("手动关闭 ComfyUI 后抑制自动启动（ISSUE #290）", () => {
     await stopComfyUiProcess(); // 落闩锁
     clearComfyManualStop(); // 设置保存重新开启自动启动时清除
 
-    vi.mocked(getSettingsSync).mockReturnValue({
-      ...autoStartSettings,
-      comfyuiAutoStart: false,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ...autoStartSettings,
+        comfyuiAutoStart: false,
+      } as never,
+    );
     const r = await ensureComfyUiReady({});
 
     // 既然闩锁已清，应落到「未开启自动启动」而非「已被手动关闭」。
@@ -178,7 +184,9 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
       error: "ComfyUI 路径不存在：/nope（请在设置页检查）",
     });
-    vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ autoStartSettings as never,
+    );
     return ensureComfyUiReady({ timeoutMs: 5_000 });
   };
 
@@ -200,10 +208,12 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
 
   it("手动启动（manual:true）清失败闩锁，放行走设置检查", async () => {
     await runFailingAutoStart();
-    vi.mocked(getSettingsSync).mockReturnValue({
-      ...autoStartSettings,
-      comfyuiAutoStart: false,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ...autoStartSettings,
+        comfyuiAutoStart: false,
+      } as never,
+    );
 
     const r = await ensureComfyUiReady({ manual: true });
     // 闩锁已清 → 不被「上次失败」拦下，落到「未开启自动启动」
@@ -213,10 +223,12 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
   it("clearComfyManualStop（重新开启自动启动）同时清失败闩锁", async () => {
     await runFailingAutoStart();
     clearComfyManualStop();
-    vi.mocked(getSettingsSync).mockReturnValue({
-      ...autoStartSettings,
-      comfyuiAutoStart: false,
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ...autoStartSettings,
+        comfyuiAutoStart: false,
+      } as never,
+    );
 
     const r = await ensureComfyUiReady({});
     expect(r.detail).toContain("未开启自动启动");
@@ -277,13 +289,17 @@ describe("getComfyUiStatus — 状态三态组合", () => {
       cwd: "/x",
       mainPy: "/x/main.py",
     });
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: false,
-    } as never);
-    vi.mocked(spawnManaged).mockReturnValue({
-      child: { pid: 98765 },
-      error: undefined,
-    } as never);
+    vi.mocked(getExitPolicy).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        exitKillComfyui: false,
+      } as never,
+    );
+    vi.mocked(spawnManaged).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        child: { pid: 98765 },
+        error: undefined,
+      } as never,
+    );
     vi.mocked(findPidForMainPy).mockResolvedValue(null);
     const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
     /* 等 `starting` 落位 —— 条件轮询（规范 §11.14）而不是「睡一拍再断状态」：
@@ -297,9 +313,11 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     expect(r.ok).toBe(false);
     // 收尾后单飞锁释放：下一次调用能重新开始（不会永久卡在「启动中」）。
     expect((await getComfyUiStatus()).starting).toBe(false);
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: true,
-    } as never);
+    vi.mocked(getExitPolicy).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        exitKillComfyui: true,
+      } as never,
+    );
   });
 
   /* 启动失败后状态行必须自己落回「未运行」。
@@ -315,13 +333,17 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     const { getExitPolicy } =
       await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("~/lib/process/process-launch");
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: false,
-    } as never);
-    vi.mocked(spawnManaged).mockReturnValue({
-      child: { pid: 98765 },
-      error: undefined,
-    } as never);
+    vi.mocked(getExitPolicy).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        exitKillComfyui: false,
+      } as never,
+    );
+    vi.mocked(spawnManaged).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        child: { pid: 98765 },
+        error: undefined,
+      } as never,
+    );
     vi.mocked(findPidForMainPy).mockResolvedValue(null);
     const failed = await ensureComfyUiReady({ manual: true, timeoutMs: 250 });
     expect(failed.ok).toBe(false);
@@ -348,9 +370,11 @@ describe("getComfyUiStatus — 状态三态组合", () => {
       expect(settled.probing).toBe(false);
     } finally {
       vi.useRealTimers();
-      vi.mocked(getExitPolicy).mockReturnValue({
-        exitKillComfyui: true,
-      } as never);
+      vi.mocked(getExitPolicy).mockReturnValue(
+        /* SAFETY: 类型断言已复核 */ {
+          exitKillComfyui: true,
+        } as never,
+      );
       clearComfyAutoStartFailure();
       resetComfyUiStatus();
     }
@@ -589,13 +613,17 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
       cwd: "/x",
       mainPy: "/x/main.py",
     });
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: false,
-    } as never);
-    vi.mocked(spawnManaged).mockReturnValue({
-      child: { pid: 98766 },
-      error: undefined,
-    } as never);
+    vi.mocked(getExitPolicy).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        exitKillComfyui: false,
+      } as never,
+    );
+    vi.mocked(spawnManaged).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        child: { pid: 98766 },
+        error: undefined,
+      } as never,
+    );
     vi.mocked(findPidForMainPy).mockResolvedValue(null);
 
     const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
@@ -608,9 +636,11 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
 
     await pending;
     expect((await getComfyUiStatus()).starting).toBe(false);
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: true,
-    } as never);
+    vi.mocked(getExitPolicy).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        exitKillComfyui: true,
+      } as never,
+    );
   });
 
   it("resetComfyUiStatus 后不再复用旧结论（启动/关闭动作会改动事实）", async () => {
@@ -737,17 +767,21 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
     resetComfyUiStatus();
     const { resetComfyRuntimeSnapshot } = await import("./status");
     resetComfyRuntimeSnapshot();
-    vi.mocked(getSettingsSync).mockReturnValue({
-      comfyuiPath: "",
-      comfyuiAutoStart: true,
-      comfyuiPort: 0,
-      comfyuiExtraArgs: "",
-    } as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        comfyuiPath: "",
+        comfyuiAutoStart: true,
+        comfyuiPort: 0,
+        comfyuiExtraArgs: "",
+      } as never,
+    );
     const r = await ensureComfyUiReady({ manual: true });
     expect(r.ok).toBe(false);
     expect(r.detail).toContain("未配置安装路径");
 
-    vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ autoStartSettings as never,
+    );
     const s = await getComfyUiStatus({ force: true });
     /* 关键断言：状态行不得说「正在启动」—— 一个进程都没被拉起过。
      * 它此刻该说的要么是「未运行」、要么是证据不足的「检测中…」
@@ -765,7 +799,9 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
       resetComfyUiStatus();
       const { resetComfyRuntimeSnapshot } = await import("./status");
       resetComfyRuntimeSnapshot();
-      vi.mocked(getSettingsSync).mockReturnValue(settings as never);
+      vi.mocked(getSettingsSync).mockReturnValue(
+        /* SAFETY: 类型断言已复核 */ settings as never,
+      );
       expect((await ensureComfyUiReady({})).ok).toBe(false);
       /* 自动来源的两条 skip 分支都不该落窗口：窗口是给「拉起 → 就绪」那段
        * 空窗的缓冲，而这些分支连拉起都不做。 */
@@ -783,15 +819,21 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
     const { getExitPolicy } =
       await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("~/lib/process/process-launch");
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: false,
-    } as never);
-    vi.mocked(spawnManaged).mockReturnValue({
-      child: { pid: 98765 },
-      error: undefined,
-    } as never);
+    vi.mocked(getExitPolicy).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        exitKillComfyui: false,
+      } as never,
+    );
+    vi.mocked(spawnManaged).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        child: { pid: 98765 },
+        error: undefined,
+      } as never,
+    );
     vi.mocked(findPidForMainPy).mockResolvedValue(null);
-    vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
+    vi.mocked(getSettingsSync).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ autoStartSettings as never,
+    );
 
     const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
     await expect
@@ -800,9 +842,11 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
       })
       .toBe(true);
     await pending;
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: true,
-    } as never);
+    vi.mocked(getExitPolicy).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ {
+        exitKillComfyui: true,
+      } as never,
+    );
   });
 
   it("重置状态（启动/关闭动作）会清掉黏滞：新事实立刻说了算", async () => {

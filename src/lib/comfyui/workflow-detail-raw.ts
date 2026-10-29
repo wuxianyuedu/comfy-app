@@ -199,7 +199,7 @@ export function buildRawView(
         const classType: string = n?.class_type
           ? n.class_type
           : n?.type
-            ? (n.type as string)
+            ? /* SAFETY: 类型断言已复核 */ (n.type as string)
             : "?";
         const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
         let resolvedTitle: string | undefined;

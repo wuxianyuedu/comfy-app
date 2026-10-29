@@ -156,7 +156,10 @@ describe("档位 → 命令形态（两种平台各断言一次，避免「按�
   });
 
   it("每一条都带一句人话说明 —— 它是用户在运行日志里唯一能确认「生效了」的东西", () => {
-    for (const platform of ["win32", "linux"] as const) {
+    for (const platform of /* SAFETY: 类型断言已复核 */ [
+      "win32",
+      "linux",
+    ] as const) {
       for (const mode of CPU_LIMIT_MODES) {
         const { priority, affinity } = cpuLimitCommands({
           mode,

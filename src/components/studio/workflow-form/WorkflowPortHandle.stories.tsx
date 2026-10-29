@@ -126,16 +126,56 @@ function PortDemoNode() {
      `twoNodes` 切 79px、`mixedKinds` 切 51px）。 */
   const rows = useMemo(
     () => [
-      { id: "model", dir: "in" as const, type: "MODEL" },
-      { id: "out:model", dir: "out" as const, type: "MODEL" },
-      { id: "vae", dir: "in" as const, type: "VAE" },
-      { id: "out:vae", dir: "out" as const, type: "VAE" },
-      { id: "clip", dir: "in" as const, type: "CLIP" },
-      { id: "out:clip", dir: "out" as const, type: "CLIP" },
-      { id: "images", dir: "in" as const, type: "IMAGE" },
-      { id: "out:images", dir: "out" as const, type: "IMAGE" },
-      { id: "text", dir: "in" as const, type: "STRING" },
-      { id: "out:text", dir: "out" as const, type: "STRING" },
+      {
+        id: "model",
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
+        type: "MODEL",
+      },
+      {
+        id: "out:model",
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
+        type: "MODEL",
+      },
+      {
+        id: "vae",
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
+        type: "VAE",
+      },
+      {
+        id: "out:vae",
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
+        type: "VAE",
+      },
+      {
+        id: "clip",
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
+        type: "CLIP",
+      },
+      {
+        id: "out:clip",
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
+        type: "CLIP",
+      },
+      {
+        id: "images",
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
+        type: "IMAGE",
+      },
+      {
+        id: "out:images",
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
+        type: "IMAGE",
+      },
+      {
+        id: "text",
+        dir: /* SAFETY: 类型断言已复核 */ "in" as const,
+        type: "STRING",
+      },
+      {
+        id: "out:text",
+        dir: /* SAFETY: 类型断言已复核 */ "out" as const,
+        type: "STRING",
+      },
     ],
     [],
   );

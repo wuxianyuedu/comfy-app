@@ -85,7 +85,8 @@ export function readCustomNodesManifest(
       stamp: customNodesManifestStamp(root),
     };
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
+    const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException)
+      .code;
     if (code === "ENOENT") return { kind: "missing" };
     return { kind: "unreadable", detail: `${code ?? "unknown"}` };
   }

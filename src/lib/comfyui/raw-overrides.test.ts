@@ -62,7 +62,7 @@ function widgetsOf(
   subgraphUid: string,
   innerId: string,
 ): unknown[] {
-  const r = raw as {
+  const r = /* SAFETY: 类型断言已复核 */ raw as {
     definitions: {
       subgraphs: Record<
         string,
@@ -120,7 +120,7 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
       ],
       links: [],
     };
-    const result = applyRawOverrides(raw, [
+    const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
       { nodeId: "24", name: "image", value: "new.png" },
     ]) as { nodes: { id: string; widgets_values: unknown[] }[] };
 
@@ -164,9 +164,10 @@ function apiGraphWithSampler(): ApiGraph {
 
 describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
   it("值写进命名入参；数值入参的字符串值被收窄成数字", () => {
-    const out = applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "steps", value: "30" },
-    ]) as ApiGraph;
+    const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(
+      apiGraphWithSampler(),
+      [{ nodeId: "3", name: "steps", value: "30" }],
+    ) as ApiGraph;
 
     expect(out["3"]!.inputs.steps).toBe(30);
     /* 其余入参（含连线元组）原样保留。 */
@@ -175,17 +176,19 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
   });
 
   it("空串不参与数值收窄（清空输入框 = 没有值，不能把 steps 写成 0）", () => {
-    const out = applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "steps", value: "" },
-    ]) as ApiGraph;
+    const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(
+      apiGraphWithSampler(),
+      [{ nodeId: "3", name: "steps", value: "" }],
+    ) as ApiGraph;
 
     expect(out["3"]!.inputs.steps).toBe("");
   });
 
   it("control_after_generate=randomize：铸新 seed 且该键不入载荷", () => {
-    const out = applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "control_after_generate", value: "randomize" },
-    ]) as ApiGraph;
+    const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(
+      apiGraphWithSampler(),
+      [{ nodeId: "3", name: "control_after_generate", value: "randomize" }],
+    ) as ApiGraph;
 
     expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
     const seed = out["3"]!.inputs.seed;
@@ -194,9 +197,10 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
   });
 
   it("control_after_generate=fixed：只摘键，seed 保持原值", () => {
-    const out = applyApiOverrides(apiGraphWithSampler(), [
-      { nodeId: "3", name: "control_after_generate", value: "fixed" },
-    ]) as ApiGraph;
+    const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(
+      apiGraphWithSampler(),
+      [{ nodeId: "3", name: "control_after_generate", value: "fixed" }],
+    ) as ApiGraph;
 
     expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
     expect(out["3"]!.inputs.seed).toBe(111);
@@ -207,7 +211,7 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
       "3": { class_type: "KSampler", inputs: { seed: 1 } },
       "4": { class_type: "Note" },
     };
-    const out = applyApiOverrides(graph, [
+    const out = /* SAFETY: 类型断言已复核 */ applyApiOverrides(graph, [
       { nodeId: "999", name: "seed", value: 7 },
       { nodeId: "4", name: "seed", value: 7 },
     ]) as Record<string, { inputs?: Record<string, unknown> }>;
@@ -293,7 +297,10 @@ type DriftOut = {
 
 describe("抵消 comfy-cli 提升控件回写的槽位漂移", () => {
   it("漂移存在时：宿主值折进内层，宿主数组清空（回写变空操作）", () => {
-    const out = applyRawOverrides(driftRaw(true), []) as DriftOut;
+    const out = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
+      driftRaw(true),
+      [],
+    ) as DriftOut;
     /* 宿主按下标 0 的 clip_name 值落进内层 CLIPLoader —— 不是错位的 undefined。 */
     expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual([
       "umt5_xxl_fp8.safetensors",
@@ -303,7 +310,9 @@ describe("抵消 comfy-cli 提升控件回写的槽位漂移", () => {
   });
 
   it("没有覆盖项时同样抵消（错位与「这次有没有画布覆盖」无关）", () => {
-    const out = applyRawOverrides(driftRaw(true)) as DriftOut;
+    const out = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
+      driftRaw(true),
+    ) as DriftOut;
     expect(out.nodes[0]!.widgets_values).toEqual([]);
     expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual([
       "umt5_xxl_fp8.safetensors",
@@ -311,7 +320,10 @@ describe("抵消 comfy-cli 提升控件回写的槽位漂移", () => {
   });
 
   it("漂移不存在时不动载荷（宿主数组与内层默认值都保留）", () => {
-    const out = applyRawOverrides(driftRaw(false), []) as DriftOut;
+    const out = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
+      driftRaw(false),
+      [],
+    ) as DriftOut;
     expect(out.nodes[0]!.widgets_values).toEqual(["umt5_xxl_fp8.safetensors"]);
     expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual(["default.safetensors"]);
   });

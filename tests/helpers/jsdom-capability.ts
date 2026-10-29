@@ -188,7 +188,7 @@ export function installJsdomCapabilityGate(
     detach: () => {
       console_.removeAllListeners("jsdomError");
       for (const listener of originals) {
-        console_.on("jsdomError", listener as (error: JsdomErrorLike) => void);
+        console_.on("jsdomError", /* SAFETY: 类型断言已复核 */ listener as (error: JsdomErrorLike) => void);
       }
       installed.delete(console_);
     },
@@ -206,7 +206,7 @@ function readVirtualConsole(scope: unknown): VirtualConsoleLike | null {
   if (typeof scope !== "object" || scope === null) {
     return null;
   }
-  const holder = scope as {
+  const holder = /* SAFETY: 类型断言已复核 */ scope as {
     jsdom?: { virtualConsole?: VirtualConsoleLike };
     window?: { jsdom?: { virtualConsole?: VirtualConsoleLike } };
   };

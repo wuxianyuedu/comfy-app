@@ -96,30 +96,38 @@ export const PanelsSlideBetweenTriggers: Story = {
 export const Alignments: Story = {
   render: () => (
     <div className="flex w-72 flex-col gap-6">
-      {(["start", "center"] as const).map((align) => (
-        <div key={align} className="flex flex-col gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            align={align}
-          </span>
-          <NavigationMenu align={align} className="justify-start">
-            <NavigationMenuList>
-              <NavigationMenuItem>
-                <NavigationMenuTrigger>菜单</NavigationMenuTrigger>
-                <NavigationMenuContent>
-                  <ul className="grid w-64 gap-1 p-2">
-                    <li>
-                      <NavigationMenuLink href="#">第一项</NavigationMenuLink>
-                    </li>
-                    <li>
-                      <NavigationMenuLink href="#">第二项</NavigationMenuLink>
-                    </li>
-                  </ul>
-                </NavigationMenuContent>
-              </NavigationMenuItem>
-            </NavigationMenuList>
-          </NavigationMenu>
-        </div>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (["start", "center"] as const).map(
+          (align) => (
+            <div key={align} className="flex flex-col gap-1.5">
+              <span className="text-ink-muted font-mono text-[11px]">
+                align={align}
+              </span>
+              <NavigationMenu align={align} className="justify-start">
+                <NavigationMenuList>
+                  <NavigationMenuItem>
+                    <NavigationMenuTrigger>菜单</NavigationMenuTrigger>
+                    <NavigationMenuContent>
+                      <ul className="grid w-64 gap-1 p-2">
+                        <li>
+                          <NavigationMenuLink href="#">
+                            第一项
+                          </NavigationMenuLink>
+                        </li>
+                        <li>
+                          <NavigationMenuLink href="#">
+                            第二项
+                          </NavigationMenuLink>
+                        </li>
+                      </ul>
+                    </NavigationMenuContent>
+                  </NavigationMenuItem>
+                </NavigationMenuList>
+              </NavigationMenu>
+            </div>
+          ),
+        )
+      }
     </div>
   ),
 };

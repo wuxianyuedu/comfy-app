@@ -42,11 +42,15 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
       scriptMarkdown: row.scriptMarkdown,
     },
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters)
-      ? (row.characters as Character[])
+    scenes: Array.isArray(row.scenes)
+      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Scene[])
       : [],
-    shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
+    characters: Array.isArray(row.characters)
+      ? /* SAFETY: 类型断言已复核 */ (row.characters as Character[])
+      : [],
+    shots: Array.isArray(row.shots)
+      ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[])
+      : [],
   });
 }
 

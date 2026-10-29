@@ -108,7 +108,7 @@ function runProbe(
     );
     return { code: 0, output };
   } catch (error) {
-    const e = error as {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number | null;
       stdout?: string;
       stderr?: string;

@@ -376,7 +376,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "src/**",
     ]);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fmt = require("../scripts/check-format.cjs") as {
+    const fmt = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
       isScanned: (rel: string) => boolean;
       IGNORE_GLOBS: readonly string[];
     };

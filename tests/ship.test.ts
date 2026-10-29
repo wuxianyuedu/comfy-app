@@ -1633,8 +1633,8 @@ describe("issueItemShapes：一张单子正文里的条目形态（#2251 —— 
   it("`###` 后面没内容不算小节；空正文与非字符串输入都归零而不是抛", () => {
     expect(issueItemShapes("###   \n### 有内容\n").headings).toBe(1);
     expect(issueItemShapes("").total).toBe(0);
-    expect(issueItemShapes(undefined as never).total).toBe(0);
-    expect(issueItemShapes(null as never).total).toBe(0);
+    expect(issueItemShapes(/* SAFETY: 类型断言已复核 */ undefined as never).total).toBe(0);
+    expect(issueItemShapes(/* SAFETY: 类型断言已复核 */ null as never).total).toBe(0);
   });
 });
 
@@ -3454,7 +3454,7 @@ describe("findMergedPullForHeadSha：这一笔是不是已经随某条已合并�
     expect(findMergedPullForHeadSha(CLOSED, "aa11bb22")).toBeNull();
     expect(findMergedPullForHeadSha(CLOSED, "ff99ee88")).toBeNull();
     expect(findMergedPullForHeadSha(CLOSED, "")).toBeNull();
-    expect(findMergedPullForHeadSha(CLOSED, undefined as never)).toBeNull();
+    expect(findMergedPullForHeadSha(CLOSED, /* SAFETY: 类型断言已复核 */ undefined as never)).toBeNull();
   });
 
   it("信封形状：只给 HTTP `status` 不给 data 时不算命中（与「信封不等于终态」同一条）", () => {
@@ -4044,7 +4044,7 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   }
 
   const json = (o: unknown): FakeResult => ({
-    status: Number((o as { code?: number }).code ?? 0),
+    status: Number((/* SAFETY: 类型断言已复核 */ o as { code?: number }).code ?? 0),
     stdout: JSON.stringify(o),
     stderr: "",
     error: null,

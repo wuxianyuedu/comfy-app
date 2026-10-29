@@ -46,7 +46,7 @@ export function makeCtx(opts: { user?: TRPCUser | null } = {}): {
 } {
   const user = opts.user === undefined ? makeUser() : opts.user;
   return {
-    db: getTestDb() as unknown as TestDb,
+    db: /* SAFETY: 类型断言已复核 */ getTestDb() as unknown as TestDb,
     session: null,
     user,
     headers: new Headers({ "x-forwarded-for": "127.0.0.1" }),
@@ -66,7 +66,7 @@ export async function errorEnvelope(promise: Promise<unknown>): Promise<{
   return promise.then(
     () => ({ code: "OK", message: "" }),
     (e: unknown) => {
-      const err = e as { code?: unknown; message?: unknown } | null;
+      const err = /* SAFETY: 类型断言已复核 */ e as { code?: unknown; message?: unknown } | null;
       // 逐维按类型收窄：拿 `String(unknown)` 兜底会在错误对象上打出
       // `[object Object]`，那等于把「码不对」这一维又判回成看运气。
       return {

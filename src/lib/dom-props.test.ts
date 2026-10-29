@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { commonOwnProps, splitDomProps, type OmitOwnProps } from "./dom-props";
 
 type InputProps = React.ComponentProps<"input">;
-const PRIVATE = ["type", "value", "onChange"] as const;
+const PRIVATE = /* SAFETY: 类型断言已复核 */ [
+  "type",
+  "value",
+  "onChange",
+] as const;
 /** 一个恒等函数当 `onChange` 桩（避免空函数体被 lint 拦下）。 */
 const noop = () => undefined;
 
@@ -42,7 +46,10 @@ describe("splitDomProps", () => {
 
   it("空 keys 时 rest 是全部、own 为空", () => {
     const props = { id: "a" };
-    const { own, rest } = splitDomProps(props, [] as const);
+    const { own, rest } = splitDomProps(
+      props,
+      /* SAFETY: 类型断言已复核 */ [] as const,
+    );
     expect(own).toEqual({});
     expect(rest).toEqual({ id: "a" });
   });

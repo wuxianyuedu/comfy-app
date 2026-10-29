@@ -379,13 +379,15 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
 
   it("没有 ioKey 时按「节点 + 方向 + 槽位名」认出同一个 pin", () => {
     const original = wrapperSeed();
-    delete (original as { ioKey?: string }).ioKey;
+    delete (
+      /* SAFETY: 类型断言已复核 */ (original as { ioKey?: string }).ioKey
+    );
     const copy = { ...original, required: true };
     expect(ioLabel(copy, [original])).toBe("Seed");
   });
 
   it("不同 pin 真撞名时用 name 区分（保持既有行为）", () => {
-    const first = {
+    const first = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "param",
       nodeId: "1",
@@ -394,7 +396,7 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
       ioKey: "1::param::inputImage",
       control: "link",
     } as EnrichedWidget;
-    const second = {
+    const second = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "param",
       nodeId: "2",
@@ -409,7 +411,7 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
 
   it("撞名时区分标记绝不使用封装槽位的机器别名：改用宿主标题", () => {
     const seed = wrapperSeed({ nodeTitle: "Checkpoint settings" });
-    const homonym = {
+    const homonym = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "widget",
       nodeId: "9",
@@ -424,7 +426,7 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
 
   it("撞名且没有宿主标题时保留作者命名，不退化成 value_1", () => {
     const seed = wrapperSeed();
-    const homonym = {
+    const homonym = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "widget",
       nodeId: "9",

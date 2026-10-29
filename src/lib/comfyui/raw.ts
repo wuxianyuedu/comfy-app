@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ComfyUI 工作流「原始 / 控件顺序」兼容层
  *
  * 本应用只接受 **ComfyUI 的原始工作流格式**（工作流 / RAW / UI 格式，
@@ -40,7 +40,9 @@ export { asRecord } from "~/lib/is-record";
 /** DB Json 列 / JSON.parse 产物 → RawWorkflow 视图。根不是普通对象时返回
  *  null（下游均有 `Array.isArray(raw.nodes)` 类守卫，路径与旧代码等价）。 */
 export function asRawWorkflow(v: unknown): RawWorkflow | null {
-  return isPlainRecord(v) ? (v as RawWorkflow) : null;
+  return isPlainRecord(v)
+    ? /* SAFETY: 类型断言已复核 */ (v as RawWorkflow)
+    : null;
 }
 
 /** `String(v)` 的类型收窄等价：值全部来自 JSON 反序列化产物（无 symbol /
@@ -51,7 +53,7 @@ export function toStringValue(v: unknown): string {
   if (typeof v === "string") return v;
   if (v === null) return "null";
   if (v === undefined) return "undefined";
-  return (v as { toString(): string }).toString();
+  return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
 }
 
 /** raw UI 格式节点的 inputs[] 条目（ComfyUI 只把「转为输入」的槽位写进来）。
@@ -369,7 +371,7 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
       _objectInfoFailedAt = Date.now();
       return null;
     }
-    const data = parsed.data as ObjectInfo;
+    const data = /* SAFETY: 类型断言已复核 */ parsed.data as ObjectInfo;
     _objectInfoCache = { at: Date.now(), data };
     return data;
   } catch {

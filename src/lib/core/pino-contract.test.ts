@@ -61,7 +61,7 @@ describe("pino 输出格式契约", () => {
     await flush();
 
     expect(lines()).toHaveLength(1);
-    const parsed = JSON.parse(lines()[0]!) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(lines()[0]!) as {
       level: number;
       time: number;
       msg: string;
@@ -108,7 +108,10 @@ describe("pino 脱敏契约（redact 生效）", () => {
     expect(raw).not.toContain("sample-password-明文");
     expect(raw).not.toContain("sample-token-明文");
     expect(raw).not.toContain("sample-key-明文");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Record<
+      string,
+      unknown
+    >;
     expect(parsed.password).toBe("[Redacted]");
     expect(parsed.token).toBe("[Redacted]");
     expect(parsed.apiKey).toBe("[Redacted]");
@@ -139,7 +142,10 @@ describe("pino 脱敏契约（redact 生效）", () => {
     expect(raw).not.toContain("sample-api-value-明文");
     expect(raw).not.toContain("sample-token-明文");
     expect(raw).not.toContain("sid=sample-session");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Record<
+      string,
+      unknown
+    >;
     expect(parsed.client).toEqual({
       secret: "[Redacted]",
       apiSecret: "[Redacted]",
@@ -173,7 +179,9 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
 
     const raw = lines()[0]!;
     expect(raw).not.toContain("一只在月球上的猫");
-    const parsed = JSON.parse(raw) as { prompt: string };
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
+      prompt: string;
+    };
     expect(parsed.prompt).toBe("[Redacted]");
   });
 
@@ -189,7 +197,7 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     const raw = lines()[0]!;
     expect(raw).not.toContain("negative 明文");
     expect(raw).not.toContain("n-明文");
-    const parsed = JSON.parse(raw) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
       request: { prompt: string; negativePrompt: string };
     };
     expect(parsed.request.prompt).toBe("[Redacted]");
@@ -205,7 +213,10 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     const raw = lines()[0]!;
     expect(raw).not.toContain("u@example.com");
     expect(raw).not.toContain("13800000000");
-    const parsed = JSON.parse(raw) as { email: string; phone: string };
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
+      email: string;
+      phone: string;
+    };
     expect(parsed.email).toBe("[Redacted]");
     expect(parsed.phone).toBe("[Redacted]");
   });

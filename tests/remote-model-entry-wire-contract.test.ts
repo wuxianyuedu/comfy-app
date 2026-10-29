@@ -138,7 +138,7 @@ describe("远端模型条目 ⇄ configSave 的入参判据", () => {
      * 它不会编译红，只会让用户刚加的模型没进列表。 */
     const drifted = { model: "gpt-x", baseUrl: "https://api.example/v1" };
     await expect(
-      createCaller(makeCtx()).configSave({ extraModels: [drifted as never] }),
+      createCaller(makeCtx()).configSave({ extraModels: [/* SAFETY: 类型断言已复核 */ drifted as never] }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(tdb.$tables.remoteModels).toHaveLength(0);
   });

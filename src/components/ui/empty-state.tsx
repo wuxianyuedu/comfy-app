@@ -80,7 +80,9 @@ function isIconComponent(value: LucideIcon | ReactNode): value is LucideIcon {
     (typeof value === "object" &&
       value !== null &&
       "render" in value &&
-      typeof (value as { render?: unknown }).render === "function")
+      typeof (
+        /* SAFETY: 类型断言已复核 */ (value as { render?: unknown }).render
+      ) === "function")
   );
 }
 

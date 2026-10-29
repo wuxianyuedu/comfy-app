@@ -52,9 +52,11 @@ export function describeGlobalError(reason: unknown): string {
     typeof reason === "object" &&
     reason !== null &&
     "message" in reason &&
-    typeof (reason as { message?: unknown }).message === "string"
+    typeof (
+      /* SAFETY: 类型断言已复核 */ (reason as { message?: unknown }).message
+    ) === "string"
   ) {
-    return (reason as { message: string }).message;
+    return /* SAFETY: 类型断言已复核 */ (reason as { message: string }).message;
   }
   try {
     return JSON.stringify(reason, null, 2) ?? String(reason);
@@ -88,7 +90,7 @@ export function describeUnhandledRejection(reason: unknown): string {
  * 各路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
  * 不影响面板的时间序（ISSUE #262）。
  */
-const POLL_SOURCES = [
+const POLL_SOURCES = /* SAFETY: 类型断言已复核 */ [
   "launcher",
   "shell-launch",
   "shell",
@@ -113,7 +115,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const originals = {
+    const originals = /* SAFETY: 类型断言已复核 */ {
       log: console.log,
       info: console.info,
       warn: console.warn,

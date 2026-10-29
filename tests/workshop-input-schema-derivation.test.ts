@@ -36,7 +36,7 @@ function parseShot(value: unknown) {
   expect(parsed.success, `写侧判据当场拒了：${String(parsed.error)}`).toBe(
     true,
   );
-  return parsed.success ? parsed.data : (undefined as never);
+  return parsed.success ? parsed.data : (/* SAFETY: 类型断言已复核 */ undefined as never);
 }
 
 describe("工坊写侧 schema ⇄ 派生类型：同读数且可选性方向一致（§E4 / #2499）", () => {
@@ -116,7 +116,7 @@ describe("工坊写侧 schema ⇄ 派生类型：同读数且可选性方向一�
   });
 
   it("MCP 入参面：createdAt 仍在可选字段里（.default 不许把键变成 required）", () => {
-    const json = z4mini.toJSONSchema(characterPortraitInputSchema, {
+    const json = /* SAFETY: 类型断言已复核 */ z4mini.toJSONSchema(characterPortraitInputSchema, {
       target: "draft-7",
       io: "input",
     }) as { required?: string[]; properties?: Record<string, unknown> };

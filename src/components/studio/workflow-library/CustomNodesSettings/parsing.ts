@@ -27,7 +27,9 @@ export function deriveRowState(
     return { kind: "empty" };
   if (!saved) return { kind: "unimported" };
   if (saved.status === "error") {
-    const firstErr = (saved.errors ?? [])[0] as { error?: unknown } | undefined;
+    const firstErr = /* SAFETY: 类型断言已复核 */ (saved.errors ?? [])[0] as
+      | { error?: unknown }
+      | undefined;
     const reason =
       typeof firstErr?.error === "string" ? firstErr.error : "解析出错";
     return { kind: "error", reason };

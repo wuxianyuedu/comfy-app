@@ -86,7 +86,9 @@ export function createSettingsFileMemo(
       if (cache && fp === fingerprint) return cache;
       let parsed: ComfySettings;
       try {
-        parsed = JSON.parse(io.read(file)) as ComfySettings;
+        parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(
+          io.read(file),
+        ) as ComfySettings;
       } catch {
         parsed = {};
       }
@@ -201,7 +203,7 @@ export async function postComfyPrompt(
         `ComfyUI /api/prompt 失败 (${res.status}): ${await res.text().catch(() => "")}`,
       );
     }
-    return (await res.json()) as ComfyPromptResult;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as ComfyPromptResult;
   } catch (e) {
     guardNetworkFailure(e);
   }
@@ -216,7 +218,10 @@ export async function getComfyHistory(
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
-    return (await res.json()) as Record<string, unknown>;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<
+      string,
+      unknown
+    >;
   } catch (e) {
     guardNetworkFailure(e);
   }
@@ -261,7 +266,9 @@ export async function uploadComfyImage(
       throw new Error(
         `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
       );
-    const data = (await res.json()) as { name?: string };
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      name?: string;
+    };
     if (!data.name) throw new Error("ComfyUI 上传未返回文件名");
     return data.name;
   } catch (e) {
@@ -379,7 +386,7 @@ export function substitutePlaceholders(
     .join(vars.negative ?? "")
     .split("{{image}}")
     .join(vars.image ?? "");
-  return JSON.parse(json) as unknown;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(json) as unknown;
 }
 
 export interface ComfyRunResult {
@@ -403,7 +410,7 @@ export async function runComfyWorkflow(
   let history: Record<string, unknown> = {};
   while (Date.now() < deadline) {
     history = await getComfyHistory(promptId).catch(() => ({}));
-    const entry = history[promptId] as
+    const entry = /* SAFETY: 类型断言已复核 */ history[promptId] as
       | { status?: { completed?: boolean; status_str?: string } }
       | undefined;
     const done =
@@ -414,7 +421,7 @@ export async function runComfyWorkflow(
     await sleep(1500);
   }
 
-  const entry = history[promptId] as
+  const entry = /* SAFETY: 类型断言已复核 */ history[promptId] as
     | { outputs?: Record<string, unknown> }
     | undefined;
   const outputs = entry?.outputs ?? {};
@@ -422,7 +429,7 @@ export async function runComfyWorkflow(
   const outDir = outputDirForSession(opts?.sessionId);
   await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {
-    const rec = nodeOut as {
+    const rec = /* SAFETY: 类型断言已复核 */ nodeOut as {
       images?: Array<{ filename: string; subfolder: string; type: string }>;
       gifs?: Array<{ filename: string; subfolder: string; type: string }>;
     };

@@ -231,18 +231,30 @@ export function parseWorkspaceTabs(
     return null;
   }
   if (typeof parsed !== "object" || parsed === null) return null;
-  const record = parsed as { activeKey?: unknown; tabs?: unknown };
+  const record = /* SAFETY: 类型断言已复核 */ parsed as {
+    activeKey?: unknown;
+    tabs?: unknown;
+  };
   if (!Array.isArray(record.tabs) || typeof record.activeKey !== "string") {
     return null;
   }
   const tabs: ViewTab[] = [];
   for (const entry of record.tabs) {
     if (!Array.isArray(entry) || entry.length < 2) return null;
-    const [view, projectId] = entry as [unknown, unknown];
-    if (typeof view !== "string" || !knownViews.includes(view as WorkspaceView))
+    const [view, projectId] = /* SAFETY: 类型断言已复核 */ entry as [
+      unknown,
+      unknown,
+    ];
+    if (
+      typeof view !== "string" ||
+      !knownViews.includes(/* SAFETY: 类型断言已复核 */ view as WorkspaceView)
+    )
       return null;
     if (projectId !== null && typeof projectId !== "string") return null;
-    const tab = makeTab(view as WorkspaceView, projectId);
+    const tab = makeTab(
+      /* SAFETY: 类型断言已复核 */ view as WorkspaceView,
+      projectId,
+    );
     // 造不出来（项目类视图丢了项目 id）或键重复 ⇒ 整份不可信。
     if (!tab || tabs.some((existing) => existing.key === tab.key)) return null;
     tabs.push(tab);

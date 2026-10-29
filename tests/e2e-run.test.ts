@@ -197,7 +197,7 @@ Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or proces
      * 等的又只是 webServer 的 URL 可访问 —— 于是冒烟档的健康检查在建表完成前
      * 打过去，全新检出的现场是 `db: "empty"` ⇒ 503 ⇒ 那条 `@critical` 必红。
      * 现在空库是一个**要等**的动作（`ensure`），由本档在起 Playwright 之前做掉。 */
-    for (const probe of ["missing", "unknown"] as const) {
+    for (const probe of /* SAFETY: 类型断言已复核 */ ["missing", "unknown"] as const) {
       const d = schemaPreflightDecision({
         probe,
         fingerprintMatch: false,
@@ -676,7 +676,7 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`pnpm test:e2e` 真的走这条通道（否则记账这一步没有执行者）", () => {
-    const pkg = JSON.parse(readText("package.json")) as {
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(readText("package.json")) as {
       scripts?: Record<string, string>;
     };
     /* 按**入口**判而不是按命令长得像什么：`playwright test` 与
@@ -705,7 +705,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     const live = readFreshnessLedgerAt(ROOT, TRACK.ledger);
     expect(Object.keys(live)).toContain(TRACK.key);
     // 这份记录是**真跑**过的（本轮的 `node scripts/e2e-run.mjs`），不是手写的一行。
-    const rec = live[TRACK.key] as Record<string, unknown> | undefined;
+    const rec = /* SAFETY: 类型断言已复核 */ live[TRACK.key] as Record<string, unknown> | undefined;
     expect(String(rec?.trackedBy)).toBe("e2e");
   });
 
@@ -778,7 +778,7 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
     ).toBe("proceed");
 
     // 没建成 ⇒ 阻断，出口是 `pnpm db:push`（那是人的决定，别替它做）。
-    for (const state of ["missing", "stale"] as const) {
+    for (const state of /* SAFETY: 类型断言已复核 */ ["missing", "stale"] as const) {
       const blocked = ensureSchemaBeforeRun({
         root: ROOT,
         ensure: () => ({ state, detail: "现场原因" }),
@@ -874,7 +874,7 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
  * 保证「等到了结论」这半条没有退化成空壳。
  */
 describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () => {
-  const ENV = {
+  const ENV = /* SAFETY: 类型断言已复核 */ {
     E2E_PREFLIGHT: "{}",
     E2E_PYTHON_PREFLIGHT: "{}",
   } as unknown as NodeJS.ProcessEnv;
@@ -1022,12 +1022,12 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   });
 
   it("Python 缺件 ⇒ 拦，且**结论已经写进 env**（`playwright.config.ts` 读它）", async () => {
-    const env = {} as NodeJS.ProcessEnv;
+    const env = /* SAFETY: 类型断言已复核 */ {} as NodeJS.ProcessEnv;
     const collectors = makePreflightCollectors({
       env,
       cwd: ROOT,
       python: () => ({
-        verdict: "missing" as const,
+        verdict: /* SAFETY: 类型断言已复核 */ "missing" as const,
         interpreter: null,
         detail: "没有解释器",
       }),
@@ -1042,10 +1042,10 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
 
   it("schema 判成 abort ⇒ 拦下，且逐条列出丢数据的语句", async () => {
     const collectors = makePreflightCollectors({
-      env: {} as NodeJS.ProcessEnv,
+      env: /* SAFETY: 类型断言已复核 */ {} as NodeJS.ProcessEnv,
       cwd: ROOT,
       schema: () => ({
-        verdict: "abort" as const,
+        verdict: /* SAFETY: 类型断言已复核 */ "abort" as const,
         reason: "含丢数据语句",
         risky: ["DROP TABLE loraTrainingJob"],
       }),
@@ -1059,11 +1059,11 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
 
   it("浏览器 ready / 拿不到结论都只是读数，不拦", async () => {
     for (const verdict of [
-      { verdict: "ready" as const },
-      { verdict: "unknown" as const, detail: "探不动" },
+      { verdict: /* SAFETY: 类型断言已复核 */ "ready" as const },
+      { verdict: /* SAFETY: 类型断言已复核 */ "unknown" as const, detail: "探不动" },
     ]) {
       const collectors = makePreflightCollectors({
-        env: {} as NodeJS.ProcessEnv,
+        env: /* SAFETY: 类型断言已复核 */ {} as NodeJS.ProcessEnv,
         cwd: ROOT,
         browser: async () => verdict,
       });

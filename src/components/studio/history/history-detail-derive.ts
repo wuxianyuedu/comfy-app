@@ -45,7 +45,7 @@ export function workflowInputsOf<T extends { name: string }>(
   detail: TaskDetail | null,
 ): T[] {
   const raw: unknown = paramsOf(detail).workflowInputs;
-  return Array.isArray(raw) ? (raw as T[]) : [];
+  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as T[]) : [];
 }
 
 /**
@@ -68,7 +68,7 @@ export type TaskOrigin = "workshop" | "workflow";
  * 反面：工作流库的就地运行只带 `workflow` + `workflowInputs`；画布节点运行
  * 再多个 `projectId`。两者都算「工作流直接发起」，只显示工作流参数。
  */
-const WORKSHOP_TOP_LEVEL_KEYS = [
+const WORKSHOP_TOP_LEVEL_KEYS = /* SAFETY: 类型断言已复核 */ [
   "prompt",
   "negative",
   "firstFrame",

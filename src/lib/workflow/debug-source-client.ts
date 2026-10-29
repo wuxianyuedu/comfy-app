@@ -26,5 +26,5 @@ export async function fetchDebugSource(
    * `body?.error`（服务端回结构化信封时读不到），且 `res.json()` 各调一遍。 */
   const body = await readJsonBody(res);
   if (!res.ok) throw new Error(readApiError(body) ?? `HTTP ${res.status}`);
-  return body as DebugSourcePayload;
+  return /* SAFETY: 类型断言已复核 */ body as DebugSourcePayload;
 }

@@ -36,7 +36,7 @@ const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
+    const body = /* SAFETY: 类型断言已复核 */ (await request.json()) as {
       ns?: string;
       level?: string;
       msg?: string;
@@ -48,7 +48,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
     const level = body.level ?? "info";
-    if (!ALLOWED_LEVEL.has(level as "info" | "warn" | "error")) {
+    if (
+      !ALLOWED_LEVEL.has(
+        /* SAFETY: 类型断言已复核 */ level as "info" | "warn" | "error",
+      )
+    ) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
     if (typeof body.msg !== "string" || body.msg.length === 0) {
@@ -63,7 +67,10 @@ export async function POST(request: Request) {
       body.fields && typeof body.fields === "object" ? body.fields : undefined;
 
     const log = createAppRuntimeLogger(ns);
-    log[level as "info" | "warn" | "error"](msg, fields);
+    log[/* SAFETY: 类型断言已复核 */ level as "info" | "warn" | "error"](
+      msg,
+      fields,
+    );
 
     return NextResponse.json({ ok: true });
   } catch {

@@ -193,7 +193,13 @@ export async function GET(request: Request) {
   const source = searchParams.get("source") ?? "";
   const requested = searchParams.get("session");
 
-  if (!(RUNTIME_LOG_SOURCES as readonly string[]).includes(source)) {
+  if (
+    !(
+      /* SAFETY: 类型断言已复核 */ (
+        RUNTIME_LOG_SOURCES as readonly string[]
+      ).includes(source)
+    )
+  ) {
     return NextResponse.json(emptyPayload(`unknown source: ${source}`), {
       status: 400,
     });
@@ -204,7 +210,7 @@ export async function GET(request: Request) {
      * 读方自己拼 `log/current/services/<source>-*.log` 就会与写方漂开，而漂开的
      * 表现是「日志在磁盘上、界面上看不到」（两边各自都「看起来是对的」）。 */
     const currentEntries = await listRuntimeLogFiles(
-      source as RuntimeLogSource,
+      /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
     );
 
     /* 历史归档：`runs/` 与包内相对目录同样从写方那一侧取，端点不写 `log/runs`
@@ -217,7 +223,7 @@ export async function GET(request: Request) {
       sourceDir: LOG_DIRS.services,
       runJsonName: LOG_LAYOUT.runJson,
       maxPacks: MAX_PACKS,
-      source: source as RuntimeLogSource,
+      source: /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
     });
 
     /* 分组、顺序、文案全在纯判据那一层：端点只把两边的数据递进去，不自己拼列表

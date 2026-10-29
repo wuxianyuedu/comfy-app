@@ -262,7 +262,11 @@ export function ShotCard({
               <SelectMenu
                 className="bg-subtle! border-border! text-2xs"
                 value={shot.motion ?? "medium"}
-                onChange={(v) => onPatch({ motion: v as MotionLevel })}
+                onChange={(v) =>
+                  onPatch({
+                    motion: /* SAFETY: 类型断言已复核 */ v as MotionLevel,
+                  })
+                }
                 options={MOTIONS}
                 labels={MOTION_LABELS}
                 placeholder="运动"

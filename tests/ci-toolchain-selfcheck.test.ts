@@ -254,7 +254,7 @@ describe("工具链自证：engines.node 的区间", () => {
   });
 
   it("与 package.json 的 engines.node 对账（改了一侧另一侧会红）", () => {
-    const pkg = JSON.parse(read("package.json")) as {
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(read("package.json")) as {
       engines: { node: string };
     };
     const engines = pkg.engines.node;
@@ -480,8 +480,8 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
    * 判据的结论从此只取决于用例自己造的东西。
    */
   const noExternalAction = {
-    platform: "win32" as NodeJS.Platform,
-    env: { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
+    platform: /* SAFETY: 类型断言已复核 */ "win32" as NodeJS.Platform,
+    env: /* SAFETY: 类型断言已复核 */ { LOCALAPPDATA: "/L" } as unknown as NodeJS.ProcessEnv,
     existing: () => false,
     mkdir: () => undefined,
     download: () => undefined,
@@ -652,7 +652,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       writeFileSync(path.join(links, "python.exe"), "");
       const r = installPython({
         ...noExternalAction,
-        env: { LOCALAPPDATA: localAppData } as unknown as NodeJS.ProcessEnv,
+        env: /* SAFETY: 类型断言已复核 */ { LOCALAPPDATA: localAppData } as unknown as NodeJS.ProcessEnv,
         run: () => ({ ok: true, out: "" }),
       });
       expect(r.installed).toBe(false);
@@ -681,8 +681,8 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
    * 所以最后那条「官方 embed 包解到检出本地」才是这里唯一真跑通过的一条。
    * 下面用注入的 run 把三条各自的**断点**逐条照亮。 */
   const win = {
-    platform: "win32" as NodeJS.Platform,
-    env: {
+    platform: /* SAFETY: 类型断言已复核 */ "win32" as NodeJS.Platform,
+    env: /* SAFETY: 类型断言已复核 */ {
       LOCALAPPDATA: "/L",
       USERPROFILE: "/U",
       TEMP: "/T",

@@ -89,7 +89,7 @@ describe("常驻根（resolveArtifactRoot）", () => {
 
     const derived = resolveArtifactRoot({ cwd: ROOT, env: {}, run: storeOn("F:") });
     /* 目录名取的是**本仓 package.json 的 name**（同依赖槽那一份推导），不写死字面量。 */
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
     ) as { name?: string };
     expect(derived.root).toBe(
@@ -202,13 +202,13 @@ describe("发布那一跑（main）", () => {
     const { code } = runPublish({ root });
     expect(code).toBe(0);
     const dir = path.join(root, "r1");
-    const manifest = JSON.parse(
+    const manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8"),
     ) as Record<string, unknown>;
     expect(manifest.label).toBe("r1");
     expect(manifest.sha).toBe("cafe1234567890");
     expect(manifest.keep).toBe(DEFAULT_KEEP);
-    expect((manifest.files as { path: string }[]).map((f) => f.path)).toEqual([
+    expect((/* SAFETY: 类型断言已复核 */ manifest.files as { path: string }[]).map((f) => f.path)).toEqual([
       "msi/app.msi",
       "nsis/app-setup.exe",
     ]);

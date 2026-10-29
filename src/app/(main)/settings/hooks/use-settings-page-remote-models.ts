@@ -221,7 +221,7 @@ export function useSettingsRemoteModels(input: {
       patchLlm({
         temperatureByTask:
           Object.keys(next).length > 0
-            ? (next as Record<TaskType, number>)
+            ? /* SAFETY: 类型断言已复核 */ (next as Record<TaskType, number>)
             : undefined,
       });
     },

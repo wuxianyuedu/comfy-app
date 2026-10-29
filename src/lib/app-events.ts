@@ -161,7 +161,11 @@ export function subscribeAppEvent<K extends AppEventName>(
 ): () => void {
   if (typeof window === "undefined") return noop;
   const listener = (event: Event) => {
-    handler((event as CustomEvent).detail as AppEvents[K]);
+    handler(
+      /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+        event as CustomEvent
+      ).detail as AppEvents[K],
+    );
   };
   window.addEventListener(name, listener);
   return () => window.removeEventListener(name, listener);

@@ -67,7 +67,9 @@ function FrostCard({
   label: string;
 }) {
   const palette = computeNodePalette(
-    { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
+    /* SAFETY: 类型断言已复核 */ { mode: nodeMode } as Parameters<
+      typeof computeNodePalette
+    >[0],
     { color: ROLE_COLOR },
     DARK_PALETTE_BASE,
   );
@@ -147,7 +149,9 @@ export const InCanvas: Story = {
 /** 真画布里的节点渲染器：走 `FrostLayer`，所以缩放由 store 给。 */
 function FrostDemoNode() {
   const palette = computeNodePalette(
-    { mode: 4 } as Parameters<typeof computeNodePalette>[0],
+    /* SAFETY: 类型断言已复核 */ { mode: 4 } as Parameters<
+      typeof computeNodePalette
+    >[0],
     { color: ROLE_COLOR },
     DARK_PALETTE_BASE,
   );

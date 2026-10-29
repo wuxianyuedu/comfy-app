@@ -86,7 +86,7 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, root, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

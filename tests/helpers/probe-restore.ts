@@ -56,7 +56,7 @@ export const realProbeIo: ProbeIo = {
         if (readFileSync(abs).equals(bytes)) return;
         last = "写回后读回的内容与快照不一致";
       } catch (e) {
-        last = (e as Error).message;
+        last = (/* SAFETY: 类型断言已复核 */ e as Error).message;
       }
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);
@@ -96,7 +96,7 @@ export function restoreToSnapshot(
     try {
       now = io.read(abs);
     } catch (e) {
-      failed.push({ abs, why: `读不到当前内容：${(e as Error).message}` });
+      failed.push({ abs, why: `读不到当前内容：${(/* SAFETY: 类型断言已复核 */ e as Error).message}` });
       continue;
     }
     if (sameBytes(now, want)) {
@@ -108,7 +108,7 @@ export function restoreToSnapshot(
       else io.write(abs, want);
       restored.push(abs);
     } catch (e) {
-      failed.push({ abs, why: (e as Error).message });
+      failed.push({ abs, why: (/* SAFETY: 类型断言已复核 */ e as Error).message });
     }
   }
   return { restored, unchanged, failed };

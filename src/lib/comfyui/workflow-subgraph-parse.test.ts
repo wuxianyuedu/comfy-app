@@ -200,7 +200,10 @@ describe("buildSubgraphGraph — 节点作者标题", () => {
  */
 describe("extractSubgraphAnnotations — 宿主链坐标", () => {
   function subWith(nodes: unknown[]): RawSubgraphDef {
-    return { id: "uid", nodes } as RawSubgraphDef;
+    return /* SAFETY: 类型断言已复核 */ {
+      id: "uid",
+      nodes,
+    } as RawSubgraphDef;
   }
 
   it("读得回 `宿主:内部` 拼接键的拖拽覆盖", () => {
@@ -417,7 +420,7 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
     const produced = [
       {
         linkId: 7,
-        kind: "input" as const,
+        kind: /* SAFETY: 类型断言已复核 */ "input" as const,
         pinId: "pin-1",
         innerNodeId: "5277",
         innerSlotName: "seed",

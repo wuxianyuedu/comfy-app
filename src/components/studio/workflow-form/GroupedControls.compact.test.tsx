@@ -111,8 +111,12 @@ describe("画布 / 库内的组合参数控件", () => {
       expect(row!.closest("[data-grouped-box]")).toBeNull();
       const dot = row!.querySelector(`[data-port-dot="${ioKey}"]`);
       expect(dot, `${ioKey} 行左侧应当有大端点`).toBeTruthy();
-      expect((dot as HTMLElement).style.width).toBe("12px");
-      expect((dot as HTMLElement).style.height).toBe("12px");
+      expect(
+        /* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.width,
+      ).toBe("12px");
+      expect(
+        /* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.height,
+      ).toBe("12px");
     }
   });
 

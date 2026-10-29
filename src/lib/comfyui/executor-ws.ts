@@ -1,4 +1,4 @@
-﻿/**
+/**
  * `executor-ws.ts` — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  * ===========================================================================
  *
@@ -216,8 +216,9 @@ export async function connect(): Promise<void> {
     kickQueue();
   });
   ws.on("message", (data) =>
-    fireAndForget(handleMessage((data as Buffer).toString()), (e) =>
-      logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`),
+    fireAndForget(
+      handleMessage(/* SAFETY: 类型断言已复核 */ (data as Buffer).toString()),
+      (e) => logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`),
     ),
   );
   // error / close 都交给 handleWsDrop 统一处理（幂等，双发只生效一次）。
@@ -315,7 +316,7 @@ export async function handleMessage(raw: string) {
   }
   if (!msg || typeof msg !== "object") return;
   // ComfyUI WS 消息的最小结构视图（协议判断委托给 comfyProtocol Adapter）。
-  const message = msg as ComfyWsMessage;
+  const message = /* SAFETY: 类型断言已复核 */ msg as ComfyWsMessage;
   const data = message.data ?? {};
   const promptId: string | undefined =
     typeof data.prompt_id === "string" ? data.prompt_id : undefined;

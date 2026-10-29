@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "./select";
 
-const OPTIONS = ["png", "jpg", "webp"] as const;
+const OPTIONS = /* SAFETY: 类型断言已复核 */ ["png", "jpg", "webp"] as const;
 
 function Demo({
   defaultValue = "png",

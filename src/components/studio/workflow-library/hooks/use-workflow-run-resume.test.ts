@@ -242,7 +242,11 @@ describe("watchWorkflowRun", () => {
     const handlers = makeHandlers();
     watchWorkflowRun("t1", handlers);
     const captured = vi.mocked(watchTask).mock.calls[0]![1];
-    const entry = { t: 1, level: "info" as const, msg: "开始" };
+    const entry = {
+      t: 1,
+      level: /* SAFETY: 类型断言已复核 */ "info" as const,
+      msg: "开始",
+    };
     captured.onLog?.(entry);
     expect(handlers.onLog).toHaveBeenCalledWith("t1", entry);
   });

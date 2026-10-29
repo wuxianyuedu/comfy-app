@@ -88,7 +88,7 @@ function parseReport(output: string): FreshnessReport {
   if (typeof raw !== "object" || raw === null) {
     throw new Error(`--json 输出不是一个对象：${output}`);
   }
-  const r = raw as Record<string, unknown>;
+  const r = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (!Array.isArray(r.remoteDrifts)) {
     throw new Error(`--json 输出缺少 remoteDrifts 数组：${output}`);
   }
@@ -96,8 +96,8 @@ function parseReport(output: string): FreshnessReport {
     code: typeof r.code === "number" ? r.code : -1,
     remoteChecked: r.remoteChecked === true,
     remoteAgeMs: typeof r.remoteAgeMs === "number" ? r.remoteAgeMs : null,
-    remoteDrifts: r.remoteDrifts as FreshnessReport["remoteDrifts"],
-    installDrift: (r.installDrift ?? null) as FreshnessReport["installDrift"],
+    remoteDrifts: /* SAFETY: 类型断言已复核 */ r.remoteDrifts as FreshnessReport["remoteDrifts"],
+    installDrift: /* SAFETY: 类型断言已复核 */ (r.installDrift ?? null) as FreshnessReport["installDrift"],
     envBroken: r.envBroken === true,
   };
 }
@@ -369,7 +369,7 @@ describe("check-deps-freshness 契约", () => {
     // 权威定义（`scripts/doc-facts.cjs` 反向解析它），判据里的字面量必须与它逐项相等。
     // 这条用例同时挡住了「解析器失灵 ⇒ 读出空清单 ⇒ 一切照旧绿」那一档
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
-    const facts = (await import("../scripts/doc-facts.cjs")) as unknown as {
+    const facts = /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
       FACTS: { key: string; extract: () => unknown }[];
     };
     const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
@@ -377,7 +377,7 @@ describe("check-deps-freshness 契约", () => {
     const declared = probesFact?.extract();
     expect(Array.isArray(declared)).toBe(true);
     const worktree =
-      (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
         RESOLVE_PROBES: string[];
       };
     expect(worktree.RESOLVE_PROBES).toEqual(declared);

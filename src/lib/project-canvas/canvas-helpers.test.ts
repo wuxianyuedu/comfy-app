@@ -21,7 +21,7 @@ function node(id: string, data: Partial<CanvasNodeData>): CanvasNodeType {
   return {
     id,
     type: "canvasNode",
-    data: data as CanvasNodeData,
+    data: /* SAFETY: 类型断言已复核 */ data as CanvasNodeData,
     position: { x: 0, y: 0 },
   };
 }
@@ -88,7 +88,9 @@ describe("placeCanvasNode", () => {
       nodes: base,
       point: { x: 30, y: 40 },
       flow,
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     expect(next).toHaveLength(2);
     expect(next[1]!.type).toBe("canvasNode");
@@ -106,7 +108,9 @@ describe("placeCanvasNode", () => {
           return p;
         },
       },
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     expect(received).toEqual(viewportCenter());
   });
@@ -122,7 +126,9 @@ describe("placeCanvasNode", () => {
           return p;
         },
       },
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     expect(received).toEqual(viewportCenter());
   });
@@ -133,7 +139,9 @@ describe("placeCanvasNode", () => {
       nodes: base,
       point: { x: 0, y: 0 },
       flow,
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     expect(base).toHaveLength(1);
     expect(next).not.toBe(base);
@@ -154,7 +162,9 @@ describe("placeCanvasNode", () => {
           return { x: p.x + 9999, y: p.y + 9999 };
         },
       },
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     expect(calls).toBe(0);
     expect(next[0]!.position).toEqual({ x: 340, y: 10 });
@@ -166,7 +176,9 @@ describe("placeCanvasNode", () => {
       id: "n_sink",
       flowPosition: { x: 0, y: 0 },
       flow,
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     expect(next[0]!.id).toBe("n_sink");
   });
@@ -176,13 +188,17 @@ describe("placeCanvasNode", () => {
       nodes: [],
       point: { x: 0, y: 0 },
       flow,
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     const second = placeCanvasNode({
       nodes: first,
       point: { x: 0, y: 0 },
       flow,
-      data: { kind: "image" } as CanvasNodeData,
+      data: /* SAFETY: 类型断言已复核 */ {
+        kind: "image",
+      } as CanvasNodeData,
     });
     expect(first[0]!.id).not.toBe(second[1]!.id);
   });

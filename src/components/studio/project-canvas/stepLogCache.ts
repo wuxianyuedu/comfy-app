@@ -120,7 +120,7 @@ export function appendStepLog(
 ): StepLogPanelState | null {
   if (!taskId) return null;
   const prev = cache.get(taskId) ?? {
-    logs: [] as StepLogEntry[],
+    logs: /* SAFETY: 类型断言已复核 */ [] as StepLogEntry[],
     validationErrors: null,
   };
   // 按 (时间, 消息) 去重 —— 与 ImageGenerationPanel 里的 SSE 去重口径一致。
@@ -156,7 +156,7 @@ export function setStepLogValidationErrors(
 ): void {
   if (!taskId) return;
   const prev = cache.get(taskId) ?? {
-    logs: [] as StepLogEntry[],
+    logs: /* SAFETY: 类型断言已复核 */ [] as StepLogEntry[],
     validationErrors: null,
   };
   touch(taskId, { logs: prev.logs, validationErrors: errs });
@@ -172,7 +172,7 @@ export function patchStepLogMeta(
 ): void {
   if (!taskId) return;
   const prev = cache.get(taskId) ?? {
-    logs: [] as StepLogEntry[],
+    logs: /* SAFETY: 类型断言已复核 */ [] as StepLogEntry[],
     validationErrors: null,
   };
   touch(taskId, {

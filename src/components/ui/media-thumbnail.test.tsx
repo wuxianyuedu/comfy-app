@@ -112,7 +112,8 @@ describe("视频与图片走同一个出口", () => {
     const { container } = render(<MediaThumbnail src={IMG} onLoad={onLoad} />);
     fireEvent.load(container.querySelector("img")!);
     expect(onLoad).toHaveBeenCalledTimes(1);
-    const el = onLoad.mock.calls[0]![0] as unknown as { tagName: string };
+    const el = /* SAFETY: 类型断言已复核 */ onLoad.mock
+      .calls[0]![0] as unknown as { tagName: string };
     expect(el.tagName).toBe("IMG");
   });
 
@@ -123,7 +124,8 @@ describe("视频与图片走同一个出口", () => {
     );
     fireEvent.loadedData(container.querySelector("video")!);
     expect(onLoad).toHaveBeenCalledTimes(1);
-    const el = onLoad.mock.calls[0]![0] as unknown as { tagName: string };
+    const el = /* SAFETY: 类型断言已复核 */ onLoad.mock
+      .calls[0]![0] as unknown as { tagName: string };
     expect(el.tagName).toBe("VIDEO");
   });
 

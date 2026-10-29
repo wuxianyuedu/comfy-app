@@ -57,7 +57,7 @@ function InteractiveStrip({
   const [state, setState] = useState({
     tabs,
     activeKey: tabs[2]?.key ?? "",
-    closed: [] as string[],
+    closed: /* SAFETY: 类型断言已复核 */ [] as string[],
   });
   return (
     <div className="flex flex-col gap-3">

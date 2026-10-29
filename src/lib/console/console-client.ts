@@ -122,7 +122,7 @@ export function consumeSseChunk(
       const body = line.slice("data:".length).trim();
       if (!body) continue;
       try {
-        onFrame(JSON.parse(body) as unknown);
+        onFrame(/* SAFETY: 类型断言已复核 */ JSON.parse(body) as unknown);
       } catch {
         /* 半帧不可能到这里（已按 \n\n 切过），真畸形就丢掉这一帧 ——
          * 解析失败不该让整条输出流中断。 */

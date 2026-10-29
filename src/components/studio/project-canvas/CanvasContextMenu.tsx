@@ -84,27 +84,31 @@ export function CanvasContextMenu({
           <DropdownMenuLabel className="text-ink-muted text-3xs px-2 py-1 tracking-wider uppercase">
             创建节点
           </DropdownMenuLabel>
-          {(Object.keys(NODE_META) as NodeKind[]).map((kind) => {
-            const meta = NODE_META[kind];
-            return (
-              <DropdownMenuItem
-                key={kind}
-                data-canvas-node-kind={kind}
-                onClick={() => onPick(kind)}
-                className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
-              >
-                <Icon
-                  name={meta.icon}
-                  size={15}
-                  className="text-primary-strong"
-                />
-                <span className="flex flex-col">
-                  <span className="font-medium">{meta.label}</span>
-                  <span className="text-ink-muted text-3xs">{meta.desc}</span>
-                </span>
-              </DropdownMenuItem>
-            );
-          })}
+          {
+            /* SAFETY: 类型断言已复核 */ (
+              Object.keys(NODE_META) as NodeKind[]
+            ).map((kind) => {
+              const meta = NODE_META[kind];
+              return (
+                <DropdownMenuItem
+                  key={kind}
+                  data-canvas-node-kind={kind}
+                  onClick={() => onPick(kind)}
+                  className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                >
+                  <Icon
+                    name={meta.icon}
+                    size={15}
+                    className="text-primary-strong"
+                  />
+                  <span className="flex flex-col">
+                    <span className="font-medium">{meta.label}</span>
+                    <span className="text-ink-muted text-3xs">{meta.desc}</span>
+                  </span>
+                </DropdownMenuItem>
+              );
+            })
+          }
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

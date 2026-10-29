@@ -107,7 +107,10 @@ describe("useFlashState", () => {
 });
 
 describe("useFlashLatch", () => {
-  const EMPTY = { path: null as string | null, failed: false };
+  const EMPTY = {
+    path: /* SAFETY: 类型断言已复核 */ null as string | null,
+    failed: false,
+  };
 
   it("载荷与亮起同生共死：一次动作的两个可见值一起过期", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));

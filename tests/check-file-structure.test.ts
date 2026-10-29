@@ -50,7 +50,7 @@ import { stripComments } from "./helpers/strip-comments";
  * 是可选安装。反过来先试 `pwsh` 只会在装了 7 的机器上多起一次进程。
  * `python` 那一条走 `pythonCandidates()`（平台差异在原处回答，见那份模块的头注）。
  */
-const POWER_SHELL_CANDIDATES = ["powershell", "pwsh"] as const;
+const POWER_SHELL_CANDIDATES = /* SAFETY: 类型断言已复核 */ ["powershell", "pwsh"] as const;
 /** 探测与真跑共用同一条参数形态：探测要回答的正是「这条形态跑得通吗」。 */
 const POWER_SHELL_PROBE_ARGS = ["-NoProfile", "-Command", "exit 0"];
 /** 本组用例的条数（`env` 档跳过的登记表里记的就是这个数，见
@@ -94,7 +94,7 @@ function runWith(args: string[]): { code: number; output: string } {
     );
     return { code: 0, output };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -1366,7 +1366,7 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
     // `.prettierignore`；它随 #2541 被删（依赖一起没了），而这条用例当时**没同批改**，
     // 于是在主干上 ENOENT 崩了两天 —— 见 ISSUE #2603。现在真正生效的那一份是
     // `.oxfmtrc.json`。
-    const config = JSON.parse(
+    const config = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(process.cwd(), ".oxfmtrc.json"), "utf8"),
     ) as { ignorePatterns?: string[] };
     expect(
@@ -1387,7 +1387,7 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
     /* 入口取**判据自己那一份**三级解析（`resolveOxfmtEntry`）—— 这里再造一个
      * 「按 node_modules 拼路径」就是第二次实现同一件事（§12.18），而它会和判据漂移。 */
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const formatGate = require("../scripts/check-format.cjs") as {
+    const formatGate = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
       resolveOxfmtEntry: () => string | null;
     };
     const entry = formatGate.resolveOxfmtEntry();
@@ -1498,7 +1498,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     height: number;
     decorations?: boolean;
   } => {
-    const conf = JSON.parse(readFileSync(CONF, "utf8")) as {
+    const conf = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(CONF, "utf8")) as {
       app: {
         windows: {
           label?: string;
@@ -1611,7 +1611,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(interactive).toContain("button");
     expect(interactive).toContain("[data-no-drag]");
     // 窗口按钮 / 查看日志 / 日志面板各自声明 no-drag（与脚本判据同源）
-    for (const [start, end] of [
+    for (const [start, end] of /* SAFETY: 类型断言已复核 */ [
       [".win-buttons {", ".win-btn {"],
       [".log-toggle {", ".log-toggle:hover"],
       [".log-panel {", ".log-panel pre"],

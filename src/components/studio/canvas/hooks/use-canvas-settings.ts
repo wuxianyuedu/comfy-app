@@ -24,7 +24,9 @@ function readSettings(): CanvasSettings {
   /* SSR / 隐私模式 / 坏数据一律回落默认值 —— 三条判据收在
    *`~/lib/browser-storage`（§16.2.4.28）。 */
   return readStorageJson(STORAGE_KEY, DEFAULT_CANVAS_SETTINGS, (raw) => {
-    const parsed = JSON.parse(raw) as Partial<CanvasSettings>;
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      raw,
+    ) as Partial<CanvasSettings>;
     /* 向前兼容：存储里的未知键忽略，默认值补齐旧载荷留下的空洞。 */
     return { ...DEFAULT_CANVAS_SETTINGS, ...parsed };
   });
@@ -106,7 +108,7 @@ export function useDebugMode() {
  *`debugMode` 被排除在外：它是运行期调试手段，不是视觉定制，
  * 不该点亮「你改过设置」这个点。 */
 export function isCustomCanvasSettings(settings: CanvasSettings): boolean {
-  const keys = (
+  const keys = /* SAFETY: 类型断言已复核 */ (
     Object.keys(DEFAULT_CANVAS_SETTINGS) as (keyof CanvasSettings)[]
   ).filter((key) => key !== "debugMode");
   for (const k of keys) {

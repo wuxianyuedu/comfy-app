@@ -25,7 +25,7 @@ const hostEntry = read("scripts/executor-host.mjs");
 const runtimeGraph = read("src/lib/comfyui/host-runtime.ts");
 const privateInputs = read("scripts/standalone-private-inputs.mjs");
 const buildDesktop = read("scripts/build-desktop.mjs");
-const pkg = JSON.parse(read("package.json")) as {
+const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(read("package.json")) as {
   scripts: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;

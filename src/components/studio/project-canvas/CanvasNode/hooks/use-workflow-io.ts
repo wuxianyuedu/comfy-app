@@ -167,7 +167,11 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         .then((tpl) => {
           if (!alive || !tpl) return;
           setWfIO(tpl.workflowIO ?? null);
-          const paramMap = (tpl.paramMap as Record<string, unknown>) ?? null;
+          const paramMap =
+            /* SAFETY: 类型断言已复核 */ (tpl.paramMap as Record<
+              string,
+              unknown
+            >) ?? null;
           setWfParamMap(paramMap);
           /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步
            *  状态，映射必须随节点一起持久化，否则刷新后运行会丢掉手工线。 */

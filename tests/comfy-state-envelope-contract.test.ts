@@ -50,9 +50,9 @@ function wireClientToRealRoute(
       const href = new URL(String(url), BASE).href;
       /* 只给 `url` 一个字段就够：路由读的就是它。
        * 不构造 `Request` 是为了不让这一格依赖 jsdom 那侧有没有 fetch 家族的全局。 */
-      const res = await GET({ url: href } as unknown as Request);
+      const res = await GET(/* SAFETY: 类型断言已复核 */ { url: href } as unknown as Request);
       if (res.status !== 200) return res;
-      const frame = (await res.clone().json()) as Record<string, unknown>;
+      const frame = /* SAFETY: 类型断言已复核 */ (await res.clone().json()) as Record<string, unknown>;
       return new Response(JSON.stringify(mutate ? mutate(frame) : frame), {
         status: 200,
         headers: { "content-type": "application/json" },

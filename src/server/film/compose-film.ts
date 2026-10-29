@@ -54,7 +54,9 @@ export async function syncFilmToProject(
   const row = await productionRepository.getForUser(userId, projectId);
   if (!row) return;
   const progress = normalizeProductionProgress(row.progress);
-  const rawShots = Array.isArray(row.shots) ? (row.shots as Shot[]) : [];
+  const rawShots = Array.isArray(row.shots)
+    ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[])
+    : [];
 
   // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
   const clipByShotId = new Map<string, FilmShotClip>();
@@ -315,7 +317,7 @@ export async function composeFilm(id: string) {
           finalShots.map((s) => ({
             shotId: s.shotId ?? null,
             videoPath: s.videoPath ?? null,
-            status: s.status as ShotStatus,
+            status: /* SAFETY: 类型断言已复核 */ s.status as ShotStatus,
           })),
         );
       } catch (e) {

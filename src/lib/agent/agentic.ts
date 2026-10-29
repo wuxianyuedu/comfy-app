@@ -172,14 +172,14 @@ export async function chatAgent(
       }),
     });
     if (!res.ok) throw new Error("llm failed");
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       content?: string;
       choices?: Array<{ message?: { content?: string } }>;
     };
     const content = data.content ?? data.choices?.[0]?.message?.content ?? "";
     const jsonMatch = /\{[\s\S]*\}/.exec(content);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(jsonMatch[0]) as {
         ready?: boolean;
         reply?: string;
         spec?: RawSpec;

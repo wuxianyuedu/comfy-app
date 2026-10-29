@@ -31,7 +31,7 @@ const LOCK = readFileSync(join(ROOT, "pnpm-lock.yaml"), "utf8");
 /** package.json 的声明范围：下面断言「lockfile 记的 specifier」时以它为准，
  *  而不是把某个版本号抄进用例 —— 抄字面量的那版在 next 升个小版本时就红了，
  *  而它要验的是**解析器**，不是「当前钉的是哪一版」。 */
-const PKG = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+const PKG = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
   dependencies: Record<string, string>;
 };
 

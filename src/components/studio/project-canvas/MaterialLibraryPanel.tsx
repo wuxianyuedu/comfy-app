@@ -116,7 +116,9 @@ export function MaterialLibraryPanel({
           下划线两层），两枚同高同基线。 */}
       <Tabs
         value={scope}
-        onValueChange={(value) => setScope(value as MaterialScope)}
+        onValueChange={(value) =>
+          setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)
+        }
         className="gap-0"
       >
         <TabsList
@@ -124,8 +126,14 @@ export function MaterialLibraryPanel({
           className="border-border-strong h-auto w-full justify-start gap-4 rounded-none border-b px-4 pt-2"
         >
           {[
-            { id: "project" as MaterialScope, label: "本项目" },
-            { id: "cross" as MaterialScope, label: "跨项目" },
+            {
+              id: /* SAFETY: 类型断言已复核 */ "project" as MaterialScope,
+              label: "本项目",
+            },
+            {
+              id: /* SAFETY: 类型断言已复核 */ "cross" as MaterialScope,
+              label: "跨项目",
+            },
           ].map((scopeItem) => (
             <TabsTrigger
               key={scopeItem.id}

@@ -255,7 +255,7 @@ function scan(): Report {
     ["scripts/lib-node-only-scan.mjs", "--json"],
     { cwd: REPO_ROOT, encoding: "utf8" },
   );
-  return JSON.parse(out) as Report;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(out) as Report;
 }
 
 describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {

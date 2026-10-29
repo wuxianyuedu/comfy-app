@@ -58,8 +58,8 @@ describe("IOEditStore.toggleIO", () => {
       nodeId: "1670",
       hostNodeId: "4",
       name: "value",
-      kind: "widget" as const,
-      direction: "input" as const,
+      kind: /* SAFETY: 类型断言已复核 */ "widget" as const,
+      direction: /* SAFETY: 类型断言已复核 */ "input" as const,
     };
     store.getState().toggleIO(ref);
     store.getState().toggleIO(ref);
@@ -102,8 +102,8 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
     const ref = {
       nodeId: "4",
       name: "value_1",
-      kind: "widget" as const,
-      direction: "input" as const,
+      kind: /* SAFETY: 类型断言已复核 */ "widget" as const,
+      direction: /* SAFETY: 类型断言已复核 */ "input" as const,
     };
     store.getState().toggleIO(ref);
     store.getState().toggleIO(ref);
@@ -245,8 +245,9 @@ describe("callStoreAction", () => {
     const store = createIOEditStore("wf");
     /* 模拟旧实例：动作集合比当前模块少成员（旧窗口里 setIOValues /
      *  resetIOPreviewValues 这类已删动作还在调用点，新实例上则已经不存在）。 */
-    const stale = {
-      getState: () => ({}) as unknown as IOEditStore,
+    const stale = /* SAFETY: 类型断言已复核 */ {
+      getState: () =>
+        /* SAFETY: 类型断言已复核 */ ({}) as unknown as IOEditStore,
     } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
@@ -270,8 +271,9 @@ describe("callStoreAction", () => {
     const deliveries: { title: string }[] = [];
     registerStaleStoreDeliver((n) => deliveries.push(n));
     reportCodeUpdatedSinceLoad();
-    const stale = {
-      getState: () => ({}) as unknown as IOEditStore,
+    const stale = /* SAFETY: 类型断言已复核 */ {
+      getState: () =>
+        /* SAFETY: 类型断言已复核 */ ({}) as unknown as IOEditStore,
     } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {

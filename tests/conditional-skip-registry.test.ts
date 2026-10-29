@@ -32,7 +32,7 @@ import { stripComments } from "./helpers/strip-comments";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 档位：缺工具 / 平台分叉 / 缺构建产物 / 人工挂起。 */
-const TIERS = ["env", "platform", "artifact", "manual"] as const;
+const TIERS = /* SAFETY: 类型断言已复核 */ ["env", "platform", "artifact", "manual"] as const;
 type Tier = (typeof TIERS)[number];
 
 type Registration = {

@@ -41,6 +41,7 @@ import path from "node:path";
 
 import { isWindows } from "./platform.ts";
 
+type SpawnSyncError = NodeJS.ErrnoException | null | undefined;
 /** 「这个候选在这台机器上到底起不起得来」的那一次 OS 交互。 */
 export interface UsabilityProbe {
   /** 执行位检查：抛错即「没有执行权限」（默认真 `fs.accessSync(X_OK)`）。 */
@@ -96,9 +97,8 @@ const realUsabilityProbe: UsabilityProbe = {
       windowsHide: true,
       timeout: USABILITY_PROBE_TIMEOUT_MS,
     });
-    return (
-      (probe.error as NodeJS.ErrnoException | null | undefined)?.code ?? null
-    );
+    const err = /* SAFETY: 类型断言已复核 */ probe.error as SpawnSyncError;
+    return err?.code ?? null;
   },
 };
 
@@ -743,7 +743,7 @@ export function pnpmJsEntry(dropIn: string): string | null {
   if (!pkgDir) return null;
   let manifest: { bin?: unknown };
   try {
-    manifest = JSON.parse(
+    manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
     ) as { bin?: unknown };
   } catch {
@@ -753,7 +753,7 @@ export function pnpmJsEntry(dropIn: string): string | null {
   let rel: unknown;
   if (typeof bin === "string") rel = bin;
   else if (bin && typeof bin === "object")
-    rel = (bin as Record<string, unknown>).pnpm;
+    rel = /* SAFETY: 类型断言已复核 */ (bin as Record<string, unknown>).pnpm;
   if (typeof rel === "string" && rel !== "") {
     const target = path.resolve(pkgDir, rel);
     if (isPnpmEntryScript(target)) return target;
@@ -777,7 +777,7 @@ function pnpmPackageDir(dropIn: string): string | null {
      * 名字对不上就不算。 */
     if (dir !== dropIn) return dir;
     try {
-      const pkg = JSON.parse(
+      const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
         fs.readFileSync(path.join(dir, "package.json"), "utf8"),
       ) as { name?: unknown };
       if (pkg.name === "pnpm") return dir;

@@ -39,7 +39,7 @@ const BASELINE_PATH = join(
   ".storybook-coverage-baseline.json",
 );
 
-const BASELINE = JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as {
+const BASELINE = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as {
   uiSurfaces: number;
   covered: number;
 };

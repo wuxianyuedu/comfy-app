@@ -127,7 +127,10 @@ export async function resolveDesktopStoragePaths(
   );
   const parsedMain = extra
     ? parseExtraModelPathsYaml(extra.content)
-    : { basePath: null, entries: [] as ExtraModelPathEntry[] };
+    : {
+        basePath: null,
+        entries: /* SAFETY: 类型断言已复核 */ [] as ExtraModelPathEntry[],
+      };
 
   const launchArgs = await resolveArgs(dir);
   /* `--extra-model-paths-config` 指向的额外 yaml（Desktop 版共享目录的另一种

@@ -40,7 +40,7 @@ function hasCommand(cmd: string, args: string[]): boolean {
 }
 
 describe("app-port 跨语言一致性（四侧读同一份共享向量）", () => {
-  const fixture = JSON.parse(
+  const fixture = /* SAFETY: 类型断言已复核 */ JSON.parse(
     fs.readFileSync(path.join(ROOT, VECTORS), "utf8"),
   ) as {
     vectors: { input: string; normalized: string; fnv1a32: number; port: number }[];

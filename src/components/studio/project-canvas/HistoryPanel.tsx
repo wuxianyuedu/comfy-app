@@ -112,7 +112,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {projectId && (
         <Tabs
           value={scope}
-          onValueChange={(value) => setScope(value as HistoryScope)}
+          onValueChange={(value) =>
+            setScope(/* SAFETY: 类型断言已复核 */ value as HistoryScope)
+          }
           className="gap-0"
         >
           <TabsList
@@ -120,8 +122,14 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             className="border-border-strong h-auto w-full justify-start gap-4 rounded-none border-b px-4 pt-2"
           >
             {[
-              { id: "project" as HistoryScope, label: "本项目" },
-              { id: "all" as HistoryScope, label: "全部" },
+              {
+                id: /* SAFETY: 类型断言已复核 */ "project" as HistoryScope,
+                label: "本项目",
+              },
+              {
+                id: /* SAFETY: 类型断言已复核 */ "all" as HistoryScope,
+                label: "全部",
+              },
             ].map((scopeItem) => (
               <TabsTrigger
                 key={scopeItem.id}

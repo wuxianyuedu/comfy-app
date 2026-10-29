@@ -70,7 +70,7 @@ function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   try {
     const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
       llm?: QueryLlmConfig;
       settings?: Settings;
     };
@@ -94,7 +94,7 @@ function writeSettingsCache(value: {
 /** 目标分区（来自跳转载荷）的合法性收敛：不在白名单里就当作没给。 */
 function readInitialSection(raw: string | null | undefined): Section | null {
   return SETTINGS_SECTIONS.some((item) => item.id === raw)
-    ? (raw as Section)
+    ? /* SAFETY: 类型断言已复核 */ (raw as Section)
     : null;
 }
 

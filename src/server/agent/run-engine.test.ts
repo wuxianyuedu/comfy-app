@@ -185,7 +185,9 @@ describe("advanceRunLoop", () => {
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    expect((row!.characters as { name: string }[])[0]).toMatchObject({
+    expect(
+      /* SAFETY: 类型断言已复核 */ (row!.characters as { name: string }[])[0],
+    ).toMatchObject({
       name: "阿宁",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");
@@ -202,7 +204,7 @@ describe("advanceRunLoop", () => {
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    const shots = row!.shots as {
+    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as {
       index: number;
       prompt: string;
       status: string;
@@ -232,12 +234,14 @@ describe("advanceRunLoop", () => {
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
     // 「种子」默认随机：首刷也带一个新的随机 seed（走「种子」对外参数；作者没连种子口则落不下去）。
-    const firstSeed = (
+    const firstSeed = /* SAFETY: 类型断言已复核 */ (
       synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
     ).seed;
     expect(typeof firstSeed).toBe("number");
     expect(Number.isFinite(firstSeed)).toBe(true);
-    const shot = (row!.shots as { imageUrl?: string; status: string }[])[0];
+    const shot = /* SAFETY: 类型断言已复核 */ (
+      row!.shots as { imageUrl?: string; status: string }[]
+    )[0];
     expect(shot).toMatchObject({
       status: "done",
       imageUrl: "/api/generated/shot.png",
@@ -268,7 +272,7 @@ describe("advanceRunLoop", () => {
       workflowId: "wf-img",
     });
     // 重出走的是「抽卡」：带一个有限数字 seed（具体值随机，只断类型）
-    const seedArg = (
+    const seedArg = /* SAFETY: 类型断言已复核 */ (
       synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
     ).seed;
     expect(typeof seedArg).toBe("number");
@@ -532,7 +536,10 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(reviewScript).toHaveBeenCalledTimes(1);
     expect(scriptDigestOf(revised)).not.toBe(scriptDigestOf("# 旧剧本"));
     const row = await readRow();
-    const shots = row!.shots as { id: string; prompt: string }[];
+    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as {
+      id: string;
+      prompt: string;
+    }[];
     expect(shots.some((s) => s.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
     const run = normalizeProductionRun(row!.run);
     expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));

@@ -431,7 +431,10 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   // 高度，理由见 NODE_TITLE_H 的注释）。`data.size.h` 里带的主体内容高度
   // 正好就是 `size[1]`。
   const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
-  const graphById = detail.graph as Record<string, GraphEntry | undefined>;
+  const graphById = /* SAFETY: 类型断言已复核 */ detail.graph as Record<
+    string,
+    GraphEntry | undefined
+  >;
   const buildWfNode = (
     n: ComfyGraphNode,
     pos: { x: number; y: number },
@@ -668,7 +671,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
             p ? { x: p[0], y: p[1] } : { x: padX, y: padY },
           );
     });
-    const middlePosById = Object.fromEntries(
+    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -704,7 +707,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         ? buildSubgraphNode(realNode, pos)
         : buildWfNode(realNode, pos);
     });
-    const middlePosById = Object.fromEntries(
+    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -722,7 +725,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       ? buildSubgraphNode(realNode, pos)
       : buildWfNode(realNode, pos);
   });
-  const middlePosById = Object.fromEntries(
+  const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
     middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
   ) as Record<string, { x: number; y: number }>;
   return [

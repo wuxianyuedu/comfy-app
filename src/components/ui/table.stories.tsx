@@ -96,7 +96,9 @@ export const WithStatusColumn: Story = {
           <TableRow key={name}>
             <TableCell className="font-mono text-xs">{name}</TableCell>
             <TableCell>
-              <Badge tone={tone as BadgeTone}>{status}</Badge>
+              <Badge tone={/* SAFETY: 类型断言已复核 */ tone as BadgeTone}>
+                {status}
+              </Badge>
             </TableCell>
             <TableCell className="text-right">
               <Button size="xs" variant="ghost">

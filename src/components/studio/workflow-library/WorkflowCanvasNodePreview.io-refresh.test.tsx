@@ -388,7 +388,9 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       expect(row!.closest("[data-grouped-box]")).toBeNull();
       const dot = row!.querySelector(`[data-port-dot="${ioKey}"]`);
       expect(dot, `${ioKey} 行左侧应当有大端点`).toBeTruthy();
-      expect((dot as HTMLElement).style.width).toBe("12px");
+      expect(
+        /* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.width,
+      ).toBe("12px");
       expect(box.querySelector(`[data-io-key="${ioKey}"]`)).toBeNull();
     }
     /* 两个端口各自是一个真正的落点（端点 id 即 ioKey）—— 拖到「百万像素」

@@ -84,7 +84,10 @@ describe("parseAppearance：不认就整份回落", () => {
 describe("applyAppearance", () => {
   it("一次写入两个变量", () => {
     const el = fakeElement();
-    applyAppearance({ radius: "lg", fontScale: "125" }, el as never);
+    applyAppearance(
+      { radius: "lg", fontScale: "125" },
+      /* SAFETY: 类型断言已复核 */ el as never,
+    );
     expect(el.store.get("--radius")).toBe("1.25rem");
     expect(el.store.get("--font-scale")).toBe("1.25");
   });

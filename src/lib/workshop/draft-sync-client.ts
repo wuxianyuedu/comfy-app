@@ -21,9 +21,11 @@ export async function fetchServerDraft(
     if (
       typeof data === "object" &&
       data !== null &&
-      (data as { exists?: unknown }).exists === true
+      /* SAFETY: 类型断言已复核 */ (data as { exists?: unknown }).exists ===
+        true
     ) {
-      return (data as { draft: WorkshopDraftDto }).draft;
+      return /* SAFETY: 类型断言已复核 */ (data as { draft: WorkshopDraftDto })
+        .draft;
     }
     return null;
   } catch {

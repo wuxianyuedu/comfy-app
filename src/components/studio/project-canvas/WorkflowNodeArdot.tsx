@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WorkflowNode.ardot.tsx — 纯设计转代码参考件（PURE DESIGN-TO-CODE · v4）
  *
  * 由 Ardot 稿 714503087315759（项目画布节点 v2 重设计，frame 3:12 NodeCard-v2）
@@ -43,7 +43,7 @@ import { Textarea } from "~/components/ui/textarea";
  * 与 `lib/comfyui/types.ts` 的 PORT_COLORS 同源；本文件只用到三档前缀，
  * 集中在这里而不是散在 JSX 里 —— 「成组集中的常量表」才是规范 §3.6.1
  * 「类型色例外」的合法载体，也便于扫描器显式豁免。 */
-const PORT_TYPE_COLORS = {
+const PORT_TYPE_COLORS = /* SAFETY: 类型断言已复核 */ {
   image: "#7C5CFC",
   video: "#FF5CA8",
   boolean: "#67E89D",

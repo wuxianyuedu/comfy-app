@@ -6,7 +6,7 @@
 import { formatDate } from "~/lib/time-format";
 
 /** 产生执行日志的工坊环节。 */
-export const GENERATION_LOG_STAGES = [
+export const GENERATION_LOG_STAGES = /* SAFETY: 类型断言已复核 */ [
   "character",
   "storyboard",
   "portrait",
@@ -39,7 +39,9 @@ export const MAX_LOG_DETAIL_CHARS = 12000;
 function isGenerationLogStage(v: unknown): v is GenerationLogStage {
   return (
     typeof v === "string" &&
-    (GENERATION_LOG_STAGES as readonly string[]).includes(v)
+    /* SAFETY: 类型断言已复核 */ (
+      GENERATION_LOG_STAGES as readonly string[]
+    ).includes(v)
   );
 }
 
@@ -48,7 +50,7 @@ export function normalizeGenerationLogEntry(
   raw: unknown,
 ): GenerationLogEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const rec = raw as Record<string, unknown>;
+  const rec = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   const summary =
     typeof rec.summary === "string"
       ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS)

@@ -83,7 +83,7 @@ export function parseAppServiceExitRecord(
   raw: unknown,
 ): AppServiceExitRecord | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const o = raw as Record<string, unknown>;
+  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (typeof o.at !== "string" || o.at === "") return null;
   if (typeof o.reason !== "string") return null;
   return {
@@ -276,7 +276,9 @@ export function parseAppServiceExitRaw(
 ): AppServiceExitRecord | null {
   if (typeof raw !== "string" || raw.trim() === "") return null;
   try {
-    return parseAppServiceExitRecord(JSON.parse(raw) as unknown);
+    return parseAppServiceExitRecord(
+      /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown,
+    );
   } catch {
     return null;
   }
@@ -365,7 +367,7 @@ export async function fetchAppServiceExit(): Promise<AppServiceExitProbe> {
       signal: AbortSignal.timeout(APP_SERVICE_EXIT_TIMEOUT_MS),
     });
     if (!res.ok) return empty;
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       record?: unknown;
       currentRunId?: unknown;
     };

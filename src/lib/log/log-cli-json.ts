@@ -30,7 +30,7 @@ export function splitCliLogLine(
   const match = CLI_LOG_PREFIX.exec(message);
   if (!match) return null;
   return {
-    tag: match[1] as CliLogTag,
+    tag: /* SAFETY: 类型断言已复核 */ match[1] as CliLogTag,
     payload: message.slice(match[0].length).trimStart(),
   };
 }

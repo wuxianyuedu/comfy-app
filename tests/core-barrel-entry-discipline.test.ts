@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
  * 是它自己的判据）：`tests/` 下那些自造自删的并发探针（`.setup-cleanup-probe-*.test.tsx`）
  * 与本用例同时活动，CI 上撞出来的是一条不含本判据、也不含真凶的 `ENOENT` 栈。 */
 const requireCjs = createRequire(import.meta.url);
-const reader = requireCjs("../scripts/gate-scan-read.cjs") as {
+const reader = /* SAFETY: 类型断言已复核 */ requireCjs("../scripts/gate-scan-read.cjs") as {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
   walkForScan: (

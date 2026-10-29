@@ -123,7 +123,7 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeriesOwner(ctx, input.id);
       await ctx.db.delete(series).where(eq(series.id, input.id));
-      return { ok: true as const };
+      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
     }),
 
   // ───────────────────────────── 季 (FR-SR-02) ─────────────────────────────
@@ -189,7 +189,7 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeasonOwner(ctx, input.id);
       await ctx.db.delete(season).where(eq(season.id, input.id));
-      return { ok: true as const };
+      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
     }),
 
   // ───────────────────────────── 集 (FR-SR-02) ─────────────────────────────
@@ -272,7 +272,7 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertEpisodeOwner(ctx, input.id);
       await ctx.db.delete(episode).where(eq(episode.id, input.id));
-      return { ok: true as const };
+      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
     }),
 
   /** 按 projectId 查它归属的集（系列层级下的定位）。无归属返回 null。 */

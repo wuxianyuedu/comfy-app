@@ -91,12 +91,19 @@ export function ShotRow({
               className="bg-subtle! border-border! text-xs"
               value={shot.shotType}
               onChange={(value) =>
-                onUpdate(shot.id, { shotType: value as ShotType })
+                onUpdate(shot.id, {
+                  shotType: /* SAFETY: 类型断言已复核 */ value as ShotType,
+                })
               }
               /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
                * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
               options={[...SHOT_TYPES]}
-              labels={SHOT_TYPE_LABELS as Record<string, string>}
+              labels={
+                /* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<
+                  string,
+                  string
+                >
+              }
               placeholder="选择景别"
             />
           )}

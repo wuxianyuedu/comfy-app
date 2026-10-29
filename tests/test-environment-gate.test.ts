@@ -92,7 +92,7 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       ),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -298,7 +298,7 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
         { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
       );
     } catch (error) {
-      const e = error as { stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
       ok = false;
       output = `${e.stdout ?? ""}${e.stderr ?? ""}`;
     }

@@ -114,7 +114,9 @@ export function useCanvasDrop({
       e.preventDefault();
       let payload: MediaDropPayload;
       try {
-        payload = JSON.parse(raw) as MediaDropPayload;
+        payload = /* SAFETY: 类型断言已复核 */ JSON.parse(
+          raw,
+        ) as MediaDropPayload;
       } catch {
         return;
       }

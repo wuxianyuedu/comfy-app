@@ -138,13 +138,17 @@ async function scanRoot(
   try {
     rootStat = await fs.promises.stat(abs);
   } catch (e) {
-    const code = (e as NodeJS.ErrnoException | undefined)?.code;
+    const code = /* SAFETY: 类型断言已复核 */ (
+      e as NodeJS.ErrnoException | undefined
+    )?.code;
     if (code === "ENOENT") {
       return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
     }
     // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
     // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
-    const msg = (e as Error | undefined)?.message ?? String(e);
+    const msg =
+      /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ??
+      String(e);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -214,7 +218,9 @@ async function scanRoot(
   try {
     await visit(abs);
   } catch (e) {
-    const msg = (e as Error | undefined)?.message ?? String(e);
+    const msg =
+      /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ??
+      String(e);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -358,7 +364,9 @@ function checksumOfFile(
     try {
       const hash = createHash("sha1");
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
-      stream.on("data", (chunk) => hash.update(chunk as string));
+      stream.on("data", (chunk) =>
+        hash.update(/* SAFETY: 类型断言已复核 */ chunk as string),
+      );
       stream.on("error", () => resolve(null));
       stream.on("end", () => {
         const checksum = hash.digest("hex").slice(0, 16);

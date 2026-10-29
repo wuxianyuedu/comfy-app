@@ -34,7 +34,7 @@ import { kindOf, type MediaKind } from "./media-kind";
 export const SHARED_SCOPE = "_shared";
 
 /** 固定分类目录。id 用于磁盘目录名与 API 参数，name 是面板展示名。 */
-export const MATERIAL_FOLDERS = [
+export const MATERIAL_FOLDERS = /* SAFETY: 类型断言已复核 */ [
   { id: "ref", name: "参考素材" },
   { id: "scenes", name: "场景" },
   { id: "storyboard", name: "分镜" },

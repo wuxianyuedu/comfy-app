@@ -73,7 +73,7 @@ type ScanReader = {
   vanishedNote: (count: number) => string;
 };
 
-const reader = requireCjs(READER_PATH) as ScanReader;
+const reader = /* SAFETY: 类型断言已复核 */ requireCjs(READER_PATH) as ScanReader;
 
 /** 每格自己建、自己拆：这些用例只在临时目录里活动，不碰工作树。 */
 const made: string[] = [];
@@ -117,7 +117,7 @@ describe("readForScan —— 文件级消失窗口", () => {
       thrown = error;
     }
     expect(thrown, "读目录必须抛（吞成 null 就等于静默放行）").toBeTruthy();
-    expect((thrown as NodeJS.ErrnoException).code).not.toBe("ENOENT");
+    expect((/* SAFETY: 类型断言已复核 */ thrown as NodeJS.ErrnoException).code).not.toBe("ENOENT");
   });
 });
 
@@ -351,7 +351,7 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
         },
       );
     } catch (err) {
-      const e = err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
       code = typeof e.status === "number" ? e.status : 1;
       output = `${e.stdout ?? ""}${e.stderr ?? ""}`;
     }

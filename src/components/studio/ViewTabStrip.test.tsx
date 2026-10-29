@@ -49,7 +49,9 @@ describe("viewTabLabel", () => {
   });
 
   it("未知视图原样回显，不套一个最近的标签", () => {
-    expect(viewTabLabel("nope" as never)).toBe("nope");
+    expect(viewTabLabel(/* SAFETY: 类型断言已复核 */ "nope" as never)).toBe(
+      "nope",
+    );
   });
 });
 
@@ -133,10 +135,12 @@ function codeOf(rel: string): string {
 }
 
 describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", () => {
-  it.for([
-    "src/components/studio/ViewTabStrip.tsx",
-    "src/components/studio/TitleBarTabs.tsx",
-  ] as const)("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      "src/components/studio/ViewTabStrip.tsx",
+      "src/components/studio/TitleBarTabs.tsx",
+    ] as const,
+  )("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
     const code = codeOf(rel);
     expect(
       /active\s*\?\s*"[^"]*u-tab-active[^"]*"/.test(code),

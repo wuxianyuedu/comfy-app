@@ -50,7 +50,9 @@ export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {
         aria-label="出图 CPU 占用档位"
         value={value}
         onValueChange={(v) =>
-          c.patchSettings({ comfyuiCpuLimit: v as CpuLimitMode })
+          c.patchSettings({
+            comfyuiCpuLimit: /* SAFETY: 类型断言已复核 */ v as CpuLimitMode,
+          })
         }
         className="flex flex-col gap-1.5"
       >

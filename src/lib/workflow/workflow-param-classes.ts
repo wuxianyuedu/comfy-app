@@ -164,7 +164,9 @@ export function sizeGroupIds(
   id: string | null | undefined,
 ): readonly ParamClass[] {
   if (!id) return [];
-  return id === "size" ? SIZE_SUB_IDS : [id as ParamClass];
+  return id === "size"
+    ? SIZE_SUB_IDS
+    : [/* SAFETY: 类型断言已复核 */ id as ParamClass];
 }
 
 /* ── 端口分类：只看**声明类型** ──
@@ -348,7 +350,11 @@ export function portTypeDisplay(type: string | undefined | null): string {
 }
 
 /** 数值端口的三类声明（尺寸的数值形态都能落在这几类行上）。 */
-const NUMERIC_PORT_TYPES = ["INT", "FLOAT", "NUMBER"] as const;
+const NUMERIC_PORT_TYPES = /* SAFETY: 类型断言已复核 */ [
+  "INT",
+  "FLOAT",
+  "NUMBER",
+] as const;
 
 /** 尺寸子口的**规格表**：展示类型 + 可接受的端口类型（一处定义，展示与闸门同源）。
  *

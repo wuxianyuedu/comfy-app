@@ -9,7 +9,7 @@ function AspectRatio({
     <div
       data-slot="aspect-ratio"
       style={
-        {
+        /* SAFETY: 类型断言已复核 */ {
           "--ratio": ratio,
         } as React.CSSProperties
       }

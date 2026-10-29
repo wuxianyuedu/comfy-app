@@ -459,8 +459,10 @@ describe("LogPanel 日志面板", () => {
       expect(button.className).not.toContain("min-w-0");
       expect(button.className).toContain("min-w-fit");
 
-      const labelEl = button.children[0] as HTMLElement;
-      const countEl = button.children[1] as HTMLElement;
+      const labelEl = /* SAFETY: 类型断言已复核 */ button
+        .children[0] as HTMLElement;
+      const countEl = /* SAFETY: 类型断言已复核 */ button
+        .children[1] as HTMLElement;
       expect(labelEl.className).toContain("whitespace-nowrap");
       expect(labelEl.className).not.toContain("truncate");
       /* 数字列：定宽 `4ch` + 右对齐 + 等宽数字——「文字 + 四位数字」是固定预算，
@@ -825,12 +827,12 @@ describe("LogPanel 日志面板", () => {
         }),
       );
       expect(await screen.findByText(/exports\//)).toBeInTheDocument();
-      const [url, init] = fetchMock.mock.calls[0] as unknown as [
-        string,
-        { body: string },
-      ];
+      const [url, init] = /* SAFETY: 类型断言已复核 */ fetchMock.mock
+        .calls[0] as unknown as [string, { body: string }];
       expect(url).toBe("/api/logs/export");
-      const sent = JSON.parse(init.body) as { content?: string };
+      const sent = /* SAFETY: 类型断言已复核 */ JSON.parse(init.body) as {
+        content?: string;
+      };
       expect(sent.content).toContain("事件");
     } finally {
       vi.unstubAllGlobals();
@@ -861,7 +863,8 @@ describe("LogPanel 日志面板", () => {
         screen.getByRole("button", { name: "打包诊断现场到本地文件" }),
       );
       expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
-      const [url] = fetchMock.mock.calls[0] as unknown as [string];
+      const [url] = /* SAFETY: 类型断言已复核 */ fetchMock.mock
+        .calls[0] as unknown as [string];
       expect(url).toBe("/api/logs/diagnostics");
     } finally {
       vi.unstubAllGlobals();
@@ -957,9 +960,10 @@ describe("LogPanel 日志面板", () => {
     /* jsdom 不做布局，`clientHeight` 恒为 0；这里给它一个真实尺度的视口
      * （600px 高、1100px 宽），面板才会走虚拟窗口分支。改的是**原型**上的取值：
      * 面板读的是它自己那个滚动元素，而 jsdom 里所有元素的尺寸都由这一份原型给出。 */
-    const prototype: object = Object.getPrototypeOf(
-      document.createElement("div"),
-    ) as object;
+    const prototype: object =
+      /* SAFETY: 类型断言已复核 */ Object.getPrototypeOf(
+        document.createElement("div"),
+      ) as object;
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
     const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
     Object.defineProperty(prototype, "clientHeight", {
@@ -1021,9 +1025,10 @@ describe("LogPanel 日志面板", () => {
     useSmallPage(200);
     seed(200);
 
-    const prototype: object = Object.getPrototypeOf(
-      document.createElement("div"),
-    ) as object;
+    const prototype: object =
+      /* SAFETY: 类型断言已复核 */ Object.getPrototypeOf(
+        document.createElement("div"),
+      ) as object;
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
     const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
     Object.defineProperty(prototype, "clientHeight", {

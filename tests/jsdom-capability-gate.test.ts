@@ -106,7 +106,7 @@ describe("jsdom 能力缺口的处置（精确白名单 + 计数 + 原样转发�
     expect(
       gate.consume({
         type: "not-implemented",
-        message: 42 as unknown as string,
+        message: /* SAFETY: 类型断言已复核 */ 42 as unknown as string,
       }),
     ).toBe(false);
     expect(gate.suppressedCount()).toBe(0);

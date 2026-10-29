@@ -39,7 +39,11 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const PATHS = ["style_pack", "style_pack/高光", "style_pack/锐化"] as const;
+const PATHS = /* SAFETY: 类型断言已复核 */ [
+  "style_pack",
+  "style_pack/高光",
+  "style_pack/锐化",
+] as const;
 
 function ExpansionDemo() {
   /* 初始空表 = 全部未表态 = 全部折叠。 */

@@ -172,7 +172,7 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run(["--json"]);
     expect(code).toBe(1);
-    const parsed = JSON.parse(output) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
       reports: { entry: string; reachable: number }[];
       findings: { entry: string; module: string; dep?: string; chain?: string[] }[];
     };

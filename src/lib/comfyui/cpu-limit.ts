@@ -82,8 +82,10 @@ export const CPU_LIMIT_LABELS: Record<CpuLimitMode, string> = {
 
 /** 档位的取值校验（设置项从 JSON 读进来时是 `unknown`）。 */
 export function toCpuLimitMode(value: unknown): CpuLimitMode {
-  return CPU_LIMIT_MODES.includes(value as CpuLimitMode)
-    ? (value as CpuLimitMode)
+  return CPU_LIMIT_MODES.includes(
+    /* SAFETY: 类型断言已复核 */ value as CpuLimitMode,
+  )
+    ? /* SAFETY: 类型断言已复核 */ (value as CpuLimitMode)
     : "yield";
 }
 

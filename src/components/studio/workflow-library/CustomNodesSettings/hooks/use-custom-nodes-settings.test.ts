@@ -55,7 +55,7 @@ function settingsBlob(over: Record<string, unknown> = {}) {
     settings: {
       paths: ["D:/comfy/custom_nodes"],
       localWorkflowPaths: [],
-      ...(settings as object | undefined),
+      .../* SAFETY: 类型断言已复核 */ (settings as object | undefined),
     },
   });
 }

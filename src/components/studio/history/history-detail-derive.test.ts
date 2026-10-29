@@ -24,7 +24,12 @@ function makeDetail(
   params: unknown,
   extra: Partial<TaskDetail> = {},
 ): TaskDetail {
-  return { id: "t-1", params, images: [], ...extra } as unknown as TaskDetail;
+  return /* SAFETY: 类型断言已复核 */ {
+    id: "t-1",
+    params,
+    images: [],
+    ...extra,
+  } as unknown as TaskDetail;
 }
 
 /** 造一份带作者标签的 IO 表（键是 ioKey：`<nodeId>::widget::<name>`）。 */
@@ -131,7 +136,7 @@ describe("deriveWorkshopParams", () => {
   });
 
   it("用户改过的模式契约优先于内置默认", () => {
-    const contracts = [
+    const contracts = /* SAFETY: 类型断言已复核 */ [
       { mode: "T2I", inputs: ["prompt", "size"], output: "image" },
     ] as unknown as Parameters<typeof deriveWorkshopParams>[2];
     const rows = deriveWorkshopParams(

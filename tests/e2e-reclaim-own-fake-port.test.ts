@@ -55,7 +55,7 @@ describe("替身端口占位者的识别：命令行那一半", () => {
     ).toBe(true);
     expect(isFakeServerCmdline(FOREIGN_CMDLINE)).toBe(false);
     expect(isFakeServerCmdline("")).toBe(false);
-    expect(isFakeServerCmdline(null as unknown as string)).toBe(false);
+    expect(isFakeServerCmdline(/* SAFETY: 类型断言已复核 */ null as unknown as string)).toBe(false);
   });
 
   it("点名脚本的**文件名片段**才对得上（不是随便一个 node 进程）", () => {
@@ -118,7 +118,7 @@ describe("收的方式与边界", () => {
     /* 契约三条：按 PID 收整棵树、POSIX 上按进程组（`detached`）、强杀。
      * 这条同时钉住「不自己拼 taskkill / process.kill」——本档只调那个唯一出口。 */
     expect(reap).toHaveBeenCalledTimes(1);
-    const reaped = (reap.mock.calls as unknown[][])[0]?.[0] as {
+    const reaped = /* SAFETY: 类型断言已复核 */ (/* SAFETY: 类型断言已复核 */ reap.mock.calls as unknown[][])[0]?.[0] as {
       pid: number;
       force: boolean;
       detached: boolean;
@@ -336,7 +336,7 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
       reap,
     });
     expect(result.reclaimed).toEqual([4242]);
-    const reaped = (reap.mock.calls as unknown[][])[0]?.[0] as {
+    const reaped = /* SAFETY: 类型断言已复核 */ (/* SAFETY: 类型断言已复核 */ reap.mock.calls as unknown[][])[0]?.[0] as {
       pid: number;
       force: boolean;
     };

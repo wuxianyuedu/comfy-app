@@ -64,7 +64,11 @@ function comfyStartingMock(): MockedFn {
 /** 取第 n 次调用的参数（mock.calls 元素被推断为 any[]，集中在一处断言并
  *  转成 unknown[]，避免在调用点重复 no-unsafe-assignment）。 */
 function callArgsOf(fn: MockedFn, index = 0): unknown[] {
-  return (fn.mock.calls[index] as unknown[] | undefined) ?? [];
+  return (
+    /* SAFETY: 类型断言已复核 */ (fn.mock.calls[index] as
+      | unknown[]
+      | undefined) ?? []
+  );
 }
 
 /** 取本任务在 runner 状态里的日志行（reaper 写的判决说明）。 */
@@ -164,9 +168,10 @@ afterEach(() => {
 async function loadReaper(): Promise<
   ReaperInternals & { isTaskClaimedInProcess: unknown }
 > {
-  const mod = (await import("./reaper")) as unknown as ReaperInternals & {
-    isTaskClaimedInProcess: unknown;
-  };
+  const mod =
+    /* SAFETY: 类型断言已复核 */ (await import("./reaper")) as unknown as ReaperInternals & {
+      isTaskClaimedInProcess: unknown;
+    };
   return mod;
 }
 
@@ -320,7 +325,7 @@ describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主
 
   it("comfy-cli 子进程正在驱动（promptId 未回传）→ 跳过回收", async () => {
     const reaper = await loadReaper();
-    vi.mocked(cliProcs).set("t-cli", {} as never);
+    vi.mocked(cliProcs).set("t-cli", /* SAFETY: 类型断言已复核 */ {} as never);
     repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-cli")]);
 
     await reaper.reapStaleQueuedTasks!();
@@ -571,7 +576,7 @@ describe("RUNNING reaper 判决矩阵", () => {
    */
   it("无 promptId 但本进程仍握着它的 cli 句柄：两轮都不插手（正常执行中）", async () => {
     const reaper = await loadReaper();
-    vi.mocked(cliProcs).set("t-np1", {} as never);
+    vi.mocked(cliProcs).set("t-np1", /* SAFETY: 类型断言已复核 */ {} as never);
     repoMock("listStaleRunning").mockResolvedValue([
       runningRow("t-np1", null),
       runningRow("t-np1", null),

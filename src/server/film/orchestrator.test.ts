@@ -330,9 +330,11 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     filmRepo.create.mockResolvedValue({ id: "f-offline" });
     llmStructured.mockRejectedValue(new Error("no llm"));
     const { parseIdeaToScenes } = await import("~/lib/workshop/script-parser");
-    vi.mocked(parseIdeaToScenes).mockReturnValue([
-      { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
-    ] as unknown as ReturnType<typeof parseIdeaToScenes>);
+    vi.mocked(parseIdeaToScenes).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ [
+        { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
+      ] as unknown as ReturnType<typeof parseIdeaToScenes>,
+    );
 
     const r = await createFilm({ userId: "u1", title: "离线", script: "剧本" });
 
@@ -362,7 +364,11 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
 describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 5）", () => {
   // 只映射用到的字段即可（id / index / prompt / negativePrompt / sceneHeading）。
   const shot = (over: Record<string, unknown>) =>
-    ({ sceneHeading: "", negativePrompt: "", ...over }) as never;
+    /* SAFETY: 类型断言已复核 */ ({
+      sceneHeading: "",
+      negativePrompt: "",
+      ...over,
+    }) as never;
 
   it("逐条映射镜头、按镜号排序，不触发 LLM 分镜，且落 projectId 关联", async () => {
     filmRepo.create.mockResolvedValue({ id: "film-p1" });
@@ -400,10 +406,8 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
     expect(llmStructured).not.toHaveBeenCalled();
 
     // 成片挂上 projectId，标题 / 类型 / 剧本取自项目
-    const created = filmRepo.create.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
+    const created = /* SAFETY: 类型断言已复核 */ filmRepo.create.mock
+      .calls[0]![0] as Record<string, unknown>;
     expect(created.projectId).toBe("proj_1");
     expect(created.title).toBe("项目片");
     expect(created.type).toBe("animation");

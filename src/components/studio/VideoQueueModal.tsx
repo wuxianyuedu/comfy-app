@@ -51,7 +51,9 @@ const STATUS_META: Record<
  *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
 function statusMetaFor(status: string): StatusMeta {
   return status in STATUS_META
-    ? STATUS_META[status as keyof typeof STATUS_META]
+    ? STATUS_META[
+        /* SAFETY: 类型断言已复核 */ status as keyof typeof STATUS_META
+      ]
     : STATUS_META.QUEUED;
 }
 

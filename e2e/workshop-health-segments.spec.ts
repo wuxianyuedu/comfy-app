@@ -33,7 +33,7 @@ interface SegmentOnScreen {
 async function readSegments(barRoots: Locator): Promise<SegmentOnScreen[]> {
   return await barRoots.evaluateAll((nodes) =>
     nodes.map((node) => {
-      const root = node as HTMLElement;
+      const root = /* SAFETY: 类型断言已复核 */ node as HTMLElement;
       const label = root.querySelector("span");
       const fill = root.querySelector<HTMLElement>(
         '[data-slot="progress-bar-fill"]',

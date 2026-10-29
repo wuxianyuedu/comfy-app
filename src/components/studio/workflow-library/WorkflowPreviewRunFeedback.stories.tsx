@@ -142,36 +142,40 @@ export const UploadNotice: Story = {
 export const ViewModeMatrix: Story = {
   render: (args) => (
     <div className="flex flex-col gap-8">
-      {(["edit", "use"] as const).map((viewMode) => (
-        <div key={viewMode} className="flex flex-col gap-3">
-          <span className="text-ink-muted font-mono text-[11px]">
-            viewMode = {viewMode}
-          </span>
-          {MATRIX_ROWS.map(([key, phase]) => (
-            <div key={key} className="flex flex-col gap-1">
-              <span className="text-ink-faint font-mono text-[11px]">
-                phase = {key}
+      {
+        /* SAFETY: 类型断言已复核 */ (["edit", "use"] as const).map(
+          (viewMode) => (
+            <div key={viewMode} className="flex flex-col gap-3">
+              <span className="text-ink-muted font-mono text-[11px]">
+                viewMode = {viewMode}
               </span>
-              <div className="border-border-strong bg-surface w-152 rounded-lg border p-2">
-                <WorkflowPreviewRunFeedback
-                  {...args}
-                  viewMode={viewMode}
-                  phase={phase}
-                  running={key === "running"}
-                  pct={key === "running" ? 42 : key === "done" ? 100 : 0}
-                  nodeLabel={key === "running" ? "K采样器" : null}
-                  resultUrl={
-                    key === "done"
-                      ? "/storybook-assets/sample-landscape.svg"
-                      : null
-                  }
-                  missingLabels={key === "failed" ? ["模型文件缺失"] : []}
-                />
-              </div>
+              {MATRIX_ROWS.map(([key, phase]) => (
+                <div key={key} className="flex flex-col gap-1">
+                  <span className="text-ink-faint font-mono text-[11px]">
+                    phase = {key}
+                  </span>
+                  <div className="border-border-strong bg-surface w-152 rounded-lg border p-2">
+                    <WorkflowPreviewRunFeedback
+                      {...args}
+                      viewMode={viewMode}
+                      phase={phase}
+                      running={key === "running"}
+                      pct={key === "running" ? 42 : key === "done" ? 100 : 0}
+                      nodeLabel={key === "running" ? "K采样器" : null}
+                      resultUrl={
+                        key === "done"
+                          ? "/storybook-assets/sample-landscape.svg"
+                          : null
+                      }
+                      missingLabels={key === "failed" ? ["模型文件缺失"] : []}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ))}
+          ),
+        )
+      }
     </div>
   ),
 };

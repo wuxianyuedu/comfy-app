@@ -26,7 +26,7 @@ const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } =
     closeSyncMock: vi.fn<(fd: number) => void>(),
     warnMock: vi.fn<(message: string) => void>(),
     /** 每次 `spawn` 产出的假句柄，按调用顺序记录（用例从尾部拿）。 */
-    spawned: [] as Array<EmitterChild>,
+    spawned: /* SAFETY: 类型断言已复核 */ [] as Array<EmitterChild>,
   }));
 
 type EmitterChild = EventEmitter & {
@@ -78,7 +78,7 @@ function fakeChild(): EmitterChild {
 
 /** 最近一次 `spawn` 的三元参数（命令 / 参数 / 选项）。 */
 function lastSpawn(): [string, string[], Record<string, unknown>] {
-  const call = spawnMock.mock.calls.at(-1) as
+  const call = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls.at(-1) as
     | [string, string[], Record<string, unknown>]
     | undefined;
   if (!call) throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
@@ -99,8 +99,8 @@ const callerEnv: NodeJS.ProcessEnv = {
  * Linux/CI 上也只会走 POSIX 分支** —— 断言写 `powershell.exe`，实收
  * `{detached:true, stdio:全 ignore}`，五条恒红且看着像「代码坏了」。
  * 现在两端机器判同一份输入，两个分支在任何宿主上都有执行者。 */
-const POSIX = "linux" as const;
-const WINDOWS = "win32" as const;
+const POSIX = /* SAFETY: 类型断言已复核 */ "linux" as const;
+const WINDOWS = /* SAFETY: 类型断言已复核 */ "win32" as const;
 
 beforeEach(() => {
   /* 登记表按用例清：`spawn` / `openSync` 的调用次数本身就是判据

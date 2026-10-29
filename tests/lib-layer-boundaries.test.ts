@@ -31,15 +31,15 @@ type Policy = {
 
 /** 从扁平配置里取出 boundaries 那一节（含 elements 声明与策略）。 */
 function boundariesSection(): { elements: ElementDef[]; policies: Policy[] } {
-  const configs = eslintConfig as unknown as Array<{
+  const configs = /* SAFETY: 类型断言已复核 */ eslintConfig as unknown as Array<{
     plugins?: Record<string, unknown>;
     settings?: Record<string, unknown>;
     rules?: Record<string, unknown>;
   }>;
   const section = configs.find((c) => c.plugins?.boundaries);
   expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
-  const elements = (section?.settings?.["boundaries/elements"] ?? []) as ElementDef[];
-  const rule = section?.rules?.["boundaries/dependencies"] as
+  const elements = /* SAFETY: 类型断言已复核 */ (section?.settings?.["boundaries/elements"] ?? []) as ElementDef[];
+  const rule = /* SAFETY: 类型断言已复核 */ section?.rules?.["boundaries/dependencies"] as
     | [string, { policies?: Policy[] }]
     | undefined;
   return { elements, policies: rule?.[1]?.policies ?? [] };

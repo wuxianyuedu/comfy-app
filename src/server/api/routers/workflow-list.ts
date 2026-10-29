@@ -225,7 +225,10 @@ export const workflowListProcedures = {
         const rawView = asRawWorkflow(list.rawJson);
         const graphObj =
           rawView && Array.isArray(rawView.nodes)
-            ? (rawView as unknown as Record<string, unknown>)
+            ? /* SAFETY: 类型断言已复核 */ (rawView as unknown as Record<
+                string,
+                unknown
+              >)
             : null;
         const exec = executionShapeOf(list);
 

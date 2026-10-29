@@ -87,7 +87,7 @@ const client = createClient({
 // (ISSUE #1282).
 await applySqlitePragmas(client);
 
-const globalForDb = globalThis as unknown as {
+const globalForDb = /* SAFETY: 类型断言已复核 */ globalThis as unknown as {
   db: ReturnType<typeof drizzle<typeof schema>> | undefined;
 };
 

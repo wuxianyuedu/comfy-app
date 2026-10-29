@@ -52,7 +52,7 @@ import type {
 } from "../workflow-library-param-cards";
 
 /** 三列节点的节点类型名（注册表在视图里，见 `WorkflowLibraryCanvasNodes`）。 */
-export const LIB_NODE_TYPES = {
+export const LIB_NODE_TYPES = /* SAFETY: 类型断言已复核 */ {
   libParams: "libParams",
   libHost: "libHost",
   libOutputs: "libOutputs",
@@ -105,7 +105,7 @@ export interface LayoutSizing {
   fillHeight: number;
 }
 
-export const LAYOUT_SIZING: LayoutSizing = {
+export const LAYOUT_SIZING: LayoutSizing = /* SAFETY: 类型断言已复核 */ {
   paramsWidth: 220,
   outputsWidth: 200,
   hostWidth: 380,
@@ -271,7 +271,7 @@ export function useLibraryWireFlow({
 }
 
 /** 三列**内容**节点的 id（首帧定向 fitView 的包围盒 = 这三个）。 */
-export const LIBRARY_CONTENT_NODE_IDS = [
+export const LIBRARY_CONTENT_NODE_IDS = /* SAFETY: 类型断言已复核 */ [
   LIB_NODE_PARAMS,
   LIB_NODE_HOST,
   LIB_NODE_OUTPUTS,

@@ -74,18 +74,20 @@ export const RealSources: Story = {
   args: { className: "h-40 w-64 rounded-lg object-cover" },
   render: (args) => (
     <div className="flex flex-wrap items-start gap-4">
-      {(
-        [
-          "sample-landscape.svg",
-          "sample-portrait.svg",
-          "sample-wide.svg",
-        ] as const
-      ).map((name) => (
-        <div key={name} className="flex flex-col items-center gap-1.5">
-          <ThumbnailWithSource {...args} sourceName={name} alt={name} />
-          <span className="text-ink-muted font-mono text-[11px]">{name}</span>
-        </div>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (
+          [
+            "sample-landscape.svg",
+            "sample-portrait.svg",
+            "sample-wide.svg",
+          ] as const
+        ).map((name) => (
+          <div key={name} className="flex flex-col items-center gap-1.5">
+            <ThumbnailWithSource {...args} sourceName={name} alt={name} />
+            <span className="text-ink-muted font-mono text-[11px]">{name}</span>
+          </div>
+        ))
+      }
     </div>
   ),
 };

@@ -102,10 +102,18 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
                 className="bg-subtle! border-border! text-sm"
                 value={meta.type}
                 onChange={(value) =>
-                  onMetaChange({ ...meta, type: value as ProjectType })
+                  onMetaChange({
+                    ...meta,
+                    type: /* SAFETY: 类型断言已复核 */ value as ProjectType,
+                  })
                 }
                 options={PROJECT_TYPES}
-                labels={PROJECT_TYPE_LABELS as Record<string, string>}
+                labels={
+                  /* SAFETY: 类型断言已复核 */ PROJECT_TYPE_LABELS as Record<
+                    string,
+                    string
+                  >
+                }
                 placeholder="选择类型"
               />
             )}

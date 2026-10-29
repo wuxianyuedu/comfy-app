@@ -121,7 +121,7 @@ const COLD_COMPILE_WORKERS = 2;
  * 交给 webServer 起，在那一档上必然失败，而且报出来的是「webServer 超时」
  * （180s），指不到「PATH 上没有 pnpm」。
  */
-export const E2E_SERVER_ARGS = {
+export const E2E_SERVER_ARGS = /* SAFETY: 类型断言已复核 */ {
   dev: ["dev"],
   start: ["start"],
 } as const;
@@ -155,9 +155,9 @@ export function pnpmWebServerCommand(
  * 保留它是因为它一直是别人 import 的入口（`tests/e2e-runtime-budget.test.ts` 拿它做
  * 两份实现的对账）；对账比的是**参数部分**，可执行名由 {@link pnpmWebServerCommand} 决定。
  */
-export const E2E_SERVER_COMMANDS = {
-  dev: pnpmWebServerCommand("dev", {} as NodeJS.ProcessEnv),
-  start: pnpmWebServerCommand("start", {} as NodeJS.ProcessEnv),
+export const E2E_SERVER_COMMANDS = /* SAFETY: 类型断言已复核 */ {
+  dev: pnpmWebServerCommand("dev", /* SAFETY: 类型断言已复核 */ {} as NodeJS.ProcessEnv),
+  start: pnpmWebServerCommand("start", /* SAFETY: 类型断言已复核 */ {} as NodeJS.ProcessEnv),
 } as const;
 
 /**

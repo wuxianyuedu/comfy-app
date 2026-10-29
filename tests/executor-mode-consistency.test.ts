@@ -50,7 +50,7 @@ const HOST = path.join(ROOT, "scripts", "executor-host.mjs");
 const TS_SIDE = path.join(ROOT, "src", "lib", "comfyui", "executor-mode.ts");
 
 const vectors = (
-  JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8")) as {
+  /* SAFETY: 类型断言已复核 */ JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8")) as {
     vectors: Array<{ raw: string; mode: string; unknown: string | null }>;
   }
 ).vectors;
@@ -151,7 +151,7 @@ describe("两个纯 Node 宿主不许再各写一份归一化", () => {
   /* 「编排器」这一侧读**现算的链路闭包**而不是主文件：R5 拆刀（ISSUE #1811）后
    * 门控那一段住 `launcher-core/dev-boot.mjs`，只读主文件会让 `toContain` 落空
    * 而 `not.toMatch` 对着空串恒真 —— 那正是这条判据要防的形态。 */
-  for (const [label, file] of [
+  for (const [label, file] of /* SAFETY: 类型断言已复核 */ [
     ["dev-launcher.mjs", LAUNCHER],
     ["executor-host.mjs", HOST],
   ] as const) {

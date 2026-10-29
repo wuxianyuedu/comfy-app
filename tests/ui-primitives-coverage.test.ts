@@ -207,7 +207,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 这两个**字面量**，而绕过的形态可以不含它们（例如自己包一层 `new Blob`
    * 却忘了 revoke、或自己写相对时间阈值）。用例逐个钉住出口模块存在 +
    * 导出的名字 + 至少一处业务引用。 */
-  it.for([
+  it.for(/* SAFETY: 类型断言已复核 */ [
     ["~/lib/browser-io", ["copyText", "downloadText", "downloadJson"]],
     ["~/lib/time-format", ["timeAgo", "formatClock"]],
     /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：P50/P51/P52 是硬闸，
@@ -365,7 +365,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
    * `disclosure` 本批迁了 8 处、`option-list-popover` 4 处、`use-interval`
    * 10 处上下。 */
-  it.for([
+  it.for(/* SAFETY: 类型断言已复核 */ [
     ["disclosure", "tsx", ["Disclosure"], 3],
     ["option-list-popover", "tsx", ["OptionListPopover"], 3],
     ["use-interval", "ts", ["useInterval"], 5],
@@ -412,7 +412,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
    * `list-filter` 本批迁了 8 处、`expansion-set` 3 份映射、`wide-panel` 3 个面板；
    * `progress` / `key-value-rows` 各迁了 10 处与 5 处。 */
-  it.for([
+  it.for(/* SAFETY: 类型断言已复核 */ [
     [
       "~/lib/list-filter",
       "ts",

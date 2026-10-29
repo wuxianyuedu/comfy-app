@@ -34,7 +34,10 @@ describe("退避链：顺序与启动参数都取自那份判据", () => {
   });
 
   it("POSIX 上没有 py，也就不许凭空多出一个 -3", () => {
-    for (const platform of ["linux", "darwin"] as NodeJS.Platform[]) {
+    for (const platform of /* SAFETY: 类型断言已复核 */ [
+      "linux",
+      "darwin",
+    ] as NodeJS.Platform[]) {
       const attempts = pythonAttempts(SCRIPT, platform);
       expect(attempts.map((a) => a.command)).toEqual(["python3", "python"]);
       expect(attempts.every((a) => !a.args.includes("-3"))).toBe(true);
@@ -42,7 +45,10 @@ describe("退避链：顺序与启动参数都取自那份判据", () => {
   });
 
   it("长度就是「全部试完」那条边界：调用点不再自写 length - 1", () => {
-    for (const platform of ["win32", "linux"] as NodeJS.Platform[]) {
+    for (const platform of /* SAFETY: 类型断言已复核 */ [
+      "win32",
+      "linux",
+    ] as NodeJS.Platform[]) {
       expect(pythonAttempts(SCRIPT, platform)).toHaveLength(
         pythonCandidates(platform).length,
       );
@@ -100,7 +106,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   function fakeStream() {
     const cbs: Record<string, ((arg: unknown) => void)[]> = {};
     return {
-      stream: {
+      stream: /* SAFETY: 类型断言已复核 */ {
         on: (ev: string, cb: (arg: unknown) => void) => {
           (cbs[ev] ??= []).push(cb);
         },
@@ -146,7 +152,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
     const cbs: ((arg: unknown) => void)[] = [];
     const lines: string[] = [];
     forEachOutputLine(
-      {
+      /* SAFETY: 类型断言已复核 */ {
         on: (_ev: string, cb: (arg: unknown) => void) => cbs.push(cb),
       } as unknown as NodeJS.ReadableStream,
       (l) => lines.push(l),
@@ -159,7 +165,7 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
     /* 这一档是形态约束：内核只挂这两个，缺哪个就是哪个不触发，不许在这里抛 ——
      * 抛出去会把一次正常的解析变成「流内部起进程失败」。 */
     const seen: string[] = [];
-    const stream = {
+    const stream = /* SAFETY: 类型断言已复核 */ {
       on: (ev: string) => {
         seen.push(ev);
       },

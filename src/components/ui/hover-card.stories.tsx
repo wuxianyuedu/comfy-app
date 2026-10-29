@@ -79,16 +79,20 @@ export const InteractiveContent: Story = {
 export const Sides: Story = {
   render: () => (
     <div className="flex items-center gap-4">
-      {(["top", "right", "bottom", "left"] as const).map((side) => (
-        <HoverCard key={side}>
-          <HoverCardTrigger render={<Button variant="outline" size="sm" />}>
-            side={side}
-          </HoverCardTrigger>
-          <HoverCardContent side={side}>
-            <p className="text-sm">开在 {side} 这一侧</p>
-          </HoverCardContent>
-        </HoverCard>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (
+          ["top", "right", "bottom", "left"] as const
+        ).map((side) => (
+          <HoverCard key={side}>
+            <HoverCardTrigger render={<Button variant="outline" size="sm" />}>
+              side={side}
+            </HoverCardTrigger>
+            <HoverCardContent side={side}>
+              <p className="text-sm">开在 {side} 这一侧</p>
+            </HoverCardContent>
+          </HoverCard>
+        ))
+      }
     </div>
   ),
 };

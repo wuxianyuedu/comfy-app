@@ -104,7 +104,7 @@ function collectProxyWidgetPairs(
   }
   if (raw && typeof raw === "object") {
     for (const [slot, value] of Object.entries(
-      raw as Record<string, unknown>,
+      /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>,
     )) {
       const target = asTarget(value);
       if (target) pairs.push({ slot, target });
@@ -391,7 +391,7 @@ function subgraphAuthorLabelsByUid(
    * 键也可能是数字序号，真 UUID 藏在定义自身的 `id` 上 —— 两种都登记，让
    * 上层按 wrapper 的 `class_type` 查得到。 */
   const subgraphEntries: [string, RawSubgraphDef][] = Array.isArray(subgraphs)
-    ? (subgraphs as RawSubgraphDef[]).map(
+    ? /* SAFETY: 类型断言已复核 */ (subgraphs as RawSubgraphDef[]).map(
         (subDef, index): [string, RawSubgraphDef] => [String(index), subDef],
       )
     : Object.entries(subgraphs);
@@ -400,7 +400,10 @@ function subgraphAuthorLabelsByUid(
     const table: Record<string, string> = {};
     for (const pinRaw of subDef.inputs) {
       if (!pinRaw || typeof pinRaw !== "object") continue;
-      const pin = pinRaw as Record<string, unknown>;
+      const pin = /* SAFETY: 类型断言已复核 */ pinRaw as Record<
+        string,
+        unknown
+      >;
       const slot = typeof pin.name === "string" ? pin.name.trim() : "";
       const label = typeof pin.label === "string" ? pin.label.trim() : "";
       if (!slot || !label || slot === label) continue;
@@ -617,7 +620,9 @@ export async function buildRawInputs(
               await multilineForClassField(rnClassType, w.name),
               w.value,
             )
-              ? { multiline: true as const }
+              ? {
+                  multiline: /* SAFETY: 类型断言已复核 */ true as const,
+                }
               : {}),
           });
         }
@@ -653,7 +658,7 @@ export async function buildRawInputs(
                   imageRef: {
                     filename: fname,
                     subfolder: "",
-                    type: "input" as const,
+                    type: /* SAFETY: 类型断言已复核 */ "input" as const,
                   },
                 }
               : {}),

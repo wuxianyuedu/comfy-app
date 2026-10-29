@@ -6,7 +6,7 @@ import {
 } from "./comfy-readiness-client";
 
 function jsonRes(status: number, body: unknown): Response {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,

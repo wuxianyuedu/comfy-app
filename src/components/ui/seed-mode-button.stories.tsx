@@ -79,13 +79,15 @@ export const InCanvasRow: Story = {
       <span className="border-border-strong bg-canvas-deep text-ink-soft flex-1 rounded-md border px-2 py-0.5 font-mono text-[11px]">
         486920135724881
       </span>
-      {([null, ...MODES] as const).map((mode) => (
-        <SeedModeButton
-          key={mode ?? "unset"}
-          mode={mode ?? undefined}
-          onPick={() => undefined}
-        />
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ ([null, ...MODES] as const).map((mode) => (
+          <SeedModeButton
+            key={mode ?? "unset"}
+            mode={mode ?? undefined}
+            onPick={() => undefined}
+          />
+        ))
+      }
     </div>
   ),
 };

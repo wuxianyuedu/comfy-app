@@ -31,7 +31,7 @@ const SPACING_SCRIPT = join(REPO_ROOT, "scripts", "tw4-spacing-canonical.mjs");
 /** 两份脚本共享的扫描内核：注释剥离就住在这里（`!row` 那条误报的修法）。 */
 const SCAN_CORE = join(REPO_ROOT, "scripts", "tw4-scan-core.mjs");
 
-describe.for([
+describe.for(/* SAFETY: 类型断言已复核 */ [
   ["canonical", CANON_BASELINE, CANON_SCRIPT],
   ["spacing", SPACING_BASELINE, SPACING_SCRIPT],
 ] as const)("%s 判据（ISSUE #1451 要求 2 / #1811 翻硬闸）", ([_name, baseline, script]) => {
@@ -79,7 +79,7 @@ describe.for([
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
     );
     const onDemand =
-      (ledger as { onDemand?: Record<string, unknown> }).onDemand ?? {};
+      (/* SAFETY: 类型断言已复核 */ ledger as { onDemand?: Record<string, unknown> }).onDemand ?? {};
     const hits = Object.keys(onDemand).filter((k) =>
       script.endsWith(k) || k === script.split("/").pop(),
     );

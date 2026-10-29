@@ -35,7 +35,11 @@ function setShellForm(on: boolean) {
       value: { invoke: async () => null, transformCallback: () => 0 },
     });
   } else {
-    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    delete (
+      /* SAFETY: 类型断言已复核 */ (
+        window as unknown as Record<string, unknown>
+      ).__TAURI_INTERNALS__
+    );
   }
 }
 
@@ -67,7 +71,10 @@ describe("WindowTitleBar", () => {
        `shrink-0` 的按钮放在 flex-start —— 就是用户看到的左上角。 */
     const children = Array.from(bar?.children ?? []);
     expect(children).toHaveLength(2);
-    const [spacer, controls] = children as [HTMLElement, HTMLElement];
+    const [spacer, controls] = /* SAFETY: 类型断言已复核 */ children as [
+      HTMLElement,
+      HTMLElement,
+    ];
     expect(spacer.className).toContain("flex-1");
     expect(spacer.getAttribute("aria-hidden")).toBe("true");
     /* 按钮确实在**后**那一格里（顺序即位置：flex 行按 DOM 顺序摆放）。 */

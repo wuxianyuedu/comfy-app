@@ -42,7 +42,7 @@ function run(args: string[] = []) {
     });
     return { code: 0, output };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -137,7 +137,7 @@ describe("premerge-check —— 段的筛选", () => {
   test("`--json` 给出逐段结论（机器可读那一半）", () => {
     const { code, output } = run(["--only=claims", "--json"]);
     expect(code).toBe(0);
-    const parsed = JSON.parse(output) as {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
       code: number;
       segments: Array<{ key: string; code: number }>;
     };

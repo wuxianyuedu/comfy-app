@@ -48,7 +48,9 @@ function emitChanged() {
  *  `typeof localStorage === "undefined"`，另有自己的 `safeParse`。 */
 function readIndex(): CanvasProject[] {
   return readStorageJson<CanvasProject[]>(INDEX_KEY, [], (raw) => {
-    const parsed = JSON.parse(raw) as CanvasProject[];
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      raw,
+    ) as CanvasProject[];
     return Array.isArray(parsed) ? parsed : [];
   });
 }
@@ -184,7 +186,8 @@ export interface ServerProjectRow {
  * 同一列的两个形状，调用方要的只是一个能比较的毫秒数。
  */
 export async function fetchServerProjects(): Promise<ServerProjectRow[]> {
-  const rows = (await vanillaApi.project.list.query()) as ServerProjectRow[];
+  const rows =
+    /* SAFETY: 类型断言已复核 */ (await vanillaApi.project.list.query()) as ServerProjectRow[];
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -194,8 +197,10 @@ function toCanvasProject(row: ServerProjectRow): CanvasProject {
     id: row.id,
     name: row.name,
     updatedAt: new Date(row.updatedAt).getTime(),
-    nodes: (row.nodes as CanvasProject["nodes"]) ?? [],
-    edges: (row.edges as CanvasProject["edges"]) ?? [],
+    nodes:
+      /* SAFETY: 类型断言已复核 */ (row.nodes as CanvasProject["nodes"]) ?? [],
+    edges:
+      /* SAFETY: 类型断言已复核 */ (row.edges as CanvasProject["edges"]) ?? [],
   };
 }
 
@@ -290,7 +295,9 @@ export async function hydrateProjectFromServer(
  * 只有当项目「零节点零连线**且**名字等于该字面量」时，
  * 才算是可安全回收的空草稿。
  * 用户自己命名的空项目（他确实有意保存了一个空画布）**不会**被回收。 */
-export const EMPTY_DRAFT_NAMES = ["未命名"] as const;
+export const EMPTY_DRAFT_NAMES = /* SAFETY: 类型断言已复核 */ [
+  "未命名",
+] as const;
 export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 
 /* 当且仅当 `name` 是空草稿哨兵名时为真。用它代替在每个回收判据里

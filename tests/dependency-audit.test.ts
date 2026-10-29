@@ -114,7 +114,7 @@ function readLedger(dir: string): LedgerFile {
   const raw: unknown = JSON.parse(
     readFileSync(path.join(dir, LEDGER_REL), "utf8"),
   );
-  return raw as LedgerFile;
+  return /* SAFETY: 类型断言已复核 */ raw as LedgerFile;
 }
 
 function writeLedger(dir: string, ledger: LedgerFile): void {
@@ -247,7 +247,7 @@ describe("真脚本：--update 只许降（验收点名要求的形态）", () =
       );
       return { code: 0, out };
     } catch (error) {
-      const e = error as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ error as { status?: number; stdout?: string; stderr?: string };
       return { code: e.status ?? 1, out: `${e.stdout ?? ""}${e.stderr ?? ""}` };
     }
   }

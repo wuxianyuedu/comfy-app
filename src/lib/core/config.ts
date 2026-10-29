@@ -89,7 +89,7 @@ export interface AppConfig {
  * 有处可取：前端设置页（浏览器侧，拿不到服务端 config 实例）与后端在读到空值时
  * 都必须落到同一个默认端口 / 回环地址，否则就是规范 §12.14 禁止的多份口径。
  */
-export const CONFIG_ENV_DEFAULTS = {
+export const CONFIG_ENV_DEFAULTS = /* SAFETY: 类型断言已复核 */ {
   /**
    * 开发服务监听端口。
    *

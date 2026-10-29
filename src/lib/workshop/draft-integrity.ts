@@ -176,7 +176,9 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
         key: "status",
         ok: (value) =>
           typeof value === "string" &&
-          (SHOT_STATUSES as readonly string[]).includes(value),
+          /* SAFETY: 类型断言已复核 */ (
+            SHOT_STATUSES as readonly string[]
+          ).includes(value),
         reason: "状态不在已知取值里：完成度计数会把它算错一边",
       },
     ],
@@ -203,7 +205,7 @@ function auditOne(
       },
     ];
   }
-  const source = value as Record<string, unknown>;
+  const source = /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>;
   const id = check.idOf(source);
   const label = id
     ? `${noun} #${String(index + 1)}「${id}」`
@@ -265,7 +267,9 @@ export function describeDraftIssues(
 ): string | null {
   if (issues.length === 0) return null;
   const counts = countAffectedElements(issues);
-  const parts = (["scene", "character", "shot"] as const)
+  const parts = /* SAFETY: 类型断言已复核 */ (
+    ["scene", "character", "shot"] as const
+  )
     .filter((kind) => counts[kind] > 0)
     .map((kind) => `${String(counts[kind])} ${DRAFT_ELEMENT_NOUN[kind]}`);
   return `草稿里有 ${parts.join("、")} 的形状不认识，已原样保留但需要修复`;

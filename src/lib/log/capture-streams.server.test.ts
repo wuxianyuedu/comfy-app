@@ -27,7 +27,7 @@ const tmp = fs.realpathSync(
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    ...(actual as Record<string, unknown>),
+    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
     NEXTJS_LOG_DIR: tmp,
     SERVICES_LOG_DIR: tmp,
   };

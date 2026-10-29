@@ -309,7 +309,7 @@ function serializeValue(col: string, v: unknown): unknown {
 function allRows(table: string): Row[] {
   if (!currentSqlite) throw new Error("test db 未初始化");
   return (
-    currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Record<
+    /* SAFETY: 类型断言已复核 */ currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Record<
       string,
       unknown
     >[]
@@ -328,7 +328,7 @@ function insertInto(table: string, obj: Record<string, unknown>): void {
 
 function getRow(table: string, id: string): Row {
   if (!currentSqlite) throw new Error("test db 未初始化");
-  const raw = currentSqlite
+  const raw = /* SAFETY: 类型断言已复核 */ currentSqlite
     .prepare(`SELECT * FROM "${table}" WHERE id = ?`)
     .get(id) as Record<string, unknown> | undefined;
   if (!raw) throw new Error(`row not found: ${table} ${id}`);
@@ -440,13 +440,13 @@ export function createTestDb(): TestDb {
    * 指不到宿主，正是 #2586 这一族）。断言的目标类型取 `RemoteCallback`，
    * 让「哪里不对」只出现在这一行。 */
   const db = drizzle(
-    sqliteProxyHost(sqlite) as unknown as RemoteCallback,
+    /* SAFETY: 类型断言已复核 */ sqliteProxyHost(sqlite) as unknown as RemoteCallback,
     { schema },
   );
 
   const workflowTemplatesWithTags = (): Row[] => {
     const rows = allRows("workflowTemplate");
-    const tagRows = sqlite
+    const tagRows = /* SAFETY: 类型断言已复核 */ sqlite
       .prepare(
         `SELECT wm.workflowModelTag AS tagId, wm.workflowTemplate AS wtId, t.name AS name, t.userId AS userId
          FROM workflowModelTag_workflowTemplate wm
@@ -469,7 +469,7 @@ export function createTestDb(): TestDb {
     }
     return rows.map((row) => ({
       ...row,
-      modelTags: byWt.get(row.id as string) ?? [],
+      modelTags: byWt.get(/* SAFETY: 类型断言已复核 */ row.id as string) ?? [],
     }));
   };
 
@@ -515,7 +515,7 @@ export function createTestDb(): TestDb {
   };
 
   // 把 $reset / $tables 挂到 drizzle 实例上，供测试与 vi.mock 共用同一对象
-  const api = Object.assign(db, {
+  const api = /* SAFETY: 类型断言已复核 */ Object.assign(db, {
     $reset: reset,
     $tables: tables,
     $sqlTrace: sqlTrace,

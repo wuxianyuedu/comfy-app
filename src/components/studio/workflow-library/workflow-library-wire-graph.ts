@@ -107,7 +107,7 @@ export const MANUAL_STROKE = "#a78bfa";
  *  参数**的界面，「未连过就不要连」），所以没有虚线分支，也没有「默认线」那一档
  *  描边色。默认落点仍算在 `resolved` 里（卡片与运行期读它），只是不在画布上画
  *  一条虚线占位。 */
-export const LIBRARY_EDGE_STYLE = {
+export const LIBRARY_EDGE_STYLE = /* SAFETY: 类型断言已复核 */ {
   stroke: MANUAL_STROKE,
   strokeWidth: 2.5,
   opacity: 1,

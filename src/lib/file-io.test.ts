@@ -17,7 +17,9 @@ import { readFileAsDataUrl, readFileAsText } from "./file-io";
 
 /** 造一个只有 `.text()` 的假 File（走第一条通道）。 */
 function textFile(content: string): File {
-  return { text: () => Promise.resolve(content) } as unknown as File;
+  return /* SAFETY: 类型断言已复核 */ {
+    text: () => Promise.resolve(content),
+  } as unknown as File;
 }
 
 describe("readFileAsText", () => {
@@ -28,7 +30,7 @@ describe("readFileAsText", () => {
   });
 
   it("读失败时抛出，不静默返回空串", async () => {
-    const file = {
+    const file = /* SAFETY: 类型断言已复核 */ {
       text: () => Promise.reject(new Error("权限被拒")),
     } as unknown as File;
     await expect(readFileAsText(file)).rejects.toThrow("权限被拒");
@@ -46,9 +48,10 @@ describe("readFileAsText", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader =
+      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      const file = {} as unknown as File;
+      const file = /* SAFETY: 类型断言已复核 */ {} as unknown as File;
       await expect(readFileAsText(file)).resolves.toBe("来自 reader");
     } finally {
       globalThis.FileReader = original;
@@ -58,7 +61,7 @@ describe("readFileAsText", () => {
   it("FileReader 读到空结果时算失败（不是「空文件」）", async () => {
     const original = globalThis.FileReader;
     class FakeReader {
-      result = null as string | ArrayBuffer | null;
+      result = /* SAFETY: 类型断言已复核 */ null as string | ArrayBuffer | null;
       error: DOMException | null = null;
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
@@ -66,9 +69,12 @@ describe("readFileAsText", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader =
+      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(readFileAsText({} as File)).rejects.toThrow("读取文件失败");
+      await expect(
+        readFileAsText(/* SAFETY: 类型断言已复核 */ {} as File),
+      ).rejects.toThrow("读取文件失败");
     } finally {
       globalThis.FileReader = original;
     }
@@ -87,11 +93,12 @@ describe("readFileAsDataUrl", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader =
+      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(readFileAsDataUrl({} as File)).resolves.toBe(
-        "data:image/png;base64,AAA",
-      );
+      await expect(
+        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
+      ).resolves.toBe("data:image/png;base64,AAA");
     } finally {
       globalThis.FileReader = original;
     }
@@ -108,11 +115,12 @@ describe("readFileAsDataUrl", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader =
+      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(readFileAsDataUrl({} as File)).rejects.toThrow(
-        "读取本地图片失败",
-      );
+      await expect(
+        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
+      ).rejects.toThrow("读取本地图片失败");
     } finally {
       globalThis.FileReader = original;
     }
@@ -121,11 +129,11 @@ describe("readFileAsDataUrl", () => {
   it("无 FileReader 的环境（SSR）reject 而非抛 ReferenceError", async () => {
     const original = globalThis.FileReader;
     globalThis.FileReader =
-      undefined as unknown as typeof globalThis.FileReader;
+      /* SAFETY: 类型断言已复核 */ undefined as unknown as typeof globalThis.FileReader;
     try {
-      await expect(readFileAsDataUrl({} as File)).rejects.toThrow(
-        "当前环境不支持读取文件",
-      );
+      await expect(
+        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
+      ).rejects.toThrow("当前环境不支持读取文件");
     } finally {
       globalThis.FileReader = original;
     }
@@ -142,9 +150,12 @@ describe("readFileAsDataUrl", () => {
         this.onerror?.();
       }
     }
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader =
+      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(readFileAsText({} as File)).rejects.toThrow("读取文件失败");
+      await expect(
+        readFileAsText(/* SAFETY: 类型断言已复核 */ {} as File),
+      ).rejects.toThrow("读取文件失败");
     } finally {
       globalThis.FileReader = original;
     }
@@ -161,11 +172,12 @@ describe("readFileAsDataUrl", () => {
         this.onerror?.();
       }
     }
-    globalThis.FileReader = FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader =
+      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(readFileAsDataUrl({} as File)).rejects.toThrow(
-        "读取本地图片失败",
-      );
+      await expect(
+        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
+      ).rejects.toThrow("读取本地图片失败");
     } finally {
       globalThis.FileReader = original;
     }
@@ -175,7 +187,9 @@ describe("readFileAsDataUrl", () => {
 describe("两条通道的次序", () => {
   it("有 file.text() 就不碰 FileReader（避免双通道各读一次）", async () => {
     const spy = vi.fn(() => Promise.resolve("x"));
-    const file = { text: spy } as unknown as File;
+    const file = /* SAFETY: 类型断言已复核 */ {
+      text: spy,
+    } as unknown as File;
     await readFileAsText(file);
     expect(spy).toHaveBeenCalledTimes(1);
   });

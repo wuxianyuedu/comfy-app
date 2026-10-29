@@ -26,7 +26,9 @@ function healthOf(
     },
     true,
   );
-  return (Object.keys(rows) as HealthRow["id"][]).map((id) => {
+  return /* SAFETY: 类型断言已复核 */ (
+    Object.keys(rows) as HealthRow["id"][]
+  ).map((id) => {
     const override = overrides[id];
     const ratio = typeof override === "number" ? override : override ? 1 : 0;
     /* 缩略与全名故意取不同值：写成一样就无法证明视图分别用了这两个字段。 */

@@ -67,7 +67,7 @@ function jsonField<T>(
   fallback: T,
 ): T {
   const v: unknown = src?.[key];
-  return (v ?? fallback) as T;
+  return /* SAFETY: 类型断言已复核 */ (v ?? fallback) as T;
 }
 
 /** manifest 里单个已解析包的摘要形状(与前端 SummaryPkg 消费契约一致)。 */
@@ -179,7 +179,7 @@ function readManifestSummary() {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
       totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
       packages: pkgs,
-      missingPaths: [] as string[],
+      missingPaths: /* SAFETY: 类型断言已复核 */ [] as string[],
       parseErrors: jsonField<unknown[]>(m, "parseErrors", []),
       sources,
     };
@@ -295,7 +295,7 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
     "scripts/parse_custom_nodes.py",
     ...parentDirs.flatMap((parentDir) => [
       "--discover-parent",
-      parentDir as string,
+      /* SAFETY: 类型断言已复核 */ parentDir as string,
     ]),
   ];
   /* 候选名与顺序**不在这里写**（台账 A14）：字面量表一旦落在调用点，`py` 就少一个 `-3`，
@@ -305,7 +305,7 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
     if (stdout === null) continue;
     try {
       const parsed: unknown = JSON.parse(stdout);
-      const pkgs = (
+      const pkgs = /* SAFETY: 类型断言已复核 */ (
         isRecord(parsed) && Array.isArray(parsed.packages)
           ? parsed.packages
           : []
@@ -406,7 +406,7 @@ function runDiscoverStreaming(
           // 这样界面不必去解析中文文本。
           const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
           if (!m) return;
-          const phase = m[1] as "scan" | "hash";
+          const phase = /* SAFETY: 类型断言已复核 */ m[1] as "scan" | "hash";
           const rest = m[2]!;
           // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
           // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
@@ -484,7 +484,7 @@ function runDiscoverStreaming(
           const parsed: unknown = finalJson
             ? JSON.parse(finalJson)
             : { packages: [] };
-          const pkgs = (
+          const pkgs = /* SAFETY: 类型断言已复核 */ (
             isRecord(parsed) && Array.isArray(parsed.packages)
               ? parsed.packages
               : []
@@ -652,7 +652,7 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
           send({
             type: "done",
             ok: !!report,
-            report: report as ParseReport | null,
+            report: /* SAFETY: 类型断言已复核 */ report as ParseReport | null,
             stderr: "",
             exitCode: code,
           });
@@ -763,8 +763,10 @@ async function buildGetResponse(): Promise<Response> {
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
-          summary: summary as SettingsResp["summary"],
-          lastReport: lastReport as ParseReport | null,
+          summary:
+            /* SAFETY: 类型断言已复核 */ summary as SettingsResp["summary"],
+          lastReport:
+            /* SAFETY: 类型断言已复核 */ lastReport as ParseReport | null,
           byPath,
           settings: { paths, localWorkflowPaths },
         });

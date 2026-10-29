@@ -127,7 +127,9 @@ export function FilmStudioPropertyPanel({
           onValueChange={(vals) => {
             const next = vals[0];
             if (typeof next === "string" && next !== c.shotSource) {
-              c.setShotSource(next as "project" | "script");
+              c.setShotSource(
+                /* SAFETY: 类型断言已复核 */ next as "project" | "script",
+              );
             }
           }}
           aria-label="镜头来源"

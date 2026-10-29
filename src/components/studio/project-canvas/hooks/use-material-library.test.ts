@@ -127,7 +127,7 @@ describe("useMaterialLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
 
     const file = new File(["x"], "a.png", { type: "image/png" });
-    const files = {
+    const files = /* SAFETY: 类型断言已复核 */ {
       length: 1,
       0: file,
       item: (i: number) => (i === 0 ? file : null),
@@ -153,7 +153,11 @@ describe("useMaterialLibrary", () => {
 
     const a = new File(["a"], "a.png");
     const b = new File(["b"], "b.png");
-    const files = { length: 2, 0: a, 1: b } as unknown as FileList;
+    const files = /* SAFETY: 类型断言已复核 */ {
+      length: 2,
+      0: a,
+      1: b,
+    } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
     });
@@ -171,7 +175,10 @@ describe("useMaterialLibrary", () => {
       useMaterialLibrary({ projectId: "p-1" }),
     );
     const file = new File(["x"], "a.png");
-    const files = { length: 1, 0: file } as unknown as FileList;
+    const files = /* SAFETY: 类型断言已复核 */ {
+      length: 1,
+      0: file,
+    } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
     });
@@ -187,7 +194,10 @@ describe("useMaterialLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
 
     const file = new File(["x"], "a.png");
-    const files = { length: 1, 0: file } as unknown as FileList;
+    const files = /* SAFETY: 类型断言已复核 */ {
+      length: 1,
+      0: file,
+    } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
     });

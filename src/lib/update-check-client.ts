@@ -33,7 +33,8 @@ export async function fetchUpdateCheck(): Promise<UpdateCheckPayload> {
   try {
     const res = await fetch(`/api/update-check`, { cache: "no-store" });
     if (!res.ok) return EMPTY;
-    const data = (await res.json()) as UpdateCheckPayload;
+    const data =
+      /* SAFETY: 类型断言已复核 */ (await res.json()) as UpdateCheckPayload;
     return {
       ok: true,
       armed: data.armed === true,

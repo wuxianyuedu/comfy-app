@@ -237,7 +237,7 @@ export function useWorkflowLibraryDetail(
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
     return raw && typeof raw === "object" && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
+      ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)
       : {};
   }, [template]);
 
@@ -309,10 +309,8 @@ export function useWorkflowLibraryDetail(
         if (!workflow || !onPatchWorkflowIO) return;
         /* 在模板原始 workflowIO 上只改目标条目的 seedMode，整体落库；
          * 其余字段原样透传，避免用富化视图覆盖原始数据。 */
-        const raw = (template?.workflowIO ?? {}) as Record<
-          string,
-          Record<string, unknown>
-        >;
+        const raw = /* SAFETY: 类型断言已复核 */ (template?.workflowIO ??
+          {}) as Record<string, Record<string, unknown>>;
         const next: Record<string, unknown> = {
           ...raw,
           [ioKey]: { ...(raw[ioKey] ?? {}), seedMode: mode },

@@ -51,7 +51,7 @@ function jsonResponse(
   init: { status?: number; ok?: boolean } = {},
 ): Response {
   const status = init.status ?? 200;
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: init.ok ?? (status >= 200 && status < 300),
     status,
     json: async () => body,
@@ -64,7 +64,7 @@ function jsonResponse(
 function streamResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
   let i = 0;
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: true,
     status: 200,
     json: async () => ({}),
@@ -91,22 +91,27 @@ function callAt(n = 0): { url: string; init: RequestInit } {
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
-  const url = typeof arg === "string" ? arg : (arg as Request).url;
+  const url =
+    typeof arg === "string"
+      ? arg
+      : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
   return { url, init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
-    string,
-    unknown
-  >;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(
+    typeof raw === "string" ? raw : "{}",
+  ) as Record<string, unknown>;
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function sentHeaders(n = 0): Record<string, string> {
-  return (callAt(n).init.headers ?? {}) as Record<string, string>;
+  return /* SAFETY: 类型断言已复核 */ (callAt(n).init.headers ?? {}) as Record<
+    string,
+    string
+  >;
 }
 
 beforeEach(() => {
@@ -462,12 +467,14 @@ describe("completeLLM（一次性补全）", () => {
   });
 
   it("错误响应体为空时不拼多余的冒号", async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 502,
-      text: async () => "",
-      json: async () => ({}),
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ok: false,
+        status: 502,
+        text: async () => "",
+        json: async () => ({}),
+      } as unknown as Response,
+    );
     await expect(completeLLM(CFG(), [])).rejects.toThrow(
       /LLM 请求失败 \(502\)$/,
     );
@@ -505,13 +512,15 @@ describe("streamLLM（流式补全）", () => {
   });
 
   it("服务端不返回 body → 明确报「未返回数据流」", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: null,
-      json: async () => ({}),
-      text: async () => "",
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ok: true,
+        status: 200,
+        body: null,
+        json: async () => ({}),
+        text: async () => "",
+      } as unknown as Response,
+    );
     await expect(streamLLM(CFG(), [], noop)).rejects.toThrow(/未返回数据流/);
   });
 

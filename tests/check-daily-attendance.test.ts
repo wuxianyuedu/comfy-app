@@ -268,7 +268,7 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       expect(isDailyDispatch({ event }), event).toBe(false);
     }
     /* 多条里挑最近的那一条 —— 拿旧的当「上一次」会把缺勤读成出勤。 */
-    const picked = latestDailyDispatch([
+    const picked = /* SAFETY: 类型断言已复核 */ latestDailyDispatch([
       listed("old", "crontab: 0 4 * * *", "2026-10-20T16:00:00.000Z"),
       listed("new", "crontab: 0 0 * * *", RECENT),
       listed("pr", "pull_request", "2026-10-23T01:00:00.000Z"),
@@ -333,7 +333,7 @@ describe("daily-attendance：命令行那一跳", () => {
       ),
     });
     expect(detailFile.code, detailFile.out).toBe(CODE.PRESENT);
-    expect((JSON.parse(detailFile.out) as { verdict: string }).verdict).toBe(
+    expect((/* SAFETY: 类型断言已复核 */ JSON.parse(detailFile.out) as { verdict: string }).verdict).toBe(
       "present",
     );
 

@@ -54,7 +54,9 @@ export async function testModelUsage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const json = /* SAFETY: 类型断言已复核 */ (await res
+    .json()
+    .catch(() => ({}))) as Record<string, unknown>;
   return parseUsageTestResult(res, json);
 }
 
@@ -100,6 +102,8 @@ export async function queryUsageTask(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const json = /* SAFETY: 类型断言已复核 */ (await res
+    .json()
+    .catch(() => ({}))) as Record<string, unknown>;
   return parseUsageTestResult(res, json);
 }

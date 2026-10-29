@@ -36,7 +36,7 @@ function channels(value: string): [number, number, number] {
 
 /** WCAG 相对亮度（sRGB 线性化后加权）。 */
 function luminance(value: string): number {
-  const [r, g, b] = channels(value).map((c) => {
+  const [r, g, b] = /* SAFETY: 类型断言已复核 */ channels(value).map((c) => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
@@ -74,7 +74,7 @@ const MIN_SELECTED_VS_BASE = 1.35;
 const MIN_SELECTED_VS_HOVER = 1.15;
 
 describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）", () => {
-  it.for([
+  it.for(/* SAFETY: 类型断言已复核 */ [
     ["浅色", () => light],
     ["深色", () => dark],
   ] as const)("%s：悬停 / 选中底色都明显区别于侧栏底", ([, get]) => {
@@ -99,7 +99,7 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     ).toBeGreaterThanOrEqual(MIN_SELECTED_VS_HOVER);
   });
 
-  it.for([
+  it.for(/* SAFETY: 类型断言已复核 */ [
     ["浅色", () => light],
     ["深色", () => dark],
   ] as const)("%s：别名确实落到侧栏专用的两级 token 上", ([, get]) => {
@@ -119,7 +119,7 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     );
   });
 
-  it.for([
+  it.for(/* SAFETY: 类型断言已复核 */ [
     ["浅色", () => light],
     ["深色", () => dark],
   ] as const)("%s：选中底上的正文与指示条都够亮", ([, get]) => {

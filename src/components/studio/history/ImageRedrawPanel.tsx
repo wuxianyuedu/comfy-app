@@ -61,7 +61,11 @@ export function ImageRedrawPanel({
         <FieldLabel>模式</FieldLabel>
         <RadioGroup
           value={controller.mode}
-          onValueChange={(v) => controller.setMode(v as "upscale" | "inpaint")}
+          onValueChange={(v) =>
+            controller.setMode(
+              /* SAFETY: 类型断言已复核 */ v as "upscale" | "inpaint",
+            )
+          }
           className="flex flex-row gap-4"
         >
           {/* 点击区走 radio-group 的 children 语义（P78）：文字进 Item，

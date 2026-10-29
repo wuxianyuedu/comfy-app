@@ -55,7 +55,7 @@ describe("size-preset-store", () => {
       height: 720,
     });
     expect(listener).toHaveBeenCalledTimes(1);
-    const persisted = JSON.parse(
+    const persisted = /* SAFETY: 类型断言已复核 */ JSON.parse(
       window.localStorage.getItem(SIZE_PRESET_STORAGE_KEY) ?? "null",
     ) as { image?: Record<string, Record<string, unknown>> } | null;
     expect(persisted?.image?.["16:9 横屏"]?.["1k"]).toEqual({

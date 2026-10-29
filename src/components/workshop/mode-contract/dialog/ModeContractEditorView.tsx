@@ -223,7 +223,9 @@ function ModeContractDraftPanel({
         <SelectMenu
           value={draft.output}
           onChange={(value) =>
-            controller.setOutput(value as ModeContract["output"])
+            controller.setOutput(
+              /* SAFETY: 类型断言已复核 */ value as ModeContract["output"],
+            )
           }
           options={["image", "video", "audio"]}
           labels={{

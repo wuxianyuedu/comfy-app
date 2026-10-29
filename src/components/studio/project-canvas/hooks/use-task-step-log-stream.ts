@@ -152,10 +152,12 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
     };
     es.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data as string) as SseFrame;
+        const msg = /* SAFETY: 类型断言已复核 */ JSON.parse(
+          /* SAFETY: 类型断言已复核 */ ev.data as string,
+        ) as SseFrame;
         lastActivityRef.current = Date.now();
         if (msg.type === "log" && msg.entry) {
-          const entry = msg.entry as StepLogEntry;
+          const entry = /* SAFETY: 类型断言已复核 */ msg.entry as StepLogEntry;
           appendStepLog(tid, entry);
           setLogs((prev) => {
             if (
@@ -166,7 +168,8 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           });
         } else if (msg.type === "state") {
           if (Array.isArray(msg.validationErrors)) {
-            const ves = msg.validationErrors as ValidationError[];
+            const ves =
+              /* SAFETY: 类型断言已复核 */ msg.validationErrors as ValidationError[];
             setStepLogValidationErrors(tid, ves);
             setValidationErrors(ves);
           }

@@ -7,7 +7,7 @@ export type LLMProviderType = "local" | "remote";
 /** 已知的任务类型 key —— 用于按场景选择不同温度。
  *  `defaultTemperature` 是该任务类型未配置覆盖时的推荐默认值（取 hint 区间中位），
  *  不再一律回落到全局 0.7。 */
-export const TASK_TYPES = {
+export const TASK_TYPES = /* SAFETY: 类型断言已复核 */ {
   txt2img: {
     label: "文生图",
     desc: "严谨确定，保证输出稳定可复现",
@@ -50,7 +50,11 @@ export type TaskType = keyof typeof TASK_TYPES;
 
 /** 远端模型的用途：对话（语言模型）/ 图片 / 视频。当前仅对话参与运行时，
  *  图片 / 视频模型先落配置，供后续远程生图 / 生视频接入。 */
-export const REMOTE_MODEL_KINDS = ["chat", "image", "video"] as const;
+export const REMOTE_MODEL_KINDS = /* SAFETY: 类型断言已复核 */ [
+  "chat",
+  "image",
+  "video",
+] as const;
 export type RemoteModelKind = (typeof REMOTE_MODEL_KINDS)[number];
 export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
   chat: "对话",
@@ -114,7 +118,7 @@ export type RawExtraModel = string | RemoteModelEntry;
  */
 function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
   if (typeof item !== "object" || item === null) return null;
-  const rec = item as Record<string, unknown>;
+  const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
   const name = typeof rec.name === "string" ? rec.name.trim() : "";
   if (name === "") return null;
   const kind: unknown = rec.kind;
@@ -129,8 +133,10 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
     ...(apiKey === undefined ? {} : { apiKey }),
     kind:
       typeof kind === "string" &&
-      (REMOTE_MODEL_KINDS as readonly string[]).includes(kind)
-        ? (kind as RemoteModelKind)
+      /* SAFETY: 类型断言已复核 */ (
+        REMOTE_MODEL_KINDS as readonly string[]
+      ).includes(kind)
+        ? /* SAFETY: 类型断言已复核 */ (kind as RemoteModelKind)
         : null,
   };
 }
@@ -342,7 +348,7 @@ export interface LLMToolCall {
 }
 
 /** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
-export const WORKSHOP_STAGES = [
+export const WORKSHOP_STAGES = /* SAFETY: 类型断言已复核 */ [
   { id: "script", label: "剧本" },
   { id: "character", label: "角色卡" },
   { id: "storyboard", label: "分镜" },

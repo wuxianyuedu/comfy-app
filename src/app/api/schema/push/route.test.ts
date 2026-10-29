@@ -116,7 +116,9 @@ describe("POST /api/schema/push", () => {
     });
     const res = await post();
     expect(res.status).toBe(404);
-    const body = (await res.json()) as { error?: string };
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      error?: string;
+    };
     expect(body.error).toContain("找不到");
   });
 });

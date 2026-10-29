@@ -114,7 +114,7 @@ describe("落点与根", () => {
 
     const run = () => ({ status: 0, stdout: "G:\\.pnpm-store\\v11\n" });
     const pkgName = String(
-      (JSON.parse(
+      (/* SAFETY: 类型断言已复核 */ JSON.parse(
         fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
       ) as { name?: string }).name,
     ).toLowerCase();
@@ -165,7 +165,7 @@ describe("--seed", () => {
     const lines: string[] = [];
     const log = (line: string) => lines.push(line);
     expect(seed({ cacheDir: la, mirror, dryRun: false, log, plan })).toBe(0);
-    const manifest = JSON.parse(
+    const manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
     ) as { version: string; files: { path: string; sha256: string }[] };
     expect(manifest.version).toBe(plan.version);

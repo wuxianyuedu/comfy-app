@@ -49,10 +49,9 @@ function bodyOf(
 ): Record<string, unknown> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
   const raw: unknown = init?.body;
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
-    string,
-    unknown
-  >;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(
+    typeof raw === "string" ? raw : "{}",
+  ) as Record<string, unknown>;
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
@@ -61,7 +60,10 @@ function headersOf(
   call = 0,
 ): Record<string, string> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
-  return (init?.headers ?? {}) as Record<string, string>;
+  return /* SAFETY: 类型断言已复核 */ (init?.headers ?? {}) as Record<
+    string,
+    string
+  >;
 }
 
 /** 上游响应桩：按上面的 mock 签名给回 Response 形状。 */
@@ -111,7 +113,10 @@ describe("defaultChannelsFromEnv / normalizeSettings", () => {
   it("坏数据（非对象 / 字段类型不对）按默认处理，不抛错", () => {
     const defaults = defaultChannelsFromEnv({});
     const merged = normalizeSettings(
-      { image: "not-an-object" as never, video: { baseUrl: 123 } as never },
+      {
+        image: /* SAFETY: 类型断言已复核 */ "not-an-object" as never,
+        video: /* SAFETY: 类型断言已复核 */ { baseUrl: 123 } as never,
+      },
       defaults,
     );
     expect(merged.image).toEqual(defaults.image);

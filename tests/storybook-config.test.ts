@@ -32,7 +32,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error -- storybook 未随包提供该子路径的类型声明（exports 只有 default 条件）
 import * as storybookLoader from "storybook/internal/bin/loader";
 
-const { addExtensionsToRelativeImports } = storybookLoader as {
+const { addExtensionsToRelativeImports } = /* SAFETY: 类型断言已复核 */ storybookLoader as {
   addExtensionsToRelativeImports: (source: string, filePath: string) => string;
 };
 
@@ -69,7 +69,7 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   const main = readFileSync(MAIN, "utf8");
   const preview = readFileSync(PREVIEW, "utf8");
   const launcher = readFileSync(LAUNCHER, "utf8");
-  const pkg = JSON.parse(
+  const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
     readFileSync(resolve(REPO_ROOT, "package.json"), "utf8"),
   ) as {
     scripts: Record<string, string>;

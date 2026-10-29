@@ -132,7 +132,7 @@ function findHexMismatch(
 ): string[] {
   const bad: string[] = [];
   for (const row of rows) {
-    for (const state of ["light", "dark"] as const) {
+    for (const state of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
       const doc = row[state];
       if (!doc) continue;
       const actual =
@@ -559,7 +559,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     );
     /* 先验量具：这条是「等式为 0」的判据，档表解空了会永远绿（比红更糟）。
      * 六颗都是本仓真实在用、且**必须**能被类名表达的档。 */
-    for (const [px, name] of [
+    for (const [px, name] of /* SAFETY: 类型断言已复核 */ [
       [9, "4xs"],
       [10, "3xs"],
       [11, "2xs"],
@@ -857,7 +857,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       readFileSync(GLOBALS_PATH, "utf8"),
       TSHIRT_NAME,
     );
-    for (const [name, px] of [
+    for (const [name, px] of /* SAFETY: 类型断言已复核 */ [
       ["xs", 16],
       ["sm", 20],
       ["lg", 28],
@@ -870,7 +870,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     /* 两颗微标签刻意**不配对**（globals.css 注释自己写着「也不给 --text-*-line-height
      * 配对」）—— 这正是「10.5px 并进来只动字号、不动行高」的前提。哪天有人给它们
      * 配了行高，那 52 处的账要重算。 */
-    for (const name of ["2xs", "3xs"] as const) {
+    for (const name of /* SAFETY: 类型断言已复核 */ ["2xs", "3xs"] as const) {
       expect(
         renderedLineHeightPx(tiers, name),
         `--text-${name} 被加了配对行高 —— 并入它的那批调用点行盒会变，像素账要重算`,

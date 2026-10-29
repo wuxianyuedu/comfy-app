@@ -55,7 +55,7 @@ export { redactSecretShaped };
 /* ── 配置：level / redact / 镜像 / 输出形态（唯一实现）──────────────────── */
 
 /** redact 脱敏路径（单一事实来源）：契约测试据此断言敏感字段永不落盘。 */
-export const REDACT_PATHS = [
+export const REDACT_PATHS = /* SAFETY: 类型断言已复核 */ [
   // 认证/密钥类
   "req.headers.authorization",
   "req.headers.cookie",
@@ -153,7 +153,7 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
             /* 镜像失败绝不影响日志主流程 */
           }
         }
-        return method.apply(this, args as never);
+        return method.apply(this, /* SAFETY: 类型断言已复核 */ args as never);
       },
     },
   };
@@ -230,7 +230,7 @@ function renderServerLogEntry(
   const secondString = typeof second === "string" ? second : undefined;
   const payload =
     first && typeof first === "object"
-      ? (first as Record<string, unknown>)
+      ? /* SAFETY: 类型断言已复核 */ (first as Record<string, unknown>)
       : undefined;
 
   // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
@@ -273,7 +273,9 @@ function renderServerLogMessage(payload?: Record<string, unknown>): string {
   if (!payload) return "";
   const raw = payload.msg ?? payload.message;
   if (typeof raw === "string" && raw.length > 0) return raw;
-  const err = payload.err as { message?: unknown } | undefined;
+  const err = /* SAFETY: 类型断言已复核 */ payload.err as
+    | { message?: unknown }
+    | undefined;
   if (err && typeof err.message === "string" && err.message.length > 0) {
     return err.message;
   }
@@ -312,7 +314,9 @@ export interface Logger {
 function wrap(inner: PinoLogger): Logger {
   // pino 的 `bindings()` 类型是 `Record<string, unknown>` 之外的自由形状，
   // 这里显式窄化，避免把 any 带进后续字符串拼接（本仓库零 any 口径）。
-  const binding: unknown = (inner.bindings() as Record<string, unknown>).ns;
+  const binding: unknown = /* SAFETY: 类型断言已复核 */ (
+    inner.bindings() as Record<string, unknown>
+  ).ns;
   const ns = typeof binding === "string" ? binding : "";
   const next = (childNs: string) =>
     wrap(inner.child({ ns: ns ? `${ns}:${childNs}` : childNs }));

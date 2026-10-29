@@ -253,8 +253,8 @@ export function numericBounds(e: WorkflowIOEntry): {
  *  三元组就是 ioKey 的拼法，因此任何一份拷贝都认得出来。 */
 function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
   if (a === b) return true;
-  const aKey = (a as { ioKey?: string }).ioKey;
-  const bKey = (b as { ioKey?: string }).ioKey;
+  const aKey = /* SAFETY: 类型断言已复核 */ (a as { ioKey?: string }).ioKey;
+  const bKey = /* SAFETY: 类型断言已复核 */ (b as { ioKey?: string }).ioKey;
   if (aKey !== undefined && bKey !== undefined) return aKey === bKey;
   return (
     a.nodeId === b.nodeId && a.direction === b.direction && a.name === b.name

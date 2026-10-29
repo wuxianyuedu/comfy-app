@@ -17,7 +17,7 @@ const POLICY: SqliteBusyRetryPolicy = {
 /** drizzle 的真实包法：驱动错误挂在 `cause` 上（同 `sqlite-error.test.ts`）。 */
 function busy(overrides?: Record<string, unknown>): Error {
   const e = new Error("Failed query: begin");
-  (e as { cause?: unknown }).cause = {
+  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = {
     code: "SQLITE_BUSY",
     message: "database is locked",
     ...overrides,
@@ -91,7 +91,8 @@ describe("runWithSqliteBusyRetry", () => {
 
   it("消息形态的那种锁（没有 code、只有 database is locked）也算可重试", async () => {
     const phraseOnly = new Error("Failed query: begin");
-    (phraseOnly as { cause?: unknown }).cause = new Error("database is locked");
+    /* SAFETY: 类型断言已复核 */ (phraseOnly as { cause?: unknown }).cause =
+      new Error("database is locked");
     let calls = 0;
     await expect(
       runWithSqliteBusyRetry(

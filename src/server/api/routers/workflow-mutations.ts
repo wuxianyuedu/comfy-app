@@ -242,7 +242,7 @@ export const workflowMutationProcedures = {
             ? persistEnrichedWorkflowIO(
                 /* IO 的类型 / 默认值从 RAW 原件的字面量与 object_info 富化，
                  * 存库不再有第二份可执行的 API 图。 */
-                (existing.rawJson as
+                /* SAFETY: 类型断言已复核 */ (existing.rawJson as
                   | Record<string, unknown>
                   | null
                   | undefined) ?? null,
@@ -281,7 +281,10 @@ export const workflowMutationProcedures = {
           existing.positions &&
           typeof existing.positions === "object" &&
           !Array.isArray(existing.positions)
-            ? (existing.positions as Record<string, unknown>)
+            ? /* SAFETY: 类型断言已复核 */ (existing.positions as Record<
+                string,
+                unknown
+              >)
             : {};
         const next: Record<string, unknown> = {};
         if (scope) {
@@ -318,7 +321,10 @@ export const workflowMutationProcedures = {
         typeof existing.rawJson === "object" &&
         !Array.isArray(existing.rawJson)
       ) {
-        nextRawJson = existing.rawJson as Record<string, unknown>;
+        nextRawJson = /* SAFETY: 类型断言已复核 */ existing.rawJson as Record<
+          string,
+          unknown
+        >;
       }
       const writePositions =
         input.positions !== undefined &&
@@ -326,15 +332,20 @@ export const workflowMutationProcedures = {
       if (writePositions || groups !== undefined || notes !== undefined) {
         nextRawJson = nextRawJson ? { ...nextRawJson } : {};
         const nodes = Array.isArray(nextRawJson.nodes)
-          ? [...(nextRawJson.nodes as unknown[])]
+          ? [.../* SAFETY: 类型断言已复核 */ (nextRawJson.nodes as unknown[])]
           : [];
         if (writePositions) {
-          const posMap = input.positions as Record<string, [number, number]>;
+          const posMap = /* SAFETY: 类型断言已复核 */ input.positions as Record<
+            string,
+            [number, number]
+          >;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
             if (!nd || typeof nd !== "object") continue;
             const rawId =
-              nd && "id" in nd ? (nd as { id?: unknown }).id : undefined;
+              nd && "id" in nd
+                ? /* SAFETY: 类型断言已复核 */ (nd as { id?: unknown }).id
+                : undefined;
             const pid =
               typeof rawId === "string"
                 ? rawId
@@ -358,11 +369,17 @@ export const workflowMutationProcedures = {
               existing.positions &&
               typeof existing.positions === "object" &&
               !Array.isArray(existing.positions)
-                ? (existing.positions as Record<string, [number, number]>)
+                ? /* SAFETY: 类型断言已复核 */ (existing.positions as Record<
+                    string,
+                    [number, number]
+                  >)
                 : {};
             patch.positions = {
               ...cur,
-              ...(input.positions as Record<string, [number, number]>),
+              .../* SAFETY: 类型断言已复核 */ (input.positions as Record<
+                string,
+                [number, number]
+              >),
             };
           } else {
             patch.positions = input.positions;

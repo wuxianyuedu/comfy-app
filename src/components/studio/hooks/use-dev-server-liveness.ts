@@ -221,7 +221,10 @@ async function probeBootId(): Promise<ProbeResult> {
         runId: null,
         routeTableStale: res.status === 404,
       };
-    const data = (await res.json()) as { bootId?: unknown; runId?: unknown };
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      bootId?: unknown;
+      runId?: unknown;
+    };
     const runId =
       typeof data.runId === "string" && data.runId.length > 0
         ? data.runId

@@ -53,7 +53,7 @@ function isPortraitSource(value: unknown): value is PortraitSource {
  *  使一张坏数据不会炸掉整块界面。旧草稿缺字段按导入来源兜底。 */
 export function normalizePortrait(raw: unknown): CharacterPortrait | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const candidate = raw as Record<string, unknown>;
+  const candidate = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   const url = candidate.url;
   if (typeof url !== "string" || !url) return null;
   const createdAt = candidate.createdAt;

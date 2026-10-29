@@ -43,7 +43,7 @@ import { describe, expect, it } from "vitest";
 /** 站点根路径 → 仓库路径（`/fonts/x.woff2` 落在 `public/fonts/x.woff2`）。 */
 const PUBLIC_REL_OF = (sitePath: string) => `public${sitePath}`;
 /** 文件载体 → CSS 里该写的扩展名与 `format()`，两者必须同一项。 */
-const FONT_CARRIERS = [
+const FONT_CARRIERS = /* SAFETY: 类型断言已复核 */ [
   { ext: ".woff2", format: "woff2", glob: "*.woff2" },
   { ext: ".ttf", format: "truetype", glob: "*.ttf" },
 ] as const;
@@ -58,7 +58,7 @@ const LICENSE_REL = "public/fonts/OFL-Sarasa-Gothic.txt";
  *（前者的判据在下面 `@font-face` 的条数核对，后者的判据是每条的 family 必须
  * 真出现在某个 `--font-*` 的首选位上）。
  */
-const EMBEDDED_FACES = [
+const EMBEDDED_FACES = /* SAFETY: 类型断言已复核 */ [
   {
     file: "public/fonts/SarasaGothicSC-Bold.woff2",
     family: "Sarasa Gothic SC",

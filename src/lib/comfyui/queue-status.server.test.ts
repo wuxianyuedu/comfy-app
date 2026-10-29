@@ -20,10 +20,13 @@ import { stripComments } from "../../../tests/helpers/strip-comments";
  * `unbound-method` 判据）；`state` 是用例间可改的输入。 */
 const stub = vi.hoisted(() => {
   const state = {
-    running: null as Record<string, unknown> | null,
+    running: /* SAFETY: 类型断言已复核 */ null as Record<
+      string,
+      unknown
+    > | null,
     queued: 0,
     /** 进程级快照的桩返回值（`status.ts` 的 `ComfyRuntimeSnapshot` 子集）。 */
-    snapshot: {
+    snapshot: /* SAFETY: 类型断言已复核 */ {
       running: false,
       unverified: false,
       didQueryProcTable: true,

@@ -28,7 +28,7 @@ function jsonBody(init: RequestInit | undefined): unknown {
   const body = init?.body;
   if (typeof body !== "string")
     throw new Error(`请求体不是字符串: ${typeof body}`);
-  return JSON.parse(body) as unknown;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(body) as unknown;
 }
 
 afterEach(() => {

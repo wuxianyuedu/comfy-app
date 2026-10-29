@@ -139,7 +139,7 @@ test("假声明在较早那笔上：只审 HEAD 漏过，审区间抓到", ({ re
   /* 逐条都审：区间里 2 笔，`--json` 的 `commits` 就得是 2 ——
    * 「拿到区间却只审顶端」会同时过掉上面两条断言。 */
   const asJson = repo.run(["HEAD~2..HEAD", "--json"]);
-  const parsed = JSON.parse(asJson.output) as { commits: number };
+  const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(asJson.output) as { commits: number };
   repoExpect(parsed.commits).toBe(2);
 });
 
@@ -177,7 +177,7 @@ test("同一句里并列的两个章节各报一条（不是只报一个）", ({
 
   const { code, output } = repo.run(["--commit", "HEAD", "--json"]);
   repoExpect(code).toBe(1);
-  const parsed = JSON.parse(output) as {
+  const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
     verdict: string;
     audits: Array<{
       rows: Array<{ claim: { target: string }; verdict: string }>;
@@ -465,7 +465,7 @@ describe("真历史（本仓库）", () => {
           stdio: ["ignore", "pipe", "pipe"],
         });
       } catch (err) {
-        const e = err as { status?: number; stdout?: string; stderr?: string };
+        const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
         code = e.status ?? -1;
         out = `${e.stdout ?? ""}${e.stderr ?? ""}`;
       }

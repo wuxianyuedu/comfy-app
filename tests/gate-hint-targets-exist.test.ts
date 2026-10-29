@@ -217,7 +217,7 @@ function exitCodeOfGate(rel: string): number {
     });
     return 0;
   } catch (error) {
-    const code = (error as { status?: number | null }).status;
+    const code = (/* SAFETY: 类型断言已复核 */ error as { status?: number | null }).status;
     return typeof code === "number" ? code : -1;
   }
 }

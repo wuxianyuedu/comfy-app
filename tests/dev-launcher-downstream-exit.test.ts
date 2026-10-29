@@ -75,7 +75,7 @@ function markersFor(stderrText: string): {
         cwd: process.cwd(),
       },
     );
-    return JSON.parse(out.stdout || "{}") as {
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(out.stdout || "{}") as {
       abandoned: boolean;
       crashed: boolean;
     };

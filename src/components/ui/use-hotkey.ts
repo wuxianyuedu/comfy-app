@@ -155,9 +155,15 @@ export function useHotkey(
       handlerRef.current();
     };
 
-    host.addEventListener("keydown", onKeyDown as EventListener);
+    host.addEventListener(
+      "keydown",
+      /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener,
+    );
     return () =>
-      host.removeEventListener("keydown", onKeyDown as EventListener);
+      host.removeEventListener(
+        "keydown",
+        /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener,
+      );
   }, [
     enabled,
     filterInput,

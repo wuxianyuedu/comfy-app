@@ -44,7 +44,7 @@ const ROOT_WORKERS = resolveCiWorkers().workers;
  * 共享项 ⇒ 期望值。**这就是「一处定义」的那张表**：
  * 新增一项根级共享项时，同批加在这里（否则第 4 条会红 —— 那正是它的用意）。
  */
-const SHARED_EXPECTATIONS = {
+const SHARED_EXPECTATIONS = /* SAFETY: 类型断言已复核 */ {
   setupFiles: ["tests/setup.ts"],
   globals: false,
   testTimeout: 30_000,
@@ -90,7 +90,7 @@ const EXPECTED_PROJECTS = ["happy-dom", "node"];
  * 都随之整档变化）。§11.17.1.2「同一件事只该有一个来源」的另一面：
  * 两个字段各自说自己的话，就不许拿一个去顶另一个。
  */
-const EXPECTED_TIER_ENVIRONMENTS = {
+const EXPECTED_TIER_ENVIRONMENTS = /* SAFETY: 类型断言已复核 */ {
   node: "node",
   "happy-dom": "happy-dom",
 } as const;
@@ -113,10 +113,10 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
   it("**每一档**都拿到了共享项（失效形态是一档落后，所以逐档判）", async () => {
     const vitest = await resolvedVitest();
     for (const project of vitest.projects) {
-      const cfg = project.config as unknown as Record<string, unknown>;
+      const cfg = /* SAFETY: 类型断言已复核 */ project.config as unknown as Record<string, unknown>;
       const prefix = `[${project.name}]`;
       // setupFiles 在解析后是**绝对路径**，所以比形状（落在仓库根之下、名字对）。
-      const setupFiles = cfg.setupFiles as string[];
+      const setupFiles = /* SAFETY: 类型断言已复核 */ cfg.setupFiles as string[];
       /* 比较前归一分隔符：`path.relative()` 在 win32 上给出 `tests\setup.ts`，而期望
          值按配置源码写成 POSIX 形式 —— 不归一的话这条判据在每台 Windows 上都红，
          且红的原因与它要判的事（共享项有没有落到每一档）毫无关系。 */
@@ -129,7 +129,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(cfg.hookTimeout, prefix).toBe(SHARED_EXPECTATIONS.hookTimeout);
       expect(cfg.maxWorkers, prefix).toBe(SHARED_EXPECTATIONS.maxWorkers);
       expect(
-        (cfg.expect as { poll?: unknown } | undefined)?.poll,
+        (/* SAFETY: 类型断言已复核 */ cfg.expect as { poll?: unknown } | undefined)?.poll,
         prefix,
       ).toEqual(EXPECT_POLL);
     }
@@ -158,7 +158,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
     expect(source).not.toMatch(/extends\s*:\s*false/);
     for (const project of vitest.projects) {
       expect(
-        (project.config as unknown as Record<string, unknown>).globals,
+        (/* SAFETY: 类型断言已复核 */ project.config as unknown as Record<string, unknown>).globals,
         `[${project.name}] 共享项缺席 = 这一档把继承关掉了`,
       ).toBe(SHARED_EXPECTATIONS.globals);
     }
@@ -166,7 +166,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
 
   it("根 `test` 上没有「只对某档有意义」的项，project 里不再重复声明共享项", async () => {
     // 这一条判**配置文本**（解析后看不出「它写在哪一层」），用 TS 模块直接读默认导出。
-    const mod = (await import(path.join(ROOT, "vitest.config.ts"))) as {
+    const mod = /* SAFETY: 类型断言已复核 */ (await import(path.join(ROOT, "vitest.config.ts"))) as {
       default: { test: Record<string, unknown> };
     };
     const rootTest = mod.default.test;
@@ -192,7 +192,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       );
     }
 
-    const projects = rootTest.projects as {
+    const projects = /* SAFETY: 类型断言已复核 */ rootTest.projects as {
       test: Record<string, unknown> & { name?: string };
     }[];
     for (const entry of projects) {

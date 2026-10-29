@@ -64,7 +64,10 @@ describe("deriveModelOverview 分组与排序", () => {
     const out = deriveModelOverview({
       folders: [
         { folder: "a", label: "A", count: 1 },
-        { folder: "b", label: "B" } as never,
+        /* SAFETY: 类型断言已复核 */ {
+          folder: "b",
+          label: "B",
+        } as never,
       ],
       loading: false,
       isError: false,

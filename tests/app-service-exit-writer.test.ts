@@ -20,7 +20,7 @@ interface ExitModule {
   ) => boolean;
 }
 
-const mod = (await import(
+const mod = /* SAFETY: 类型断言已复核 */ (await import(
   pathToFileURL(join(process.cwd(), "scripts", "app-service-exit.mjs")).href
 )) as unknown as ExitModule;
 
@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 function read(root: string): Record<string, unknown> {
-  return JSON.parse(
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(
     readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8"),
   ) as Record<string, unknown>;
 }

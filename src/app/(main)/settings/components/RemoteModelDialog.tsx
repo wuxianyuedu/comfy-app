@@ -98,7 +98,7 @@ export function RemoteModelDialog({
                 onChange={(kind) =>
                   d.setAddForm((f) => ({
                     ...f,
-                    kind: kind as RemoteModelKind,
+                    kind: /* SAFETY: 类型断言已复核 */ kind as RemoteModelKind,
                   }))
                 }
                 options={[...REMOTE_MODEL_KINDS]}

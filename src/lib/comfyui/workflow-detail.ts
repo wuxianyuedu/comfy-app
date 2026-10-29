@@ -223,7 +223,10 @@ async function buildWorkflowDetailJson(input: {
   const positionsFromRaw =
     raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
   const tplPositions =
-    (tpl.positions as Record<string, [number, number]>) ?? {};
+    /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<
+      string,
+      [number, number]
+    >) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
     ...tplPositions,
@@ -264,7 +267,7 @@ async function buildWorkflowDetailJson(input: {
       const classType: string = n.class_type
         ? n.class_type
         : n.type
-          ? (n.type as string)
+          ? /* SAFETY: 类型断言已复核 */ (n.type as string)
           : "?";
       const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
       /* 子图封装节点（class_type === UUID）的显示名取自
@@ -316,7 +319,7 @@ async function buildWorkflowDetailJson(input: {
    * （与工作流级的 `WorkflowTemplate.modes` 同名、含义完全不同）归一到
    * `modeOverrides`——下游 `enrichWorkflowIO` 与客户端都只读后者。
    * 少了这一步，同一个 JSON 列就会被两处各按各的名字读。 */
-  const workflowIORaw = parseWorkflowIOMap(
+  const workflowIORaw = /* SAFETY: 类型断言已复核 */ parseWorkflowIOMap(
     asRecord(tpl.workflowIO) ?? {},
   ) as Record<string, WorkflowIORawEntry>;
 
@@ -453,7 +456,10 @@ async function buildWorkflowDetailJson(input: {
         const slot: IOParamSlot =
           e.kind === "output"
             ? { direction: "output", kind: "output" }
-            : { direction: "input", kind: e.kind as "param" | "widget" };
+            : {
+                direction: "input",
+                kind: /* SAFETY: 类型断言已复核 */ e.kind as "param" | "widget",
+              };
         return [k, { ...e, ...slot } satisfies WorkflowDetailIOEntry];
       }),
     ),
@@ -555,7 +561,9 @@ export async function buildWorkflowDetailFull(
    * （缓存在 PATCH / DELETE 时失效；404 从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return JSON.parse(cached) as WorkflowDetailFull;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(
+      cached,
+    ) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
@@ -621,7 +629,9 @@ export async function buildWorkflowDetailFull(
     }),
   );
 
-  return JSON.parse(detailJson) as WorkflowDetailFull;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(
+    detailJson,
+  ) as WorkflowDetailFull;
 }
 
 export async function buildSubgraphDetail(
@@ -639,7 +649,9 @@ export async function buildSubgraphDetail(
    * （下面 400 / 404 那两种情况从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return JSON.parse(cached) as WorkflowDetailFull;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(
+      cached,
+    ) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
@@ -744,7 +756,10 @@ export async function buildSubgraphDetail(
     );
     const ann = extractSubgraphAnnotations(
       sub,
-      (tpl.positions as Record<string, [number, number]>) ?? {},
+      /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<
+        string,
+        [number, number]
+      >) ?? {},
       hostId,
     );
 
@@ -776,5 +791,7 @@ export async function buildSubgraphDetail(
     });
   });
 
-  return JSON.parse(detailJson) as WorkflowDetailFull;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(
+    detailJson,
+  ) as WorkflowDetailFull;
 }

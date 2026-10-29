@@ -70,7 +70,9 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
    * 内存版的旧行为一致，不是新缺口。 */
   const node =
     row.progressNode && typeof row.progressNode === "object"
-      ? (row.progressNode as { classType?: unknown })
+      ? /* SAFETY: 类型断言已复核 */ (row.progressNode as {
+          classType?: unknown;
+        })
       : null;
 
   return {

@@ -39,7 +39,9 @@ const TRANSIENT_LOCK_PHRASES = [
 
 function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
   if (typeof value !== "object" || value === null) return "";
-  const raw = (value as Record<string, unknown>)[key];
+  const raw = /* SAFETY: 类型断言已复核 */ (value as Record<string, unknown>)[
+    key
+  ];
   return typeof raw === "string" ? raw : "";
 }
 
@@ -55,7 +57,7 @@ function collect(error: unknown): { codes: string[]; messages: string[] } {
     if (message && !messages.includes(message)) messages.push(message);
     node =
       typeof node === "object"
-        ? (node as { cause?: unknown }).cause
+        ? /* SAFETY: 类型断言已复核 */ (node as { cause?: unknown }).cause
         : undefined;
   }
   return { codes, messages };

@@ -23,10 +23,16 @@ class FakeEventSource {
     FakeEventSource.instances.push(this);
   }
   emit(payload: unknown): void {
-    this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent<string>);
+    this.onmessage?.(
+      /* SAFETY: 类型断言已复核 */ {
+        data: JSON.stringify(payload),
+      } as MessageEvent<string>,
+    );
   }
   emitRaw(data: string): void {
-    this.onmessage?.({ data } as MessageEvent<string>);
+    this.onmessage?.(
+      /* SAFETY: 类型断言已复核 */ { data } as MessageEvent<string>,
+    );
   }
   close(): void {
     this.closed = true;

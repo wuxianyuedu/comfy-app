@@ -255,16 +255,20 @@ function LLMSettingsModal({
           <FormField label="提供方" className="mb-3">
             {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。 */}
             <div role="radiogroup" aria-label="提供方" className="flex gap-2">
-              {(["local", "remote"] as const).map((p) => (
-                <SelectChip
-                  key={p}
-                  shape="segment"
-                  selected={provider === p}
-                  onClick={() => setDraftProvider(p)}
-                >
-                  {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
-                </SelectChip>
-              ))}
+              {
+                /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map(
+                  (p) => (
+                    <SelectChip
+                      key={p}
+                      shape="segment"
+                      selected={provider === p}
+                      onClick={() => setDraftProvider(p)}
+                    >
+                      {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                    </SelectChip>
+                  ),
+                )
+              }
             </div>
           </FormField>
 

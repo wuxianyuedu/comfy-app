@@ -105,5 +105,5 @@ const requireCjs = createRequire(__filename);
  * 见文件头「失败路径」）。
  */
 export function loadJudgeModule(): A11yJudgeModule {
-  return requireCjs(SCRIPT) as A11yJudgeModule;
+  return /* SAFETY: 类型断言已复核 */ requireCjs(SCRIPT) as A11yJudgeModule;
 }

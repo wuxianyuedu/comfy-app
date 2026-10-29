@@ -56,7 +56,7 @@ export async function fetchProduction(
     if (!res.ok) return null;
     const data: unknown = await res.json();
     if (isRecord(data) && data.exists === true && isRecord(data.production)) {
-      return data.production as unknown as ProductionData;
+      return /* SAFETY: 类型断言已复核 */ data.production as unknown as ProductionData;
     }
     return null;
   } catch {

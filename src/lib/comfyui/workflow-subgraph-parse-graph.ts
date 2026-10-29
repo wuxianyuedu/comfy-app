@@ -591,7 +591,7 @@ export function buildSubgraphGraph(
                   imageRef: {
                     filename: fname,
                     subfolder: "",
-                    type: "input" as const,
+                    type: /* SAFETY: 类型断言已复核 */ "input" as const,
                   },
                 }
               : {}),

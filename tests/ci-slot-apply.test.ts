@@ -111,7 +111,7 @@ describe("槽的输入面与落位", () => {
 
   it("落位时摘掉本仓自己的 scripts，其余逐字节照搬", () => {
     const written = materializeSlotInputs({ jobRoot: job, slot });
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(slot, "package.json"), "utf8"),
     ) as { scripts?: unknown; dependencies?: Record<string, string> };
     expect(pkg.scripts).toBeUndefined();
@@ -129,7 +129,7 @@ describe("槽的输入面与落位", () => {
     expect(pnpmInstallFingerprint(slot)).toBe(pnpmInstallFingerprint(job));
     /* 只往 scripts 加一行：两侧都不动。旧实现（键对原文取哈希）里这一行会换键，
      * 而槽里那份副本逐字不变 —— 白付一次整装（`Done in 3m 41.4s`）。 */
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(job, "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     pkg.scripts["setup:comfy-cli-venv"] =

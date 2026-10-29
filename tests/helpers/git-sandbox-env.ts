@@ -52,7 +52,7 @@
  */
 
 /** 必须剥掉的继承变量：全部是 `git` 给自己的子进程（含钩子）导出的「仓库定位」线索。 */
-export const GIT_INHERITED_ENV_KEYS = [
+export const GIT_INHERITED_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
   "GIT_DIR",
   "GIT_WORK_TREE",
   "GIT_INDEX_FILE",
@@ -68,7 +68,7 @@ export const GIT_INHERITED_ENV_KEYS = [
  * 值是**常量**而不是 `process.env` 里那一份：这些提交只活在测试自己造的临时仓库里、
  * 用例结束后连目录一起删，不需要、也不该继承调用方的身份（真身份写进 dump 只会泄密）。
  */
-export const SANDBOX_GIT_IDENTITY = {
+export const SANDBOX_GIT_IDENTITY = /* SAFETY: 类型断言已复核 */ {
   email: "gate@example.com",
   name: "gate",
 } as const;

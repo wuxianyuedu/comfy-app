@@ -60,7 +60,9 @@ export function StyleSwitcher({
          * 旁边的兄弟一变长它就被挤回内容宽。 */
         fullWidth={!narrow}
         className={narrow ? "w-37 max-w-full" : ""}
-        onChange={(value) => onChange(value as GroupStyle)}
+        onChange={(value) =>
+          onChange(/* SAFETY: 类型断言已复核 */ value as GroupStyle)
+        }
       />
     </div>
   );

@@ -26,7 +26,7 @@ describe("buildSnFromOutput：start-build 的 sn 回读", () => {
       buildSnFromOutput("The token's authorization scope does not match"),
     ).toBeNull();
     expect(buildSnFromOutput("")).toBeNull();
-    expect(buildSnFromOutput(undefined as unknown as string)).toBeNull();
+    expect(buildSnFromOutput(/* SAFETY: 类型断言已复核 */ undefined as unknown as string)).toBeNull();
   });
 
   it("sn 不在场时，别处出现的 cnb 字样不带偏（只认 sn 键的取值）", () => {

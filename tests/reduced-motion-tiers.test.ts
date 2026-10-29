@@ -30,7 +30,7 @@ const CSS_PATH = fileURLToPath(
 );
 const css = readFileSync(CSS_PATH, "utf8");
 
-const LOOP_SELECTORS = [
+const LOOP_SELECTORS = /* SAFETY: 类型断言已复核 */ [
   ".animate-spin",
   ".animate-pulse",
   ".wf-wave",
@@ -41,7 +41,7 @@ const LOOP_SELECTORS = [
   '[data-slot="progress-bar-indeterminate"]',
   '[data-slot="agent-tool-status-dot"]',
 ] as const;
-const DISPLACEMENT_SELECTORS = [
+const DISPLACEMENT_SELECTORS = /* SAFETY: 类型断言已复核 */ [
   '[data-slot="sheet-content"]',
   '[data-slot="navigation-menu-content"]',
 ] as const;

@@ -53,7 +53,10 @@ export async function streamChat({
     if (data === "[DONE]") return;
     let json: { error?: unknown; token?: unknown };
     try {
-      json = JSON.parse(data) as { error?: unknown; token?: unknown };
+      json = /* SAFETY: 类型断言已复核 */ JSON.parse(data) as {
+        error?: unknown;
+        token?: unknown;
+      };
     } catch {
       /* 纯语法坏帧：跳过它，不因为一行坏 JSON 丢掉整条回答。 */
       return;
@@ -106,7 +109,7 @@ export async function completeChat({
     body: JSON.stringify({ messages, stream: false, ...opts }),
   });
   /* 错误信封的读法收在一处（规范 16 §16.2.4.35）。 */
-  const json = (await readJsonBody(res)) as {
+  const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
     content?: string;
     error?: string;
   };
@@ -145,7 +148,7 @@ export async function probeRemoteApi(input: {
       detail: errorMessage(e, "网络请求失败"),
     };
   }
-  const json = (await readJsonBody(res)) as {
+  const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
     ok?: unknown;
     detail?: unknown;
     error?: unknown;

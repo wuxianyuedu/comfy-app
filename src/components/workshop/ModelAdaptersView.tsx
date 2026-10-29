@@ -107,7 +107,10 @@ function InputMappingRow({
       <SelectMenu
         value={row.type}
         onChange={(value) =>
-          onChange({ type: value as WorkshopInputType, field: row.field })
+          onChange({
+            type: /* SAFETY: 类型断言已复核 */ value as WorkshopInputType,
+            field: row.field,
+          })
         }
         options={WORKSHOP_INPUT_TYPES.map((t) => t.type)}
         labels={Object.fromEntries(

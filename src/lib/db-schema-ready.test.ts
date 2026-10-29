@@ -104,7 +104,7 @@ afterEach(() => {
   /* 关掉挂在单例上的客户端（`NODE_ENV !== "production"` 时 `~/server/db` 会把它
    * 留在 `globalThis.db`）。这一步是卫生，不是「让删得掉」—— 真正的释放要等
    * 线程结束，见上面 `sweepStaleTempDirs` 的说明。 */
-  const cached = (
+  const cached = /* SAFETY: 类型断言已复核 */ (
     globalThis as unknown as {
       db?: { $client?: { close?: () => void } };
     }

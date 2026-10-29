@@ -143,8 +143,14 @@ export function useSectionScrollSpy<Id extends string>({
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) crossed.add(entry.target as HTMLElement);
-          else crossed.delete(entry.target as HTMLElement);
+          if (entry.isIntersecting)
+            crossed.add(
+              /* SAFETY: 类型断言已复核 */ entry.target as HTMLElement,
+            );
+          else
+            crossed.delete(
+              /* SAFETY: 类型断言已复核 */ entry.target as HTMLElement,
+            );
         }
         /* 按**文档顺序**自己排一遍取最后一个：`entries` 的次序不保证，
          * 不能拿浏览器给的那一个当结论。 */

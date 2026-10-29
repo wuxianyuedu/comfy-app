@@ -561,7 +561,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
            * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
           const baselineRel = row!.baseline.split("/").pop() ?? row!.baseline;
-          const written = JSON.parse(
+          const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
             handle.repo.read(join("scripts", baselineRel)),
           ) as { rules?: Record<string, unknown> };
           expect(

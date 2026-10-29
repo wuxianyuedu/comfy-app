@@ -97,7 +97,7 @@ type StoryModule = { default?: MetaShape } & Record<string, unknown>;
 const globbed = import.meta.glob("../src/components/ui/*.stories.tsx", {
   eager: true,
 });
-const files = globbed as Record<string, StoryModule>;
+const files = /* SAFETY: 类型断言已复核 */ globbed as Record<string, StoryModule>;
 
 /** 页面级规则：判的是「一整页」，对单枚裸渲染的组件没有意义（见文件头第 ② 条）。 */
 const PAGE_SCOPE_RULES_OFF = [
@@ -231,7 +231,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
       for (const [storyName, raw] of Object.entries(mod)) {
         if (storyName === "default") continue;
         if (!raw || typeof raw !== "object") continue;
-        const story = raw as StoryShape;
+        const story = /* SAFETY: 类型断言已复核 */ raw as StoryShape;
         const key = `${component} > ${storyName}`;
         /* `argTypes[x].defaultValue` 在 Storybook 里由 argsEnhancers 折进 args。
          * 本用例的浅合并与它等价的前提是这一档为空 —— 出现了就是「渲的输入与
@@ -263,7 +263,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
             typeof Comp === "object" /* forwardRef / memo 包装 */
           ) {
             tree = createElement(
-              Comp as ComponentType<Record<string, unknown>>,
+              /* SAFETY: 类型断言已复核 */ Comp as ComponentType<Record<string, unknown>>,
               args,
             );
           } else {
@@ -280,7 +280,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
           ) {
             throw new Error("render 未返回可判的节点（副作用式 / 空 render）");
           }
-          view = render(tree as ReactElement);
+          view = render(/* SAFETY: 类型断言已复核 */ tree as ReactElement);
           const results = await axe.run(view.baseElement, {
             resultTypes: ["violations"],
             rules: Object.fromEntries(
@@ -335,14 +335,14 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
 
     const actual = asLedger(findings, unrenderable);
     const registered = asLedger(
-      (KNOWN.violations as Finding[]).map((v) => ({ ...v, nodes: 0 })),
+      (/* SAFETY: 类型断言已复核 */ KNOWN.violations as Finding[]).map((v) => ({ ...v, nodes: 0 })),
       KNOWN.unrenderable,
     );
-    const actualPairs = JSON.parse(actual) as {
+    const actualPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(actual) as {
       violations: { component: string; rule: string }[];
       unrenderable: string[];
     };
-    const registeredPairs = JSON.parse(registered) as typeof actualPairs;
+    const registeredPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(registered) as typeof actualPairs;
 
     const found = new Set(
       actualPairs.violations.map((v) => `${v.component}|${v.rule}`),

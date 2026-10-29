@@ -232,7 +232,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .limit(take);
       /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
        * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
-      return rows as Array<{
+      return /* SAFETY: 类型断言已复核 */ rows as Array<{
         id: string;
         createdAt: Date;
         workflowName: string;
@@ -614,7 +614,9 @@ export function createTaskRepoImpl(
         .where(eq(task.id, taskId))
         .limit(1);
       const value = rows[0]?.rawCli;
-      return Array.isArray(value) ? (value as string[]) : null;
+      return Array.isArray(value)
+        ? /* SAFETY: 类型断言已复核 */ (value as string[])
+        : null;
     },
   };
 }

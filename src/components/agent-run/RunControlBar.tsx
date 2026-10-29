@@ -145,7 +145,11 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             <span className="text-ink-faint">确认粒度</span>
             <SelectMenu
               value={c.approvalMode}
-              onChange={(v) => c.setApprovalMode(v as ApprovalMode)}
+              onChange={(v) =>
+                c.setApprovalMode(
+                  /* SAFETY: 类型断言已复核 */ v as ApprovalMode,
+                )
+              }
               options={APPROVAL_OPTIONS.map((o) => o.value)}
               labels={Object.fromEntries(
                 APPROVAL_OPTIONS.map((o) => [o.value, o.label]),

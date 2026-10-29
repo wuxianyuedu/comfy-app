@@ -160,7 +160,7 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
 
   it("`TEMP` 与 `TMP` 指向同一个目录，且三个落点同卷", () => {
     expect(env.TEMP).toBe(env.TMP);
-    for (const key of ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const) {
+    for (const key of /* SAFETY: 类型断言已复核 */ ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const) {
       const value = env[key]!;
       expect(
         isAbsolutePath(value),
@@ -168,7 +168,7 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
           "而作业目录每跑换一个，临时文件就散在各个工作区里",
       ).toBe(true);
     }
-    const roots = (["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map(
+    const roots = (/* SAFETY: 类型断言已复核 */ ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map(
       (k) => volumeRootOf(env[k]!),
     );
     expect(

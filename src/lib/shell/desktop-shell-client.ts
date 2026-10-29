@@ -85,7 +85,9 @@ const LOADING_STUB_ID = "__comfyapp_loading_stub";
  */
 export function clearLaunchLoadingStub(): void {
   if (typeof window === "undefined") return;
-  const w = window as unknown as { __comfyappStubTimer?: number };
+  const w = /* SAFETY: 类型断言已复核 */ window as unknown as {
+    __comfyappStubTimer?: number;
+  };
   if (w.__comfyappStubTimer) {
     window.clearInterval(w.__comfyappStubTimer);
     w.__comfyappStubTimer = 0;

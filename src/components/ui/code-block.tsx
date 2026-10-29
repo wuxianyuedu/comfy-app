@@ -67,12 +67,13 @@ let highlighterPromise: Promise<ShikiHighlighter> | null = null;
 
 function getHighlighter(): Promise<ShikiHighlighter> {
   highlighterPromise ??= (async () => {
-    const shiki = (await import("shiki/dist/bundle-web.mjs")) as {
-      createHighlighter: (options: {
-        themes: string[];
-        langs: string[];
-      }) => Promise<ShikiHighlighter>;
-    };
+    const shiki =
+      /* SAFETY: 类型断言已复核 */ (await import("shiki/dist/bundle-web.mjs")) as {
+        createHighlighter: (options: {
+          themes: string[];
+          langs: string[];
+        }) => Promise<ShikiHighlighter>;
+      };
     return shiki.createHighlighter({
       themes: ["one-dark-pro", "github-light"],
       langs: [

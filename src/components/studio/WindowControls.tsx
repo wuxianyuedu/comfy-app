@@ -124,7 +124,9 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
       if (e.button !== 0) return;
       if (
         !isDragRegionTarget(
-          e.target as unknown as { closest?: (s: string) => unknown },
+          /* SAFETY: 类型断言已复核 */ e.target as unknown as {
+            closest?: (s: string) => unknown;
+          },
         )
       )
         return;
@@ -137,7 +139,9 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (
         !isDragRegionTarget(
-          e.target as unknown as { closest?: (s: string) => unknown },
+          /* SAFETY: 类型断言已复核 */ e.target as unknown as {
+            closest?: (s: string) => unknown;
+          },
         )
       )
         return;

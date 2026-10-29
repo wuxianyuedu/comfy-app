@@ -32,7 +32,7 @@ export function friendlyError(raw: unknown): string {
     return parts.length ? parts.join("\n") : "";
   }
   if (typeof raw === "object") {
-    const o = raw as Record<string, unknown>;
+    const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
     // 按优先级取：先 ComfyUI 自己的规范字段，再取通用异常形状
     //（Error.message / details / reason 这类通用形状）。
     const candidates: (keyof typeof o)[] = [

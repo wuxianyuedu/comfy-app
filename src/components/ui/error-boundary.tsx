@@ -47,9 +47,9 @@ export class ErrorBoundary extends React.Component<
        * 空白**，用户既看不到出了什么事、也没有「重试」。 */
       const custom = this.props.fallback;
       if (typeof custom === "function") {
-        const node = (custom as (error: Error | null) => React.ReactNode)(
-          this.state.error,
-        );
+        const node = /* SAFETY: 类型断言已复核 */ (
+          custom as (error: Error | null) => React.ReactNode
+        )(this.state.error);
         if (node !== null && node !== undefined) return node;
       } else if (custom) {
         return custom;

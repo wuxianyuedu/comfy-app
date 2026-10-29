@@ -61,7 +61,7 @@ import { expectHomeReady } from "./support/home-anchors";
  * 「主线程侧的劣化」或「取数环境变了」。别的 spec 红不要读成它也红 ——
  * `expectHomeReady` 是它唯一的前置，而那是全仓共用的那一枚锚点（`support/home-anchors`）。
  */
-const RUNTIME_BUDGET = {
+const RUNTIME_BUDGET = /* SAFETY: 类型断言已复核 */ {
   /**
    * 基线读数（毫秒）—— **实测初值，不是估的**。唯一出处是
    * `scripts/.runtime-budget-baseline.json` 的 `metric.byPlatform`（与

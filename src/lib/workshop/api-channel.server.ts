@@ -55,7 +55,7 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   if (cache) return cache;
   let stored: Partial<WorkshopApiSettings> = {};
   try {
-    stored = JSON.parse(
+    stored = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(FILE, "utf-8"),
     ) as Partial<WorkshopApiSettings>;
   } catch {

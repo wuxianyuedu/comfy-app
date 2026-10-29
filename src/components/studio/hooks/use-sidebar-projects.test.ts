@@ -63,7 +63,7 @@ describe("useSidebarProjects", () => {
     const many = Array.from({ length: 20 }, (_, i) => ({
       id: `proj_${i}`,
       name: `项目 ${i}`,
-      origin: "both" as const,
+      origin: /* SAFETY: 类型断言已复核 */ "both" as const,
     }));
     listProjectsWithServer.mockResolvedValue({ ok: true, entries: many });
 

@@ -43,7 +43,7 @@ const runsDir = path.join(logRoot, "runs");
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    ...(actual as Record<string, unknown>),
+    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
     LOG_ROOT: logRoot,
     SERVICES_LOG_DIR: servicesDir,
   };
@@ -72,7 +72,10 @@ async function get(query: string): Promise<{ status: number; data: Payload }> {
   const res = await GET(
     new Request(`http://localhost/api/logs/sessions?${query}`),
   );
-  return { status: res.status, data: (await res.json()) as Payload };
+  return {
+    status: res.status,
+    data: /* SAFETY: 类型断言已复核 */ (await res.json()) as Payload,
+  };
 }
 
 /** 造一份某来源的启动日志文件（名字按写方那套规则）。 */

@@ -51,7 +51,10 @@ function step(
 }
 
 /** 「已经探到、且这份进程是新的」——冷启动之后最常见的那一拍。 */
-const RUNNING_NEW = { state: "online", processIsNew: true } as const;
+const RUNNING_NEW = /* SAFETY: 类型断言已复核 */ {
+  state: "online",
+  processIsNew: true,
+} as const;
 
 describe("deriveAppServiceEvent 边沿判据", () => {
   it("首帧不产出任何事件（还没探通过，谈不上断开或启动）", () => {

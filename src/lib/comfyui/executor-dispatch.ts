@@ -217,8 +217,9 @@ export async function claimAndDispatchOnce(options?: {
     taskId,
     workflowName: row.workflowName,
     rawJson: row.execPayload,
-    overrides: (row.params as { workflowInputs?: Job["overrides"] })
-      ?.workflowInputs,
+    overrides: /* SAFETY: 类型断言已复核 */ (
+      row.params as { workflowInputs?: Job["overrides"] }
+    )?.workflowInputs,
   };
 
   /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一

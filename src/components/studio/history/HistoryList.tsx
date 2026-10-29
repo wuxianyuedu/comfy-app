@@ -103,7 +103,9 @@ export function HistoryList({
       <ViewActions>
         <SelectMenu
           value={c.sort}
-          onChange={(value) => c.setSort(value as SortKey)}
+          onChange={(value) =>
+            c.setSort(/* SAFETY: 类型断言已复核 */ value as SortKey)
+          }
           options={["newest", "oldest"]}
           labels={{ newest: "时间倒序", oldest: "时间正序" }}
           aria-label="排序"

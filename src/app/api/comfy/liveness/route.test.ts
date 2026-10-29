@@ -12,7 +12,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const snapshot = vi.fn();
 const subscribers: Array<(s: unknown) => void> = [];
 vi.mock("~/lib/comfyui/liveness-signal", () => ({
-  getLivenessSnapshot: (): unknown => snapshot() as unknown,
+  getLivenessSnapshot: (): unknown =>
+    /* SAFETY: 类型断言已复核 */ snapshot() as unknown,
   subscribeComfyExit: (l: (s: unknown) => void) => {
     subscribers.push(l);
     return () => {

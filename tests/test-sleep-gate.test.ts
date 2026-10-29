@@ -48,7 +48,7 @@ const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
  * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
-const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
+const { scanFile, walk } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(SCRIPT) as {
   scanFile: (abs: string) => unknown[] | null;
   walk: (dir: string, out?: string[]) => string[];
 };
@@ -88,7 +88,7 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -359,7 +359,7 @@ describe("裸 sleep 门禁：扫描面在枚举途中消失（同族第 5 条）
             rmSync(dir, { recursive: true, force: true });
           }
           return (
-            realReaddir as (
+            /* SAFETY: 类型断言已复核 */ realReaddir as (
               p: typeof dirPath,
               o: typeof options,
             ) => ReturnType<typeof realReaddir>

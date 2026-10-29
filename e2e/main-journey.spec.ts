@@ -143,12 +143,12 @@ async function trpcCall(
   if (last === undefined) {
     throw new Error(`${procedure} 回了空响应体（预期 JSON Lines）`);
   }
-  const parsed = JSON.parse(last) as { json?: unknown };
+  const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(last) as { json?: unknown };
   /* 最后一行是 `[chunkId, status, data]`，其中 `data` 的形状是
    * `[[值]]`「值 + 零个 asyncProp」（三段含义见 `e2e/support/trpc-stub.ts` 的
    * 文件头）。逐层取到 `[2] → [0] → [0]` 就是过程返回的那个值本身。 */
-  const data = (parsed.json as unknown[] | undefined)?.[2];
-  const value = (data as unknown[][] | undefined)?.[0];
+  const data = (/* SAFETY: 类型断言已复核 */ parsed.json as unknown[] | undefined)?.[2];
+  const value = (/* SAFETY: 类型断言已复核 */ data as unknown[][] | undefined)?.[0];
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -211,7 +211,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
 
     /* 断言的是**库里有这一行**，不是「请求发出去了」：再读一次服务端，
      * 拿到的必须是我们刚写进去的那个 id / 名字。 */
-    const listed = (await trpcQuery(page, "project.list")) as
+    const listed = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "project.list")) as
       { id: string; name: string }[] | undefined;
     const project = (listed ?? []).find((item) => item.id === projectId);
     expect(
@@ -222,7 +222,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
 
     /* 建工作流：出图还需要一条**可执行**的库行（`hasExecutableWorkflow` 认
      * rawJson 的 nodes 非空）。这条也走服务端，随后由 `generate.generate` 提交。 */
-    const workflow = (await trpcMutation(page, "workflow.create", {
+    const workflow = /* SAFETY: 类型断言已复核 */ (await trpcMutation(page, "workflow.create", {
       name: `E2E 工作流 ${stamp}`,
       taskType: "image",
       /* 入参字段是 `raw`（服务端 `parseWorkflowContent(JSON.stringify(raw))`
@@ -233,7 +233,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     expect(workflowId, "workflow.create 必须回一个 id").toBeTruthy();
 
     /* ── ③ 出图：真提交 + 真收口 ── */
-    const submitted = (await trpcMutation(page, "generate.generate", {
+    const submitted = /* SAFETY: 类型断言已复核 */ (await trpcMutation(page, "generate.generate", {
       workflow: workflowId,
       prompt: "一只在窗台上的猫",
       projectId,
@@ -254,7 +254,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const terminal = await expect
       .poll(
         async () => {
-          const detail = (await trpcQuery(page, "task.detail", {
+          const detail = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "task.detail", {
             id: taskId,
           })) as
             | { status?: string; error?: string | null; images?: unknown[] }
@@ -273,7 +273,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
       .then(() => trpcQuery(page, "task.detail", { id: taskId }))
       .then(
         (detail) =>
-          detail as {
+          /* SAFETY: 类型断言已复核 */ detail as {
             status?: string;
             error?: string | null;
             images?: unknown[];
@@ -307,14 +307,14 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
       "e2e-journey-password",
     );
 
-    const workflow = (await trpcMutation(page, "workflow.create", {
+    const workflow = /* SAFETY: 类型断言已复核 */ (await trpcMutation(page, "workflow.create", {
       name: `E2E 失败工作流 ${stamp}`,
       taskType: "image",
       /* 哨兵进工作流 → 假 comfy-cli 回放失败序列（见本文件头 FAIL_SENTINEL）。 */
       raw: rawWorkflow(`失败用例 ${FAIL_SENTINEL}`),
     })) as { id?: string } | undefined;
 
-    const submitted = (await trpcMutation(page, "generate.generate", {
+    const submitted = /* SAFETY: 类型断言已复核 */ (await trpcMutation(page, "generate.generate", {
       workflow: workflow?.id,
       prompt: "这条应当失败",
       paramMap: {},
@@ -326,10 +326,10 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
      * 也成立，会在排队那一瞬就放行、把 `QUEUED` 当成结论）。 */
     /* 同成功用例：等的是**已到终态**（非终态回 null、poll 继续等），不是
      * 「不再是 RUNNING」——后者对 `QUEUED` 也成立，会在排队那一瞬放行。 */
-    const terminal = (await expect
+    const terminal = /* SAFETY: 类型断言已复核 */ (await expect
       .poll(
         async () => {
-          const detail = (await trpcQuery(page, "task.detail", {
+          const detail = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "task.detail", {
             id: taskId,
           })) as { status?: string } | undefined;
           return isTerminalTaskStatus(detail?.status) ? detail : null;

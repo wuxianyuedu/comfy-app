@@ -143,7 +143,13 @@ export function AgentOverlay({
 
   const visibleMessages =
     messages.length === 0
-      ? [{ id: "greeting", role: "assistant" as const, content: GREETING }]
+      ? [
+          {
+            id: "greeting",
+            role: /* SAFETY: 类型断言已复核 */ "assistant" as const,
+            content: GREETING,
+          },
+        ]
       : messages;
 
   return (

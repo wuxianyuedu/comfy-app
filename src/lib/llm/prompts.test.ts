@@ -56,7 +56,9 @@ describe("buildCharacterMessages", () => {
 
   it("信息全空时给出兜底指令，而不是发一条空消息", () => {
     const [, user] = buildCharacterMessages({ name: "" });
-    expect((user!.content as string).trim()).toBe("请帮我设计一个原创角色");
+    expect(/* SAFETY: 类型断言已复核 */ (user!.content as string).trim()).toBe(
+      "请帮我设计一个原创角色",
+    );
   });
 
   it("风格标签用顿号连接", () => {
@@ -365,7 +367,7 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
     expect(msgs[0]!.role).toBe("system");
     const user = msgs[1]!;
     expect(user.role).toBe("user");
-    const content = user.content as Array<{
+    const content = /* SAFETY: 类型断言已复核 */ user.content as Array<{
       type: string;
       text?: string;
       image_url?: { url: string };
@@ -383,7 +385,7 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
   });
 
   it("没有定妆照时只带镜头图一张", () => {
-    const content = buildShotImageReviewMessages({
+    const content = /* SAFETY: 类型断言已复核 */ buildShotImageReviewMessages({
       imageUrl: "/shot.png",
       portraitUrls: [],
       prompt: "x",
@@ -397,7 +399,7 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
   });
 
   it("传生图 rubric 文本时，system 追加维度评分要求", () => {
-    const system = buildShotImageReviewMessages(
+    const system = /* SAFETY: 类型断言已复核 */ buildShotImageReviewMessages(
       {
         imageUrl: "/s",
         portraitUrls: [],

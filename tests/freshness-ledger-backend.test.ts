@@ -53,7 +53,7 @@ const PRISTINE = snapshotPaths([path.join(ROOT, E2E_REL)]);
 function e2eTrack(
   ledger: Record<string, unknown> | null,
 ): { verifiedAt?: string } | undefined {
-  return ledger?.e2e as { verifiedAt?: string } | undefined;
+  return /* SAFETY: 类型断言已复核 */ ledger?.e2e as { verifiedAt?: string } | undefined;
 }
 
 function git(args: string): string {

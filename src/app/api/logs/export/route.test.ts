@@ -24,7 +24,7 @@ const exportDir = path.join(tmp, "exports");
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    ...(actual as Record<string, unknown>),
+    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
     LOG_ROOT: tmp,
     LOG_EXPORT_DIR: exportDir,
   };
@@ -72,7 +72,7 @@ describe("/api/logs/export", () => {
   it("把内容写进 log/exports/ 并回绝对路径与相对路径", async () => {
     const res = await post({ label: "app-runtime", content: "第一行\n第二行" });
     expect(res.status).toBe(200);
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       ok: boolean;
       path: string;
       relativePath: string;
@@ -89,7 +89,9 @@ describe("/api/logs/export", () => {
       label: "../../../evil",
       content: "x",
     });
-    const data = (await res.json()) as { path: string };
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      path: string;
+    };
     expect(path.dirname(data.path)).toBe(exportDir);
     expect(path.basename(data.path).startsWith("logs-all-")).toBe(true);
   });

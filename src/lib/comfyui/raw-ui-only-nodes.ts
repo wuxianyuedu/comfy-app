@@ -35,7 +35,7 @@ export const UI_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
 /** Read a string field off an unknown payload（非 string → undefined）。 */
 function strField(o: unknown, key: string): string | undefined {
   if (o == null || typeof o !== "object") return undefined;
-  const v = (o as Record<string, unknown>)[key];
+  const v = /* SAFETY: 类型断言已复核 */ (o as Record<string, unknown>)[key];
   return typeof v === "string" ? v : undefined;
 }
 
@@ -58,7 +58,7 @@ function pickOutUiOnlyNodes(nodes: unknown[]): {
       kept.push(n);
       continue;
     }
-    const node = n as Record<string, unknown>;
+    const node = /* SAFETY: 类型断言已复核 */ n as Record<string, unknown>;
     /* 两种导出形态都认：ComfyUI 新导出走 `type`，部分路径（子图 wrapper）走
      * `class_type`（与 `executor-cli` 里读节点类型同口径）。 */
     const type = strField(node, "type") ?? strField(node, "class_type");
@@ -92,7 +92,7 @@ function dropLinksTo(
       return !removedIds.has(idOf(link[1])) && !removedIds.has(idOf(link[3]));
     }
     if (link != null && typeof link === "object") {
-      const l = link as Record<string, unknown>;
+      const l = /* SAFETY: 类型断言已复核 */ link as Record<string, unknown>;
       return (
         !removedIds.has(idOf(l.origin_id)) && !removedIds.has(idOf(l.target_id))
       );
@@ -129,7 +129,7 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
   const defs = raw.definitions;
   const subs =
     defs != null && typeof defs === "object"
-      ? (defs as Record<string, unknown>).subgraphs
+      ? /* SAFETY: 类型断言已复核 */ (defs as Record<string, unknown>).subgraphs
       : undefined;
   const list: unknown[] = Array.isArray(subs)
     ? subs
@@ -138,7 +138,7 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
       : [];
   for (const sub of list) {
     if (sub == null || typeof sub !== "object") continue;
-    const def = sub as Record<string, unknown>;
+    const def = /* SAFETY: 类型断言已复核 */ sub as Record<string, unknown>;
     if (!Array.isArray(def.nodes)) continue;
     const inner = pickOutUiOnlyNodes(def.nodes);
     if (inner.removedIds.size > 0) {

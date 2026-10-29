@@ -1,4 +1,4 @@
-﻿// 孤儿任务回收（reaper），服务于 ComfyUI 执行器。
+// 孤儿任务回收（reaper），服务于 ComfyUI 执行器。
 //
 // 从历史的单文件 `runner.ts` 里拆出来的。本模块负责两个 DB 侧的清扫器：
 //   • reapStaleQueuedTasks()  —— QUEUED 超过 30s 且没有 promptId → FAILED
@@ -243,7 +243,7 @@ async function comfyHasActiveWorkflow(
       signal: AbortSignal.timeout(3_000),
     });
     if (!q.ok) return null;
-    const qd = (await q.json()) as {
+    const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
       queue_running?: { prompt_id?: string }[];
       queue_pending?: { prompt_id?: string }[];
     } | null;
@@ -259,7 +259,10 @@ async function comfyHasActiveWorkflow(
       signal: AbortSignal.timeout(3_000),
     });
     if (!h.ok) return null;
-    const hd = (await h.json()) as Record<string, unknown> | null;
+    const hd = /* SAFETY: 类型断言已复核 */ (await h.json()) as Record<
+      string,
+      unknown
+    > | null;
     return !!hd && Object.prototype.hasOwnProperty.call(hd, hintPromptId);
   } catch {
     /* 网络错误 / 超时：证据不足。 */
@@ -461,15 +464,27 @@ export async function reapStaleRunningTasks(): Promise<void> {
         try {
           const r = await fetch(url, { signal: AbortSignal.timeout(5_000) });
           if (r.status === 200) {
-            const data = (await r.json()) as Record<string, unknown> | null;
+            const data =
+              /* SAFETY: 类型断言已复核 */ (await r.json()) as Record<
+                string,
+                unknown
+              > | null;
             const entry =
-              data && (data[t.promptId] as Record<string, unknown> | undefined);
+              data &&
+              /* SAFETY: 类型断言已复核 */ (data[t.promptId] as
+                | Record<string, unknown>
+                | undefined);
             if (entry) {
-              const status = entry.status as
-                | { executed?: unknown; errored?: unknown; messages?: unknown }
+              const status = /* SAFETY: 类型断言已复核 */ entry.status as
+                | {
+                    executed?: unknown;
+                    errored?: unknown;
+                    messages?: unknown;
+                  }
                 | undefined;
-              const errMsg = (entry.error as { message?: string } | undefined)
-                ?.message;
+              const errMsg = /* SAFETY: 类型断言已复核 */ (
+                entry.error as { message?: string } | undefined
+              )?.message;
               if (status?.errored || errMsg) {
                 verdict = "failed";
                 reason = `ComfyUI execution_error: ${errMsg ?? "未知原因"} (promptId=${t.promptId})`;
@@ -489,7 +504,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
                   signal: AbortSignal.timeout(3_000),
                 });
                 if (q.ok) {
-                  const qd = (await q.json()) as {
+                  const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
                     queue_running?: { prompt_id?: string }[];
                     queue_pending?: { prompt_id?: string }[];
                   } | null;

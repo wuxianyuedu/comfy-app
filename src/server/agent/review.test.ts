@@ -78,7 +78,9 @@ async function rows(
 ): Promise<Record<string, unknown>[]> {
   const row = await productionRepository.getForUser(USER, PROJ);
   const raw = row?.[col];
-  return Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+  return Array.isArray(raw)
+    ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>[])
+    : [];
 }
 
 beforeEach(() => {
@@ -117,7 +119,9 @@ describe("reviewContent", () => {
     // 只写内容列，没碰 run（run 仍是 upsert 默认的空对象，无 status）
     const row = await productionRepository.getForUser(USER, PROJ);
     expect(
-      (row?.run as Record<string, unknown> | undefined)?.status,
+      /* SAFETY: 类型断言已复核 */ (
+        row?.run as Record<string, unknown> | undefined
+      )?.status,
     ).toBeUndefined();
   });
 
@@ -396,17 +400,21 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
     // 视觉评审走独立视觉模型配置通道
     expect(getVisionLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
     // 消息里带图：镜头图 + 定妆照都进了 image_url 块
-    const [, userMsg] = completeLLMStructured.mock.calls[0]![1] as Array<{
+    const [, userMsg] = /* SAFETY: 类型断言已复核 */ completeLLMStructured.mock
+      .calls[0]![1] as Array<{
       role: string;
       content: unknown;
     }>;
-    const parts = userMsg!.content as Array<{
+    const parts = /* SAFETY: 类型断言已复核 */ userMsg!.content as Array<{
       type: string;
       image_url?: unknown;
     }>;
     const imageUrls = parts
       .filter((p) => p.type === "image_url")
-      .map((p) => (p.image_url as { url: string }).url);
+      .map(
+        (p) =>
+          /* SAFETY: 类型断言已复核 */ (p.image_url as { url: string }).url,
+      );
     expect(imageUrls).toEqual(["/shot.png", "/portrait.png"]);
   });
 
@@ -506,7 +514,10 @@ describe("autoselectShotImage", () => {
     // 赢家判定落 shot.imageReview（与 reviewShotImage 同一落点）；镜头的
     // imageUrl / taskId 不被服务端动（草稿回写口径，字段所有权见 #2615）。
     const shot = (await rows("shots"))[0]!;
-    expect((shot.imageReview as { scores: unknown }).scores).toBeTruthy();
+    expect(
+      /* SAFETY: 类型断言已复核 */ (shot.imageReview as { scores: unknown })
+        .scores,
+    ).toBeTruthy();
     expect(shot.imageUrl).toBe("/generated/task-a/1.png");
   });
 

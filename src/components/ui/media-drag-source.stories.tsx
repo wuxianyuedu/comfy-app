@@ -114,16 +114,18 @@ export const NotDraggableByCanDrag: Story = {
 export const MediaTypes: Story = {
   render: () => (
     <div className="flex flex-wrap gap-4">
-      {(
-        [
-          ["image", artifactUrl(["cover.png"])],
-          ["video", artifactUrl(["clip.mp4"])],
-          ["audio", artifactUrl(["bgm.mp3"])],
-          ["doc", artifactUrl(["notes.txt"])],
-        ] as const
-      ).map(([kind, url]) => (
-        <MediaDragCard key={kind} kind={kind} url={url} />
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (
+          [
+            ["image", artifactUrl(["cover.png"])],
+            ["video", artifactUrl(["clip.mp4"])],
+            ["audio", artifactUrl(["bgm.mp3"])],
+            ["doc", artifactUrl(["notes.txt"])],
+          ] as const
+        ).map(([kind, url]) => (
+          <MediaDragCard key={kind} kind={kind} url={url} />
+        ))
+      }
     </div>
   ),
 };

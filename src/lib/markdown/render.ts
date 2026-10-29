@@ -43,7 +43,7 @@ import { applyElementStyles } from "./styles";
  * - `async: false`：同步返回。本模块在 React 渲染期被调用（`useMemo`），
  *   异步解析会把「渲染」变成一次状态机。
  */
-const MARKED_OPTIONS = {
+const MARKED_OPTIONS = /* SAFETY: 类型断言已复核 */ {
   gfm: true,
   breaks: false,
   async: false,

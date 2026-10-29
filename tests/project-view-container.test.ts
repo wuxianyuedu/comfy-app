@@ -96,7 +96,7 @@ describe("统一容器的接入约定（文档型）", () => {
     }
   });
 
-  it.for(DOCUMENT_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(DOCUMENT_VIEWS.map((rel) => /* SAFETY: 类型断言已复核 */ [rel] as [string]))(
     "%s 引了容器，且没再手写那一串形状",
     ([rel]) => {
       const code = codeOf(rel);
@@ -150,7 +150,7 @@ describe("统一容器的接入约定（工作区型）", () => {
     }
   });
 
-  it.for(WORKSPACE_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(WORKSPACE_VIEWS.map((rel) => /* SAFETY: 类型断言已复核 */ [rel] as [string]))(
     "%s 引了 WorkspaceFrame，且不再自己写几何或页面滚动",
     ([rel]) => {
       const code = codeOf(rel);

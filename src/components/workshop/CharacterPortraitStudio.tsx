@@ -127,17 +127,21 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           aria-label="定妆照生成通道"
           className="flex gap-2"
         >
-          {(["local", "remote"] as const).map((channel) => (
-            <SelectChip
-              key={channel}
-              shape="compact"
-              selected={session.channel === channel}
-              onClick={() => actions.patch({ channel })}
-              disabled={session.busy || session.importing}
-            >
-              {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
-            </SelectChip>
-          ))}
+          {
+            /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map(
+              (channel) => (
+                <SelectChip
+                  key={channel}
+                  shape="compact"
+                  selected={session.channel === channel}
+                  onClick={() => actions.patch({ channel })}
+                  disabled={session.busy || session.importing}
+                >
+                  {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
+                </SelectChip>
+              ),
+            )
+          }
         </div>
         {session.channel === "local" && (
           <SelectMenu

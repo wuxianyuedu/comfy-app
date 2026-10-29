@@ -148,7 +148,9 @@ describe("边的两端与 handle 取值", () => {
       buildOutputEdge(outputWire, true),
     ]) {
       expect(
-        (edge.style as { strokeDasharray?: string }).strokeDasharray,
+        /* SAFETY: 类型断言已复核 */ (
+          edge.style as { strokeDasharray?: string }
+        ).strokeDasharray,
       ).toBeUndefined();
       expect(edge.style).toMatchObject({ strokeWidth: 2.5, opacity: 1 });
     }

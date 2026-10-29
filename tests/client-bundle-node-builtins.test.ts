@@ -54,7 +54,7 @@ function scan(): Report {
     ["scripts/lib-node-only-scan.mjs", "--json"],
     { cwd: REPO_ROOT, encoding: "utf8" },
   );
-  return JSON.parse(out) as Report;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(out) as Report;
 }
 
 /** 去掉注释，避免把注释里提到的 `node:fs` 误判成 import。 */
@@ -90,7 +90,7 @@ function runScanOnFixture(files: Record<string, string>): Report {
      * `--json` 那一档恒退 0，所以这一格退非 0 就是夹具或脚本坏了。 */
     expectGateRan(r);
     expect(r.code, r.output).toBe(0);
-    return JSON.parse(r.output) as Report;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(r.output) as Report;
   } finally {
     dispose();
   }

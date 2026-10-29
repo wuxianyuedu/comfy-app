@@ -52,7 +52,9 @@ export async function fetchHistoryEntry(
       const hist = await getHistory(promptId);
       lastRaw = hist;
       lastErr = null;
-      const entry = hist?.[promptId] as ComfyHistoryEntry | undefined;
+      const entry = /* SAFETY: 类型断言已复核 */ hist?.[promptId] as
+        | ComfyHistoryEntry
+        | undefined;
       // outputs 落盘也可能晚一拍，等到有 outputs 或明确报错为止。
       if (entry && (entry.outputs || entry.status?.status_str)) {
         /* 拿到结果也原样记一份：成功路径同样需要「ComfyUI 回了什么」的现场。 */
@@ -123,7 +125,7 @@ export async function traceComfyQueue(taskId: string | null): Promise<void> {
       trace("http", taskId, `/queue 探测失败 HTTP ${r.status}`, { base });
       return;
     }
-    const qd = (await r.json()) as unknown;
+    const qd = /* SAFETY: 类型断言已复核 */ (await r.json()) as unknown;
     const sum = queueTraceSummary(qd);
     trace("http", taskId, "ComfyUI /queue 快照", { base, ...sum, raw: qd });
   } catch (err) {

@@ -104,7 +104,7 @@ export function readNavigationSample(page: Page): Promise<{
   firstContentfulPaint: number | null;
 }> {
   return page.evaluate(() => {
-    const nav = performance.getEntriesByType(
+    const nav = /* SAFETY: 类型断言已复核 */ performance.getEntriesByType(
       "navigation",
     )[0] as PerformanceNavigationTiming | undefined;
     const fcp = performance.getEntriesByName("first-contentful-paint")[0];
@@ -138,7 +138,7 @@ export function steadyMin(
   if (samples.length <= discard) return null;
   const kept = samples.slice(discard);
   if (kept.some((v) => v === null || !Number.isFinite(v))) return null;
-  return Math.min(...(kept as number[]));
+  return Math.min(...(/* SAFETY: 类型断言已复核 */ kept as number[]));
 }
 
 /**

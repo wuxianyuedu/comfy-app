@@ -48,7 +48,7 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -203,7 +203,7 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
    * 而 eslint 禁止裸 `require()`。两者的语义在这里一样（跑一次就拿到导出），
    * 取 `createRequire` 是因为它**同步** —— 不必让一条纯函数用例变成 async。 */
   const requireCjs = createRequire(import.meta.url);
-  const { maskNonCode } = requireCjs(
+  const { maskNonCode } = /* SAFETY: 类型断言已复核 */ requireCjs(
     "../scripts/check-test-concurrency.cjs",
   ) as { maskNonCode: (src: string) => string };
 

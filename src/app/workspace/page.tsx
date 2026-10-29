@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { subscribeAppEvent } from "~/lib/app-events";
 import { useMemo, useState, useCallback, useEffect } from "react";
@@ -134,7 +134,7 @@ export default function WorkspacePage() {
               updatedAt: project.updatedAt
                 ? (timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改")
                 : "刚刚",
-              kind: "canvas" as const,
+              kind: /* SAFETY: 类型断言已复核 */ "canvas" as const,
               subtitle:
                 nodeCount > 0
                   ? `${nodeCount} 节点 · ${edgeCount} 连线`

@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 // 判据脚本是 CJS（与 scripts/check-*.cjs 同族，`@ts-nocheck` 后经 require 进来是 any），
 // 按仓库惯例给 mod 显式标注返回形状。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const mod = require("../scripts/check-tsc-artifact-hint.cjs") as {
+const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-tsc-artifact-hint.cjs") as {
   classifyTscErrors: (text: string) => {
     total: number;
     files: string[];

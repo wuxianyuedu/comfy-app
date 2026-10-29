@@ -283,7 +283,7 @@ describe("pruneBackups：删不动不改变结论，但要说话", () => {
       fs.writeFileSync(path.join(backupDir(root), n), "x");
     }
     const unlink = vi.spyOn(fs, "unlinkSync").mockImplementation(() => {
-      const e = new Error("EBUSY: 被占用") as NodeJS.ErrnoException;
+      const e = /* SAFETY: 类型断言已复核 */ new Error("EBUSY: 被占用") as NodeJS.ErrnoException;
       e.code = "EBUSY";
       throw e;
     });
@@ -455,7 +455,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     const before = fs.readFileSync(dbFile);
 
     const mkdir = vi.spyOn(fs, "mkdirSync").mockImplementation(() => {
-      const e = new Error("EACCES: 拒绝访问") as NodeJS.ErrnoException;
+      const e = /* SAFETY: 类型断言已复核 */ new Error("EACCES: 拒绝访问") as NodeJS.ErrnoException;
       e.code = "EACCES";
       throw e;
     });

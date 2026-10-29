@@ -52,9 +52,19 @@ const meta = {
      显式链接 —— 判据按**文件里的 cva 轴**核，漏掉一条就是「那一档没人验」。
      `size` 那一条的控件进不了 Args 面板（面板按 `component` 的 props 生成），
      但它必须在这里；每一档由 story `ButtonSizes` 现场铺开。 */
-  argTypes: {
-    align: { control: { type: "select" as const }, options: ALIGNS },
-    size: { control: { type: "select" as const }, options: BUTTON_SIZES },
+  argTypes: /* SAFETY: 类型断言已复核 */ {
+    align: {
+      control: {
+        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+      },
+      options: ALIGNS,
+    },
+    size: {
+      control: {
+        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+      },
+      options: BUTTON_SIZES,
+    },
   } as Record<string, { control: { type: "select" }; options: string[] }>,
 } satisfies Meta<typeof InputGroupAddon>;
 

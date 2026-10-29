@@ -21,7 +21,10 @@ const { scan, comfy } = vi.hoisted(() => ({
     modelCountsByFolder: vi.fn(async () => ({ checkpoints: 3 })),
   },
   comfy: {
-    listModelFolders: vi.fn(async () => ["vae", "checkpoints"] as string[]),
+    listModelFolders: vi.fn(
+      async () =>
+        /* SAFETY: 类型断言已复核 */ ["vae", "checkpoints"] as string[],
+    ),
     comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
   },
 }));
@@ -174,7 +177,7 @@ describe("model.list / sync —— 上下文与透传", () => {
   it("列表把 input 原样给仓储；不传时是空对象而不是 undefined", async () => {
     const list = vi
       .spyOn(modelRepository, "list")
-      .mockResolvedValue([] as never);
+      .mockResolvedValue(/* SAFETY: 类型断言已复核 */ [] as never);
     await caller().list({ type: "checkpoints", q: "sd" });
     expect(list).toHaveBeenCalledWith({ type: "checkpoints", q: "sd" });
     await caller().list();

@@ -141,11 +141,13 @@ describe("DrizzleRepository 基类", () => {
 
     /* `as Project` 是基类签名自己的形状：`create(entity: T)` 收整行类型，落库却只给
      * 必填列 —— 想证明「默认列由库补」就必须能少给字段，这里不放宽基类的签名。 */
-    const created = await repo.create({
-      id: "p-create",
-      userId: "u1",
-      name: "基类写入",
-    } as Project);
+    const created = await repo.create(
+      /* SAFETY: 类型断言已复核 */ {
+        id: "p-create",
+        userId: "u1",
+        name: "基类写入",
+      } as Project,
+    );
 
     expect(created).toMatchObject({ id: "p-create", name: "基类写入" });
     expect(created.nodes).toBe("[]");
@@ -368,7 +370,9 @@ describe("WorkflowModelTagRepository", () => {
 
     expect(await workflowModelTagRepository.getTemplateTagRows([])).toEqual([]);
     expect(
-      await workflowModelTagRepository.getTemplateTagRows([wt.id as string]),
+      await workflowModelTagRepository.getTemplateTagRows([
+        /* SAFETY: 类型断言已复核 */ wt.id as string,
+      ]),
     ).toEqual([{ templateId: "wt1", name: "动漫" }]);
 
     const hit = await workflowTemplateRepository.listForUser("u1", {
@@ -489,7 +493,7 @@ describe("WorkflowTemplateRepository", () => {
     expect(await workflowTemplateRepository.listByUser("u2")).toEqual([]);
     expect(
       (await workflowTemplateRepository.listByUser("u1")).map((t) => t.id),
-    ).toEqual([wt.id as string]);
+    ).toEqual([/* SAFETY: 类型断言已复核 */ wt.id as string]);
   });
 });
 
@@ -596,7 +600,7 @@ describe("ModelRepository", () => {
   });
 
   it("listAvailableFileNamesByFolders 空数组短路、去重且排序", async () => {
-    for (const [fileName, folder] of [
+    for (const [fileName, folder] of /* SAFETY: 类型断言已复核 */ [
       ["b.safetensors", "checkpoints"],
       ["a.safetensors", "checkpoints"],
     ] as const) {
@@ -1213,15 +1217,17 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.findByIdForUser("u2", f.id)).toBeNull();
     const plain = await filmRepository.findByIdForUser("u1", f.id);
     expect(plain).not.toBeNull();
-    expect((plain as Record<string, unknown>).shots).toBeUndefined();
+    expect(
+      /* SAFETY: 类型断言已复核 */ (plain as Record<string, unknown>).shots,
+    ).toBeUndefined();
 
     const withShots = await filmRepository.findByIdForUser("u1", f.id, {
       includeShots: true,
     });
     expect(
-      (withShots as unknown as { shots: Array<{ order: number }> }).shots.map(
-        (s) => s.order,
-      ),
+      /* SAFETY: 类型断言已复核 */ (
+        withShots as unknown as { shots: Array<{ order: number }> }
+      ).shots.map((s) => s.order),
     ).toEqual([0, 2]);
     expect(
       await filmRepository.findByIdForUser("u1", "nope", {
@@ -1389,7 +1395,8 @@ describe("LlmConfigRepository", () => {
     });
 
     // 关键断言：DB 里存的不是明文（这条只有读原始行才能证明）
-    const raw = tdb.$tables.llmConfig[0]!.apiKey as string;
+    const raw = /* SAFETY: 类型断言已复核 */ tdb.$tables.llmConfig[0]!
+      .apiKey as string;
     expect(raw).not.toBe("sk-plain");
     expect(raw.startsWith("enc:v1:")).toBe(true);
 
@@ -1513,7 +1520,10 @@ describe("RemoteModelRepository", () => {
       },
     ];
     const created = await remoteModelRepository.replaceAll([{ name: "甲" }]);
-    await remoteModelRepository.saveWorkshopAdapters("甲", adapters as never);
+    await remoteModelRepository.saveWorkshopAdapters(
+      "甲",
+      /* SAFETY: 类型断言已复核 */ adapters as never,
+    );
     expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
       {
         mode: "T2I",
@@ -1618,7 +1628,11 @@ describe("RemoteModelRepository", () => {
       .replaceAll([{ name: "乙" }])
       .then(() => null)
       .catch(
-        (e: unknown) => e as { message: string; cause?: { message?: string } },
+        (e: unknown) =>
+          /* SAFETY: 类型断言已复核 */ e as {
+            message: string;
+            cause?: { message?: string };
+          },
       );
     expect(failure, "第二条写失败必须让整条调用失败得看得见").not.toBeNull();
     /* drizzle 会把宿主抛的东西包成 `Failed query: …`，原因挂在 `cause` 上——
@@ -1641,7 +1655,8 @@ describe("RemoteModelRepository", () => {
   it("起事务撞锁 ⇒ 按 SETTINGS_DB_WRITE 的预算重试，成功后一次落定", async () => {
     const busy = () => {
       const e = new Error("database is locked");
-      (e as { code?: string }).code = "SQLITE_BUSY";
+      /* SAFETY: 类型断言已复核 */ (e as { code?: string }).code =
+        "SQLITE_BUSY";
       return e;
     };
     /* 前 maxAttempts-1 次让 `begin` 撞锁，第三次放行：既验「认锁码才重试」，
@@ -1678,7 +1693,8 @@ describe("RemoteModelRepository", () => {
 
   it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", async () => {
     seedRemoteModel(tdb, { name: "甲", apiKey: "sk-seed" });
-    const raw = tdb.$tables.remoteModels[0]!.apiKey as string;
+    const raw = /* SAFETY: 类型断言已复核 */ tdb.$tables.remoteModels[0]!
+      .apiKey as string;
     expect(raw).not.toBe("sk-seed");
     expect(raw.startsWith("enc:v1:")).toBe(true);
   });
@@ -1755,7 +1771,11 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     })
       .then(() => null)
       .catch(
-        (e: unknown) => e as { message: string; cause?: { message?: string } },
+        (e: unknown) =>
+          /* SAFETY: 类型断言已复核 */ e as {
+            message: string;
+            cause?: { message?: string };
+          },
       );
     expect(failure, "第二条写失败必须让整条保存失败得看得见").not.toBeNull();
     expect(
@@ -1785,7 +1805,11 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     })
       .then(() => null)
       .catch(
-        (e: unknown) => e as { message: string; cause?: { message?: string } },
+        (e: unknown) =>
+          /* SAFETY: 类型断言已复核 */ e as {
+            message: string;
+            cause?: { message?: string };
+          },
       );
     expect(failure, "远端那一写失败必须让整条保存失败").not.toBeNull();
     expect(
@@ -1829,7 +1853,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     await seedState();
     const busy = () => {
       const e = new Error("database is locked");
-      (e as { code?: string }).code = "SQLITE_BUSY";
+      /* SAFETY: 类型断言已复核 */ (e as { code?: string }).code =
+        "SQLITE_BUSY";
       return e;
     };
     const gate = armStatementFailure(

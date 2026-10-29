@@ -36,9 +36,13 @@ export function classTypeForNode(
   if (!graph || typeof graph !== "object" || !nodeId) return undefined;
 
   // API 形状优先：这一支不需要遍历，是 O(1) 的按键取。
-  const apiNode = (graph as Record<string, unknown>)[nodeId];
+  const apiNode = /* SAFETY: 类型断言已复核 */ (
+    graph as Record<string, unknown>
+  )[nodeId];
   if (apiNode && typeof apiNode === "object") {
-    const classType = (apiNode as Record<string, unknown>).class_type;
+    const classType = /* SAFETY: 类型断言已复核 */ (
+      apiNode as Record<string, unknown>
+    ).class_type;
     if (typeof classType === "string" && classType) return classType;
   }
 

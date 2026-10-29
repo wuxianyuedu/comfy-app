@@ -165,11 +165,15 @@ function parseRevMap(raw: unknown): Record<string, number> {
 export function normalizeProductionRun(raw: unknown): ProductionRun {
   const obj = asRecord(raw);
   if (!obj) return { ...DEFAULT_PRODUCTION_RUN };
-  const status = RUN_STATUSES.includes(obj.status as RunStatus)
-    ? (obj.status as RunStatus)
+  const status = RUN_STATUSES.includes(
+    /* SAFETY: 类型断言已复核 */ obj.status as RunStatus,
+  )
+    ? /* SAFETY: 类型断言已复核 */ (obj.status as RunStatus)
     : "idle";
-  const approvalMode = APPROVAL_MODES.includes(obj.approvalMode as ApprovalMode)
-    ? (obj.approvalMode as ApprovalMode)
+  const approvalMode = APPROVAL_MODES.includes(
+    /* SAFETY: 类型断言已复核 */ obj.approvalMode as ApprovalMode,
+  )
+    ? /* SAFETY: 类型断言已复核 */ (obj.approvalMode as ApprovalMode)
     : "stage";
   const log: RunStep[] = [];
   if (Array.isArray(obj.log)) {

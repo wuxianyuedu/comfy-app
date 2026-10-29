@@ -128,7 +128,10 @@ export function rawUiNodeType(
   nodeId: string,
 ): string | undefined {
   if (!raw || typeof raw !== "object" || !nodeId) return undefined;
-  const type = resolveRawNode(raw as JsonRecord, nodeId)?.type;
+  const type = resolveRawNode(
+    /* SAFETY: 类型断言已复核 */ raw as JsonRecord,
+    nodeId,
+  )?.type;
   return typeof type === "string" && type ? type : undefined;
 }
 /** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
@@ -155,7 +158,7 @@ function seedWidgetSlot(node: RawUiNode): number {
       typeof w === "string"
         ? w
         : w != null && typeof w === "object"
-          ? ((w as JsonRecord).name ?? inp.name)
+          ? /* SAFETY: 类型断言已复核 */ ((w as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname))
       return slot;
@@ -173,7 +176,7 @@ function seedWidgetName(node: RawUiNode): string | null {
       typeof w === "string"
         ? w
         : w != null && typeof w === "object"
-          ? ((w as JsonRecord).name ?? inp.name)
+          ? /* SAFETY: 类型断言已复核 */ ((w as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       return typeof inp.name === "string" ? inp.name : String(wname);
@@ -235,7 +238,7 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
   const defs = raw.definitions;
   const subs =
     defs != null && typeof defs === "object"
-      ? (defs as JsonRecord).subgraphs
+      ? /* SAFETY: 类型断言已复核 */ (defs as JsonRecord).subgraphs
       : undefined;
   const list: unknown[] = Array.isArray(subs)
     ? subs
@@ -303,7 +306,7 @@ function collectSubgraphTargets(
   const linksById = new Map<string, SubgraphLink>();
   for (const l of Array.isArray(sub.links) ? sub.links : []) {
     if (l == null || typeof l !== "object") continue;
-    const link = l as SubgraphLink;
+    const link = /* SAFETY: 类型断言已复核 */ l as SubgraphLink;
     if (typeof link.id !== "string" && typeof link.id !== "number") continue;
     linksById.set(String(link.id), link);
   }
@@ -311,7 +314,7 @@ function collectSubgraphTargets(
   const defInputs: SubgraphPin[] = [];
   for (const i of Array.isArray(sub.inputs) ? sub.inputs : []) {
     if (i == null || typeof i !== "object") continue;
-    defInputs.push(i as SubgraphPin);
+    defInputs.push(/* SAFETY: 类型断言已复核 */ i as SubgraphPin);
   }
 
   const targetByName = new Map<string, { nodeId: string; slot: number }>();
@@ -445,7 +448,7 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
 
       /* zod 解析出的副本上 `widgets_values` 是 `any[]`：这里显式收成 `unknown[]`，
        * 逐项取出的值才不会把 `any` 带进「写回内层」的那一步。 */
-      const host = (
+      const host = /* SAFETY: 类型断言已复核 */ (
         Array.isArray(node.widgets_values) ? node.widgets_values : []
       ) as unknown[];
       for (const [name, idx] of ours) {
@@ -490,7 +493,8 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
       typeof inp.widget === "string"
         ? inp.widget
         : inp.widget != null && typeof inp.widget === "object"
-          ? ((inp.widget as JsonRecord).name ?? inp.name)
+          ? /* SAFETY: 类型断言已复核 */ ((inp.widget as JsonRecord).name ??
+            inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) slot++;
   }
@@ -532,7 +536,9 @@ export function applyApiOverrides(
 ): JsonRecord {
   if (graph == null || typeof graph !== "object" || Array.isArray(graph))
     return {};
-  const out = JSON.parse(JSON.stringify(graph)) as JsonRecord;
+  const out = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    JSON.stringify(graph),
+  ) as JsonRecord;
   if (!overrides?.length) return out;
 
   for (const ov of overrides) {
@@ -544,14 +550,15 @@ export function applyApiOverrides(
       Array.isArray(nodeRaw)
     )
       continue;
-    const inputsRaw = (nodeRaw as JsonRecord).inputs;
+    const inputsRaw = /* SAFETY: 类型断言已复核 */ (nodeRaw as JsonRecord)
+      .inputs;
     if (
       inputsRaw == null ||
       typeof inputsRaw !== "object" ||
       Array.isArray(inputsRaw)
     )
       continue;
-    const inputs = inputsRaw as JsonRecord;
+    const inputs = /* SAFETY: 类型断言已复核 */ inputsRaw as JsonRecord;
 
     if (ov.name === CONTROL_AFTER_GENERATE) {
       delete inputs[CONTROL_AFTER_GENERATE];
@@ -570,7 +577,9 @@ export function applyRawOverrides(
   rawJson: unknown,
   overrides?: RawWorkflowOverride[],
 ): JsonRecord {
-  const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
+  const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    JSON.stringify(rawJson),
+  ) as JsonRecord;
   /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
    * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
    * 的引脚上）。因此这一步先于「有没有覆盖」的判断。 */

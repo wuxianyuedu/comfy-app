@@ -7,7 +7,7 @@ type FetchMock = Mock<typeof fetch>;
 
 /** 造一个带 JSON 体的 Response；非法 JSON 走 reject */
 function jsonRes(status: number, body: unknown): Response {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
@@ -79,13 +79,15 @@ describe("uploadBgm", () => {
   it("响应体不是合法 JSON：按空对象处理，不把解析异常抛给用户", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn<typeof fetch>().mockResolvedValue({
-        ok: false,
-        status: 502,
-        json: async () => {
-          throw new SyntaxError("Unexpected token <");
-        },
-      } as unknown as Response),
+      vi.fn<typeof fetch>().mockResolvedValue(
+        /* SAFETY: 类型断言已复核 */ {
+          ok: false,
+          status: 502,
+          json: async () => {
+            throw new SyntaxError("Unexpected token <");
+          },
+        } as unknown as Response,
+      ),
     );
     await expect(uploadBgm(new File(["x"], "a.wav"))).rejects.toThrow(
       "BGM 上传失败",

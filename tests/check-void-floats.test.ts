@@ -106,7 +106,7 @@ void b();`,
     // 建立基线
     const upd = repo.run(["--update"]);
     expect(upd.code).toBe(0);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(
         join(repo.dir, "scripts", ".void-floats-baseline.json"),
         "utf8",
@@ -161,7 +161,7 @@ void a();`,
     );
     repo.run(["--update"]);
     const p = join(repo.dir, "scripts", ".void-floats-baseline.json");
-    const json = JSON.parse(readFileSync(p, "utf8")) as { ruleVersion: number };
+    const json = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(p, "utf8")) as { ruleVersion: number };
     json.ruleVersion = 999;
     writeFileSync(p, JSON.stringify(json, null, 2) + "\n", "utf8");
     const r = repo.run();

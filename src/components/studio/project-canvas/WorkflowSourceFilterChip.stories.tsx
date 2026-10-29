@@ -14,7 +14,11 @@ import { WorkflowSourceFilterChip } from "~/components/studio/project-canvas/Wor
  * 浮层壳与选项行走 `ui/option-list-popover`（规范 16 §16.2.4.14）—— 本目录四个
  * chip 此前各写一遍这份壳，所以 story 里不摆自定义浮层，只摆真组件。
  */
-const OPTIONS = ["all", "local", "online"] as const;
+const OPTIONS = /* SAFETY: 类型断言已复核 */ [
+  "all",
+  "local",
+  "online",
+] as const;
 
 const meta = {
   title: "Studio/WorkflowSourceFilterChip",

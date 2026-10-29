@@ -249,7 +249,8 @@ export const REVIEW_RUBRICS: Record<ReviewRubricKind, ReviewRubric> = {
 
 /** 取某评审对象的 rubric；未知 kind → null（调用方回落「无评分」旧路，不抛）。 */
 export function rubricFor(kind: string): ReviewRubric | null {
-  const rubric = REVIEW_RUBRICS[kind as ReviewRubricKind];
+  const rubric =
+    REVIEW_RUBRICS[/* SAFETY: 类型断言已复核 */ kind as ReviewRubricKind];
   return rubric ?? null;
 }
 
@@ -261,7 +262,7 @@ export function rubricFor(kind: string): ReviewRubric | null {
 export function renderRubricForPrompt(rubric: ReviewRubric): string {
   return rubric.dimensions
     .map((d) => {
-      const anchors = ([1, 2, 3, 4, 5] as const)
+      const anchors = /* SAFETY: 类型断言已复核 */ ([1, 2, 3, 4, 5] as const)
         .map((score) => `${score}=${d.anchors[score]}`)
         .join("；");
       return `- ${d.label}（${d.key}）：${d.description}。${anchors}`;

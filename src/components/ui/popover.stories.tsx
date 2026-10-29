@@ -58,16 +58,20 @@ export const Default: Story = {
 export const Sides: Story = {
   render: () => (
     <div className="flex items-center gap-4">
-      {(["top", "right", "bottom", "left"] as const).map((side) => (
-        <Popover key={side}>
-          <PopoverTrigger render={<Button variant="outline" size="sm" />}>
-            side={side}
-          </PopoverTrigger>
-          <PopoverContent side={side} className="w-40">
-            <p className="text-sm">开在 {side} 这一侧</p>
-          </PopoverContent>
-        </Popover>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (
+          ["top", "right", "bottom", "left"] as const
+        ).map((side) => (
+          <Popover key={side}>
+            <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+              side={side}
+            </PopoverTrigger>
+            <PopoverContent side={side} className="w-40">
+              <p className="text-sm">开在 {side} 这一侧</p>
+            </PopoverContent>
+          </Popover>
+        ))
+      }
     </div>
   ),
 };

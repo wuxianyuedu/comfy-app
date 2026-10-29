@@ -26,7 +26,9 @@ import { config, proxy } from "./proxy";
 function reqFor(pathnameWithQuery: string): NextRequest {
   const url = new URL(`http://127.0.0.1:3996${pathnameWithQuery}`);
   const nextUrl = Object.assign(url, { clone: () => new URL(url.href) });
-  return { nextUrl } as unknown as NextRequest;
+  return /* SAFETY: 类型断言已复核 */ {
+    nextUrl,
+  } as unknown as NextRequest;
 }
 
 /** rewrite 的落点（Next 把它写在 `x-middleware-rewrite` 上）；`next()` 时为空。 */

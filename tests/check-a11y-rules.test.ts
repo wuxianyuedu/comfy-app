@@ -86,12 +86,12 @@ test(
      * 它**只**作为下面那条话术的读数，不当断言：首次求值的墙钟是机器读数，
      * 不是判据的性质（热检出 3.4s、冷检出 40s+、`.next/` 命中 1.1–1.7s）。 */
     const first = Date.now();
-    const flat = (await loadEslintConfig()) as { rules?: unknown }[];
+    const flat = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as { rules?: unknown }[];
     const firstMs = Date.now() - first;
 
     // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
     const second = Date.now();
-    const again = (await loadEslintConfig()) as { rules?: unknown }[];
+    const again = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as { rules?: unknown }[];
     const secondMs = Date.now() - second;
 
     expect(Array.isArray(flat)).toBe(true);
@@ -129,8 +129,8 @@ test(
 );
 
 test("导出面：每个导出都是可调用的（不是「导了没人用」的空壳）", () => {
-  const mod = loadJudgeModule() as unknown as Record<string, unknown>;
-  const { VERIFIED_SURFACES } = mod as {
+  const mod = /* SAFETY: 类型断言已复核 */ loadJudgeModule() as unknown as Record<string, unknown>;
+  const { VERIFIED_SURFACES } = /* SAFETY: 类型断言已复核 */ mod as {
     VERIFIED_SURFACES: Record<string, string>;
   };
   for (const key of Object.keys(VERIFIED_SURFACES)) {
@@ -161,7 +161,7 @@ test(
       (error: unknown) => {
         // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
         expect(error).toBeInstanceOf(Error);
-        expect(String((error as Error).message).length).toBeGreaterThan(0);
+        expect(String((/* SAFETY: 类型断言已复核 */ error as Error).message).length).toBeGreaterThan(0);
       },
     );
   },

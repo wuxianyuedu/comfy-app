@@ -172,7 +172,9 @@ async function consumeSettingsStream(
       // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
       let ev: SettingsStreamEvent;
       try {
-        ev = JSON.parse(line) as SettingsStreamEvent;
+        ev = /* SAFETY: 类型断言已复核 */ JSON.parse(
+          line,
+        ) as SettingsStreamEvent;
       } catch {
         continue;
       }
@@ -366,9 +368,10 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
       if (!isStream) {
         // 缓存预热路径：服务端返回单个 JSON blob。
-        const data = (await res.json()) as SettingsResp & {
-          error?: { message?: string } | string;
-        };
+        const data =
+          /* SAFETY: 类型断言已复核 */ (await res.json()) as SettingsResp & {
+            error?: { message?: string } | string;
+          };
         const parsed = parseSettingsBlob(data, res.status);
         setSavedPaths(parsed.paths);
         setSummary(parsed.summary);
@@ -473,7 +476,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         buf = buf.slice(nl + 1);
         if (!line.trim()) continue;
         try {
-          const obj = JSON.parse(line) as ParseStreamEvent;
+          const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(
+            line,
+          ) as ParseStreamEvent;
           if (obj.type === "log") {
             setLogs((prev) =>
               tailWindowAppend(

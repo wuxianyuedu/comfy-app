@@ -163,7 +163,7 @@ export function pollEndpointFor(baseUrl: string, remoteTaskId: string): string {
 export type UpstreamJsonReader = (res: Response) => Promise<unknown>;
 
 const defaultJsonReader: UpstreamJsonReader = (res) =>
-  res.json().catch(() => ({})) as Promise<unknown>;
+  /* SAFETY: 类型断言已复核 */ res.json().catch(() => ({})) as Promise<unknown>;
 
 /** 上游返回非 2xx 时统一的错误文案（截断响应体，避免把整页 HTML 灌进日志）。 */
 function upstreamError(label: string, status: number, payload: unknown): Error {

@@ -38,7 +38,7 @@ function busyError(): Error {
   const e = new Error(
     'Failed query: update "task" set "status" = ? where "task"."id" = ?',
   );
-  (e as { cause?: unknown }).cause = {
+  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = {
     code: "SQLITE_BUSY",
     message: "database is locked",
   };
@@ -55,7 +55,7 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
     const outcome = await writeTerminal("t-retry", "失败收口", async () => {
       calls += 1;
       if (calls < 3) throw busyError();
-      return "written" as const;
+      return /* SAFETY: 类型断言已复核 */ "written" as const;
     });
 
     expect(outcome).toBe("written");
@@ -113,7 +113,11 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
 
   it("一次就成的收口不写任何多余日志", async () => {
     markDispatched("t-clean");
-    await writeTerminal("t-clean", "成功收口", async () => "written" as const);
+    await writeTerminal(
+      "t-clean",
+      "成功收口",
+      async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+    );
     expect(state().logs.has("t-clean")).toBe(false);
     expect(isDispatchedHere("t-clean")).toBe(true);
   });

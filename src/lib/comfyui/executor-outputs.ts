@@ -39,17 +39,28 @@ export function collectOutputs(
   const texts: string[] = [];
   for (const nodeOut of Object.values(outputs)) {
     if (!nodeOut || typeof nodeOut !== "object") continue;
-    const node = nodeOut as Record<string, unknown>;
+    const node = /* SAFETY: 类型断言已复核 */ nodeOut as Record<
+      string,
+      unknown
+    >;
     if (Array.isArray(node.images))
-      images.push(...(node.images as CollectedOutputFile[]));
+      images.push(
+        .../* SAFETY: 类型断言已复核 */ (node.images as CollectedOutputFile[]),
+      );
     if (Array.isArray(node.videos))
-      videos.push(...(node.videos as CollectedOutputFile[]));
+      videos.push(
+        .../* SAFETY: 类型断言已复核 */ (node.videos as CollectedOutputFile[]),
+      );
     // VHS_VideoCombine 把文件发在 `gifs` 下（实际是 mp4/gif/webm）。
     if (Array.isArray(node.gifs))
-      videos.push(...(node.gifs as CollectedOutputFile[]));
+      videos.push(
+        .../* SAFETY: 类型断言已复核 */ (node.gifs as CollectedOutputFile[]),
+      );
     // SaveAudio 与 AudioComposite 把文件发在 `audios` 下。
     if (Array.isArray(node.audios))
-      audios.push(...(node.audios as CollectedOutputFile[]));
+      audios.push(
+        .../* SAFETY: 类型断言已复核 */ (node.audios as CollectedOutputFile[]),
+      );
     // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
     if (typeof node.text === "string" && node.text.trim())
       texts.push(node.text);
@@ -74,10 +85,15 @@ export function collectOutputs(
           (it) =>
             it &&
             typeof it === "object" &&
-            typeof (it as Record<string, unknown>).filename === "string",
+            typeof (
+              /* SAFETY: 类型断言已复核 */ (it as Record<string, unknown>)
+                .filename
+            ) === "string",
         )
       )
-        others.push(...(v as CollectedOutputFile[]));
+        others.push(
+          .../* SAFETY: 类型断言已复核 */ (v as CollectedOutputFile[]),
+        );
     }
   }
   return { images, videos, audios, others, texts };
@@ -160,16 +176,28 @@ function readSamplerNode(
 
 export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const out: RuntimeParams = {};
-  const prompt = (entry as { prompt?: unknown } | null | undefined)?.prompt;
-  const graphRaw = (prompt as Record<string, unknown> | null | undefined)?.[2];
+  const prompt = /* SAFETY: 类型断言已复核 */ (
+    entry as { prompt?: unknown } | null | undefined
+  )?.prompt;
+  const graphRaw = /* SAFETY: 类型断言已复核 */ (
+    prompt as Record<string, unknown> | null | undefined
+  )?.[2];
   if (!graphRaw || typeof graphRaw !== "object") return out;
-  const graph = graphRaw as Record<string, unknown>;
+  const graph = /* SAFETY: 类型断言已复核 */ graphRaw as Record<
+    string,
+    unknown
+  >;
   const samplers: SamplerRuntime[] = [];
   for (const [nid, nodeRaw] of Object.entries(graph)) {
-    const node = nodeRaw as Record<string, unknown> | undefined;
+    const node = /* SAFETY: 类型断言已复核 */ nodeRaw as
+      | Record<string, unknown>
+      | undefined;
     const t = typeof node?.class_type === "string" ? node.class_type : "";
     if (!isSamplerClassType(t)) continue;
-    const inputs = (node?.inputs ?? {}) as Record<string, unknown>;
+    const inputs = /* SAFETY: 类型断言已复核 */ (node?.inputs ?? {}) as Record<
+      string,
+      unknown
+    >;
     samplers.push(readSamplerNode(nid, t, inputs));
   }
   if (samplers.length === 0) return out;

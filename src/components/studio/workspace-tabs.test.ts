@@ -267,39 +267,41 @@ describe("持久化：整份可用，否则整份放弃", () => {
     expect(out?.tabs.map((tab) => tab.view)).toEqual(["home", "queue"]);
   });
 
-  it.for([
-    ["坏 JSON", "{oops"],
-    ["未知视图", JSON.stringify({ activeKey: "x:", tabs: [["nope", null]] })],
-    [
-      "activeKey 指向不存在的页",
-      JSON.stringify({
-        activeKey: tabKey("models", null),
-        tabs: [["home", null]],
-      }),
-    ],
-    [
-      "重复页签",
-      JSON.stringify({
-        activeKey: tabKey("queue", null),
-        tabs: [
-          ["home", null],
-          ["queue", null],
-          ["queue", null],
-        ],
-      }),
-    ],
-    [
-      "项目类视图丢了项目 id",
-      JSON.stringify({
-        activeKey: tabKey("workshop", null),
-        tabs: [
-          ["home", null],
-          ["workshop", null],
-        ],
-      }),
-    ],
-    ["形状不对", JSON.stringify({ activeKey: "home:", tabs: "queue" })],
-  ] as const)("%s ⇒ 整份放弃（返回 null 由调用方回落初始态）", (_row) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["坏 JSON", "{oops"],
+      ["未知视图", JSON.stringify({ activeKey: "x:", tabs: [["nope", null]] })],
+      [
+        "activeKey 指向不存在的页",
+        JSON.stringify({
+          activeKey: tabKey("models", null),
+          tabs: [["home", null]],
+        }),
+      ],
+      [
+        "重复页签",
+        JSON.stringify({
+          activeKey: tabKey("queue", null),
+          tabs: [
+            ["home", null],
+            ["queue", null],
+            ["queue", null],
+          ],
+        }),
+      ],
+      [
+        "项目类视图丢了项目 id",
+        JSON.stringify({
+          activeKey: tabKey("workshop", null),
+          tabs: [
+            ["home", null],
+            ["workshop", null],
+          ],
+        }),
+      ],
+      ["形状不对", JSON.stringify({ activeKey: "home:", tabs: "queue" })],
+    ] as const,
+  )("%s ⇒ 整份放弃（返回 null 由调用方回落初始态）", (_row) => {
     const [, raw] = _row;
     expect(parseWorkspaceTabs(raw, VIEWS)).toBeNull();
   });

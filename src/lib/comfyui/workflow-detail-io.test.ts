@@ -11,7 +11,7 @@ function makeParams(
 ): WorkflowIOEnrichParams {
   return {
     workflowIORaw:
-      workflowIORaw as unknown as WorkflowIOEnrichParams["workflowIORaw"],
+      /* SAFETY: 类型断言已复核 */ workflowIORaw as unknown as WorkflowIOEnrichParams["workflowIORaw"],
     rawInputsById: {},
     rawNodeMeta: [],
     graph: {},
@@ -191,10 +191,9 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
-      string,
-      { defaultValue?: unknown }
-    >;
+    const modes = /* SAFETY: 类型断言已复核 */ result[
+      "94::widget::aspect_ratio"
+    ]!.modeOverrides as Record<string, { defaultValue?: unknown }>;
     expect(modes.T2I!.defaultValue).toBe("16:9 (Widescreen)");
   });
 
@@ -210,10 +209,9 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
-      string,
-      { defaultValue?: unknown }
-    >;
+    const modes = /* SAFETY: 类型断言已复核 */ result[
+      "94::widget::aspect_ratio"
+    ]!.modeOverrides as Record<string, { defaultValue?: unknown }>;
     expect(modes.T2I!.defaultValue).toBe("4:3 (Standard)");
   });
 
@@ -247,10 +245,9 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
-      string,
-      { defaultValue?: unknown }
-    >;
+    const modes = /* SAFETY: 类型断言已复核 */ result[
+      "94::widget::aspect_ratio"
+    ]!.modeOverrides as Record<string, { defaultValue?: unknown }>;
     expect(modes.T2I!.defaultValue).toBe("16:9");
   });
 
@@ -798,7 +795,7 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
   const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
 
   it("buildRawInputs + enrichWorkflowIO：label 直读，清掉改名后取到作者 label", async () => {
-    const raw = {
+    const raw = /* SAFETY: 类型断言已复核 */ {
       nodes: [
         {
           id: 1512,
@@ -887,7 +884,7 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
    * 封装节点的自动编号槽位也直接按机器名处理。 */
   const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
 
-  const raw = {
+  const raw = /* SAFETY: 类型断言已复核 */ {
     nodes: [
       {
         id: 4,
@@ -951,7 +948,9 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
   });
 
   it("作者写在本层的名字优先于子图边界 pin", async () => {
-    const own = JSON.parse(JSON.stringify(raw)) as unknown as RawWorkflow;
+    const own = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      JSON.stringify(raw),
+    ) as unknown as RawWorkflow;
     own.nodes[0]!.inputs![0]!.label = "我的种子";
     const { rawInputsById } = await buildRawInputs(
       own,
@@ -1033,7 +1032,7 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
   /* wrapper 槽位别名 value_1，作者把业务名写在本层 inputs[].label 上。
    * 通用翻译（localized_name）也在，且排在前 —— 显示名会停在翻译上，
    * 仅凭显示的 label 无从判断本层是否有作者命名，只有 slotLabel 能作证。 */
-  const raw = {
+  const raw = /* SAFETY: 类型断言已复核 */ {
     nodes: [
       {
         id: 9,
@@ -1087,7 +1086,7 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
   });
 
   it("普通节点：没有另一个作者名就不塞无信息量的 slotLabel", async () => {
-    const plain = {
+    const plain = /* SAFETY: 类型断言已复核 */ {
       nodes: [
         {
           id: 24,

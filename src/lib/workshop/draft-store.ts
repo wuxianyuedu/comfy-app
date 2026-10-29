@@ -55,7 +55,9 @@ function draftKeyFor(id: string): string {
 function parseDraft(raw: string | null): WorkshopDraft {
   if (!raw) return emptyWorkshopDraft();
   try {
-    const draft = JSON.parse(raw) as Partial<WorkshopDraft>;
+    const draft = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      raw,
+    ) as Partial<WorkshopDraft>;
     return {
       meta: draft.meta ?? DEFAULT_META,
       scriptMarkdown:

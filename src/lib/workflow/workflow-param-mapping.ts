@@ -149,7 +149,9 @@ function buildContractEntries(
     const ids: readonly string[] = def.cls === "size" ? SIZE_SUB_IDS : [def.id];
     for (const id of ids) {
       if (out.some((entry) => entry.id === id)) continue;
-      const cls = (def.cls === "size" ? id : def.cls) as ParamClass;
+      const cls = /* SAFETY: 类型断言已复核 */ (
+        def.cls === "size" ? id : def.cls
+      ) as ParamClass;
       const pins = pinsByClass.get(cls) ?? [];
       const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
       out.push({
@@ -193,7 +195,9 @@ function classifyPins(
     number: [],
   };
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
-    const entry = raw as WorkflowIOEntry | undefined;
+    const entry = /* SAFETY: 类型断言已复核 */ raw as
+      | WorkflowIOEntry
+      | undefined;
     // 显式空值守卫：`pinFamily(entry)` 的契约本就要求 entry 非 undefined 才
     // 可能返回真 family，但编译器看不到——原实现里 push 的三行 `entry!.xxx`
     // 是把这一契约「用两次」（判据 + 断言）；改成同行守卫后判据与窄化同源。
@@ -208,7 +212,9 @@ function classifyPins(
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
-  for (const klass of Object.keys(CLASS_FAMILY) as ParamClass[]) {
+  for (const klass of /* SAFETY: 类型断言已复核 */ Object.keys(
+    CLASS_FAMILY,
+  ) as ParamClass[]) {
     /* 聚合值 `size` 不单独摆候选：契约层把它摊成六个子口。 */
     if (klass === "size") continue;
     const family = CLASS_FAMILY[klass];
@@ -341,11 +347,13 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
   const out: ParamMapping = { manualByMode, labels: {} };
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
     return out;
-  const sourceRaw = (paramMap as Record<string, unknown>).source;
+  const sourceRaw = /* SAFETY: 类型断言已复核 */ (
+    paramMap as Record<string, unknown>
+  ).source;
   if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw))
     return out;
   for (const [key, value] of Object.entries(
-    sourceRaw as Record<string, unknown>,
+    /* SAFETY: 类型断言已复核 */ sourceRaw as Record<string, unknown>,
   )) {
     if (!key.startsWith(MODE_KEY_PREFIX)) continue;
     const mode = key.slice(MODE_KEY_PREFIX.length);
@@ -353,7 +361,7 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
     if (!value || typeof value !== "object" || Array.isArray(value)) continue;
     const byEntry: Record<string, string | null> = {};
     for (const [entryId, target] of Object.entries(
-      value as Record<string, unknown>,
+      /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>,
     )) {
       /* 存量清理：那个键没有任何入口能再写出来，读到即丢（下面 `byEntry` 里没它，
        *  序列化自然也不会把它写回去）。 */

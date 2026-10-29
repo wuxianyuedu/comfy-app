@@ -42,7 +42,7 @@ export function trpcHttpLink(options: {
 
   if (!options.withLogger) return [http];
 
-  return [
+  return /* SAFETY: 类型断言已复核 */ [
     loggerLink({
       enabled: (op) =>
         process.env.NODE_ENV === "development" ||

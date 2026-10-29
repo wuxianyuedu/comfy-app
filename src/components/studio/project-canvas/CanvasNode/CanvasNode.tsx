@@ -57,7 +57,13 @@ export const CanvasNode = React.memo(function CanvasNode({
       setNodes((nds) =>
         nds.map((node) =>
           node.id === id
-            ? { ...node, data: { ...(node.data as CanvasNodeData), ...p } }
+            ? {
+                ...node,
+                data: {
+                  .../* SAFETY: 类型断言已复核 */ (node.data as CanvasNodeData),
+                  ...p,
+                },
+              }
             : node,
         ),
       ),

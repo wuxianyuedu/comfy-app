@@ -79,7 +79,11 @@ describe("portraitCandidates 读取候选", () => {
   it("无 portraits 字段（旧数据）返回空数组", () => {
     expect(portraitCandidates(makeCharacter())).toEqual([]);
     expect(
-      portraitCandidates(makeCharacter({ portraits: "x" as never })),
+      portraitCandidates(
+        makeCharacter({
+          portraits: /* SAFETY: 类型断言已复核 */ "x" as never,
+        }),
+      ),
     ).toEqual([]);
   });
 
@@ -87,7 +91,7 @@ describe("portraitCandidates 读取候选", () => {
     const character = makeCharacter({
       portraits: [
         makePortrait({ url: "/u/old.png", createdAt: 1 }),
-        { url: "" } as CharacterPortrait,
+        /* SAFETY: 类型断言已复核 */ { url: "" } as CharacterPortrait,
         makePortrait({ url: "/u/new.png", createdAt: 9 }),
       ],
     });

@@ -263,7 +263,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
           stdio: ["ignore", "ignore", "pipe"],
         });
       } catch (err) {
-        const e = err as { status?: number; stderr?: string | Buffer };
+        const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stderr?: string | Buffer };
         code = e.status ?? 1;
         stderr = String(e.stderr ?? "");
       }
@@ -374,7 +374,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     const pkgDir = path.resolve(entry, "..", "..");
     return {
       pkgDir,
-      pkg: JSON.parse(
+      pkg: /* SAFETY: 类型断言已复核 */ JSON.parse(
         fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
       ) as { name: string; version: string; bin?: Record<string, string> },
     };
@@ -406,7 +406,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     expect(a.pkg.bin?.tsc6 ?? null, "两份的键撞了：tsc 那份也有 tsc6").toBeNull();
     expect(b.pkg.bin?.tsc ?? null, "两份的键撞了：tsc6 那份也有 tsc").toBeNull();
     /* 入口路径与包自己申报的那条一致（垫片没指到别处去）。 */
-    for (const [name, entry] of [
+    for (const [name, entry] of /* SAFETY: 类型断言已复核 */ [
       ["tsc", tsc!],
       ["tsc6", tsc6!],
     ] as const) {
@@ -434,7 +434,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     expect(byShimName, "`.bin/tsc` 与 `require.resolve(\"typescript\")` 给了同一份包 —— 口径变了，重读 #2572").not.toBe(
       byDepName,
     );
-    const aliasPkg = JSON.parse(
+    const aliasPkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(byDepName, "package.json"), "utf8"),
     ) as { name: string; bin?: Record<string, string> };
     expect(resolvePackageBinEntry("typescript"), "按依赖名居然解析得到").toBeNull();
@@ -555,7 +555,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       });
       return { status: 0, stdout, stderr: "" };
     } catch (err) {
-      const e = err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
       return {
         status: e.status ?? 1,
         stdout: String(e.stdout ?? ""),

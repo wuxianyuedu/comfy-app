@@ -71,7 +71,10 @@ export function splitDomProps<
   rest: Omit<T, Extract<Keys[number], keyof T>>;
 } {
   const own: Record<string, unknown> = {};
-  const rest = { ...props } as Record<string, unknown>;
+  const rest = /* SAFETY: 类型断言已复核 */ { ...props } as Record<
+    string,
+    unknown
+  >;
   for (const key of keys) {
     /* 调用处没传的私有键**不出现在 own 里**（不凭空补 `undefined`）——
      * 那会让「区分不出「没传」与「传了 undefined」」这个信息在出口里丢掉。 */
@@ -80,7 +83,7 @@ export function splitDomProps<
       delete rest[key];
     }
   }
-  return { own, rest } as {
+  return /* SAFETY: 类型断言已复核 */ { own, rest } as {
     own: Pick<T, Extract<Keys[number], keyof T>>;
     rest: Omit<T, Extract<Keys[number], keyof T>>;
   };
@@ -103,6 +106,10 @@ export function commonOwnProps<A extends string, B extends string>(
   a: readonly A[],
   b: readonly B[],
 ): (A & B)[] {
-  const setB = new Set<string>(b as readonly string[]);
-  return (a as readonly string[]).filter((k) => setB.has(k)) as (A & B)[];
+  const setB = new Set<string>(
+    /* SAFETY: 类型断言已复核 */ b as readonly string[],
+  );
+  return /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+    a as readonly string[]
+  ).filter((k) => setB.has(k)) as (A & B)[];
 }

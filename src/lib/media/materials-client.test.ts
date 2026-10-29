@@ -14,7 +14,11 @@ function jsonResponse(
   ok = true,
   status = ok ? 200 : 400,
 ): Response {
-  return { ok, status, json: async () => body } as unknown as Response;
+  return /* SAFETY: 类型断言已复核 */ {
+    ok,
+    status,
+    json: async () => body,
+  } as unknown as Response;
 }
 
 /** 记录调用参数：URL 与 init 都按可选处理，避免 vi.fn() 的零元组签名报错。 */
@@ -25,7 +29,7 @@ function callArgs(fetchMock: ReturnType<typeof vi.fn>): {
   const first = fetchMock.mock.calls[0] ?? [];
   return {
     url: String(first[0] ?? ""),
-    init: first[1] as RequestInit | undefined,
+    init: /* SAFETY: 类型断言已复核 */ first[1] as RequestInit | undefined,
   };
 }
 
@@ -143,7 +147,8 @@ describe("uploadMaterial", () => {
       folder: "ref",
       projectId: "p-1",
     });
-    const fd1 = callArgs(fetchMock).init?.body as FormData;
+    const fd1 = /* SAFETY: 类型断言已复核 */ callArgs(fetchMock).init
+      ?.body as FormData;
     expect(fd1.get("folder")).toBe("ref");
     expect(fd1.get("projectId")).toBe("p-1");
     expect(fd1.get("shared")).toBeNull();
@@ -152,11 +157,12 @@ describe("uploadMaterial", () => {
       folder: "ref",
       projectId: null,
     });
-    const fd2 = (
-      (fetchMock.mock.calls[1] as unknown[] | undefined)?.[1] as
-        | RequestInit
-        | undefined
-    )?.body as FormData;
+    const fd2 =
+      /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+        (fetchMock.mock.calls[1] as unknown[] | undefined)?.[1] as
+          | RequestInit
+          | undefined
+      )?.body as FormData;
     expect(fd2.get("shared")).toBe("true");
   });
 

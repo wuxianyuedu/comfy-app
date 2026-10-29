@@ -73,9 +73,14 @@ function serializeOne(a: unknown): string {
     typeof a === "object" &&
     a !== null &&
     "stack" in a &&
-    typeof (a as { stack?: unknown }).stack === "string"
+    typeof (/* SAFETY: 类型断言已复核 */ (a as { stack?: unknown }).stack) ===
+      "string"
   ) {
-    const e = a as { name?: unknown; message?: unknown; stack: string };
+    const e = /* SAFETY: 类型断言已复核 */ a as {
+      name?: unknown;
+      message?: unknown;
+      stack: string;
+    };
     const head = typeof e.message === "string" ? e.message : JSON.stringify(a);
     return `${head}\n${e.stack}`;
   }
@@ -698,7 +703,9 @@ export function computeFiltered(
      * 计数维度（`computeOriginCounts`）不读这里——下拉里仍显示真实条数，开关只
      * 影响「显示哪些行」，与「来源筛选下拉」是两条正交的轴。 */
     const categoryOk = disabledSet
-      ? !disabledSet.has(bucketOf(entry) as LogCategoryFilter)
+      ? !disabledSet.has(
+          /* SAFETY: 类型断言已复核 */ bucketOf(entry) as LogCategoryFilter,
+        )
       : true;
     return levelOk && originOk && categoryOk && matchesSearch(entry, search);
   });

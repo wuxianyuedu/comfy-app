@@ -26,7 +26,10 @@ import {
   type FitBoundsNode,
 } from "../subgraph-viewport";
 
-const FIT_FALLBACK_SIZE = { width: 240, height: 80 } as const;
+const FIT_FALLBACK_SIZE = /* SAFETY: 类型断言已复核 */ {
+  width: 240,
+  height: 80,
+} as const;
 /** 连续多少轮测量结果不再扩大就收手（超大图逐屏挂载时不必等全部量完）。 */
 const FIT_SETTLE_ROUNDS = 3;
 /** 轮数护栏，避免测量始终不稳时无限重算。 */

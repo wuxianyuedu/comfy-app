@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ollamaTagsUrl, probeOllama, startOllama } from "./ollama-client";
 
 function jsonRes(status: number, body: unknown): Response {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,

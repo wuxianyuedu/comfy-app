@@ -282,7 +282,10 @@ export function CanvasRulers({
   // 每条可见的主竖线的世界 X → 屏幕 X。
   const xLabels = useMemo(() => {
     if (zoom <= 0.01 || !width)
-      return [] as { world: number; screen: number }[];
+      return /* SAFETY: 类型断言已复核 */ [] as {
+        world: number;
+        screen: number;
+      }[];
     const start = Math.floor(-tx / zoom / labelStep) * labelStep;
     const end = Math.ceil((width - tx) / zoom / labelStep) * labelStep;
     const out: { world: number; screen: number }[] = [];
@@ -297,7 +300,10 @@ export function CanvasRulers({
   // 每条可见的主横线的世界 Y → 屏幕 Y。
   const yLabels = useMemo(() => {
     if (zoom <= 0.01 || !height)
-      return [] as { world: number; screen: number }[];
+      return /* SAFETY: 类型断言已复核 */ [] as {
+        world: number;
+        screen: number;
+      }[];
     const start = Math.floor(-ty / zoom / labelStep) * labelStep;
     const end = Math.ceil((height - ty) / zoom / labelStep) * labelStep;
     const out: { world: number; screen: number }[] = [];

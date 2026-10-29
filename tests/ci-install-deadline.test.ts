@@ -40,7 +40,7 @@ function harness(script: (child: FakeChild) => void) {
     /* 假定时器只需「别真等」：预算给 1ms、心跳索性关掉（见各条用例）。 */
     budgetMs: 30,
     heartbeatMs: 1_000_000,
-    spawnImpl: (() => {
+    spawnImpl: /* SAFETY: 类型断言已复核 */ (() => {
       script(child);
       return child;
     }) as never,

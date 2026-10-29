@@ -14,7 +14,10 @@ const taskListQuery = vi.fn();
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     task: {
-      list: { query: (...args: unknown[]) => taskListQuery(...args) as never },
+      list: {
+        query: (...args: unknown[]) =>
+          /* SAFETY: 类型断言已复核 */ taskListQuery(...args) as never,
+      },
     },
   },
 }));

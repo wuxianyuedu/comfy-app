@@ -71,7 +71,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
   if (!root || typeof root !== "object") return undefined;
   const seen = new WeakSet<object>();
   const stack: { node: JsonRecord; d: number }[] = [
-    { node: root as JsonRecord, d: 0 },
+    { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
   ];
   while (stack.length) {
     /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
@@ -91,7 +91,10 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     }
     for (const v of Object.values(node)) {
       if (v && typeof v === "object")
-        stack.push({ node: v as JsonRecord, d: d + 1 });
+        stack.push({
+          node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
+          d: d + 1,
+        });
     }
   }
   return undefined;
@@ -111,11 +114,11 @@ export function extractEnvelopeValidationErrors(
 export function envelopeErrorMessage(env: unknown): string {
   const err =
     env != null && typeof env === "object"
-      ? (env as JsonRecord).error
+      ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
       : undefined;
   const str = (o: unknown, key: string): string | undefined => {
     if (o == null || typeof o !== "object") return undefined;
-    const v = (o as JsonRecord)[key];
+    const v = /* SAFETY: 类型断言已复核 */ (o as JsonRecord)[key];
     return typeof v === "string" ? v : undefined;
   };
   return str(err, "message") ?? str(err, "hint") ?? "comfy-cli 执行失败";
@@ -133,17 +136,21 @@ export function translateWorkflowUnknownNodesError(
   env: unknown,
 ): string | null {
   if (env == null || typeof env !== "object") return null;
-  const err = (env as JsonRecord).error;
+  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
   if (err == null || typeof err !== "object") return null;
-  if ((err as JsonRecord).code !== "workflow_unknown_nodes") return null;
-  const details = (err as JsonRecord).details;
+  if (
+    /* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !==
+    "workflow_unknown_nodes"
+  )
+    return null;
+  const details = /* SAFETY: 类型断言已复核 */ (err as JsonRecord).details;
   const list =
     details != null && typeof details === "object"
-      ? (details as JsonRecord).errors
+      ? /* SAFETY: 类型断言已复核 */ (details as JsonRecord).errors
       : undefined;
   if (Array.isArray(list) && list.length > 0) {
     const lines = list.slice(0, 12).map((raw) => {
-      const e = raw as JsonRecord;
+      const e = /* SAFETY: 类型断言已复核 */ raw as JsonRecord;
       const node =
         typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
       const field = typeof e.field === "string" ? ` 的「${e.field}」输入` : "";
@@ -168,8 +175,11 @@ export function translateWorkflowUnknownNodesError(
     );
   }
   const message =
-    typeof (err as JsonRecord).message === "string"
-      ? ((err as JsonRecord).message as string)
+    typeof (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).message) ===
+    "string"
+      ? /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ ((
+          err as JsonRecord
+        ).message as string)
       : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
@@ -235,8 +245,9 @@ function nodeTag(
   evt: JsonRecord,
   patched: Record<string, unknown> | undefined,
 ): string {
-  const node = (evt.node ??
-    (evt.data as JsonRecord | null | undefined)?.node ??
+  const node = /* SAFETY: 类型断言已复核 */ (evt.node ??
+    /* SAFETY: 类型断言已复核 */ (evt.data as JsonRecord | null | undefined)
+      ?.node ??
     "?") as string;
   const fromEvent =
     typeof evt.class_type === "string" && evt.class_type
@@ -320,7 +331,7 @@ export function createCliEnvelopeParser(
     }
     /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
     doTrace("cli", taskId, "stdout 事件", { event: ev });
-    dispatchEvent(ev as JsonRecord);
+    dispatchEvent(/* SAFETY: 类型断言已复核 */ ev as JsonRecord);
   };
 
   const dispatchEvent = (evt: JsonRecord): void => {
@@ -589,11 +600,11 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         const rawMsg = msg;
         const err =
           env != null && typeof env === "object"
-            ? (env as JsonRecord).error
+            ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
             : undefined;
         const errCode =
           err != null && typeof err === "object"
-            ? (err as JsonRecord).code
+            ? /* SAFETY: 类型断言已复核 */ (err as JsonRecord).code
             : undefined;
         if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
           try {

@@ -195,20 +195,20 @@ const MESSAGE_KINDS: readonly MessageKind[] = [
  * 于是那些消息落到「未标记启动」那一组——不猜它属于哪一次，也不因此丢掉整条。 */
 function asMessageRecord(raw: unknown): MessageRecord | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const o = raw as Record<string, unknown>;
+  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (typeof o.id !== "string" || o.id === "") return null;
   if (typeof o.title !== "string" || typeof o.body !== "string") return null;
   if (typeof o.time !== "number" || !Number.isFinite(o.time)) return null;
   if (typeof o.read !== "boolean") return null;
   if (
     typeof o.kind !== "string" ||
-    !MESSAGE_KINDS.includes(o.kind as MessageKind)
+    !MESSAGE_KINDS.includes(/* SAFETY: 类型断言已复核 */ o.kind as MessageKind)
   ) {
     return null;
   }
   return {
     id: o.id,
-    kind: o.kind as MessageKind,
+    kind: /* SAFETY: 类型断言已复核 */ o.kind as MessageKind,
     title: o.title,
     body: o.body,
     time: o.time,

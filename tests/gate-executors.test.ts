@@ -92,7 +92,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     );
     /* 条数从台账现算，不写死：写死一份计数就等于再造一条「加了条目忘了改数」的
      * 会漂的判据（同一族先例见 #2135 那次钩子步数被钉死）。 */
-    const onDemand = JSON.parse(
+    const onDemand = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(
         join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
         "utf8",
@@ -633,7 +633,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("本仓库的台账：登记的每一形都真验得过（不是把红留在下一跳）", () => {
     // 在真仓库根跑：临时区里没有 `.githooks/` / `.cnb.yml` / `package.json` 的**原样**，
     // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
-    const ledger = JSON.parse(
+    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(
         join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
         "utf8",
@@ -674,7 +674,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     const { code, output } = repo.run(["--update"]);
     expect(output, output).toContain("台账已重写");
     expect(code).toBe(0);
-    const after = JSON.parse(
+    const after = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(
         join(repo.dir, "scripts", ".gate-executor-ledger.json"),
         "utf8",

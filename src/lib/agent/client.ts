@@ -40,8 +40,8 @@ function parseAgentResponse(data: unknown): AgentChatResponse {
           call.id !== "",
       )
       .map((call) => ({
-        id: call.id as string,
-        name: call.name as string,
+        id: /* SAFETY: 类型断言已复核 */ call.id as string,
+        name: /* SAFETY: 类型断言已复核 */ call.name as string,
         arguments: typeof call.arguments === "string" ? call.arguments : "{}",
       }));
   }

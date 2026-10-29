@@ -48,7 +48,10 @@ describe("useExternalAction", () => {
         throw new Error("ECONNREFUSED");
       });
     });
-    const first = report.mock.calls[0] as [string, string];
+    const first = /* SAFETY: 类型断言已复核 */ report.mock.calls[0] as [
+      string,
+      string,
+    ];
     expect(first[0]).toBe("err");
     expect(first[1]).toContain("应用服务");
   });

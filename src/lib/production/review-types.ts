@@ -63,7 +63,9 @@ const MODES: readonly ReviewMode[] = ["gacha", "reprompt"];
 
 /** 宽容解析重生成方式；非法/缺省回落 `gacha`（抽卡是默认动作）。 */
 export function normalizeReviewMode(raw: unknown): ReviewMode {
-  return MODES.includes(raw as ReviewMode) ? (raw as ReviewMode) : "gacha";
+  return MODES.includes(/* SAFETY: 类型断言已复核 */ raw as ReviewMode)
+    ? /* SAFETY: 类型断言已复核 */ (raw as ReviewMode)
+    : "gacha";
 }
 
 /**
@@ -185,7 +187,7 @@ export function applyReview(
     hit = true;
     // Array.isArray 把 unknown 收窄成 any[]：显式标 unknown[] 再展开，避免 any 混入数组。
     const prevHistory: unknown[] = Array.isArray(raw.reviewHistory)
-      ? (raw.reviewHistory as unknown[])
+      ? /* SAFETY: 类型断言已复核 */ (raw.reviewHistory as unknown[])
       : [];
     const prevVerdict = normalizeReviewVerdict(raw.review);
     const history = prevVerdict

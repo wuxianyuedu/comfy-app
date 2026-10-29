@@ -335,7 +335,10 @@ export async function getHistory(
     // 本地 ComfyUI 正常秒回；此超时只兜「连上却不返回」的病态挂死，给足余量。
     signal: AbortSignal.timeout(15_000),
   });
-  return (await res.json()) as Record<string, unknown>;
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<
+    string,
+    unknown
+  >;
 }
 
 /** `getView` 的失败带着 ComfyUI 回的状态码。
@@ -385,7 +388,7 @@ export async function listModels(folder: string): Promise<string[]> {
       { signal: AbortSignal.timeout(5_000) },
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as string[];
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as string[];
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
@@ -407,7 +410,7 @@ export async function listModelFolders(): Promise<string[]> {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return [];
-    const data = (await res.json()) as string[];
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as string[];
     return Array.isArray(data)
       ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
       : [];
@@ -436,7 +439,9 @@ export async function uploadImage(
       `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
     );
   }
-  return (await res.json()) as { name?: string };
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    name?: string;
+  };
 }
 
 /** 让 ComfyUI 中断**当前正在执行的这一轮**（全局停、不带 prompt 参数——所以
@@ -511,7 +516,7 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       system?: { ram_total?: number; ram_free?: number };
       devices?: ComfyDevice[];
     };

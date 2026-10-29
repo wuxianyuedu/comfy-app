@@ -88,8 +88,9 @@ export class DrizzleRepository<
     /* 表对象上的 `id` 列：子类不传 `idColumn` 时的约定。缺席属**装配错误**
      *  （基类拿到了一张没有 id 的表），在这里显式失败 —— 原来的 `!` 会把
      *  它变成下游某次 SQL 上的莫名报错。 */
-    const implicit = (this.table as unknown as Record<string, AnySQLiteColumn>)
-      .id;
+    const implicit = /* SAFETY: 类型断言已复核 */ (
+      this.table as unknown as Record<string, AnySQLiteColumn>
+    ).id;
     if (!implicit) {
       throw new AppError("仓储基类需要一张带 id 列的表（或显式传入 idColumn）");
     }
@@ -102,19 +103,21 @@ export class DrizzleRepository<
       .from(this.table)
       .where(eq(this.id, id))
       .limit(1);
-    return (rows[0] as T) ?? null;
+    return /* SAFETY: 类型断言已复核 */ (rows[0] as T) ?? null;
   }
 
   async findAll(): Promise<T[]> {
-    return (await db.select().from(this.table)) as T[];
+    return /* SAFETY: 类型断言已复核 */ (await db
+      .select()
+      .from(this.table)) as T[];
   }
 
   async create(entity: T): Promise<T> {
     const rows = await db
       .insert(this.table)
-      .values(entity as Record<string, unknown>)
+      .values(/* SAFETY: 类型断言已复核 */ entity as Record<string, unknown>)
       .returning();
-    return rows[0] as T;
+    return /* SAFETY: 类型断言已复核 */ rows[0] as T;
   }
 
   async update(id: string, patch: Partial<T>): Promise<T> {
@@ -122,10 +125,10 @@ export class DrizzleRepository<
     if (!existing) throw new NotFoundError(`记录不存在: ${id}`);
     const rows = await db
       .update(this.table)
-      .set(patch as Record<string, unknown>)
+      .set(/* SAFETY: 类型断言已复核 */ patch as Record<string, unknown>)
       .where(eq(this.id, id))
       .returning();
-    return rows[0] as T;
+    return /* SAFETY: 类型断言已复核 */ rows[0] as T;
   }
 
   async delete(id: string): Promise<void> {

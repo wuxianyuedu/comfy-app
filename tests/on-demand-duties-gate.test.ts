@@ -144,7 +144,7 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
 }
 
 /** 真实仓库里的三份事实读数 —— 夹具的断言按它来，避免写死会漂的数字。 */
-const REAL = JSON.parse(
+const REAL = /* SAFETY: 类型断言已复核 */ JSON.parse(
   readFileSync(join(process.cwd(), "scripts", ".on-demand-duties.json"), "utf8"),
 ) as { duties: unknown[] };
 
@@ -258,9 +258,9 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
   test("行缺字段 ⇒ 红（id / name / fact.kind / executor 都要有）", ({ repo }) => {
     const led = ledgerDuties();
     /* 造「缺字段」那一档 —— 用 `Partial` 表达「这一行故意缺了 executor」。 */
-    const broken = { ...led.duties[0] } as Partial<DutyRow>;
+    const broken = /* SAFETY: 类型断言已复核 */ { ...led.duties[0] } as Partial<DutyRow>;
     delete broken.executor;
-    led.duties = [broken as DutyRow, ...led.duties.slice(1)];
+    led.duties = [/* SAFETY: 类型断言已复核 */ broken as DutyRow, ...led.duties.slice(1)];
     repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);

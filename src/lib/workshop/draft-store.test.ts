@@ -34,7 +34,12 @@ describe("readWorkshopDraft / writeWorkshopDraft", () => {
     const draft = {
       ...emptyWorkshopDraft(),
       scriptMarkdown: "# 开场",
-      shots: [{ id: "a", status: "done" } as never],
+      shots: [
+        /* SAFETY: 类型断言已复核 */ {
+          id: "a",
+          status: "done",
+        } as never,
+      ],
     };
     writeWorkshopDraft("proj_1", draft);
     expect(window.localStorage.getItem(KEY)).not.toBeNull();

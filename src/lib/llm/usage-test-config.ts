@@ -30,7 +30,11 @@ export interface UsageField {
 
 /** 视频生成常见的 mode 预设（Agnes 等：text / keyframe / reference）。
  * 仅为快捷选项——选中后仍可在输入框里自由改，适配其它模型的其它取值。 */
-export const VIDEO_MODE_PRESETS = ["text", "keyframe", "reference"] as const;
+export const VIDEO_MODE_PRESETS = /* SAFETY: 类型断言已复核 */ [
+  "text",
+  "keyframe",
+  "reference",
+] as const;
 
 /** 各 mode 的取值要求与所需媒体字段说明（按 Agnes 文档措辞归纳，
  *  其它模型若取值不同可直接手改，不写死）。 */
@@ -61,7 +65,7 @@ export function defaultVideoFields(): UsageField[] {
 
 /** 视频请求里承载媒体（图片/音频）的字段名集合。mode=text 不允许携带它们
  *（Agnes 等提供方会以 invalid mode 拒绝），选中 text 时这些行应隐藏/删除。 */
-export const VIDEO_MEDIA_FIELD_KEYS = [
+export const VIDEO_MEDIA_FIELD_KEYS = /* SAFETY: 类型断言已复核 */ [
   "first_frame",
   "last_frame",
   "images",
@@ -81,7 +85,9 @@ export function videoModeHidesMedia(fields: UsageField[]): boolean {
 
 /** 判断某行是不是媒体行：字段名命中媒体字段集合（first_frame / images 等）。 */
 export function isMediaField(key: string): boolean {
-  return (VIDEO_MEDIA_FIELD_KEYS as readonly string[]).includes(key.trim());
+  return /* SAFETY: 类型断言已复核 */ (
+    VIDEO_MEDIA_FIELD_KEYS as readonly string[]
+  ).includes(key.trim());
 }
 
 /** 媒体字段对图片地址的公网可达要求说明（Agnes 等要求其服务可拉取该 URL，
@@ -118,11 +124,16 @@ export function videoModeMissingHint(fields: UsageField[]): string | null {
 /** 服务端按「数组」接收的媒体字段（可携带多张参考图/音频）。这类字段常被用户
  *  贴成一张裸 URL 字符串，而服务端期望 []string——不包成数组就会 400
  *  （原文是 cannot unmarshal string into []string，即「无法把字符串解成字符串数组」）。 */
-export const MEDIA_ARRAY_FIELD_KEYS = ["images", "audios"] as const;
+export const MEDIA_ARRAY_FIELD_KEYS = /* SAFETY: 类型断言已复核 */ [
+  "images",
+  "audios",
+] as const;
 
 /** 判断字段是不是数组型媒体字段（命中 images / audios 等，含首尾空白）。 */
 export function isMediaArrayField(key: string): boolean {
-  return (MEDIA_ARRAY_FIELD_KEYS as readonly string[]).includes(key.trim());
+  return /* SAFETY: 类型断言已复核 */ (
+    MEDIA_ARRAY_FIELD_KEYS as readonly string[]
+  ).includes(key.trim());
 }
 
 /** 把结构化字段行转成请求体的 JSON 对象字符串（服务器按 JSON 对象逐键合并）。

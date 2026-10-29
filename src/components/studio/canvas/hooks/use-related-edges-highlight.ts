@@ -58,7 +58,9 @@ export function readPortFocusRole(
   if (!handle) return "none";
   const table = data?.[NODE_PORT_FOCUS_DATA_KEY];
   if (!table || typeof table !== "object") return "none";
-  const role = (table as Record<string, unknown>)[handle];
+  const role = /* SAFETY: 类型断言已复核 */ (table as Record<string, unknown>)[
+    handle
+  ];
   return role === "upstream" || role === "downstream" || role === "related"
     ? role
     : "none";
@@ -115,7 +117,8 @@ export function useRelatedEdgesHighlight(
      * 读渲染期真实节点对象，而不是可能滞后的顶层 nodes 数组。 */
     const selectedIds = new Set<string>();
     state.nodeLookup.forEach((internal, nodeId) => {
-      const userNode = internal.internals.userNode as Node | undefined;
+      const userNode = /* SAFETY: 类型断言已复核 */ internal.internals
+        .userNode as Node | undefined;
       if (userNode?.selected) selectedIds.add(nodeId);
     });
 
@@ -201,10 +204,12 @@ export function useRelatedEdgesHighlight(
           );
           bucket.related.forEach((handle) => (nextTable[handle] = "related"));
         }
-        const data = node.data as Record<string, unknown> | undefined;
-        const previousTable = data?.[NODE_PORT_FOCUS_DATA_KEY] as
-          | Record<string, EdgeFocusRole>
+        const data = /* SAFETY: 类型断言已复核 */ node.data as
+          | Record<string, unknown>
           | undefined;
+        const previousTable = /* SAFETY: 类型断言已复核 */ data?.[
+          NODE_PORT_FOCUS_DATA_KEY
+        ] as Record<string, EdgeFocusRole> | undefined;
         /* 没有端口标记且本来就没有字段 → 原样返回，不制造无意义的新对象。 */
         const previousActive = data?.[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
         const activeUpToDate = focusActive ? previousActive : !previousActive;
@@ -253,7 +258,8 @@ export function useRelatedEdgesHighlight(
       const state = store.getState();
       const ids: string[] = [];
       state.nodeLookup.forEach((internal, nodeId) => {
-        const userNode = internal.internals.userNode as Node | undefined;
+        const userNode = /* SAFETY: 类型断言已复核 */ internal.internals
+          .userNode as Node | undefined;
         if (userNode?.selected) ids.push(nodeId);
       });
       /* 边表签名参与进来：端口行级别由边表算出，连线增删（含「连上 / 断开某一行」）

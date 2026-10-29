@@ -497,7 +497,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
           env: gitSandboxEnv(),
         });
       } catch (error) {
-        const e = error as {
+        const e = /* SAFETY: 类型断言已复核 */ error as {
           stderr?: string;
           stdout?: string;
           status?: number;

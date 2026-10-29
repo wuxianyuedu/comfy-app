@@ -104,7 +104,7 @@ function CountColumn({
  */
 function asOriginFilter(value: unknown): LogOriginFilter {
   return typeof value === "string" && value in ORIGIN_TEXT
-    ? (value as LogOriginFilter)
+    ? /* SAFETY: 类型断言已复核 */ (value as LogOriginFilter)
     : "all";
 }
 

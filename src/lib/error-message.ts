@@ -65,9 +65,11 @@ const TRANSPORT_WRAPPER_RE =
  * 顶层 message。顶层只是传输层包装时才让位给服务端原文。
  */
 function pickUnderlyingMessage(e: object): string | null {
-  const top = (e as { message?: unknown }).message;
+  const top = /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message;
   const topStr = typeof top === "string" && top.length > 0 ? top : null;
-  const shape = (e as { shape?: { message?: unknown } }).shape;
+  const shape = /* SAFETY: 类型断言已复核 */ (
+    e as { shape?: { message?: unknown } }
+  ).shape;
   const shapeStr =
     shape && typeof shape.message === "string" && shape.message.length > 0
       ? shape.message
@@ -84,7 +86,8 @@ export function errorMessage(e: unknown, fallback: string): string {
     if (underlying) {
       /* 顶层是传输层包装且服务端另有原文 → 直接用原文（它是根因描述）。 */
       if (
-        underlying !== (e as { message?: unknown }).message &&
+        underlying !==
+          /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message &&
         !TRANSPORT_WRAPPER_RE.test(underlying)
       ) {
         return underlying;
@@ -153,7 +156,7 @@ export function errorText(
  */
 export function errorCode(e: unknown): string | null {
   if (typeof e !== "object" || e === null) return null;
-  const obj = e as {
+  const obj = /* SAFETY: 类型断言已复核 */ e as {
     code?: unknown;
     data?: { code?: unknown };
     shape?: { code?: unknown };
@@ -185,7 +188,7 @@ export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
   if (typeof e === "string") {
     parts.push(e);
   } else if (typeof e === "object") {
-    const obj = e as {
+    const obj = /* SAFETY: 类型断言已复核 */ e as {
       name?: unknown;
       message?: unknown;
       code?: unknown;

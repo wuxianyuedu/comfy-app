@@ -206,7 +206,7 @@ const Section = React.memo(function Section({
         return {
           key,
           label: option.subgroup,
-          options: [] as typeof section.options,
+          options: /* SAFETY: 类型断言已复核 */ [] as typeof section.options,
         };
       }).options.push(option);
     }

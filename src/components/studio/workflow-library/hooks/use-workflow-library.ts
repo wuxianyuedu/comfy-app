@@ -269,7 +269,11 @@ export function useWorkflowLibrary(
 
   const modelTags = useMemo(
     () =>
-      (tagsQ.data?.tags ?? []) as { id: string; name: string; count: number }[],
+      /* SAFETY: 类型断言已复核 */ (tagsQ.data?.tags ?? []) as {
+        id: string;
+        name: string;
+        count: number;
+      }[],
     [tagsQ.data],
   );
 

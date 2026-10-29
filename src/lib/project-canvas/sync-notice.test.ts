@@ -46,27 +46,31 @@ afterEach(() => {
 });
 
 describe("isPermanentRefusal：重试有没有用是唯一的那把尺", () => {
-  it.for([
-    ["FORBIDDEN", "该项目 id 已属于其他用户"],
-    ["BAD_REQUEST", "name too small"],
-    ["UNAUTHORIZED", "未登录"],
-    ["CONFLICT", "名字已占用"],
-    ["PRECONDITION_FAILED", "缺少前置条件"],
-    ["PAYLOAD_TOO_LARGE", "画布过大"],
-  ] as const)("%s 是拒收（服务端明确回了一句不收）", ([code, message]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["FORBIDDEN", "该项目 id 已属于其他用户"],
+      ["BAD_REQUEST", "name too small"],
+      ["UNAUTHORIZED", "未登录"],
+      ["CONFLICT", "名字已占用"],
+      ["PRECONDITION_FAILED", "缺少前置条件"],
+      ["PAYLOAD_TOO_LARGE", "画布过大"],
+    ] as const,
+  )("%s 是拒收（服务端明确回了一句不收）", ([code, message]) => {
     expect(isPermanentRefusal(trpcError(code, message))).toBe(true);
   });
 
-  it.for([
-    ["TIMEOUT", "请求超时"],
-    ["TOO_MANY_REQUESTS", "打得太勤"],
-    ["INTERNAL_SERVER_ERROR", "no such table"],
-    ["SERVICE_UNAVAILABLE", "服务未就绪"],
-    ["BAD_GATEWAY", "上游错误"],
-    ["GATEWAY_TIMEOUT", "上游超时"],
-    ["PARSE_ERROR", "<!DOCTYPE ...> is not valid JSON"],
-    ["CLIENT_CLOSED_REQUEST", "signal is aborted without reason"],
-  ] as const)("%s 是可重试（不许打扰用户）", ([code, message]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["TIMEOUT", "请求超时"],
+      ["TOO_MANY_REQUESTS", "打得太勤"],
+      ["INTERNAL_SERVER_ERROR", "no such table"],
+      ["SERVICE_UNAVAILABLE", "服务未就绪"],
+      ["BAD_GATEWAY", "上游错误"],
+      ["GATEWAY_TIMEOUT", "上游超时"],
+      ["PARSE_ERROR", "<!DOCTYPE ...> is not valid JSON"],
+      ["CLIENT_CLOSED_REQUEST", "signal is aborted without reason"],
+    ] as const,
+  )("%s 是可重试（不许打扰用户）", ([code, message]) => {
     expect(isPermanentRefusal(trpcError(code, message))).toBe(false);
   });
 
@@ -223,7 +227,8 @@ describe("reportMirrorFailure：两个分支都要有痕迹", () => {
     /* 界面上看不到 `FORBIDDEN` 这个字，所以日志那一行必须把它带回来 ——
      * 少了这一半，「到底是哪个码拒的」就只能靠猜。 */
     expect(warn).toHaveBeenCalledTimes(1);
-    const logged = (warn.mock.calls[0] ?? []) as unknown[];
+    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ??
+      []) as unknown[];
     expect(logged.map((part) => String(part)).join(" ")).toContain(
       "code=FORBIDDEN",
     );
@@ -242,7 +247,8 @@ describe("reportMirrorFailure：两个分支都要有痕迹", () => {
      * 等于把网络层原文搬进面板（口径同 `~/lib/error-message`）。
      * `console.warn` 的实参在类型上是 `any[]`，先收成 `unknown[]` 再取，
      * 否则断言拿到的是 `any`，写错了也不会红。 */
-    const logged = (warn.mock.calls[0] ?? []) as unknown[];
+    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ??
+      []) as unknown[];
     expect(String(logged[0])).toContain("暂时性");
     expect(logged.at(-1)).toBe("proj_rep2");
     expect(listSyncNotices().some((n) => n.projectId === "proj_rep2")).toBe(

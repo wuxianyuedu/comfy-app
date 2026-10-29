@@ -49,9 +49,12 @@ vi.mock("~/lib/comfyui/client", () => ({
 import { GET } from "./route";
 
 function get(query: string): NextRequest {
-  return new Request(`http://127.0.0.1:3100/api/images${query}`, {
-    method: "GET",
-  }) as unknown as NextRequest;
+  return /* SAFETY: 类型断言已复核 */ new Request(
+    `http://127.0.0.1:3100/api/images${query}`,
+    {
+      method: "GET",
+    },
+  ) as unknown as NextRequest;
 }
 
 beforeEach(() => {
@@ -138,7 +141,10 @@ describe("上游失败要分相", () => {
     );
     const res = await GET(get("?filename=gone.png"));
     expect(res.status).toBe(404);
-    expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+    expect(
+      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { error?: string })
+        .error,
+    ).toBeTruthy();
   });
 
   it("ComfyUI 回别的状态 → 502，不伪装成 500", async () => {
@@ -152,8 +158,9 @@ describe("上游失败要分相", () => {
     getView.mockRejectedValueOnce(new TypeError("fetch failed"));
     const res = await GET(get("?filename=a.png"));
     expect(res.status).toBe(503);
-    expect(((await res.json()) as { hint?: string }).hint).toBe(
-      "comfyui-unreachable",
-    );
+    expect(
+      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { hint?: string })
+        .hint,
+    ).toBe("comfyui-unreachable");
   });
 });

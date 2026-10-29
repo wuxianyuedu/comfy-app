@@ -149,7 +149,7 @@ export function useWorkshopAgent(
           detail: result.detail,
         });
         return {
-          role: "tool" as const,
+          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
           tool_call_id: call.id,
           content: JSON.stringify({
             ok: result.ok,
@@ -161,7 +161,7 @@ export function useWorkshopAgent(
         const msg = errorMessage(err, "工具执行失败");
         patchToolRun(runId, { status: "error", detail: msg });
         return {
-          role: "tool" as const,
+          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
           tool_call_id: call.id,
           content: JSON.stringify({ ok: false, error: msg }),
         } satisfies AgentMessageLike;

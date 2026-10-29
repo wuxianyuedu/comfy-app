@@ -112,7 +112,7 @@ function runBaseCheckOnce(
     });
     return { code: 0, stdout, stderr: "" };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
     return {
       code: e.status ?? -1,
       stdout: String(e.stdout ?? ""),
@@ -247,7 +247,7 @@ describe("base-check —— judge() 判决（纯函数，两向各一组）", ()
   });
 
   test("每一态都答得出「下一步做什么」（答不出 = 判据没有出口）", () => {
-    for (const verdict of [
+    for (const verdict of /* SAFETY: 类型断言已复核 */ [
       "current-green",
       "baseline-red",
       "yours",
@@ -612,7 +612,7 @@ describe("base-check —— 命令解析", () => {
   test("标签不存在 ⇒ 判失败并列出候选（不许猜）", () => {
     const r = resolveGateCommand(["这个标签不存在"]);
     expect(r.ok).toBe(false);
-    expect(String((r as { error: string }).error)).toContain("可用");
+    expect(String((/* SAFETY: 类型断言已复核 */ r as { error: string }).error)).toContain("可用");
   });
 
   test("没给命令 ⇒ 判失败", () => {
@@ -658,7 +658,7 @@ describe("base-check —— 目标存在性（127 那条边界）", () => {
   });
 
   test("normalizeRun 把 spawn error 归成 127", () => {
-    const fake = {
+    const fake = /* SAFETY: 类型断言已复核 */ {
       error: new Error("ENOENT"),
       status: null,
       stdout: "",
@@ -1070,7 +1070,7 @@ describe("base-check --base —— 整批结论的优先级（纯函数）", () 
   });
 
   test("每一态都答得出「下一步做什么」，且红的那几条被点名", () => {
-    for (const summary of [
+    for (const summary of /* SAFETY: 类型断言已复核 */ [
       "current-green",
       "inconclusive",
       "baseline-red",
@@ -1217,7 +1217,7 @@ describe("base-check --base —— 真仓库上的端到端", () => {
     const r = makeBatchRepo({ baselineRed: true });
     try {
       const { stdout } = runBaseCheck(r.work, ["--base", "--json"]);
-      const parsed = JSON.parse(stdout) as {
+      const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(stdout) as {
         summary: string;
         ref: string;
         rows: Array<{

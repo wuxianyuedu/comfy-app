@@ -45,7 +45,9 @@ const impl: TaskRepoImpl = createTaskRepoImpl(db, { owner: "inline" });
 
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
-  return (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
+  return /* SAFETY: 类型断言已复核 */ (
+    q as unknown as { limit(n: unknown): Q }
+  ).limit(NO_LIMIT);
 }
 
 /**

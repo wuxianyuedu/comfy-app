@@ -70,7 +70,10 @@ function renderViewer(onClose: () => void = () => undefined) {
   );
   return {
     ...view,
-    canvas: () => view.getByTestId("image-viewer-canvas") as HTMLDivElement,
+    canvas: () =>
+      /* SAFETY: 类型断言已复核 */ view.getByTestId(
+        "image-viewer-canvas",
+      ) as HTMLDivElement,
     percent: () =>
       view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
     mode: () => view.getByTestId("image-viewer-mode").textContent?.trim() ?? "",

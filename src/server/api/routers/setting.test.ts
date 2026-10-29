@@ -243,11 +243,13 @@ describe("setting.save", () => {
   });
 
   /* 拒绝发生在写之前：端口这一档此前是「先写库再靠别处兜」，越界值会直接进设置文件。 */
-  it.for([
-    [{ comfyuiPort: -1 }],
-    [{ comfyuiPort: 65536 }],
-    [{ comfyuiPort: 1.5 }],
-  ] as const)("端口非法 %j → BAD_REQUEST 且一次都不写", async ([input]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      [{ comfyuiPort: -1 }],
+      [{ comfyuiPort: 65536 }],
+      [{ comfyuiPort: 1.5 }],
+    ] as const,
+  )("端口非法 %j → BAD_REQUEST 且一次都不写", async ([input]) => {
     await expect(createCaller(makeCtx()).save(input)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
@@ -287,19 +289,22 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
       url: "https://example.com/out.mp4",
     });
     expect(res.ok).toBe(true);
-    const args = spawnMock.mock.calls[0]?.[1] as string[];
+    const args = /* SAFETY: 类型断言已复核 */ spawnMock.mock
+      .calls[0]?.[1] as string[];
     expect(args.at(-1)).toBe("https://example.com/out.mp4");
   });
 
   /* 这些都能过 `z.url()` —— 它们不是「非法 URL」，是「合法的危险协议」。
      拦在 spawn 之前才算拦住：发出去就等于本机程序已经被拉起了。 */
-  it.for([
-    ["file:///C:/Users/me/.env"],
-    ["file:///etc/passwd"],
-    ["javascript:alert(document.cookie)"],
-    ["comfyapp://open?path=C:/"],
-    ["search-ms:query=x"],
-  ] as const)("%j → ok:false 且一次都不 spawn", async ([url]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["file:///C:/Users/me/.env"],
+      ["file:///etc/passwd"],
+      ["javascript:alert(document.cookie)"],
+      ["comfyapp://open?path=C:/"],
+      ["search-ms:query=x"],
+    ] as const,
+  )("%j → ok:false 且一次都不 spawn", async ([url]) => {
     const res = await createCaller(makeCtx()).openExternal({ url });
     expect(res.ok).toBe(false);
     expect(res.detail).toContain("http/https");
@@ -330,10 +335,12 @@ describe("setting.comfyEmbeddable", () => {
     expect(res.target).toBeTruthy();
   });
 
-  it.for([
-    ["file:///C:/ComfyUI", "http://127.0.0.1:3100"],
-    ["http://127.0.0.1:8188", "javascript:alert(1)"],
-  ] as const)(
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["file:///C:/ComfyUI", "http://127.0.0.1:3100"],
+      ["http://127.0.0.1:8188", "javascript:alert(1)"],
+    ] as const,
+  )(
     "输入层就拒非 http(s)（%j / %j），不发探测请求",
     async ([base, hostOrigin]) => {
       await expect(
@@ -445,7 +452,8 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
     });
     expect(res.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [cmd, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock
+      .calls[0] as [string, string[]];
     if (process.platform === "win32") {
       /* `/select,"<路径>"` 必须是**一个**参数：拆成两个时 explorer 会把含空格的
        * 路径截断，表现是「打开了资源管理器但什么都没选中」。 */

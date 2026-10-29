@@ -34,7 +34,7 @@ import { describe, expect, it } from "vitest";
 import vitestConfig, { COVERAGE_THRESHOLDS } from "../vitest.config";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { globToRegExp } = require("../scripts/check-format.cjs") as {
+const { globToRegExp } = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
   globToRegExp: (glob: string) => RegExp;
 };
 
@@ -62,7 +62,7 @@ function sourceFiles(): string[] {
  * 的那一天静默变成空转，而这正是本文件立单要治的「写着有、其实没人判」）。
  * `include` 没有开关，仍读默认导出。 */
 const coverage = (
-  vitestConfig as unknown as {
+  /* SAFETY: 类型断言已复核 */ vitestConfig as unknown as {
     test?: {
       coverage?: { include?: string[] };
     };

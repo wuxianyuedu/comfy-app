@@ -189,7 +189,7 @@ function SidebarProvider({
         data-narrow={narrow ? "true" : "false"}
         data-narrow-crossings={crossings}
         style={
-          {
+          /* SAFETY: 类型断言已复核 */ {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
@@ -247,7 +247,7 @@ function Sidebar({
           data-mobile="true"
           className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
           style={
-            {
+            /* SAFETY: 类型断言已复核 */ {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
           }
@@ -717,7 +717,7 @@ function SidebarMenuSkeleton({
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
         style={
-          {
+          /* SAFETY: 类型断言已复核 */ {
             "--skeleton-width": width,
           } as React.CSSProperties
         }

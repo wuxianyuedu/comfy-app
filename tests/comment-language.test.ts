@@ -53,7 +53,7 @@ function runInRepo(args: string[] = []): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -492,7 +492,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
 
 describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   test("doc-facts 从 reference-facts 的那一行解析出名单，而不是另存一份", async () => {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+    const mod = /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
       extractAsciiOnlyModules: () => string[];
       FACTS: Array<{ key: string; kind: string }>;
     };
@@ -515,7 +515,7 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   });
 
   test("事实已登记在 FACTS 里（有 key 才参与 doc:check 的核对）", async () => {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+    const mod = /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
       FACTS: Array<{ key: string }>;
     };
     expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(

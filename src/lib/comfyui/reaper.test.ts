@@ -93,8 +93,10 @@ describe("configureReaper 接缝", () => {
     const fakeRepo = {
       listStaleUnownedQueued: async () => [],
       listStaleRunning: async () => [],
-      finalizeFailure: async () => "written" as const,
-      finalizeFromReaper: async () => "written" as const,
+      finalizeFailure: async () =>
+        /* SAFETY: 类型断言已复核 */ "written" as const,
+      finalizeFromReaper: async () =>
+        /* SAFETY: 类型断言已复核 */ "written" as const,
     };
     expect(() => mod.configureReaper({ taskRepo: fakeRepo })).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。

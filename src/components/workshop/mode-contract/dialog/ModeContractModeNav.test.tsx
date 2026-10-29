@@ -127,7 +127,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     );
     const row = container.querySelector(`[data-mode="${target.code}"]`);
     expect(row).toBeTruthy();
-    await user.click(row as HTMLElement);
+    await user.click(/* SAFETY: 类型断言已复核 */ row as HTMLElement);
     expect(onSelect).toHaveBeenCalledWith(target.code);
   });
 

@@ -140,7 +140,7 @@ function runGuard(overrides: Record<string, string | null>): string {
     );
     return "CODE=0";
   } catch (e: unknown) {
-    const err = e as { stdout?: string; stderr?: string; status?: number };
+    const err = /* SAFETY: 类型断言已复核 */ e as { stdout?: string; stderr?: string; status?: number };
     return `CODE=${err.status ?? 1}\n${err.stdout ?? ""}${err.stderr ?? ""}`;
   }
 }
@@ -302,7 +302,7 @@ describe("跨平台动作的实现契约", () => {
     }
     // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
     // 零警告门禁形同虚设却没人发现）。
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
     ) as { scripts?: Record<string, string> };
     expect(

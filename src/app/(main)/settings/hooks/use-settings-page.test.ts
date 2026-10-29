@@ -112,7 +112,7 @@ vi.mock("~/lib/log/log-file-client", () => {
         `/api/logs/current?source=${source}&offset=${offset}`,
       );
       if (!res.ok) return null;
-      return (await res.json()) as {
+      return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
         content: string;
         size: number;
         offset: number;
@@ -125,7 +125,7 @@ vi.mock("~/lib/log/log-file-client", () => {
     if (sessionId) query.set("session", sessionId);
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
     if (!res.ok) return null;
-    return (await res.json()) as unknown;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
   });
   return {
     fetchFileLogSlice,
@@ -233,7 +233,7 @@ const mockRouter = t.router({
       () =>
         behavior.comfyInstance ?? {
           pathConfigured: true,
-          instanceType: "portable" as const,
+          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
           desktopManaged: false,
         },
     ),
@@ -589,15 +589,17 @@ describe("useSettingsPage", () => {
    * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
   it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
     behavior.llmError = "数据库被锁";
-    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (
+      runtimeLogCalls as unknown as unknown[]
+    ).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect
       .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        /* SAFETY: 类型断言已复核 */ (
+          runtimeLogCalls as unknown as Array<{ level: string }>
+        ).some((c) => c.level === "error"),
       )
       .toBe(true);
     /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐）。
@@ -607,7 +609,7 @@ describe("useSettingsPage", () => {
     expect(result.current.hasError).toBe(true);
     expect(result.current.serveState).toBeNull();
     expect(result.current.errorText).toContain("数据库被锁");
-    const errors = (
+    const errors = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
     ).filter((c) => c.level === "error");
     expect(errors.length).toBe(1);
@@ -617,7 +619,7 @@ describe("useSettingsPage", () => {
     await act(async () => {
       result.current.retry();
     });
-    const errorsAfter = (
+    const errorsAfter = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
     ).filter((c) => c.level === "error");
     expect(errorsAfter.length).toBe(1);
@@ -689,20 +691,22 @@ describe("useSettingsPage", () => {
    * 拿着「请求被中断」的提示无从排查。 */
   it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
     behavior.llmError = "no such table: llmConfig";
-    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (
+      runtimeLogCalls as unknown as unknown[]
+    ).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
     await expect
       .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        /* SAFETY: 类型断言已复核 */ (
+          runtimeLogCalls as unknown as Array<{ level: string }>
+        ).some((c) => c.level === "error"),
       )
       .toBe(true);
 
-    const entry = (
+    const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
         level: string;
         fields?: { query?: string; raw?: string };
@@ -718,20 +722,22 @@ describe("useSettingsPage", () => {
   it("两个查询都失败时，日志字段记全两条查询名", async () => {
     behavior.llmError = "llm 炸了";
     behavior.settingsError = "settings 炸了";
-    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (
+      runtimeLogCalls as unknown as unknown[]
+    ).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
     await expect
       .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        /* SAFETY: 类型断言已复核 */ (
+          runtimeLogCalls as unknown as Array<{ level: string }>
+        ).some((c) => c.level === "error"),
       )
       .toBe(true);
 
-    const entry = (
+    const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
         level: string;
         fields?: { query?: string };

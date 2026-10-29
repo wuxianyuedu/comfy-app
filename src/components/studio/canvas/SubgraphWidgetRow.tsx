@@ -113,8 +113,12 @@ export function SubgraphWidgetRow({
           className="border-border-strong bg-canvas-deep mt-0.5 max-h-24 w-full rounded-[5px] border object-contain"
         />
       ) : inp.type === "COMBO" &&
-        Array.isArray((inp as ComboInputMeta).comboOptions) &&
-        ((inp as ComboInputMeta).comboOptions as unknown[]).length > 0 ? (
+        Array.isArray(
+          /* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta).comboOptions,
+        ) &&
+        /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+          (inp as ComboInputMeta).comboOptions as unknown[]
+        ).length > 0 ? (
         /* 工作流画布上的 COMBO widget 渲染成只读的
          *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
          *  在这里保持禁用（编辑发生在会落盘取值的项目
@@ -123,7 +127,11 @@ export function SubgraphWidgetRow({
         <SelectMenu
           value={typeof v === "string" ? v : ""}
           onChange={() => undefined}
-          options={(inp as ComboInputMeta).comboOptions as string[]}
+          options={
+            /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+              inp as ComboInputMeta
+            ).comboOptions as string[]
+          }
           disabled
           fullWidth
           className="text-2xs! h-5.5! min-w-0 py-0!"

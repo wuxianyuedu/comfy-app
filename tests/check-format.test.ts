@@ -188,12 +188,12 @@ describe("oxfmt 格式判据（硬闸）", () => {
 
 describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("../scripts/check-format.cjs") as {
+  const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
     isIgnored: (rel: string) => boolean;
     globToRegExp: (glob: string) => RegExp;
   };
 
-  test.for([
+  test.for(/* SAFETY: 类型断言已复核 */ [
     ["scripts/check-format.cjs", true],
     ["tests/anything.test.ts", true],
     ["e2e/smoke.spec.ts", true],

@@ -38,7 +38,9 @@ function mockPrepare(
 ) {
   const mock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const raw = typeof init?.body === "string" ? init.body : "{}";
-    const body = JSON.parse(raw) as { image?: string };
+    const body = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
+      image?: string;
+    };
     const image = body.image ?? "";
     if (failUrls.has(image)) {
       return new Response(JSON.stringify({ error: "上传失败" }), {

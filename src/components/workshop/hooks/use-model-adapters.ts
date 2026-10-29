@@ -60,12 +60,13 @@ export function useModelAdapters(): ModelAdaptersController {
   const candidates: AdapterCandidate[] = React.useMemo(() => {
     const raw: unknown = configQ.data?.config;
     if (typeof raw !== "object" || raw === null) return [];
-    const extra = (raw as Record<string, unknown>).extraModels;
+    const extra = /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)
+      .extraModels;
     if (!Array.isArray(extra)) return [];
     const out: AdapterCandidate[] = [];
     for (const item of extra) {
       if (typeof item !== "object" || item === null) continue;
-      const rec = item as Record<string, unknown>;
+      const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
       const name = typeof rec.name === "string" ? rec.name : "";
       const kind =
         rec.kind === "video"

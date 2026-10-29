@@ -126,7 +126,7 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       signal: AbortSignal.timeout(BUILD_ID_TIMEOUT_MS),
     });
     if (!res.ok) return empty;
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       buildId?: unknown;
       bootId?: unknown;
       restartReason?: unknown;

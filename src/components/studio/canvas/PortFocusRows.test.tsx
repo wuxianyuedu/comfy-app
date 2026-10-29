@@ -75,11 +75,13 @@ function renderWithPortFocus(
 ) {
   const data = nodeData();
   if (portFocus !== undefined) {
-    (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_DATA_KEY] =
-      portFocus;
+    /* SAFETY: 类型断言已复核 */ (data as unknown as Record<string, unknown>)[
+      NODE_PORT_FOCUS_DATA_KEY
+    ] = portFocus;
   }
-  (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_ACTIVE_KEY] =
-    active;
+  /* SAFETY: 类型断言已复核 */ (data as unknown as Record<string, unknown>)[
+    NODE_PORT_FOCUS_ACTIVE_KEY
+  ] = active;
   return renderWithFlow(
     <WFStoresProvider stores={makeStores()}>
       <FlowNode data={data} />

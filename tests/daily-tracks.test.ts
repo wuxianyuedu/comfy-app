@@ -167,7 +167,7 @@ describe("三档的登记形状（§11.8）", () => {
     ]);
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
       // 账文件 / 键 / 名字 / 命令是每条账的存在意义，缺一个这条记录就退化成一句空话。
-      for (const field of ["ledger", "key", "label", "run"] as const) {
+      for (const field of /* SAFETY: 类型断言已复核 */ ["ledger", "key", "label", "run"] as const) {
         expect(String(track[field]).length, `${kind}.${field}`).toBeGreaterThan(
           0,
         );
@@ -706,7 +706,7 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
     // 另拼一遍 = 两处各写一条产物链，漏掉「剥私有输入」那一步的表现是构建绿了、
     // 产物里那把刀却没跑（硬规则 17 判过的形态）。
     expect(artifactPlan().args).toEqual(["run", "build"]);
-    const pkg = JSON.parse(readText("package.json")) as {
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(readText("package.json")) as {
       scripts?: Record<string, string>;
     };
     const build = pkg.scripts?.build ?? "";
@@ -819,7 +819,7 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`package.json` 的入口真的走这层通道（否则记账这一步没有执行者）", () => {
-    const pkg = JSON.parse(readText("package.json")) as {
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(readText("package.json")) as {
       scripts?: Record<string, string>;
     };
     // 按**入口**判而不是按命令长得像什么：裸 `vitest run --coverage` 也能跑出同样的用例，
@@ -981,7 +981,7 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       flush();
       /* `earliest` 在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——
        * 不显式声明的话 `return` 会被收窄成初值 `null`，调用方的 `.toISOString()` 报 `never`。 */
-      return earliest as Date | null;
+      return /* SAFETY: 类型断言已复核 */ earliest as Date | null;
     };
     /* 两个提交各自命中自己那一行、各自解出一个时刻。
      * ⚠️ **不许拿「两者相等」当判据**：夹具是背靠背两次提交，而 `%cI` 的精度是

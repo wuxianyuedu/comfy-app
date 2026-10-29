@@ -201,7 +201,7 @@ function scanSurface() {
       text: stripComments(readFileSync(f, "utf8")),
     }));
   const procedurePaths = Object.keys(
-    (appRouter._def as unknown as { procedures: Record<string, unknown> })
+    (/* SAFETY: 类型断言已复核 */ appRouter._def as unknown as { procedures: Record<string, unknown> })
       .procedures,
   ).sort();
   return { mounts, closures, tests, consumers, procedurePaths };

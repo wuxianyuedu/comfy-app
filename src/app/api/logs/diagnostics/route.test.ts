@@ -26,7 +26,10 @@ const logRoot = path.join(tmp, "log");
  * .gitignore 里，CI 上不存在）。 */
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
-  return { ...(actual as Record<string, unknown>), LOG_ROOT: logRoot };
+  return {
+    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
+    LOG_ROOT: logRoot,
+  };
 });
 
 let authed = true;
@@ -96,7 +99,7 @@ describe("/api/logs/diagnostics", () => {
     async () => {
       const res = await POST();
       expect(res.status).toBe(200);
-      const data = (await res.json()) as {
+      const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
         ok: boolean;
         path: string;
         relativePath: string;

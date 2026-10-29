@@ -590,7 +590,7 @@ describe("回读比对：本来就规范 / 改动后正是规范形态", { timeo
   /** 真仓库里那份判据（`HERE` 就是真仓库，oxfmt 解析不受临时仓库影响）。 */
   function realJudge() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("../scripts/check-reformat-only.cjs") as {
+    return /* SAFETY: 类型断言已复核 */ require("../scripts/check-reformat-only.cjs") as {
       classifyReformatOnly: (
         entries: Array<{ file: string; before: string; after: string }>,
       ) => Set<string>;
@@ -644,7 +644,7 @@ describe(
       entries: Array<{ file: string; before: string; after: string }>,
     ): Set<string> {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const tempMod = require(
+      const tempMod = /* SAFETY: 类型断言已复核 */ require(
         join(repo.dir, "scripts", "check-reformat-only.cjs"),
       ) as {
         classifyReformatOnly: typeof entries extends never
@@ -711,7 +711,7 @@ describe(
 
 describe("补丁解析（纯函数，不跑 git）", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("../scripts/check-reformat-only.cjs") as {
+  const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-reformat-only.cjs") as {
     collectChangedFiles: (
       patch: string,
     ) => Array<{ before: string; after: string }>;

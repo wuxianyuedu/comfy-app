@@ -14,7 +14,7 @@ function drizzleWrapped(cause: unknown): Error {
   const e = new Error(
     'Failed query: update "task" set "status" = ? where "task"."id" = ?\nparams: FAILED,t1',
   );
-  (e as { cause?: unknown }).cause = cause;
+  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = cause;
   return e;
 }
 

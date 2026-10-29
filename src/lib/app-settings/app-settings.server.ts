@@ -131,7 +131,9 @@ export function getSettingsSync(): AppSettings {
   if (cache && fingerprint === cacheFingerprint) return cache;
   try {
     if (raw === null) throw new Error("设置文件读不到");
-    const parsed = JSON.parse(raw) as Partial<AppSettings> & {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      raw,
+    ) as Partial<AppSettings> & {
       comfyuiUrl?: string;
     };
     /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；

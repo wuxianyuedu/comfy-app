@@ -41,7 +41,10 @@ const {
 } = vi.hoisted(() => ({
   stat: vi.fn(),
   open: vi.fn(),
-  readCalls: [] as { length: number; position: number }[],
+  readCalls: /* SAFETY: type assertion reviewed */ [] as {
+    length: number;
+    position: number;
+  }[],
   disk: { bytes: Buffer.from("") },
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   loginRequiredMock: vi.fn<() => boolean>(() => false),
@@ -81,9 +84,12 @@ function paramsOf(path: string[] | undefined) {
 function get(path: string[] | undefined, range?: string) {
   return import("./route").then(({ GET }) =>
     GET(
-      new Request("http://x/api/generated", {
-        headers: range === undefined ? {} : { range },
-      }) as never,
+      /* SAFETY: type assertion reviewed */ new Request(
+        "http://x/api/generated",
+        {
+          headers: range === undefined ? {} : { range },
+        },
+      ) as never,
       paramsOf(path),
     ),
   );
@@ -236,12 +242,16 @@ describe("整份读（没有 Range）", () => {
     expect(cache).toMatch(/^private\b/);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     // 读的是根目录内的那个文件，不是别处。
-    expect(normalize(stat.mock.calls[0]?.[0] as string)).toBe(
-      `${artifactRoot}/t1/a.png`,
-    );
-    expect(normalize(open.mock.calls[0]?.[0] as string)).toBe(
-      `${artifactRoot}/t1/a.png`,
-    );
+    expect(
+      normalize(
+        /* SAFETY: type assertion reviewed */ stat.mock.calls[0]?.[0] as string,
+      ),
+    ).toBe(`${artifactRoot}/t1/a.png`);
+    expect(
+      normalize(
+        /* SAFETY: type assertion reviewed */ open.mock.calls[0]?.[0] as string,
+      ),
+    ).toBe(`${artifactRoot}/t1/a.png`);
   });
 
   it("Accept-Ranges 在场，客户端才知道可以分段要", async () => {

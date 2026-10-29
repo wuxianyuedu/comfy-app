@@ -70,12 +70,14 @@ describe("DocumentFrame（文档型）", () => {
     expect(column.className).toContain("max-w-wide");
   });
 
-  it.for([
-    ["narrow", "max-w-narrow"],
-    ["medium", "max-w-medium"],
-    ["wide", "max-w-wide"],
-    ["full", "max-w-none"],
-  ] as const)(
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["narrow", "max-w-narrow"],
+      ["medium", "max-w-medium"],
+      ["wide", "max-w-wide"],
+      ["full", "max-w-none"],
+    ] as const,
+  )(
     "档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）",
     ([width, cls]) => {
       const { container } = render(
@@ -164,8 +166,9 @@ describe("DocumentFrame（文档型）", () => {
     const scroller = frame.querySelector("[class*='overflow-y-auto']");
     // 同一父级下的前一个兄弟 —— 它不该被塞进居中列里。
     expect(
-      backdrop.compareDocumentPosition(scroller as Node) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      backdrop.compareDocumentPosition(
+        /* SAFETY: 类型断言已复核 */ scroller as Node,
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 

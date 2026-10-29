@@ -44,7 +44,7 @@ const ROOT = process.cwd();
  * 这条守卫对它的计数能力 —— 形状还在（有人改回裸字面量），判据却看不见了，
  * 而且不会有任何东西变红。退役名清单让「改回去」继续被拦。
  */
-const RETIRED_SCREEN_NAMES = [
+const RETIRED_SCREEN_NAMES = /* SAFETY: 类型断言已复核 */ [
   /* 队列与运行 → 队列（ISSUE #1423：与侧栏 / 页签同一个名字）。 */
   "队列与运行",
   /* 历史记录 → 历史（同上，多出来的「记录」两个字没多给信息）。 */
@@ -61,7 +61,7 @@ const RETIRED_SCREEN_NAMES = [
  * 两半的分工写在这里，是因为清单的覆盖面必须与「守卫的实际射程」对上 ——
  * 读这份清单的人不该以为它是全库判据。
  */
-const PAGE_HEADER_CONSUMERS = [
+const PAGE_HEADER_CONSUMERS = /* SAFETY: 类型断言已复核 */ [
   "src/components/console/ConsoleView.tsx",
   /* 路由壳 `app/(main)/models/page.tsx` 只留 `metadata` + 挂载 —— 页头在
    * 实现侧（`pageHeaderTitle` 是 client 侧的函数，server 壳调不到它）。

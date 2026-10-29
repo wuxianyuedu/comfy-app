@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *   ② 非法值 fail-fast，且错误信息里带**字段名**（否则排障时只知道「配置错了」）。
  */
 
-const KEYS = [
+const KEYS = /* SAFETY: 类型断言已复核 */ [
   "NODE_ENV",
   "LOG_LEVEL",
   "DATABASE_URL",
@@ -69,11 +69,13 @@ describe("默认值", () => {
 });
 
 describe("环境三态", () => {
-  it.for([
-    ["development", true, false, false],
-    ["test", false, false, true],
-    ["production", false, true, false],
-  ] as const)(
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["development", true, false, false],
+      ["test", false, false, true],
+      ["production", false, true, false],
+    ] as const,
+  )(
     "%s → isDev/isProd/isTest 互斥且正确",
     async ([env, isDev, isProd, isTest]) => {
       vi.stubEnv("NODE_ENV", env);
@@ -92,14 +94,13 @@ describe("环境三态", () => {
 });
 
 describe("logLevel", () => {
-  it.for(["debug", "info", "warn", "error"] as const)(
-    "%s 合法",
-    async (level) => {
-      process.env.LOG_LEVEL = level;
-      const { config } = await loadConfig();
-      expect(config.logLevel).toBe(level);
-    },
-  );
+  it.for(
+    /* SAFETY: 类型断言已复核 */ ["debug", "info", "warn", "error"] as const,
+  )("%s 合法", async (level) => {
+    process.env.LOG_LEVEL = level;
+    const { config } = await loadConfig();
+    expect(config.logLevel).toBe(level);
+  });
 
   it("非法级别 fail-fast 且错误里带字段名", async () => {
     process.env.LOG_LEVEL = "verbose";

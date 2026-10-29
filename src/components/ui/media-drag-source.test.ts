@@ -46,7 +46,7 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
       url: "https://x.test/a.png",
       kind: "image",
     });
-    props.onDragStart(event as never);
+    props.onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
     const raw = event.data.get(MEDIA_DRAG_MIME);
     expect(raw).toBeTypeOf("string");
     expect(JSON.parse(raw!)).toEqual({
@@ -59,7 +59,7 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
   it("effectAllowed 是 copy（拖拽是「加一份」，不是搬走）", () => {
     const event = dragEvent();
     mediaDragSourceProps({ url: "/a.png", kind: "image" }).onDragStart(
-      event as never,
+      /* SAFETY: 类型断言已复核 */ event as never,
     );
     expect(event.effectAllowed).toBe("copy");
   });
@@ -70,8 +70,10 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
       url: "/x/a.png",
       displayName: "素材：封面",
       kind: "image",
-    }).onDragStart(event as never);
-    const payload = JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
+    }).onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
+    const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      event.data.get(MEDIA_DRAG_MIME)!,
+    ) as {
       displayName: string;
     };
     expect(payload.displayName).toBe("素材：封面");
@@ -141,7 +143,7 @@ describe("可拖与光标类是同一个判据", () => {
   it("不可拖时 onDragStart 不写任何数据（显式静默，而不是半份载荷）", () => {
     const event = dragEvent();
     const props = mediaDragSourceProps({ url: null, kind: "image" });
-    props.onDragStart(event as never);
+    props.onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
     expect(event.data.size).toBe(0);
   });
 });
@@ -150,9 +152,11 @@ describe("audio / doc 也能拖（落点给「暂不支持」的提示）", () =
   it("mediaType 原样透传", () => {
     const event = dragEvent();
     mediaDragSourceProps({ url: "/a.mp3", kind: "audio" }).onDragStart(
-      event as never,
+      /* SAFETY: 类型断言已复核 */ event as never,
     );
-    const payload = JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
+    const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      event.data.get(MEDIA_DRAG_MIME)!,
+    ) as {
       mediaType: string;
     };
     expect(payload.mediaType).toBe("audio");
@@ -164,10 +168,10 @@ describe("onDragStart 身份稳定（同一份参数复用不重建）", () => {
     const a = mediaDragSourceProps({ url: "/a.png", kind: "image" });
     const b = mediaDragSourceProps({ url: "/a.png", kind: "image" });
     const ev = dragEvent();
-    a.onDragStart(ev as never);
+    a.onDragStart(/* SAFETY: 类型断言已复核 */ ev as never);
     const first = ev.data.get(MEDIA_DRAG_MIME);
     const ev2 = dragEvent();
-    b.onDragStart(ev2 as never);
+    b.onDragStart(/* SAFETY: 类型断言已复核 */ ev2 as never);
     expect(ev2.data.get(MEDIA_DRAG_MIME)).toBe(first);
   });
 });

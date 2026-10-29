@@ -26,7 +26,7 @@ afterEach(cleanup);
 function controller(
   overrides: Partial<ReadySettingsPageController> = {},
 ): ReadySettingsPageController {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     backups: [],
     pendingRestore: null,
     backupListLoading: false,

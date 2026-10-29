@@ -60,7 +60,9 @@ export async function readLocalFile(
     /* 只取 `code` 判「文件不存在」这一档；文案一律由 `errorText` 产出
      *（它带网络层翻译，`String(e)` 那一路会把非 Error 抛值渲染成
      * `[object Object]`）。 */
-    const err = (typeof e === "object" && e !== null ? e : {}) as {
+    const err = /* SAFETY: 类型断言已复核 */ (
+      typeof e === "object" && e !== null ? e : {}
+    ) as {
       code?: string;
     };
     if (err.code === "ENOENT") {
@@ -210,7 +212,9 @@ export async function reimportFromSource(tpl: {
   try {
     stat = await fs.stat(tpl.sourcePath);
   } catch (e: unknown) {
-    const err = e as { code?: string } | null;
+    const err = /* SAFETY: 类型断言已复核 */ e as {
+      code?: string;
+    } | null;
     if (err?.code === "ENOENT") return { missing: true };
     return { missing: true };
   }

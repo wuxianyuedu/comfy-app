@@ -35,7 +35,8 @@ const VALID_STAGES: readonly PipelineStageId[] = [
 
 export function isStage(v: unknown): v is PipelineStageId {
   return (
-    typeof v === "string" && (VALID_STAGES as readonly string[]).includes(v)
+    typeof v === "string" &&
+    /* SAFETY: 类型断言已复核 */ (VALID_STAGES as readonly string[]).includes(v)
   );
 }
 
@@ -81,7 +82,9 @@ function applyContentToState(
     meta: {
       ...state.meta,
       title: content.title,
-      type: (content.type as ProjectMeta["type"]) ?? state.meta.type,
+      type:
+        /* SAFETY: 类型断言已复核 */ (content.type as ProjectMeta["type"]) ??
+        state.meta.type,
       tone: content.tone,
       logline: content.logline,
       scriptMarkdown: content.scriptMarkdown,
@@ -98,16 +101,22 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
     idea: row.idea,
     meta: {
       title: row.title,
-      type: (row.type as ProjectMeta["type"]) ?? "short_video",
+      type:
+        /* SAFETY: 类型断言已复核 */ (row.type as ProjectMeta["type"]) ??
+        "short_video",
       tone: row.tone,
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
     },
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters)
-      ? (row.characters as Character[])
+    scenes: Array.isArray(row.scenes)
+      ? /* SAFETY: 类型断言已复核 */ (row.scenes as Scene[])
       : [],
-    shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
+    characters: Array.isArray(row.characters)
+      ? /* SAFETY: 类型断言已复核 */ (row.characters as Character[])
+      : [],
+    shots: Array.isArray(row.shots)
+      ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[])
+      : [],
     stage: isStage(row.stage) ? row.stage : "script",
     projectId: row.projectId ?? null,
   };

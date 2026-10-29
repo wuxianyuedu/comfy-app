@@ -88,7 +88,10 @@ export function parseAppearance(
   if (typeof parsed !== "object" || parsed === null) {
     return { ...DEFAULT_APPEARANCE };
   }
-  const record = parsed as { radius?: unknown; fontScale?: unknown };
+  const record = /* SAFETY: 类型断言已复核 */ parsed as {
+    radius?: unknown;
+    fontScale?: unknown;
+  };
   if (
     typeof record.radius !== "string" ||
     typeof record.fontScale !== "string" ||

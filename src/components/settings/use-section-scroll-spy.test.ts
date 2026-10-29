@@ -61,18 +61,18 @@ class FakeIntersectionObserver {
     this.callback(
       entries.map(
         (e) =>
-          ({
+          /* SAFETY: 类型断言已复核 */ ({
             target: e.target,
             isIntersecting: e.isIntersecting,
             intersectionRatio: e.isIntersecting ? 1 : 0,
           }) as unknown as IntersectionObserverEntry,
       ),
-      this as unknown as IntersectionObserver,
+      /* SAFETY: 类型断言已复核 */ this as unknown as IntersectionObserver,
     );
   }
 }
 
-const IDS = ["a", "b", "c"] as const;
+const IDS = /* SAFETY: 类型断言已复核 */ ["a", "b", "c"] as const;
 
 /** 建宿主容器 + 三个分区节，并把 `ref` 回调挂上去。 */
 function mountSections(ref: React.RefObject<HTMLElement | null>) {

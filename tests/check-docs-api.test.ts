@@ -224,7 +224,7 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (err) {
-      const e = err as { status?: number; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stderr?: string };
       code = e.status ?? -1;
       out = `${e.stderr ?? ""}`;
     }

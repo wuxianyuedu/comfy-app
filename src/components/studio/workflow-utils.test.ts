@@ -17,7 +17,11 @@ function detailWith(
   graph: WorkflowDetail["graph"],
   rawNodes: WorkflowDetail["rawNodes"],
 ): WorkflowDetail {
-  return { nodes, graph, rawNodes } as unknown as WorkflowDetail;
+  return /* SAFETY: 类型断言已复核 */ {
+    nodes,
+    graph,
+    rawNodes,
+  } as unknown as WorkflowDetail;
 }
 
 describe("extractNoteTitle", () => {
@@ -78,7 +82,7 @@ describe("buildEdges sourceHandle", () => {
    * 并打 error#008 警告（用户看到的 out:width / out:height）。 */
   it("无输出元数据的源节点回落到通用 out handle", () => {
     const detail = detailWith(
-      [
+      /* SAFETY: 类型断言已复核 */ [
         {
           id: "94",
           type: "CustomNoOutputs",
@@ -107,7 +111,7 @@ describe("buildEdges sourceHandle", () => {
 
   it("有静态输出表的源节点仍 pin 到精确 handle", () => {
     const detail = detailWith(
-      [
+      /* SAFETY: 类型断言已复核 */ [
         { id: "10", type: "KSampler", class_type: "KSampler", inputs: {} },
         { id: "20", type: "VAEDecode", class_type: "VAEDecode", inputs: {} },
       ] as unknown as WorkflowDetail["nodes"],
@@ -120,7 +124,7 @@ describe("buildEdges sourceHandle", () => {
 
   it("仅有 raw outputs 的源节点按 raw 名字 pin", () => {
     const detail = detailWith(
-      [
+      /* SAFETY: 类型断言已复核 */ [
         {
           id: "30",
           type: "ResolutionSelector",
@@ -137,7 +141,7 @@ describe("buildEdges sourceHandle", () => {
       {
         "40": { class_type: "EmptyLatentImage", inputs: { width: ["30", 0] } },
       },
-      [
+      /* SAFETY: 类型断言已复核 */ [
         {
           id: "30",
           widgets_values: [],

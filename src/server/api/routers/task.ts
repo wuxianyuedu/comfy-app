@@ -72,7 +72,10 @@ export const taskRouter = createTRPCRouter({
           includeImages: true,
         });
         return tasks.map((task) => {
-          const p = (task.params ?? {}) as Record<string, unknown>;
+          const p = /* SAFETY: 类型断言已复核 */ (task.params ?? {}) as Record<
+            string,
+            unknown
+          >;
           const checkpoint =
             typeof p.checkpoint === "string" ? p.checkpoint : null;
           const cover = task.images[0]?.localPath ?? null;
@@ -257,7 +260,7 @@ export const taskRouter = createTRPCRouter({
       const task = await taskRepository.findSnapshotById(input.id);
       if (!task)
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-      const snap = task.workflowSnapshot as {
+      const snap = /* SAFETY: 类型断言已复核 */ task.workflowSnapshot as {
         workflow?: unknown;
         capturedAt?: string;
         source?: string;

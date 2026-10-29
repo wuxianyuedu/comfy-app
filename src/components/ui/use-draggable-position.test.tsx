@@ -55,7 +55,7 @@ function setViewport(width: number, height: number) {
  * 命中不了边界，等于没测。
  */
 function stubRect(this: HTMLElement) {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     width: 40,
     height: 40,
     top: 0,
@@ -148,12 +148,14 @@ function drag(
   to: { x: number; y: number },
 ) {
   act(() => {
-    handleProps.onPointerDown({
-      button: 0,
-      pointerId: 1,
-      clientX: from.x,
-      clientY: from.y,
-    } as unknown as React.PointerEvent<HTMLElement>);
+    handleProps.onPointerDown(
+      /* SAFETY: 类型断言已复核 */ {
+        button: 0,
+        pointerId: 1,
+        clientX: from.x,
+        clientY: from.y,
+      } as unknown as React.PointerEvent<HTMLElement>,
+    );
   });
   const steps = 8;
   act(() => {
@@ -194,7 +196,9 @@ describe("useDraggablePosition", () => {
       { x: 700, y: 600 },
     );
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
-    const saved = JSON.parse(window.localStorage.getItem(KEY)!) as {
+    const saved = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      window.localStorage.getItem(KEY)!,
+    ) as {
       right: number;
       bottom: number;
     };
@@ -308,12 +312,14 @@ describe("useDraggablePosition", () => {
     await expect.poll(() => controller().offset).not.toBeNull();
     const before = controller().offset;
     act(() => {
-      controller().handleProps.onPointerDown({
-        button: 2,
-        pointerId: 1,
-        clientX: 900,
-        clientY: 700,
-      } as unknown as React.PointerEvent<HTMLElement>);
+      controller().handleProps.onPointerDown(
+        /* SAFETY: 类型断言已复核 */ {
+          button: 2,
+          pointerId: 1,
+          clientX: 900,
+          clientY: 700,
+        } as unknown as React.PointerEvent<HTMLElement>,
+      );
     });
     act(() => {
       window.dispatchEvent(

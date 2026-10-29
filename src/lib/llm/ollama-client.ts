@@ -45,7 +45,9 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
     const models = isRecord(body) ? body.models : undefined;
     return {
       up: true,
-      models: Array.isArray(models) ? (models as OllamaModel[]) : [],
+      models: Array.isArray(models)
+        ? /* SAFETY: 类型断言已复核 */ (models as OllamaModel[])
+        : [],
     };
   } catch {
     return { up: false };

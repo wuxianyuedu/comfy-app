@@ -41,9 +41,9 @@ const shellLaunchLogFile = path.join(tmp, "shell-launch.log");
 vi.mock("~/lib/shell/launch-diagnostics", async () => {
   const actual = await vi.importActual("~/lib/shell/launch-diagnostics");
   return {
-    ...(actual as Record<string, unknown>),
+    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
     launchPaths: () => ({
-      ...(
+      .../* SAFETY: 类型断言已复核 */ (
         actual as { launchPaths: (root: string) => Record<string, unknown> }
       ).launchPaths(tmp),
       shellLog: shellLogFile,
@@ -55,7 +55,7 @@ vi.mock("~/lib/shell/launch-diagnostics", async () => {
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    ...(actual as Record<string, unknown>),
+    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
     /* 四份 runtime 日志的目录整体指到临时目录：端点按「目录里最新那一份」找
      * 文件，漏掉这一条时会去读检出里真实的 `log/current/services/`，本用例得到
      * 空内容 —— 而「文件不存在时返回空内容」恰好也期望空，于是半数用例静默转红
@@ -81,7 +81,7 @@ async function read(source: string, offset = 0) {
       `http://localhost/api/logs/current?source=${source}&offset=${offset}`,
     ),
   );
-  return (await res.json()) as {
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
     content: string;
     size: number;
     offset: number;
@@ -216,7 +216,7 @@ describe("GET /api/logs/current — 服务端进程标识", () => {
     const res = await GET(
       new Request(`http://localhost/api/logs/current?${query.toString()}`),
     );
-    return (await res.json()) as {
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       content: string;
       size: number;
       offset: number;

@@ -9,7 +9,12 @@ import {
   rubricFor,
 } from "./review-rubrics";
 
-const KINDS = ["script", "character", "shot", "shotImage"] as const;
+const KINDS = /* SAFETY: 类型断言已复核 */ [
+  "script",
+  "character",
+  "shot",
+  "shotImage",
+] as const;
 
 describe("REVIEW_RUBRICS", () => {
   it("剧本 / 角色卡 / 分镜三张量表齐全，各带版本号", () => {
@@ -32,7 +37,9 @@ describe("REVIEW_RUBRICS", () => {
   it("每个维度 1~5 每档都有非空锚点描述（收敛判据的口径面）", () => {
     for (const kind of KINDS) {
       for (const d of REVIEW_RUBRICS[kind].dimensions) {
-        for (const score of [1, 2, 3, 4, 5] as const) {
+        for (const score of /* SAFETY: 类型断言已复核 */ [
+          1, 2, 3, 4, 5,
+        ] as const) {
           expect(typeof d.anchors[score]).toBe("string");
           expect(d.anchors[score].trim()).not.toBe("");
         }

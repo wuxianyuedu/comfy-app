@@ -13,7 +13,7 @@ afterEach(cleanup);
  * 且**颜色走语义 token 类名**（不落 Tailwind 原生调色板字面量）——
  * 换品牌色 / 状态色时调用处不用改。
  */
-const VARIANTS = [
+const VARIANTS = /* SAFETY: 类型断言已复核 */ [
   "default",
   "destructive",
   "warning",
@@ -36,14 +36,18 @@ describe("Alert", () => {
     expect(alertOf({ variant }).className).toContain("rounded-lg");
   });
 
-  it.for(["warning", "info", "success", "danger"] as const)(
-    "variant=%s 的边框 / 底色走语义 token",
-    (variant) => {
-      const cls = alertOf({ variant }).className;
-      expect(cls).toMatch(/\bborder-(warning|info|success|destructive)\/30\b/);
-      expect(cls).toMatch(/\bbg-(warning|info|success|destructive)\/10\b/);
-    },
-  );
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      "warning",
+      "info",
+      "success",
+      "danger",
+    ] as const,
+  )("variant=%s 的边框 / 底色走语义 token", (variant) => {
+    const cls = alertOf({ variant }).className;
+    expect(cls).toMatch(/\bborder-(warning|info|success|destructive)\/30\b/);
+    expect(cls).toMatch(/\bbg-(warning|info|success|destructive)\/10\b/);
+  });
 
   it.for(VARIANTS)("variant=%s 不落 Tailwind 原生调色板字面量", (variant) => {
     expect(alertOf({ variant }).className).not.toMatch(
@@ -52,7 +56,12 @@ describe("Alert", () => {
   });
 
   it("warning / info / success / danger 的文字档走 -strong token", () => {
-    for (const variant of ["warning", "info", "success", "danger"] as const) {
+    for (const variant of /* SAFETY: 类型断言已复核 */ [
+      "warning",
+      "info",
+      "success",
+      "danger",
+    ] as const) {
       expect(alertOf({ variant }).className).toMatch(
         /\btext-(warning|info|success|danger)-strong\b/,
       );

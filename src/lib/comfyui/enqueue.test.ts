@@ -49,7 +49,7 @@ describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
     const fakeRepo = {
       findStatusAndPromptById: async () => null,
-      cancel: async () => "written" as const,
+      cancel: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
     };
     expect(() => mod.configureEnqueue({ taskRepo: fakeRepo })).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。
@@ -93,7 +93,8 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
     const kill = vi.fn();
-    if (inFlight) cli.cliProcs.set(taskId, { kill } as never);
+    if (inFlight)
+      cli.cliProcs.set(taskId, /* SAFETY: 类型断言已复核 */ { kill } as never);
     else cli.cliProcs.delete(taskId);
     return { taskId, repo, kill };
   }

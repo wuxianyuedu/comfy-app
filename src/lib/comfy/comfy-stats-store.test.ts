@@ -22,7 +22,7 @@ vi.mock("~/lib/comfy/comfy-stats-client", () => ({
    `EventSource`，直接驱动 store 注册进来的那一个回调比造一条假连接确定。 */
 const crashListeners = vi.hoisted(
   () =>
-    [] as Array<
+    /* SAFETY: 类型断言已复核 */ [] as Array<
       (s: {
         seq: number;
         at: number;

@@ -147,9 +147,9 @@ function renderStudio(options: RenderOptions = {}) {
 
 /** onShotsChange 是函数式补丁：把它折叠成「最终一条 patch 里的镜头列表」。 */
 function lastPatchedShot(mock: { mock: { calls: unknown[][] } }): Shot {
-  const last = mock.mock.calls[mock.mock.calls.length - 1]![0] as (
-    prev: Shot[],
-  ) => Shot[];
+  const last = /* SAFETY: 类型断言已复核 */ mock.mock.calls[
+    mock.mock.calls.length - 1
+  ]![0] as (prev: Shot[]) => Shot[];
   return last([makeShot()])[0]!;
 }
 
@@ -257,7 +257,9 @@ describe("ShotStudio 生图出口", () => {
     /* watchShot 的产物回写经 onShotsChange 的函数式补丁发生 */
     const calls = vi.mocked(onShotsChange).mock.calls;
     const wroteImage = calls.some((call) => {
-      const patch = (call[0] as (prev: Shot[]) => Shot[])([makeShot()])[0]!;
+      const patch = /* SAFETY: 类型断言已复核 */ (
+        call[0] as (prev: Shot[]) => Shot[]
+      )([makeShot()])[0]!;
       return patch.imageUrl === "/api/generated/1.png";
     });
     expect(wroteImage).toBe(true);

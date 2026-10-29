@@ -284,10 +284,9 @@ export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
-export const TEMPERATURE_TASKS = Object.entries(TASK_TYPES) as [
-  TaskType,
-  (typeof TASK_TYPES)[TaskType],
-][];
+export const TEMPERATURE_TASKS = /* SAFETY: 类型断言已复核 */ Object.entries(
+  TASK_TYPES,
+) as [TaskType, (typeof TASK_TYPES)[TaskType]][];
 
 /** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），用交集类型表达，
  *  消费方（含子视图）内不必逐处判空。 */

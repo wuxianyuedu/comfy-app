@@ -113,22 +113,26 @@ export const NotEditableRendersNothing: Story = {
 export const ModeOverrides: Story = {
   render: () => (
     <div className="flex flex-col gap-4">
-      {([null, "turbo", "draft"] as const).map((mode) => (
-        <div key={String(mode)} className="flex flex-col gap-1">
-          <span className="text-ink-muted font-mono text-[11px]">
-            mode = {mode ?? "（条目级）"}
-          </span>
-          <div className="bg-canvas border-border-strong w-80 rounded-lg border p-2">
-            <RequiredChips
-              pins={[WIDTH, STEPS]}
-              mode={mode}
-              visibilityMode={mode}
-              onRequiredChange={() => undefined}
-              onVisibilityChange={() => undefined}
-            />
-          </div>
-        </div>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ ([null, "turbo", "draft"] as const).map(
+          (mode) => (
+            <div key={String(mode)} className="flex flex-col gap-1">
+              <span className="text-ink-muted font-mono text-[11px]">
+                mode = {mode ?? "（条目级）"}
+              </span>
+              <div className="bg-canvas border-border-strong w-80 rounded-lg border p-2">
+                <RequiredChips
+                  pins={[WIDTH, STEPS]}
+                  mode={mode}
+                  visibilityMode={mode}
+                  onRequiredChange={() => undefined}
+                  onVisibilityChange={() => undefined}
+                />
+              </div>
+            </div>
+          ),
+        )
+      }
     </div>
   ),
 };
@@ -140,16 +144,20 @@ export const ModeOverrides: Story = {
 export const SizeTableFooters: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
-      {(["image", "video"] as const).map((scene) => (
-        <div key={scene} className="flex flex-col gap-1">
-          <span className="text-ink-muted font-mono text-[11px]">
-            scene = {scene}
-          </span>
-          <div className="border-border-strong w-96 rounded-lg border p-2">
-            <SizeTableFooter scene={scene} onOpen={() => undefined} />
-          </div>
-        </div>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (["image", "video"] as const).map(
+          (scene) => (
+            <div key={scene} className="flex flex-col gap-1">
+              <span className="text-ink-muted font-mono text-[11px]">
+                scene = {scene}
+              </span>
+              <div className="border-border-strong w-96 rounded-lg border p-2">
+                <SizeTableFooter scene={scene} onOpen={() => undefined} />
+              </div>
+            </div>
+          ),
+        )
+      }
       <p className="text-ink-muted font-mono text-[11px]">
         尺寸上界 GROUPED_SIZE_MAX = {String(GROUPED_SIZE_MAX)} ·
         两个子类的说明：

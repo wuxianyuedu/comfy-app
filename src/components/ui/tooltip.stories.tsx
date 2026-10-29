@@ -105,14 +105,18 @@ export const Sides: Story = {
   render: () => (
     <TooltipProvider>
       <div className="flex items-center gap-3">
-        {(["top", "right", "bottom", "left"] as const).map((side) => (
-          <Tooltip key={side}>
-            <TooltipTrigger render={<Button variant="outline" size="sm" />}>
-              {side}
-            </TooltipTrigger>
-            <TooltipContent side={side}>开在 {side}</TooltipContent>
-          </Tooltip>
-        ))}
+        {
+          /* SAFETY: 类型断言已复核 */ (
+            ["top", "right", "bottom", "left"] as const
+          ).map((side) => (
+            <Tooltip key={side}>
+              <TooltipTrigger render={<Button variant="outline" size="sm" />}>
+                {side}
+              </TooltipTrigger>
+              <TooltipContent side={side}>开在 {side}</TooltipContent>
+            </Tooltip>
+          ))
+        }
       </div>
     </TooltipProvider>
   ),

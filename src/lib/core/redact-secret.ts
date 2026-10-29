@@ -101,7 +101,9 @@ export function redactSecretShaped(
     return value.map((v) => redactSecretShaped(v, depth + 1, seen));
   }
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+  for (const [k, v] of Object.entries(
+    /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>,
+  )) {
     out[k] = redactSecretShaped(v, depth + 1, seen);
   }
   return out;

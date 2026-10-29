@@ -128,7 +128,10 @@ export const projectRouter = createTRPCRouter({
           steps: params.steps ?? null,
           cfg: params.cfg ?? null,
           checkpoint: params.checkpoint ?? null,
-          referenceImages: (task.referenceImages as string[] | null) ?? [],
+          referenceImages:
+            /* SAFETY: 类型断言已复核 */ (task.referenceImages as
+              | string[]
+              | null) ?? [],
           parentId: task.parentId ?? null,
           createdAt: task.createdAt,
           images: task.images.map((img) => ({

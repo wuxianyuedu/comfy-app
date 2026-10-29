@@ -113,7 +113,8 @@ describe("WorkflowEditorInner", () => {
      * `flex-1` 会平分内容列 —— 实测那会让加载态嵌在库的下半截
      * （`/tmp` 那两张截图的形状），覆盖式才是这一段该有的形态。 */
     expect(screen.getByText("加载工作流节点…")).toBeInTheDocument();
-    const layer = container.firstElementChild as HTMLElement | null;
+    const layer =
+      /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement | null;
     expect(layer, "加载态没有渲染出来").toBeTruthy();
     expect(
       layer?.className,
