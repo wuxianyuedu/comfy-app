@@ -189,6 +189,8 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-resolution",
       "size-multiple",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
   });
 
@@ -231,6 +233,8 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-multiple",
       "duration",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     expect(
       buildParamEntries(videoIO, undefined, { mode: "T2I" }).map(
@@ -246,6 +250,8 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-resolution",
       "size-multiple",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
   });
 
@@ -267,6 +273,8 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-resolution",
       "size-multiple",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     /* 没有可落点的口如实零候选（未配置）。 */
     expect(byId.get("prompt")!.pins).toEqual([]);
@@ -293,6 +301,8 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       .map((entry) => entry.id)
       .sort();
     expect(ids).toEqual([
+      "lora-name",
+      "lora-strength",
       "negative",
       "prompt",
       "seed",

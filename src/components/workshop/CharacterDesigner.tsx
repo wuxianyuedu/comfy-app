@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
-import { textHandler } from "~/lib/form-props";
+import { clamp } from "~/lib/clamp";
+import { numberHandler, textHandler } from "~/lib/form-props";
 import { Trash } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -8,8 +9,10 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
+import { Input } from "~/components/ui/input";
 import { Disclosure } from "~/components/ui/disclosure";
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
+import { useCharacterLoraOptions } from "./hooks/use-character-lora-options";
 import {
   CHARACTER_ATTRIBUTES,
   type AttributeOptionSet,
@@ -90,6 +93,10 @@ export function CharacterDesigner({
 }: Props) {
   const [brief, setBrief] = React.useState("");
   const { config, openSettings } = useLLM();
+
+  /* 角色 LoRA 绑定的候选（模型库 loras 目录，#2622 FR-QA-02③）。 */
+  const { options: loraFiles, loading: lorasLoading } =
+    useCharacterLoraOptions();
 
   /* 提取/导入 与 一句话生成/AI 润色 两个分域各自沉在 sub-hook
    * （与 useStoryboardExtractFlow 同族）；依赖显式注入，返回形状与
@@ -417,6 +424,54 @@ export function CharacterDesigner({
                   )}
                   placeholder="不指定（使用风格标签）"
                 />
+              </div>
+
+              {/* 绑定 LoRA（FR-QA-02③ · #2622）：值在提交时落到工作流的
+                  「lora-name」契约口（LoraLoader 的 lora_name）；工作流没连
+                  该口 → unmatched 提示，用其图内 LoRA 配置。 */}
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_96px]">
+                <div>
+                  <span className="text-muted-foreground mb-1 block text-xs">
+                    绑定 LoRA（可选）
+                  </span>
+                  <SelectMenu
+                    className="border-border! bg-subtle! text-sm"
+                    value={character.loraName ?? ""}
+                    onChange={(value) =>
+                      update(character.id, {
+                        loraName: value || undefined,
+                        ...(value ? {} : { loraStrength: undefined }),
+                      })
+                    }
+                    options={loraFiles}
+                    placeholder={
+                      lorasLoading ? "加载中…" : "不绑定（用工作流图内配置）"
+                    }
+                  />
+                </div>
+                {character.loraName && (
+                  <div>
+                    <span className="text-muted-foreground mb-1 block text-xs">
+                      强度
+                    </span>
+                    <Input
+                      inputMode="decimal"
+                      value={
+                        character.loraStrength !== undefined
+                          ? String(character.loraStrength)
+                          : "1"
+                      }
+                      disabled={!character.loraName}
+                      onChange={numberHandler(
+                        (v) =>
+                          update(character.id, {
+                            loraStrength: clamp(v, 0, 2),
+                          }),
+                        1,
+                      )}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* 生成出的提示词预览 */}

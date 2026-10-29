@@ -68,7 +68,13 @@ export type ExposedParamClass =
   /** 采样种子（INT）。作者把这一口连到工作流的 seed / noise_seed 端口，工坊才能
    *  按次指定种子（如「抽卡重生成」换种子重出）；**没连这一口的工作流不受影响**
    *  —— 用其图内自带的 seed 配置，实际是否可换由工作流决定。 */
-  | "seed";
+  | "seed"
+  /** 角色 LoRA（文本）。作者连到工作流 LoraLoader 的 lora_name 端口，工坊才能
+   *  按出场角色的绑定注入 LoRA（FR-QA-02③）；没连的工作流用其图内 LoRA 配置。 */
+  | "lora-name"
+  /** 角色 LoRA 强度（FLOAT）。与 lora-name 同源（LoraLoader 的 strength widget）；
+   *  缺省 1.0，只连 lora-name 不连强度时用工作流图内的强度值。 */
+  | "lora-strength";
 
 export interface ExposedParamDef {
   cls: ExposedParamClass;
@@ -94,6 +100,8 @@ export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
   "last-frame": "尾帧",
   duration: "时长",
   seed: "种子",
+  "lora-name": "角色 LoRA",
+  "lora-strength": "LoRA 强度",
 };
 
 /** 各口的**界面展示名** —— 整个仓库的**唯一出处**。
@@ -117,6 +125,8 @@ export const EXPOSED_PARAM_DISPLAY_LABEL: Record<ExposedParamClass, string> = {
   "last-frame": "尾帧图片",
   duration: "时长（秒）",
   seed: "种子",
+  "lora-name": "角色 LoRA",
+  "lora-strength": "LoRA 强度",
 };
 
 /** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。 */
@@ -188,6 +198,18 @@ export function exposedParamsForMode(
       id: "seed",
       label: EXPOSED_PARAM_DISPLAY_LABEL.seed,
     });
+    /* 角色 LoRA 口：作者连到 LoraLoader 的 lora_name / strength 才生效，没连的
+     * 工作流用其图内 LoRA 配置（与种子口同一句「连线才生效」的口径）。 */
+    out.push({
+      cls: "lora-name",
+      id: "lora-name",
+      label: EXPOSED_PARAM_DISPLAY_LABEL["lora-name"],
+    });
+    out.push({
+      cls: "lora-strength",
+      id: "lora-strength",
+      label: EXPOSED_PARAM_DISPLAY_LABEL["lora-strength"],
+    });
     return out;
   }
 
@@ -217,6 +239,17 @@ export function exposedParamsForMode(
     cls: "seed",
     id: "seed",
     label: EXPOSED_PARAM_DISPLAY_LABEL.seed,
+  });
+  /* 角色 LoRA 口（同上：连线才生效）。 */
+  out.push({
+    cls: "lora-name",
+    id: "lora-name",
+    label: EXPOSED_PARAM_DISPLAY_LABEL["lora-name"],
+  });
+  out.push({
+    cls: "lora-strength",
+    id: "lora-strength",
+    label: EXPOSED_PARAM_DISPLAY_LABEL["lora-strength"],
   });
   return out;
 }

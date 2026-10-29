@@ -891,14 +891,20 @@
   ② 改剧本的基调后重跑分镜，镜头描述随之改变（证明基调进了提示词
   `src/lib/workshop/prompt-builder.ts`）；③ 无「长度失控 / 重复段落」的评审环节 ⇒ 本条未达标。
 
-#### FR-QA-02 角色一致性口径
-
-- 状态：计划中
+- 状态：已上线（定妆照锚定既有 + 视觉评审 #2479 + LoRA 绑定 #2622）
 - 需求：同一角色跨镜、跨集可辨 —— 这是「多剧集能不能接上」的关键一条。
 - 行为与验收：① 每个角色有且仅有一张**生效定妆照**（`portraitUrl`），缺锚定给出可见提示；
   ② 镜头按 `characterIds` 收集定妆照作为 `referenceImages` 上传，生图请求里能查到该字段；
-  ③ **角色 ↔ 模型（LoRA）可绑定**（当前无此机制，LoRA 只能由工作流内部承载）；
-  ④ 视觉一致性评审可用（当前只评审文本，`src/server/agent/review.ts` 等后续多模态能力）。
+  ③ **角色 ↔ 模型（LoRA）可绑定**（#2622 已落）：角色卡带 `loraName` / `loraStrength`
+  （设计器下拉数据源 = 模型库 loras 目录）；提交时取出场角色第一个绑定，
+  经标准契约口 `lora-name` / `lora-strength` 落到作者连线的 LoraLoader 端口——
+  与 seed 口同款「连线才生效」口径，没连的工作流 unmatched 如实提示；
+  ④ 视觉一致性评审可用（#2479：生图 rubric 对照定妆照）。
+- 落点：`src/lib/workshop/types.ts`（角色字段）、
+  `src/components/workshop/CharacterDesigner.tsx` + `hooks/use-character-lora-options.ts`（绑定 UI）、
+  `src/lib/workflow/workflow-exposed-params.ts` / `workflow-param-classes.ts`（契约口）、
+  `src/lib/workshop/workflow-encapsulation.ts`（值映射）、
+  `src/components/workshop/ShotStudio.tsx` / `hooks/use-workshop-generation.ts`（提交收集）t/review.ts` 等后续多模态能力）。
 
 #### FR-QA-03 分镜质量口径
 

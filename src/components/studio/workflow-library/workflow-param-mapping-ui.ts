@@ -24,6 +24,8 @@ export const PARAM_CLASS_LABEL: Record<ParamClass, string> = {
   "last-frame": "尾帧",
   duration: "时长",
   seed: "种子",
+  "lora-name": "角色 LoRA",
+  "lora-strength": "LoRA 强度",
   other: "参数",
 };
 
@@ -43,6 +45,8 @@ export const PARAM_CLASS_COLOR: Record<ParamClass, string> = {
   "last-frame": "#fbbf24",
   duration: "#f472b6",
   seed: "#fb923c",
+  "lora-name": "#c084fc",
+  "lora-strength": "#f472b6",
   other: "#94a3b8",
 };
 

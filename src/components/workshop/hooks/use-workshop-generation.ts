@@ -107,11 +107,24 @@ export function useWorkshopGeneration({
           `${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`,
         );
       }
+      /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色里第一个绑定的生效；
+       * 工作流没连 lora 口 → unmatched 提示（describeUnmatchedInputs）。 */
+      const loraChar = characters
+        .filter((c) => shot.characterIds.includes(c.id))
+        .find((c) => c.loraName);
       const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
         prompt: shot.prompt,
         negativePrompt: shot.negativePrompt || undefined,
         size: sizeSpec,
         ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
+        ...(loraChar?.loraName
+          ? {
+              loraName: loraChar.loraName,
+              ...(loraChar.loraStrength !== undefined
+                ? { loraStrength: loraChar.loraStrength }
+                : {}),
+            }
+          : {}),
       });
       return { input, unmatchedWarning: describeUnmatchedInputs(unmatched) };
     },

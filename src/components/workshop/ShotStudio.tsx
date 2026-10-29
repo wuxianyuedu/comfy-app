@@ -278,10 +278,23 @@ export function ShotStudio({
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个生图工作流
          *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
          * 没有可执行的图。见 generateShot 入口的门禁。 */
+        /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色里第一个绑定的生效
+         * （多角色链式加载另立）；工作流没连 lora 口 → unmatched 提示。 */
+        const loraChar = characters
+          .filter((c) => shot.characterIds.includes(c.id))
+          .find((c) => c.loraName);
         const built = await buildLibraryWorkflowInput(workflowId, {
           prompt: shot.prompt,
           negativePrompt: shot.negativePrompt || undefined,
           size: sizeSpec,
+          ...(loraChar?.loraName
+            ? {
+                loraName: loraChar.loraName,
+                ...(loraChar.loraStrength !== undefined
+                  ? { loraStrength: loraChar.loraStrength }
+                  : {}),
+              }
+            : {}),
           // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。
           seed: resolveSeed(seedInput),
           ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),

@@ -80,6 +80,13 @@ export interface WorkshopExposedValues {
    *  那一行上。**没连种子口的工作流：这个值落不下去（进 unmatched），仍用其图内
    *  seed 配置** —— 实际是否可换由工作流决定。「抽卡重生成」= 给一个新的随机 seed。 */
   seed?: number;
+  /** 角色 LoRA 文件名（模型库 loras 目录）。落在作者连到「lora-name」口、
+   *  指向 LoraLoader 的 lora_name 端口的落点上；没连的工作流用其图内 LoRA
+   *  配置（FR-QA-02③ · #2622）。 */
+  loraName?: string;
+  /** 角色 LoRA 强度（缺省 1.0 由工作流图内值兜底；只连 lora-name 不连强度时
+   *  本值不生效）。 */
+  loraStrength?: number;
   /** **自定义口**的值（契约口 id → 值，如 `{ "custom-text-1": "水彩" }`）。
    *
    *  预制的几个口各有业务语义（提示词 / 尺寸 / 首帧…），所以各占一个字段；
@@ -235,6 +242,14 @@ function toContractValues(args: {
   /* 种子：调用方（如「抽卡重生成」）给一个 seed 值，落到作者连的「种子」口上；
    *  作者没连这一口 → applyParamMapping 如实报进 unmatched，工作流用其图内 seed。 */
   if (values.seed !== undefined) out.seed = values.seed;
+
+  /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色的绑定值，落到作者连的
+   *  「lora-name」/「lora-strength」口上；没连 → unmatched 如实提示，
+   *  工作流用其图内 LoRA 配置。 */
+  if (values.loraName !== undefined) out["lora-name"] = values.loraName;
+  if (values.loraStrength !== undefined) {
+    out["lora-strength"] = values.loraStrength;
+  }
 
   /* 自定义口：值已经是「契约口 id → 值」的形状，原样并入 —— 这些 id 只在生效
    *  契约里存在，没有业务语义可翻译（作者起的名字就是全部语义）。落不下去的
