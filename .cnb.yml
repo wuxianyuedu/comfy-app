@@ -2060,10 +2060,11 @@
     # 于是「自动修」这一段每次都白走、还让人以为差一个权限就通了。
     # 修与判现在都落在**本地**：`.githooks/pre-commit` 的 D0 带 `--staged` 跑同一份
     # `check-format.cjs`，红了人就 `pnpm exec oxfmt <点名的文件>`（只点本次改的）。
-    # 平台这一格留的是**第二层**：判据本体一字未改，参数按原来平台侧的口径不带 `--staged`
-    # （那里的工作区就是这次要判的那份源码，带 `--staged` 读到的是空的暂存区 ⇒ 恒跳过，
-    # 「挂了等于没挂」—— 这条由 `tests/doc-check-hook-wiring.test.ts` 钉着）。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-format.cjs
+    # 平台这一格留的是**第二层**：判据本体一字未改，判面用 `--changed`（改动面 ∩ 扫描面）
+    # —— printWidth 80→100 起全库档对未迁移的存量恒红（见 check-format.cjs 文件头），
+    # 平台这一格判的是「这次 PR 带来的那批」；基线取 `CNB_PULL_REQUEST_TARGET_SHA`
+    # （changed-scope 的既有口径），合成 merge 提交上的对账也在那一层。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-format.cjs --changed
 
   # 收窄（ISSUE #1993）：它判的是「这次提交里有多少个文件只是被 prettier 重排过」，
   # 而判据本体是**逐文件跑 prettier**（每个改动过的源文件一次）。所以面就是
