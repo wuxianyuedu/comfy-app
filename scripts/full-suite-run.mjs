@@ -21,8 +21,30 @@
  * `scripts/freshness-ledger.mjs`）：只有绿了才记、红着不记（跑过 ≠ 跑绿过）。
  * `--skip` / `--dirty` 的解析与落账走 `scripts/daily-run.mjs`（四档共用，§12.12）。
  *
+ * ## 覆盖率门槛：**默认只上报，不拦 CI**（ISSUE #2669，业主口径）
+ *
+ * 这一档过去天天红，而**用例一条都没红** —— 红在整体 / 目录级覆盖率低于登记值。
+ * 那种红不产生任何可执行的结论，还把「整档凭证」永久卡在「不记账」上（红着不记 ⇒
+ * 从上游四格解锁以来那份账一次都没刷新过）。业主的裁决与三条理由写在
+ * `vitest.config.ts` 末尾那一节（无关文件改分母会红 / 删掉高覆盖的废弃模块反而红 /
+ * 门槛卡住合并会诱导写「执行但不验证」的用例）；**该红的是 patch coverage**
+ * —— 只量这次 diff 里新增改动的行，红一定能据此行动 —— 那是另一张单，不在这里顺手做。
+ *
+ * 落地形态刻意选「开关」而不是「删门槛」，因为可反：
+ *   · 登记处（149 条门槛）**一条数字没动**，`vitest.config.ts` 的
+ *     `COVERAGE_THRESHOLDS` 永远原样在场；
+ *   · 默认档把「交给 vitest 判定」的那一份摘空 ⇒ 用例全绿就退 0、**照常记账**，
+ *     覆盖率报告（`text` / `json-summary` / `lcov`）一个都不少，这是「上报」那一半；
+ *   · 要按门槛判红：`--enforce-coverage` 或 `COMFY_COVERAGE_ENFORCE=1`
+ *     （`pnpm check:all` 的 `test` 条目就显式带它 —— 本地那一档仍是棘轮的执行者，
+ *     「只升不降」得有人真的算，见 `scripts/quality-gate.mjs`）。
+ *
+ * ⚠️ 这一档**不靠猜**「非零是不是覆盖率造成的」：默认档根本没有那个歧义 ——
+ * 门槛不参与退码，非零就只用例红/崩负责，判决链比分类器短一截。
+ *
  * 用法：
  *   node scripts/full-suite-run.mjs --dry-run       只打印本次会跑什么（无副作用）
+ *   node scripts/full-suite-run.mjs --enforce-coverage   按登记门槛判红（本地硬档）
  *   node scripts/full-suite-run.mjs                 跑全量单测 + 覆盖率，绿了记一笔账
  *   node scripts/full-suite-run.mjs --skip "<理由>"  今天不跑，记一条写明理由的豁免
  *   node scripts/full-suite-run.mjs --dirty "<理由>" 这次改动不吃这一档，记一条
@@ -75,7 +97,9 @@ export const TRACK = freshnessTrack("full");
  * 本次要跑的那条命令 —— 抽成纯函数是为了让「跑的是什么」可被判据核。
  *
  * 与 `pnpm run test:coverage` 逐字同形（`package.json` 里那一行是这条命令的历史入口）：
- * 覆盖率门槛**只在这一档判**，单文件跑 `--coverage` 会把其余路径按 0% 算（§11.7）。
+ * 覆盖率**报告**只在这一档产出 —— 单文件跑 `--coverage` 会把其余路径按 0% 算（§11.7）。
+ * 「产出报告」与「拿门槛算退码」现在是两件事：后者由 `coverageGate` /
+ * `COMFY_COVERAGE_ENFORCE` 决定，默认档不判（ISSUE #2669）。
  *
  * ⚠️ **并发跟现场核数走，不写死**（ISSUE #1993 / 规范 §13.5.21）：旧形态是在
  * `.cnb.yml` 里裸跑 `node scripts/full-suite-run.mjs`，并发吃 `vitest.config.ts` 给的
@@ -192,7 +216,35 @@ export function toTransportSafePath(target) {
  * @returns {string[]}
  */
 function passthrough(argv) {
-  return argv.filter((a) => a !== "--dry-run");
+  /* 自己的旗标必须在这里摘掉，**不许**落到 `extra` 里：`isWholeTrackRun(extra)` 把
+   * 「透传了任何参数」判成「跑的不是整档、不记账」—— 那会让每一次带
+   * `--enforce-coverage` 的硬档跑绿了却不记账，正是 §13.5.4 说的那种自我拆账。 */
+  return argv.filter((a) => a !== "--dry-run" && a !== "--enforce-coverage");
+}
+
+/**
+ * 「这一档到底判不判覆盖率门槛」—— 只有一个判点，两处来源（旗标 / 环境变量）。
+ *
+ * 抽成函数是因为这句话**必须被念出来**（§13.5.25「降档永远要被读出来，不许冒充全套过了」）：
+ * 默认档不判是业主口径，不是「跑过了且通过」；而硬档下如果还在念「没判」，
+ * 就是话术与执行脱钩。读 ⇄ 执行同读数，两边共用这一个函数。
+ *
+ * @param {string[]} argv 原始参数
+ * @param {Record<string, string | undefined>} [env] 传给子进程的那份环境
+ * @returns {{enforce: boolean, reading: string}}
+ */
+export function coverageGate(argv, env = process.env) {
+  const enforce =
+    argv.includes("--enforce-coverage") || env.COMFY_COVERAGE_ENFORCE === "1";
+  return {
+    enforce,
+    reading: enforce
+      ? "[full-suite-run] 覆盖率门槛：**判**（按 `vitest.config.ts` 的登记处逐条算退码；本地/`check:all` 那一档）\n"
+      : "[full-suite-run] 覆盖率门槛：**今天没判** —— 整体/目录级只上报（ISSUE #2669 业主口径）。\n" +
+        "  这不是「门槛已通过」，是「这一维不参与退码」；覆盖率报告照常产出。\n" +
+        "  要按门槛判红：`node scripts/full-suite-run.mjs --enforce-coverage`" +
+        "（`pnpm check:all` 的 `test` 条目已带它）。\n",
+  };
 }
 
 /**
@@ -534,6 +586,10 @@ async function main(argv) {
   }
   const run = planRun(extra, load.workers, junitFile);
   if (load.note) process.stderr.write(`[full-suite-run] ${load.note}\n`);
+  const gate = coverageGate(argv);
+  /* 先念档位再起子进程：这一档墙钟是分钟级，起完之后才念等于让读的人在十分钟里
+   * 猜「门槛到底算了没有」（#2574 那条「几百 MB 那一跳长得像卡死」是同一件事的另一直角）。 */
+  process.stdout.write(gate.reading);
   if (dryRun) {
     process.stdout.write(
       `[full-suite-run] ${run.label} → pnpm ${run.args.join(" ")}` +
@@ -542,6 +598,8 @@ async function main(argv) {
     process.stdout.write(
       `[full-suite-run] 记账文件：${TRACK.ledger}（键 \`${TRACK.key}\`，跑法 \`${TRACK.run}\`）\n`,
     );
+    /* `--dry-run` 也要念档位那句：它唯一的用途就是「这次会跑什么」，而「覆盖率判不判」
+     * 是那条命令的一半内容 —— 不念出来，读的人会以为那 149 条门槛在算退码。 */
     return 0;
   }
   const wallStart = Date.now();
@@ -553,6 +611,10 @@ async function main(argv) {
     stdio: "inherit",
     command: cli,
     timeoutMs: FULL_SUITE_TIMEOUT_MS,
+    /* 开关交给子进程（`vitest.config.ts` 末尾那一节读它），本进程不改任何配置文件。 */
+    env: gate.enforce
+      ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" }
+      : process.env,
   });
   const wallMs = Date.now() - wallStart;
   /* 榜打在**三态分流之前**：红的那一次与被预算砍的那一次，恰恰是最需要知道
@@ -642,7 +704,7 @@ async function main(argv) {
         process.stderr.write(
           "[full-suite-run] **第 2 遍全绿** ⇒ 刚才那次是**负载假红**（同一批用例在更隔离的\n" +
             "  条件下重测的结果，不是「放宽了判据」）。本档退 0，但**不记账** ——\n" +
-            "  这条账记的是「整档带着覆盖率门槛跑绿过」，而第 2 遍没带覆盖率那一半。\n" +
+            "  这条账记的是「整档那一跑跑绿过」，而第 2 遍没带覆盖率那一半（更没带门槛判定）。\n" +
             "  降负载的杠杆是并发（`maxWorkers` / 串行），不是 `testTimeout`。\n",
         );
         return 0;
@@ -684,8 +746,12 @@ async function main(argv) {
   }
   if (!shouldRecord({ exitCode, dryRun, extra })) {
     process.stderr.write(
-      `[full-suite-run] ✗ 全量单测 / 覆盖率未通过（退出码 ${res.status ?? "信号"}）—— **不记账**：\n` +
+      `[full-suite-run] ✗ 全量单测未通过（退出码 ${res.status ?? "信号"}）—— **不记账**：\n` +
         "        这条账记的是「上一次真跑绿」，红着记一条「我跑过」会把两件事混成一件。\n" +
+        /* 默认档下覆盖率门槛**不参与退码**（ISSUE #2669），所以这一行的成因只剩用例与
+         * 崩溃两类 —— 话术不许再把它写成「覆盖率未通过」，那会把读的人派去查一份
+         * 根本不红的东西（而硬档下这么说是准确的，所以这句跟着档位念）。 */
+        `        本档覆盖率判定：${gate.enforce ? "判（门槛可能是这一跳的成因之一）" : "没判（这一跳与覆盖率无关）"}\n` +
         "        红的定性先按 §11.13 隔离重跑那条走，别把红当成「账没记上」。\n" +
         `        规范：docs/standards/13-提交与-code-review.md §13.5.4 / §11.7\n`,
     );
@@ -697,7 +763,9 @@ async function main(argv) {
     who: gitUser(TRACK.key),
   });
   process.stdout.write(
-    `[full-suite-run] ✓ 全量单测 + 覆盖率通过\n[full-suite-run] ${note}\n`,
+    `[full-suite-run] ✓ 全量单测通过 —— 覆盖率那一半：${
+      gate.enforce ? "判过，且逐条达到登记值" : "只上报，没判（ISSUE #2669）"
+    }\n[full-suite-run] ${note}\n`,
   );
   /* 回写机器自有分支 `ci/freshness-ledger`（ISSUE #2247）；仅每日档置
    * `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op。 */
