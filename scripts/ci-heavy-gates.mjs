@@ -164,7 +164,7 @@ export const HEAVY_GATES = [
      * `heavyGateRegistryProblems()` 在开跑前就核这件事（对不上 ⇒ 判红、一条都不跑）。 */
     name: "脚本档类型检查(tsc 的 .mjs 全量面)",
     argv: ["node", "scripts/check-scripts-typecheck.cjs"],
-    why: "判未被 import 的 `**/*.mjs` 脚本（主 tsconfig 收不到那一格；ISSUE #2524 / 规范 §13.5.14）。它判的是**全仓不变量**（210 份脚本 + 一份只降不升的基线），与「这次改了什么」无关 ⇒ 不收窄；代价是它自己起一次 tsc（本机实测 12.5–17.9s）。",
+    why: "判未被 import 的 `**/*.mjs` 脚本（主 tsconfig 收不到那一格；ISSUE #2524 / 规范 §13.5.14）。它判的是**全仓不变量**（脚本档全量面 + 一份只降不升的基线；面的份数由 `scripts/.scripts-typecheck-baseline.json` 的 `face` 自己报，这里不抄一个会过期的数），与「这次改了什么」无关 ⇒ 不收窄；代价是它自己起一次 tsc（本机实测 12.5–17.9s）。",
   },
 ];
 

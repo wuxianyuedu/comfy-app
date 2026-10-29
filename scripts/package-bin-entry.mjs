@@ -24,6 +24,10 @@
  *   `resolvePackageBinEntry(pkgName)` → 该包 `bin` 指向的**绝对路径**；解析不到给 `null`
  *   （不抛 —— 「没装」与「装了但入口缺席」对调用方是同一件事：起不起来）。
  *
+ *   `resolveBinEntryByName(name)`（ISSUE #2572）→ `.bin/<name>` 那份垫片**指向的**绝对路径。
+ *   它答的是**另一个问题**：「这个名字归谁」。在本仓两者会分岔 —— 按依赖名正推把
+ *   两份编译器混成一份，理由写在它自己的注释里。
+ *
  * 刻意**不做**的事：
  *   · 不解析 PATH 上的全局命令（本仓只用本地装的那一份，规范 §2.1）；
  *   · 不判「这个包能不能跑」—— 那是 `spawn` 之后的事，本模块只给路径；
@@ -33,6 +37,11 @@
  *
  *   const entry = resolvePackageBinEntry("typedoc");          // …/typedoc/bin/typedoc
  *   spawn(process.execPath, [entry, ...args], { cwd: root }); // 不经 shell、不括引号
+ *
+ *   const tsc = resolveBinEntryByName("tsc");                 // 垫片自己说归谁
+ *
+ * 两者都有现成的执行者，别在调用点重抄（§12.18）：按包名的那几条见 `run-affected-tests.mjs`
+ * / `typedoc-run.mjs`；按垫片名字的那条是 `ci-run-tool.mjs`。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -96,6 +105,124 @@ export function resolvePackageBinEntry(pkgName, opts = {}) {
   }
 }
 
+/**
+ * 「**垫片名字** → 包真身入口」（ISSUE #2572）—— 与上面那个按包名解析的是两个问题。
+ *
+ * 为什么必须另开一份：在本仓，「`node_modules/.bin/<名字>` 归谁」**不由 `package.json`
+ * 的依赖名决定，而由 pnpm 摆垫片时用的 `bin` 键决定**。本仓的 `tsc` 就是活例子（四条
+ * 都是当场跑出来的读数，不是推的）：
+ *   · 依赖 `typescript` 是别名 `npm:@typescript/typescript6@6.0.2` ——
+ *     `require.resolve("typescript/package.json")` 落在这**一份**上，它的 `bin` 只有一个
+ *     键 `tsc6` ⇒ `resolvePackageBinEntry("typescript")` = `null`（键名与包名对不上）；
+ *   · 而 **`.bin/tsc` 归另一个包**：目录 `@typescript/native`，它自己申报的 `name`
+ *     正是 `typescript`、版本 7.0.2、`bin` 是 `{tsc}` ⇒
+ *     `resolvePackageBinEntry("@typescript/native")` 也是 `null`（键是 `tsc`，不是包名）。
+ * 两份都叫 `typescript`、各管一个名字，「按依赖名正推」这条路给的不是答案而是空。
+ * **混成一份的那一格在下一步**：拿着 `null` 去「取 `bin` 的第一个键」凑一个兜底
+ * （很自然的写法），`typescript` 就凑出 `tsc6` ⇒ `tsc` 安静地跑成了 6.0.2 那份。
+ * 所以只能问垫片自己：它知道这个名字归谁。
+ *
+ * 问法按**权威度**排两层：
+ *   ① pnpm 在 `.bin/<name>`（无扩展名那份 sh shim）末尾写的 `# cmd-shim-target=<绝对路径>`
+ *      —— 本仓 `.bin` 里 21 份垫片**全部**带这一行（当场数过）；它由生成垫片的那一步
+ *      自己写下，不需要我去解释 `$basedir` / `$basedir_win` / `%~dp0` 三种前缀；
+ *   ② 退回去读 `.cmd` / sh 里那行的**目标路径**（声明缺席或那条路径不在时——
+ *      比如 `node_modules` 是从别处搬来的，绝对声明会指到空气上，而垫片里那条相对路径还在）。
+ * 两层都拿不到 ⇒ `null`，**不退回 `shell: true`**
+ * （`spawn-shell-scan.mjs` 那条判据在场，别为绿放宽它）。
+ *
+ * @param {string} name 垫片名（`tsc` / `tsc6` / `vitest`，不带扩展名）
+ * @param {{root?: string}} [opts] `root` 仓库根（默认本仓根）
+ * @returns {string | null}
+ */
+export function resolveBinEntryByName(name, opts = {}) {
+  const { root = ROOT } = opts;
+  const binDir = path.join(root, "node_modules", ".bin");
+  const declared = readDeclaredTarget(path.join(binDir, name));
+  if (declared !== null) return declared;
+  for (const shimName of [`${name}.cmd`, name]) {
+    const target = readShimTarget(path.join(binDir, shimName));
+    if (target !== null) return target;
+  }
+  return null;
+}
+
+/**
+ * 垫片自己申报的目标（`# cmd-shim-target=<绝对路径>`）。
+ *
+ * 只认**行首的注释**那一种形状 —— pnpm 就是这么写的；把它当键值对去全文搜，
+ * 会被正文里任何写着这句话的注释带跑（垫片里的注释是人写的）。
+ * 声明是安装期烤进垫片的**绝对路径**，所以必须验存在：不验的话，一份从别的检出
+ * 搬来的 `node_modules` 会让它稳定指到不存在的文件上，而那正是「静默起不来」的形状。
+ *
+ * @param {string} shimPath 无扩展名那份垫片的绝对路径
+ * @returns {string | null}
+ */
+function readDeclaredTarget(shimPath) {
+  if (!fs.existsSync(shimPath)) return null;
+  let text;
+  try {
+    text = fs.readFileSync(shimPath, "utf8");
+  } catch {
+    return null;
+  }
+  const m = /^# cmd-shim-target=(\S.*)$/m.exec(text);
+  if (m?.[1] === undefined) return null;
+  const target = path.resolve(m[1].trim());
+  return fs.existsSync(target) ? target : null;
+}
+
+/**
+ * 从一份垫片里抠出「该交给 Node 的那个文件」—— 上面那个声明拿不到时的第二层。
+ *
+ * 两种垫片里「可执行位 + 目标」各占一行，两种都要认：
+ *   · `.cmd`：`"%~dp0\node.exe"  "%~dp0\..\@typescript\native\bin\tsc" %*`
+ *   · sh：    `exec node  "$basedir/../@typescript/native/bin/tsc" "$@"`
+ * 取法是**逐个看引号里的路径**：先剔掉 basename 为 `node` / `node.exe` 的（那是可执行位
+ * 本身），剩下第一个带 `%~dp0` / `$basedir` 的就是目标。不写"取第二个字段"那种正则，
+ * 是因为 pnpm 在不同版本里改过空格数、分支嵌套，还给 POSIX 写过
+ * `$basedir` / `$basedir_win` 两套（Windows 上带 `.exe` 那份）—— 而「路径 + 剔掉 node」
+ * 这件事在两种形状里都不变。
+ *
+ * 存在性检查顺手解决了平台差：POSIX 上 `.cmd` 里那些反斜杠路径解析不到 ⇒ 返回 `null`，
+ * 调用方接着去试无扩展名那份 shim。
+ *
+ * @param {string} shimPath 垫片文件的绝对路径
+ * @returns {string | null}
+ */
+function readShimTarget(shimPath) {
+  if (!fs.existsSync(shimPath)) return null;
+  let text;
+  try {
+    text = fs.readFileSync(shimPath, "utf8");
+  } catch {
+    return null;
+  }
+  const here = path.dirname(shimPath);
+  for (const raw of text.match(/"[^"]+"/g) ?? []) {
+    const token = raw.slice(1, -1).trim();
+    const isCmd = token.includes("%~dp0");
+    const isSh = token.includes("$basedir");
+    if (!isCmd && !isSh) continue;
+    const rel = isCmd
+      ? token.split("%~dp0").pop()
+      : token.replace(/^\$basedir(_win)?/, "");
+    if (rel === undefined || rel === "") continue;
+    /* 先剥掉前导分隔符再 resolve：`.cmd` 里那串是 `%~dp0\..\…`，`split("%~dp0")` 出来
+     * 带着**前导反斜杠**，而 `path.resolve` 会把以 `\` 开头的路径当**盘根相对**
+     * （`G:\..\…` ⇒ 直接指到别的卷目录上去，`existsSync` 一律 false，表现就是
+     * 「所有垫片都解析不到」）。sh 那份的 `$basedir/…` 同理带前导 `/`。 */
+    const target = path.resolve(
+      here,
+      rel.replace(/^[/\\]+/, "").replace(/\\/g, path.sep),
+    );
+    const base = path.basename(target).toLowerCase();
+    if (base === "node" || base === "node.exe") continue;
+    if (fs.existsSync(target)) return target;
+  }
+  return null;
+}
+
 /* 直接执行时念一句（人读的那一份；判据在用例里）：
  * `node scripts/package-bin-entry.mjs typedoc storybook vitest` */
 if (
@@ -104,10 +231,17 @@ if (
 ) {
   const names = process.argv.slice(2);
   if (names.length === 0) {
-    process.stdout.write("用法：node scripts/package-bin-entry.mjs <包名>…\n");
+    process.stdout.write(
+      "用法：node scripts/package-bin-entry.mjs [--by-name] <名字>…\n" +
+        "  默认按**包名**解析（`resolvePackageBinEntry`）；\n" +
+        "  `--by-name` 按**垫片名字**解析（`resolveBinEntryByName`，本仓 `tsc` / `tsc6` 那一族必须要它）。\n",
+    );
   }
-  for (const n of names) {
-    const entry = resolvePackageBinEntry(n);
-    process.stdout.write(`${n}: ${entry ?? "(解析不到 —— 没装)"}\n`);
+  const byName = names[0] === "--by-name";
+  for (const n of byName ? names.slice(1) : names) {
+    const entry = byName ? resolveBinEntryByName(n) : resolvePackageBinEntry(n);
+    process.stdout.write(
+      `${n}: ${entry ?? "(解析不到 —— 没装，或垫片不在)"}\n`,
+    );
   }
 }
