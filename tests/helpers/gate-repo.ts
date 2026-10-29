@@ -249,6 +249,16 @@ export interface GateRunResult {
   spawnError: string | null;
   /** 结束它的信号名（win32 上一般为 `null` —— 那一平台上终止不产生信号退出码）。 */
   signal: string | null;
+  /**
+   * 两条流**分开**的原值。
+   *
+   * 为什么需要它：`output` 的形状是「成功 ⇒ 只有 stdout；失败 ⇒ 两流合并」，
+   * 于是「退 0 但要在 stdout 上念一句话」那类判据（降档声明、跳过说明）没法用
+   * `output` 判 —— 那句要是只落在 stderr，`output` 里根本没有它，断言会假绿；
+   * 反过来想断言「这句话**不在** stdout」也做不到。取两条流原值即可，不改 `output`
+   * 那条既有约定（全仓门禁自测都挂在那上面）。
+   */
+  raw: { stdout: string; stderr: string };
 }
 
 /**
