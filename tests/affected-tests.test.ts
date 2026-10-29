@@ -712,6 +712,36 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
     expect(src).not.toMatch(/["']--changed["']\s*,\s*\.\.\.changed/);
   });
 
+  it("`--dry-run` 的 return 排在 `resolveVitestEntry()` **之前**（读数档不许依赖 node_modules）", () => {
+    /* 现场：`--dry-run` 的两处 return 曾排在 `resolveVitestEntry()` **之后**，而那是这个
+     * 启动器里第一个依赖 `node_modules` 的调用（解析不到就 `throw`）。于是「不起 vitest 的
+     * 读数档」反而成了唯一必须装好依赖的一档 —— 干净检出 / 只读沙箱上它红在
+     * 「解析不到 vitest 入口」，而它的全部用途（对账清单份数、问一句跑得起来吗）一个都用不上。
+     *
+     * 判据为什么是**源码顺序**而不是真起进程：`resolvePackageBinEntry` 按
+     * `createRequire(root)` 解析，而 vitest 进程内（哪怕 `root` 是 `/tmp` 的夹具）那条
+     * require 仍沿 `node_modules` 向上找到本仓那份 —— 于是「跑一次 `--full --dry-run`」
+     * 在改前改后**都**绿，这条用例就成了恒绿判据（本仓最狠的那一族）。顺序是唯一可判形态。
+     *
+     * ⚠️ 必须找**调用**（`= resolveVitestEntry()`）而不是裸名字：那份出口在本文件里
+     * 先被 `export { … }` 提了一次，按裸名字取 `indexOf` 会落到导出那一行上（实测）。 */
+    const src = fs.readFileSync(LAUNCHER, "utf8");
+    const CALL = "= resolveVitestEntry()";
+    for (const anchor of ['argv.includes("--full")', "const files = collectList()"]) {
+      const at = src.indexOf(anchor);
+      expect(at, `找不到定位锚点：${anchor}`).toBeGreaterThan(-1);
+      const after = src.slice(at);
+      const dry = after.indexOf("if (dryRun)");
+      const entry = after.indexOf(CALL);
+      expect(dry, `${anchor} 之后找不到 if (dryRun)`).toBeGreaterThan(-1);
+      if (entry < 0) continue; // 这一支根本不解析入口（更好）
+      expect(
+        dry,
+        `${anchor} 那一支里 if (dryRun) 必须排在 resolveVitestEntry() 之前（否则读数档依赖 node_modules）`,
+      ).toBeLessThan(entry);
+    }
+  });
+
   it("启动器在真实改动面量级上跑得起来（--dry-run 只走筛清单那一半，不起 vitest）", () => {
     const payload = hugeList().join("\n");
     const r = spawnSync(process.execPath, [LAUNCHER, "--dry-run"], {
