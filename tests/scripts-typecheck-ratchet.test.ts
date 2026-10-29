@@ -300,6 +300,11 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
         reason?: string;
       };
       diskFace: (list: string[], excludes: string[]) => { all: string[]; missed: string[] };
+      trackedMjs: (root: string) => Set<string> | null;
+      splitTrackedFace: (
+        mjs: string[],
+        tracked: Set<string> | null,
+      ) => { face: string[]; untracked: string[]; filtered: boolean };
     };
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
@@ -307,7 +312,17 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     const ts = createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
-    const face = cfg.mjs ?? [];
+    /* 面取**判据自己那一份求交结果**（ISSUE #2681）：账上记的是「这份提交里有多少脚本」，
+     * 用例若拿未筛的磁盘展开去比，就把刚修掉的那条耦合又请回来了 ——
+     * 平台上任何一份落在工作区的未入库产物都会让它红一次，而且指不出是谁。 */
+    const { face, untracked } = judge.splitTrackedFace(
+      cfg.mjs ?? [],
+      judge.trackedMjs(REPO_ROOT),
+    );
+    expect(
+      untracked,
+      `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${untracked.join("、")}`,
+    ).toEqual([]);
     const baseline = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
     ) as { face: number; total: number; files: Record<string, Record<string, number>> };
@@ -327,10 +342,81 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       0,
     );
     expect(summed).toBe(baseline.total);
-    /* 独立枚举：盘上每一份非点目录的 `.mjs` 都必须在面里（exclude 那些由配置自己说）。 */
+    /* 独立枚举：盘上每一份非点目录的 `.mjs` 都必须在面里（exclude 那些由配置自己说）。
+     * 这里**刻意用未筛的 `cfg.mjs`** —— 这一问判的是「include 有没有被改窄」，
+     * 是配置的事；未入库的产物由上面那条 `untracked` 单独点名，两问不混。 */
     const disk = walkMjs(REPO_ROOT, []);
-    const missed = judge.diskFace(face, cfg.excludes ?? []);
+    const missed = judge.diskFace(cfg.mjs ?? [], cfg.excludes ?? []);
     expect(missed.missed, `这些 .mjs 不在判决面上：${missed.missed.join(", ")}`).toEqual([]);
     expect(disk.length).toBeGreaterThanOrEqual(face.length);
+  });
+});
+
+/**
+ * 面 ⇄ 入库清单：未入库的产物不进账（ISSUE #2681）。
+ *
+ * 立案读数：平台那一跑展开 212 份而账上 210、本地是 211 = `git ls-files '*.mjs'` 的数，
+ * 红只给两个数 —— 「差一份」有两种相反的修法（该记账 vs 该把它归进 exclude）。
+ * 现在的口径：账记的是**这份提交**里有多少脚本，所以求交在判据里做、判据自己点名，
+ * 用例这一侧读的是**同一份实现**（`trackedMjs` + `splitTrackedFace`），不抄第二遍。
+ */
+describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
+  const judge = createRequire(import.meta.url)(
+    "../scripts/check-scripts-typecheck.cjs",
+  ) as {
+    trackedMjs: (root: string) => Set<string> | null;
+    splitTrackedFace: (
+      mjs: string[],
+      tracked: Set<string> | null,
+    ) => { face: string[]; untracked: string[]; filtered: boolean };
+  };
+
+  it("求交给出两侧；取不到 git 清单时明写「没筛」而不是「都不算」", () => {
+    const list = ["scripts/a.mjs", "scripts/stray.mjs"];
+    const both = judge.splitTrackedFace(list, new Set(["scripts/a.mjs"]));
+    expect(both.face).toEqual(["scripts/a.mjs"]);
+    expect(both.untracked).toEqual(["scripts/stray.mjs"]);
+    expect(both.filtered).toBe(true);
+    /* `null` 那一支是夹具的形状：拿不到清单 ⇒ 面 = 磁盘展开原值。
+       判它，是因为「筛成空集」长得像「面缩了」，而那是本次要修的反方向。 */
+    const noGit = judge.splitTrackedFace(list, null);
+    expect(noGit).toEqual({ face: list, untracked: [], filtered: false });
+  });
+
+  it("真 git 夹具：未入库那份被点名、不进面、它的红也不记账；提交之后就进账", () => {
+    const git = (args: string[], cwd: string) =>
+      execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const repo = mkdtempSync(join(tmpdir(), "2681-repo-"));
+    rmSync(repo, { recursive: true, force: true });
+    mkdirSync(repo, { recursive: true });
+    created.push(repo);
+    writeFileSync(join(repo, "tsconfig.scripts.json"), JSON.stringify(FIXTURE_CONFIG, null, 2), "utf8");
+    mkdirSync(join(repo, "scripts"), { recursive: true });
+    writeFileSync(join(repo, "scripts", "clean.mjs"), "export const a = 1;\n", "utf8");
+    git(["init", "-q"], repo);
+    git(["add", "-A"], repo);
+    git(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "seed"], repo);
+
+    /* 先让它自己写一份基线（否则「不记账」那一支会被「没有基线」那一步盖住，读不出因果）。 */
+    const seed = runCheck(["--update"], repo);
+    expect(seed.code, seed.output).toBe(0);
+
+    /* 未入库的一份**带错**（`const dead` 是本案那类死声明）：它必须被点名、且不进账。 */
+    writeFileSync(join(repo, "scripts", "stray.mjs"), "const dead = 1;\nexport const z = 1;\n", "utf8");
+    const stray = runCheck([], repo);
+    expect(stray.code, stray.output).toBe(0);
+    expect(stray.output).toContain("展开 2 份 .mjs（入库的 1 份");
+    expect(stray.output).toContain("面外未入库 1 份");
+    expect(stray.output).toContain("scripts/stray.mjs");
+    expect(stray.output).toContain("面外读数（未入库，不记账）");
+
+    /* 反向：同一份一旦入库，它就该被算 —— 否则上面那支只是「永远不看新文件」。 */
+    git(["add", "scripts/stray.mjs"], repo);
+    git(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "add stray"], repo);
+    const trackedNow = runCheck([], repo);
+    expect(trackedNow.code, trackedNow.output).toBe(1);
+    expect(trackedNow.output).toContain("展开 2 份 .mjs（入库的 2 份");
+    expect(trackedNow.output).toContain("scripts/stray.mjs TS6133");
+    expect(trackedNow.output).not.toContain("面外未入库");
   });
 });

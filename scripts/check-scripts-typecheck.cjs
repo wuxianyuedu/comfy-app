@@ -147,6 +147,74 @@ function configFace(ts) {
 }
 
 /**
+ * 这份检出里**入库的** `.mjs` 清单；取不到时返回 `null`（=「没筛」，不是「都不算」）。
+ *
+ * 为什么需要它（ISSUE #2681）：`configFace()` 走的是 TS 的 glob 引擎，它看的是
+ * 「这台机器的这个目录此刻有什么」，于是任何落在非点目录、非 exclude 里的构建产物
+ * 都会进面 —— 平台那一跑实测就比入库清单多 1 份，而红只给「212 vs 210」两个数
+ * （「差一份」有两种相反的修法：新加入库脚本没记账 vs 磁盘上多了一份没入库的产物）。
+ * 账本记的是**这份提交**里有多少脚本，所以比对口径也该按这份算。
+ *
+ * 三条形状：
+ *   · `git ls-files` 用 args 数组直起（不开 shell —— `shell:true` 既触发 DEP0190
+ *     也不转义参数，见 #2572 那条判据守的东西）；
+ *   · **只在这棵树的 git 顶层就是它时才筛**：用例会把 ROOT 指到临时夹具目录，
+ *     而夹具可能恰好落在某个仓库里 —— 那时 `ls-files` 返回的是**别人那份**的清单，
+ *     拿它筛会把整面筛空（表现是「判决面 0 份」，比不筛坏得多）。顶层对不上就返回 `null`；
+ *   · 取不到（没装 git / 不是仓库 / 超时）一律 `null` —— 「取不到」不等于「没有」。
+ *
+ * @param {string} root 被测的那棵树
+ * @returns {Set<string> | null} 相对路径（正斜杠）集合；取不到时 `null`
+ */
+function trackedMjs(root) {
+  const top = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (top.status !== 0 || !String(top.stdout ?? "").trim()) return null;
+  /* 比 realpath：Windows 上盘符大小写与 8.3 形态都会让字符串不同而目录相同。 */
+  const same = (p) => {
+    try {
+      return fs.realpathSync(p).replace(/\\/g, "/").toLowerCase();
+    } catch {
+      return path.resolve(p).replace(/\\/g, "/").toLowerCase();
+    }
+  };
+  if (same(String(top.stdout).trim()) !== same(root)) return null;
+  const listed = spawnSync("git", ["ls-files", "-z", "--", "*.mjs"], {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (listed.status !== 0 || listed.error) return null;
+  return new Set(
+    String(listed.stdout ?? "")
+      .split("\0")
+      .filter(Boolean)
+      .map((f) => f.replaceAll("\\", "/")),
+  );
+}
+
+/**
+ * 「配置展开的那一份」⇄「入库的那一份」的唯一一次求交。
+ *
+ * 判据与用例共用它 —— 账上的 `face` 与判据读到的面必须是同一个数，两处各写一遍
+ * 就是两份口径（§12.12，而这次的漂移恰好会伪装成「面与账不符」那种红）。
+ *
+ * @param {string[]} mjs `configFace()` 展开的结果（相对路径、正斜杠、已排序）
+ * @param {Set<string> | null} tracked `trackedMjs()` 的结果
+ * @returns {{face: string[], untracked: string[], filtered: boolean}}
+ */
+function splitTrackedFace(mjs, tracked) {
+  if (tracked === null) return { face: mjs, untracked: [], filtered: false };
+  const face = [];
+  /** @type {string[]} */
+  const untracked = [];
+  for (const f of mjs) (tracked.has(f) ? face : untracked).push(f);
+  return { face, untracked, filtered: true };
+}
+
+/**
  * 独立走一遍盘：仓库里所有**非点目录**下的 `.mjs`。这是判据自己的「应该有多少」，
  * 与配置展开那一份对账才得出「面有没有漏」。
  *
@@ -190,8 +258,10 @@ function diskFace(configList, excludes = []) {
  *
  * @param {{ok: true, mjs: string[], excludes: string[]} | {ok: false, reason: string}} cfg
  * @param {{listed: string[]}} ran tsc 实际报回来的 program 文件清单
+ * @param {string[]} [face] 入库的那一份（第②问用它；第①问坚持用未筛的 `cfg.mjs` ——
+ *        「include 有没有被改窄」是配置的问题，与磁盘上落了什么产物无关）
  */
-function faceProblems(cfg, ran) {
+function faceProblems(cfg, ran, face = cfg.ok ? cfg.mjs : []) {
   const problems = [];
   if (!cfg.ok) {
     return [cfg.reason];
@@ -210,7 +280,7 @@ function faceProblems(cfg, ran) {
         .map((f) => path.relative(ROOT, f).replaceAll("\\", "/"))
         .filter(Boolean),
     );
-    const notRun = cfg.mjs.filter((f) => !listed.has(f));
+    const notRun = face.filter((f) => !listed.has(f));
     if (notRun.length) {
       problems.push(
         `配置声称在判、tsc 却没报回来这些文件（⇒ 这一跑不可信）：\n` +
@@ -384,9 +454,29 @@ function main(io = {}) {
     console.error(`${TAG} ✗ ${cfg.reason}`);
     return 2;
   }
+  /* 账上那个 `face` 记的是「**这份提交**里有多少脚本」，所以比对前先按入库清单求交
+   * （ISSUE #2681：`configFace` 走磁盘 glob，平台上落进工作区的构建产物会把它顶大 1 份，
+   * 而红只给「212 vs 210」两个数 —— 那份多出来的东西谁都没提交过，也就没人能据此行动）。
+   * 求交只动「算不算进账/判不判它的红」这一半；「include 有没有被改窄」那条对账
+   * （下面 `faceProblems` 的第①问）仍拿**未筛**的那一份 —— 它判的是配置，不是磁盘。 */
+  const { face, untracked, filtered } = splitTrackedFace(cfg.mjs, trackedMjs(ROOT));
   console.log(
-    `${TAG} 判决面：${CONFIG_REL} 展开 ${cfg.mjs.length} 份 .mjs（脚本档全量，不是可达闭包）`,
+    `${TAG} 判决面：${CONFIG_REL} 展开 ${cfg.mjs.length} 份 .mjs（入库的 ${face.length} 份；脚本档全量，不是可达闭包）`,
   );
+  if (!filtered) {
+    /* 只有「这一棵树的 git 顶层不是它自己」才走到这里 —— 临时夹具那一档的形状。
+     * 必须念出来：不筛 ⇒ 面 = 磁盘展开，此时「面 ⇄ 账」那条比对的口径与真仓库不同。 */
+    console.log(
+      `${TAG} （没按入库清单筛：这棵树不是它自己的 git 顶层 ⇒ 面 = 磁盘展开原值）`,
+    );
+  }
+  if (untracked.length) {
+    console.log(
+      `${TAG} 面外未入库 ${untracked.length} 份（磁盘上有、git 清单里没有 ⇒ 不进账、` +
+        `它们的红也不记账，但逐景点名）：\n` +
+        untracked.map((f) => `    · ${f}`).join("\n"),
+    );
+  }
 
   const ran = noRun ? { ok: true, code: 0, output: "" } : run();
   if (!ran.ok) {
@@ -404,7 +494,7 @@ function main(io = {}) {
     return 2;
   }
 
-  const problems = faceProblems(cfg, { listed });
+  const problems = faceProblems(cfg, { listed }, face);
   if (problems.length) {
     console.error(`${TAG} ✗ 判决面不自证：\n  ` + problems.join("\n  "));
     return 1;
@@ -416,7 +506,26 @@ function main(io = {}) {
     return 0;
   }
 
-  const cur = tally(diags);
+  /* 未入库那份的报错**不并进账**（否则一份没人提交的产物能凭空地涨棘轮），但念出来：
+   * 「不判它」与「看不见它」是两句话 —— 后者会让下一次同类污染再次无名。 */
+  const untrackedSet = new Set(untracked);
+  const toRel = (f) =>
+    path.isAbsolute(f) ? path.relative(ROOT, f).replaceAll("\\", "/") : f;
+  const judged = diags.filter((d) => !untrackedSet.has(toRel(d.rel)));
+  if (judged.length !== diags.length) {
+    const offFace = new Map();
+    for (const d of diags) {
+      const rel = toRel(d.rel);
+      if (!untrackedSet.has(rel)) continue;
+      offFace.set(rel, (offFace.get(rel) ?? 0) + 1);
+    }
+    console.log(
+      `${TAG} 面外读数（未入库，不记账）：${[...offFace]
+        .map(([f, n]) => `${f} ${n} 处`)
+        .join("、")}`,
+    );
+  }
+  const cur = tally(judged);
   /* 语法 / 配置层的报错会让 tsc **收工**：实测（2026-10-28，拿一份带类型注解的 `.mjs`
    * 探针站在这一档上）整跑只打出一行 `TS8010`，其余 319 处**一个都不报** —— 不是它们
    * 没了，是语义检查那一跳根本没发生。少了这一格读数，「基线 320 → 当前 1」会被念成
@@ -439,7 +548,7 @@ function main(io = {}) {
   if (masked.length) {
     console.error(
       `${TAG} ✗ 这一跑里有语法 / 配置层的报错（${masked.slice(0, 5).join("、")}${masked.length > 5 ? ` 等 ${masked.length} 处` : ""}）——\n` +
-        `${TAG}   tsc 报完这些就**不做语义检查**（实测），所以上面那份清单只是判决面 ${cfg.mjs.length} 份里的一部分，\n` +
+        `${TAG}   tsc 报完这些就**不做语义检查**（实测），所以上面那份清单只是判决面 ${face.length} 份里的一部分，\n` +
         `${TAG}   少掉的格子是「没判」而不是「已修」。先把语法修掉再谈这一档的结论。`,
     );
   }
@@ -496,9 +605,9 @@ function main(io = {}) {
       );
       return 1;
     }
-    saveBase(cur, cfg.mjs.length);
+    saveBase(cur, face.length);
     console.log(
-      `${TAG} 基线已重写：面 ${cfg.mjs.length} 份 / 存量 ${cur.total} 处 / ${Object.keys(cur.files).length} 份文件`,
+      `${TAG} 基线已重写：面 ${face.length} 份 / 存量 ${cur.total} 处 / ${Object.keys(cur.files).length} 份文件`,
     );
     return 0;
   }
@@ -561,7 +670,7 @@ function main(io = {}) {
     return 1;
   }
   console.log(
-    `${TAG} ✓ 判决面 ${cfg.mjs.length} 份 / 存量 ${cur.total} 处（基线 ${baseline.total}）`,
+    `${TAG} ✓ 判决面 ${face.length} 份 / 存量 ${cur.total} 处（基线 ${baseline.total}）`,
   );
   return 0;
 }
@@ -570,6 +679,8 @@ function main(io = {}) {
 module.exports = {
   main,
   configFace,
+  trackedMjs,
+  splitTrackedFace,
   diskFace,
   faceProblems,
   parseOutput,
