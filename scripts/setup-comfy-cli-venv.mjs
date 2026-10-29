@@ -63,6 +63,11 @@ const VenvPy = isWin
 const UpgradeCheckIntervalHours = 24;
 const STEP_TIMEOUT_DEFAULT_MS = 900_000;
 
+/** 按行追加到本次运行的日志（写失败不改主流程结论）。
+ *
+ * @param {string} level
+ * @param {string} message
+ */
 function writeLog(level, message) {
   const ts = new Date().toTimeString().slice(0, 8);
   try {
@@ -73,6 +78,12 @@ function writeLog(level, message) {
   }
 }
 
+/** 进度快照（启动器读的是一份 JSON，不是日志）。
+ *
+ * @param {string} phase
+ * @param {string} message
+ * @param {{done?: boolean, failed?: boolean}} [flags]
+ */
 function writeStatus(phase, message, { done = false, failed = false } = {}) {
   try {
     mkdirSync(RunDir, { recursive: true });
@@ -92,7 +103,14 @@ function writeStatus(phase, message, { done = false, failed = false } = {}) {
   }
 }
 
-/** 跑一步子进程并收 stdout/stderr（maxBuffer 给足 —— pip 的输出很容易超 1MB）。 */
+/** 跑一步子进程并收 stdout/stderr（maxBuffer 给足 —— pip 的输出很容易超 1MB）。
+ *
+ * @param {string} label
+ * @param {string} file
+ * @param {string[]} args
+ * @param {number} [timeoutMs]
+ * @returns {{ ok: boolean, stdout: string, stderr: string }}
+ */
 function runStep(label, file, args, timeoutMs = STEP_TIMEOUT_DEFAULT_MS) {
   writeLog("STEP", label);
   writeLog("INFO", `> ${file} ${args.join(" ")}`);
@@ -103,7 +121,10 @@ function runStep(label, file, args, timeoutMs = STEP_TIMEOUT_DEFAULT_MS) {
     windowsHide: true,
     maxBuffer: 32 * 1024 * 1024,
   });
-  if (r.error?.code === "ETIMEDOUT") {
+  /* `spawnSync` 把 `error` 声明成 `Error`，而「超时 / 起不来」带的是 ErrnoException
+   * —— 那一句 `ETIMEDOUT` 只能从 `.code` 上读到（cast 形状同 ci-cp936-exit.mjs）。 */
+  const spawnError = /** @type {NodeJS.ErrnoException | undefined} */ (r.error);
+  if (spawnError?.code === "ETIMEDOUT") {
     writeLog("ERROR", `${label} 超时（${Math.round(timeoutMs / 1000)}s）`);
     return { ok: false, stdout: "", stderr: "" };
   }
@@ -159,6 +180,12 @@ function getLatestComfyCliVersion() {
   return /^comfy-cli\s*\(([^)]+)\)/m.exec(r.stdout)?.[1] ?? null;
 }
 
+/** 版本号逐段比（非数字段退回字符串序 —— PyPI 上带后缀的版号走的就是那一支）。
+ *
+ * @param {string} left
+ * @param {string} right
+ * @returns {number}
+ */
 function compareVersions(left, right) {
   const pa = String(left).split(/[.+-]/);
   const pb = String(right).split(/[.+-]/);
@@ -181,6 +208,11 @@ function readUpgradeState() {
   }
 }
 
+/** 记下这次检查的时刻与两端版号（节流读的就是这一份）。
+ *
+ * @param {string} installed
+ * @param {string} latest
+ */
 function saveUpgradeState(installed, latest) {
   try {
     mkdirSync(RunDir, { recursive: true });
@@ -198,6 +230,11 @@ function saveUpgradeState(installed, latest) {
   }
 }
 
+/** 距上次检查是否已到最小间隔（`--force` 直接放行）。
+ *
+ * @param {boolean} force
+ * @returns {boolean}
+ */
 function upgradeCheckDue(force) {
   if (force) return true;
   const state = readUpgradeState();
@@ -385,7 +422,11 @@ function main() {
   return 0;
 }
 
-/** 基础 Python 是否达到本仓下限（判据与话术同源：ci-env-probe.mjs 的唯一实现）。 */
+/** 基础 Python 是否达到本仓下限（判据与话术同源：ci-env-probe.mjs 的唯一实现）。
+ *
+ * @param {string} pythonPath
+ * @returns {boolean}
+ */
 function pythonMeetsFloor(pythonPath) {
   const r = spawnSync(pythonPath, ["--version"], {
     encoding: "utf8",
