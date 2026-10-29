@@ -125,10 +125,7 @@ import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
  * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。
  * 判决链仍只有 `scripts/affected-tests.mjs` 那一份（ISSUE #2240：换的只是**载体**，
  * 不是筛法 —— 改动面走 stdin，不再逐个铺进 argv）。 */
-import {
-  collectAttribute,
-  collectList,
-} from "./affected-launch-changed-list.mjs";
+import { collectList } from "./affected-launch-changed-list.mjs";
 /* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威），而写这套布局的
  * 三件事现在住在 `affected-launch-junit-io.mjs`：import 而不是各抄一份文件名 —— 抄两份的
  * 漂移形态是静默的，改名那侧照常跑、这侧读不到，而「读不到」在这一格长得和「这次没有
@@ -177,6 +174,11 @@ import {
  * 理由写在那份文件头：机制层再塞第六件事就越过 900 行硬闸，而越闸的形态不是报错，
  * 是「那一层读不动了」（§12.6 R5）。判据一个字没改，换的只是它住哪儿。 */
 import { announceQuiet, reporterArgs } from "./affected-launch-log-budget.mjs";
+/* quiet 档的**另一半**：那档只打点，「跑了哪些用例」得单独念一遍（同一刀拆法）。 */
+import { fileListReport } from "./affected-launch-file-list.mjs";
+/* 「改动面归因 ⇒ 拆小建议」那一跳（纯提示，不参与任何判决）住在同一份文件里：
+ * 本层已经贴住 900 行硬闸，而越闸的形态不是报错，是「那一层读不动了」（§12.6 R5 / §12.13）。 */
+import { collectAttribute } from "./affected-launch-scope-advice.mjs";
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { existsSync } from "node:fs";
@@ -422,19 +424,6 @@ export function scopeAdvice(input) {
   return lines.join("\n") + "\n";
 }
 
-/**
- * 调 `affected-tests.mjs --attribute` 拿「每个改动文件各自影响多少份」。
- *
- * 失败一律返回空数组：这条建议的分量只到「提示」，拿不到归因就不给建议 ——
- * 为一个纯提示让整个 C 组崩掉是把主次搞反了（与 `--attribute` 自己也「拿不到图时
- * 打空数组而不是报错」同口径）。**但必须打到 stderr**，静默吞掉会让「归因从来没
- * 成功过」这件事没人知道（同 §11.23「声明 ⇄ 读者」那一族）。
- *
- * ⚠️ 改动面**要一起送过去**（ISSUE #2240 的第三格）：原先这一档不带清单 ⇒
- * `affected-tests.mjs` 只能读暂存区，而平台侧没有暂存区 ⇒ 归因恒为空 ⇒
- * 那条「拆小」建议在平台上从来没生效过（只影响提示、不影响判定，但与本条同处一处失修）。
- */
-
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* ── 显式全量档（`--full`）───────────────────────────────────────────────
@@ -463,6 +452,14 @@ async function main(argv) {
     if (note) process.stderr.write(`[affected-launch] ${note}\n`);
     const quietFull = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
       process.stderr.write(t),
+    );
+    /* 这一档的「清单」不是一张表而是 vitest 自己收集出来的全集 —— 逐份列出来只会把
+     * 日志预算吃光，所以这里只念一句「没有清单可列」。不静默：quiet 档读的人要能分辨
+     * 「这一档本来就不列」与「列清单这件事坏了」。 */
+    process.stderr.write(
+      quietFull
+        ? "[affected-launch] 本次清单：全量档由 vitest 自行收集，故不逐份列出（quiet 只换 reporter）\n"
+        : "",
     );
     if (dryRun) {
       process.stdout.write(
@@ -526,6 +523,11 @@ async function main(argv) {
       `[affected-launch] 分文件耗时读数落在 ${junitDir}（组 C 账本，随本次跑清理）\n`,
     );
   }
+  /* 「跑了哪些用例」在 quiet 档由这里补（`--reporter=dot` 只打点，实测一跑上百份时
+   * 平台日志里一个文件名都没有，只剩 `Tests N passed`；而那份清单里排在最前面的是
+   * **103 份固定清单**，它们才是这次守的到底是什么）。打的是**送进 vitest 的清单**，
+   * 不为它多起一次 vitest、也不改任何判据。 */
+  process.stderr.write(fileListReport(files, { quiet }));
   /* 改动面归因只在**面大到值得说**时才去算：它是给「拆小」用的（见 `scopeAdvice`），
    * 而面小的时候那句话没有任何信息 —— 白算一次还会让每次提交多付约 220ms。
    * 判断用**已经拿到**的清单份数（`files.length - 固定清单份数`），不额外读一次 git。 */
