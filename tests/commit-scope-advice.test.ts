@@ -18,13 +18,20 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { scopeAdvice } from "../scripts/run-affected-tests.mjs";
+/* 这一格的两半（归因 + 话术）住在 `affected-launch-scope-advice.mjs` —— 从启动器那一层
+ * 搬出去是因为它贴住了 900 行硬闸（§12.6 R5），判据一个字没改。用例跟着走：**读者面是
+ * 函数自己**，不是它碰巧常住的那个文件。 */
+import { scopeAdvice } from "../scripts/affected-launch-scope-advice.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const LAUNCHER_PATH = path.join(ROOT, "scripts", "run-affected-tests.mjs");
+const ADVICE_PATH = path.join(ROOT, "scripts", "affected-launch-scope-advice.mjs");
 
 describe("受影响用例的启动器 —— 「大改动拆小」这条建议的执行者", () => {
+  /* 两处都要读：建议的**话术**在 advice 那份里，而「该不该印」那条判定留在启动器的
+   * 调用点上（它读的是已经拿到的清单份数）—— 判据说的事横跨这两份，读一份就判不全。 */
   const src = readFileSync(LAUNCHER_PATH, "utf8");
+  const adviceSrc = readFileSync(ADVICE_PATH, "utf8");
 
   it("面大时逐条点名「哪个改动文件把面撑大了」，并给出最大的一刀", () => {
     const text = scopeAdvice({
@@ -99,7 +106,7 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
      * `wantAdvice` 决定。这里两个方向都钉：① 阈值是个**实测划出来的分界**
      * （见 `SCOPE_ADVICE_MIN` 的文档），不是随手写的数；② 判定与调用点
      * 都读的是**已经拿到的清单份数**，不额外读 git。 */
-    expect(src).toMatch(/const SCOPE_ADVICE_MIN = \d+;/);
+    expect(adviceSrc).toMatch(/const SCOPE_ADVICE_MIN = \d+;/);
     expect(src).toMatch(/const wantAdvice = affectedCount >= SCOPE_ADVICE_MIN;/);
     // 小面上整段建议不该被拼出来（拼了却没印也是一种「写了没读者」）
     const small = scopeAdvice({
