@@ -192,7 +192,7 @@ describe("探测判据跨实现同源", () => {
     );
     // 探针名也要对得上，否则「在不在」的语义无从对照。
     expect(
-      typeof /* SAFETY: 类型断言已复核 */ (ts as { probeSchemaSync: unknown }).probeSchemaSync,
+      typeof (/* SAFETY: 类型断言已复核 */ (ts as { probeSchemaSync: unknown }).probeSchemaSync),
     ).toBe("function");
   });
 
@@ -271,9 +271,7 @@ describe("spawn 失败原因的两种形状都念得出来（ISSUE #2724）", ()
    * 「起 pnpm 失败（…）」那一行都必须说出原因 —— 此前串形状读 `.code` 双双
    * 兜底成 UNKNOWN。判据打在渲染出的那一行上（ISSUE #2660 的口径）。 */
   it("error 为串（spawnSettled 形状）⇒ 原文出现，不降级成 UNKNOWN", async () => {
-    const { pushSchema, describeSpawnFailure } = await import(
-      "../scripts/db-push-core.mjs",
-    );
+    const { pushSchema, describeSpawnFailure } = await import("../scripts/db-push-core.mjs");
     const result = pushSchema(process.cwd(), {
       run: () => ({ status: null, stdout: "", stderr: "", error: "ENOENT" }),
     });
@@ -282,9 +280,7 @@ describe("spawn 失败原因的两种形状都念得出来（ISSUE #2724）", ()
   });
 
   it("error 为 ErrnoException 形状 ⇒ 仍读 .code", async () => {
-    const { pushSchema, describeSpawnFailure } = await import(
-      "../scripts/db-push-core.mjs",
-    );
+    const { pushSchema, describeSpawnFailure } = await import("../scripts/db-push-core.mjs");
     const err = Object.assign(new Error("spawn pnpm ENOENT"), {
       code: "ENOENT",
     });

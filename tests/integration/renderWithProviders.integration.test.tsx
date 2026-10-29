@@ -112,8 +112,10 @@ function TagDemo() {
       {listQ.isLoading && <div data-testid="loading">加载中…</div>}
       {listQ.isError && (
         <div data-testid="error">
-          {/* SAFETY: 类型断言已复核 */ (listQ.error as { message?: string } | null)?.message ??
-            "加载失败"}
+          {
+            /* SAFETY: 类型断言已复核 */ (listQ.error as { message?: string } | null)?.message ??
+              "加载失败"
+          }
         </div>
       )}
       {listQ.data && (

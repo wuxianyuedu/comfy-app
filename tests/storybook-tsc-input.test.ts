@@ -292,7 +292,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     // 类型也要对得上：`APP_DEV_PORT` 不是数字时 reader 会整份回落到缺省值。
     for (const [key, value] of Object.entries(payload)) {
       expect(typeof value, `${key} 的类型与入库缺省值不一致`).toBe(
-        typeof /* SAFETY: 类型断言已复核 */ (APP_ORIGIN_DEFAULTS as Record<string, unknown>)[key],
+        typeof (/* SAFETY: 类型断言已复核 */ (APP_ORIGIN_DEFAULTS as Record<string, unknown>)[key]),
       );
     }
   });
