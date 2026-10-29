@@ -24,27 +24,108 @@
  * 平台信封上的 HTTP `status: 200` 与流水线过没过毫无关系。
  */
 
-import { execFileSync } from "node:child_process";
 import path from "node:path";
 
-import { buildSnFromOutput } from "./ship-exec.mjs";
+import { buildSnFromOutput, makeRunner } from "./ship-exec.mjs";
+
+/** 工作树根：`makeRunner` 的 `cwd`（与 `ship` 那一路同一个宿主适配层，不再自带 `execFileSync`）。 */
+const ROOT = path.resolve(import.meta.dirname, "..");
+/** 外部命令的执行者（测试里整体替换 `cnbCall` 的出口）。 */
+const run = makeRunner(ROOT);
+
+/**
+ * 起一次 `cnb`，把**「起不来」与「非零退出」都收成读数**，而不是让 spawn 层冒成一条 Node 栈。
+ *
+ * 为什么不在这里用隔壁那个 `cnbJson()`：它把三种情况折叠成同一个 `null`
+ * （`:131` ENOENT / `:134` 没有 `{` / `:143` 解析失败），而本探针要的恰恰是**分清**这三件事 ——
+ * 每种原因的下一动作不同（ISSUE #2690 的口径钉在这层）。所以复用只到 `makeRunner` 那一层。
+ *
+ * @param {string[]} args cnb 的参数（含 `-v`）
+ * @param {(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult} [runner]
+ *   真起命令的那一格（默认用 `makeRunner(ROOT)`）。**用例必须从这里喂**：
+ *   本件判的是「spawn 层报 ENOENT 时被不成一行读数」，而那条映射就发生在这一层 ——
+ *   实测把 `r.error` 那支压成空串，只注入 `readBuild` 的取数出口的用例**照旧绿**
+ *   （它绕过了这里），所以出口要开到真正起命令的那一层，不然判据是空的。
+ * @returns {{failure: string, text: string}} `failure` 非空即这一次没有取到响应；
+ *   `text` 是给下一层解析的原文（成功时只给 stdout，与改前逐字一致）
+ */
+export function cnbCall(args, runner = run) {
+  const r = runner("cnb", args);
+  if (r.error) {
+    return { failure: `cnb 起不来：${r.error}`, text: "" };
+  }
+  if (r.status !== 0) {
+    /* 错误面在 stderr（与 `ship-exec.mjs:62-65` 那条同源：只接 stdout 会念不出理由），
+     * 但**只截前 120 字**：平台失败时的原文可能带请求行，整段转发不是这份探针的职责。 */
+    const out = `${r.stdout}${r.stderr}`;
+    return { failure: `cnb 退 ${r.status}`, text: out };
+  }
+  return { failure: "", text: r.stdout };
+}
 
 /** 终态集合 —— 平台 `status` 的原值（`pending` / `running` 之外的都算停了）。 */
 const TERMINAL = new Set(["success", "failed", "cancel", "timeout", "skipped"]);
+
+/**
+ * 一跑的读数（`readBuild` 与 `emptyReading` 的返回值是同一件事的两条路）。
+ *
+ * `note` 是「取不到时的那句原因」，它的读者是 `formatReadingRow()`：非空时缀在结论行尾。
+ * 三句原因的下一动作各不相同（响应不是 JSON ⇒ 去看 `-v` 那一路到底打了什么；
+ * 响应里没有 data ⇒ 那个 sn 不存在；`cnb` 起不来 ⇒ 工具链那一格），而
+ * `status=(取不到)` 单独一行分不出这三件事 —— 所以「不静默」这句话落在**打印出来的行**上，
+ * 不落在字段名上。
+ *
+ * @typedef {Object} Reading
+ * @property {string} sn
+ * @property {string} status
+ * @property {string} createTime
+ * @property {string} startTime
+ * @property {string} endTime
+ * @property {string} title
+ * @property {string} note
+ */
+
+/**
+ * `build get-build-logs --sn` 那一页里的一行（平台给什么读什么，故全部可缺）。
+ *
+ * @typedef {Object} RunRow
+ * @property {string} [sn]
+ * @property {string} [createTime]
+ * @property {string} [endTime]
+ * @property {string | number} [duration]
+ * @property {string} [title]
+ * @property {string} [event]
+ */
 
 /**
  * 取一跑的读数。
  *
  * @param {string} repo `组织/仓库`
  * @param {string} sn 构建号
- * @returns {{sn: string, status: string, createTime: string, startTime: string, endTime: string, title: string}}
+ * @param {(args:string[])=>{failure:string,text:string}} [call] 取数那一格的出口
+ *   （默认打真平台）。用例要判的是「`cnb` 起不来时屏幕上是一行读数、还不是一段 Node 栈」，
+ *   那只能喂进一份起不来的结果 —— 与 `report()` 的 `readRow` 同一口径，
+ *   不去读源码里的字面量（ISSUE #2660 那一族）。
+ * @returns {Reading}
  */
-export function readBuild(repo, sn) {
-  const raw = execFileSync(
-    "cnb",
-    ["build", "get-build-status", "--repo", repo, "--sn", sn, "-v"],
-    { encoding: "utf8" },
-  );
+export function readBuild(repo, sn, call = cnbCall) {
+  const { failure, text: raw } = call([
+    "build",
+    "get-build-status",
+    "--repo",
+    repo,
+    "--sn",
+    sn,
+    "-v",
+  ]);
+  if (failure) {
+    /* 这一支就是本件要修的那一格：改前 `execFileSync` 在这里直接抛，屏幕上是一段
+     * Node 栈（`spawnSync cnb ENOENT`），既没有读数、也没有「为什么没有」。 */
+    return emptyReading(
+      sn,
+      raw ? `${failure}（前 120 字：${raw.slice(0, 120)}）` : failure,
+    );
+  }
   /* `-v` 打的是 **JSON**（实测 `{ "status": 200, "data": { "status": "error", … } }`），
    * 不是 YAML —— 第一版按 YAML 逐行取键，取到的是「(取不到)」，而那一屏看上去与
    * 「还在排队」一模一样。这正是本项目反复记过的失明形态（§13.6.2：没判 ≠ 绿）。 */
@@ -86,7 +167,11 @@ export function readBuild(repo, sn) {
   };
 }
 
-/** 毫秒 → ISO（取不到就是空串，不拿「此刻」冒充）。 */
+/** 毫秒 → ISO（取不到就是空串，不拿「此刻」冒充）。
+ *
+ * @param {number} ms
+ * @returns {string}
+ */
 function isoOf(ms) {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
 }
@@ -104,13 +189,26 @@ function isoOf(ms) {
  * @returns {{createTime: string, endTime: string, title: string, event: string}}
  */
 export function readRunWindow(repo, sn) {
-  const raw = execFileSync(
-    "cnb",
-    ["build", "get-build-logs", "--repo", repo, "--sn", sn, "-v"],
-    { encoding: "utf8" },
-  );
+  const { failure, text: raw } = cnbCall([
+    "build",
+    "get-build-logs",
+    "--repo",
+    repo,
+    "--sn",
+    sn,
+    "-v",
+  ]);
+  /* 这一路只给时间线，不给 `status`：取不到就把四格留空（改前的 `catch` 也是这个形状），
+   * 结论行上那句「为什么没有读数」由 `readBuild` 那一路的 `note` 承担 —— 两路拼一行，
+   * 不许在这一路再编一个理由。 */
+  if (failure) return { createTime: "", endTime: "", title: "", event: "" };
   try {
+    /* 平台这一路给的是一个数组，`JSON.parse` 回来是 `any` —— 那里从没被判过。
+     * 只在**进出的那一处**记一次形状（字段全可缺：平台给不给 `title` 不是本件能定的，
+     * 缺就是缺，下面的读法本来就按「取不到给空串」写）。 */
+    /** @type {RunRow[]} */
     const rows = JSON.parse(raw)?.data?.data ?? [];
+    /** @type {RunRow} */
     const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {};
     const create = Number(
       row.createTime ? Date.parse(row.createTime) : Number.NaN,
@@ -134,7 +232,12 @@ export function readRunWindow(repo, sn) {
   }
 }
 
-/** 读数取不到时的形态：`status` 照实说「取不到」，附一句原因（不静默、不冒充绿）。 */
+/** 读数取不到时的形态：`status` 照实说「取不到」，附一句原因（不静默、不冒充绿）。
+ *
+ * @param {string} sn
+ * @param {string} note
+ * @returns {Reading}
+ */
 function emptyReading(sn, note) {
   return {
     sn,
@@ -147,7 +250,14 @@ function emptyReading(sn, note) {
   };
 }
 
-/** 把平台的时间串（`2026-10-26T02:50:07Z` 或毫秒时间戳）换成毫秒；取不到给 `null`。 */
+/** 把平台的时间串（`2026-10-26T02:50:07Z` 或毫秒时间戳的**字符串**形态）换成毫秒；
+ *  取不到给 `null`。两个调用点喂的都是 `Reading` 上那几个字段，全是串 ——
+ *  所以参数不收 `number`：收了就会在里面立刻需要一次「到底是按 epoch 还是按日历算」的
+ *  判断，而那个判断在真实读数里没有对应物（实测平台这两路给的都是串）。
+ *
+ * @param {string | null | undefined} value
+ * @returns {number | null}
+ */
 export function toMs(value) {
   if (value == null || value === "") return null;
   if (/^\d+$/.test(value)) return Number(value);
@@ -162,11 +272,21 @@ export function toMs(value) {
  * 两件不同的事，所以答案里带 `stillRunning`，读的人不必自己再推。
  *
  * 参数：两个构建读数（`startTime` / `endTime` / `createTime`）与当前时刻。
- * 这里不用 `@param` 标签写它们 —— 那几行全是类型语法、一个中文都不含，
- * 而「注释一律中文」这条硬闸（§12.4.6）对 JSDoc 结构行的豁免面比这三行窄（实测拦在
- * 多行对象类型上）。散文写中文比跟判据的豁免边界打交道稳妥。
+ * 这里不用多行内联对象类型写它们 —— 那几行全是类型语法、一个中文都不含，
+ * 而「注释一律中文」这条硬闸（§12.4.6）对 JSDoc 结构行的豁免面比多行对象窄（实测拦在
+ * 多行对象类型上）。散文写中文比跟判据的豁免边界打交道稳妥 —— 形状收在上面那个
+ * `Reading` typedef 里，一行引用就够，不必再折一份。
+ *
+ * @param {Reading} a 左边的读数
+ * @param {Reading} b 右边的读数
+ * @param {number} [now] 当前时刻（一侧还在跑时按它收口）
+ * @returns {{verdict: string, seconds: number, stillRunning: boolean}}
  */
 export function overlap(a, b, now = Date.now()) {
+  /**
+   * @param {Reading} x 任一读数
+   * @returns {{start: number | null, end: number, stillRunning: boolean}}
+   */
   const span = (x) => {
     const start = toMs(x.startTime) ?? toMs(x.createTime);
     const end = toMs(x.endTime);
@@ -188,29 +308,54 @@ export function overlap(a, b, now = Date.now()) {
 }
 
 /**
+ * 一跑的那一行读数。
+ *
+ * `note` 非空时（只有「取不到」那两条路非空，成功那一路给空串）把原因缀在**同一行**行尾：
+ * 三个原因的下一动作不同，把它们打到屏幕上才是「不静默」——写进对象而没人念，
+ * 读的人看到的仍只是一句 `status=(取不到)`。
+ *
+ * @param {Reading} r
+ * @returns {string}
+ */
+export function formatReadingRow(r) {
+  const note = r.note ? `（${r.note}）` : "";
+  return (
+    `[probe] ${r.sn}  status=${r.status}  create=${r.createTime}  ` +
+    `start=${r.startTime}  end=${r.endTime}  title=${r.title}${note}`
+  );
+}
+
+/**
  * 一行一跑地打出来，附逐对相交读数。
+ *
+ * `readRow` 是**取数那一格的出口**（默认打真平台）：本判据要能被判「取不到时屏幕上
+ * 读不读得到那句原因」，而那只能靠喂进一份取不到的读数来判 —— 不是靠读源码里的字面量。
  *
  * @param {string} repo
  * @param {string[]} sns
+ * @param {(sn: string) => Reading} [readRow]
+ * @returns {Reading[]}
  */
-export function report(repo, sns) {
+export function report(
+  repo,
+  sns,
+  readRow = (sn) => ({ ...readBuild(repo, sn), ...readRunWindow(repo, sn) }),
+) {
   const now = Date.now();
   /* 两路拼成一行：`get-build-status` 给 `status`（终态只认它的原值），
    * `get-build-logs --sn` 给整跑的时间线。缺一路就如实说缺，不拿另一路顶。 */
-  const rows = sns.map((sn) => {
-    const run = readRunWindow(repo, sn);
-    return { ...readBuild(repo, sn), ...run };
-  });
+  const rows = sns.map((sn) => readRow(sn));
   for (const r of rows) {
-    console.log(
-      `[probe] ${r.sn}  status=${r.status}  create=${r.createTime}  start=${r.startTime}  end=${r.endTime}  title=${r.title}`,
-    );
+    console.log(formatReadingRow(r));
   }
-  for (let i = 0; i < rows.length; i += 1) {
-    for (let j = i + 1; j < rows.length; j += 1) {
-      const o = overlap(rows[i], rows[j], now);
+  /* 逐对相交：改成 `entries()` + `slice()` 而不是 `rows[i]` / `rows[j]` 按下标取 ——
+   * 后者在 `noUncheckedIndexedAccess` 下每次都是「可能 undefined」，而这两层循环的
+   * 下标本来就在界内。配对与顺序逐字不变（同一对、同一朝向）。 */
+  for (const [i, a] of rows.entries()) {
+    for (const b of rows.slice(i + 1)) {
+      const o = overlap(a, b, now);
       console.log(
-        `[probe] ${rows[i].sn} × ${rows[j].sn} ⇒ ${o.verdict}（${o.seconds}s${o.stillRunning ? "，有一侧仍在跑" : ""}）`,
+        `[probe] ${a.sn} × ${b.sn} ⇒ ${o.verdict}（${o.seconds}s${o.stillRunning ? "，有一侧仍在跑" : ""}）`,
       );
     }
   }
@@ -256,6 +401,11 @@ export function probeConfig(opts) {
   if (cancelInProgress != null)
     pipelineLock.push(`    cancel-in-progress: ${cancelInProgress}`);
   if (wait) pipelineLock.push(`    wait: true`, `    timeout: 900`);
+  /**
+   * @param {number} indent 缩进格数
+   * @param {{key: string, wait?: boolean, timeout?: number, expires?: string}} l 锁的三件
+   * @returns {string[]}
+   */
   const lockBlock = (indent, l) => {
     const pad = " ".repeat(indent);
     const out = [`${pad}lock:`, `${pad}  key: ${l.key}`];
@@ -264,6 +414,10 @@ export function probeConfig(opts) {
     if (l.expires != null) out.push(`${pad}  expires: ${l.expires}`);
     return out;
   };
+  /**
+   * @param {number} indent 缩进格数
+   * @returns {string[]}
+   */
   const body = (indent) => {
     const pad = " ".repeat(indent);
     return [
@@ -311,24 +465,25 @@ export function probeConfig(opts) {
  * @param {string} title
  */
 export function startProbe(repo, event, title) {
-  const raw = execFileSync(
-    "cnb",
-    [
-      "build",
-      "start-build",
-      "--repo",
-      repo,
-      "--branch",
-      "master",
-      "--event",
-      event,
-      "--sync",
-      "false",
-      "--title",
-      title,
-    ],
-    { encoding: "utf8" },
-  );
+  const { failure, text: raw } = cnbCall([
+    "build",
+    "start-build",
+    "--repo",
+    repo,
+    "--branch",
+    "master",
+    "--event",
+    event,
+    "--sync",
+    "false",
+    "--title",
+    title,
+  ]);
+  /* 这是**写动作**，失败要响亮（与上面两路取读数不同）：区别只在于改前它冒成一段
+   * Node 栈，现在念得出是哪一层没起来 —— 退出码 0 依旧不等于发出去了，sn 那格照旧独立回读。 */
+  if (failure) {
+    throw new Error(`${failure}：start-build 这一步没有取到响应\n${raw}`);
+  }
   const sn = buildSnFromOutput(raw);
   if (!sn) {
     throw new Error(`起跑失败（没读回 sn）：\n${raw}`);
@@ -336,7 +491,13 @@ export function startProbe(repo, event, title) {
   return sn;
 }
 
-/** 轮询到终态；超时返回最后一读（`status` 原值照给，不替它编结论）。 */
+/** 轮询到终态；超时返回最后一读（`status` 原值照给，不替它编结论）。
+ *
+ * @param {string} repo
+ * @param {string} sn
+ * @param {number} [timeoutMs]
+ * @returns {Reading}
+ */
 export function waitTerminal(repo, sn, timeoutMs = 30 * 60 * 1000) {
   const deadline = Date.now() + timeoutMs;
   let last = readBuild(repo, sn);
@@ -360,12 +521,19 @@ const USAGE = [
   "`start` / `pair` 起的事件名必须**已经在 `.cnb.yml` 的 `$:` 段里**（`--config` 不替代整份配置）。",
 ].join("\n");
 
-/** 极简旗标解析：只要 `--k v` 与 `--flag` 两形态，够用了，不引依赖。 */
+/** 极简旗标解析：只要 `--k v` 与 `--flag` 两形态，够用了，不引依赖。
+ *
+ * @param {string[]} argv
+ * @returns {Record<string, string | boolean>}
+ */
 function parseFlags(argv) {
   /** @type {Record<string, string | boolean>} */
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
+    /* `noUncheckedIndexedAccess` 下按下标取到的是 `string | undefined`，而 `i < length`
+     * 已保证这一格有值 —— 守卫只是把这件事写给类型检查器（同 `dev.mjs` 那一处）。 */
+    if (a === undefined) continue;
     if (!a.startsWith("--")) continue;
     const k = a.slice(2);
     const next = argv[i + 1];
@@ -394,6 +562,12 @@ if (
       console.error(USAGE);
       process.exit(2);
     }
+    /**
+     * 旗标值 → 三态布尔（`false` 要能区别于「没给」，那一格决定 `cancel-in-progress` 写不写）。
+     *
+     * @param {string | boolean | undefined} v
+     * @returns {boolean | undefined}
+     */
     const bool = (v) =>
       v === true
         ? true

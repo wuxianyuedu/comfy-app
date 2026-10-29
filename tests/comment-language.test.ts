@@ -233,6 +233,46 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/jsdoc-prose-param-name-prose.ts");
   });
 
+  test("@property 的**字段名**恰是英文虚词时同样豁免（`@property {string} note`）", ({
+    repo,
+  }) => {
+    // 与上面那条同因的另一半：名字位置的剥除原先只覆盖 `@param` / `@arg` /
+    // `@argument`，`@property` 漏在外面 —— 于是 `@property {string} note`
+    // （`note` 在虚词表里）这条**纯结构行**被判成英文散文。
+    // 现场：ISSUE #2589 批 6 给 `ci-probe-lock-readout.mjs` 补 `Reading` typedef 时，
+    // 硬闸当场拦下（存量已清零 ⇒ 新增即阻断），而它拦的是一行没有英文说明的字。
+    repo.write(
+      "src/lib/jsdoc-prose-property-name.ts",
+      [
+        "/**",
+        " * 一跑的读数。",
+        " *",
+        " * @typedef {Object} Reading",
+        " * @property {string} sn",
+        " * @property {string} note",
+        " * @property {string} [did]",
+        " */",
+        "export const keep = 1;",
+        "",
+      ].join("\n"),
+    );
+    expect(repo.run().code).toBe(0);
+  });
+
+  test("@property 后面**真有**英文说明 → 仍被统计（豁免不放过散文）", ({
+    repo,
+  }) => {
+    // 上一条的反向锚点：剥掉字段名之后剩下的若真是说明句，虚词照旧命中 ——
+    // 豁免面只到「@tag + 类型块 + 名字」那三段为止。
+    repo.write(
+      "src/lib/jsdoc-prose-property-name-prose.ts",
+      "/** @property {string} note the reason the reading was unavailable */\nexport const a = 1;\n",
+    );
+    const r = repo.run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/jsdoc-prose-property-name-prose.ts");
+  });
+
   test("JSDoc 结构块的**续行**（多行类型）同样不参与统计", ({ repo }) => {
     // 多行 typedef 只有第一行带 tag，其余行只剩类型语法。
     // 不豁免续行的话，`version: string | null }} ProbeResult` 这类行会被当成英文注释。

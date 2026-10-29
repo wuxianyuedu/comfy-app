@@ -409,6 +409,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // （用了共享夹具 / 只造临时目录 / 拉别的可执行文件 / 夹具文件）每一条都得有人钉住，
   // 而它们是「下一次有人写门禁自测」时才走得进的路径，所以必须进固定清单。
   "tests/gate-repo-boilerplate-gate.test.ts",
+  // 探针还原的**口径**（ISSUE #2593 / 规范 §11.16.1）：用例改真实入库文件之后，还原的凭据
+  // 只许是「进用例那一刻的字节」，不许是 git 索引 —— `git checkout -- <文件>` 分不出
+  // 「探针留的脏」与「这条分支上正在做的未提交工作」，而处置逐字相同，实测吃掉过两次
+  // 同分支上的文档改动（92 行，第二次靠 `docs/generated/` 的镜像才恢复回来）。
+  // 它同时是回潮判据（全仓扫 `tests/**` 的**文本**，命中那两种形态即红），而回潮的形态
+  // 正是「下一次有人写收尾网时顺手敲 `git checkout`」—— 那种改动不会把这条带进受影响集
+  // （它读的是别的文件的文本，import 图追不到），所以必须进固定清单。
+  "tests/probe-restore.test.ts",
   // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
   // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
   // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
@@ -664,6 +672,16 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.githooks/**` wide 兜底（改钩子 → `withFixed("all")` 跑全固定清单），加一步的那条 PR
   // 自己就会跑这份测试、当场抓到条数不符 —— 红在正确的地方，不再全员冻结。
   "tests/commit-gate-tier.test.ts",
+  // eslint 档位的**阳性对照**（ISSUE #2541 收尾）：三批之后全仓又回到 0 警，而
+  // 「0 警」是**状态**不是**能力** —— #2541 的本质正是「空集意义上的 0 警」
+  //（core 面规则一条都没跑过，却报了 0 条）。这条造已知违例真跑一次 eslint，
+  // 断言守着的那几条会拦；再靠 `--sabotage` 钉住「它会红」（恒绿的对照不是对照）。
+  // 触发面是「有人动 `eslint.config.js`」，而配置住在仓库根、本判据住在 tests/，
+  // import 图追不到；更关键的是那种改动**往往正是为了关掉某条规则**（加白名单 /
+  // 收 `files` 面），此时「只在受影响时才跑」恰好把自己排除在外 —— 与
+  // `tests/spawn-shell-scan.test.ts`（改完静态闸要补阳性对照，ISSUE #2562 缺口 1）
+  // 同因，必须固定跑。
+  "tests/eslint-gate-canary.test.ts",
   // 「`src/**` 那一侧的 `import.meta` 只有 `url` 是活的」（ISSUE #2599）：这条读的是
   // **磁盘文本**（`readdirSync` + 正则扫 `src/**`），不在任何 import 图里 —— 把
   // `import.meta.dirname` 带进 `src/env.js` 的那笔改动，增量面一条都不会把它带上去。
@@ -671,4 +689,18 @@ export const FIXED_STRUCTURAL_TESTS = [
   // （§13.5.25），于是唯一执行者只剩**每日那一跑**：从落地到被看见隔了一次派发。
   // 进固定清单 = 这笔改动**当场**红，不再等每日（#2114 那一族的处置方向）。
   "tests/env-import-meta-shape.test.ts",
+  // 「`build-desktop` 念得出每一步多久」这件事的执行者（ISSUE #2574）。它读的是
+  // **磁盘文本**（`readFileSync` + 按 `console.log` 调用站点取），而 `build-desktop.mjs`
+  // 不被任何测试 import —— 改它不会把这条带进增量面；反过来，「有人把读数删掉」或
+  // 「把时长塞进 `fail()` 的话术里（读数升级成判定）」也都不在任何改动面上。
+  // 不登记的话它的表现不是红，是**下次再撞「CI 上看起来像卡死」时，屏幕里仍然只有体积、
+  // 没有时刻** —— 与 `tests/env-import-meta-shape.test.ts`（同因，#2599）一条方向。
+  "tests/build-desktop-step-readings.test.ts",
+  // 「`.qoderignore` 是工具写的那一份」这件事的执行者（ISSUE #2712）。它读的是**两份文本**
+  // （入库那份 ⇄ `scripts/qoder-ignore.mjs` 渲染那份）+ `package.json` 里那条出口，而
+  // `.qoderignore` 不被任何代码 import、出口住在仓库根 —— 静态 import 图两条都追不到：
+  // 改那份表**不会**把这条带进增量面。不登记的表现不是红，是「装了等于没装」：别人
+  // 跑一次 `pnpm qoder:ignore` 拿到一份比仓里那份更窄的表，而他没有任何理由怀疑它。
+  // 同因（读磁盘文本、与本次改动无关也必须响）与上面两条一条方向。
+  "tests/qoder-ignore.test.ts",
 ];

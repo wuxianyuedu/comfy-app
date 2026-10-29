@@ -18,7 +18,11 @@ import path from "node:path";
 const root = path.resolve(import.meta.dirname, "..");
 const HOOKS_PATH = ".githooks";
 
-/** 在仓库内跑一条 git 命令，返回 { ok, stdout }；git 缺失/非检出时 ok=false。 */
+/** 在仓库内跑一条 git 命令，返回 { ok, stdout }；git 缺失/非检出时 ok=false。
+ *
+ * @param {string[]} args
+ * @returns {{ ok: boolean, stdout: string }}
+ */
 function git(args) {
   try {
     const r = spawnSync("git", args, {
@@ -32,6 +36,10 @@ function git(args) {
   }
 }
 
+/** 统一的 `[hooks]` 前缀那一行。
+ *
+ * @param {string} message
+ */
 function say(message) {
   process.stdout.write(`[hooks] ${message}\n`);
 }

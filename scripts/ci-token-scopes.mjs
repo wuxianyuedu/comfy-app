@@ -389,14 +389,78 @@ export async function probeAll(opts) {
 }
 
 /**
+ * 「在哪看」—— 把这一次读数映射到**读者要找的那个位置**（ISSUE #2551 的追问）。
+ *
+ * 这一行是被一句话逼出来的：读数早就打出来了，而人来问「它每天在日志里，在哪里，我没看到」。
+ * 也就是说，**读数落在日志里、而读者找不到它，与没有读数等价** —— 这与
+ * `ci-workspace-probe.mjs` 里「job 标签只取 basename，两跑并排一模一样」是同一类病。
+ *
+ * 映射按**触发口**（`CNB_EVENT` 是唯一权威）：同一条 `ci-token-scopes.mjs` 挂在三处，
+ * 而三处的**路径完全不同**（`.cnb.yml` 里 `每日令牌权限读数` / `令牌权限读数` /
+ * 桌包那一格）。所以「去哪个流水线、哪一格里看」不能靠读的人自己拼。
+ *
+ * ⚠️ 默认退化成「照事件名去找」而不是猜一个具体格名：事件名认不出来时，写死一条路径
+ * 就是在教人去看一个可能不存在的地方 —— 那比不写更坏（§13.6.4.1 同一条纪律）。
+ *
+ * @param {{event?: string | null, label?: string | null}} ctx 这一跑的事件与流水线名
+ * @returns {string} 一行「在哪看」
+ */
+export function whereItLives(ctx) {
+  const event = String(ctx.event ?? "");
+  const label = ctx.label ? `${ctx.label} 流水线` : "流水线";
+  /**
+   * ⚠️ 定时那两档**不能只按 `crontab:` 前缀分**：01:00 是每日档（第二格「每日令牌权限读数」），
+   * 03:00 是桌包档（endStages 里的「令牌权限读数」）。第一版就是这么写的，用例当场抓到
+   * 它把桌包那一跑指去了每日档的格名 —— 指错位置比不指更坏，所以这两条先于通用前缀判。
+   * 时刻若再挪（`.cnb.yml` 注释里连挪了三次 `0 4` → `0 2` → `0 0` → `0 1`），这里要同批改；
+   * 认不出来的就落进最后那条按事件名指路的出口，而不是落回一个陈旧的格名。
+   */
+  const dailyCron = /^crontab:\s*0\s+1\s/.test(event);
+  const packageCron = /^crontab:\s*0\s+3\s/.test(event);
+  /** @type {{match: (e: string) => boolean, where: string}[]} */
+  const lanes = [
+    {
+      match: (e) => e === "pull_request",
+      where: `这一跑：${label} → 最后两格（endStages）里的「令牌权限读数」`,
+    },
+    {
+      match: () => packageCron,
+      where: `这一跑：${label} → 最后两格（endStages）里的「令牌权限读数」`,
+    },
+    {
+      match: () => dailyCron,
+      where: `这一跑：${label} → 第二格「每日令牌权限读数」`,
+    },
+    {
+      match: (e) => e.startsWith("web_trigger_package") || e.startsWith("api_trigger_package"),
+      where: `这一跑：${label} → 最后两格（endStages）里的「令牌权限读数」`,
+    },
+    {
+      match: (e) => e.startsWith("web_trigger_daily") || e.startsWith("api_trigger_daily"),
+      where: `这一跑：${label} → 第二格「每日令牌权限读数」`,
+    },
+  ];
+  const lane = lanes.find((l) => l.match(event));
+  return (
+    `在哪看：${lane ? lane.where : `按事件名 ${event || "（不在场）"} 找到这一跑的流水线，` +
+      "在它的 stage 列表里找「令牌权限读数」/「每日令牌权限读数」那一格"}` +
+    " · 平台不把每一格的日志摊在流水线首页，要点进那一格才看得见"
+  );
+}
+
+/**
  * 读数：哪一族够得着、哪一族被平台点名缺什么、哪一族没量到。
  *
  * @param {ProbeRow[]} rows
- * @param {{repo: string, event: string | null, branch: string | null}} ctx
+ * @param {{repo: string, event: string | null, branch: string | null, label?: string | null}} ctx
  * @returns {string[]}
  */
 export function formatReadout(rows, ctx) {
   const lines = [
+    /* ⚠️ 这一行只认 `ctx.label`，不认 `ctx.event` —— 见下面 `whereItLives()` 里那条：
+     * 这一格在哪看，是「事件 → 哪条流水线」的映射，不是这一跑的事件名。 */
+    whereItLives(ctx),
+    "",
     `== 这一跑的令牌够得着哪些能力（repo=${ctx.repo}）==`,
     `事件=${ctx.event ?? "（不在场）"} · 分支=${ctx.branch ?? "（不在场）"}` +
       "（平台按「事件 + ref」给权限，同一枚令牌换事件就换一套面）",
@@ -536,6 +600,9 @@ export async function main(opts = {}) {
     log(
       formatReadout(rows, {
         repo,
+        /* 流水线名只用来把「在哪看」念准（`每日生产构建` / `质量门禁` / `桌面成品包`）；
+         * 环境里没有它时那一行会退回按事件名指路，而不是猜一个格名。 */
+        label: env.CNB_PIPELINE_NAME ?? null,
         event: env.CNB_EVENT ?? null,
         branch: env.CNB_BRANCH ?? null,
       }).join("\n"),

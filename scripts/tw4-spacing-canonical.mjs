@@ -58,6 +58,7 @@ const PX_VALUE = /^(\d+(?:\.\d+)?)px$/;
  * className 同形，不剥会让 `--check` 报出不存在的候选、`--write` 去改注释里的示例
  * （「此前写成 `h-[22px]`」被改写成「此前写成 `h-5.5`」= 解释与被解释的东西一起漂）。 */
 
+/** @param {string} file @returns {string} */
 function read(file) {
   return fs.readFileSync(file, "utf8");
 }
@@ -71,6 +72,7 @@ async function loadDesignSystem() {
         "请改用项目主题编译并重新推导换算（不要直接跑 --write）。",
     );
   }
+  /** @param {string} id @param {string} base */
   const loadStylesheet = async (id, base) => {
     const file =
       id === "tailwindcss"
@@ -89,12 +91,32 @@ const ds = await loadDesignSystem();
 /**
  * 单个候选 → 规范化候选（不改写时返回 null）。
  * @param {string} token
+/**
+ * 一条换算改写。
+ *
+ * `key` 只有 spacing 换算那一路给（`base + bang`，即「这条换算挂在哪个 spacing 槽位上」），
+ * 同值 `w-K h-K → size-K` 那一路不给 ⇒ 写成可选是**如实**，不是放宽。
+ *
+ * ⚠️ 当场量到：**全文件没有一处读 `key`**（消费点只有 `from` / `to`，以及 `changes.length`）——
+ * 与批 6 那次「`note` 写进对象而没人念」同一形，处置记在 ISSUE #2717：
+ * 不在这支类型笔里顺手删字段（那是改输出，不是改类型）。
+ * @typedef {Object} Change
+ * @property {string} from
+ * @property {string} to
+ * @property {string} [key]
+ */
+
+/**
+ * @param {string} token
  * @returns {{ from: string, to: string, key: string } | null}
  */
 function canonicalize(token) {
   const match = TOKEN.exec(token);
   if (!match) return null;
-  const [, base, value, bang] = match;
+  /* 三个捕获组都给了默认值：`TOKEN` 里它们都是必选的，但在 `noUncheckedIndexedAccess`
+   * 下解构出来仍是 `string | undefined`，而这一串值要进 `Number(…)`、模板串与
+   * `base + bang`（那个 key 是**下游按它分组**的，留 undefined 进去就是假分组）。 */
+  const [, base = "", value = "", bang = ""] = match;
   const px = PX_VALUE.exec(value);
   if (!px) return null;
   const k = Number(px[1]) / BASE_SPACING_PX;
@@ -122,11 +144,14 @@ const H_TOKEN = /^h-(\d+(?:\.\d+)?!?)$/;
  * 两步：① spacing 换算；② 同值 `w-K` / `h-K` 合并成 `size-K`。第二步的必要性来自
  * 第一步 —— 原本写 `w-[10px] h-[10px]` 时 P80（视图层 w-N 与 h-N 同值）数不到它
  * （值在方括号里），换成裸数值 `w-2.5 h-2.5` 后就成了硬闸命中项。
- */
+ * @param {string} content
+ * @param {Change[]} changes @returns {string} */
 function rewriteStringContent(content, changes) {
   const pieces = content.split(/(\s+)/);
   for (let i = 0; i < pieces.length; i += 2) {
-    const hit = canonicalize(pieces[i]);
+    const piece = pieces[i];
+    if (piece === undefined) continue;
+    const hit = canonicalize(piece);
     if (!hit) continue;
     pieces[i] = hit.to;
     changes.push(hit);
@@ -135,9 +160,13 @@ function rewriteStringContent(content, changes) {
   const wSlots = new Map();
   const hSlots = new Map();
   for (let i = 0; i < pieces.length; i += 2) {
-    const w = W_TOKEN.exec(pieces[i]);
+    /* 取一次再判（第七次「补类型不是纯减法」：这两个 `.exec(…)` 此前喂的是
+     * `pieces[i]`，而隐式 any 让「可能没取到」不报；上一步把参数类型指实之后才现形）。 */
+    const piece = pieces[i];
+    if (piece === undefined) continue;
+    const w = W_TOKEN.exec(piece);
     if (w) wSlots.set(w[1], i);
-    const h = H_TOKEN.exec(pieces[i]);
+    const h = H_TOKEN.exec(piece);
     if (h) hSlots.set(h[1], i);
   }
   let merged = false;
@@ -163,7 +192,7 @@ function rewriteStringContent(content, changes) {
     .replace(/^[ \t]+|[ \t]+$/g, "");
 }
 
-/** @param {string} text @param {Array<{from:string,to:string}>} changes */
+/** @param {string} text @param {Change[]} changes */
 function rewriteText(text, changes) {
   return rewriteLiterals(text, (content) => {
     const before = changes.length;
@@ -173,6 +202,15 @@ function rewriteText(text, changes) {
   }).text;
 }
 
+/**
+ * 递归列出 `.tsx` / `.ts` 文件（相对仓库根的绝对路径）。
+ *
+ * 返回类型必须写出来：`yield* walk(full)` 让 tsc 自推时「返回类型依赖自己的推断结果」
+ * （TS7023），与批 7 那一份 `tw4-canonical-report.mjs` 的同一个函数同一形 ——
+ * 两份是各自实现的（一个扫 `.css`/`.snap`、一个只扫 TS），不是抄漏了注解。
+ * @param {string} dir
+ * @returns {Generator<string>}
+ */
 function* walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -191,6 +229,7 @@ const touched = [];
 for (const file of files) {
   const before = read(file);
   /** @type {Array<{from:string,to:string}>} */
+  /** @type {Change[]} */
   const changes = [];
   const after = rewriteText(before, changes);
   if (after === before) continue;

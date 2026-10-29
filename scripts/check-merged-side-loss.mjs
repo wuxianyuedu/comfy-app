@@ -80,7 +80,10 @@ import process from "node:process";
 import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
 import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
 
-/** 一条 git 命令；失败回 `null`（取不到 ≠ 空值，调用方据此判 `2`）。 */
+/** 一条 git 命令；失败回 `null`（取不到 ≠ 空值，调用方据此判 `2`）。
+ * @param {string[]} args
+ * @param {string} [input] 给标准输入喂内容时传（`git cat-file --batch` 那一路）
+ * @returns {string | null} */
 function git(args, input) {
   try {
     return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
@@ -104,7 +107,7 @@ export function inGitRepo() {
  *
  * 分叉线上的两次提交逐文件比下来会有一片「疑似退回」，而它们全是**正当的并线差异**
  * （实测反例 `0c38dce0` vs `af589681`）。所以这不是「可选的严格性」，是判据正确性的前提。
- */
+ * @param {string} ancestor @param {string} descendant @returns {boolean} */
 export function isAncestor(ancestor, descendant) {
   try {
     execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
@@ -122,15 +125,20 @@ export function isAncestor(ancestor, descendant) {
  * 对 `baseline..sha` 之间改动的每个文件，判它 `sha` 那一版是否 == 基线的某个**祖先**
  * 版本（即退回了）。判据与本文件头「判据形状」一节逐字对应。
  *
+ * @param {{sha: string, baseline: string}} target 待查的那一笔与它对照的基线那一笔
  * @returns {{ok: true, lost: string[]} | {ok: false, reason: string}} 取不到事实时给 `ok:false`
  */
 export function scan({ sha, baseline }) {
   if (!inGitRepo()) return { ok: false, reason: "不在 git 检出里" };
 
-  for (const [ref, label] of [
+  /** 成对遍历写成元组数组，不写裸字面量：后者被推成 `string[][]`，解构出的
+   *  `ref` / `label` 各带 `| undefined`（与批 9 / 批 10 同一形，第三次撞上）。 */
+  /** @type {Array<[string, string]>} */
+  const refs = [
     [sha, "待查提交"],
     [baseline, "基线提交"],
-  ]) {
+  ];
+  for (const [ref, label] of refs) {
     if (git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]) === null) {
       return { ok: false, reason: `${label}取不到：${ref}` };
     }
@@ -159,11 +167,16 @@ export function scan({ sha, baseline }) {
 
   /* 候选集里不含基线那一版自己（与逐文件读法同口径：判的是「退回成**更早**的某一版」，
    * 而「等于基线版」在上面已按正常前移放过）。 */
+  /** @type {Map<string, string[]>} */
   const candidates = new Map();
+  /** @type {string[]} */
   const specs = [];
   for (const f of files) {
     specs.push(`${sha}:${f}`, `${baseline}:${f}`);
-    const older = hist.get(f).filter((s) => s !== baseline);
+    /* `historyByFile` 建表时就按 `files` 逐份预置了空数组，所以这个键必在；
+     * `?? []` 是写给类型看的（`Map.get` 在 `noUncheckedIndexedAccess` 下是 `| undefined`），
+     * 与批 7 那处「取一次 + 兜底并说明键必在」同一形。 */
+    const older = (hist.get(f) ?? []).filter((s) => s !== baseline);
     candidates.set(f, older);
     for (const h of older) specs.push(`${h}:${f}`);
   }
@@ -182,7 +195,7 @@ export function scan({ sha, baseline }) {
      * `blobAt` 现在是查已取回的表，不再起进程。 */
     const hit = findEarlierVersion({
       result,
-      historyShas: candidates.get(f),
+      historyShas: candidates.get(f) ?? [], // 同一圈 `files` 刚逐个 set 过，键必在（见上面那句注释）
       blobAt: (older) => blob.get(`${older}:${f}`) ?? null,
     });
     if (hit) lost.push(f);
@@ -190,7 +203,8 @@ export function scan({ sha, baseline }) {
   return { ok: true, lost };
 }
 
-/** 从 argv 里取一条 `--key value` 形式的选项。 */
+/** 从 argv 里取一条 `--key value` 形式的选项。
+ * @param {string[]} argv @param {string} key @returns {string} */
 function optionValue(argv, key) {
   const i = argv.indexOf(key);
   return i === -1 ? "" : (argv[i + 1] ?? "");

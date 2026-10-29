@@ -23,11 +23,21 @@ import {
   readBranchLedger,
 } from "../scripts/freshness-ledger.mjs";
 import { readFreshnessLedger } from "../scripts/freshness-gate.mjs";
+import {
+  restoreToSnapshot,
+  snapshotPaths,
+} from "./helpers/probe-restore.ts";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 const E2E_REL = "scripts/.e2e-freshness.json";
 const BRANCH = "ci/freshness-ledger-test";
+
+/**
+ * 还原的凭据 = 进本文件那一刻的字节（快照取在模块加载时，比 `beforeAll` 更早）。
+ * 这一份用例要往**真实入库文件**上写一份假账，所以它欠工作树一次还原（§11.16.2）。
+ */
+const PRISTINE = snapshotPaths([path.join(ROOT, E2E_REL)]);
 
 /**
  * 账里 `e2e` 那一档。
@@ -79,8 +89,14 @@ beforeAll(() => {
     `commit-tree ${tree} -p ${parent} -m "test: machine ledger"`,
   ).trim();
   git(`update-ref refs/heads/${BRANCH} ${sha}`);
-  // 还原工作树 E2E_REL（回到 master 那份真实账），保持测试环境干净。
-  git(`checkout HEAD -- ${E2E_REL}`);
+  /* 还原工作树里那份账 = **进本文件那一刻的字节**，不是 `git checkout HEAD -- <文件>`
+   * （ISSUE #2593 / §11.16.2：那一句会把同一分支上未提交的账改动一起抹掉，
+   * 而这份文件正是被本单点名修掉的第二处现场）。 */
+  const { failed } = restoreToSnapshot(PRISTINE);
+  expect(
+    failed.map((f) => `${f.abs} → ${f.why}`),
+    "探针没能把 `scripts/.e2e-freshness.json` 还原成进用例前那一版",
+  ).toEqual([]);
   git(`reset -q HEAD -- ${E2E_REL}`);
   process.env.FRESHNESS_LEDGER_BRANCH = BRANCH;
 });
@@ -88,6 +104,9 @@ beforeAll(() => {
 afterAll(() => {
   delete process.env.FRESHNESS_LEDGER_BRANCH;
   git(`branch -D ${BRANCH}`);
+  /* 再走一次：`beforeAll` 若在 `update-ref` 那一步之前抛了，假账就还留在工作树上。
+   * 已一致时这里一次写都不做（`restoreToSnapshot` 先比字节）。 */
+  restoreToSnapshot(PRISTINE);
 });
 
 describe("freshness ledger 机器分支回看（#2247）", () => {

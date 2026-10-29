@@ -7,14 +7,22 @@
  * Windows 侧的双击入口（`tools/start/verify-quality.ps1`）走 `.ps1`；Linux / macOS / CI
  * 直接跑本文件（`pnpm check:all`），不需要 pwsh。
  *
+ * ⚠️ 「同契约」指的是**门禁清单、退出码、话术形状**三份，不含两条流的分派：本文件的
+ * 红行走 stderr（`emitVerdict()` 一处决定，为的是机器侧能用 `2>` 单独捞出来，
+ * ISSUE #2653），而 `.ps1` 那一侧是人对着控制台看 —— 两条流落在同一屏里，分派没有消费者。
+ * 因此既不要为此改 `.ps1`，也不要反过来把本文件的红行拉回 stdout。
+ *
  * 为什么不把口令写进文档让人手敲：门禁是**多步串联**（三条命令 + 依赖一致性预检 +
  * 已知基线失败排除）。写成文档就有「漏跑一步 / 顺序反了 / 只跑了自己记得的那个」的
  * 空间，而这些都不会报错——只是让绿灯变得不可信（规范 §9.2 第 3 条禁止的静默失败）。
  *
  * 用法：
  *   node scripts/quality-gate.mjs                # 全部
- *   node scripts/quality-gate.mjs --mode lint    # 只跑一项
+ *   node scripts/quality-gate.mjs --mode lint    # 只跑一项（`--mode=lint` 同形）
  *   node scripts/quality-gate.mjs --mode all     # 显式全部
+ * 除此之外**不认任何旗标**：拼错的形式与缺值的 `--mode` 一律退 2 并念出认识的形态，
+ * 不静默回落到「全部」——那在一份带 `vitest --coverage` 的入口上是最贵的一种误读
+ * （ISSUE #2709）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -35,7 +43,59 @@ import { renderVerdict } from "./ci-log.mjs";
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
+/**
+ * 一条判决落在哪条流，**只在这一处决定**：红走 stderr、其余走 stdout。
+ *
+ * 这句话此前是本文件里的两份答案（ISSUE #2653）：`reportVerdict()` 用两个 `for`
+ * 各写一遍分流，而 `fail()` 与整轮小结根本没写 —— 于是「红要能从一屏绿里被 `2>`
+ * 单独捞出来」只覆盖到各档自己那一行，失败路径与「这一轮红了几档」那三行仍在 stdout。
+ * 判决行、它前面那段段头、它后面那几行出路**必须同一条流**：出路留在 stdout，
+ * 捞出来就只剩半截判决。
+ *
+ * @param {{state?: "ok"|"skip"|"red", gate?: string, subject?: string, detail?: string, hint?: string, items?: Array<string>, before?: Array<string>, after?: Array<string>}} verdict
+ *   除 `before` / `after` 之外的字段原样交 `renderVerdict()`（纯函数，本文件不碰它的形状）
+ */
+function emitVerdict({ before = [], after = [], ...verdict }) {
+  const write = verdict.state === "red" ? console.error : console.log;
+  for (const line of before) write(line);
+  for (const line of renderVerdict(verdict)) write(line);
+  for (const line of after) write(line);
+}
+
+/**
+ * 失败路径的统一出口（ISSUE #2588）：此前四条失败路径调用一个**从未声明过**的
+ * `fail()`，真跑进去时抛 `ReferenceError: fail is not defined` —— 结论方向没错
+ * （仍然非零退出），但失败原因那一格是空的，读者拿到的是一屏指向门禁自身的栈。
+ * 形状收进 `renderVerdict()` 一份（§12.12）：红行由共享 formatter 给，
+ * 提示行与退出码仍由调用点自己负责（四个站点的码各不相同：null / 1 / 2）。
+ *
+ * @param {string} message 本来要说的那句可行动的中文
+ * @param {{gate?: string, before?: Array<string>, after?: Array<string>}} [options]
+ *   `gate` 判据名（缺省按本入口自己的名字念）；`before` / `after` 是同一条失败块的
+ *   段头与出路 —— 跟着判决走同一条流，不许留在 stdout
+ */
+function fail(
+  message,
+  { gate = "quality-gate", before = [], after = [] } = {},
+) {
+  emitVerdict({ state: "red", gate, detail: message, before, after });
+}
+
 /** 门禁清单：与 quality-gate.ps1 的 $Blocks 一一对应（新增门禁两处同步）。 */
+/**
+ * 一档判决的登记：屏幕上念什么（`label`）、怎么起（`args`）、要不要进 `all` 那一档
+ * （`run: false` = 只在显式点名时跑）。
+ *
+ * 这三件就是**实现里真实存在的三个键**（当场数过 10 档，没有一个条目带第四个键）——
+ * 写这个 typedef 的直接收益是那 4 格「按字符串索引 GATES」不再报隐式 any：
+ * `GATES[key]` 过去在 `{ typecheck: {…}, lint: {…}, … }` 这个字面量类型上按 string
+ * 取，取到的类型是 `any`，于是 `GATES[k].run !== false` 与 `GATES[k].label` 都不曾被判过。
+ * @typedef {Object} Gate
+ * @property {string} label
+ * @property {string[]} args
+ * @property {boolean} [run]
+ */
+/** @type {Record<string, Gate>} */
 const GATES = {
   typecheck: { label: "Typecheck (tsc --noEmit)", args: ["typecheck"] },
   lint: {
@@ -56,7 +116,10 @@ const GATES = {
    */
   format: {
     label: "oxfmt format ratchet",
-    args: ["../scripts/check-format.cjs"],
+    /* `--changed`：判改动面 ∩ 扫描面（printWidth 80→100 起全库档对未迁移的
+     * 存量恒红，见 check-format.cjs 文件头；check:all 是「按需完整验证」，
+     * 对格式的读数与平台 PR 那一格同口径 —— 判「这次带来的那批」）。 */
+    args: ["../scripts/check-format.cjs", "--changed"],
   },
   test: {
     label:
@@ -72,6 +135,10 @@ const GATES = {
      *      所以这一步不能收窄，也别学它把 `--coverage` 加进钩子的增量档。
      *   2. 红与覆盖率已经**各自记账**（`vitest.config.ts` 的 `reportOnFailure`），
      *      不再出现「一条试用例红 → 报告不产出 → 门槛静默缺席」。
+     * ⚠️ 第三条是后补的（ISSUE #2669）：**CI 那一档已经不判门槛**（整体/目录级覆盖率
+     *      改成只上报），所以这一步是那份登记处现在**唯一**会算它的地方 —— 本条目
+     *      显式给子进程带 `COMFY_COVERAGE_ENFORCE=1`（见 `runGate`）。摘掉它，
+     *      149 条门槛就又回到「写在配置里、没人判」那个原病上。
      * 代价说清楚：这一步的墙钟从约 10 分钟涨到带 instrumentation 的量级（实测全量
      * 591s → 更长），`check:all` 本来就是「按需完整验证」那一档，不是每次提交。 */
     args: ["exec", "vitest", "run", "--coverage"],
@@ -196,10 +263,40 @@ const GATES = {
   },
 };
 
+/**
+ * 命令行只有一件事可给：跑哪一档。**两种形式都认**（`--mode lint` 与 `--mode=lint`）。
+ *
+ * 为什么要专门认等号形式（ISSUE #2709 的现场）：原实现只匹配 `argv[i] === "--mode"`，
+ * 于是 `--mode=lint` 落不进任何分支，而循环对**不认识的参数一个字都不做** ——
+ * `mode` 保持初值 `"all"`，表现是「以为自己在重跑一档，实际把整套默认档跑完」
+ * （含 `vitest --coverage`，实测 10 分钟 / 1209 行输出）。
+ * 「没提要求」在这份工具里意味着最重的那一档，所以不认识的写法不许被读成它：
+ * 收进 `unknown` 交给调用点退 2，**而不是静默继续**。
+ * @param {string[]} argv
+ * @returns {{mode: string, unknown: string[]}} */
 function parseArgs(argv) {
-  const out = { mode: "all" };
+  /** @type {{mode: string, unknown: string[]}} */
+  const out = { mode: "all", unknown: [] };
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--mode") out.mode = argv[++i] || "all";
+    const arg = argv[i] ?? "";
+    if (arg === "--mode") {
+      const next = argv[i + 1];
+      /* 提了旗标没给值 ⇒ 不算「没提要求」：原实现那句 `|| "all"` 正是本单要收的那一格
+       * （缺值 / 不认识的形式统统落回 `"all"`，而 `"all"` 在这份工具里是最重的一档）。 */
+      if (next === undefined || next.startsWith("--")) {
+        out.unknown.push(arg);
+        continue;
+      }
+      i += 1;
+      out.mode = next;
+      continue;
+    }
+    if (arg.startsWith("--mode=")) {
+      out.mode = arg.slice("--mode=".length);
+      if (!out.mode) out.unknown.push(arg);
+      continue;
+    }
+    out.unknown.push(arg);
   }
   return out;
 }
@@ -210,9 +307,9 @@ function parseArgs(argv) {
  * 从前这里用 `==> 标题` 打段头、`  [OK] … passed` / `  [FAIL] … failed (exit N)` 打结论，
  * 而同一台机上的钩子打的是 `── check: <标签>` + `  [ok] ── …`、跑批打的是 `[重档] … ok`。
  * 三段话术说同一件事，且「这一档没跑」在三种形状里没有位置。
- */
+ * @param {Gate} gate @param {number} code @returns {void} */
 function reportVerdict(gate, code) {
-  const lines = renderVerdict({
+  emitVerdict({
     state: code === 0 ? "ok" : "red",
     gate: gate.label,
     detail: code === 0 ? "通过" : `退出码 ${code}`,
@@ -221,9 +318,6 @@ function reportVerdict(gate, code) {
         ? ""
         : "先修这一档，再重跑 `pnpm check:all`（`--mode <档名>` 可以只重跑它）",
   });
-  /* 绿走 stdout、红走 stderr：红的那些行要能从一屏绿里被 `2>` 单独捞出来。 */
-  for (const line of code === 0 ? lines : []) console.log(line);
-  for (const line of code === 0 ? [] : lines) console.error(line);
 }
 
 /**
@@ -270,30 +364,46 @@ function resolvePnpm() {
   const invocation = pnpmInvocation([]);
   if (invocation)
     return { command: invocation.command, prefixArgs: invocation.args };
-  fail("PATH 上找不到可用的 pnpm —— 门禁无法运行。");
-  console.log(
-    "        自查：pnpm check:toolchain（会打印选中的形态与探测结果）",
-  );
-  console.log(
-    "        修复：corepack enable && corepack prepare pnpm@<packageManager 版本> --activate",
-  );
+  fail("PATH 上找不到可用的 pnpm —— 门禁无法运行。", {
+    after: [
+      "        自查：pnpm check:toolchain（会打印选中的形态与探测结果）",
+      "        修复：corepack enable && corepack prepare pnpm@<packageManager 版本> --activate",
+    ],
+  });
   return null;
 }
 
-function runGate(pnpm, key) {
-  const gate = GATES[key];
-  /** 实际的命令行形态：宿主（`.ps1` 形态时是 pwsh/powershell）+ pnpm 参数。 */
-  const invocation = (args) => [pnpm.command, ...pnpm.prefixArgs, ...args];
+/**
+ * @param {{command: string, prefixArgs: string[]}} pnpm 上面那个解析器的成功形
+ *   （不重述它的字段，取它已声明的那一份）
+ * @param {string} key 这一档在 `GATES` 里的名字（只用来判 `test` 那一档要不要带排除清单）
+ * @param {Gate} gate 由调用点交出（见 `main` 里那段「解一次」的注释）
+ * @returns {number} */
+function runGate(pnpm, key, gate) {
+  /** 实际的命令行形态：宿主（`.ps1` 形态时是 pwsh/powershell）+ pnpm 参数。
+   *  分成 `{command, args}` 而不是打平成一个数组：调用点要的是「可执行件 + 参数表」
+   *  两件事，打平之后从数组头取那一项在类型上就是 `string | undefined`，
+   *  而 `spawnSync(…)` 的首参要的是 `string`（这一格是 `gate.args` 有了类型之后现形的）。
+   * @param {string[]} args @returns {{command: string, args: string[]}} */
+  const invocation = (args) => ({
+    command: pnpm.command,
+    args: [...pnpm.prefixArgs, ...args],
+  });
   // 门禁脚本是 `node scripts/xxx.cjs` / `xxx.mjs` 而不是 pnpm 子命令：用 node 直接跑，
   // 免得再套一层 pnpm exec（那层只带来解析开销与 Windows 的 .cmd 差异）。
   // 认 `.mjs` 与认 `.cjs` 是同一条理由 —— 只认后者会让新加的 ESM 门禁被当成
   // pnpm 参数（`pnpm ../scripts/x.mjs`），表现是一句看不懂的「command not found」。
-  if (/\.(?:c|m)?js$/.test(gate.args[0] ?? "")) {
-    const script = path.resolve(ROOT, "scripts", path.basename(gate.args[0]));
+  /* 解一次首项而不是按三次下标：`gate.args[0]` 在 `noUncheckedIndexedAccess` 下是
+   * `string | undefined`，原来那句 `?? ""` 只喂了正则，`path.basename(…)` 那一处并没有被
+   * 它保护 —— 空串本来也匹配不上 `\.(?:c|m)?js$`，所以「首项在且是脚本」这一条判据
+   * 与原来的覆盖面逐字相同。 */
+  const [firstArg, ...restArgs] = gate.args;
+  if (firstArg && /\.(?:c|m)?js$/.test(firstArg)) {
+    const script = path.resolve(ROOT, "scripts", path.basename(firstArg));
     // 回显解释器与脚本的**真实**路径（不写成 `node scripts/x.cjs` 的近似形态）：
     // 这一步用的是 `process.execPath`，与 PATH 上的 `node` 未必是同一个。
-    echoCommandLine(process.execPath, [script, ...gate.args.slice(1)]);
-    const r = spawnSync(process.execPath, [script, ...gate.args.slice(1)], {
+    echoCommandLine(process.execPath, [script, ...restArgs]);
+    const r = spawnSync(process.execPath, [script, ...restArgs], {
       cwd: ROOT,
       stdio: "inherit",
       windowsHide: true,
@@ -311,20 +421,32 @@ function runGate(pnpm, key) {
   }
   // 回显真正被执行的那条（`pnpm.command` 可能是经 PowerShell 宿主的 `.ps1`），
   // 而不是把参数拼到「pnpm」这个字面名后面 —— 后者在 Windows 上常常不是同一条。
-  const [command, ...argv] = invocation(args);
+  const { command, args: argv } = invocation(args);
   echoCommandLine(command, argv);
   const result = spawnSync(command, argv, {
     cwd: ROOT,
     stdio: "inherit",
     windowsHide: true,
+    /* 覆盖率门槛的**判定**在 CI 那一档已经改成「只上报」（ISSUE #2669），所以
+     * `vitest.config.ts` 那 149 条登记值需要一个真的会算它的执行者，否则它就退化成
+     * 又一份「写在配置里、没人判」的死配置（那正是下面这段注释记录的原病）。
+     * `check:all` 就是那个执行者：它是本地「按需完整验证」那一档，不是每次提交、
+     * 也不是平台流水线（`grep quality-gate .cnb.yml .githooks/*` 当场核过：只有
+     * `package.json` 的 `check:all` 与 `tools/**\/*.ps1` 起它）。
+     * 只给 `test` 这一条带，别的条目原样继承 —— 它不是全局开关。 */
+    env:
+      key === "test"
+        ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" }
+        : process.env,
   });
   // 「命令没起来」与「跑完但非零退出」分开报：前者 stderr 通常是空的，
   // `status ?? 1` 只给一个退出码等于没说原因（ISSUE #576 的形态）。
   if (result.error) {
+    const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
     fail(
-      `起 ${command} 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
+      `起 ${command} 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}`,
+      { after: [`        实际命令：${formatCommandLine(command, argv)}`] },
     );
-    console.log(`        实际命令：${formatCommandLine(command, argv)}`);
     return 1;
   }
   const code = result.status ?? 1;
@@ -333,38 +455,63 @@ function runGate(pnpm, key) {
 }
 
 function main() {
-  const { mode } = parseArgs(process.argv.slice(2));
+  const { mode, unknown } = parseArgs(process.argv.slice(2));
+  /* 不认识的形式**先退**，一次档都不跑：这一格的代价是分钟级的（默认档含
+   * `vitest --coverage`），把「拼错」读成「跑全套」是本入口能犯的最贵的那种误读。
+   * 退码与「未知门禁」同形（2 = 这一步没有结论，不是「跑过了且绿」）。 */
+  if (unknown.length > 0) {
+    fail(
+      `不认识的参数：${unknown.join(" / ")} —— 本入口只认 --mode <档名>（也认 --mode=<档名>）；` +
+        `可选：${Object.keys(GATES).join(" / ")} / all`,
+    );
+    return 2;
+  }
   // `run: false` 的门禁只在**显式点名**时跑：`all` 是「日常该完整跑一遍」那一档，
   // 而像素档的代价与它的结论有效性（基线带平台）都不属于那一档。
-  const defaultKeys = Object.keys(GATES).filter((k) => GATES[k].run !== false);
+  /* 遍历表本身而不是「先取键再按键取回值」：`Object.keys(GATES)` 之后 `GATES[k]` 在类型上
+   * 又是 `Gate | undefined`（与上面那条「解一次」是同一个口径的两种落点）。
+   * `entries()` 一次拿到键与值，判据不变（`run: false` 的那几档不进默认档）。 */
+  const defaultKeys = Object.entries(GATES)
+    .filter(([, gate]) => gate.run !== false)
+    .map(([k]) => k);
   const keys = mode === "all" ? defaultKeys : [mode];
+  /* 先把键解成 `Gate` 再往下走。原来这里只判一次存在性，后面 `runGate` 里再按同一个
+   * `string` 索引取一遍 —— 那就是批 13 记下的同一形：守卫在调用点、函数自己拿回
+   * `Gate | undefined`。解一次并把解出来的那份交给执行者，判据与类型看到的是同一份事实
+   * （话术、返回码 2、以及「先全量校验再跑依赖预检」这个顺序都没变）。 */
+  /** @type {Array<{key: string, gate: Gate}>} */
+  const plan = [];
   for (const k of keys) {
-    if (!GATES[k]) {
+    const gate = GATES[k];
+    if (!gate) {
       fail(
         `未知门禁：${mode}（可选：${Object.keys(GATES).join(" / ")} / all）`,
       );
       return 2;
     }
+    plan.push({ key: k, gate });
   }
 
   const drift = dependencyDrift();
   if (drift.drift) {
-    console.log("");
-    console.log("==> 依赖一致性预检");
-    fail(`依赖与 pnpm-lock.yaml 不一致（${drift.reason}）。`);
+    /* 段头、逐项差异、出路 —— 与判决行是**同一块**，分开走两条流等于捞出来只剩半截判决。 */
+    const after = [];
     if (drift.diff) {
-      console.log(
+      after.push(
         "  差异明细（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）：",
+        ...renderDriftReport(drift.diff, { maxPerSection: 8 }),
       );
-      for (const line of renderDriftReport(drift.diff, { maxPerSection: 8 }))
-        console.log(line);
     }
-    console.log(
+    after.push(
       "        请先关闭所有正在运行的本项目窗口（dev server 会锁住原生模块），",
+      "        然后在项目根目录执行：pnpm install",
+      "        详见 docs/guides/sync-after-pull.md",
+      "",
     );
-    console.log("        然后在项目根目录执行：pnpm install");
-    console.log("        详见 docs/guides/sync-after-pull.md");
-    console.log("");
+    fail(`依赖与 pnpm-lock.yaml 不一致（${drift.reason}）。`, {
+      before: ["", "==> 依赖一致性预检"],
+      after,
+    });
     return 1;
   }
 
@@ -373,17 +520,17 @@ function main() {
 
   let exitCode = 0;
   const red = [];
-  for (const k of keys) {
-    const code = runGate(pnpm, k);
+  for (const { key, gate } of plan) {
+    const code = runGate(pnpm, key, gate);
     if (code !== 0) {
       exitCode = code;
-      red.push(GATES[k].label);
+      red.push(gate.label);
     }
   }
-  console.log("");
   /* 整轮末尾按「跑了几档、红了几档、红的是谁」说一次：各档自己那几行只回答
-   * 「我这一档怎么了」，回答不了「这一轮全跑完没有」。 */
-  const lines = renderVerdict({
+   * 「我这一档怎么了」，回答不了「这一轮全跑完没有」。红的那几行（含「红的是谁」
+   * 那一张名单）与判决同一条流 —— 决定下一动作的就是这一行。 */
+  emitVerdict({
     state: exitCode === 0 ? "ok" : "red",
     gate: "一键门禁",
     detail:
@@ -394,9 +541,9 @@ function main() {
       exitCode === 0
         ? ""
         : "依次修上面那几档；只重跑其中一档用 `--mode <档名>`（可选：pnpm check:all --mode lint）",
+    items: red.map((name) => `· ${name}`),
+    before: [""],
   });
-  for (const line of lines) console.log(line);
-  for (const name of red) console.log(`    · ${name}`);
   return exitCode;
 }
 

@@ -17,6 +17,10 @@
  *     （AGENTS 硬规则 1「只用 pnpm」；说明性引用需带纠正词，见 checkLedgerCommands）。
  *   - 门禁步骤引用口径：规范文档/索引里不得用「第 N 步」引用 pre-commit 或已删除的平台流水线，
  *     须写日志里打印的标签（ISSUE #1374；见 checkGateStepIndexRefs）。
+ *   - 用户面命令口径：会被照着敲的那几份文档里不得出现「生产运行时不存在的驱动」的
+ *     require / import 形状（`better-sqlite3` 是 devDependencies，桌包与 standalone 里
+ *     根本没有 —— ISSUE #2580；见 checkRuntimeAbsentDriverCommands，
+ *     口径与遍历面登记在 docs/reference-facts.md §3.8）。
  *
  * 接入方式：**由平台侧 `.cnb.yml` 调用**（`pnpm doc:check` 是同一条命令的手动入口）。
  *
@@ -225,8 +229,72 @@ function checkLedgerCommands() {
 }
 
 /**
- * 门禁步骤的引用口径：规范文档与索引里引用 `.githooks/pre-commit`（或已删除的平台流水线）
- * 的某一步，一律写**钩子日志里打印的标签**（`── check: <标签>`）或那一步跑的脚本名，
+ * 用户面文档里不许出现「本仓生产运行时不存在的驱动」的**可执行命令形状**（ISSUE #2580）。
+ *
+ * 为什么要这一条：`docs/guide-database-backup.md` 从第 10 行起教的是
+ * `require('better-sqlite3')` 的在线 `backup()` 与 `pragma('integrity_check')`，
+ * 而 **`better-sqlite3` 是 `devDependencies`**（只给测试基建）——开发机碰巧能跑，
+ * 桌包用户与 standalone 运行期根本没有这个包。照指南敲就是 `MODULE_NOT_FOUND`，
+ * 而那条路径动的正是**用户数据**（备份 / 恢复）。机制早已换成 `VACUUM INTO`
+ * （`scripts/db-backup-core.mjs` 有一节标题就问这件事），台账（PRODUCTION-GAPS D6）、
+ * 核心实现、以及「`src/lib/db-backup/backup.ts` 里不许出现那三个字样」的断言都改了，
+ * **唯一没跟上的是给用户看的那一页** —— 所以这条判据的对象是「读者面」，
+ * 与 §13.5.17 给 doc:check 定的那一档同源。
+ *
+ * 判据刻意**只认命令形状**（`require(…)` / `from …`），不认名字：
+ * 规范里大量正当句子在讲「当年为什么换掉它」（§6.1 那一族、D6、`allowBuilds` 为何显式
+ * `false`），按名字判就误报一片 —— 而误报的判据活不过一次评审（硬规则 24 末句）。
+ * 真正害人的是能被复制粘贴执行的那一行。
+ *
+ * 遍历面 = **会被照着敲**的那几份：`README.md`、`docs/README.md`、`AGENTS.md`、
+ * `docs/guide-*.md`、`docs/guides/*.md`。**不含 `docs/standards/**`**：那一层要记换型
+ * 历史，句子会逐字引用旧 API 的形状。豁免与上面那条「npm/npx」同口径 —— 同一行带
+ * 纠正词（没有 / 不存在 / 改为 / devDependencies …）视为说明而非命令。
+ */
+const RUNTIME_ABSENT_DRIVER_CMD_RE =
+  /require\(\s*["']better-sqlite3["']\s*\)|from\s+["']better-sqlite3["']/;
+const RUNTIME_ABSENT_DRIVER_EXPLAIN_RE =
+  /不要|别再|没有|不存在|禁止|改为|修正|曾用|曾是|历史上|不再|说明|devDependencies|测试基建|为什么/;
+
+/** 用户面文档集合（`docs/guide-*.md` 与 `docs/guides/*.md` 由磁盘现算，不抄名单）。 */
+function userFacingDocs() {
+  const out = ["README.md", "docs/README.md", AGENTS_MD_PATH];
+  const collect = (dir, prefix) => {
+    const abs = path.join(ROOT, dir);
+    if (!exists(dir)) return;
+    for (const name of fs.readdirSync(abs).sort()) {
+      if (name.endsWith(".md") && name.startsWith(prefix)) {
+        out.push(`${dir}${name}`);
+      }
+    }
+  };
+  collect("docs/", "guide-");
+  collect("docs/guides/", "");
+  return out;
+}
+
+function checkRuntimeAbsentDriverCommands() {
+  for (const doc of userFacingDocs()) {
+    if (!exists(doc)) continue;
+    const lines = readText(doc).split("\n");
+    lines.forEach((line, i) => {
+      if (!RUNTIME_ABSENT_DRIVER_CMD_RE.test(line)) return;
+      if (RUNTIME_ABSENT_DRIVER_EXPLAIN_RE.test(line)) return;
+      problems.push(
+        `[${doc}:${i + 1}] 出现 \`better-sqlite3\` 的可执行命令形状 —— 它是 ` +
+          `devDependencies（只给测试基建），**生产运行时与桌包里没有这个包**，照抄就是 ` +
+          "`MODULE_NOT_FOUND`，而备份 / 恢复这条路径动的是用户数据（ISSUE #2580）。" +
+          "改用运行时真在场的出口：`pnpm db:backup`（或裸 node 跑 " +
+          "`node scripts/db-backup.mjs`）、`node:sqlite` 的手工命令；" +
+          "若这句是在讲「别用它的理由」，补上「没有 / 不存在 / 改为 / devDependencies」" +
+          "等说明词以标明是说明而非可执行命令。",
+      );
+    });
+  }
+}
+
+/**
+ * 门禁步骤的引用口径：规范文档与索引里引用 `.githooks/pre-commit`（或已删除的平台流水线） * 的某一步，一律写**钩子日志里打印的标签**（`── check: <标签>`）或那一步跑的脚本名，
  * 不写「第 N 步」（ISSUE #1374）。
  *
  * 为什么单列一条：钩子早已是「组 0 + A/B/C/D 四个并行组」，「第 N 步」在这份形状上
@@ -724,6 +792,7 @@ function main() {
   checkFactKeysMatchDocs();
   checkScopeCoverage();
   checkLedgerCommands();
+  checkRuntimeAbsentDriverCommands();
   checkGateStepIndexRefs();
   checkGateStepCounts();
   checkGateChecklistMatchesHook();

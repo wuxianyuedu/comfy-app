@@ -41,6 +41,7 @@ import {
   SUITE_JUNIT_RELATIVE,
   TRACK as SUITE_TRACK,
   classifyRerunOutcome,
+  coverageGate,
   parseJunitPhaseCosts,
   planIsolatedRerun,
   planRun as suitePlan,
@@ -1354,5 +1355,79 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
     /* 「Test timed out」在本仓只能是**被引用**的话术，不该在这里被重新定义成一份正则。
        两份清单漂移的代价由 `tests/hook-affected-launch.test.ts` 钉在组 C 那一侧。 */
     expect(/\/Test timed out in[^/]*\/i/.test(src)).toBe(false);
+  });
+});
+
+/**
+ * 覆盖率门槛：**判定是开关，登记是账**（ISSUE #2669，业主口径）。
+ *
+ * 背景读数：每日那一格天天红而用例一条没红，红在两维目录级门槛上
+ * （`production 93.33 < 95` / `process 94.73 < 96`，`cnb-040-1k62o8qa1`）。
+ * 那种红不产生可执行结论，还把整档凭证永久卡在「不记账」上。裁决是
+ * 「整体覆盖率只上报，不要让 CI 红；该红的是 patch coverage；趋势用棘轮不当门禁」。
+ *
+ * 落地形态刻意选「开关 + 登记处不挪」，所以这几条判的都是**形状**：
+ * 谁在念档位、旗标有没有漏进 `extra`（漏了就会「绿了不记账」——自我拆账）、
+ * 以及门槛那份登记处还剩谁在算（没执行者就退回「写在配置里、没人判」那个原病）。
+ */
+describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
+  it("默认档念的是「没判」并给出硬档出口，而不是冒充「已通过」", () => {
+    const gate = coverageGate([]);
+    expect(gate.enforce).toBe(false);
+    expect(gate.reading).toContain("没判");
+    /* 下一动作必须在话术里（§13.5.3.5.1）：只说「没判」而不说怎么判，
+       下一个人只能去翻配置。 */
+    expect(gate.reading).toContain("--enforce-coverage");
+    /* 降档必须自带否认（§13.5.25「不许被读成『全套过了』」）。判「含那句否认」而不是
+       「不含『已通过』」—— 后者会被这句自否认自己判红，形状也不如前者硬。 */
+    expect(gate.reading).toContain("这不是「门槛已通过」");
+  });
+
+  it("旗标与环境变量两处来源都认；硬档那句不许仍念「没判」", () => {
+    expect(coverageGate(["--enforce-coverage"]).enforce).toBe(true);
+    expect(
+      coverageGate([], { COMFY_COVERAGE_ENFORCE: "1" }).enforce,
+      "环境变量那条路没接上 —— CI 之外的人没法开硬档",
+    ).toBe(true);
+    const hard = coverageGate(["--enforce-coverage"]);
+    expect(hard.reading).toContain("判");
+    expect(hard.reading).not.toContain("没判");
+  });
+
+  it("旗标不进 `extra`：带硬档旗标的那次仍然算整档、仍然记账", () => {
+    /* `isWholeTrackRun(extra)` 把「透传了任何参数」判成「跑的不是整档」。所以
+       自己的旗标若漏进 `extra`，每一次硬档跑绿都不记账 —— 那是把出口做成自我拆账。
+       判法用 `--dry-run` 的**真实打印**（它念的就是 `extra` 拼出来的那条命令），
+       比读源码里的 filter 一行更硬：拼错、漏摘、被 `planRun` 二次注入都当场红。 */
+    const out = execFileSync(
+      process.execPath,
+      ["scripts/full-suite-run.mjs", "--dry-run", "--enforce-coverage"],
+      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    expect(out).toContain("覆盖率门槛：**判**");
+    const commandLine = out.split("\n").find((l) => l.includes("→ pnpm run"));
+    expect(commandLine, "dry-run 没念出那条命令").toBeTruthy();
+    expect(commandLine).not.toContain("--enforce-coverage");
+  });
+
+  it("两个执行者各就各位：CI 档交给子进程，本地 `check:all` 显式开硬档", () => {
+    /* 这条判的是「登记处不是死配置」（§11.7 / 台账 E2 的原病）：
+       CI 那一档改成只上报之后，必须还剩一个真的按门槛算退码的执行者 ——
+       `quality-gate.mjs` 的 `test` 条目（`pnpm check:all`，本地按需完整验证档）。
+       两处都只**引用**那一个判点（`coverageGate` / 同一个环境变量名），
+       不在调用点重抄一份判定（§12.18）。 */
+    const suite = readFileSync(
+      join(ROOT, "scripts/full-suite-run.mjs"),
+      "utf8",
+    );
+    expect(suite).toContain('env.COMFY_COVERAGE_ENFORCE === "1"');
+    expect(suite).toContain('COMFY_COVERAGE_ENFORCE: "1"');
+    expect(suite).toContain("env: gate.enforce");
+    const gate = readFileSync(join(ROOT, "scripts/quality-gate.mjs"), "utf8");
+    expect(gate).toMatch(/key === "test"[\s\S]{0,120}COMFY_COVERAGE_ENFORCE: "1"/);
+    /* 反向：CI 的清单里**不许**有人顺手把硬档写进 `.cnb.yml` —— 那会把本单修掉的
+       那个红灯原样装回去。 */
+    const cnb = readFileSync(join(ROOT, ".cnb.yml"), "utf8");
+    expect(cnb).not.toContain("COMFY_COVERAGE_ENFORCE");
   });
 });

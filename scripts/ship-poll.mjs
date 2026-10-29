@@ -33,7 +33,7 @@ import {
   enrichStageErrors,
   inFlightStages,
 } from "./ci-build-readout.mjs";
-import { CODE } from "./ship-core.mjs";
+import { CODE, readPullVerdict } from "./ship-core.mjs";
 
 /**
  * 轮询的**同签名断流**上限：连续这么多次读到同一件事就不再读。
@@ -77,18 +77,26 @@ export function toShipBuildState(state) {
  *   newSha: string,
  *   now: ()=>number,
  *   sleep: (ms:number)=>void | Promise<void>,
+ *   number?: number | string | null,
  * }} ctx
+ *   `number` 是可选的 PR 号（建/复用 PR 之后才有）。给了它，「按 sha 还没解析到
+ *   build」那一格会顺带读一眼 `get-pull` 的 `mergeable_state` / `blocked_on` ——
+ *   ISSUE #2645：CI「没起」与「红了」在读数上长得像，而真因常在**冲突**
+ *   （`mergeable_state=conflict` 的 PR 平台不派生构建），那一句能把人从「再等等 /
+ *   换分支名」那条冤枉路上拽回来。没给（例如只是轮询、还不知道 PR 号）就只念旧文案。
  * @returns {Promise<{buildState:"green"|"red"|"cancelled"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
  *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（取不到列表），
  *   以及**同签名断流**（连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，
  *   再等下去只是重复同一句话）。
  */
 export async function pollUntilTerminal(ctx) {
-  const { run, log, slug, newSha, now, sleep } = ctx;
+  const { run, log, slug, newSha, now, sleep, number } = ctx;
   let buildState =
     /** @type {"green"|"red"|"cancelled"|"running"|"unknown"} */ ("unknown");
   let buildSn = null;
   const deadline = now() + 45 * 60 * 1000;
+  /** PR 冲突信号已念过的标记：只在 `!picked` 那一格念一次，不每 20 秒复述。 */
+  let announcedPrState = false;
   /* 同一签名**连续**读了多少次：第一条就把计数设成 1，所以「连续 10 次」= 第 10 次读到同一件事
    * 就断流。签名里任何一件变了（sn / data.status / pipeline 完成数 / **stage 完成数**）就归零，
    * **有格在飞也归零**（下面那段）—— 掐掉的只是「每 20 秒重复同一句话直到烧完预算」那种等待。
@@ -125,6 +133,33 @@ export async function pollUntilTerminal(ctx) {
       log(
         `[ship] 按 sha ${short(newSha)} 还没解析到 build（平台可能尚未开跑）…`,
       );
+      /* ISSUE #2645：CI「没起」与「红了」在读数上长得像，而真因常在**冲突**——
+       * `mergeable_state=conflict` 的 PR 平台不派生构建，干等只会烧预算。顺带读一眼
+       * PR 的 `mergeable_state` / `blocked_on`，把人从「再等等 / 换分支名」那条冤枉路
+       * 上拽回来。只念一次（`announcedPrState`），且没给 `number` 时不发这一问。 */
+      if (number && !announcedPrState) {
+        announcedPrState = true;
+        const pr = cnbJson(run, [
+          "pulls",
+          "get-pull",
+          "--repo",
+          slug,
+          "--number",
+          String(number),
+          "-v",
+        ]);
+        const pv = pr ? readPullVerdict(pr.json) : null;
+        if (pv) {
+          log(
+            `[ship] PR #${number}：mergeable_state=${pv.mergeableState} blocked_on=${pv.blockedOn || "(无)"}`,
+          );
+          if (pv.mergeableState === "conflict") {
+            log(
+              "[ship]   ⚠️ 冲突的 PR 平台不派生 CI —— 先 `git fetch` + 合上游解冲突、推新 sha，别干等。",
+            );
+          }
+        }
+      }
     } else {
       buildSn = picked.sn;
       const st = cnbJson(run, [

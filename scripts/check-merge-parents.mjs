@@ -53,7 +53,12 @@ import process from "node:process";
 const MERGE_MESSAGE_RE =
   /^Merge (?:branch|remote-tracking|tag|commit|pull request|ref)\b/;
 
-/** 在仓库内跑一条 git 命令；失败时回 ""（裸目录 / 浅克隆里取不到值）。 */
+/**
+ * 在仓库内跑一条 git 命令；失败时回 ""（裸目录 / 浅克隆里取不到值）。
+ *
+ * @param {string[]} args
+ * @returns {string}
+ */
 function git(args) {
   try {
     return execFileSync("git", args, {
@@ -73,7 +78,12 @@ function pendingParentCount() {
   return mergeHead.split(/\s+/).filter(Boolean).length + 1;
 }
 
-/** 消息文件的前若干行里的首行声明（跳过后面的注释与空行）。 */
+/**
+ * 消息文件的前若干行里的首行声明（跳过后面的注释与空行）。
+ *
+ * @param {string} messageFile
+ * @returns {boolean}
+ */
 function readMergeClaim(messageFile) {
   let text;
   try {

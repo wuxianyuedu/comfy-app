@@ -41,12 +41,19 @@ const PORT_SOURCE_LABEL = {
 
 /** 解析透传参数：-p/--port 覆盖端口，-H/--hostname 指定监听地址。
  *  未显式给出时都用解析值/默认值，保证「开发者手工 pnpm dev」与
- *  「启动器 pnpm dev -p N」走同一条命令构造路径。 */
+ *  「启动器 pnpm dev -p N」走同一条命令构造路径。
+ *
+ * @param {string[]} argv
+ * @returns {{ port: string | null, hostname: string | null }}
+ */
 function parseArgs(argv) {
   let port = null;
   let hostname = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    /* `noUncheckedIndexedAccess` 之下按下标取到的是 `string | undefined`；
+     * `i < argv.length` 已保证这一格有值，守卫只把这件事写给类型检查器看。 */
+    if (a === undefined) continue;
     if (a === "-p" || a === "--port") port = argv[i + 1] ?? port;
     else if (a.startsWith("--port=")) port = a.slice("--port=".length);
     else if (a === "-H" || a === "--hostname")
@@ -183,8 +190,11 @@ const result = spawnSync(invocation.command, invocation.args, {
 // 命令**没起来**（EACCES / EINVAL / ENOENT）时 status 为 null，必须与「跑完但
 // 非零退出」分开报：前者 stderr 通常是空的，只给退出码等于没说原因。
 if (result.error) {
+  /* `spawnSync` 的 `error` 声明是 `Error`，而系统级失败带的是 `ErrnoException`
+   * （`code` 就是那一句「为什么起不来」的全部内容）。 */
+  const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
   process.stderr.write(
-    `[dev.mjs] ✗ 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}\n` +
+    `[dev.mjs] ✗ 起 pnpm 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}\n` +
       `[dev.mjs]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
   );
   process.exit(1);

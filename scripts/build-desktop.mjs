@@ -16,6 +16,42 @@
  *      （bundle.externalBin = ["binaries/node"]，打包后资源中按平台名为 node / node.exe）
  *
  * 产物被 src-tauri/.gitignore 忽略，不入库。
+ *
+ * ── 读数：每一步念「耗时 + 一条量」（ISSUE #2574）──────────────────────────
+ * 装配那一大段（standalone 整树 `cpSync` → 顶层白名单剔除 → 载荷实体化 → 静态资源与
+ * 启动页 → 体积护栏）从第一步到最后一步**一个耗时都不念**，几百 MB 的那一跳期间屏幕上
+ * 没有任何新行 —— 在 CI 上它长得和「卡死 / 超时前兆」一模一样，而脚本正在正常干活。
+ * 这一族本仓已经误判过一次（E2E 那格跑了 36 分钟被平台按 stage 超时 kill），当时唯一能
+ * 用来分辨「在跑」与「挂了」的是**平台那一格的 duration**（整格一个数，且它是毫秒 ——
+ * ISSUE #2442），脚本内部哪一步吃掉多少时间取不出来。所以现在念：
+ *   1/4 build、2/4 组装（含 `cpSync` 那一跳的「遍历多少条 / 挡掉多少条 / 多久」）、
+ *   3/4 sidecar、4/4 全程。
+ * **这些是读数**：不参与退码、不改判定（与 `pnpm ship` 阶段 0 那几行同口径）；
+ * 「秒数必须有出处」这条纪律要的是**跑的时候把量记下来**，不是引用旧账本里的数字
+ * （`docs/audits/2026-10-21-timing-baseline-refs-volume.md`：同一份动作冷/暖两态跨数倍）。
+ *
+ * ── 三条「不要这么修」（本单逐条实测过，别照常见建议动手）──────────────────
+ *   · **不换 `fs.cp`（异步版）**：本脚本是直线式一次执行，全文
+ *     `availableParallelism` / `cpus` / `setInterval` **零命中**，没有任何要在事件循环上
+ *     活着的东西 ⇒ 同步拷贝在这里不冻结任何东西。症状是「静默」，对症的是**读数**。
+ *   · **不加 `BUILD_MAX_PARALLELISM` 夹取**：`build-desktop` 根本不用 `availableParallelism()`；
+ *     用它的是 `scripts/ci-load.mjs`，而那里的 `resolveCores()` **优先读平台给的 `CNB_CPUS`**
+ *     （比按宿主机报数的 `availableParallelism` 更贴近「这一趟分到多少」），已经比夹取更贴事实；
+ *     且本仓 CI 是 Windows runner、不是 cgroup 容器，「Node <22.5 在 cgroup v2 会回退到
+ *     宿主机核数」在这一条链路上不适用。
+ *   · **`force` / `dereference` 不为「表达意图」而全表钉死**：承重那两处
+ *     （standalone 整树、载荷实体化）**已显式写 `dereference: true` 并带理由**
+ *     （Windows 无开发者权限 EPERM、pnpm 软链必须摊平）；`force` 在**四条拷贝调用**上
+ *     全表没写（`cpSync` / `copyFileSync` 的默认就是 `true`；写着 `force: true` 的三处
+ *     都在 `rmSync` 上，那是另一回事），而产物层 `check-standalone-contents.cjs`
+ *     **真数两层产物**（AGENTS 硬规则 18），
+ *     「一件该带的被静默覆盖掉」当场红，而载荷实体化那处的局部意图由上一行的
+ *     `if (existsSync(dest)) continue;` 表达。`filter` 也早就在用，且它的作用不是"省空间"：
+ *     顶层白名单（`STANDALONE_ALLOWED_TOPLEVEL`，与产物层检查同源）保证的是
+ *     **私有输入到不了装配层**与**不必整树拷来再删**两件事，见 §装配 那段注释；
+ *     而「这一趟到底搬了多大一份」不靠注释里的数字说话 —— 运行时那一行
+ *     `static 体积 …MB` 念的就是当场量出来的值。
+ *     所以这不是「算法级优化还没做」，是已经做完并记账。
  */
 import {
   chmodSync,
@@ -32,6 +68,12 @@ import {
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
+
+// 时长格式化的唯一一份（先例：`scripts/ci-build-readout.mjs:96` 这样从脚本侧引 `.ts`）。
+// 单位是这条读数的全部意义 —— 平台与 Node 给的时长字段都是**毫秒**，而读的人按秒读：
+// `--diagnose` 曾把一次 15m30s 的格子念成 `930916s`（≈10.7 天，ISSUE #2442）。
+// 所以这里不在脚本里再写一份格式化（AGENTS 硬规则 24 / §12.18）。
+import { formatDurationMs } from "../src/lib/time-format.ts";
 
 import {
   echoCommandLine,
@@ -58,6 +100,20 @@ const root = join(__dirname, "..");
 const nextOut = join(root, ".next", "standalone");
 const staticDir = join(root, "src-tauri", "static");
 const binDir = join(root, "src-tauri", "binaries");
+
+/* 阶段计时（ISSUE #2574）：**只出读数**，不参与退码、不改判定 —— 与 `pnpm ship`
+ * 阶段 0 那三行同口径。为什么要有：装配那几百 MB 的一跳期间屏幕上没有任何新行，
+ * 在 CI 上长得和「卡死 / 超时前兆」一模一样，而脚本内部哪一步吃掉多少时间过去
+ * **取不出来**（平台那一格只有一个整格 duration，且它是毫秒 —— #2442）。
+ * 时长格式化用的是 `src/lib/time-format.ts` 那一份，见上方 import 的理由。 */
+const scriptStartedAt = performance.now();
+/**
+ * @param {number} since 起点（`performance.now()` 的返回值）
+ * @returns {string} 念给人看的时长；取不到时明说取不到，不假装是 0
+ */
+function elapsedSince(since) {
+  return formatDurationMs(performance.now() - since) ?? "取不到时长";
+}
 
 function targetTriple() {
   if (process.platform === "win32") {
@@ -89,17 +145,27 @@ function targetTriple() {
 import { sidecarFileName } from "./sidecar-name.mjs";
 export { sidecarFileName };
 
+/** 报错并终止 —— 返回类型必须是 `never`，不是「不返回」的语义描述：
+ *  写成 `void` 时，`if (!invocation) { fail(…) }` 之后检查器仍认为 `invocation` 可能是 null
+ *  （本批 8 格 `TS18047` 全是这一条造成的），于是每一处使用点都要再判一次没必要的空。
+ * @param {string} msg @returns {never} */
 function fail(msg) {
   console.error(`[build-desktop] 错误：${msg}`);
   process.exit(1);
 }
 
-// 递归计算目录字节数（用于体积护栏 / Top 目录定位）
+/** 递归计算目录字节数（用于体积护栏 / Top 目录定位）。
+ * @param {string} dir @returns {number} */
 function dirSize(dir) {
   let total = 0;
   const stack = [dir];
   while (stack.length) {
+    /* `stack.pop()` 在类型上是 `string | undefined`：`while (stack.length)` 已经保证它取得出，
+     * 但那是**我**知道的不是**类型**知道的（这一格是 `dirSize` 有了参数类型之后**新冒出来的**，
+     * 本仓「补类型不是纯减法」第五次现场）。`break` 与那句长度判据是同一件事的两种写法，
+     * 不是新增的容错分支。 */
     const cur = stack.pop();
+    if (cur === undefined) break;
     let ents;
     try {
       ents = readdirSync(cur, { withFileTypes: true });
@@ -121,6 +187,7 @@ function dirSize(dir) {
 
 // ── 1/4 next build（standalone）────────────────────────────
 console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）...");
+const step1At = performance.now();
 // pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：`execSync("pnpm …")`
 // 走的是 shell，Windows 上选中批处理形态时同样起不来，而 shell 语义让「命令没起来」
 // 与「跑完但失败」更难分辨。派生子进程一律经 pnpmInvocation，不自己拼可执行名。
@@ -138,8 +205,11 @@ console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）..
     windowsHide: true,
   });
   if (build.error) {
+    /* `code` 是 spawn 层附在 Error 上的字段（`ErrnoException`），声明面里没有 ——
+     * 按既有口径收成一次局部判型，而不是在使用点上写 `(e as any).code`。 */
+    const spawnError = /** @type {NodeJS.ErrnoException} */ (build.error);
     fail(
-      `起 pnpm 失败（${build.error.code ?? "UNKNOWN"}）：${build.error.message}；` +
+      `起 pnpm 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}；` +
         `实际命令：${formatCommandLine(invocation.command, invocation.args)}`,
     );
   }
@@ -151,9 +221,11 @@ if (!existsSync(join(nextOut, "server.js"))) {
     ".next/standalone/server.js 不存在，请确认 next.config.js 已配置 output: 'standalone'",
   );
 }
+console.log(`[build-desktop]   1/4 完成（耗时 ${elapsedSince(step1At)}）`);
 
 // ── 2/4 组装 src-tauri/static ──────────────────────────────
 console.log("[build-desktop] 2/4 组装 src-tauri/static ...");
+const step2At = performance.now();
 rmSync(staticDir, { recursive: true, force: true });
 mkdirSync(staticDir, { recursive: true });
 
@@ -195,25 +267,56 @@ for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
 // `standalone-private-inputs.mjs` 的 `STATIC_ALLOWED_TOPLEVEL`（与产物层检查、
 // 用例同源，不在这里再抄一份名单）。
 //
-// 为什么在**复制前**判而不是「整树拷来再删」：实测这一层今天躺着 `src/` 11.7 MB、
-// `changelog.d/` 3.3 MB 与开发机的 `data/llm-secret.key`，白名单生效后这些一个字节
-// 都不必复制。file tracing 仍会把它们带进 `.next/standalone`（根因与修法归
-// ISSUE #1217），本条只管「装进桌包的那一份」。
+// 为什么在**复制前**判而不是「整树拷来再删」：这一道的价值不是某个 MB 数，而是两条
+// **不依赖上游是否干净**的性质 ——
+//   · 开发机私有输入即使 file tracing 再失控，也进不了装配层（不是"先拷进来再删掉"，
+//     那个中间态本身就是一次会把密钥写进产物目录的窗口）；
+//   · 不必把整棵仓库读进内存再剪枝 —— 少写的那一趟是几百 MB 量级的 I/O。
+// 今天实测 `.next/standalone` 的顶层已不含 `changelog.d` / `data` / `.env`
+// （`pnpm build` 收尾那一步先剥，执行者是同一份 `standalone-private-inputs.mjs` 清单），
+// 所以装配层这一跳通常一条都不挡 —— **`挡掉 0 条` 是常态，不是计数器坏了**。
+// file tracing 仍会把多余条目带进 `.next/standalone`（根因与修法归 ISSUE #1217），
+// 本条只管「装进桌包的那一份」。
 // 注意：node_modules/.cache 单独排除，不能整体排除 node_modules（standalone
 // 运行时必需裁剪版）。
+/** 装进桌包的那一份要过白名单：`abs` 是待判条目的绝对路径。
+ * @param {string} abs @returns {boolean} */
 const staticAllowed = (abs) => isStaticPathAllowed(relative(nextOut, abs));
 
+/* `cpSync` 这一跳的账（ISSUE #2574 期望 2）：白名单在场时，「过 filter 的条目数」与
+ * 「被挡掉的条目数」就是**挡得对不对的证人** —— 只有体积没有这两个数，看不出
+ * 「白名单今天生效了几条」。计数在 filter 里做，不改它的返回值。
+ * ⚠️ 口径：`filter` 对**每一个将要复制的路径**（目录与文件都算）各调一次，
+ * 所以这两个数是「遍历到的条目数」，不是「文件数」。念的时候不许含糊成文件数。
+ * 交叉证人：`挡掉 M 条` 与下面 `pruneStaticToAllowList` 打印的「已剔除…顶层条目」应当同向
+ * （0 挡 ⇒ 0 剔）—— 哪天两者不一致，就是白名单或计数漂了。#2678 那条「账与产物对不上」
+ * 正是被这两行一起读出来的。 */
+let cpSeen = 0;
+let cpRejected = 0;
+const cpAt = performance.now();
 cpSync(nextOut, staticDir, {
   recursive: true,
   dereference: true, // server.js + 裁剪 node_modules（解引用 symlink，避免 Windows 无开发者权限时 EPERM）
   filter: (src) => {
+    cpSeen += 1;
     const rel = relative(nextOut, src);
     if (rel === "") return true; // 根目录本身
-    if (!staticAllowed(src)) return false;
+    if (!staticAllowed(src)) {
+      cpRejected += 1;
+      return false;
+    }
     const cacheRel = join("node_modules", ".cache");
-    return rel !== cacheRel && !rel.startsWith(cacheRel + sep);
+    if (rel === cacheRel || rel.startsWith(cacheRel + sep)) {
+      cpRejected += 1;
+      return false;
+    }
+    return true;
   },
 });
+console.log(
+  `[build-desktop]   §装配 standalone 整树：过 filter ${cpSeen} 条、挡掉 ${cpRejected} 条，` +
+    `耗时 ${elapsedSince(cpAt)}`,
+);
 
 /* §装配：白名单的落盘兜底。filter 已在复制前挡掉名单外条目，这里保留作兜底
  * （有人绕过 filter 往 static 里写文件、或将来改复制方式时仍然兜得住），
@@ -341,7 +444,11 @@ for (const payloadFile of [
 //
 // 形态选择：把 store 里的包**上提**到顶层（先看 pnpm 的 hoist 兜底层
 // `.pnpm/node_modules/`，再看各包的私有层），然后把 `.pnpm` 整棵删掉——不是「上提后
-// 再留一份 store」，实测那样载荷是 404 MB，扁平化后是 245 MB。
+// 再留一份 store」。当时那一趟的对比是 404 MB（留 store）对 245 MB（扁平化）——
+// **这两个数是那一趟的读数，不是今天的载荷**：今天多大由运行时那行
+// `static 体积 …MB` 当场念（把绝对体积写进注释就会腐烂，ISSUE #2678 收的是这一族）。
+// 这条选择本身不依赖那两个数：留 store 的问题不是体积，是 `.pnpm` 那层的软链语义
+// 在 standalone 里根本不可解析（上面那段 `Cannot find module` 就是它的表现）。
 // 同名多版本时取第一个发现者：这与 pnpm 自己在 hoist 兜底层的取舍同形，且下面的
 // 「载荷可解析性断言」会在构建期就把选错的那一类抓出来（不是等用户双击）。
 const storeDir = join(staticDir, "node_modules", ".pnpm");
@@ -349,6 +456,7 @@ if (existsSync(storeDir)) {
   const nmDir = join(staticDir, "node_modules");
   /** 包名（含 `@scope/name`）→ 源目录。Map 的首个命中者胜出 = 上面那条优先级。 */
   const packages = new Map();
+  /** @param {string} base */
   const collectLevel = (base) => {
     if (!existsSync(base)) return;
     for (const entry of readdirSync(base)) {
@@ -452,12 +560,15 @@ writeFileSync(join(staticDir, "index.html"), splashHtml, "utf8");
 console.log(
   "[build-desktop]   static 组装完成（standalone + .next/static + public + splash.html + index.html fallback）",
 );
-
 // ── 2.5 §整治：体积护栏 ──
 // 若 static 仍超过阈值，说明 Next standalone file tracing 再次失控（把整仓库
 // 根塞了进来）。立即失败并列出 Top 目录，绝不把 >GB 级副本打包进 exe。
 const MAX_STATIC_GB = 1.5;
+/* 数体积那一跳自己也是一次全树遍历 —— 它过去和拷贝混在「2/4 多久」里读不出来，
+ * 而「装配慢」与「量一遍慢」是两件事（ISSUE #2574）。 */
+const sizeAt = performance.now();
 const totalMB = dirSize(staticDir) / 1024 / 1024;
+const sizeMs = elapsedSince(sizeAt);
 if (totalMB / 1024 > MAX_STATIC_GB) {
   const top = readdirSync(staticDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
@@ -475,7 +586,8 @@ if (totalMB / 1024 > MAX_STATIC_GB) {
   );
 }
 console.log(
-  `[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈值 ${MAX_STATIC_GB}GB）`,
+  `[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈值 ${MAX_STATIC_GB}GB，` +
+    `数体积这一遍耗时 ${sizeMs}）`,
 );
 
 // ── 2.6 §出厂计数：装配后的 static 再数一次（AGENTS 硬规则 18 / 台账 R5-01）──
@@ -495,9 +607,10 @@ console.log(
     { stdio: "inherit", cwd: root, windowsHide: true },
   );
   if (check.error) {
+    const spawnError = /** @type {NodeJS.ErrnoException} */ (check.error);
     fail(
-      `起 check-standalone-contents 失败（${check.error.code ?? "UNKNOWN"}）：` +
-        `${check.error.message}；实际命令：node scripts/check-standalone-contents.cjs`,
+      `起 check-standalone-contents 失败（${spawnError.code ?? "UNKNOWN"}）：` +
+        `${spawnError.message}；实际命令：node scripts/check-standalone-contents.cjs`,
     );
   }
   if (check.status !== 0) {
@@ -512,7 +625,9 @@ console.log(
 }
 
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
+console.log(`[build-desktop]   2/4 完成（耗时 ${elapsedSince(step2At)}）`);
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");
+const step3At = performance.now();
 mkdirSync(binDir, { recursive: true });
 const sidecar = join(binDir, sidecarFileName(targetTriple()));
 copyFileSync(process.execPath, sidecar);
@@ -522,8 +637,14 @@ if (process.platform !== "win32") {
   chmodSync(sidecar, 0o755);
 }
 console.log(
-  `[build-desktop]   sidecar: ${sidecar} (${(statSync(sidecar).size / 1024 / 1024).toFixed(1)} MB)`,
+  `[build-desktop]   sidecar: ${sidecar} (${(statSync(sidecar).size / 1024 / 1024).toFixed(1)} MB，` +
+    `复制耗时 ${elapsedSince(step3At)})`,
 );
 
 // ── 4/4 完成 ───────────────────────────────────────────────
-console.log("[build-desktop] 4/4 完成。请执行 pnpm tauri build 打出安装包。");
+// 4/4 本身只做这一行打印，所以它念的量是**全程**（1/4 + 2/4 + 3/4 之和，
+// 不含随后由 tauri 自己跑的 `pnpm tauri build`）。
+console.log(
+  `[build-desktop] 4/4 完成（全程 ${elapsedSince(scriptStartedAt)}，不含 pnpm tauri build）。` +
+    "请执行 pnpm tauri build 打出安装包。",
+);

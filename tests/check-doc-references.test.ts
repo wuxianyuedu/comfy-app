@@ -27,6 +27,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  restoreToSnapshot,
+  snapshotPaths,
+} from "./helpers/probe-restore.ts";
 
 const REPO_ROOT = process.cwd();
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
@@ -67,13 +71,19 @@ function runCheck(): { code: number; output: string } {
 
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
 
-/* ── 探针收尾的最后一道网（ISSUE #2415）────────────────────────────────
+/* ── 探针收尾的最后一道网（ISSUE #2415 → #2593 订正）──────────────────
  * 本文件多数组的现场是「真仓库文件上改 → 判 → 还原」（判据读的是整仓扫描面，
  * 夹具仓库喂不饱它们；autofix 组已改成夹具仓库，见文件尾）。还原靠重试式写入，
  * 但 Windows 上它仍可能八次全抛（实测 UNKNOWN）。这一网保证：**即便还原没做成，
- * 脏工作区也不会悄悄留给下一个 `git add -A`** —— 未跟踪的探针新文件直接删、
- * 被改过的入库文件从 git 索引拉回原样（自愈），然后把事故路径点名成红。
- * 红要能说得出原因：是「探针留脏」而不是别的，路径就在消息里。 */
+ * 也不会把脏工作区悄悄留给下一个 `git add -A`** —— 然后把事故路径点名成红。
+ *
+ * ⚠️ 这一网**曾经**是「未跟踪的直接删、脏的从 git 索引拉回原样」。那句话把
+ * 「脏 = 探针留脏了」当成了一个不成立的前提：`git status` 分不出探针留的脏与
+ * **这条分支上正在做的未提交工作**，而处置逐字相同 —— 于是它吃掉过两次本单的
+ * 文档改动（92 行，第二次靠 `docs/generated/` 的镜像才恢复）。现在还原只认
+ * 进本文件那一刻的字节快照（`tests/helpers/probe-restore.ts` / 规范 §11.16.2），
+ * 快照本身是脏的就照样带出去。红说的是「这一份没写回成快照那一版」，不是
+ * 「工作区不干净」—— 后者可能是别人正在做的活，不该由这一档判定。 */
 const PROBE_TARGETS = [
   "AGENTS.md",
   "docs/reference-facts.md",
@@ -84,45 +94,26 @@ const PROBE_TARGETS = [
   "changelog.d/zz-step-index-probe.md",
 ];
 
-function gitStatusPorcelain(paths: string[]): string {
-  try {
-    return execFileSync("git", ["status", "--porcelain", "--", ...paths], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch {
-    return ""; // git 不可用时不挡路：各组的还原与断言仍在
-  }
-}
+/**
+ * 快照取在**模块加载时** —— 比本文件任何一条 `it` 都早，所以「进本文件之前就脏的那份
+ * 工作」会被原样带出去（取晚了拍到的就是探针改过的那一版，还原于是把探针的脏固化成
+ * 「原样」）。
+ */
+const PRISTINE = snapshotPaths(PROBE_TARGETS.map((rel) => join(REPO_ROOT, rel)));
 
 afterEach(() => {
-  const dirty = gitStatusPorcelain(PROBE_TARGETS);
-  if (!dirty.trim()) return;
-  const touched = dirty
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => line.slice(3).trim());
-  for (const rel of touched) {
-    const abs = join(REPO_ROOT, rel);
-    if (dirty.includes(`?? ${rel}`)) {
-      rmSync(abs, { force: true }); // 未跟踪的探针新文件：直接删
-    } else {
-      try {
-        execFileSync("git", ["checkout", "--", rel], {
-          cwd: REPO_ROOT,
-          stdio: "ignore",
-        });
-      } catch {
-        // 拉不回就让下面的断言红 —— 红里点名的路径就是人要去看的地方
-      }
-    }
-  }
-  const rest = gitStatusPorcelain(PROBE_TARGETS).trim();
+  const { failed } = restoreToSnapshot(PRISTINE);
+  /* 只有「还原做不成」才红，且点名是哪一份、为什么。这里**不再**拿 `git status` 判
+   * 「名单里还有脏文件」—— 那正是本单要拆掉的那个混淆：`git status` 说脏，可能是
+   * 探针留的脏，也可能是这条分支上正在做的活，而这一档没有能力分这两者，
+   * 于是它一响就必然要么误报、要么把人指去退回别人的工作（实测这格一开始就把
+   * 全部 59 条用例判红，因为工作区里正躺着一份未提交的文档改动）。 */
   expect(
-    rest,
-    `探针把仓库文件留脏了（已尝试 git 自愈仍未清干净）：${rest}`,
-  ).toBe("");
+    failed.map((f) => `${f.abs} → ${f.why}`),
+    `探针没能把仓库文件还原成「进本文件之前的那一版」（写入已重试仍未成）：\n  ${failed
+      .map((f) => `${f.abs} → ${f.why}`)
+      .join("\n  ")}`,
+  ).toEqual([]);
 });
 
 /**
@@ -428,6 +419,90 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
     const { code, output } = runCheck();
     expect(code).toBe(0);
     expect(output).toContain("[doc:check] ✓");
+  });
+});
+
+describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
+  /* 现场：`docs/guide-database-backup.md` 教的是 `require('better-sqlite3')` 的在线
+   * `backup()` 与 `pragma('integrity_check')`，而那包是 devDependencies —— 桌包用户与
+   * standalone 运行期根本没有它，照抄就是 `MODULE_NOT_FOUND`，动的还是用户数据。
+   * 机制（`VACUUM INTO`）、台账（D6）、核心实现与「不许出现那三个字样」的断言都早已改，
+   * 漏的是**给用户看的那一页**，所以这条挂在 doc:check（§13.5.17 那一档）上。
+   *
+   * 判据只认**可执行命令形状**（`require(…)` / `from …`），不认名字：规范里大量正当句子
+   * 在讲「当年为什么换掉它」。上面那条「台账命令口径」组用的探针文件（DEV-QUERIES.md）
+   * 已在 `PROBE_TARGETS` 的快照网里，这里复用同一份 ⇒ 不把新的入库文档拖进写探针的窗口。 */
+  const probe = "docs/guides/DEV-QUERIES.md";
+
+  function withProbe(appended: string): { code: number; output: string } {
+    const abs = join(REPO_ROOT, probe);
+    const original = readFileSync(abs, "utf8");
+    writeText(abs, `${original}\n${appended}\n`);
+    try {
+      return runCheck();
+    } finally {
+      restoreText(abs, original);
+    }
+  }
+
+  it("已接入 main 流程（定义了却没人调用 = 没有执行者）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function checkRuntimeAbsentDriverCommands()");
+    expect(isCalledInMain(script, "checkRuntimeAbsentDriverCommands()")).toBe(
+      true,
+    );
+  });
+
+  it("把 require 形状写进用户面文档 → 红，点名文件行号并给出真在场的出口", () => {
+    const { code, output } = withProbe(
+      '```bash\nnode -e "const D=require(\'better-sqlite3\'); const db=new D(\'db.sqlite\'); console.log(db.pragma(\'integrity_check\'));"\n```',
+    );
+    expect(code, "命令形状必须让 doc:check 红").not.toBe(0);
+    expect(output).toContain(probe);
+    expect(output).toContain("devDependencies");
+    expect(output, "红话必须给得出路，而不只是说不能用").toContain("node:sqlite");
+    expect(output).toContain("pnpm db:backup");
+  });
+
+  it("`from 'better-sqlite3'`（ESM 那一形）同样拦下", () => {
+    const { code, output } = withProbe(
+      '```js\nimport Database from "better-sqlite3";\n```',
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain(probe);
+  });
+
+  it("同一行带纠正词 ⇒ 是说明而不是命令（放行）", () => {
+    const { code, output } = withProbe(
+      "备份指南里那种 `require('better-sqlite3')` 的写法**没有**在线备份可用：" +
+        "它是 devDependencies，生产运行时不存在这个包，请改为 `pnpm db:backup`。",
+    );
+    expect(output, "放行时不该顺带把别的规则念成红").toContain("[doc:check] ✓");
+    expect(code).toBe(0);
+  });
+
+  /* 这条钉的是「窄到命令形状」那一格本身：真仓库此刻的用户面文档里，`better-sqlite3`
+   * 这个名字**确实在散文中出现**（§1 与 §2.2 那两句正是「讲别用它的理由」），而 doc:check
+   * 是绿的。先断言这些散文在场，再断言绿 —— 否则有人把那两句删掉之后，这条会退化成
+   * 「什么都判不出来的一条绿」（与 §13.5.12「反向自证」同一口径）。 */
+  it("基线为绿，且绿不是靠「面内一个字都没提」换来的", () => {
+    const guide = docText("docs/guide-database-backup.md");
+    expect(
+      guide.split("\n").filter((l) => l.includes("better-sqlite3")).length,
+      "指南里必须有讲明「为什么不能用它」的散文，否则下面那条绿没有对象",
+    ).toBeGreaterThan(0);
+    for (const line of guide.split("\n")) {
+      if (!line.includes("better-sqlite3")) continue;
+      expect(
+        line,
+        "散文可以提名字，但不许留成能被复制粘贴执行的那一行",
+      ).not.toMatch(
+        /require\(\s*["']better-sqlite3["']\s*\)|from\s+["']better-sqlite3["']/,
+      );
+    }
+    const { code, output } = runCheck();
+    expect(output).toContain("[doc:check] ✓");
+    expect(code).toBe(0);
   });
 });
 

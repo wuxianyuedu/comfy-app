@@ -34,6 +34,31 @@
  * `sha256` 把两侧对齐，能对上的是「同一份内容换名」（不算变化），对不上的才是
  * 「新增内容」或「真变大」。判定不由它下。
  *
+ * ── **开发期状态（2026-10-29 业主口径，ISSUE #2634）**：两条总量判据**暂撤** ──────
+ *
+ * `TOTALS_ENFORCED = false` ⇒ gzip 总量与 chunk 文件数**照量、照打、不参与判定**，
+ * 退 0 但**明写「这一格今天没判」**（不许被读成「已在预算内」）。为什么是这两条、
+ * 为什么不是判据本体被删：
+ *
+ *   · 触发点是每日档那笔 `+17.4 KB / +1 chunk`（基线 `dd8d4647` 其后 35 次主干提交）。
+ *     按 §13.5.4「不是你的账，立案，别替别人签」，没有人有那 35 笔的 before/after 与
+ *     「为什么值这个体积」，所以**没人签**；而不签的代价是 `每日生产构建` 恒红，
+ *     把 `每日单元测试` / `每日全量E2E` / `每日 ESLint 零警告` / `每日浏览器安装`
+ *     四格一起拖成 `skipped` —— 一条**预算**判据在吃掉三张**新鲜度**账（ISSUE #2114 那一族）。
+ *   · 开发期客户端体积本来就在来回涨，这一格的信号价值此刻低于它挡掉的证据价值。
+ *     所以撤的是**执行**，不是**量具**：读数、逐文件指纹诊断、归因（「其后 N 次提交」）
+ *     一句都没少打，将来签账的人拿到的还是同一份现场。
+ *   · **`--update` 的棘轮一条没动**（只许下降，抬高要 `--allow-increase`）。基线仍停在
+ *     `224 / 2196.3 KB` —— 于是恢复判据那一天，开发期累计的涨幅会一次性摆在同一个
+ *     对照物前面，不会被「边涨边重记基线」抹平。这一条是这次暂撤不变成隐性豁免的关键。
+ *
+ * **恢复条件**：出正式版前把 `TOTALS_ENFORCED` 改回 `true`（恢复之前可以先用
+ * `--enforce-totals` 跑一次自查，看那一版会不会红、红在哪几笔）。登记在三处：
+ * 本文件的运行读数、规范 §13.5.4、以及单子（恢复那张与 #2634 各自的名字写在下面）。
+ *
+ * ⚠️ 别把这次暂撤读成「预算闸可以按人临时关」：关的是**这一档判据的执行**，
+ * 而它每次运行都自报「今天没判」——降档必须被说出来（§13.5.25 同一条纪律）。
+ *
  * ⚠️ 但「新增内容」这个桶**不能单独打印**（ISSUE #2141）：老块内容涨几十字节就会换哈希，
  * 于是它同时是「新增」与「消失」两条 —— 只报前一半时，一笔 44 B 的小改在屏幕上长得像
  * 新增了 30 KB。两份输出（判红那一档与 `--update` / `--report` 那一档）都走 `deltaLines()`，
@@ -73,6 +98,9 @@
  *   node scripts/check-bundle-budget.cjs --update   # 由造成这批字节的那条 PR 认账后重写基线
  *                                                   #   （须伴随下降，除非带 --allow-increase + 理由）
  *   node scripts/check-bundle-budget.cjs --report   # 只出清单，不判失败（盘点用）
+ *   node scripts/check-bundle-budget.cjs --enforce-totals
+ *                                                 #   无视开发期暂撤，按现行判据硬档跑一次
+ *                                                 #   （出正式版恢复前的自查口）
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -86,6 +114,16 @@ const REPORT_ONLY = ARGS.has("--report");
 const UPDATE = ARGS.has("--update");
 const ALLOW_INCREASE = ARGS.has("--allow-increase");
 const BASELINE = path.join(__dirname, ".bundle-budget-baseline.json");
+
+/**
+ * 两条总量判据（gzip / chunk 文件数）当前**是否参与判定**。
+ *
+ * `false` = 开发期暂撤（2026-10-29 业主口径，ISSUE #2634）—— 见文件头「开发期状态」那一节：
+ * 读数照量照打、归因照给、`--update` 的棘轮一条没动，只有**执行**停了，而且停会被念出来。
+ * 恢复 = 改回 `true`；在此之前想硬档跑一次用 `--enforce-totals`。
+ */
+const TOTALS_ENFORCED = false;
+const ENFORCE_TOTALS = TOTALS_ENFORCED || ARGS.has("--enforce-totals");
 
 /**
  * 测量面：`next build` 产出的 client chunk 目录（Turbopack 默认链）。
@@ -617,7 +655,22 @@ function main() {
   console.log(`  基线：${fmt(base.metric)}（生成于 ${base.generatedAt}）`);
 
   if (problems.length) {
-    console.error("[bundle-budget] 违规（阻断）：\n  " + problems.join("\n  "));
+    /* 撤档那一档的**判决行**走 stdout，读数与归因留在 stderr（诊断本色）。
+     * 这条分界不是排版：退 0 的判据在很多消费者那里只转述 stdout
+     * （`quality-gate.mjs` 的绿档、`tests/helpers/gate-repo.ts` 的夹具都是这个形状），
+     * 「今天没判」这句话要是只落 stderr，就会被读成「它绿了，所以没什么可看的」——
+     * 那是本次暂撤最坏的失效形态（硬规则 27：效应不许只转述自己的 stdout）。 */
+    if (!ENFORCE_TOTALS) {
+      console.log(
+        "[bundle-budget] 两条总量判据处于**开发期暂撤**状态（业主口径 2026-10-29，ISSUE #2634）" +
+          "—— 下面那些涨幅是读数，**这一格今天没判**。",
+      );
+    }
+    console.error(
+      ENFORCE_TOTALS
+        ? "[bundle-budget] 违规（阻断）：\n  " + problems.join("\n  ")
+        : "[bundle-budget] 读数（不参与判定）：\n  " + problems.join("\n  "),
+    );
     /* 归因先说：判红那一刻读者最该知道的是「这个读数取自哪一版源码」。
      * 缺了它，「涨了 493 字节」的第一反应必然落在「是不是抖动 / 是不是量错了」上，
      * 而不是「这是不是基线之后那几次改动换来的」—— 而后者才是下一步该回答的问题。
@@ -740,6 +793,19 @@ function main() {
         "  要一份平台的独立读数（不改本地账）用单跑口 `api_trigger_build`，见 §13.5.23；" +
         "认账那一次 --update 读的是本地产物。",
     );
+    if (!ENFORCE_TOTALS) {
+      /* 收尾这几句是本单的**判点**：撤档不许被读成通过（§13.5.25 那条「降档永远要被念出来」），
+       * 也不许被读成「以后也不用管了」——恢复条件与「基线没动」这两件必须在同一次输出里。
+       * 走 stdout 的理由见上面那段（退 0 的档，只转述 stdout 的消费者也得看见）。 */
+      console.log(
+        "[bundle-budget] 这不是「已在预算内」（那句 ✓ 今天不会出现是有意的）。\n" +
+          "  恢复：出正式版前把 scripts/check-bundle-budget.cjs 的 `TOTALS_ENFORCED` 改回 true；\n" +
+          "  恢复前想先看一眼会红在哪几笔：`node scripts/check-bundle-budget.cjs --enforce-totals`。\n" +
+          "  基线那一份账一条没动 —— 恢复那一天，开发期累计的涨幅会一次性摆在同一个对照物前面，\n" +
+          "  不会被「边涨边重记基线」抹平。",
+      );
+      return 0;
+    }
     return 1;
   }
 

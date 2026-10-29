@@ -57,6 +57,12 @@ import {
   reporterArgs,
   resolveQuiet,
 } from "../scripts/affected-launch-log-budget.mjs";
+/* 日志预算的**另一半**：quiet 那档只打点，「跑了哪些用例」必须另有一处出口 —— 否则
+ * 平台那屏日志里一个文件名都没有，只剩 `Tests N passed`（这一格此前就长这样）。 */
+import {
+  fileListReport,
+  MAX_LISTED,
+} from "../scripts/affected-launch-file-list.mjs";
 /* 墙钟判点（ISSUE #2364）：等待有预算而**跑**没有上界，于是负载膨胀时那一格一路开到被
  * 平台掐掉（实测 3240105ms），连「未判定」那句话都没说出来。下面这几条钉两件事：
  * **界只划在「还开不开下一遍」**（已开跑的那一遍永远跑完），以及**「没开」不许长得像
@@ -68,6 +74,8 @@ import {
   gateRerunByWallClock,
   perFileBudgetStopReport,
   PLATFORM_STAGE_KILL_MS,
+  probeFiles,
+  rerunFileList,
   resolveWallClockMs,
   SERIAL_RERUN_FACTOR,
   STAGE_WALL_CLOCK_MS,
@@ -109,6 +117,10 @@ import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK_PATH = ".githooks/pre-commit";
 const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
+/* 「怎么起一次 vitest」那一层（并发覆盖 / 分块 / 入口定位 / 抓子进程输出）合并 master 之后
+ * 出列到这一份 —— 判据按**真实落点**读，机制层不转假出口（转一层的话「搬走了」与
+ * 「还能用」长得一样）。启动器那一层留下的仍是判决链。 */
+const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
 
 /**
  * 把一段代码跑起来期间 `process.stderr` 的写入**收在手里**（随返回值交出 `text`）。
@@ -432,8 +444,9 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
 
   it("输出被抓在手里再原样回吐 —— 不抓就分不出「真断言红」与「机器太满」", () => {
     // 判决依赖输出内容，所以失败那一档不能再是 stdio:"inherit"。
+    const spawnSrc = readFileSync(SPAWN_LAYER_PATH, "utf8");
     const spawn = /function spawnVitest\(entry, args\) \{[\s\S]*?\n\}/.exec(
-      src,
+      spawnSrc,
     )?.[0];
     expect(spawn, "spawnVitest 还在吗？").toBeTruthy();
     expect(spawn).toContain('encoding: "utf8"');
@@ -1081,7 +1094,10 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
       /resolveMaxWorkers\(\s*\n?\s*process\.env\.COMFY_PRECOMMIT_MAX_WORKERS,\s*\n?\s*resolveCiWorkers\(\)\.workers,/,
     );
     // 函数体里不许再出现 process.env，也不许自己 import 核数（那会让它不再纯）。
-    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(src);
+    // 函数体读的是它**现在**住的那一份（合并 master 之后随「起进程」那一层出列）。
+    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(
+      readFileSync(SPAWN_LAYER_PATH, "utf8"),
+    );
     expect(body, "解不出 resolveMaxWorkers 的函数体").not.toBeNull();
     expect(body![1]).not.toContain("process.env");
     expect(body![1]).not.toContain("availableParallelism");
@@ -1961,7 +1977,7 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
  * limit(102400)`，且保留的是尾部 —— 被截掉的恰是开头（跑了哪些、哪份失败）。而
  * `vitest run` 的默认 reporter 会**逐个文件**打一行，一跑 100+ 行是常态。
  */
-describe("日志预算：quiet 档只换 reporter", () => {
+describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
   it("没置 ⇒ 一个字都不加（本地人跑时要看逐文件清单）", () => {
     expect(resolveQuiet(undefined)).toEqual({ quiet: false, note: null });
     expect(resolveQuiet("")).toEqual({ quiet: false, note: null });
@@ -2016,6 +2032,67 @@ describe("日志预算：quiet 档只换 reporter", () => {
     for (const args of calls) {
       expect(args).toContain("--reporter=dot");
     }
+  });
+
+  /* ── 「跑了哪些用例」这一格（quiet 档的代价） ───────────────────────────────
+   *
+   * 现场（业主报的）：平台 `受影响用例` 一格的日志里只剩 `Tests 1116 passed (1116)`
+   * 这类总数，**一个文件名都没有**。根因是上面那条日志预算：`dot` 只打点。
+   * 而清单里排在最前面的是 **103 份固定清单**（`fixed-structural-tests.mjs`），
+   * 它们才是「这次守的到底是什么」的答案 —— 总数答不了这个问题。
+   */
+
+  it("不 quiet ⇒ 一个字都不打（默认 reporter 已经逐文件打过了）", () => {
+    /* 重复打印是反方向的：这一档（不 quiet）是本地人跑，日志不是瓶颈；
+     * 而 quiet 那一档开它的理由正是「日志预算不够」。 */
+    expect(fileListReport(["tests/a.test.ts"], { quiet: false })).toBe("");
+  });
+
+  it("quiet ⇒ 逐份列出清单，且明说这行是「跑了哪些」的唯一出处", () => {
+    const text = fileListReport(
+      ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"],
+      { quiet: true },
+    );
+    expect(text).toContain("本次清单：3 份用例");
+    for (const f of ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"]) {
+      expect(text).toContain(f);
+    }
+    /* 「为什么只有这几行」必须读得回来（§11.23：写了没有读者等于没写）。 */
+    expect(text).toContain("唯一出处");
+  });
+
+  it("超封顶 ⇒ 截断并**念出来**（「少打一份」不许长得像「少跑一份」）", () => {
+    const files = Array.from({ length: 5 }, (_, i) => `tests/t${i}.test.ts`);
+    const text = fileListReport(files, { quiet: true, max: 2 });
+    expect(text).toContain("本次清单：5 份用例");
+    expect(text).toContain("tests/t0.test.ts");
+    expect(text).toContain("tests/t1.test.ts");
+    expect(text).not.toContain("tests/t2.test.ts");
+    expect(text).toContain("另有 3 份未列出");
+  });
+
+  it("封顶是 200（比本仓常态的增量面大，只有异常大的改动面才截断）", () => {
+    expect(MAX_LISTED).toBeGreaterThanOrEqual(150);
+    const files = Array.from(
+      { length: MAX_LISTED + 1 },
+      () => "tests/x.test.ts",
+    );
+    expect(fileListReport(files, { quiet: true })).toContain("另有 1 份未列出");
+  });
+
+  it("空清单不许静默（它在这条链上本来就被守卫拦掉了）", () => {
+    expect(fileListReport([], { quiet: true })).toContain("0 份");
+  });
+
+  it("清单那一跳真的接进了增量档，且打的是**送进 vitest 的**那份清单", () => {
+    /* 形状那一面由用例守着（`main` 会起真 vitest，不在单测里跑）：判的是「打了」与
+     * 「打的是 files」两件事 —— 换成别的变量名就会读到一份「看起来也列了东西」的清单，
+     * 而那一份与真跑的清单可以完全不同步。 */
+    const launcher = readFileSync(LAUNCHER_PATH, "utf8");
+    expect(launcher).toMatch(/fileListReport\(files, \{ quiet \}\)/);
+    /* `--full` 那一档没有清单可列（vitest 自己收集），但也不许静默：
+     * 「这一档本来就不列」与「列清单这件事坏了」必须读得出区别。 */
+    expect(launcher).toMatch(/全量档由 vitest 自行收集，故不逐份列出/);
   });
 });
 
@@ -2180,6 +2257,67 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
         nowMs: 0,
       }),
     ).toBe(3);
+  });
+
+  it("第 2 遍的名单：整块那一支照旧全跑，probe 那一支才挑（且惰性读 junit）", () => {
+    const files = ["tests/a.test.ts", "tests/b.test.ts"];
+    /* 整块买得起 ⇒ 名单是全部，而且**一次 junit 都不读**：这一档不需要挑谁。 */
+    const noRead = () => {
+      throw new Error("整块那一支不该读 junit 读数");
+    };
+    expect(
+      rerunFileList({
+        gate: { via: "block" },
+        files,
+        readSuites: noRead,
+        isTimeout: isTimeoutShaped,
+      }),
+    ).toEqual(files);
+    /* probe 那一支才读，且按读数挑。 */
+    expect(
+      rerunFileList({
+        gate: { via: "probe", probeCount: 1 },
+        files,
+        readSuites: () => [
+          { name: "tests/a.test.ts", body: "Test timed out in 30000ms." },
+          { name: "tests/b.test.ts", body: "AssertionError: boom" },
+        ],
+        isTimeout: isTimeoutShaped,
+      }),
+    ).toEqual(["tests/b.test.ts"]);
+  });
+
+  it("买得起的那几份**挑谁**：不带指纹的排前面，同档保持清单顺序", () => {
+    /* 现场（ISSUE #2601）：`budgetAllows` 只答「买得起几份」，而调用点拿它去切
+     * `scope.files.slice(0, n)` —— 那是**清单顺序**，与「哪一份最可能量出结论」无关。
+     * 把唯一一次测量落在那几份**必然超时**的文件上，读出来的「仍只是超时形态」是
+     * 一个信息量为零的读数。 */
+    const files = ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"];
+    const readSuites = [
+      { name: "tests/a.test.ts", body: "Test timed out in 30000ms." },
+      { name: "tests/c.test.ts", body: "AssertionError: expected 1 to be 2" },
+    ];
+    /* 只买得起一份 ⇒ 给那份**不带指纹**的（它的红坐实就是 `hard-fail`，多知道一件）。 */
+    expect(
+      probeFiles({ files, count: 1, readSuites, isTimeout: isTimeoutShaped }),
+    ).toEqual(["tests/c.test.ts"]);
+    /* 买得起两份 ⇒ 第二份回到清单顺序（`a` 在 `b` 前），而不是按读数排。 */
+    expect(
+      probeFiles({ files, count: 2, readSuites, isTimeout: isTimeoutShaped }),
+    ).toEqual(["tests/c.test.ts", "tests/a.test.ts"]);
+    /* 买得起全部 ⇒ 原样（这一格不改名单，只改被放过去测量的那几份是谁）。 */
+    expect(
+      probeFiles({ files, count: 3, readSuites, isTimeout: isTimeoutShaped }),
+    ).toEqual(files);
+    /* 一份都买不起 ⇒ 空，不拿「反正要挑一份」顶上。 */
+    expect(probeFiles({ files, count: 0, readSuites })).toEqual([]);
+    expect(probeFiles({ files: [], count: 2 })).toEqual([]);
+    /* junit 里**查不到自己**的那份仍在候选里（它要落到下面那条逐文件补跑），
+       `isTimeout` 默认值不许把它悄悄筛掉。 */
+    expect(probeFiles({ files, count: 2 })).toEqual([
+      "tests/a.test.ts",
+      "tests/b.test.ts",
+    ]);
   });
 
   it("两句判点话术各自必须说完「界是多少 / 为什么停 / 下一动作」", () => {

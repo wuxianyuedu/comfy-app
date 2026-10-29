@@ -204,10 +204,11 @@ export function decide(staged) {
  *   mkdir?: (p: string, o?: { recursive?: boolean }) => void,
  *   copy?: (source: string, dest: string) => void,
  *   chmod?: (p: string, m: number) => void,
- *   write?: (p: string, s: string) => void,
  *   platform?: NodeJS.Platform,
  * }} [deps] 全部可注入 —— 用例据此判「建了什么 / 没动什么」，不碰真盘；
  *   `versionOutput` 是 `cargo -vV` 的替身（不注入才真起一次）。
+ *   ⚠️ 这里**没有** `write`：往 `src-tauri/static/`（出厂件那一层）写文件这个动作
+ *   本身是缺陷，随 ISSUE #2629 一起移除，不留一个「以后还可以注入进来写一笔」的口子。
  * @returns {{ ok: boolean, lines: string[] }}
  *   `ok: false` = 前提落不了位（triple 取不到等），调用方按编译失败收场并把
  *   `lines` 打出来。
@@ -221,7 +222,6 @@ export function materializeCargoTestInputs({
   mkdir = (p, o) => fs.mkdirSync(p, o),
   copy = (a, b) => fs.copyFileSync(a, b),
   chmod = (p, m) => fs.chmodSync(p, m),
-  write = (p, s) => fs.writeFileSync(p, s, "utf8"),
   platform = process.platform,
 } = {}) {
   const srcTauri = path.join(root, "src-tauri");
@@ -263,16 +263,21 @@ export function materializeCargoTestInputs({
     );
   }
 
+  /* `cargo test` 的编译前提只需要**目录在**（`bundle.resources = ["static/"]` 会去
+   * 解析它），不需要里面有任何东西 —— 实测：清空 `src-tauri/static/` 之后
+   * `cargo test --offline` 照样 `56 passed`（ISSUE #2629 的当场读数）。
+   *
+   * ⚠️ 这里过去会写一个 `.cargo-test-placeholder` 占位文件，而**这一个目录正是
+   * `check-standalone-contents.cjs` 数的第二层**（真被内嵌进 exe 的那一份载荷根）。
+   * 后果是「跑过一次壳的 cargo test 的那台机器上，`pnpm build` 恒红在产物层」
+   * （报的是「顶层出现白名单外的条目」，读起来像谁提交了脏文件），而平台那一跑
+   * 永远看不到这一格 —— CI 不跑 pre-commit，工作区也不留这个文件。
+   * 开发期的编译前提不该往出厂件的扫描面里放任何东西，所以只 `mkdir`，不写文件。 */
   const staticDir = path.join(srcTauri, "static");
   if (!exists(staticDir)) {
     mkdir(staticDir, { recursive: true });
-    write(
-      path.join(staticDir, ".cargo-test-placeholder"),
-      "cargo test 的编译前提占位：resources 声明的 static/ 必须存在。\n" +
-        "真产物由 scripts/build-desktop.mjs 在 tauri build 之前组装；本文件随下一次组装被替换。\n",
-    );
     lines.push(
-      `[shell-gate] cargo test 编译前提：static/ 不在 ⇒ 建空目录 + 占位（真产物归 build-desktop）`,
+      `[shell-gate] cargo test 编译前提：static/ 不在 ⇒ 只建空目录（真产物归 build-desktop）`,
     );
   }
   return { ok: true, lines };

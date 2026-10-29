@@ -20,12 +20,18 @@
  *
  * ⚠️ 转义口径（§11.7 那条坑）：配置里的键是 gitignore 风格转义（`src/app/\(main\)/…`），
  * 磁盘路径是原样圆括号。直接字符串比会造出假红，所以先脱转义再交给 glob 匹配。
+ *
+ * ⚠️ **门槛从「登记处」那份具名导出取，不从默认导出的 `test.coverage.thresholds` 取**
+ * （ISSUE #2669：业主口径把整体 / 目录级覆盖率改成「只上报，不拦 CI」，默认档下交给
+ * vitest 的那一份被开关摘空）。这是本文件唯一能成立的读法 —— 读那份被摘空的，
+ * 判据会在「没人动过任何门槛」的那一天静默变成空转，而它治的正是静默失效。
+ * 「判定 ⇄ 登记是两件事」本身由下面那条档位用例钉住（两侧都判）。
  */
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import vitestConfig from "../vitest.config";
+import vitestConfig, { COVERAGE_THRESHOLDS } from "../vitest.config";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { globToRegExp } = require("../scripts/check-format.cjs") as {
@@ -51,17 +57,21 @@ function sourceFiles(): string[] {
   return out;
 }
 
+/* 门槛读的是**登记处**那份具名导出，不是默认导出里的 `test.coverage.thresholds`
+ * （ISSUE #2669：默认档下那份被开关摘空了 —— 拿它当输入，本判据就会在没人改任何门槛
+ * 的那一天静默变成空转，而这正是本文件立单要治的「写着有、其实没人判」）。
+ * `include` 没有开关，仍读默认导出。 */
 const coverage = (
   vitestConfig as unknown as {
     test?: {
-      coverage?: { include?: string[]; thresholds?: Record<string, unknown> };
+      coverage?: { include?: string[] };
     };
   }
 ).test?.coverage;
 
 const includeEntries = coverage?.include ?? [];
-const thresholdKeys = Object.keys(coverage?.thresholds ?? {}).filter(
-  (key) => typeof coverage?.thresholds?.[key] === "object",
+const thresholdKeys = Object.keys(COVERAGE_THRESHOLDS).filter(
+  (key) => typeof COVERAGE_THRESHOLDS[key] === "object",
 );
 
 const files = sourceFiles();
@@ -79,6 +89,33 @@ describe("覆盖率配置的每一条都要落到真实文件", () => {
     ).toBeTruthy();
     expect(includeEntries.length).toBeGreaterThan(0);
     expect(thresholdKeys.length).toBeGreaterThan(0);
+  });
+
+  it("判定是开关、登记是账：默认档摘空的是「交给 vitest 的那一份」，不是登记处", () => {
+    /* ISSUE #2669 带进来的那条形状，所以两侧都要判，只判一侧就退回本次要修的状态：
+     *   · **登记处**在任何档位都必须满 —— 本文件的清单从它取；
+     *   · **交给 vitest 的那一份**才随开关走 —— 它决定退码。
+     * 期望由当前环境自己推（不写死档位），所以 `COMFY_COVERAGE_ENFORCE=1` 那一档下
+     * 这一条不假红；而「开关没接上」（默认档仍带着门槛）会被那一支 `toBe(0)` 当场抓到。 */
+    const enforce = process.env.COMFY_COVERAGE_ENFORCE === "1";
+    const registered = Object.keys(COVERAGE_THRESHOLDS).length;
+    expect(
+      registered,
+      "登记处空了 —— 门槛被连账一起摘掉，本判据从此没有对象",
+    ).toBeGreaterThan(100);
+    const applied = Object.keys(
+      (
+        vitestConfig as unknown as {
+          test?: { coverage?: { thresholds?: Record<string, unknown> } };
+        }
+      ).test?.coverage?.thresholds ?? {},
+    ).length;
+    expect(
+      applied,
+      enforce
+        ? "硬档下该把登记处整份交给 vitest（读到不等 ⇒ 开关接反）"
+        : "默认档该摘空的是**判定**而不是账（读到非 0 ⇒ 开关没接上，CI 仍会因整体覆盖率红）",
+    ).toBe(enforce ? registered : 0);
   });
 
   it("匹配器本身不是空转：include 合起来要覆盖到成规模的源文件", () => {

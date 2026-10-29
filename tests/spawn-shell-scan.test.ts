@@ -29,9 +29,20 @@
  *   · 真违规仍然判得出来（含多行选项对象、临时树端到端）；
  *   · 普通数据对象的同名键（哪怕值不是 `false`）、`re.exec(...)` 的实参、
  *     字符串里写着 `shell:` 的那几个反例，一个都不判。
+ *
+ * ── ISSUE #2572：同一个坑的**另一半**（「起不来」之外还有「起得绕」）──────────
+ *
+ * `shell: true` 是「开一层 shell 去起垫片」；`.cnb.yml` 那两格写的是
+ * `node_modules/.bin/tsc`，外壳为了起它**回退去跑同目录那份 `.ps1`**——没开
+ * `shell: true`，但同样多了一层宿主。所以本文件接着判两件事：
+ *   · **按名字问出包真身**（`resolveBinEntryByName`）——本仓 `tsc` 与 `tsc6` 是两份
+ *     不同的编译器，按依赖名推会把一个名字安到另一份头上（那两条「本仓事实」的用例）；
+ *   · **清单里不再出现直接起垫片的命令行**，而那两格确实换成了 `ci-run-tool.mjs`
+ *     （读磁盘文本 ⇒ 与上面「形状判据」同一条不固定的理由）。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -39,6 +50,7 @@ import { describe, expect, it } from "vitest";
 import { stripComments } from "./helpers/strip-comments";
 import {
   binRelativePath,
+  resolveBinEntryByName,
   resolvePackageBinEntry,
 } from "../scripts/package-bin-entry.mjs";
 import {
@@ -301,5 +313,346 @@ describe("scripts/package-bin-entry.mjs", () => {
     );
     expect(binRelativePath({ typedoc: "bin/typedoc" }, "别的键")).toBeNull();
     expect(binRelativePath(undefined, "x")).toBeNull();
+  });
+});
+
+/** 造一棵只在测试里用的「检出」（`<root>/node_modules/**` 现摆垫片与包真身）。 */
+function makeFixtureRoot(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "bin-shim-"));
+}
+
+/** 往夹具里写一个文件（父目录现造 —— 夹具就是要在缺目录的地方长出垫片）。 */
+function writeFixture(root: string, rel: string, content: string): string {
+  const abs = path.join(root, rel);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, content);
+  return abs;
+}
+
+/**
+ * 在临时「检出」里摆好文件、跑一段判据、收尾删树。
+ * 值可以写成 `(root) => string`，让内容里带上夹具自己的绝对路径。
+ */
+function withFixture(
+  files: Record<string, string | ((root: string) => string)>,
+  fn: (root: string) => void,
+) {
+  const root = makeFixtureRoot();
+  try {
+    for (const [rel, content] of Object.entries(files)) {
+      writeFixture(
+        root,
+        rel,
+        typeof content === "function" ? content(root) : content,
+      );
+    }
+    fn(root);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 「按**垫片名字**问归谁」那一族（ISSUE #2572）。
+ *
+ * ── 为什么这一族必须单独钉 ────────────────────────────────────────────────
+ *
+ * 上面那个按包名解析的回答是「这个包的入口在哪」；CI 清单里要问的是**另一个**问题：
+ * 「`.bin/tsc` 这一跳，实际跑的是哪份文件」。本仓这两件事的答案**不是同一个包**，
+ * 而漂移的形态是静默的：拿依赖名去推 ⇒ 拿到 `null` ⇒ 很自然地补一句
+ * 「取 `bin` 的第一个键」 ⇒ 拿到的是**另一份编译器的入口**，跑起来一声不吭。
+ *
+ * ⚠️ 量具边界（先说清，免得下次把这条当「它证明了两份版本永远不同」）：
+ *   · 下面那两条「本仓事实」的用例读的是**当前装的** `node_modules`，它们钉的是
+ *     「名字归谁」这条**关系**，不钉版本号 —— 升过 `@typescript/*` 之后关系若变了，
+ *     用例会红在那一句 `bin` 键的比对上，这正是需要重读口径的时刻；
+ *   · 「起得来」这一半由 `ci-run-tool` 那几条端到端用例判（真起一次子进程）。
+ */
+describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", () => {
+  /** 从「包真身入口」回到那份包的 `package.json`（`<pkgDir>/bin/<名>` 那一层）。 */
+  const pkgJsonOfEntry = (entry: string) => {
+    const pkgDir = path.resolve(entry, "..", "..");
+    return {
+      pkgDir,
+      pkg: JSON.parse(
+        fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
+      ) as { name: string; version: string; bin?: Record<string, string> },
+    };
+  };
+
+  it("本仓 `tsc` 与 `tsc6` 解析到**两份不同的包**，且各自 `bin` 里就是那个名字", () => {
+    const tsc = resolveBinEntryByName("tsc");
+    const tsc6 = resolveBinEntryByName("tsc6");
+    expect(tsc, "`.bin/tsc` 解析不到").toBeTruthy();
+    expect(tsc6, "`.bin/tsc6` 解析不到").toBeTruthy();
+    expect(tsc).not.toBe(tsc6);
+
+    /* 「不同」要能指到包：两份各有自己的 `package.json`，且**那个名字的 `bin` 键只在
+     * 自己那一份里** —— 这是「垫片说的」与「依赖名说的」各说各话的那一格的正面证据。 */
+    const a = pkgJsonOfEntry(tsc!);
+    const b = pkgJsonOfEntry(tsc6!);
+    expect(a.pkgDir).not.toBe(b.pkgDir);
+    /* 「不许混」判到**版本与申报名都不同**这一层 —— 但刻意不钉死具体号
+     * （`7.0.2` / `6.0.2` 是当场读数，写进断言就成了会过期的账；升过版本之后这条
+     * 仍判「两份是不是两份」，而单子要的就是那一格）。 */
+    expect(a.pkg.version, "两份编译器报同一个版本 —— 混成一份了").not.toBe(
+      b.pkg.version,
+    );
+    expect(a.pkg.name, "两份编译器申报同一个包名 —— 混成一份了").not.toBe(
+      b.pkg.name,
+    );
+    expect(a.pkg.bin?.tsc, "`.bin/tsc` 那份包的 bin 里没有 tsc 键").toBeTruthy();
+    expect(b.pkg.bin?.tsc6, "`.bin/tsc6` 那份包的 bin 里没有 tsc6 键").toBeTruthy();
+    expect(a.pkg.bin?.tsc6 ?? null, "两份的键撞了：tsc 那份也有 tsc6").toBeNull();
+    expect(b.pkg.bin?.tsc ?? null, "两份的键撞了：tsc6 那份也有 tsc").toBeNull();
+    /* 入口路径与包自己申报的那条一致（垫片没指到别处去）。 */
+    for (const [name, entry] of [
+      ["tsc", tsc!],
+      ["tsc6", tsc6!],
+    ] as const) {
+      const { pkgDir, pkg } = pkgJsonOfEntry(entry);
+      expect(path.resolve(pkgDir, pkg.bin![name]!.replace(/^\.\//, ""))).toBe(
+        entry,
+      );
+    }
+  });
+
+  it("危险的那一格：`require.resolve(\"typescript\")` 与 `.bin/tsc` **不是同一份包**", () => {
+    /* 这条是本单的全部理由，所以它判的是**关系**而不是路径字符串：
+     *   · 按依赖名解析 ⇒ 别名包（`@typescript/typescript6`）；
+     *   · 按垫片名字 ⇒ 另一个包（`@typescript/native`），而它自己申报的 `name`
+     *     恰恰是 `typescript`。
+     * 谁在这里补「取 `bin` 的第一个键」当兜底，`tsc` 就安静地跑成了别名包那份 ——
+     * 下面那两条 `toBeNull` 就是那个兜底会被写出来的原因。 */
+    const requireFromRoot = createRequire(path.join(ROOT, "noop.js"));
+    const byDepName = path.dirname(
+      requireFromRoot.resolve("typescript/package.json"),
+    );
+    const byShimName = path.dirname(
+      path.dirname(resolveBinEntryByName("tsc")!),
+    );
+    expect(byShimName, "`.bin/tsc` 与 `require.resolve(\"typescript\")` 给了同一份包 —— 口径变了，重读 #2572").not.toBe(
+      byDepName,
+    );
+    const aliasPkg = JSON.parse(
+      fs.readFileSync(path.join(byDepName, "package.json"), "utf8"),
+    ) as { name: string; bin?: Record<string, string> };
+    expect(resolvePackageBinEntry("typescript"), "按依赖名居然解析得到").toBeNull();
+    expect(
+      resolvePackageBinEntry("@typescript/native"),
+      "按目录名居然解析得到",
+    ).toBeNull();
+    /* 「取第一个键」那条兜底会把 tsc 变成 tsc6 —— 判它，是因为它长得像正确答案。 */
+    const firstKey = Object.keys(aliasPkg.bin ?? {})[0];
+    expect(firstKey).toBe("tsc6");
+    expect(binRelativePath(aliasPkg.bin, "typescript")).toBeNull();
+  });
+
+  it("垫片不存在 ⇒ null（调用方据此退「没结论」，不是「跑过了」）", () => {
+    expect(resolveBinEntryByName("这个垫片一定不存在-2572")).toBeNull();
+  });
+
+  const targetRel = "node_modules/pkg/bin/x";
+  const shimRel = "node_modules/.bin/x";
+  /** 夹具里那份包真身（判据比对的就是它，分隔符由 `path.resolve` 归一）。 */
+  const targetOf = (root: string) => path.join(root, targetRel);
+
+  it("第一层：垫片末尾那行 `# cmd-shim-target=` 直接给答案", () => {
+    /* 正文里那条 `$basedir` 刻意指向**不存在**的文件 —— 否则两层给同一个结果，
+     * 摘掉声明这一层也判不出来（它只是「另一种写法也对了」，不是「这层在场」的证人）。 */
+    withFixture(
+      {
+        [targetRel]: "console.log(1)\n",
+        [shimRel]: (root) =>
+          `#!/bin/sh\nexec node "$basedir/../pkg/bin/absent" "$@"\n# cmd-shim-target=${path
+            .join(root, targetRel)
+            .replace(/\\/g, "/")}\n`,
+      },
+      (root) => {
+        expect(resolveBinEntryByName("x", { root })).toBe(targetOf(root));
+      },
+    );
+  });
+
+  it("第二层：声明指到空气时回落到 `.cmd` 那条相对路径（跳过 node.exe、剥前导分隔符）", () => {
+    /* `node_modules` 是从别的检出搬来的那一形：绝对声明落在空气上，而垫片里那条
+     * 相对路径还在。这一层顺带判两件 —— `node.exe` 那个 token 是可执行位不是目标，
+     * 而 `%~dp0\..\…` 拆出来**带着前导反斜杠**，直接 `path.resolve` 会被当盘根相对
+     * （「所有垫片都解析不到」那一次的根因）。
+     * 夹具里那份 sh shim 刻意**不带** `$basedir` 目标，好让「答上来的是 `.cmd`」
+     * 这件事可归因 —— 两份 shim 给同一个结果时，摘掉任一层都判不出来。 */
+    withFixture(
+      {
+        [targetRel]: "console.log(1)\n",
+        /* 那份 `node.exe` 是**故意摆在那儿**的：真装了它的时候，不跳过可执行位就会
+         * 把它当目标交出去（第一个带 `%~dp0` 的 token 正是它）—— 判「跳过」就得让它在场。 */
+        "node_modules/.bin/node.exe": "",
+        [shimRel]:
+          "#!/bin/sh\nexec node elsewhere \"$@\"\n# cmd-shim-target=G:/别的检出/根本不存在/x\n",
+        "node_modules/.bin/x.cmd": [
+          "@SETLOCAL",
+          '@IF EXIST "%~dp0\\node.exe" (',
+          '  "%~dp0\\node.exe"  "%~dp0\\..\\pkg\\bin\\x" %*',
+          ") ELSE (",
+          '  node  "%~dp0\\..\\pkg\\bin\\x" %*',
+          ")",
+        ].join("\r\n"),
+      },
+      (root) => {
+        expect(resolveBinEntryByName("x", { root })).toBe(targetOf(root));
+      },
+    );
+  });
+
+  it("第二层另一种书写：老 pnpm 的 `$basedir` 垫片（没有那行声明）也要走到", () => {
+    /* 上面那条把声明摘掉之后先撞上的是 `.cmd`，所以这一份**只给 sh shim** ——
+     * 否则 `$basedir` 那一支永远走不到，正例的一种书写形态就没证人。
+     * 顺带判 `"$basedir/node"` 那个 token 被跳过（它是可执行位）。 */
+    withFixture(
+      {
+        [targetRel]: "console.log(1)\n",
+        [shimRel]:
+          '#!/bin/sh\nif [ -x "$basedir/node" ]; then\n  exec "$basedir/node"  "$basedir/../pkg/bin/x" "$@"\nelse\n  exec node  "$basedir/../pkg/bin/x" "$@"\nfi\n',
+      },
+      (root) => {
+        expect(resolveBinEntryByName("x", { root })).toBe(targetOf(root));
+      },
+    );
+  });
+
+  it("声明只认**行首注释**：缩进的那一行不算（垫片正文是人写的，不当键值对全文搜）", () => {
+    withFixture(
+      {
+        [targetRel]: "console.log(1)\n",
+        [shimRel]: (root) =>
+          `#!/bin/sh\n  # cmd-shim-target=${path
+            .join(root, targetRel)
+            .replace(/\\/g, "/")}\n`,
+      },
+      (root) => {
+        expect(resolveBinEntryByName("x", { root })).toBeNull();
+      },
+    );
+  });
+
+  it("夹具里没有那份垫片 ⇒ null（两层都空手，不抛）", () => {
+    withFixture({ [targetRel]: "console.log(1)\n" }, (root) => {
+      expect(resolveBinEntryByName("x", { root })).toBeNull();
+    });
+  });
+});
+
+describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () => {
+  const run = (
+    argv: string[],
+    cwd = ROOT,
+  ): { status: number; stdout: string; stderr: string } => {
+    try {
+      const stdout = execFileSync(process.execPath, argv, {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return { status: 0, stdout, stderr: "" };
+    } catch (err) {
+      const e = err as { status?: number; stdout?: string; stderr?: string };
+      return {
+        status: e.status ?? 1,
+        stdout: String(e.stdout ?? ""),
+        stderr: String(e.stderr ?? ""),
+      };
+    }
+  };
+
+  it("端到端：解析到的那一份**就是被起起来的那一份**（读数 ⇄ 执行同读数）", () => {
+    /* 「解析得到」不等于「跑的是它」——这一条真起一次 `tsc --version`，把两件事对上。
+     * 它同时是 DEP0190 那一族的正面证据：整条链上没有 shell（`spawn-shell-scan` 判形状，
+     * 这一条判真跑起来之后日志里没有宿主的话术）。 */
+    const entry = resolveBinEntryByName("tsc");
+    expect(entry).toBeTruthy();
+    const r = run(["scripts/ci-run-tool.mjs", "tsc", "--version"]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/Version \d/);
+    expect(r.stdout).toContain(`[ci-run-tool] 实际执行：node ${entry}`);
+  });
+
+  it("参数逐字转发（含带空格的值），不拼回一条字符串", () => {
+    withFixture(
+      {
+        "node_modules/pkg/bin/echo.cjs":
+          'process.stdout.write(JSON.stringify(process.argv.slice(2)) + "\\n");\n',
+        "node_modules/.bin/echo": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "echo.cjs")
+            .replace(/\\/g, "/")}\n`,
+      },
+      (root) => {
+        const args = ["--reporter", "verbose output", "--only-changed"];
+        const r = run([
+          "scripts/ci-run-tool.mjs",
+          "--root",
+          root,
+          "echo",
+          ...args,
+        ]);
+        expect(r.status, r.stderr).toBe(0);
+        /* 「逐字」两半都要判：值里带空格被切开 ⇒ 数组对不上；
+         * 被拼成一整串再交给 shell ⇒ 更早就红了（子进程收到一个参数）。 */
+        expect(JSON.parse(r.stdout.split("\n")[0] ?? "[]")).toEqual(args);
+      },
+    );
+  });
+
+  it("子进程的退出码原样转发；解析不到 ⇒ 退 2（没跑 ≠ 跑过）", () => {
+    withFixture(
+      {
+        "node_modules/pkg/bin/fail.cjs": "process.exit(3);\n",
+        "node_modules/.bin/fail": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "fail.cjs")
+            .replace(/\\/g, "/")}\n`,
+      },
+      (root) => {
+        expect(run(["scripts/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(
+          3,
+        );
+
+        const notRun = run([
+          "scripts/ci-run-tool.mjs",
+          "--root",
+          root,
+          "这个垫片不在",
+        ]);
+        expect(notRun.status, "解析不到却退 0/1 —— 会被读成「跑过了且红」").toBe(2);
+        /* 红了要指路：给得出自查入口，不然下一个人只能去猜是哪一层没解析到。 */
+        expect(notRun.stderr).toContain("--by-name");
+        expect(notRun.stderr).toContain("这个垫片不在");
+      },
+    );
+    /* 「没点名要跑谁」同样是没结论，不是绿。 */
+    expect(run(["scripts/ci-run-tool.mjs"]).status).toBe(2);
+    expect(run(["scripts/ci-run-tool.mjs", "--root"]).status).toBe(2);
+  });
+
+  it("`.cnb.yml` 不再直接起 `.bin` 垫片，那两格改走本入口", () => {
+    /* 这一条读磁盘文本，而 `.cnb.yml` **不被任何测试 import** ⇒ 它已经在固定清单里
+     * （`scripts/fixed-structural-tests.mjs`，本文件那条理由登记在那儿）：改清单不会
+     * 把这些用例带进增量面，不固定跑的表现不是红，是下一次又长出 `.bin/tsc`。 */
+    const yml = fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
+    const commandLines = yml
+      .split("\n")
+      /* 注释行是说明，不是命令 —— 本文件里正当地写着「别再写 `node_modules/.bin/…`」
+       * 那一句；把它判成违例就是罚正在教人别这么写的那行（同 `stripComments` 的理由）。 */
+      .filter((l) => !/^\s*#/.test(l));
+    const offenders = commandLines.filter((l) =>
+      /node_modules[\\/]\.bin[\\/]/.test(l),
+    );
+    expect(offenders, "清单里又出现了直接起垫片的写法").toEqual([]);
+    /* 反向：那两格确实用了新入口（只判「没有旧写法」的话，删掉两格也能绿）。 */
+    const joined = commandLines.join("\n");
+    expect(joined).toContain("node scripts/ci-run-tool.mjs tsc --noEmit");
+    expect(joined).toContain(
+      "node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts",
+    );
   });
 });

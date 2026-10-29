@@ -32,7 +32,11 @@
  */
 export const GENERATED_PREFIXES = ["docs/api/", "docs/generated/"];
 
-/** 该路径是不是生成物（退回即常态，不判）。 */
+/** 该路径是不是生成物（退回即常态，不判）。
+ *
+ * @param {string} file 变更清单里的一条路径
+ * @returns {boolean}
+ */
 export function isGenerated(file) {
   return GENERATED_PREFIXES.some((p) => file.startsWith(p));
 }

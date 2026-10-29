@@ -43,9 +43,13 @@ const HERE = import.meta.dirname;
  * 走的是**同一条判决链**（`affected-tests.mjs`），不是第二份筛法：
  * 两处各自筛一遍的漂移是静默的，而这一档的红会拦推送。
  *
+ * 转出给「拆小建议」那一格（`affected-launch-scope-advice.mjs`）：它要的是**同一份**
+ * 改动面，只是拿去问另一个问题（每个改动文件各自拉进来多少份）。让那边自己再读一遍
+ * 那个变量就是同一句判断的第二份副本 —— 漂开时那一段归因会静默变成恒空。
+ *
  * @returns {string[]}
  */
-function changedFromEnv() {
+export function changedFromEnv() {
   return (process.env.COMFY_AFFECTED_CHANGED ?? "")
     .split(/[\n\r]+/)
     .map((s) => s.trim())
@@ -59,11 +63,16 @@ function changedFromEnv() {
  * 定位它靠 cwd 就多一条「从哪跑就得到哪」的隐含前提（实测：从别的目录用绝对路径起
  * 这个启动器，cwd 那一条会让子进程去找一个不存在的脚本）。
  *
+ * 转出（而不是另写一份）是为了让**第二跳调用方**也走同一个载体：拆小建议那一格
+ * （`affected-launch-scope-advice.mjs`）问的是同一件事的另一个切面 —— 「每个改动文件
+ * 各自拉进来多少份」。抄一份命令行形状就会在某一次改动里漂开（多一个旗标、少一层
+ * encoding），而漂开的表现是那一格静默回到「拿不到归因」。
+ *
  * @param {string[]} extra 子进程要额外带的旗标（如 `--attribute`）
  * @param {string[]} changed 改动面清单
  * @returns {{status: number|null, stdout: string, stderr: string, error?: Error}}
  */
-function spawnAffected(extra, changed) {
+export function spawnAffected(extra, changed) {
   return spawnSync(
     process.execPath,
     [
@@ -99,40 +108,6 @@ export function describeListFailure({
     ? `子进程起不来（${`${error.code ?? ""} ${error.message ?? ""}`.trim()}）`
     : `退出码 ${status ?? "信号"}`;
   return `[affected-launch] 清单解析失败（${why}；改动面 ${changedCount} 条）`;
-}
-
-/**
- * 调 `affected-tests.mjs --attribute` 拿「每个改动文件各自影响多少份」。
- *
- * 失败一律返回空数组：这条建议的分量只到「提示」，拿不到归因就不给建议 ——
- * 为一个纯提示让整个 C 组崩掉是把主次搞反了（与 `--attribute` 自己也「拿不到图时
- * 打空数组而不是报错」同口径）。**但必须打到 stderr**，静默吞掉会让「归因从来没
- * 成功过」这件事没人知道（同 §11.23「声明 ⇄ 读者」那一族）。
- *
- * ⚠️ 改动面**要一起送过去**（ISSUE #2240 的第三格）：原先这一档不带清单 ⇒
- * `affected-tests.mjs` 只能读暂存区，而平台侧没有暂存区 ⇒ 归因恒为空 ⇒
- * 那条「拆小」建议在平台上从来没生效过（只影响提示、不影响判定，但与本条同处一处失修）。
- *
- * @returns {Array<{file: string, affected: number}>}
- */
-export function collectAttribute() {
-  const res = spawnAffected(["--attribute"], changedFromEnv());
-  if (res.status !== 0) {
-    process.stderr.write(
-      "[affected-launch] 改动面归因拿不到（仅影响下面那条建议，不影响本次判定）\n",
-    );
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(String(res.stdout ?? "[]"));
-    if (!Array.isArray(parsed)) throw new Error("不是数组");
-    return parsed;
-  } catch {
-    process.stderr.write(
-      "[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n",
-    );
-    return [];
-  }
 }
 
 /**

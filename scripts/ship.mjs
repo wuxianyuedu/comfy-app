@@ -142,7 +142,11 @@
  *   pnpm ship --close-issue 2179               # 只补关：人点名的号**不要求本轮合并**，
  *                                              #  前提换成「平台查得到它随某条已合并 PR 落地」
  *                                              #  （查不到 ⇒ 退 2；「查不到」不等于「没落地」）
- *   pnpm ship --merge --close-issue 2179       # 本轮号（标题里那批）+ 人点名的号，并集去重
+ *   pnpm ship --merge --close-issue 2179       # 本轮号（标题**末尾的认领形态** `(#N)`）+ 人点名的号，
+ *                                              #  并集去重。正文里裸写的 `#730` 不算认领 ——
+ *                                              #  那是引用，只念一行「没关」并给人点名的出口
+ *                                              #  （ISSUE #2646：PR #2642 的标题让一张早已
+ *                                              #  closed 的邻居免了事故，在世的就是被静默关掉）
  *   pnpm ship --close-issue 2488 --as-merged 2487
  *                                              # 补关的第二条凭据入口（ISSUE #2491）：每日档自动
  *                                              # 立案的单子里没有 (#号) 可反查 ⇒ 人只点名**一条凭据**，
@@ -605,6 +609,7 @@ async function runFlow(deps, tmpFiles) {
         newSha,
         now,
         sleep,
+        number,
       });
       if (poll.stop !== null) {
         codes.push(poll.stop);

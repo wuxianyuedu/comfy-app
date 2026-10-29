@@ -332,7 +332,9 @@ export async function autoselectShotImage(
     if (seen.has(taskId)) continue;
     seen.add(taskId);
     const task = await taskRepository.findByIdWithImages(taskId);
-    if (!task || task.userId !== userId) {
+    /* 等价形态：`userId` 是必填 string，不存在「task 为 null 而 userId 也是
+     * undefined」那一支（`prefer-optional-chain` 要的就是这一句）。 */
+    if (task?.userId !== userId) {
       throw new Error(`候选任务不存在或不属于当前用户：${taskId}`);
     }
     const image = task.images.find((i) => i.isCover) ?? task.images[0];
