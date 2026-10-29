@@ -53,6 +53,12 @@ const {
   reviseScript: vi.fn(async () => "# 改写后的剧本"),
 }));
 vi.mock("~/server/agent/review", () => ({
+  autoselectShotImage: vi.fn(async () => ({
+    winnerTaskId: "task-w",
+    winnerImageUrl: "/generated/task-w/1.png",
+    winnerVerdict: { pass: true, issues: [], suggestion: "", scoredAt: "" },
+    candidates: [],
+  })),
   reviewContent,
   regenerateShot,
   reviewScript,
@@ -410,5 +416,34 @@ describe("run 人工侧（#2480）", () => {
       "characterConsistency",
       "promptAlignment",
     ]);
+  });
+});
+
+describe("run.autoselectShot（FR-QA-04④ · #2612）", () => {
+  it("候选数量越界（<2 / >4）被入参判据拦下", async () => {
+    await expect(
+      createCaller(makeCtx()).autoselectShot({
+        projectId: "proj_1",
+        shotId: "shot-1",
+        taskIds: ["task-1"],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      createCaller(makeCtx()).autoselectShot({
+        projectId: "proj_1",
+        shotId: "shot-1",
+        taskIds: ["a", "b", "c", "d", "e"],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("合法候选透传评审编排，返回赢家与候选分数", async () => {
+    const res = await createCaller(makeCtx()).autoselectShot({
+      projectId: "proj_1",
+      shotId: "shot-1",
+      taskIds: ["task-1", "task-2"],
+    });
+    expect(res.winnerTaskId).toBe("task-w");
+    expect(res.winnerImageUrl).toBe("/generated/task-w/1.png");
   });
 });

@@ -586,12 +586,9 @@
 .lock-probe-a: &lock_probe_a
   key: probe-2363-a
   cancel-in-progress: false
-# `oxfmt 格式` 的**委托回写**口（见 `.format-fixup-stage` 那段）。它自成一份工作清单，
-# 按上面 R3「同一把锁只给同一份清单」的规则必须独占一把 —— 与单跑三档共用会把
-# 「我要复验构建」和「我要补一笔格式修复」排成互斥。
-.lock-formatfix: &lock_formatfix
-  key: formatfix
-  cancel-in-progress: true
+# ⚠️ 这里曾有 `.lock-formatfix`（`oxfmt 格式` 的委托回写口独占一把锁，ISSUE #2362/#2365）。
+# 那个事件连同委托在 ISSUE #2610 里整条摘掉（PR 事件的令牌推不动、也触发不了可信事件），
+# 所以这把锁没有引用者了 —— 留着它就是一条「在册而无人出勤」的配置（§13.5.x 那一族）。
 
 # ── push 档（`master 合并复核`）的格子：树级校验档 ────────────────────────────
 #
@@ -1287,43 +1284,31 @@
     timeout: 5m
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/publish-desktop-bundle.mjs
 
-# ── 格式修复的**委托回写**格（ISSUE #2362 / #2365）──────────────────────────────
+# ── 这里曾有一条「格式修复的委托回写」流水线（ISSUE #2362 / #2365 / #2342）──────────
 #
-# 这一份**不属于**每日档 / 单跑三档，也不许被并进那几张表：它是「一条按需补推」，
-# 由 `pull_request` 那一格的 `start-build --event api_trigger_formatfix` 发出来，
-# 事件键挂在下面不远的 `api_trigger_formatfix` 上（那段头注写着为什么必须换口）。
+# 形状是：`oxfmt 格式` 那一格判红 ⇒ `ci-format-fixup.mjs --check --autofix` 就地写文件、
+# 复判全绿 ⇒ 再 `cnb build start-build --event api_trigger_formatfix` 把回写委托给一条
+# **可信事件**的流水线（`--delegate`，它自己直推 PR 源分支，`--sha` 与 ls-remote 实时头
+# 做幂等闸）。它当时解决的是「PR 事件的令牌推不动」（#2362 的现场：护栏一条没错，
+# 建好修复提交后 push 被拒）。
 #
-# 前提只有一件：`node_modules`。每次构建都是全新 job 目录、`node_modules` 恒不在场
-# （`.cnb.yml` 的 `工作区复用读数` 两跑实测），而判 / 修 / 复判三拍全在这份依赖上。
+# 今天它被**整条摘掉**（ISSUE #2610，业主口径 2026-10-29：本地判 + 本地修，CI 只判），
+# 因为委托那一跳在这类事件上恒发不出去 —— 2026-10-28 实测 build `cnb-tb0-1k61hpvhf`
+# 的 `oxfmt 格式` 那格念的是：
 #
-# `--sha` 与 `--ref` **必须由调用方代入**（`start-build --env`），这里一格正文都不写死：
-#   · `--ref` = PR 源分支。`CNB_BRANCH` 在这一口是「流水线所在分支」（实测 = `master`），
-#     拿它当回写目标正是 #2358 首跑认错分支的同一个根因；
-#   · `--sha` = 委托那一刻的源分支头。它同时是**幂等闸**：被委托这一跑拿 `git ls-remote`
-#     的实时头与它比，对不上就说明中间有人推过 ⇒ 打一行读数、退 0、不推。
-#     不用 `CNB_COMMIT` 当闸 —— 那是触发那一刻的快照，会一直对得上、白推一次非 fast-forward。
+#   [format-fixup] × start-build 退了 0 但读不回 sn —— 委托没发出去（403 / scope 不足那一族）
+#   status: 403 · errcode: 10023
+#   errmsg: "The token's authorization scope does not match this request.
+#            Missing required scopes: repo-cnb-trigger:rw"
 #
-# ⚠️ `--delegate` 是「我就是回写口」的显式声明：脚本靠它区分「自己是那一格」与
-# 「自己被挂在 PR 那一格上」—— 后者在当前令牌下根本推不动，唯一的出路是再委托一次。
-# 少写这一个旗标的表现是：这一格自己把事件又发回给自己（死循环，且账面全绿）。
+# ⇒ 需要的是 `repo-cnb-trigger:rw`，而 PR 事件那把令牌只有 `repo-code:r`，**没有开关可改**。
+# 于是这条链的设计前提（「换执行口就能推」）在唯一需要它的事件类型上不成立，
+# 每次格式红都要白跑一次委托、再把同一个红交回给人。
+# 判与修都挪到 `.githooks/pre-commit` 的 D0（同一份 `check-format.cjs --staged`）。
 #
-# `timeout: 10m`：装依赖 + 一次 prettier，与 `oxfmt 格式` 那一格同量级；
-# 给 10m 是「卡死要早报」的余量，不是重试预算（这一格不重试）。
-.format-fixup-delegate: &format_fixup_delegate
-  - name: 委托回写·安装依赖
-    script: |
-      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
-      $ErrorActionPreference = "Stop"
-      node scripts/ci-cp936-exit.mjs -- node scripts/check-pnpm-available.mjs
-      node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs
-  - name: 委托回写·判修推
-    script: |
-      $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
-      $args = @("--check", "--autofix", "--delegate")
-      if ($env:COMFYAPP_ACTING_REF) { $args += @("--ref", $env:COMFYAPP_ACTING_REF) }
-      if ($env:COMFYAPP_ACTING_SHA) { $args += @("--sha", $env:COMFYAPP_ACTING_SHA) }
-      node scripts/ci-cp936-exit.mjs -- node scripts/ci-format-fixup.mjs @args
-    timeout: 10m
+# 如果哪天要把它接回来（比如给 CI 配了带触发权限的单独令牌 —— 那是 ISSUE #2551 那件事），
+# 恢复的不该只是这两段 YAML：**委托发的出去之前，PR 那一格不许再挂 `--autofix`** ——
+# 「就地修好但回不去」正是让陈旧在 CI 上隐形的那一格（ISSUE #2231 同型，别再来一次）。
 
 # ── PR 失败立案：这一跑红了 ⇒ 把红变成**看得见**的东西（ISSUE #2332）─────────────
 #
@@ -2053,11 +2038,19 @@
     ifModify:
       - "src/**"
       - ".storybook/**"
-    # #2342（口径变更，业主拍板）：红 ⇒ 就地 prettier --write 门禁判出的那几个文件、
-    # 复判全绿后由 bot 推一个 format-only 提交回 PR 源分支，流水线在新提交上重跑。
-    # 判据本体一字未改（ci-format-fixup.mjs 内部先原样跑 check-format.cjs；绿时
-    # 一个字节不多写）。四道护栏与凭据说明见脚本头注与规范 §13.5.19 末节。
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-format-fixup.mjs --check --autofix
+    # 口径变更（ISSUE #2610，业主拍板 2026-10-29）：**这一格只判，不再修也不再委托**。
+    # 此前它跑 `ci-format-fixup.mjs --check --autofix`：红 ⇒ 就地写文件 ⇒ 复判全绿 ⇒
+    # 把修复提交委托给 `api_trigger_formatfix`（可信事件、令牌 rw）回写。实测这条路在
+    # PR 事件上恒发不出去 —— 那一类事件的令牌只有 `repo-code:r`，`start-build` 当场
+    # `403 / errcode 10023 / Missing required scopes: repo-cnb-trigger:rw`
+    # （build `cnb-tb0-1k61hpvhf` 的 stage-25，2026-10-28），脚本 fail-closed 照旧退 1，
+    # 于是「自动修」这一段每次都白走、还让人以为差一个权限就通了。
+    # 修与判现在都落在**本地**：`.githooks/pre-commit` 的 D0 带 `--staged` 跑同一份
+    # `check-format.cjs`，红了人就 `pnpm exec oxfmt <点名的文件>`（只点本次改的）。
+    # 平台这一格留的是**第二层**：判据本体一字未改，参数按原来平台侧的口径不带 `--staged`
+    # （那里的工作区就是这次要判的那份源码，带 `--staged` 读到的是空的暂存区 ⇒ 恒跳过，
+    # 「挂了等于没挂」—— 这条由 `tests/doc-check-hook-wiring.test.ts` 钉着）。
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-format.cjs
 
   # 收窄（ISSUE #1993）：它判的是「这次提交里有多少个文件只是被 prettier 重排过」，
   # 而判据本体是**逐文件跑 prettier**（每个改动过的源文件一次）。所以面就是
@@ -2617,37 +2610,18 @@ master:
       lock: *lock_oneshot_unit
       stages: *oneshot_unit
 
-  # ── 第四个 API 口：`oxfmt 格式` 的**委托回写**（ISSUE #2362 / #2365）─────────
+  # ── 这里曾有第四个 API 口：`api_trigger_formatfix`（ISSUE #2362 / #2365）─────────
   #
-  # 为什么需要第二条 API 口：`oxfmt 格式` 那一格现在会自己修（#2342），但它在
-  # `pull_request` 事件上 —— 而 PR 类事件的 `CNB_TOKEN` **只有 `repo-code:r`**（平台按
-  # 「事件 + ref」给权限，`pull_request` 整族在「不可信事件」名单里，没有任何 YAML 开关能翻；
-  # OIDC 也不给 PR / Issue 事件签发 id_token）。红路径实测（#2362 的 `cnb-1mr` 那跑）：
-  # 判红 → 就地修 → 复判全绿 → 源分支反查正确 → plumbing 建好修复提交 `488837a1` →
-  # **push 被拒**。护栏一条没错，缺的是「谁有权推」。
-  #
-  # 出路不是要权限（没有那个开关），也不是配一套长期 bot 凭据（多一个轮换面 + 泄漏面），
-  # 而是**换执行口**：`api_trigger` 是可信事件、令牌 `rw`。同一轮里用一条临时流水线实测过
-  # `git push --dry-run origin HEAD:refs/heads/probe-perm` ⇒ `PUSH_RC=0`、`[new branch]`。
-  #
-  # 于是 `oxfmt 格式` 那一格在 PR 事件上只做「判 / 修 / 复判」，再把
-  # `cnb build start-build --event api_trigger_formatfix` 发出来；被委托的这一条跑
-  # `--delegate`（它就是回写口，自己推）。两格各跑一次 prettier，多出来的那一遍是
-  # 这个洞的定价。
-  #
-  # ⚠️ 三条形状约束，每一条都不能省：
-  #   · **参数走 `--ref` / `--sha` / `env`，不指望环境变量**：`CNB_BRANCH` 在 `api_trigger`
-  #     上是「这条流水线所在分支」（实测就是 `master`），拿它当回写目标会推错地方 ——
-  #     与 #2358 首跑把它当 PR 源分支是同一个根因；
-  #   · **`lock` 自己一把**（`*lock_formatfix`）：它的 `stages:` 是一份新清单，
-  #     按 R3「同一把锁只给同一份清单」必须独占，否则与单跑三档排成互斥；
-  #   · **不进 `*daily_gates` / `*oneshot_*`**：它是「一条按需补推」，不是每日档、也不是
-  #     那三档重档的任何一档 —— 把它塞进那几张表会让「手点一遍每日档」多跑一次推送。
-  api_trigger_formatfix:
-    - <<: *common
-      name: 格式修复委托回写（API 触发）
-      lock: *lock_formatfix
-      stages: *format_fixup_delegate
+  # 它存在的唯一理由是「`oxfmt 格式` 那一格在 PR 事件上推不动，要换一个可信事件做回写口」。
+  # 整条链已在 ISSUE **#2610** 里摘掉，而摘它的证据正是这一口**没等到自己的前提**：
+  # 委托那一跳本身也要权限，2026-10-28 实测 `start-build` 回
+  # `403 / errcode 10023 / Missing required scopes: repo-cnb-trigger:rw` ——
+  # PR 类事件的令牌只有 `repo-code:r`，而平台没有 YAML 开关能翻上去（#2362 当年写的
+  # 「换执行口就能推」只对**被委托的那一条**成立，发起委托的那一跳照样被拒）。
+  # 判与修现在都在本地（`.githooks/pre-commit` 的 D0 跑 `check-format.cjs --staged`），
+  # 平台那一格只判。要恢复回写能力请先看 ISSUE **#2551**（给 CI 配单独令牌那件事），
+  # 并且记住：**委托发不出去之前，PR 那一格不许再挂 `--autofix`**（就地修 + 回不去
+  # = 让陈旧隐形的那一格，ISSUE #2231 同型）。
 
   # ── 锁编排探针（ISSUE #2363）：三条**一次性**流水线，读数取完即**整段删掉** ─────
   #

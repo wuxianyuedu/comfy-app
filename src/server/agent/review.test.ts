@@ -35,13 +35,19 @@ import { productionRepository } from "~/lib/core/repository-production";
 import { normalizeScriptReviewState } from "~/lib/production/review-types";
 import { REVIEW_RUBRICS } from "~/lib/production/review-rubrics";
 import {
+  autoselectShotImage,
   regenerateShot,
   reviewContent,
   reviewScript,
   reviewShotImage,
   reviseScript,
 } from "~/server/agent/review";
-import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedTask,
+  seedUser,
+  type Row,
+} from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
 const USER = "user-a";
@@ -417,5 +423,122 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
     await expect(reviewShotImage(USER, PROJ, "missing")).rejects.toThrow(
       /找不到要评审的镜头/,
     );
+  });
+});
+
+// ── 自动优选：抽卡 N 选 1（FR-QA-04④ · #2612）──────────────────
+
+describe("autoselectShotImage", () => {
+  const cover = (id: string, path: string): Row => ({
+    id,
+    localPath: path,
+    mediaType: "image",
+    seed: "42",
+    width: 512,
+    height: 512,
+    isCover: true,
+    sortIndex: 0,
+  });
+
+  beforeEach(() => {
+    // 默认判定带一个维度分（mean = score）；各用例再按需覆盖。
+    completeLLMStructured.mockImplementation(async () => ({
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scores: { 对齐: { score: 3, note: "" } },
+    }));
+  });
+
+  it("逐候选打分，均分最高者为赢家；imageUrl/taskId 不被服务端直写（草稿回写口径）", async () => {
+    await seed({
+      shots: [
+        {
+          id: "shot-1",
+          index: 1,
+          prompt: "一只猫",
+          status: "done",
+          imageUrl: "/generated/task-a/1.png",
+        },
+      ],
+    });
+    seedTask(tdb, {
+      id: "task-a",
+      userId: USER,
+      status: "SUCCEEDED",
+      projectId: PROJ,
+      images: [cover("a1", "/generated/task-a/1.png")],
+    });
+    seedTask(tdb, {
+      id: "task-b",
+      userId: USER,
+      status: "SUCCEEDED",
+      projectId: PROJ,
+      images: [cover("b1", "/generated/task-b/1.png")],
+    });
+    // 候选 A 得 3 分、候选 B 得 5 分 → B 胜出。
+    completeLLMStructured
+      .mockResolvedValueOnce({
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scores: { 对齐: { score: 3, note: "" } },
+      })
+      .mockResolvedValueOnce({
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scores: { 对齐: { score: 5, note: "" } },
+      });
+
+    console.log(
+      "DEBUG row:",
+      (await productionRepository.getForUser(USER, PROJ))?.id,
+    );
+    const res = await autoselectShotImage(USER, PROJ, "shot-1", [
+      "task-a",
+      "task-b",
+    ]);
+    expect(res.winnerTaskId).toBe("task-b");
+    expect(res.winnerImageUrl).toBe("/generated/task-b/1.png");
+    expect(res.candidates.length).toBe(2);
+
+    // 赢家判定落 shot.imageReview（与 reviewShotImage 同一落点）；镜头的
+    // imageUrl / taskId 不被服务端动（草稿回写口径，字段所有权见 #2615）。
+    const shot = (await rows("shots"))[0]!;
+    expect((shot.imageReview as { scores: unknown }).scores).toBeTruthy();
+    expect(shot.imageUrl).toBe("/generated/task-a/1.png");
+  });
+
+  it("候选无产物 → 跳过并记录；全无产物 → 可行动错误", async () => {
+    await seed({
+      shots: [{ id: "shot-1", index: 1, prompt: "x", status: "done" }],
+    });
+    seedTask(tdb, {
+      id: "task-empty",
+      userId: USER,
+      status: "FAILED",
+      projectId: PROJ,
+    });
+    await expect(
+      autoselectShotImage(USER, PROJ, "shot-1", ["task-empty", "task-empty"]),
+    ).rejects.toThrow(/没有产物/);
+  });
+
+  it("候选不属于当前用户 → 拒绝；数量越界 → 可行动错误", async () => {
+    await seed({ shots: [{ id: "shot-1", index: 1, prompt: "x" }] });
+    seedTask(tdb, {
+      id: "task-other",
+      userId: "user-b",
+      status: "SUCCEEDED",
+      projectId: PROJ,
+    });
+    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    await expect(
+      autoselectShotImage(USER, PROJ, "shot-1", ["task-other", "task-other"]),
+    ).rejects.toThrow(/不属于当前用户/);
+    await expect(
+      autoselectShotImage(USER, PROJ, "shot-1", ["only-one"]),
+    ).rejects.toThrow(/2~4/);
   });
 });
