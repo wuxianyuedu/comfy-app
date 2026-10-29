@@ -98,6 +98,11 @@ function countUserTables() {
           "SELECT count(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
         )
         .get();
+      /* `.get()` 取不到东西 = 驱动/连接不对，**不是**「库里有 0 张表」——
+       * 这一句直接 `row.c` 会抛出去被下面那个大 `catch` 折成 -1（今天的行为），
+       * 写成 `row?.c ?? 0` 就把「取不到」降成了「无表」——那正是本文件下游要区分
+       * 的两件事（0 会让复核报「drizzle-kit 没建表」）。所以判空照旧回 -1。 */
+      if (!row) return -1;
       return Number(row.c ?? 0);
     } finally {
       db.close();
@@ -107,6 +112,8 @@ function countUserTables() {
   }
 }
 
+/** 报错并终止 —— 返回类型写 `never`（批 12 那条口径）：它的调用点都在「说完就走」的位置。
+ * @param {string} message @returns {never} */
 function fail(message) {
   process.stderr.write(`\n[db:push] ✗ ${message}\n\n`);
   process.exit(1);
@@ -144,7 +151,12 @@ function syncSchema() {
   const cli = pnpmCli();
   const result = pushSchema(root, {
     force: true,
-    run: (args, { cwd, env, stdio, timeoutMs }) =>
+    /* 两个默认值不是防御，是**照契约写**：这里注入的 `run` 按内核声明是
+     * `typeof runPnpmSync`，而后者自己就是 `runPnpmSync(args = [], {…} = {})`
+     * （`launcher-core/shell.mjs:261`）—— 即「可以裸调」是这份契约的一部分。
+     * 原来这一句两个参数都当必然存在用，于是解构那一步在类型上读不到字段
+     * （6 格红全在这一行）。 */
+    run: (args = [], { cwd, env, stdio, timeoutMs } = {}) =>
       spawnSettled(cli.command, [...cli.prefixArgs, ...args], {
         cwd,
         env,
