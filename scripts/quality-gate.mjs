@@ -7,6 +7,11 @@
  * Windows 侧的双击入口（`tools/start/verify-quality.ps1`）走 `.ps1`；Linux / macOS / CI
  * 直接跑本文件（`pnpm check:all`），不需要 pwsh。
  *
+ * ⚠️ 「同契约」指的是**门禁清单、退出码、话术形状**三份，不含两条流的分派：本文件的
+ * 红行走 stderr（`emitVerdict()` 一处决定，为的是机器侧能用 `2>` 单独捞出来，
+ * ISSUE #2653），而 `.ps1` 那一侧是人对着控制台看 —— 两条流落在同一屏里，分派没有消费者。
+ * 因此既不要为此改 `.ps1`，也不要反过来把本文件的红行拉回 stdout。
+ *
  * 为什么不把口令写进文档让人手敲：门禁是**多步串联**（三条命令 + 依赖一致性预检 +
  * 已知基线失败排除）。写成文档就有「漏跑一步 / 顺序反了 / 只跑了自己记得的那个」的
  * 空间，而这些都不会报错——只是让绿灯变得不可信（规范 §9.2 第 3 条禁止的静默失败）。
@@ -36,6 +41,25 @@ const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /**
+ * 一条判决落在哪条流，**只在这一处决定**：红走 stderr、其余走 stdout。
+ *
+ * 这句话此前是本文件里的两份答案（ISSUE #2653）：`reportVerdict()` 用两个 `for`
+ * 各写一遍分流，而 `fail()` 与整轮小结根本没写 —— 于是「红要能从一屏绿里被 `2>`
+ * 单独捞出来」只覆盖到各档自己那一行，失败路径与「这一轮红了几档」那三行仍在 stdout。
+ * 判决行、它前面那段段头、它后面那几行出路**必须同一条流**：出路留在 stdout，
+ * 捞出来就只剩半截判决。
+ *
+ * @param {{state?: "ok"|"skip"|"red", gate?: string, subject?: string, detail?: string, hint?: string, items?: Array<string>, before?: Array<string>, after?: Array<string>}} verdict
+ *   除 `before` / `after` 之外的字段原样交 `renderVerdict()`（纯函数，本文件不碰它的形状）
+ */
+function emitVerdict({ before = [], after = [], ...verdict }) {
+  const write = verdict.state === "red" ? console.error : console.log;
+  for (const line of before) write(line);
+  for (const line of renderVerdict(verdict)) write(line);
+  for (const line of after) write(line);
+}
+
+/**
  * 失败路径的统一出口（ISSUE #2588）：此前四条失败路径调用一个**从未声明过**的
  * `fail()`，真跑进去时抛 `ReferenceError: fail is not defined` —— 结论方向没错
  * （仍然非零退出），但失败原因那一格是空的，读者拿到的是一屏指向门禁自身的栈。
@@ -43,11 +67,15 @@ const ROOT = path.resolve(HERE, "..");
  * 提示行与退出码仍由调用点自己负责（四个站点的码各不相同：null / 1 / 2）。
  *
  * @param {string} message 本来要说的那句可行动的中文
- * @param {string} [gate] 判据名（缺省按本入口自己的名字念）
+ * @param {{gate?: string, before?: Array<string>, after?: Array<string>}} [options]
+ *   `gate` 判据名（缺省按本入口自己的名字念）；`before` / `after` 是同一条失败块的
+ *   段头与出路 —— 跟着判决走同一条流，不许留在 stdout
  */
-function fail(message, gate = "quality-gate") {
-  for (const line of renderVerdict({ state: "red", gate, detail: message }))
-    console.log(line);
+function fail(
+  message,
+  { gate = "quality-gate", before = [], after = [] } = {},
+) {
+  emitVerdict({ state: "red", gate, detail: message, before, after });
 }
 
 /** 门禁清单：与 quality-gate.ps1 的 $Blocks 一一对应（新增门禁两处同步）。 */
@@ -227,7 +255,7 @@ function parseArgs(argv) {
  * 三段话术说同一件事，且「这一档没跑」在三种形状里没有位置。
  */
 function reportVerdict(gate, code) {
-  const lines = renderVerdict({
+  emitVerdict({
     state: code === 0 ? "ok" : "red",
     gate: gate.label,
     detail: code === 0 ? "通过" : `退出码 ${code}`,
@@ -236,9 +264,6 @@ function reportVerdict(gate, code) {
         ? ""
         : "先修这一档，再重跑 `pnpm check:all`（`--mode <档名>` 可以只重跑它）",
   });
-  /* 绿走 stdout、红走 stderr：红的那些行要能从一屏绿里被 `2>` 单独捞出来。 */
-  for (const line of code === 0 ? lines : []) console.log(line);
-  for (const line of code === 0 ? [] : lines) console.error(line);
 }
 
 /**
@@ -285,13 +310,12 @@ function resolvePnpm() {
   const invocation = pnpmInvocation([]);
   if (invocation)
     return { command: invocation.command, prefixArgs: invocation.args };
-  fail("PATH 上找不到可用的 pnpm —— 门禁无法运行。");
-  console.log(
-    "        自查：pnpm check:toolchain（会打印选中的形态与探测结果）",
-  );
-  console.log(
-    "        修复：corepack enable && corepack prepare pnpm@<packageManager 版本> --activate",
-  );
+  fail("PATH 上找不到可用的 pnpm —— 门禁无法运行。", {
+    after: [
+      "        自查：pnpm check:toolchain（会打印选中的形态与探测结果）",
+      "        修复：corepack enable && corepack prepare pnpm@<packageManager 版本> --activate",
+    ],
+  });
   return null;
 }
 
@@ -338,8 +362,8 @@ function runGate(pnpm, key) {
   if (result.error) {
     fail(
       `起 ${command} 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
+      { after: [`        实际命令：${formatCommandLine(command, argv)}`] },
     );
-    console.log(`        实际命令：${formatCommandLine(command, argv)}`);
     return 1;
   }
   const code = result.status ?? 1;
@@ -364,22 +388,24 @@ function main() {
 
   const drift = dependencyDrift();
   if (drift.drift) {
-    console.log("");
-    console.log("==> 依赖一致性预检");
-    fail(`依赖与 pnpm-lock.yaml 不一致（${drift.reason}）。`);
+    /* 段头、逐项差异、出路 —— 与判决行是**同一块**，分开走两条流等于捞出来只剩半截判决。 */
+    const after = [];
     if (drift.diff) {
-      console.log(
+      after.push(
         "  差异明细（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）：",
+        ...renderDriftReport(drift.diff, { maxPerSection: 8 }),
       );
-      for (const line of renderDriftReport(drift.diff, { maxPerSection: 8 }))
-        console.log(line);
     }
-    console.log(
+    after.push(
       "        请先关闭所有正在运行的本项目窗口（dev server 会锁住原生模块），",
+      "        然后在项目根目录执行：pnpm install",
+      "        详见 docs/guides/sync-after-pull.md",
+      "",
     );
-    console.log("        然后在项目根目录执行：pnpm install");
-    console.log("        详见 docs/guides/sync-after-pull.md");
-    console.log("");
+    fail(`依赖与 pnpm-lock.yaml 不一致（${drift.reason}）。`, {
+      before: ["", "==> 依赖一致性预检"],
+      after,
+    });
     return 1;
   }
 
@@ -395,10 +421,10 @@ function main() {
       red.push(GATES[k].label);
     }
   }
-  console.log("");
   /* 整轮末尾按「跑了几档、红了几档、红的是谁」说一次：各档自己那几行只回答
-   * 「我这一档怎么了」，回答不了「这一轮全跑完没有」。 */
-  const lines = renderVerdict({
+   * 「我这一档怎么了」，回答不了「这一轮全跑完没有」。红的那几行（含「红的是谁」
+   * 那一张名单）与判决同一条流 —— 决定下一动作的就是这一行。 */
+  emitVerdict({
     state: exitCode === 0 ? "ok" : "red",
     gate: "一键门禁",
     detail:
@@ -409,9 +435,9 @@ function main() {
       exitCode === 0
         ? ""
         : "依次修上面那几档；只重跑其中一档用 `--mode <档名>`（可选：pnpm check:all --mode lint）",
+    items: red.map((name) => `· ${name}`),
+    before: [""],
   });
-  for (const line of lines) console.log(line);
-  for (const name of red) console.log(`    · ${name}`);
   return exitCode;
 }
 
