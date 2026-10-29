@@ -10,13 +10,7 @@
 // 按「未配置」处理，绝不抛错把读取流程打断。本模块不依赖 server-only，
 // 供 Next server 与纯 Node 的 Workshop MCP 两侧共用。
 
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createCipheriv, createDecipheriv, hash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -33,7 +27,7 @@ let cachedKey: Buffer | undefined;
 
 function deriveKey(material: string): Buffer {
   // 32 字节主密钥：任意长度的口令/文件内容都先经 SHA-256 归一化到密钥长度。
-  return createHash("sha256").update(material).digest();
+  return Buffer.from(hash("sha256", material), "hex");
 }
 
 function loadOrCreateKey(): Buffer {
@@ -45,15 +39,13 @@ function loadOrCreateKey(): Buffer {
     if (!existsSync(KEY_FILE)) {
       mkdirSync(join(process.cwd(), "data"), { recursive: true });
       // 文件里放一个随机口令，由它派生 AES 密钥；不直接存密钥字节。
-      const fileKey =
-        randomUUID().replace(/-/g, "") + randomBytes(16).toString("hex");
+      const fileKey = randomUUID().replace(/-/g, "") + randomBytes(16).toString("hex");
       writeFileSync(KEY_FILE, fileKey, { encoding: "utf-8", mode: 0o600 });
     }
     cachedKey = deriveKey(readFileSync(KEY_FILE, "utf-8").trim());
     return cachedKey;
   } catch {
-    const envSecret =
-      process.env[ENV_VAR] ?? process.env[ENV_VAR.toLowerCase()];
+    const envSecret = process.env[ENV_VAR] ?? process.env[ENV_VAR.toLowerCase()];
     if (envSecret && envSecret.trim().length >= 8) {
       cachedKey = deriveKey(envSecret.trim());
       return cachedKey;
@@ -68,16 +60,11 @@ export function isEncrypted(value: string): boolean {
   return value.startsWith(PREFIX);
 }
 
-export function encryptLlmKey(
-  plaintext: string | null | undefined,
-): string | null {
+export function encryptLlmKey(plaintext: string | null | undefined): string | null {
   if (!plaintext) return null;
   const iv = randomBytes(12);
   const cipher = createCipheriv(ALGO, loadOrCreateKey(), iv);
-  const ct = Buffer.concat([
-    cipher.update(String(plaintext), "utf-8"),
-    cipher.final(),
-  ]);
+  const ct = Buffer.concat([cipher.update(String(plaintext), "utf-8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ct.toString("base64")}`;
 }
@@ -89,16 +76,9 @@ export function decryptLlmKey(enc: string | null | undefined): string | null {
     const body = enc.slice(PREFIX.length);
     const [ivB64, tagB64, ctB64] = body.split(":");
     if (!ivB64 || !tagB64 || !ctB64) return null;
-    const decipher = createDecipheriv(
-      ALGO,
-      loadOrCreateKey(),
-      Buffer.from(ivB64, "base64"),
-    );
+    const decipher = createDecipheriv(ALGO, loadOrCreateKey(), Buffer.from(ivB64, "base64"));
     decipher.setAuthTag(Buffer.from(tagB64, "base64"));
-    const pt = Buffer.concat([
-      decipher.update(Buffer.from(ctB64, "base64")),
-      decipher.final(),
-    ]);
+    const pt = Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]);
     return pt.toString("utf-8");
   } catch {
     return null;

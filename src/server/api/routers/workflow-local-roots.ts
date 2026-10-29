@@ -6,13 +6,10 @@
  * 文件、守卫用 `process.env` 启动快照），`.env` 新增目录后界面会出现
  * 「待导入」项、点击导入却被守卫拒绝。现在两个口径收成本文件的一份出处。
  */
-import { createHash } from "node:crypto";
 import path from "node:path";
+import { hash } from "node:crypto";
 
-import {
-  deriveComfyuiWorkflowsDir,
-  getSettingsSync,
-} from "~/lib/app-settings/app-settings.server";
+import { deriveComfyuiWorkflowsDir, getSettingsSync } from "~/lib/app-settings/app-settings.server";
 import { hasRawContent } from "~/lib/comfyui/execution-shape";
 import { readEnvVar } from "~/lib/envfile";
 import { normalizeSlashes } from "~/lib/path-display";
@@ -48,9 +45,7 @@ function getLocalWorkflowRoots(): string[] {
 
 /* 给「磁盘上有、但还没导入过」的文件生成的稳定、确定的占位 id。 */
 function pendingId(absPath: string): string {
-  return (
-    "pending-" + createHash("sha1").update(absPath).digest("hex").slice(0, 12)
-  );
+  return "pending-" + hash("sha1", absPath, "hex").slice(0, 12);
 }
 
 /* 追加到 `list` 里的「本地待导入」占位行的形状。

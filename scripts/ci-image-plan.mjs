@@ -57,7 +57,6 @@
  * `cdn.npmmirror.com` 现取（`fetchNodePlan()`）。写死两份的形态是「上游一升，这里还
  * 指着一个已经不存在（或更糟：还存在但已过时）的版本」—— 而那两种在日志里长得一样。
  */
-import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -67,14 +66,12 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import process from "node:process";
 
 /** 仓库根 —— 本脚本住在 `scripts/` 下。 */
-export const ROOT = path.resolve(
-  import.meta.dirname,
-  "..",
-);
+export const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 镜像标签的**版本**部分。它不是「本仓的版本号」，是「这份声明长自哪一版源码」的锚。 */
 export const IMAGE_TAG = "ci-node-v1";
@@ -167,9 +164,7 @@ export function nodeFloor(range) {
     );
   }
   return /** @type {{major: number, minor: number, patch: number}} */ (
-    floors.sort(
-      (a, b) => a.major - b.major || a.minor - b.minor || a.patch - b.patch,
-    )[0]
+    floors.sort((a, b) => a.major - b.major || a.minor - b.minor || a.patch - b.patch)[0]
   );
 }
 
@@ -283,21 +278,12 @@ export function toolingVersionsFromLock(lockText, names) {
  * }} input
  * @returns {{tag: string, dockerfile: string, build: string, cp: string, verify: string}}
  */
-export function imagePlan({
-  nodeVersion,
-  pnpmVersion,
-  tag = IMAGE_TAG,
-  appDir = APP_DIR,
-}) {
+export function imagePlan({ nodeVersion, pnpmVersion, tag = IMAGE_TAG, appDir = APP_DIR }) {
   if (!/^v\d+\.\d+\.\d+$/.test(nodeVersion ?? "")) {
-    throw new Error(
-      `node 版本要带 v 的精确号（拿到的是 ${JSON.stringify(nodeVersion)}）`,
-    );
+    throw new Error(`node 版本要带 v 的精确号（拿到的是 ${JSON.stringify(nodeVersion)}）`);
   }
   if (!/^\d+\.\d+\.\d+/.test(pnpmVersion ?? "")) {
-    throw new Error(
-      `pnpm 版本形状不认（拿到的是 ${JSON.stringify(pnpmVersion)}）`,
-    );
+    throw new Error(`pnpm 版本形状不认（拿到的是 ${JSON.stringify(pnpmVersion)}）`);
   }
   const image = `comfyapp-ci:${tag}`;
   const header = [
@@ -326,7 +312,7 @@ export function imagePlan({
     "RUN cd /tmp \\",
     " && curl -fsSLO https://cdn.npmmirror.com/binaries/node/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz \\",
     " && curl -fsSLO https://cdn.npmmirror.com/binaries/node/${NODE_VERSION}/SHASUMS256.txt \\",
-    " && grep \" node-${NODE_VERSION}-linux-x64.tar.xz$\" SHASUMS256.txt | sha256sum -c - \\",
+    ' && grep " node-${NODE_VERSION}-linux-x64.tar.xz$" SHASUMS256.txt | sha256sum -c - \\',
     " && tar -xJf node-${NODE_VERSION}-linux-x64.tar.xz -C /usr/local --strip-components=1 \\",
     " && rm -f node-${NODE_VERSION}-linux-x64.tar.xz SHASUMS256.txt",
     `RUN npm install -g pnpm@${pnpmVersion} && pnpm --version`,
@@ -583,12 +569,26 @@ export function buildTarStream({
 }
 
 /** 一个 ustar 头部块（512 字节）。数值字段用八进制、尾随 NUL + 空格。 */
-export function tarHeader(/** @type {string} */ name, /** @type {string} */ type, /** @type {number} */ mode, /** @type {number} */ size, /** @type {string} */ linkname) {
+export function tarHeader(
+  /** @type {string} */ name,
+  /** @type {string} */ type,
+  /** @type {number} */ mode,
+  /** @type {number} */ size,
+  /** @type {string} */ linkname,
+) {
   const head = Buffer.alloc(512);
-  const put = (/** @type {string} */ text, /** @type {number} */ offset, /** @type {number} */ length) => {
+  const put = (
+    /** @type {string} */ text,
+    /** @type {number} */ offset,
+    /** @type {number} */ length,
+  ) => {
     Buffer.from(text, "utf8").copy(head, offset, 0, length);
   };
-  const num = (/** @type {number} */ value, /** @type {number} */ offset, /** @type {number} */ length) => {
+  const num = (
+    /** @type {number} */ value,
+    /** @type {number} */ offset,
+    /** @type {number} */ length,
+  ) => {
     /* `length - 1` 位八进制 + 尾随 NUL：ustar 的数值字段是「定宽、右补零、以 NUL 收尾」。 */
     put(value.toString(8).padStart(length - 1, "0") + "\0", offset, length);
   };
@@ -625,7 +625,7 @@ function pad512(/** @type {Buffer} */ content) {
  * @param {Buffer} buf
  */
 export function tarballDigest(buf) {
-  return "sha256:" + createHash("sha256").update(buf).digest("hex");
+  return "sha256:" + crypto.hash("sha256", buf, "hex");
 }
 
 /* ────────────────────────── 生成与打印 ────────────────────────── */
@@ -724,11 +724,7 @@ export function main({
   const out = { dockerfile: plan.dockerfile, plan };
   if (write) {
     mkdirSync(path.join(root, "docker"), { recursive: true });
-    writeFileSync(
-      path.join(root, "docker", "ci-node.Dockerfile"),
-      plan.dockerfile,
-      "utf8",
-    );
+    writeFileSync(path.join(root, "docker", "ci-node.Dockerfile"), plan.dockerfile, "utf8");
     log(`[ci-image-plan] 已写出 docker/ci-node.Dockerfile（${plan.tag}）`);
   }
   if (tar) {
@@ -759,8 +755,7 @@ export function main({
 /* 只在被直接执行时跑（`tests/script-main-guard.test.ts` 守着这一形态：
  * 两侧都过 `path.resolve` 比较，别拼 `file://${argv[1]}` —— 它在 Windows 上恒不相等）。 */
 const invokedDirectly =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
 
 if (invokedDirectly) {
   try {
