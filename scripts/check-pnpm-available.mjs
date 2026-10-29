@@ -48,17 +48,24 @@ const root = path.resolve(import.meta.dirname, "..");
  * 拿 `packageManager`，跟着换会让自检报告一个与本检出无关的 pnpm 版本。
  */
 const depsRootArgIndex = process.argv.indexOf("--deps-root");
-const depsRoot =
-  depsRootArgIndex >= 0 && process.argv[depsRootArgIndex + 1]
-    ? path.resolve(process.argv[depsRootArgIndex + 1])
-    : root;
+/* 取一次再判：`process.argv[i+1]` 在 noUncheckedIndexedAccess 下是 `string | undefined`，
+ * 而真值判据已经把它收进「非空串」那一支（同一形见批 8 / 批 10 —— 判的是旗标缺值，
+ * 缺值就退回默认的 `root`，不猜、也不用 cast）。 */
+const depsRootArg =
+  depsRootArgIndex >= 0 ? process.argv[depsRootArgIndex + 1] : undefined;
+const depsRoot = depsRootArg ? path.resolve(depsRootArg) : root;
 
-/** 打印一行结论（纯 ASCII 前缀 + 原文，便于日志检索）。 */
+/** 打印一行结论（纯 ASCII 前缀 + 原文，便于日志检索）。
+ * @param {string} prefix @param {string} message @returns {void} */
 function say(prefix, message) {
   process.stdout.write(`${prefix} ${message}\n`);
 }
 
-/** 只比数字主体：`v12.4.1` 与 `12.4.1` 是同一个版本（判据与启动器一致）。 */
+/** 只比数字主体：`v12.4.1` 与 `12.4.1` 是同一个版本（判据与启动器一致）。
+ *
+ * 两个入参按**调用点真正喂的东西**收型（一处是 `result.probe.version`、一处是
+ * `result.expected`，两样都可能缺 —— 所以判据第一句就是 `!a || !b`）。
+ * @param {string | null | undefined} a @param {string | null | undefined} b @returns {boolean} */
 function sameVersion(a, b) {
   if (!a || !b) return false;
   return a.replace(/^v/, "") === b.replace(/^v/, "");
@@ -142,7 +149,13 @@ function corepackShippedDir(env = process.env) {
       .sort((a, b) => {
         const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
         const pb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
-        for (let i = 0; i < 3; i += 1) if (pa[i] !== pb[i]) return pa[i] - pb[i];
+        /* 逐段比时两边都取一次并给 0 —— 与上面 `.map(… || 0)` 是同一个默认值，
+         * 只是按下标读在 `noUncheckedIndexedAccess` 下要如实过一遍（这一支的键
+         * 由 `/^\d+\.\d+\.\d+/` 保证至少三段，取不到只能是那三段之外）。 */
+        for (let i = 0; i < 3; i += 1) {
+          const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+          if (diff !== 0) return diff;
+        }
         return 0;
       })
       .reverse();
@@ -207,7 +220,11 @@ if (result.probe.command) {
     say("[INFO]", `经 JS 入口执行：${invocation.command} ${invocation.args.join(" ")}`);
   }
 }
-if (result.repaired || result.tip) say("[INFO]", result.tip);
+/* `say` 的 message 收成 `string` 之后这一格才现形（第八次「补类型不是纯减法」）：
+ * 原来 `result.repaired || result.tip` 那一支里，`tip` 为 null 时会把字面词
+ * `null` 当成一行提示打出去（"[INFO] null"）。条件换成只看 `tip` ——
+ * 有tip才念，没 tip 就什么都不念（repaired 本身在这不带来任何可读信息）。 */
+if (result.tip) say("[INFO]", result.tip);
 
 // 版本一致性：先按启动器的口径**试一次自动对齐**，复核通过才算「一致」。
 if (result.expected && !sameVersion(result.probe.version, result.expected)) {
@@ -239,10 +256,18 @@ if (result.expected && !sameVersion(result.probe.version, result.expected)) {
 const nodeVersion = process.env.COMFYAPP_NODE_VERSION ?? process.version;
 const declaredFloor =
   JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))?.engines?.node ?? null;
+/* `collectDependencyFloors` 给的是一个**可分辨联合**（`{ok:true, floors}` 或
+ * `{ok:false, reason}`），而原来这一句直接 `.floors ?? []` —— 类型上读不到那个字段
+ * （`TS2339`，本批那格红的就是它），行为上等于「采集没跑起来 ⇒ 当成没有下限」。
+ * 这里**先把这一支如实窄一次、保持原行为**（空数组），因为「没跑起来该不该被念出来」
+ * 是改输出不是改类型：处置记在 ISSUE #2722 —— 内核（`node-engines.mjs:356-363`）对采集失败
+ * 本有 `kind:"unparsable"` 的正确出口，而这里传了一个非 `undefined` 的值，把下面那条
+ * 已经写好的 WARN 话术变得结构上不可达。 */
+const floorCollection = collectDependencyFloors(root);
 const floorVerdict = describeNodeAgainstFloor({
   version: nodeVersion,
   range: declaredFloor,
-  floors: collectDependencyFloors(root).floors ?? [],
+  floors: floorCollection.ok ? floorCollection.floors : [],
 });
 if (!declaredFloor) {
   say("[WARN]", "package.json 没有 engines.node —— Node 下限无人声明（见规范 §2.1.8）。");
@@ -253,7 +278,10 @@ if (!declaredFloor) {
 } else {
   say("[WARN]", `Node ${floorVerdict.version} 不在声明范围内（engines.node = ${declaredFloor}）。`);
   const next = floorVerdict.recommend ? ` 建议升到 ${floorVerdict.recommend}` : "";
-  say("[INFO]", `越界会踩到的档：${floorVerdict.violated.join(" / ") || "（依赖侧未点名）"}。${next}`);
+  say(
+    "[INFO]",
+    `越界会踩到的档：${floorVerdict.violated?.join(" / ") || "（依赖侧未点名）"}。${next}`,
+  );
   process.stdout.write(
     [
       "         [判据] 低版本 Node 上 `next dev` / `next build` 照常，",
