@@ -169,12 +169,41 @@ export function describeRiskyChanges(statements) {
 }
 
 /**
+ * 一次子进程「落定的结果」—— 注入点 `run` 的返回契约（ISSUE #2724）。
+ *
+ * 契约 = **内核实际读的那几件**（`stdout` / `stderr` / `error`；`status` 与
+ * `command` / `args` 内核从不读），不是「某个具体实现的全部字段」：
+ * `runPnpmSync` 的 `error` 是 `NodeJS.ErrnoException`，`spawnSettled` 的是
+ * `code` 字符串 —— 两份现成实现都满足本形，注入者不再需要伪造没人读的字段。
+ *
+ * @typedef {{status: number | null, stdout: string, stderr: string,
+ *            error: NodeJS.ErrnoException | string | null}} RunOutcome
+ */
+
+/**
+ * 把一次「没起来」的原因翻成给人看的一句话 —— **唯一一份**（ISSUE #2724）。
+ *
+ * 此前两个消费点各自读 `error?.code ?? "UNKNOWN"`：注入者给的是**串**（如
+ * `"ENOENT"`，`spawnSettled` 的形状）时 `.code` / `.message` 都是 undefined，
+ * 两个 `??` 双双兜底 ⇒ 屏幕上就成了 `（UNKNOWN）：` —— 命令压根没起来的原因
+ * 被丢掉（ISSUE #576 的形态）。串就用串、对象取 `.code`、都没有才 UNKNOWN。
+ *
+ * @param {NodeJS.ErrnoException | string | null | undefined} error
+ * @returns {string}
+ */
+export function describeSpawnFailure(error) {
+  if (!error) return "UNKNOWN";
+  if (typeof error === "string") return error;
+  return error.code ?? error.message ?? "UNKNOWN";
+}
+
+/**
  * 跑一次 push 并复核收敛。
  *
  * @param {string} root 项目根（作为 drizzle-kit 的 cwd）
  * @param {{ databaseUrl?: string, force?: boolean,
  *           verifyConvergence?: boolean, timeoutMs?: number,
- *           run?: typeof runPnpmSync,
+ *           run?: (args: string[], opts?: {cwd?: string, env?: Record<string, string | undefined>, stdio?: "pipe" | "inherit" | "ignore", timeoutMs?: number}) => RunOutcome,
  *           forward?: (chunk: string) => void }} [options]
  *   `force` 为 true 时带 `--force`（自动批准「会丢数据」的语句，`pnpm db:push`
  *   的口径）；启动链路的自动同步**必须**用 false —— 那种变更要由人决定。
@@ -186,7 +215,7 @@ export function describeRiskyChanges(statements) {
  *   （`canAutoApply`：只认建表 / 建索引 / 加列，见本文件顶部）。死选项随本次
  *   一并删掉（§12.16 零消费），判据仍留在原处、不分叉。
  * @returns {{ converged: boolean, alreadyCurrent: boolean, invocationFailed: boolean,
- *             blockedByTty: boolean, error: NodeJS.ErrnoException | null,
+ *             blockedByTty: boolean, error: NodeJS.ErrnoException | string | null,
  *             firstOutput: string, finalOutput: string }}
  */
 export function pushSchema(root, options = {}) {
