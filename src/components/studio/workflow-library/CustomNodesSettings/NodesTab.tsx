@@ -25,7 +25,7 @@ const CARD_ROW_ESTIMATE_PX = 44;
 /** 卡间距，与 fallback 档的 `gap-1` 同一个值。 */
 const CARD_GAP_PX = 4;
 /** 卡列表的滚动视口上限：超过就容器内滚，不再把页面撑成几千像素。 */
-const CARD_LIST_MAX_H_CLASS = "max-h-[480px] overflow-y-auto";
+const CARD_LIST_MAX_H_CLASS = "max-h-120 overflow-y-auto";
 
 /** 单张卡（从层 3 的 `nodeTypeList.map` 里原样提出 —— 窗口化只改「哪几张在场」，
  * 不改卡本身的任何形态/行为）。 */
@@ -57,7 +57,7 @@ function CardRow({
  * 交互卡（每张还是自己的 Disclosure）。
  *
  * 形态与取舍：
- *   · **窗口化用独立滚动容器**（`max-h-[480px] overflow-y-auto`），不用
+ *   · **窗口化用独立滚动容器**（`max-h-120 overflow-y-auto`），不用
  *     ModelLibrary / ProjectOutputs 那种「文档滚动锚 + scrollMargin」—— 那份
  *     模式适合页面顶层的单列表；这里列表嵌在树面板里、多包可**同时**展开，
  *     各自的 offsetTop 随其它面板开合漂移，页面锚方案要做跨列表的 margin 对账。
@@ -104,10 +104,7 @@ function NodeCardList({
 
   if (!measured) {
     return (
-      <div
-        ref={setScrollEl}
-        className={cn("flex flex-col gap-1", CARD_LIST_MAX_H_CLASS)}
-      >
+      <div ref={setScrollEl} className={cn("flex flex-col gap-1", CARD_LIST_MAX_H_CLASS)}>
         {nodeTypeList.map(renderCard)}
       </div>
     );
@@ -199,10 +196,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           </div>
         ) : (
           <p className="text-muted-foreground text-xs">
-            未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI
-            安装路径，目录会自动推导为{""}
-            <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>
-            。
+            未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI 安装路径，目录会自动推导为
+            {""}
+            <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>。
           </p>
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
@@ -275,13 +271,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         <div className="flex flex-col gap-2">
           {parentBlocks.map(({ parent, subs, cnt, total }) => {
             const isOpen = parentExpansion.isExpanded(parent);
-            const parentParsed =
-              total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
+            const parentParsed = total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
             return (
-              <div
-                key={parent}
-                className="border-border bg-bg rounded-xl border"
-              >
+              <div key={parent} className="border-border bg-bg rounded-xl border">
                 {/* 父级头 —— 可点击切换。`▸/▾`、`role`、`tabIndex`、
  Enter/Space 全交给`Disclosure`（规范 16 §16.2.4.13）——
  此前是自绘的`role="button"` div，注释里写着「不能用原生
@@ -302,10 +294,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-ink font-medium">📁</span>
-                        <span
-                          className="text-ink truncate font-mono text-xs"
-                          title={parent}
-                        >
+                        <span className="text-ink truncate font-mono text-xs" title={parent}>
                           {parent}
                         </span>
                       </div>
@@ -351,11 +340,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       <Button
                         variant="outline"
                         onClick={() => void onParseAllParent(parent)}
-                        disabled={
-                          !!parsing ||
-                          total === 0 ||
-                          (parentParsed && cnt.outdated === 0)
-                        }
+                        disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
                         className="border-border bg-bg text-ink hover:bg-subtle text-2xs h-auto shrink-0 rounded-lg px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {parsing ? "…" : "解析本目录"}
@@ -386,11 +371,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       // 点击展开只对有已解析节点的包可用。
                       // 未导入 / 缺失 /
                       // 空的包没东西可显示。
-                      const nodesAreLoaded =
-                        state.kind === "loaded" || state.kind === "outdated";
-                      const nodeListOpen = nodeListExpansion.isExpanded(
-                        sub.path,
-                      );
+                      const nodesAreLoaded = state.kind === "loaded" || state.kind === "outdated";
+                      const nodeListOpen = nodeListExpansion.isExpanded(sub.path);
                       const nodeTypeList = saved?.nodeTypes ?? [];
                       return (
                         <div key={sub.path}>
@@ -403,9 +385,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                           >
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-ink font-medium">
-                                  {sub.name}
-                                </span>
+                                <span className="text-ink font-medium">{sub.name}</span>
                                 <StatusBadge
                                   status={preset.status}
                                   label={
@@ -436,9 +416,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
  承担），此处的`Disclosure` 只接管这一行。 */
                                 <Disclosure
                                   open={nodeListOpen}
-                                  onOpenChange={() =>
-                                    nodeListExpansion.toggle(sub.path)
-                                  }
+                                  onOpenChange={() => nodeListExpansion.toggle(sub.path)}
                                   marker="caret"
                                   className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
                                   panelClassName="hidden"
@@ -479,9 +457,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   preset.btn,
                                 )}
                               >
-                                {perPkgParsing[sub.path]
-                                  ? "解析中…"
-                                  : preset.btnLabel}
+                                {perPkgParsing[sub.path] ? "解析中…" : preset.btnLabel}
                               </Button>
                             </div>
                           </div>
