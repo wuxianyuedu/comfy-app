@@ -241,15 +241,26 @@ async function main(argv) {
    */
   const full = argv.includes("--full");
   if (full) {
-    const entry = resolveVitestEntry();
-    const { workers, note } = resolveMaxWorkers(
-      process.env.COMFY_PRECOMMIT_MAX_WORKERS,
-      resolveCiWorkers().workers,
-    );
     process.stderr.write(
       "[affected-launch] --full：按名字要全量（**不经**暂存区解析、不拼位置参数，\n" +
         "  由 vitest 自己收集全部用例）。这一档买的是「没人能替你保证」的那部分，\n" +
         "  代价是整份套件的墙钟 —— 常态提交仍走增量档。\n",
+    );
+    /* ⚠️ `--dry-run` 必须排在 `resolveVitestEntry()` **之前**：那是本文件里第一个
+     * 依赖 `node_modules` 的调用（解析不到就 `throw`），而「不起 vitest 的读数档」
+     * 反过来成了唯一必须装好依赖的一档 —— 干净检出 / 只读沙箱上 `--dry-run` 直接红在
+     * 「解析不到 vitest 入口」，而它的全部用途（对账清单份数、问一句跑得起来吗）
+     * 一个都用不上。判据 `tests/affected-tests.test.ts` 的「干净检出」一条真起进程判这条顺序。 */
+    if (dryRun) {
+      process.stdout.write(
+        "[affected-launch] --full：会跑全部用例（vitest 自行收集）\n",
+      );
+      return 0;
+    }
+    const entry = resolveVitestEntry();
+    const { workers, note } = resolveMaxWorkers(
+      process.env.COMFY_PRECOMMIT_MAX_WORKERS,
+      resolveCiWorkers().workers,
     );
     if (note) process.stderr.write(`[affected-launch] ${note}\n`);
     const quietFull = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
@@ -263,12 +274,6 @@ async function main(argv) {
         ? "[affected-launch] 本次清单：全量档由 vitest 自行收集，故不逐份列出（quiet 只换 reporter）\n"
         : "",
     );
-    if (dryRun) {
-      process.stdout.write(
-        "[affected-launch] --full：会跑全部用例（vitest 自行收集）\n",
-      );
-      return 0;
-    }
     // 空清单在这里是**明确意图**（全量），所以复用同一条判决链（超时形态仍会隔离复跑）。
     return await runChunk([], { entry, workers, quiet: quietFull });
   }
@@ -290,6 +295,8 @@ async function main(argv) {
     );
     return 1;
   }
+  /* 同上：读数档不碰 `node_modules`。它要的信息（清单份数 / 启动次数 / 最长一块）
+   * 全部来自 `collectList()` 与 `planLaunches()`，两者都是纯计算。 */
   if (dryRun) {
     process.stdout.write(
       `[affected-launch] ${files.length} 个用例 / ${chunks.length} 次启动，` +
