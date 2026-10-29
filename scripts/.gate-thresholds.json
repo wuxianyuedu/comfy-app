@@ -258,13 +258,13 @@
       "why": "「第 2 遍分不出哪份是超时」时逐文件补跑的上限（ISSUE #2225）。不是松紧量：调它只决定要不要多花几十秒拿回判决粒度，任何一条断言的判定都不随它变 —— 调大也不会让真红变绿。"
     },
     {
-      "file": "scripts/run-affected-tests.mjs",
+      "file": "scripts/affected-launch-scope-advice.mjs",
       "const": "SCOPE_ADVICE_MIN",
       "value": 60,
-      "unit": "秒",
+      "unit": "份",
       "kind": "report",
       "strictness": "n/a",
-      "why": "组 C 慢到某个点才补一句「怎么降负载」的话术阈值。纯话术门槛，不参与判定，也不参与退出码。"
+      "why": "受影响面大到某个份数才补一句「这一刀能不能拆小」的话术阈值（60 = 本仓库自己实测的分界，见该常量的文档）。纯话术门槛，不参与判定，也不参与退出码。"
     },
     {
       "file": "scripts/run-affected-tests.mjs",

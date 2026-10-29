@@ -145,10 +145,17 @@ function stripJsdocTypeSyntax(text) {
 }
 
 /**
- * `@param` 类行的**参数名**位置：`@param {T} name` 里紧跟类型块的那个标识符。
- * 它必须是**单个**词，且不是 `{T}` 形式的类型块本身。
+ * `@param` / `@property` 类行的**名字**位置：`@param {T} name` / `@property {T} name`
+ * 里紧跟类型块的那个标识符。它必须是**单个**词，且不是 `{T}` 形式的类型块本身。
+ *
+ * ⚠️ `@property` 与 `@param` 同一个道理（原来只列了前三者，于是
+ * `@property {string} note` 被判成英文散文 —— `note` 在虚词表里，而那一行
+ * 一个英文说明字都没有；现场是 `scripts/ci-probe-lock-readout.mjs` 的 `Reading`
+ * typedef，ISSUE #2589 批 6 撞上）。可选字段写成 `@property {T} [name]` 时，
+ * 方括号那一段已被 `stripJsdocTypeSyntax` 剥掉，这里不需要特判。
  */
-const PARAM_TAG_RE = /@(param|arg|argument)\s+(?:\{[^{}]*\}\s+)?([A-Za-z_$][\w$]*)/;
+const PARAM_TAG_RE =
+  /@(param|arg|argument|property|prop)\s+(?:\{[^{}]*\}\s+)?([A-Za-z_$][\w$]*)/;
 
 /**
  * 一行是否**本身就是** JSDoc 结构行（带 `@param` / `@typedef` 等 tag）。
