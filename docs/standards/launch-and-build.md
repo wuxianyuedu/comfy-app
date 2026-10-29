@@ -874,6 +874,18 @@ Windows 上 corepack 那三个垫片里**只有 `.ps1` 起得来**，于是「�
 2. **直接可执行**（§2.1.1 的候选表，`.ps1` 除外）。
 3. **`.ps1` 经宿主** —— 前两段都拿不到形态时的出口。
 
+**同一条判断对仓里装的其它 CLI 也有一个入口**（ISSUE #2572）：
+`scripts/ci-run-tool.mjs <垫片名> [参数…]` —— 它问的是「`.bin/<名字>` 这一跳实际跑的是
+哪份文件」，答完直接 `spawn(process.execPath, [入口, …])`，第三段那层宿主根本不出现。
+⚠️ **它按名字问、不按依赖名问**，这一条不是洁癖而是本仓的事实：`typescript` 是别名
+`npm:@typescript/typescript6@6.0.2`（`bin` 键 `tsc6`），而 `tsc` 这个名字归
+`@typescript/native`（7.0.2，自报名恰恰是 `typescript`）—— 按依赖名正推两条路都拿不到
+入口，而「拿不到就取 `bin` 的第一个键」那个自然兜底会把 `tsc` 安静地跑成另一份。
+读数、两层解析（pnpm 写在垫片末尾的 `# cmd-shim-target=` 声明优先，回落读 `.cmd` / sh
+里那条相对路径）与回归判据都在 `scripts/package-bin-entry.mjs` 的 `resolveBinEntryByName`
+上方与 `tests/spawn-shell-scan.test.ts`。`.cnb.yml` 的 `类型检查` / `lib Node-only 声明`
+两格用的就是它（那两格过去直接写 `node_modules/.bin/…`，被外壳回退成经 PowerShell 起）。
+
 ⚠️ **这一簇必须住在一个文件里**，别把它拆成 `pnpm-js-entry.ts` 那种"更清爽"的形态：
 `executable-resolve.ts` 在 `tests/esm-cross-host-imports.test.ts` 的跨宿主清单里
 （`shell.mjs` 静态 import 它），而那条链要求**每个节点都是叶子**（只 import 同批清单内
