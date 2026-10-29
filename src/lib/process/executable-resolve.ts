@@ -11,7 +11,7 @@
 //   · 它现在能不能被 spawn 起来（`usableCommand`，含同目录 `.ps1` 回退）
 //   · PATH 上哪个候选真的能跑（`whichCommand`）
 //   · pnpm 的包真身 JS 入口在哪（`pnpmJsEntry` / `pnpmJsInvocation`）
-//   · 「命令 + 宿主参数」的最终形态（`commandInvocation` / `pnpmInvocation`）
+//   · 「命令 + 宿主参数」的最终形态（`commandInvocation` / `pnpmInvocation`）——那条 `.ps1` 回退答的是「起不起得来」，起**仓里装的** CLI 该问包真身入口（`scripts/package-bin-entry.mjs`，#2572）
 //
 // ## 为什么它住在 `src/lib/process/`
 //

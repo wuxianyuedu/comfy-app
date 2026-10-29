@@ -1719,8 +1719,21 @@
   #
   # 「类型 / 静态检查」这一段的顺序里**没有先后约束**（都只读工作区、互不依赖），
   # 唯一一条有位置约束的是 `新鲜度账`（必须排在任何会刷新账的跑法脚本之前，见那一格）。
+  #
+  # ⚠️ 这一格与下面 `lib Node-only 声明` 起本地 CLI 走 `scripts/ci-run-tool.mjs`，
+  #   **不写 `node_modules/.bin/<名字>`**（ISSUE #2572）：那三个垫片（`.cmd` / `.ps1` /
+  #   无扩展名 shim）是 pnpm 摆给**宿主 shell** 的，Node 一个都直接起不了，于是
+  #   `ci-cp936-exit.mjs` 只能回退去起同目录那份 `.ps1` —— 起一个仓里的编译器要绕一层
+  #   PowerShell 宿主。直起包真身之后那一层没有了，DEP0190 那类「开 shell + args 数组」
+  #   的弃用形态也不会从这里长回来（判据 `scripts/spawn-shell-scan.mjs`）。
+  #
+  # ⚠️ **按名字问，不按依赖名问**：本仓 `typescript` 是别名 `npm:@typescript/typescript6`
+  #   （`bin` 键 `tsc6`），而 `tsc` 这个名字归另一个包（`@typescript/native`，自报名
+  #   正是 `typescript`）。两份编译器各有名字、互不等价，所以「它跑的是哪一份」必须由
+  #   垫片自己回答 —— 口径与实测在 `scripts/package-bin-entry.mjs` 的
+  #   `resolveBinEntryByName` 上方，回归判据在 `tests/spawn-shell-scan.test.ts`。
   - name: 类型检查
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/tsc --noEmit
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs tsc --noEmit
 
   # ── 受影响用例（2026-10-20 新增；它的两个本地执行者同日撤销）──────────────
   #
@@ -2011,7 +2024,7 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-ui-logic-separation.cjs
 
   - name: lib Node-only 声明
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/lib-node-only-declarations.test.ts
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
 
   # oxfmt 格式硬闸（规范 §13.5.1）：**从本地钩子挪到这里**（ISSUE #2010）。
   #
@@ -2103,11 +2116,11 @@
   # - name: 格式化提交分离
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
   # - name: core 骨架单一事实源
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
   # - name: 零消费导出
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
   # - name: core 出口纪律与基类纯度
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node_modules/.bin/vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
 
   # ⚠️ **执行面是钩子注册表，不是条目表**（两轮合并之后的口径）：这一格跑的命令是
   # `node scripts/ci-heavy-gates.mjs`，而它读的正是 `.githooks/pre-commit` 里那些

@@ -381,9 +381,9 @@ export function splitStreamChunk(carry, chunk) {
  *
  * 判据只影响「解析口说找不到时算不算失败」，而不是「怎么起」：
  *
- *   · `.cnb.yml` 的 stage 里两种都真实存在 —— `node_modules/.bin/tsc`、
- *     `scripts/check-import-alias.cjs` 是**路径**（相对检出根），`pnpm` / `node`
- *     是**名字**（要靠 PATH + PATHEXT 解析，Windows 上这才是那条会踩坑的）；
+ *   · 清单里的命令**两类对象都有**，而**路径**那一类今天只剩 `scripts/check-*.cjs`
+ *     与 `node scripts/*.mjs` 这一种形态 —— `pnpm` / `node` 是**名字**（要靠 PATH +
+ *     PATHEXT 解析，Windows 上这才是那条会踩坑的）；
  *   · `resolveCommandInvocation()` 是**纯 PATH 查找**，对一条相对路径它当然
  *     报 `resolved: false` —— 那不是「找不到」，是「这条不是名字、不该问 PATH」。
  *     把两者混作一谈，就会在类型检查那一格上误红（本文件第一次上平台之后的现场：
