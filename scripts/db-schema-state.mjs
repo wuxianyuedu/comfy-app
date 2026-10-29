@@ -21,6 +21,7 @@ import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import {
   canAutoApply,
   describeRiskyChanges,
+  describeSpawnFailure,
   pendingStatements,
   pushSchema,
   riskyStatements,
@@ -454,7 +455,7 @@ export function ensureSchemaCurrent(root, options = {}) {
  *  @returns {string} */
 function staleReason(result) {
   if (result.invocationFailed) {
-    return `起 pnpm 失败（${result.error?.code ?? "UNKNOWN"}）`;
+    return `起 pnpm 失败（${describeSpawnFailure(result.error)}）`;
   }
   if (result.blockedByTty) {
     return "这次的变更里有「会丢数据」的语句（删列 / 重建表），drizzle-kit 要求人工确认";
