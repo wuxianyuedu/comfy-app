@@ -95,6 +95,9 @@
  *
  * 判据是**最后一行** `---`：只认文档末尾之前的那一条分隔线，正文里出现同名行
  * 不受影响。
+ *
+ * @param {string} text
+ * @returns {string}
  */
 export function stripBundledSection(text) {
   const marker = "\n---\n";
@@ -108,15 +111,20 @@ const SECTION_RE = /^([A-Za-z][A-Za-z0-9_-]*):\s*$/;
 /**
  * 把 lockfile 文本切成顶层段落 → 行数组。
  * 重复段落（同一文件里出现两次）会追加合并，调用方据 duplicates 自行提示。
+ *
+ * @param {string} text
+ * @returns {{ sections: Map<string, string[]>, duplicates: string[] }}
  */
 export function splitTopSections(text) {
   const sections = new Map();
+  /** @type {string[]} */
   const duplicates = [];
+  /** @type {string[] | null} */
   let current = null;
   for (const line of stripBundledSection(text).split(/\r?\n/)) {
     const m = SECTION_RE.exec(line);
     if (m) {
-      const name = m[1];
+      const [, name = ""] = m;
       if (sections.has(name)) {
         if (!duplicates.includes(name)) duplicates.push(name);
         current = sections.get(name); // 合并到既有段落，避免后写的覆盖先写的
@@ -131,7 +139,11 @@ export function splitTopSections(text) {
   return { sections, duplicates };
 }
 
-/** 缩进（空格数）；制表符按 2 空格折算，避免脏文件把层级算错。 */
+/** 缩进（空格数）；制表符按 2 空格折算，避免脏文件把层级算错。
+ *
+ * @param {string} line
+ * @returns {number}
+ */
 function indentOf(line) {
   let n = 0;
   for (const ch of line) {
@@ -142,7 +154,11 @@ function indentOf(line) {
   return n;
 }
 
-/** 去掉成对引号。 */
+/** 去掉成对引号。
+ *
+ * @param {string} s
+ * @returns {string}
+ */
 function unquote(s) {
   const t = s.trim();
   if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) {
@@ -166,8 +182,12 @@ const KEY_RE = /^(["']?)([^:'"]*\S)\1:\s*(.*)$/;
  * 形如：'@adobe/css-tools@4.5.0':
  *       resolution: ...
  *   一级键 = 段落内缩进最小的键行。不依赖固定缩进宽度（pnpm 的缩进随层级变化）。
+ *
+ * @param {string[]} lines
+ * @returns {Map<string, string[]>}
  */
 export function splitTopKeys(lines) {
+  /** @type {Map<string, string[]>} */
   const entries = new Map();
   let minIndent = Infinity;
   for (const line of lines) {
@@ -177,21 +197,24 @@ export function splitTopKeys(lines) {
     minIndent = Math.min(minIndent, indentOf(line));
   }
   if (minIndent === Infinity) return entries;
+  /** @type {string | null} */
   let cur = null;
   for (const line of lines) {
     if (!line.trim()) {
-      if (cur) entries.get(cur).push(line);
+      const bucket = cur ? entries.get(cur) : undefined;
+      if (bucket) bucket.push(line);
       continue;
     }
     const ind = indentOf(line);
     if (ind === minIndent) {
       const m = KEY_RE.exec(line.trim());
-      const name = unquote(m ? m[2] : line.trim());
+      const name = unquote(m ? (m[2] ?? "") : line.trim());
       if (!entries.has(name)) entries.set(name, []);
       cur = name;
       continue;
     }
-    if (cur) entries.get(cur).push(line);
+    const bucket = cur ? entries.get(cur) : undefined;
+    if (bucket) bucket.push(line);
   }
   return entries;
 }
@@ -200,27 +223,40 @@ export function splitTopKeys(lines) {
  * 段落原文行 → 键值表（去引号、trim）。用于 settings / overrides 这类扁平表：
  * 它们的「键: 值」与段落同缩进、没有子行，splitTopKeys 拿到的是空数组，
  * 必须直接读原文行。`val` 为空的行是块头（如 `importers:` 下的 `.:`），跳过。
+ *
+ * @param {string[]} lines
+ * @returns {Map<string, string>}
  */
 export function flatEntries(lines) {
+  /** @type {Map<string, string>} */
   const out = new Map();
   for (const line of lines) {
     const m = /^\s*([^\s:#][^:]*):\s*(.*?)\s*$/.exec(line);
     if (!m) continue;
-    const key = unquote(m[1].trim());
-    const val = m[2];
-    if (!val) continue; // 「键:」后面跟子块（如 importers 的 .:），不是扁平表
-    out.set(key, unquote(val));
+    const [, rawKey = "", rawVal = ""] = m;
+    const key = unquote(rawKey.trim());
+    if (!rawVal) continue; // 「键:」后面跟子块（如 importers 的 .:），不是扁平表
+    out.set(key, unquote(rawVal));
   }
   return out;
 }
 
-/** importers 段的某个 importer（如 `.`）→ { dependencies, devDependencies, ... } → 行数组 */
+/** importers 段的某个 importer（如 `.`）→ { dependencies, devDependencies, ... } → 行数组
+ *
+ * @param {string[]} lines
+ * @returns {Map<string, string[]>}
+ */
 export function importerGroups(lines) {
   return splitTopKeys(lines);
 }
 
-/** 依赖表行数组 → Map<包名, { specifier, version }> */
+/** 依赖表行数组 → Map<包名, { specifier, version }>
+ *
+ * @param {string[]} lines
+ * @returns {Map<string, DepEntry>}
+ */
 export function parseDependencyTable(lines) {
+  /** @type {Map<string, DepEntry>} */
   const out = new Map();
   // 包名行是表内缩进最小的一行（pnpm 的缩进宽度随层级变化，不能写死 4/6 空格）
   let nameIndent = Infinity;
@@ -229,6 +265,7 @@ export function parseDependencyTable(lines) {
     if (!body || !body.endsWith(":")) continue;
     nameIndent = Math.min(nameIndent, indentOf(line));
   }
+  /** @type {string | null} */
   let name = null;
   for (const line of lines) {
     const ind = indentOf(line);
@@ -248,7 +285,14 @@ export function parseDependencyTable(lines) {
     }
     if (!name) continue;
     const m = /^(specifier|version):\s*(.*)$/.exec(body);
-    if (m) out.get(name)[m[1]] = unquote(m[2]);
+    const entry = out.get(name);
+    if (!m || !entry) continue;
+    const [, field, value = ""] = m;
+    /* 正则那两个分支就是键名的全部取值，这里显式收窄 —— 原来那句
+     * `out.get(name)[m[1]] = …` 是拿一个 `string` 去索引 `{specifier, version}`，
+     * 类型面收进来之后它报的正是「这一格本来就是错的」那一类（行为逐字不变）。 */
+    if (field === "specifier") entry.specifier = unquote(value);
+    else entry.version = unquote(value);
   }
   return out;
 }
@@ -258,10 +302,22 @@ const LOCK_PREFIX = "lockfileVersion";
 /**
  * 解析一份 lockfile → 规范化结构。
  * 返回 { importer: Map, sections: Map<段落名, Map<键, 原文行数组>>, raw }
+ *
+ * @param {string} text
+ * @returns {ParsedLockfile}
  */
 export function parseLockfile(text) {
   const { sections, duplicates } = splitTopSections(text);
-  const out = { sections: new Map(), importer: new Map(), duplicates, lockfileVersion: "" };
+  /** @type {Map<string, LockSection>} */
+  const outSections = new Map();
+  /** @type {Map<string, Map<string, Map<string, DepEntry>>>} */
+  const outImporter = new Map();
+  const out = {
+    sections: outSections,
+    importer: outImporter,
+    duplicates,
+    lockfileVersion: "",
+  };
   for (const [name, lines] of sections) {
     if (name === LOCK_PREFIX) {
       out.lockfileVersion = unquote(lines.find((l) => l.trim()) || "");
@@ -270,27 +326,35 @@ export function parseLockfile(text) {
     // keys 用于条目级比对（packages/snapshots/importers）；
     // raw 保留整段原文，供 settings/overrides 这类扁平表直接读值——
     // 「键: 值」同缩进的扁平段不产生子行，keys 会得到空数组。
-    out.sections.set(name, { keys: splitTopKeys(lines), raw: lines });
+    outSections.set(name, { keys: splitTopKeys(lines), raw: lines });
   }
-  const importers = out.sections.get("importers");
+  const importers = outSections.get("importers");
   if (importers) {
     for (const [importer, lines] of importers.keys) {
       const groups = new Map();
       for (const [group, body] of importerGroups(lines)) {
         groups.set(group, parseDependencyTable(body));
       }
-      out.importer.set(importer, groups);
+      outImporter.set(importer, groups);
     }
   }
   return out;
 }
 
-/** 段落取一级键表（settings 这类扁平段为空表，改用 .raw）。 */
+/** 段落取一级键表（settings 这类扁平段为空表，改用 .raw）。
+ *
+ * @param {LockSection | undefined} section
+ * @returns {Map<string, string[]>}
+ */
 function sectionKeys(section) {
   return section ? section.keys : new Map();
 }
 
-/** 条目指纹：忽略空行与注释，用于判断同一段落里的条目是否真的变了。 */
+/** 条目指纹：忽略空行与注释，用于判断同一段落里的条目是否真的变了。
+ *
+ * @param {string[]} lines
+ * @returns {string}
+ */
 function fingerprint(lines) {
   return lines
     .map((l) => l.replace(/\s+$/, ""))
@@ -300,11 +364,15 @@ function fingerprint(lines) {
 
 /**
  * 对比两份 lockfile。
- * @returns {{lockfileVersion:string, sectionDiffs:object, importerDiffs:object, packageDiffs:object}}
+ *
+ * @param {string} oldText
+ * @param {string} newText
+ * @returns {LockDiff}
  */
 export function diffLockfiles(oldText, newText) {
   const a = parseLockfile(oldText);
   const b = parseLockfile(newText);
+  /** @type {LockDiff} */
   const result = {
     lockfileVersion: "",
     duplicates: { old: a.duplicates, new: b.duplicates },
@@ -318,29 +386,40 @@ export function diffLockfiles(oldText, newText) {
   const vb = b.lockfileVersion;
   if (va !== vb) result.lockfileVersion = `${va || "(无)"} → ${vb || "(无)"}`;
 
-  for (const [sectionName, key] of [
-    ["packages", "packages"],
-    ["snapshots", "snapshots"],
-  ]) {
-    const sa = sectionKeys(a.sections.get(sectionName));
-    const sb = sectionKeys(b.sections.get(sectionName));
+  /* 条目级两段各写一次：原来是 `[["packages","packages"],["snapshots","snapshots"]]`
+   * 那样一圈 `for (const [sectionName, key] of …)` 再用 `result[key]` 落回去 ——
+   * 那两个名字**逐字相同**，绕这一圈什么也没参数化，而类型面上它是
+   * 「拿 `string | undefined` 当索引」（`TS2538` ×2）。展开成两行显式赋值，
+   * 读起来也直接对上 `LockDiff` 那两个字段。 */
+  for (const name of ["packages", "snapshots"]) {
+    const sa = sectionKeys(a.sections.get(name));
+    const sb = sectionKeys(b.sections.get(name));
     const added = [];
     const removed = [];
     for (const k of sb.keys()) if (!sa.has(k)) added.push(k);
     for (const k of sa.keys()) if (!sb.has(k)) removed.push(k);
-    result[key] = { added: added.sort(), removed: removed.sort() };
+    const entry = { added: added.sort(), removed: removed.sort() };
+    if (name === "packages") result.packages = entry;
+    else result.snapshots = entry;
   }
 
-  result.raw = { old: a, new: b };
   return result;
 }
 
-/** settings / overrides 这类扁平表：按值比对。 */
+/** settings / overrides 这类扁平表：按值比对。
+ *
+ * @param {LockSection | undefined} oldSection
+ * @param {LockSection | undefined} newSection
+ * @returns {FlatDiff}
+ */
 function mergeFlatDiff(oldSection, newSection) {
   const a = oldSection ? flatEntries(oldSection.raw) : new Map();
   const b = newSection ? flatEntries(newSection.raw) : new Map();
+  /** @type {FieldChange[]} */
   const added = [];
+  /** @type {FieldChange[]} */
   const removed = [];
+  /** @type {FieldChange[]} */
   const changed = [];
   for (const [k, v] of b) {
     if (!a.has(k)) added.push({ key: k, value: v });
@@ -350,19 +429,29 @@ function mergeFlatDiff(oldSection, newSection) {
   return { added, removed, changed };
 }
 
-/** 各 importer 的依赖表逐项比对。 */
+/** 各 importer 的依赖表逐项比对。
+ *
+ * @param {ParsedLockfile} a
+ * @param {ParsedLockfile} b
+ * @returns {Record<string, Record<string, GroupDiff>>}
+ */
 function diffImporters(a, b) {
   const names = [...new Set([...a.importer.keys(), ...b.importer.keys()])].sort();
+  /** @type {Record<string, Record<string, GroupDiff>>} */
   const out = {};
   for (const name of names) {
     const ga = a.importer.get(name) || new Map();
     const gb = b.importer.get(name) || new Map();
+    /** @type {Record<string, GroupDiff>} */
     const groups = {};
     for (const group of [...new Set([...ga.keys(), ...gb.keys()])].sort()) {
       const da = ga.get(group) || new Map();
       const db = gb.get(group) || new Map();
+      /** @type {DepChange[]} */
       const added = [];
+      /** @type {DepChange[]} */
       const removed = [];
+      /** @type {DepChange[]} */
       const changed = [];
       for (const [pkg, val] of db) {
         if (!da.has(pkg)) added.push({ name: pkg, value: val });
@@ -381,7 +470,11 @@ function diffImporters(a, b) {
   return out;
 }
 
-/** diff 是否为空（两份 lockfile 实质一致）。 */
+/** diff 是否为空（两份 lockfile 实质一致）。
+ *
+ * @param {LockDiff} d
+ * @returns {boolean}
+ */
 export function isEmptyDiff(d) {
   return (
     !d.lockfileVersion &&
@@ -399,7 +492,11 @@ export function isEmptyDiff(d) {
   );
 }
 
-/** 段落行数组的一致指纹（导出供守卫用：判断 packages/snapshots 是否只有顺序差异）。 */
+/** 段落行数组的一致指纹（导出供守卫用：判断 packages/snapshots 是否只有顺序差异）。
+ *
+ * @param {string[]} sectionLines
+ * @returns {string}
+ */
 export function sectionFingerprint(sectionLines) {
   return fingerprint(sectionLines);
 }
