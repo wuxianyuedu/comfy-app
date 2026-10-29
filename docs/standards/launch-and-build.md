@@ -2890,6 +2890,25 @@ Cannot find package 'promise-limit' imported from …\.next\standalone\…
 （顶层白名单外条目 + 开发库文件）并退 1；② 真跑一次出厂构建，日志里出现两次计数。
 **别把 ① 当成 ② 的证据**——① 只证明判据认得出投毒，不证明出厂链路真的敲了它。
 
+⚠️ **但「数第二层」这件事有个前置：那一层得真的是产物**（ISSUE #2629）。
+`src-tauri/static/` 由 `build-desktop.mjs` 装配，判据认「装配过」的事实是那一层里有
+`server.js` —— 上面那三条**缺件**检查从一开始就带着这道门，只有**顶层白名单**那一条漏了。
+漏了的形态是**只在开发机上出现的恒红**：`scripts/shell-gate.mjs` 为满足 `cargo test` 的
+编译前提，曾在这层写过一枚 `.cargo-test-placeholder`，于是「本机跑过一次壳的 cargo test」
+之后 `pnpm build` 就红在「顶层出现白名单外的条目」——读起来像有人把脏文件塞进了出厂件，
+而平台那一跑永远看不到这一格（CI 不跑 pre-commit，工作区每跑完一次被整棵删掉）。
+两条同批落地，各钉一半：
+
+| 谁 | 改成什么 | 判据 |
+| --- | --- | --- |
+| `shell-gate.mjs` 的编译前提 | **只 `mkdir`，一个文件都不写** —— 「空目录就够」不是推测：清空 `src-tauri/static/` 后 `cargo test --offline` 实测 `56 passed`（壳内全部 `#[test]` 的那个执行者，硬规则 5） | `tests/shell-gate.test.ts`：跑完断言 `readdirSync(static) === []`（开发期不得往出厂件扫描面放任何东西） |
+| `check-standalone-contents.cjs` 的顶层那一格 | 与缺件检查同一个口径：**没 `server.js` 就不判**，并打一行「**顶层这一格不判**，不是『已检查通过』」；这一句**不管目录空不空都打**（空目录时它以前打的是 `✓ 产物干净（共 0 个文件）`——把「从来没装配过」说成「检查过且通过」） | `tests/dist-artifact-hygiene.test.ts`：同一份目录两侧钉 —— 未装配 ⇒ 退 0 且念出「不判」、**不出现**「产物干净」；补上 `server.js` ⇒ 那枚杂项立刻红（白名单一个字没改，这不是放宽） |
+
+**为什么不去改白名单**：给 `STATIC_ALLOWED_TOPLEVEL` 加一项 `.cargo-test-placeholder`
+会得到「开发期的东西被登记成出厂件」，而那份清单与减法侧逐字同源、由
+`tests/dist-artifact-hygiene.test.ts` 核对 —— 加一项要回答「谁在运行期读它」，
+而这件东西没人读。
+
 **自查入口**（不装安装包也能验）：
 
 ```bash
