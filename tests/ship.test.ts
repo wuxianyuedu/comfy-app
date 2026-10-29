@@ -88,11 +88,13 @@ import {
   PULL_BODY_LIMIT,
 } from "../scripts/ship-pull-body.mjs";
 import {
+  claimNumbersFromTitle,
   decideCloseIssue,
   fetchPullMergeProof,
   findMergedPullProofs,
   issueNumbersFromText,
   pullTitleBody,
+  referencedNotClaimed,
 } from "../scripts/ship-close.mjs";
 import {
   authorLabel,
@@ -385,6 +387,58 @@ describe("issueNumbersFromText：只从标题本体取，绝不从拼完 PR 号�
     const squashLine = `${title} (#2110)`;
     expect(issueNumbersFromText(title)).toEqual([2070]);
     expect(issueNumbersFromText(squashLine)).toEqual([2070, 2110]);
+  });
+});
+
+/**
+ * 「这行文字里出现过哪些号」与「这一轮认领了哪张单」是两个问题（ISSUE #2646）。
+ *
+ * 上面那组用例留着不删是刻意的：`issueNumbersFromText` 仍在被用
+ * （`referencedNotClaimed` 拿它当全集），把全集一起收窄等于连「这里有处引用」那半句
+ * 信息也丢掉 —— 收窄只发生在**认领**这一刀上。
+ */
+describe("claimNumbersFromTitle / referencedNotClaimed：认领形态与正文引用分开", () => {
+  it("认领只认 (#号)，裸写的那一半落进「引用」", () => {
+    /* 这就是 PR #2642 的原始标题形状：那一次 `#730` 被连带推定成本轮的单子去关，
+     * 靠它 10-04 就 closed 才只是 no-op。 */
+    const title = "test(gates): #730 那格改判 oxfmt 的忽略面 (#2603)";
+    expect(claimNumbersFromTitle(title)).toEqual([2603]);
+    expect(referencedNotClaimed(title)).toEqual([730]);
+    expect(issueNumbersFromText(title)).toEqual([730, 2603]);
+  });
+
+  it("全是裸写 ⇒ 一个认领都没有（这种标题只能靠人点名，不能靠推定）", () => {
+    expect(claimNumbersFromTitle("fix(a): 修 #2070 与 #2096")).toEqual([]);
+    expect(referencedNotClaimed("fix(a): 修 #2070 与 #2096")).toEqual([
+      2070, 2096,
+    ]);
+  });
+
+  it("括号里带空格的写法也认，且去重照旧", () => {
+    expect(claimNumbersFromTitle("修 ( #2070 ) 再修 (#2070)")).toEqual([2070]);
+    expect(claimNumbersFromTitle("")).toEqual([]);
+  });
+
+  it("decideCloseIssue 那一层：裸写的号不进待关集合", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: true,
+      title: "test(gates): #730 那格 (#2603)",
+      explicit: [],
+    });
+    expect(d.act).toBe(true);
+    expect(d.numbers).toEqual([2603]);
+  });
+
+  it("反面的反面：人点名过的号即使标题里是裸写也照关 —— 收窄针对推定，不针对显式动作", () => {
+    const d = decideCloseIssue({
+      requested: true,
+      landedVerified: true,
+      title: "test(gates): #730 那格",
+      explicit: [730],
+    });
+    expect(d.numbers).toEqual([730]);
+    expect(d.sources.get(730)).toContain("人点名");
   });
 });
 
@@ -850,6 +904,71 @@ describe("closeIssues：回执不算结论，独立回读三件原值才算", ()
       expect(f.log.join("\n")).toContain("没有结论");
     });
   });
+
+  /**
+   * 引用与认领是两件事（ISSUE #2646）。
+   *
+   * 现场是本轮自己撞的：PR #2642 的标题 `test(gates): #730 那格改判 oxfmt 的忽略面…(#2603)`
+   * 让 `#730` 也被推定成本轮的单子去关 —— 那次纯属运气（它 10-04 就 closed，重复关是
+   * no-op），换成一张在世的单就是**静默关掉别人的单子**，而 `update-issue` 的包装退出码
+   * 照旧 0。下面三条按「贵的顺序」排：先钉不关（后果最重），再钉念出来（可审计性），
+   * 最后钉人点名那条路没被收窄误伤（撤便利不撤能力）。
+   */
+  describe("标题正文里的裸 #号 不算认领凭证（ISSUE #2646）", () => {
+    const mixedTitleLanded = {
+      title: "test(gates): #730 那格改判忽略面 (#2603)",
+      sha: "abc1234",
+      verified: true,
+    };
+
+    it("只关 (#2603)，#730 一次都不碰", () => {
+      const f = io({});
+      const code = closeIssues({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug: "org/repo",
+        closeIssue: true,
+        landed: mixedTitleLanded,
+      });
+      expect(code, f.log.join("\n")).toBe(CODE.GREEN);
+      const updates = f.calls.filter((c) => c.includes("update-issue"));
+      /* 「一次都不碰」要数调用次数，不能只看没报错：多关一张单子在退出码上是零成本。 */
+      expect(updates).toHaveLength(1);
+      expect(updates[0]).toContain("--number 2603");
+      expect(updates.join("\n")).not.toContain("--number 730");
+    });
+
+    it("那句「没关」要念出来 —— 静默不关与静默关掉，读者读到的是同一种「不知道处理过没有」", () => {
+      const f = io({});
+      closeIssues({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug: "org/repo",
+        closeIssue: true,
+        landed: mixedTitleLanded,
+      });
+      const all = f.log.join("\n");
+      expect(all).toContain("标题引用了 #730");
+      expect(all).toContain("没关");
+      /* 出口要给全：只说「没关」而不说怎么才能关，读者会以为这是脚本漏了什么。 */
+      expect(all).toContain("--close-issue 730");
+    });
+
+    it("人点名仍然算 —— 收窄只针对**推定**，不针对显式动作（硬规则 28 第一条）", () => {
+      const f = io({});
+      const code = closeIssues({
+        run: f.run,
+        log: (l) => f.log.push(l),
+        slug: "org/repo",
+        closeIssue: true,
+        landed: { title: "test(gates): 一格没有括号号", sha: "", verified: true },
+        explicit: [730],
+      });
+      expect(code, f.log.join("\n")).toBe(CODE.GREEN);
+      expect(f.calls.filter((c) => c.includes("update-issue"))).toHaveLength(1);
+      expect(f.calls[0]).toContain("--number 730");
+    });
+  });
 });
 
 /**
@@ -1123,6 +1242,25 @@ describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号"
       findMergedPullProofs({ run: f.run, slug: "o/r", numbers: [2179] }).proofs
         .size,
     ).toBe(0);
+  });
+
+  it("负控制：标题里**裸写**那个号不算落地证明（认领形态才算，ISSUE #2646）", () => {
+    /* 「那条 PR 顺手修了 #2179 的邻居」是描述，不是「它把 #2179 做完了」的声明。
+     * 这一格与 `decideCloseIssue` 那条同源，但它是**另一条通道**（按标题反查证明），
+     * 只钉住关单那一刀会留下这条：推定来源还在，只是没人用它关过。 */
+    const f = io([
+      [{ number: 2184, is_merged: true, title: "fix(ci): 顺带修 #2179 的邻居" }],
+    ]);
+    const r = findMergedPullProofs({
+      run: f.run,
+      slug: "o/r",
+      numbers: [2179],
+    });
+    expect(r.proofs.has(2179)).toBe(false);
+    /* 扫过与否是另一件事：这一条**跑到过**平台、也数到了那条已合并 PR，
+     * 只是它不构成证明（「没证明」与「没查」在两处出口里各说各的话）。 */
+    expect(r.ran).toBe(true);
+    expect(r.scanned).toBe(1);
   });
 
   it("cnb 取不到 ⇒ ran=false（不构成结论），且不往下翻页", () => {
