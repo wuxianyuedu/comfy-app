@@ -138,9 +138,7 @@ const REFERENCE_IMAGE_DEFAULT_COUNT = 2;
  *  没有这个口子。 */
 function isImageEditMode(code: string | null | undefined): boolean {
   if (typeof code !== "string") return false;
-  return /^(i2i|inpaint|outpaint|upscale|e2i|d2i|p2i|r2i|c2i)$/i.test(
-    code.trim(),
-  );
+  return /^(i2i|inpaint|outpaint|upscale|e2i|d2i|p2i|r2i|c2i)$/i.test(code.trim());
 }
 
 /** 一个模式是否支持多张参考图（图生图类通常多图）。 */
@@ -152,9 +150,7 @@ function allowsReferenceImages(code: string | null | undefined): boolean {
  *
  *  模式为空（工作流没声明模式）时退到最保守的一套（提示词 + 尺寸），
  *  与工作流无关 —— 「对外参数只跟模式有关」，没有模式就只说最通用的两样。 */
-export function exposedParamsForMode(
-  code: string | null | undefined,
-): ExposedParamDef[] {
+export function exposedParamsForMode(code: string | null | undefined): ExposedParamDef[] {
   const out: ExposedParamDef[] = [
     { cls: "prompt", id: "prompt", label: EXPOSED_PARAM_DISPLAY_LABEL.prompt },
     {
@@ -214,17 +210,11 @@ export function exposedParamsForMode(
   }
 
   if (isImageEditMode(code)) {
-    for (
-      let i = 0;
-      i < (allowsReferenceImages(code) ? REFERENCE_IMAGE_DEFAULT_COUNT : 1);
-      i += 1
-    ) {
+    for (let i = 0; i < (allowsReferenceImages(code) ? REFERENCE_IMAGE_DEFAULT_COUNT : 1); i += 1) {
       out.push({
         cls: "reference-image",
         id: i === 0 ? "reference-image" : `reference-image-${i + 1}`,
-        label: exposedParamDisplayLabel(
-          i === 0 ? "reference-image" : `reference-image-${i + 1}`,
-        ),
+        label: exposedParamDisplayLabel(i === 0 ? "reference-image" : `reference-image-${i + 1}`),
       });
     }
   }
@@ -296,8 +286,7 @@ export function exposedParamDisplayLabel(id: string): string {
   const cls = exposedClassOf(id);
   if (!cls) return id;
   const slot = referenceImageSlotIndex(id);
-  if (slot > 1)
-    return `${EXPOSED_PARAM_DISPLAY_LABEL["reference-image"]} ${slot}`;
+  if (slot > 1) return `${EXPOSED_PARAM_DISPLAY_LABEL["reference-image"]} ${slot}`;
   return EXPOSED_PARAM_DISPLAY_LABEL[cls];
 }
 

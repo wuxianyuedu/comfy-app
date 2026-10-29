@@ -24,9 +24,7 @@ import {
 } from "./model-mode-contract";
 
 /** 工作流库里所有「生成类」模式（契约编辑器只对它们开放）。 */
-const GENERATIVE_MODES = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative).map(
-  (t) => t.code,
-);
+const GENERATIVE_MODES = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative).map((t) => t.code);
 
 describe("模式契约口 id 值域", () => {
   it("内置默认契约的每个口都被 isModeContractInputId 接受", () => {
@@ -45,14 +43,7 @@ describe("模式契约口 id 值域", () => {
   });
 
   it("两套 id 互不接受：适配器侧的细分类型不会混进契约", () => {
-    const bothSides = [
-      "prompt",
-      "negative",
-      "first-frame",
-      "last-frame",
-      "duration",
-      "seed",
-    ];
+    const bothSides = ["prompt", "negative", "first-frame", "last-frame", "duration", "seed"];
     for (const t of WORKSHOP_INPUT_TYPES) {
       if (bothSides.includes(t.type)) continue;
       expect(isModeContractInputId(t.type), t.type).toBe(false);
@@ -69,9 +60,7 @@ describe("模式契约口 id 值域", () => {
   it("参考图不设数量上限：下一个槽依次 reference-image / -2 / -3", () => {
     expect(nextReferenceImageId([])).toBe("reference-image");
     expect(nextReferenceImageId(["prompt", "size"])).toBe("reference-image");
-    expect(nextReferenceImageId(["prompt", "reference-image", "size"])).toBe(
-      "reference-image-2",
-    );
+    expect(nextReferenceImageId(["prompt", "reference-image", "size"])).toBe("reference-image-2");
     expect(nextReferenceImageId(["reference-image", "reference-image-2"])).toBe(
       "reference-image-3",
     );
@@ -96,12 +85,7 @@ describe("模式契约口 id 值域", () => {
       inputs: ["prompt", "size", "reference-image", "reference-image-2"],
       output: "image",
     });
-    expect(entries.map((e) => e.control)).toEqual([
-      "text",
-      "size",
-      "image",
-      "image",
-    ]);
+    expect(entries.map((e) => e.control)).toEqual(["text", "size", "image", "image"]);
     expect(entries[3]?.label).toBe("参考图 2");
   });
 });
@@ -168,18 +152,12 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
     ]);
     const entries = modeContractEntries("t2i", stored);
     expect(entries.map((e) => e.id)).toEqual(["prompt", "reference-image-2"]);
-    expect(entries[1]?.label).toBe(
-      exposedParamDisplayLabel("reference-image-2"),
-    );
+    expect(entries[1]?.label).toBe(exposedParamDisplayLabel("reference-image-2"));
   });
 
   it("模式大小写不敏感（注册表按大写存）", () => {
-    const stored = parseModeContracts([
-      { mode: "T2I", inputs: ["prompt"], output: "image" },
-    ]);
-    expect(modeContractEntries("t2i", stored).map((e) => e.id)).toEqual([
-      "prompt",
-    ]);
+    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt"], output: "image" }]);
+    expect(modeContractEntries("t2i", stored).map((e) => e.id)).toEqual(["prompt"]);
   });
 });
 
@@ -200,9 +178,7 @@ describe("自定义口：id 形状与序号", () => {
     /* 下一个图片口拿 2 —— 与文本口共用序号空间，删掉一个再加不会立刻复用
      *  同一个 id（映射表按 id 存，复用会让旧落点线落到新口上）。 */
     expect(nextCustomInputId(first, "image")).toBe("custom-image-2");
-    expect(nextCustomInputId([...first, "custom-image-2"], "text")).toBe(
-      "custom-text-3",
-    );
+    expect(nextCustomInputId([...first, "custom-image-2"], "text")).toBe("custom-text-3");
   });
 });
 
@@ -259,11 +235,7 @@ describe("自定义口：往返与归一化", () => {
 
   it("展示名取作者填的名字；控件形态按类型给", () => {
     const entries = contractToStatusEntries(contract);
-    expect(entries.map((e) => e.id)).toEqual([
-      "prompt",
-      "custom-text-1",
-      "size",
-    ]);
+    expect(entries.map((e) => e.id)).toEqual(["prompt", "custom-text-1", "size"]);
     expect(entries[1]?.label).toBe("水彩风格");
     expect(entries[1]?.control).toBe("text");
     /* 不传定义时给中性兜底 —— 不落到「提示词」这类张冠李戴的措辞上。 */
@@ -286,16 +258,8 @@ describe("调序：顺序就是工坊对外的参数顺序", () => {
   const inputs: ModeContractInputId[] = ["prompt", "negative", "size"];
 
   it("上移 / 下移交换相邻两项", () => {
-    expect(moveContractInput(inputs, "negative", -1)).toEqual([
-      "negative",
-      "prompt",
-      "size",
-    ]);
-    expect(moveContractInput(inputs, "negative", 1)).toEqual([
-      "prompt",
-      "size",
-      "negative",
-    ]);
+    expect(moveContractInput(inputs, "negative", -1)).toEqual(["negative", "prompt", "size"]);
+    expect(moveContractInput(inputs, "negative", 1)).toEqual(["prompt", "size", "negative"]);
   });
 
   it("越界时原样返回（视图据此把首尾的按钮置灰）", () => {
@@ -318,9 +282,7 @@ describe("调序：顺序就是工坊对外的参数顺序", () => {
  * 类型表反向核对一遍（不是「抄一遍」：抄一遍不会红，核对会）。 */
 describe("成品配置覆盖全部生成类模式", () => {
   it("ALL_CONTRACT_MODES 与工作流类型表的生成类模式逐项一致", () => {
-    expect([...ALL_CONTRACT_MODES].sort()).toEqual(
-      [...GENERATIVE_MODES].sort(),
-    );
+    expect([...ALL_CONTRACT_MODES].sort()).toEqual([...GENERATIVE_MODES].sort());
   });
 
   it("每个模式都有一份口清单（空清单 = 该模式在工坊里没有任何对外参数）", () => {
@@ -332,8 +294,6 @@ describe("成品配置覆盖全部生成类模式", () => {
   });
 
   it("传入自己的模式清单时按它算（调用方不必只能吃默认全集）", () => {
-    expect(configuredModeContracts(["t2i"]).map((c) => c.mode)).toEqual([
-      "T2I",
-    ]);
+    expect(configuredModeContracts(["t2i"]).map((c) => c.mode)).toEqual(["T2I"]);
   });
 });

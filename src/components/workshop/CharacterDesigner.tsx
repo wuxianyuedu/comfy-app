@@ -13,15 +13,9 @@ import { Input } from "~/components/ui/input";
 import { Disclosure } from "~/components/ui/disclosure";
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
 import { useCharacterLoraOptions } from "./hooks/use-character-lora-options";
-import {
-  CHARACTER_ATTRIBUTES,
-  type AttributeOptionSet,
-} from "~/lib/workshop/character-options";
+import { CHARACTER_ATTRIBUTES, type AttributeOptionSet } from "~/lib/workshop/character-options";
 import type { Character, StyleRef } from "~/lib/workshop/types";
-import {
-  buildCharacterPrompt,
-  buildCharacterNegative,
-} from "~/lib/workshop/prompt-builder";
+import { buildCharacterPrompt, buildCharacterNegative } from "~/lib/workshop/prompt-builder";
 import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
 import {
   CharacterPortraitStudio,
@@ -38,14 +32,8 @@ import { channelProviderLabel } from "~/lib/workshop/channel-options";
 import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
 import { IndexDot } from "~/components/workshop/IndexDot";
 import { enterCommit } from "~/components/ui/use-enter-commit";
-import {
-  ExitReminder,
-  exitReminderSignal,
-} from "~/components/ui/use-exit-reminder";
-import type {
-  ExtractSession,
-  ExtractSessionActions,
-} from "./hooks/use-workshop-pipeline";
+import { ExitReminder, exitReminderSignal } from "~/components/ui/use-exit-reminder";
+import type { ExtractSession, ExtractSessionActions } from "./hooks/use-workshop-pipeline";
 
 interface Props {
   characters: Character[];
@@ -95,8 +83,7 @@ export function CharacterDesigner({
   const { config, openSettings } = useLLM();
 
   /* 角色 LoRA 绑定的候选（模型库 loras 目录，#2622 FR-QA-02③）。 */
-  const { options: loraFiles, loading: lorasLoading } =
-    useCharacterLoraOptions();
+  const { options: loraFiles, loading: lorasLoading } = useCharacterLoraOptions();
 
   /* 提取/导入 与 一句话生成/AI 润色 两个分域各自沉在 sub-hook
    * （与 useStoryboardExtractFlow 同族）；依赖显式注入，返回形状与
@@ -171,10 +158,7 @@ export function CharacterDesigner({
        切到别的阶段 / 别的视图时它们会随之消失。判据在 CSS（`globals.css`
        的 `[data-exit-reminder]:has(~ [data-dirty])`），这里只负责把信号摆出来 ——
        组件本身零状态、零定时器（详见 `ui/use-exit-reminder` 的文件头）。 */
-    <div
-      className="flex-col gap-4"
-      {...exitReminderSignal(characters.length > 0)}
-    >
+    <div className="flex-col gap-4" {...exitReminderSignal(characters.length > 0)}>
       <div className="flex items-center justify-between">
         <h3 className="u-title">
           角色设计{""}
@@ -255,9 +239,7 @@ export function CharacterDesigner({
                 </pre>
               </Disclosure>
             )}
-            {genStatus && !genError && (
-              <p className="text-primary mt-1 text-xs">{genStatus}</p>
-            )}
+            {genStatus && !genError && <p className="text-primary mt-1 text-xs">{genStatus}</p>}
             {genError && (
               <p className="bg-destructive/10 text-destructive mt-1 rounded-lg px-3 py-2 text-xs">
                 {genError}
@@ -297,17 +279,12 @@ export function CharacterDesigner({
       ) : (
         <div className="flex flex-col gap-3">
           {characters.map((character, i) => (
-            <div
-              key={character.id}
-              className="border-border bg-surface rounded-xl border p-4"
-            >
+            <div key={character.id} className="border-border bg-surface rounded-xl border p-4">
               <div className="mb-3 flex items-center gap-2">
                 <IndexDot index={i + 1} />
                 <input
                   value={character.name}
-                  onChange={(event) =>
-                    update(character.id, { name: event.target.value })
-                  }
+                  onChange={(event) => update(character.id, { name: event.target.value })}
                   className="text-ink hover:border-border focus:border-primary flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium outline-none"
                   placeholder="角色名"
                 />
@@ -323,12 +300,7 @@ export function CharacterDesigner({
                       "…"
                     ) : (
                       <>
-                        <Icon
-                          data-icon="inline-start"
-                          name="sparkles"
-                          size={12}
-                          className="mr-1"
-                        />
+                        <Icon data-icon="inline-start" name="sparkles" size={12} className="mr-1" />
                         AI 润色
                       </>
                     )}
@@ -350,9 +322,7 @@ export function CharacterDesigner({
                 <Field
                   label="年龄/性别"
                   value={character.ageGender}
-                  onChange={(value) =>
-                    update(character.id, { ageGender: value })
-                  }
+                  onChange={(value) => update(character.id, { ageGender: value })}
                   placeholder="25岁 女性"
                 />
 
@@ -361,66 +331,49 @@ export function CharacterDesigner({
                   label={attrSet("costume").label}
                   groups={attrSet("costume").groups}
                   value={splitAttr(character.costume)}
-                  onChange={(items) =>
-                    update(character.id, { costume: joinAttr(items) })
-                  }
+                  onChange={(items) => update(character.id, { costume: joinAttr(items) })}
                   placeholder="如：唐装、风衣…"
                 />
                 <AttributeMultiSelect
                   label={attrSet("appearance").label}
                   groups={attrSet("appearance").groups}
                   value={splitAttr(character.appearance)}
-                  onChange={(items) =>
-                    update(character.id, { appearance: joinAttr(items) })
-                  }
+                  onChange={(items) => update(character.id, { appearance: joinAttr(items) })}
                   placeholder="如：短发、双眼皮…"
                 />
                 <AttributeMultiSelect
                   label={attrSet("personality").label}
                   groups={attrSet("personality").groups}
                   value={splitAttr(character.personality)}
-                  onChange={(items) =>
-                    update(character.id, { personality: joinAttr(items) })
-                  }
+                  onChange={(items) => update(character.id, { personality: joinAttr(items) })}
                   placeholder="如：冷静、开朗…"
                 />
                 <AttributeMultiSelect
                   label={attrSet("temperament").label}
                   groups={attrSet("temperament").groups}
                   value={splitAttr(character.temperament)}
-                  onChange={(items) =>
-                    update(character.id, { temperament: joinAttr(items) })
-                  }
+                  onChange={(items) => update(character.id, { temperament: joinAttr(items) })}
                   placeholder="如：清冷孤傲、知性…"
                 />
                 <AttributeMultiSelect
                   label={attrSet("styleTags").label}
                   groups={attrSet("styleTags").groups}
                   value={character.styleTags ?? []}
-                  onChange={(items) =>
-                    update(character.id, { styleTags: items })
-                  }
+                  onChange={(items) => update(character.id, { styleTags: items })}
                   placeholder="如：厚涂、国风…"
                 />
               </div>
 
               {/* 关联的风格技能 */}
               <div className="mt-2">
-                <span className="text-muted-foreground mb-1 block text-xs">
-                  艺术风格（Skill）
-                </span>
+                <span className="text-muted-foreground mb-1 block text-xs">艺术风格（Skill）</span>
                 <SelectMenu
                   className="border-border! bg-subtle! text-sm"
                   value={character.skillSlug ?? ""}
-                  onChange={(value) =>
-                    update(character.id, { skillSlug: value || undefined })
-                  }
+                  onChange={(value) => update(character.id, { skillSlug: value || undefined })}
                   options={styles.map((style) => style.slug)}
                   labels={Object.fromEntries(
-                    styles.map((style) => [
-                      style.slug,
-                      `${style.icon} ${style.name}`,
-                    ]),
+                    styles.map((style) => [style.slug, `${style.icon} ${style.name}`]),
                   )}
                   placeholder="不指定（使用风格标签）"
                 />
@@ -444,22 +397,16 @@ export function CharacterDesigner({
                       })
                     }
                     options={loraFiles}
-                    placeholder={
-                      lorasLoading ? "加载中…" : "不绑定（用工作流图内配置）"
-                    }
+                    placeholder={lorasLoading ? "加载中…" : "不绑定（用工作流图内配置）"}
                   />
                 </div>
                 {character.loraName && (
                   <div>
-                    <span className="text-muted-foreground mb-1 block text-xs">
-                      强度
-                    </span>
+                    <span className="text-muted-foreground mb-1 block text-xs">强度</span>
                     <Input
                       inputMode="decimal"
                       value={
-                        character.loraStrength !== undefined
-                          ? String(character.loraStrength)
-                          : "1"
+                        character.loraStrength !== undefined ? String(character.loraStrength) : "1"
                       }
                       disabled={!character.loraName}
                       onChange={numberHandler(
@@ -476,9 +423,7 @@ export function CharacterDesigner({
 
               {/* 生成出的提示词预览 */}
               <div className="bg-subtle mt-3 rounded-lg p-3">
-                <p className="text-muted-foreground mb-1 text-xs font-medium">
-                  生成提示词预览
-                </p>
+                <p className="text-muted-foreground mb-1 text-xs font-medium">生成提示词预览</p>
                 <p className="text-ink/80 text-xs leading-relaxed wrap-break-word">
                   {character.positivePrompt || "填写角色信息后自动生成…"}
                 </p>
@@ -491,12 +436,7 @@ export function CharacterDesigner({
               </div>
 
               {/* 定妆照：按上方提示词生成 / 导入，多次结果留作候选供挑选 */}
-              {portrait && (
-                <CharacterPortraitStudio
-                  character={character}
-                  portrait={portrait}
-                />
-              )}
+              {portrait && <CharacterPortraitStudio character={character} portrait={portrait} />}
             </div>
           ))}
         </div>
@@ -517,10 +457,7 @@ function Field({
   placeholder?: string;
 }) {
   return (
-    <FormField
-      label={label}
-      labelClassName="text-muted-foreground mb-1 text-xs"
-    >
+    <FormField label={label} labelClassName="text-muted-foreground mb-1 text-xs">
       {(a11y) => (
         <input
           {...a11y}

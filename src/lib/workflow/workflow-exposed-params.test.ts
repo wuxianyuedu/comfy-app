@@ -7,11 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { familyOfClass } from "./workflow-param-classes";
-import {
-  exposedClassOf,
-  exposedParamLabel,
-  exposedParamsForMode,
-} from "./workflow-exposed-params";
+import { exposedClassOf, exposedParamLabel, exposedParamsForMode } from "./workflow-exposed-params";
 
 function ids(mode: string | null): string[] {
   return exposedParamsForMode(mode).map((def) => def.id);
@@ -87,22 +83,8 @@ describe("exposedParamsForMode", () => {
   });
 
   it("没有模式时退到最保守的一套（提示词 + 尺寸 + 种子）", () => {
-    expect(ids(null)).toEqual([
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength",
-    ]);
-    expect(ids("")).toEqual([
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength",
-    ]);
+    expect(ids(null)).toEqual(["prompt", "negative", "size", "seed", "lora-name", "lora-strength"]);
+    expect(ids("")).toEqual(["prompt", "negative", "size", "seed", "lora-name", "lora-strength"]);
   });
 
   it("契约口一律常驻：没有 `optional` 这种「看工作流脸色」的标记", () => {

@@ -38,9 +38,7 @@ vi.mock("~/components/workshop/LLMContext", () => ({
 
 vi.mock("~/lib/llm/browser", () => ({
   streamChat: vi.fn(async () => {
-    return JSON.stringify([
-      { name: "小满", appearance: "短黑发,清秀,白色连衣裙" },
-    ]);
+    return JSON.stringify([{ name: "小满", appearance: "短黑发,清秀,白色连衣裙" }]);
   }),
 }));
 
@@ -75,9 +73,7 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
        给不出区分。 */
     await expect.poll(() => onCharactersChange.mock.calls.length).toBe(1);
 
-    const listArg = onCharactersChange.mock.calls[0]?.[0] as
-      | Character[]
-      | undefined;
+    const listArg = onCharactersChange.mock.calls[0]?.[0] as Character[] | undefined;
     expect(listArg).toBeDefined();
     const first = listArg?.[0];
     expect(first).toBeDefined();

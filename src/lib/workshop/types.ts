@@ -40,14 +40,7 @@ export type PortraitSource = "local" | "remote" | "import";
  * （§12.12）：`Shot.status`、`Shot.clipStatus`、`Asset.status` 现在都指向这里，
  * 而写侧契约要按**同一份**枚举校验取值。
  */
-export const SHOT_STATUSES = [
-  "idle",
-  "queued",
-  "running",
-  "done",
-  "failed",
-  "stale",
-] as const;
+export const SHOT_STATUSES = ["idle", "queued", "running", "done", "failed", "stale"] as const;
 export type ShotStatus = (typeof SHOT_STATUSES)[number];
 
 export const MOTION_LEVELS = ["low", "medium", "high"] as const;
@@ -97,9 +90,7 @@ export const DEFAULT_SHOT_TYPE: ShotType = "medium";
  *  不在清单里的一律回落默认档 —— 不抛错（一条镜头的景别写错不该毁掉整批解析），
  *  但也不放它进类型系统。 */
 export function normalizeShotType(raw: unknown): ShotType {
-  return (SHOT_TYPES as readonly string[]).includes(
-    typeof raw === "string" ? raw : "",
-  )
+  return (SHOT_TYPES as readonly string[]).includes(typeof raw === "string" ? raw : "")
     ? (raw as ShotType)
     : DEFAULT_SHOT_TYPE;
 }
@@ -214,9 +205,7 @@ const stringList = z
 function optionalEnum<const T extends readonly string[]>(values: T) {
   return z
     .unknown()
-    .transform((value) =>
-      values.includes(value as string) ? (value as T[number]) : undefined,
-    )
+    .transform((value) => (values.includes(value as string) ? (value as T[number]) : undefined))
     .optional();
 }
 

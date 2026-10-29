@@ -16,10 +16,7 @@ import { autoselectShot } from "~/lib/production/run-client";
 import { reviewScoreMean } from "~/lib/production/review-types";
 import { fixed } from "~/lib/number-format";
 import { withTimeoutResult } from "~/lib/with-timeout";
-import {
-  buildShotNegative,
-  buildShotPrompt,
-} from "~/lib/workshop/prompt-builder";
+import { buildShotNegative, buildShotPrompt } from "~/lib/workshop/prompt-builder";
 import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
@@ -106,24 +103,19 @@ function useAutoFillPrompts(
     inputsRef.current = inputs;
   });
   React.useEffect(() => {
-    const needsFill = shots.some(
-      (s) => !s.prompt.trim() && !editedRef.current.has(s.id),
-    );
+    const needsFill = shots.some((s) => !s.prompt.trim() && !editedRef.current.has(s.id));
     if (!needsFill) return;
     const { scenes, characters, styles } = inputsRef.current;
     onShotsChange((prev) =>
       prev.map((shot) => {
         if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
         const scene = scenes.find((sc) => sc.id === shot.sceneId);
-        const chars = characters.filter((c) =>
-          shot.characterIds.includes(c.id),
-        );
+        const chars = characters.filter((c) => shot.characterIds.includes(c.id));
         const style = styles.find((st) => st.slug === shot.skillSlug);
         return {
           ...shot,
           prompt: buildShotPrompt(shot, scene, chars, style),
-          negativePrompt:
-            shot.negativePrompt || buildShotNegative(chars, style),
+          negativePrompt: shot.negativePrompt || buildShotNegative(chars, style),
         };
       }),
     );
@@ -160,11 +152,7 @@ export function ShotStudio({
   );
   /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
    * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
-  const {
-    progress,
-    report: reportProgress,
-    flush: flushProgress,
-  } = useThrottledProgressMap();
+  const { progress, report: reportProgress, flush: flushProgress } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   /* 批处理的忙碌位走唯一出口（规范 16 §16.2.4.71）：它此前复位写在循环之后，
    * 循环里抛错就永远停在「批处理中」。 */
@@ -180,17 +168,10 @@ export function ShotStudio({
   );
 
   // ── 自动预填：分镜输出 → 图片提示词（逻辑收在 useAutoFillPrompts）──
-  useAutoFillPrompts(
-    shots,
-    { scenes, characters, styles },
-    onShotsChange,
-    editedRef,
-  );
+  useAutoFillPrompts(shots, { scenes, characters, styles }, onShotsChange, editedRef);
 
   function patchShot(id: string, p: Partial<Shot>) {
-    onShotsChange((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...p } : s)),
-    );
+    onShotsChange((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
   }
 
   function setShotError(id: string, message: string | undefined) {
@@ -260,20 +241,13 @@ export function ShotStudio({
         /* 镜头存的是尺寸表达（老数据可能是"832x1216"，回读时归一）——
          * 尺寸只表达一次，两种目标形状都由它现算。 */
         const sizeSpec = parseShotSize(
-          shot.params.size !== undefined && shot.params.size !== ""
-            ? shot.params.size
-            : shotSize,
+          shot.params.size !== undefined && shot.params.size !== "" ? shot.params.size : shotSize,
         );
         /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上；
          * 没连参考图口的工作流会经 unmatched 提示，上传失败只提示失败数。 */
-        const refs = await preparePortraitReferences(
-          characters,
-          shot.characterIds,
-        );
+        const refs = await preparePortraitReferences(characters, shot.characterIds);
         if (refs.failedCount > 0) {
-          onNotice(
-            `${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`,
-          );
+          onNotice(`${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`);
         }
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个生图工作流
          *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
@@ -374,15 +348,11 @@ export function ShotStudio({
     await batch.run(() =>
       /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：在跑的与排队的同存，
        * 不再「await 一条到底再提交下一条」地空转。 */
-      runWithConcurrency(
-        [...pending],
-        WORKSHOP_BATCH_CONCURRENCY,
-        async (shot) => {
-          // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
-          if (shot.status === "running" || shot.imageUrl) return;
-          await generateShot(shot);
-        },
-      ),
+      runWithConcurrency([...pending], WORKSHOP_BATCH_CONCURRENCY, async (shot) => {
+        // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
+        if (shot.status === "running" || shot.imageUrl) return;
+        await generateShot(shot);
+      }),
     );
   }
 
@@ -425,18 +395,10 @@ export function ShotStudio({
  会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">尺寸</span>
-          <ShotSizePicker
-            value={shotSize}
-            onChange={setShotSize}
-            disabled={batch.busy}
-          />
+          <ShotSizePicker value={shotSize} onChange={setShotSize} disabled={batch.busy} />
         </div>
         {channel === "local" && (
-          <SeedAdvancedField
-            value={seedInput}
-            onChange={setSeedInput}
-            disabled={batch.busy}
-          />
+          <SeedAdvancedField value={seedInput} onChange={setSeedInput} disabled={batch.busy} />
         )}
         <Button
           variant="primary-solid"
@@ -472,8 +434,7 @@ export function ShotStudio({
       {channel === "api" && !apiReady && (
         <div className="bg-amber/10 text-amber flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
           <Icon name="info" size={12} />
-          API 生图通道未配置 — 点击上方「模型适配」配置该模型的接口与字段映射
-          后即可使用。
+          API 生图通道未配置 — 点击上方「模型适配」配置该模型的接口与字段映射 后即可使用。
         </div>
       )}
 
@@ -583,24 +544,17 @@ function ShotCardRow({
 }: ShotCardRowProps) {
   const [gachaCount, setGachaCount] = React.useState(2);
   return (
-    <div
-      data-shot-index={shot.index}
-      className="border-border bg-surface rounded-xl border p-4"
-    >
+    <div data-shot-index={shot.index} className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground truncate text-xs">
-          {shot.sceneHeading}
-        </span>
+        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
         <StatusBadge status={shot.status} />
         {busyCount > 0 && shot.status === "running" && (
           <span className="text-muted-foreground text-3xs">
             {progress > 0 ? `${Math.round(progress)}%` : "排队中…"}
           </span>
         )}
-        <span className="text-faint text-3xs ml-auto">
-          {channel === "local" ? "本地" : "API"}
-        </span>
+        <span className="text-faint text-3xs ml-auto">{channel === "local" ? "本地" : "API"}</span>
       </div>
 
       {shot.status === "running" && (
@@ -644,19 +598,11 @@ function ShotCardRow({
           }
           className="h-auto rounded-lg px-4 py-1.5"
         >
-          {shot.status === "running"
-            ? "生成中…"
-            : shot.imageUrl
-              ? "重新生成"
-              : "生成此镜头"}
+          {shot.status === "running" ? "生成中…" : shot.imageUrl ? "重新生成" : "生成此镜头"}
         </Button>
         {channel === "local" && (
           /* 抽卡优选（FR-QA-04④）：本地通道才有任务行可评；N=连发张数。 */
-          <div
-            role="radiogroup"
-            aria-label="抽卡张数"
-            className="flex items-center gap-1"
-          >
+          <div role="radiogroup" aria-label="抽卡张数" className="flex items-center gap-1">
             {[2, 3, 4].map((n) => (
               <SelectChip
                 key={n}
@@ -700,9 +646,7 @@ function ShotCardRow({
           </Button>
         )}
         {shot.taskId && (
-          <span className="text-faint text-3xs truncate">
-            任务 {shot.taskId.slice(0, 12)}…
-          </span>
+          <span className="text-faint text-3xs truncate">任务 {shot.taskId.slice(0, 12)}…</span>
         )}
       </div>
 
