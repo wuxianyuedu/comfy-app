@@ -213,6 +213,40 @@ describe("formatReadout：三档措辞各自代表不同的事实", () => {
   });
 });
 
+describe("whereItLives：读数落在日志里，还要读得出来在哪", () => {
+  /* 这一族治的是 ISSUE #2551 的追问原话：「它是什么形状现在每天在日志里，在哪里，
+   * 我没看到」。读数早就打出来了 —— 缺的是**指路**。所以判据是「每一档触发口都念出
+   * 它自己那个格名」，而不是「念了一句什么」。 */
+  const rows = [
+    {
+      domain: "repo-code",
+      scope: "repo-code:r",
+      why: "读分支列表",
+      path: "git/branches",
+      reply: { state: "granted" as const, status: 200 },
+      ms: 10,
+    },
+  ];
+
+  it("三档触发口各自念对格名", () => {
+    const head = (event: string, label: string) =>
+      formatReadout(rows, { repo: "a/b", event, branch: "master", label })[0];
+    expect(head("pull_request", "质量门禁")).toContain("质量门禁 流水线");
+    expect(head("pull_request", "质量门禁")).toContain("「令牌权限读数」");
+    expect(head("crontab: 0 1 * * *", "每日生产构建")).toContain("「每日令牌权限读数」");
+    expect(head("web_trigger_daily", "每日档（手动触发）")).toContain("「每日令牌权限读数」");
+    expect(head("api_trigger_daily", "每日档（API 触发）")).toContain("「每日令牌权限读数」");
+    expect(head("crontab: 0 3 * * *", "桌面成品包")).toContain("「令牌权限读数」");
+  });
+
+  it("事件认不出来时按事件名指路，不猜一个可能不存在的格名", () => {
+    const line = formatReadout(rows, { repo: "a/b", event: "push", branch: "master" })[0];
+    expect(line).toContain("push");
+    expect(line).toContain("找「令牌权限读数」");
+    expect(line, "没认出来的事件不该被写成某一条具体流水线").not.toContain("流水线 流水线");
+  });
+});
+
 describe("main：退码、缺件的出口、以及「不打凭据」", () => {
   const heard: string[] = [];
   const run = async (
