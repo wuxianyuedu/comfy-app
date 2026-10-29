@@ -150,6 +150,7 @@ import {
   mergePerFileReads,
 } from "./affected-launch-retry-verdict.mjs";
 import {
+  isTimeoutShaped,
   remainingWaitMs,
   RETRY_BUDGET_MS,
   waitForLoadToSettle,
@@ -161,6 +162,7 @@ import {
   gateRerunByWallClock,
   perFileBudgetStopReport,
   remainingWallClockMs,
+  rerunFileList,
   resolveWallClockMs,
   wallClockBudget,
   wallClockSkipReport,
@@ -732,14 +734,18 @@ export async function runChunk(chunk, deps) {
             : " 没等到回落"
         } —— 起第 2 遍：${scope.why}、--no-file-parallelism\n`,
   );
-  /* 走「先量一份」那一支时，第 2 遍只跑它买得起的那几份：`classifyRetry` 只看
-   * **这次真的复跑过的那几份**（`scope.files` 之外的本来就归不进来），而剩下的文件
-   * 会走下面那条逐文件补跑（同一份判据 `affordablePerFileCount` 算份数）——
-   * 两条路的分工是「一份一个退出码」对「多份一次启动」，结论档位一模一样。 */
-  const retryFiles =
-    gate.via === "probe"
-      ? scope.files.slice(0, gate.probeCount ?? 1)
-      : scope.files;
+  /* 走「先量一份」那一支时，第 2 遍只跑它买得起的那几份，且**按读数挑**（`rerunFileList`
+   * → `probeFiles`）：不是 `scope.files` 里排在前面的几份 —— 那是清单顺序，与「哪一份最
+   * 可能量出结论」无关（ISSUE #2601）。剩下的文件照旧走下面那条逐文件补跑（同一份判据
+   * `affordablePerFileCount` 算份数）—— 两条路的分工是「一份一个退出码」对「多份一次
+   * 启动」，结论档位一模一样。 */
+  const retryFiles = rerunFileList({
+    gate,
+    files: scope.files,
+    readSuites: () =>
+      readRetrySuiteFailures({ junitDir, chunkId, read: deps.readJunit }),
+    isTimeout: isTimeoutShaped,
+  });
   const retry = spawn(entry, [
     "run",
     ...reporters,

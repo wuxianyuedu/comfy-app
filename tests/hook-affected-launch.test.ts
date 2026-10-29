@@ -68,6 +68,8 @@ import {
   gateRerunByWallClock,
   perFileBudgetStopReport,
   PLATFORM_STAGE_KILL_MS,
+  probeFiles,
+  rerunFileList,
   resolveWallClockMs,
   SERIAL_RERUN_FACTOR,
   STAGE_WALL_CLOCK_MS,
@@ -2180,6 +2182,67 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
         nowMs: 0,
       }),
     ).toBe(3);
+  });
+
+  it("第 2 遍的名单：整块那一支照旧全跑，probe 那一支才挑（且惰性读 junit）", () => {
+    const files = ["tests/a.test.ts", "tests/b.test.ts"];
+    /* 整块买得起 ⇒ 名单是全部，而且**一次 junit 都不读**：这一档不需要挑谁。 */
+    const noRead = () => {
+      throw new Error("整块那一支不该读 junit 读数");
+    };
+    expect(
+      rerunFileList({
+        gate: { via: "block" },
+        files,
+        readSuites: noRead,
+        isTimeout: isTimeoutShaped,
+      }),
+    ).toEqual(files);
+    /* probe 那一支才读，且按读数挑。 */
+    expect(
+      rerunFileList({
+        gate: { via: "probe", probeCount: 1 },
+        files,
+        readSuites: () => [
+          { name: "tests/a.test.ts", body: "Test timed out in 30000ms." },
+          { name: "tests/b.test.ts", body: "AssertionError: boom" },
+        ],
+        isTimeout: isTimeoutShaped,
+      }),
+    ).toEqual(["tests/b.test.ts"]);
+  });
+
+  it("买得起的那几份**挑谁**：不带指纹的排前面，同档保持清单顺序", () => {
+    /* 现场（ISSUE #2601）：`budgetAllows` 只答「买得起几份」，而调用点拿它去切
+     * `scope.files.slice(0, n)` —— 那是**清单顺序**，与「哪一份最可能量出结论」无关。
+     * 把唯一一次测量落在那几份**必然超时**的文件上，读出来的「仍只是超时形态」是
+     * 一个信息量为零的读数。 */
+    const files = ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"];
+    const readSuites = [
+      { name: "tests/a.test.ts", body: "Test timed out in 30000ms." },
+      { name: "tests/c.test.ts", body: "AssertionError: expected 1 to be 2" },
+    ];
+    /* 只买得起一份 ⇒ 给那份**不带指纹**的（它的红坐实就是 `hard-fail`，多知道一件）。 */
+    expect(
+      probeFiles({ files, count: 1, readSuites, isTimeout: isTimeoutShaped }),
+    ).toEqual(["tests/c.test.ts"]);
+    /* 买得起两份 ⇒ 第二份回到清单顺序（`a` 在 `b` 前），而不是按读数排。 */
+    expect(
+      probeFiles({ files, count: 2, readSuites, isTimeout: isTimeoutShaped }),
+    ).toEqual(["tests/c.test.ts", "tests/a.test.ts"]);
+    /* 买得起全部 ⇒ 原样（这一格不改名单，只改被放过去测量的那几份是谁）。 */
+    expect(
+      probeFiles({ files, count: 3, readSuites, isTimeout: isTimeoutShaped }),
+    ).toEqual(files);
+    /* 一份都买不起 ⇒ 空，不拿「反正要挑一份」顶上。 */
+    expect(probeFiles({ files, count: 0, readSuites })).toEqual([]);
+    expect(probeFiles({ files: [], count: 2 })).toEqual([]);
+    /* junit 里**查不到自己**的那份仍在候选里（它要落到下面那条逐文件补跑），
+       `isTimeout` 默认值不许把它悄悄筛掉。 */
+    expect(probeFiles({ files, count: 2 })).toEqual([
+      "tests/a.test.ts",
+      "tests/b.test.ts",
+    ]);
   });
 
   it("两句判点话术各自必须说完「界是多少 / 为什么停 / 下一动作」", () => {
