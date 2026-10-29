@@ -74,6 +74,28 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
     expect(got.notRunCodes).toEqual([]);
   });
 
+  it("check-format --staged ⇒ 换发 --changed（printWidth 迁移期全库档恒红，ISSUE #2729）", () => {
+    const got = heavyGateArgv([
+      "node",
+      "scripts/check-format.cjs",
+      "--staged",
+    ]);
+    expect(got.ok).toBe(true);
+    if (!got.ok) return;
+    expect(got.argv).toEqual(["node", "scripts/check-format.cjs", "--changed"]);
+    expect(got.via).toContain("改动面");
+    expect(got.notRunCodes).toEqual([]);
+    /* 对照：别的步骤不沾这个换发 —— 剥旗标进全库照旧。 */
+    const other = heavyGateArgv([
+      "node",
+      "scripts/check-dead-exports.cjs",
+      "--staged",
+    ]);
+    expect(other.ok).toBe(true);
+    if (!other.ok) return;
+    expect(other.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
+  });
+
   it("拿得到基线 ⇒ 换成 `--base` 形态（真判，不再恒绿无声）", () => {
     const got = heavyGateArgv(["node", "scripts/shell-gate.mjs"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
