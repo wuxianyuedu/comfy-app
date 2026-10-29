@@ -2653,6 +2653,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     stageProgress?: string[];
     /** false = 列表里没有这条 sha（平台还没开跑）。 */
     found?: boolean;
+    /** `pulls get-pull` 回读的 mergeable_state；不给则这一问回空（读不到）。 */
+    mergeableState?: string;
+    /** `pulls get-pull` 回读的 blocked_on。 */
+    blockedOn?: string;
   }) {
     const log: string[] = [];
     const calls: string[] = [];
@@ -2665,6 +2669,21 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
             ? []
             : [{ sn: "b1", sha: SHA, event: "pull_request", createTime: "t" }];
         return ok(JSON.stringify({ status: 200, data: { data: builds } }));
+      }
+      if (args[0] === "pulls" && args[1] === "get-pull") {
+        const ms = opts.mergeableState ?? "mergeable";
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              number: 2633,
+              mergeable_state: ms,
+              blocked_on: opts.blockedOn ?? "",
+              is_merged: false,
+              state: "open",
+            },
+          }),
+        );
       }
       if (args[1] === "get-build-status") {
         const statuses = opts.statuses ?? ["pending"];
@@ -2762,6 +2781,49 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     expect(all).toContain("没有终态结论");
     // 断流那句要带着日志页，否则「不再等了」等于把人赶进下一步去猜。
     expect(all).toContain("/-/build/logs/b1");
+  });
+
+  it("ISSUE #2645：按 sha 查不到 build 且 PR 冲突 ⇒ 念 mergeable_state 并指明「平台不跑 CI」（每轮只念一次）", async () => {
+    /* 真因常在冲突：mergeable_state=conflict 的 PR 平台不派生构建，干等只会烧预算。
+     * 这一条喂 `found:false`（列表里没有这条 sha）+ PR 冲突，验两件事：① 轮询会把
+     * `mergeable_state`/`blocked_on` 读出来打在「还没解析到 build」那一句旁边；
+     * ② 那句只在 `!picked` 那一格念一次（不每 20 秒复述）。 */
+    const f = io({
+      found: false,
+      mergeableState: "conflict",
+      blockedOn: "code_conflict",
+    });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+      number: 2633,
+    });
+    expect(out.stop).toBe(CODE.NOT_RUN);
+    const all = f.log.join("\n");
+    expect(all).toContain("PR #2633：mergeable_state=conflict blocked_on=code_conflict");
+    expect(all).toContain("冲突的 PR 平台不派生 CI");
+    // 只念一次：反复复述「PR 冲突」与复述「没变化」是同一类噪音。
+    expect(all.split("mergeable_state=conflict").length - 1).toBe(1);
+    // 没给 number 的那一族测试不受影响（上面那条「连续 10 次」就不带 number）。
+  });
+
+  it("ISSUE #2645（负控制）：查不到 build 但 PR 可合并 ⇒ 只念 mergeable_state，不报冲突提示", async () => {
+    const f = io({ found: false, mergeableState: "mergeable" });
+    const out = await pollUntilTerminal({
+      run: f.run,
+      log: (s) => f.log.push(s),
+      ...base,
+      now: f.now,
+      sleep: f.sleep,
+      number: 2633,
+    });
+    expect(out.stop).toBe(CODE.NOT_RUN);
+    const all = f.log.join("\n");
+    expect(all).toContain("PR #2633：mergeable_state=mergeable");
+    expect(all).not.toContain("冲突的 PR 平台不派生 CI");
   });
 
   it("负控制：pipeline 级读数一字不动、stage 一路推进 ⇒ 不算断流，继续轮到终态", async () => {

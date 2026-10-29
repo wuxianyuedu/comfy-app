@@ -605,6 +605,7 @@ async function runFlow(deps, tmpFiles) {
         newSha,
         now,
         sleep,
+        number,
       });
       if (poll.stop !== null) {
         codes.push(poll.stop);
