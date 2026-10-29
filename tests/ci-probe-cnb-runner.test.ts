@@ -73,12 +73,24 @@ describe("`cnb` 起不来 → 一行读数，不是一段栈", () => {
   });
 
   it("正向：`readBuild` 不抛，且把原因落成 `note`", () => {
+    /* 用 try/catch 而不是 `expect(fn).not.toThrow()` 再把结果赋给局部变量：
+     * 后者在类型上是「闭包里赋值，外面不知道有没有赋上」（TS18048 实测两次红），
+     * 而这一格判的恰恰是「冒成异常」与「给出一行读数」的区别 —— catch 到的东西
+     * 直接当断言值念出来，红了能一眼看出是栈而不是读数。 */
+    let thrown: unknown = null;
     let reading;
-    expect(() => {
-      reading = readBuild("moon-read/comfy-app-t3", "cnb-abc-1", callWith(ENOENT));
-    }).not.toThrow();
-    expect(reading.status).toBe("(取不到)");
-    expect(reading.note).toBe("cnb 起不来：ENOENT");
+    try {
+      reading = readBuild(
+        "moon-read/comfy-app-t3",
+        "cnb-abc-1",
+        callWith(ENOENT),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeNull();
+    expect(reading?.status).toBe("(取不到)");
+    expect(reading?.note).toBe("cnb 起不来：ENOENT");
   });
 
   it("那一行念得出原因（与 #2675 立起来的打印同一处判）", () => {
