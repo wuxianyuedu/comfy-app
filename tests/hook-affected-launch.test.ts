@@ -117,6 +117,10 @@ import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK_PATH = ".githooks/pre-commit";
 const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
+/* 「怎么起一次 vitest」那一层（并发覆盖 / 分块 / 入口定位 / 抓子进程输出）合并 master 之后
+ * 出列到这一份 —— 判据按**真实落点**读，机制层不转假出口（转一层的话「搬走了」与
+ * 「还能用」长得一样）。启动器那一层留下的仍是判决链。 */
+const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
 
 /**
  * 把一段代码跑起来期间 `process.stderr` 的写入**收在手里**（随返回值交出 `text`）。
@@ -440,8 +444,9 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
 
   it("输出被抓在手里再原样回吐 —— 不抓就分不出「真断言红」与「机器太满」", () => {
     // 判决依赖输出内容，所以失败那一档不能再是 stdio:"inherit"。
+    const spawnSrc = readFileSync(SPAWN_LAYER_PATH, "utf8");
     const spawn = /function spawnVitest\(entry, args\) \{[\s\S]*?\n\}/.exec(
-      src,
+      spawnSrc,
     )?.[0];
     expect(spawn, "spawnVitest 还在吗？").toBeTruthy();
     expect(spawn).toContain('encoding: "utf8"');
@@ -1089,7 +1094,10 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
       /resolveMaxWorkers\(\s*\n?\s*process\.env\.COMFY_PRECOMMIT_MAX_WORKERS,\s*\n?\s*resolveCiWorkers\(\)\.workers,/,
     );
     // 函数体里不许再出现 process.env，也不许自己 import 核数（那会让它不再纯）。
-    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(src);
+    // 函数体读的是它**现在**住的那一份（合并 master 之后随「起进程」那一层出列）。
+    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(
+      readFileSync(SPAWN_LAYER_PATH, "utf8"),
+    );
     expect(body, "解不出 resolveMaxWorkers 的函数体").not.toBeNull();
     expect(body![1]).not.toContain("process.env");
     expect(body![1]).not.toContain("availableParallelism");

@@ -119,7 +119,6 @@
  * 拿不到可信读数」才放行，且必须把「哪几份没校验」印在脸上。
  */
 
-import { spawnSync } from "node:child_process";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 /* 「改动面 ⇒ 清单」那一跳住在自己那份文件里 —— 与话术层、复跑面同一刀，理由写在那份文件头：
  * 机制层再塞第五件事就会长到读不动，而读不动的那一层失效形态是「判据恒绿」。
@@ -186,13 +185,20 @@ import {
   collectAttribute,
   scopeAdvice,
 } from "./affected-launch-scope-advice.mjs";
+/* 「怎么起一次 vitest」那一层（并发怎么定、清单怎么切、入口在哪）住进自己那份文件：
+ * 本层留下的是**判决链**，起进程那一层出列 —— 撞上 900 行硬闸时那条切线就是它
+ * （§12.6 姊妹档 check-infra-file-size.cjs）。转出是为了既有 import 面不变。 */
+import {
+  planLaunches,
+  resolveMaxWorkers,
+  resolveVitestEntry,
+  spawnVitest,
+} from "./affected-launch-spawn.mjs";
+export { planLaunches, resolveMaxWorkers, resolveVitestEntry };
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { existsSync } from "node:fs";
 import path from "node:path";
-
-/* vitest 的入口解析与 typedoc / storybook 共用一份实现（ISSUE #2453）。 */
-import { resolvePackageBinEntry } from "./package-bin-entry.mjs";
 
 /**
  * 一次 spawn 的命令行长预算（字符）。
@@ -219,140 +225,6 @@ export const SAFE_ARGV_BUDGET = 24_000;
  */
 const PER_FILE_RERUN_MAX = 8;
 
-/**
- * 从环境变量取一个**显式的**并发覆盖（`COMFY_PRECOMMIT_MAX_WORKERS`）。
- *
- * 为什么要有这个口子：4 是「8 逻辑核、A/B/D 同时在跑」那一档的实测值，而
- * **共享机 / 小核 VM / 正在跑 dev server + ComfyUI 的机器**上，这个常数与
- * 「此刻真有几个核可用」无关 —— 实测同一份 C 组在 load ≈0/16/65/128 下墙钟
- * 19.7s → 114.5s → 214s → 229s（判定全绿，见规范 §13.6.4 那一族）。
- * 单条预算（`CLI_BUDGET` 的 120s）能吸收到某个负载为止，再往上就需要**人为降负载** ——
- * 而 §13.6.4 明写「降负载的杠杆是并发，不是预算」，此前却没有任何一处能把钩子的
- * 并发调小（注释里那句「机器紧张把 C/D 也挪成串行即可」只是一句话，没有执行者），
- * 于是唯一的出路变成改钩子或 `--no-verify`（两条都不该是常态）。
- *
- * ⚠️ 这个口子**只调并发、不碰任何判据**：候选清单、预算、退出码口径一律不变，
- * 所以它不能被当成「让慢用例过关的旋钮」（同 §11.13 对 `expect.poll` 的那条口径）。
- * 传非法值（非整数 / <1）时**按默认值办并提醒**，不静默降级成 0（那会让 vitest
- * 报一个与真因无关的错）。
- *
- * ⚠️ 这一层是**纯函数**：环境变量由调用点读进来（`main` 那一处），不在这里兜底 ——
- * 否则用例里「不给值 = 走默认」这一格会被用例进程自己继承到的环境变量污染，
- * 而那种失效是「判据看着跑过、其实测的是外部环境」。**兜底并发同样由调用点注入**
- * （`resolveCiWorkers().workers`，唯一出处 `scripts/ci-load.mjs`）—— 这里以前自带
- * 一条 `DEFAULT_MAX_WORKERS = 4`，与 `vitest.config.ts` 的 8、`ci-load.mjs` 的按核折算
- * 凑成同一句判断的三份副本，于是「单条链别占满整台机」那一档压住了平台两格、
- * 本地那一跳照旧铺开；收口见 ISSUE #2324。
- *
- * @param {string | undefined} raw `COMFY_PRECOMMIT_MAX_WORKERS` 的原值
- * @param {number} fallback 调用点给的兜底并发（必须 ≥1 的整数）
- * @returns {{workers: number, note: string | null}}
- */
-export function resolveMaxWorkers(raw, fallback) {
-  /* 兜底不是可选参数：漏传就当**没跑起来**，不许悄悄退回某个默认并发 ——
-   * 那会正好像这次修的那三副本一样，再长出一处没人管的数字。 */
-  if (!Number.isInteger(fallback) || fallback < 1) {
-    throw new Error(
-      `resolveMaxWorkers 需要调用点注入兜底并发（≥1 的整数），收到 ${String(fallback)}`,
-    );
-  }
-  if (raw === undefined || raw.trim() === "") {
-    return { workers: fallback, note: null };
-  }
-  const parsed = Number(raw.trim());
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    return {
-      workers: fallback,
-      note: `COMFY_PRECOMMIT_MAX_WORKERS="${raw}" 不是 ≥1 的整数，按默认 ${fallback} 办`,
-    };
-  }
-  if (parsed === fallback) {
-    return { workers: fallback, note: null };
-  }
-  return {
-    workers: parsed,
-    note:
-      `按 COMFY_PRECOMMIT_MAX_WORKERS 用 --maxWorkers=${parsed}` +
-      `（默认 ${fallback}；这只调并发，不动任何判据）`,
-  };
-}
-
-/**
- * 跑一次 vitest，**把输出抓在手里**（而不是 `stdio: "inherit"`）。
- *
- * 为什么必须抓：这一层的判决依赖「输出里有没有超时指纹」（见文件头那节）。
- * `inherit` 会把 stdout/stderr 直接接到父进程上，于是这段文本在本进程里**拿不到**
- * —— 那样就没有任何东西能区分「真断言红」与「机器太满」。
- *
- * 抓下来之后仍要**原样回吐**（`process.stdout.write`），否则日志里就看不见失败原因了 ——
- * 那正是 `run-affected` 当初被造出来要避免的形态（「跑的是 0 个用例、原因读不出」）。
- *
- * @returns {{status: number|null, output: string}}
- */
-function spawnVitest(entry, args) {
-  const res = spawnSync(process.execPath, [entry, ...args], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
-  process.stdout.write(res.stdout ?? "");
-  process.stderr.write(res.stderr ?? "");
-  if (res.error) throw res.error;
-  return { status: res.status, output };
-}
-
-/**
- * 按命令行长预算把清单切成若干块，**顺序与成员都不变**。
- *
- * 单独导出成纯函数是为了让它可判：这条链路的失效模式（用例没跑）只有把
- * 「不丢不重」写成断言才拦得住，靠肉眼看 shell 的引号是拦不住的。
- */
-export function planLaunches(files, budget = SAFE_ARGV_BUDGET) {
-  const chunks = [];
-  let current = [];
-  let length = 0;
-  for (const file of files) {
-    const name = String(file).trim();
-    if (!name) continue;
-    if (name.length + 1 > budget) {
-      throw new Error(
-        `[affected-launch] 单个路径就超过命令行长预算（${name.length} > ${budget}）——` +
-          "这一条不能被任何分块策略放进去，只能让它点名红",
-      );
-    }
-    // 每段之间要一个空格，按 `join(" ")` 的真实长度算，不留估算余量。
-    const next = current.length === 0 ? name.length : length + 1 + name.length;
-    if (current.length > 0 && next > budget) {
-      chunks.push(current);
-      current = [name];
-      length = name.length;
-      continue;
-    }
-    current.push(name);
-    length = next;
-  }
-  if (current.length > 0) chunks.push(current);
-  return chunks;
-}
-
-/**
- * 解析 vitest 的 ESM 入口。
- *
- * 实现**只有一份**：`scripts/package-bin-entry.mjs` 的 `resolvePackageBinEntry`
- * （ISSUE #2453）。三条理由（pnpm 布局里真身在 `.pnpm/…` 下、顶层那个是链接；
- * 入口名由包的 `bin` 字段定义；`require.resolve` 顺带把「装没装」问出来）写在那个模块的
- * 文件头 —— 这里只保留**抛错**那一层语义：本模块的调用方是门禁链路，解析不到要**当场停**
- * （不是拿到 null 继续走），而「停的时候说什么」仍然要分辨「包没有 bin」与「入口不在盘上」。
- */
-export function resolveVitestEntry(cwd = process.cwd()) {
-  const entry = resolvePackageBinEntry("vitest", { root: cwd });
-  if (!entry) {
-    throw new Error(
-      `[affected-launch] 解析不到本地 vitest 的入口（包没有 bin.vitest，或入口不在盘上；cwd=${cwd}）`,
-    );
-  }
-  return entry;
-}
 
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");

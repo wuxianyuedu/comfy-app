@@ -34,3 +34,20 @@
 平台 `受影响用例` 那一格会红在「面与账不许两份口径」上（PR #2688 的现场：`配置展开 213 份，
 账上写 211`）。走它自己的写入口 `node scripts/check-scripts-typecheck.cjs --update` 重写，
 `face` 记 213、`total` 保持实测的 206 处 / 17 份 —— 两份新脚本实测 0 处红，不是把新增登记成已知。
+
+## 合并之后：启动器越过 900 行硬闸时的第二刀（同一 PR）
+
+与 master 的 oxlint 那一批合并之后启动器仍在闸上（`check-infra-file-size.cjs` 的 900 行；
+越闸的形态不是报错，是所有人的提交停在门口），所以再切一刀 —— 仍**只搬位置、判据一个字不改**：
+
+- 「怎么起一次 vitest」那一层出列到 `affected-launch-spawn.mjs`：并发覆盖
+  （`resolveMaxWorkers`）、命令行分块（`planLaunches`）、入口定位（`resolveVitestEntry`）、
+  子进程输出抓取（`spawnVitest`）。留下的仍是**判决链**（第 1 遍什么档 / 复不复跑 /
+  逐文件补跑 / 退哪个码）。
+- 调用点与用例按**真实落点** import（机制层不转假出口）；`run-affected-tests.mjs` 对
+  `planLaunches` / `resolveMaxWorkers` / `resolveVitestEntry` 做转出，既有 import 面不变。
+- `@ts-nocheck` 随代码搬：那批函数原本住在一份带它的脚本里（「提交门槛脚本、无类型消费方」），
+  丢掉会让一整套 `TS7006` 当场变成「新增脚本的存量红」（棘轮对新增零容忍）。
+
+同批记账：`scripts/.scripts-typecheck-baseline.json` 的 `face` 按实测走它自己的写入口
+（新增一份 `.mjs`），存量取实测的 170 处 / 15 份 —— 新文件零红，不是把新增登记成已知。
