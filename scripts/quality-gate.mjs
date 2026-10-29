@@ -18,8 +18,11 @@
  *
  * 用法：
  *   node scripts/quality-gate.mjs                # 全部
- *   node scripts/quality-gate.mjs --mode lint    # 只跑一项
+ *   node scripts/quality-gate.mjs --mode lint    # 只跑一项（`--mode=lint` 同形）
  *   node scripts/quality-gate.mjs --mode all     # 显式全部
+ * 除此之外**不认任何旗标**：拼错的形式与缺值的 `--mode` 一律退 2 并念出认识的形态，
+ * 不静默回落到「全部」——那在一份带 `vitest --coverage` 的入口上是最贵的一种误读
+ * （ISSUE #2709）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -257,11 +260,40 @@ const GATES = {
   },
 };
 
-/** @param {string[]} argv @returns {{mode: string}} */
+/**
+ * 命令行只有一件事可给：跑哪一档。**两种形式都认**（`--mode lint` 与 `--mode=lint`）。
+ *
+ * 为什么要专门认等号形式（ISSUE #2709 的现场）：原实现只匹配 `argv[i] === "--mode"`，
+ * 于是 `--mode=lint` 落不进任何分支，而循环对**不认识的参数一个字都不做** ——
+ * `mode` 保持初值 `"all"`，表现是「以为自己在重跑一档，实际把整套默认档跑完」
+ * （含 `vitest --coverage`，实测 10 分钟 / 1209 行输出）。
+ * 「没提要求」在这份工具里意味着最重的那一档，所以不认识的写法不许被读成它：
+ * 收进 `unknown` 交给调用点退 2，**而不是静默继续**。
+ * @param {string[]} argv
+ * @returns {{mode: string, unknown: string[]}} */
 function parseArgs(argv) {
-  const out = { mode: "all" };
+  /** @type {{mode: string, unknown: string[]}} */
+  const out = { mode: "all", unknown: [] };
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--mode") out.mode = argv[++i] || "all";
+    const arg = argv[i] ?? "";
+    if (arg === "--mode") {
+      const next = argv[i + 1];
+      /* 提了旗标没给值 ⇒ 不算「没提要求」：原实现那句 `|| "all"` 正是本单要收的那一格
+       * （缺值 / 不认识的形式统统落回 `"all"`，而 `"all"` 在这份工具里是最重的一档）。 */
+      if (next === undefined || next.startsWith("--")) {
+        out.unknown.push(arg);
+        continue;
+      }
+      i += 1;
+      out.mode = next;
+      continue;
+    }
+    if (arg.startsWith("--mode=")) {
+      out.mode = arg.slice("--mode=".length);
+      if (!out.mode) out.unknown.push(arg);
+      continue;
+    }
+    out.unknown.push(arg);
   }
   return out;
 }
@@ -420,7 +452,17 @@ function runGate(pnpm, key, gate) {
 }
 
 function main() {
-  const { mode } = parseArgs(process.argv.slice(2));
+  const { mode, unknown } = parseArgs(process.argv.slice(2));
+  /* 不认识的形式**先退**，一次档都不跑：这一格的代价是分钟级的（默认档含
+   * `vitest --coverage`），把「拼错」读成「跑全套」是本入口能犯的最贵的那种误读。
+   * 退码与「未知门禁」同形（2 = 这一步没有结论，不是「跑过了且绿」）。 */
+  if (unknown.length > 0) {
+    fail(
+      `不认识的参数：${unknown.join(" / ")} —— 本入口只认 --mode <档名>（也认 --mode=<档名>）；` +
+        `可选：${Object.keys(GATES).join(" / ")} / all`,
+    );
+    return 2;
+  }
   // `run: false` 的门禁只在**显式点名**时跑：`all` 是「日常该完整跑一遍」那一档，
   // 而像素档的代价与它的结论有效性（基线带平台）都不属于那一档。
   /* 遍历表本身而不是「先取键再按键取回值」：`Object.keys(GATES)` 之后 `GATES[k]` 在类型上
