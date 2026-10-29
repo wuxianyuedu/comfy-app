@@ -1078,7 +1078,21 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       .map((line) => line.replace(/\/\/.*$/, ""))
       .join("\n");
     expect(code).toContain("result.error");
-    expect(code).toContain("result.error.code");
+    /* 「把 code 打出来」钉在**失败块那一段**里，而不是整份文件的子串：这一格原本断的是
+     * 字面量 `result.error.code`，而它判的是语义 ——「那条失败路径必须报出错误码」。
+     * 脚本侧为了过类型检查把那一位收成一句局部变量之后，整档搜子串就红在一个
+     * **没有变过的行为**上（ISSUE #2589 批 1 的现场：CI `受影响用例` 那一格）。
+     * 收窄到块内既保留原意，也不再被邻近的改写牵动；反面那半（不许 `?? 0` 吞掉）
+     * 仍在下面，它才是这条用例真正的来由。 */
+    const failureBlock = code.slice(
+      code.indexOf("if (result.error)"),
+      code.indexOf("if (result.status === null)"),
+    );
+    expect(
+      failureBlock.length,
+      "认不出失败块（那两段 `if` 的形状变了）—— 这条用例此刻没有判任何东西",
+    ).toBeGreaterThan(0);
+    expect(failureBlock, "失败块里必须把 error 的 code 打出来").toContain(".code");
     expect(code).toContain("实际命令：");
     // 旧写法 `process.exit(result.status ?? 0)` 把「没起来」读成成功 —— 必须分开判。
     expect(code, "不得再出现 ?? 0 吞掉「没起来」").not.toMatch(
