@@ -19,6 +19,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   utimesSync,
   writeFileSync,
@@ -1174,12 +1175,10 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
     return { dir, srcTauri: path.join(dir, "src-tauri") };
   }
 
-  it("两侧都缺 ⇒ sidecar（名字带 cargo 报的三元组）与 static 占位都建出来", () => {
+  it("两侧都缺 ⇒ 建 sidecar（名字带 cargo 报的三元组），而 **static/ 里一个文件都不写**", () => {
     const { dir, srcTauri } = fixture();
     /** @type {Array<[string, string]>} */
     const copies: Array<[string, string]> = [];
-    /** @type {string[]} */
-    const notes: string[] = [];
     /** @type {string[]} */
     const chmods: string[] = [];
     const r = materializeCargoTestInputs({
@@ -1188,14 +1187,11 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
       execPath: path.join(dir, "this-node.exe"),
       versionOutput: VERSION_OUT,
       copy: (a: string, b: string) => copies.push([a, b]),
-      /* `chmod` / `write` 也得注入：本用例只判「建了哪几件、源是什么」，
-       * 而上游实现的 `copy` 被替成记账之后盘上并没有那个 sidecar —— 默认的
-       * `fs.chmodSync` 会当场 ENOENT；`write` 同理（占位文件也不该真写盘）。
-       * 两笔都记进 `notes`，断言的是「谁被建了」，不是「盘上有没有」。 */
-      /* 记进 `chmods` 而不是空实现：本用例同样要判「执行位是在哪一件上设的」
-       * （`@typescript-eslint/no-empty-function` 也不收空方法）。 */
+      /* `chmod` 注入而不留空实现：本用例要判「执行位是在哪一件上设的」
+       * （`@typescript-eslint/no-empty-function` 也不收空方法）。
+       * `write` 这一格随 ISSUE #2629 一起没了 —— 实现不再往 `static/` 写任何东西，
+       * 所以这里也没有要替的写盘动作。 */
       chmod: (p: string) => chmods.push(path.relative(srcTauri, p)),
-      write: (p: string) => notes.push(path.relative(srcTauri, p)),
     });
     expect(r.ok).toBe(true);
     const sidecar = path.join(
@@ -1205,7 +1201,6 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
     );
     // 源是**当前正在跑门禁的这个 node**（与 build-desktop 同一来源）。
     expect(copies).toEqual([[path.join(dir, "this-node.exe"), sidecar]]);
-    expect(notes).toEqual([path.join("static", ".cargo-test-placeholder")]);
     /* 执行位只在 POSIX 上设（Windows 不看这一位）—— 判据两边都得成立。 */
     expect(chmods).toEqual(
       process.platform === "win32"
@@ -1213,6 +1208,24 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
         : [path.join("binaries", path.basename(sidecar))],
     );
     expect(r.lines.join("\n")).toContain("sidecar");
+
+    /**
+     * 这一格是 #2629 的**边界本体**：`src-tauri/static/` 是
+     * `check-standalone-contents.cjs` 数的第二层（真被内嵌进 exe 的那份载荷根），
+     * 所以开发期的编译前提**不得往这里放任何东西**。
+     * 旧实现写了一个 `.cargo-test-placeholder`，后果是「本机跑过一次 cargo test ⇒
+     * `pnpm build` 恒红在产物层（顶层出现白名单外的条目）」，而平台那一跑永远
+     * 看不到这一格（CI 不跑 pre-commit）。
+     *
+     * 「空目录就够」不是推测：清空 `src-tauri/static/` 后 `cargo test --offline`
+     * 实测 `56 passed`（壳内全部 `#[test]` 的那个执行者，见 AGENTS 硬规则 5）。
+     */
+    const staticDir = path.join(srcTauri, "static");
+    expect(existsSync(staticDir), "static/ 这个目录仍要建出来（resources 声明的输入）").toBe(
+      true,
+    );
+    expect(readdirSync(staticDir)).toEqual([]);
+    expect(r.lines.join("\n")).toContain("只建空目录");
   });
 
   it("已在场的产物一律不碰（本地跑过 build-desktop 时那是真的）", () => {
@@ -1234,9 +1247,9 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
     });
     expect(r.ok).toBe(true);
     expect(readFileSync(sidecar, "utf8")).toBe("REAL");
-    expect(existsSync(path.join(staticDir, ".cargo-test-placeholder"))).toBe(
-      false,
-    );
+    /* 不碰已有的装配件，也**不往里加东西**（#2629 那半件边界）：这一层将来就是
+     * 出厂件，开发期的一次 `cargo test` 不该改变它的内容。 */
+    expect(readdirSync(staticDir)).toEqual(["splash.html"]);
     expect(r.lines.join("\n")).not.toContain("sidecar 不在");
   });
 
