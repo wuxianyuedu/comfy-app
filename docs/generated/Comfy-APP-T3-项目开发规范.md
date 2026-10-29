@@ -442,21 +442,26 @@ pnpm build && pnpm start   # 生产预览
 - 提交时使用 `git -c core.autocrlf=false add <file>` 让 LF 原样入库，避免 autocrlf 的 clean 过滤再次改写换行；`core.autocrlf=true` 时 clean 会把 CRLF 转 LF 入库、checkout 又转回 CRLF，造成工作区与 index 反复不一致。
 - 提交前必须复查 `git diff HEAD~1 HEAD --numstat`，确认换行统一为 LF 后无异常噪声混入。
 
-### 11.3 Linux/CI 装依赖失败（better-sqlite3 原生模块缺编译工具链）
+### 11.3 装依赖失败先分两族：allowBuilds 没答上，与运行时原生件被锁
 
-**现象**：Linux/CI 环境执行 `pnpm install` 时，better-sqlite3（Drizzle 的 sqlite 驱动）
-的安装脚本走 `node-gyp rebuild` 编译，若构建机缺 `make`/`gcc`/`g++`（未装 `build-essential`）
-则依赖安装阶段直接失败。
+**现象**：`pnpm install`（含 `--frozen-lockfile`）在**安装阶段**就红。两族的报错形态不同，
+混在一起就会把人支去装用不上的东西。
 
-**判定**：报错指向 node-gyp / 编译失败，且能确认缺 make/gcc/g++；这**不是代码或依赖问题**，
-仅代表构建机缺编译工具链。
+**判定与处理**：
 
-**处理**：
-- 在跑 `pnpm install` 前先装编译工具链：Ubuntu/Debian 用 `apt-get install -y build-essential`，
-  Arch 用 `base-devel`。
-- better-sqlite3@13 内置各平台 prebuild 二进制，装好工具链后通常命中 prebuild 无需本地编译，
-  编译脚本仅兜底；此步骤是低成本保险，保证 CI 任意情况都能装完依赖。
-- 若日后启用平台侧流水线，构建镜像务必挑带编译工具的（`node:24` 的 Debian 骨架就自带
-  make/gcc/g++），不必额外安装；缺工具链的表现是 `pnpm install --frozen-lockfile`
-  当场失败，而不是「装完了但跑不起来」。详见
-  [15.6](15-附录.md#156-疑难排查记录随问题归档对齐主规范-11) 对应条目。
+- **`ERR_PNPM_IGNORED_BUILDS`** —— 依赖里有带 `preinstall` / `install` / `postinstall`
+  构建脚本的包，而 `pnpm-workspace.yaml` 的 `allowBuilds` 没给出答案（非交互模式 exit 1）。
+  修法是**加条目**：`true`（批准）与 `false`（显式拒绝）都算回答过，漏答才红
+  （判据 = `scripts/check-allow-builds.cjs`，口径见规范 §13.5.15）。
+  ⚠️ 这一族**不要**去装编译工具链：v13 起的 `better-sqlite3` 随包附带八个平台的
+  `prebuilds/*.node`，install 阶段没有可跑的构建脚本。本节旧写法把它当成
+  「Drizzle 的 sqlite 驱动 + node-gyp rebuild + 缺 make/gcc 就失败」，那两句话的前提
+  都已被规范 §6.1 的读数否掉 —— 运行时用的是 `@libsql/client`，
+  `better-sqlite3` 只是 `devDependencies`（全仓唯一真实 import 在 `tests/helpers/test-db.ts`）。
+- **`EPERM rename …@libsql/win32-x64-msvc/index.node`** —— dev server 还在跑时补依赖，
+  被活进程锁住的是**运行时那份原生件**（AGENTS 硬规则 9）。出口：走编排器补装，
+  或不经过编排器手工装之前先 `pnpm deps:guard`。锁着的从来不是 `better-sqlite3`。
+
+彻底重装（删 `node_modules` 再装）的触发条件与命令只有一份出处：
+[sync-after-pull.md](../guides/sync-after-pull.md)，这里不抄第二份；同族排障条目见
+[15.6](15-附录.md#156-疑难排查记录随问题归档对齐主规范-11)。
