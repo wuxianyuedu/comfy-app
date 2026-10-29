@@ -105,6 +105,32 @@ import { resolveGitDir } from "./git-dir.mjs";
 export const REMOTE_REF_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * ② 的一条依赖面漂移（远端在分叉点之后对依赖面做了什么）。
+ *
+ * 建 typedef 而不是继续用 `object`：`runFreshnessCheck` 的 `@returns` 过去把这一串
+ * 写成 `remoteDrifts: object[]`，于是三个消费点（渲染、`--json`、摘要计数）上
+ * `d.file` / `d.kind` 全是「Property does not exist on type 'object'」—— 声明把
+ * 已经存在的事实擦掉了，判据行为一个字没变，只是没人能证明它。
+ * @typedef {object} Drift
+ * @property {string} file 相对仓库根的路径
+ * @property {string} kind 这一条是什么（删除 / 新增 / 改过内容）
+ * @property {string[]} detail 明细行（lockfile 那条形如 `renderLockDiff` 的输出）
+ */
+
+/**
+ * ③ 安装层的读数（`detectInstallDrift` 给；`null` = 一致）。
+ *
+ * `diff` 的类型是 `lockfileDrift()` 那份的**权威声明**（`lockfile/lock-diff.d.mts`），
+ * 不是这里另写一份 —— 本文件不构造它，只搬运给 `renderLockDiff`。
+ * @typedef {object} InstallDrift
+ * @property {string} state
+ * @property {string[]} unresolved 两个构造点都必带（`unresolvableDeclaredDeps()` 给的是数组，
+ *   没有就是空数组），所以这条是**必填**而不是可选 —— 写成可选会让下面那句
+ *   `drift.unresolved.join(…)` 报「possibly undefined」，而它永远不可能缺
+ * @property {import("./lockfile/lock-diff.d.mts").LockDiff | null} [diff]
+ */
+
+/**
  * 依赖面的三个输入文件收在 `dependency-face.mjs` 一处（本文件从它 import）。
  * 为什么抽出去：`check-allow-builds.cjs` 判「动了依赖面才扫全树」要的是**同一份清单**，
  * 从本文件 import 会把 `lockfile/lock-diff.mjs`、`launcher-core/worktree.mjs` 这条下游链
@@ -126,7 +152,9 @@ export function matchedDependencyFiles(files) {
   return files.filter((f) => set.has(f));
 }
 
-/** 读暂存区文件清单（`--staged` 用）。拿不到时返回 `null` = 未触发，不猜。 */
+/** 读暂存区文件清单（`--staged` 用）。拿不到时返回 `null` = 未触发，不猜。
+ * @param {string} root
+ * @returns {string[] | null} */
 function stagedFiles(root) {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，而机器之间还不一样）。 */
@@ -173,7 +201,11 @@ export function resolveRemoteMasterRev(root, branch = "master") {
     .filter((s) => s.endsWith(`/${branch}`));
   if (names.length === 0) return null;
   const preferred = names.find((s) => s === `origin/${branch}`);
-  return preferred ?? [...names].sort()[0];
+  /* 排序取首个也要过一遍 `?? null`：`sort()[0]` 在类型上是 `string | undefined`，
+   * 而上面的长度判据已经保证它存在 —— 那句 `?? null` 是写给检查器的，
+   * 与本文件「取不到就是取不到」那条口径同一形（这里不可能取不到，那一支走不到）。 */
+  const [fallback = null] = [...names].sort();
+  return preferred ?? fallback;
 }
 
 /**
@@ -184,6 +216,9 @@ export function resolveRemoteMasterRev(root, branch = "master") {
  * 于是 `/tmp/xyz` 上的读数与 `/workspace` 上的读数长得一模一样，
  * 而"没跑起来"这件事一个字都不出现。**取不到 cwd 就是取不到**：
  * 回 `ok=false`，调用方据此把这一层判成「没跑起来」。
+ * @param {string[]} args
+ * @param {string} cwd
+ * @returns {{ ok: boolean, out: string }}
  */
 function git(args, cwd) {
   if (typeof cwd !== "string" || cwd === "") return { ok: false, out: "" };
@@ -216,6 +251,8 @@ function git(args, cwd) {
  * 从未再动）返回 `null` = **不可知**，调用方按「未校验」处理 —— 不许拿「文件在」
  * 当「引用新鲜」。
  * @returns {number | null} epoch 毫秒；null = 不可知
+ * @param {string} root
+ * @param {string} [rev]
  */
 export function remoteRefTimestamp(root, rev = DEFAULT_REMOTE_REV) {
   /* 引用名里 remote 与 branch 的分界在**最后一个** `/`：`cnb/master` → remote=`cnb`、
@@ -299,6 +336,8 @@ export function isRemoteAncestorOfHead(root, rev) {
  * 已经在我的历史里了。这在「HEAD == origin/master」时也成立，但那一种由上面第二条
  * 覆盖（分叉点就是 HEAD，比出来同样成立），两条不冲突、谁先命中都给出正确结果。
  * @returns {string | null}
+ * @param {string} root
+ * @param {string} [remoteRev]
  */
 export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
   // 远端已在 HEAD 的历史里（典型：刚把它 merge 进来）⇒ ② 没有可比的对象。
@@ -326,6 +365,7 @@ export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
  * `$GIT_DIR` 通过 `resolveGitDir()` 解析（`--git-dir` 之外还要认链接工作树里
  * `.git` 是个文件的情形，同 `remoteRefTimestamp` 那条路径的理由）。
  * @returns {boolean}
+ * @param {string} root
  */
 export function hasInProgressMerge(root) {
   try {
@@ -356,19 +396,24 @@ export function hasInProgressMerge(root) {
  * @param {string} root
  * @param {string} baseRev 分叉点
  * @param {string} remoteRev 远端引用
- * @returns {{ file: string, kind: string, detail: string[] }[]}
+ * @returns {Drift[]}
  */
 export function detectRemoteDrift(
   root,
   baseRev,
   remoteRev = DEFAULT_REMOTE_REV,
 ) {
+  /** @type {Drift[]} */
   const drifts = [];
   for (const rel of DEPENDENCY_FILES) {
     const baseText = readAtRev(baseRev, rel, root);
     const remoteText = readAtRev(remoteRev, rel, root);
     if (baseText === null && remoteText === null) continue;
-    if (baseText !== null && remoteText === null) {
+    /* 拆成两条独立判据，而不是过去那条 `baseText !== null && remoteText === null`：
+     * 语义一字未动（两侧都为 null 已在上一行 continue），但复合条件让检查器
+     * 没能把 `remoteText` 收进「非 null」那一支 —— 于是下面 `diffLockfiles(baseText, remoteText)`
+     * 报的是「string | null 进不了 string」（那是**声明**没跟上，不是这里真能传进 null）。 */
+    if (remoteText === null) {
       drifts.push({
         file: rel,
         kind: `远端删除（你的基线上还有）`,
@@ -427,7 +472,8 @@ export function detectRemoteDrift(
  *
  * 三种非 `fresh` 各自有话说，不能都归成「不一致」：`no-install` 是「压根没装」、
  * `no-lockfile` 是「检出里没有 lockfile」—— 给错动作比不给更坏。
- * @returns {{ state: string, diff?: object, unresolved?: string[] } | null} null = 一致
+ * @returns {InstallDrift | null} null = 一致
+ * @param {string} root
  */
 export function detectInstallDrift(root) {
   const unresolved = unresolvableDeclaredDeps(root);
@@ -444,6 +490,7 @@ export function detectInstallDrift(root) {
  * `unresolved` 与 `drift` 是两种病，所以**分开说**：lockfile 对得上而解析不到时，
  * 只报「你的安装记录和声明对不上」是**错的**（它俩恰好对得上），会把人送去核对一份
  * 本来就对的文件。这一档要说的是「这个包在树里解析不到」，出口仍然是重装。
+ * @param {InstallDrift} drift
  */
 function renderInstallDrift(drift) {
   if (drift.state === "no-install") {
@@ -499,7 +546,7 @@ function renderInstallDrift(drift) {
  * （同 `shell-gate.mjs` 的 `runGate`）。
  * @param {string} root
  * @param {{ offline?: boolean, now?: number, rev?: string }} [opts]
- * @returns {{ code: number, remoteChecked: boolean, remoteAgeMs: number | null, remoteDrifts: object[], installDrift: object | null, lines: string[], remoteRev?: string, remoteAlreadyContained?: boolean, envBroken?: boolean }}
+ * @returns {{ code: number, remoteChecked: boolean, remoteAgeMs: number | null, remoteDrifts: Drift[], installDrift: InstallDrift | null, lines: string[], remoteRev?: string, remoteAlreadyContained?: boolean, envBroken?: boolean }}
  */
 export function runFreshnessCheck(root, opts = {}) {
   /* 不写死 `origin/master`（R12-01）：远端名是每台克隆机的属性，按引用现算。
@@ -518,6 +565,7 @@ export function runFreshnessCheck(root, opts = {}) {
 
   let remoteChecked = false;
   let remoteAgeMs = null;
+  /** @type {Drift[]} */
   let remoteDrifts = [];
   /** 远端那条引用**已经在本地历史里**（不领先）⇒ ② 判过且无待同步对象，与「没看」分开的两态之一。 */
   let remoteAlreadyContained = false;
@@ -658,10 +706,11 @@ function main() {
    * 一模一样、且**一个字都不说**：拿一个空目录问「我的依赖装对了吗」，答案变成了
    * 「仓库根那份」，而「你问的那个目录根本没被看过」这件事从不出现。
    * 钩子与 `pnpm check:deps-freshness` 都在仓库根执行，那条路不受影响。 */
-  const root =
-    rootArg !== -1 && process.argv[rootArg + 1]
-      ? path.resolve(process.argv[rootArg + 1])
-      : process.cwd();
+  /* 取到局部变量再判：`process.argv[i+1]` 在 noUncheckedIndexedAccess 下是
+   * `string | undefined`，而真值判据已经把它收进「非空串」那一支 —— 让检查器也看见
+   * 这一次（与 `tw4-canonical-report.mjs` 那批同一形，不写 cast、不抬严格度）。 */
+  const rootValue = rootArg === -1 ? undefined : process.argv[rootArg + 1];
+  const root = rootValue ? path.resolve(rootValue) : process.cwd();
 
   // `--staged`：钩子那一档。未命中依赖面就**立刻退 0、零输出** —— 不给
   // 「只是改了别的文件」的提交加任何时间，也不增加一行噪声。
@@ -691,7 +740,7 @@ function main() {
           installDrift: result.installDrift
             ? {
                 state: result.installDrift.state,
-                unresolved: result.installDrift.unresolved ?? [],
+                unresolved: result.installDrift.unresolved,
               }
             : null,
           /* 环境不可信时 ①② 都没判 —— 结构化读数里也必须有这一格，
