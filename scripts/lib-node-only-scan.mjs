@@ -35,23 +35,45 @@ const NODE_BUILTINS =
 /** 第二类声明后缀（§18.4）：同一领域的服务端拆件。 */
 const SERVER_SUFFIX = ".server.ts";
 
+/** 去注释（口径与 `tests/helpers/strip-comments.ts` 同形；这份是台账里登记的存量副本）。
+ *
+ * @param {string} src
+ * @returns {string}
+ */
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-/** 抽出模块的 import 列表（值导入与 type-only 分开标注）。 */
+/** 抽出模块的 import 列表（值导入与 type-only 分开标注）。
+ *
+ * @param {string} src
+ * @returns {Array<{ clause: string, spec: string }>}
+ */
 function parseImports(src) {
+  /** @type {Array<{ clause: string, spec: string }>} */
   const out = [];
   const fromRe = /import\s+([\s\S]*?)\s+from\s+["']([^"']+)["']/g;
   let m;
   while ((m = fromRe.exec(src))) {
-    out.push({ clause: m[1].replace(/\s+/g, " ").trim(), spec: m[2] });
+    /* 两个捕获组都是正则要求成立的（`from` 与引号内说明符都在模式里），
+     * 解构默认值只是把这件事写给类型检查器 —— 不是运行期分支。 */
+    const [, clause = "", spec = ""] = m;
+    out.push({ clause: clause.replace(/\s+/g, " ").trim(), spec });
   }
   const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
-  while ((m = bareRe.exec(src))) out.push({ clause: "", spec: m[1] });
+  while ((m = bareRe.exec(src))) {
+    const [, spec = ""] = m;
+    out.push({ clause: "", spec });
+  }
   return out;
 }
 
+/** 把一个说明符解到磁盘上的模块；解不出（外部包 / 不存在）回 `null`。
+ *
+ * @param {string} fromFile
+ * @param {string} spec
+ * @returns {string | null}
+ */
 function resolveLocal(fromFile, spec) {
   let base;
   if (spec.startsWith("~/") || spec.startsWith("@/")) base = path.join(SRC, spec.slice(2));
@@ -67,6 +89,12 @@ function resolveLocal(fromFile, spec) {
   return candidates.find((c) => fs.existsSync(c) && fs.statSync(c).isFile()) ?? null;
 }
 
+/** 递归列出 `dir` 下的非测试 `.ts` / `.tsx`。
+ *
+ * @param {string} dir
+ * @param {string[]} [out]
+ * @returns {string[]}
+ */
 function listModules(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name);
@@ -80,6 +108,11 @@ function listModules(dir, out = []) {
   return out;
 }
 
+/** 相对仓库根、正斜杠形态的路径（判据与读数都用这一形）。
+ *
+ * @param {string} file
+ * @returns {string}
+ */
 const rel = (file) => path.relative(ROOT, file).split(path.sep).join("/");
 
 /* 判据只管 **逻辑层** `src/lib/**`（§18 的适用范围）。
@@ -90,9 +123,19 @@ const rel = (file) => path.relative(ROOT, file).split(path.sep).join("/");
  * 而**仪式化的声明会稀释真的那个**：当每个文件都带这行时，`log-session-scope`
  * 恰好漏掉的那次没人会看出来。这里刻意只对中国 lib 判 —— 与
  * `tests/client-bundle-node-builtins.test.ts` 的既有口径一致。 */
+/** 这个模块在不在判据的作用半径里（只有 `src/lib/**` 判）。
+ *
+ * @param {string} file
+ * @returns {boolean}
+ */
 const IN_SCOPE = (file) => rel(file).startsWith("src/lib/");
 
-/** 模块自带的声明形态（§18.4 的三分类）。 */
+/** 模块自带的声明形态（§18.4 的三分类）。
+ *
+ * @param {string} file
+ * @param {string} raw 未剥注释的原文（`server-only` / `"use client"` 要按真身判）
+ * @returns {"server-only" | "server-suffix" | "use-client" | "none"}
+ */
 function declarationOf(file, raw) {
   if (/^\s*import\s+["']server-only["']/m.test(raw)) return "server-only";
   if (rel(file).endsWith(SERVER_SUFFIX)) return "server-suffix";
@@ -126,15 +169,24 @@ function analyze() {
    *     （实测：`src/trpc/react.tsx` 是 `"use client"`，而只有一个未声明的
    *     `src/trpc/query-client.ts` 从它出发才可达 —— 把它当边界，这个模块
    *     就永远不在客户端可达集里，判据静默失效。） */
+  /** @param {string} file */
   const isServerBoundary = (file) => {
     const d = decls.get(file);
     return d === "server-only" || d === "server-suffix";
   };
 
-  /** 从一组入口出发，找到「先撞上谁」。带分支，用于给出完整引用链。 */
+  /** 从一组入口出发，找到「先撞上谁」。带分支，用于给出完整引用链。
+   *
+   * @param {string[]} entries
+   * @param {(file: string, chain: string[]) => boolean} isTarget
+   */
   function reach(entries, isTarget) {
     const seen = new Set();
     const hits = new Map();
+    /**
+     * @param {string} file
+     * @param {string[]} chain
+     */
     const walk = (file, chain) => {
       if (seen.has(file)) return;
       seen.add(file);
@@ -168,6 +220,10 @@ function analyze() {
   const clientReachablePure = new Set();
   {
     const seenEntry = new Set();
+    /**
+     * @param {string} file
+     * @param {boolean} isRoot 入口自身（是起点，不算「被引到」）
+     */
     const walkEntry = (file, isRoot) => {
       if (seenEntry.has(file)) return;
       seenEntry.add(file);
