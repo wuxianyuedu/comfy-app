@@ -33,11 +33,41 @@ import { buildSnFromOutput } from "./ship-exec.mjs";
 const TERMINAL = new Set(["success", "failed", "cancel", "timeout", "skipped"]);
 
 /**
+ * 一跑的读数（`readBuild` 与 `emptyReading` 的返回值是同一件事的两条路）。
+ *
+ * `note` 是「取不到时的那句原因」。**它现在被写进对象而没有任何一处念它**
+ * （打印那一圈只念 `sn` / `status` / 四个时刻 / `title`，外部调用方也不读）——
+ * 那是一格与「不静默」这句自我声明不相符的实现，另立单处理，不混进本笔的类型改动。
+ * 留着它（而不是从形状里删掉）是因为删掉就等于把那条线索一起抹了。
+ *
+ * @typedef {Object} Reading
+ * @property {string} sn
+ * @property {string} status
+ * @property {string} createTime
+ * @property {string} startTime
+ * @property {string} endTime
+ * @property {string} title
+ * @property {string} note
+ */
+
+/**
+ * `build get-build-logs --sn` 那一页里的一行（平台给什么读什么，故全部可缺）。
+ *
+ * @typedef {Object} RunRow
+ * @property {string} [sn]
+ * @property {string} [createTime]
+ * @property {string} [endTime]
+ * @property {string | number} [duration]
+ * @property {string} [title]
+ * @property {string} [event]
+ */
+
+/**
  * 取一跑的读数。
  *
  * @param {string} repo `组织/仓库`
  * @param {string} sn 构建号
- * @returns {{sn: string, status: string, createTime: string, startTime: string, endTime: string, title: string}}
+ * @returns {Reading}
  */
 export function readBuild(repo, sn) {
   const raw = execFileSync(
@@ -86,7 +116,11 @@ export function readBuild(repo, sn) {
   };
 }
 
-/** 毫秒 → ISO（取不到就是空串，不拿「此刻」冒充）。 */
+/** 毫秒 → ISO（取不到就是空串，不拿「此刻」冒充）。
+ *
+ * @param {number} ms
+ * @returns {string}
+ */
 function isoOf(ms) {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
 }
@@ -110,7 +144,12 @@ export function readRunWindow(repo, sn) {
     { encoding: "utf8" },
   );
   try {
+    /* 平台这一路给的是一个数组，`JSON.parse` 回来是 `any` —— 那里从没被判过。
+     * 只在**进出的那一处**记一次形状（字段全可缺：平台给不给 `title` 不是本件能定的，
+     * 缺就是缺，下面的读法本来就按「取不到给空串」写）。 */
+    /** @type {RunRow[]} */
     const rows = JSON.parse(raw)?.data?.data ?? [];
+    /** @type {RunRow} */
     const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {};
     const create = Number(
       row.createTime ? Date.parse(row.createTime) : Number.NaN,
@@ -134,7 +173,12 @@ export function readRunWindow(repo, sn) {
   }
 }
 
-/** 读数取不到时的形态：`status` 照实说「取不到」，附一句原因（不静默、不冒充绿）。 */
+/** 读数取不到时的形态：`status` 照实说「取不到」，附一句原因（不静默、不冒充绿）。
+ *
+ * @param {string} sn
+ * @param {string} note
+ * @returns {Reading}
+ */
 function emptyReading(sn, note) {
   return {
     sn,
@@ -147,7 +191,14 @@ function emptyReading(sn, note) {
   };
 }
 
-/** 把平台的时间串（`2026-10-26T02:50:07Z` 或毫秒时间戳）换成毫秒；取不到给 `null`。 */
+/** 把平台的时间串（`2026-10-26T02:50:07Z` 或毫秒时间戳的**字符串**形态）换成毫秒；
+ *  取不到给 `null`。两个调用点喂的都是 `Reading` 上那几个字段，全是串 ——
+ *  所以参数不收 `number`：收了就会在里面立刻需要一次「到底是按 epoch 还是按日历算」的
+ *  判断，而那个判断在真实读数里没有对应物（实测平台这两路给的都是串）。
+ *
+ * @param {string | null | undefined} value
+ * @returns {number | null}
+ */
 export function toMs(value) {
   if (value == null || value === "") return null;
   if (/^\d+$/.test(value)) return Number(value);
@@ -162,11 +213,21 @@ export function toMs(value) {
  * 两件不同的事，所以答案里带 `stillRunning`，读的人不必自己再推。
  *
  * 参数：两个构建读数（`startTime` / `endTime` / `createTime`）与当前时刻。
- * 这里不用 `@param` 标签写它们 —— 那几行全是类型语法、一个中文都不含，
- * 而「注释一律中文」这条硬闸（§12.4.6）对 JSDoc 结构行的豁免面比这三行窄（实测拦在
- * 多行对象类型上）。散文写中文比跟判据的豁免边界打交道稳妥。
+ * 这里不用多行内联对象类型写它们 —— 那几行全是类型语法、一个中文都不含，
+ * 而「注释一律中文」这条硬闸（§12.4.6）对 JSDoc 结构行的豁免面比多行对象窄（实测拦在
+ * 多行对象类型上）。散文写中文比跟判据的豁免边界打交道稳妥 —— 形状收在上面那个
+ * `Reading` typedef 里，一行引用就够，不必再折一份。
+ *
+ * @param {Reading} a 左边的读数
+ * @param {Reading} b 右边的读数
+ * @param {number} [now] 当前时刻（一侧还在跑时按它收口）
+ * @returns {{verdict: string, seconds: number, stillRunning: boolean}}
  */
 export function overlap(a, b, now = Date.now()) {
+  /**
+   * @param {Reading} x 任一读数
+   * @returns {{start: number | null, end: number, stillRunning: boolean}}
+   */
   const span = (x) => {
     const start = toMs(x.startTime) ?? toMs(x.createTime);
     const end = toMs(x.endTime);
@@ -206,11 +267,14 @@ export function report(repo, sns) {
       `[probe] ${r.sn}  status=${r.status}  create=${r.createTime}  start=${r.startTime}  end=${r.endTime}  title=${r.title}`,
     );
   }
-  for (let i = 0; i < rows.length; i += 1) {
-    for (let j = i + 1; j < rows.length; j += 1) {
-      const o = overlap(rows[i], rows[j], now);
+  /* 逐对相交：改成 `entries()` + `slice()` 而不是 `rows[i]` / `rows[j]` 按下标取 ——
+   * 后者在 `noUncheckedIndexedAccess` 下每次都是「可能 undefined」，而这两层循环的
+   * 下标本来就在界内。配对与顺序逐字不变（同一对、同一朝向）。 */
+  for (const [i, a] of rows.entries()) {
+    for (const b of rows.slice(i + 1)) {
+      const o = overlap(a, b, now);
       console.log(
-        `[probe] ${rows[i].sn} × ${rows[j].sn} ⇒ ${o.verdict}（${o.seconds}s${o.stillRunning ? "，有一侧仍在跑" : ""}）`,
+        `[probe] ${a.sn} × ${b.sn} ⇒ ${o.verdict}（${o.seconds}s${o.stillRunning ? "，有一侧仍在跑" : ""}）`,
       );
     }
   }
@@ -256,6 +320,11 @@ export function probeConfig(opts) {
   if (cancelInProgress != null)
     pipelineLock.push(`    cancel-in-progress: ${cancelInProgress}`);
   if (wait) pipelineLock.push(`    wait: true`, `    timeout: 900`);
+  /**
+   * @param {number} indent 缩进格数
+   * @param {{key: string, wait?: boolean, timeout?: number, expires?: string}} l 锁的三件
+   * @returns {string[]}
+   */
   const lockBlock = (indent, l) => {
     const pad = " ".repeat(indent);
     const out = [`${pad}lock:`, `${pad}  key: ${l.key}`];
@@ -264,6 +333,10 @@ export function probeConfig(opts) {
     if (l.expires != null) out.push(`${pad}  expires: ${l.expires}`);
     return out;
   };
+  /**
+   * @param {number} indent 缩进格数
+   * @returns {string[]}
+   */
   const body = (indent) => {
     const pad = " ".repeat(indent);
     return [
@@ -336,7 +409,13 @@ export function startProbe(repo, event, title) {
   return sn;
 }
 
-/** 轮询到终态；超时返回最后一读（`status` 原值照给，不替它编结论）。 */
+/** 轮询到终态；超时返回最后一读（`status` 原值照给，不替它编结论）。
+ *
+ * @param {string} repo
+ * @param {string} sn
+ * @param {number} [timeoutMs]
+ * @returns {Reading}
+ */
 export function waitTerminal(repo, sn, timeoutMs = 30 * 60 * 1000) {
   const deadline = Date.now() + timeoutMs;
   let last = readBuild(repo, sn);
@@ -360,12 +439,19 @@ const USAGE = [
   "`start` / `pair` 起的事件名必须**已经在 `.cnb.yml` 的 `$:` 段里**（`--config` 不替代整份配置）。",
 ].join("\n");
 
-/** 极简旗标解析：只要 `--k v` 与 `--flag` 两形态，够用了，不引依赖。 */
+/** 极简旗标解析：只要 `--k v` 与 `--flag` 两形态，够用了，不引依赖。
+ *
+ * @param {string[]} argv
+ * @returns {Record<string, string | boolean>}
+ */
 function parseFlags(argv) {
   /** @type {Record<string, string | boolean>} */
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
+    /* `noUncheckedIndexedAccess` 下按下标取到的是 `string | undefined`，而 `i < length`
+     * 已保证这一格有值 —— 守卫只是把这件事写给类型检查器（同 `dev.mjs` 那一处）。 */
+    if (a === undefined) continue;
     if (!a.startsWith("--")) continue;
     const k = a.slice(2);
     const next = argv[i + 1];
@@ -394,6 +480,12 @@ if (
       console.error(USAGE);
       process.exit(2);
     }
+    /**
+     * 旗标值 → 三态布尔（`false` 要能区别于「没给」，那一格决定 `cancel-in-progress` 写不写）。
+     *
+     * @param {string | boolean | undefined} v
+     * @returns {boolean | undefined}
+     */
     const bool = (v) =>
       v === true
         ? true
