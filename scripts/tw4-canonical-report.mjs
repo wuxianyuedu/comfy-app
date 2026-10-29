@@ -69,14 +69,54 @@ const LITERAL_IN_NON_JS = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
  * 于是报告说 0 条、真机上编辑器却在提示。判据宁可宽、不可漏。 */
 const MAYBE_CLASS = /^[a-zA-Z!@][^\s"'`]*$/;
 
+/** 一份样式表：Tailwind 引擎的 `loadStylesheet` 回调要还的东西（三件都是它的形状要求）。
+ * @typedef {object} StyleFile
+ * @property {string} path
+ * @property {string} base
+ * @property {string} content
+ */
+
+/** 一个类名 token 的**一处**命中。
+ *
+ * 建这个形状的唯一理由不是「给 tsc 交代」：`occurrences` 的 value 在四个消费点
+ * （`--write`、报告、判定档、孤儿计数）上各读不同字段，过去靠隐式 any 把它们串起来，
+ * 于是「把 `snapshot` 写成 `isSnapshot`」这类错要到运行时才炸。
+ * @typedef {object} Hit
+ * @property {string} file 命中所在文件（绝对路径）
+ * @property {boolean} snapshot 落在 `.snap` 快照里（要 `vitest -u` 才同步）
+ * @property {boolean} orphan 快照且没有同名测试文件（改了没有任何用例兜底）
+ * @property {boolean} test 落在测试文件里（`--write` 默认不碰）
+ */
+
+/** 一条改写建议 = 一个 raw → 一个 canonical，连同它的命中统计。
+ * @typedef {object} Suggestion
+ * @property {string} raw
+ * @property {string} to
+ * @property {number} count 源文件里的处数（测试与孤儿快照都不算）
+ * @property {number} inTests
+ * @property {number} snapshots
+ * @property {string[]} files 全部命中文件
+ * @property {string[]} sourceFiles 非测试命中文件（`--write` 的默认目标）
+ * @property {string[]} testFiles
+ */
+
+/** @param {string} file @returns {string} */
 function read(file) {
   return fs.readFileSync(file, "utf8");
 }
 
+/** @param {string} file @returns {StyleFile} */
 function readStyle(file) {
   return { path: file, base: path.dirname(file), content: read(file) };
 }
 
+/**
+ * `__unstable__loadDesignSystem` 的回调：把 `@import` 的说明符落到真实文件。
+ *
+ * @param {string} id
+ * @param {string} base
+ * @returns {Promise<StyleFile>}
+ */
 async function loadStylesheet(id, base) {
   const file =
     id === "tailwindcss"
@@ -97,6 +137,15 @@ const ds = await __unstable__loadDesignSystem('@import "tailwindcss";', {
   loadStylesheet,
 });
 
+/**
+ * 递归列出 `dir` 下会被扫的文件（`.ts` / `.tsx` / `.css` / `.snap`）。
+ *
+ * 返回类型必须**写出来**：生成器递归 `yield* walk(full)` 让 tsc 无法自推
+ * （TS7023「隐式 any 因为被自己的返回表达式引用」），而它给出的不是「加注解」
+ * 而是「这里有个环」—— 环是真的，注解是唯一不改变行为的解。
+ * @param {string} dir
+ * @returns {Generator<string>}
+ */
 function* walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -108,7 +157,9 @@ function* walk(dir) {
 /** 测试文件：里面的类名多数是**断言样本**，而负样本改了就把判据改坏了 ——
  *  真踩过：`parseZClass("z-[200]")` 本是「解析器不认任意值写法」的样本，被批量
  *  改成 `z-200` 后，同一个文件里另一行又期望 `z-200` 被解析成 200，断言自相矛盾。
- *  所以 `--write` 默认不碰测试文件（报告里单列），确认过要同步再加 `--with-tests`。 */
+ *  所以 `--write` 默认不碰测试文件（报告里单列），确认过要同步再加 `--with-tests`。
+ *  @param {string} file
+ *  @returns {boolean} */
 const isTestFile = (file) => /\.(test|spec)\.tsx?$|__tests__[\\/]/.test(file);
 
 const files =
@@ -116,7 +167,8 @@ const files =
     ? explicit.map((f) => path.resolve(ROOT, f))
     : [...walk(SRC)];
 
-/** token → 命中处 */
+/** token → 命中处
+ * @type {Map<string, Hit[]>} */
 const occurrences = new Map();
 /** 孤儿快照：没有同名测试文件，vitest 永远不会校验它（改了也没有用例兜底）。 */
 const orphanSnapshots = new Set();
@@ -128,7 +180,9 @@ for (const file of files) {
    * 剥它等于把真的内容吞掉（快照里更可能逐字记着一段输出）。 */
   const literals = /\.tsx?$/.test(file)
     ? stringLiterals(read(file))
-    : [...read(file).matchAll(LITERAL_IN_NON_JS)].map((m) => ({ content: m[2] }));
+    : [...read(file).matchAll(LITERAL_IN_NON_JS)].map((m) => ({
+        content: m[2] ?? "",
+      }));
   for (const match of literals) {
     for (const token of match.content.split(/\s+/)) {
       if (!token || !MAYBE_CLASS.test(token)) continue;
@@ -151,6 +205,8 @@ const tokens = [...occurrences.keys()];
  *  逐个问而不是批量：`canonicalizeCandidates` 批量返回的数组与输入**不是逐位对应**
  *  （同一批里出现重复写法时它会重排），按索引 zip 会把 `I2V` 配成 `bg()` 这种
  *  凭空建议 —— 那正是「拿返回顺序当对应关系」踩出来的。 */
+/** raw → canonical
+ * @type {Map<string, string>} */
 const canonical = new Map();
 const startedAt = Date.now();
 let done = 0;
@@ -170,10 +226,16 @@ console.error(
 );
 /** 一条建议 = 一个 raw，连同它的命中处（孤儿快照里的不算：无人校验，改了也没用例兜底）。 */
 let orphanHits = 0;
+/** @type {Suggestion[]} */
 const suggestions = [];
 for (const [raw, to] of canonical) {
-  const hits = occurrences.get(raw).filter((h) => !h.orphan);
-  orphanHits += occurrences.get(raw).length - hits.length;
+  /* 取一次而不是两次：`canonical` 的键必然是 `occurrences` 键的子集（它就是从这里
+   * 逐个问出来的），但类型上看不出来 —— 第二次 `.get(raw)` 在 `Hit[] | undefined`
+   * 上点 `.length` 就是要 tsc 替我信这件事。`?? []` 让「真取不到」退化成
+   * 「0 处 → continue」，与原行为同一形（原来那一句会 TypeError）。 */
+  const all = occurrences.get(raw) ?? [];
+  const hits = all.filter((h) => !h.orphan);
+  orphanHits += all.length - hits.length;
   if (hits.length === 0) continue;
   const inTests = hits.filter((h) => h.test);
   suggestions.push({
@@ -189,7 +251,9 @@ for (const [raw, to] of canonical) {
 }
 
 if (shouldWrite) {
-  /** 只动字符串字面量内、且整 token 相等的出现处。 */
+  /** 只动字符串字面量内、且整 token 相等的出现处。
+   * @param {string} file
+   * @returns {boolean} 有没有真的改写（0 处时不落盘） */
   const rewriteFile = (file) => {
     const before = read(file);
     /* 走共享内核：注释里的示例不会被改写（`--write` 只动真会被应用的类名）。 */
@@ -197,7 +261,12 @@ if (shouldWrite) {
       const pieces = content.split(/(\s+)/);
       let hit = false;
       for (let i = 0; i < pieces.length; i += 2) {
-        const to = canonical.get(pieces[i]);
+        /* 取出来再判：`pieces[i]` 在 noUncheckedIndexedAccess 下是 `string | undefined`，
+         * 循环界保证它不是 undefined，但那是**我**知道的不是**类型**知道的 ——
+         * 直接 `canonical.get(pieces[i])` 会新冒一格 TS2345（本批实测就是这么现出来的）。 */
+        const piece = pieces[i];
+        if (piece === undefined) continue;
+        const to = canonical.get(piece);
         if (!to) continue;
         pieces[i] = to;
         hit = true;
@@ -300,7 +369,8 @@ if (asJson) {
  * 自证靠**默认档**（不带 flag 的那次报告）—— 见文件头那条：`--check` 的「0 处」
  * 必须能被默认档的清单复现，否则「一个永远扫不到东西的判据」也会全绿。 */
 
-/** 源文件侧的候选：`{文件 → 处数}`。默认档那次的报告与判定用的是同一份。 */
+/** 源文件侧的候选：`{文件 → 处数}`。默认档那次的报告与判定用的是同一份。
+ * @type {Record<string, number>} */
 const current = {};
 for (const s of suggestions) {
   for (const f of s.sourceFiles) {
