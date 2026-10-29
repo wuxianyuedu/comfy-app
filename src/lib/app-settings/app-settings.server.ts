@@ -8,16 +8,11 @@
  * `~/lib/endpoints`（零依赖常量层），而不是走这条会拖进 `node:fs` 的路。
  */
 
-import { createHash } from "node:crypto";
 import fs from "node:fs";
+import { hash } from "node:crypto";
 import path from "node:path";
 
-import {
-  DEFAULTS,
-  migrateExitDefaults,
-  type AppSettings,
-  type ExitPolicy,
-} from "./index";
+import { DEFAULTS, migrateExitDefaults, type AppSettings, type ExitPolicy } from "./index";
 
 export * from "./index";
 export type { AppSettings, ExitPolicy };
@@ -117,7 +112,7 @@ function readSettingsFile(): { fingerprint: string; raw: string | null } {
   try {
     const raw = fs.readFileSync(/*turbopackIgnore: true*/ SETTINGS_FILE);
     return {
-      fingerprint: createHash("sha1").update(raw).digest("hex"),
+      fingerprint: hash("sha1", raw, "hex"),
       raw: raw.toString("utf-8"),
     };
   } catch {
@@ -150,23 +145,15 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 /* 合并一次局部更新并落盘，返回合并后的完整设置。 */
-export async function saveSettings(
-  partial: Partial<AppSettings>,
-): Promise<AppSettings> {
+export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
   const next: AppSettings = { ...getSettingsSync(), ...partial };
   cache = next;
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.promises.writeFile(
-    SETTINGS_FILE,
-    JSON.stringify(next, null, 2),
-    "utf-8",
-  );
+  await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf-8");
   /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
    * 内容」判成外部改动、白白重读一遍（读出来还是同一份，只是白花一次 IO）。
    * 别的进程（执行宿主）不受这里影响，它自己按文件指纹重读。 */
-  cacheFingerprint = createHash("sha1")
-    .update(JSON.stringify(next, null, 2))
-    .digest("hex");
+  cacheFingerprint = hash("sha1", JSON.stringify(next, null, 2), "hex");
   return next;
 }
 
