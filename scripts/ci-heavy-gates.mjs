@@ -209,6 +209,20 @@ export function fullTreeArgv(argv) {
  */
 export function heavyGateArgv(argv, deps = {}) {
   const joined = argv.join(" ");
+  /* ⚠️ `check-format.cjs --staged` 在这一档**换发 `--changed`**，不剥旗标进全库
+   * （ISSUE #2729，printWidth 80 → 100 迁移期，#2710）：全库档对还没迁到 100 列的
+   * 存量**恒红**（本机实测 1352 份未过）——剥旗标进全库等于让聚合档判一个
+   * 「迁移完成前必红」的面，每条 PR 都被它挡住。专设的 `.cnb.yml` stage 判的是
+   * **改动面**（`--changed`），聚合档与它判**同一个面**：同一格不许两条执行者
+   * 两个答案（§13.5.12）。迁移完成、全库档重新可绿之后，这一条换发自然等价。 */
+  if (joined.includes("check-format.cjs") && argv.includes("--staged")) {
+    return {
+      ok: true,
+      argv: argv.map((a) => (a === "--staged" ? "--changed" : a)),
+      via: "改动面（printWidth 迁移期：全库档对存量恒红，#2710）",
+      notRunCodes: [],
+    };
+  }
   if (!CHANGED_SCOPED.some((p) => joined.includes(p))) {
     return {
       ok: true,
