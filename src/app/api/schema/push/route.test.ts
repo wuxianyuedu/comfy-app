@@ -19,13 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const statusFile = path.join(
-  process.cwd(),
-  "log",
-  "current",
-  "tools",
-  "schema-sync.json",
-);
+const statusFile = path.join(process.cwd(), "log", "current", "tools", "schema-sync.json");
 
 const spawnSchemaSync = vi.hoisted(() => vi.fn());
 

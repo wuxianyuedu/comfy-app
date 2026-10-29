@@ -4,10 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { withTimeout } from "~/lib/with-timeout";
 import { vanillaApi } from "~/trpc/vanilla";
-import type {
-  WorkflowDetail,
-  WorkflowIOParam,
-} from "~/components/studio/workflow-types";
+import type { WorkflowDetail, WorkflowIOParam } from "~/components/studio/workflow-types";
 
 /** tRPC 查询返回的工作流详情载荷：在 WorkflowDetail 基础上，失败分支会带上
  *  `error` 字段（成功时缺省）。用它对全文件散落的 `(x as any)` 做类型收窄，
@@ -90,9 +87,7 @@ export interface WorkflowDetailLoaderArgs {
   setWorkflowIO: (
     updater:
       | Record<string, WorkflowIOParam>
-      | ((
-          prev: Record<string, WorkflowIOParam>,
-        ) => Record<string, WorkflowIOParam>),
+      | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>),
   ) => void;
   setSubgraphStack: Dispatch<SetStateAction<WorkflowSubgraphStackEntry[]>>;
   setRootWorkflowName: Dispatch<SetStateAction<string>>;
@@ -131,9 +126,7 @@ export function useWorkflowDetailLoader({
     (
       updater:
         | WorkflowSubgraphStackEntry[]
-        | ((
-            prev: WorkflowSubgraphStackEntry[],
-          ) => WorkflowSubgraphStackEntry[]),
+        | ((prev: WorkflowSubgraphStackEntry[]) => WorkflowSubgraphStackEntry[]),
     ) => {
       setSubgraphStack((prev) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
@@ -290,15 +283,13 @@ export function useWorkflowDetailLoader({
         )) as WorkflowDetailResponse;
         if (d.error) throw new Error(d.error);
         writeCache(cacheKey, d);
-        if (myReqId === latestRequestIdRef.current)
-          commitDetail(d, isSubgraph, opts);
+        if (myReqId === latestRequestIdRef.current) commitDetail(d, isSubgraph, opts);
       } catch (e: unknown) {
         /* 子图下钻失败：非致命 —— 保留父图，仅用内联错误提示，绝不渲染「返回」
          *  错误屏（那会回退到工作流库界面）。e 为 unknown：先 instanceof Error
          *  收窄再取 message，否则回退到约定文案。 */
         const msg =
-          (e instanceof Error ? e.message : "") ||
-          (isSubgraph ? "子工作流加载失败" : "加载失败");
+          (e instanceof Error ? e.message : "") || (isSubgraph ? "子工作流加载失败" : "加载失败");
         if (isSubgraph) setSubgraphError(msg);
         else setError(msg);
       } finally {
@@ -342,14 +333,7 @@ export function useWorkflowDetailLoader({
       }
       void fetchDetail({ bust: true, hostNodeId });
     },
-    [
-      fetchDetail,
-      latestRequestIdRef,
-      setError,
-      setDetail,
-      setLoading,
-      setSubgraphLoading,
-    ],
+    [fetchDetail, latestRequestIdRef, setError, setDetail, setLoading, setSubgraphLoading],
   );
 
   useEffect(() => {

@@ -110,11 +110,7 @@ export function defaultInputsForMode(mode: string): Array<{
     case "M2I":
       return [...base, { type: "mask", field: "mask_image" }, ...size];
     case "INPAINT":
-      return [
-        ...base,
-        { type: "image", field: "image" },
-        { type: "mask", field: "mask" },
-      ];
+      return [...base, { type: "image", field: "image" }, { type: "mask", field: "mask" }];
     case "OUTPAINT":
       return [...base, { type: "image", field: "image" }, ...size];
     default:
@@ -182,8 +178,7 @@ export function parseRemoteModeAdapters(raw: unknown): RemoteModeAdapter[] {
       typeof rec.endpointPath === "string" && rec.endpointPath.trim() !== ""
         ? rec.endpointPath.trim()
         : defaultEndpointPathForMode(mode);
-    const outputField =
-      typeof rec.outputField === "string" ? rec.outputField.trim() : "";
+    const outputField = typeof rec.outputField === "string" ? rec.outputField.trim() : "";
     out.push({
       mode,
       endpointPath,
@@ -247,16 +242,11 @@ export const MODE_CONTRACT_INPUT_TYPES = /* SAFETY: 类型断言已复核 */ [
   { type: "last-frame", label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"] },
 ] as const;
 
-export type ModeContractInputType =
-  (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
+export type ModeContractInputType = (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
 
-const MODE_CONTRACT_INPUT_SET = new Set<string>(
-  MODE_CONTRACT_INPUT_TYPES.map((t) => t.type),
-);
+const MODE_CONTRACT_INPUT_SET = new Set<string>(MODE_CONTRACT_INPUT_TYPES.map((t) => t.type));
 
-export function isModeContractInputType(
-  v: unknown,
-): v is ModeContractInputType {
+export function isModeContractInputType(v: unknown): v is ModeContractInputType {
   return typeof v === "string" && MODE_CONTRACT_INPUT_SET.has(v);
 }
 
@@ -304,9 +294,7 @@ export type ModeContractInputId =
  *
  *  转发底层的 `exposedCustomKindOf`：自定义口这个概念在映射 / 封装层就已经存在
  *  （见 `exposedClassOf`），契约层不再自己解析一遍形状。 */
-export function customInputKindOf(
-  id: string | null | undefined,
-): ModeContractCustomKind | null {
+export function customInputKindOf(id: string | null | undefined): ModeContractCustomKind | null {
   return typeof id === "string" ? exposedCustomKindOf(id) : null;
 }
 
@@ -381,9 +369,7 @@ export function modeContractInputIdLabel(
 
 /* 下一个可追加的参考图口 id —— 参考图不设数量上限，每次追加下一个序号槽
  *（`reference-image` 之后是 `reference-image-2`、`-3`，依次递增）。 */
-export function nextReferenceImageId(
-  inputs: readonly ModeContractInputId[],
-): ModeContractInputId {
+export function nextReferenceImageId(inputs: readonly ModeContractInputId[]): ModeContractInputId {
   let max = 0;
   for (const id of inputs) {
     const slot = id === "reference-image" ? 1 : referenceImageSlotIndex(id);
@@ -451,15 +437,12 @@ export function requiredInputsFor(contract: {
   const source =
     contract.required ??
     builtInRequiredInputs(
-      contract.inputs.filter((id): id is ModeContractInputId =>
-        isModeContractInputId(id),
-      ),
+      contract.inputs.filter((id): id is ModeContractInputId => isModeContractInputId(id)),
     );
   /* 必备口必须是本契约里存在的口：契约里删掉某口之后，残留的 required 条目会
    *  让「缺了必备口」永远为真（页面提示一个已经不存在的口缺落点）。 */
   return source.filter(
-    (id): id is ModeContractInputId =>
-      isModeContractInputId(id) && contract.inputs.includes(id),
+    (id): id is ModeContractInputId => isModeContractInputId(id) && contract.inputs.includes(id),
   );
 }
 
@@ -555,37 +538,29 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
     const inputs = rawInputs.filter(
       (i): i is ModeContractInputId =>
         isModeContractInputId(i) &&
-        (customInputKindOf(i) === null ||
-          customInputs.some((def) => def.id === i)),
+        (customInputKindOf(i) === null || customInputs.some((def) => def.id === i)),
     );
     if (inputs.length === 0) continue;
     /* 必备口：只收契约里真的存在的口（`required` 缺失 = 没配过 → 存 undefined，
      *  由 `requiredInputsFor` 回落内置默认）。 */
     const required = Array.isArray(rec.required)
       ? rec.required.filter(
-          (i): i is ModeContractInputId =>
-            isModeContractInputId(i) && inputs.includes(i),
+          (i): i is ModeContractInputId => isModeContractInputId(i) && inputs.includes(i),
         )
       : undefined;
     const rawOutput = typeof rec.output === "string" ? rec.output : "";
     const output: ModeContractOutput =
-      rawOutput === "video" || rawOutput === "audio"
-        ? rawOutput
-        : outputKindForMode(mode);
+      rawOutput === "video" || rawOutput === "audio" ? rawOutput : outputKindForMode(mode);
     /* 只留本契约真的用到的自定义口定义：`inputs` 里已删掉的口，定义跟着消失
      *  （否则注册表会随每次「加一个又删一个」永久膨胀）。 */
-    const usedCustomInputs = customInputs.filter((def) =>
-      inputs.includes(def.id),
-    );
+    const usedCustomInputs = customInputs.filter((def) => inputs.includes(def.id));
     seen.add(mode);
     out.push({
       mode,
       inputs,
       output,
       ...(required !== undefined ? { required } : {}),
-      ...(usedCustomInputs.length > 0
-        ? { customInputs: usedCustomInputs }
-        : {}),
+      ...(usedCustomInputs.length > 0 ? { customInputs: usedCustomInputs } : {}),
     });
   }
   return out;
@@ -660,9 +635,7 @@ export function modeContractEntries(
  *  自定义口的展示名与类型只此一处可取（契约里存着），所以这里必须把
  *  `contract.customInputs` 一起带上 —— 不带的话下游只会拿到一条中性兜底名，
  *  作者起的名字在画布 / 封装页签上全都看不见。 */
-export function contractToStatusEntries(
-  contract: ModeContract,
-): ContractEntryDisplay[] {
+export function contractToStatusEntries(contract: ModeContract): ContractEntryDisplay[] {
   const customInputs = contract.customInputs;
   return contract.inputs.map((type) => ({
     id: type,

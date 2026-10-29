@@ -42,7 +42,11 @@ function run(args: string[] = []) {
     });
     return { code: 0, output };
   } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as {
+      status?: number;
+      stdout?: string;
+      stderr?: string;
+    };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -86,12 +90,7 @@ describe("premerge-check —— 从 base-check 的报告里读回结论词", () 
   });
 
   test("四种结论词都认得", () => {
-    for (const v of [
-      "current-green",
-      "inconclusive",
-      "baseline-red",
-      "yours",
-    ]) {
+    for (const v of ["current-green", "inconclusive", "baseline-red", "yours"]) {
       expect(lastSummary(`[base-check] 结论：${v}\n`)).toBe(v);
     }
   });
@@ -156,9 +155,7 @@ describe("premerge-check —— 不发明第二套实现（面的来源）", () 
       process.execPath,
       [
         "-e",
-        `process.stdout.write(require("node:fs").readFileSync(${JSON.stringify(
-          SCRIPT,
-        )}, "utf8"))`,
+        `process.stdout.write(require("node:fs").readFileSync(${JSON.stringify(SCRIPT)}, "utf8"))`,
       ],
       { encoding: "utf8" },
     );
@@ -175,9 +172,7 @@ describe("premerge-check —— 不发明第二套实现（面的来源）", () 
       process.execPath,
       [
         "-e",
-        `process.stdout.write(require("node:fs").readFileSync(${JSON.stringify(
-          SCRIPT,
-        )}, "utf8"))`,
+        `process.stdout.write(require("node:fs").readFileSync(${JSON.stringify(SCRIPT)}, "utf8"))`,
       ],
       { encoding: "utf8" },
     );
@@ -212,8 +207,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
      * `tests/check-commit-claims.test.ts` 的 ①b 那组（同一夹具里「较早那笔说谎」）。 */
     /* 段表是 `Record<string, 联合>`，取数形状那一格在各成员上键不同 —— 这里按判据
      * 要问的三样取一个视图，而不是往生产类型里塞可选键。 */
-    const claims: { kind: string; shape?: string; args?: string[] } =
-      SEGMENTS.claims!;
+    const claims: { kind: string; shape?: string; args?: string[] } = SEGMENTS.claims!;
     expect(claims.kind).toBe("anchored");
     expect(claims.shape).toBe("range");
     /* 反向那半：这一段不许再带回「空 args」的旧形态 —— 那就是缺陷本身。 */
@@ -240,9 +234,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     /* `--light` 筛过之后那一批里**没有**它 —— 这时去重必须不生效，
      * 否则「light 档没跑」会被读成「base 段跑过了」，那正是假绿的形状。 */
     const light = [{ argv: ["node", "scripts/check-file-structure.cjs"] }];
-    expect(
-      scriptsInCommands(light).has("scripts/check-commit-claims.mjs"),
-    ).toBe(false);
+    expect(scriptsInCommands(light).has("scripts/check-commit-claims.mjs")).toBe(false);
 
     /* 非脚本项（`pnpm run lint` 那一族）不该被当成「跑过某个 .mjs」。 */
     expect(scriptsInCommands([{ argv: ["pnpm", "run", "lint"] }]).size).toBe(0);
@@ -310,8 +302,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const tip = g("rev-parse", "master");
       g("checkout", "-q", "work");
 
-      const { resolveForkBaseline } =
-        await import("../scripts/premerge-check.mjs");
+      const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(true);
       if (!got.ok) return;
@@ -334,15 +325,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const g = (...args: string[]) =>
         execFileSync(
           "git",
-          [
-            "-c",
-            "user.email=t@t",
-            "-c",
-            "user.name=t",
-            "-c",
-            "commit.gpgsign=false",
-            ...args,
-          ],
+          ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
           { cwd: repo, encoding: "utf8" },
         ).trim();
       /* 全程不出现任何名为 `master` 的引用 —— 这就是平台检出的形状。 */
@@ -356,8 +339,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "mine");
 
-      const { resolveForkBaseline } =
-        await import("../scripts/premerge-check.mjs");
+      const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
 
       /* ① 没有 env：这条路在平台上就是取不到，必须**照实说取不到**（不是编一个基线）。 */
       const without = resolveForkBaseline(repo, {});
@@ -373,11 +355,10 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       if (!withEnv.ok) return;
       expect(withEnv.baseline).toBe(target);
       /* 交出去的那一批就是「PR 自己的提交」，不多不少一笔。 */
-      const batch = execFileSync(
-        "git",
-        ["log", "--format=%s", `${withEnv.baseline}..HEAD`],
-        { cwd: repo, encoding: "utf8" },
-      )
+      const batch = execFileSync("git", ["log", "--format=%s", `${withEnv.baseline}..HEAD`], {
+        cwd: repo,
+        encoding: "utf8",
+      })
         .trim()
         .split("\n");
       expect(batch).toEqual(["mine"]);
@@ -388,8 +369,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         CNB_PULL_REQUEST_TARGET_SHA: "f".repeat(40),
       });
       expect(bogus.ok).toBe(false);
-      if (!bogus.ok)
-        expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
+      if (!bogus.ok) expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -404,15 +384,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const g = (...args: string[]) =>
         execFileSync(
           "git",
-          [
-            "-c",
-            "user.email=t@t",
-            "-c",
-            "user.name=t",
-            "-c",
-            "commit.gpgsign=false",
-            ...args,
-          ],
+          ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
           { cwd: repo, encoding: "utf8" },
         ).trim();
       g("init", "-q", "-b", "work");
@@ -420,8 +392,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "c1");
       /* 没有 `origin/master`、也没有本地 `master` ⇒ `resolveMergeBaseRef` 给 null。 */
-      const { anchorMissed, resolveForkBaseline } =
-        await import("../scripts/premerge-check.mjs");
+      const { anchorMissed, resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(false);
       if (!got.ok) {

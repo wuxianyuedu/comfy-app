@@ -50,17 +50,9 @@ export const SHOT_STATUSES = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 export type ShotStatus = (typeof SHOT_STATUSES)[number];
 
-export const MOTION_LEVELS = /* SAFETY: 类型断言已复核 */ [
-  "low",
-  "medium",
-  "high",
-] as const;
+export const MOTION_LEVELS = /* SAFETY: 类型断言已复核 */ ["low", "medium", "high"] as const;
 export type MotionLevel = (typeof MOTION_LEVELS)[number];
-export const TRANSITIONS = /* SAFETY: 类型断言已复核 */ [
-  "cut",
-  "dissolve",
-  "fade",
-] as const;
+export const TRANSITIONS = /* SAFETY: 类型断言已复核 */ ["cut", "dissolve", "fade"] as const;
 export type Transition = (typeof TRANSITIONS)[number];
 
 export const MOTION_LABELS: Record<MotionLevel, string> = {
@@ -105,9 +97,9 @@ export const DEFAULT_SHOT_TYPE: ShotType = "medium";
  *  不在清单里的一律回落默认档 —— 不抛错（一条镜头的景别写错不该毁掉整批解析），
  *  但也不放它进类型系统。 */
 export function normalizeShotType(raw: unknown): ShotType {
-  return /* SAFETY: 类型断言已复核 */ (
-    SHOT_TYPES as readonly string[]
-  ).includes(typeof raw === "string" ? raw : "")
+  return /* SAFETY: 类型断言已复核 */ (SHOT_TYPES as readonly string[]).includes(
+    typeof raw === "string" ? raw : "",
+  )
     ? /* SAFETY: 类型断言已复核 */ (raw as ShotType)
     : DEFAULT_SHOT_TYPE;
 }

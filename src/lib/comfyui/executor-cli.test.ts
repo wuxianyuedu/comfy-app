@@ -77,15 +77,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
         { name: "scheduler", widget: { name: "scheduler" } },
         { name: "denoise", widget: { name: "denoise" } },
       ],
-      widgets_values: [
-        276260017540259,
-        "fixed",
-        25,
-        4,
-        "res_multistep",
-        "simple",
-        1,
-      ],
+      widgets_values: [276260017540259, "fixed", 25, 4, "res_multistep", "simple", 1],
     };
     const raw = rawJsonWith(JSON.parse(JSON.stringify(ksampler)));
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
@@ -266,15 +258,7 @@ function liblibSubgraphFixture() {
                   link: null,
                 },
               ],
-              widgets_values: [
-                276260017540259,
-                "randomize",
-                25,
-                4,
-                "res_multistep",
-                "simple",
-                1,
-              ],
+              widgets_values: [276260017540259, "randomize", 25, 4, "res_multistep", "simple", 1],
             },
           ],
           links: [
@@ -320,10 +304,9 @@ type FixtureResult = {
 
 describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () => {
   it("提示词覆盖要写进内层 CLIPTextEncode（宿主数组随后被漂移中和清空）", () => {
-    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
-      liblibSubgraphFixture(),
-      [{ nodeId: "76", name: "text", value: "3只小猫在喝山泉" }],
-    ) as unknown as FixtureResult;
+    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(liblibSubgraphFixture(), [
+      { nodeId: "76", name: "text", value: "3只小猫在喝山泉" },
+    ]) as unknown as FixtureResult;
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 67)!;
@@ -336,10 +319,9 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("seed 覆盖要写进内层 KSampler 的 seed 槽（跳过 control 哨兵）", () => {
-    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
-      liblibSubgraphFixture(),
-      [{ nodeId: "76", name: "seed", value: 12345 }],
-    ) as unknown as FixtureResult;
+    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(liblibSubgraphFixture(), [
+      { nodeId: "76", name: "seed", value: 12345 },
+    ]) as unknown as FixtureResult;
 
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
     // KSampler 的 widgets_values 依次是：seed、control、steps、cfg、sampler、scheduler、denoise
@@ -351,10 +333,9 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("randomize 兜底生成的随机种子同样要落到内层 KSampler", () => {
-    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
-      liblibSubgraphFixture(),
-      [{ nodeId: "76", name: "control_after_generate", value: "randomize" }],
-    ) as unknown as FixtureResult;
+    const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(liblibSubgraphFixture(), [
+      { nodeId: "76", name: "control_after_generate", value: "randomize" },
+    ]) as unknown as FixtureResult;
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;

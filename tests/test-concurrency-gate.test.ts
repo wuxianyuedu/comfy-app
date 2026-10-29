@@ -208,9 +208,7 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
   ) as { maskNonCode: (src: string) => string };
 
   it("模板串的整体被挖掉（含里面的站点字样）", () => {
-    const masked = maskNonCode(
-      'const F = `it.concurrent("x", () => {});`;\nconst G = 1;',
-    );
+    const masked = maskNonCode('const F = `it.concurrent("x", () => {});`;\nconst G = 1;');
     expect(masked).not.toContain("concurrent");
     expect(masked).toContain("const G = 1;");
   });
@@ -223,9 +221,7 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
       'const S = `pre ${fn({ a: 1 }) ?? ""} ' +
         'it.concurrent("漏出来的站点", () => {});`;\nconst T = 2;',
     );
-    expect(masked, "插值没弹栈 —— 站点整片漏出扫描面").not.toContain(
-      "concurrent",
-    );
+    expect(masked, "插值没弹栈 —— 站点整片漏出扫描面").not.toContain("concurrent");
     expect(masked).toContain("const T = 2;");
   });
 

@@ -49,9 +49,7 @@ export function readApiErrorMessage(body: unknown): string | null {
  * 保存 API 通道配置，成功后返回服务端下发的**脱敏视图**（apiKey 永不下发）。
  * 失败时抛出带服务端消息的 Error，由调用方（controller hook）转成提示条。
  */
-export async function saveApiChannels(
-  payload: ApiChannelSavePayload,
-): Promise<ApiChannelsView> {
+export async function saveApiChannels(payload: ApiChannelSavePayload): Promise<ApiChannelsView> {
   let res: Response;
   try {
     res = await fetch(SAVE_ENDPOINT, {

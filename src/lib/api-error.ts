@@ -106,13 +106,12 @@ export function apiErrorBody(
  */
 export function readApiError(body: unknown): string | null {
   if (typeof body !== "object" || body === null) return null;
-  const err: unknown = /* SAFETY: 类型断言已复核 */ (
-    body as Record<string, unknown>
-  )[RESPONSE_ERROR_KEY];
+  const err: unknown = /* SAFETY: 类型断言已复核 */ (body as Record<string, unknown>)[
+    RESPONSE_ERROR_KEY
+  ];
   if (typeof err === "string" && err.trim()) return err;
   if (typeof err === "object" && err !== null) {
-    const message = /* SAFETY: 类型断言已复核 */ (err as { message?: unknown })
-      .message;
+    const message = /* SAFETY: 类型断言已复核 */ (err as { message?: unknown }).message;
     if (typeof message === "string" && message.trim()) return message;
   }
   return null;

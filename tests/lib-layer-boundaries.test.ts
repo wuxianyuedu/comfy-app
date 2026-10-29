@@ -38,7 +38,8 @@ function boundariesSection(): { elements: ElementDef[]; policies: Policy[] } {
   }>;
   const section = configs.find((c) => c.plugins?.boundaries);
   expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
-  const elements = /* SAFETY: 类型断言已复核 */ (section?.settings?.["boundaries/elements"] ?? []) as ElementDef[];
+  const elements = /* SAFETY: 类型断言已复核 */ (section?.settings?.["boundaries/elements"] ??
+    []) as ElementDef[];
   const rule = /* SAFETY: 类型断言已复核 */ section?.rules?.["boundaries/dependencies"] as
     | [string, { policies?: Policy[] }]
     | undefined;
@@ -71,8 +72,7 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
   it("`lib` → `components` 被显式禁止（H1 依赖倒置）", () => {
     const { policies } = boundariesSection();
     const hasRule = policies.some(
-      (p) =>
-        p.from?.element?.type === "lib" && p.disallow?.to?.element?.type === "components",
+      (p) => p.from?.element?.type === "lib" && p.disallow?.to?.element?.type === "components",
     );
     expect(hasRule, "缺少 lib → components 的 disallow 策略").toBe(true);
   });

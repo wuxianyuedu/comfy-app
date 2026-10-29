@@ -135,17 +135,11 @@ describe("关闭语义", () => {
       ],
       ["queue", null],
     );
-    expect(closeViewTab(s, tabKey("queue", null)).activeKey).toBe(
-      tabKey("home", null),
-    );
+    expect(closeViewTab(s, tabKey("queue", null)).activeKey).toBe(tabKey("home", null));
   });
 
   it("关到只剩首页时状态仍然成立（不塌成另一种布局）", () => {
-    let s = openViewTab(
-      openViewTab(initialWorkspaceTabs(), "queue", null),
-      "models",
-      null,
-    );
+    let s = openViewTab(openViewTab(initialWorkspaceTabs(), "queue", null), "models", null);
     s = closeViewTab(s, tabKey("queue", null));
     s = closeViewTab(s, tabKey("models", null));
     expect(s.tabs).toHaveLength(1);
@@ -172,11 +166,7 @@ describe("瞬时页签：切走即关（最多只有当前页可以是 transient
   it("从设置切到别页：设置那一页退场，不动别的常驻页", () => {
     let s = openViewTab(initialWorkspaceTabs(), "queue", null);
     s = openViewTab(s, "settings", null);
-    expect(s.tabs.map((tab) => tab.view)).toEqual([
-      "home",
-      "queue",
-      "settings",
-    ]);
+    expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "queue", "settings"]);
 
     s = openViewTab(s, "models", null);
     expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "queue", "models"]);
@@ -238,10 +228,7 @@ describe("项目消失后的页签", () => {
   it("当前页正是被关掉的页时落回首页", () => {
     let s = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
     s = openViewTab(s, "queue", null);
-    const after = dropProjectTabs(
-      { tabs: s.tabs, activeKey: tabKey("workshop", "p1") },
-      "p1",
-    );
+    const after = dropProjectTabs({ tabs: s.tabs, activeKey: tabKey("workshop", "p1") }, "p1");
     expect(after.activeKey).toBe(tabKey("home", null));
   });
 

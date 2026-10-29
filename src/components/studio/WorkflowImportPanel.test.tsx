@@ -3,13 +3,7 @@
 // 漏斗 —— 读文件 → 识别格式 → 预填面板 → 由用户确认后走同一条导入提交。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { WorkflowImportPanel } from "./WorkflowImportPanel";
 import {
@@ -30,13 +24,7 @@ const createMut = /* SAFETY: 类型断言已复核 */ {
 
 function Harness() {
   const state = useWorkflowImport({ createMut, load: () => undefined });
-  return (
-    <WorkflowImportPanel
-      state={state}
-      onClose={() => undefined}
-      onImport={() => undefined}
-    />
-  );
+  return <WorkflowImportPanel state={state} onClose={() => undefined} onImport={() => undefined} />;
 }
 
 /** jsdom 各版本对 `Blob.text()` 的支持不一致，这里直接钉死读取结果。 */
@@ -59,9 +47,7 @@ describe("导入面板的文件入口", () => {
 
     const input = screen.getByLabelText<HTMLInputElement>(FILE_LABEL);
     expect(input.accept).toContain(".json");
-    expect(
-      screen.getByRole("button", { name: /选择文件/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /选择文件/ })).toBeInTheDocument();
   });
 
   it("选择文件后预填名称与 JSON 内容", async () => {
@@ -69,11 +55,8 @@ describe("导入面板的文件入口", () => {
 
     pickFile(jsonFile("my-flow.json", RAW_WF));
 
-    await waitFor(() =>
-      expect(screen.getByDisplayValue("my-flow")).toBeInTheDocument(),
-    );
-    const textarea =
-      screen.getByPlaceholderText<HTMLTextAreaElement>(/last_node_id/);
+    await waitFor(() => expect(screen.getByDisplayValue("my-flow")).toBeInTheDocument());
+    const textarea = screen.getByPlaceholderText<HTMLTextAreaElement>(/last_node_id/);
     expect(textarea.value).toContain("KSampler");
   });
 
@@ -89,9 +72,7 @@ describe("导入面板的文件入口", () => {
       },
     });
 
-    await waitFor(() =>
-      expect(screen.getByDisplayValue("dropped")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByDisplayValue("dropped")).toBeInTheDocument());
   });
 
   it("拖入 API 格式 JSON：给出可见原因，不静默丢弃", async () => {

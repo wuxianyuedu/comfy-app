@@ -39,10 +39,7 @@ import {
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
 
-const REPO_ROOT = path.resolve(
-  import.meta.dirname,
-  "..",
-);
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 用例自己造的「项目根」：只放宿主入口，日志因此落它自己的 tmpdir 下。 */
 const tmpRoots: string[] = [];
@@ -200,7 +197,13 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
       expect(call.env.COMFYAPP_HOST_BOOT_ID).toBe("2026-01-01-00-00-00");
       expect(result?.child).toEqual({ pid: 4242 });
       expect(result?.stdoutFile).toBe(
-        path.join(root, "log", "current", "services", "executor-host-stdout-2026-01-01-00-00-00.log"),
+        path.join(
+          root,
+          "log",
+          "current",
+          "services",
+          "executor-host-stdout-2026-01-01-00-00-00.log",
+        ),
       );
       expect(result?.stderrFile).toContain("executor-host-stderr-2026-01-01-00-00-00.log");
       expect(EXECUTOR_HOST_LOG_PREFIXES).toEqual([

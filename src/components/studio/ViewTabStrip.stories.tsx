@@ -1,10 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 import { useState } from "react";
 
-import {
-  ViewTabStrip,
-  type OpenableView,
-} from "~/components/studio/ViewTabStrip";
+import { ViewTabStrip, type OpenableView } from "~/components/studio/ViewTabStrip";
 import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
 
 /**
@@ -47,13 +44,7 @@ const OPENABLE: OpenableView[] = [
 ];
 
 /** 适配件：页签条是受控组件（选中 / 关闭都要真发生），story 自己持状态。 */
-function InteractiveStrip({
-  inTitleBar,
-  tabs,
-}: {
-  inTitleBar: boolean;
-  tabs: ViewTab[];
-}) {
+function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: ViewTab[] }) {
   const [state, setState] = useState({
     tabs,
     activeKey: tabs[2]?.key ?? "",
@@ -61,9 +52,7 @@ function InteractiveStrip({
   });
   return (
     <div className="flex flex-col gap-3">
-      <div
-        className={inTitleBar ? "bg-canvas border-border border-b pb-2" : ""}
-      >
+      <div className={inTitleBar ? "bg-canvas border-border border-b pb-2" : ""}>
         <ViewTabStrip
           tabs={state.tabs}
           activeKey={state.activeKey}

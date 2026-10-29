@@ -52,7 +52,11 @@ const ALIASES = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 /* 两态取值本来就相同（品牌色 + 它上面的文字色）。 */
-const THEME_INVARIANT = /* SAFETY: 类型断言已复核 */ ["--primary", "--accent", "--destructive"] as const;
+const THEME_INVARIANT = /* SAFETY: 类型断言已复核 */ [
+  "--primary",
+  "--accent",
+  "--destructive",
+] as const;
 
 describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
   it.for(ALIASES)("%s 深色档 != 浅色档（别名确实随主题）", (name) => {
@@ -98,33 +102,27 @@ const UTILITY_SOURCES = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 describe("utility 的取值路径：编成 var() 且解得到主题值", () => {
-  it.for(UTILITY_SOURCES)(
-    ".$cls 的 $prop 来自 var()（不写死色值）",
-    ({ cls, prop }) => {
-      const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0];
-      expect(
-        rule,
-        `产物里应有 .${cls} 规则（类名没被固定住？见 theme-tokens.ts）。` +
-          " 若产物里确实没有它，是判据依赖的类没进固定输入源，不是业务回归。",
-      ).toBeTruthy();
-      const decl = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1];
-      expect(decl, `.${cls} 应声明 ${prop}`).toBeTruthy();
-      // 性质一：值必须来自 var()（写死色值会让主题切换失效）。
-      expect(decl?.trim()).toMatch(/^var\(--[a-zA-Z0-9-]+\)$/);
-    },
-  );
+  it.for(UTILITY_SOURCES)(".$cls 的 $prop 来自 var()（不写死色值）", ({ cls, prop }) => {
+    const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0];
+    expect(
+      rule,
+      `产物里应有 .${cls} 规则（类名没被固定住？见 theme-tokens.ts）。` +
+        " 若产物里确实没有它，是判据依赖的类没进固定输入源，不是业务回归。",
+    ).toBeTruthy();
+    const decl = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1];
+    expect(decl, `.${cls} 应声明 ${prop}`).toBeTruthy();
+    // 性质一：值必须来自 var()（写死色值会让主题切换失效）。
+    expect(decl?.trim()).toMatch(/^var\(--[a-zA-Z0-9-]+\)$/);
+  });
 
-  it.for(UTILITY_SOURCES)(
-    ".$cls 引用的变量在两态都解得出非空主题值",
-    ({ cls, prop }) => {
-      const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0];
-      const decl = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1];
-      const name = /var\((--[a-zA-Z0-9-]+)\)/.exec(decl ?? "")?.[1];
-      expect(name, `.${cls} 的 ${prop} 应当引用一颗变量`).toBeTruthy();
-      // 性质二：那颗变量在浅/深两态都解得出非空值。只判 var() 形态的话，
-      // 指向一颗**不存在的** token 也照样绿 —— 那正是「编译得过、渲染是空」的形态。
-      expect(light.get(name ?? ""), `${name} 浅色档`).toBeTruthy();
-      expect(dark.get(name ?? ""), `${name} 深色档`).toBeTruthy();
-    },
-  );
+  it.for(UTILITY_SOURCES)(".$cls 引用的变量在两态都解得出非空主题值", ({ cls, prop }) => {
+    const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0];
+    const decl = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1];
+    const name = /var\((--[a-zA-Z0-9-]+)\)/.exec(decl ?? "")?.[1];
+    expect(name, `.${cls} 的 ${prop} 应当引用一颗变量`).toBeTruthy();
+    // 性质二：那颗变量在浅/深两态都解得出非空值。只判 var() 形态的话，
+    // 指向一颗**不存在的** token 也照样绿 —— 那正是「编译得过、渲染是空」的形态。
+    expect(light.get(name ?? ""), `${name} 浅色档`).toBeTruthy();
+    expect(dark.get(name ?? ""), `${name} 深色档`).toBeTruthy();
+  });
 });

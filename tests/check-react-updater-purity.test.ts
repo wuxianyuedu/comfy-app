@@ -14,11 +14,7 @@
  * 故测试把坏/好样例写进 tmp,再用 node scripts/check-react-updater-purity.cjs <dir>
  * 调用同一脚本(等价于真实门禁的解析路径)。
  */
-import {
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -30,14 +26,17 @@ let workdir = "";
 
 function run(dir: string): { code: number; output: string } {
   try {
-    const output = execFileSync(
-      process.execPath,
-      [SCRIPT, dir],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
+    const output = execFileSync(process.execPath, [SCRIPT, dir], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     return { code: 0, output };
   } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as {
+      status?: number;
+      stdout?: string;
+      stderr?: string;
+    };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,

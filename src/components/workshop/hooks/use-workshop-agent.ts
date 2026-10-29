@@ -65,9 +65,7 @@ function toolRunId(): string {
 const AGENT_MESSAGE_MAX = 2000;
 const AGENT_TOOLRUN_MAX = 2000;
 
-export function useWorkshopAgent(
-  handlers: WorkshopAgentToolHandlers,
-): WorkshopAgentController {
+export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopAgentController {
   const [open, setOpen] = React.useState(false);
   const [messages, setMessages] = React.useState<AgentPanelMessage[]>([]);
   const [input, setInput] = React.useState("");
@@ -103,37 +101,24 @@ export function useWorkshopAgent(
     );
     setMessages((prev) => {
       const next = prev.concat({ id: run.id, role: "tool-run", run });
-      return next.length > AGENT_MESSAGE_MAX
-        ? next.slice(-AGENT_MESSAGE_MAX)
-        : next;
+      return next.length > AGENT_MESSAGE_MAX ? next.slice(-AGENT_MESSAGE_MAX) : next;
     });
   }, []);
 
-  const patchToolRun = React.useCallback(
-    (id: string, patch: Partial<AgentToolRun>) => {
-      setToolRuns((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-      );
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === id && m.role === "tool-run"
-            ? { ...m, run: { ...m.run, ...patch } }
-            : m,
-        ),
-      );
-    },
-    [],
-  );
+  const patchToolRun = React.useCallback((id: string, patch: Partial<AgentToolRun>) => {
+    setToolRuns((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id && m.role === "tool-run" ? { ...m, run: { ...m.run, ...patch } } : m,
+      ),
+    );
+  }, []);
 
   /** 把工具调用解析并执行（纯逻辑经 executor 模块）。 */
   const executeOneTool = React.useCallback(
     async (call: { id: string; name: string; arguments: string }) => {
       const runId = toolRunId();
-      const tool = resolveAgentTool(
-        call.name,
-        call.arguments,
-        handlersRef.current,
-      );
+      const tool = resolveAgentTool(call.name, call.arguments, handlersRef.current);
       const run: AgentToolRun = {
         id: runId,
         toolName: call.name,
@@ -201,10 +186,7 @@ export function useWorkshopAgent(
         });
 
         // 纯文本回复（无工具调用）→ 结束本轮
-        if (
-          response.reply &&
-          !(response.tool_calls && response.tool_calls.length > 0)
-        ) {
+        if (response.reply && !(response.tool_calls && response.tool_calls.length > 0)) {
           pushMsg({
             id: agentMsgId(),
             role: "assistant",

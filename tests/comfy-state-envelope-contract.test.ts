@@ -31,10 +31,7 @@ import {
   subscribeComfyStateChanges,
 } from "~/lib/comfy/comfy-state-client";
 import type { ComfyStateChange } from "~/lib/comfyui/state-watch";
-import {
-  noteComfyStateChange,
-  resetComfyStateWatchForTest,
-} from "~/lib/comfyui/state-watch";
+import { noteComfyStateChange, resetComfyStateWatchForTest } from "~/lib/comfyui/state-watch";
 
 /** 客户端写的是相对 URL，而路由读的是 `new URL(request.url)` —— 不补成绝对形式，
  *  那一句会直接抛（然后被客户端的 catch 吞成「这一轮没有变化」，表现是永远收不到帧）。 */
@@ -52,7 +49,10 @@ function wireClientToRealRoute(
        * 不构造 `Request` 是为了不让这一格依赖 jsdom 那侧有没有 fetch 家族的全局。 */
       const res = await GET(/* SAFETY: 类型断言已复核 */ { url: href } as unknown as Request);
       if (res.status !== 200) return res;
-      const frame = /* SAFETY: 类型断言已复核 */ (await res.clone().json()) as Record<string, unknown>;
+      const frame = /* SAFETY: 类型断言已复核 */ (await res.clone().json()) as Record<
+        string,
+        unknown
+      >;
       return new Response(JSON.stringify(mutate ? mutate(frame) : frame), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -70,10 +70,7 @@ async function settle(times = 2): Promise<void> {
 }
 
 /** 等到条件成立（最多若干轮），不等就按失败处理 —— 不靠「赌一拍够不够」。 */
-async function settleUntil(
-  condition: () => boolean,
-  rounds = 50,
-): Promise<boolean> {
+async function settleUntil(condition: () => boolean, rounds = 50): Promise<boolean> {
   for (let i = 0; i < rounds; i += 1) {
     await settle(1);
     if (condition()) return true;
@@ -150,22 +147,12 @@ describe("comfy state 的信封：生产侧那一笔 == 消费侧那一笔", () 
      * 少了它，两边一起把某一列删掉（今天 `kind` 就没有第二个消费点）也是一片绿。 */
     wireClientToRealRoute();
     const produced = noteComfyStateChange("config", "配置写入", 3000);
-    expect(Object.keys(produced).sort()).toEqual([
-      "at",
-      "detail",
-      "kind",
-      "seq",
-    ]);
+    expect(Object.keys(produced).sort()).toEqual(["at", "detail", "kind", "seq"]);
 
     const delivered: ComfyStateChange[] = [];
     const off = subscribeComfyStateChanges((change) => delivered.push(change));
     expect(await settleUntil(() => delivered.length === 1)).toBe(true);
-    expect(Object.keys(delivered[0]!).sort()).toEqual([
-      "at",
-      "detail",
-      "kind",
-      "seq",
-    ]);
+    expect(Object.keys(delivered[0]!).sort()).toEqual(["at", "detail", "kind", "seq"]);
     off();
   });
 });

@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import {
-  createTRPCRouter,
-  authedProcedure,
-  rateLimitedProcedure,
-} from "~/server/api/trpc";
+import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
 import { projectRepository, taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { asRecord } from "~/lib/is-record";
@@ -56,15 +52,13 @@ export const projectRouter = createTRPCRouter({
     }),
 
   /* GET /api/projects/[id] —— 读 */
-  get: authedProcedure
-    .input(z.object({ projectId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const project = await projectRepository.findById(input.projectId);
-      if (project?.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
-      }
-      return project;
-    }),
+  get: authedProcedure.input(z.object({ projectId: z.string() })).query(async ({ ctx, input }) => {
+    const project = await projectRepository.findById(input.projectId);
+    if (project?.userId !== ctx.user.id) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
+    }
+    return project;
+  }),
 
   /* PATCH /api/projects/[id] —— 局部更新 */
   patch: authedProcedure
@@ -104,9 +98,7 @@ export const projectRouter = createTRPCRouter({
       if (project?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
-      const tasks = await taskRepository.findByProjectIdWithImages(
-        input.projectId,
-      );
+      const tasks = await taskRepository.findByProjectIdWithImages(input.projectId);
       const outputs = tasks.map((task) => {
         // params 是任务表的 JSON 列:非对象(标量)时所有属性读取均为 undefined,与原
         // `(task.params ?? {}) as Record<string, any>` 的读取结果一致。
@@ -129,9 +121,7 @@ export const projectRouter = createTRPCRouter({
           cfg: params.cfg ?? null,
           checkpoint: params.checkpoint ?? null,
           referenceImages:
-            /* SAFETY: 类型断言已复核 */ (task.referenceImages as
-              | string[]
-              | null) ?? [],
+            /* SAFETY: 类型断言已复核 */ (task.referenceImages as string[] | null) ?? [],
           parentId: task.parentId ?? null,
           createdAt: task.createdAt,
           images: task.images.map((img) => ({

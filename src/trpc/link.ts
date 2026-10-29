@@ -25,10 +25,7 @@ export function trpcHttpLink(options: {
   origin?: string;
   withLogger?: boolean;
 }): TRPCLink<never>[] {
-  const url =
-    options.origin === undefined
-      ? getTrpcEndpoint()
-      : getTrpcEndpointFor(options.origin);
+  const url = options.origin === undefined ? getTrpcEndpoint() : getTrpcEndpointFor(options.origin);
 
   const http = httpBatchStreamLink({
     transformer: SuperJSON,

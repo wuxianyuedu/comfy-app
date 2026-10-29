@@ -81,18 +81,12 @@ describe("isPermanentRefusal：重试有没有用是唯一的那把尺", () => {
   });
 
   it("码在 `shape` 或裸 `code` 上也认（取值链与日志那一份同源）", () => {
+    expect(isPermanentRefusal(Object.assign(new Error("x"), { code: "FORBIDDEN" }))).toBe(true);
     expect(
-      isPermanentRefusal(Object.assign(new Error("x"), { code: "FORBIDDEN" })),
-    ).toBe(true);
-    expect(
-      isPermanentRefusal(
-        Object.assign(new Error("x"), { shape: { code: "UNAUTHORIZED" } }),
-      ),
+      isPermanentRefusal(Object.assign(new Error("x"), { shape: { code: "UNAUTHORIZED" } })),
     ).toBe(true);
     /* 空串不是码：`{ code: "" }` 判成拒收会让每一次奇怪抛值都弹提示。 */
-    expect(
-      isPermanentRefusal(Object.assign(new Error("x"), { data: { code: "" } })),
-    ).toBe(false);
+    expect(isPermanentRefusal(Object.assign(new Error("x"), { data: { code: "" } }))).toBe(false);
   });
 });
 
@@ -106,9 +100,7 @@ describe("recordSyncFailure", () => {
     expect(changed).toBe(true);
     expect(broadcasts).toBe(1);
 
-    const notices = listSyncNotices().filter(
-      (n) => n.projectId === "proj_rec1",
-    );
+    const notices = listSyncNotices().filter((n) => n.projectId === "proj_rec1");
     expect(notices).toHaveLength(1);
     expect(notices[0]?.projectName).toBe("灵感板");
     /* 动作前缀一定在（一句笼统的「同步失败」会把两种后果压平），
@@ -146,19 +138,11 @@ describe("recordSyncFailure", () => {
 
   it("同一份画布的同一句原因只登记一次（自动保存会反复撞）", () => {
     const err = trpcError("FORBIDDEN", "该项目 id 已属于其他用户");
-    expect(
-      recordSyncFailure("没能存进服务端", { id: "proj_rec2", name: "A" }, err),
-    ).toBe(true);
-    expect(
-      recordSyncFailure("没能存进服务端", { id: "proj_rec2", name: "A" }, err),
-    ).toBe(false);
-    expect(
-      recordSyncFailure("没能存进服务端", { id: "proj_rec2", name: "A" }, err),
-    ).toBe(false);
+    expect(recordSyncFailure("没能存进服务端", { id: "proj_rec2", name: "A" }, err)).toBe(true);
+    expect(recordSyncFailure("没能存进服务端", { id: "proj_rec2", name: "A" }, err)).toBe(false);
+    expect(recordSyncFailure("没能存进服务端", { id: "proj_rec2", name: "A" }, err)).toBe(false);
     expect(broadcasts).toBe(1);
-    expect(
-      listSyncNotices().filter((n) => n.projectId === "proj_rec2"),
-    ).toHaveLength(1);
+    expect(listSyncNotices().filter((n) => n.projectId === "proj_rec2")).toHaveLength(1);
   });
 
   it("原因变了要重新登记并再广播（改了名字之后变成另一条拒收）", () => {
@@ -187,9 +171,7 @@ describe("recordSyncFailure", () => {
     );
     expect(changed).toBe(false);
     expect(broadcasts).toBe(0);
-    expect(listSyncNotices().some((n) => n.projectId === "proj_rec4")).toBe(
-      false,
-    );
+    expect(listSyncNotices().some((n) => n.projectId === "proj_rec4")).toBe(false);
   });
 });
 
@@ -203,9 +185,7 @@ describe("clearSyncFailure", () => {
     broadcasts = 0;
     expect(clearSyncFailure("proj_clr1")).toBe(true);
     expect(broadcasts).toBe(1);
-    expect(listSyncNotices().some((n) => n.projectId === "proj_clr1")).toBe(
-      false,
-    );
+    expect(listSyncNotices().some((n) => n.projectId === "proj_clr1")).toBe(false);
   });
 
   it("本来就没有这条时不广播（每次成功都发一条空事件是噪音）", () => {
@@ -227,11 +207,8 @@ describe("reportMirrorFailure：两个分支都要有痕迹", () => {
     /* 界面上看不到 `FORBIDDEN` 这个字，所以日志那一行必须把它带回来 ——
      * 少了这一半，「到底是哪个码拒的」就只能靠猜。 */
     expect(warn).toHaveBeenCalledTimes(1);
-    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ??
-      []) as unknown[];
-    expect(logged.map((part) => String(part)).join(" ")).toContain(
-      "code=FORBIDDEN",
-    );
+    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ?? []) as unknown[];
+    expect(logged.map((part) => String(part)).join(" ")).toContain("code=FORBIDDEN");
     expect(logged.at(-1)).toBe("proj_rep1");
   });
 
@@ -247,12 +224,9 @@ describe("reportMirrorFailure：两个分支都要有痕迹", () => {
      * 等于把网络层原文搬进面板（口径同 `~/lib/error-message`）。
      * `console.warn` 的实参在类型上是 `any[]`，先收成 `unknown[]` 再取，
      * 否则断言拿到的是 `any`，写错了也不会红。 */
-    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ??
-      []) as unknown[];
+    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ?? []) as unknown[];
     expect(String(logged[0])).toContain("暂时性");
     expect(logged.at(-1)).toBe("proj_rep2");
-    expect(listSyncNotices().some((n) => n.projectId === "proj_rep2")).toBe(
-      false,
-    );
+    expect(listSyncNotices().some((n) => n.projectId === "proj_rep2")).toBe(false);
   });
 });

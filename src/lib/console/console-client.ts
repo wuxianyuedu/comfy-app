@@ -61,10 +61,7 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         runId: payload.runId,
         command: typeof payload.command === "string" ? payload.command : "",
         cwd: typeof payload.cwd === "string" ? payload.cwd : "",
-        startedAt:
-          typeof payload.startedAt === "number"
-            ? payload.startedAt
-            : Date.now(),
+        startedAt: typeof payload.startedAt === "number" ? payload.startedAt : Date.now(),
       };
     case "out": {
       if (typeof payload.text !== "string") return null;
@@ -80,20 +77,13 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         code: typeof payload.code === "number" ? payload.code : null,
         signal: typeof payload.signal === "string" ? payload.signal : null,
         killed: payload.killed === true,
-        truncatedNote:
-          typeof payload.truncatedNote === "string"
-            ? payload.truncatedNote
-            : null,
-        durationMs:
-          typeof payload.durationMs === "number" ? payload.durationMs : 0,
+        truncatedNote: typeof payload.truncatedNote === "string" ? payload.truncatedNote : null,
+        durationMs: typeof payload.durationMs === "number" ? payload.durationMs : 0,
       };
     case "error":
       return {
         type: "error",
-        message:
-          typeof payload.message === "string"
-            ? payload.message
-            : "命令执行失败",
+        message: typeof payload.message === "string" ? payload.message : "命令执行失败",
       };
     default:
       return null;
@@ -107,10 +97,7 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
  * 单独抽出来是为了它能被直接单测 —— 「半个 JSON 被当成一帧丢掉」是这类解析器
  * 最经典的静默缺陷（表现是输出偶尔缺一行，而没有任何报错）。
  */
-export function consumeSseChunk(
-  buffer: string,
-  onFrame: (payload: unknown) => void,
-): string {
+export function consumeSseChunk(buffer: string, onFrame: (payload: unknown) => void): string {
   let rest = buffer;
   for (;;) {
     const idx = rest.indexOf("\n\n");
@@ -144,9 +131,7 @@ function isAbortError(e: unknown): boolean {
  *   · 用户中止 → `aborted`（界面显示「已停止」，不是「失败」）；
  *   · 其它（网络断、解析不出响应体）→ `failed` + 可读文案。
  */
-export async function runConsoleCommand(
-  opts: RunConsoleOptions,
-): Promise<RunConsoleOutcome> {
+export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunConsoleOutcome> {
   let res: Response;
   try {
     res = await fetch("/api/console/run", {
@@ -166,9 +151,7 @@ export async function runConsoleCommand(
   }
 
   if (!res.ok) {
-    const reason =
-      readApiError(await readJsonBody(res)) ??
-      `服务端拒绝执行（HTTP ${res.status}）`;
+    const reason = readApiError(await readJsonBody(res)) ?? `服务端拒绝执行（HTTP ${res.status}）`;
     return { kind: "rejected", reason };
   }
   if (!res.body) return { kind: "failed", reason: "服务端没有返回输出流" };

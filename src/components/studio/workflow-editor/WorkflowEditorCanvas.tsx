@@ -16,11 +16,7 @@ import {
   type OnNodesChange,
   type OnEdgesChange,
 } from "@xyflow/react";
-import {
-  CanvasGrid,
-  ZoomIndicator,
-  CanvasRulers,
-} from "../WorkflowCanvasDecorations";
+import { CanvasGrid, ZoomIndicator, CanvasRulers } from "../WorkflowCanvasDecorations";
 import { CanvasSettingsButton } from "../canvas/CanvasSettingsButton";
 import { CanvasRecenterButton } from "../canvas/CanvasRecenterButton";
 import { isCustomCanvasSettings } from "../canvas/hooks/use-canvas-settings";
@@ -94,10 +90,7 @@ export interface WorkflowEditorCanvasProps {
   onNodeDragStop: (e: unknown, node: Node) => void;
   canvasSettings: CanvasSettings;
   canvasSettingsHydrated: boolean;
-  onMiniMapJump: (
-    event: React.MouseEvent,
-    position: { x: number; y: number },
-  ) => void;
+  onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
   onOpenSettings: () => void;
   /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
   onRecenter: () => void;
@@ -138,9 +131,7 @@ export function WorkflowEditorCanvas({
    *（角色色是静态的），所以拖节点时 MiniMap 不会因为回调
    * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: Node) => {
-    const d = /* SAFETY: 类型断言已复核 */ node.data as
-      | WorkflowNodeData
-      | undefined;
+    const d = /* SAFETY: 类型断言已复核 */ node.data as WorkflowNodeData | undefined;
     return (
       (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ??
       "var(--color-ink-faint)"
@@ -240,9 +231,7 @@ export function WorkflowEditorCanvas({
        *  用户把任何一项从默认值改掉时，
        *  会亮起一颗紫色圆点。 */}
       <CanvasSettingsButton
-        hasOverrides={
-          canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)
-        }
+        hasOverrides={canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)}
         onClick={onOpenSettings}
       />
       <CanvasRecenterButton onClick={onRecenter} />

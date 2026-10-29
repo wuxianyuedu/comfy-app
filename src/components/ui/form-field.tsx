@@ -2,12 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "~/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 
 /**
@@ -128,9 +123,7 @@ export function FormField({
 
   const a11y: FormFieldA11y = {
     id: fieldId,
-    ...(error
-      ? { "aria-invalid": /* SAFETY: 类型断言已复核 */ true as const }
-      : {}),
+    ...(error ? { "aria-invalid": /* SAFETY: 类型断言已复核 */ true as const } : {}),
     ...(errorId ? { "aria-describedby": errorId } : {}),
   };
 
@@ -149,10 +142,7 @@ export function FormField({
       {label != null && (
         <FieldLabel
           {...(wiresControl ? { htmlFor: fieldId } : {})}
-          className={cn(
-            "text-ink/80 mb-1.5 block w-full text-sm font-medium",
-            labelClassName,
-          )}
+          className={cn("text-ink/80 mb-1.5 block w-full text-sm font-medium", labelClassName)}
         >
           {label}
           {required && (
@@ -164,17 +154,12 @@ export function FormField({
       )}
       {typeof children === "function" ? children(a11y) : (children ?? null)}
       {hint != null && (
-        <FieldDescription className="text-2xs leading-relaxed">
-          {hint}
-        </FieldDescription>
+        <FieldDescription className="text-2xs leading-relaxed">{hint}</FieldDescription>
       )}
       {error != null && error !== "" && (
         <FieldError
           id={errorId}
-          className={cn(
-            "text-danger-strong text-2xs mt-1 font-normal",
-            errorClassName,
-          )}
+          className={cn("text-danger-strong text-2xs mt-1 font-normal", errorClassName)}
         >
           {error}
         </FieldError>

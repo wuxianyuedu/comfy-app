@@ -46,21 +46,14 @@ export interface ProjectOutputsController {
   refetch: () => void;
 }
 
-export function useProjectOutputs(
-  projectId: string | null,
-): ProjectOutputsController {
+export function useProjectOutputs(projectId: string | null): ProjectOutputsController {
   const trpc = useTRPC();
   const outputsQ = useQuery(
-    trpc.project.outputs.queryOptions(
-      { projectId: projectId ?? "" },
-      { enabled: !!projectId },
-    ),
+    trpc.project.outputs.queryOptions({ projectId: projectId ?? "" }, { enabled: !!projectId }),
   );
 
   // 服务端 createdAt 是 Date，视图层要字符串做时间轴展示，这里统一收窄。
-  const outputs = /* SAFETY: 类型断言已复核 */ (
-    outputsQ.data?.outputs ?? []
-  ).map((output) => ({
+  const outputs = /* SAFETY: 类型断言已复核 */ (outputsQ.data?.outputs ?? []).map((output) => ({
     ...output,
     createdAt: String(output.createdAt),
   })) as ProjectOutputItem[];

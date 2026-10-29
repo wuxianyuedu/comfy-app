@@ -13,20 +13,13 @@ export const runtime = "nodejs";
 
 /** ComfyUI 不可达（未运行 / 端口不通）的判据：这些形态才值得触发自动启动。 */
 function isUnreachable(msg: string): boolean {
-  return /fetch failed|ECONNREFUSED|ENOTFOUND|instance is not running/i.test(
-    msg,
-  );
+  return /fetch failed|ECONNREFUSED|ENOTFOUND|instance is not running/i.test(msg);
 }
 
 // 安全（OWASP A04/A05）：白名单图片类型并限制大小，好让
 // 畸形上传无法写入任意扩展名或耗尽内存。
 
-const ALLOWED_MIME = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-]);
+const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
@@ -39,16 +32,10 @@ export async function POST(req: NextRequest) {
   const file = /* SAFETY: 类型断言已复核 */ form.get("image") as File | null;
   if (!file) return NextResponse.json({ error: "未收到文件" }, { status: 400 });
   if (!ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json(
-      { error: "仅支持 PNG / JPG / WebP / GIF 图片" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "仅支持 PNG / JPG / WebP / GIF 图片" }, { status: 400 });
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json(
-      { error: "图片大小不能超过 50MB" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "图片大小不能超过 50MB" }, { status: 400 });
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
@@ -62,8 +49,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await uploadImage(buf, filename, "input");
-    if (!res.name)
-      return NextResponse.json({ error: "上传失败" }, { status: 500 });
+    if (!res.name) return NextResponse.json({ error: "上传失败" }, { status: 500 });
     return NextResponse.json({ name: res.name });
   } catch (e) {
     const msg = apiErrorDetail(e, "上传失败");

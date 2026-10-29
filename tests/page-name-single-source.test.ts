@@ -106,9 +106,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
          4 个字，不是 0 —— 所以下面还要单独判「短名是全名的前缀」这一族）。 */
       const stripped = extra.replace(item.label, "").replace(/[·・\-—\s]/g, "");
       if (stripped.length > 0 && extra.startsWith(item.label)) {
-        offenders.push(
-          `${item.id}: label「${item.label}」/ viewLabel「${extra}」`,
-        );
+        offenders.push(`${item.id}: label「${item.label}」/ viewLabel「${extra}」`);
       }
     }
     expect(
@@ -137,10 +135,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
   function bareScreenNameHeadings(text: string): string[] {
     const known = new Set([
       /* 注册表里**当前**的每一个屏名。 */
-      ...NAV_ITEMS.flatMap((item) => [
-        item.label,
-        item.viewLabel ?? item.label,
-      ]),
+      ...NAV_ITEMS.flatMap((item) => [item.label, item.viewLabel ?? item.label]),
       /* 加已退役的那几个：判据只认当前名字的话，它会在**收口那一刻**同时失去
        * 计数能力 —— 正是这条守卫要拦的形状从「命中」变成「看不见」，
        * 而它自己不会红（实测：本文件第一版正是这么漏掉「队列与运行」的）。
@@ -148,9 +143,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
       ...RETIRED_SCREEN_NAMES,
     ]);
     const hits: string[] = [];
-    for (const match of text.matchAll(
-      /<h[12]\b[^>]*>\s*([^\s<>{][^<>{]*?)\s*<\/h[12]>/g,
-    )) {
+    for (const match of text.matchAll(/<h[12]\b[^>]*>\s*([^\s<>{][^<>{]*?)\s*<\/h[12]>/g)) {
       const content = match[1]?.trim() ?? "";
       if (known.has(content)) hits.push(content);
     }
@@ -162,24 +155,16 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
      * 「历史记录」是 `HistoryList.tsx` 的 h1。喂进来必须被数到，否则下面那条
      * 断言 `[]` 只是「判据在空转」。 */
     expect(
-      bareScreenNameHeadings(
-        '<h1 className="font-title u-title-page">队列与运行</h1>',
-      ),
+      bareScreenNameHeadings('<h1 className="font-title u-title-page">队列与运行</h1>'),
     ).toEqual(["队列与运行"]);
-    expect(bareScreenNameHeadings('<h1 className="x">历史记录</h1>')).toEqual([
-      "历史记录",
-    ]);
+    expect(bareScreenNameHeadings('<h1 className="x">历史记录</h1>')).toEqual(["历史记录"]);
     /* 反面：收口后的写法不误报（`<h1>` 由基元渲染，视图里没有它）。 */
-    expect(
-      bareScreenNameHeadings('<PageHeader title={pageHeaderTitle("queue")} />'),
-    ).toEqual([]);
+    expect(bareScreenNameHeadings('<PageHeader title={pageHeaderTitle("queue")} />')).toEqual([]);
   });
 
   it("屏内 `h1` 不许再出现裸字面量的屏名（`<h1>队列与运行</h1>` 那种）", () => {
     const offenders = PAGE_HEADER_CONSUMERS.flatMap((rel) =>
-      bareScreenNameHeadings(read(rel)).map(
-        (name) => `${rel}: <h1>${name}</h1>`,
-      ),
+      bareScreenNameHeadings(read(rel)).map((name) => `${rel}: <h1>${name}</h1>`),
     );
     expect(
       offenders,
@@ -204,9 +189,6 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
         if (/[·・]/.test(line)) hits.push(`${rel}: ${line.trim()}`);
       }
     }
-    expect(
-      hits,
-      "页头标题里又挂了一个屏名 —— 那是同一件事的第二个名字（ISSUE #1423）",
-    ).toEqual([]);
+    expect(hits, "页头标题里又挂了一个屏名 —— 那是同一件事的第二个名字（ISSUE #1423）").toEqual([]);
   });
 });

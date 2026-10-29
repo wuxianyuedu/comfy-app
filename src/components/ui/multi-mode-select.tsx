@@ -57,15 +57,8 @@ import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
-import {
-  ALL_WORKFLOW_TYPES,
-  type WorkflowCategory,
-} from "~/lib/workflow/workflow-types";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { ALL_WORKFLOW_TYPES, type WorkflowCategory } from "~/lib/workflow/workflow-types";
 
 /* ── per-category pill colors（走语义 token，规范 03 §3.6.2）── */
 const CATEGORY_PILL: Record<WorkflowCategory, string> = {
@@ -133,9 +126,7 @@ export function MultiModeSelect({
       setDraftDefault(defaultMode);
       setQuery("");
       // 打开时定位到第一个已选模式的分类（回退到图像）。
-      const firstSelected = ALL_WORKFLOW_TYPES.find((type) =>
-        modes.includes(type.code),
-      );
+      const firstSelected = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
       setActiveTab(firstSelected?.category ?? "image");
     }
   }
@@ -181,9 +172,7 @@ export function MultiModeSelect({
         matchesNeedle(lowerQuery, type.subCategory ?? "") ||
         matchesNeedle(lowerQuery, type.fullName),
     );
-    const groupedMap: Partial<
-      Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>
-    > = {};
+    const groupedMap: Partial<Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>> = {};
     for (const type of filtered) {
       (groupedMap[type.category] ??= []).push(type);
     }
@@ -193,9 +182,7 @@ export function MultiModeSelect({
   /* 当前页签分类下的模式项（无命中时列表区渲染空态）。 */
   const items = grouped[activeTab] ?? [];
 
-  const firstSelected = ALL_WORKFLOW_TYPES.find((type) =>
-    modes.includes(type.code),
-  );
+  const firstSelected = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
   const mainLabel = firstSelected ? firstSelected.label : "选择模式";
   const plusN = Math.max(0, modes.length - 1);
 
@@ -216,13 +203,7 @@ export function MultiModeSelect({
           }
         >
           <span>{modes.length === 0 ? "选择模式" : mainLabel}</span>
-          <svg
-            className="shrink-0"
-            width="10"
-            height="10"
-            viewBox="0 0 12 12"
-            fill="none"
-          >
+          <svg className="shrink-0" width="10" height="10" viewBox="0 0 12 12" fill="none">
             <path
               d="M3 4.5L6 7.5L9 4.5"
               stroke="currentColor"
@@ -269,51 +250,42 @@ export function MultiModeSelect({
         {/* tabs — switchable 图像 / 视频 / 音频 */}
         <div className="border-border-subtle flex items-center gap-1 border-b px-2 pt-2">
           {
-            /* SAFETY: 类型断言已复核 */ (
-              ["image", "video", "audio"] as WorkflowCategory[]
-            ).map((cat) => {
-              const selCount = (grouped[cat] ?? []).filter((type) =>
-                draft.has(type.code),
-              ).length;
-              const isActive = activeTab === cat;
-              return (
-                <Button
-                  key={cat}
-                  variant="ghost"
-                  onClick={() => setActiveTab(cat)}
-                  className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
-                    isActive
-                      ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
-                      : "text-ink-muted hover:text-ink-strong"
-                  }`}
-                >
-                  {CATEGORY_LABEL[cat]}
-                  {selCount > 0 && (
-                    <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>
-                      {selCount}
-                    </span>
-                  )}
-                  {isActive && (
-                    <span
-                      className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
-                    />
-                  )}
-                </Button>
-              );
-            })
+            /* SAFETY: 类型断言已复核 */ (["image", "video", "audio"] as WorkflowCategory[]).map(
+              (cat) => {
+                const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
+                const isActive = activeTab === cat;
+                return (
+                  <Button
+                    key={cat}
+                    variant="ghost"
+                    onClick={() => setActiveTab(cat)}
+                    className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
+                      isActive
+                        ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
+                        : "text-ink-muted hover:text-ink-strong"
+                    }`}
+                  >
+                    {CATEGORY_LABEL[cat]}
+                    {selCount > 0 && (
+                      <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>{selCount}</span>
+                    )}
+                    {isActive && (
+                      <span
+                        className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
+                      />
+                    )}
+                  </Button>
+                );
+              },
+            )
           }
         </div>
 
         {/* 列表 —— 只列当前页签分类下的项 */}
-        <div
-          style={{ maxHeight: POPOVER_MAX_H }}
-          className="overflow-y-auto py-1"
-        >
+        <div style={{ maxHeight: POPOVER_MAX_H }} className="overflow-y-auto py-1">
           {items.length === 0 ? (
             <div className="text-ink-muted px-3 py-4 text-center text-xs">
-              {query.trim()
-                ? "没有匹配的模式"
-                : `${CATEGORY_LABEL[activeTab]}暂无模式`}
+              {query.trim() ? "没有匹配的模式" : `${CATEGORY_LABEL[activeTab]}暂无模式`}
             </div>
           ) : (
             items.map((item) => {
@@ -339,9 +311,7 @@ export function MultiModeSelect({
                    * 键名 + `preventDefault` 显式），不在这里手写第二份
                    * `event.key === " "` —— 那正是这条账要消除的形态。 */
                   onClick={() => toggle(item.code)}
-                  {...simpleKeyHandler(["Space", "Enter"], () =>
-                    toggle(item.code),
-                  )}
+                  {...simpleKeyHandler(["Space", "Enter"], () => toggle(item.code))}
                   tabIndex={0}
                   role="checkbox"
                   aria-checked={isSelected}
@@ -355,12 +325,7 @@ export function MultiModeSelect({
                     }`}
                   >
                     {isSelected && (
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                      >
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                         <path
                           d="M2.5 6l2.5 2.5L9.5 3.5"
                           stroke="currentColor"
@@ -371,9 +336,7 @@ export function MultiModeSelect({
                       </svg>
                     )}
                   </span>
-                  <span className="flex-1 truncate text-sm font-medium">
-                    {item.label}
-                  </span>
+                  <span className="flex-1 truncate text-sm font-medium">{item.label}</span>
                   {/* 默认模式标记：点星星把该模式设为默认（未选中会顺带勾上） */}
                   <Button
                     variant="ghost"
@@ -391,9 +354,7 @@ export function MultiModeSelect({
                   >
                     {isDraftDefault ? "★ 默认" : "☆ 默认"}
                   </Button>
-                  <span
-                    className={`text-2xs shrink-0 ${CATEGORY_TEXT[activeTab]} opacity-60`}
-                  >
+                  <span className={`text-2xs shrink-0 ${CATEGORY_TEXT[activeTab]} opacity-60`}>
                     {item.code}
                   </span>
                 </div>

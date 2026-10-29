@@ -16,12 +16,7 @@ export interface ChatArgs {
  * 浏览器永远看不到它。SSE 分片形如 `{ token }`，
  * 末尾以 `[DONE]` 标记结束整条流。
  */
-export async function streamChat({
-  messages,
-  opts,
-  onToken,
-  signal,
-}: ChatArgs): Promise<string> {
+export async function streamChat({ messages, opts, onToken, signal }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -99,10 +94,7 @@ export async function streamChat({
 }
 
 /* 非流式的一次性对话。 */
-export async function completeChat({
-  messages,
-  opts,
-}: ChatArgs): Promise<string> {
+export async function completeChat({ messages, opts }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -113,8 +105,7 @@ export async function completeChat({
     content?: string;
     error?: string;
   };
-  if (!res.ok)
-    throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
+  if (!res.ok) throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
   return json.content ?? "";
 }
 
@@ -164,9 +155,7 @@ export async function probeRemoteApi(input: {
     ok: json.ok === true,
     detail,
     models: Array.isArray(json.models)
-      ? json.models.filter(
-          (m): m is string => typeof m === "string" && m !== "",
-        )
+      ? json.models.filter((m): m is string => typeof m === "string" && m !== "")
       : undefined,
   };
 }

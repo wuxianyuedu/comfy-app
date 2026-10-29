@@ -69,10 +69,7 @@ function makeStores(): WFStores {
 }
 
 /** 挂上端口关注标记渲染（模拟 useRelatedEdgesHighlight 写回节点 data 的结果）。 */
-function renderWithPortFocus(
-  portFocus: Record<string, string> | undefined,
-  active: boolean,
-) {
+function renderWithPortFocus(portFocus: Record<string, string> | undefined, active: boolean) {
   const data = nodeData();
   if (portFocus !== undefined) {
     /* SAFETY: 类型断言已复核 */ (data as unknown as Record<string, unknown>)[
@@ -152,14 +149,10 @@ describe("端口行关注级别渲染", () => {
 
   it("输出侧的标记按 `out:<名字>` 落在同一行（TOP PINS 共享行）", () => {
     renderWithPortFocus({ "out:LATENT": "downstream" }, true);
-    const row = document.querySelector<HTMLElement>(
-      '[data-pin-output="LATENT"]',
-    )!;
+    const row = document.querySelector<HTMLElement>('[data-pin-output="LATENT"]')!;
     expect(row).not.toBeNull();
     expect(row.style.background).not.toBe("");
-    const handle = row.querySelector<HTMLElement>(
-      '[data-handleid="out:LATENT"]',
-    )!;
+    const handle = row.querySelector<HTMLElement>('[data-handleid="out:LATENT"]')!;
     expect(handle.style.width).toBe("12px");
   });
 });

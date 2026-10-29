@@ -93,8 +93,7 @@ describe("GET /api/debug/source", () => {
   });
 
   it("绝对路径 → 403（跨平台：relative 变绝对也算逃出）", async () => {
-    const outside =
-      process.platform === "win32" ? "C:/Windows/win.ini" : "/etc/passwd";
+    const outside = process.platform === "win32" ? "C:/Windows/win.ini" : "/etc/passwd";
     const { GET } = await import("./route");
     const res = await GET(requestWith(outside));
     expect(res.status).toBe(403);
@@ -115,18 +114,13 @@ describe("GET /api/debug/source", () => {
     const { GET } = await import("./route");
     const res = await GET(requestWith("src/lib/clamp.ts"));
     expect(res.status).toBe(200);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<
-      string,
-      string | number
-    >;
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, string | number>;
     expect(body.content).toBe("export const x = 1;");
     expect(body.size).toBe(19);
     expect(body.modifiedAt).toBe(mtime.toISOString());
     // 两个路径字段的分工：一个给人看（相对），一个给 vscode:// 协议用（绝对、正斜杠）。
     expect(String(body.file).replace(/\\/g, "/")).toBe("src/lib/clamp.ts");
-    expect(String(body.absolutePath).replace(/\\/g, "/")).toContain(
-      "/src/lib/clamp.ts",
-    );
+    expect(String(body.absolutePath).replace(/\\/g, "/")).toContain("/src/lib/clamp.ts");
   });
 
   it("文件不存在 → 404，不把 fs 的错误原文回出去", async () => {

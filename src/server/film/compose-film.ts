@@ -24,12 +24,7 @@ import { errorMessage, errorText } from "~/lib/error-message";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import type { ShotStatus } from "~/lib/film/film-status";
-import {
-  buildNormalizeArgs,
-  buildSegmentVf,
-  buildSrtBody,
-  clipPathOf,
-} from "./compose-steps";
+import { buildNormalizeArgs, buildSegmentVf, buildSrtBody, clipPathOf } from "./compose-steps";
 import { appendFilmLog } from "./film-log";
 
 // ── 回写：成片合成完成 → 统一项目逐镜 clip + 完成状态（Phase 5 / §6.3 + §7）──
@@ -193,11 +188,7 @@ export async function composeFilm(id: string) {
         // 空串标题也要回落到 prompt（|| 语义），沿用既有行为。
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         const srtText = (shot.heading || shot.prompt).slice(0, 80);
-        await fs.writeFile(
-          srtPath,
-          buildSrtBody({ text: srtText, dur }),
-          "utf-8",
-        );
+        await fs.writeFile(srtPath, buildSrtBody({ text: srtText, dur }), "utf-8");
       }
 
       const tryWithSub = film.subtitleOn;
@@ -212,11 +203,7 @@ export async function composeFilm(id: string) {
         tmpDir,
       );
       if (res.code !== 0 && tryWithSub) {
-        await appendFilmLog(
-          id,
-          "warn",
-          `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`,
-        );
+        await appendFilmLog(id, "warn", `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`);
         res = await runFFmpeg(
           buildNormalizeArgs({ clip, vf, dur, out: segOut, srtPath: null }),
           tmpDir,
@@ -236,18 +223,7 @@ export async function composeFilm(id: string) {
     await fs.writeFile(listPath, list, "utf-8");
     const concatPath = path.join(tmpDir, "concat.mp4");
     const cres = await runFFmpeg(
-      [
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        listPath,
-        "-c",
-        "copy",
-        concatPath,
-      ],
+      ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath],
       tmpDir,
     );
     if (cres.code !== 0)
@@ -321,19 +297,13 @@ export async function composeFilm(id: string) {
           })),
         );
       } catch (e) {
-        await appendFilmLog(
-          id,
-          "warn",
-          `已合成，但回写项目失败：${errorText(e, "未知错误")}`,
-        );
+        await appendFilmLog(id, "warn", `已合成，但回写项目失败：${errorText(e, "未知错误")}`);
       }
     }
   } catch (e) {
     await filmRepository.markFailed(id, errorMessage(e, "合成失败"));
     await appendFilmLog(id, "error", errorText(e, "合成失败"));
   } finally {
-    await fs
-      .rm(tmpDir, { recursive: true, force: true })
-      .catch(() => undefined);
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

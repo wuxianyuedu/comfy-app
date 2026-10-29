@@ -80,8 +80,7 @@ export const KNOWN_JSDOM_GAPS: readonly JsdomCapabilityGap[] = [
       "连字 / 图标度量这一档由 Storybook 的 a11y 面板（真浏览器，有度量）现场判；axe 侧的两条规则已在 a11y 用例里点名关掉。",
   },
   {
-    message:
-      "Not implemented: Window's getComputedStyle() method: with pseudo-elements",
+    message: "Not implemented: Window's getComputedStyle() method: with pseudo-elements",
     why: "jsdom 的 `getComputedStyle` 只实现了无伪元素那一档（`Window.js` 对第二参非空直接 notImplemented），而 `::before/::after` 的 `content` 正是它要读的。",
     coveredBy:
       "伪元素绘制由 Storybook 的 a11y 面板（真浏览器，CSS 生效）现场判；axe 侧的相关规则已在 a11y 用例里点名关掉。",
@@ -188,7 +187,10 @@ export function installJsdomCapabilityGate(
     detach: () => {
       console_.removeAllListeners("jsdomError");
       for (const listener of originals) {
-        console_.on("jsdomError", /* SAFETY: 类型断言已复核 */ listener as (error: JsdomErrorLike) => void);
+        console_.on(
+          "jsdomError",
+          /* SAFETY: 类型断言已复核 */ listener as (error: JsdomErrorLike) => void,
+        );
       }
       installed.delete(console_);
     },
@@ -210,7 +212,5 @@ function readVirtualConsole(scope: unknown): VirtualConsoleLike | null {
     jsdom?: { virtualConsole?: VirtualConsoleLike };
     window?: { jsdom?: { virtualConsole?: VirtualConsoleLike } };
   };
-  return (
-    holder.jsdom?.virtualConsole ?? holder.window?.jsdom?.virtualConsole ?? null
-  );
+  return holder.jsdom?.virtualConsole ?? holder.window?.jsdom?.virtualConsole ?? null;
 }

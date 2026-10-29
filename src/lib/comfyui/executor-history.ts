@@ -42,9 +42,7 @@ export type ComfyHistoryEntry = {
  *  现场可查。因此这里在**每个终局分支**都把原始回执写进 trace（comfyui/trace.ts）：
  *  promptId 是什么、轮询了几轮、最后一轮 /history 的原始 JSON、以及 ComfyUI 的
  *  实时 /queue 快照（回答「任务其实还在跑吗」）。 */
-export async function fetchHistoryEntry(
-  promptId: string,
-): Promise<ComfyHistoryEntry | null> {
+export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryEntry | null> {
   let lastRaw: Record<string, unknown> | null = null;
   let lastErr: unknown = null;
   for (let i = 0; i < HISTORY_RETRIES; i++) {
@@ -52,21 +50,14 @@ export async function fetchHistoryEntry(
       const hist = await getHistory(promptId);
       lastRaw = hist;
       lastErr = null;
-      const entry = /* SAFETY: 类型断言已复核 */ hist?.[promptId] as
-        | ComfyHistoryEntry
-        | undefined;
+      const entry = /* SAFETY: 类型断言已复核 */ hist?.[promptId] as ComfyHistoryEntry | undefined;
       // outputs 落盘也可能晚一拍，等到有 outputs 或明确报错为止。
       if (entry && (entry.outputs || entry.status?.status_str)) {
         /* 拿到结果也原样记一份：成功路径同样需要「ComfyUI 回了什么」的现场。 */
-        trace(
-          "history",
-          taskTraceIdForPrompt(promptId),
-          `history 命中（第 ${i + 1} 轮）`,
-          {
-            promptId,
-            entry,
-          },
-        );
+        trace("history", taskTraceIdForPrompt(promptId), `history 命中（第 ${i + 1} 轮）`, {
+          promptId,
+          entry,
+        });
         return entry;
       }
       if (entry && i >= 3) {

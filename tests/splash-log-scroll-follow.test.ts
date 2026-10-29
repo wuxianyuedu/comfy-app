@@ -65,7 +65,8 @@ function bootSplash(): {
 } {
   document.documentElement.innerHTML = PAGE_HTML;
 
-  window.setInterval = /* SAFETY: 类型断言已复核 */ (() => 0) as unknown as typeof window.setInterval;
+  window.setInterval = /* SAFETY: 类型断言已复核 */ (() =>
+    0) as unknown as typeof window.setInterval;
   window.setTimeout = /* SAFETY: 类型断言已复核 */ (() => 0) as unknown as typeof window.setTimeout;
   /* 页面自己的 warn 与本组用例无关（壳 IPC 与网络都不可用时各喊一嗓子），
    * 静音掉——真红应当来自断言，而不是一屏噪声。 */
@@ -100,8 +101,7 @@ function bootSplash(): {
     },
     renderLog: internals.renderLog.bind(window),
     /** 「回到最新」按钮当前可不可见（页面用 data-visible 表达）。 */
-    latestVisible: () =>
-      document.getElementById("log-latest")!.dataset.visible === "true",
+    latestVisible: () => document.getElementById("log-latest")!.dataset.visible === "true",
     /** 走真实入口展开日志面板（用户看到的那一下点击）。面板收起时
      * 「回到最新」不该出现——它只对看得见面板的用户有意义。 */
     openPanel: () => {
@@ -131,9 +131,7 @@ describe("启动页日志面板：用户上翻后刷新不再把他拽回底部"
     env.setScrollTop(parked);
 
     env.renderLog("[b] 第二批（刷新时新到的内容）");
-    expect(env.scroll.scrollTop, "用户已接管滚动，刷新不该覆盖他的位置").toBe(
-      parked,
-    );
+    expect(env.scroll.scrollTop, "用户已接管滚动，刷新不该覆盖他的位置").toBe(parked);
   });
 
   it("暂停有可见出口：按钮出现，点了回到最新并恢复跟随", () => {
@@ -149,9 +147,7 @@ describe("启动页日志面板：用户上翻后刷新不再把他拽回底部"
     document
       .getElementById("log-latest")!
       .dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-    expect(env.scroll.scrollTop, "点「回到最新」要真的到底").toBe(
-      SCROLL_HEIGHT,
-    );
+    expect(env.scroll.scrollTop, "点「回到最新」要真的到底").toBe(SCROLL_HEIGHT);
     expect(env.latestVisible(), "恢复跟随后按钮收回").toBe(false);
 
     env.renderLog("新的一帧");

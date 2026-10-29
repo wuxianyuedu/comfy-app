@@ -2,10 +2,7 @@ import { errorMessage } from "~/lib/error-message";
 
 import "server-only";
 import type { ZodType } from "zod";
-import {
-  llmConfigRepository,
-  remoteModelRepository,
-} from "~/lib/core/repository";
+import { llmConfigRepository, remoteModelRepository } from "~/lib/core/repository";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import {
@@ -28,9 +25,7 @@ import type {
 } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
-  provider:
-    /* SAFETY: 类型断言已复核 */ (process.env
-      .LLM_PROVIDER as LLMProviderType) || "local",
+  provider: /* SAFETY: 类型断言已复核 */ (process.env.LLM_PROVIDER as LLMProviderType) || "local",
   baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
   model: process.env.LLM_MODEL ?? "",
   extraModels: null,
@@ -50,25 +45,20 @@ const ENV_DEFAULTS: LLMConfig = {
  * 模型解析：override.model 命中 extraModels 里带独立 baseUrl / apiKey 的远端
  * 条目时，本次请求改走该条目的连接参数（未配置的继续用全局值）。
  */
-export async function getLLMConfig(
-  override?: LLMRequestOptions,
-): Promise<LLMConfig> {
+export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
   const cfg: LLMConfig = { ...ENV_DEFAULTS };
 
   try {
     const row = await llmConfigRepository.findSingleton();
     if (row) {
-      if (row.provider)
-        cfg.provider =
-          /* SAFETY: 类型断言已复核 */ row.provider as LLMProviderType;
+      if (row.provider) cfg.provider = /* SAFETY: 类型断言已复核 */ row.provider as LLMProviderType;
       if (row.baseUrl) cfg.baseUrl = row.baseUrl;
       if (row.model) cfg.model = row.model;
       // 两类候选分开存：`llmConfig.extraModels` 是本地 ollama 候选（纯名字，无
       // apiKey），远端独立模型在 `remoteModel` 表。读取时合并两者，保证下游
       //（运行时按名找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
       const split = splitExtraModels(
-        /* SAFETY: 类型断言已复核 */ (row as Record<string, unknown>)
-          .extraModels,
+        /* SAFETY: 类型断言已复核 */ (row as Record<string, unknown>).extraModels,
       );
       const remoteRows = await remoteModelRepository.list();
       const remoteEntries = remoteRows.map((r) => ({
@@ -95,11 +85,10 @@ export async function getLLMConfig(
       // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
       const raw = /* SAFETY: 类型断言已复核 */ row as Record<string, unknown>;
       if (raw.temperatureByTask)
-        cfg.temperatureByTask =
-          /* SAFETY: 类型断言已复核 */ raw.temperatureByTask as Record<
-            TaskType,
-            number
-          >;
+        cfg.temperatureByTask = /* SAFETY: 类型断言已复核 */ raw.temperatureByTask as Record<
+          TaskType,
+          number
+        >;
       if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
     }
   } catch {
@@ -244,10 +233,7 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
  *       （Ollama 的视觉输入形态，与 OpenAI content 数组不同）。
  * 图块的 `url` 接受 http(s) 或 `data:` base64；本地 Ollama 可直接喂本机可达址。
  */
-function messagesToWire(
-  cfg: LLMConfig,
-  messages: LLMMessage[],
-): Array<Record<string, unknown>> {
+function messagesToWire(cfg: LLMConfig, messages: LLMMessage[]): Array<Record<string, unknown>> {
   const local = cfg.provider === "local";
   return messages.map((m) => {
     const base: Record<string, unknown> = { role: m.role };
@@ -255,17 +241,11 @@ function messagesToWire(
       base.content = m.content;
     } else if (local) {
       const texts = m.content
-        .filter(
-          (p): p is Extract<LLMContentPart, { type: "text" }> =>
-            p.type === "text",
-        )
+        .filter((p): p is Extract<LLMContentPart, { type: "text" }> => p.type === "text")
         .map((p) => p.text)
         .join("\n");
       const images = m.content
-        .filter(
-          (p): p is Extract<LLMContentPart, { type: "image_url" }> =>
-            p.type === "image_url",
-        )
+        .filter((p): p is Extract<LLMContentPart, { type: "image_url" }> => p.type === "image_url")
         .map((p) => p.image_url.url);
       base.content = texts;
       if (images.length > 0) base.images = images;
@@ -287,15 +267,11 @@ function messagesToWire(
  * kind=image 那条 → 主 model），并按名字回查远端条目的连接参数（baseUrl / apiKey）。
  * 未单独配视觉模型时回落主 model，连接参数沿用主配置。
  */
-export async function getVisionLLMConfig(
-  override?: LLMRequestOptions,
-): Promise<LLMConfig> {
+export async function getVisionLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
   const cfg = await getLLMConfig(override);
   const visionModel = pickVisionModelName(cfg, override);
   if (visionModel === cfg.model) return cfg;
-  const entry = cfg.extraModels?.find(
-    (e) => e.name === visionModel && !!(e.baseUrl ?? e.apiKey),
-  );
+  const entry = cfg.extraModels?.find((e) => e.name === visionModel && !!(e.baseUrl ?? e.apiKey));
   return {
     ...cfg,
     model: visionModel,
@@ -309,10 +285,7 @@ export async function getVisionLLMConfig(
 }
 
 /** 统一的上游 /chat/completions 请求：网络层失败给出可读原因，HTTP 非 2xx 带状态码与响应片段。 */
-async function upstreamChat(
-  cfg: LLMConfig,
-  body: Record<string, unknown>,
-): Promise<Response> {
+async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -327,9 +300,7 @@ async function upstreamChat(
     const detail = await res.text().catch(() => "");
     // 401/403 大概率是 Key 无效 / 未授权 —— 给个更明确的提示，而不是只给状态码。
     const hint =
-      res.status === 401 || res.status === 403
-        ? "（API Key 无效或未授权，请检查后重试）"
-        : "";
+      res.status === 401 || res.status === 403 ? "（API Key 无效或未授权，请检查后重试）" : "";
     const snippet = detail.trim()
       ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`
       : "";
@@ -348,10 +319,7 @@ function assertModelConfigured(cfg: LLMConfig): void {
 }
 
 /* 一次性（非流式）补全。 */
-export async function completeLLM(
-  cfg: LLMConfig,
-  messages: LLMMessage[],
-): Promise<string> {
+export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
     model: cfg.model,

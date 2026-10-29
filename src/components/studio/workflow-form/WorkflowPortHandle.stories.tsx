@@ -1,16 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 import { useMemo } from "react";
 
-import {
-  PortHandle,
-  portChipStyle,
-} from "~/components/studio/workflow-form/WorkflowPortHandle";
+import { PortHandle, portChipStyle } from "~/components/studio/workflow-form/WorkflowPortHandle";
 import { DARK_PALETTE_BASE } from "~/components/studio/canvas/workflow-node-palette";
-import {
-  StorybookFlowCanvas,
-  canvasScene,
-  withNodeType,
-} from "../../../../.storybook/flow-canvas";
+import { StorybookFlowCanvas, canvasScene, withNodeType } from "../../../../.storybook/flow-canvas";
 
 /**
  * 画布端点（`PortHandle`）—— 第二层注入（React Flow）的**核心现场**。
@@ -70,27 +63,13 @@ const PORT_ROWS: { id: string; dir: "in" | "out"; type?: string }[] = [
  * 骑在卡片边框上。把 `px-3.5` 放到卡片上时端点会压住标签 —— 那是这一层最容易
  * 摆错的一处，所以 story 里按真结构来。
  */
-function PortRow({
-  portId,
-  dir,
-  type,
-}: {
-  portId: string;
-  dir: "in" | "out";
-  type?: string;
-}) {
+function PortRow({ portId, dir, type }: { portId: string; dir: "in" | "out"; type?: string }) {
   /* 卡面取**节点调色板的底色**（`DARK_PALETTE_BASE.body`）而不是再写一遍 hex ——
      那是画布节点卡片表面的唯一出处（类型色则经 `portChipStyle()` 取，同源）。 */
   return (
-    <div
-      className="relative w-80"
-      style={{ background: DARK_PALETTE_BASE.body }}
-    >
+    <div className="relative w-80" style={{ background: DARK_PALETTE_BASE.body }}>
       <div className="flex h-9 items-center justify-between px-3.5">
-        <span
-          className="font-mono text-[11px]"
-          style={{ color: portChipStyle(type).color }}
-        >
+        <span className="font-mono text-[11px]" style={{ color: portChipStyle(type).color }}>
           {type ?? "STRING"}
         </span>
         <span className="text-ink-fainter font-mono text-[10px]">{dir}</span>
@@ -202,9 +181,7 @@ function PortDemoNode() {
             >
               {row.type}
             </span>
-            <span className="text-ink-fainter font-mono text-[10px]">
-              {row.dir}
-            </span>
+            <span className="text-ink-fainter font-mono text-[10px]">{row.dir}</span>
           </div>
           <PortHandle id={row.id} dir={row.dir} type={row.type} />
         </div>

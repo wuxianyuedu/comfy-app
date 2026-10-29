@@ -22,10 +22,7 @@ import { z } from "zod";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 import { logger } from "~/lib/core/logger";
 import { asRawWorkflow, extractPositions } from "~/lib/comfyui/raw";
-import {
-  normalizeTaskType,
-  VALID_TASK_TYPE_CODES,
-} from "~/lib/workflow/workflow-types";
+import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "~/lib/workflow/workflow-types";
 
 /* ── 外部工作流 JSON 的形状契约（导入边界，规范 §5.5）──────────────────────
  * 本 schema 回答**落到库里的东西是什么形状**：RAW 原件必须有非空 `nodes[]`
@@ -50,9 +47,7 @@ export interface ParsedWorkflow {
 
 /* 读一个本地文件，返回它的文本与 mtime（毫秒）。
  * 路径缺失或不可读时抛出带可读说明的错误。 */
-export async function readLocalFile(
-  absPath: string,
-): Promise<{ text: string; mtimeMs: number }> {
+export async function readLocalFile(absPath: string): Promise<{ text: string; mtimeMs: number }> {
   let stat;
   try {
     stat = await fs.stat(absPath);
@@ -60,9 +55,7 @@ export async function readLocalFile(
     /* 只取 `code` 判「文件不存在」这一档；文案一律由 `errorText` 产出
      *（它带网络层翻译，`String(e)` 那一路会把非 Error 抛值渲染成
      * `[object Object]`）。 */
-    const err = /* SAFETY: 类型断言已复核 */ (
-      typeof e === "object" && e !== null ? e : {}
-    ) as {
+    const err = /* SAFETY: 类型断言已复核 */ (typeof e === "object" && e !== null ? e : {}) as {
       code?: string;
     };
     if (err.code === "ENOENT") {
@@ -95,9 +88,7 @@ export async function parseWorkflowContent(
   try {
     candidate = JSON.parse(content);
   } catch {
-    throw new Error(
-      "JSON 解析失败，请检查文件内容是否为有效的 ComfyUI 工作流 JSON",
-    );
+    throw new Error("JSON 解析失败，请检查文件内容是否为有效的 ComfyUI 工作流 JSON");
   }
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
     throw new Error("不是有效的工作流 JSON（根节点应为对象）");
@@ -133,9 +124,7 @@ export async function parseWorkflowContent(
     taskType = normalizeTaskType(taskType);
   }
   if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
-    logger.info(
-      `[importSource] Unknown taskType "${taskType}", allowing as custom type`,
-    );
+    logger.info(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
   }
 
   return { rawJson, positions, taskType, warnings, format: "raw" };

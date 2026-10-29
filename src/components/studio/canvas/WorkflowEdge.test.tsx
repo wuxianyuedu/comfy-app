@@ -7,10 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import type { EdgeProps, Position } from "@xyflow/react";
 import { WorkflowEdge } from "./WorkflowEdge";
-import {
-  EDGE_FOCUS_ACTIVE_KEY,
-  EDGE_FOCUS_DATA_KEY,
-} from "./hooks/use-related-edges-highlight";
+import { EDGE_FOCUS_ACTIVE_KEY, EDGE_FOCUS_DATA_KEY } from "./hooks/use-related-edges-highlight";
 
 afterEach(cleanup);
 
@@ -36,9 +33,7 @@ function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
  *  带偏（第一版就踩了这个坑：拿到的 20 是命中区的宽度）。 */
 function wireStyles(data: Record<string, unknown> | undefined) {
   const { container } = render(<WorkflowEdge {...makeProps(data)} />);
-  const borders = Array.from(
-    container.querySelectorAll("path.react-flow__edge-path"),
-  );
+  const borders = Array.from(container.querySelectorAll("path.react-flow__edge-path"));
   /* 每条描边后面跟着一条同几何的命中区 path（无 style），过滤掉它们。 */
   const painted = borders.filter((path) => path.getAttribute("style") !== null);
   expect(painted.length).toBe(2);
@@ -95,17 +90,19 @@ describe("WorkflowEdge 选中态样式", () => {
         style={{ stroke: "#10b981" }}
       />,
     );
-    const painted = Array.from(
-      container.querySelectorAll("path.react-flow__edge-path"),
-    ).filter((path) => path.getAttribute("style") !== null);
+    const painted = Array.from(container.querySelectorAll("path.react-flow__edge-path")).filter(
+      (path) => path.getAttribute("style") !== null,
+    );
     const stroke = painted.at(-1)!.getAttribute("style") ?? "";
     /* 提亮公式把 #10b981 推向白色 —— 亮度升上去，但仍是绿系（G 分量最大），
      * 用户依然能凭颜色读出这条线上流的是 IMAGE。 */
     const rgbPart = /rgb\(([^)]+)\)/.exec(stroke)?.[1];
     expect(rgbPart).toBeTruthy();
-    const [r, g, b] = /* SAFETY: 类型断言已复核 */ rgbPart!
-      .split(",")
-      .map(Number) as [number, number, number];
+    const [r, g, b] = /* SAFETY: 类型断言已复核 */ rgbPart!.split(",").map(Number) as [
+      number,
+      number,
+      number,
+    ];
     expect(g).toBeGreaterThan(r);
     expect(g).toBeGreaterThan(b);
     /* 确实被提亮了：比原色 #10b981（16,185,129）更亮。 */

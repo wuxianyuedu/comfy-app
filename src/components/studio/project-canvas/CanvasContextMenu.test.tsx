@@ -16,14 +16,9 @@ import { NODE_META, type NodeKind } from "~/lib/project-canvas/canvas-types";
 
 afterEach(cleanup);
 
-const SOURCE = readFileSync(
-  path.resolve(__dirname, "CanvasContextMenu.tsx"),
-  "utf8",
-);
+const SOURCE = readFileSync(path.resolve(__dirname, "CanvasContextMenu.tsx"), "utf8");
 
-function renderMenu(
-  over: Partial<Parameters<typeof CanvasContextMenu>[0]> = {},
-) {
+function renderMenu(over: Partial<Parameters<typeof CanvasContextMenu>[0]> = {}) {
   return render(
     <CanvasContextMenu
       x={40}
@@ -40,17 +35,13 @@ describe("CanvasContextMenu 走 ui/dropdown-menu", () => {
   it("渲染成 role=menu，每个节点一项 role=menuitem", () => {
     renderMenu();
     expect(screen.getByRole("menu")).toBeInTheDocument();
-    expect(screen.getAllByRole("menuitem")).toHaveLength(
-      Object.keys(NODE_META).length + 1,
-    );
+    expect(screen.getAllByRole("menuitem")).toHaveLength(Object.keys(NODE_META).length + 1);
   });
 
   it("点一个节点项会把对应的 kind 交给 onPick", () => {
     const onPick = vi.fn();
     renderMenu({ onPick });
-    const kinds = /* SAFETY: 类型断言已复核 */ Object.keys(
-      NODE_META,
-    ) as NodeKind[];
+    const kinds = /* SAFETY: 类型断言已复核 */ Object.keys(NODE_META) as NodeKind[];
     const firstKind = kinds[0]!;
     fireEvent.click(
       screen.getByRole("menuitem", {

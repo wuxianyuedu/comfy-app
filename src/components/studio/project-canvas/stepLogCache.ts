@@ -85,9 +85,7 @@ function touch(id: string, next: StepLogPanelState) {
 }
 
 /* 载入某个 taskId 的持久化状态；没有则为 null。 */
-export function loadStepLogPanelState(
-  taskId: string | null | undefined,
-): StepLogPanelState | null {
+export function loadStepLogPanelState(taskId: string | null | undefined): StepLogPanelState | null {
   if (!taskId) return null;
   return cache.get(taskId) ?? null;
 }
@@ -95,19 +93,14 @@ export function loadStepLogPanelState(
 /* 覆盖某个 taskId 的持久化状态。测试要用；
  * 面板想主动重置时也用（例如用户选了新工作流 —— 目前没有这条路径，
  * 但把出口留着）。 */
-export function saveStepLogPanelState(
-  taskId: string,
-  next: StepLogPanelState,
-): void {
+export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): void {
   if (!taskId) return;
   touch(taskId, next);
 }
 
 /* 丢掉某个 taskId 的条目。用于「任务真结束后，用户不希望下次点同一节点时
  * 又冒出旧界面状态」的场景 —— 目前还没这么做，但接口先备着。 */
-export function clearStepLogPanelState(
-  taskId: string | null | undefined,
-): void {
+export function clearStepLogPanelState(taskId: string | null | undefined): void {
   if (!taskId) return;
   cache.delete(taskId);
 }

@@ -72,9 +72,7 @@ export interface Repository<T extends Identifiable> {
  *
  * @typeParam T 实体类型（需满足 {@link Identifiable}，通常为 `InferSelectModel`）
  */
-export class DrizzleRepository<
-  T extends Identifiable,
-> implements Repository<T> {
+export class DrizzleRepository<T extends Identifiable> implements Repository<T> {
   protected readonly table: AnySQLiteTable;
   protected readonly idColumn?: AnySQLiteColumn;
   constructor(table: AnySQLiteTable, idColumn?: AnySQLiteColumn) {
@@ -98,18 +96,12 @@ export class DrizzleRepository<
   }
 
   async findById(id: string): Promise<T | null> {
-    const rows = await db
-      .select()
-      .from(this.table)
-      .where(eq(this.id, id))
-      .limit(1);
+    const rows = await db.select().from(this.table).where(eq(this.id, id)).limit(1);
     return /* SAFETY: 类型断言已复核 */ (rows[0] as T) ?? null;
   }
 
   async findAll(): Promise<T[]> {
-    return /* SAFETY: 类型断言已复核 */ (await db
-      .select()
-      .from(this.table)) as T[];
+    return /* SAFETY: 类型断言已复核 */ (await db.select().from(this.table)) as T[];
   }
 
   async create(entity: T): Promise<T> {

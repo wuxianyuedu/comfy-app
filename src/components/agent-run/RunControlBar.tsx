@@ -14,11 +14,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { textHandler } from "~/lib/form-props";
 import { formatClock } from "~/lib/time-format";
 import { useAgentRun, type AgentRunController } from "./use-agent-run";
-import type {
-  ApprovalMode,
-  RunAction,
-  RunStatus,
-} from "~/lib/production/run-types";
+import type { ApprovalMode, RunAction, RunStatus } from "~/lib/production/run-types";
 
 const STATUS_LABEL: Record<RunStatus, string> = {
   idle: "未启动",
@@ -30,10 +26,7 @@ const STATUS_LABEL: Record<RunStatus, string> = {
   cancelled: "已取消",
 };
 
-const STATUS_BADGE: Record<
-  RunStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
+const STATUS_BADGE: Record<RunStatus, "default" | "secondary" | "destructive" | "outline"> = {
   idle: "outline",
   running: "default",
   awaiting_approval: "secondary",
@@ -90,16 +83,10 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
   return (
     <div className="border-border-subtle bg-panel z-base flex flex-col gap-2 border-b px-4 py-2.5">
       <div className="flex items-center gap-2">
-        <span className="text-ink-field text-sm font-semibold">
-          AI 自主成片
-        </span>
-        <Badge variant={STATUS_BADGE[run.status]}>
-          {STATUS_LABEL[run.status]}
-        </Badge>
+        <span className="text-ink-field text-sm font-semibold">AI 自主成片</span>
+        <Badge variant={STATUS_BADGE[run.status]}>{STATUS_LABEL[run.status]}</Badge>
         {run.status === "running" || run.status === "awaiting_approval" ? (
-          <span className="text-ink-fainter text-xs">
-            下一步：{actionLabel(c.action)}
-          </span>
+          <span className="text-ink-fainter text-xs">下一步：{actionLabel(c.action)}</span>
         ) : null}
       </div>
 
@@ -110,14 +97,8 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           aria-label="执行日志"
         >
           {[...run.log].reverse().map((step) => (
-            <li
-              key={step.ts}
-              className="text-ink-fainter text-2xs flex items-baseline gap-1.5"
-            >
-              <span
-                className={step.ok ? "text-success-strong" : "text-destructive"}
-                aria-hidden
-              >
+            <li key={step.ts} className="text-ink-fainter text-2xs flex items-baseline gap-1.5">
+              <span className={step.ok ? "text-success-strong" : "text-destructive"} aria-hidden>
                 {step.ok ? "✓" : "✗"}
               </span>
               <span className="text-ink-faintest shrink-0 tabular-nums">
@@ -145,15 +126,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             <span className="text-ink-faint">确认粒度</span>
             <SelectMenu
               value={c.approvalMode}
-              onChange={(v) =>
-                c.setApprovalMode(
-                  /* SAFETY: 类型断言已复核 */ v as ApprovalMode,
-                )
-              }
+              onChange={(v) => c.setApprovalMode(/* SAFETY: 类型断言已复核 */ v as ApprovalMode)}
               options={APPROVAL_OPTIONS.map((o) => o.value)}
-              labels={Object.fromEntries(
-                APPROVAL_OPTIONS.map((o) => [o.value, o.label]),
-              )}
+              labels={Object.fromEntries(APPROVAL_OPTIONS.map((o) => [o.value, o.label]))}
             />
           </FieldLabel>
           <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs">
@@ -200,12 +175,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
 
       {run.status === "awaiting_approval" && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void c.approve()}
-            disabled={busy}
-          >
+          <Button type="button" size="sm" onClick={() => void c.approve()} disabled={busy}>
             确认，继续
           </Button>
           <Button
@@ -231,12 +201,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
 
       {run.status === "paused" && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void c.resume()}
-            disabled={busy}
-          >
+          <Button type="button" size="sm" onClick={() => void c.resume()} disabled={busy}>
             继续
           </Button>
           <Button

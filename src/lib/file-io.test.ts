@@ -48,8 +48,7 @@ describe("readFileAsText", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader =
-      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader = /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
       const file = /* SAFETY: 类型断言已复核 */ {} as unknown as File;
       await expect(readFileAsText(file)).resolves.toBe("来自 reader");
@@ -69,12 +68,11 @@ describe("readFileAsText", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader =
-      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader = /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(
-        readFileAsText(/* SAFETY: 类型断言已复核 */ {} as File),
-      ).rejects.toThrow("读取文件失败");
+      await expect(readFileAsText(/* SAFETY: 类型断言已复核 */ {} as File)).rejects.toThrow(
+        "读取文件失败",
+      );
     } finally {
       globalThis.FileReader = original;
     }
@@ -93,12 +91,11 @@ describe("readFileAsDataUrl", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader =
-      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader = /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(
-        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
-      ).resolves.toBe("data:image/png;base64,AAA");
+      await expect(readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File)).resolves.toBe(
+        "data:image/png;base64,AAA",
+      );
     } finally {
       globalThis.FileReader = original;
     }
@@ -115,12 +112,11 @@ describe("readFileAsDataUrl", () => {
         this.onload?.();
       }
     }
-    globalThis.FileReader =
-      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader = /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(
-        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
-      ).rejects.toThrow("读取本地图片失败");
+      await expect(readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File)).rejects.toThrow(
+        "读取本地图片失败",
+      );
     } finally {
       globalThis.FileReader = original;
     }
@@ -131,9 +127,9 @@ describe("readFileAsDataUrl", () => {
     globalThis.FileReader =
       /* SAFETY: 类型断言已复核 */ undefined as unknown as typeof globalThis.FileReader;
     try {
-      await expect(
-        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
-      ).rejects.toThrow("当前环境不支持读取文件");
+      await expect(readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File)).rejects.toThrow(
+        "当前环境不支持读取文件",
+      );
     } finally {
       globalThis.FileReader = original;
     }
@@ -150,12 +146,11 @@ describe("readFileAsDataUrl", () => {
         this.onerror?.();
       }
     }
-    globalThis.FileReader =
-      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader = /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(
-        readFileAsText(/* SAFETY: 类型断言已复核 */ {} as File),
-      ).rejects.toThrow("读取文件失败");
+      await expect(readFileAsText(/* SAFETY: 类型断言已复核 */ {} as File)).rejects.toThrow(
+        "读取文件失败",
+      );
     } finally {
       globalThis.FileReader = original;
     }
@@ -172,12 +167,11 @@ describe("readFileAsDataUrl", () => {
         this.onerror?.();
       }
     }
-    globalThis.FileReader =
-      /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
+    globalThis.FileReader = /* SAFETY: 类型断言已复核 */ FakeReader as unknown as typeof FileReader;
     try {
-      await expect(
-        readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File),
-      ).rejects.toThrow("读取本地图片失败");
+      await expect(readFileAsDataUrl(/* SAFETY: 类型断言已复核 */ {} as File)).rejects.toThrow(
+        "读取本地图片失败",
+      );
     } finally {
       globalThis.FileReader = original;
     }

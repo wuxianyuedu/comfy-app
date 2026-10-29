@@ -6,9 +6,7 @@ import { isRecord } from "~/lib/is-record";
 import type { AgentChatRequest, AgentChatResponse } from "./shared";
 
 /** 向 Agent 服务端发送一轮消息，返回响应（reply / tool_calls / fallback）。 */
-export async function sendAgentMessage(
-  req: AgentChatRequest,
-): Promise<AgentChatResponse> {
+export async function sendAgentMessage(req: AgentChatRequest): Promise<AgentChatResponse> {
   let res: Response;
   try {
     res = await fetch("/api/agent/chat", {
@@ -34,10 +32,7 @@ function parseAgentResponse(data: unknown): AgentChatResponse {
     result.tool_calls = data.tool_calls
       .filter(isRecord)
       .filter(
-        (call) =>
-          typeof call.id === "string" &&
-          typeof call.name === "string" &&
-          call.id !== "",
+        (call) => typeof call.id === "string" && typeof call.name === "string" && call.id !== "",
       )
       .map((call) => ({
         id: /* SAFETY: 类型断言已复核 */ call.id as string,

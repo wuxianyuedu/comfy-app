@@ -42,30 +42,14 @@
  * 登记表同时受**反向**检查：条目若没被引擎真解出来，就算红 —— 留着只会变成一条
  * 「有豁免权、没有实物」的通道，而那正是可以拿来放行下一枚死规则的形状。
  */
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  compiledCssPinnedTo,
-  ruleSelectors,
-} from "./helpers/theme-tokens";
+import { compiledCssPinnedTo, ruleSelectors } from "./helpers/theme-tokens";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".next",
-  "dist",
-  "coverage",
-  "__snapshots__",
-]);
+const SKIP_DIRS = new Set(["node_modules", ".next", "dist", "coverage", "__snapshots__"]);
 
 /** 运行期拼候选名：源码里绝不留完整形状，否则这份测试自己就成了死规则的新出处。 */
 function cand(prop: string, value: string): string {
@@ -87,8 +71,7 @@ const REGISTERED: Record<string, string> = {
    * 运行期拼之后也不再供给 —— 于是两条都成了「有豁免权、没有实物」。
    * 别据此认为「紧贴汉字」是一种可依赖的写法：那只是恰好没成形的一个形状，正文里挪一个
    * 分隔符就会翻（真正稳的是方括号内侧留空格），口径见 docs/DESIGN.md 的扫描边界那一条。 */
-  [cand("translate-y", "-1px")]:
-    "DEV-QUERIES 列出的「不进文本 codemod」清单，逐字才有检索价值",
+  [cand("translate-y", "-1px")]: "DEV-QUERIES 列出的「不进文本 codemod」清单，逐字才有检索价值",
   [cand("aspect", "4/3")]: "同上",
   [cand("w", "360px")]: "02 §性能的示例代码（面板宽度就是这一枚 arbitrary）",
   [cand("min-h", "300px")]: "10 §错误处理的示例代码（虚线占位框）",
@@ -214,10 +197,9 @@ beforeAll(async () => {
     "把 src 钉成扫描面之后一条 arbitrary 都没解出来 —— 消费侧是空集，" +
       "供给侧差集那条判据会把所有正文候选都当成零消费者报错",
   ).toBeGreaterThan(50);
-  expect(
-    proseFiles.length,
-    "没读到正文与用例文件 —— 归属与反向检查在对空集立法",
-  ).toBeGreaterThan(20);
+  expect(proseFiles.length, "没读到正文与用例文件 —— 归属与反向检查在对空集立法").toBeGreaterThan(
+    20,
+  );
 });
 
 describe("正文与用例不许成为死规则的唯一出处", () => {
@@ -226,9 +208,7 @@ describe("正文与用例不许成为死规则的唯一出处", () => {
     for (const candidate of proseCandidates) {
       if (srcCandidates.has(candidate)) continue; // src 自己也在供给，不是正文造成的死规则
       if (REGISTERED[candidate]) continue; // 逐字示例 / 检索式，已给理由
-      const where = proseFiles
-        .filter(([, text]) => spelledIn(text, candidate))
-        .map(([f]) => f);
+      const where = proseFiles.filter(([, text]) => spelledIn(text, candidate)).map(([f]) => f);
       offenders.push(`${candidate}  ← ${where.join(" | ") || "(归属未命中)"}`);
     }
     expect(
@@ -236,14 +216,15 @@ describe("正文与用例不许成为死规则的唯一出处", () => {
       "这些 arbitrary 候选名只有正文/用例在供给 ⇒ 每次构建多一条没人用的规则。" +
         "改法：方括号内侧各留一个空格（读者看到的仍是同一个类名，扫描器读不出候选名）；" +
         "确实是逐字示例或检索式的，登记进本文件的 REGISTERED 并写理由：\n" +
-        offenders.sort().map((o) => `  ${o}`).join("\n"),
+        offenders
+          .sort()
+          .map((o) => `  ${o}`)
+          .join("\n"),
     ).toEqual([]);
   });
 
   it("登记表不留「有豁免权、没有实物」的条目", () => {
-    const stale = Object.keys(REGISTERED).filter(
-      (candidate) => !proseCandidates.has(candidate),
-    );
+    const stale = Object.keys(REGISTERED).filter((candidate) => !proseCandidates.has(candidate));
     expect(
       stale,
       "这些登记条目指向的候选名并没有被引擎解出来（示例被改写、或那一枚本来就成不了形）—— " +

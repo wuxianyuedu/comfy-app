@@ -86,12 +86,8 @@ export function filterGroups<G extends { title: string }, K extends keyof G>(
   if (!needle) return groups;
   const out: G[] = [];
   for (const group of groups) {
-    const all =
-      /* SAFETY: 类型断言已复核 */ (group[field] as
-        | ItemOf<G, K>[]
-        | undefined) ?? [];
-    const keep =
-      hit ?? ((item: ItemOf<G, K>) => matchesNeedle(needle, String(item)));
+    const all = /* SAFETY: 类型断言已复核 */ (group[field] as ItemOf<G, K>[] | undefined) ?? [];
+    const keep = hit ?? ((item: ItemOf<G, K>) => matchesNeedle(needle, String(item)));
     const kept = all.filter(keep);
     if (kept.length === 0) continue;
     out.push({ ...group, [field]: kept });
@@ -100,9 +96,7 @@ export function filterGroups<G extends { title: string }, K extends keyof G>(
 }
 
 /** `G[K]` 的元素类型（`G[K]` 必须是数组）。 */
-export type ItemOf<G, K extends keyof G> = G[K] extends readonly (infer I)[]
-  ? I
-  : never;
+export type ItemOf<G, K extends keyof G> = G[K] extends readonly (infer I)[] ? I : never;
 
 /**
  * 「先归一化、再分组过滤」的一步式入口（`AttributeMultiSelect` 那个形态）。
@@ -111,10 +105,7 @@ export type ItemOf<G, K extends keyof G> = G[K] extends readonly (infer I)[]
  * （`AttributeMultiSelect` 归一化了 `trim()` 却没折小写）。要单用其中一步的场景
  * （如先按别的条件筛、最后再按关键字）直接用上面的函数。
  */
-export function filterGroupsByKeyword<
-  G extends { title: string },
-  K extends keyof G,
->(
+export function filterGroupsByKeyword<G extends { title: string }, K extends keyof G>(
   groups: G[],
   rawKeyword: string,
   field: K,

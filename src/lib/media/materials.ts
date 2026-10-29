@@ -48,9 +48,7 @@ export type MaterialFolderId = (typeof MATERIAL_FOLDERS)[number]["id"];
 
 const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((folder) => folder.id));
 
-export function isValidFolder(
-  id: string | null | undefined,
-): id is MaterialFolderId {
+export function isValidFolder(id: string | null | undefined): id is MaterialFolderId {
   return !!id && FOLDER_IDS.has(id);
 }
 
@@ -95,9 +93,7 @@ export function sanitizeScope(raw: string | null | undefined): string | null {
  * 文件名白名单化：剥掉所有目录成分，再替换掉在 Windows/POSIX 上有特殊含义
  * 的字符。返回 null 表示该名字不可用。
  */
-export function sanitizeFileName(
-  raw: string | null | undefined,
-): string | null {
+export function sanitizeFileName(raw: string | null | undefined): string | null {
   if (!raw) return null;
   // 同时按两种分隔符切，避免 Windows 上 "a/b\\c.png" 漏网
   const base = lastSegments(raw, 1).trim();
@@ -161,10 +157,7 @@ export async function visibleMaterialScopes(
     return out;
   }
   const { projectId } = opts;
-  if (
-    projectId &&
-    (await materialScopeOwnership(userId, projectId)) === "foreign"
-  ) {
+  if (projectId && (await materialScopeOwnership(userId, projectId)) === "foreign") {
     // 与「这个项目根本没有素材」同形：只回共享区
     return [SHARED_SCOPE];
   }
@@ -173,10 +166,7 @@ export async function visibleMaterialScopes(
 
 /** 写 / 删这一格素材的许可：共享区不限，明确属于别人的不行，库里没登记的放行
  *  （理由见上面 `unclaimed` 那条）。 */
-export async function canWriteMaterialScope(
-  userId: string,
-  scope: string,
-): Promise<boolean> {
+export async function canWriteMaterialScope(userId: string, scope: string): Promise<boolean> {
   return (await materialScopeOwnership(userId, scope)) !== "foreign";
 }
 
@@ -198,10 +188,7 @@ export interface MaterialItem {
 }
 
 /** 列出单个 scope/folder 下的素材。目录不存在时返回空数组（不是错误）。 */
-export async function listFolderItems(
-  scope: string,
-  folder: string,
-): Promise<MaterialItem[]> {
+export async function listFolderItems(scope: string, folder: string): Promise<MaterialItem[]> {
   const dir = folderDir(scope, folder);
   if (!dir) return [];
   let entries: string[];
@@ -215,10 +202,7 @@ export async function listFolderItems(
     if (name.startsWith(".")) continue; // 跳过 .DS_Store 之类
     try {
       const st = await fs.stat(
-        /*turbopackIgnore: true*/ path.join(
-          /*turbopackIgnore: true*/ dir,
-          name,
-        ),
+        /*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ dir, name),
       );
       if (!st.isFile()) continue;
       items.push({
@@ -227,9 +211,7 @@ export async function listFolderItems(
         folder,
         folderName: folderName(folder),
         kind: inferKind(name),
-        url: artifactUrl(
-          ["materials", scope, folder, name].map(encodeURIComponent),
-        ),
+        url: artifactUrl(["materials", scope, folder, name].map(encodeURIComponent)),
         size: st.size,
         updatedAt: st.mtime.toISOString(),
         scope,
@@ -249,9 +231,7 @@ export async function listFolderItems(
 export async function listScopes(): Promise<string[]> {
   try {
     const entries = await fs.readdir(materialsRoot(), { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isDirectory())
-      .map((dir) => dir.name);
+    return entries.filter((entry) => entry.isDirectory()).map((dir) => dir.name);
   } catch {
     return [];
   }
@@ -262,9 +242,7 @@ export async function listScopes(): Promise<string[]> {
  * 返回 Map<folderId, MaterialItem[]>，7 个分类恒定存在（可能为空数组），
  * 这样前端不必自己补齐缺失分类。
  */
-export async function collectByFolder(
-  scopes: string[],
-): Promise<Map<string, MaterialItem[]>> {
+export async function collectByFolder(scopes: string[]): Promise<Map<string, MaterialItem[]>> {
   const map = new Map<string, MaterialItem[]>();
   for (const f of MATERIAL_FOLDERS) map.set(f.id, []);
   for (const scope of scopes) {

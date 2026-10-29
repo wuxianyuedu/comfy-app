@@ -46,10 +46,7 @@ const CFG = (over: Partial<LLMConfig> = {}): LLMConfig => ({
 });
 
 /** 一次性响应替身：`res.json()` / `res.text()` 都可用。 */
-function jsonResponse(
-  body: unknown,
-  init: { status?: number; ok?: boolean } = {},
-): Response {
+function jsonResponse(body: unknown, init: { status?: number; ok?: boolean } = {}): Response {
   const status = init.status ?? 200;
   return /* SAFETY: 类型断言已复核 */ {
     ok: init.ok ?? (status >= 200 && status < 300),
@@ -91,27 +88,22 @@ function callAt(n = 0): { url: string; init: RequestInit } {
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
-  const url =
-    typeof arg === "string"
-      ? arg
-      : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
+  const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
   return { url, init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    typeof raw === "string" ? raw : "{}",
-  ) as Record<string, unknown>;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
+    string,
+    unknown
+  >;
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function sentHeaders(n = 0): Record<string, string> {
-  return /* SAFETY: 类型断言已复核 */ (callAt(n).init.headers ?? {}) as Record<
-    string,
-    string
-  >;
+  return /* SAFETY: 类型断言已复核 */ (callAt(n).init.headers ?? {}) as Record<string, string>;
 }
 
 beforeEach(() => {
@@ -318,8 +310,7 @@ describe("getConfigForClient", () => {
 /* ─────────────────────────── 网络失败的可读翻译 ─────────────────────────── */
 
 describe("describeFetchFailure", () => {
-  const typeErr = (cause: unknown) =>
-    Object.assign(new TypeError("fetch failed"), { cause });
+  const typeErr = (cause: unknown) => Object.assign(new TypeError("fetch failed"), { cause });
 
   it("非 TypeError 走原样消息；非 Error 给兜底中文", () => {
     expect(describeFetchFailure(new Error("自定义"), CFG())).toBe("自定义");
@@ -354,32 +345,21 @@ describe("describeFetchFailure", () => {
   });
 
   it("DNS 失败 / 超时 / 其他错误各有专门的文案分支", () => {
-    const dns = describeFetchFailure(
-      typeErr(new Error("getaddrinfo ENOTFOUND nope")),
-      CFG(),
-    );
+    const dns = describeFetchFailure(typeErr(new Error("getaddrinfo ENOTFOUND nope")), CFG());
     expect(dns).toContain("域名解析失败");
 
-    const timeout = describeFetchFailure(
-      typeErr(new Error("connect ETIMEDOUT")),
-      CFG(),
-    );
+    const timeout = describeFetchFailure(typeErr(new Error("connect ETIMEDOUT")), CFG());
     expect(timeout).toContain("连接超时");
 
-    const other = describeFetchFailure(
-      typeErr(new Error("socket hang up")),
-      CFG(),
-    );
+    const other = describeFetchFailure(typeErr(new Error("socket hang up")), CFG());
     expect(other).toContain("socket hang up");
   });
 
   it("cause 不是 Error（字符串 / 对象 / 缺失）时也能拼出文案而不是 [object Object]", () => {
-    expect(describeFetchFailure(typeErr("ECONNREFUSED"), CFG())).toContain(
-      "连不上",
+    expect(describeFetchFailure(typeErr("ECONNREFUSED"), CFG())).toContain("连不上");
+    expect(describeFetchFailure(typeErr({ code: "X" }), CFG({ provider: "remote" }))).toContain(
+      '{"code":"X"}',
     );
-    expect(
-      describeFetchFailure(typeErr({ code: "X" }), CFG({ provider: "remote" })),
-    ).toContain('{"code":"X"}');
     const none = describeFetchFailure(new TypeError("fetch failed"), CFG());
     expect(none).toContain("调用本地模型失败");
   });
@@ -397,20 +377,15 @@ describe("describeFetchFailure", () => {
 
 describe("completeLLM（一次性补全）", () => {
   it("未配置模型 → 立刻抛可操作文案，且不发请求", async () => {
-    await expect(completeLLM(CFG({ model: "  " }), [])).rejects.toThrow(
-      /尚未配置生效模型/,
-    );
+    await expect(completeLLM(CFG({ model: "  " }), [])).rejects.toThrow(/尚未配置生效模型/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("请求形状：URL 去尾斜杠、Content-Type、非流式、截断参数", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ choices: [{ message: { content: "你好" } }] }),
-    );
-    const text = await completeLLM(
-      CFG({ baseUrl: "http://127.0.0.1:11434/v1/", maxTokens: 128 }),
-      [{ role: "user", content: "hi" }],
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ choices: [{ message: { content: "你好" } }] }));
+    const text = await completeLLM(CFG({ baseUrl: "http://127.0.0.1:11434/v1/", maxTokens: 128 }), [
+      { role: "user", content: "hi" },
+    ]);
     expect(text).toBe("你好");
 
     expect(callAt().url).toBe("http://127.0.0.1:11434/v1/chat/completions");
@@ -453,17 +428,13 @@ describe("completeLLM（一次性补全）", () => {
   });
 
   it("非 2xx：401/403 附「API Key 无效」提示并截断响应片段", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ error: "unauthorized" }, { status: 401 }),
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ error: "unauthorized" }, { status: 401 }));
     await expect(completeLLM(CFG({ provider: "remote" }), [])).rejects.toThrow(
       /LLM 请求失败 \(401\).*API Key 无效/,
     );
 
     fetchMock.mockResolvedValue(jsonResponse({}, { status: 500 }));
-    await expect(completeLLM(CFG(), [])).rejects.toThrow(
-      /LLM 请求失败 \(500\)/,
-    );
+    await expect(completeLLM(CFG(), [])).rejects.toThrow(/LLM 请求失败 \(500\)/);
   });
 
   it("错误响应体为空时不拼多余的冒号", async () => {
@@ -475,9 +446,7 @@ describe("completeLLM（一次性补全）", () => {
         json: async () => ({}),
       } as unknown as Response,
     );
-    await expect(completeLLM(CFG(), [])).rejects.toThrow(
-      /LLM 请求失败 \(502\)$/,
-    );
+    await expect(completeLLM(CFG(), [])).rejects.toThrow(/LLM 请求失败 \(502\)$/);
   });
 });
 
@@ -525,9 +494,7 @@ describe("streamLLM（流式补全）", () => {
   });
 
   it("未配置模型时同样先拦下", async () => {
-    await expect(streamLLM(CFG({ model: "" }), [], noop)).rejects.toThrow(
-      /尚未配置生效模型/,
-    );
+    await expect(streamLLM(CFG({ model: "" }), [], noop)).rejects.toThrow(/尚未配置生效模型/);
   });
 });
 
@@ -546,12 +513,8 @@ describe("completeLLMStructured（结构化补全）", () => {
   });
 
   it("返回非 JSON → 抛「无法解析结构化结果」", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ choices: [{ message: { content: "不是 JSON" } }] }),
-    );
-    await expect(completeLLMStructured(CFG(), [], schema)).rejects.toThrow(
-      /非 JSON/,
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ choices: [{ message: { content: "不是 JSON" } }] }));
+    await expect(completeLLMStructured(CFG(), [], schema)).rejects.toThrow(/非 JSON/);
   });
 
   it("JSON 合法但 schema 不匹配 → 抛 zod 校验错误", async () => {

@@ -33,9 +33,7 @@ vi.mock("~/lib/film/bgm-client", () => ({
 
 /* Phase 5：hook 会读活跃项目镜头（getActiveId + fetchProduction）。默认无活跃项目
  * （回落剧本模式，既有 create() 用例行为不变）；来源相关用例在用例内改写返回值。 */
-const getActiveIdMock = vi.hoisted(() =>
-  vi.fn<() => string | null>(() => null),
-);
+const getActiveIdMock = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const fetchProductionMock = vi.hoisted(() =>
   vi.fn<(id: string) => Promise<unknown>>(async () => null),
 );
@@ -191,11 +189,9 @@ describe("useFilmStudio", () => {
   it("生成中进行中时启动轮询，完成后停止（不泄漏 interval）", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      vanilla.film.detail.query
-        .mockResolvedValueOnce({ film: runningFilm() })
-        .mockResolvedValue({
-          film: { ...runningFilm(), status: "DONE", finalVideo: "/v.mp4" },
-        });
+      vanilla.film.detail.query.mockResolvedValueOnce({ film: runningFilm() }).mockResolvedValue({
+        film: { ...runningFilm(), status: "DONE", finalVideo: "/v.mp4" },
+      });
       const { result } = renderHook(() => useFilmStudio());
       await act(async () => {
         await result.current.create();
@@ -298,9 +294,7 @@ describe("useFilmStudio", () => {
     expect(vanilla.film.create.mutate).not.toHaveBeenCalled();
     expect(vanilla.film.start.mutate).toHaveBeenCalledWith({ id: "f-1" });
     expect(vanilla.film.detail.query).toHaveBeenCalledWith({ id: "f-1" });
-    expect(toast.success).toHaveBeenCalledWith(
-      "已用项目镜头启动成片，正在逐镜生成…",
-    );
+    expect(toast.success).toHaveBeenCalledWith("已用项目镜头启动成片，正在逐镜生成…");
   });
 
   it("createFromProject 无镜头时短路：不发请求、提示回工坊产镜头", async () => {
@@ -310,8 +304,6 @@ describe("useFilmStudio", () => {
       await result.current.createFromProject();
     });
     expect(vanilla.film.createFromProject.mutate).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith(
-      "当前项目还没有镜头，请先在工坊产出镜头",
-    );
+    expect(toast.error).toHaveBeenCalledWith("当前项目还没有镜头，请先在工坊产出镜头");
   });
 });

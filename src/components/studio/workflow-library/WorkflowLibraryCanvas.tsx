@@ -45,10 +45,7 @@ import type { ElementBox } from "~/lib/dom-rect";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
-import type {
-  LibraryOutputCards,
-  LibraryParamCards,
-} from "./workflow-library-param-cards";
+import type { LibraryOutputCards, LibraryParamCards } from "./workflow-library-param-cards";
 import {
   buildLibraryNodes,
   handleInventoryOf,
@@ -152,19 +149,13 @@ function useCanvasBackdropSize(box: ElementBox | null): {
       box && box.width > 0 && box.height > 0
         ? { width: box.width, height: box.height }
         : {
-            width:
-              LAYOUT_SIZING.paramsWidth +
-              LAYOUT_SIZING.hostWidth +
-              LAYOUT_SIZING.outputsWidth,
+            width: LAYOUT_SIZING.paramsWidth + LAYOUT_SIZING.hostWidth + LAYOUT_SIZING.outputsWidth,
             height: LAYOUT_SIZING.fillHeight,
           },
     [box],
   );
 
-  return useMemo(
-    () => libraryBackdropSize(LAYOUT_SIZING, viewport),
-    [viewport],
-  );
+  return useMemo(() => libraryBackdropSize(LAYOUT_SIZING, viewport), [viewport]);
 }
 
 /** 端点**清单**（哪个节点上有哪些口）—— 变了就主动重算落点。
@@ -263,12 +254,9 @@ function WorkflowLibraryCanvasInner({
 
   /* 点一条线：记为选中（React Flow 自己对它打 selected，驱动 Delete 删除；同时
    *  `selectedEdgeIds` 给命中的边注入高亮描边，见 `useLibraryWireFlow`）。 */
-  const handleEdgeClick = useCallback(
-    (_event: React.MouseEvent, edge: Edge) => {
-      setSelectedEdgeIds(new Set([edge.id]));
-    },
-    [],
-  );
+  const handleEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    setSelectedEdgeIds(new Set([edge.id]));
+  }, []);
 
   /* 首帧**定向 fitView**：只按三列内容节点缩放（见 `libraryFitViewOptions`）。
    *
@@ -287,9 +275,7 @@ function WorkflowLibraryCanvasInner({
   const markFitted = useCallback(() => setFitted(true), []);
   const handleInit = useCallback(
     (instance: ReactFlowInstance) => {
-      void instance
-        .fitView(libraryFitViewOptions())
-        .then(markFitted, markFitted);
+      void instance.fitView(libraryFitViewOptions()).then(markFitted, markFitted);
     },
     [markFitted],
   );
@@ -370,9 +356,7 @@ function WorkflowLibraryCanvasInner({
       const at = positionOf(dragged.id);
       if (!at) return;
       setNodes((current) =>
-        current.map((node) =>
-          node.id === dragged.id ? { ...node, position: at } : node,
-        ),
+        current.map((node) => (node.id === dragged.id ? { ...node, position: at } : node)),
       );
     },
     [setNodes],

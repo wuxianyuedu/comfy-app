@@ -64,9 +64,7 @@ function LabelWithId({ label, id }: { label: string; id: string }) {
   return (
     <>
       {label}
-      <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">
-        {id}
-      </span>
+      <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">{id}</span>
     </>
   );
 }
@@ -96,10 +94,7 @@ export function ModeContractEditorView({
           没动作），`pt-8 sm:pt-10` 会在页眉之上白留一整条空气。收成 `pt-4 sm:pt-5`，
           与其余文档型视图同一档。 */}
       <div className="px-4 sm:px-8">
-        <PageHeader
-          className="pt-4 pb-3 sm:pt-5"
-          srTitle={pageHeaderTitle("mode-contract")}
-        />
+        <PageHeader className="pt-4 pb-3 sm:pt-5" srTitle={pageHeaderTitle("mode-contract")} />
       </div>
 
       <div className="flex min-h-0 flex-1 gap-6 px-4 pb-5 sm:px-8">
@@ -153,9 +148,7 @@ function ModeContractDraftPanel({
       <div className="border-border flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
         <h4 className="text-ink text-sm font-semibold">
           {contractModeLabel(draft.mode)} 的统一对外参数
-          <span className="text-muted-foreground/60 text-2xs ml-1.5 font-mono">
-            {draft.mode}
-          </span>
+          <span className="text-muted-foreground/60 text-2xs ml-1.5 font-mono">{draft.mode}</span>
         </h4>
       </div>
 
@@ -175,15 +168,13 @@ function ModeContractDraftPanel({
           例如纯文生图把「提示词」勾必备、「负向提示词」不勾。
         </p>
         <p>
-          「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 + 分辨率（1k /
-          2k / 4k），或 比例 + 百万像素 + 倍数（8 / 16 / 32 /
-          64）。选「分辨率」时工坊按场景尺寸表换算成「百万像素 + 倍数」
-          再下发，两种写法落到工作流 / 远端接口上的效果一致。
+          「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 + 分辨率（1k / 2k / 4k），或 比例 +
+          百万像素 + 倍数（8 / 16 / 32 / 64）。选「分辨率」时工坊按场景尺寸表换算成「百万像素 +
+          倍数」 再下发，两种写法落到工作流 / 远端接口上的效果一致。
         </p>
         <p>
           输入口（按顺序作为工坊对该模式的统一输入）—— 本地工作流在
-          「画布节点」为每个口配落点，远端模型在「模型适配」里为每个口配
-          请求字段。
+          「画布节点」为每个口配落点，远端模型在「模型适配」里为每个口配 请求字段。
         </p>
       </Disclosure>
 
@@ -208,9 +199,7 @@ function ModeContractDraftPanel({
         customInputs={draft.customInputs ?? []}
         onAddPredefined={(type) =>
           controller.appendInput(
-            type === "reference-image"
-              ? (nextReferenceImageId ?? "reference-image")
-              : type,
+            type === "reference-image" ? (nextReferenceImageId ?? "reference-image") : type,
           )
         }
         onAddCustom={controller.addCustomInput}
@@ -223,9 +212,7 @@ function ModeContractDraftPanel({
         <SelectMenu
           value={draft.output}
           onChange={(value) =>
-            controller.setOutput(
-              /* SAFETY: 类型断言已复核 */ value as ModeContract["output"],
-            )
+            controller.setOutput(/* SAFETY: 类型断言已复核 */ value as ModeContract["output"])
           }
           options={["image", "video", "audio"]}
           labels={{
@@ -240,8 +227,7 @@ function ModeContractDraftPanel({
 
       {!draft.inputs.includes("prompt") && (
         <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-          契约里没有「提示词」口 —— 工坊生成的提示词将无处可落，
-          保存后该模式无法被工坊驱动。
+          契约里没有「提示词」口 —— 工坊生成的提示词将无处可落， 保存后该模式无法被工坊驱动。
         </p>
       )}
       {!controller.hasAnyRequired && (
@@ -253,18 +239,12 @@ function ModeContractDraftPanel({
       {saved && (
         <p className="bg-success/10 text-success-strong rounded-lg px-3 py-2 text-xs">
           已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
-          <span className="text-ink font-medium">
-            改动只落在这台机器上，不会跟着代码走。
-          </span>
+          <span className="text-ink font-medium">改动只落在这台机器上，不会跟着代码走。</span>
         </p>
       )}
 
       <div>
-        <Button
-          variant="primary-solid"
-          onClick={() => void controller.save()}
-          disabled={saving}
-        >
+        <Button variant="primary-solid" onClick={() => void controller.save()} disabled={saving}>
           {saving ? "保存中…" : "保存模式契约"}
         </Button>
       </div>
@@ -290,9 +270,7 @@ function ContractInputRow({
   return (
     <div className="border-border bg-bg flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
       <span className="text-ink min-w-0 text-sm">
-        <span className="text-muted-foreground mr-1 tabular-nums">
-          {index + 1}.
-        </span>
+        <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
         <LabelWithId label={label} id={input} />
         {kind && (
           <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">

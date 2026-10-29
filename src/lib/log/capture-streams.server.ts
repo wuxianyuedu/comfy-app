@@ -71,9 +71,7 @@ export function panelCaptureLogPath(): string {
  * 策略增长，代价也跟着长）。逐份 `stat` 的语义一字未改：读不到就跳过
  * （正在被轮转删掉那一格），全部读不到才回 null。
  */
-export async function latestPanelLogFile(
-  dir = NEXTJS_LOG_DIR,
-): Promise<string | null> {
+export async function latestPanelLogFile(dir = NEXTJS_LOG_DIR): Promise<string | null> {
   let best: { file: string; mtimeMs: number } | null = null;
   let names: string[];
   try {
@@ -116,10 +114,7 @@ function pruneOldFiles(): void {
   try {
     entries = fs
       .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
-      .filter(
-        (name) =>
-          name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"),
-      )
+      .filter((name) => name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"))
       .flatMap((name) => {
         const file = path.join(NEXTJS_LOG_DIR, name);
         try {
@@ -229,10 +224,7 @@ export function installStreamCapture(): void {
       cb?: (err?: Error | null) => void,
     ): boolean {
       try {
-        const text =
-          typeof chunk === "string"
-            ? chunk
-            : Buffer.from(chunk).toString("utf-8");
+        const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf-8");
         bufferedAppend(filePath, text);
       } catch {
         /* 转录失败不吞掉输出本身 */

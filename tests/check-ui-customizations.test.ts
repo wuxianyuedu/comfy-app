@@ -15,10 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(
-  __dirname,
-  "../scripts/check-ui-customizations.cjs",
-);
+const SCRIPT = path.resolve(__dirname, "../scripts/check-ui-customizations.cjs");
 const DOC = "docs/standards/16-shadcn-ui与表单校验.md";
 
 /** 台账小节（形状与真实文档一致：标题 + 四列表格）。 */
@@ -59,14 +56,18 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(
-        process.execPath,
-        [path.join(root, "scripts", path.basename(SCRIPT))],
-        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-      ),
+      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string; status?: number };
+    const e = /* SAFETY: 类型断言已复核 */ error as {
+      stdout?: string;
+      stderr?: string;
+      status?: number;
+    };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -123,10 +124,7 @@ describe("ui/ 定制标记 ⟺ 台账", () => {
     /* 临时仓库里那份文档的 §16.7 有一行 `not-a-ledger-row.tsx`；这里把它换成
      * 真实存在的文件名，验证门禁不会把别的小节的表格当成台账。 */
     const result = gate({
-      [DOC]: docWithLedger([ledgerRow("button.tsx")]).replace(
-        "not-a-ledger-row.tsx",
-        "button.tsx",
-      ),
+      [DOC]: docWithLedger([ledgerRow("button.tsx")]).replace("not-a-ledger-row.tsx", "button.tsx"),
       "src/components/ui/button.tsx": `${MARKER}\n`,
     });
     expect(result.ok).toBe(true);

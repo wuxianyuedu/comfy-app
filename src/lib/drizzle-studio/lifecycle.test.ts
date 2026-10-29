@@ -26,15 +26,11 @@ vi.mock("child_process", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   spawn: spawnMock,
 }));
-const killProcessTreeMock = vi.hoisted(() =>
-  vi.fn(async () => ({ ok: true, via: "stub" })),
-);
+const killProcessTreeMock = vi.hoisted(() => vi.fn(async () => ({ ok: true, via: "stub" })));
 vi.mock("~/lib/process/kill-process-tree", () => ({
   killProcessTree: killProcessTreeMock,
 }));
-const openUrlMock = vi.hoisted(() =>
-  vi.fn(async () => ({ ok: true, detail: "opened" })),
-);
+const openUrlMock = vi.hoisted(() => vi.fn(async () => ({ ok: true, detail: "opened" })));
 vi.mock("~/lib/shell/open-in-browser", () => ({
   openUrlInBrowser: openUrlMock,
 }));
@@ -162,12 +158,11 @@ describe("openDrizzleStudio — 未运行时不打开空页面", () => {
 describe("退出记录的归属（ISSUE #2435）", () => {
   /** 假子进程：只给到本模块真会碰到的那几样（pid、两条输出流、事件）。 */
   function fakeChild(pid: number) {
-    const child =
-      /* SAFETY: 类型断言已复核 */ new EventEmitter() as EventEmitter & {
-        pid: number;
-        stdout: EventEmitter;
-        stderr: EventEmitter;
-      };
+    const child = /* SAFETY: 类型断言已复核 */ new EventEmitter() as EventEmitter & {
+      pid: number;
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+    };
     child.pid = pid;
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
@@ -176,8 +171,7 @@ describe("退出记录的归属（ISSUE #2435）", () => {
 
   /** 落盘行里「为什么退出」那几行（横幅 + `[exit]`）。写入器带时间戳前缀，
    *  所以按包含取，不按行首取。 */
-  const exitText = () =>
-    logLines.filter((l) => l.includes("■") || l.includes("[exit]")).join("\n");
+  const exitText = () => logLines.filter((l) => l.includes("■") || l.includes("[exit]")).join("\n");
 
   /** 拉起一个「永远没就绪」的 Studio：只为拿到挂好的 child 与 exit 回调。
    *  `timeoutMs: 0` 让等待循环第一轮就收尾，不起真进程也不等 500ms。 */
@@ -225,9 +219,7 @@ describe("退出记录的归属（ISSUE #2435）", () => {
     expect(text).not.toContain("显存");
     expect(text).toContain("drizzle.config.ts");
     // 进 pino 的那句是面板/日志检索的主入口，主语同样不能串
-    expect(seen.join("\n")).toContain(
-      "Drizzle Studio 进程退出：异常退出（exit 1）",
-    );
+    expect(seen.join("\n")).toContain("Drizzle Studio 进程退出：异常退出（exit 1）");
     expect(seen.join("\n")).not.toContain("ComfyUI");
   });
 });

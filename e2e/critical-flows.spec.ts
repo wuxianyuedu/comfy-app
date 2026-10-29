@@ -1,10 +1,4 @@
-import {
-  expect,
-  test,
-  type Locator,
-  type Page,
-  type Route,
-} from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 
 import { LOG_ROW_SINGLE } from "../src/components/studio/logs/log-virtual";
 import { fakeComfyuiBaseUrl } from "./support/fake-comfyui-endpoint.mjs";
@@ -49,12 +43,7 @@ async function stubBackend(page: Page) {
     const url = route.request().url();
     /* 一律回空的 JSON 数组：不卡住、也不冒充数据。 */
     let handled = false;
-    for (const procedure of [
-      "setting.get",
-      "comfyui.status",
-      "workflow.list",
-      "task.list",
-    ]) {
+    for (const procedure of ["setting.get", "comfyui.status", "workflow.list", "task.list"]) {
       if (url.includes(procedure)) handled = true;
     }
     if (!handled) {
@@ -88,9 +77,7 @@ test.describe("登录链路 @critical", () => {
      不是按钮。改的是读法，不是用例锁的那件事。 */
     page.getByRole("radio", { name: "创建账号" }).click();
     await expect(page.getByText("昵称（可选）")).toBeVisible();
-    await expect(page.locator('form button[type="submit"]')).toHaveText(
-      "创建并登录",
-    );
+    await expect(page.locator('form button[type="submit"]')).toHaveText("创建并登录");
 
     await page.getByPlaceholder("name@example.com").fill("e2e@example.com");
     await page.locator('input[type="password"]').fill("e2e-password-123");
@@ -105,9 +92,7 @@ test.describe("登录链路 @critical", () => {
           const url = page.url();
           if (!url.endsWith("/login")) return "navigated";
           const body = await page.locator("body").innerText();
-          return /提交中|加载中|请稍候|创建并登录/.test(body)
-            ? "submitted"
-            : "idle";
+          return /提交中|加载中|请稍候|创建并登录/.test(body) ? "submitted" : "idle";
         },
         {
           timeout: 15_000,
@@ -133,27 +118,19 @@ test.describe("工作区链路 @critical", () => {
      * 标签重复一份，而不是 import 那份常量：e2e 的断言应当只看屏幕上有无这些东西，
      * 拿 React 侧常量当数据源会让「常量与渲染不一致」这种真故障变成用例里的自洽。 */
     for (const label of ["首页", "模型", "历史", "队列", "工作流库"]) {
-      await expect(
-        page.getByRole("button", { name: label, exact: true }).first(),
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: label, exact: true }).first()).toBeVisible();
     }
 
     /* 「工作流库」下面那两项是**应用级浮层入口**（模型适配 / 模式契约）：它们不切视图、
      * 只开弹窗，且与项目无关，所以留在侧栏而不进工坊那个项目内视图。 */
     for (const label of ["模型适配", "模式契约"]) {
-      await expect(
-        page.getByRole("button", { name: label, exact: true }).first(),
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: label, exact: true }).first()).toBeVisible();
     }
 
     /* 画布 / 工坊是项目内页签：没进项目时它们**不在侧栏**，在首页以入口卡出现。
      * 早先这里把这两个名字混进上面那个侧栏循环，于是从导航拆类那天起就一直是红的。 */
-    await expect(
-      page.getByRole("button", { name: /新建画布/ }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /全链路工坊/ }).first(),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /新建画布/ }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /全链路工坊/ }).first()).toBeVisible();
 
     // 最近项目分区存在（空态也要有标题，不能整段消失）
     await expect(page.getByRole("heading", { name: "最近项目" })).toBeVisible();
@@ -166,9 +143,7 @@ test.describe("工作区链路 @critical", () => {
 
     // 工作流库页头标题 + 导入入口（导入是对外可见的主要动作）
     await expect(page.getByRole("heading", { name: "工作流库" })).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /导入工作流/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /导入工作流/ })).toBeVisible();
   });
 
   /**
@@ -200,9 +175,7 @@ test.describe("工作区链路 @critical", () => {
    * 两处负向验证各红在指定断言上：换成默认尺寸报 `宽度塌了：16×16`，
    * 只给宽不给高报 `不是圆：24×16`。
    */
-  test("@critical 工作流库加载态的转圈是真的圆，不是一条竖线", async ({
-    page,
-  }) => {
+  test("@critical 工作流库加载态的转圈是真的圆，不是一条竖线", async ({ page }) => {
     await stubBackend(page);
     /* 把列表查询拖住，制造「加载中」这一刻（它只持续几秒，抓不到就白跑）。 */
     await page.route("**/api/trpc/**", async (route: Route) => {
@@ -246,10 +219,7 @@ test.describe("工作区链路 @critical", () => {
 
     const size = await measure();
     /* 老形态宽 4px / 高 21px；正常形态是 24×24（`size-6`）。 */
-    expect(
-      size.width,
-      `宽度塌了：${size.width}×${size.height}`,
-    ).toBeGreaterThan(16);
+    expect(size.width, `宽度塌了：${size.width}×${size.height}`).toBeGreaterThan(16);
     expect(
       Math.abs(size.width - size.height),
       `不是圆：${size.width}×${size.height}`,
@@ -299,16 +269,12 @@ test.describe("工作区链路 @critical", () => {
         )
         .first(),
     ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByRole("button", { name: /导入工作流/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /导入工作流/ })).toBeVisible();
   });
 });
 
 test.describe("工作流执行链路 @critical", () => {
-  test("@critical 提交执行后界面给出可见进行态而不是只剩等待文案", async ({
-    page,
-  }) => {
+  test("@critical 提交执行后界面给出可见进行态而不是只剩等待文案", async ({ page }) => {
     await stubBackend(page);
     // 执行流：初始排队 → SSE 推终态失败。锁住「失败原因必须可见」。
     await page.route("**/api/tasks/**", async (route: Route) => {
@@ -406,9 +372,7 @@ test.describe("工作台概览 @critical", () => {
        所以它恒绿、什么都没守。现在按可访问名真的点开入口再验面板标题：
        守的是「状态栏那颗入口接得上、面板标题看得见」。 */
     await page.getByRole("button", { name: /^日志面板/ }).click();
-    await expect(
-      page.getByText("应用日志", { exact: true }).first(),
-    ).toBeVisible();
+    await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
   });
 });
 
@@ -432,18 +396,13 @@ test.describe("应用页签与全屏视图 @critical", () => {
    */
   const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
     target.evaluate((el) => {
-      const box = (/* SAFETY: 类型断言已复核 */ el as HTMLElement).getBoundingClientRect();
-      const top = document.elementFromPoint(
-        box.x + box.width / 2,
-        box.y + box.height / 2,
-      );
-      return top !== null && (/* SAFETY: 类型断言已复核 */ el as HTMLElement).contains(top);
+      const box = /* SAFETY: 类型断言已复核 */ (el as HTMLElement).getBoundingClientRect();
+      const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return top !== null && /* SAFETY: 类型断言已复核 */ (el as HTMLElement).contains(top);
     });
 
   async function expectStatusBarNotCovered(page: Page) {
-    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(0);
     const statusbar = page.getByLabel("底部状态栏");
     await expect(statusbar).toBeVisible();
     expect(
@@ -452,9 +411,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
     ).toBe(true);
   }
 
-  test("@critical 打开设置后底部状态栏与视图出路都不被盖住", async ({
-    page,
-  }) => {
+  test("@critical 打开设置后底部状态栏与视图出路都不被盖住", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
     await expectStatusBarNotCovered(page);
@@ -486,9 +443,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 首轮修复只改了「全屏视图」，弹窗类仍是 `fixed inset-0`，于是打开应用日志
    * 后页签与右上角的关闭按钮照样被挡住。这条把弹窗形态钉进 E2E。
    */
-  test("@critical 打开应用日志面板后状态栏与面板关闭出口都不被盖住", async ({
-    page,
-  }) => {
+  test("@critical 打开应用日志面板后状态栏与面板关闭出口都不被盖住", async ({ page }) => {
     await stubBackend(page);
     await page.route("**/api/logs/current**", async (route: Route) => {
       await route.fulfill({
@@ -504,18 +459,15 @@ test.describe("应用页签与全屏视图 @critical", () => {
     // 入口在底部状态栏：纯图标按钮，可访问名由 Hint 的 accessibleName 给出。
     await page.getByRole("button", { name: /^日志面板/ }).click();
     // 面板标题：确认弹窗真的打开了（而不是入口没接上）。
-    await expect(
-      page.getByText("应用日志", { exact: true }).first(),
-    ).toBeVisible();
+    await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
 
     await expectStatusBarNotCovered(page);
     // 面板唯一的可见出路（另有 Esc / Ctrl+Shift+L 两条，用户看不见就等于没有）。
     const close = page.getByRole("button", { name: /^关闭/ }).first();
     await expect(close).toBeVisible();
-    expect(
-      await centerHitsOwnSubtree(close),
-      "日志面板的关闭按钮被面板自己的结构盖住了",
-    ).toBe(true);
+    expect(await centerHitsOwnSubtree(close), "日志面板的关闭按钮被面板自己的结构盖住了").toBe(
+      true,
+    );
   });
 
   /**
@@ -556,8 +508,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
          * 级别按钮上的 warn / error 才有非零样本，「警告黄、错误红」才可断言。 */
         const lines = Array.from({ length: ROWS }, (_, i) => {
           const t = fmt(start + i * 1000);
-          const level =
-            i >= ROWS - 3 ? "[ERROR]" : i >= ROWS - 5 ? "[WARN]" : "[INFO]";
+          const level = i >= ROWS - 3 ? "[ERROR]" : i >= ROWS - 5 ? "[WARN]" : "[INFO]";
           return `[${t}] ${level} [app] 事件 ${i}`;
         });
         await route.fulfill({
@@ -632,17 +583,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
     async function openPanel(page: Page) {
       await page.goto("/workspace");
       await page.getByRole("button", { name: /^日志面板/ }).click();
-      await expect(
-        page.getByText("应用日志", { exact: true }).first(),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "更早的一页" }),
-      ).toBeVisible();
+      await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "更早的一页" })).toBeVisible();
     }
 
-    test("@critical 下拉弹层贴住扳机底边，且候选点得动、来源切得过来", async ({
-      page,
-    }) => {
+    test("@critical 下拉弹层贴住扳机底边，且候选点得动、来源切得过来", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
@@ -714,9 +659,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await expect(trigger).toContainText("应用服务");
     });
 
-    test("@critical 翻页能在历史页之间来回，且页码随内容变化", async ({
-      page,
-    }) => {
+    test("@critical 翻页能在历史页之间来回，且页码随内容变化", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
@@ -744,9 +687,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      * 这里刻意把夹具堆到满页（`LOG_PAGE_SIZE`）：450 行时虚拟化前后都只有几十
      * 行的量级，量不出差异。
      */
-    test("@critical 满页 2000 行只渲染视口内的几十行，且滚动条长度与内容一致", async ({
-      page,
-    }) => {
+    test("@critical 满页 2000 行只渲染视口内的几十行，且滚动条长度与内容一致", async ({ page }) => {
       await stubBackend(page);
       const ROWS = 2000;
       /* 夹具的**时刻锚点必须在路由外取一次**（不能在 handler 里每轮 `Date.now()`）。
@@ -765,8 +706,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
         };
         const lines = Array.from({ length: ROWS }, (_, i) => {
-          const level =
-            i >= ROWS - 3 ? "[ERROR]" : i >= ROWS - 9 ? "[WARN]" : "[INFO]";
+          const level = i >= ROWS - 3 ? "[ERROR]" : i >= ROWS - 9 ? "[WARN]" : "[INFO]";
           return `[${fmt(start + i * 1000)}] ${level} [app] 事件 ${i}`;
         });
         await route.fulfill({
@@ -785,9 +725,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
       /* ① 满页 2000 行，但 DOM 里只有视口内的那几十行。上限取 200（远低于
        * 2000，又给不同视口高度留足余量）：这条断言就是「不会卡」的判据本身。 */
-      await expect
-        .poll(async () => page.locator("[data-log-index]").count())
-        .toBeGreaterThan(0);
+      await expect.poll(async () => page.locator("[data-log-index]").count()).toBeGreaterThan(0);
       const rendered = await page.locator("[data-log-index]").count();
       expect(rendered).toBeLessThan(200);
 
@@ -817,12 +755,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         el.scrollTop = el.scrollHeight;
       });
       await expect
-        .poll(async () =>
-          page
-            .locator("[data-log-index]")
-            .last()
-            .getAttribute("data-log-index"),
-        )
+        .poll(async () => page.locator("[data-log-index]").last().getAttribute("data-log-index"))
         .toBe(String(ROWS - 1));
 
       /* ④ 切页那一刻的耗时：满页 2000 行一次性渲染在真实 Chromium 里是几百
@@ -834,9 +767,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       expect(Date.now() - t0).toBeLessThan(1500);
     });
 
-    test("@critical 框选日志文本后，新日志到达不会把内容滚动走", async ({
-      page,
-    }) => {
+    test("@critical 框选日志文本后，新日志到达不会把内容滚动走", async ({ page }) => {
       await stubBackend(page);
 
       /* 每次轮询都追加一行：模拟「日志到上限了还继续产生新日志」。 */
@@ -844,10 +775,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await page.route("**/api/logs/current**", async (route: Route) => {
         const start = Date.now() - 600_000;
         const lines = Array.from({ length: 40 }, (_, i) => {
-          const t = new Date(start + i * 1000)
-            .toISOString()
-            .replace("T", " ")
-            .replace("Z", "");
+          const t = new Date(start + i * 1000).toISOString().replace("T", " ").replace("Z", "");
           return `[${t}.000] [INFO] [app] 事件 ${i}`;
         });
         round += 1;
@@ -908,9 +836,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       }));
       /* 关键：选区还在（没被刷新冲掉），且滚动位置没有被新日志推走。 */
       expect(after.selected).toBe(before.selected);
-      expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThanOrEqual(
-        1,
-      );
+      expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThanOrEqual(1);
     });
 
     /**
@@ -983,9 +909,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       expect(await popupWidth()).toBe(before);
     });
 
-    test("@critical 行头里类别计数在下拉左侧，下拉贴住右侧操作区", async ({
-      page,
-    }) => {
+    test("@critical 行头里类别计数在下拉左侧，下拉贴住右侧操作区", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
@@ -1025,9 +949,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      *   - 「错误」按钮右边缘到搜索框左边缘的空白 < 48px（老形态这里是上百 px）；
      *   - 每个按钮的 `scrollWidth <= clientWidth`（没有一个字被切掉/省略）。
      */
-    test("@critical 级别筛选占满行头富余宽度，不再挤成窄条也不留大片空白", async ({
-      page,
-    }) => {
+    test("@critical 级别筛选占满行头富余宽度，不再挤成窄条也不留大片空白", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
@@ -1051,9 +973,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       /* 五个按钮等分同一块空间。 */
       expect(maxWidth - minWidth).toBeLessThanOrEqual(2);
       /* 按钮高度也吃满行头（老形态 32.75px 里塞两行文本）。 */
-      expect(Math.max(...boxes.map((b) => b.height))).toBeGreaterThanOrEqual(
-        32,
-      );
+      expect(Math.max(...boxes.map((b) => b.height))).toBeGreaterThanOrEqual(32);
 
       const searchBox = await page.getByPlaceholder(/搜索日志/).boundingBox();
       expect(searchBox).not.toBeNull();
@@ -1075,18 +995,14 @@ test.describe("应用页签与全屏视图 @critical", () => {
      * 这三条都是**布局结果**：jsdom 既不做布局也不实现 `scrollWidth`，
      * 所以判据只能落在真实浏览器上。
      */
-    test("@critical 级别按钮不省略、带级别色，且标题旁不再复述警告/错误", async ({
-      page,
-    }) => {
+    test("@critical 级别按钮不省略、带级别色，且标题旁不再复述警告/错误", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
 
       /* ① 按钮不被裁：内容宽度不超过可视宽度（被切成 `警…` 时 scrollWidth 会反超）。 */
       for (const label of ["全部", "调试", "信息", "警告", "错误"]) {
-        const button = page
-          .getByTitle(new RegExp(`^当前来源的${label}：`))
-          .first();
+        const button = page.getByTitle(new RegExp(`^当前来源的${label}：`)).first();
         const box = await button.boundingBox();
         expect(box).not.toBeNull();
         /* 「两字标签 + 四位数字」的固有宽度在 60px 上下：低于 56px 说明按钮
@@ -1094,7 +1010,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
         expect(box!.width).toBeGreaterThanOrEqual(56);
 
         const overflow = await button.evaluate((el) => {
-          const nodes = /* SAFETY: 类型断言已复核 */ [el, ...Array.from(el.children)] as HTMLElement[];
+          const nodes = /* SAFETY: 类型断言已复核 */ [
+            el,
+            ...Array.from(el.children),
+          ] as HTMLElement[];
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
         for (const px of overflow) expect(px).toBeLessThanOrEqual(1);
@@ -1144,9 +1063,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
       /* ③ 标题旁那块灰底胶囊整块删除（"左侧那两个"就是它复述的两个数）；
        *    行头第一行里只剩标题，不再有第二个计数源。 */
-      expect(
-        await page.locator('span.rounded-full[class*="bg-white/5"]').count(),
-      ).toBe(0);
+      expect(await page.locator('span.rounded-full[class*="bg-white/5"]').count()).toBe(0);
       const headerFirstRow = await page
         .locator("div.flex.min-h-14")
         .first()
@@ -1168,9 +1085,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      * 任何一行落不进分类。这条只能在真实浏览器里量：要读的正是下拉弹层里
      * 四列数字的文本（jsdom 里弹层的过渡/层级行为与真实环境不同）。
      */
-    test("@critical 无文件来源的日志有「控制台 / 全局错误」分类且能筛出来", async ({
-      page,
-    }) => {
+    test("@critical 无文件来源的日志有「控制台 / 全局错误」分类且能筛出来", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
@@ -1217,9 +1132,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
             await consoleOption.evaluate((el) => {
               const nodes = Array.from(el.querySelectorAll(".sr-only"));
               const summary =
-                nodes
-                  .map((n) => n.textContent?.trim() ?? "")
-                  .find((t) => /^\d+ 条/.test(t)) ?? "";
+                nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
               return /^(\d+) 条/.exec(summary)?.[1] ?? "0";
             }),
           ),
@@ -1264,9 +1177,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         optionOf(label).evaluate((el) => {
           const nodes = Array.from(el.querySelectorAll(".sr-only"));
           const summary =
-            nodes
-              .map((n) => n.textContent?.trim() ?? "")
-              .find((t) => /^\d+ 条/.test(t)) ?? "";
+            nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
           const num = (re: RegExp) => Number(re.exec(summary)?.[1] ?? "0");
           return {
             all: num(/^(\d+) 条/),
@@ -1291,9 +1202,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
        *    切过去只剩 1」挡在门外（两者共用 `matchesSearch` + `bucketOf`）。 */
       for (const label of buckets) {
         const c = await levelsOf(label);
-        expect(`${label} ${c.info + c.warn + c.error}`).toBe(
-          `${label} ${c.all}`,
-        );
+        expect(`${label} ${c.info + c.warn + c.error}`).toBe(`${label} ${c.all}`);
       }
       /* ② 时间线口径：「全部来源（按条去重）」= 时间线上的条数。两个数字来自
        *    同一份 `filteredLogs`（下拉读 `countsByOrigin.all`，页脚读
@@ -1315,17 +1224,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
         page.evaluate(() => {
           const num = (text: string | null | undefined, re: RegExp) =>
             re.exec(text ?? "")?.[1] ?? "";
-          const option = Array.from(
-            document.querySelectorAll('[role="option"]'),
-          ).find((el) => el.textContent?.includes("全部来源（按条去重）"));
+          const option = Array.from(document.querySelectorAll('[role="option"]')).find((el) =>
+            el.textContent?.includes("全部来源（按条去重）"),
+          );
           const summary = Array.from(option?.querySelectorAll(".sr-only") ?? [])
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
           /* 页脚那句「… · 面板共保留 N 条」。这个数只在页脚出现一处，直接取
              最内层命中它的节点即可（祖先会连着把整行文本都带进来，正则仍能取到）。 */
-          const footer = Array.from(
-            document.querySelectorAll("span, div, p"),
-          ).find((el) => /面板共保留 \d+ 条/.test(el.textContent ?? ""));
+          const footer = Array.from(document.querySelectorAll("span, div, p")).find((el) =>
+            /面板共保留 \d+ 条/.test(el.textContent ?? ""),
+          );
           return {
             dropdown: num(summary, /^(\d+) 条/),
             footer: num(footer?.textContent, /面板共保留 (\d+) 条/),
@@ -1340,21 +1249,15 @@ test.describe("应用页签与全屏视图 @critical", () => {
         })
         .toBe("equal");
       /* 那批无文件来源的行确实有自己的计数（不是 0，也不只计入「全部来源」）。 */
-      expect(
-        Number(await summaryOf("控制台 / 全局错误")),
-      ).toBeGreaterThanOrEqual(3);
+      expect(Number(await summaryOf("控制台 / 全局错误"))).toBeGreaterThanOrEqual(3);
 
       /* 切过去能看到那批行（切来源会回到第 1 页，窗口重取），且文件来源的行
        * 不在里面。 */
       await consoleOption.click();
       await expect(
-        page
-          .locator("[data-log-text]", { hasText: "e2e 控制台样本 1" })
-          .first(),
+        page.locator("[data-log-text]", { hasText: "e2e 控制台样本 1" }).first(),
       ).toBeVisible();
-      await expect(
-        page.locator("[data-log-text]", { hasText: /事件 / }),
-      ).toHaveCount(0);
+      await expect(page.locator("[data-log-text]", { hasText: /事件 / })).toHaveCount(0);
     });
 
     /**
@@ -1366,10 +1269,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      *      与正常按钮无从区分，命中测试只有浏览器做得了）；
      *   2. 它写进剪贴板的**就是这一行**（带时刻与级别），而不是整页。
      */
-    test("@critical 每条日志末尾的复制按钮能复制到这一行", async ({
-      page,
-      context,
-    }) => {
+    test("@critical 每条日志末尾的复制按钮能复制到这一行", async ({ page, context }) => {
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
       await stubBackend(page);
       await stubLogs(page);
@@ -1424,15 +1324,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
       const devLines = [`[${fmt(now - 15_000)}] [STEP] 启动开发服务`];
 
       await page.route("**/api/logs/current**", async (route: Route) => {
-        const source = new URL(route.request().url()).searchParams.get(
-          "source",
-        );
+        const source = new URL(route.request().url()).searchParams.get("source");
         const lines =
-          source === "launcher"
-            ? launcherLines
-            : source === "dev-launcher"
-              ? devLines
-              : [];
+          source === "launcher" ? launcherLines : source === "dev-launcher" ? devLines : [];
         const content = lines.join("\n") + (lines.length ? "\n" : "");
         await route.fulfill({
           status: 200,
@@ -1451,23 +1345,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
       await page.goto("/workspace");
       await page.getByRole("button", { name: /^日志面板/ }).click();
-      await expect(
-        page.getByText("应用日志", { exact: true }).first(),
-      ).toBeVisible();
+      await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
 
       /* 启动器的早期行必须在面板上（老形态：一行都没有）。 */
-      await expect(
-        page.getByText("=== launcher started ===").first(),
-      ).toBeVisible();
+      await expect(page.getByText("=== launcher started ===").first()).toBeVisible();
       await expect(page.getByText("python=3.12").first()).toBeVisible();
       await expect(page.getByText("[STEP] 启动开发服务").first()).toBeVisible();
 
       /* 切到「启动器」来源也能看到（不是只混在全部来源里）。 */
       await page.getByRole("combobox", { name: "按来源筛选" }).click();
       await page.getByRole("option", { name: /启动器/ }).click();
-      await expect(
-        page.getByText("=== launcher started ===").first(),
-      ).toBeVisible();
+      await expect(page.getByText("=== launcher started ===").first()).toBeVisible();
     });
 
     /**
@@ -1483,9 +1371,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      * 这里在浏览器里喂真实形态的行：断言级别标签被认出来（`INFO` / `ERROR`
      * 不是正文的一部分）、正文里不再残留 `[HH:mm:ss] [LEVEL]` 前缀。
      */
-    test("@critical 启动与启动器两来源的日志行按级别解析 不整行显示原文", async ({
-      page,
-    }) => {
+    test("@critical 启动与启动器两来源的日志行按级别解析 不整行显示原文", async ({ page }) => {
       await stubBackend(page);
 
       const fmt = (t: number) => {
@@ -1510,8 +1396,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
          窗口退化成带完整日期时间戳的写法：本用例要守的是级别解析与正文不残留前缀，
          「同批行两轮读到同一个键」这个不变量在两种写法下都成立。 */
       const devBase = now - 40_000;
-      const crossesMidnight =
-        new Date(devBase).getDate() !== new Date(now).getDate();
+      const crossesMidnight = new Date(devBase).getDate() !== new Date(now).getDate();
       const devStamp = (offsetMs: number) => {
         const t = now - offsetMs;
         return crossesMidnight ? fmt(t) : clock(t);
@@ -1541,11 +1426,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
            `getByText` 直接撞严格模式。 */
         const offset = Number(params.get("offset") ?? "0");
         const lines =
-          source === "dev-launcher"
-            ? devLines
-            : source === "launcher"
-              ? launcherLines
-              : [];
+          source === "dev-launcher" ? devLines : source === "launcher" ? launcherLines : [];
         const full = lines.join("\n") + (lines.length ? "\n" : "");
         /* 前面留 1000 字节当「本会话之前已有的内容」，让尾部窗口那条路也走得到。 */
         const size = 1000 + full.length;
@@ -1565,9 +1446,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
       await page.goto("/workspace");
       await page.getByRole("button", { name: /^日志面板/ }).click();
-      await expect(
-        page.getByText("应用日志", { exact: true }).first(),
-      ).toBeVisible();
+      await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
 
       /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。
          这里只取 `.first()`：面板有两个独立消费者（状态栏的错误计数与面板本体），
@@ -1578,16 +1457,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await expect(page.getByText("预检通过").first()).toBeVisible();
       await expect(page.getByText("检查端口占用").first()).toBeVisible();
       await expect(page.getByText("Job Object 创建成功").first()).toBeVisible();
-      await expect(
-        page.getByText("找不到预编译 Tauri 壳").first(),
-      ).toBeVisible();
+      await expect(page.getByText("找不到预编译 Tauri 壳").first()).toBeVisible();
 
       const body = await page.locator("[data-log-text]").allInnerTexts();
       expect(body.length).toBeGreaterThan(0);
       for (const text of body) {
-        expect(text).not.toMatch(
-          /\[\d{2}:\d{2}:\d{2}\]\s*\[(INFO|STEP|OK|WARN|ERROR|DEBUG)\s*\]/,
-        );
+        expect(text).not.toMatch(/\[\d{2}:\d{2}:\d{2}\]\s*\[(INFO|STEP|OK|WARN|ERROR|DEBUG)\s*\]/);
       }
 
       /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。
@@ -1602,9 +1477,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await page.getByRole("combobox", { name: "按来源筛选" }).click();
       await page.getByRole("option", { name: /^启动 4 / }).click();
       await expect(page.getByText("检查端口占用").first()).toBeVisible();
-      await expect(
-        page.getByText("找不到预编译 Tauri 壳").first(),
-      ).toBeVisible();
+      await expect(page.getByText("找不到预编译 Tauri 壳").first()).toBeVisible();
     });
   });
 
@@ -1650,10 +1523,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * `setting.comfyStatus` —— 三条 `url.includes(...)` 对现在的请求一个都不再命中，
    * 整个桩成了装饰，`comfyOpen` 反而被它的旧信封形状卡住。
    */
-  async function stubComfyTrpc(
-    page: Page,
-    options: { embeddable?: boolean } = {},
-  ) {
+  async function stubComfyTrpc(page: Page, options: { embeddable?: boolean } = {}) {
     const calls = { open: 0 };
     /* 计次与桩**分开挂**：同一个 URL 只能有一个处理器（后注册的先被调用，再挂一条
        会把这条整个遮蔽 —— 实测计数恒 0），而路由位已经被 `stubTrpc` 占了。 */
@@ -1776,9 +1646,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
     /* 浏览器形态不内嵌、也不画假页签栏（判据 `shouldUseBrowserTab`）。
        「壳内页签里渲染 iframe」那条契约在这里量不到，见上面的说明块。 */
     await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
-    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(0);
   });
 
   /* 负向（浏览器形态版）：即使服务端内嵌探测回答「不可嵌」，浏览器形态也**不去看
@@ -1789,10 +1657,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 壳内的正向契约（不可嵌 → 同一个页签内给可读说明、且不弹第二个窗口）在本套件
    * 量不到，归 §11.10.4 的壳冒烟。`blocked` 结论本身怎么产出由
    * `src/lib/comfy/comfy-embed.test.ts` 守着。 */
-  test("@critical 内嵌探测结论不影响浏览器形态：仍走新浏览器页签", async ({
-    page,
-    context,
-  }) => {
+  test("@critical 内嵌探测结论不影响浏览器形态：仍走新浏览器页签", async ({ page, context }) => {
     await stubComfyTrpc(page, { embeddable: false });
     const popupPromise = context.waitForEvent("page", { timeout: 20_000 });
 
@@ -1815,9 +1680,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 浏览器里没法真开一个系统窗口，所以这里断言「动作发出去了」——桩掉该端点
    * 并数调用次数；同时用 popup 计数确认**没有**在应用内另开窗口。
    */
-  test("@critical 在浏览器打开 ComfyUI 动作发出且不切走当前视图", async ({
-    page,
-  }) => {
+  test("@critical 在浏览器打开 ComfyUI 动作发出且不切走当前视图", async ({ page }) => {
     let windowCount = 0;
     page.on("popup", () => {
       windowCount += 1;
@@ -1830,9 +1693,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await openComfyControlPage(page, false);
     /* 停在「ComfyUI」那一页（上面没离开它），基线就是「仍在这一屏」——
        页头那行可见标题按 ISSUE #1693 收掉了，所以认这一屏用的是它唯一的刷新出口。 */
-    await expect(
-      page.getByRole("button", { name: "刷新 ComfyUI 状态" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "刷新 ComfyUI 状态" })).toBeVisible();
 
     await page
       .getByRole("button", { name: /在浏览器打开/ })
@@ -1840,19 +1701,13 @@ test.describe("应用页签与全屏视图 @critical", () => {
       .click();
 
     // 动作确实发出了（服务端有可见出口，不是静默失败）。
-    await expect
-      .poll(() => comfyCalls.open, { timeout: 20_000 })
-      .toBeGreaterThan(0);
+    await expect.poll(() => comfyCalls.open, { timeout: 20_000 }).toBeGreaterThan(0);
     /* 这条出口不与当前视图抢位置：点完还在这屏，且它不在应用内开新页签、
        也不弹浏览器页签（走的是系统默认浏览器那条服务端出口）。
        壳内那条「不新增也不切换应用页签」在这里量不到 —— 浏览器形态本来就没有
        应用内页签栏，归 §11.10.4 壳冒烟。 */
-    await expect(
-      page.getByRole("button", { name: "刷新 ComfyUI 状态" }),
-    ).toBeVisible();
-    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole("button", { name: "刷新 ComfyUI 状态" })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(0);
     expect(windowCount).toBe(0);
   });
 });

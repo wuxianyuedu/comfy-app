@@ -85,11 +85,7 @@ export interface RawCharacter {
 }
 
 export function parseCharacter(text: string): RawCharacter {
-  const obj =
-    /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<
-      string,
-      unknown
-    >) ?? {};
+  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
     appearance: asText(obj.appearance),
@@ -118,11 +114,7 @@ export interface RawCharacterFull extends RawCharacter {
 }
 
 export function parseCharacterFull(text: string): RawCharacterFull {
-  const obj =
-    /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<
-      string,
-      unknown
-    >) ?? {};
+  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
     name: asText(obj.name, "未命名角色"),
@@ -172,10 +164,7 @@ export interface RawShot {
 export function parseStoryboard(text: string): RawShot[] {
   const data = extractJsonArray(text);
   return data.map((datum) => {
-    const obj = /* SAFETY: 类型断言已复核 */ (datum ?? {}) as Record<
-      string,
-      unknown
-    >;
+    const obj = /* SAFETY: 类型断言已复核 */ (datum ?? {}) as Record<string, unknown>;
 
     return {
       shotType: normalizeShotType(obj.shotType),
@@ -183,9 +172,7 @@ export function parseStoryboard(text: string): RawShot[] {
       description: asText(obj.description, ""),
 
       characterNames: Array.isArray(obj.characterNames)
-        ? /* SAFETY: 类型断言已复核 */ (obj.characterNames as unknown[]).map(
-            String,
-          )
+        ? /* SAFETY: 类型断言已复核 */ (obj.characterNames as unknown[]).map(String)
         : [],
     };
   });
@@ -338,10 +325,7 @@ export function buildScriptRevisionMessages(
   const lowScores =
     feedback.lowScores.length > 0
       ? feedback.lowScores
-          .map(
-            (item) =>
-              `- ${item.key}：${item.score} 分${item.note ? `（${item.note}）` : ""}`,
-          )
+          .map((item) => `- ${item.key}：${item.score} 分${item.note ? `（${item.note}）` : ""}`)
           .join("\n")
       : "（本判定未带维度评分）";
   const user = `【项目信息】

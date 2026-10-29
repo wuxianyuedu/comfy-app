@@ -121,10 +121,7 @@ export const LIVENESS_VERIFY_MS = 0;
  * `elapsedInStartingMs` 只在 `starting` 档参与判断（快档 → 慢档的切换点）
  * —— 其它阶段传什么都一样。
  */
-export function livenessIntervalMs(
-  phase: LivenessPhase,
-  elapsedInStartingMs = 0,
-): number {
+export function livenessIntervalMs(phase: LivenessPhase, elapsedInStartingMs = 0): number {
   switch (phase) {
     case "verifying":
       return LIVENESS_VERIFY_MS;

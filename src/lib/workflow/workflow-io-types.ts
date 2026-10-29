@@ -125,10 +125,7 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
  *  入参刻意只要求「带 modeOverrides 字段」这一结构子集，这样派生产物
  *  （WorkflowIOEntry & { ioKey, control } 等）也能直接传进来。 */
 export function isVisibleInMode(
-  entry:
-    | { modeOverrides?: Record<string, WorkflowIOModeOverride> }
-    | undefined
-    | null,
+  entry: { modeOverrides?: Record<string, WorkflowIOModeOverride> } | undefined | null,
   mode?: string | null,
 ): boolean {
   if (!entry || typeof entry !== "object") return true;
@@ -148,10 +145,7 @@ export function isVisibleInMode(
  *
  *  `null` 不算覆盖：它表示不出一个「有意义的默认值」，放行只会把 `null` 下发给
  *  ComfyUI；一律回退图内默认值。 */
-export function resolveEntryDefault(
-  entry: WorkflowIOEntry,
-  mode?: string | null,
-): unknown {
+export function resolveEntryDefault(entry: WorkflowIOEntry, mode?: string | null): unknown {
   if (mode) {
     const modeDefault = entry.modeOverrides?.[mode]?.defaultValue;
     if (modeDefault !== undefined && modeDefault !== null) return modeDefault;
@@ -193,9 +187,7 @@ export function resolveEntrySeedMode(
 }
 
 /** 收集整张 IO 表里出现过的全部模式码（去重、保持稳定顺序）。 */
-export function collectModeCodes(
-  io: WorkflowIOMap | null | undefined,
-): string[] {
+export function collectModeCodes(io: WorkflowIOMap | null | undefined): string[] {
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
     if (!entry || typeof entry !== "object") continue;

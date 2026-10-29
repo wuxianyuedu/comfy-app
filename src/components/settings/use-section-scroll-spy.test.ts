@@ -22,10 +22,7 @@ import { act, renderHook } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  SECTION_ROOT_MARGIN,
-  useSectionScrollSpy,
-} from "./use-section-scroll-spy";
+import { SECTION_ROOT_MARGIN, useSectionScrollSpy } from "./use-section-scroll-spy";
 
 /** 假观察器：只记录「观察了谁、配置是什么」，回调由用例手动投递。 */
 class FakeIntersectionObserver {
@@ -35,10 +32,7 @@ class FakeIntersectionObserver {
   callback: IntersectionObserverCallback;
   disconnected = false;
 
-  constructor(
-    cb: IntersectionObserverCallback,
-    options?: IntersectionObserverInit,
-  ) {
+  constructor(cb: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     this.callback = cb;
     this.options = options;
     FakeIntersectionObserver.last = this;

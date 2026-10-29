@@ -22,10 +22,7 @@ import { AppearanceSection } from "./AppearanceSection";
 afterEach(cleanup);
 
 /** 本分区只消费 `theme` / `setTheme` 两个字段，其余字段与本节无关。 */
-function controller(
-  theme: "light" | "dark",
-  setTheme = vi.fn(),
-): ReadySettingsPageController {
+function controller(theme: "light" | "dark", setTheme = vi.fn()): ReadySettingsPageController {
   return /* SAFETY: 类型断言已复核 */ {
     theme,
     setTheme,
@@ -74,9 +71,7 @@ describe("AppearanceSection 的单选组键盘契约", () => {
 
   it("三组都带可访问名（否则读屏只念出一串 radio）", () => {
     render(<AppearanceSection c={controller("dark")} />);
-    const labels = screen
-      .getAllByRole("radiogroup")
-      .map((g) => g.getAttribute("aria-label"));
+    const labels = screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"));
     expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
   });
 });
@@ -119,9 +114,7 @@ describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
         expect(cls).toContain("data-checked:hover:text-primary");
         expect(cls).toContain("data-checked:hover:border-primary");
         /* 未选中档的悬停也仍在，且**不含**选中档的底色 —— 两档不能互相串。 */
-        expect(tokensOf(radio).has("data-checked:hover:bg-primary-soft")).toBe(
-          true,
-        );
+        expect(tokensOf(radio).has("data-checked:hover:bg-primary-soft")).toBe(true);
       }
     }
   });

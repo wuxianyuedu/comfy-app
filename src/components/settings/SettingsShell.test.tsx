@@ -31,10 +31,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  SETTINGS_SECTIONS,
-  type Section,
-} from "~/app/(main)/settings/hooks/use-settings-page";
+import { SETTINGS_SECTIONS, type Section } from "~/app/(main)/settings/hooks/use-settings-page";
 
 import { SettingsShell, sectionAnchorId } from "./SettingsShell";
 import { SETTINGS_SCROLL_ORDER, TREE_GROUPS } from "./settings-section-summary";
@@ -44,21 +41,12 @@ afterEach(cleanup);
 /** 每个分区一段可辨识的正文（判「全量渲染」时按它找）。 */
 function sectionsStub() {
   return /* SAFETY: 类型断言已复核 */ Object.fromEntries(
-    SETTINGS_SECTIONS.map((item) => [
-      item.id,
-      <p key={item.id}>正文-{item.id}</p>,
-    ]),
+    SETTINGS_SECTIONS.map((item) => [item.id, <p key={item.id}>正文-{item.id}</p>]),
   ) as Record<Section, React.ReactNode>;
 }
 
 function renderShell(section: Section = "llmLocal", onSelect = vi.fn()) {
-  render(
-    <SettingsShell
-      section={section}
-      onSelect={onSelect}
-      sections={sectionsStub()}
-    />,
-  );
+  render(<SettingsShell section={section} onSelect={onSelect} sections={sectionsStub()} />);
   return onSelect;
 }
 
@@ -101,16 +89,14 @@ describe("SettingsShell", () => {
        用户按目录往下读、正文却跳到另一处。`SETTINGS_SCROLL_ORDER` 由
        `TREE_GROUPS` 派生，这一条把它与 `SETTINGS_SECTIONS` 对齐（不漏、不重）。 */
     const expected = SETTINGS_SECTIONS.map((item) => item.id);
-    expect(new Set(SETTINGS_SCROLL_ORDER).size).toBe(
-      SETTINGS_SCROLL_ORDER.length,
-    );
+    expect(new Set(SETTINGS_SCROLL_ORDER).size).toBe(SETTINGS_SCROLL_ORDER.length);
     expect([...SETTINGS_SCROLL_ORDER].sort()).toEqual([...expected].sort());
 
     /* 文档顺序也真的按它排：逐个读 `<section>` 的 id 与派生根比。 */
     renderShell();
-    const domOrder = [
-      ...document.querySelectorAll("section[id^=settings-]"),
-    ].map((el) => el.id.replace(/^settings-/, ""));
+    const domOrder = [...document.querySelectorAll("section[id^=settings-]")].map((el) =>
+      el.id.replace(/^settings-/, ""),
+    );
     expect(domOrder).toEqual([...SETTINGS_SCROLL_ORDER]);
   });
 
@@ -128,17 +114,13 @@ describe("SettingsShell", () => {
     }
     /* 每个分组的子行集合都挂在自己的父行下面（树的行与子行绑成一对，
        §16.2.4.39）—— 数一数 `tree-children` 容器等于分组数。 */
-    expect(nav().querySelectorAll('[data-slot="tree-children"]').length).toBe(
-      groupLabels.length,
-    );
+    expect(nav().querySelectorAll('[data-slot="tree-children"]').length).toBe(groupLabels.length);
   });
 
   it("当前分区恰好一项带 aria-current，点击把分区交给调用方", async () => {
     const onSelect = renderShell("backup");
     const buttons = within(nav()).getAllByRole("button");
-    const current = buttons.filter(
-      (el) => el.getAttribute("aria-current") === "true",
-    );
+    const current = buttons.filter((el) => el.getAttribute("aria-current") === "true");
     expect(current).toHaveLength(1);
     expect(current[0]).toHaveTextContent("备份与恢复");
 
@@ -156,9 +138,7 @@ describe("SettingsShell", () => {
       const node = document.getElementById(sectionAnchorId(item.id));
       expect(node).not.toBeNull();
       /* 标题是这一节里的 `h2`（区块标题档），不带分组名的干扰。 */
-      expect(
-        within(node!).getByRole("heading", { level: 2 }),
-      ).toHaveTextContent(item.label);
+      expect(within(node!).getByRole("heading", { level: 2 })).toHaveTextContent(item.label);
     }
   });
 
@@ -248,13 +228,7 @@ describe("SettingsShell", () => {
   });
 
   it("给 fallback 时不渲染分区列表（三态占位只出现一次）", () => {
-    render(
-      <SettingsShell
-        section="llmLocal"
-        onSelect={vi.fn()}
-        fallback={<p>正在读取设置…</p>}
-      />,
-    );
+    render(<SettingsShell section="llmLocal" onSelect={vi.fn()} fallback={<p>正在读取设置…</p>} />);
     /* 导航仍在（外壳这一层照常渲染），右侧换成整块占位 ——
      * 「铺 9 份同样的占位」正是这一条要挡的形态。 */
     expect(nav()).toBeTruthy();

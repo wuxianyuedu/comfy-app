@@ -55,16 +55,9 @@ vi.mock("~/lib/workshop/mode-contract.server", () => ({
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
-import {
-  llmConfigRepository,
-  remoteModelRepository,
-} from "~/lib/core/repository";
+import { llmConfigRepository, remoteModelRepository } from "~/lib/core/repository";
 import { llmRouter } from "~/server/api/routers/llm";
-import {
-  getTestDb,
-  seedRemoteModel,
-  type TestDb,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedRemoteModel, type TestDb } from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(llmRouter);
@@ -86,15 +79,8 @@ beforeEach(() => {
 describe("configSave —— 写库之前的地址与枚举闸", () => {
   it("baseUrl 走非 http(s) 协议 → BAD_REQUEST，且一个字都不写库", async () => {
     const upsert = vi.spyOn(llmConfigRepository, "upsertSingleton");
-    for (const bad of [
-      "javascript:alert(1)",
-      "file:///etc/passwd",
-      "http://",
-      "not-a-url",
-    ]) {
-      expect(await codeOf(caller().configSave({ baseUrl: bad }))).toBe(
-        "BAD_REQUEST",
-      );
+    for (const bad of ["javascript:alert(1)", "file:///etc/passwd", "http://", "not-a-url"]) {
+      expect(await codeOf(caller().configSave({ baseUrl: bad }))).toBe("BAD_REQUEST");
     }
     expect(upsert).not.toHaveBeenCalled();
     upsert.mockRestore();
@@ -104,14 +90,8 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       .mockResolvedValue(/* SAFETY: 类型断言已复核 */ undefined as never);
-    expect(
-      await codeOf(caller().configSave({ baseUrl: "HTTPS://x.example" })),
-    ).toBe("OK");
-    expect(
-      await codeOf(
-        caller().configSave({ baseUrl: "http://127.0.0.1:11434/v1" }),
-      ),
-    ).toBe("OK");
+    expect(await codeOf(caller().configSave({ baseUrl: "HTTPS://x.example" }))).toBe("OK");
+    expect(await codeOf(caller().configSave({ baseUrl: "http://127.0.0.1:11434/v1" }))).toBe("OK");
     expect(upsert).toHaveBeenCalledTimes(2);
     upsert.mockRestore();
   });
@@ -134,10 +114,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
       .spyOn(llmConfigRepository, "upsertSingleton")
       .mockResolvedValue(/* SAFETY: 类型断言已复核 */ undefined as never);
     await caller().configSave({
-      extraModels: [
-        "llama3",
-        { name: "gpt-x", baseUrl: "https://api.example/v1", apiKey: "k" },
-      ],
+      extraModels: ["llama3", { name: "gpt-x", baseUrl: "https://api.example/v1", apiKey: "k" }],
     });
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({
       extraModels: ["llama3"],
@@ -164,9 +141,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({ extraModels: undefined });
     /* 反向那一半才是这条的落点：库里那行远端模型必须还在。只盯「传了 undefined」
      * 的话，某一层把它折成 `[]` 也照样绿（spy 记账看不到库）。 */
-    expect((await remoteModelRepository.list()).map((r) => r.name)).toEqual([
-      "既有远端",
-    ]);
+    expect((await remoteModelRepository.list()).map((r) => r.name)).toEqual(["既有远端"]);
     upsert.mockRestore();
   });
 
@@ -221,18 +196,14 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
   });
 
   it("契约口合法集合通过并原样交给存储层", async () => {
-    await caller().modeContractsSave(
-      contract(["prompt", "negative", "size", "reference-image-2"]),
-    );
+    await caller().modeContractsSave(contract(["prompt", "negative", "size", "reference-image-2"]));
     expect(contracts.saveModeContracts).toHaveBeenCalledTimes(1);
   });
 
   it("混进适配器侧的输入类型（aspect-ratio）→ BAD_REQUEST 且不落盘", async () => {
-    expect(
-      await codeOf(
-        caller().modeContractsSave(contract(["prompt", "aspect-ratio"])),
-      ),
-    ).toBe("BAD_REQUEST");
+    expect(await codeOf(caller().modeContractsSave(contract(["prompt", "aspect-ratio"])))).toBe(
+      "BAD_REQUEST",
+    );
     expect(contracts.saveModeContracts).not.toHaveBeenCalled();
   });
 

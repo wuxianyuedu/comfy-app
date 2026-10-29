@@ -111,9 +111,7 @@ export function sandboxGitConfig(): Record<string, string> {
 /** 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量、并注入沙箱 git 配置的环境。
  * @param extra 追加的变量（在同名键处最后覆盖）
  * @returns 可直接交给子进程的 `env` */
-export function gitSandboxEnv(
-  extra: Record<string, string | undefined> = {},
-): NodeJS.ProcessEnv {
+export function gitSandboxEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
   for (const key of GIT_INHERITED_ENV_KEYS) delete env[key];
   return withSandboxGitConfig(env);
@@ -132,9 +130,7 @@ export function gitSandboxEnv(
  * @param env 目标环境（会被原地改写）
  * @returns 同一份 `env`，方便链式使用
  */
-export function withSandboxGitConfig(
-  env: NodeJS.ProcessEnv,
-): NodeJS.ProcessEnv {
+export function withSandboxGitConfig(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const injected = sandboxGitConfig();
   const base = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10) || 0;
   let index = base;

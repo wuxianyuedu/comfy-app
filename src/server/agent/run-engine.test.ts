@@ -79,9 +79,7 @@ const reviewScript = vi.hoisted(() =>
     }),
   ),
 );
-const reviseScript = vi.hoisted(() =>
-  vi.fn(async (_u: string, _p: string) => "# 改写后的剧本"),
-);
+const reviseScript = vi.hoisted(() => vi.fn(async (_u: string, _p: string) => "# 改写后的剧本"));
 vi.mock("~/server/agent/review", () => ({
   reviewContent,
   reviewScript,
@@ -176,18 +174,11 @@ describe("advanceRunLoop", () => {
   });
 
   it("角色步：completeLLMStructured 产出写入 characters 后停在角色阶段等确认", async () => {
-    completeLLMStructured.mockResolvedValueOnce([
-      { name: "阿宁", appearance: "短发" },
-    ]);
-    await seed(
-      { scriptMarkdown: "# 剧本" },
-      { status: "running", approvalMode: "stage" },
-    );
+    completeLLMStructured.mockResolvedValueOnce([{ name: "阿宁", appearance: "短发" }]);
+    await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row!.characters as { name: string }[])[0],
-    ).toMatchObject({
+    expect(/* SAFETY: 类型断言已复核 */ (row!.characters as { name: string }[])[0]).toMatchObject({
       name: "阿宁",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");

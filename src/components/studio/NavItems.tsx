@@ -293,9 +293,7 @@ export const NAV_ITEMS: NavItem[] = [
 
 /** 主页侧栏顶部常驻的全局项（排除项目页签与项目入口）。 */
 export function globalNavItems(): NavItem[] {
-  return NAV_ITEMS.filter(
-    (item) => !item.projectScoped && item.id !== PROJECTS_ENTRY.id,
-  );
+  return NAV_ITEMS.filter((item) => !item.projectScoped && item.id !== PROJECTS_ENTRY.id);
 }
 
 /**

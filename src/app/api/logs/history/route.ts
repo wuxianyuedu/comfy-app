@@ -17,10 +17,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const rel = searchParams.get("file") ?? "";
     if (!rel) {
-      return NextResponse.json(
-        { content: "", size: 0, error: "missing file" },
-        { status: 400 },
-      );
+      return NextResponse.json({ content: "", size: 0, error: "missing file" }, { status: 400 });
     }
 
     // 安全校验：只能读取 log/ 目录下的 .log 文件
@@ -44,19 +41,15 @@ export async function GET(request: Request) {
     try {
       content = await fs.promises.readFile(full, "utf8");
     } catch (error) {
-      if (
-        /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code ===
-        "ENOENT"
-      ) {
+      if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") {
         return invalidOrMissing();
       }
       throw error;
     }
     return NextResponse.json({ content, size: content.length });
   } catch (error) {
-    return NextResponse.json(
-      apiErrorBody(error, "读取日志历史失败", { content: "", size: 0 }),
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(error, "读取日志历史失败", { content: "", size: 0 }), {
+      status: 500,
+    });
   }
 }

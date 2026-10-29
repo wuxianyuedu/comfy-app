@@ -53,10 +53,7 @@ import {
   resolveBinEntryByName,
   resolvePackageBinEntry,
 } from "../scripts/package-bin-entry.mjs";
-import {
-  findShellOptions,
-  findShellOptionsIn,
-} from "../scripts/spawn-shell-scan.mjs";
+import { findShellOptions, findShellOptionsIn } from "../scripts/spawn-shell-scan.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -66,11 +63,10 @@ describe("scripts/spawn-shell-scan.mjs", () => {
     // 是肉眼找到的。不进固定清单就等于「发现第三处靠运气」。
     let stdout = "";
     expect(() => {
-      stdout = execFileSync(
-        process.execPath,
-        ["scripts/spawn-shell-scan.mjs"],
-        { cwd: ROOT, encoding: "utf8" },
-      );
+      stdout = execFileSync(process.execPath, ["scripts/spawn-shell-scan.mjs"], {
+        cwd: ROOT,
+        encoding: "utf8",
+      });
     }).not.toThrow();
     expect(stdout).toContain("OK");
   });
@@ -106,7 +102,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
   it("truthy 字符串 shell 也算违例（#2562 盲区：'cmd.exe' / ComSpec 同样开 shell）", () => {
     const cases = [
       "spawn(a, b, { shell: 'cmd.exe' });",
-      'spawn(a, b, { shell: process.env.ComSpec });',
+      "spawn(a, b, { shell: process.env.ComSpec });",
       'spawn(a, b, { shell: "shell" });',
     ];
     for (const src of cases) {
@@ -120,8 +116,8 @@ describe("scripts/spawn-shell-scan.mjs", () => {
       'spawn(a, b, { shell: process.platform === "win32" });',
       "spawnSync(bin, args, { shell: needsShell(cmd) });",
       'execFileSync("git", ["status"], { shell: needsShell(cmd) });',
-      'fork(mod, [a], { shell: true });',
-      'exec(cmd, { shell: requiresShell });',
+      "fork(mod, [a], { shell: true });",
+      "exec(cmd, { shell: requiresShell });",
       'spawn(a, b, { shell: "cmd.exe" });',
       [
         "spawnSync(invocation.command, invocation.args, {",
@@ -139,27 +135,17 @@ describe("scripts/spawn-shell-scan.mjs", () => {
   it("#2562 缺口 2：exec/execSync 天然走 shell —— 只认 child_process 那个绑定", () => {
     // 真 child_process：应判
     expect(
-      findShellOptionsIn(
-        'import { exec } from "node:child_process";\nexec("pnpm install");',
-      ),
+      findShellOptionsIn('import { exec } from "node:child_process";\nexec("pnpm install");'),
     ).toHaveLength(1);
     expect(
-      findShellOptionsIn(
-        'import { execSync } from "node:child_process";\nexecSync("git status");',
-      ),
+      findShellOptionsIn('import { execSync } from "node:child_process";\nexecSync("git status");'),
     ).toHaveLength(1);
     // 局部函数 / 注入端口同名：不判（否则误报教会人加白名单）
-    expect(
-      findShellOptionsIn('const exec = run ?? (() => ({}));\nexec("x");'),
-    ).toEqual([]);
-    expect(findShellOptionsIn("function f({ exec }) { exec(cmd, args); }")).toEqual(
-      [],
-    );
+    expect(findShellOptionsIn('const exec = run ?? (() => ({}));\nexec("x");')).toEqual([]);
+    expect(findShellOptionsIn("function f({ exec }) { exec(cmd, args); }")).toEqual([]);
     // execFile / execFileSync 默认不走 shell：不在这里一棍打死
     expect(
-      findShellOptionsIn(
-        'import { execFile } from "node:child_process";\nexecFile("x", []);',
-      ),
+      findShellOptionsIn('import { execFile } from "node:child_process";\nexecFile("x", []);'),
     ).toEqual([]);
   });
 
@@ -181,9 +167,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
   it("#2513：普通数据对象的同名键不判（哪怕值不是 false）", () => {
     const cases = [
       // #2494 现场那一行的形状：每键读数对象里的字段
-      ["const slot = {", '  key: "k",', "  shell: isUselessShell(abs),", "};"].join(
-        "\n",
-      ),
+      ["const slot = {", '  key: "k",', "  shell: isUselessShell(abs),", "};"].join("\n"),
       // launcher-core/log.mjs 的日志分区表
       'export const LOG_DIRS = { shell: "shell" };',
       // 返回值对象（launcher-core/shell-stage.mjs）
@@ -215,7 +199,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
         path.join(root, "scripts", "violation.mjs"),
         [
           "export function run(bin, args) {",
-          '  return spawn(bin, args, {',
+          "  return spawn(bin, args, {",
           '    stdio: "inherit",',
           "    shell: true,",
           "  });",
@@ -308,9 +292,7 @@ describe("scripts/package-bin-entry.mjs", () => {
 
   it("bin 的两种形状都接得住：字符串与对象", () => {
     expect(binRelativePath("./dist/bin/x.js", "x")).toBe("./dist/bin/x.js");
-    expect(binRelativePath({ typedoc: "bin/typedoc" }, "typedoc")).toBe(
-      "bin/typedoc",
-    );
+    expect(binRelativePath({ typedoc: "bin/typedoc" }, "typedoc")).toBe("bin/typedoc");
     expect(binRelativePath({ typedoc: "bin/typedoc" }, "别的键")).toBeNull();
     expect(binRelativePath(undefined, "x")).toBeNull();
   });
@@ -340,11 +322,7 @@ function withFixture(
   const root = makeFixtureRoot();
   try {
     for (const [rel, content] of Object.entries(files)) {
-      writeFixture(
-        root,
-        rel,
-        typeof content === "function" ? content(root) : content,
-      );
+      writeFixture(root, rel, typeof content === "function" ? content(root) : content);
     }
     fn(root);
   } finally {
@@ -395,12 +373,8 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     /* 「不许混」判到**版本与申报名都不同**这一层 —— 但刻意不钉死具体号
      * （`7.0.2` / `6.0.2` 是当场读数，写进断言就成了会过期的账；升过版本之后这条
      * 仍判「两份是不是两份」，而单子要的就是那一格）。 */
-    expect(a.pkg.version, "两份编译器报同一个版本 —— 混成一份了").not.toBe(
-      b.pkg.version,
-    );
-    expect(a.pkg.name, "两份编译器申报同一个包名 —— 混成一份了").not.toBe(
-      b.pkg.name,
-    );
+    expect(a.pkg.version, "两份编译器报同一个版本 —— 混成一份了").not.toBe(b.pkg.version);
+    expect(a.pkg.name, "两份编译器申报同一个包名 —— 混成一份了").not.toBe(b.pkg.name);
     expect(a.pkg.bin?.tsc, "`.bin/tsc` 那份包的 bin 里没有 tsc 键").toBeTruthy();
     expect(b.pkg.bin?.tsc6, "`.bin/tsc6` 那份包的 bin 里没有 tsc6 键").toBeTruthy();
     expect(a.pkg.bin?.tsc6 ?? null, "两份的键撞了：tsc 那份也有 tsc6").toBeNull();
@@ -411,13 +385,11 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
       ["tsc6", tsc6!],
     ] as const) {
       const { pkgDir, pkg } = pkgJsonOfEntry(entry);
-      expect(path.resolve(pkgDir, pkg.bin![name]!.replace(/^\.\//, ""))).toBe(
-        entry,
-      );
+      expect(path.resolve(pkgDir, pkg.bin![name]!.replace(/^\.\//, ""))).toBe(entry);
     }
   });
 
-  it("危险的那一格：`require.resolve(\"typescript\")` 与 `.bin/tsc` **不是同一份包**", () => {
+  it('危险的那一格：`require.resolve("typescript")` 与 `.bin/tsc` **不是同一份包**', () => {
     /* 这条是本单的全部理由，所以它判的是**关系**而不是路径字符串：
      *   · 按依赖名解析 ⇒ 别名包（`@typescript/typescript6`）；
      *   · 按垫片名字 ⇒ 另一个包（`@typescript/native`），而它自己申报的 `name`
@@ -425,23 +397,17 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
      * 谁在这里补「取 `bin` 的第一个键」当兜底，`tsc` 就安静地跑成了别名包那份 ——
      * 下面那两条 `toBeNull` 就是那个兜底会被写出来的原因。 */
     const requireFromRoot = createRequire(path.join(ROOT, "noop.js"));
-    const byDepName = path.dirname(
-      requireFromRoot.resolve("typescript/package.json"),
-    );
-    const byShimName = path.dirname(
-      path.dirname(resolveBinEntryByName("tsc")!),
-    );
-    expect(byShimName, "`.bin/tsc` 与 `require.resolve(\"typescript\")` 给了同一份包 —— 口径变了，重读 #2572").not.toBe(
-      byDepName,
-    );
+    const byDepName = path.dirname(requireFromRoot.resolve("typescript/package.json"));
+    const byShimName = path.dirname(path.dirname(resolveBinEntryByName("tsc")!));
+    expect(
+      byShimName,
+      '`.bin/tsc` 与 `require.resolve("typescript")` 给了同一份包 —— 口径变了，重读 #2572',
+    ).not.toBe(byDepName);
     const aliasPkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(byDepName, "package.json"), "utf8"),
     ) as { name: string; bin?: Record<string, string> };
     expect(resolvePackageBinEntry("typescript"), "按依赖名居然解析得到").toBeNull();
-    expect(
-      resolvePackageBinEntry("@typescript/native"),
-      "按目录名居然解析得到",
-    ).toBeNull();
+    expect(resolvePackageBinEntry("@typescript/native"), "按目录名居然解析得到").toBeNull();
     /* 「取第一个键」那条兜底会把 tsc 变成 tsc6 —— 判它，是因为它长得像正确答案。 */
     const firstKey = Object.keys(aliasPkg.bin ?? {})[0];
     expect(firstKey).toBe("tsc6");
@@ -488,7 +454,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
          * 把它当目标交出去（第一个带 `%~dp0` 的 token 正是它）—— 判「跳过」就得让它在场。 */
         "node_modules/.bin/node.exe": "",
         [shimRel]:
-          "#!/bin/sh\nexec node elsewhere \"$@\"\n# cmd-shim-target=G:/别的检出/根本不存在/x\n",
+          '#!/bin/sh\nexec node elsewhere "$@"\n# cmd-shim-target=G:/别的检出/根本不存在/x\n',
         "node_modules/.bin/x.cmd": [
           "@SETLOCAL",
           '@IF EXIST "%~dp0\\node.exe" (',
@@ -525,9 +491,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
       {
         [targetRel]: "console.log(1)\n",
         [shimRel]: (root) =>
-          `#!/bin/sh\n  # cmd-shim-target=${path
-            .join(root, targetRel)
-            .replace(/\\/g, "/")}\n`,
+          `#!/bin/sh\n  # cmd-shim-target=${path.join(root, targetRel).replace(/\\/g, "/")}\n`,
       },
       (root) => {
         expect(resolveBinEntryByName("x", { root })).toBeNull();
@@ -543,10 +507,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
 });
 
 describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () => {
-  const run = (
-    argv: string[],
-    cwd = ROOT,
-  ): { status: number; stdout: string; stderr: string } => {
+  const run = (argv: string[], cwd = ROOT): { status: number; stdout: string; stderr: string } => {
     try {
       const stdout = execFileSync(process.execPath, argv, {
         cwd,
@@ -555,7 +516,11 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       });
       return { status: 0, stdout, stderr: "" };
     } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as {
+        status?: number;
+        stdout?: string;
+        stderr?: string;
+      };
       return {
         status: e.status ?? 1,
         stdout: String(e.stdout ?? ""),
@@ -588,13 +553,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       },
       (root) => {
         const args = ["--reporter", "verbose output", "--only-changed"];
-        const r = run([
-          "scripts/ci-run-tool.mjs",
-          "--root",
-          root,
-          "echo",
-          ...args,
-        ]);
+        const r = run(["scripts/ci-run-tool.mjs", "--root", root, "echo", ...args]);
         expect(r.status, r.stderr).toBe(0);
         /* 「逐字」两半都要判：值里带空格被切开 ⇒ 数组对不上；
          * 被拼成一整串再交给 shell ⇒ 更早就红了（子进程收到一个参数）。 */
@@ -613,16 +572,9 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
             .replace(/\\/g, "/")}\n`,
       },
       (root) => {
-        expect(run(["scripts/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(
-          3,
-        );
+        expect(run(["scripts/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(3);
 
-        const notRun = run([
-          "scripts/ci-run-tool.mjs",
-          "--root",
-          root,
-          "这个垫片不在",
-        ]);
+        const notRun = run(["scripts/ci-run-tool.mjs", "--root", root, "这个垫片不在"]);
         expect(notRun.status, "解析不到却退 0/1 —— 会被读成「跑过了且红」").toBe(2);
         /* 红了要指路：给得出自查入口，不然下一个人只能去猜是哪一层没解析到。 */
         expect(notRun.stderr).toContain("--by-name");
@@ -644,9 +596,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       /* 注释行是说明，不是命令 —— 本文件里正当地写着「别再写 `node_modules/.bin/…`」
        * 那一句；把它判成违例就是罚正在教人别这么写的那行（同 `stripComments` 的理由）。 */
       .filter((l) => !/^\s*#/.test(l));
-    const offenders = commandLines.filter((l) =>
-      /node_modules[\\/]\.bin[\\/]/.test(l),
-    );
+    const offenders = commandLines.filter((l) => /node_modules[\\/]\.bin[\\/]/.test(l));
     expect(offenders, "清单里又出现了直接起垫片的写法").toEqual([]);
     /* 反向：那两格确实用了新入口（只判「没有旧写法」的话，删掉两格也能绿）。 */
     const joined = commandLines.join("\n");

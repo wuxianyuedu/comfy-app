@@ -94,9 +94,7 @@ describe("resolveComfyLaunchPlan", () => {
     expect(plan).not.toHaveProperty("error");
     if ("error" in plan) return;
     // .venv 排在 standalone-env 之前（vendor 构建的 torch 在 .venv 里）
-    expect(plan.cmd).toBe(
-      path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
-    );
+    expect(plan.cmd).toBe(path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"));
   });
 
   it("桌面版 Desktop 实例（.comfyui-desktop-2 标记）：standalone-env 优先于 .venv", () => {
@@ -138,9 +136,7 @@ describe("resolveComfyLaunchPlan", () => {
 
     expect(plan).not.toHaveProperty("error");
     if ("error" in plan) return;
-    expect(plan.cmd).toBe(
-      path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
-    );
+    expect(plan.cmd).toBe(path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"));
     expect(plan.hasDeps).toBe(true);
   });
 
@@ -230,27 +226,18 @@ describe("resolveComfyLaunchPlan", () => {
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     // 选中带 torch 的 .venv（依赖判据认 POSIX 的 lib/python3.x/site-packages）
-    expect(
-      /* SAFETY: 类型断言已复核 */ (plan as { cmd: string; hasDeps?: boolean })
-        .cmd,
-    ).toBe(path.join(envRoot, "bin", "python3"));
-    expect(
-      /* SAFETY: 类型断言已复核 */ (plan as { hasDeps?: boolean }).hasDeps,
-    ).toBe(true);
+    expect(/* SAFETY: 类型断言已复核 */ (plan as { cmd: string; hasDeps?: boolean }).cmd).toBe(
+      path.join(envRoot, "bin", "python3"),
+    );
+    expect(/* SAFETY: 类型断言已复核 */ (plan as { hasDeps?: boolean }).hasDeps).toBe(true);
   });
 
   it("Linux venv 无 torch：仍返回解释器，但 hasDeps=false（交由调用方提示装依赖）", () => {
     const root = path.resolve("/srv/ComfyUI-nodeps");
     const envRoot = path.join(root, ".venv");
-    const fsSet = fakeFs(
-      root,
-      path.join(root, "main.py"),
-      path.join(envRoot, "bin", "python"),
-    );
+    const fsSet = fakeFs(root, path.join(root, "main.py"), path.join(envRoot, "bin", "python"));
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     expect(plan).not.toHaveProperty("error");
-    expect(
-      /* SAFETY: 类型断言已复核 */ (plan as { hasDeps?: boolean }).hasDeps,
-    ).toBe(false);
+    expect(/* SAFETY: 类型断言已复核 */ (plan as { hasDeps?: boolean }).hasDeps).toBe(false);
   });
 });

@@ -82,9 +82,7 @@ describe("允许写脏的名单", () => {
     const prefixes = writerPrefixes();
     for (const duty of AUTOFIX_DUTIES) {
       for (const out of duty.outputs ?? []) {
-        expect(prefixes, `${duty.stage} 的 ${out} 不在派生名单里`).toContain(
-          out,
-        );
+        expect(prefixes, `${duty.stage} 的 ${out} 不在派生名单里`).toContain(out);
       }
     }
   });
@@ -114,9 +112,7 @@ describe("允许写脏的名单", () => {
     ).toBe(false);
     expect(underWriter(".storybook/preview.ts", prefixes)).toBe(false);
     /* 生成物档的既有前缀不受影响。 */
-    expect(underWriter("docs/generated/launch-and-build.md", prefixes)).toBe(
-      true,
-    );
+    expect(underWriter("docs/generated/launch-and-build.md", prefixes)).toBe(true);
   });
 
   it("登记名单为空 ⇒ 任何 tracked 改动都是名单外（不许「名单没配 ⇒ 一律放行」）", () => {
@@ -152,9 +148,7 @@ describe("三格的判定与档位", () => {
     const sha = "a".repeat(40);
     const other = "b".repeat(40);
     const shape = { parents: [sha, "c".repeat(40)], tree: "d".repeat(40) };
-    expect(provenanceVerdict({ ...base, declared: sha, head: sha }).red).toBe(
-      false,
-    );
+    expect(provenanceVerdict({ ...base, declared: sha, head: sha }).red).toBe(false);
     const merged = provenanceVerdict({
       ...base,
       declared: sha,
@@ -183,9 +177,7 @@ describe("三格的判定与档位", () => {
       head: other,
       contains: null,
     });
-    expect(unknownRelation.red, "拿不到祖先关系就判红 = 把缺测量当结论").toBe(
-      false,
-    );
+    expect(unknownRelation.red, "拿不到祖先关系就判红 = 把缺测量当结论").toBe(false);
     expect(unknownRelation.lines.join("\n")).toContain("出处·未校验");
   });
 
@@ -197,9 +189,7 @@ describe("三格的判定与档位", () => {
         declared,
         head: sha,
       });
-      expect(unknown.red, `拿不到声明时不许判红（${String(declared)}）`).toBe(
-        false,
-      );
+      expect(unknown.red, `拿不到声明时不许判红（${String(declared)}）`).toBe(false);
       expect(unknown.lines.join("\n")).toContain("出处·未校验");
     }
   });
@@ -245,17 +235,7 @@ describe("三格的判定与档位", () => {
       ...base,
       declared: null,
       head: null,
-      untracked: [
-        "leftover.tmp",
-        "src/scratch.ts",
-        "a",
-        "b",
-        "c",
-        "d",
-        "e",
-        "f",
-        "g",
-      ],
+      untracked: ["leftover.tmp", "src/scratch.ts", "a", "b", "c", "d", "e", "f", "g"],
     });
     expect(got.red).toBe(false);
     const text = got.lines.join("\n");
@@ -268,10 +248,7 @@ describe("三格的判定与档位", () => {
     /* 键名换了会当场发现（这条原来就在）；顺序是新增的那半 —— PR 事件上 HEAD 等于 merge
      * 面而不是源 head 面，把它排到后面就等于回到那两跑的红（假红会教会所有人绕过这一档，
      * 见 §13.5.3.4.2 与本文件那段注释）。 */
-    expect(DECLARED_SHA_ENVS).toEqual([
-      "CNB_PULL_REQUEST_MERGE_SHA",
-      "CNB_COMMIT",
-    ]);
+    expect(DECLARED_SHA_ENVS).toEqual(["CNB_PULL_REQUEST_MERGE_SHA", "CNB_COMMIT"]);
   });
 });
 
@@ -280,9 +257,7 @@ describe("出口", () => {
     const dir = tmpLedgerDir();
     const sha = "c".repeat(40);
     const run = (cmd: string, args: string[]) =>
-      cmd === "git" && args[0] === "rev-parse"
-        ? { ok: true, out: sha }
-        : { ok: false, out: "" };
+      cmd === "git" && args[0] === "rev-parse" ? { ok: true, out: sha } : { ok: false, out: "" };
     const spawnOk = (stdout: string) => () => ({ status: 0, stdout });
 
     expect(
@@ -333,22 +308,19 @@ describe("出口", () => {
     const dir = tmpLedgerDir();
     const declared = "a".repeat(40);
     const head = "b".repeat(40);
-    const face =
-      (verifyOk: boolean, ancestorOk: boolean) =>
-      (cmd: string, args: string[]) => {
-        if (cmd !== "git") return { ok: false, out: "" };
-        if (args[0] === "rev-parse" && args[1] === "HEAD")
-          return { ok: true, out: head };
-        if (args[0] === "rev-parse" && args[1] === "--verify")
-          return { ok: verifyOk, out: verifyOk ? declared : "" };
-        if (args[0] === "merge-base")
-          return {
-            ok: ancestorOk,
-            out: ancestorOk ? "" : "fatal: Not a valid object name",
-          };
-        if (args[0] === "log") return { ok: true, out: declared };
-        return { ok: false, out: "" };
-      };
+    const face = (verifyOk: boolean, ancestorOk: boolean) => (cmd: string, args: string[]) => {
+      if (cmd !== "git") return { ok: false, out: "" };
+      if (args[0] === "rev-parse" && args[1] === "HEAD") return { ok: true, out: head };
+      if (args[0] === "rev-parse" && args[1] === "--verify")
+        return { ok: verifyOk, out: verifyOk ? declared : "" };
+      if (args[0] === "merge-base")
+        return {
+          ok: ancestorOk,
+          out: ancestorOk ? "" : "fatal: Not a valid object name",
+        };
+      if (args[0] === "log") return { ok: true, out: declared };
+      return { ok: false, out: "" };
+    };
     const call = (verifyOk: boolean, ancestorOk: boolean) =>
       main({
         cwd: path.sep,
@@ -404,7 +376,9 @@ describe("出口", () => {
     const file = path.join(dir, "comfyapp-ci-workspace-provenance.json");
     /* `JSON.parse` 回 `any` —— 直接取用会让后面三行都挂在 any 上（eslint 三条 unsafe 就
      * 落在这）。按本档真正断言的那三格收成有类型的账目，注入面与读出面从此同一个形状。 */
-    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(fs.readFileSync(file, "utf8")) as unknown[];
+    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      fs.readFileSync(file, "utf8"),
+    ) as unknown[];
     expect(Array.isArray(ledger)).toBe(true);
     expect(ledger.length).toBe(2);
     expect(ledger[0]).toMatchObject({ red: false, offenders: 0, untracked: 1 });

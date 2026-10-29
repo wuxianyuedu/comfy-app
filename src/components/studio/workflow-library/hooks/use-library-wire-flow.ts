@@ -20,18 +20,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  type Connection,
-  type Edge,
-  type Node,
-  type OnConnectEnd,
-} from "@xyflow/react";
+import { type Connection, type Edge, type Node, type OnConnectEnd } from "@xyflow/react";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
-import {
-  pinAcceptsEntry,
-  type ParamEntry,
-} from "~/lib/workflow/workflow-param-mapping";
+import { pinAcceptsEntry, type ParamEntry } from "~/lib/workflow/workflow-param-mapping";
 import {
   LIBRARY_EDGE_STYLE,
   LIB_NODE_BACKDROP,
@@ -181,13 +173,7 @@ export function useLibraryWireFlow({
    *  节点集合仍是固定的（三列布局，见 `defaultNodes` 的说明）：节点内部是整张
    *  表单，逐帧重建代价高；边只是几条线，重建无妨。 */
   const defaultEdges = useMemo(
-    () =>
-      deriveLibraryEdges(
-        paramCards.wires,
-        outputWires,
-        !!canWire,
-        selectedEdgeIds,
-      ),
+    () => deriveLibraryEdges(paramCards.wires, outputWires, !!canWire, selectedEdgeIds),
     [paramCards.wires, outputWires, canWire, selectedEdgeIds],
   );
 
@@ -372,11 +358,7 @@ export function buildLibraryNodes(
     },
     contentNode(LIB_NODE_PARAMS, LIB_NODE_TYPES.libParams, sizing.paramsWidth),
     contentNode(LIB_NODE_HOST, LIB_NODE_TYPES.libHost, sizing.hostWidth),
-    contentNode(
-      LIB_NODE_OUTPUTS,
-      LIB_NODE_TYPES.libOutputs,
-      sizing.outputsWidth,
-    ),
+    contentNode(LIB_NODE_OUTPUTS, LIB_NODE_TYPES.libOutputs, sizing.outputsWidth),
   ];
 }
 
@@ -473,10 +455,7 @@ export function libraryConnectionRefusal(
 }
 
 /** `onConnectEnd` 交回来的两端（只取还原连接需要的字段）。 */
-type DropHandle =
-  | { id?: string | null; nodeId?: string; type?: string }
-  | null
-  | undefined;
+type DropHandle = { id?: string | null; nodeId?: string; type?: string } | null | undefined;
 
 /** 从松手现场还原这次连接的形状（`null` = 有一端没落在端点上）。
  *
@@ -539,10 +518,7 @@ export function deriveLibraryEdges(
  *  端口名反查条目。查不到（端口已从 IO 移除 / 过期快照）时拒绝连线。 */
 /** handle id 就是**条目 id**：一个口一颗点（见 `paramOutputPorts`），条目 id 在
  *  同一个画布节点内天然唯一（尺寸卡的六行各是子口 id，普通卡就是契约口 id）。 */
-function entryForHandle(
-  entries: readonly ParamEntry[],
-  handleId: string,
-): ParamEntry | null {
+function entryForHandle(entries: readonly ParamEntry[], handleId: string): ParamEntry | null {
   return entries.find((item) => item.id === handleId) ?? null;
 }
 
@@ -552,11 +528,7 @@ function entryForHandle(
  *  某一条线时不必用卡片头 ↺ 把整张卡（尺寸卡是六条形态线）一起清掉 —— 点这条线、
  *  按 Delete 即可只断这一条（断开的就是它对应的那个 entryId）。只读（无模式 /
  *  无落库回调）时不可交互，避免误删。 */
-export function buildInputEdge(
-  wire: ParamCardWire,
-  interactive: boolean,
-  selected = false,
-): Edge {
+export function buildInputEdge(wire: ParamCardWire, interactive: boolean, selected = false): Edge {
   return {
     id: libraryEdgeId("param", wire.entryId, wire.handleId),
     source: LIB_NODE_PARAMS,
@@ -576,11 +548,7 @@ export function buildInputEdge(
 }
 
 /** 输出侧一条边：宿主卡片的输出行圆点 → 右列卡片圆点。 */
-export function buildOutputEdge(
-  wire: ParamCardWire,
-  interactive: boolean,
-  selected = false,
-): Edge {
+export function buildOutputEdge(wire: ParamCardWire, interactive: boolean, selected = false): Edge {
   return {
     id: libraryEdgeId("output", wire.entryId, wire.handleId),
     source: LIB_NODE_HOST,

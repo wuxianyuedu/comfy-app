@@ -29,15 +29,11 @@ export type TerminalTaskStatus = (typeof TERMINAL_TASK_STATUSES)[number];
 export function isTerminalTaskStatus(
   status: string | null | undefined,
 ): status is TerminalTaskStatus {
-  return (
-    status === "SUCCEEDED" || status === "FAILED" || status === "CANCELLED"
-  );
+  return status === "SUCCEEDED" || status === "FAILED" || status === "CANCELLED";
 }
 
 /** 该状态是否「终态失败」（终态且非成功）：失败原因在这里才有意义。 */
-export function isTerminalFailureTaskStatus(
-  status: string | null | undefined,
-): boolean {
+export function isTerminalFailureTaskStatus(status: string | null | undefined): boolean {
   return status === "FAILED" || status === "CANCELLED";
 }
 
@@ -69,8 +65,6 @@ export function taskStatusLabel(status: string | null | undefined): string {
   if (status === null || status === undefined || status === "") return "未知";
   const known: readonly string[] = Object.keys(TASK_STATUS_LABELS);
   return known.includes(status)
-    ? TASK_STATUS_LABELS[
-        /* SAFETY: 类型断言已复核 */ status as keyof typeof TASK_STATUS_LABELS
-      ]
+    ? TASK_STATUS_LABELS[/* SAFETY: 类型断言已复核 */ status as keyof typeof TASK_STATUS_LABELS]
     : status;
 }

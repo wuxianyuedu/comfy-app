@@ -26,9 +26,7 @@ vi.mock("./launch-path", () => ({
   }),
 }));
 vi.mock("./proc-detect", () => ({
-  findPidForMainPyDetailed: vi
-    .fn()
-    .mockResolvedValue({ pid: null, failed: false }),
+  findPidForMainPyDetailed: vi.fn().mockResolvedValue({ pid: null, failed: false }),
   findPidListeningPort: vi.fn().mockResolvedValue(null),
 }));
 /* runEnsureLaunch 的端口冲突用例需要封闭的探测面：./probe（快照的端口探测）、
@@ -69,10 +67,7 @@ vi.mock("./lifecycle-exit", async (importOriginal) => {
   return { ...actual, startComfyExitWatcher: vi.fn(() => ({ stop: vi.fn() })) };
 });
 
-import {
-  getExitPolicy,
-  getSettingsSync,
-} from "../app-settings/app-settings.server";
+import { getExitPolicy, getSettingsSync } from "../app-settings/app-settings.server";
 
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 
@@ -210,9 +205,7 @@ describe("pruneKeepAliveLogs —— 按次命名的保活日志只建不删会�
 
   function keepAliveFiles(): string[] {
     if (!fs.existsSync(SERVICES_LOG_DIR)) return [];
-    return fs
-      .readdirSync(SERVICES_LOG_DIR)
-      .filter((name) => name.startsWith("comfyui-keepalive-"));
+    return fs.readdirSync(SERVICES_LOG_DIR).filter((name) => name.startsWith("comfyui-keepalive-"));
   }
 
   beforeEach(() => {
@@ -263,8 +256,7 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     // 现场原文：新进程绑 8188 失败当场退出，这行落在保活重定向 err 文件里。
     fs.writeFileSync(
       path.join(SERVICES_LOG_DIR, "comfyui-keepalive-stamp.err.log"),
-      "[INFO] Starting server\n" +
-        "[ERROR] Port 8188 is already in use on address 127.0.0.1.\n",
+      "[INFO] Starting server\n" + "[ERROR] Port 8188 is already in use on address 127.0.0.1.\n",
     );
     const { spawnManaged } = await import("~/lib/process/process-launch");
     // spawnManaged 是同步返回（keepAlive 下 child 是中介进程句柄）
@@ -296,10 +288,7 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
       localTimestamp: () => "stamp",
       markSessionStart: vi.fn(),
       markSessionEnd: vi.fn(),
-      probeComfyUi: vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValue("http://127.0.0.1:8188"),
+      probeComfyUi: vi.fn().mockResolvedValueOnce(null).mockResolvedValue("http://127.0.0.1:8188"),
     };
 
     const r = await runEnsureLaunch({

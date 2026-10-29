@@ -50,10 +50,7 @@ describe("schemaSyncNotice", () => {
   });
 
   it("missing / stale 给出口而不是安慰（规范 §9.2 第 3 条）", () => {
-    for (const phase of /* SAFETY: 类型断言已复核 */ [
-      "missing",
-      "stale",
-    ] as const) {
+    for (const phase of /* SAFETY: 类型断言已复核 */ ["missing", "stale"] as const) {
       const n = notice(phase);
       expect(n?.tone).toBe("error");
       expect(n?.refreshable).toBe(false);
@@ -63,25 +60,17 @@ describe("schemaSyncNotice", () => {
   });
 
   it("本机有执行件（canPush）→ 给「立即同步」按钮，文案不再复述命令", () => {
-    for (const phase of /* SAFETY: 类型断言已复核 */ [
-      "missing",
-      "stale",
-    ] as const) {
+    for (const phase of /* SAFETY: 类型断言已复核 */ ["missing", "stale"] as const) {
       const n = notice(phase, null, true);
       expect(n?.actionable).toBe(true);
       expect(n?.text).not.toContain("pnpm db:push");
       /* 按钮文案仍然要能说清「哪一档」（用户在弹窗里要读到原因）。 */
-      expect(n?.text).toBe(
-        phase === "missing" ? "数据库表还没建" : "数据库结构过期",
-      );
+      expect(n?.text).toBe(phase === "missing" ? "数据库表还没建" : "数据库结构过期");
     }
   });
 
   it("没有执行件（桌包）→ 回落成「跑 pnpm db:push」的纯提示，不给死按钮", () => {
-    for (const phase of /* SAFETY: 类型断言已复核 */ [
-      "missing",
-      "stale",
-    ] as const) {
+    for (const phase of /* SAFETY: 类型断言已复核 */ ["missing", "stale"] as const) {
       const n = notice(phase, null, false);
       expect(n?.actionable).toBe(false);
       expect(n?.text).toContain("pnpm db:push");
@@ -89,8 +78,6 @@ describe("schemaSyncNotice", () => {
   });
 
   it("原因透进 tooltip（否则用户只知道「不一致」、不知道哪条语句）", () => {
-    expect(notice("stale", "含「会丢数据」的语句 2 条")?.title).toContain(
-      "会丢数据",
-    );
+    expect(notice("stale", "含「会丢数据」的语句 2 条")?.title).toContain("会丢数据");
   });
 });

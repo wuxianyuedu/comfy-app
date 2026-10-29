@@ -66,9 +66,7 @@ export function deriveStaleStoreNotification(
 ): StaleStoreNotification | null {
   if (!input.codeUpdatedSinceLoad || input.reason === null) return null;
 
-  const steps = STALE_STORE_RELOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join(
-    "\n",
-  );
+  const steps = STALE_STORE_RELOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const body = [
     "应用在运行期间拉取到了新代码，但当前页面还停留在改动之前的模块上，",
     "所以刚新增的部分能力在旧组件实例上不存在（表现为某个功能静默失效，",

@@ -8,23 +8,14 @@
  * 规范：docs/standards/13-提交与-code-review.md §13.10.5
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { copyGateDeps } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(
-  __dirname,
-  "../scripts/check-changelog-fragments.cjs",
-);
+const SCRIPT = path.resolve(__dirname, "../scripts/check-changelog-fragments.cjs");
 const tempDirs: string[] = [];
 
 /**
@@ -64,15 +55,13 @@ function scanner(files: Record<string, string>) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 describe("check-changelog-fragments", () => {
   it("放过形态正确的碎片", () => {
     const { run } = scanner({
-      "changelog.d/408-changelog-conflict-free.md":
-        "## Changed\n\n- 条目正文。\n",
+      "changelog.d/408-changelog-conflict-free.md": "## Changed\n\n- 条目正文。\n",
       "changelog.d/0-no-issue-fragment.md": "## Fixed\n\n- 条目正文。\n",
     });
     const res = run();

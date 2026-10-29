@@ -69,12 +69,7 @@ export interface UseHotkeyOptions {
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable
-  );
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
 /**
@@ -90,11 +85,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * 折成 `ctrl`。这条是这次收口的核心 —— 收口前所有 Ctrl 组合键在 mac 上都是
  * 死的，因为没人写 `metaKey`。
  */
-export function matchesHotkey(
-  event: KeyboardEvent,
-  spec: HotkeySpec,
-  isMac: boolean,
-): boolean {
+export function matchesHotkey(event: KeyboardEvent, spec: HotkeySpec, isMac: boolean): boolean {
   if (event.key.toLowerCase() !== spec.key.toLowerCase()) return false;
 
   /* 目标修饰键集合：`mod` 只是「当前平台那一个」的简写。 */
@@ -126,12 +117,7 @@ function detectMac(): boolean {
 export function useHotkey(
   spec: HotkeySpec,
   handler: () => void,
-  {
-    enabled = true,
-    filterInput = true,
-    preventDefault = true,
-    target,
-  }: UseHotkeyOptions = {},
+  { enabled = true, filterInput = true, preventDefault = true, target }: UseHotkeyOptions = {},
 ): void {
   /* handler 放 ref：传新函数不该重建监听（同 `useInterval` 的口径）。 */
   const handlerRef = useRef(handler);
@@ -143,37 +129,18 @@ export function useHotkey(
 
   useEffect(() => {
     if (!enabled) return;
-    const host: Window | Document =
-      target ?? (typeof window !== "undefined" ? window : document);
+    const host: Window | Document = target ?? (typeof window !== "undefined" ? window : document);
     const isMac = detectMac();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (filterInput && isEditableTarget(event.target)) return;
-      if (!matchesHotkey(event, { key, mod, ctrl, meta, shift, alt }, isMac))
-        return;
+      if (!matchesHotkey(event, { key, mod, ctrl, meta, shift, alt }, isMac)) return;
       if (preventDefault) event.preventDefault();
       handlerRef.current();
     };
 
-    host.addEventListener(
-      "keydown",
-      /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener,
-    );
+    host.addEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
     return () =>
-      host.removeEventListener(
-        "keydown",
-        /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener,
-      );
-  }, [
-    enabled,
-    filterInput,
-    preventDefault,
-    target,
-    key,
-    mod,
-    ctrl,
-    meta,
-    shift,
-    alt,
-  ]);
+      host.removeEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
+  }, [enabled, filterInput, preventDefault, target, key, mod, ctrl, meta, shift, alt]);
 }

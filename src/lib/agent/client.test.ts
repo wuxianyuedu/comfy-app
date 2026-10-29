@@ -29,9 +29,7 @@ describe("sendAgentMessage", () => {
         new Response(
           JSON.stringify({
             reply: "好的",
-            tool_calls: [
-              { id: "c1", name: "generate_script", arguments: '{"idea":"x"}' },
-            ],
+            tool_calls: [{ id: "c1", name: "generate_script", arguments: '{"idea":"x"}' }],
             done: true,
             fallback_instruction: { action: "get_project_state" },
           }),
@@ -126,10 +124,7 @@ describe("sendAgentMessage", () => {
   });
 
   it("非 2xx 但信封缺 message / 不是对象 → 统一回退文案（不抛 undefined）", async () => {
-    mockFetch(
-      () =>
-        new Response(JSON.stringify({ error: { code: "x" } }), { status: 500 }),
-    );
+    mockFetch(() => new Response(JSON.stringify({ error: { code: "x" } }), { status: 500 }));
     await expect(sendAgentMessage(REQ)).rejects.toThrow("请求失败");
 
     mockFetch(() => new Response("plain text error", { status: 500 }));
@@ -151,16 +146,13 @@ describe("sendAgentMessage", () => {
     const seen: { url: string; init?: RequestInit } = { url: "" };
     mockFetch(() => new Response("{}", { status: 200 }));
     vi.mocked(fetch).mockImplementation((url: string | URL | Request, init) => {
-      seen.url =
-        typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+      seen.url = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
       seen.init = init;
       return Promise.resolve(new Response("{}", { status: 200 }));
     });
     await sendAgentMessage(REQ);
     expect(seen.url).toBe("/api/agent/chat");
     expect(seen.init?.method).toBe("POST");
-    expect(
-      JSON.parse(/* SAFETY: 类型断言已复核 */ seen.init?.body as string),
-    ).toEqual(REQ);
+    expect(JSON.parse(/* SAFETY: 类型断言已复核 */ seen.init?.body as string)).toEqual(REQ);
   });
 });

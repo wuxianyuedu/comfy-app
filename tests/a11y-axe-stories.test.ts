@@ -56,12 +56,7 @@
  * 新增违规 ⇒ 红；修掉了却还留着登记 ⇒ 也红。
  */
 import { cleanup, render } from "@testing-library/react";
-import {
-  createElement,
-  type ComponentType,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { createElement, type ComponentType, type ReactElement, type ReactNode } from "react";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 import KNOWN from "../scripts/.a11y-axe-known.json";
@@ -153,10 +148,7 @@ function reasonOf(error: unknown): string {
     ?.split("\n")
     .map((l) => l.replace(/\\/g, "/"))
     .find((l) => l.includes("src/components/ui/"));
-  return (frame ? `${error.message} ← ${frame.trim()}` : error.message).slice(
-    0,
-    200,
-  );
+  return (frame ? `${error.message} ← ${frame.trim()}` : error.message).slice(0, 200);
 }
 
 /** 一份逐字可粘的清单（判红时必须打印它 —— 红话要给得出下一步）。 */
@@ -170,9 +162,7 @@ function asLedger(findings: Finding[], unrenderable: string[]): string {
   return JSON.stringify(
     {
       violations: [...byPair.values()]
-        .sort((a, b) =>
-          `${a.component}|${a.rule}`.localeCompare(`${b.component}|${b.rule}`),
-        )
+        .sort((a, b) => `${a.component}|${a.rule}`.localeCompare(`${b.component}|${b.rule}`))
         .map((f) => ({ component: f.component, rule: f.rule, nodes: f.nodes })),
       unrenderable: [...new Set(unrenderable)].sort(),
     },
@@ -187,10 +177,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
      * vitest 若改了 jsdom 实例的挂载形状，`installJsdomCapabilityGate` 会静默回 null，
      * 那两行 `Not implemented` 就回来了 —— 而回来之后的形态与「本来就没噪音」同形。 */
     const capability = installJsdomCapabilityGate(globalThis);
-    expect(
-      capability,
-      "jsdom 能力缺口的处置器没接上（见 tests/setup.ts）",
-    ).not.toBeNull();
+    expect(capability, "jsdom 能力缺口的处置器没接上（见 tests/setup.ts）").not.toBeNull();
     /* 关掉的规则名必须**真的是 axe 里的规则**。打错一个字母的那一档，`axe.run` 会在
      * 每个故事上各抛一次「Rule not found」——几百条红看起来像「渲染面坏了」，
      * 而病灶是一个字符串。这里一次判掉（`RULES_OFF` = 页面级 + 绘制层两组，都覆盖）。 */
@@ -272,20 +259,13 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
           /* Storybook 允许「副作用式 render」（不返回节点、直接改 DOM），也允许
            * `cond && <X/>` 这种渲成 `false` 的形状。这一档给不出那种画面时的正确说法是
            * **渲染不了**，而不是渲一棵空树让 axe 判通过 —— 空树的判定结果永远是「零违规」。 */
-          if (
-            tree === null ||
-            tree === undefined ||
-            tree === false ||
-            tree === ""
-          ) {
+          if (tree === null || tree === undefined || tree === false || tree === "") {
             throw new Error("render 未返回可判的节点（副作用式 / 空 render）");
           }
           view = render(/* SAFETY: 类型断言已复核 */ tree as ReactElement);
           const results = await axe.run(view.baseElement, {
             resultTypes: ["violations"],
-            rules: Object.fromEntries(
-              RULES_OFF.map((rule) => [rule, { enabled: false }]),
-            ),
+            rules: Object.fromEntries(RULES_OFF.map((rule) => [rule, { enabled: false }])),
           });
           rendered += 1;
           for (const violation of results.violations) {
@@ -335,18 +315,18 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
 
     const actual = asLedger(findings, unrenderable);
     const registered = asLedger(
-      (/* SAFETY: 类型断言已复核 */ KNOWN.violations as Finding[]).map((v) => ({ ...v, nodes: 0 })),
+      /* SAFETY: 类型断言已复核 */ (KNOWN.violations as Finding[]).map((v) => ({ ...v, nodes: 0 })),
       KNOWN.unrenderable,
     );
     const actualPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(actual) as {
       violations: { component: string; rule: string }[];
       unrenderable: string[];
     };
-    const registeredPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(registered) as typeof actualPairs;
+    const registeredPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      registered,
+    ) as typeof actualPairs;
 
-    const found = new Set(
-      actualPairs.violations.map((v) => `${v.component}|${v.rule}`),
-    );
+    const found = new Set(actualPairs.violations.map((v) => `${v.component}|${v.rule}`));
     const registeredSet = new Set(
       registeredPairs.violations.map((v) => `${v.component}|${v.rule}`),
     );
@@ -359,9 +339,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
     const unrenderableGained = [...actualUnrenderable].filter(
       (k) => !registeredUnrenderable.has(k),
     );
-    const unrenderableLost = [...registeredUnrenderable].filter(
-      (k) => !actualUnrenderable.has(k),
-    );
+    const unrenderableLost = [...registeredUnrenderable].filter((k) => !actualUnrenderable.has(k));
 
     /* 不一致时把**候选清单**落到系统临时目录（不是仓库、更不是登记表本身）：
      * 登记表的更新方式是「人读过再粘贴」，判据自己不许有「跑一下就绿」的出口
@@ -374,11 +352,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
     ) {
       const os = await import("node:os");
       const fse = await import("node:fs");
-      fse.writeFileSync(
-        os.tmpdir() + "/a11y-axe-candidate.json",
-        actual + "\n",
-        "utf8",
-      );
+      fse.writeFileSync(os.tmpdir() + "/a11y-axe-candidate.json", actual + "\n", "utf8");
     }
 
     const gapLines = capability?.summaryLines() ?? [];
@@ -397,9 +371,7 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
               .join("\n")}`
           : "",
         stale.length > 0
-          ? `登记里已经不再命中的（修好了就该撤账）：\n${stale
-              .map((p) => `  · ${p}`)
-              .join("\n")}`
+          ? `登记里已经不再命中的（修好了就该撤账）：\n${stale.map((p) => `  · ${p}`).join("\n")}`
           : "",
         unrenderableGained.length > 0
           ? `当轮渲不出来的（逐条原因，账里不存它）：\n${unrenderableGained

@@ -12,12 +12,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import {
-  DEFAULTS,
-  migrateExitDefaults,
-  type AppSettings,
-  type ExitPolicy,
-} from "./index";
+import { DEFAULTS, migrateExitDefaults, type AppSettings, type ExitPolicy } from "./index";
 
 export * from "./index";
 export type { AppSettings, ExitPolicy };
@@ -131,9 +126,7 @@ export function getSettingsSync(): AppSettings {
   if (cache && fingerprint === cacheFingerprint) return cache;
   try {
     if (raw === null) throw new Error("设置文件读不到");
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      raw,
-    ) as Partial<AppSettings> & {
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<AppSettings> & {
       comfyuiUrl?: string;
     };
     /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；
@@ -152,17 +145,11 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 /* 合并一次局部更新并落盘，返回合并后的完整设置。 */
-export async function saveSettings(
-  partial: Partial<AppSettings>,
-): Promise<AppSettings> {
+export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
   const next: AppSettings = { ...getSettingsSync(), ...partial };
   cache = next;
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.promises.writeFile(
-    SETTINGS_FILE,
-    JSON.stringify(next, null, 2),
-    "utf-8",
-  );
+  await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf-8");
   /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
    * 内容」判成外部改动、白白重读一遍（读出来还是同一份，只是白花一次 IO）。
    * 别的进程（执行宿主）不受这里影响，它自己按文件指纹重读。 */

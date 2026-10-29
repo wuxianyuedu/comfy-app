@@ -33,9 +33,7 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 /** 真实仓里 oxfmt 的入口（沙箱用例通过 `COMFYAPP_OXFMT_ENTRY` 借给它）。 */
 const OXFMT_ENTRY = join(
-  dirname(
-    createRequire(join(process.cwd(), "noop.js")).resolve("oxfmt/package.json"),
-  ),
+  dirname(createRequire(join(process.cwd(), "noop.js")).resolve("oxfmt/package.json")),
   "bin",
   "oxfmt",
 );
@@ -97,9 +95,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).toContain("src/lib/keep.ts");
   });
 
-  test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({
-    repo,
-  }) => {
+  test("翻硬闸后 --update / --strict 是断头的（不许有隐藏放宽通道）", ({ repo }) => {
     /* 少了这一格，「删了 --update」与「--update 还在但没人调」看起来一样。 */
     repo.write("src/lib/fresh.ts", DIRTY);
     for (const flag of ["--update", "--strict"]) {
@@ -107,15 +103,11 @@ describe("oxfmt 格式判据（硬闸）", () => {
       expect(r.code, `${flag} 不该放行脏文件`).toBe(1);
       /* 出路不该是「跑 --update 收紧基线」——那条路已经不存在（判据的输出里
        * 只能出现「本判据是硬闸（无基线、无 --update）」这半句声明）。 */
-      expect(r.output, `${flag} 的出路不该指向 --update`).not.toContain(
-        "--update 收紧",
-      );
+      expect(r.output, `${flag} 的出路不该指向 --update`).not.toContain("--update 收紧");
     }
   });
 
-  test("prettier 入口取不到 → exit 2，且**不许**读成「全库干净」", ({
-    repo,
-  }) => {
+  test("prettier 入口取不到 → exit 2，且**不许**读成「全库干净」", ({ repo }) => {
     /* 这条钉的是原来的 fail-open（台账 E11）：门禁过去经 `pnpm exec` 找 prettier，
      * 命令找不到时退出 1、stdout 为空，而脚本把「空清单」当成「0 个文件未过」
      * 并打 `[format] OK` 退出 0 —— 依赖缺失 / 形态选错的机器上门禁就这样瞎掉。 */
@@ -126,9 +118,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).not.toContain("[ok] oxfmt 格式");
   });
 
-  test("prettier 退出 1 却一行都没列出来 → exit 2（「没跑成」与「有差异」分开）", ({
-    repo,
-  }) => {
+  test("prettier 退出 1 却一行都没列出来 → exit 2（「没跑成」与「有差异」分开）", ({ repo }) => {
     /* 沙箱里放一个「只按退出码说话」的假入口：`--list-different` 返回 1 的含义是
      * 「有差异，清单在 stdout」，清单为空就说明这句话不可信。 */
     repo.write("src/lib/keep.ts", CLEAN);
@@ -141,9 +131,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).not.toContain("[ok] oxfmt 格式");
   });
 
-  test("oxfmt 清单带 ANSI 颜色码 → 照样认出文件（CI 侧 stdout 着色的形态）", ({
-    repo,
-  }) => {
+  test("oxfmt 清单带 ANSI 颜色码 → 照样认出文件（CI 侧 stdout 着色的形态）", ({ repo }) => {
     /* 真实发生的失效：CI 侧 oxfmt 给文件名上色
      * （`\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」过不了
      * 白名单的路径形态，整张清单被悄悄滤成空 —— 门禁当场读成「命中 0 个」。
@@ -152,10 +140,10 @@ describe("oxfmt 格式判据（硬闸）", () => {
     repo.write(
       stubRel,
       'process.stdout.write("' +
-        '\\u001b[38;2;244;191;117;1m' +
+        "\\u001b[38;2;244;191;117;1m" +
         "src/lib/fresh.ts" +
         '\\u001b[0m (1ms)\\n"' +
-        ');\nprocess.exit(1);\n',
+        ");\nprocess.exit(1);\n",
     );
     const stub = join(repo.dir, stubRel);
     const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: stub } });
@@ -163,9 +151,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).toContain("src/lib/fresh.ts");
   });
 
-  test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({
-    repo,
-  }) => {
+  test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({ repo }) => {
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
     // 夹具预建了空的 `src/lib`：oxfmt 对「存在但一个可扫文件都没有」的根报
     // `Expected at least one target file`（exit 2），所以这里放一份干净源文件
@@ -177,10 +163,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
     /* Rust 壳的构建输出：它被**嵌套的** src-tauri/.gitignore 忽略，而 prettier 只
      * 按仓库根读 .gitignore —— 不进白名单就会拿它阻断每一次提交（ISSUE #638 修好
      * pnpm 启动形态后本门禁第一次真正扫到全库时暴露的现象）。 */
-    repo.write(
-      "src-tauri/target/debug/build/app-1/out/__global-api-script.js",
-      DIRTY,
-    );
+    repo.write("src-tauri/target/debug/build/app-1/out/__global-api-script.js", DIRTY);
     const r = repo.run();
     expect(r.code).toBe(0);
   });
@@ -193,21 +176,23 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     globToRegExp: (glob: string) => RegExp;
   };
 
-  test.for(/* SAFETY: 类型断言已复核 */ [
-    ["scripts/check-format.cjs", true],
-    ["tests/anything.test.ts", true],
-    ["e2e/smoke.spec.ts", true],
-    ["docs/api/assets/main.js", true],
-    ["next.config.js", true],
-    ["vitest.config.ts", true],
-    // 非源码产物（Rust 壳构建输出）豁免；glob 锚在 src-tauri 下，不是「任何 target 目录」
-    ["src-tauri/target/release/build/app-x/out/__global-api-script.js", true],
-    ["src-tauri/src/main.rs", false],
-    ["src/lib/target/keep.ts", false],
-    ["src/lib/endpoints.ts", false],
-    ["src/components/ui/button.tsx", false],
-    ["src/app/api/health/route.ts", false],
-  ] as const)("%s → ignored=%s", ([rel, expected]) => {
+  test.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["scripts/check-format.cjs", true],
+      ["tests/anything.test.ts", true],
+      ["e2e/smoke.spec.ts", true],
+      ["docs/api/assets/main.js", true],
+      ["next.config.js", true],
+      ["vitest.config.ts", true],
+      // 非源码产物（Rust 壳构建输出）豁免；glob 锚在 src-tauri 下，不是「任何 target 目录」
+      ["src-tauri/target/release/build/app-x/out/__global-api-script.js", true],
+      ["src-tauri/src/main.rs", false],
+      ["src/lib/target/keep.ts", false],
+      ["src/lib/endpoints.ts", false],
+      ["src/components/ui/button.tsx", false],
+      ["src/app/api/health/route.ts", false],
+    ] as const,
+  )("%s → ignored=%s", ([rel, expected]) => {
     expect(mod.isIgnored(rel)).toBe(expected);
   });
 
@@ -348,9 +333,7 @@ describe("oxfmt 格式判据 --changed 改动面档", () => {
     expect(r.output).not.toContain("[ok] oxfmt 格式");
   });
 
-  test("只判已提交的改动：未提交的脏文件不在改动面（提交那一刻由 --staged 判）", ({
-    repo,
-  }) => {
+  test("只判已提交的改动：未提交的脏文件不在改动面（提交那一刻由 --staged 判）", ({ repo }) => {
     /* 这是 `git diff <基线>...HEAD` 的定义边界，不是漏洞：改动面档跑在 push/CI
      * 那两跳上，那里的一切都已提交；提交瞬间的干净由 `--staged` 档背书。
      * 钉住它，防止将来有人把「未提交」悄悄混进改动面造成两档重复判。 */

@@ -71,10 +71,7 @@ export function useParamWiring({
    * 它按「模式 → 条目 → 目标」与落库键空间同构，故 `hasWireEdit` 只查它一份。 */
   const [overlay, setOverlay] = useState<Record<string, unknown>>({});
   /* 生效映射 = 已落库的那一份叠上本轮本地改动。 */
-  const effective = useMemo(
-    () => mergeParamMaps(paramMap, overlay),
-    [paramMap, overlay],
-  );
+  const effective = useMemo(() => mergeParamMaps(paramMap, overlay), [paramMap, overlay]);
 
   const commit = useCallback(
     (next: Record<string, unknown>) => {
@@ -143,10 +140,7 @@ export function useParamWiring({
 
 /** 本地 overlay 会涉及的顶层命名空间：左列写 `source`、右列写 `output`，
  *  两者都是「按模式归拢 → 再按条目」的同构结构，合并规则一致。 */
-const LOCAL_OVERLAY_NAMESPACES = /* SAFETY: 类型断言已复核 */ [
-  "source",
-  "output",
-] as const;
+const LOCAL_OVERLAY_NAMESPACES = /* SAFETY: 类型断言已复核 */ ["source", "output"] as const;
 
 /** 已落库的 paramMap 叠上本地 overlay。
  *
@@ -159,20 +153,14 @@ function mergeParamMaps(
   if (Object.keys(overlay).length === 0) return base;
   const next: Record<string, unknown> = { ...base };
   for (const ns of LOCAL_OVERLAY_NAMESPACES) {
-    const merged = mergeNamespace(
-      namespaceOf(base, ns),
-      namespaceOf(overlay, ns),
-    );
+    const merged = mergeNamespace(namespaceOf(base, ns), namespaceOf(overlay, ns));
     if (Object.keys(merged).length > 0) next[ns] = merged;
   }
   return next;
 }
 
 /** 取某个一级命名空间（不是普通对象时按空表处理）。 */
-function namespaceOf(
-  paramMap: Record<string, unknown>,
-  ns: string,
-): Record<string, unknown> {
+function namespaceOf(paramMap: Record<string, unknown>, ns: string): Record<string, unknown> {
   const raw = paramMap[ns];
   return isPlainRecord(raw) ? raw : {};
 }

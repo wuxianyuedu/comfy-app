@@ -54,8 +54,7 @@ export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
  * 级别色**不参与**选中判定（级别配色表照常挂在按钮上）：它表达的是「这一格
  * 是哪一类」，与「当前看的是哪一类」是两件事。
  */
-export const FILTER_SELECTED_STYLES =
-  "bg-primary/12 ring-1 ring-primary/45 font-semibold";
+export const FILTER_SELECTED_STYLES = "bg-primary/12 ring-1 ring-primary/45 font-semibold";
 
 /**
  * `ToggleGroupItem` 那一档的选中样式：与上面同一套三层表达（底色 + 描边 + 字重），
@@ -67,8 +66,7 @@ export const FILTER_SELECTED_STYLES =
  * `#f7f8fa` —— 于是「选中」又变回看不见（ISSUE #609 那条用户反馈的原样）。
  * 描边与字重不参与这场冲突（基元不在 pressed 上设 box-shadow / 字重），照常挂。
  */
-export const FILTER_SELECTED_ITEM_STYLES =
-  "bg-primary/12! ring-1 ring-primary/45 font-semibold";
+export const FILTER_SELECTED_ITEM_STYLES = "bg-primary/12! ring-1 ring-primary/45 font-semibold";
 
 /** 日志级别的正文配色（视图与测试共用同一份表）。级别是状态语义，走语义
  *  token（§4.11.1 / P71）：warn→`text-warning-strong`、error→

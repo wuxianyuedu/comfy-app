@@ -30,11 +30,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /** 清单文件名（相对仓库根）—— 解析器与读取侧共用这一个字面量。 */
-export const CUSTOM_NODES_MANIFEST_REL = path.join(
-  "src",
-  "generated",
-  "customNodes.manifest.json",
-);
+export const CUSTOM_NODES_MANIFEST_REL = path.join("src", "generated", "customNodes.manifest.json");
 
 /** 清单的绝对路径（`root` 只为单测留的口子，生产调用一律默认 `process.cwd()`）。 */
 export function customNodesManifestPath(root: string = process.cwd()): string {
@@ -47,9 +43,7 @@ export function customNodesManifestPath(root: string = process.cwd()): string {
  * 文件只在解析 / 流式解析收尾时被写，写完指纹必变 —— 摘要端点用它做「不必重新解析
  * 整份几百 KB」的短路缓存。`null` = 读不到（不存在或无权限），此时调用方不许缓存。
  */
-export function customNodesManifestStamp(
-  root: string = process.cwd(),
-): string | null {
+export function customNodesManifestStamp(root: string = process.cwd()): string | null {
   try {
     const st = fs.statSync(customNodesManifestPath(root));
     return `${st.size}:${Math.trunc(st.mtimeMs)}`;
@@ -72,9 +66,7 @@ export type CustomNodesManifestRead =
  * `stamp` 只在 `kind: "ok"` 时给出，且允许为 null（刚读到内容又 stat 失败的竞态）——
  * 调用方据此决定「能不能进缓存」，而不是拿一个旧指纹冒充新内容。
  */
-export function readCustomNodesManifest(
-  root: string = process.cwd(),
-): CustomNodesManifestRead {
+export function readCustomNodesManifest(root: string = process.cwd()): CustomNodesManifestRead {
   const file = customNodesManifestPath(root);
   try {
     // 单次 readFileSync 就够：文件只被解析器整体覆写，不存在半写入的中间态可读
@@ -85,8 +77,7 @@ export function readCustomNodesManifest(
       stamp: customNodesManifestStamp(root),
     };
   } catch (error) {
-    const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException)
-      .code;
+    const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") return { kind: "missing" };
     return { kind: "unreadable", detail: `${code ?? "unknown"}` };
   }

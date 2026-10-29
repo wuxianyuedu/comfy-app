@@ -20,8 +20,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   delete (
-    /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>)
-      .__TAURI_INTERNALS__
+    /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
   );
 });
 
@@ -36,9 +35,8 @@ function setShell(on: boolean) {
     });
   } else {
     delete (
-      /* SAFETY: 类型断言已复核 */ (
-        window as unknown as Record<string, unknown>
-      ).__TAURI_INTERNALS__
+      /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>)
+        .__TAURI_INTERNALS__
     );
   }
 }

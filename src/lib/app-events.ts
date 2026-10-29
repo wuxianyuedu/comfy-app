@@ -126,9 +126,7 @@ export function emitAppEvent<K extends AppEventName>(
 ): void {
   if (typeof window === "undefined") return;
   const detail = payload[0];
-  window.dispatchEvent(
-    detail === undefined ? new Event(name) : new CustomEvent(name, { detail }),
-  );
+  window.dispatchEvent(detail === undefined ? new Event(name) : new CustomEvent(name, { detail }));
 }
 
 /** 空操作：无 `window` 时订阅返回它（调用方可以无条件 `return` 订阅结果）。 */
@@ -162,9 +160,8 @@ export function subscribeAppEvent<K extends AppEventName>(
   if (typeof window === "undefined") return noop;
   const listener = (event: Event) => {
     handler(
-      /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-        event as CustomEvent
-      ).detail as AppEvents[K],
+      /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (event as CustomEvent)
+        .detail as AppEvents[K],
     );
   };
   window.addEventListener(name, listener);

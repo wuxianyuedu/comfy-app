@@ -3,10 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { LOG_DIRS } from "../../../../../scripts/launcher-core/log.mjs";
-import {
-  LOG_LAYOUT,
-  runsDir,
-} from "../../../../../scripts/launcher-core/run.mjs";
+import { LOG_LAYOUT, runsDir } from "../../../../../scripts/launcher-core/run.mjs";
 import { apiErrorBody } from "~/lib/api-error";
 import { clamp } from "~/lib/clamp";
 import { LOG_ROOT } from "~/lib/log/log-paths";
@@ -23,10 +20,7 @@ import {
   runtimeLogFileLabel,
   type RuntimeLogSource,
 } from "~/lib/log/runtime-log-file";
-import {
-  listRuntimeLogFiles,
-  type RuntimeLogFileEntry,
-} from "~/lib/log/runtime-log-pack.server";
+import { listRuntimeLogFiles, type RuntimeLogFileEntry } from "~/lib/log/runtime-log-pack.server";
 
 /**
  * `GET /api/logs/sessions` —— 列出某个来源**每一次启动**的日志（**跨运行包**），
@@ -164,9 +158,7 @@ function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
   return {
     name: entry.name,
     startedAt: entry.startedAt,
-    title: runtimeLogFileLabel(
-      parsed ?? { source: "", startedAt: null, ordinal: 1 },
-    ),
+    title: runtimeLogFileLabel(parsed ?? { source: "", startedAt: null, ordinal: 1 }),
   };
 }
 
@@ -180,12 +172,7 @@ function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
 function resolveArchivedFile(sessionId: string, root: string): string | null {
   const parsed = parsePackScopedId(sessionId);
   if (!parsed) return null;
-  return path.join(
-    runsDir(root),
-    parsed.packName,
-    LOG_DIRS.services,
-    parsed.fileName,
-  );
+  return path.join(runsDir(root), parsed.packName, LOG_DIRS.services, parsed.fileName);
 }
 
 export async function GET(request: Request) {
@@ -193,13 +180,7 @@ export async function GET(request: Request) {
   const source = searchParams.get("source") ?? "";
   const requested = searchParams.get("session");
 
-  if (
-    !(
-      /* SAFETY: 类型断言已复核 */ (
-        RUNTIME_LOG_SOURCES as readonly string[]
-      ).includes(source)
-    )
-  ) {
+  if (!(/* SAFETY: 类型断言已复核 */ (RUNTIME_LOG_SOURCES as readonly string[]).includes(source))) {
     return NextResponse.json(emptyPayload(`unknown source: ${source}`), {
       status: 400,
     });
@@ -238,9 +219,7 @@ export async function GET(request: Request) {
     if (sessions.length === 0) return NextResponse.json(emptyPayload());
 
     const selectedId =
-      sessions.find((session) => session.id === requested)?.id ??
-      sessions[0]?.id ??
-      null;
+      sessions.find((session) => session.id === requested)?.id ?? sessions[0]?.id ?? null;
     /* 请求的那一份已被保留策略删掉（或客户端缓存了旧列表）时回落最新那一份，
      * 并把实际选中项如实回报 —— 客户端据此同步下拉，不去猜。 */
     const selected = sessions.find((session) => session.id === selectedId);
@@ -266,9 +245,8 @@ export async function GET(request: Request) {
       total,
     } satisfies LogSessionsPayload);
   } catch (error) {
-    return NextResponse.json(
-      apiErrorBody(error, "读取日志会话失败", { ...emptyPayload() }),
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(error, "读取日志会话失败", { ...emptyPayload() }), {
+      status: 500,
+    });
   }
 }

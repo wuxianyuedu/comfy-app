@@ -14,11 +14,7 @@
  * 原始文件同时经 `/api/custom-nodes/manifest` 直接对外提供。
  */
 
-import type {
-  NodeTypeConfig,
-  PortSpec,
-  FieldDef,
-} from "~/lib/comfyui/node-config";
+import type { NodeTypeConfig, PortSpec, FieldDef } from "~/lib/comfyui/node-config";
 import { isFieldType } from "~/lib/comfyui/field-types";
 import { errorText } from "~/lib/error-message";
 import { emitAppEvent } from "~/lib/app-events";
@@ -75,9 +71,7 @@ export function specToField(s: PortSpec): FieldDef {
      * 收窄以满足 no-base-to-string。 */
     placeholder:
       s.default !== undefined && s.default !== null
-        ? /* SAFETY: 类型断言已复核 */ (
-            s.default as { toString(): string }
-          ).toString()
+        ? /* SAFETY: 类型断言已复核 */ (s.default as { toString(): string }).toString()
         : undefined,
     group: "参数",
     // 纯连接端口渲染成连线手柄，而不是编辑字段。
@@ -148,11 +142,7 @@ export function getCustomNodesRegistryVersion(): number {
  * 只在**结论真的变了**时才广播：自动刷新与手动重解析会反复命中同一档失败
  * （「还没有清单」），不去重就是把同一个提示刷屏（口径同 `sync-notice` 的按原因去重）。
  */
-function recordRegistry(next: {
-  loaded: boolean;
-  count: number;
-  detail: string | null;
-}): void {
+function recordRegistry(next: { loaded: boolean; count: number; detail: string | null }): void {
   const unchanged =
     registryState.loaded === next.loaded &&
     registryState.count === next.count &&
@@ -339,12 +329,7 @@ export async function getCustomNodesManifest(
       return null;
     }
     const data: unknown = await res.json();
-    if (
-      !data ||
-      typeof data !== "object" ||
-      !("nodes" in data) ||
-      !data.nodes
-    ) {
+    if (!data || typeof data !== "object" || !("nodes" in data) || !data.nodes) {
       console.error(
         "[custom-nodes] 清单形状不对：响应里没有 nodes 字段（解析器版本与前端不匹配？）",
       );
@@ -354,10 +339,7 @@ export async function getCustomNodesManifest(
       nodes: Record<string, ManifestNodeRaw>;
     };
   } catch (e) {
-    console.error(
-      "[custom-nodes] 读取节点清单失败：",
-      errorText(e, "读取自定义节点清单"),
-    );
+    console.error("[custom-nodes] 读取节点清单失败：", errorText(e, "读取自定义节点清单"));
     return null;
   }
 }
@@ -391,8 +373,7 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   }
 
   try {
-    const manifest =
-      /* SAFETY: 类型断言已复核 */ (await res.json()) as RawManifest;
+    const manifest = /* SAFETY: 类型断言已复核 */ (await res.json()) as RawManifest;
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);
@@ -401,8 +382,7 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     Object.assign(CUSTOM_NODE_TYPES, next);
     // 同步包来源映射，让 ComfyNode 不必重新解析 manifest
     // 就能渲染左下角页脚。
-    for (const k of Object.keys(CUSTOM_NODE_PACKAGE))
-      delete CUSTOM_NODE_PACKAGE[k];
+    for (const k of Object.keys(CUSTOM_NODE_PACKAGE)) delete CUSTOM_NODE_PACKAGE[k];
     Object.assign(CUSTOM_NODE_PACKAGE, nextPackages);
     /* 表已经换完：把结论记进可读状态并广播一次，让订阅侧（画布的页脚 / 渲染链标注）
      * 在没有整页刷新的情况下重渲染。`count` 为 0 也算灌入成功 —— 那是「解析器

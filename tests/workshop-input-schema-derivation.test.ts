@@ -33,10 +33,8 @@ import {
 
 function parseShot(value: unknown) {
   const parsed = shotInputSchema.safeParse(value);
-  expect(parsed.success, `写侧判据当场拒了：${String(parsed.error)}`).toBe(
-    true,
-  );
-  return parsed.success ? parsed.data : (/* SAFETY: 类型断言已复核 */ undefined as never);
+  expect(parsed.success, `写侧判据当场拒了：${String(parsed.error)}`).toBe(true);
+  return parsed.success ? parsed.data : /* SAFETY: 类型断言已复核 */ (undefined as never);
 }
 
 describe("工坊写侧 schema ⇄ 派生类型：同读数且可选性方向一致（§E4 / #2499）", () => {

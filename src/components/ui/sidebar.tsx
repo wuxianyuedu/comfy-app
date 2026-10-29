@@ -34,11 +34,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Skeleton } from "~/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { PanelLeftIcon } from "lucide-react";
 
 /* 开合态存 cookie 而不是 localStorage —— 它是唯一能被**服务端**读到的通道：
@@ -131,11 +127,7 @@ function SidebarProvider({
 
       /* 记下这一档：下次启动由服务端读 cookie 传给 `defaultOpen`，
        * 于是首屏就是它（见文件顶部那段说明）。 */
-      writeCookieItem(
-        SIDEBAR_COOKIE_NAME,
-        String(openState),
-        SIDEBAR_COOKIE_MAX_AGE,
-      );
+      writeCookieItem(SIDEBAR_COOKIE_NAME, String(openState), SIDEBAR_COOKIE_MAX_AGE);
     },
     [setOpenProp, open, crossings],
   );
@@ -164,16 +156,7 @@ function SidebarProvider({
       collapsedByAuto,
       toggleSidebar,
     }),
-    [
-      state,
-      open,
-      setOpen,
-      isMobile,
-      openMobile,
-      setOpenMobile,
-      collapsedByAuto,
-      toggleSidebar,
-    ],
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, collapsedByAuto, toggleSidebar],
   );
 
   return (
@@ -309,11 +292,7 @@ function Sidebar({
   );
 }
 
-function SidebarTrigger({
-  className,
-  onClick,
-  ...props
-}: React.ComponentProps<typeof Button>) {
+function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar, collapsedByAuto } = useSidebar();
 
   /* 文案必须区分自动与手动：不分的话用户会以为是自己点坏了 —— 这是设计评审当时
@@ -382,10 +361,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
   );
 }
 
-function SidebarInput({
-  className,
-  ...props
-}: React.ComponentProps<typeof Input>) {
+function SidebarInput({ className, ...props }: React.ComponentProps<typeof Input>) {
   return (
     <Input
       data-slot="sidebar-input"
@@ -418,10 +394,7 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function SidebarSeparator({
-  className,
-  ...props
-}: React.ComponentProps<typeof Separator>) {
+function SidebarSeparator({ className, ...props }: React.ComponentProps<typeof Separator>) {
   return (
     <Separator
       data-slot="sidebar-separator"
@@ -505,10 +478,7 @@ function SidebarGroupAction({
   });
 }
 
-function SidebarGroupContent({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+function SidebarGroupContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sidebar-group-content"
@@ -671,10 +641,7 @@ function SidebarMenuAction({
   });
 }
 
-function SidebarMenuBadge({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+function SidebarMenuBadge({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sidebar-menu-badge"
@@ -707,12 +674,7 @@ function SidebarMenuSkeleton({
       className={cn("flex h-8 items-center gap-2 rounded-md px-2", className)}
       {...props}
     >
-      {showIcon && (
-        <Skeleton
-          className="size-4 rounded-md"
-          data-sidebar="menu-skeleton-icon"
-        />
-      )}
+      {showIcon && <Skeleton className="size-4 rounded-md" data-sidebar="menu-skeleton-icon" />}
       <Skeleton
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
@@ -740,10 +702,7 @@ function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
   );
 }
 
-function SidebarMenuSubItem({
-  className,
-  ...props
-}: React.ComponentProps<"li">) {
+function SidebarMenuSubItem({ className, ...props }: React.ComponentProps<"li">) {
   return (
     <li
       data-slot="sidebar-menu-sub-item"

@@ -48,9 +48,7 @@ export const AllModes: Story = {
     <div className="flex flex-col gap-3">
       {MODES.map((mode) => (
         <div key={mode} className="flex items-center gap-3">
-          <span className="text-ink-muted w-20 font-mono text-[11px]">
-            {mode}
-          </span>
+          <span className="text-ink-muted w-20 font-mono text-[11px]">{mode}</span>
           <SeedModeButton mode={mode} onPick={() => undefined} />
         </div>
       ))}
@@ -81,11 +79,7 @@ export const InCanvasRow: Story = {
       </span>
       {
         /* SAFETY: 类型断言已复核 */ ([null, ...MODES] as const).map((mode) => (
-          <SeedModeButton
-            key={mode ?? "unset"}
-            mode={mode ?? undefined}
-            onPick={() => undefined}
-          />
+          <SeedModeButton key={mode ?? "unset"} mode={mode ?? undefined} onPick={() => undefined} />
         ))
       }
     </div>

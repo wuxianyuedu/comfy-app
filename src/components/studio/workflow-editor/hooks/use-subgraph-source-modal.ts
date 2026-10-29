@@ -40,9 +40,7 @@ export function useSubgraphSourceModal(params: {
       return (
         subs[ctx.subUid] ??
         Object.values(subs).find(
-          (s) =>
-            /* SAFETY: 类型断言已复核 */ (s as { id?: unknown } | null)?.id ===
-            ctx.subUid,
+          (s) => /* SAFETY: 类型断言已复核 */ (s as { id?: unknown } | null)?.id === ctx.subUid,
         ) ??
         null
       );

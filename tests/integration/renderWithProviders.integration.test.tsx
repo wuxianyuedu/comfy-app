@@ -13,11 +13,7 @@
 import { useState, type ReactElement } from "react";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
 import { createTRPCClient, httpBatchStreamLink } from "@trpc/client";
-import {
-  QueryClientProvider,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -52,12 +48,10 @@ const mockRouter = t.router({
       }
       return { tags: behavior.tags };
     }),
-    add: t.procedure
-      .input(z.object({ name: z.string().min(1) }))
-      .mutation(async ({ input }) => {
-        behavior.tags = [...behavior.tags, input.name];
-        return { tags: behavior.tags };
-      }),
+    add: t.procedure.input(z.object({ name: z.string().min(1) })).mutation(async ({ input }) => {
+      behavior.tags = [...behavior.tags, input.name];
+      return { tags: behavior.tags };
+    }),
   }),
 });
 type MockRouter = typeof mockRouter;
@@ -99,9 +93,7 @@ function TagDemo() {
   const trpc = useLocalTRPC();
   const queryClient = useQueryClient();
   const client = useLocalClient();
-  const listQ = useQuery(
-    trpc.tag.list.queryOptions(undefined, { placeholderData: (p) => p }),
-  );
+  const listQ = useQuery(trpc.tag.list.queryOptions(undefined, { placeholderData: (p) => p }));
   const [err, setErr] = useState<string | null>(null);
 
   const add = async () => {
@@ -120,7 +112,8 @@ function TagDemo() {
       {listQ.isLoading && <div data-testid="loading">加载中…</div>}
       {listQ.isError && (
         <div data-testid="error">
-          {(/* SAFETY: 类型断言已复核 */ listQ.error as { message?: string } | null)?.message ?? "加载失败"}
+          {/* SAFETY: 类型断言已复核 */ (listQ.error as { message?: string } | null)?.message ??
+            "加载失败"}
         </div>
       )}
       {listQ.data && (
@@ -144,21 +137,18 @@ describe("前端集成层 · MSW 数据态流转自检", () => {
     renderTagDemo(<TagDemo />);
 
     expect(screen.getByTestId("loading")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.queryByTestId("loading")).not.toBeInTheDocument(),
-    );
-    expect(screen.getAllByTestId("tag-item").map((n) => n.textContent)).toEqual(
-      ["checkpoint", "lora"],
-    );
+    await waitFor(() => expect(screen.queryByTestId("loading")).not.toBeInTheDocument());
+    expect(screen.getAllByTestId("tag-item").map((n) => n.textContent)).toEqual([
+      "checkpoint",
+      "lora",
+    ]);
   });
 
   it("2. loading→error：router 抛错后进入错误态（不再停留 loading）", async () => {
     behavior = { tags: [], listError: "数据库不可用" };
     renderTagDemo(<TagDemo />);
 
-    await waitFor(() =>
-      expect(screen.getByTestId("error")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId("error")).toBeInTheDocument());
     expect(screen.getByTestId("error").textContent).toContain("数据库不可用");
     expect(screen.queryByTestId("loading")).not.toBeInTheDocument();
   });

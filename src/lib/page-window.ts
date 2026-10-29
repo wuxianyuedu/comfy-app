@@ -68,11 +68,7 @@ function normalizeIndex(value: number, fallback: number): number {
  * 页码越界时**钳回**（不是返回空页）：用户在 3 页时把日志清到只剩 1 页，
  * 期望的是落回末页那一档，而不是看到一片空白。
  */
-export function tailPages<T>(
-  items: readonly T[],
-  page: number,
-  pageSize: number,
-): PageWindow<T> {
+export function tailPages<T>(items: readonly T[], page: number, pageSize: number): PageWindow<T> {
   const size = safeSize(pageSize);
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / size));
@@ -93,11 +89,7 @@ export function tailPages<T>(
  * 钳过的页码、另一处用的是原始页码 —— 页码越界时它们会给出不同答案
  *（虽然那时页面正好也被钳回了，差值恰好被 `max(0, …)` 吃掉，所以一直没人发现）。
  */
-export function countAfterPage(
-  total: number,
-  page: number,
-  pageSize: number,
-): number {
+export function countAfterPage(total: number, page: number, pageSize: number): number {
   const size = safeSize(pageSize);
   const totalPages = Math.max(1, Math.ceil(total / size));
   const safePage = clamp(normalizeIndex(page, 1), 1, totalPages);
@@ -152,11 +144,7 @@ export function tailWindow<T>(items: readonly T[], size: number): T[] {
  * 只在放入得下时复制、只在放不下时原地搬，两条合起来就是「每次追加恰好一趟
  * O(size) 搬移」的最小写法。
  */
-export function tailWindowAppend<T>(
-  items: readonly T[],
-  item: T,
-  size: number,
-): T[] {
+export function tailWindowAppend<T>(items: readonly T[], item: T, size: number): T[] {
   const n = safeSize(size);
   /* 窗口未满：复制 + 追加（必须换引用，见上）。这一支就是
    * `tailWindow([...items, item], n)` 本身 —— 归一口径不必在这里再算一遍，
@@ -188,11 +176,7 @@ export interface ChunkRange {
  * 算进度、标记已处理），交出范围比交出数组更贴用途 —— 也让「块内元素个数」
  * 与「块在原文里的位置」不会各算一遍。
  */
-export function chunkRange(
-  totalItems: number,
-  size: number,
-  index: number,
-): ChunkRange {
+export function chunkRange(totalItems: number, size: number, index: number): ChunkRange {
   const s = safeSize(size);
   /* 条目数先归零：负数会让下面的 `Math.min` 给出负的 `end`（`slice(0, -5)`
    * 不是空窗口，而是「从末尾倒数」）。 */

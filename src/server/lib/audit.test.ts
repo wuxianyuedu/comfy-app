@@ -21,9 +21,7 @@ vi.mock("~/server/db", () => ({
         const rejectNow = /* SAFETY: 类型断言已复核 */ (
           globalThis as { __REJECT_INSERT__?: boolean }
         ).__REJECT_INSERT__;
-        return rejectNow
-          ? Promise.reject(new Error("db down"))
-          : Promise.resolve();
+        return rejectNow ? Promise.reject(new Error("db down")) : Promise.resolve();
       },
     })),
   },
@@ -47,34 +45,28 @@ function ctx() {
 }
 
 beforeEach(() => {
-  /* SAFETY: 类型断言已复核 */ (
-    globalThis as { __REJECT_INSERT__?: boolean }
-  ).__REJECT_INSERT__ = false;
+  /* SAFETY: 类型断言已复核 */ (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ =
+    false;
   loggerErrorMock.mockClear();
 });
 
 describe("audit 审计日志契约", () => {
   it("成功路径：审计写入不抛错、不触发失败兜底日志", async () => {
-    await expect(
-      audit("login_failed", ctx(), { email: "x@test.dev" }),
-    ).resolves.toBeUndefined();
+    await expect(audit("login_failed", ctx(), { email: "x@test.dev" })).resolves.toBeUndefined();
     expect(loggerErrorMock).not.toHaveBeenCalled();
   });
 
   it("失败路径：db 写入失败仍 logger.error('audit_write_failed')——关键路径不静默", async () => {
-    /* SAFETY: 类型断言已复核 */ (
-      globalThis as { __REJECT_INSERT__?: boolean }
-    ).__REJECT_INSERT__ = true;
+    /* SAFETY: 类型断言已复核 */ (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__ =
+      true;
     // audit 内部 catch 住错误，不向调用方抛（不阻塞主流程）
-    await expect(
-      audit("role_changed", ctx(), { role: "admin" }),
-    ).resolves.toBeUndefined();
+    await expect(audit("role_changed", ctx(), { role: "admin" })).resolves.toBeUndefined();
     expect(loggerErrorMock).toHaveBeenCalled();
-    const msg = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock
-      .calls[0]?.[1] as string;
+    const msg = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock.calls[0]?.[1] as string;
     expect(msg).toBe("audit_write_failed");
-    const fields = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock
-      .calls[0]?.[0] as { event?: string };
+    const fields = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock.calls[0]?.[0] as {
+      event?: string;
+    };
     expect(fields?.event).toBe("role_changed");
   });
 });

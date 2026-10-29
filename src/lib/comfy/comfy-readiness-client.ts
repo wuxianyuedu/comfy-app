@@ -24,9 +24,7 @@ export const COMFY_READY_TIMEOUT_MS = 180_000;
 /** 单次轮询间隔：服务端每次会短等一小会儿，这里再退避一档，避免连打。 */
 export const COMFY_READY_POLL_MS = 2_000;
 
-export type ComfyReadyResult =
-  | { ok: true }
-  | { ok: false; pending: boolean; message: string };
+export type ComfyReadyResult = { ok: true } | { ok: false; pending: boolean; message: string };
 
 interface EnsureBody {
   ok?: unknown;

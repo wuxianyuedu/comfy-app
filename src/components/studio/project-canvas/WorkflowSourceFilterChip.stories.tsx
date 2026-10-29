@@ -14,11 +14,7 @@ import { WorkflowSourceFilterChip } from "~/components/studio/project-canvas/Wor
  * 浮层壳与选项行走 `ui/option-list-popover`（规范 16 §16.2.4.14）—— 本目录四个
  * chip 此前各写一遍这份壳，所以 story 里不摆自定义浮层，只摆真组件。
  */
-const OPTIONS = /* SAFETY: 类型断言已复核 */ [
-  "all",
-  "local",
-  "online",
-] as const;
+const OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;
 
 const meta = {
   title: "Studio/WorkflowSourceFilterChip",
@@ -39,9 +35,7 @@ export const AllValues: Story = {
     <div className="flex items-center gap-3">
       {OPTIONS.map((value) => (
         <div key={value} className="flex flex-col items-start gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            value = {value}
-          </span>
+          <span className="text-ink-muted font-mono text-[11px]">value = {value}</span>
           <WorkflowSourceFilterChip value={value} onChange={() => undefined} />
         </div>
       ))}

@@ -36,8 +36,7 @@ function readEnabled(): CategoryEnabled {
   const stored = readStorageJson<Partial<CategoryEnabled>>(STORAGE_KEY, {});
   const base = defaultEnabled();
   for (const category of LOG_CATEGORY_FILTERS) {
-    if (typeof stored[category] === "boolean")
-      base[category] = stored[category];
+    if (typeof stored[category] === "boolean") base[category] = stored[category];
   }
   return base;
 }

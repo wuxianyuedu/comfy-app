@@ -146,9 +146,7 @@ export function copyGateDeps(
     if (seen.has(abs)) continue;
     seen.add(abs);
     const src = readFileSync(abs, "utf8");
-    const names = DEP_RES.flatMap((re) =>
-      [...src.matchAll(re)].map((m) => m[1]!),
-    );
+    const names = DEP_RES.flatMap((re) => [...src.matchAll(re)].map((m) => m[1]!));
     for (const name of names) {
       const source = path.join(REPO_ROOT, "scripts", name);
       const dest = path.join(destDir, name);
@@ -196,10 +194,7 @@ function claims(initial: string[]): {
     covers: (rel) => {
       const target = normalizeRel(rel);
       return owned.some(
-        (o) =>
-          target === o ||
-          target.startsWith(`${o}/`) ||
-          o.startsWith(`${target}/`),
+        (o) => target === o || target.startsWith(`${o}/`) || o.startsWith(`${target}/`),
       );
     },
     add: (rel) => {
@@ -297,10 +292,7 @@ export interface GateRepo {
    * 的 fail-closed 用例）。这不是顺手开的口子：判据脚本的**环境本身就是被测输入**，
    * 只给一个固定 env 就等于让「没设这个变量」那一档永远测不到。
    */
-  run: (
-    args?: string[],
-    overrides?: { env?: Record<string, string | undefined> },
-  ) => GateRunResult;
+  run: (args?: string[], overrides?: { env?: Record<string, string | undefined> }) => GateRunResult;
   /** 从工作区里读回一个文件（判据会就地改文件时用）。 */
   read: (rel: string) => string;
   /** 工作区里这个路径在不在（判「`--update` 到底有没有落盘」用，不必 `read` 再 catch）。 */
@@ -389,20 +381,10 @@ export interface GateRepoOptions {
  * 调用点**必须**在 `finally` 里 `dispose()`，或者用 `defineGateRepo` 那条路让 vitest 代管。
  */
 export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
-  const {
-    script,
-    dir = "scripts",
-    dirs = [],
-    workdir,
-    env,
-    files,
-    copy,
-    setup,
-  } = options;
+  const { script, dir = "scripts", dirs = [], workdir, env, files, copy, setup } = options;
   const scriptSource = path.join(REPO_ROOT, "scripts", script);
   const scriptRel = dir === "scripts" ? path.join("scripts", script) : script;
-  const prefix =
-    workdir ?? script.replace(/^check-/, "").replace(/\.(c|m)?js$/, "");
+  const prefix = workdir ?? script.replace(/^check-/, "").replace(/\.(c|m)?js$/, "");
 
   const root = mkdtempSync(path.join(tmpdir(), `${prefix}-gate-`));
   const scriptDir = path.dirname(path.join(root, scriptRel));
@@ -602,7 +584,7 @@ export function defineGateRepo(options: GateRepoOptions) {
      * 空解构是 API 约束，no-empty-pattern 在此属误报，禁用一行。
      * 台账：本仓此形态仅 tests/helpers 两文件四处（本处 + platform-fixtures ×3）。 */
     // eslint-disable-next-line no-empty-pattern
-    repo: async ({ }, use) => {
+    repo: async ({}, use) => {
       /* 收尾挂在 `use` 之后 —— 用例中途 throw 也跑（这是相对手写 `afterEach` 的收益）。 */
       const handle = createGateRepo(options);
       await use(handle.repo);

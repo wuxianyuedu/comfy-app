@@ -12,10 +12,7 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  SIDEBAR_PROJECT_LIMIT,
-  useSidebarProjects,
-} from "./use-sidebar-projects";
+import { SIDEBAR_PROJECT_LIMIT, useSidebarProjects } from "./use-sidebar-projects";
 
 const { listProjectsWithServer } = vi.hoisted(() => ({
   listProjectsWithServer: vi.fn(),
@@ -41,9 +38,7 @@ describe("useSidebarProjects", () => {
 
     const { result } = renderHook(() => useSidebarProjects());
 
-    await expect
-      .poll(() => result.current.map((p) => p.id))
-      .toEqual(["proj_server", "proj_local"]);
+    await expect.poll(() => result.current.map((p) => p.id)).toEqual(["proj_server", "proj_local"]);
   });
 
   it("拉取失败（离线）时仍交回本地那一份，不清空", async () => {
@@ -54,9 +49,7 @@ describe("useSidebarProjects", () => {
 
     const { result } = renderHook(() => useSidebarProjects());
 
-    await expect
-      .poll(() => result.current.map((p) => p.id))
-      .toEqual(["proj_local"]);
+    await expect.poll(() => result.current.map((p) => p.id)).toEqual(["proj_local"]);
   });
 
   it("列表长度收在 SIDEBAR_PROJECT_LIMIT 以内", async () => {

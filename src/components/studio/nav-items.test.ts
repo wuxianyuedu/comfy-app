@@ -101,12 +101,11 @@ describe("模型适配 / 模式契约：已经是全局视图（此前是浮层�
        这条继承自旧的 `OVERLAY_NAV_ITEMS`「恰好两项、按序」判据 —— 换了建模方式，
        那份「不许静默增删」的约束不能跟着丢。 */
     const ids = globalNavItems().map((i) => i.id);
-    expect(
-      ids.slice(ids.indexOf("workflows") + 1, ids.indexOf("console")),
-    ).toEqual(["model-adapters", "mode-contract"]);
-    const labels = Object.fromEntries(
-      globalNavItems().map((i) => [i.id, i.label]),
-    );
+    expect(ids.slice(ids.indexOf("workflows") + 1, ids.indexOf("console"))).toEqual([
+      "model-adapters",
+      "mode-contract",
+    ]);
+    const labels = Object.fromEntries(globalNavItems().map((i) => [i.id, i.label]));
     expect(labels["model-adapters"]).toBe("模型适配");
     expect(labels["mode-contract"]).toBe("模式契约");
   });
@@ -117,15 +116,8 @@ describe("模型适配 / 模式契约：已经是全局视图（此前是浮层�
        「点开弹窗、不改视图」与「切视图页签」并存时，同一个功能会有两种「开没开」
        的真相（侧栏那个布尔 vs 页签状态），而那正是这一刀要消掉的形状。
        运行时判据抓不到「导出了却没人用」，所以这里判字面量。 */
-    const source = readFileSync(
-      path.resolve(import.meta.dirname, "NavItems.tsx"),
-      "utf8",
-    );
-    for (const retired of [
-      "OverlayEntryId",
-      "OverlayNavItem",
-      "OVERLAY_NAV_ITEMS",
-    ]) {
+    const source = readFileSync(path.resolve(import.meta.dirname, "NavItems.tsx"), "utf8");
+    for (const retired of ["OverlayEntryId", "OverlayNavItem", "OVERLAY_NAV_ITEMS"]) {
       expect(source, `NavItems 里还留着 ${retired}`).not.toContain(retired);
     }
   });
@@ -135,21 +127,13 @@ describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
   /* 这两张清单是**产品判断**的落点，不是实现细节：改一个视图就换一种行为，
      而界面上不会有任何东西提示"这一页的规则变了"。所以逐项钉死 ——
      以后想把画布也改成瞬时、或想把设置放回侧栏，必须先来改这里并说明理由。 */
-  const TRANSIENT_IDS: WorkspaceView[] = [
-    "settings",
-    "model-adapters",
-    "mode-contract",
-  ];
+  const TRANSIENT_IDS: WorkspaceView[] = ["settings", "model-adapters", "mode-contract"];
 
   it("恰好这三项是瞬时页签（切走即关），其余都不是", () => {
-    const actual = NAV_ITEMS.filter((item) => isTransientView(item.id)).map(
-      (item) => item.id,
-    );
+    const actual = NAV_ITEMS.filter((item) => isTransientView(item.id)).map((item) => item.id);
     expect(actual.sort()).toEqual([...TRANSIENT_IDS].sort());
     for (const id of ["home", "canvas", "workshop", "models", "console"]) {
-      expect(
-        isTransientView(/* SAFETY: 类型断言已复核 */ id as WorkspaceView),
-      ).toBe(false);
+      expect(isTransientView(/* SAFETY: 类型断言已复核 */ id as WorkspaceView)).toBe(false);
     }
   });
 

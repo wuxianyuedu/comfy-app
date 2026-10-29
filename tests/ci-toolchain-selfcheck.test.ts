@@ -20,14 +20,7 @@
  *      没接上 = 那一步又回到手写形态，本文件判的链就断了）。
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { deflateRawSync } from "node:zlib";
@@ -54,10 +47,7 @@ import {
   pnpmPathValue,
 } from "../scripts/ci-toolchain-pnpm.mjs";
 import { BROWSER_PACKAGES } from "../scripts/ci-toolchain-browser.mjs";
-import {
-  pythonCandidates,
-  pythonProbeArgs,
-} from "../src/lib/process/python-candidates";
+import { pythonCandidates, pythonProbeArgs } from "../src/lib/process/python-candidates";
 
 /** 浏览器那一层的直接导出（下载根两个 / 「已装就不装」/ 「到得了哪」）。 */
 const { PLAYWRIGHT_HOST_CANDIDATES: browserCandidates } =
@@ -186,9 +176,7 @@ function crc32(buf: Buffer): number {
 
 /** 从一段源码里抠出「按平台二选一」的候选表（两份文本，逐项对账）。 */
 function candidatesInSource(text: string, constName: string): string[] {
-  const block = new RegExp(`const ${constName}\\s*=\\s*([\\s\\S]*?);\\n`).exec(
-    text,
-  )?.[1];
+  const block = new RegExp(`const ${constName}\\s*=\\s*([\\s\\S]*?);\\n`).exec(text)?.[1];
   if (!block) return [];
   /* 只收**数组字面量里**的字符串：`process.platform === "win32"` 那句里的
    * `"win32"` 是平台判别式，不是候选名 —— 连它一起收就会把「候选表」多算一项。
@@ -207,10 +195,7 @@ describe("工具链自证：Python 候选表只有一份答案", () => {
     /* 扫描面先自证：抠不到表说明下面几条是空转。 */
     const found = candidatesInSource(text, "PY_CANDIDATES");
     expect(found, "抠不到 PY_CANDIDATES —— 扫描面指错了地方").not.toEqual([]);
-    expect(found).toEqual([
-      ...pythonCandidates("win32"),
-      ...pythonCandidates("linux"),
-    ]);
+    expect(found).toEqual([...pythonCandidates("win32"), ...pythonCandidates("linux")]);
   });
 
   it("`py` 的 `-3` 在脚本里也没丢（裸 py 是「列出已装版本」并退非零）", () => {
@@ -226,13 +211,8 @@ describe("工具链自证：Python 候选表只有一份答案", () => {
   it("门禁脚本（.cjs）的候选表也对得上 —— 三处一份答案", () => {
     const gate = read("scripts/check-app-port-vectors.cjs");
     const found = candidatesInSource(gate, "PYTHON_CANDIDATES");
-    expect(found, "抠不到 PYTHON_CANDIDATES —— 扫描面指错了地方").not.toEqual(
-      [],
-    );
-    expect(found).toEqual([
-      ...pythonCandidates("win32"),
-      ...pythonCandidates("linux"),
-    ]);
+    expect(found, "抠不到 PYTHON_CANDIDATES —— 扫描面指错了地方").not.toEqual([]);
+    expect(found).toEqual([...pythonCandidates("win32"), ...pythonCandidates("linux")]);
     expect(gate).toMatch(/PYTHON_PROBE_ARGS\s*=\s*\{\s*py:\s*\["-3"/);
   });
 });
@@ -404,10 +384,7 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
        * 判「是不是 D: 盘的 Users 根」按**归一后的正斜杠形态**，不写字面量：
        * 脚本用平台的 `path.join` 拼，POSIX 宿主上会得到 `D:\/Users` 这种混种形态，
        * 写死会漂（这是判据自身的可移植性，不是被测逻辑的形态）。 */
-      listDirs: (p) =>
-        /^d:\/+users\/?$/i.test(p.replace(/\\/g, "/"))
-          ? ["D:\\Users\\yuedu"]
-          : [],
+      listDirs: (p) => (/^d:\/+users\/?$/i.test(p.replace(/\\/g, "/")) ? ["D:\\Users\\yuedu"] : []),
     });
     /* 一律按**归一后的正斜杠形态**断言落点身份 —— 脚本用平台 `path.join` 拼，
      * POSIX 宿主上会出现 `D:\/...` 这类混种分隔符；判的是「探了哪个落点」，
@@ -419,9 +396,7 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
         .toLowerCase();
     const set = new Set(probed.map(norm));
     // 标准落点仍在（不能为了新形态把既有的四个丢了）。
-    expect(set.has(norm("C:\\srv\\AppData\\Local\\Programs\\Python"))).toBe(
-      true,
-    );
+    expect(set.has(norm("C:\\srv\\AppData\\Local\\Programs\\Python"))).toBe(true);
     // 这台机 PATH 上出现过的盘符下的同类位置也探了（不是只探 C:）。
     expect(set.has("d:/program files/python")).toBe(true);
     expect(set.has("d:/python")).toBe(true);
@@ -502,17 +477,11 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
      * 这里直判落点拼法（本机没有那个文件，所以 `installPython` 的分支由它决定）；
      * 真起 `winget` 那一档不可能在开发机上判 —— 由这段拼法本身承担。 */
     /* 被测实现用平台的 `path.join` 拼，所以落点身份按**归一形态**比。 */
-    const want = norm(
-      path.join("/L", "Microsoft", "WindowsApps", "winget.exe"),
-    );
+    const want = norm(path.join("/L", "Microsoft", "WindowsApps", "winget.exe"));
     const existing = (p: string) => norm(p) === want;
-    expect(
-      norm(wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, existing) ?? ""),
-    ).toBe(want);
+    expect(norm(wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, existing) ?? "")).toBe(want);
     // 盘上真没有时不编一个路径出来（那会让下面的 `winget install` 以 ENOENT 失败）。
-    expect(
-      wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, () => false),
-    ).toBeNull();
+    expect(wingetAtStandardLocation({ LOCALAPPDATA: "/L" }, () => false)).toBeNull();
     // 没有 LOCALAPPDATA 时不拼出一个相对路径来冒充绝对路径。
     expect(wingetAtStandardLocation({})).toBeNull();
   });
@@ -538,11 +507,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     );
     /* 其他账号那一条要补 `AppData\Local`（MSIX 按用户安装落在那儿）—— 少补这一段
      * 会拼成一条不存在的路径。 */
-    expect(
-      has(
-        "C:\\Users\\other\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe",
-      ),
-    ).toBe(true);
+    expect(has("C:\\Users\\other\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe")).toBe(true);
     /* 盘符从 PATH 反推的 —— `D:` 盘上的程序目录也在候选里（写死 `C:` 就会漏）。 */
     expect(has("D:\\Program Files\\WindowsApps\\winget.exe")).toBe(true);
     expect(has("/PF/Microsoft/WindowsApps/winget.exe")).toBe(true);
@@ -578,9 +543,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     expect(ran).toContain("dnf install -y python3");
     // 刻意**不**替人 sudo：权限那一层归平台侧的人（无人值守里一次提示 = 一次挂死）。
     expect(ran.some((c) => c.includes("sudo"))).toBe(false);
-    expect(linux.reason === null || typeof linux.reason === "string").toBe(
-      true,
-    );
+    expect(linux.reason === null || typeof linux.reason === "string").toBe(true);
 
     // 一个都不在 ⇒ 如实说「请自行安装」，而不是猜一个可能不存在的包管理器。
     const none = installPython({
@@ -652,7 +615,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       writeFileSync(path.join(links, "python.exe"), "");
       const r = installPython({
         ...noExternalAction,
-        env: /* SAFETY: 类型断言已复核 */ { LOCALAPPDATA: localAppData } as unknown as NodeJS.ProcessEnv,
+        env: /* SAFETY: 类型断言已复核 */ {
+          LOCALAPPDATA: localAppData,
+        } as unknown as NodeJS.ProcessEnv,
         run: () => ({ ok: true, out: "" }),
       });
       expect(r.installed).toBe(false);
@@ -667,9 +632,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
       /* `run` 对 `--scope` 那两条报失败，对其余（`winget --version`、`scoop …`）
        * 报成功 —— 后面两条通道因此仍会被走到，它们的接缝同样由夹具注入死。 */
       run: (_cmd, args) =>
-        args.includes("--scope")
-          ? { ok: false, out: "boom" }
-          : { ok: true, out: "" },
+        args.includes("--scope") ? { ok: false, out: "boom" } : { ok: true, out: "" },
     });
     expect(r.installed).toBe(false);
     expect(r.reason).toContain("user");
@@ -723,9 +686,7 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
 
   it("embed 包固定版本号，不取 latest（同一提交在两台节点上要装出同一个 Python）", () => {
     expect(PYTHON_EMBED_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(read("scripts/ci-toolchain-selfcheck.mjs")).not.toContain(
-      "/latest/",
-    );
+    expect(read("scripts/ci-toolchain-selfcheck.mjs")).not.toContain("/latest/");
   });
 
   it("三条通道全断时，reason 逐条点名各自断在哪（不糊成一句「装不上」）", () => {
@@ -814,8 +775,7 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
     const lines = pnpmForensics({
       platform: "win32",
       env: { PATH: dir },
-      isFile: (p: string) =>
-        p.toLowerCase() === path.join(dir, "pnpm.ps1").toLowerCase(),
+      isFile: (p: string) => p.toLowerCase() === path.join(dir, "pnpm.ps1").toLowerCase(),
       tried,
       hostFound: false,
     });
@@ -871,13 +831,8 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
     /* 判定面与读数面必须是**同一份**读法：两处各读一遍，就会出现「判据读的是
      * `Path`、取证打的却是空的 `PATH`」—— 那正是第 2281 号单里读不出根因的那种日志。 */
     const env = { Path: "C:\\Windows;C:\\nodejs" };
-    expect(pnpmPathValue({ platform: "win32", env })).toBe(
-      "C:\\Windows;C:\\nodejs",
-    );
-    expect(pnpmPathEntries({ platform: "win32", env })).toEqual([
-      "C:\\Windows",
-      "C:\\nodejs",
-    ]);
+    expect(pnpmPathValue({ platform: "win32", env })).toBe("C:\\Windows;C:\\nodejs");
+    expect(pnpmPathEntries({ platform: "win32", env })).toEqual(["C:\\Windows", "C:\\nodejs"]);
     // POSIX 上 `Path` 与 `PATH` 是两个变量：不许把不敏感那一条套过去。
     expect(pnpmPathValue({ platform: "linux", env })).toBe("");
   });
@@ -891,9 +846,7 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
       env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
       // 盘上有两个形态，而两个都起不来。
       isFile: (p: string) =>
-        [".ps1", ".cmd"].some(
-          (e) => p.toLowerCase() === path.join(dir, `pnpm${e}`),
-        ),
+        [".ps1", ".cmd"].some((e) => p.toLowerCase() === path.join(dir, `pnpm${e}`)),
       host: () => null,
       probeRun: () => null,
     });
@@ -923,13 +876,7 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
  * 一件不少（少了就变成「拿 .ps1 当可执行文件起」）。
  */
 describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () => {
-  const hostPrefix = [
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-File",
-    "/bin/pnpm.PS1",
-  ];
+  const hostPrefix = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "/bin/pnpm.PS1"];
 
   it("真命令里**不带**探针参数 `-v`（带上就变成「只打版本、什么都不装」）", () => {
     const calls: string[][] = [];
@@ -954,13 +901,7 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
     /* 装哪几件从 `BROWSER_PACKAGES` 取，**不在这里抄一份** —— 抄一份就成了第二处
      * 「这一步装什么」的定义，换成只装 headless shell 时它不会跟着变（本笔正是这么
      * 改的，而这一条当场红了一次）。 */
-    expect(args).toEqual([
-      ...hostPrefix,
-      "exec",
-      "playwright",
-      "install",
-      ...BROWSER_PACKAGES,
-    ]);
+    expect(args).toEqual([...hostPrefix, "exec", "playwright", "install", ...BROWSER_PACKAGES]);
   });
 
   it("宿主前缀一件不少（少了就变成「拿 .ps1 当可执行文件起」）", () => {
@@ -1031,10 +972,7 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
     ).not.toContain("chromium");
     /* 复验判的那一件必须在装的那一串里 —— 否则「装上」与「判过」指着两件不同的东西
      * （判据会一直红，而东西其实装了）。 */
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
     for (const pkg of BROWSER_PACKAGES) {
       expect(src, `复验找的形状与 BROWSER_PACKAGES 对不上：${pkg}`).toContain(
         pkg.replace(/-/g, "_"),
@@ -1070,10 +1008,7 @@ describe("工具链自证：`.cnb.yml` 真的在跑它", () => {
  * 实现走：只要通道内部出现了直取模块级实现，它就红。
  */
 describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961）", () => {
-  const script = readFileSync(
-    path.join(ROOT, "scripts", "ci-toolchain-python.mjs"),
-    "utf8",
-  );
+  const script = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-python.mjs"), "utf8");
 
   it("`installPython` 的注入面覆盖每条通道会伸出去的东西", () => {
     for (const one of [
@@ -1099,13 +1034,9 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
       script.indexOf("function viaScoop("),
       script.indexOf("function viaEmbed("),
     );
-    expect(scoop, "viaScoop 没有接 findExeUnder 注入面").toContain(
-      "findExeUnder",
-    );
+    expect(scoop, "viaScoop 没有接 findExeUnder 注入面").toContain("findExeUnder");
     expect(
-      /(?<![.\w])findExeUnder\s*\(/.test(
-        scoop.replace(/findExeUnder:\s*findExe/, ""),
-      ),
+      /(?<![.\w])findExeUnder\s*\(/.test(scoop.replace(/findExeUnder:\s*findExe/, "")),
       "viaScoop 又直接调了模块级的 findExeUnder（读真 fs）：注入面形同虚设",
     ).toBe(false);
 
@@ -1114,9 +1045,7 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
       script.indexOf("function viaWinget("),
       script.indexOf("function installViaWinget("),
     );
-    expect(shell, "viaWinget 没把 listDirs / existing 透传给实现").toContain(
-      "listDirs",
-    );
+    expect(shell, "viaWinget 没把 listDirs / existing 透传给实现").toContain("listDirs");
     expect(shell).toContain("existing");
   });
 
@@ -1124,16 +1053,11 @@ describe("工具链自证：安装通道的注入面按结构判（ISSUE #1961�
     /* 只判 **Windows** 分支：POSIX 那条只经 `run` 起包管理器，没有网络与解压
      * 那两截 —— 只注入 `run` 在那里是真的够，判它等于误报。 */
     const self = readFileSync(import.meta.filename, "utf8");
-    const calls = [
-      ...self.matchAll(/installPython\(\{([\s\S]*?)\n\s{0,6}\}\);/g),
-    ].map((m) => m[1] ?? "");
-    const winCalls = calls.filter((args) =>
-      args.includes("...noExternalAction"),
+    const calls = [...self.matchAll(/installPython\(\{([\s\S]*?)\n\s{0,6}\}\);/g)].map(
+      (m) => m[1] ?? "",
     );
-    expect(
-      winCalls.length,
-      "没扫到 Windows 分支的调用点，判据失效了",
-    ).toBeGreaterThan(1);
+    const winCalls = calls.filter((args) => args.includes("...noExternalAction"));
+    expect(winCalls.length, "没扫到 Windows 分支的调用点，判据失效了").toBeGreaterThan(1);
     expect(
       calls.some((args) => args.includes('platform: "linux"')),
       "POSIX 分支的调用点不见了（判据的另一半）",
@@ -1293,11 +1217,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
      * 与上面那条「大小写按 NTFS 不敏感处理」是同一条理由。 */
     const norm = (p: string) => p.replace(/[\\/]+/g, "\\").toLowerCase();
     const onDisk = new Set(
-      [
-        nodeDir + String.raw`\pnpm`,
-        nodeDir + String.raw`\pnpm.ps1`,
-        hostExe,
-      ].map(norm),
+      [nodeDir + String.raw`\pnpm`, nodeDir + String.raw`\pnpm.ps1`, hostExe].map(norm),
     );
     const r = findPnpm({
       platform: "win32",
@@ -1312,10 +1232,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
         return null;
       },
     });
-    expect(
-      r.ok,
-      "第二条 PATH 上的 pnpm 必须被找到（切错分隔符会整串当成一条）",
-    ).toBe(true);
+    expect(r.ok, "第二条 PATH 上的 pnpm 必须被找到（切错分隔符会整串当成一条）").toBe(true);
     expect(r.out).toBe("12.4.1");
   });
 
@@ -1375,26 +1292,16 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
        * 少了这条模拟，探针参数丢了也照绿 —— 那正是这次漏网的原因。 */
       probeRun: (cmd: string, args: string[]) => {
         calls.push([cmd, args]);
-        return args.includes("-v")
-          ? { command: cmd, args, out: "12.4.1" }
-          : null;
+        return args.includes("-v") ? { command: cmd, args, out: "12.4.1" } : null;
       },
     });
-    expect(r.ok, "垫片没收到 -v ⇒ 被当成起不来 ⇒ 又报「pnpm 不可用」").toBe(
-      true,
-    );
+    expect(r.ok, "垫片没收到 -v ⇒ 被当成起不来 ⇒ 又报「pnpm 不可用」").toBe(true);
     expect(calls.length).toBeGreaterThan(0);
     for (const [, args] of calls) {
       expect(args, "探 `.ps1` 时 `-v` 没接在宿主前缀后面").toContain("-v");
       // 宿主前缀本身不许丢（丢了就变成「拿 .ps1 当可执行文件起」）。
       expect(args).toEqual(
-        expect.arrayContaining([
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          ps1,
-        ]),
+        expect.arrayContaining(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1]),
       );
     }
   });
@@ -1511,16 +1418,10 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
  */
 describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   it("落点里有 headless shell ⇒ 判过；没有 / 读不到 ⇒ 判不过", async () => {
-    const { browserExecutableExists } =
-      await import("../scripts/ci-toolchain-selfcheck.mjs");
-    const root =
-      process.platform === "win32"
-        ? "C:\\x\\ms-playwright"
-        : "/x/ms-playwright";
+    const { browserExecutableExists } = await import("../scripts/ci-toolchain-selfcheck.mjs");
+    const root = process.platform === "win32" ? "C:\\x\\ms-playwright" : "/x/ms-playwright";
     const exe =
-      process.platform === "win32"
-        ? "chrome-headless-shell.exe"
-        : "chrome-headless-shell";
+      process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
 
     /* 「齐」那一半边用**真临时目录**跑：判据是**活的**（`findFileUnder` 真去读 fs），
      * 只喂目录名不算数 —— 而「真读盘」恰好是这一条要与实现同源的形态。 */
@@ -1571,8 +1472,7 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   });
 
   it("落点根按平台推（不写死盘符 / 认环境变量）", async () => {
-    const { playwrightBrowsersRoot } =
-      await import("../scripts/ci-toolchain-selfcheck.mjs");
+    const { playwrightBrowsersRoot } = await import("../scripts/ci-toolchain-selfcheck.mjs");
     /* ⚠️ 期望值一律用**目标平台**的 join 拼，不用宿主的 `path.join`（`node:path`
      * 是宿主那一份）。判据是可注入的 `platform`，所以这组会**在一种平台上判另一种
      * 平台** —— 拿宿主 `path.join` 去拼会跟着跑判据的那台机器变：平台侧实测报过
@@ -1596,9 +1496,9 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
         env: { HOME: "/h" },
       }),
     ).toBe(posix("/h", "Library", "Caches", "ms-playwright"));
-    expect(
-      playwrightBrowsersRoot({ platform: "linux", env: { HOME: "/h" } }),
-    ).toBe(posix("/h", ".cache", "ms-playwright"));
+    expect(playwrightBrowsersRoot({ platform: "linux", env: { HOME: "/h" } })).toBe(
+      posix("/h", ".cache", "ms-playwright"),
+    );
     // 显式指定就听它的（自托管那台机把用户数据放在 D: 盘）。
     expect(
       playwrightBrowsersRoot({
@@ -1611,10 +1511,7 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
   it("复验真的排在「装」之后，且不过要非零退出（不许提前 return 0）", () => {
     /* 浏览器那一层的实现住在 `scripts/ci-toolchain-browser.mjs`（§12.6 R5 的 900 行
      * 硬闸下拆出来的，与 `ci-toolchain-python.mjs` 同一条边界）。 */
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
     const body = src.slice(
       src.indexOf("export function playwrightOnly("),
       src.indexOf("export function browserExecutableExists("),
@@ -1626,10 +1523,7 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
      * 会命中前面那个，于是这条判据答的是「跳过那一支在装之前」，
      * 与它要守的「复验在装之后」是两件事 —— 而它**照样会绿**。
      * 这类「判据指到了同形的邻居上」正是本仓反复记的那一格（判据在，但判错了对象）。 */
-    const verifyAt = body.indexOf(
-      "browserExecutableExists({ env })",
-      installAt,
-    );
+    const verifyAt = body.indexOf("browserExecutableExists({ env })", installAt);
     expect(installAt).toBeGreaterThan(0);
     expect(
       verifyAt,
@@ -1655,10 +1549,7 @@ describe("工具链自证：装完必须复验（ISSUE #1961）", () => {
  */
 describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
   it("守卫把 `main()` 的返回值交给 `process.exit()`", () => {
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"), "utf8");
     /* 按源码形状钉：末尾那一段里必须有 `process.exit(main())`。
      * 裸 `main();` 正是被吞码的形态 —— 它的表现是「打了未通过、退出码 0」。 */
     const guard = src.slice(src.indexOf("import.meta.filename"));
@@ -1725,19 +1616,14 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
        * 少了任何一处，这一条就变成在测「这台机器装没装浏览器」——那是**恒真**的。 */
       const patchedSrc = readFileSync(browserProbe, "utf8");
       const planted: Array<[string, (s: string) => boolean]> = [
-        [
-          "安装那一步（①）",
-          (t) => t.includes('const install = { ok: true, out: "(probe'),
-        ],
+        ["安装那一步（①）", (t) => t.includes('const install = { ok: true, out: "(probe')],
         [
           "「已装就跳过」（①′）",
-          (t) =>
-            t.includes("const already = { ok: false, out: '(probe: 不跳过)' }"),
+          (t) => t.includes("const already = { ok: false, out: '(probe: 不跳过)' }"),
         ],
         [
           "自取成功那条早退（①″）",
-          (t) =>
-            t.includes("if (false && seeded.ok && browserExecutableExists"),
+          (t) => t.includes("if (false && seeded.ok && browserExecutableExists"),
         ],
       ];
       for (const [label, hit] of planted) {
@@ -1750,10 +1636,7 @@ describe("工具链自证：退出码必须转出去（ISSUE #1961）", () => {
       /* 子进程跑**真**的那个入口（它 import 的是补过的那份 browser 模块）。 */
       writeFileSync(
         probe,
-        readFileSync(
-          path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"),
-          "utf8",
-        ),
+        readFileSync(path.join(ROOT, "scripts", "ci-toolchain-selfcheck.mjs"), "utf8"),
       );
       const r = spawnSync(process.execPath, [probe, "--playwright-only"], {
         encoding: "utf8",
@@ -1874,16 +1757,13 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
     });
     const text = playwrightInstallHints(out, facts).join("\n");
     /* ① 生效的超时值必须与现场对得上（旧话术在这里说的是「30s」）。 */
-    expect(text, "读数里的超时值与现场对不上 —— 人照它改会改错方向").toContain(
-      "120000ms",
-    );
+    expect(text, "读数里的超时值与现场对不上 —— 人照它改会改错方向").toContain("120000ms");
     expect(text).not.toContain("30s 是 Playwright 的默认");
     /* ② 那两条出口要**点名为已经做过**，而不是再建议一遍。 */
     expect(text).toContain("都已经做过了");
-    expect(
-      text,
-      "又把「放宽到 120000」当建议给出来了 —— 那正是现场已经配着的值",
-    ).not.toContain("放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000");
+    expect(text, "又把「放宽到 120000」当建议给出来了 —— 那正是现场已经配着的值").not.toContain(
+      "放宽：PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000",
+    );
     /* ③ 剩下的出路必须给出来（在宿主机 / 网络侧，不是仓库里）。 */
     expect(text).toContain("预先把 chromium-headless-shell 装进落点");
   });
@@ -1900,14 +1780,12 @@ describe("工具链自证：下载失败的读数是读数，不是又一句「�
     const notRaised = playwrightInstallHints(
       out,
       playwrightInstallHintFacts({
-        PLAYWRIGHT_DOWNLOAD_HOST:
-          "https://cdn.npmmirror.com/binaries/playwright",
+        PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright",
       }),
     ).join("\n");
-    expect(
-      notRaised,
-      "缺省超时那一档把「放宽」也吞掉了 —— 那是还没走过的出口",
-    ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
+    expect(notRaised, "缺省超时那一档把「放宽」也吞掉了 —— 那是还没走过的出口").toContain(
+      "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT",
+    );
   });
 
   it("`playwrightInstallHintFacts()` 读的是**生效值**：0 / 空 / 非数字不算放宽", () => {
@@ -1968,14 +1846,8 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
   function readyEnv() {
     const dir = mkdtempSync(path.join(tmpdir(), "pw-ready-"));
     const exe =
-      process.platform === "win32"
-        ? "chrome-headless-shell.exe"
-        : "chrome-headless-shell";
-    const nested = path.join(
-      dir,
-      "chromium_headless_shell-1243",
-      "chrome-headless-shell-linux64",
-    );
+      process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+    const nested = path.join(dir, "chromium_headless_shell-1243", "chrome-headless-shell-linux64");
     mkdirSync(nested, { recursive: true });
     writeFileSync(path.join(nested, exe), "");
     return dir;
@@ -2066,9 +1938,9 @@ describe("工具链自证：装过的就不装（ISSUE #1961）", () => {
  */
 describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #1961）", () => {
   it("设了就只用它；没设就回退到 Playwright 的默认（不发明第二个镜像）", () => {
-    expect(
-      playwrightHostsToTry({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" }),
-    ).toEqual(["https://m/x"]);
+    expect(playwrightHostsToTry({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" })).toEqual([
+      "https://m/x",
+    ]);
     expect(playwrightHostsToTry({})).toEqual([undefined]);
   });
 
@@ -2155,9 +2027,7 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
       }),
       /* 只有 npmmirror 那一个根量得到（现场就是这样：配着的那个超时、别的根 200）。 */
       probe: (url) =>
-        url.includes("npmmirror.com/binaries")
-          ? "HTTP 200"
-          : "超时（8000ms 内没有响应）",
+        url.includes("npmmirror.com/binaries") ? "HTTP 200" : "超时（8000ms 内没有响应）",
       exec: (
         /** @type {string} */ _cmd,
         /** @type {string[]} */ _args,
@@ -2191,9 +2061,9 @@ describe("工具链自证：下载根由外面给，不由本仓猜（ISSUE #196
       "没设 `PLAYWRIGHT_DOWNLOAD_HOST` 时本仓自己给了一个根 —— 那等于把" +
         "「哪面墙怎么过」写死在仓里，换台机器就静默失效",
     ).toEqual([undefined]);
-    expect(
-      playwrightDownloadRoots({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" }),
-    ).toEqual(["https://m/x"]);
+    expect(playwrightDownloadRoots({ PLAYWRIGHT_DOWNLOAD_HOST: "https://m/x" })).toEqual([
+      "https://m/x",
+    ]);
   });
 
   it("`runPlaywrightInstall` 把根逐次交给子进程（不是设一次全局）", () => {
@@ -2365,12 +2235,7 @@ function firstStdoutMatch(
   // 定时器只当「子进程压根没起来」的失败上限，命中即 clear。
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () =>
-        reject(
-          new Error(
-            `${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`,
-          ),
-        ),
+      () => reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`)),
       timeoutMs,
     );
     let buffered = "";
@@ -2409,10 +2274,7 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
    * 端口由服务自己选（`listen(0)`）再打在 stdout 上，用例不猜端口 —— 猜端口会在
    * 并行 / 端口被占时变成一条**看起来像判据红**的假红（本仓对这类形态有先例）。
    */
-  async function withServer(
-    kind: keyof typeof SERVER_CASES,
-    body: (base: string) => void,
-  ) {
+  async function withServer(kind: keyof typeof SERVER_CASES, body: (base: string) => void) {
     const script = `
       const { createServer } = require("node:http");
       const kind = ${JSON.stringify(SERVER_CASES[kind])};
@@ -2437,10 +2299,7 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
     await withServer("ok", (base) => {
       const verdict = httpDownloadProbe(`${base}/a.zip`);
       expect(verdict, "真取回字节却没判通").toMatch(/^HTTP 206/);
-      expect(
-        verdict,
-        "读数里没有实收字节数 —— 人判不出「到底有没有量到东西」",
-      ).toContain("字节");
+      expect(verdict, "读数里没有实收字节数 —— 人判不出「到底有没有量到东西」").toContain("字节");
       expect(isReachableVerdict(verdict)).toBe(true);
     });
   });
@@ -2453,18 +2312,15 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
         timeoutMs: 400,
       });
       expect(isReachableVerdict(verdict), "0 字节被判成了「通」").toBe(false);
-      expect(
-        verdict,
-        "「连上了但 0 字节」与「压根没连上」必须分得开 —— 处置不同",
-      ).toContain("连上了但 0 字节");
+      expect(verdict, "「连上了但 0 字节」与「压根没连上」必须分得开 —— 处置不同").toContain(
+        "连上了但 0 字节",
+      );
     });
   });
 
   it("3xx ⇒ 跟随（Playwright 自己也跟随，裸看会把 302 读成「没量到」）", async () => {
     await withServer("redirect", (base) => {
-      const verdict = httpDownloadProbe(
-        `${base}/root/builds/cft/1/win64/x.zip`,
-      );
+      const verdict = httpDownloadProbe(`${base}/root/builds/cft/1/win64/x.zip`);
       expect(
         verdict,
         "没跟随重定向 —— 候选根里 `registry.npmmirror.com/-/binary/playwright` 就回 302，" +
@@ -2489,15 +2345,14 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
      * 就断了」印在了一条 0 字节的链路上）。 */
     await withServer("redirectStall", (base) => {
       const started = Date.now();
-      const verdict = httpDownloadProbe(
-        `${base}/root/builds/cft/1/win64/x.zip`,
-        { timeoutMs: 400, maxRedirects: 3 },
-      );
+      const verdict = httpDownloadProbe(`${base}/root/builds/cft/1/win64/x.zip`, {
+        timeoutMs: 400,
+        maxRedirects: 3,
+      });
       const elapsed = Date.now() - started;
       expect(
         isReachableVerdict(verdict),
-        `0 字节被判成了「通」（读数：${verdict}）—— 那一跳只是重定向，` +
-          "真资源一个字节都没到",
+        `0 字节被判成了「通」（读数：${verdict}）—— 那一跳只是重定向，` + "真资源一个字节都没到",
       ).toBe(false);
       expect(
         elapsed,
@@ -2558,10 +2413,9 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
         written,
         "服务端没报回写入量 —— 这条用例量不到东西（夹具问题，不是判据问题）",
       ).toBeGreaterThan(0);
-      expect(
-        written,
-        "探测把整个 body 读完了 —— 它不是下载，收到第一批字节就该收手",
-      ).toBeLessThan(8 * 1024 * 1024);
+      expect(written, "探测把整个 body 读完了 —— 它不是下载，收到第一批字节就该收手").toBeLessThan(
+        8 * 1024 * 1024,
+      );
     } finally {
       child.kill();
     }
@@ -2574,8 +2428,7 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
      * `builds/chromium/<revision>/…` 形状。给后两条接上 `builds/cft/…` 得到的地址
      * 永远供不上这一件（实测跟到最后是 400）—— 而人照读数「换一个能通的根」就会
      * 换到那里去（现场 `cnb-oqf-1k51ifhis` 那两条逐字是 400）。 */
-    const candidates /** @type {string[]} */ =
-      /** @type {unknown} */ browserCandidates;
+    const candidates /** @type {string[]} */ = /** @type {unknown} */ browserCandidates;
     for (const legacy of [
       "https://cdn.playwright.dev/dbazure/download/playwright",
       "https://playwright.download.prss.microsoft.com/dbazure/download/playwright",
@@ -2597,17 +2450,13 @@ describe("下载根探测：HEAD 答不了「取得下来吗」，必须真取�
     /* 结构性一条：上面几条判的是行为，这条判的是「它没被改回去」——
      * HEAD 与 GET 在本地服务上可能都回 206，但真链路上完全不同。 */
     const src = read("scripts/ci-toolchain-browser-reach.mjs");
-    expect(
-      src,
-      "浏览器探测又回到 HEAD 了 —— HEAD 答不了「取得下来吗」",
-    ).not.toContain('method: "HEAD"');
-    expect(src, "探测里没有 `Range` —— 那就不是「取一小段」的判法").toContain(
-      "Range",
+    expect(src, "浏览器探测又回到 HEAD 了 —— HEAD 答不了「取得下来吗」").not.toContain(
+      'method: "HEAD"',
     );
-    expect(
-      src,
-      "函数头里没了「为什么不发 HEAD」那条理由 —— 下一个人会把它改回去",
-    ).toContain("为什么不是 HEAD");
+    expect(src, "探测里没有 `Range` —— 那就不是「取一小段」的判法").toContain("Range");
+    expect(src, "函数头里没了「为什么不发 HEAD」那条理由 —— 下一个人会把它改回去").toContain(
+      "为什么不是 HEAD",
+    );
   });
 });
 
@@ -2698,10 +2547,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     async () => {
       const TOTAL = 256 * 1024;
       await withStallingLink(TOTAL, 20 * 1024, async (base) => {
-        const dest = path.join(
-          mkdtempSync(path.join(tmpdir(), "cnb-fetch-")),
-          "x.bin",
-        );
+        const dest = path.join(mkdtempSync(path.join(tmpdir(), "cnb-fetch-")), "x.bin");
         try {
           const res = fetchUrlResumable(`${base}/x.zip`, dest, {
             chunkBytes: 128 * 1024,
@@ -2730,10 +2576,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
             readFileSync(dest).every((b) => b === 7),
             "内容不对 —— 说明片与片之间接错了位置（偏移算错）",
           ).toBe(true);
-          expect(
-            res.chunks,
-            "一片都没记到 —— 这条用例没量到东西",
-          ).toBeGreaterThan(1);
+          expect(res.chunks, "一片都没记到 —— 这条用例没量到东西").toBeGreaterThan(1);
         } finally {
           rmSync(path.dirname(dest), { recursive: true, force: true });
         }
@@ -2809,10 +2652,9 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
         fetchChunk: () => ({ bytes: -1, total: null, out: "ERR 连不上" }),
       });
       expect(res.ok).toBe(false);
-      expect(
-        res.out,
-        "取不到总长时没说清「这一档交给老路」—— 人读到会以为整条路都断了",
-      ).toContain("老路");
+      expect(res.out, "取不到总长时没说清「这一档交给老路」—— 人读到会以为整条路都断了").toContain(
+        "老路",
+      );
       expect(existsSync(dest), "总长都没取到却建了文件").toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2851,17 +2693,14 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
      * `<browserVersion>`（`153.0.8010.12`）。拿错一个号不会报错：包解到一个没人会看的
      * 目录，Playwright 随即 `Removing unused browser` 把整包重下一遍 —— 自取白做，
      * 而日志两个方向都像成功。 */
-    expect(browserDirName({ revision: "1243" })).toBe(
-      "chromium_headless_shell-1243",
-    );
+    expect(browserDirName({ revision: "1243" })).toBe("chromium_headless_shell-1243");
     expect(
       browserDirName({ revision: "1243" }),
       "目录名里出现了 browserVersion —— 那一位不是目录名用的号",
     ).not.toContain("153");
-    expect(
-      browserDirName(null, "1243"),
-      "读不到 browsers.json 时没用那档缺省",
-    ).toBe("chromium_headless_shell-1243");
+    expect(browserDirName(null, "1243"), "读不到 browsers.json 时没用那档缺省").toBe(
+      "chromium_headless_shell-1243",
+    );
     expect(
       browserDirName(null),
       "两个号都读不到时给了一个**猜的**目录名 —— 那会装出一份没人会用的东西，而它看起来与成功同形",
@@ -2909,10 +2748,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
         installCalled,
         "自取失败之后没有交给 playwright install 的老路 —— 那等于把一条尝试当成了判据",
       ).toBe(true);
-      expect(
-        code,
-        "自取失败时这一步应当由「装完复验」决定收场（这一跑老路也没成 ⇒ 红）",
-      ).toBe(1);
+      expect(code, "自取失败时这一步应当由「装完复验」决定收场（这一跑老路也没成 ⇒ 红）").toBe(1);
       expect(printed.join("\n")).toContain("模拟：分片取不下来");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2932,9 +2768,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
     const dir = mkdtempSync(path.join(tmpdir(), "pw-seeded-"));
     try {
       const exe =
-        process.platform === "win32"
-          ? "chrome-headless-shell.exe"
-          : "chrome-headless-shell";
+        process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
       /** @type {string[]} */
       const printed: string[] = [];
       /** @type {boolean} */

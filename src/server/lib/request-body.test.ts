@@ -30,12 +30,11 @@ describe("readJsonRecord", () => {
     const result = await readJsonRecord(reqWith("{ 不是 JSON"));
     expect(isErrorResponse(result)).toBe(true);
     expect(/* SAFETY: 类型断言已复核 */ (result as Response).status).toBe(400);
-    const envelope =
-      /* SAFETY: 类型断言已复核 */ (await /* SAFETY: 类型断言已复核 */ (
-        result as Response
-      ).json()) as {
-        error: { code: string; message: string };
-      };
+    const envelope = /* SAFETY: 类型断言已复核 */ (await /* SAFETY: 类型断言已复核 */ (
+      result as Response
+    ).json()) as {
+      error: { code: string; message: string };
+    };
     /* 信封形状走 §10.9 的唯一出口：`{ error: { code, message } }`，
      * 而不是 `{ error: "…" }` 字符串。 */
     expect(envelope.error.code).toBe("validation.invalid");

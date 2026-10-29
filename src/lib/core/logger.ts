@@ -217,10 +217,7 @@ export const logger = createPinoLogger();
  * `[app] （无可读文案；字段：password, token） {"ns":"login"}`）。
  * pino 里也没有「(msg, ns)」这种签名：`(msg, extra)` 的第二个参数是格式化实参。
  */
-function renderServerLogEntry(
-  rawArgs: unknown[],
-  loggerNs?: string,
-): { msg: string; ns: string } {
+function renderServerLogEntry(rawArgs: unknown[], loggerNs?: string): { msg: string; ns: string } {
   // 二次防线（也覆盖直接调用本函数的路径）：先把 payload 里的密钥形状值擦掉再取文案。
   const args = rawArgs.map((a) => redactSecretShaped(a));
   const first = args[0];
@@ -242,11 +239,8 @@ function renderServerLogEntry(
   // `renderServerLogMessage` 里，于是第二个字符串（真正的文案）永远选不上，
   // 面板只剩「（无可读文案；字段：…）」。
   const msg = payload
-    ? (firstNonEmpty(
-        renderServerLogMessage(payload),
-        secondString,
-        renderFieldKeyList(payload),
-      ) ?? "服务端错误")
+    ? (firstNonEmpty(renderServerLogMessage(payload), secondString, renderFieldKeyList(payload)) ??
+      "服务端错误")
     : // 没有结构化字段：字符串参数就是正文；再没有才回落占位文案
       (firstNonEmpty(stringArg, secondString) ?? "服务端错误");
 
@@ -273,9 +267,7 @@ function renderServerLogMessage(payload?: Record<string, unknown>): string {
   if (!payload) return "";
   const raw = payload.msg ?? payload.message;
   if (typeof raw === "string" && raw.length > 0) return raw;
-  const err = /* SAFETY: 类型断言已复核 */ payload.err as
-    | { message?: unknown }
-    | undefined;
+  const err = /* SAFETY: 类型断言已复核 */ payload.err as { message?: unknown } | undefined;
   if (err && typeof err.message === "string" && err.message.length > 0) {
     return err.message;
   }
@@ -318,8 +310,7 @@ function wrap(inner: PinoLogger): Logger {
     inner.bindings() as Record<string, unknown>
   ).ns;
   const ns = typeof binding === "string" ? binding : "";
-  const next = (childNs: string) =>
-    wrap(inner.child({ ns: ns ? `${ns}:${childNs}` : childNs }));
+  const next = (childNs: string) => wrap(inner.child({ ns: ns ? `${ns}:${childNs}` : childNs }));
   return {
     debug: (msg, fields) => inner.debug(fields ?? {}, msg),
     info: (msg, fields) => inner.info(fields ?? {}, msg),
@@ -335,10 +326,7 @@ function wrap(inner: PinoLogger): Logger {
  * `opts` 只用于把落盘目标换成调用方自己的流（测试断言 JSON 行、或宿主自定义
  * 目标流）；常规调用方不需要传。
  */
-export function createLogger(
-  namespace: string,
-  opts: Omit<PinoLoggerOptions, "ns"> = {},
-): Logger {
+export function createLogger(namespace: string, opts: Omit<PinoLoggerOptions, "ns"> = {}): Logger {
   return wrap(createPinoLogger({ ...opts, ns: namespace }));
 }
 

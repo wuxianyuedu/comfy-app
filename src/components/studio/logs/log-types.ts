@@ -35,13 +35,7 @@ export interface LogEntry {
   /** Where the log came from（console / tauri / system）。 */
   source: "console" | "tauri" | "system";
   /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
-  origin?:
-    | "dev"
-    | "launcher"
-    | "app"
-    | "app-runtime"
-    | "shell"
-    | "shell-launch";
+  origin?: "dev" | "launcher" | "app" | "app-runtime" | "shell" | "shell-launch";
   /** console 日志的调用位置（文件:行号） */
   location?: string;
   /**
@@ -69,10 +63,7 @@ export type LogFilter = LogLevel | "all";
  * 因此「控制台 / 全局错误」是一个**真分类**：它有自己的计数、按它筛出这些行，
  * 且 `console + 四个文件来源 = 全部来源`（见 computeOriginCounts 的守恒契约）。
  */
-export type LogOriginFilter =
-  | NonNullable<LogEntry["origin"]>
-  | "console"
-  | "all";
+export type LogOriginFilter = NonNullable<LogEntry["origin"]> | "console" | "all";
 
 /**
  * 行没有文件来源（`origin` 为 undefined）时归入的桶（见 {@link LogOriginFilter}）。

@@ -27,9 +27,7 @@ import type { EnrichedWidget } from "~/components/studio/workflow-io-groups";
  * `data-dimension-pin` 是每个 chip 的定位依据（判据与测试按它找），
  * 所以下面的 pin 名都写成真机上会出现的（`width` / `height` / `aspect` / `megapixels`）。
  */
-const pin = (
-  over: Partial<EnrichedWidget> & { ioKey: string },
-): EnrichedWidget => ({
+const pin = (over: Partial<EnrichedWidget> & { ioKey: string }): EnrichedWidget => ({
   direction: "input",
   kind: "widget",
   nodeId: "5",
@@ -93,9 +91,7 @@ export const NotEditableRendersNothing: Story = {
   args: { onRequiredChange: undefined },
   render: (args) => (
     <div className="flex items-center gap-3">
-      <span className="text-ink-muted font-mono text-[11px]">
-        两个回调都不传 →
-      </span>
+      <span className="text-ink-muted font-mono text-[11px]">两个回调都不传 →</span>
       <span className="border-border text-ink-faint rounded border border-dashed px-3 py-1 text-[11px]">
         <RequiredChips {...args} />
       </span>
@@ -114,24 +110,22 @@ export const ModeOverrides: Story = {
   render: () => (
     <div className="flex flex-col gap-4">
       {
-        /* SAFETY: 类型断言已复核 */ ([null, "turbo", "draft"] as const).map(
-          (mode) => (
-            <div key={String(mode)} className="flex flex-col gap-1">
-              <span className="text-ink-muted font-mono text-[11px]">
-                mode = {mode ?? "（条目级）"}
-              </span>
-              <div className="bg-canvas border-border-strong w-80 rounded-lg border p-2">
-                <RequiredChips
-                  pins={[WIDTH, STEPS]}
-                  mode={mode}
-                  visibilityMode={mode}
-                  onRequiredChange={() => undefined}
-                  onVisibilityChange={() => undefined}
-                />
-              </div>
+        /* SAFETY: 类型断言已复核 */ ([null, "turbo", "draft"] as const).map((mode) => (
+          <div key={String(mode)} className="flex flex-col gap-1">
+            <span className="text-ink-muted font-mono text-[11px]">
+              mode = {mode ?? "（条目级）"}
+            </span>
+            <div className="bg-canvas border-border-strong w-80 rounded-lg border p-2">
+              <RequiredChips
+                pins={[WIDTH, STEPS]}
+                mode={mode}
+                visibilityMode={mode}
+                onRequiredChange={() => undefined}
+                onVisibilityChange={() => undefined}
+              />
             </div>
-          ),
-        )
+          </div>
+        ))
       }
     </div>
   ),
@@ -145,22 +139,17 @@ export const SizeTableFooters: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
       {
-        /* SAFETY: 类型断言已复核 */ (["image", "video"] as const).map(
-          (scene) => (
-            <div key={scene} className="flex flex-col gap-1">
-              <span className="text-ink-muted font-mono text-[11px]">
-                scene = {scene}
-              </span>
-              <div className="border-border-strong w-96 rounded-lg border p-2">
-                <SizeTableFooter scene={scene} onOpen={() => undefined} />
-              </div>
+        /* SAFETY: 类型断言已复核 */ (["image", "video"] as const).map((scene) => (
+          <div key={scene} className="flex flex-col gap-1">
+            <span className="text-ink-muted font-mono text-[11px]">scene = {scene}</span>
+            <div className="border-border-strong w-96 rounded-lg border p-2">
+              <SizeTableFooter scene={scene} onOpen={() => undefined} />
             </div>
-          ),
-        )
+          </div>
+        ))
       }
       <p className="text-ink-muted font-mono text-[11px]">
-        尺寸上界 GROUPED_SIZE_MAX = {String(GROUPED_SIZE_MAX)} ·
-        两个子类的说明：
+        尺寸上界 GROUPED_SIZE_MAX = {String(GROUPED_SIZE_MAX)} · 两个子类的说明：
         {Object.entries(CLARITY_HINT)
           .map(([k, v]) => `${k}=${v}`)
           .join(" / ")}

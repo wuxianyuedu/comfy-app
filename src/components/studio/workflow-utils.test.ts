@@ -68,9 +68,7 @@ describe("resolveNodePackage", () => {
     expect(resolveNodePackage("AnySwitch (rgthree)")).toBe("rgthree-comfy");
   });
   it("cnr_id 属性优先于回退", () => {
-    expect(resolveNodePackage("X", { cnr_id: "custom-pack" })).toBe(
-      "custom-pack",
-    );
+    expect(resolveNodePackage("X", { cnr_id: "custom-pack" })).toBe("custom-pack");
     expect(resolveNodePackage("X", { cnr_id: "comfy-core" })).toBe("ComfyUI");
   });
 });
@@ -160,10 +158,7 @@ describe("hex color helpers", () => {
   });
 
   it("lightenHex 提高亮度分量", () => {
-    const [before, after] = [
-      lightenHex("#111111", 0),
-      lightenHex("#111111", 0.5),
-    ];
+    const [before, after] = [lightenHex("#111111", 0), lightenHex("#111111", 0.5)];
     expect(after).not.toBe(before);
   });
 

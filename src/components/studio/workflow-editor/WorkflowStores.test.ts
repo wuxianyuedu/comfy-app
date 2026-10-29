@@ -12,11 +12,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  callStoreAction,
-  createIOEditStore,
-  type IOEditStore,
-} from "./WorkflowStores";
+import { callStoreAction, createIOEditStore, type IOEditStore } from "./WorkflowStores";
 import {
   registerStaleStoreDeliver,
   reportCodeUpdatedSinceLoad,
@@ -47,9 +43,7 @@ describe("IOEditStore.toggleIO", () => {
       kind: "widget",
       direction: "input",
     });
-    expect(store.getState().workflowIO["1670::widget::value"]!.hostNodeId).toBe(
-      "4",
-    );
+    expect(store.getState().workflowIO["1670::widget::value"]!.hostNodeId).toBe("4");
   });
 
   it("再次勾选同一 pin 时整体摘掉条目", () => {
@@ -120,9 +114,7 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
       direction: "input",
     });
     store.getState().setIOLabel("24::widget::image", "image");
-    expect(store.getState().workflowIO["24::widget::image"]!.label).toBe(
-      "image",
-    );
+    expect(store.getState().workflowIO["24::widget::image"]!.label).toBe("image");
   });
 
   it("清空改名 = 恢复默认显示名", () => {
@@ -135,9 +127,7 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
     });
     store.getState().setIOLabel("24::widget::image", "尾帧图");
     store.getState().setIOLabel("24::widget::image", "  ");
-    expect(
-      store.getState().workflowIO["24::widget::image"]!.label,
-    ).toBeUndefined();
+    expect(store.getState().workflowIO["24::widget::image"]!.label).toBeUndefined();
   });
 });
 
@@ -234,9 +224,7 @@ describe("callStoreAction", () => {
         },
       },
     });
-    const ok = callStoreAction(store, "toggleIORequired", (state) =>
-      state.toggleIORequired(key),
-    );
+    const ok = callStoreAction(store, "toggleIORequired", (state) => state.toggleIORequired(key));
     expect(ok).toBe(true);
     expect(store.getState().workflowIO[key]!.required).toBe(true);
   });
@@ -246,19 +234,14 @@ describe("callStoreAction", () => {
     /* 模拟旧实例：动作集合比当前模块少成员（旧窗口里 setIOValues /
      *  resetIOPreviewValues 这类已删动作还在调用点，新实例上则已经不存在）。 */
     const stale = /* SAFETY: 类型断言已复核 */ {
-      getState: () =>
-        /* SAFETY: 类型断言已复核 */ ({}) as unknown as IOEditStore,
+      getState: () => /* SAFETY: 类型断言已复核 */ ({}) as unknown as IOEditStore,
     } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
-      expect(() =>
-        callStoreAction(stale, "toggleIORequired", () => undefined),
-      ).not.toThrow();
+      expect(() => callStoreAction(stale, "toggleIORequired", () => undefined)).not.toThrow();
       expect(warn).toHaveBeenCalledOnce();
       /* 正常实例不受影响。 */
-      expect(callStoreAction(store, "toggleIORequired", () => undefined)).toBe(
-        true,
-      );
+      expect(callStoreAction(store, "toggleIORequired", () => undefined)).toBe(true);
     } finally {
       warn.mockRestore();
     }
@@ -272,8 +255,7 @@ describe("callStoreAction", () => {
     registerStaleStoreDeliver((n) => deliveries.push(n));
     reportCodeUpdatedSinceLoad();
     const stale = /* SAFETY: 类型断言已复核 */ {
-      getState: () =>
-        /* SAFETY: 类型断言已复核 */ ({}) as unknown as IOEditStore,
+      getState: () => /* SAFETY: 类型断言已复核 */ ({}) as unknown as IOEditStore,
     } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {

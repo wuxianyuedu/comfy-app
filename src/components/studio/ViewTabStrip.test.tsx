@@ -16,11 +16,7 @@ afterEach(() => {
 });
 
 function strip(over: Partial<Parameters<typeof ViewTabStrip>[0]> = {}) {
-  const state = openViewTab(
-    openViewTab(initialWorkspaceTabs(), "queue", null),
-    "workshop",
-    "p1",
-  );
+  const state = openViewTab(openViewTab(initialWorkspaceTabs(), "queue", null), "workshop", "p1");
   return render(
     <ViewTabStrip
       tabs={state.tabs}
@@ -49,9 +45,7 @@ describe("viewTabLabel", () => {
   });
 
   it("未知视图原样回显，不套一个最近的标签", () => {
-    expect(viewTabLabel(/* SAFETY: 类型断言已复核 */ "nope" as never)).toBe(
-      "nope",
-    );
+    expect(viewTabLabel(/* SAFETY: 类型断言已复核 */ "nope" as never)).toBe("nope");
   });
 });
 
@@ -128,10 +122,7 @@ const ROOT = path.resolve(__dirname, "../../..");
 
 /** 剥块注释再判：说明文字里提到 `bg-canvas` 不算有人这么写。 */
 function codeOf(rel: string): string {
-  return readFileSync(path.join(ROOT, rel), "utf8").replace(
-    /\/\*[\s\S]*?\*\//g,
-    "",
-  );
+  return readFileSync(path.join(ROOT, rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", () => {
@@ -147,19 +138,14 @@ describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", ()
       `${rel} 的选中分支没有走 .u-tab-active`,
     ).toBe(true);
     /* 选中分支里自带背景类 = 那一处会脱离工具类单独漂移。当初就是这个形状。 */
-    expect(
-      /active\s*\?\s*"[^"]*\bbg-/.test(code),
-      `${rel} 在选中分支里直接写了背景类`,
-    ).toBe(false);
+    expect(/active\s*\?\s*"[^"]*\bbg-/.test(code), `${rel} 在选中分支里直接写了背景类`).toBe(false);
   });
 
   it(".u-tab-active 不是空类：给了更亮的表面，也给了一条品牌色条", () => {
     const css = codeOf("src/app/globals.css");
     const block = /\.u-tab-active\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     const bar = /\.u-tab-active::after\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    expect(block, "缺背景（或没取 surface token）").toContain(
-      "var(--color-surface)",
-    );
+    expect(block, "缺背景（或没取 surface token）").toContain("var(--color-surface)");
     expect(bar, "缺顶部色条的高度").toContain("height: 2px");
     expect(bar, "色条没取品牌渐变 token").toContain("var(--gradient-brand)");
   });

@@ -20,9 +20,7 @@ import path from "node:path";
 /* 临时目录必须与实现同源构造：实现用 path.join(NEXTJS_LOG_DIR, …)（Windows 拼
  * 反斜杠），若这里用 `/tmp` 这类 POSIX 字符串当 mock 目录，startsWith 前缀比对
  * 必因分隔符不一致而假失败。os.tmpdir() + realpath 归一化后两边同为真实绝对路径。 */
-const tmp = fs.realpathSync(
-  fs.mkdtempSync(path.join(os.tmpdir(), "capture-streams-")),
-);
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "capture-streams-")));
 
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
@@ -113,10 +111,7 @@ describe("installStreamCapture", () => {
     process.stdout.write("首屏编译错误：Module not found\n");
     process.stderr.write("FATAL: An unexpected Turbopack error occurred\n");
 
-    const text = await readCaptureWhenFilled(
-      file,
-      "FATAL: An unexpected Turbopack error occurred",
-    );
+    const text = await readCaptureWhenFilled(file, "FATAL: An unexpected Turbopack error occurred");
     expect(text).toContain("首屏编译错误：Module not found");
     expect(text).toContain("FATAL: An unexpected Turbopack error occurred");
   });
@@ -132,9 +127,7 @@ describe("installStreamCapture", () => {
      * `app-runtime-<时刻>.log` —— 两者都不该由本模块产出（它只转录 nextjs
      * 面板那一份）。 */
     await freshInstall();
-    expect(
-      fs.readdirSync(tmp).filter((n) => n.startsWith("app-runtime")),
-    ).toEqual([]);
+    expect(fs.readdirSync(tmp).filter((n) => n.startsWith("app-runtime"))).toEqual([]);
   });
 
   it("原输出行为不变（转录是额外落一份，不接管）", async () => {
@@ -150,9 +143,9 @@ describe("installStreamCapture", () => {
     // 原实现仍被调用
     expect(writes.join("")).toContain("业务输出");
     // 同时落了盘（走缓冲，要等到落盘再读）
-    expect(
-      await readCaptureWhenFilled(mod.panelCaptureLogPath(), "业务输出"),
-    ).toContain("业务输出");
+    expect(await readCaptureWhenFilled(mod.panelCaptureLogPath(), "业务输出")).toContain(
+      "业务输出",
+    );
   });
 });
 
@@ -203,9 +196,7 @@ describe("转录文件的取最新与轮转（ISSUE #1365）", () => {
 
   it("目录不存在时返回 null（不是抛错）", async () => {
     const mod = await freshInstall();
-    expect(
-      await mod.latestPanelLogFile(path.join(tmp, "no-such-dir")),
-    ).toBeNull();
+    expect(await mod.latestPanelLogFile(path.join(tmp, "no-such-dir"))).toBeNull();
   });
 
   it("轮转按 mtime 保留最近 5 份，跨 bootId 也算同族", async () => {

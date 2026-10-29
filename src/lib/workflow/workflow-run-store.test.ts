@@ -146,9 +146,7 @@ describe("workflow-run-store", () => {
       startedAt: 1,
     });
     appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" });
-    expect(
-      appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" }),
-    ).toHaveLength(1);
+    expect(appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" })).toHaveLength(1);
 
     failWorkflowRun("t1", "未找到生成结果");
 

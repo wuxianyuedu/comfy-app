@@ -56,10 +56,7 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
      *   · win32 ：`status: 1` + `signal: null` —— 这一平台上终止不产生信号退出码，
      *     所以「被杀掉」与「自己退 1」**就是不可分**的。那是平台事实，不是判据放松。
      * 旧写法把 POSIX 那一半当通用前提 ⇒ 在 Windows 节点上恒红（每日全量是它的执行者）。 */
-    const got = probeExecutable(process.execPath, [
-      "-e",
-      "process.kill(process.pid, 'SIGKILL')",
-    ]);
+    const got = probeExecutable(process.execPath, ["-e", "process.kill(process.pid, 'SIGKILL')"]);
     expect(got.ok).toBe(false);
     expect(got.failure?.kind).toBe("nonzero-exit");
     const said = describeProbeFailure(got.failure!);
@@ -86,11 +83,7 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
   it("撞上探测预算 ⇒ timeout，不许混进「起不来」", () => {
     /* 这一格是本判据存在的理由：`error.code === "ETIMEDOUT"` 说的是「这一次没量到」，
      * 而下一次动作（再取一遍）与「去装一个东西」完全不同（规范 §13.6.4）。 */
-    const got = probeExecutable(
-      process.execPath,
-      ["-e", "setTimeout(() => {}, 5000)"],
-      50,
-    );
+    const got = probeExecutable(process.execPath, ["-e", "setTimeout(() => {}, 5000)"], 50);
     expect(got.ok).toBe(false);
     expect(got.failure).toMatchObject({ kind: "timeout", timeoutMs: 50 });
   });
@@ -101,16 +94,10 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
   const probeOnly =
     (wanted: string, failure: ProbeOutcome["failure"] = null) =>
     (candidate: string): ProbeOutcome =>
-      candidate === wanted
-        ? { ok: true, failure: null }
-        : { ok: false, failure };
+      candidate === wanted ? { ok: true, failure: null } : { ok: false, failure };
 
   it("命中第一个能跑的，且不把后面的候选算成「试过」", () => {
-    const got = firstRunnable(
-      ["powershell", "pwsh"],
-      () => [],
-      probeOnly("pwsh"),
-    );
+    const got = firstRunnable(["powershell", "pwsh"], () => [], probeOnly("pwsh"));
     expect(got.hit).toBe("pwsh");
     // 第一个候选**确实试过**且失败了 —— 这句读数下一次要靠它说清「谁顶掉了谁」。
     expect(got.missed[0]?.candidate).toBe("powershell");
@@ -152,15 +139,11 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
 
 describe("话术：下一个要排障的人得从这一行读出「哪一个候选、什么原因」", () => {
   it("三条出口各说各的（别糊成一句「不可用」）", () => {
-    expect(
-      describeProbeFailure({ kind: "spawn-error", code: "ENOENT" }),
-    ).toContain("ENOENT");
-    expect(
-      describeProbeFailure({ kind: "nonzero-exit", status: 2, signal: null }),
-    ).toContain("exit 2");
-    expect(
-      describeProbeFailure({ kind: "timeout", timeoutMs: 20000 }),
-    ).toContain("没量到");
+    expect(describeProbeFailure({ kind: "spawn-error", code: "ENOENT" })).toContain("ENOENT");
+    expect(describeProbeFailure({ kind: "nonzero-exit", status: 2, signal: null })).toContain(
+      "exit 2",
+    );
+    expect(describeProbeFailure({ kind: "timeout", timeoutMs: 20000 })).toContain("没量到");
   });
 
   it("多个候选时逐个点名，且原因跟在名字后面", () => {

@@ -16,9 +16,7 @@ export interface DebugSourcePayload {
 }
 
 /** 读取某模块的源码文本。文件不存在 / 非白名单时抛带服务端文案的错误。 */
-export async function fetchDebugSource(
-  file: string,
-): Promise<DebugSourcePayload> {
+export async function fetchDebugSource(file: string): Promise<DebugSourcePayload> {
   /* 一行也走出口：编码是出口的责任，调用处不必记得（漏一处就是静默 404，
    * 见规范 16 §16.2.4.32 的第 ④ 条）。 */
   const res = await fetch(withQuery("/api/debug/source", { file }));

@@ -75,9 +75,7 @@ export async function readGenerationLogs(
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
-          const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(
-            trimmed,
-          ) as Record<string, unknown>;
+          const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(trimmed) as Record<string, unknown>;
           // 行内 stage 由 append 写入；不匹配的环节直接跳过
           if (raw.stage !== stage) continue;
           const entry = normalizeGenerationLogEntry(raw);

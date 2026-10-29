@@ -93,8 +93,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
     const kill = vi.fn();
-    if (inFlight)
-      cli.cliProcs.set(taskId, /* SAFETY: 类型断言已复核 */ { kill } as never);
+    if (inFlight) cli.cliProcs.set(taskId, /* SAFETY: 类型断言已复核 */ { kill } as never);
     else cli.cliProcs.delete(taskId);
     return { taskId, repo, kill };
   }
@@ -128,10 +127,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   });
 
   it("中断请求失败：取消仍然落库，并告诉用户这一轮还会跑完", async () => {
-    const { taskId, repo } = setup(
-      { status: "RUNNING", promptId: "p-d" },
-      { inFlight: true },
-    );
+    const { taskId, repo } = setup({ status: "RUNNING", promptId: "p-d" }, { inFlight: true });
     vi.mocked(client.interrupt).mockRejectedValue(new Error("ECONNREFUSED"));
 
     await mod.cancelTask(taskId);

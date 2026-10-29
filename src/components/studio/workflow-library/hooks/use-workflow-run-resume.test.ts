@@ -230,11 +230,9 @@ describe("watchWorkflowRun", () => {
     const run = getWorkflowRun("t1");
     expect(run?.status).toBe("failed");
     expect(run?.errorMessage).toBe("显存不足");
-    expect(
-      run?.logs?.some(
-        (log) => log.level === "error" && log.msg.includes("显存不足"),
-      ),
-    ).toBe(true);
+    expect(run?.logs?.some((log) => log.level === "error" && log.msg.includes("显存不足"))).toBe(
+      true,
+    );
   });
 
   it("日志原样转交（累积与去重仍归调用方 / store）", () => {

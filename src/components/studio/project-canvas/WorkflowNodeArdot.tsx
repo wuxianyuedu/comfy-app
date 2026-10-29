@@ -57,8 +57,7 @@ const PORT_DOT_SHADOW = "0 4px 4px rgba(0,0,0,0.25)";
 const portColor = (type?: string) => {
   const t = upperToken(type);
   if (t === "IMAGE" || t === "MASK") return PORT_TYPE_COLORS.image;
-  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO")
-    return PORT_TYPE_COLORS.video;
+  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO") return PORT_TYPE_COLORS.video;
   if (t === "BOOLEAN" || t === "BOOL") return PORT_TYPE_COLORS.boolean;
   return "var(--color-ink-muted)";
 };
@@ -108,8 +107,7 @@ function PortDot({
   /** 距 wrapper 顶部 px（按 Ardot 实测绝对位置） */
   top: number;
 }) {
-  const stroke =
-    side === "right" ? "var(--color-card)" : "var(--color-border-strong)";
+  const stroke = side === "right" ? "var(--color-card)" : "var(--color-border-strong)";
   return (
     <span
       aria-hidden
@@ -127,15 +125,7 @@ function PortDot({
 }
 
 /* ── STRING 端口行（label subrow + textarea，不含端点；端点由外层 wrapper 渲染）── */
-function PortRowString({
-  label,
-  type,
-  value,
-}: {
-  label: string;
-  type: string;
-  value: string;
-}) {
+function PortRowString({ label, type, value }: { label: string; type: string; value: string }) {
   return (
     <div className="flex h-21.5 flex-col gap-1.5 py-1.5">
       <div className="flex h-4 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
@@ -159,15 +149,7 @@ function PortRowString({
 }
 
 /* ── INT/FLOAT 端口行（单行 33h：label + spacer + miniInput + chip） ── */
-function PortRowInt({
-  label,
-  type,
-  value,
-}: {
-  label: string;
-  type: string;
-  value: string;
-}) {
+function PortRowInt({ label, type, value }: { label: string; type: string; value: string }) {
   return (
     <div className="flex h-8.25 items-center gap-2.5 pr-3.5 pl-3.5">
       <span
@@ -331,9 +313,7 @@ export function WorkflowNodeArdot() {
         <PortRowString
           label="negative_prompt"
           type="STRING"
-          value={
-            "lowres, bad anatomy, worst quality, blurry, extra fingers, watermark, text"
-          }
+          value={"lowres, bad anatomy, worst quality, blurry, extra fingers, watermark, text"}
         />
         <PortRowInt label="seed" type="INT" value="378304737375764" />
 

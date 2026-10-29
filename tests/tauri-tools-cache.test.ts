@@ -52,8 +52,7 @@ function tmpDir(tag: string): string {
 }
 
 afterEach(() => {
-  for (const dir of made.splice(0))
-    fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
 /** 一份与生产同形状的 plan，但 dll 的哈希按夹具内容现算 —— 让「哈希认不过」这条能被测到。 */
@@ -77,10 +76,7 @@ function fixturePlan(dllContent: string) {
  * @param {string} tauriRoot 传给 seed/ensure 的 `cacheDir`（生产里它 = `LOCALAPPDATA\tauri`）
  * @param {{dllContent?: string, drop?: string[]}} [opts] `drop` = 故意缺哪几件
  */
-function fakeCacheTree(
-  tauriRoot: string,
-  opts: { dllContent?: string; drop?: string[] } = {},
-) {
+function fakeCacheTree(tauriRoot: string, opts: { dllContent?: string; drop?: string[] } = {}) {
   const dllContent = opts.dllContent ?? "dll-bytes";
   const plan = fixturePlan(dllContent);
   const root = path.join(tauriRoot, NSIS_PLAN.cacheRel);
@@ -114,9 +110,9 @@ describe("落点与根", () => {
 
     const run = () => ({ status: 0, stdout: "G:\\.pnpm-store\\v11\n" });
     const pkgName = String(
-      (/* SAFETY: 类型断言已复核 */ JSON.parse(
-        fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
-      ) as { name?: string }).name,
+      /* SAFETY: 类型断言已复核 */ (
+        JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { name?: string }
+      ).name,
     ).toLowerCase();
     expect(resolveToolRoot({ cwd: ROOT, env: {}, run }).root).toBe(
       path.join("G:\\", "ci-tools", pkgName),
@@ -143,10 +139,7 @@ describe("必需件视图", () => {
   it("缺件清单按 bundler 那份路径点名；相对路径一律正斜杠", () => {
     const la = tmpDir("missing");
     const { root } = fakeCacheTree(la, { drop: ["NSIS.exe", "makensis.exe"] });
-    expect(missingRequired(root, NSIS_PLAN.required)).toEqual([
-      "NSIS.exe",
-      "makensis.exe",
-    ]);
+    expect(missingRequired(root, NSIS_PLAN.required)).toEqual(["NSIS.exe", "makensis.exe"]);
     expect(listTreeFiles(root)).toContain("Include/extra.nsh");
     expect(listTreeFiles(path.join(la, "nope"))).toEqual([]);
   });
@@ -241,8 +234,7 @@ describe("ensure（作业起手那一格）", () => {
       plan,
     });
     expect(code).toBe(0);
-    expect(missingRequired(path.join(la, NSIS_PLAN.cacheRel), plan.required))
-      .toEqual([]);
+    expect(missingRequired(path.join(la, NSIS_PLAN.cacheRel), plan.required)).toEqual([]);
     expect(lines.join("\n")).toContain("已补齐");
   });
 

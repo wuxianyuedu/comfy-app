@@ -36,10 +36,7 @@ import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
 import { useHotkey } from "~/components/ui/use-hotkey";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { Icon } from "~/components/ui/icon";
 
@@ -51,13 +48,7 @@ import { Icon } from "~/components/ui/icon";
 const MemoJsonView = memo(JsonView);
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
-type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [k: string]: JsonValue };
+type JsonValue = null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
@@ -166,12 +157,7 @@ function clearPreviousHighlights(body: HTMLElement) {
 }
 
 /** 把 hits 注入 DOM (行级 + substring) */
-function applyHighlights(
-  body: HTMLElement,
-  hits: Path[],
-  hitIndex: number,
-  query: string,
-) {
+function applyHighlights(body: HTMLElement, hits: Path[], hitIndex: number, query: string) {
   clearPreviousHighlights(body);
   if (!query || hits.length === 0) return;
 
@@ -278,11 +264,7 @@ export interface JsonViewerProps {
   initialCollapsedDepth?: number;
 }
 
-export function JsonViewer({
-  data,
-  title = "JSON",
-  initialCollapsedDepth = 1,
-}: JsonViewerProps) {
+export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: JsonViewerProps) {
   // ── 搜索 + 命中索引 ──
   const [query, setQuery] = useState("");
   const [hitIndex, setHitIndex] = useState(0);
@@ -292,8 +274,7 @@ export function JsonViewer({
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const hits = useMemo(
-    () =>
-      collectHits(/* SAFETY: 类型断言已复核 */ data as JsonValue, query.trim()),
+    () => collectHits(/* SAFETY: 类型断言已复核 */ data as JsonValue, query.trim()),
     [data, query],
   );
 
@@ -383,8 +364,7 @@ export function JsonViewer({
 
   // ── 渲染 ──
   // collapseObjectsAfterLength: initialCollapsedDepth=0 → 不折叠, 否则按深度折叠
-  const collapseThreshold =
-    initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
+  const collapseThreshold = initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
 
   return (
     <div className="bg-panel-deep flex h-full min-h-0 flex-col">
@@ -460,12 +440,7 @@ export function JsonViewer({
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               title="清空 (Esc)"
             >
-              <Icon
-                data-icon="inline-start"
-                name="close"
-                size={14}
-                className="text-ink-muted"
-              />
+              <Icon data-icon="inline-start" name="close" size={14} className="text-ink-muted" />
             </Button>
           </>
         )}

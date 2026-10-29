@@ -61,10 +61,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
       .orderBy(desc(workflowTemplate.createdAt));
   }
 
-  async findByIdForUser(
-    userId: string,
-    id: string,
-  ): Promise<WorkflowTemplate | null> {
+  async findByIdForUser(userId: string, id: string): Promise<WorkflowTemplate | null> {
     const wf = await this.findById(id);
     return wf?.userId === userId ? wf : null;
   }
@@ -85,9 +82,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     const rows = await db
       .select(SOURCE_META_COLUMNS)
       .from(workflowTemplate)
-      .where(
-        and(eq(workflowTemplate.id, id), eq(workflowTemplate.userId, userId)),
-      )
+      .where(and(eq(workflowTemplate.id, id), eq(workflowTemplate.userId, userId)))
       .limit(1);
     return rows[0] ?? null;
   }
@@ -165,9 +160,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     if (tagIds.length) {
       await db
         .insert(workflowModelTagToWorkflowTemplate)
-        .values(
-          tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })),
-        );
+        .values(tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })));
     }
   }
 }

@@ -151,10 +151,7 @@ export interface DevServerLiveness {
  * 用**发起**时刻而不是应答时刻做基准：探活有 2.5s 超时，拿应答时刻算会把「这一拍
  * 慢了」记成停表（超时那一拍尤其明显）。发起时刻与定时器的节拍是同一件事。
  */
-export function probeGapMs(
-  previousStartedAt: number | null,
-  startedAt: number,
-): number {
+export function probeGapMs(previousStartedAt: number | null, startedAt: number): number {
   if (previousStartedAt === null) return 0;
   return Math.max(0, startedAt - previousStartedAt - DEV_SERVER_PROBE_MS);
 }
@@ -225,10 +222,7 @@ async function probeBootId(): Promise<ProbeResult> {
       bootId?: unknown;
       runId?: unknown;
     };
-    const runId =
-      typeof data.runId === "string" && data.runId.length > 0
-        ? data.runId
-        : null;
+    const runId = typeof data.runId === "string" && data.runId.length > 0 ? data.runId : null;
     return typeof data.bootId === "string" && data.bootId.length > 0
       ? { ok: true, bootId: data.bootId, runId }
       : { ok: false, bootId: null, runId: null, routeTableStale: false };

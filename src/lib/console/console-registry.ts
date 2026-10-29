@@ -45,10 +45,7 @@ export function consoleSlot(): ConsoleSlot {
 }
 
 /** 记一条已完成的运行（只留最近 `MAX_HISTORY_ENTRIES` 条）。 */
-export function recordConsoleHistory(
-  slot: ConsoleSlot,
-  entry: ConsoleHistoryEntry,
-): void {
+export function recordConsoleHistory(slot: ConsoleSlot, entry: ConsoleHistoryEntry): void {
   slot.history.push(entry);
   if (slot.history.length > MAX_HISTORY_ENTRIES) {
     slot.history.splice(0, slot.history.length - MAX_HISTORY_ENTRIES);
@@ -63,7 +60,5 @@ export function recordConsoleHistory(
  * 永远是 undefined → 清空动作变成空操作 → 用例互相污染）。
  */
 export function resetConsoleSlotForTest(): void {
-  delete (
-    /* SAFETY: 类型断言已复核 */ (globalThis as GlobalWithSlot)[SLOT_KEY]
-  );
+  delete (/* SAFETY: 类型断言已复核 */ (globalThis as GlobalWithSlot)[SLOT_KEY]);
 }

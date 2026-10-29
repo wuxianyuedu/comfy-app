@@ -1,10 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  SETTINGS_SECTIONS,
-  type Section,
-} from "~/app/(main)/settings/hooks/use-settings-page";
+import { SETTINGS_SECTIONS, type Section } from "~/app/(main)/settings/hooks/use-settings-page";
 import { SettingsShell } from "./SettingsShell";
 
 /**
@@ -48,21 +45,9 @@ function sections(pad: string) {
   ) as Record<Section, React.ReactNode>;
 }
 
-function Demo({
-  initial = "llmLocal",
-  pad = "",
-}: {
-  initial?: Section;
-  pad?: string;
-}) {
+function Demo({ initial = "llmLocal", pad = "" }: { initial?: Section; pad?: string }) {
   const [section, setSection] = useState<Section>(initial);
-  return (
-    <SettingsShell
-      section={section}
-      onSelect={setSection}
-      sections={sections(pad)}
-    />
-  );
+  return <SettingsShell section={section} onSelect={setSection} sections={sections(pad)} />;
 }
 
 /** 默认选中「本地模型」—— 高亮落在树的第一段第一条上，各节都很短（一屏装得下）。 */
@@ -87,9 +72,7 @@ export const LoadingFallback: Story = {
     <SettingsShell
       section="llmLocal"
       onSelect={noop}
-      fallback={
-        <p className="text-ink-muted text-sm">正在读取设置…（三态占位）</p>
-      }
+      fallback={<p className="text-ink-muted text-sm">正在读取设置…（三态占位）</p>}
     />
   ),
 };

@@ -104,9 +104,9 @@ export function readNavigationSample(page: Page): Promise<{
   firstContentfulPaint: number | null;
 }> {
   return page.evaluate(() => {
-    const nav = /* SAFETY: 类型断言已复核 */ performance.getEntriesByType(
-      "navigation",
-    )[0] as PerformanceNavigationTiming | undefined;
+    const nav = /* SAFETY: 类型断言已复核 */ performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
     const fcp = performance.getEntriesByName("first-contentful-paint")[0];
     return {
       // `loadEventEnd` 在 load 未完成时是 0 —— 那是「还没有这个读数」，不是「0 毫秒」。
@@ -138,7 +138,7 @@ export function steadyMin(
   if (samples.length <= discard) return null;
   const kept = samples.slice(discard);
   if (kept.some((v) => v === null || !Number.isFinite(v))) return null;
-  return Math.min(...(/* SAFETY: 类型断言已复核 */ kept as number[]));
+  return Math.min(.../* SAFETY: 类型断言已复核 */ (kept as number[]));
 }
 
 /**

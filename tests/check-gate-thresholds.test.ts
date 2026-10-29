@@ -134,9 +134,7 @@ describe("analyze：账 ⇄ 源码", () => {
     const r = run(baseEntries(), {
       "scripts/check-a.cjs": "const SPLIT_LINES_X = 900;\n",
     });
-    expect(r.problems.some((p: string) => p.includes("找不到该常量声明"))).toBe(
-      true,
-    );
+    expect(r.problems.some((p: string) => p.includes("找不到该常量声明"))).toBe(true);
   });
 
   it("负控制④：提取坏了（账被清空）⇒ 红，而不是两侧空集的恒绿", () => {
@@ -170,8 +168,7 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
 
   it("判据文件里冒出账上没有的顶层数值 ⇒ 红，并给出两条出路", () => {
     const r = run(baseEntries(), {
-      "scripts/check-a.cjs":
-        "const SPLIT_LINES = 900;\nconst NEW_GATE_LIMIT = 42;\n",
+      "scripts/check-a.cjs": "const SPLIT_LINES = 900;\nconst NEW_GATE_LIMIT = 42;\n",
     });
     const hit = r.problems.find((p: string) => p.includes("NEW_GATE_LIMIT"));
     expect(hit, "未入账的新承重数值没被拦").toContain("report");
@@ -182,24 +179,14 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
       ["scripts/check-a.cjs#SPLIT_LINES", { value: 900, kind: "threshold" }],
     ]);
     const loose = patch(baseEntries(), "scripts/check-a.cjs", { value: 1500 });
-    const unsigned = run(
-      loose,
-      { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" },
-      master,
-    );
-    expect(
-      unsigned.problems.some((p: string) => p.includes("相对主干是**放宽**")),
-    ).toBe(true);
+    const unsigned = run(loose, { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" }, master);
+    expect(unsigned.problems.some((p: string) => p.includes("相对主干是**放宽**"))).toBe(true);
 
     const signed = patch(loose, "scripts/check-a.cjs", {
       movedFrom: 900,
       movedIssue: "#2156",
     });
-    const okRun = run(
-      signed,
-      { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" },
-      master,
-    );
+    const okRun = run(signed, { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" }, master);
     expect(
       okRun.problems.some((p: string) => p.includes("相对主干是**放宽**")),
       "签了字还在拦，等于把这条路堵死",
@@ -215,11 +202,7 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
       "scripts/check-a.cjs",
       { movedFrom: 900, movedIssue: "2156" },
     );
-    const r = run(
-      loose,
-      { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" },
-      master,
-    );
+    const r = run(loose, { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" }, master);
     expect(r.problems.some((p: string) => p.includes("放宽"))).toBe(true);
   });
 });
@@ -351,10 +334,7 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
   });
 
   it("已入账的它被改大 ⇒ 漂移红且念成「变松」（取值那一路也认 export）", () => {
-    const r = runWith("export const GATE_LIMIT = 90;\n", [
-      ...baseEntries(),
-      entry,
-    ]);
+    const r = runWith("export const GATE_LIMIT = 90;\n", [...baseEntries(), entry]);
     const drift = r.problems.find((p: string) => p.includes("GATE_LIMIT"));
     expect(drift, "取值不认 export 时，放宽后的面会恒红").toBeTruthy();
     expect(drift).toContain("源码 90 ≠ 账 42");
@@ -362,10 +342,7 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
   });
 
   it("账与源码一致时不许有红（同一把尺子的第三向）", () => {
-    const r = runWith("export const GATE_LIMIT = 42;\n", [
-      ...baseEntries(),
-      entry,
-    ]);
+    const r = runWith("export const GATE_LIMIT = 42;\n", [...baseEntries(), entry]);
     expect(r.problems, r.problems.join("\n")).toEqual([]);
   });
 });

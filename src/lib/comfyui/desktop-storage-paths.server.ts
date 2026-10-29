@@ -38,10 +38,7 @@ const EXTRA_PATHS_FILE = "extra_model_paths.yaml";
  * ComfyUI 的 base 目录：Comfy Desktop 布局下是 `<实例根>/ComfyUI`
  * （main.py 所在目录才是进程 cwd）；配置直接指到源码根时就是它自己。
  */
-function detectBaseDir(
-  instanceRoot: string,
-  exists: (p: string) => boolean,
-): string {
+function detectBaseDir(instanceRoot: string, exists: (p: string) => boolean): string {
   const nested = path.join(instanceRoot, "ComfyUI");
   return exists(path.join(nested, "main.py")) ? nested : instanceRoot;
 }
@@ -103,8 +100,7 @@ export async function resolveDesktopStoragePaths(
   if (!dir) return null;
 
   const exists = deps.exists ?? fs.existsSync;
-  const readFile =
-    deps.readFile ?? ((p: string, enc: "utf8") => fs.promises.readFile(p, enc));
+  const readFile = deps.readFile ?? ((p: string, enc: "utf8") => fs.promises.readFile(p, enc));
   const resolveArgs =
     deps.resolveArgs ??
     (async (target: string) =>
@@ -121,10 +117,7 @@ export async function resolveDesktopStoragePaths(
 
   const instanceRoot = classified.instanceRoot;
   const baseDir = detectBaseDir(instanceRoot, exists);
-  const extra = await readExtraPathsFile(
-    extraPathsCandidates(baseDir, instanceRoot),
-    readFile,
-  );
+  const extra = await readExtraPathsFile(extraPathsCandidates(baseDir, instanceRoot), readFile);
   const parsedMain = extra
     ? parseExtraModelPathsYaml(extra.content)
     : {

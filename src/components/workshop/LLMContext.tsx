@@ -36,14 +36,7 @@ export function useLLM(): LLMContextValue {
 }
 
 export function LLMProvider({ children }: { children: React.ReactNode }) {
-  const {
-    config,
-    localModels,
-    remoteModels,
-    remoteImageModels,
-    loading,
-    refresh,
-  } = useLLMConfig();
+  const { config, localModels, remoteModels, remoteImageModels, loading, refresh } = useLLMConfig();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -65,15 +58,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       closeSettings: () => setSettingsOpen(false),
       refresh,
     }),
-    [
-      config,
-      localModels,
-      remoteModels,
-      remoteImageModels,
-      loading,
-      settingsOpen,
-      refresh,
-    ],
+    [config, localModels, remoteModels, remoteImageModels, loading, settingsOpen, refresh],
   );
 
   return (
@@ -103,12 +88,7 @@ export function LLMSettingsButton() {
         onClick={openSettings}
         className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
       >
-        <Icon
-          data-icon="inline-start"
-          name="settings"
-          size={14}
-          className="mr-1.5"
-        />
+        <Icon data-icon="inline-start" name="settings" size={14} className="mr-1.5" />
         LLM 设置
       </Button>
     </Hint>
@@ -130,9 +110,7 @@ function LLMSettingsModal({
   /** 弹窗内的模型选择草稿：null = 未改动（保存时不动主配置） */
   const [draftModel, setDraftModel] = React.useState<string | null>(null);
   /** 提供方草稿：null = 未改动。本地 / 远程的切换从设置页挪到运行界面。 */
-  const [draftProvider, setDraftProvider] = React.useState<
-    "local" | "remote" | null
-  >(null);
+  const [draftProvider, setDraftProvider] = React.useState<"local" | "remote" | null>(null);
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const testBusy = useBusyAction();
   const [msg, setMsg] = React.useState<{
@@ -147,9 +125,7 @@ function LLMSettingsModal({
   /* 候选列表 = 已配置的 extraModels + 当前生效模型（保证至少一项可选） */
   const candidates = React.useMemo(() => {
     const list = initial?.extraModels ?? [];
-    return initial?.model && !list.includes(initial.model)
-      ? [initial.model, ...list]
-      : list;
+    return initial?.model && !list.includes(initial.model) ? [initial.model, ...list] : list;
   }, [initial]);
 
   async function handleSave() {
@@ -169,8 +145,7 @@ function LLMSettingsModal({
         onSaved(cfg);
       },
       {
-        report: (kind, detail) =>
-          setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+        report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
         failureText: "保存失败",
       },
     );
@@ -204,8 +179,7 @@ function LLMSettingsModal({
           /* 成功文案是**动作结果**的函数（回显模型的前 60 个字符）——
            *`successText` 支持函数形式正是为这类落点（同`use-external-action`
            * 的`detail` 由端点给）。 */
-          report: (kind, detail) =>
-            setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+          report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
           failureText: "连接失败",
           successText: (result) => `连接成功：${result.detail}`,
         },
@@ -256,18 +230,16 @@ function LLMSettingsModal({
             {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。 */}
             <div role="radiogroup" aria-label="提供方" className="flex gap-2">
               {
-                /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map(
-                  (p) => (
-                    <SelectChip
-                      key={p}
-                      shape="segment"
-                      selected={provider === p}
-                      onClick={() => setDraftProvider(p)}
-                    >
-                      {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
-                    </SelectChip>
-                  ),
-                )
+                /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((p) => (
+                  <SelectChip
+                    key={p}
+                    shape="segment"
+                    selected={provider === p}
+                    onClick={() => setDraftProvider(p)}
+                  >
+                    {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                  </SelectChip>
+                ))
               }
             </div>
           </FormField>
@@ -275,11 +247,7 @@ function LLMSettingsModal({
           {candidates.length > 0 ? (
             /* 一列里选一个 —— 与上面那一排同一条单选契约（`radiogroup`），
                只是排布成竖列（模型名长，横排会被截断）。 */
-            <div
-              role="radiogroup"
-              aria-label="选择模型"
-              className="flex flex-col gap-1.5"
-            >
+            <div role="radiogroup" aria-label="选择模型" className="flex flex-col gap-1.5">
               {candidates.map((name) => (
                 <SelectChip
                   key={name}

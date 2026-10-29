@@ -23,9 +23,7 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
     const { raw: out, removed } = stripUiOnlyNodes(raw);
 
     expect(removed).toBe(2);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (out.nodes as MiniNode[]).map((n) => n.id),
-    ).toEqual([2]);
+    expect(/* SAFETY: 类型断言已复核 */ (out.nodes as MiniNode[]).map((n) => n.id)).toEqual([2]);
     // 只留下与两个幸存端点都无关的那一条
     expect(out.links).toEqual([[12, 2, 1, 2, 2, "LATENT"]]);
   });
@@ -68,18 +66,15 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
     expect(removed).toBe(1);
     const subs = /* SAFETY: 类型断言已复核 */ (
       out.definitions as {
-        subgraphs: Record<
-          string,
-          { nodes: MiniNode[]; links: { id: number }[] }
-        >;
+        subgraphs: Record<string, { nodes: MiniNode[]; links: { id: number }[] }>;
       }
     ).subgraphs;
     expect(subs["0"]!.nodes.map((n) => n.id)).toEqual(["1671"]);
     expect(subs["0"]!.links.map((l) => l.id)).toEqual([2]);
     // 顶层 wrapper 不受影响（它不是 UI-only 类型）
-    expect(
-      /* SAFETY: 类型断言已复核 */ (out.nodes as MiniNode[]).map((n) => n.id),
-    ).toEqual(["1512"]);
+    expect(/* SAFETY: 类型断言已复核 */ (out.nodes as MiniNode[]).map((n) => n.id)).toEqual([
+      "1512",
+    ]);
   });
 
   it("数组形态的子图定义同样覆盖", () => {

@@ -21,9 +21,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 const { getSessionMock } = vi.hoisted(() => ({
-  getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(
-    async () => null,
-  ),
+  getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(async () => null),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -70,15 +68,8 @@ vi.mock("~/lib/comfyui/raw", async (importOriginal) => ({
 
 import { createCallerFactory, createTRPCContext } from "~/server/api/trpc";
 import { workflowRouter } from "~/server/api/routers/workflow";
-import {
-  importFromLocalPath,
-  reimportFromSource,
-} from "~/lib/comfyui/importSource";
-import {
-  getTestDb,
-  seedUser,
-  seedWorkflowTemplate,
-} from "../../../../tests/helpers/test-db";
+import { importFromLocalPath, reimportFromSource } from "~/lib/comfyui/importSource";
+import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
 import { makeCtx, errorEnvelope } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(workflowRouter);
@@ -263,9 +254,9 @@ describe("workflow.create", () => {
   });
 
   it("nodes 为空数组 → BAD_REQUEST", async () => {
-    await expect(
-      createCaller(makeCtx()).create({ raw: { nodes: [] } }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(createCaller(makeCtx()).create({ raw: { nodes: [] } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
   });
 
   it("本地文件导入：成功路径（名称回退为文件名）", async () => {
@@ -289,9 +280,7 @@ describe("workflow.create", () => {
   });
 
   it("本地文件导入失败 → BAD_REQUEST（透传错误消息）", async () => {
-    vi.mocked(importFromLocalPath).mockRejectedValueOnce(
-      new Error("文件不存在"),
-    );
+    vi.mocked(importFromLocalPath).mockRejectedValueOnce(new Error("文件不存在"));
     await expect(
       createCaller(makeCtx()).create({
         sourcePath: path.join(WF_ALLOWED_ROOT, "missing.json"),
@@ -340,9 +329,7 @@ describe("workflow.detail", () => {
     await expect(caller.detail({ id: "wf-b" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(
-      caller.detail(/* SAFETY: 类型断言已复核 */ {} as never),
-    ).rejects.toMatchObject({
+    await expect(caller.detail(/* SAFETY: 类型断言已复核 */ {} as never)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
   });
@@ -398,9 +385,7 @@ describe("workflow.detailFull", () => {
     // 先钉住「缓存确实在」：没有这一条，下面那句 bust 生效只是「缓存本来就没生效」的假象。
     expect((await caller.detailFull({ id: "df-bust" })).name).toBe("V1");
     // 顶栏「🔄 强制重载」的唯一实现路径就是这个入参被转给了 lib。
-    expect((await caller.detailFull({ id: "df-bust", bust: true })).name).toBe(
-      "V2",
-    );
+    expect((await caller.detailFull({ id: "df-bust", bust: true })).name).toBe("V2");
   });
 });
 
@@ -440,20 +425,20 @@ describe("workflow.subgraph", () => {
     seedWorkflowTemplate(tdb, { id: "sg-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
     // 有行、没有内嵌子图
-    expect(
-      await errorEnvelope(caller.subgraph({ id: "sg-plain", uid: "x" })),
-    ).toEqual({ code: "NOT_FOUND", message: "该工作流没有内嵌子工作流" });
+    expect(await errorEnvelope(caller.subgraph({ id: "sg-plain", uid: "x" }))).toEqual({
+      code: "NOT_FOUND",
+      message: "该工作流没有内嵌子工作流",
+    });
     // 有子图、uid 对不上（消息带被截断的 uid，供排障定位是哪一层面包屑）
-    const wrongUid = await errorEnvelope(
-      caller.subgraph({ id: "sg-with", uid: "no-such-uid" }),
-    );
+    const wrongUid = await errorEnvelope(caller.subgraph({ id: "sg-with", uid: "no-such-uid" }));
     expect(wrongUid.code).toBe("NOT_FOUND");
     // 现状：uid 只回显前 8 个字符（面包屑定位用），断言按实际形态写死
     expect(wrongUid.message).toBe("未找到子工作流 no-such-");
     // 他人的行必须与「根本没有这行」同形：不能靠错误消息探出别人的工作流存在
-    expect(
-      await errorEnvelope(caller.subgraph({ id: "sg-b", uid: "x" })),
-    ).toEqual({ code: "NOT_FOUND", message: "未找到该工作流" });
+    expect(await errorEnvelope(caller.subgraph({ id: "sg-b", uid: "x" }))).toEqual({
+      code: "NOT_FOUND",
+      message: "未找到该工作流",
+    });
   });
 });
 
@@ -492,9 +477,7 @@ describe("workflow.update", () => {
       nodes: Array<{ pos?: unknown }>;
     };
     expect(rawJson.nodes[0]?.pos).toEqual([1, 2]);
-    expect(row.modelTags).toEqual([
-      expect.objectContaining({ name: "SDXL", userId: "user-a" }),
-    ]);
+    expect(row.modelTags).toEqual([expect.objectContaining({ name: "SDXL", userId: "user-a" })]);
     expect(tdb.$tables.workflowModelTags).toHaveLength(1);
   });
 
@@ -521,14 +504,10 @@ describe("workflow.update", () => {
     seedUser(tdb, { id: "user-b", email: "b@test.dev" });
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
-    await expect(
-      caller.update({ id: "nope", name: "X" }),
-    ).rejects.toMatchObject({
+    await expect(caller.update({ id: "nope", name: "X" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(
-      caller.update({ id: "wf-b", name: "X" }),
-    ).rejects.toMatchObject({
+    await expect(caller.update({ id: "wf-b", name: "X" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -551,9 +530,7 @@ describe("workflow.update", () => {
       id: "wf-reset-top",
       resetPositionsScope: "",
     });
-    const row = tdb.$tables.workflowTemplates.find(
-      (r) => r.id === "wf-reset-top",
-    )!;
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-top")!;
     expect(row.positions).toEqual({ "4:1670": [1000, 1000] });
   });
 
@@ -573,9 +550,7 @@ describe("workflow.update", () => {
       id: "wf-reset-sub",
       resetPositionsScope: "4",
     });
-    const row = tdb.$tables.workflowTemplates.find(
-      (r) => r.id === "wf-reset-sub",
-    )!;
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-sub")!;
     expect(row.positions).toEqual({
       "4": [10, 10],
       "4:5:1670": [500, 500],
@@ -593,9 +568,7 @@ describe("workflow.update", () => {
       id: "wf-reset-empty",
       resetPositionsScope: "",
     });
-    const row = tdb.$tables.workflowTemplates.find(
-      (r) => r.id === "wf-reset-empty",
-    )!;
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-empty")!;
     expect(row.positions).toBeNull();
   });
 
@@ -610,9 +583,7 @@ describe("workflow.update", () => {
       resetPositionsScope: "",
       positions: { "1": [999, 999] },
     });
-    const row = tdb.$tables.workflowTemplates.find(
-      (r) => r.id === "wf-reset-excl",
-    )!;
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-excl")!;
     expect(row.positions).toBeNull();
   });
 });
@@ -627,9 +598,7 @@ describe("workflow.delete", () => {
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
     expect(await caller.delete({ id: "wf-1" })).toEqual({ ok: true });
-    expect(
-      tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1"),
-    ).toBeUndefined();
+    expect(tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")).toBeUndefined();
     await expect(caller.delete({ id: "wf-1" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -697,9 +666,7 @@ describe("workflow.resync", () => {
   });
 
   it("模板不存在 → NOT_FOUND", async () => {
-    await expect(
-      createCaller(makeCtx()).resync({ id: "nope" }),
-    ).rejects.toMatchObject({
+    await expect(createCaller(makeCtx()).resync({ id: "nope" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });

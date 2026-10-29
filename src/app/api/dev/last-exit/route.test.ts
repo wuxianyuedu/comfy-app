@@ -61,8 +61,7 @@ describe("GET /api/dev/last-exit", () => {
     const res = await GET();
     expect(res.status).toBe(200);
     expect(
-      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { record: unknown })
-        .record,
+      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { record: unknown }).record,
     ).toBeNull();
   });
 
@@ -72,8 +71,7 @@ describe("GET /api/dev/last-exit", () => {
     const res = await GET();
     expect(res.status).toBe(200);
     expect(
-      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { record: unknown })
-        .record,
+      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { record: unknown }).record,
     ).toBeNull();
   });
 

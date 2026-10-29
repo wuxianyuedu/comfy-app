@@ -4,10 +4,7 @@
 // 「主目录被启动参数覆盖了」这件事只写在 `source` 里，界面上要显示成一句人话；
 // 口径散进组件后就只能靠渲染快照看着它对不对。
 
-import type {
-  DesktopStoragePaths,
-  StorageDirInfo,
-} from "~/lib/comfyui/desktop-storage-paths";
+import type { DesktopStoragePaths, StorageDirInfo } from "~/lib/comfyui/desktop-storage-paths";
 
 /** 一行 = 一个标签 + 它对应的目录列表（共享组可能多条）。 */
 export type StoragePathRow = {
@@ -29,9 +26,7 @@ const ROW_SPECS = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 /** 把六组目录摊平成界面行；共享组为空时给空数组（组件渲染「未配置」而不是不显示）。 */
-export function buildStorageRows(
-  storage: DesktopStoragePaths,
-): StoragePathRow[] {
+export function buildStorageRows(storage: DesktopStoragePaths): StoragePathRow[] {
   const slots: Record<
     (typeof ROW_SPECS)[number]["key"],
     { primary: StorageDirInfo; shared: StorageDirInfo[] }

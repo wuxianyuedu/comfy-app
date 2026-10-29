@@ -110,9 +110,7 @@ describe("handleAgentChat：JSON 指令回退（方案 2）", () => {
   });
 
   it("action 是登记过的工具名 → 输出 fallback_instruction", async () => {
-    completeLLM.mockResolvedValue(
-      '{"action": "generate_script", "idea": "海边"}',
-    );
+    completeLLM.mockResolvedValue('{"action": "generate_script", "idea": "海边"}');
     const res = await handleAgentChat(req());
     expect(res.fallback_instruction).toEqual({
       action: "generate_script",
@@ -146,9 +144,7 @@ describe("handleAgentChat：JSON 指令回退（方案 2）", () => {
   });
 
   it("同时有 reply 与 action → 以 action 为准（动作优先，不丢指令）", async () => {
-    completeLLM.mockResolvedValue(
-      '{"reply": "好的", "action": "generate_script"}',
-    );
+    completeLLM.mockResolvedValue('{"reply": "好的", "action": "generate_script"}');
     const res = await handleAgentChat(req());
     expect(res.fallback_instruction).toEqual({
       reply: "好的",
@@ -193,8 +189,10 @@ describe("handleAgentChat：消息窄化", () => {
         ],
       }),
     );
-    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock
-      .calls[0] as [unknown, unknown[]];
+    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock.calls[0] as [
+      unknown,
+      unknown[],
+    ];
     // 只剩 user 一条（system 由 server.ts 自己拼，不信调用方）
     expect(msgs).toHaveLength(2); // sysMessages = [system(自己拼), user]
     expect(msgs[0]).toMatchObject({ role: "system" });
@@ -216,8 +214,10 @@ describe("handleAgentChat：消息窄化", () => {
         ],
       }),
     );
-    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock
-      .calls[0] as [unknown, Array<Record<string, unknown>>];
+    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock.calls[0] as [
+      unknown,
+      Array<Record<string, unknown>>,
+    ];
     const assistant = msgs.find((m) => m.role === "assistant");
     expect(assistant?.tool_calls).toEqual([
       {

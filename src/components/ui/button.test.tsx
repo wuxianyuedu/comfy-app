@@ -23,38 +23,24 @@ const SEMANTIC_VARIANTS = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 describe("Button 语义变体", () => {
-  it.for(SEMANTIC_VARIANTS)(
-    "variant=%s 产出的类是语义 token 类名",
-    (variant) => {
-      const cls = buttonVariants({ variant });
-      expect(cls).toMatch(
-        /\b(bg|text|border)-(primary|destructive|success|warning|info)/,
-      );
-    },
-  );
+  it.for(SEMANTIC_VARIANTS)("variant=%s 产出的类是语义 token 类名", (variant) => {
+    const cls = buttonVariants({ variant });
+    expect(cls).toMatch(/\b(bg|text|border)-(primary|destructive|success|warning|info)/);
+  });
 
-  it.for(SEMANTIC_VARIANTS)(
-    "variant=%s 不落任何 Tailwind 原生调色板字面量",
-    (variant) => {
-      const cls = buttonVariants({ variant });
-      // 原生调色板（violet-500 / red-700 / emerald-400 …）一出现就说明
-      // 又绕开了语义 token，改品牌色不会生效（§3.6.2）。
-      expect(cls).not.toMatch(
-        /\b(?:bg|text|border)-(?:violet|red|rose|emerald|amber|cyan|fuchsia|purple|green|blue)-\d/,
-      );
-    },
-  );
+  it.for(SEMANTIC_VARIANTS)("variant=%s 不落任何 Tailwind 原生调色板字面量", (variant) => {
+    const cls = buttonVariants({ variant });
+    // 原生调色板（violet-500 / red-700 / emerald-400 …）一出现就说明
+    // 又绕开了语义 token，改品牌色不会生效（§3.6.2）。
+    expect(cls).not.toMatch(
+      /\b(?:bg|text|border)-(?:violet|red|rose|emerald|amber|cyan|fuchsia|purple|green|blue)-\d/,
+    );
+  });
 
   it("软底变体的文字走 -strong 档，不直接复用原色", () => {
-    expect(buttonVariants({ variant: "warning" })).toContain(
-      "text-warning-strong",
-    );
-    expect(buttonVariants({ variant: "success" })).toContain(
-      "text-success-strong",
-    );
-    expect(buttonVariants({ variant: "danger" })).toContain(
-      "text-danger-strong",
-    );
+    expect(buttonVariants({ variant: "warning" })).toContain("text-warning-strong");
+    expect(buttonVariants({ variant: "success" })).toContain("text-success-strong");
+    expect(buttonVariants({ variant: "danger" })).toContain("text-danger-strong");
     expect(buttonVariants({ variant: "info" })).toContain("text-info-strong");
   });
 

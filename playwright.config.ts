@@ -2,14 +2,8 @@ import { availableParallelism } from "node:os";
 
 import { defineConfig, devices } from "@playwright/test";
 import { resolveAppPort, resolveRepoRoot } from "./scripts/app-port.mjs";
-import {
-  fakeComfyuiEnv,
-  fakeComfyuiStatsUrl,
-} from "./e2e/support/fake-comfyui-endpoint.mjs";
-import {
-  COMFY_CLI_PYTHON_KEY,
-  fakeExecutorEnv,
-} from "./e2e/support/fake-comfyui-executor-env.mjs";
+import { fakeComfyuiEnv, fakeComfyuiStatsUrl } from "./e2e/support/fake-comfyui-endpoint.mjs";
+import { COMFY_CLI_PYTHON_KEY, fakeExecutorEnv } from "./e2e/support/fake-comfyui-executor-env.mjs";
 import {
   decodePythonPreflight,
   PYTHON_PREFLIGHT_ENV_KEY,
@@ -61,15 +55,11 @@ const appOrigin = `http://localhost:${appPort}`;
  * 本文件只**读** `scripts/e2e-run.mjs` 起 Playwright 之前算好的那份判决 —— 同
  * `globalSetup` 读 pre-flight 端口结论的口径（ISSUE #1766）。读不到时退回裸名字：
  * 那一格是「不知道」而不是「没有」，别把手工 `pnpm exec playwright test` 弄崩。 */
-const pythonPreflight = decodePythonPreflight(
-  process.env[PYTHON_PREFLIGHT_ENV_KEY],
-);
+const pythonPreflight = decodePythonPreflight(process.env[PYTHON_PREFLIGHT_ENV_KEY]);
 
 const fakeExecutor = fakeExecutorEnv();
 if (fakeExecutor.reason) {
-  process.stdout.write(
-    `[playwright] ⚠ 假 comfy-cli 未注入：${fakeExecutor.reason}\n`,
-  );
+  process.stdout.write(`[playwright] ⚠ 假 comfy-cli 未注入：${fakeExecutor.reason}\n`);
 }
 const executorEnv: Record<string, string> = fakeExecutor.env;
 if (pythonPreflight?.interpreter && executorEnv[COMFY_CLI_PYTHON_KEY]) {
@@ -254,17 +244,13 @@ export function resolveWebServerCommand(
  * @returns 覆盖 Playwright 默认并行度的 worker 数（**恒有值**：不写这个键就等于让
  *   Playwright 按核数铺开 —— `cpus - 1`，16 核上是 15 —— 而那正是本条要治的形态）
  */
-export function resolveE2eWorkers(
-  env: NodeJS.ProcessEnv,
-  cpus = resolveLocalCpus(env),
-): number {
+export function resolveE2eWorkers(env: NodeJS.ProcessEnv, cpus = resolveLocalCpus(env)): number {
   /* 两档都收敛（见函数头注），所以 `CI` / `PNPM_START` 不再分流 —— 入参留着是为了
    * 让「同一对键」这条口径在签名上仍然只有一处（调用点与跑法脚本共用）。 */
   void env;
   /* `cpus - 1` 是 Playwright 自己的默认算法（留一块给 `next start` 与替身两个服务），
    * 单核那档**不能**算成 0 —— `Math.max(1, …)` 兜住它，而不是让它退化成上界。 */
-  const usable =
-    Number.isInteger(cpus) && cpus >= 1 ? Math.max(1, cpus - 1) : null;
+  const usable = Number.isInteger(cpus) && cpus >= 1 ? Math.max(1, cpus - 1) : null;
   const byCores = usable ?? COLD_COMPILE_WORKERS;
   return Math.max(1, Math.min(COLD_COMPILE_WORKERS, byCores));
 }

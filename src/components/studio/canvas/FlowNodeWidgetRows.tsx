@@ -5,22 +5,11 @@
 import { Handle, Position } from "@xyflow/react";
 import { portColor, inferInputType } from "~/lib/comfyui/types";
 import { friendlyInputName } from "~/lib/comfyui/node-titles";
-import {
-  renderWidgetValue,
-  valueCellColor,
-  sanitizeComboLabel,
-} from "../workflow-utils";
+import { renderWidgetValue, valueCellColor, sanitizeComboLabel } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import { StringTextarea } from "../StringTextarea";
-import {
-  PORT_ROW_TONES,
-  portDotGlow,
-  resolvePortRowTone,
-} from "./flow-focus-endpoints";
-import {
-  NODE_PORT_FOCUS_ACTIVE_KEY,
-  readPortFocusRole,
-} from "./hooks/use-related-edges-highlight";
+import { PORT_ROW_TONES, portDotGlow, resolvePortRowTone } from "./flow-focus-endpoints";
+import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
 interface FlowNodeWidgetRowsProps {
@@ -41,10 +30,7 @@ export function FlowNodeWidgetRows({
   /* 选中节点时端口行跟着连线一起变（判据与连线同源，见 FlowNodePinRows）：
    *  有连线落到的那一行提亮、端点放大，没有落到的行压暗。级别由
    *  `useRelatedEdgesHighlight` 写在本节点 data 上，行渲染层只读。 */
-  const nodeData = /* SAFETY: 类型断言已复核 */ data as unknown as Record<
-    string,
-    unknown
-  >;
+  const nodeData = /* SAFETY: 类型断言已复核 */ data as unknown as Record<string, unknown>;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   return (
     <div className="relative flex min-h-0 flex-1 flex-col py-0.5">
@@ -53,9 +39,7 @@ export function FlowNodeWidgetRows({
         // （少见 —— 主要是兼作默认值的子图包裹输入）。
         const isConn = rawMeta[k]?.isConnection === true;
         // 边界连线：包裹暴露该槽位的哨兵（origin_id -10）。
-        const isBoundary =
-          rawMeta[k]?.isBoundary === true ||
-          data.boundaryInputs?.has(k) === true;
+        const isBoundary = rawMeta[k]?.isBoundary === true || data.boundaryInputs?.has(k) === true;
         // 类型一律从 JS 类型的标量值推导（连线元组
         // 的 edgeType 路径在顶部针脚区）。
         const inputType = inferInputType(data.classType, k, v);
@@ -80,9 +64,7 @@ export function FlowNodeWidgetRows({
          *  不按字段名猜（叫 prompt 的单行输入不该被升级成 textarea）。 */
         const isStringWidget =
           inputType === "STRING" &&
-          (meta?.multiline === true ||
-            stringText.length >= 32 ||
-            stringText.includes("\n"));
+          (meta?.multiline === true || stringText.length >= 32 || stringText.includes("\n"));
 
         /* 这一行的观感：widget 行的 Handle id 就是输入名（无前缀）。档位映射收口
          * 在 `PORT_ROW_TONES`（与连接行共用同一张表，避免两处各写一套三元链）。 */
@@ -128,11 +110,8 @@ export function FlowNodeWidgetRows({
                 width: tone.dotSize,
                 height: tone.dotSize,
                 boxShadow:
-                  isConn || isBoundary
-                    ? portDotGlow(typeCol, tone.dotGlowStrong)
-                    : undefined,
-                borderColor:
-                  isConn || isBoundary ? "var(--color-canvas)" : "transparent",
+                  isConn || isBoundary ? portDotGlow(typeCol, tone.dotGlowStrong) : undefined,
+                borderColor: isConn || isBoundary ? "var(--color-canvas)" : "transparent",
               }}
               title={`${k} (${inputType})`}
             />

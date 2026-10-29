@@ -14,10 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  clearWhichCommandCache,
-  type UsabilityProbe,
-} from "./executable-resolve";
+import { clearWhichCommandCache, type UsabilityProbe } from "./executable-resolve";
 import { pythonCandidates, pythonProbeArgs } from "./python-candidates";
 import { findPython, resolvePython } from "./python-resolve";
 
@@ -54,8 +51,7 @@ function writeCandidate(file: string) {
 function probeOnly(wanted: string): UsabilityProbe {
   return {
     access: () => undefined,
-    spawn: (candidate) =>
-      (candidate.split(/[\\/]/).pop() ?? "") === wanted ? null : "ENOEXEC",
+    spawn: (candidate) => ((candidate.split(/[\\/]/).pop() ?? "") === wanted ? null : "ENOEXEC"),
   };
 }
 
@@ -125,8 +121,7 @@ describe("resolvePython：在候选里挑出第一个真能跑的", () => {
       probe: {
         access: () => undefined,
         spawn: (candidate, args) => {
-          if ((candidate.split(/[\\/]/).pop() ?? "") !== "py.EXE")
-            return "ENOEXEC";
+          if ((candidate.split(/[\\/]/).pop() ?? "") !== "py.EXE") return "ENOEXEC";
           seen.push(args);
           // 只有带 `-3` 的探针才「起得来」—— 裸 `py` 的形态如实报非零。
           return args.includes("-3") ? null : "ENOEXEC";
@@ -229,13 +224,7 @@ describe("「没量到」≠ 「这个命令不存在」（ISSUE #1961）", () =
    * 「这一次没量到」（超时 + 资源类）分开钉住：前者照旧算不可用，后者必须当可用
    * （否则一台满机上的判据会齐刷刷误报「工具没装」—— 让人去装一个本就装好的东西）。 */
   it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      "ETIMEDOUT",
-      "EAGAIN",
-      "EMFILE",
-      "ENOMEM",
-      "UNKNOWN",
-    ] as const,
+    /* SAFETY: 类型断言已复核 */ ["ETIMEDOUT", "EAGAIN", "EMFILE", "ENOMEM", "UNKNOWN"] as const,
   )("「没量到」的码（%s）按**可用**算，不再被跳过", (code) => {
     const dir = freshDir();
     writeCandidate(path.join(dir, "python3"));

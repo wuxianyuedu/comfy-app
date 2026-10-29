@@ -16,10 +16,7 @@ vi.mock("~/lib/comfyui/queue-status.server", () => ({
     /* SAFETY: 类型断言已复核 */ collect as unknown as () => Promise<unknown>,
 }));
 
-import {
-  subscribeQueueChanged,
-  resetQueueChangedSignalForTest,
-} from "./queue-signal.server";
+import { subscribeQueueChanged, resetQueueChangedSignalForTest } from "./queue-signal.server";
 
 const SAME = {
   online: true,

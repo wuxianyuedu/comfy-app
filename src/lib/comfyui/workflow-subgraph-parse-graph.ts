@@ -231,14 +231,9 @@ export function parseSubgraphSlots(
     const nodeId = String(rn.id);
     if (Array.isArray(rn.inputs)) {
       const rawInputs: RawNodeInput[] = rn.inputs;
-      const slots = resolveInputSlots(
-        rawInputs,
-        boundarySlotsByNodeId?.[nodeId],
-      );
+      const slots = resolveInputSlots(rawInputs, boundarySlotsByNodeId?.[nodeId]);
       const widgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
-      inputNameByNodeSlot[nodeId] = slots.map(({ slot }) =>
-        slotNameAt(slots, rawInputs, slot),
-      );
+      inputNameByNodeSlot[nodeId] = slots.map(({ slot }) => slotNameAt(slots, rawInputs, slot));
       // 按槽位顺序拍一份 widget 值快照，边界那一趟才能顺带给出默认 `value`
       // （封装节点把提示词暴露成输入时，CLIPTextEncode 的 `text` 就在这里）。
       inputWidgetValueByNodeSlot[nodeId] = slots.map(({ slot, index }) => {
@@ -249,12 +244,8 @@ export function parseSubgraphSlots(
       });
     }
     if (Array.isArray(rn.outputs)) {
-      const sorted = [...rn.outputs].sort(
-        (a, b) => (a?.idx ?? 0) - (b?.idx ?? 0),
-      );
-      outputNameByNodeSlot[nodeId] = sorted.map((x) =>
-        typeof x?.name === "string" ? x.name : "",
-      );
+      const sorted = [...rn.outputs].sort((a, b) => (a?.idx ?? 0) - (b?.idx ?? 0));
+      outputNameByNodeSlot[nodeId] = sorted.map((x) => (typeof x?.name === "string" ? x.name : ""));
     }
   }
 
@@ -274,10 +265,7 @@ export interface SubgraphGraphResult {
   nodes: DetailNodeView[];
   inputEndpointNodes: Set<string>;
   outputEndpointNodes: Set<string>;
-  boundaryInputByNode: Record<
-    string,
-    { name: string; type: string; value: unknown }
-  >;
+  boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }>;
   boundaryOutputByNode: Record<string, { name: string; type: string }>;
   connectsToByNode: Record<string, string>;
   connectsFromByNode: Record<string, string>;
@@ -340,12 +328,8 @@ export function buildSubgraphGraph(
    *  客户端现在已经忽略它们。 */
   const inputEndpointNodes = new Set<string>();
   const outputEndpointNodes = new Set<string>();
-  const boundaryInputByNode: Record<
-    string,
-    { name: string; type: string; value: unknown }
-  > = {};
-  const boundaryOutputByNode: Record<string, { name: string; type: string }> =
-    {};
+  const boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }> = {};
+  const boundaryOutputByNode: Record<string, { name: string; type: string }> = {};
   const connectsToByNode: Record<string, string> = {};
   const connectsFromByNode: Record<string, string> = {};
 
@@ -381,8 +365,7 @@ export function buildSubgraphGraph(
       if (lk?.src !== "-10") continue;
       const slotNames: string[] | undefined = inputNameByNodeSlot[lk.targetId];
       const slotName = slotNames?.[lk.targetSlot];
-      if (slotName)
-        proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
+      if (slotName) proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
     }
   }
 
@@ -392,10 +375,8 @@ export function buildSubgraphGraph(
     const classType: string = rn.type ?? "?";
     /* 记下原始的 litegraph 外框尺寸，客户端才能按 ComfyUI 的精确尺寸
      *  画出这个节点（见上面 `sizeById` 的声明）。 */
-    const rnSize =
-      Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
-    if (rnSize)
-      sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
+    const rnSize = Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
+    if (rnSize) sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
     /* 每个输入的元数据。「内部」连线（源自子图内的另一个节点）与
      *  「边界」连线（源自输入哨兵节点 -10，值来自父级封装节点）分开标记。
      *  边界连线仍然记 isConnection（供 UI 打标签），但写 inputMap 时**跳过**，
@@ -403,9 +384,7 @@ export function buildSubgraphGraph(
     const rawInputs: RawInputEntry[] = [];
     const inputMap: Record<string, unknown> = {};
     if (Array.isArray(rn.inputs)) {
-      const rnWidgets = Array.isArray(rn.widgets_values)
-        ? rn.widgets_values
-        : [];
+      const rnWidgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
       /* 哨兵感知的配对：ComfyUI 会在 seed 型 INT widget 之后往
        *  `widgets_values` 里插一个 `control_after_generate` 槽位，
        *  按位置硬对会把后面每个 widget 都错位一格。这里用共享助手
@@ -418,19 +397,13 @@ export function buildSubgraphGraph(
         if (!inp || typeof inp.name !== "string") continue;
         const isConn = inp.link != null;
         const widgetName =
-          inp.widget && typeof inp.widget.name === "string"
-            ? inp.widget.name
-            : undefined;
+          inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         const widgetValue = widgetName ? wvMap[widgetName] : undefined;
         const entry: RawInputEntry = {
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
-          localized:
-            typeof inp.localized_name === "string"
-              ? inp.localized_name
-              : undefined,
-          type:
-            typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
+          localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          type: typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
           /* 把边界连线（origin_id = -10/-20）标成 "isBoundary"，
            *  画布便能渲染成「封装节点暴露出来的输入」（它仍是一条连接，
            *  但子图内部没有真实的源节点）。 */
@@ -450,11 +423,7 @@ export function buildSubgraphGraph(
          *  另外：不再向下游传播 IMAGE 输入的 `imageRef`，理由与父级路由相同 ——
          *  下游的 IMAGE 消费方只会再显示一遍未缩放 / 未编码的上游图，
          *  有误导性。只有 LoadImage 源节点带预览（在下面推的合成条目上）。 */
-        if (
-          typeof inp.type === "string" &&
-          inp.type === "STRING" &&
-          widgetValue !== undefined
-        ) {
+        if (typeof inp.type === "string" && inp.type === "STRING" && widgetValue !== undefined) {
           if (inferIsMultiline(undefined, widgetValue)) entry.multiline = true;
         }
         rawInputs.push(entry);
@@ -492,8 +461,7 @@ export function buildSubgraphGraph(
              *  （OUTPUT 端点定位助手要用）。只保留**第一个**非哨兵源，
              *  定位结果才确定。 */
             // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 需保留 first-truthy 语义（空串也视为未设置）
-            if (!connectsFromByNode[nodeId])
-              connectsFromByNode[nodeId] = lk?.src ?? "";
+            if (!connectsFromByNode[nodeId]) connectsFromByNode[nodeId] = lk?.src ?? "";
           }
         } else if (widgetValue !== undefined) {
           // 把对应的 widget 值折进 inputs[]（API 形态）。
@@ -539,24 +507,16 @@ export function buildSubgraphGraph(
             }
             /* 非哨兵目标 → 把第一个记成 `connects_to`
              *  （INPUT 端点定位助手要用）。 */
-            if (
-              target &&
-              target !== "-10" &&
-              target !== "-20" &&
-              !connectsToByNode[nodeId]
-            ) {
+            if (target && target !== "-10" && target !== "-20" && !connectsToByNode[nodeId]) {
               connectsToByNode[nodeId] = target;
             }
           }
         }
         rawOutputs.push({
           name: o.name,
-          localized:
-            typeof o.localized_name === "string" ? o.localized_name : undefined,
+          localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
           type: typeof o.type === "string" ? o.type : "*",
-          links: Array.isArray(o.links)
-            ? o.links.map((n) => Number(n) || 0)
-            : [],
+          links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
           isBoundary: isBoundaryOut,
         });
       }
@@ -602,12 +562,9 @@ export function buildSubgraphGraph(
       rawOutputsById[nodeId] = rawOutputs;
       rawNodeMeta.push({
         id: nodeId,
-        widgets_values: Array.isArray(rn.widgets_values)
-          ? rn.widgets_values
-          : [],
+        widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
         outputs: rawOutputs,
-        flags:
-          typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {},
+        flags: typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {},
         mode: typeof rn.mode === "number" ? rn.mode : 0,
       });
     }

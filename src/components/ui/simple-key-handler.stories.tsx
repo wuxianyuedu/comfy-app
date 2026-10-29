@@ -62,9 +62,7 @@ function Demo({ keys, ignoreRepeat, preventDefault }: SimpleKeyHandlerProps) {
 }
 
 export const Default: Story = {
-  render: (args) => (
-    <Demo {/* SAFETY: 类型断言已复核 */ ...(args as SimpleKeyHandlerProps)} />
-  ),
+  render: (args) => <Demo {/* SAFETY: 类型断言已复核 */ ...(args as SimpleKeyHandlerProps)} />,
 };
 
 /* 下面几张各自覆写 `keys`，所以类型上把它**声明成可选** —— 故事层要的是

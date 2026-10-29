@@ -73,9 +73,7 @@ describe("isTaskClaimedInProcess — QUEUED reaper 的 in-memory 认领保护", 
 
   it("本进程在飞的是别的任务时，不误判当前任务", () => {
     const s = fakeState({ pendingDispatch: new Set(["task-other"]) });
-    expect(isTaskClaimedInProcess(s, cli(["task-other"]), "task-1")).toBe(
-      false,
-    );
+    expect(isTaskClaimedInProcess(s, cli(["task-other"]), "task-1")).toBe(false);
   });
 
   it("多个信号并存时任一命中即判认领", () => {
@@ -93,10 +91,8 @@ describe("configureReaper 接缝", () => {
     const fakeRepo = {
       listStaleUnownedQueued: async () => [],
       listStaleRunning: async () => [],
-      finalizeFailure: async () =>
-        /* SAFETY: 类型断言已复核 */ "written" as const,
-      finalizeFromReaper: async () =>
-        /* SAFETY: 类型断言已复核 */ "written" as const,
+      finalizeFailure: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+      finalizeFromReaper: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
     };
     expect(() => mod.configureReaper({ taskRepo: fakeRepo })).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。

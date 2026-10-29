@@ -95,9 +95,7 @@ describe("测试库的表结构与 schema.ts 同步", () => {
 
     // 表数为零说明遍历根本没认出租照对象（drizzle 内部符号变了）——
     // 那时上面那条会「全绿」而毫无价值，所以这条判据必须自己先红。
-    expect(checkedTables, "一张表都没比对到，判据本身失效了").toBeGreaterThan(
-      20,
-    );
+    expect(checkedTables, "一张表都没比对到，判据本身失效了").toBeGreaterThan(20);
     expect(offenders).toEqual([]);
   });
 });

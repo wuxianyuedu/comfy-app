@@ -6,24 +6,13 @@
 // 参考节点、点节点关菜单）职责内聚、只依赖 menu / setMenu / setNodes / 落点换算，
 // 抽成子 hook 让 CanvasInner 回到函数长度阈值内（规范 §12.13：巨型函数按职责切子 hook）。
 // 行为与原内联实现逐字一致，仅位置搬家。
-import {
-  useCallback,
-  type Dispatch,
-  type MouseEvent,
-  type SetStateAction,
-} from "react";
+import { useCallback, type Dispatch, type MouseEvent, type SetStateAction } from "react";
 import type { NodeMouseHandler } from "@xyflow/react";
 
-import {
-  defaultData,
-  type CanvasNodeType,
-  type NodeKind,
-} from "~/lib/project-canvas/canvas-types";
+import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-canvas/canvas-types";
 import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 
-type ScreenToFlowFn = Parameters<
-  typeof placeCanvasNode
->[0]["flow"]["screenToFlowPosition"];
+type ScreenToFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPosition"];
 
 interface UseCanvasMenuArgs {
   menu: { x: number; y: number } | null;
@@ -80,10 +69,7 @@ export function useCanvasMenu({
     setMenu(null);
   }, [menu, screenToFlowPosition, setNodes, setMenu]);
 
-  const onNodeClick: NodeMouseHandler = useCallback(
-    () => setMenu(null),
-    [setMenu],
-  );
+  const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), [setMenu]);
 
   return { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick };
 }

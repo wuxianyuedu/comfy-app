@@ -27,9 +27,7 @@ const LAUNCHER = JSON.stringify(
   pathToFileURL(join(process.cwd(), "scripts", "dev-launcher.mjs")).href,
 );
 const ORCH = JSON.stringify(
-  pathToFileURL(
-    join(process.cwd(), "scripts", "launcher-core", "orchestrator.mjs"),
-  ).href,
+  pathToFileURL(join(process.cwd(), "scripts", "launcher-core", "orchestrator.mjs")).href,
 );
 const ROOT = process.cwd();
 
@@ -39,14 +37,10 @@ function join(...parts: string[]): string {
 
 /** 在子进程里调真实实现（判据是纯函数，不 mock、不造进程）。 */
 function decidePort(script: string): unknown {
-  const out = spawnSync(
-    process.execPath,
-    ["--input-type=module", "-e", script],
-    {
-      encoding: "utf8",
-      cwd: ROOT,
-    },
-  );
+  const out = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+    encoding: "utf8",
+    cwd: ROOT,
+  });
   if (out.status !== 0) throw new Error(out.stderr || out.stdout);
   return JSON.parse(out.stdout);
 }
@@ -153,17 +147,13 @@ describe("端口残留回收：显式端口 + 应用服务自证（ISSUE #621）
   it("自证判据只认本仓库的应用服务形状，检出根路径是硬前提", () => {
     expect(isApp(`node ${ROOT}/scripts/dev.mjs -p 3311`)).toBe(true);
     expect(isApp(`node ${ROOT}/scripts/start.mjs -p 3311`)).toBe(true);
-    expect(
-      isApp(`node ${ROOT}/node_modules/next/dist/bin/next dev --turbo -p 3311`),
-    ).toBe(true);
+    expect(isApp(`node ${ROOT}/node_modules/next/dist/bin/next dev --turbo -p 3311`)).toBe(true);
     // 别的检出的服务：路径不在本检出根内
     expect(isApp("node /somewhere/else/scripts/dev.mjs -p 3311")).toBe(false);
     // 只有检出根路径但跑的是别的东西
     expect(isApp(`python ${ROOT}/tools/whatever.py --port 3311`)).toBe(false);
     // 完全没有检出根路径（用户直接在别处 pnpm dev）
-    expect(isApp("node /usr/lib/node_modules/next/dist/bin/next dev")).toBe(
-      false,
-    );
+    expect(isApp("node /usr/lib/node_modules/next/dist/bin/next dev")).toBe(false);
     expect(isApp("")).toBe(false);
   });
 

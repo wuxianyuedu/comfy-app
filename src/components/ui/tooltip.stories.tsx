@@ -2,12 +2,7 @@ import { Info, Trash2 } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { Button } from "~/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 
 /**
  * `ui/tooltip` 是 base-ui 的悬停提示基座。它比裸基元多出**两处项目特有的口径**，
@@ -59,12 +54,7 @@ export const InToolbar: Story = {
         {["运行", "停止", "清空", "删除"].map((label, index) => (
           <Tooltip key={label}>
             <TooltipTrigger
-              render={
-                <Button
-                  size="icon-sm"
-                  variant={index === 3 ? "danger" : "ghost"}
-                />
-              }
+              render={<Button size="icon-sm" variant={index === 3 ? "danger" : "ghost"} />}
             >
               <Trash2 />
               <span className="sr-only">{label}</span>
@@ -88,12 +78,8 @@ export const NearEdge: Story = {
     <TooltipProvider>
       <div className="flex justify-end">
         <Tooltip>
-          <TooltipTrigger render={<Button variant="outline" />}>
-            贴右上角
-          </TooltipTrigger>
-          <TooltipContent>
-            一段比较长的文案，用来看气泡贴边时右边留多少
-          </TooltipContent>
+          <TooltipTrigger render={<Button variant="outline" />}>贴右上角</TooltipTrigger>
+          <TooltipContent>一段比较长的文案，用来看气泡贴边时右边留多少</TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>
@@ -106,9 +92,7 @@ export const Sides: Story = {
     <TooltipProvider>
       <div className="flex items-center gap-3">
         {
-          /* SAFETY: 类型断言已复核 */ (
-            ["top", "right", "bottom", "left"] as const
-          ).map((side) => (
+          /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
             <Tooltip key={side}>
               <TooltipTrigger render={<Button variant="outline" size="sm" />}>
                 {side}

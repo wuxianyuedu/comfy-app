@@ -45,9 +45,9 @@ describe("resolveTaskTemperature", () => {
   });
 
   it("无覆盖、无显式温度 → 用该任务类型的推荐默认（不再一律回落全局 0.7）", () => {
-    expect(
-      resolveTaskTemperature({ taskType: "code", overrides, fallback: 0.7 }),
-    ).toBe(TASK_TYPES.code.defaultTemperature);
+    expect(resolveTaskTemperature({ taskType: "code", overrides, fallback: 0.7 })).toBe(
+      TASK_TYPES.code.defaultTemperature,
+    );
     expect(
       resolveTaskTemperature({
         taskType: "creative",
@@ -60,9 +60,9 @@ describe("resolveTaskTemperature", () => {
 
   it("review 档（FR-QA-07）：低温档位存在，评审走它的推荐默认/用户覆盖", () => {
     expect(TASK_TYPES.review.defaultTemperature).toBeLessThanOrEqual(0.2);
-    expect(
-      resolveTaskTemperature({ taskType: "review", overrides, fallback: 0.7 }),
-    ).toBe(TASK_TYPES.review.defaultTemperature);
+    expect(resolveTaskTemperature({ taskType: "review", overrides, fallback: 0.7 })).toBe(
+      TASK_TYPES.review.defaultTemperature,
+    );
     expect(
       resolveTaskTemperature({
         taskType: "review",
@@ -73,9 +73,7 @@ describe("resolveTaskTemperature", () => {
   });
 
   it("没传任务类型 → 显式温度优先于全局默认；都没有则回落全局", () => {
-    expect(
-      resolveTaskTemperature({ explicitTemperature: 0.5, fallback: 0.7 }),
-    ).toBe(0.5);
+    expect(resolveTaskTemperature({ explicitTemperature: 0.5, fallback: 0.7 })).toBe(0.5);
     expect(resolveTaskTemperature({ fallback: 0.7 })).toBe(0.7);
   });
 
@@ -137,9 +135,7 @@ describe("normalizeExtraModels", () => {
     expect(kept?.apiKey).toBe("sk-1");
     const [cleared] = normalizeExtraModels([{ name: "m", apiKey: null }]);
     expect(cleared?.apiKey).toBeNull();
-    const [bySplit] = splitExtraModels([
-      { name: "m", apiKey: null },
-    ]).remoteEntries;
+    const [bySplit] = splitExtraModels([{ name: "m", apiKey: null }]).remoteEntries;
     expect(bySplit?.apiKey).toBeNull();
   });
 
@@ -147,18 +143,14 @@ describe("normalizeExtraModels", () => {
     for (const rec of [{}, { apiKey: undefined }, { apiKey: 42 }]) {
       expect(normalizeEntryApiKey(rec)).toBeUndefined();
       const [entry] = normalizeExtraModels([{ name: "m", ...rec }]);
-      const [splitEntry] = splitExtraModels([
-        { name: "m", ...rec },
-      ]).remoteEntries;
+      const [splitEntry] = splitExtraModels([{ name: "m", ...rec }]).remoteEntries;
       expect(Object.keys(entry ?? {})).not.toContain("apiKey");
       expect(Object.keys(splitEntry ?? {})).not.toContain("apiKey");
     }
   });
 
   it("无名 / 非字符串 / 非数组输入一律丢弃或返回空", () => {
-    expect(normalizeExtraModels([{ baseUrl: "https://x" }, null, 42])).toEqual(
-      [],
-    );
+    expect(normalizeExtraModels([{ baseUrl: "https://x" }, null, 42])).toEqual([]);
     expect(normalizeExtraModels(undefined)).toEqual([]);
     expect(normalizeExtraModels("gpt-4o")).toEqual([]);
   });
@@ -182,9 +174,7 @@ describe("isLoopbackBaseUrl", () => {
     expect(isLoopbackBaseUrl("https://api.openai.com/v1")).toBe(false);
     expect(isLoopbackBaseUrl("https://192.168.1.10/v1")).toBe(false);
     expect(isLoopbackBaseUrl("")).toBe(false);
-    expect(
-      isLoopbackBaseUrl(/* SAFETY: 类型断言已复核 */ null as unknown as string),
-    ).toBe(false);
+    expect(isLoopbackBaseUrl(/* SAFETY: 类型断言已复核 */ null as unknown as string)).toBe(false);
   });
 });
 
@@ -199,16 +189,10 @@ describe("isMisplacedLocalOllama", () => {
   });
   it("无 apiKey、baseUrl 空 → 回落到全局 llmConfig.baseUrl 判定", () => {
     expect(
-      isMisplacedLocalOllama(
-        { baseUrl: null, apiKey: null },
-        "http://localhost:11434/v1",
-      ),
+      isMisplacedLocalOllama({ baseUrl: null, apiKey: null }, "http://localhost:11434/v1"),
     ).toBe(true);
     expect(
-      isMisplacedLocalOllama(
-        { baseUrl: null, apiKey: null },
-        "https://api.openai.com/v1",
-      ),
+      isMisplacedLocalOllama({ baseUrl: null, apiKey: null }, "https://api.openai.com/v1"),
     ).toBe(false);
   });
   it("带独立 apiKey 或指向非回环地址 → 真远端，不判为本地", () => {
@@ -275,26 +259,16 @@ describe("foldRemoteToLocal", () => {
 
 describe("effectiveProviderType", () => {
   it("本机回环 + 无密钥的「远端」配置按本地生效（ollama 误存为远端的修复口径）", () => {
-    expect(
-      effectiveProviderType("remote", "http://127.0.0.1:11434/v1", false),
-    ).toBe("local");
-    expect(
-      effectiveProviderType("remote", "http://localhost:11434/v1", false),
-    ).toBe("local");
+    expect(effectiveProviderType("remote", "http://127.0.0.1:11434/v1", false)).toBe("local");
+    expect(effectiveProviderType("remote", "http://localhost:11434/v1", false)).toBe("local");
   });
 
   it("回环但带密钥（可能是本机网关转发远端）尊重存储的 remote", () => {
-    expect(
-      effectiveProviderType("remote", "http://127.0.0.1:3000/v1", true),
-    ).toBe("remote");
+    expect(effectiveProviderType("remote", "http://127.0.0.1:3000/v1", true)).toBe("remote");
   });
 
   it("非回环地址尊重存储值；local 永远保持 local", () => {
-    expect(
-      effectiveProviderType("remote", "https://api.openai.com/v1", false),
-    ).toBe("remote");
-    expect(
-      effectiveProviderType("local", "http://192.168.1.8:11434/v1", false),
-    ).toBe("local");
+    expect(effectiveProviderType("remote", "https://api.openai.com/v1", false)).toBe("remote");
+    expect(effectiveProviderType("local", "http://192.168.1.8:11434/v1", false)).toBe("local");
   });
 });

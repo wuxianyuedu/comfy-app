@@ -86,8 +86,7 @@ function localTimestamp(): string {
 export function traceStringify(value: unknown): string {
   if (value == null) return "null";
   if (typeof value === "string") return value;
-  if (value instanceof Error)
-    return `${value.name}: ${value.message}\n${value.stack ?? ""}`;
+  if (value instanceof Error) return `${value.name}: ${value.message}\n${value.stack ?? ""}`;
   if (typeof value === "object") {
     try {
       return JSON.stringify(value, null, 2);
@@ -97,8 +96,7 @@ export function traceStringify(value: unknown): string {
     }
   }
   if (typeof value === "symbol") return Symbol.prototype.toString.call(value);
-  if (typeof value === "function")
-    return `[function ${value.name || "anonymous"}]`;
+  if (typeof value === "function") return `[function ${value.name || "anonymous"}]`;
   /* 此处 value 已是 string/number/boolean/bigint（其余分支均已 return）。 */
   return `${/* SAFETY: 类型断言已复核 */ value as string | number | boolean | bigint}`;
 }
@@ -181,21 +179,13 @@ export function historyTraceSummary(
 ): HistoryVerdict {
   const entry =
     hist && promptId
-      ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as
-          | Record<string, unknown>
-          | undefined)
+      ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as Record<string, unknown> | undefined)
       : undefined;
   if (!entry) {
     return { found: false, outputNodeCount: 0 };
   }
-  const outputs = /* SAFETY: 类型断言已复核 */ (entry.outputs ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const status = /* SAFETY: 类型断言已复核 */ (entry.status ?? {}) as Record<
-    string,
-    unknown
-  >;
+  const outputs = /* SAFETY: 类型断言已复核 */ (entry.outputs ?? {}) as Record<string, unknown>;
+  const status = /* SAFETY: 类型断言已复核 */ (entry.status ?? {}) as Record<string, unknown>;
   const messages = status.messages;
   let executionError: string | undefined;
   if (Array.isArray(messages)) {
@@ -218,12 +208,8 @@ export function historyTraceSummary(
   return {
     found: true,
     outputNodeCount: Object.keys(outputs).length,
-    ...(typeof status.status_str === "string"
-      ? { statusStr: status.status_str }
-      : {}),
-    ...(typeof status.completed === "boolean"
-      ? { completed: status.completed }
-      : {}),
+    ...(typeof status.status_str === "string" ? { statusStr: status.status_str } : {}),
+    ...(typeof status.completed === "boolean" ? { completed: status.completed } : {}),
     ...(executionError ? { executionError } : {}),
   };
 }
@@ -239,18 +225,13 @@ export function historyOutputKeys(
 ): { nodeId: string; keys: string[] }[] {
   const entry =
     hist && promptId
-      ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as
-          | Record<string, unknown>
-          | undefined)
+      ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as Record<string, unknown> | undefined)
       : undefined;
   const outputs = entry?.outputs;
   if (!outputs || typeof outputs !== "object") return [];
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
-    keys:
-      v && typeof v === "object"
-        ? Object.keys(/* SAFETY: 类型断言已复核 */ v as object)
-        : [],
+    keys: v && typeof v === "object" ? Object.keys(/* SAFETY: 类型断言已复核 */ v as object) : [],
   }));
 }
 
@@ -268,8 +249,7 @@ export function queueTraceSummary(qd: unknown): {
       if (Array.isArray(it)) {
         if (typeof it[1] === "string" && it[1]) ids.push(it[1]);
       } else if (it && typeof it === "object") {
-        const id = /* SAFETY: 类型断言已复核 */ (it as { prompt_id?: unknown })
-          .prompt_id;
+        const id = /* SAFETY: 类型断言已复核 */ (it as { prompt_id?: unknown }).prompt_id;
         if (typeof id === "string" && id) ids.push(id);
       }
     }

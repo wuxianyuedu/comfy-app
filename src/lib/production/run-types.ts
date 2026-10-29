@@ -132,10 +132,7 @@ export const REVIEW_MAX_RETRY = 2;
 export const SCRIPT_REVIEW_SCORE_THRESHOLD = 3.5;
 
 /** 追加一条执行日志（不可变，尾部追加、超上限从头裁剪）。 */
-export function appendRunStep(
-  run: ProductionRun,
-  step: RunStep,
-): ProductionRun {
+export function appendRunStep(run: ProductionRun, step: RunStep): ProductionRun {
   return { ...run, log: tailWindow([...run.log, step], RUN_LOG_LIMIT) };
 }
 
@@ -165,9 +162,7 @@ function parseRevMap(raw: unknown): Record<string, number> {
 export function normalizeProductionRun(raw: unknown): ProductionRun {
   const obj = asRecord(raw);
   if (!obj) return { ...DEFAULT_PRODUCTION_RUN };
-  const status = RUN_STATUSES.includes(
-    /* SAFETY: 类型断言已复核 */ obj.status as RunStatus,
-  )
+  const status = RUN_STATUSES.includes(/* SAFETY: 类型断言已复核 */ obj.status as RunStatus)
     ? /* SAFETY: 类型断言已复核 */ (obj.status as RunStatus)
     : "idle";
   const approvalMode = APPROVAL_MODES.includes(
@@ -193,21 +188,15 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     approvalMode,
     stage: isProductionStage(obj.stage) ? obj.stage : "script",
     goal: typeof obj.goal === "string" ? obj.goal : "",
-    awaitingStage: isProductionStage(obj.awaitingStage)
-      ? obj.awaitingStage
-      : null,
-    imageWorkflowId:
-      typeof obj.imageWorkflowId === "string" ? obj.imageWorkflowId : "",
-    videoWorkflowId:
-      typeof obj.videoWorkflowId === "string" ? obj.videoWorkflowId : "",
-    filmStartedAt:
-      typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
+    awaitingStage: isProductionStage(obj.awaitingStage) ? obj.awaitingStage : null,
+    imageWorkflowId: typeof obj.imageWorkflowId === "string" ? obj.imageWorkflowId : "",
+    videoWorkflowId: typeof obj.videoWorkflowId === "string" ? obj.videoWorkflowId : "",
+    filmStartedAt: typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
     processedShotRev: parseRevMap(obj.processedShotRev),
     autoReview: obj.autoReview === true,
     reviewedShotRev: parseRevMap(obj.reviewedShotRev),
     reviewAttempts: parseRevMap(obj.reviewAttempts),
-    scriptReviewDigest:
-      typeof obj.scriptReviewDigest === "string" ? obj.scriptReviewDigest : "",
+    scriptReviewDigest: typeof obj.scriptReviewDigest === "string" ? obj.scriptReviewDigest : "",
     scriptReviewAttempts:
       typeof obj.scriptReviewAttempts === "number" &&
       Number.isFinite(obj.scriptReviewAttempts) &&
@@ -216,9 +205,7 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
         : 0,
     scriptRevisionPending: obj.scriptRevisionPending === true,
     storyboardScriptDigest:
-      typeof obj.storyboardScriptDigest === "string"
-        ? obj.storyboardScriptDigest
-        : "",
+      typeof obj.storyboardScriptDigest === "string" ? obj.storyboardScriptDigest : "",
     log,
     error: typeof obj.error === "string" ? obj.error : null,
     updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : "",
@@ -272,19 +259,15 @@ export function scriptDigestOf(markdown: string): string {
 }
 
 /** 把 production 行归一成规划视图（无行 → 全空，等价「连剧本都还没有」）。 */
-export function toRunView(
-  production: ProductionLike | null,
-): ProductionRunView {
-  const shotsRaw =
-    production && Array.isArray(production.shots) ? production.shots : [];
+export function toRunView(production: ProductionLike | null): ProductionRunView {
+  const shotsRaw = production && Array.isArray(production.shots) ? production.shots : [];
   const shots: ShotRunView[] = [];
   for (const item of shotsRaw) {
     const rec = asRecord(item);
     if (!rec || typeof rec.id !== "string") continue;
     shots.push({
       id: rec.id,
-      rev:
-        typeof rec.rev === "number" && Number.isFinite(rec.rev) ? rec.rev : 0,
+      rev: typeof rec.rev === "number" && Number.isFinite(rec.rev) ? rec.rev : 0,
       hasImage: Boolean(rec.imageUrl),
       hasClip: Boolean(rec.clipUrl),
       humanVerdict: normalizeHumanVerdict(rec.humanVerdict),
@@ -292,13 +275,8 @@ export function toRunView(
     });
   }
   const characters =
-    production && Array.isArray(production.characters)
-      ? production.characters
-      : [];
-  const script =
-    typeof production?.scriptMarkdown === "string"
-      ? production.scriptMarkdown
-      : "";
+    production && Array.isArray(production.characters) ? production.characters : [];
+  const script = typeof production?.scriptMarkdown === "string" ? production.scriptMarkdown : "";
   const scriptReviewRaw = asRecord(production?.scriptReview);
   return {
     hasScript: script.trim().length > 0,
@@ -334,10 +312,7 @@ export type RunAction =
  *     图齐（且评审已定稿）未出片 → render_film；已出片 → done。
  * 这里只出「做什么」，「做完后是否停下等点头」由执行引擎按 approvalMode 处理（P6-2）。
  */
-export function planNextRunAction(
-  view: ProductionRunView,
-  run: ProductionRun,
-): RunAction {
+export function planNextRunAction(view: ProductionRunView, run: ProductionRun): RunAction {
   switch (run.status) {
     case "awaiting_approval":
       return { kind: "await_approval", stage: run.awaitingStage ?? run.stage };
@@ -381,8 +356,7 @@ export function planNextRunAction(
       return done !== undefined && done < s.rev;
     })
     .map((s) => s.id);
-  if (needImage.length > 0)
-    return { kind: "render_images", shotIds: needImage };
+  if (needImage.length > 0) return { kind: "render_images", shotIds: needImage };
   // 自动评审：图齐后，把「已出图但评审定稿快照落后于当前 rev」的镜头纳入待评审。
   // 评审不合格的抽卡会抬高该镜 rev → 重新出现在 needImage → 重出后再评，直到通过或达上限。
   // 人工裁决优先（#2480 · FR-AG-02 质量停点由人拍板）：
@@ -407,8 +381,7 @@ export function planNextRunAction(
         return true;
       })
       .map((s) => s.id);
-    if (needReview.length > 0)
-      return { kind: "review_shots", shotIds: needReview };
+    if (needReview.length > 0) return { kind: "review_shots", shotIds: needReview };
   }
   if (!view.filmRendered) return { kind: "render_film" };
   return { kind: "done" };

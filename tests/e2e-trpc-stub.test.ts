@@ -35,8 +35,7 @@ const payload = {
  * 传恒等函数时 `{json, meta}` 会原样漏进下游，head 的槽位就不是结果信封了。
  */
 async function consume(body: string) {
-  const { jsonlStreamConsumer } =
-    await import("@trpc/server/unstable-core-do-not-import");
+  const { jsonlStreamConsumer } = await import("@trpc/server/unstable-core-do-not-import");
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new TextEncoder().encode(body));
@@ -58,8 +57,12 @@ async function consume(body: string) {
 
 /** 拆开「两层异步值」拿到 `result.data`（协议形状，与客户端同一次拆解）。 */
 async function unwrap(slot: unknown) {
-  const envelope = /* SAFETY: 类型断言已复核 */ (await Promise.resolve(slot)) as { result: unknown };
-  const result = /* SAFETY: 类型断言已复核 */ (await Promise.resolve(envelope.result)) as { data: unknown };
+  const envelope = /* SAFETY: 类型断言已复核 */ (await Promise.resolve(slot)) as {
+    result: unknown;
+  };
+  const result = /* SAFETY: 类型断言已复核 */ (await Promise.resolve(envelope.result)) as {
+    data: unknown;
+  };
   return Promise.resolve(result.data);
 }
 
@@ -69,7 +72,9 @@ describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
     expect(lines).toHaveLength(4);
 
     const [firstLine, ...rest] = lines;
-    const head = /* SAFETY: 类型断言已复核 */ JSON.parse(firstLine!) as { json: Record<string, unknown> };
+    const head = /* SAFETY: 类型断言已复核 */ JSON.parse(firstLine!) as {
+      json: Record<string, unknown>;
+    };
     expect(Object.keys(head.json)).toEqual(["0"]);
 
     for (const line of rest) {
@@ -92,7 +97,7 @@ describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
     /* `createdAt` 过线之后仍然是 `Date`（superjson 的 meta 路径带对了）；
      * 丢了 meta 时这里是字符串，而客户端 `row.createdAt.getTime()` 会抛
      * `is not a function` —— 真现场见 ISSUE #1442 的复现步骤。 */
-    const [first] = (/* SAFETY: 类型断言已复核 */ data as typeof payload).tasks;
+    const [first] = /* SAFETY: 类型断言已复核 */ (data as typeof payload).tasks;
     expect(first?.createdAt).toBeInstanceOf(Date);
     expect(first?.createdAt.toISOString()).toBe("2026-01-01T00:00:01.000Z");
   });
@@ -132,10 +137,9 @@ describe("stubTrpc 的批请求对齐（§11.8 的录制输入面依赖它）", 
 
   it("批请求里有一个过程没有主 → 整条不管（半桩比不桩更坏）", () => {
     expect(
-      planStubResults(
-        "http://x/api/trpc/workflow.list,workflowModel.list?batch=1&input=%7B%7D",
-        { "workflow.list": { workflows: [], total: 0 } },
-      ),
+      planStubResults("http://x/api/trpc/workflow.list,workflowModel.list?batch=1&input=%7B%7D", {
+        "workflow.list": { workflows: [], total: 0 },
+      }),
     ).toBeNull();
   });
 

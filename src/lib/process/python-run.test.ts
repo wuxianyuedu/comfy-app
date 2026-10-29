@@ -25,19 +25,13 @@ describe("退避链：顺序与启动参数都取自那份判据", () => {
     expect(attempts.map((a) => a.command)).toEqual(["python", "py", "python3"]);
     /* `-3` 必须排在脚本参数**前面**：`py` 把第一个非选项参数当脚本，
      * 拼在后面就成了「跑 -3 这个文件」。 */
-    expect(attempts.find((a) => a.command === "py")?.args).toEqual([
-      "-3",
-      ...SCRIPT,
-    ]);
+    expect(attempts.find((a) => a.command === "py")?.args).toEqual(["-3", ...SCRIPT]);
     expect(attempts.find((a) => a.command === "python")?.args).toEqual(SCRIPT);
     expect(attempts.find((a) => a.command === "python3")?.args).toEqual(SCRIPT);
   });
 
   it("POSIX 上没有 py，也就不许凭空多出一个 -3", () => {
-    for (const platform of /* SAFETY: 类型断言已复核 */ [
-      "linux",
-      "darwin",
-    ] as NodeJS.Platform[]) {
+    for (const platform of /* SAFETY: 类型断言已复核 */ ["linux", "darwin"] as NodeJS.Platform[]) {
       const attempts = pythonAttempts(SCRIPT, platform);
       expect(attempts.map((a) => a.command)).toEqual(["python3", "python"]);
       expect(attempts.every((a) => !a.args.includes("-3"))).toBe(true);
@@ -45,13 +39,8 @@ describe("退避链：顺序与启动参数都取自那份判据", () => {
   });
 
   it("长度就是「全部试完」那条边界：调用点不再自写 length - 1", () => {
-    for (const platform of /* SAFETY: 类型断言已复核 */ [
-      "win32",
-      "linux",
-    ] as NodeJS.Platform[]) {
-      expect(pythonAttempts(SCRIPT, platform)).toHaveLength(
-        pythonCandidates(platform).length,
-      );
+    for (const platform of /* SAFETY: 类型断言已复核 */ ["win32", "linux"] as NodeJS.Platform[]) {
+      expect(pythonAttempts(SCRIPT, platform)).toHaveLength(pythonCandidates(platform).length);
     }
     /* 最后一档必须还在链上（A14 的第二处旧形状：127 的退避写成 `< length - 1`，
      * 最后一个候选根本没轮到，那句「未找到解释器」因此不可达）。 */

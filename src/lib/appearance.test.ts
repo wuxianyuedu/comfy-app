@@ -44,13 +44,8 @@ describe("默认档 = 引入前的原值", () => {
   });
 
   it("「中」与「标准 100%」就是各自档位表里的默认项", () => {
-    expect(
-      RADIUS_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.radius),
-    ).toBeTruthy();
-    expect(
-      FONT_SCALE_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.fontScale)
-        ?.value,
-    ).toBe("1");
+    expect(RADIUS_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.radius)).toBeTruthy();
+    expect(FONT_SCALE_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.fontScale)?.value).toBe("1");
   });
 });
 
@@ -70,9 +65,9 @@ describe("parseAppearance：不认就整份回落", () => {
   });
 
   it("一半合法一半非法也整份回落（不许圆角新的、字号旧的）", () => {
-    expect(
-      parseAppearance(JSON.stringify({ radius: "xl", fontScale: "nope" })),
-    ).toEqual(DEFAULT_APPEARANCE);
+    expect(parseAppearance(JSON.stringify({ radius: "xl", fontScale: "nope" }))).toEqual(
+      DEFAULT_APPEARANCE,
+    );
   });
 
   it("合法值原样读回", () => {
@@ -84,10 +79,7 @@ describe("parseAppearance：不认就整份回落", () => {
 describe("applyAppearance", () => {
   it("一次写入两个变量", () => {
     const el = fakeElement();
-    applyAppearance(
-      { radius: "lg", fontScale: "125" },
-      /* SAFETY: 类型断言已复核 */ el as never,
-    );
+    applyAppearance({ radius: "lg", fontScale: "125" }, /* SAFETY: 类型断言已复核 */ el as never);
     expect(el.store.get("--radius")).toBe("1.25rem");
     expect(el.store.get("--font-scale")).toBe("1.25");
   });
@@ -136,12 +128,8 @@ describe("readAppearance / saveAppearance", () => {
 
   it("保存时同步写到 <html> 上（离开设置页也必须成立）", () => {
     saveAppearance({ radius: "lg", fontScale: "110" });
-    expect(document.documentElement.style.getPropertyValue("--radius")).toBe(
-      "1.25rem",
-    );
-    expect(
-      document.documentElement.style.getPropertyValue("--font-scale"),
-    ).toBe("1.1");
+    expect(document.documentElement.style.getPropertyValue("--radius")).toBe("1.25rem");
+    expect(document.documentElement.style.getPropertyValue("--font-scale")).toBe("1.1");
   });
 
   it("存的是坏值时读回默认，且不抛", () => {

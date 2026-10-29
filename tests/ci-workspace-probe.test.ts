@@ -35,9 +35,9 @@ const CP936_UNENCODABLE = [0x21d2, 0x26a0, 0xfe0f];
 
 function expectCp936Safe(lines: string[]) {
   const text = lines.join("\n");
-  const hits = CP936_UNENCODABLE.filter((code) =>
-    text.includes(String.fromCharCode(code)),
-  ).map((code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`);
+  const hits = CP936_UNENCODABLE.filter((code) => text.includes(String.fromCharCode(code))).map(
+    (code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`,
+  );
   expect(
     hits,
     "这些码位在 CP936 里没有对应字节，平台日志会把它们打成 ? —— 读数读不出等于没有读数",
@@ -67,9 +67,7 @@ function fakeRun(facts: Record<string, string> = GIT_FACTS) {
   return (cmd: string, args: string[]) => {
     if (cmd !== "git") return { ok: false, out: "" };
     const key = args.join(" ");
-    return key in facts
-      ? { ok: true, out: facts[key] ?? "" }
-      : { ok: false, out: "" };
+    return key in facts ? { ok: true, out: facts[key] ?? "" } : { ok: false, out: "" };
   };
 }
 
@@ -79,10 +77,7 @@ function fakeRun(facts: Record<string, string> = GIT_FACTS) {
  * `ledgerBody` 是账本文件的既有内容（不存在就别给，读它会抛 —— 那正是「第一跑」的形态）。
  * 写进去的内容收在 `written` 里，用例据此判「这一跑到底有没有把对照记下来」。
  */
-function fakeFs(
-  tree: Record<string, { birth?: number; mtime?: number }>,
-  ledgerBody?: string,
-) {
+function fakeFs(tree: Record<string, { birth?: number; mtime?: number }>, ledgerBody?: string) {
   const written = new Map<string, string>();
   /** 记「为账本建过哪些目录」—— 这一档要把账本写在工作区之外，建父目录那一跳得能判。 */
   const made: string[] = [];
@@ -109,9 +104,7 @@ function fakeFs(
 }
 
 /** 完整工作区：`.git` 30s 前出现，node_modules 与 .next 都在。 */
-function warmTree(
-  overrides: Record<string, { birth?: number; mtime?: number }> = {},
-) {
+function warmTree(overrides: Record<string, { birth?: number; mtime?: number }> = {}) {
   return {
     [CWD]: { birth: NOW - 60_000 },
     [path.join(CWD, ".git")]: { birth: NOW - 30_000 },
@@ -165,10 +158,7 @@ const baseFacts = {
   "playwright-report": factOf(false),
 };
 
-function probe(
-  tree: Record<string, { birth?: number; mtime?: number }>,
-  ledgerBody?: string,
-) {
+function probe(tree: Record<string, { birth?: number; mtime?: number }>, ledgerBody?: string) {
   const { fsLike, written, made } = fakeFs(tree, ledgerBody);
   return {
     lines: workspaceProbeLines({
@@ -213,14 +203,10 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
   it("真的把这一跑记进账本了（下一跑才有对照可查）", () => {
     const { written, made } = probe(warmTree());
     const body = written.get(LEDGER);
-    expect(
-      body,
-      "账本没落盘 ⇒ 这一档每跑一次都是「第一跑」，对照永远不会出现",
-    ).toBeDefined();
-    expect(
-      made,
-      "账本的父目录没建 ⇒ 宿主上第一次写会 ENOENT，读数从此永远只有本次",
-    ).toContain(path.dirname(LEDGER));
+    expect(body, "账本没落盘 ⇒ 这一档每跑一次都是「第一跑」，对照永远不会出现").toBeDefined();
+    expect(made, "账本的父目录没建 ⇒ 宿主上第一次写会 ENOENT，读数从此永远只有本次").toContain(
+      path.dirname(LEDGER),
+    );
     const entries = /* SAFETY: 类型断言已复核 */ JSON.parse(String(body)) as Array<{
       cwd: string;
       gitBornMs: number | null;
@@ -390,16 +376,8 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
   });
 
   it("对照行取得出「是哪一台 job」：只取 basename 时两跑都叫 workspace，那一行等于没读", () => {
-    const run1 = path.join(
-      os.tmpdir(),
-      "cnb-f3v-1k57a1o1l-001~c5g",
-      "workspace",
-    );
-    const run2 = path.join(
-      os.tmpdir(),
-      "cnb-f5b-1k57bgqol-001~ttf",
-      "workspace",
-    );
+    const run1 = path.join(os.tmpdir(), "cnb-f3v-1k57a1o1l-001~c5g", "workspace");
+    const run2 = path.join(os.tmpdir(), "cnb-f5b-1k57bgqol-001~ttf", "workspace");
     expect(jobLabel(run1)).not.toBe(jobLabel(run2));
     expect(jobLabel(run1)).toContain("cnb-f3v-1k57a1o1l-001~c5g");
     expect(path.basename(run1)).toBe(path.basename(run2));
@@ -408,18 +386,9 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
   it("每一支会进日志的文案都能以 CP936 出口（⇒ 与 ⚠️ 实测被打成 ?，正是这一档最该读的那几行）", () => {
     const branches = [
       ...reuseVerdict([], entryOf()),
-      ...reuseVerdict(
-        [entryOf({ cwd: path.join(os.tmpdir(), "job-a") })],
-        entryOf(),
-      ),
-      ...reuseVerdict(
-        [entryOf({ gitBornMs: 1000 })],
-        entryOf({ gitBornMs: 1000 }),
-      ),
-      ...reuseVerdict(
-        [entryOf({ gitBornMs: 7 })],
-        entryOf({ gitBornMs: 1000 }),
-      ),
+      ...reuseVerdict([entryOf({ cwd: path.join(os.tmpdir(), "job-a") })], entryOf()),
+      ...reuseVerdict([entryOf({ gitBornMs: 1000 })], entryOf({ gitBornMs: 1000 })),
+      ...reuseVerdict([entryOf({ gitBornMs: 7 })], entryOf({ gitBornMs: 1000 })),
       ...cacheVerdict({
         ...baseFacts,
         node_modules: factOf(false),
@@ -467,9 +436,7 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
       windowsHide: true,
       env: { ...process.env, COMFYAPP_CI_PROBE_DIR: dir },
     });
-    expect(r.stderr, "这一档是读数：任何情况下都不该把故障写成非零退出").toBe(
-      "",
-    );
+    expect(r.stderr, "这一档是读数：任何情况下都不该把故障写成非零退出").toBe("");
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("== 检出与工作区 ==");
     expect(r.stdout).toContain("== 结论（读数，不判红绿）==");

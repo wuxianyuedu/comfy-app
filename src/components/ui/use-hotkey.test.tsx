@@ -80,12 +80,8 @@ describe("mod 是跨平台的（这条正是原来两处 mac 上死的根因）"
   });
 
   it("显式 ctrl 时与平台无关（刻意只在 Ctrl 上成立）", () => {
-    expect(
-      matchesHotkey(key("l", { ctrl: true }), { key: "l", ctrl: true }, true),
-    ).toBe(true);
-    expect(
-      matchesHotkey(key("l", { meta: true }), { key: "l", ctrl: true }, true),
-    ).toBe(false);
+    expect(matchesHotkey(key("l", { ctrl: true }), { key: "l", ctrl: true }, true)).toBe(true);
+    expect(matchesHotkey(key("l", { meta: true }), { key: "l", ctrl: true }, true)).toBe(false);
   });
 });
 
@@ -95,25 +91,17 @@ describe("未声明的修饰键必须没按（否则单键会互相吞）", () =
   });
 
   it("Escape 配 anything 修饰键时不命中（避免与别的 Escape 快捷键打架）", () => {
-    expect(
-      matchesHotkey(key("Escape", { shift: true }), { key: "Escape" }, false),
-    ).toBe(false);
+    expect(matchesHotkey(key("Escape", { shift: true }), { key: "Escape" }, false)).toBe(false);
   });
 
   it("声明了 shift 的组合键在没按 Shift 时不命中", () => {
     expect(
-      matchesHotkey(
-        key("l", { ctrl: true }),
-        { key: "l", mod: true, shift: true },
-        false,
-      ),
+      matchesHotkey(key("l", { ctrl: true }), { key: "l", mod: true, shift: true }, false),
     ).toBe(false);
   });
 
   it("主键大小写不敏感", () => {
-    expect(
-      matchesHotkey(key("L", { ctrl: true }), { key: "l", mod: true }, false),
-    ).toBe(true);
+    expect(matchesHotkey(key("L", { ctrl: true }), { key: "l", mod: true }, false)).toBe(true);
   });
 });
 

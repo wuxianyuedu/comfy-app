@@ -2,10 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { getExitPolicy } from "~/lib/app-settings/app-settings.server";
-import {
-  spawnManaged,
-  waitForDetachMediator,
-} from "~/lib/process/process-launch";
+import { spawnManaged, waitForDetachMediator } from "~/lib/process/process-launch";
 import {
   openRuntimeLogWriter,
   pruneRuntimeLogFiles,
@@ -100,12 +97,8 @@ async function probeOllamaPort(): Promise<boolean> {
 async function resolveOllamaExe(): Promise<string> {
   if (process.platform !== "win32") return "ollama";
   const candidates = /* SAFETY: 类型断言已复核 */ [
-    process.env.LOCALAPPDATA
-      ? `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe`
-      : null,
-    process.env.ProgramFiles
-      ? `${process.env.ProgramFiles}\\Ollama\\ollama.exe`
-      : null,
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe` : null,
+    process.env.ProgramFiles ? `${process.env.ProgramFiles}\\Ollama\\ollama.exe` : null,
     process.env["ProgramFiles(x86)"]
       ? `${process.env["ProgramFiles(x86)"]}\\Ollama\\ollama.exe`
       : null,
@@ -154,9 +147,7 @@ async function spawnOllamaServe(
   keepAlive: boolean,
 ): Promise<{ ok: boolean; detail: string }> {
   if (keepAlive) {
-    appendOllamaLog(
-      `[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`,
-    );
+    appendOllamaLog(`[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
     const launched = spawnManaged({
       command: exe,
       args: ["serve"],
@@ -239,9 +230,7 @@ async function spawnOllamaServe(
         // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
         child.on("exit", (code, signal) => {
           appendOllamaLog(`■ Ollama 进程已退出（code=${code ?? "null"}）`);
-          appendOllamaLog(
-            `[exit] code=${code ?? "null"} signal=${signal ?? "none"}`,
-          );
+          appendOllamaLog(`[exit] code=${code ?? "null"} signal=${signal ?? "none"}`);
           settle({
             ok: false,
             detail:
@@ -330,10 +319,7 @@ export async function POST(_req: NextRequest) {
   } catch (e) {
     const hint = ollamaFailureHint(e);
     appendOllamaLog(`[err] 启动失败：${hint}`);
-    return NextResponse.json(
-      { error: `启动 Ollama 失败：${hint}` },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: `启动 Ollama 失败：${hint}` }, { status: 500 });
   } finally {
     st.starting = false;
   }

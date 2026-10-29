@@ -16,10 +16,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  collectShapes,
-  main,
-} from "../scripts/check-comment-headers.mjs";
+import { collectShapes, main } from "../scripts/check-comment-headers.mjs";
 import { headerShape } from "../scripts/ship-ticket.mjs";
 
 type FakeResult = {
@@ -166,9 +163,6 @@ describe("main：三态与点名", () => {
       rows: { number: string }[];
     };
     expect(parsed.total).toBe(3);
-    expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual([
-      "2195",
-      "2194",
-    ]);
+    expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual(["2195", "2194"]);
   });
 });

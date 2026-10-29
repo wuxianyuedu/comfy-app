@@ -35,29 +35,18 @@ export function artifactUrl(segments: readonly (string | number)[]): string {
 
 /** 布局的唯一形状：project 任务在 `projects/<projectId>/<taskId>` 下，其余直接在 `<taskId>` 下。
  *  磁盘与 URL 两条出口都由它派生。 */
-export function taskOutputSegments(
-  taskId: string,
-  projectId?: string | null,
-): string[] {
+export function taskOutputSegments(taskId: string, projectId?: string | null): string[] {
   return projectId ? [PROJECTS_SUBDIR, projectId, taskId] : [taskId];
 }
 
 /** 浏览器地址前缀：写进 `TaskImage.localPath` / `resultImages` 的那一段。 */
-export function taskOutputUrl(
-  taskId: string,
-  projectId?: string | null,
-): string {
+export function taskOutputUrl(taskId: string, projectId?: string | null): string {
   return artifactUrl(taskOutputSegments(taskId, projectId));
 }
 
 /** 给人看的**相对**落点（`generated/projects/<pid>/<tid>/`）。
  *  相对应用根而不给绝对路径：那台机器上根在哪儿由壳 / launcher 决定，
  *  界面写死一个绝对形状就一定会说错。 */
-export function artifactDirDisplay(
-  taskId: string,
-  projectId?: string | null,
-): string {
-  return `${ARTIFACT_ROOT_DIR}/${taskOutputSegments(taskId, projectId).join(
-    "/",
-  )}/`;
+export function artifactDirDisplay(taskId: string, projectId?: string | null): string {
+  return `${ARTIFACT_ROOT_DIR}/${taskOutputSegments(taskId, projectId).join("/")}/`;
 }

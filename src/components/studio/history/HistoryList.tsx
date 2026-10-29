@@ -73,11 +73,7 @@ function HistoryGroupTaskList({
  * 历史记录面板 —— 容器（规范 17 §17.2 第④层）。
  * 只做：取 controller → 传给视图 → 挂详情弹层；不含任何业务规则。
  */
-export function HistoryList({
-  onOpenTask: _onOpenTask,
-}: {
-  onOpenTask?: (id: string) => void;
-}) {
+export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: string) => void }) {
   /* 拿掉 modal「打开完整详情 ↗」按钮后 onOpenTask 变成无用 prop,
    * 重命名为 _onOpenTask 让 lint 沉默并保留向下兼容（父组件还在传，旧版可以仍然保留这个 prop）。
    * 用户反馈「在这里点开就显示详情，别在其他界面再显示」—— 历史 modal 是「这里」，
@@ -103,9 +99,7 @@ export function HistoryList({
       <ViewActions>
         <SelectMenu
           value={c.sort}
-          onChange={(value) =>
-            c.setSort(/* SAFETY: 类型断言已复核 */ value as SortKey)
-          }
+          onChange={(value) => c.setSort(/* SAFETY: 类型断言已复核 */ value as SortKey)}
           options={["newest", "oldest"]}
           labels={{ newest: "时间倒序", oldest: "时间正序" }}
           aria-label="排序"
@@ -133,11 +127,7 @@ export function HistoryList({
           现在整排交给 `ui/select-chip`（「一排里选一个」的全库唯一实现，
           规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，且自带
           与常态同值的 `hover:`，不会被 `Button` 的默认悬停档吃掉。 */}
-      <div
-        role="radiogroup"
-        aria-label="按状态筛选任务"
-        className="mb-6 flex flex-wrap gap-2"
-      >
+      <div role="radiogroup" aria-label="按状态筛选任务" className="mb-6 flex flex-wrap gap-2">
         {FILTERS.map((filterOption) => {
           const isActive = c.filter === filterOption.key;
           const count = c.counts[filterOption.key] ?? 0;
@@ -149,9 +139,7 @@ export function HistoryList({
               onClick={() => c.switchFilter(filterOption.key)}
               className="gap-2"
             >
-              {filterOption.tone && (
-                <StatusDot state={filterOption.tone} sizeClass="size-1.5" />
-              )}
+              {filterOption.tone && <StatusDot state={filterOption.tone} sizeClass="size-1.5" />}
               <span>{filterOption.label}</span>
               <span
                 /* 计数徽标：底色取**当前字色**的淡底（`bg-current/N`），
@@ -173,11 +161,7 @@ export function HistoryList({
       {c.loading ? (
         <p className="text-ink-muted text-sm">加载中…</p>
       ) : c.filteredCount === 0 ? (
-        <EmptyState
-          title={c.empty.title}
-          description={c.empty.hint}
-          minHeightClass="min-h-75"
-        />
+        <EmptyState title={c.empty.title} description={c.empty.hint} minHeightClass="min-h-75" />
       ) : (
         <div className="flex-col gap-6">
           {c.visibleGroups.map((group) => (
@@ -185,12 +169,8 @@ export function HistoryList({
               {/* ── 日期分组标题 ── */}
               <div className="mb-3 flex items-center gap-3">
                 <div className="u-gradient-brand h-4 w-1 rounded-full" />
-                <h2 className="text-ink-strong text-sm font-semibold">
-                  {group.key}
-                </h2>
-                <span className="text-ink-fainter text-xs">
-                  {group.items.length} 个任务
-                </span>
+                <h2 className="text-ink-strong text-sm font-semibold">{group.key}</h2>
+                <span className="text-ink-fainter text-xs">{group.items.length} 个任务</span>
                 <div className="bg-subtle h-px flex-1" />
               </div>
 

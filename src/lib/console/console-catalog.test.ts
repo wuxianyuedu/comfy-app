@@ -82,9 +82,7 @@ describe("预设命令表", () => {
   it("每条预设都能被解析器拆开（预设本身必须是合法命令行）", () => {
     for (const preset of allPresets()) {
       const parsed = parseConsoleLine(preset.command);
-      expect(parsed.ok, `预设 ${preset.id} 解析失败：${preset.command}`).toBe(
-        true,
-      );
+      expect(parsed.ok, `预设 ${preset.id} 解析失败：${preset.command}`).toBe(true);
     }
   });
 

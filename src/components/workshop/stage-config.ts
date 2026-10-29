@@ -63,10 +63,7 @@ export interface StageViewContext {
 export type StageRatios = Record<Tab, number>;
 
 /** 各阶段完成度 0..1（等权平均即总进度）。 */
-export function computeStageRatios(
-  ctx: StageViewContext,
-  rendered: boolean,
-): StageRatios {
+export function computeStageRatios(ctx: StageViewContext, rendered: boolean): StageRatios {
   return {
     script: ctx.scriptReady ? 1 : 0,
     character: ctx.characterCount > 0 ? 1 : 0,
@@ -93,19 +90,13 @@ export function stageSubtitle(
   if (ratios[id] >= 1) return "已完成";
   switch (id) {
     case "character":
-      return ctx.characterCount > 0
-        ? `已建 ${ctx.characterCount} 个`
-        : "待开始";
+      return ctx.characterCount > 0 ? `已建 ${ctx.characterCount} 个` : "待开始";
     case "storyboard":
       return ctx.shotCount > 0 ? `${ctx.shotCount} 镜` : "待开始";
     case "shots":
-      return ctx.shotCount > 0
-        ? `图 ${ctx.imageDoneCount}/${ctx.shotCount}`
-        : "待开始";
+      return ctx.shotCount > 0 ? `图 ${ctx.imageDoneCount}/${ctx.shotCount}` : "待开始";
     case "video":
-      return ctx.shotCount > 0
-        ? `片段 ${ctx.clipDoneCount}/${ctx.shotCount}`
-        : "待开始";
+      return ctx.shotCount > 0 ? `片段 ${ctx.clipDoneCount}/${ctx.shotCount}` : "待开始";
     case "render":
       return ctx.shotCount > 0 ? "可合成" : "待开始";
     default:
@@ -114,10 +105,7 @@ export function stageSubtitle(
 }
 
 /** 前置未满足时的温和提示(纯建议,不阻断)。 */
-export function stagePrereq(
-  id: Tab,
-  ctx: StageViewContext,
-): { text: string; go: Tab } | null {
+export function stagePrereq(id: Tab, ctx: StageViewContext): { text: string; go: Tab } | null {
   switch (id) {
     case "character":
       return ctx.scriptReady
@@ -180,8 +168,7 @@ export interface MissingItem {
  * 颜色不在这里给：视图按 `done` 取语义档（规范 03 §3.6.2），本模块不再带色值。
  */
 export function buildMissingSummary(ctx: StageViewContext): MissingItem[] {
-  const shotGap =
-    ctx.shotTarget > 0 ? Math.max(ctx.shotTarget - ctx.shotCount, 0) : null;
+  const shotGap = ctx.shotTarget > 0 ? Math.max(ctx.shotTarget - ctx.shotCount, 0) : null;
   return [
     {
       label: "角色卡",
@@ -224,10 +211,7 @@ export interface HealthRow {
  * 判定不掺任何写死目标：ratio 来自 stageRatios（其入参全是草稿/生成态的真实计数），
  * pending 就是「这一段还没做完」，不接受「应该有几个」这类外部常数。
  */
-export function buildHealthSnapshot(
-  ratios: StageRatios,
-  _ctx: StageViewContext,
-): HealthRow[] {
+export function buildHealthSnapshot(ratios: StageRatios, _ctx: StageViewContext): HealthRow[] {
   return STAGE_DEFS.map((stage) => {
     const ratio = ratios[stage.id];
     return {

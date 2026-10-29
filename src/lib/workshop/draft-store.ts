@@ -55,19 +55,15 @@ function draftKeyFor(id: string): string {
 function parseDraft(raw: string | null): WorkshopDraft {
   if (!raw) return emptyWorkshopDraft();
   try {
-    const draft = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      raw,
-    ) as Partial<WorkshopDraft>;
+    const draft = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<WorkshopDraft>;
     return {
       meta: draft.meta ?? DEFAULT_META,
-      scriptMarkdown:
-        typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
+      scriptMarkdown: typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
       scenes: Array.isArray(draft.scenes) ? draft.scenes : [],
       characters: Array.isArray(draft.characters) ? draft.characters : [],
       shots: Array.isArray(draft.shots) ? draft.shots : [],
       workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
-      videoWorkflowId:
-        typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
+      videoWorkflowId: typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
     };
   } catch {
     return emptyWorkshopDraft();

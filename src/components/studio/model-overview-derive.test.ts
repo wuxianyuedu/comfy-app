@@ -25,11 +25,7 @@ describe("deriveModelOverview 分组与排序", () => {
       loading: false,
       isError: false,
     });
-    expect(out.groups.map((g) => g.folder)).toEqual([
-      "checkpoints",
-      "loras",
-      "vae",
-    ]);
+    expect(out.groups.map((g) => g.folder)).toEqual(["checkpoints", "loras", "vae"]);
     expect(out.total).toBe(48);
     expect(out.emptyFolderCount).toBe(0);
   });

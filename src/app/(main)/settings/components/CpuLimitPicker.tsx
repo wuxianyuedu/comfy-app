@@ -69,9 +69,7 @@ export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {
                 <Label htmlFor={id} className="text-ink text-sm font-normal">
                   {CPU_LIMIT_LABELS[mode]}
                 </Label>
-                <span className="text-muted-foreground text-xs">
-                  {CPU_LIMIT_HINTS[mode]}
-                </span>
+                <span className="text-muted-foreground text-xs">{CPU_LIMIT_HINTS[mode]}</span>
               </div>
             </div>
           );

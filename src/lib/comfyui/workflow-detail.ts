@@ -27,21 +27,10 @@ import {
   toStringValue,
   type ApiWorkflowNode,
 } from "~/lib/comfyui/raw";
-import {
-  cacheJson,
-  cacheDel,
-  cacheDelPrefix,
-  cachePeek,
-} from "~/lib/server-cache";
+import { cacheJson, cacheDel, cacheDelPrefix, cachePeek } from "~/lib/server-cache";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
-import {
-  parseWorkflowIOMap,
-  type IOParamSlot,
-} from "~/lib/workflow/workflow-io-types";
-import {
-  parseWorkflowParamMap,
-  type WorkflowParamMap,
-} from "~/lib/workflow/workflow-param-map";
+import { parseWorkflowIOMap, type IOParamSlot } from "~/lib/workflow/workflow-io-types";
+import { parseWorkflowParamMap, type WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 import { createObjectInfoResolvers } from "~/lib/comfyui/workflow-detail-combo";
 import { inferIsMultiline } from "~/lib/comfyui/types";
 import {
@@ -54,10 +43,7 @@ import {
   type RawNodeMeta,
   type RawViewPacket,
 } from "~/lib/comfyui/workflow-detail-raw";
-import {
-  hasExecutableWorkflow,
-  hasRawContent,
-} from "~/lib/comfyui/execution-shape";
+import { hasExecutableWorkflow, hasRawContent } from "~/lib/comfyui/execution-shape";
 import { buildRawViewGraph } from "~/lib/comfyui/raw-view-graph";
 import {
   enrichWorkflowIO,
@@ -84,8 +70,7 @@ import {
  *  `WorkflowIOParam`）保持 tRPC 推断兼容 —— 非法组合（output+param 等）在类型
  *  层面被排除。`kind` 的开放字符串取值（自定义种类）走 `WorkflowIOEntry` 透传，
  *  不进这条判别联合。 */
-export type WorkflowDetailIOEntry = IOParamSlot &
-  Omit<WorkflowIOEntry, "direction" | "kind">;
+export type WorkflowDetailIOEntry = IOParamSlot & Omit<WorkflowIOEntry, "direction" | "kind">;
 
 /** ComfyUI group frames 的下发形状（镜像客户端 WorkflowGroup，bypass 恒写入）。 */
 export interface WorkflowDetailGroup {
@@ -220,13 +205,9 @@ async function buildWorkflowDetailJson(input: {
    *      `grp:bpin:inputs`）无害：渲染器只按图节点 id 查位置，
    *      未知键会被静默忽略。
    *      ignored. */
-  const positionsFromRaw =
-    raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
+  const positionsFromRaw = raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
   const tplPositions =
-    /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<
-      string,
-      [number, number]
-    >) ?? {};
+    /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<string, [number, number]>) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
     ...tplPositions,
@@ -234,8 +215,7 @@ async function buildWorkflowDetailJson(input: {
   /* 两个来源都没有内容时，客户端应该对整张图跑 Kahn，
    * 而不是把一个空对象当成「就用这些（一个都没有）位置」。
    * 返回 null，客户端的稀疏守卫才会生效并干净地往下走。 */
-  const positions =
-    Object.keys(effectivePositions).length > 0 ? effectivePositions : null;
+  const positions = Object.keys(effectivePositions).length > 0 ? effectivePositions : null;
 
   /* 每个节点的输入元数据 + ComfyUI 的精确外框尺寸
    * （完整语义见 workflow-detail-raw.ts 的 buildRawInputs ——
@@ -255,57 +235,49 @@ async function buildWorkflowDetailJson(input: {
   /* 派生视图图（保留 subgraph wrapper）就是 `detail.nodes` / `detail.graph`
    * 的来源：`rawJson` 是唯一的存库原件。 */
   const viewGraph = buildRawViewGraph(raw ?? { nodes: [] });
-  const nodes: DetailNodeView[] = Object.entries(viewGraph).map(
-    ([nodeId, n]) => {
-      // ComfyUI 的导出形态不一：新快照用 `class_type`，旧的与部分 rgthree-comfy
-      // 导出只有 `type`。回落读 `type`，下面那句「是否为子图封装节点」的判断才能
-      // 认出两个字段里任一处的 UUID 类名 —— 少了这道回落，每个节点都会被渲染成
-      // 普通的 WorkflowNode，子图封装节点会把 10+ 行 IO **内联摊开**，
-      // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
-      // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
-      //  `a || b` ≡ `a ? a : b`，空串同样回退。）
-      const classType: string = n.class_type
-        ? n.class_type
-        : n.type
-          ? /* SAFETY: 类型断言已复核 */ (n.type as string)
-          : "?";
-      const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
-      /* 子图封装节点（class_type === UUID）的显示名取自
-       *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套
-       *  查找方式（子图的键可能是 UUID，也可能是它内部的 `.id` 字段）。
-       *  名字缺失时回落到既有的空字符串哨兵 —— 那是最后的兜底标签，
-       *  客户端 friendlyNodeTitle() 随后会渲染成「子工作流」——
-       *  也就是最后的兜底标签，与改动前的行为一致。 */
-      let resolvedTitle: string | undefined;
-      if (isUuidClass && raw?.definitions?.subgraphs) {
-        const subs = raw.definitions.subgraphs;
-        let def = subs[classType];
-        if (!def) {
-          const matchKey = Object.keys(subs).find(
-            (key) => subs[key]?.id === classType,
-          );
-          if (matchKey) def = subs[matchKey];
-        }
-        if (def && typeof def.name === "string" && def.name.trim()) {
-          resolvedTitle = def.name.trim();
-        }
+  const nodes: DetailNodeView[] = Object.entries(viewGraph).map(([nodeId, n]) => {
+    // ComfyUI 的导出形态不一：新快照用 `class_type`，旧的与部分 rgthree-comfy
+    // 导出只有 `type`。回落读 `type`，下面那句「是否为子图封装节点」的判断才能
+    // 认出两个字段里任一处的 UUID 类名 —— 少了这道回落，每个节点都会被渲染成
+    // 普通的 WorkflowNode，子图封装节点会把 10+ 行 IO **内联摊开**，
+    // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
+    // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
+    //  `a || b` ≡ `a ? a : b`，空串同样回退。）
+    const classType: string = n.class_type
+      ? n.class_type
+      : n.type
+        ? /* SAFETY: 类型断言已复核 */ (n.type as string)
+        : "?";
+    const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
+    /* 子图封装节点（class_type === UUID）的显示名取自
+     *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套
+     *  查找方式（子图的键可能是 UUID，也可能是它内部的 `.id` 字段）。
+     *  名字缺失时回落到既有的空字符串哨兵 —— 那是最后的兜底标签，
+     *  客户端 friendlyNodeTitle() 随后会渲染成「子工作流」——
+     *  也就是最后的兜底标签，与改动前的行为一致。 */
+    let resolvedTitle: string | undefined;
+    if (isUuidClass && raw?.definitions?.subgraphs) {
+      const subs = raw.definitions.subgraphs;
+      let def = subs[classType];
+      if (!def) {
+        const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
+        if (matchKey) def = subs[matchKey];
       }
-      return {
-        id: nodeId,
-        class_type: classType,
-        title:
-          resolvedTitle ??
-          n._meta?.title ??
-          (isUuidClass ? "" : classType) ??
-          nodeId,
-        is_subgraph: isUuidClass,
-        raw_inputs: rawInputsById[nodeId] ?? [],
-        /* 该节点的 ComfyUI 精确外框尺寸（[w, h]）。rawJson 里没有该节点时为
-         *  undefined —— 客户端回落到按内容驱动的 min/max 宽度布局。 */
-        size: sizeById[nodeId],
-      };
-    },
-  );
+      if (def && typeof def.name === "string" && def.name.trim()) {
+        resolvedTitle = def.name.trim();
+      }
+    }
+    return {
+      id: nodeId,
+      class_type: classType,
+      title: resolvedTitle ?? n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+      is_subgraph: isUuidClass,
+      raw_inputs: rawInputsById[nodeId] ?? [],
+      /* 该节点的 ComfyUI 精确外框尺寸（[w, h]）。rawJson 里没有该节点时为
+       *  undefined —— 客户端回落到按内容驱动的 min/max 宽度布局。 */
+      size: sizeById[nodeId],
+    };
+  });
 
   /* raw 视图专用数据包：与 `detail.nodes` 同源（都从 rawJson 派生），保留
    * subgraph wrapper 整卡，供 RAW 布局与 ComfyUI 自身画布对齐。 */
@@ -373,9 +345,7 @@ async function buildWorkflowDetailJson(input: {
       const rec = asRecord(g);
       if (!rec) return;
       const bounds: unknown[] =
-        Array.isArray(rec.bounding) && rec.bounding.length >= 4
-          ? rec.bounding
-          : [0, 0, 0, 0];
+        Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
       groups.push({
         id: toStringValue(rec.id ?? `g-${idx}`),
         title: typeof rec.title === "string" ? rec.title : "",
@@ -402,8 +372,7 @@ async function buildWorkflowDetailJson(input: {
     raw.nodes.forEach((n) => {
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) return;
       const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
-      const size =
-        Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
+      const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
       const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
       const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
       // ComfyUI 的 Note 节点可能带显式的 `title` 字段（较新版本）；
@@ -482,10 +451,7 @@ async function buildWorkflowDetailJson(input: {
  *
  *  PATCH 之后必须调用：服务端详情缓存 TTL 30s，不主动清的话客户端就算重新
  *  拉 `detailFull` 也会拿回改动前的富化 IO，界面看起来像「改了没生效」。 */
-export function invalidateWorkflowDetailCache(
-  userId: string,
-  id: string,
-): void {
+export function invalidateWorkflowDetailCache(userId: string, id: string): void {
   cacheDel(`wf:${userId}:${id}`);
   cacheDelPrefix(`sg:${userId}:${id}:`);
 }
@@ -505,11 +471,8 @@ export async function buildWorkflowDetailFull(
    * 真正的 <select>，而不是自由文本输入框。
    * 缺失 / 不可达 → undefined → 优雅回落到普通文本控件。
    * 实现落在 workflow-detail-combo.ts。 */
-  const {
-    comboOptionsForClassField,
-    comboOptionsForFieldName,
-    multilineForClassField,
-  } = createObjectInfoResolvers();
+  const { comboOptionsForClassField, comboOptionsForFieldName, multilineForClassField } =
+    createObjectInfoResolvers();
 
   /* ?_bust=1 查询参数强制内存 LRU 被
    *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
@@ -537,17 +500,13 @@ export async function buildWorkflowDetailFull(
   let sourceOutdated = false;
   let sourceMissing = false;
   let sourcePath: string | null = null;
-  const meta = await workflowTemplateRepository.findSourceMetaForUser(
-    userId,
-    id,
-  );
+  const meta = await workflowTemplateRepository.findSourceMetaForUser(userId, id);
   if (meta?.sourcePath) {
     sourcePath = meta.sourcePath;
     try {
       const stat = fs.statSync(sourcePath);
       sourceOutdated =
-        typeof meta.sourceMtime === "number" &&
-        Math.floor(stat.mtimeMs / 1000) > meta.sourceMtime;
+        typeof meta.sourceMtime === "number" && Math.floor(stat.mtimeMs / 1000) > meta.sourceMtime;
     } catch {
       /* 文件不在了：告诉界面（它会给「磁盘文件已丢失」而不是「有更新」）。 */
       sourceMissing = true;
@@ -561,14 +520,11 @@ export async function buildWorkflowDetailFull(
    * （缓存在 PATCH / DELETE 时失效；404 从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return /* SAFETY: 类型断言已复核 */ JSON.parse(
-      cached,
-    ) as WorkflowDetailFull;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(cached) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
-  if (!tpl)
-    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
   /* ── 自动同步（可选，默认关）──
    *  设置 `autoSyncLocalWorkflow` 开启时，「进详情」等价于「点同步」：检出到磁盘
@@ -593,8 +549,7 @@ export async function buildWorkflowDetailFull(
       tpl.paramMap = reimported.update.paramMap ?? tpl.paramMap;
       tpl.positions = reimported.update.positions ?? tpl.positions;
       tpl.sourceMtime = reimported.update.sourceMtime ?? tpl.sourceMtime;
-      tpl.sourceChecksum =
-        reimported.update.sourceChecksum ?? tpl.sourceChecksum;
+      tpl.sourceChecksum = reimported.update.sourceChecksum ?? tpl.sourceChecksum;
       tpl.taskType = reimported.update.taskType ?? tpl.taskType;
       await workflowTemplateRepository.update(tpl.id, {
         rawJson: tpl.rawJson,
@@ -629,9 +584,7 @@ export async function buildWorkflowDetailFull(
     }),
   );
 
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    detailJson,
-  ) as WorkflowDetailFull;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(detailJson) as WorkflowDetailFull;
 }
 
 export async function buildSubgraphDetail(
@@ -649,14 +602,11 @@ export async function buildSubgraphDetail(
    * （下面 400 / 404 那两种情况从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return /* SAFETY: 类型断言已复核 */ JSON.parse(
-      cached,
-    ) as WorkflowDetailFull;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(cached) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
-  if (!tpl)
-    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
   const raw = asRawWorkflow(tpl.rawJson);
   if (!raw?.definitions?.subgraphs) {
@@ -672,9 +622,7 @@ export async function buildSubgraphDetail(
   let sub = subgraphs[uid];
   if (!sub) {
     // 退回按 .id 字段匹配
-    const matchUid = Object.keys(subgraphs).find(
-      (key) => subgraphs[key]?.id === uid,
-    );
+    const matchUid = Object.keys(subgraphs).find((key) => subgraphs[key]?.id === uid);
     if (matchUid) sub = subgraphs[matchUid];
   }
   if (!sub) {
@@ -698,11 +646,7 @@ export async function buildSubgraphDetail(
     /* 边界槽位下标要先于槽位表算出来：ComfyUI 的 \`target_slot\` 与节点自带
      *  \`idx\` 在某些导出路径上口径不同，只有哨兵边记下的关联是权威事实
      *  （见 \`parseSubgraphSlots\`）。 */
-    const sg = buildSubgraphGraph(
-      sub,
-      linkById,
-      boundarySlotsByNode(boundaryLinkInfoById),
-    );
+    const sg = buildSubgraphGraph(sub, linkById, boundarySlotsByNode(boundaryLinkInfoById));
     /* 子图内部 STRING 输入的多行判定：`buildSubgraphGraph` 是同步的，读不到
      *  object_info 的声明 —— 就地补盖一次。判据仍只有 `inferIsMultiline`
      *  一处（「值很长」那条它已经盖过），不补的话短提示词的内部节点会退化成
@@ -712,10 +656,7 @@ export async function buildSubgraphDetail(
       for (const entry of entries) {
         if (entry.type !== "STRING" || entry.multiline) continue;
         if (
-          inferIsMultiline(
-            await multilineForClassField(classType, entry.name),
-            entry.widgetValue,
-          )
+          inferIsMultiline(await multilineForClassField(classType, entry.name), entry.widgetValue)
         ) {
           entry.multiline = true;
         }
@@ -748,18 +689,10 @@ export async function buildSubgraphDetail(
     /* 被丢掉的边界连线必须留下可诊断的痕迹：否则「这条线没画出来」在界面上
      *  只是一个安静的空白，排障时既不知道是哪条边、也无从判断是数据问题还是
      *  渲染问题（规范 10 §10.3.1：降级不得静默）。 */
-    reportDroppedBoundaryLinks(
-      sub,
-      boundaryLinkInfoById,
-      pinIdByLinkId,
-      boundaryLinks,
-    );
+    reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, boundaryLinks);
     const ann = extractSubgraphAnnotations(
       sub,
-      /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<
-        string,
-        [number, number]
-      >) ?? {},
+      /* SAFETY: 类型断言已复核 */ (tpl.positions as Record<string, [number, number]>) ?? {},
       hostId,
     );
 
@@ -791,7 +724,5 @@ export async function buildSubgraphDetail(
     });
   });
 
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    detailJson,
-  ) as WorkflowDetailFull;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(detailJson) as WorkflowDetailFull;
 }

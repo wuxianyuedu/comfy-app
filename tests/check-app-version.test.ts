@@ -53,9 +53,7 @@ describe("产品版本号三处同步（D7）", () => {
     expect(r.output).toContain("src-tauri/Cargo.toml");
   });
 
-  test("① 只升 package.json（tauri.conf.json 落后）→ 红，并指出是哪两处不等", ({
-    repo,
-  }) => {
+  test("① 只升 package.json（tauri.conf.json 落后）→ 红，并指出是哪两处不等", ({ repo }) => {
     writeAll(repo, { pkg: "0.2.0", tauri: "0.1.0" });
     const r = repo.run();
     expect(r.code).toBe(1);
@@ -79,9 +77,7 @@ describe("产品版本号三处同步（D7）", () => {
     expect(r.output).toContain("src-tauri/tauri.conf.json");
   });
 
-  test("② `Cargo.toml` 把版本挪出 `[package]` 段 → 红（读不出 = 字段被挪位）", ({
-    repo,
-  }) => {
+  test("② `Cargo.toml` 把版本挪出 `[package]` 段 → 红（读不出 = 字段被挪位）", ({ repo }) => {
     writeAll(repo);
     repo.write(
       "src-tauri/Cargo.toml",
@@ -100,9 +96,7 @@ describe("产品版本号三处同步（D7）", () => {
     expect(r.output).toContain("提取不出");
   });
 
-  test("③ `[dependencies]` 段里的 `version` 不算产品版本（按段切，不裸 grep）", ({
-    repo,
-  }) => {
+  test("③ `[dependencies]` 段里的 `version` 不算产品版本（按段切，不裸 grep）", ({ repo }) => {
     writeAll(repo);
     /* 依赖表里写一个与产品版本不同的数：裸 grep 会把它读进来 → 三处「不一致」误报。 */
     repo.write(
@@ -121,9 +115,7 @@ describe("产品版本号三处同步（D7）", () => {
     expect(r.output).toContain("MAJOR.MINOR.PATCH");
   });
 
-  test("带 `-pre` 后缀的形态合法（三个配置文件都是字符串，判据只求同）", ({
-    repo,
-  }) => {
+  test("带 `-pre` 后缀的形态合法（三个配置文件都是字符串，判据只求同）", ({ repo }) => {
     writeAll(repo, { pkg: "1.0.0-rc.1", tauri: "1.0.0-rc.1", cargo: "1.0.0-rc.1" });
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -142,16 +134,11 @@ describe("产品版本号三处同步（D7）", () => {
     const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
-    expect(pkg.scripts["check:app-version"]).toBe(
-      "node scripts/check-app-version.cjs",
-    );
+    expect(pkg.scripts["check:app-version"]).toBe("node scripts/check-app-version.cjs");
   });
 
   test("④ pre-commit 的 D 组真跑这一步（写在文件里没人跑 = 没有等价）", () => {
-    const hook = readFileSync(
-      path.join(REPO_ROOT, ".githooks", "pre-commit"),
-      "utf8",
-    );
+    const hook = readFileSync(path.join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
     const steps = [...hook.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
       label: m[1] ?? "",
       cmd: m[2] ?? "",

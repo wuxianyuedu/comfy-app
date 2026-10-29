@@ -140,8 +140,7 @@ export function offsetWithin(
   const innerRect = inner.getBoundingClientRect();
   const outerRect = outer.getBoundingClientRect();
   const outerScroll =
-    /* SAFETY: 类型断言已复核 */ (outer as unknown as { scrollTop?: number })
-      .scrollTop ?? 0;
+    /* SAFETY: 类型断言已复核 */ (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
   return innerRect.top - outerRect.top + outerScroll;
 }
 
@@ -169,14 +168,9 @@ export function isWithinViewport(
  * （`el.scrollHeight / lines.length`），而**除数为 0 时给出 `Infinity`**
  * ——那会把 `scrollTo({ top: Infinity })` 交给浏览器。这里量不到就返回 `null`。
  */
-export function readLineHeight(
-  el: Element | null | undefined,
-  lineCount: number,
-): number | null {
+export function readLineHeight(el: Element | null | undefined, lineCount: number): number | null {
   if (!el || lineCount <= 0) return null;
-  const scrollHeight = /* SAFETY: 类型断言已复核 */ (
-    el as { scrollHeight?: number }
-  ).scrollHeight;
+  const scrollHeight = /* SAFETY: 类型断言已复核 */ (el as { scrollHeight?: number }).scrollHeight;
   if (typeof scrollHeight !== "number" || scrollHeight <= 0) return null;
   return scrollHeight / lineCount;
 }

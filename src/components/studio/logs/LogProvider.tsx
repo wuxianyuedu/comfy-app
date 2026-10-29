@@ -21,12 +21,7 @@ import {
   useLogStore,
 } from "./log-store";
 
-export type {
-  LogEntry,
-  LogFilter,
-  LogLevel,
-  LogOriginFilter,
-} from "./log-store";
+export type { LogEntry, LogFilter, LogLevel, LogOriginFilter } from "./log-store";
 
 /**
  * 订阅日志 store 的指定字段（规范 07 §7.4：组件只订阅自己需要的字段，
@@ -45,16 +40,13 @@ export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
 
 /** unknown 抛值 → 可读文本（Error 带堆栈；对象取 message；其余 JSON/String 兜底）。 */
 export function describeGlobalError(reason: unknown): string {
-  if (reason instanceof Error)
-    return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
+  if (reason instanceof Error) return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
   if (typeof reason === "string") return reason;
   if (
     typeof reason === "object" &&
     reason !== null &&
     "message" in reason &&
-    typeof (
-      /* SAFETY: 类型断言已复核 */ (reason as { message?: unknown }).message
-    ) === "string"
+    typeof (/* SAFETY: 类型断言已复核 */ (reason as { message?: unknown }).message) === "string"
   ) {
     return /* SAFETY: 类型断言已复核 */ (reason as { message: string }).message;
   }
@@ -178,23 +170,14 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     const setup = async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<{ level: string; message: string }>(
-          "log:emit",
-          (event) => {
-            const lv = event.payload?.level ?? "info";
-            const message = event.payload?.message ?? "";
-            if (!message) return;
-            const level: LogLevel =
-              lv === "error"
-                ? "error"
-                : lv === "warn"
-                  ? "warn"
-                  : lv === "debug"
-                    ? "debug"
-                    : "info";
-            addEntry({ level, message, source: "tauri" });
-          },
-        );
+        unlisten = await listen<{ level: string; message: string }>("log:emit", (event) => {
+          const lv = event.payload?.level ?? "info";
+          const message = event.payload?.message ?? "";
+          if (!message) return;
+          const level: LogLevel =
+            lv === "error" ? "error" : lv === "warn" ? "warn" : lv === "debug" ? "debug" : "info";
+          addEntry({ level, message, source: "tauri" });
+        });
       } catch (err) {
         /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。
            但「在壳里却监听失败」不是正常形态，最常见的原因是 CSP 的 connect-src

@@ -8,11 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  displayNameFromUrl,
-  mediaDragSourceProps,
-  MEDIA_DRAG_MIME,
-} from "./media-drag-source";
+import { displayNameFromUrl, mediaDragSourceProps, MEDIA_DRAG_MIME } from "./media-drag-source";
 
 /** 造一个够用的 dragstart 事件替身。 */
 function dragEvent() {
@@ -71,9 +67,7 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
       displayName: "素材：封面",
       kind: "image",
     }).onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
-    const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      event.data.get(MEDIA_DRAG_MIME)!,
-    ) as {
+    const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
       displayName: string;
     };
     expect(payload.displayName).toBe("素材：封面");
@@ -154,9 +148,7 @@ describe("audio / doc 也能拖（落点给「暂不支持」的提示）", () =
     mediaDragSourceProps({ url: "/a.mp3", kind: "audio" }).onDragStart(
       /* SAFETY: 类型断言已复核 */ event as never,
     );
-    const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      event.data.get(MEDIA_DRAG_MIME)!,
-    ) as {
+    const payload = /* SAFETY: 类型断言已复核 */ JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
       mediaType: string;
     };
     expect(payload.mediaType).toBe("audio");

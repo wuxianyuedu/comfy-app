@@ -208,9 +208,7 @@ export function renderWidgetValue(value: unknown): string {
   if (typeof value === "object") return "{…}";
   // 剩余只可能是 bigint / symbol / function —— 均带自有 toString，与
   // String(value) 运行时一致（显式收窄以满足 no-base-to-string）。
-  return /* SAFETY: 类型断言已复核 */ (
-    value as { toString(): string }
-  ).toString();
+  return /* SAFETY: 类型断言已复核 */ (value as { toString(): string }).toString();
 }
 
 /** 「值单元格」的文字颜色：**未连线**取主档、**已连线**取低一档（值来自上游的信号）。
@@ -223,9 +221,7 @@ export function renderWidgetValue(value: unknown): string {
 export function valueCellColor(value: unknown, connected = false): string {
   /* 空值不是「值」，仍单独压弱一档 —— 与有没有连线无关。 */
   if (value === undefined || value === null) return "var(--color-ink-faintest)";
-  return connected
-    ? "var(--color-widget-value-dim)"
-    : "var(--color-widget-value)";
+  return connected ? "var(--color-widget-value-dim)" : "var(--color-widget-value)";
 }
 
 /** 与 WorkflowNode 的 widget 值同形，但去掉了所有按 classType / 键名的
@@ -342,8 +338,7 @@ export function parseHex(hex: string): [number, number, number] {
       .split("")
       .map((char) => char + char)
       .join("");
-  if (hexValue.length < 6 || /[^0-9a-fA-F]/.test(hexValue))
-    return [120, 120, 135];
+  if (hexValue.length < 6 || /[^0-9a-fA-F]/.test(hexValue)) return [120, 120, 135];
   return [
     parseInt(hexValue.slice(0, 2), 16),
     parseInt(hexValue.slice(2, 4), 16),
@@ -414,9 +409,7 @@ export function computeKahnLayout(
       srcOut.add(id);
     }
   }
-  const remaining = new Map(
-    Object.entries(incoming).map(([key, links]) => [key, links.size]),
-  );
+  const remaining = new Map(Object.entries(incoming).map(([key, links]) => [key, links.size]));
   const queue: string[] = [];
   for (const [id, deg] of remaining) {
     if (deg === 0) {
@@ -469,10 +462,7 @@ export function buildEdges(
   const rawOutById = new Map<string, RawOutputMeta[]>();
   for (const rawNode of detail.rawNodes ?? []) {
     if (!rawNode?.id) continue;
-    rawOutById.set(
-      rawNode.id,
-      Array.isArray(rawNode.outputs) ? rawNode.outputs : [],
-    );
+    rawOutById.set(rawNode.id, Array.isArray(rawNode.outputs) ? rawNode.outputs : []);
   }
 
   const edges: Edge[] = [];
@@ -482,12 +472,7 @@ export function buildEdges(
     const inputs = asRecord(raw.inputs);
     if (!inputs) continue;
     for (const [inputName, value] of Object.entries(inputs)) {
-      if (
-        !Array.isArray(value) ||
-        value.length < 1 ||
-        typeof value[0] !== "string"
-      )
-        continue;
+      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
       const srcId = value[0];
       if (!known.has(srcId) || !known.has(nodeId)) continue;
       const srcSlot = Number(value[1] ?? 0);
@@ -597,22 +582,11 @@ export function buildEdges(
 export function buildInputSources(
   inputs: Record<string, unknown> | undefined,
   nodesById: Record<string, ComfyGraphNode>,
-): Record<
-  string,
-  { id: string; title: string; slot: number; classType?: string }
-> {
-  const out: Record<
-    string,
-    { id: string; title: string; slot: number; classType?: string }
-  > = {};
+): Record<string, { id: string; title: string; slot: number; classType?: string }> {
+  const out: Record<string, { id: string; title: string; slot: number; classType?: string }> = {};
   if (!inputs) return out;
   for (const [key, value] of Object.entries(inputs)) {
-    if (
-      !Array.isArray(value) ||
-      value.length < 1 ||
-      typeof value[0] !== "string"
-    )
-      continue;
+    if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
     const src = nodesById[value[0]];
     out[key] = {
       id: value[0],
@@ -649,12 +623,7 @@ export function buildConnectedOutputs(
   for (const raw of Object.values(detail.graph ?? {})) {
     const inp = asRecord(asRecord(raw)?.inputs) ?? {};
     for (const value of Object.values(inp)) {
-      if (
-        !Array.isArray(value) ||
-        value.length < 1 ||
-        typeof value[0] !== "string"
-      )
-        continue;
+      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
       const srcId = value[0];
       const slot = Number(value[1] ?? 0);
       const node = nodesById[srcId];
@@ -705,9 +674,7 @@ export function inferSourceOutNames(
       out[nodeId] = staticNames;
       continue;
     }
-    const rawNames = (rawMetaById[nodeId]?.outputs ?? []).map(
-      (output) => output.name,
-    );
+    const rawNames = (rawMetaById[nodeId]?.outputs ?? []).map((output) => output.name);
     if (rawNames.length > 0) {
       out[nodeId] = rawNames;
       continue;
@@ -718,12 +685,7 @@ export function inferSourceOutNames(
     for (const consumerRaw of Object.values(detail.graph ?? {})) {
       const inp = asRecord(asRecord(consumerRaw)?.inputs) ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
-        if (
-          !Array.isArray(value) ||
-          value.length < 1 ||
-          typeof value[0] !== "string"
-        )
-          continue;
+        if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
         if (value[0] !== nodeId) continue;
         const slot = Number(value[1] ?? 0);
         const stripped = inputKey.replace(/_\d+$/g, "");
@@ -744,9 +706,7 @@ export function inferSourceOutNames(
 
 /* 按包围盒包含关系算出每个分组的嵌套深度。分组深度 = 有多少个其它分组
  * 直接或间接地包含它 —— 子框据此画在父框**之上**，嵌套分组才读得对。 */
-export function computeGroupDepths(
-  groups: WorkflowGroup[],
-): Record<string, number> {
+export function computeGroupDepths(groups: WorkflowGroup[]): Record<string, number> {
   if (groups.length === 0) return {};
   const inside = (inner: WorkflowGroup, outer: WorkflowGroup) => {
     const [ix, iy, iw, ih] = inner.bounding;

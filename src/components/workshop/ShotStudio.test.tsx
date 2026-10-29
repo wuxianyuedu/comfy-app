@@ -98,9 +98,7 @@ const channelsConfigured: ApiChannelsView = {
   },
 };
 
-function buildResult(
-  patch: Partial<LibraryWorkflowBuildResult> = {},
-): LibraryWorkflowBuildResult {
+function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWorkflowBuildResult {
   return {
     input: { workflow: "wf-1", prompt: "a cat" },
     unmatched: [],
@@ -130,11 +128,7 @@ function renderStudio(options: RenderOptions = {}) {
       styles={[]}
       workflowId={options.workflowId ?? ""}
       projectId="proj-1"
-      apiChannels={
-        options.apiChannels === undefined
-          ? channelsConfigured
-          : options.apiChannels
-      }
+      apiChannels={options.apiChannels === undefined ? channelsConfigured : options.apiChannels}
       onOpenModelAdapters={() => undefined}
       onShotsChange={onShotsChange}
       onNotice={onNotice}
@@ -147,9 +141,9 @@ function renderStudio(options: RenderOptions = {}) {
 
 /** onShotsChange 是函数式补丁：把它折叠成「最终一条 patch 里的镜头列表」。 */
 function lastPatchedShot(mock: { mock: { calls: unknown[][] } }): Shot {
-  const last = /* SAFETY: 类型断言已复核 */ mock.mock.calls[
-    mock.mock.calls.length - 1
-  ]![0] as (prev: Shot[]) => Shot[];
+  const last = /* SAFETY: 类型断言已复核 */ mock.mock.calls[mock.mock.calls.length - 1]![0] as (
+    prev: Shot[],
+  ) => Shot[];
   return last([makeShot()])[0]!;
 }
 
@@ -183,10 +177,7 @@ describe("ShotStudio 门禁", () => {
        不是 `role="button"`。改的是读法，不是它锁的那件事。 */
     await user.click(screen.getByRole("radio", { name: /API 直连/ }));
     expect(screen.getByText(/API 生图通道未配置/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /批量生图/ })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(screen.getByRole("button", { name: /批量生图/ })).toHaveProperty("disabled", true);
   });
 });
 
@@ -217,9 +208,7 @@ describe("ShotStudio 生图出口", () => {
 
     await user.click(screen.getByRole("button", { name: "生成此镜头" }));
     await expect.poll(() => mockedStart).toHaveBeenCalled();
-    await expect
-      .poll(() => onNotice)
-      .toHaveBeenCalledWith(expect.stringContaining("种子"));
+    await expect.poll(() => onNotice).toHaveBeenCalledWith(expect.stringContaining("种子"));
   });
 
   it("进行中且有本机任务 id 的镜头显示「取消」，点击接 onCancelShot", () => {
@@ -257,9 +246,9 @@ describe("ShotStudio 生图出口", () => {
     /* watchShot 的产物回写经 onShotsChange 的函数式补丁发生 */
     const calls = vi.mocked(onShotsChange).mock.calls;
     const wroteImage = calls.some((call) => {
-      const patch = /* SAFETY: 类型断言已复核 */ (
-        call[0] as (prev: Shot[]) => Shot[]
-      )([makeShot()])[0]!;
+      const patch = /* SAFETY: 类型断言已复核 */ (call[0] as (prev: Shot[]) => Shot[])([
+        makeShot(),
+      ])[0]!;
       return patch.imageUrl === "/api/generated/1.png";
     });
     expect(wroteImage).toBe(true);

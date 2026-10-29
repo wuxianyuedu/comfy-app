@@ -21,10 +21,7 @@
 
 import type { ReactNode } from "react";
 
-import type {
-  LibraryOutputCards,
-  LibraryParamCards,
-} from "./workflow-library-param-cards";
+import type { LibraryOutputCards, LibraryParamCards } from "./workflow-library-param-cards";
 
 /** 三列各一个节点：左列对外参数卡片、中间宿主卡片、右列对外输出参数卡片。 */
 export const LIB_NODE_PARAMS = "lib:params";
@@ -197,8 +194,7 @@ export function libraryContentExtent(sizing: LibraryNodeSizing): {
   width: number;
   height: number;
 } {
-  const { paramsWidth, hostWidth, outputsWidth, columnGap, envelopeHeight } =
-    sizing;
+  const { paramsWidth, hostWidth, outputsWidth, columnGap, envelopeHeight } = sizing;
   return {
     width: paramsWidth + hostWidth + outputsWidth + columnGap * 2,
     height: envelopeHeight,

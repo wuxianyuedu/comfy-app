@@ -21,13 +21,12 @@ const AUTOSTART_TIMEOUT_MS = 120_000;
 /** `ensureComfyUiReady` 的入参形状（路由传的是短窗口 timeoutMs + onLog）。 */
 type EnsureOptions = { timeoutMs: number; onLog: (msg: string) => void };
 
-const { requireRequestUser, probeComfyUi, ensureComfyUiReady, logger } =
-  vi.hoisted(() => ({
-    requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
-    probeComfyUi: vi.fn<(ms: number) => Promise<string | null>>(),
-    ensureComfyUiReady: vi.fn<(options: EnsureOptions) => Promise<unknown>>(),
-    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-  }));
+const { requireRequestUser, probeComfyUi, ensureComfyUiReady, logger } = vi.hoisted(() => ({
+  requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
+  probeComfyUi: vi.fn<(ms: number) => Promise<string | null>>(),
+  ensureComfyUiReady: vi.fn<(options: EnsureOptions) => Promise<unknown>>(),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: () => requireRequestUser(),
@@ -117,9 +116,7 @@ describe("POST /api/comfy/ensure", () => {
 
   it("启动失败 → 503 pending:false，detail 是错误原文（可直接给用户看）", async () => {
     probeComfyUi.mockResolvedValueOnce(null);
-    ensureComfyUiReady.mockRejectedValueOnce(
-      new Error("找不到 comfy-cli 的虚拟环境"),
-    );
+    ensureComfyUiReady.mockRejectedValueOnce(new Error("找不到 comfy-cli 的虚拟环境"));
     const { POST } = await import("./route");
     const res = await POST();
     expect(res.status).toBe(503);

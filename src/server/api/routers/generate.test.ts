@@ -14,8 +14,7 @@ import type * as AppRuntimeLogModule from "~/lib/log/app-runtime-log";
  * 一份，ISSUE #2173）；本文件只留 `vi.mock` 声明。里程碑日志的临时路径不再需要
  * `vi.hoisted` —— 它落在工厂里算，而工厂的求值时机本来就在被测模块 import 之前。 */
 vi.mock("~/lib/log/app-runtime-log", async (importOriginal) => {
-  const { runtimeLogMockBoundary } =
-    await import("../../../../tests/helpers/wire-mock-boundary");
+  const { runtimeLogMockBoundary } = await import("../../../../tests/helpers/wire-mock-boundary");
   return runtimeLogMockBoundary(
     await importOriginal<typeof AppRuntimeLogModule>(),
     "generate-router-log",
@@ -27,33 +26,25 @@ const { kickMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("~/server/db", async () => {
-  const { dbMockBoundary } =
-    await import("../../../../tests/helpers/wire-mock-boundary");
+  const { dbMockBoundary } = await import("../../../../tests/helpers/wire-mock-boundary");
   return dbMockBoundary();
 });
 vi.mock("~/server/better-auth", async () => {
-  const { sessionMockBoundary } =
-    await import("../../../../tests/helpers/wire-mock-boundary");
+  const { sessionMockBoundary } = await import("../../../../tests/helpers/wire-mock-boundary");
   return sessionMockBoundary();
 });
 vi.mock("~/lib/core/logger", async (importOriginal) => {
-  const { loggerMockBoundary } =
-    await import("../../../../tests/helpers/wire-mock-boundary");
+  const { loggerMockBoundary } = await import("../../../../tests/helpers/wire-mock-boundary");
   return loggerMockBoundary(await importOriginal<typeof LoggerModule>());
 });
 vi.mock("~/lib/comfyui/executor-continuation", async () => {
-  const { continuationMockBoundary } =
-    await import("../../../../tests/helpers/wire-mock-boundary");
+  const { continuationMockBoundary } = await import("../../../../tests/helpers/wire-mock-boundary");
   return continuationMockBoundary(kickMock);
 });
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { generateRouter } from "~/server/api/routers/generate";
-import {
-  getTestDb,
-  seedUser,
-  seedWorkflowTemplate,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
 import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(generateRouter);
@@ -104,8 +95,7 @@ describe("generate.generate（工作流库工作流）", () => {
     // claimedBy=inline 与 execPayload），这里踢一次只是省掉等 2s 节拍。
     expect(kickMock).toHaveBeenCalledTimes(1);
     expect(
-      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown })
-        .workflowInputs,
+      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown }).workflowInputs,
     ).toEqual([{ nodeId: "1", name: "text", value: "a cat" }]);
   });
 
@@ -211,8 +201,7 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     // （见 executor-dispatch.test.ts 的「两种载荷都只交 comfy-cli」组）。
     expect(row?.execPayload).toEqual(rawJson);
     expect(
-      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown })
-        .workflowInputs,
+      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown }).workflowInputs,
     ).toEqual([{ nodeId: "1", name: "text", value: "hi" }]);
   });
 
@@ -223,9 +212,7 @@ describe("generate.generate（RAW 原件执行路径）", () => {
       userId: "user-a",
       rawJson: null,
     });
-    const env = await errorEnvelope(
-      createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
-    );
+    const env = await errorEnvelope(createCaller(makeCtx()).generate({ workflow: "wf-empty" }));
     expect(env.code).toBe("PRECONDITION_FAILED");
     expect(env.message).toContain("没有可执行内容");
     expect(kickMock).not.toHaveBeenCalled();
@@ -237,9 +224,9 @@ describe("generate.generate（RAW 原件执行路径）", () => {
       userId: "user-b",
       rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
     });
-    await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-b" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(createCaller(makeCtx()).generate({ workflow: "wf-b" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-missing" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });

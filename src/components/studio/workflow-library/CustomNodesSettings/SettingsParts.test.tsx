@@ -79,9 +79,7 @@ describe("PortRow", () => {
 
 describe("WidgetValueChip", () => {
   it('toggle:truthy 值渲染 ✓(含字符串 "true"/"True")', () => {
-    const { rerender } = render(
-      <WidgetValueChip widget="toggle" value={true} />,
-    );
+    const { rerender } = render(<WidgetValueChip widget="toggle" value={true} />);
     expect(screen.getByText("✓")).toBeInTheDocument();
     rerender(<WidgetValueChip widget="toggle" value="True" />);
     expect(screen.getByText("✓")).toBeInTheDocument();
@@ -93,9 +91,7 @@ describe("WidgetValueChip", () => {
   });
 
   it("select:值经 String() 渲染并同步 title,null 显示 —", () => {
-    const { rerender } = render(
-      <WidgetValueChip widget="select" value="sdxl" />,
-    );
+    const { rerender } = render(<WidgetValueChip widget="select" value="sdxl" />);
     expect(screen.getByText("sdxl")).toHaveAttribute("title", "sdxl");
     rerender(<WidgetValueChip widget="select" value={null} />);
     expect(screen.getByText("—")).toBeInTheDocument();
@@ -157,16 +153,12 @@ describe("ParseProgressBanner", () => {
     expect(screen.getByText(/正在处理/)).toBeInTheDocument();
     expect(screen.getByText("3/8")).toBeInTheDocument();
     // 父路径只保留最后两段(支持 \ 与 / 两种分隔符)
-    expect(
-      screen.getByText("· custom_nodes/ipadapter_plus"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("· custom_nodes/ipadapter_plus")).toBeInTheDocument();
     /* 进度条为确定宽度：`done/total*100` 经 `~/lib/progress` 的 `pctToWidth`
        取整（3/8 = 37.5 → 38）；渲染侧改用 translateX 动画（§2.7 布局属性
        动画），38% 对应 translateX(-62%)。口径收口后不再出现小数 —— 走
        `~/components/ui/progress-bar` 的 `data-slot` 取节点。 */
-    const bar = container.querySelector<HTMLElement>(
-      '[data-slot="progress-bar-fill"]',
-    )!;
+    const bar = container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
     expect(bar.style.transform).toBe("translateX(-62%)");
     expect(screen.getByTitle("hashing packages…")).toBeInTheDocument();
   });
@@ -186,12 +178,8 @@ describe("ParseProgressBanner", () => {
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("（总数待定，正在扫描…）")).toBeInTheDocument();
     // 不定态：滑动条纹，而不是按百分比设置的确定条
-    expect(
-      container.querySelector('[data-slot="progress-bar-fill"]'),
-    ).toBeNull();
-    expect(
-      container.querySelector('[data-slot="progress-bar-indeterminate"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-fill"]')).toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-indeterminate"]')).not.toBeNull();
   });
 
   it("queue/初始阶段:渲染「首次扫描」兜底文案", () => {
@@ -199,9 +187,7 @@ describe("ParseProgressBanner", () => {
       <ParseProgressBanner progress={{ ...PROGRESS, phase: "queue" }} />,
     );
     expect(screen.getByText("首次扫描目录中的节点包…")).toBeInTheDocument();
-    expect(
-      container.querySelector('[data-slot="progress-bar-fill"]'),
-    ).toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-fill"]')).toBeNull();
   });
 });
 
@@ -228,26 +214,18 @@ describe("ReportCards", () => {
     render(<ReportCards report={report} />);
 
     expect(screen.getByText("最近解析结果")).toBeInTheDocument();
-    expect(
-      screen.getByText("3 个目录 · 30 个节点 · 1 个错误"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("3 个目录 · 30 个节点 · 1 个错误")).toBeInTheDocument();
 
-    const okCard = screen
-      .getByText("ipadapter")
-      .closest<HTMLDivElement>("div.rounded-xl")!;
+    const okCard = screen.getByText("ipadapter").closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(okCard).getByText("已加载")).toBeInTheDocument(); // STATUS_STYLE.ok
     /* 路径按**末几段**渲染（语义在尾部，CSS `truncate` 只留头部会把它切掉），
      * 完整路径仍在 `title` 上（hover 可见 / 可复制）。 */
-    expect(
-      within(okCard).getByText("ComfyUI/custom_nodes/ipadapter"),
-    ).toBeInTheDocument();
+    expect(within(okCard).getByText("ComfyUI/custom_nodes/ipadapter")).toBeInTheDocument();
     expect(within(okCard).getByText("18")).toBeInTheDocument();
     expect(within(okCard).getByText("IPAdapter")).toBeInTheDocument();
     expect(within(okCard).getByText("KSampler")).toBeInTheDocument();
 
-    const errCard = screen
-      .getByText("broken_pkg")
-      .closest<HTMLDivElement>("div.rounded-xl")!;
+    const errCard = screen.getByText("broken_pkg").closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(errCard).getByText("解析出错")).toBeInTheDocument(); // STATUS_STYLE.error
     expect(within(errCard).getByText("⚠ foo.py: boom")).toBeInTheDocument();
 
@@ -264,9 +242,7 @@ describe("ReportCards", () => {
         }}
       />,
     );
-    const card = screen
-      .getByText("gone_pkg")
-      .closest<HTMLDivElement>("div.rounded-xl")!;
+    const card = screen.getByText("gone_pkg").closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(card).getByText("目录不存在")).toBeInTheDocument();
   });
 

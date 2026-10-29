@@ -44,10 +44,7 @@ export interface MessageRecord {
 }
 
 /** 供 push 传入的载荷（id/time/read 由 store 补全，runId 缺省取当前启动）。 */
-export type NewMessage = Omit<
-  MessageRecord,
-  "id" | "time" | "read" | "runId"
-> & {
+export type NewMessage = Omit<MessageRecord, "id" | "time" | "read" | "runId"> & {
   /** 缺省时由 store 用「当前是哪一次启动」盖上，于是各生产方不必各自去取。 */
   runId?: string | null;
   /**
@@ -144,8 +141,7 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
     set((s) => ({
       messages: s.messages.map((x) => (x.read ? x : { ...x, read: true })),
     })),
-  remove: (id) =>
-    set((s) => ({ messages: s.messages.filter((x) => x.id !== id) })),
+  remove: (id) => set((s) => ({ messages: s.messages.filter((x) => x.id !== id) })),
   clear: () => set({ messages: [] }),
   hydrate: () =>
     set((s) => ({
@@ -182,12 +178,7 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
  * 而这个面板记的正是故障，丢历史等于把唯一的留底抹掉。 */
 export const MESSAGE_CENTER_STORAGE_KEY = "comfyapp:message-center:v1";
 
-const MESSAGE_KINDS: readonly MessageKind[] = [
-  "update",
-  "restart",
-  "offline",
-  "info",
-];
+const MESSAGE_KINDS: readonly MessageKind[] = ["update", "restart", "offline", "info"];
 
 /** 一条记录是否可用（字段齐、类型对、kind 认识）。
  *

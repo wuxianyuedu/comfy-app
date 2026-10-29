@@ -74,9 +74,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       <RadioGroup
         aria-label="主题外观"
         value={c.theme}
-        onValueChange={(v) =>
-          c.setTheme(/* SAFETY: 类型断言已复核 */ v as "dark" | "light")
-        }
+        onValueChange={(v) => c.setTheme(/* SAFETY: 类型断言已复核 */ v as "dark" | "light")}
         className="grid max-w-md grid-cols-2 gap-3"
       >
         {

@@ -198,9 +198,7 @@ export function NodeChip({
   const meta = NODE_META[kind];
   const isSm = size === "sm";
   return (
-    <div
-      className={`flex min-w-0 items-center ${isSm ? "gap-1.5" : "gap-2.5"}`}
-    >
+    <div className={`flex min-w-0 items-center ${isSm ? "gap-1.5" : "gap-2.5"}`}>
       <span
         className={`flex shrink-0 items-center justify-center rounded-full font-bold ${
           isSm ? "text-3xs h-5 w-5" : "text-2xs h-6 w-6"
@@ -214,11 +212,7 @@ export function NodeChip({
       >
         {meta.typeChar}
       </span>
-      <span
-        className={`text-ink-bright truncate font-semibold ${
-          isSm ? "text-2xs" : "text-sm"
-        }`}
-      >
+      <span className={`text-ink-bright truncate font-semibold ${isSm ? "text-2xs" : "text-sm"}`}>
         {name}
       </span>
     </div>

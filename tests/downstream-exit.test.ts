@@ -30,9 +30,7 @@ type RuntimeExitRecord = {
 };
 
 const { runtimeExitRecord } = /* SAFETY: 类型断言已复核 */ (await import(
-  pathToFileURL(
-    join(process.cwd(), "scripts", "launcher-core", "downstream-exit.mjs"),
-  ).href
+  pathToFileURL(join(process.cwd(), "scripts", "launcher-core", "downstream-exit.mjs")).href
 )) as { runtimeExitRecord: (input: RuntimeExitInput) => RuntimeExitRecord };
 
 /** dev server 以退出码非零结束。 */

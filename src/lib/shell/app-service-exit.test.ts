@@ -77,12 +77,8 @@ describe("parseAppServiceExitRecord", () => {
 describe("summarizeAppServiceExit", () => {
   it("信号优先于退出码：被强杀与自己 exit 1 的排查方向完全相反", () => {
     // Windows 上两者都表现成一个非零码，只有信号能区分。
-    expect(
-      summarizeAppServiceExit(rec({ code: 1, signal: "SIGKILL" })),
-    ).toContain("SIGKILL");
-    expect(
-      summarizeAppServiceExit(rec({ code: 1, signal: "SIGKILL" })),
-    ).toContain("内存不足");
+    expect(summarizeAppServiceExit(rec({ code: 1, signal: "SIGKILL" }))).toContain("SIGKILL");
+    expect(summarizeAppServiceExit(rec({ code: 1, signal: "SIGKILL" }))).toContain("内存不足");
   });
 
   it("认得出的退出码给通俗解释", () => {
@@ -91,9 +87,7 @@ describe("summarizeAppServiceExit", () => {
 
   it("认不出的退出码如实报数字，不硬套一句话", () => {
     expect(summarizeAppServiceExit(rec({ code: 42 }))).toContain("42");
-    expect(summarizeAppServiceExit(rec({ code: 42 }))).not.toContain(
-      "内存不足",
-    );
+    expect(summarizeAppServiceExit(rec({ code: 42 }))).not.toContain("内存不足");
   });
 
   it("退出码 0 说的是「正常退出」这个具体结论", () => {
@@ -149,9 +143,7 @@ describe("describeAppServiceExit", () => {
   });
 
   it("detail 是这一次的具体退出事实，与 why 各司其职", () => {
-    const notice = describeAppServiceExit(
-      rec({ kind: "dev-server", code: 137 }),
-    );
+    const notice = describeAppServiceExit(rec({ kind: "dev-server", code: 137 }));
     expect(notice.detail).toContain("137");
     expect(notice.why).not.toContain("137");
   });
@@ -163,9 +155,7 @@ describe("isPreviousRunExit", () => {
   });
 
   it("runId 相同 → 描写的不是过去那一次，不显示", () => {
-    expect(isPreviousRunExit(rec({ runId: "run-same" }), "run-same")).toBe(
-      false,
-    );
+    expect(isPreviousRunExit(rec({ runId: "run-same" }), "run-same")).toBe(false);
   });
 
   it("任一方拿不到 runId → 按可显示处理（宁可多显示一次原因，也别把唯一线索藏起来）", () => {
@@ -194,9 +184,7 @@ describe("isCurrentDisconnectExit（断开那一刻：这份记录是不是这�
   });
 
   it("记录的时刻读不懂 / 在未来（时钟漂移）→ 不可当作「刚刚」", () => {
-    expect(
-      isCurrentDisconnectExit(rec({ runId: null, at: "坏时刻" }), null, NOW),
-    ).toBe(false);
+    expect(isCurrentDisconnectExit(rec({ runId: null, at: "坏时刻" }), null, NOW)).toBe(false);
     const future = rec({ runId: null, at: "2026-10-14T17:00:00.000Z" });
     expect(isCurrentDisconnectExit(future, null, NOW)).toBe(false);
   });

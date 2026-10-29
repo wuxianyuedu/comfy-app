@@ -15,11 +15,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  DEFAULT_FLASH_MS,
-  useFlashLatch,
-  useFlashState,
-} from "./use-flash-state";
+import { DEFAULT_FLASH_MS, useFlashLatch, useFlashState } from "./use-flash-state";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -69,9 +65,7 @@ describe("useFlashState", () => {
   });
 
   it("卸载后定时器不再 setState（日志行会随翻页被卸载）", async () => {
-    const error = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { result, unmount } = renderHook(() => useFlashState(1000));
 
     act(() => result.current.flash());
@@ -115,9 +109,7 @@ describe("useFlashLatch", () => {
   it("载荷与亮起同生共死：一次动作的两个可见值一起过期", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));
 
-    act(() =>
-      result.current.flash({ path: "log/exports/a.txt", failed: false }),
-    );
+    act(() => result.current.flash({ path: "log/exports/a.txt", failed: false }));
     expect(result.current.value).toEqual({
       path: "log/exports/a.txt",
       failed: false,

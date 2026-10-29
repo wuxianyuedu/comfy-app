@@ -434,9 +434,7 @@ export function resetComfyUiStatus(): void {
  * 「未运行」的结论，而是把 `probing` 置真：宁可多显示一次「检测中…」，也不要
  * 把正在启动的实例误报成未运行（这正是用户看到的状态来回跳）。
  */
-export async function getComfyUiStatus(
-  opts: { force?: boolean } = {},
-): Promise<ComfyUiStatus> {
+export async function getComfyUiStatus(opts: { force?: boolean } = {}): Promise<ComfyUiStatus> {
   /* TTL 缓存 + 在途去重：状态行按秒轮询，每次轮询都重付一遍
    * 「PowerShell 进程表查询 + HTTP 探测」在本机要十几秒（ISSUE #346 的
    * `setting.comfyStatus 10457ms` 就是它），既让状态行刷新慢到看不出变化，
@@ -471,8 +469,7 @@ export async function getComfyUiStatus(
 function withTransientFlags(status: ComfyUiStatus): ComfyUiStatus {
   const starting = isComfyStarting();
   const stopping = isComfyStopping();
-  if (status.starting === starting && status.stopping === stopping)
-    return status;
+  if (status.starting === starting && status.stopping === stopping) return status;
   return { ...status, starting, stopping };
 }
 
@@ -585,8 +582,7 @@ function deriveAndLatch(facts: {
      * 启动…」，连「启动 ComfyUI」按钮都跟着一起锁死。窗口是给「拉起动作 →
      * 就绪」那段空窗的缓冲，它的寿命只由真实时间与这两条证据决定。 */
     st.startingAt = Date.now();
-  } else if (snap.didQueryProcTable && !snap.unverified)
-    markComfyNotRunningProven();
+  } else if (snap.didQueryProcTable && !snap.unverified) markComfyNotRunningProven();
   return status;
 }
 
@@ -600,9 +596,7 @@ const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/comfyui-last-session.json`;
 
 function readSessionMark(): ComfySessionMark | null {
   try {
-    const parsed: unknown = JSON.parse(
-      fs.readFileSync(COMFY_SESSION_MARK, "utf-8"),
-    );
+    const parsed: unknown = JSON.parse(fs.readFileSync(COMFY_SESSION_MARK, "utf-8"));
     if (parsed === null || typeof parsed !== "object") return null;
     return /* SAFETY: 类型断言已复核 */ parsed as ComfySessionMark;
   } catch {
@@ -619,10 +613,7 @@ function writeSessionMark(mark: ComfySessionMark): void {
   }
 }
 
-function markComfySessionStart(info: {
-  pid: number | null;
-  mode: ComfySessionMark["mode"];
-}): void {
+function markComfySessionStart(info: { pid: number | null; mode: ComfySessionMark["mode"] }): void {
   writeSessionMark({
     pid: info.pid,
     mode: info.mode,
@@ -651,10 +642,7 @@ let staleSessionChecked = false;
 
 /** 下次启动时反推「上一次会话为什么没有结局」。
  *  @param comfyUp 这次启动时 ComfyUI 是否还活着（保活移交时据此闭嘴）。 */
-function warnStaleComfySession(
-  note: (msg: string) => void,
-  comfyUp: boolean,
-): void {
+function warnStaleComfySession(note: (msg: string) => void, comfyUp: boolean): void {
   if (staleSessionChecked) return;
   staleSessionChecked = true;
   const stale = describeStaleSession(readSessionMark(), comfyUp);
@@ -818,8 +806,7 @@ export async function ensureComfyUiReady(
     return {
       ok: false,
       base: null,
-      detail:
-        "ComfyUI 未运行，且未配置安装路径——请到 设置 → 创作后端 填写 ComfyUI 路径",
+      detail: "ComfyUI 未运行，且未配置安装路径——请到 设置 → 创作后端 填写 ComfyUI 路径",
     };
   }
   /* 到这里才是「真的会拉起」：判决表摘掉 already-up / skip-* 后只剩「等已有

@@ -54,13 +54,10 @@ afterEach(() => {
 
 /** handler 只要 `formData()`，用真 Request 顶替 NextRequest。 */
 function reqWith(form: FormData): NextRequest {
-  return /* SAFETY: 类型断言已复核 */ new Request(
-    "http://localhost/api/film/bgm",
-    {
-      method: "POST",
-      body: form,
-    },
-  ) as unknown as NextRequest;
+  return /* SAFETY: 类型断言已复核 */ new Request("http://localhost/api/film/bgm", {
+    method: "POST",
+    body: form,
+  }) as unknown as NextRequest;
 }
 
 function audioForm(name: string, type: string, bytes = "ID3"): FormData {
@@ -89,9 +86,7 @@ describe("POST /api/film/bgm", () => {
   });
 
   it("白名单外的类型 → 400，且不落盘", async () => {
-    const res = await POST(
-      reqWith(audioForm("evil.exe", "application/x-msdownload")),
-    );
+    const res = await POST(reqWith(audioForm("evil.exe", "application/x-msdownload")));
     expect(res.status).toBe(400);
     expect(writes.writeFile).toEqual([]);
   });
@@ -103,14 +98,11 @@ describe("POST /api/film/bgm", () => {
   });
 
   it("请求体不是 multipart → 400「表单解析失败」", async () => {
-    const req = /* SAFETY: 类型断言已复核 */ new Request(
-      "http://localhost/api/film/bgm",
-      {
-        method: "POST",
-        headers: { "content-type": "text/plain" },
-        body: "not-a-form",
-      },
-    ) as unknown as NextRequest;
+    const req = /* SAFETY: 类型断言已复核 */ new Request("http://localhost/api/film/bgm", {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: "not-a-form",
+    }) as unknown as NextRequest;
     const res = await POST(req);
     expect(res.status).toBe(400);
     expect(

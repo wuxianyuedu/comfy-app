@@ -48,20 +48,12 @@ interface SseFrame {
 /** 把失败原因补成一条 error 日志行（横幅之外，时间线里也看得见，#378）。
  *  纯函数 + 显式 next：去重在 updater 之外完成，避免在 setState updater 里做副作用
  *  （StrictMode 下 updater 可能被调用两次）。 */
-function withFailureLogLine(
-  prev: StepLogEntry[],
-  reason: string,
-  now: number,
-): StepLogEntry[] {
+function withFailureLogLine(prev: StepLogEntry[], reason: string, now: number): StepLogEntry[] {
   if (!reason) return prev;
   const text = `✗ 生成失败：${reason}`;
   const last = prev[prev.length - 1];
   /* 末行已是同因错误（服务端自己写过 ✗ 生成失败）→ 不重复追加。 */
-  if (
-    last?.level === "error" &&
-    typeof last.msg === "string" &&
-    last.msg.includes(reason)
-  ) {
+  if (last?.level === "error" && typeof last.msg === "string" && last.msg.includes(reason)) {
     return prev;
   }
   return [...prev, { t: now, level: "error", msg: text, client: true }];
@@ -98,9 +90,7 @@ export interface TaskStepLogStream {
 
 export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
   const [logs, setLogs] = useState<StepLogEntry[]>([]);
-  const [validationErrors, setValidationErrors] = useState<
-    ValidationError[] | null
-  >(null);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -160,16 +150,12 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           const entry = /* SAFETY: 类型断言已复核 */ msg.entry as StepLogEntry;
           appendStepLog(tid, entry);
           setLogs((prev) => {
-            if (
-              prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)
-            )
-              return prev;
+            if (prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)) return prev;
             return tailWindowAppend(prev, entry, MAX_LOGS_PER_TASK);
           });
         } else if (msg.type === "state") {
           if (Array.isArray(msg.validationErrors)) {
-            const ves =
-              /* SAFETY: 类型断言已复核 */ msg.validationErrors as ValidationError[];
+            const ves = /* SAFETY: 类型断言已复核 */ msg.validationErrors as ValidationError[];
             setStepLogValidationErrors(tid, ves);
             setValidationErrors(ves);
           }
@@ -190,10 +176,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           }
           if (msg.workflowName || msg.status) {
             patchStepLogMeta(tid, {
-              workflowName:
-                typeof msg.workflowName === "string"
-                  ? msg.workflowName
-                  : undefined,
+              workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
               status: typeof msg.status === "string" ? msg.status : undefined,
               nodeId: getNodeIdByTaskId(tid) ?? undefined,
             });
@@ -220,8 +203,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             const st = finalStatus ?? fallback;
             if (lastStatusRef.current !== st) lastStatusRef.current = st;
             setStatus(st);
-            const reason =
-              finalError ?? (typeof msg.error === "string" ? msg.error : null);
+            const reason = finalError ?? (typeof msg.error === "string" ? msg.error : null);
             if (reason && isTerminalFailureTaskStatus(st)) {
               setError(reason);
               appendFailureLogLine(tid, reason, setLogs);

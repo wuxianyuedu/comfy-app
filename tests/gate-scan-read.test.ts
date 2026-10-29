@@ -57,9 +57,7 @@ import { copyGateDeps } from "./helpers/gate-repo";
 
 const requireCjs = createRequire(import.meta.url);
 
-const READER_PATH = fileURLToPath(
-  new URL("../scripts/gate-scan-read.cjs", import.meta.url),
-);
+const READER_PATH = fileURLToPath(new URL("../scripts/gate-scan-read.cjs", import.meta.url));
 const SCRIPTS_DIR = fileURLToPath(new URL("../scripts", import.meta.url));
 
 type ScanReader = {
@@ -117,7 +115,7 @@ describe("readForScan —— 文件级消失窗口", () => {
       thrown = error;
     }
     expect(thrown, "读目录必须抛（吞成 null 就等于静默放行）").toBeTruthy();
-    expect((/* SAFETY: 类型断言已复核 */ thrown as NodeJS.ErrnoException).code).not.toBe("ENOENT");
+    expect(/* SAFETY: 类型断言已复核 */ (thrown as NodeJS.ErrnoException).code).not.toBe("ENOENT");
   });
 });
 
@@ -150,9 +148,9 @@ describe("readdirForScan / walkForScan —— 目录级消失窗口", () => {
     const dir = tempDir();
     mkdirSync(path.join(dir, ".cache"));
     writeFileSync(path.join(dir, ".cache", "x.test.ts"), "z", "utf8");
-    expect(
-      reader.walkForScan(dir, /\.test\.ts$/).map((abs) => path.basename(abs)),
-    ).toEqual(["x.test.ts"]);
+    expect(reader.walkForScan(dir, /\.test\.ts$/).map((abs) => path.basename(abs))).toEqual([
+      "x.test.ts",
+    ]);
   });
 
   it("`node_modules` 默认不收，自定义 `skipDirs` 叠加", () => {
@@ -171,9 +169,9 @@ describe("readdirForScan / walkForScan —— 目录级消失窗口", () => {
     /* 反向对照：只用默认白名单时 `fixtures` 必须在 —— 否则上面那条会因为
        「两条都跳了」而空绿（`node_modules` 本来就在默认白名单里，两份读数
        之间的差就是 `skipDirs` 传进来的那一项）。 */
-    expect(
-      reader.walkForScan(dir, /\.test\.ts$/).map((abs) => path.basename(abs)),
-    ).toEqual(["keep.test.ts"]);
+    expect(reader.walkForScan(dir, /\.test\.ts$/).map((abs) => path.basename(abs))).toEqual([
+      "keep.test.ts",
+    ]);
   });
 
   it("列出来的目录数与真实条目一致（量具自证：过滤器写漂会静默少收）", () => {
@@ -338,11 +336,7 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
         /* 不带 `--strict`：这一条要的是「遍历不崩 + 结论照给」，而 `--strict` 下
          * R5 棘轮会因为临时仓库没有基线文件先报一条、把后面的话挡住。
          * 立案现场那次崩在遍历阶段，与哪一档无关 —— 遍历本身与档位无关。 */
-        [
-          "--require",
-          shim,
-          path.join(root, "scripts", "check-file-structure.cjs"),
-        ],
+        ["--require", shim, path.join(root, "scripts", "check-file-structure.cjs")],
         {
           cwd: root,
           encoding: "utf8",
@@ -351,27 +345,25 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
         },
       );
     } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as {
+        status?: number;
+        stdout?: string;
+        stderr?: string;
+      };
       code = typeof e.status === "number" ? e.status : 1;
       output = `${e.stdout ?? ""}${e.stderr ?? ""}`;
     }
 
     /* ① 不崩：`ENOENT` 的那条栈不许出现在输出里（它出现说明异常冒到了顶层）。 */
-    expect(
-      output,
-      "并发删除仍把判据带崩了（`scandir` 栈 = 未捕获的 ENOENT）",
-    ).not.toContain("scandir");
+    expect(output, "并发删除仍把判据带崩了（`scandir` 栈 = 未捕获的 ENOENT）").not.toContain(
+      "scandir",
+    );
     expect(output).not.toContain("Uncaught");
     /* ② 结论照给：空工作区缺 `src/proxy.ts` 是 R11 的真实违规，与临时目录无关。 */
-    expect(output, "判据的真实结论没给出来（这一条才是它该报的）").toContain(
-      "R11",
-    );
+    expect(output, "判据的真实结论没给出来（这一条才是它该报的）").toContain("R11");
     expect(code).toBe(1);
     /* ③ 消失数进结论行：静默跳过 = 判据在它没读过的东西上假装绿。 */
-    expect(
-      output,
-      "条目消失没进结论行（静默跳过等于覆盖范围不可见）",
-    ).toContain("在扫描期间消失");
+    expect(output, "条目消失没进结论行（静默跳过等于覆盖范围不可见）").toContain("在扫描期间消失");
   });
 });
 
@@ -392,9 +384,7 @@ describe("回潮判据 —— 遍历仓库根的判据必须走共用读取器",
 
   it("C：遍历仓库根的判据必须引用共用读取器", () => {
     const missing = rootWalkers
-      .filter(
-        (abs) => !/require\(\s*"\.\/gate-scan-read\.cjs"\s*\)/.test(srcOf(abs)),
-      )
+      .filter((abs) => !/require\(\s*"\.\/gate-scan-read\.cjs"\s*\)/.test(srcOf(abs)))
       .map((abs) => path.basename(abs));
     expect(
       missing,
@@ -405,22 +395,17 @@ describe("回潮判据 —— 遍历仓库根的判据必须走共用读取器",
 
   it("负控制：合成一份坏判据，两条形态都必须被 C 抓到", () => {
     expect(
-      enumeratesRepoRoot(
-        'for (const e of fs.readdirSync(".", { withFileTypes: true })) {}',
-      ),
+      enumeratesRepoRoot('for (const e of fs.readdirSync(".", { withFileTypes: true })) {}'),
       'C 对 `readdirSync(".")` 形态失配',
     ).toBe(true);
     /* 立案现场那一句的真实形态：从仓库根起的递归枚举。 */
     expect(
-      enumeratesRepoRoot(
-        '(function walkScripts(dir) { walkScripts(p); })(".");',
-      ),
+      enumeratesRepoRoot('(function walkScripts(dir) { walkScripts(p); })(".");'),
       'C 对 `walk*(".")` 形态失配',
     ).toBe(true);
-    expect(
-      enumeratesRepoRoot("walk(path.join(ROOT));"),
-      "C 对 `path.join(ROOT)` 形态失配",
-    ).toBe(true);
+    expect(enumeratesRepoRoot("walk(path.join(ROOT));"), "C 对 `path.join(ROOT)` 形态失配").toBe(
+      true,
+    );
     /* 另一侧：扫稳定子目录的判据不许被 C 误伤 —— 那是一次没有收益的大搬迁。 */
     expect(
       enumeratesRepoRoot(
@@ -451,16 +436,12 @@ describe("回潮判据 —— 消失容错只许有一处实现", () => {
       readers.length,
       "探测器 A 一份都没抓到 —— 多半是它自己的正则漂了",
     ).toBeGreaterThanOrEqual(15);
-    expect(readers.map((abs) => path.basename(abs))).toContain(
-      "check-test-sleep.cjs",
-    );
+    expect(readers.map((abs) => path.basename(abs))).toContain("check-test-sleep.cjs");
   });
 
   it("A：枚举 tests 的判据必须引用共用读取器", () => {
     const missing = readers
-      .filter(
-        (abs) => !/require\(\s*"\.\/gate-scan-read\.cjs"\s*\)/.test(srcOf(abs)),
-      )
+      .filter((abs) => !/require\(\s*"\.\/gate-scan-read\.cjs"\s*\)/.test(srcOf(abs)))
       .map((abs) => path.basename(abs));
     expect(
       missing,
@@ -487,17 +468,12 @@ describe("回潮判据 —— 消失容错只许有一处实现", () => {
       'const raw = fs.readFileSync(abs, "utf8");',
       'if (error && error.code === "ENOENT") return null;',
     ].join("\n");
-    expect(
-      enumeratesTests(bad),
-      "A 探测器对合成样本失配 = 它抓不到真回潮",
-    ).toBe(true);
+    expect(enumeratesTests(bad), "A 探测器对合成样本失配 = 它抓不到真回潮").toBe(true);
     expect(swallowsEnoent(bad), "B 探测器对合成样本失配 = 同上").toBe(true);
 
     /* 另一侧：不枚举 tests 的判据不许被 A 误伤（`check-rust-function-length` 扫的是壳）。 */
     expect(
-      enumeratesTests(
-        'const SCAN_DIRS = ["src-tauri/src"];\nconst t = "tests" in name;',
-      ),
+      enumeratesTests('const SCAN_DIRS = ["src-tauri/src"];\nconst t = "tests" in name;'),
     ).toBe(false);
   });
 });

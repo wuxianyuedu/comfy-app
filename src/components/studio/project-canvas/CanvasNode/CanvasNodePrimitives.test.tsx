@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import {
-  Field,
-  NodeChip,
-  StatusBadge,
-  StatusDot,
-} from "./CanvasNodePrimitives";
+import { Field, NodeChip, StatusBadge, StatusDot } from "./CanvasNodePrimitives";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 
 // vitest globals: false 下 RTL 不会自动 cleanup,需手动注册
@@ -13,12 +8,7 @@ afterEach(cleanup);
 
 type Status = CanvasNodeData["status"];
 
-const STATUSES = /* SAFETY: 类型断言已复核 */ [
-  "idle",
-  "running",
-  "done",
-  "error",
-] as const;
+const STATUSES = /* SAFETY: 类型断言已复核 */ ["idle", "running", "done", "error"] as const;
 
 /* 与源码 PORT 语义一致:每种 status 对应固定渐变 + 发光色。
  * jsdom 会把渐变里的 hex 规范化为 rgb,但 toHaveStyle 会对期望值做同样的
@@ -57,8 +47,7 @@ describe("Field", () => {
 describe("StatusDot", () => {
   it.for(STATUSES)("status=%s 渲染对应渐变与发光", (status) => {
     const { container } = render(<StatusDot status={status} />);
-    const dot =
-      /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
+    const dot = /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
     expect(dot.tagName).toBe("SPAN");
     /* `size-2.5` 而非 ` size-2.5`：P80 把「宽高同值」统一成 size-*（硬闸），
      * 迁移时这份断言没跟着重算。 */

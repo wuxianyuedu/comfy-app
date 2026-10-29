@@ -41,10 +41,7 @@ export function ImageRedrawPanel({
   imageUrl,
   toastReport,
 }: ImageRedrawPanelProps) {
-  const controller = useImageRedrawClient(
-    { prompt, projectId, parentTaskId },
-    toastReport,
-  );
+  const controller = useImageRedrawClient({ prompt, projectId, parentTaskId }, toastReport);
 
   useEffect(() => {
     void runAsyncAction(controller.ensureTemplates, {
@@ -62,9 +59,7 @@ export function ImageRedrawPanel({
         <RadioGroup
           value={controller.mode}
           onValueChange={(v) =>
-            controller.setMode(
-              /* SAFETY: 类型断言已复核 */ v as "upscale" | "inpaint",
-            )
+            controller.setMode(/* SAFETY: 类型断言已复核 */ v as "upscale" | "inpaint")
           }
           className="flex flex-row gap-4"
         >
@@ -104,17 +99,14 @@ export function ImageRedrawPanel({
           >
             <SelectValue>
               {(selected) =>
-                controller.templates.find((t) => t.id === selected)?.name ??
-                "先选一个模板"
+                controller.templates.find((t) => t.id === selected)?.name ?? "先选一个模板"
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {controller.templates.length === 0 ? (
               <div className="text-ink-fainter text-2xs px-2 py-1.5">
-                {controller.templatesLoading
-                  ? "加载中…"
-                  : "工作流库为空：先在库页导入一个模板"}
+                {controller.templatesLoading ? "加载中…" : "工作流库为空：先在库页导入一个模板"}
               </div>
             ) : (
               controller.templates.map((t) => (

@@ -64,17 +64,12 @@ async function callWithTools(
 }
 
 /** 普通对话调用（不带 tools / response_format）。 */
-async function callPlain(
-  cfg: LLMConfig,
-  messages: LLMMessage[],
-): Promise<string> {
+async function callPlain(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
   return completeLLM(cfg, messages);
 }
 
 /** 处理一次 Agent 请求：调模型理解意图并返回指令。 */
-export async function handleAgentChat(
-  req: AgentChatRequest,
-): Promise<AgentChatResponse> {
+export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
   const cfg = await getLLMConfig({ taskType: "chat" });
   const messages = narrowMessages(req.messages);
   const tools = workshopOpenAITools();
@@ -92,11 +87,7 @@ export async function handleAgentChat(
   // 方案 1：OpenAI 兼容 tools 协议
   if (req.useTools !== false) {
     try {
-      const { content, toolCalls } = await callWithTools(
-        cfg,
-        sysMessages,
-        tools,
-      );
+      const { content, toolCalls } = await callWithTools(cfg, sysMessages, tools);
       if (toolCalls.length > 0) {
         return {
           ...(content.trim() ? { reply: content.trim() } : {}),
@@ -144,10 +135,7 @@ export async function handleAgentChat(
       reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
     };
   }
-  if (
-    hasAction &&
-    validNames.has(/* SAFETY: 类型断言已复核 */ instruction.action as string)
-  ) {
+  if (hasAction && validNames.has(/* SAFETY: 类型断言已复核 */ instruction.action as string)) {
     return { fallback_instruction: instruction };
   }
   if (instruction.done === true && hasReply) {

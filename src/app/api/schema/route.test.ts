@@ -17,19 +17,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const statusFile = path.join(
-  process.cwd(),
-  "log",
-  "current",
-  "tools",
-  "schema-sync.json",
-);
+const statusFile = path.join(process.cwd(), "log", "current", "tools", "schema-sync.json");
 let backup: string | null = null;
 
 beforeEach(() => {
-  backup = fs.existsSync(statusFile)
-    ? fs.readFileSync(statusFile, "utf8")
-    : null;
+  backup = fs.existsSync(statusFile) ? fs.readFileSync(statusFile, "utf8") : null;
 });
 
 afterEach(() => {

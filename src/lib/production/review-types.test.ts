@@ -96,26 +96,16 @@ describe("normalizeReviewVerdict", () => {
 
   it("旧数据无 scores / scores 为空对象 → 不挂键（读作「未评分」不报错）", () => {
     expect(normalizeReviewVerdict({ pass: true })?.scores).toBeUndefined();
-    expect(
-      normalizeReviewVerdict({ pass: true, scores: {} })?.scores,
-    ).toBeUndefined();
-    expect(
-      normalizeReviewVerdict({ pass: true, scores: "垃圾" })?.scores,
-    ).toBeUndefined();
+    expect(normalizeReviewVerdict({ pass: true, scores: {} })?.scores).toBeUndefined();
+    expect(normalizeReviewVerdict({ pass: true, scores: "垃圾" })?.scores).toBeUndefined();
   });
 
   it("rubricVersion：非空字符串才挂键", () => {
+    expect(normalizeReviewVerdict({ pass: true, rubricVersion: "v1" })?.rubricVersion).toBe("v1");
     expect(
-      normalizeReviewVerdict({ pass: true, rubricVersion: "v1" })
-        ?.rubricVersion,
-    ).toBe("v1");
-    expect(
-      normalizeReviewVerdict({ pass: true, rubricVersion: "  " })
-        ?.rubricVersion,
+      normalizeReviewVerdict({ pass: true, rubricVersion: "  " })?.rubricVersion,
     ).toBeUndefined();
-    expect(
-      normalizeReviewVerdict({ pass: true, rubricVersion: 3 })?.rubricVersion,
-    ).toBeUndefined();
+    expect(normalizeReviewVerdict({ pass: true, rubricVersion: 3 })?.rubricVersion).toBeUndefined();
   });
 });
 
@@ -147,18 +137,16 @@ describe("applyReview", () => {
       { id: "a", prompt: "p" },
       { id: "b", name: "角色" },
     ];
-    const out = /* SAFETY: 类型断言已复核 */ applyReview(
-      entities,
-      "b",
-      verdict,
-    ) as Record<string, unknown>[];
+    const out = /* SAFETY: 类型断言已复核 */ applyReview(entities, "b", verdict) as Record<
+      string,
+      unknown
+    >[];
     expect(out[0]).toBe(entities[0]);
     expect(out[1]).not.toBe(entities[1]);
     expect(out[1]!.review).toEqual(verdict);
     // 不改原入参（不可变）
     expect(
-      /* SAFETY: 类型断言已复核 */ (entities[1] as Record<string, unknown>)
-        .review,
+      /* SAFETY: 类型断言已复核 */ (entities[1] as Record<string, unknown>).review,
     ).toBeUndefined();
   });
 
@@ -191,8 +179,7 @@ describe("applyReview", () => {
     // history 只存「本轮之前」的判定；曲线 = [...reviewHistory, review]（旧→新）
     expect(out[0]?.reviewHistory).toEqual([first]);
     expect([
-      .../* SAFETY: 类型断言已复核 */ (out[0]
-        ?.reviewHistory as ReviewVerdict[]),
+      .../* SAFETY: 类型断言已复核 */ (out[0]?.reviewHistory as ReviewVerdict[]),
       second,
     ]).toEqual([first, second]);
   });
@@ -201,8 +188,7 @@ describe("applyReview", () => {
     let entities: unknown[] = [{ id: "a", review: { nope: true } }];
     entities = applyReview(entities, "a", verdict);
     expect(
-      /* SAFETY: 类型断言已复核 */ (entities[0] as Record<string, unknown>)
-        .reviewHistory,
+      /* SAFETY: 类型断言已复核 */ (entities[0] as Record<string, unknown>).reviewHistory,
     ).toBeUndefined();
 
     let chain: unknown[] = [{ id: "a" }];
@@ -214,11 +200,11 @@ describe("applyReview", () => {
     ).reviewHistory as ReviewVerdict[];
     expect(history).toHaveLength(9); // REVIEW_HISTORY_LIMIT
     expect(history[0]?.scoredAt).toBe("t2"); // 最早的 2 轮被裁掉
-    expect(
-      /* SAFETY: 类型断言已复核 */ (chain[0] as Record<string, unknown>).review,
-    ).toMatchObject({
-      scoredAt: "t11",
-    });
+    expect(/* SAFETY: 类型断言已复核 */ (chain[0] as Record<string, unknown>).review).toMatchObject(
+      {
+        scoredAt: "t11",
+      },
+    );
   });
 });
 
@@ -310,8 +296,7 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
 
   it("recordScriptRevision 超 SCRIPT_REVISION_LIMIT(3) 从头裁剪；畸形条目丢弃", () => {
     let state = normalizeScriptReviewState(null);
-    for (let i = 0; i < 5; i++)
-      state = recordScriptRevision(state, `v${i}`, `t${i}`);
+    for (let i = 0; i < 5; i++) state = recordScriptRevision(state, `v${i}`, `t${i}`);
     expect(state.revisions.map((r) => r.markdown)).toEqual(["v2", "v3", "v4"]);
     // 畸形留档（缺 markdown / 空串）在读取时被丢弃
     const dirty = normalizeScriptReviewState({
@@ -321,9 +306,7 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
   });
 
   it("weakScoreEntries：低分维度升序（最差先改）；未评分 → 空数组", () => {
-    expect(weakScoreEntries(verdict)).toEqual([
-      { key: "structure", score: 2, note: "无高潮" },
-    ]);
+    expect(weakScoreEntries(verdict)).toEqual([{ key: "structure", score: 2, note: "无高潮" }]);
     expect(
       weakScoreEntries({
         pass: false,
@@ -369,9 +352,13 @@ describe("人工裁决 / 人评分（#2480）", () => {
       note: "可以",
       at: "",
     });
-    expect(
-      normalizeHumanVerdict({ pass: false, rev: 2.7, digest: " d " }),
-    ).toEqual({ pass: false, note: "", at: "", rev: 2.7, digest: "d" });
+    expect(normalizeHumanVerdict({ pass: false, rev: 2.7, digest: " d " })).toEqual({
+      pass: false,
+      note: "",
+      at: "",
+      rev: 2.7,
+      digest: "d",
+    });
   });
 
   it("applyHumanVerdict：写 humanVerdict 不碰 AI 判定；无命中原样返回入参引用", () => {
@@ -382,11 +369,9 @@ describe("人工裁决 / 人评分（#2480）", () => {
         imageReview: { pass: true, issues: [], suggestion: "", scoredAt: "y" },
       },
     ];
-    const out = /* SAFETY: 类型断言已复核 */ applyHumanVerdict(
-      entities,
-      "a",
-      verdict,
-    ) as Array<Record<string, unknown>>;
+    const out = /* SAFETY: 类型断言已复核 */ applyHumanVerdict(entities, "a", verdict) as Array<
+      Record<string, unknown>
+    >;
     expect(out[0]?.humanVerdict).toEqual(verdict);
     // AI 的两套判定原样保留
     expect(out[0]?.review).toMatchObject({ pass: true });
@@ -397,9 +382,7 @@ describe("人工裁决 / 人评分（#2480）", () => {
   it("getRecordHumanVerdict：宽容读；没裁决过 → null", () => {
     expect(getRecordHumanVerdict({ humanVerdict: verdict })).toEqual(verdict);
     expect(getRecordHumanVerdict({})).toBeNull();
-    expect(
-      getRecordHumanVerdict({ humanVerdict: { note: "缺 pass" } }),
-    ).toBeNull();
+    expect(getRecordHumanVerdict({ humanVerdict: { note: "缺 pass" } })).toBeNull();
   });
 
   it("normalizeHumanRating：夹取 0~5 取整；非有限数 → null", () => {
@@ -445,9 +428,7 @@ describe("人工裁决 / 人评分（#2480）", () => {
     expect(state.review?.pass).toBe(false);
     expect(state.revisions.map((r) => r.markdown)).toEqual(["v0"]);
     // normalize 往返：脏 JSON 里的人工裁决也能宽容读回
-    expect(
-      normalizeScriptReviewState({ humanVerdict: verdict }).humanVerdict,
-    ).toEqual(verdict);
+    expect(normalizeScriptReviewState({ humanVerdict: verdict }).humanVerdict).toEqual(verdict);
     expect(normalizeScriptReviewState({}).humanVerdict).toBeNull();
   });
 });

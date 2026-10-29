@@ -54,10 +54,7 @@ describe("readWorkshopDraft / writeWorkshopDraft", () => {
   });
 
   it("逐字段类型校验：非数组的 shots 被纠正成空数组", () => {
-    window.localStorage.setItem(
-      KEY,
-      JSON.stringify({ v: 1, shots: "不是数组", scenes: null }),
-    );
+    window.localStorage.setItem(KEY, JSON.stringify({ v: 1, shots: "不是数组", scenes: null }));
     const back = readWorkshopDraft("proj_1");
     expect(back.shots).toEqual([]);
     expect(back.scenes).toEqual([]);

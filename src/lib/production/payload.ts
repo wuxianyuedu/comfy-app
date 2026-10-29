@@ -46,9 +46,7 @@ export const SHOT_DERIVED_FIELDS = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 /** 角色记录上的机器衍生字段（#2623 的人工裁决；rev 随该单补）。 */
-export const CHARACTER_DERIVED_FIELDS = /* SAFETY: 类型断言已复核 */ [
-  "humanVerdict",
-] as const;
+export const CHARACTER_DERIVED_FIELDS = /* SAFETY: 类型断言已复核 */ ["humanVerdict"] as const;
 
 /** 按同 id 继承机器衍生字段：入参缺键的位从 existing 同 id 记录取现值。
  *  纯函数、不可变；无 id 的入参记录原样保留。 */

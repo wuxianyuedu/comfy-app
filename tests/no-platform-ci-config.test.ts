@@ -51,11 +51,7 @@ import {
 /* 单跑那三档的前提集与「单跑名 ⇄ 每日名」的对照是**数据**，一份出处在
  * `scripts/ci-oneshot-gates.mjs`。这里 import 它而不是在测试里重抄一遍 ——
  * 重抄就成了「判据自己就是第二份事实」。 */
-import {
-  ONESHOT_TARGETS,
-  oneshotGates,
-  oneshotPairs,
-} from "../scripts/ci-oneshot-gates.mjs";
+import { ONESHOT_TARGETS, oneshotGates, oneshotPairs } from "../scripts/ci-oneshot-gates.mjs";
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
@@ -104,9 +100,7 @@ export function ciConfigsAmong(entries: string[]): string[] {
 /** 仓库根的一层目录项 + 已知 CI 目录位（判据的真实扫描面）。 */
 function repoTopLevel(): string[] {
   const top = readdirSync(ROOT, { withFileTypes: true }).map((e) => e.name);
-  const nested = CI_CONFIG_PATHS.filter((rel) =>
-    existsSync(path.join(ROOT, ...rel.split("/"))),
-  );
+  const nested = CI_CONFIG_PATHS.filter((rel) => existsSync(path.join(ROOT, ...rel.split("/"))));
   return [...top, ...nested];
 }
 
@@ -191,8 +185,7 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
     why: "必须挂 push（master 合并形态复核）",
   },
   {
-    mustMatch:
-      /^ {2}"crontab: [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+":\s*$/m,
+    mustMatch: /^ {2}"crontab: [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+":\s*$/m,
     why:
       "必须挂一条 crontab（生产构建每天一次，ISSUE #2010）：定时任务的分支键只认**明确的单一分支名**，" +
       '而事件键必须写成 `"crontab: <5 段 POSIX cron>"` —— 写成 `crontab:` 映射或 `schedule` 都不会报错，只是永远不触发',
@@ -220,8 +213,7 @@ const PS7_ONLY: Array<{ pattern: RegExp; what: string; instead: string }> = [
   {
     pattern: /\?\./,
     what: "`?.` null 条件运算符（PS 7+）",
-    instead:
-      "先 `$o = Get-Command X -ErrorAction SilentlyContinue` 再 `if ($o) { $o.Source }`",
+    instead: "先 `$o = Get-Command X -ErrorAction SilentlyContinue` 再 `if ($o) { $o.Source }`",
   },
   {
     pattern: /\?\?/,
@@ -367,19 +359,9 @@ const DAILY_GATES = [
  */
 const PR_MOVED_TO_DAILY: [string, string, string, string][] = [
   ["工具链自证", "每日工具链自证", "scripts/ci-toolchain-selfcheck.mjs", ""],
-  [
-    "Python 可用性",
-    "每日 Python 可用性",
-    "scripts/ci-toolchain-selfcheck.mjs",
-    "--python-only",
-  ],
+  ["Python 可用性", "每日 Python 可用性", "scripts/ci-toolchain-selfcheck.mjs", "--python-only"],
   ["Python 探针读数", "每日 Python 探针读数", "scripts/python-probe.mjs", ""],
-  [
-    "浏览器安装",
-    "每日浏览器安装",
-    "scripts/ci-toolchain-selfcheck.mjs",
-    "--playwright-only",
-  ],
+  ["浏览器安装", "每日浏览器安装", "scripts/ci-toolchain-selfcheck.mjs", "--playwright-only"],
   /* `ESLint 零警告` 是**另一条理由**（不是「节点事实」而是「起一堆子进程」：
    * 它挂满过 8640s 与 20m 两次，且红的地方从来不是这次改动违规，而是这台机当时
    * 腾不出核）。同一张表接住它，是因为要判的东西**逐字相同**：PR 清单里不许再有、
@@ -512,12 +494,7 @@ function stageEnvAssignments(text: string, name: string): string[] {
   if (at < 0) return [];
   const out: string[] = [];
   for (const line of lines.slice(at + 1)) {
-    if (
-      /^\s*(script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(
-        line,
-      )
-    )
-      break;
+    if (/^\s*(script|timeout|ifModify|name|retries|jobs|runs_on|image):/.test(line)) break;
     const t = line.trim();
     if (t === "" || t.startsWith("#") || t.startsWith("-")) continue;
     if (!/^[A-Za-z_][A-Za-z0-9_]*\s*:/.test(t)) continue;
@@ -656,10 +633,7 @@ export function registeredPushGateOrder(text: string): string[] {
  * @param pipelineName 流水线的 `name:` 值（如「每日生产构建」）
  * @returns stage 名；`[]` = 那条流水线没找到 / 没有 stages
  */
-export function pipelineStageNames(
-  text: string,
-  pipelineName: string,
-): string[] {
+export function pipelineStageNames(text: string, pipelineName: string): string[] {
   const lines = text.split("\n");
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
@@ -674,8 +648,7 @@ export function pipelineStageNames(
   }
   if (start < 0) return [];
   /* 流水线项的缩进 = 它 `name:` 那一行的缩进；`stages:` 的键在它**下一层**。 */
-  const itemIndent =
-    (lines[start] ?? "").length - (lines[start] ?? "").trimStart().length;
+  const itemIndent = (lines[start] ?? "").length - (lines[start] ?? "").trimStart().length;
   const out: string[] = [];
   let stageIndent: number | null = null;
   for (let i = start + 1; i < lines.length; i += 1) {
@@ -749,10 +722,7 @@ export function anchorStageNames(text: string, anchor: string): string[] {
  */
 export function stageKeptAsComment(text: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(
-    `^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`,
-    "m",
-  ).test(text);
+  return new RegExp(`^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`, "m").test(text);
 }
 
 /**
@@ -873,8 +843,7 @@ export function commentedStageBlock(text: string, name: string): string | null {
     /* 收尾：下一个同级（注释态）stage 项，或**回到未注释的顶格键**（`master:` 那一层）。
      * ⚠️ 判据不能写成「`^\S` 就收尾」—— 注释块里的每一行都以 `#` 开头，那也是 `\S`，
      * 于是块内容会被切在第一行之后（`- name: X` 一行）。 */
-    if (/^#\s+-\s+name:/.test(raw) || (/^\S/.test(raw) && !raw.startsWith("#")))
-      break;
+    if (/^#\s+-\s+name:/.test(raw) || (/^\S/.test(raw) && !raw.startsWith("#"))) break;
     out.push(strip(raw));
   }
   return out.join("\n");
@@ -944,9 +913,7 @@ export function stageTimeouts(text: string): Map<string, string> {
 export function hasPipelineLockCancelInProgress(text: string): boolean {
   /* 收口到「下一个更浅缩进的键」或**文本末尾** —— 少了后半句，末尾没跟别的键的
    * 夹具会解析不出来（真 `.cnb.yml` 里 `.common` 后面还有 `.gates`，看不出来）。 */
-  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(
-    text,
-  );
+  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
   const body = anchor?.[1];
   if (body === undefined) return false;
   // `lock:` 块内出现 `cancel-in-progress: true`（同一块里的 `timeout`/`key` 不算）。
@@ -969,14 +936,10 @@ export function hasPipelineLockCancelInProgress(text: string): boolean {
  * @returns key 原文（未做变量替换）；没写 `key` 时回 `null`
  */
 export function pipelineLockKeyTemplate(text: string): string | null {
-  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(
-    text,
-  );
+  const anchor = /^\.common:\s*&\w+\s*$([\s\S]*?)(?=^\S|$(?![\s\S]))/m.exec(text);
   const body = anchor?.[1];
   if (body === undefined) return null;
-  const lock = /^(\s+)lock:[ \t]*\r?\n([\s\S]*?)(?=^\1\S|\s*$(?![\s\S]))/m.exec(
-    body,
-  );
+  const lock = /^(\s+)lock:[ \t]*\r?\n([\s\S]*?)(?=^\1\S|\s*$(?![\s\S]))/m.exec(body);
   const block = lock?.[2];
   if (block === undefined) return null;
   const key = /^\s+key:[ \t]*(\S.*?)[ \t]*$/m.exec(block);
@@ -1003,14 +966,8 @@ const LOCK_KEY_ALLOWED_VARS = /* SAFETY: 类型断言已复核 */ ["CNB_PULL_REQ
  * @param vars 这次构建里哪些变量有值（没列出的 = 无值）
  * @returns 平台算出来的锁键
  */
-export function resolveLockKey(
-  template: string,
-  vars: Record<string, string | undefined>,
-): string {
-  return template.replace(
-    /\$\{?([A-Za-z0-9_]+)\}?/g,
-    (_whole, name: string) => vars[name] ?? "",
-  );
+export function resolveLockKey(template: string, vars: Record<string, string | undefined>): string {
+  return template.replace(/\$\{?([A-Za-z0-9_]+)\}?/g, (_whole, name: string) => vars[name] ?? "");
 }
 
 /** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文 }`（`null` = 没写）。 */
@@ -1018,8 +975,7 @@ export function lockAnchorDefinitions(
   text: string,
 ): Map<string, { key: string; cancelInProgress: boolean | null }> {
   const out = new Map<string, { key: string; cancelInProgress: boolean | null }>();
-  const def =
-    /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
+  const def = /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
     const name = m[1];
     const body = m[2] ?? "";
@@ -1027,13 +983,10 @@ export function lockAnchorDefinitions(
     if (name === undefined || key === undefined) continue;
     /* `null` = 这一行**没写**；`false` 是「写了、值是 false」—— 两者不同：
      * 漏写会让同一件事重复排队，而 `false` 是有意的取舍（逐笔留读数，见 R2）。 */
-    const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(
-      body,
-    )?.[1];
+    const rawCancel = /^[ \t]+cancel-in-progress:[ \t]*(true|false)[ \t]*$/m.exec(body)?.[1];
     out.set(name, {
       key,
-      cancelInProgress:
-        rawCancel === undefined ? null : rawCancel === "true",
+      cancelInProgress: rawCancel === undefined ? null : rawCancel === "true",
     });
   }
   return out;
@@ -1155,9 +1108,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
   }
   const rows = pipelineLockAssignments(text);
   if (rows.length === 0) {
-    return [
-      "解析不出 `master:` 块里的任何流水线 —— 判据在这一份配置上恒转（要修解析器）",
-    ];
+    return ["解析不出 `master:` 块里的任何流水线 —— 判据在这一份配置上恒转（要修解析器）"];
   }
   const prKey = resolveLockKey(commonTemplate, {
     CNB_PULL_REQUEST_IID: prIid,
@@ -1187,9 +1138,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
    * 两份名单都是字面量而不是 `PROBE_PIPELINES` 的投影：B/C 不吃锚点却也不该拿到
    * 「A 那把 `false` 的锁」那张通行证 —— 投影会让「C 有了锁」与「A 的锁错了」在读数上
    * 变成同一件事。 */
-  const probeExempt = new Map(
-    PROBE_LOCK_EXEMPT.map((e) => [e.event, e]),
-  );
+  const probeExempt = new Map(PROBE_LOCK_EXEMPT.map((e) => [e.event, e]));
 
   for (const row of rows) {
     if (row.event === "pull_request") {
@@ -1197,9 +1146,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
        * 只看原文里有没有那个变量名是不够的（#1981 那个 bug 的原文里也有变量，
        * 只是代进去之后两条 PR 逐字相同）。 */
       const template =
-        row.lockRef === null
-          ? commonTemplate
-          : (defs.get(row.lockRef)?.key ?? commonTemplate);
+        row.lockRef === null ? commonTemplate : (defs.get(row.lockRef)?.key ?? commonTemplate);
       const a = resolveLockKey(template, { CNB_PULL_REQUEST_IID: "1980" });
       const b = resolveLockKey(template, { CNB_PULL_REQUEST_IID: "1982" });
       if (a === b) {
@@ -1227,8 +1174,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
     }
     /* R2 的「必须显式写」这一半：`cancel-in-progress: false` 与「漏写」在配置里长得
      * 一样，所以漏写默认判红；只有**点名要 `false`** 的那一把（探针 A）放过。 */
-    const exemptCancel =
-      probeExempt.get(row.event)?.cancelFalse === row.lockRef;
+    const exemptCancel = probeExempt.get(row.event)?.cancelFalse === row.lockRef;
     if (def.cancelInProgress === null && !exemptCancel) {
       bad.push(
         `锁 *${row.lockRef} 没有显式写 cancel-in-progress —— 漏写与「有意排队」在配置里长得一样，重复排队就收不成一条（要排队的那一档写 false 并说明理由）`,
@@ -1265,9 +1211,7 @@ export function lockClassViolations(text: string, prIid = "1982"): string[] {
   }
   for (const [key, works] of lockToWork) {
     if (works.size > 1) {
-      const list = [...works]
-        .map((w) => w ?? "(没收到 stages 引用)")
-        .join(" / ");
+      const list = [...works].map((w) => w ?? "(没收到 stages 引用)").join(" / ");
       bad.push(
         `锁 key「${key}」被 ${works.size} 份不同的 stage 清单共用（${list}）—— 同一把锁只该挡「同一件事被重复排队」，不同事之间不该互掐`,
       );
@@ -1292,11 +1236,7 @@ const DOC_ANCHORS: Array<{ file: string; mustContain: string[] }> = [
 ];
 
 /** 文档里缺哪些锚点句（跨行断句不算缺失，故整篇去换行后再比）。 */
-export function missingAnchors(
-  file: string,
-  needles: string[],
-  root: string = ROOT,
-): string[] {
+export function missingAnchors(file: string, needles: string[], root: string = ROOT): string[] {
   const text = readFileSync(path.join(root, file), "utf8");
   const flat = text.replace(/\r\n/g, "\n").replace(/\n/g, "");
   return needles.filter((needle) => !flat.includes(needle.replace(/\n/g, "")));
@@ -1337,9 +1277,7 @@ function readRegisteredConfig(): string {
   const rel = REGISTERED_CI_CONFIG;
   const p = path.join(ROOT, rel);
   if (!existsSync(p)) {
-    throw new Error(
-      `登记在册的平台侧配置不存在：${rel}（它缺席时这套判据全都无从谈起）`,
-    );
+    throw new Error(`登记在册的平台侧配置不存在：${rel}（它缺席时这套判据全都无从谈起）`);
   }
   return readFileSync(p, "utf8");
 }
@@ -1347,9 +1285,7 @@ function readRegisteredConfig(): string {
 describe("平台侧流水线配置：形态必须是「自托管 + 已登记」（§13.5.3 / §13.5.4）", () => {
   it("仓库根只允许出现登记在册的那一份，别的 CI 形态一律不许", () => {
     const present = ciConfigsAmong(repoTopLevel());
-    expect(
-      present.filter((rel) => !REGISTERED_CI_CONFIGS.includes(rel)),
-    ).toEqual([]);
+    expect(present.filter((rel) => !REGISTERED_CI_CONFIGS.includes(rel))).toEqual([]);
   });
 
   it("登记在册的那一份必须满足形态契约（漏掉哪条都是静默失效）", () => {
@@ -1361,10 +1297,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("runner 是**锚点展开后**真的落在流水线上的（文本里有 ≠ 解析得到）", () => {
     const text = readRegisteredConfig();
     const runners = resolveAnchoredRunner(text);
-    expect(
-      runners.length,
-      "没解析出 .common 锚点里的 runner —— 锚点被删了或换了形状",
-    ).toBe(1);
+    expect(runners.length, "没解析出 .common 锚点里的 runner —— 锚点被删了或换了形状").toBe(1);
     const runner = runners[0];
     if (runner === undefined) throw new Error("锚点里的 runner 解析不出来");
     expect(runner.namespace).toBe("group");
@@ -1386,9 +1319,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 有期限的探针例外（ISSUE #2363）从两边**同额**扣掉：探针不吃锚点、也不吃
      * `*common` 那条锁（理由见下面那条用例）。同额扣除必须两头都有 —— 只减一边
      * 会让「漏接锚点」与「探针在跑」在读数上变成同一个数字。 */
-    const probing = PROBE_PIPELINES.filter((name) =>
-      text.includes(`  ${name}:\n`),
-    );
+    const probing = PROBE_PIPELINES.filter((name) => text.includes(`  ${name}:\n`));
     expect(
       refs.length + probing.length,
       `锚点引用数（${refs.length}）与带 \`stages:\` 的流水线数（${stageLists.length}）对不上 —— ` +
@@ -1416,9 +1347,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      *     ⇒ 删掉探针不会留下一条只能靠改用例才能过的判据。
      */
     const text = readRegisteredConfig();
-    const alive = PROBE_PIPELINES.filter((name) =>
-      text.includes(`  ${name}:\n`),
-    );
+    const alive = PROBE_PIPELINES.filter((name) => text.includes(`  ${name}:\n`));
     if (alive.length === 0) return;
     expect(
       Date.parse(PROBE_BY),
@@ -1430,13 +1359,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     for (const name of alive) {
       const block = configEventBlock(text, name);
       expect(block, `探针 ${name} 在配置里但没有可解析的流水线体`).not.toBe("");
-      expect(
-        block,
-        `探针 ${name} 没有 namespace: group（会回落到计费平台池）`,
-      ).toMatch(/namespace:\s*group\b/);
-      expect(block, `探针 ${name} 没有非空 tags`).toMatch(
-        /^\s*tags:\s*\n\s+-\s*\S+/m,
+      expect(block, `探针 ${name} 没有 namespace: group（会回落到计费平台池）`).toMatch(
+        /namespace:\s*group\b/,
       );
+      expect(block, `探针 ${name} 没有非空 tags`).toMatch(/^\s*tags:\s*\n\s+-\s*\S+/m);
       expect(
         block,
         `探针 ${name} 引用了 \`*common\` —— 它会继承那条 PR 模板锁，三条互相掐停，探针自己成了变量`,
@@ -1479,10 +1405,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 被从清单里删了，顺序判据会退化成永远成立的空判。 */
     const installAt = declared.indexOf("安装依赖");
     const apiDocsAt = declared.indexOf("API 文档生成与自检");
-    expect(
-      installAt,
-      "push 清单里没有「安装依赖」—— 前提格被删了",
-    ).toBeGreaterThanOrEqual(0);
+    expect(installAt, "push 清单里没有「安装依赖」—— 前提格被删了").toBeGreaterThanOrEqual(0);
     expect(
       apiDocsAt,
       "push 清单里没有「API 文档生成与自检」—— 这一格如今谁都不判",
@@ -1511,14 +1434,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const viaButton = pipelineStageNames(text, "每日档（手动触发）");
     const viaApi = pipelineStageNames(text, "每日档（API 触发）");
     const declared = registeredDailyGateOrder(text);
-    expect(
-      declared.length,
-      "每日清单解析为空 —— 后面的比较就没有对象了",
-    ).toBeGreaterThan(0);
-    expect(
-      viaCron,
-      "定时那一条的 stage 名单与 `COMFYAPP_CI_DAILY_GATES` 不一致",
-    ).toEqual(declared);
+    expect(declared.length, "每日清单解析为空 —— 后面的比较就没有对象了").toBeGreaterThan(0);
+    expect(viaCron, "定时那一条的 stage 名单与 `COMFYAPP_CI_DAILY_GATES` 不一致").toEqual(declared);
     expect(
       viaButton,
       "手点那一条与定时那一条跑的**不是同一份**清单 —— 它应当引用同一个 `*daily_gates` 锚点",
@@ -1532,9 +1449,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * `Event must be 'api_trigger' or start with 'api_trigger_'.`）。写成 `daily_api`
      * 那一类名字，这条流水线在配置解析期一个字都不报，而永远没人能触发它 ——
      * 判前缀不判整串：后缀是自由命名的（官方口径），把它钉成字面量等于把实现细节当判据。 */
-    const apiEvents = [...text.matchAll(/^ {2}(api_trigger\w*):$/gm)].map(
-      (m) => m[1],
-    );
+    const apiEvents = [...text.matchAll(/^ {2}(api_trigger\w*):$/gm)].map((m) => m[1]);
     expect(
       apiEvents,
       "API 触发口的事件键丢了，或不再是 `api_trigger` 前缀（服务端会直接 400）",
@@ -1550,26 +1465,18 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     /* 事件键与按钮：**两个方向**都要有对象。这里的失效形态都是「按了没反应」或
      * 「永远没人按」，而两种都不会让任何一边自己变红。 */
-    const events = [...text.matchAll(/^ {2}(web_trigger_\w+):$/gm)].map(
-      (m) => m[1],
-    );
-    expect(
-      events.length,
-      ".cnb.yml 里没有 `web_trigger_*` 事件键",
-    ).toBeGreaterThan(0);
+    const events = [...text.matchAll(/^ {2}(web_trigger_\w+):$/gm)].map((m) => m[1]);
+    expect(events.length, ".cnb.yml 里没有 `web_trigger_*` 事件键").toBeGreaterThan(0);
     const triggerFile = path.join(ROOT, ".cnb", "web_trigger.yml");
     expect(
       existsSync(triggerFile),
       "缺 `.cnb/web_trigger.yml` —— 官方把按钮定义放在这个文件里，没有它就没有按钮可点",
     ).toBe(true);
     const buttons = readFileSync(triggerFile, "utf8");
-    const bound = [
-      ...buttons.matchAll(/^[ 	]*event:[ 	]*(web_trigger_\w+)[ 	]*$/gm),
-    ].map((m) => m[1]);
-    expect(
-      bound.length,
-      "`.cnb/web_trigger.yml` 里一个 `event:` 都没有",
-    ).toBeGreaterThan(0);
+    const bound = [...buttons.matchAll(/^[ 	]*event:[ 	]*(web_trigger_\w+)[ 	]*$/gm)].map(
+      (m) => m[1],
+    );
+    expect(bound.length, "`.cnb/web_trigger.yml` 里一个 `event:` 都没有").toBeGreaterThan(0);
     for (const ev of bound) {
       expect(
         events,
@@ -1594,41 +1501,27 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const drifted: string[] = [];
     for (const { file, mustContain } of DOC_ANCHORS) {
       const missing = missingAnchors(file, mustContain);
-      if (missing.length > 0)
-        drifted.push(`${file} 缺：${missing.join(" / ")}`);
+      if (missing.length > 0) drifted.push(`${file} 缺：${missing.join(" / ")}`);
     }
     expect(drifted).toEqual([]);
   });
 
   it("doc-facts **必须**把 .cnb.yml 登记成 path 类事实（它真的存在了）", () => {
-    const facts = readFileSync(
-      path.join(ROOT, "scripts/doc-facts.cjs"),
-      "utf8",
-    );
+    const facts = readFileSync(path.join(ROOT, "scripts/doc-facts.cjs"), "utf8");
     /* `source:` 在文件里有两种排版（独占一行 / 跟在 `kind` 后面同一行），
      * 所以扫的是「含 `source:` 的行」而不是「以 `source:` 开头的行」。 */
-    const sourceLines = facts
-      .split("\n")
-      .filter((line) => /(^|[{,]\s*)source:\s*["']/.test(line));
+    const sourceLines = facts.split("\n").filter((line) => /(^|[{,]\s*)source:\s*["']/.test(line));
     // 先确认扫描面没跑偏（事实表里一定有 `source:` 行，否则下面的断言是空转）。
     expect(sourceLines.length).toBeGreaterThan(0);
-    expect(
-      facts,
-      "scripts/doc-facts.cjs 里连事实表都没读出来，扫描面指错了地方",
-    ).toContain("kind:");
-    // path 类事实的语义是「文档指向的文件必须存在」——文件回来了，就该有登记。
-    const registered = sourceLines.some((line) =>
-      /source:\s*["']\.cnb\.yml["']/.test(line),
+    expect(facts, "scripts/doc-facts.cjs 里连事实表都没读出来，扫描面指错了地方").toContain(
+      "kind:",
     );
-    expect(
-      registered,
-      "scripts/doc-facts.cjs 没有把 .cnb.yml 登记成 path 类事实",
-    ).toBe(true);
+    // path 类事实的语义是「文档指向的文件必须存在」——文件回来了，就该有登记。
+    const registered = sourceLines.some((line) => /source:\s*["']\.cnb\.yml["']/.test(line));
+    expect(registered, "scripts/doc-facts.cjs 没有把 .cnb.yml 登记成 path 类事实").toBe(true);
     // 反向：别的 CI 形态不许被登记（登记一个刻意不存在的文件会让 doc:check 恒红）。
     const offenders = sourceLines.filter((line) =>
-      CI_CONFIG_FILES.filter((n) => n !== ".cnb.yml").some((n) =>
-        line.includes(n),
-      ),
+      CI_CONFIG_FILES.filter((n) => n !== ".cnb.yml").some((n) => line.includes(n)),
     );
     expect(offenders.map((line) => line.trim())).toEqual([]);
   });
@@ -1689,10 +1582,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 红在 webServer 的 180s 超时上 —— 两者都指不到真正缺的那一格。 */
     const daily = registeredDailyGateOrder(text);
     const e2eAt = daily.indexOf("每日全量E2E");
-    expect(
-      e2eAt,
-      "「每日全量E2E」不在每日清单里 —— 上面那条搬家的断言失去落点",
-    ).toBeGreaterThan(-1);
+    expect(e2eAt, "「每日全量E2E」不在每日清单里 —— 上面那条搬家的断言失去落点").toBeGreaterThan(
+      -1,
+    );
     for (const prerequisite of ["每日浏览器安装", "每日生产构建"]) {
       expect(
         daily.indexOf(prerequisite),
@@ -1727,11 +1619,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 不是账）—— 下面那条「PR 撤掉的每一格必须在每日清单里有同名执行者」判的就是
      * 这件事，所以这里不再回到 PR 那一份。 */
     const blockText =
-      stageBlock(text, "每日浏览器安装") ??
-      commentedStageBlock(text, "每日浏览器安装");
-    const scriptLine = /^[ \t]*(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(
-      blockText ?? "",
-    );
+      stageBlock(text, "每日浏览器安装") ?? commentedStageBlock(text, "每日浏览器安装");
+    const scriptLine = /^[ \t]*(?:#\s*)?script:[ \t]*(\S.*)$/m.exec(blockText ?? "");
     const command = scriptLine?.[1]?.trim();
     expect(command, "解析不出「每日浏览器安装」那一步的 script").toBeTruthy();
     /* ⚠️ 入口**不一定在第一个字符上**：每个 stage 的脚本现在都以一句
@@ -1739,13 +1628,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 不设它平台侧的中文日志全是乱码，见 `.cnb.yml` 头注第 6 条），外面还包着
      * `ci-cp936-exit.mjs`（ISSUE #1977 的 CP936 出口）。`unwrapCp936()` 剥掉后者 ——
      * 判的是「这一段命令点到的是哪个入口」，不是「中间隔了几层壳」。 */
-    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(
-      unwrapCp936(command ?? ""),
-    )?.[1];
-    expect(
-      entry,
-      `「每日浏览器安装」那一步指向的不是 scripts/ 下的入口：${command}`,
-    ).toBeTruthy();
+    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(unwrapCp936(command ?? ""))?.[1];
+    expect(entry, `「每日浏览器安装」那一步指向的不是 scripts/ 下的入口：${command}`).toBeTruthy();
     expect(
       existsSync(path.join(ROOT, entry ?? "")),
       `「每日浏览器安装」点名的入口不在盘上：${entry}`,
@@ -1778,18 +1662,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
           "这一段判据会失去扫描对象，先补登记",
       ).toContain("每日浏览器安装");
     }
-    expect(
-      stage,
-      "解析不出「每日浏览器安装」这一步 —— 名字被改了？",
-    ).toBeTruthy();
+    expect(stage, "解析不出「每日浏览器安装」这一步 —— 名字被改了？").toBeTruthy();
     expect(
       stage,
       "「每日浏览器安装」没设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT` —— 默认的 30s 是" +
         "**套接字**超时，180 MiB 的包在慢链路上会被它按时掐断",
     ).toContain("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT");
-    expect(stage).toMatch(
-      /PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT:\s*"[1-9]\d*"/,
-    );
+    expect(stage).toMatch(/PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT:\s*"[1-9]\d*"/);
 
     /* 光放宽预算不够 —— 放宽到 120s 之后**照旧超时**（`cnb-gt1-1k513ill4` 的原文是
      * `timed out after 120000ms`），那时结论就变了：这台节点真的到不了
@@ -1827,10 +1706,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const testAt = order.indexOf("每日单元测试");
     /* 两个名字都必须取到：取不到就是**这一格被从清单里删了**，而顺序判据会退化成
      * 「-1 比 -1 小」那种永远成立的空判（解析失败伪装成结论）。 */
-    expect(
-      probeAt,
-      "`每日 Python 可用性` 不在每日清单里了",
-    ).toBeGreaterThanOrEqual(0);
+    expect(probeAt, "`每日 Python 可用性` 不在每日清单里了").toBeGreaterThanOrEqual(0);
     expect(testAt, "`每日单元测试` 不在每日清单里了").toBeGreaterThanOrEqual(0);
     expect(
       probeAt,
@@ -1982,8 +1858,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       const m = /^(\d+)([smh])$/.exec(raw);
       expect(m, `${name} 的 timeout 写法认不出：${raw}`).not.toBeNull();
       if (!m) continue;
-      const minutes =
-        Number(m[1]) * (m[2] === "h" ? 60 : m[2] === "s" ? 1 / 60 : 1);
+      const minutes = Number(m[1]) * (m[2] === "h" ? 60 : m[2] === "s" ? 1 / 60 : 1);
       expect(
         minutes,
         `${name} 的 timeout=${raw} 是小时量级 —— 那与平台默认的 2h 上限没有区别，` +
@@ -2019,9 +1894,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).not.toBeNull();
     if (template === null) return;
     // ① 代入的变量必须在白名单里 —— `CNB_BRANCH` 正是那个会退化成目标分支的。
-    const used = [...template.matchAll(/\$\{?([A-Za-z0-9_]+)\}?/g)].map(
-      (m) => m[1] ?? "",
-    );
+    const used = [...template.matchAll(/\$\{?([A-Za-z0-9_]+)\}?/g)].map((m) => m[1] ?? "");
     const stray = used.filter(
       (name) => !LOCK_KEY_ALLOWED_VARS.includes(/* SAFETY: 类型断言已复核 */ name as never),
     );
@@ -2077,9 +1950,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       `解析出的流水线数（${rows.length}）与带 stages: 的项（${stageLines}）对不上 —— 有一条被漏掉，它就没人判`,
     ).toBe(stageLines);
     expect(rows.filter((r) => r.event === "pull_request").length).toBe(1);
-    expect(
-      rows.filter((r) => r.event !== "pull_request").length,
-    ).toBeGreaterThanOrEqual(9);
+    expect(rows.filter((r) => r.event !== "pull_request").length).toBeGreaterThanOrEqual(9);
     /* 三条每日触发口仍然同一把（那份互斥是刻意保留的，不是被这次改动顺手拆掉的）。
      * 这里**不钉事件名清单** —— 时刻那一格由 crontab 那几条判据管，这里只管锁。 */
     const daily = rows.filter((r) => r.lockRef === "lock_daily");
@@ -2150,10 +2021,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "web_trigger_daily|每日档（手动触发）|lock_daily|*daily_gates",
       "api_trigger_daily|每日档（API 触发）|lock_daily|*daily_gates",
     ]);
-    expect([...lockAnchorDefinitions(fixture).keys()]).toEqual([
-      "lock_push",
-      "lock_daily",
-    ]);
+    expect([...lockAnchorDefinitions(fixture).keys()]).toEqual(["lock_push", "lock_daily"]);
     expect(lockClassViolations(fixture)).toEqual([]);
 
     /* ⑦ 探针那三条**不吃锚点**、各自带 `runner`，而 `lock:` 只在**当前这一项之内**
@@ -2162,11 +2030,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 一条锁都不写」这条例外根本没有对象，而探针 A 的 `false` 也测不到它自己要测的
      * 那把锁（`.cnb.yml` 那段注释早就点了这个坏形态，判据这一侧据此补上）。
      * 顺带钉住例外的**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
-    const probeFixture = (o: {
-      cancel?: string | null;
-      probeB?: string;
-      extra?: string;
-    }) =>
+    const probeFixture = (o: { cancel?: string | null; probeB?: string; extra?: string }) =>
       [
         ".common: &common",
         "  lock:",
@@ -2205,14 +2069,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ].join("\n");
     /* A 拿到的是**它自己**那把锁（不是上一条的 `lock_push`），B 落到「一条都不写」。 */
     expect(
-      pipelineLockAssignments(probeFixture({})).map(
-        (r) => `${r.event}|${r.lockRef ?? "(没写)"}`,
-      ),
+      pipelineLockAssignments(probeFixture({})).map((r) => `${r.event}|${r.lockRef ?? "(没写)"}`),
     ).toContain("api_trigger_probe_a|lock_probe_a");
     expect(
-      pipelineLockAssignments(probeFixture({})).map(
-        (r) => `${r.event}|${r.lockRef ?? "(没写)"}`,
-      ),
+      pipelineLockAssignments(probeFixture({})).map((r) => `${r.event}|${r.lockRef ?? "(没写)"}`),
     ).toContain("api_trigger_probe_b|(没写)");
     expect(lockClassViolations(probeFixture({}))).toEqual([]);
     expect(
@@ -2231,44 +2091,36 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "B 自己拿一把锁就没在当对照组了，而豁免的只是「一条都不写」",
     ).toContain("没有显式写 cancel-in-progress");
     expect(
-      lockClassViolations(probeFixture({}).replace("  key: probe-2363-a", "  key: probe-$CNB_BRANCH")).join(
-        "\n",
-      ),
+      lockClassViolations(
+        probeFixture({}).replace("  key: probe-2363-a", "  key: probe-$CNB_BRANCH"),
+      ).join("\n"),
       "例外不覆盖 key 形态：带变量照旧点名",
     ).toContain("带变量");
 
     // ① R1：有人**忘了写覆盖** ⇒ 那条流水线静默回落到 `pr-`，正是被修掉的那个形态。
     const forgotten = fixture.replace("      lock: *lock_push\n", "");
-    expect(lockClassViolations(forgotten).join("\n")).toContain(
-      "没有显式的 lock 覆盖",
-    );
+    expect(lockClassViolations(forgotten).join("\n")).toContain("没有显式的 lock 覆盖");
 
     // ② R3：两个**不同的工作清单**被并进一把锁 ⇒ 单跑会掐掉每日（本条要拦的形状）。
     const merged = fixture.replace(
       ".lock-daily: &lock_daily\n  key: daily\n",
       ".lock-daily: &lock_daily\n  key: push\n",
     );
-    expect(lockClassViolations(merged).join("\n")).toContain(
-      "份不同的 stage 清单共用",
-    );
+    expect(lockClassViolations(merged).join("\n")).toContain("份不同的 stage 清单共用");
 
     // ③ R2：类锁**漏写** `cancel-in-progress` ⇒ 重复排队收不成一条，而不报错。
     const noCancel = fixture.replace(
       ".lock-daily: &lock_daily\n  key: daily\n  cancel-in-progress: true\n",
       ".lock-daily: &lock_daily\n  key: daily\n",
     );
-    expect(lockClassViolations(noCancel).join("\n")).toContain(
-      "没有显式写 cancel-in-progress",
-    );
+    expect(lockClassViolations(noCancel).join("\n")).toContain("没有显式写 cancel-in-progress");
 
     // ③′ R6：`push` 那把写回 `true` ⇒ 前一笔 push 的复核读数被销毁（ISSUE #2396 的形态）。
     const pushCancels = fixture.replace(
       "  key: push\n  cancel-in-progress: false",
       "  key: push\n  cancel-in-progress: true",
     );
-    expect(lockClassViolations(pushCancels).join("\n")).toContain(
-      "cancel-in-progress 不是 false",
-    );
+    expect(lockClassViolations(pushCancels).join("\n")).toContain("cancel-in-progress 不是 false");
 
     // ④ R2 的后半：key 里放进变量 ⇒ 换个事件它就无值，退化这件事又回来了。
     const templated = fixture.replace(
@@ -2282,23 +2134,17 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "  key: push\n  cancel-in-progress: false",
       "  key: pr-\n  cancel-in-progress: false",
     );
-    expect(lockClassViolations(degenerate).join("\n")).toContain(
-      "与非 PR 退化 / PR 那把逐字相同",
-    );
+    expect(lockClassViolations(degenerate).join("\n")).toContain("与非 PR 退化 / PR 那把逐字相同");
     const prCollapses = fixture.replace(
       "    key: pr-$CNB_PULL_REQUEST_IID\n",
       "    key: pr-$CNB_DEFAULT_BRANCH\n",
     );
-    expect(lockClassViolations(prCollapses).join("\n")).toContain(
-      "与 PR 编号无关",
-    );
+    expect(lockClassViolations(prCollapses).join("\n")).toContain("与 PR 编号无关");
 
     /* ⑥ 解析器不许假装通过。两种「没有对象」是两件不同的事，都必须出声：
      *    · 没有 `.common.lock.key` ⇒ 全档回落到平台默认 key（#1981 那个 bug 的形状）；
      *    · 有 `.common` 但 `master:` 下一条流水线都收不出来 ⇒ 判据在空转。 */
-    expect(lockClassViolations("master:\n").join("\n")).toContain(
-      "没有 `lock.key`",
-    );
+    expect(lockClassViolations("master:\n").join("\n")).toContain("没有 `lock.key`");
     expect(
       lockClassViolations(
         [
@@ -2356,10 +2202,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "`覆盖率上报` 必须自己判报告在不在（`coverage/lcov.info` 缺席时跳过而不是判红）——" +
         "`单元测试` 此刻被临时停用，报告本来就不存在",
     ).toContain("coverage/lcov.info");
-    expect(
-      script,
-      "那个脚本必须有一个「没有报告」的出口，且在缺报告时**不退非零**",
-    ).toMatch(/没有报告/);
+    expect(script, "那个脚本必须有一个「没有报告」的出口，且在缺报告时**不退非零**").toMatch(
+      /没有报告/,
+    );
   });
 
   it("定时那一跑（crontab）挂在 master 下、每天一次，且跑的就是 `COMFYAPP_CI_DAILY_GATES` 那七格（ISSUE #2010 / #2018）", () => {
@@ -2488,23 +2333,18 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(prefetch, "`.cnb.yml` 里找不到「打包·桌包工具预置」那一格").toBeTruthy();
     const prefetchEntry = "scripts/tauri-tools-cache.mjs";
     expect(prefetch, `预置那一格点的应是 ${prefetchEntry}`).toContain(prefetchEntry);
-    expect(existsSync(path.join(ROOT, prefetchEntry)), `${prefetchEntry} 不在盘上`).toBe(
-      true,
-    );
+    expect(existsSync(path.join(ROOT, prefetchEntry)), `${prefetchEntry} 不在盘上`).toBe(true);
     const packageStages = pipelineStageNames(text, "桌面成品包");
     expect(
       packageStages.indexOf("打包·桌包工具预置"),
       "「打包·桌包工具预置」没在清单里 —— 那一格丢了就等于回到「构建期现下 GitHub release」",
     ).toBeGreaterThanOrEqual(0);
     expect(
-      packageStages.indexOf("打包·桌包工具预置") <
-        packageStages.indexOf("打包·桌面成品构建"),
+      packageStages.indexOf("打包·桌包工具预置") < packageStages.indexOf("打包·桌面成品构建"),
       "工具预置排到了真打包之后 —— 那一刻 bundler 已经自己去撞那条下载预算了",
     ).toBe(true);
 
-    const rows = pipelineLockAssignments(text).filter(
-      (r) => r.stagesRef === "*package_gates",
-    );
+    const rows = pipelineLockAssignments(text).filter((r) => r.stagesRef === "*package_gates");
     expect(
       rows.map((r) => r.event).sort(),
       "桌包档应有两个触发口：`crontab` 与 `web_trigger_package`（按钮在 `.cnb/web_trigger.yml`）",
@@ -2525,10 +2365,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 只扫 `script` 那一串，不扫整块：这一档的注释正当地要写出「不许带 `--grep`」这句话，
      * 把说明判成违规等于逼人删注释（与 PS 5.1 那条形制判据「注释里同形文本放过」同一条口径）。 */
     const script = stageScriptLine(text, "每日单元测试");
-    expect(
-      script,
-      "「每日单元测试」没有 `script` —— 那一格根本不会跑任何命令",
-    ).toBeTruthy();
+    expect(script, "「每日单元测试」没有 `script` —— 那一格根本不会跑任何命令").toBeTruthy();
     expect(
       script,
       "「每日单元测试」跑的应是**跑法脚本** —— 裸 vitest 的绿只落在日志里，" +
@@ -2542,18 +2379,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 所以这里判的不是风格 —— 加了 `--grep` 的那一跑会**绿着不记账**，
      * 而账面看起来与真跑过一模一样。 */
     for (const forbidden of ["--grep", "--coverage=false", "tests/"]) {
-      expect(
-        script,
-        `「每日单元测试」带了 ${forbidden} —— 那不是整档，跑绿也不记账`,
-      ).not.toContain(forbidden);
+      expect(script, `「每日单元测试」带了 ${forbidden} —— 那不是整档，跑绿也不记账`).not.toContain(
+        forbidden,
+      );
     }
     /* 预算必须**大于**脚本自己的墙钟预算：否则先被掐的是 stage，而那一刀不带
      * 「被预算砍 vs 判据红」的分流话术（`classifyOutcome`），读起来就像判据红。 */
     const minutes = stageBudgetMinutes(stageTimeouts(text).get("每日单元测试"));
-    expect(
-      minutes,
-      "「每日单元测试」没有 `timeout` 预算（一天的量级，卡死要早报）",
-    ).toBeTruthy();
+    expect(minutes, "「每日单元测试」没有 `timeout` 预算（一天的量级，卡死要早报）").toBeTruthy();
     expect(
       minutes * 60_000,
       `stage 预算必须大于 FULL_SUITE_TIMEOUT_MS（${FULL_SUITE_TIMEOUT_MS}ms）—— ` +
@@ -2565,10 +2398,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const text = readRegisteredConfig();
     const entry = "scripts/e2e-run.mjs";
     const script = stageScriptLine(text, "每日全量E2E");
-    expect(
-      script,
-      "「每日全量E2E」没有 `script` —— 那一格根本不会跑任何命令",
-    ).toBeTruthy();
+    expect(script, "「每日全量E2E」没有 `script` —— 那一格根本不会跑任何命令").toBeTruthy();
     expect(
       script,
       `「每日全量E2E」应点名 ${entry} —— 它是 \`FRESHNESS_TRACKS.e2e\` 现在唯一的执行者，` +
@@ -2583,10 +2413,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 的档 —— 与「这一档三个月没人跑」在账面上逐字同形。
      * 只扫 `script`：这一档的注释正当地要写出「不许带 `--grep`」这句话。 */
     for (const forbidden of ["--grep", "tests/", "e2e/"]) {
-      expect(
-        script,
-        `「每日全量E2E」带了 ${forbidden} —— 那不是整档，跑绿也不记账`,
-      ).not.toContain(forbidden);
+      expect(script, `「每日全量E2E」带了 ${forbidden} —— 那不是整档，跑绿也不记账`).not.toContain(
+        forbidden,
+      );
     }
     /* 顺序与产物前提**不在这里判**：`每日生产构建` / `每日浏览器安装` 必须排在前、
      * 以及这一格显式声明 `COMFY_E2E_SERVER: start`，都写在上面那条「E2E 已离开 PR」的
@@ -2701,10 +2530,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       const prScript = executableScriptLines(text, pr);
       const dailyEnv = stageEnvAssignments(text, daily);
       const prEnv = stageEnvAssignments(text, pr);
-      expect(
-        [...dailyScript, ...dailyEnv],
-        `定时那一跑里找不到「${daily}」的 script`,
-      ).toBeTruthy();
+      expect([...dailyScript, ...dailyEnv], `定时那一跑里找不到「${daily}」的 script`).toBeTruthy();
       expect(
         [...prScript, ...prEnv],
         `PR 那一跑里找不到「${pr}」的 script —— 镜像判据两边都要取得到，否则它是空转`,
@@ -2733,35 +2559,28 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     // 否则这条判据就成了恒红，而恒红的判据与没有判据在账面上同形。
     expect(checkPrOnlyEnvExceptions([], healthyPr, keys)).toBeNull();
     // ① 每日那一格被人补回了开关（这正是本次要挡回去的那一步）。
-    expect(
-      checkPrOnlyEnvExceptions(['COMFY_CI_SLOT: "1"'], healthyPr, keys),
-    ).toContain("每日那一格又写上了");
+    expect(checkPrOnlyEnvExceptions(['COMFY_CI_SLOT: "1"'], healthyPr, keys)).toContain(
+      "每日那一格又写上了",
+    );
     // ② 写成「关掉的开关」同样不行：它读起来像「这里本来就该有一行」。
-    expect(
-      checkPrOnlyEnvExceptions(['COMFY_CI_SLOT: "0"'], healthyPr, keys),
-    ).toContain("每日那一格又写上了");
+    expect(checkPrOnlyEnvExceptions(['COMFY_CI_SLOT: "0"'], healthyPr, keys)).toContain(
+      "每日那一格又写上了",
+    );
     // ③ PR 那一格被摘干净 ⇒ 名单过期，必须点名而不是静默放行。
     expect(checkPrOnlyEnvExceptions([], [], keys)).toContain("名单过期了");
     // ④ PR 那一格还在，但不再是「置着」的形状 ⇒ 例外被改成了「随便漂」。
-    expect(
-      checkPrOnlyEnvExceptions([], ['COMFY_CI_SLOT: "0"'], keys),
-    ).toContain("不再是「置着」的形状");
+    expect(checkPrOnlyEnvExceptions([], ['COMFY_CI_SLOT: "0"'], keys)).toContain(
+      "不再是「置着」的形状",
+    );
     // 同一个键写两遍（YAML 静默覆盖）也要被抓住。
     expect(
-      checkPrOnlyEnvExceptions(
-        [],
-        ['COMFY_CI_SLOT: "1"', 'COMFY_CI_SLOT: "0"'],
-        keys,
-      ),
+      checkPrOnlyEnvExceptions([], ['COMFY_CI_SLOT: "1"', 'COMFY_CI_SLOT: "0"'], keys),
     ).toContain("同一个键写两遍");
     // 名单为空时不误伤：形状检查一条都不该响。
     expect(checkPrOnlyEnvExceptions(["A: 1"], ["A: 1"], [])).toBeNull();
     // 剥行那一步只剥名单里的键，其余一字不动（否则「逐字相同」会被悄悄放宽）。
     expect(
-      dropPrOnlyEnvLines(
-        ['COMFY_CI_SLOT: "1"', 'PLAYWRIGHT_DOWNLOAD_HOST: "x"'],
-        keys,
-      ),
+      dropPrOnlyEnvLines(['COMFY_CI_SLOT: "1"', 'PLAYWRIGHT_DOWNLOAD_HOST: "x"'], keys),
     ).toEqual(['PLAYWRIGHT_DOWNLOAD_HOST: "x"']);
     expect(dropPrOnlyEnvLines(['B: "1"'], [])).toEqual(['B: "1"']);
     // 脚本行不会被误认成 env 赋值（`$enc=…` / `node …` 都没有 `KEY:` 那个形状）。
@@ -2783,10 +2602,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const text = readRegisteredConfig();
     const prOrder = registeredGateOrder(text);
     const dailyOrder = registeredDailyGateOrder(text);
-    expect(
-      prOrder.length,
-      "解析不出 COMFYAPP_CI_GATES —— 这条判据就没有对象了",
-    ).toBeGreaterThan(0);
+    expect(prOrder.length, "解析不出 COMFYAPP_CI_GATES —— 这条判据就没有对象了").toBeGreaterThan(0);
     expect(
       dailyOrder.length,
       "解析不出 COMFYAPP_CI_DAILY_GATES —— 这条判据就没有对象了",
@@ -2808,10 +2624,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         `每日档里取不到「${dailyName}」的 script —— 名字改了，还是整块没了`,
       ).toBeTruthy();
       const command = lines.join(" ");
-      expect(
-        command,
-        `「${dailyName}」点的入口不是 ${entry}：撤档不等于换判据`,
-      ).toContain(entry);
+      expect(command, `「${dailyName}」点的入口不是 ${entry}：撤档不等于换判据`).toContain(entry);
       if (flag !== "") {
         expect(
           command,
@@ -2833,10 +2646,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("每日链里必须有一格点的是 `ci-daily-failure-issue.mjs --no-block`，且排在最前", () => {
     const text = readRegisteredConfig();
     const lines = executableScriptLines(text, "每日失败立案");
-    expect(
-      lines,
-      "配置文件里没有「每日失败立案」这一格 ⇒ 自动立案没有执行者了",
-    ).toBeTruthy();
+    expect(lines, "配置文件里没有「每日失败立案」这一格 ⇒ 自动立案没有执行者了").toBeTruthy();
     expect(lines.join(" ")).toContain("scripts/ci-daily-failure-issue.mjs");
     expect(lines.join(" ")).toContain("--no-block");
     expect(
@@ -2856,13 +2666,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         "playwright.config.ts",
       ]),
     ).toEqual([".cnb.yml"]);
-    expect(ciConfigsAmong([".github/workflows"])).toEqual([
-      ".github/workflows",
-    ]);
+    expect(ciConfigsAmong([".github/workflows"])).toEqual([".github/workflows"]);
     // ② 反向锚点判据在缺文案时确实会红。
-    expect(missingAnchors("package.json", ["不可能出现的句子"])).toEqual([
-      "不可能出现的句子",
-    ]);
+    expect(missingAnchors("package.json", ["不可能出现的句子"])).toEqual(["不可能出现的句子"]);
     // ③ 形态契约真的会拒绝坏形态（#1229 那种顶层写 stages: 的）。
     const bad = "stages:\n  - name: x\n    script: echo hi\n";
     expect(CONFIG_SHAPE.filter((c) => c.mustMatch.test(bad)).length).toBe(0);
@@ -2877,9 +2683,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 后者不是宽容 —— 判据的说明里正当地会写出这些形状（那条 ⚠️ 就是），
      * 把说明判成违规等于逼人删注释。 */
     expect(
-      ps7OnlySyntaxIn(
-        "master:\n  push:\n    - script: |\n        $x = $o?.Source\n",
-      ),
+      ps7OnlySyntaxIn("master:\n  push:\n    - script: |\n        $x = $o?.Source\n"),
     ).toHaveLength(1);
     expect(
       ps7OnlySyntaxIn(
@@ -2887,16 +2691,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ),
     ).toEqual([]);
     // 块外的同形文本不许被算进来（缩进收口真在起作用）。
-    expect(
-      ps7OnlySyntaxIn(
-        "master:\n  name: a?.b\n    - script: |\n        $x = 1\n",
-      ),
-    ).toEqual([]);
+    expect(ps7OnlySyntaxIn("master:\n  name: a?.b\n    - script: |\n        $x = 1\n")).toEqual([]);
     expect(PS7_ONLY.length).toBeGreaterThanOrEqual(4);
     /* ⑦ stage 顺序判据与探测入口判据都要能红：喂进一份「单元测试 排在 Python 后面」
      * 的配置时必须点名，喂进**没有那个键**的配置时必须答「解析不出」。 */
-    const badOrder =
-      "x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      单元测试, Python 可用性\n";
+    const badOrder = "x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      单元测试, Python 可用性\n";
     const badOrderParsed = registeredGateOrder(badOrder);
     expect(badOrderParsed.indexOf("Python 可用性")).toBeGreaterThan(
       badOrderParsed.indexOf("单元测试"),
@@ -2907,45 +2706,29 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      *  · 注释形态那条对**行内 `#`** 与**行尾注释**都判得出来。 */
     const disabledFixture =
       "x:\n  env:\n    COMFYAPP_CI_DISABLED_GATES: >-\n      单元测试, 别的东西\n";
-    expect(registeredDisabledGates(disabledFixture)).toEqual([
-      "单元测试",
-      "别的东西",
-    ]);
+    expect(registeredDisabledGates(disabledFixture)).toEqual(["单元测试", "别的东西"]);
     expect(registeredDisabledGates("master:\n  push:\n    - x\n")).toEqual([]);
     // `GATES` 的内容不许被 `DISABLED_GATES` 的解析器收走（两个键的正则不能互相命中）。
     expect(
-      registeredDisabledGates(
-        "x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      单元测试\n",
-      ),
+      registeredDisabledGates("x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      单元测试\n"),
     ).toEqual([]);
     expect(
-      registeredGateOrder(
-        "x:\n  env:\n    COMFYAPP_CI_DISABLED_GATES: >-\n      单元测试\n",
-      ),
+      registeredGateOrder("x:\n  env:\n    COMFYAPP_CI_DISABLED_GATES: >-\n      单元测试\n"),
     ).toEqual([]);
     // 注释形态：整行被 `#` 注释掉才算「留了原文」；没注释的不算、名字不同的不算。
     expect(
-      stageKeptAsComment(
-        "x:\n  stages:\n  #   - name: 单元测试\n  #     script: x\n",
-        "单元测试",
-      ),
+      stageKeptAsComment("x:\n  stages:\n  #   - name: 单元测试\n  #     script: x\n", "单元测试"),
     ).toBe(true);
     expect(
-      stageKeptAsComment(
-        "x:\n  stages:\n  - name: 单元测试\n    script: x\n",
-        "单元测试",
-      ),
+      stageKeptAsComment("x:\n  stages:\n  - name: 单元测试\n    script: x\n", "单元测试"),
     ).toBe(false);
-    expect(
-      stageKeptAsComment("x:\n  stages:\n  #   - name: 别的\n", "单元测试"),
-    ).toBe(false);
+    expect(stageKeptAsComment("x:\n  stages:\n  #   - name: 别的\n", "单元测试")).toBe(false);
     /* ⑧ 预算与流水线锁两条判据都要能红：喂进不带 timeout 的 stage 块、
      * 喂进不带 lock 的锚点，都必须答「没有」。 */
     // 夹具按**真实缩进**写：`stages:` 的直接子项是 2 空格、键在 4 空格。
     const noBudget = "x:\n  stages:\n  - name: 单元测试\n    script: x\n";
     expect(stageTimeouts(noBudget).has("单元测试")).toBe(false);
-    const withBudget =
-      "x:\n  stages:\n  - name: 单元测试\n    script: x\n    timeout: 45m\n";
+    const withBudget = "x:\n  stages:\n  - name: 单元测试\n    script: x\n    timeout: 45m\n";
     expect(stageTimeouts(withBudget).get("单元测试")).toBe("45m");
     /* 子 Job 那一层（Job 级 `image:` 的容器格）：预算跟着 `image` 一起下移，
      * 而 stage 名照旧取**外层**那一个 —— 判据与账里用的都是它。 */
@@ -2956,9 +2739,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBe("30m");
     /* 更深的 `env:` 里出现 `timeout:` 不算（那是另一个东西）。 */
     expect(
-      stageTimeouts(
-        "x:\n  stages:\n  - name: a\n    env:\n      timeout: 99m\n",
-      ).has("a"),
+      stageTimeouts("x:\n  stages:\n  - name: a\n    env:\n      timeout: 99m\n").has("a"),
     ).toBe(false);
     // 同级下一项开始后，上一项的 timeout 不许被算到它头上。
     expect(
@@ -2967,9 +2748,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ).has("b"),
     ).toBe(false);
     expect(
-      hasPipelineLockCancelInProgress(
-        ".common: &common\n  runner:\n    namespace: group\n",
-      ),
+      hasPipelineLockCancelInProgress(".common: &common\n  runner:\n    namespace: group\n"),
     ).toBe(false);
     expect(
       hasPipelineLockCancelInProgress(
@@ -2991,15 +2770,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeNull();
     const keyFixture =
       ".common: &common\n  lock:\n    key: pr-$CNB_PULL_REQUEST_IID\n    cancel-in-progress: true\n";
-    expect(pipelineLockKeyTemplate(keyFixture)).toBe(
-      "pr-$CNB_PULL_REQUEST_IID",
-    );
+    expect(pipelineLockKeyTemplate(keyFixture)).toBe("pr-$CNB_PULL_REQUEST_IID");
     // 默认口径的那种写法（`$CNB_BRANCH`）也能被解析出来 —— 由调用方判它违规，
     // 不是靠「解析不出来」蒙过去。
     expect(
-      pipelineLockKeyTemplate(
-        ".common: &common\n  lock:\n    key: $CNB_BRANCH-质量门禁\n",
-      ),
+      pipelineLockKeyTemplate(".common: &common\n  lock:\n    key: $CNB_BRANCH-质量门禁\n"),
     ).toBe("$CNB_BRANCH-质量门禁");
     // 替换：两种花括号都认、无值替换成空串、不认识的变量按空串算。
     expect(resolveLockKey("a-$X-${Y}-$Z", { X: "1", Y: "2" })).toBe("a-1-2-");
@@ -3023,9 +2798,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(crontabEvents("master:\n  crontab:\n    - x\n")).toEqual([]);
     expect(crontabEvents("master:\n  schedule: 0 4 * * *\n")).toEqual([]);
     // 正确的形态认得出来，且把父分支键带出来（定时任务只认单一分支名）。
-    expect(
-      crontabEvents('master:\n  "crontab: 0 4 * * *":\n    - x\n'),
-    ).toEqual([
+    expect(crontabEvents('master:\n  "crontab: 0 4 * * *":\n    - x\n')).toEqual([
       { branch: "master", event: "crontab: 0 4 * * *", cron: "0 4 * * *" },
     ]);
     // ② 频率那三段的判据：每小时 / 一天多次 / 分钟也散开的形态，判定都必须是「不是单值」。
@@ -3046,20 +2819,14 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     }
     // ③ 清单解析器：键在 / 键不在 / 不误收 `GATES`（两个键的正则不能互相命中）。
     expect(
-      registeredDailyGateOrder(
-        "x:\n  env:\n    COMFYAPP_CI_DAILY_GATES: >-\n      每日生产构建\n",
-      ),
+      registeredDailyGateOrder("x:\n  env:\n    COMFYAPP_CI_DAILY_GATES: >-\n      每日生产构建\n"),
     ).toEqual(["每日生产构建"]);
     expect(registeredDailyGateOrder("master:\n  push:\n    - x\n")).toEqual([]);
     expect(
-      registeredDailyGateOrder(
-        "x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      每日生产构建\n",
-      ),
+      registeredDailyGateOrder("x:\n  env:\n    COMFYAPP_CI_GATES: >-\n      每日生产构建\n"),
     ).toEqual([]);
     expect(
-      registeredGateOrder(
-        "x:\n  env:\n    COMFYAPP_CI_DAILY_GATES: >-\n      每日生产构建\n",
-      ),
+      registeredGateOrder("x:\n  env:\n    COMFYAPP_CI_DAILY_GATES: >-\n      每日生产构建\n"),
     ).toEqual([]);
     /* ④ 「流水线里真的跑哪几格」：从 `name:` 之后按缩进收，别把停用行算进来。 */
     const fixture = [
@@ -3078,9 +2845,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "        - name: 别的格",
       "",
     ].join("\n");
-    expect(pipelineStageNames(fixture, "每日生产构建")).toEqual([
-      "每日生产构建",
-    ]);
+    expect(pipelineStageNames(fixture, "每日生产构建")).toEqual(["每日生产构建"]);
     expect(pipelineStageNames(fixture, "别的流水线")).toEqual(["别的格"]);
     expect(pipelineStageNames(fixture, "不存在的流水线")).toEqual([]);
     /* **引用形态**（`stages: *daily_gates`）：两个触发口共用一份清单之后，判据读得到的
@@ -3106,10 +2871,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "      stages: *daily_gates",
       "",
     ].join("\n");
-    expect(pipelineStageNames(aliased, "每日生产构建")).toEqual([
-      "每日安装依赖",
-      "每日全量E2E",
-    ]);
+    expect(pipelineStageNames(aliased, "每日生产构建")).toEqual(["每日安装依赖", "每日全量E2E"]);
     expect(
       pipelineStageNames(aliased, "每日档（手动触发）"),
       "两个触发口读出来不一样 —— 引用解析在某一侧走岔了",
@@ -3199,10 +2961,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
       for (const pair of oneshotPairs(target)) {
         const oneshotBody = stageBody(text, pair.oneshot);
         const dailyBody = stageBody(text, pair.daily);
-        expect(
-          oneshotBody,
-          `${pair.oneshot} 在配置里找不到那一项`,
-        ).not.toBeNull();
+        expect(oneshotBody, `${pair.oneshot} 在配置里找不到那一项`).not.toBeNull();
         expect(dailyBody, `${pair.daily} 在配置里找不到那一项`).not.toBeNull();
         expect(
           oneshotBody,
@@ -3236,8 +2995,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
   it("反向自检：四种坏形状都要被各自的判据点名，而现役形状一条都不许被抓", () => {
     const text = readRegisteredConfig();
     const e2e = ONESHOT_TARGETS.find((t) => t.gate.daily === "每日全量E2E");
-    if (!e2e)
-      throw new Error("注册表里没有「每日全量E2E」那一行，这条自检没有基准");
+    if (!e2e) throw new Error("注册表里没有「每日全量E2E」那一行，这条自检没有基准");
     const pipeline = e2e.pipelineWeb;
     const live = pipelineStageNames(text, pipeline);
 
@@ -3245,8 +3003,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
      * 「这一档根本没跑」，所以变异必须真的少一格）。 */
     const browserAt = text.indexOf("  - name: 单跑E2E·浏览器安装");
     const e2eAt = text.indexOf("  - name: 单跑E2E·全量E2E", browserAt);
-    if (browserAt < 0 || e2eAt < 0)
-      throw new Error("单跑E2E 那张锚点表里找不到浏览器/目标那两格");
+    if (browserAt < 0 || e2eAt < 0) throw new Error("单跑E2E 那张锚点表里找不到浏览器/目标那两格");
     const dropped = text.slice(0, browserAt) + text.slice(e2eAt);
     const droppedList = pipelineStageNames(dropped, pipeline);
     expect(droppedList, "① 漏一格必须让清单变短").not.toEqual(live);
@@ -3278,13 +3035,8 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     ).not.toBe(stageBody(text, "单跑E2E·同步数据库表结构"));
 
     /* ④ 名字撞车：把单跑那格改成每日的名字，由「不许重名」那条抓。 */
-    const collided = text.replace(
-      "  - name: 单跑E2E·安装依赖",
-      "  - name: 每日安装依赖",
-    );
-    expect(duplicatedStageNames(collided), "④ 重名必须被点名").toContain(
-      "每日安装依赖",
-    );
+    const collided = text.replace("  - name: 单跑E2E·安装依赖", "  - name: 每日安装依赖");
+    expect(duplicatedStageNames(collided), "④ 重名必须被点名").toContain("每日安装依赖");
 
     /* 现役形状：四条判据一条都不许抓到东西（否则上面的「会变」是自证的假象）。 */
     expect(live).toEqual(oneshotGates(e2e));
@@ -3295,9 +3047,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
 
     /* ⑤ 决定必须在规范正文里有原文（只长在配置里的决定等于没有决定）。 */
     expect(
-      missingAnchors("docs/standards/13-提交与-code-review.md", [
-        "单跑那一跑不是每日档的出勤",
-      ]),
+      missingAnchors("docs/standards/13-提交与-code-review.md", ["单跑那一跑不是每日档的出勤"]),
     ).toEqual([]);
   });
 });

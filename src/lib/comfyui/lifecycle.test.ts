@@ -51,9 +51,7 @@ vi.mock("./desktop-instance", () => ({
 vi.mock("./proc-detect", () => ({
   findPidForMainPy: vi.fn().mockResolvedValue(null),
   findPidListeningPort: vi.fn().mockResolvedValue(null),
-  findPidForMainPyDetailed: vi
-    .fn()
-    .mockResolvedValue({ pid: null, failed: false }),
+  findPidForMainPyDetailed: vi.fn().mockResolvedValue({ pid: null, failed: false }),
 }));
 vi.mock("~/lib/process/process-launch", () => ({
   spawnManaged: vi.fn(),
@@ -105,11 +103,7 @@ import {
   clearComfyManualStop,
   clearComfyAutoStartFailure,
 } from "./lifecycle";
-import {
-  findPidForMainPy,
-  findPidForMainPyDetailed,
-  findPidListeningPort,
-} from "./proc-detect";
+import { findPidForMainPy, findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 
 const autoStartSettings = {
@@ -270,10 +264,8 @@ describe("getComfyUiStatus — 状态三态组合", () => {
   });
 
   it("启动进行中时 starting=true、收尾后回 false（设置页据此禁用「启动 ComfyUI」）", async () => {
-    const { ensureComfyUiReady, getComfyUiStatus } =
-      await import("./lifecycle");
-    const { getExitPolicy } =
-      await import("../app-settings/app-settings.server");
+    const { ensureComfyUiReady, getComfyUiStatus } = await import("./lifecycle");
+    const { getExitPolicy } = await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("~/lib/process/process-launch");
     // 走保活（keepAlive）路径 + 进程探测永远找不到 main.py：启动会一直等到
     // timeoutMs 到点收尾，这段时间正好观察 starting 的 true → false 两端。
@@ -330,8 +322,7 @@ describe("getComfyUiStatus — 状态三态组合", () => {
   it("启动流程已收尾后，启动窗口按真实时间过期，不被轮询续期", async () => {
     // 先造一次「拉起过、随后失败收尾」的启动：保活路径 + 进程永远探不到 +
     // 250ms 超时收尾（与上面「启动进行中」用例同一手法，不会真起进程）。
-    const { getExitPolicy } =
-      await import("../app-settings/app-settings.server");
+    const { getExitPolicy } = await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("~/lib/process/process-launch");
     vi.mocked(getExitPolicy).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {
@@ -603,8 +594,7 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
 
     /* 造一个「启动进行中」的窗口：走保活路径 + 进程探测找不到 main.py，
      * 启动会一直等到 timeoutMs 到点，期间 starting 为真。 */
-    const { getExitPolicy } =
-      await import("../app-settings/app-settings.server");
+    const { getExitPolicy } = await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("~/lib/process/process-launch");
     const { resolveComfyLaunchPlan } = await import("./launch-path");
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
@@ -799,9 +789,7 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
       resetComfyUiStatus();
       const { resetComfyRuntimeSnapshot } = await import("./status");
       resetComfyRuntimeSnapshot();
-      vi.mocked(getSettingsSync).mockReturnValue(
-        /* SAFETY: 类型断言已复核 */ settings as never,
-      );
+      vi.mocked(getSettingsSync).mockReturnValue(/* SAFETY: 类型断言已复核 */ settings as never);
       expect((await ensureComfyUiReady({})).ok).toBe(false);
       /* 自动来源的两条 skip 分支都不该落窗口：窗口是给「拉起 → 就绪」那段
        * 空窗的缓冲，而这些分支连拉起都不做。 */
@@ -816,8 +804,7 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
     /* 路径存在、自动启动开着 → 判决是 launch，走进拉起后状态行在窗口内
      * 不落「未运行」（ISSUE #442 的原始诉求不能被这次修正推翻）。
      * 用「保活拉起 + 进程永远探不到 + 短超时」收尾，不会真起进程。 */
-    const { getExitPolicy } =
-      await import("../app-settings/app-settings.server");
+    const { getExitPolicy } = await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("~/lib/process/process-launch");
     vi.mocked(getExitPolicy).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ {

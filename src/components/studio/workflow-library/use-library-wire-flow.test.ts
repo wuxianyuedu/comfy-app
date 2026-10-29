@@ -9,10 +9,7 @@ import {
   handleInventoryOf,
   LAYOUT_SIZING,
 } from "./hooks/use-library-wire-flow";
-import {
-  deriveLibraryOutputCards,
-  deriveLibraryParamCards,
-} from "./workflow-library-param-cards";
+import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
 import {
   LIB_NODE_BACKDROP,
   LIB_NODE_HOST,
@@ -81,12 +78,7 @@ describe("deriveLibraryEdges — 单条线可单独选中 / 删除", () => {
 
   it("点选中的边（selectedIds）在 style 里注入高亮描边", () => {
     const selectedId = "libwire:param:size-width?size-width";
-    const edges = deriveLibraryEdges(
-      [inputWire],
-      [outputWire],
-      true,
-      new Set([selectedId]),
-    );
+    const edges = deriveLibraryEdges([inputWire], [outputWire], true, new Set([selectedId]));
     const selected = edges.find((e) => e.id === selectedId)!;
     expect(selected.style?.stroke).toBe("#c4b5fd");
     expect(selected.style?.strokeWidth).toBe(4);
@@ -148,8 +140,7 @@ describe("handleInventoryOf — 什么时候请 React Flow 重算落点", () => 
       type: "IMAGE",
     },
   };
-  const cards = () =>
-    deriveLibraryParamCards({ io, paramMap: null, mode: "T2I" });
+  const cards = () => deriveLibraryParamCards({ io, paramMap: null, mode: "T2I" });
   const outputs = () => deriveLibraryOutputCards({ io, mode: "T2I" });
 
   it("同一批口的新对象（纯重渲染）：清单不变，不发重算请求", () => {

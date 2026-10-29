@@ -15,10 +15,7 @@ import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
 import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
-import {
-  useMaterialLibrary,
-  type MaterialScope,
-} from "./hooks/use-material-library";
+import { useMaterialLibrary, type MaterialScope } from "./hooks/use-material-library";
 import type { MaterialItem } from "~/lib/media/materials-client";
 
 /* 对外类型再导出：历史消费方从本文件 import MaterialItem，保持 API 不变。 */
@@ -43,11 +40,7 @@ interface MaterialLibraryPanelProps {
  * 状态与网络在 hooks/use-material-library.ts + lib/materials-client.ts，
  * 本文件只渲染 + 上抛事件；对外 props 与导出名保持不变，消费方零改动。
  */
-export function MaterialLibraryPanel({
-  onClose,
-  projectId,
-  onUse,
-}: MaterialLibraryPanelProps) {
+export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibraryPanelProps) {
   const c = useMaterialLibrary({ projectId });
   /* 显示密度（网格/列表）是纯视觉偏好，与业务数据无关，留在视图层。 */
   const [display, setDisplay] = useState<DisplayMode>("grid");
@@ -77,9 +70,7 @@ export function MaterialLibraryPanel({
     <aside className="bg-panel border-border-strong flex h-full w-90 shrink-0 flex-col overflow-hidden border-l">
       {/* ── Header ── */}
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
-        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">
-          素材库
-        </h2>
+        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">素材库</h2>
         <Hint
           label={`素材保存在 ${ARTIFACT_ROOT_DIR}/materials 下，可直接把文件丢进对应分类目录`}
           accessibleName
@@ -116,9 +107,7 @@ export function MaterialLibraryPanel({
           下划线两层），两枚同高同基线。 */}
       <Tabs
         value={scope}
-        onValueChange={(value) =>
-          setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)
-        }
+        onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)}
         className="gap-0"
       >
         <TabsList
@@ -220,9 +209,7 @@ export function MaterialLibraryPanel({
       {/* ── Error banner ── */}
       {error && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
-          <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">
-            {error}
-          </span>
+          <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button
             variant="ghost"
             onClick={refresh}

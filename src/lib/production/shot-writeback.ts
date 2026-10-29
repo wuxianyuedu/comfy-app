@@ -13,19 +13,13 @@
 //
 // 单一写入者（§6.4）：只写生成态字段，编辑面（prompt/negative）仍是工坊写入面，这里不碰。
 // 放 src/lib/<domain>-client 层，视图/hook 不经手 fetch（对齐 §17 / 硬规则 10）。
-import {
-  fetchProduction,
-  pushProduction,
-} from "~/lib/production/production-client";
+import { fetchProduction, pushProduction } from "~/lib/production/production-client";
 import {
   applyShotGeneration,
   applyShotRedo,
   type ShotGenerationPatch,
 } from "~/lib/production/sync";
-import {
-  readWorkshopDraft,
-  writeWorkshopDraft,
-} from "~/lib/workshop/draft-store";
+import { readWorkshopDraft, writeWorkshopDraft } from "~/lib/workshop/draft-store";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
 import { fireAndForget } from "~/lib/async-action";
 import type { Shot } from "~/lib/workshop/types";
@@ -69,10 +63,7 @@ export async function recordCanvasShotGeneration(
 
 /** 单镜「退回让 AI 重做」（Phase 6 · P6-3b）：清空该镜产出、状态回 idle、rev 自增，
  *  作为「用户改过」的显式信号 —— run 规划器据此把该镜重新纳入待办。同样落草稿 + production 两处。 */
-export async function requestShotRedo(
-  projectId: string,
-  shotId: string,
-): Promise<void> {
+export async function requestShotRedo(projectId: string, shotId: string): Promise<void> {
   if (!projectId || !shotId) return;
 
   const draft = readWorkshopDraft(projectId);

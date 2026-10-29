@@ -50,9 +50,10 @@ const {
   spawnMock: vi.fn(),
   /** 让「取检出根」那一次 `realpath` 抛错的开关（探针在每次调用开头读它）。 */
   fsState: { failRoot: false },
-  probeMock: vi.fn<() => Promise<{ embeddable: boolean; reason: string }>>(
-    async () => ({ embeddable: true, reason: "ok" }),
-  ),
+  probeMock: vi.fn<() => Promise<{ embeddable: boolean; reason: string }>>(async () => ({
+    embeddable: true,
+    reason: "ok",
+  })),
   getSettingsMock: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({
     comfyuiPort: 8188,
     comfyuiPath: "",
@@ -62,14 +63,15 @@ const {
     comfyuiPath: "C:/ComfyUI",
     comfyuiAutoStart: true,
   })),
-  saveSettingsMock: vi.fn<
-    (partial: Record<string, unknown>) => Promise<Record<string, unknown>>
-  >(async (partial) => ({ comfyuiPort: 8188, ...partial })),
+  saveSettingsMock: vi.fn<(partial: Record<string, unknown>) => Promise<Record<string, unknown>>>(
+    async (partial) => ({ comfyuiPort: 8188, ...partial }),
+  ),
   clearManualStopMock: vi.fn<() => void>(),
   clearAutoStartFailureMock: vi.fn<() => void>(),
-  ensureReadyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(
-    async () => ({ ok: true, detail: "已就绪" }),
-  ),
+  ensureReadyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(async () => ({
+    ok: true,
+    detail: "已就绪",
+  })),
   statusMock: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({
     up: true,
     base: "http://127.0.0.1:8188",
@@ -79,9 +81,10 @@ const {
     port: null,
     via: "external",
   })),
-  openComfyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(
-    async () => ({ ok: true, detail: "已打开" }),
-  ),
+  openComfyMock: vi.fn<() => Promise<{ ok: boolean; detail: string }>>(async () => ({
+    ok: true,
+    detail: "已打开",
+  })),
   stopComfyMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
     ok: true,
   })),
@@ -90,9 +93,7 @@ const {
   })),
   /* 存储目录读盘在 `desktop-storage-paths.server` 里（它自己有用例），这里只判
    * 「用配置路径调它、非桌面如实返回 null」这条接线。 */
-  resolveStorageMock: vi.fn<(dir: string) => Promise<unknown>>(
-    async () => null,
-  ),
+  resolveStorageMock: vi.fn<(dir: string) => Promise<unknown>>(async () => null),
   studioProbeMock: vi.fn<(port: number) => Promise<boolean>>(async () => true),
   studioStartingMock: vi.fn<() => boolean>(() => false),
   studioEnsureMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
@@ -289,8 +290,7 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
       url: "https://example.com/out.mp4",
     });
     expect(res.ok).toBe(true);
-    const args = /* SAFETY: 类型断言已复核 */ spawnMock.mock
-      .calls[0]?.[1] as string[];
+    const args = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0]?.[1] as string[];
     expect(args.at(-1)).toBe("https://example.com/out.mp4");
   });
 
@@ -312,9 +312,9 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
   });
 
   it("连 URL 都不是的串 → BAD_REQUEST（与「合法但危险」是两个不同的出口）", async () => {
-    await expect(
-      createCaller(makeCtx()).openExternal({ url: "not a url" }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(createCaller(makeCtx()).openExternal({ url: "not a url" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
     expect(spawnMock).not.toHaveBeenCalled();
   });
 });
@@ -327,10 +327,7 @@ describe("setting.comfyEmbeddable", () => {
       base: "http://127.0.0.1:8188",
       hostOrigin: "http://127.0.0.1:3100",
     });
-    expect(probeMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8188",
-      "http://127.0.0.1:3100",
-    );
+    expect(probeMock).toHaveBeenCalledWith("http://127.0.0.1:8188", "http://127.0.0.1:3100");
     expect(res).toMatchObject({ embeddable: true });
     expect(res.target).toBeTruthy();
   });
@@ -340,15 +337,12 @@ describe("setting.comfyEmbeddable", () => {
       ["file:///C:/ComfyUI", "http://127.0.0.1:3100"],
       ["http://127.0.0.1:8188", "javascript:alert(1)"],
     ] as const,
-  )(
-    "输入层就拒非 http(s)（%j / %j），不发探测请求",
-    async ([base, hostOrigin]) => {
-      await expect(
-        createCaller(makeCtx()).comfyEmbeddable({ base, hostOrigin }),
-      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-      expect(probeMock).not.toHaveBeenCalled();
-    },
-  );
+  )("输入层就拒非 http(s)（%j / %j），不发探测请求", async ([base, hostOrigin]) => {
+    await expect(
+      createCaller(makeCtx()).comfyEmbeddable({ base, hostOrigin }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(probeMock).not.toHaveBeenCalled();
+  });
 
   it("不是 URL 的串同样被拦（`.url()` 那道闸还在）", async () => {
     await expect(
@@ -452,8 +446,7 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
     });
     expect(res.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock
-      .calls[0] as [string, string[]];
+    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [string, string[]];
     if (process.platform === "win32") {
       /* `/select,"<路径>"` 必须是**一个**参数：拆成两个时 explorer 会把含空格的
        * 路径截断，表现是「打开了资源管理器但什么都没选中」。 */
@@ -504,9 +497,9 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
   });
 
   it("空串入参 → zod 拦下（不给地基一个「打开空路径」的机会）", async () => {
-    await expect(
-      createCaller(makeCtx()).revealPath({ path: "" }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(createCaller(makeCtx()).revealPath({ path: "" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
     expect(spawnMock).not.toHaveBeenCalled();
   });
 });

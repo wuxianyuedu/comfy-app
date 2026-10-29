@@ -19,9 +19,7 @@ afterEach(() => {
 
 /** 取外框（两类都带 data-view-container，便于从 DOM 判形状，而不是靠读源码）。 */
 function frameOf(container: HTMLElement, kind: "document" | "workspace") {
-  const frame = container.querySelector<HTMLElement>(
-    `[data-view-container="${kind}"]`,
-  );
+  const frame = container.querySelector<HTMLElement>(`[data-view-container="${kind}"]`);
   if (!frame) throw new Error(`没渲染出 data-view-container="${kind}" 的外框`);
   return frame;
 }
@@ -77,31 +75,25 @@ describe("DocumentFrame（文档型）", () => {
       ["wide", "max-w-wide"],
       ["full", "max-w-none"],
     ] as const,
-  )(
-    "档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）",
-    ([width, cls]) => {
-      const { container } = render(
-        <DocumentFrame width={width}>
-          <p>内容</p>
-        </DocumentFrame>,
-      );
-      const column = container.querySelector<HTMLElement>(
-        '[data-view-container="document"] [class*="overflow-y-auto"] > div',
-      );
-      if (!column) throw new Error("没找到居中列");
-      expect(column.className).toContain(cls);
-      // 档位名互斥：同时出现两份就等于宽度又有了两个家。
-      const others = [
-        "max-w-narrow",
-        "max-w-medium",
-        "max-w-wide",
-        "max-w-none",
-      ].filter((name) => name !== cls);
-      for (const name of others) {
-        expect(column.className, `不该同时出现 ${name}`).not.toContain(name);
-      }
-    },
-  );
+  )("档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）", ([width, cls]) => {
+    const { container } = render(
+      <DocumentFrame width={width}>
+        <p>内容</p>
+      </DocumentFrame>,
+    );
+    const column = container.querySelector<HTMLElement>(
+      '[data-view-container="document"] [class*="overflow-y-auto"] > div',
+    );
+    if (!column) throw new Error("没找到居中列");
+    expect(column.className).toContain(cls);
+    // 档位名互斥：同时出现两份就等于宽度又有了两个家。
+    const others = ["max-w-narrow", "max-w-medium", "max-w-wide", "max-w-none"].filter(
+      (name) => name !== cls,
+    );
+    for (const name of others) {
+      expect(column.className, `不该同时出现 ${name}`).not.toContain(name);
+    }
+  });
 
   it("full 档位不封顶：内容吃满滚动区，等于不给宽度上限", () => {
     /* `max-w-none` 是这一档的**唯一**判据形态，别改成「干脆不写」：
@@ -166,9 +158,8 @@ describe("DocumentFrame（文档型）", () => {
     const scroller = frame.querySelector("[class*='overflow-y-auto']");
     // 同一父级下的前一个兄弟 —— 它不该被塞进居中列里。
     expect(
-      backdrop.compareDocumentPosition(
-        /* SAFETY: 类型断言已复核 */ scroller as Node,
-      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      backdrop.compareDocumentPosition(/* SAFETY: 类型断言已复核 */ scroller as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -193,9 +184,7 @@ describe("WorkspaceFrame（工作区型）", () => {
     expect(frame.className).toContain("h-full");
     expect(frame.className).toContain("overflow-hidden");
     // 容器自己不产生滚动层：内部哪一栏滚，是视图的事。
-    expect(frame.querySelectorAll("[class*='overflow-y-auto']")).toHaveLength(
-      0,
-    );
+    expect(frame.querySelectorAll("[class*='overflow-y-auto']")).toHaveLength(0);
   });
 
   it("不出现居中列与宽度档位（工作区型被限宽就是这次要修的那个病）", () => {

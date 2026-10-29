@@ -105,23 +105,13 @@ export interface WorkflowLibraryController {
   loadModelTags: () => void;
   handleUse: (id: string, meta?: { name: string; taskType: string }) => void;
   /** 持久化工作流类型（modes + defaultMode，defaultMode 回写 taskType）。 */
-  patchModes: (
-    id: string,
-    modes: string[],
-    defaultMode: string,
-  ) => Promise<void>;
+  patchModes: (id: string, modes: string[], defaultMode: string) => Promise<void>;
   /** 持久化模型标签绑定。 */
   patchModelTags: (id: string, names: string[]) => Promise<void>;
   /** 整体落库 workflowIO（详情预览的 seed「控件后行为」等参数级配置）。 */
-  patchWorkflowIO: (
-    id: string,
-    workflowIO: Record<string, unknown>,
-  ) => Promise<void>;
+  patchWorkflowIO: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
   /** 整体落库 paramMap（详情预览拖线改对外参数落点）。 */
-  patchParamMap: (
-    id: string,
-    paramMap: Record<string, unknown>,
-  ) => Promise<void>;
+  patchParamMap: (id: string, paramMap: Record<string, unknown>) => Promise<void>;
   handleDeleteClick: (id: string, name: string) => void;
   handleDownload: (id: string, name: string) => Promise<void>;
   handleResync: (id: string, name: string) => Promise<void>;
@@ -182,10 +172,7 @@ export function useWorkflowLibrary(
      * （取决于 throwOnError 配置），故这里只负责打日志 + 兜底触发一次重试，
      * 错误展示一律读 `listQ.error`。 */
     void listQ.refetch().catch((error: unknown) => {
-      console.warn(
-        "[WorkflowLibrary] 工作流列表拉取失败:",
-        errorMessage(error, "未知错误"),
-      );
+      console.warn("[WorkflowLibrary] 工作流列表拉取失败:", errorMessage(error, "未知错误"));
     });
   }, [listQ]);
 
@@ -298,10 +285,7 @@ export function useWorkflowLibrary(
     [workflows, localPending],
   );
 
-  const typeCounts = useMemo(
-    () => countByType(workflows, localPending),
-    [workflows, localPending],
-  );
+  const typeCounts = useMemo(() => countByType(workflows, localPending), [workflows, localPending]);
 
   const selectedRow = useMemo(
     () => workflows.find((workflow) => workflow.id === selectedId) ?? null,
@@ -317,9 +301,7 @@ export function useWorkflowLibrary(
   const resyncAction = useItemAction();
   /* 只写不读：载入中的标志目前只由 `useWorkflowActions` 的 finally 清理，
    * 视图尚未渲染它（保持本次「只搬不改」）。保留是为了不丢掉这条状态通道。 */
-  const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>({});
 
   const actions = useWorkflowActions({
     setDeleting,
@@ -348,10 +330,7 @@ export function useWorkflowLibrary(
     () => importState.setShowImport((value) => !value),
     [importState],
   );
-  const closeImport = useCallback(
-    () => importState.setShowImport(false),
-    [importState],
-  );
+  const closeImport = useCallback(() => importState.setShowImport(false), [importState]);
   const cancelDelete = useCallback(() => setPendingDelete(null), []);
 
   const handleUse = useCallback(
@@ -379,12 +358,8 @@ export function useWorkflowLibrary(
     const id = editingId;
     setEditingId(null);
     if (!id) return;
-    void queryClient.invalidateQueries(
-      trpc.workflow.detail.queryFilter({ id }),
-    );
-    void queryClient.invalidateQueries(
-      trpc.workflow.detailFull.queryFilter({ id }),
-    );
+    void queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
+    void queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
   }, [editingId, trpc, queryClient]);
 
   return {

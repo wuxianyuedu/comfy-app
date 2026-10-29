@@ -40,9 +40,7 @@ function toModelNames(raw: unknown): string[] {
       if (name === "") continue;
       const kind =
         typeof rec.kind === "string" &&
-        REMOTE_MODEL_KINDS.includes(
-          /* SAFETY: 类型断言已复核 */ rec.kind as RemoteModelKind,
-        )
+        REMOTE_MODEL_KINDS.includes(/* SAFETY: 类型断言已复核 */ rec.kind as RemoteModelKind)
           ? /* SAFETY: 类型断言已复核 */ (rec.kind as RemoteModelKind)
           : null;
       if (!isChatModel(kind)) continue;
@@ -96,13 +94,9 @@ export function useLLMConfig(): LLMConfigController {
        注意：远端候选仅取 chat 类型——图片/视频模型不能执行文本生成。 */
     const p = splitExtraModels(cfg.extraModels);
     /* 远端候选只收 chat（或 kind 缺省按 chat 处理）的模型。 */
-    const remoteNames = p.remoteEntries
-      .filter((e) => isChatModel(e.kind))
-      .map((e) => e.name);
+    const remoteNames = p.remoteEntries.filter((e) => isChatModel(e.kind)).map((e) => e.name);
     /* 远端生图模型（kind=image）单独一组，给定妆照等远端生图通道挑选。 */
-    const remoteImageNames = p.remoteEntries
-      .filter((e) => e.kind === "image")
-      .map((e) => e.name);
+    const remoteImageNames = p.remoteEntries.filter((e) => e.kind === "image").map((e) => e.name);
     /* 本地 Ollama 模型均通过 chat/completions 调用，天然可做文本任务。 */
     const local = p.localNames.slice();
     const remote = remoteNames.slice();
@@ -110,11 +104,7 @@ export function useLLMConfig(): LLMConfigController {
     /* 生效提供方：本机 Ollama 被存成「远端 API」（baseUrl 回环 + 无密钥）时按
        本地分组与展示——否则 ollama 模型在下拉/徽标里被挂成「远端」，可用性
        探测也走错通道（§1.1 口径与 describeFetchFailure / foldRemoteToLocal 一致）。 */
-    const effectiveProvider = effectiveProviderType(
-      cfg.provider,
-      cfg.baseUrl,
-      !!cfg.hasApiKey,
-    );
+    const effectiveProvider = effectiveProviderType(cfg.provider, cfg.baseUrl, !!cfg.hasApiKey);
     /* 兜底：当前生效主模型不在候选里时，按生效提供方归入对应组，保证下拉总能选它。
        明确是远端 image/video 类型的主模型不收入文本候选（避免误选到生成任务）。 */
     if (model && !local.includes(model) && !remote.includes(model)) {
@@ -174,11 +164,7 @@ export function useLLMConfigSave(): LLMConfigSaveController {
         hasApiKey: !!cfg.hasApiKey,
         // 与 useLLMConfig 同口径：本机 ollama 误存成「远端」时，保存后的
         // 视图配置也要按生效提供方展示，否则徽标/页脚闪回「远端」。
-        provider: effectiveProviderType(
-          cfg.provider,
-          cfg.baseUrl,
-          !!cfg.hasApiKey,
-        ),
+        provider: effectiveProviderType(cfg.provider, cfg.baseUrl, !!cfg.hasApiKey),
         extraModels: toModelNames(rawExtra),
         temperatureByTask: cfg.temperatureByTask ?? undefined,
       };

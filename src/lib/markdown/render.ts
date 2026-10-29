@@ -57,9 +57,7 @@ export function markdownToHtml(text: string): string {
    *  断言失败（marked 改了返回类型契约）时宁可炸在渲染期，也不要静默插入
    *  一个 `[object Promise]`。 */
   if (typeof parsed !== "string") {
-    throw new TypeError(
-      "markdown/render：marked 返回了非字符串（async 选项被改动？）",
-    );
+    throw new TypeError("markdown/render：marked 返回了非字符串（async 选项被改动？）");
   }
   return applyElementStyles(sanitizeHtml(parsed));
 }

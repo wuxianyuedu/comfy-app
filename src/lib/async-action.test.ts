@@ -20,19 +20,17 @@ describe("toActionResult", () => {
       ok: true,
       detail: "兜底",
     });
-    expect(
-      toActionResult({ ok: false, detail: "服务端说的原因" }, "兜底"),
-    ).toEqual({ ok: false, detail: "服务端说的原因" });
+    expect(toActionResult({ ok: false, detail: "服务端说的原因" }, "兜底")).toEqual({
+      ok: false,
+      detail: "服务端说的原因",
+    });
   });
 
   it("`error` 与 `detail` 都是可读文案的来源（先 detail 后 error）", () => {
-    expect(
-      toActionResult({ ok: false, error: "网络错误" }, "兜底").detail,
-    ).toBe("网络错误");
-    expect(
-      toActionResult({ ok: false, detail: "详情", error: "错误" }, "兜底")
-        .detail,
-    ).toBe("详情");
+    expect(toActionResult({ ok: false, error: "网络错误" }, "兜底").detail).toBe("网络错误");
+    expect(toActionResult({ ok: false, detail: "详情", error: "错误" }, "兜底").detail).toBe(
+      "详情",
+    );
   });
 
   it("void / null / undefined 视为成功（tRPC 不抛即成功）", () => {
@@ -107,8 +105,7 @@ describe("runAsyncAction", () => {
       { report, failureText: "保存失败" },
     );
     expect(r.ok).toBe(false);
-    const [kind, detail] = /* SAFETY: 类型断言已复核 */ report.mock
-      .calls[0] as [string, string];
+    const [kind, detail] = /* SAFETY: 类型断言已复核 */ report.mock.calls[0] as [string, string];
     expect(kind).toBe("err");
     /* `errorMessage` 把网络层原文翻译成人话（`~/lib/error-message`）。 */
     expect(detail).toContain("应用服务");
@@ -142,13 +139,10 @@ describe("runAsyncAction", () => {
 
   it("`{ok:false}` 的不抛返回也报失败，并用服务端给的 detail", async () => {
     const report = vi.fn();
-    const r = await runAsyncAction(
-      async () => ({ ok: false, detail: "路径不存在" }),
-      {
-        report,
-        failureText: "打开目录失败",
-      },
-    );
+    const r = await runAsyncAction(async () => ({ ok: false, detail: "路径不存在" }), {
+      report,
+      failureText: "打开目录失败",
+    });
     expect(r.ok).toBe(false);
     expect(report).toHaveBeenCalledWith("err", "路径不存在");
   });
@@ -213,8 +207,7 @@ describe("runAsyncAction", () => {
 
 describe("fireAndForget", () => {
   /** 冲刷 Promise 微任务队列，让 `.catch` 里的分支跑完。 */
-  const flushMicrotasks = () =>
-    new Promise((resolve) => setTimeout(resolve, 0));
+  const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it("成功的 promise：onError 不被调用、也不向 caller 返回任何东西（不制造 caller 侧的 unhandledrejection）", async () => {
     const onError = vi.fn();

@@ -15,14 +15,8 @@ import {
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "~/components/studio/workflow-io";
-import {
-  type CanvasNodeData,
-  defaultData,
-} from "~/lib/project-canvas/canvas-types";
-import {
-  makeNodeId,
-  placeCanvasNode,
-} from "~/lib/project-canvas/canvas-helpers";
+import { type CanvasNodeData, defaultData } from "~/lib/project-canvas/canvas-types";
+import { makeNodeId, placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 import { beginStaleRun } from "~/lib/stale-run";
 import {
   importOutputAsInput,
@@ -34,10 +28,7 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { setActiveTaskId } from "~/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { buildCanvasGeneratePayload } from "~/components/studio/project-canvas/CanvasNode/generate-payload";
-import {
-  parseGenerateInput,
-  type GenerateInput,
-} from "~/lib/workflow/workflow-generate-input";
+import { parseGenerateInput, type GenerateInput } from "~/lib/workflow/workflow-generate-input";
 import { errorMessage } from "~/lib/error-message";
 
 export interface UseGenerateArgs {
@@ -108,8 +99,7 @@ export function useGenerate({
           guard.commit(() =>
             patch({
               status: "error",
-              error:
-                t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
+              error: t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
               progress: 0,
             }),
           );
@@ -130,8 +120,7 @@ export function useGenerate({
     // ── 用户上传的工作流节点：跑选中的 WorkflowTemplate ──
     if (
       d.kind === "workflow" ||
-      ((d.kind === "image" || d.kind === "video" || d.kind === "picture") &&
-        d.workflowId)
+      ((d.kind === "image" || d.kind === "video" || d.kind === "picture") && d.workflowId)
     ) {
       if (!d.workflowId) {
         patch({ error: "请先选择工作流", status: "error" });
@@ -156,9 +145,7 @@ export function useGenerate({
         const taskId = await startGenerate(payload);
         patch({ taskId });
         setActiveTaskId(taskId, id);
-        const result = await pollTask(taskId, undefined, (progress) =>
-          patch({ progress }),
-        );
+        const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
         if (isTaskSuccess(result)) {
           // picture 节点 = 图片资产本身，生成结果直接
           //  写回本节点 mediaPath（ContentAssetBody 据此预览），不另起下游节点。
@@ -194,12 +181,9 @@ export function useGenerate({
              * 所以走出口的 `flowPosition` 那一支（坐标本身已在画布坐标系里）。 */
             const cur = getNode(id);
             const base = cur?.position ?? { x: 0, y: 0 };
-            const isVideoOut =
-              outputTargetKind(wfIO ?? undefined, d.workflowTaskType) ===
-              "video";
+            const isVideoOut = outputTargetKind(wfIO ?? undefined, d.workflowTaskType) === "video";
             // 主输出 ioKey（自动连线用，必须与该节点渲染的 output 句柄 id 一致）
-            const outIoKey =
-              splitWorkflowIO(wfIO ?? undefined).outputs[0]?.ioKey ?? "output";
+            const outIoKey = splitWorkflowIO(wfIO ?? undefined).outputs[0]?.ioKey ?? "output";
             let imported: string | null = null;
             if (!isVideoOut && result.mediaType !== "video") {
               try {
@@ -317,9 +301,7 @@ export function useGenerate({
       const taskId = await startGenerate(parsed.input);
       patch({ taskId });
       setActiveTaskId(taskId, id);
-      const result = await pollTask(taskId, undefined, (progress) =>
-        patch({ progress }),
-      );
+      const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
       if (isTaskSuccess(result)) {
         patch({
           status: "done",

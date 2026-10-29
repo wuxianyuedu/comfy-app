@@ -55,13 +55,11 @@ vi.mock("fs", () => ({
       disk.writeFile.push(p);
     },
     unlink: async (p: string) => {
-      if (!fileStats.has(p))
-        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!fileStats.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       disk.unlink.push(p);
     },
     access: async (p: string) => {
-      if (!fileStats.has(p))
-        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!fileStats.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     },
   },
 }));
@@ -75,11 +73,7 @@ vi.mock("~/server/auth/request-user", () => ({
 
 import { DELETE, GET, POST } from "./route";
 import { materialsRoot, SHARED_SCOPE } from "~/lib/media/materials";
-import {
-  getTestDb,
-  seedProject,
-  seedUser,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedProject, seedUser } from "../../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
 const ROOT = materialsRoot();
@@ -87,10 +81,7 @@ const nameOf = (id: string) => id.split("/").pop() ?? id;
 
 /** handler 只要 `req.url` 与 `formData()`，用真 Request 顶替 NextRequest。 */
 function reqOf(url: string, init?: RequestInit): NextRequest {
-  return /* SAFETY: 类型断言已复核 */ new Request(
-    url,
-    init,
-  ) as unknown as NextRequest;
+  return /* SAFETY: 类型断言已复核 */ new Request(url, init) as unknown as NextRequest;
 }
 
 function put(scope: string, folder: string, name: string): void {
@@ -132,8 +123,7 @@ function uploadForm(init: {
   return form;
 }
 
-const postWith = (form: FormData) =>
-  POST(reqOf(urlOf(""), { method: "POST", body: form }));
+const postWith = (form: FormData) => POST(reqOf(urlOf(""), { method: "POST", body: form }));
 
 beforeEach(() => {
   tdb.$reset();
@@ -165,10 +155,7 @@ describe("GET /api/materials —— 读侧归属", () => {
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       items: { id: string }[];
     };
-    expect(body.items.map((i) => nameOf(i.id))).toEqual([
-      "mine.png",
-      "shared.png",
-    ]);
+    expect(body.items.map((i) => nameOf(i.id))).toEqual(["mine.png", "shared.png"]);
   });
 
   it("别人的项目 → 与「没素材」同形（不给探测项目 id 用）", async () => {
@@ -203,9 +190,7 @@ describe("GET /api/materials —— 读侧归属", () => {
   });
 
   it("未知分类 → 400（分类是枚举，不是路径片段）", async () => {
-    expect(
-      (await GET(reqOf(urlOf("?projectId=proj-a&folder=../docs")))).status,
-    ).toBe(400);
+    expect((await GET(reqOf(urlOf("?projectId=proj-a&folder=../docs")))).status).toBe(400);
   });
 
   it("库里没有的项目目录仍可写可见（画布镜像是尽力而为，别把正常流程堵死）", async () => {
@@ -223,15 +208,11 @@ describe("POST /api/materials —— 上传", () => {
       uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }),
     );
     expect(res.status).toBe(200);
-    expect(disk.writeFile).toEqual([
-      path.join(ROOT, "proj-a", "docs", "note.txt"),
-    ]);
+    expect(disk.writeFile).toEqual([path.join(ROOT, "proj-a", "docs", "note.txt")]);
   });
 
   it("写别人的项目 → 404，且 mkdir / writeFile 都没发生", async () => {
-    const res = await postWith(
-      uploadForm({ projectId: "proj-b", folder: "docs", name: "x.txt" }),
-    );
+    const res = await postWith(uploadForm({ projectId: "proj-b", folder: "docs", name: "x.txt" }));
     expect(res.status).toBe(404);
     expect(disk.mkdir).toEqual([]);
     expect(disk.writeFile).toEqual([]);
@@ -239,25 +220,15 @@ describe("POST /api/materials —— 上传", () => {
 
   it("shared=true 落到共享区（不设归属）", async () => {
     expect(
-      (
-        await postWith(
-          uploadForm({ shared: "true", folder: "docs", name: "s.txt" }),
-        )
-      ).status,
+      (await postWith(uploadForm({ shared: "true", folder: "docs", name: "s.txt" }))).status,
     ).toBe(200);
-    expect(disk.writeFile[0]).toBe(
-      path.join(ROOT, SHARED_SCOPE, "docs", "s.txt"),
-    );
+    expect(disk.writeFile[0]).toBe(path.join(ROOT, SHARED_SCOPE, "docs", "s.txt"));
   });
 
   it("重名不覆盖：追加 -1（同名上传不该把用户的旧文件冲掉）", async () => {
     put("proj-a", "docs", "note.txt");
-    await postWith(
-      uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }),
-    );
-    expect(disk.writeFile).toEqual([
-      path.join(ROOT, "proj-a", "docs", "note-1.txt"),
-    ]);
+    await postWith(uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }));
+    expect(disk.writeFile).toEqual([path.join(ROOT, "proj-a", "docs", "note-1.txt")]);
   });
 
   it("坏 MIME / 缺分类 / 缺 projectId：各自一个 400，且都不落盘", async () => {
@@ -305,9 +276,7 @@ describe("POST /api/materials —— 上传", () => {
         name: "..\\..\\evil.txt",
       }),
     );
-    expect(disk.writeFile[0]).toBe(
-      path.join(ROOT, "proj-a", "docs", "evil.txt"),
-    );
+    expect(disk.writeFile[0]).toBe(path.join(ROOT, "proj-a", "docs", "evil.txt"));
   });
 });
 
@@ -319,17 +288,13 @@ describe("DELETE /api/materials —— 删除侧归属", () => {
   });
 
   it("删别人项目里那一格 → 404，`fs.unlink` 一次都没被调用", async () => {
-    expect(
-      (await DELETE(reqOf(urlOf("?id=proj-b/ref/secret.png")))).status,
-    ).toBe(404);
+    expect((await DELETE(reqOf(urlOf("?id=proj-b/ref/secret.png")))).status).toBe(404);
     expect(disk.unlink).toEqual([]);
   });
 
   it("id 形状不对（段数 / 分类 / scope）→ 400，什么都不删", async () => {
     for (const id of ["", "a/b", "proj-a/../x.png", "proj-b/nope/mine.png"]) {
-      expect(
-        (await DELETE(reqOf(urlOf(`?id=${encodeURIComponent(id)}`)))).status,
-      ).toBe(400);
+      expect((await DELETE(reqOf(urlOf(`?id=${encodeURIComponent(id)}`)))).status).toBe(400);
     }
     expect(disk.unlink).toEqual([]);
   });

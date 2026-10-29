@@ -80,9 +80,7 @@ function launcherTargetNames(): string[] {
   // 字面量（`root` 与 `"src-tauri"` 是前缀，不是判据对象）。
   return [...block.matchAll(/path\.join\(([^)]*)\)/g)]
     .map((m) => {
-      const parts = [...(m[1] ?? "").matchAll(/"([^"]+)"/g)].map(
-        (q) => q[1] ?? "",
-      );
+      const parts = [...(m[1] ?? "").matchAll(/"([^"]+)"/g)].map((q) => q[1] ?? "");
       const last = parts[parts.length - 1] ?? "";
       return last.replace(/^src-tauri\//, "").replace(/\/$/, "");
     })
@@ -93,11 +91,7 @@ function launcherTargetNames(): string[] {
 describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () => {
   it("没碰壳的改动：两问都是 false，这一步什么都不做", () => {
     expect(
-      decide([
-        "src/lib/x.ts",
-        "docs/standards/11-测试与可观测性.md",
-        "src-tauri/icons/a.png",
-      ]),
+      decide(["src/lib/x.ts", "docs/standards/11-测试与可观测性.md", "src-tauri/icons/a.png"]),
     ).toEqual({ touchesShell: false, needsCargoTest: false });
   });
 
@@ -206,16 +200,14 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
   const temps: string[] = [];
 
   afterEach(() => {
-    for (const dir of temps.splice(0))
-      rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
   /** 建一个临时仓库；返仓库根。`git` 用户名/邮箱按仓库级设，不污染全局。 */
   function initRepo(): string {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-"));
     temps.push(dir);
-    const git = (...args: string[]) =>
-      execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
+    const git = (...args: string[]) => execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
     git("init", "-q", "-b", "main");
     git("config", "user.email", "t@t.t");
     git("config", "user.name", "t");
@@ -273,13 +265,9 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
     execFileSync("git", ["-C", dir, "checkout", "-q", "main"], {
       stdio: "pipe",
     });
-    execFileSync(
-      "git",
-      ["-C", dir, "merge", "--no-commit", "--no-edit", "other"],
-      {
-        stdio: "pipe",
-      },
-    );
+    execFileSync("git", ["-C", dir, "merge", "--no-commit", "--no-edit", "other"], {
+      stdio: "pipe",
+    });
 
     const staged = [
       "src-tauri/splash-assets/index.html", // 采纳自 other
@@ -321,10 +309,7 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
     write(dir, "src-tauri/splash-assets/index.html", "resolved-by-me");
     execFileSync("git", ["-C", dir, "add", "-A"], { stdio: "pipe" });
 
-    const kept = dropAdoptedShellInputs(
-      ["src-tauri/splash-assets/index.html"],
-      dir,
-    );
+    const kept = dropAdoptedShellInputs(["src-tauri/splash-assets/index.html"], dir);
     expect(kept).toEqual(["src-tauri/splash-assets/index.html"]);
     expect(decide(kept).touchesShell).toBe(true);
   });
@@ -345,8 +330,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   const temps: string[] = [];
 
   afterEach(() => {
-    for (const dir of temps.splice(0))
-      rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
   const HOUR = 3_600_000;
@@ -375,9 +359,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       utimesSync(full, inputTime, inputTime);
     }
     if (exe !== "none") {
-      const exeTime = new Date(
-        inputTime.getTime() + (exe === "newer" ? HOUR : -HOUR),
-      );
+      const exeTime = new Date(inputTime.getTime() + (exe === "newer" ? HOUR : -HOUR));
       for (const name of ["app.exe", "app"]) {
         const full = path.join(dir, "src-tauri", "target", "release", name);
         mkdirSync(path.dirname(full), { recursive: true });
@@ -403,10 +385,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     const dir = shellFixture("newer");
     const r = runGate({ staged: ["src-tauri/tauri.conf.json"], root: dir });
     expect(r.exitCode).toBe(0);
-    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
-      "cargo:skipped",
-      "freshness:ok",
-    ]);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual(["cargo:skipped", "freshness:ok"]);
   });
 
   /**
@@ -450,8 +429,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   describe("cargo 寻址：PATH 优先、工具链默认安装位兜底（ISSUE #1555）", () => {
     const temps: string[] = [];
     afterEach(() => {
-      for (const dir of temps.splice(0))
-        rmSync(dir, { recursive: true, force: true });
+      for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
     });
 
     /**
@@ -490,7 +468,8 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         return findCargo();
       } finally {
         for (const [k, v] of Object.entries(saved)) {
-          if (v === undefined) delete process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved];
+          if (v === undefined)
+            delete process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved];
           else process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved] = v;
         }
       }
@@ -502,9 +481,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
 
     it("PATH 上没有、~/.cargo/bin 有：回退到它（容器镜像的常态）", () => {
       const home = fakeHome([`.cargo/bin/${cargoName}`]);
-      expect(findCargoIn(home)).toBe(
-        path.join(home, ".cargo", "bin", cargoName),
-      );
+      expect(findCargoIn(home)).toBe(path.join(home, ".cargo", "bin", cargoName));
     });
 
     it("PATH 与 ~/.cargo/bin 都没有、~/.rustup/toolchains 有：再回退一层", () => {
@@ -620,8 +597,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
   describe("CARGO_HOME 的落点要真的进判据（ISSUE #2293）", () => {
     const temps: string[] = [];
     afterEach(() => {
-      for (const dir of temps.splice(0))
-        rmSync(dir, { recursive: true, force: true });
+      for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
     });
 
     /** 造一个假 `CARGO_HOME`（里面放 `bin/cargo`），返回它的绝对路径。 */
@@ -653,9 +629,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         `${cargoHome}${path.sep}`,
         `${cargoHome}${path.sep}${path.sep}`,
       ]) {
-        expect(findCargo({ env: { PATH: "", CARGO_HOME: value } })).toBe(
-          expectPath,
-        );
+        expect(findCargo({ env: { PATH: "", CARGO_HOME: value } })).toBe(expectPath);
       }
     });
 
@@ -678,9 +652,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       expect(got.path, JSON.stringify(got.probes)).toBeNull();
       const wheres = got.probes.map((p) => p.where);
       expect(wheres[0]).toBe("PATH");
-      expect(got.probes.some((p) => p.where.startsWith("CARGO_HOME/bin"))).toBe(
-        true,
-      );
+      expect(got.probes.some((p) => p.where.startsWith("CARGO_HOME/bin"))).toBe(true);
       expect(wheres).toContain("~/.cargo/bin");
       // 每一处都要留下结论（命中只在 path 非 null 时出现）
       expect(got.probes.every((p) => p.result !== "hit")).toBe(true);
@@ -722,19 +694,16 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       const missing = findCargoLookup({
         env: { PATH: "", CARGO_HOME: path.join(tmpdir(), "没有这个目录-xyz") },
       });
-      expect(
-        missing.probes.find((p) => p.where.startsWith("CARGO_HOME/bin"))
-          ?.result,
-      ).toBe("absent");
+      expect(missing.probes.find((p) => p.where.startsWith("CARGO_HOME/bin"))?.result).toBe(
+        "absent",
+      );
       /* `CARGO_HOME/bin` 在 ⇒ empty（目录在、没有那个名字）；`bin` 都不在 ⇒ absent。
        * 两句的下一动作不同：前者去装工具链，后者说明 `CARGO_HOME` 的值指错了。 */
       mkdirSync(path.join(empty, "bin"), { recursive: true });
       const emptyHome = findCargoLookup({
         env: { PATH: "", CARGO_HOME: empty },
       });
-      const probe = emptyHome.probes.find((p) =>
-        p.where.startsWith("CARGO_HOME/bin"),
-      );
+      const probe = emptyHome.probes.find((p) => p.where.startsWith("CARGO_HOME/bin"));
       expect(probe?.result).toBe("empty");
       expect(probe?.detail).toContain(empty);
     });
@@ -758,8 +727,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     describe("「装在哪」读 rustup 记着的事实与用户家目录，不只读环境变量（ISSUE #2374）", () => {
       const temps: string[] = [];
       afterEach(() => {
-        for (const dir of temps.splice(0))
-          rmSync(dir, { recursive: true, force: true });
+        for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
       });
 
       /** 造一个「`cargo` 就装在这儿」的目录，返回它的上一级（= `cargo_home`）。 */
@@ -792,9 +760,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         });
         expect(got.path).toBe(path.join(cargoHome, "bin", cargoName));
         const hit = got.probes.find((p) => p.result === "hit");
-        expect(hit?.where.startsWith("rustup 记着的 cargo_home/bin")).toBe(
-          true,
-        );
+        expect(hit?.where.startsWith("rustup 记着的 cargo_home/bin")).toBe(true);
       });
 
       it("RUSTUP_HOME 没设 ⇒ 读 ~/.rustup/settings.toml（默认落点照样算数）", () => {
@@ -818,10 +784,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
         const profile = tempDir("shell-gate-profile-");
         temps.push(profile);
         mkdirSync(path.join(profile, ".cargo", "bin"), { recursive: true });
-        writeFileSync(
-          path.join(profile, ".cargo", "bin", cargoName),
-          "#!/bin/sh\nexit 0\n",
-        );
+        writeFileSync(path.join(profile, ".cargo", "bin", cargoName), "#!/bin/sh\nexit 0\n");
         const other = tempDir("shell-gate-homedir-");
         temps.push(other);
         expect(
@@ -835,24 +798,15 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       it("settings.toml 读不到 / 没那一行 / 值是空串 ⇒ 这一处不探（判据一个字不改）", () => {
         const fakeUserHome = tempDir("shell-gate-user-home3-");
         temps.push(fakeUserHome);
-        expect(
-          rustupCargoHomeValue({ env: {}, home: fakeUserHome }),
-        ).toBeNull();
+        expect(rustupCargoHomeValue({ env: {}, home: fakeUserHome })).toBeNull();
         mkdirSync(path.join(fakeUserHome, ".rustup"), { recursive: true });
         writeFileSync(
           path.join(fakeUserHome, ".rustup", "settings.toml"),
           'default_toolchain = "stable"\n',
         );
-        expect(
-          rustupCargoHomeValue({ env: {}, home: fakeUserHome }),
-        ).toBeNull();
-        writeFileSync(
-          path.join(fakeUserHome, ".rustup", "settings.toml"),
-          'cargo_home = ""\n',
-        );
-        expect(
-          rustupCargoHomeValue({ env: {}, home: fakeUserHome }),
-        ).toBeNull();
+        expect(rustupCargoHomeValue({ env: {}, home: fakeUserHome })).toBeNull();
+        writeFileSync(path.join(fakeUserHome, ".rustup", "settings.toml"), 'cargo_home = ""\n');
+        expect(rustupCargoHomeValue({ env: {}, home: fakeUserHome })).toBeNull();
       });
 
       it("同一个家目录只探一次（取证那行不许把同一段路径念两遍）", () => {
@@ -885,8 +839,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       });
       expect(r.exitCode).toBe(2);
       expect(r.steps[0]?.kind).toBe("cargo");
-      const probes =
-        r.steps[0]?.kind === "cargo" ? r.steps[0].probes : undefined;
+      const probes = r.steps[0]?.kind === "cargo" ? r.steps[0].probes : undefined;
       expect(probes?.map((p) => p.where)).toEqual(["PATH", "CARGO_HOME/bin"]);
     });
   });
@@ -899,9 +852,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       cargoRunner: () => null,
     });
     expect(r.exitCode).toBe(1);
-    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
-      "cargo:missing",
-    ]);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual(["cargo:missing"]);
   });
 
   it("改了 Rust 而 cargo 退非 0：把那个码原样交出去，且**不再往下判时效**", () => {
@@ -926,10 +877,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       cargoRunner: () => ({ code: 0 }),
     });
     expect(r.exitCode).toBe(0);
-    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
-      "cargo:ok",
-      "freshness:ok",
-    ]);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual(["cargo:ok", "freshness:ok"]);
   });
 
   it("检出里压根没有壳二进制：退 1 并给全重编命令（不是「跳过」）", () => {
@@ -938,16 +886,12 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     expect(r.exitCode).toBe(1);
     const problem = freshnessOf(r);
     expect(problem).toContain("根本没有编出来的壳");
-    expect(problem).toContain(
-      "cargo build --release --features custom-protocol",
-    );
+    expect(problem).toContain("cargo build --release --features custom-protocol");
   });
 
   it("freshnessProblem 单独可判：newer 给 null、older 给话术（不靠 runGate 顺带）", () => {
     expect(freshnessProblem(shellFixture("newer"))).toBeNull();
-    expect(freshnessProblem(shellFixture("older")) ?? "").toContain(
-      "二进制仍是旧的",
-    );
+    expect(freshnessProblem(shellFixture("older")) ?? "").toContain("二进制仍是旧的");
   });
 
   it("CLI 的退出码就是 runGate 的退出码（传导不能被 print 语句吃掉）", () => {
@@ -1000,11 +944,7 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
   it("基线取不到 ⇒ 退 2（没跑起来），且说清是「没跑起来」而不是「判红」", () => {
     const cli = spawnSync(
       process.execPath,
-      [
-        path.join(ROOT, "scripts", "shell-gate.mjs"),
-        "--base",
-        "no-such-ref-xyz",
-      ],
+      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--base", "no-such-ref-xyz"],
       { cwd: ROOT, encoding: "utf8" },
     );
     expect(cli.status).toBe(2);
@@ -1019,9 +959,7 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
       mode: "base",
     });
     expect(r.exitCode).toBe(2);
-    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
-      "cargo:missing",
-    ]);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual(["cargo:missing"]);
   });
 
   it("本地形态不变：同样「cargo 不在」退 1（那边确实该拦住提交）", () => {
@@ -1071,8 +1009,7 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
 describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改动算进来（#2325）", () => {
   const temps: string[] = [];
   afterEach(() => {
-    for (const dir of temps.splice(0))
-      rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
   function git(dir: string, ...args: string[]): string {
@@ -1167,8 +1104,7 @@ describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改
  * 而不是真产物 —— 真产物归 build-desktop，两路不许互相冒充。
  */
 describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => {
-  const VERSION_OUT =
-    "cargo 1.98.0 (…)\nrelease: 1.98\nhost: x86_64-pc-windows-msvc\n";
+  const VERSION_OUT = "cargo 1.98.0 (…)\nrelease: 1.98\nhost: x86_64-pc-windows-msvc\n";
 
   function fixture() {
     const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-mat-"));
@@ -1194,18 +1130,12 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
       chmod: (p: string) => chmods.push(path.relative(srcTauri, p)),
     });
     expect(r.ok).toBe(true);
-    const sidecar = path.join(
-      srcTauri,
-      "binaries",
-      sidecarFileName("x86_64-pc-windows-msvc"),
-    );
+    const sidecar = path.join(srcTauri, "binaries", sidecarFileName("x86_64-pc-windows-msvc"));
     // 源是**当前正在跑门禁的这个 node**（与 build-desktop 同一来源）。
     expect(copies).toEqual([[path.join(dir, "this-node.exe"), sidecar]]);
     /* 执行位只在 POSIX 上设（Windows 不看这一位）—— 判据两边都得成立。 */
     expect(chmods).toEqual(
-      process.platform === "win32"
-        ? []
-        : [path.join("binaries", path.basename(sidecar))],
+      process.platform === "win32" ? [] : [path.join("binaries", path.basename(sidecar))],
     );
     expect(r.lines.join("\n")).toContain("sidecar");
 
@@ -1221,20 +1151,14 @@ describe("cargo test 编译前提落位（materializeCargoTestInputs）", () => 
      * 实测 `56 passed`（壳内全部 `#[test]` 的那个执行者，见 AGENTS 硬规则 5）。
      */
     const staticDir = path.join(srcTauri, "static");
-    expect(existsSync(staticDir), "static/ 这个目录仍要建出来（resources 声明的输入）").toBe(
-      true,
-    );
+    expect(existsSync(staticDir), "static/ 这个目录仍要建出来（resources 声明的输入）").toBe(true);
     expect(readdirSync(staticDir)).toEqual([]);
     expect(r.lines.join("\n")).toContain("只建空目录");
   });
 
   it("已在场的产物一律不碰（本地跑过 build-desktop 时那是真的）", () => {
     const { dir, srcTauri } = fixture();
-    const sidecar = path.join(
-      srcTauri,
-      "binaries",
-      sidecarFileName("x86_64-pc-windows-msvc"),
-    );
+    const sidecar = path.join(srcTauri, "binaries", sidecarFileName("x86_64-pc-windows-msvc"));
     mkdirSync(path.dirname(sidecar), { recursive: true });
     writeFileSync(sidecar, "REAL");
     const staticDir = path.join(srcTauri, "static");

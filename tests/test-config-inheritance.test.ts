@@ -105,9 +105,7 @@ async function resolvedVitest(): Promise<Vitest> {
 describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () => {
   it("两档都在，且命名与文档一致", async () => {
     const vitest = await resolvedVitest();
-    expect(vitest.projects.map((p) => p.name).sort()).toEqual(
-      EXPECTED_PROJECTS,
-    );
+    expect(vitest.projects.map((p) => p.name).sort()).toEqual(EXPECTED_PROJECTS);
   });
 
   it("**每一档**都拿到了共享项（失效形态是一档落后，所以逐档判）", async () => {
@@ -129,7 +127,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(cfg.hookTimeout, prefix).toBe(SHARED_EXPECTATIONS.hookTimeout);
       expect(cfg.maxWorkers, prefix).toBe(SHARED_EXPECTATIONS.maxWorkers);
       expect(
-        (/* SAFETY: 类型断言已复核 */ cfg.expect as { poll?: unknown } | undefined)?.poll,
+        /* SAFETY: 类型断言已复核 */ (cfg.expect as { poll?: unknown } | undefined)?.poll,
         prefix,
       ).toEqual(EXPECT_POLL);
     }
@@ -158,7 +156,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
     expect(source).not.toMatch(/extends\s*:\s*false/);
     for (const project of vitest.projects) {
       expect(
-        (/* SAFETY: 类型断言已复核 */ project.config as unknown as Record<string, unknown>).globals,
+        /* SAFETY: 类型断言已复核 */ (project.config as unknown as Record<string, unknown>).globals,
         `[${project.name}] 共享项缺席 = 这一档把继承关掉了`,
       ).toBe(SHARED_EXPECTATIONS.globals);
     }
@@ -166,13 +164,13 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
 
   it("根 `test` 上没有「只对某档有意义」的项，project 里不再重复声明共享项", async () => {
     // 这一条判**配置文本**（解析后看不出「它写在哪一层」），用 TS 模块直接读默认导出。
-    const mod = /* SAFETY: 类型断言已复核 */ (await import(path.join(ROOT, "vitest.config.ts"))) as {
+    const mod = /* SAFETY: 类型断言已复核 */ (await import(
+      path.join(ROOT, "vitest.config.ts")
+    )) as {
       default: { test: Record<string, unknown> };
     };
     const rootTest = mod.default.test;
-    const extra = Object.keys(rootTest).filter(
-      (k) => !ROOT_ALLOWED_KEYS.has(k),
-    );
+    const extra = Object.keys(rootTest).filter((k) => !ROOT_ALLOWED_KEYS.has(k));
     expect(extra, "新增根级项先回答「它是不是共享项」").toEqual([]);
 
     /**
@@ -187,9 +185,7 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
      */
     const declared = Object.keys(rootTest);
     for (const key of Object.keys(SHARED_EXPECTATIONS)) {
-      expect(declared, `共享项 \`${key}\` 该声明在根 \`test\` 上`).toContain(
-        key,
-      );
+      expect(declared, `共享项 \`${key}\` 该声明在根 \`test\` 上`).toContain(key);
     }
 
     const projects = /* SAFETY: 类型断言已复核 */ rootTest.projects as {
@@ -199,10 +195,9 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       const duplicated = Object.keys(entry.test).filter((k) =>
         Object.keys(SHARED_EXPECTATIONS).includes(k),
       );
-      expect(
-        duplicated,
-        `[${String(entry.test.name)}] 共享项该只在根 \`test\` 上定义一次`,
-      ).toEqual([]);
+      expect(duplicated, `[${String(entry.test.name)}] 共享项该只在根 \`test\` 上定义一次`).toEqual(
+        [],
+      );
     }
   });
 });

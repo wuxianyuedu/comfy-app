@@ -10,11 +10,7 @@ import type { Edge, FitViewOptions, Node, XYPosition } from "@xyflow/react";
 import { afterNextPaint } from "~/lib/next-frame";
 import { nextId } from "~/lib/unique-id";
 import { lastSegments } from "~/lib/path-display";
-import {
-  type CanvasNodeType,
-  type CanvasNodeData,
-  isCanvasNode,
-} from "./canvas-types";
+import { type CanvasNodeType, type CanvasNodeData, isCanvasNode } from "./canvas-types";
 
 /** 生成画布节点唯一 id（项目画布各创建入口共用，避免散落重复逻辑）。 */
 export function makeNodeId(): string {
@@ -83,8 +79,7 @@ export function placeCanvasNode(opts: {
   id?: string;
 }): CanvasNodeType[] {
   const position =
-    opts.flowPosition ??
-    opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
+    opts.flowPosition ?? opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
   const node: CanvasNodeType = {
     id: opts.id ?? makeNodeId(),
     type: "canvasNode",
@@ -139,16 +134,9 @@ export function applyPropagationToNodes(
       const key = edge.targetHandle;
       let stored: unknown = undefined;
       if (src.kind === "text" && src.content?.trim()) stored = src.content;
-      else if (
-        (src.kind === "picture" || src.kind === "movie") &&
-        src.mediaPath
-      )
+      else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath)
         stored = src.mediaPath;
-      else if (
-        src.resultPath &&
-        src.resultMediaType !== "video" &&
-        importedFile
-      )
+      else if (src.resultPath && src.resultMediaType !== "video" && importedFile)
         stored = importedFile;
       if (stored !== undefined) {
         return {
@@ -172,9 +160,7 @@ export function applyPropagationToNodes(
     if (td.kind === "picture" || td.kind === "movie") {
       const incoming: string | undefined =
         importedFile ??
-        (src.kind === "picture" || src.kind === "movie"
-          ? (src.mediaPath ?? undefined)
-          : undefined);
+        (src.kind === "picture" || src.kind === "movie" ? (src.mediaPath ?? undefined) : undefined);
       if (incoming) {
         return {
           ...node,
@@ -219,19 +205,14 @@ export function applyPropagationToNodes(
           next.inputImage = importedFile;
           next.upstreamId = sourceId;
           // 自动切换消费端模式，让喂进来的图片真正被用上
-          if (next.kind === "image" && next.mode === "txt2img")
-            next.mode = "img2img";
+          if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
           if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
-        } else if (
-          (src.kind === "picture" || src.kind === "movie") &&
-          src.mediaPath
-        ) {
+        } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath) {
           // 内容载体本来就住在 ComfyUI 的 input 目录里，
           // 因此不必重新导入 —— 直接接上现成的文件名即可。
           next.inputImage = src.mediaPath;
           next.upstreamId = sourceId;
-          if (next.kind === "image" && next.mode === "txt2img")
-            next.mode = "img2img";
+          if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
           if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
         }
         break;

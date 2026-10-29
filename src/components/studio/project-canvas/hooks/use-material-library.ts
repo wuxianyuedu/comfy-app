@@ -60,8 +60,7 @@ export interface UseMaterialLibraryOptions {
 /** 把 unknown 抛值捞成中文消息——失败路径始终有可读文案（硬规则）。 */
 function errMsg(e: unknown, fallback: string): string {
   if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = /* SAFETY: 类型断言已复核 */ (e as { message?: unknown })
-      .message;
+    const m: unknown = /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message;
     if (typeof m === "string") return m;
   }
   return fallback;
@@ -186,18 +185,17 @@ export function useMaterialLibrary({
   const searching = normalizeNeedle(search).length > 0;
   const showItems = searching || folder !== null;
 
-  const breadcrumbSegments: Array<{ label: string; key: string | null }> =
-    searching
-      ? [{ label: `搜索结果 · ${items.length}`, key: null }]
-      : folder
-        ? [
-            { label: "全部", key: null },
-            {
-              label: folders.find((fld) => fld.id === folder)?.name ?? folder,
-              key: folder,
-            },
-          ]
-        : [{ label: "全部", key: null }];
+  const breadcrumbSegments: Array<{ label: string; key: string | null }> = searching
+    ? [{ label: `搜索结果 · ${items.length}`, key: null }]
+    : folder
+      ? [
+          { label: "全部", key: null },
+          {
+            label: folders.find((fld) => fld.id === folder)?.name ?? folder,
+            key: folder,
+          },
+        ]
+      : [{ label: "全部", key: null }];
 
   return {
     scope,

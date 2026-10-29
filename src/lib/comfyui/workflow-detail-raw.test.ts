@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildRawInputs,
-  buildInnerNodeInputs,
-} from "~/lib/comfyui/workflow-detail-raw";
+import { buildRawInputs, buildInnerNodeInputs } from "~/lib/comfyui/workflow-detail-raw";
 import type { RawWorkflow } from "~/lib/comfyui/raw";
 
 const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
@@ -108,11 +105,7 @@ async function noMultiline(): Promise<undefined> {
 
 describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () => {
   it("按 proxyWidgets 记下内部真实字段（label / localized 一并带上）", async () => {
-    const { rawInputsById } = await buildRawInputs(
-      wrapperWorkflow,
-      noCombo,
-      noMultiline,
-    );
+    const { rawInputsById } = await buildRawInputs(wrapperWorkflow, noCombo, noMultiline);
     const entries = rawInputsById["1"]!;
     expect(entries).toHaveLength(2);
     expect(entries[0]!.name).toBe("value_1");
@@ -140,9 +133,7 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
           id: 7,
           type: "KSampler",
           pos: [0, 0],
-          inputs: [
-            { name: "seed", type: "INT", link: null, widget: { name: "seed" } },
-          ],
+          inputs: [{ name: "seed", type: "INT", link: null, widget: { name: "seed" } }],
           widgets_values: [42],
         },
       ],
@@ -159,11 +150,7 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
     const subs = broken.definitions!.subgraphs!;
     const key = Object.keys(subs)[0]!;
     subs[key]!.nodes = [];
-    const { rawInputsById } = await buildRawInputs(
-      broken,
-      noCombo,
-      noMultiline,
-    );
+    const { rawInputsById } = await buildRawInputs(broken, noCombo, noMultiline);
     expect(rawInputsById["1"]![0]!.proxyField).toEqual({
       nodeId: "12",
       field: "seed",
@@ -217,20 +204,12 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
   } as unknown as RawWorkflow;
 
   it("本层没写 label 时用边界 pin 的作者名", async () => {
-    const { rawInputsById } = await buildRawInputs(
-      quarantined,
-      noCombo,
-      noMultiline,
-    );
+    const { rawInputsById } = await buildRawInputs(quarantined, noCombo, noMultiline);
     expect(rawInputsById["4"]![0]!.label).toBe("Seed");
   });
 
   it("边界 pin 也没写 label 时保持原样（不给无信息量的名字）", async () => {
-    const { rawInputsById } = await buildRawInputs(
-      quarantined,
-      noCombo,
-      noMultiline,
-    );
+    const { rawInputsById } = await buildRawInputs(quarantined, noCombo, noMultiline);
     expect(rawInputsById["4"]![1]!.label).toBeUndefined();
   });
 
@@ -279,9 +258,7 @@ describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
     /* widgets_values[0] 属于 seed；seed 家族多占一个
      *  control_after_generate 槽，故 steps 取到下标 2。 */
     expect(seed!.widgetValue).toBe(12345);
-    expect(
-      inner["12"]!.find((input) => input.name === "steps")!.widgetValue,
-    ).toBe(20);
+    expect(inner["12"]!.find((input) => input.name === "steps")!.widgetValue).toBe(20);
   });
 
   it("没有子图定义时返回空表", () => {
@@ -302,9 +279,7 @@ describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
 describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）", () => {
   /** 把 wrapper 的 proxyWidgets 换成任意形态，其余保持真实导出形状。 */
   function withProxy(props: Record<string, unknown>): RawWorkflow {
-    const clone = /* SAFETY: 类型断言已复核 */ structuredClone(
-      wrapperWorkflow,
-    ) as unknown as {
+    const clone = /* SAFETY: 类型断言已复核 */ structuredClone(wrapperWorkflow) as unknown as {
       nodes: { properties: Record<string, unknown> }[];
     };
     clone.nodes[0]!.properties = props;

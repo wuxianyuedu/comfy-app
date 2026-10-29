@@ -16,9 +16,7 @@ export class ErrorBoundary extends React.Component<
     /** 降级 UI：可传 ReactNode，也可传 (error) => ReactNode 函数以拿到真实错误对象。
      * 函数形态返回 `null` / `undefined` 表示「这次不接管」，退回本组件的默认降级 UI —
      * 让调用点只处理它认得的那一类错误，其余照旧（见 `useLazyChunkFallback`）。 */
-    fallback?:
-      | React.ReactNode
-      | ((error: Error | null) => React.ReactNode | null | undefined);
+    fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode | null | undefined);
     onError?: (error: Error, info: React.ErrorInfo) => void;
   },
   { hasError: boolean; error: Error | null }
@@ -56,9 +54,7 @@ export class ErrorBoundary extends React.Component<
       }
       return (
         <div className="border-destructive/25 bg-destructive/5 flex flex-col items-center justify-center gap-3 rounded-2xl border px-6 py-12 text-center">
-          <p className="text-danger-strong text-sm font-semibold">
-            组件渲染出错
-          </p>
+          <p className="text-danger-strong text-sm font-semibold">组件渲染出错</p>
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, error: null })}

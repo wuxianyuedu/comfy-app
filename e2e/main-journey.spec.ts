@@ -115,9 +115,7 @@ async function trpcCall(
 
   const url =
     kind === "query"
-      ? `/api/trpc/${procedure}?batch=1&input=${encodeURIComponent(
-          JSON.stringify({ 0: payload }),
-        )}`
+      ? `/api/trpc/${procedure}?batch=1&input=${encodeURIComponent(JSON.stringify({ 0: payload }))}`
       : `/api/trpc/${procedure}?batch=1`;
   const res =
     kind === "query"
@@ -134,9 +132,7 @@ async function trpcCall(
 
   const body = await res.text();
   if (!res.ok()) {
-    throw new Error(
-      `${procedure} 失败：HTTP ${res.status()} ${body.slice(0, 400)}`,
-    );
+    throw new Error(`${procedure} 失败：HTTP ${res.status()} ${body.slice(0, 400)}`);
   }
   const lines = body.split("\n").filter(Boolean);
   const last = lines.at(-1);
@@ -147,8 +143,8 @@ async function trpcCall(
   /* 最后一行是 `[chunkId, status, data]`，其中 `data` 的形状是
    * `[[值]]`「值 + 零个 asyncProp」（三段含义见 `e2e/support/trpc-stub.ts` 的
    * 文件头）。逐层取到 `[2] → [0] → [0]` 就是过程返回的那个值本身。 */
-  const data = (/* SAFETY: 类型断言已复核 */ parsed.json as unknown[] | undefined)?.[2];
-  const value = (/* SAFETY: 类型断言已复核 */ data as unknown[][] | undefined)?.[0];
+  const data = /* SAFETY: 类型断言已复核 */ (parsed.json as unknown[] | undefined)?.[2];
+  const value = /* SAFETY: 类型断言已复核 */ (data as unknown[][] | undefined)?.[0];
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -166,11 +162,7 @@ function trpcMutation(page: Page, procedure: string, input: unknown) {
  *
  *  密码 ≥ 12 字符：`auth-server` 的 `minPasswordLength: 12`，短密码会在提交那一刻
  *  被判破坏 —— 本用例要的是「真的登录成功」，不是「表单变灰」。 */
-async function signUp(
-  page: Page,
-  email: string,
-  password: string,
-): Promise<void> {
+async function signUp(page: Page, email: string, password: string): Promise<void> {
   await page.goto("/login");
   await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
      不是按钮。改的是读法，不是用例锁的那件事。 */
@@ -189,9 +181,7 @@ async function signUp(
 }
 
 test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
-  test("@critical 走完登录、建项目、出图，且断言的是链路产物", async ({
-    page,
-  }) => {
+  test("@critical 走完登录、建项目、出图，且断言的是链路产物", async ({ page }) => {
     test.slow();
 
     /* ── ① 登录：真认证路径 ── */
@@ -212,7 +202,8 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     /* 断言的是**库里有这一行**，不是「请求发出去了」：再读一次服务端，
      * 拿到的必须是我们刚写进去的那个 id / 名字。 */
     const listed = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "project.list")) as
-      { id: string; name: string }[] | undefined;
+      | { id: string; name: string }[]
+      | undefined;
     const project = (listed ?? []).find((item) => item.id === projectId);
     expect(
       project,
@@ -256,17 +247,14 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
         async () => {
           const detail = /* SAFETY: 类型断言已复核 */ (await trpcQuery(page, "task.detail", {
             id: taskId,
-          })) as
-            | { status?: string; error?: string | null; images?: unknown[] }
-            | undefined;
+          })) as { status?: string; error?: string | null; images?: unknown[] } | undefined;
           /* 非终态一律回同一个哨兵：poll 据此**继续等**（`QUEUED` 也到不了
              `"终态"`，所以不会被当成结论放行）。 */
           return isTerminalTaskStatus(detail?.status) ? detail : null;
         },
         {
           timeout: 60_000,
-          message:
-            "任务没有到终态：出图这一跳断了（下游替身没应答，或执行器收口失败）",
+          message: "任务没有到终态：出图这一跳断了（下游替身没应答，或执行器收口失败）",
         },
       )
       .not.toBeNull()
@@ -282,10 +270,9 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
 
     /* 失败也要说清失败在哪一步（验收标准 3）：把 error 带进断言消息，
      * 而不是只报「status 不是 SUCCEEDED」。 */
-    expect(
-      terminal.status,
-      `任务终态不是 SUCCEEDED，error=${terminal.error ?? "(无)"}`,
-    ).toBe("SUCCEEDED");
+    expect(terminal.status, `任务终态不是 SUCCEEDED，error=${terminal.error ?? "(无)"}`).toBe(
+      "SUCCEEDED",
+    );
 
     /* 链路产物的第二重断言：产物真的落进了任务行（`TaskImage`），
      * 也就是「出图」不是「任务标个成功就完了」。 */
@@ -295,17 +282,11 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("@critical 出图失败时终态说得清失败原因（不是超时后报别的）", async ({
-    page,
-  }) => {
+  test("@critical 出图失败时终态说得清失败原因（不是超时后报别的）", async ({ page }) => {
     test.slow();
 
     const stamp = Date.now();
-    await signUp(
-      page,
-      `e2e-journey-fail-${stamp}@example.com`,
-      "e2e-journey-password",
-    );
+    await signUp(page, `e2e-journey-fail-${stamp}@example.com`, "e2e-journey-password");
 
     const workflow = /* SAFETY: 类型断言已复核 */ (await trpcMutation(page, "workflow.create", {
       name: `E2E 失败工作流 ${stamp}`,

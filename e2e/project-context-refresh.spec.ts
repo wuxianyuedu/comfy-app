@@ -88,9 +88,7 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     for (const label of PROJECT_VIEWS) expect(afterReload).toContain(label);
   });
 
-  test("刷新后 active-id 与项目索引都还在（缺陷的另一半：别只在界面上兜住）", async ({
-    page,
-  }) => {
+  test("刷新后 active-id 与项目索引都还在（缺陷的另一半：别只在界面上兜住）", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
     await page.getByRole("button", { name: "新建画布项目" }).click();
@@ -99,9 +97,7 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
      * React 处理里，所以先等界面表达出「已经在项目里」再读。 */
     await expect(page.getByRole("button", { name: "新页签" })).toBeVisible();
     await expect
-      .poll(() =>
-        page.evaluate(() => localStorage.getItem("comfyapp.canvas.active.v1")),
-      )
+      .poll(() => page.evaluate(() => localStorage.getItem("comfyapp.canvas.active.v1")))
       .not.toBeNull();
 
     await page.reload();
@@ -117,7 +113,9 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     }));
     expect(stored.active).not.toBeNull();
     /* 那一行不能被当成空草稿清掉 —— 它是用户刚建的、正开着的项目。 */
-    const projects = /* SAFETY: 类型断言已复核 */ JSON.parse(stored.index ?? "[]") as Array<{ id: string }>;
+    const projects = /* SAFETY: 类型断言已复核 */ JSON.parse(stored.index ?? "[]") as Array<{
+      id: string;
+    }>;
     expect(projects.map((project) => project.id)).toContain(stored.active);
   });
 });

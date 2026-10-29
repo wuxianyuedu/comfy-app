@@ -57,8 +57,7 @@ export function findInstallationById(
       if (
         item &&
         typeof item === "object" &&
-        /* SAFETY: 类型断言已复核 */ (item as Record<string, unknown>).id ===
-          instanceId
+        /* SAFETY: 类型断言已复核 */ (item as Record<string, unknown>).id === instanceId
       ) {
         return /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
       }
@@ -77,11 +76,7 @@ export function findInstallationById(
   return null;
 }
 
-function deepFindById(
-  node: unknown,
-  id: string,
-  depth = 0,
-): Record<string, unknown> | null {
+function deepFindById(node: unknown, id: string, depth = 0): Record<string, unknown> | null {
   if (depth > 12 || node == null) return null;
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -179,9 +174,7 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
 }
 
 /** 从 installations.json 条目里解出 envVars（可能为对象或空）。 */
-function extractEnvVars(
-  entry: Record<string, unknown> | null,
-): Record<string, string> {
+function extractEnvVars(entry: Record<string, unknown> | null): Record<string, string> {
   const ev = entry?.envVars;
   if (ev && typeof ev === "object" && !Array.isArray(ev)) {
     const out: Record<string, string> = {};
@@ -226,8 +219,7 @@ export async function resolveDesktopLaunchArgs(
   } = {},
 ): Promise<DesktopLaunchArgs | null> {
   const readFile =
-    deps.readFile ??
-    (async (p: string, enc: "utf8") => fs.promises.readFile(p, enc));
+    deps.readFile ?? (async (p: string, enc: "utf8") => fs.promises.readFile(p, enc));
   let idContent: string;
   try {
     idContent = await readFile(instanceIdFile, "utf8");
@@ -299,9 +291,7 @@ export async function resolveEffectiveLaunch(input: {
 
   if (isDesktop) {
     const meta = kind.instanceIdFile
-      ? await (input.resolveDesktop ?? resolveDesktopLaunchArgs)(
-          kind.instanceIdFile,
-        )
+      ? await (input.resolveDesktop ?? resolveDesktopLaunchArgs)(kind.instanceIdFile)
       : null;
     if (meta) {
       return {

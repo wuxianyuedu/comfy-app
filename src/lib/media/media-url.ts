@@ -78,8 +78,7 @@ export function mediaReferenceFilename(reference: unknown): string {
     ? /* SAFETY: 类型断言已复核 */ (reference as unknown[])[0]
     : reference;
   if (raw != null && typeof raw === "object") {
-    const f = /* SAFETY: 类型断言已复核 */ (raw as { filename?: unknown })
-      .filename;
+    const f = /* SAFETY: 类型断言已复核 */ (raw as { filename?: unknown }).filename;
     return typeof f === "string" ? f.trim() : "";
   }
   return typeof raw === "string" ? raw.trim() : "";
@@ -111,25 +110,18 @@ export function mediaPreviewUrl(reference: unknown): string | null {
   if (typeof reference === "object") {
     const ref = Array.isArray(reference)
       ? {
-          filename:
-            /* SAFETY: 类型断言已复核 */ (reference as unknown[])[0] ?? null,
-          subfolder:
-            /* SAFETY: 类型断言已复核 */ (reference as unknown[])[1] ?? null,
-          type:
-            /* SAFETY: 类型断言已复核 */ (reference as unknown[])[2] ?? null,
+          filename: /* SAFETY: 类型断言已复核 */ (reference as unknown[])[0] ?? null,
+          subfolder: /* SAFETY: 类型断言已复核 */ (reference as unknown[])[1] ?? null,
+          type: /* SAFETY: 类型断言已复核 */ (reference as unknown[])[2] ?? null,
         }
       : /* SAFETY: 类型断言已复核 */ (reference as {
           filename?: unknown;
           subfolder?: unknown;
           type?: unknown;
         });
-    const filename =
-      typeof ref.filename === "string" ? ref.filename.trim() : "";
+    const filename = typeof ref.filename === "string" ? ref.filename.trim() : "";
     if (filename === "") return null;
-    const type =
-      typeof ref.type === "string" && ref.type.trim() !== ""
-        ? ref.type.trim()
-        : "input";
+    const type = typeof ref.type === "string" && ref.type.trim() !== "" ? ref.type.trim() : "input";
     const subfolder =
       typeof ref.subfolder === "string" && ref.subfolder.trim() !== ""
         ? ref.subfolder.trim()

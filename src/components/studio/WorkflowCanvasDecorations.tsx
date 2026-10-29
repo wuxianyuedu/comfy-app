@@ -2,16 +2,8 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { digitsOnly, textHandler } from "~/lib/form-props";
 import { clamp } from "~/lib/clamp";
-import {
-  useReactFlow,
-  useStore,
-  Background,
-  BackgroundVariant,
-} from "@xyflow/react";
-import {
-  DEFAULT_CANVAS_SETTINGS,
-  type CanvasSettings,
-} from "./canvas/canvas-settings-types";
+import { useReactFlow, useStore, Background, BackgroundVariant } from "@xyflow/react";
+import { DEFAULT_CANVAS_SETTINGS, type CanvasSettings } from "./canvas/canvas-settings-types";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { enterCommit } from "~/components/ui/use-enter-commit";
@@ -246,9 +238,7 @@ export function ZoomIndicator({
           beginEdit();
         }}
         className={`border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg select-none hover:border-white/25 ${
-          dragging
-            ? "border-primary-400/50 cursor-grabbing"
-            : "cursor-ns-resize"
+          dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
         }`}
       >
         {pct}%

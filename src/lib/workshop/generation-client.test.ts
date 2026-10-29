@@ -32,10 +32,7 @@ function makeCharacter(id: string, portraitUrl?: string): Character {
  *  （…/a.png → up-a.png），`failUrls` 里的 URL 一律失败。
  *  文件名与 URL 绑定而不是与调用序绑定，「出场序」的断言才有意义；
  *  各用例用独立 URL 前缀，避免 helper 的会话内缓存跨用例串味。 */
-function mockPrepare(
-  prefix: string,
-  failUrls: ReadonlySet<string> = new Set(),
-) {
+function mockPrepare(prefix: string, failUrls: ReadonlySet<string> = new Set()) {
   const mock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const raw = typeof init?.body === "string" ? init.body : "{}";
     const body = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
@@ -69,11 +66,7 @@ describe("preparePortraitReferences", () => {
     ];
     const mock = mockPrepare("t1");
 
-    const { files, failedCount } = await preparePortraitReferences(characters, [
-      "c3",
-      "c2",
-      "c1",
-    ]);
+    const { files, failedCount } = await preparePortraitReferences(characters, ["c3", "c2", "c1"]);
 
     // 出场序（c3 在前），不是角色表序；文件名与 URL 绑定可判序。
     expect(files).toEqual(["up-t1-b.png", "up-t1-a.png"]);
@@ -99,10 +92,7 @@ describe("preparePortraitReferences", () => {
     ];
     mockPrepare("t3", new Set(["/api/generated/t3/a.png"]));
 
-    const { files, failedCount } = await preparePortraitReferences(characters, [
-      "c1",
-      "c2",
-    ]);
+    const { files, failedCount } = await preparePortraitReferences(characters, ["c1", "c2"]);
 
     expect(files).toEqual(["up-t3-b.png"]);
     expect(failedCount).toBe(1);
@@ -116,11 +106,7 @@ describe("preparePortraitReferences", () => {
     ];
     const mock = mockPrepare("t4");
 
-    const { files } = await preparePortraitReferences(characters, [
-      "c1",
-      "c2",
-      "c3",
-    ]);
+    const { files } = await preparePortraitReferences(characters, ["c1", "c2", "c3"]);
 
     expect(files).toHaveLength(2);
     expect(mock).toHaveBeenCalledTimes(2);

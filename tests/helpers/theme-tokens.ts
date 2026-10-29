@@ -39,7 +39,8 @@ const twModule = /* SAFETY: 类型断言已复核 */ require("@tailwindcss/postc
   default?: () => postcss.AcceptedPlugin;
 };
 const tailwind =
-  twModule.default ?? (/* SAFETY: 类型断言已复核 */ twModule as unknown as () => postcss.AcceptedPlugin);
+  twModule.default ??
+  /* SAFETY: 类型断言已复核 */ (twModule as unknown as () => postcss.AcceptedPlugin);
 
 const GLOBALS_CSS = path.resolve(__dirname, "../../src/app/globals.css");
 
@@ -170,19 +171,14 @@ function disableAutoScan(cssText: string): string {
  */
 export function withPinnedSources(cssText: string): string {
   const noAutoScan = disableAutoScan(stripSourceDirectives(cssText));
-  const pins = PINNED_UTILITY_CLASSES.map(
-    (cls) => `@source inline("${cls}");`,
-  ).join("\n");
+  const pins = PINNED_UTILITY_CLASSES.map((cls) => `@source inline("${cls}");`).join("\n");
   // 把项目自己写的 `@theme` 改成 `@theme static`：v4 默认会**按用法 tree-shake** 主题变量
   // ——「某个 token 有没有进产物」取决于全仓哪里用到了它，而这批用例读的是 token 的取值与
   // 级联，不该被这件事左右（实测反例：关掉扫描后 `--color-primary-strong` 的浅色档消失，
   // `sidebar-state-contrast` 的「浅色：选中底上的正文与指示条都够亮」当场红，而深色档因为
   // 是手写在 `.dark {}` 里的所以还在 —— 这种「一半在、一半被摇掉」的形状比全红更难归因）。
   // static 只**加**声明、不改任何已有值（逐条比对过两态产物：同名不同值 = 0 条）。
-  const staticTheme = noAutoScan.replace(
-    /@theme(\s+inline)?\s*\{/g,
-    "@theme$1 static {",
-  );
+  const staticTheme = noAutoScan.replace(/@theme(\s+inline)?\s*\{/g, "@theme$1 static {");
   return `${staticTheme}\n${pins}\n`;
 }
 
@@ -271,10 +267,7 @@ export async function loadThemeTokens(): Promise<{
 }
 
 /** 为指定主题构建 token 取值器。 */
-export function themeTokens(
-  theme: "light" | "dark",
-  cssText: string,
-): ThemeTokens {
+export function themeTokens(theme: "light" | "dark", cssText: string): ThemeTokens {
   const dark = theme === "dark";
   const root = postcss.parse(cssText);
 
@@ -294,13 +287,10 @@ export function themeTokens(
     order += 1;
     // `@layer` 内的声明优先级低于层外声明；同一层内**后写胜出**。
     const atrule = rule.parent;
-    const layered =
-      atrule?.type === "atrule" && /^layer/i.test(atrule.name ?? "");
+    const layered = atrule?.type === "atrule" && /^layer/i.test(atrule.name ?? "");
     const prev = values.get(decl.prop);
     const wins =
-      !prev ||
-      (prev.layered && !layered) ||
-      (prev.layered === layered && prev.order < order);
+      !prev || (prev.layered && !layered) || (prev.layered === layered && prev.order < order);
     if (wins) values.set(decl.prop, { value: decl.value, layered, order });
   });
 
@@ -308,8 +298,7 @@ export function themeTokens(
   function resolve(name: string, seen: Set<string>): string | undefined {
     const entry = values.get(name);
     if (!entry) return undefined;
-    if (seen.has(name))
-      throw new Error(`token 引用成环：${[...seen, name].join(" → ")}`);
+    if (seen.has(name)) throw new Error(`token 引用成环：${[...seen, name].join(" → ")}`);
     const next = new Set(seen).add(name);
     return resolveValue(entry.value, next);
   }

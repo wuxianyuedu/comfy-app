@@ -71,10 +71,7 @@ function renderRow(message: string) {
  * `title=` 换成了 `ui/hint`），只断言「按钮上还有个 title 属性」会在这条治理线
  * 生效之后变成假绿。
  */
-async function hintText(
-  user: ReturnType<typeof userEvent.setup>,
-  el: HTMLElement,
-) {
+async function hintText(user: ReturnType<typeof userEvent.setup>, el: HTMLElement) {
   /* 先 `unhover` 再 `hover`：点击之后指针已经停在按钮上，直接再 hover 不会
    * 触发新的 open（Base UI 认的是「进入」这一次转移）。 */
   await user.unhover(el);
@@ -89,9 +86,7 @@ async function hintText(
 function revealButtons(): HTMLElement[] {
   return screen
     .queryAllByRole("button")
-    .filter((el) =>
-      (el.getAttribute("aria-label") ?? "").startsWith("在文件管理器里定位 "),
-    );
+    .filter((el) => (el.getAttribute("aria-label") ?? "").startsWith("在文件管理器里定位 "));
 }
 
 afterEach(() => {
@@ -115,9 +110,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
         name: `在文件管理器里定位 ${ROOT}\\scripts\\dev.mjs`,
       }),
     ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: `在文件管理器里定位 ${ROOT}` }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: `在文件管理器里定位 ${ROOT}` })).toBeTruthy();
   });
 
   it("不像路径的行不产生按钮（相对路径 / 散文都不给假入口）", () => {
@@ -128,9 +121,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
   });
 
   it("相对路径不产生按钮（判不了相对谁，指错比不可点更糟）", () => {
-    renderRow(
-      "shell log: log/shell/shell.log（见 src/lib/log/log-paths.ts:12）",
-    );
+    renderRow("shell log: log/shell/shell.log（见 src/lib/log/log-paths.ts:12）");
     expect(revealButtons()).toHaveLength(0);
   });
 
@@ -173,9 +164,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
     mutateMock.mockResolvedValue({ ok: true, detail: "已在文件管理器里定位" });
     const user = userEvent.setup();
     renderRow(`项目根: ${ROOT}`);
-    await user.click(
-      screen.getByRole("button", { name: `在文件管理器里定位 ${ROOT}` }),
-    );
+    await user.click(screen.getByRole("button", { name: `在文件管理器里定位 ${ROOT}` }));
     await expect.poll(() => mutateMock).toHaveBeenCalledTimes(1);
     expect(mutateMock).toHaveBeenCalledWith({ path: ROOT });
   });
@@ -203,9 +192,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
     });
     await user.click(button);
     await expect.poll(() => button.textContent).toContain("打开失败");
-    expect(await hintText(user, button)).toContain(
-      "找不到可在文件管理器里打开的路径",
-    );
+    expect(await hintText(user, button)).toContain("找不到可在文件管理器里打开的路径");
   });
 
   it("网络层抛错也变成可见的失败（不许点了没反应）", async () => {

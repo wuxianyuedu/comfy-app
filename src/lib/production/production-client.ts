@@ -5,10 +5,7 @@
 // 与 draft-sync-client 同款：静默失败，localStorage 仍是即时缓存，下次再补推。
 import { withQuery } from "~/lib/query-string";
 import { isRecord } from "~/lib/is-record";
-import {
-  normalizeProductionProgress,
-  type ProductionProgress,
-} from "~/lib/production/progress";
+import { normalizeProductionProgress, type ProductionProgress } from "~/lib/production/progress";
 
 /** 一次生产数据写入的载荷（字段与 production 表列一一对应）。 */
 export interface ProductionPayload {
@@ -28,10 +25,7 @@ export interface ProductionPayload {
 export type ProductionData = ProductionPayload;
 
 /** 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。静默失败。 */
-export async function pushProduction(
-  projectId: string,
-  payload: ProductionPayload,
-): Promise<void> {
+export async function pushProduction(projectId: string, payload: ProductionPayload): Promise<void> {
   if (!projectId) return;
   try {
     await fetch("/api/production", {
@@ -45,14 +39,10 @@ export async function pushProduction(
 }
 
 /** 拉取某项目的生产数据；无该行 / 请求失败 → null。 */
-export async function fetchProduction(
-  projectId: string,
-): Promise<ProductionData | null> {
+export async function fetchProduction(projectId: string): Promise<ProductionData | null> {
   if (!projectId) return null;
   try {
-    const res = await fetch(
-      withQuery("/api/production", { project: projectId }),
-    );
+    const res = await fetch(withQuery("/api/production", { project: projectId }));
     if (!res.ok) return null;
     const data: unknown = await res.json();
     if (isRecord(data) && data.exists === true && isRecord(data.production)) {

@@ -12,10 +12,7 @@ import {
   DEV_LAUNCHER_LOG,
   LAUNCHER_SHELL_LOG,
 } from "~/lib/log/log-paths";
-import {
-  RUNTIME_LOG_SOURCES,
-  type RuntimeLogSource,
-} from "~/lib/log/runtime-log-file";
+import { RUNTIME_LOG_SOURCES, type RuntimeLogSource } from "~/lib/log/runtime-log-file";
 import { latestRuntimeLogFile } from "~/lib/log/runtime-log-pack.server";
 
 const LAUNCHER_LOG_FILE = LAUNCHER_SHELL_LOG;
@@ -53,10 +50,7 @@ async function sizeOrNull(file: string): Promise<number | null> {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
     return stat.size;
   } catch (error) {
-    if (
-      /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code ===
-      "ENOENT"
-    )
+    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT")
       return null;
     throw error;
   }
@@ -73,11 +67,7 @@ async function sizeOrNull(file: string): Promise<number | null> {
  * 轮询。`turbopackIgnore` 那枚标记逐处跟着调用点搬（它管的是构建期产物
  * tracing，漏搬的表现是「构建期过、出厂件缺件」，硬规则 17 / 18 那一族）。
  */
-async function readBytes(
-  file: string,
-  start: number,
-  length: number,
-): Promise<Buffer | null> {
+async function readBytes(file: string, start: number, length: number): Promise<Buffer | null> {
   const size = await sizeOrNull(file);
   if (size === null) return null;
   const from = clamp(start, 0, size);
@@ -94,11 +84,7 @@ async function readBytes(
 }
 
 /** 把窗口起点向后对齐到第一个完整行（丢弃被截断的头半行），避免解析出乱码。 */
-function alignToLineStart(
-  buf: Buffer,
-  start: number,
-  fileSize: number,
-): number {
+function alignToLineStart(buf: Buffer, start: number, fileSize: number): number {
   if (start <= 0) return 0;
   const nl = buf.indexOf(0x0a);
   if (nl < 0) return fileSize;
@@ -122,10 +108,7 @@ async function sessionStartMs(): Promise<number | null> {
 async function resolveCurrentLog(source: string): Promise<string> {
   if (source === "launcher") return LAUNCHER_LOG_FILE;
   try {
-    const raw = await fs.promises.readFile(
-      /*turbopackIgnore: true*/ SENTINEL_FILE,
-      "utf8",
-    );
+    const raw = await fs.promises.readFile(/*turbopackIgnore: true*/ SENTINEL_FILE, "utf8");
     const sentinel = raw.trim();
     if (sentinel && (await sizeOrNull(sentinel)) !== null) {
       return sentinel;
@@ -190,9 +173,7 @@ async function readLogSlice(
     return { content: "", size: 0, offset: 0, sessionStart, bootId, mismatch };
   }
   const cursorValid =
-    Number.isFinite(requestedOffset) &&
-    requestedOffset > 0 &&
-    requestedOffset <= fileSize;
+    Number.isFinite(requestedOffset) && requestedOffset > 0 && requestedOffset <= fileSize;
   /* 游标已被读到文件末尾：没有新增，直接回空（不必再读一次）。 */
   if (cursorValid && requestedOffset === fileSize) {
     return {
@@ -204,12 +185,9 @@ async function readLogSlice(
       mismatch,
     };
   }
-  let start = cursorValid
-    ? requestedOffset
-    : Math.max(0, fileSize - TAIL_BYTES);
+  let start = cursorValid ? requestedOffset : Math.max(0, fileSize - TAIL_BYTES);
 
-  const buf =
-    (await readBytes(logFile, start, fileSize - start)) ?? Buffer.alloc(0);
+  const buf = (await readBytes(logFile, start, fileSize - start)) ?? Buffer.alloc(0);
   /* 只有「滑动窗口」分支才需要掐头对齐：游标来自上一次响应的 `size`，
    * 它本身就在行边界上（或者是文件末尾）。 */
   if (!cursorValid) {
@@ -247,17 +225,11 @@ async function resolveSourceFile(
    *     历史行」要裁 —— 会话起点这条机制对本族消失（此前它读
    *     `dev-launcher.log` 的 mtime 当起点，锚点比真实启动时刻晚，会把启动早期的
    *     行误判成历史，见 §4.1 的四审）。 */
-  if (
-    /* SAFETY: 类型断言已复核 */ (
-      RUNTIME_LOG_SOURCES as readonly string[]
-    ).includes(source)
-  ) {
+  if (/* SAFETY: 类型断言已复核 */ (RUNTIME_LOG_SOURCES as readonly string[]).includes(source)) {
     const latest = await latestRuntimeLogFile(
       /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
     );
-    return latest
-      ? { file: latest.file, resumable: false }
-      : { file: "", resumable: false };
+    return latest ? { file: latest.file, resumable: false } : { file: "", resumable: false };
   }
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
   if (source === "app") {

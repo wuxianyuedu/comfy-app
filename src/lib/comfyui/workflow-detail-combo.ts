@@ -31,8 +31,7 @@ const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
   }
   const extra: unknown = spec[1];
   if (extra != null && typeof extra === "object") {
-    const opts = /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>)
-      .options;
+    const opts = /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>).options;
     if (Array.isArray(opts)) {
       const list = opts.filter((x): x is string => typeof x === "string");
       return list.length ? list : undefined;
@@ -65,8 +64,7 @@ export function createObjectInfoResolvers(): {
 } {
   let _comboObjectInfo: Awaited<ReturnType<typeof fetchObjectInfo>> | undefined;
   const ensureObjectInfo = async () => {
-    if (_comboObjectInfo === undefined)
-      _comboObjectInfo = await fetchObjectInfo();
+    if (_comboObjectInfo === undefined) _comboObjectInfo = await fetchObjectInfo();
     return _comboObjectInfo;
   };
 
@@ -99,8 +97,7 @@ export function createObjectInfoResolvers(): {
     field: string,
   ): Promise<string[] | undefined> => {
     const [specOpts, localOpts] = await Promise.all([
-      (async () =>
-        comboOptionsFromSpec(await specForClassField(classType, field)))(),
+      (async () => comboOptionsFromSpec(await specForClassField(classType, field)))(),
       localModelFileNames(modelFoldersForField(field)),
     ]);
 
@@ -123,9 +120,7 @@ export function createObjectInfoResolvers(): {
    * 会把所有已知默认值并起来 —— 这无害，因为下面的本地模型并集已经覆盖了
    * 现实中磁盘上的那批。object_info 只拉一次并缓存，因此重复调用很便宜。
    */
-  const comboOptionsForFieldName = async (
-    field: string,
-  ): Promise<string[] | undefined> => {
+  const comboOptionsForFieldName = async (field: string): Promise<string[] | undefined> => {
     const oi = await ensureObjectInfo();
     if (!oi) return undefined;
     const declared: string[] = [];
@@ -161,10 +156,7 @@ export function createObjectInfoResolvers(): {
     if (!Array.isArray(spec)) return undefined;
     const extra: unknown = spec[1];
     if (extra == null || typeof extra !== "object") return undefined;
-    return (
-      /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>)
-        .multiline === true
-    );
+    return /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>).multiline === true;
   };
 
   return {

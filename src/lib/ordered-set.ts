@@ -96,11 +96,7 @@ export function uniqueBy<T, K>(
   for (const value of values) {
     const key = keyOf(value);
     /* `0` / `false` 是**真实键**，只有 `null` / `undefined` / `""` 才是「没有身份」。 */
-    if (
-      key === null ||
-      key === undefined ||
-      /* SAFETY: 类型断言已复核 */ (key as unknown) === ""
-    )
+    if (key === null || key === undefined || /* SAFETY: 类型断言已复核 */ (key as unknown) === "")
       continue;
     if (seen.has(key)) continue;
     seen.add(key);

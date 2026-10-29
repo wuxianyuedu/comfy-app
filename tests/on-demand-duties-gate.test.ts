@@ -154,10 +154,7 @@ describe("on-demand-duties —— 双向", () => {
      * 夹具里只有 FRESHNESS_TRACKS 的三档 + quality-gate 的 premerge。
      * 真实索引还登记了 dependencyAudit / tw4 等条目（需要真实 quality-gate 与台账），
      * 所以这里不直接用真索引，而是用最小的那份。 */
-    repo.write(
-      "scripts/.on-demand-duties.json",
-      JSON.stringify(ledgerDuties(), null, 2),
-    );
+    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("双向核对通过");
@@ -199,10 +196,7 @@ describe("on-demand-duties —— 双向", () => {
   });
 
   test("方向②：新增的按需台账条目没登记 ⇒ 红", ({ repo }) => {
-    repo.write(
-      "scripts/.on-demand-duties.json",
-      JSON.stringify(ledgerDuties(), null, 2),
-    );
+    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     repo.write(
       "scripts/.gate-executor-ledger.json",
       JSON.stringify(
@@ -232,10 +226,7 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
   });
 
   test("duties 为空数组 ⇒ 红（空索引 = 把门禁关掉）", ({ repo }) => {
-    repo.write(
-      "scripts/.on-demand-duties.json",
-      JSON.stringify({ why: "", duties: [] }, null, 2),
-    );
+    repo.write("scripts/.on-demand-duties.json", JSON.stringify({ why: "", duties: [] }, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("duties");

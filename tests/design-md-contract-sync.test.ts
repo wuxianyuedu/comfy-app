@@ -49,10 +49,7 @@ function collectBareTokenCitations(text: string): string[] {
 }
 
 /** ①的判决：引用了但产物里没有声明的名字。 */
-function findUnknownTokens(
-  cited: string[],
-  exists: (name: string) => boolean,
-): string[] {
+function findUnknownTokens(cited: string[], exists: (name: string) => boolean): string[] {
   return cited.filter((name) => !exists(name));
 }
 
@@ -91,9 +88,7 @@ function collectHexRows(section: string): HexRow[] {
     const token = singleCodeSpan(cells[1] ?? "", COLOR_TOKEN);
     if (!token) continue;
     const light = parseHexCell(cells[2] ?? "");
-    const dark = (cells[3] ?? "").includes("同值")
-      ? light
-      : parseHexCell(cells[3] ?? "");
+    const dark = (cells[3] ?? "").includes("同值") ? light : parseHexCell(cells[3] ?? "");
     if (!light && !dark) continue;
     rows.push({
       token,
@@ -135,10 +130,8 @@ function findHexMismatch(
     for (const state of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
       const doc = row[state];
       if (!doc) continue;
-      const actual =
-        normalizeCssHex(resolve(row.token, state)) ?? "(产物里不是单一 hex)";
-      if (actual !== doc)
-        bad.push(`${row.token} ${state}: 文档 ${doc} / 产物 ${actual}`);
+      const actual = normalizeCssHex(resolve(row.token, state)) ?? "(产物里不是单一 hex)";
+      if (actual !== doc) bad.push(`${row.token} ${state}: 文档 ${doc} / 产物 ${actual}`);
     }
   }
   return bad;
@@ -157,14 +150,8 @@ describe("docs/DESIGN.md 的 token 引用面（幽灵 token 的文档方向）",
   it("引用到的每一颗 --color-* 在编译产物里有声明", () => {
     const cited = collectBareTokenCitations(doc);
     // 取到 0 条 = 判据在空转（同「按 marker 定位再解析」那一族的红法）
-    expect(
-      cited.length,
-      "文档里一颗 token 都没引用到 —— 解析失效",
-    ).toBeGreaterThan(20);
-    const unknown = findUnknownTokens(
-      cited,
-      (name) => light.has(name) || dark.has(name),
-    );
+    expect(cited.length, "文档里一颗 token 都没引用到 —— 解析失效").toBeGreaterThan(20);
+    const unknown = findUnknownTokens(cited, (name) => light.has(name) || dark.has(name));
     expect(
       unknown,
       `文档引用了产物里查无此名的 token（改名或删token 时这份契约不会响）：${unknown.join(", ")}`,
@@ -172,8 +159,7 @@ describe("docs/DESIGN.md 的 token 引用面（幽灵 token 的文档方向）",
   });
 
   it("负控制：引用一个不存在的名字必须被判出来（否则上一条绿得没有意义）", () => {
-    const fixture =
-      "底 `--color-canvas` 与假想的 `--color-zprobe-not-a-token`。";
+    const fixture = "底 `--color-canvas` 与假想的 `--color-zprobe-not-a-token`。";
     expect(
       findUnknownTokens(
         collectBareTokenCitations(fixture),
@@ -181,23 +167,16 @@ describe("docs/DESIGN.md 的 token 引用面（幽灵 token 的文档方向）",
       ),
     ).toEqual(["--color-zprobe-not-a-token"]);
     // 而真存在的名字不许被误报
-    expect(
-      findUnknownTokens(["--color-canvas"], (name) => light.has(name)),
-    ).toEqual([]);
+    expect(findUnknownTokens(["--color-canvas"], (name) => light.has(name))).toEqual([]);
   });
 });
 
 describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
   it("表在、行解析得到（表头漂了要当场响）", () => {
     const section = sectionBetween(doc, "### 语义角色表");
-    expect(
-      section,
-      "找不到「语义角色表」小节 —— 文档结构变了要同步这里的锚点",
-    ).not.toBeNull();
+    expect(section, "找不到「语义角色表」小节 —— 文档结构变了要同步这里的锚点").not.toBeNull();
     const rows = collectHexRows(section ?? "");
-    expect(rows.length, "Colors 表解析到 0 行 —— 判据在空转").toBeGreaterThan(
-      5,
-    );
+    expect(rows.length, "Colors 表解析到 0 行 —— 判据在空转").toBeGreaterThan(5);
   });
 
   it("单一 hex 的格子等于编译产物里该态的取值", () => {
@@ -216,9 +195,7 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
       "| 弱文字 | `--color-ink-muted` | `#6b6b76` | `#000000` | x |\n" +
       "| 表头 | -- | -- | -- | -- |\n";
     const rows = collectHexRows(fixture);
-    expect(rows).toEqual([
-      { token: "--color-ink-muted", light: "#6b6b76", dark: "#000000" },
-    ]);
+    expect(rows).toEqual([{ token: "--color-ink-muted", light: "#6b6b76", dark: "#000000" }]);
     const bad = findHexMismatch(rows, (name, state) =>
       (state === "light" ? light : dark).get(name),
     );
@@ -233,9 +210,7 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
         "| 危险 | `--color-destructive` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | y |",
       ].join("\n"),
     );
-    expect(skip, "一格并列两颗 token / 值不是单一 hex 时不许产生断言").toEqual(
-      [],
-    );
+    expect(skip, "一格并列两颗 token / 值不是单一 hex 时不许产生断言").toEqual([]);
   });
 });
 
@@ -248,16 +223,8 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
    字面字号，而调用点还有几百处存量）。 */
 
 const SRC_DIR = fileURLToPath(new URL("../src", import.meta.url));
-const GLOBALS_PATH = fileURLToPath(
-  new URL("../src/app/globals.css", import.meta.url),
-);
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".next",
-  "dist",
-  "coverage",
-  "__snapshots__",
-]);
+const GLOBALS_PATH = fileURLToPath(new URL("../src/app/globals.css", import.meta.url));
+const SKIP_DIRS = new Set(["node_modules", ".next", "dist", "coverage", "__snapshots__"]);
 
 /** 产品代码面：`.stories.` 与 `.test.` 排除在外 —— 它们不是设计系统的消费者，
  *  拿像素契约绑住演示件与用例只会逼人往 story 里塞无意义的类名。 */
@@ -345,9 +312,7 @@ function scanTitleSubtitleBelowBody(): { file: string; line: number }[] {
   const hits: { file: string; line: number }[] = [];
   for (const abs of collectProductFiles(SRC_DIR)) {
     const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
-    for (const line of firstSubtitleViolation(
-      stripComments(readFileSync(abs, "utf8")),
-    )) {
+    for (const line of firstSubtitleViolation(stripComments(readFileSync(abs, "utf8")))) {
       hits.push({ file: rel, line });
     }
   }
@@ -467,10 +432,7 @@ const GENERATE_BUTTON_MARKS = [
 
 /** 一族的标记在给定文本里是否算「同一枚形状」。`scope: "line"` 逐行判，其余整段判。
  *  判据与它的负控制共用这一个出口 —— 否则负控制测的是另一套逻辑，红了也证明不了判据。 */
-function familyHits(
-  fam: { marks: RegExp[]; scope?: "file" | "line" },
-  text: string,
-): boolean {
+function familyHits(fam: { marks: RegExp[]; scope?: "file" | "line" }, text: string): boolean {
   return fam.scope === "line"
     ? text.split(/\r?\n/).some((line) => fam.marks.every((re) => re.test(line)))
     : fam.marks.every((re) => re.test(text));
@@ -553,10 +515,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      * 「同一个尺寸两个名字」在 14px 上照样成立：`text-sm` 是契约认的默认正文档，
      * 而调用点还写着同值的字面量。两边共用同一份读法（`tests/helpers/text-tiers.ts`），
      * 值不写死在这里：Tailwind 默认表来自依赖、项目档来自 globals.css。 */
-    const tiers = parseTextTiers(
-      readFileSync(GLOBALS_PATH, "utf8"),
-      TSHIRT_NAME,
-    );
+    const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
     /* 先验量具：这条是「等式为 0」的判据，档表解空了会永远绿（比红更糟）。
      * 六颗都是本仓真实在用、且**必须**能被类名表达的档。 */
     for (const [px, name] of /* SAFETY: 类型断言已复核 */ [
@@ -567,10 +526,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       [14, "sm"],
       [16, "base"],
     ] as const) {
-      expect(
-        tiers.byPx.get(px),
-        `档表读空了或取错值：${px}px 应是 ${name}`,
-      ).toBe(name);
+      expect(tiers.byPx.get(px), `档表读空了或取错值：${px}px 应是 ${name}`).toBe(name);
     }
     /* 反向：三颗标题档（`section` / `page` / `stage`）**不在**射程内，两层理由：
      * 它们乘 `--font-scale`，**没有单一渲染值**（14px 的 `section` 在 125% 档下是
@@ -582,9 +538,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       "乘 --font-scale 的标题档进了射程：它的渲染值随设置页变，等式判据不成立",
     ).toBe(false);
     expect(
-      tiers.names.filter(
-        (n) => n === "section" || n === "page" || n === "stage",
-      ),
+      tiers.names.filter((n) => n === "section" || n === "page" || n === "stage"),
       "同上：这三颗一颗都不该在档表里",
     ).toEqual([]);
     /* 那两条筛法各自验一次：`TEXT_DECL_RE` 只认常量形状（`calc()` 那种直接被跳过），
@@ -606,36 +560,24 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       synthetic.names.includes("hero"),
       "非 t-shirt 的自造档名进了射程 —— 判据会逼调用点写一个被 `cn()` 当颜色处理的类名",
     ).toBe(false);
-    expect(synthetic.names.includes("4xs"), "合法 t-shirt 名被筛掉了").toBe(
-      true,
-    );
+    expect(synthetic.names.includes("4xs"), "合法 t-shirt 名被筛掉了").toBe(true);
+    expect(synthetic.names.includes("tight"), "乘 --font-scale 的 calc 档被解进了射程").toBe(false);
     expect(
-      synthetic.names.includes("tight"),
-      "乘 --font-scale 的 calc 档被解进了射程",
-    ).toBe(false);
-    expect(
-      [..."probe-text-[14px] 与 probe-text-[18px]".matchAll(TEXT_LITERAL)]
-        .length,
+      [..."probe-text-[14px] 与 probe-text-[18px]".matchAll(TEXT_LITERAL)].length,
       "字面字号的正则漂了（这条判据会静默全绿）。样本串带 `probe-` 前缀是刻意的：" +
         "写全一枚候选名，产物 CSS 里就多一条没人用的规则，见 03 §3.6.2",
     ).toBe(2);
 
-    const isTierValue = (value: string) =>
-      tiers.byPx.has(Number.parseFloat(value));
+    const isTierValue = (value: string) => tiers.byPx.has(Number.parseFloat(value));
     /* 变异：清零之后 offenders 是空集，而「空集 + 写漂的谓词」照样绿 —— 所以谓词
        自己喂两条：等于档位值的必须判违规，不在档表上的不许（9.5px 是还没命名的一档，
        本轮之后 10.5px 也不再是档 —— 它被并进了 2xs，见下面那条归零等式）。 */
-    expect(
-      isTierValue("14"),
-      "谓词认不出 14px 就是 text-sm 的渲染值 —— 这条清零判据在空转",
-    ).toBe(true);
-    expect(isTierValue("9.5"), "不在档表上的值被判成违规（判据越界了）").toBe(
-      false,
+    expect(isTierValue("14"), "谓词认不出 14px 就是 text-sm 的渲染值 —— 这条清零判据在空转").toBe(
+      true,
     );
+    expect(isTierValue("9.5"), "不在档表上的值被判成违规（判据越界了）").toBe(false);
 
-    const offenders = scanProduct(TEXT_LITERAL).filter((h) =>
-      isTierValue(h.value),
-    );
+    const offenders = scanProduct(TEXT_LITERAL).filter((h) => isTierValue(h.value));
     expect(
       offenders,
       "这些调用点写的字面 px 正好等于某档的当前渲染值，应改用具名档" +
@@ -663,7 +605,6 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBeLessThanOrEqual(TEXT_BASELINE);
   });
 
-
   /**
    * 词汇表：住在 `@theme` 之外的每一枚字号，都要有一句「它是干什么的」。
    *
@@ -685,7 +626,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     "11": "json-view 主题类与 markdown 的 h6 / table（11px 本身是 text-2xs 的档值）",
     "11.5": "面板字段标签与次级说明行；同一枚值也是 cb-code-block 的密度",
     "12": "markdown h5",
-    "12.5": "控制台与卡片的行密度（两处 pre 的等宽正文、表头行、面板条目标题）；同一枚值也是 markdown h4",
+    "12.5":
+      "控制台与卡片的行密度（两处 pre 的等宽正文、表头行、面板条目标题）；同一枚值也是 markdown h4",
     "13.5": "工坊步骤条的标题（与 size-9 序号圆同排）",
     "14": "markdown h3",
     "15": "面板 / 抽屉 / 日志框的区块标题（也用在 size-9 的序号圆里）",
@@ -696,9 +638,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   };
 
   it("住在 `@theme` 之外的字号是一张词汇表：新值要先登记角色", () => {
-    const MD_STYLES_PATH = fileURLToPath(
-      new URL("../src/lib/markdown/styles.ts", import.meta.url),
-    );
+    const MD_STYLES_PATH = fileURLToPath(new URL("../src/lib/markdown/styles.ts", import.meta.url));
     /** 值 → 出现的来路（报错时要能指出「是谁把它带进来的」）。 */
     const inUse = new Map<string, Set<string>>();
     const add = (value: string, source: string) => {
@@ -707,8 +647,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     };
 
     /* 来路 ①：调用点的 arbitrary 字面量 —— 与棘轮同一个面（产品文件、剥注释）。 */
-    for (const hit of scanProduct(TEXT_LITERAL))
-      add(hit.value, `调用点（如 ${hit.file}）`);
+    for (const hit of scanProduct(TEXT_LITERAL)) add(hit.value, `调用点（如 ${hit.file}）`);
     /* 来路 ②：globals.css 里 `@theme` 之外的裸 font-size 声明。
      * `@theme` 里那些是 `--text-*: 11px`，不带 `font-size:` 这个属性名，所以这条匹配
      * 天然只收声明侧 —— 不必再去切块。 */
@@ -792,9 +731,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     expect(
       offenders,
       "这些调用点又写了字面 12px / 13px —— 用 text-xs / text-sm（行高要不同就再加 leading-*）：\n" +
-        `${[...new Set(offenders.map((o) => o.file))]
-          .map((f) => `  ${f}`)
-          .join("\n")}`,
+        `${[...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")}`,
     ).toEqual([]);
     /* 反向：两档真的都还是 Tailwind 默认的 12 / 14px（否则上面那条会因为「这档没了」
        而空绿，而下一轮的人会搞错每档到底多大）。 */
@@ -818,8 +755,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
        宽度受限的 10 处本来就带 `min-w-0 truncate` / `max-w-*`：收不下是截断，不是溢出。 */
     const driftLiteral = /\btext-\[10\.5px\]/g;
     expect(
-      [...("text-" + "[10.5px] 与 text-" + "[10.5px]").matchAll(driftLiteral)]
-        .length,
+      [...("text-" + "[10.5px] 与 text-" + "[10.5px]").matchAll(driftLiteral)].length,
       "10.5px 的正则漂了（这条归零判据会静默全绿）",
     ).toBe(2);
     const offenders = scanProduct(driftLiteral);
@@ -827,20 +763,12 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       offenders,
       "这些调用点又写了 10.5px —— 那是「比 2xs 小半像素」的漂移值，不是档；" +
         "要改密度请先在 @theme 动 --text-2xs（\n" +
-        `${[...new Set(offenders.map((o) => o.file))]
-          .map((f) => `  ${f}`)
-          .join("\n")}`,
+        `${[...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")}`,
     ).toEqual([]);
     /* 反向：2xs 必须还是 11px —— 否则上面那条「并进来」的落点就变了，
        而这批调用点的像素变化量全靠这颗档的值来定（读法与判据共用同一份 helper）。 */
-    const tiers = parseTextTiers(
-      readFileSync(GLOBALS_PATH, "utf8"),
-      TSHIRT_NAME,
-    );
-    expect(
-      tiers.byPx.get(11),
-      "--text-2xs 不再是 11px？本判据的归一方向要重判",
-    ).toBe("2xs");
+    const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
+    expect(tiers.byPx.get(11), "--text-2xs 不再是 11px？本判据的归一方向要重判").toBe("2xs");
   });
 
   it("档位的配对行高由这张表给：文档与推理都不许凭印象写数字", () => {
@@ -853,10 +781,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      * （那是 `text-xs` 的）。真 Chromium 读数（Storybook 沙箱，加载的就是这份编译
      * 产物）：xs 12/16、sm 14/20、lg 18/28、2xs 11/16.5、3xs 10/15 —— 后两档的
      * 16.5 / 15 是**继承来的 1.5 倍**，不是配对。 */
-    const tiers = parseTextTiers(
-      readFileSync(GLOBALS_PATH, "utf8"),
-      TSHIRT_NAME,
-    );
+    const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
     for (const [name, px] of /* SAFETY: 类型断言已复核 */ [
       ["xs", 16],
       ["sm", 20],
@@ -906,9 +831,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       offenders,
       "这些调用点挂了标题档的同名 class —— 屏级标题走 `.u-title-page`、段级走 " +
         "`.u-title-stage`、卡片标题走 `.u-title`（它们不是 utility，是 components 层的类）：\n" +
-        `${[...new Set(offenders.map((o) => o.file))]
-          .map((f) => `  ${f}`)
-          .join("\n")}`,
+        `${[...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")}`,
     ).toEqual([]);
   });
 
@@ -938,8 +861,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       "浮层上限的正则漂了（这条归零判据会静默全绿）",
     ).toBe(2);
     expect(
-      [...("align-" + "[-2px] 与 align-" + "[-1px]").matchAll(iconAlign)]
-        .length,
+      [...("align-" + "[-2px] 与 align-" + "[-1px]").matchAll(iconAlign)].length,
       "行内图标对齐的正则漂了（这条归零判据会静默全绿）",
     ).toBe(2);
 
@@ -968,15 +890,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
         `${vhOffenders.map((o) => `  ${o.file}  max-h-[${o.value}vh]`).join("\n")}`,
     ).toEqual([]);
 
-    const ALIGN_OWNERS = new Set([
-      "src/components/studio/project-canvas/EmptyCanvasHint.tsx",
-    ]);
+    const ALIGN_OWNERS = new Set(["src/components/studio/project-canvas/EmptyCanvasHint.tsx"]);
     const alignHits = scanProduct(iconAlign);
     expect(
-      alignHits.filter(
-        (h) =>
-          h.file === "src/components/studio/project-canvas/EmptyCanvasHint.tsx",
-      ).length,
+      alignHits.filter((h) => h.file === "src/components/studio/project-canvas/EmptyCanvasHint.tsx")
+        .length,
       "唯一保留的那一枚文本流图标对齐扫不到 —— 这条判据在对空集立法",
     ).toBeGreaterThan(0);
     const alignOffenders = alignHits.filter((h) => !ALIGN_OWNERS.has(h.file));
@@ -1027,10 +945,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       '<p className="text-muted-foreground mt-1 text-xs">每种模式的统一输入 / 输出。</p>',
     ].join("\n");
     const scanText = firstSubtitleViolation;
-    expect(
-      scanText(positive),
-      "副说明写成 `text-xs` 没被抓住（这条判据空转）",
-    ).toEqual([1]);
+    expect(scanText(positive), "副说明写成 `text-xs` 没被抓住（这条判据空转）").toEqual([1]);
     for (const tier of ["text-2xs", "text-3xs"]) {
       expect(
         scanText(positive.replace("text-xs", tier)),
@@ -1087,14 +1002,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
        豁免名单跟着撤：留一个不存在的名字，等于给「以后又加回这一档」预先放行。） */
     const EXEMPT = new Set(["section", "page", "stage"]);
     const names = [
-      ...readFileSync(GLOBALS_PATH, "utf8").matchAll(
-        /^\s*--text-([a-z0-9]+)\s*:/gm,
-      ),
+      ...readFileSync(GLOBALS_PATH, "utf8").matchAll(/^\s*--text-([a-z0-9]+)\s*:/gm),
     ].flatMap((m) => (m[1] ? [m[1]] : []));
-    expect(
-      names.length,
-      "一颗 --text-* 都没解出来（正则漂了，这条会静默全绿）",
-    ).toBeGreaterThan(4);
+    expect(names.length, "一颗 --text-* 都没解出来（正则漂了，这条会静默全绿）").toBeGreaterThan(4);
     const bad = names.filter((n) => !TSHIRT_NAME.test(n) && !EXEMPT.has(n));
     expect(
       bad,
@@ -1147,8 +1057,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     },
     {
       name: "区头（强调圆点 + 大写标签 + 计数胶囊 + 虚线）",
-      owner:
-        "src/components/studio/workflow-form/DynamicWorkflowForm/SectionHeader.tsx",
+      owner: "src/components/studio/workflow-form/DynamicWorkflowForm/SectionHeader.tsx",
       use: "~/components/studio/workflow-form/DynamicWorkflowForm/SectionHeader",
       marks: SECTION_HEADER_MARKS,
       sample:
@@ -1207,10 +1116,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
           owners.push(path.relative(ROOT_DIR, abs).split(path.sep).join("/"));
         }
       }
-      expect(
-        owners,
-        `${fam.name}的类名组合又出现了第二份出处 —— 用 ${fam.use}`,
-      ).toEqual([fam.owner]);
+      expect(owners, `${fam.name}的类名组合又出现了第二份出处 —— 用 ${fam.use}`).toEqual([
+        fam.owner,
+      ]);
     }
   });
 
@@ -1241,9 +1149,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   it("负控制：上面每条判据都真的能被抓（否则它们绿得没意义）", () => {
-    const tierPx = renderedRadiusValues(
-      parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8")),
-    );
+    const tierPx = renderedRadiusValues(parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8")));
     const biggest = Math.max(...tierPx);
     expect("border rounded-" + `[${biggest}px] h-5`).toMatch(RADIUS_LITERAL);
     /* 样本串**拆开拼**：一整条 `text-[ … ]` 形状的候选名出现在被扫正文里就会生成进产物，
@@ -1261,9 +1167,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       scanProduct(TEXT_LITERAL).length,
       "扫描面有文件却解不出任何字面字号：正则或剥注释漂了",
     ).toBeGreaterThan(0);
-    expect(TSHIRT_NAME.test("micro"), "非法档名没被识破（形状判据空转）").toBe(
-      false,
-    );
+    expect(TSHIRT_NAME.test("micro"), "非法档名没被识破（形状判据空转）").toBe(false);
     expect(TSHIRT_NAME.test("3xs"), "合法 t-shirt 名被误判").toBe(true);
     for (const fam of FAMILIES) {
       expect(
@@ -1280,10 +1184,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       arbitrary("shadow", "0_0_6px_rgba(52,211,153,0.8)"),
       "回到裸值的光晕没被抓住（这条判据空转）",
     ).toMatch(HALO_RAW);
-    expect(
-      arbitrary("shadow", "0_0_6px_#34d399"),
-      "光晕写成 hex 没被抓住",
-    ).toMatch(SHADOW_HEX);
+    expect(arbitrary("shadow", "0_0_6px_#34d399"), "光晕写成 hex 没被抓住").toMatch(SHADOW_HEX);
     expect(
       arbitrary("shadow", "0_0_6px_var(--color-glow-success)"),
       "正确的 token 形态被误判成裸色",
@@ -1296,10 +1197,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       arbitrary("shadow", "0_18px_40px_rgba(0,0,0,0.55)"),
       "投影被光晕判据误抓（判据越界了）",
     ).not.toMatch(HALO_RAW);
-    expect(
-      arbitrary("bg", "#34D399"),
-      "类别色被光晕判据误抓（判据越界了）",
-    ).not.toMatch(SHADOW_HEX);
+    expect(arbitrary("bg", "#34D399"), "类别色被光晕判据误抓（判据越界了）").not.toMatch(
+      SHADOW_HEX,
+    );
     /* 反向：异类不许被同族标记抓到。`ParamOwnerTag` 那枚带描边的类型标签
        （`py-px` + `font-medium`）与胶囊那枚 11px 的图标方块（`grid size-9`、
        没有 h-5 / gap-1.25）各是其主自己的形状 —— 抓到了说明标记写得太松，

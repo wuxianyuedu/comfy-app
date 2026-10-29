@@ -77,8 +77,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
       ...shape,
       data: {
         ...shape.data,
-        zodError:
-          error.cause instanceof ZodError ? error.cause.flatten() : null,
+        zodError: error.cause instanceof ZodError ? error.cause.flatten() : null,
       },
     };
   },
@@ -194,18 +193,16 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  * 数据库」缺陷（库行被重建/删除后仍返回不存在的 id）。收口到同一判决后，
  * 两个 API 面的鉴权语义由 `requireServerUser` 单点持有。
  */
-export const authedProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(async ({ ctx, next }) => {
-    const user = ctx.user ?? (await requireServerUser(ctx.session));
-    if (!user) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "需要登录后才能执行该操作",
-      });
-    }
-    return next({ ctx: { ...ctx, user } });
-  });
+export const authedProcedure = t.procedure.use(timingMiddleware).use(async ({ ctx, next }) => {
+  const user = ctx.user ?? (await requireServerUser(ctx.session));
+  if (!user) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "需要登录后才能执行该操作",
+    });
+  }
+  return next({ ctx: { ...ctx, user } });
+});
 
 /**
  * 带限流的「需登录」procedure。
@@ -213,15 +210,13 @@ export const authedProcedure = t.procedure
  * 对敏感操作（提权、删除、导出等）按 userId/IP 做滑动窗口限流，
  * 防脚本暴力调用。默认 10 秒窗口内 20 次，超限返回 429。
  */
-export const rateLimitedProcedure = authedProcedure.use(
-  async ({ ctx, next }) => {
-    const key = ctx.user.id ?? ctx.headers.get("x-forwarded-for") ?? "anon";
-    if (!checkRateLimit(key)) {
-      throw new TRPCError({
-        code: "TOO_MANY_REQUESTS",
-        message: "请求过于频繁，请稍后再试",
-      });
-    }
-    return next({ ctx });
-  },
-);
+export const rateLimitedProcedure = authedProcedure.use(async ({ ctx, next }) => {
+  const key = ctx.user.id ?? ctx.headers.get("x-forwarded-for") ?? "anon";
+  if (!checkRateLimit(key)) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "请求过于频繁，请稍后再试",
+    });
+  }
+  return next({ ctx });
+});

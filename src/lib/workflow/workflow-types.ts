@@ -195,8 +195,7 @@ export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
     label: "首尾帧生视频",
     category: "video",
     subCategory: "生成",
-    description:
-      "Wan/LTX/Bernini 用（首尾帧只此一个 code，旧 FL2V 已归一至此）",
+    description: "Wan/LTX/Bernini 用（首尾帧只此一个 code，旧 FL2V 已归一至此）",
     isGenerative: true,
   },
   {
@@ -386,21 +385,13 @@ export const ALL_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 /* ── 查找工具 ── */
 
 /** 按 code 查找 */
-export function getWorkflowType(
-  code: string,
-): WorkflowTypeDefinition | undefined {
-  return ALL_WORKFLOW_TYPES.find(
-    (ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === code,
-  );
+export function getWorkflowType(code: string): WorkflowTypeDefinition | undefined {
+  return ALL_WORKFLOW_TYPES.find((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === code);
 }
 
 /** 按分类查找 */
-export function getWorkflowTypesByCategory(
-  cat: WorkflowCategory,
-): WorkflowTypeDefinition[] {
-  return ALL_WORKFLOW_TYPES.filter(
-    (ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat,
-  );
+export function getWorkflowTypesByCategory(cat: WorkflowCategory): WorkflowTypeDefinition[] {
+  return ALL_WORKFLOW_TYPES.filter((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat);
 }
 
 /** 获取所有合法的 taskType code 集合（用于校验 DB 字段） */
@@ -450,8 +441,7 @@ export function resolveWorkflowMode(args: {
     (mode): mode is string => typeof mode === "string" && mode.length > 0,
   );
   const declared = args.defaultMode;
-  if (declared && (modes.length === 0 || modes.includes(declared)))
-    return declared;
+  if (declared && (modes.length === 0 || modes.includes(declared))) return declared;
   const [firstMode] = modes;
   if (firstMode) return firstMode;
   if (typeof args.taskType === "string" && args.taskType) {

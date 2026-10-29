@@ -6,10 +6,7 @@ import { getSettingsSync } from "~/lib/app-settings/app-settings.server";
 import { contentTypeForPath } from "~/lib/media/mime-ext";
 import { isForeignOwnedArtifact } from "~/lib/media/output-access";
 import { generatedRoot, isWithinGeneratedRoot } from "~/lib/media/output-paths";
-import {
-  contentRangeHeader,
-  resolveByteRange,
-} from "~/server/lib/range-request";
+import { contentRangeHeader, resolveByteRange } from "~/server/lib/range-request";
 import { requireRequestUser } from "~/server/auth/request-user";
 
 /**
@@ -134,12 +131,10 @@ export async function GET(
        * 的字节回，并把窗口一起收窄 —— `Content-Range` 承诺 6 个字节而 body 只有 2 个，
        * 比回 404 更坏：客户端会按承诺的长度去拼文件，拼出一个坏产物。
        * 一个字节都没读到则是「这一格现在没有那段东西」，按不存在处理。 */
-      if (bytesRead === 0 && buf.length > 0)
-        return new Response("Not found", { status: 404 });
+      if (bytesRead === 0 && buf.length > 0) return new Response("Not found", { status: 404 });
       if (bytesRead !== buf.length) {
         buf = buf.subarray(0, bytesRead);
-        if (window)
-          effectiveWindow = { start, endInclusive: start + bytesRead - 1 };
+        if (window) effectiveWindow = { start, endInclusive: start + bytesRead - 1 };
       }
     } finally {
       // 句柄必须关：Windows 上不关的那一份会把产物锁住，同名重生成当场失败

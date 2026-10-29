@@ -15,10 +15,7 @@ import { cancelTask } from "~/lib/task-cancel-client";
 import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
-import {
-  parseWorkflowIOMap,
-  type WorkflowIOMap,
-} from "~/lib/workflow/workflow-io-types";
+import { parseWorkflowIOMap, type WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 
 import { taskWorkflowId } from "../history-detail-derive";
@@ -129,10 +126,7 @@ export function useHistoryList(): HistoryListController {
   const closeDetail = useCallback(() => setDetailId(null), []);
 
   const detailQ = useQuery(
-    trpc.task.detail.queryOptions(
-      { id: detailId ?? "" },
-      { enabled: !!detailId },
-    ),
+    trpc.task.detail.queryOptions({ id: detailId ?? "" }, { enabled: !!detailId }),
   );
   /* 详情直接派生自查询结果：detailId 切换时 isPending 自动为 true、data 为 null，
      open 清空逻辑不再需要本地镜像 state。 */
@@ -150,10 +144,7 @@ export function useHistoryList(): HistoryListController {
     ),
   );
   const workflowIO = useMemo<WorkflowIOMap>(
-    () =>
-      ioQ.isSuccess
-        ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO)
-        : EMPTY_WORKFLOW_IO,
+    () => (ioQ.isSuccess ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO) : EMPTY_WORKFLOW_IO),
     [ioQ.isSuccess, ioQ.data],
   );
   /* 模式契约注册表：详情弹窗按「任务模式 + 生效契约」枚举工坊对外口（与工坊
@@ -163,8 +154,9 @@ export function useHistoryList(): HistoryListController {
       enabled: !!detailId,
     }),
   );
-  const modeContracts = /* SAFETY: 类型断言已复核 */ (contractsQ.data
-    ?.contracts ?? null) as readonly ModeContract[] | null;
+  const modeContracts = /* SAFETY: 类型断言已复核 */ (contractsQ.data?.contracts ?? null) as
+    | readonly ModeContract[]
+    | null;
 
   const filtered = useMemo(
     () => sortTasks(filterTasks(tasks, filter), sort),
@@ -184,10 +176,7 @@ export function useHistoryList(): HistoryListController {
     setFilter(filterKey);
     setDisplayCount(PAGE_SIZE);
   }, []);
-  const loadMore = useCallback(
-    () => setDisplayCount((count) => count + PAGE_SIZE),
-    [],
-  );
+  const loadMore = useCallback(() => setDisplayCount((count) => count + PAGE_SIZE), []);
 
   const deleteTask = useMutation(trpc.task.delete.mutationOptions());
 
@@ -199,8 +188,7 @@ export function useHistoryList(): HistoryListController {
    * 成功那一侧用 `successText` 给一句陈述句；「取消失败」那条的失败文案
    * 保留可执行动作（「稍后重试」），它是这条账里唯一值得写的引导。 */
   const report: ActionReport = useCallback(
-    (kind, detail) =>
-      kind === "ok" ? toast.info(detail) : toast.error(detail),
+    (kind, detail) => (kind === "ok" ? toast.info(detail) : toast.error(detail)),
     [toast],
   );
 
@@ -226,10 +214,7 @@ export function useHistoryList(): HistoryListController {
           queryClient.setQueryData(
             trpc.task.list.queryKey(undefined),
             /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
-            (old) =>
-              old
-                ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) }
-                : old,
+            (old) => (old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old),
           );
           if (detailId === id) setDetailId(null);
         },
@@ -254,8 +239,7 @@ export function useHistoryList(): HistoryListController {
           {
             report,
             failureText: "重试失败",
-            successText: (r) =>
-              `已原样重新入队：新任务 ${r.detail}，可在队列或历史观察进度`,
+            successText: (r) => `已原样重新入队：新任务 ${r.detail}，可在队列或历史观察进度`,
           },
         );
       });

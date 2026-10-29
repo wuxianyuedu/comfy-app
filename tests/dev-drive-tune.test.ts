@@ -171,9 +171,7 @@ describe("块克隆这一条：判据只能来自实测", () => {
     devDrive.volume.devDriveLabel = "是（受信任）";
     const lever2 = leverOf(devDrive, "block-clone");
     expect(lever2.status).toBe("blocked");
-    expect(
-      lever2.actions.filter((action) => action.scope === "admin").length,
-    ).toBe(0);
+    expect(lever2.actions.filter((action) => action.scope === "admin").length).toBe(0);
   });
 
   it("读不到物理簇 → 不判（不猜）", () => {
@@ -191,9 +189,7 @@ describe("块克隆这一条：判据只能来自实测", () => {
     report.capabilities.libuvForceClone = false;
     const lever = leverOf(report, "block-clone");
     expect(lever.status).toBe("ok");
-    expect(lever.actions.some((action) => action.label.includes("clone"))).toBe(
-      true,
-    );
+    expect(lever.actions.some((action) => action.label.includes("clone"))).toBe(true);
   });
 
   it("不是 ReFS → 与本条无关，不判", () => {
@@ -414,9 +410,7 @@ describe("搜索索引这一条：要能自己回答「标记生效没有」", (
     report.indexMarking = { known: true, sampled: 300, marked: 120, ratio: 0.4 };
     const lever = leverOf(report, "search-index");
     expect(lever.status).toBe("actionable");
-    expect(
-      lever.actions.some((action) => action.command.includes("NotContentIndexed")),
-    ).toBe(true);
+    expect(lever.actions.some((action) => action.command.includes("NotContentIndexed"))).toBe(true);
   });
 });
 
@@ -441,9 +435,7 @@ describe("开发卷上的筛选器", () => {
     const lever = leverOf(report, "dev-drive-filters");
     expect(lever.status).toBe("na");
     expect(lever.detail).toContain("lnvscenter");
-    expect(
-      lever.actions.some((action) => action.command.includes("--bench")),
-    ).toBe(true);
+    expect(lever.actions.some((action) => action.command.includes("--bench"))).toBe(true);
   });
 
   it("实测到第三方引擎在扫 → 待办，并给出那两条安全策略路径", () => {
@@ -454,11 +446,7 @@ describe("开发卷上的筛选器", () => {
     const lever = leverOf(report, "dev-drive-filters");
     expect(lever.status).toBe("actionable");
     expect(lever.detail).toContain("12.5");
-    expect(
-      lever.actions.some((action) =>
-        action.command.includes("setfiltersallowed"),
-      ),
-    ).toBe(true);
+    expect(lever.actions.some((action) => action.command.includes("setfiltersallowed"))).toBe(true);
   });
 
   it("实测到第三方引擎 CPU 增量为 0 → 就位，且不给「改安全策略」的动作", () => {
@@ -487,9 +475,7 @@ describe("报告与计数", () => {
     const levers = buildLevers(makeReport());
     const summary = summarizeLevers(levers);
     expect(summary.total).toBe(levers.length);
-    expect(summary.ok + summary.actionable + summary.blocked + summary.na).toBe(
-      levers.length,
-    );
+    expect(summary.ok + summary.actionable + summary.blocked + summary.na).toBe(levers.length);
   });
 
   it("渲染出的文本带着检出根、能力实测与动作矩阵三段", () => {
@@ -507,7 +493,9 @@ describe("报告与计数", () => {
     const report = makeReport();
     report.levers = buildLevers(report);
     report.summary = summarizeLevers(report.levers);
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(report)) as { levers: unknown[] };
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(report)) as {
+      levers: unknown[];
+    };
     expect(Array.isArray(parsed.levers)).toBe(true);
   });
 

@@ -39,10 +39,7 @@ import {
   workshopInputLabel,
   type WorkshopInputType,
 } from "~/lib/workshop/model-mode-contract";
-import {
-  ALL_WORKFLOW_TYPES,
-  getWorkflowType,
-} from "~/lib/workflow/workflow-types";
+import { ALL_WORKFLOW_TYPES, getWorkflowType } from "~/lib/workflow/workflow-types";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -76,11 +73,7 @@ function FieldLabelRow({ label, id }: { label: string; id?: string }) {
   return (
     <span className="text-ink/80 text-xs font-medium">
       {label}
-      {id && (
-        <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">
-          {id}
-        </span>
-      )}
+      {id && <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">{id}</span>}
     </span>
   );
 }
@@ -114,10 +107,7 @@ function InputMappingRow({
         }
         options={WORKSHOP_INPUT_TYPES.map((t) => t.type)}
         labels={Object.fromEntries(
-          WORKSHOP_INPUT_TYPES.map((t) => [
-            t.type,
-            `${workshopInputLabel(t.type)}（${t.type}）`,
-          ]),
+          WORKSHOP_INPUT_TYPES.map((t) => [t.type, `${workshopInputLabel(t.type)}（${t.type}）`]),
         )}
         aria-label={`${modeLabel(mode)} 第 ${index + 1} 行统一输入类型`}
         className="w-52 shrink-0 text-xs"
@@ -127,9 +117,7 @@ function InputMappingRow({
       </span>
       <input
         value={row.field}
-        onChange={(event) =>
-          onChange({ type: row.type, field: event.target.value })
-        }
+        onChange={(event) => onChange({ type: row.type, field: event.target.value })}
         placeholder="请求体字段名"
         aria-label={`${modeLabel(mode)} 第 ${index + 1} 行的请求体字段名`}
         className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
@@ -190,22 +178,16 @@ export function ModelAdaptersView() {
 
       {/* 选择远端模型 */}
       <section>
-        <SectionLabel hint="选中一个模型，下面为它逐模式配字段映射">
-          远端模型
-        </SectionLabel>
+        <SectionLabel hint="选中一个模型，下面为它逐模式配字段映射">远端模型</SectionLabel>
         {loading ? (
           <p className="text-muted-foreground text-sm">加载中…</p>
         ) : candidates.length === 0 ? (
           <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-            还没有远端模型 —— 到「设置 → 模型」添加 kind=图片 / 视频
-            的远端条目后， 回来为它配置各模式的输入输出。
+            还没有远端模型 —— 到「设置 → 模型」添加 kind=图片 / 视频 的远端条目后，
+            回来为它配置各模式的输入输出。
           </p>
         ) : (
-          <div
-            role="radiogroup"
-            aria-label="选择远端模型"
-            className="flex flex-wrap gap-2"
-          >
+          <div role="radiogroup" aria-label="选择远端模型" className="flex flex-wrap gap-2">
             {candidates.map((c) => (
               <SelectChip
                 key={c.name}
@@ -217,9 +199,7 @@ export function ModelAdaptersView() {
                 <span
                   className={cn(
                     "text-2xs ml-1.5",
-                    selectedModel === c.name
-                      ? "text-primary/70"
-                      : "text-muted-foreground/70",
+                    selectedModel === c.name ? "text-primary/70" : "text-muted-foreground/70",
                   )}
                 >
                   {c.kind === "image" ? "生图" : "视频"}
@@ -234,9 +214,7 @@ export function ModelAdaptersView() {
         <>
           {/* 支持的工坊模式 */}
           <section>
-            <SectionLabel hint="每个模式一张卡片，下面配它的字段映射">
-              支持的工坊模式
-            </SectionLabel>
+            <SectionLabel hint="每个模式一张卡片，下面配它的字段映射">支持的工坊模式</SectionLabel>
             <div className="flex flex-wrap items-center gap-2">
               {draft.map((a) => (
                 <span
@@ -248,9 +226,7 @@ export function ModelAdaptersView() {
                     variant="ghost"
                     size="icon-xs"
                     aria-label={`移除模式 ${modeLabel(a.mode)}`}
-                    onClick={() =>
-                      setDraft((prev) => prev.filter((x) => x.mode !== a.mode))
-                    }
+                    onClick={() => setDraft((prev) => prev.filter((x) => x.mode !== a.mode))}
                     className="text-muted-foreground/60 hover:text-danger-strong hover:bg-transparent"
                   >
                     ✕
@@ -270,9 +246,7 @@ export function ModelAdaptersView() {
             {addModeOpen && (
               <div className="border-border bg-bg mt-3 flex flex-col gap-3 rounded-xl border p-3">
                 {MODE_GROUPS.map((group) => {
-                  const modes = availableModes.filter(
-                    (t) => t.category === group.category,
-                  );
+                  const modes = availableModes.filter((t) => t.category === group.category);
                   if (modes.length === 0) return null;
                   return (
                     <div key={group.category}>
@@ -304,10 +278,7 @@ export function ModelAdaptersView() {
 
           {/* 每个已配置模式的适配器编辑 */}
           {draft.map((a) => (
-            <section
-              key={a.mode}
-              className="border-border bg-surface rounded-xl border p-4"
-            >
+            <section key={a.mode} className="border-border bg-surface rounded-xl border p-4">
               <div className="border-border mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
                 <h4 className="text-ink text-sm font-semibold">
                   {modeLabel(a.mode)}
@@ -324,9 +295,7 @@ export function ModelAdaptersView() {
               </div>
 
               <FormField
-                label={
-                  <FieldLabelRow label="端点路径" id="拼在模型 Base URL 后" />
-                }
+                label={<FieldLabelRow label="端点路径" id="拼在模型 Base URL 后" />}
                 id={`adapter-endpoint-${a.mode}`}
                 labelClassName="mb-1.5"
               >
@@ -382,10 +351,7 @@ export function ModelAdaptersView() {
                           WORKSHOP_INPUT_TYPES[0];
                         return {
                           ...x,
-                          inputs: [
-                            ...x.inputs,
-                            { type: next.type, field: next.type },
-                          ],
+                          inputs: [...x.inputs, { type: next.type, field: next.type }],
                         };
                       })
                     }
@@ -397,10 +363,7 @@ export function ModelAdaptersView() {
 
               <FormField
                 label={
-                  <FieldLabelRow
-                    label="产物字段路径"
-                    id="响应 JSON 内，如 url / data.0.url"
-                  />
+                  <FieldLabelRow label="产物字段路径" id="响应 JSON 内，如 url / data.0.url" />
                 }
                 id={`adapter-output-${a.mode}`}
                 hint="留空走通用提取。"

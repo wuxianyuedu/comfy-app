@@ -21,18 +21,12 @@ afterEach(() => {
 
 describe("ollamaTagsUrl", () => {
   it("剥掉 OpenAI 兼容的 /v1 后缀", () => {
-    expect(ollamaTagsUrl("http://localhost:11434/v1")).toBe(
-      "http://localhost:11434/api/tags",
-    );
-    expect(ollamaTagsUrl("http://localhost:11434/v1/")).toBe(
-      "http://localhost:11434/api/tags",
-    );
+    expect(ollamaTagsUrl("http://localhost:11434/v1")).toBe("http://localhost:11434/api/tags");
+    expect(ollamaTagsUrl("http://localhost:11434/v1/")).toBe("http://localhost:11434/api/tags");
   });
 
   it("没有 /v1 时原样拼接", () => {
-    expect(ollamaTagsUrl("http://localhost:11434")).toBe(
-      "http://localhost:11434/api/tags",
-    );
+    expect(ollamaTagsUrl("http://localhost:11434")).toBe("http://localhost:11434/api/tags");
   });
 });
 
@@ -65,10 +59,7 @@ describe("probeOllama", () => {
   });
 
   it("超时 / 网络不可达 → down，不抛错（探测失败不是错误）", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("The operation timed out")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("The operation timed out")));
     await expect(probeOllama("http://x")).resolves.toEqual({ up: false });
   });
 
@@ -89,9 +80,7 @@ describe("probeOllama", () => {
 
 describe("startOllama", () => {
   it("2xx → 正常返回", async () => {
-    const fetchMock: Mock<typeof fetch> = vi
-      .fn()
-      .mockResolvedValue(jsonRes(200, { ok: true }));
+    const fetchMock: Mock<typeof fetch> = vi.fn().mockResolvedValue(jsonRes(200, { ok: true }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(startOllama()).resolves.toBeUndefined();
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/llm/ollama-start");

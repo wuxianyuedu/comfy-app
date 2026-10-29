@@ -3,10 +3,7 @@
 import { subscribeAppEvent } from "~/lib/app-events";
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { VideoQueueModal, AppShell } from "~/components/studio";
-import {
-  WORKSPACE_VIEWS,
-  useWorkspaceTabs,
-} from "~/components/studio/hooks/use-workspace-tabs";
+import { WORKSPACE_VIEWS, useWorkspaceTabs } from "~/components/studio/hooks/use-workspace-tabs";
 import { useSidebarProjects } from "~/components/studio/hooks/use-sidebar-projects";
 import { useOpenServerProject } from "~/components/studio/project-canvas/hooks/use-open-server-project";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
@@ -45,20 +42,14 @@ export default function WorkspacePage() {
    *
    * 载荷里的 `section`（目标设置分区）先落进一次性 state，再由视图栈逐层传给
    * 设置视图、由它消费后回调清空（同下方的 `canvasSeedNew` 那一族）。 */
-  const [pendingSettingsSection, setPendingSettingsSection] = useState<
-    string | null
-  >(null);
-  const consumeSettingsSection = useCallback(
-    () => setPendingSettingsSection(null),
-    [],
-  );
+  const [pendingSettingsSection, setPendingSettingsSection] = useState<string | null>(null);
+  const consumeSettingsSection = useCallback(() => setPendingSettingsSection(null), []);
   useEffect(
     () =>
       subscribeAppEvent("workspace:navigate", ({ view, section }) => {
         const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
         if (!target) return;
-        if (target === "settings" && section)
-          setPendingSettingsSection(section);
+        if (target === "settings" && section) setPendingSettingsSection(section);
         navigateTo(target);
       }),
     [navigateTo],
@@ -82,18 +73,13 @@ export default function WorkspacePage() {
   // ── 当前活跃项目 id（项目闸门的判据）：来源 canvas-store 的 active 键，
   //    只在客户端可读，SSR 首帧为 null。订阅 store 变化事件保持同步。
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const refreshActiveProject = useCallback(
-    () => setActiveProjectId(getActiveId()),
-    [],
-  );
+  const refreshActiveProject = useCallback(() => setActiveProjectId(getActiveId()), []);
   useEffect(() => {
     // 首帧后同步一次活跃项目 id（getActiveId 只在客户端可读，SSR 为 null）；
     // 与本文件恢复视图处同一约定。订阅回调里的 setState 属合规的外部同步。
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshActiveProject();
-    return subscribeAppEvent("comfyapp:canvas-store-changed", () =>
-      refreshActiveProject(),
-    );
+    return subscribeAppEvent("comfyapp:canvas-store-changed", () => refreshActiveProject());
   }, [refreshActiveProject]);
 
   // ── 设置后，无限画布接收这条工作流并为它放一个
@@ -135,10 +121,7 @@ export default function WorkspacePage() {
                 ? (timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改")
                 : "刚刚",
               kind: /* SAFETY: 类型断言已复核 */ "canvas" as const,
-              subtitle:
-                nodeCount > 0
-                  ? `${nodeCount} 节点 · ${edgeCount} 连线`
-                  : "空画布",
+              subtitle: nodeCount > 0 ? `${nodeCount} 节点 · ${edgeCount} 连线` : "空画布",
               thumbnails: [],
             };
           }),
@@ -242,10 +225,7 @@ export default function WorkspacePage() {
   /** 项目 id → 项目名（页签标题用「工坊·项目名」区分同一视图的多页）。 */
   const projectNameOf = useCallback(
     (projectId: string | null) =>
-      projectId
-        ? (recentProjects.find((project) => project.id === projectId)?.name ??
-          null)
-        : null,
+      projectId ? (recentProjects.find((project) => project.id === projectId)?.name ?? null) : null,
     [recentProjects],
   );
 

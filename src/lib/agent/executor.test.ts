@@ -123,11 +123,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
   it("generate_script：模型返回空 → 报「未返回剧本内容」，不写空剧本进 store", async () => {
     streamReturns("   ");
     const { state, handlers } = makeMockContext();
-    const tool = resolveAgentTool(
-      "generate_script",
-      '{"idea":"海边"}',
-      handlers,
-    );
+    const tool = resolveAgentTool("generate_script", '{"idea":"海边"}', handlers);
     const res = await tool.execute();
     expect(res.ok).toBe(false);
     expect(state.scriptMarkdown).toBe("");
@@ -136,32 +132,20 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
   it("generate_script：正常返回 → 落库并报字符数", async () => {
     streamReturns("  # 剧本\n第一场  ");
     const { state, handlers } = makeMockContext();
-    const res = await resolveAgentTool(
-      "generate_script",
-      '{"idea":"海边"}',
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("generate_script", '{"idea":"海边"}', handlers).execute();
     expect(res.ok).toBe(true);
     expect(state.scriptMarkdown).toBe("# 剧本\n第一场");
   });
 
   it("generate_script：idea 是对象 → 不拼出 [object Object]", () => {
     const { handlers } = makeMockContext();
-    const tool = resolveAgentTool(
-      "generate_script",
-      JSON.stringify({ idea: { a: 1 } }),
-      handlers,
-    );
+    const tool = resolveAgentTool("generate_script", JSON.stringify({ idea: { a: 1 } }), handlers);
     expect(tool.summary).not.toContain("[object Object]");
   });
 
   it("edit_script：当前剧本为空 → 明确要求先生成，不调模型", async () => {
     const { handlers } = makeMockContext();
-    const res = await resolveAgentTool(
-      "edit_script",
-      '{"instruction":"润色"}',
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("edit_script", '{"instruction":"润色"}', handlers).execute();
     expect(res.ok).toBe(false);
     expect(res.summary).toContain("剧本");
     expect(streamChat).not.toHaveBeenCalled();
@@ -171,11 +155,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     streamChat.mockResolvedValue("");
     const { state, handlers } = makeMockContext();
     state.scriptMarkdown = "原剧本";
-    const res = await resolveAgentTool(
-      "edit_script",
-      '{"instruction":"润色"}',
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("edit_script", '{"instruction":"润色"}', handlers).execute();
     expect(res.ok).toBe(false);
     expect(state.scriptMarkdown).toBe("原剧本");
   });
@@ -186,11 +166,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     );
     const { state, handlers } = makeMockContext();
     state.scriptMarkdown = "剧本内容";
-    const res = await resolveAgentTool(
-      "extract_characters",
-      "{}",
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("extract_characters", "{}", handlers).execute();
     expect(res.ok).toBe(true);
     // 只有带名字的条目被收（"nonsense" 与无名条目都过滤）
     expect(state.characters).toHaveLength(1);
@@ -205,11 +181,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     streamChat.mockResolvedValue("模型说了些别的");
     const { state, handlers } = makeMockContext();
     state.scriptMarkdown = "剧本内容";
-    const res = await resolveAgentTool(
-      "extract_characters",
-      "{}",
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("extract_characters", "{}", handlers).execute();
     expect(res.ok).toBe(false);
     expect(state.characters).toEqual([]);
   });
@@ -239,25 +211,15 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("add_character：空名 → 明确拒绝，不调模型", async () => {
     const { handlers } = makeMockContext();
-    const res = await resolveAgentTool(
-      "add_character",
-      "{}",
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("add_character", "{}", handlers).execute();
     expect(res.ok).toBe(false);
     expect(streamChat).not.toHaveBeenCalled();
   });
 
   it("add_character：重名 → 拒绝，且不产生第二张卡", async () => {
     const { state, handlers } = makeMockContext();
-    state.characters = [
-      /* SAFETY: 类型断言已复核 */ { id: "c1", name: "阿宁" } as never,
-    ];
-    const res = await resolveAgentTool(
-      "add_character",
-      '{"name":"阿宁"}',
-      handlers,
-    ).execute();
+    state.characters = [/* SAFETY: 类型断言已复核 */ { id: "c1", name: "阿宁" } as never];
+    const res = await resolveAgentTool("add_character", '{"name":"阿宁"}', handlers).execute();
     expect(res.ok).toBe(false);
     expect(state.characters).toHaveLength(1);
   });
@@ -280,11 +242,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     );
     const { state, handlers } = makeMockContext();
     state.scriptMarkdown = "剧本";
-    const res = await resolveAgentTool(
-      "plan_storyboard",
-      "{}",
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("plan_storyboard", "{}", handlers).execute();
     expect(res.ok).toBe(true);
     expect(state.shots).toHaveLength(2);
     expect(state.shots[0]?.sceneHeading).toBe("内景·教室");
@@ -309,11 +267,7 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     );
     const { state, handlers } = makeMockContext();
     state.scriptMarkdown = "剧本";
-    const res = await resolveAgentTool(
-      "plan_storyboard",
-      "{}",
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("plan_storyboard", "{}", handlers).execute();
     expect(res.ok).toBe(true);
     expect(state.shots.map((shot) => shot.shotType)).toEqual([
       "medium",
@@ -327,22 +281,14 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     streamChat.mockResolvedValue("[]");
     const { state, handlers } = makeMockContext();
     state.scriptMarkdown = "剧本";
-    const res = await resolveAgentTool(
-      "plan_storyboard",
-      "{}",
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("plan_storyboard", "{}", handlers).execute();
     expect(res.ok).toBe(false);
     expect(state.shots).toEqual([]);
   });
 
   it("generate_shot_images：明确告诉用户去页面触发（不做静默空转）", async () => {
     const { handlers } = makeMockContext();
-    const res = await resolveAgentTool(
-      "generate_shot_images",
-      "{}",
-      handlers,
-    ).execute();
+    const res = await resolveAgentTool("generate_shot_images", "{}", handlers).execute();
     expect(res.ok).toBe(false);
     expect(res.summary).toContain("手动触发");
     expect(res.detail).toBeTruthy();
@@ -395,9 +341,7 @@ describe("resolveAgentTool — 参数摘要", () => {
 
   it("空参数串 → 占位", () => {
     const { handlers } = makeMockContext();
-    expect(resolveAgentTool("add_character", "", handlers).argSummary).toBe(
-      "(空参数)",
-    );
+    expect(resolveAgentTool("add_character", "", handlers).argSummary).toBe("(空参数)");
   });
 });
 
@@ -426,11 +370,7 @@ describe("resolveAgentTool — set_project_meta 字段白名单", () => {
 
   it("无可识别字段 → 摘要标注 (无字段)", async () => {
     const { handlers } = makeMockContext();
-    const tool = resolveAgentTool(
-      "set_project_meta",
-      JSON.stringify({ unknown: "x" }),
-      handlers,
-    );
+    const tool = resolveAgentTool("set_project_meta", JSON.stringify({ unknown: "x" }), handlers);
     const res = await tool.execute();
     expect(res.ok).toBe(true);
     expect(res.summary).toContain("(无字段)");

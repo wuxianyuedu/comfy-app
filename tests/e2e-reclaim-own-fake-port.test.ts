@@ -47,12 +47,8 @@ const FOREIGN_CMDLINE = "node some-other-service.js";
 describe("替身端口占位者的识别：命令行那一半", () => {
   it("反斜杠与大小写都认（Windows 上是 `node e2e\\support\\…`）", () => {
     expect(isFakeServerCmdline(OUR_CMDLINE)).toBe(true);
-    expect(
-      isFakeServerCmdline("node e2e\\support\\fake-comfyui-server.mjs"),
-    ).toBe(true);
-    expect(
-      isFakeServerCmdline("NODE E2E/SUPPORT/FAKE-COMFYUI-SERVER.MJS"),
-    ).toBe(true);
+    expect(isFakeServerCmdline("node e2e\\support\\fake-comfyui-server.mjs")).toBe(true);
+    expect(isFakeServerCmdline("NODE E2E/SUPPORT/FAKE-COMFYUI-SERVER.MJS")).toBe(true);
     expect(isFakeServerCmdline(FOREIGN_CMDLINE)).toBe(false);
     expect(isFakeServerCmdline("")).toBe(false);
     expect(isFakeServerCmdline(/* SAFETY: 类型断言已复核 */ null as unknown as string)).toBe(false);
@@ -62,9 +58,7 @@ describe("替身端口占位者的识别：命令行那一半", () => {
     /* 这一条的代价不对称：判宽了会把别人的 node 进程收掉，判窄了只是退回
      * 「不动它」（那条路的出口是 `describeSlotConflict` 的两条建议）。 */
     expect(isFakeServerCmdline("node scripts/dev.mjs")).toBe(false);
-    expect(isFakeServerCmdline("node e2e/support/preflight-python.mjs")).toBe(
-      false,
-    );
+    expect(isFakeServerCmdline("node e2e/support/preflight-python.mjs")).toBe(false);
   });
 });
 
@@ -118,7 +112,9 @@ describe("收的方式与边界", () => {
     /* 契约三条：按 PID 收整棵树、POSIX 上按进程组（`detached`）、强杀。
      * 这条同时钉住「不自己拼 taskkill / process.kill」——本档只调那个唯一出口。 */
     expect(reap).toHaveBeenCalledTimes(1);
-    const reaped = /* SAFETY: 类型断言已复核 */ (/* SAFETY: 类型断言已复核 */ reap.mock.calls as unknown[][])[0]?.[0] as {
+    const reaped = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+      reap.mock.calls as unknown[][]
+    )[0]?.[0] as {
       pid: number;
       force: boolean;
       detached: boolean;
@@ -131,8 +127,7 @@ describe("收的方式与边界", () => {
     const reap = vi.fn(async () => ({ ok: true }));
     const result = await reclaimOwnFakePort(18188, {
       listeningPids: async () => [7],
-      readCmdlines: async (pids) =>
-        new Map(pids.map((p) => [p, FOREIGN_CMDLINE])),
+      readCmdlines: async (pids) => new Map(pids.map((p) => [p, FOREIGN_CMDLINE])),
       answersFake: async () => true,
       reap,
     });
@@ -202,9 +197,7 @@ describe("接线在位：这一步真的挂在起 Playwright 之前（§13.5.12�
      * 都在文件里」—— 后者在删掉重算那一行时照样成立（编码那一句本来还在）。
      * 所以从回收那一句起截一段，在那一段里找重算。 */
     const reclaimAt = run.indexOf("await reclaimOwnFakePort(");
-    const encodeAt = run.indexOf(
-      "env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)",
-    );
+    const encodeAt = run.indexOf("env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)");
     expect(reclaimAt).toBeGreaterThan(-1);
     expect(encodeAt).toBeGreaterThan(reclaimAt);
     const between = run.slice(reclaimAt, encodeAt);
@@ -215,10 +208,7 @@ describe("接线在位：这一步真的挂在起 Playwright 之前（§13.5.12�
     /* 两处各写一份就会漂：这边按「命令行点名了哪个脚本」认自己的残留，那边按
      * 同一个名字起服务。漂了的表现是「认不出自己的残留」——而那正是本 ISSUE 的病。 */
     const config = readFileSync(
-      path.join(
-        path.resolve(import.meta.dirname, ".."),
-        "playwright.config.ts",
-      ),
+      path.join(path.resolve(import.meta.dirname, ".."), "playwright.config.ts"),
       "utf8",
     );
     expect(config).toContain(FAKE_SERVER_SCRIPT);
@@ -249,13 +239,9 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
 
   it("命令行带检出根 + 本仓启动脚本 ⇒ 认（`dev.mjs` 与 `start.mjs` 都认）", () => {
     expect(isAppDevServerCmdline(OUR_APP, ROOT)).toBe(true);
-    expect(isAppDevServerCmdline("node /repo/scripts/dev.mjs", ROOT)).toBe(
-      true,
-    );
+    expect(isAppDevServerCmdline("node /repo/scripts/dev.mjs", ROOT)).toBe(true);
     /* 反斜杠形态在 Windows 上是常见的。 */
-    expect(
-      isAppDevServerCmdline("node F:\\repo\\scripts\\start.mjs", "F:/repo"),
-    ).toBe(true);
+    expect(isAppDevServerCmdline("node F:\\repo\\scripts\\start.mjs", "F:/repo")).toBe(true);
   });
 
   it("**别的检出**的应用服务 ⇒ 不收（命令行里的检出根不是我们的，§1.4）", () => {
@@ -336,7 +322,9 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
       reap,
     });
     expect(result.reclaimed).toEqual([4242]);
-    const reaped = /* SAFETY: 类型断言已复核 */ (/* SAFETY: 类型断言已复核 */ reap.mock.calls as unknown[][])[0]?.[0] as {
+    const reaped = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+      reap.mock.calls as unknown[][]
+    )[0]?.[0] as {
       pid: number;
       force: boolean;
     };
@@ -410,20 +398,14 @@ describe("接线在位：应用端口那一格也挂在起 Playwright 之前（�
   });
 
   it("只在 CI 档做", () => {
-    expect(run.indexOf("if (env.CI && preflight.appOccupied)")).toBeGreaterThan(
-      -1,
-    );
+    expect(run.indexOf("if (env.CI && preflight.appOccupied)")).toBeGreaterThan(-1);
   });
 
   it("收完**重算** pre-flight（判据是相对位置，不是「两句都在」）", () => {
     const reclaimAt = run.indexOf("await reclaimOwnAppPort(");
-    const encodeAt = run.indexOf(
-      "env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)",
-    );
+    const encodeAt = run.indexOf("env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)");
     expect(reclaimAt).toBeGreaterThan(-1);
     expect(encodeAt).toBeGreaterThan(reclaimAt);
-    expect(run.slice(reclaimAt, encodeAt)).toContain(
-      "preflight = await runPreflight(",
-    );
+    expect(run.slice(reclaimAt, encodeAt)).toContain("preflight = await runPreflight(");
   });
 });

@@ -30,11 +30,9 @@ function renderRows(): { inRow: Text; outside: Text } {
     <p id="other">页面里别的文本</p>
   `;
   return {
-    inRow: /* SAFETY: 类型断言已复核 */ document.querySelector(
-      `[${LOG_ROW_TEXT_ATTRIBUTE}]`,
-    )!.firstChild as Text,
-    outside: /* SAFETY: 类型断言已复核 */ document.querySelector("#other")!
+    inRow: /* SAFETY: 类型断言已复核 */ document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!
       .firstChild as Text,
+    outside: /* SAFETY: 类型断言已复核 */ document.querySelector("#other")!.firstChild as Text,
   };
 }
 
@@ -56,8 +54,7 @@ describe("selectionInsideLogs 选区是否落在日志正文里", () => {
 
   it("选在日志行元素本身上 → true（浏览器给的是元素端点）", () => {
     const { inRow } = renderRows();
-    const element = /* SAFETY: 类型断言已复核 */ (inRow.parentElement ??
-      inRow) as Node;
+    const element = /* SAFETY: 类型断言已复核 */ (inRow.parentElement ?? inRow) as Node;
     expect(selectionInsideLogs(selectionOn(element))).toBe(true);
   });
 
@@ -140,10 +137,7 @@ describe("词法上色里的路径区间", () => {
 
   it("时间戳 / 标签 / URL 那几档的上色不受影响（路径改造别动到它们）", () => {
     expect(
-      tokenizeRow("[17:43:16] INFO [OK] 阶段: 壳已接手 http://x/y").map((t) => [
-        t.text,
-        t.style,
-      ]),
+      tokenizeRow("[17:43:16] INFO [OK] 阶段: 壳已接手 http://x/y").map((t) => [t.text, t.style]),
     ).toEqual([
       ["[17:43:16]", "gray"],
       [" INFO ", undefined],

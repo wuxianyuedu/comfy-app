@@ -13,8 +13,7 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     workflow: {
       update: {
-        mutate: (...args: unknown[]) =>
-          /* SAFETY: 类型断言已复核 */ updateMutate(...args) as never,
+        mutate: (...args: unknown[]) => /* SAFETY: 类型断言已复核 */ updateMutate(...args) as never,
       },
     },
   },
@@ -33,9 +32,7 @@ describe("patchWorkflow", () => {
 
   it("失败向外抛（调用方负责回滚与提示）", async () => {
     updateMutate.mockRejectedValue(new Error("保存模式失败，请重试"));
-    await expect(patchWorkflow({ id: "wf-1" })).rejects.toThrow(
-      "保存模式失败，请重试",
-    );
+    await expect(patchWorkflow({ id: "wf-1" })).rejects.toThrow("保存模式失败，请重试");
   });
 });
 

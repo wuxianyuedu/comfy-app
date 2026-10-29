@@ -13,10 +13,7 @@ import { asRecord } from "~/lib/is-record";
 import { clampPct } from "~/lib/progress";
 import { sleep } from "~/lib/with-timeout";
 import { comfyImageUrl } from "~/lib/media/media-url";
-import {
-  parseValidationErrorsJson,
-  type ValidationError,
-} from "~/lib/comfyui/validation";
+import { parseValidationErrorsJson, type ValidationError } from "~/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
 
@@ -53,8 +50,7 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   /* ComfyUI 未运行时的 503（`hint: comfyui-unreachable`）是可重试的：服务端
    * 此时会顺手把实例拉起来，调用方等一会儿再传就能成功（ISSUE #345）。 */
   const retryable =
-    res.status === 503 ||
-    (typeof obj?.hint === "string" && obj.hint === "comfyui-unreachable");
+    res.status === 503 || (typeof obj?.hint === "string" && obj.hint === "comfyui-unreachable");
   return {
     ok: false,
     retryable,
@@ -116,9 +112,7 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
  * 复用图片节点用的同一个 `/api/upload` 接口（它把字节丢进 ComfyUI 的 input
  * 目录并返回存储后的文件名）。返回文件名，外加一个可直接用的预览 URL
  *（经 /api/images 代理，浏览器因此不必直接访问 ComfyUI 的端口）。 */
-export async function uploadMediaFile(
-  file: File,
-): Promise<{ name: string; url: string }> {
+export async function uploadMediaFile(file: File): Promise<{ name: string; url: string }> {
   const name = await uploadImageFile(file);
   /* 预览地址的拼装收在 `~/lib/media/media-url`（规范 16 §16.2.4.32）。
    * `comfyImageUrl` 对空文件名返回 `null`；`name` 刚由 `uploadImageFile`
@@ -202,9 +196,7 @@ export async function pollTask(
           return { taskId, localPath: v.localPath, mediaType: v.mediaType };
         }
       }
-      const st = /* SAFETY: 类型断言已复核 */ task?.status as
-        | string
-        | undefined;
+      const st = /* SAFETY: 类型断言已复核 */ task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
         /* 防御性归一：`task.error` 在库里是可空文本列，
          * 但历史数据行 / 更早的代码路径（例如 buildPromptError 曾用
@@ -226,15 +218,11 @@ export async function pollTask(
               : "";
         const trimmed = peeled.trim();
         const isGarbage =
-          !trimmed ||
-          trimmed === "[object Object]" ||
-          trimmed === "[unserializable error]";
+          !trimmed || trimmed === "[object Object]" || trimmed === "[unserializable error]";
         return {
           taskId,
           status: st,
-          error: isGarbage
-            ? `任务 ${st}（无详细错误，请查看后端日志）`
-            : trimmed,
+          error: isGarbage ? `任务 ${st}（无详细错误，请查看后端日志）` : trimmed,
           /* 失败也回传请求 payload 快照，前端用于在失败面板里
            *  展示「执行了哪些参数」。task.params 由 /api/generate route.ts
            *  写入（任务表的 JSON 列）。 */
@@ -257,8 +245,5 @@ export async function pollTask(
 /* 成功分支的类型守卫 —— 让既有的 `if (result)` 调用点语义不变
  *（填充过的 TaskResult 依旧是真值），同时让失败分支有类型安全。 */
 export function isTaskSuccess(r: TaskResult | TaskFailure): r is TaskResult {
-  return (
-    typeof (/* SAFETY: 类型断言已复核 */ (r as TaskResult).localPath) ===
-    "string"
-  );
+  return typeof (/* SAFETY: 类型断言已复核 */ (r as TaskResult).localPath) === "string";
 }

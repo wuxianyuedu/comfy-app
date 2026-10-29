@@ -250,11 +250,10 @@ type Report = {
 
 /** 跑一次可达性分析（实现收在 `scripts/lib-node-only-scan.mjs`，本用例不复制一份）。 */
 function scan(): Report {
-  const out = execFileSync(
-    process.execPath,
-    ["scripts/lib-node-only-scan.mjs", "--json"],
-    { cwd: REPO_ROOT, encoding: "utf8" },
-  );
+  const out = execFileSync(process.execPath, ["scripts/lib-node-only-scan.mjs", "--json"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
   return /* SAFETY: 类型断言已复核 */ JSON.parse(out) as Report;
 }
 
@@ -263,9 +262,7 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
 
   it("顶层 import Node 内建的模块都必须有声明（§18.4 三选一，不许都没有）", () => {
     // 第三类的**唯一**出口是下面的显式登记；这里先判「有没有声明」。
-    const offenders = report.unguarded.filter(
-      (rel) => !PURE_NODE_HOSTS.includes(rel),
-    );
+    const offenders = report.unguarded.filter((rel) => !PURE_NODE_HOSTS.includes(rel));
     expect(
       offenders,
       `以下模块顶层 import 了 Node 内建模块，但既没有 \`import "server-only"\`、` +
@@ -284,9 +281,7 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
     expect(
       hits,
       `以下模块声明为「只能服务端用」却仍被纯模块可达：\n` +
-        hits
-          .map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`)
-          .join("\n"),
+        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n"),
     ).toEqual([]);
   });
 
@@ -296,9 +291,7 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
       hits,
       `以下模块被 \`"use client"\` 入口静态引用且顶层 import 了 Node 内建 —— ` +
         `Turbopack 会以 "does not support external modules" 让整页 500：\n` +
-        hits
-          .map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`)
-          .join("\n"),
+        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n"),
     ).toEqual([]);
   });
 

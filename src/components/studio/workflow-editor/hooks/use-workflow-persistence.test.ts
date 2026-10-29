@@ -80,13 +80,8 @@ function renderReset(args: {
 }
 
 /** 从 setDetail 的 updater 里取出写回的 positions。 */
-function readWrittenPositions(
-  setDetail: ReturnType<typeof vi.fn>,
-  detail: WorkflowDetail,
-) {
-  const updater = /* SAFETY: 类型断言已复核 */ setDetail.mock.calls.at(
-    -1,
-  )?.[0] as
+function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: WorkflowDetail) {
+  const updater = /* SAFETY: 类型断言已复核 */ setDetail.mock.calls.at(-1)?.[0] as
     | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
     | undefined;
   if (!updater) return undefined;
@@ -137,10 +132,7 @@ describe("resetLayout", () => {
     const positions = {
       "4": /* SAFETY: 类型断言已复核 */ [100, 100] as [number, number],
       "4:1670": /* SAFETY: 类型断言已复核 */ [1000, 1000] as [number, number],
-      "grp:bpin:inputs": /* SAFETY: 类型断言已复核 */ [0, 0] as [
-        number,
-        number,
-      ],
+      "grp:bpin:inputs": /* SAFETY: 类型断言已复核 */ [0, 0] as [number, number],
     };
     const detail = makeDetail({
       nodes: nodesOf(["4"]),
@@ -237,10 +229,7 @@ describe("resetLayout · 子图 id 命名空间", () => {
       "4": /* SAFETY: 类型断言已复核 */ [0, 0] as [number, number],
       "4:1001": /* SAFETY: 类型断言已复核 */ [1000, 1000] as [number, number],
       "4:1002": /* SAFETY: 类型断言已复核 */ [1200, 1000] as [number, number],
-      "grp:bpin:inputs": /* SAFETY: 类型断言已复核 */ [5, 5] as [
-        number,
-        number,
-      ],
+      "grp:bpin:inputs": /* SAFETY: 类型断言已复核 */ [5, 5] as [number, number],
     };
     const detail = makeDetail({
       id: "wf-1#subgraph:uid",

@@ -18,11 +18,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  asCanvasNodeData,
-  defaultData,
-  type StrictCanvasNodeData,
-} from "./canvas-types";
+import { asCanvasNodeData, defaultData, type StrictCanvasNodeData } from "./canvas-types";
 
 describe("StrictCanvasNodeData — 字段名拼错必须编译不过", () => {
   it("已声明字段可正常读写", () => {

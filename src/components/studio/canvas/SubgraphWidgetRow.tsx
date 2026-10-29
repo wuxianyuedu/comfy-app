@@ -27,13 +27,7 @@ interface SubgraphWidgetRowProps {
   hostNodeId?: string;
 }
 
-export function SubgraphWidgetRow({
-  inp,
-  label,
-  io,
-  nodeId,
-  hostNodeId,
-}: SubgraphWidgetRowProps) {
+export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: SubgraphWidgetRowProps) {
   const v: unknown = inp.widgetValue;
   const isConn = inp.isConnection === true || inp.isBoundary === true;
   /* 图片类 widget（IMAGE / MASK / IMAGEUPLOAD）：画布上也要把选中的图
@@ -91,9 +85,7 @@ export function SubgraphWidgetRow({
            *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
           className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
           style={{
-            color: isConn
-              ? "var(--color-ink-strong)"
-              : "var(--color-ink-subtle)",
+            color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
           }}
           title={label}
         >
@@ -113,9 +105,7 @@ export function SubgraphWidgetRow({
           className="border-border-strong bg-canvas-deep mt-0.5 max-h-24 w-full rounded-[5px] border object-contain"
         />
       ) : inp.type === "COMBO" &&
-        Array.isArray(
-          /* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta).comboOptions,
-        ) &&
+        Array.isArray(/* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta).comboOptions) &&
         /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
           (inp as ComboInputMeta).comboOptions as unknown[]
         ).length > 0 ? (
@@ -128,9 +118,8 @@ export function SubgraphWidgetRow({
           value={typeof v === "string" ? v : ""}
           onChange={() => undefined}
           options={
-            /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-              inp as ComboInputMeta
-            ).comboOptions as string[]
+            /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta)
+              .comboOptions as string[]
           }
           disabled
           fullWidth

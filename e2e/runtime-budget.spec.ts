@@ -1,11 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import {
-  collectSamples,
-  summarize,
-  DISCARD_ROUNDS,
-  ROUNDS,
-} from "./support/runtime-budget";
+import { collectSamples, summarize, DISCARD_ROUNDS, ROUNDS } from "./support/runtime-budget";
 import { expectHomeReady } from "./support/home-anchors";
 
 /**
@@ -88,10 +83,7 @@ test.describe("页面级运行时读数在预算内", () => {
    *   · 「渲染完了」有唯一口径（`expectHomeReady`），不是「等一个可能永远不来的东西」。
    * 换路径就要重录基线 —— 所以刻意不参数化成「多屏巡检」。
    */
-  test("首页首屏读数（min / 弃前 4 轮）不超过基线的 2 倍", async ({
-    page,
-    context,
-  }) => {
+  test("首页首屏读数（min / 弃前 4 轮）不超过基线的 2 倍", async ({ page, context }) => {
     /* 先用 Playwright 给的 `page` 等锚点：那一次导航同时把服务与缓存带进暖态，
      * 后面 12 轮才是真的在测「稳态」。 */
     await page.goto("/workspace");
@@ -125,13 +117,11 @@ test.describe("页面级运行时读数在预算内", () => {
       `（${roundsNote} 取 min）；平台 ${PLATFORM} 的基线：${baseline.loadEventEnd}ms / ${baseline.firstContentfulPaint}ms` +
       `（×${budget} ⇒ 预算 ${loadBudget}ms / ${fcpBudget}ms）`;
 
-    expect(
-      loadEventEnd,
-      `loadEventEnd 超出预算（${budget}× 基线）。${detail}`,
-    ).toBeLessThanOrEqual(loadBudget);
-    expect(
-      firstContentfulPaint,
-      `FCP 超出预算（${budget}× 基线）。${detail}`,
-    ).toBeLessThanOrEqual(fcpBudget);
+    expect(loadEventEnd, `loadEventEnd 超出预算（${budget}× 基线）。${detail}`).toBeLessThanOrEqual(
+      loadBudget,
+    );
+    expect(firstContentfulPaint, `FCP 超出预算（${budget}× 基线）。${detail}`).toBeLessThanOrEqual(
+      fcpBudget,
+    );
   });
 });

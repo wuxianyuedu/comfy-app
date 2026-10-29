@@ -60,12 +60,7 @@ function widgets(): EnrichedWidget[] {
   return Object.entries(io).map(([ioKey, entry]) => ({
     ...entry,
     ioKey,
-    control:
-      entry.type === "COMBO"
-        ? "select"
-        : entry.type === "INT"
-          ? "int"
-          : "float",
+    control: entry.type === "COMBO" ? "select" : entry.type === "INT" ? "int" : "float",
   }));
 }
 
@@ -89,9 +84,7 @@ describe("画布 / 库内的组合参数控件", () => {
     /* 用户口径：「改回之前的样式」「改成之前带有下拉菜单的样式」—— 控件本体
      *  必须还在，且是那块带下拉的控件（触发器 + 下拉面板）。 */
     const column = renderCompact();
-    expect(
-      column.querySelector('[aria-label="选择比例、像素与倍数"]'),
-    ).toBeTruthy();
+    expect(column.querySelector('[aria-label="选择比例、像素与倍数"]')).toBeTruthy();
     /* 段内选项从手拼 `<Button role="option">` 迁到 `ui/toggle-group` 之后，
      * 浮层面板不再手挂 `aria-haspopup="listbox"`——base-ui Popover.Trigger
      * 自己给 `aria-haspopup="dialog"`（源码 SelectTrigger.js:123），语义更
@@ -111,12 +104,8 @@ describe("画布 / 库内的组合参数控件", () => {
       expect(row!.closest("[data-grouped-box]")).toBeNull();
       const dot = row!.querySelector(`[data-port-dot="${ioKey}"]`);
       expect(dot, `${ioKey} 行左侧应当有大端点`).toBeTruthy();
-      expect(
-        /* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.width,
-      ).toBe("12px");
-      expect(
-        /* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.height,
-      ).toBe("12px");
+      expect(/* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.width).toBe("12px");
+      expect(/* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.height).toBe("12px");
     }
   });
 
@@ -147,9 +136,7 @@ describe("画布 / 库内的组合参数控件", () => {
     const column = renderCompact();
     for (const ioKey of Object.keys(io)) {
       const row = column.querySelector(`[data-io-key="${ioKey}"]`)!;
-      expect(row.className, `${ioKey} 行左内边距应与其他参数行一致`).toContain(
-        "pl-3.5",
-      );
+      expect(row.className, `${ioKey} 行左内边距应与其他参数行一致`).toContain("pl-3.5");
     }
   });
 

@@ -41,10 +41,7 @@ export function defaultOutputSource(
   let best = firstOutput;
   for (const item of outputs) {
     if (item.displayOrder === undefined) continue;
-    if (
-      best.displayOrder === undefined ||
-      item.displayOrder < best.displayOrder
-    ) {
+    if (best.displayOrder === undefined || item.displayOrder < best.displayOrder) {
       best = item;
     }
   }
@@ -66,8 +63,7 @@ function manualMapForMode(
   mode: string | null | undefined,
 ): Record<string, string | null> {
   if (!mode) return {};
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
-    return {};
+  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) return {};
   const ns = /* SAFETY: 类型断言已复核 */ (paramMap as Record<string, unknown>)[
     OUTPUT_BINDING_NAMESPACE
   ];
@@ -95,8 +91,7 @@ export function manualOutputSource(
 ): string | null | undefined {
   if (!mode) return undefined;
   const table = manualMapForMode(paramMap, mode);
-  if (!Object.prototype.hasOwnProperty.call(table, outputIoKey))
-    return undefined;
+  if (!Object.prototype.hasOwnProperty.call(table, outputIoKey)) return undefined;
   return table[outputIoKey] ?? null;
 }
 
@@ -148,9 +143,7 @@ export function applyOutputBindingEdit(
   const key = `${MODE_KEY_PREFIX}${edit.mode}`;
   const byOutput = table[key];
   table[key] = {
-    ...(byOutput && typeof byOutput === "object" && !Array.isArray(byOutput)
-      ? byOutput
-      : {}),
+    ...(byOutput && typeof byOutput === "object" && !Array.isArray(byOutput) ? byOutput : {}),
     [edit.outputIoKey]: edit.ioKey,
   };
   return { ...base, [OUTPUT_BINDING_NAMESPACE]: table };
@@ -174,8 +167,7 @@ export function clearOutputBindingEdit(
   };
   const key = `${MODE_KEY_PREFIX}${mode}`;
   const byOutput = table[key];
-  if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput))
-    return base;
+  if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput)) return base;
   const next = {
     .../* SAFETY: 类型断言已复核 */ (byOutput as Record<string, unknown>),
   };

@@ -3,10 +3,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  fetchHistoryTasks,
-  probeGlobalTaskCount,
-} from "./history-panel-client";
+import { fetchHistoryTasks, probeGlobalTaskCount } from "./history-panel-client";
 import type { HistoryTaskRow } from "./history-panel-types";
 
 const taskListQuery = vi.fn();
@@ -15,8 +12,7 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     task: {
       list: {
-        query: (...args: unknown[]) =>
-          /* SAFETY: 类型断言已复核 */ taskListQuery(...args) as never,
+        query: (...args: unknown[]) => /* SAFETY: 类型断言已复核 */ taskListQuery(...args) as never,
       },
     },
   },
@@ -93,10 +89,7 @@ describe("fetchHistoryTasks", () => {
 
   it("mediaType 非法值 → 该行被丢弃（枚举是硬约束，不静默兜底）", async () => {
     taskListQuery.mockResolvedValue({
-      tasks: [
-        row({ id: "ok" }),
-        { ...row({ id: "bad" }), mediaType: "hologram" },
-      ],
+      tasks: [row({ id: "ok" }), { ...row({ id: "bad" }), mediaType: "hologram" }],
     });
     const out = await fetchHistoryTasks({ take: 10 });
     expect(out.map((r) => r.id)).toEqual(["ok"]);

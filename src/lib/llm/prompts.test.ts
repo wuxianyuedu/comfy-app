@@ -107,9 +107,7 @@ describe("parseCharacter", () => {
 
 describe("parseCharacterFull", () => {
   it("角色名为空时用「未命名角色」兜底", () => {
-    const got = parseCharacterFull(
-      '{"appearance":"a","costume":"b","personality":"c"}',
-    );
+    const got = parseCharacterFull('{"appearance":"a","costume":"b","personality":"c"}');
     expect(got.name).toBe("未命名角色");
   });
 
@@ -156,9 +154,7 @@ describe("parseStoryboard", () => {
     const got = parseStoryboard(
       '[{"shotType":"close","description":"特写","characterNames":["阿离"]}]',
     );
-    expect(got).toEqual([
-      { shotType: "close", description: "特写", characterNames: ["阿离"] },
-    ]);
+    expect(got).toEqual([{ shotType: "close", description: "特写", characterNames: ["阿离"] }]);
   });
 
   it("越界景别回落到 medium（不把非法值透给下游）", () => {
@@ -168,15 +164,12 @@ describe("parseStoryboard", () => {
 
   it("characterNames 不是数组时归一为空数组", () => {
     expect(
-      parseStoryboard('[{"shotType":"wide","characterNames":"阿离"}]')[0]!
-        .characterNames,
+      parseStoryboard('[{"shotType":"wide","characterNames":"阿离"}]')[0]!.characterNames,
     ).toEqual([]);
   });
 
   it("characterNames 元素统一转字符串（下游按名字匹配角色卡）", () => {
-    const got = parseStoryboard(
-      '[{"shotType":"wide","characterNames":[1,{"n":"x"},null]}]',
-    );
+    const got = parseStoryboard('[{"shotType":"wide","characterNames":[1,{"n":"x"},null]}]');
     expect(got[0]!.characterNames).toEqual(["1", "[object Object]", "null"]);
   });
 
@@ -264,17 +257,9 @@ describe("buildScriptReviewMessages", () => {
     expect(user!.content).toContain("## 场景1");
   });
   it("rubric 文本进 system；空剧本不产出 undefined", () => {
-    const [, user] = buildScriptReviewMessages(
-      "",
-      ctx,
-      "- 结构（structure）：x。1=a；5=b",
-    );
+    const [, user] = buildScriptReviewMessages("", ctx, "- 结构（structure）：x。1=a；5=b");
     expect(user!.content).toContain("（空）");
-    const [system] = buildScriptReviewMessages(
-      "s",
-      ctx,
-      "- 结构（structure）：x。1=a；5=b",
-    );
+    const [system] = buildScriptReviewMessages("s", ctx, "- 结构（structure）：x。1=a；5=b");
     expect(system!.content).toContain("structure");
   });
 });
@@ -344,11 +329,7 @@ describe("buildShotRepromptMessages", () => {
     expect(user!.content).toContain("补主体动作");
   });
   it("无缺陷 / 无建议 → 占位文案，不抛", () => {
-    const [, user] = buildShotRepromptMessages(
-      "p",
-      { issues: [], suggestion: "" },
-      ctx,
-    );
+    const [, user] = buildShotRepromptMessages("p", { issues: [], suggestion: "" }, ctx);
     expect(user!.content).toContain("（未逐条列出）");
     expect(user!.content).toContain("【改进建议】（无）");
   });
@@ -378,9 +359,7 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
     expect(content[0]!.text).toContain("雨中司机");
     expect(content[0]!.text).toContain("中景");
     // 之后是图块：镜头图 + 两张定妆照
-    const imageUrls = content
-      .filter((p) => p.type === "image_url")
-      .map((p) => p.image_url!.url);
+    const imageUrls = content.filter((p) => p.type === "image_url").map((p) => p.image_url!.url);
     expect(imageUrls).toEqual(["/shot.png", "/p1.png", "/p2.png"]);
   });
 
@@ -392,9 +371,7 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
       shotType: "",
       characterNames: [],
     })[1]!.content as Array<{ type: string; image_url?: { url: string } }>;
-    const imageUrls = content
-      .filter((p) => p.type === "image_url")
-      .map((p) => p.image_url!.url);
+    const imageUrls = content.filter((p) => p.type === "image_url").map((p) => p.image_url!.url);
     expect(imageUrls).toEqual(["/shot.png"]);
   });
 

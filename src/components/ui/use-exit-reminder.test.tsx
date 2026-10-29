@@ -41,8 +41,7 @@ describe("ExitReminder", () => {
         <ExitReminder>提示</ExitReminder>
       </div>,
     );
-    const host =
-      /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
+    const host = /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
     expect(host.hasAttribute("data-dirty")).toBe(true);
   });
 });

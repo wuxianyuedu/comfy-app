@@ -45,13 +45,7 @@ const BUTTON_STORY = join(
   "message-center",
   "MessageCenterButton.stories.tsx",
 );
-const PANEL = join(
-  ROOT,
-  "src",
-  "components",
-  "message-center",
-  "MessageCenterPanel.tsx",
-);
+const PANEL = join(ROOT, "src", "components", "message-center", "MessageCenterPanel.tsx");
 
 const sources = readFileSync(SOURCES, "utf8");
 const preview = readFileSync(PREVIEW, "utf8");
@@ -73,14 +67,12 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
     ).toContain("消息场景里没有叫");
     /* 条目必须走真 action：`setState({ messages: [...] })` 能画出一模一样的界面，
        但把 id 生成与 `MAX_MESSAGES` 裁剪整个跳过 —— 那是这一层存在的理由。 */
-    expect(
-      sources,
-      "必须走真 action push() —— 手捏 messages 会跳过 id 生成与条数裁剪",
-    ).toContain(".push(");
-    expect(
-      sourcesCode,
-      "不许直接 setState messages —— 那正是要防的假形态",
-    ).not.toMatch(/setState\(\s*\{\s*messages/);
+    expect(sources, "必须走真 action push() —— 手捏 messages 会跳过 id 生成与条数裁剪").toContain(
+      ".push(",
+    );
+    expect(sourcesCode, "不许直接 setState messages —— 那正是要防的假形态").not.toMatch(
+      /setState\(\s*\{\s*messages/,
+    );
   });
 
   it("场景带 open，装饰器在渲染前把它置好（否则面板 return null）", () => {
@@ -96,10 +88,9 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
 
   it("「全部已读」走真动作 markAllRead，不逐条写 read: true", () => {
     expect(sources).toContain("markAllRead");
-    expect(
-      sourcesCode,
-      "场景不许逐条写 read: true —— 那摆的是末态，验不到动作本身",
-    ).not.toMatch(/read:\s*true/);
+    expect(sourcesCode, "场景不许逐条写 read: true —— 那摆的是末态，验不到动作本身").not.toMatch(
+      /read:\s*true/,
+    );
   });
 
   it("装饰器挂在 preview.tsx 的链上（没挂 = parameters 没人读，store 空着）", () => {
@@ -111,10 +102,9 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
     expect(start, "preview.tsx 里找不到 decorators 数组").toBeGreaterThan(-1);
     const end = preview.indexOf("]", start);
     const chain = preview.slice(start, end + 1);
-    expect(
-      chain,
-      "少挂 withMessageScene = parameters.messageScene 没人读，面板不打开",
-    ).toContain("withMessageScene");
+    expect(chain, "少挂 withMessageScene = parameters.messageScene 没人读，面板不打开").toContain(
+      "withMessageScene",
+    );
     /* 反向：挂上了但没人读也不成立 —— `withAppProviders` 要在链上（它读
        `parameters.messagePanelHidden`）。 */
     expect(chain, "withAppProviders 也要在链上").toContain("withAppProviders");
@@ -139,10 +129,9 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
       "withAppProviders 要读 parameters.messagePanelHidden —— 否则「开着面板」那一档会把按钮盖住",
     ).toMatch(/\.messagePanelHidden\s*===/);
     /* ② 生效：读到的值必须真的**改变挂载** —— 只是读出来不用，面板照样盖住画面。 */
-    expect(
-      providersCode,
-      "读了不用等于没读：面板的挂载必须由 hideMessagePanel 决定",
-    ).toMatch(/hideMessagePanel\s*\?[\s\S]{0,40}MessageCenterPanel/);
+    expect(providersCode, "读了不用等于没读：面板的挂载必须由 hideMessagePanel 决定").toMatch(
+      /hideMessagePanel\s*\?[\s\S]{0,40}MessageCenterPanel/,
+    );
     /* ③ 消费：那条 story 真的声明了这个参数（没人用 = 这一档白留）。 */
     expect(
       buttonStoryCode,
@@ -162,9 +151,7 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
       [panelStory, "MessageCenterPanel"],
       [buttonStory, "MessageCenterButton"],
     ] as const) {
-      expect(story, `${name} 的 story 没 import 真组件`).toContain(
-        `from "./${name}"`,
-      );
+      expect(story, `${name} 的 story 没 import 真组件`).toContain(`from "./${name}"`);
       expect(story).toContain(`component: ${name}`);
     }
   });

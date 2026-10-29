@@ -62,11 +62,7 @@ export const DEFAULT_APPEARANCE: AppearancePrefs = {
   fontScale: "100",
 };
 
-function stepValue(
-  steps: AppearanceStep[],
-  id: string,
-  fallbackId: string,
-): string {
+function stepValue(steps: AppearanceStep[], id: string, fallbackId: string): string {
   const hit = steps.find((step) => step.id === id);
   return (hit ?? steps.find((step) => step.id === fallbackId))?.value ?? "";
 }
@@ -75,9 +71,7 @@ function stepValue(
  * 解析持久化值。**任何不认识的取值都整份回落默认**，不做"认哪个用哪个"：
  * 半份生效会让界面出现"圆角是新的、字号是旧的"这种无法解释的组合。
  */
-export function parseAppearance(
-  raw: string | null | undefined,
-): AppearancePrefs {
+export function parseAppearance(raw: string | null | undefined): AppearancePrefs {
   if (!raw) return { ...DEFAULT_APPEARANCE };
   let parsed: unknown;
   try {
@@ -110,16 +104,8 @@ export function serializeAppearance(prefs: AppearancePrefs): string {
 /** 本偏好要写进 CSS 的变量集合（纯数据，便于单测）。 */
 export function appearanceVars(prefs: AppearancePrefs): Record<string, string> {
   return {
-    "--radius": stepValue(
-      RADIUS_STEPS,
-      prefs.radius,
-      DEFAULT_APPEARANCE.radius,
-    ),
-    "--font-scale": stepValue(
-      FONT_SCALE_STEPS,
-      prefs.fontScale,
-      DEFAULT_APPEARANCE.fontScale,
-    ),
+    "--radius": stepValue(RADIUS_STEPS, prefs.radius, DEFAULT_APPEARANCE.radius),
+    "--font-scale": stepValue(FONT_SCALE_STEPS, prefs.fontScale, DEFAULT_APPEARANCE.fontScale),
   };
 }
 

@@ -10,10 +10,7 @@ import {
   writeWorkshopDraft,
 } from "~/lib/workshop/draft-store";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
-import {
-  fetchProduction,
-  pushProduction,
-} from "~/lib/production/production-client";
+import { fetchProduction, pushProduction } from "~/lib/production/production-client";
 import type { Shot } from "~/lib/workshop/types";
 import { recordCanvasShotGeneration, requestShotRedo } from "./shot-writeback";
 
@@ -199,9 +196,7 @@ describe("requestShotRedo", () => {
 
     expect(pushProdMock).toHaveBeenCalledTimes(1);
     const [, payload] = pushProdMock.mock.calls[0]!;
-    const pushed = /* SAFETY: 类型断言已复核 */ (
-      payload.shots as Record<string, unknown>[]
-    )[0]!;
+    const pushed = /* SAFETY: 类型断言已复核 */ (payload.shots as Record<string, unknown>[])[0]!;
     expect(pushed).toMatchObject({
       status: "idle",
       clipStatus: "idle",

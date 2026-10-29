@@ -67,9 +67,7 @@ describe("frameAncestorsAllows", () => {
   });
 
   it("列出别的源 → 不放行", () => {
-    expect(
-      frameAncestorsAllows("frame-ancestors http://127.0.0.1:9999", HOST),
-    ).toBe(false);
+    expect(frameAncestorsAllows("frame-ancestors http://127.0.0.1:9999", HOST)).toBe(false);
   });
 
   it("'none' → 不放行", () => {
@@ -172,15 +170,11 @@ describe("probeComfyEmbeddable — 取事实（IO）", () => {
   });
 
   it("探测请求必须带 Origin（否则测不出跨源拦截）", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () =>
-      res({ "access-control-allow-origin": "*" }),
-    );
+    const fetchImpl = vi.fn<typeof fetch>(async () => res({ "access-control-allow-origin": "*" }));
     await probeComfyEmbeddable(COMFY, HOST, fetchImpl);
     const init = fetchImpl.mock.calls[0]?.[1];
     expect(
-      /* SAFETY: 类型断言已复核 */ (
-        init?.headers as Record<string, string> | undefined
-      )?.Origin,
+      /* SAFETY: 类型断言已复核 */ (init?.headers as Record<string, string> | undefined)?.Origin,
     ).toBe(HOST);
   });
 

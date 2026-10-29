@@ -42,17 +42,9 @@ function safeParseJson(json: string): Record<string, unknown> {
 /** 把未知参数串转成人类可读摘要。 */
 function summarizeArgs(argsJson: string, maxLen = 200): string {
   try {
-    const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(argsJson) as Record<
-      string,
-      unknown
-    >;
+    const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(argsJson) as Record<string, unknown>;
     const keys = Object.entries(obj)
-      .filter(
-        ([, v]) =>
-          typeof v === "string" ||
-          typeof v === "number" ||
-          typeof v === "boolean",
-      )
+      .filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
       .map(([k, v]) => `${k}=${String(v).slice(0, 60)}`)
       .join(", ");
     return keys.slice(0, maxLen) || "(空参数)";
@@ -73,16 +65,12 @@ function parseCharactersFromJson(text: string): Array<{
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
-        const rec = /* SAFETY: 类型断言已复核 */ item as Record<
-          string,
-          unknown
-        >;
+        const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
         return {
           name: typeof rec.name === "string" ? rec.name : "",
           appearance: typeof rec.appearance === "string" ? rec.appearance : "",
           costume: typeof rec.costume === "string" ? rec.costume : "",
-          personality:
-            typeof rec.personality === "string" ? rec.personality : "",
+          personality: typeof rec.personality === "string" ? rec.personality : "",
         };
       })
       .filter((c) => c.name.trim() !== "");
@@ -125,10 +113,7 @@ function parseShotsFromJson(text: string): Array<{
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
-        const rec = /* SAFETY: 类型断言已复核 */ item as Record<
-          string,
-          unknown
-        >;
+        const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
         return {
           sceneHeading:
             typeof rec.sceneHeading === "string"
@@ -136,19 +121,14 @@ function parseShotsFromJson(text: string): Array<{
               : typeof rec.heading === "string"
                 ? rec.heading
                 : "",
-          description:
-            typeof rec.description === "string" ? rec.description : "",
+          description: typeof rec.description === "string" ? rec.description : "",
           shotType: normalizeShotType(rec.shotType),
           characterNames: Array.isArray(rec.characterNames)
-            ? /* SAFETY: 类型断言已复核 */ (
-                rec.characterNames as unknown[]
-              ).map(String)
+            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as unknown[]).map(String)
             : [],
         };
       })
-      .filter(
-        (s) => s.sceneHeading.trim() !== "" || s.description.trim() !== "",
-      );
+      .filter((s) => s.sceneHeading.trim() !== "" || s.description.trim() !== "");
   } catch {
     return [];
   }
@@ -192,17 +172,9 @@ export function resolveAgentTool(
       if (typeof args.tone === "string") patch.tone = args.tone;
       if (typeof args.logline === "string") patch.logline = args.logline;
       if (typeof args.type === "string") {
-        const valid = [
-          "short_video",
-          "micro_film",
-          "animation",
-          "ad",
-          "comic",
-          "other",
-        ];
+        const valid = ["short_video", "micro_film", "animation", "ad", "comic", "other"];
         if (valid.includes(args.type)) {
-          patch.type =
-            /* SAFETY: 类型断言已复核 */ args.type as WorkshopDraftDto["meta"]["type"];
+          patch.type = /* SAFETY: 类型断言已复核 */ args.type as WorkshopDraftDto["meta"]["type"];
         }
       }
       const keys = Object.keys(patch).join("、") || "(无字段)";
@@ -222,9 +194,7 @@ export function resolveAgentTool(
       // 非字符串参数只接受标量，对象走 toString 只会得到 "[object Object]"
       const rawIdea: unknown = args.idea;
       const idea =
-        typeof rawIdea === "string" ||
-        typeof rawIdea === "number" ||
-        typeof rawIdea === "boolean"
+        typeof rawIdea === "string" || typeof rawIdea === "number" || typeof rawIdea === "boolean"
           ? String(rawIdea)
           : "";
       return {
@@ -233,8 +203,7 @@ export function resolveAgentTool(
         argSummary,
         execute: async () => {
           const meta = hd.getMeta();
-          const { buildScriptMarkdownMessages } =
-            await import("~/lib/llm/prompts");
+          const { buildScriptMarkdownMessages } = await import("~/lib/llm/prompts");
           const { streamChat } = await import("~/lib/llm/browser");
           let full = "";
           await streamChat({
@@ -258,8 +227,7 @@ export function resolveAgentTool(
 
     case "edit_script": {
       const args = safeParseJson(argsJson);
-      const instruction =
-        typeof args.instruction === "string" ? args.instruction : "";
+      const instruction = typeof args.instruction === "string" ? args.instruction : "";
       const currentScript = hd.getScriptMarkdown();
       return {
         toolName: name,
@@ -366,13 +334,10 @@ ${script.slice(0, 8000)}`,
           if (existing.some((c) => c.name === charName)) {
             return { ok: false, summary: `角色「${charName}」已存在` };
           }
-          const { buildCharacterFromBriefMessages } =
-            await import("~/lib/llm/prompts");
+          const { buildCharacterFromBriefMessages } = await import("~/lib/llm/prompts");
           const { streamChat } = await import("~/lib/llm/browser");
           const full = await streamChat({
-            messages: buildCharacterFromBriefMessages(
-              desc ? `${charName}：${desc}` : charName,
-            ),
+            messages: buildCharacterFromBriefMessages(desc ? `${charName}：${desc}` : charName),
           });
           const parsed = parseCharacterFull(full);
           const { workshopUid } = await import("~/lib/workshop/script-parser");

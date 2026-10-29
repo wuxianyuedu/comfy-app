@@ -55,18 +55,14 @@ export function ShotRow({
   onRemove: (id: string) => void;
   onGenerate: (shot: Shot) => void;
 }) {
-  const linkedChars = characters.filter((character) =>
-    shot.characterIds.includes(character.id),
-  );
+  const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
   /* 本镜头的实时生成进度（ComfyUI 当前节点 + 百分比）。 */
   const progress = progressByShot?.[shot.id];
   return (
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground text-xs">
-          {shot.sceneHeading}
-        </span>
+        <span className="text-muted-foreground text-xs">{shot.sceneHeading}</span>
         <ShotStatusBadge status={shot.status} />
         <Button
           variant="ghost"
@@ -81,10 +77,7 @@ export function ShotRow({
 
       <div className="grid gap-2 sm:grid-cols-2">
         {/* Shot type */}
-        <FormField
-          label="景别"
-          labelClassName="text-muted-foreground mb-1 text-xs"
-        >
+        <FormField label="景别" labelClassName="text-muted-foreground mb-1 text-xs">
           {(field) => (
             <SelectMenu
               {...field}
@@ -98,36 +91,23 @@ export function ShotRow({
               /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
                * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
               options={[...SHOT_TYPES]}
-              labels={
-                /* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<
-                  string,
-                  string
-                >
-              }
+              labels={/* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<string, string>}
               placeholder="选择景别"
             />
           )}
         </FormField>
 
         {/* Style */}
-        <FormField
-          label="风格 Skill"
-          labelClassName="text-muted-foreground mb-1 text-xs"
-        >
+        <FormField label="风格 Skill" labelClassName="text-muted-foreground mb-1 text-xs">
           {(field) => (
             <SelectMenu
               {...field}
               className="bg-subtle! border-border! text-xs"
               value={shot.skillSlug ?? ""}
-              onChange={(value) =>
-                onUpdate(shot.id, { skillSlug: value || undefined })
-              }
+              onChange={(value) => onUpdate(shot.id, { skillSlug: value || undefined })}
               options={styles.map((style) => style.slug)}
               labels={Object.fromEntries(
-                styles.map((style) => [
-                  style.slug,
-                  `${style.icon} ${style.name}`,
-                ]),
+                styles.map((style) => [style.slug, `${style.icon} ${style.name}`]),
               )}
               placeholder="跟随角色/默认"
             />
@@ -138,9 +118,7 @@ export function ShotRow({
       {/* Description */}
       <Textarea
         value={shot.description}
-        onChange={(event) =>
-          onUpdate(shot.id, { description: event.target.value })
-        }
+        onChange={(event) => onUpdate(shot.id, { description: event.target.value })}
         rows={2}
         className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 mt-2 min-h-0 rounded-md px-2 py-1.5 text-xs"
         placeholder="画面描述（留空则使用场景动作描述）"
@@ -149,9 +127,7 @@ export function ShotRow({
       {/* 角色多选 */}
       {characters.length > 0 && (
         <div className="mt-2">
-          <span className="text-muted-foreground mb-1 block text-xs">
-            出场角色
-          </span>
+          <span className="text-muted-foreground mb-1 block text-xs">出场角色</span>
           <div className="flex flex-wrap gap-1.5">
             {characters.map((character) => {
               const on = shot.characterIds.includes(character.id);
@@ -198,15 +174,11 @@ export function ShotRow({
         <p className="text-ink/80 text-xs leading-relaxed wrap-break-word">
           {shot.prompt || "填写描述后自动生成…"}
         </p>
-        {polishError && (
-          <p className="text-danger-strong text-2xs mt-1">{polishError}</p>
-        )}
+        {polishError && <p className="text-danger-strong text-2xs mt-1">{polishError}</p>}
         {linkedChars.length > 0 && (
           <p className="text-primary/70 mt-1 text-xs">
             关联角色：
-            {linkedChars
-              .map((linkedChar) => linkedChar.name || "未命名")
-              .join("、")}
+            {linkedChars.map((linkedChar) => linkedChar.name || "未命名").join("、")}
           </p>
         )}
       </div>

@@ -77,9 +77,7 @@ function writeLines(n: number, startIndex = 0): void {
 
 async function read(source: string, offset = 0) {
   const res = await GET(
-    new Request(
-      `http://localhost/api/logs/current?source=${source}&offset=${offset}`,
-    ),
+    new Request(`http://localhost/api/logs/current?source=${source}&offset=${offset}`),
   );
   return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
     content: string;
@@ -213,9 +211,7 @@ describe("GET /api/logs/current — 服务端进程标识", () => {
   async function readWithBoot(source: string, offset: number, bootId?: string) {
     const query = new URLSearchParams({ source, offset: String(offset) });
     if (bootId !== undefined) query.set("bootId", bootId);
-    const res = await GET(
-      new Request(`http://localhost/api/logs/current?${query.toString()}`),
-    );
+    const res = await GET(new Request(`http://localhost/api/logs/current?${query.toString()}`));
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       content: string;
       size: number;

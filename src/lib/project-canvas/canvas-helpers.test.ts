@@ -362,26 +362,18 @@ describe("applyPropagationToNodes", () => {
 
   it("video 节点接 inputImage：小写 t2v 才切 i2v（大写 T2V 不切 — 同一缺陷）", () => {
     const src = node("s", { kind: "image", resultPath: "/o/a.png" });
-    const lower = applyPropagationToNodes(
-      [src, node("t", { kind: "video", mode: "t2v" })],
-      "s",
-      {
-        srcData: src.data,
-        outEdges: [edge("t", "inputImage")],
-        importedFile: "imported.png",
-      },
-    );
+    const lower = applyPropagationToNodes([src, node("t", { kind: "video", mode: "t2v" })], "s", {
+      srcData: src.data,
+      outEdges: [edge("t", "inputImage")],
+      importedFile: "imported.png",
+    });
     expect(lower[1]!.data.mode).toBe("i2v");
 
-    const upper = applyPropagationToNodes(
-      [src, node("t", { kind: "video", mode: "T2V" })],
-      "s",
-      {
-        srcData: src.data,
-        outEdges: [edge("t", "inputImage")],
-        importedFile: "imported.png",
-      },
-    );
+    const upper = applyPropagationToNodes([src, node("t", { kind: "video", mode: "T2V" })], "s", {
+      srcData: src.data,
+      outEdges: [edge("t", "inputImage")],
+      importedFile: "imported.png",
+    });
     expect(upper[1]!.data.mode).toBe("T2V");
   });
 });

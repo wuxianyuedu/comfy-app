@@ -14,10 +14,7 @@ import { afterEach, describe, expect, it } from "vitest";
 interface ExitModule {
   APP_SERVICE_EXIT_FILE: string;
   appServiceExitPath: (root: string) => string;
-  writeAppServiceExit: (
-    root: string,
-    input: Record<string, unknown>,
-  ) => boolean;
+  writeAppServiceExit: (root: string, input: Record<string, unknown>) => boolean;
 }
 
 const mod = /* SAFETY: 类型断言已复核 */ (await import(
@@ -44,22 +41,15 @@ function read(root: string): Record<string, unknown> {
 describe("writeAppServiceExit", () => {
   it("落在 run/app-service-exit.json（与 launch-status.json 同属本次运行的现场）", () => {
     const root = tmpRoot();
-    expect(
-      mod.writeAppServiceExit(root, { kind: "dev-server", reason: "x" }),
-    ).toBe(true);
-    expect(mod.appServiceExitPath(root)).toBe(
-      join(root, "run", mod.APP_SERVICE_EXIT_FILE),
-    );
+    expect(mod.writeAppServiceExit(root, { kind: "dev-server", reason: "x" })).toBe(true);
+    expect(mod.appServiceExitPath(root)).toBe(join(root, "run", mod.APP_SERVICE_EXIT_FILE));
     expect(read(root).kind).toBe("dev-server");
   });
 
   it("无 BOM（读取侧 JSON.parse 遇 BOM 会当场失败）", () => {
     const root = tmpRoot();
     mod.writeAppServiceExit(root, { kind: "dev-server", reason: "x" });
-    const raw = readFileSync(
-      join(root, "run", mod.APP_SERVICE_EXIT_FILE),
-      "utf8",
-    );
+    const raw = readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8");
     expect(raw.startsWith("\uFEFF")).toBe(false);
   });
 
@@ -103,8 +93,6 @@ describe("writeAppServiceExit", () => {
     const blocked = join(root, "run");
     // 先把 run 造成一个**文件**，mkdir/write 都会失败。
     writeFileSync(blocked, "x");
-    expect(
-      mod.writeAppServiceExit(root, { kind: "dev-server", reason: "x" }),
-    ).toBe(false);
+    expect(mod.writeAppServiceExit(root, { kind: "dev-server", reason: "x" })).toBe(false);
   });
 });

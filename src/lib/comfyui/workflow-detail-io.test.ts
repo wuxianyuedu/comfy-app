@@ -191,9 +191,8 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    const modes = /* SAFETY: 类型断言已复核 */ result[
-      "94::widget::aspect_ratio"
-    ]!.modeOverrides as Record<string, { defaultValue?: unknown }>;
+    const modes = /* SAFETY: 类型断言已复核 */ result["94::widget::aspect_ratio"]!
+      .modeOverrides as Record<string, { defaultValue?: unknown }>;
     expect(modes.T2I!.defaultValue).toBe("16:9 (Widescreen)");
   });
 
@@ -209,9 +208,8 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    const modes = /* SAFETY: 类型断言已复核 */ result[
-      "94::widget::aspect_ratio"
-    ]!.modeOverrides as Record<string, { defaultValue?: unknown }>;
+    const modes = /* SAFETY: 类型断言已复核 */ result["94::widget::aspect_ratio"]!
+      .modeOverrides as Record<string, { defaultValue?: unknown }>;
     expect(modes.T2I!.defaultValue).toBe("4:3 (Standard)");
   });
 
@@ -245,9 +243,8 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
         },
       }),
     );
-    const modes = /* SAFETY: 类型断言已复核 */ result[
-      "94::widget::aspect_ratio"
-    ]!.modeOverrides as Record<string, { defaultValue?: unknown }>;
+    const modes = /* SAFETY: 类型断言已复核 */ result["94::widget::aspect_ratio"]!
+      .modeOverrides as Record<string, { defaultValue?: unknown }>;
     expect(modes.T2I!.defaultValue).toBe("16:9");
   });
 
@@ -323,9 +320,7 @@ describe("enrichWorkflowIO — 不投影图内语义角色（工坊契约口径�
       ),
     );
     expect(Object.keys(result["6::widget::text"]!)).not.toContain("isTextNode");
-    expect(Object.keys(result["77::widget::value"]!)).not.toContain(
-      "isTextNode",
-    );
+    expect(Object.keys(result["77::widget::value"]!)).not.toContain("isTextNode");
   });
 });
 
@@ -1153,9 +1148,7 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
     );
 
   it("没改过名时显示名由富化链给出（内部字段名）", async () => {
-    const result = await enrichWorkflowIO(
-      wrapperParams("4::widget::value_1", "value_1"),
-    );
+    const result = await enrichWorkflowIO(wrapperParams("4::widget::value_1", "value_1"));
     expect(result["4::widget::value_1"]!.label).toBe("1");
   });
 

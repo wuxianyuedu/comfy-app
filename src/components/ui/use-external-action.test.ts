@@ -17,9 +17,7 @@ import { useExternalAction } from "./use-external-action";
 describe("useExternalAction", () => {
   it("成功时按 ok 报（并归一 `triggered` 那种形状）", async () => {
     const report = vi.fn();
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "browser", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
       await result.current.run(async () => ({ ok: true, detail: "已打开" }));
     });
@@ -29,9 +27,7 @@ describe("useExternalAction", () => {
 
   it("只给 triggered 的动作也报成功（调用处不必记得读哪个字段）", async () => {
     const report = vi.fn();
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "update", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "update", report }));
     await act(async () => {
       await result.current.run(async () => ({ triggered: true }));
     });
@@ -40,18 +36,13 @@ describe("useExternalAction", () => {
 
   it("动作抛错时用 errorMessage 兜底（失败路径必须有可读文案）", async () => {
     const report = vi.fn();
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "folder", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "folder", report }));
     await act(async () => {
       await result.current.run(async () => {
         throw new Error("ECONNREFUSED");
       });
     });
-    const first = /* SAFETY: 类型断言已复核 */ report.mock.calls[0] as [
-      string,
-      string,
-    ];
+    const first = /* SAFETY: 类型断言已复核 */ report.mock.calls[0] as [string, string];
     expect(first[0]).toBe("err");
     expect(first[1]).toContain("应用服务");
   });
@@ -60,9 +51,7 @@ describe("useExternalAction", () => {
     /* `new Error("")` 的 message 是空串 —— `errorMessage` 对它回落到 fallback，
      * 而 fallback 由目标类别给出（调用处不再各写一句）。 */
     const report = vi.fn();
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "folder", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "folder", report }));
     await act(async () => {
       await result.current.run(async () => {
         throw new Error("");
@@ -74,9 +63,7 @@ describe("useExternalAction", () => {
   it("runWithTarget：空目标**在发起 IO 之前**拦下（不调 action、不进 busy）", async () => {
     const report = vi.fn();
     const action = vi.fn();
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "browser", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
       await result.current.runWithTarget("   ", action);
     });
@@ -88,9 +75,7 @@ describe("useExternalAction", () => {
   it("runWithTarget：有目标时把目标交给 action", async () => {
     const report = vi.fn();
     const action = vi.fn(async () => ({ ok: true, detail: "ok" }));
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "browser", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
       await result.current.runWithTarget("https://x", action);
     });
@@ -107,9 +92,7 @@ describe("useExternalAction", () => {
           resolve = r;
         }),
     );
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "browser", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     let first!: Promise<void>;
     act(() => {
       first = result.current.run(action);
@@ -127,9 +110,7 @@ describe("useExternalAction", () => {
   it("guard 返回 false 时整段跳过（不进 busy、不报错）", async () => {
     const report = vi.fn();
     const action = vi.fn();
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "browser", report }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
       await result.current.run(action, async () => false);
     });
@@ -140,9 +121,7 @@ describe("useExternalAction", () => {
 
   it("动作进行中 busy 为 true（界面据此显示「打开中…」）", async () => {
     let resolve!: (v: { ok: boolean; detail: string }) => void;
-    const { result } = renderHook(() =>
-      useExternalAction({ target: "browser", report: vi.fn() }),
-    );
+    const { result } = renderHook(() => useExternalAction({ target: "browser", report: vi.fn() }));
     let p!: Promise<void>;
     act(() => {
       p = result.current.run(

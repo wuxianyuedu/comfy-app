@@ -46,9 +46,7 @@ import { launcherChainSource } from "./helpers/launcher-source";
 /** 数出「进程组」里还剩几个活着的标记进程（用唯一标记匹配命令行）。 */
 function countMarkedProcesses(marker: string): number {
   const out = execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" });
-  return out
-    .split("\n")
-    .filter((line: string) => line.includes(marker) && !line.includes("ps -eo"))
+  return out.split("\n").filter((line: string) => line.includes(marker) && !line.includes("ps -eo"))
     .length;
 }
 
@@ -61,10 +59,7 @@ function countMarkedProcesses(marker: string): number {
  * 所以两边都读同一个 `check`：先轮询等它成立，再把**最终读数**交回调用点
  * （调用点自己仍用 `toBe(true)` 判结论，报错文案里保留各自的语义）。
  */
-async function waitUntil(
-  check: () => boolean,
-  timeoutMs = 5000,
-): Promise<boolean> {
+async function waitUntil(check: () => boolean, timeoutMs = 5000): Promise<boolean> {
   await expect.poll(check, { timeout: timeoutMs, interval: 100 }).toBe(true);
   return check();
 }
@@ -99,24 +94,17 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
       const marker = `comfyapp-tree-${Date.now()}`;
       const child = spawnInGroup({
         command: "sh",
-        args: [
-          "-c",
-          `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`,
-        ],
+        args: ["-c", `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`],
         cwd: process.cwd(),
       });
-      expect(
-        await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000),
-      ).toBe(true);
+      expect(await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000)).toBe(true);
 
       const result = await killProcessTree({ pid: child.pid!, detached: true });
       expect(result.ok).toBe(true);
       // 「整组」是判据：信号落到 -pgid，而不只是 leader。
       expect(result.via).toContain("进程组");
 
-      expect(
-        await waitUntil(() => countMarkedProcesses(marker) === 0, 8000),
-      ).toBe(true);
+      expect(await waitUntil(() => countMarkedProcesses(marker) === 0, 8000)).toBe(true);
     },
     20_000,
   );
@@ -241,45 +229,31 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it(".next 缓存指纹：配置不变则保留，变了才清；SKIP_CLEAN 强制保留", () => {
     const root = makeTmp();
-    fs.writeFileSync(
-      path.join(root, "package.json"),
-      JSON.stringify({ name: "a" }),
-    );
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "a" }));
     const first = syncNextCache(root, { NODE_ENV: undefined });
     expect(first.cleaned).toBe(false); // 首次：写初始指纹，不「清理」
-    expect(
-      fs.readFileSync(path.join(root, ".next", "config-fingerprint"), "utf8"),
-    ).toBe(configFingerprint(root).hash);
+    expect(fs.readFileSync(path.join(root, ".next", "config-fingerprint"), "utf8")).toBe(
+      configFingerprint(root).hash,
+    );
 
     // 指纹一致 → 保留缓存（不清）
     expect(syncNextCache(root, { NODE_ENV: undefined }).cleaned).toBe(false);
 
     // 配置内容变了 → 清缓存（否则会拿旧 route/旧 chunk 跑）
-    fs.writeFileSync(
-      path.join(root, "package.json"),
-      JSON.stringify({ name: "b" }),
-    );
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "b" }));
     expect(syncNextCache(root, { NODE_ENV: undefined }).cleaned).toBe(true);
 
     // SKIP_CLEAN 明确要求保留
-    fs.writeFileSync(
-      path.join(root, "package.json"),
-      JSON.stringify({ name: "c" }),
-    );
-    expect(
-      syncNextCache(root, { NODE_ENV: undefined, SKIP_CLEAN: "1" }).cleaned,
-    ).toBe(false);
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "c" }));
+    expect(syncNextCache(root, { NODE_ENV: undefined, SKIP_CLEAN: "1" }).cleaned).toBe(false);
     // FORCE_CLEAN 明确要求清
-    expect(
-      syncNextCache(root, { NODE_ENV: undefined, FORCE_CLEAN: "1" }).reason,
-    ).toContain("FORCE_CLEAN");
+    expect(syncNextCache(root, { NODE_ENV: undefined, FORCE_CLEAN: "1" }).reason).toContain(
+      "FORCE_CLEAN",
+    );
   });
 
   it("壳侧不再依赖 Windows：Cargo 的 windows crate 在非 Windows 下不参与编译", () => {
-    const cargo = fs.readFileSync(
-      path.join(process.cwd(), "src-tauri", "Cargo.toml"),
-      "utf8",
-    );
+    const cargo = fs.readFileSync(path.join(process.cwd(), "src-tauri", "Cargo.toml"), "utf8");
     // 无条件依赖 windows crate = Linux/macOS 上编译整棵 windows 树并失败
     // （实测 `error[E0425]: cannot find type IMarshal in windows_core::imp`）。
     expect(cargo).toMatch(/\[target\.'cfg\(windows\)'\.dependencies\]/);
@@ -308,14 +282,8 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it("sidecar 的拉起与回收走官方 shell 插件（跨平台机制由它选）", () => {
     const root = process.cwd();
-    const lib = fs.readFileSync(
-      path.join(root, "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
-    const cargo = fs.readFileSync(
-      path.join(root, "src-tauri", "Cargo.toml"),
-      "utf8",
-    );
+    const lib = fs.readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
+    const cargo = fs.readFileSync(path.join(root, "src-tauri", "Cargo.toml"), "utf8");
     // 插件在 Rust 侧提供跨平台 spawn/kill：写死 std::process::Command + taskkill
     // 时 POSIX 分支等于「什么都不做」（sidecar 活过壳退出，继续占端口）
     expect(cargo).toContain("tauri-plugin-shell");
@@ -326,34 +294,24 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     for (const cap of ["default", "remote", "splash"]) {
       const file = path.join(root, "src-tauri", "capabilities", `${cap}.json`);
       if (!fs.existsSync(file)) continue;
-      expect(fs.readFileSync(file, "utf8")).not.toMatch(
-        /shell:(allow-execute|allow-spawn)/,
-      );
+      expect(fs.readFileSync(file, "utf8")).not.toMatch(/shell:(allow-execute|allow-spawn)/);
     }
   });
 
   it("壳的项目根判据不再绑在 Windows 专属文件上", () => {
-    const lib = fs.readFileSync(
-      path.join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = fs.readFileSync(path.join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     // 旧判据只认 scripts/dev-launcher.ps1 → Linux/macOS 上 resolve_project_root()
     // 恒返回空串：启动页读不到 launch-status、壳日志落不了盘，表现为「一直转圈」。
     // 现在认的是**编排器的唯一实现**（.ps1 只是它的 Windows 调用入口）——
     // 判据绑在入口形态上，换入口时就会再静默失效一次。
     expect(lib).toContain("fn looks_like_project_root");
     expect(lib).toContain('join("dev-launcher.mjs")');
-    expect(lib).not.toMatch(
-      /looks_like_project_root[\s\S]{0,400}dev-launcher\.ps1/,
-    );
+    expect(lib).not.toMatch(/looks_like_project_root[\s\S]{0,400}dev-launcher\.ps1/);
   });
 
   it("统一编排：Windows 走同一份 .mjs，.ps1 只剩调用入口", () => {
     const root = process.cwd();
-    const ps1 = fs.readFileSync(
-      path.join(root, "scripts", "dev-launcher.ps1"),
-      "utf8",
-    );
+    const ps1 = fs.readFileSync(path.join(root, "scripts", "dev-launcher.ps1"), "utf8");
     // 入口只做「定位 + 转交 + 透传退出码」：不再有 Windows 专属的编排调用
     // （taskkill / Get-CimInstance / Job Object / cmd.exe）。
     expect(ps1).toContain("dev-launcher.mjs");
@@ -381,25 +339,14 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     //   · launcher-core/shell.mjs 的 isWindows()（进程组 / 可执行名后缀）
     //   · launch-core/procs.mjs 的 isWindows()（进程与端口探测机制）
     expect(launcher).not.toMatch(/process\.platform === "win32"/);
-    for (const rel of [
-      "shell.mjs",
-      "procs.mjs",
-      "orchestrator.mjs",
-      "log.mjs",
-      "worktree.mjs",
-    ]) {
-      expect(
-        fs.existsSync(path.join(root, "scripts", "launcher-core", rel)),
-      ).toBe(true);
+    for (const rel of ["shell.mjs", "procs.mjs", "orchestrator.mjs", "log.mjs", "worktree.mjs"]) {
+      expect(fs.existsSync(path.join(root, "scripts", "launcher-core", rel))).toBe(true);
     }
   });
 
   it("壳退出时的统一回收走 reap-process.mjs（不在 Rust 里重写平台分支）", () => {
     const root = process.cwd();
-    const lib = fs.readFileSync(
-      path.join(root, "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = fs.readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
     // kill_sidecar 除了插件的 kill()，还要补一刀统一回收：Node 之下的
     // next-server / turbopack worker 才是真正会残留成孤儿的那几层。
     expect(lib).toMatch(/fn kill_sidecar\(project_root: &str\)/);
@@ -408,17 +355,11 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   });
 
   it("sidecar 命名按平台判据收口（不再是写死的 node.exe）", () => {
-    const lib = fs.readFileSync(
-      path.join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = fs.readFileSync(path.join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     // 写死 "node.exe" 时 Linux 启动找不到 sidecar（资源里叫 node，没有后缀）
     expect(lib).not.toMatch(/join\("node\.exe"\)/);
     expect(lib).toContain("sidecar_binary_name");
-    const build = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "build-desktop.mjs"),
-      "utf8",
-    );
+    const build = fs.readFileSync(path.join(process.cwd(), "scripts", "build-desktop.mjs"), "utf8");
     expect(build).toContain("sidecarFileName");
   });
 });
@@ -452,12 +393,7 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
    * 的生产链路都要它，两处各写一份的下场是「某一条忘了起」（host 模式下现场是
    * 任务永远停在队列）。下面几条因此把函数体从 launcher 改到共用件上断。 */
   const spawnKernelSrc = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      "scripts",
-      "launcher-core",
-      "executor-host-spawn.mjs",
-    ),
+    path.join(process.cwd(), "scripts", "launcher-core", "executor-host-spawn.mjs"),
     "utf8",
   );
 
@@ -511,9 +447,7 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
     expect(kernel).toContain("parseEnvFile(");
     expect(kernel).toContain('"COMFY_EXECUTOR"');
     // launcher 里不许再留第二份归一化实现（漂移就是这么发生的）
-    expect(launcherSrc).not.toContain(
-      "export function resolveComfyExecutorMode(",
-    );
+    expect(launcherSrc).not.toContain("export function resolveComfyExecutorMode(");
   });
 
   it("RUNTIME_SCRIPTS 含 executor-host.mjs（桌面包用户改 .env 才能试 host）", () => {
@@ -543,9 +477,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
 
   /** 剥掉块注释与整行 `//` 注释：注释里解释「为什么用动态 import」不该被当成说明符。 */
   function stripComments(source: string): string {
-    return source
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^[ \t]*\/\/.*$/gm, "");
+    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
   }
 
   function scriptFiles(dir: string): string[] {
@@ -575,10 +507,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
     }
     // 清单不能静默变空：`dev-launcher.mjs` 与 `reap-process.mjs` 各有一条，它们是
     // 「回收残留进程树」的唯一入口 —— 扫不到就说明这条判据本身失效了。
-    expect(
-      checked,
-      "没有扫到任何 src/lib 路径字面量——判据失效",
-    ).toBeGreaterThanOrEqual(2);
+    expect(checked, "没有扫到任何 src/lib 路径字面量——判据失效").toBeGreaterThanOrEqual(2);
     expect(offenders).toEqual([]);
   });
 });
@@ -675,12 +604,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
   }
 
   /** 造一份应用服务转录（mtime 可指定，用来验「只认本次运行」）。 */
-  function writePanel(
-    dir: string,
-    name: string,
-    text: string,
-    mtimeMs: number,
-  ) {
+  function writePanel(dir: string, name: string, text: string, mtimeMs: number) {
     const file = path.join(dir, name);
     fs.writeFileSync(file, text, "utf8");
     fs.utimesSync(file, new Date(mtimeMs), new Date(mtimeMs));
@@ -714,9 +638,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     const stdoutFile = path.join(dir, "nextjs-stdout.log");
     fs.writeFileSync(stderrFile, "", "utf8");
     fs.writeFileSync(stdoutFile, "GET /api/health 503\n", "utf8");
-    expect(
-      readDiagnosticsTail({ stderrFile, stdoutFile, panelDir: makeTmp() }),
-    ).toContain("503");
+    expect(readDiagnosticsTail({ stderrFile, stdoutFile, panelDir: makeTmp() })).toContain("503");
   });
 
   it("两个重定向文件都空 → 退到应用服务转录（同步 append，随写随见）", () => {
@@ -751,27 +673,16 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     const dir = makeTmp();
     const stdoutFile = path.join(dir, "nextjs-stdout.log");
     fs.writeFileSync(stdoutFile, "只有 stdout\n", "utf8");
-    expect(readDiagnosticsTail({ stdoutFile, panelDir: null })).toContain(
-      "只有 stdout",
-    );
+    expect(readDiagnosticsTail({ stdoutFile, panelDir: null })).toContain("只有 stdout");
   });
 
   it("panelSince 之前的转录一律不算 —— 不把上一次的失败现场摆给用户", () => {
     const panelDir = makeTmp();
     const now = Date.now();
-    writePanel(
-      panelDir,
-      "nextjs-panel-1-1.log",
-      "上一次的失败\n",
-      now - 60_000,
-    );
+    writePanel(panelDir, "nextjs-panel-1-1.log", "上一次的失败\n", now - 60_000);
     writePanel(panelDir, "nextjs-panel-2-2.log", "本次的失败\n", now);
-    expect(
-      readDiagnosticsTail({ panelDir, panelSince: now - 5_000 }),
-    ).toContain("本次的失败");
-    expect(readDiagnosticsTail({ panelDir, panelSince: now + 60_000 })).toBe(
-      "",
-    );
+    expect(readDiagnosticsTail({ panelDir, panelSince: now - 5_000 })).toContain("本次的失败");
+    expect(readDiagnosticsTail({ panelDir, panelSince: now + 60_000 })).toBe("");
   });
 
   it("latestPanelTranscript：取 mtime 最新的那一份；目录不在时返回 null", () => {
@@ -779,11 +690,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     const now = Date.now();
     writePanel(panelDir, "nextjs-panel-1-1.log", "旧\n", now - 60_000);
     writePanel(panelDir, "nextjs-panel-2-2.log", "新\n", now);
-    fs.writeFileSync(
-      path.join(panelDir, "nextjs-stdout-1.log"),
-      "不是转录",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(panelDir, "nextjs-stdout-1.log"), "不是转录", "utf8");
     expect(latestPanelTranscript(panelDir)).toContain("nextjs-panel-2-2.log");
     expect(latestPanelTranscript(path.join(panelDir, "不存在"))).toBeNull();
   });

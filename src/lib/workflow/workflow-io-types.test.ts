@@ -44,9 +44,7 @@ describe("resolveEntryRequired — required 的模式覆盖两级回退", () => 
 
 describe("resolveEntrySeedMode — seedMode 的模式覆盖两级回退", () => {
   it("无 mode 时回退条目级 seedMode", () => {
-    expect(resolveEntrySeedMode(entry({ seedMode: "increment" }))).toBe(
-      "increment",
-    );
+    expect(resolveEntrySeedMode(entry({ seedMode: "increment" }))).toBe("increment");
     expect(resolveEntrySeedMode(entry())).toBeUndefined();
   });
 
@@ -115,9 +113,7 @@ describe("parseWorkflowIOMap —— 列边界上的历史键归一", () => {
     });
     /* 旧键不留下：同一个覆盖层以两个名字在本列里往返，读的人分不清哪个是权威。 */
     expect(
-      /* SAFETY: 类型断言已复核 */ (
-        map["94::widget::aspect_ratio"] as { modes?: unknown }
-      ).modes,
+      /* SAFETY: 类型断言已复核 */ (map["94::widget::aspect_ratio"] as { modes?: unknown }).modes,
     ).toBeUndefined();
   });
 

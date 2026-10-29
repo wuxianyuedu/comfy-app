@@ -48,10 +48,11 @@ function seedConfig(repo: { write: (rel: string, s: string) => void }) {
 }
 
 /** 三个文件的常态：入口静静态 import 中转层，中转层 import 一个便宜的模块。 */
-function seedCheapChain(repo: {
-  write: (rel: string, s: string) => void;
-}) {
-  repo.write("src/app/entry.tsx", 'import { mid } from "~/components/mid";\nexport const e = mid;\n');
+function seedCheapChain(repo: { write: (rel: string, s: string) => void }) {
+  repo.write(
+    "src/app/entry.tsx",
+    'import { mid } from "~/components/mid";\nexport const e = mid;\n',
+  );
   repo.write("src/components/mid.ts", 'import { leaf } from "./leaf";\nexport const mid = leaf;\n');
   repo.write("src/components/leaf.ts", "export const leaf = 1;\n");
 }
@@ -126,7 +127,7 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
     repo.write(
       "src/components/lazy-heavy.ts",
       'import React from "react";\n' +
-        'export const Lazy = React.lazy(() =>\n' +
+        "export const Lazy = React.lazy(() =>\n" +
         '  import("@xyflow/react").then((m) => ({ default: m.ReactFlow })),\n);\n',
     );
     const { code, output } = repo.run();
@@ -152,9 +153,7 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
   });
 
   /* ── ⑤ 登记项自身的失效 ─────────────────────────────────────────────── */
-  test("登记为入口的文件不存在时判红（登记项静默失效是最典型的死法）", ({
-    repo,
-  }) => {
+  test("登记为入口的文件不存在时判红（登记项静默失效是最典型的死法）", ({ repo }) => {
     seedConfig(repo);
     seedCheapChain(repo);
     repo.remove("src/app/entry.tsx");

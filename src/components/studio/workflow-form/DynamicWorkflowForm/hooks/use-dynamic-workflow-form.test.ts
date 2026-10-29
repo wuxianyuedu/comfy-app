@@ -17,10 +17,7 @@ vi.mock("~/lib/project-canvas/canvas-api", () => ({
 }));
 
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
-import type {
-  WorkflowIOEntry,
-  WorkflowIOMap,
-} from "~/components/studio/workflow-io";
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { DynamicWorkflowFormProps } from "../dynamic-workflow-form-config";
 import type { DynamicWorkflowFormController } from "./use-dynamic-workflow-form";
 
@@ -68,10 +65,7 @@ function pickPickerFile(file: File) {
 }
 
 /** Widget pin（默认 kind=widget）。 */
-function widget(
-  name: string,
-  over: Partial<WorkflowIOEntry> = {},
-): WorkflowIOEntry {
+function widget(name: string, over: Partial<WorkflowIOEntry> = {}): WorkflowIOEntry {
   return {
     direction: "input",
     kind: "widget",
@@ -83,10 +77,7 @@ function widget(
 }
 
 /** 连线端口（kind=param）。 */
-function wire(
-  name: string,
-  over: Partial<WorkflowIOEntry> = {},
-): WorkflowIOEntry {
+function wire(name: string, over: Partial<WorkflowIOEntry> = {}): WorkflowIOEntry {
   return {
     direction: "input",
     kind: "param",
@@ -109,9 +100,7 @@ function ioMap(...entries: WorkflowIOEntry[]): WorkflowIOMap {
   return map;
 }
 
-function baseProps(
-  over: Partial<DynamicWorkflowFormProps> = {},
-): DynamicWorkflowFormProps {
+function baseProps(over: Partial<DynamicWorkflowFormProps> = {}): DynamicWorkflowFormProps {
   return {
     io: null,
     values: {},
@@ -131,9 +120,7 @@ describe("useDynamicWorkflowForm — IO 切分与空态", () => {
 
   it("只有输出、没有输入时不算空（输出条仍有内容可显示）", () => {
     const { result } = renderHook(() =>
-      useDynamicWorkflowForm(
-        baseProps({ io: ioMap(output("image")), showOutputs: true }),
-      ),
+      useDynamicWorkflowForm(baseProps({ io: ioMap(output("image")), showOutputs: true })),
     );
     expect(result.current.isEmpty).toBe(false);
     expect(result.current.outputs).toHaveLength(1);
@@ -141,9 +128,7 @@ describe("useDynamicWorkflowForm — IO 切分与空态", () => {
 
   it("连线端口进 wireInputs、widget 进 widgetInputs，互不混装", () => {
     const { result } = renderHook(() =>
-      useDynamicWorkflowForm(
-        baseProps({ io: ioMap(wire("image"), widget("prompt")) }),
-      ),
+      useDynamicWorkflowForm(baseProps({ io: ioMap(wire("image"), widget("prompt")) })),
     );
     expect(result.current.wireInputs.map((e) => e.name)).toEqual(["image"]);
     expect(result.current.widgetInputs.map((e) => e.name)).toEqual(["prompt"]);
@@ -165,14 +150,9 @@ describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作
 
   it("运行态：数值 widget（steps 等）并入端口行，继承可连线的单行版式", () => {
     const { result } = renderHook(() =>
-      useDynamicWorkflowForm(
-        baseProps({ io: ioMap(wire("image"), widget("steps", numeric)) }),
-      ),
+      useDynamicWorkflowForm(baseProps({ io: ioMap(wire("image"), widget("steps", numeric)) })),
     );
-    expect(result.current.portEntries.map((e) => e.name)).toEqual([
-      "image",
-      "steps",
-    ]);
+    expect(result.current.portEntries.map((e) => e.name)).toEqual(["image", "steps"]);
     expect(result.current.widgetSectionEntries).toEqual([]);
   });
 
@@ -180,16 +160,11 @@ describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作
     const { result } = renderHook(() =>
       useDynamicWorkflowForm(
         baseProps({
-          io: ioMap(
-            widget("prompt", { type: "STRING" }),
-            widget("steps", numeric),
-          ),
+          io: ioMap(widget("prompt", { type: "STRING" }), widget("steps", numeric)),
         }),
       ),
     );
-    expect(result.current.widgetSectionEntries.map((e) => e.name)).toEqual([
-      "prompt",
-    ]);
+    expect(result.current.widgetSectionEntries.map((e) => e.name)).toEqual(["prompt"]);
     expect(result.current.portEntries.map((e) => e.name)).toEqual(["steps"]);
   });
 
@@ -205,9 +180,7 @@ describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作
     // 这是后端对齐历史根因的回归用例：数值行若仍被压成端口行版式，
     // 那套版式从不渲染必填/👁，作者永远碰不到（seed 挤没的来源）。
     expect(result.current.portEntries.map((e) => e.name)).toEqual(["image"]);
-    expect(result.current.widgetSectionEntries.map((e) => e.name)).toEqual([
-      "steps",
-    ]);
+    expect(result.current.widgetSectionEntries.map((e) => e.name)).toEqual(["steps"]);
   });
 
   it("作者态由 onReorder 触发同样成立（不止必填回调）", () => {
@@ -219,9 +192,7 @@ describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作
         }),
       ),
     );
-    expect(result.current.widgetSectionEntries.map((e) => e.name)).toEqual([
-      "seed",
-    ]);
+    expect(result.current.widgetSectionEntries.map((e) => e.name)).toEqual(["seed"]);
   });
 });
 
@@ -233,9 +204,7 @@ describe("useDynamicWorkflowForm — 多模式可见性过滤", () => {
 
   it("当前模式下 visible=false 的行不显示（展示层过滤）", () => {
     const { result } = renderHook(() =>
-      useDynamicWorkflowForm(
-        baseProps({ io: ioMap(hiddenInTxt2img), mode: "txt2img" }),
-      ),
+      useDynamicWorkflowForm(baseProps({ io: ioMap(hiddenInTxt2img), mode: "txt2img" })),
     );
     expect(result.current.inputs).toEqual([]);
   });
@@ -257,9 +226,7 @@ describe("useDynamicWorkflowForm — 多模式可见性过滤", () => {
 
   it("切到其它模式时该行重新可见", () => {
     const { result } = renderHook(() =>
-      useDynamicWorkflowForm(
-        baseProps({ io: ioMap(hiddenInTxt2img), mode: "img2img" }),
-      ),
+      useDynamicWorkflowForm(baseProps({ io: ioMap(hiddenInTxt2img), mode: "img2img" })),
     );
     expect(result.current.inputs.map((e) => e.name)).toEqual(["denoise"]);
   });
@@ -289,15 +256,12 @@ describe("useDynamicWorkflowForm — set 与 values 的不可变更新", () => {
   it("set 产生新对象（不原地改 values），并只改目标键", () => {
     const values = { a: 1, b: 2 };
     const onChange = vi.fn();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ values, onChange })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ values, onChange })));
 
     act(() => result.current.set("b", 99));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    const next = /* SAFETY: 类型断言已复核 */ onChange.mock
-      .calls[0]![0] as Record<string, unknown>;
+    const next = /* SAFETY: 类型断言已复核 */ onChange.mock.calls[0]![0] as Record<string, unknown>;
     expect(next).toEqual({ a: 1, b: 99 });
     expect(next).not.toBe(values); // 不可变：调用方靠引用变化触发重渲染
     expect(values).toEqual({ a: 1, b: 2 }); // 原对象未被改
@@ -305,9 +269,7 @@ describe("useDynamicWorkflowForm — set 与 values 的不可变更新", () => {
 
   it("onChange 是调用方持有的：controller 透传同一个引用", () => {
     const onChange = vi.fn();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onChange })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onChange })));
     expect(result.current.onChange).toBe(onChange);
   });
 });
@@ -319,16 +281,12 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
   });
 
   it("传了 onReorder 才给出拖拽手势", () => {
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
     expect(result.current.dragHandlers).not.toBeNull();
   });
 
   it("拿起一行后 draggingKey/dragOverKey 同步置位，endDrag 清空", () => {
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
 
     act(() => result.current.beginPortDrag("k1"));
     expect(result.current.draggingKey).toBe("k1");
@@ -341,9 +299,7 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
 
   it("drop 到另一行：回调onReorder(fromKey, beforeKey) 并清掉高亮", () => {
     const onReorder = vi.fn();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
 
     act(() =>
       result.current.dragHandlers!.onDragStart("from")(
@@ -369,9 +325,7 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
 
   it("落点在目标行下半区时插到其后（指示线与插入位置同源）", () => {
     const onReorder = vi.fn();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
     act(() => result.current.beginPortDrag("from"));
     act(() =>
       result.current.dragHandlers!.onDrop("to")(
@@ -390,9 +344,7 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
 
   it("从输入框/下拉起手取消拖拽（只能从不可编辑区域拖动）", () => {
     const onReorder = vi.fn();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
     const preventDefault = vi.fn();
     const setData = vi.fn();
     act(() =>
@@ -411,9 +363,7 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
 
   it("drop 到自己身上不触发重排（避免无意义的顺序写入）", () => {
     const onReorder = vi.fn();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder })));
 
     act(() => result.current.beginPortDrag("same"));
     act(() =>
@@ -430,9 +380,7 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
   });
 
   it("拖拽高亮不覆盖同一行：拖到自己时 dragOverKey 不变", () => {
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
 
     act(() => result.current.beginPortDrag("k1"));
     act(() =>
@@ -457,9 +405,7 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
   });
 
   it("数据流里的 setData 被调用（Firefox 不调用就不启动拖拽）", () => {
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })),
-    );
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onReorder: vi.fn() })));
     const setData = vi.fn();
     act(() =>
       result.current.dragHandlers!.onDragStart("k1")(
@@ -505,9 +451,7 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     // 上传失败路径会把错误打给 console（LogProvider 会收进日志面板），
     // 测试里静音避免污染输出。用返回 undefined 的箭头函数而非空函数体，
     // 保持与其余 mock 写法一致。
-    const consoleErr = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    const consoleErr = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { result } = renderFormWithPicker(baseProps({ onChange }));
 
     act(() => result.current.controller.pickFile("img-key"));
@@ -530,9 +474,7 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
   it("上传失败：原因同时上抛给调用方（画布节点/库节点各自渲染提示条）", async () => {
     vi.mocked(uploadImageFile).mockRejectedValue(new Error("ComfyUI 启动超时"));
     const onUploadError = vi.fn();
-    const consoleErr = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    const consoleErr = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { result } = renderFormWithPicker(baseProps({ onUploadError }));
 
     act(() => result.current.controller.pickFile("img-key"));

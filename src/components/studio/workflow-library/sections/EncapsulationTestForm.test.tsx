@@ -18,9 +18,7 @@ import { EncapsulationTestForm } from "./EncapsulationTestForm";
 afterEach(cleanup);
 
 /** 契约口（含落点信息；`targetIoKey: null` = 没连到工作流）。 */
-function entry(
-  over: Partial<EncapsulationEntryStatus> & { id: string },
-): EncapsulationEntryStatus {
+function entry(over: Partial<EncapsulationEntryStatus> & { id: string }): EncapsulationEntryStatus {
   return {
     label: over.id,
     control: "text",
@@ -81,9 +79,7 @@ describe("EncapsulationTestForm", () => {
     expect(negative).toBeTruthy();
     /* 没连到工作流的口给一句说明，但**不禁用**：值仍可填。 */
     expect(screen.getByText("未连到端口，用工作流默认值")).toBeTruthy();
-    expect(
-      /* SAFETY: 类型断言已复核 */ (negative as HTMLTextAreaElement).disabled,
-    ).toBe(false);
+    expect(/* SAFETY: 类型断言已复核 */ (negative as HTMLTextAreaElement).disabled).toBe(false);
   });
 
   it("视频模式的尺寸口没落点也渲染尺寸控件（不再连尺寸都选不了）", () => {
@@ -146,8 +142,7 @@ describe("EncapsulationTestForm", () => {
         throw new Error("ComfyUI 未启动");
       }),
     });
-    const input =
-      document.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).toBeTruthy();
     const file = new File([new Uint8Array([1, 2, 3])], "f.png", {
       type: "image/png",

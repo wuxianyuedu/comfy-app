@@ -75,10 +75,7 @@ test("§x.y 照旧保留 而该节不在那次提交的树里 → 红", ({ repo 
   repo.write("docs/standards/13-提交与-code-review.md", docWith("13.5.12"));
   commitAll(repo, "feat: 某次改动");
   repo.write("src/a.ts", "export const a = 1;\n");
-  commitAll(
-    repo,
-    "feat: 收掉一批红\n\nmaster 新增的 §13.5.13 / §13.6.3 两节照旧保留。",
-  );
+  commitAll(repo, "feat: 收掉一批红\n\nmaster 新增的 §13.5.13 / §13.6.3 两节照旧保留。");
 
   const { code, output } = repo.run(["--commit", "HEAD"]);
   repoExpect(code).toBe(1);
@@ -88,16 +85,10 @@ test("§x.y 照旧保留 而该节不在那次提交的树里 → 红", ({ repo 
 });
 
 test("声明与该节一致时 → 绿", ({ repo }) => {
-  repo.write(
-    "docs/standards/13-提交与-code-review.md",
-    docWith("13.5.13", "13.6.3"),
-  );
+  repo.write("docs/standards/13-提交与-code-review.md", docWith("13.5.13", "13.6.3"));
   commitAll(repo, "docs: 补两节");
   repo.write("src/a.ts", "export const a = 2;\n");
-  commitAll(
-    repo,
-    "feat: 某次改动\n\nmaster 新增的 §13.5.13 / §13.6.3 两节照旧保留。",
-  );
+  commitAll(repo, "feat: 某次改动\n\nmaster 新增的 §13.5.13 / §13.6.3 两节照旧保留。");
 
   const { code, output } = repo.run(["--commit", "HEAD"]);
   repoExpect(code).toBe(0);
@@ -116,10 +107,7 @@ test("假声明在较早那笔上：只审 HEAD 漏过，审区间抓到", ({ re
   repo.write("docs/standards/13-提交与-code-review.md", docWith("13.5.12"));
   commitAll(repo, "docs: 起点");
   repo.write("src/a.ts", "export const a = 101;\n");
-  commitAll(
-    repo,
-    "feat: 带假声明的那笔\n\nmaster 新增的 §13.5.13 两节照旧保留。",
-  );
+  commitAll(repo, "feat: 带假声明的那笔\n\nmaster 新增的 §13.5.13 两节照旧保留。");
   /* 之后再一笔干净的 —— 它就是「合并后 HEAD 的前进」那一格的最小复现。 */
   repo.write("src/b.ts", "export const b = 1;\n");
   commitAll(repo, "feat: 之后的一笔（没有声明）");
@@ -143,9 +131,7 @@ test("假声明在较早那笔上：只审 HEAD 漏过，审区间抓到", ({ re
   repoExpect(parsed.commits).toBe(2);
 });
 
-test("区间里没有提交 ⇒ 退 0 并说「无可审，不是判过」（不许折成「取不到」）", ({
-  repo,
-}) => {
+test("区间里没有提交 ⇒ 退 0 并说「无可审，不是判过」（不许折成「取不到」）", ({ repo }) => {
   /* 这是合并前常见的一态：`<分叉点> == HEAD`（刚 fetch 完、分支还没带新东西）。
    * 旧形态把它报成「取不到要审的提交」并退 2 —— 那是把「没带东西」说成
    * 「判据坏了」，而 2 在本仓的口径里是「没跑起来、不构成证据」。 */
@@ -184,24 +170,17 @@ test("同一句里并列的两个章节各报一条（不是只报一个）", ({
     }>;
   };
   repoExpect(parsed.verdict).toBe("contradicted");
-  const targets = parsed.audits[0]!.rows.filter(
-    (r) => r.verdict === "contradicted",
-  )
+  const targets = parsed.audits[0]!.rows.filter((r) => r.verdict === "contradicted")
     .map((r) => r.claim.target)
     .sort();
   repoExpect(targets).toEqual(["13.5.13", "13.6.3"]);
 });
 
-test("折行的提交信息要能拼回一句（`§13.5.13 /` 与 `§13.6.3 两节…保留` 分两行）", ({
-  repo,
-}) => {
+test("折行的提交信息要能拼回一句（`§13.5.13 /` 与 `§13.6.3 两节…保留` 分两行）", ({ repo }) => {
   repo.write("docs/standards/13-提交与-code-review.md", docWith("13.5.12"));
   commitAll(repo, "docs: 起点");
   repo.write("src/a.ts", "export const a = 4;\n");
-  commitAll(
-    repo,
-    "feat: 某次改动\n\nmaster 新增的 §13.5.13 /\n§13.6.3 两节照旧保留。",
-  );
+  commitAll(repo, "feat: 某次改动\n\nmaster 新增的 §13.5.13 /\n§13.6.3 两节照旧保留。");
 
   const { code, output } = repo.run(["--commit", "HEAD"]);
   repoExpect(code).toBe(1);
@@ -214,10 +193,7 @@ test("`）。 「双击重命名」保留` 那类跨小句的「保留」不算�
   repo.write("docs/standards/16-某章.md", docWith("16.2.4.57"));
   commitAll(repo, "docs: 起点");
   repo.write("src/a.ts", "export const a = 5;\n");
-  commitAll(
-    repo,
-    "feat: 某次改动\n\n§16.2.4.57）。 「双击重命名」保留双击，另补 Enter / F2。",
-  );
+  commitAll(repo, "feat: 某次改动\n\n§16.2.4.57）。 「双击重命名」保留双击，另补 Enter / F2。");
 
   const { code, output } = repo.run(["--commit", "HEAD"]);
   repoExpect(code).toBe(0);
@@ -228,10 +204,7 @@ test("`§11.14，…新增 §11.15，…。 保留` 跨句号的那条不算声�
   repo.write("docs/standards/11-测试.md", docWith("11.14", "11.15"));
   commitAll(repo, "docs: 起点");
   repo.write("src/a.ts", "export const a = 6;\n");
-  commitAll(
-    repo,
-    "feat: 某次改动\n\n§11.14，本 PR 在文末新增 §11.15，两侧无实质重叠。 保留",
-  );
+  commitAll(repo, "feat: 某次改动\n\n§11.14，本 PR 在文末新增 §11.15，两侧无实质重叠。 保留");
 
   const { code } = repo.run(["--commit", "HEAD"]);
   repoExpect(code).toBe(0);
@@ -264,9 +237,7 @@ test("提交**没碰**那份文档时，那一节仍在（不得判成「不出�
   repoExpect(output).toContain("都与事实一致");
 });
 
-test("非 ASCII 文档名要读得出来（`ls-tree` 的路径转义会静默把名单变空）", ({
-  repo,
-}) => {
+test("非 ASCII 文档名要读得出来（`ls-tree` 的路径转义会静默把名单变空）", ({ repo }) => {
   /* 文件名带中文是**本仓库的常态**（`11-测试与可观测性.md`）。`git ls-tree` 默认
    * 按 C 风格转义加引号，处理不当会让规范文档名单变成 0 份 ⇒ 每句「保留」都读成
    * 「不出现」（实测 4 处假红，而输出看起来完全正常）。 */
@@ -282,14 +253,9 @@ test("非 ASCII 文档名要读得出来（`ls-tree` 的路径转义会静默把
 
 /* ── ⑦ 路径声明：要真的存在这个路径 ─────────────────────────────── */
 
-test("`60/68.75/75rem … 一个数字都没动` 不是路径声明（树里没有这个路径）", ({
-  repo,
-}) => {
+test("`60/68.75/75rem … 一个数字都没动` 不是路径声明（树里没有这个路径）", ({ repo }) => {
   repo.write("src/a.ts", "export const a = 10;\n");
-  commitAll(
-    repo,
-    "feat: 收口宽度\n\n60/68.75/75rem = 从前的 960/1100/1200，一个数字都没动。",
-  );
+  commitAll(repo, "feat: 收口宽度\n\n60/68.75/75rem = 从前的 960/1100/1200，一个数字都没动。");
 
   const { code, output } = repo.run(["--commit", "HEAD"]);
   repoExpect(code).toBe(0);
@@ -320,9 +286,7 @@ test("计数归零点名了执行者才核；没点名的（散文）不成声�
 
 /* ── ⑨ 跑不起来 ≠ 说反话 ────────────────────────────────────────── */
 
-test("取不到那个提交 → 退出码 2（核对过程本身失败，与「声明说反话」分开）", ({
-  repo,
-}) => {
+test("取不到那个提交 → 退出码 2（核对过程本身失败，与「声明说反话」分开）", ({ repo }) => {
   repo.write("src/a.ts", "export const a = 14;\n");
   commitAll(repo, "feat: 起点");
 
@@ -352,10 +316,7 @@ describe("extractClaims 的句式口径", () => {
   });
 
   vitestTest("`master 新增的` / `各处插记` 这类连接物允许出现在窗口里", () => {
-    const claims = extractClaims(
-      "并保留 master 新增的 §11.24 与声明⇄读者表三行",
-      NO_TREE,
-    );
+    const claims = extractClaims("并保留 master 新增的 §11.24 与声明⇄读者表三行", NO_TREE);
     expect(claims.map((c) => c.target)).toEqual(["11.24"]);
   });
 
@@ -385,10 +346,7 @@ describe("extractClaims 的句式口径", () => {
     /* 真样本 `23bc80da`：`§3.6.1 的 p71-allow 例外块照原文保留` 说的是那个
      * lint 例外块被抄过去了，与「§3.6.1 这一节还在」毫无关系。 */
     expect(
-      extractClaims(
-        "（只剩内容区消费，§3.6.1 的 p71-allow 例外块照原文保留）",
-        NO_TREE,
-      ),
+      extractClaims("（只剩内容区消费，§3.6.1 的 p71-allow 例外块照原文保留）", NO_TREE),
     ).toHaveLength(0);
   });
 
@@ -401,10 +359,7 @@ describe("extractClaims 的句式口径", () => {
     );
     expect(quotedOnly).toHaveLength(0);
     /* 引号外的同一句式仍要认：引号只屏蔽它自己覆盖的那一段。 */
-    const mixed = extractClaims(
-      "「§1.1 照旧保留」是别人写的，而 §13.6.3 照旧保留",
-      NO_TREE,
-    );
+    const mixed = extractClaims("「§1.1 照旧保留」是别人写的，而 §13.6.3 照旧保留", NO_TREE);
     expect(mixed.map((c) => c.target)).toEqual(["13.6.3"]);
   });
 
@@ -465,7 +420,11 @@ describe("真历史（本仓库）", () => {
           stdio: ["ignore", "pipe", "pipe"],
         });
       } catch (err) {
-        const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stdout?: string; stderr?: string };
+        const e = /* SAFETY: 类型断言已复核 */ err as {
+          status?: number;
+          stdout?: string;
+          stderr?: string;
+        };
         code = e.status ?? -1;
         out = `${e.stdout ?? ""}${e.stderr ?? ""}`;
       }

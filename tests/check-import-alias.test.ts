@@ -11,13 +11,7 @@
  * 别让门禁自己变成误报源（成员会直接删掉误报的门禁，等于没有）。
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -59,8 +53,7 @@ function scanner(files: Record<string, string>) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 describe("check-import-alias", () => {
@@ -74,7 +67,7 @@ describe("check-import-alias", () => {
     expect(ok).toBe(true);
   });
 
-  it("拦下 `from \"@/…\"`（含 src/components/ui，shadcn 生成物默认写法）", () => {
+  it('拦下 `from "@/…"`（含 src/components/ui，shadcn 生成物默认写法）', () => {
     const { run } = scanner({
       "src/components/ui/status-badge.tsx":
         'import { cn } from "@/lib/utils";\nexport const a = cn("p-2");\n',
@@ -87,10 +80,8 @@ describe("check-import-alias", () => {
 
   it("拦下动态 import 与 vi.mock 里的 @/（非 import 语句的等价写法）", () => {
     const { run } = scanner({
-      "src/app/workspace/page.tsx":
-        'export const lazy = () => import("@/components/studio");\n',
-      "src/components/studio/hooks/use-x.test.ts":
-        'vi.mock("@/lib/media/media", () => ({}));\n',
+      "src/app/workspace/page.tsx": 'export const lazy = () => import("@/components/studio");\n',
+      "src/components/studio/hooks/use-x.test.ts": 'vi.mock("@/lib/media/media", () => ({}));\n',
     });
     const { ok, output } = run();
     expect(ok).toBe(false);

@@ -43,8 +43,7 @@ import {
 
 /** 造一个「git 调用」替身：按参数给出退出码与 stdout。 */
 const gitStub =
-  (byArgs: Record<string, { status: number; stdout: string }>) =>
-  (args: string[]) => {
+  (byArgs: Record<string, { status: number; stdout: string }>) => (args: string[]) => {
     /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
      * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算，替身才不会被
      * 「多了一个旗标」这件事顶掉。 */
@@ -68,12 +67,7 @@ function installStub() {
 
 describe("依赖面清单", () => {
   it("覆盖 pnpm install 读的那几份（判窄了 = 拿陈旧 node_modules 跑门禁）", () => {
-    for (const f of [
-      "pnpm-lock.yaml",
-      "package.json",
-      "pnpm-workspace.yaml",
-      "next.config.js",
-    ]) {
+    for (const f of ["pnpm-lock.yaml", "package.json", "pnpm-workspace.yaml", "next.config.js"]) {
       expect(DEP_FILES, `${f} 应在依赖面里`).toContain(f);
     }
   });
@@ -179,12 +173,7 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
 
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ci-deps-"));
-    for (const f of [
-      "pnpm-lock.yaml",
-      "package.json",
-      "pnpm-workspace.yaml",
-      "next.config.js",
-    ]) {
+    for (const f of ["pnpm-lock.yaml", "package.json", "pnpm-workspace.yaml", "next.config.js"]) {
       fs.writeFileSync(path.join(tmp, f), "# " + f + "\n");
     }
     /* `package.json` 是真 JSON：键面要解析它才能摘 `scripts`（ISSUE #2489）。 */
@@ -207,7 +196,9 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
   });
 
   const readPkg = () =>
-    /* SAFETY: 类型断言已复核 */ JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8")) as {
+    /* SAFETY: 类型断言已复核 */ JSON.parse(
+      fs.readFileSync(path.join(tmp, "package.json"), "utf8"),
+    ) as {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
@@ -222,26 +213,18 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
   it("只改 scripts ⇒ 指纹不变：它不在安装闭包里（ISSUE #2489）", () => {
     const before = pnpmInstallFingerprint(tmp);
     const pkg = readPkg();
-    pkg.scripts["setup:comfy-cli-venv"] =
-      "node scripts/setup-comfy-cli-venv.mjs";
-    fs.writeFileSync(
-      path.join(tmp, "package.json"),
-      `${JSON.stringify(pkg, null, 2)}\n`,
+    pkg.scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
+    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    expect(pnpmInstallFingerprint(tmp), "scripts 变也换键 ⇒ 白付一次整装，而槽的内容逐字不变").toBe(
+      before,
     );
-    expect(
-      pnpmInstallFingerprint(tmp),
-      "scripts 变也换键 ⇒ 白付一次整装，而槽的内容逐字不变",
-    ).toBe(before);
   });
 
   it("改依赖 ⇒ 指纹变（判宽只是少省，判窄是拿旧树跑门禁）", () => {
     const before = pnpmInstallFingerprint(tmp);
     const pkg = readPkg();
     pkg.dependencies.leftpad = "1.0.1";
-    fs.writeFileSync(
-      path.join(tmp, "package.json"),
-      `${JSON.stringify(pkg, null, 2)}\n`,
-    );
+    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
     expect(pnpmInstallFingerprint(tmp)).not.toBe(before);
   });
 
@@ -287,10 +270,7 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     });
     expect(failing).toBe(1);
     expect(seen[0], "装之前就要算、且交出去").toBe(pnpmInstallFingerprint(tmp));
-    expect(
-      readInstallFingerprint(tmp),
-      "非零退出时不许落指纹：那一套是半成品",
-    ).toBeNull();
+    expect(readInstallFingerprint(tmp), "非零退出时不许落指纹：那一套是半成品").toBeNull();
 
     const passing = await main({
       root: tmp,
@@ -363,12 +343,7 @@ describe("main：装 / 跳过两条出口的退出码", () => {
  * 指纹对得上。用来隔离 `main()` 用例，不让它去断言宿主实时盘（#2030）。 */
 function makeInstalledRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ci-deps-skip-"));
-  for (const f of [
-    "pnpm-lock.yaml",
-    "package.json",
-    "pnpm-workspace.yaml",
-    "next.config.js",
-  ]) {
+  for (const f of ["pnpm-lock.yaml", "package.json", "pnpm-workspace.yaml", "next.config.js"]) {
     fs.writeFileSync(path.join(root, f), "# " + f + "\n");
   }
   /* `package.json` 要是真 JSON：键面会解析它来摘 `scripts`（ISSUE #2489）。 */
@@ -411,9 +386,7 @@ describe("接槽执行档的三条出口", () => {
       install: stub.run,
     });
     expect(code).toBe(0);
-    expect(stub.calls, "开关没拨也要真装一次 —— 每日那一格靠的就是这一跳").toBe(
-      1,
-    );
+    expect(stub.calls, "开关没拨也要真装一次 —— 每日那一格靠的就是这一跳").toBe(1);
     expect(out.text).toContain("槽未接管（开关没拨");
     expect(out.text).toContain("⇒ 照常装");
   });
@@ -473,8 +446,7 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
     exists: (p: string) => files[p] !== undefined || dirs.has(p),
     spawn: (cmd: string) => {
       const hit = files[cmd];
-      if (!hit)
-        return { status: null, stdout: "", stderr: "", error: "ENOENT" };
+      if (!hit) return { status: null, stdout: "", stderr: "", error: "ENOENT" };
       if (!hit.ok) {
         return { status: 1, stdout: "", stderr: "usage", error: null };
       }
@@ -484,7 +456,10 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
 
   const LOCAL = path.join("C:", "Users", "svc", "AppData", "Local");
   const baseEnv = () =>
-    /* SAFETY: 类型断言已复核 */ ({ LOCALAPPDATA: LOCAL, PATH: "" }) as unknown as NodeJS.ProcessEnv;
+    /* SAFETY: 类型断言已复核 */ ({
+      LOCALAPPDATA: LOCAL,
+      PATH: "",
+    }) as unknown as NodeJS.ProcessEnv;
   /** 只造得出 `isDirectory` 的那几项 —— 被测判据只用它，别的字段与结论无关。 */
   const dirEntry = (name: string) =>
     /* SAFETY: 类型断言已复核 */ ({ name, isDirectory: () => true }) as unknown as Dirent;
@@ -534,16 +509,13 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
       env,
       exists,
       spawn,
-      readDir: (p: string) =>
-        p === store ? [dirEntry("11.25.0"), dirEntry("12.4.1")] : [],
+      readDir: (p: string) => (p === store ? [dirEntry("11.25.0"), dirEntry("12.4.1")] : []),
       write: (s) => lines.push(s),
     });
     expect(r.bootstrapped).toBe(true);
     // 版本取最高那一版（`12.4.1` 而不是字典序更大的 `11.25.0`）。
     expect(r.dir).toBe(v12);
-    expect(env.PATH.startsWith(`${v12};`), `PATH 没被前插：${env.PATH}`).toBe(
-      true,
-    );
+    expect(env.PATH.startsWith(`${v12};`), `PATH 没被前插：${env.PATH}`).toBe(true);
     // 起不来的那个必须留一条读数 —— 否则「为什么没用 PATH 上那个」无从回答。
     expect(r.consulted.join("\n")).toContain(shim);
     expect(lines.join("")).toContain("PATH 上没有可用的 pnpm");

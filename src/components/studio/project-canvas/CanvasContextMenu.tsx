@@ -31,13 +31,7 @@ interface CanvasContextMenuProps {
   onClose: () => void;
 }
 
-export function CanvasContextMenu({
-  x,
-  y,
-  onPick,
-  onPickTest,
-  onClose,
-}: CanvasContextMenuProps) {
+export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasContextMenuProps) {
   return (
     <DropdownMenu open onOpenChange={(open) => !open && onClose()}>
       {/* 零尺寸定位锚点：菜单开在右键那个点上，而不是某个可见控件旁边。 */}
@@ -72,9 +66,7 @@ export function CanvasContextMenu({
             </span>
             <span className="flex flex-col">
               <span className="font-medium">测试自定义工作流</span>
-              <span className="text-ink-muted text-3xs">
-                纯视觉 · 对齐 Ardot 稿（无运行时）
-              </span>
+              <span className="text-ink-muted text-3xs">纯视觉 · 对齐 Ardot 稿（无运行时）</span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -85,9 +77,7 @@ export function CanvasContextMenu({
             创建节点
           </DropdownMenuLabel>
           {
-            /* SAFETY: 类型断言已复核 */ (
-              Object.keys(NODE_META) as NodeKind[]
-            ).map((kind) => {
+            /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as NodeKind[]).map((kind) => {
               const meta = NODE_META[kind];
               return (
                 <DropdownMenuItem
@@ -96,11 +86,7 @@ export function CanvasContextMenu({
                   onClick={() => onPick(kind)}
                   className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
                 >
-                  <Icon
-                    name={meta.icon}
-                    size={15}
-                    className="text-primary-strong"
-                  />
+                  <Icon name={meta.icon} size={15} className="text-primary-strong" />
                   <span className="flex flex-col">
                     <span className="font-medium">{meta.label}</span>
                     <span className="text-ink-muted text-3xs">{meta.desc}</span>

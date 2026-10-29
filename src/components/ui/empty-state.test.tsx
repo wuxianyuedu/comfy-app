@@ -29,21 +29,14 @@ describe("EmptyState（三合一）", () => {
   });
 
   it("page：icon 传 lucide 组件按统一尺寸渲染（原 studio/ui 形态）", () => {
-    const { container } = render(
-      <EmptyState icon={TriangleAlert} title="列表还没返回" />,
-    );
+    const { container } = render(<EmptyState icon={TriangleAlert} title="列表还没返回" />);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg?.getAttribute("width")).toBe("32");
   });
 
   it("page：icon 传已渲染节点原样使用（原 ui/empty-state 形态）", () => {
-    render(
-      <EmptyState
-        icon={<Loader2 data-testid="spin-icon" size={20} />}
-        title="正在加载…"
-      />,
-    );
+    render(<EmptyState icon={<Loader2 data-testid="spin-icon" size={20} />} title="正在加载…" />);
     expect(screen.getByTestId("spin-icon")).toBeInTheDocument();
   });
 
@@ -56,9 +49,7 @@ describe("EmptyState（三合一）", () => {
   });
 
   it("hint：行内提示条形态，只有一段文案（原 EmptyStateHint 形态）", () => {
-    render(
-      <EmptyState variant="hint" description="该工作流尚未标记对外参数。" />,
-    );
+    render(<EmptyState variant="hint" description="该工作流尚未标记对外参数。" />);
     expect(screen.getByText("该工作流尚未标记对外参数。")).toBeInTheDocument();
     // 行内形态刻意不带标题位与虚线卡片的居中骨架
     expect(document.querySelector("div.grid.place-items-center")).toBeNull();
@@ -70,9 +61,7 @@ describe("EmptyState（三合一）", () => {
   });
 
   it("minHeightClass 可覆盖（原 studio/ui 的列表区矮态）", () => {
-    const { container } = render(
-      <EmptyState title="空" minHeightClass="min-h-40" />,
-    );
+    const { container } = render(<EmptyState title="空" minHeightClass="min-h-40" />);
     expect(container.firstElementChild?.className).toContain("min-h-40");
   });
 
@@ -85,8 +74,7 @@ describe("EmptyState（三合一）", () => {
     const { container } = render(
       <EmptyState variant="panel" icon={FileText} title="暂无匹配的日志" />,
     );
-    const root =
-      /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
+    const root = /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
     for (const cls of [
       "flex",
       "h-full",
@@ -105,9 +93,7 @@ describe("EmptyState（三合一）", () => {
   });
 
   it("panel：icon 传 lucide 组件按弱化档渲染（32 / 1.5 / opacity-30）", () => {
-    const { container } = render(
-      <EmptyState variant="panel" icon={FileText} />,
-    );
+    const { container } = render(<EmptyState variant="panel" icon={FileText} />);
     const svg = container.querySelector("svg");
     expect(svg?.getAttribute("width")).toBe("32");
     expect(svg?.getAttribute("stroke-width")).toBe("1.5");

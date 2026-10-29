@@ -28,9 +28,9 @@ import {
  * 现在它走 `ui/status-badge` 的同一份「状态 → 语义 token」映射（规范 16 §16.2.4.5），
  * 所以下面这两件并排时**颜色口径是同一个**。
  */
-const STATUSES = /* SAFETY: 类型断言已复核 */ Object.keys(
-  STATUS_LABEL,
-) as Array<keyof typeof STATUS_LABEL>;
+const STATUSES = /* SAFETY: 类型断言已复核 */ Object.keys(STATUS_LABEL) as Array<
+  keyof typeof STATUS_LABEL
+>;
 const KINDS = /* SAFETY: 类型断言已复核 */ Object.keys(NODE_META) as NodeKind[];
 
 const meta = {
@@ -96,12 +96,7 @@ export const NodeChips: Story = {
       <div className="flex flex-col gap-2">
         <span className="text-ink-muted font-mono text-[11px]">size = sm</span>
         {KINDS.map((kind) => (
-          <NodeChip
-            key={kind}
-            kind={kind}
-            name={NODE_META[kind].label}
-            size="sm"
-          />
+          <NodeChip key={kind} kind={kind} name={NODE_META[kind].label} size="sm" />
         ))}
       </div>
     </div>

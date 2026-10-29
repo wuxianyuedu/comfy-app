@@ -34,23 +34,14 @@ interface WorkflowLibraryFiltersProps {
   onManageModels: () => void;
 }
 
-const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ [
-  "all",
-  "local",
-  "online",
-] as const;
+const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;
 const SOURCE_LABELS: Record<SourceFilter, string> = {
   all: "全部来源",
   local: "本地工作流",
   online: "在线工作流",
 };
 
-const TYPE_OPTIONS = /* SAFETY: 类型断言已复核 */ [
-  "all",
-  "image",
-  "video",
-  "audio",
-] as const;
+const TYPE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "image", "video", "audio"] as const;
 const TYPE_LABELS: Record<TypeFilter, string> = {
   all: "全部类型",
   image: "图像",
@@ -75,8 +66,7 @@ function CountBadge({ count }: { count: number }) {
  *  要么在短文案上留一块空白。`shrink-0` 是硬要求 —— 这排控件不许被压扁
  *  （规范 03 §3.8.1），排不下由外层整组换行。
  */
-const TRIGGER_CLS =
-  "w-auto min-w-28 shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
+const TRIGGER_CLS = "w-auto min-w-28 shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
 
 export function WorkflowLibraryFilters({
   sourceFilter,
@@ -91,15 +81,10 @@ export function WorkflowLibraryFilters({
   onManageModels,
 }: WorkflowLibraryFiltersProps) {
   return (
-    <div
-      data-testid="workflow-library-filter-row"
-      className="flex flex-nowrap items-center gap-2"
-    >
+    <div data-testid="workflow-library-filter-row" className="flex flex-nowrap items-center gap-2">
       <SelectMenu
         value={sourceFilter}
-        onChange={(v) =>
-          onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter)
-        }
+        onChange={(v) => onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter)}
         options={[...SOURCE_OPTIONS]}
         className={TRIGGER_CLS}
         popoverMinWidth={150}
@@ -124,9 +109,7 @@ export function WorkflowLibraryFilters({
 
       <SelectMenu
         value={typeFilter}
-        onChange={(v) =>
-          onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter)
-        }
+        onChange={(v) => onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter)}
         options={[...TYPE_OPTIONS]}
         className={TRIGGER_CLS}
         popoverMinWidth={140}
@@ -162,18 +145,13 @@ export function WorkflowLibraryFilters({
           all: (
             <span className="flex items-center justify-between gap-2">
               <span>全部模型</span>
-              <CountBadge
-                count={modelTags.reduce((sum, tag) => sum + tag.count, 0)}
-              />
+              <CountBadge count={modelTags.reduce((sum, tag) => sum + tag.count, 0)} />
             </span>
           ),
           ...Object.fromEntries(
             modelTags.map((tag) => [
               tag.name,
-              <span
-                className="flex items-center justify-between gap-2"
-                key={tag.id}
-              >
+              <span className="flex items-center justify-between gap-2" key={tag.id}>
                 <span>{tag.name}</span>
                 <CountBadge count={tag.count} />
               </span>,

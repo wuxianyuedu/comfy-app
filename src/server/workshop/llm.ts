@@ -79,12 +79,8 @@ export async function completeWorkshopLLM(
     });
   } catch (e) {
     const msg = errorMessage(e, String(e));
-    const cause =
-      e instanceof TypeError && e.cause instanceof Error
-        ? String(e.cause.message)
-        : "";
-    const reach =
-      /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
+    const cause = e instanceof TypeError && e.cause instanceof Error ? String(e.cause.message) : "";
+    const reach = /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
     throw new Error(
       reach
         ? `连不上 LLM 服务（${cfg.baseUrl}）：请确认本地服务已启动或 Base URL 正确（${cause || "连接被拒绝"}）。`
@@ -94,10 +90,7 @@ export async function completeWorkshopLLM(
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    const hint =
-      res.status === 401 || res.status === 403
-        ? "（API Key 无效或未授权）"
-        : "";
+    const hint = res.status === 401 || res.status === 403 ? "（API Key 无效或未授权）" : "";
     throw new Error(
       `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
     );

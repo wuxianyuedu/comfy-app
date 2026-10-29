@@ -27,14 +27,7 @@
  * 某一处自己推一份，「装在 A、判在 B」就成立，而那正是「装了但探不到」的机制。
  * 所以第三组用例钉的是「落点推导只有一处实现」这件事本身。
  */
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -160,7 +153,11 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
 
   it("`TEMP` 与 `TMP` 指向同一个目录，且三个落点同卷", () => {
     expect(env.TEMP).toBe(env.TMP);
-    for (const key of /* SAFETY: 类型断言已复核 */ ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const) {
+    for (const key of /* SAFETY: 类型断言已复核 */ [
+      "TEMP",
+      "TMP",
+      "PLAYWRIGHT_BROWSERS_PATH",
+    ] as const) {
       const value = env[key]!;
       expect(
         isAbsolutePath(value),
@@ -168,9 +165,9 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
           "而作业目录每跑换一个，临时文件就散在各个工作区里",
       ).toBe(true);
     }
-    const roots = (/* SAFETY: 类型断言已复核 */ ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map(
-      (k) => volumeRootOf(env[k]!),
-    );
+    const roots = /* SAFETY: 类型断言已复核 */ (
+      ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const
+    ).map((k) => volumeRootOf(env[k]!));
     expect(
       new Set(roots).size,
       `三个落点必须同卷（现在分别是 ${roots.join(" / ")}）—— 跨卷时「往落点里挪一个` +
@@ -247,10 +244,7 @@ describe("落点推导：装与判同源，且「装了却探不到」说得出�
     const tmp = mkdtempSync(path.join(tmpdir(), "ci-pwroot-"));
     try {
       const platform = process.platform;
-      const exe =
-        platform === "win32"
-          ? "chrome-headless-shell.exe"
-          : "chrome-headless-shell";
+      const exe = platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
       const primary = path.join(tmp, "primary");
       mkdirSync(primary, { recursive: true });
       /* 让平台默认根落在 tmp 里：win32 读 `LOCALAPPDATA`，另两个读 `HOME`。 */
@@ -283,10 +277,7 @@ describe("落点推导：装与判同源，且「装了却探不到」说得出�
     const tmp = mkdtempSync(path.join(tmpdir(), "ci-pwroot2-"));
     try {
       const platform = process.platform;
-      const exe =
-        platform === "win32"
-          ? "chrome-headless-shell.exe"
-          : "chrome-headless-shell";
+      const exe = platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
       const primary = path.join(tmp, "primary");
       const nested = path.join(primary, "chromium_headless_shell-1243", "bin");
       mkdirSync(nested, { recursive: true });
@@ -310,14 +301,8 @@ describe("落点推导：装与判同源，且「装了却探不到」说得出�
 describe("落点推导只有一处实现（装与判同源的前提）", () => {
   it("`ms-playwright` 这个字面量只住在落点模块里", () => {
     const literal = /["'`]ms-playwright["'`]/;
-    const root = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-browser-root.mjs"),
-      "utf8",
-    );
-    const browser = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"),
-      "utf8",
-    );
+    const root = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser-root.mjs"), "utf8");
+    const browser = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
     expect(literal.test(root)).toBe(true);
     expect(
       literal.test(browser),
@@ -327,10 +312,7 @@ describe("落点推导只有一处实现（装与判同源的前提）", () => {
   });
 
   it("`ci-toolchain-browser.mjs` 从落点模块取那三个名字（不是自己抄一份）", () => {
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
     expect(src).toContain('from "./ci-toolchain-browser-root.mjs"');
     for (const name of [
       "playwrightBrowsersRoot",

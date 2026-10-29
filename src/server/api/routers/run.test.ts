@@ -17,41 +17,37 @@ vi.mock("~/server/agent/run-engine", () => ({
   advanceRunLoop: vi.fn(async () => undefined),
 }));
 // 评审 / 重生成的落库逻辑在 review.test.ts 覆盖；此处只验端点的入参校验 + 委派 seam。
-const {
-  reviewContent,
-  regenerateShot,
-  reviewScript,
-  reviewShotImage,
-  reviseScript,
-} = vi.hoisted(() => ({
-  reviewContent: vi.fn(async () => ({
-    pass: false,
-    issues: ["含混"],
-    suggestion: "更具体",
-    scoredAt: "t",
-  })),
-  regenerateShot: vi.fn(async () => undefined),
-  reviewScript: vi.fn(async () => ({
-    verdict: {
+const { reviewContent, regenerateShot, reviewScript, reviewShotImage, reviseScript } = vi.hoisted(
+  () => ({
+    reviewContent: vi.fn(async () => ({
+      pass: false,
+      issues: ["含混"],
+      suggestion: "更具体",
+      scoredAt: "t",
+    })),
+    regenerateShot: vi.fn(async () => undefined),
+    reviewScript: vi.fn(async () => ({
+      verdict: {
+        pass: true,
+        issues: [],
+        suggestion: "",
+        scoredAt: "t2",
+        scores: { structure: { score: 4, note: "结构完整" } },
+        rubricVersion: "script-v1",
+      },
+      history: [],
+    })),
+    reviewShotImage: vi.fn(async () => ({
       pass: true,
       issues: [],
       suggestion: "",
-      scoredAt: "t2",
-      scores: { structure: { score: 4, note: "结构完整" } },
-      rubricVersion: "script-v1",
-    },
-    history: [],
-  })),
-  reviewShotImage: vi.fn(async () => ({
-    pass: true,
-    issues: [],
-    suggestion: "",
-    scoredAt: "t3",
-    scores: { artifacts: { score: 4, note: "无崩" } },
-    rubricVersion: "shotImage-v1",
-  })),
-  reviseScript: vi.fn(async () => "# 改写后的剧本"),
-}));
+      scoredAt: "t3",
+      scores: { artifacts: { score: 4, note: "无崩" } },
+      rubricVersion: "shotImage-v1",
+    })),
+    reviseScript: vi.fn(async () => "# 改写后的剧本"),
+  }),
+);
 vi.mock("~/server/agent/review", () => ({
   autoselectShotImage: vi.fn(async () => ({
     winnerTaskId: "task-w",
@@ -127,9 +123,7 @@ describe("run.start / 生命周期", () => {
   it("无生产数据 → PRECONDITION_FAILED + 可行动文案", async () => {
     // 码必须是 4xx：写成裸 Error 会被归成 INTERNAL_SERVER_ERROR，界面只剩「出错了」，
     // 而「先在工坊产出内容」这句可行动的提示到不了用户面前（硬规则 4）。
-    const env = await errorEnvelope(
-      createCaller(makeCtx()).start({ projectId: "proj_x" }),
-    );
+    const env = await errorEnvelope(createCaller(makeCtx()).start({ projectId: "proj_x" }));
     expect(env.code).toBe("PRECONDITION_FAILED");
     expect(env.message).toContain("还没有生产数据");
   });
@@ -145,9 +139,7 @@ describe("run.start / 生命周期", () => {
     expect(res.run.goal).toBe("一句话");
     expect(res.action).toEqual({ kind: "generate_script" });
     const row = await productionRepository.getForUser("user-a", "proj_1");
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row?.run as { status: string }).status,
-    ).toBe("running");
+    expect(/* SAFETY: 类型断言已复核 */ (row?.run as { status: string }).status).toBe("running");
   });
 
   it("图缺 → 启动后下一步 render_images（只列缺图的镜）", async () => {
@@ -196,12 +188,7 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
       projectId: "proj_r",
       shotId: "s1",
     });
-    expect(reviewContent).toHaveBeenCalledWith(
-      "user-a",
-      "proj_r",
-      "shot",
-      "s1",
-    );
+    expect(reviewContent).toHaveBeenCalledWith("user-a", "proj_r", "shot", "s1");
     expect(res.verdict.pass).toBe(false);
   });
 
@@ -210,12 +197,7 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
       projectId: "proj_r",
       characterId: "c1",
     });
-    expect(reviewContent).toHaveBeenCalledWith(
-      "user-a",
-      "proj_r",
-      "character",
-      "c1",
-    );
+    expect(reviewContent).toHaveBeenCalledWith("user-a", "proj_r", "character", "c1");
   });
 
   it("reviewScript → 委派剧本评审执行器并回显 verdict + 曲线（FR-QA-07 ②）", async () => {
@@ -256,13 +238,7 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
       shotId: "s1",
       mode: "gacha",
     });
-    expect(regenerateShot).toHaveBeenCalledWith(
-      "user-a",
-      "proj_r",
-      "s1",
-      "gacha",
-      undefined,
-    );
+    expect(regenerateShot).toHaveBeenCalledWith("user-a", "proj_r", "s1", "gacha", undefined);
     expect(res.ok).toBe(true);
   });
 
@@ -313,9 +289,7 @@ describe("run 人工侧（#2480）", () => {
       rev: 2,
     });
     const row = await productionRepository.getForUser("user-a", "proj_h");
-    const shot = /* SAFETY: 类型断言已复核 */ (
-      row?.shots as Array<Record<string, unknown>>
-    )[0];
+    const shot = /* SAFETY: 类型断言已复核 */ (row?.shots as Array<Record<string, unknown>>)[0];
     expect(shot?.humanVerdict).toMatchObject({ pass: false, rev: 2 });
   });
 
@@ -351,9 +325,7 @@ describe("run 人工侧（#2480）", () => {
     });
     let row = await productionRepository.getForUser("user-a", "proj_h");
     expect(
-      /* SAFETY: 类型断言已复核 */ (
-        row?.shots as Array<Record<string, unknown>>
-      )[0]?.humanRating,
+      /* SAFETY: 类型断言已复核 */ (row?.shots as Array<Record<string, unknown>>)[0]?.humanRating,
     ).toBe(3);
     await createCaller(makeCtx()).setHumanRating({
       projectId: "proj_h",
@@ -362,9 +334,7 @@ describe("run 人工侧（#2480）", () => {
     });
     row = await productionRepository.getForUser("user-a", "proj_h");
     expect(
-      /* SAFETY: 类型断言已复核 */ (
-        row?.shots as Array<Record<string, unknown>>
-      )[0]?.humanRating,
+      /* SAFETY: 类型断言已复核 */ (row?.shots as Array<Record<string, unknown>>)[0]?.humanRating,
     ).toBeNull();
     await expect(
       createCaller(makeCtx()).setHumanRating({

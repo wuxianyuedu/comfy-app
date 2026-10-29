@@ -249,11 +249,7 @@ describe("CP936 出口：编排与退出码", () => {
   /** 一条只发数据、不落盘的假子进程 —— `runWithCp936Exit` 的注入面。
    *  `close` 那两形参**都要能给**（ISSUE #2571）：只喂 `code` 的话，「被信号终止」
    *  那一档在这一层根本不存在，而它恰恰是 `code === null` 的唯一来源。 */
-  const fakeChild = (
-    out: string,
-    code: number | null,
-    signal: string | null = null,
-  ) => {
+  const fakeChild = (out: string, code: number | null, signal: string | null = null) => {
     const handlers: Record<string, (a?: unknown, b?: unknown) => void> = {};
     const stream = {
       on: (ev: string, fn: (d: unknown) => void) => {
@@ -431,12 +427,7 @@ describe("CP936 出口：编排与退出码", () => {
      * `resolve` 注入「原样放行」：这里要判的是终止 → 退出码那一条链，不是解析层。 */
     let handle: ReturnType<typeof spawn> | undefined;
     const code = await runWithCp936Exit(
-      [
-        "--",
-        process.execPath,
-        "-e",
-        "console.log('第一条读数');setInterval(() => {}, 999)",
-      ],
+      ["--", process.execPath, "-e", "console.log('第一条读数');setInterval(() => {}, 999)"],
       {
         platform: "linux",
         resolve: passthroughResolve,
@@ -461,12 +452,8 @@ describe("CP936 出口：编排与退出码", () => {
     expect(exitCodeFromTermination(0, null)).toBe(0);
     expect(exitCodeFromTermination(null, "SIGKILL")).toBe(137);
     expect(exitCodeFromTermination(null, "SIGTERM")).toBe(143);
-    expect(exitCodeFromTermination(null, "SIG不存在的")).toBe(
-      UNKNOWN_TERMINATION_EXIT,
-    );
-    expect(exitCodeFromTermination(null, null)).toBe(
-      UNKNOWN_TERMINATION_EXIT,
-    );
+    expect(exitCodeFromTermination(null, "SIG不存在的")).toBe(UNKNOWN_TERMINATION_EXIT);
+    expect(exitCodeFromTermination(null, null)).toBe(UNKNOWN_TERMINATION_EXIT);
     expect(exitCodeFromTermination(null, "SIG不存在的")).not.toBe(0);
   });
 
@@ -558,11 +545,7 @@ describe("CP936 出口：编排与退出码", () => {
     });
     expect(seen[0]?.cmd).toBe("powershell.exe");
     /* 宿主前缀参数在前、原参数在后（顺序反了等于把 `pnpm.ps1` 当子命令传）。 */
-    expect(seen[0]?.args.slice(0, 3)).toEqual([
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-    ]);
+    expect(seen[0]?.args.slice(0, 3)).toEqual(["-NoProfile", "-ExecutionPolicy", "Bypass"]);
     expect(seen[0]?.args.slice(-2)).toEqual(["install", "--frozen-lockfile"]);
   });
 
@@ -616,10 +599,7 @@ describe("CP936 出口：编排与退出码", () => {
      *   · 但它**仍要过形态判据** —— 「不问 PATH」只解决误报，命令本身在 Windows 上
      *     照样要落 `.ps1` 回退才起得来（下一个用例判那一半）。 */
     const given = ["--noEmit"];
-    const resolved = resolveShellInvocation(
-      path.join("node_modules", ".bin", "tsc"),
-      given,
-    );
+    const resolved = resolveShellInvocation(path.join("node_modules", ".bin", "tsc"), given);
     expect(resolved.resolved).toBe(true);
     /* 绝对化过 —— 证明它走的是「形态」那条路，不是原样透传。 */
     expect(path.isAbsolute(resolved.command)).toBe(true);
@@ -637,9 +617,7 @@ describe("CP936 出口：编排与退出码", () => {
   it("Windows 的反斜杠路径同判「是路径」（两种分隔符都认）", () => {
     /* `.cnb.yml` 现在的写法是正斜杠，但 Windows 上两种分隔符都得认 ——
      * 只认 `/` 的判据在下一次有人写成 `\` 时就会把一条合法命令送去问 PATH。 */
-    const resolved = resolveShellInvocation("node_modules\\.bin\\tsc", [
-      "--noEmit",
-    ]);
+    const resolved = resolveShellInvocation("node_modules\\.bin\\tsc", ["--noEmit"]);
     expect(resolved.resolved).toBe(true);
     expect(path.isAbsolute(resolved.command)).toBe(true);
   });
@@ -664,8 +642,8 @@ describe("CP936 出口：编排与退出码", () => {
     fs.writeFileSync(
       host,
       Buffer.from([
-        0x4d, 0x5a, 0x00, 0x03, 0x91, 0x00, 0x40, 0x00, 0x00, 0x01, 0x02, 0x03,
-        0xff, 0xfe, 0xfd, 0xfc,
+        0x4d, 0x5a, 0x00, 0x03, 0x91, 0x00, 0x40, 0x00, 0x00, 0x01, 0x02, 0x03, 0xff, 0xfe, 0xfd,
+        0xfc,
       ]),
       { mode: 0o755 },
     );
@@ -680,11 +658,11 @@ describe("CP936 出口：编排与退出码", () => {
     /* 这一格得注入 `probe` 才判得出来，而 `resolveShellInvocation` 的入参里没有
      * `probe`，所以直接判它的下一层（`commandInvocation`）：本仓在 POSIX 上造不出
      * 「shebang 起不来」（那是内核解析的），上面那条 `probe` 就是这句话。 */
-    const resolved = commandInvocation(
-      path.resolve(path.join(dir, "tsc")),
-      ["--version"],
-      { platform: "win32", env, probe },
-    );
+    const resolved = commandInvocation(path.resolve(path.join(dir, "tsc")), ["--version"], {
+      platform: "win32",
+      env,
+      probe,
+    });
     expect(resolved.command).toBe(host);
     expect(resolved.prefixArgs).toContain(path.join(dir, "tsc.ps1"));
   });
@@ -700,10 +678,7 @@ describe("CP936 出口：编排与退出码", () => {
      * —— 正是 #1397 那一族说过的「mock 排的形状必须真机出得来」。
      * Windows 上给它 `<dir>/pnpm.EXE`（`PATHEXT` 里那一档；复制当前 node 二进制
      * 就是一个真能跑的 PE 映像），POSIX 上给无扩展名的 `<dir>/pnpm`。 */
-    const fake = path.join(
-      dir,
-      process.platform === "win32" ? "pnpm.EXE" : "pnpm",
-    );
+    const fake = path.join(dir, process.platform === "win32" ? "pnpm.EXE" : "pnpm");
     fs.copyFileSync(process.execPath, fake);
     fs.chmodSync(fake, 0o755);
     const seen: string[] = [];
@@ -746,9 +721,7 @@ describe("CP936 出口：编排与退出码", () => {
      * 上一句判「接没接上解析口」，这一句判「问的是哪张 PATH」。少了它，`seen[0]`
      * 指到宿主上任何一份叫 `pnpm` 的东西都照样绿（本次那条红正是这个样子）。
      * 名字按宿主比（Windows 上带 `.EXE`，那本来就是 PATHEXT 那一档的事）。 */
-    expect(path.resolve(seen[0] ?? "").toLowerCase()).toBe(
-      path.resolve(fake).toLowerCase(),
-    );
+    expect(path.resolve(seen[0] ?? "").toLowerCase()).toBe(path.resolve(fake).toLowerCase());
   });
 
   it("PATH 上查无此命令 ⇒ **可读出口 + 127**，不是把裸名字丢给 spawn", async () => {
@@ -861,14 +834,11 @@ describe("CP936 出口：编排与退出码", () => {
      * `spawnSync` 在 Linux 上起一条不存在的**相对路径**同样是 `ENOENT`
      * （与 Windows 上的现场同一个错误码），所以这一格本地判得动。 */
     const printed: string[] = [];
-    const code = await runWithCp936Exit(
-      ["--", "node_modules/.bin/npx-根本没有这个文件", "tsc"],
-      {
-        platform: "linux",
-        resolve: passthroughResolve,
-        out: (chunk) => printed.push(chunk),
-      },
-    );
+    const code = await runWithCp936Exit(["--", "node_modules/.bin/npx-根本没有这个文件", "tsc"], {
+      platform: "linux",
+      resolve: passthroughResolve,
+      out: (chunk) => printed.push(chunk),
+    });
     expect(code).toBe(127);
     const text = printed.join("");
     expect(text).toContain("ENOENT");
@@ -899,7 +869,7 @@ describe("CP936 出口：编排与退出码", () => {
     writeCp936("中文一二三", {
       platform: "win32",
       spawnImpl: /* SAFETY: 类型断言已复核 */ ((_cmd: string, _args: string[], opts: never) => {
-        calls.push({ stdio: (/* SAFETY: 类型断言已复核 */ opts as { stdio: unknown }).stdio });
+        calls.push({ stdio: /* SAFETY: 类型断言已复核 */ (opts as { stdio: unknown }).stdio });
         return { status: 0 };
       }) as never,
     });
@@ -924,7 +894,9 @@ describe("CP936 出口：编排与退出码", () => {
     writeCp936("中文一二三", {
       platform: "win32",
       spawnImpl: /* SAFETY: 类型断言已复核 */ ((_cmd: string, _args: string[], opts: never) => {
-        calls.push({ timeout: (/* SAFETY: 类型断言已复核 */ opts as { timeout: unknown }).timeout });
+        calls.push({
+          timeout: /* SAFETY: 类型断言已复核 */ (opts as { timeout: unknown }).timeout,
+        });
         return { status: 0 };
       }) as never,
     });

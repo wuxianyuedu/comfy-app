@@ -10,13 +10,11 @@ export interface RawCliResponse {
 /** 拉取某次执行的 comfy-cli 完整原始输出（按行）。请求失败时返回空数组。 */
 export async function fetchRawCli(taskId: string): Promise<string[]> {
   try {
-    const res = await fetch(
-      `/api/tasks/${encodeURIComponent(taskId)}/raw-cli`,
-      { cache: "no-store" },
-    );
+    const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/raw-cli`, {
+      cache: "no-store",
+    });
     if (!res.ok) return [];
-    const data =
-      /* SAFETY: 类型断言已复核 */ (await res.json()) as Partial<RawCliResponse>;
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Partial<RawCliResponse>;
     return Array.isArray(data.lines) ? data.lines : [];
   } catch {
     return [];

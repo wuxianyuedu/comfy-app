@@ -23,9 +23,6 @@ export function throughJsonWire<T>(value: unknown): T {
 }
 
 /** 镜像声明的列里，线上没有发出来的那些（空数组 = 契约对得上）。 */
-export function missingFromWire(
-  shape: ZodRawShape,
-  wireKeys: readonly string[],
-): string[] {
+export function missingFromWire(shape: ZodRawShape, wireKeys: readonly string[]): string[] {
   return Object.keys(shape).filter((key) => !wireKeys.includes(key));
 }

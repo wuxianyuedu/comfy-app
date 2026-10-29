@@ -43,19 +43,13 @@ import type {
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
 import { withTimeoutResult } from "~/lib/with-timeout";
-import {
-  errorResponse,
-  unauthorizedResponse,
-} from "~/server/lib/error-response";
+import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MANIFEST = customNodesManifestPath();
-const REPORT = path.join(
-  process.cwd(),
-  "src/generated/customNodes.report.json",
-);
+const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
 
 /* ── 外部 JSON 的窄化工具(替代原 any)───────────────────────────
  * manifest / report / python stdout 都是外部输入,统一 unknown 进、守卫窄化读;
@@ -88,10 +82,7 @@ interface ManifestPackageSummary {
  *  主路径：设置里配置的 ComfyUI 安装根下的 `custom_nodes` 目录（自动推导）。
  *  `.env` 的 CUSTOM_NODES_PATH 仍作为覆盖/补充项保留（向后兼容）。 */
 function getPaths(): string[] {
-  const derived = deriveComfyuiSubdir(
-    getSettingsSync().comfyuiPath,
-    "custom_nodes",
-  );
+  const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "custom_nodes");
   const extra = (readEnvVar("CUSTOM_NODES_PATH") ?? "")
     .split(",")
     .map((part) => part.trim())
@@ -153,13 +144,9 @@ function readManifestSummary() {
     if (!isPlainRecord(parsed)) return null;
     const m = parsed;
     const pkgs: ManifestPackageSummary[] = [];
-    const pmap: Record<string, unknown> = isPlainRecord(m.packages)
-      ? m.packages
-      : {};
+    const pmap: Record<string, unknown> = isPlainRecord(m.packages) ? m.packages : {};
     for (const [name, info] of Object.entries(pmap)) {
-      const fields: Record<string, unknown> | undefined = isPlainRecord(info)
-        ? info
-        : undefined;
+      const fields: Record<string, unknown> | undefined = isPlainRecord(info) ? info : undefined;
       pkgs.push({
         name,
         path: jsonField(fields, "path", ""),
@@ -219,10 +206,7 @@ function buildPathMap(
 
 /* 对一组父目录跑只读的 `discover` 模式并返回子包。
  * 做短暂缓存，因为界面上路径输入一变就会调它。 */
-const discoverCache = new Map<
-  string,
-  { at: number; result: DiscoveredSubpkg[] }
->();
+const discoverCache = new Map<string, { at: number; result: DiscoveredSubpkg[] }>();
 
 /* 缓存容量上限。必须设：键由请求体里的父目录列表拼成（外部可控），而 TTL 只在
  * 读的时候判 —— 过期的条目本身会一直留在表里，不设界就是无上限增长。 */
@@ -274,9 +258,7 @@ function spawnCapture(command: string, args: string[]): Promise<string | null> {
       stdout += chunk;
     });
     child.on("error", () => resolve(null));
-    child.on("close", (code) =>
-      resolve(code === 0 && stdout.length > 0 ? stdout : null),
-    );
+    child.on("close", (code) => resolve(code === 0 && stdout.length > 0 ? stdout : null));
   });
 
   return withTimeoutResult(collect, DISCOVER_TIMEOUT_MS, null, {
@@ -306,9 +288,7 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
     try {
       const parsed: unknown = JSON.parse(stdout);
       const pkgs = /* SAFETY: 类型断言已复核 */ (
-        isRecord(parsed) && Array.isArray(parsed.packages)
-          ? parsed.packages
-          : []
+        isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
       ) as DiscoveredSubpkg[];
       rememberDiscover(key, pkgs);
       return pkgs;
@@ -388,14 +368,10 @@ function runDiscoverStreaming(
        * 「扫描到 0 个节点」，而过去的夹具只排 `error`、不排第二次 `close`，
        * 所以这一形从来没有执行者（台账 A14）。 */
       let handedOff = false;
-      const cp = spawn(
-        /*turbopackIgnore: true*/ attempt.command,
-        attempt.args,
-        {
-          cwd: process.cwd(),
-          env: process.env,
-        },
-      );
+      const cp = spawn(/*turbopackIgnore: true*/ attempt.command, attempt.args, {
+        cwd: process.cwd(),
+        env: process.env,
+      });
 
       forEachOutputLine(cp.stdout, (line) => {
         if (line.startsWith("PROGRESS::")) {
@@ -481,13 +457,9 @@ function runDiscoverStreaming(
           return;
         }
         try {
-          const parsed: unknown = finalJson
-            ? JSON.parse(finalJson)
-            : { packages: [] };
+          const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
           const pkgs = /* SAFETY: 类型断言已复核 */ (
-            isRecord(parsed) && Array.isArray(parsed.packages)
-              ? parsed.packages
-              : []
+            isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
           ) as DiscoveredSubpkg[];
           rememberDiscover(parent, pkgs);
           resolved = true;
@@ -577,14 +549,10 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
         /* 见 `runDiscoverStreaming` 里那段同名的守卫：真机上缺解释器是 `error` 之后
          * **还会再来一次 `close`**，那一趟不许把「没有报告」定成最终答案。 */
         let handedOff = false;
-        const cp = spawn(
-          /*turbopackIgnore: true*/ attempt.command,
-          attempt.args,
-          {
-            cwd: process.cwd(),
-            env: process.env,
-          },
-        );
+        const cp = spawn(/*turbopackIgnore: true*/ attempt.command, attempt.args, {
+          cwd: process.cwd(),
+          env: process.env,
+        });
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
           if (handedOff || closed) return;
@@ -613,13 +581,8 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
 
         /* 按行切分交给内核 —— 与探测口原本是一段孪生实现（两份 `indexOf("\n")` 循环，
          * 一份在 `end` 时补发尾行、一份不补）。 */
-        const pipeLogs = (
-          s: NodeJS.ReadableStream,
-          defaultLevel: "info" | "error" = "info",
-        ) => {
-          forEachOutputLine(s, (line) =>
-            send({ type: "log", level: defaultLevel, msg: line }),
-          );
+        const pipeLogs = (s: NodeJS.ReadableStream, defaultLevel: "info" | "error" = "info") => {
+          forEachOutputLine(s, (line) => send({ type: "log", level: defaultLevel, msg: line }));
         };
         // 解析器的 stdout 是正常进度（绿色 info）。
         // stderr 是错误（红色）—— 解析器把语法错误与一般异常经 log_stderr()
@@ -644,8 +607,7 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
           closed = true;
           let report: unknown = null;
           try {
-            if (fs.existsSync(REPORT))
-              report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
+            if (fs.existsSync(REPORT)) report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
           } catch {
             report = null;
           }
@@ -687,11 +649,7 @@ export async function GET() {
     return await buildGetResponse();
   } catch (e) {
     return errorResponse(
-      new AppError(
-        apiErrorDetail(e, "读取配置失败"),
-        "custom_nodes.read_failed",
-        500,
-      ),
+      new AppError(apiErrorDetail(e, "读取配置失败"), "custom_nodes.read_failed", 500),
     );
   }
 }
@@ -726,8 +684,7 @@ async function buildGetResponse(): Promise<Response> {
     const discoveredByParent: Record<string, unknown[]> = {};
     /* `allCached` 已逐个查过缓存，这里的 `?? []` 只是让类型与判据同一处
      * 落地（真出现空说明 `allCached` 那次判定与本次读取之间缓存被清了）。 */
-    for (const p of paths)
-      discoveredByParent[p] = discoverCache.get(p)?.result ?? [];
+    for (const p of paths) discoveredByParent[p] = discoverCache.get(p)?.result ?? [];
     return NextResponse.json({
       settings,
       summary,
@@ -763,10 +720,8 @@ async function buildGetResponse(): Promise<Response> {
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
-          summary:
-            /* SAFETY: 类型断言已复核 */ summary as SettingsResp["summary"],
-          lastReport:
-            /* SAFETY: 类型断言已复核 */ lastReport as ParseReport | null,
+          summary: /* SAFETY: 类型断言已复核 */ summary as SettingsResp["summary"],
+          lastReport: /* SAFETY: 类型断言已复核 */ lastReport as ParseReport | null,
           byPath,
           settings: { paths, localWorkflowPaths },
         });
@@ -823,10 +778,7 @@ export async function POST(req: NextRequest) {
       for (const p of rawPkgs) {
         const s = safeSpawnArg(p);
         if (s === null) {
-          return NextResponse.json(
-            { ok: false, error: "invalid package entry" },
-            { status: 400 },
-          );
+          return NextResponse.json({ ok: false, error: "invalid package entry" }, { status: 400 });
         }
         sanitized.push(s);
       }
@@ -855,10 +807,7 @@ export async function POST(req: NextRequest) {
     for (const p of parentsRaw) {
       const s = safeSpawnArg(p);
       if (s === null) {
-        return NextResponse.json(
-          { ok: false, error: "invalid parent path" },
-          { status: 400 },
-        );
+        return NextResponse.json({ ok: false, error: "invalid parent path" }, { status: 400 });
       }
       parents.push(s);
     }
@@ -872,8 +821,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, packages: result });
   }
 
-  return NextResponse.json(
-    { ok: false, error: "unknown action" },
-    { status: 400 },
-  );
+  return NextResponse.json({ ok: false, error: "unknown action" }, { status: 400 });
 }

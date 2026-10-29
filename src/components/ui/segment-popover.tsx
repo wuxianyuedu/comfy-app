@@ -42,21 +42,11 @@ import { ChevronDown } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { getOrCreate, getOrThrow } from "~/lib/collections";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 
 /** 用小矩形直观呈现宽高比。 */
-export function RatioIcon({
-  ratio,
-  className = "",
-}: {
-  ratio: number;
-  className?: string;
-}) {
+export function RatioIcon({ ratio, className = "" }: { ratio: number; className?: string }) {
   const MAX = 18;
   const width = ratio >= 1 ? MAX : Math.max(4, Math.round(MAX * ratio));
   const height = ratio >= 1 ? Math.max(4, Math.round(MAX / ratio)) : MAX;
@@ -169,11 +159,7 @@ export function MultiSegmentPopover({
             first={i === 0}
           />
         ))}
-        {footer ? (
-          <div className="border-border-strong mt-3 border-t pt-3">
-            {footer}
-          </div>
-        ) : null}
+        {footer ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
       </PopoverContent>
     </Popover>
   );
@@ -195,10 +181,7 @@ const Section = React.memo(function Section({
       return [{ key: "_", label: undefined, options: section.options }];
     }
     const order: string[] = [];
-    const map = new Map<
-      string,
-      { key: string; label?: string; options: typeof section.options }
-    >();
+    const map = new Map<string, { key: string; label?: string; options: typeof section.options }>();
     for (const option of section.options) {
       const key = option.subgroup ?? "_";
       getOrCreate(map, key, () => {

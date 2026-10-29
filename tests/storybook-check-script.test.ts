@@ -15,14 +15,7 @@
  * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.3.2、§9.5。
  */
 import { execFileSync } from "node:child_process";
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -76,10 +69,7 @@ function makeRepo() {
   /* 占位理由指向的文件要**真的存在**，否则「理由表与磁盘对得上」那条会红 ——
      而这一组用例判的是枚举来源。/ `thing.test.ts` 是临时仓库里唯一一个
      命中「分母之外」的文件，它必须存在才说得通。 */
-  writeFileSync(
-    path.join(root, "src", "components", "ui", "thing.test.ts"),
-    "",
-  );
+  writeFileSync(path.join(root, "src", "components", "ui", "thing.test.ts"), "");
   const ledger = path.join(root, CHECK_DIR_REL, "coverage-ledger.mjs");
   writeFileSync(
     ledger,
@@ -117,8 +107,7 @@ function scanner(input: { component?: string; story: string }) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs";
@@ -167,10 +156,10 @@ describe("storybook-check（故事枚举来源门禁）", () => {
 
   it("拦下手写清单漏档（cva 里加了一档、故事没跟上）", () => {
     const { ok, output } = scanner({
-      story: GOOD_STORY.replace(
-        '[ "default", "danger"]',
+      story: GOOD_STORY.replace('[ "default", "danger"]', '["default"]').replace(
+        '["default", "danger"]',
         '["default"]',
-      ).replace('["default", "danger"]', '["default"]'),
+      ),
     }).run();
     expect(ok).toBe(false);
     expect(output).toContain("danger");
@@ -178,10 +167,7 @@ describe("storybook-check（故事枚举来源门禁）", () => {
 
   it("拦下整条轴被漏掉（那一档没人验）", () => {
     const { ok, output } = scanner({
-      story: GOOD_STORY.replace(
-        '    size: { control: "select", options: SIZES },\n',
-        "",
-      ),
+      story: GOOD_STORY.replace('    size: { control: "select", options: SIZES },\n', ""),
     }).run();
     expect(ok).toBe(false);
     expect(output).toContain("少了轴");
@@ -225,10 +211,7 @@ describe("storybook-check（故事枚举来源门禁）", () => {
     /* 文件还在、但**不再 import 任何组件**（清空成一句说明）—— 这正是
        「删 story 时留下一个空壳」的现实形态：glob 还扫得到它，所以不会命中
        「一份 story 都没有」那条空转保护，覆盖率却掉到 0。 */
-    writeFileSync(
-      path.join(uiDir, "thing.stories.tsx"),
-      "export default {};\n",
-    );
+    writeFileSync(path.join(uiDir, "thing.stories.tsx"), "export default {};\n");
     const { ok, output } = runIn(root);
     expect(ok).toBe(false);
     expect(output).toContain("组件覆盖率下降");
@@ -240,10 +223,7 @@ describe("storybook-check（故事枚举来源门禁）", () => {
     writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
     writeFileSync(path.join(uiDir, "thing.stories.tsx"), GOOD_STORY);
     // 多一个只有实现、没有 story 的组件
-    writeFileSync(
-      path.join(uiDir, "another.tsx"),
-      "export const Another = () => null;\n",
-    );
+    writeFileSync(path.join(uiDir, "another.tsx"), "export const Another = () => null;\n");
     const { ok, output } = runIn(root);
     expect(ok).toBe(false);
     expect(output).toContain("可预览文件数");
@@ -285,10 +265,7 @@ describe("storybook-check（故事枚举来源门禁）", () => {
       /export const NO_STORY_REASON = new Map\([^;]*\);/,
       'export const NO_STORY_REASON = new Map([\n  ["not-a-real-file.ts", "临时变异：磁盘上没有这个文件"],\n]);',
     );
-    expect(
-      mutated,
-      "变异没生效 —— 理由表的导出行形状变了，这条判据会在空转",
-    ).not.toBe(src);
+    expect(mutated, "变异没生效 —— 理由表的导出行形状变了，这条判据会在空转").not.toBe(src);
     writeFileSync(ledger, mutated);
     const { ok, output } = runIn(root);
     expect(ok).toBe(false);

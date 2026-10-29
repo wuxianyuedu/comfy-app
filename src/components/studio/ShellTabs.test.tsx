@@ -25,13 +25,7 @@
  * 壳冒烟，见规范 §11.10.4）。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
@@ -46,9 +40,8 @@ function setShellForm(on: boolean) {
     });
   } else {
     delete (
-      /* SAFETY: 类型断言已复核 */ (
-        window as unknown as Record<string, unknown>
-      ).__TAURI_INTERNALS__
+      /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>)
+        .__TAURI_INTERNALS__
     );
   }
 }
@@ -173,12 +166,9 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
     try {
       /* 主应用页签用 `hidden` 隐藏（不是卸载），所以画布状态不会因切页签丢掉；
        * 非当前页签那层带 `aria-hidden="true"`，读屏器不会念到看不见的内容。 */
-      expect(
-        screen.getByTestId("main-content").closest(".hidden"),
-      ).not.toBeNull();
+      expect(screen.getByTestId("main-content").closest(".hidden")).not.toBeNull();
       /* 非当前页签那层的 `aria-hidden` 由「这一格是不是当前页签」直接给出。 */
-      const host = () =>
-        view.container.querySelector("iframe")!.closest("div")!;
+      const host = () => view.container.querySelector("iframe")!.closest("div")!;
       expect(host().getAttribute("aria-hidden")).toBe("false");
 
       /* 切回主应用：ComfyUI 页签那一格变成 hidden + aria-hidden，iframe 仍在树上
@@ -234,9 +224,7 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
        * 塞了一个页签 —— 内容区按设计「始终挂载、只切显隐」，所以这棵树里**会有**
        * 一个 iframe。这是两条用例的构造差异，不是判据冲突。 */
       expect(screen.getByTestId("main-content")).not.toBeNull();
-      expect(
-        view.container.querySelectorAll(String.raw`[role="tablist"]`),
-      ).toHaveLength(0);
+      expect(view.container.querySelectorAll(String.raw`[role="tablist"]`)).toHaveLength(0);
       /* 顺带钉住「不按形态改内容」这条实现取舍：这一格在两种形态下渲染得**一模一样**，
        * 所以浏览器形态里那个 iframe 照样挂在树上（只是这一格不该被走到）。
        * 如果哪天有人给它加一个 `if (useTitleBar)` 之类的分叉，这条会红 ——

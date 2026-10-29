@@ -235,9 +235,7 @@ describe("静态：读 git 路径的调用必须带守卫（防复发）", () =>
       if (exempt) {
         /* 豁免只覆盖**登记的那几处**：多出来的调用仍然要拦。 */
         if (bad.length !== exempt.count) {
-          problems.push(
-            `${rel}：豁免登记 ${exempt.count} 处，实测 ${bad.length} 处 —— 对不上`,
-          );
+          problems.push(`${rel}：豁免登记 ${exempt.count} 处，实测 ${bad.length} 处 —— 对不上`);
         }
         continue;
       }

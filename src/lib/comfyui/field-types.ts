@@ -37,8 +37,6 @@ export const FIELD_TYPES = /* SAFETY: 类型断言已复核 */ [
 export function isFieldType(value: unknown): value is FieldType {
   return (
     typeof value === "string" &&
-    /* SAFETY: 类型断言已复核 */ (FIELD_TYPES as readonly string[]).includes(
-      value,
-    )
+    /* SAFETY: 类型断言已复核 */ (FIELD_TYPES as readonly string[]).includes(value)
   );
 }

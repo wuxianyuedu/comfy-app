@@ -49,9 +49,7 @@ export type CheckedEvent = { target: { checked: boolean } };
  * 「值转换是可选的」在这个模块的定位（全库唯一 props 适配器出口）里就是谎言，
  * 现在把它从**类型契约**上就掐掉。
  */
-export function textHandler(
-  onValue: ValueHandler<string>,
-): (event: ValueEvent) => void;
+export function textHandler(onValue: ValueHandler<string>): (event: ValueEvent) => void;
 export function textHandler<T>(
   onValue: ValueHandler<T>,
   transform: (raw: string) => T,
@@ -76,9 +74,7 @@ export function textHandler<T>(
  * 路径，调用处就得自己记得传对参数，而传错的后果是**静默的**（`undefined`
  * 被当成 `false`，开关永远打不开）。
  */
-export function checkedHandler(
-  onValue: (checked: boolean) => void,
-): (event: CheckedEvent) => void {
+export function checkedHandler(onValue: (checked: boolean) => void): (event: CheckedEvent) => void {
   return (event) => onValue(event.target.checked);
 }
 
@@ -119,8 +115,7 @@ export function bindKey<T extends object, K extends keyof T>(
   patch: (partial: Pick<T, K>) => void,
   key: K,
 ): (value: T[K]) => void {
-  return (value) =>
-    patch(/* SAFETY: 类型断言已复核 */ { [key]: value } as Pick<T, K>);
+  return (value) => patch(/* SAFETY: 类型断言已复核 */ { [key]: value } as Pick<T, K>);
 }
 
 /**
@@ -135,10 +130,7 @@ export function bindKey<T extends object, K extends keyof T>(
  * 与 `textHandler` 共用「取值只有一处」的口径：这条路径读的也是
  * `target.value`，没有第二份取法可言。
  */
-export function readTextInput(
-  event: ValueEvent,
-  onValue: ValueHandler<string>,
-): void {
+export function readTextInput(event: ValueEvent, onValue: ValueHandler<string>): void {
   onValue(event.target.value);
 }
 

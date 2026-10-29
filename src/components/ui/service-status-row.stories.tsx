@@ -79,9 +79,7 @@ export const Narrow: Story = {
       className={`border-border bg-surface-2 w-90 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
     >
       <StatusDot state="busy" />
-      <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
-        ComfyUI 正在启动…（已拉起 8 秒）
-      </span>
+      <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>ComfyUI 正在启动…（已拉起 8 秒）</span>
       <div className={STATUS_ACTIONS_CLASS}>
         <StatusButton onClick={() => undefined} variant="primary">
           打开查看
@@ -93,11 +91,7 @@ export const Narrow: Story = {
         >
           在浏览器打开
         </StatusButton>
-        <StatusButton
-          onClick={() => undefined}
-          variant="primary-solid"
-          disabled
-        >
+        <StatusButton onClick={() => undefined} variant="primary-solid" disabled>
           启动中…
         </StatusButton>
         <StatusButton onClick={() => undefined} variant="primary" disabled>
@@ -132,11 +126,7 @@ export const States: Story = {
             <StatusDot state={state} />
             <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>{text}</span>
             <div className={STATUS_ACTIONS_CLASS}>
-              <StatusButton
-                onClick={() => undefined}
-                variant="primary"
-                disabled={state === "busy"}
-              >
+              <StatusButton onClick={() => undefined} variant="primary" disabled={state === "busy"}>
                 打开查看
               </StatusButton>
               <StatusButton

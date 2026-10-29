@@ -36,11 +36,7 @@ function Demo({
   orientation?: "horizontal" | "vertical";
 }) {
   return (
-    <Tabs
-      defaultValue={initialValue}
-      onValueChange={onValueChange}
-      orientation={orientation}
-    >
+    <Tabs defaultValue={initialValue} onValueChange={onValueChange} orientation={orientation}>
       <TabsList variant={variant}>
         <TabsTrigger value="params">参数</TabsTrigger>
         <TabsTrigger value="nodes">节点</TabsTrigger>
@@ -100,18 +96,14 @@ describe("ui/tabs 的命名钩子", () => {
     await user.click(screen.getByRole("tab", { name: "节点" }));
     expect(screen.getByText("节点区")).toBeInTheDocument();
     expect(screen.queryByText("参数区")).not.toBeInTheDocument();
-    expect(
-      document.querySelectorAll('[data-slot="tabs-content"]'),
-    ).toHaveLength(1);
+    expect(document.querySelectorAll('[data-slot="tabs-content"]')).toHaveLength(1);
   });
 
   it(`orientation 不传时默认 horizontal（\`group-data-horizontal/tabs:h-8\` 只在横向成立）`, () => {
     render(<Demo />);
-    expect(
-      document
-        .querySelector('[data-slot="tabs"]')
-        ?.getAttribute("data-orientation"),
-    ).toBe("horizontal");
+    expect(document.querySelector('[data-slot="tabs"]')?.getAttribute("data-orientation")).toBe(
+      "horizontal",
+    );
   });
 
   it("两档形态互斥：default 出药丸底，line 必须透明底且带下划线那条 after", () => {
@@ -182,10 +174,7 @@ describe("ui/tabs 的键盘换页签", () => {
     const user = userEvent.setup();
     render(<Demo />);
     await user.click(screen.getByRole("tab", { name: "历史" }));
-    expect(screen.getByRole("tab", { name: "历史" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.getByRole("tab", { name: "历史" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("历史区")).toBeVisible();
   });
 
@@ -194,14 +183,8 @@ describe("ui/tabs 的键盘换页签", () => {
        键路径必须由基元接上，否则鼠标能用而键盘不能。 */
     const user = userEvent.setup();
     render(<Demo />);
-    expect(screen.getByRole("tab", { name: "参数" })).toHaveAttribute(
-      "tabindex",
-      "0",
-    );
-    expect(screen.getByRole("tab", { name: "节点" })).toHaveAttribute(
-      "tabindex",
-      "-1",
-    );
+    expect(screen.getByRole("tab", { name: "参数" })).toHaveAttribute("tabindex", "0");
+    expect(screen.getByRole("tab", { name: "节点" })).toHaveAttribute("tabindex", "-1");
     await user.tab();
     expect(screen.getByRole("tab", { name: "参数" })).toHaveFocus();
   });
@@ -226,9 +209,6 @@ describe("ui/tabs 的键盘换页签", () => {
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange.mock.calls[0]?.[0]).toBe("nodes");
     /* 没人改 `value`，所以内容不换 —— 这是「受控」这个词在这里的全部含义。 */
-    expect(screen.getByRole("tab", { name: "参数" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.getByRole("tab", { name: "参数" })).toHaveAttribute("aria-selected", "true");
   });
 });

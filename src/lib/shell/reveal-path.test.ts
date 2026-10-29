@@ -39,9 +39,7 @@ function installFakeChild(errorCode?: string) {
     setTimeout(() => {
       if (errorCode) {
         for (const cb of handlers.error ?? [])
-          cb(
-            Object.assign(new Error(`spawn ${errorCode}`), { code: errorCode }),
-          );
+          cb(Object.assign(new Error(`spawn ${errorCode}`), { code: errorCode }));
         return;
       }
       for (const cb of handlers.spawn ?? []) cb();
@@ -64,9 +62,7 @@ beforeEach(() => {
 describe("最长存在前缀解析", () => {
   it("整串就存在时原样返回（不画蛇添足地退）", () => {
     const exists = probeFor("F:\\a\\b\\c.log");
-    expect(resolveExistingPath("F:\\a\\b\\c.log", exists)).toBe(
-      "F:\\a\\b\\c.log",
-    );
+    expect(resolveExistingPath("F:\\a\\b\\c.log", exists)).toBe("F:\\a\\b\\c.log");
   });
 
   it("尾随半段文字时在**最后一段内**退到存在的那一截", () => {
@@ -83,9 +79,7 @@ describe("最长存在前缀解析", () => {
      * 跨段退会命中 `F:\a`，于是用户点 `F:\a\b` 打开了 `F:\a`，
      * 界面上没有任何东西解释为什么。这是本函数唯一一条「宁可漏」的判据。 */
     expect(resolveExistingPath("F:\\a\\b", probeFor("F:\\a"))).toBeNull();
-    expect(
-      resolveExistingPath("F:\\a\\b\\c\\d", probeFor("F:\\a\\b")),
-    ).toBeNull();
+    expect(resolveExistingPath("F:\\a\\b\\c\\d", probeFor("F:\\a\\b"))).toBeNull();
   });
 
   it("整段都多余时不退到父目录（宁可回 null 也不指错）", () => {
@@ -104,12 +98,8 @@ describe("最长存在前缀解析", () => {
      * 「打开了那个目录」—— 跨段退的坏味道从另一个口子漏回来。判据据此把
      * 「结尾是分隔符」的候选一律跳过。 */
     const exists = probeFor("/workspace/");
-    expect(
-      resolveExistingPath("/workspace/no-such-file.txt", exists),
-    ).toBeNull();
-    expect(
-      resolveExistingPath("F:\\a\\b\\missing.log", probeFor("F:\\a\\b\\")),
-    ).toBeNull();
+    expect(resolveExistingPath("/workspace/no-such-file.txt", exists)).toBeNull();
+    expect(resolveExistingPath("F:\\a\\b\\missing.log", probeFor("F:\\a\\b\\"))).toBeNull();
   });
 
   it("只退到最后一段的段首，盘符壳与根都不认", () => {
@@ -125,13 +115,11 @@ describe("最长存在前缀解析", () => {
 
 describe("命令与参数形态", () => {
   it('Windows 用 `explorer /select,"<路径>"` 且路径与 /select 同属一个参数', async () => {
-    const target =
-      process.platform === "win32" ? "C:\\a b\\c.log" : "/a b/c.log";
+    const target = process.platform === "win32" ? "C:\\a b\\c.log" : "/a b/c.log";
     const result = await revealPathInFileManager(target, probeFor(target));
     expect(result.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock
-      .calls[0] as [string, string[]];
+    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [string, string[]];
     if (process.platform === "win32") {
       expect(cmd).toMatch(/cmd(\.exe)?$/i);
       /* `/select,"<路径>"` 必须是**一个**参数：拆成 `/select,` + 路径两个时，
@@ -150,18 +138,18 @@ describe("命令与参数形态", () => {
   it("spawn 的是命令 + 参数数组，不是拼好的整串（不走 shell）", async () => {
     const target = "/var/log/app.log";
     await revealPathInFileManager(target, probeFor(target));
-    const [, args, options] = /* SAFETY: 类型断言已复核 */ spawnMock.mock
-      .calls[0] as [string, string[], { stdio?: string }];
+    const [, args, options] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { stdio?: string },
+    ];
     expect(Array.isArray(args)).toBe(true);
     expect(args.some((a) => a.includes(" "))).toBe(false);
     expect(options.stdio).toBe("ignore");
   });
 
   it("路径不存在时不 spawn，并给出可读的失败说明", async () => {
-    const result = await revealPathInFileManager(
-      "F:\\nope\\missing.log",
-      () => false,
-    );
+    const result = await revealPathInFileManager("F:\\nope\\missing.log", () => false);
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("找不到可在文件管理器里打开的路径");
     expect(spawnMock).not.toHaveBeenCalled();
@@ -182,10 +170,7 @@ describe("命令与参数形态", () => {
     try {
       const result = await revealPathInFileManager(tmp, () => true);
       expect(result.ok).toBe(true);
-      const [, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [
-        string,
-        string[],
-      ];
+      const [, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [string, string[]];
       /* 目录不加 `/select`：否则窗口停在父层、只选中该文件夹，看不到里面产物。 */
       expect(args.at(-1)).toBe(tmp);
       expect(args.at(-1)).not.toContain("/select");
@@ -205,8 +190,6 @@ describe("与文本判据串起来（端到端形态）", () => {
     const exists = probeFor("F:\\AI\\Other\\app\\scripts\\dev-launcher.mjs");
     const result = await revealPathInFileManager(tokens[0]!.text, exists);
     expect(result.ok).toBe(true);
-    expect(result.revealed).toBe(
-      "F:\\AI\\Other\\app\\scripts\\dev-launcher.mjs",
-    );
+    expect(result.revealed).toBe("F:\\AI\\Other\\app\\scripts\\dev-launcher.mjs");
   });
 });

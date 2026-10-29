@@ -50,9 +50,7 @@ const PATH_RE =
  * 字符串里的 `#` 与 URL 不参与本判据，所以宁可少剥也不误剥代码。
  */
 export function stripComments(text: string): string {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:\\])\/\/[^\n]*/g, "$1");
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/[^\n]*/g, "$1");
 }
 
 /** 一份源码里作为字符串字面量出现的仓库路径（已去重）。 */
@@ -89,9 +87,7 @@ function gateScripts(): string[] {
     const src = sourceOf(rel);
     /* 只认同目录相对形态：仓里判据之间的引用全是这一种（口径同
      * `tests/helpers/gate-repo.ts` 的 `copyGateDeps`）。 */
-    for (const m of src.matchAll(
-      /require\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g,
-    )) {
+    for (const m of src.matchAll(/require\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g)) {
       const dep = `scripts/${m[1]!}`;
       if (seen.has(dep) || !existsSync(path.join(ROOT, dep))) continue;
       seen.add(dep);
@@ -217,7 +213,7 @@ function exitCodeOfGate(rel: string): number {
     });
     return 0;
   } catch (error) {
-    const code = (/* SAFETY: 类型断言已复核 */ error as { status?: number | null }).status;
+    const code = /* SAFETY: 类型断言已复核 */ (error as { status?: number | null }).status;
     return typeof code === "number" ? code : -1;
   }
 }
@@ -262,9 +258,7 @@ describe("门禁脚本里的路径字面量必须存在", () => {
      * 里的数据模块），同一次拆分也让只看 `check-*.cjs` 的旧扫描面从 111 条掉到 40 条
      * —— **掉的那 71 条没有红**。那次缩水正说明这条门槛的职责是「发现扫描面塌了」，
      * 而它抓不到「扫描面慢漏」；后者由 `gateScripts()` 的闭包展开来保证。 */
-    expect(seen, "一条路径字面量都没扫到：判据形态或写法变了").toBeGreaterThan(
-      50,
-    );
+    expect(seen, "一条路径字面量都没扫到：判据形态或写法变了").toBeGreaterThan(50);
     expect(
       dead,
       `这些路径被门禁当数据用（豁免项 / 比对目标 / 改法提示），但仓库里没有：\n  ${dead.join("\n  ")}\n` +
@@ -287,18 +281,24 @@ describe("门禁脚本里的路径字面量必须存在", () => {
        否则「删一条、再发现下一条」（§11.18）。 */
     for (const entry of PRODUCT_ROOT_LITERALS) {
       const basename = path.posix.basename(entry.path);
-      expect.soft(
-        quotedRepoPaths(sourceOf(entry.script)),
-        `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
-      ).toContain(entry.path);
-      expect.soft(
-        sourceOf(entry.generatedBy),
-        `例外失效：${entry.generatedBy} 已经不再产出 ${basename} —— 登记理由不成立`,
-      ).toContain(basename);
-      expect.soft(
-        existsSync(path.join(ROOT, entry.path)),
-        `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从产物根例外表里删掉`,
-      ).toBe(false);
+      expect
+        .soft(
+          quotedRepoPaths(sourceOf(entry.script)),
+          `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
+        )
+        .toContain(entry.path);
+      expect
+        .soft(
+          sourceOf(entry.generatedBy),
+          `例外失效：${entry.generatedBy} 已经不再产出 ${basename} —— 登记理由不成立`,
+        )
+        .toContain(basename);
+      expect
+        .soft(
+          existsSync(path.join(ROOT, entry.path)),
+          `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从产物根例外表里删掉`,
+        )
+        .toBe(false);
     }
   });
 
@@ -315,19 +315,25 @@ describe("门禁脚本里的路径字面量必须存在", () => {
     /* 软断言：一张例外表逐条复算 —— 过期的条目要一次全列出，
        否则「删一条、再发现下一条」（§11.18）。 */
     for (const entry of CONDITIONAL_PATHS) {
-      expect.soft(
-        quotedRepoPaths(sourceOf(entry.script)),
-        `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
-      ).toContain(entry.path);
-      expect.soft(
-        exitCodeOfGate(entry.script),
-        `${entry.script} 在这个仓库里没站下（台账不在本该是它的正常状态）—— ` +
-          "要么它已经不是条件路径了（该从本表删掉），要么零站点那条快路径坏了",
-      ).toBe(0);
-      expect.soft(
-        existsSync(path.join(ROOT, entry.path)),
-        `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从条件路径例外表里删掉`,
-      ).toBe(false);
+      expect
+        .soft(
+          quotedRepoPaths(sourceOf(entry.script)),
+          `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
+        )
+        .toContain(entry.path);
+      expect
+        .soft(
+          exitCodeOfGate(entry.script),
+          `${entry.script} 在这个仓库里没站下（台账不在本该是它的正常状态）—— ` +
+            "要么它已经不是条件路径了（该从本表删掉），要么零站点那条快路径坏了",
+        )
+        .toBe(0);
+      expect
+        .soft(
+          existsSync(path.join(ROOT, entry.path)),
+          `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从条件路径例外表里删掉`,
+        )
+        .toBe(false);
     }
   });
 
@@ -359,8 +365,7 @@ describe("门禁脚本里的路径字面量必须存在", () => {
     /* ③ 判定③是这套机制里唯一会**随现实漂**的一问：`existsSync` 必须为 false。
        反向执行者 = 拿一份**真存在**的路径走同一条判定，必须判成「该从表里删掉」
        （台账落库那次，这一问就是这样红的 —— 那两条例外当时没被同批删掉）。 */
-    const wouldPassAsConditional = (p: string) =>
-      !existsSync(path.join(ROOT, p));
+    const wouldPassAsConditional = (p: string) => !existsSync(path.join(ROOT, p));
     expect(
       wouldPassAsConditional("scripts/check-annotate-consumer.cjs"),
       "真存在的路径被判成『条件路径』了：这一问再也不会拦住过期例外",
@@ -380,13 +385,10 @@ describe("门禁脚本里的路径字面量必须存在", () => {
     ].join("\n");
     const found = quotedRepoPaths(src);
     expect(found).toContain("scripts/check-ui-primitives.cjs");
-    expect(found).toContain(
-      "src/components/studio/canvas/DefinitelyNotThere.tsx",
+    expect(found).toContain("src/components/studio/canvas/DefinitelyNotThere.tsx");
+    expect(found, "注释里的旧路径不该进判据面（那多半是在叙述历史）").not.toContain(
+      "src/lib/app-settings.ts",
     );
-    expect(
-      found,
-      "注释里的旧路径不该进判据面（那多半是在叙述历史）",
-    ).not.toContain("src/lib/app-settings.ts");
     expect(found.filter((p) => !existsSync(path.join(ROOT, p))).length).toBe(1);
   });
 });

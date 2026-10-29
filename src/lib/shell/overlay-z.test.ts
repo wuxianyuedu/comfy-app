@@ -39,15 +39,7 @@ describe("浮层刻度表（规范 16 §16.2.5）", () => {
   });
 
   it("档与档之间严格递增（相邻相等 = 层叠顺序由 DOM 决定，即『时灵时不灵』）", () => {
-    const scale: number[] = [
-      Z.base,
-      Z.canvasUi,
-      Z.canvasMax,
-      Z.modal,
-      Z.popup,
-      Z.toast,
-      Z.chrome,
-    ];
+    const scale: number[] = [Z.base, Z.canvasUi, Z.canvasMax, Z.modal, Z.popup, Z.toast, Z.chrome];
     for (let i = 1; i < scale.length; i += 1) {
       const lo = scale[i - 1] ?? Number.NaN;
       const hi = scale[i] ?? Number.NaN;

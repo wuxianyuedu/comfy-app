@@ -179,8 +179,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   const interval = deps.intervalMs ?? 10_000;
   const now = deps.now ?? Date.now;
   const missThreshold = deps.missThreshold ?? 2;
-  const setTimer =
-    deps.setTimer ?? ((fn: () => void, ms: number) => setInterval(fn, ms));
+  const setTimer = deps.setTimer ?? ((fn: () => void, ms: number) => setInterval(fn, ms));
   const clearTimer = deps.clearTimer ?? ((h) => clearInterval(h));
 
   let stopped = false;
@@ -202,9 +201,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       stop();
       return;
     }
-    const lookup = await deps
-      .findPid()
-      .catch(() => ({ pid: null, failed: true }));
+    const lookup = await deps.findPid().catch(() => ({ pid: null, failed: true }));
     if (stopped) return;
 
     /* 查询失败（PowerShell 超时 / 命令起不来）：证据不足，**不能**当作「进程消失」。
@@ -305,11 +302,7 @@ export function describeStaleSession(
  * 原始字节（通常 UTF-8）；个别回退路径（powershell `Start-Process`）会是 UTF-16LE，
  * 这里统一识别 BOM 后按对应编码读。
  */
-function readTailLines(
-  filePath: string,
-  maxLines = 40,
-  maxLineLen = 600,
-): string[] {
+function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): string[] {
   try {
     if (!fs.existsSync(filePath)) return [];
     const buf = fs.readFileSync(filePath);

@@ -84,13 +84,11 @@ describe("三相比两相：404 与 500 是两件事", () => {
 
   it("两相的码互不相同：客户端按码分档说话，混了就等于没分", async () => {
     readMock.mockReturnValue({ kind: "missing" });
-    const missing = /* SAFETY: 类型断言已复核 */ (await (
-      await GET()
-    ).json()) as { error: { code: string } };
+    const missing = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
+      error: { code: string };
+    };
     readMock.mockReturnValue({ kind: "unreadable", detail: "EACCES" });
-    const unreadable = /* SAFETY: 类型断言已复核 */ (await (
-      await GET()
-    ).json()) as {
+    const unreadable = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
       error: { code: string };
     };
     expect(missing.error.code).not.toBe(unreadable.error.code);

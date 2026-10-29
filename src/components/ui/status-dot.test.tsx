@@ -28,9 +28,7 @@ describe("StatusDot", () => {
   });
 
   it.for(STATES)("state=%s 的颜色是语义 token 类名", (state) => {
-    expect(dotOf({ state }).className).toMatch(
-      /\bbg-(success|warning|info|destructive)\b/,
-    );
+    expect(dotOf({ state }).className).toMatch(/\bbg-(success|warning|info|destructive)\b/);
   });
 
   it.for(STATES)("state=%s 不落 Tailwind 原生调色板字面量", (state) => {
@@ -40,23 +38,17 @@ describe("StatusDot", () => {
   });
 
   it("四态的颜色互不相同（否则状态不可分辨）", () => {
-    const colors = STATES.map(
-      (state) => /\bbg-\S+/.exec(dotOf({ state }).className)?.[0] ?? "",
-    );
+    const colors = STATES.map((state) => /\bbg-\S+/.exec(dotOf({ state }).className)?.[0] ?? "");
     expect(new Set(colors).size).toBe(STATES.length);
   });
 
   it("缺省不带脉冲，pulse 才加 animate-pulse", () => {
     expect(dotOf({ state: "up" }).className).not.toContain("animate-pulse");
-    expect(dotOf({ state: "up", pulse: true }).className).toContain(
-      "animate-pulse",
-    );
+    expect(dotOf({ state: "up", pulse: true }).className).toContain("animate-pulse");
   });
 
   it("尺寸类可覆盖（状态行 size-2 / 行内 size-1.5）", () => {
     expect(dotOf({ state: "up" }).className).toContain("size-2");
-    expect(dotOf({ state: "up", sizeClass: "size-1.5" }).className).toContain(
-      "size-1.5",
-    );
+    expect(dotOf({ state: "up", sizeClass: "size-1.5" }).className).toContain("size-1.5");
   });
 });

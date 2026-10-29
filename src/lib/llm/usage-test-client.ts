@@ -46,17 +46,16 @@ export interface UsageTestResult {
   savedPath?: string;
 }
 
-export async function testModelUsage(
-  input: UsageTestInput,
-): Promise<UsageTestResult> {
+export async function testModelUsage(input: UsageTestInput): Promise<UsageTestResult> {
   const res = await fetch("/api/llm/test-usage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const json = /* SAFETY: 类型断言已复核 */ (await res
-    .json()
-    .catch(() => ({}))) as Record<string, unknown>;
+  const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
   return parseUsageTestResult(res, json);
 }
 
@@ -71,10 +70,7 @@ export interface UsageTaskQueryInput {
 }
 
 /** 解析单个 tRPC/fetch 结果对象为 UsageTestResult 的公共收尾。 */
-function parseUsageTestResult(
-  res: Response,
-  json: Record<string, unknown>,
-): UsageTestResult {
+function parseUsageTestResult(res: Response, json: Record<string, unknown>): UsageTestResult {
   const str = (k: string): string | undefined => {
     const v: unknown = json[k];
     return typeof v === "string" ? v : undefined;
@@ -94,16 +90,15 @@ function parseUsageTestResult(
 
 /** 对已提交的异步视频任务再等一轮：产物就绪则返回 videoUrl（并落盘本地），
  *  否则仍 pending 返回，供调用方继续提供「继续等待」入口。 */
-export async function queryUsageTask(
-  input: UsageTaskQueryInput,
-): Promise<UsageTestResult> {
+export async function queryUsageTask(input: UsageTaskQueryInput): Promise<UsageTestResult> {
   const res = await fetch("/api/llm/test-usage/query", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const json = /* SAFETY: 类型断言已复核 */ (await res
-    .json()
-    .catch(() => ({}))) as Record<string, unknown>;
+  const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
   return parseUsageTestResult(res, json);
 }

@@ -27,17 +27,14 @@ export async function POST(req: NextRequest) {
   if (isErrorResponse(body)) return body;
 
   const rawMessages = Array.isArray(body.messages)
-    ? /* SAFETY: 类型断言已复核 */ (body.messages as Array<
-        Record<string, unknown>
-      >)
+    ? /* SAFETY: 类型断言已复核 */ (body.messages as Array<Record<string, unknown>>)
     : [];
   if (rawMessages.length === 0) {
     return NextResponse.json({ error: "messages 不能为空" }, { status: 400 });
   }
 
   const request: AgentChatRequest = {
-    messages:
-      /* SAFETY: 类型断言已复核 */ rawMessages as AgentChatRequest["messages"],
+    messages: /* SAFETY: 类型断言已复核 */ rawMessages as AgentChatRequest["messages"],
     draft: parseDraftDto(body.draft),
     useTools: body.useTools !== false,
   };

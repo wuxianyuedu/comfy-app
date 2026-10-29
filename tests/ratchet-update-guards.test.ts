@@ -37,15 +37,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import {
-  createGateRepo,
-  type GateRepo,
-  type GateRepoOptions,
-} from "./helpers/gate-repo";
-import {
-  expectActionableRefusal,
-  ACTIONABLE_REFUSAL,
-} from "./helpers/ratchet-refusal";
+import { createGateRepo, type GateRepo, type GateRepoOptions } from "./helpers/gate-repo";
+import { expectActionableRefusal, ACTIONABLE_REFUSAL } from "./helpers/ratchet-refusal";
 
 /** 一条棘轮的完整描述：脚本、基线落点、夹具输入、以及「怎么再加一条违规」。 */
 interface Ratchet {
@@ -223,8 +216,7 @@ const HARD_GATE_FLIPS: Record<string, string> = {
 
 /** 不是计数棘轮的 `--update` 出口：加条目是它的正常用法，拒涨反而错。理由必须写在册子上。 */
 const NOT_A_RATCHET: Record<string, string> = {
-  ".gate-executor-ledger.json":
-    "判据执行者台账：新增一条判据就该新增一个条目，这是登记表不是棘轮",
+  ".gate-executor-ledger.json": "判据执行者台账：新增一条判据就该新增一个条目，这是登记表不是棘轮",
 };
 
 /**
@@ -267,9 +259,7 @@ function discoveredBaselines(): Array<{ script: string; baseline: string }> {
     }
     /** 真被当作写入目标的变量名。 */
     const writeTargets = new Set<string>();
-    for (const m of src.matchAll(
-      /(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g,
-    )) {
+    for (const m of src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g)) {
       if (m[1]) writeTargets.add(m[1]);
     }
     for (const [name, baseline] of declared) {
@@ -283,9 +273,7 @@ function discoveredBaselines(): Array<{ script: string; baseline: string }> {
       if (baseline) push(script, baseline);
     }
   }
-  return [...found.values()].sort((a, b) =>
-    a.baseline.localeCompare(b.baseline),
-  );
+  return [...found.values()].sort((a, b) => a.baseline.localeCompare(b.baseline));
 }
 
 /** 基线文件名 → 表里的行（`RATCHETS` 的 baseline 带目录前缀，这里按文件名对齐）。 */
@@ -312,98 +300,90 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
   }
 
   for (const ratchet of RATCHETS) {
-    itRatchet(
-      `${ratchet.script}：--update 不许把基线往上涨，也不许偷偷落盘`,
-      ratchet,
-      () => {
-        const handle = createGateRepo({
-          script: ratchet.script,
-          dir: ratchet.dir,
-          ...ratchet.fixture,
-        });
-        const { repo } = handle;
-        const judge = ratchet.judgeArgs ?? [];
-        try {
-          /* ① 造一条违规后 --update 必须成功并写出基线 —— 否则后面三步是在判一个空夹具。 */
-          ratchet.violate(repo, 1);
-          const seed = repo.run(["--update"]);
-          expect(seed.code, seed.output).toBe(0);
-          expect(repo.exists(ratchet.baseline)).toBe(true);
-          const seeded = repo.read(ratchet.baseline);
+    itRatchet(`${ratchet.script}：--update 不许把基线往上涨，也不许偷偷落盘`, ratchet, () => {
+      const handle = createGateRepo({
+        script: ratchet.script,
+        dir: ratchet.dir,
+        ...ratchet.fixture,
+      });
+      const { repo } = handle;
+      const judge = ratchet.judgeArgs ?? [];
+      try {
+        /* ① 造一条违规后 --update 必须成功并写出基线 —— 否则后面三步是在判一个空夹具。 */
+        ratchet.violate(repo, 1);
+        const seed = repo.run(["--update"]);
+        expect(seed.code, seed.output).toBe(0);
+        expect(repo.exists(ratchet.baseline)).toBe(true);
+        const seeded = repo.read(ratchet.baseline);
 
-          /* ② 基线等于现状时必须绿：不先看这一步，第 ④ 步的「非零」可能只是脚本自己跑挂了
-           *（退出码与「拦住」逐字同形 —— 台账 E10 / E11 那一族）。 */
-          const green = repo.run(judge);
-          expect(green.code, green.output).toBe(0);
+        /* ② 基线等于现状时必须绿：不先看这一步，第 ④ 步的「非零」可能只是脚本自己跑挂了
+         *（退出码与「拦住」逐字同形 —— 台账 E10 / E11 那一族）。 */
+        const green = repo.run(judge);
+        expect(green.code, green.output).toBe(0);
 
-          /* ③ 再加一条违规必须红 —— 证明这个判据真的在数，而不是恒放行。 */
-          ratchet.violate(repo, 2);
-          const red = repo.run(judge);
-          expect(
-            red.code,
-            `加第二条违规后判据仍放行，说明这条棘轮没在计数：\n${red.output}`,
-          ).not.toBe(0);
+        /* ③ 再加一条违规必须红 —— 证明这个判据真的在数，而不是恒放行。 */
+        ratchet.violate(repo, 2);
+        const red = repo.run(judge);
+        expect(
+          red.code,
+          `加第二条违规后判据仍放行，说明这条棘轮没在计数：\n${red.output}`,
+        ).not.toBe(0);
 
-          /* ④ 此时 --update 必须拦下，且基线一个字节都没变。 */
-          const widen = repo.run(["--update"]);
-          expect(
-            widen.code,
-            `--update 把新增的违规收进了基线（棘轮被放宽）：\n${widen.output}`,
-          ).not.toBe(0);
-          expect(repo.read(ratchet.baseline)).toBe(seeded);
+        /* ④ 此时 --update 必须拦下，且基线一个字节都没变。 */
+        const widen = repo.run(["--update"]);
+        expect(
+          widen.code,
+          `--update 把新增的违规收进了基线（棘轮被放宽）：\n${widen.output}`,
+        ).not.toBe(0);
+        expect(repo.read(ratchet.baseline)).toBe(seeded);
 
-          /* ⑥ 拒涨那句话必须给出**上涨态里可执行的下一步**。
-           *
-           * 判的对象是话术而不是退出码：`check-tsc-diagnostic-executors.cjs` 落地时红话写着
-           * 「再跑 `--update`（= 把基线收紧到 N）」，而同一个 `--update` 对上涨正是非零拒绝 ——
-           * 照它跑只会再吃一次红，真问题（「这条声明由谁执行」）一次都没被回答。
-           * 这条只在 ④ 已经拦下的那条输出上判，所以判的是「拒涨那一刻说的话」，
-           * 不是脚本里随便哪句提到旗标的注释。三种自洽写法的清单在 helper 文件头。 */
-          expectActionableRefusal(widen.output, ratchet.script);
-        } finally {
-          handle.dispose();
-        }
-      },
-    );
+        /* ⑥ 拒涨那句话必须给出**上涨态里可执行的下一步**。
+         *
+         * 判的对象是话术而不是退出码：`check-tsc-diagnostic-executors.cjs` 落地时红话写着
+         * 「再跑 `--update`（= 把基线收紧到 N）」，而同一个 `--update` 对上涨正是非零拒绝 ——
+         * 照它跑只会再吃一次红，真问题（「这条声明由谁执行」）一次都没被回答。
+         * 这条只在 ④ 已经拦下的那条输出上判，所以判的是「拒涨那一刻说的话」，
+         * 不是脚本里随便哪句提到旗标的注释。三种自洽写法的清单在 helper 文件头。 */
+        expectActionableRefusal(widen.output, ratchet.script);
+      } finally {
+        handle.dispose();
+      }
+    });
 
-    itRatchet(
-      `${ratchet.script}：基线已经清到 0 时也不许被 --update 放宽`,
-      ratchet,
-      () => {
-        const handle = createGateRepo({
-          script: ratchet.script,
-          dir: ratchet.dir,
-          ...ratchet.fixture,
-        });
-        const { repo } = handle;
-        const judge = ratchet.judgeArgs ?? [];
-        try {
-          /* ⑤ 这一档单独跑，是因为「治理做到 0」正是棘轮最该硬的时候，而它有一种
-           * 共同的失效写法：`if (before && after > before)` —— 基线总数为 0 时整个条件
-           * 短路，拒涨检查**根本不执行**（`check-ui-primitives` 今天的基线是 0 处；
-           * 口径与非 --update 路径共用的先例见
-           * `check-ui-logic-separation.cjs` 的 `diffAgainstBaseline` 注释）。
-           * 干净沙箱 → 先建立一份「0」基线 → 再造一条违规 → --update 必须拒。 */
-          const seed = repo.run(["--update"]);
-          expect(seed.code, seed.output).toBe(0);
-          expect(
-            repo.exists(ratchet.baseline),
-            `干净沙箱下 --update 没写出基线文件，这一档无从判起：\n${seed.output}`,
-          ).toBe(true);
+    itRatchet(`${ratchet.script}：基线已经清到 0 时也不许被 --update 放宽`, ratchet, () => {
+      const handle = createGateRepo({
+        script: ratchet.script,
+        dir: ratchet.dir,
+        ...ratchet.fixture,
+      });
+      const { repo } = handle;
+      const judge = ratchet.judgeArgs ?? [];
+      try {
+        /* ⑤ 这一档单独跑，是因为「治理做到 0」正是棘轮最该硬的时候，而它有一种
+         * 共同的失效写法：`if (before && after > before)` —— 基线总数为 0 时整个条件
+         * 短路，拒涨检查**根本不执行**（`check-ui-primitives` 今天的基线是 0 处；
+         * 口径与非 --update 路径共用的先例见
+         * `check-ui-logic-separation.cjs` 的 `diffAgainstBaseline` 注释）。
+         * 干净沙箱 → 先建立一份「0」基线 → 再造一条违规 → --update 必须拒。 */
+        const seed = repo.run(["--update"]);
+        expect(seed.code, seed.output).toBe(0);
+        expect(
+          repo.exists(ratchet.baseline),
+          `干净沙箱下 --update 没写出基线文件，这一档无从判起：\n${seed.output}`,
+        ).toBe(true);
 
-          ratchet.violate(repo, 1);
-          expect(repo.run(judge).code, "空基线 + 一条违规必须红").not.toBe(0);
+        ratchet.violate(repo, 1);
+        expect(repo.run(judge).code, "空基线 + 一条违规必须红").not.toBe(0);
 
-          const widen = repo.run(["--update"]);
-          expect(
-            widen.code,
-            `基线为 0 时 --update 把第一条违规收进了基线（棘轮在最不该松的时候松着）：\n${widen.output}`,
-          ).not.toBe(0);
-        } finally {
-          handle.dispose();
-        }
-      },
-    );
+        const widen = repo.run(["--update"]);
+        expect(
+          widen.code,
+          `基线为 0 时 --update 把第一条违规收进了基线（棘轮在最不该松的时候松着）：\n${widen.output}`,
+        ).not.toBe(0);
+      } finally {
+        handle.dispose();
+      }
+    });
   }
 
   describe("完整性：每一个 --update 出口都要被五张归类表之一点名", () => {
@@ -465,10 +445,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
        * 这里把它接上：被点名的文件必须调用那份唯一实现（`tests/helpers/ratchet-refusal.ts`），
        * 判的是「有没有这个执行者」，所以认符号名而不是认某句措辞或某种行形状。 */
       const missing = Object.entries(COVERED_LOCALLY).filter(([, testFile]) => {
-        const src = readFileSync(
-          join(import.meta.dirname, "..", testFile),
-          "utf8",
-        );
+        const src = readFileSync(join(import.meta.dirname, "..", testFile), "utf8");
         return !/expectActionableRefusal\s*\(/.test(src);
       });
       expect(
@@ -490,28 +467,17 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
       const dir = join(import.meta.dirname, "..", "scripts");
       const present = new Set(readdirSync(dir));
       const stale = listed.filter((name) => !present.has(name));
-      expect(
-        stale,
-        `这些登记项在 scripts/ 下已不存在：\n${stale.join("\n")}`,
-      ).toEqual([]);
+      expect(stale, `这些登记项在 scripts/ 下已不存在：\n${stale.join("\n")}`).toEqual([]);
       /* 反向：现算出的每一个都要真在 found 里（防止表里写了个不存在的脚本名）。 */
       const known = new Set(found.map((f) => f.baseline));
       for (const name of Object.keys(PENDING)) {
-        expect(known.has(name), `PENDING 里的 ${name} 不在现算清单里`).toBe(
-          true,
-        );
+        expect(known.has(name), `PENDING 里的 ${name} 不在现算清单里`).toBe(true);
       }
       for (const name of Object.keys(NOT_A_RATCHET)) {
-        expect(
-          known.has(name),
-          `NOT_A_RATCHET 里的 ${name} 不在现算清单里`,
-        ).toBe(true);
+        expect(known.has(name), `NOT_A_RATCHET 里的 ${name} 不在现算清单里`).toBe(true);
       }
       for (const name of Object.keys(RETIRED_RATCHETS)) {
-        expect(
-          known.has(name),
-          `RETIRED_RATCHETS 里的 ${name} 不在现算清单里`,
-        ).toBe(true);
+        expect(known.has(name), `RETIRED_RATCHETS 里的 ${name} 不在现算清单里`).toBe(true);
       }
       for (const name of Object.keys(COVERED_LOCALLY)) {
         expect(known.has(name), `册上的 ${name} 不在现算清单里`).toBe(true);
@@ -599,9 +565,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           found.filter((f) => f.script === script).map((f) => f.baseline),
         ),
       );
-      const both = Object.keys(RETIRED_RATCHETS).filter((name) =>
-        flipsBaselines.has(name),
-      );
+      const both = Object.keys(RETIRED_RATCHETS).filter((name) => flipsBaselines.has(name));
       expect(
         both,
         `这些基线同时在 RETIRED_RATCHETS 与 HARD_GATE_FLIPS 里 —— ` +
@@ -666,10 +630,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
 
     it("表里每一行的脚本与基线都对得上真仓库（脚本改名/搬基线要同步改表）", () => {
       for (const r of RATCHETS) {
-        const src = readFileSync(
-          join(import.meta.dirname, "..", "scripts", r.script),
-          "utf8",
-        );
+        const src = readFileSync(join(import.meta.dirname, "..", "scripts", r.script), "utf8");
         const name = r.baseline.split("/").pop() ?? r.baseline;
         expect(src, `${r.script} 不再落盘 ${name}`).toContain(`"${name}"`);
       }

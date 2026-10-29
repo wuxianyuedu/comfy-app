@@ -94,9 +94,7 @@ function renderStudio(options: RenderOptions = {}) {
       shots={options.shots ?? [makeShot()]}
       workflowId={options.workflowId ?? "vwf-1"}
       projectId="proj-1"
-      apiChannels={
-        options.apiChannels === undefined ? videoReady : options.apiChannels
-      }
+      apiChannels={options.apiChannels === undefined ? videoReady : options.apiChannels}
       onOpenModelAdapters={onOpenModelAdapters}
       onShotsChange={onShotsChange}
       onNotice={onNotice}
@@ -110,9 +108,9 @@ function renderStudio(options: RenderOptions = {}) {
 
 /** onShotsChange 是函数式补丁：折叠成最终一条 patch 里的镜头。 */
 function lastPatchedShot(mock: { mock: { calls: unknown[][] } }): Shot {
-  const last = /* SAFETY: 类型断言已复核 */ mock.mock.calls[
-    mock.mock.calls.length - 1
-  ]![0] as (prev: Shot[]) => Shot[];
+  const last = /* SAFETY: 类型断言已复核 */ mock.mock.calls[mock.mock.calls.length - 1]![0] as (
+    prev: Shot[],
+  ) => Shot[];
   return last([makeShot()])[0]!;
 }
 
@@ -155,10 +153,7 @@ describe("VideoStudio 门禁与空态", () => {
     renderStudio({ apiChannels: null });
     await switchToApi(user);
     expect(screen.getByText(/API 视频通道未配置/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "生成片段" })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(screen.getByRole("button", { name: "生成片段" })).toHaveProperty("disabled", true);
   });
 
   it("阶段内那枚就近入口：接在 onOpenModelAdapters 上，且名字与落地页一致", async () => {
@@ -218,9 +213,7 @@ describe("VideoStudio API 通道出口", () => {
     mockedSubmit.mockRejectedValue(new Error("远端限流"));
 
     await user.click(screen.getByRole("button", { name: "生成片段" }));
-    await expect
-      .poll(() => lastPatchedShot(onShotsChange).clipStatus)
-      .toBe("failed");
+    await expect.poll(() => lastPatchedShot(onShotsChange).clipStatus).toBe("failed");
     expect(screen.getByText("远端限流")).toBeTruthy();
   });
 });

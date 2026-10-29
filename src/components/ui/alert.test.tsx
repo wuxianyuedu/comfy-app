@@ -36,18 +36,14 @@ describe("Alert", () => {
     expect(alertOf({ variant }).className).toContain("rounded-lg");
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      "warning",
-      "info",
-      "success",
-      "danger",
-    ] as const,
-  )("variant=%s 的边框 / 底色走语义 token", (variant) => {
-    const cls = alertOf({ variant }).className;
-    expect(cls).toMatch(/\bborder-(warning|info|success|destructive)\/30\b/);
-    expect(cls).toMatch(/\bbg-(warning|info|success|destructive)\/10\b/);
-  });
+  it.for(/* SAFETY: 类型断言已复核 */ ["warning", "info", "success", "danger"] as const)(
+    "variant=%s 的边框 / 底色走语义 token",
+    (variant) => {
+      const cls = alertOf({ variant }).className;
+      expect(cls).toMatch(/\bborder-(warning|info|success|destructive)\/30\b/);
+      expect(cls).toMatch(/\bbg-(warning|info|success|destructive)\/10\b/);
+    },
+  );
 
   it.for(VARIANTS)("variant=%s 不落 Tailwind 原生调色板字面量", (variant) => {
     expect(alertOf({ variant }).className).not.toMatch(
@@ -76,13 +72,7 @@ describe("Alert", () => {
         <AlertDescription>正文</AlertDescription>
       </Alert>,
     );
-    expect(screen.getByText("标题")).toHaveAttribute(
-      "data-slot",
-      "alert-title",
-    );
-    expect(screen.getByText("正文")).toHaveAttribute(
-      "data-slot",
-      "alert-description",
-    );
+    expect(screen.getByText("标题")).toHaveAttribute("data-slot", "alert-title");
+    expect(screen.getByText("正文")).toHaveAttribute("data-slot", "alert-description");
   });
 });

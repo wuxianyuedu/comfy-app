@@ -42,10 +42,7 @@ beforeEach(() => {
     addEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
       listeners.add(/* SAFETY: 类型断言已复核 */ cb as () => void);
     },
-    removeEventListener: (
-      _: string,
-      cb: EventListenerOrEventListenerObject,
-    ) => {
+    removeEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
       listeners.delete(/* SAFETY: 类型断言已复核 */ cb as () => void);
     },
   })) as unknown as typeof window.matchMedia;

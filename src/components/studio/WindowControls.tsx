@@ -119,21 +119,18 @@ export function useWindowMaximized(): [boolean, (next: boolean) => void] {
  * 两份 state 必然漂）—— 这里只拿到 setter。
  */
 export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.button !== 0) return;
-      if (
-        !isDragRegionTarget(
-          /* SAFETY: 类型断言已复核 */ e.target as unknown as {
-            closest?: (s: string) => unknown;
-          },
-        )
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if (
+      !isDragRegionTarget(
+        /* SAFETY: 类型断言已复核 */ e.target as unknown as {
+          closest?: (s: string) => unknown;
+        },
       )
-        return;
-      void startWindowDrag();
-    },
-    [],
-  );
+    )
+      return;
+    void startWindowDrag();
+  }, []);
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

@@ -10,11 +10,7 @@ import { ProgressBar } from "~/components/ui/progress-bar";
 import { SelectChip } from "~/components/ui/select-chip";
 import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import { SelectMenu } from "~/components/ui/select-menu";
-import {
-  MOTION_LABELS,
-  type MotionLevel,
-  type Shot,
-} from "~/lib/workshop/types";
+import { MOTION_LABELS, type MotionLevel, type Shot } from "~/lib/workshop/types";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { IndexDot } from "~/components/workshop/IndexDot";
@@ -133,8 +129,7 @@ export function ChannelSwitch({
       {channel === "api" && !apiReady && (
         <div className="bg-amber/10 text-amber flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
           <Icon name="info" size={12} />
-          API 视频通道未配置 — 点击上方「模型适配」配置该模型的接口与字段映射
-          后即可使用。
+          API 视频通道未配置 — 点击上方「模型适配」配置该模型的接口与字段映射 后即可使用。
         </div>
       )}
     </>
@@ -142,11 +137,7 @@ export function ChannelSwitch({
 }
 
 /* ── 某镜头片段生成的状态药丸 ── */
-export function ClipBadge({
-  status,
-}: {
-  status: NonNullable<Shot["clipStatus"]>;
-}) {
+export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> }) {
   return (
     <StatusBadge
       status={status}
@@ -192,18 +183,14 @@ export function ShotCard({
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground truncate text-xs">
-          {shot.sceneHeading}
-        </span>
+        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
         <ClipBadge status={clipStatus} />
         {clipStatus === "running" && (
           <span className="text-muted-foreground text-3xs">
             {progress > 0 ? `${Math.round(progress)}%` : "排队中…"}
           </span>
         )}
-        <span className="text-faint text-3xs ml-auto">
-          {channel === "local" ? "本地" : "API"}
-        </span>
+        <span className="text-faint text-3xs ml-auto">{channel === "local" ? "本地" : "API"}</span>
       </div>
 
       {clipStatus === "running" && (
@@ -244,11 +231,7 @@ export function ShotCard({
                 type="number"
                 min={1}
                 max={20}
-                value={
-                  typeof shot.duration === "number" && shot.duration > 0
-                    ? shot.duration
-                    : 5
-                }
+                value={typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 5}
                 onChange={(e) =>
                   onPatch({
                     duration: clamp(Number(e.target.value) || 5, 1, 20),
@@ -272,9 +255,7 @@ export function ShotCard({
                 placeholder="运动"
               />
             </FieldLabel>
-            <span className="text-faint text-3xs">
-              {framesFor(shot, fps)} 帧
-            </span>
+            <span className="text-faint text-3xs">{framesFor(shot, fps)} 帧</span>
           </div>
         </div>
         <Button
@@ -282,17 +263,11 @@ export function ShotCard({
           size="xs"
           onClick={onGenerate}
           disabled={
-            clipStatus === "running" ||
-            !videoPrompt(shot) ||
-            (channel === "api" && !apiReady)
+            clipStatus === "running" || !videoPrompt(shot) || (channel === "api" && !apiReady)
           }
           className="h-auto shrink-0 rounded-lg px-4 py-1.5"
         >
-          {clipStatus === "running"
-            ? "生成中…"
-            : shot.clipUrl
-              ? "重新生成"
-              : "生成片段"}
+          {clipStatus === "running" ? "生成中…" : shot.clipUrl ? "重新生成" : "生成片段"}
         </Button>
         {clipStatus === "running" && shot.clipTaskId && (
           /* 只对本机任务可取消：API 直连的 remoteTaskId 是另一套体系，没有
@@ -319,8 +294,7 @@ export function ShotCard({
       )}
       {!shot.imageUrl && !error && (
         <p className="text-muted-foreground text-2xs mt-2">
-          该镜头暂无画面 —
-          将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
+          该镜头暂无画面 — 将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
         </p>
       )}
 

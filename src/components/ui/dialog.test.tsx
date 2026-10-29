@@ -121,8 +121,10 @@ const CONTENT_MARK = '[data-slot="dialog-content"]';
 
 /** 取最近一次 onOpenChange 的第一实参（新状态）与 reason（关闭原因）。 */
 function lastCall(onOpenChange: ReturnType<typeof vi.fn>) {
-  const calls = /* SAFETY: 类型断言已复核 */ onOpenChange.mock
-    .calls as unknown as [boolean, { reason?: string }?][];
+  const calls = /* SAFETY: 类型断言已复核 */ onOpenChange.mock.calls as unknown as [
+    boolean,
+    { reason?: string }?,
+  ][];
   const call = calls.at(-1);
   return { nextOpen: call?.[0], reason: call?.[1]?.reason };
 }
@@ -145,9 +147,7 @@ describe("ui/dialog 的关闭按钮", () => {
     /* 内置那枚带绝对定位（右上角），自绘那枚不带 —— 位置重合是事故的几何成因。 */
     const builtin = [...closes].find((el) => el.className.includes("absolute"));
     expect(builtin).toBeDefined();
-    expect(
-      [...closes].filter((el) => el.className.includes("absolute")),
-    ).toHaveLength(1);
+    expect([...closes].filter((el) => el.className.includes("absolute"))).toHaveLength(1);
   });
 
   it("正确用法：showCloseButton={false} 之后只剩自绘那一枚，不多不少", async () => {
@@ -189,9 +189,7 @@ describe("ui/dialog 的关闭按钮", () => {
     /* 重新打开后 `[data-slot="dialog-overlay"]` 必须在位 —— 它是「弹窗背后变暗、
        且背后内容点不中」的那一层（ISSUE #1742 之前缺的就是它）。 */
     await user.click(screen.getByRole("button", { name: "打开设置" }));
-    await expect
-      .poll(() => document.querySelector(CONTENT_MARK))
-      .not.toBeNull();
+    await expect.poll(() => document.querySelector(CONTENT_MARK)).not.toBeNull();
     expect(
       document.querySelector('[data-slot="dialog-overlay"]'),
       "DialogContent 必须自带 Backdrop",
@@ -235,18 +233,12 @@ describe("ui/dialog 的可访问名与归属", () => {
        aria-labelledby → 那个节点的文本，才是规范 06 要的关联。 */
     const labelledBy = popup.getAttribute("aria-labelledby");
     expect(labelledBy).toBeTruthy();
-    expect(document.getElementById(labelledBy ?? "")?.textContent).toContain(
-      "弹窗标题",
-    );
-    expect(
-      screen.getByRole("dialog", { name: "弹窗标题" }),
-    ).toBeInTheDocument();
+    expect(document.getElementById(labelledBy ?? "")?.textContent).toContain("弹窗标题");
+    expect(screen.getByRole("dialog", { name: "弹窗标题" })).toBeInTheDocument();
 
     const describedBy = popup.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy ?? "")?.textContent).toContain(
-      "这是说明文案",
-    );
+    expect(document.getElementById(describedBy ?? "")?.textContent).toContain("这是说明文案");
   });
 
   it("内容渲染在 body 的 Portal 里，不在触发器的宿主容器内", async () => {
@@ -263,9 +255,7 @@ describe("ui/dialog 的可访问名与归属", () => {
     /* 这条是上面那条受控用例「拿不到按钮」的正面表述：弹窗开着的时候，外部
        内容不在 a11y 树里 ⇒ 读屏与 Tab 键都进不去背景页面。谁要是把模态行为
        关掉（或改成自绘遮罩），这里会先红。 */
-    expect(
-      screen.queryByRole("button", { name: "打开设置" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "打开设置" })).not.toBeInTheDocument();
   });
 });
 
