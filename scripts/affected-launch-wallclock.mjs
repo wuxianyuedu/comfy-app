@@ -214,6 +214,84 @@ export function affordablePerFileCount({
 }
 
 /**
+ * 第 2 遍的**名单**：整块那一遍照旧跑全部失败文件，买不起整块时只跑买得起的那几份。
+ *
+ * 为什么把它挪到这一层：调用点此前是 `gate.via === "probe" ? slice(0, n) : scope.files`
+ * 加一次 junit 读数，五件东西（档位、份数、读数、指纹、清单顺序）散在 `runChunk` 里，
+ * 而其中**只有一件**是判断（挑谁）。收成一处之后，`runChunk` 那一句只剩装配。
+ *
+ * @param {{gate: {via: "block" | "probe", probeCount?: number}, files: string[],
+ *   readSuites: () => {name: string, body: string}[],
+ *   isTimeout: (text: string) => boolean}} args
+ *   `readSuites` 是惰性的：不买不起整块那一档一次 junit 都不读
+ * @returns {string[]} 第 2 遍要跑的文件（`via: "block"` ⇒ 全部）
+ */
+export function rerunFileList({ gate, files, readSuites, isTimeout }) {
+  if (gate.via !== "probe") return [...files];
+  return probeFiles({
+    files,
+    count: gate.probeCount ?? 1,
+    readSuites: readSuites(),
+    isTimeout,
+  });
+}
+
+/**
+ * 买得起的那几份**该挑哪几份**（ISSUE #2601）。
+ *
+ * `budgetAllows` 只回答「买得起几份」（`probeCount`），而调用点此前拿它去切
+ * `scope.files.slice(0, n)` —— 那是**清单顺序**，与「哪一份最可能量出结论」毫无关系。
+ * 于是一次真实测量可能落在三份**必然超时**的文件上，测出来的读音是「这一批仍只是超时
+ * 形态」，而它们本来就该是这个读数 —— 那次测量的信息量为零，还不是最坏的一种。
+ *
+ * 排序只用**已经拿到手**的读数，不新增任何取数：
+ *   1. junit 失败文本里**不带**超时指纹的排最前 —— 那份的红如果坐实，第二遍就会落
+ *      `hard-fail`（真红，阻断并点名），那是这一格唯一能"多知道一件"的方向；
+ *   2. 带指纹的、以及 junit 里**查不到自己**的排后面（这两档的下一动作都是复跑，
+ *      谁先谁后不改变结论档位）—— 后一档仍要**留在**候选里：不在候选里就等于把它们
+ *      从下面那条逐文件补跑里弄丢了；
+ *   3. 同档内保持**清单顺序**（并行时 suite 的先后是完成次序，拿它当顺序会让同一份
+ *      输入产出两条不同的命令行，与复跑面那条口径同源）。
+ *
+ * 这一格**不改任何结论档、不碰任何预算数**：它只决定「被放过去测量的那 n 份是谁」。
+ *
+ * @param {{files: string[], count: number,
+ *   readSuites?: {name: string, body: string}[],
+ *   isTimeout?: (text: string) => boolean}} args
+ *   `isTimeout` 默认取 `isTimeoutShaped`（由调用点注入，本文件不复制第二份指纹清单）
+ * @returns {string[]} 挑出来的文件（`count` ≤ 0 ⇒ 空；`count ≥ 份数` ⇒ 原样）
+ */
+export function probeFiles({
+  files,
+  count,
+  readSuites = [],
+  isTimeout = () => true,
+}) {
+  const list = Array.isArray(files) ? files : [];
+  const n = Math.max(0, Math.trunc(Number(count) || 0));
+  if (n <= 0 || list.length === 0) return [];
+  if (n >= list.length) return [...list];
+  /** @type {Map<string, string>} */
+  const bodyByName = new Map();
+  for (const s of readSuites) {
+    const prev = bodyByName.get(s.name) ?? "";
+    bodyByName.set(s.name, `${prev}\n${s.body ?? ""}`);
+  }
+  /** 0 = 不带指纹（最该先量）；1 = 带指纹 / 查不到自己 */
+  /** @param {string} file */
+  const rank = (file) => {
+    const body = bodyByName.get(file);
+    if (body === undefined) return 1;
+    return isTimeout(body) ? 1 : 0;
+  };
+  return list
+    .map((file, index) => ({ file, index, rank: rank(file) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .slice(0, n)
+    .map((it) => it.file);
+}
+
+/**
  * 「补跑买不起下一份」这句话（同一档判点在逐文件那一轮上的形状）。
  *
  * 必须与上面那句分开说：那一轮停在半路时，剩下的文件**既没跑过也没被确认过**，
