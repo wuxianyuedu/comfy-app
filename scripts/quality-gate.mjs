@@ -35,6 +35,21 @@ import { renderVerdict } from "./ci-log.mjs";
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
+/**
+ * 失败路径的统一出口（ISSUE #2588）：此前四条失败路径调用一个**从未声明过**的
+ * `fail()`，真跑进去时抛 `ReferenceError: fail is not defined` —— 结论方向没错
+ * （仍然非零退出），但失败原因那一格是空的，读者拿到的是一屏指向门禁自身的栈。
+ * 形状收进 `renderVerdict()` 一份（§12.12）：红行由共享 formatter 给，
+ * 提示行与退出码仍由调用点自己负责（四个站点的码各不相同：null / 1 / 2）。
+ *
+ * @param {string} message 本来要说的那句可行动的中文
+ * @param {string} [gate] 判据名（缺省按本入口自己的名字念）
+ */
+function fail(message, gate = "quality-gate") {
+  for (const line of renderVerdict({ state: "red", gate, detail: message }))
+    console.log(line);
+}
+
 /** 门禁清单：与 quality-gate.ps1 的 $Blocks 一一对应（新增门禁两处同步）。 */
 const GATES = {
   typecheck: { label: "Typecheck (tsc --noEmit)", args: ["typecheck"] },
