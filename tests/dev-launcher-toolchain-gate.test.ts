@@ -1420,6 +1420,32 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     expect(r.stdout).toContain("建议升到 26.12.1");
   });
 
+  (envWithPnpm() ? it : it.skip)("依赖下限采集没跑起来 ⇒ 念采集器的 reason，不把「没跑起来」印成「在声明范围内」（ISSUE #2722）", () => {
+    /* 临时根：有 engines.node 与依赖声明、**没有 node_modules** —— 硬规则 26 的场景
+     * （还没 install 就自查）。修复前：采集失败被折成空数组 ⇒ 那一格打 [OK] 在声明
+     * 范围内；修复后：WARN 带采集器的 reason（「一个依赖的 package.json 都没解析到」）。 */
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-no-modules-"));
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      JSON.stringify({
+        name: "fixture",
+        version: "1.0.0",
+        engines: { node: ">=26.12.1" },
+        dependencies: { "some-pkg": "1.0.0" },
+      }),
+      "utf8",
+    );
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", tmp],
+      { encoding: "utf8", env: envWithPnpm() ?? process.env },
+    );
+    expect(r.status, `stdout=${r.stdout ?? ""} stderr=${r.stderr ?? ""}`).toBe(0);
+    expect(r.stdout).toContain("Node 下限这条判据没跑起来");
+    expect(r.stdout).toContain("依赖没装");
+    expect(r.stdout).not.toContain("在声明范围内");
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
   (envWithPnpm() ? it : it.skip)("当前 Node 合规时打 OK 行（这句是上面那格的对照组）", () => {
     /* 本条的输入是「这一跑真的起的那个 node」，所以它**不能**注入
      * `COMFYAPP_NODE_VERSION`：上一格（低版本 Node 那一档）把它写进了宿主环境，
