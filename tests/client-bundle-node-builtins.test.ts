@@ -32,9 +32,10 @@
  * 本用例调用扫描器是毫秒级、能给出引用链、可在 pre-commit 跑。
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { createGateRepo, expectGateRan } from "./helpers/gate-repo";
 
 const REPO_ROOT = process.cwd();
 const SRC = join(REPO_ROOT, "src");
@@ -60,6 +61,75 @@ function scan(): Report {
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
+
+/**
+ * 两枚反向验证探针跑在**夹具树**上（ISSUE #2663）。
+ *
+ * 它们此前把 `import fs from "node:fs"` 注进真实入库文件
+ * （`src/lib/shell/shell-tabs-store.ts` 与 `src/trpc/query-client.ts`）再在 `finally`
+ * 里还原。#2593 管住了「还原的凭据」（不许拿 git 索引当凭据），**管不住读的那一侧**：
+ * vitest 按文件并行，而 `tests/lib-node-only-declarations.test.ts` 在同一时刻扫的
+ * 正是同一棵真实树 —— 探针写入的那一瞬被别人读成仓库事实。当场现场：
+ * build `cnb-c25-1k62nch99` 报 `× src/lib/shell/shell-tabs-store.ts`
+ * （那份文件在 `master` 上只有 `import { create } from "zustand"`），
+ * 同一分支不改内容只重派生一次即绿（`cnb-8h5-1k62o407o`）。
+ *
+ * 出路只有「换一棵树」：独占 / 串行只把窗口调窄，第三份读同一棵真实树的用例出现时
+ * 照撞（规范 §11.19 那条「并发与真实资源的隔离要一起改」是同一件事的另一半）。
+ * 夹具树里「写」与「别人读」不是同一棵，窗口不存在。
+ */
+function runScanOnFixture(files: Record<string, string>): Report {
+  const { repo, dispose } = createGateRepo({
+    script: "lib-node-only-scan.mjs",
+    dirs: ["src"],
+  });
+  try {
+    for (const [rel, content] of Object.entries(files)) repo.write(rel, content);
+    const r = repo.run(["--json"]);
+    /* 先判「跑起来了」再判内容（拿不到测量不是判据红，§13.6.4）；
+     * `--json` 那一档恒退 0，所以这一格退非 0 就是夹具或脚本坏了。 */
+    expectGateRan(r);
+    expect(r.code, r.output).toBe(0);
+    return JSON.parse(r.output) as Report;
+  } finally {
+    dispose();
+  }
+}
+
+/**
+ * 判别位是那个 **lib 侧**的 `"use client"` 入口：入口集若退回「只收 app/components」，
+ * 从 `page.tsx` 出发走不到 `src/lib/foo/pure-fs.ts`（它只挂在 lib 侧入口下面），
+ * 这一格就红 —— 断的不是「目标被找到」，是「walk 的起点里有没有 lib」。
+ */
+const LIB_ENTRY_FIXTURE = {
+  "src/app/only-shell/page.tsx":
+    '"use client";\n\nimport { unrelated } from "~/lib/zzz/unrelated";\n\n' +
+    "export default function Page() {\n  return unrelated();\n}\n",
+  "src/lib/zzz/unrelated.ts": "export function unrelated() {\n  return 1;\n}\n",
+  "src/lib/bar/tabs-entry.ts":
+    '"use client";\n\nimport { touchFs } from "~/lib/foo/pure-fs";\n\n' +
+    "export const entry = touchFs;\n",
+  "src/lib/foo/pure-fs.ts":
+    'import fs from "node:fs";\n\nexport function touchFs() {\n' +
+    "  return typeof fs.existsSync === \"function\";\n}\n",
+};
+
+/**
+ * 判别位是那个**夹在中间**的 `"use client"` 模块：扫描器若把声明当停止点，
+ * `page.tsx → react-entry` 这一步就停住，`pure-leaf` 永远不可见 ⇒ 这一格红。
+ * （旧扫描器缺的就是这一块 —— 见文件头那两段「两份判据各差一块」。）
+ */
+const CROSS_CLIENT_FIXTURE = {
+  "src/app/x/page.tsx":
+    '"use client";\n\nimport { reactEntry } from "~/trpc/react-entry";\n\n' +
+    "export default function P() {\n  return reactEntry;\n}\n",
+  "src/trpc/react-entry.ts":
+    '"use client";\n\nimport { leaf } from "./pure-leaf";\n\n' +
+    "export const reactEntry = leaf;\n",
+  "src/trpc/pure-leaf.ts":
+    'import fs from "node:fs";\n\nexport function leaf() {\n' +
+    "  return typeof fs.readFileSync === \"function\";\n}\n",
+};
 
 describe("客户端可达图中不得出现顶层 import Node 内建的模块", () => {
   const report = scan();
@@ -104,52 +174,42 @@ describe("客户端可达图中不得出现顶层 import Node 内建的模块", 
   });
 
   it("入口是全 src/** 的 use client（不限于 app/components）", () => {
-    // 反向验证入口集：`src/lib/shell/shell-tabs-store.ts` 是 `"use client"`，但它
-    // **不在** `src/app|components` 下 —— 旧版本文件只从 app/components 收集入口，
-    // 因此把 Node 内建注进它不会红。入口集改回窄口径，这条立刻红。
-    const target = join(SRC, "lib", "shell", "shell-tabs-store.ts");
-    const original = readFileSync(target, "utf8");
-    expect(original).toMatch(/^\s*["']use client["']/m);
-    try {
-      writeFileSync(target, 'import fs from "node:fs";\n' + original);
-      const probe = scan();
-      const hit = probe.clientReachable.find(
-        (h) => h.module === "src/lib/shell/shell-tabs-store.ts",
-      );
-      expect(
-        hit,
-        "扫描器的客户端入口集没有覆盖 src/lib 下的 use client 模块 —— " +
-          "只从 src/app|components 收集入口会漏掉它们。",
-      ).toBeDefined();
-    } finally {
-      writeFileSync(target, original);
-    }
+    /* 真实树里的锚点（只读）：这一形确实存在，判别位不是编出来的。 */
+    expect(readFileSync(join(SRC, "lib", "shell", "shell-tabs-store.ts"), "utf8"))
+      .toMatch(/^\s*["']use client["']/m);
+
+    const report = runScanOnFixture(LIB_ENTRY_FIXTURE);
+    const hit = report.clientReachable.find(
+      (h) => h.module === "src/lib/foo/pure-fs.ts",
+    );
+    expect(
+      hit,
+      '扫描器的客户端入口集没有覆盖 src/lib 下的 "use client" 模块 —— ' +
+        "只从 src/app|components 收集入口会漏掉它们（夹具里那个 lib 侧入口就是判别位）。",
+    ).toBeDefined();
+    /* 链首必须是那个 **lib 侧**入口：只断「目标被找到」的话，
+     * 一条从 app 那侧绕过来的路也能把它满足掉，判别位就白设了。 */
+    expect(hit?.chain[0]).toBe("src/lib/bar/tabs-entry.ts");
   });
 
   it("客户端图要能穿过 use client 边界（声明不是边界）", () => {
-    // 反向验证锚点：`src/trpc/react.tsx` 是 `"use client"`，而
-    // `src/trpc/query-client.ts` **只**从它出发才可达。扫描器若把
-    // `"use client"` 当成停止点，这条路径就永远不可见 —— 判据静默失效
-    // （这正是「两份判据互相补盲」里扫描器缺的那块）。
-    //
-    // 所以这里**真的注入一次**再撤掉：只看「扫描器认不认这条边」不够 ——
-    // 一个永远把 clientReachable 返回空的实现也能过那种断言。
-    const target = join(SRC, "trpc", "query-client.ts");
-    const original = readFileSync(target, "utf8");
-    try {
-      writeFileSync(target, 'import fs from "node:fs";\n' + original);
-      const probe = scan();
-      const hit = probe.clientReachable.find(
-        (h) => h.module === "src/trpc/query-client.ts",
-      );
-      expect(
-        hit,
-        '扫描器没有穿过 "use client" 边界：src/trpc/query-client.ts 只从 ' +
-          'src/trpc/react.tsx（"use client"）可达，把它当停止点就会漏报。',
-      ).toBeDefined();
-      expect(hit?.chain.join(" -> ")).toContain("src/trpc/react.tsx");
-    } finally {
-      writeFileSync(target, original);
-    }
+    // 真实树里的锚点（只读）：`src/trpc/react.tsx` 是 `"use client"`，而
+    // `src/trpc/query-client.ts` **只**从它出发才可达。
+    expect(readFileSync(join(SRC, "trpc", "react.tsx"), "utf8")).toMatch(
+      /^\s*["']use client["']/m,
+    );
+
+    const report = runScanOnFixture(CROSS_CLIENT_FIXTURE);
+    const hit = report.clientReachable.find(
+      (h) => h.module === "src/trpc/pure-leaf.ts",
+    );
+    expect(
+      hit,
+      '扫描器把 "use client" 当成了停止点：夹具里 src/trpc/pure-leaf.ts 只从 ' +
+        'src/trpc/react-entry.ts（"use client"）可达，当边界就会漏报。' +
+        " 一个永远把 clientReachable 返回空的实现也会红在这里 —— " +
+        "这条断言要的正是一次真注入的图。",
+    ).toBeDefined();
+    expect(hit?.chain.join(" -> ")).toContain("src/trpc/react-entry.ts");
   });
 });
