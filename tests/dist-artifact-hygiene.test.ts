@@ -708,6 +708,56 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   });
 
   /**
+   * 「不是装配产物就别当装配产物数」（ISSUE #2629）—— 两侧同批钉。
+   *
+   * 现场不是理论：`scripts/shell-gate.mjs` 为了满足 `cargo test` 的编译前提，
+   * 在 `src-tauri/static/` 里写过一枚 `.cargo-test-placeholder`，于是**本机跑过一次壳的
+   * cargo test 之后，`pnpm build` 恒红在产物层**（报的就是「顶层出现白名单外的条目」，
+   * 读起来像谁把脏文件塞进了出厂件）。而这一格在平台档上从不出现 —— CI 不跑
+   * pre-commit、工作区每次被整棵删掉，所以「每日/PR 都是绿的」替不了它。
+   *
+   * 上面那半件（不再往那层写文件）由 `tests/shell-gate.test.ts` 钉；这一条钉的是
+   * **判据自己的边界**：那三条「缺件」检查早就只认「装配过的层」（`server.js` 在场），
+   * 只有顶层白名单这一条漏了这道门 —— 于是它把「从来没装配过」的目录当成出厂件数。
+   * 两侧都要：只钉「不判」会掩盖「装配过的层照样要红」那一半。
+   */
+  it("未装配的 static 层不判顶层，但念出「这一格不判」；补上 server.js 照样红", () => {
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-unassembled-"));
+    const lines: string[] = [];
+    const errSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...a: unknown[]) => {
+        lines.push(a.join(" "));
+      });
+    const logSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation((...a: unknown[]) => {
+        lines.push(a.join(" "));
+      });
+    try {
+      writeFileSync(join(dir, ".cargo-test-placeholder"), "开发期的东西");
+      /* ① 没装配 ⇒ 不判，且**明说不判**（「退 0」与「已检查通过」必须是两种读数，
+       *  §13.5.25 那条「降档永远要被说出来」在同一件事上的应用）。 */
+      expect(checkerExports().checkDir(dir, "static")).toBe(false);
+      const skipped = lines.join(" ");
+      expect(skipped).toContain("顶层这一格不判");
+      expect(skipped).not.toContain("产物干净");
+
+      /* ② 同一份目录补上装配判据（`server.js`）⇒ 那枚杂项立刻要红 ——
+       * 少了这一侧，上面那条「不判」就是「把检查删了」的另一种写法。 */
+      lines.length = 0;
+      writeFileSync(join(dir, "server.js"), "// entry");
+      expect(checkerExports().checkDir(dir, "static")).toBe(true);
+      expect(lines.join(" ")).toContain("顶层出现白名单外的条目");
+      expect(lines.join(" ")).toContain(".cargo-test-placeholder");
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
    * 接线的形态判据（R5-01 的另一半）：判据在 `.next/standalone` 层早有执行者
    * （`pnpm build` 收尾那一步），而 `src-tauri/static` 此前只有「人手工跑一次
    * 自查入口」—— 出厂链路上没有执行者。这条锁三件事：真的敲了、敲的就是数
