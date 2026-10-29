@@ -54,7 +54,9 @@ const checkOnly = args.includes("--check");
 /** 机器可读输出(`--json`):给用例与别的脚本读「并到哪一段、锚刷成了什么」。 */
 const asJson = args.includes("--json");
 const releaseIdx = args.indexOf("--release");
-const releaseVersion = releaseIdx >= 0 ? args[releaseIdx + 1] : null;
+/* 与 `--anchor` 同一形：下标取到的 `string | undefined` 在产生端收掉。
+ * 「给了 `--version` 而后面没值」与「没给」都是「不显式定版，取待发段落的标题」。 */
+const releaseVersion = releaseIdx >= 0 ? (args[releaseIdx + 1] ?? null) : null;
 if (releaseIdx >= 0 && !releaseVersion) {
   console.error("[merge-changelog] --release 需要版本号,如 --release 0.2.0");
   process.exit(1);
@@ -62,7 +64,10 @@ if (releaseIdx >= 0 && !releaseVersion) {
 /* `--anchor <commit>`:本轮条目里**最早**的那个提交。缺省取当前 HEAD ——
  * 「并入这一刻」通常就是那一次提交(碎片是随那次改动一起写的,§13.10.4)。 */
 const anchorIdx = args.indexOf("--anchor");
-const anchorRevArg = anchorIdx >= 0 ? args[anchorIdx + 1] : null;
+/* `args[i]` 在 noUncheckedIndexedAccess 下是 `string | undefined`，**在取的那一处就收掉**：
+ * 「给了 `--anchor` 而后面没值」与「压根没给」在这里是同一条语义（都交给下面的 HEAD 回退），
+ * 留着 undefined 只会让后面每个消费点重新问一遍。 */
+const anchorRevArg = anchorIdx >= 0 ? (args[anchorIdx + 1] ?? null) : null;
 if (anchorIdx >= 0 && !anchorRevArg) {
   console.error("[merge-changelog] --anchor 需要提交引用,如 --anchor 9321411");
   process.exit(1);
@@ -118,22 +123,49 @@ function isPendingTitle(title) {
 }
 
 /**
+ * 一个待发段落在 CHANGELOG 里的位置，连同它的锚（缺锚时 `rev` / `slug` 都是 null）。
+ * @typedef {Object} PendingSection
+ * @property {number} start
+ * @property {string} title
+ * @property {string | null} rev
+ * @property {string | null} slug
+ */
+
+/**
+ * 「带锚的那一支」：`rev` 在这一步之后已被证实不是 null。
+ *
+ * 为什么要单列一个形状、而不是就地写属性判据：
+ * `pending.filter((p) => p.rev !== null)` 里那句判的是**属性**，检查器不会据此收窄元素
+ * —— 实测四格 `TS18047` 全落在紧随其后的 `a.rev < b.rev` 上。把「过滤完 rev 必非 null」
+ * 写成类型谓词一次，排序与落点两处同时受益（与批 8 那条「声明要跟上实现」同一口径）。
+ * @typedef {Object} AnchoredSection
+ * @property {number} start
+ * @property {string} title
+ * @property {string} rev
+ * @property {string | null} slug
+ */
+
+/**
  * 待发段落清单(**按来源锚最早者优先**排序 —— 锚写明「这一段里最早的条目是哪个提交
  * 带进来的」,所以并入的位置由锚决定,不由「谁排在文件最上面」决定)。
  *
  * 没有锚的待发段落也收进来:它们是**缺锚存量**,排在带锚的之后、按文件顺序。
  *
  * @param {string[]} lines
- * @returns {{start: number, title: string, rev: string | null, slug: string | null}[]}
+ * @returns {PendingSection[]}
  */
 function pendingSections(lines) {
+  /** @type {PendingSection[]} */
   const out = [];
   let inFence = false;
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence;
     if (inFence) return;
     const m = /^##\s+(.+?)\s*$/.exec(line);
-    if (!m || !isPendingTitle(m[1])) return;
+    /* 解构 + 真值判据：`m[1]` 是 `string | undefined`，而 `isPendingTitle(…)` 要的
+     * 是 `string` —— 在这里收掉，比在下面两处（判据与 `out.push`）各写一遍强。 */
+    const [, title] = m ?? [];
+    if (!title || !isPendingTitle(title)) return;
     /* 锚只认段落开头几行 —— 认成「段落里任意一行有 `<!-- since:`」会让正文里一句
      * **讨论锚本身**的话被当成本段落的锚。 */
     let rev = null;
@@ -141,12 +173,12 @@ function pendingSections(lines) {
     for (const probe of lines.slice(i + 1, i + 7)) {
       const a = ANCHOR_RE.exec(probe);
       if (a) {
-        rev = a[1];
-        slug = a[2];
+        rev = a[1] ?? null;
+        slug = a[2] ?? null;
         break;
       }
     }
-    out.push({ start: i, title: m[1], rev, slug });
+    out.push({ start: i, title, rev, slug });
   });
   return out;
 }
@@ -187,38 +219,57 @@ function anchorIsCommit(rev) {
  */
 function mergeInto(changelogText, fragments, version, anchorRev) {
   const lines = changelogText.split("\n");
-  const pending = pendingSections(lines);
-  if (pending.length === 0) {
+  /* 解构出「第一个待发段落」，而不是判完 `length` 再按下标取：前者让类型也看见「非空」，
+   * 于是 `target` 不再带着 `undefined` 走到后面四处（那五格红就是这么来的）。
+   * 抛出条件与原句逐字等价（`pending.length === 0` ⇔ 这里取不到第一个）。 */
+  const [firstPending, ...restPending] = pendingSections(lines);
+  if (!firstPending) {
     throw new Error(
       "CHANGELOG.md 里找不到待发段落(既没有 `## [Unreleased]`、也没有未发布的 `[x.y.z]`)",
     );
   }
+  const pending = [firstPending, ...restPending];
 
   /* 落点:带锚且锚最早的那个待发段落;一个带锚的都没有时退回文件里的第一个
    * (缺锚存量,并入时顺手补锚 —— 见下面的 `anchorLine`)。 */
-  const anchored = pending.filter((p) => p.rev !== null);
+  /** @param {PendingSection} p @returns {p is AnchoredSection} */
+  const hasAnchor = (p) => p.rev !== null;
+  const anchored = pending.filter(hasAnchor);
   anchored.sort((a, b) => (a.rev < b.rev ? -1 : a.rev > b.rev ? 1 : 0));
-  const target = anchored[0] ?? pending[0];
+  const target = anchored[0] ?? firstPending;
 
   const start = target.start;
   let end = lines.findIndex((l, i) => i > start && /^##\s/.test(l));
   if (end < 0) end = lines.length;
 
   /* 解析该待发段落的各段落,与碎片合并(同一段落:现有在前,碎片在后)。 */
+  /** 段落 → 该段落已有的行。 */
+  /** @type {Map<string, string[]>} */
   const bucket = new Map();
+  /** 取某段落的数组，不在就建一个放进去 —— 原来那两句 `has` 再 `get`（两处）合并成一处，
+   *  `get` 的返回类型因此是 `string[]` 而不是 `string[] | undefined`。
+   * @param {string} section @returns {string[]} */
+  const listOf = (section) => {
+    const existing = bucket.get(section);
+    if (existing) return existing;
+    /** @type {string[]} */
+    const created = [];
+    bucket.set(section, created);
+    return created;
+  };
   let current = null;
   for (const line of lines.slice(start + 1, end)) {
-    const m = line.match(/^###\s+(.+)$/);
-    if (m && SECTIONS.includes(m[1].trim())) {
-      current = m[1].trim();
-      if (!bucket.has(current)) bucket.set(current, []);
+    const [, name] = line.match(/^###\s+(.+)$/) ?? [];
+    const section = name?.trim();
+    if (section && SECTIONS.includes(section)) {
+      current = section;
+      listOf(current);
       continue;
     }
-    if (current) bucket.get(current).push(line);
+    if (current) listOf(current).push(line);
   }
   for (const f of fragments) {
-    if (!bucket.has(f.section)) bucket.set(f.section, []);
-    bucket.get(f.section).push("", f.body);
+    listOf(f.section).push("", f.body);
   }
 
   const rebuilt = [];
@@ -227,8 +278,7 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
     ...[...bucket.keys()].filter((s) => !SECTIONS.includes(s)),
   ]) {
     if (!bucket.has(section)) continue;
-    const body = bucket
-      .get(section)
+    const body = listOf(section)
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
@@ -280,9 +330,12 @@ if (!fragments.length) {
   console.log("[merge-changelog] changelog.d/ 里没有碎片,无需并入。");
   process.exit(0);
 }
+/* 段落 → 该段落的碎片文件名（只给屏幕上的摘要用）。注解必须落在 **reduce 的初值**上：
+ * 累加器 `acc` 的类型是从初值推出来的，写在等号左边（哪怕用 cast）改不到它 ——
+ * 实测那样 `acc[f.section] ??= []` 照旧报 TS7053。 */
 const bySection = fragments.reduce(
   (acc, f) => ((acc[f.section] ??= []).push(f.name), acc),
-  {},
+  /** @type {Record<string, string[]>} */ ({}),
 );
 console.log(
   `[merge-changelog] 待并入 ${fragments.length} 个碎片:` +
@@ -300,7 +353,9 @@ if (anchorRev === null) {
     anchorRev = headRev();
   } catch (err) {
     console.error(
-      `[merge-changelog] 取不到当前 HEAD(${err.message})—— 并入必须知道「这一轮条目里` +
+      `[merge-changelog] 取不到当前 HEAD(${
+        err instanceof Error ? err.message : String(err)
+      })—— 并入必须知道「这一轮条目里` +
         `最早的是哪个提交」,请用 --anchor <commit> 显式给出(裸目录 / tarball 解包的检出)`,
     );
     process.exit(1);
