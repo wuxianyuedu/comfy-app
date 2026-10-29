@@ -46,9 +46,12 @@
  *     都在 `rmSync` 上，那是另一回事），而产物层 `check-standalone-contents.cjs`
  *     **真数两层产物**（AGENTS 硬规则 18），
  *     「一件该带的被静默覆盖掉」当场红，而载荷实体化那处的局部意图由上一行的
- *     `if (existsSync(dest)) continue;` 表达。`filter` 也早就在用且量过收益：
- *     「复制前挡掉」省下的是 `src/` 11.7 MB + `changelog.d/` 3.3 MB 加开发机私有输入，
- *     载荷实体化把 404 MB 压到 245 MB —— 这不是「算法级优化还没做」，是已经做完并记账。
+ *     `if (existsSync(dest)) continue;` 表达。`filter` 也早就在用，且它的作用不是"省空间"：
+ *     顶层白名单（`STANDALONE_ALLOWED_TOPLEVEL`，与产物层检查同源）保证的是
+ *     **私有输入到不了装配层**与**不必整树拷来再删**两件事，见 §装配 那段注释；
+ *     而「这一趟到底搬了多大一份」不靠注释里的数字说话 —— 运行时那一行
+ *     `static 体积 …MB` 念的就是当场量出来的值。
+ *     所以这不是「算法级优化还没做」，是已经做完并记账。
  */
 import {
   chmodSync,
@@ -251,10 +254,16 @@ for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
 // `standalone-private-inputs.mjs` 的 `STATIC_ALLOWED_TOPLEVEL`（与产物层检查、
 // 用例同源，不在这里再抄一份名单）。
 //
-// 为什么在**复制前**判而不是「整树拷来再删」：实测这一层今天躺着 `src/` 11.7 MB、
-// `changelog.d/` 3.3 MB 与开发机的 `data/llm-secret.key`，白名单生效后这些一个字节
-// 都不必复制。file tracing 仍会把它们带进 `.next/standalone`（根因与修法归
-// ISSUE #1217），本条只管「装进桌包的那一份」。
+// 为什么在**复制前**判而不是「整树拷来再删」：这一道的价值不是某个 MB 数，而是两条
+// **不依赖上游是否干净**的性质 ——
+//   · 开发机私有输入即使 file tracing 再失控，也进不了装配层（不是"先拷进来再删掉"，
+//     那个中间态本身就是一次会把密钥写进产物目录的窗口）；
+//   · 不必把整棵仓库读进内存再剪枝 —— 少写的那一趟是几百 MB 量级的 I/O。
+// 今天实测 `.next/standalone` 的顶层已不含 `changelog.d` / `data` / `.env`
+// （`pnpm build` 收尾那一步先剥，执行者是同一份 `standalone-private-inputs.mjs` 清单），
+// 所以装配层这一跳通常一条都不挡 —— **`挡掉 0 条` 是常态，不是计数器坏了**。
+// file tracing 仍会把多余条目带进 `.next/standalone`（根因与修法归 ISSUE #1217），
+// 本条只管「装进桌包的那一份」。
 // 注意：node_modules/.cache 单独排除，不能整体排除 node_modules（standalone
 // 运行时必需裁剪版）。
 const staticAllowed = (abs) => isStaticPathAllowed(relative(nextOut, abs));
@@ -263,7 +272,10 @@ const staticAllowed = (abs) => isStaticPathAllowed(relative(nextOut, abs));
  * 「被挡掉的条目数」就是**挡得对不对的证人** —— 只有体积没有这两个数，看不出
  * 「白名单今天生效了几条」。计数在 filter 里做，不改它的返回值。
  * ⚠️ 口径：`filter` 对**每一个将要复制的路径**（目录与文件都算）各调一次，
- * 所以这两个数是「遍历到的条目数」，不是「文件数」。念的时候不许含糊成文件数。 */
+ * 所以这两个数是「遍历到的条目数」，不是「文件数」。念的时候不许含糊成文件数。
+ * 交叉证人：`挡掉 M 条` 与下面 `pruneStaticToAllowList` 打印的「已剔除…顶层条目」应当同向
+ * （0 挡 ⇒ 0 剔）—— 哪天两者不一致，就是白名单或计数漂了。#2678 那条「账与产物对不上」
+ * 正是被这两行一起读出来的。 */
 let cpSeen = 0;
 let cpRejected = 0;
 const cpAt = performance.now();
@@ -417,7 +429,11 @@ for (const payloadFile of [
 //
 // 形态选择：把 store 里的包**上提**到顶层（先看 pnpm 的 hoist 兜底层
 // `.pnpm/node_modules/`，再看各包的私有层），然后把 `.pnpm` 整棵删掉——不是「上提后
-// 再留一份 store」，实测那样载荷是 404 MB，扁平化后是 245 MB。
+// 再留一份 store」。当时那一趟的对比是 404 MB（留 store）对 245 MB（扁平化）——
+// **这两个数是那一趟的读数，不是今天的载荷**：今天多大由运行时那行
+// `static 体积 …MB` 当场念（把绝对体积写进注释就会腐烂，ISSUE #2678 收的是这一族）。
+// 这条选择本身不依赖那两个数：留 store 的问题不是体积，是 `.pnpm` 那层的软链语义
+// 在 standalone 里根本不可解析（上面那段 `Cannot find module` 就是它的表现）。
 // 同名多版本时取第一个发现者：这与 pnpm 自己在 hoist 兜底层的取舍同形，且下面的
 // 「载荷可解析性断言」会在构建期就把选错的那一类抓出来（不是等用户双击）。
 const storeDir = join(staticDir, "node_modules", ".pnpm");

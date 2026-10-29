@@ -237,8 +237,14 @@ export const RUNTIME_SCRIPTS = [
  *
  * 为什么这里必须是白名单而不是再列一份黑名单：`bundle.resources` 从 ISSUE #1216
  * 起是真的会分发出去的东西（此前 `resources` 段是空的，`static/` 里多脏都没人看见），
- * 而 file tracing 每次升级都可能多带一个目录（实测这一层今天躺着 `src/` 11.7 MB、
- * `changelog.d/` 3.3 MB、`data/llm-secret.key`、`Comfy APP.lnk`、`build-launcher/`）。
+ * 而 file tracing 每次升级都可能多带一个目录。**哪几样会在场，每台机、每一趟都不一样**：
+ * 历史上被点名过的形状有整棵 `src/`、`changelog.d/`、开发机的 `data/llm-secret.key`、
+ * 桌面快捷方式 `.lnk`、`build-launcher/`、根级 `next.config.js`；而一次真装配（本次在本机）
+ * 读到的是 `.next / node_modules / package.json / public /
+ * scripts / server.js / src` 七个顶层条目、装配那一跳 `挡掉 0 条` —— 因为 `pnpm build`
+ * 收尾那一步（同一个清单）已经先剥过一轮。
+ * **所以这份名单的价值不是"省下多少 MB"**（那个数每次都不一样，写在这里就会腐烂），
+ * 而是「多带一个目录必然被看见」这条**不依赖上游是否干净**的性质。
  * 黑名单是欠完备的——#1217 记的正是「`outputFileTracingExcludes` 整份未生效」这条根因；
  * 在装配这一层用默认拒绝，才让「多带一个目录」必然被看见而不是等用户解包发现。
  *
@@ -256,11 +262,13 @@ export const RUNTIME_SCRIPTS = [
  *   · `schema.sql` —— 首启建表的 DDL，由 `build-desktop.mjs` 的 §首启建表 现生成
  *     （载荷里没 drizzle-kit，桌包首启只能靠它；只含结构、不许含数据）。
  *
- * 注意 `src` **不在**这份顶层名单里：桌包不需要整棵源码树（`src/` 11.7 MB，里面还有
- * 377 个测试文件）。但运行期有一处真的会读 TS 源——`scripts/reap-process.mjs` 与
+ * 注意 `src` **不在**这份顶层名单里：桌包不需要整棵源码树（它主要是测试与开发期源码，
+ * 出厂件一件都不读）。但运行期有一处真的会读 TS 源——`scripts/reap-process.mjs` 与
  * `scripts/dev-launcher.mjs` 都 `await import("../src/lib/process/kill-process-tree.ts")`
  * （硬规则 3 的平台机制单点），缺它桌包里的回收入口直接起不来。所以 `src` 走
- * `RUNTIME_SRC` 的**逐文件**放行，见下面那份清单与 `isStaticPathAllowed()`。
+ * `RUNTIME_SRC` 的**逐文件**放行，见下面那份清单与 `isStaticPathAllowed()`；
+ * 本次真装配的产物里 `src/` 恰好就是那三个放行件（`kill-process-tree.ts` /
+ * `executable-resolve.ts` / `platform.ts`）—— 放行集在干活，读得出。
  */
 export const STATIC_ALLOWED_TOPLEVEL = [
   ".next",
