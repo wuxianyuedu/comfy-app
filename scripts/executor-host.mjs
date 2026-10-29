@@ -76,7 +76,9 @@ const logPath =
  *  才会把 boot 顺序里的 configureXxx 链真接上；这里保持「纯 .mjs 无 TS」的
  *  最小依赖，方便单测直接 `spawn(node, [executor-host.mjs])`。 */
 function localStamp(d = new Date()) {
+  /** @param {number} n */
   const p2 = (n) => String(n).padStart(2, "0");
+  /** @param {number} n */
   const p3 = (n) => String(n).padStart(3, "0");
   return (
     `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ` +
@@ -84,6 +86,8 @@ function localStamp(d = new Date()) {
   );
 }
 
+/** 往本进程的日志通道写一行。
+ * @param {string} msg @returns {void} */
 function writeLine(msg) {
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
@@ -143,14 +147,32 @@ function resolveDatabaseUrl() {
 
 /** 与 `src/server/db.ts::resolveDbPath` 同一锚点规则：`file:` 前缀剥离后按
  *  进程 CWD（已 chdir 到 ROOT）解析。不复用 db.ts 是因为它带 `import
- *  "server-only"`（宿主加载即 throw），这里只做等价的纯路径解析。 */
+ *  "server-only"`（宿主加载即 throw），这里只做等价的纯路径解析。
+ * @param {string} url @returns {string} */
 function resolveDbFile(url) {
   const value = url || "file:./db.sqlite";
   const raw = value.startsWith("file:") ? value.slice("file:".length) : value;
   return path.resolve(process.cwd(), raw || "./db.sqlite");
 }
 
+/**
+ * `bootRuntime` 成功之后填的运行时句柄。
+ *
+ * 这个形状只按**本文件用到的那四件**写（`hostRepo` / `cliProcs` / `interrupt` /
+ * `claimAndDispatch`），而且后两件的类型取自这里的调用方式 —— 真正产生它们的
+ * `src/lib/comfyui/host-runtime.ts` 是**动态 import** 进来的（构建期走预编译 bundle、
+ * 开发期经 tsx），从这一侧拿不到它的导出类型；把它写成更细的声明就是编一份
+ * （与批 4 那张假 `@returns` 是同一类缺陷，只是方向相反：那处是声明比实现少，
+ * 这里如果写细就是声明比实现多）。
+ * @typedef {Object} HostRuntime
+ * @property {any} hostRepo
+ * @property {any} cliProcs
+ * @property {() => Promise<unknown>} interrupt
+ * @property {(options?: any) => Promise<unknown>} claimAndDispatch
+ */
+
 // 运行时句柄：bootRuntime 成功后填充，claim tick 与测试钩子共用。
+/** @type {HostRuntime | null} */
 let hostRuntime = null;
 
 /** 领取节拍（ms）。与 inline 的「点一次跑一个」语义对齐：每 tick `take=1`，
@@ -167,14 +189,18 @@ const CLAIM_TICK_MS =
  *  侧会救、`queued` 统计恒 0）。留着这一层只因为收尾对账（kill + interrupt）
  *  是 host 独有的：它要碰本进程的 `cliProcs`。 */
 async function claimTickOnce(options = {}) {
-  if (!hostRuntime) return;
-  const claimedId = await hostRuntime.claimAndDispatch(options);
+  /* 一次 tick 只读一次模块状态：先取进局部、再由那一句守卫 —— 模块级的
+   * `hostRuntime` 会被 `bootRuntime` 赋值，跨 `await` 之后检查器不再相信上面那句
+   * 守卫（这不是多余的判据，是「把一句守卫的作用域写实」）。 */
+  const runtime = hostRuntime;
+  if (!runtime) return;
+  const claimedId = await runtime.claimAndDispatch(options);
   /* 这行是本进程「领到并交棒给执行链」的唯一可见证据（契约测与排障都读它）；
    * 领取判据本身在 dispatch 里，日志不重复写第二份。 */
   if (claimedId) {
     writeLine(`claim-dispatched taskId=${claimedId} bootId=${bootId}`);
   }
-  await reconcileCancelled();
+  await reconcileCancelled(runtime);
 }
 
 /** 取消收尾（ADR §13-3B1 决定 3 → §14 D2 落定形态）：用户点取消时 Next 只把行
@@ -182,9 +208,10 @@ async function claimTickOnce(options = {}) {
  *  并**由本侧**发 `interrupt()`——kill 只收走 comfy-cli，它提交的 prompt 还在
  *  ComfyUI 那边跑，不发就是「取消后继续出图」。
  *  kill 形态与 `enqueue.cancelTask` 同构（同一判据源，不另发明一套），被杀 cli
- *  的迟到回写由 impl 的终态守卫挡下（§14 D4）。 */
-async function reconcileCancelled() {
-  const { hostRepo, cliProcs } = hostRuntime;
+ *  的迟到回写由 impl 的终态守卫挡下（§14 D4）。
+ * @param {HostRuntime} runtime 由调用点交出（`claimTickOnce` 已经过一次守卫） */
+async function reconcileCancelled(runtime) {
+  const { hostRepo, cliProcs } = runtime;
   /* 快照迭代是**刻意的**：循环体内会 `cliProcs.delete(taskId)`，直接迭代活的
    * Map 会在删除时跳键。unicorn/no-useless-spread 不看循环体的突变，属误报，
    * 禁用一行（台账：全仓此形态仅本处）。 */
@@ -207,9 +234,12 @@ async function reconcileCancelled() {
        * 就会「取消后继续出图」。失败不致命：状态已经是 CANCELLED。 */
       let interruptState = "sent";
       try {
-        await hostRuntime.interrupt();
+        await runtime.interrupt();
       } catch (err) {
-        interruptState = `failed:${err?.message ?? err}`;
+        /* 同一个文件里另一处 catch（`claim-tick 异常` 那一句）用的就是这条判据，
+         * 这一处漏了 —— `err` 是 `unknown`，`err?.message` 在类型上根本不存在
+         * （TS2339），而不是「运行时会给出 message」。同形补齐，不改话术。 */
+        interruptState = `failed:${err instanceof Error ? err.message : String(err)}`;
       }
       writeLine(`cancel-reaped taskId=${taskId} interrupt=${interruptState}`);
     } catch {
@@ -371,6 +401,8 @@ const hb = setInterval(
 
 /* 领取主循环（3-B1）：host 形态每 CLAIM_TICK_MS 领一行（无行可领时只是一个
  * 空 SELECT，不打日志防刷屏）；骨架形态不起这条循环。 */
+/** 领取循环的定时器句柄；骨架形态不起这条循环，所以它一直是 null。
+ * @type {ReturnType<typeof setInterval> | null} */
 let claimHandle = null;
 if (runtimeMode) {
   claimHandle = setInterval(() => {
@@ -382,6 +414,8 @@ if (runtimeMode) {
   }, CLAIM_TICK_MS);
 }
 
+/** 收尾：停心跳与领取循环、写一行 shutdown，然后退出。
+ * @param {string} sig 触发它的信号名（两个注册点各给自己的那一个） */
 function shutdown(sig) {
   clearInterval(hb);
   if (claimHandle !== null) clearInterval(claimHandle);
