@@ -456,6 +456,31 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toMatch(/\b3\s+src\/components\/Multi\.tsx/);
   });
 
+  test("表达式容器的前导注释（`{/* SAFETY: … */ (expr)…}`）按 `*/` 收口，其后代码行不进统计", ({
+    repo,
+  }) => {
+    // 阳性对照：anti-slop 的 SAFETY 形态把注释写进 JSX 表达式容器的前导位，
+    // `*/` 后面跟着的是代码不是 `}`。旧口径只认 `*/}` 收口 ⇒ 整份文件被判成
+    // 「块注释内」，其后的英文代码行被当成英文注释（现场：
+    // tests/integration/renderWithProviders.integration.test.tsx，SAFETY 批撞上）。
+    // fixture 刻意让注释后的代码行「含虚词成句英文」——若收口判错，这行必被计入。
+    repo.write(
+      "src/components/SafetyExpr.tsx",
+      [
+        "export function SafetyExpr({ error }: { error: unknown }) {",
+        "  return (",
+        "    <div>",
+        "      {/* SAFETY: 类型断言已复核 */ (error as { message?: string } | null)?.message}",
+        '      {error ? "The message was rendered above the fallback text" : null}',
+        "    </div>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    expect(repo.run().code).toBe(0);
+  });
+
   test("字符串字面量里的英文不被当成注释", ({ repo }) => {
     repo.write(
       "src/lib/str.ts",

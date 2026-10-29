@@ -410,7 +410,9 @@ describe("收到崩溃信号后的复核与换档（ISSUE #1351）", () => {
     expect(getComfyLivenessForTest().intervalMs).toBe(0);
 
     release!(onlineStats());
-    await expect.poll(() => getComfyLivenessForTest().phase, { timeout: 4000 }).toBe("idle");
+    /* 用 `vi.waitFor` 而不是 `expect.poll`：这条用例罩在体外开着的假时钟窗口里，
+       poll 不推进假定时器，waitFor 才自推进（§11.14 一个用例一把时钟）。 */
+    await vi.waitFor(() => expect(getComfyLivenessForTest().phase).toBe("idle"), { timeout: 4000 });
   });
 
   it("启动等待的起点参与换档：超过快档窗口后间隔从 400ms 变 1s", async () => {
