@@ -79,6 +79,20 @@ function fail(
 }
 
 /** 门禁清单：与 quality-gate.ps1 的 $Blocks 一一对应（新增门禁两处同步）。 */
+/**
+ * 一档判决的登记：屏幕上念什么（`label`）、怎么起（`args`）、要不要进 `all` 那一档
+ * （`run: false` = 只在显式点名时跑）。
+ *
+ * 这三件就是**实现里真实存在的三个键**（当场数过 10 档，没有一个条目带第四个键）——
+ * 写这个 typedef 的直接收益是那 4 格「按字符串索引 GATES」不再报隐式 any：
+ * `GATES[key]` 过去在 `{ typecheck: {…}, lint: {…}, … }` 这个字面量类型上按 string
+ * 取，取到的类型是 `any`，于是 `GATES[k].run !== false` 与 `GATES[k].label` 都不曾被判过。
+ * @typedef {Object} Gate
+ * @property {string} label
+ * @property {string[]} args
+ * @property {boolean} [run]
+ */
+/** @type {Record<string, Gate>} */
 const GATES = {
   typecheck: { label: "Typecheck (tsc --noEmit)", args: ["typecheck"] },
   lint: {
@@ -243,6 +257,7 @@ const GATES = {
   },
 };
 
+/** @param {string[]} argv @returns {{mode: string}} */
 function parseArgs(argv) {
   const out = { mode: "all" };
   for (let i = 0; i < argv.length; i++) {
@@ -257,7 +272,7 @@ function parseArgs(argv) {
  * 从前这里用 `==> 标题` 打段头、`  [OK] … passed` / `  [FAIL] … failed (exit N)` 打结论，
  * 而同一台机上的钩子打的是 `── check: <标签>` + `  [ok] ── …`、跑批打的是 `[重档] … ok`。
  * 三段话术说同一件事，且「这一档没跑」在三种形状里没有位置。
- */
+ * @param {Gate} gate @param {number} code @returns {void} */
 function reportVerdict(gate, code) {
   emitVerdict({
     state: code === 0 ? "ok" : "red",
@@ -323,20 +338,37 @@ function resolvePnpm() {
   return null;
 }
 
-function runGate(pnpm, key) {
-  const gate = GATES[key];
-  /** 实际的命令行形态：宿主（`.ps1` 形态时是 pwsh/powershell）+ pnpm 参数。 */
-  const invocation = (args) => [pnpm.command, ...pnpm.prefixArgs, ...args];
+/**
+ * @param {{command: string, prefixArgs: string[]}} pnpm 上面那个解析器的成功形
+ *   （不重述它的字段，取它已声明的那一份）
+ * @param {string} key 这一档在 `GATES` 里的名字（只用来判 `test` 那一档要不要带排除清单）
+ * @param {Gate} gate 由调用点交出（见 `main` 里那段「解一次」的注释）
+ * @returns {number} */
+function runGate(pnpm, key, gate) {
+  /** 实际的命令行形态：宿主（`.ps1` 形态时是 pwsh/powershell）+ pnpm 参数。
+   *  分成 `{command, args}` 而不是打平成一个数组：调用点要的是「可执行件 + 参数表」
+   *  两件事，打平之后从数组头取那一项在类型上就是 `string | undefined`，
+   *  而 `spawnSync(…)` 的首参要的是 `string`（这一格是 `gate.args` 有了类型之后现形的）。
+   * @param {string[]} args @returns {{command: string, args: string[]}} */
+  const invocation = (args) => ({
+    command: pnpm.command,
+    args: [...pnpm.prefixArgs, ...args],
+  });
   // 门禁脚本是 `node scripts/xxx.cjs` / `xxx.mjs` 而不是 pnpm 子命令：用 node 直接跑，
   // 免得再套一层 pnpm exec（那层只带来解析开销与 Windows 的 .cmd 差异）。
   // 认 `.mjs` 与认 `.cjs` 是同一条理由 —— 只认后者会让新加的 ESM 门禁被当成
   // pnpm 参数（`pnpm ../scripts/x.mjs`），表现是一句看不懂的「command not found」。
-  if (/\.(?:c|m)?js$/.test(gate.args[0] ?? "")) {
-    const script = path.resolve(ROOT, "scripts", path.basename(gate.args[0]));
+  /* 解一次首项而不是按三次下标：`gate.args[0]` 在 `noUncheckedIndexedAccess` 下是
+   * `string | undefined`，原来那句 `?? ""` 只喂了正则，`path.basename(…)` 那一处并没有被
+   * 它保护 —— 空串本来也匹配不上 `\.(?:c|m)?js$`，所以「首项在且是脚本」这一条判据
+   * 与原来的覆盖面逐字相同。 */
+  const [firstArg, ...restArgs] = gate.args;
+  if (firstArg && /\.(?:c|m)?js$/.test(firstArg)) {
+    const script = path.resolve(ROOT, "scripts", path.basename(firstArg));
     // 回显解释器与脚本的**真实**路径（不写成 `node scripts/x.cjs` 的近似形态）：
     // 这一步用的是 `process.execPath`，与 PATH 上的 `node` 未必是同一个。
-    echoCommandLine(process.execPath, [script, ...gate.args.slice(1)]);
-    const r = spawnSync(process.execPath, [script, ...gate.args.slice(1)], {
+    echoCommandLine(process.execPath, [script, ...restArgs]);
+    const r = spawnSync(process.execPath, [script, ...restArgs], {
       cwd: ROOT,
       stdio: "inherit",
       windowsHide: true,
@@ -354,7 +386,7 @@ function runGate(pnpm, key) {
   }
   // 回显真正被执行的那条（`pnpm.command` 可能是经 PowerShell 宿主的 `.ps1`），
   // 而不是把参数拼到「pnpm」这个字面名后面 —— 后者在 Windows 上常常不是同一条。
-  const [command, ...argv] = invocation(args);
+  const { command, args: argv } = invocation(args);
   echoCommandLine(command, argv);
   const result = spawnSync(command, argv, {
     cwd: ROOT,
@@ -375,8 +407,9 @@ function runGate(pnpm, key) {
   // 「命令没起来」与「跑完但非零退出」分开报：前者 stderr 通常是空的，
   // `status ?? 1` 只给一个退出码等于没说原因（ISSUE #576 的形态）。
   if (result.error) {
+    const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
     fail(
-      `起 ${command} 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
+      `起 ${command} 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}`,
       { after: [`        实际命令：${formatCommandLine(command, argv)}`] },
     );
     return 1;
@@ -390,15 +423,28 @@ function main() {
   const { mode } = parseArgs(process.argv.slice(2));
   // `run: false` 的门禁只在**显式点名**时跑：`all` 是「日常该完整跑一遍」那一档，
   // 而像素档的代价与它的结论有效性（基线带平台）都不属于那一档。
-  const defaultKeys = Object.keys(GATES).filter((k) => GATES[k].run !== false);
+  /* 遍历表本身而不是「先取键再按键取回值」：`Object.keys(GATES)` 之后 `GATES[k]` 在类型上
+   * 又是 `Gate | undefined`（与上面那条「解一次」是同一个口径的两种落点）。
+   * `entries()` 一次拿到键与值，判据不变（`run: false` 的那几档不进默认档）。 */
+  const defaultKeys = Object.entries(GATES)
+    .filter(([, gate]) => gate.run !== false)
+    .map(([k]) => k);
   const keys = mode === "all" ? defaultKeys : [mode];
+  /* 先把键解成 `Gate` 再往下走。原来这里只判一次存在性，后面 `runGate` 里再按同一个
+   * `string` 索引取一遍 —— 那就是批 13 记下的同一形：守卫在调用点、函数自己拿回
+   * `Gate | undefined`。解一次并把解出来的那份交给执行者，判据与类型看到的是同一份事实
+   * （话术、返回码 2、以及「先全量校验再跑依赖预检」这个顺序都没变）。 */
+  /** @type {Array<{key: string, gate: Gate}>} */
+  const plan = [];
   for (const k of keys) {
-    if (!GATES[k]) {
+    const gate = GATES[k];
+    if (!gate) {
       fail(
         `未知门禁：${mode}（可选：${Object.keys(GATES).join(" / ")} / all）`,
       );
       return 2;
     }
+    plan.push({ key: k, gate });
   }
 
   const drift = dependencyDrift();
@@ -429,11 +475,11 @@ function main() {
 
   let exitCode = 0;
   const red = [];
-  for (const k of keys) {
-    const code = runGate(pnpm, k);
+  for (const { key, gate } of plan) {
+    const code = runGate(pnpm, key, gate);
     if (code !== 0) {
       exitCode = code;
-      red.push(GATES[k].label);
+      red.push(gate.label);
     }
   }
   /* 整轮末尾按「跑了几档、红了几档、红的是谁」说一次：各档自己那几行只回答
