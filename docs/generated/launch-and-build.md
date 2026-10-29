@@ -445,7 +445,7 @@ Node 侧 `src/lib/shell/launch-diagnostics.ts`。用例条数不在这里记账�
 
 壳每次启动往**三份**追加写文件（`shell-launch.log` / `dev-launcher-stderr.log` /
 `shell.log`）各写一行会话标记，`get_launch_log` 与面板按**最后一个标记前缀**以后
-取内容 —— 否则「查看日志」里会混进上周的 stderr 与壳诊断（ISSUE #203）。
+取内容 —— 否则「查看日志」里会混进上周的 stderr 与壳诊断（PR #203）。
 
 这条标记有两个读者，两条口径都是硬约束：
 
@@ -599,7 +599,7 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
 > POSIX 上只有一种形态（无扩展名），且内核自己解析 shebang，整条判据退化为原来的行为
 > ——「批处理专属」的短路**只在 Windows 生效**。
 
-> **`.PS1` 不看 `PATHEXT`，而且必须交宿主起**（ISSUE #1961）。这两条是同一次立案的两半，
+> **`.PS1` 不看 `PATHEXT`，而且必须交宿主起**（PR #1961）。这两条是同一次立案的两半，
 > 少任一半都会让同一格红：
 >
 > ① **候选表里无条件有 `.PS1`**。它此前与 `.CMD` / `.BAT` / `.COM` 一样要 `PATHEXT`
@@ -2467,7 +2467,7 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
   | `.next/standalone` | `.next` `node_modules` `package.json` `public` `scripts` `server.js`          | `STANDALONE_ALLOWED_TOPLEVEL` |
   | `src-tauri/static` | 上面这些 + `schema.sql` `splash.html` `index.html`（装配步才产出的三件） | `STATIC_ALLOWED_TOPLEVEL`     |
 
-  > 仓库根曾有一层 `config/`（只装模式契约注册表）、并随包分发。ISSUE #1917 之后
+  > 仓库根曾有一层 `config/`（只装模式契约注册表）、并随包分发。PR #1917 之后
   > **这一层不存在了**：模式契约的内置默认回到源码里（`model-mode-contract.ts` 的
   > `configuredModeContracts`，编译进产物，不需要任何文件随包），机器上的改动是
   > 本机覆盖（`data/workshop-mode-contracts.json`，`data/` 那条线照旧不入库、
