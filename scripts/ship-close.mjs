@@ -59,6 +59,47 @@ export function issueNumbersFromText(text) {
 }
 
 /**
+ * **认领形态**的号：只认 `(#123)` 这一种写法（ISSUE #2646）。
+ *
+ * 为什么要与 `issueNumbersFromText` 分开：那条是「这行文字里出现过哪些号」，
+ * 而**关单需要的是「这一轮做完并认领了哪张单」**。本仓的认领形态就是提交信息末尾的
+ * `(#issue)`（`git log --oneline` 上 `… (#2555)` 全是这个形状，`ship` 取标题用的
+ * branch-first 那笔也这么写），正文里裸写的 `#730` 是人话引用 —— 两者喂给同一条正则，
+ * 实测结果就是 PR #2642 那一次：标题 `test(gates): #730 那格改判… (#2603)`
+ * 让 `#730` 也被关掉（它早在 10-04 就 closed，那次是 no-op；换成一张在世的单就是
+ * 静默关掉别人的单子，而 `update-issue` 的包装退出码照旧 0）。
+ *
+ * ⚠️ 同一条约束仍然成立：**只喂标题本体**，不许喂拼完 PR 号的那一整行（见上面那段与
+ * `pullTitleBody`）—— 收窄成带括号并没有消除「`(#2648)` 其实是 PR 号」这一格，
+ * 消除它靠的是剥回本体这一步。
+ *
+ * @param {string} text 标题本体
+ * @returns {number[]}
+ */
+export function claimNumbersFromTitle(text) {
+  /** @type {number[]} */
+  const out = [];
+  for (const m of String(text ?? "").matchAll(/\(\s*#\s?(\d{2,})\s*\)/g)) {
+    out.push(Number(m[1]));
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * 「像号，但不是认领形态」的那一半 —— 正文里裸写的引用（ISSUE #2646 的期望 2）。
+ *
+ * 它**不参与关单**，只用来把那件事念成一次可读的**拒绝**：静默不关与静默关掉，
+ * 对读者是同一种「不知道有没有处理」，而引用本身是有信息量的（「这格与 #730 同源」）。
+ *
+ * @param {string} text 标题本体
+ * @returns {number[]}
+ */
+export function referencedNotClaimed(text) {
+  const claimed = new Set(claimNumbersFromTitle(text));
+  return issueNumbersFromText(text).filter((n) => !claimed.has(n));
+}
+
+/**
  * 剥掉平台在 squash 那一行**末尾追加的 PR 号**，回到「标题本体」。
  *
  * 为什么必须有这一格：见 `issueNumbersFromText` 那段——PR 号与 issue 号共用一套编号空间，
@@ -130,8 +171,9 @@ export function decideCloseIssue({
   /** @type {number[]} */
   const numbers = [];
   if (landedVerified) {
-    // 本轮已验真 ⇒ 标题里点名的号 + 人额外点名的号，并集去重。
-    for (const n of issueNumbersFromText(title)) {
+    // 本轮已验真 ⇒ 标题里**认领形态**的号 + 人额外点名的号，并集去重。
+    // （正文里裸写的引用进 `references`，只念不关 —— ISSUE #2646。）
+    for (const n of claimNumbersFromTitle(title)) {
       sources.set(n, "本轮落地那一行点名的");
       numbers.push(n);
     }
@@ -302,7 +344,7 @@ export function findMergedPullProofs(ctx) {
       scanned += 1;
       const number = Number(item.number ?? 0);
       const body = pullTitleBody(String(item.title ?? ""), number);
-      for (const n of issueNumbersFromText(body)) {
+      for (const n of claimNumbersFromTitle(body)) {
         if (want.has(n) && !proofs.has(n)) {
           proofs.set(n, { prNumber: number, title: body });
         }
@@ -441,6 +483,17 @@ export function closeIssues(ctx) {
   for (const number of plan.numbers) {
     log(
       `[ship] 关 #${number} —— 依据：${plan.sources.get(number) ?? "(未标注)"}`,
+    );
+  }
+  /* 引用与认领是两件事（ISSUE #2646）：标题正文里裸写的 `#730` 不再算本单的认领凭证。
+   * 这一行把「**没关**它」念出来 —— 静默不关与静默关掉，在读者那边是同一种
+   * 「不知道处理过没有」；而那处引用本身有信息量（「这一格与那张单同源」），不该丢。 */
+  const claimed = new Set(plan.numbers);
+  for (const n of referencedNotClaimed(title)) {
+    if (claimed.has(n)) continue;
+    log(
+      `[ship] 标题引用了 #${n}，它不在认领形态 (#号) 里 ⇒ **没关**` +
+        `（人点名才算）：要关请 pnpm ship --close-issue ${n}`,
     );
   }
   for (const number of plan.unproven) {
