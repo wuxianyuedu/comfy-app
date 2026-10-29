@@ -664,6 +664,16 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.githooks/**` wide 兜底（改钩子 → `withFixed("all")` 跑全固定清单），加一步的那条 PR
   // 自己就会跑这份测试、当场抓到条数不符 —— 红在正确的地方，不再全员冻结。
   "tests/commit-gate-tier.test.ts",
+  // eslint 档位的**阳性对照**（ISSUE #2541 收尾）：三批之后全仓又回到 0 警，而
+  // 「0 警」是**状态**不是**能力** —— #2541 的本质正是「空集意义上的 0 警」
+  //（core 面规则一条都没跑过，却报了 0 条）。这条造已知违例真跑一次 eslint，
+  // 断言守着的那几条会拦；再靠 `--sabotage` 钉住「它会红」（恒绿的对照不是对照）。
+  // 触发面是「有人动 `eslint.config.js`」，而配置住在仓库根、本判据住在 tests/，
+  // import 图追不到；更关键的是那种改动**往往正是为了关掉某条规则**（加白名单 /
+  // 收 `files` 面），此时「只在受影响时才跑」恰好把自己排除在外 —— 与
+  // `tests/spawn-shell-scan.test.ts`（改完静态闸要补阳性对照，ISSUE #2562 缺口 1）
+  // 同因，必须固定跑。
+  "tests/eslint-gate-canary.test.ts",
   // 「`src/**` 那一侧的 `import.meta` 只有 `url` 是活的」（ISSUE #2599）：这条读的是
   // **磁盘文本**（`readdirSync` + 正则扫 `src/**`），不在任何 import 图里 —— 把
   // `import.meta.dirname` 带进 `src/env.js` 的那笔改动，增量面一条都不会把它带上去。
