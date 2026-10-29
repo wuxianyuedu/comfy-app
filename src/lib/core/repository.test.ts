@@ -41,9 +41,11 @@ import {
   userRepository,
   llmConfigRepository,
   remoteModelRepository,
+  saveLlmSettings,
   parseAdaptersJson,
 } from "~/lib/core/repository-user";
 import { decryptLlmKey } from "~/lib/llm/secrets";
+import type { DbExecutor } from "~/lib/core/repository-executor-types";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { postRepository } from "~/lib/core/repository-post";
 import {
@@ -1679,6 +1681,221 @@ describe("RemoteModelRepository", () => {
     const raw = tdb.$tables.remoteModels[0]!.apiKey as string;
     expect(raw).not.toBe("sk-seed");
     expect(raw.startsWith("enc:v1:")).toBe(true);
+  });
+});
+
+/* ── saveLlmSettings：一次设置保存跨两张表（ISSUE #2592）─────────────────────
+ * #2586 那组判的是 `replaceAll` **内部**三条语句；这一组判的是**调用它的那条链**
+ * 跨 `remoteModel` ⇄ `llmConfig` 那一层。这一族在本仓没有现成锚点可照抄，所以
+ * 每条都自带反证：「中途失败」一律由测试宿主的语句钩子造出来。
+ *
+ * ⚠️ 单子期望 3 里那句「并发两次保存」在这里只能是**串行**：宿主是一条
+ * `:memory:` 连接，第二次 `begin` 会直接撞上第一条还没提交的事务并报 SQLite 自己的
+ * 错 —— 那是测试的形状，不是生产的并发语义（libsql 每次事务绑连接池里的不同连接）。
+ * 真正要的那条性质（「别的保存在这两次写之间插不进来」）由下面那条 trace 用例证明：
+ * 一次保存的 `begin…commit` 之间语句连续、且不出现第二个 begin。 */
+describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事务里落定", () => {
+  const head = (s: string) => (s.trim().split(/\s+/)[0] ?? "").toLowerCase();
+  /** 只认「往 llmConfig 写」那两条；同一张表上那条 select 是 read-modify-write 的读。 */
+  const llmConfigWrite = (sql: string) =>
+    /^(insert into|update)\s+"llmconfig"/i.test(sql);
+  const remoteModelInsert = (sql: string) =>
+    /^insert into "remotemodel"/i.test(sql);
+
+  /** 起态：库里已有一份单例配置与两条远端模型 —— 回滚的断言要有对照物。 */
+  async function seedState(): Promise<void> {
+    await llmConfigRepository.upsertSingleton({
+      model: "旧模型",
+      apiKey: "sk-old",
+    });
+    await remoteModelRepository.replaceAll([
+      { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-a" },
+      { name: "丙", baseUrl: "https://c/v1" },
+    ]);
+  }
+  const names = async () =>
+    (await remoteModelRepository.list()).map((r) => r.name).sort();
+
+  it("一次保存的全部语句落在同一个 begin…commit 里（顺序整段相等，不多不少）", async () => {
+    await seedState();
+    tdb.$sqlTrace.length = 0;
+    await saveLlmSettings({
+      model: "新模型",
+      extraModels: [
+        "llama3",
+        { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" },
+      ],
+    });
+    expect(tdb.$sqlTrace.map(head)).toEqual([
+      "begin",
+      /* remoteModel 那一侧：读（继承来源）→ 删（本次未给出的甲、丙）→ 批量 upsert */
+      "select",
+      "delete",
+      "insert",
+      /* llmConfig 那一侧：读—改—写也在同一次 begin…commit 内。
+       * 写成**整段等式**而不是「都比第一个 commit 小」，是因为两种改法都必须当场红：
+       * ① 拆回两个事务（本单的症状）⇒ 数组里会多出第二个 begin…commit 段；
+       * ② 在提交后补一次重读 ⇒ 尾巴上多一条 select。
+       * （#2586 那一族用的是 slice，那两种写法在那里都判不出第二条事务 —— 这里不沿用。）
+       * ⚠️ 本条**不**证明「单例那次读用的是事务而不是模块级连接」：宿主只有一条连接，
+       * 两者在 trace 上逐字相同。那一格由下面那条按身份判的用例钉。 */
+      "select",
+      "update",
+      "commit",
+    ]);
+  });
+
+  it("llmConfig 那一写失败 ⇒ remoteModel 表保持原样（含密钥），单例行也没动", async () => {
+    await seedState();
+    /* 注入**非锁族**错误：有界重试会「认不出原因就原样抛」，这条测到的才是回滚。 */
+    const gate = armStatementFailure(llmConfigWrite);
+    const failure = await saveLlmSettings({
+      model: "坏模型",
+      extraModels: [{ name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" }],
+    })
+      .then(() => null)
+      .catch(
+        (e: unknown) => e as { message: string; cause?: { message?: string } },
+      );
+    expect(failure, "第二条写失败必须让整条保存失败得看得见").not.toBeNull();
+    expect(
+      `${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`,
+      "包装层不许把原因吞掉",
+    ).toContain("测试注入");
+    expect(gate.hits(), "非锁族错误不许重试，整条事务只该撞一次").toBe(1);
+
+    /* 这就是 #2592 的症状本体：此前 `replaceAll` 已经提交，这里会是「远端清单已换」。 */
+    const rows = await remoteModelRepository.list();
+    expect(rows.map((r) => r.name).sort()).toEqual(["丙", "甲"]);
+    expect(
+      decryptLlmKey(rows.find((r) => r.name === "甲")?.apiKey ?? null),
+      "删掉的那条带着加密密钥，回滚不成就会永久找不回来",
+    ).toBe("sk-a");
+    expect((await llmConfigRepository.findSingleton())?.model).toBe("旧模型");
+  });
+
+  it("反向那一半：remoteModel 的批量写失败 ⇒ llmConfig 一个字都没写", async () => {
+    await seedState();
+    const gate = armStatementFailure(remoteModelInsert);
+    /* 包装层与 #2586 那条同形：drizzle 把宿主抛的东西放进 `Failed query: …`，
+     * 注入的那句挂在 `cause` 上 —— 只看 message 会读不到原因（#1250 记的形态）。 */
+    const failure = await saveLlmSettings({
+      provider: "remote",
+      extraModels: [{ name: "乙", baseUrl: "https://b/v1" }],
+    })
+      .then(() => null)
+      .catch(
+        (e: unknown) => e as { message: string; cause?: { message?: string } },
+      );
+    expect(failure, "远端那一写失败必须让整条保存失败").not.toBeNull();
+    expect(
+      `${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`,
+    ).toContain("测试注入");
+    expect(gate.hits()).toBe(1);
+    expect((await llmConfigRepository.findSingleton())?.provider).toBe("local");
+    expect((await llmConfigRepository.findSingleton())?.model).toBe("旧模型");
+    expect(await names()).toEqual(["丙", "甲"]);
+  });
+
+  it("没给 extraModels ⇒ 事务里一条 remoteModel 语句都没有（不是「按空清单覆盖」）", async () => {
+    await seedState();
+    tdb.$sqlTrace.length = 0;
+    await saveLlmSettings({ model: "新模型" });
+    expect(
+      tdb.$sqlTrace.some((s) => /remotemodel/i.test(s)),
+      "缺键就是「本次不动这张表」——按空清单覆盖等于替用户清空远端模型与其密钥（A11）",
+    ).toBe(false);
+    expect(await names()).toEqual(["丙", "甲"]);
+    expect((await llmConfigRepository.findSingleton())?.model).toBe("新模型");
+  });
+
+  it("成功那一跑：本地候选名进 llmConfig、远端条目进 remoteModel，两份是同一次的新态", async () => {
+    await saveLlmSettings({
+      extraModels: [
+        "llama3",
+        { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" },
+      ],
+    });
+    const cfg = await llmConfigRepository.findSingleton();
+    expect(cfg?.extraModels).toEqual(["llama3"]);
+    const rows = await remoteModelRepository.list();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: "乙", baseUrl: "https://b/v1" });
+    expect(decryptLlmKey(rows[0]!.apiKey)).toBe("sk-b");
+    expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
+  });
+
+  it("起事务撞锁 ⇒ 整条跨表事务按 SETTINGS_DB_WRITE 重试（与 #2586 同一份预算）", async () => {
+    await seedState();
+    const busy = () => {
+      const e = new Error("database is locked");
+      (e as { code?: string }).code = "SQLITE_BUSY";
+      return e;
+    };
+    const gate = armStatementFailure(
+      (sql) => sql.trim().toLowerCase() === "begin",
+      busy,
+      SETTINGS_DB_WRITE.maxAttempts - 1,
+    );
+    /* 起态那份 `replaceAll` 自己也是一条事务（一个 begin…commit），不在这里的账上：
+     * 断言的是**这一次保存**重试了几回，不清零就会把起态那次一起数进来。 */
+    tdb.$sqlTrace.length = 0;
+    await saveLlmSettings({
+      model: "新模型",
+      extraModels: [{ name: "乙", baseUrl: "https://b/v1" }],
+    });
+    expect(gate.hits()).toBe(SETTINGS_DB_WRITE.maxAttempts - 1);
+    const heads = tdb.$sqlTrace.map(head);
+    /* 每次重试都重新起一条**完整**事务（begin 数 = 尝试数），而只有成功那一次落到
+     * commit ——「重试的是某一条语句」的写法会在这里红。 */
+    expect(heads.filter((h) => h === "begin")).toHaveLength(
+      SETTINGS_DB_WRITE.maxAttempts,
+    );
+    expect(heads.filter((h) => h === "commit")).toHaveLength(1);
+  });
+
+  it("两次保存按顺序整体生效：终态等于后一次，不留前一次的远端残行", async () => {
+    await saveLlmSettings({
+      model: "A",
+      extraModels: [{ name: "甲" }, "llama-A"],
+    });
+    await saveLlmSettings({
+      model: "B",
+      extraModels: [{ name: "乙" }, "llama-B"],
+    });
+    expect(await names()).toEqual(["乙"]);
+    const cfg = await llmConfigRepository.findSingleton();
+    expect(cfg?.model).toBe("B");
+    expect(cfg?.extraModels).toEqual(["llama-B"]);
+  });
+
+  /* 期望 2「单例那次读也落在同一个 executor 上」在**本宿主里只能按身份判**：
+   * 测试宿主是一条 `:memory:` 连接，`db` 与 `tx` 打的是同一个实例，所以「读走模块级
+   * 连接还是走事务」在 SQL trace 上**看不出区别** —— 上面那条 trace 用例证明不了它。
+   * 生产侧这个区别是实的：libsql 的 `file:` 客户端是连接池，整条事务绑其中一条连接，
+   * 另一条只会读到提交前的旧行。于是这条钉的是「传进来的到底是谁」。 */
+  it("单例的 read-modify-write 把事务对象交给读，而不是让它回落模块级连接", async () => {
+    await seedState();
+    const original =
+      llmConfigRepository.findSingleton.bind(llmConfigRepository);
+    const seen: Array<DbExecutor | undefined> = [];
+    const spy = vi
+      .spyOn(llmConfigRepository, "findSingleton")
+      .mockImplementation(async (executor?: DbExecutor) => {
+        seen.push(executor);
+        return original(executor);
+      });
+    await saveLlmSettings({ model: "新模型" });
+    spy.mockRestore();
+    expect(
+      seen,
+      "这一次保存里，那份 read-modify-write 的读只发生一次",
+    ).toHaveLength(1);
+    expect(
+      seen[0],
+      "读必须拿到调用方传下来的 executor —— 缺省就回落到模块级连接",
+    ).toBeDefined();
+    expect(seen[0], "而且拿到的不是模块级那个 db，是事务本身").not.toBe(tdb);
   });
 });
 
