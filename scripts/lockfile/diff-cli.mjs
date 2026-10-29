@@ -19,6 +19,10 @@ import path from "node:path";
 import { diffLockfiles, isEmptyDiff } from "./lock-diff.mjs";
 import { renderDriftReport } from "./render-lock-diff.mjs";
 
+/** `--installed` / `--root` / `--max-per-section` 三个旗标（缺省即上面那三格）。
+ *
+ * @param {string[]} argv
+ */
 function parseArgs(argv) {
   const out = { installed: "", root: process.cwd(), maxPerSection: 8 };
   for (let i = 0; i < argv.length; i++) {

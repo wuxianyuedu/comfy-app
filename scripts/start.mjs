@@ -122,8 +122,9 @@ const result = spawnSync(invocation.command, invocation.args, {
   env: { ...process.env, PORT: String(port) },
 });
 if (result.error) {
+  const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
   process.stderr.write(
-    `[start.mjs] ✗ 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}\n` +
+    `[start.mjs] ✗ 起 pnpm 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}\n` +
       `[start.mjs]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
   );
   process.exit(1);
