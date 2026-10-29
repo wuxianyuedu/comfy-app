@@ -689,4 +689,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // （§13.5.25），于是唯一执行者只剩**每日那一跑**：从落地到被看见隔了一次派发。
   // 进固定清单 = 这笔改动**当场**红，不再等每日（#2114 那一族的处置方向）。
   "tests/env-import-meta-shape.test.ts",
+  // 「`build-desktop` 念得出每一步多久」这件事的执行者（ISSUE #2574）。它读的是
+  // **磁盘文本**（`readFileSync` + 按 `console.log` 调用站点取），而 `build-desktop.mjs`
+  // 不被任何测试 import —— 改它不会把这条带进增量面；反过来，「有人把读数删掉」或
+  // 「把时长塞进 `fail()` 的话术里（读数升级成判定）」也都不在任何改动面上。
+  // 不登记的话它的表现不是红，是**下次再撞「CI 上看起来像卡死」时，屏幕里仍然只有体积、
+  // 没有时刻** —— 与 `tests/env-import-meta-shape.test.ts`（同因，#2599）一条方向。
+  "tests/build-desktop-step-readings.test.ts",
 ];
