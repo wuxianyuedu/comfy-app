@@ -696,4 +696,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 不登记的话它的表现不是红，是**下次再撞「CI 上看起来像卡死」时，屏幕里仍然只有体积、
   // 没有时刻** —— 与 `tests/env-import-meta-shape.test.ts`（同因，#2599）一条方向。
   "tests/build-desktop-step-readings.test.ts",
+  // 「`.qoderignore` 是工具写的那一份」这件事的执行者（ISSUE #2712）。它读的是**两份文本**
+  // （入库那份 ⇄ `scripts/qoder-ignore.mjs` 渲染那份）+ `package.json` 里那条出口，而
+  // `.qoderignore` 不被任何代码 import、出口住在仓库根 —— 静态 import 图两条都追不到：
+  // 改那份表**不会**把这条带进增量面。不登记的表现不是红，是「装了等于没装」：别人
+  // 跑一次 `pnpm qoder:ignore` 拿到一份比仓里那份更窄的表，而他没有任何理由怀疑它。
+  // 同因（读磁盘文本、与本次改动无关也必须响）与上面两条一条方向。
+  "tests/qoder-ignore.test.ts",
 ];
