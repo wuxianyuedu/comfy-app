@@ -27,6 +27,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  restoreToSnapshot,
+  snapshotPaths,
+} from "./helpers/probe-restore.ts";
 
 const REPO_ROOT = process.cwd();
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
@@ -67,13 +71,19 @@ function runCheck(): { code: number; output: string } {
 
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
 
-/* ── 探针收尾的最后一道网（ISSUE #2415）────────────────────────────────
+/* ── 探针收尾的最后一道网（ISSUE #2415 → #2593 订正）──────────────────
  * 本文件多数组的现场是「真仓库文件上改 → 判 → 还原」（判据读的是整仓扫描面，
  * 夹具仓库喂不饱它们；autofix 组已改成夹具仓库，见文件尾）。还原靠重试式写入，
  * 但 Windows 上它仍可能八次全抛（实测 UNKNOWN）。这一网保证：**即便还原没做成，
- * 脏工作区也不会悄悄留给下一个 `git add -A`** —— 未跟踪的探针新文件直接删、
- * 被改过的入库文件从 git 索引拉回原样（自愈），然后把事故路径点名成红。
- * 红要能说得出原因：是「探针留脏」而不是别的，路径就在消息里。 */
+ * 也不会把脏工作区悄悄留给下一个 `git add -A`** —— 然后把事故路径点名成红。
+ *
+ * ⚠️ 这一网**曾经**是「未跟踪的直接删、脏的从 git 索引拉回原样」。那句话把
+ * 「脏 = 探针留脏了」当成了一个不成立的前提：`git status` 分不出探针留的脏与
+ * **这条分支上正在做的未提交工作**，而处置逐字相同 —— 于是它吃掉过两次本单的
+ * 文档改动（92 行，第二次靠 `docs/generated/` 的镜像才恢复）。现在还原只认
+ * 进本文件那一刻的字节快照（`tests/helpers/probe-restore.ts` / 规范 §11.16.2），
+ * 快照本身是脏的就照样带出去。红说的是「这一份没写回成快照那一版」，不是
+ * 「工作区不干净」—— 后者可能是别人正在做的活，不该由这一档判定。 */
 const PROBE_TARGETS = [
   "AGENTS.md",
   "docs/reference-facts.md",
@@ -84,45 +94,26 @@ const PROBE_TARGETS = [
   "changelog.d/zz-step-index-probe.md",
 ];
 
-function gitStatusPorcelain(paths: string[]): string {
-  try {
-    return execFileSync("git", ["status", "--porcelain", "--", ...paths], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch {
-    return ""; // git 不可用时不挡路：各组的还原与断言仍在
-  }
-}
+/**
+ * 快照取在**模块加载时** —— 比本文件任何一条 `it` 都早，所以「进本文件之前就脏的那份
+ * 工作」会被原样带出去（取晚了拍到的就是探针改过的那一版，还原于是把探针的脏固化成
+ * 「原样」）。
+ */
+const PRISTINE = snapshotPaths(PROBE_TARGETS.map((rel) => join(REPO_ROOT, rel)));
 
 afterEach(() => {
-  const dirty = gitStatusPorcelain(PROBE_TARGETS);
-  if (!dirty.trim()) return;
-  const touched = dirty
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => line.slice(3).trim());
-  for (const rel of touched) {
-    const abs = join(REPO_ROOT, rel);
-    if (dirty.includes(`?? ${rel}`)) {
-      rmSync(abs, { force: true }); // 未跟踪的探针新文件：直接删
-    } else {
-      try {
-        execFileSync("git", ["checkout", "--", rel], {
-          cwd: REPO_ROOT,
-          stdio: "ignore",
-        });
-      } catch {
-        // 拉不回就让下面的断言红 —— 红里点名的路径就是人要去看的地方
-      }
-    }
-  }
-  const rest = gitStatusPorcelain(PROBE_TARGETS).trim();
+  const { failed } = restoreToSnapshot(PRISTINE);
+  /* 只有「还原做不成」才红，且点名是哪一份、为什么。这里**不再**拿 `git status` 判
+   * 「名单里还有脏文件」—— 那正是本单要拆掉的那个混淆：`git status` 说脏，可能是
+   * 探针留的脏，也可能是这条分支上正在做的活，而这一档没有能力分这两者，
+   * 于是它一响就必然要么误报、要么把人指去退回别人的工作（实测这格一开始就把
+   * 全部 59 条用例判红，因为工作区里正躺着一份未提交的文档改动）。 */
   expect(
-    rest,
-    `探针把仓库文件留脏了（已尝试 git 自愈仍未清干净）：${rest}`,
-  ).toBe("");
+    failed.map((f) => `${f.abs} → ${f.why}`),
+    `探针没能把仓库文件还原成「进本文件之前的那一版」（写入已重试仍未成）：\n  ${failed
+      .map((f) => `${f.abs} → ${f.why}`)
+      .join("\n  ")}`,
+  ).toEqual([]);
 });
 
 /**
