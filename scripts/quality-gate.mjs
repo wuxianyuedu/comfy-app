@@ -115,6 +115,10 @@ const GATES = {
      *      所以这一步不能收窄，也别学它把 `--coverage` 加进钩子的增量档。
      *   2. 红与覆盖率已经**各自记账**（`vitest.config.ts` 的 `reportOnFailure`），
      *      不再出现「一条试用例红 → 报告不产出 → 门槛静默缺席」。
+     * ⚠️ 第三条是后补的（ISSUE #2669）：**CI 那一档已经不判门槛**（整体/目录级覆盖率
+     *      改成只上报），所以这一步是那份登记处现在**唯一**会算它的地方 —— 本条目
+     *      显式给子进程带 `COMFY_COVERAGE_ENFORCE=1`（见 `runGate`）。摘掉它，
+     *      149 条门槛就又回到「写在配置里、没人判」那个原病上。
      * 代价说清楚：这一步的墙钟从约 10 分钟涨到带 instrumentation 的量级（实测全量
      * 591s → 更长），`check:all` 本来就是「按需完整验证」那一档，不是每次提交。 */
     args: ["exec", "vitest", "run", "--coverage"],
@@ -356,6 +360,17 @@ function runGate(pnpm, key) {
     cwd: ROOT,
     stdio: "inherit",
     windowsHide: true,
+    /* 覆盖率门槛的**判定**在 CI 那一档已经改成「只上报」（ISSUE #2669），所以
+     * `vitest.config.ts` 那 149 条登记值需要一个真的会算它的执行者，否则它就退化成
+     * 又一份「写在配置里、没人判」的死配置（那正是下面这段注释记录的原病）。
+     * `check:all` 就是那个执行者：它是本地「按需完整验证」那一档，不是每次提交、
+     * 也不是平台流水线（`grep quality-gate .cnb.yml .githooks/*` 当场核过：只有
+     * `package.json` 的 `check:all` 与 `tools/**\/*.ps1` 起它）。
+     * 只给 `test` 这一条带，别的条目原样继承 —— 它不是全局开关。 */
+    env:
+      key === "test"
+        ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" }
+        : process.env,
   });
   // 「命令没起来」与「跑完但非零退出」分开报：前者 stderr 通常是空的，
   // `status ?? 1` 只给一个退出码等于没说原因（ISSUE #576 的形态）。

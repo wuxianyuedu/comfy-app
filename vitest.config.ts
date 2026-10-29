@@ -73,7 +73,10 @@ const DOM_TEST_GLOBS = [
   "tests/**/*.test.tsx",
 ];
 
-export default defineConfig({
+/* 覆盖率门槛的「登记处 ⇄ 判定开关」在**文件末尾**（ISSUE #2669）：这里先把整份配置
+ * 收成一份具名对象，末尾再决定「传给 vitest 的那一份带不带 thresholds」。
+ * 那 149 条门槛的**字面量一行都没动**，也没有搬家 —— 挪走的只是「谁来判」。 */
+const BASE_CONFIG = defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
@@ -2132,3 +2135,51 @@ export default defineConfig({
     },
   },
 });
+
+/* ── 覆盖率门槛：登记处 ⇄ 判定开关（ISSUE #2669，业主口径）────────────────────
+ *
+ * 口径原文（该单 2026-10-29 的评论）：**整体覆盖率只上报，不要让 CI 红**。
+ * 那三条理由决定了这里的形态，所以抄在决定发生的位置上，不是注释装饰：
+ *   ① **它会红在与这次改动无关的原因上** —— 别人动了别的文件、分母变了，你的 PR 红了，
+ *      而你的 diff 里没有任何该改的东西；「无法据此行动」的红灯成本远大于收益
+ *      （§13.5.29 那一族的同类）；
+ *   ② **它会惩罚正确行为** —— 删掉一个覆盖很好但已废弃的模块，剩下的是低覆盖代码，
+ *      整体覆盖率下降，做对了事反而红；
+ *   ③ **它会诱导刷指标** —— 门槛卡住合并时人就写「执行但不验证」的用例凑数，而覆盖率
+ *      量的是执行、不是验证：一条没有任何断言的用例照样贡献分子。
+ * 该红的是 **patch coverage**（只量这次 diff 里新增/改动的行：红 ⇒ 原因一定在你这次
+ * 改的代码里，且知道该给哪几行补测试）—— 那是另一种能力，另立单，不在这里顺手做。
+ *
+ * ⚠️ 「摘掉**判定**」与「摘掉**登记**」是两件事，这一层的形状就是为分清它们：
+ *   · `COVERAGE_THRESHOLDS`（登记处）**永远原样在场** —— 那 149 条按实测登记的数
+ *     （规范 §11.7 / §18.6 的「只升不降 + 实测值向下取整到 5 的倍数」）。
+ *     判「每一条门槛的键都要落到真实文件」的那条判据（`tests/coverage-targets-exist.test.ts`）
+ *     **读的是这里**，不是默认导出里那份可能被摘空的东西 —— 否则默认档下那扇门
+ *     就变成「写着有、其实没人判」，而它正是那条判据立单时要治的形状；
+ *   · 传给 vitest 的那一份才由开关决定。默认**不判**：覆盖率照跑、报告照出
+ *     （`text` / `json-summary` / `lcov` 三种 reporter 一个都没动），只是不拿它决定退码；
+ *     `COMFY_COVERAGE_ENFORCE=1` 才按门槛判红（本地与 `pnpm check:all` 那一档用它，
+ *     见 `scripts/quality-gate.mjs` 的 `test` 条目与 `scripts/full-suite-run.mjs` 的
+ *     `--enforce-coverage`）。
+ * ⚠️ **不许**在这里开 vitest 自带的 `coverage.thresholds.autoUpdate`：它会在跑的过程中
+ *   改写本文件（业主点名「只能在专门 job 或本地跑，别在正常 gated run 里开」），
+ *   那等于把「谁最近跑过一次覆盖率」变成改登记处的通道 —— 棘轮的每次上移都得是人签的账。
+ */
+const COVERAGE_ENFORCE = process.env.COMFY_COVERAGE_ENFORCE === "1";
+
+/** 覆盖率门槛的**登记处**：与判定开关无关，永远在场（读它，不要读下面那份）。 */
+export const COVERAGE_THRESHOLDS = (
+  BASE_CONFIG.test?.coverage?.thresholds ?? {}
+) as Record<string, unknown>;
+
+export default defineConfig(
+  COVERAGE_ENFORCE
+    ? BASE_CONFIG
+    : {
+        ...BASE_CONFIG,
+        test: {
+          ...BASE_CONFIG.test,
+          coverage: { ...BASE_CONFIG.test?.coverage, thresholds: {} },
+        },
+      },
+);
