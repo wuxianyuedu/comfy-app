@@ -44,7 +44,11 @@ const envPath = path.join(root, ".env");
 const examplePath = path.join(root, ".env.example");
 
 /** 按 KEY= 逐行覆盖（锚行首，兼容 example 未来新增注释/行）——与
- *  `scripts/prepare-local-run.ps1` 的 `(?m)^KEY=.*$` 口径一致。 */
+ *  `scripts/prepare-local-run.ps1` 的 `(?m)^KEY=.*$` 口径一致。
+ *
+ * @param {string} content `.env.example` 或现有 `.env` 的全文
+ * @returns {string}
+ */
 function fill(content) {
   const secret = newAuthSecret();
   return content
@@ -59,7 +63,11 @@ function fill(content) {
     );
 }
 
-/** 三项必填值是否都拿到了非空内容（判据同 `src/env.js`：空串 == 未给）。 */
+/** 三项必填值是否都拿到了非空内容（判据同 `src/env.js`：空串 == 未给）。
+ *
+ * @param {string} content
+ * @returns {boolean}
+ */
 export function hasRequiredValues(content) {
   return REQUIRED_ENV_KEYS.every((key) =>
     new RegExp(`^${key}="?([^"\\r\\n]+)"?\\s*$`, "m").test(content),
