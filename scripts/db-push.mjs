@@ -39,7 +39,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { pushSchema } from "./db-push-core.mjs";
+import { describeSpawnFailure, pushSchema } from "./db-push-core.mjs";
 import { pnpmCli, spawnSettled } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
@@ -172,7 +172,7 @@ function syncSchema() {
   const tables = countUserTables();
   if (tables <= 0) {
     const hint = result.invocationFailed
-      ? `起 pnpm 失败（${result.error?.code ?? "UNKNOWN"}）：${result.error?.message ?? ""}`
+      ? `起 pnpm 失败（${describeSpawnFailure(result.error)}）：${typeof result.error === "string" ? result.error : (result.error?.message ?? "")}`
       : result.blockedByTty
         ? "drizzle-kit 报「Interactive prompts require a TTY terminal」——交互提示被静默吞掉，库原样没动。"
         : "drizzle-kit 没走到 diff 那一步（输出见上），且库里的用户表数为 0。";
