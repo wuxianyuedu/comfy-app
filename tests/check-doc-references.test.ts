@@ -422,6 +422,90 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   });
 });
 
+describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
+  /* 现场：`docs/guide-database-backup.md` 教的是 `require('better-sqlite3')` 的在线
+   * `backup()` 与 `pragma('integrity_check')`，而那包是 devDependencies —— 桌包用户与
+   * standalone 运行期根本没有它，照抄就是 `MODULE_NOT_FOUND`，动的还是用户数据。
+   * 机制（`VACUUM INTO`）、台账（D6）、核心实现与「不许出现那三个字样」的断言都早已改，
+   * 漏的是**给用户看的那一页**，所以这条挂在 doc:check（§13.5.17 那一档）上。
+   *
+   * 判据只认**可执行命令形状**（`require(…)` / `from …`），不认名字：规范里大量正当句子
+   * 在讲「当年为什么换掉它」。上面那条「台账命令口径」组用的探针文件（DEV-QUERIES.md）
+   * 已在 `PROBE_TARGETS` 的快照网里，这里复用同一份 ⇒ 不把新的入库文档拖进写探针的窗口。 */
+  const probe = "docs/guides/DEV-QUERIES.md";
+
+  function withProbe(appended: string): { code: number; output: string } {
+    const abs = join(REPO_ROOT, probe);
+    const original = readFileSync(abs, "utf8");
+    writeText(abs, `${original}\n${appended}\n`);
+    try {
+      return runCheck();
+    } finally {
+      restoreText(abs, original);
+    }
+  }
+
+  it("已接入 main 流程（定义了却没人调用 = 没有执行者）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function checkRuntimeAbsentDriverCommands()");
+    expect(isCalledInMain(script, "checkRuntimeAbsentDriverCommands()")).toBe(
+      true,
+    );
+  });
+
+  it("把 require 形状写进用户面文档 → 红，点名文件行号并给出真在场的出口", () => {
+    const { code, output } = withProbe(
+      '```bash\nnode -e "const D=require(\'better-sqlite3\'); const db=new D(\'db.sqlite\'); console.log(db.pragma(\'integrity_check\'));"\n```',
+    );
+    expect(code, "命令形状必须让 doc:check 红").not.toBe(0);
+    expect(output).toContain(probe);
+    expect(output).toContain("devDependencies");
+    expect(output, "红话必须给得出路，而不只是说不能用").toContain("node:sqlite");
+    expect(output).toContain("pnpm db:backup");
+  });
+
+  it("`from 'better-sqlite3'`（ESM 那一形）同样拦下", () => {
+    const { code, output } = withProbe(
+      '```js\nimport Database from "better-sqlite3";\n```',
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain(probe);
+  });
+
+  it("同一行带纠正词 ⇒ 是说明而不是命令（放行）", () => {
+    const { code, output } = withProbe(
+      "备份指南里那种 `require('better-sqlite3')` 的写法**没有**在线备份可用：" +
+        "它是 devDependencies，生产运行时不存在这个包，请改为 `pnpm db:backup`。",
+    );
+    expect(output, "放行时不该顺带把别的规则念成红").toContain("[doc:check] ✓");
+    expect(code).toBe(0);
+  });
+
+  /* 这条钉的是「窄到命令形状」那一格本身：真仓库此刻的用户面文档里，`better-sqlite3`
+   * 这个名字**确实在散文中出现**（§1 与 §2.2 那两句正是「讲别用它的理由」），而 doc:check
+   * 是绿的。先断言这些散文在场，再断言绿 —— 否则有人把那两句删掉之后，这条会退化成
+   * 「什么都判不出来的一条绿」（与 §13.5.12「反向自证」同一口径）。 */
+  it("基线为绿，且绿不是靠「面内一个字都没提」换来的", () => {
+    const guide = docText("docs/guide-database-backup.md");
+    expect(
+      guide.split("\n").filter((l) => l.includes("better-sqlite3")).length,
+      "指南里必须有讲明「为什么不能用它」的散文，否则下面那条绿没有对象",
+    ).toBeGreaterThan(0);
+    for (const line of guide.split("\n")) {
+      if (!line.includes("better-sqlite3")) continue;
+      expect(
+        line,
+        "散文可以提名字，但不许留成能被复制粘贴执行的那一行",
+      ).not.toMatch(
+        /require\(\s*["']better-sqlite3["']\s*\)|from\s+["']better-sqlite3["']/,
+      );
+    }
+    const { code, output } = runCheck();
+    expect(output).toContain("[doc:check] ✓");
+    expect(code).toBe(0);
+  });
+});
+
 describe("AGENTS.md ↔ standards 漂移守卫", () => {
   /* 目的：AGENTS.md 是代理自动加载的唯一导航文件，历史上两处漂移都恰好
    *      落在 SCOPED_DOCS 的盲区（AGENTS.md 在仓库根，docs/ 才纳入）。

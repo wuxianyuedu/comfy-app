@@ -7,12 +7,18 @@
 
 ## 1. 数据库在哪里
 
-应用使用 **better-sqlite3** 驱动，数据库文件路径由 `.env` 中的
-`DATABASE_URL` 决定，默认值：
+应用运行时的 SQLite 驱动是 **`@libsql/client`**（本地 `file:` 模式），数据库文件路径由
+`.env` 中的 `DATABASE_URL` 决定，默认值：
 
 ```
 DATABASE_URL="file:./db.sqlite"
 ```
+
+> ⚠️ **网上许多 SQLite 备份写法用的是 `better-sqlite3`，本应用的生产运行时没有这个包** ——
+> 它是 `devDependencies`（只给测试基建用），装好依赖的开发机碰巧能跑，
+> **桌包用户与 standalone 运行期照抄就是 `MODULE_NOT_FOUND`**。本指南里所有手工命令只用
+> 运行时真在场的东西：应用自带的脚本（Node 自带的 `node:sqlite`）或 `@libsql/client`。
+> 驱动这一族的完整读数见规范 `docs/standards/launch-and-build.md` §6.1。
 
 解析规则：相对路径以**进程 CWD**（即项目根目录）为锚点。因此实际文件位置：
 
@@ -32,33 +38,59 @@ SQLite 在 WAL 模式下会产生两个辅助文件：
 
 ## 2. 备份数据库
 
-### 2.1 安全备份（推荐）
-
-在应用**关闭**状态下，直接复制 `db.sqlite` 即可：
+### 2.1 用现成的入口（推荐）
 
 ```bash
 # 在项目根目录执行
-copy db.sqlite db-backup-20260920.sqlite
+pnpm db:backup
 ```
 
-应用关闭时 SQLite 已将 WAL 合并回主库（checkpoint on close），
-所以单文件就是完整快照。
+它做的是 `VACUUM INTO`（SQLite 自带的「一条语句拿一份一致性单文件快照」），
+**不用停应用**，并且做完三道自证：产物单文件（不带 `-wal` / `-shm`）、
+`PRAGMA integrity_check` 回 `ok`、产物里至少有一张表。读数：
 
-### 2.2 热备份（应用运行中）
-
-如果不想停应用，用 SQLite 的在线备份 API（一条命令完成）：
-
-```bash
-node -e "const D=require('better-sqlite3'); const src=new D('db.sqlite'); const dst=new D('db-hot-backup.sqlite'); src.backup(dst); src.close(); dst.close(); console.log('done');"
+```
+[db:backup] 落点：<项目根>\data\backups\db-backup-20261029-125022.sqlite（保留最近 3 份，本机私有目录、不入版本控制）
 ```
 
-这会产出一个一致性快照，不影响应用读写。
+- **落点**是 `data/backups/`，不是项目根旁边：生产里 `process.cwd()` 就是安装目录，
+  而下一次安装 / 更新会覆盖安装清单里的文件——备份放那儿会被一次升级带走。
+- **只留最近 3 份**（同一秒里再点一次会排 `-2`，不覆盖前一份）。
+- 界面上同一条路：设置页的数据库备份区（列清单 / 立即备份 / 选一份请求恢复）。
+- 还有一档自动的：**在设置页点「同步表结构」并确认那一次**（它带 `--force`）之前先备份 ——
+  `--force` 是唯一会跑「删列 / 重建表」的那条路，也是唯一一次失误不可逆的时刻。
+  普通启动那一路**不带** `--force`：它按白名单只认建表 / 建索引 / 加列，不会丢数据，
+  所以刻意不备份 —— 每次都备会让 `data/backups/` 被「一次正常启动」填满，
+  3 份保留量反而挤掉真正有价值的那几份。备份失败**不阻断**同步（那是你已确认的动作），
+  但会把原因讲出来，让「这次变更万一丢了数据、目前没有退路」至少是可见的。
+
+恢复**不在点按钮那一刻换文件**：那一条只写一个「待恢复」标记，真正的换文件发生在
+**下次启动**（`applyPendingRestoreAtBoot`）。这是刻意的——运行期有多个进程握着这个库
+（内嵌 Next server、执行宿主、你可能开着的 Drizzle Studio），在别人握着句柄时覆盖
+`db.sqlite` 是不可逆的数据事故。
+
+### 2.2 为什么不是「在线 `backup()`」，也不是直接 `copy`
+
+- **在线 `backup()`**：那是 `better-sqlite3` 的 API，而本应用运行时用的是
+  `@libsql/client`，它**没有** `backup()`（`Client` 只有 `execute` / `transaction` /
+  `sync` / `close`）。所以这条路在本仓不是「不推荐」，是**不存在**。
+- **直接 `copy db.sqlite`**：只有在应用**正常关闭**（SQLite 关库时 checkpoint，把 WAL
+  合回主库）之后才是完整快照。应用还开着、或被强杀 / 崩溃时，WAL 里那些**已提交但尚未
+  checkpoint** 的数据不在主库文件里，`copy` 出来的那一份就缺这一段——而它正是你刚做完的活。
+  `VACUUM INTO` 的产物包含这部分，所以本指南把 `pnpm db:backup` 放在推荐位，
+  把 `copy` 只留给「已经确认应用关干净、且手边没有任何脚本」的场合（§3 的跨机迁移）。
 
 ### 2.3 备份建议
 
-- 定期备份到项目目录外（避免 git 误提交 / 构建产物污染）。
-- `.gitignore` 已排除 `db.sqlite*`，不会意外进版本控制。
-- 如果有多台机器，可把备份文件放云盘同步。
+- 定期把 `data/backups/` 里的文件拷到项目外（云盘 / 另一台机器）——`data/` 是本机私有状态，
+  `.gitignore` 收它，打包时 `scripts/standalone-private-inputs.mjs` 也会把它从分发产物里剥掉，
+  所以它**不会**进版本控制，也**不会**跟着桌包分发；反过来讲：它也不在备份之外，
+  重装 / 删目录时那份库会一起没了，跨介质另存才叫备份。
+- 一份备份能还原出的**不只是业务数据**：`db.sqlite` 里那些 LLM API Key 是 AES-256-GCM
+  **密文**，而解开它们的那把在 `data/llm-secret.key`；`account` / `session` 表里还躺着
+  可用的会话凭据（与 `.env` 的 `AUTH_SECRET` 绑定）。所以「库 + `data/` 目录」一起拷走
+  ≈ 整套凭据一起拷走 —— 别把这一对丢进公共网盘或直接发给别人；要跨机分享数据时，
+  先想清楚对方需不需要你的密钥。
 
 ---
 
@@ -70,9 +102,10 @@ node -e "const D=require('better-sqlite3'); const src=new D('db.sqlite'); const 
 
 1. **关闭本机的应用**（Tauri 窗口 + dev server 终端，确保无进程持有 DB）。
 
-2. **备份当前数据库**（以防需要回退）：
+2. **备份当前数据库**（以防需要回退）——应用已经关上了，两种都行：
    ```bash
-   copy db.sqlite db-before-migration.sqlite
+   pnpm db:backup   # 推荐：产物自带 integrity_check，且落在 data/backups/ 里按份轮转
+   copy db.sqlite db-before-migration.sqlite   # 关干净之后的手工档
    ```
 
 3. **删除本机 WAL/SHM 辅助文件**（如果存在）：
@@ -128,16 +161,20 @@ tRPC failed on workflow.list: database disk image is malformed
 
 ### 4.2 根因确认
 
+只读打开主库，检查完整性（用的是 **Node 自带的 `node:sqlite`**，装了 Node 就能跑，
+不需要任何依赖）：
+
 ```bash
-# 只读打开主库，检查完整性
-node -e "const D=require('better-sqlite3'); const db=new D('db.sqlite',{readonly:true}); console.log(db.pragma('integrity_check')); db.close();"
+node -e "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync('db.sqlite',{readOnly:true}); console.log(db.prepare('PRAGMA integrity_check').all()); db.close();"
 ```
+
+健康的库回一行 `ok`；有损坏时回的是逐行的问题描述。
 
 如果报错 `malformed`，再单独测主库（不带 WAL）：
 
 ```bash
 copy db.sqlite test-main.sqlite
-node -e "const D=require('better-sqlite3'); const db=new D('test-main.sqlite',{readonly:true}); console.log(db.pragma('integrity_check')); db.close();"
+node -e "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync('test-main.sqlite',{readOnly:true}); console.log(db.prepare('PRAGMA integrity_check').all()); db.close();"
 ```
 
 - 如果去掉 WAL 后 integrity_check 返回 `ok` → **损坏在 WAL 文件**（最常见），
@@ -154,34 +191,61 @@ node -e "const D=require('better-sqlite3'); const db=new D('test-main.sqlite',{r
 
 ### 4.4 主库损坏修复
 
-如果主库本身有损坏页：
+如果主库本身有损坏页，先救可读的那一半。**别在原始文件上做**——下面这份脚本只读它，
+写的是新库 `db-recovered.sqlite`。
 
-1. 尝试抢救可读数据：
-   ```bash
-   node -e "
-   const D=require('better-sqlite3');
-   const src=new D('db.sqlite',{readonly:true});
-   const dst=new D('db-recovered.sqlite');
-   // 逐表导出（遇到损坏表会跳过）
-   const tables=src.prepare(\"SELECT name FROM sqlite_master WHERE type='table'\").all();
-   for(const t of tables){
-     try{
-       const rows=src.prepare('SELECT * FROM \"'+t.name+'\"').all();
-       if(rows.length){
-         const cols=Object.keys(rows[0]);
-         dst.exec(src.prepare(\"SELECT sql FROM sqlite_master WHERE name='\"+t.name+\"'\").get().sql);
-         const ins=dst.prepare('INSERT INTO \"'+t.name+'\" ('+cols.map(c=>'\"'+c+'\"').join(',')+') VALUES ('+cols.map(c=>'@'+c).join(',')+')');
-         for(const r of rows) ins.run(r);
-       }
-       console.log('OK:',t.name,rows.length,'rows');
-     }catch(e){console.log('SKIP:',t.name,e.message);}
-   }
-   src.close(); dst.close();
-   "
-   ```
-2. 用 `db-recovered.sqlite` 替换 `db.sqlite`。
-3. 启动应用（schema 自愈会补齐缺失结构）。
-4. 如有 §2 的定期备份，直接从备份恢复是最省事的。
+把这段存成项目根里的 `db-rescue.mjs`（用的还是 Node 自带的 `node:sqlite`，零依赖）：
+
+```js
+// 逐表把还读得动的数据搬进一份新库：某张表读不动就跳过它，不整库放弃。
+import { DatabaseSync } from "node:sqlite";
+
+const src = new DatabaseSync("db.sqlite", { readOnly: true });
+const dst = new DatabaseSync("db-recovered.sqlite");
+
+dst.exec("BEGIN");
+for (const t of src
+  .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table'")
+  .all()) {
+  try {
+    const rows = src.prepare(`SELECT * FROM "${t.name}"`).all();
+    if (t.sql) dst.exec(t.sql);
+    if (rows.length === 0) {
+      console.log("OK:", t.name, "0 rows");
+      continue;
+    }
+    const cols = Object.keys(rows[0]);
+    const ins = dst.prepare(
+      `INSERT INTO "${t.name}" (${cols.map((c) => `"${c}"`).join(",")})` +
+        ` VALUES (${cols.map((c) => `:${c}`).join(",")})`,
+    );
+    for (const r of rows) ins.run(r);
+    console.log("OK:", t.name, rows.length, "rows");
+  } catch (e) {
+    console.log("SKIP:", t.name, e.message);
+  }
+}
+dst.exec("COMMIT");
+src.close();
+dst.close();
+```
+
+跑它、再按 §4.2 那句验一份产物：
+
+```bash
+node db-rescue.mjs
+node -e "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync('db-recovered.sqlite',{readOnly:true}); console.log(db.prepare('PRAGMA integrity_check').all()); db.close();"
+```
+
+- 每行 `OK: <表名> <行数>` 是搬好了的；`SKIP: <表名> <原因>` 是救不动的那张——
+  **先看清 SKIP 了哪些**，再决定要不要用这份产物覆盖。
+- 这份产物**不校验业务完整性**（外键、`session` 与 `AUTH_SECRET` 的配对都要人看一眼），
+  它只保证「SQLite 读得动」。
+1. 确认产物可用后，关掉应用，用 `db-recovered.sqlite` 替换 `db.sqlite`（连同 §3.1 第 3 步
+   删掉 `-wal` / `-shm`）。
+2. 启动应用（schema 自愈会补齐缺失结构）。
+3. **如果 §2.1 那份 `pnpm db:backup` 有产物，从备份恢复永远比抢救省事** ——
+   设置页选那份 + 确认，下次启动自动换文件。
 
 ---
 
@@ -264,11 +328,12 @@ Get-CimInstance Win32_Process |
 
 | 操作 | 命令/步骤 |
 |---|---|
-| 备份 | 关应用 → `copy db.sqlite backup.sqlite` |
-| 恢复备份 | 关应用 → 删 `-wal` `-shm` → `copy backup.sqlite db.sqlite` → 开应用 |
+| 备份 | `pnpm db:backup`（不用停应用；落 `data/backups/`，留最近 3 份，自带 `integrity_check`） |
+| 恢复备份 | 设置页选那份 + 确认 → 重启应用（换文件发生在启动那一跳） |
 | 用别人的库 | 关应用 → 删本机 `-wal` `-shm` → 覆盖 `db.sqlite` → 开应用 |
 | WAL 损坏修复 | 关应用 → 删 `-wal` `-shm` → 开应用 |
-| 完整性检查 | `node -e "..."` 见 §4.2 |
+| 主库损坏抢救 | `node db-rescue.mjs` 见 §4.4（只读原库，写新库） |
+| 完整性检查 | `node -e "…node:sqlite…PRAGMA integrity_check"` 见 §4.2 |
 | 定位 dev server PID | `netstat -ano \| findstr :3100 \| findstr LISTENING` |
 | 终止进程树 | `node scripts/reap-process.mjs <PID> --force` |
 | 按项目路径找所有进程 | PowerShell `Get-CimInstance` 见 §5.4 |

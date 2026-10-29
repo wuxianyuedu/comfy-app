@@ -3511,7 +3511,7 @@ shebang）。**「回退」在这里不是保守，是把判据的对象换成�
 
     [cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc
 
-`resolveCommandInvocation()` 是**纯 PATH 查找**。而 `.cnb.yml` 的 stage 里**两种都真实
+`resolveCommandInvocation()` 是**纯 PATH 查找**。而当时那份清单里**两类对象都真实
 存在**：`node_modules/.bin/tsc` / `scripts/check-*.cjs` 是**路径**（相对检出根），
 `pnpm` / `node` 是**名字**。对一条相对路径，PATH 查找当然回答 `resolved: false` ——
 那不是「找不到」，是**这条不该问 PATH**。把两者混作一谈，第四处刚补上的那条
@@ -3529,9 +3529,17 @@ shebang）。**「回退」在这里不是保守，是把判据的对象换成�
 ⚠️ **第二半不是可有可无的锦上添花**：只做第一半（「路径原样交给 `spawn`」）只解决了
 **误报**，命令在 Windows 上**照样起不来** —— pnpm 给 `node_modules/.bin/<工具>` 摆的三个
 垫片（`.cmd` / `.ps1` / 无扩展名 shim），Node 一个都起不了（`.cmd` 只有 cmd.exe 解释、
-shim 是 shebang），而这三个正是 `.cnb.yml` 里那条 `node_modules/.bin/tsc` 与三条
-`vitest` 要用的形态。**「不问 PATH」回答的是「该问谁」，「过形态判据」回答的是「怎么起」
+shim 是 shebang），而当时 `.cnb.yml` 里那条 `node_modules/.bin/tsc` 与三条 `vitest`
+要用的正是这三个垫片。**「不问 PATH」回答的是「该问谁」，「过形态判据」回答的是「怎么起」
 —— 这是两个问题。**
+
+> **#2572 把这一处从「起得来」升级成「起得省」**：那两格后来改走
+> `node scripts/ci-run-tool.mjs <名字>` —— 它按**垫片名字**问出包真身的 JS 入口，再
+> `spawn(process.execPath, [入口, …])`。外壳对垫片路径的处理**一字未改**（清单里再没有
+> 那种写法，判据仍在 `tests/ci-cp936-exit.test.ts`），少掉的只是「非要经一层 PowerShell
+> 宿主才能起一个仓里的编译器」这一跳。为什么必须按名字问、不能按依赖名问（本仓 `tsc`
+> 与 `tsc6` 是两份不同的编译器），读数与口径在 `scripts/package-bin-entry.mjs` 的
+> `resolveBinEntryByName` 上方。
 
 > 这一处与第四处合起来是同一句话的两面：**「回退」和「拒绝」都要先认清对象是谁。**
 > 收名字的那一层不能拿「原样退回候选」当保守（那会把裸名字交给 spawn），

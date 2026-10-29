@@ -872,6 +872,18 @@ Windows 上 corepack 那三个垫片里**只有 `.ps1` 起得来**，于是「�
 2. **直接可执行**（§2.1.1 的候选表，`.ps1` 除外）。
 3. **`.ps1` 经宿主** —— 前两段都拿不到形态时的出口。
 
+**同一条判断对仓里装的其它 CLI 也有一个入口**（ISSUE #2572）：
+`scripts/ci-run-tool.mjs <垫片名> [参数…]` —— 它问的是「`.bin/<名字>` 这一跳实际跑的是
+哪份文件」，答完直接 `spawn(process.execPath, [入口, …])`，第三段那层宿主根本不出现。
+⚠️ **它按名字问、不按依赖名问**，这一条不是洁癖而是本仓的事实：`typescript` 是别名
+`npm:@typescript/typescript6@6.0.2`（`bin` 键 `tsc6`），而 `tsc` 这个名字归
+`@typescript/native`（7.0.2，自报名恰恰是 `typescript`）—— 按依赖名正推两条路都拿不到
+入口，而「拿不到就取 `bin` 的第一个键」那个自然兜底会把 `tsc` 安静地跑成另一份。
+读数、两层解析（pnpm 写在垫片末尾的 `# cmd-shim-target=` 声明优先，回落读 `.cmd` / sh
+里那条相对路径）与回归判据都在 `scripts/package-bin-entry.mjs` 的 `resolveBinEntryByName`
+上方与 `tests/spawn-shell-scan.test.ts`。`.cnb.yml` 的 `类型检查` / `lib Node-only 声明`
+两格用的就是它（那两格过去直接写 `node_modules/.bin/…`，被外壳回退成经 PowerShell 起）。
+
 ⚠️ **这一簇必须住在一个文件里**，别把它拆成 `pnpm-js-entry.ts` 那种"更清爽"的形态：
 `executable-resolve.ts` 在 `tests/esm-cross-host-imports.test.ts` 的跨宿主清单里
 （`shell.mjs` 静态 import 它），而那条链要求**每个节点都是叶子**（只 import 同批清单内
@@ -2868,7 +2880,7 @@ Cannot find package 'promise-limit' imported from …\.next\standalone\…
 
 **运行期数据的落位**（签字口径 = 每用户目录）：NSIS 默认装到 `%LOCALAPPDATA%\<产品名>`（实测 `installer.nsi` 的 `INSTDIR` 分支——perUser 走 `$LOCALAPPDATA`，perMachine 才去 `$PROGRAMFILES`），因此**载荷根本来就是每用户可写目录**：`db.sqlite` / `log/` / `data/` / `generated/`（产物根，曾在 `public/generated/`）这些按 `process.cwd()` 解析的运行期目录都落在那一层。注意 Next 的 standalone `server.js` 启动即 `process.chdir(__dirname)`，所以壳必须把 `current_dir` 显式对齐到载荷根（`spawn_sidecar` 的 `.current_dir(&app_root)`），否则「入口建的库」与「server 读的库」是两个文件。卸载删的是安装清单里的文件，运行期写出的库与日志留在原处（`RMDir` 不递归）。**把数据与代码彻底分家**要收口 10 余处 `process.cwd()` 锚点（`app-settings.server.ts` / `llm/secrets.ts` / `log/log-paths.ts` / `comfyui/executor-cli.ts` 等），不在本刀顺手做。
 
-**同批堵掉的一处泄漏**（与硬规则 17 同一件事）：`.next/standalone/data/` 实测带着开发机的 `llm-secret.key` 与 `app-settings.json`（全项目追踪顺手拷进来的），而 resources 一旦真装配就会随安装包出去——**解包即得密钥**。两条判据：`PRIVATE_INPUTS` 逐条点名 `data/` 那两份；`src-tauri/static` 的顶层改成**默认拒绝**的白名单（`STATIC_ALLOWED_TOPLEVEL` + `RUNTIME_SRC` 逐文件放行，实测挡掉 `src/` 11.7 MB、`changelog.d/` 3.3 MB、`Comfy APP.lnk`、`build-launcher/`、`next.config.js`）。
+**同批堵掉的一处泄漏**（与硬规则 17 同一件事）：`.next/standalone/data/` 实测带着开发机的 `llm-secret.key` 与 `app-settings.json`（全项目追踪顺手拷进来的），而 resources 一旦真装配就会随安装包出去——**解包即得密钥**。两条判据：`PRIVATE_INPUTS` 逐条点名 `data/` 那两份；`src-tauri/static` 的顶层改成**默认拒绝**的白名单（`STATIC_ALLOWED_TOPLEVEL` + `RUNTIME_SRC` 逐文件放行）。**那一刀当场挡掉的形状**是整棵 `src/`、`changelog.d/`、`Comfy APP.lnk`、`build-launcher/`、`next.config.js` 这五类 —— 那是**当时那台机、那一趟**的读数，不是常量：`pnpm build` 收尾先剥一轮之后，一次真装配在装配那一跳读到的是 `挡掉 0 条`（`build-desktop.mjs` 的 §装配 那行读数，ISSUE #2574 起才取得到）。所以这份名单的理由**不是"省下多少 MB"**（那种数写进注释就会腐烂，ISSUE #2678 收的就是它），而是「多带一个目录必然被看见」这条**不依赖上游是否干净**的性质。
 
 > **与 §7.2 / ISSUE #1217 的边界**：「tracing 把开发期目录带进 `.next/standalone`」这条根因仍归 #1217。本刀的默认拒绝只作用在**装配这一层**——理由是：从这一刀起 `static/` 是真的会分发出去的东西，那里多带一个目录不再是「脏」，而是「泄漏」。
 

@@ -602,8 +602,11 @@ describe("CP936 出口：编排与退出码", () => {
      *
      *   [cp936-exit] PATH 上找不到这条命令：node_modules/.bin/tsc
      *
-     * `.cnb.yml` 的 stage 里**两种都真实存在** —— `node_modules/.bin/tsc` /
-     * `scripts/check-*.cjs` 是**路径**（相对检出根），`pnpm` / `node` 是**名字**。
+     * `.cnb.yml` 的 stage 里**两类对象都真实存在** —— `scripts/check-*.cjs` 是**路径**
+     * （相对检出根），`pnpm` / `node` 是**名字**；这里拿 `node_modules/.bin/tsc` 当输入
+     * 是因为它**曾经**就是清单里的写法（ISSUE #1977 的现场），#2572 起那两格改成
+     * 直起包真身，但外壳对「一条盘上的垫片路径」这一形状的处理**没变** —— 判据判的是
+     * 外壳自己，不跟着清单改口径。
      * 而 `resolveCommandInvocation()` 是**纯 PATH 查找**，对一条相对路径它当然报
      * `resolved: false` —— 那不是「找不到」，是「这条不该问 PATH」。把两者混作
      * 一谈，就会在类型检查那一格上**误红**（判据把该保守的方向用反了）。

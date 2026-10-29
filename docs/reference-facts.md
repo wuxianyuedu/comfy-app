@@ -317,6 +317,49 @@
 **标签从哪来**：`grep -n '^  run "' .githooks/pre-commit` 逐字取，或跑一次提交看
 `── check:` 那些行；`tests/doc-check-hook-wiring.test.ts` 里的 `dGroupSteps()` 是同一形状的解析器。
 
+## 3.8 用户面文档不许教「运行时不存在的驱动」那一形命令（ISSUE #2580）
+
+> 判据 = `scripts/check-doc-references.cjs` 的 `checkRuntimeAbsentDriverCommands()`。
+> 现场是 `docs/guide-database-backup.md`：它教 `require('better-sqlite3')` 的在线
+> `backup()` 与 `pragma('integrity_check')`，而**那包是 `devDependencies`**（只给测试基建），
+> 桌包用户与 standalone 运行期根本没有它 —— 照指南敲就是 `MODULE_NOT_FOUND`，
+> 而备份 / 恢复这条路径动的是**用户数据**。机制早已换成 `VACUUM INTO`
+> （`scripts/db-backup-core.mjs` 有一节标题就问这件事）、台账 D6 改了、核心改了、
+> 「`src/lib/db-backup/backup.ts` 里不许出现那三个字样」的断言也钉了，
+> **唯一没跟上的是给用户看的那一页**。
+
+**判据只认命令形状**（`require("better-sqlite3")` / `from "better-sqlite3"`），**不认名字**：
+规范里大量正当句子在讲「当年为什么换掉它」（规范 §6.1 那一族、`allowBuilds` 为何对
+`better-sqlite3` 显式写 `false`），按名字判就误报一片 —— 而误报的判据活不过一次评审
+（AGENTS 硬规则 24 末句同一条纪律）。真正害人的恰好是**能被复制粘贴执行的那一行**，
+所以量程收窄到它，代价是「散文里的陈旧说法」仍归人读（那类漂移由 §3.6 的漂移守卫管形状，
+不管措辞）。
+
+遍历面**由磁盘现算**，不抄名单（与 §3.6 表末那条同口径）：`README.md`、`docs/README.md`、
+`AGENTS.md`、`docs/guide-*.md`、`docs/guides/*.md`。**不含 `docs/standards/**`** ——
+那一层要记换型历史，句子会逐字引用旧 API 的形状。豁免与「台账命令口径」同族
+（`checkLedgerCommands()`）：同一行出现「没有 / 不存在 / 改为 / 修正 / devDependencies /
+测试基建 / 为什么」等纠正词，视为在说明而不是在下命令。
+
+执行者与其余几族同格：平台侧 `.cnb.yml` 的「文档引用与权威源一致」，本地出口
+`pnpm doc:check`（它不随每次提交自动跑，理由见 §3.6 末段与规范 §13.5.17）。
+回归测试 `tests/check-doc-references.test.ts`「用户面文档不许教跑不通的驱动」那一段（5 条）：
+两形命令各判红、说明句放行、`main()` 里在场，以及**基线那条绿不许是空面** ——
+它先断言面内确有散文提及那个名字，再断言绿，否则有人删掉那两句说明之后，
+这条会退化成「什么都判不出来的一条绿」。
+
+**这条判据不管的那一半**：「两份文档对同一件事给出互斥**说法**」（散文 ⇄ 散文）。
+这类漂移此前真实发生过并被本族判不出来 —— `docs/standards/15-附录.md` 的技术栈表把数据层
+写成「Drizzle ORM + better-sqlite3」、同一份文档与旧版总规范 §11.3 还在教「install 走
+node-gyp 编译它、缺 gcc 就失败」，而规范 §6.1 与 `docs/guides/sync-after-pull.md` 记着
+运行时用的是 `@libsql/client`、v13 起 install 阶段没有可跑的构建脚本
+（订正落在 **ISSUE #2671**）。**两份文件同时进 `doc:check`、两边都绿。**
+默认答案仍然是**不新写**这一族的判据：把「按名字判」那条边界让出去，实测读数摆在这儿 ——
+把本族放宽到认名字，当场就把 `AGENTS.md` 硬规则 9 里那句「`better-sqlite3` 早已退成
+dev-only 测试基建」念成红。「散文 ⇄ 散文互斥」要真做成判据，需要的是**另一种形状**（一个主题只许有一份关键句
+出处、其余文档写引用），那是登记制而不是扫描制；先量「现有文档里这种互斥说法命中多少、
+其中真违规占多少」再决定，别为一条没量过的判据开第二轮子（AGENTS 硬规则 24 末句 / 27 末段）。
+
 ## 4. 维护规则
 
 1. **改源码/配置里的真实值**：只改源码那一处，跑 `pnpm doc:check` 由脚本自动
