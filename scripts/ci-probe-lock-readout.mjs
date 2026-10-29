@@ -35,10 +35,11 @@ const TERMINAL = new Set(["success", "failed", "cancel", "timeout", "skipped"]);
 /**
  * 一跑的读数（`readBuild` 与 `emptyReading` 的返回值是同一件事的两条路）。
  *
- * `note` 是「取不到时的那句原因」。**它现在被写进对象而没有任何一处念它**
- * （打印那一圈只念 `sn` / `status` / 四个时刻 / `title`，外部调用方也不读）——
- * 那是一格与「不静默」这句自我声明不相符的实现，另立单处理，不混进本笔的类型改动。
- * 留着它（而不是从形状里删掉）是因为删掉就等于把那条线索一起抹了。
+ * `note` 是「取不到时的那句原因」，它的读者是 `formatReadingRow()`：非空时缀在结论行尾。
+ * 三句原因的下一动作各不相同（响应不是 JSON ⇒ 去看 `-v` 那一路到底打了什么；
+ * 响应里没有 data ⇒ 那个 sn 不存在；`cnb` 起不来 ⇒ 工具链那一格），而
+ * `status=(取不到)` 单独一行分不出这三件事 —— 所以「不静默」这句话落在**打印出来的行**上，
+ * 不落在字段名上。
  *
  * @typedef {Object} Reading
  * @property {string} sn
@@ -249,23 +250,45 @@ export function overlap(a, b, now = Date.now()) {
 }
 
 /**
+ * 一跑的那一行读数。
+ *
+ * `note` 非空时（只有「取不到」那两条路非空，成功那一路给空串）把原因缀在**同一行**行尾：
+ * 三个原因的下一动作不同，把它们打到屏幕上才是「不静默」——写进对象而没人念，
+ * 读的人看到的仍只是一句 `status=(取不到)`。
+ *
+ * @param {Reading} r
+ * @returns {string}
+ */
+export function formatReadingRow(r) {
+  const note = r.note ? `（${r.note}）` : "";
+  return (
+    `[probe] ${r.sn}  status=${r.status}  create=${r.createTime}  ` +
+    `start=${r.startTime}  end=${r.endTime}  title=${r.title}${note}`
+  );
+}
+
+/**
  * 一行一跑地打出来，附逐对相交读数。
+ *
+ * `readRow` 是**取数那一格的出口**（默认打真平台）：本判据要能被判「取不到时屏幕上
+ * 读不读得到那句原因」，而那只能靠喂进一份取不到的读数来判 —— 不是靠读源码里的字面量。
  *
  * @param {string} repo
  * @param {string[]} sns
+ * @param {(sn: string) => Reading} [readRow]
+ * @returns {Reading[]}
  */
-export function report(repo, sns) {
+export function report(
+  repo,
+  sns,
+  readRow = (sn) => ({ ...readBuild(repo, sn), ...readRunWindow(repo, sn) }),
+) {
   const now = Date.now();
   /* 两路拼成一行：`get-build-status` 给 `status`（终态只认它的原值），
    * `get-build-logs --sn` 给整跑的时间线。缺一路就如实说缺，不拿另一路顶。 */
-  const rows = sns.map((sn) => {
-    const run = readRunWindow(repo, sn);
-    return { ...readBuild(repo, sn), ...run };
-  });
+  const rows = sns.map((sn) => readRow(sn));
   for (const r of rows) {
-    console.log(
-      `[probe] ${r.sn}  status=${r.status}  create=${r.createTime}  start=${r.startTime}  end=${r.endTime}  title=${r.title}`,
-    );
+    console.log(formatReadingRow(r));
   }
   /* 逐对相交：改成 `entries()` + `slice()` 而不是 `rows[i]` / `rows[j]` 按下标取 ——
    * 后者在 `noUncheckedIndexedAccess` 下每次都是「可能 undefined」，而这两层循环的
