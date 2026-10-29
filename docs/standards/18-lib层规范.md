@@ -436,6 +436,74 @@ Error: `headers` was called outside a request scope.
 > 现在两条路都产出「同一页 + 同一份 images」，并且用例把两**条**路都覆盖了 ——
 > 只测一条会让人以为另一条也对。
 
+#### 18.10.1 跨表写入的事务边界落在仓库层的一个入口（ISSUE #2592）
+
+这条链上「谁负责原子性」原来落在**没有人**身上：路由层以为是仓库层，仓库层以为是路由层。
+现场是设置页保存 LLM 配置那一条 mutation —— 两个 await 依次写两张表：
+
+```
+remoteModelRepository.replaceAll(split.remoteEntries);   // 写 1：返回即已提交
+llmConfigRepository.upsertSingleton({ ... });            // 写 2：这里失败 = 半态
+```
+
+第二条失败（AES-GCM 抛错、`SQLITE_BUSY` 都落在它上面）时第一条已经落地，于是
+`remoteModel` 表与 `llmConfig.extraModels` **指向不同一套模型**；而界面下一次读的是
+`getConfigForClient()` 拼出来的合并结果 —— 不一致会被直接呈现给用户。`upsertSingleton`
+自己**还是一次 read-modify-write**（先 `findSingleton()` 再 insert/update，同样没有事务），
+所以这一跳是「三次往返、两处交叠窗口」，不是两个原子步。它与 #2586 是同一类缺陷
+（partial save）但**不是同一处**：#2586 收的是 `replaceAll` **内部**那三条语句。
+
+**口径（一句）**：路由层不写库，跨表原子性由仓库层的一个入口负责 —— 这里就是
+`saveLlmSettings(input)`（`src/lib/core/repository-user.ts`）。它开一次
+`db.transaction`、把 `tx` 同时传给两个写口，并复用 `SETTINGS_DB_WRITE` 那份预算
+（#2586 已选定，不另立第二个数字：事务范围扩到两张表 ⇒ 持锁更久，撞锁的表现从
+「偶发丢数据」变成「偶发保存报错」，仍是同一格重试的事）。
+
+三条落地形状，都是为了让「第二个保存入口漏掉事务」这件事不发生：
+
+1. **`db.transaction(` 不许写在 `llm.ts` 里**。不是因为违规 —— `eslint.config.js` 的
+   `boundaries` 只拦 components ⇄ server 两个方向，同属 server 的路由直发语句它不判
+   （反例既有：`src/server/api/routers/series.ts` 一整批 `ctx.db` 写）—— 而是那样每条
+   调用链都要自己决定事务范围，漏一条就回到本单的症状。取向写在这里，**没有机器判据**，
+   也不要为新写一条启发式扫描器（硬规则 24 末句）。
+2. **executor 的类型只定义一处**：`src/lib/core/repository-executor-types.ts` 的
+   `DbExecutor = typeof db | TxExecutor`，其中 `TxExecutor` 从 `db.transaction` 的**回调形参**
+   上派生（`Parameters<Parameters<…>[0]>[0]`），不手写 union —— 手写的那份就是「升级时
+   需要有人记得来同步」的那条记忆。被抄成两份的代价不是编译错，是「某个方法悄悄只用
+   模块级 `db`，事务开到它那里就断了」。
+3. **语句体与事务分开**：`replaceAll` 的那段读—删—写从回调里搬出来成
+   `syncRemoteModels(exec, entries)`（不碰事务、不套重试），于是 `replaceAll` 与
+   `saveLlmSettings` 是同一份实现上的两个事务范围，而不是两份会各自漂的实现。
+   接受 executor 的方法**不再自己 begin**（SQLite 在嵌套事务上报
+   `cannot start a transaction within a transaction`），这是 `saveLlmSettings` 走
+   `syncRemoteModels` 而不是走 `replaceAll` 的原因 —— 后者末尾那次 `list()` 重读
+   在新范围里既多余又会被算进持锁时间。
+
+**`getConfigForClient()` 那次读刻意留在事务外**：读侧一致性不是这条链的诉求，
+搬进去只会把持锁时间再拉长。用例把这条钉成一句可红的断言 ——
+一次保存的 `begin…commit` 之间语句**整段相等**（多一条读也红）。
+
+> 那条整段等式与 #2586 那一族用的 `slice` 不同，是刻意的：slice 只看「第一个 commit 之前」，
+> 于是「拆回两个事务」（= 本单的症状）在它里面**照样绿**。变异实测四组读数（改动都还原并
+> `cmp` 验过逐字相同）：拆成两个事务 ⇒ trace / 回滚 / 重试范围三条红；
+> `upsertSingleton` 里把 executor 丢掉 ⇒ 只有那条按身份判的用例红；
+> 拆分改成无条件（缺键折成空清单）⇒ 只有 A11 那条红；事务内换顺序 ⇒ 只有 trace 红。
+
+**「读落在哪个 executor 上」在本宿主里只能按身份判**：`tests/helpers/test-db.ts` 是一条
+`:memory:` 连接，`db` 与 `tx` 打的是同一个实例 ⇒ 把那句 `findSingleton()` 改回模块级连接，
+SQL trace 逐字不变、用例照样绿。生产侧这个区别是实的（libsql 的 `file:` 客户端是连接池，
+整条事务绑其中一条，另一条只读到提交前的旧行），所以钉法是断言**传下来的对象不是 `db`**。
+读代码的人若把这类断言改写成「trace 里少一条 select」，就等于把判据挪到了一个看不见它的量具上。
+
+用例在 `src/lib/core/repository.test.ts` 的 `saveLlmSettings` 那一组（8 条，含两个方向的
+「第二写失败 ⇒ 第一写不残留」，失败一律由测试宿主的语句钩子造）。
+单子里那句「**并发**两次保存 ⇒ 终态等于后一次」在这里只能是**串行**：第二次 `begin` 会直接撞上
+第一条未提交的事务并报 SQLite 自己的错 —— 那是测试的形状，不是生产的并发语义（libsql 每次事务
+绑连接池里的不同连接）；要真验并发得开两条连接打同一个库，那一格不属本单。
+
+> 与 §6.1 的分工：那一张表记的是**驱动与宿主的读数**（`behavior` 两侧不对称、
+> 等锁预算只能落在重试层）；这一节记的是**边界该落在哪一层**。下次别再从 `llm.ts` 往上重新推。
+
 ### 18.11 本批（ISSUE #569 第 2 项 / #572 第 2–3 项）的落地记录
 
 #### 18.11.1 判据只许有一份：客户端可达图的两份实现合并（#569 第 2 项）

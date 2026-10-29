@@ -2,7 +2,6 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getConfigForClient } from "~/lib/llm/server";
 import { remoteModelEntrySchema } from "~/lib/llm/remote-model-schema";
-import { splitExtraModels } from "~/lib/llm/types";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { remoteModelRepository } from "~/lib/core/repository";
 import {
@@ -161,23 +160,13 @@ export const llmRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      const { llmConfigRepository, remoteModelRepository } =
-        await import("~/lib/core/repository");
-      // 远端模型与本地候选分开存。把提交的候选清单按类型拆分：
-      //   字符串 → llmConfig.extraModels（本地候选，无 apiKey）
-      //   对象   → remoteModel 表（远端独立模型）
-      const split = splitExtraModels(input.extraModels);
-      if (input.extraModels !== undefined) {
-        await remoteModelRepository.replaceAll(split.remoteEntries);
-      }
-      await llmConfigRepository.upsertSingleton({
-        ...input,
-        // 本地候选只写名字字符串（无 extraModels 输入时保持原值）；远端条目已落
-        // remoteModel 表，llmConfig 不再承载远端对象，避免两类混存。
-        extraModels:
-          input.extraModels !== undefined ? split.localNames : undefined,
-      });
+      const { saveLlmSettings } = await import("~/lib/core/repository");
+      /* 两张表（远端模型清单 / llmConfig 单例）在同一次事务里落定，事务边界与
+       * 「哪一条候选落哪张表」的拆分都在仓库层的那个入口里 —— 路由这里只说一句
+       * 「存」，不再自己决定写入范围（ISSUE #2592）。 */
+      await saveLlmSettings(input);
       // 回传脱敏配置（不携带明文 apiKey，改发 hasApiKey 布尔），与 configGet 同源。
+      // 这一读**提交之后**才发生：读侧一致性不归本事务管，别把它搬进去。
       const config = await getConfigForClient();
       return { config };
     }),
