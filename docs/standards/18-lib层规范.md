@@ -185,8 +185,10 @@ for (const [, k, l, f, s, b] of rows)
 ```
 
 只要某个域或只看目录级：把上面管道接 `grep "lib/core"` / `grep '/\*\*'`。
-门槛的**当前实测值**与**还差多少**由 `pnpm test:coverage` 给（覆盖率门槛只在这一档判，
-§11.7；红着也会 `exit 1`），跑绿一次由 `node scripts/full-suite-run.mjs` 落账。
+门槛的**当前实测值**与**还差多少**由 `pnpm check:all` 的 `test` 条目给（它显式带
+`COMFY_COVERAGE_ENFORCE=1`，是这份登记处现在唯一会算退码的执行者；裸
+`pnpm test:coverage` 在默认档**不判**门槛，见 §11.7 末节，ISSUE #2669）；
+跑绿一次由 `node scripts/full-suite-run.mjs` 落账。
 
 落地口径：
 
