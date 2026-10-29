@@ -15,6 +15,7 @@
  * 规范：docs/standards/13-提交与-code-review.md §13.5
  */
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 import { vi } from "vitest";
@@ -60,6 +61,16 @@ const { test, expect } = defineGateRepo({
 // 脏内容：多余空格 + 多余空行，oxfmt 一定会改它。
 const DIRTY = "export const PROBE={a:1,\n\n\n  b:2};\n";
 const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
+/* 另一种干净形态（`--staged` 判面收窄那条用例要暂存一份**干净的**改动）。 */
+const CLEAN2 = "export const PROBE = { b: 2, a: 1 };\n";
+
+/** 读工作区 HEAD 的 sha（`--changed` 用例拿它当 `CNB_PULL_REQUEST_TARGET_SHA`）。 */
+function gitSha(dir: string): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: dir,
+    encoding: "utf8",
+  }).trim();
+}
 
 describe("oxfmt 格式判据（硬闸）", () => {
   test("全库格式干净 → 通过", ({ repo }) => {
@@ -251,6 +262,106 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
 
   test("无暂存改动 → 跳过（不为空提交白扫全库）", ({ repo }) => {
     const r = repo.run(["--staged"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("未触及扫描面");
+  });
+
+  test("--staged 只判暂存的那一批：面外同仓的脏文件不再被扫", ({ repo }) => {
+    /* 判面收窄的钉子（printWidth 80→100 迁移的地基，见判据文件头）：收窄前
+     * 命中暂存面后回落**全库**扫 —— 迁移期间那份全库读数对未迁移的存量恒红，
+     * 等于每一次碰 src 的提交都被别人的旧文件拦死。收窄后判的是「这一批带进来
+     * 的是什么」：暂存的是干净改动 ⇒ 放行，哪怕工作区里还躺着没暂存的脏文件。 */
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", CLEAN2);
+    repo.git("add", "src/lib/keep.ts");
+    repo.write("src/lib/fresh.ts", DIRTY);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).not.toContain("src/lib/fresh.ts");
+  });
+});
+
+/**
+ * `--changed`：改动面档（printWidth 80→100 增量迁移的执行档，平台侧与 check:all 用）。
+ *
+ * 改动面取自 `changed-scope.mjs` 的 `resolveChangedFiles`（唯一出处，§12.18）：
+ * 给了 `CNB_PULL_REQUEST_TARGET_SHA` 就按它三点 diff —— 所以每条用例自己给基线
+ * sha，不依赖 git 的默认分支名，也不踩 `resolveMergeBaseRef` 的兜底链。
+ *
+ * 与 `--staged` 同一条纪律：跳过与「扫过之后没有脏文件」是同一个退出码，
+ * 所以每条断言都同时看输出（§11.23 的「声明 ⇄ 读者」）。
+ */
+describe("oxfmt 格式判据 --changed 改动面档", () => {
+  test("改动面里有未过格式的文件 → 阻断，并指出是哪个文件", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    const base = gitSha(repo.dir);
+    repo.write("src/lib/fresh.ts", DIRTY);
+    repo.git("add", "-A");
+    repo.commit("dirty");
+    const r = repo.run(["--changed"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: base },
+    });
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/fresh.ts");
+  });
+
+  test("改动面全在扫描面外 → 跳过（不起 oxfmt）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    const base = gitSha(repo.dir);
+    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
+    repo.git("add", "-A");
+    repo.commit("scripts-only");
+    const r = repo.run(["--changed"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: base },
+    });
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("未触及扫描面");
+    expect(r.output).not.toContain("运行 oxfmt");
+  });
+
+  test("改动面里混着白名单文件 → 只判扫描面内的那份", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    const base = gitSha(repo.dir);
+    repo.write("src/lib/fresh.ts", CLEAN);
+    repo.write("scripts/fresh.mjs", DIRTY);
+    repo.git("add", "-A");
+    repo.commit("mixed");
+    const r = repo.run(["--changed"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: base },
+    });
+    expect(r.code, r.output).toBe(0);
+  });
+
+  test("改动面取不到（没有任何提交）→ exit 2，不冒充干净", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    const r = repo.run(["--changed"]);
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("改动面没算出来");
+    expect(r.output).not.toContain("[ok] oxfmt 格式");
+  });
+
+  test("只判已提交的改动：未提交的脏文件不在改动面（提交那一刻由 --staged 判）", ({
+    repo,
+  }) => {
+    /* 这是 `git diff <基线>...HEAD` 的定义边界，不是漏洞：改动面档跑在 push/CI
+     * 那两跳上，那里的一切都已提交；提交瞬间的干净由 `--staged` 档背书。
+     * 钉住它，防止将来有人把「未提交」悄悄混进改动面造成两档重复判。 */
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    const base = gitSha(repo.dir);
+    repo.write("src/lib/fresh.ts", DIRTY);
+    const r = repo.run(["--changed"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: base },
+    });
     expect(r.code).toBe(0);
     expect(r.output).toContain("未触及扫描面");
   });

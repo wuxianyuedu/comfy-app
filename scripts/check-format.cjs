@@ -5,13 +5,27 @@
  *
  * ── 它在哪跑：本地 D0 判 + 平台侧判（ISSUE #2610，2026-10-29；中间那段历史见下）─────
  *
- * 现在有两个执行者，跑的是同一份实现、只差一个旗标：
+ * 现在是**一份实现、三档判面**（判面收窄是 printWidth 迁移的地基，见下）：
  *   · `.githooks/pre-commit` 的 **D0** 带 `--staged`（「没碰到扫描面」就跳过并明说跳过，
  *     红了当场 `pnpm exec oxfmt <点名的文件>`，只点本次改的 —— 不必等一次 CI 往返）；
- *   · `.cnb.yml` 的「oxfmt 格式」跑**全量档**（不带 `--staged`：那边的工作区就是这次要判
- *     的那份源码，带上会读到空的暂存区 ⇒ 恒跳过、挂了等于没挂）。
- * 第三个出口是 `pnpm check:all`（`scripts/quality-gate.mjs` 的 `format` 项）。
+ *     命中扫描面后判的是**暂存的那一批**，不再回落全库；
+ *   · `.cnb.yml` 的「oxfmt 格式」与 `pnpm check:all` 带 `--changed`：判**改动面**
+ *     （`changed-scope.mjs` 的 `resolveChangedFiles`，基线 = `CNB_PULL_REQUEST_TARGET_SHA`
+ *     三点 diff，本地退回各 remote/本地 master 的分叉点）∩ 扫描面；
+ *   · **默认（不带旗标）照旧全库**——硬闸语义「未过 oxfmt 的文件一个都不许有」
+ *     仍由这一档背书（`--report` 盘点也是全库）。
  * 三处都由 `tests/doc-check-hook-wiring.test.ts` 钉（钩子里有 + 平台侧有 + 都指这一份脚本）。
+ *
+ * ── 为什么判面要收窄（printWidth 80 → 100 的增量迁移）──────────────────
+ *
+ * `printWidth` 改成 100 的那一刻，全库档对**还没迁移的存量**恒红：一行 79 列的
+ * 旧代码什么都没做错，只是按旧行宽折过行。一次性全量重排走不通——它会被
+ * `check-merged-side-loss.mjs`（#1617）判成「整份退回」：解开 80 列折行后的
+ * 字节流恰好等于某些文件**更早的历史版本**（实测 width=100 重排一次，5 份命中），
+ * 而那条判据没有豁免口。所以迁移只能增量：**谁碰一个文件，谁把它迁到 100**，
+ * 判面跟着收窄到「这次改动带来的那批」。代价要说清楚：全库不变式从「每一份都干净」
+ * 弱成「你带来的每一份都干净」，没被碰过的存量文件不迁移就不变干净——这是
+ * 增量采用的定义，不是漏洞。
  *
  * 这段历史之所以值得留在文件头上，是因为它三步都在判同一件事：「**自称在哪跑**」与
  * 「**真在哪跑**」必须一致（§13.5.12 立案的那族形态）。
@@ -72,9 +86,10 @@
  * 无感,且 prettier 的 `--cache` 让重复调用几乎零成本。
  *
  * 用法:
- *   node scripts/check-format.cjs             # 检查(硬闸:命中即退 1) —— 平台侧用的就是这一档
- *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用)
- *   node scripts/check-format.cjs --staged    # 仅当暂存改动落在扫描面内才扫(人的动作:提交前自查)
+ *   node scripts/check-format.cjs             # 全库检查(硬闸:命中即退 1) —— 裸调用的硬闸语义
+ *   node scripts/check-format.cjs --changed   # 只判改动面 ∩ 扫描面 —— 平台侧与 check:all 用这一档
+ *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用,照旧全库)
+ *   node scripts/check-format.cjs --staged    # 判暂存面(人的动作:提交前自查)
  *
  * ── `--staged`：全库扫描的「白付」与它的输入面 ────────────────────────────────
  *
@@ -149,6 +164,7 @@ const ROOT = process.cwd();
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const STAGED = ARGS.has("--staged");
+const CHANGED = ARGS.has("--changed");
 
 /** 扫描范围与 package.json 的 format:check 逐字一致。 */
 const GLOBS = ["**/*.{ts,tsx,js,jsx,mdx}"];
@@ -257,9 +273,10 @@ function stagedFiles() {
 }
 
 /**
- * 找出未过 prettier 的文件(仓库根相对 POSIX 路径,已排序,已剔除白名单)。
+ * oxfmt 调一次 `--check <targets…>` 的**共通壳**：三条 fail-closed 规则 +
+ * 剥 ANSI + 抽文件名（两条收集器共用这一份，§12.12）。
  *
- * 三条**fail-closed** 规则（本函数过去只有前两条的一半，因而存在一条
+ * 三条 **fail-closed** 规则（本函数过去只有前两条的一半，因而存在一条
  * 「命令没跑成 → 报全库干净」的出路，见台账 E11）：
  *   · 子进程被信号杀掉（`status === null`，含超时被杀）→ exit 2；
  *   · 退出码不属于 {0, 1} → exit 2（配置写错 / 解析失败，prettier 会走这一档）；
@@ -268,6 +285,97 @@ function stagedFiles() {
  * 而清单为空与「命令根本没跑成」（例如 `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
  * Command "prettier" not found`，退出码同样是 1 且 stdout 为空）在旧代码里
  * 长得一模一样 —— 于是门禁把「什么都没扫」读成「0 个文件未过（基线 0 个）/ OK」。
+ *
+ * @param {string} entry oxfmt 入口（已解析）
+ * @param {string[]} targets 本次调用的目标（一个扫描根，或点名的一批文件）
+ * @param {string} subject 报错/调试信息里的目标描述（如 `扫描根 src`、`点名的 7 份改动`）
+ * @returns {string[]} 有差异的文件路径（oxfmt 原样交回的那批）
+ */
+function oxfmtCheckTargets(entry, targets, subject) {
+  const args = ["--check", ...targets];
+  const res = spawnSync(process.execPath, [entry, ...args], {
+    cwd: ROOT,
+    encoding: "utf8",
+    // 单文件清单在超大仓库里能到几百 KB；默认 1 MB 会把 stdout 截成空串，
+    // 那正好落进上面第三条要拦的形态 —— 宁可显式给大。
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 600_000,
+  });
+  if (res.error) {
+    console.error(
+      `[format] 无法执行 oxfmt（${res.error.code ?? "UNKNOWN"}）：${res.error.message}\n` +
+        `[format]   实际命令：${process.execPath} ${entry} ${args.join(" ")}`,
+    );
+    process.exit(2);
+  }
+  if (res.status === null) {
+    console.error(
+      `[format] oxfmt 被信号终止（${res.signal ?? "unknown"}），不是「没有差异」。\n` +
+        `[format]   入口 ${entry}，${subject}。`,
+    );
+    process.exit(2);
+  }
+  /* 排查逃生口（默认关）：`COMFYAPP_FORMAT_DEBUG=1` 时把 oxfmt 的原始读数
+   * 原样吐出来 —— 判据自测在「本地绿、CI 红」的形态下，没有这批读数就只能猜
+   * （脏文件被判干净时，到底是没扫到还是没认出来，两种修法完全不同）。
+   * 走 **stdout** 而不是 stderr：夹具把成功那档的 `output` 折成纯 stdout，
+   * 打 stderr 这批读数在「判据成功退出」的用例里永远看不见。 */
+  if (process.env.COMFYAPP_FORMAT_DEBUG) {
+    const ver = spawnSync(process.execPath, [entry, "--version"], {
+      encoding: "utf8",
+    });
+    console.log(
+      `[format][debug] ROOT=${ROOT}\n` +
+        `[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +
+        `[format][debug] oxfmt status=${res.status} stdout=${JSON.stringify(res.stdout)}\n` +
+        `[format][debug] oxfmt stderr=${JSON.stringify(res.stderr)}`,
+    );
+  }
+  const lines = (res.stdout || "")
+    // **先剥 ANSI 颜色码再解析**：oxfmt 会给文件名上色（实测 CI 侧
+    // `\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」
+    // 过不了 `isScanned` 的路径形态，整张清单会被悄悄滤成空 —— 门禁当场读成
+    // 「命中 0 个」（本地 stdout 不着色，所以这一档只在 CI 形态下暴露）。
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /
+    // `Format issues found in above N files.` / `Finished in ...` 这类摘要行，
+    // 认不出的行一律丢掉（宁可漏报也不许把摘要行当成文件名）。
+    .map(
+      (line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null,
+    )
+    .filter((line) => line && !line.startsWith("["));
+  if (res.status !== 0 && res.status !== 1) {
+    console.error(
+      `[format] oxfmt 执行失败(exit ${res.status}):\n${res.stderr || res.stdout || ""}`,
+    );
+    process.exit(2);
+  }
+  if (res.status === 1 && lines.length === 0) {
+    console.error(
+      "[format] oxfmt 退出 1（「有差异」）却没有列出任何文件 —— 按 fail-closed 判定为\n" +
+        "[format]   「命令没跑成」，不是「全库干净」。真实仓里出现这一行请贴出入口与\n" +
+        "[format]   下面这段 stderr。",
+    );
+    if (res.stderr)
+      console.error(`[format]   stderr: ${String(res.stderr).trim()}`);
+    process.exit(2);
+  }
+  return lines;
+}
+
+/** 相对路径归一 + 白名单收口（两条收集器同一段，收在这里）。 */
+function keepScanned(f, found) {
+  const rel = toPosix(path.relative(ROOT, path.resolve(ROOT, f)));
+  // 传目录给 oxfmt 会把它认识的语言（含 md / json / css）一并扫到，
+  // 本格的面仍是 ts/tsx/js/jsx/mdx 减白名单 —— 用 isScanned 收口。
+  if (!isScanned(rel)) return;
+  found.add(rel);
+}
+
+/**
+ * 全库档：逐扫描根跑（`SCAN_ROOTS`）。判据不变 —— 「未过 oxfmt 的文件一个都不许有」。
  */
 function collectUnformatted(entry) {
   const found = new Set();
@@ -278,96 +386,66 @@ function collectUnformatted(entry) {
      * `.storybook`，实测把整条门打成了 fail-closed 的 exit 2）。真实仓两个根都在，
      * 这条跳过不改真实仓的判决面。 */
     if (!fs.existsSync(path.join(ROOT, root))) continue;
-    /* oxfmt 只列**有差异**的文件（形如 `src/foo.ts (12ms)`），随后给一行
-     * `Format issues found in above N files.`；退出码 1 = 有差异、0 = 全干净。
-     * 没有 `--cache` 这一档：oxfmt 在本仓实测 1.9s（prettier 全热 234s），
-     * 为它再养一套缓存键不划算 —— 何况 prettier 那条缓存键本就因绝对路径恒 miss。 */
-    const args = ["--check", root];
-    const res = spawnSync(process.execPath, [entry, ...args], {
-      cwd: ROOT,
-      encoding: "utf8",
-      // 单文件清单在超大仓库里能到几百 KB；默认 1 MB 会把 stdout 截成空串，
-      // 那正好落进上面第三条要拦的形态 —— 宁可显式给大。
-      maxBuffer: 64 * 1024 * 1024,
-      timeout: 600_000,
-    });
-    if (res.error) {
-      console.error(
-        `[format] 无法执行 oxfmt（${res.error.code ?? "UNKNOWN"}）：${res.error.message}\n` +
-          `[format]   实际命令：${process.execPath} ${entry} ${args.join(" ")}`,
-      );
-      process.exit(2);
-    }
-    if (res.status === null) {
-      console.error(
-        `[format] oxfmt 被信号终止（${res.signal ?? "unknown"}），不是「没有差异」。\n` +
-          `[format]   入口 ${entry}，扫描根 ${root}。`,
-      );
-      process.exit(2);
-    }
-    /* 排查逃生口（默认关）：`COMFYAPP_FORMAT_DEBUG=1` 时把 oxfmt 的原始读数
-     * 原样吐出来 —— 判据自测在「本地绿、CI 红」的形态下，没有这批读数就只能猜
-     * （脏文件被判干净时，到底是没扫到还是没认出来，两种修法完全不同）。
-     * 走 **stdout** 而不是 stderr：夹具把成功那档的 `output` 折成纯 stdout，
-     * 打 stderr 这批读数在「判据成功退出」的用例里永远看不见。 */
-    if (process.env.COMFYAPP_FORMAT_DEBUG) {
-      const ver = spawnSync(process.execPath, [entry, "--version"], {
-        encoding: "utf8",
-      });
-      console.log(
-        `[format][debug] ROOT=${ROOT}\n` +
-          `[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +
-          `[format][debug] oxfmt status=${res.status} stdout=${JSON.stringify(res.stdout)}\n` +
-          `[format][debug] oxfmt stderr=${JSON.stringify(res.stderr)}`,
-      );
-    }
-    const lines = (res.stdout || "")
-      // **先剥 ANSI 颜色码再解析**：oxfmt 会给文件名上色（实测 CI 侧
-      // `\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」
-      // 过不了 `isScanned` 的路径形态，整张清单会被悄悄滤成空 —— 门禁当场读成
-      // 「命中 0 个」（本地 stdout 不着色，所以这一档只在 CI 形态下暴露）。
-      .replace(/\u001b\[[0-9;]*m/g, "")
-      .split("\n")
-      .map((line) => line.trim())
-      // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /
-      // `Format issues found in above N files.` / `Finished in ...` 这类摘要行，
-      // 认不出的行一律丢掉（宁可漏报也不许把摘要行当成文件名）。
-      .map(
-        (line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null,
-      )
-      .filter((line) => line && !line.startsWith("["));
-    if (res.status !== 0 && res.status !== 1) {
-      console.error(
-        `[format] oxfmt 执行失败(exit ${res.status}):\n${res.stderr || res.stdout || ""}`,
-      );
-      process.exit(2);
-    }
-    if (res.status === 1 && lines.length === 0) {
-      console.error(
-        "[format] oxfmt 退出 1（「有差异」）却没有列出任何文件 —— 按 fail-closed 判定为\n" +
-          "[format]   「命令没跑成」，不是「全库干净」。真实仓里出现这一行请贴出入口与\n" +
-          "[format]   下面这段 stderr。",
-      );
-      if (res.stderr)
-        console.error(`[format]   stderr: ${String(res.stderr).trim()}`);
-      process.exit(2);
-    }
-    for (const f of lines) {
-      const rel = toPosix(path.relative(ROOT, path.resolve(ROOT, f)));
-      // 传目录给 oxfmt 会把它认识的语言（含 md / json / css）一并扫到，
-      // 本格的面仍是 ts/tsx/js/jsx/mdx 减白名单 —— 用 isScanned 收口。
-      if (!isScanned(rel)) continue;
-      found.add(rel);
+    for (const f of oxfmtCheckTargets(entry, [root], `扫描根 ${root}`)) {
+      keepScanned(f, found);
     }
   }
   return [...found].sort();
 }
 
+/**
+ * 点名档：对**给定的一批文件**分批跑（`--changed` 与 `--staged` 共用）。
+ *
+ * 为什么要分批：改动面可以很大（实测一次注释批注 PR 带 717 份），Windows 的
+ * 命令行长度上限约 32K 字符，整批塞一条命令会在半路被截 —— 200 份一批
+ * （约 10K 字符）给足余量。fail-closed 规则**逐批**生效：任何一批被信号杀 /
+ * 退出码越界 / 退出 1 却不交清单，整条门当场 exit 2，不许把「后半批没跑」
+ * 读成「全干净」。
+ */
+function collectUnformattedFiles(entry, files) {
+  const found = new Set();
+  const CHUNK = 200;
+  for (let i = 0; i < files.length; i += CHUNK) {
+    const batch = files.slice(i, i + CHUNK);
+    const subject = `点名 ${batch.length} 份（第 ${Math.floor(i / CHUNK) + 1} 批）`;
+    for (const f of oxfmtCheckTargets(entry, batch, subject)) {
+      keepScanned(f, found);
+    }
+  }
+  return [...found].sort();
+}
+
+/** 入口解析失败的统一出口（原文一字不改：有测试钉着「找不到 oxfmt 入口」这句）。 */
+function entryMissing() {
+  /* 「取不到 prettier」与「全库都格式化好了」是两种结论，必须走不同的门。
+   * 旧代码在这一档会一路走到 `[format] OK`（空清单 = 0 个未过），
+   * 也就是门禁在依赖缺失 / 形态选错的机器上**静默放行**（台账 E11）。 */
+  console.error(
+    "[format] 找不到 oxfmt 入口：本地 node_modules 里没有它，" +
+      "`COMFYAPP_OXFMT_ENTRY` 也没给。\n" +
+      "[format]   以 exit 2 结束 —— 判据没跑成不许读成「全库干净」。",
+  );
+  process.exit(2);
+}
+
+/** 三档共用的判决出口（红 ⇒ 退 1 并给修复出路；绿 ⇒ gatePass）。 */
+function judge(current, scope) {
+  if (current.length) {
+    gateFail("oxfmt 格式", current, {
+      detail: `${current.length} 个文件未过（${scope}）`,
+      hint:
+        "本判据是硬闸（无基线、无 --update）:存量已清零,新增即阻断（规范 §13.5）。\n" +
+        "修复:pnpm exec oxfmt <上面列出的文件>（只格式化你改过的,别全库跑）。",
+    });
+    process.exit(1);
+  }
+  gatePass("oxfmt 格式", `扫描完成：命中 0 个（${scope}）`);
+}
+
 async function main() {
-  /* `--staged` 的短路点在**所有**工作之前：未命中扫描面时连 prettier 入口都不解析
-   * —— 那条解析在依赖缺失时会 exit 2，而「本次提交没碰扫描面」与「prettier 装没装」
-   * 无关，不该被后者带崩（否则把依赖问题伪装成这一步的形态）。
-   * 只作用于 check 档：`--report` 照旧全库（见文件头）。 */
+  /* 两档收窄（`--staged` / `--changed`）的短路点都在**入口解析之前**：「这次根本
+   * 没带来靶子内的文件」与「oxfmt 装没装」无关，不该被后者带崩（否则把依赖问题
+   * 伪装成这一步的形态）。`--report` 与默认全库档照旧先解析入口。 */
   if (STAGED && !REPORT_ONLY) {
     const files = stagedFiles();
     if (files === null) {
@@ -384,20 +462,48 @@ async function main() {
       );
       process.exit(0);
     }
+    /* 命中后判**暂存的那一批**，不再回落全库：printWidth 迁移期间全库档对
+     * 未迁移的存量恒红（见文件头），而提交这一刻要判的是「这一批带进来干不干净」
+     * —— 那批没被暂存的存量文件并不随本次提交走，不该由它背书。 */
+    const entry = resolveOxfmtEntry();
+    if (!entry) entryMissing();
+    judge(collectUnformattedFiles(entry, hits), "暂存面");
+    return;
+  }
+
+  if (CHANGED && !REPORT_ONLY) {
+    /* 改动面先算（这是 git 的事，与 oxfmt 装没装无关）：拿不到 ⇒ exit 2，
+     * 「没判」不冒充「干净」—— 与 ci-affected-tests 同一口径（§13.6.2）。
+     * 判据实现只有一份出处：`changed-scope.mjs`（基线选取 / 三点 diff / quotePath
+     * / 改名两侧都收），这里不抄第二份（§12.18）。`require(esm)` 与
+     * `check-doc-mirror-pairing.cjs` 同形，`copyGateDeps` 按这一形态补沙箱依赖。 */
+    const { resolveChangedFiles } = require("./changed-scope.mjs");
+    const changed = resolveChangedFiles({ cwd: ROOT });
+    if (!changed.ok) {
+      console.error(
+        `[format] 改动面没算出来：${changed.reason}\n` +
+          "[format]   按 fail-closed 判「没判」，以 exit 2 结束（不冒充「未触及扫描面」）。",
+      );
+      process.exit(2);
+    }
+    const hits = changed.files.filter(isScanned);
+    if (!hits.length) {
+      console.log(
+        `[format] ✓ 本次改动未触及扫描面（${changed.files.length} 个改动文件中 0 个在 oxfmt 靶子内，基线：${changed.via}），跳过。`,
+      );
+      process.exit(0);
+    }
+    const entry = resolveOxfmtEntry();
+    if (!entry) entryMissing();
+    /* 只看**已提交**的改动（`git diff <基线>...HEAD` 的定义边界）：没提交的新文件
+     * 不在面里，它们由 pre-commit 的 `--staged` 档在提交那一刻判 —— 两档合起来
+     * 才是完整的一条链，单独哪一档都不许被读成「全量」。 */
+    judge(collectUnformattedFiles(entry, hits), "改动面");
+    return;
   }
 
   const entry = resolveOxfmtEntry();
-  if (!entry) {
-    /* 「取不到 prettier」与「全库都格式化好了」是两种结论，必须走不同的门。
-     * 旧代码在这一档会一路走到 `[format] OK`（空清单 = 0 个未过），
-     * 也就是门禁在依赖缺失 / 形态选错的机器上**静默放行**（台账 E11）。 */
-    console.error(
-      "[format] 找不到 oxfmt 入口：本地 node_modules 里没有它，" +
-        "`COMFYAPP_OXFMT_ENTRY` 也没给。\n" +
-        "[format]   以 exit 2 结束 —— 判据没跑成不许读成「全库干净」。",
-    );
-    process.exit(2);
-  }
+  if (!entry) entryMissing();
   console.log("[format] 运行 oxfmt --check（无缓存档，全量约 2s）…");
   const current = collectUnformatted(entry);
 
@@ -410,17 +516,7 @@ async function main() {
     process.exit(0);
   }
 
-  if (current.length) {
-    gateFail("oxfmt 格式", current, {
-      detail: `${current.length} 个文件未过`,
-      hint:
-        "本判据是硬闸（无基线、无 --update）:存量已清零,新增即阻断（规范 §13.5）。\n" +
-        "修复:pnpm exec oxfmt <上面列出的文件>（只格式化你改过的,别全库跑）。",
-    });
-    process.exit(1);
-  }
-
-  gatePass("oxfmt 格式", `扫描完成：命中 0 个`);
+  judge(current, "全库");
 }
 
 if (require.main === module) main();
