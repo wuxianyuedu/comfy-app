@@ -94,6 +94,7 @@ Comfy-APP-T3/
 | `CHANGELOG.md`                            | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
 | `CHANGELOG-archive.md`                    | 历史条目归档：`changelog.d/` 建成至 2026-10 的全部碎片原文（逐份收录、一字未改），供检索历史变更                                                                    |
 | `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突；**只放尚未并入的条目**                                                                        |
+| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
@@ -411,6 +412,7 @@ pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm do
 pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）
+pnpm qoder:ignore # 写/刷新 .qoderignore（代码索引排除表；改完要重启 Qoder CN 才生效）
 ```
 
 非开发人员无需记上面命令，双击根目录 `tools/start/verify-quality.ps1` 即可一键跑质量门禁

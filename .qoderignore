@@ -1,0 +1,54 @@
+# .qoderignore —— Qoder 代码索引的排除表（格式同 .gitignore）
+#
+# 这份文件由 `node scripts/qoder-ignore.mjs` 生成，**不要手改**：
+#   pnpm qoder:ignore          写 / 刷新（幂等）
+#   pnpm qoder:ignore --check  比对「入库这份 ⇄ 工具会写的那份」，不一致退 1
+# 它只影响索引器的扫描面，**不影响任何判据**：门禁读的是 git 清单与源码树，
+# 这里列的目录本来也都被 .gitignore 忽略着。
+# ⚠️ 改完要重启 Qoder CN 进程才生效（编辑文件本身不会热加载）。
+
+# 依赖与构建产物
+# 依赖树，全是第三方源码与打包产物
+/node_modules/
+# Next 的构建与开发缓存（Turbopack 产物 + standalone）
+/.next/
+# Next 静态导出的产物
+/out/
+# 打包输出目录
+/dist/
+# 覆盖率报告（判据读它，索引不需要）
+/coverage/
+# Storybook 静态站产物
+/storybook-static/
+# Playwright 每次跑的产物
+/test-results/
+# Playwright 的 HTML 报告
+/playwright-report/
+
+# 桌包（Tauri）
+# Cargo 的 target 树：本仓最大的一棵，且内含第三方 Rust 源码
+/src-tauri/target/
+
+# 本机运行状态与临时物
+# ComfyUI 侧的 Python 虚拟环境（第三方包）
+/python-venv/
+# 运行日志（按 §4 的布局落盘，滚动很快）
+/log/
+# 本机私有状态：备份、密钥材料、画布数据
+/data/
+# 运行期临时文件
+/run/
+# 临时目录
+/temp/
+# 本地数据库本体（WAL 辅助文件见下一行）
+/db.sqlite
+# SQLite 的 -wal / -shm 运行时文件
+/db.sqlite-*
+
+# 生成物与工具缓存
+# TypeDoc 的生成物（几千份 .md；判据那一格会自己重新生成，不进 git）
+/docs/api/
+# Qoder 自己的缓存，不需要被索引
+/.qoder/cache/
+# tsc 的增量构建信息文件
+*.tsbuildinfo
