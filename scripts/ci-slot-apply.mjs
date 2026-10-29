@@ -500,6 +500,7 @@ function pruneAndReport(io) {
  *   run?: (args: string[], opts: object) => {status: number | null},
  *   spawn?: (exe: string, args: string[], opts: object) => {status: number | null},
  *   probe?: (p: string) => number | null,
+ *   floorBytes?: number,
  *   now?: () => number,
  *   log?: (line: string) => void,
  * }} [io]
@@ -572,7 +573,13 @@ export function applySlot(io = {}) {
     return { handled: true, action: "reuse", why: life.why };
   }
 
-  const room = hasRoomForSlot({ path: cacheRoot, probe: io.probe });
+  /* `floorBytes` 只有一条正当用途：判据自测把下限钉死，好让「不注入 probe」那条
+   * 回归位不读到**未受控的实时盘面**（生产不给 ⇒ 用默认的 20 GiB，行为一字不变）。 */
+  const room = hasRoomForSlot({
+    path: cacheRoot,
+    probe: io.probe,
+    floorBytes: io.floorBytes,
+  });
   if (!room.ok) {
     log(`[缓存槽] 不建槽：${room.why} ⇒ 退回作业内普通装`);
     return { handled: false, action: plan.action, why: room.why };
