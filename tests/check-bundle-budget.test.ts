@@ -27,7 +27,7 @@
  * 2. 「raw 涨、gzip 不涨」被判红 ⇒ 那是可压缩冗余、不是用户可感知的劣化。
  */
 import { execFileSync } from "node:child_process";
-import { defineGateRepo, describe } from "./helpers/gate-repo";
+import { defineGateRepo, describe, expectGateRan } from "./helpers/gate-repo";
 import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 
 /**
@@ -94,12 +94,26 @@ function seedChunks(
   }
 }
 
+/**
+ * 「判据那一半」的用例统一走**硬档**（ISSUE #2634）。
+ *
+ * 2026-10-29 业主口径把两条总量判据（gzip / chunk 文件数）**开发期暂撤**了：默认档
+ * 照量照打、不参与判定、退 0。于是这个文件里那些「涨了要红」的用例如果继续用默认档，
+ * 断言的就不再是判据、而是撤档 —— 所以它们一律带 `--enforce-totals`。
+ *
+ * 为什么是加旗标而不是把 `TOTALS_ENFORCED` 改回 `true` 再测：旗标走的是**同一段判定代码**，
+ * 于是「撤档」本身也拿到了一条反向对照（同一夹具、同一份读数，默认档退 0、硬档退 1）；
+ * 而去改文件里的常量，测的是「改代码之后代码还在」，那种判据下一次一定漂。
+ * 撤档那一半的行为单独开一个 describe 钉（见下面「开发期暂撤」那组）。
+ */
+const enforce = (args: string[] = []): string[] => ["--enforce-totals", ...args];
+
 describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
   test("产物不存在时跳过并不报错（守的是构建结果，不是构建本身）", ({
     repo,
   }) => {
     repo.remove(".next/static/chunks");
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(0);
     expect(output).toContain("跳过");
   });
@@ -108,14 +122,14 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     repo,
   }) => {
     chunk(repo, "only.js", "/* one */\n");
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     expect(output).toContain("测量面退化");
   });
 
   test("基线缺失时判红（先 --update 落一份实测初值）", ({ repo }) => {
     seedChunks(repo);
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     expect(output).toContain("基线文件缺失");
   });
@@ -128,7 +142,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     expect(seeded.code, seeded.output).toBe(0);
     expect(repo.exists("scripts/.bundle-budget-baseline.json")).toBe(true);
 
-    const ok = repo.run();
+    const ok = repo.run(enforce());
     expect(ok.code, ok.output).toBe(0);
     expect(ok.output).toContain("在预算内");
 
@@ -141,7 +155,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
       "scripts/.bundle-budget-baseline.json",
       `${JSON.stringify(baseline, null, 2)}\n`,
     );
-    const blocked = repo.run();
+    const blocked = repo.run(enforce());
     expect(blocked.code, blocked.output).toBe(1);
     expect(blocked.output).toContain("gzip 总量上升");
   });
@@ -151,7 +165,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     expect(repo.run(["--update"]).code).toBe(0);
     /* 保持字节总量不变、只加文件 —— 只有文件数那一档此刻会响。 */
     chunk(repo, "extra-one.js", "/* x */\n");
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     expect(output).toContain("chunk 文件数上升");
   });
@@ -175,7 +189,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     const allowed = repo.run(["--update", "--allow-increase"]);
     expect(allowed.code, allowed.output).toBe(0);
     /* 认过账之后基线被抬高，检查放行。 */
-    expect(repo.run().code).toBe(0);
+    expect(repo.run(enforce()).code).toBe(0);
   });
 
   /* ── 「该谁签」是这两句红话里承重的那一格（ISSUE #2149）─────────────────────
@@ -195,7 +209,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     /* 只把已有的一个 chunk 变大：文件数不变，落进「gzip 总量上升」那一档。 */
     chunk(repo, "0800.js", `/* ${"g".repeat(20000)} */\n`);
 
-    const blocked = repo.run();
+    const blocked = repo.run(enforce());
     expect(blocked.code, blocked.output).toBe(1);
     expect(blocked.output).toContain("谁把这批客户端字节带进来的谁签");
     expect(blocked.output).toContain("这不是你的账");
@@ -231,7 +245,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     chunk(repo, "zz-renamed.js", body);
 
     /* 判定：总量一个字节没变 ⇒ 绿。这是口径的核心（名字不是身份）。 */
-    const checked = repo.run();
+    const checked = repo.run(enforce());
     expect(checked.code, checked.output).toBe(0);
     expect(checked.output).toContain("在预算内");
 
@@ -315,7 +329,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
       `${JSON.stringify(baseline, null, 2)}\n`,
     );
 
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(0);
     expect(output).toContain("在预算内");
     expect(output).not.toContain("raw 总量上升");
@@ -335,7 +349,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
       "0800.js",
       `/* ${Array.from({ length: 400 }, (_, i) => (i * 7919) % 256).join(",")} */\n`,
     );
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     expect(output).toMatch(/\+\d+ B/);
     expect(output).not.toContain("+0.0 KB");
@@ -382,7 +396,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     );
 
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     /* 两档不许混成一句（§12.13.3 留给下一个按行数记账的棘轮的第二条）：
      * 「没记」的下一步是重记；「记了但不可达」的下一步是**先分清该不该认账**
@@ -411,12 +425,95 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     /* 造一次真实上涨：往一个已有 chunk 追加不可压内容。 */
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
 
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     /* 与上一条互为反面：这一档是「压根没记」，所以下一步才是「重跑一次 --update」。 */
     expect(output).toContain("基线修订号：取不到");
     expect(output).toContain("无法判断");
     expect(output).not.toContain("不可达");
+  });
+});
+
+/**
+ * 开发期暂撤那一档（ISSUE #2634，2026-10-29 业主口径）。
+ *
+ * 这组用例**只有撤档态存在**：把 `TOTALS_ENFORCED` 改回 `true` 的那一天，它们会全部红 ——
+ * 那是设计的一部分，红话会指着这里，恢复的人必须**带着读数决定**删掉这一组还是留着
+ * （留着的话，第一条断言就得翻成「默认档也判」）。所以这里刻意不断言「常量是 false」
+ * 那种写法（那会把一次口径变更焊成长期判据），断言的是**默认档今天的行为**。
+ */
+describe("check-bundle-budget.cjs（开发期暂撤两条总量判据，ISSUE #2634）", () => {
+  /** 造一份「超出基线」的现场：先按默认档落基线，再往 gzip 与文件数两边都加。 */
+  const growBeyondBaseline = (repo: {
+    run: (a?: string[]) => { code: number; output: string };
+    write: (r: string, c: string) => void;
+  }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+    /* 新增一个 chunk（文件数 +1）且让内容比基线里任何一块都大（gzip 总量上升）——
+     * 两条被暂撤的判据**同时**命中，正是 #2634 现场那种形态。 */
+    chunk(repo, "99-growth.js", `/* ${"x".repeat(40000)} */\n`);
+  };
+
+  test("默认档：同一份超限读数退 0，判决行走 **stdout** 明写今天没判", ({ repo }) => {
+    growBeyondBaseline(repo);
+    const r = repo.run();
+    /* 先判「真的跑到判据脚本」再判退 0：撤档这一档的 `code === 0` 与「脚本没起来」
+     * 在读数上同形（夹具的 `code` 在取不到状态时兜 1，但 spawn 失败也可能是 0 长度输出），
+     * 而这一格的全部价值就是「它跑了，并且说出自己没判」。 */
+    expectGateRan(r);
+    expect(r.code, r.output).toBe(0);
+    /* 撤档的**判决句**必须落在 stdout：退 0 的判据在很多消费者那里只转述 stdout
+     * （`quality-gate.mjs` 的绿档、以及本夹具自己 —— `output` 在非 0 时才合并两条流，
+     * 这是全仓门禁自测的形状，不为一格改它）。写在 stderr 的话，「今天没判」会被
+     * 读成「它绿了，所以没东西可看」—— 那正是硬规则 27 禁止的「只转述自己的 stdout」。 */
+    expect(r.raw.stdout).toContain("没判");
+    expect(r.raw.stdout).toContain("#2634");
+    /* 恢复条件与自查口也在 stdout，不靠人记得。 */
+    expect(r.raw.stdout).toContain("TOTALS_ENFORCED");
+    expect(r.raw.stdout).toContain("--enforce-totals");
+    /* 「不许被读成通过」是这一档的全部价值（§13.5.25 那条「降档永远要被念出来」）。
+     * 判的是**那条 ✓ 原文**没出现 —— 不能拿「在预算内」这个子串当判点，撤档那句话里
+     * 恰好写着「这不是『已在预算内』」，按子串判会把自己也判红。 */
+    expect(r.raw.stdout + r.raw.stderr).not.toContain("✓ 在预算内");
+    /* 读数还得在（撤的是执行，不是量具）：将来签账的人拿到的仍是同一份现场。 */
+    const both = r.raw.stdout + r.raw.stderr;
+    expect(both).toContain("gzip 总量上升");
+    expect(both).toContain("chunk 文件数上升");
+    expect(both).toContain("不参与判定");
+  });
+
+  test("反向对照：同一份读数带 `--enforce-totals` 退 1 —— 撤的是执行，判据没被删", ({
+    repo,
+  }) => {
+    growBeyondBaseline(repo);
+    const { code, output } = repo.run(enforce());
+    expect(code, output).toBe(1);
+    expect(output).toContain("违规（阻断）");
+    expect(output).not.toContain("没判");
+  });
+
+  test("暂撤不许顺手改基线：默认档跑完，基线文件逐字不变（棘轮仍在原地等恢复）", ({
+    repo,
+  }) => {
+    growBeyondBaseline(repo);
+    const before = repo.read("scripts/.bundle-budget-baseline.json");
+    const r = repo.run();
+    expectGateRan(r);
+    expect(r.code, r.output).toBe(0);
+    /* 「边涨边重记基线」会把这次暂撤变成**永久**豁免 —— 恢复那天就没有对照物了。
+     * 这条断言守的就是那一条：默认档一次运行不得动基线一个字节。 */
+    expect(repo.read("scripts/.bundle-budget-baseline.json")).toBe(before);
+  });
+
+  test("--update 的拒涨棘轮一条没动（暂撤不延伸到基线那一本账）", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+    chunk(repo, "99-growth.js", `/* ${"y".repeat(40000)} */\n`);
+    /* 抬高基线仍要显式 `--allow-increase` —— 这一档与总量判据无关，撤档不该顺手放开它。 */
+    const refused = repo.run(["--update"]);
+    expect(refused.code, refused.output).toBe(1);
+    expect(refused.output).toContain("拒绝抬高基线");
   });
 });
 
@@ -433,7 +530,7 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
       repo.git("commit", "-qm", "later");
 
       chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
-      const { code, output } = repo.run();
+      const { code, output } = repo.run(enforce());
       expect(code, output).toBe(1);
       /* 归因必须在**判红那一刻**说，而不是留给读者去 `git log` 基线日期：
        * 「涨了这点体积是不是那几次改动换来的」正是决定压回去 / 认账的那一步。 */
@@ -452,7 +549,7 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
     expect(repo.run(["--update"]).code).toBe(0);
 
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     expect(output).toContain("就是本检出的 HEAD");
     expect(output).toContain("未提交的改动");
@@ -499,7 +596,7 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
       );
 
       chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
-      const { code, output } = repo.run();
+      const { code, output } = repo.run(enforce());
       expect(code, output).toBe(1);
       expect(output).toContain("HEAD 是合并提交");
       expect(output).toContain("合并后的完整产物链");
@@ -537,7 +634,7 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
       );
 
       chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
-      const { code, output } = repo.run();
+      const { code, output } = repo.run(enforce());
       expect(code, output).toBe(1);
       expect(output).toContain("改按基线日期");
       expect(output).toContain("1 次主干提交");
@@ -561,7 +658,7 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
         `${JSON.stringify(baseline, null, 2)}\n`,
       );
       chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
-      const { code, output } = repo.run();
+      const { code, output } = repo.run(enforce());
       expect(code, output).toBe(1);
       // 这条夹具的历史里只有 seed 与那次 --update 之前的提交，都没动 src/ ⇒ 数得出来，是 0。
       expect(output).toContain("0 次主干提交");
@@ -584,7 +681,7 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
       `${JSON.stringify(baseline, null, 2)}\n`,
     );
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
-    const { code, output } = repo.run();
+    const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
     expect(output).toContain("基线日期那条也量不到");
     expect(output).toContain("判断不了");
