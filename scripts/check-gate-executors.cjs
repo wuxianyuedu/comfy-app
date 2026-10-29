@@ -351,11 +351,67 @@ function checkEntrypoints(entrypoints, names) {
       );
       continue;
     }
-    /* 「无旗标那一形」的判据要排除**其它形点名的旗标**，否则同一行 `--staged` 会被
-     * 读成「无旗标那一形也有人跑」—— 那正是本层要拦的那种塌成。 */
+    /* 口径（ISSUE #2590 期望 3 选定的那一半）：**登记成「入口」的脚本必须是判定型**。
+     * 理由不是风格：本仓「入口」这个词在读者面上一直指「一条会判成败的命令」
+     * （`.cnb.yml` 的格表、钩子的 `run` 行、`quality-gate.mjs` 的 `args:` 表项都是那个形状），
+     * 而这一层登记的语义是「这一形由这条命令执行」—— 一份 0 处 `process.exit` 的报告型脚本
+     * 没有「这一形的结论」可执行，它的在册面是 §11.23 的声明索引，不是这里。
+     * 两个出口里选了「补正向判据」而不是「在注释里写明不要求」：后者等于把读者面的歧义
+     * 留在原地，而那条歧义正是本症状的成因。
+     * 对照读数：在册这 2 份 5 形跑这条是 0 红（两份都是判定型），所以这条不需要改任何
+     * 既有的 `judges` 文案 —— 台账是结论，不是缓冲区。 */
+    const scriptSrc = readForScan(path.join(ROOT, "scripts", script));
+    if (scriptSrc !== null && !hasExit(scriptSrc)) {
+      problems.push(
+        `「${script}」被登记成入口（${entries.length} 形），但它是**报告型**` +
+          `（源码里 0 处 \`process.exit\`）⇒ 「这一形由谁执行」问的是一条会判成败的命令，` +
+          `报告型答不了它。要登记的是它的**在册面**：§11.23 的声明索引` +
+          `（check-declaration-readers.cjs），不是本台账的 entrypoints`,
+      );
+      continue;
+    }
+    /* 「同一脚本的每一形只能被认成它自己那一形」（ISSUE #2590 把这条从特例推广成一般式）。
+     * 排除集是「别的形点名的、而不属于本形的旗标」：
+     *   · 无旗标那一形 —— `others` 就是全部被登记的旗标，退化成今天那句「不许被带旗标的行冒充」；
+     *   · 带旗标那一形 —— 一行 `--staged --json` 不再同时证 `--staged` 那一形，
+     *     否则**子集那一形一个执行者都没有而账面全绿**（这就是 #2530 那个「塌成」换了个方向：
+     *     当年收的是「无旗标 vs 带旗标」，把不变量写成了特例，带旗标形之间还开着）。
+     * ⚠️ 别把它实现成「一行只能命中一形」的全局分配 —— 一条命令确实可能同时是
+     * 两个**不同脚本**的执行者，那样改会把这条判据变成容易误报的那一类。 */
     const declaredFlags = new Set(
       entries.flatMap((e) => (Array.isArray(e?.flags) ? e.flags : [])),
     );
+    /* 登记时就拒掉「两形旗标有包含关系（含相等）」：允许它存在，等于让「超集那一行同时证两形」
+     * 是错还是有意在规范里没有答案 —— 上面那条排除也就没有拦头。
+     *
+     * ⚠️ **只对「两形都点了旗标」的配对成立**，这条范围不是妥协而是实测定的：本仓的
+     * 「无旗标那一形」表达的是「整档、不收窄输入面」，它在集合论上是任何一形的子集 ——
+     * 照字面把「任意两形 `A ⊆ B`」做成判据，在册那 2 份 5 形当场就红 2 条
+     * （`--json ⊃ (无旗标)` 与 `--staged ⊃ (无旗标)`），而单子里明写「先跑在册的对照，
+     * 期望它 0 红」⇒ 要拒的是「两个带旗标形互相冒充」那一种，不是「全档 vs 收窄」这一种。
+     * 两者在下面那条排除里也各自被认成自己那一形：一行 `--json` 不会证「无旗标那一形」，
+     * 反过来一行不带旗标的也不会证 `--json` 那一形。 */
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = i + 1; j < entries.length; j += 1) {
+        const a = new Set(entries[i]?.flags ?? []);
+        const b = new Set(entries[j]?.flags ?? []);
+        if (a.size === 0 || b.size === 0) continue;
+        const contained = (x, y) => [...x].every((f) => y.has(f));
+        const labelOf = (s) => [...s].join(" ");
+        if (a.size === b.size && contained(a, b)) {
+          problems.push(
+            `「${script}」的两形旗标**完全相同**（都是 ${labelOf(a)}）⇒ 它们就是同一形：` +
+              `合成一条登记（executors 并起来），别在账上摆两条长得不同的假形状`,
+          );
+        } else if (contained(a, b) || contained(b, a)) {
+          problems.push(
+            `「${script}」的两形 ${labelOf(a)} 与 ${labelOf(b)} 有**包含关系** —— ` +
+              `登记成两形就必须判得动两行：要么本来就是一形（合成一条），` +
+              `要么给它们各配一行真的不同的命令（互不包含）`,
+          );
+        }
+      }
+    }
     for (const entry of entries) {
       forms += 1;
       const flags = Array.isArray(entry?.flags) ? entry.flags : [];
@@ -380,13 +436,14 @@ function checkEntrypoints(entrypoints, names) {
           );
           continue;
         }
+        const others = [...declaredFlags].filter((f) => !flags.includes(f));
         const hit = lines.some((line) => {
           const mine = ownFlags(line, script);
           if (mine === null) return false;
-          if (flags.length === 0) {
-            return [...declaredFlags].every((f) => !mine.has(f));
-          }
-          return flags.every((f) => mine.has(f));
+          return (
+            flags.every((f) => mine.has(f)) &&
+            others.every((f) => !mine.has(f))
+          );
         });
         if (!hit) {
           problems.push(

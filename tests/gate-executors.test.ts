@@ -685,4 +685,225 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
       "--update 之后入口条目必须原样还在",
     ).toBe(2);
   });
+
+  /**
+   * #2530 那个「塌成」换了个方向（ISSUE #2590）。
+   *
+   * 当年收的是「无旗标那一形被带旗标的行冒充」，排除逻辑因此只写在那一个分支上，
+   * 于是**两个带旗标形之间还开着**：`--staged` ⊂ `--staged --json` 时，超集那一行
+   * 同时满足两形 ⇒ 子集那一形一个执行者都没有，账面照样全绿。入口台账是
+   * 「这一形谁在跑」的唯一登记面，它一旦单向成立，把命令改成超集形状时没有任何一格会红。
+   *
+   * 四档一起建（照单子里那张表）：超集行冒充子集形 ⇒ 红；只有子集行而登记超集形 ⇒ 红
+   * （今天已经对，别被新逻辑改坏）；两行都在 ⇒ 绿；在册那种「全档形 + 收窄形」
+   * 不许被误判成包含关系（那是本仓最常用的一形对）。
+   */
+  const twoFlagForms = (
+    repo: {
+      write: (p: string, s: string) => void;
+    },
+    hookBody: string,
+  ) => {
+    withProbe(repo);
+    repo.write(".githooks/pre-commit", hookBody);
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          {
+            flags: ["--staged"],
+            judges: "窄档（只判动了输入面的那一次）",
+            executors: [".githooks/pre-commit"],
+          },
+          {
+            flags: ["--staged", "--json"],
+            judges: "窄档 + 机器读的输出",
+            executors: [".githooks/pre-commit"],
+          },
+        ],
+      }),
+    );
+  };
+
+  test("钩子里只有超集行 ⇒ 子集那一形红并点名（今天不红的那一格）", ({ repo }) => {
+    twoFlagForms(
+      repo,
+      '  run "超集档" node scripts/' + PROBE + " --staged --json\n",
+    );
+    const { output } = repo.run();
+    expect(output).toContain("登记了那一形（--staged）");
+    /* 反向那一半：超集那一形确实有行，不该跟着报 —— 只报「没被认出来的那一形」，
+     * 否则这条判据会变成「两形都别登记旗标」。 */
+    expect(output).not.toContain("登记了那一形（--staged --json）");
+  });
+
+  test("钩子里只有子集行 ⇒ 超集那一形仍然红（这条今天就对，别改坏）", ({ repo }) => {
+    twoFlagForms(repo, '  run "窄档" node scripts/' + PROBE + " --staged\n");
+    const { output } = repo.run();
+    expect(output).toContain("登记了那一形（--staged --json）");
+    expect(output).not.toContain("登记了那一形（--staged）");
+  });
+
+  test("两行都在 ⇒ 两形各自被认成自己那一形", ({ repo }) => {
+    twoFlagForms(
+      repo,
+      '  run "窄档" node scripts/' +
+        PROBE +
+        " --staged\n" +
+        '  run "窄档出 JSON" node scripts/' +
+        PROBE +
+        " --staged --json\n",
+    );
+    expect(repo.run().output).not.toContain("登记了那一形");
+  });
+
+  test("在册那种「全档形 + 收窄形」不算包含关系 —— 无旗标那一形表达的是整档，不是子集", ({
+    repo,
+  }) => {
+    withProbe(repo);
+    repo.write(
+      ".githooks/pre-commit",
+      '  run "窄档" node scripts/' +
+        PROBE +
+        " --staged\n" +
+        /* 无旗标那一形也要真有一行 —— 少了它，下面那句「不算包含关系」会被一条
+         * 「(无旗标) 那一形没有执行者」的红淹掉，而那条红是本例的**正确答案**。 */
+        '  run "整档" node scripts/' +
+        PROBE +
+        "\n",
+    );
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          { flags: [], judges: "整档全判", executors: [".githooks/pre-commit"] },
+          {
+            flags: ["--staged"],
+            judges: "收窄档",
+            executors: [".githooks/pre-commit"],
+          },
+        ],
+      }),
+    );
+    const { output } = repo.run();
+    /* 照字面把「任意两形 A ⊆ B」做成判据，这里会红两条 —— 而真仓库在册那 2 份 5 形
+     * 跑这条是 0 红（单子里明写的对照）。空集是任何集合的子集，所以「无旗标」必须
+     * 被排除在这条之外；它由上面那条命中逻辑单独认。 */
+    expect(output).not.toContain("有**包含关系**");
+    expect(output).not.toContain("完全相同");
+    expect(output).not.toContain("登记了那一形");
+  });
+
+  test("两形旗标相等或有包含关系 ⇒ 登记当场红（要合成一形，或各配一行真不同的命令）", ({
+    repo,
+  }) => {
+    withProbe(repo);
+    repo.write(
+      ".githooks/pre-commit",
+      '  run "a" node scripts/' +
+        PROBE +
+        " --staged\n" +
+        '  run "b" node scripts/' +
+        PROBE +
+        " --staged --json\n",
+    );
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          {
+            flags: ["--staged"],
+            judges: "同一形登记了两遍",
+            executors: [".githooks/pre-commit"],
+          },
+          {
+            flags: ["--staged"],
+            judges: "另一遍",
+            executors: [".githooks/pre-commit"],
+          },
+        ],
+      }),
+    );
+    expect(repo.run().output).toContain("完全相同");
+
+    /* 相等那一档改成包含那一档（`--staged` ⊂ `--staged --json`），报的是另一句话。 */
+    repo.write(
+      "scripts/.gate-executor-ledger.json",
+      ledgerWith({
+        [PROBE]: [
+          {
+            flags: ["--staged"],
+            judges: "窄档",
+            executors: [".githooks/pre-commit"],
+          },
+          {
+            flags: ["--staged", "--json"],
+            judges: "窄档 + JSON",
+            executors: [".githooks/pre-commit"],
+          },
+        ],
+      }),
+    );
+    const nested = repo.run().output;
+    expect(nested).toContain("有**包含关系**");
+    expect(nested).not.toContain("完全相同");
+  });
+
+  /**
+   * 「入口要不要要求判定型」这一格选定的是**补正向判据**（ISSUE #2590 期望 3）。
+   * 理由：本仓「入口」在读者面上一直指「一条会判成败的命令」（`.cnb.yml` 的格表、
+   * 钩子的 `run` 行、`quality-gate.mjs` 的 `args:` 都是那个形状），而这份台账登记的
+   * 语义是「这一形由这条命令执行」。报告型没有「这一形的结论」可执行，它的在册面是
+   * §11.23 的声明索引。另一个出口（只在注释里写明「不要求」）等于把读者面的歧义留在原地，
+   * 而那条歧义正是本症状的成因 —— 所以不选。
+   */
+  test("报告型脚本不许登记成入口；补上 process.exit 就不再报（反证）", ({ repo }) => {
+    const reportProbe = "check-probe-report.cjs";
+    const asReport = (body: string) => {
+      repo.write(`scripts/${reportProbe}`, body);
+      repo.write(
+        ".githooks/pre-commit",
+        '  run "报告" node scripts/' +
+          reportProbe +
+          " --staged\n" +
+          /* 两形都得有一行 —— 不然「没有执行者」那条红会先响，本例要判的那条
+           * （它根本不是判定型）就被盖在下面。 */
+          '  run "报告出 JSON" node scripts/' +
+          reportProbe +
+          " --json\n",
+      );
+      repo.write(
+        "scripts/.gate-executor-ledger.json",
+        JSON.stringify({
+          onDemand: {},
+          entrypoints: {
+            [reportProbe]: [
+              {
+                flags: ["--staged"],
+                judges: "收窄档",
+                executors: [".githooks/pre-commit"],
+              },
+              {
+                flags: ["--json"],
+                judges: "出 JSON",
+                executors: [".githooks/pre-commit"],
+              },
+            ],
+          },
+        }),
+      );
+    };
+    asReport('#!/usr/bin/env node\nconsole.log("只是报告，不判");\n');
+    const report = repo.run().output;
+    /* 锚点取这条消息独有的那半句：整条判据的收尾口径里本来就写着「报告型不许自称
+     * 供 pre-commit 调用」，拿「报告型」三个字当判点会把收尾句也判进去。 */
+    expect(report).toContain("但它是**报告型**");
+    expect(report).toContain("§11.23");
+    /* 同一条登记、同一份执行者，只把脚本换成判定型 ⇒ 这条红必须消失 ——
+     * 不然它长得像「登记格式不对」，而报的其实是「它不是一条会判成败的命令」。 */
+    asReport(
+      '#!/usr/bin/env node\nconsole.log("判一下");\nprocess.exit(0);\n',
+    );
+    expect(repo.run().output).not.toContain("但它是**报告型**");
+  });
 });
