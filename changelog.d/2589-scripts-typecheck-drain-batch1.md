@@ -30,3 +30,17 @@
   直接跑这些脚本的 6 份用例（`check-merge-parents` / `lockfile-diff` /
   `linux-env-bootstrap` / `merged-side-loss-gate` / `pending-merge-loss-gate` /
   `dev-handle`）90 条绿 —— 这一批没有行为变化，那 90 条买的是「没有」。
+
+  **平台那一格抓到一处本批带进去的用例红**（`受影响用例` 不在本地档，见硬规则 7）：
+  `tests/dev-launcher-toolchain-gate.test.ts` 钉「失败路径要报出错误码」的方式是
+  **整档搜字面量** `result.error.code`，而本批把那一位收成一句局部变量之后，
+  它红在一个**行为一个字没变**的地方（build `cnb-3jq-1k62lrhab`，
+  `Tests 1 failed | 1886 passed`）。改法是**把断言收窄到它真正要看的那一段**：
+  从 `if (result.error) {` 到 `if (result.status === null) {` 之间必须出现 `.code`，
+  并且**提取落空要前置断言**（`failureBlock.length > 0`）—— 少了那一格，
+  「块没切出来」会被读成「块里没有 code」，判据就在 silently 不判。
+  变异实测：把 `${spawnError.code ?? "UNKNOWN"}` 换成 `${spawnError.message}`
+  ⇒ 这一格当场红（`失败块里必须把 error 的 code 打出来: expected 'if (result.error) …'
+  to contain '.code'`），换回原样 ⇒ 56 passed / 13 skipped。
+  同一条用例里那句真正的反面断言（不许 `exit(result.status ?? 0)` 把「没起来」读成成功）
+  逐字留在原位 —— 那才是它当初存在的理由，本批没有动它。
