@@ -24,10 +24,44 @@
  * 平台信封上的 HTTP `status: 200` 与流水线过没过毫无关系。
  */
 
-import { execFileSync } from "node:child_process";
 import path from "node:path";
 
-import { buildSnFromOutput } from "./ship-exec.mjs";
+import { buildSnFromOutput, makeRunner } from "./ship-exec.mjs";
+
+/** 工作树根：`makeRunner` 的 `cwd`（与 `ship` 那一路同一个宿主适配层，不再自带 `execFileSync`）。 */
+const ROOT = path.resolve(import.meta.dirname, "..");
+/** 外部命令的执行者（测试里整体替换 `cnbCall` 的出口）。 */
+const run = makeRunner(ROOT);
+
+/**
+ * 起一次 `cnb`，把**「起不来」与「非零退出」都收成读数**，而不是让 spawn 层冒成一条 Node 栈。
+ *
+ * 为什么不在这里用隔壁那个 `cnbJson()`：它把三种情况折叠成同一个 `null`
+ * （`:131` ENOENT / `:134` 没有 `{` / `:143` 解析失败），而本探针要的恰恰是**分清**这三件事 ——
+ * 每种原因的下一动作不同（ISSUE #2690 的口径钉在这层）。所以复用只到 `makeRunner` 那一层。
+ *
+ * @param {string[]} args cnb 的参数（含 `-v`）
+ * @param {(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult} [runner]
+ *   真起命令的那一格（默认用 `makeRunner(ROOT)`）。**用例必须从这里喂**：
+ *   本件判的是「spawn 层报 ENOENT 时被不成一行读数」，而那条映射就发生在这一层 ——
+ *   实测把 `r.error` 那支压成空串，只注入 `readBuild` 的取数出口的用例**照旧绿**
+ *   （它绕过了这里），所以出口要开到真正起命令的那一层，不然判据是空的。
+ * @returns {{failure: string, text: string}} `failure` 非空即这一次没有取到响应；
+ *   `text` 是给下一层解析的原文（成功时只给 stdout，与改前逐字一致）
+ */
+export function cnbCall(args, runner = run) {
+  const r = runner("cnb", args);
+  if (r.error) {
+    return { failure: `cnb 起不来：${r.error}`, text: "" };
+  }
+  if (r.status !== 0) {
+    /* 错误面在 stderr（与 `ship-exec.mjs:62-65` 那条同源：只接 stdout 会念不出理由），
+     * 但**只截前 120 字**：平台失败时的原文可能带请求行，整段转发不是这份探针的职责。 */
+    const out = `${r.stdout}${r.stderr}`;
+    return { failure: `cnb 退 ${r.status}`, text: out };
+  }
+  return { failure: "", text: r.stdout };
+}
 
 /** 终态集合 —— 平台 `status` 的原值（`pending` / `running` 之外的都算停了）。 */
 const TERMINAL = new Set(["success", "failed", "cancel", "timeout", "skipped"]);
@@ -68,14 +102,30 @@ const TERMINAL = new Set(["success", "failed", "cancel", "timeout", "skipped"]);
  *
  * @param {string} repo `组织/仓库`
  * @param {string} sn 构建号
+ * @param {(args:string[])=>{failure:string,text:string}} [call] 取数那一格的出口
+ *   （默认打真平台）。用例要判的是「`cnb` 起不来时屏幕上是一行读数、还不是一段 Node 栈」，
+ *   那只能喂进一份起不来的结果 —— 与 `report()` 的 `readRow` 同一口径，
+ *   不去读源码里的字面量（ISSUE #2660 那一族）。
  * @returns {Reading}
  */
-export function readBuild(repo, sn) {
-  const raw = execFileSync(
-    "cnb",
-    ["build", "get-build-status", "--repo", repo, "--sn", sn, "-v"],
-    { encoding: "utf8" },
-  );
+export function readBuild(repo, sn, call = cnbCall) {
+  const { failure, text: raw } = call([
+    "build",
+    "get-build-status",
+    "--repo",
+    repo,
+    "--sn",
+    sn,
+    "-v",
+  ]);
+  if (failure) {
+    /* 这一支就是本件要修的那一格：改前 `execFileSync` 在这里直接抛，屏幕上是一段
+     * Node 栈（`spawnSync cnb ENOENT`），既没有读数、也没有「为什么没有」。 */
+    return emptyReading(
+      sn,
+      raw ? `${failure}（前 120 字：${raw.slice(0, 120)}）` : failure,
+    );
+  }
   /* `-v` 打的是 **JSON**（实测 `{ "status": 200, "data": { "status": "error", … } }`），
    * 不是 YAML —— 第一版按 YAML 逐行取键，取到的是「(取不到)」，而那一屏看上去与
    * 「还在排队」一模一样。这正是本项目反复记过的失明形态（§13.6.2：没判 ≠ 绿）。 */
@@ -139,11 +189,19 @@ function isoOf(ms) {
  * @returns {{createTime: string, endTime: string, title: string, event: string}}
  */
 export function readRunWindow(repo, sn) {
-  const raw = execFileSync(
-    "cnb",
-    ["build", "get-build-logs", "--repo", repo, "--sn", sn, "-v"],
-    { encoding: "utf8" },
-  );
+  const { failure, text: raw } = cnbCall([
+    "build",
+    "get-build-logs",
+    "--repo",
+    repo,
+    "--sn",
+    sn,
+    "-v",
+  ]);
+  /* 这一路只给时间线，不给 `status`：取不到就把四格留空（改前的 `catch` 也是这个形状），
+   * 结论行上那句「为什么没有读数」由 `readBuild` 那一路的 `note` 承担 —— 两路拼一行，
+   * 不许在这一路再编一个理由。 */
+  if (failure) return { createTime: "", endTime: "", title: "", event: "" };
   try {
     /* 平台这一路给的是一个数组，`JSON.parse` 回来是 `any` —— 那里从没被判过。
      * 只在**进出的那一处**记一次形状（字段全可缺：平台给不给 `title` 不是本件能定的，
@@ -407,24 +465,25 @@ export function probeConfig(opts) {
  * @param {string} title
  */
 export function startProbe(repo, event, title) {
-  const raw = execFileSync(
-    "cnb",
-    [
-      "build",
-      "start-build",
-      "--repo",
-      repo,
-      "--branch",
-      "master",
-      "--event",
-      event,
-      "--sync",
-      "false",
-      "--title",
-      title,
-    ],
-    { encoding: "utf8" },
-  );
+  const { failure, text: raw } = cnbCall([
+    "build",
+    "start-build",
+    "--repo",
+    repo,
+    "--branch",
+    "master",
+    "--event",
+    event,
+    "--sync",
+    "false",
+    "--title",
+    title,
+  ]);
+  /* 这是**写动作**，失败要响亮（与上面两路取读数不同）：区别只在于改前它冒成一段
+   * Node 栈，现在念得出是哪一层没起来 —— 退出码 0 依旧不等于发出去了，sn 那格照旧独立回读。 */
+  if (failure) {
+    throw new Error(`${failure}：start-build 这一步没有取到响应\n${raw}`);
+  }
   const sn = buildSnFromOutput(raw);
   if (!sn) {
     throw new Error(`起跑失败（没读回 sn）：\n${raw}`);
