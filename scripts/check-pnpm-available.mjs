@@ -259,23 +259,32 @@ const declaredFloor =
 /* `collectDependencyFloors` 给的是一个**可分辨联合**（`{ok:true, floors}` 或
  * `{ok:false, reason}`），而原来这一句直接 `.floors ?? []` —— 类型上读不到那个字段
  * （`TS2339`，本批那格红的就是它），行为上等于「采集没跑起来 ⇒ 当成没有下限」。
- * 这里**先把这一支如实窄一次、保持原行为**（空数组），因为「没跑起来该不该被念出来」
- * 是改输出不是改类型：处置记在 ISSUE #2722 —— 内核（`node-engines.mjs:356-363`）对采集失败
- * 本有 `kind:"unparsable"` 的正确出口，而这里传了一个非 `undefined` 的值，把下面那条
- * 已经写好的 WARN 话术变得结构上不可达。 */
-const floorCollection = collectDependencyFloors(root);
-const floorVerdict = describeNodeAgainstFloor({
-  version: nodeVersion,
-  range: declaredFloor,
-  floors: floorCollection.ok ? floorCollection.floors : [],
-});
+ * 处置记在 ISSUE #2722：内核对采集失败本有 `kind:"unparsable"` 的正确出口，而这里
+ * 传了一个非 `undefined` 的值，把已经写好的 WARN 话术变得结构上不可达 —— 且把三件事
+ * 折成一件：「没有依赖」「没读到依赖」「没跑起来」。
+ *
+ * #2722 落地（两处）：
+ *   ① 采集改用 `depsRoot` —— `--deps-root` 的契约本来就是「只换依赖检查的根」，
+ *      地板采集是依赖检查；此前写死真仓 root，让 `--deps-root` 的用例永远测不到失败档。
+ *   ② 采集失败 ⇒ 只念 WARN（带采集器的那句 `reason` —— 五条话术第一次被取用），
+ *      **不进版本判定**：判定继续算，[OK] 会照出，那正是本单的病
+ *      （「没跑起来」被印成「在声明范围内」）。退出码不变（这一档不是拦截项）。 */
+const floorCollection = collectDependencyFloors(depsRoot);
 if (!declaredFloor) {
   say("[WARN]", "package.json 没有 engines.node —— Node 下限无人声明（见规范 §2.1.8）。");
-} else if (floorVerdict.kind === "unparsable") {
-  say("[WARN]", `Node 下限这条判据没跑起来：本机 ${nodeVersion} 或 engines.node 读不懂。`);
-} else if (floorVerdict.ok) {
-  say("[OK]  ", `Node ${floorVerdict.version} 在声明范围内（engines.node = ${declaredFloor}）。`);
+} else if (!floorCollection.ok) {
+  say("[WARN]", `Node 下限这条判据没跑起来：${floorCollection.reason}。`);
 } else {
+  const floorVerdict = describeNodeAgainstFloor({
+    version: nodeVersion,
+    range: declaredFloor,
+    floors: floorCollection.floors,
+  });
+  if (floorVerdict.kind === "unparsable") {
+    say("[WARN]", `Node 下限这条判据没跑起来：本机 ${nodeVersion} 或 engines.node 读不懂。`);
+  } else if (floorVerdict.ok) {
+    say("[OK]  ", `Node ${floorVerdict.version} 在声明范围内（engines.node = ${declaredFloor}）。`);
+  } else {
   say("[WARN]", `Node ${floorVerdict.version} 不在声明范围内（engines.node = ${declaredFloor}）。`);
   const next = floorVerdict.recommend ? ` 建议升到 ${floorVerdict.recommend}` : "";
   say(
@@ -290,6 +299,7 @@ if (!declaredFloor) {
       "",
     ].join("\n"),
   );
+  }
 }
 
 // node_modules：启动器的**另一道**门禁，自检不把它藏起来。
