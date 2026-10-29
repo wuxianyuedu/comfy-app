@@ -11,6 +11,10 @@
  * 其余三站的「名字已声明」由脚本档 typecheck 的棘轮管着（TS2304 已 4 → 0，
  * 只降不升）—— 两层合起来，这一族「失败路径在场、触发条件不在场」的形态
  * 再也混不进来。
+ *
+ * 第二格判的是**流别**（ISSUE #2653）：#2588 把 `fail()` 补上时取了「形状收进
+ * `renderVerdict()`」那一半、流别按调用点原本的 `console.log` 保留，于是同文件里
+ * 「红走哪条流」有两份答案，失败路径与整轮小结的红行都留在 stdout。
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -34,5 +38,33 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
     expect(out).toContain("all");
     expect(out).not.toContain("ReferenceError");
     expect(r.status).toBe(2);
+  });
+
+  /**
+   * 红落在**哪一条流**（ISSUE #2653）。
+   *
+   * 上面那一格把两条流拼在一起断「那句中文在场」—— 对本次缺陷天然无感：红行整个在
+   * stdout 时它照样绿。本文件里的分流只有一处实现（`emitVerdict()` 按 `state` 选流，
+   * 判决行 + 段头 + 出路同一条流），所以钉住这一处 = 钉住五个站点；
+   * 整轮小结那三行走的是同一处，不必（也没法在不造环境故障的前提下）另起一跑。
+   *
+   * 「从一屏绿里被 `2>` 单独捞出来」是这句口径的全部用途 —— 所以两条流都要断：
+   * stderr 里必须在，**stdout 里必须不在**（只断前者，红行同时出现在两条流也算过）。
+   */
+  it("红的判决行走 stderr、不留在 stdout（`2>` 捞出来的那一屏要完整）", () => {
+    const r = spawnSync(
+      process.execPath,
+      [GATE, "--mode", "definitely-not-a-gate"],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 60_000,
+      },
+    );
+    expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(2);
+    expect(r.stderr).toContain(
+      "[红] quality-gate（未知门禁：definitely-not-a-gate",
+    );
+    expect(r.stdout ?? "").not.toContain("[红]");
   });
 });
