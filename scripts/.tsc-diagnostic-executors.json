@@ -190,7 +190,7 @@
         "label": "判据执行者台账"
       },
       "baseline": {
-        "scripts/check-gate-executors.cjs": 57
+        "scripts/check-gate-executors.cjs": 63
       },
       "section": "13.5.12"
     }
