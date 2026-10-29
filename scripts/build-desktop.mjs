@@ -145,17 +145,27 @@ function targetTriple() {
 import { sidecarFileName } from "./sidecar-name.mjs";
 export { sidecarFileName };
 
+/** 报错并终止 —— 返回类型必须是 `never`，不是「不返回」的语义描述：
+ *  写成 `void` 时，`if (!invocation) { fail(…) }` 之后检查器仍认为 `invocation` 可能是 null
+ *  （本批 8 格 `TS18047` 全是这一条造成的），于是每一处使用点都要再判一次没必要的空。
+ * @param {string} msg @returns {never} */
 function fail(msg) {
   console.error(`[build-desktop] 错误：${msg}`);
   process.exit(1);
 }
 
-// 递归计算目录字节数（用于体积护栏 / Top 目录定位）
+/** 递归计算目录字节数（用于体积护栏 / Top 目录定位）。
+ * @param {string} dir @returns {number} */
 function dirSize(dir) {
   let total = 0;
   const stack = [dir];
   while (stack.length) {
+    /* `stack.pop()` 在类型上是 `string | undefined`：`while (stack.length)` 已经保证它取得出，
+     * 但那是**我**知道的不是**类型**知道的（这一格是 `dirSize` 有了参数类型之后**新冒出来的**，
+     * 本仓「补类型不是纯减法」第五次现场）。`break` 与那句长度判据是同一件事的两种写法，
+     * 不是新增的容错分支。 */
     const cur = stack.pop();
+    if (cur === undefined) break;
     let ents;
     try {
       ents = readdirSync(cur, { withFileTypes: true });
@@ -195,8 +205,11 @@ const step1At = performance.now();
     windowsHide: true,
   });
   if (build.error) {
+    /* `code` 是 spawn 层附在 Error 上的字段（`ErrnoException`），声明面里没有 ——
+     * 按既有口径收成一次局部判型，而不是在使用点上写 `(e as any).code`。 */
+    const spawnError = /** @type {NodeJS.ErrnoException} */ (build.error);
     fail(
-      `起 pnpm 失败（${build.error.code ?? "UNKNOWN"}）：${build.error.message}；` +
+      `起 pnpm 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}；` +
         `实际命令：${formatCommandLine(invocation.command, invocation.args)}`,
     );
   }
@@ -266,6 +279,8 @@ for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
 // 本条只管「装进桌包的那一份」。
 // 注意：node_modules/.cache 单独排除，不能整体排除 node_modules（standalone
 // 运行时必需裁剪版）。
+/** 装进桌包的那一份要过白名单：`abs` 是待判条目的绝对路径。
+ * @param {string} abs @returns {boolean} */
 const staticAllowed = (abs) => isStaticPathAllowed(relative(nextOut, abs));
 
 /* `cpSync` 这一跳的账（ISSUE #2574 期望 2）：白名单在场时，「过 filter 的条目数」与
@@ -441,6 +456,7 @@ if (existsSync(storeDir)) {
   const nmDir = join(staticDir, "node_modules");
   /** 包名（含 `@scope/name`）→ 源目录。Map 的首个命中者胜出 = 上面那条优先级。 */
   const packages = new Map();
+  /** @param {string} base */
   const collectLevel = (base) => {
     if (!existsSync(base)) return;
     for (const entry of readdirSync(base)) {
@@ -591,9 +607,10 @@ console.log(
     { stdio: "inherit", cwd: root, windowsHide: true },
   );
   if (check.error) {
+    const spawnError = /** @type {NodeJS.ErrnoException} */ (check.error);
     fail(
-      `起 check-standalone-contents 失败（${check.error.code ?? "UNKNOWN"}）：` +
-        `${check.error.message}；实际命令：node scripts/check-standalone-contents.cjs`,
+      `起 check-standalone-contents 失败（${spawnError.code ?? "UNKNOWN"}）：` +
+        `${spawnError.message}；实际命令：node scripts/check-standalone-contents.cjs`,
     );
   }
   if (check.status !== 0) {
