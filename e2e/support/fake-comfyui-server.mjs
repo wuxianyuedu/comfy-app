@@ -39,7 +39,8 @@ const HOST = resolveFakeComfyuiHost();
 const PORT = resolveFakeComfyuiPort();
 const CORS = process.env.E2E_FAKE_COMFY_CORS !== "0";
 
-/** 回环地址判定（对应 ComfyUI 的 `is_loopback`）。 */
+/** 回环地址判定（对应 ComfyUI 的 `is_loopback`）。
+ * @param {string} hostname @returns {boolean} */
 function isLoopback(hostname) {
   if (!hostname) return false;
   return (
@@ -58,7 +59,7 @@ function isLoopback(hostname) {
  * → 403**（替身自己的端口见 `fake-comfyui-endpoint.mjs`）。只在某一侧没有端口时才退化成比较主机名（ComfyUI 原文行为）。
  * 简化成「只比主机名」会两边都是 127.0.0.1 而永远放行，假服务就与真实
  * ComfyUI 不一致，测试随之失去意义。
- */
+ * @param {import("node:http").IncomingMessage} req @returns {boolean} */
 function isCrossOriginRequest(req) {
   if (req.headers["sec-fetch-site"] === "cross-site") return true;
   const host = req.headers.host;
@@ -69,7 +70,7 @@ function isCrossOriginRequest(req) {
   const parsed = new URL(origin);
   let originCompare = parsed.host.toLowerCase();
 
-  const hostHostname = hostCompare.split(":")[0];
+  const [hostHostname = ""] = hostCompare.split(":");
   if (!isLoopback(hostHostname)) return false;
 
   if (!parsed.port) hostCompare = hostHostname;
@@ -104,14 +105,21 @@ const PNG_BYTES = Buffer.concat([
   ),
 ]);
 
+/** 收完请求体（替身只看 JSON，不判长度上限）。
+ * @param {import("node:http").IncomingMessage} req @returns {Promise<string>} */
 function readBody(req) {
   return new Promise((resolve) => {
+    /** @type {Buffer[]} */
     const chunks = [];
-    req.on("data", (c) => chunks.push(c));
+    req.on("data", (/** @type {Buffer} */ c) => chunks.push(c));
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
   });
 }
 
+/** @param {import("node:http").ServerResponse} res
+ * @param {Record<string, string>} headers
+ * @param {number} status
+ * @param {unknown} payload */
 function sendJson(res, headers, status, payload) {
   res.writeHead(status, {
     ...headers,
@@ -120,6 +128,12 @@ function sendJson(res, headers, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+/** 按路由回形。`headers` 由调用点按 CORS 档决定（开则带 `access-control-allow-origin`）。
+ * @param {import("node:http").IncomingMessage} req
+ * @param {import("node:http").ServerResponse} res
+ * @param {Record<string, string>} headers
+ * @param {string} path 已剥掉 query 的请求路径
+ * @returns {Promise<void>} */
 async function handle(req, res, headers, path) {
   if (path === "/") {
     res.writeHead(200, {
@@ -179,8 +193,13 @@ async function handle(req, res, headers, path) {
    * ——与真件同形，也是 `fetchHistoryEntry` 轮询等待的那一段。 */
   const historyMatch = /^\/api\/history\/([^/]+)$/.exec(path);
   if (historyMatch) {
-    const entry = history.get(decodeURIComponent(historyMatch[1]));
-    sendJson(res, headers, 200, entry ? { [historyMatch[1]]: entry } : {});
+    /* 解构一次而不是两处各按 `[1]` 取：那是同一个值被读两遍，而它在下标读法上是
+     * `string | undefined` —— 一处报 `TS2345`（进不了 `decodeURIComponent`）、
+     * 另一处报 `TS2464`（**全账唯一一格**：计算属性名要的是 string）。
+     * 两个红同一个根因，收在取出的那一句里就同时消失。 */
+    const [, historyId = ""] = historyMatch;
+    const entry = history.get(decodeURIComponent(historyId));
+    sendJson(res, headers, 200, entry ? { [historyId]: entry } : {});
     return;
   }
   /* 产物下载：本应用拿 history 里的 filename 回来取字节（`client.getView`）。 */
@@ -207,11 +226,17 @@ const server = createServer((req, res) => {
     return;
   }
 
+  /** 头上先给一份，CORS 那一档再往里加键 —— 所以它必须是「串到串」的表，
+   *  而不是被字面量推出来的 `{ "content-type": string }`（那个形状再加键就报 TS7053）。
+   * @type {Record<string, string>} */
   const headers = { "content-type": "application/json; charset=utf-8" };
   if (CORS) headers["access-control-allow-origin"] = "*";
 
-  const path = (req.url ?? "/").split("?")[0];
-  void handle(req, res, headers, path).catch(() => {
+  /* 解构给默认值而不是按下标取：`split("?")[0]` 在 `noUncheckedIndexedAccess` 下是
+   * `string | undefined`，而 `handle(…)` 的形参已是 `string`（这一格是补完形参之后**新冒出来的**，
+   * 与批 1 / 6 / 8 那三次同族：把类型指对之后，原来被隐式 any 吞掉的读取才现形）。 */
+  const [urlPath = "/"] = (req.url ?? "/").split("?");
+  void handle(req, res, headers, urlPath).catch(() => {
     /* 替身自身的异常不许把链路判成「ComfyUI 有问题」：回 500 让本应用按
      * 「接口异常」处理，比让连接悬空（表现为超时）可读得多。 */
     try {
