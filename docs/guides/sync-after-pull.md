@@ -44,7 +44,9 @@ pnpm exec tsc --noEmit   # 或直接 pnpm dev 跑起来看是否正常
 
 - `pnpm install` 报 `ERR_PNPM_IGNORED_BUILDS` 或 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`；
 - `pnpm-workspace.yaml` 里的 `allowBuilds` / `minimumReleaseAge` / `verifyDepsBeforeRun` 有变更（提交信息里通常会提到）；
-- better-sqlite3 等原生模块运行时报错（旧二进制与新配置不匹配）；
+- 原生模块在**测试宿主**上报错（`better-sqlite3` 那一族的旧二进制与新配置不匹配 ——
+  它是 `devDependencies`，只在被加载进跑测试的那个进程时才出现，应用运行期不用它；
+  运行时的 SQLite 驱动是 `@libsql/client`，见规范 §6.1）；
 - 上一次 install 被中断过，`node_modules` 可能残缺。
 
 ```powershell
