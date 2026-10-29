@@ -350,6 +350,13 @@ describe("applySlot 的三档", () => {
     const out = applySlot({
       cwd: job,
       env: { [SLOT_ENABLED_ENV]: "1", COMFY_CI_CACHE_ROOT: missingCache },
+      // `floorBytes: 0`：这一条钉的是「真实 statfsFreeBytes 对还不存在的路径向上找到
+      // 最近存在的祖先」，不是「这个卷此刻还剩多少空间」。下限不透传时走生产下限
+      // 20 GiB，而那是**未受控输入** —— runner 的缓存盘被填到 20 GiB 以下后（槽自己
+      // 就在占盘），这条回归位对所有人红（实测两个在飞 PR 被同一条红拦下，本地
+      // 19GB 的 G 盘同样红）。0 只放行「量具真的读到了数」；读不到（null）照旧判
+      // 不够 ⇒ 祖先行走为的钉子原样保留。
+      floorBytes: 0,
       run: () => {
         installs += 1;
         fs.mkdirSync(path.join(missingCache, key, "node_modules"), {
