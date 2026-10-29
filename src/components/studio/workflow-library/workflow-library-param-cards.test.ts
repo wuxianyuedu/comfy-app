@@ -20,10 +20,7 @@ import {
 import { applyOutputBindingEdit } from "~/lib/workflow/workflow-output-binding";
 import { inferGroups, splitWorkflowIO } from "~/components/studio/workflow-io";
 import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
-import {
-  deriveLibraryOutputCards,
-  deriveLibraryParamCards,
-} from "./workflow-library-param-cards";
+import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
   "9::widget::text": {
@@ -79,6 +76,8 @@ describe("deriveLibraryParamCards", () => {
       "negative",
       ...SIZE_SUB_IDS,
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     /* 落点只由作者画的线决定：没有线就没有落点，页面如实显示未配置。 */
     expect(resolved).toEqual({});
@@ -194,12 +193,16 @@ describe("deriveLibraryParamCards", () => {
       exposedParamDisplayLabel("negative"),
       ...sizeLabels,
       exposedParamDisplayLabel("seed"),
+      exposedParamDisplayLabel("lora-name"),
+      exposedParamDisplayLabel("lora-strength"),
     ]);
     expect(withRename.entries.map((entry) => entry.label)).toEqual([
       exposedParamDisplayLabel("prompt"),
       exposedParamDisplayLabel("negative"),
       ...sizeLabels,
       exposedParamDisplayLabel("seed"),
+      exposedParamDisplayLabel("lora-name"),
+      exposedParamDisplayLabel("lora-strength"),
     ]);
     expect(withRename.ownersByPin["9::widget::text"]).toBe("提示词");
   });
@@ -302,6 +305,8 @@ describe("deriveLibraryParamCards", () => {
       "negative",
       ...SIZE_SUB_IDS,
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     /* 没有落点就没有线：卡片如实显示成未配置，不凭空画。 */
     expect(wires).toHaveLength(0);
@@ -387,9 +392,7 @@ describe("deriveLibraryParamCards", () => {
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
     /* 子口只画它连的那一条（形态由子口身份声明）。 */
-    expect(wires.map((wire) => wire.targetIoKey)).toEqual([
-      "5::widget::megapixels",
-    ]);
+    expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::megapixels"]);
     /* 线从**被落到的那一行**出发：尺寸卡的行 = 形态，handle 就是子口 id。 */
     expect(wires.map((wire) => wire.handleId)).toEqual(["size-megapixels"]);
   });
@@ -413,9 +416,7 @@ describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () 
     /* 视图按它判断「这颗圆点该不该画成已连接」：库内每个候选各画一条线，若还按
      *  「生效落点才实心」上色，带线的圆点看着反而是断的（ISSUE #355：「这里连线
      *  断开是什么原因」）。 */
-    const groupedKeys = inferGroups(
-      splitWorkflowIO(io).widgetInputs,
-    ).groupedKeys;
+    const groupedKeys = inferGroups(splitWorkflowIO(io).widgetInputs).groupedKeys;
     const { wires, wiredDotKeys } = deriveLibraryParamCards({
       io,
       paramMap: {
@@ -490,15 +491,11 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     const moved = deriveLibraryOutputCards({ io: two, paramMap, mode: "T2I" });
     expect(moved.resolved["9::output::MASK"]).toBe("9::output::IMAGE");
     /* 作者改过的那一个口才画线（未连过的不画，见上一条用例）。 */
-    expect(moved.wires.map((wire) => wire.entryId)).toEqual([
-      "9::output::MASK",
-    ]);
+    expect(moved.wires.map((wire) => wire.entryId)).toEqual(["9::output::MASK"]);
     expect(moved.isManual("9::output::MASK")).toBe(true);
     /* 别的模式不受影响。 */
     expect(
-      deriveLibraryOutputCards({ io: two, paramMap, mode: "T2V" }).isManual(
-        "9::output::MASK",
-      ),
+      deriveLibraryOutputCards({ io: two, paramMap, mode: "T2V" }).isManual("9::output::MASK"),
     ).toBe(false);
   });
 
@@ -606,6 +603,8 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
       "negative",
       ...SIZE_SUB_IDS,
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
   });
 

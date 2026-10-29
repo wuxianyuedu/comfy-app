@@ -20,17 +20,12 @@ import {
 import type { TaskDetail } from "./history-types";
 
 /** 只造测试关心的字段：TaskDetail 很大，其余字段用 unknown 兜。 */
-function makeDetail(
-  params: unknown,
-  extra: Partial<TaskDetail> = {},
-): TaskDetail {
+function makeDetail(params: unknown, extra: Partial<TaskDetail> = {}): TaskDetail {
   return { id: "t-1", params, images: [], ...extra } as unknown as TaskDetail;
 }
 
 /** 造一份带作者标签的 IO 表（键是 ioKey：`<nodeId>::widget::<name>`）。 */
-function io(
-  ...entries: Array<[nodeId: string, name: string, label?: string]>
-): WorkflowIOMap {
+function io(...entries: Array<[nodeId: string, name: string, label?: string]>): WorkflowIOMap {
   const map: WorkflowIOMap = {};
   for (const [nodeId, name, label] of entries) {
     map[`${nodeId}::widget::${name}`] = {
@@ -46,9 +41,7 @@ function io(
 
 describe("workflowInputsOf", () => {
   it("非数组回落为空数组", () => {
-    expect(workflowInputsOf(makeDetail({ workflowInputs: "nope" }))).toEqual(
-      [],
-    );
+    expect(workflowInputsOf(makeDetail({ workflowInputs: "nope" }))).toEqual([]);
     expect(workflowInputsOf(makeDetail(null))).toEqual([]);
   });
 });
@@ -64,13 +57,9 @@ describe("taskWorkflowId", () => {
 
 describe("deriveTaskOrigin", () => {
   it("工坊发起：顶层带对外值（提示词 / 反向 / 首尾帧 / 帧数）", () => {
-    expect(
-      deriveTaskOrigin(makeDetail({ workflow: "w", prompt: "少女" })),
-    ).toBe("workshop");
+    expect(deriveTaskOrigin(makeDetail({ workflow: "w", prompt: "少女" }))).toBe("workshop");
     expect(deriveTaskOrigin(makeDetail({ frames: 81 }))).toBe("workshop");
-    expect(deriveTaskOrigin(makeDetail({ firstFrame: "a.png" }))).toBe(
-      "workshop",
-    );
+    expect(deriveTaskOrigin(makeDetail({ firstFrame: "a.png" }))).toBe("workshop");
   });
 
   it("工作流直接发起：只有 workflow + workflowInputs（库内就地运行 / 画布节点）", () => {
@@ -82,15 +71,11 @@ describe("deriveTaskOrigin", () => {
         }),
       ),
     ).toBe("workflow");
-    expect(
-      deriveTaskOrigin(makeDetail({ workflow: "w", projectId: "p-1" })),
-    ).toBe("workflow");
+    expect(deriveTaskOrigin(makeDetail({ workflow: "w", projectId: "p-1" }))).toBe("workflow");
   });
 
   it("空白值不算「有」（空串 / null 不会把任务误判成工坊）", () => {
-    expect(deriveTaskOrigin(makeDetail({ prompt: "", negative: null }))).toBe(
-      "workflow",
-    );
+    expect(deriveTaskOrigin(makeDetail({ prompt: "", negative: null }))).toBe("workflow");
   });
 });
 
@@ -114,6 +99,8 @@ describe("deriveWorkshopParams", () => {
       "negative",
       "size",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     expect(rows[0]?.value).toBe("少女");
     expect(rows[1]?.value).toBeUndefined(); // 没给负向 → 仍占位、value undefined
@@ -134,22 +121,12 @@ describe("deriveWorkshopParams", () => {
     const contracts = [
       { mode: "T2I", inputs: ["prompt", "size"], output: "image" },
     ] as unknown as Parameters<typeof deriveWorkshopParams>[2];
-    const rows = deriveWorkshopParams(
-      makeDetail({ prompt: "x" }),
-      "T2I",
-      contracts,
-      null,
-    );
+    const rows = deriveWorkshopParams(makeDetail({ prompt: "x" }), "T2I", contracts, null);
     expect(rows.map((r) => r.id)).toEqual(["prompt", "size"]);
   });
 
   it("模式为空时回落内置默认契约（仍列出口，不返回空）", () => {
-    const rows = deriveWorkshopParams(
-      makeDetail({ workflow: "w" }),
-      null,
-      null,
-      null,
-    );
+    const rows = deriveWorkshopParams(makeDetail({ workflow: "w" }), null, null, null);
     expect(rows.length).toBeGreaterThan(0);
   });
 });
@@ -175,15 +152,10 @@ describe("resolveParamLabel", () => {
 
   it("查不到标签 / 没有 IO 表时如实回落 pin 名（不编）", () => {
     expect(
-      resolveParamLabel(
-        { nodeId: "23", name: "text" },
-        io(["23", "aspect_ratio", "宽高比"]),
-      ),
+      resolveParamLabel({ nodeId: "23", name: "text" }, io(["23", "aspect_ratio", "宽高比"])),
     ).toBe("text");
     expect(resolveParamLabel({ name: "text" }, null)).toBe("text");
-    expect(
-      resolveParamLabel({ nodeId: "23", name: "text" }, io(["23", "text"])),
-    ).toBe("text");
+    expect(resolveParamLabel({ nodeId: "23", name: "text" }, io(["23", "text"]))).toBe("text");
   });
 });
 
@@ -195,10 +167,7 @@ describe("deriveWorkflowParams", () => {
         { nodeId: "7", name: "text", value: "少女" },
       ],
     });
-    const { rows } = deriveWorkflowParams(
-      detail,
-      io(["23", "aspect_ratio", "宽高比"]),
-    );
+    const { rows } = deriveWorkflowParams(detail, io(["23", "aspect_ratio", "宽高比"]));
     expect(rows.map((row) => row.label)).toEqual(["宽高比", "text"]);
     expect(rows[0]!.name).toBe("aspect_ratio");
   });
@@ -210,16 +179,15 @@ describe("deriveWorkflowParams", () => {
         { nodeId: "4", name: "prefix", value: "a photo of" },
       ],
     });
-    expect(
-      deriveWorkflowParams(detail, null).rows.map((row) => row.name),
-    ).toEqual(["seed", "prefix"]);
+    expect(deriveWorkflowParams(detail, null).rows.map((row) => row.name)).toEqual([
+      "seed",
+      "prefix",
+    ]);
   });
 
   it("顶层条目排除 workflowInputs 本身", () => {
     const detail = makeDetail({ lora: "x.safetensors", workflowInputs: [] });
-    expect(deriveWorkflowParams(detail, null).topLevelEntries).toEqual([
-      ["lora", "x.safetensors"],
-    ]);
+    expect(deriveWorkflowParams(detail, null).topLevelEntries).toEqual([["lora", "x.safetensors"]]);
   });
 
   it("无参数时 hasAny 为 false（视图不渲染空参数区块）", () => {
@@ -227,9 +195,7 @@ describe("deriveWorkflowParams", () => {
   });
 
   it("只有顶层条目也算 hasAny（原始 JSON 折叠要显示得出来）", () => {
-    expect(
-      deriveWorkflowParams(makeDetail({ runtime: { seed: 1 } }), null).hasAny,
-    ).toBe(true);
+    expect(deriveWorkflowParams(makeDetail({ runtime: { seed: 1 } }), null).hasAny).toBe(true);
   });
 });
 
