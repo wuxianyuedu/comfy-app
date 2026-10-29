@@ -45,11 +45,7 @@ const SCHEMA_DIR = ["src", "server", "db"];
  * @returns {string} 绝对路径
  */
 export function resolveSqlitePath(root, databaseUrl) {
-  const candidates = [
-    databaseUrl,
-    process.env.DATABASE_URL,
-    "file:./db.sqlite",
-  ];
+  const candidates = [databaseUrl, process.env.DATABASE_URL, "file:./db.sqlite"];
   let url = "";
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate !== "") {
@@ -73,9 +69,7 @@ export function probeSchemaSync(root, databaseUrl) {
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
       const row = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-        )
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
         .get(SENTINEL_TABLE);
       return row ? "ready" : "missing";
     } finally {
@@ -112,10 +106,8 @@ export function schemaFingerprint(root) {
       .filter((name) => name.endsWith(".ts"))
       .sort();
     if (files.length === 0) return null;
-    const bytes = Buffer.concat(
-      files.map((name) => fs.readFileSync(path.join(dir, name))),
-    );
-    const digest = crypto.createHash("sha256").update(bytes).digest();
+    const bytes = Buffer.concat(files.map((name) => fs.readFileSync(path.join(dir, name))));
+    const digest = Buffer.from(crypto.hash("sha256", bytes, "hex"), "hex");
     return digest.readUInt32BE(0) & 0x7fffffff;
   } catch {
     return null;
@@ -196,15 +188,11 @@ export function probeSchemaFresh(root, databaseUrl) {
   if (tables !== "ready") {
     return {
       state: "unknown",
-      detail:
-        tables === "missing"
-          ? "库里还没有表"
-          : "读不到库（文件不存在 / 不是库）",
+      detail: tables === "missing" ? "库里还没有表" : "读不到库（文件不存在 / 不是库）",
     };
   }
   const want = schemaFingerprint(root);
-  if (want === null)
-    return { state: "unknown", detail: "读不到 schema 源文件" };
+  if (want === null) return { state: "unknown", detail: "读不到 schema 源文件" };
   const have = readSchemaFingerprint(root, databaseUrl);
   if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
   /* `0` = 从没登记过（`PRAGMA user_version` 的初值，见 `readSchemaFingerprint`）。
@@ -254,9 +242,7 @@ export function schemaDigest(root, databaseUrl) {
         .all();
       return crypto
         .createHash("sha256")
-        .update(
-          rows.map((r) => `${r.type}|${r.name}|${r.sql ?? ""}`).join("\n"),
-        )
+        .update(rows.map((r) => `${r.type}|${r.name}|${r.sql ?? ""}`).join("\n"))
         .digest("hex");
     } finally {
       db.close();
@@ -312,8 +298,7 @@ export function ensureSchemaCurrent(root, options = {}) {
   let want = null;
   if (tablesReady) {
     want = schemaFingerprint(root);
-    if (want === null)
-      return { state: "unknown", detail: "读不到 schema 源文件" };
+    if (want === null) return { state: "unknown", detail: "读不到 schema 源文件" };
     const have = readSchemaFingerprint(root, databaseUrl);
     if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
     if (have === want) return { state: "ready" };
@@ -332,9 +317,7 @@ export function ensureSchemaCurrent(root, options = {}) {
   const notSynced = (detail) => ({
     /* 字面量联合必须显式钉住：不加注时 TS 会把它放宽成 `string`，与
      * `ensureSchemaCurrent` 声明的返回类型对不上（`.mjs` 同样在 tsc 扫描范围内）。 */
-    state: /** @type {"stale" | "missing"} */ (
-      tablesReady ? "stale" : "missing"
-    ),
+    state: /** @type {"stale" | "missing"} */ (tablesReady ? "stale" : "missing"),
     detail,
   });
 
@@ -432,15 +415,9 @@ export function ensureSchemaCurrent(root, options = {}) {
     forward,
   });
   const after = schemaDigest(root, databaseUrl);
-  if (
-    !applied.converged ||
-    after === null ||
-    (existedBefore && after === before)
-  ) {
+  if (!applied.converged || after === null || (existedBefore && after === before)) {
     return notSynced(
-      applied.converged
-        ? "drizzle-kit 报「已应用」，但库的结构没有变化"
-        : staleReason(applied),
+      applied.converged ? "drizzle-kit 报「已应用」，但库的结构没有变化" : staleReason(applied),
     );
   }
   /* 空库这一档进来时 `want` 还没取过（闸门被跳过）—— 现在库已经建好了，
@@ -514,12 +491,7 @@ export function schemaNotice(result) {
  *  归 `log/current/tools/`：它的写入方是本工具链，读取者是 Next 服务端。
  *  与 `src/lib/log/log-paths.ts` 的 `SCHEMA_SYNC_STATUS_FILE` **同形**（那一份
  *  是 TS 侧的唯一出处，`db-schema-state.test.ts` 钉住两侧不漂）。 */
-export const SCHEMA_SYNC_STATUS_FILE = path.join(
-  "log",
-  "current",
-  "tools",
-  "schema-sync.json",
-);
+export const SCHEMA_SYNC_STATUS_FILE = path.join("log", "current", "tools", "schema-sync.json");
 
 /**
  * 写同步状态（`{ phase, detail, at }`）。
@@ -598,15 +570,11 @@ export function spawnSchemaSync(root, options = {}) {
     // 后台同步是「看不见的 15~30 秒」：先回显要跑的那条命令，出问题时至少知道
     // 谁在后台动数据库（输出落在 log/schema-sync.log，命令行则留在当前终端/编排日志）。
     echoCommandLine(process.execPath, force ? [script, "--force"] : [script]);
-    const child = spawn(
-      process.execPath,
-      force ? [script, "--force"] : [script],
-      {
-        cwd: root,
-        detached: true,
-        stdio,
-      },
-    );
+    const child = spawn(process.execPath, force ? [script, "--force"] : [script], {
+      cwd: root,
+      detached: true,
+      stdio,
+    });
     child.unref();
     return { started: true };
   } catch (error) {

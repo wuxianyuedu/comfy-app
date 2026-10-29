@@ -186,9 +186,7 @@ function baselineRevState(rev) {
   });
   /* 不可达 / 不是本检出的仓库 ⇒ 这一档是「基线过期」（ISSUE #653 的原话：
    * 修订号通常是分支提交，合入后不再有 ref 指向，`git gc` 之后一律查不到）。 */
-  return res.status === 0
-    ? { kind: "recorded", rev: String(rev) }
-    : { kind: "stale" };
+  return res.status === 0 ? { kind: "recorded", rev: String(rev) } : { kind: "stale" };
 }
 
 /**
@@ -212,15 +210,7 @@ function commitsSinceDateTouchingSource(dateStr, limit = 5) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr ?? ""))) return null;
   const res = spawnSync(
     "git",
-    [
-      "log",
-      "--since",
-      `${dateStr} 00:00:00`,
-      "--first-parent",
-      "--format=%h\x1f%s",
-      "--",
-      "src/",
-    ],
+    ["log", "--since", `${dateStr} 00:00:00`, "--first-parent", "--format=%h\x1f%s", "--", "src/"],
     { cwd: ROOT, encoding: "utf8" },
   );
   if (res.status !== 0 || typeof res.stdout !== "string") return null;
@@ -339,7 +329,7 @@ function measure() {
     const gz = zlib.gzipSync(buf).length;
     entries.push({
       name: path.basename(abs),
-      sha: crypto.createHash("sha256").update(buf).digest("hex"),
+      sha: crypto.hash("sha256", buf, "hex"),
       raw: buf.length,
       gzip: gz,
     });
@@ -400,9 +390,7 @@ function kb(n) {
 function delta(n) {
   const sign = n > 0 ? "+" : n < 0 ? "-" : "±";
   const abs = Math.abs(n);
-  return abs < 1024
-    ? `${sign}${abs} B`
-    : `${sign}${(abs / 1024).toFixed(1)} KB`;
+  return abs < 1024 ? `${sign}${abs} B` : `${sign}${(abs / 1024).toFixed(1)} KB`;
 }
 
 /**
@@ -442,9 +430,7 @@ function diagnose(cur, base) {
     if (sameName) grown.push([e.name, sameName.gzip, e.gzip]);
     else added.push(e);
   }
-  const gone = baseEntries.filter(
-    (e) => !curBySha.has(e.sha) && !curByName.has(e.name),
-  );
+  const gone = baseEntries.filter((e) => !curBySha.has(e.sha) && !curByName.has(e.name));
   const sumGzip = (list) => list.reduce((a, e) => a + (e.gzip ?? 0), 0);
   return {
     renamed,
@@ -520,8 +506,7 @@ function main() {
   }
 
   const base = readBaseline();
-  const fmt = (m) =>
-    `文件数 ${m.files} · raw ${kb(m.raw)} · gzip ${kb(m.gzip)}`;
+  const fmt = (m) => `文件数 ${m.files} · raw ${kb(m.raw)} · gzip ${kb(m.gzip)}`;
   const line = `[bundle-budget] 当前：${fmt(now)}`;
 
   if (REPORT_ONLY) {
@@ -532,10 +517,7 @@ function main() {
         : "  基线：不存在（先跑 --update 落一份实测初值）",
     );
     const d = base ? diagnose(now, base) : null;
-    if (
-      d &&
-      (d.renamed.length || d.added.length || d.grown.length || d.gone.length)
-    ) {
+    if (d && (d.renamed.length || d.added.length || d.grown.length || d.gone.length)) {
       console.log("  与基线的差异（按内容指纹对齐，诊断用、不参与判定）：");
       if (d.renamed.length) {
         console.log(
@@ -552,9 +534,7 @@ function main() {
         console.log(`    · 同名且变大 ${d.grown.length} 个`);
       }
     } else if (base && !d) {
-      console.log(
-        "  （基线是旧格式、没有逐文件指纹：判定不受影响，只影响这段诊断）",
-      );
+      console.log("  （基线是旧格式、没有逐文件指纹：判定不受影响，只影响这段诊断）");
     }
     console.log("[bundle-budget] --report 模式：只出清单，不判失败 ✓");
     return 0;

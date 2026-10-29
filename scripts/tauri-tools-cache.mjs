@@ -97,10 +97,7 @@ export const TOOLS_MANIFEST_FILE = "manifest.json";
 
 /** @param {string} file @returns {string} 该文件的 sha256（十六进制，小写） */
 function sha256File(file) {
-  return crypto
-    .createHash("sha256")
-    .update(fs.readFileSync(file))
-    .digest("hex");
+  return crypto.hash("sha256", fs.readFileSync(file), "hex");
 }
 
 /**
@@ -264,9 +261,7 @@ export function seed({ cacheDir, mirror, dryRun, log, plan = NSIS_PLAN }) {
     fs.renameSync(staging, mirror);
   } catch (error) {
     fs.rmSync(staging, { recursive: true, force: true });
-    log(
-      `[工具缓存] 失败：种盘被拒 —— ${error instanceof Error ? error.message : String(error)}`,
-    );
+    log(`[工具缓存] 失败：种盘被拒 —— ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
   log(`[工具缓存] ✓ 已种 ${files.length} 件；作业里那一格从此不必现下。`);
@@ -326,9 +321,7 @@ export function ensure({ cacheDir, toolRoot, toolRootFrom, dryRun, log, plan = N
       }
     }
   } catch (error) {
-    log(
-      `[工具缓存] 失败：补盘被拒 —— ${error instanceof Error ? error.message : String(error)}`,
-    );
+    log(`[工具缓存] 失败：补盘被拒 —— ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
   log("[工具缓存] ✓ 已补齐，必需件在场。");
@@ -357,9 +350,7 @@ export function main(io = {}) {
   const resolved = resolveToolRoot({
     cwd: io.cwd ?? ROOT,
     env,
-    run:
-      io.runStore ??
-      ((args, opts) => runPnpmSync(args, { ...opts, stdio: "pipe" })),
+    run: io.runStore ?? ((args, opts) => runPnpmSync(args, { ...opts, stdio: "pipe" })),
   });
   log(`[工具缓存] 工具根：${resolved.root ?? "取不到"}（来源：${resolved.from}）`);
   if (!resolved.root) {
@@ -382,9 +373,6 @@ export function main(io = {}) {
       });
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }
