@@ -28,3 +28,9 @@
 判据：`tests/hook-affected-launch.test.ts` 新增「跑了哪些用例这一格」一组 6 条（不 quiet
 一个字都不打、quiet 逐份列出、超封顶必须点名、封顶是 200、空清单不许静默、两个调用点的
 形状）。规范 §13.5.8.3「第九笔账」补一节。
+
+同批记账：新增两份 `.mjs` 让 `tsconfig.scripts.json` 的判决面从 211 涨到 **213**，而账本
+（`scripts/.scripts-typecheck-baseline.json` 的 `face`）是拿配置原值对账的棘轮 ⇒ 不跟着记，
+平台 `受影响用例` 那一格会红在「面与账不许两份口径」上（PR #2688 的现场：`配置展开 213 份，
+账上写 211`）。走它自己的写入口 `node scripts/check-scripts-typecheck.cjs --update` 重写，
+`face` 记 213、`total` 保持实测的 206 处 / 17 份 —— 两份新脚本实测 0 处红，不是把新增登记成已知。
