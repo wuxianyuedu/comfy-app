@@ -12,12 +12,14 @@
  *     （旧代码把垃圾 provider 按 local 误路由）；
  *   · **候选清单的拆分**：字符串 = 本地 ollama 候选、对象 = 远端模型，两类不能混存。
  *     没给 `extraModels` 时必须是 `undefined` 一路透传（「这次不给意见」），
- *     一旦路由层把它折成空数组，就等于替用户清空全部远端模型 —— 与 A11 同族的数据丢失。
+ *     一旦把它折成空数组，就等于替用户清空全部远端模型 —— 与 A11 同族的数据丢失。
+ *     拆分与两张表的写入范围都在仓库层那一个入口里（ISSUE #2592），所以这一组的
+ *     远端那一半**断言落在库里有什么**，不是「哪个方法被调了」。
  *
  * mock 边界：`~/server/db`（内存库，`as never` 那类形状错误会当场现形）、
  * `~/lib/llm/server`（会真发 LLM 请求）、`~/lib/workshop/mode-contract.server`（会读写
- * `data/workshop-mode-contracts.json` 那份本机覆盖）、仓储的两个写口用 spy 记账但保留真实现、
- * `~/server/better-auth`、`~/lib/core/logger`。
+ * `data/workshop-mode-contracts.json` 那份本机覆盖）、`llmConfigRepository.upsertSingleton`
+ * 用 spy 记账但保留真实现、`~/server/better-auth`、`~/lib/core/logger`。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -58,7 +60,11 @@ import {
   remoteModelRepository,
 } from "~/lib/core/repository";
 import { llmRouter } from "~/server/api/routers/llm";
-import { getTestDb, type TestDb } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedRemoteModel,
+  type TestDb,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(llmRouter);
@@ -123,9 +129,6 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       .mockResolvedValue(undefined as never);
-    const replace = vi
-      .spyOn(remoteModelRepository, "replaceAll")
-      .mockResolvedValue(undefined as never);
     await caller().configSave({
       extraModels: [
         "llama3",
@@ -135,23 +138,32 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({
       extraModels: ["llama3"],
     });
-    expect(replace.mock.calls[0]?.[0]).toMatchObject([
-      { name: "gpt-x", baseUrl: "https://api.example/v1", apiKey: "k" },
-    ]);
+    /* 远端那一半断言落在**表里有什么**，不是「`replaceAll` 被调了几次」——
+     * 拆分与两张表的写入范围已经从路由收进仓库层的那个入口（ISSUE #2592），
+     * 盯调用点等于盯一个不再存在的位置。 */
+    const rows = await remoteModelRepository.list();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      name: "gpt-x",
+      baseUrl: "https://api.example/v1",
+    });
+    expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
     upsert.mockRestore();
-    replace.mockRestore();
   });
 
   it("没给 extraModels 时透传 undefined —— 不是空数组（折成空数组=替用户清空远端模型，A11 同族）", async () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       .mockResolvedValue(undefined as never);
-    const replace = vi.spyOn(remoteModelRepository, "replaceAll");
+    seedRemoteModel(tdb, { name: "既有远端" });
     await caller().configSave({ model: "m1" });
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({ extraModels: undefined });
-    expect(replace).not.toHaveBeenCalled();
+    /* 反向那一半才是这条的落点：库里那行远端模型必须还在。只盯「传了 undefined」
+     * 的话，某一层把它折成 `[]` 也照样绿（spy 记账看不到库）。 */
+    expect((await remoteModelRepository.list()).map((r) => r.name)).toEqual([
+      "既有远端",
+    ]);
     upsert.mockRestore();
-    replace.mockRestore();
   });
 
   it("回传的是脱敏后的配置，路由不自己拼一份", async () => {
