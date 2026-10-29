@@ -28,6 +28,8 @@ import path from "node:path";
 import process from "node:process";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+/** 逐条累积的违规文案（空 = 绿）。
+ * @type {string[]} */
 const problems = [];
 
 /** 跨平台动作对照表所在的规范文档（唯一登记处）。 */
@@ -83,6 +85,9 @@ const TOOLS_INDEX_REL = "tools/README.md";
  */
 const ENTRY_LIST_EXEMPT = {};
 
+/** 读仓库内一份文档；**读不到就是 null**（调用方各自决定那是「缺登记」还是「跳过」）。
+ * @param {string} rel
+ * @returns {string | null} */
 function read(rel) {
   try {
     return fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -94,6 +99,7 @@ function read(rel) {
 /**
  * 解析规范里的对照表：`<!-- cross-platform-pairs -->
  *  | `a.mjs` | `b.ps1` | ... |` 形式的 Markdown 表行。
+ * @returns {string[][]} 每行 = 这一动作登记的一组脚本路径
  */
 function parsePairs() {
   const spec = read(SPEC_REL);
@@ -107,9 +113,13 @@ function parsePairs() {
     problems.push(`${SPEC_REL} 缺少 ${PAIR_MARKER} 标记（跨平台动作对照表的锚点）`);
     return [];
   }
+  /** @type {string[][]} */
   const pairs = [];
   for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i].trim();
+    /* 界内取出的那一行仍要过一遍真值判据：`noUncheckedIndexedAccess` 下
+     * `lines[i]` 是 `string | undefined`，而循环界保证它有 —— 让检查器也看见这件事
+     * （与批 6 / 批 8 同一形，不写 cast、不抬严格度）。 */
+    const line = (lines[i] ?? "").trim();
     if (!line.startsWith("|")) {
       if (pairs.length > 0) break;
       continue;
@@ -118,7 +128,11 @@ function parsePairs() {
     // 单元格里可能是裸路径，也可能带补充说明（`a/b.mjs`（`pnpm xxx`））——
     // 用「反引号里的、看起来像仓库内路径的 token」而不是「整格恰好是一个路径」，
     // 否则写清楚用法的那一格会被漏掉，门禁就会对新增动作一声不吭。
-    const files = [...line.matchAll(/`([\w./-]+\.(?:ps1|mjs|cjs|py))`/g)].map((m) => m[1]);
+    /* `matchAll` 的捕获组按下标取是 `string | undefined`；把空值收掉之后再进表，
+     * 否则下面每一处 `f.endsWith(".ps1")` 都要重新问一遍「这会不会是 undefined」。 */
+    const files = [...line.matchAll(/`([\w./-]+\.(?:ps1|mjs|cjs|py))`/g)]
+      .map((m) => m[1])
+      .filter((f) => f !== undefined);
     if (files.length === 0) continue;
     pairs.push(files);
   }
@@ -169,6 +183,7 @@ function checkPairs() {
  * 这类读取不算 —— 门禁一上线就先误伤正确写法，等于逼人绕开它。
  * 正则里的 `KNOWN_FAILED_FILES` 用拼接写，免得本脚本自己被自己的规则命中。
  */
+/** @param {string} text @returns {boolean} */
 function definesLiteral(text) {
   const NAME = "KNOWN_" + "FAILED_FILES";
   const re = new RegExp(`(?:export\\s+const\\s+)?\\$?${NAME}\\s*=\\s*(?:@\\s*\\(\\s*)?["']`, "g");
@@ -197,8 +212,16 @@ function checkSingleSource() {
   }
 }
 
-/** 遍历目录下所有文件（相对仓库根的 POSIX 路径）。 */
+/**
+ * 遍历目录下所有文件（相对仓库根的 POSIX 路径）。
+ *
+ * 返回类型必须写出来：`out.push(...walk(rel))` 让 tsc 自推时「本函数的返回类型
+ * 依赖 out 的类型、而 out 的类型又来自本函数的递归调用」，于是给 `TS7023` 而不是
+ * 「缺注解」—— 递归是真的，注解是唯一不改变行为的解（与批 7 那个生成器同一类）。
+ * @param {string} dir
+ * @returns {string[]} */
 function walk(dir) {
+  /** @type {string[]} */
   const out = [];
   const abs = path.join(ROOT, dir);
   if (!fs.existsSync(abs)) return out;
@@ -233,7 +256,10 @@ function walk(dir) {
  *      与「铺在根目录第一眼看见」被 R9 否掉后所依赖的那条承诺正好相反。
  */
 
-/** 把 README 里某一节切出来（从标题行到下一个同级或更高级标题为止）。 */
+/**
+ * 把 README 里某一节切出来（从标题行到下一个同级或更高级标题为止）。
+ * @param {string} title
+ * @returns {string | null} */
 function readmeSection(title) {
   const text = read(README_REL);
   if (text === null) return null;
@@ -241,11 +267,13 @@ function readmeSection(title) {
   const start = lines.findIndex((l) => l.trim() === title);
   if (start < 0) return null;
   const level = title.match(/^#+/)?.[0].length ?? 2;
+  /** @type {string[]} */
   const out = [];
   for (let i = start + 1; i < lines.length; i++) {
-    const m = lines[i].match(/^(#+)\s/);
-    if (m && m[1].length <= level) break;
-    out.push(lines[i]);
+    const line = lines[i] ?? "";
+    const m = line.match(/^(#+)\s/);
+    if (m && (m[1] ?? "").length <= level) break;
+    out.push(line);
   }
   return out.join("\n");
 }
@@ -257,13 +285,18 @@ function readmeSection(title) {
  * （`tools/start/start-web.ps1`）、**命令**（`pnpm dev`）、**标志**（`-Full`），
  * 而它们混在同一格文字里。一刀切成「反引号里的都是路径」会把后两类全判成
  * 「文件不存在」。所以形状由各调用点的正则负责，这一层只做提取。
- */
+ * @param {string} text
+ * @param {RegExp} re 必须带一个捕获组，取的就是那一组
+ * @returns {string[]} */
 function pathsIn(text, re) {
-  return [...text.matchAll(re)].map((m) => m[1]);
+  return [...text.matchAll(re)]
+    .map((m) => m[1])
+    .filter((p) => p !== undefined);
 }
 
 /** 收集磁盘上真实存在的双击入口（`tools/**`，排除逻辑层）。 */
 function diskEntries() {
+  /** @type {string[]} */
   const out = [];
   for (const rel of walk("tools")) {
     if (!rel.endsWith(".ps1")) continue;
@@ -292,10 +325,15 @@ function checkReadmeEntryList() {
   // ── 1. README → 磁盘 ────────────────────────────────────────────────
   // 两张表都可能有 `tools/…` / `scripts/…` 的路径 token。判据统一：写出来的
   // 每条路径都要真实存在（`tools/build/*.ps1` 这种通配形态按「至少命中一个」判）。
-  for (const [section, label] of [
+  /** 两张表连同各自的读者名（写成元组数组而不是裸字面量：后者被推成
+   *  `(string | undefined)[][]`，解构出来的 `section` 就带着「可能 undefined」往下走，
+   *  于是每一处消费点都要重新问一遍 —— 与批 5 那两张表同一形。 */
+  /** @type {Array<[string, string]>} */
+  const sections = [
     [windows, "双击入口速查"],
     [cross, "跨平台入口对照"],
-  ]) {
+  ];
+  for (const [section, label] of sections) {
     const found = pathsIn(section, /`((?:tools|scripts)\/[\w./-]+\.ps1)`/g);
     for (const rel of found) {
       if (!fs.existsSync(path.join(ROOT, rel))) {
@@ -347,9 +385,11 @@ function checkReadmeEntryList() {
     }
   }
   for (const m of cross.matchAll(/`pnpm\s+run\s+([\w:@.-]+)/g)) {
-    if (!(m[1] in scripts)) {
+    const [, name] = m;
+    if (!name) continue; // 捕获组不可能缺（正则里它是必选的），这一句是写给检查器的
+    if (!(name in scripts)) {
       problems.push(
-        `${README_REL}「${README_CROSS_SECTION}」写了 \`pnpm run ${m[1]}\`，` +
+        `${README_REL}「${README_CROSS_SECTION}」写了 \`pnpm run ${name}\`，` +
           `而 package.json 里没有这条脚本`,
       );
     }
@@ -370,6 +410,7 @@ function checkReadmeEntryList() {
   const indexed = new Set(
     (indexText === null ? [] : [...indexText.matchAll(/`((?:tools\/)?[\w-]+\/[\w.-]+\.ps1)`/g)])
       .map((m) => m[1])
+      .filter((p) => p !== undefined)
       .map((p) => (p.startsWith("tools/") ? p : `tools/${p}`)),
   );
   for (const rel of diskEntries()) {
