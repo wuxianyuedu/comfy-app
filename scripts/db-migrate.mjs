@@ -39,6 +39,11 @@ const MIGRATIONS_DIR = path.join(root, "drizzle");
 /** drizzle 的迁移账本表名。 */
 const LEDGER_TABLE = "__drizzle_migrations";
 
+/**
+ * 打一句失败话再退 1 —— 唯一的出口，调用点之后没有「继续跑」这条路。
+ * @param {string} message
+ * @returns {never}
+ */
 function fail(message) {
   process.stderr.write(`\n[db:migrate] ✗ ${message}\n\n`);
   process.exit(1);
@@ -55,6 +60,10 @@ function countUserTables() {
           `SELECT count(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '${LEDGER_TABLE}'`,
         )
         .get();
+      /* `.get()` 取不到东西 = 驱动/连接不对，**不是**「库里有 0 张表」—— 后者会让外面
+       * 那句「schema 是空的」替这条故障说话（与 `db-push.mjs` 同一处同一判法）。
+       * 原行为也是 -1：`row` 是 undefined 时 `row.c` 抛出去、被下面那个 catch 折成 -1。 */
+      if (!row) return -1;
       return Number(row.c ?? 0);
     } finally {
       db.close();
@@ -75,10 +84,16 @@ function appliedMigrations() {
           "SELECT count(*) AS c FROM sqlite_master WHERE type = 'table' AND name = ?",
         )
         .get(LEDGER_TABLE);
+      /* 两处 `.get()` 都判空再取：取不到 = 驱动/连接不对，回 -1（读不到），
+       * 不许折成 0 —— 0 在这份入口里的意思是「账本表在、里面一条迁移都没跑过」，
+       * 那是另一种事实（外面按它报「迁移没跑」）。与 `countUserTables()` 上面同一判法。 */
+      if (!exists) return -1;
       if (Number(exists.c ?? 0) === 0) return 0;
-      return Number(
-        db.prepare(`SELECT count(*) AS c FROM ${LEDGER_TABLE}`).get().c ?? 0,
-      );
+      const counted = db
+        .prepare(`SELECT count(*) AS c FROM ${LEDGER_TABLE}`)
+        .get();
+      if (!counted) return -1;
+      return Number(counted.c ?? 0);
     } finally {
       db.close();
     }
