@@ -62,10 +62,10 @@ export const INPUT_FACES = [
     test: "tests/base-check.test.ts",
     face: [
       "scripts/base-check.mjs",
-      ".githooks/**",
+      "scripts/base-check/**",
       "tests/base-check.test.ts",
     ],
-    why: "它判的是「被门槛拦住时那条命令能不能复算归属」：被测面是 base-check 本体 + 钩子怎么点名判据（含 `commandTargetState` 认的那些命令行形状）",
+    why: "它判的是「被门槛拦住时那条命令能不能复算归属」：被测面是 base-check 本体与它三份直接依赖（`git-ref` / `hook-steps` / `verdict`）。钩子那一侧**不写进面**（`.githooks/**` 是宽面触发，命中它整档先退回全跑，这一层根本轮不到问）—— 用例里的钩子文本是它自己写的夹具",
   },
   {
     test: "tests/tw4-hardgate-behaviour.test.ts",
@@ -103,14 +103,14 @@ export const INPUT_FACES = [
     ],
     why: "被测输入里最贵的一件是真的 `eslint.config.js`（它 import 了整个配置图），其余是判据本体与两份台账；业务组件改多少都不会让「规则开关 ⇄ 台账」这条漂",
   },
-  /* 下面四条是「拿真子进程 / 真 git / 真渲染」的判据自测：实测合计 988.4s（#2793 那跑
-   * 的分文件读数），而它们的触发面都窄到能写成面 —— 进固定清单的理由是 import 图追不到，
-   * 不是「必须每次跑」。`tests/affected-tests.test.ts` **刻意留在这里之外**：它守着
-   * 「增量层还在增量」这件事本身，筛它等于让解析器的缺陷把自己筛掉。
+  /* 下面这批是「拿真子进程 / 真 git / 真渲染」的判据自测：它们的触发面都窄到能写成面 ——
+   * 进固定清单的理由是 import 图追不到，不是「必须每次跑」。#2793 先登记了耗时榜上最贵的
+   * 四条，#2798 把同一张榜上剩下的九条按实读的 IO 补齐。`tests/affected-tests.test.ts`
+   * **刻意留在这里之外**：它守着「增量层还在增量」这件事本身，筛它等于让解析器的缺陷把自己筛掉。
    *
    * 依赖面与全局配置（`package.json` / lockfile / `tsconfig*.json` / `tests/setup.ts`）
    * **不往面里写**：它们自己就是 `WIDE_TRIGGERS`，一命中就退成整档全跑，根本到不了这一层
-   * 筛 —— 写进去只会长出一个永远不会被问到的模式。 */
+   * 筛 —— 写进去只会长出一个永远不会被问到的模式（判据里那一格会当场点名这种死面）。 */
   {
     test: "tests/eslint-gate-canary.test.ts",
     face: [
@@ -144,6 +144,122 @@ export const INPUT_FACES = [
       "tests/a11y-axe-stories.test.ts",
     ],
     why: "输入是 `src/components/ui/*.stories.tsx` 渲染出来的那棵树及其装饰器数据源：组件与故事的改动会改判决，负债台账与 jsdom 能力件同理（`tests/setup.ts` 与 axe / react 的版本是 wide 触发面，轮不到这一层）",
+  },
+  {
+    test: "tests/gate-executors.test.ts",
+    face: [
+      "scripts/**",
+      "tests/helpers/gate-repo.ts",
+      "tests/gate-executors.test.ts",
+    ],
+    why: "它 `readdirSync(scripts/)` 把每一份判据脚本拷进临时工作区，再拿 `.gate-executor-ledger.json` 与 `quality-gate.mjs/.ps1` 对账 —— 新增、改名或删掉一份判据脚本都会改判决；真钩子那一侧是 wide 触发面，轮不到这一层",
+  },
+  {
+    test: "tests/check-merge-parents.test.ts",
+    face: [
+      "scripts/check-merge-parents.mjs",
+      "tests/helpers/gate-repo.ts",
+      "tests/check-merge-parents.test.ts",
+    ],
+    why: "临时 git 仓库里真造合并现场，判据与共享夹具是唯一的读入面；真 `.githooks/prepare-commit-msg` 那条断言由 wide 触发面兜（改钩子时整档全跑）",
+  },
+  {
+    test: "tests/merge-changelog-anchor.test.ts",
+    face: [
+      "scripts/merge-changelog-fragments.mjs",
+      "tests/helpers/git-sandbox-env.ts",
+      "tests/merge-changelog-anchor.test.ts",
+    ],
+    why: "CHANGELOG 与碎片都是用例自己在临时仓库里造的，真仓只有被测脚本与环境隔离件两个输入",
+  },
+  {
+    test: "tests/storybook-tsc-input.test.ts",
+    face: [
+      ".storybook/**",
+      "scripts/storybook-assets.mjs",
+      "scripts/install-git-hooks.mjs",
+      ".gitignore",
+      "tests/helpers/strip-comments.ts",
+      "tests/storybook-tsc-input.test.ts",
+    ],
+    why: "它读 `.storybook` 的入口 / 注入层 / 生成件契约、`.gitignore` 的「生成件不入库」规则与装钩子入口的接线，再拿真 tsc 复量；`tsconfig.json` 与 `package.json` 是 wide 触发面",
+  },
+  {
+    test: "tests/eslint-exemption-staleness.test.ts",
+    face: [
+      "eslint.config.js",
+      "scripts/check-eslint-exemptions.cjs",
+      "scripts/check-a11y-rules.cjs",
+      "scripts/check-docs-api.cjs",
+      "scripts/check-format.cjs",
+      "scripts/check-theme-colors.cjs",
+      "scripts/ci-build-readout.mjs",
+      "scripts/ci-toolchain-pnpm.mjs",
+      "scripts/file-structure-rules.cjs",
+      "src/lib/llm/video-task-util.test.ts",
+      "src/lib/llm/video-task-util.ts",
+      "src/lib/log/log-ansi.ts",
+      "src/lib/media/materials.ts",
+      "src/lib/process/executable-resolve.ts",
+      "tests/ci-log.test.ts",
+      "tests/no-platform-ci-config.test.ts",
+      "tests/eslint-exemption-staleness.test.ts",
+    ],
+    why: "台账写在 `eslint.config.js` 里，加载器是 `check-a11y-rules.cjs`；bin 那一条拿真配置逐份 lint 台账点名的文件 —— 任一文件不再需要豁免，读数就变",
+  },
+  {
+    test: "tests/scripts-typecheck-ratchet.test.ts",
+    face: [
+      "scripts/**",
+      "tests/helpers/ratchet-refusal.ts",
+      "tests/helpers/git-sandbox-env.ts",
+      "tests/scripts-typecheck-ratchet.test.ts",
+    ],
+    why: "判决面是 `tsconfig.scripts.json` 展开的全部 `scripts/**/*.mjs`，还拿盘上枚举与真基线 JSON 对账 —— 新增或改一份脚本都在输入面里（那份 tsconfig 自己是 wide 触发面）",
+  },
+  {
+    test: "tests/precommit-timing.test.ts",
+    face: [
+      "scripts/precommit-timing.mjs",
+      "tests/helpers/hook-groups.ts",
+      "tests/helpers/git-sandbox-env.ts",
+      "tests/precommit-timing.test.ts",
+    ],
+    why: "判的是记账 / 读账往返与 CLI 契约，读入面是被测脚本与两个夹具 helper；`.githooks/pre-commit` / `timing.sh` 那两条接线断言落在 wide 触发面上",
+  },
+  {
+    test: "tests/ci-env-probe.test.ts",
+    face: [
+      ".cnb.yml",
+      ".cnb/web_trigger.yml",
+      "scripts/ci-env-probe.mjs",
+      "scripts/ci-toolchain-browser.mjs",
+      "scripts/ci-toolchain-browser-reach.mjs",
+      "scripts/ci-toolchain-browser-fetch.mjs",
+      "scripts/ci-toolchain-browser-seed.mjs",
+      "scripts/ci-toolchain-browser-root.mjs",
+      "scripts/ci-console-encoding.mjs",
+      "scripts/ci-toolchain-python.mjs",
+      "scripts/ci-cp936-exit.mjs",
+      "scripts/setup-comfy-cli-venv.mjs",
+      "scripts/setup-comfy-cli-venv.ps1",
+      "scripts/ci-oneshot-gates.mjs",
+      "scripts/full-suite-run.mjs",
+      "scripts/freshness-ledger.mjs",
+      "scripts/doc-facts.cjs",
+      "tests/no-platform-ci-config.test.ts",
+      "tests/ci-env-probe.test.ts",
+    ],
+    why: "它对着 `.cnb.yml` 判环境前提那一步的接线与门禁顺序，并 import 探针本体与它的本地依赖；`tests/no-platform-ci-config.test.ts` 是 import 进来的（它的 describe 会一起注册），后者的直接输入也逐条列在这里",
+  },
+  {
+    test: "tests/changelog-versions-gate.test.ts",
+    face: [
+      "scripts/check-changelog-versions.cjs",
+      "tests/helpers/gate-repo.ts",
+      "tests/changelog-versions-gate.test.ts",
+    ],
+    why: "CHANGELOG 由每个工作区自己造，锚取临时仓库真算出的短哈希 —— 真仓只有被测脚本与共享夹具两个输入",
   },
 ];
 
