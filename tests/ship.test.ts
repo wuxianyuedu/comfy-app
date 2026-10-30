@@ -4128,6 +4128,114 @@ describe("main() 的单子动作：独立于主流程，在 master 上、没碎�
 });
 
 /**
+ * `--dry-run` 与「只补关」那一路（ISSUE #2766）。
+ *
+ * 现场：`pnpm ship --close-issue=2748,2755 --dry-run` 念完「将要执行的命令」那几行，
+ * 然后**真的把两张单关掉了** —— 置 `closed/completed`、发「开发结束」评论、撤处理人标签，
+ * 三件写动作一件不落。根因不是「dry-run 这个机制不管关单」，而是装配层那一次调用
+ * **少传了一个字段**：同一个文件里 `--diagnose` / `--stage-log` / `--claim` 三条独立动作
+ * 都带了 `dryRun: opt.dryRun`，只有「只补关」那一条没带。
+ *
+ * 所以这两条用例**打在 `main()` 上**，不只在 `closeIssues` 上：只测被调方那一层，
+ * 「调用点漏传」这个真实回归形永远不会红（本仓反复收的那一型 —— 注入式单测看不见默认出口）。
+ * 两条是一对：dry-run 那条钉「写面一条都不发」，对照那条钉「不带它时确实发了一次」——
+ * 缺了对照，「整条链根本没跑起来」也会把前者读成绿。
+ */
+describe("#2766 --dry-run 底下「只补关」：读面照跑，写面一条不发", () => {
+  /** 只答这一族要的那几跳；`calls` 记下每一次伸手（含 git，写动作要从里面筛）。 */
+  function closeMainIo() {
+    const calls: Array<string> = [];
+    const log: Array<string> = [];
+    const ok = (stdout: string): FakeResult => ({
+      status: 0,
+      stdout,
+      stderr: "",
+      error: null,
+    });
+    const run = (cmd: string, args: Array<string>): FakeResult => {
+      calls.push([cmd, ...args].join(" "));
+      const key = args.join(" ");
+      if (cmd === "cnb" && args[0] === "--version") return ok("1.15.25");
+      if (cmd === "git" && key.includes("@{u}")) return ok("");
+      if (cmd === "git" && key === "remote") return ok("cnb\n");
+      if (cmd === "git" && key.includes("symbolic-ref"))
+        return ok("refs/remotes/cnb/master");
+      if (cmd === "git" && key.includes("--abbrev-ref")) return ok("master");
+      if (cmd === "git" && key.includes("rev-parse --verify --quiet")) return ok("d02ec9");
+      if (cmd === "git" && key.includes("get-url"))
+        return ok("https://cnb.cool/moon-read/comfy-app-t3\n");
+      if (cmd === "cnb" && args[0] === "pulls" && args[1] === "get-pull")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { number: 2069, is_merged: true, title: "fix(a): 那一格 (#2070)" },
+          }),
+        );
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "update-issue")
+        return ok(
+          JSON.stringify({ status: 200, data: { number: 2070, state: "closed" } }),
+        );
+      if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue")
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: {
+              number: 2070,
+              state: "closed",
+              state_reason: "completed",
+              closed_at: "2026-10-30T08:19:09Z",
+              /* 处理人标签**不在场**：这一族自己会念「不代发『开发结束』、不动标签」，
+               * 对照组因此只余「关单」这一件写动作要盯。 */
+              labels: [],
+            },
+          }),
+        );
+      return ok("");
+    };
+    /** 写面那四条命令（读面是 get-issue / get-pull / list-*）。 */
+    const WRITE = ["update-issue", "post-issue-comment", "post-issue-labels", "delete-issue-label"];
+    const writes = (list: Array<string>) =>
+      list.filter((c) => WRITE.some((w) => c.includes(w)));
+    return { run, calls, log, writes };
+  }
+
+  const ARGS = ["--close-issue", "2070", "--as-merged", "2069"];
+
+  it("带 --dry-run ⇒ 凭据照样回读，四件写动作一件不发，退 0（它跑起来了，结论是「可以关而这次没写」）", async () => {
+    const f = closeMainIo();
+    const code = await main({
+      args: [...ARGS, "--dry-run"],
+      env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+      run: f.run,
+      log: (l) => f.log.push(l),
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(f.writes(f.calls)).toEqual([]);
+    // 读面照跑：落地证明仍取自平台回读，不是被 dry-run 跳过。
+    expect(f.calls.some((c) => c.includes("get-pull"))).toBe(true);
+    const all = f.log.join("\n");
+    expect(all).toContain("is_merged=true");
+    expect(all).toContain("#2070 将置 state=closed / state_reason=completed");
+    expect(all).toContain("一条写命令都没发");
+  });
+
+  it("同一组旗标不带 --dry-run ⇒ 确实发了一次 update-issue（对照：缺了它，上一条能被「整条没跑」冒充绿）", async () => {
+    const f = closeMainIo();
+    const code = await main({
+      args: ARGS,
+      env: { COMFYAPP_DEV_HANDLE: "yuedu-win" },
+      run: f.run,
+      log: (l) => f.log.push(l),
+    });
+    expect(code).toBe(CODE.GREEN);
+    const updates = f.calls.filter((c) => c.includes("update-issue"));
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toContain("--state closed --state-reason completed");
+    expect(f.log.join("\n")).not.toContain("一条写命令都没发");
+  });
+});
+
+/**
  * `--diagnose`（ISSUE #2217）：CI 红了之后只读取回失败格与日志摘要。
  *
  * 判据落在三件事上：
