@@ -57,7 +57,7 @@
   （它的名字、`.a11y-rule-ledger.json` 与 §6.12 都按 jsx-a11y 写）。本批按**独立件**落地
   （可逆：将来合并只是搬函数，不改判据语义），把这一格写在规范里而不是顺手做掉。
 
-  凭据（六条）：
+  凭据（七条）：
   ① `tests/eslint-exemption-staleness.test.ts` **10 条全绿**（bin 那条 9.3s）—— 纯判决那几条
   把「相符 / 陈旧 / 全部没判成 / 有一份读不到 / 份数不符 / glob / 空台账两种 / 认块」各钉一格；
   ② `tests/doc-check-hook-wiring.test.ts` **133 条全绿**（含那句「钩子里 `D(N 个判据脚本)` 的 N
@@ -78,3 +78,19 @@
   `string | undefined` ⇒ 显式抛出「夹具没配到这一份」，**不写 `?? ""`** ——
   那会把「夹具漏配」折成「这份文件是空的、所以没命中」，正是本条判据在防的那一型）。
   修完复算 **EXIT=0、`error TS` 0 行**。
+
+- **落地之后自己照出来的一处漏登记**（不是判据的问题，是**注册面数错了**）：那一批做了四处注册
+  （钩子步骤、`base-check/declared-hook-steps.mjs` 的标签、`D(59→60)` 的自报数、
+  `fixed-structural-tests.mjs`），漏了第五处 —— 规范 §13.1「手跑全套」清单里要有
+  `✅ node scripts/check-eslint-exemptions.cjs` 那一格。撞见它的不是门禁，是另一条分支上
+  为 ISSUE #2665 做一次性 worktree 探针时、在那份工作树里跑的 `check-doc-references.cjs`。
+  窗口量得出来：`fa73d1f8` 落 `master` = 2026-10-30T06:19:38Z、探针撞见 ≈ 06:39Z
+  ⇒ **约 20 分钟**，而这段时间里 PR 与 `pre-push` 全绿 ——
+  因为 `文档引用与权威源一致` 挂在 `COMFYAPP_CI_PUSH_GATES`（**合并后**那一跑），
+  本地合并前复算与聚合档都不含它（`premerge-check.mjs` / `base-check/**` /
+  `quality-gate.mjs` / `.githooks/pre-push` 四处 grep 全 0 命中）。
+  那一格与它的 `docs/generated/` 镜像已同批补上（`doc:render -- --only` 只重生那一份），
+  补完当场 `node scripts/check-doc-references.cjs` **EXIT=0**。
+  **「为什么这一对能在合并后才被看见」是另一件诉求，另开立单：ISSUE #2753（P2）** ——
+  那里带着 `doc:check` 全量实测 **708ms** 这个数与三案的取舍（要不要挪进合并前那一跳
+  是档位决定，留给人拍；本批只补那一格，不动任何档位）。
