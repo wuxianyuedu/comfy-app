@@ -4,6 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
+import { FieldLabel } from "~/components/ui/field";
 import { textHandler } from "~/lib/form-props";
 import { cn } from "~/lib/utils";
 import type { SeriesOrganizerController } from "./hooks/use-series-organizer";
@@ -62,7 +63,7 @@ export const SeriesCharacterLibrary = ({ c, projectId }: SeriesCharacterLibraryP
         ))}
       </div>
       <div className="flex items-center gap-2">
-        <label className="flex flex-1 items-center gap-2">
+        <FieldLabel className="flex flex-1 items-center gap-2">
           <span className="text-ink-faint text-xs">新角色</span>
           <input
             className="border-border bg-surface-1 flex-1 rounded-lg border px-2 py-2 text-base outline-none"
@@ -70,7 +71,7 @@ export const SeriesCharacterLibrary = ({ c, projectId }: SeriesCharacterLibraryP
             placeholder="名称"
             value={newName}
           />
-        </label>
+        </FieldLabel>
         <Button
           className="h-8"
           disabled={!newName.trim() || c.characters === undefined}
