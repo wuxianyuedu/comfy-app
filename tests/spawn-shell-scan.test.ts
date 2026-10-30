@@ -576,9 +576,27 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
 
         const notRun = run(["scripts/ci-run-tool.mjs", "--root", root, "这个垫片不在"]);
         expect(notRun.status, "解析不到却退 0/1 —— 会被读成「跑过了且红」").toBe(2);
-        /* 红了要指路：给得出自查入口，不然下一个人只能去猜是哪一层没解析到。 */
-        expect(notRun.stderr).toContain("--by-name");
+        /* 话术分两档（ISSUE #2720）：fixture 没有 package.json ⇒ 名字不在仓内声明里，
+         * 走「面外」那一档 —— 出口指向 ship-exec 的 pnpmInvocation，**不再出现**
+         * 「先 `pnpm install`」（那句话对面外永远治不了）。 */
         expect(notRun.stderr).toContain("这个垫片不在");
+        expect(notRun.stderr).toContain("pnpmInvocation");
+        expect(notRun.stderr, "面外不许再指去 install").not.toContain("先 `pnpm install`");
+      },
+    );
+    /* 另一档的阳性对照：名字**在**仓内声明里、只是 .bin 没垫片 —— 这才轮到
+     * 「先 pnpm install」+ `--by-name` 自查。 */
+    withFixture(
+      {
+        "package.json": '{"dependencies":{"声明了没装":"1.0.0"}}\n',
+      },
+      (root) => {
+        const missing = run(["scripts/ci-run-tool.mjs", "--root", root, "声明了没装"]);
+        expect(missing.status).toBe(2);
+        expect(missing.stderr).toContain("仓内声明了这个依赖");
+        expect(missing.stderr).toContain("pnpm install");
+        /* 红了要指路：给得出自查入口，不然下一个人只能去猜是哪一层没解析到。 */
+        expect(missing.stderr).toContain("--by-name");
       },
     );
     /* 「没点名要跑谁」同样是没结论，不是绿。 */
