@@ -77,9 +77,10 @@ export function runTool(cmd, args) {
   const stdout = res.stdout ?? "";
   const stderr = res.stderr ?? "";
   /* 「命令不在」有两种形状：POSIX 的 spawn ENOENT，与 cmd.exe 回显的
-   * 「'x' is not recognized …」。两种都是**没取到读数**，不是「没就绪」。 */
+   * 「'x' is not recognized …」。两种都是**没取到读数**，不是「没就绪」。
+   * `SpawnSyncReturns.error` 的静态类型是 `Error`，`code` 只在运行期由 libuv 挂上来。 */
   const missing =
-    res.error?.code === "ENOENT" ||
+    /** @type {{code?: string} | undefined} */ (res.error)?.code === "ENOENT" ||
     (process.platform === "win32" &&
       /is not recognized as an internal or external command/i.test(stderr));
   return {
@@ -90,12 +91,22 @@ export function runTool(cmd, args) {
   };
 }
 
-/** 两段输出合成一份（保留先后：有些工具把结论写在 stderr 之前）。 */
+/**
+ * 两段输出合成一份（保留先后：有些工具把结论写在 stderr 之前）。
+ *
+ * @param {{stdout: string, stderr: string}} res
+ * @returns {string}
+ */
 function combined(res) {
   return `${res.stdout}${res.stderr}`;
 }
 
-/** 原始输出按行加前缀印出；空输出就明说「它什么都没说」。 */
+/**
+ * 原始输出按行加前缀印出；空输出就明说「它什么都没说」。
+ *
+ * @param {string[]} lines
+ * @param {{stdout: string, stderr: string}} res
+ */
 function relay(lines, res) {
   const text = combined(res).replace(/\s+$/, "");
   if (text === "") {
@@ -174,7 +185,13 @@ export function probeZvec(run = runTool) {
   };
 }
 
-/** 缺省值的形状统一成一句短话（读数缺失时别印成 0）。 */
+/**
+ * 缺省值的形状统一成一句短话（读数缺失时别印成 0）。
+ *
+ * @param {unknown} value
+ * @param {string} [fallback]
+ * @returns {string}
+ */
 function show(value, fallback = "（未给）") {
   if (value === undefined || value === null || value === "") return fallback;
   if (typeof value === "boolean") return value ? "true" : "false";
@@ -234,7 +251,12 @@ export function renderProbe(probe) {
   return lines;
 }
 
-/** 汇总两个读数：2（没结论）压过 1（没就绪）压过 0（都就绪）。 */
+/**
+ * 汇总两个读数：2（没结论）压过 1（没就绪）压过 0（都就绪）。
+ *
+ * @param {Array<{verdict: "ready" | "not-ready" | "unknown"}>} probes
+ * @returns {number}
+ */
 export function combineVerdicts(probes) {
   let total = 0;
   for (const p of probes) total = Math.max(total, VERDICT_CODE[p.verdict]);
@@ -303,6 +325,7 @@ function initialize(before) {
         : ["zg", ["index"]];
     process.stdout.write(`${TAG} 跑 \`${cmd} ${args.join(" ")}\`：\n`);
     const res = runTool(cmd, args);
+    /** @type {string[]} */
     const lines = [];
     relay(lines, res);
     for (const line of lines) process.stdout.write(`${line}\n`);
