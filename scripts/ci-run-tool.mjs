@@ -71,7 +71,7 @@ if (entry === null) {
    *     会把人引去白跑一次 install 并长出「本机跑不了平台」的误判——正确通道是
    *     `ship-exec.mjs` 的 `pnpmInvocation(args, { name })`（经 PowerShell 宿主）。
    * 用 package.json 的依赖声明区分这两档，而不是猜。 */
-  let inManifest = false;
+  let inManifest;
   try {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(root, "package.json"), "utf8"),
