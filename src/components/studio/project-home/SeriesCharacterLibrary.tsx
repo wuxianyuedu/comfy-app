@@ -34,33 +34,58 @@ export const SeriesCharacterLibrary = ({ c, projectId }: SeriesCharacterLibraryP
     <div className="flex flex-col gap-2">
       <div className="text-ink-muted text-sm font-medium">系列角色库</div>
 
-      {/* 角色列表（可改名 / 删除） */}
+      {/* 角色列表（可改名 / 删除 / 看被哪些集引用） */}
       <div className="flex flex-col gap-1.5">
-        {(c.characters ?? []).map((ch) => (
-          <div
-            className="group border-border flex items-center gap-2 rounded-lg border px-2 py-2"
-            key={ch.id}
-          >
-            <input
-              className="flex-1 bg-transparent text-base outline-none"
-              defaultValue={ch.name}
-              onBlur={(e) => {
-                if (e.target.value && e.target.value !== ch.name) {
-                  c.updateCharacter(ch.id, { name: e.target.value });
-                }
-              }}
-            />
-            <Button
-              className="text-destructive h-7 px-2 text-xs"
-              onClick={() => {
-                c.deleteCharacter(ch.id);
-              }}
-              variant="ghost"
-            >
-              删除
-            </Button>
-          </div>
-        ))}
+        {(c.characters ?? []).map((ch) => {
+          const inspected = c.inspectedCharacterId === ch.id;
+          const refs = inspected ? (c.characterEpisodes ?? []) : [];
+          return (
+            <div className="flex flex-col gap-1" key={ch.id}>
+              <div className="group border-border flex items-center gap-2 rounded-lg border px-2 py-2">
+                <input
+                  className="flex-1 bg-transparent text-base outline-none"
+                  defaultValue={ch.name}
+                  onBlur={(e) => {
+                    if (e.target.value && e.target.value !== ch.name) {
+                      c.updateCharacter(ch.id, { name: e.target.value });
+                    }
+                  }}
+                  onFocus={() => {
+                    c.inspectCharacterEpisodes(ch.id);
+                  }}
+                />
+                <Button
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    if (inspected) c.clearInspectedCharacter();
+                    else c.inspectCharacterEpisodes(ch.id);
+                  }}
+                  variant="ghost"
+                >
+                  {inspected ? "收起引用" : "引用"}
+                </Button>
+                <Button
+                  className="text-destructive h-7 px-2 text-xs"
+                  onClick={() => {
+                    c.deleteCharacter(ch.id);
+                  }}
+                  variant="ghost"
+                >
+                  删除
+                </Button>
+              </div>
+              {inspected && (
+                <div className="text-ink-faint pl-2 text-xs">
+                  {refs.length === 0
+                    ? "该角色尚未被任何集引用。"
+                    : `该角色被 ${refs.length} 集引用（改动会影响这些集）：${refs
+                        .map((r) => `S${r.seasonNumber}E${r.episodeNumber} ${r.title || "未命名"}`)
+                        .join("、")}`}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       <div className="flex items-center gap-2">
         <FieldLabel className="flex flex-1 items-center gap-2">
