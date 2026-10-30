@@ -36,6 +36,7 @@ pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**
 pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
 pnpm ship --stage-log [cnb-xxx-yyy] <格名|格 id>   # 只读：念出某一格的日志正文（绿跑也能用）——按格名反查 stageId，认不出/命中多格退 2，不替你挑一格
 pnpm ship --new-issue "fix(x): …" --issue-body-file .git/issue.md --priority P1   # 一步建单：建 → 补提单人标签 → 独立回读（标题/正文人给）
+pnpm ship --comment 2719 --body-file .git/comment.md   # 往已有单子补一条读数：写 → 独立逐字回读（正文只从文件来）
 pnpm ship --whoami                               # 只读自查：这份检出的留痕短名 + 署名格式 + 手工补 PR 标签的粘贴命令
 pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上那批**残留进程（默认只念读数）
 ```
@@ -229,6 +230,14 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
     **不替你挑一格**（挑错的那一格也有日志、也带行号，看起来就像证据）。`0` 念的是
     「正文取到了」，不等于「这一格绿了」；取数、归一与「按 sha 归属哪一跑」都和
     `--diagnose` 共用同一份（§13.10.13）。
+13. **往已有单子补读数走 `--comment`，正文只从文件来。**
+    `pnpm ship --comment <号> --body-file <文件>`：评论（开头那行署名由脚本保证有且只有一行）→
+    **独立 `list-issue-comments --sort -created` 逐字回读**之后才念结论。正文只收文件 ——
+    命令行里的多行与反引号会被 shell / `pnpm run` 吃掉；`--body-file` 与建单那格的
+    `--issue-body-file` 是两个对象。**末尾换行先归一再比对**（平台会吞掉文件末尾那一个，
+    实测 1818 ⇄ 1817），其余任何差异 ⇒ `1`；写没跑起来 / 回读没跑起来 ⇒ `2`，且回读没跑起来时
+    **别急着重跑**（可能已经写进去了，先去单子上看一眼）。一次只做一件：与领取 / 结束 / 主流程
+    任一旗标同跑 ⇒ `2`，`--body-file` 不跟 `--comment` 一起出现也 ⇒ `2`（§13.10.17）。
 
 ## 等 CI 那一格别空等：做一次回顾（规范 §13.10.14）
 

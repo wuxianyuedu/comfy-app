@@ -21,6 +21,7 @@
  */
 
 import { asArray } from "./ship-build.mjs";
+import { appendComment, readCommentBodies } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
@@ -214,35 +215,9 @@ export function readIssue({ run, slug, number }) {
 }
 
 /**
- * 评论正文（**新到旧**）。取不到回 null —— 空数组会被读成「查过了、没有」，
- * 而 null 才是「没拿到列表」。
- *
- * @param {{run:any, slug:string, number:number}} ctx
- * @returns {string[] | null}
+ * 评论的**写 + 回读**只有一份（`ship-comment.mjs`）：`--comment` 那一格用的是同一条链，
+ * 各写一份就回到 #2719 收掉之前那种「一边补了回读、另一边没有」。
  */
-export function readCommentBodies({ run, slug, number }) {
-  const got = cnbJson(run, [
-    "issues",
-    "list-issue-comments",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--sort",
-    "-created",
-    "--page-size",
-    "100",
-    "-v",
-  ]);
-  if (!got) {
-    return null;
-  }
-  const list = asArray(got.json);
-  if (!list) {
-    return null;
-  }
-  return list.map((c) => String(c?.body ?? ""));
-}
 
 /**
  * 写一条状态评论，并**独立回读**确认它是这个人的最新状态。
@@ -267,28 +242,23 @@ function ensureComment(ctx) {
     return CODE.GREEN;
   }
   const text = kind === "claim" ? claimComment(handle) : releaseComment(handle);
-  const file = mkTmp("ship-issue-comment", text);
-  if (!file) {
-    log(`[ship] #${number} 取不到 git 目录 ⇒ 评论正文没有落点，这一格没有执行者`);
+  const wrote = appendComment({
+    run,
+    log,
+    slug,
+    number,
+    body: text,
+    mkTmp,
+  });
+  if (!wrote.posted) {
+    log(`[ship] #${number} 评论写那一步没跑起来 ⇒ 不念「已评论」`);
     return CODE.NOT_RUN;
   }
-  cnbJson(run, [
-    "issues",
-    "post-issue-comment",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--body-file",
-    file,
-    "-v",
-  ]);
-  const back = readCommentBodies({ run, slug, number });
-  if (!back) {
+  if (!wrote.bodies) {
     log(`[ship] #${number} 评论写后回读没跑起来 ⇒ 不念「已评论」`);
     return CODE.NOT_RUN;
   }
-  if (handleCommentState(back, handle) !== kind) {
+  if (handleCommentState(wrote.bodies, handle) !== kind) {
     log(
       `[ship] #${number} 评论写后回读里看不到刚写的那条 ⇒ 不念「已评论」` +
         "（可能是并发写了别的状态，先去看一眼评论）",
@@ -679,6 +649,7 @@ export function finishIssueWork(ctx) {
  *   opt:any,
  *   mkTmp:(name:string,text:string)=>string|null,
  *   createIssue?:any,
+ *   commentIssue?:any,
  *   dryRun?:boolean,
  * }} ctx
  * @returns {number} `CODE` 之一
@@ -696,30 +667,44 @@ export function runIssueAction(ctx) {
     opt,
     mkTmp,
     createIssue,
+    commentIssue,
     dryRun = false,
   } = ctx;
   const claimBad = /** @type {string[]} */ (opt.claimBad ?? []);
   const releaseBad = /** @type {string[]} */ (opt.releaseBad ?? []);
   const newIssueBad = /** @type {string[]} */ (opt.newIssueBad ?? []);
+  const commentBad = /** @type {string[]} */ (opt.commentBad ?? []);
   const bad = [
     ...claimBad.map((x) => `--claim ${x}`),
     ...releaseBad.map((x) => `--release ${x}`),
     ...newIssueBad.map((x) => `--new-issue ${x}`),
+    ...commentBad.map((x) => `--comment ${x}`),
   ];
   if (bad.length > 0) {
     log(
-      `[ship] [ERROR] --claim / --release 收的是一张单的号（2 位以上数字，可写 #2179）、` +
+      `[ship] [ERROR] --claim / --release / --comment 收的是一张单的号（2 位以上数字，可写 #2179）、` +
         `--new-issue 收的是标题；这一次这些不能当号 / 标题用：${bad.join(" ")}`,
     );
     log("[ship] 一个都不认 ⇒ 不动任何单子，也不去猜是哪一张。");
     return CODE.NOT_RUN;
   }
+  /* `--body-file` 是 `--comment` 的正文，单独出现就是在写一个没有会读它的东西 ——
+   * 静默退回主流程会让人以为评论已经写了（§13.10.12 对 `--issue-body-file` 同一条处置）。 */
+  if (opt.bodyFile != null && opt.comment == null) {
+    log(
+      "[ship] [ERROR] --body-file 只跟 --comment <号> 一起用：" +
+        "它是评论正文；建单的正文旗标是 --issue-body-file。",
+    );
+    return CODE.NOT_RUN;
+  }
   const wantsNewIssue = opt.newIssue != null || newIssueBad.length > 0;
+  const wantsComment = opt.comment != null || commentBad.length > 0;
   const wanted = [
     opt.claim != null ? "--claim" : null,
     opt.release != null ? "--release" : null,
     opt.claims ? "--claims" : null,
     wantsNewIssue ? "--new-issue" : null,
+    wantsComment ? "--comment" : null,
   ].filter(Boolean);
   if (wanted.length > 1) {
     log(`[ship] [ERROR] 一次只做一件事：拿到 ${wanted.join(" + ")}`);
@@ -769,6 +754,25 @@ export function runIssueAction(ctx) {
       handle,
       handleSource,
       explicitHandle,
+      root,
+      opt,
+      mkTmp,
+      dryRun,
+    });
+  }
+  /* `--comment` 不需要「谁」：写一条读数不是「谁在做什么」，未配留痕时署名会写「未配」
+   * 但评论照发（`--new-issue` 同一条边界）。所以它排在下面对 handle 的硬性检查之前。 */
+  if (wantsComment) {
+    if (typeof commentIssue !== "function") {
+      log("[ship] [ERROR] --comment 没有接上执行者（装配层漏传）⇒ 没有结论。");
+      return CODE.NOT_RUN;
+    }
+    return commentIssue({
+      run,
+      log,
+      slug,
+      number: opt.comment,
+      handle,
       root,
       opt,
       mkTmp,

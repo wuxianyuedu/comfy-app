@@ -321,7 +321,7 @@ export function readHookSteps(hookPath = HOOK) {
  * 只认**步骤行**，块边界就是 `run_group D0` 那一行到它 `sh -c '` 的收尾引号。
  *
  * 消费方：`.githooks/pre-commit` 的档位开关（默认只跑这一档）与
- * `scripts/premerge-check.mjs`（合并前那一跳默认只复算这一档，`--full` 才全套）。
+ * `scripts/premerge-check.mjs`（合并前那一跳**默认就跑全套**，`--light` 才减到这一档）。
  *
  * @param {string} hookPath @returns {Set<string>}
  */

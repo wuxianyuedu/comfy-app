@@ -6325,7 +6325,7 @@ A/B/D 又与 C 并行（挪走它们省不到墙钟），真正的大头 C 却�
 | 用什么取       | vitest 的 **junit reporter**：每个文件一个内层 `<testsuite name="tests/x.test.ts" time="0.33">`。`json` reporter 的 `duration` 是**逐用例**的、没有文件级时长 —— 拿它拼只能再自己加一遍聚合                                                                                                                                                                                            |
 | 落在哪         | 钩子的 `$LOGD`（每次新建、随 EXIT trap 删除、**不在检出里**）—— 写进检出就是未跟踪文件，被结构门禁那一套判，且会被下一次 checkout 牵走。平台那一格没有 `$LOGD`，由 `scripts/ci-affected-tests.mjs` 自己造一份同布局目录（`node_modules/.cache/comfy-affected-*`，跑完删掉）经 `LOGD` 交给启动器（ISSUE #2074）：此前这一格**没有账本**，复跑面每次都退回整块、对账也没做成             |
 | 怎么不顶掉输出 | **`--reporter=default` 与 `--reporter=junit` 两个都给**：只给 junit 会把人类可读的输出整个换掉，而真红那一屏是唯一能读的东西（由 `tests/hook-affected-launch.test.ts` 钉住）。唯一例外是 quiet 档（`--reporter=dot`，平台日志预算）：已经有人读的出口时**不再叠 default**，否则同一跑打印两遍，正好把 102400 字节的预算作废（`junitReportArgs` 的 `withDefaultReporter`，ISSUE #2074） |
-| 清单谁念 | quiet 档换掉的是**逐一打印的那一份**（`dot` 只打点），于是「这次跑了哪些用例」在平台日志里**一个文件名都没有**，只剩 `Tests N passed` —— 而清单里排在最前面的是**固定清单**（103 份），它们才是「这次守的到底是什么」的答案，总数答不了。所以 `affected-launch-file-list.mjs` 在 quiet 档把**送进 vitest 的那一份清单**逐行念一遍（默认 200 行封顶，超出只念条数；**只打、不为它多起一次 vitest**、不改任何判据）。不 quiet 时不打 —— 默认 reporter 已经打过了，重复打印会把那一档的预算又作废一次 |
+| 清单谁念 | quiet 档换掉的是**逐一打印的那一份**（`dot` 只打点），于是「这次跑了哪些用例」在平台日志里**一个文件名都没有**，只剩 `Tests N passed` —— 而清单里排在最前面的是**固定清单**（份数**不写在本文里**：现值取 `FIXED_STRUCTURAL_TESTS.length`，一条命令的取法见本节末「日志预算的另一半」那一段），它们才是「这次守的到底是什么」的答案，总数答不了。所以 `affected-launch-file-list.mjs` 在 quiet 档把**送进 vitest 的那一份清单**逐行念一遍（默认 200 行封顶，超出只念条数；**只打、不为它多起一次 vitest**、不改任何判据）。不 quiet 时不打 —— 默认 reporter 已经打过了，重复打印会把那一档的预算又作废一次 |
 | 两块 / 两遍    | 每块、每遍各一个文件。合并按 `(块, 遍)` 升序、**后写的覆盖先写的** ⇒ 隔离复跑那遍赢。拿首跑那组数排序会把**负载**读成**文件的成本**（§13.6.4 那一族）                                                                                                                                                                                                                                  |
 | 分母           | 同目录落一份「这次真正跑了哪些文件」的清单。没有它，「junit 里只有 88 份」与「清单就是 88 份」在账本里**逐字同形**，而前者意味着两份文件一次都没被计时 —— 缺的份数被点名，且明写「不是 0 秒」                                                                                                                                                                                          |
 | 对账           | 报表给「分文件之和 ⇄ 组 C 墙钟」两行对照：junit 的 `time` 只算**测试阶段**，不含 vitest 启动、收集/transform 与 worker 拉起。所以这张表用来**排序**，不能当墙钟用                                                                                                                                                                                                                      |
@@ -6361,8 +6361,12 @@ A/B/D 又与 C 并行（挪走它们省不到墙钟），真正的大头 C 却�
 「quiet 只换 reporter」买到了「结论不被逐文件的行挤出去」，代价是**「跑了哪些用例」
 在平台日志里彻底消失** —— `--reporter=dot` 只打点，`.cnb.yml` 那一格是 quiet，于是
 一屏日志只剩 `Tests 1116 passed (1116)` 这类总数。而清单里排在最前面的是**固定清单**
-（`scripts/fixed-structural-tests.mjs`，当下 103 份：日志实现只有一处、lib 的 Node-only
-声明口径、core 骨架单一事实源……），它们才是「这次守的到底是什么」的答案 —— 总数答不了。
+（`scripts/fixed-structural-tests.mjs`；**份数不写在本文里** —— 它随每次加判据变动，而「文档里那份数」
+没有任何判据会因它漂开而红，写下来就是一份会过期的读数且没人收到账。要现值就跑一条命令：
+`pnpm exec node -e "import('./scripts/fixed-structural-tests.mjs').then((m) => console.log(m.FIXED_STRUCTURAL_TESTS.length))"`
+—— 这也是上面 §13.5.8 那句「现值以 `FIXED_STRUCTURAL_TESTS` 为准」的唯一取法）。
+这份清单守的是**全库级不变量**：日志实现只有一处、lib 的 Node-only
+声明口径、core 骨架单一事实源……，它们才是「这次守的到底是什么」的答案 —— 总数答不了。
 
 > 平台对单次日志的硬上限是 102400 字节、**保留尾部**（见 `affected-launch-log-budget.mjs`
 > 的文件头）。所以这份清单打在**起 vitest 之前**、紧接着 `reporter：dot` 那行 —— 它落在
@@ -9155,10 +9159,15 @@ into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后�
 
   ```bash
   pnpm check:premerge                 # 三段全跑，人眼看的报告
+  pnpm check:premerge --full          # 同上；「全套」这一档的显式写法（与默认逐字相同）
   pnpm check:premerge --json          # 机器可读（逐段给结论）
   pnpm check:premerge --skip-claims   # PR 里还没写合并信息时
   pnpm check:premerge --only=base     # 只跑一段（排查用）
   ```
+
+  认不出的旗标**退 2 并点名**（ISSUE #2764）：拼错的旗标既不生效也不报错的那些年里，
+  「我加了全套那一档」这句话没有任何依据 —— 2 的读法是「这一跳没有结论」，不是「跑过了且绿」。
+  `--full` 与 `--light` 同时给同样退 2（两个方向的口号同时出现时，入口不替人挑档）。
 
   **执行者不再是「人的记性」：这一跳现在挂在 push 上**（`.githooks/pre-push` →
   `scripts/premerge-proof.mjs`）。本地看不到平台侧那次 squash 合并，而 push 是本地最后一个
@@ -10435,6 +10444,52 @@ scope ⇒ **平台自报的授权面**落进构建日志，不必等某一格真
 
 这与 `ci-workspace-probe.mjs` 那条「job 标签只取 basename、两跑并排一模一样」是同一类病：
 **读数在日志里读不出来，与没有读数等价**。
+
+#### 13.10.17 往已有单子补一条读数：`--comment` / `--body-file`（ISSUE #2719）
+
+排障现场最常缺的入口是**「我已经有结论了，怎么把它写在单子上」**：`--claim` / `--release` 写的是
+两句固定的状态评论，`--close-issue` 只跟验真的关单走，`--new-issue` 是建新的。于是「补一条读数」
+只剩手工 `cnb issues post-issue-comment` 一条路 —— 而它恰好是 §13.6 记过的那一格（敲错子命令
+打印 usage 却退 0，平台一条也没写，看着像成功）。这一格把「写 + 独立回读」收成一条：
+
+```bash
+pnpm ship --comment 2719 --body-file .git/comment.md
+```
+
+**五条口径，每一条都是刻意的**：
+
+1. **正文只从文件来**（`--body-file`，没有 argv 形态）。评论正文是多行判断（症状 / 读数 / 因果），
+   而命令行里的多行会被 `pnpm run` 改成字面量 `\n`、反引号会被 shell 当命令替换吃掉 ——
+   §13.6 那条「多行提交信息一律 `--message-file`」是同一件事的两个对象。`--body-file` 与建单那格的
+   `--issue-body-file` **不是同一枚旗标**：前者是「往已有单子写的一段话」，后者是「新单子的正文」。
+   只给 `--body-file` 而没有 `--comment` ⇒ 退 2（不做「猜它是给哪张单的」）。
+2. **写后独立回读、逐字比对，但先归一一个末尾换行**。回执不算结论（§13.6.1 的同一纪律）：
+   写成功之后拉一次 `list-issue-comments --sort -created`，找到这一条再比正文。平台会**吞掉文件
+   末尾那一个换行**（实测发出去 1818 字、读回来 1817），所以比对前两边各去掉**一个**末尾换行
+   （`\r?\n$`）；除此之外任何差异（多吞的字符、被改写的行）都退 1，并把两边的原始长度与归一后的
+   长度一起打出来 —— 少了几个字与「末尾换行差一个」在终端里长得一模一样，读数里要能分开。
+3. **署名行由脚本保证有且只有一行**（`withCommentHeader`，与建单 / PR 正文同一份实现）：
+   正文文件里自己已经写了的，不再前插第二遍。那是留痕，不是判断。
+4. **一份实现**（`scripts/ship-comment.mjs`）：领取 / 结束 / 关单收尾（`ensureComment`）、CI 那一路
+   的 `runAppendIssueComment`、以及本格，三处共用同一对原语（`appendComment` 写 /
+   `readCommentBodies` 读）。此前这两段各写一份，漂移形态就是「一边补了回读、另一边没有」
+   （§12.12 同族）。`--comment` 也**不需要留痕短名**：它是「在单子上贴一段读数」，不是「谁在做」。
+5. **一次只做一件**：与 `--claim` / `--release` / `--claims` / `--merge` / `--close-issue` /
+   `--clean-branch` / `--branch` / `--message` 等任一旗标同跑 ⇒ 退 2，且一个 `cnb` 调用都不发。
+
+**退码与失败语义**：
+
+- 正文文件读不到 / 正文为空 ⇒ 退 2（空评论不是「一条短读数」，多半是文件路径打错）；
+- `post-issue-comment` 没跑起来 ⇒ 退 2；
+- **写成功但回读没跑起来 ⇒ 退 2，且话术明说「别急着重跑」** —— 这一格没有任何 idempotency marker，
+  重跑的后果可能是同一条读数挂两遍；先去看单子。
+- 回读里正文与发出去的不一致 ⇒ 退 1（公开状态不是你写的那段话）。
+- `--dry-run` 只打印计划（往哪张单、多少字、首行），一条也不写。
+
+负控制（回归在 `tests/ship.test.ts` 的 `--comment` 组）：成功路径与「先写后读」的顺序；
+末尾换行容差（`"a\n\nb\n"` 读回成 `"a\n\nb"` 算相同，`"a\n\nb\n\n"` 不算）；不一致 ⇒ 1 且只发一次
+写命令；写失败与回读失败是两档不同的话术；缺正文 / 空正文 ⇒ 2 且零 `cnb` 调用；与 `--claim` 同跑、
+以及孤立的 `--body-file` ⇒ 2；`--dry-run` 零写入。
 
 ### 13.11 随手改与 TODO 记录规范
 

@@ -540,7 +540,7 @@ export function looksNewlineMangled(msg) {
  * 正在 `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的
  * 预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,createBranch?:string|null,remote?:string|null,baseBranch?:string|null}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -629,6 +629,24 @@ export function planCommands(st) {
     const who = st.handle || "<短名>";
     p.push(
       `cnb issues list-issues --repo ${st.slug} --labels 处理人:${who} --state open --page <p> --page-size 100 -v`,
+    );
+  }
+  if (st.comment) {
+    /* `--comment` 与领取 / 结束共用同一份「写 + 回读」原语（`ship-comment.mjs`）。
+     * 原语有两档落点：单子评论区与 PR 评论区 —— PR 那一档只由 CI 立案链调用，
+     * 走不到 `ship` 的命令行；这里把它一起列出来，理由与上面那三格相同：这本账
+     * 要的是「源码里每一个 cnb 工具都有一条对应的计划行」，不是「这一跑会发哪几条」。 */
+    p.push(
+      `cnb issues post-issue-comment --repo ${st.slug} --number <号> --body-file <git目录>/comfy-ship-tmp/ship-issue-comment-<pid>.tmp -v`,
+    );
+    p.push(
+      `cnb issues list-issue-comments --repo ${st.slug} --number <号> --sort -created --page-size 100 -v`,
+    );
+    p.push(
+      `cnb pulls post-pull-comment --repo ${st.slug} --number <号> --body-file <git目录>/comfy-ship-tmp/pull-comment-<pid>.tmp -v`,
+    );
+    p.push(
+      `cnb pulls list-pull-comments --repo ${st.slug} --number <号> --sort -created --page-size 100 -v`,
     );
   }
   /* 分支落地读数（ISSUE #2427）：计划里连翻带 git 的取数一起念出来 ——

@@ -37,8 +37,35 @@
  * `ci-workspace-probe.mjs` 里几处硬拼的 `.git/<某个引用文件>`。
  */
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+/**
+ * 这份工作区此刻是不是停在「`git merge` 已解完冲突、提交还没落地」那一态
+ * （`$GIT_DIR/MERGE_HEAD` 在场）。
+ *
+ * 判据是 git 自己在合并过程中写的状态文件 —— 它也是「`git commit` 将要产生的这次提交
+ * 有两个父提交、且第二个就是被合并进来的那个 rev」的唯一权威信号。**不拿别的近似**：
+ * `git merge-base` 看不出来（HEAD 还没动）、`--is-ancestor` 也看不出来（同上），
+ * 而「暂存区里有什么」更是无关（自己改依赖也是这个形态）。
+ *
+ * `$GIT_DIR` 一律经 `resolveGitDir()`：链接工作树（`git worktree`）里 `.git` 是个
+ * **文件**不是目录，拿 `<根>/.git/MERGE_HEAD` 硬拼会永远读不到，于是靠它降档的判据
+ * **静默不降**（本文件头「另案」那条清单讲的就是这个形状）。
+ *
+ * @param {string} root 检出根（或检出内任一路径）
+ * @returns {boolean} 读不到 git 目录时返回 `false` —— 保守方向：宁可照旧多判一次，
+ *                    也不把「查不了」读成「没问题」。
+ */
+export function hasInProgressMerge(root) {
+  try {
+    const gitDir = resolveGitDir(root);
+    return gitDir ? fs.existsSync(path.join(gitDir, "MERGE_HEAD")) : false;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * 本检出的 git 目录绝对路径；不在检出里时返回 `null`。
