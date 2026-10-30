@@ -1230,116 +1230,22 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
 /**
  * ISSUE #730 的 release 壳构建失败（`cargo build --release --features custom-protocol`）。
  *
- * 现场是两条**互不相干**的编译错误（用户日志里同时出现，容易被当成一件事）：
+ * 当年现场是两条**互不相干**的编译错误（用户日志里同时出现，容易被当成一件事）：
  *
- * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」的错误（报的是
- *    脚本里的尾随逗号与行列号）—— 真正的原因文件根本不在源码里（见下条用例的注释）。
+ * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」（脚本被格式化工具
+ *    折行、serde_json 读到尾随逗号）—— 这一条的判据（根级 `.prettierignore` 兜住
+ *    `src-tauri/target/`）随 #2541 删 prettier 一起退役（ISSUE #2602）：oxfmt 的
+ *    扫描面只有 `package.json` 里点名的两个 glob（`src/**` 与 `.storybook/**`），
+ *    天然不碰 `target/`，「谁在忽略」的答案写在 `scripts/check-format.cjs` 头注里。
  * 2. 「上限 × 间隔」的两个常量相乘报 `expected u32, found u64`
  *    + `cannot multiply u32 by u64` —— 同一处表达式里的两个常量类型不同档。
  *    这一条随 #2192 退役：首帧看护的预算改由 `poll_clock::PollClock` 以 `Duration`
  *    持有，拍数不再是一个常量，于是那个相乘的形状从源码里消失了（详见下面那条用例）。
  *
  * 两条的共同点是「本地跑 lint / tsc / 单测全绿，只有真编 release 壳才暴露」，
- * 所以判据只能落在「编译前提」这一层。
+ * 所以判据只能落在「编译前提」这一层。第 1 条退役之后，本组只剩一条钉住回溯的用例。
  */
 describe("release 壳构建的地雷（ISSUE #730）", () => {
-  it("格式化工具不碰 src-tauri/target（Tauri 的插件脚本清单被折行 = 整壳编译失败）", () => {
-    // 现场已在 Linux 上逐字复现（错误信息与用户日志完全一致）：
-    //   tauri-build 把插件全局 API 脚本清单写成**紧凑单行** JSON
-    //   （serde_json::to_string 不产生换行，因此它自己永远不会带尾逗号）；
-    //   文件落在 src-tauri/target/ 下的 out/__global-api-script.js，后缀是 .js。
-    //   于是格式化器（`pnpm format:write` / 编辑器保存）按 print-width 把它折成
-    //   多行、并给最后一项补一个尾逗号；generate_context! 再读时 serde_json 直接报
-    //   "trailing comma"。6 个插件 → 6 项 + 首尾两行 = 8 行，所以「line: 8」
-    //   是可以反推出来的：那正是折行后的最后一项。
-    //   **报错位置落在 lib.rs 的 generate_context! 那一行**，与真正被改坏的
-    //   target 生成物毫无关系 —— 这正是本条长期定位不到的原因。
-    //
-    // 防线是别让格式化工具碰到它。oxfmt 的忽略面有两处（`--help` 原文）：不给
-    // `--ignore-path` 时**只读 cwd 的** `.gitignore` / `.prettierignore`，外加
-    // `.oxfmtrc.json` 的 `ignorePatterns` —— 它同样**看不到** `src-tauri/.gitignore`
-    // 里的 `/target/`，所以必须由根级配置兜。prettier 时代那份是根级
-    // `.prettierignore`；它随 #2541 被删（依赖一起没了），而这条用例当时**没同批改**，
-    // 于是在主干上 ENOENT 崩了两天 —— 见 ISSUE #2603。现在真正生效的那一份是
-    // `.oxfmtrc.json`。
-    const config = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      readFileSync(join(process.cwd(), ".oxfmtrc.json"), "utf8"),
-    ) as { ignorePatterns?: Array<string> };
-    expect(
-      config.ignorePatterns ?? [],
-      "`.oxfmtrc.json` 的 `ignorePatterns` 必须含 `src-tauri/target/`：漏掉它，" +
-        "任何在本机 cargo build 过的检出都会在下次格式化后编不出 release 壳",
-    ).toContain("src-tauri/target/");
-
-    /* ⚠️ 光读配置守不住「工具真的没碰它」——这条用例原本就只读文本（ISSUE #2603 的
-     * 期望第 2 条）。补行为档：真起 oxfmt，把当年那个形状（`.js`、内容是一份紧凑
-     * JSON）落在 `src-tauri/target/` 下，判它**没被处理**。
-     *
-     * 两侧同批跑，缺一侧这条就空转：
-     *   · 仓库内那一份被排除 ⇒ 读数必须是「一个目标都没有」（oxfmt 在这种情形退 **2**，
-     *     且不打任何文件名）；
-     *   · 同一份内容放在**仓库外**的临时目录 ⇒ 必须退 **1** 并点名那个文件。
-     * 没有对照，「没点名」和「oxfmt 根本没跑起来 / 那份文件没被看见」是同一个读数。 */
-    /* 入口取**判据自己那一份**三级解析（`resolveOxfmtEntry`）—— 这里再造一个
-     * 「按 node_modules 拼路径」就是第二次实现同一件事（§12.18），而它会和判据漂移。 */
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const formatGate = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
-      resolveOxfmtEntry: () => string | null;
-    };
-    const entry = formatGate.resolveOxfmtEntry();
-    /* 取不到入口时**如实失败**而不是拿 `null` 往下拼：那条「没跑起来」与
-     * 「跑了但排除规则生效」在这格上是两种结论，混一次就把这条护栏念反。 */
-    if (!entry) {
-      throw new Error(
-        "取不到 oxfmt 入口 ⇒ 行为档没有执行者（判据本体在这一档取不到就退 2，说同一段话）",
-      );
-    }
-
-    const probeName = "__2603-global-api-script-probe.js";
-    const targetDir = join(process.cwd(), "src-tauri", "target");
-    const probeDir = join(targetDir, "__2603-probe__");
-    /* 全新检出（没在本机 `cargo build` 过）没有 `target/`，而这条判据在那种机器上
-     * **照样要跑**（平台那一跑的节点就是这种状态）⇒ 目录按需造，但**造了就要负责**：
-     * 收尾按来源分别清理，不许给别人的工作区留一个空 `target/`。 */
-    const targetPreexisted = existsSync(targetDir);
-    const outside = mkdtempSync(join(tmpdir(), "2603-oxfmt-control-"));
-    const runOxfmt = (file: string) =>
-      spawnSync(process.execPath, [entry, "--check", file], {
-        encoding: "utf8",
-        cwd: process.cwd(),
-      });
-    /* 未格式化的形状：`printWidth: 80` 装不下 ⇒ 会被折行，正是 #730 被改坏的那个动作。 */
-    const unformatted =
-      'const plugins=["@tauri-apps/plugin-process","@tauri-apps/plugin-shell","@tauri-apps/plugin-global-shortcut","@tauri-apps/plugin-dialog","@tauri-apps/plugin-fs","@tauri-apps/plugin-clipboard-manager"];\n';
-    try {
-      mkdirSync(probeDir, { recursive: true });
-      const inside = join(probeDir, probeName);
-      const control = join(outside, probeName);
-      writeFileSync(inside, unformatted);
-      writeFileSync(control, unformatted);
-
-      const excluded = runOxfmt(inside);
-      expect(
-        excluded.stdout + excluded.stderr,
-        `src-tauri/target 下的文件被格式化工具看见了 ⇒ #730 那个整壳编译失败会回来。` +
-          `读数：\n${excluded.stdout}\n${excluded.stderr}`,
-      ).not.toContain(probeName);
-      /* 退 1 = 「发现未格式化的文件」；被排除时是退 2（一个目标都没有）。两者必须是 1 之外。 */
-      expect(excluded.status).not.toBe(1);
-
-      const controlRun = runOxfmt(control);
-      expect(
-        controlRun.status,
-        "对照组必须**判出未格式化**（退 1），否则上面那句「没点名」是空转读出来的",
-      ).toBe(1);
-      expect(controlRun.stdout).toContain(probeName);
-    } finally {
-      rmSync(probeDir, { recursive: true, force: true });
-      if (!targetPreexisted) rmSync(targetDir, { recursive: true, force: true });
-      rmSync(outside, { recursive: true, force: true });
-    }
-  });
-
   it("首帧看护的超时预算由 poll_clock 持有 —— 「两常数相乘」的旧形状不得回潮（#2328 / #2192）", () => {
     const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     // 旧形状：`PROBE_ATTEMPTS * PROBE_INTERVAL_MS`（u32 * u64 的 E0277 地雷）与
