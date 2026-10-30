@@ -8,6 +8,7 @@
     "analyze": "next analyze",
     "check:bundle": "node scripts/check-bundle-budget.cjs",
     "agent:film": "node scripts/agent-film.mjs",
+    "agent:index": "node scripts/agent-index.mjs",
     "check": "pnpm run lint && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:backup": "node scripts/db-backup.mjs",
