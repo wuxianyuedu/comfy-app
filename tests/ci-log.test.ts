@@ -209,6 +209,29 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     expect(colorEnabled({ env: {}, isTTY: false })).toBe(false);
   });
 
+  it("colorEnabled：`COMFYAPP_CI_COLOR` 只被本层认，且压不过 `NO_COLOR`（ISSUE #2755）", () => {
+    /* 平台那一档的 stdout **不是** TTY（实测绿跑 build cnb-gig-1k65nb59l 的 stage-27：
+     * 正文 64 行里只有平台自己那 2 行带 ANSI），而它的日志页会渲染色号 ——
+     * 那一格落在「TTY / 抓文本」两个判据之外，这枚就是为它开的。 */
+    expect(
+      colorEnabled({ env: { COMFYAPP_CI_COLOR: "1" }, isTTY: false }),
+    ).toBe(true);
+    expect(
+      colorEnabled({
+        env: { NO_COLOR: "", COMFYAPP_CI_COLOR: "1" },
+        isTTY: false,
+      }),
+    ).toBe(false);
+    /* `0` 与空串按关算：它是本仓私有的旗标，关法要有形状（`NO_COLOR` 那条「值不论」
+     * 是通行约定的语义，不往这里抄）。 */
+    expect(
+      colorEnabled({ env: { COMFYAPP_CI_COLOR: "0" }, isTTY: false }),
+    ).toBe(false);
+    expect(
+      colorEnabled({ env: { COMFYAPP_CI_COLOR: "" }, isTTY: false }),
+    ).toBe(false);
+  });
+
   it("逐行上色只染标签，不改变「这一行是不是判决」", () => {
     const line = colorizeLine("[info] 命中输入面 3 个文件，生成并自检中…");
     expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe("[info] 命中输入面 3 个文件，生成并自检中…");
