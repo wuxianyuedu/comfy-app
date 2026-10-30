@@ -221,10 +221,15 @@ export function specifiersOf(text, fromFile) {
 }
 
 /**
+ * 这个路径命中哪一条宽面触发（没命中回 `null`）。导出是为了让「输入面登记」的判据
+ * 用**同一份**宽面清单判死面（`tests/fixed-gate-input-faces.test.ts`）：宽面一命中，
+ * 整档就退回全跑，输入面那一层根本轮不到 —— 面里写一条整条落在宽面上的模式，
+ * 等于写了一个永远不会被问到的条件。
+ *
  * @param {string} rel
  * @returns {string | null}
  */
-function wideReasonFor(rel) {
+export function wideReasonFor(rel) {
   const hit = WIDE_TRIGGERS.find((t) => t.test(rel));
   return hit ? hit.why : null;
 }
