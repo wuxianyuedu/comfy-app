@@ -60,8 +60,13 @@
 export const INPUT_FACES = [
   {
     test: "tests/base-check.test.ts",
-    face: ["scripts/base-check.mjs", "scripts/base-check/**", "tests/base-check.test.ts"],
-    why: "它判的是「被门槛拦住时那条命令能不能复算归属」：被测面是 base-check 本体与它三份直接依赖（`git-ref` / `hook-steps` / `verdict`）。钩子那一侧**不写进面**（`.githooks/**` 是宽面触发，命中它整档先退回全跑，这一层根本轮不到问）—— 用例里的钩子文本是它自己写的夹具",
+    face: [
+      "scripts/base-check.mjs",
+      "scripts/base-check/**",
+      "tests/helpers/git-sandbox-env.ts",
+      "tests/base-check.test.ts",
+    ],
+    why: "它判的是「被门槛拦住时那条命令能不能复算归属」：被测面是 base-check 本体、它三份直接依赖（`git-ref` / `hook-steps` / `verdict`）与用例自己 import 的 `git-sandbox-env`（临时仓库的环境变量口径）。钩子那一侧**不写进面**（`.githooks/**` 是宽面触发，命中它整档先退回全跑，这一层根本轮不到问）—— 用例里的钩子文本是它自己写的夹具",
   },
   {
     test: "tests/tw4-hardgate-behaviour.test.ts",
@@ -84,8 +89,9 @@ export const INPUT_FACES = [
       "scripts/.bundle-budget-baseline.json",
       "tests/check-bundle-budget.test.ts",
       "tests/helpers/gate-repo.ts",
+      "tests/helpers/ratchet-refusal.ts",
     ],
-    why: "把判据当黑盒跑在**临时工作区**里（它内部按 `__dirname/..` 找 `.next/static/chunks`）—— 本仓真实产物不在它的读取面上，它读的是脚本自己与基线 JSON",
+    why: "把判据当黑盒跑在**临时工作区**里（它内部按 `__dirname/..` 找 `.next/static/chunks`）—— 本仓真实产物不在它的读取面上，它读的是脚本自己、基线 JSON 与两个直接 import 的夹具（临时仓库 + 拒绝话术的断言口径）",
   },
   {
     test: "tests/a11y-rules-gate.test.ts",
