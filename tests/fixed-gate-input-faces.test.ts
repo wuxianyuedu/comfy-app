@@ -13,14 +13,15 @@
  *   ① 登记的每一条必须**真的在固定清单里** —— 给一条本来就走 import 图的判据写面，
  *      写出来的是一条永不生效的死面；
  *   ② 每个模式必须**至少命中仓库里一个被跟踪的路径** —— 这一条直接判死拼写错误；
- *   ③ 名单封闭（现在 4 条）—— 加第 5 条是一次签字，不是这一层代码能自己扩张的；
+ *      并且**不能整条落在宽面触发上**（宽面一命中整档就退回全跑，这一层轮不到问）；
+ *   ③ 名单封闭 —— 加一条是一次签字，不是这一层代码能自己扩张的；
  *   ④ 两向都测：面没命中 ⇒ 缺席**且被点名**；命中 ⇒ 在场；
  *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」。
  */
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-import { resolveAffectedTests } from "../scripts/affected-tests.mjs";
+import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 import {
   INPUT_FACES,
@@ -66,11 +67,42 @@ describe("输入面登记的形状", () => {
     ).toEqual([]);
   });
 
-  it("名单是封闭的那 4 条：加一条要人来签字", () => {
+  it("每一个模式都不许整条落在宽面触发上（那种条件永远到不了筛这一层）", () => {
+    const tracked = trackedPaths();
+    const dead = [];
+    for (const entry of INPUT_FACES) {
+      for (const pattern of entry.face) {
+        const matched = tracked.filter((file) => faceMatches(file, pattern));
+        if (matched.length > 0 && matched.every((file) => wideReasonFor(file) !== null)) {
+          dead.push(`${entry.test} :: ${pattern}（命中的 ${matched.length} 份全是宽面触发）`);
+        }
+      }
+    }
+    expect(
+      dead,
+      "这些模式命中的每一份路径都在 `WIDE_TRIGGERS` 里 —— 它们一改，整档就先退回「固定清单全跑」，" +
+        "输入面这一层根本轮不到问。写成这样只会让面看起来更宽（`base-check` 的 `.githooks/**` 就是这一格）",
+    ).toEqual([]);
+  });
+
+  it("名单是封闭的那一份：加一条要人来签字", () => {
     expect(INPUT_FACES.map((entry) => entry.test).sort()).toEqual([
+      "tests/a11y-axe-stories.test.ts",
       "tests/a11y-rules-gate.test.ts",
       "tests/base-check.test.ts",
+      "tests/changed-scope.test.ts",
+      "tests/changelog-versions-gate.test.ts",
       "tests/check-bundle-budget.test.ts",
+      "tests/check-commit-claims.test.ts",
+      "tests/check-merge-parents.test.ts",
+      "tests/ci-env-probe.test.ts",
+      "tests/eslint-exemption-staleness.test.ts",
+      "tests/eslint-gate-canary.test.ts",
+      "tests/gate-executors.test.ts",
+      "tests/merge-changelog-anchor.test.ts",
+      "tests/precommit-timing.test.ts",
+      "tests/scripts-typecheck-ratchet.test.ts",
+      "tests/storybook-tsc-input.test.ts",
       "tests/tw4-hardgate-behaviour.test.ts",
     ]);
     /* 每条都得说清「它读什么」—— 没有 why 的面，下一条只会照着猜着改宽。 */
@@ -128,6 +160,52 @@ describe("切分与接线", () => {
     expect(got.skipped.map((s) => s.test)).not.toContain("tests/base-check.test.ts");
     /* 其余三条不该被它带起来：面是各判各的。 */
     expect(got.skipped.map((s) => s.test)).toContain("tests/a11y-rules-gate.test.ts");
+  });
+
+  it("后补面的四条各按自己的触发面回来，且不互相带起（#2793）", () => {
+    const cases: Array<[string, string]> = [
+      ["eslint.config.js", "tests/eslint-gate-canary.test.ts"],
+      ["scripts/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
+      ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
+      ["src/components/ui/button.tsx", "tests/a11y-axe-stories.test.ts"],
+    ];
+    for (const [changed, test] of cases) {
+      const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [changed]);
+      expect(got.keep, `${changed} 应当把 ${test} 点回来`).toContain(test);
+      for (const other of cases.map(([, one]) => one).filter((one) => one !== test)) {
+        expect(got.skipped.map((s) => s.test), `${changed} 不该带起 ${other}`).toContain(other);
+      }
+    }
+    /* 自指那一条**不许**开面：它在清单里的理由是「解析器的缺陷只有它能发现」。 */
+    expect(INPUT_FACES.map((entry) => entry.test)).not.toContain("tests/affected-tests.test.ts");
+  });
+
+  it("这一批九条各按自己的触发面回来，且不把四条业务自检带进来（#2798）", () => {
+    const cases: Array<[string, string]> = [
+      ["scripts/base-check/verdict.mjs", "tests/base-check.test.ts"],
+      ["scripts/quality-gate.mjs", "tests/gate-executors.test.ts"],
+      ["scripts/check-merge-parents.mjs", "tests/check-merge-parents.test.ts"],
+      ["scripts/merge-changelog-fragments.mjs", "tests/merge-changelog-anchor.test.ts"],
+      [".storybook/preview.tsx", "tests/storybook-tsc-input.test.ts"],
+      ["scripts/check-eslint-exemptions.cjs", "tests/eslint-exemption-staleness.test.ts"],
+      ["scripts/check-scripts-typecheck.cjs", "tests/scripts-typecheck-ratchet.test.ts"],
+      ["scripts/precommit-timing.mjs", "tests/precommit-timing.test.ts"],
+      [".cnb.yml", "tests/ci-env-probe.test.ts"],
+      ["scripts/check-changelog-versions.cjs", "tests/changelog-versions-gate.test.ts"],
+    ];
+    const untouchable = [
+      "tests/a11y-axe-stories.test.ts",
+      "tests/a11y-rules-gate.test.ts",
+      "tests/check-bundle-budget.test.ts",
+      "tests/tw4-hardgate-behaviour.test.ts",
+    ];
+    for (const [changed, test] of cases) {
+      const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [changed]);
+      expect(got.keep, `${changed} 应当把 ${test} 点回来`).toContain(test);
+      for (const other of untouchable) {
+        expect(got.skipped.map((s) => s.test), `${changed} 不该带起 ${other}`).toContain(other);
+      }
+    }
   });
 
   it("增量档（subset）过筛，并把跳过记进 reasons.__faceSkipped", () => {

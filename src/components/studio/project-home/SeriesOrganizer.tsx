@@ -13,6 +13,7 @@ import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
 import { cn } from "~/lib/utils";
 import { useSeriesOrganizer } from "./hooks/use-series-organizer";
+import { SeriesCharacterLibrary } from "./SeriesCharacterLibrary";
 
 interface SeriesOrganizerProps {
   /** 当前项目 id（来自 workspace 的活跃项目）。提供时展示「本项目归属」并支持一键归入某集。 */
@@ -249,6 +250,13 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               把当前项目归入此集
             </Button>
           )}
+        </div>
+      )}
+
+      {/* ── 系列角色库（选中系列后）────────────────────── */}
+      {c.seriesId && (
+        <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
+          <SeriesCharacterLibrary c={c} projectId={projectId} />
         </div>
       )}
     </section>

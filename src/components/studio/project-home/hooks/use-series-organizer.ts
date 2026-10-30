@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 系列 / 季 / 集 组织者的逻辑层（FR-SR-01/02，#2508）。
+ * 系列 / 季 / 集 / 角色库 组织者的逻辑层（FR-SR-01/02/03，#2508）。
  *
  * 规范 17（UI 与逻辑分离）+ 硬闸 S3：视图层不得直接调 tRPC 取数，必须经由
  * controller hook 暴露数据。本文件即该 controller —— `SeriesOrganizer.tsx`
@@ -9,8 +9,10 @@
  *
  * 同时本文件集中消费 `series.*` 全部分支 procedure（list/create/update/delete +
  * seasons/createSeason/updateSeason/deleteSeason + episodes/createEpisode/
- * updateEpisode/deleteEpisode + byProject/assignProject），满足
- * `tests/trpc-surface-executors.test.ts` 的消费方判据。
+ * updateEpisode/deleteEpisode + byProject/assignProject + 角色库全部分支：
+ * characters/createCharacter/updateCharacter/deleteCharacter + episodeCharacters/
+ * linkCharacter/unlinkCharacter + promoteFromProduction/injectToProduction），
+ * 满足 `tests/trpc-surface-executors.test.ts` 的消费方判据。
  */
 
 import { useState } from "react";
@@ -20,6 +22,23 @@ import { useTRPC, type RouterOutputs } from "~/trpc/react";
 type Series = RouterOutputs["series"]["list"][number];
 type Season = RouterOutputs["series"]["seasons"][number];
 type Episode = NonNullable<RouterOutputs["series"]["byProject"]>;
+type CharacterEntity = RouterOutputs["series"]["characters"][number];
+type EpisodeCharacterLink = RouterOutputs["series"]["episodeCharacters"][number];
+
+/** 角色可改字段（UI 编辑面）。params / portraits 由生产侧/导入携带，UI 不直编。 */
+export type CharacterPatch = Partial<{
+  name: string;
+  ageGender: string;
+  appearance: string;
+  costume: string;
+  personality: string;
+  temperament: string;
+  styleTags: Array<string>;
+  skillSlug: string | undefined;
+  positivePrompt: string;
+  negativePrompt: string;
+  portraitUrl: string | undefined;
+}>;
 
 export interface SeriesOrganizerController {
   /** 系列列表。 */
@@ -30,6 +49,10 @@ export interface SeriesOrganizerController {
   episodes?: Array<Episode>;
   /** 当前项目归属的集（无归属为 null）。 */
   currentEp?: Episode | null;
+  /** 当前选中系列下的角色库列表。 */
+  characters?: Array<CharacterEntity>;
+  /** 当前选中集已关联的角色（含定位 role）。 */
+  episodeCharacters?: Array<EpisodeCharacterLink>;
 
   seriesId: string | null;
   seasonId: string | null;
@@ -48,6 +71,17 @@ export interface SeriesOrganizerController {
   renameEpisode: (id: string, title: string) => void;
   deleteEpisode: (id: string) => void;
   assignCurrentProject: (episodeId: string) => void;
+
+  /** 角色库：建 / 改 / 删。 */
+  createCharacter: (seriesId: string, name: string) => void;
+  updateCharacter: (id: string, patch: CharacterPatch) => void;
+  deleteCharacter: (id: string) => void;
+  /** 集 ↔ 角色关联。 */
+  linkCharacter: (episodeId: string, characterId: string) => void;
+  unlinkCharacter: (episodeId: string, characterId: string) => void;
+  /** 双向同步：把项目角色提升进系列库 / 把系列库角色注入项目。 */
+  promoteFromProduction: (projectId: string) => void;
+  injectToProduction: (projectId: string) => void;
 }
 
 export function useSeriesOrganizer(projectId?: string): SeriesOrganizerController {
@@ -68,6 +102,15 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const currentEp = useQuery(
     trpc.series.byProject.queryOptions({ projectId: projectId ?? "" }, { enabled: !!projectId }),
   );
+  const characterList = useQuery(
+    trpc.series.characters.queryOptions({ seriesId: seriesId ?? "" }, { enabled: !!seriesId }),
+  );
+  const episodeChars = useQuery(
+    trpc.series.episodeCharacters.queryOptions(
+      { episodeId: episodeId ?? "" },
+      { enabled: !!episodeId },
+    ),
+  );
 
   const invalidateSeries = () => void qc.invalidateQueries(trpc.series.list.queryFilter());
   const invalidateSeasons = (sid: string) =>
@@ -79,6 +122,10 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
       void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
     }
   };
+  const invalidateCharacters = (sid: string) =>
+    void qc.invalidateQueries(trpc.series.characters.queryFilter({ seriesId: sid }));
+  const invalidateEpisodeChars = (eid: string) =>
+    void qc.invalidateQueries(trpc.series.episodeCharacters.queryFilter({ episodeId: eid }));
 
   const createSeries = useMutation(
     trpc.series.create.mutationOptions({ onSuccess: invalidateSeries }),
@@ -158,11 +205,62 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     trpc.series.assignProject.mutationOptions({ onSuccess: invalidateCurrent }),
   );
 
+  // ── 系列角色库（FR-SR-03）──────────────────────────────
+  const createCharacterMut = useMutation(
+    trpc.series.createCharacter.mutationOptions({
+      onSuccess: () => {
+        if (seriesId) invalidateCharacters(seriesId);
+      },
+    }),
+  );
+  const updateCharacterMut = useMutation(
+    trpc.series.updateCharacter.mutationOptions({
+      onSuccess: () => {
+        if (seriesId) invalidateCharacters(seriesId);
+      },
+    }),
+  );
+  const deleteCharacterMut = useMutation(
+    trpc.series.deleteCharacter.mutationOptions({
+      onSuccess: () => {
+        if (seriesId) invalidateCharacters(seriesId);
+        if (episodeId) invalidateEpisodeChars(episodeId);
+      },
+    }),
+  );
+  const linkCharacterMut = useMutation(
+    trpc.series.linkCharacter.mutationOptions({
+      onSuccess: () => {
+        if (episodeId) invalidateEpisodeChars(episodeId);
+      },
+    }),
+  );
+  const unlinkCharacterMut = useMutation(
+    trpc.series.unlinkCharacter.mutationOptions({
+      onSuccess: () => {
+        if (episodeId) invalidateEpisodeChars(episodeId);
+      },
+    }),
+  );
+  const promoteMut = useMutation(
+    trpc.series.promoteFromProduction.mutationOptions({
+      onSuccess: () => {
+        if (seriesId) invalidateCharacters(seriesId);
+        if (episodeId) invalidateEpisodeChars(episodeId);
+      },
+    }),
+  );
+  const injectMut = useMutation(
+    trpc.series.injectToProduction.mutationOptions({ onSuccess: invalidateCurrent }),
+  );
+
   return {
     seriesList: seriesList.data,
     seasons: seasons.data,
     episodes: episodes.data,
     currentEp: currentEp.data,
+    characters: characterList.data,
+    episodeCharacters: episodeChars.data,
     seriesId,
     seasonId,
     episodeId,
@@ -191,5 +289,13 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
       }
       assignProject.mutate({ episodeId: epid, projectId });
     },
+    createCharacter: (sid, name) => createCharacterMut.mutate({ seriesId: sid, name }),
+    updateCharacter: (id, patch) => updateCharacterMut.mutate({ id, ...patch }),
+    deleteCharacter: (id) => deleteCharacterMut.mutate({ id }),
+    linkCharacter: (epid, cid) => linkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
+    unlinkCharacter: (epid, cid) =>
+      unlinkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
+    promoteFromProduction: (pid) => promoteMut.mutate({ projectId: pid }),
+    injectToProduction: (pid) => injectMut.mutate({ projectId: pid }),
   };
 }
