@@ -33,6 +33,7 @@
  *     不是「跑了且红」。两者混成一个数，下一次就会有人拿「没跑」当「判过了」。
  * 刻意**不退回 `shell: true`**：`spawn-shell-scan.mjs` 那条判据就在守这件事。
  */
+import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
