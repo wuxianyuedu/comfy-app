@@ -53,6 +53,11 @@ export function parseArgs(argv) {
   const opts = { out: DEFAULT_OUT, attempts: DEFAULT_ATTEMPTS };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    /* `noUncheckedIndexedAccess` 之下按下标取到的是 `string | undefined`；
+     * `i < argv.length` 已保证这一格有值，守卫只把这件事写给类型检查器看 ——
+     * 与 `scripts/dev.mjs` 的 `parseArgs` 同一个写法（下面那个闭包读的是同一个
+     * `const`，收窄会跟着进去，所以只需要在这一处收一次）。 */
+    if (arg === undefined) continue;
     const value = () => {
       const eq = arg.indexOf("=");
       if (eq > 0) return arg.slice(eq + 1);
