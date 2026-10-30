@@ -27,7 +27,7 @@ import { CODE } from "./ship-core.mjs";
 import { runBranches } from "./ship-branches.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
-import { runNewIssue } from "./ship-issue-new.mjs";
+import { runIssueComment, runNewIssue } from "./ship-issue-new.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
 import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
@@ -65,6 +65,8 @@ function namedActions(opt, self) {
     ["claims", opt.claims, "--claims"],
     ["branches", opt.branches, "--branches"],
     ["newIssue", opt.newIssue != null || opt.newIssueBad.length > 0, "--new-issue"],
+    ["comment", opt.comment != null || opt.commentBad.length > 0, "--comment"],
+    ["bodyFile", opt.bodyFile != null, "--body-file"],
     ["rerunCi", opt.rerunCi, "--rerun-ci"],
   ];
   return table
@@ -269,9 +271,12 @@ export function runStandaloneAction(io) {
     opt.release != null ||
     opt.claims ||
     opt.newIssue != null ||
+    opt.comment != null ||
+    opt.bodyFile != null ||
     opt.claimBad.length > 0 ||
     opt.releaseBad.length > 0 ||
-    opt.newIssueBad.length > 0
+    opt.newIssueBad.length > 0 ||
+    opt.commentBad.length > 0
   ) {
     return {
       handled: true,
@@ -288,6 +293,7 @@ export function runStandaloneAction(io) {
           opt,
           mkTmp,
           createIssue: runNewIssue,
+          commentIssue: runIssueComment,
           dryRun: opt.dryRun,
         }),
       ]),
@@ -326,6 +332,7 @@ export function runStandaloneAction(io) {
           handle,
           mkTmp,
           asMerged: opt.asMerged,
+          dryRun: opt.dryRun,
         }),
       ]),
     };
