@@ -34,13 +34,36 @@ import {
 
 const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
 
-/** 跑一次入口脚本。 */
-function run(args: Array<string> = []) {
+/**
+ * 跑一次入口脚本 —— **子进程里跑**，但不是「裸」跑。
+ *
+ * 这一份用例的每一段都在**真检出**上敲 git（`resolveForkBaseline` 与两段各自起的
+ * `check-commit-claims.mjs` / `check-merged-side-loss.mjs`），所以它对这个仓库的
+ * **位置**极其敏感，而继承来的环境会把它指到别处去：
+ *
+ *   · `GIT_DIR` / `GIT_INDEX_FILE` 一族 —— git 导给它自己起的钩子，pre-commit 里跑的
+ *     vitest 一路继承（机制与现场见 `git-sandbox-env.ts` 文件头）；
+ *   · `CNB_PULL_REQUEST_TARGET_SHA` / `CNB_COMMIT` / `CNB_PULL_REQUEST_MERGE_SHA` ——
+ *     **平台那一跑**的改动面读数（ISSUE #2787）。PR 流水线里它们同样继承进用例 spawn
+ *     的每一个子进程，于是「分叉点是哪一条」在本地与平台上**不是同一个问题**：
+ *     本机问的是 `origin/master` 的分叉点，平台上问的是那一跑的 sha。
+ *
+ * `tests/setup.ts` 已经在 worker 启动时剥过一次（那一条盖住 `runScript` 往下那一层），
+ * 但夹具**自己**起的这一次不该指望上游清理过 —— 与 `gate-repo.ts` 那句「共享夹具要自带
+ * 隔离」同一条口径。剥法复用 `gitSandboxEnv()`（唯一一份清单，§12.18），顺带把「禁签名
+ * + 身份」也注入进去。
+ *
+ * @param args 交给入口的旗标
+ * @param envOverrides 这一次要**额外给**的平台变量：把那一族当**被测输入**的用例
+ *   自己显式给（见「没有 `master` 引用时目标 sha 从 env 进来」那一条）
+ */
+function run(args: Array<string> = [], envOverrides: Record<string, string> = {}) {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: process.cwd(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      env: gitSandboxEnv(envOverrides),
     });
     return { code: 0, output };
   } catch (err) {
@@ -311,7 +334,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
             "commit.gpgsign=false",
             ...args,
           ],
-          { cwd: repo, encoding: "utf8" },
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段：钩子 / 平台那一跑的变量会让
+           * 它操作到**别的**仓库，而那类故障在日志里长得像夹具坏了）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
         ).trim();
       g("init", "-q", "-b", "master");
       writeFileSync(join(repo, "a.txt"), "1\n");
@@ -362,7 +387,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         execFileSync(
           "git",
           ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
-          { cwd: repo, encoding: "utf8" },
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
         ).trim();
       /* 全程不出现任何名为 `master` 的引用 —— 这就是平台检出的形状。 */
       g("init", "-q", "-b", "main");
@@ -396,6 +422,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const batch = execFileSync("git", ["log", "--format=%s", `${withEnv.baseline}..HEAD`], {
         cwd: repo,
         encoding: "utf8",
+        env: gitSandboxEnv(),
       })
         .trim()
         .split("\n");
@@ -425,7 +452,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         execFileSync(
           "git",
           ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
-          { cwd: repo, encoding: "utf8" },
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
         ).trim();
       g("init", "-q", "-b", "work");
       writeFileSync(join(repo, "a.txt"), "1\n");
@@ -472,7 +500,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         execFileSync(
           "git",
           ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
-          { cwd: repo, encoding: "utf8" },
+          /* 临时仓库里的 git 自带隔离（同 `run()` 那段）。 */
+          { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
         ).trim();
       g("init", "-q", "-b", "main");
       writeFileSync(join(repo, "a.txt"), "1\n");
