@@ -17,14 +17,7 @@
  * 规范：docs/standards/13-提交与-code-review.md §13.5
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -115,10 +108,7 @@ const { test, expect } = defineGateRepo({
      * 也让脚本的「向上找 oxfmt」这一档被真正走到（而不是悄悄退回 pnpm 兜底）。
      * `symlinkDir` 内部按平台选 junction / dir（Windows 下目录软链需特权，
      * junction 是 NTFS 内建、无需特权且语义等价）。 */
-    symlinkDir(
-      join(process.cwd(), "node_modules"),
-      join(repo.dir, "node_modules"),
-    );
+    symlinkDir(join(process.cwd(), "node_modules"), join(repo.dir, "node_modules"));
     repo.git("init", "-q");
     repo.git("config", "user.email", "t@local");
     repo.git("config", "user.name", "t");
@@ -234,10 +224,7 @@ function instrumentOxfmt(repo: GateRepo, failFirst = false): () => number {
   mkdirSync(join(repo.dir, "node_modules", "oxfmt", "bin"), {
     recursive: true,
   });
-  copyFileSync(
-    wrapper,
-    join(repo.dir, "node_modules", "oxfmt", "bin", "oxfmt"),
-  );
+  copyFileSync(wrapper, join(repo.dir, "node_modules", "oxfmt", "bin", "oxfmt"));
   writeFileSync(
     join(repo.dir, "node_modules", "oxfmt", "package.json"),
     JSON.stringify({ name: "oxfmt", version: "0.0.0", type: "module" }),
@@ -284,19 +271,14 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
 
   test("真实行为改动 → 放行（不把功能提交误判成格式化）", ({ repo }) => {
     seedDirty(repo, 1);
-    repo.write(
-      "src/lib/dirty-0.ts",
-      'export const PROBE_0={a:99,b:"changed"};\n',
-    );
+    repo.write("src/lib/dirty-0.ts", 'export const PROBE_0={a:99,b:"changed"};\n');
     commitAll(repo, "behaviour change");
     const r = repo.run();
     expect(r.code).toBe(0);
     expect(r.output).toContain("没有纯格式化的");
   });
 
-  test("格式化器的重新断行也算纯格式化（逐行比对会漏报的那一档）", ({
-    repo,
-  }) => {
+  test("格式化器的重新断行也算纯格式化（逐行比对会漏报的那一档）", ({ repo }) => {
     seedDirty(repo, 1);
     const rel = "src/lib/dirty-0.ts";
     // 超宽对象 → 格式化器一定把它拆成多行：断行变了，内容没变。
@@ -322,8 +304,7 @@ describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
 
   test("纯新增文件的提交不算格式化（没有旧内容可比）", ({ repo }) => {
     seedDirty(repo, 1);
-    for (let i = 0; i < 12; i++)
-      repo.write(`src/lib/added-${i}.ts`, "export const X={a:1};\n");
+    for (let i = 0; i < 12; i++) repo.write(`src/lib/added-${i}.ts`, "export const X={a:1};\n");
     commitAll(repo, "add files");
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -363,9 +344,7 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(r.output).toContain("纯格式化 12 个");
   });
 
-  test("重排与功能改动混在**同一条**提交里 ⇒ 声明了照样拦（护栏 ②）", ({
-    repo,
-  }) => {
+  test("重排与功能改动混在**同一条**提交里 ⇒ 声明了照样拦（护栏 ②）", ({ repo }) => {
     seedDirty(repo, 12);
     formatInPlace(
       repo,
@@ -423,158 +402,137 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
   });
 });
 
-describe(
-  "pre-commit 现场：必须判「暂存区」而不是上一次提交",
-  { timeout: 300_000 },
-  () => {
-    /* 这组用例守的是一条**真实发生过的**失效：脚本接在 pre-commit 里，而
-     * pre-commit 在提交对象生成**之前**运行，此时 `HEAD` 仍是上一次提交。
-     * 早先实现无条件取 `HEAD~1..HEAD`，于是：
-     *   · 本次暂存内容一个都没参与判定；
-     *   · 只要上一次提交恰好是格式化提交（master 上的存量治理就是这样），
-     *     门禁就把那次**已合并**的提交当成「本次」拦下，后续每个提交都过不去。
-     * 现场表现是「我什么都没格式化，门禁却报 563 个纯格式化文件」。 */
+describe("pre-commit 现场：必须判「暂存区」而不是上一次提交", { timeout: 300_000 }, () => {
+  /* 这组用例守的是一条**真实发生过的**失效：脚本接在 pre-commit 里，而
+   * pre-commit 在提交对象生成**之前**运行，此时 `HEAD` 仍是上一次提交。
+   * 早先实现无条件取 `HEAD~1..HEAD`，于是：
+   *   · 本次暂存内容一个都没参与判定；
+   *   · 只要上一次提交恰好是格式化提交（master 上的存量治理就是这样），
+   *     门禁就把那次**已合并**的提交当成「本次」拦下，后续每个提交都过不去。
+   * 现场表现是「我什么都没格式化，门禁却报 563 个纯格式化文件」。 */
 
-    test("上一次提交是格式化提交、本次暂存是真实改动 → 放行（不被上一次污染）", ({
+  test("上一次提交是格式化提交、本次暂存是真实改动 → 放行（不被上一次污染）", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
       repo,
-    }) => {
-      seedDirty(repo, 12);
-      formatInPlace(
-        repo,
-        Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
-      );
-      commitAll(repo, "format only"); // 上一次提交：12 个纯格式化（会被判为阻断）
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, "format only"); // 上一次提交：12 个纯格式化（会被判为阻断）
 
-      // 本次只暂存一个真实行为改动，还没提交（正是 pre-commit 的现场）。
-      repo.write("src/lib/feature.ts", "export const answer = 42;\n");
-      repo.git("add", "src/lib/feature.ts");
+    // 本次只暂存一个真实行为改动，还没提交（正是 pre-commit 的现场）。
+    repo.write("src/lib/feature.ts", "export const answer = 42;\n");
+    repo.git("add", "src/lib/feature.ts");
 
-      const r = repo.run();
-      expect(r.code).toBe(0);
-      // 判的是暂存区：只有 1 个改动文件，且它不是「重排既有文件」。
-      expect(r.output).toContain("改动 1 个源文件");
-      expect(r.output).toContain("没有纯格式化的");
-    });
+    const r = repo.run();
+    expect(r.code).toBe(0);
+    // 判的是暂存区：只有 1 个改动文件，且它不是「重排既有文件」。
+    expect(r.output).toContain("改动 1 个源文件");
+    expect(r.output).toContain("没有纯格式化的");
+  });
 
-    test("暂存区里一次格式化 12 个既有文件 → 仍然阻断（该拦的照样拦）", ({
+  test("暂存区里一次格式化 12 个既有文件 → 仍然阻断（该拦的照样拦）", ({ repo }) => {
+    // `seedDirty` 自己就提交了基线，这里不能再 commit 一次（会因无改动而失败）。
+    seedDirty(repo, 12);
+
+    formatInPlace(
       repo,
-    }) => {
-      // `seedDirty` 自己就提交了基线，这里不能再 commit 一次（会因无改动而失败）。
-      seedDirty(repo, 12);
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    repo.git("add", "-A"); // 暂存但**不提交**
 
-      formatInPlace(
-        repo,
-        Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
-      );
-      repo.git("add", "-A"); // 暂存但**不提交**
+    const r = repo.run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("纯格式化 12 个");
+  });
 
-      const r = repo.run();
-      expect(r.code).toBe(1);
-      expect(r.output).toContain("纯格式化 12 个");
-    });
+  test("暂存区只有纯新增文件 → 放行（新增不是「重排既有文件」）", ({ repo }) => {
+    seedDirty(repo, 1);
+    for (let i = 0; i < 12; i++) repo.write(`src/lib/new-${i}.ts`, "export const X = { a: 1 };\n");
+    repo.git("add", "-A");
 
-    test("暂存区只有纯新增文件 → 放行（新增不是「重排既有文件」）", ({
+    const r = repo.run();
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("没有纯格式化的");
+  });
+
+  test("无暂存改动时回落到「判 HEAD 这一次提交」（本地事后复盘口径不变）", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
       repo,
-    }) => {
-      seedDirty(repo, 1);
-      for (let i = 0; i < 12; i++)
-        repo.write(`src/lib/new-${i}.ts`, "export const X = { a: 1 };\n");
-      repo.git("add", "-A");
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, "format only"); // 已提交，暂存区是空的
 
-      const r = repo.run();
-      expect(r.code).toBe(0);
-      expect(r.output).toContain("没有纯格式化的");
-    });
+    const r = repo.run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("纯格式化 12 个");
+  });
 
-    test("无暂存改动时回落到「判 HEAD 这一次提交」（本地事后复盘口径不变）", ({
+  /* 合并提交豁免：一次 merge 会把上游整批（含别处做的格式化）带进来，
+   * 「拆成两次提交」在这里物理上不可能 —— 上游形态已定死在历史里。
+   * 判据取 `MERGE_HEAD` 是否存在（pre-commit 跑在合并提交对象生成**之前**，
+   * 此时该文件由 `git merge` 写入、合并完成后删除）。 */
+  test("合并进行中（MERGE_HEAD 存在）→ 跳过判定，不阻断", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
       repo,
-    }) => {
-      seedDirty(repo, 12);
-      formatInPlace(
-        repo,
-        Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
-      );
-      commitAll(repo, "format only"); // 已提交，暂存区是空的
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    repo.git("add", "-A");
+    // 模拟 `git merge` 的现场：pre-commit 触发时 MERGE_HEAD 已写好。
+    writeFileSync(join(repo.dir, ".git", "MERGE_HEAD"), `${headSha(repo)}\n`);
 
-      const r = repo.run();
-      expect(r.code).toBe(1);
-      expect(r.output).toContain("纯格式化 12 个");
-    });
+    const r = repo.run();
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("合并提交");
+  });
 
-    /* 合并提交豁免：一次 merge 会把上游整批（含别处做的格式化）带进来，
-     * 「拆成两次提交」在这里物理上不可能 —— 上游形态已定死在历史里。
-     * 判据取 `MERGE_HEAD` 是否存在（pre-commit 跑在合并提交对象生成**之前**，
-     * 此时该文件由 `git merge` 写入、合并完成后删除）。 */
-    test("合并进行中（MERGE_HEAD 存在）→ 跳过判定，不阻断", ({ repo }) => {
-      seedDirty(repo, 12);
-      formatInPlace(
-        repo,
-        Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
-      );
-      repo.git("add", "-A");
-      // 模拟 `git merge` 的现场：pre-commit 触发时 MERGE_HEAD 已写好。
-      writeFileSync(join(repo.dir, ".git", "MERGE_HEAD"), `${headSha(repo)}\n`);
-
-      const r = repo.run();
-      expect(r.code).toBe(0);
-      expect(r.output).toContain("合并提交");
-    });
-
-    test("合并提交豁免不掩盖 CI 的 --range 盘点（按范围判，不受现场影响）", ({
+  test("合并提交豁免不掩盖 CI 的 --range 盘点（按范围判，不受现场影响）", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
       repo,
-    }) => {
-      seedDirty(repo, 12);
-      formatInPlace(
-        repo,
-        Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
-      );
-      commitAll(repo, "format only");
-      writeFileSync(join(repo.dir, ".git", "MERGE_HEAD"), `${headSha(repo)}\n`);
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, "format only");
+    writeFileSync(join(repo.dir, ".git", "MERGE_HEAD"), `${headSha(repo)}\n`);
 
-      const r = repo.run(["--range", "HEAD~1..HEAD"]);
-      expect(r.code).toBe(1);
-      expect(r.output).toContain("纯格式化 12 个");
-    });
-  },
-);
+    const r = repo.run(["--range", "HEAD~1..HEAD"]);
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("纯格式化 12 个");
+  });
+});
 
-describe(
-  "判定成本：整批一次 oxfmt，不按文件各起一次",
-  { timeout: 300_000 },
-  () => {
-    /* 这条用例守的是一条**真实发生过的**失效：早先的实现对每个文件各起一次
-     * `prettier --stdin-filepath`，而格式化器的启动 + 插件加载是主要成本
-     * （实测单文件约 400ms，与文件大小几乎无关）—— 12 个文件 ≈ 5s，正好把
-     * vitest 默认的 testTimeout 顶穿。现场表现是 `Test timed out in 5000ms`，
-     * 报在别的门禁用例上，看起来像「测试写得慢」，实际是门禁自身的调用形态
-     * 在文件数上线性叠加（真人「批量格式化」提交改几十个文件时只会更慢）。
-     *
-     * 判据用**计数**而不是耗时：耗时在负载波动下必然抖动，而「格式化器起了
-     * 几次」是确定的。整批口径下 batch 恰好一次（外加逐文件兜底，正常路径上为 0），
-     * 逐文件口径下是「文件数 + 1」。用包装脚本记调用次数，
-     * 断言与阈值无关的形态：次数远小于文件数。 */
-    test("12 个文件的改动 → oxfmt 调用次数远小于文件数（整批口径）", ({
+describe("判定成本：整批一次 oxfmt，不按文件各起一次", { timeout: 300_000 }, () => {
+  /* 这条用例守的是一条**真实发生过的**失效：早先的实现对每个文件各起一次
+   * `prettier --stdin-filepath`，而格式化器的启动 + 插件加载是主要成本
+   * （实测单文件约 400ms，与文件大小几乎无关）—— 12 个文件 ≈ 5s，正好把
+   * vitest 默认的 testTimeout 顶穿。现场表现是 `Test timed out in 5000ms`，
+   * 报在别的门禁用例上，看起来像「测试写得慢」，实际是门禁自身的调用形态
+   * 在文件数上线性叠加（真人「批量格式化」提交改几十个文件时只会更慢）。
+   *
+   * 判据用**计数**而不是耗时：耗时在负载波动下必然抖动，而「格式化器起了
+   * 几次」是确定的。整批口径下 batch 恰好一次（外加逐文件兜底，正常路径上为 0），
+   * 逐文件口径下是「文件数 + 1」。用包装脚本记调用次数，
+   * 断言与阈值无关的形态：次数远小于文件数。 */
+  test("12 个文件的改动 → oxfmt 调用次数远小于文件数（整批口径）", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
       repo,
-    }) => {
-      seedDirty(repo, 12);
-      formatInPlace(
-        repo,
-        Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
-      );
-      commitAll(repo, "format only");
-      writeFileSync(join(repo.dir, ".gitignore"), "node_modules\n");
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, "format only");
+    writeFileSync(join(repo.dir, ".gitignore"), "node_modules\n");
 
-      const calls = instrumentOxfmt(repo);
+    const calls = instrumentOxfmt(repo);
 
-      const r = repo.run();
-      expect(r.code).toBe(1);
-      expect(r.output).toContain("纯格式化 12 个");
+    const r = repo.run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("纯格式化 12 个");
 
-      // 逐文件口径下这里会是 13；整批口径下是 1（兜底最多再补几次）。
-      expect(calls()).toBeLessThanOrEqual(3);
-    });
-  },
-);
+    // 逐文件口径下这里会是 13；整批口径下是 1（兜底最多再补几次）。
+    expect(calls()).toBeLessThanOrEqual(3);
+  });
+});
 
 /**
  * 「回读比对」这一档的两端（真起 oxfmt，不打桩 —— 被锁的正是「谁来给答案」）。
@@ -590,7 +548,7 @@ describe("回读比对：本来就规范 / 改动后正是规范形态", { timeo
   /** 真仓库里那份判据（`HERE` 就是真仓库，oxfmt 解析不受临时仓库影响）。 */
   function realJudge() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("../scripts/check-reformat-only.cjs") as {
+    return /* SAFETY: 类型断言已复核 */ require("../scripts/check-reformat-only.cjs") as {
       classifyReformatOnly: (
         entries: Array<{ file: string; before: string; after: string }>,
       ) => Set<string>;
@@ -603,9 +561,7 @@ describe("回读比对：本来就规范 / 改动后正是规范形态", { timeo
     const tidy = oxfmtText(messy);
     expect(tidy, "夹具造出来的形态必须与改动前不同").not.toBe(messy);
     expect([
-      ...realJudge().classifyReformatOnly([
-        { file: "src/lib/p.ts", before: messy, after: tidy },
-      ]),
+      ...realJudge().classifyReformatOnly([{ file: "src/lib/p.ts", before: messy, after: tidy }]),
     ]).toEqual(["src/lib/p.ts"]);
   });
 
@@ -631,90 +587,75 @@ describe("回读比对：本来就规范 / 改动后正是规范形态", { timeo
  *
  * 真起 oxfmt 而不打桩：被锁的正是「谁来给答案」。
  */
-describe(
-  "批量那一档：退出 0 一次给全部结论，非 0 逐文件兜底",
-  { timeout: 300_000 },
-  () => {
-    /**
-     * 在临时仓库里加载**那一份**脚本（而不是真仓库的），再把一批文件喂给它 ——
-     * 于是 wrapper 命中、计数有意义。
-     */
-    function verdictViaTempRepo(
-      repo: GateRepo,
-      entries: Array<{ file: string; before: string; after: string }>,
-    ): Set<string> {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const tempMod = require(
-        join(repo.dir, "scripts", "check-reformat-only.cjs"),
-      ) as {
-        classifyReformatOnly: typeof entries extends never
-          ? never
-          : (e: typeof entries) => Set<string>;
-      };
-      return tempMod.classifyReformatOnly(entries);
-    }
+describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜底", { timeout: 300_000 }, () => {
+  /**
+   * 在临时仓库里加载**那一份**脚本（而不是真仓库的），再把一批文件喂给它 ——
+   * 于是 wrapper 命中、计数有意义。
+   */
+  function verdictViaTempRepo(
+    repo: GateRepo,
+    entries: Array<{ file: string; before: string; after: string }>,
+  ): Set<string> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tempMod = /* SAFETY: 类型断言已复核 */ require(
+      join(repo.dir, "scripts", "check-reformat-only.cjs"),
+    ) as {
+      classifyReformatOnly: typeof entries extends never
+        ? never
+        : (e: typeof entries) => Set<string>;
+    };
+    return tempMod.classifyReformatOnly(entries);
+  }
 
-    test("本来就规范的文件：整批一次就够，不再为它另起一次", ({ repo }) => {
-      seedEmpty(repo);
-      const before = oxfmtText("export const P = { a: 1, b: 2 };\n");
-      const after = "export const P = { a: 1, b: 3 };\n";
+  test("本来就规范的文件：整批一次就够，不再为它另起一次", ({ repo }) => {
+    seedEmpty(repo);
+    const before = oxfmtText("export const P = { a: 1, b: 2 };\n");
+    const after = "export const P = { a: 1, b: 3 };\n";
 
-      const calls = instrumentOxfmt(repo);
-      const value = verdictViaTempRepo(repo, [
-        { file: "src/lib/keep-clean.ts", before, after },
-      ]);
+    const calls = instrumentOxfmt(repo);
+    const value = verdictViaTempRepo(repo, [{ file: "src/lib/keep-clean.ts", before, after }]);
 
-      expect([...value], "改动后不是它的规范形态 → 不是纯格式化").toEqual([]);
-      expect(
-        calls(),
-        "整批那一次已经给了结论（回读没变），再起一次是白付 —— 实际提交里" +
-          "绝大多数文件都在这一档",
-      ).toBe(1);
-    });
+    expect([...value], "改动后不是它的规范形态 → 不是纯格式化").toEqual([]);
+    expect(
+      calls(),
+      "整批那一次已经给了结论（回读没变），再起一次是白付 —— 实际提交里" + "绝大多数文件都在这一档",
+    ).toBe(1);
+  });
 
-    test("整批没跑起来 ⇒ 每个文件各退一次兜底（没结论不许当成「本来就规范」）", ({
-      repo,
-    }) => {
-      seedEmpty(repo);
-      const messy = "export const P={a:1,\n\n\n  b:2};\n";
-      const tidy = oxfmtText(messy);
+  test("整批没跑起来 ⇒ 每个文件各退一次兜底（没结论不许当成「本来就规范」）", ({ repo }) => {
+    seedEmpty(repo);
+    const messy = "export const P={a:1,\n\n\n  b:2};\n";
+    const tidy = oxfmtText(messy);
 
-      // 整批那一次故意以非 0 退出 ⇒ 没有结论，必须退回逐文件那一档。
-      const calls = instrumentOxfmt(repo, true);
-      const value = verdictViaTempRepo(repo, [
-        { file: "src/lib/messy.ts", before: messy, after: tidy },
-      ]);
+    // 整批那一次故意以非 0 退出 ⇒ 没有结论，必须退回逐文件那一档。
+    const calls = instrumentOxfmt(repo, true);
+    const value = verdictViaTempRepo(repo, [
+      { file: "src/lib/messy.ts", before: messy, after: tidy },
+    ]);
 
-      expect([...value], "兜底那一档照样给出正确答案").toEqual([
-        "src/lib/messy.ts",
-      ]);
-      expect(calls(), "整批那一次失败后，这一个文件补了一次逐文件判定").toBe(2);
-    });
+    expect([...value], "兜底那一档照样给出正确答案").toEqual(["src/lib/messy.ts"]);
+    expect(calls(), "整批那一次失败后，这一个文件补了一次逐文件判定").toBe(2);
+  });
 
-    test("被改写的那一档：规范形态取自回读，不再另起一次", ({ repo }) => {
-      seedEmpty(repo);
-      const messy = "export const P={a:1,\n\n\n  b:2};\n";
-      const tidy = oxfmtText(messy);
+  test("被改写的那一档：规范形态取自回读，不再另起一次", ({ repo }) => {
+    seedEmpty(repo);
+    const messy = "export const P={a:1,\n\n\n  b:2};\n";
+    const tidy = oxfmtText(messy);
 
-      const calls = instrumentOxfmt(repo);
-      const value = verdictViaTempRepo(repo, [
-        { file: "src/lib/messy.ts", before: messy, after: tidy },
-      ]);
+    const calls = instrumentOxfmt(repo);
+    const value = verdictViaTempRepo(repo, [
+      { file: "src/lib/messy.ts", before: messy, after: tidy },
+    ]);
 
-      expect([...value], "改动后正是格式化器给出的形态 → 纯格式化").toEqual([
-        "src/lib/messy.ts",
-      ]);
-      expect(calls(), "改写过的文件由整批那一次给出结论").toBe(1);
-    });
-  },
-);
+    expect([...value], "改动后正是格式化器给出的形态 → 纯格式化").toEqual(["src/lib/messy.ts"]);
+    expect(calls(), "改写过的文件由整批那一次给出结论").toBe(1);
+  });
+});
 
 describe("补丁解析（纯函数，不跑 git）", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("../scripts/check-reformat-only.cjs") as {
-    collectChangedFiles: (
-      patch: string,
-    ) => Array<{ before: string; after: string }>;
+  const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-reformat-only.cjs") as {
+    collectChangedFiles: (patch: string) => Array<{ before: string; after: string }>;
     LIMIT: number;
   };
 
@@ -767,9 +708,7 @@ describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判
     expect(r.output).toContain("跳过");
   });
 
-  test("面上一份源文件都没有时跳过；有 `docs/**.md` 这种也在面上（扩展名口径）", ({
-    repo,
-  }) => {
+  test("面上一份源文件都没有时跳过；有 `docs/**.md` 这种也在面上（扩展名口径）", ({ repo }) => {
     seedEmpty(repo);
     repo.write("docs/note.md", "# 随手笔记\n");
     repo.git("add", "-A");
@@ -796,9 +735,7 @@ describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判
     }
   });
 
-  test("根级源文件（如 `package.json`）也在面上 —— 空串根不命中任何东西", ({
-    repo,
-  }) => {
+  test("根级源文件（如 `package.json`）也在面上 —— 空串根不命中任何东西", ({ repo }) => {
     seedEmpty(repo);
     repo.write("package.json", '{ "name": "probe" }\n');
     repo.git("add", "-A");
@@ -806,9 +743,7 @@ describe("`--staged`：面上没有源文件时跳过，有源文件时照旧判
     expect(r.output).not.toContain("未触及扫描面");
   });
 
-  test("带了 `--range` 时一律不跳（它按显式范围判，与暂存区无关）", ({
-    repo,
-  }) => {
+  test("带了 `--range` 时一律不跳（它按显式范围判，与暂存区无关）", ({ repo }) => {
     seedEmpty(repo);
     repo.write("docs/note.md", "# 只有文档\n");
     repo.git("add", "-A");

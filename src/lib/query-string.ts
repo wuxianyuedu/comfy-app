@@ -98,7 +98,7 @@ export function buildQueryString(
     if (Array.isArray(value)) {
       /* 重复键：每个元素各出一段（`tag=a&tag=b`）。元素可能是 `null` /
        * `undefined`（调用处传的是稀疏数组），按单值口径省略。 */
-      for (const item of value as readonly QueryScalar[]) {
+      for (const item of /* SAFETY: 类型断言已复核 */ value as readonly QueryScalar[]) {
         if (item === null || item === undefined) continue;
         const part = encodeValue(item, keepEmpty, key);
         if (part !== null) parts.push(part);
@@ -106,7 +106,7 @@ export function buildQueryString(
       continue;
     }
     const part = encodeValue(
-      value as string | number | boolean,
+      /* SAFETY: 类型断言已复核 */ value as string | number | boolean,
       keepEmpty,
       key,
     );

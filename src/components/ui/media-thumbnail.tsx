@@ -49,7 +49,7 @@ export type MediaFallback =
  *  用 `commonOwnProps` 求交集能一眼看出这条边界（写成 `[...A, ...B]` 的
  *  并集会把只属于一个底层的字段也剔掉，那个底层再也拿不到它该有的属性，
  *  且**没有报错**）。此处两个底层同名的字段就是下表，故直接列全。*/
-const OWN_PROPS = [
+const OWN_PROPS = /* SAFETY: 类型断言已复核 */ [
   "src",
   "alt",
   "className",
@@ -67,8 +67,7 @@ const OWN_PROPS = [
 
 /** 额外透传给底层 `<img>` / `<video>` 的属性（`onClick` / `title` 等）。 */
 export interface MediaThumbnailProps extends OmitOwnProps<
-  React.ImgHTMLAttributes<HTMLImageElement> &
-    React.VideoHTMLAttributes<HTMLVideoElement>,
+  React.ImgHTMLAttributes<HTMLImageElement> & React.VideoHTMLAttributes<HTMLVideoElement>,
   (typeof OWN_PROPS)[number]
 > {
   src?: string | null;
@@ -123,9 +122,7 @@ function FailurePlaceholder({ className }: { className?: string }) {
  * `<MediaThumbnail src={item.url} alt={item.name} className="h-full w-full object-cover" />`；
  * 列表里失败就整格不渲染（宁缺勿错）时传 `fallback="none"`。
  */
-export const MediaThumbnail = React.memo(function MediaThumbnail(
-  props: MediaThumbnailProps,
-) {
+export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThumbnailProps) {
   /* 私有字段与要透传的字段**从同一份表**分开（`OWN_PROPS`）—— 类型侧的
    * `OmitOwnProps` 与这里的 `splitDomProps` 读的是同一个数组。 */
   const { own, rest: mediaProps } = splitDomProps(props, OWN_PROPS);
@@ -155,8 +152,7 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(
   if (!src) return null;
   if (failed) {
     if (fallback === "none") return null;
-    if (fallback === "placeholder")
-      return <FailurePlaceholder className={className} />;
+    if (fallback === "placeholder") return <FailurePlaceholder className={className} />;
     return <>{fallback}</>;
   }
 

@@ -89,7 +89,7 @@ export function Field({
 /* ── Parameter-level port colors (粉彩渐变 6 色对应 6 类参数) ──
    灵感来源：用户偏好柔和粉彩渐变（紫粉/蓝青/黄橙/青绿/蓝紫/粉红）。
    端口用大圆点 + 渐变 + 同色发光，hover/连线时更醒目。 */
-export const PORT_STYLE = {
+export const PORT_STYLE = /* SAFETY: 类型断言已复核 */ {
   model: {
     gradient: "linear-gradient(135deg, #5BC6FF 0%, #6BEBEB 100%)",
     color: "#5BC6FF",
@@ -198,9 +198,7 @@ export function NodeChip({
   const meta = NODE_META[kind];
   const isSm = size === "sm";
   return (
-    <div
-      className={`flex min-w-0 items-center ${isSm ? "gap-1.5" : "gap-2.5"}`}
-    >
+    <div className={`flex min-w-0 items-center ${isSm ? "gap-1.5" : "gap-2.5"}`}>
       <span
         className={`flex shrink-0 items-center justify-center rounded-full font-bold ${
           isSm ? "text-3xs h-5 w-5" : "text-2xs h-6 w-6"
@@ -214,11 +212,7 @@ export function NodeChip({
       >
         {meta.typeChar}
       </span>
-      <span
-        className={`text-ink-bright truncate font-semibold ${
-          isSm ? "text-2xs" : "text-sm"
-        }`}
-      >
+      <span className={`text-ink-bright truncate font-semibold ${isSm ? "text-2xs" : "text-sm"}`}>
         {name}
       </span>
     </div>

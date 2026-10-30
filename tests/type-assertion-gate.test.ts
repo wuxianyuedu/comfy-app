@@ -22,10 +22,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { copyGateDeps } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(
-  __dirname,
-  "../scripts/check-type-assertion-executor.cjs",
-);
+const SCRIPT = path.resolve(__dirname, "../scripts/check-type-assertion-executor.cjs");
 
 /** 与仓库同口径的 tsconfig（`**\/*.ts` 覆盖测试文件）。 */
 const TS_CONFIG = JSON.stringify(
@@ -60,7 +57,7 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

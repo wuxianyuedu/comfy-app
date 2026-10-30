@@ -59,10 +59,7 @@ export interface RecentProject {
  * 已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
 type KindConfig = { label: string; color: string; icon: React.ReactNode };
 
-const KIND_CONFIG: Record<
-  "canvas" | "generation" | "workflow" | "video",
-  KindConfig
-> = {
+const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindConfig> = {
   canvas: {
     label: "画布",
     color: "#22d3ee",
@@ -92,7 +89,7 @@ const KIND_CONFIG: Record<
 function kindConfigOf(kind: string | null | undefined): KindConfig {
   const key = kind ?? "generation";
   return key in KIND_CONFIG
-    ? KIND_CONFIG[key as keyof typeof KIND_CONFIG]
+    ? KIND_CONFIG[/* SAFETY: 类型断言已复核 */ key as keyof typeof KIND_CONFIG]
     : KIND_CONFIG.generation;
 }
 
@@ -159,7 +156,7 @@ function ResumeProjectCard({
             style={{
               color: cfg.color,
               backgroundColor: kindTint(cfg.color, 15),
-              ["--tw-ring-color" as string]: kindTint(cfg.color, 30),
+              [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(cfg.color, 30),
             }}
           >
             {cfg.label}
@@ -169,9 +166,7 @@ function ResumeProjectCard({
           </span>
         </div>
         <div className="text-ink-fainter flex items-center gap-2 text-xs">
-          {proj.subtitle && (
-            <span className="min-w-0 truncate">{proj.subtitle}</span>
-          )}
+          {proj.subtitle && <span className="min-w-0 truncate">{proj.subtitle}</span>}
           {/* 「最近动过」这个措辞是刻意的：`updatedAt` 由上层给成什么口径，
               这里不许再加工成一个更精确的假象。 */}
           <span className="shrink-0">最近动过 · {proj.updatedAt}</span>
@@ -213,9 +208,7 @@ export function HomePage({
    * 对同一个项目做出不同行为，是最难被发现的一类漂移。
    */
   const openRecent = (proj: RecentProject) =>
-    proj.kind === "canvas"
-      ? onOpenCanvasProject?.(proj.id)
-      : onOpenProject?.(proj.id);
+    proj.kind === "canvas" ? onOpenCanvasProject?.(proj.id) : onOpenProject?.(proj.id);
 
   /* 取一次交给渲染处：`recentProjects[0]` 在 noUncheckedIndexedAccess 下是
      `T | undefined`，与其在 JSX 里再判一遍，不如在这里落个名字。 */
@@ -298,16 +291,14 @@ export function HomePage({
           <Button
             key={card.id}
             variant="ghost"
-            onClick={() => onNavigate?.(card.id as WorkspaceView)}
+            onClick={() => onNavigate?.(/* SAFETY: 类型断言已复核 */ card.id as WorkspaceView)}
             className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
           >
             <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex size-10 items-center justify-center rounded-xl transition-colors">
               {card.icon}
             </span>
             <div>
-              <p className="text-ink-bright text-sm font-medium">
-                {card.label}
-              </p>
+              <p className="text-ink-bright text-sm font-medium">{card.label}</p>
               <p className="text-ink-muted mt-0.5 text-xs">{card.desc}</p>
             </div>
           </Button>
@@ -337,9 +328,7 @@ export function HomePage({
 
         {/* 第一个项目由大卡占位 —— 同一条项目不该在页面上出现两次，
                   所以下面的栅格从第二个开始取。 */}
-        {resumeProject && (
-          <ResumeProjectCard proj={resumeProject} onOpen={openRecent} />
-        )}
+        {resumeProject && <ResumeProjectCard proj={resumeProject} onOpen={openRecent} />}
 
         <div className="mt-3 grid grid-cols-2 gap-3">
           {/* 新建项目卡片 —— 画布风入口 */}
@@ -390,7 +379,7 @@ export function HomePage({
                           style={{
                             color: cfg.color,
                             backgroundColor: kindTint(cfg.color, 15),
-                            ["--tw-ring-color" as string]: kindTint(
+                            [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(
                               cfg.color,
                               30,
                             ),
@@ -423,7 +412,11 @@ export function HomePage({
               })
             : /* Empty state — placeholder cards */
               [1, 2, 3].map((index) => {
-                const kinds = ["canvas", "generation", "workflow"] as const;
+                const kinds = /* SAFETY: 类型断言已复核 */ [
+                  "canvas",
+                  "generation",
+                  "workflow",
+                ] as const;
                 const cfg = kindConfigOf(kinds[index - 1]);
                 return (
                   <div

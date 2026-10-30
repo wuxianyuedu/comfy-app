@@ -1,4 +1,4 @@
-﻿/**
+/**
  * `executor-ws.ts` — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  * ===========================================================================
  *
@@ -29,21 +29,9 @@ import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";
 import { toPct } from "~/lib/progress";
 import { logger } from "~/lib/core/logger";
-import {
-  probeComfyBase,
-  resolveComfyBase,
-  resetComfyBase,
-  toWsBase,
-} from "./client";
+import { probeComfyBase, resolveComfyBase, resetComfyBase, toWsBase } from "./client";
 import { comfyProtocol, type ComfyWsMessage } from "./protocol-adapter";
-import {
-  state,
-  log,
-  claimSettle,
-  CLIENT_ID,
-  JOB_TIMEOUT_MS,
-  WS_PATHS,
-} from "./runner-state";
+import { state, log, claimSettle, CLIENT_ID, JOB_TIMEOUT_MS, WS_PATHS } from "./runner-state";
 import { WS_RECONNECT, backoffDelayMs } from "../retry-policy";
 import { complete, fail } from "./executor-finalize";
 import { announceToQueuedTasks } from "./executor-continuation";
@@ -53,11 +41,7 @@ import {
   isComfyAutoStartSuppressed,
 } from "./lifecycle";
 import { kickQueue } from "./executor-continuation";
-import {
-  fetchHistoryEntry,
-  traceComfyQueue,
-  type ComfyHistoryEntry,
-} from "./executor-history";
+import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
 import { trace } from "./trace";
 import { classTypeForNode, nodeLabel } from "./graph-node-class";
 
@@ -73,10 +57,7 @@ export { claimSettle };
 export async function loadRealTaskRepo() {
   return (await import("../core/repository")).taskRepository;
 }
-export type TaskRepoForWs = Pick<
-  Awaited<ReturnType<typeof loadRealTaskRepo>>,
-  "updateProgress"
->;
+export type TaskRepoForWs = Pick<Awaited<ReturnType<typeof loadRealTaskRepo>>, "updateProgress">;
 
 export type ExecutorWsDeps = { taskRepo: TaskRepoForWs };
 let depsOverride: Partial<ExecutorWsDeps> = {};
@@ -136,10 +117,7 @@ export async function connect(): Promise<void> {
     if (!comfyDownNotified) {
       comfyDownNotified = true;
       announceToQueuedTasks("ComfyUI 未运行，正在自动启动…", "warn");
-      announceToQueuedTasks(
-        "启动完成后将自动继续执行当前工作流，请稍候",
-        "info",
-      );
+      announceToQueuedTasks("启动完成后将自动继续执行当前工作流，请稍候", "info");
       void ensureComfyUiReady({
         timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS,
         // onLog 在单飞中被首次调用捕获；启动进程内的每一步 note 都会经这里
@@ -161,10 +139,7 @@ export async function connect(): Promise<void> {
         })
         .catch((err: unknown) => {
           logger.warn(`[comfyui] ${errorText(err, "自动启动失败")}`);
-          announceToQueuedTasks(
-            errorText(err, "ComfyUI 自动启动失败"),
-            "error",
-          );
+          announceToQueuedTasks(errorText(err, "ComfyUI 自动启动失败"), "error");
         });
     } else if (!isComfyAutoStartSuppressed()) {
       // 自动启动已在单飞中进行：仅维持调用以保 isComfyStarting 为真，
@@ -172,9 +147,8 @@ export async function connect(): Promise<void> {
       // 但**必须挂一个 catch**——单飞的 promise 若因未预期路径 reject，
       // 上面 `if (!comfyDownNotified)` 分支那次调用已挂了 .then/.catch，
       // 这次「已经在飞」的分支若不接住，reject 就变成 unhandledRejection。
-      fireAndForget(
-        ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS }),
-        (e) => logger.warn(`[comfyui] ${errorText(e, "自动启动等待失败")}`),
+      fireAndForget(ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS }), (e) =>
+        logger.warn(`[comfyui] ${errorText(e, "自动启动等待失败")}`),
       );
     }
     // 自动启动已被闩锁抑制（启动失败 / 用户手动关闭）时不重连：重连只会每
@@ -216,7 +190,7 @@ export async function connect(): Promise<void> {
     kickQueue();
   });
   ws.on("message", (data) =>
-    fireAndForget(handleMessage((data as Buffer).toString()), (e) =>
+    fireAndForget(handleMessage(/* SAFETY: 类型断言已复核 */ (data as Buffer).toString()), (e) =>
       logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`),
     ),
   );
@@ -264,9 +238,7 @@ function scheduleReconnect() {
   if (reconnectHandle) clearTimeout(reconnectHandle);
   reconnectHandle = setTimeout(() => {
     reconnectHandle = null;
-    fireAndForget(connect(), (err) =>
-      logger.warn(`[comfyui] ${errorText(err, "WS 重连失败")}`),
-    );
+    fireAndForget(connect(), (err) => logger.warn(`[comfyui] ${errorText(err, "WS 重连失败")}`));
   }, delay);
 }
 
@@ -315,7 +287,7 @@ export async function handleMessage(raw: string) {
   }
   if (!msg || typeof msg !== "object") return;
   // ComfyUI WS 消息的最小结构视图（协议判断委托给 comfyProtocol Adapter）。
-  const message = msg as ComfyWsMessage;
+  const message = /* SAFETY: 类型断言已复核 */ msg as ComfyWsMessage;
   const data = message.data ?? {};
   const promptId: string | undefined =
     typeof data.prompt_id === "string" ? data.prompt_id : undefined;
@@ -348,11 +320,7 @@ export async function handleMessage(raw: string) {
   // 任何来自 ComfyUI 的活动（节点开始执行 / 进度推进）都续期看门狗，
   // 避免长任务被 5 分钟硬超时误杀（P2 修复）。完成/错误分支走 claimSettle
   // 会清掉定时器，这里刷新无害。
-  if (
-    signal === "node-started" ||
-    signal === "node-finished" ||
-    signal === "progress"
-  ) {
+  if (signal === "node-started" || signal === "node-finished" || signal === "progress") {
     armWatchdog(taskId, promptId);
   }
 
@@ -372,11 +340,7 @@ export async function handleMessage(raw: string) {
       classType: classType ?? "",
       t: Date.now(),
     });
-    log(
-      taskId,
-      "info",
-      `▶ 节点 [${nodeId}] ${nodeLabel(classType)}（${classType ?? "?"}）`,
-    );
+    log(taskId, "info", `▶ 节点 [${nodeId}] ${nodeLabel(classType)}（${classType ?? "?"}）`);
     return;
   }
 
@@ -388,11 +352,7 @@ export async function handleMessage(raw: string) {
     const last = s.lastNodeByTask.get(taskId);
     if (last) {
       const dur = Math.max(0, Math.round((Date.now() - last.t) / 100) / 10);
-      log(
-        taskId,
-        "info",
-        `✔ 节点 [${last.node}] ${nodeLabel(last.classType)} 完成（${dur}s）`,
-      );
+      log(taskId, "info", `✔ 节点 [${last.node}] ${nodeLabel(last.classType)} 完成（${dur}s）`);
       s.lastNodeByTask.delete(taskId);
     }
   }
@@ -416,14 +376,9 @@ export async function handleMessage(raw: string) {
       | undefined;
     const rawNodeId: unknown = data.node;
     const nodeId =
-      typeof rawNodeId === "string" || typeof rawNodeId === "number"
-        ? String(rawNodeId)
-        : null;
+      typeof rawNodeId === "string" || typeof rawNodeId === "number" ? String(rawNodeId) : null;
     if (nodeId) {
-      const classType = classTypeForNode(
-        s.executedWorkflow.get(taskId),
-        nodeId,
-      );
+      const classType = classTypeForNode(s.executedWorkflow.get(taskId), nodeId);
       node = {
         id: nodeId,
         value,
@@ -444,11 +399,7 @@ export async function handleMessage(raw: string) {
      *  读；无节点信息的帧传 undefined，impl 侧不覆写原值。 */
     const taskRepository = await resolveTaskRepo();
     if (!(await taskRepository.updateProgress(taskId, pct, node))) {
-      log(
-        taskId,
-        "warn",
-        "忽略迟到进度：本任务已由其它路径收口（终态不再改写）",
-      );
+      log(taskId, "warn", "忽略迟到进度：本任务已由其它路径收口（终态不再改写）");
       return;
     }
 

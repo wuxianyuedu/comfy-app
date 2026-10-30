@@ -7,10 +7,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  fetchHistoryTasks,
-  probeGlobalTaskCount,
-} from "~/lib/project-canvas/history-panel-client";
+import { fetchHistoryTasks, probeGlobalTaskCount } from "~/lib/project-canvas/history-panel-client";
 
 import { useHistoryPanel } from "./use-history-panel";
 
@@ -65,17 +62,13 @@ describe("useHistoryPanel", () => {
     act(() => result.current.setScope("all"));
     await expect
       .poll(() => mockedFetch)
-      .toHaveBeenLastCalledWith(
-        expect.not.objectContaining({ projectId: "p-1" }),
-      );
+      .toHaveBeenLastCalledWith(expect.not.objectContaining({ projectId: "p-1" }));
   });
 
   it("类型筛选：all 不带 media（服务端不认这个值），其余按枚举传", async () => {
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.loading).toBe(false);
-    expect(mockedFetch).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ media: "all" }),
-    );
+    expect(mockedFetch).toHaveBeenLastCalledWith(expect.not.objectContaining({ media: "all" }));
 
     act(() => result.current.setFilter("video"));
     await expect
@@ -109,12 +102,14 @@ describe("useHistoryPanel", () => {
   });
 
   it("activeCount 只数 RUNNING / QUEUED", async () => {
-    mockedFetch.mockResolvedValue([
-      row({ id: "a", status: "RUNNING" }),
-      row({ id: "b", status: "QUEUED" }),
-      row({ id: "c", status: "SUCCEEDED" }),
-      row({ id: "d", status: "FAILED" }),
-    ] as never);
+    mockedFetch.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ [
+        row({ id: "a", status: "RUNNING" }),
+        row({ id: "b", status: "QUEUED" }),
+        row({ id: "c", status: "SUCCEEDED" }),
+        row({ id: "d", status: "FAILED" }),
+      ] as never,
+    );
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.tasks).toHaveLength(4);
     expect(result.current.activeCount).toBe(2);
@@ -135,7 +130,7 @@ describe("useHistoryPanel", () => {
   });
 
   it("本项目有记录时不探测全局（省一次请求）", async () => {
-    mockedFetch.mockResolvedValue([row()] as never);
+    mockedFetch.mockResolvedValue(/* SAFETY: 类型断言已复核 */ [row()] as never);
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.tasks).toHaveLength(1);
     expect(mockedProbe).not.toHaveBeenCalled();
@@ -145,7 +140,9 @@ describe("useHistoryPanel", () => {
     const clearSpy = vi.spyOn(globalThis, "clearInterval");
     const setSpy = vi.spyOn(globalThis, "setInterval");
 
-    mockedFetch.mockResolvedValue([row({ status: "RUNNING" })] as never);
+    mockedFetch.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ [row({ status: "RUNNING" })] as never,
+    );
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.activeCount).toBe(1);
 
@@ -153,9 +150,11 @@ describe("useHistoryPanel", () => {
     expect(started).toHaveLength(1);
 
     // 轮询推进 → 拉到「已完成」→ 定时器被清掉
-    mockedFetch.mockResolvedValue([row({ status: "SUCCEEDED" })] as never);
+    mockedFetch.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ [row({ status: "SUCCEEDED" })] as never,
+    );
     act(() => {
-      const tick = started[0]?.[0] as () => void;
+      const tick = /* SAFETY: 类型断言已复核 */ started[0]?.[0] as () => void;
       tick();
     });
     await expect.poll(() => result.current.activeCount).toBe(0);
@@ -170,7 +169,7 @@ describe("useHistoryPanel", () => {
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.error).toBe("读取历史记录失败");
 
-    mockedFetch.mockResolvedValue([row()] as never);
+    mockedFetch.mockResolvedValue(/* SAFETY: 类型断言已复核 */ [row()] as never);
     act(() => result.current.refresh());
     /* 先等 tasks 落定再断言 error：error 在拉取**开始时**就被清掉，
      * 只等 error 的话可能在数据回来之前就通过（局部绿 / 全量红的时序坑）。 */

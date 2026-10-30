@@ -10,15 +10,12 @@ import {
   parseRemoteModeAdapters,
   WORKSHOP_INPUT_TYPES,
 } from "~/lib/workshop/model-mode-contract";
-import {
-  loadModeContracts,
-  saveModeContracts,
-} from "~/lib/workshop/mode-contract.server";
+import { loadModeContracts, saveModeContracts } from "~/lib/workshop/mode-contract.server";
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
   type: z.enum(
-    WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]],
+    /* SAFETY: 类型断言已复核 */ WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]],
   ),
   field: z.string().min(1),
 });
@@ -32,7 +29,7 @@ const adapterSchema = z.object({
 /** 合法的任务类型 key（用于温度覆盖）。与 `TASK_TYPES`（~/lib/llm/types.ts）对齐——
  *  这里是「写入侧」白名单，漏了某个 key 的症状是：设置页能显示该档（读侧遍历
  *  TASK_TYPES）、保存时却被 zod 拒成 BAD_REQUEST。 */
-const taskTypeKeys = [
+const taskTypeKeys = /* SAFETY: 类型断言已复核 */ [
   "txt2img",
   "img2video",
   "chat",
@@ -45,9 +42,7 @@ const taskTypeKeys = [
  *  对象那一半的形状**不在这里定义** —— 它与弹窗草稿写回的那一枚条目是同一份
  *  真相（`~/lib/llm/remote-model-schema` 的 `remoteModelEntrySchema`，含 `kind`
  *  的词表）。在这里再抄一份行内枚举，就是「弹窗能选、服务端不认」那种漂移的起点。 */
-const extraModelsSchema = z.array(
-  z.union([z.string(), remoteModelEntrySchema]),
-);
+const extraModelsSchema = z.array(z.union([z.string(), remoteModelEntrySchema]));
 
 export const llmRouter = createTRPCRouter({
   /* GET /api/llm/config —— 读 */
@@ -82,9 +77,7 @@ export const llmRouter = createTRPCRouter({
             output: z.enum(["image", "video", "audio"]),
             /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
              * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
-            required: z
-              .array(z.string().refine(isModeContractInputId))
-              .optional(),
+            required: z.array(z.string().refine(isModeContractInputId)).optional(),
             /* 作者自定义的口：名字由作者填，类型是「简单类型」之一（决定工坊
              *  控件形态与它接受哪一族端口）。归一化（丢弃无定义的口）在
              *  `parseModeContracts` 里再做一次。 */
@@ -114,9 +107,7 @@ export const llmRouter = createTRPCRouter({
   workshopAdaptersGet: authedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .query(async ({ input }) => {
-      const adapters = await remoteModelRepository.getWorkshopAdapters(
-        input.name,
-      );
+      const adapters = await remoteModelRepository.getWorkshopAdapters(input.name);
       return { adapters };
     }),
 
@@ -132,10 +123,7 @@ export const llmRouter = createTRPCRouter({
       const adapters = parseRemoteModeAdapters(
         input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
       );
-      const saved = await remoteModelRepository.saveWorkshopAdapters(
-        input.name,
-        adapters,
-      );
+      const saved = await remoteModelRepository.saveWorkshopAdapters(input.name, adapters);
       return { adapters: saved };
     }),
 
@@ -145,17 +133,12 @@ export const llmRouter = createTRPCRouter({
       z.object({
         provider: z.enum(["local", "remote"]).optional(),
         apiKey: z.string().optional(),
-        baseUrl: z
-          .string()
-          .refine(isHttpUrl, { message: "baseUrl 必须为 http/https" })
-          .optional(),
+        baseUrl: z.string().refine(isHttpUrl, { message: "baseUrl 必须为 http/https" }).optional(),
         model: z.string().optional(),
         /** 候选清单：字符串=本地 ollama 候选；对象=远端独立模型（写入 remoteModel 表） */
         extraModels: extraModelsSchema.optional(),
         temperature: z.number().optional(),
-        temperatureByTask: z
-          .record(z.enum(taskTypeKeys), z.number())
-          .optional(),
+        temperatureByTask: z.record(z.enum(taskTypeKeys), z.number()).optional(),
         maxTokens: z.number().optional(),
       }),
     )

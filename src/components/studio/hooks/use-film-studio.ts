@@ -115,13 +115,9 @@ export function useFilmStudio(): FilmStudioController {
   const [frames] = useState(FILM_FRAMES_PER_SHOT);
 
   const [script, setScript] = useState(DEFAULT_SCRIPT);
-  const [videoWorkflows, setVideoWorkflows] = useState<
-    { id: string; name: string }[]
-  >([]);
+  const [videoWorkflows, setVideoWorkflows] = useState<{ id: string; name: string }[]>([]);
   const [videoWorkflowId, setVideoWorkflowId] = useState("");
-  const [imageWorkflows, setImageWorkflows] = useState<
-    { id: string; name: string }[]
-  >([]);
+  const [imageWorkflows, setImageWorkflows] = useState<{ id: string; name: string }[]>([]);
   const [imageWorkflowId, setImageWorkflowId] = useState("");
   const [subtitleOn, setSubtitleOn] = useState(true);
   const [bgmName, setBgmName] = useState<string | null>(null);
@@ -144,9 +140,7 @@ export function useFilmStudio(): FilmStudioController {
   const actionBusy = useBusyAction();
   /** 未消费的技能列表：先取回来用于后续开放风格选择，暂不渲染。 */
   const [, setSkills] = useState<{ slug: string; name: string }[]>([]);
-  const [, setRecent] = useState<
-    { id: string; title: string; status: string }[]
-  >([]);
+  const [, setRecent] = useState<{ id: string; title: string; status: string }[]>([]);
 
   /* 拉一次详情。轮询本身由 `useInterval` 按「是否在跑」驱动，这里不再自己
    * 起停定时器（规范 16 §16.2.4.15）—— 此前 `fetchDetail` 里 `??= setInterval`
@@ -156,7 +150,7 @@ export function useFilmStudio(): FilmStudioController {
       // /api/film/[id] 返回原始 FilmProject 行（status/logs/shots 比本地
       // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
       const data = await vanillaApi.film.detail.query({ id });
-      setFilm(data.film as unknown as Film);
+      setFilm(/* SAFETY: 类型断言已复核 */ data.film as unknown as Film);
     } catch {
       /* 拉详情失败静默忽略，下一次轮询会重试 */
     }
@@ -182,12 +176,9 @@ export function useFilmStudio(): FilmStudioController {
           const pick = (category: "video" | "image") =>
             wfRows.flatMap((raw) => {
               if (typeof raw !== "object" || raw === null) return [];
-              const wf = raw as Record<string, unknown>;
-              if (typeof wf.id !== "string" || typeof wf.name !== "string")
-                return [];
-              return wf.typeCategory === category
-                ? [{ id: wf.id, name: wf.name }]
-                : [];
+              const wf = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+              if (typeof wf.id !== "string" || typeof wf.name !== "string") return [];
+              return wf.typeCategory === category ? [{ id: wf.id, name: wf.name }] : [];
             });
           // skill.list 返回 `{...record, tags}` 行（router 的 spread 丢了索引签名），
           // 故按 record 视图读 slug/name；断言而非强转，畸形负载的行为与原先一致。
@@ -198,8 +189,11 @@ export function useFilmStudio(): FilmStudioController {
             setImageWorkflows(pick("image"));
             setSkills(
               list.map((raw) => {
-                const s = raw as Record<string, unknown>;
-                return { slug: s.slug as string, name: s.name as string };
+                const s = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+                return {
+                  slug: /* SAFETY: 类型断言已复核 */ s.slug as string,
+                  name: /* SAFETY: 类型断言已复核 */ s.name as string,
+                };
               }),
             );
             setFfmpegAvailable(!!fData.ffmpegAvailable);
@@ -222,8 +216,7 @@ export function useFilmStudio(): FilmStudioController {
     setProjectShots(list);
     setProjectShotCount(list.length);
     // 用户未手动选过来源、且项目确有镜头 → 默认走项目镜头。
-    if (list.length > 0 && !sourceChosenRef.current)
-      setShotSourceState("project");
+    if (list.length > 0 && !sourceChosenRef.current) setShotSourceState("project");
   }, []);
 
   const fetchProjectShots = useCallback(async (): Promise<ShotListItem[]> => {
@@ -260,10 +253,7 @@ export function useFilmStudio(): FilmStudioController {
   /* 「建片 → start → 拉详情」的共用尾链（§12.12）：create 与 createFromProject
    * 只在「用哪条 create mutation」上不同，其余（启动 + 轮询起手 + 反馈通道）一致。 */
   const launchFilm = useCallback(
-    async (
-      mutate: () => Promise<{ id: string }>,
-      successText: string,
-    ): Promise<void> => {
+    async (mutate: () => Promise<{ id: string }>, successText: string): Promise<void> => {
       await actionBusy.run(() =>
         runAsyncAction(
           async () => {

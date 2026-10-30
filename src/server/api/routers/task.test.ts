@@ -16,9 +16,7 @@ const { statMock, rmMock } = vi.hoisted(() => ({
   statMock: vi.fn<(path: string) => Promise<unknown>>(async () => {
     throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
   }),
-  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(
-    async () => undefined,
-  ),
+  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(async () => undefined),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -43,12 +41,7 @@ import { taskRouter } from "~/server/api/routers/task";
 import { taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { generatedRoot } from "~/lib/media/output-paths";
-import {
-  getTestDb,
-  seedUser,
-  seedTask,
-  type Row,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedUser, seedTask, type Row } from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(taskRouter);
@@ -180,7 +173,11 @@ describe("task.list", () => {
     await expect(caller.list({ take: 201 })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
-    await expect(caller.list({ media: "doc" as never })).rejects.toMatchObject({
+    await expect(
+      caller.list({
+        media: /* SAFETY: 类型断言已复核 */ "doc" as never,
+      }),
+    ).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
   });
@@ -197,7 +194,7 @@ describe("task.detail", () => {
     });
     const task = await createCaller(makeCtx()).detail({ id: "task-1" });
     expect(task.id).toBe("task-1");
-    expect((task.images as Row[]).map((i) => i.id)).toEqual(["img-1"]);
+    expect(/* SAFETY: 类型断言已复核 */ (task.images as Row[]).map((i) => i.id)).toEqual(["img-1"]);
   });
 
   it("不存在 / 他人任务 → 同一个 NOT_FOUND（不给探测 id 用）", async () => {
@@ -228,9 +225,9 @@ describe("task.cancel", () => {
   it("越权:非归属者取消他人任务抛 NOT_FOUND 且任务不受影响", async () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", status: "RUNNING" });
     await expect(
-      createCaller(
-        makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }),
-      ).cancel({ id: "task-1" }),
+      createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } })).cancel({
+        id: "task-1",
+      }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     const row = tdb.$tables.tasks.find((t) => t.id === "task-1")!;
     expect(row.status).toBe("RUNNING");
@@ -284,9 +281,9 @@ describe("task.retry", () => {
   it("越权:非归属者重跑他人任务抛 NOT_FOUND 且不建新行", async () => {
     seedFailedTask();
     await expect(
-      createCaller(
-        makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }),
-      ).retry({ id: "task-old" }),
+      createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } })).retry({
+        id: "task-old",
+      }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(tdb.$tables.tasks.length).toBe(1);
   });
@@ -294,20 +291,20 @@ describe("task.retry", () => {
   it("非终态（RUNNING / QUEUED）拒绝重跑，给可行动错误", async () => {
     seedTask(tdb, { id: "task-run", userId: "user-a", status: "RUNNING" });
     seedTask(tdb, { id: "task-queued", userId: "user-a", status: "QUEUED" });
-    await expect(
-      createCaller(makeCtx()).retry({ id: "task-run" }),
-    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    await expect(
-      createCaller(makeCtx()).retry({ id: "task-queued" }),
-    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(createCaller(makeCtx()).retry({ id: "task-run" })).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    await expect(createCaller(makeCtx()).retry({ id: "task-queued" })).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
     expect(tdb.$tables.tasks.length).toBe(2);
   });
 
   it("execPayload 为空的历史遗留行拒绝重跑并指路（到创作台重新生成）", async () => {
     seedTask(tdb, { id: "task-legacy", userId: "user-a", status: "FAILED" });
-    await expect(
-      createCaller(makeCtx()).retry({ id: "task-legacy" }),
-    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(createCaller(makeCtx()).retry({ id: "task-legacy" })).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
     expect(tdb.$tables.tasks.length).toBe(1);
   });
 });
@@ -338,12 +335,10 @@ describe("task.workflow", () => {
     // 两查之间被删（并发删除 / 库被换）时，第二条查不到必须走**同一个 404**，
     // 而不是把 undefined 往下传成一次 500。
     seedTask(tdb, { id: "task-1", userId: "user-a" });
-    const snap = vi
-      .spyOn(taskRepository, "findSnapshotById")
-      .mockResolvedValue(null);
-    await expect(
-      createCaller(makeCtx()).workflow({ id: "task-1" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const snap = vi.spyOn(taskRepository, "findSnapshotById").mockResolvedValue(null);
+    await expect(createCaller(makeCtx()).workflow({ id: "task-1" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     snap.mockRestore();
   });
 
@@ -388,9 +383,9 @@ describe("task.workflow", () => {
 describe("task.openFolder", () => {
   it("projectId 路径穿越 → FORBIDDEN（目录白名单）", async () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "../../evil" });
-    await expect(
-      createCaller(makeCtx()).openFolder({ id: "task-1" }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(createCaller(makeCtx()).openFolder({ id: "task-1" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 
   it("目录不存在 → { opened: false, error: 'directory missing' }", async () => {
@@ -411,9 +406,9 @@ describe("task.openFolder", () => {
 
   it("他人任务 → NOT_FOUND", async () => {
     seedTask(tdb, { id: "task-b", userId: "user-b" });
-    await expect(
-      createCaller(makeCtx()).openFolder({ id: "task-b" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(createCaller(makeCtx()).openFolder({ id: "task-b" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });
 
@@ -429,10 +424,10 @@ describe("task.delete（rateLimitedProcedure）", () => {
     expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
       ok: true,
     });
-    expect(rmMock).toHaveBeenCalledWith(
-      path.resolve(generatedRoot(), "task-1"),
-      { recursive: true, force: true },
-    );
+    expect(rmMock).toHaveBeenCalledWith(path.resolve(generatedRoot(), "task-1"), {
+      recursive: true,
+      force: true,
+    });
     expect(tdb.$tables.tasks.find((t) => t.id === "task-1")).toBeUndefined();
   });
 
@@ -475,9 +470,9 @@ describe("task.delete（rateLimitedProcedure）", () => {
 
   it("他人任务 → NOT_FOUND", async () => {
     seedTask(tdb, { id: "task-b", userId: "user-b" });
-    await expect(
-      createCaller(makeCtx()).delete({ id: "task-b" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(createCaller(makeCtx()).delete({ id: "task-b" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     expect(rmMock).not.toHaveBeenCalled();
   });
 

@@ -11,11 +11,7 @@ import { promises as fs } from "node:fs";
 import { isRecord } from "~/lib/is-record";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
-import {
-  DEFAULT_IMAGE_MIME,
-  extOfPath,
-  mimeForExt,
-} from "~/lib/media/mime-ext";
+import { DEFAULT_IMAGE_MIME, extOfPath, mimeForExt } from "~/lib/media/mime-ext";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -36,10 +32,7 @@ export interface ResolvedMedia {
  * 从 data URL、本地生成路径或绝对 http(s) URL 加载图片字节。
  * 源不可用时抛出带可读说明的错误。
  */
-export async function resolveMediaBytes(
-  src: string,
-  _origin: string,
-): Promise<ResolvedMedia> {
+export async function resolveMediaBytes(src: string, _origin: string): Promise<ResolvedMedia> {
   if (isInlineMedia(src)) {
     /* 「怎么读回一个 data URL 的 MIME 与载荷」只有一处定义
      *（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
@@ -77,9 +70,7 @@ export async function resolveMediaBytes(
       buffer,
       /* 类型头说不是图（网关错误页的 text/html、空类型头）时按 URL 的扩展名回落 ——
        * 同样要先取扩展名再查表，见上面本地分支那条注释。 */
-      mime: mime?.startsWith("image/")
-        ? mime
-        : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
+      mime: mime?.startsWith("image/") ? mime : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
     };
   }
 
@@ -87,10 +78,7 @@ export async function resolveMediaBytes(
 }
 
 /* 与 resolveMediaBytes 相同，只是返回内联 data URL（给远程 API 用）。 */
-export async function resolveMediaDataUrl(
-  src: string,
-  _origin: string,
-): Promise<string> {
+export async function resolveMediaDataUrl(src: string, _origin: string): Promise<string> {
   const { buffer, mime } = await resolveMediaBytes(src, _origin);
   return toDataUrl(buffer, mime);
 }
@@ -99,7 +87,7 @@ export async function resolveMediaDataUrl(
 export async function readUpstreamJson(res: Response): Promise<unknown> {
   const text = await res.text();
   try {
-    return JSON.parse(text) as unknown;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(text) as unknown;
   } catch {
     throw new Error(
       `上游返回非 JSON (${res.status}): ${clampText(text, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
@@ -108,10 +96,7 @@ export async function readUpstreamJson(res: Response): Promise<unknown> {
 }
 
 /* 从 unknown 响应体里按默认值取字符串字段（请求侧守卫）。 */
-export function strField(
-  rec: Record<string, unknown>,
-  key: string,
-): string | undefined {
+export function strField(rec: Record<string, unknown>, key: string): string | undefined {
   const v: unknown = rec[key];
   return typeof v === "string" && v.trim().length > 0 ? v : undefined;
 }

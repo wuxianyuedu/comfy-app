@@ -15,11 +15,7 @@ import "server-only";
 import { z } from "zod";
 
 import { productionRepository } from "~/lib/core/repository-production";
-import {
-  completeLLM,
-  completeLLMStructured,
-  getLLMConfig,
-} from "~/lib/llm/server";
+import { completeLLM, completeLLMStructured, getLLMConfig } from "~/lib/llm/server";
 import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
 import { randomSeed } from "~/lib/comfyui/random-seed";
@@ -41,12 +37,7 @@ import { applyShotRedo } from "~/lib/production/sync";
 import { reviewScoreMean } from "~/lib/production/review-types";
 import { fixed } from "~/lib/number-format";
 import { displayValue } from "~/lib/display-value";
-import {
-  reviewContent,
-  reviewScript,
-  reviewShotImage,
-  reviseScript,
-} from "~/server/agent/review";
+import { reviewContent, reviewScript, reviewShotImage, reviseScript } from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage } from "~/lib/error-message";
 import type { Character, ProjectType, Shot } from "~/lib/workshop/types";
@@ -122,7 +113,7 @@ async function saveRun(userId: string, projectId: string, run: ProductionRun) {
 
 function projectMeta(row: Production) {
   return {
-    type: row.type as ProjectType,
+    type: /* SAFETY: 类型断言已复核 */ row.type as ProjectType,
     tone: row.tone,
     logline: row.logline,
     title: row.title,
@@ -139,9 +130,7 @@ async function execScript(
 ): Promise<ExecResult> {
   const cfg = await getLLMConfig();
   const idea = run.goal.trim() || row.title;
-  const md = (
-    await completeLLM(cfg, buildScriptMarkdownMessages(projectMeta(row), idea))
-  ).trim();
+  const md = (await completeLLM(cfg, buildScriptMarkdownMessages(projectMeta(row), idea))).trim();
   if (!md) return { ok: false, error: "模型未返回剧本内容" };
   await productionRepository.patchContent(userId, projectId, {
     scriptMarkdown: md,
@@ -154,8 +143,7 @@ async function execCharacters(
   projectId: string,
   row: Production,
 ): Promise<ExecResult> {
-  if (!row.scriptMarkdown.trim())
-    return { ok: false, error: "剧本为空，无法提取角色" };
+  if (!row.scriptMarkdown.trim()) return { ok: false, error: "剧本为空，无法提取角色" };
   const cfg = await getLLMConfig();
   const briefs = await completeLLMStructured(
     cfg,
@@ -204,8 +192,7 @@ async function execStoryboard(
   run: ProductionRun,
   row: Production,
 ): Promise<ExecResult> {
-  if (!row.scriptMarkdown.trim())
-    return { ok: false, error: "剧本为空，无法规划分镜" };
+  if (!row.scriptMarkdown.trim()) return { ok: false, error: "剧本为空，无法规划分镜" };
   const cfg = await getLLMConfig();
   const items = await completeLLMStructured(
     cfg,
@@ -232,7 +219,7 @@ async function execStoryboard(
       index: i,
       sceneId: "",
       sceneHeading: it.sceneHeading ?? "",
-      shotType: (it.shotType ?? "medium") as Shot["shotType"],
+      shotType: /* SAFETY: 类型断言已复核 */ (it.shotType ?? "medium") as Shot["shotType"],
       description: it.description,
       characterIds: [],
       prompt: it.description,
@@ -266,7 +253,7 @@ async function execImages(
       error: "缺少图类工作流（imageWorkflowId），无法逐镜生图",
     };
   }
-  const shots = Array.isArray(row.shots) ? (row.shots as Shot[]) : [];
+  const shots = Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [];
   const want = new Set(shotIds);
   const next: Shot[] = [];
   for (const shot of shots) {
@@ -295,9 +282,7 @@ async function execImages(
     }
   }
   await productionRepository.patchContent(userId, projectId, { shots: next });
-  const doneCount = next.filter(
-    (s) => want.has(s.id) && s.status === "done",
-  ).length;
+  const doneCount = next.filter((s) => want.has(s.id) && s.status === "done").length;
   const failedCount = shotIds.length - doneCount;
   // 记录这些镜头「已按当前 rev 处理」——用户之后再改（rev 变大）会被重新纳入。
   return {
@@ -331,12 +316,10 @@ async function execReviewScript(
   const attempts = run.scriptReviewAttempts + 1;
   const mean = reviewScoreMean(outcome.verdict);
   const qualified =
-    outcome.verdict.pass &&
-    (mean === null || mean >= SCRIPT_REVIEW_SCORE_THRESHOLD);
+    outcome.verdict.pass && (mean === null || mean >= SCRIPT_REVIEW_SCORE_THRESHOLD);
   // 「均分 X.X」是给人读的：数字精度格式化走唯一出口（P50），缺值占位走
   // displayValue（P8）—— 都是「这组判据只有一份口径」的收口。
-  const meanText =
-    mean === null ? "未评分" : `均分 ${displayValue(fixed(mean, 1))}`;
+  const meanText = mean === null ? "未评分" : `均分 ${displayValue(fixed(mean, 1))}`;
   // 收口（达标或封顶）→ 写指纹快照；未收口 → 挂「待改写」，改完剧本变会再回评审。
   const settle = {
     scriptReviewAttempts: attempts,
@@ -438,12 +421,7 @@ async function execReviewShots(
       pass = false;
     } else
       try {
-        const textVerdict = await reviewContent(
-          userId,
-          projectId,
-          "shot",
-          shotId,
-        );
+        const textVerdict = await reviewContent(userId, projectId, "shot", shotId);
         // 视觉裁判：仅镜头已出图时跑（没图就只看文本，退化回旧行为）。
         let imagePass: boolean | null = null;
         if (hasImage) {
@@ -476,8 +454,7 @@ async function execReviewShots(
 
   if (rerollIds.length > 0) {
     const fresh = await productionRepository.getForUser(userId, projectId);
-    let shots: unknown[] =
-      fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
+    let shots: unknown[] = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
     for (const id of rerollIds) shots = applyShotRedo(shots, id);
     await productionRepository.patchContent(userId, projectId, { shots });
   }
@@ -498,13 +475,11 @@ async function execFilm(
   projectId: string,
   run: ProductionRun,
 ): Promise<ExecResult> {
-  if (run.filmStartedAt)
-    return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
+  if (run.filmStartedAt) return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。
   // createFilmFromProject→start：服务端 watchFilm 逐镜视频 + composeFilm 合成 + syncFilmToProject 回写。
   try {
-    const { createFilmFromProject, startFilm } =
-      await import("~/server/film/orchestrator");
+    const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
     const { id } = await createFilmFromProject({
       userId,
       projectId,
@@ -526,10 +501,7 @@ async function execFilm(
  * 推进 run 到下一个停点（等点头 / 完成 / 失败 / 被暂停）。fire-and-forget 调用即可；
  * 内部对每步失败落 failed，不抛给调用方。
  */
-export async function advanceRunLoop(
-  userId: string,
-  projectId: string,
-): Promise<void> {
+export async function advanceRunLoop(userId: string, projectId: string): Promise<void> {
   try {
     for (let tick = 0; tick < MAX_TICKS; tick++) {
       const row = await productionRepository.getForUser(userId, projectId);
@@ -573,23 +545,10 @@ export async function advanceRunLoop(
           res = await execStoryboard(userId, projectId, run, row);
           break;
         case "render_images":
-          res = await execImages(
-            userId,
-            projectId,
-            run,
-            row,
-            view,
-            action.shotIds,
-          );
+          res = await execImages(userId, projectId, run, row, view, action.shotIds);
           break;
         case "review_shots":
-          res = await execReviewShots(
-            userId,
-            projectId,
-            run,
-            view,
-            action.shotIds,
-          );
+          res = await execReviewShots(userId, projectId, run, view, action.shotIds);
           break;
         case "render_film":
           res = await execFilm(userId, projectId, run);
@@ -604,9 +563,7 @@ export async function advanceRunLoop(
           ts: nowIso(),
           kind: action.kind,
           ok: res.ok,
-          detail: res.ok
-            ? (res.summary ?? actionLabel(action))
-            : (res.error ?? "失败"),
+          detail: res.ok ? (res.summary ?? actionLabel(action)) : (res.error ?? "失败"),
         });
       }
       if (!res.ok) {

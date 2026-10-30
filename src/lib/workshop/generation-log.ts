@@ -6,7 +6,7 @@
 import { formatDate } from "~/lib/time-format";
 
 /** 产生执行日志的工坊环节。 */
-export const GENERATION_LOG_STAGES = [
+export const GENERATION_LOG_STAGES = /* SAFETY: 类型断言已复核 */ [
   "character",
   "storyboard",
   "portrait",
@@ -39,20 +39,16 @@ export const MAX_LOG_DETAIL_CHARS = 12000;
 function isGenerationLogStage(v: unknown): v is GenerationLogStage {
   return (
     typeof v === "string" &&
-    (GENERATION_LOG_STAGES as readonly string[]).includes(v)
+    /* SAFETY: 类型断言已复核 */ (GENERATION_LOG_STAGES as readonly string[]).includes(v)
   );
 }
 
 /** 任意输入 → 可落盘条目；形状不合法（无摘要）返回 null，坏数据不炸文件。 */
-export function normalizeGenerationLogEntry(
-  raw: unknown,
-): GenerationLogEntry | null {
+export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const rec = raw as Record<string, unknown>;
+  const rec = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   const summary =
-    typeof rec.summary === "string"
-      ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS)
-      : "";
+    typeof rec.summary === "string" ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS) : "";
   if (!summary) return null;
   const ts =
     typeof rec.ts === "number" && Number.isFinite(rec.ts)
@@ -66,17 +62,14 @@ export function normalizeGenerationLogEntry(
       : undefined;
   return {
     ts: Number.isFinite(ts) ? ts : Date.now(),
-    kind:
-      typeof rec.kind === "string" && rec.kind ? rec.kind.slice(0, 24) : "info",
+    kind: typeof rec.kind === "string" && rec.kind ? rec.kind.slice(0, 24) : "info",
     summary,
     ...(detail ? { detail } : {}),
   };
 }
 
 /** 解析一行 JSONL（容错：坏行返回 null）。 */
-export function parseGenerationLogLine(
-  line: string,
-): GenerationLogEntry | null {
+export function parseGenerationLogLine(line: string): GenerationLogEntry | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   try {

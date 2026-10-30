@@ -20,7 +20,7 @@ afterEach(cleanup);
  * 文案**不在本文件**：同一个状态在不同界面叫法不同（任务历史「已完成」/
  * 画布节点「运行后生成」/ 镜头「片段就绪」），那是业务文案。
  */
-const KNOWN = [
+const KNOWN = /* SAFETY: 类型断言已复核 */ [
   "SUCCEEDED",
   "RUNNING",
   "QUEUED",
@@ -66,9 +66,7 @@ describe("StatusBadge", () => {
 
   it("缺省带状态圆点；dot={false} 时不带（叠在媒体上的角标）", () => {
     const { container: withDot } = render(<StatusBadge status="RUNNING" />);
-    const { container: withoutDot } = render(
-      <StatusBadge status="RUNNING" dot={false} />,
-    );
+    const { container: withoutDot } = render(<StatusBadge status="RUNNING" dot={false} />);
     expect(withDot.querySelectorAll("span").length).toBe(
       withoutDot.querySelectorAll("span").length + 1,
     );

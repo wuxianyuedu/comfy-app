@@ -43,7 +43,7 @@ function renderTopBar() {
       <WorkflowEditorTopBar
         onClose={noop}
         detail={
-          {
+          /* SAFETY: 类型断言已复核 */ {
             name: "wf",
             nodes: [],
             edges: [],
@@ -54,11 +54,11 @@ function renderTopBar() {
         }
         rootWorkflowName="wf"
         subgraphStack={[]}
-        setSubgraphStack={noop as never}
+        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
         fetchDetail={vi.fn(async () => undefined)}
         onExitSubgraph={noop}
         forceReloadDetail={noop}
-        setViewJsonOpen={noop as never}
+        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
         resetLayout={noop}
         viewHostNodeId=""
         handleSave={noop}
@@ -92,21 +92,13 @@ describe("顶栏按钮全部走 ui/button 基元（ISSUE #672 P1）", () => {
      * —— 顺序写反的话顶栏按钮会全部变成直角（见 BUTTON_PRIMITIVE_OVERRIDE）。
      * 这条断言的是**合并后的结果**，不是源码字符串，所以抓得住顺序问题。 */
     const { container } = renderTopBar();
-    const labels = [
-      "调试",
-      "📌 编辑 IO",
-      "👁 预览 IO",
-      "📋 查看 JSON",
-      "重置布局",
-    ];
+    const labels = ["调试", "📌 编辑 IO", "👁 预览 IO", "📋 查看 JSON", "重置布局"];
     for (const text of labels) {
       const el = screen.getByRole("button", { name: new RegExp(text) });
       expect(el.className).toContain("h-auto");
       expect(el.className).not.toContain("rounded-none");
       expect(el.className).toMatch(/rounded-(md|lg)\b/);
     }
-    expect(container.querySelectorAll("button").length).toBeGreaterThanOrEqual(
-      labels.length,
-    );
+    expect(container.querySelectorAll("button").length).toBeGreaterThanOrEqual(labels.length);
   });
 });

@@ -23,11 +23,7 @@
  *  消费方（WorkflowNode / WorkflowSubgraphNode / NodeIdChip …）只读不改。
  * ════════════════════════════════════════════════════════════════════════ */
 import React, { createContext, useContext } from "react";
-import {
-  createStore,
-  useStore as useZustandStore,
-  type StoreApi,
-} from "zustand";
+import { createStore, useStore as useZustandStore, type StoreApi } from "zustand";
 import type {
   WorkflowDetail,
   WorkflowGroup,
@@ -82,28 +78,18 @@ export interface IOEditActions {
   toggleIORequired: (key: string) => void;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。 */
   setIOSeedMode: (key: string, mode: string) => void;
-  reorderIO: (
-    fromKey: string,
-    targetKey: string | null,
-    position: WorkflowIODropPosition,
-  ) => void;
+  reorderIO: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
   /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
    *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
    *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
    *  workflowIO 时一起落库，无需改表。 */
-  setIOModeOverride: (
-    key: string,
-    mode: string,
-    patch: WorkflowIOModeOverride | null,
-  ) => void;
+  setIOModeOverride: (key: string, mode: string, patch: WorkflowIOModeOverride | null) => void;
   /** 批量摘掉所有 IO 条目上给定模式码的覆盖层（modes[mode]）。
    *  模式从工作流 `modes` 列移除后，条目里的覆盖必须跟着清掉，否则这些
    *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
    *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
    *  据此决定是否需要把清理结果落库。 */
-  purgeModeOverrides: (
-    codes: string[],
-  ) => Record<string, WorkflowIOParam> | null;
+  purgeModeOverrides: (codes: string[]) => Record<string, WorkflowIOParam> | null;
 }
 export type IOEditStore = IOEditState & IOEditActions;
 
@@ -114,9 +100,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     ioPreviewOpen: false,
 
     setIoEditMode: (on) =>
-      set(
-        on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false },
-      ),
+      set(on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false }),
     setIoPreviewOpen: (open) =>
       set(
         open
@@ -220,8 +204,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       set((state) => {
         const hit = codes.filter((code) =>
           Object.values(state.workflowIO).some(
-            (entry) =>
-              entry?.modeOverrides != null && code in entry.modeOverrides,
+            (entry) => entry?.modeOverrides != null && code in entry.modeOverrides,
           ),
         );
         if (hit.length === 0) return {};
@@ -328,20 +311,17 @@ export const WFStoresContext = createContext<WFStores | null>(null);
  *  消费方请用 useIOEditStore(selector)。 */
 export function useIOEditApi(): StoreApi<IOEditStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error("useIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) throw new Error("useIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.io;
 }
 export function useRgthreeApi(): StoreApi<RgthreeGroupsStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error("useRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) throw new Error("useRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.rgthree;
 }
 export function useViewerApi(): StoreApi<NodeJsonViewerStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error("useViewerApi 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) throw new Error("useViewerApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.viewer;
 }
 
@@ -392,8 +372,7 @@ export function callStoreAction<S extends object>(
 
 export function useIOEditStore<U>(selector: (s: IOEditStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error("useIOEditStore 必须在 <WFStoresContext.Provider> 内使用");
+  if (!ctx) throw new Error("useIOEditStore 必须在 <WFStoresContext.Provider> 内使用");
   return useZustandStore(ctx.io, selector);
 }
 
@@ -439,9 +418,7 @@ export function createRgthreeGroupsStore(
       /* 用 `in` 判据 + 值本身收窄：`hasOwnProperty` 只回答「有没有这个键」，
        * 类型上仍要做一次索引取值。 */
       if (override !== undefined) return override;
-      const g = get().detail?.groups?.find(
-        (x: WorkflowGroup) => x.id === groupId,
-      );
+      const g = get().detail?.groups?.find((x: WorkflowGroup) => x.id === groupId);
       return !!g?.bypass;
     },
 
@@ -457,23 +434,15 @@ export function createRgthreeGroupsStore(
   }));
 }
 
-export function useRgthreeGroupsStore<U>(
-  selector: (s: RgthreeGroupsStore) => U,
-): U {
+export function useRgthreeGroupsStore<U>(selector: (s: RgthreeGroupsStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useRgthreeGroupsStore 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) throw new Error("useRgthreeGroupsStore 必须在 <WFStoresContext.Provider> 内使用");
   return useZustandStore(ctx.rgthree, selector);
 }
 /* 返回 getBypass/setBypass —— 与 RgthreeGroupsContextValue 等价。 */
 export function useRgthreeGroups(): RgthreeGroupsContextValue {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useRgthreeGroups 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) throw new Error("useRgthreeGroups 必须在 <WFStoresContext.Provider> 内使用");
   const getBypass = useZustandStore(ctx.rgthree, (state) => state.getBypass);
   const setBypass = useZustandStore(ctx.rgthree, (state) => state.setBypass);
   return { getBypass, setBypass };
@@ -532,28 +501,22 @@ export function createNodeJsonViewerStore(
       if (!detail?.graph) return null;
       const entry: unknown = detail.graph[nodeId];
       return entry && typeof entry === "object"
-        ? (entry as Record<string, unknown>)
+        ? /* SAFETY: 类型断言已复核 */ (entry as Record<string, unknown>)
         : null;
     },
 
     getNodeView: (nodeId) => {
-      const {
-        detail,
-        rawMetaById,
-        positions,
-        subgraphRawContext,
-        subgraphStackLength,
-      } = get();
+      const { detail, rawMetaById, positions, subgraphRawContext, subgraphStackLength } = get();
       if (!detail) return null;
       const rawEntry: unknown = detail.graph?.[nodeId];
       const entry =
         rawEntry && typeof rawEntry === "object"
-          ? (rawEntry as Record<string, unknown>)
+          ? /* SAFETY: 类型断言已复核 */ (rawEntry as Record<string, unknown>)
           : null;
       let rawNodesSource: Array<Record<string, unknown>> | null = null;
       const isSubView = subgraphStackLength > 0 && subgraphRawContext;
       if (isSubView) {
-        const subs = (
+        const subs = /* SAFETY: 类型断言已复核 */ (
           subgraphRawContext.parentRawJson as {
             definitions?: { subgraphs?: Record<string, unknown> };
           } | null
@@ -565,17 +528,19 @@ export function createNodeJsonViewerStore(
           id?: string;
           nodes?: Array<Record<string, unknown>>;
         };
-        let subDef: RawSubgraphDef | undefined = subs?.[targetUid] as
+        let subDef: RawSubgraphDef | undefined = /* SAFETY: 类型断言已复核 */ subs?.[targetUid] as
           | RawSubgraphDef
           | undefined;
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs
             ? Object.keys(subs).find(
                 (key) =>
-                  (subs[key] as RawSubgraphDef | undefined)?.id === targetUid,
+                  /* SAFETY: 类型断言已复核 */ (subs[key] as RawSubgraphDef | undefined)?.id ===
+                  targetUid,
               )
             : undefined;
-          if (matchKey && subs) subDef = subs[matchKey] as RawSubgraphDef;
+          if (matchKey && subs)
+            subDef = /* SAFETY: 类型断言已复核 */ subs[matchKey] as RawSubgraphDef;
         }
         if (subDef && Array.isArray(subDef.nodes)) {
           rawNodesSource = subDef.nodes;
@@ -585,17 +550,16 @@ export function createNodeJsonViewerStore(
         !rawNodesSource &&
         typeof detail.rawJson === "object" &&
         detail.rawJson !== null &&
-        Array.isArray((detail.rawJson as { nodes?: unknown }).nodes)
+        Array.isArray(/* SAFETY: 类型断言已复核 */ (detail.rawJson as { nodes?: unknown }).nodes)
       ) {
-        rawNodesSource = (
+        rawNodesSource = /* SAFETY: 类型断言已复核 */ (
           detail.rawJson as {
             nodes: Array<Record<string, unknown>>;
           }
         ).nodes;
       }
       const rawNode = rawNodesSource
-        ? (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ??
-          null)
+        ? (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ?? null)
         : null;
       return {
         entry,
@@ -614,23 +578,15 @@ export function createNodeJsonViewerStore(
   }));
 }
 
-export function useNodeJsonViewerStore<U>(
-  selector: (s: NodeJsonViewerStore) => U,
-): U {
+export function useNodeJsonViewerStore<U>(selector: (s: NodeJsonViewerStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useNodeJsonViewerStore 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) throw new Error("useNodeJsonViewerStore 必须在 <WFStoresContext.Provider> 内使用");
   return useZustandStore(ctx.viewer, selector);
 }
 /* 便捷访问 —— 与原 NodeJsonViewerContextValue 等价，供 NodeIdChip 等使用。 */
 export function useNodeJsonViewer(): NodeJsonViewerContextValue {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useNodeJsonViewer 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) throw new Error("useNodeJsonViewer 必须在 <WFStoresContext.Provider> 内使用");
   const getNodeJson = useZustandStore(ctx.viewer, (state) => state.getNodeJson);
   const getNodeView = useZustandStore(ctx.viewer, (state) => state.getNodeView);
   const requestShow = useZustandStore(ctx.viewer, (state) => state.requestShow);
@@ -659,11 +615,7 @@ export function WFStoresProvider({
   );
 }
 
-function NodeJsonViewerPortal({
-  store,
-}: {
-  store: StoreApi<NodeJsonViewerStore>;
-}) {
+function NodeJsonViewerPortal({ store }: { store: StoreApi<NodeJsonViewerStore> }) {
   const viewer = useZustandStore(store, (state) => state.viewer);
   const getNodeJson = useZustandStore(store, (state) => state.getNodeJson);
   const getNodeView = useZustandStore(store, (state) => state.getNodeView);

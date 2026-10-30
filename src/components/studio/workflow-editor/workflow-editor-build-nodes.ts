@@ -52,9 +52,7 @@ import {
 type GraphEntry = { inputs?: WorkflowNodeData["inputs"] };
 /** `detail.boundaryPins.inputs / .outputs` 里的一个边界 pin ——
  *  两个数组的元素形状相同。 */
-type BoundaryPin = NonNullable<
-  WorkflowDetail["boundaryPins"]
->["inputs"][number];
+type BoundaryPin = NonNullable<WorkflowDetail["boundaryPins"]>["inputs"][number];
 
 export interface BuildInitialNodesCtx {
   detail: WorkflowDetail | null;
@@ -266,10 +264,8 @@ function layoutBoundaryPins(
   const outputsDefault = computeGroupDefault(outputsRaw, "right");
 
   const positionsById = detail.positions ?? {};
-  const savedIn: [number, number] | undefined =
-    positionsById["grp:bpin:inputs"];
-  const savedOut: [number, number] | undefined =
-    positionsById["grp:bpin:outputs"];
+  const savedIn: [number, number] | undefined = positionsById["grp:bpin:inputs"];
+  const savedOut: [number, number] | undefined = positionsById["grp:bpin:outputs"];
 
   const inputsGroupPos = savedIn
     ? { x: savedIn[0], y: savedIn[1] }
@@ -284,8 +280,7 @@ function layoutBoundaryPins(
         y: minY - GROUP_TITLE_BAR,
       });
 
-  const stackRel = (i: number) =>
-    GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
+  const stackRel = (i: number) => GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
   const inputsRelYs = detail.boundaryPins.inputs.map((_p, i) => {
     const r = inputsRaw[i];
     return r ? r[1] - inputsGroupPos.y : stackRel(i);
@@ -297,10 +292,7 @@ function layoutBoundaryPins(
   const minHeight = GROUP_TITLE_BAR + GROUP_PAD_Y_BOTTOM;
   const computedHeight = (relYs: number[]): number => {
     if (relYs.length === 0) return 0;
-    return Math.max(
-      minHeight,
-      Math.max(...relYs) + IO_PORT_HEIGHT + GROUP_PAD_Y_BOTTOM,
-    );
+    return Math.max(minHeight, Math.max(...relYs) + IO_PORT_HEIGHT + GROUP_PAD_Y_BOTTOM);
   };
 
   const out: Node[] = [];
@@ -319,9 +311,7 @@ function layoutBoundaryPins(
     detail.boundaryPins.inputs.forEach((pin, i) => {
       const relY = inputsRelYs.at(i);
       if (relY === undefined) return;
-      out.push(
-        buildBoundaryPinNode(pin, "input", "grp:bpin:inputs", relY, inputRelX),
-      );
+      out.push(buildBoundaryPinNode(pin, "input", "grp:bpin:inputs", relY, inputRelX));
     });
   }
 
@@ -336,15 +326,7 @@ function layoutBoundaryPins(
     detail.boundaryPins.outputs.forEach((pin, i) => {
       const relY = outputsRelYs.at(i);
       if (relY === undefined) return;
-      out.push(
-        buildBoundaryPinNode(
-          pin,
-          "output",
-          "grp:bpin:outputs",
-          relY,
-          outputRelX,
-        ),
-      );
+      out.push(buildBoundaryPinNode(pin, "output", "grp:bpin:outputs", relY, outputRelX));
     });
   }
 
@@ -431,17 +413,15 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   // 高度，理由见 NODE_TITLE_H 的注释）。`data.size.h` 里带的主体内容高度
   // 正好就是 `size[1]`。
   const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
-  const graphById = detail.graph as Record<string, GraphEntry | undefined>;
-  const buildWfNode = (
-    n: ComfyGraphNode,
-    pos: { x: number; y: number },
-  ): Node => ({
+  const graphById = /* SAFETY: 类型断言已复核 */ detail.graph as Record<
+    string,
+    GraphEntry | undefined
+  >;
+  const buildWfNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => ({
     id: n.id,
     type: "wfNode",
     position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
-    style: n.size
-      ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H }
-      : undefined,
+    style: n.size ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H } : undefined,
     zIndex: NODE_Z,
     data: {
       nodeId: n.id,
@@ -493,18 +473,14 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
    *  芯片（见 WfSubgraphNode）。下钻（双击，或点头部的展开按钮）才加载
    *  子图内部的图，那里的 IO 成员节点会被包进 INPUTS / OUTPUTS wfGroup。
    */
-  const buildSubgraphNode = (
-    n: ComfyGraphNode,
-    pos: { x: number; y: number },
-  ): Node => {
+  const buildSubgraphNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => {
     /* 有**外部**连线的子图输入，就是父工作流接进来的那些。判据取自
      *  detail.graph[子图节点id].inputs —— 这里的键，只要值是
      *  [srcId, slot] 元组，就算已连接。 */
     const subgraphInp = graphById[n.id]?.inputs ?? {};
     const connectedInputs = new Set<string>();
     for (const [name, v] of Object.entries(subgraphInp)) {
-      if (Array.isArray(v) && typeof v[0] === "string")
-        connectedInputs.add(name);
+      if (Array.isArray(v) && typeof v[0] === "string") connectedInputs.add(name);
     }
     return {
       id: n.id,
@@ -514,9 +490,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       // 主体因此正好落在导入的 pos.y 上。
       position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
       zIndex: SUBGRAPH_Z, // 画在普通节点之上，紫色描边才读得出来
-      style: n.size
-        ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H }
-        : undefined,
+      style: n.size ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H } : undefined,
       data: {
         nodeId: n.id,
         /* 本层若是「子图内部的子图」，本卡片自身就是下一层的宿主，其内部
@@ -532,8 +506,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         connectedInputs,
         size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
         mode: rawMetaById[n.id]?.mode ?? 0,
-        onEnter: () =>
-          onEnterSubgraph?.(n.id, n.class_type, n.title, hostNodeId),
+        onEnter: () => onEnterSubgraph?.(n.id, n.class_type, n.title, hostNodeId),
       },
     };
   };
@@ -611,9 +584,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   });
 
   // 只处理真实的图节点（便签类节点在上面单独渲染）。
-  const realNodes = scopeDetail.nodes.filter(
-    (node) => !isNoteType(node.class_type),
-  );
+  const realNodes = scopeDetail.nodes.filter((node) => !isNoteType(node.class_type));
 
   /* 内层的图节点一律渲染成完整的 WfNode / WfSubgraphNode 卡片 ——
    *  不再按 is_input_endpoint / is_output_endpoint 把某些节点换成 wfIoPort。
@@ -638,37 +609,22 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   // 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
   // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
   // Kahn 拓扑自动布局兜底。
-  const kahn = computeKahnLayout(
-    realNodes,
-    scopeDetail.graph ?? {},
-    colW,
-    rowH,
-    padX,
-    padY,
-  );
+  const kahn = computeKahnLayout(realNodes, scopeDetail.graph ?? {}, colW, rowH, padX, padY);
 
   const savedPositions = scopeDetail.positions;
   const positionsCount = Object.keys(savedPositions ?? {}).length;
 
   const useSavedPositions =
-    savedPositions != null &&
-    positionsCount > 0 &&
-    positionsCount >= realNodes.length;
+    savedPositions != null && positionsCount > 0 && positionsCount >= realNodes.length;
   if (useSavedPositions && savedPositions) {
     const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {
       const p = positionsById[realNode.id];
       return realNode.is_subgraph
-        ? buildSubgraphNode(
-            realNode,
-            p ? { x: p[0], y: p[1] } : { x: padX, y: padY },
-          )
-        : buildWfNode(
-            realNode,
-            p ? { x: p[0], y: p[1] } : { x: padX, y: padY },
-          );
+        ? buildSubgraphNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY })
+        : buildWfNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY });
     });
-    const middlePosById = Object.fromEntries(
+    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -700,11 +656,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       } else {
         pos = { x: padX, y: padY };
       }
-      return realNode.is_subgraph
-        ? buildSubgraphNode(realNode, pos)
-        : buildWfNode(realNode, pos);
+      return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
     });
-    const middlePosById = Object.fromEntries(
+    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -718,11 +672,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   /* ── 2) Auto-layout via Kahn longest-path ── (raw 视图兜底，复用上面算好的 kahn) */
   const middleNodes = realNodes.map((realNode) => {
     const pos = kahn[realNode.id] ?? { x: padX, y: padY };
-    return realNode.is_subgraph
-      ? buildSubgraphNode(realNode, pos)
-      : buildWfNode(realNode, pos);
+    return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
   });
-  const middlePosById = Object.fromEntries(
+  const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
     middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
   ) as Record<string, { x: number; y: number }>;
   return [

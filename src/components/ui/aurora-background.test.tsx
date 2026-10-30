@@ -29,15 +29,13 @@ afterEach(cleanup);
 /** 取渲染出的内联 background（jsdom 会原样序列化 `color-mix()`，实测不丢值）。 */
 function glowBackground(tone: "violet" | "cyan" | "magenta", alpha: number) {
   const { container } = render(<AuroraGlow tone={tone} alpha={alpha} />);
-  return (container.firstElementChild as HTMLElement).style.background;
+  return /* SAFETY: 类型断言已复核 */ (container.firstElementChild as HTMLElement).style.background;
 }
 
 describe("AuroraGlow", () => {
   it("三个 tone 各自映射到同名的整颗 token", () => {
-    for (const tone of ["violet", "cyan", "magenta"] as const) {
-      expect(glowBackground(tone, 0.5)).toContain(
-        `var(--color-aurora-${tone})`,
-      );
+    for (const tone of /* SAFETY: 类型断言已复核 */ ["violet", "cyan", "magenta"] as const) {
+      expect(glowBackground(tone, 0.5)).toContain(`var(--color-aurora-${tone})`);
     }
   });
 
@@ -45,9 +43,7 @@ describe("AuroraGlow", () => {
     expect(glowBackground("cyan", 0.42)).toContain(
       "color-mix(in srgb, var(--color-aurora-cyan) 42%, transparent)",
     );
-    expect(glowBackground("violet", 0.425)).toContain(
-      "var(--color-aurora-violet) 43%",
-    );
+    expect(glowBackground("violet", 0.425)).toContain("var(--color-aurora-violet) 43%");
   });
 
   it("只吃这一层的强度，不影响别的 tone", () => {

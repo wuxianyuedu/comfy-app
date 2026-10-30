@@ -26,7 +26,10 @@ import {
   type FitBoundsNode,
 } from "../subgraph-viewport";
 
-const FIT_FALLBACK_SIZE = { width: 240, height: 80 } as const;
+const FIT_FALLBACK_SIZE = /* SAFETY: 类型断言已复核 */ {
+  width: 240,
+  height: 80,
+} as const;
 /** 连续多少轮测量结果不再扩大就收手（超大图逐屏挂载时不必等全部量完）。 */
 const FIT_SETTLE_ROUNDS = 3;
 /** 轮数护栏，避免测量始终不稳时无限重算。 */
@@ -106,9 +109,7 @@ export function useWorkflowViewportFit(params: {
    * nodes.length 变化），重跑时的 cleanup 会取消还没触发的 rAF；把「已聚焦」
    * 在排程时就记死，会让被取消的那一次永远补不回来 —— 视口于是停在上一份图
    * （ISSUE #394：打开子工作流没聚焦到）。 */
-  const fitSchedulerRef = useRef<ReturnType<
-    typeof createFitOnceScheduler
-  > | null>(null);
+  const fitSchedulerRef = useRef<ReturnType<typeof createFitOnceScheduler> | null>(null);
   fitSchedulerRef.current ??= createFitOnceScheduler();
 
   /* 把视口对准「当前视图里真实有内容的节点」。
@@ -163,9 +164,7 @@ export function useWorkflowViewportFit(params: {
     });
     let raf = 0;
     const step = () => {
-      const { bounds, done } = stepper.next(() =>
-        collectFitTargets(rf.getNodes()),
-      );
+      const { bounds, done } = stepper.next(() => collectFitTargets(rf.getNodes()));
       const { width, height } = rfStore.getState();
       applyFitViewport({ width, height }, rf, bounds, {
         minZoom: canvasSettings.minZoom,

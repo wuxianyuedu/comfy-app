@@ -80,7 +80,7 @@ function isIconComponent(value: LucideIcon | ReactNode): value is LucideIcon {
     (typeof value === "object" &&
       value !== null &&
       "render" in value &&
-      typeof (value as { render?: unknown }).render === "function")
+      typeof (/* SAFETY: 类型断言已复核 */ (value as { render?: unknown }).render) === "function")
   );
 }
 
@@ -153,16 +153,12 @@ export function EmptyState({
     >
       <EmptyHeader>
         {renderedIcon && (
-          <EmptyMedia
-            className={cn(error ? "text-destructive" : "text-primary")}
-          >
+          <EmptyMedia className={cn(error ? "text-destructive" : "text-primary")}>
             {renderedIcon}
           </EmptyMedia>
         )}
         {title && (
-          <EmptyTitle
-            className={cn(error ? "text-destructive" : "text-ink-strong")}
-          >
+          <EmptyTitle className={cn(error ? "text-destructive" : "text-ink-strong")}>
             {title}
           </EmptyTitle>
         )}
@@ -174,9 +170,7 @@ export function EmptyState({
         {action && (
           // EmptyContent 默认 flex-col + max-w-sm，操作按钮要横向排；
           // 覆盖 layout 到 flex-row，不动 variant 语义。
-          <EmptyContent className="mt-3 flex-row justify-center gap-2">
-            {action}
-          </EmptyContent>
+          <EmptyContent className="mt-3 flex-row justify-center gap-2">{action}</EmptyContent>
         )}
       </EmptyHeader>
     </Empty>

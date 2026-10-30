@@ -20,10 +20,7 @@
 import process from "node:process";
 
 import { parseFileLogs } from "../src/components/studio/logs/log-analysis.ts";
-import {
-  LOG_STORE_MAX,
-  useLogStore,
-} from "../src/components/studio/logs/log-store.ts";
+import { LOG_STORE_MAX, useLogStore } from "../src/components/studio/logs/log-store.ts";
 import type { LogEntry } from "../src/components/studio/logs/log-types.ts";
 
 /** 一行日志正文的样本：形状取自真实转录（带 tRPC 计时与业务中文），长度典型。 */
@@ -33,7 +30,14 @@ function sampleLine(i: number): string {
 
 /** 造 `n` 条互不相同的条目（id/seq/time 都单调，保证不会被去重）。 */
 function makeEntries(n: number, seqBase: number, timeBase: number): LogEntry[] {
-  const levels = ["debug", "info", "info", "info", "warn", "error"] as const;
+  const levels = /* SAFETY: 类型断言已复核 */ [
+    "debug",
+    "info",
+    "info",
+    "info",
+    "warn",
+    "error",
+  ] as const;
   const out: LogEntry[] = [];
   for (let i = 0; i < n; i += 1) {
     out.push({
@@ -80,11 +84,7 @@ function tableAppend(): void {
         useLogStore
           .getState()
           .appendFileLogs(
-            makeEntries(
-              batch,
-              size + round * 1_000_000,
-              1_700_000_000_000 + round * 1_000_000,
-            ),
+            makeEntries(batch, size + round * 1_000_000, 1_700_000_000_000 + round * 1_000_000),
           );
       }, runs);
       rows.push(
@@ -105,25 +105,15 @@ function pollRound(): void {
       seq += 1;
       useLogStore
         .getState()
-        .appendFileLogs(
-          makeEntries(
-            perSource,
-            seq * 1_000_000,
-            1_700_000_000_000 + seq * 1_000,
-          ),
-        );
+        .appendFileLogs(makeEntries(perSource, seq * 1_000_000, 1_700_000_000_000 + seq * 1_000));
     }
   };
   useLogStore.setState({ logs: [], filteredLogs: [], revision: 0 });
   const growing = medianMs(round, 5);
   const saturated = medianMs(round, 5);
   console.log("\n【一轮轮询】六路来源各写一次（六路 × 300 行）");
-  console.log(
-    `  时间线增长中（0 → ${LOG_STORE_MAX}）: ${growing.toFixed(1)} ms`,
-  );
-  console.log(
-    `  时间线已封顶（${LOG_STORE_MAX} 条）: ${saturated.toFixed(1)} ms`,
-  );
+  console.log(`  时间线增长中（0 → ${LOG_STORE_MAX}）: ${growing.toFixed(1)} ms`);
+  console.log(`  时间线已封顶（${LOG_STORE_MAX} 条）: ${saturated.toFixed(1)} ms`);
   console.log(`  参照：一帧 16.7ms；轮询间隔 2s。读数超过一帧即「每轮丢帧」。`);
 }
 

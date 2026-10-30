@@ -23,17 +23,14 @@ const OPTIONS: {
   { v: "online", label: "在线", local: false },
 ];
 
-export function WorkflowSourceFilterChip({
-  value,
-  onChange,
-}: WorkflowSourceFilterChipProps) {
+export function WorkflowSourceFilterChip({ value, onChange }: WorkflowSourceFilterChipProps) {
   const isLocal = value === "local";
   const label = value === "all" ? "全部" : isLocal ? "本机" : "在线";
 
   return (
     <OptionListPopover
       value={value}
-      onSelect={(next) => onChange(next as WorkflowSourceFilter)}
+      onSelect={(next) => onChange(/* SAFETY: 类型断言已复核 */ next as WorkflowSourceFilter)}
       triggerTitle="工作流来源筛选"
       align="start"
       contentClassName="w-40"

@@ -26,14 +26,10 @@ import { describe, expect, it } from "vitest";
  * 是它自己的判据）：`tests/` 下那些自造自删的并发探针（`.setup-cleanup-probe-*.test.tsx`）
  * 与本用例同时活动，CI 上撞出来的是一条不含本判据、也不含真凶的 `ENOENT` 栈。 */
 const requireCjs = createRequire(import.meta.url);
-const reader = requireCjs("../scripts/gate-scan-read.cjs") as {
+const reader = /* SAFETY: 类型断言已复核 */ requireCjs("../scripts/gate-scan-read.cjs") as {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
-  walkForScan: (
-    dir: string,
-    fileRe: RegExp,
-    opts?: { skipDirs?: Set<string> },
-  ) => string[];
+  walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => string[];
   vanishedNote: (count: number) => string;
 };
 
@@ -61,68 +57,59 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
 
   // 全仓 walk + stripComments 的判据：并行跑多份工程时 5s 默认超时会假红
   // （单独跑 <3s）。给足容忍度，断言本身不变。
-  it(
-    "转出的每个符号都有消费方（没有消费方的转发等于零消费导出）",
-    { timeout: 30_000 },
-    () => {
-      const code = stripComments(readFileSync(INDEX, "utf8"));
-      const names = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)]
-        .flatMap((m) => (m[1] ?? "").split(","))
-        .map((part) =>
-          part
-            .trim()
-            .split(/\s+as\s+/)
-            .pop()
-            ?.trim(),
-        )
-        .filter((n): n is string => Boolean(n));
-      // 正向：当前唯一转出的符号是确实被引用的那个（反向验证扫描器不是空转）
-      expect(names).toContain("SkillSeed");
+  it("转出的每个符号都有消费方（没有消费方的转发等于零消费导出）", { timeout: 30_000 }, () => {
+    const code = stripComments(readFileSync(INDEX, "utf8"));
+    const names = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)]
+      .flatMap((m) => (m[1] ?? "").split(","))
+      .map((part) =>
+        part
+          .trim()
+          .split(/\s+as\s+/)
+          .pop()
+          ?.trim(),
+      )
+      .filter((n): n is string => Boolean(n));
+    // 正向：当前唯一转出的符号是确实被引用的那个（反向验证扫描器不是空转）
+    expect(names).toContain("SkillSeed");
 
-      // 反向：扫全仓（含测试 / 脚本），每个转出的符号必须至少有一处引用。
-      const roots = ["src", "tests", "scripts", "e2e"].map((d) =>
-        join(ROOT, d),
-      );
-      /* 「根不在」与「条目消失」是两回事（`gate-scan-read` 那条口径）：一份都没读到
-       * 却报绿，比崩掉更坏。老写法把 `readdirSync` 的 ENOENT 一并吞成空数组，
-       * 于是重命名一个顶层目录就能让本用例静默失去覆盖面。 */
-      const missingRoots = roots.filter((r) => !reader.dirExists(r));
-      expect(
-        missingRoots,
-        "扫描根缺失 ⇒ 这一轮的语料是残缺的，「无人引用」这个结论没有依据：" +
-          missingRoots.join(", "),
-      ).toEqual([]);
-      let vanished = 0;
-      const corpus = roots
-        .flatMap((dir) => walkAll(dir))
-        .filter((f) => f !== INDEX)
-        .map((f) => {
-          /* 消失 ⇒ 这一轮没读到，计入读数而不是崩掉整条判据（读不到 ≠ 没有违规，
-           * 但「列到名字、读时已没」的那一份内容里也不可能藏着引用）。 */
-          const text = reader.readForScan(f);
-          if (text === null) {
-            vanished += 1;
-            return "";
-          }
-          return stripComments(text);
-        })
-        .join("\n");
-      if (vanished > 0) {
-        /* 静默跳过等于让本用例在它其实没读过的文件上假装绿 —— 读数要出来。
-         * 打印排在断言之前：断言失败时 vitest 会把这一段一起带出去。 */
-        console.info(`[core-barrel]${reader.vanishedNote(vanished).trim()}`);
-      }
-      const orphaned = names.filter(
-        (n) => !new RegExp(`\\b${n}\\b`).test(corpus),
-      );
-      expect(
-        orphaned,
-        "以下符号被 `core/index.ts` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n" +
-          "要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。" +
-          reader.vanishedNote(vanished),
-      ).toEqual([]);
-    },
-  );
+    // 反向：扫全仓（含测试 / 脚本），每个转出的符号必须至少有一处引用。
+    const roots = ["src", "tests", "scripts", "e2e"].map((d) => join(ROOT, d));
+    /* 「根不在」与「条目消失」是两回事（`gate-scan-read` 那条口径）：一份都没读到
+     * 却报绿，比崩掉更坏。老写法把 `readdirSync` 的 ENOENT 一并吞成空数组，
+     * 于是重命名一个顶层目录就能让本用例静默失去覆盖面。 */
+    const missingRoots = roots.filter((r) => !reader.dirExists(r));
+    expect(
+      missingRoots,
+      "扫描根缺失 ⇒ 这一轮的语料是残缺的，「无人引用」这个结论没有依据：" + missingRoots.join(", "),
+    ).toEqual([]);
+    let vanished = 0;
+    const corpus = roots
+      .flatMap((dir) => walkAll(dir))
+      .filter((f) => f !== INDEX)
+      .map((f) => {
+        /* 消失 ⇒ 这一轮没读到，计入读数而不是崩掉整条判据（读不到 ≠ 没有违规，
+         * 但「列到名字、读时已没」的那一份内容里也不可能藏着引用）。 */
+        const text = reader.readForScan(f);
+        if (text === null) {
+          vanished += 1;
+          return "";
+        }
+        return stripComments(text);
+      })
+      .join("\n");
+    if (vanished > 0) {
+      /* 静默跳过等于让本用例在它其实没读过的文件上假装绿 —— 读数要出来。
+       * 打印排在断言之前：断言失败时 vitest 会把这一段一起带出去。 */
+      console.info(`[core-barrel]${reader.vanishedNote(vanished).trim()}`);
+    }
+    const orphaned = names.filter((n) => !new RegExp(`\\b${n}\\b`).test(corpus));
+    expect(
+      orphaned,
+      "以下符号被 `core/index.ts` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n" +
+        "要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。" +
+        reader.vanishedNote(vanished),
+    ).toEqual([]);
+  });
 
   it("barrel 与「同层模块从它取用」组合起来不产生环（判据保留在这里的理由）", () => {
     // 这条不是「测代码」，而是把 `export *` 判据的**理由**钉成可执行事实：

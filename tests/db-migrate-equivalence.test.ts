@@ -71,7 +71,7 @@ function readShape(file: string): Record<string, TableShape> {
   if (r.status !== 0 || !r.stdout.trim()) {
     throw new Error(`读库结构失败：${r.stderr}`);
   }
-  return JSON.parse(r.stdout) as Record<string, TableShape>;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(r.stdout) as Record<string, TableShape>;
 }
 
 /**
@@ -90,10 +90,7 @@ function readShape(file: string): Record<string, TableShape> {
  * @param leftCols `db:migrate` 那一侧的 token 串（物理序）
  * @param rightCols `db:push` 那一侧的 token 串（物理序）
  */
-function diffColumns(
-  leftCols: string,
-  rightCols: string,
-): { missing: string[]; extra: string[] } {
+function diffColumns(leftCols: string, rightCols: string): { missing: string[]; extra: string[] } {
   const left = leftCols ? leftCols.split(",") : [];
   const right = rightCols ? rightCols.split(",") : [];
   return {
@@ -135,17 +132,13 @@ beforeAll(async () => {
       throw new Error(`db:migrate 失败：${migrate.stderr || migrate.stdout}`);
     }
 
-    const push = spawnSync(
-      process.execPath,
-      [path.join(process.cwd(), "scripts", "db-push.mjs")],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 300_000,
-      },
-    );
+    const push = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-push.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    });
     if (push.status !== 0) {
       throw new Error(`db:push 失败：${push.stderr || push.stdout}`);
     }
@@ -219,8 +212,10 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
       missing: ["a:TEXT"],
       extra: ["a:TEXT NOT NULL"],
     });
-    expect(diffColumns("a:TEXT NOT NULL PK,b:TEXT", "b:TEXT,a:TEXT NOT NULL PK"))
-      .toEqual({ missing: [], extra: [] });
+    expect(diffColumns("a:TEXT NOT NULL PK,b:TEXT", "b:TEXT,a:TEXT NOT NULL PK")).toEqual({
+      missing: [],
+      extra: [],
+    });
     /* 主键那一维单独确认一次：`PK` 在 token 里，丢了它两条就不等。 */
     expect(diffColumns("a:TEXT PK", "a:TEXT").missing).toEqual(["a:TEXT"]);
   });
@@ -302,17 +297,13 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
 
   it("迁移是幂等的：连跑两次第二次不改结构", () => {
     const before = readShape(migratedDb);
-    const r = spawnSync(
-      process.execPath,
-      [path.join(process.cwd(), "scripts", "db-migrate.mjs")],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 300_000,
-      },
-    );
+    const r = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-migrate.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    });
     expect(r.status, "第二次迁移必须是 no-op 且 exit 0").toBe(0);
     expect(readShape(migratedDb)).toEqual(before);
   }, 300_000);

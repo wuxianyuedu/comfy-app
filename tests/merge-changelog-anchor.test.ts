@@ -17,13 +17,7 @@
  * 而「锚解析不出」那一档是它自己的失败路径 —— 用假的 git 就等于在测另一个东西。
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -31,10 +25,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
-const SCRIPT = path.resolve(
-  import.meta.dirname,
-  "../scripts/merge-changelog-fragments.mjs",
-);
+const SCRIPT = path.resolve(import.meta.dirname, "../scripts/merge-changelog-fragments.mjs");
 const tempDirs: string[] = [];
 
 /** 造一个临时「仓库」：脚本 + CHANGELOG.md + 若干碎片，并 `git init` 出一次提交。 */
@@ -91,7 +82,7 @@ function fixture(
           ),
         };
       } catch (err) {
-        const e = err as { stdout?: string; stderr?: string };
+        const e = /* SAFETY: 类型断言已复核 */ err as { stdout?: string; stderr?: string };
         return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
       }
     },
@@ -108,8 +99,7 @@ function fixture(
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 /**
@@ -159,10 +149,7 @@ describe("merge-changelog —— 落点由来源锚决定", () => {
     expect(atEarlier).toBeGreaterThan(0);
     expect(text.slice(atEarlier)).toContain("- 新条目 C。");
     /* 落点**不是**文件里第一个待发段落（`[Unreleased]`）—— 它那条链里没有新条目。 */
-    const unreleasedSeg = text.slice(
-      text.indexOf("## [Unreleased]"),
-      text.indexOf("## [未发布]"),
-    );
+    const unreleasedSeg = text.slice(text.indexOf("## [Unreleased]"), text.indexOf("## [未发布]"));
     expect(unreleasedSeg).not.toContain("- 新条目 C。");
   });
 
@@ -175,10 +162,7 @@ describe("merge-changelog —— 落点由来源锚决定", () => {
     const text = f.read("CHANGELOG.md");
     expect(text).toContain(`<!-- since: ${f.head} — 较早的那一批 -->`);
     /* 那一段原来那一行锚被替换掉了，段落里不会有第二条 `since:`。 */
-    const seg = text.slice(
-      text.indexOf("## [未发布]"),
-      text.indexOf("## [0.1.0]"),
-    );
+    const seg = text.slice(text.indexOf("## [未发布]"), text.indexOf("## [0.1.0]"));
     expect(seg.match(/since:/g)?.length).toBe(1);
     /* 另一段的锚**不动**（那一段这一轮没有新条目）。 */
     expect(text).toContain("<!-- since: bbb2222 — 较晚的那一批 -->");
@@ -186,16 +170,7 @@ describe("merge-changelog —— 落点由来源锚决定", () => {
 
   it("段落本来没有锚时补上，且 `[Unreleased]` 的标题不因为是它而改动", () => {
     const f = fixture(
-      [
-        "# 更新日志",
-        "",
-        "## [Unreleased]",
-        "",
-        "### Added",
-        "",
-        "- 旧条目。",
-        "",
-      ].join("\n"),
+      ["# 更新日志", "", "## [Unreleased]", "", "### Added", "", "- 旧条目。", ""].join("\n"),
       { "1693-new.md": "## Fixed\n\n- 新条目 C。\n" },
     );
     const res = f.run(["--anchor", f.head]);
@@ -276,8 +251,6 @@ describe("merge-changelog —— 缺省锚取当前 HEAD", () => {
     });
     const res = f.run();
     expect(res.ok, res.output).toBe(true);
-    expect(f.read("CHANGELOG.md")).toContain(
-      `<!-- since: ${f.head} — 较早的那一批 -->`,
-    );
+    expect(f.read("CHANGELOG.md")).toContain(`<!-- since: ${f.head} — 较早的那一批 -->`);
   });
 });

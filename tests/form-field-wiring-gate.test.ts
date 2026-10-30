@@ -47,10 +47,7 @@ function gate(
    * 必须走 `tests/helpers/symlink-dir.ts`：Windows 上 `symlinkSync(…, "dir")`
    * 需要开发者模式或管理员令牌，普通开发者 100% EPERM（同一族已收口三次，
    * 见那份 helper 的文件头与台账 E13）。 */
-  symlinkDir(
-    path.resolve(__dirname, "../node_modules"),
-    path.join(root, "node_modules"),
-  );
+  symlinkDir(path.resolve(__dirname, "../node_modules"), path.join(root, "node_modules"));
   if (baseline) {
     writeFileSync(
       path.join(root, "scripts", ".form-field-wiring-baseline.json"),
@@ -73,7 +70,7 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

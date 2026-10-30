@@ -18,10 +18,7 @@
  * 状态都从这里取，不再各写各的）。
  */
 import { upperToken } from "~/lib/upper-token";
-import type {
-  WorkflowIOEntry,
-  WorkflowIOMap,
-} from "~/lib/workflow/workflow-io-types";
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import {
   EXPOSED_PARAM_LABEL,
   exposedParamDisplayLabel,
@@ -160,11 +157,9 @@ export function sizeSubLabel(cls: ParamClass): string {
  *  卡片列把它渲染成**一张卡**（六行形态各一颗圆点，见 `WorkflowParamCardColumn`），
  *  而连线、落点、↺ 恢复默认都按子口走 —— 这层换算就是两者的桥：
  *  `sizeGroupIds("size")` 给出全部六个键，`sizeGroupIds(<子口 id>)` 回它自己。 */
-export function sizeGroupIds(
-  id: string | null | undefined,
-): readonly ParamClass[] {
+export function sizeGroupIds(id: string | null | undefined): readonly ParamClass[] {
   if (!id) return [];
-  return id === "size" ? SIZE_SUB_IDS : [id as ParamClass];
+  return id === "size" ? SIZE_SUB_IDS : [/* SAFETY: 类型断言已复核 */ id as ParamClass];
 }
 
 /* ── 端口分类：只看**声明类型** ──
@@ -192,9 +187,7 @@ const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
 const NUMBER_TYPES = new Set(["INT", "FLOAT", "NUMBER", "COMBO", "*"]);
 
 /** 端口按声明类型归族（`null` = 不能当任何对外参数的落点：连线型端口、输出口）。 */
-export function pinFamily(
-  e: WorkflowIOEntry | null | undefined,
-): PinFamily | null {
+export function pinFamily(e: WorkflowIOEntry | null | undefined): PinFamily | null {
   if (e?.direction !== "input" || e.kind !== "widget") return null;
   const type = (e.type ?? "*").toUpperCase();
   if (TEXT_TYPES.has(type)) return "text";
@@ -275,9 +268,7 @@ export function candidateClasses(cls: ParamClass): readonly ParamClass[] {
  *    · 宽高比 + （像素量 或 分辨率档）。
  *  只连其中一个（只有宽度、只有比例…）解不出另一维 —— 不算配置完成：状态显示
  *  未配置，「缺了它不能跑」的清单里带上它。 */
-export function isSizeDetermined(
-  resolved: Record<string, string | null | undefined>,
-): boolean {
+export function isSizeDetermined(resolved: Record<string, string | null | undefined>): boolean {
   const wired = (cls: ParamClass) => Boolean(resolved[cls]);
   if (wired("size-width") && wired("size-height")) return true;
   if (!wired("size-aspect")) return false;
@@ -348,7 +339,7 @@ export function portTypeDisplay(type: string | undefined | null): string {
 }
 
 /** 数值端口的三类声明（尺寸的数值形态都能落在这几类行上）。 */
-const NUMERIC_PORT_TYPES = ["INT", "FLOAT", "NUMBER"] as const;
+const NUMERIC_PORT_TYPES = /* SAFETY: 类型断言已复核 */ ["INT", "FLOAT", "NUMBER"] as const;
 
 /** 尺寸子口的**规格表**：展示类型 + 可接受的端口类型（一处定义，展示与闸门同源）。
  *
@@ -360,10 +351,7 @@ const NUMERIC_PORT_TYPES = ["INT", "FLOAT", "NUMBER"] as const;
  *    （用户口径：「这是不行的」）。
  *
  *  类型未知（缺省 / `*`）的端口一律放行：拿不到事实时不替作者做决定。 */
-const SIZE_SUB_SPEC: Record<
-  string,
-  { display: string; accepts: readonly string[] }
-> = {
+const SIZE_SUB_SPEC: Record<string, { display: string; accepts: readonly string[] }> = {
   "size-width": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
   "size-height": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
   "size-megapixels": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },

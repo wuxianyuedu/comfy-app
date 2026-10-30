@@ -26,10 +26,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(
-  __dirname,
-  "../scripts/check-declaration-readers.cjs",
-);
+const SCRIPT = path.resolve(__dirname, "../scripts/check-declaration-readers.cjs");
 
 /**
  * 够过地板（MIN_CARRIERS = 8）的一份合法索引。
@@ -83,9 +80,8 @@ type Fixture = {
 };
 
 const DEFAULT_HOOK =
-  Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join(
-    "",
-  ) + '  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n';
+  Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join("") +
+  '  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n';
 const DEFAULT_FIXED_LIST =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
 const DEFAULT_PKG = JSON.stringify({
@@ -102,17 +98,10 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
 
   if (fx.ledger !== undefined) {
-    const body =
-      typeof fx.ledger === "string" ? fx.ledger : JSON.stringify(fx.ledger);
-    writeFileSync(
-      path.join(root, "scripts", ".declaration-readers.json"),
-      body,
-    );
+    const body = typeof fx.ledger === "string" ? fx.ledger : JSON.stringify(fx.ledger);
+    writeFileSync(path.join(root, "scripts", ".declaration-readers.json"), body);
   }
-  writeFileSync(
-    path.join(root, ".githooks", "pre-commit"),
-    fx.hook ?? DEFAULT_HOOK,
-  );
+  writeFileSync(path.join(root, ".githooks", "pre-commit"), fx.hook ?? DEFAULT_HOOK);
   writeFileSync(
     path.join(root, "scripts", "fixed-structural-tests.mjs"),
     fx.fixedList ?? DEFAULT_FIXED_LIST,
@@ -130,14 +119,14 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(
-        process.execPath,
-        [path.join(root, "scripts", path.basename(SCRIPT))],
-        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-      ),
+      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -205,8 +194,7 @@ describe("声明 ⇄ 读者门禁：该拦的形状（§11.23）", () => {
     const r = gate({
       ledger: { carriers: list },
       // 固定清单里换成另一份文件 → 登记的那份出局
-      fixedList:
-        'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/other.test.ts",\n];\n',
+      fixedList: 'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/other.test.ts",\n];\n',
     });
     expect(r.ok).toBe(false);
     expect(r.output).toContain("FIXED_STRUCTURAL_TESTS");

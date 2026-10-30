@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 // 判据脚本是 CJS（与 scripts/check-*.cjs 同族，`@ts-nocheck` 后经 require 进来是 any），
 // 按仓库惯例给 mod 显式标注返回形状。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const mod = require("../scripts/check-tsc-artifact-hint.cjs") as {
+const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-tsc-artifact-hint.cjs") as {
   classifyTscErrors: (text: string) => {
     total: number;
     files: string[];
@@ -81,9 +81,9 @@ describe("tsc 生成物报错的点破（#1182）", () => {
     const v = classifyTscErrors(REAL_ARTIFACT_OUTPUT_WIN);
     expect(v.total).toBe(2);
     expect(v.artifactOnly).toBe(true);
-    expect([
-      ...new Set(v.artifactFiles.map((f) => f.replace(/\\/g, "/"))),
-    ]).toEqual([".next/dev/types/validator.ts"]);
+    expect([...new Set(v.artifactFiles.map((f) => f.replace(/\\/g, "/")))]).toEqual([
+      ".next/dev/types/validator.ts",
+    ]);
   });
 
   it("本地复演的真 tsc 读数（单行 TS1005）也点破 —— 不要求凑够两条", () => {
@@ -126,9 +126,7 @@ describe("tsc 生成物报错的点破（#1182）", () => {
 
   it("组件的现生成件也算（ISSUE #1409 同族：`.storybook/generated/`）", () => {
     expect(isArtifact(".storybook/generated/app-origin.ts")).toBe(true);
-    expect(isArtifact("F:\\proj\\.storybook\\generated\\app-origin.json")).toBe(
-      true,
-    );
+    expect(isArtifact("F:\\proj\\.storybook\\generated\\app-origin.json")).toBe(true);
     // 同族的另两处**不算**：注入层与主配置是源码（它们报错就是真错，别被点破成生成物）。
     expect(isArtifact(".storybook/data-sources.tsx")).toBe(false);
     expect(isArtifact(".storybook/main.ts")).toBe(false);
@@ -146,9 +144,7 @@ describe("tsc 生成物报错的点破（#1182）", () => {
 
   it("两类生成物的处置命令各自给对（别把 .next 的删法套到工作台生成件上）", () => {
     const sb = buildHint(
-      classifyTscErrors(
-        ".storybook/generated/app-origin.ts(1,5): error TS1005: x.\n",
-      ),
+      classifyTscErrors(".storybook/generated/app-origin.ts(1,5): error TS1005: x.\n"),
     );
     expect(sb).toContain("rm -rf .storybook/generated");
     expect(sb).toContain("ISSUE #1409");
@@ -176,8 +172,6 @@ describe("门槛接线", () => {
 
   it("组 A 失败时调用点破脚本，并兜住它自己的失败", () => {
     expect(hook).toContain("check-tsc-artifact-hint.cjs");
-    expect(hook).toMatch(
-      /if \[ "\$id" = "A" \]; then[\s\S]*?\|\| true\s*\n\s*fi/,
-    );
+    expect(hook).toMatch(/if \[ "\$id" = "A" \]; then[\s\S]*?\|\| true\s*\n\s*fi/);
   });
 });

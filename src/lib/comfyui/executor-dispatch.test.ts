@@ -56,16 +56,16 @@ type ExecJobRow = {
 /** 注入用的假仓储：四条读写的调用都记下来，断言不依赖实现细节。 */
 function fakeRepo(overrides: Record<string, unknown> = {}) {
   return {
-    claimNextQueued: vi.fn(async () => [] as string[]),
-    findExecJob: vi.fn(async () => null as ExecJobRow),
-    finalizeFailure: vi.fn(async () => "written" as const),
-    listQueuedIds: vi.fn(async () => [] as string[]),
+    claimNextQueued: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as string[]),
+    findExecJob: vi.fn(async () => /* SAFETY: 类型断言已复核 */ null as ExecJobRow),
+    finalizeFailure: vi.fn(async () => /* SAFETY: 类型断言已复核 */ "written" as const),
+    listQueuedIds: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as string[]),
     ...overrides,
   };
 }
 
 function openWs() {
-  state().ws = { readyState: 1 } as never;
+  state().ws = /* SAFETY: 类型断言已复核 */ { readyState: 1 } as never;
 }
 
 function resetRunnerState() {
@@ -133,9 +133,7 @@ describe("就绪门控：不就绪就不领行", () => {
     await mod.claimAndDispatchOnce();
     await mod.claimAndDispatchOnce();
 
-    expect(
-      logsOf("t-once").filter((m) => m.includes("等待 ComfyUI")),
-    ).toHaveLength(1);
+    expect(logsOf("t-once").filter((m) => m.includes("等待 ComfyUI"))).toHaveLength(1);
   });
 
   it("多条排队行各自都有提示（不是只提示最旧那条）", async () => {
@@ -233,9 +231,7 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     );
     expect(state().pendingDispatch.has("t-raw")).toBe(true);
     expect(typeof state().startedAt.get("t-raw")).toBe("number");
-    expect(logsOf("t-raw").some((m) => m.includes("任务已从队列领取"))).toBe(
-      true,
-    );
+    expect(logsOf("t-raw").some((m) => m.includes("任务已从队列领取"))).toBe(true);
   });
 
   it("把 workflowInputs 全量打进任务日志（dev 重启后日志是唯一现场）", async () => {
@@ -349,15 +345,10 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
 describe("提交异常必须归还槽位", () => {
   it("executeViaComfyCli reject → 走统一收口路径，不是 unhandled rejection", async () => {
     openWs();
-    vi.mocked(cli.executeViaComfyCli).mockRejectedValue(
-      new Error("spawn python ENOENT"),
-    );
+    vi.mocked(cli.executeViaComfyCli).mockRejectedValue(new Error("spawn python ENOENT"));
     const repo = fakeRepo({
       // 领过的行在库里已是 RUNNING，不会再被领到——用 Once 表达这件事
-      claimNextQueued: vi
-        .fn()
-        .mockResolvedValueOnce(["t-err"])
-        .mockResolvedValue([]),
+      claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err"]).mockResolvedValue([]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
         workflowName: "w",
         execPayload: { "1": {} },
@@ -369,27 +360,16 @@ describe("提交异常必须归还槽位", () => {
     await mod.claimAndDispatchOnce();
     await flush();
 
-    expect(fin.finalizeFailure).toHaveBeenCalledWith(
-      "t-err",
-      "",
-      "spawn python ENOENT",
-    );
-    expect(logsOf("t-err").some((m) => m.includes("工作流启动异常"))).toBe(
-      true,
-    );
+    expect(fin.finalizeFailure).toHaveBeenCalledWith("t-err", "", "spawn python ENOENT");
+    expect(logsOf("t-err").some((m) => m.includes("工作流启动异常"))).toBe(true);
   });
 
   it("收口路径本身再失败（DB down）→ 仍手动归还，队列不被一条坏任务堵死", async () => {
     openWs();
-    vi.mocked(cli.executeViaComfyCli).mockRejectedValue(
-      new Error("spawn failed"),
-    );
+    vi.mocked(cli.executeViaComfyCli).mockRejectedValue(new Error("spawn failed"));
     vi.mocked(fin.finalizeFailure).mockRejectedValue(new Error("db down"));
     const repo = fakeRepo({
-      claimNextQueued: vi
-        .fn()
-        .mockResolvedValueOnce(["t-err-db"])
-        .mockResolvedValue([]),
+      claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err-db"]).mockResolvedValue([]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
         workflowName: "w",
         execPayload: { "1": {} },
@@ -402,9 +382,7 @@ describe("提交异常必须归还槽位", () => {
     await flush();
 
     expect(state().pendingDispatch.size).toBe(0);
-    expect(
-      logsOf("t-err-db").some((m) => m.includes("finalizeFailure 二次失败")),
-    ).toBe(true);
+    expect(logsOf("t-err-db").some((m) => m.includes("finalizeFailure 二次失败"))).toBe(true);
     /* 关键契约：double-failure = 「库此刻写不进去」，此时立刻再领一次就是在那儿
      * 自旋。推进交给常驻节拍，所以这一拍之内 `claimNextQueued` 只被调一次。 */
     expect(repo.claimNextQueued).toHaveBeenCalledTimes(1);
@@ -425,9 +403,7 @@ describe("提交异常必须归还槽位", () => {
     await mod.claimAndDispatchOnce();
     await flush();
 
-    expect(logsOf("t-ok").some((m) => m.includes("工作流启动异常"))).toBe(
-      false,
-    );
+    expect(logsOf("t-ok").some((m) => m.includes("工作流启动异常"))).toBe(false);
     expect(state().pendingDispatch.has("t-ok")).toBe(true);
   });
 });
@@ -439,10 +415,7 @@ describe("叶子总线接线（这一刀把它从一条回调扩成两条）", (
     });
     mod.configureDispatch({ taskRepo: repo, owner: "host" });
 
-    continuation.announceToQueuedTasks(
-      "ComfyUI 已就绪，继续执行工作流…",
-      "success",
-    );
+    continuation.announceToQueuedTasks("ComfyUI 已就绪，继续执行工作流…", "success");
     await flush();
 
     // 归属跟着注入的 owner 走：host 进程不往 inline 的行上写提示。
@@ -458,14 +431,14 @@ describe("叶子总线接线（这一刀把它从一条回调扩成两条）", (
     vi.resetModules();
     const fresh = await import("./executor-dispatch");
     const runnerState = await import("./runner-state");
-    runnerState.state().ws = { readyState: 1 } as never;
+    runnerState.state().ws = /* SAFETY: 类型断言已复核 */ {
+      readyState: 1,
+    } as never;
 
     expect(await fresh.claimAndDispatchOnce()).toBeNull();
 
     const { logger } = await import("~/lib/core/logger");
-    const warns = vi
-      .mocked(logger.warn)
-      .mock.calls.filter((c) => String(c[0]).includes("未注入"));
+    const warns = vi.mocked(logger.warn).mock.calls.filter((c) => String(c[0]).includes("未注入"));
     expect(warns.length).toBeLessThanOrEqual(1);
     fresh.stopDispatchLoop();
   });

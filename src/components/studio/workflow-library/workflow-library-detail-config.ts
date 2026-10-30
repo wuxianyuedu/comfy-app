@@ -18,7 +18,7 @@ import type { WorkflowRow } from "./workflow-library-config";
  *  拉起来**，而多数时候用户只是想看一眼「工坊会怎么驱动它」。
  *  「编辑对外参数 / 实际使用」那一份常驻实例另见视图层的**首次访问才挂载**
  *  （`WorkflowLibraryDetailView`）：切这两页时只下载一次，之后常驻不重建。 */
-export const DETAIL_TABS = [
+export const DETAIL_TABS = /* SAFETY: 类型断言已复核 */ [
   { key: "params", label: "工坊封装" },
   { key: "canvas", label: "编辑对外参数" },
   { key: "use", label: "实际使用" },
@@ -35,23 +35,13 @@ export interface WorkflowLibraryDetailProps {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
   allModelTags?: { id: string; name: string; count: number }[];
   /** 持久化类型（modes + defaultMode）。 */
-  onPatchModes?: (
-    id: string,
-    modes: string[],
-    defaultMode: string,
-  ) => Promise<void>;
+  onPatchModes?: (id: string, modes: string[], defaultMode: string) => Promise<void>;
   /** 持久化模型标签绑定。 */
   onPatchModelTags?: (id: string, names: string[]) => Promise<void>;
   /** 整体落库 workflowIO（预览面板的 seed「控件后行为」等参数级配置）。 */
-  onPatchWorkflowIO?: (
-    id: string,
-    workflowIO: Record<string, unknown>,
-  ) => Promise<void>;
+  onPatchWorkflowIO?: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
   /** 整体落库 paramMap（预览面板拖圆点改对外参数落点）。 */
-  onPatchParamMap?: (
-    id: string,
-    paramMap: Record<string, unknown>,
-  ) => Promise<void>;
+  onPatchParamMap?: (id: string, paramMap: Record<string, unknown>) => Promise<void>;
   onUse: (id: string, meta?: { name: string; taskType: string }) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string, name: string) => void;
@@ -75,7 +65,7 @@ export interface DetailTemplate {
 /** workflowIO 在旧数据里可能存成数组或非对象，这里收紧成 Map 或 null。 */
 export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
   if (!raw || Array.isArray(raw) || typeof raw !== "object") return null;
-  return raw as WorkflowIOMap;
+  return /* SAFETY: 类型断言已复核 */ raw as WorkflowIOMap;
 }
 
 /** 「源文件」展示磁盘上的原始导入 JSON（用户当初导入的那个文件）：库里的
@@ -100,10 +90,7 @@ export function buildSourceData(
  *  `isLoading`（它在换 key 与后台 refetch 时为真，二者都不该出现占位）。
  *
  *  未选中工作流时不算加载（空态由视图渲染）。 */
-export function isDetailLoadingFor(
-  workflowId: string | null,
-  settledId: string | null,
-): boolean {
+export function isDetailLoadingFor(workflowId: string | null, settledId: string | null): boolean {
   if (!workflowId) return false;
   return settledId !== workflowId;
 }

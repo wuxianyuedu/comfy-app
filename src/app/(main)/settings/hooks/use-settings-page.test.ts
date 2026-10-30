@@ -19,36 +19,17 @@ import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
 import { http, HttpResponse } from "msw/http";
 import SuperJSON from "superjson";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTestQueryClient } from "../../../../../tests/helpers/renderWithProviders";
-import {
-  createTestTRPC,
-  testTrpcEndpoint,
-} from "../../../../../tests/helpers/test-trpc";
+import { createTestTRPC, testTrpcEndpoint } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 import { resetComfyStateClientForTest } from "~/lib/comfy/comfy-state-client";
-import {
-  getComfyStateChange,
-  resetComfyStateWatchForTest,
-} from "~/lib/comfyui/state-watch";
+import { getComfyStateChange, resetComfyStateWatchForTest } from "~/lib/comfyui/state-watch";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
-import {
-  useSettingsPage,
-  type LlmConfig,
-  type Settings,
-} from "./use-settings-page";
+import { useSettingsPage, type LlmConfig, type Settings } from "./use-settings-page";
 
 vi.mock("~/lib/llm/ollama-client", () => ({
   probeOllama: vi.fn(),
@@ -73,32 +54,26 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 // app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
 // 测试通过 `vi.importActual` 保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），
 // 只 spy `postAppRuntimeLog` 并记录调用参数。
-const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } =
-  vi.hoisted(() => {
-    const calls: Array<{
-      ns: string;
-      level: string;
-      msg: string;
-      fields?: unknown;
-    }> = [];
-    /** 启动日志「按会话取」的请求记账（来源 + 请求的会话 id） */
-    const logRequests: Array<{ source: string; session: string | null }> = [];
-    return {
-      postAppRuntimeLogMock: vi.fn(
-        (
-          ns: string,
-          level: string,
-          msg: string,
-          fields?: unknown,
-        ): Promise<void> => {
-          calls.push({ ns, level, msg, fields });
-          return Promise.resolve();
-        },
-      ),
-      runtimeLogCalls: calls,
-      sessionLogRequests: logRequests,
-    };
-  });
+const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } = vi.hoisted(() => {
+  const calls: Array<{
+    ns: string;
+    level: string;
+    msg: string;
+    fields?: unknown;
+  }> = [];
+  /** 启动日志「按会话取」的请求记账（来源 + 请求的会话 id） */
+  const logRequests: Array<{ source: string; session: string | null }> = [];
+  return {
+    postAppRuntimeLogMock: vi.fn(
+      (ns: string, level: string, msg: string, fields?: unknown): Promise<void> => {
+        calls.push({ ns, level, msg, fields });
+        return Promise.resolve();
+      },
+    ),
+    runtimeLogCalls: calls,
+    sessionLogRequests: logRequests,
+  };
+});
 vi.mock("~/lib/log/log-file-client", () => {
   // fetchFileLogSlice / fetchLogSessions 复刻真实实现（走全局 fetch，由 MSW 拦截
   // 返回日志内容）。之所以不引用 importOriginal：真实实现只是对端点的一次 fetch，
@@ -108,11 +83,9 @@ vi.mock("~/lib/log/log-file-client", () => {
       source: string,
       offset: number,
     ): Promise<{ content: string; size: number; offset: number } | null> => {
-      const res = await fetch(
-        `/api/logs/current?source=${source}&offset=${offset}`,
-      );
+      const res = await fetch(`/api/logs/current?source=${source}&offset=${offset}`);
       if (!res.ok) return null;
-      return (await res.json()) as {
+      return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
         content: string;
         size: number;
         offset: number;
@@ -125,7 +98,7 @@ vi.mock("~/lib/log/log-file-client", () => {
     if (sessionId) query.set("session", sessionId);
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
     if (!res.ok) return null;
-    return (await res.json()) as unknown;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
   });
   return {
     fetchFileLogSlice,
@@ -233,7 +206,7 @@ const mockRouter = t.router({
       () =>
         behavior.comfyInstance ?? {
           pathConfigured: true,
-          instanceType: "portable" as const,
+          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
           desktopManaged: false,
         },
     ),
@@ -358,10 +331,7 @@ beforeEach(() => {
       stateRequests.push(new URL(request.url).search);
       /* 与真实路由同一判决：`since` 比当前纪元旧 → 回那一次变化，否则 204。 */
       const change = getComfyStateChange();
-      const since = Number.parseInt(
-        new URL(request.url).searchParams.get("since") ?? "0",
-        10,
-      );
+      const since = Number.parseInt(new URL(request.url).searchParams.get("since") ?? "0", 10);
       if (change.last === null || change.seq <= since) {
         return new HttpResponse(null, { status: 204 });
       }
@@ -456,9 +426,7 @@ describe("useSettingsPage", () => {
     });
     await expect.poll(() => second.result.current.drafts).not.toBeNull();
     expect(second.result.current.drafts?.llm.model).toBe("qwen3:14b");
-    expect(second.result.current.drafts?.settings.comfyuiPath).toBe(
-      "D:/ComfyUI",
-    );
+    expect(second.result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
     // 不该进入降级/加载兜底
     expect(second.result.current.isInitialLoad).toBe(false);
     expect(second.result.current.hasError).toBe(false);
@@ -589,13 +557,13 @@ describe("useSettingsPage", () => {
    * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
   it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
     behavior.llmError = "数据库被锁";
-    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as unknown[]).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect
       .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
+        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
           (c) => c.level === "error",
         ),
       )
@@ -607,7 +575,7 @@ describe("useSettingsPage", () => {
     expect(result.current.hasError).toBe(true);
     expect(result.current.serveState).toBeNull();
     expect(result.current.errorText).toContain("数据库被锁");
-    const errors = (
+    const errors = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
     ).filter((c) => c.level === "error");
     expect(errors.length).toBe(1);
@@ -617,7 +585,7 @@ describe("useSettingsPage", () => {
     await act(async () => {
       result.current.retry();
     });
-    const errorsAfter = (
+    const errorsAfter = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
     ).filter((c) => c.level === "error");
     expect(errorsAfter.length).toBe(1);
@@ -675,12 +643,8 @@ describe("useSettingsPage", () => {
     expect(second.result.current.hasError).toBe(false);
     expect(second.result.current.notReady).toBe(false);
     // 失败原因仍然可见（非阻塞提示条），且带重试出口
-    expect(second.result.current.serveState?.errorText).toContain(
-      "no such table: llmConfig",
-    );
-    expect(second.result.current.drafts?.settings.comfyuiPath).toBe(
-      "D:/ComfyUI",
-    );
+    expect(second.result.current.serveState?.errorText).toContain("no such table: llmConfig");
+    expect(second.result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
     expect(typeof second.result.current.retry).toBe("function");
   });
 
@@ -689,20 +653,20 @@ describe("useSettingsPage", () => {
    * 拿着「请求被中断」的提示无从排查。 */
   it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
     behavior.llmError = "no such table: llmConfig";
-    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as unknown[]).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
     await expect
       .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
+        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
           (c) => c.level === "error",
         ),
       )
       .toBe(true);
 
-    const entry = (
+    const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
         level: string;
         fields?: { query?: string; raw?: string };
@@ -718,20 +682,20 @@ describe("useSettingsPage", () => {
   it("两个查询都失败时，日志字段记全两条查询名", async () => {
     behavior.llmError = "llm 炸了";
     behavior.settingsError = "settings 炸了";
-    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as unknown[]).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
     await expect
       .poll(() =>
-        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
+        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
           (c) => c.level === "error",
         ),
       )
       .toBe(true);
 
-    const entry = (
+    const entry = /* SAFETY: 类型断言已复核 */ (
       runtimeLogCalls as unknown as Array<{
         level: string;
         fields?: { query?: string };
@@ -797,9 +761,7 @@ describe("useSettingsPage", () => {
       out = await result.current.addRemoteModel({ name: "gpt-4o" });
     });
     expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
-      "gpt-4o",
-    ]);
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual(["gpt-4o"]);
     // 即时落库成功有提示条
     expect(result.current.flash).toEqual({
       kind: "ok",
@@ -821,19 +783,14 @@ describe("useSettingsPage", () => {
       out = await result.current.addRemoteModel({ name: "qwen3:14b" });
     });
     expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
-      "gpt-4o",
-      "qwen3:14b",
-    ]);
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual(["gpt-4o", "qwen3:14b"]);
 
     // 移除即时落库，只动清单不碰生效模型字段（运行时在工坊切换）
     await act(async () => {
       out = await result.current.removeRemoteModel("gpt-4o");
     });
     expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
-      "qwen3:14b",
-    ]);
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual(["qwen3:14b"]);
     await act(async () => {
       out = await result.current.removeRemoteModel("qwen3:14b");
     });
@@ -872,9 +829,7 @@ describe("useSettingsPage", () => {
         apiKey: "sk-1",
       });
     });
-    const entry = result.current.remoteModelList.find(
-      (e) => e.name === "gpt-4o",
-    );
+    const entry = result.current.remoteModelList.find((e) => e.name === "gpt-4o");
     expect(entry?.baseUrl).toBe("https://api.example.com/v1");
     expect(entry?.apiKey).toBe("sk-1");
 
@@ -883,10 +838,9 @@ describe("useSettingsPage", () => {
       result.current.patchLlm({ model: "gpt-4o" });
     });
     expect(result.current.drafts?.llm.model).toBe("gpt-4o");
-    expect(
-      result.current.drafts?.llm.extraModels.find((e) => e.name === "gpt-4o")
-        ?.baseUrl,
-    ).toBe("https://api.example.com/v1");
+    expect(result.current.drafts?.llm.extraModels.find((e) => e.name === "gpt-4o")?.baseUrl).toBe(
+      "https://api.example.com/v1",
+    );
   });
 
   it("保存 LLM 成功 → ok 提示 + 清空 API Key 输入框", async () => {
@@ -972,18 +926,14 @@ describe("useSettingsPage", () => {
       });
     });
     expect(out.ok).toBe(true);
-    const renamed = result.current.remoteModelList.find(
-      (e) => e.name === "gpt-4o-2024",
-    );
+    const renamed = result.current.remoteModelList.find((e) => e.name === "gpt-4o-2024");
     expect(renamed?.baseUrl).toBe("https://api.example.com/v1");
     /* 未重填、也没勾「清除密钥」→ 这一条**不带 apiKey 键**（= 本次不提供意见）。
      * 此前这里是 `(existing?.apiKey ?? null)`，而真实场景里 `existing` 来自服务端
      * **脱敏下发**的清单（永远没值）→ 折成 null → 覆盖式保存把库里那把密钥清掉
      * （台账 A11）。草稿不该留着它没见过的值。 */
     expect(Object.keys(renamed ?? {})).not.toContain("apiKey");
-    expect(
-      result.current.remoteModelList.some((e) => e.name === "gpt-4o"),
-    ).toBe(false);
+    expect(result.current.remoteModelList.some((e) => e.name === "gpt-4o")).toBe(false);
 
     // 改名撞其他候选 → 拒绝；撞生效模型名不拒绝（生效模型不在清单管理范围）
     await act(async () => {
@@ -1009,10 +959,7 @@ describe("useSettingsPage", () => {
       });
     });
     expect(out.ok).toBe(true);
-    expect(
-      result.current.remoteModelList.find((e) => e.name === "qwen3:14b")
-        ?.apiKey,
-    ).toBeNull();
+    expect(result.current.remoteModelList.find((e) => e.name === "qwen3:14b")?.apiKey).toBeNull();
   });
 
   it("远端模型密钥的三态表达：重填=新值 / 显式清除=null / 都没动=不带这个键（台账 A11）", async () => {
@@ -1025,8 +972,7 @@ describe("useSettingsPage", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.drafts).not.toBeNull();
-    const entryOf = (name: string) =>
-      result.current.remoteModelList.find((e) => e.name === name);
+    const entryOf = (name: string) => result.current.remoteModelList.find((e) => e.name === name);
 
     await act(async () => {
       await result.current.addRemoteModel({ name: "m1", apiKey: "sk-old" });

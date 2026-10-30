@@ -4,10 +4,7 @@ import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
-import {
-  fetchTaskWorkflow,
-  openTaskFolder,
-} from "~/lib/history-detail-actions";
+import { fetchTaskWorkflow, openTaskFolder } from "~/lib/history-detail-actions";
 
 import {
   deriveTaskOrigin,
@@ -81,22 +78,15 @@ export function HistoryDetailModal({
   const origin = deriveTaskOrigin(current);
   const workshopParams =
     origin === "workshop"
-      ? deriveWorkshopParams(
-          current,
-          current?.type ?? null,
-          modeContracts,
-          workflowIO,
-        )
+      ? deriveWorkshopParams(current, current?.type ?? null, modeContracts, workflowIO)
       : [];
   const {
     rows: paramRows,
     topLevelEntries,
     hasAny: hasParams,
   } = deriveWorkflowParams(current, workflowIO);
-  const firstImage = Array.isArray(current?.images)
-    ? current.images[0]
-    : undefined;
-  const snapSource = (
+  const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
+  const snapSource = /* SAFETY: 类型断言已复核 */ (
     current?.workflowSnapshot as { source?: string } | null | undefined
   )?.source;
   const sourceLabel =
@@ -164,8 +154,7 @@ export function HistoryDetailModal({
                   </div>
                   {actions.folderPopover.helperMissing ? (
                     <div className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mb-2 rounded border px-2.5 py-1.5 leading-relaxed">
-                      未检测到 ComfyApp
-                      助手，浏览器没有弹出「打开外部应用」确认框。
+                      未检测到 ComfyApp 助手，浏览器没有弹出「打开外部应用」确认框。
                       请双击运行项目内{""}
                       <code className="text-warning-strong">
                         scripts\install-comfyapp-helper.ps1
@@ -178,10 +167,7 @@ export function HistoryDetailModal({
                       </code>
                       {""}
                       协议（仅本机、无需管理员）， 或直接{""}
-                      <a
-                        href="/api/helper/install"
-                        className="hover:text-warning-strong underline"
-                      >
+                      <a href="/api/helper/install" className="hover:text-warning-strong underline">
                         下载安装脚本
                       </a>
                       。
@@ -302,11 +288,7 @@ export function HistoryDetailModal({
                 {/* 放大 / 局部重绘（#2483 · FR-QA-09）：只对图片产物开放（视频
                     产物没有这一族修复动作）。模板取自用户工作流库。 */}
                 {firstImage && !isVideo(firstImage.localPath) && (
-                  <Disclosure
-                    trigger={
-                      <span className="u-title text-sm">放大 / 局部重绘</span>
-                    }
-                  >
+                  <Disclosure trigger={<span className="u-title text-sm">放大 / 局部重绘</span>}>
                     <ImageRedrawPanel
                       prompt={current?.prompt ?? ""}
                       projectId={current?.projectId ?? null}
@@ -333,9 +315,7 @@ export function HistoryDetailModal({
  「哪些是工坊给的、哪些是工作流收的」分不清。 */}
                 {workshopParams.length > 0 && (
                   <div>
-                    <p className="text-ink-faint mb-1 text-xs font-semibold">
-                      工坊参数
-                    </p>
+                    <p className="text-ink-faint mb-1 text-xs font-semibold">工坊参数</p>
                     <KeyValueRows
                       layout="table"
                       className="mb-2"
@@ -357,9 +337,7 @@ export function HistoryDetailModal({
 
                 {hasParams && (
                   <div>
-                    <p className="text-ink-faint mb-1 text-xs font-semibold">
-                      工作流参数
-                    </p>
+                    <p className="text-ink-faint mb-1 text-xs font-semibold">工作流参数</p>
 
                     {paramRows.length > 0 && (
                       <KeyValueRows
@@ -388,11 +366,7 @@ export function HistoryDetailModal({
                         } 个字段`}
                       >
                         <pre className="border-border-subtle text-ink-faint text-2xs max-w-full border-t p-3 break-all whitespace-pre-wrap">
-                          {JSON.stringify(
-                            Object.fromEntries(topLevelEntries),
-                            null,
-                            2,
-                          )}
+                          {JSON.stringify(Object.fromEntries(topLevelEntries), null, 2)}
                         </pre>
                       </Disclosure>
                     )}

@@ -39,27 +39,19 @@ export function FilmStudioPropertyPanel({
       {/* Form fields */}
       <div className="flex-1 flex-col gap-4 overflow-y-auto p-4">
         {/* Shot name */}
-        <FormField
-          label="镜头名称"
-          labelClassName="text-ink-faint mb-1.5 text-2xs"
-        >
+        <FormField label="镜头名称" labelClassName="text-ink-faint mb-1.5 text-2xs">
           {(field) => (
             <input
               {...field}
               value={selectedShot.name}
-              onChange={textHandler((name) =>
-                onPatchShot(selectedShotId, { name }),
-              )}
+              onChange={textHandler((name) => onPatchShot(selectedShotId, { name }))}
               className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
             />
           )}
         </FormField>
 
         {/* Duration */}
-        <FormField
-          label="时长 (秒)"
-          labelClassName="text-ink-faint mb-1.5 text-2xs"
-        >
+        <FormField label="时长 (秒)" labelClassName="text-ink-faint mb-1.5 text-2xs">
           {(field) => (
             <input
               {...field}
@@ -79,30 +71,21 @@ export function FilmStudioPropertyPanel({
         </FormField>
 
         {/* Mode select */}
-        <FormField
-          label="生成模式"
-          labelClassName="text-ink-faint mb-1.5 text-2xs"
-        >
+        <FormField label="生成模式" labelClassName="text-ink-faint mb-1.5 text-2xs">
           <div className="border-border bg-subtle text-ink-field flex h-9 items-center rounded-lg border px-3 text-sm">
             图生视频 (Wan I2V)
           </div>
         </FormField>
 
         {/* Transition */}
-        <FormField
-          label="转场效果"
-          labelClassName="text-ink-faint mb-1.5 text-2xs"
-        >
+        <FormField label="转场效果" labelClassName="text-ink-faint mb-1.5 text-2xs">
           <div className="border-border bg-subtle text-ink-strong flex h-9 items-center rounded-lg border px-3 text-sm">
             溶解过渡 (Cross Dissolve)
           </div>
         </FormField>
 
         {/* Prompt textarea */}
-        <FormField
-          label="提示词 / 描述"
-          labelClassName="text-ink-faint mb-1.5 text-2xs"
-        >
+        <FormField label="提示词 / 描述" labelClassName="text-ink-faint mb-1.5 text-2xs">
           {(field) => (
             <Textarea
               {...field}
@@ -127,7 +110,7 @@ export function FilmStudioPropertyPanel({
           onValueChange={(vals) => {
             const next = vals[0];
             if (typeof next === "string" && next !== c.shotSource) {
-              c.setShotSource(next as "project" | "script");
+              c.setShotSource(/* SAFETY: 类型断言已复核 */ next as "project" | "script");
             }
           }}
           aria-label="镜头来源"
@@ -141,10 +124,7 @@ export function FilmStudioPropertyPanel({
             当前项目镜头
             {c.projectShotCount > 0 ? `（${c.projectShotCount}）` : ""}
           </ToggleGroupItem>
-          <ToggleGroupItem
-            value="script"
-            className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
-          >
+          <ToggleGroupItem value="script" className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs">
             剧本自动分镜
           </ToggleGroupItem>
         </ToggleGroup>
@@ -158,10 +138,7 @@ export function FilmStudioPropertyPanel({
           </p>
         ) : (
           /* 全局配置：剧本输入（从原版收起） */
-          <FormField
-            label="剧本 / 创意"
-            labelClassName="text-ink-faint mb-1.5 text-2xs"
-          >
+          <FormField label="剧本 / 创意" labelClassName="text-ink-faint mb-1.5 text-2xs">
             {(field) => (
               <Textarea
                 {...field}
@@ -176,10 +153,7 @@ export function FilmStudioPropertyPanel({
         )}
 
         {/* 逐镜生成用的工作流（内置模板已移除，必须从工作流库选） */}
-        <FormField
-          label="视频工作流（工作流库）"
-          labelClassName="text-ink-faint mb-1.5 text-2xs"
-        >
+        <FormField label="视频工作流（工作流库）" labelClassName="text-ink-faint mb-1.5 text-2xs">
           {(field) => (
             <>
               <SelectMenu
@@ -187,20 +161,15 @@ export function FilmStudioPropertyPanel({
                 value={c.videoWorkflowId}
                 onChange={c.setVideoWorkflowId}
                 options={c.videoWorkflows.map((wf) => wf.id)}
-                labels={Object.fromEntries(
-                  c.videoWorkflows.map((wf) => [wf.id, wf.name]),
-                )}
+                labels={Object.fromEntries(c.videoWorkflows.map((wf) => [wf.id, wf.name]))}
                 placeholder={
-                  c.videoWorkflows.length
-                    ? "选择视频工作流…"
-                    : "工作流库里还没有视频工作流"
+                  c.videoWorkflows.length ? "选择视频工作流…" : "工作流库里还没有视频工作流"
                 }
                 fullWidth
               />
               {!c.videoWorkflowId && (
                 <span className="text-ink-fainter text-2xs mt-1 block">
-                  没有内置视频工作流可回落 ——
-                  请先在工作室「工作流库」导入并配好对外参数。
+                  没有内置视频工作流可回落 —— 请先在工作室「工作流库」导入并配好对外参数。
                 </span>
               )}
             </>
@@ -218,13 +187,9 @@ export function FilmStudioPropertyPanel({
               value={c.imageWorkflowId}
               onChange={c.setImageWorkflowId}
               options={c.imageWorkflows.map((wf) => wf.id)}
-              labels={Object.fromEntries(
-                c.imageWorkflows.map((wf) => [wf.id, wf.name]),
-              )}
+              labels={Object.fromEntries(c.imageWorkflows.map((wf) => [wf.id, wf.name]))}
               placeholder={
-                c.imageWorkflows.length
-                  ? "不需要 / 未选择"
-                  : "工作流库里还没有图类工作流"
+                c.imageWorkflows.length ? "不需要 / 未选择" : "工作流库里还没有图类工作流"
               }
               fullWidth
             />
@@ -243,9 +208,7 @@ export function FilmStudioPropertyPanel({
 
         {/* BGM upload */}
         <div>
-          <span className="text-ink-faint text-2xs mb-1.5 block">
-            背景音乐（可选）
-          </span>
+          <span className="text-ink-faint text-2xs mb-1.5 block">背景音乐（可选）</span>
           <input
             type="file"
             accept="audio/*"
@@ -257,9 +220,7 @@ export function FilmStudioPropertyPanel({
             className="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong text-2xs file:text-2xs w-full file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5"
           />
           {c.bgmName && (
-            <p className="text-primary-strong text-2xs mt-1 truncate">
-              已选：{c.bgmName}
-            </p>
+            <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
           )}
         </div>
 

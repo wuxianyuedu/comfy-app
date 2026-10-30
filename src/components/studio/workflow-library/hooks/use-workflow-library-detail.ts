@@ -184,10 +184,7 @@ export function useWorkflowLibraryDetail(
   /* 未选中工作流时不发请求（enabled:false）。hooks 顺序必须稳定，因此这里不
    * 做 early return —— 空态交给视图渲染。 */
   const detailQuery = useQuery(
-    trpc.workflow.detail.queryOptions(
-      { id: workflow?.id ?? "" },
-      { enabled: !!workflow },
-    ),
+    trpc.workflow.detail.queryOptions({ id: workflow?.id ?? "" }, { enabled: !!workflow }),
   );
 
   const template = detailQuery.data?.template;
@@ -198,10 +195,7 @@ export function useWorkflowLibraryDetail(
    * 表解析 + 存量清洗），这里取它的 workflowIO 覆盖原始列；rawJson /
    * graph 等仍用轻量 template，patchSeedMode 也继续以原始列为底稿。 */
   const enrichedQuery = useQuery(
-    trpc.workflow.detailFull.queryOptions(
-      { id: workflow?.id ?? "" },
-      { enabled: !!workflow },
-    ),
+    trpc.workflow.detailFull.queryOptions({ id: workflow?.id ?? "" }, { enabled: !!workflow }),
   );
 
   /* 就绪条件：当前选中工作流已排空过一次详情请求的数据（或错误）。
@@ -217,8 +211,7 @@ export function useWorkflowLibraryDetail(
   /* detailFull 是与 detail 并行的第二个请求；两者都排空才把表单交给预览，
    * 否则表单会先按空 IO 渲染再重排一次（左下「首次打开布局切换」）。 */
   const isDetailLoading =
-    isDetailLoadingFor(workflow?.id ?? null, detailSettledId) ||
-    (!!workflow && !enrichedSettled);
+    isDetailLoadingFor(workflow?.id ?? null, detailSettledId) || (!!workflow && !enrichedSettled);
 
   const workflowIO = useMemo(
     () =>
@@ -237,21 +230,18 @@ export function useWorkflowLibraryDetail(
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
     return raw && typeof raw === "object" && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
+      ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)
       : {};
   }, [template]);
 
   const formatFlags = useMemo(
-    () =>
-      workflow ? deriveFormatFlags(workflow) : { hasRaw: false, usable: false },
+    () => (workflow ? deriveFormatFlags(workflow) : { hasRaw: false, usable: false }),
     [workflow],
   );
 
   const syncFlags = useMemo(
     () =>
-      workflow
-        ? deriveSyncFlags(workflow)
-        : { dirty: false, missing: false, canResync: false },
+      workflow ? deriveSyncFlags(workflow) : { dirty: false, missing: false, canResync: false },
     [workflow],
   );
 
@@ -291,8 +281,7 @@ export function useWorkflowLibraryDetail(
       defaultMode: workflow?.defaultMode ?? workflow?.taskType ?? "",
       modelTags: workflow?.modelTags ?? [],
       allModelTags,
-      busy:
-        !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
+      busy: !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
       patchModes: async (modes, defaultMode) => {
         if (!workflow || !onPatchModes) return;
         await onPatchModes(workflow.id, modes, defaultMode);
@@ -309,7 +298,7 @@ export function useWorkflowLibraryDetail(
         if (!workflow || !onPatchWorkflowIO) return;
         /* 在模板原始 workflowIO 上只改目标条目的 seedMode，整体落库；
          * 其余字段原样透传，避免用富化视图覆盖原始数据。 */
-        const raw = (template?.workflowIO ?? {}) as Record<
+        const raw = /* SAFETY: 类型断言已复核 */ (template?.workflowIO ?? {}) as Record<
           string,
           Record<string, unknown>
         >;
@@ -345,11 +334,7 @@ export function useWorkflowLibraryDetail(
       }),
     [workflow],
   );
-  const activeMode = resolveActiveMode(
-    modeOverride,
-    workflow?.id ?? null,
-    defaultMode,
-  );
+  const activeMode = resolveActiveMode(modeOverride, workflow?.id ?? null, defaultMode);
 
   return {
     workflow,

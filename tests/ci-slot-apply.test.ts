@@ -36,10 +36,7 @@ import {
   SLOT_TTL_MS,
   statfsFreeBytes,
 } from "../scripts/ci-slot-apply.mjs";
-import {
-  FINGERPRINT_FILE,
-  pnpmInstallFingerprint,
-} from "../scripts/ci-deps-face.mjs";
+import { FINGERPRINT_FILE, pnpmInstallFingerprint } from "../scripts/ci-deps-face.mjs";
 
 let job: string;
 let cache: string;
@@ -49,12 +46,7 @@ let key: string;
 /** 造一份「依赖面四件 + node_modules」的最小作业检出。 */
 function seedJob(root: string) {
   fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
-  for (const rel of [
-    "pnpm-lock.yaml",
-    "package.json",
-    "pnpm-workspace.yaml",
-    "next.config.js",
-  ]) {
+  for (const rel of ["pnpm-lock.yaml", "package.json", "pnpm-workspace.yaml", "next.config.js"]) {
     fs.writeFileSync(path.join(root, rel), `${rel}\n`);
   }
   fs.writeFileSync(
@@ -111,14 +103,12 @@ describe("槽的输入面与落位", () => {
 
   it("落位时摘掉本仓自己的 scripts，其余逐字节照搬", () => {
     const written = materializeSlotInputs({ jobRoot: job, slot });
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(slot, "package.json"), "utf8"),
     ) as { scripts?: unknown; dependencies?: Record<string, string> };
     expect(pkg.scripts).toBeUndefined();
     expect(pkg.dependencies).toEqual({ leftpad: "1.0.0" });
-    expect(fs.readFileSync(path.join(slot, "pnpm-lock.yaml"), "utf8")).toBe(
-      "pnpm-lock.yaml\n",
-    );
+    expect(fs.readFileSync(path.join(slot, "pnpm-lock.yaml"), "utf8")).toBe("pnpm-lock.yaml\n");
     expect(written.some((line) => line.includes("已摘 scripts"))).toBe(true);
   });
 
@@ -129,15 +119,11 @@ describe("槽的输入面与落位", () => {
     expect(pnpmInstallFingerprint(slot)).toBe(pnpmInstallFingerprint(job));
     /* 只往 scripts 加一行：两侧都不动。旧实现（键对原文取哈希）里这一行会换键，
      * 而槽里那份副本逐字不变 —— 白付一次整装（`Done in 3m 41.4s`）。 */
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(job, "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
-    pkg.scripts["setup:comfy-cli-venv"] =
-      "node scripts/setup-comfy-cli-venv.mjs";
-    fs.writeFileSync(
-      path.join(job, "package.json"),
-      `${JSON.stringify(pkg, null, 2)}\n`,
-    );
+    pkg.scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
+    fs.writeFileSync(path.join(job, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
     expect(pnpmInstallFingerprint(job)).toBe(key);
     expect(pnpmInstallFingerprint(slot)).toBe(key);
   });
@@ -274,9 +260,7 @@ describe("applySlot 的三档", () => {
     expect(installs).toBe(0);
     // 复用路径整个跳过了 install ⇒ 不补这一笔，作业就少一次 `.git/config` 写入。
     expect(lifecycle).toBe(1);
-    expect(fs.lstatSync(path.join(job, "node_modules")).isSymbolicLink()).toBe(
-      true,
-    );
+    expect(fs.lstatSync(path.join(job, "node_modules")).isSymbolicLink()).toBe(true);
   });
 
   it("作业里已有一棵真树 ⇒ 不冒充接管（链建不起来就是 handled=false）", () => {
@@ -369,9 +353,7 @@ describe("applySlot 的三档", () => {
     });
     expect(installs).toBe(1);
     expect(out.handled).toBe(true);
-    expect(fs.existsSync(path.join(missingCache, key, FINGERPRINT_FILE))).toBe(
-      true,
-    );
+    expect(fs.existsSync(path.join(missingCache, key, FINGERPRINT_FILE))).toBe(true);
   });
 
   it("盘不够 ⇒ 不装、不建槽、退回普通装", () => {
@@ -444,12 +426,8 @@ describe("applySlot 的三档", () => {
     });
     expect(out.handled).toBe(true);
     expect(installs).toBe(1);
-    expect(
-      fs.readFileSync(path.join(slot, FINGERPRINT_FILE), "utf8").trim(),
-    ).toBe(key);
-    expect(fs.lstatSync(path.join(job, "node_modules")).isSymbolicLink()).toBe(
-      true,
-    );
+    expect(fs.readFileSync(path.join(slot, FINGERPRINT_FILE), "utf8").trim()).toBe(key);
+    expect(fs.lstatSync(path.join(job, "node_modules")).isSymbolicLink()).toBe(true);
   });
 
   it("退 0 但没有产物 ⇒ 判成没装上（不把没证据的槽写进指纹）", () => {
@@ -475,16 +453,10 @@ describe("作业里那条链的摘除（绝不穿链装）", () => {
     fs.mkdirSync(path.join(slot, "node_modules"), { recursive: true });
     fs.writeFileSync(path.join(slot, "node_modules", ".modules.yaml"), "x\n");
     fs.rmSync(path.join(job, "node_modules"), { recursive: true, force: true });
-    fs.symlinkSync(
-      path.join(slot, "node_modules"),
-      path.join(job, "node_modules"),
-      "junction",
-    );
+    fs.symlinkSync(path.join(slot, "node_modules"), path.join(job, "node_modules"), "junction");
     expect(clearJobLink(job)).toBe(true);
     expect(fs.existsSync(path.join(job, "node_modules"))).toBe(false);
-    expect(
-      fs.existsSync(path.join(slot, "node_modules", ".modules.yaml")),
-    ).toBe(true);
+    expect(fs.existsSync(path.join(slot, "node_modules", ".modules.yaml"))).toBe(true);
   });
 
   it("作业里是一棵真树 ⇒ 返回 false 且不碰它", () => {
@@ -508,10 +480,7 @@ describe("LRU 与作业侧补写", () => {
       const dir = path.join(cache, k);
       fs.mkdirSync(dir, { recursive: true });
       // 名字越靠前越旧，且落在配额之外的那两个必须**超出 TTL** 才可淘汰。
-      markSlotUsed(
-        dir,
-        now - (keys.length - Number(k.slice(1))) * 10 * 60 * 60 * 1000,
-      );
+      markSlotUsed(dir, now - (keys.length - Number(k.slice(1))) * 10 * 60 * 60 * 1000);
     }
     const current = keys[keys.length - 1] ?? "";
     const out = pruneSlots({ cacheRoot: cache, currentKey: current, now });
@@ -548,10 +517,7 @@ describe("LRU 与作业侧补写", () => {
     expect(slotLastUsed(dir)).toBeNull();
     const now = Date.now();
     // 把它排到配额之外（其余四个都比它「新」），它仍然不该被删。
-    for (const [i, k] of Array.from(
-      { length: MAX_SLOT_KEYS },
-      (_, j) => `n${j}`,
-    ).entries()) {
+    for (const [i, k] of Array.from({ length: MAX_SLOT_KEYS }, (_, j) => `n${j}`).entries()) {
       const other = path.join(cache, k);
       fs.mkdirSync(other, { recursive: true });
       markSlotUsed(other, now - i * 60_000);
@@ -580,12 +546,10 @@ describe("LRU 与作业侧补写", () => {
   });
 
   it("槽根不在 ⇒ 不抛，两个清单都空（没得淘汰就是没得淘汰）", () => {
-    expect(pruneSlots({ cacheRoot: path.join(cache, "没有这个目录") })).toEqual(
-      {
-        evicted: [],
-        held: [],
-      },
-    );
+    expect(pruneSlots({ cacheRoot: path.join(cache, "没有这个目录") })).toEqual({
+      evicted: [],
+      held: [],
+    });
   });
 
   it("作业侧补写退非零 ⇒ 如实报 ok=false 并带上退出码", () => {

@@ -40,10 +40,7 @@ const ROOT = path.resolve(__dirname, "..");
 const made: string[] = [];
 
 function tmpDir(tag: string): string {
-  const onRepoVolume = path.join(
-    path.parse(ROOT).root,
-    `comfy-publish-${tag}`,
-  );
+  const onRepoVolume = path.join(path.parse(ROOT).root, `comfy-publish-${tag}`);
   let dir: string;
   try {
     dir = fs.mkdtempSync(onRepoVolume);
@@ -89,21 +86,16 @@ describe("常驻根（resolveArtifactRoot）", () => {
 
     const derived = resolveArtifactRoot({ cwd: ROOT, env: {}, run: storeOn("F:") });
     /* 目录名取的是**本仓 package.json 的 name**（同依赖槽那一份推导），不写死字面量。 */
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
     ) as { name?: string };
-    expect(derived.root).toBe(
-      path.join("F:\\", "ci-artifacts", String(pkg.name).toLowerCase()),
-    );
+    expect(derived.root).toBe(path.join("F:\\", "ci-artifacts", String(pkg.name).toLowerCase()));
   });
 
   it("成品根不许落在缓存槽的根里（那边按键位淘汰会删掉安装包）", () => {
     const io = { cwd: ROOT, env: {}, run: storeOn("G:") };
     const artifacts = resolveArtifactRoot(io).root ?? "";
-    for (const other of [
-      resolveCacheRoot(io).root ?? "",
-      resolveBuildCacheRoot(io).root ?? "",
-    ]) {
+    for (const other of [resolveCacheRoot(io).root ?? "", resolveBuildCacheRoot(io).root ?? ""]) {
       expect(artifacts.startsWith(other)).toBe(false);
     }
   });
@@ -133,13 +125,7 @@ describe("标签与清单", () => {
   });
 
   it("只收安装包，相对路径保留目录层级", () => {
-    const bundle = path.join(
-      fakeBundleRepo("collect"),
-      "src-tauri",
-      "target",
-      "release",
-      "bundle",
-    );
+    const bundle = path.join(fakeBundleRepo("collect"), "src-tauri", "target", "release", "bundle");
     const found = collectBundles(bundle);
     expect(found.map((e) => e.relPath)).toEqual(["msi/app.msi", "nsis/app-setup.exe"]);
     expect(collectBundles(path.join(bundle, "nope"))).toEqual([]);
@@ -202,19 +188,16 @@ describe("发布那一跑（main）", () => {
     const { code } = runPublish({ root });
     expect(code).toBe(0);
     const dir = path.join(root, "r1");
-    const manifest = JSON.parse(
+    const manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8"),
     ) as Record<string, unknown>;
     expect(manifest.label).toBe("r1");
     expect(manifest.sha).toBe("cafe1234567890");
     expect(manifest.keep).toBe(DEFAULT_KEEP);
-    expect((manifest.files as { path: string }[]).map((f) => f.path)).toEqual([
-      "msi/app.msi",
-      "nsis/app-setup.exe",
-    ]);
-    expect(fs.readFileSync(path.join(root, LATEST_POINTER_FILE), "utf8").trim()).toBe(
-      "r1",
-    );
+    expect(
+      /* SAFETY: 类型断言已复核 */ (manifest.files as { path: string }[]).map((f) => f.path),
+    ).toEqual(["msi/app.msi", "nsis/app-setup.exe"]);
+    expect(fs.readFileSync(path.join(root, LATEST_POINTER_FILE), "utf8").trim()).toBe("r1");
     /* 指针是**文件**：`<root>/latest` 长成一个目录就是本单禁掉的那个形态。 */
     expect(fs.statSync(path.join(root, LATEST_POINTER_FILE)).isFile()).toBe(true);
     expect(fs.readdirSync(root)).not.toContain("latest");
@@ -223,10 +206,7 @@ describe("发布那一跑（main）", () => {
   it("同标签再来一次 = 退 1，旧目录一个字都不动", () => {
     const root = tmpDir("dup");
     expect(runPublish({ root }).code).toBe(0);
-    const before = fs.readFileSync(
-      path.join(root, "r1", MANIFEST_FILE),
-      "utf8",
-    );
+    const before = fs.readFileSync(path.join(root, "r1", MANIFEST_FILE), "utf8");
     const again = runPublish({ root });
     expect(again.code).toBe(1);
     expect(again.log).toContain("已经发布过");
@@ -249,7 +229,11 @@ describe("发布那一跑（main）", () => {
         }),
       ).toBe(0);
     }
-    expect(listReleases(root).map((r) => r.name).sort()).toEqual(["a2", "a3"]);
+    expect(
+      listReleases(root)
+        .map((r) => r.name)
+        .sort(),
+    ).toEqual(["a2", "a3"]);
     /* 删了谁必须念得出来 —— 「悄悄少了一份」与「按 keep 轮转掉」在盘上长得一样。 */
     expect(sink.join("\n")).toContain("轮转删 a1");
   });

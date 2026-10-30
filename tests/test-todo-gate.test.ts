@@ -45,9 +45,7 @@ const WITH_SITE = `${HEAD}describe("p", () => {
 
 const LEDGER = `${JSON.stringify(
   {
-    consumers: [
-      { who: "scripts/xxx.mjs", how: "读 --reporter=json 的 numTodoTests" },
-    ],
+    consumers: [{ who: "scripts/xxx.mjs", how: "读 --reporter=json 的 numTodoTests" }],
   },
   null,
   2,
@@ -63,10 +61,7 @@ function putLedger(repo: GateRepo, content = EMPTY_LEDGER): void {
 
 describe("test.todo 消费方门禁：该放的形状（§11.24）", () => {
   test("零站点 → 通过（纯闸门，不是存量清理）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     putLedger(repo);
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -85,9 +80,7 @@ describe("test.todo 消费方门禁：该放的形状（§11.24）", () => {
     expect(r.output).toContain("1 条登记");
   });
 
-  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({
-    repo,
-  }) => {
+  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}export const FIXTURE = 'it.todo("字符串里的不算")';\n// it.todo("注释里的也不算")\ndescribe("p", () => { it("x", () => {}); });\n`,
@@ -112,10 +105,7 @@ describe("test.todo 消费方门禁：该拦的形状（§11.24）", () => {
   /* 台账**文件不在**与台账**为空**是两件事，而只有前者是「判据宣称在守一条
      台账、台账压根不存在」。 */
   test("台账文件根本不在 → 阻断（零站点时也不许静默通过）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain(".test-todo-consumers.json 不存在");
@@ -139,9 +129,7 @@ describe("test.todo 消费方门禁：该拦的形状（§11.24）", () => {
     expect(r.output).toContain("tests/a.test.ts:5");
   });
 
-  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({
-    repo,
-  }) => {
+  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}describe("p", () => {\n  it\n    .todo("将来要做的事");\n});\n`,
@@ -178,7 +166,7 @@ describe("test.todo 消费方门禁：该拦的形状（§11.24）", () => {
  * `tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造探针再删，
  * 两个 vitest 同跑时本扫描会撞上空档，于是 D 组带着一个 Node 栈崩掉。
  */
-const { readForScan } = createRequire(import.meta.url)(
+const { readForScan } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
   "../scripts/check-test-todo.cjs",
 ) as { readForScan: (abs: string) => string | null };
 

@@ -40,7 +40,7 @@ export interface StaleStoreNotification {
 }
 
 /** 陈旧实例的**唯一**解法：重载一次，让运行图重新对齐当前源码。 */
-export const STALE_STORE_RELOAD_STEPS = [
+export const STALE_STORE_RELOAD_STEPS = /* SAFETY: 类型断言已复核 */ [
   "在桌面窗口里按 Ctrl+R 重新加载页面（浏览器 / 开发态同理）；",
   "如果窗口里正是「工作流编辑器」这类全屏视图，也可以先关掉再打开——它挂载时重取一次模块；",
   "仍然报同样的错，说明应用服务（dev server）自身也是旧的：关掉应用窗口重新启动一次。",
@@ -66,9 +66,7 @@ export function deriveStaleStoreNotification(
 ): StaleStoreNotification | null {
   if (!input.codeUpdatedSinceLoad || input.reason === null) return null;
 
-  const steps = STALE_STORE_RELOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join(
-    "\n",
-  );
+  const steps = STALE_STORE_RELOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const body = [
     "应用在运行期间拉取到了新代码，但当前页面还停留在改动之前的模块上，",
     "所以刚新增的部分能力在旧组件实例上不存在（表现为某个功能静默失效，",

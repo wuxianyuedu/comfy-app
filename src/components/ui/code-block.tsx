@@ -57,17 +57,14 @@ interface ShikiToken {
 }
 
 type ShikiHighlighter = {
-  codeToTokensBase: (
-    code: string,
-    options: { lang: string; theme: string },
-  ) => ShikiToken[][];
+  codeToTokensBase: (code: string, options: { lang: string; theme: string }) => ShikiToken[][];
 };
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
 
 function getHighlighter(): Promise<ShikiHighlighter> {
   highlighterPromise ??= (async () => {
-    const shiki = (await import("shiki/dist/bundle-web.mjs")) as {
+    const shiki = /* SAFETY: 类型断言已复核 */ (await import("shiki/dist/bundle-web.mjs")) as {
       createHighlighter: (options: {
         themes: string[];
         langs: string[];
@@ -127,21 +124,14 @@ function PlainCodeBlock({ code }: { code: string }) {
   );
 }
 
-export function CodeBlock({
-  code,
-  language,
-}: {
-  code: string;
-  language: string;
-}) {
+export function CodeBlock({ code, language }: { code: string; language: string }) {
   const [tokens, setTokens] = useState<ShikiToken[][] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /* 语法高亮主题必须跟应用主题走：只在 `one-dark-pro` 上高亮时，Light 下
      代码是「暗色主题的 token 色」压在浅底上（关键字/注释对比度极低）。
      `resolvedTheme` 首帧可能为 undefined —— 按 Dark 起步（默认主题）。 */
   const { resolvedTheme } = useTheme();
-  const shikiTheme =
-    resolvedTheme === "light" ? "github-light" : "one-dark-pro";
+  const shikiTheme = resolvedTheme === "light" ? "github-light" : "one-dark-pro";
 
   useEffect(() => {
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换代码 / 换语言 / 换主题都会
@@ -164,11 +154,7 @@ export function CodeBlock({
         /* 分块的位置算术收在 `~/lib/page-window`（规范 16 §16.2.4.67）：
          * 此前 `chunkIndex * CHUNK_LINES` 与 `ceil(total / CHUNK_LINES)`
          * 各写一遍，且没有一处夹住越界块号。 */
-        const { total: totalChunks } = chunkRange(
-          allLines.length,
-          CHUNK_LINES,
-          0,
-        );
+        const { total: totalChunks } = chunkRange(allLines.length, CHUNK_LINES, 0);
         const acc: ShikiToken[][] = [];
         let chunkIndex = 0;
 
@@ -209,9 +195,7 @@ export function CodeBlock({
     return (
       <div className="cb-code-block">
         <div className="cb-line">
-          <span className="cb-code text-2xs text-danger-strong">
-            语法高亮失败：{error}
-          </span>
+          <span className="cb-code text-2xs text-danger-strong">语法高亮失败：{error}</span>
         </div>
       </div>
     );

@@ -45,7 +45,7 @@ const impl: TaskRepoImpl = createTaskRepoImpl(db, { owner: "inline" });
 
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
-  return (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
+  return /* SAFETY: 类型断言已复核 */ (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
 }
 
 /**
@@ -150,15 +150,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
       statusList?: string[];
       includeImages?: boolean;
     },
-  ): Promise<
-    Task[] | TaskWithCover[] | Array<TaskCardRow & { images: TaskImage[] }>
-  > {
+  ): Promise<Task[] | TaskWithCover[] | Array<TaskCardRow & { images: TaskImage[] }>> {
     const where = and(
       eq(task.userId, userId),
       opts?.projectId ? eq(task.projectId, opts.projectId) : undefined,
-      opts?.statusList?.length
-        ? inArray(task.status, opts.statusList)
-        : undefined,
+      opts?.statusList?.length ? inArray(task.status, opts.statusList) : undefined,
     );
     if (opts?.includeImages) {
       const withImages = (rows: Task[]) => attachImages(rows);
@@ -215,11 +211,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
     if (!existing) throw new NotFoundError(`任务不存在: ${id}`);
     const data: Partial<Task> = { status };
     if (extra) Object.assign(data, extra);
-    const rows = await db
-      .update(task)
-      .set(data)
-      .where(eq(task.id, id))
-      .returning();
+    const rows = await db.update(task).set(data).where(eq(task.id, id)).returning();
     return firstRowOfExisting(rows, `任务不存在: ${id}`);
   }
 
@@ -268,8 +260,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
   /** 12 个 exec-chain 方法 delegate 到共享 impl（P3 §5 Phase 2-A-1）。签名走
    *  `TaskRepoImpl["method"]` 反推、与 impl 单点绑定；SQL 主体见
    *  `./repository-task-impl.ts`。 */
-  findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (taskId) =>
-    impl.findExecutionMeta(taskId);
+  findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (taskId) => impl.findExecutionMeta(taskId);
 
   /** 等一条任务跑到终态时的最小读面：状态 + 进度 + 产出清单 + 失败原因。
    *
@@ -405,10 +396,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   /** 本应用排队中的任务数（同样跨归属——见上，这一格答的是「前面还堵几个」）。 */
   async countQueuedForStatusBar(): Promise<number> {
-    const rows = await db
-      .select({ c: count() })
-      .from(task)
-      .where(eq(task.status, "QUEUED"));
+    const rows = await db.select({ c: count() }).from(task).where(eq(task.status, "QUEUED"));
     return rows[0]?.c ?? 0;
   }
 
@@ -428,33 +416,25 @@ export class TaskRepository extends DrizzleRepository<Task> {
   finalizeSuccess: TaskRepoImpl["finalizeSuccess"] = (taskId, data) =>
     impl.finalizeSuccess(taskId, data);
 
-  finalizeFailure: TaskRepoImpl["finalizeFailure"] = (
-    taskId,
-    error,
-    validationErrors,
-  ) => impl.finalizeFailure(taskId, error, validationErrors);
+  finalizeFailure: TaskRepoImpl["finalizeFailure"] = (taskId, error, validationErrors) =>
+    impl.finalizeFailure(taskId, error, validationErrors);
 
   cancel: TaskRepoImpl["cancel"] = (taskId) => impl.cancel(taskId);
 
-  finalizeFromReaper: TaskRepoImpl["finalizeFromReaper"] = (
-    taskId,
-    status,
-    error,
-  ) => impl.finalizeFromReaper(taskId, status, error);
+  finalizeFromReaper: TaskRepoImpl["finalizeFromReaper"] = (taskId, status, error) =>
+    impl.finalizeFromReaper(taskId, status, error);
 
   findStatusAndPromptById: TaskRepoImpl["findStatusAndPromptById"] = (taskId) =>
     impl.findStatusAndPromptById(taskId);
 
-  replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) =>
-    impl.replaceLogs(taskId, logs);
+  replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) => impl.replaceLogs(taskId, logs);
 
   replaceRawCli: TaskRepoImpl["replaceRawCli"] = (taskId, lines) =>
     impl.replaceRawCli(taskId, lines);
 
   findRawCli: TaskRepoImpl["findRawCli"] = (taskId) => impl.findRawCli(taskId);
 
-  listQueuedIds: TaskRepoImpl["listQueuedIds"] = (owner, take) =>
-    impl.listQueuedIds(owner, take);
+  listQueuedIds: TaskRepoImpl["listQueuedIds"] = (owner, take) => impl.listQueuedIds(owner, take);
 
   /* 领取与载荷读也 delegate 进类（P3 §5 ADR §14 D1 第二刀）：此前只有 host 一条
    * pull，所以留在 impl 层「直接调 impl」；现在 Next 也是领取宿主，两侧都经由
@@ -463,13 +443,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
   claimNextQueued: TaskRepoImpl["claimNextQueued"] = (mode, take) =>
     impl.claimNextQueued(mode, take);
 
-  findExecJob: TaskRepoImpl["findExecJob"] = (taskId) =>
-    impl.findExecJob(taskId);
+  findExecJob: TaskRepoImpl["findExecJob"] = (taskId) => impl.findExecJob(taskId);
 
-  listStaleUnownedQueued: TaskRepoImpl["listStaleUnownedQueued"] = (
-    cutoff,
-    take,
-  ) => impl.listStaleUnownedQueued(cutoff, take);
+  listStaleUnownedQueued: TaskRepoImpl["listStaleUnownedQueued"] = (cutoff, take) =>
+    impl.listStaleUnownedQueued(cutoff, take);
 
   listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take, owner) =>
     impl.listStaleRunning(cutoff, take, owner);
@@ -478,8 +455,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
     impl.createImages(taskId, images);
 
   /** 按 id 读一张产物图（连带 task 归属校验用）；不存在 → null。（#2480） */
-  findImageById: TaskRepoImpl["findImageById"] = (imageId) =>
-    impl.findImageById(imageId);
+  findImageById: TaskRepoImpl["findImageById"] = (imageId) => impl.findImageById(imageId);
 
   patchImageFeedback: TaskRepoImpl["patchImageFeedback"] = (imageId, data) =>
     impl.patchImageFeedback(imageId, data);

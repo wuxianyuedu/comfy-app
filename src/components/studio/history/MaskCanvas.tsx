@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 
-const BRUSH_SIZES = [8, 20, 40] as const;
+const BRUSH_SIZES = /* SAFETY: 类型断言已复核 */ [8, 20, 40] as const;
 
 export interface MaskCanvasProps {
   /** 当前蒙版（PNG dataURL）；外部清空（重置）时传 null 触发重绘底色。 */

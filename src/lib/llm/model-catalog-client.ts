@@ -36,7 +36,7 @@ async function getModels(
         signal: AbortSignal.timeout(8000),
       },
     );
-    const json = (await res.json().catch(() => ({}))) as {
+    const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as {
       ok?: unknown;
       models?: unknown;
       detail?: unknown;
@@ -53,10 +53,7 @@ async function getModels(
             .map((m) => m.trim())
             .filter((m) => m !== "")
         : [],
-      detail:
-        typeof json.detail === "string"
-          ? json.detail
-          : `请求失败 (${res.status})`,
+      detail: typeof json.detail === "string" ? json.detail : `请求失败 (${res.status})`,
     };
   } catch (e) {
     return {

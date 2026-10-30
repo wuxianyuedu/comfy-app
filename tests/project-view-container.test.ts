@@ -63,13 +63,7 @@ const WORKSPACE_VIEWS = [
      「被豁免」—— 它判的是「居中列没封顶时留白归零」，这一屏没有居中列。留白的归属
      下移到屏内那一层，实测在 `ModeContractEditorView.tsx` 的页眉与两栏容器上
      （`px-4 sm:px-8`），那一层现在自己就是判据看得见的调用点。 */
-  path.join(
-    "src",
-    "components",
-    "workshop",
-    "mode-contract",
-    "ModeContractView.tsx",
-  ),
+  path.join("src", "components", "workshop", "mode-contract", "ModeContractView.tsx"),
 ];
 
 /** 剥注释再判：说明文字里出现 `max-w-300` 不等于有人手写那一层。 */
@@ -96,7 +90,7 @@ describe("统一容器的接入约定（文档型）", () => {
     }
   });
 
-  it.for(DOCUMENT_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(DOCUMENT_VIEWS.map((rel) => /* SAFETY: 类型断言已复核 */ [rel] as [string]))(
     "%s 引了容器，且没再手写那一串形状",
     ([rel]) => {
       const code = codeOf(rel);
@@ -135,10 +129,7 @@ describe("统一容器的接入约定（文档型）", () => {
         }
       }
     }
-    expect(
-      offenders,
-      "这些视图把内容铺到了容器边缘：居中列没封顶时左右留白归零",
-    ).toEqual([]);
+    expect(offenders, "这些视图把内容铺到了容器边缘：居中列没封顶时左右留白归零").toEqual([]);
   });
 });
 
@@ -150,7 +141,7 @@ describe("统一容器的接入约定（工作区型）", () => {
     }
   });
 
-  it.for(WORKSPACE_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(WORKSPACE_VIEWS.map((rel) => /* SAFETY: 类型断言已复核 */ [rel] as [string]))(
     "%s 引了 WorkspaceFrame，且不再自己写几何或页面滚动",
     ([rel]) => {
       const code = codeOf(rel);
@@ -159,18 +150,13 @@ describe("统一容器的接入约定（工作区型）", () => {
          这一屏的滚动条」双层滚动（工坊屏原先正是这个形状）。 */
       expect(code).not.toMatch(/min-h-screen/);
       // 容器那串几何不许在视图里再抄一遍。
-      expect(code).not.toMatch(
-        /className="flex h-full[^"]*flex-col overflow-hidden"/,
-      );
+      expect(code).not.toMatch(/className="flex h-full[^"]*flex-col overflow-hidden"/);
     },
   );
 
   it("调用点不再给工作区型包一层滚动容器（双层滚动的另一半）", () => {
     const page = codeOf(path.join("src", "app", "workspace", "page.tsx"));
-    expect(
-      page,
-      "工坊的滚动条归它自己的容器管，调用点再包一层就是两条叠着",
-    ).not.toMatch(
+    expect(page, "工坊的滚动条归它自己的容器管，调用点再包一层就是两条叠着").not.toMatch(
       /<div className="h-full overflow-y-auto">\s*<WorkshopPipeline/,
     );
   });

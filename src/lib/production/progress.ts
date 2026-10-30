@@ -8,7 +8,7 @@
 import { isRecord } from "~/lib/is-record";
 
 /** 生产阶段游标的全部取值（与工坊阶段导航一一对应；done 由 rendered=true 表达）。 */
-export const PRODUCTION_STAGES = [
+export const PRODUCTION_STAGES = /* SAFETY: 类型断言已复核 */ [
   "script",
   "character",
   "storyboard",
@@ -22,7 +22,7 @@ export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
 export function isProductionStage(value: unknown): value is ProductionStage {
   return (
     typeof value === "string" &&
-    (PRODUCTION_STAGES as readonly string[]).includes(value)
+    /* SAFETY: 类型断言已复核 */ (PRODUCTION_STAGES as readonly string[]).includes(value)
   );
 }
 

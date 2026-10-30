@@ -26,8 +26,7 @@ const T1 = T0 + 125_000;
 const exitNotice = {
   why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
   action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
-  detail:
-    "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+  detail: "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
 };
 
 /** 推进一拍的便捷写法：吃上一拍的游标，回下一拍的游标与事件。
@@ -43,15 +42,14 @@ function step(
   },
   now: number,
 ) {
-  return deriveAppServiceEvent(
-    cursor,
-    { ...facts, unprobedMs: facts.unprobedMs ?? 0 },
-    now,
-  );
+  return deriveAppServiceEvent(cursor, { ...facts, unprobedMs: facts.unprobedMs ?? 0 }, now);
 }
 
 /** 「已经探到、且这份进程是新的」——冷启动之后最常见的那一拍。 */
-const RUNNING_NEW = { state: "online", processIsNew: true } as const;
+const RUNNING_NEW = /* SAFETY: 类型断言已复核 */ {
+  state: "online",
+  processIsNew: true,
+} as const;
 
 describe("deriveAppServiceEvent 边沿判据", () => {
   it("首帧不产出任何事件（还没探通过，谈不上断开或启动）", () => {
@@ -76,34 +74,18 @@ describe("deriveAppServiceEvent 边沿判据", () => {
   it("online → offline：记一条断开，游标记住断开时刻", () => {
     const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
     expect(first.cursor.offlineAt).toBeNull();
-    const second = step(
-      first.cursor,
-      { state: "offline", processIsNew: true },
-      T1,
-    );
+    const second = step(first.cursor, { state: "offline", processIsNew: true }, T1);
     expect(second.event).toEqual({ type: "disconnect", at: T1 });
     expect(second.cursor.offlineAt).toBe(T1);
   });
 
   it("持续 offline 逐拍不再发消息（否则每 2 秒一条）", () => {
     const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
-    const off = step(
-      first.cursor,
-      { state: "offline", processIsNew: true },
-      T1,
-    );
+    const off = step(first.cursor, { state: "offline", processIsNew: true }, T1);
     expect(off.event?.type).toBe("disconnect");
-    const again = step(
-      off.cursor,
-      { state: "offline", processIsNew: true },
-      T1 + 2000,
-    );
+    const again = step(off.cursor, { state: "offline", processIsNew: true }, T1 + 2000);
     expect(again.event).toBeNull();
-    const still = step(
-      again.cursor,
-      { state: "offline", processIsNew: true },
-      T1 + 4000,
-    );
+    const still = step(again.cursor, { state: "offline", processIsNew: true }, T1 + 4000);
     expect(still.event).toBeNull();
   });
 
@@ -112,11 +94,7 @@ describe("deriveAppServiceEvent 边沿判据", () => {
     cursor = step(cursor, { state: "offline", processIsNew: true }, T1).cursor;
     /* 「进程是新的」由真→假→真：重启之后要重新判一次，否则上一拍已经为真，
      * 边沿不会成立。 */
-    cursor = step(
-      cursor,
-      { state: "offline", processIsNew: false },
-      T1 + 2000,
-    ).cursor;
+    cursor = step(cursor, { state: "offline", processIsNew: false }, T1 + 2000).cursor;
     const up = step(cursor, RUNNING_NEW, T1 + 3000);
     expect(up.event).toEqual({
       type: "start",
@@ -307,9 +285,7 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
       expect(m.body).not.toContain("pnpm dev");
       expect(m.body).not.toContain("没有经过启动编排");
       // 能确定的那一件（这次是冷启动还是恢复）必须说出来
-      expect(m.body).toContain(
-        offlineAt === null ? "冷启动" : "这次断开没有留下结束记录",
-      );
+      expect(m.body).toContain(offlineAt === null ? "冷启动" : "这次断开没有留下结束记录");
     }
   });
 

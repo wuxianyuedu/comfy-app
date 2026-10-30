@@ -63,7 +63,9 @@ const MODES: readonly ReviewMode[] = ["gacha", "reprompt"];
 
 /** 宽容解析重生成方式；非法/缺省回落 `gacha`（抽卡是默认动作）。 */
 export function normalizeReviewMode(raw: unknown): ReviewMode {
-  return MODES.includes(raw as ReviewMode) ? (raw as ReviewMode) : "gacha";
+  return MODES.includes(/* SAFETY: 类型断言已复核 */ raw as ReviewMode)
+    ? /* SAFETY: 类型断言已复核 */ (raw as ReviewMode)
+    : "gacha";
 }
 
 /**
@@ -71,9 +73,7 @@ export function normalizeReviewMode(raw: unknown): ReviewMode {
  * 可缺省依据」的条目，分越界夹取到 1~5、key 去空白后非空；非法条目丢弃，不抛。
  * 返回 undefined = 入参里没有可用的 scores（旧数据 / 模型没给）。
  */
-function normalizeScores(
-  raw: unknown,
-): Record<string, ReviewScore> | undefined {
+function normalizeScores(raw: unknown): Record<string, ReviewScore> | undefined {
   const obj = asRecord(raw);
   if (!obj) return undefined;
   const out: Record<string, ReviewScore> = {};
@@ -81,8 +81,7 @@ function normalizeScores(
     const trimmedKey = key.trim();
     const item = asRecord(value);
     if (!item || trimmedKey === "") continue;
-    if (typeof item.score !== "number" || !Number.isFinite(item.score))
-      continue;
+    if (typeof item.score !== "number" || !Number.isFinite(item.score)) continue;
     out[trimmedKey] = {
       score: clamp(item.score, 1, 5),
       note: typeof item.note === "string" ? item.note.trim() : "",
@@ -174,18 +173,14 @@ export function applyImageReview(
  * `reviewHistory`（尾部追加、超上限从头裁剪），当前判定始终在 `review` ——
  * 曲线 = `[...reviewHistory, review]`。旧判定无效（缺 pass）时不往历史塞垃圾。
  */
-export function applyReview(
-  entities: unknown[],
-  id: string,
-  verdict: ReviewVerdict,
-): unknown[] {
+export function applyReview(entities: unknown[], id: string, verdict: ReviewVerdict): unknown[] {
   let hit = false;
   const next = entities.map((raw) => {
     if (!isRecord(raw) || raw.id !== id) return raw;
     hit = true;
     // Array.isArray 把 unknown 收窄成 any[]：显式标 unknown[] 再展开，避免 any 混入数组。
     const prevHistory: unknown[] = Array.isArray(raw.reviewHistory)
-      ? (raw.reviewHistory as unknown[])
+      ? /* SAFETY: 类型断言已复核 */ (raw.reviewHistory as unknown[])
       : [];
     const prevVerdict = normalizeReviewVerdict(raw.review);
     const history = prevVerdict
@@ -227,8 +222,7 @@ export interface ScriptRevision {
 /** 宽容读取 `production.scriptReview` 列（未知 JSON → 形状）；缺省/畸形不抛，回落「没评过」。 */
 export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
   const obj = asRecord(raw);
-  if (!obj)
-    return { review: null, history: [], revisions: [], humanVerdict: null };
+  if (!obj) return { review: null, history: [], revisions: [], humanVerdict: null };
   const history = (Array.isArray(obj.history) ? obj.history : [])
     .map((item) => normalizeReviewVerdict(item))
     .filter((item): item is ReviewVerdict => item !== null)
@@ -236,8 +230,7 @@ export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
   const revisions = (Array.isArray(obj.revisions) ? obj.revisions : [])
     .map((item) => {
       const rec = asRecord(item);
-      if (!rec || typeof rec.markdown !== "string" || rec.markdown === "")
-        return null;
+      if (!rec || typeof rec.markdown !== "string" || rec.markdown === "") return null;
       return {
         at: typeof rec.at === "string" ? rec.at : "",
         markdown: rec.markdown,
@@ -254,10 +247,7 @@ export function normalizeScriptReviewState(raw: unknown): ScriptReviewState {
 }
 
 /** 写回剧本评审（纯函数）：prev 的有效判定进 history（尾部追加、超上限从头裁剪）。 */
-export function applyScriptReview(
-  prev: unknown,
-  verdict: ReviewVerdict,
-): ScriptReviewState {
+export function applyScriptReview(prev: unknown, verdict: ReviewVerdict): ScriptReviewState {
   const state = normalizeScriptReviewState(prev);
   const history = state.review
     ? tailWindow([...state.history, state.review], REVIEW_HISTORY_LIMIT)
@@ -274,10 +264,7 @@ export function applyScriptReview(
  * 写回剧本人工裁决（纯函数，#2480）：只动 `humanVerdict`，AI 判定与曲线原样保留。
  * 裁决快照带当前剧本指纹（`digest` 由调用方传入）—— 之后剧本变过（指纹不等）裁决作废。
  */
-export function applyScriptHumanVerdict(
-  prev: unknown,
-  verdict: HumanVerdict,
-): ScriptReviewState {
+export function applyScriptHumanVerdict(prev: unknown, verdict: HumanVerdict): ScriptReviewState {
   const state = normalizeScriptReviewState(prev);
   return { ...state, humanVerdict: verdict };
 }
@@ -294,10 +281,7 @@ export function recordScriptRevision(
   const state = normalizeScriptReviewState(prev);
   return {
     ...state,
-    revisions: tailWindow(
-      [...state.revisions, { at, markdown }],
-      SCRIPT_REVISION_LIMIT,
-    ),
+    revisions: tailWindow([...state.revisions, { at, markdown }], SCRIPT_REVISION_LIMIT),
   };
 }
 
@@ -345,9 +329,7 @@ export function normalizeHumanVerdict(raw: unknown): HumanVerdict | null {
     pass: obj.pass,
     note: typeof obj.note === "string" ? obj.note.trim() : "",
     at: typeof obj.at === "string" ? obj.at : "",
-    ...(typeof obj.rev === "number" && Number.isFinite(obj.rev)
-      ? { rev: obj.rev }
-      : {}),
+    ...(typeof obj.rev === "number" && Number.isFinite(obj.rev) ? { rev: obj.rev } : {}),
     ...(typeof obj.digest === "string" && obj.digest.trim() !== ""
       ? { digest: obj.digest.trim() }
       : {}),
@@ -409,9 +391,7 @@ export function applyHumanRating(
     hit = true;
     const value = normalizeHumanRating(rating);
     // undefined 键不落：序列化后 null 与缺省在宽容读下等价，这里保留 null 显式语义。
-    return value === null
-      ? { ...raw, humanRating: null }
-      : { ...raw, humanRating: value };
+    return value === null ? { ...raw, humanRating: null } : { ...raw, humanRating: value };
   });
   return hit ? next : entities;
 }

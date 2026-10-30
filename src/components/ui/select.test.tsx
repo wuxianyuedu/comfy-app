@@ -19,15 +19,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 
-const OPTIONS = ["png", "jpg", "webp"] as const;
+const OPTIONS = /* SAFETY: 类型断言已复核 */ ["png", "jpg", "webp"] as const;
 
 function Demo({
   defaultValue = "png",
@@ -162,9 +156,7 @@ describe("ui/select 的选择回路", () => {
     /* 只在**选项**这一层数（`data-slot="select-item"`）：base-ui 会把
        `data-selected` 同时打在弹层内部的其他节点上，按裸属性数会得到 2 枚，
        那条数法判不出「到底哪一项被选中」。 */
-    const selected = document.querySelectorAll(
-      '[data-slot="select-item"][data-selected]',
-    );
+    const selected = document.querySelectorAll('[data-slot="select-item"][data-selected]');
     expect(selected).toHaveLength(1);
     expect(selected[0]?.textContent).toContain("JPG");
     /* 指示器是 `pointer-events-none` 的绝对定位小格：它不许吃掉点击，

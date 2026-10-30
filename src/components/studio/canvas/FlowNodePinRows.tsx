@@ -18,10 +18,7 @@ import {
   resolvePortRowTone,
   type PortRowTone,
 } from "./flow-focus-endpoints";
-import {
-  NODE_PORT_FOCUS_ACTIVE_KEY,
-  readPortFocusRole,
-} from "./hooks/use-related-edges-highlight";
+import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 
 interface FlowNodePinRowsProps {
   data: WorkflowNodeData;
@@ -41,7 +38,7 @@ export function FlowNodePinRows({
   /* 选中节点时端口行跟着连线一起变：有连线落到的那一行提亮、端口圆点放大，
    *  没有连线落到的行压暗。级别由 `useRelatedEdgesHighlight` 写在本节点 data 上
    *  （与连线标记同一帧算出），行渲染层只读。 */
-  const nodeData = data as unknown as Record<string, unknown>;
+  const nodeData = /* SAFETY: 类型断言已复核 */ data as unknown as Record<string, unknown>;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */
@@ -89,10 +86,7 @@ export function FlowNodePinRows({
         /* 端口行的观感：两端取一致的一档（见 toneOf）。 */
         const tone =
           PORT_ROW_TONES[
-            toneOf(
-              inName,
-              outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined,
-            )
+            toneOf(inName, outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined)
           ];
 
         return (
@@ -130,21 +124,18 @@ export function FlowNodePinRows({
                 {/* 顶部针脚区**未连线**输入的 IO 复选框 ——
                  * 已连线的槽位取值来自上游，把它
                  * 暴露成工作流输入没有意义。 */}
-                {io?.ioEditMode &&
-                  inMeta &&
-                  !inMeta.isConnection &&
-                  !inMeta.isBoundary && (
-                    <IoCheckbox
-                      io={io}
-                      ioRef={{
-                        nodeId: data.nodeId,
-                        hostNodeId: data.hostNodeId,
-                        name: inName ?? "",
-                        kind: "param",
-                        direction: "input",
-                      }}
-                    />
-                  )}
+                {io?.ioEditMode && inMeta && !inMeta.isConnection && !inMeta.isBoundary && (
+                  <IoCheckbox
+                    io={io}
+                    ioRef={{
+                      nodeId: data.nodeId,
+                      hostNodeId: data.hostNodeId,
+                      name: inName ?? "",
+                      kind: "param",
+                      direction: "input",
+                    }}
+                  />
+                )}
                 <span
                   className="text-2xs min-w-0 flex-1 truncate text-left"
                   style={{

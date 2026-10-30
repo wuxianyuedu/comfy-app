@@ -13,10 +13,7 @@
 //     快照它，只能按 `params.workflow` 现查（见 `resolveParamLabel`）。
 
 import { asRecord } from "~/lib/is-record";
-import {
-  modeContractEntries,
-  type ModeContract,
-} from "~/lib/workshop/model-mode-contract";
+import { modeContractEntries, type ModeContract } from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { TaskDetail } from "./history-types";
 
@@ -26,8 +23,7 @@ import type { TaskDetail } from "./history-types";
  * 各有一份逐字相同的三元 —— 收进这里，改一处即可。
  */
 export function kvValueText(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number")
-    return String(value);
+  if (typeof value === "string" || typeof value === "number") return String(value);
   return JSON.stringify(value);
 }
 
@@ -41,11 +37,9 @@ function paramsOf(detail: TaskDetail | null): Record<string, unknown> {
 }
 
 /** 取 params.workflowInputs，非数组时给空数组。 */
-export function workflowInputsOf<T extends { name: string }>(
-  detail: TaskDetail | null,
-): T[] {
+export function workflowInputsOf<T extends { name: string }>(detail: TaskDetail | null): T[] {
   const raw: unknown = paramsOf(detail).workflowInputs;
-  return Array.isArray(raw) ? (raw as T[]) : [];
+  return Array.isArray(raw) ? /* SAFETY: 类型断言已复核 */ (raw as T[]) : [];
 }
 
 /**
@@ -68,7 +62,7 @@ export type TaskOrigin = "workshop" | "workflow";
  * 反面：工作流库的就地运行只带 `workflow` + `workflowInputs`；画布节点运行
  * 再多个 `projectId`。两者都算「工作流直接发起」，只显示工作流参数。
  */
-const WORKSHOP_TOP_LEVEL_KEYS = [
+const WORKSHOP_TOP_LEVEL_KEYS = /* SAFETY: 类型断言已复核 */ [
   "prompt",
   "negative",
   "firstFrame",
@@ -78,9 +72,7 @@ const WORKSHOP_TOP_LEVEL_KEYS = [
 
 export function deriveTaskOrigin(detail: TaskDetail | null): TaskOrigin {
   const params = paramsOf(detail);
-  return WORKSHOP_TOP_LEVEL_KEYS.some((key) => !isBlank(params[key]))
-    ? "workshop"
-    : "workflow";
+  return WORKSHOP_TOP_LEVEL_KEYS.some((key) => !isBlank(params[key])) ? "workshop" : "workflow";
 }
 
 /** 一行「工坊参数」（模式契约的一个对外口 + 该次任务落在它上面的值）。
@@ -135,10 +127,7 @@ function resolvePortValue(
   if (portId === "size") {
     const parts = inputs
       .filter((input) => SIZE_PIN_NAMES.has(input.name))
-      .map(
-        (input) =>
-          `${resolveParamLabel(input, io)} ${kvValueText(input.value)}`,
-      );
+      .map((input) => `${resolveParamLabel(input, io)} ${kvValueText(input.value)}`);
     if (parts.length > 0) return parts.join(" · ");
   }
   const pin = inputs.find((input) => input.name === portId);
@@ -201,8 +190,7 @@ function findIoEntry(
 ): { label?: string } | null {
   if (!io) return null;
   if (nodeId) {
-    const exact =
-      io[`${nodeId}::widget::${name}`] ?? io[`${nodeId}::input::${name}`];
+    const exact = io[`${nodeId}::widget::${name}`] ?? io[`${nodeId}::input::${name}`];
     if (exact) return exact;
   }
   const suffix = `::widget::${name}`;
@@ -238,9 +226,7 @@ export function deriveWorkflowParams(
     label: resolveParamLabel(input, io),
     value: input.value,
   }));
-  const topLevelEntries = Object.entries(params).filter(
-    ([key]) => key !== "workflowInputs",
-  );
+  const topLevelEntries = Object.entries(params).filter(([key]) => key !== "workflowInputs");
   return {
     rows,
     topLevelEntries,

@@ -59,10 +59,7 @@ function gate(
   const root = mkdtempSync(path.join(tmpdir(), "gate-repo-boilerplate-"));
   roots.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(
-    SCRIPT,
-    path.join(root, "scripts", "check-gate-repo-boilerplate.cjs"),
-  );
+  copyFileSync(SCRIPT, path.join(root, "scripts", "check-gate-repo-boilerplate.cjs"));
   /* 判据共用的扫描读取器（`gate-` 前缀，不是 `check-`）：少带时本判据在临时仓库里
    * 直接 MODULE_NOT_FOUND，用例读到的是「门禁坏了」而不是「夹具缺一块」。 */
   copyFileSync(
@@ -86,7 +83,7 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, root, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -137,24 +134,17 @@ describe("门禁自测样板门禁：该拦的形状（硬闸，§11.16.1）", (
     const r = gate({ "tests/x.test.ts": HAND_ROLLED }, ["--update"]);
     expect(r.ok, "--update 不该让手搓样板通过").toBe(false);
     expect(
-      existsSync(
-        path.join(r.root, "scripts", ".gate-repo-boilerplate-baseline.json"),
-      ),
+      existsSync(path.join(r.root, "scripts", ".gate-repo-boilerplate-baseline.json")),
       "--update 被删了，不该再写出任何基线文件",
     ).toBe(false);
   });
 
   it("⑤ 旧旗标 `--allow-new` 同判：不落盘、不放过", () => {
-    const r = gate({ "tests/x.test.ts": HAND_ROLLED }, [
-      "--update",
-      "--allow-new",
-    ]);
+    const r = gate({ "tests/x.test.ts": HAND_ROLLED }, ["--update", "--allow-new"]);
     expect(r.ok).toBe(false);
-    expect(
-      existsSync(
-        path.join(r.root, "scripts", ".gate-repo-boilerplate-baseline.json"),
-      ),
-    ).toBe(false);
+    expect(existsSync(path.join(r.root, "scripts", ".gate-repo-boilerplate-baseline.json"))).toBe(
+      false,
+    );
   });
 });
 
@@ -231,9 +221,7 @@ describe("真实仓库：这条硬闸今天为 0（§11.16.1）", () => {
     }).filter(
       (e) =>
         e.isFile() &&
-        readFileSync(path.join(__dirname, e.name), "utf8").includes(
-          "/helpers/gate-repo",
-        ),
+        readFileSync(path.join(__dirname, e.name), "utf8").includes("/helpers/gate-repo"),
     );
     expect(
       users.length,

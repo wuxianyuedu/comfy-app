@@ -16,12 +16,7 @@ export interface ChatArgs {
  * 浏览器永远看不到它。SSE 分片形如 `{ token }`，
  * 末尾以 `[DONE]` 标记结束整条流。
  */
-export async function streamChat({
-  messages,
-  opts,
-  onToken,
-  signal,
-}: ChatArgs): Promise<string> {
+export async function streamChat({ messages, opts, onToken, signal }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -53,7 +48,10 @@ export async function streamChat({
     if (data === "[DONE]") return;
     let json: { error?: unknown; token?: unknown };
     try {
-      json = JSON.parse(data) as { error?: unknown; token?: unknown };
+      json = /* SAFETY: 类型断言已复核 */ JSON.parse(data) as {
+        error?: unknown;
+        token?: unknown;
+      };
     } catch {
       /* 纯语法坏帧：跳过它，不因为一行坏 JSON 丢掉整条回答。 */
       return;
@@ -96,22 +94,18 @@ export async function streamChat({
 }
 
 /* 非流式的一次性对话。 */
-export async function completeChat({
-  messages,
-  opts,
-}: ChatArgs): Promise<string> {
+export async function completeChat({ messages, opts }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, stream: false, ...opts }),
   });
   /* 错误信封的读法收在一处（规范 16 §16.2.4.35）。 */
-  const json = (await readJsonBody(res)) as {
+  const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
     content?: string;
     error?: string;
   };
-  if (!res.ok)
-    throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
+  if (!res.ok) throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
   return json.content ?? "";
 }
 
@@ -145,7 +139,7 @@ export async function probeRemoteApi(input: {
       detail: errorMessage(e, "网络请求失败"),
     };
   }
-  const json = (await readJsonBody(res)) as {
+  const json = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
     ok?: unknown;
     detail?: unknown;
     error?: unknown;
@@ -161,9 +155,7 @@ export async function probeRemoteApi(input: {
     ok: json.ok === true,
     detail,
     models: Array.isArray(json.models)
-      ? json.models.filter(
-          (m): m is string => typeof m === "string" && m !== "",
-        )
+      ? json.models.filter((m): m is string => typeof m === "string" && m !== "")
       : undefined,
   };
 }

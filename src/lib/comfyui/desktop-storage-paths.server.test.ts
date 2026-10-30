@@ -35,7 +35,7 @@ function baseDeps(overrides: Record<string, unknown> = {}) {
   return {
     exists: existsOf(DESKTOP_DIRS),
     readFile: async () => SHARED_YAML,
-    resolveArgs: async () => [] as string[],
+    resolveArgs: async () => /* SAFETY: 类型断言已复核 */ [] as string[],
     ...overrides,
   };
 }
@@ -45,10 +45,7 @@ describe("resolveDesktopStoragePaths", () => {
     expect(await resolveDesktopStoragePaths("")).toBeNull();
     expect(await resolveDesktopStoragePaths(null)).toBeNull();
     // 源码根里只有 main.py，没有桌面标记 → portable。
-    const portable = existsOf([
-      path.resolve("/plain"),
-      path.resolve("/plain/main.py"),
-    ]);
+    const portable = existsOf([path.resolve("/plain"), path.resolve("/plain/main.py")]);
     expect(
       await resolveDesktopStoragePaths(path.resolve("/plain"), {
         exists: portable,
@@ -88,9 +85,7 @@ describe("resolveDesktopStoragePaths", () => {
         source: "comfyui_shared",
       },
     ]);
-    expect(result?.extraModelPathsFile).toBe(
-      path.join(base, "extra_model_paths.yaml"),
-    );
+    expect(result?.extraModelPathsFile).toBe(path.join(base, "extra_model_paths.yaml"));
   });
 
   it("base 下没有 yaml 时退回实例根读（extraModelPathsFile 如实记落点）", async () => {
@@ -122,9 +117,7 @@ describe("resolveDesktopStoragePaths", () => {
     );
     expect(result?.extraModelPathsFile).toBeNull();
     expect(result?.sharedModelDirs).toEqual([]);
-    expect(result?.modelDir.path).toBe(
-      path.join(DESKTOP_ROOT, "ComfyUI", "models"),
-    );
+    expect(result?.modelDir.path).toBe(path.join(DESKTOP_ROOT, "ComfyUI", "models"));
   });
 
   it("启动参数优先于 yaml 与布局：--base-directory / --input-directory 生效", async () => {
@@ -184,8 +177,7 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        readFile: async () =>
-          `self:\n  base_path: ${base}\n  paths:\n    - models\n    - input\n`,
+        readFile: async () => `self:\n  base_path: ${base}\n  paths:\n    - models\n    - input\n`,
       }),
     );
     expect(result?.sharedModelDirs).toEqual([]);
@@ -223,9 +215,7 @@ describe("resolveDesktopStoragePaths", () => {
     expect(result?.instanceRoot).toBe(DESKTOP_ROOT);
     expect(result?.baseDir).toBe(sourceRoot);
     expect(result?.modelDir.exists).toBe(true);
-    expect(result?.extraModelPathsFile).toBe(
-      path.join(sourceRoot, "extra_model_paths.yaml"),
-    );
+    expect(result?.extraModelPathsFile).toBe(path.join(sourceRoot, "extra_model_paths.yaml"));
   });
 
   it("--extra-model-paths-config 指向的文件与主 yaml 叠加进共享目录", async () => {

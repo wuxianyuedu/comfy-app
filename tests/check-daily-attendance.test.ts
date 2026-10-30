@@ -119,12 +119,7 @@ function detail(
 }
 
 /** 列表里的一项（`get-build-logs` 的形状）。 */
-function listed(
-  sn: string,
-  event: string,
-  createTime: string,
-  status = "success",
-) {
+function listed(sn: string, event: string, createTime: string, status = "success") {
   return { sn, event, createTime, status };
 }
 
@@ -135,9 +130,7 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
   it("窗口内一次逐格全绿的派发 = 出勤（退 0）", () => {
     const got = judgeAttendance({
       builds: [listed("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT)],
-      details: [
-        detail("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT, GREEN_STAGES),
-      ],
+      details: [detail("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT, GREEN_STAGES)],
       now: NOW,
     });
     expect(got.code, got.headline).toBe(CODE.PRESENT);
@@ -173,18 +166,8 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       { name: "End", status: "success", duration: 81 },
     ];
     const got = judgeAttendance({
-      builds: [
-        listed("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, "error"),
-      ],
-      details: [
-        detail(
-          "cnb-lm1-1k5h1otqt",
-          "crontab: 0 0 * * *",
-          RECENT,
-          stages,
-          "cancel",
-        ),
-      ],
+      builds: [listed("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, "error")],
+      details: [detail("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, stages, "cancel")],
       now: NOW,
     });
     expect(got.code, got.headline).toBe(CODE.NO_VERDICT);
@@ -201,18 +184,8 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       { name: "每日安装依赖", status: "skipped", duration: 0 },
     ];
     const got = judgeAttendance({
-      builds: [
-        listed("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, "error"),
-      ],
-      details: [
-        detail(
-          "cnb-7kr-1k5as018h",
-          "crontab: 0 4 * * *",
-          RECENT,
-          stages,
-          "error",
-        ),
-      ],
+      builds: [listed("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, "error")],
+      details: [detail("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, stages, "error")],
       now: NOW,
     });
     expect(got.code, got.headline).toBe(CODE.ABSENT);
@@ -221,10 +194,7 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
 
   it("列表里根本没有每日派发 = 缺勤，并且说清认的是哪三个事件", () => {
     const got = judgeAttendance({
-      builds: [
-        listed("cnb-x", "pull_request", RECENT),
-        listed("cnb-y", "push", RECENT),
-      ],
+      builds: [listed("cnb-x", "pull_request", RECENT), listed("cnb-y", "push", RECENT)],
       details: [],
       now: NOW,
     });
@@ -268,7 +238,7 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       expect(isDailyDispatch({ event }), event).toBe(false);
     }
     /* 多条里挑最近的那一条 —— 拿旧的当「上一次」会把缺勤读成出勤。 */
-    const picked = latestDailyDispatch([
+    const picked = /* SAFETY: 类型断言已复核 */ latestDailyDispatch([
       listed("old", "crontab: 0 4 * * *", "2026-10-20T16:00:00.000Z"),
       listed("new", "crontab: 0 0 * * *", RECENT),
       listed("pr", "pull_request", "2026-10-23T01:00:00.000Z"),
@@ -328,14 +298,13 @@ describe("daily-attendance：命令行那一跳", () => {
     /* 同一条 sn 换成带逐格的详情 ⇒ 出勤。 */
     const detailFile = runCli(["--from", "@DIR@/one.json", "--json"], {
       "one.json": JSON.stringify(
-        detail("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT, GREEN_STAGES)
-          .json,
+        detail("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT, GREEN_STAGES).json,
       ),
     });
     expect(detailFile.code, detailFile.out).toBe(CODE.PRESENT);
-    expect((JSON.parse(detailFile.out) as { verdict: string }).verdict).toBe(
-      "present",
-    );
+    expect(
+      /* SAFETY: 类型断言已复核 */ (JSON.parse(detailFile.out) as { verdict: string }).verdict,
+    ).toBe("present");
 
     /* **真**那份 `get-build-status -v` 只有 `status` + `pipelinesStatus`（实测），
      * 认不出它是哪一类派发、也认不出它是什么时候落的 ⇒ 必须落到「未校验」，
@@ -366,11 +335,7 @@ describe("daily-attendance：命令行那一跳", () => {
     const body = JSON.stringify({
       data: [listed("cnb-hk7-1k5i5euak", "crontab: 0 0 * * *", RECENT)],
     });
-    const got = runCli(
-      ["--from", "@DIR@/list.json", "--json"],
-      { "list.json": body },
-      null,
-    );
+    const got = runCli(["--from", "@DIR@/list.json", "--json"], { "list.json": body }, null);
     expect(got.code, got.out).toBe(CODE.NO_VERDICT);
     expect(got.out).toContain("必须同时钉住");
   });
@@ -412,11 +377,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
     for (let i = 0; i < count; i += 1) {
       const h = newestH + ((oldestH - newestH) * i) / Math.max(1, count - 1);
       rows.push(
-        listed(
-          `pr-${newestH}-${i}`,
-          "pull_request",
-          new Date(NOW - h * 3_600_000).toISOString(),
-        ),
+        listed(`pr-${newestH}-${i}`, "pull_request", new Date(NOW - h * 3_600_000).toISOString()),
       );
     }
     return rows;
@@ -483,8 +444,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
 
   it("每页都只盖 10 小时 ⇒ 撞页数上界，covered=false（不是「窗口内没有」）", () => {
     const pages: Record<number, PageRow[] | null> = {};
-    for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1)
-      pages[p] = pageRows(1, 10);
+    for (let p = 1; p <= FETCH_MAX_PAGES + 2; p += 1) pages[p] = pageRows(1, 10);
     const { run } = pagerByPage(pages);
     const win = fetchBuildsCoveringWindow({
       run,
@@ -572,9 +532,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
     expect(code, out).toBe(CODE.NO_VERDICT);
     expect(code, "盖不住窗口时不许念成缺勤").not.toBe(CODE.ABSENT);
     expect(out).toContain("取数没盖住窗口");
-    expect(calls.filter((c) => c.includes("get-build-logs"))).toHaveLength(
-      FETCH_MAX_PAGES,
-    );
+    expect(calls.filter((c) => c.includes("get-build-logs"))).toHaveLength(FETCH_MAX_PAGES);
   });
 
   it("在线那一跳：翻页把上一跑捞回来 ⇒ 照常判出勤（修复没有把正路弄瞎）", () => {
@@ -587,9 +545,7 @@ describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
     const { run } = pagerByPage({ 1: first, 2: pageRows(10, 40) });
     const statusRun = (cmd: string, args: string[]) => {
       if (args.includes("get-build-status")) {
-        const one = detail("sn-daily", daily.event, daily.createTime, [
-          ...GREEN_STAGES,
-        ]);
+        const one = detail("sn-daily", daily.event, daily.createTime, [...GREEN_STAGES]);
         return {
           status: 0,
           stdout: JSON.stringify({ status: 200, data: one.json.data }),

@@ -19,8 +19,7 @@ import {
 
 const CANVAS_GAP =
   "Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package";
-const PSEUDO_GAP =
-  "Not implemented: Window's getComputedStyle() method: with pseudo-elements";
+const PSEUDO_GAP = "Not implemented: Window's getComputedStyle() method: with pseudo-elements";
 
 /** 造一个 jsdom 那种 `virtualConsole`（它就是 `node:events` 的 EventEmitter）。 */
 function fakeVirtualConsole() {
@@ -40,9 +39,7 @@ function scopeOf(emitter: EventEmitter) {
 function installOrFail(emitter: EventEmitter): JsdomCapabilityController {
   const controller = installJsdomCapabilityGate(scopeOf(emitter));
   if (!controller) {
-    throw new Error(
-      "假 virtualConsole 没被认出来（readVirtualConsole 的形状与实现不符）",
-    );
+    throw new Error("假 virtualConsole 没被认出来（readVirtualConsole 的形状与实现不符）");
   }
   return controller;
 }
@@ -62,12 +59,8 @@ describe("jsdom 能力缺口的处置（精确白名单 + 计数 + 原样转发�
 
   it("② 逐字命中才吞，并计数", () => {
     const gate = createJsdomCapabilityGate();
-    expect(gate.consume({ type: "not-implemented", message: CANVAS_GAP })).toBe(
-      true,
-    );
-    expect(gate.consume({ type: "not-implemented", message: PSEUDO_GAP })).toBe(
-      true,
-    );
+    expect(gate.consume({ type: "not-implemented", message: CANVAS_GAP })).toBe(true);
+    expect(gate.consume({ type: "not-implemented", message: PSEUDO_GAP })).toBe(true);
     expect(gate.suppressedCount()).toBe(2);
     expect(gate.summaryLines()).toHaveLength(2);
   });
@@ -85,10 +78,9 @@ describe("jsdom 能力缺口的处置（精确白名单 + 计数 + 原样转发�
       `${CANVAS_GAP} `,
     ];
     for (const message of nearMisses) {
-      expect(
-        gate.consume({ type: "not-implemented", message }),
-        `这条不该被吞：${message}`,
-      ).toBe(false);
+      expect(gate.consume({ type: "not-implemented", message }), `这条不该被吞：${message}`).toBe(
+        false,
+      );
     }
     expect(gate.suppressedCount()).toBe(0);
     expect(gate.summaryLines()).toEqual([]);
@@ -97,16 +89,14 @@ describe("jsdom 能力缺口的处置（精确白名单 + 计数 + 原样转发�
   it("④ 只有 not-implemented 那一档有资格被吞；真异常一律转发", () => {
     const gate = createJsdomCapabilityGate();
     /* message 逐字等于白名单，但 type 不是能力缺口 ⇒ 不许吞。 */
-    expect(
-      gate.consume({ type: "unhandled-exception", message: CANVAS_GAP }),
-    ).toBe(false);
+    expect(gate.consume({ type: "unhandled-exception", message: CANVAS_GAP })).toBe(false);
     /* 没有 type（jsdom 的资源加载失败那一类走的是别的 type 或没有）⇒ 不许吞。 */
     expect(gate.consume({ message: PSEUDO_GAP })).toBe(false);
     /* 形状不对的输入（不是对象 / message 不是串）不许把处置器本身弄炸。 */
     expect(
       gate.consume({
         type: "not-implemented",
-        message: 42 as unknown as string,
+        message: /* SAFETY: 类型断言已复核 */ 42 as unknown as string,
       }),
     ).toBe(false);
     expect(gate.suppressedCount()).toBe(0);
@@ -127,9 +117,7 @@ describe("jsdom 能力缺口的处置（精确白名单 + 计数 + 原样转发�
   it("⑥ 装上之后：白名单内不发声音，白名单外逐字转发", () => {
     const { emitter, original } = fakeVirtualConsole();
     const controller = installOrFail(emitter);
-    const errorSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     emitter.emit("jsdomError", {
       type: "not-implemented",
@@ -146,9 +134,7 @@ describe("jsdom 能力缺口的处置（精确白名单 + 计数 + 原样转发�
       message: "Not implemented: something brand new",
     });
     expect(errorSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy.mock.calls[0]?.[0]).toBe(
-      "Not implemented: something brand new",
-    );
+    expect(errorSpy.mock.calls[0]?.[0]).toBe("Not implemented: something brand new");
 
     /* 未捕获异常那一支：jsdom 默认打 `cause.stack`，转发面不许改成 message。 */
     emitter.emit("jsdomError", {

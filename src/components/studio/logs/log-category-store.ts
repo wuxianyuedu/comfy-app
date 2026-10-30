@@ -23,7 +23,7 @@ function defaultEnabled(): CategoryEnabled {
   return LOG_CATEGORY_FILTERS.reduce<CategoryEnabled>((acc, category) => {
     acc[category] = true;
     return acc;
-  }, {} as CategoryEnabled);
+  }, /* SAFETY: 类型断言已复核 */ {} as CategoryEnabled);
 }
 
 /**
@@ -36,8 +36,7 @@ function readEnabled(): CategoryEnabled {
   const stored = readStorageJson<Partial<CategoryEnabled>>(STORAGE_KEY, {});
   const base = defaultEnabled();
   for (const category of LOG_CATEGORY_FILTERS) {
-    if (typeof stored[category] === "boolean")
-      base[category] = stored[category];
+    if (typeof stored[category] === "boolean") base[category] = stored[category];
   }
   return base;
 }

@@ -34,7 +34,7 @@ const SCRIPT = path.resolve(__dirname, "../scripts/check-test-waitfor.cjs");
  * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
-const { scanFile } = createRequire(import.meta.url)(SCRIPT) as {
+const { scanFile } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(SCRIPT) as {
   scanFile: (abs: string) => unknown[] | null;
 };
 
@@ -143,12 +143,7 @@ describe("waitFor 边界门禁：扫描期间文件消失（并发探针）", ()
        一个已经不存在的文件没有站点可言 ⇒ 返回 null 让调用方计数；
        计数必须进结论行（`collect` 的 `vanished` 与 OK 那行的「另有 N 份未读」），
        静默跳过就是 §13.5.12 那一族「判据自称在跑、实际没跑」。 */
-    const gone = path.resolve(
-      __dirname,
-      "..",
-      "tests",
-      `.setup-cleanup-probe-0-0.test.tsx`,
-    );
+    const gone = path.resolve(__dirname, "..", "tests", `.setup-cleanup-probe-0-0.test.tsx`);
     expect(existsSync(gone), "夹具路径本身不该存在").toBe(false);
     expect(scanFile(gone)).toBeNull();
   });

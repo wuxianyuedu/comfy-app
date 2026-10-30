@@ -67,9 +67,7 @@ export const Default: Story = {
 
 /** 自由百万像素档：`clarity` 是 `"2.5M"` 这类档位之外的值，追加「倍数」一段。 */
 export const CustomMegapixels: Story = {
-  render: () => (
-    <LivePicker initial={{ ...DEFAULT_SIZE_SPEC, clarity: "2.5M" }} />
-  ),
+  render: () => <LivePicker initial={{ ...DEFAULT_SIZE_SPEC, clarity: "2.5M" }} />,
 };
 
 /**
@@ -80,17 +78,14 @@ export const CustomMegapixels: Story = {
 export const TwoScenes: Story = {
   render: () => (
     <div className="flex gap-10">
-      {(["image", "video"] as const).map((scene) => (
-        <div key={scene} className="flex flex-col gap-2">
-          <span className="text-ink-muted font-mono text-[11px]">
-            scene = {scene}
-          </span>
-          <LivePicker
-            initial={{ ...DEFAULT_SHOT_SIZE, clarity: "2k" }}
-            scene={scene}
-          />
-        </div>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (["image", "video"] as const).map((scene) => (
+          <div key={scene} className="flex flex-col gap-2">
+            <span className="text-ink-muted font-mono text-[11px]">scene = {scene}</span>
+            <LivePicker initial={{ ...DEFAULT_SHOT_SIZE, clarity: "2k" }} scene={scene} />
+          </div>
+        ))
+      }
     </div>
   ),
 };

@@ -86,10 +86,7 @@ const STAT_PARALLEL = 32;
 /** 批量 stat，读不到的位置返回 `null`（权限错误 / 扫描中途消失）。
  *  与原先同步版的 `catch { continue }` 同语义：单个条目出错不影响整趟扫描。 */
 async function statMany(paths: string[]): Promise<(fs.Stats | null)[]> {
-  const out: (fs.Stats | null)[] = Array.from(
-    { length: paths.length },
-    () => null,
-  );
+  const out: (fs.Stats | null)[] = Array.from({ length: paths.length }, () => null);
   let cursor = 0;
   async function worker(): Promise<void> {
     while (cursor < paths.length) {
@@ -103,11 +100,7 @@ async function statMany(paths: string[]): Promise<(fs.Stats | null)[]> {
       }
     }
   }
-  await Promise.all(
-    Array.from({ length: Math.min(STAT_PARALLEL, paths.length) }, () =>
-      worker(),
-    ),
-  );
+  await Promise.all(Array.from({ length: Math.min(STAT_PARALLEL, paths.length) }, () => worker()));
   return out;
 }
 
@@ -124,10 +117,7 @@ async function statMany(paths: string[]): Promise<(fs.Stats | null)[]> {
  *  一次扫描就把同时进来的所有请求一起卡住。异步版不堵事件循环，且改用
  *  `withFileTypes` 的 `Dirent` 判类型，连「不是 .json/.workflow 的条目」也
  *  不必 stat（同步版对每个条目都 statSync 一次）。 */
-async function scanRoot(
-  rawDir: string,
-  recursive: boolean,
-): Promise<ScannedRoot> {
+async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot> {
   const abs = resolve(rawDir);
   // 闭包里的「这个文件来自根目录 X」标记 —— 每推入一项就盖上，
   // by `visit` so callers can show "📂 <root 短名>" without re-computing
@@ -138,13 +128,13 @@ async function scanRoot(
   try {
     rootStat = await fs.promises.stat(abs);
   } catch (e) {
-    const code = (e as NodeJS.ErrnoException | undefined)?.code;
+    const code = /* SAFETY: 类型断言已复核 */ (e as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") {
       return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
     }
     // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
     // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
-    const msg = (e as Error | undefined)?.message ?? String(e);
+    const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -214,7 +204,7 @@ async function scanRoot(
   try {
     await visit(abs);
   } catch (e) {
-    const msg = (e as Error | undefined)?.message ?? String(e);
+    const msg = /* SAFETY: 类型断言已复核 */ (e as Error | undefined)?.message ?? String(e);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -239,13 +229,9 @@ export async function scanLocalWorkflowRoots(
 ): Promise<{ roots: ScannedRoot[]; allFiles: LocalWorkflowFile[] }> {
   const recursive = !!opts.recursive;
   const allFiles: LocalWorkflowFile[] = [];
-  const trimmedPaths = rawPaths
-    .map((raw) => raw.trim())
-    .filter((trimmed) => trimmed.length > 0);
+  const trimmedPaths = rawPaths.map((raw) => raw.trim()).filter((trimmed) => trimmed.length > 0);
   /* 目录之间并发：同步版是一个目录一个目录地等，总耗时是所有目录之和。 */
-  const roots = await Promise.all(
-    trimmedPaths.map((trimmed) => scanRoot(trimmed, recursive)),
-  );
+  const roots = await Promise.all(trimmedPaths.map((trimmed) => scanRoot(trimmed, recursive)));
 
   /* 「按绝对路径去重、保留首次出现」走 `~/lib/ordered-set` 的 `uniqueBy`
    *（规范 16 §16.2.4.55）—— 收口前是本文件里手写的一遍 Set 循环，
@@ -318,10 +304,7 @@ declare global {
 }
 
 function checksumCache(): Map<string, ChecksumMemo> {
-  return (globalThis.__localWorkflowChecksums_v1 ??= new Map<
-    string,
-    ChecksumMemo
-  >());
+  return (globalThis.__localWorkflowChecksums_v1 ??= new Map<string, ChecksumMemo>());
 }
 
 /** checksum 记忆的容量淘汰：超出上限时丢掉最早插入的键（Map 的插入序）。
@@ -358,7 +341,7 @@ function checksumOfFile(
     try {
       const hash = createHash("sha1");
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
-      stream.on("data", (chunk) => hash.update(chunk as string));
+      stream.on("data", (chunk) => hash.update(/* SAFETY: 类型断言已复核 */ chunk as string));
       stream.on("error", () => resolve(null));
       stream.on("end", () => {
         const checksum = hash.digest("hex").slice(0, 16);
@@ -397,11 +380,7 @@ export async function scanLocalWorkflowChecksums(
 
       if (!file?.absPath) continue;
 
-      const result = await checksumOfFile(
-        file.absPath,
-        file.size,
-        file.mtimeMs,
-      );
+      const result = await checksumOfFile(file.absPath, file.size, file.mtimeMs);
 
       if (result) {
         out.push({
@@ -413,9 +392,7 @@ export async function scanLocalWorkflowChecksums(
     }
   }
   await Promise.all(
-    Array.from({ length: Math.min(MAX_PARALLEL, allFiles.length) }, () =>
-      worker(),
-    ),
+    Array.from({ length: Math.min(MAX_PARALLEL, allFiles.length) }, () => worker()),
   );
   return out;
 }

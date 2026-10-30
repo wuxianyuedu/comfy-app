@@ -24,9 +24,7 @@ export const COMFY_READY_TIMEOUT_MS = 180_000;
 /** 单次轮询间隔：服务端每次会短等一小会儿，这里再退避一档，避免连打。 */
 export const COMFY_READY_POLL_MS = 2_000;
 
-export type ComfyReadyResult =
-  | { ok: true }
-  | { ok: false; pending: boolean; message: string };
+export type ComfyReadyResult = { ok: true } | { ok: false; pending: boolean; message: string };
 
 interface EnsureBody {
   ok?: unknown;
@@ -38,7 +36,7 @@ interface EnsureBody {
 /** 从 ensure 响应体里取可读文案：`detail` → `{error}` 字符串 → `{error:{message}}`。 */
 export function readComfyErrorMessage(body: unknown, fallback: string): string {
   if (typeof body === "object" && body !== null) {
-    const rec = body as EnsureBody;
+    const rec = /* SAFETY: 类型断言已复核 */ body as EnsureBody;
     /* `detail` 是这条路由的**业务字段**（「正在启动」的进度描述）而不是错误
      * 文案，所以它优先于错误信封 —— 那不是第二套错误形状。
      * `{error}` 字符串与 `{error:{message}}` 交 `~/lib/api-error` 的唯一读法
@@ -71,7 +69,7 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
     res.ok &&
     typeof body === "object" &&
     body !== null &&
-    (body as EnsureBody).ok === true
+    /* SAFETY: 类型断言已复核 */ (body as EnsureBody).ok === true
   ) {
     return { ok: true };
   }

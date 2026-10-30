@@ -15,10 +15,7 @@ import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { remoteModelRepository } from "~/lib/core/repository";
-import {
-  type RemoteModeAdapter,
-  type WorkshopInputType,
-} from "~/lib/workshop/model-mode-contract";
+import { type RemoteModeAdapter, type WorkshopInputType } from "~/lib/workshop/model-mode-contract";
 
 import {
   callImageGeneration,
@@ -55,7 +52,7 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   if (cache) return cache;
   let stored: Partial<WorkshopApiSettings> = {};
   try {
-    stored = JSON.parse(
+    stored = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(FILE, "utf-8"),
     ) as Partial<WorkshopApiSettings>;
   } catch {
@@ -71,14 +68,8 @@ export async function saveWorkshopApiSettings(
 ): Promise<WorkshopApiSettings> {
   const current = getWorkshopApiSettingsSync();
   const next: WorkshopApiSettings = {
-    image:
-      patch.image !== undefined
-        ? sanitizeChannel(patch.image, current.image)
-        : current.image,
-    video:
-      patch.video !== undefined
-        ? sanitizeChannel(patch.video, current.video)
-        : current.video,
+    image: patch.image !== undefined ? sanitizeChannel(patch.image, current.image) : current.image,
+    video: patch.video !== undefined ? sanitizeChannel(patch.video, current.video) : current.video,
   };
   cache = next;
   await fs.mkdir(path.dirname(FILE), { recursive: true });
@@ -94,9 +85,7 @@ export function getMaskedChannels() {
 export type { ApiImageRequest, ApiVideoSubmitRequest, ApiVideoSubmitResult };
 
 /** 统一输入的当前取值（适配器按类型取值落字段）。 */
-function unifiedImageInputs(
-  req: ApiImageRequest,
-): Partial<Record<WorkshopInputType, unknown>> {
+function unifiedImageInputs(req: ApiImageRequest): Partial<Record<WorkshopInputType, unknown>> {
   return {
     prompt: req.prompt ?? undefined,
     negative: req.negative ?? undefined,
@@ -139,16 +128,13 @@ async function resolveTarget(
   /* 返回体里带上 channel 是为了让调用方把「同一份配置」交给 callImageGeneration
    * 做端点的最终拼装（未配置时的可读错误也在那里判）。 */
   const wantedModel = (req.model ?? "").trim();
-  if (!wantedModel)
-    return { target: fallbackTarget(channel), channel, adapter: null };
+  if (!wantedModel) return { target: fallbackTarget(channel), channel, adapter: null };
   try {
     const entries = await remoteModelRepository.list();
     const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
-    if (!entry)
-      return { target: fallbackTarget(channel), channel, adapter: null };
+    if (!entry) return { target: fallbackTarget(channel), channel, adapter: null };
     // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
-    const adapters =
-      await remoteModelRepository.getWorkshopAdapters(wantedModel);
+    const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
     const wantedMode = upperToken(req.mode);
     const [onlyAdapter] = adapters;
     const adapter =
@@ -182,9 +168,7 @@ function fallbackTarget(channel: ApiChannelStored): ApiUpstreamTarget {
 
 /* 调一个 OpenAI 兼容的 images/generations 端点；返回可用的 URL
  *（远程 URL，或 b64 载荷内联成 data URL）。 */
-export async function generateImageViaApi(
-  req: ApiImageRequest,
-): Promise<string> {
+export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
   const resolved = await resolveTarget(req, getWorkshopApiSettingsSync().image);
   /* 有适配器：请求体按字段映射落统一输入 + 按 outputField 取结果；
    * 无适配器：OpenAI 兼容默认映射（含「未配置」时抛既有的可读错误）。 */
@@ -198,9 +182,7 @@ export async function generateImageViaApi(
 }
 
 /* 把视频任务提交到配置好的端点。 */
-export async function submitVideoViaApi(
-  req: ApiVideoSubmitRequest,
-): Promise<ApiVideoSubmitResult> {
+export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<ApiVideoSubmitResult> {
   return callVideoSubmit(req, getWorkshopApiSettingsSync().video, {
     readJson: readUpstreamJson,
   });

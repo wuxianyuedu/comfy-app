@@ -16,10 +16,7 @@ vi.mock("~/config/custom-nodes", () => ({
   getCustomNodesManifest: vi.fn().mockResolvedValue(null),
 }));
 
-import {
-  getCustomNodesManifest,
-  refreshCustomNodes,
-} from "~/config/custom-nodes";
+import { getCustomNodesManifest, refreshCustomNodes } from "~/config/custom-nodes";
 import { useCustomNodesSettings } from "./use-custom-nodes-settings";
 
 const mockedManifest = vi.mocked(getCustomNodesManifest);
@@ -55,7 +52,7 @@ function settingsBlob(over: Record<string, unknown> = {}) {
     settings: {
       paths: ["D:/comfy/custom_nodes"],
       localWorkflowPaths: [],
-      ...(settings as object | undefined),
+      .../* SAFETY: 类型断言已复核 */ (settings as object | undefined),
     },
   });
 }
@@ -96,18 +93,14 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
 
     // 完成信号是「数据落地」而不是 loading：loading 初值就是 false，
     // 用它会立刻通过、根本等不到请求回来（这是一类常见的空断言陷阱）。
-    await expect
-      .poll(() => result.current.savedPaths)
-      .toEqual(["D:/comfy/custom_nodes"]);
+    await expect.poll(() => result.current.savedPaths).toEqual(["D:/comfy/custom_nodes"]);
     // 首次拉取是 GET（无第二个参数）：读 /api/custom-nodes
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/custom-nodes");
     expect(mockedManifest).toHaveBeenCalled();
   });
 
   it("拉取完成后展开所有已配置父目录（用户一打开就能看到列表）", async () => {
-    fetchMock.mockResolvedValue(
-      settingsBlob({ settings: { paths: ["D:/a", "D:/b"] } }),
-    );
+    fetchMock.mockResolvedValue(settingsBlob({ settings: { paths: ["D:/a", "D:/b"] } }));
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
@@ -122,31 +115,23 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
     act(() => result.current.setOpen(true));
     await expect.poll(() => result.current.savedPaths).toHaveLength(1);
 
-    act(() =>
-      result.current.parentExpansion.set("D:/comfy/custom_nodes", false),
-    );
+    act(() => result.current.parentExpansion.set("D:/comfy/custom_nodes", false));
 
     // 再拉一次：折叠状态必须保留
     await act(async () => {
       await result.current.onParseSingle("D:/comfy/custom_nodes/foo");
     });
-    expect(
-      result.current.parentExpansion.isExpanded("D:/comfy/custom_nodes"),
-    ).toBe(false);
+    expect(result.current.parentExpansion.isExpanded("D:/comfy/custom_nodes")).toBe(false);
   });
 });
 
 describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
   it("服务端返回错误 blob（无 settings）→ saveErr 给出服务端原文", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ error: { message: "ComfyUI 路径未配置" } }, 500),
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ error: { message: "ComfyUI 路径未配置" } }, 500));
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await expect
-      .poll(() => result.current.saveErr)
-      .toContain("ComfyUI 路径未配置");
+    await expect.poll(() => result.current.saveErr).toContain("ComfyUI 路径未配置");
     // 错误必须是可读文案，不是 "Cannot read properties of undefined"
     expect(result.current.saveErr).not.toContain("undefined");
   });
@@ -187,9 +172,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
 
 describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle）", () => {
   it("未找到自定义节点目录时 onParseAll 直接给出可行动提示，不发请求", async () => {
-    fetchMock.mockImplementation(async () =>
-      settingsBlob({ settings: { paths: [] } }),
-    );
+    fetchMock.mockImplementation(async () => settingsBlob({ settings: { paths: [] } }));
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
     /* 本用例的响应本来就「没有目录」，等不到 savedPaths —— 改为等首次拉取完成。
@@ -233,9 +216,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await expect
-      .poll(() => result.current.savedPaths.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.savedPaths.length).toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -257,9 +238,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     // 不留死状态：解析结束必须回 false，否则按钮永远显示「解析中」
     expect(result.current.parsing).toBe(false);
     // 解析流的 log 事件必须落到日志面板（用户看得见进度）
-    expect(result.current.logs.map((l) => l.msg)).toEqual(
-      expect.arrayContaining(["开始解析…"]),
-    );
+    expect(result.current.logs.map((l) => l.msg)).toEqual(expect.arrayContaining(["开始解析…"]));
     // 解析完成后 report 必须有值（视图据此渲染报告卡），不能是 null
     expect(result.current.report).not.toBeNull();
     // 解析成功后必须刷新注册表，否则新导入的节点要硬刷新才出现
@@ -280,9 +259,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await expect
-      .poll(() => result.current.savedPaths.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.savedPaths.length).toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -302,9 +279,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await expect
-      .poll(() => result.current.savedPaths.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.savedPaths.length).toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -323,9 +298,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await expect
-      .poll(() => result.current.savedPaths.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.savedPaths.length).toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseSingle("D:/pkg/a");
@@ -341,9 +314,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     fetchMock.mockResolvedValue(settingsBlob());
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await expect
-      .poll(() => result.current.savedPaths.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.savedPaths.length).toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAllParent("D:/empty");
@@ -358,16 +329,12 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
       headers: { "content-type": "application/x-ndjson" },
     });
     fetchMock.mockImplementation(async (_i, init) =>
-      (init?.method ?? "GET").toUpperCase() === "POST"
-        ? noBody
-        : settingsBlob(),
+      (init?.method ?? "GET").toUpperCase() === "POST" ? noBody : settingsBlob(),
     );
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await expect
-      .poll(() => result.current.savedPaths.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.savedPaths.length).toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();

@@ -16,21 +16,11 @@
  * 复用同一调用方式才等价于真实校验（脚本内部用 __dirname 定位仓库根）。
  */
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  restoreToSnapshot,
-  snapshotPaths,
-} from "./helpers/probe-restore.ts";
+import { restoreToSnapshot, snapshotPaths } from "./helpers/probe-restore.ts";
 
 const REPO_ROOT = process.cwd();
 const CHECK = join(REPO_ROOT, "scripts", "check-doc-references.cjs");
@@ -46,9 +36,10 @@ type Fact = {
 };
 
 async function loadFacts(): Promise<Fact[]> {
-  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-    FACTS: Fact[];
-  };
+  const mod =
+    /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
+      FACTS: Fact[];
+    };
   return mod.FACTS;
 }
 
@@ -61,7 +52,11 @@ function runCheck(): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as {
+      status?: number;
+      stdout?: string;
+      stderr?: string;
+    };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -132,7 +127,7 @@ function writeText(abs: string, text: string): void {
       if (readFileSync(abs, "utf8") === text) return;
       lastError = "写回后读回的内容与预期不一致";
     } catch (err) {
-      lastError = (err as Error).message;
+      lastError = /* SAFETY: 类型断言已复核 */ (err as Error).message;
     }
   }
   throw new Error(
@@ -150,9 +145,10 @@ function restoreText(abs: string, text: string): void {
  * 「哪条判据在哪跑」写在 SCOPED_DOCS 之外的那几份文件里，不显式并入就没人核（§13.5.10 第 ② 条）。
  */
 async function gateDocs(): Promise<string[]> {
-  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-    SCOPED_DOCS: string[];
-  };
+  const mod =
+    /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
+      SCOPED_DOCS: string[];
+    };
   return [
     ...new Set([
       "AGENTS.md",
@@ -199,9 +195,7 @@ describe("FACTS 的并行引用点（onlyDocs ∪ otherDocs）", () => {
     const facts = await loadFacts();
     const fact = facts.find((f) => f.key === "comfyui.port");
     expect(fact?.onlyDocs).toContain("docs/workshop-mcp.md");
-    expect(fact?.otherDocs).toContain(
-      "docs/standards/Comfy-APP-T3-项目开发规范.md",
-    );
+    expect(fact?.otherDocs).toContain("docs/standards/Comfy-APP-T3-项目开发规范.md");
   });
 
   it("docs/reference-facts.md 如实登记 otherDocs 的存在与语义", () => {
@@ -257,9 +251,7 @@ describe("主规范「开发端口」行（comfyui.port 第二引用点）", () 
     const facts = await loadFacts();
     const fact = facts.find((f) => f.key === "comfyui.port");
     expect(fact?.extract()).toBe("8188");
-    expect(docText("docs/generated/Comfy-APP-T3-项目开发规范.md")).toContain(
-      ":8188`",
-    );
+    expect(docText("docs/generated/Comfy-APP-T3-项目开发规范.md")).toContain(":8188`");
   });
 });
 
@@ -276,13 +268,12 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
 
   async function loadScope(): Promise<ScopeMod> {
     const mod =
-      (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
     return mod;
   }
 
   it("仓库当前不存在「未登记也未豁免」的规范文档（守卫基线为绿）", async () => {
-    const { SCOPED_DOCS, SCOPED_DOC_DIRS, SCOPED_DOC_EXEMPTIONS } =
-      await loadScope();
+    const { SCOPED_DOCS, SCOPED_DOC_DIRS, SCOPED_DOC_EXEMPTIONS } = await loadScope();
     expect(SCOPED_DOC_DIRS.length).toBeGreaterThan(0);
     const scoped = new Set(SCOPED_DOCS);
     const { readdirSync, statSync } = await import("node:fs");
@@ -296,8 +287,7 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
           continue;
         }
         if (!name.endsWith(".md")) continue;
-        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS))
-          offenders.push(rel);
+        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS)) offenders.push(rel);
       }
     };
     SCOPED_DOC_DIRS.forEach(walk);
@@ -305,12 +295,7 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
   });
 
   it("新增一个未登记的规范文档 → doc:check 失败并点名该文件", () => {
-    const temp = join(
-      REPO_ROOT,
-      "docs",
-      "standards",
-      "99-temp-unregistered.md",
-    );
+    const temp = join(REPO_ROOT, "docs", "standards", "99-temp-unregistered.md");
     writeFileSync(temp, "# 临时未登记文档\n\n端口 localhost:9999\n", "utf8");
     try {
       const { code, output } = runCheck();
@@ -391,9 +376,7 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   }
 
   it("把 npm 命令写进已登记的文档 → doc:check 失败并给出改法", () => {
-    const { code, output } = withRegisteredDocProbe(
-      "```bash\nnpm run test:e2e\n```",
-    );
+    const { code, output } = withRegisteredDocProbe("```bash\nnpm run test:e2e\n```");
     expect(code).not.toBe(0);
     expect(output).toContain("DEV-QUERIES.md");
     expect(output).toContain("硬规则 1");
@@ -401,9 +384,7 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   });
 
   it("npx 同样被拦下", () => {
-    const { code, output } = withRegisteredDocProbe(
-      "```bash\nnpx tsc --noEmit\n```",
-    );
+    const { code, output } = withRegisteredDocProbe("```bash\nnpx tsc --noEmit\n```");
     expect(code).not.toBe(0);
     expect(output).toContain("npx");
   });
@@ -448,14 +429,12 @@ describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
   it("已接入 main 流程（定义了却没人调用 = 没有执行者）", () => {
     const script = readFileSync(CHECK, "utf8");
     expect(script).toContain("function checkRuntimeAbsentDriverCommands()");
-    expect(isCalledInMain(script, "checkRuntimeAbsentDriverCommands()")).toBe(
-      true,
-    );
+    expect(isCalledInMain(script, "checkRuntimeAbsentDriverCommands()")).toBe(true);
   });
 
   it("把 require 形状写进用户面文档 → 红，点名文件行号并给出真在场的出口", () => {
     const { code, output } = withProbe(
-      '```bash\nnode -e "const D=require(\'better-sqlite3\'); const db=new D(\'db.sqlite\'); console.log(db.pragma(\'integrity_check\'));"\n```',
+      "```bash\nnode -e \"const D=require('better-sqlite3'); const db=new D('db.sqlite'); console.log(db.pragma('integrity_check'));\"\n```",
     );
     expect(code, "命令形状必须让 doc:check 红").not.toBe(0);
     expect(output).toContain(probe);
@@ -465,9 +444,7 @@ describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
   });
 
   it("`from 'better-sqlite3'`（ESM 那一形）同样拦下", () => {
-    const { code, output } = withProbe(
-      '```js\nimport Database from "better-sqlite3";\n```',
-    );
+    const { code, output } = withProbe('```js\nimport Database from "better-sqlite3";\n```');
     expect(code).not.toBe(0);
     expect(output).toContain(probe);
   });
@@ -493,10 +470,7 @@ describe("用户面文档不许教跑不通的驱动（ISSUE #2580）", () => {
     ).toBeGreaterThan(0);
     for (const line of guide.split("\n")) {
       if (!line.includes("better-sqlite3")) continue;
-      expect(
-        line,
-        "散文可以提名字，但不许留成能被复制粘贴执行的那一行",
-      ).not.toMatch(
+      expect(line, "散文可以提名字，但不许留成能被复制粘贴执行的那一行").not.toMatch(
         /require\(\s*["']better-sqlite3["']\s*\)|from\s+["']better-sqlite3["']/,
       );
     }
@@ -522,9 +496,10 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
   });
 
   it("AGENTS.md 由 checkLedgerCommands 显式并入遍历（不进 SCOPED_DOCS、避免生成冗余副本）", async () => {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      SCOPED_DOCS: string[];
-    };
+    const mod =
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
+        SCOPED_DOCS: string[];
+      };
     // AGENTS.md 刻意不入 SCOPED_DOCS：进则被 render-doc-placeholders 复制成
     // docs/generated/AGENTS.md，产物里没有占位符替换、只是同一份内容，反而
     // 让读者以为可以改产物（规范 §13.5.5 明确「禁止手改生成物」）。
@@ -534,9 +509,7 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
       script.indexOf("function checkLedgerCommands()"),
       script.indexOf("function shouldApplyFactToDoc"),
     );
-    expect(ledgerBody).toMatch(
-      /\[\s*AGENTS_MD_PATH\s*,\s*\.\.\.SCOPED_DOCS\s*\]/,
-    );
+    expect(ledgerBody).toMatch(/\[\s*AGENTS_MD_PATH\s*,\s*\.\.\.SCOPED_DOCS\s*\]/);
   });
 
   it("当前 AGENTS.md 无漂移（基线为绿）", () => {
@@ -615,13 +588,9 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
    * 「不红」这件事在本机分不出是「豁免生效了」还是「那个目录真的在」⇒ 探针文件必须是
    * **一定不存在**的名字，存在性检查本来会红、豁免让它不红 —— 那才有信号。 */
   it("被 .gitignore 忽略的嵌套目录形态同样豁免（差分探针）", () => {
-    const ignored = withAgentsMdProbe(
-      "临时探针：`docs/api/__probe_not_exists__.md` 用于测试。",
-    );
+    const ignored = withAgentsMdProbe("临时探针：`docs/api/__probe_not_exists__.md` 用于测试。");
     expect(ignored.code, ignored.output).toBe(0);
-    const notIgnored = withAgentsMdProbe(
-      "临时探针：`docs/__probe_not_exists__.md` 用于测试。",
-    );
+    const notIgnored = withAgentsMdProbe("临时探针：`docs/__probe_not_exists__.md` 用于测试。");
     expect(notIgnored.code).not.toBe(0);
     expect(notIgnored.output).toContain("在仓库中不存在");
   });
@@ -654,8 +623,7 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
 describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", () => {
   const STEP_RE = /第\s*\d+(?:\s*\/\s*\d+)?\s*步/;
   const GATE_RE = /pre-commit|\.githooks|\bCI\b/;
-  const EXPLAIN_RE =
-    /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史/;
+  const EXPLAIN_RE = /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史/;
 
   /** 临时在一份文档尾部加探针、跑校验、再还原（finally 保证红的时候也还原）。 */
   function withProbe(
@@ -723,10 +691,7 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
   });
 
   it("AGENTS.md 也在扫描面内（它是代理自动加载的导航文件）", () => {
-    const { code, output } = withProbe(
-      "AGENTS.md",
-      "临时探针：门禁见 pre-commit 第 98 步。",
-    );
+    const { code, output } = withProbe("AGENTS.md", "临时探针：门禁见 pre-commit 第 98 步。");
     expect(code).not.toBe(0);
     expect(output).toContain("[AGENTS.md:");
     expect(output).toContain("第 98 步");
@@ -798,18 +763,13 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
     const start = text.indexOf(CHECKLIST_MARKER);
     const rest = text.slice(start);
     const close = rest.indexOf("```");
-    expect(
-      start,
-      "§13.1 的 marker 还在吗？判据与这条用例都要靠它定位",
-    ).toBeGreaterThan(-1);
+    expect(start, "§13.1 的 marker 还在吗？判据与这条用例都要靠它定位").toBeGreaterThan(-1);
     expect(close, "marker 之后找不到围栏收尾").toBeGreaterThan(-1);
     return rest
       .slice(0, close)
       .split("\n")
       .filter((l) => l.startsWith("✅ "))
-      .map((l) =>
-        (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim(),
-      );
+      .map((l) => (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim());
   }
 
   /** 精确替换一次：命中 0 次或 ≥2 次都直接抛 —— 否则文档一改措辞，探针就静默失效，
@@ -817,9 +777,7 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
   function replaceOnce(text: string, from: string, to: string): string {
     const hits = text.split(from).length - 1;
     if (hits !== 1) {
-      throw new Error(
-        `探针锚点命中 ${hits} 次（应为 1）：${from.slice(0, 60)}`,
-      );
+      throw new Error(`探针锚点命中 ${hits} 次（应为 1）：${from.slice(0, 60)}`);
     }
     return text.replace(from, to);
   }
@@ -838,32 +796,22 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
   it("已接入 main 流程（不是定义了却没人调用）", () => {
     const script = readFileSync(CHECK, "utf8");
     expect(script).toContain("function checkGateChecklistMatchesHook()");
-    expect(isCalledInMain(script, "checkGateChecklistMatchesHook()")).toBe(
-      true,
-    );
+    expect(isCalledInMain(script, "checkGateChecklistMatchesHook()")).toBe(true);
   });
 
   it("量具自己没坏：注释掉的调用不算「已接入」", () => {
     const wired = "function main() {\n  checkGateChecklistMatchesHook();\n}\n";
-    const muted =
-      "function main() {\n  // checkGateChecklistMatchesHook();\n}\n";
+    const muted = "function main() {\n  // checkGateChecklistMatchesHook();\n}\n";
     expect(isCalledInMain(wired, "checkGateChecklistMatchesHook()")).toBe(true);
-    expect(isCalledInMain(muted, "checkGateChecklistMatchesHook()")).toBe(
-      false,
-    );
+    expect(isCalledInMain(muted, "checkGateChecklistMatchesHook()")).toBe(false);
   });
 
   it("存量 = 0：钩子 D 组的每一步都在清单里，且 flag 逐字一致", () => {
     const hook = hookCommands();
     const doc = new Set(docCommands());
-    expect(
-      hook.length,
-      "解析不出钩子步骤，这条用例等于什么都没测",
-    ).toBeGreaterThanOrEqual(25);
+    expect(hook.length, "解析不出钩子步骤，这条用例等于什么都没测").toBeGreaterThanOrEqual(25);
     for (const cmd of hook) {
-      expect(doc.has(cmd), `清单里缺这一条（或 flag 不一致）：${cmd}`).toBe(
-        true,
-      );
+      expect(doc.has(cmd), `清单里缺这一条（或 flag 不一致）：${cmd}`).toBe(true);
     }
   });
 
@@ -974,10 +922,7 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
           ).toBe(true);
         });
     }
-    expect(
-      scanned,
-      "扫描面一份都没读到，这条用例等于什么都没测",
-    ).toBeGreaterThan(20);
+    expect(scanned, "扫描面一份都没读到，这条用例等于什么都没测").toBeGreaterThan(20);
   });
 
   it("种一条「`.githooks/pre-commit`（24 步）」→ 红，并给出指针形态的改法", () => {
@@ -1080,7 +1025,11 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
       });
       return { code: 0, output };
     } catch (err) {
-      const e = err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as {
+        status?: number;
+        stdout?: string;
+        stderr?: string;
+      };
       return {
         code: typeof e.status === "number" ? e.status : 1,
         output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -1148,9 +1097,7 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
     /* 修的是生成物：探针文本应当出现在产物里（它就是「源 → 生成物」那一份计算的
      * 结果），而**源那一份不许被改**（判据的红话里那句「不要手改生成物」在这里的
      * 镜像：自动修也不许反过来改源）。 */
-    expect(readFileSync(genAbs(), "utf8")).toContain(
-      "自动修探针：这一行只在编辑态。",
-    );
+    expect(readFileSync(genAbs(), "utf8")).toContain("自动修探针：这一行只在编辑态。");
     expect(readFileSync(editAbs(), "utf8")).toBe(probed);
   });
 
@@ -1198,7 +1145,11 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
       });
       return { code: 0, output };
     } catch (err) {
-      const e = err as { status?: number; stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ err as {
+        status?: number;
+        stdout?: string;
+        stderr?: string;
+      };
       return {
         code: typeof e.status === "number" ? e.status : 1,
         output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -1213,9 +1164,14 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
       mkdirSync(dirname(editAbs(rel)), { recursive: true });
       writeFileSync(
         editAbs(rel),
-        [`# ${rel}（夹具）`, "", "> **占位符约定**：占位符由 doc:check 动态核对。", "", "- ComfyUI 端口：{{comfyui.port}}", ""].join(
-          "\n",
-        ),
+        [
+          `# ${rel}（夹具）`,
+          "",
+          "> **占位符约定**：占位符由 doc:check 动态核对。",
+          "",
+          "- ComfyUI 端口：{{comfyui.port}}",
+          "",
+        ].join("\n"),
         "utf8",
       );
     }
@@ -1239,15 +1195,16 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
     const original = readFileSync(editAbs(MINE), "utf8");
     writeFileSync(
       editAbs(MINE),
-      original.replace("- ComfyUI 端口：{{comfyui.port}}", "- 探针：只写我自己那份。\n- ComfyUI 端口：{{comfyui.port}}"),
+      original.replace(
+        "- ComfyUI 端口：{{comfyui.port}}",
+        "- 探针：只写我自己那份。\n- ComfyUI 端口：{{comfyui.port}}",
+      ),
       "utf8",
     );
 
     const { code, output } = runRender(["--only", MINE]);
     expect(code, output).toBe(0);
-    expect(readFileSync(genAbs("DEV-QUERIES.md"), "utf8")).toContain(
-      "只写我自己那份",
-    );
+    expect(readFileSync(genAbs("DEV-QUERIES.md"), "utf8")).toContain("只写我自己那份");
     /* 本格的主断言：别人那份**没有被顺手重渲染**（内容逐字仍是脏的那版）。 */
     expect(readFileSync(genAbs("TESTING.md"), "utf8")).toBe(othersBefore);
     /* 降档要被念出来：这一批写了 1 份、全量是 2 份 —— 不写这行就成了「只跑了一遍渲染」
@@ -1273,10 +1230,7 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
     seedPair();
     const mineBefore = readFileSync(genAbs("DEV-QUERIES.md"), "utf8");
     const othersBefore = readFileSync(genAbs("TESTING.md"), "utf8");
-    const { code, output } = runRender([
-      "--only",
-      "docs/guides/根本不存在.md",
-    ]);
+    const { code, output } = runRender(["--only", "docs/guides/根本不存在.md"]);
     expect(code, output).toBe(1);
     expect(output).toContain("不在 SCOPED_DOCS 的名字");
     expect(readFileSync(genAbs("DEV-QUERIES.md"), "utf8")).toBe(mineBefore);

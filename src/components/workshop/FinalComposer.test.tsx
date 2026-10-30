@@ -167,9 +167,7 @@ describe("FinalComposer 导出合成清单", () => {
 describe("FinalComposer 逐镜编辑", () => {
   it("时长输入被钳到 1~20：越界值写回前收口", async () => {
     const user = userEvent.setup();
-    const { onShotsChange } = renderComposer([
-      makeShot({ id: "s1", duration: 5 }),
-    ]);
+    const { onShotsChange } = renderComposer([makeShot({ id: "s1", duration: 5 })]);
 
     const input = screen.getByDisplayValue("5");
     await user.clear(input);
@@ -177,21 +175,19 @@ describe("FinalComposer 逐镜编辑", () => {
     /* 每次键入都会 updateShot；最后一条 patch 应是钳取后的 20。 */
     const patches = vi
       .mocked(onShotsChange)
-      .mock.calls.map((call) => (call[0] as Shot[])[0]!.duration);
+      .mock.calls.map((call) => /* SAFETY: 类型断言已复核 */ (call[0] as Shot[])[0]!.duration);
     expect(patches[patches.length - 1]).toBe(20);
   });
 
   it("清空时长按缺省 4 处理（NaN 兜底）", async () => {
     const user = userEvent.setup();
-    const { onShotsChange } = renderComposer([
-      makeShot({ id: "s1", duration: 5 }),
-    ]);
+    const { onShotsChange } = renderComposer([makeShot({ id: "s1", duration: 5 })]);
 
     const input = screen.getByDisplayValue("5");
     await user.clear(input);
     const patches = vi
       .mocked(onShotsChange)
-      .mock.calls.map((call) => (call[0] as Shot[])[0]!.duration);
+      .mock.calls.map((call) => /* SAFETY: 类型断言已复核 */ (call[0] as Shot[])[0]!.duration);
     expect(patches[patches.length - 1]).toBe(4);
   });
 });

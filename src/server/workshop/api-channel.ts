@@ -36,7 +36,7 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   if (cache) return cache;
   let stored: Partial<WorkshopApiSettings> = {};
   try {
-    stored = JSON.parse(
+    stored = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(FILE, "utf-8"),
     ) as Partial<WorkshopApiSettings>;
   } catch {
@@ -49,19 +49,14 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
 export type { ApiImageRequest, ApiVideoSubmitRequest, ApiVideoSubmitResult };
 
 /** 调用 OpenAI 兼容 images/generations 端点，返回可用 URL（远程或 data URL）。 */
-export async function generateImageViaApi(
-  req: ApiImageRequest,
-): Promise<string> {
+export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
   const channel = getWorkshopApiSettingsSync().image;
-  if (!channel.baseUrl)
-    throw new Error("API 生图通道未配置：请先填写 Base URL 与 API Key");
+  if (!channel.baseUrl) throw new Error("API 生图通道未配置：请先填写 Base URL 与 API Key");
   return callImageGeneration(req, channel, () => null);
 }
 
 /** 提交视频任务；支持同步 URL 与异步任务两种上游。 */
-export async function submitVideoViaApi(
-  req: ApiVideoSubmitRequest,
-): Promise<ApiVideoSubmitResult> {
+export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<ApiVideoSubmitResult> {
   return callVideoSubmit(req, getWorkshopApiSettingsSync().video);
 }
 

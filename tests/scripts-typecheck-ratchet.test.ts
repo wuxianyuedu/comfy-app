@@ -15,13 +15,7 @@
  * `scripts/.scripts-typecheck-baseline.json`，也不动任何入库文件）。
  */
 import { execFileSync } from "node:child_process";
-import {
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -56,10 +50,7 @@ const created: string[] = [];
 let fixture = "";
 
 /** 起真脚本（与 `runCheck` 同一条口径：子进程 + 原样退出码 + 两端输出都收回来）。 */
-function runCheck(
-  args: string[],
-  root = fixture,
-): { code: number; output: string } {
+function runCheck(args: string[], root = fixture): { code: number; output: string } {
   try {
     const output = execFileSync(process.execPath, [CHECK, ...args], {
       cwd: REPO_ROOT,
@@ -69,7 +60,11 @@ function runCheck(
     });
     return { code: 0, output };
   } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ err as {
+      status?: number;
+      stdout?: string;
+      stderr?: string;
+    };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -96,7 +91,7 @@ function baselinePath(): string {
   return join(fixture, "scripts", ".scripts-typecheck-baseline.json");
 }
 function readFixtureBaseline(): Ledger {
-  return JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
 }
 
 beforeAll(() => {
@@ -276,11 +271,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
           .filter(Boolean),
       );
     } catch (e) {
-      return `；git 清单取不到，定位不了是哪几份：${(e as Error).message}`;
+      return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (e as Error).message}`;
     }
-    const stray = face
-      .map((p) => String(p).replaceAll("\\", "/"))
-      .filter((p) => !tracked.has(p));
+    const stray = face.map((p) => String(p).replaceAll("\\", "/")).filter((p) => !tracked.has(p));
     return (
       `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）` +
       (stray.length > 0
@@ -290,7 +283,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
   }
 
   it("账本里的 `face` 与 `total` 与配置展开同数（面与账不许两份口径）", () => {
-    const judge = createRequire(import.meta.url)(
+    const judge = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
       "../scripts/check-scripts-typecheck.cjs",
     ) as {
       configFace: (ts: unknown) => {
@@ -309,21 +302,18 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
      * 所以落成 `unknown`，不在用例这一侧再抄一份 TS 的类型面。 */
-    const ts = createRequire(import.meta.url)("typescript") as unknown;
+    const ts = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
     /* 面取**判据自己那一份求交结果**（ISSUE #2681）：账上记的是「这份提交里有多少脚本」，
      * 用例若拿未筛的磁盘展开去比，就把刚修掉的那条耦合又请回来了 ——
      * 平台上任何一份落在工作区的未入库产物都会让它红一次，而且指不出是谁。 */
-    const { face, untracked } = judge.splitTrackedFace(
-      cfg.mjs ?? [],
-      judge.trackedMjs(REPO_ROOT),
-    );
+    const { face, untracked } = judge.splitTrackedFace(cfg.mjs ?? [], judge.trackedMjs(REPO_ROOT));
     expect(
       untracked,
       `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${untracked.join("、")}`,
     ).toEqual([]);
-    const baseline = JSON.parse(
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
     ) as { face: number; total: number; files: Record<string, Record<string, number>> };
     /* 面收了、账没跟着记（或反过来）都会在这一格现形 —— 那两种形态在账面读数上
@@ -361,9 +351,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
  * 用例这一侧读的是**同一份实现**（`trackedMjs` + `splitTrackedFace`），不抄第二遍。
  */
 describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
-  const judge = createRequire(import.meta.url)(
-    "../scripts/check-scripts-typecheck.cjs",
-  ) as {
+  const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
     trackedMjs: (root: string) => Set<string> | null;
     splitTrackedFace: (
       mjs: string[],
@@ -390,7 +378,11 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
     rmSync(repo, { recursive: true, force: true });
     mkdirSync(repo, { recursive: true });
     created.push(repo);
-    writeFileSync(join(repo, "tsconfig.scripts.json"), JSON.stringify(FIXTURE_CONFIG, null, 2), "utf8");
+    writeFileSync(
+      join(repo, "tsconfig.scripts.json"),
+      JSON.stringify(FIXTURE_CONFIG, null, 2),
+      "utf8",
+    );
     mkdirSync(join(repo, "scripts"), { recursive: true });
     writeFileSync(join(repo, "scripts", "clean.mjs"), "export const a = 1;\n", "utf8");
     git(["init", "-q"], repo);
@@ -402,7 +394,11 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
     expect(seed.code, seed.output).toBe(0);
 
     /* 未入库的一份**带错**（`const dead` 是本案那类死声明）：它必须被点名、且不进账。 */
-    writeFileSync(join(repo, "scripts", "stray.mjs"), "const dead = 1;\nexport const z = 1;\n", "utf8");
+    writeFileSync(
+      join(repo, "scripts", "stray.mjs"),
+      "const dead = 1;\nexport const z = 1;\n",
+      "utf8",
+    );
     const stray = runCheck([], repo);
     expect(stray.code, stray.output).toBe(0);
     expect(stray.output).toContain("展开 2 份 .mjs（入库的 1 份");

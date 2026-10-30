@@ -30,17 +30,7 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
@@ -80,9 +70,7 @@ const KNOWN_CLAIM_MODES: string[] = ["inline", "host"];
 /** `ownedBy()` 的内存侧同判据（行已经在手里、只需分类「为什么没写进去」时用）。
  *  两条必须同步改：SQL 侧漏一行、内存侧多认一行，就会把别人的行判成「归我」。 */
 function isOwnedBy(claimedBy: string | null, owner: TaskClaimMode): boolean {
-  return owner === "host"
-    ? claimedBy === "host"
-    : claimedBy === null || claimedBy === "inline";
+  return owner === "host" ? claimedBy === "host" : claimedBy === null || claimedBy === "inline";
 }
 
 /**
@@ -139,10 +127,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
      * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
      * 行由此转为显式归属；reaper 分片（`listStale*` 的 `owner`）用同一归属谓词。
      */
-    async claimNextQueued(
-      mode: TaskClaimMode,
-      take: number,
-    ): Promise<string[]> {
+    async claimNextQueued(mode: TaskClaimMode, take: number): Promise<string[]> {
       const candidates = db
         .select({ id: task.id })
         .from(task)
@@ -232,7 +217,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .limit(take);
       /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
        * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
-      return rows as Array<{
+      return /* SAFETY: 类型断言已复核 */ rows as Array<{
         id: string;
         createdAt: Date;
         workflowName: string;
@@ -319,9 +304,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     },
 
     /** 按 id 读一张产物图（连带 task 的归属 userId 做归属校验）；不存在 → null。 */
-    async findImageById(
-      imageId: string,
-    ): Promise<{ id: string; userId: string } | null> {
+    async findImageById(imageId: string): Promise<{ id: string; userId: string } | null> {
       const rows = await db
         .select({ id: taskImage.id, userId: task.userId })
         .from(taskImage)
@@ -356,19 +339,12 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
  * `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
  */
 
-export function createTaskRepoImpl(
-  db: TaskRepoDb,
-  options: { owner: TaskClaimMode },
-) {
+export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMode }) {
   const { owner } = options;
 
   /** 收口写入的共用守卫：终态不再被改写 + 只动自己那一片（ADR §14 D4）。 */
   function writeGuard(taskId: string) {
-    return and(
-      eq(task.id, taskId),
-      notInArray(task.status, TERMINAL_STATES),
-      ownedBy(owner),
-    );
+    return and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES), ownedBy(owner));
   }
 
   /** 「第一次转到 RUNNING 时把开始时刻定格」的 SET 片段（P3 §5 ADR §14 D1 的 4-B2）。
@@ -517,9 +493,7 @@ export function createTaskRepoImpl(
         .set({
           status: "FAILED",
           error,
-          validationErrors: validationErrors?.length
-            ? JSON.stringify(validationErrors)
-            : null,
+          validationErrors: validationErrors?.length ? JSON.stringify(validationErrors) : null,
           finishedAt: new Date(),
         })
         .where(writeGuard(taskId))
@@ -540,9 +514,7 @@ export function createTaskRepoImpl(
       const updated = await db
         .update(task)
         .set({ status: "CANCELLED", finishedAt: new Date() })
-        .where(
-          and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)),
-        )
+        .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
         .returning({ id: task.id });
       return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
@@ -614,7 +586,7 @@ export function createTaskRepoImpl(
         .where(eq(task.id, taskId))
         .limit(1);
       const value = rows[0]?.rawCli;
-      return Array.isArray(value) ? (value as string[]) : null;
+      return Array.isArray(value) ? /* SAFETY: 类型断言已复核 */ (value as string[]) : null;
     },
   };
 }

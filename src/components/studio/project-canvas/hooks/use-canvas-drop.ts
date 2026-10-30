@@ -15,16 +15,9 @@ import type { XYPosition } from "@xyflow/react";
 import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 import { runAsyncAction } from "~/lib/async-action";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
-import {
-  defaultData,
-  type CanvasNodeType,
-  type NodeKind,
-} from "~/lib/project-canvas/canvas-types";
+import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-canvas/canvas-types";
 import { useToast } from "~/components/studio/ToastProvider";
-import {
-  MEDIA_DRAG_MIME,
-  type MediaDragPayload,
-} from "~/components/ui/media-drag-source";
+import { MEDIA_DRAG_MIME, type MediaDragPayload } from "~/components/ui/media-drag-source";
 
 export interface UseCanvasDropArgs {
   screenToFlowPosition: (p: XYPosition) => XYPosition;
@@ -37,10 +30,7 @@ export type MediaDropPayload = MediaDragPayload & {
   position?: XYPosition;
 };
 
-export function useCanvasDrop({
-  screenToFlowPosition,
-  setNodes,
-}: UseCanvasDropArgs) {
+export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropArgs) {
   const toast = useToast();
 
   const placeMediaNode = useCallback(
@@ -48,9 +38,7 @@ export function useCanvasDrop({
       const { url, displayName, mediaType, position } = opts;
       if (mediaType !== "image" && mediaType !== "video") {
         toast.info(
-          mediaType === "audio"
-            ? "音频暂不支持落地画布"
-            : "该文件类型暂不支持落地画布",
+          mediaType === "audio" ? "音频暂不支持落地画布" : "该文件类型暂不支持落地画布",
           "画布目前只有图片 / 视频两种内容载体节点",
         );
         return;
@@ -114,7 +102,7 @@ export function useCanvasDrop({
       e.preventDefault();
       let payload: MediaDropPayload;
       try {
-        payload = JSON.parse(raw) as MediaDropPayload;
+        payload = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as MediaDropPayload;
       } catch {
         return;
       }

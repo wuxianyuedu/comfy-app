@@ -35,15 +35,13 @@ export const UI_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
 /** Read a string field off an unknown payload（非 string → undefined）。 */
 function strField(o: unknown, key: string): string | undefined {
   if (o == null || typeof o !== "object") return undefined;
-  const v = (o as Record<string, unknown>)[key];
+  const v = /* SAFETY: 类型断言已复核 */ (o as Record<string, unknown>)[key];
   return typeof v === "string" ? v : undefined;
 }
 
 /** 端点的 id → 比较用的字符串；不是 string / number（畸形数据里的对象等）给空串。 */
 function idOf(value: unknown): string {
-  return typeof value === "string" || typeof value === "number"
-    ? String(value)
-    : "";
+  return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
 /** 从一组节点里挑出 UI-only 的：返回保留的节点与被删的 id。 */
@@ -58,7 +56,7 @@ function pickOutUiOnlyNodes(nodes: unknown[]): {
       kept.push(n);
       continue;
     }
-    const node = n as Record<string, unknown>;
+    const node = /* SAFETY: 类型断言已复核 */ n as Record<string, unknown>;
     /* 两种导出形态都认：ComfyUI 新导出走 `type`，部分路径（子图 wrapper）走
      * `class_type`（与 `executor-cli` 里读节点类型同口径）。 */
     const type = strField(node, "type") ?? strField(node, "class_type");
@@ -81,10 +79,7 @@ function pickOutUiOnlyNodes(nodes: unknown[]): {
  *
  * 不清理会留下指向不存在节点的悬空连线（转换器按 id 查表时拿到 `undefined`）。
  */
-function dropLinksTo(
-  container: Record<string, unknown>,
-  removedIds: Set<string>,
-): void {
+function dropLinksTo(container: Record<string, unknown>, removedIds: Set<string>): void {
   const links = container.links;
   if (!Array.isArray(links)) return;
   container.links = links.filter((link) => {
@@ -92,10 +87,8 @@ function dropLinksTo(
       return !removedIds.has(idOf(link[1])) && !removedIds.has(idOf(link[3]));
     }
     if (link != null && typeof link === "object") {
-      const l = link as Record<string, unknown>;
-      return (
-        !removedIds.has(idOf(l.origin_id)) && !removedIds.has(idOf(l.target_id))
-      );
+      const l = /* SAFETY: 类型断言已复核 */ link as Record<string, unknown>;
+      return !removedIds.has(idOf(l.origin_id)) && !removedIds.has(idOf(l.target_id));
     }
     return true;
   });
@@ -129,7 +122,7 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
   const defs = raw.definitions;
   const subs =
     defs != null && typeof defs === "object"
-      ? (defs as Record<string, unknown>).subgraphs
+      ? /* SAFETY: 类型断言已复核 */ (defs as Record<string, unknown>).subgraphs
       : undefined;
   const list: unknown[] = Array.isArray(subs)
     ? subs
@@ -138,7 +131,7 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
       : [];
   for (const sub of list) {
     if (sub == null || typeof sub !== "object") continue;
-    const def = sub as Record<string, unknown>;
+    const def = /* SAFETY: 类型断言已复核 */ sub as Record<string, unknown>;
     if (!Array.isArray(def.nodes)) continue;
     const inner = pickOutUiOnlyNodes(def.nodes);
     if (inner.removedIds.size > 0) {

@@ -8,11 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { vanillaApi } from "~/trpc/vanilla";
 
-import {
-  type TagItem,
-  mergeTagSnapshots,
-  useModelTags,
-} from "./use-model-tags";
+import { type TagItem, mergeTagSnapshots, useModelTags } from "./use-model-tags";
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
@@ -26,7 +22,7 @@ vi.mock("~/trpc/vanilla", () => ({
 }));
 
 /** tRPC resolver 的类型是 Resolver<...>，测试里按 vi.Mock 取用。 */
-const mockOf = (fn: unknown) => fn as Mock;
+const mockOf = (fn: unknown) => /* SAFETY: 类型断言已复核 */ fn as Mock;
 
 const vanilla = {
   workflowModel: {
@@ -61,9 +57,10 @@ afterEach(cleanup);
 describe("mergeTagSnapshots（纯函数：props 合并规则）", () => {
   it("只补本地没有的标签，不覆盖本地已有的", () => {
     const local = [tag("z-image", 9)];
-    expect(
-      mergeTagSnapshots(local, [tag("z-image", 2), tag("wan2.2", 1)]),
-    ).toEqual([tag("wan2.2", 1), tag("z-image", 9)]);
+    expect(mergeTagSnapshots(local, [tag("z-image", 2), tag("wan2.2", 1)])).toEqual([
+      tag("wan2.2", 1),
+      tag("z-image", 9),
+    ]);
   });
 
   it("快照没带来新东西时原样返回（引用不变，避免无谓 re-render）", () => {
@@ -74,23 +71,18 @@ describe("mergeTagSnapshots（纯函数：props 合并规则）", () => {
 
 describe("useModelTags", () => {
   it("首次渲染以父组件快照为种子", () => {
-    const { result } = renderHook(() =>
-      useModelTags({ initialTags: [tag("z-image", 3)] }),
-    );
+    const { result } = renderHook(() => useModelTags({ initialTags: [tag("z-image", 3)] }));
     expect(result.current.tags).toEqual([tag("z-image", 3)]);
   });
 
   it("父组件递来含新标签的快照时并入，但不覆盖本地更新的计数", () => {
     const initial = [tag("z-image", 1)];
-    const { result, rerender } = renderHook(
-      ({ tags }) => useModelTags({ initialTags: tags }),
-      { initialProps: { tags: initial } },
-    );
+    const { result, rerender } = renderHook(({ tags }) => useModelTags({ initialTags: tags }), {
+      initialProps: { tags: initial },
+    });
     rerender({ tags: [tag("z-image", 99), tag("wan2.2", 1)] });
     // 本地已有 z-image：计数保持 1（不让旧/新快照改掉本地状态）
-    expect(result.current.tags.find((t) => t.name === "z-image")?.count).toBe(
-      1,
-    );
+    expect(result.current.tags.find((t) => t.name === "z-image")?.count).toBe(1);
     expect(result.current.tags.some((t) => t.name === "wan2.2")).toBe(true);
   });
 
@@ -107,9 +99,7 @@ describe("useModelTags", () => {
 
   it("addTag：成功后清空草稿、刷新列表并回调父组件", async () => {
     const onChanged = vi.fn();
-    const { result } = renderHook(() =>
-      useModelTags({ initialTags: [], onChanged }),
-    );
+    const { result } = renderHook(() => useModelTags({ initialTags: [], onChanged }));
     act(() => result.current.setDraft("  z-image  "));
     await act(async () => {
       await result.current.addTag();
@@ -118,9 +108,7 @@ describe("useModelTags", () => {
       name: "z-image",
     });
     expect(result.current.draft).toBe("");
-    await expect
-      .poll(() => result.current.tags.map((t) => t.name))
-      .toEqual(["z-image", "wan2.2"]);
+    await expect.poll(() => result.current.tags.map((t) => t.name)).toEqual(["z-image", "wan2.2"]);
     expect(onChanged).toHaveBeenCalled();
   });
 
@@ -145,9 +133,7 @@ describe("useModelTags", () => {
   });
 
   it("addTag 抛错：错误文案可读（失败路径必须有出口）", async () => {
-    vanilla.workflowModel.create.mutate.mockRejectedValue(
-      new Error("标签名过长"),
-    );
+    vanilla.workflowModel.create.mutate.mockRejectedValue(new Error("标签名过长"));
     const { result } = renderHook(() => useModelTags({ initialTags: [] }));
     act(() => result.current.setDraft("x"));
     await act(async () => {
@@ -176,9 +162,7 @@ describe("useModelTags", () => {
     await act(async () => {
       await result.current.deleteTag("z-image", 3);
     });
-    expect(confirmSpy).toHaveBeenCalledWith(
-      expect.stringContaining("已绑定 3 个工作流"),
-    );
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("已绑定 3 个工作流"));
     expect(vanilla.workflowModel.delete.mutate).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
@@ -218,9 +202,7 @@ describe("useModelTags", () => {
     vanilla.workflowModel.rename.mutate.mockResolvedValue({ tag: null });
     /* 那条标签必须在列表里 —— 错误挂在**它**身上（规范 16 §16.2.4.33），
      * 条目集合收敛时不在屏幕上的条目不会留住错误。 */
-    const { result } = renderHook(() =>
-      useModelTags({ initialTags: [tag("a", 1)] }),
-    );
+    const { result } = renderHook(() => useModelTags({ initialTags: [tag("a", 1)] }));
     let ok: boolean | undefined;
     await act(async () => {
       ok = await result.current.renameTag("a", "b");
@@ -231,9 +213,7 @@ describe("useModelTags", () => {
 
   it("refresh 失败保留旧列表（弹窗仍可用，不让用户看到空白）", async () => {
     vanilla.workflowModel.create.mutate.mockResolvedValue({ tag: tag("new") });
-    const { result } = renderHook(() =>
-      useModelTags({ initialTags: [tag("keep", 1)] }),
-    );
+    const { result } = renderHook(() => useModelTags({ initialTags: [tag("keep", 1)] }));
     vanilla.workflowModel.list.query.mockRejectedValue(new Error("500"));
     act(() => result.current.setDraft("x"));
     await act(async () => {

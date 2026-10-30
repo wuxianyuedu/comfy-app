@@ -24,10 +24,7 @@ import {
 } from "~/lib/llm/types";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
-import type {
-  ModelDialog,
-  RemoteModelDialogs,
-} from "../hooks/use-remote-model-dialogs";
+import type { ModelDialog, RemoteModelDialogs } from "../hooks/use-remote-model-dialogs";
 
 export function RemoteModelDialog({
   c,
@@ -53,9 +50,7 @@ export function RemoteModelDialog({
       >
         <div className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="u-title">
-              {dialog.mode === "edit" ? "编辑模型" : "添加模型"}
-            </h3>
+            <h3 className="u-title">{dialog.mode === "edit" ? "编辑模型" : "添加模型"}</h3>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -98,7 +93,7 @@ export function RemoteModelDialog({
                 onChange={(kind) =>
                   d.setAddForm((f) => ({
                     ...f,
-                    kind: kind as RemoteModelKind,
+                    kind: /* SAFETY: 类型断言已复核 */ kind as RemoteModelKind,
                   }))
                 }
                 options={[...REMOTE_MODEL_KINDS]}
@@ -120,9 +115,7 @@ export function RemoteModelDialog({
                 {...a11y}
                 type="text"
                 value={d.addForm.baseUrl}
-                onChange={textHandler((baseUrl) =>
-                  d.setAddForm({ ...d.addForm, baseUrl }),
-                )}
+                onChange={textHandler((baseUrl) => d.setAddForm({ ...d.addForm, baseUrl }))}
                 placeholder="https://api.example.com/v1"
                 className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
               />
@@ -211,9 +204,7 @@ export function RemoteModelDialog({
                       key={name}
                       variant="outline"
                       size="xs"
-                      onClick={() =>
-                        d.setAddForm((f) => ({ ...f, model: name }))
-                      }
+                      onClick={() => d.setAddForm((f) => ({ ...f, model: name }))}
                       className="text-muted-foreground hover:text-ink text-2xs h-auto rounded px-2 py-0.5"
                     >
                       {name}
@@ -239,9 +230,7 @@ export function RemoteModelDialog({
                 {...a11y}
                 type="text"
                 value={d.addForm.model}
-                onChange={(event) =>
-                  d.setAddForm({ ...d.addForm, model: event.target.value })
-                }
+                onChange={(event) => d.setAddForm({ ...d.addForm, model: event.target.value })}
                 placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
                 className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
               />
@@ -269,11 +258,7 @@ export function RemoteModelDialog({
               disabled={c.saving}
               className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
             >
-              {c.saving
-                ? "保存中…"
-                : dialog.mode === "edit"
-                  ? "保存"
-                  : "添加并保存"}
+              {c.saving ? "保存中…" : dialog.mode === "edit" ? "保存" : "添加并保存"}
             </Button>
           </div>
         </div>

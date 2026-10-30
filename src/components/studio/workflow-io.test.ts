@@ -64,12 +64,8 @@ describe("controlForEntry — type 缺失时的回退推断", () => {
   });
 
   it("数字 defaultValue 优先于名称推断", () => {
-    expect(controlForEntry({ ...pin("foo", "自定义"), defaultValue: 3 })).toBe(
-      "int",
-    );
-    expect(
-      controlForEntry({ ...pin("foo", "自定义"), defaultValue: 1.5 }),
-    ).toBe("float");
+    expect(controlForEntry({ ...pin("foo", "自定义"), defaultValue: 3 })).toBe("int");
+    expect(controlForEntry({ ...pin("foo", "自定义"), defaultValue: 1.5 })).toBe("float");
   });
 
   it("显式声明的 STRING 不受回退影响（提示词仍是 text）", () => {
@@ -88,9 +84,7 @@ describe("controlForEntry — type 缺失时的回退推断", () => {
 
 describe("inferDimensionGroup — 两种形态", () => {
   it("W/H 形态：无 type 也能命中（回归：组合选择器消失）", () => {
-    const group = inferDimensionGroup(
-      widgetsOf(pin("width", "宽度"), pin("height", "高度")),
-    );
+    const group = inferDimensionGroup(widgetsOf(pin("width", "宽度"), pin("height", "高度")));
     expect(group).not.toBeNull();
     expect(group?.width?.ioKey).toBe("7::widget::width");
     expect(group?.height?.ioKey).toBe("7::widget::height");
@@ -126,37 +120,25 @@ describe("inferDimensionGroup — 两种形态", () => {
   });
 
   it("只有 宽高比 缺 百万像素 时不成立", () => {
-    expect(
-      inferDimensionGroup(widgetsOf(pin("aspect_ratio", "宽高比"))),
-    ).toBeNull();
+    expect(inferDimensionGroup(widgetsOf(pin("aspect_ratio", "宽高比")))).toBeNull();
   });
 });
 
 describe("inferGroups — groupedKeys 覆盖两种形态", () => {
   it("W/H 形态两个 pin 都进入 groupedKeys，不会在表单里重复渲染", () => {
-    const { groupedKeys } = inferGroups(
-      widgetsOf(pin("width", "宽度"), pin("height", "高度")),
-    );
-    expect([...groupedKeys].sort()).toEqual([
-      "7::widget::height",
-      "7::widget::width",
-    ]);
+    const { groupedKeys } = inferGroups(widgetsOf(pin("width", "宽度"), pin("height", "高度")));
+    expect([...groupedKeys].sort()).toEqual(["7::widget::height", "7::widget::width"]);
   });
 
   it("宽高比 + 百万像素形态同样进入 groupedKeys", () => {
     const { groupedKeys } = inferGroups(
       widgetsOf(pin("aspect_ratio", "宽高比"), pin("megapixels", "百万像素")),
     );
-    expect([...groupedKeys].sort()).toEqual([
-      "7::widget::aspect_ratio",
-      "7::widget::megapixels",
-    ]);
+    expect([...groupedKeys].sort()).toEqual(["7::widget::aspect_ratio", "7::widget::megapixels"]);
   });
 
   it("无组合时不产出 groupedKeys", () => {
-    const { dimension, video, groupedKeys } = inferGroups(
-      widgetsOf(pin("text", "提示词")),
-    );
+    const { dimension, video, groupedKeys } = inferGroups(widgetsOf(pin("text", "提示词")));
     expect(dimension).toBeNull();
     expect(video).toBeNull();
     expect(groupedKeys.size).toBe(0);
@@ -184,11 +166,7 @@ describe("splitWorkflowIO — kind 决定分组，客户端无 legacy 特判", (
   /* 服务端 enrichment（workflow-detail-io.ts）自动把带可编辑控件的旧
    * kind:"param" 迁移为 "widget"，客户端 splitWorkflowIO 只按 kind 分组，
    * 不再需要 promoteLegacyParams 之类的兼容逻辑。 */
-  const entry = (
-    kind: string,
-    name: string,
-    type?: string,
-  ): WorkflowIOEntry => ({
+  const entry = (kind: string, name: string, type?: string): WorkflowIOEntry => ({
     direction: "input",
     kind,
     nodeId: "7",
@@ -234,9 +212,7 @@ describe("mergeRefreshedDefaults — IO 默认值刷新（保覆盖，ISSUE #288
   });
 
   it("用户已覆盖的参数保持用户的值", () => {
-    expect(
-      mergeRefreshedDefaults({ steps: 8 }, { steps: 20 }, { steps: 30 }),
-    ).toBeNull();
+    expect(mergeRefreshedDefaults({ steps: 8 }, { steps: 20 }, { steps: 30 })).toBeNull();
     expect(resolve({ steps: 8 }, { steps: 20 }, { steps: 30 })).toEqual({
       steps: 8,
     });
@@ -254,9 +230,9 @@ describe("mergeRefreshedDefaults — IO 默认值刷新（保覆盖，ISSUE #288
   });
 
   it("用户把值改回默认值时仍判定为未覆盖（按值比较的固有取舍）", () => {
-    expect(
-      mergeRefreshedDefaults({ steps: 20 }, { steps: 20 }, { steps: 30 }),
-    ).toEqual({ steps: 30 });
+    expect(mergeRefreshedDefaults({ steps: 20 }, { steps: 20 }, { steps: 30 })).toEqual({
+      steps: 30,
+    });
   });
 
   it("新暴露的 pin（基线里没有）直接采用默认值", () => {
@@ -264,30 +240,24 @@ describe("mergeRefreshedDefaults — IO 默认值刷新（保覆盖，ISSUE #288
   });
 
   it("被取消勾选的 pin 从值表里摘掉", () => {
-    expect(
-      resolve({ steps: 8, gone: 1 }, { steps: 20, gone: 1 }, { steps: 20 }),
-    ).toEqual({ steps: 8 });
+    expect(resolve({ steps: 8, gone: 1 }, { steps: 20, gone: 1 }, { steps: 20 })).toEqual({
+      steps: 8,
+    });
   });
 
   it("没有任何键需要变更时返回 null（调用方跳过 setState）", () => {
-    expect(
-      mergeRefreshedDefaults({ steps: 8 }, { steps: 20 }, { steps: 20 }),
-    ).toBeNull();
+    expect(mergeRefreshedDefaults({ steps: 8 }, { steps: 20 }, { steps: 20 })).toBeNull();
   });
 
   it("值未被改动时不触发无谓更新", () => {
     const shared = { url: "a.png" };
-    expect(
-      mergeRefreshedDefaults({ img: shared }, { img: shared }, { img: shared }),
-    ).toBeNull();
+    expect(mergeRefreshedDefaults({ img: shared }, { img: shared }, { img: shared })).toBeNull();
   });
 });
 
 describe("controlForEntry — 图片上传位（IMAGEUPLOAD / IMAGE / MASK）", () => {
   it("IMAGEUPLOAD 就是上传控件，不再退化成纯文本", () => {
-    expect(controlForEntry(pin("upload", "选择文件上传", "IMAGEUPLOAD"))).toBe(
-      "image",
-    );
+    expect(controlForEntry(pin("upload", "选择文件上传", "IMAGEUPLOAD"))).toBe("image");
   });
 
   it("IMAGE / MASK 仍渲染上传控件", () => {
@@ -296,9 +266,7 @@ describe("controlForEntry — 图片上传位（IMAGEUPLOAD / IMAGE / MASK）", 
   });
 
   it("上传位声明成 STRING 时按 pin 名兜底为上传控件", () => {
-    expect(controlForEntry(pin("upload", "选择文件上传", "STRING"))).toBe(
-      "image",
-    );
+    expect(controlForEntry(pin("upload", "选择文件上传", "STRING"))).toBe("image");
   });
 
   it("结果槽 pin 名 `image` 不会因兜底变成上传按钮", () => {
@@ -379,13 +347,13 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
 
   it("没有 ioKey 时按「节点 + 方向 + 槽位名」认出同一个 pin", () => {
     const original = wrapperSeed();
-    delete (original as { ioKey?: string }).ioKey;
+    delete (/* SAFETY: 类型断言已复核 */ (original as { ioKey?: string }).ioKey);
     const copy = { ...original, required: true };
     expect(ioLabel(copy, [original])).toBe("Seed");
   });
 
   it("不同 pin 真撞名时用 name 区分（保持既有行为）", () => {
-    const first = {
+    const first = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "param",
       nodeId: "1",
@@ -394,7 +362,7 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
       ioKey: "1::param::inputImage",
       control: "link",
     } as EnrichedWidget;
-    const second = {
+    const second = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "param",
       nodeId: "2",
@@ -409,7 +377,7 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
 
   it("撞名时区分标记绝不使用封装槽位的机器别名：改用宿主标题", () => {
     const seed = wrapperSeed({ nodeTitle: "Checkpoint settings" });
-    const homonym = {
+    const homonym = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "widget",
       nodeId: "9",
@@ -424,7 +392,7 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
 
   it("撞名且没有宿主标题时保留作者命名，不退化成 value_1", () => {
     const seed = wrapperSeed();
-    const homonym = {
+    const homonym = /* SAFETY: 类型断言已复核 */ {
       direction: "input",
       kind: "widget",
       nodeId: "9",

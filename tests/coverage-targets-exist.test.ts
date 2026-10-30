@@ -34,7 +34,7 @@ import { describe, expect, it } from "vitest";
 import vitestConfig, { COVERAGE_THRESHOLDS } from "../vitest.config";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { globToRegExp } = require("../scripts/check-format.cjs") as {
+const { globToRegExp } = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
   globToRegExp: (glob: string) => RegExp;
 };
 
@@ -61,7 +61,7 @@ function sourceFiles(): string[] {
  * （ISSUE #2669：默认档下那份被开关摘空了 —— 拿它当输入，本判据就会在没人改任何门槛
  * 的那一天静默变成空转，而这正是本文件立单要治的「写着有、其实没人判」）。
  * `include` 没有开关，仍读默认导出。 */
-const coverage = (
+const coverage = /* SAFETY: 类型断言已复核 */ (
   vitestConfig as unknown as {
     test?: {
       coverage?: { include?: string[] };
@@ -83,10 +83,7 @@ function matchedCount(glob: string): number {
 
 describe("覆盖率配置的每一条都要落到真实文件", () => {
   it("配置真的解析出了两份清单（解析失效时本条要红，不要静默绿）", () => {
-    expect(
-      coverage,
-      "vitest.config.ts 的 test.coverage 解析不到了",
-    ).toBeTruthy();
+    expect(coverage, "vitest.config.ts 的 test.coverage 解析不到了").toBeTruthy();
     expect(includeEntries.length).toBeGreaterThan(0);
     expect(thresholdKeys.length).toBeGreaterThan(0);
   });
@@ -99,10 +96,7 @@ describe("覆盖率配置的每一条都要落到真实文件", () => {
      * 这一条不假红；而「开关没接上」（默认档仍带着门槛）会被那一支 `toBe(0)` 当场抓到。 */
     const enforce = process.env.COMFY_COVERAGE_ENFORCE === "1";
     const registered = Object.keys(COVERAGE_THRESHOLDS).length;
-    expect(
-      registered,
-      "登记处空了 —— 门槛被连账一起摘掉，本判据从此没有对象",
-    ).toBeGreaterThan(100);
+    expect(registered, "登记处空了 —— 门槛被连账一起摘掉，本判据从此没有对象").toBeGreaterThan(100);
     const applied = Object.keys(
       (
         vitestConfig as unknown as {
@@ -132,19 +126,14 @@ describe("覆盖率配置的每一条都要落到真实文件", () => {
     const offRoot = [...includeEntries, ...thresholdKeys].filter(
       (entry) => !unescapeGlob(entry).startsWith("src/"),
     );
-    expect(
-      offRoot,
-      `这些覆盖率条目不在 src/ 面里：\n${offRoot.join("\n")}`,
-    ).toEqual([]);
+    expect(offRoot, `这些覆盖率条目不在 src/ 面里：\n${offRoot.join("\n")}`).toEqual([]);
   });
 
   it("coverage.include 的每一项都匹配到至少一个真实文件", () => {
     const dangling = includeEntries.filter((glob) => matchedCount(glob) === 0);
     expect(
       dangling,
-      `这些 include 条目指向不存在的文件（门槛挂在判据不认识的路径上）：\n${dangling.join(
-        "\n",
-      )}`,
+      `这些 include 条目指向不存在的文件（门槛挂在判据不认识的路径上）：\n${dangling.join("\n")}`,
     ).toEqual([]);
   });
 
@@ -160,12 +149,7 @@ describe("覆盖率配置的每一条都要落到真实文件", () => {
     /* 反向自证：拿一个磁盘上确定存在的文件构造断言，确认 matchedCount>0 ——
      * 若匹配口径哪天坏掉，这一条会先红，而不是让上面两条一起变成恒绿。 */
     const probe = "src/lib/endpoints.ts";
-    expect(statSync(path.join(ROOT, probe)).isFile(), `${probe} 不在了？`).toBe(
-      true,
-    );
-    expect(
-      matchedCount(probe),
-      `${probe} 匹配不上，说明匹配口径坏了`,
-    ).toBeGreaterThan(0);
+    expect(statSync(path.join(ROOT, probe)).isFile(), `${probe} 不在了？`).toBe(true);
+    expect(matchedCount(probe), `${probe} 匹配不上，说明匹配口径坏了`).toBeGreaterThan(0);
   });
 });

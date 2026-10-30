@@ -70,16 +70,10 @@ function MediaDragCard({
       })}
     >
       <span className="text-sm font-medium">
-        {url === null || url === undefined
-          ? "没有图（不可拖）"
-          : displayNameFromUrl(url)}
+        {url === null || url === undefined ? "没有图（不可拖）" : displayNameFromUrl(url)}
       </span>
-      <span className="text-ink-muted font-mono text-[11px]">
-        mediaType = {kind}
-      </span>
-      <span className="text-ink-muted text-[11px]">
-        把鼠标放上来：可拖时是抓取光标
-      </span>
+      <span className="text-ink-muted font-mono text-[11px]">mediaType = {kind}</span>
+      <span className="text-ink-muted text-[11px]">把鼠标放上来：可拖时是抓取光标</span>
     </div>
   );
 }
@@ -114,16 +108,18 @@ export const NotDraggableByCanDrag: Story = {
 export const MediaTypes: Story = {
   render: () => (
     <div className="flex flex-wrap gap-4">
-      {(
-        [
-          ["image", artifactUrl(["cover.png"])],
-          ["video", artifactUrl(["clip.mp4"])],
-          ["audio", artifactUrl(["bgm.mp3"])],
-          ["doc", artifactUrl(["notes.txt"])],
-        ] as const
-      ).map(([kind, url]) => (
-        <MediaDragCard key={kind} kind={kind} url={url} />
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (
+          [
+            ["image", artifactUrl(["cover.png"])],
+            ["video", artifactUrl(["clip.mp4"])],
+            ["audio", artifactUrl(["bgm.mp3"])],
+            ["doc", artifactUrl(["notes.txt"])],
+          ] as const
+        ).map(([kind, url]) => (
+          <MediaDragCard key={kind} kind={kind} url={url} />
+        ))
+      }
     </div>
   ),
 };

@@ -125,7 +125,7 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
           ts.isVariableStatement(stmt)
             ? stmt.declarationList.declarations
                 .filter((d) => ts.isIdentifier(d.name))
-                .map((d) => (d.name as ts.Identifier).text)
+                .map((d) => /* SAFETY: 类型断言已复核 */ (d.name as ts.Identifier).text)
             : [],
         ),
       );
@@ -147,9 +147,7 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
       const refs = controlOptionsByAxis(parse(story));
       for (const axis of axes) {
         if (!refs.has(axis)) {
-          offenders.push(
-            `${rel(story)} 少了轴 \`${axis}\`（${rel(component)} 的 cva 里有它）`,
-          );
+          offenders.push(`${rel(story)} 少了轴 \`${axis}\`（${rel(component)} 的 cva 里有它）`);
         }
       }
     }

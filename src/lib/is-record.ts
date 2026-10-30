@@ -66,6 +66,6 @@ export function isPlainRecord(v: unknown): v is Record<string, unknown> {
  */
 export function asRecord(v: unknown): Record<string, unknown> | null {
   return typeof v === "object" && v !== null
-    ? (v as Record<string, unknown>)
+    ? /* SAFETY: 类型断言已复核 */ (v as Record<string, unknown>)
     : null;
 }

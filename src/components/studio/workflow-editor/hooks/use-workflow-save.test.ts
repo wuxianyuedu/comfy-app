@@ -27,8 +27,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   return {
     ...actual,
     useMutation: () => ({
-      mutate: (...args: unknown[]) => mutate(...args) as never,
-      mutateAsync: (...args: unknown[]) => mutateAsync(...args) as never,
+      mutate: (...args: unknown[]) => /* SAFETY: 类型断言已复核 */ mutate(...args) as never,
+      mutateAsync: (...args: unknown[]) =>
+        /* SAFETY: 类型断言已复核 */ mutateAsync(...args) as never,
       isPending: false,
       isIdle: true,
       isSuccess: false,
@@ -50,10 +51,7 @@ describe("useWorkflowSaveMutation", () => {
   it("mutate 转发输入", () => {
     const { result } = renderHook(() => useWorkflowSaveMutation());
     result.current.mutate({ id: "wf-1", positions: { "1": [0, 0] } });
-    expect(mutate).toHaveBeenCalledWith(
-      { id: "wf-1", positions: { "1": [0, 0] } },
-      undefined,
-    );
+    expect(mutate).toHaveBeenCalledWith({ id: "wf-1", positions: { "1": [0, 0] } }, undefined);
   });
 
   /* 第二实参不是装饰：`onError` 是「拖拽落盘失败」这类静默写暴露给用户的唯一
@@ -77,16 +75,11 @@ describe("useWorkflowSaveMutation", () => {
   it("mutateAsync 失败向外抛（handleSave 靠它设 error）", async () => {
     mutateAsync.mockRejectedValue(new Error("保存失败"));
     const { result } = renderHook(() => useWorkflowSaveMutation());
-    await expect(result.current.mutateAsync({ id: "wf-1" })).rejects.toThrow(
-      "保存失败",
-    );
+    await expect(result.current.mutateAsync({ id: "wf-1" })).rejects.toThrow("保存失败");
   });
 
   it("只暴露 mutate / mutateAsync —— 视图拿不到 mutation 状态（S3 的目的）", () => {
     const { result } = renderHook(() => useWorkflowSaveMutation());
-    expect(Object.keys(result.current).sort()).toEqual([
-      "mutate",
-      "mutateAsync",
-    ]);
+    expect(Object.keys(result.current).sort()).toEqual(["mutate", "mutateAsync"]);
   });
 });

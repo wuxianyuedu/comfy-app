@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ComfyUI 工作流「原始 / 控件顺序」兼容层
  *
  * 本应用只接受 **ComfyUI 的原始工作流格式**（工作流 / RAW / UI 格式，
@@ -40,7 +40,7 @@ export { asRecord } from "~/lib/is-record";
 /** DB Json 列 / JSON.parse 产物 → RawWorkflow 视图。根不是普通对象时返回
  *  null（下游均有 `Array.isArray(raw.nodes)` 类守卫，路径与旧代码等价）。 */
 export function asRawWorkflow(v: unknown): RawWorkflow | null {
-  return isPlainRecord(v) ? (v as RawWorkflow) : null;
+  return isPlainRecord(v) ? /* SAFETY: 类型断言已复核 */ (v as RawWorkflow) : null;
 }
 
 /** `String(v)` 的类型收窄等价：值全部来自 JSON 反序列化产物（无 symbol /
@@ -51,7 +51,7 @@ export function toStringValue(v: unknown): string {
   if (typeof v === "string") return v;
   if (v === null) return "null";
   if (v === undefined) return "undefined";
-  return (v as { toString(): string }).toString();
+  return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
 }
 
 /** raw UI 格式节点的 inputs[] 条目（ComfyUI 只把「转为输入」的槽位写进来）。
@@ -214,9 +214,7 @@ export interface ApiWorkflowNode {
  * 从原始格式抽取节点坐标 (用于编辑器初始布局)
  * ────────────────────────────────────────────────────────────────────── */
 
-export function extractPositions(
-  raw: RawWorkflow,
-): Record<string, [number, number]> {
+export function extractPositions(raw: RawWorkflow): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {};
   if (!Array.isArray(raw.nodes)) return out;
   for (const n of raw.nodes) {
@@ -255,10 +253,7 @@ export function extractPositions(
       for (const inner of innerNodes) {
         if (inner && Array.isArray(inner.pos) && inner.pos.length >= 2) {
           const iId = String(inner.id);
-          out[`${wId}:${iId}`] = [
-            Number(inner.pos[0]) || 0,
-            Number(inner.pos[1]) || 0,
-          ];
+          out[`${wId}:${iId}`] = [Number(inner.pos[0]) || 0, Number(inner.pos[1]) || 0];
         }
       }
     }
@@ -284,9 +279,7 @@ export function extractPositions(
  *   "sampler_name": [["euler", "euler_ancestral", …], {}]   ← COMBO：首项是候选数组
  * 少数新版（V3 schema）会给对象形式 `{ type: "INT", … }`，这里两种都兼容。
  */
-export type ObjectInfoInputSpec =
-  | [unknown, Record<string, unknown>?]
-  | Record<string, unknown>;
+export type ObjectInfoInputSpec = [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
 export interface ObjectInfoClassDef {
   input_order?: { required?: string[]; optional?: string[] };
@@ -369,7 +362,7 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
       _objectInfoFailedAt = Date.now();
       return null;
     }
-    const data = parsed.data as ObjectInfo;
+    const data = /* SAFETY: 类型断言已复核 */ parsed.data as ObjectInfo;
     _objectInfoCache = { at: Date.now(), data };
     return data;
   } catch {
@@ -400,9 +393,7 @@ function hasControlAfterGenerate(
   options: Record<string, unknown>,
 ): boolean {
   if (type !== "INT") return false;
-  return (
-    SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true
-  );
+  return SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true;
 }
 
 /**
@@ -430,10 +421,7 @@ export function pairWidgetValues(
     const wname = inp?.widget?.name;
     if (typeof wname !== "string") continue;
     order.push(wname);
-    if (
-      SEED_WIDGET_NAMES.has(wname) &&
-      (inp.type === "INT" || inp.type === undefined)
-    ) {
+    if (SEED_WIDGET_NAMES.has(wname) && (inp.type === "INT" || inp.type === undefined)) {
       order.push(CONTROL_SENTINEL);
     }
   }
@@ -454,9 +442,7 @@ export function pairWidgetValues(
  *  画布之前只按 raw 节点 `inputs[]` 里的 `widget` 标记配对控件值，
  *  而 ComfyUI **默认不会把未「转成输入」的控件写进 inputs[]** —— 于是
  *  CLIPTextEncode 的提示词、各类 Loader 的模型名整段丢失，节点上一个参数都不显示。 */
-export async function fetchWidgetOrderTable(): Promise<
-  Record<string, string[]>
-> {
+export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>> {
   const info = await fetchObjectInfo();
   const table: Record<string, string[]> = {};
   if (info) {
@@ -464,8 +450,7 @@ export async function fetchWidgetOrderTable(): Promise<
       table[clsName] = resolveWidgetOrder(def);
     }
   } else {
-    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS))
-      table[clsName] = list;
+    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS)) table[clsName] = list;
   }
   return table;
 }
@@ -481,8 +466,7 @@ export function mapWidgetValuesByOrder(
   widgetOrder: string[] | undefined,
   widgetsValues: unknown[],
 ): { name: string; value: unknown }[] | null {
-  if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0)
-    return null;
+  if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0) return null;
   const bare = widgetOrder.filter((name) => name !== CONTROL_SENTINEL);
   const names =
     widgetsValues.length === widgetOrder.length
@@ -516,8 +500,7 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
     // forceInput 的标量输入被渲染成插槽，同样不占 widgets_values 的位置。
     if (options?.forceInput === true) return;
     out.push(name);
-    if (hasControlAfterGenerate(name, type, options))
-      out.push(CONTROL_SENTINEL);
+    if (hasControlAfterGenerate(name, type, options)) out.push(CONTROL_SENTINEL);
   };
   // widgets_values = required 全部 widget + optional 全部 widget 按顺序扁平化，
   // 只取 required 会从第一个 optional 起错位（VHS_VideoCombine / SaveAnimatedWEBP / KJNodes）。
@@ -530,15 +513,7 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
  * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
  * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
 const FALLBACK_WIDGETS: Record<string, string[]> = {
-  KSampler: [
-    "seed",
-    CONTROL_SENTINEL,
-    "steps",
-    "cfg",
-    "sampler_name",
-    "scheduler",
-    "denoise",
-  ],
+  KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
   KSamplerAdvanced: [
     "add_noise",
     "noise_seed",

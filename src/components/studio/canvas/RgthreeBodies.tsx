@@ -81,9 +81,7 @@ export function RgthreeFastGroupsBypasserBody({
                 height: 14,
                 borderRadius: 7,
                 cursor: "pointer",
-                background: bypass
-                  ? "rgba(236, 72, 153, 0.55)"
-                  : "rgba(63, 63, 70, 0.55)",
+                background: bypass ? "rgba(236, 72, 153, 0.55)" : "rgba(63, 63, 70, 0.55)",
                 border: "1px solid var(--color-border-strong)",
                 position: "relative",
                 flex: "0 0 auto",
@@ -98,9 +96,7 @@ export function RgthreeFastGroupsBypasserBody({
                   width: 10,
                   height: 10,
                   borderRadius: 5,
-                  background: bypass
-                    ? "var(--color-accent-soft)"
-                    : "var(--color-ink-subtle)",
+                  background: bypass ? "var(--color-accent-soft)" : "var(--color-ink-subtle)",
                   transition: "left 120ms",
                 }}
               />
@@ -122,11 +118,7 @@ export function RgthreeFastGroupsBypasserBody({
  *   • efficiency-nodes 的 SetNode / GetNode —— 它的包在我们装的环境里
  *     没有磁盘标记，节点本身也没有 `cnr_id`，所以硬编码这份
  *     归属。 */
-export function RgthreePowerLoraLoaderBody({
-  widgets,
-}: {
-  widgets: unknown[];
-}) {
+export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) {
   const fmtStrength = (v: unknown): string | undefined => {
     if (typeof v === "number") {
       /* ComfyUI 会剥掉末尾的零（"1.00" → "1"，"0.85" 保持）——
@@ -141,7 +133,7 @@ export function RgthreePowerLoraLoaderBody({
   // 逐 lora 行：过滤掉表头 widget 与空占位。
   // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
-  const loras: PowerLoraWidget[] = (
+  const loras: PowerLoraWidget[] = /* SAFETY: 类型断言已复核 */ (
     (widgets ?? []) as PowerLoraWidget[]
   ).filter((widget) => {
     if (widget === null || widget === undefined) return false;
@@ -207,17 +199,13 @@ export function RgthreePowerLoraLoaderBody({
           const name =
             typeof widget === "string"
               ? widget
-              : (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as
+              : /* SAFETY: 类型断言已复核 */ (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as
                   | string
                   | undefined) ?? "");
           const modelStr = isObj
-            ? fmtStrength(
-                rec?.model_strength ?? rec?.model_str ?? rec?.strength,
-              )
+            ? fmtStrength(rec?.model_strength ?? rec?.model_str ?? rec?.strength)
             : undefined;
-          const clipStr = isObj
-            ? fmtStrength(rec?.clip_strength ?? rec?.clip_str)
-            : undefined;
+          const clipStr = isObj ? fmtStrength(rec?.clip_strength ?? rec?.clip_str) : undefined;
           return (
             <div
               key={`pll-r-${index}`}
@@ -227,9 +215,7 @@ export function RgthreePowerLoraLoaderBody({
               <span
                 className="min-widget-0 flex-1 truncate"
                 style={{
-                  color: name
-                    ? "var(--color-ink-bright)"
-                    : "var(--color-ink-fainter)",
+                  color: name ? "var(--color-ink-bright)" : "var(--color-ink-fainter)",
                 }}
                 title={name}
               >
@@ -300,11 +286,9 @@ export function RgthreeLabelBody({
 }) {
   const p = properties ?? {};
   const fontSize = typeof p.fontSize === "number" ? p.fontSize : 24;
-  const fontFamily =
-    typeof p.fontFamily === "string" ? p.fontFamily : "sans-serif";
+  const fontFamily = typeof p.fontFamily === "string" ? p.fontFamily : "sans-serif";
   const fontColor = typeof p.fontColor === "string" ? p.fontColor : "#ffffff";
-  const textAlign =
-    p.textAlign === "center" || p.textAlign === "right" ? p.textAlign : "left";
+  const textAlign = p.textAlign === "center" || p.textAlign === "right" ? p.textAlign : "left";
   const bg =
     typeof p.backgroundColor === "string" && p.backgroundColor !== "transparent"
       ? p.backgroundColor

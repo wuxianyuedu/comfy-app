@@ -196,9 +196,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    expect(
-      container.querySelector('[data-testid="workflow-param-card-column"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeTruthy();
     expect(screen.getByTestId("param-node-prompt")).toBeTruthy();
     /* 尺寸：六行形态合成**一张卡**（`param-node-size`），不再并排六个节点
      * （用户口径：「尺寸这里不要显示这么多节点，尺寸只显示一个节点」）。 */
@@ -254,9 +252,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       />,
     );
     /* 提示词落到 positive_prompt、尺寸落到宽高比那一行 —— 两行各带一次徽标。 */
-    const tags = [
-      ...container.querySelectorAll('[data-testid="wflib-param-owner"]'),
-    ];
+    const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
     /* 徽标文案 = 这个对外参数自己的名字（尺寸在映射层是子口，卡片上「尺寸 ·
      *  宽高比」那一行属于它）。按同一份派生取值断言，不写字面量。 */
     const sizeAspect = buildParamEntries(promptSizeIO(), undefined, {
@@ -289,9 +285,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    const tags = [
-      ...container.querySelectorAll('[data-testid="wflib-param-owner"]'),
-    ];
+    const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
     const sizeAspect = buildParamEntries(promptSizeIO(), undefined, {
       mode: "T2I",
     }).find((entry) => entry.id === "size-aspect")!;
@@ -318,23 +312,15 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     );
     /* 左列卡片的 handle id = **条目 id**（一个口一颗点）：普通卡是契约口 id，
      *  尺寸那张卡是**子口 id**（卡的每一行 = 一个形态）。 */
-    const params = container.querySelector(
-      '[data-testid="wflib-canvas-node-params"]',
-    )!;
+    const params = container.querySelector('[data-testid="wflib-canvas-node-params"]')!;
     expect(params.querySelector('[data-handleid="prompt"]')).toBeTruthy();
     expect(params.querySelector('[data-handleid="size-aspect"]')).toBeTruthy();
     /* 宿主卡片的两端都在（连线的另一端）：提示词是普通参数行，
      *  宽高比则落在组合控件那一格上（比例/像素由同一块控件录入）。 */
-    const host = container.querySelector(
-      '[data-testid="wflib-canvas-node-host"]',
-    )!;
+    const host = container.querySelector('[data-testid="wflib-canvas-node-host"]')!;
     expect(host).toBeTruthy();
-    expect(
-      host.querySelector('[data-handleid="9::widget::positive_prompt"]'),
-    ).toBeTruthy();
-    expect(
-      host.querySelector('[data-handleid="5::widget::aspect_ratio"]'),
-    ).toBeTruthy();
+    expect(host.querySelector('[data-handleid="9::widget::positive_prompt"]')).toBeTruthy();
+    expect(host.querySelector('[data-handleid="5::widget::aspect_ratio"]')).toBeTruthy();
   });
 
   it("组合控件右对齐、按内容收窄，三个参数在框外各自成行 —— ISSUE #355", () => {
@@ -374,9 +360,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       />,
     );
     /* 控件在（带下拉触发器）。 */
-    expect(
-      container.querySelector('[aria-label="选择比例与像素"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('[aria-label="选择比例与像素"]')).toBeTruthy();
     const box = container.querySelector("[data-grouped-box]")!;
     expect(box).toBeTruthy();
     /* 框贴右沿：外层 flex 用 justify-end。 */
@@ -388,7 +372,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       expect(row!.closest("[data-grouped-box]")).toBeNull();
       const dot = row!.querySelector(`[data-port-dot="${ioKey}"]`);
       expect(dot, `${ioKey} 行左侧应当有大端点`).toBeTruthy();
-      expect((dot as HTMLElement).style.width).toBe("12px");
+      expect(/* SAFETY: 类型断言已复核 */ (dot as HTMLElement).style.width).toBe("12px");
       expect(box.querySelector(`[data-io-key="${ioKey}"]`)).toBeNull();
     }
     /* 两个端口各自是一个真正的落点（端点 id 即 ioKey）—— 拖到「百万像素」
@@ -416,9 +400,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    const nodes = [
-      ...container.querySelectorAll<HTMLElement>(".react-flow__node"),
-    ];
+    const nodes = [...container.querySelectorAll<HTMLElement>(".react-flow__node")];
     const xOf = (id: string) => {
       const el = nodes.find((node) => node.dataset.id === id)!;
       expect(el, `节点 ${id} 应挂载`).toBeTruthy();
@@ -463,9 +445,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    expect(
-      container.querySelector('[aria-label="选择比例与像素"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('[aria-label="选择比例与像素"]')).toBeTruthy();
     /* 两个端口各有自己的端点（同一块控件录入，但落点分开）。 */
     for (const ioKey of ["5::widget::aspect_ratio", "5::widget::megapixels"]) {
       expect(
@@ -489,9 +469,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         usable
       />,
     );
-    expect(
-      container.querySelector('[data-testid="workflow-param-card-column"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeTruthy();
     expect(screen.getByTestId("param-node-prompt")).toBeTruthy();
     expect(screen.getByTestId("param-node-negative")).toBeTruthy();
     /* 尺寸：六行形态合成**一张卡**（契约口常驻，落点全空 = 未配置）。 */
