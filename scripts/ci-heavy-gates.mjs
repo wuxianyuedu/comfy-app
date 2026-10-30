@@ -98,7 +98,15 @@ import process from "node:process";
 import { CHANGED_SCOPED, readHookSteps, runGate } from "./base-check/hook-steps.mjs";
 import { resolveBaseRef, resolveChangedFiles } from "./changed-scope.mjs";
 import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
-import { gateFail, gatePass, gateSkip, looksSkipped } from "./ci-log.mjs";
+import {
+  COLORS,
+  colorEnabled,
+  gateFail,
+  gatePass,
+  gateSkip,
+  looksSkipped,
+  paintLine,
+} from "./ci-log.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -507,7 +515,30 @@ export function heavyGateRegistryProblems(hookSteps) {
  */
 export function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
-  const log = io.log ?? ((line) => process.stdout.write(`${line}\n`));
+  /* 写盘与上色**分两层**（ISSUE #2748）：颜色只加在「真的往 stdout 写」的那一档。
+   *
+   * 这一格把每条判决转交给 `gatePass` / `gateSkip` / `gateFail` 时都带着自己的 `out`
+   * （为了统一走一个出口），而 `ci-log.mjs` 的 `emit()` 见到 `out` 就整行原样透传 ——
+   * 那条短路本意是给**抓文本**的调用方（子进程的管道、用例的断言），结果把转述型跑批
+   * 一起短路了：一屏 `[ok]` / `[skip]` / `[重档]` 全是同一种灰，只有被转述的那份子进程
+   * 自己带出的 ANSI 才显红。⇒ 补在这一层，用 `ci-log.mjs` 的同一个合成点。
+   *
+   * 三条边界：注入 `io.log`（用例、抓文本的调用方）拿到的仍是干净行；`--json` 那一路
+   * 走 `writeLine`，一个字节都不许多；`NO_COLOR` / 非 TTY 不着色由 `colorEnabled()` 判。 */
+  const writeLine = io.log ?? ((line) => process.stdout.write(`${line}\n`));
+  /* `--json` 那一档**整屏**都是机器可读的：前面那几行 `[重档]` 叙述与 JSON 走同一个
+   * stdout，所以叙述行也不许多色号 —— 上色与这一档无关。 */
+  const paintOn =
+    io.log === undefined &&
+    !argv.includes("--json") &&
+    colorEnabled({ env: io.env });
+  /**
+   * 屏幕上的一行（上色 + 色带）。
+   * @param {string} line
+   * @param {string} [color] 只给合计那一行用（它自己不带三态前缀）
+   */
+  const log = (line, color) =>
+    writeLine(paintLine(line, { enabled: paintOn, color }));
   const onlyArg = argv.find((a) => a.startsWith("--only="));
   const only = onlyArg ? onlyArg.slice("--only=".length) : null;
   const cwd = io.cwd ?? ROOT;
@@ -600,7 +631,9 @@ export function main(io = {}) {
   const green = runs.filter((r) => r.code === 0 && !noJudgement.includes(r));
 
   if (argv.includes("--json")) {
-    log(
+    /* 机器可读那一档走 `writeLine`：JSON 是要被 `JSON.parse` 回去的，
+     * 上色与色带一个字节都不许多。 */
+    writeLine(
       JSON.stringify(
         {
           total: runs.length + skipped.length,
@@ -690,11 +723,16 @@ export function main(io = {}) {
   const skippedTotal = skipped.length + notJudged.length + noJudgement.length + missing.length;
   /* 合计行按**同一套三态**措辞：「判过 / 没判 / 红」对得上上面逐条那三列前缀。
    * 条数是这几档之和 —— 谁都不许从总账里消失（少算一条就是「这一条没判」被
-   * 静默地折成绿）。 */
+   * 静默地折成绿）。
+   * 它自己不带三态前缀，却要跟着判决走（ISSUE #2748）：三态的取法与
+   * `ci-log.mjs` 的 `renderTally()` 逐字同口径（红 > 没判 > 判过），不留第二份
+   * 「什么时候算红」。 */
+  const tallyState = red.length > 0 ? "red" : skippedTotal > 0 ? "skip" : "ok";
   log(
     `[重档] 合计：红 ${red.length}、没判 ${skippedTotal}、` +
       `判过 ${green.length}（共 ${green.length + skippedTotal + red.length} 条）；` +
       `墙钟合计 ${totalMs}ms`,
+    COLORS[tallyState],
   );
   if (red.length > 0) {
     for (const r of red) log(`[重档] 下一动作：先修「${r.label}」这一条（上面有证据）`);
