@@ -28,7 +28,14 @@ const WHITELIST = new Set(["scripts/git-dir.mjs"]);
 const needle = "." + "git";
 const re = new RegExp("[\"']" + needle.replace(".", "\\.") + "[\"']");
 
-/** 递归收集 scripts/** 下的 .mjs 文件（跳过 node_modules）。 */
+/**
+ * 递归收集 `scripts/**` 下的 `.mjs` 文件（跳过 `node_modules`）。
+ * @param {string} dir 起点目录（绝对路径）
+ * @param {string[]} [out] 累加用的收集器 —— 递归各层共用**同一个数组**，
+ *   所以返回值就是最初那次调用传进来的那一份（不写类型时默认值是 `never[]`，
+ *   下面 `out.push(full)` 会报「推不进去」）
+ * @returns {string[]} 收集到的文件绝对路径
+ */
 function collect(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name);
@@ -43,6 +50,10 @@ function collect(dir, out = []) {
   return out;
 }
 
+/**
+ * 命中清单：`相对路径:行号: 那一行的原文`。
+ * @type {string[]}
+ */
 const offenders = [];
 for (const file of collect(SCRIPTS)) {
   const rel = path.relative(ROOT, file).split(path.sep).join("/");
