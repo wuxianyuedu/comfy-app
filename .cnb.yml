@@ -446,6 +446,23 @@
     # 也**不要**写成容器里那个 `/ms-playwright`：那是给镜像配的，在宿主上不存在，
     # 写了等于让落点判据去一个空目录找东西（判据 `tests/ci-image-identity.test.ts` 守这条）。
     PLAYWRIGHT_BROWSERS_PATH: "G:\\.cache\\ms-playwright"
+    # ── 判决行的颜色：平台日志页那一屏也要带色（ISSUE #2755）──────────────────────
+    #
+    # 为什么**不是** `FORCE_COLOR`：那枚是全生态共识旗标，chalk / picocolors / oxfmt 的
+    # anstyle 都读它 —— 挂上之后被聚合档**捕获后解析**的那份子进程输出会开始带色号，
+    # 而 `lastLine()` / `looksSkipped()` / 90 字压缩三处都会把色号算进内容
+    # （§13.5.29.1 那条边界写明的后果）。所以这枚只被本仓那一层认
+    # （`scripts/ci-log.mjs` 的 `colorEnabled()`），第三方读不到它 ⇒ 子进程那一路
+    # 天然仍是干净文本。
+    #
+    # 为什么写在这**一级**：它说的是「这台节点的日志页会渲染色号」，那是宿主的属性、
+    # 不是某一格的属性 —— 写在某一格里，其余各格的判决行照旧全灰（同一族坑见上面
+    # 「落点」那段：作用面跨格却写在格内 = 装好了，探不到）。
+    #
+    # ⚠️ 它压不过 `NO_COLOR`：`colorEnabled()` 里 `NO_COLOR` 仍是一票否决；`0` 按关算。
+    # 当场读数：绿跑 build `cnb-gig-1k65nb59l` 的 stage-27 正文 64 行里只有 2 行带 ANSI，
+    # 而那两行是平台自己的 `Runner` / `Finished` 前缀 —— 我们的 `[ok]` / `[skip]` 无色。
+    COMFYAPP_CI_COLOR: "1"
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
