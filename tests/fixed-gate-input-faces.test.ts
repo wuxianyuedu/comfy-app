@@ -16,9 +16,14 @@
  *      并且**不能整条落在宽面触发上**（宽面一命中整档就退回全跑，这一层轮不到问）；
  *   ③ 名单封闭 —— 加一条是一次签字，不是这一层代码能自己扩张的；
  *   ④ 两向都测：面没命中 ⇒ 缺席**且被点名**；命中 ⇒ 在场；
- *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」。
+ *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」；
+ *   ⑥ 用例**直接 import** 的每一份仓库文件都必须在它自己的面里 —— 面自称「它读什么」，
+ *     少写一份共享夹具，那句自称就有一处是假的（#2802 抓到两条）。
  */
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests.mjs";
@@ -36,6 +41,56 @@ function trackedPaths(): Array<string> {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const MODULE_EXTS = [
+  "",
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".json",
+  "/index.ts",
+  "/index.tsx",
+  "/index.mjs",
+];
+
+/**
+ * 一份用例里**真正的**静态 `import` / `export … from` 说明符。
+ *
+ * 为什么走语法树而不是正则：用例的夹具文本里本来就会写 `import x from "./…"`
+ * （`tests/storybook-tsc-input.test.ts` 的模块标识符常量就是），而那是被测输入、
+ * 不是本文件自己的依赖。正则分不开这两种形状，语法树里只有前者是 ImportDeclaration。
+ */
+function importSpecifiersOf(rel: string): Array<string> {
+  const text = readFileSync(path.join(ROOT, rel), "utf8");
+  const source = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const specs: Array<string> = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specs.push(node.moduleSpecifier.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return specs;
+}
+
+/** 相对说明符 → 被跟踪的仓库路径（按 `tsconfig` 的候选扩展名逐个试；裸包名与别名回 `null`）。 */
+function resolveRelative(spec: string, from: string, tracked: Set<string>): string | null {
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec));
+  for (const ext of MODULE_EXTS) {
+    const candidate = base + ext;
+    if (tracked.has(candidate)) return candidate;
+  }
+  return null;
 }
 
 describe("输入面登记的形状", () => {
@@ -82,6 +137,32 @@ describe("输入面登记的形状", () => {
       dead,
       "这些模式命中的每一份路径都在 `WIDE_TRIGGERS` 里 —— 它们一改，整档就先退回「固定清单全跑」，" +
         "输入面这一层根本轮不到问。写成这样只会让面看起来更宽（`base-check` 的 `.githooks/**` 就是这一格）",
+    ).toEqual([]);
+  });
+
+  it("用例直接 import 的每一份仓库文件都在它自己的面里（面自称「它读什么」就不许有假话）", () => {
+    const tracked = new Set(trackedPaths());
+    const gaps: Array<string> = [];
+    const unresolved: Array<string> = [];
+    for (const entry of INPUT_FACES) {
+      for (const spec of importSpecifiersOf(entry.test)) {
+        if (!spec.startsWith(".")) continue;
+        const rel = resolveRelative(spec, entry.test, tracked);
+        if (rel === null) {
+          unresolved.push(`${entry.test} :: ${spec}`);
+          continue;
+        }
+        if (!faceHits(entry, [rel])) gaps.push(`${entry.test} :: ${spec} → ${rel}`);
+      }
+    }
+    expect(
+      unresolved,
+      "这些相对 import 在索引里找不到对应文件 —— 要么是面要盯着的一份还没入库的文件，要么是判据的解析漏了扩展名形态",
+    ).toEqual([]);
+    expect(
+      gaps,
+      "这些文件是用例直接 import 的，却没写进它的面 —— 面少一份输入，改到那一份时这条判据就会「按面静默跳过」；" +
+        "今天 import 图还会把它点回来（两套机制是并集），可那句「它读什么」已经有一处是假的",
     ).toEqual([]);
   });
 
