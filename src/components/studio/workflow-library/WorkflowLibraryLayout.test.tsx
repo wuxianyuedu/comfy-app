@@ -96,9 +96,7 @@ describe("详情头部：窄屏不丢按钮", () => {
 
   it("标题区有可读下限（压缩压力交给它，标题截断而不是把按钮挤出去）", () => {
     renderHeader();
-    expect(screen.getByTestId("detail-title-block").className).toContain(
-      "min-w-45",
-    );
+    expect(screen.getByTestId("detail-title-block").className).toContain("min-w-45");
   });
 });
 
@@ -107,9 +105,7 @@ describe("详情头部：执行日志入口已下沉到各页签", () => {
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
   it("详情头部不再集中放置统一入口（入口分散到画布节点 / 工坊封装页签）", () => {
-    expect(read("sections/DetailHeader.tsx")).not.toContain(
-      "WorkflowRunLogButton",
-    );
+    expect(read("sections/DetailHeader.tsx")).not.toContain("WorkflowRunLogButton");
   });
 
   it("画布节点页签有独立入口，且带 canvas-node 来源过滤", () => {
@@ -179,9 +175,7 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
       /flex h-full min-h-0 w-full flex-col items-center gap-3/,
     );
     /* 页签面板把高度传下去（缺 `h-full` 则整条链断在第一层）。 */
-    expect(read("sections/DetailBody.tsx")).toMatch(
-      /flex h-full min-h-105 flex-col/,
-    );
+    expect(read("sections/DetailBody.tsx")).toMatch(/flex h-full min-h-105 flex-col/);
   });
 
   it("三列之上垫了一层背景板，且它的尺寸由视口与内容取大", () => {
@@ -192,12 +186,8 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
 
     const graph = read("workflow-library-wire-graph.ts");
     /* 取大，缺一边都会退回空白：比视口矮（高度）或比三列窄（右列被挤出视野）。 */
-    expect(graph).toMatch(
-      /Math\.max\(content\.height,\s*clamp\(viewport\.height\)\)/,
-    );
-    expect(graph).toMatch(
-      /Math\.max\(content\.width,\s*clamp\(viewport\.width\)\)/,
-    );
+    expect(graph).toMatch(/Math\.max\(content\.height,\s*clamp\(viewport\.height\)\)/);
+    expect(graph).toMatch(/Math\.max\(content\.width,\s*clamp\(viewport\.width\)\)/);
   });
 });
 
@@ -210,15 +200,10 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
   it("第 1 条：不再显示「手动 / 自动」落点（相关字段也一并删了）", () => {
     /* 落点现在**只**来自作者画的线（没有第二条来源），「手动落点」这句话已经
      *  没有区分能力，留着只会让用户以为还有别的落点来源。 */
-    expect(read("sections/WorkshopEncapsulationPanel.tsx")).not.toContain(
-      "手动落点",
-    );
+    expect(read("sections/WorkshopEncapsulationPanel.tsx")).not.toContain("手动落点");
     /* 状态派生的类型上也不再有这个字段（不是只把渲染删掉）。 */
     const status = readFileSync(
-      path.resolve(
-        __dirname,
-        "../../../lib/workshop/workshop-encapsulation-status.ts",
-      ),
+      path.resolve(__dirname, "../../../lib/workshop/workshop-encapsulation-status.ts"),
       "utf8",
     );
     expect(status).not.toMatch(/^\s*manual: boolean;/m);
@@ -237,9 +222,7 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
        「必填 / 可选」读的正是「没落点会不会挡住运行」，再挂一个同义徽标就是把
        同一份事实换个说法说第二遍。判据先去掉注释 —— 把「为什么删掉它」写进
        注释不该让计数停在原地（同 §16.2.4.12 的 P9 口径）。 */
-    const code = panel
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
+    const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code).not.toContain("可选 · 未落点");
     expect(code).not.toContain("必备 · 未落点");
     /* 例外只留「必填口没落点」：那不是复述，是缺件状态。 */
@@ -255,9 +238,7 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
     expect(panel).toMatch(/modes\.length > 1/);
     /* 模式由详情层下发（两个页签共用同一份当前模式）。 */
     expect(read("sections/DetailBody.tsx")).toMatch(/mode=\{activeMode\}/);
-    expect(read("WorkflowLibraryDetailView.tsx")).toContain(
-      "activeMode={activeMode}",
-    );
+    expect(read("WorkflowLibraryDetailView.tsx")).toContain("activeMode={activeMode}");
   });
 
   it("第 4 条：首帧 fit 落地前画布不可见（不在错误缩放上画一帧）", () => {
@@ -303,13 +284,9 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     /* 根容器换行：排不下时整组落到第二行，而不是把某个下拉挤变形。 */
     expect(header).toMatch(/flex flex-wrap items-center gap-x-3 gap-y-2/);
     /* 筛选是一组：组内不换行（组之间才换行）。 */
-    expect(header).toMatch(
-      /workflow-library-header-filters[\s\S]{0,80}flex shrink-0 flex-nowrap/,
-    );
+    expect(header).toMatch(/workflow-library-header-filters[\s\S]{0,80}flex shrink-0 flex-nowrap/);
     /* 动作组不许被压（规范 03 §3.8.1）。 */
-    expect(header).toMatch(
-      /ml-auto flex shrink-0 flex-wrap items-center gap-2/,
-    );
+    expect(header).toMatch(/ml-auto flex shrink-0 flex-wrap items-center gap-2/);
 
     /* 屏名不再有可见标题（ISSUE #1847 / #1693）：顶栏与页签常驻写着「工作流库」，
      * 屏内再写一遍是同一个名字出现两次。名字仍从注册表取（`pageHeaderTitle`），
@@ -345,12 +322,9 @@ describe("局部加载不许用整列加载界面", () => {
     /* 常驻形态的回归：`<WorkflowCanvasEditor …>` 不出现在**任何**条件之外
      *  —— 逐个匹配点都必须在 `editingId &&` 里。取反的写法是把条件那一段剥掉
      *  再看还剩不剩裸的 `<WorkflowCanvasEditor`。 */
-    expect(
-      library.replace(
-        /\{c\.editingId && \(\s*<WorkflowCanvasEditor/g,
-        "<GATED",
-      ),
-    ).not.toMatch(/<WorkflowCanvasEditor\s+workflowId=/);
+    expect(library.replace(/\{c\.editingId && \(\s*<WorkflowCanvasEditor/g, "<GATED")).not.toMatch(
+      /<WorkflowCanvasEditor\s+workflowId=/,
+    );
     /* 编辑器自身仍带 `open` 契约（组件 API 不变）。 */
     expect(library).toMatch(/<WorkflowCanvasEditor[\s\S]{0,180}\bopen\b/);
   });
@@ -359,9 +333,7 @@ describe("局部加载不许用整列加载界面", () => {
     const view = read("WorkflowLibraryDetailView.tsx");
     /* 常驻实例套在 `canvasMounted &&` 里，而不是只有 `hidden`。 */
     expect(view).toMatch(/\{canvasMounted && \(/);
-    expect(view).toMatch(
-      /hidden=\{activeTab !== "canvas" && activeTab !== "use"\}/,
-    );
+    expect(view).toMatch(/hidden=\{activeTab !== "canvas" && activeTab !== "use"\}/);
   });
 
   it("`canvasMounted` 由 controller 给，且落在「首次切到画布页签」那一刻", () => {
@@ -369,12 +341,11 @@ describe("局部加载不许用整列加载界面", () => {
     /* 契约：controller 上有这个字段。 */
     expect(hook).toMatch(/canvasMounted: boolean;/);
     /* 判据：当前工作流访问过画布页签才为真。 */
+    expect(hook).toMatch(/canvasMounted: !!workflow && canvasVisitedFor === workflow\.id/);
+    /* 记录点只在切页签那一条路径上（不是 effect 里 setState）。oxlint curly 切泛形
+     * 后这行是加括号的多行体，正则要跟着钉（顺带防回归到单行无括号）。 */
     expect(hook).toMatch(
-      /canvasMounted: !!workflow && canvasVisitedFor === workflow\.id/,
-    );
-    /* 记录点只在切页签那一条路径上（不是 effect 里 setState）。 */
-    expect(hook).toMatch(
-      /if \(isCanvasTab\(tab\) && workflow\) setCanvasVisitedFor\(workflow\.id\)/,
+      /if \(isCanvasTab\(tab\) && workflow\) \{\s*setCanvasVisitedFor\(workflow\.id\);\s*\}/,
     );
   });
 });
