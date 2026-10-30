@@ -68,6 +68,28 @@
  * 平台自己写进 `get-build-status -v` 的 `pipelinesStatus[*].name` 再核一次。给不出
  * （名字写错）就退 2「没有结论」——**不许**退化成「不过滤」，那正是上面那一形。
  *
+ * ## 预算账陈旧度触发器（ISSUE #2639）
+ *
+ * 预算闸（`check-bundle-budget.cjs`）判红时自己念得出「基线修订号 dd8d4647 · 其后 35 次提交」，
+ * 却没有任何一格说「陈旧到什么程度就该有人出面」—— 六次同类账（#2219 / #2273 / #2464 /
+ * #2512 / #2518 / #2634）全靠碰巧有个正在修别的单子的人读到它。所以这一格在**判红**时把那笔
+ * 账升成一句点名：基线其后提交数 ≥ `BUNDLE_BASELINE_STALE_COMMITS`、或预算闸连续红
+ * ≥ `BUNDLE_GATE_RED_STREAK_DAYS` 天，正文就多一节「该有人出面了」+ §13.5.4 的两条出口
+ * （认账 / 压回）。**它不改判据的判定**（棘轮只许降不许升照旧），只把「该有人出面」从
+ * 「碰巧被读到」变成「被念出来」。
+ *
+ * 三条边界：
+ *   · **只认判据自己打的那两句判决行**（`BUNDLE_GATE_MARKERS`），不重算金额 —— 重算就是
+ *     第二个量具，两处会开始各说各话（§13.5.4）；
+ *   · **撤档期间不响**（#2634 把 `TOTALS_ENFORCED` 改成 false）：判据照打差额、但明说
+ *     「今天没判」，那种读数**不是红**，升它就是替业主的暂撤决定编一条催办。撤档也不静默：
+ *     这一格每次都把「今天没判」这句打出来；
+ *   · **读不出 ≠ 没到门限**（§13.6.4.1）：连续天数没盖住窗口 / 日志没取到 / 中间有一跑没判，
+ *     一律不升并念出是哪一档 —— 不把它读成「还没满 M 天」。
+ *
+ * 整段实现（判决行解析 / 门限 / 连续天数 / 正文那一节）在 `ci-daily-bundle-escalation.mjs`
+ * —— 拆成模块是为了让本文件留在 900 行硬闸之内；本文件只把这一跑的读数递过去、把结论念出来。
+ *
  * ## 用法
  *
  * ```text
@@ -90,6 +112,10 @@ import {
   enrichStageErrors,
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
+import {
+  BUNDLE_GATE_STAGE,
+  judgeBundleStageReading,
+} from "./ci-daily-bundle-escalation.mjs";
 import { machineHandle } from "./dev-handle.mjs";
 import {
   DEFAULT_WINDOW_HOURS,
@@ -209,7 +235,7 @@ export function pickPreviousDaily({ list, details, lanes = [] }) {
  * 缺省（不给 `--lane`）= 空名单 = 不按档过滤，只为旧调用点与 `--from` 离线复现保留。
  */
 export const LANE_STAGES = /** @type {Record<string, string[]>} */ ({
-  每日生产构建: ["每日生产构建"],
+  [BUNDLE_GATE_STAGE]: [BUNDLE_GATE_STAGE],
 });
 
 /**
@@ -305,7 +331,7 @@ export function decideAction({ state, failedNames, existing }) {
  * 拼正文：只有事实与出口。
  *
  * @param {{slug:string, build:any, sn:string, stage:string, skipped:string[],
- *   readout:string[], handle:string}} input
+ *   readout:string[], handle:string, escalation?:string}} input
  * @returns {string}
  */
 export function composeBody({
@@ -316,6 +342,7 @@ export function composeBody({
   skipped,
   readout,
   handle,
+  escalation = "",
 }) {
   return [
     commentHeader(handle),
@@ -337,6 +364,7 @@ export function composeBody({
     readout.join("\n").trim() ||
       "(这一格的日志正文没取到 —— 那句不是「日志里没有失败行」，是**取不到**)",
     "```",
+    ...(escalation ? ["", escalation] : []),
     "",
     "## 根因：**未判定**",
     "",
@@ -429,6 +457,10 @@ export function main(io = {}) {
   let list;
   /** @type {Array<{sn:string,json:any}>} */
   let details;
+  /* 离线档里那一跑的**格日志正文**（`stageLogs[sn]`）：预算账触发器要在离线档也能被复现，
+   * 否则它只有联网那一条路可测 —— 而那条路上的输入（真红 + 连续几天红）恰恰最难造。 */
+  /** @type {Record<string,string> | null} */
+  let offlineLogs = null;
   const offline = Boolean(from);
   if (offline) {
     if (!from || !fs.existsSync(from)) {
@@ -450,8 +482,13 @@ export function main(io = {}) {
     else if (Array.isArray(parsed?.data)) rows = parsed.data;
     list = rows;
     details = Array.isArray(parsed?.details) ? parsed.details : [];
+    offlineLogs =
+      parsed?.stageLogs && typeof parsed.stageLogs === "object"
+        ? parsed.stageLogs
+        : null;
     log(
-      `[daily-failure-issue] 离线档：列表 ${rows.length} 条 · 详情 ${details.length} 跑 ⇒ ` +
+      `[daily-failure-issue] 离线档：列表 ${rows.length} 条 · 详情 ${details.length} 跑 · ` +
+        `格日志 ${offlineLogs ? Object.keys(offlineLogs).length : 0} 份 ⇒ ` +
         "**强制只读**（离线那份详情与「开着的单」都不是当场取的，据它写平台就是把过期读数写成事实）",
     );
   } else {
@@ -558,6 +595,25 @@ export function main(io = {}) {
     return decision.action === "none" ? CODE.DONE : finish(CODE.NO_FACT, why);
   }
 
+  /* ── 预算账陈旧度触发器（ISSUE #2639）────────────────────────────────
+   * 实现（判决行解析 / 门限 / 连续天数 / 正文那一节）整段在
+   * `ci-daily-bundle-escalation.mjs`：这里只负责把这一跑的读数递过去、把那句话打出来。
+   * 这一段**不参与写不写**：它只给正文多一节 / 少一节，改了预算闸的判定才是越界。 */
+  const bundleJudge = judgeBundleStageReading({
+    run,
+    slug,
+    offline,
+    offlineLogs,
+    outcome,
+    sn,
+    details,
+    lanes,
+  });
+  const escalation = bundleJudge.section;
+  log(
+    `[daily-failure-issue] 预算账触发器：${bundleJudge.fired ? "↑ 升级" : "不升级"} —— ${bundleJudge.reason}`,
+  );
+
   const willWrite = offline || dryRun;
   let wrote = true;
   for (const s of decision.stages) {
@@ -569,6 +625,9 @@ export function main(io = {}) {
       skipped,
       readout,
       handle,
+      /* 升级那一节只挂在预算闸那一张单上：别的格的红与这笔账无关，
+       * 挂上去就是替它说一句它没有读数支撑的话。 */
+      escalation: s.stage === BUNDLE_GATE_STAGE ? escalation : "",
     });
     const title = issueTitle({
       sn,
