@@ -65,6 +65,7 @@
     "storybook": "node scripts/storybook.mjs dev",
     "storybook:build": "node scripts/storybook.mjs build",
     "doc:check": "node scripts/check-doc-references.cjs",
+    "doc:toc": "node scripts/doc-toc.mjs",
     "theme:scan": "node scripts/check-theme-colors.cjs --report",
     "ui:primitives": "node scripts/check-ui-primitives.cjs",
     "ui:overlay-z": "node scripts/check-overlay-z.cjs",
