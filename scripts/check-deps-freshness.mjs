@@ -92,7 +92,7 @@ import {
   unresolvableDeclaredDeps,
 } from "./launcher-core/worktree.mjs";
 import { DEPENDENCY_FILES } from "./dependency-face.mjs";
-import { resolveGitDir } from "./git-dir.mjs";
+import { resolveGitDir, hasInProgressMerge } from "./git-dir.mjs";
 
 /**
  * 「远端引用还算新鲜」的宽限期（毫秒）。
@@ -354,29 +354,11 @@ export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
 }
 
 /**
- * 本次提交是不是一个**待落地的合并提交**（`git merge` 已解完冲突、尚未 commit）。
- *
- * 判据是 `$GIT_DIR/MERGE_HEAD` 在场 —— 那是 git 自己在合并过程中写的状态文件，
- * 也是「`git commit` 将要产生的这次提交有两个父提交、且第二个就是被合并进来的
- * 那个 rev」的唯一权威信号。**不拿别的近似**：`git merge-base` 看不出来（HEAD
- * 还没动）、`--is-ancestor` 也看不出来（同上），而「暂存区里有 `package.json`」
- * 更是无关（自己改依赖也是这个形态）。
- *
- * `$GIT_DIR` 通过 `resolveGitDir()` 解析（`--git-dir` 之外还要认链接工作树里
- * `.git` 是个文件的情形，同 `remoteRefTimestamp` 那条路径的理由）。
- * @returns {boolean}
- * @param {string} root
+ * 本次提交是不是一个**待落地的合并提交**：判据与实现都在 `git-dir.mjs` 的
+ * `hasInProgressMerge()`（那里写清了为什么只有 `$GIT_DIR/MERGE_HEAD` 这一个信号算数，
+ * 以及为什么不能硬拼 `<根>/.git/…`）。本文件过去自己留了一份**退回式实现** ——
+ * 同一判据的第二份实现就是漂移的来源，已并过去（`git-dir.mjs` 文件头那条「另案」清单）。
  */
-export function hasInProgressMerge(root) {
-  try {
-    const gitDir = resolveGitDir(root);
-    return gitDir ? fs.existsSync(path.join(gitDir, "MERGE_HEAD")) : false;
-  } catch {
-    /* 解析不出 git 目录 ⇒ 当作「不是合并提交」，② 照常按分叉点判（保守方向：
-       宁可多判一次，不可把「查不了」读成「没问题」—— 同 `readAtRev` 的口径）。 */
-    return false;
-  }
-}
 
 /**
  * 判据 ②：**分叉点**的依赖面 vs 远端 rev 的依赖面。
