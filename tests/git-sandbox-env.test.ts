@@ -15,6 +15,11 @@
  * ① 用的是本测试**自己 mkdtemp 出来的一份仓库**，不是运行它的那个仓库 ——
  * 判据可以随便污染夹具，但绝不许碰调用方的检出（这正是被测事故本身的形态）。
  *
+ * 第四档（④，ISSUE #2787）：平台那一跑的改动面变量（`CNB_PULL_REQUEST_TARGET_SHA` 一族）
+ * 同样进不来。判的是同一件事——「只对当前那一跑成立的读数」不许被子进程继承——只是
+ * 这一族不是 git 导出的，第一类清单收不到，而它会一路走进用例 spawn 的判据脚本，
+ * 让沙箱拿**真仓库的 sha** 去算自己的改动面（现场见 `git-sandbox-env.ts` 文件头第三类）。
+ *
  * 第三档（③）：宿主开着 `core.autocrlf=true` 时，夹具的 `git add` **一条 advice 都不打**。
  * 那一行 `LF will be replaced by CRLF` 不改变任何结论，却是 CI 里最像「真红」的噪音；
  * 反向锚点同样是「先证明宿主那一档确实会叫」——不先造一次带噪的 `git add`，
@@ -26,7 +31,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { GIT_INHERITED_ENV_KEYS, gitSandboxEnv } from "./helpers/git-sandbox-env";
+import {
+  GIT_INHERITED_ENV_KEYS,
+  PLATFORM_RUN_ENV_KEYS,
+  gitSandboxEnv,
+  stripInheritedGitEnv,
+} from "./helpers/git-sandbox-env";
 
 /** 本文件造出来的夹具仓库；收尾全删，用例中途失败也不把临时目录留在 `tmpdir`。 */
 const dirs: Array<string> = [];
@@ -194,6 +204,44 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     expect(`${sandboxed.stdout ?? ""}${sandboxed.stderr ?? ""}`).not.toContain(
       "will be replaced by",
     );
+  });
+
+  it("④ 平台那一跑的改动面变量进不了沙箱（两个出口都要剥）", () => {
+    /* 三个键都是「指向某一个具体提交」的读数：`resolveBaseRef()` 优先认第一个，
+     * 另外两个进 `reconcileSyntheticMergeFace()` 的合成提交对账。 */
+    for (const key of ["CNB_PULL_REQUEST_TARGET_SHA", "CNB_PULL_REQUEST_MERGE_SHA", "CNB_COMMIT"]) {
+      expect(PLATFORM_RUN_ENV_KEYS, `清单里没有 ${key}`).toContain(key);
+    }
+    const poisoned = {
+      ...process.env,
+      CNB_PULL_REQUEST_TARGET_SHA: "deadbeef".repeat(5),
+      CNB_PULL_REQUEST_MERGE_SHA: "feedface".repeat(5),
+      CNB_COMMIT: "abad1dea".repeat(5),
+    };
+    /* 前提：这三个键在 `process.env` 上确实会被读到（本机没有 ⇒ 只能靠注进去）。 */
+    expect(poisoned.CNB_PULL_REQUEST_TARGET_SHA).toBeTruthy();
+
+    const viaSpawn = gitSandboxEnv(poisoned);
+    for (const key of PLATFORM_RUN_ENV_KEYS) {
+      expect(viaSpawn[key], `gitSandboxEnv() 没剥掉 ${key}`).toBeUndefined();
+    }
+    /* 另一条出口：`tests/setup.ts` 在 worker 启动时改的是 `process.env` 本身。
+     * 两个出口剥的必须是**同一张清单** —— 只改一处时，另一处会静默漏掉新增的键。 */
+    const marker = "[sandbox-env-probe]";
+    expect(poisoned.CNB_COMMIT).toBeTruthy();
+    process.env.CNB_COMMIT = "abad1dea".repeat(5);
+    process.env.CNB_PULL_REQUEST_TARGET_SHA = "deadbeef".repeat(5);
+    try {
+      stripInheritedGitEnv();
+      expect(process.env.CNB_COMMIT, `${marker} stripInheritedGitEnv() 没剥掉 CNB_COMMIT`).toBe(
+        undefined,
+      );
+      expect(process.env.CNB_PULL_REQUEST_TARGET_SHA).toBe(undefined);
+    } finally {
+      /* 全局那一档是**就地改** `process.env` 的，用例必须自己收拾（同文件 `dirs` 的理由）。 */
+      delete process.env.CNB_COMMIT;
+      delete process.env.CNB_PULL_REQUEST_TARGET_SHA;
+    }
   });
 
   it("全局那一档挂在 `tests/setup.ts` 上（否则 20 份自起仓库的用例各扫各的）", () => {

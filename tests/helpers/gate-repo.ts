@@ -90,6 +90,25 @@ export { afterAll, afterEach, beforeAll, beforeEach, describe } from "vitest";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 
 /**
+ * 夹具工作区的**边界标记**：这个文件是被拷进临时仓库的，靠它把「临时仓库」与
+ * 「夹具自己的检出」分开（ISSUE #2787）。
+ *
+ * 为什么需要它：`mkdtempSync(tmpdir(), …)` 建在系统临时目录下，而 `src/**` 的判据
+ * 走 `require.resolve`／TS 的 `moduleResolution`，解析是**一路向上**的 —— 于是临时
+ * 仓库里那份脚本会捡到**更上层目录**（`/tmp` 与它的祖先）里任意项目的 `node_modules`。
+ * 现场（PR #2784）是 CI 的 `TMPDIR` 落在工作区**里面**，于是沙箱捡到了本仓自己的
+ * `node_modules/pnpm-workspace.yaml`，`pnpm-workspace.yaml` 的 `packages` 里那句
+ * `!scripts` 把脚本目录从工作区里剔掉，pnpm 转而在**仓库根**执行 —— 脚本的
+ * `ROOT = process.cwd()` 就变成了真仓库：真仓库的 `HEAD`、真仓库的 `MERGE_HEAD`
+ * 都不归这个用例管，红出来的是 `[format] 改动面没算出来：<真 sha> 的 diff 没跑起来`。
+ * 本机 `/tmp` 在仓库外面，所以这一格本机永远绿、只有 CI 红。
+ *
+ * 落一份最小 `package.json` 之后这个目录就是**包根**，上溯到此为止（与 `installDep`
+ * 那段「建目录 + 最小 package.json 就封住了解析边界」同一条判据）。
+ */
+const SANDBOX_PACKAGE_MARKER = '{"name":"gate-sandbox","private":true}\n';
+
+/**
  * **按 `require("./x.cjs")` 递归补齐判据的同目录依赖**（临时仓库里已放好那份脚本之后调）。
  *
  * 判据之间是有依赖的（`maskNonCode` 那一份，以及扫描面共用的 `gate-scan-read.cjs`），
@@ -394,6 +413,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
   const prefix = workdir ?? script.replace(/^check-/, "").replace(/\.(c|m)?js$/, "");
 
   const root = mkdtempSync(path.join(tmpdir(), `${prefix}-gate-`));
+  /* 边界标记先落（上面 `SANDBOX_PACKAGE_MARKER` 那段）：它必须在任何「解析向上走」的
+   * 判据起子进程**之前**就在盘上。 */
+  writeFileSync(path.join(root, "package.json"), SANDBOX_PACKAGE_MARKER);
   const scriptDir = path.dirname(path.join(root, scriptRel));
   mkdirSync(scriptDir, { recursive: true });
   /* 权限位显式补齐：某些沙箱 / 受限 umask 下新建目录是 `drwxr-xr-x`，
