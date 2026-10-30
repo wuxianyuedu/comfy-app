@@ -13,6 +13,7 @@ import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
 import { cn } from "~/lib/utils";
 import { useSeriesOrganizer } from "./hooks/use-series-organizer";
+import { SeriesCharacterLibrary } from "./series-character-library";
 
 interface SeriesOrganizerProps {
   /** 当前项目 id（来自 workspace 的活跃项目）。提供时展示「本项目归属」并支持一键归入某集。 */
@@ -31,9 +32,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
     <section className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="u-title">系列 / 季 / 集</h2>
-        <span className="text-ink-faint text-xs">
-          把项目归入系列层级（FR-SR：多剧集组织）
-        </span>
+        <span className="text-ink-faint text-xs">把项目归入系列层级（FR-SR：多剧集组织）</span>
       </div>
 
       {/* ── 本项目当前归属 ─────────────────────────── */}
@@ -59,9 +58,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               key={s.id}
               className={cn(
                 "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
-                c.seriesId === s.id
-                  ? "border-border-strong bg-surface-2"
-                  : "border-border",
+                c.seriesId === s.id ? "border-border-strong bg-surface-2" : "border-border",
               )}
             >
               <input
@@ -76,9 +73,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               <Button
                 variant="ghost"
                 className="h-7 px-2 text-xs"
-                onClick={() =>
-                  c.selectSeries(c.seriesId === s.id ? null : s.id)
-                }
+                onClick={() => c.selectSeries(c.seriesId === s.id ? null : s.id)}
               >
                 {c.seriesId === s.id ? "收起" : "展开"}
               </Button>
@@ -123,14 +118,10 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 key={se.id}
                 className={cn(
                   "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
-                  c.seasonId === se.id
-                    ? "border-border-strong bg-surface-2"
-                    : "border-border",
+                  c.seasonId === se.id ? "border-border-strong bg-surface-2" : "border-border",
                 )}
               >
-                <span className="text-ink-faint w-6 text-xs">
-                  S{se.seasonNumber}
-                </span>
+                <span className="text-ink-faint w-6 text-xs">S{se.seasonNumber}</span>
                 <input
                   className="flex-1 bg-transparent text-sm outline-none"
                   defaultValue={se.title}
@@ -143,9 +134,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 <Button
                   variant="ghost"
                   className="h-7 px-2 text-xs"
-                  onClick={() =>
-                    c.selectSeason(c.seasonId === se.id ? null : se.id)
-                  }
+                  onClick={() => c.selectSeason(c.seasonId === se.id ? null : se.id)}
                 >
                   {c.seasonId === se.id ? "收起" : "展开"}
                 </Button>
@@ -192,14 +181,10 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 key={e.id}
                 className={cn(
                   "group flex items-center gap-2 rounded-lg border px-2 py-1.5",
-                  c.episodeId === e.id
-                    ? "border-border-strong bg-surface-2"
-                    : "border-border",
+                  c.episodeId === e.id ? "border-border-strong bg-surface-2" : "border-border",
                 )}
               >
-                <span className="text-ink-faint w-6 text-xs">
-                  E{e.episodeNumber}
-                </span>
+                <span className="text-ink-faint w-6 text-xs">E{e.episodeNumber}</span>
                 <input
                   className="flex-1 bg-transparent text-sm outline-none"
                   defaultValue={e.title}
@@ -213,9 +198,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                   <Button
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() =>
-                      c.selectEpisode(c.episodeId === e.id ? null : e.id)
-                    }
+                    onClick={() => c.selectEpisode(c.episodeId === e.id ? null : e.id)}
                   >
                     {c.episodeId === e.id ? "已选" : "选定"}
                   </Button>
@@ -261,6 +244,13 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               把当前项目归入此集
             </Button>
           )}
+        </div>
+      )}
+
+      {/* ── 系列角色库（选中系列后）────────────────────── */}
+      {c.seriesId && (
+        <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
+          <SeriesCharacterLibrary c={c} projectId={projectId} />
         </div>
       )}
     </section>
