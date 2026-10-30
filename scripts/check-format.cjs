@@ -74,12 +74,12 @@
  * 文件时自动落在白名单里(不误报)。豁免不进棘轮计数。
  *
  * 白名单里的第二类是**非源码产物**:`src-tauri/target/` 下是 `cargo build` 的输出
- * (Rust 壳),由**嵌套的** `src-tauri/.gitignore` 忽略。prettier 只按 cwd(仓库根)
- * 读 `.gitignore`,嵌套的忽略文件它看不到 —— 于是构建过一次的检出会把 target 下的
- * 生成脚本(out/__global-api-script.js)判成「新增未过格式的文件」,阻断每一次提交
- * (ISSUE #638 修好 pnpm 启动形态后本门禁才第一次真正扫到全库,这条才暴露;CI 的
- * 干净检出没有 target 目录,所以只有开发机踩得到)。产物既不该被格式化 ——
- * 下一次构建会覆盖它,也不该进棘轮计数。
+ * (Rust 壳)。**现在谁在忽略它**（ISSUE #2602）:本门禁与 `format:check` / `format:write`
+ * 的扫描面收口在 `SCAN_ROOTS` 两个目录（`src` 与 `.storybook`）——`target/` 天然不在
+ * 面内,不存在「生成脚本被格式化工具折行 ⇒ serde_json 读到尾随逗号 ⇒ 整壳编译失败」
+ * 那一条(那是 prettier 时代的现场,当年的执行者是根级 `.prettierignore`,#2541 删
+ * prettier 时一并删了;这条历史上的根因与取证见 ISSUE #730 / #638)。产物既不该被
+ * 格式化 —— 下一次构建会覆盖它,也不该进棘轮计数。
  *
  * 为什么逐个 glob 调 prettier 而不是一次性:需要把 glob 交给 shell 展开或引号
  * 透传,而 Windows 上 cmd/pwsh 的展开语义与 POSIX 不同;逐个 glob 调用对平台
