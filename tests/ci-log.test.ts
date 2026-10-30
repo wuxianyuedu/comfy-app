@@ -38,6 +38,7 @@ import {
   indentItems,
   looksSkipped,
   paint,
+  paintLine,
   renderTally,
   renderVerdict,
   stateOfLine,
@@ -221,6 +222,36 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     expect(stateOfLine("  √ [format] OK")).toBe("ok");
     expect(stateOfLine("  × 3 处违规")).toBe("red");
     expect(stateOfLine("[warn] 只是读得出来")).toBeNull();
+  });
+
+  it("paintLine 是颜色层的唯一合成点：三态各自上色，删光色号仍是那一行", () => {
+    /* 这一条钉的是「三态在屏幕上分得开」这件事本身。此前它只在 `emit()` 的默认出口
+     * 成立，而**自己管写**的跑批（转述型那一族）拿不到 —— 于是它那一屏里
+     * `[ok]` 与 `[skip]` 逐字同灰（ISSUE #2748）。 */
+    for (const state of ["ok", "skip", "red"] as const) {
+      const text = `${TAGS[state]} 某判据（读数）`;
+      const painted = paintLine(text, { enabled: true });
+      expect(painted).toContain(`\u001b[${COLORS[state]}m${text}\u001b[0m`);
+      expect(painted.replace(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
+    }
+  });
+
+  it("paintLine 关掉着色时一个字节都不加（注入 log / NO_COLOR / 非 TTY 那一档）", () => {
+    expect(paintLine("[ok] x", { enabled: false })).toBe("[ok] x");
+    expect(paintLine("[重档] x", { enabled: false })).toBe("[重档] x");
+  });
+
+  it("paintLine 的 color 覆盖：不带三态前缀的那一行也能跟着判决走（合计行）", () => {
+    const text = "[重档] 合计：红 1、没判 0、判过 58（共 59 条）";
+    const painted = paintLine(text, { enabled: true, color: COLORS.red });
+    expect(painted.startsWith(`\u001b[${COLORS.red}m▌`)).toBe(true);
+    expect(painted).toContain(`\u001b[${COLORS.red}m${text}\u001b[0m`);
+    expect(painted.replace(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
+    /* 不给 `color` 时它仍是一行认不出态的普通文本（中性灰带）——
+     * 覆盖口只给点名要它的那一行，不默认把整屏染起来。 */
+    expect(paintLine(text, { enabled: true })).toBe(
+      `\u001b[90m▌\u001b[0m ${text}`,
+    );
   });
 
   it("调用方给了 out ⇒ 交出去的仍是干净文本（跑批靠它读回结论句）", () => {
