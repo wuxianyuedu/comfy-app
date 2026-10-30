@@ -445,6 +445,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 覆盖度账本的执行者（零消费导出 / 两个清单逐字同源）。
   "tests/check-a11y-rules.test.ts",
   "tests/helpers/a11y-effective-config.coverage.test.ts",
+  // 「eslint 文件级豁免台账 ⇄ 真违例」的执行者（规范 §13.5.31 / ISSUE #2607 第 3 条）：
+  // 那份台账自己的注释写着「何时可移除」，而这句话此前没有任何东西在读 ——
+  // 文件改干净了，豁免那一行照样躺在配置上。本层要钉的不是「差集会不会算」，
+  // 而是**取数没跑成时不许冒充结论**：`Linter#verify` 的内联配置写成 eslintrc 形时
+  // 对每一份文件都抛错，而朴素实现照样打「命中 0 处」——那正好等于「台账全部陈旧」
+  // 这个最刺眼的假结论。bin 那一条同时是「平台侧也真跑过一次这份判据」的站点
+  // （本仓的 D 档不进默认提交，平台靠固定清单这一格收住它），故进固定清单。
+  "tests/eslint-exemption-staleness.test.ts",
   // 「被门禁拦下先复算 master 基线」的执行者（规范 §13.6.2 第 1 步）：那段
   // `git worktree add ../.wt-base-check … && node scripts/check-*.cjs … && git worktree
   // remove` 此前只写在文档与注释里，于是「这一条本身还没有机器判据」是 §13.6.2 自己的
