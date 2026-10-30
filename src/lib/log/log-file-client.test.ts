@@ -33,9 +33,7 @@ afterEach(() => {
 type FetchCall = readonly [RequestInfo | URL, RequestInit?];
 
 /** 记一次 fetch 的出口：拿到请求 URL 与init，并决定这一轮怎么回。 */
-function stubFetch(
-  reply: { body?: unknown; ok?: boolean } | { throws: unknown },
-) {
+function stubFetch(reply: { body?: unknown; ok?: boolean } | { throws: unknown }) {
   const spy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
     if ("throws" in reply) throw reply.throws;
     return new Response(JSON.stringify(reply.body ?? {}), {
@@ -67,7 +65,7 @@ function methodOf(call: FetchCall | undefined): string | undefined {
 /** JSON 请求体。 */
 function bodyOf(call: FetchCall | undefined): Record<string, unknown> {
   const raw = typeof call?.[1]?.body === "string" ? call[1].body : "{}";
-  return JSON.parse(raw) as Record<string, unknown>;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Record<string, unknown>;
 }
 
 describe("fetchFileLogSlice —— 增量游标", () => {
@@ -78,18 +76,14 @@ describe("fetchFileLogSlice —— 增量游标", () => {
       size: 0,
       offset: 0,
     });
-    expect(urlOf(fetchMock.mock.calls[0])).toBe(
-      "/api/logs/current?source=dev-launcher&offset=0",
-    );
+    expect(urlOf(fetchMock.mock.calls[0])).toBe("/api/logs/current?source=dev-launcher&offset=0");
   });
 
   it("首轮没有 bootId 时整个键不发；带上时参与比对", async () => {
     const fetchMock = stubFetch({ body: { content: "", size: 1, offset: 1 } });
     await fetchFileLogSlice("app", 1);
     await fetchFileLogSlice("app", 1, "boot-7");
-    expect(urlOf(fetchMock.mock.calls[0])).toBe(
-      "/api/logs/current?source=app&offset=1",
-    );
+    expect(urlOf(fetchMock.mock.calls[0])).toBe("/api/logs/current?source=app&offset=1");
     expect(urlOf(fetchMock.mock.calls[1])).toBe(
       "/api/logs/current?source=app&offset=1&bootId=boot-7",
     );
@@ -151,12 +145,8 @@ describe("fetchLogSessions —— 会话视图", () => {
     await fetchLogSessions("comfyui-runtime");
     await fetchLogSessions("comfyui-runtime", null);
     await fetchLogSessions("ollama-runtime", "s-2");
-    expect(urlOf(fetchMock.mock.calls[0])).toBe(
-      "/api/logs/sessions?source=comfyui-runtime",
-    );
-    expect(urlOf(fetchMock.mock.calls[1])).toBe(
-      "/api/logs/sessions?source=comfyui-runtime",
-    );
+    expect(urlOf(fetchMock.mock.calls[0])).toBe("/api/logs/sessions?source=comfyui-runtime");
+    expect(urlOf(fetchMock.mock.calls[1])).toBe("/api/logs/sessions?source=comfyui-runtime");
     expect(urlOf(fetchMock.mock.calls[2])).toBe(
       "/api/logs/sessions?source=ollama-runtime&session=s-2",
     );
@@ -294,8 +284,6 @@ describe("postAppRuntimeLog —— 补记必须绝不影响主流程", () => {
 
   it("网络失败静默返回，绝不抛给调用方", async () => {
     stubFetch({ throws: new TypeError("fetch failed") });
-    await expect(
-      postAppRuntimeLog("app", "error", "一条"),
-    ).resolves.toBeUndefined();
+    await expect(postAppRuntimeLog("app", "error", "一条")).resolves.toBeUndefined();
   });
 });

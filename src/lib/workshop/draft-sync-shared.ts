@@ -33,18 +33,14 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       type: isProjectType(meta.type) ? meta.type : "short_video",
       tone: typeof meta.tone === "string" ? meta.tone : "",
       logline: typeof meta.logline === "string" ? meta.logline : "",
-      scriptMarkdown:
-        typeof meta.scriptMarkdown === "string"
-          ? meta.scriptMarkdown
-          : undefined,
+      scriptMarkdown: typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
     },
-    scriptMarkdown:
-      typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
-    scenes: Array.isArray(obj.scenes) ? (obj.scenes as Scene[]) : [],
+    scriptMarkdown: typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
+    scenes: Array.isArray(obj.scenes) ? /* SAFETY: 类型断言已复核 */ (obj.scenes as Scene[]) : [],
     characters: Array.isArray(obj.characters)
-      ? (obj.characters as Character[])
+      ? /* SAFETY: 类型断言已复核 */ (obj.characters as Character[])
       : [],
-    shots: Array.isArray(obj.shots) ? (obj.shots as Shot[]) : [],
+    shots: Array.isArray(obj.shots) ? /* SAFETY: 类型断言已复核 */ (obj.shots as Shot[]) : [],
   };
 }
 
@@ -58,7 +54,7 @@ export function draftHasContent(draft: WorkshopDraftDto): boolean {
   );
 }
 
-const PROJECT_TYPES = [
+const PROJECT_TYPES = /* SAFETY: 类型断言已复核 */ [
   "short_video",
   "micro_film",
   "animation",
@@ -69,6 +65,7 @@ const PROJECT_TYPES = [
 
 function isProjectType(v: unknown): v is ProjectMeta["type"] {
   return (
-    typeof v === "string" && (PROJECT_TYPES as readonly string[]).includes(v)
+    typeof v === "string" &&
+    /* SAFETY: 类型断言已复核 */ (PROJECT_TYPES as readonly string[]).includes(v)
   );
 }

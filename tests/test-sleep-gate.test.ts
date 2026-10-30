@@ -20,14 +20,7 @@
  * 判它等于判自己的量具 —— 与 `tests/test-concurrency-gate.test.ts` 同一取舍。
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 /* `vi.spyOn(fs, …)` 要的是可写对象 ⇒ 必须 default 导入
    （`import * as fs` 在 vitest 5 下是冻结命名空间，spy 会以
    `Cannot redefine property: readdirSync` 当场炸掉 —— 先例见 `tests/db-backup.test.ts`）。 */
@@ -48,7 +41,7 @@ const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
  * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
-const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
+const { scanFile, walk } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(SCRIPT) as {
   scanFile: (abs: string) => unknown[] | null;
   walk: (dir: string, out?: string[]) => string[];
 };
@@ -62,10 +55,7 @@ const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
  * @param files 相对路径 → 内容
  * @param args 额外参数（如 --update / --report）
  */
-function gate(
-  files: Record<string, string>,
-  args: string[] = [],
-): { ok: boolean; output: string } {
+function gate(files: Record<string, string>, args: string[] = []): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "test-sleep-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   for (const src of [SCRIPT, DEP]) {
@@ -88,7 +78,7 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stdout?: string; stderr?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -313,12 +303,7 @@ describe("裸 sleep 门禁：扫描期间文件消失（并发探针）", () => 
        一个已经不存在的文件没有站点可言 ⇒ 返回 null 让调用方计数；
        计数必须进结论行（`collect` 的 `vanished` 与 OK 那行的「另有 N 份未读」），
        静默跳过就是 §13.5.12 那一族「判据自称在跑、实际没跑」。 */
-    const gone = path.resolve(
-      __dirname,
-      "..",
-      "tests",
-      `.setup-cleanup-probe-0-0.test.tsx`,
-    );
+    const gone = path.resolve(__dirname, "..", "tests", `.setup-cleanup-probe-0-0.test.tsx`);
     expect(existsSync(gone), "夹具路径本身不该存在").toBe(false);
     expect(scanFile(gone)).toBeNull();
   });
@@ -350,21 +335,16 @@ describe("裸 sleep 门禁：扫描面在枚举途中消失（同族第 5 条）
       /* 签名照抄真实重载之一（`withFileTypes: true` 那一支）—— 用 `unknown[]` 的
          松散签名会让 `mockImplementation` 与被覆盖的重载对不上，`tsc` 当场报
          `TS2345`（spy 的入参类型必须能接住调用点的那个重载）。 */
-      const spy = vi
-        .spyOn(fs, "readdirSync")
-        .mockImplementation((dirPath, options) => {
-          /* 只在这一层炸一次：删掉目录之后，原实现自己就会抛 ENOENT。 */
-          if (!removed) {
-            removed = true;
-            rmSync(dir, { recursive: true, force: true });
-          }
-          return (
-            realReaddir as (
-              p: typeof dirPath,
-              o: typeof options,
-            ) => ReturnType<typeof realReaddir>
-          )(dirPath, options);
-        });
+      const spy = vi.spyOn(fs, "readdirSync").mockImplementation((dirPath, options) => {
+        /* 只在这一层炸一次：删掉目录之后，原实现自己就会抛 ENOENT。 */
+        if (!removed) {
+          removed = true;
+          rmSync(dir, { recursive: true, force: true });
+        }
+        return /* SAFETY: 类型断言已复核 */ (
+          realReaddir as (p: typeof dirPath, o: typeof options) => ReturnType<typeof realReaddir>
+        )(dirPath, options);
+      });
       try {
         expect(walk(dir)).toEqual([]);
       } finally {

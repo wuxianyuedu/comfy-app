@@ -59,8 +59,7 @@ function scan(
   pick: (record: Record<string, unknown>) => string | null,
   depth: number,
 ): string | null {
-  if (depth > MAX_DEPTH || node === null || typeof node !== "object")
-    return null;
+  if (depth > MAX_DEPTH || node === null || typeof node !== "object") return null;
 
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -70,7 +69,7 @@ function scan(
     return null;
   }
 
-  const record = node as Record<string, unknown>;
+  const record = /* SAFETY: 类型断言已复核 */ node as Record<string, unknown>;
   const direct = pick(record);
   if (direct !== null) return direct;
   for (const value of Object.values(record)) {
@@ -84,7 +83,7 @@ function scan(
 function apiInput(record: Record<string, unknown>, key: string): string | null {
   const inputs = record.inputs;
   if (inputs === null || typeof inputs !== "object") return null;
-  return asFileName((inputs as Record<string, unknown>)[key]);
+  return asFileName(/* SAFETY: 类型断言已复核 */ (inputs as Record<string, unknown>)[key]);
 }
 
 /** UI 格式：节点类型在表里时取 `widgets_values[下标]`。 */

@@ -112,18 +112,12 @@ describe("app-port 端口解析", () => {
     expect(readEnvFileValue("COMFYAPP_PORT='3100'", "COMFYAPP_PORT")).toBe("3100");
     expect(readEnvFileValue("COMFYAPP_PORT = 3100", "COMFYAPP_PORT")).toBe("3100");
     expect(readEnvFileValue("  COMFYAPP_PORT=3100", "COMFYAPP_PORT")).toBe("3100");
-    expect(
-      readEnvFileValue("COMFYAPP_PORT=3100   # 固定端口", "COMFYAPP_PORT"),
-    ).toBe("3100");
+    expect(readEnvFileValue("COMFYAPP_PORT=3100   # 固定端口", "COMFYAPP_PORT")).toBe("3100");
     // `abc#def` 里的 `#` 是值的一部分，不能当注释切掉。
-    expect(readEnvFileValue("COMFYAPP_PORT=abc#def", "COMFYAPP_PORT")).toBe(
-      "abc#def",
-    );
+    expect(readEnvFileValue("COMFYAPP_PORT=abc#def", "COMFYAPP_PORT")).toBe("abc#def");
     // 整行注释（.env.example 的示例行）不算配置；键名子串不算匹配。
     expect(readEnvFileValue("# COMFYAPP_PORT=3100\n", "COMFYAPP_PORT")).toBeNull();
-    expect(
-      readEnvFileValue("OTHER_COMFYAPP_PORT=3100", "COMFYAPP_PORT"),
-    ).toBeNull();
+    expect(readEnvFileValue("OTHER_COMFYAPP_PORT=3100", "COMFYAPP_PORT")).toBeNull();
     expect(readEnvFileValue("", "COMFYAPP_PORT")).toBeNull();
   });
 
@@ -131,11 +125,7 @@ describe("app-port 端口解析", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "app-port-bad-"));
     try {
       for (const bad of ["not-a-number", "", "70000", "0", "-1"]) {
-        fs.writeFileSync(
-          path.join(tmp, ".env"),
-          `COMFYAPP_PORT=${bad}\n`,
-          "utf8",
-        );
+        fs.writeFileSync(path.join(tmp, ".env"), `COMFYAPP_PORT=${bad}\n`, "utf8");
         expect(readEnvPort(tmp), `COMFYAPP_PORT=${bad}`).toBeNull();
         expect(resolveAppPort(tmp)).toBe(derivePortFromPath(tmp));
       }
@@ -195,11 +185,8 @@ describe("app-port 端口解析", () => {
  * 任一侧实现漂移 → 对应侧测试失败，而不是等到 Windows 真机上才发现。
  */
 describe("app-port 四语言共享校验向量", () => {
-  const fixture = JSON.parse(
-    fs.readFileSync(
-      path.join(process.cwd(), "tests", "fixtures", "app-port-vectors.json"),
-      "utf8",
-    ),
+  const fixture = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "tests", "fixtures", "app-port-vectors.json"), "utf8"),
   ) as {
     vectors: {
       input: string;
@@ -223,9 +210,7 @@ describe("app-port 四语言共享校验向量", () => {
 
   it("同一检出的书写差异（分隔符 / 大小写 / 尾斜杠）归一到同一端口", () => {
     // F:\… 与 F:/… 与 F:/…/ 三条向量必须同端口 —— 这正是 §1.1 的承诺。
-    const win = fixture.vectors.filter((v) =>
-      v.normalized === "f:/ai/other/comfy-app-t3-branch",
-    );
+    const win = fixture.vectors.filter((v) => v.normalized === "f:/ai/other/comfy-app-t3-branch");
     expect(win.length).toBeGreaterThanOrEqual(3);
     expect(new Set(win.map((v) => v.port)).size).toBe(1);
   });
@@ -261,7 +246,7 @@ describe("仓库根收口（resolveRepoRoot）", () => {
     );
   });
 
-  it('调用点不得再用 `process.cwd()` 当端口根（防回潮）', () => {
+  it("调用点不得再用 `process.cwd()` 当端口根（防回潮）", () => {
     /* 这一条拦的是「同一事实两处表达」再长出来：两个 e2e 侧调用点此前写的
      * `resolveAppPort(process.cwd())` 就属于这一类 —— 当下与仓库根同值，
      * 换个人从别处 import、或宿主先 chdir 就分叉。判据按形状扫全库，

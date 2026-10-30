@@ -26,9 +26,8 @@ function okStream(chunks: string[]) {
  *  FormData / Blob 等，直接 String() 会被 lint 判为可疑的隐式序列化）。 */
 function jsonBody(init: RequestInit | undefined): unknown {
   const body = init?.body;
-  if (typeof body !== "string")
-    throw new Error(`请求体不是字符串: ${typeof body}`);
-  return JSON.parse(body) as unknown;
+  if (typeof body !== "string") throw new Error(`请求体不是字符串: ${typeof body}`);
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(body) as unknown;
 }
 
 afterEach(() => {
@@ -40,11 +39,7 @@ describe("streamChat", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        okStream([
-          'data: {"token":"你"}\n',
-          'data: {"token":"好"}\n',
-          "data: [DONE]\n",
-        ]),
+        okStream(['data: {"token":"你"}\n', 'data: {"token":"好"}\n', "data: [DONE]\n"]),
       ),
     );
     const tokens: string[] = [];
@@ -60,9 +55,7 @@ describe("streamChat", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        okStream([
-          'data: {"token":"a"}\ndata: {"token":"b"}\ndata: {"token":"c"}\ndata: [DONE]\n',
-        ]),
+        okStream(['data: {"token":"a"}\ndata: {"token":"b"}\ndata: {"token":"c"}\ndata: [DONE]\n']),
       ),
     );
     expect(await streamChat({ messages: [] })).toBe("abc");
@@ -72,11 +65,7 @@ describe("streamChat", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        okStream([
-          'data: {"tok',
-          'en":"hello"}\n',
-          'data: {"token":" world"}\ndata: [DONE]\n',
-        ]),
+        okStream(['data: {"tok', 'en":"hello"}\n', 'data: {"token":" world"}\ndata: [DONE]\n']),
       ),
     );
     const full = await streamChat({ messages: [] });
@@ -87,12 +76,7 @@ describe("streamChat", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        okStream([
-          ": keep-alive\n",
-          "\n",
-          'data: {"token":"x"}\n',
-          "data: [DONE]\n",
-        ]),
+        okStream([": keep-alive\n", "\n", 'data: {"token":"x"}\n', "data: [DONE]\n"]),
       ),
     );
     expect(await streamChat({ messages: [] })).toBe("x");
@@ -110,9 +94,7 @@ describe("streamChat", () => {
     const onToken = vi.fn();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        okStream(['data: {"other":1}\n', 'data: {"token":""}\n']),
-      ),
+      vi.fn(async () => okStream(['data: {"other":1}\n', 'data: {"token":""}\n'])),
     );
     expect(await streamChat({ messages: [], onToken })).toBe("");
     expect(onToken).not.toHaveBeenCalled();
@@ -131,9 +113,7 @@ describe("streamChat", () => {
   it("末帧无换行 + 跨 chunk 半个 JSON 也拼得回来", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        okStream(['data: {"token":"前半"}\ndata: {"tok', 'en":"末尾"}']),
-      ),
+      vi.fn(async () => okStream(['data: {"token":"前半"}\ndata: {"tok', 'en":"末尾"}'])),
     );
     expect(await streamChat({ messages: [] })).toBe("前半末尾");
   });
@@ -173,12 +153,7 @@ describe("streamChat", () => {
   it("帧内 error 字段必须抛出，而不是把半截正文当成功返回", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        okStream([
-          'data: {"token":"前半"}\n',
-          'data: {"error":"上游鉴权失败"}\n',
-        ]),
-      ),
+      vi.fn(async () => okStream(['data: {"token":"前半"}\n', 'data: {"error":"上游鉴权失败"}\n'])),
     );
     // 此前 `json.error` 抛出的 Error 会被下面的 catch 重新捕获，而 catch 只在
     // 消息命中 /LLM|请求|fetch/i 时才 rethrow —— "上游鉴权失败" 不命中，于是
@@ -190,9 +165,7 @@ describe("streamChat", () => {
   it("error 帧即使空串也不当成功（空值不是「没有错误」）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        okStream(['data: {"error":""}\n', 'data: {"token":"ok"}\n']),
-      ),
+      vi.fn(async () => okStream(['data: {"error":""}\n', 'data: {"token":"ok"}\n'])),
     );
     // 空串 error 视为「没有值」，与 `lib/error-message` 对空串的口径一致：
     // 不能因为 `""` 是假值就把整条流当成正常。
@@ -203,20 +176,14 @@ describe("streamChat", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        okStream([
-          "data: {bad json\n",
-          'data: {"token":"good"}\n',
-          "data: [DONE]\n",
-        ]),
+        okStream(["data: {bad json\n", 'data: {"token":"good"}\n', "data: [DONE]\n"]),
       ),
     );
     expect(await streamChat({ messages: [] })).toBe("good");
   });
 
   it("请求体带上 stream:true 与调用方 opts，signal 透传", async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () =>
-      okStream(["data: [DONE]\n"]),
-    );
+    const fetchMock = vi.fn<typeof fetch>(async () => okStream(["data: [DONE]\n"]));
     vi.stubGlobal("fetch", fetchMock);
     const controller = new AbortController();
     await streamChat({
@@ -246,8 +213,7 @@ describe("completeChat", () => {
 
   it("请求体带 stream:false", async () => {
     const fetchMock = vi.fn<typeof fetch>(
-      async () =>
-        new Response(JSON.stringify({ content: "x" }), { status: 200 }),
+      async () => new Response(JSON.stringify({ content: "x" }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
     await completeChat({ messages: [] });
@@ -267,10 +233,7 @@ describe("completeChat", () => {
   it("非 2xx 抛出服务端 error 文案", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: "密钥无效" }), { status: 401 }),
-      ),
+      vi.fn(async () => new Response(JSON.stringify({ error: "密钥无效" }), { status: 401 })),
     );
     await expect(completeChat({ messages: [] })).rejects.toThrow("密钥无效");
   });
@@ -309,10 +272,7 @@ describe("probeRemoteApi", () => {
       "fetch",
       vi.fn(
         async () =>
-          new Response(
-            JSON.stringify({ ok: true, detail: "ok", models: "a" }),
-            { status: 200 },
-          ),
+          new Response(JSON.stringify({ ok: true, detail: "ok", models: "a" }), { status: 200 }),
       ),
     );
     expect((await probeRemoteApi({})).models).toBeUndefined();

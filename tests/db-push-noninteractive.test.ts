@@ -48,7 +48,7 @@ afterEach(() => {
 
 describe("pnpm db:push 非交互可用", () => {
   it("package.json 的 db:push 经 scripts/db-push.mjs，而不是裸 drizzle-kit push", () => {
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     // 裸 `drizzle-kit push` 在无 TTY 上「报错 + exit 0 + 留空库」，是本条缺陷的形态。
@@ -57,14 +57,8 @@ describe("pnpm db:push 非交互可用", () => {
   });
 
   it("以 --force 运行 drizzle-kit，且判定依据不是它的退出码", () => {
-    const src = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "db-push.mjs"),
-      "utf8",
-    );
-    const core = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "db-push-core.mjs"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push.mjs"), "utf8");
+    const core = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push-core.mjs"), "utf8");
     /* `--force` 与「命令起没起来 / 跑完落没落地」的判据自 2026-09-20 起收在
      * db-push-core.mjs：`pnpm db:push`（force: true）与启动链路的按需同步
      * （force: false）共用它 —— 两处各判一次必然分叉。 */
@@ -93,10 +87,7 @@ describe("pnpm db:push 非交互可用", () => {
         timeout: 120_000,
       },
     );
-    expect(
-      result.status,
-      "建不出库时必须非零退出（旧实现此处 exit 0）",
-    ).not.toBe(0);
+    expect(result.status, "建不出库时必须非零退出（旧实现此处 exit 0）").not.toBe(0);
     expect(result.stderr).toContain("db:push");
   }, 150_000);
 
@@ -146,10 +137,7 @@ describe("db:push 的空转档：库已经是这一版 schema 建的就不再起
      * 自己的 src/server/db 无关，所以这里能用最小夹具把两侧对齐。 */
     const schemaDir = path.join(tmp, "src", "server", "db");
     fs.mkdirSync(schemaDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(schemaDir, "schema.ts"),
-      "export const t = 1;\n",
-    );
+    fs.writeFileSync(path.join(schemaDir, "schema.ts"), "export const t = 1;\n");
     createSchema(dbFile);
 
     /* 表在、但库里从没登记过指纹（\`PRAGMA user_version\` 读出来是 0）⇒ 判据
@@ -180,10 +168,7 @@ describe("db:push 的空转档：库已经是这一版 schema 建的就不再起
   });
 
   it("db-push 的入口用的是共享判据（不是在本文件里另判一次指纹）", () => {
-    const src = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "db-push.mjs"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push.mjs"), "utf8");
     expect(src).toContain("probeSchemaFresh");
     expect(src).toContain('fresh.state === "synced"');
     // 判据失效时不许跳：只认 "synced" 这一档（写成 `!== "outdated"` 会把 unknown 也放过）。
@@ -202,11 +187,13 @@ describe("探测判据跨实现同源", () => {
     // TS 侧的哨兵表名从源码里读出来，避免「两边各自改名后互不知情」。
     const m = /const SENTINEL_TABLE = "([^"]+)"/.exec(tsSrc);
     expect(m, "TS 侧必须保留单一定义的 SENTINEL_TABLE").toBeTruthy();
-    expect((mjs as { SENTINEL_TABLE: string }).SENTINEL_TABLE).toBe(m![1]);
-    // 探针名也要对得上，否则「在不在」的语义无从对照。
-    expect(typeof (ts as { probeSchemaSync: unknown }).probeSchemaSync).toBe(
-      "function",
+    expect(/* SAFETY: 类型断言已复核 */ (mjs as { SENTINEL_TABLE: string }).SENTINEL_TABLE).toBe(
+      m![1],
     );
+    // 探针名也要对得上，否则「在不在」的语义无从对照。
+    expect(
+      typeof (/* SAFETY: 类型断言已复核 */ (ts as { probeSchemaSync: unknown }).probeSchemaSync),
+    ).toBe("function");
   });
 
   it("同一批真实库状态下，两份实现给出同一结论", async () => {
@@ -244,10 +231,7 @@ describe("构建期缺 DATABASE_URL 不得把构建打死", () => {
    * （`/api/health` 的 503 + `db: empty`）而不是构建期崩溃。
    */
   it("resolveDbPath 的判据对缺值/空值都成立（源码级，避免真起 next build）", () => {
-    const src = fs.readFileSync(
-      path.join(process.cwd(), "src", "server", "db.ts"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "server", "db.ts"), "utf8");
     // 不得只写 `url.startsWith` —— 必须先兜住 undefined/"" 的输入形态。
     expect(
       src.includes("const value = url || DEFAULT_DB_FILE;"),
@@ -256,21 +240,12 @@ describe("构建期缺 DATABASE_URL 不得把构建打死", () => {
     // 该模块在构建期模块图上、且会被 code frame 渲染，必须保持纯 ASCII
     //（否则下一个踩中的偏移会把 next build 用一个指不到原因的 Rust panic 打死）。
     const nonAscii = [...src].filter((c) => c.charCodeAt(0) > 127).length;
-    expect(
-      nonAscii,
-      "src/server/db.ts 必须保持纯 ASCII（AGENTS 硬规则 15）",
-    ).toBe(0);
+    expect(nonAscii, "src/server/db.ts 必须保持纯 ASCII（AGENTS 硬规则 15）").toBe(0);
   });
 
   it("db-push 与 db.ts 认同一套默认库文件锚点", () => {
-    const pushSrc = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "db-push.mjs"),
-      "utf8",
-    );
-    const dbSrc = fs.readFileSync(
-      path.join(process.cwd(), "src", "server", "db.ts"),
-      "utf8",
-    );
+    const pushSrc = fs.readFileSync(path.join(process.cwd(), "scripts", "db-push.mjs"), "utf8");
+    const dbSrc = fs.readFileSync(path.join(process.cwd(), "src", "server", "db.ts"), "utf8");
     /* 默认锚点（`file:./db.sqlite`）的**唯一实现**在 `db-schema-state.mjs` 的
      * `resolveSqlitePath` —— `db-push.mjs` 与 `db-migrate.mjs` 都 import 它。
      * 本用例此前断言的是「`db-push.mjs` 的源码里含这个字面量」，那是在**钉住
@@ -296,9 +271,7 @@ describe("spawn 失败原因的两种形状都念得出来（ISSUE #2724）", ()
    * 「起 pnpm 失败（…）」那一行都必须说出原因 —— 此前串形状读 `.code` 双双
    * 兜底成 UNKNOWN。判据打在渲染出的那一行上（ISSUE #2660 的口径）。 */
   it("error 为串（spawnSettled 形状）⇒ 原文出现，不降级成 UNKNOWN", async () => {
-    const { pushSchema, describeSpawnFailure } = await import(
-      "../scripts/db-push-core.mjs",
-    );
+    const { pushSchema, describeSpawnFailure } = await import("../scripts/db-push-core.mjs");
     const result = pushSchema(process.cwd(), {
       run: () => ({ status: null, stdout: "", stderr: "", error: "ENOENT" }),
     });
@@ -307,9 +280,7 @@ describe("spawn 失败原因的两种形状都念得出来（ISSUE #2724）", ()
   });
 
   it("error 为 ErrnoException 形状 ⇒ 仍读 .code", async () => {
-    const { pushSchema, describeSpawnFailure } = await import(
-      "../scripts/db-push-core.mjs",
-    );
+    const { pushSchema, describeSpawnFailure } = await import("../scripts/db-push-core.mjs");
     const err = Object.assign(new Error("spawn pnpm ENOENT"), {
       code: "ENOENT",
     });

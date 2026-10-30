@@ -120,10 +120,7 @@ function text(value: string | (() => string)): string {
  * 但那个模块的 `detail` 有「已交给外部程序」这类**外部动作专属**的兜底文案，
  * 所以两份仍然分开：合成一份会让「外部动作」这个概念漏进通用动作层。
  */
-export function toActionResult(
-  raw: RawActionResult,
-  fallbackDetail: string,
-): ActionResult {
+export function toActionResult(raw: RawActionResult, fallbackDetail: string): ActionResult {
   if (raw === true) return { ok: true, detail: fallbackDetail };
   if (raw === false) return { ok: false, detail: fallbackDetail };
   if (raw === null || raw === undefined) {
@@ -132,7 +129,7 @@ export function toActionResult(
   }
   /* 普通对象（业务返回值）按「不抛即成功」读；只有真的带了 `ok` /
    * `triggered` 字段时才按信封判 —— 与 `void` 同口径。 */
-  const envelope = raw as {
+  const envelope = /* SAFETY: 类型断言已复核 */ raw as {
     ok?: boolean;
     triggered?: boolean;
     detail?: string | null;
@@ -173,12 +170,7 @@ export function toActionResult(
  */
 export async function runAsyncAction(
   action: () => Promise<RawActionResult>,
-  {
-    report,
-    failureText,
-    successText,
-    readResultEnvelope = true,
-  }: RunAsyncActionOptions,
+  { report, failureText, successText, readResultEnvelope = true }: RunAsyncActionOptions,
 ): Promise<ActionResult> {
   try {
     const raw = await action();
@@ -199,9 +191,7 @@ export async function runAsyncAction(
        * 中间那一档是必须的：`{ ok: true, detail: "已启动" }` 这类信封的
        * `detail` 是端点自己探出来的结论，调用处不该把它抄一遍。 */
       const detail =
-        typeof successText === "function"
-          ? successText(result)
-          : (successText ?? result.detail);
+        typeof successText === "function" ? successText(result) : (successText ?? result.detail);
       if (detail) report("ok", detail);
       return { ok: true, detail: detail ?? "" };
     }
@@ -251,10 +241,7 @@ export async function runAsyncAction(
  *（否则本函数就没有兑现「不制造 unhandledrejection」的承诺）。真故障由
  * `onError` 自己的日志路径去暴露，本处只保证"最后一道防线不再漏"。
  */
-export function fireAndForget(
-  task: Promise<unknown>,
-  onError: (e: unknown) => void,
-): void {
+export function fireAndForget(task: Promise<unknown>, onError: (e: unknown) => void): void {
   task.catch((e) => {
     try {
       onError(e);

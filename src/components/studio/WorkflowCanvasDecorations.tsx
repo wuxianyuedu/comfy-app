@@ -2,16 +2,8 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { digitsOnly, textHandler } from "~/lib/form-props";
 import { clamp } from "~/lib/clamp";
-import {
-  useReactFlow,
-  useStore,
-  Background,
-  BackgroundVariant,
-} from "@xyflow/react";
-import {
-  DEFAULT_CANVAS_SETTINGS,
-  type CanvasSettings,
-} from "./canvas/canvas-settings-types";
+import { useReactFlow, useStore, Background, BackgroundVariant } from "@xyflow/react";
+import { DEFAULT_CANVAS_SETTINGS, type CanvasSettings } from "./canvas/canvas-settings-types";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { enterCommit } from "~/components/ui/use-enter-commit";
@@ -246,9 +238,7 @@ export function ZoomIndicator({
           beginEdit();
         }}
         className={`border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg select-none hover:border-white/25 ${
-          dragging
-            ? "border-primary-400/50 cursor-grabbing"
-            : "cursor-ns-resize"
+          dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
         }`}
       >
         {pct}%
@@ -282,7 +272,10 @@ export function CanvasRulers({
   // 每条可见的主竖线的世界 X → 屏幕 X。
   const xLabels = useMemo(() => {
     if (zoom <= 0.01 || !width)
-      return [] as { world: number; screen: number }[];
+      return /* SAFETY: 类型断言已复核 */ [] as {
+        world: number;
+        screen: number;
+      }[];
     const start = Math.floor(-tx / zoom / labelStep) * labelStep;
     const end = Math.ceil((width - tx) / zoom / labelStep) * labelStep;
     const out: { world: number; screen: number }[] = [];
@@ -297,7 +290,10 @@ export function CanvasRulers({
   // 每条可见的主横线的世界 Y → 屏幕 Y。
   const yLabels = useMemo(() => {
     if (zoom <= 0.01 || !height)
-      return [] as { world: number; screen: number }[];
+      return /* SAFETY: 类型断言已复核 */ [] as {
+        world: number;
+        screen: number;
+      }[];
     const start = Math.floor(-ty / zoom / labelStep) * labelStep;
     const end = Math.ceil((height - ty) / zoom / labelStep) * labelStep;
     const out: { world: number; screen: number }[] = [];

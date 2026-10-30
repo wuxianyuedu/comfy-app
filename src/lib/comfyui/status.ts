@@ -111,9 +111,7 @@ function isUnboundPortSnapshot(snap: ComfyRuntimeSnapshot): boolean {
 
 /** 该快照在 `now` 时刻是否已过有效期。 */
 function isStale(snap: ComfyRuntimeSnapshot, at: number, now: number): boolean {
-  const ttl = isUnboundPortSnapshot(snap)
-    ? COMFY_UNBOUND_PORT_TTL_MS
-    : COMFY_SNAPSHOT_TTL_MS;
+  const ttl = isUnboundPortSnapshot(snap) ? COMFY_UNBOUND_PORT_TTL_MS : COMFY_SNAPSHOT_TTL_MS;
   return now - at >= ttl;
 }
 
@@ -155,16 +153,10 @@ function boundChildPid(): number | null {
  *  一致（便携 → venv → 桌面 standalone-env），这里作为兜底再放宽一层。 */
 export function launcherCommandCandidates(pythonExe: string): string[] {
   const dir = path.dirname(pythonExe);
-  const exts =
-    process.platform === "win32"
-      ? ["pythonw.exe", "python.exe"]
-      : ["pythonw", "python"];
+  const exts = process.platform === "win32" ? ["pythonw.exe", "python.exe"] : ["pythonw", "python"];
   // 去重：便携版解释器本身就叫 python.exe，枚举结果与候选重复时不必查两遍。
   return [
-    ...new Set([
-      ...exts.map((name) => path.join(...tracingIgnoreArgs(), dir, name)),
-      pythonExe,
-    ]),
+    ...new Set([...exts.map((name) => path.join(...tracingIgnoreArgs(), dir, name)), pythonExe]),
   ];
 }
 
@@ -206,7 +198,7 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
 export function extractSetupCmds(raw: string): string | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    const setup = (parsed as { setup?: { cmds?: unknown } })?.setup;
+    const setup = /* SAFETY: 类型断言已复核 */ (parsed as { setup?: { cmds?: unknown } })?.setup;
     const cmds = setup?.cmds;
     return typeof cmds === "string" && cmds.trim() ? cmds : null;
   } catch {
@@ -258,9 +250,7 @@ async function resolvePortFast(
   const guessed =
     alreadyProbedPort === true
       ? Promise.resolve(configuredPort)
-      : probeComfyAtPort(configuredPort).then((base) =>
-          base ? configuredPort : null,
-        );
+      : probeComfyAtPort(configuredPort).then((base) => (base ? configuredPort : null));
   const winner = await Promise.race([
     authoritative.then((port) => ({ port })),
     guessed.then((port) => ({ port })),
@@ -343,11 +333,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
-        port: await resolvePortFast(
-          lookup.pid,
-          configuredPort,
-          configuredPortUp,
-        ),
+        port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
         via: "配置路径的实例",
         unverified: false,
         didQueryProcTable: true,
@@ -360,12 +346,9 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   // 3) 启动器形态：Comfy Desktop 的 standalone-env 由 uv 启动，命令行里没有
   //    main.py（步骤 2 必然落空）；先试 setup 登记的启动器，再试解释器候选。
   const classify = classifyComfyInstall(comfyuiPath);
-  const registered = readRegisteredLauncher(
-    classify.instanceRoot ?? comfyuiPath,
-  );
+  const registered = readRegisteredLauncher(classify.instanceRoot ?? comfyuiPath);
   const candidates: { cmd: string; via: string }[] = [];
-  if (registered)
-    candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
+  if (registered) candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
   if (!("error" in plan)) {
     for (const cmd of launcherCommandCandidates(plan.cmd)) {
       candidates.push({ cmd, via: "配置路径的解释器" });
@@ -376,9 +359,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   //    「实例根下的解释器路径」查表必然落空。这里顺着 `standalone-env\pyvenv.cfg`
   //    的 home/executable 找到真正在跑的解释器，再补一遍 uv 托管目录
   //    （见 env-python.ts）。命中即 source=any，仍不等 HTTP。
-  for (const c of collectComfyPythonCandidates(
-    classify.instanceRoot ?? comfyuiPath,
-  )) {
+  for (const c of collectComfyPythonCandidates(classify.instanceRoot ?? comfyuiPath)) {
     candidates.push({ cmd: c.exe, via: c.via });
   }
 
@@ -393,9 +374,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
    *
    * 命中后按候选**原始顺序**取第一个：几路同时命中时，仍由「先声明的判据优先」
    * 决定结论（顺序语义与串行版一致，不会因为谁先返回而改变判定）。 */
-  const lookups = await Promise.all(
-    candidates.map((c) => findPidForMainPyDetailed(c.cmd)),
-  );
+  const lookups = await Promise.all(candidates.map((c) => findPidForMainPyDetailed(c.cmd)));
   /* 两个同长数组按位置配对：`Promise.all` 保序，所以下标一一对应。
    * 用 `entries()` 取候选、`lookups.at(i)` 取结果，省掉两处 `!`。 */
   for (const [i, candidate] of candidates.entries()) {
@@ -406,11 +385,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
-        port: await resolvePortFast(
-          lookup.pid,
-          configuredPort,
-          configuredPortUp,
-        ),
+        port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
         via: candidate.via,
         unverified: false,
         didQueryProcTable: true,

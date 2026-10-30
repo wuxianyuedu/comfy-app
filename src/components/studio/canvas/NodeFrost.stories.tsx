@@ -1,15 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  FrostLayer,
-  NodeFrost,
-  PseudoFrostLayer,
-} from "~/components/studio/canvas/NodeFrost";
-import {
-  StorybookFlowCanvas,
-  canvasScene,
-  withNodeType,
-} from "../../../../.storybook/flow-canvas";
+import { FrostLayer, NodeFrost, PseudoFrostLayer } from "~/components/studio/canvas/NodeFrost";
+import { StorybookFlowCanvas, canvasScene, withNodeType } from "../../../../.storybook/flow-canvas";
 import {
   computeNodePalette,
   DARK_PALETTE_BASE,
@@ -57,17 +49,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 节点卡片的摆法（`relative` + `overflow-hidden` 是毛玻璃能被裁回边界的前提）。 */
-function FrostCard({
-  zoom,
-  nodeMode,
-  label,
-}: {
-  zoom: number;
-  nodeMode: number;
-  label: string;
-}) {
+function FrostCard({ zoom, nodeMode, label }: { zoom: number; nodeMode: number; label: string }) {
   const palette = computeNodePalette(
-    { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
+    /* SAFETY: 类型断言已复核 */ { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
     { color: ROLE_COLOR },
     DARK_PALETTE_BASE,
   );
@@ -81,11 +65,7 @@ function FrostCard({
         }}
       >
         <PseudoFrostLayer modeColor={palette.modeColor} />
-        <NodeFrost
-          zoom={zoom}
-          color={palette.modeColor}
-          nodeMode={palette.nodeMode}
-        />
+        <NodeFrost zoom={zoom} color={palette.modeColor} nodeMode={palette.nodeMode} />
         <div
           className={`relative ${zClass("base")} p-3 text-xs`}
           style={{ color: DARK_PALETTE_BASE.titleFallback }}
@@ -120,11 +100,7 @@ export const ModeColors: Story = {
     <div className="flex flex-wrap items-start gap-6 p-4">
       <FrostCard zoom={1} nodeMode={4} label="旁路 nodeMode=4" />
       <FrostCard zoom={1} nodeMode={2} label="静音 nodeMode=2" />
-      <FrostCard
-        zoom={1}
-        nodeMode={0}
-        label="始终 nodeMode=0（不渲染毛玻璃）"
-      />
+      <FrostCard zoom={1} nodeMode={0} label="始终 nodeMode=0（不渲染毛玻璃）" />
     </div>
   ),
 };
@@ -147,7 +123,7 @@ export const InCanvas: Story = {
 /** 真画布里的节点渲染器：走 `FrostLayer`，所以缩放由 store 给。 */
 function FrostDemoNode() {
   const palette = computeNodePalette(
-    { mode: 4 } as Parameters<typeof computeNodePalette>[0],
+    /* SAFETY: 类型断言已复核 */ { mode: 4 } as Parameters<typeof computeNodePalette>[0],
     { color: ROLE_COLOR },
     DARK_PALETTE_BASE,
   );

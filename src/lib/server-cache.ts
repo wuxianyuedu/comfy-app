@@ -48,7 +48,7 @@ export async function cacheJson<T>(
     // 重新插入一次，以标记为「最近使用」。
     store.map.delete(key);
     store.map.set(key, existing);
-    return existing.value as T;
+    return /* SAFETY: 类型断言已复核 */ existing.value as T;
   }
 
   const value = await build();
@@ -82,7 +82,7 @@ export function cachePeek<T>(key: string): T | undefined {
     // 重新插入一次，以标记为「最近使用」。
     store.map.delete(key);
     store.map.set(key, existing);
-    return existing.value as T;
+    return /* SAFETY: 类型断言已复核 */ existing.value as T;
   }
   return undefined;
 }

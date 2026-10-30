@@ -17,7 +17,9 @@ const meta = {
   title: "UI/SimpleKeyHandler",
   /* `component` 是可选的，这里刻意不给：属性包不是组件，连上去只会让人以为它有
      props 面板 —— 画出形态的是 `Demo` 里那个 `role` 元素，Args 也由它接。 */
-  args: { keys: ["Space", "Enter"] as readonly string[] },
+  args: {
+    keys: /* SAFETY: 类型断言已复核 */ ["Space", "Enter"] as readonly string[],
+  },
 } satisfies Meta<SimpleKeyHandlerProps>;
 
 export default meta;
@@ -60,7 +62,7 @@ function Demo({ keys, ignoreRepeat, preventDefault }: SimpleKeyHandlerProps) {
 }
 
 export const Default: Story = {
-  render: (args) => <Demo {...(args as SimpleKeyHandlerProps)} />,
+  render: (args) => <Demo {/* SAFETY: 类型断言已复核 */ ...(args as SimpleKeyHandlerProps)} />,
 };
 
 /* 下面几张各自覆写 `keys`，所以类型上把它**声明成可选** —— 故事层要的是

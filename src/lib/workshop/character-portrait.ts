@@ -27,10 +27,7 @@ export interface PortraitLogEntry {
   text: string;
 }
 
-export function makePortraitLog(
-  level: PortraitLogEntry["level"],
-  text: string,
-): PortraitLogEntry {
+export function makePortraitLog(level: PortraitLogEntry["level"], text: string): PortraitLogEntry {
   return { ts: Date.now(), level, text };
 }
 
@@ -40,9 +37,7 @@ export function appendPortraitLog(
   entry: PortraitLogEntry,
 ): PortraitLogEntry[] {
   const next = [...list, entry];
-  return next.length > MAX_PORTRAIT_LOG
-    ? next.slice(next.length - MAX_PORTRAIT_LOG)
-    : next;
+  return next.length > MAX_PORTRAIT_LOG ? next.slice(next.length - MAX_PORTRAIT_LOG) : next;
 }
 
 function isPortraitSource(value: unknown): value is PortraitSource {
@@ -53,20 +48,15 @@ function isPortraitSource(value: unknown): value is PortraitSource {
  *  使一张坏数据不会炸掉整块界面。旧草稿缺字段按导入来源兜底。 */
 export function normalizePortrait(raw: unknown): CharacterPortrait | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const candidate = raw as Record<string, unknown>;
+  const candidate = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   const url = candidate.url;
   if (typeof url !== "string" || !url) return null;
   const createdAt = candidate.createdAt;
   return {
     url,
     source: isPortraitSource(candidate.source) ? candidate.source : "import",
-    createdAt:
-      typeof createdAt === "number" && Number.isFinite(createdAt)
-        ? createdAt
-        : 0,
-    ...(typeof candidate.model === "string" && candidate.model
-      ? { model: candidate.model }
-      : {}),
+    createdAt: typeof createdAt === "number" && Number.isFinite(createdAt) ? createdAt : 0,
+    ...(typeof candidate.model === "string" && candidate.model ? { model: candidate.model } : {}),
     ...(typeof candidate.taskId === "string" && candidate.taskId
       ? { taskId: candidate.taskId }
       : {}),
@@ -91,9 +81,7 @@ export function withPortraitCandidate(
   character: Character,
   candidate: CharacterPortrait,
 ): Character {
-  const rest = portraitCandidates(character).filter(
-    (item) => item.url !== candidate.url,
-  );
+  const rest = portraitCandidates(character).filter((item) => item.url !== candidate.url);
   const portraits = [candidate, ...rest].slice(0, MAX_PORTRAIT_CANDIDATES);
   return {
     ...character,
@@ -103,10 +91,7 @@ export function withPortraitCandidate(
 }
 
 /** 把候选里的一张定为定妆照（不在候选里则原样返回，避免写入悬空地址）。 */
-export function withSelectedPortrait(
-  character: Character,
-  url: string,
-): Character {
+export function withSelectedPortrait(character: Character, url: string): Character {
   if (!portraitCandidates(character).some((item) => item.url === url)) {
     return character;
   }
@@ -114,16 +99,10 @@ export function withSelectedPortrait(
 }
 
 /** 删除一张候选；删掉的若正是当前定妆照，则回落到剩下的最新一张。 */
-export function withoutPortraitCandidate(
-  character: Character,
-  url: string,
-): Character {
-  const portraits = portraitCandidates(character).filter(
-    (item) => item.url !== url,
-  );
+export function withoutPortraitCandidate(character: Character, url: string): Character {
+  const portraits = portraitCandidates(character).filter((item) => item.url !== url);
   const next = { ...character, portraits };
-  const portraitUrl =
-    character.portraitUrl === url ? portraits[0]?.url : character.portraitUrl;
+  const portraitUrl = character.portraitUrl === url ? portraits[0]?.url : character.portraitUrl;
   if (portraitUrl) next.portraitUrl = portraitUrl;
   else delete next.portraitUrl;
   return next;

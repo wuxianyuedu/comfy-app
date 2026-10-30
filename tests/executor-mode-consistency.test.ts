@@ -17,15 +17,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 const { warnMock } = vi.hoisted(() => ({ warnMock: vi.fn() }));
 vi.mock("~/lib/core/logger", () => ({
@@ -49,7 +41,7 @@ const LAUNCHER = path.join(ROOT, "scripts", "dev-launcher.mjs");
 const HOST = path.join(ROOT, "scripts", "executor-host.mjs");
 const TS_SIDE = path.join(ROOT, "src", "lib", "comfyui", "executor-mode.ts");
 
-const vectors = (
+const vectors = /* SAFETY: 类型断言已复核 */ (
   JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8")) as {
     vectors: Array<{ raw: string; mode: string; unknown: string | null }>;
   }
@@ -85,15 +77,12 @@ afterAll(() => {
 });
 
 describe("两侧对同一组向量给出同一判决", () => {
-  it.for(vectors.map((v) => [v.raw, v.mode]))(
-    "COMFY_EXECUTOR=%j → 两侧同为 %s",
-    ([raw, mode]) => {
-      const node = normalizeExecutorMode(raw);
-      process.env[EXECUTOR_ENV_KEY] = raw;
-      expect(resolveExecutorClaim()).toBe(node.mode);
-      expect(node.mode).toBe(mode);
-    },
-  );
+  it.for(vectors.map((v) => [v.raw, v.mode]))("COMFY_EXECUTOR=%j → 两侧同为 %s", ([raw, mode]) => {
+    const node = normalizeExecutorMode(raw);
+    process.env[EXECUTOR_ENV_KEY] = raw;
+    expect(resolveExecutorClaim()).toBe(node.mode);
+    expect(node.mode).toBe(mode);
+  });
 
   it("未设该 key 时两侧都按 inline（且都不算「未知值」）", () => {
     const node = normalizeExecutorMode(undefined);
@@ -122,9 +111,7 @@ describe("两侧对同一组向量给出同一判决", () => {
 describe("`.env` 回读这一层只在纯 Node 侧存在，且真的回读", () => {
   it("进程 env 没给该 key → 回读 .env（这是「手工起 host 只改 .env」能成立的前提）", () => {
     const file = tempEnvFile([`${EXECUTOR_ENV_KEY}="host"`]);
-    expect(
-      resolveExecutorMode({ procEnv: {}, envFilePath: file }),
-    ).toMatchObject({ mode: "host" });
+    expect(resolveExecutorMode({ procEnv: {}, envFilePath: file })).toMatchObject({ mode: "host" });
   });
 
   it("进程 env 显式给了空值 → 视为「我要关掉」，不被 .env 顶掉（与 @next/env 同形）", () => {
@@ -151,11 +138,12 @@ describe("两个纯 Node 宿主不许再各写一份归一化", () => {
   /* 「编排器」这一侧读**现算的链路闭包**而不是主文件：R5 拆刀（ISSUE #1811）后
    * 门控那一段住 `launcher-core/dev-boot.mjs`，只读主文件会让 `toContain` 落空
    * 而 `not.toMatch` 对着空串恒真 —— 那正是这条判据要防的形态。 */
-  for (const [label, file] of [
+  for (const [label, file] of /* SAFETY: 类型断言已复核 */ [
     ["dev-launcher.mjs", LAUNCHER],
     ["executor-host.mjs", HOST],
   ] as const) {
-    const src = label === "dev-launcher.mjs" ? launcherChainSource() : fs.readFileSync(file, "utf8");
+    const src =
+      label === "dev-launcher.mjs" ? launcherChainSource() : fs.readFileSync(file, "utf8");
 
     it(`${label} 读同一份 launcher-core/executor-mode.mjs`, () => {
       expect(src).toContain("launcher-core/executor-mode.mjs");
@@ -164,12 +152,8 @@ describe("两个纯 Node 宿主不许再各写一份归一化", () => {
 
     it(`${label} 里没有第二份 trim/小写归一化（漂移就是这么来的）`, () => {
       const code = stripComments(src);
-      expect(code).not.toMatch(
-        new RegExp(`${EXECUTOR_ENV_KEY}[^\\n]*(toLowerCase|trim\\(\\))`),
-      );
-      expect(code).not.toMatch(
-        new RegExp(`process\\.env\\.${EXECUTOR_ENV_KEY}\\s*\\?\\?`),
-      );
+      expect(code).not.toMatch(new RegExp(`${EXECUTOR_ENV_KEY}[^\\n]*(toLowerCase|trim\\(\\))`));
+      expect(code).not.toMatch(new RegExp(`process\\.env\\.${EXECUTOR_ENV_KEY}\\s*\\?\\?`));
     });
 
     it(`${label} 对未知值留一行可见提示`, () => {

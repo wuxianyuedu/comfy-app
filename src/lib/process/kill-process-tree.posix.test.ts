@@ -32,16 +32,9 @@ const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
         cb: (err: Error | null, stdout: string) => void,
       ) => void
     >(),
-  execFileSyncMock:
-    vi.fn<(cmd: string, args: string[], options: unknown) => string>(),
+  execFileSyncMock: vi.fn<(cmd: string, args: string[], options: unknown) => string>(),
   spawnMock:
-    vi.fn<
-      (
-        cmd: string,
-        args: string[],
-        options: unknown,
-      ) => EventEmitter & { pid: number }
-    >(),
+    vi.fn<(cmd: string, args: string[], options: unknown) => EventEmitter & { pid: number }>(),
 }));
 
 vi.mock("child_process", () => ({
@@ -90,16 +83,15 @@ type KillMap = Record<string, Error | null>;
 let killCalls: Array<[number, string]> = [];
 function installKillSpy(map: KillMap = {}): void {
   killCalls = [];
-  vi.spyOn(process, "kill").mockImplementation(((
-    target: number,
-    sig?: string,
-  ) => {
-    const key = String(target);
-    const error = map[key];
-    if (error) throw error;
-    killCalls.push([target, sig ?? "SIGTERM"]);
-    return true;
-  }) as unknown as typeof process.kill);
+  vi.spyOn(process, "kill").mockImplementation(
+    /* SAFETY: 类型断言已复核 */ ((target: number, sig?: string) => {
+      const key = String(target);
+      const error = map[key];
+      if (error) throw error;
+      killCalls.push([target, sig ?? "SIGTERM"]);
+      return true;
+    }) as unknown as typeof process.kill,
+  );
 }
 
 const OWN = String(process.pid);
@@ -150,10 +142,7 @@ describe("killProcessTree POSIX：谁该被发信号", () => {
 
   it("② force 只换信号名，不换目标（SIGKILL 也必须是发给组）", async () => {
     installAsyncPs({ "2866": 2838, [OWN]: 9999 });
-    const r = await killProcessTreeWith(
-      { pid: 2866, force: true },
-      { windows: false },
-    );
+    const r = await killProcessTreeWith({ pid: 2866, force: true }, { windows: false });
     expect(r.via).toContain("SIGKILL");
     expect(killCalls).toEqual([[-2838, "SIGKILL"]]);
   });
@@ -188,10 +177,7 @@ describe("killProcessTree POSIX：谁该被发信号", () => {
 
   it("⑥ ps 不可用但调用方声明 detached → 仍试一次按 pid 的组信号（末位补救，不是主判据）", async () => {
     installAsyncPs({ [OWN]: 9999 });
-    const r = await killProcessTreeWith(
-      { pid: 2866, detached: true },
-      { windows: false },
-    );
+    const r = await killProcessTreeWith({ pid: 2866, detached: true }, { windows: false });
     expect(r.via).toContain("进程组·未探测");
     expect(killCalls).toEqual([[-2866, "SIGTERM"]]);
   });
@@ -214,10 +200,7 @@ describe("killProcessTree POSIX：谁该被发信号", () => {
   it("⑨ 目标与自身同组时，即使声明 detached 也不许按 pid 猜组（旧实现留孤儿的入口）", async () => {
     const own = 4242;
     installAsyncPs({ "2866": own, [OWN]: own });
-    await killProcessTreeWith(
-      { pid: 2866, detached: true },
-      { windows: false },
-    );
+    await killProcessTreeWith({ pid: 2866, detached: true }, { windows: false });
     expect(killCalls).toEqual([[2866, "SIGTERM"]]);
   });
 });
@@ -240,16 +223,13 @@ describe("killProcessTreeSync 与异步版同判据（两侧不许分叉）", ()
     expect(killCalls).toEqual([[2866, "SIGTERM"]]);
   });
 
-  platformTest(
-    "自身 PGID 读不到 → 同样保守禁组（同步版不许比异步版胆大）",
-    ({ asPlatform }) => {
-      asPlatform("linux");
-      installSyncPs({ "2866": 2838 });
-      const r = killProcessTreeSync({ pid: 2866 });
-      expect(r.via).toContain("禁杀组");
-      expect(killCalls).toEqual([[2866, "SIGTERM"]]);
-    },
-  );
+  platformTest("自身 PGID 读不到 → 同样保守禁组（同步版不许比异步版胆大）", ({ asPlatform }) => {
+    asPlatform("linux");
+    installSyncPs({ "2866": 2838 });
+    const r = killProcessTreeSync({ pid: 2866 });
+    expect(r.via).toContain("禁杀组");
+    expect(killCalls).toEqual([[2866, "SIGTERM"]]);
+  });
 
   platformTest("组信号被拒 → 落单杀；force 换成 SIGKILL", ({ asPlatform }) => {
     asPlatform("linux");
@@ -259,22 +239,19 @@ describe("killProcessTreeSync 与异步版同判据（两侧不许分叉）", ()
     expect(r.via).toBe("kill -SIGKILL 2866（单进程兜底）");
   });
 
-  platformTest(
-    "ps 完全不可用 + detached → 进程组·未探测；都不行 → ok=false",
-    ({ asPlatform }) => {
-      asPlatform("linux");
-      installSyncPs({ [OWN]: 9999 });
-      const tried = killProcessTreeSync({ pid: 2866, detached: true });
-      expect(tried.via).toContain("进程组·未探测");
+  platformTest("ps 完全不可用 + detached → 进程组·未探测；都不行 → ok=false", ({ asPlatform }) => {
+    asPlatform("linux");
+    installSyncPs({ [OWN]: 9999 });
+    const tried = killProcessTreeSync({ pid: 2866, detached: true });
+    expect(tried.via).toContain("进程组·未探测");
 
-      installKillSpy({
-        "-2866": new Error("ESRCH"),
-        "2866": new Error("ESRCH"),
-      });
-      const failed = killProcessTreeSync({ pid: 2866 });
-      expect(failed.ok).toBe(false);
-    },
-  );
+    installKillSpy({
+      "-2866": new Error("ESRCH"),
+      "2866": new Error("ESRCH"),
+    });
+    const failed = killProcessTreeSync({ pid: 2866 });
+    expect(failed.ok).toBe(false);
+  });
 
   it("非法 PID 直接跳过，不发任何信号", () => {
     expect(killProcessTreeSync({ pid: 0 }).ok).toBe(false);
@@ -322,25 +299,19 @@ describe("killProcessTreeByImage 的 POSIX 侧（pkill -x，按名字回收）",
     return child;
   }
 
-  platformTest(
-    "exit=0 → ok；exit=1（没有匹配的进程）同样算 ok",
-    async ({ asPlatform }) => {
-      asPlatform("linux");
-      const child = pkillChild();
-      const pending = killProcessTreeByImage("ollama");
-      expect(spawnMock.mock.calls[0]?.slice(0, 2)).toEqual([
-        "pkill",
-        ["-x", "ollama"],
-      ]);
-      child.emit("close", 1);
-      expect((await pending).ok).toBe(true);
+  platformTest("exit=0 → ok；exit=1（没有匹配的进程）同样算 ok", async ({ asPlatform }) => {
+    asPlatform("linux");
+    const child = pkillChild();
+    const pending = killProcessTreeByImage("ollama");
+    expect(spawnMock.mock.calls[0]?.slice(0, 2)).toEqual(["pkill", ["-x", "ollama"]]);
+    child.emit("close", 1);
+    expect((await pending).ok).toBe(true);
 
-      const zero = pkillChild();
-      const pending0 = killProcessTreeByImage("ollama");
-      zero.emit("close", 0);
-      expect((await pending0).ok).toBe(true);
-    },
-  );
+    const zero = pkillChild();
+    const pending0 = killProcessTreeByImage("ollama");
+    zero.emit("close", 0);
+    expect((await pending0).ok).toBe(true);
+  });
 
   platformTest(
     "其它退出码（权限 / pkill 缺失）→ ok=false，via 里带上退出码",

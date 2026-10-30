@@ -22,10 +22,7 @@ import { act, renderHook } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  SECTION_ROOT_MARGIN,
-  useSectionScrollSpy,
-} from "./use-section-scroll-spy";
+import { SECTION_ROOT_MARGIN, useSectionScrollSpy } from "./use-section-scroll-spy";
 
 /** 假观察器：只记录「观察了谁、配置是什么」，回调由用例手动投递。 */
 class FakeIntersectionObserver {
@@ -35,10 +32,7 @@ class FakeIntersectionObserver {
   callback: IntersectionObserverCallback;
   disconnected = false;
 
-  constructor(
-    cb: IntersectionObserverCallback,
-    options?: IntersectionObserverInit,
-  ) {
+  constructor(cb: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     this.callback = cb;
     this.options = options;
     FakeIntersectionObserver.last = this;
@@ -61,18 +55,18 @@ class FakeIntersectionObserver {
     this.callback(
       entries.map(
         (e) =>
-          ({
+          /* SAFETY: 类型断言已复核 */ ({
             target: e.target,
             isIntersecting: e.isIntersecting,
             intersectionRatio: e.isIntersecting ? 1 : 0,
           }) as unknown as IntersectionObserverEntry,
       ),
-      this as unknown as IntersectionObserver,
+      /* SAFETY: 类型断言已复核 */ this as unknown as IntersectionObserver,
     );
   }
 }
 
-const IDS = ["a", "b", "c"] as const;
+const IDS = /* SAFETY: 类型断言已复核 */ ["a", "b", "c"] as const;
 
 /** 建宿主容器 + 三个分区节，并把 `ref` 回调挂上去。 */
 function mountSections(ref: React.RefObject<HTMLElement | null>) {

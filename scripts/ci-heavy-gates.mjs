@@ -95,16 +95,9 @@
 import path from "node:path";
 import process from "node:process";
 
-import {
-  CHANGED_SCOPED,
-  readHookSteps,
-  runGate,
-} from "./base-check/hook-steps.mjs";
+import { CHANGED_SCOPED, readHookSteps, runGate } from "./base-check/hook-steps.mjs";
 import { resolveBaseRef, resolveChangedFiles } from "./changed-scope.mjs";
-import {
-  faceTouched,
-  narrowingEntryForScript,
-} from "./ci-incremental-gates.mjs";
+import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
 import { gateFail, gatePass, gateSkip, looksSkipped } from "./ci-log.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -259,9 +252,7 @@ export function heavyGateArgv(argv, deps = {}) {
  * @returns {string | null}
  */
 export function judgmentScriptOf(argv) {
-  const m = String((argv ?? []).join(" ")).match(
-    /scripts\/[A-Za-z0-9._-]+\.(?:cjs|mjs)/,
-  );
+  const m = String((argv ?? []).join(" ")).match(/scripts\/[A-Za-z0-9._-]+\.(?:cjs|mjs)/);
   return m ? m[0] : null;
 }
 
@@ -326,10 +317,7 @@ export function runHeavyGates(io = {}) {
   }
   const steps = only
     ? all.filter(
-        (s) =>
-          s.label === only ||
-          s.label.includes(only) ||
-          s.argv.join(" ").includes(only),
+        (s) => s.label === only || s.label.includes(only) || s.argv.join(" ").includes(only),
       )
     : all;
   /** @type {{label: string, code: number, output: string, ms: number, notRunCodes: number[], noJudgement: boolean}[]} */
@@ -562,18 +550,14 @@ export function main(io = {}) {
       const got = resolveChangedFiles({ cwd: io.cwd ?? ROOT, env: io.env });
       changedFiles = got.ok ? { files: got.files } : null;
       if (!got.ok) {
-        log(
-          `[重档] 取不到改动面 ⇒ 这一格**不收窄**（全部照跑）：${got.reason}`,
-        );
+        log(`[重档] 取不到改动面 ⇒ 这一格**不收窄**（全部照跑）：${got.reason}`);
       } else if (got.files.length === 0) {
         log(
           "[重档] 改动面是空的 ⇒ 这一格**不收窄**（全部照跑）—— 空清单是「不知道」，不是「没改」",
         );
       } else {
         /* 念出「按哪份 diff 收窄」：收窄是**这一格**少判一些的理由，读者必须能核对它。 */
-        log(
-          `[重档] 改动面：${got.via}（${got.files.length} 个文件）⇒ 这一格按面收窄`,
-        );
+        log(`[重档] 改动面：${got.via}（${got.files.length} 个文件）⇒ 这一格按面收窄`);
       }
     }
   }
@@ -651,11 +635,9 @@ export function main(io = {}) {
     /** @param {string} line */
     const say = (line) => log(line);
     for (const s of skipped) {
-      gateSkip(
-        s.label,
-        `按面未触及：面 ${s.globs.join(" / ")}（平台那一格：${s.stage}）`,
-        { out: say },
-      );
+      gateSkip(s.label, `按面未触及：面 ${s.globs.join(" / ")}（平台那一格：${s.stage}）`, {
+        out: say,
+      });
     }
     runs.forEach((r) => {
       if (isNotRun(r)) {
@@ -705,8 +687,7 @@ export function main(io = {}) {
     }
   }
   const totalMs = runs.reduce((sum, r) => sum + r.ms, 0);
-  const skippedTotal =
-    skipped.length + notJudged.length + noJudgement.length + missing.length;
+  const skippedTotal = skipped.length + notJudged.length + noJudgement.length + missing.length;
   /* 合计行按**同一套三态**措辞：「判过 / 没判 / 红」对得上上面逐条那三列前缀。
    * 条数是这几档之和 —— 谁都不许从总账里消失（少算一条就是「这一条没判」被
    * 静默地折成绿）。 */
@@ -716,14 +697,12 @@ export function main(io = {}) {
       `墙钟合计 ${totalMs}ms`,
   );
   if (red.length > 0) {
-    for (const r of red)
-      log(`[重档] 下一动作：先修「${r.label}」这一条（上面有证据）`);
+    for (const r of red) log(`[重档] 下一动作：先修「${r.label}」这一条（上面有证据）`);
     return 1;
   }
   if (missing.length > 0) {
     // 127 单列一档并退 2：把它并进「红」就等于宣布「判据判出失败」，而事实是它没判。
-    for (const r of missing)
-      log(`[重档] 下一动作：查「${r.label}」为什么没跑起来（不是通过）`);
+    for (const r of missing) log(`[重档] 下一动作：查「${r.label}」为什么没跑起来（不是通过）`);
     return 2;
   }
   if (notJudged.length > 0) {
@@ -737,9 +716,6 @@ export function main(io = {}) {
 /* 只在被直接执行时跑 main。被 import 时（`tests/ci-autofix-duties.test.ts` 要读
  * `HEAVY_GATES`）只暴露纯数据与函数 —— 否则 `process.exit()` 会当场把测试进程杀掉，
  * 而那件事的形态是「用例一条都没跑、套件却红了」，读起来与真红完全两样。 */
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

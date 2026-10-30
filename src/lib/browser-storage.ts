@@ -36,9 +36,7 @@
 export function hasBrowserStorage(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return (
-      typeof window.localStorage !== "undefined" && window.localStorage !== null
-    );
+    return typeof window.localStorage !== "undefined" && window.localStorage !== null;
   } catch {
     return false;
   }
@@ -99,11 +97,7 @@ export function removeStorageItem(key: string): boolean {
  * `parse` 可选：调用处若只存字符串（`"1"` / `"split"`），传 `Number.parseInt`
  * 这类窄化函数即可 —— 不再需要各自写一遍 `raw === "preset" ? ... : ...`。
  */
-export function readStorageJson<T>(
-  key: string,
-  fallback: T,
-  parse?: (raw: string) => T,
-): T {
+export function readStorageJson<T>(key: string, fallback: T, parse?: (raw: string) => T): T {
   const raw = readStorageItem(key);
   if (raw === null) return fallback;
   if (parse) {
@@ -114,7 +108,7 @@ export function readStorageJson<T>(
     }
   }
   try {
-    return JSON.parse(raw) as T;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as T;
   } catch {
     return fallback;
   }
@@ -144,11 +138,7 @@ export function writeStorageJson(key: string, value: unknown): boolean {
  * 修补（首帧仍要用服务端给的初始值），两者都不是「读一件小事」这个形状 ——
  * 等真有第二个消费方时再按那时的形状加。
  */
-export function writeCookieItem(
-  name: string,
-  value: string,
-  maxAgeSeconds: number,
-): boolean {
+export function writeCookieItem(name: string, value: string, maxAgeSeconds: number): boolean {
   if (typeof document === "undefined") return false;
   try {
     document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;

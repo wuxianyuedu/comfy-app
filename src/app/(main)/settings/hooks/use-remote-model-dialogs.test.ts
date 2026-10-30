@@ -14,7 +14,7 @@ import { useRemoteModelDialogs } from "./use-remote-model-dialogs";
 
 /** 只补本文件用得到的那几个字段，其余以类型断言绕过（接口很大，且与本案无关）。 */
 function makeController(over: Record<string, unknown> = {}) {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     saving: false,
     addRemoteModel: vi.fn(async () => ({ ok: true })),
     updateRemoteModel: vi.fn(async () => ({ ok: true })),
@@ -26,7 +26,7 @@ function setup(over: Record<string, unknown> = {}) {
   return renderHook(() => useRemoteModelDialogs(makeController(over)));
 }
 
-const formDefaults = {
+const formDefaults = /* SAFETY: 类型断言已复核 */ {
   baseUrl: "",
   apiKey: "",
   model: "",

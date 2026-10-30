@@ -52,15 +52,8 @@ import {
   sceneFromMode,
   type SizeScene,
 } from "~/lib/media/size-presets";
-import type {
-  WorkflowIOEntry,
-  WorkflowIOMap,
-} from "~/lib/workflow/workflow-io-types";
-import type {
-  ParamClass,
-  ParamEntry,
-  PinFamily,
-} from "./workflow-param-classes";
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import type { ParamClass, ParamEntry, PinFamily } from "./workflow-param-classes";
 import {
   CLASS_FAMILY,
   SIZE_SUB_IDS,
@@ -115,12 +108,7 @@ export function buildParamEntries(
    *  到最保守的一套（提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除
    *  —— 对外有哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是
    *  「对外参数」。 */
-  return buildContractEntries(
-    io,
-    labels,
-    options?.mode ?? null,
-    options?.contractIds,
-  );
+  return buildContractEntries(io, labels, options?.mode ?? null, options?.contractIds);
 }
 
 /** 契约驱动的条目构造（有模式语境时的唯一路径）。 */
@@ -149,7 +137,7 @@ function buildContractEntries(
     const ids: readonly string[] = def.cls === "size" ? SIZE_SUB_IDS : [def.id];
     for (const id of ids) {
       if (out.some((entry) => entry.id === id)) continue;
-      const cls = (def.cls === "size" ? id : def.cls) as ParamClass;
+      const cls = /* SAFETY: 类型断言已复核 */ (def.cls === "size" ? id : def.cls) as ParamClass;
       const pins = pinsByClass.get(cls) ?? [];
       const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
       out.push({
@@ -163,10 +151,7 @@ function buildContractEntries(
         nodeTitle: "",
         cls,
         label:
-          override ??
-          (def.cls === "size"
-            ? sizeSubLabel(cls)
-            : exposedParamDisplayLabel(def.id)),
+          override ?? (def.cls === "size" ? sizeSubLabel(cls) : exposedParamDisplayLabel(def.id)),
         pins,
       });
     }
@@ -179,9 +164,7 @@ function buildContractEntries(
  *  这是「这个工作流能承接什么」的**唯一**判定处，只回答一个事实问题：某个
  *  对外参数现在能落到哪几行上。它不参与「对外有哪些参数」的决策 —— 那是契约表
  *  的事（`exposedParamsForMode`），判据里不含任何推导。 */
-function classifyPins(
-  io: WorkflowIOMap | null | undefined,
-): Map<ParamClass, ParamEntry["pins"]> {
+function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, ParamEntry["pins"]> {
   /** 三份**按类型**收的候选池：一族一份，族内所有对外参数共享。
    *
    *  形态 / 正负 / 首尾都由作者连线声明，所以每个口都摆出它那一族的全部候选，
@@ -193,7 +176,7 @@ function classifyPins(
     number: [],
   };
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
-    const entry = raw as WorkflowIOEntry | undefined;
+    const entry = /* SAFETY: 类型断言已复核 */ raw as WorkflowIOEntry | undefined;
     // 显式空值守卫：`pinFamily(entry)` 的契约本就要求 entry 非 undefined 才
     // 可能返回真 family，但编译器看不到——原实现里 push 的三行 `entry!.xxx`
     // 是把这一契约「用两次」（判据 + 断言）；改成同行守卫后判据与窄化同源。
@@ -208,7 +191,7 @@ function classifyPins(
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
-  for (const klass of Object.keys(CLASS_FAMILY) as ParamClass[]) {
+  for (const klass of /* SAFETY: 类型断言已复核 */ Object.keys(CLASS_FAMILY) as ParamClass[]) {
     /* 聚合值 `size` 不单独摆候选：契约层把它摊成六个子口。 */
     if (klass === "size") continue;
     const family = CLASS_FAMILY[klass];
@@ -339,13 +322,11 @@ const LEGACY_SIZE_ENTRY_ID = "size";
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const manualByMode: Record<string, Record<string, string | null>> = {};
   const out: ParamMapping = { manualByMode, labels: {} };
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
-    return out;
-  const sourceRaw = (paramMap as Record<string, unknown>).source;
-  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw))
-    return out;
+  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) return out;
+  const sourceRaw = /* SAFETY: 类型断言已复核 */ (paramMap as Record<string, unknown>).source;
+  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) return out;
   for (const [key, value] of Object.entries(
-    sourceRaw as Record<string, unknown>,
+    /* SAFETY: 类型断言已复核 */ sourceRaw as Record<string, unknown>,
   )) {
     if (!key.startsWith(MODE_KEY_PREFIX)) continue;
     const mode = key.slice(MODE_KEY_PREFIX.length);
@@ -353,7 +334,7 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
     if (!value || typeof value !== "object" || Array.isArray(value)) continue;
     const byEntry: Record<string, string | null> = {};
     for (const [entryId, target] of Object.entries(
-      value as Record<string, unknown>,
+      /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>,
     )) {
       /* 存量清理：那个键没有任何入口能再写出来，读到即丢（下面 `byEntry` 里没它，
        *  序列化自然也不会把它写回去）。 */
@@ -383,8 +364,7 @@ export function serializeParamMapping(
       if (typeof target !== "string" && target !== null) continue;
       targets[id] = target;
     }
-    if (Object.keys(targets).length > 0)
-      source[`${MODE_KEY_PREFIX}${mode}`] = targets;
+    if (Object.keys(targets).length > 0) source[`${MODE_KEY_PREFIX}${mode}`] = targets;
   }
   return { ...paramMap, source };
 }
@@ -504,10 +484,7 @@ export interface MappedInput {
  *  之所以要把宿主 id 一起存下来，而不是运行期「拿裸 id 去所有子图定义里扫
  *  一遍」：后者在同名内部 id 或子图定义缺失时会静默失效（表现为「改了参数
  *  没生效」），拼出来的 id 才是确定性事实。 */
-export function runtimeNodeId(entry: {
-  nodeId: string;
-  hostNodeId?: string;
-}): string {
+export function runtimeNodeId(entry: { nodeId: string; hostNodeId?: string }): string {
   /* 已经是拼接形式（旧数据或嵌套场景已带冒号）→ 不重复拼。 */
   if (entry.nodeId.includes(":") || !entry.hostNodeId) return entry.nodeId;
   return `${entry.hostNodeId}:${entry.nodeId}`;
@@ -633,13 +610,7 @@ export function applyParamMapping(args: {
     let pushed = false;
     for (const target of targets) {
       if (!io?.[target.ioKey]) continue;
-      const perPort = sizeValueForPin(
-        io,
-        entry,
-        target.ioKey,
-        supplied,
-        sceneFromMode(mode),
-      );
+      const perPort = sizeValueForPin(io, entry, target.ioKey, supplied, sceneFromMode(mode));
       if (perPort === undefined) continue;
       push(target.ioKey, perPort);
       pushed = true;

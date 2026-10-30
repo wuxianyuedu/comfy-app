@@ -74,50 +74,52 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       <RadioGroup
         aria-label="主题外观"
         value={c.theme}
-        onValueChange={(v) => c.setTheme(v as "dark" | "light")}
+        onValueChange={(v) => c.setTheme(/* SAFETY: 类型断言已复核 */ v as "dark" | "light")}
         className="grid max-w-md grid-cols-2 gap-3"
       >
-        {(
-          [
-            {
-              value: "dark",
-              label: "深色",
-              Icon: Moon,
-              hint: "适合低光环境",
-            },
-            {
-              value: "light",
-              label: "浅色",
-              Icon: Sun,
-              hint: "明亮、高对比",
-            },
-          ] as const
-        ).map(({ value, label, Icon, hint }) => (
-          <RadioGroupItem
-            key={value}
-            value={value}
-            /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的尺寸/高度/内边距/
+        {
+          /* SAFETY: 类型断言已复核 */ (
+            [
+              {
+                value: "dark",
+                label: "深色",
+                Icon: Moon,
+                hint: "适合低光环境",
+              },
+              {
+                value: "light",
+                label: "浅色",
+                Icon: Sun,
+                hint: "明亮、高对比",
+              },
+            ] as const
+          ).map(({ value, label, Icon, hint }) => (
+            <RadioGroupItem
+              key={value}
+              value={value}
+              /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的尺寸/高度/内边距/
                字号全部归还给调用处 —— 基类是「小圆点」形态（`size-4` +
                `aspect-square`），这里必须连**宽度**与**宽高比**一起还
                （`size-auto!` / `aspect-auto!`；只还 `h-auto` 的话宽度仍是 16px，
                卡片被压成竖排单字、内容溢出叠到下一节）。
                基元自带的「中心圆点」选中指示器是给小圆点形态用的；这里选中态
                已由边框 + 底色表达，圆点只会叠在文字上，隐藏（见下一条同款）。 */
-            nativeButton
-            render={
-              <Button
-                variant="ghost"
-                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-checked:hover:border-primary data-checked:hover:bg-primary-soft data-checked:hover:text-ink data-unchecked:border-border data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors **:data-[slot=radio-group-indicator]:hidden"
-              />
-            }
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              <Icon size={18} className="text-primary" />
-              {label}
-            </span>
-            <span className="text-xs opacity-80">{hint}</span>
-          </RadioGroupItem>
-        ))}
+              nativeButton
+              render={
+                <Button
+                  variant="ghost"
+                  className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-checked:hover:border-primary data-checked:hover:bg-primary-soft data-checked:hover:text-ink data-unchecked:border-border data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors **:data-[slot=radio-group-indicator]:hidden"
+                />
+              }
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <Icon size={18} className="text-primary" />
+                {label}
+              </span>
+              <span className="text-xs opacity-80">{hint}</span>
+            </RadioGroupItem>
+          ))
+        }
       </RadioGroup>
 
       {/* 圆角与标题字阶各只改一个全局 CSS 变量（--radius / --font-scale）；

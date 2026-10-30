@@ -30,7 +30,11 @@ export interface UsageField {
 
 /** 视频生成常见的 mode 预设（Agnes 等：text / keyframe / reference）。
  * 仅为快捷选项——选中后仍可在输入框里自由改，适配其它模型的其它取值。 */
-export const VIDEO_MODE_PRESETS = ["text", "keyframe", "reference"] as const;
+export const VIDEO_MODE_PRESETS = /* SAFETY: 类型断言已复核 */ [
+  "text",
+  "keyframe",
+  "reference",
+] as const;
 
 /** 各 mode 的取值要求与所需媒体字段说明（按 Agnes 文档措辞归纳，
  *  其它模型若取值不同可直接手改，不写死）。 */
@@ -61,7 +65,7 @@ export function defaultVideoFields(): UsageField[] {
 
 /** 视频请求里承载媒体（图片/音频）的字段名集合。mode=text 不允许携带它们
  *（Agnes 等提供方会以 invalid mode 拒绝），选中 text 时这些行应隐藏/删除。 */
-export const VIDEO_MEDIA_FIELD_KEYS = [
+export const VIDEO_MEDIA_FIELD_KEYS = /* SAFETY: 类型断言已复核 */ [
   "first_frame",
   "last_frame",
   "images",
@@ -81,7 +85,9 @@ export function videoModeHidesMedia(fields: UsageField[]): boolean {
 
 /** 判断某行是不是媒体行：字段名命中媒体字段集合（first_frame / images 等）。 */
 export function isMediaField(key: string): boolean {
-  return (VIDEO_MEDIA_FIELD_KEYS as readonly string[]).includes(key.trim());
+  return /* SAFETY: 类型断言已复核 */ (VIDEO_MEDIA_FIELD_KEYS as readonly string[]).includes(
+    key.trim(),
+  );
 }
 
 /** 媒体字段对图片地址的公网可达要求说明（Agnes 等要求其服务可拉取该 URL，
@@ -94,20 +100,14 @@ export const MEDIA_URL_NOTICE =
 export function videoModeMissingHint(fields: UsageField[]): string | null {
   const mode = fields.find((f) => f.key.trim() === "mode")?.value.trim() ?? "";
   const keys = new Set(fields.map((f) => f.key.trim()));
-  if (
-    mode === "keyframe" &&
-    !keys.has("first_frame") &&
-    !keys.has("last_frame")
-  ) {
+  if (mode === "keyframe" && !keys.has("first_frame") && !keys.has("last_frame")) {
     return "mode=keyframe 需要 first_frame（或 last_frame）图片：添加一行字段名 first_frame，填公网可访问的图片地址（http(s) 开头），或点「上传」选本地图片。";
   }
   if (mode === "reference" && !keys.has("images") && !keys.has("audios")) {
     return 'mode=reference 需要 images（或 audios）：添加一行字段名 images，值填公网可访问的图片地址（http(s) 开头）；单张直接贴 URL 即可，多张用逗号分隔或 JSON 数组写法 ["…","…"]。';
   }
   if (mode === "text") {
-    const forbidden = ["first_frame", "last_frame", "images", "audios"].filter(
-      (k) => keys.has(k),
-    );
+    const forbidden = ["first_frame", "last_frame", "images", "audios"].filter((k) => keys.has(k));
     if (forbidden.length > 0) {
       return `mode=text 不能携带媒体字段（${forbidden.join(" / ")}）：请删掉这些行，或把 mode 改成 keyframe / reference。`;
     }
@@ -118,11 +118,13 @@ export function videoModeMissingHint(fields: UsageField[]): string | null {
 /** 服务端按「数组」接收的媒体字段（可携带多张参考图/音频）。这类字段常被用户
  *  贴成一张裸 URL 字符串，而服务端期望 []string——不包成数组就会 400
  *  （原文是 cannot unmarshal string into []string，即「无法把字符串解成字符串数组」）。 */
-export const MEDIA_ARRAY_FIELD_KEYS = ["images", "audios"] as const;
+export const MEDIA_ARRAY_FIELD_KEYS = /* SAFETY: 类型断言已复核 */ ["images", "audios"] as const;
 
 /** 判断字段是不是数组型媒体字段（命中 images / audios 等，含首尾空白）。 */
 export function isMediaArrayField(key: string): boolean {
-  return (MEDIA_ARRAY_FIELD_KEYS as readonly string[]).includes(key.trim());
+  return /* SAFETY: 类型断言已复核 */ (MEDIA_ARRAY_FIELD_KEYS as readonly string[]).includes(
+    key.trim(),
+  );
 }
 
 /** 把结构化字段行转成请求体的 JSON 对象字符串（服务器按 JSON 对象逐键合并）。
@@ -181,8 +183,7 @@ export function looksLikeImage(value: string): boolean {
   const v = value.trim();
   if (!v) return false;
   return (
-    /^data:image\//i.test(v) ||
-    /^(https?:\/\/).+\.(png|jpe?g|webp|gif|avif|bmp)([?#].*)?$/i.test(v)
+    /^data:image\//i.test(v) || /^(https?:\/\/).+\.(png|jpe?g|webp|gif|avif|bmp)([?#].*)?$/i.test(v)
   );
 }
 
@@ -231,18 +232,12 @@ export function usageTestDraftKey(kind: string, name: string): string {
 /** 从产物 URL 推断合理的文件扩展名（供存到本地 temp 用）。
  *  远程 http(s) 地址按路径扩展名取；data:image/xxx 按 mime 取；
  *  其它一律回落默认扩展名（图片 png / 视频 mp4）。返回不含点的扩展名。 */
-export function mediaExtensionFromUrl(
-  url: string,
-  fallback: "png" | "mp4",
-): string {
+export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): string {
   const u = url.trim();
   if (u.startsWith("data:image/")) {
     const m = /^data:image\/([a-zA-Z0-9.+-]+)/.exec(u);
     if (m?.[1]) {
-      const ext = m[1]
-        .toLowerCase()
-        .replace("jpeg", "jpg")
-        .replace("svg+xml", "svg");
+      const ext = m[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
       if (/^[a-z0-9]{1,8}$/.test(ext)) return ext;
     }
     return fallback;

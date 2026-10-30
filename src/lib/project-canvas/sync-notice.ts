@@ -93,21 +93,12 @@ const notices = new Map<string, SyncNotice>();
  * `tests/single-logger-channel.test.ts` 管（豁免清单点名的是**本文件**，
  * 不是整个 `project-canvas` 目录）。
  */
-export function logSyncIssue(
-  action: string,
-  e: unknown,
-  projectId?: string,
-): void {
+export function logSyncIssue(action: string, e: unknown, projectId?: string): void {
   /* 一行里给两份：`errorText` 是翻译过的人话（「服务返回了非预期内容…」），
    * `rawErrorDetail` 是**服务端原文 + 码**（`code=FORBIDDEN — …`）。
    * 只留前者，「到底是哪个码拒的」就查不回来；只留后者，面板上是一串原文。
    * 口径同 `~/lib/error-message` 那两个函数的分工说明。 */
-  console.warn(
-    `[canvas-sync] ${action}：`,
-    errorText(e, action),
-    rawErrorDetail(e),
-    projectId,
-  );
+  console.warn(`[canvas-sync] ${action}：`, errorText(e, action), rawErrorDetail(e), projectId);
 }
 
 /**
@@ -131,7 +122,9 @@ const REFUSAL_PHRASES: Partial<Record<TRPC_ERROR_CODE_KEY, string>> = {
 function refusalDetail(action: string, e: unknown): string {
   const code = errorCode(e);
   const phrase =
-    code === null ? undefined : REFUSAL_PHRASES[code as TRPC_ERROR_CODE_KEY];
+    code === null
+      ? undefined
+      : REFUSAL_PHRASES[/* SAFETY: 类型断言已复核 */ code as TRPC_ERROR_CODE_KEY];
   return phrase ? `${action}：${phrase}` : errorText(e, action);
 }
 

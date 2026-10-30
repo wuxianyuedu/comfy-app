@@ -16,14 +16,7 @@
  * 两道守：本用例锁清单还在（改坏了先红），`check-standalone-contents.cjs`
  * 在构建后真去数文件（清单还在 ≠ 清单生效）。
  */
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -45,10 +38,7 @@ import {
   stripForbiddenShapes,
 } from "../scripts/standalone-private-inputs.mjs";
 
-const buildDesktop = readFileSync(
-  join(process.cwd(), "scripts", "build-desktop.mjs"),
-  "utf8",
-);
+const buildDesktop = readFileSync(join(process.cwd(), "scripts", "build-desktop.mjs"), "utf8");
 const stripModule = readFileSync(
   join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
   "utf8",
@@ -57,7 +47,7 @@ const checker = readFileSync(
   join(process.cwd(), "scripts", "check-standalone-contents.cjs"),
   "utf8",
 );
-const pkg = JSON.parse(
+const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
   readFileSync(join(process.cwd(), "package.json"), "utf8"),
 ) as { scripts: Record<string, string> };
 
@@ -66,10 +56,7 @@ const pkg = JSON.parse(
 /** 从 `check-standalone-contents.cjs` 源码里取出 ALLOWED_SCRIPTS 的字面量集合。 */
 function allowedScriptsFromChecker(source: string): string[] {
   const start = source.indexOf("const ALLOWED_SCRIPTS = new Set([");
-  expect(
-    start,
-    "check-standalone-contents.cjs 里找不到 ALLOWED_SCRIPTS",
-  ).toBeGreaterThan(-1);
+  expect(start, "check-standalone-contents.cjs 里找不到 ALLOWED_SCRIPTS").toBeGreaterThan(-1);
   const body = source.slice(start, source.indexOf("]);", start));
   return [...body.matchAll(/"([^"]+)"/g)]
     .map((m) => m[1])
@@ -98,9 +85,7 @@ function collectRelativeClosure(entry: string): string[] {
       // 误伤字符串里的 `//`（例如 URL）
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join("\n");
-    for (const m of code.matchAll(
-      /from\s+"(\.[^"]+)"|import\(\s*"(\.[^"]+)"\s*\)/g,
-    )) {
+    for (const m of code.matchAll(/from\s+"(\.[^"]+)"|import\(\s*"(\.[^"]+)"\s*\)/g)) {
       const spec = m[1] ?? m[2];
       if (!spec) continue;
       const target = resolve(dirname(file), spec);
@@ -143,9 +128,7 @@ describe("开发机私有输入的剔除清单（单一实现，两处复用）"
   });
 
   it("`pnpm build` 自身收尾就剥离（CI 只跑 build，不跑 build-desktop）", () => {
-    expect(pkg.scripts.build).toContain(
-      "node scripts/standalone-private-inputs.mjs",
-    );
+    expect(pkg.scripts.build).toContain("node scripts/standalone-private-inputs.mjs");
   });
 });
 
@@ -159,9 +142,7 @@ describe("check-standalone-contents：产物层检查覆盖私有输入", () => 
   });
 
   it("同时检查 .next/standalone 与 src-tauri/static 两份产物", () => {
-    expect(checker).toContain(
-      'const STATIC_DIR = path.join(ROOT, "src-tauri", "static")',
-    );
+    expect(checker).toContain('const STATIC_DIR = path.join(ROOT, "src-tauri", "static")');
     expect(checker).toMatch(/checkDir\(STANDALONE/);
     expect(checker).toMatch(/checkDir\(STATIC_DIR/);
   });
@@ -251,12 +232,8 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
       }
       stripDevArtifacts(dir);
       expect(existsSync(join(dir, "scripts", "dev-launcher.mjs"))).toBe(true);
-      expect(
-        existsSync(join(dir, "scripts", "launcher-core", "orchestrator.mjs")),
-      ).toBe(true);
-      expect(
-        existsSync(join(dir, "scripts", "launcher-core", "secret-new.mjs")),
-      ).toBe(false);
+      expect(existsSync(join(dir, "scripts", "launcher-core", "orchestrator.mjs"))).toBe(true);
+      expect(existsSync(join(dir, "scripts", "launcher-core", "secret-new.mjs"))).toBe(false);
       expect(existsSync(join(dir, "scripts", "gate-new.cjs"))).toBe(false);
       expect(existsSync(join(dir, "AGENTS.md"))).toBe(false);
     } finally {
@@ -271,9 +248,7 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
 
   it("`pnpm build` 收尾就剔除（CI 只跑 build，不跑 build-desktop）", () => {
     // main() 里两个都要跑：只清私有输入不清开发文件，standalone 仍然带 AGENTS.md
-    const mainBody = stripModule.slice(
-      stripModule.lastIndexOf("function main()"),
-    );
+    const mainBody = stripModule.slice(stripModule.lastIndexOf("function main()"));
     expect(mainBody).toContain("stripPrivateInputs(standalone");
     expect(mainBody).toContain("stripDevArtifacts(standalone");
   });
@@ -306,7 +281,7 @@ interface CheckerExports {
 }
 
 function checkerExports(): CheckerExports {
-  return createRequire(import.meta.url)(
+  return /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
     "../scripts/check-standalone-contents.cjs",
   ) as CheckerExports;
 }
@@ -341,9 +316,7 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
    * 判成违规，而剔除明明保留了它。
    */
   it("两份白名单集合相同（漏在一处 = 剔除与检查互相打架）", () => {
-    expect(new Set(allowedScriptsFromChecker(checker))).toEqual(
-      new Set(RUNTIME_SCRIPTS),
-    );
+    expect(new Set(allowedScriptsFromChecker(checker))).toEqual(new Set(RUNTIME_SCRIPTS));
   });
 
   /**
@@ -367,9 +340,7 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
    * `splash-assets` / `lockfile/*` 就是这样漏在清单外的（登记靠人记，必漏）。
    */
   it("清单覆盖编排器的相对 import 闭包（新增内部分件漏登记即失败）", () => {
-    const closure = collectRelativeClosure(
-      join(process.cwd(), "scripts", "dev-launcher.mjs"),
-    );
+    const closure = collectRelativeClosure(join(process.cwd(), "scripts", "dev-launcher.mjs"));
     // 闭包本身要有内容：解析退化（正则写坏、路径换了）会让这条断言静默变成
     // 「什么都没漏」，那正是这类清单判据最危险的失效形态
     expect(closure.length).toBeGreaterThan(10);
@@ -392,19 +363,11 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
     // ^ 锚点不能丢：第三方包自带 README.md / tsconfig.json / eslint.config.js
     // 是正常且必需的，误报会让这条护栏变成噪声。判的是「正则首字符」，
     // 所以走 require 拿到的 RegExp 本体（prettier 折行不该让它变红）。
-    for (const tag of [
-      "开发期文件",
-      "开发期配置",
-      "门禁锁文件",
-      "TS 增量编译缓存",
-    ]) {
+    for (const tag of ["开发期文件", "开发期配置", "门禁锁文件", "TS 增量编译缓存"]) {
       const sources = forbiddenSourcesFor(tag);
       expect(sources, `禁忌清单缺 ["${tag}"] 这一条`).not.toHaveLength(0);
       for (const source of sources) {
-        expect(
-          source.startsWith("^"),
-          `["${tag}"] 的 ${source} 没锚在产物根`,
-        ).toBe(true);
+        expect(source.startsWith("^"), `["${tag}"] 的 ${source} 没锚在产物根`).toBe(true);
       }
     }
   });
@@ -477,9 +440,7 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
       }
       stripForbiddenShapes(dir);
       expect(existsSync(join(dir, "node_modules", "pino", "docs"))).toBe(false);
-      expect(
-        existsSync(join(dir, "node_modules", "next", "dist", "docs")),
-      ).toBe(true);
+      expect(existsSync(join(dir, "node_modules", "next", "dist", "docs"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -519,11 +480,7 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
     expect(stripDevArtifactsBody).toContain("stripForbiddenShapes(dir");
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-dev-"));
     try {
-      for (const rel of [
-        "src/lib/foo.test.ts",
-        "AGENTS.md",
-        "scripts/gate-new.cjs",
-      ]) {
+      for (const rel of ["src/lib/foo.test.ts", "AGENTS.md", "scripts/gate-new.cjs"]) {
         mkdirSync(join(dir, dirname(rel)), { recursive: true });
         writeFileSync(join(dir, rel), "x");
       }
@@ -544,24 +501,18 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
   it("形状清单与 check-standalone-contents.cjs 的禁忌清单逐字同源", () => {
     // 剔除侧那两张表来自 `.mjs`（无类型声明），解构出来是 `string | RegExp`，
     // 按实际结构标注一次；判据本身读的是 RegExp 本体
-    const stripShapes = [...PRIVATE_SHAPES, ...FORBIDDEN_SHAPES] as Array<
-      [string, RegExp]
-    >;
+    const stripShapes = /* SAFETY: 类型断言已复核 */ [
+      ...PRIVATE_SHAPES,
+      ...FORBIDDEN_SHAPES,
+    ] as Array<[string, RegExp]>;
     for (const [tag, re] of stripShapes) {
       expect(
         forbiddenSourcesFor(tag),
         `检查侧 ["${tag}"] 与剔除侧的 ${re.source} 不同源（或整条缺失）`,
       ).toEqual([re.source]);
     }
-    expect(FORBIDDEN_SHAPES.map(([tag]) => tag)).toEqual([
-      "测试文件",
-      "变更碎片",
-      "文档目录",
-    ]);
-    expect(PRIVATE_SHAPES.map(([tag]) => tag)).toEqual([
-      "开发机私有输入",
-      "开发库文件",
-    ]);
+    expect(FORBIDDEN_SHAPES.map(([tag]) => tag)).toEqual(["测试文件", "变更碎片", "文档目录"]);
+    expect(PRIVATE_SHAPES.map(([tag]) => tag)).toEqual(["开发机私有输入", "开发库文件"]);
   });
 });
 
@@ -590,10 +541,7 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   function makeProduct(dir: string, present: string[]): void {
     const mod = checkerExports();
     writeFileSync(join(dir, "server.js"), "// entry");
-    for (const rel of [
-      ...mod.REQUIRED_HOST_FILES,
-      ...mod.REQUIRED_PAYLOAD_FILES,
-    ]) {
+    for (const rel of [...mod.REQUIRED_HOST_FILES, ...mod.REQUIRED_PAYLOAD_FILES]) {
       const abs = join(dir, rel);
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, "// host");
@@ -613,9 +561,7 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
       rmSync(join(dir, checkerExports().RUNTIME_DIR, NAMES[0]), {
         force: true,
       });
-      expect(checkerExports().missingRequiredRuntimeFiles(dir)).toEqual([
-        NAMES[0],
-      ]);
+      expect(checkerExports().missingRequiredRuntimeFiles(dir)).toEqual([NAMES[0]]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -632,25 +578,18 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-req-"));
     const lines: string[] = [];
     // 两个通道都按住：checkDir 的「✓ 产物干净」走 console.log，不接住会往测试输出里灌噪声
-    const errSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation((...args: unknown[]) => {
-        lines.push(args.join(" "));
-      });
-    const logSpy = vi
-      .spyOn(console, "log")
-      .mockImplementation((...args: unknown[]) => {
-        lines.push(args.join(" "));
-      });
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      lines.push(args.join(" "));
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      lines.push(args.join(" "));
+    });
     try {
       // 故意少 app-route-turbo
       makeProduct(dir, NAMES.slice(1));
       expect(checkerExports().checkDir(dir, "static")).toBe(true);
       expect(
-        lines.some(
-          (line) =>
-            line.includes("[static]") && line.includes("Next 运行时脚本缺件"),
-        ),
+        lines.some((line) => line.includes("[static]") && line.includes("Next 运行时脚本缺件")),
         "static 层没被缺件检查覆盖：组装与剪枝发生在那之后，没人看第二眼",
       ).toBe(true);
 
@@ -678,16 +617,12 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   it("往 static 里放一个 db.sqlite → 两条违规一起点名（投毒验收）", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-poison-"));
     const lines: string[] = [];
-    const errSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation((...a: unknown[]) => {
-        lines.push(a.join(" "));
-      });
-    const logSpy = vi
-      .spyOn(console, "log")
-      .mockImplementation((...a: unknown[]) => {
-        lines.push(a.join(" "));
-      });
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      lines.push(a.join(" "));
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+      lines.push(a.join(" "));
+    });
     try {
       // 合法态先立：齐件的 static 判 0，否则下面那条红没有信息量（不是恒红）。
       makeProduct(dir, NAMES);
@@ -724,16 +659,12 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   it("未装配的 static 层不判顶层，但念出「这一格不判」；补上 server.js 照样红", () => {
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-unassembled-"));
     const lines: string[] = [];
-    const errSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation((...a: unknown[]) => {
-        lines.push(a.join(" "));
-      });
-    const logSpy = vi
-      .spyOn(console, "log")
-      .mockImplementation((...a: unknown[]) => {
-        lines.push(a.join(" "));
-      });
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      lines.push(a.join(" "));
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+      lines.push(a.join(" "));
+    });
     try {
       writeFileSync(join(dir, ".cargo-test-placeholder"), "开发期的东西");
       /* ① 没装配 ⇒ 不判，且**明说不判**（「退 0」与「已检查通过」必须是两种读数，
@@ -766,13 +697,8 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   it("出厂链路在装配后同批敲数产物判据，且排在 sidecar 之前", () => {
     const check = buildDesktop.indexOf("check-standalone-contents.cjs");
     const sidecar = buildDesktop.indexOf("3/4 复制 Node 运行时为 sidecar");
-    expect(
-      check,
-      "build-desktop.mjs 没有调用 check-standalone-contents.cjs",
-    ).toBeGreaterThan(-1);
-    expect(sidecar, "找不到 sidecar 步骤（3/4），顺序无从判").toBeGreaterThan(
-      -1,
-    );
+    expect(check, "build-desktop.mjs 没有调用 check-standalone-contents.cjs").toBeGreaterThan(-1);
+    expect(sidecar, "找不到 sidecar 步骤（3/4），顺序无从判").toBeGreaterThan(-1);
     expect(check).toBeLessThan(sidecar);
   });
 
@@ -785,8 +711,7 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   it("判「必须有的」穿链接可达即算在位，判「不该有的」不穿", () => {
     const store = mkdtempSync(join(tmpdir(), "comfyapp-store-rt-"));
     const dir = mkdtempSync(join(tmpdir(), "comfyapp-link-rt-"));
-    const { RUNTIME_DIR, collectFiles, missingRequiredRuntimeFiles } =
-      checkerExports();
+    const { RUNTIME_DIR, collectFiles, missingRequiredRuntimeFiles } = checkerExports();
     /**
      * 链接挂在 `node_modules/next` 上，所以 `store` 扮演的就是 next **包本身**：
      * 里面的相对路径是 RUNTIME_DIR 去掉 `node_modules/next/` 前缀的那一段。
@@ -830,9 +755,7 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
 describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
   it("检查侧与剔除侧的顶层清单逐字同源，且不是空清单", () => {
     const mod = checkerExports();
-    expect(mod.STANDALONE_ALLOWED_TOPLEVEL).toEqual(
-      STANDALONE_ALLOWED_TOPLEVEL,
-    );
+    expect(mod.STANDALONE_ALLOWED_TOPLEVEL).toEqual(STANDALONE_ALLOWED_TOPLEVEL);
     expect(mod.STATIC_ALLOWED_TOPLEVEL).toEqual(STATIC_ALLOWED_TOPLEVEL);
     expect(mod.ALLOWED_SRC_FILES).toEqual(RUNTIME_SRC);
     // 比对退化最常见的形态是两边都拿到 []，那时上面三条断言全部无意义地绿。
@@ -840,9 +763,7 @@ describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
     expect(mod.STATIC_ALLOWED_TOPLEVEL.length).toBeGreaterThan(3);
     // static 只比 standalone 多装配步产出的那三件（不许有人把源码树放进来）
     expect(
-      mod.STATIC_ALLOWED_TOPLEVEL.filter(
-        (n) => !mod.STANDALONE_ALLOWED_TOPLEVEL.includes(n),
-      ),
+      mod.STATIC_ALLOWED_TOPLEVEL.filter((n) => !mod.STANDALONE_ALLOWED_TOPLEVEL.includes(n)),
     ).toEqual(["index.html", "schema.sql", "splash.html"]);
     expect(mod.STANDALONE_ALLOWED_TOPLEVEL).not.toContain("src");
     expect(mod.STANDALONE_ALLOWED_TOPLEVEL).not.toContain("next.config.js");
@@ -868,21 +789,14 @@ describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
   }
 
   /** 捕 checkDir 的两个输出通道（「✓ 产物干净」走 log，违规走 error）。 */
-  function captureCheck(
-    dir: string,
-    label: string,
-  ): { failed: boolean; lines: string[] } {
+  function captureCheck(dir: string, label: string): { failed: boolean; lines: string[] } {
     const lines: string[] = [];
-    const errSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation((...a: unknown[]) => {
-        lines.push(a.join(" "));
-      });
-    const logSpy = vi
-      .spyOn(console, "log")
-      .mockImplementation((...a: unknown[]) => {
-        lines.push(a.join(" "));
-      });
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      lines.push(a.join(" "));
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+      lines.push(a.join(" "));
+    });
     try {
       return { failed: checkerExports().checkDir(dir, label), lines };
     } finally {
@@ -951,9 +865,7 @@ describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
   });
 
   it("构建收尾真接上了这一刀（main 里不调，它就只是个被导出的函数）", () => {
-    const mainBody = stripModule.slice(
-      stripModule.lastIndexOf("function main()"),
-    );
+    const mainBody = stripModule.slice(stripModule.lastIndexOf("function main()"));
     expect(mainBody).toContain("pruneStandaloneToAllowList(standalone");
   });
 

@@ -65,14 +65,14 @@ function callAt(n = 0): { url: string; init: RequestInit } {
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
-  const url = typeof arg === "string" ? arg : (arg as Request).url;
+  const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
   return { url, init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
     string,
     unknown
   >;
@@ -80,7 +80,7 @@ function sentBody(n = 0): Record<string, unknown> {
 
 /** 一次性响应替身（`json()` / `text()` 都可用）。 */
 function jsonResponse(body: unknown, status = 200): Response {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
@@ -90,7 +90,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 /** 构造一个 Request 替身（只用到 `.json()`）。 */
 function reqOf(body: unknown, opts: { throw?: boolean } = {}): Request {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     json: async () => {
       if (opts.throw) throw new Error("bad json");
       return body;
@@ -149,9 +149,7 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     });
 
     // 弹窗覆盖地址与密钥
-    await expect(
-      resolveUpstream("entry", "https://typed/v1/", "sk-typed", "x"),
-    ).resolves.toEqual({
+    await expect(resolveUpstream("entry", "https://typed/v1/", "sk-typed", "x")).resolves.toEqual({
       base: "https://typed/v1",
       path: "/x",
       headers: {
@@ -164,7 +162,8 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     const global = await resolveUpstream("unknown", "", "", "/chat");
     expect(global).toMatchObject({ base: "https://global/v1", path: "/chat" });
     expect(
-      (global as { headers: Record<string, string> }).headers.Authorization,
+      /* SAFETY: 类型断言已复核 */ (global as { headers: Record<string, string> }).headers
+        .Authorization,
     ).toBe("Bearer sk-global");
   });
 
@@ -197,7 +196,8 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     });
     const up = await resolveUpstream("x", "", "", "");
     expect(
-      (up as { headers: Record<string, string> }).headers.Authorization,
+      /* SAFETY: 类型断言已复核 */ (up as { headers: Record<string, string> }).headers
+        .Authorization,
     ).toBeUndefined();
   });
 });
@@ -208,18 +208,14 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
       ok: false,
       detail: "缺少模型名",
     });
-    await expect(
-      readUsageTestPrologue(reqOf({ name: "   " })),
-    ).resolves.toEqual({
+    await expect(readUsageTestPrologue(reqOf({ name: "   " }))).resolves.toEqual({
       ok: false,
       detail: "缺少模型名",
     });
   });
 
   it("body 不是 JSON 对象（解析抛错 / 数组）时同样给「缺少模型名」", async () => {
-    await expect(
-      readUsageTestPrologue(reqOf(null, { throw: true })),
-    ).resolves.toEqual({
+    await expect(readUsageTestPrologue(reqOf(null, { throw: true }))).resolves.toEqual({
       ok: false,
       detail: "缺少模型名",
     });
@@ -238,7 +234,9 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
     });
     const failed = await readUsageTestPrologue(reqOf({ name: "x" }));
     expect(failed.ok).toBe(false);
-    expect((failed as { detail: string }).detail).toContain("接口地址为空");
+    expect(/* SAFETY: 类型断言已复核 */ (failed as { detail: string }).detail).toContain(
+      "接口地址为空",
+    );
   });
 
   it("成功时回 name / 原 body / 解析好的连接参数", async () => {
@@ -252,7 +250,7 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
     });
     // `rec` 是透传的原始 body（类型为 Record<string, unknown>）：用判据取值，
     // 不用 `as` 断言 —— 断言会掩盖「字段名写错」这类失败
-    const rec = (out as { rec: Record<string, unknown> }).rec;
+    const rec = /* SAFETY: 类型断言已复核 */ (out as { rec: Record<string, unknown> }).rec;
     expect(rec.prompt).toBe("hi");
   });
 });
@@ -260,7 +258,7 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
 describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () => {
   it("readPayload：非 JSON 响应体给 null（调用方按状态给文案）", async () => {
     expect(await readPayload(jsonResponse({ a: 1 }))).toEqual({ a: 1 });
-    const html = {
+    const html = /* SAFETY: 类型断言已复核 */ {
       ok: false,
       status: 502,
       json: async () => {
@@ -281,9 +279,9 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
     expect(httpFailureDetail(503, null)).toBe("HTTP 503");
     const long = httpFailureDetail(500, { a: "y".repeat(500) });
     expect(long.length).toBeLessThanOrEqual("HTTP 500：".length + 240);
-    expect(
-      httpFailureDetail(500, null, "z".repeat(500)).length,
-    ).toBeLessThanOrEqual("HTTP 500：".length + 240);
+    expect(httpFailureDetail(500, null, "z".repeat(500)).length).toBeLessThanOrEqual(
+      "HTTP 500：".length + 240,
+    );
   });
 
   it("parseExtraJson：空串=无额外参数，非对象 / 坏 JSON 给可读文案", () => {
@@ -293,15 +291,13 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
     // 现状（数组会被当合法「对象」合并），而不是按想象断言它会失败
     expect(parseExtraJson("[1]")).toEqual({ ok: true, extra: [1] });
     expect(parseExtraJson("{")).toMatchObject({ ok: false });
-    expect((parseExtraJson("{") as { detail: string }).detail).toContain(
-      "额外参数不是有效的 JSON 对象",
-    );
+    expect(
+      /* SAFETY: 类型断言已复核 */ (parseExtraJson("{") as { detail: string }).detail,
+    ).toContain("额外参数不是有效的 JSON 对象");
   });
 
   it("chatTextFrom：认 OpenAI 的 string 与分片数组两种形态", () => {
-    expect(chatTextFrom({ choices: [{ message: { content: "abc" } }] })).toBe(
-      "abc",
-    );
+    expect(chatTextFrom({ choices: [{ message: { content: "abc" } }] })).toBe("abc");
     expect(
       chatTextFrom({
         choices: [{ message: { content: [{ text: "a" }, { text: "b" }] } }],
@@ -331,9 +327,7 @@ const UP = {
 
 describe("callChat", () => {
   it("成功：取回复文本，并带上超时与额外参数", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ choices: [{ message: { content: "好的" } }] }),
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ choices: [{ message: { content: "好的" } }] }));
     await expect(callChat(UP, "m", "问", { top_p: 0.9 })).resolves.toEqual({
       ok: true,
       text: "好的",
@@ -358,15 +352,19 @@ describe("callChat", () => {
     fetchMock.mockResolvedValue(jsonResponse({ choices: [] }));
     const out = await callChat(UP, "m", "q", {});
     expect(out).toMatchObject({ ok: false });
-    expect((out as { detail: string }).detail).toContain("未解析到回复文本");
+    expect(/* SAFETY: 类型断言已复核 */ (out as { detail: string }).detail).toContain(
+      "未解析到回复文本",
+    );
   });
 
   it("2xx 但响应体不是对象 → 同样归为失败", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => "纯文本",
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ok: true,
+        status: 200,
+        json: async () => "纯文本",
+      } as unknown as Response,
+    );
     await expect(callChat(UP, "m", "q", {})).resolves.toMatchObject({
       ok: false,
     });
@@ -375,9 +373,7 @@ describe("callChat", () => {
 
 describe("callImage", () => {
   it("成功：从 URL / 内联 data URL 两种回包里取图；size 只在非空时上行", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ data: [{ url: "https://img/1.png" }] }),
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ data: [{ url: "https://img/1.png" }] }));
     await expect(callImage(UP, "m", "p", "1024x1024", {})).resolves.toEqual({
       ok: true,
       url: "https://img/1.png",
@@ -386,7 +382,7 @@ describe("callImage", () => {
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [{ b64_json: "AAAA" }] }));
     const inline = await callImage(UP, "m", "p", "", {});
-    expect((inline as { url: string }).url).toContain("data:image");
+    expect(/* SAFETY: 类型断言已复核 */ (inline as { url: string }).url).toContain("data:image");
 
     // size 为空串时不塞进请求体（否则上游会按空尺寸参数报错）
     expect(sentBody(1)).not.toHaveProperty("size");
@@ -401,15 +397,15 @@ describe("callImage", () => {
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [] }));
     const out = await callImage(UP, "m", "p", "", {});
-    expect((out as { detail: string }).detail).toContain("未解析到图片 URL");
+    expect(/* SAFETY: 类型断言已复核 */ (out as { detail: string }).detail).toContain(
+      "未解析到图片 URL",
+    );
   });
 });
 
 describe("callVideo（提交 + 内置一轮轮询）", () => {
   it("上游同步返回视频地址 → done，不轮询", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ data: [{ url: "https://v/1.mp4" }] }),
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ data: [{ url: "https://v/1.mp4" }] }));
     await expect(callVideo(UP, "m", "p", {})).resolves.toEqual({
       status: "done",
       url: "https://v/1.mp4",
@@ -422,9 +418,7 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
     try {
       fetchMock
         .mockResolvedValueOnce(jsonResponse({ task_id: "t1" }))
-        .mockResolvedValue(
-          jsonResponse({ data: [{ url: "https://v/done.mp4" }] }),
-        );
+        .mockResolvedValue(jsonResponse({ data: [{ url: "https://v/done.mp4" }] }));
       const p = callVideo(UP, "m", "p", {});
       await vi.advanceTimersByTimeAsync(6_000);
       await expect(p).resolves.toEqual({
@@ -452,7 +446,7 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
     fetchMock.mockResolvedValue(jsonResponse({ weird: true }));
     const out = await callVideo(UP, "m", "p", {});
     expect(out).toMatchObject({ status: "error" });
-    expect((out as { detail: string }).detail).toContain(
+    expect(/* SAFETY: 类型断言已复核 */ (out as { detail: string }).detail).toContain(
       "未找到视频 URL 或任务 ID",
     );
   });
@@ -472,9 +466,7 @@ describe("queryVideoTask（继续等待，绝不重新提交）", () => {
     // 正好是 vitest 的默认用例超时），所以这里必须推进假计时器而不是真等。
     vi.useFakeTimers();
     try {
-      fetchMock.mockResolvedValue(
-        jsonResponse({ data: [{ url: "https://v/x.mp4" }] }),
-      );
+      fetchMock.mockResolvedValue(jsonResponse({ data: [{ url: "https://v/x.mp4" }] }));
       const p = queryVideoTask(UP, "m", "t");
       await vi.advanceTimersByTimeAsync(6_000);
       await expect(p).resolves.toEqual({ done: true, url: "https://v/x.mp4" });

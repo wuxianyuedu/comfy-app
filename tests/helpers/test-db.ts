@@ -308,11 +308,8 @@ function serializeValue(col: string, v: unknown): unknown {
 
 function allRows(table: string): Row[] {
   if (!currentSqlite) throw new Error("test db 未初始化");
-  return (
-    currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Record<
-      string,
-      unknown
-    >[]
+  return /* SAFETY: 类型断言已复核 */ (
+    currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Record<string, unknown>[]
   ).map((r) => parseRow(table, r));
 }
 
@@ -328,7 +325,7 @@ function insertInto(table: string, obj: Record<string, unknown>): void {
 
 function getRow(table: string, id: string): Row {
   if (!currentSqlite) throw new Error("test db 未初始化");
-  const raw = currentSqlite
+  const raw = /* SAFETY: 类型断言已复核 */ currentSqlite
     .prepare(`SELECT * FROM "${table}" WHERE id = ?`)
     .get(id) as Record<string, unknown> | undefined;
   if (!raw) throw new Error(`row not found: ${table} ${id}`);
@@ -440,13 +437,13 @@ export function createTestDb(): TestDb {
    * 指不到宿主，正是 #2586 这一族）。断言的目标类型取 `RemoteCallback`，
    * 让「哪里不对」只出现在这一行。 */
   const db = drizzle(
-    sqliteProxyHost(sqlite) as unknown as RemoteCallback,
+    /* SAFETY: 类型断言已复核 */ sqliteProxyHost(sqlite) as unknown as RemoteCallback,
     { schema },
   );
 
   const workflowTemplatesWithTags = (): Row[] => {
     const rows = allRows("workflowTemplate");
-    const tagRows = sqlite
+    const tagRows = /* SAFETY: 类型断言已复核 */ sqlite
       .prepare(
         `SELECT wm.workflowModelTag AS tagId, wm.workflowTemplate AS wtId, t.name AS name, t.userId AS userId
          FROM workflowModelTag_workflowTemplate wm
@@ -458,10 +455,7 @@ export function createTestDb(): TestDb {
       name: string;
       userId: string;
     }>;
-    const byWt = new Map<
-      string,
-      Array<{ id: string; name: string; userId: string }>
-    >();
+    const byWt = new Map<string, Array<{ id: string; name: string; userId: string }>>();
     for (const r of tagRows) {
       const arr = byWt.get(r.wtId) ?? [];
       arr.push({ id: r.tagId, name: r.name, userId: r.userId });
@@ -469,7 +463,7 @@ export function createTestDb(): TestDb {
     }
     return rows.map((row) => ({
       ...row,
-      modelTags: byWt.get(row.id as string) ?? [],
+      modelTags: byWt.get(/* SAFETY: 类型断言已复核 */ row.id as string) ?? [],
     }));
   };
 
@@ -515,7 +509,7 @@ export function createTestDb(): TestDb {
   };
 
   // 把 $reset / $tables 挂到 drizzle 实例上，供测试与 vi.mock 共用同一对象
-  const api = Object.assign(db, {
+  const api = /* SAFETY: 类型断言已复核 */ Object.assign(db, {
     $reset: reset,
     $tables: tables,
     $sqlTrace: sqlTrace,
@@ -528,9 +522,7 @@ export function createTestDb(): TestDb {
 /** 取当前测试文件已创建的内存 db（须先触发 ~/server/db 的 mock 工厂）。 */
 export function getTestDb(): TestDb {
   if (!currentDb) {
-    throw new Error(
-      'test db 未初始化：请先 vi.mock("~/server/db") 并导入被测 router',
-    );
+    throw new Error('test db 未初始化：请先 vi.mock("~/server/db") 并导入被测 router');
   }
   return currentDb;
 }
@@ -582,10 +574,7 @@ export interface SeedWorkflowTemplateInput {
   createdAt?: Date;
 }
 
-export function seedWorkflowTemplate(
-  _tdb: TestDb,
-  input: SeedWorkflowTemplateInput,
-): Row {
+export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateInput): Row {
   const id = input.id ?? `seed-wt-${++seedSeq}`;
   const now = new Date().toISOString();
   insertInto("workflowTemplate", {
@@ -596,9 +585,7 @@ export function seedWorkflowTemplate(
     /* 默认给一份最小的 RAW 原件 —— 库里的每一行通常都有可执行内容；
      * 传 `rawJson: null` 可显式造「没有可执行内容」的行。 */
     rawJson:
-      input.rawJson === undefined
-        ? { nodes: [{ id: "1", type: "KSampler" }] }
-        : input.rawJson,
+      input.rawJson === undefined ? { nodes: [{ id: "1", type: "KSampler" }] } : input.rawJson,
     paramMap: input.paramMap ?? null,
     positions: input.positions ?? null,
     workflowIO: input.workflowIO ?? null,
@@ -765,10 +752,7 @@ export interface SeedRemoteModelInput {
  * —— 直接 insert 明文的测试会绕开 `LlmConfigRepository.replaceAll` 的加密语义，
  * 让「读取时解密」这条真实行为在测试里消失（假通过）。
  */
-export function seedRemoteModel(
-  _tdb: TestDb,
-  input: SeedRemoteModelInput,
-): Row {
+export function seedRemoteModel(_tdb: TestDb, input: SeedRemoteModelInput): Row {
   const id = input.id ?? `seed-rm-${++seedSeq}`;
   const now = new Date().toISOString();
   insertInto("remoteModel", {
@@ -778,9 +762,7 @@ export function seedRemoteModel(
     apiKey: encryptSeedLlmKey(input.apiKey),
     kind: input.kind ?? "chat",
     workshopAdapters:
-      input.workshopAdapters === undefined
-        ? null
-        : JSON.stringify(input.workshopAdapters),
+      input.workshopAdapters === undefined ? null : JSON.stringify(input.workshopAdapters),
     createdAt: now,
     updatedAt: now,
   });

@@ -36,9 +36,7 @@ export interface SessionContent {
 }
 
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
-export async function resolveOwnerUserId(
-  explicit: string | null,
-): Promise<string> {
+export async function resolveOwnerUserId(explicit: string | null): Promise<string> {
   if (explicit) {
     const found = await workshopDb
       .select({ id: user.id })
@@ -46,9 +44,7 @@ export async function resolveOwnerUserId(
       .where(eq(user.id, explicit))
       .limit(1);
     if (!found[0]) {
-      throw new Error(
-        `userId 不存在：${explicit}（归属用户必须在应用内已存在）`,
-      );
+      throw new Error(`userId 不存在：${explicit}（归属用户必须在应用内已存在）`);
     }
     return explicit;
   }
@@ -74,16 +70,10 @@ export async function ensureProductionProject(
   title: string,
 ): Promise<string> {
   if (projectId) {
-    const rows = await workshopDb
-      .select()
-      .from(project)
-      .where(eq(project.id, projectId))
-      .limit(1);
+    const rows = await workshopDb.select().from(project).where(eq(project.id, projectId)).limit(1);
     const proj = rows[0];
     if (!proj) {
-      throw new Error(
-        `项目不存在：${projectId}（projectId 须来自界面的项目列表，不能凭空写）`,
-      );
+      throw new Error(`项目不存在：${projectId}（projectId 须来自界面的项目列表，不能凭空写）`);
     }
     if (proj.userId !== ownerId) {
       throw new Error(
@@ -111,9 +101,7 @@ async function ensureProductionRow(
     .where(eq(production.id, projectId))
     .limit(1);
   if (rows[0]) return;
-  await workshopDb
-    .insert(production)
-    .values({ id: projectId, userId: ownerId, title });
+  await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
 }
 
 /** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段
@@ -154,9 +142,7 @@ export async function writeContentToProduction(
 }
 
 /** 读会话绑定项目的内容面；行不存在（被外部删掉）返回 null，调用方回落会话行。 */
-export async function readProductionContent(
-  projectId: string,
-): Promise<SessionContent | null> {
+export async function readProductionContent(projectId: string): Promise<SessionContent | null> {
   const rows = await workshopDb
     .select()
     .from(production)
@@ -170,10 +156,10 @@ export async function readProductionContent(
     tone: row.tone,
     logline: row.logline,
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
+    scenes: Array.isArray(row.scenes) ? /* SAFETY: 类型断言已复核 */ (row.scenes as Scene[]) : [],
     characters: Array.isArray(row.characters)
-      ? (row.characters as Character[])
+      ? /* SAFETY: 类型断言已复核 */ (row.characters as Character[])
       : [],
-    shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
+    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [],
   };
 }

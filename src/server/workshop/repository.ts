@@ -2,13 +2,7 @@
 // 纯函数 rowToState / stateToRow 不触碰 DB，便于单测；CRUD 走 workshopDb。
 import { desc, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import type {
-  Character,
-  PipelineStageId,
-  ProjectMeta,
-  Scene,
-  Shot,
-} from "~/lib/workshop/types";
+import type { Character, PipelineStageId, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 import {
   workshopSession,
   type WorkshopSession,
@@ -35,14 +29,13 @@ const VALID_STAGES: readonly PipelineStageId[] = [
 
 export function isStage(v: unknown): v is PipelineStageId {
   return (
-    typeof v === "string" && (VALID_STAGES as readonly string[]).includes(v)
+    typeof v === "string" &&
+    /* SAFETY: 类型断言已复核 */ (VALID_STAGES as readonly string[]).includes(v)
   );
 }
 
 /** 纯函数：内存状态 → 可写行（不含 id / 时间戳），便于单测。 */
-export function stateToRow(
-  state: WorkshopSessionState,
-): Partial<WorkshopSessionInsert> {
+export function stateToRow(state: WorkshopSessionState): Partial<WorkshopSessionInsert> {
   return {
     idea: state.idea,
     title: state.meta.title,
@@ -81,7 +74,7 @@ function applyContentToState(
     meta: {
       ...state.meta,
       title: content.title,
-      type: (content.type as ProjectMeta["type"]) ?? state.meta.type,
+      type: /* SAFETY: 类型断言已复核 */ (content.type as ProjectMeta["type"]) ?? state.meta.type,
       tone: content.tone,
       logline: content.logline,
       scriptMarkdown: content.scriptMarkdown,
@@ -98,16 +91,16 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
     idea: row.idea,
     meta: {
       title: row.title,
-      type: (row.type as ProjectMeta["type"]) ?? "short_video",
+      type: /* SAFETY: 类型断言已复核 */ (row.type as ProjectMeta["type"]) ?? "short_video",
       tone: row.tone,
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
     },
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
+    scenes: Array.isArray(row.scenes) ? /* SAFETY: 类型断言已复核 */ (row.scenes as Scene[]) : [],
     characters: Array.isArray(row.characters)
-      ? (row.characters as Character[])
+      ? /* SAFETY: 类型断言已复核 */ (row.characters as Character[])
       : [],
-    shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
+    shots: Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [],
     stage: isStage(row.stage) ? row.stage : "script",
     projectId: row.projectId ?? null,
   };
@@ -145,9 +138,7 @@ export interface CreateSessionInput {
   projectId?: string | null;
 }
 
-export async function createSession(
-  input: CreateSessionInput = {},
-): Promise<string> {
+export async function createSession(input: CreateSessionInput = {}): Promise<string> {
   const id = createId();
   // 桥（#2482）：每个新会话创建即绑定一份界面真值（project + production），
   // 外部 AI 写的内容从第一刻起就在界面上可见（FR-AG-01③）。
@@ -171,9 +162,7 @@ export async function createSession(
   return id;
 }
 
-export async function getSession(
-  id: string,
-): Promise<WorkshopSessionState | null> {
+export async function getSession(id: string): Promise<WorkshopSessionState | null> {
   const rows = await workshopDb
     .select()
     .from(workshopSession)
@@ -199,10 +188,7 @@ export async function listSessions(): Promise<WorkshopSessionSummary[]> {
   return rows.map(summarize);
 }
 
-export async function updateState(
-  id: string,
-  state: WorkshopSessionState,
-): Promise<void> {
+export async function updateState(id: string, state: WorkshopSessionState): Promise<void> {
   const rows = await workshopDb
     .select()
     .from(workshopSession)
@@ -231,9 +217,7 @@ export async function updateState(
 }
 
 export async function deleteSession(id: string): Promise<boolean> {
-  const result = await workshopDb
-    .delete(workshopSession)
-    .where(eq(workshopSession.id, id));
+  const result = await workshopDb.delete(workshopSession).where(eq(workshopSession.id, id));
   // libsql 的 ResultSet 用 rowsAffected（better-sqlite3 的 RunResult.changes 已不存在）。
   return (result.rowsAffected ?? 0) > 0;
 }

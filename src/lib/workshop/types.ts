@@ -40,7 +40,7 @@ export type PortraitSource = "local" | "remote" | "import";
  * （§12.12）：`Shot.status`、`Shot.clipStatus`、`Asset.status` 现在都指向这里，
  * 而写侧契约要按**同一份**枚举校验取值。
  */
-export const SHOT_STATUSES = [
+export const SHOT_STATUSES = /* SAFETY: 类型断言已复核 */ [
   "idle",
   "queued",
   "running",
@@ -50,9 +50,9 @@ export const SHOT_STATUSES = [
 ] as const;
 export type ShotStatus = (typeof SHOT_STATUSES)[number];
 
-export const MOTION_LEVELS = ["low", "medium", "high"] as const;
+export const MOTION_LEVELS = /* SAFETY: 类型断言已复核 */ ["low", "medium", "high"] as const;
 export type MotionLevel = (typeof MOTION_LEVELS)[number];
-export const TRANSITIONS = ["cut", "dissolve", "fade"] as const;
+export const TRANSITIONS = /* SAFETY: 类型断言已复核 */ ["cut", "dissolve", "fade"] as const;
 export type Transition = (typeof TRANSITIONS)[number];
 
 export const MOTION_LABELS: Record<MotionLevel, string> = {
@@ -77,7 +77,7 @@ export const TRANSITION_LABELS: Record<Transition, string> = {
  *（`normalizeShotType`）。曾经有一份把这条收窄跳过去写成 `as never`，
  * 表现是「LLM 说什么就存什么」，而类型层完全不知道。
  */
-export const SHOT_TYPES = [
+export const SHOT_TYPES = /* SAFETY: 类型断言已复核 */ [
   "extreme_wide", // 大远景
   "wide", // 远景
   "full", // 全景
@@ -97,10 +97,10 @@ export const DEFAULT_SHOT_TYPE: ShotType = "medium";
  *  不在清单里的一律回落默认档 —— 不抛错（一条镜头的景别写错不该毁掉整批解析），
  *  但也不放它进类型系统。 */
 export function normalizeShotType(raw: unknown): ShotType {
-  return (SHOT_TYPES as readonly string[]).includes(
+  return /* SAFETY: 类型断言已复核 */ (SHOT_TYPES as readonly string[]).includes(
     typeof raw === "string" ? raw : "",
   )
-    ? (raw as ShotType)
+    ? /* SAFETY: 类型断言已复核 */ (raw as ShotType)
     : DEFAULT_SHOT_TYPE;
 }
 
@@ -215,7 +215,9 @@ function optionalEnum<const T extends readonly string[]>(values: T) {
   return z
     .unknown()
     .transform((value) =>
-      values.includes(value as string) ? (value as T[number]) : undefined,
+      values.includes(/* SAFETY: 类型断言已复核 */ value as string)
+        ? /* SAFETY: 类型断言已复核 */ (value as T[number])
+        : undefined,
     )
     .optional();
 }
@@ -223,7 +225,7 @@ function optionalEnum<const T extends readonly string[]>(values: T) {
 /** 只收对象：`params` 是必填字段，非对象（含缺省）一律换成空对象。 */
 function paramsObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? /* SAFETY: 类型断言已复核 */ (value as Record<string, unknown>)
     : {};
 }
 

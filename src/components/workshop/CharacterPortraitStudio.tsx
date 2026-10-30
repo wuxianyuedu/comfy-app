@@ -28,10 +28,7 @@ import type {
 } from "~/components/workshop/hooks/use-character-portrait";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
-import {
-  PORTRAIT_SOURCE_LABELS,
-  portraitCandidates,
-} from "~/lib/workshop/character-portrait";
+import { PORTRAIT_SOURCE_LABELS, portraitCandidates } from "~/lib/workshop/character-portrait";
 import type { Character } from "~/lib/workshop/types";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
@@ -53,8 +50,7 @@ interface Props {
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {
-  const { session, actions, apiChannels, workflows, onOpenModelAdapters } =
-    portrait;
+  const { session, actions, apiChannels, workflows, onOpenModelAdapters } = portrait;
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
@@ -68,15 +64,11 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   /* 远端模型来自设置页「远端模型」（kind=图片）；有配置时远端通道直接可用，
    * 不必再在工坊 API 通道里重复填一份 Base URL / API Key。 */
   const { remoteImageModels } = useLLM();
-  const effectiveRemoteModel =
-    session.remoteModel || (remoteImageModels[0] ?? "");
-  const remoteReady =
-    apiChannels?.image.configured === true || remoteImageModels.length > 0;
+  const effectiveRemoteModel = session.remoteModel || (remoteImageModels[0] ?? "");
+  const remoteReady = apiChannels?.image.configured === true || remoteImageModels.length > 0;
   /* 本地通道的「模型」= 工作库里配置好对外参数的生图工作流（按模型标签展示）。
    * 没有内置模板可回落：未选工作流时本地通道不可用（见下方门禁提示）。 */
-  const localWorkflows = workflows.filter(
-    (w) => w.category === "image" && w.encapsulationReady,
-  );
+  const localWorkflows = workflows.filter((w) => w.category === "image" && w.encapsulationReady);
   const localOptionLabels: Record<string, string> = {};
   const tagCounts = new Map<string, number>();
   for (const w of localWorkflows) {
@@ -96,17 +88,11 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const remoteBlocked = session.channel === "remote" && !remoteReady;
   const hasPrompt = !!character.positivePrompt.trim();
   const canGenerate =
-    hasPrompt &&
-    !session.busy &&
-    !session.importing &&
-    !localBlocked &&
-    !remoteBlocked;
+    hasPrompt && !session.busy && !session.importing && !localBlocked && !remoteBlocked;
 
   /* 生成日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
-  const [history, setHistory] = React.useState<
-    PersistableGenerationLog[] | null
-  >(null);
+  const [history, setHistory] = React.useState<PersistableGenerationLog[] | null>(null);
   const loadHistory = () => {
     setHistoryOpen(true);
     if (history) return;
@@ -122,22 +108,20 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。
             与镜头台 / 影片台的「生成通道」是同一族：手搓的
             `variant="outline"` + 选中三元，缺「已选中时的悬停值」那一半。 */}
-        <div
-          role="radiogroup"
-          aria-label="定妆照生成通道"
-          className="flex gap-2"
-        >
-          {(["local", "remote"] as const).map((channel) => (
-            <SelectChip
-              key={channel}
-              shape="compact"
-              selected={session.channel === channel}
-              onClick={() => actions.patch({ channel })}
-              disabled={session.busy || session.importing}
-            >
-              {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
-            </SelectChip>
-          ))}
+        <div role="radiogroup" aria-label="定妆照生成通道" className="flex gap-2">
+          {
+            /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((channel) => (
+              <SelectChip
+                key={channel}
+                shape="compact"
+                selected={session.channel === channel}
+                onClick={() => actions.patch({ channel })}
+                disabled={session.busy || session.importing}
+              >
+                {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
+              </SelectChip>
+            ))
+          }
         </div>
         {session.channel === "local" && (
           <SelectMenu
@@ -178,9 +162,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 : session.channel === "local" && session.localWorkflowId
                   ? {
                       localWorkflowId: session.localWorkflowId,
-                      localLabel:
-                        localOptionLabels[session.localWorkflowId] ??
-                        "库工作流",
+                      localLabel: localOptionLabels[session.localWorkflowId] ?? "库工作流",
                     }
                   : undefined,
             )
@@ -188,11 +170,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           disabled={!canGenerate}
           className="h-auto rounded-md px-3 py-1.5"
         >
-          {busy
-            ? "生成中…"
-            : candidates.length > 0
-              ? "再生成一张"
-              : "生成定妆照"}
+          {busy ? "生成中…" : candidates.length > 0 ? "再生成一张" : "生成定妆照"}
         </Button>
         <Button
           variant="outline"
@@ -210,15 +188,13 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       {session.channel === "local" && !session.localWorkflowId && (
         <p className="text-muted-foreground text-2xs">
           本地通道需要先在上方下拉选一个工作流库模型（需在库里配置好对外参数）。
-          没有内置工作流可回落 ——
-          工作流库里还没有可用的生图工作流时，可切到「远端 API」通道。
+          没有内置工作流可回落 —— 工作流库里还没有可用的生图工作流时，可切到「远端 API」通道。
         </p>
       )}
       {session.channel === "remote" && !remoteReady && (
         <p className="text-warning-strong text-2xs flex flex-wrap items-center gap-1">
           <Icon name="info" size={11} />
-          远端 API 生图未配置 —— 在
-          <span className="font-medium">设置 → 模型</span>
+          远端 API 生图未配置 —— 在<span className="font-medium">设置 → 模型</span>
           里添加一条「图片」类型的远端模型即可直接使用；或
           <Button
             variant="link"
@@ -232,8 +208,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       )}
       {!hasPrompt && (
         <p className="text-muted-foreground text-2xs">
-          该角色还没有生成提示词：先在下方补全外貌 /
-          服装等信息，提示词会自动合成。
+          该角色还没有生成提示词：先在下方补全外貌 / 服装等信息，提示词会自动合成。
         </p>
       )}
 
@@ -297,9 +272,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                               : "text-muted-foreground"
                         }`}
                       >
-                        <span className="text-faint mr-1">
-                          {formatClock(entry.ts)}
-                        </span>
+                        <span className="text-faint mr-1">{formatClock(entry.ts)}</span>
                         {entry.text}
                       </li>
                     ))}
@@ -321,9 +294,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   {history === null ? (
                     <p className="text-muted-foreground text-2xs">加载中…</p>
                   ) : history.length === 0 ? (
-                    <p className="text-muted-foreground text-2xs">
-                      还没有落盘的历史日志。
-                    </p>
+                    <p className="text-muted-foreground text-2xs">还没有落盘的历史日志。</p>
                   ) : (
                     <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
                       {history.map((entry, i) => (
@@ -337,9 +308,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                                 : "text-muted-foreground"
                           }`}
                         >
-                          <span className="text-faint mr-1">
-                            {formatClock(entry.ts)}
-                          </span>
+                          <span className="text-faint mr-1">{formatClock(entry.ts)}</span>
                           {entry.summary}
                         </li>
                       ))}
@@ -355,8 +324,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       {/* 候选：历次生成与导入的图都在这里，点一张即定为定妆照 */}
       {candidates.length === 0 ? (
         <p className="text-muted-foreground text-2xs mt-2">
-          还没有定妆照 ——
-          生成或导入后可在这里挑一张定为定妆照，后续分镜图会以它作参考图。
+          还没有定妆照 —— 生成或导入后可在这里挑一张定为定妆照，后续分镜图会以它作参考图。
         </p>
       ) : (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -374,9 +342,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                         : `把这张（${PORTRAIT_SOURCE_LABELS[candidate.source]}）设为定妆照`
                     }
                     className={`block overflow-hidden rounded-lg border-2 transition-colors ${
-                      selected
-                        ? "border-primary"
-                        : "border-border hover:border-primary/60"
+                      selected ? "border-primary" : "border-border hover:border-primary/60"
                     }`}
                   >
                     <MediaThumbnail

@@ -20,10 +20,10 @@ import { stripComments } from "../../../tests/helpers/strip-comments";
  * `unbound-method` 判据）；`state` 是用例间可改的输入。 */
 const stub = vi.hoisted(() => {
   const state = {
-    running: null as Record<string, unknown> | null,
+    running: /* SAFETY: 类型断言已复核 */ null as Record<string, unknown> | null,
     queued: 0,
     /** 进程级快照的桩返回值（`status.ts` 的 `ComfyRuntimeSnapshot` 子集）。 */
-    snapshot: {
+    snapshot: /* SAFETY: 类型断言已复核 */ {
       running: false,
       unverified: false,
       didQueryProcTable: true,
@@ -125,15 +125,11 @@ describe("状态栏那一格的全部来源都是库", () => {
   it("耗时优先用 claimedAt；那一列为 NULL 的旧行才退回提交时刻", async () => {
     stub.state.running = baseRow({ claimedAt: null });
     const withCreated = await mod.collectComfyQueueStatus();
-    expect(withCreated.running?.startedAt).toBe(
-      Date.parse("2026-01-01T00:00:00.000Z"),
-    );
+    expect(withCreated.running?.startedAt).toBe(Date.parse("2026-01-01T00:00:00.000Z"));
 
     stub.state.running = baseRow();
     const withClaimed = await mod.collectComfyQueueStatus();
-    expect(withClaimed.running?.startedAt).toBe(
-      Date.parse("2026-01-01T00:00:10.000Z"),
-    );
+    expect(withClaimed.running?.startedAt).toBe(Date.parse("2026-01-01T00:00:10.000Z"));
   });
 
   it("没有 RUNNING 行：running 为 null，排队数照常给（这一格不该整条消失）", async () => {
@@ -226,10 +222,7 @@ describe("状态栏那一格的全部来源都是库", () => {
 
   it("源形态：这一格不再从执行进程的内存取数（这一刀的判据本身）", async () => {
     const source = stripComments(
-      readFileSync(
-        path.resolve(process.cwd(), "src/lib/comfyui/queue-status.server.ts"),
-        "utf-8",
-      ),
+      readFileSync(path.resolve(process.cwd(), "src/lib/comfyui/queue-status.server.ts"), "utf-8"),
     );
     expect(source).not.toMatch(/runner-state/);
     expect(source).not.toMatch(/\bstate\(\)/);

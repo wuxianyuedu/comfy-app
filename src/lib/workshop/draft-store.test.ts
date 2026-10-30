@@ -34,7 +34,12 @@ describe("readWorkshopDraft / writeWorkshopDraft", () => {
     const draft = {
       ...emptyWorkshopDraft(),
       scriptMarkdown: "# 开场",
-      shots: [{ id: "a", status: "done" } as never],
+      shots: [
+        /* SAFETY: 类型断言已复核 */ {
+          id: "a",
+          status: "done",
+        } as never,
+      ],
     };
     writeWorkshopDraft("proj_1", draft);
     expect(window.localStorage.getItem(KEY)).not.toBeNull();
@@ -49,10 +54,7 @@ describe("readWorkshopDraft / writeWorkshopDraft", () => {
   });
 
   it("逐字段类型校验：非数组的 shots 被纠正成空数组", () => {
-    window.localStorage.setItem(
-      KEY,
-      JSON.stringify({ v: 1, shots: "不是数组", scenes: null }),
-    );
+    window.localStorage.setItem(KEY, JSON.stringify({ v: 1, shots: "不是数组", scenes: null }));
     const back = readWorkshopDraft("proj_1");
     expect(back.shots).toEqual([]);
     expect(back.scenes).toEqual([]);

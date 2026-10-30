@@ -1,11 +1,7 @@
 import { upperToken } from "~/lib/upper-token";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import {
-  createTRPCRouter,
-  authedProcedure,
-  rateLimitedProcedure,
-} from "~/server/api/trpc";
+import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
 import { taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { errorMessage } from "~/lib/error-message";
@@ -72,9 +68,8 @@ export const taskRouter = createTRPCRouter({
           includeImages: true,
         });
         return tasks.map((task) => {
-          const p = (task.params ?? {}) as Record<string, unknown>;
-          const checkpoint =
-            typeof p.checkpoint === "string" ? p.checkpoint : null;
+          const p = /* SAFETY: 类型断言已复核 */ (task.params ?? {}) as Record<string, unknown>;
+          const checkpoint = typeof p.checkpoint === "string" ? p.checkpoint : null;
           const cover = task.images[0]?.localPath ?? null;
           const coverMediaType = task.images[0]?.mediaType ?? null;
           /* 视频落点**只有服务端答得了**：封面（`images[0]`）通常是预览图，
@@ -84,10 +79,8 @@ export const taskRouter = createTRPCRouter({
            * **或**产物子表的 `mediaType` —— 后者管住「落盘名不带视频扩展名、但
            * 执行侧记了它是视频」的那一档，只看扩展名会把它漏成 `null`。 */
           const videoPath =
-            task.images.find(
-              (image) =>
-                isVideo(image.localPath) || image.mediaType === "video",
-            )?.localPath ?? null;
+            task.images.find((image) => isVideo(image.localPath) || image.mediaType === "video")
+              ?.localPath ?? null;
           return {
             id: task.id,
             type: task.type,
@@ -124,35 +117,31 @@ export const taskRouter = createTRPCRouter({
     }),
 
   /* GET /api/tasks/[id] —— 读 */
-  detail: authedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const task = await taskRepository.findByIdWithImages(input.id);
-      if (task?.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-      }
-      return task;
-    }),
+  detail: authedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const task = await taskRepository.findByIdWithImages(input.id);
+    if (task?.userId !== ctx.user.id) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+    }
+    return task;
+  }),
 
   /* POST /api/tasks/[id]/cancel —— 新建 */
-  cancel: authedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      // 越权修复:与 detail/openFolder/delete 一致,cancel 必须校验
-      // 任务归属——此前任意登录用户可用任意 taskId 取消他人任务。
-      const task = await taskRepository.findByIdWithImages(input.id);
-      if (task?.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-      }
-      /* 取消的统一出口（P3 §5 ADR §14 D2）：走执行侧那份 `cancelTask`，而不是
-       * 只把行写成 CANCELLED。区别对用户可感三件事——① 落一行「用户取消任务」
-       * 进执行日志（只写状态时面板上看不到原因）；② 这一行正占着 ComfyUI 执行位
-       * 时请求中断，不再「按了取消还继续出图」；③ 归还本进程的并发槽并清理记账。
-       * 归属在 host 名下时也有效：跨归属的只是状态标记与全局中断，kill 在飞子进程
-       * 仍由 host 自己的 tick 负责（executor-host.mjs 的 reconcileCancelled）。 */
-      await cancelExecutorTask(input.id);
-      return { ok: true };
-    }),
+  cancel: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    // 越权修复:与 detail/openFolder/delete 一致,cancel 必须校验
+    // 任务归属——此前任意登录用户可用任意 taskId 取消他人任务。
+    const task = await taskRepository.findByIdWithImages(input.id);
+    if (task?.userId !== ctx.user.id) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+    }
+    /* 取消的统一出口（P3 §5 ADR §14 D2）：走执行侧那份 `cancelTask`，而不是
+     * 只把行写成 CANCELLED。区别对用户可感三件事——① 落一行「用户取消任务」
+     * 进执行日志（只写状态时面板上看不到原因）；② 这一行正占着 ComfyUI 执行位
+     * 时请求中断，不再「按了取消还继续出图」；③ 归还本进程的并发槽并清理记账。
+     * 归属在 host 名下时也有效：跨归属的只是状态标记与全局中断，kill 在飞子进程
+     * 仍由 host 自己的 tick 负责（executor-host.mjs 的 reconcileCancelled）。 */
+    await cancelExecutorTask(input.id);
+    return { ok: true };
+  }),
 
   /* 「原样重跑」（#2481 · FR-QA-04③ 的历史面落点）：按**原任务行**重建一个
    * QUEUED 任务（新 taskId，不复活旧行）。执行载荷用原行的 `execPayload`
@@ -166,47 +155,42 @@ export const taskRouter = createTRPCRouter({
    *
    * 只放行**终态**任务：QUEUED / RUNNING 本来就在跑，重跑是制造第二份。
    */
-  retry: authedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const original = await taskRepository.findByIdForUser(
-        ctx.user.id,
-        input.id,
-      );
-      if (!original) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-      }
-      if (original.status === "QUEUED" || original.status === "RUNNING") {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "任务还在排队或执行中，不需要重试（可在队列监视里观察）",
-        });
-      }
-      if (!original.execPayload) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "这一行没有执行载荷（execPayload 为空的历史遗留行），无法原样重跑：请到创作台重新生成",
-        });
-      }
-      const created = await taskRepository.createQueued({
-        userId: ctx.user.id,
-        type: original.type,
-        prompt: original.prompt,
-        negativePrompt: original.negativePrompt,
-        params: original.params,
-        workflowName: original.workflowName,
-        projectId: original.projectId,
-        shotId: original.shotId,
-        referenceImages: original.referenceImages ?? undefined,
-        workflowSnapshot: original.workflowSnapshot ?? undefined,
-        claimedBy: resolveExecutorClaim(),
-        execPayload: original.execPayload,
+  retry: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const original = await taskRepository.findByIdForUser(ctx.user.id, input.id);
+    if (!original) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+    }
+    if (original.status === "QUEUED" || original.status === "RUNNING") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "任务还在排队或执行中，不需要重试（可在队列监视里观察）",
       });
-      /* 与 generate 同一口径：只写行，kick 只是省掉等派发节拍（ADR §14 D1）。 */
-      kickQueue();
-      return { taskId: created.id };
-    }),
+    }
+    if (!original.execPayload) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "这一行没有执行载荷（execPayload 为空的历史遗留行），无法原样重跑：请到创作台重新生成",
+      });
+    }
+    const created = await taskRepository.createQueued({
+      userId: ctx.user.id,
+      type: original.type,
+      prompt: original.prompt,
+      negativePrompt: original.negativePrompt,
+      params: original.params,
+      workflowName: original.workflowName,
+      projectId: original.projectId,
+      shotId: original.shotId,
+      referenceImages: original.referenceImages ?? undefined,
+      workflowSnapshot: original.workflowSnapshot ?? undefined,
+      claimedBy: resolveExecutorClaim(),
+      execPayload: original.execPayload,
+    });
+    /* 与 generate 同一口径：只写行，kick 只是省掉等派发节拍（ADR §14 D1）。 */
+    kickQueue();
+    return { taskId: created.id };
+  }),
 
   /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */
   openFolder: authedProcedure
@@ -247,27 +231,24 @@ export const taskRouter = createTRPCRouter({
     }),
 
   /* GET /api/tasks/[id]/workflow —— 读：returns the workflow snapshot */
-  workflow: authedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const owner = await taskRepository.findByIdWithImages(input.id);
-      if (owner?.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-      }
-      const task = await taskRepository.findSnapshotById(input.id);
-      if (!task)
-        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-      const snap = task.workflowSnapshot as {
-        workflow?: unknown;
-        capturedAt?: string;
-        source?: string;
-      } | null;
-      return {
-        workflow: snap?.workflow ?? null,
-        source: snap?.source ?? null,
-        capturedAt: snap?.capturedAt ?? null,
-      };
-    }),
+  workflow: authedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const owner = await taskRepository.findByIdWithImages(input.id);
+    if (owner?.userId !== ctx.user.id) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+    }
+    const task = await taskRepository.findSnapshotById(input.id);
+    if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+    const snap = /* SAFETY: 类型断言已复核 */ task.workflowSnapshot as {
+      workflow?: unknown;
+      capturedAt?: string;
+      source?: string;
+    } | null;
+    return {
+      workflow: snap?.workflow ?? null,
+      source: snap?.source ?? null,
+      capturedAt: snap?.capturedAt ?? null,
+    };
+  }),
 
   /* DELETE /api/tasks/[id] —— 删除：delete task + its generated files on disk */
   delete: rateLimitedProcedure

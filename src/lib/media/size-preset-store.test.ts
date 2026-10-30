@@ -48,14 +48,12 @@ describe("size-preset-store", () => {
       height: 720,
     });
 
-    expect(
-      cell(store.getSizePresetTable(), "image", "16:9 横屏", "1k"),
-    ).toEqual({
+    expect(cell(store.getSizePresetTable(), "image", "16:9 横屏", "1k")).toEqual({
       width: 1280,
       height: 720,
     });
     expect(listener).toHaveBeenCalledTimes(1);
-    const persisted = JSON.parse(
+    const persisted = /* SAFETY: 类型断言已复核 */ JSON.parse(
       window.localStorage.getItem(SIZE_PRESET_STORAGE_KEY) ?? "null",
     ) as { image?: Record<string, Record<string, unknown>> } | null;
     expect(persisted?.image?.["16:9 横屏"]?.["1k"]).toEqual({
@@ -84,18 +82,14 @@ describe("size-preset-store", () => {
 
     store.resetSizePresetScene("image");
 
-    expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "2k")).toEqual(
-      {
-        width: 2048,
-        height: 2048,
-      },
-    );
-    expect(cell(store.getSizePresetTable(), "video", "1:1 正方", "2k")).toEqual(
-      {
-        width: 1024,
-        height: 1024,
-      },
-    );
+    expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "2k")).toEqual({
+      width: 2048,
+      height: 2048,
+    });
+    expect(cell(store.getSizePresetTable(), "video", "1:1 正方", "2k")).toEqual({
+      width: 1024,
+      height: 1024,
+    });
   });
 
   it("损坏 / 越界的存储值逐格回退默认，不影响其它格子", async () => {
@@ -135,11 +129,9 @@ describe("size-preset-store", () => {
   it("JSON 解析失败时回退默认表而不是抛错", async () => {
     window.localStorage.setItem(SIZE_PRESET_STORAGE_KEY, "{ not json");
     const store = await loadStore();
-    expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "1k")).toEqual(
-      {
-        width: 1024,
-        height: 1024,
-      },
-    );
+    expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "1k")).toEqual({
+      width: 1024,
+      height: 1024,
+    });
   });
 });

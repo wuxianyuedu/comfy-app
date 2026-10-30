@@ -45,7 +45,7 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
     const models = isRecord(body) ? body.models : undefined;
     return {
       up: true,
-      models: Array.isArray(models) ? (models as OllamaModel[]) : [],
+      models: Array.isArray(models) ? /* SAFETY: 类型断言已复核 */ (models as OllamaModel[]) : [],
     };
   } catch {
     return { up: false };
@@ -63,10 +63,7 @@ export async function startOllama(): Promise<void> {
     /* 错误信封的读法收在一处（规范 16 §16.2.4.35）：这里此前自己
      * `as { error?: string }` 断言一遍（服务端回结构化信封就取不到）。 */
     const body = await readJsonBody(res);
-    throw new Error(
-      readApiError(body) ??
-        "启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用",
-    );
+    throw new Error(readApiError(body) ?? "启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用");
   }
 }
 

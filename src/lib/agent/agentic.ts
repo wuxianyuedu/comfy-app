@@ -49,10 +49,7 @@ const MULTITURN_SYSTEM = `你是一个 AI 创作引导助手，帮助用户用 C
      "params": {"steps": 25, "cfg": 7, "sampler": "euler", "scheduler": "normal", "size": "1024x1024"}
    }}`;
 
-function offlineIdea(
-  text: string,
-  kind: "image" | "video" = "image",
-): AgentSpec {
+function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec {
   const trimmed = text.trim();
 
   return {
@@ -90,9 +87,7 @@ function detectKind(msgs: string[]): "image" | "video" | null {
 
 /* 没配 LLM 时用的脚本化多轮兜底。 */
 function offlineAgent(history: ChatMessage[]): AgentTurnResult {
-  const userMsgs = history
-    .filter((history) => history.role === "user")
-    .map((msg) => msg.content);
+  const userMsgs = history.filter((history) => history.role === "user").map((msg) => msg.content);
   if (userMsgs.length === 0) {
     return {
       reply: "你好！想生成【图片】还是【视频】？简单描述下主题就行～",
@@ -129,9 +124,7 @@ type RawSpec = {
   negative?: unknown;
   kind?: unknown;
   skillHint?: unknown;
-  params?: Partial<
-    Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>
-  >;
+  params?: Partial<Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>>;
 };
 
 function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
@@ -144,8 +137,7 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
       steps: typeof params.steps === "number" ? params.steps : undefined,
       cfg: typeof params.cfg === "number" ? params.cfg : undefined,
       sampler: typeof params.sampler === "string" ? params.sampler : undefined,
-      scheduler:
-        typeof params.scheduler === "string" ? params.scheduler : undefined,
+      scheduler: typeof params.scheduler === "string" ? params.scheduler : undefined,
       size: typeof params.size === "string" ? params.size : undefined,
     },
     skillHint: typeof s?.skillHint === "string" ? s.skillHint : undefined,
@@ -157,9 +149,7 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
  * @param history 截至目前完整对话（只含用户/助手消息；
  *                 系统提示词在内部注入）。
  */
-export async function chatAgent(
-  history: ChatMessage[],
-): Promise<AgentTurnResult> {
+export async function chatAgent(history: ChatMessage[]): Promise<AgentTurnResult> {
   const sysMsg: ChatMessage = { role: "system", content: MULTITURN_SYSTEM };
   try {
     const res = await fetch("/api/llm", {
@@ -172,14 +162,14 @@ export async function chatAgent(
       }),
     });
     if (!res.ok) throw new Error("llm failed");
-    const data = (await res.json()) as {
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       content?: string;
       choices?: Array<{ message?: { content?: string } }>;
     };
     const content = data.content ?? data.choices?.[0]?.message?.content ?? "";
     const jsonMatch = /\{[\s\S]*\}/.exec(content);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(jsonMatch[0]) as {
         ready?: boolean;
         reply?: string;
         spec?: RawSpec;

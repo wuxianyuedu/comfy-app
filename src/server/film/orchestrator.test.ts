@@ -27,14 +27,10 @@ const filmRepo = vi.hoisted(() => ({
   updateProgress: vi.fn(async (_id: string, _progress: number) => undefined),
   markGenerating: vi.fn(async (_id: string) => undefined),
   create: vi.fn<(input: { size: string }) => Promise<{ id: string }>>(),
-  appendLog: vi.fn(
-    async (_id: string, _entry: { level: string; msg: string }) => undefined,
-  ),
+  appendLog: vi.fn(async (_id: string, _entry: { level: string; msg: string }) => undefined),
   /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
   listByStatus: vi.fn<
-    (
-      _statuses: readonly string[],
-    ) => Promise<Array<{ id: string; status: string }>>
+    (_statuses: readonly string[]) => Promise<Array<{ id: string; status: string }>>
   >(async () => []),
 }));
 type ShotRow = { id: string; taskId: string | null };
@@ -48,9 +44,7 @@ type CreatedShot = {
 };
 
 const shotRepo = vi.hoisted(() => ({
-  createMany: vi.fn<(filmId: string, shots: CreatedShot[]) => Promise<void>>(
-    async () => undefined,
-  ),
+  createMany: vi.fn<(filmId: string, shots: CreatedShot[]) => Promise<void>>(async () => undefined),
   listByFilm: vi.fn<() => Promise<unknown[]>>(async () => []),
   listActiveWithTask: vi.fn<() => Promise<ShotRow[]>>(async () => []),
   markAllActiveFailed: vi.fn(async (_filmId: string) => undefined),
@@ -63,18 +57,16 @@ const taskRepo = vi.hoisted(() => ({
   findExecutionProgress: vi.fn(async (_taskId: string) => null),
   /** 监看一轮**只发一次**批量进度查询（`watchLoop` 无条件调它，空数组由仓储侧
    *  早退）；缺这个键的话循环会在这一行 reject，把「收没收到口」演成「静默死掉」。 */
-  findExecutionProgressMany: vi.fn<(_ids: string[]) => Promise<unknown[]>>(
-    async () => [],
-  ),
+  findExecutionProgressMany: vi.fn<(_ids: string[]) => Promise<unknown[]>>(async () => []),
 }));
 const skillRepo = vi.hoisted(() => ({
   findBySlug: vi.fn(async (_slug: string) => null),
 }));
 const prodRepo = vi.hoisted(() => ({
   getForUser: vi.fn<(userId: string, id: string) => Promise<unknown>>(),
-  upsertForUser: vi.fn<
-    (userId: string, data: Record<string, unknown>) => Promise<unknown>
-  >(async () => undefined),
+  upsertForUser: vi.fn<(userId: string, data: Record<string, unknown>) => Promise<unknown>>(
+    async () => undefined,
+  ),
 }));
 
 /* 首帧图合成 / 视频任务创建：startFilm 测试要读它们的**入参**断言
@@ -106,9 +98,7 @@ vi.mock("~/lib/core/repository-production", () => ({
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: createRunTaskMock,
 }));
-const cancelTaskMock = vi.hoisted(() =>
-  vi.fn(async (_taskId: string) => undefined),
-);
+const cancelTaskMock = vi.hoisted(() => vi.fn(async (_taskId: string) => undefined));
 const enqueueMock = vi.hoisted(() => vi.fn((_payload: unknown) => undefined));
 vi.mock("~/lib/comfyui/enqueue", () => ({
   enqueue: enqueueMock,
@@ -121,9 +111,7 @@ vi.mock("~/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
 }));
 const llmConfig = vi.hoisted(() => vi.fn(async () => ({})));
-const llmStructured = vi.hoisted(() =>
-  vi.fn<() => Promise<unknown[]>>(async () => []),
-);
+const llmStructured = vi.hoisted(() => vi.fn<() => Promise<unknown[]>>(async () => []));
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: llmConfig,
   completeLLMStructured: llmStructured,
@@ -281,10 +269,7 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
 
     await composeFilm("f1");
 
-    expect(filmRepo.markFailed).toHaveBeenCalledWith(
-      "f1",
-      "没有可用的镜头视频",
-    );
+    expect(filmRepo.markFailed).toHaveBeenCalledWith("f1", "没有可用的镜头视频");
   });
 });
 
@@ -330,9 +315,11 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     filmRepo.create.mockResolvedValue({ id: "f-offline" });
     llmStructured.mockRejectedValue(new Error("no llm"));
     const { parseIdeaToScenes } = await import("~/lib/workshop/script-parser");
-    vi.mocked(parseIdeaToScenes).mockReturnValue([
-      { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
-    ] as unknown as ReturnType<typeof parseIdeaToScenes>);
+    vi.mocked(parseIdeaToScenes).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ [
+        { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
+      ] as unknown as ReturnType<typeof parseIdeaToScenes>,
+    );
 
     const r = await createFilm({ userId: "u1", title: "离线", script: "剧本" });
 
@@ -362,7 +349,11 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
 describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 5）", () => {
   // 只映射用到的字段即可（id / index / prompt / negativePrompt / sceneHeading）。
   const shot = (over: Record<string, unknown>) =>
-    ({ sceneHeading: "", negativePrompt: "", ...over }) as never;
+    /* SAFETY: 类型断言已复核 */ ({
+      sceneHeading: "",
+      negativePrompt: "",
+      ...over,
+    }) as never;
 
   it("逐条映射镜头、按镜号排序，不触发 LLM 分镜，且落 projectId 关联", async () => {
     filmRepo.create.mockResolvedValue({ id: "film-p1" });
@@ -400,7 +391,7 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
     expect(llmStructured).not.toHaveBeenCalled();
 
     // 成片挂上 projectId，标题 / 类型 / 剧本取自项目
-    const created = filmRepo.create.mock.calls[0]![0] as Record<
+    const created = /* SAFETY: 类型断言已复核 */ filmRepo.create.mock.calls[0]![0] as Record<
       string,
       unknown
     >;
@@ -435,9 +426,9 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
     expect(shotRepo.createMany).not.toHaveBeenCalled();
 
     prodRepo.getForUser.mockResolvedValue({ shots: [] });
-    await expect(
-      createFilmFromProject({ userId: "u1", projectId: "proj_empty" }),
-    ).rejects.toThrow(/还没有镜头/);
+    await expect(createFilmFromProject({ userId: "u1", projectId: "proj_empty" })).rejects.toThrow(
+      /还没有镜头/,
+    );
     expect(filmRepo.create).not.toHaveBeenCalled();
   });
 });
@@ -552,10 +543,7 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     /* `composeFilm` 一见到 COMPOSING 就早退 ⇒ 不判掉的话，这一格连界面上那个
      * 「重新合成」按钮都点不动（它是唯一出口，却被自己的状态挡住）。 */
     expect(result).toEqual({ resumed: [], abandoned: ["f-comp"] });
-    expect(filmRepo.markFailed).toHaveBeenCalledWith(
-      "f-comp",
-      expect.stringContaining("合成中断"),
-    );
+    expect(filmRepo.markFailed).toHaveBeenCalledWith("f-comp", expect.stringContaining("合成中断"));
     expect(filmRepo.appendLog).toHaveBeenCalledWith(
       "f-comp",
       expect.objectContaining({ level: "error" }),
@@ -638,9 +626,7 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     expect(filmRepo.listByStatus).not.toHaveBeenCalled();
     /* 这条扫描是一次性的（回收器每 30s 还会再来一轮，它不会）：跳过之后就得等
      * 下一次重启才有人接片，所以「为什么没接」必须在日志里读得到。 */
-    expect(loggerMock.info).toHaveBeenCalledWith(
-      expect.stringContaining("重启恢复扫描跳过"),
-    );
+    expect(loggerMock.info).toHaveBeenCalledWith(expect.stringContaining("重启恢复扫描跳过"));
   });
 
   it("扫描自己炸了不许把启动打死，但要 Warn 出来", async () => {

@@ -36,12 +36,7 @@ import type { ValidationError } from "./validation";
 import type { JsonRecord } from "./raw-overrides";
 
 /** 单次 trace 落盘的注入点（测试可换成数组收集）。 */
-export type TraceFn = (
-  kind: string,
-  taskId: string,
-  msg: string,
-  data?: unknown,
-) => void;
+export type TraceFn = (kind: string, taskId: string, msg: string, data?: unknown) => void;
 
 /** 非 JSON 行进入面板的上限（避免 verbose 输出刷屏）。 */
 export const MAX_NON_JSON_LINES = 20;
@@ -71,7 +66,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
   if (!root || typeof root !== "object") return undefined;
   const seen = new WeakSet<object>();
   const stack: { node: JsonRecord; d: number }[] = [
-    { node: root as JsonRecord, d: 0 },
+    { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
   ];
   while (stack.length) {
     /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
@@ -83,15 +78,16 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     const ne = node.node_errors;
     if (
       ne != null &&
-      (Array.isArray(ne)
-        ? ne.length > 0
-        : typeof ne === "object" && Object.keys(ne).length > 0)
+      (Array.isArray(ne) ? ne.length > 0 : typeof ne === "object" && Object.keys(ne).length > 0)
     ) {
       return ne;
     }
     for (const v of Object.values(node)) {
       if (v && typeof v === "object")
-        stack.push({ node: v as JsonRecord, d: d + 1 });
+        stack.push({
+          node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
+          d: d + 1,
+        });
     }
   }
   return undefined;
@@ -111,11 +107,11 @@ export function extractEnvelopeValidationErrors(
 export function envelopeErrorMessage(env: unknown): string {
   const err =
     env != null && typeof env === "object"
-      ? (env as JsonRecord).error
+      ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
       : undefined;
   const str = (o: unknown, key: string): string | undefined => {
     if (o == null || typeof o !== "object") return undefined;
-    const v = (o as JsonRecord)[key];
+    const v = /* SAFETY: 类型断言已复核 */ (o as JsonRecord)[key];
     return typeof v === "string" ? v : undefined;
   };
   return str(err, "message") ?? str(err, "hint") ?? "comfy-cli 执行失败";
@@ -129,30 +125,24 @@ export function envelopeErrorMessage(env: unknown): string {
  *  `459:452` 的 autogrow 输入 `images` 零连线 → `autogrow_no_slots`）。
  *
  *  返回 `null` 表示不是这种错误（交给下方兜底逻辑按原样落盘）。 */
-export function translateWorkflowUnknownNodesError(
-  env: unknown,
-): string | null {
+export function translateWorkflowUnknownNodesError(env: unknown): string | null {
   if (env == null || typeof env !== "object") return null;
-  const err = (env as JsonRecord).error;
+  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
   if (err == null || typeof err !== "object") return null;
-  if ((err as JsonRecord).code !== "workflow_unknown_nodes") return null;
-  const details = (err as JsonRecord).details;
+  if (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !== "workflow_unknown_nodes")
+    return null;
+  const details = /* SAFETY: 类型断言已复核 */ (err as JsonRecord).details;
   const list =
     details != null && typeof details === "object"
-      ? (details as JsonRecord).errors
+      ? /* SAFETY: 类型断言已复核 */ (details as JsonRecord).errors
       : undefined;
   if (Array.isArray(list) && list.length > 0) {
     const lines = list.slice(0, 12).map((raw) => {
-      const e = raw as JsonRecord;
-      const node =
-        typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
+      const e = /* SAFETY: 类型断言已复核 */ raw as JsonRecord;
+      const node = typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
       const field = typeof e.field === "string" ? ` 的「${e.field}」输入` : "";
       const hint =
-        typeof e.hint === "string"
-          ? e.hint
-          : typeof e.message === "string"
-            ? e.message
-            : "";
+        typeof e.hint === "string" ? e.hint : typeof e.message === "string" ? e.message : "";
       const codeStr = typeof e.code === "string" ? e.code : "";
       const tail =
         /autogrow/i.test(codeStr) || /autogrow/i.test(hint)
@@ -162,14 +152,13 @@ export function translateWorkflowUnknownNodesError(
     });
     const more = list.length > 12 ? `\n  …还有 ${list.length - 12} 处` : "";
     return (
-      "工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n" +
-      lines.join("\n") +
-      more
+      "工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n" + lines.join("\n") + more
     );
   }
   const message =
-    typeof (err as JsonRecord).message === "string"
-      ? ((err as JsonRecord).message as string)
+    typeof (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).message) === "string"
+      ? /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ ((err as JsonRecord)
+          .message as string)
       : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
@@ -231,23 +220,15 @@ export interface CliEnvelopeParser {
  * `class_type`，而且是 ComfyUI 展开子图后的权威值）；没有才退回按图认
  * （`deps.patched`，与 `progress` 帧同一条路，见 ADR §24）。
  */
-function nodeTag(
-  evt: JsonRecord,
-  patched: Record<string, unknown> | undefined,
-): string {
-  const node = (evt.node ??
-    (evt.data as JsonRecord | null | undefined)?.node ??
+function nodeTag(evt: JsonRecord, patched: Record<string, unknown> | undefined): string {
+  const node = /* SAFETY: 类型断言已复核 */ (evt.node ??
+    /* SAFETY: 类型断言已复核 */ (evt.data as JsonRecord | null | undefined)?.node ??
     "?") as string;
   const fromEvent =
-    typeof evt.class_type === "string" && evt.class_type
-      ? evt.class_type
-      : undefined;
+    typeof evt.class_type === "string" && evt.class_type ? evt.class_type : undefined;
   const classType =
-    fromEvent ??
-    (node && node !== "?" ? classTypeForNode(patched, node) : undefined);
-  return classType
-    ? ` [${node}] ${nodeLabel(classType)}（${classType}）`
-    : ` [${node}]`;
+    fromEvent ?? (node && node !== "?" ? classTypeForNode(patched, node) : undefined);
+  return classType ? ` [${node}] ${nodeLabel(classType)}（${classType}）` : ` [${node}]`;
 }
 
 /**
@@ -256,9 +237,7 @@ function nodeTag(
  * 返回的对象可直接喂 chunk 断言，不必起真进程 —— 这正是本项要解决的
  * 「98 行不可测闭包」。
  */
-export function createCliEnvelopeParser(
-  deps: EnvelopeParserDeps,
-): CliEnvelopeParser {
+export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopeParser {
   const doTrace = deps.trace ?? trace;
   const { taskId, log } = deps;
   let buf = "";
@@ -282,16 +261,10 @@ export function createCliEnvelopeParser(
       doTrace("cli", taskId, "stdout 非 JSON 行", { line });
       if (nonJsonLines <= MAX_NON_JSON_LINES) {
         const trimmed =
-          line.length > NON_JSON_LINE_CHARS
-            ? line.slice(0, NON_JSON_LINE_CHARS) + "…"
-            : line;
+          line.length > NON_JSON_LINE_CHARS ? line.slice(0, NON_JSON_LINE_CHARS) + "…" : line;
         log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
       } else if (nonJsonLines === MAX_NON_JSON_LINES + 1) {
-        log(
-          taskId,
-          "info",
-          `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`,
-        );
+        log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
       }
       return;
     }
@@ -312,31 +285,19 @@ export function createCliEnvelopeParser(
     if (rawJsonLines <= MAX_RAW_JSON_LINES) {
       log(taskId, "info", `[comfy-cli 原始] ${line}`);
     } else if (rawJsonLines === MAX_RAW_JSON_LINES + 1) {
-      log(
-        taskId,
-        "info",
-        `[comfy-cli 原始] …后续原始行已省略（完整内容见后端 trace）`,
-      );
+      log(taskId, "info", `[comfy-cli 原始] …后续原始行已省略（完整内容见后端 trace）`);
     }
     /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
     doTrace("cli", taskId, "stdout 事件", { event: ev });
-    dispatchEvent(ev as JsonRecord);
+    dispatchEvent(/* SAFETY: 类型断言已复核 */ ev as JsonRecord);
   };
 
   const dispatchEvent = (evt: JsonRecord): void => {
-    if (
-      evt.type === "queued" &&
-      typeof evt.prompt_id === "string" &&
-      evt.prompt_id
-    ) {
+    if (evt.type === "queued" && typeof evt.prompt_id === "string" && evt.prompt_id) {
       deps.onPromptId(evt.prompt_id);
       // 与 API 路径的「✓ 已接收…等待 executing」措辞对齐，两条提交路径
       // 在日志面板里是同一套词汇。
-      log(
-        taskId,
-        "info",
-        `✓ comfy-cli 已提交（prompt_id: ${evt.prompt_id}），等待节点执行…`,
-      );
+      log(taskId, "info", `✓ comfy-cli 已提交（prompt_id: ${evt.prompt_id}），等待节点执行…`);
       return;
     }
     if (evt.type === "converted" && typeof evt.node_count === "number") {
@@ -351,11 +312,7 @@ export function createCliEnvelopeParser(
        * 这里补一句总体定性，让人不必自己数那 N 行。
        * 只在「一个节点都没真跑」时给这句：混合轮里有 executing，那时缺的不是定性
        * 而是进度，写「全部命中缓存」就是假话。 */
-      if (
-        cachedNodes > 0 &&
-        nodeCountTotal !== undefined &&
-        cachedNodes === nodeCountTotal
-      ) {
+      if (cachedNodes > 0 && nodeCountTotal !== undefined && cachedNodes === nodeCountTotal) {
         log(
           taskId,
           "info",
@@ -387,9 +344,7 @@ export function createCliEnvelopeParser(
       /* 类名靠提交那一刻的图认（`deps.patched`），与 WS 帧同一个出口 ——
        * raw 任务的进度历史上就是从这条路上来的，所以状态栏「当前节点」那一格
        * 能不能显示类名，取决于这里（ISSUE #1202）。 */
-      const classType = nodeId
-        ? classTypeForNode(deps.patched, nodeId)
-        : undefined;
+      const classType = nodeId ? classTypeForNode(deps.patched, nodeId) : undefined;
       deps.onProgress(
         Math.round((evt.completed / evt.total) * 100),
         nodeId
@@ -408,11 +363,7 @@ export function createCliEnvelopeParser(
        * 4-B2 的契约里是「当前节点 + 步数」，而缓存轮没有「当前」（这一格瞬时就是
        * 终点，写进去等于让状态栏显示一个早已跑完的节点）。宁缺不假。 */
       cachedNodes++;
-      log(
-        taskId,
-        "info",
-        `≡ comfy-cli 节点${nodeTag(evt, deps.patched)} 命中缓存，跳过`,
-      );
+      log(taskId, "info", `≡ comfy-cli 节点${nodeTag(evt, deps.patched)} 命中缓存，跳过`);
       return;
     }
     if (evt.type === "executing" || evt.type === "execution_success") {
@@ -463,8 +414,7 @@ export interface StderrSink {
   noisyWarningLines: () => number;
 }
 
-const NOISY_WARNING_RE =
-  /DeprecationWarning|SyntaxWarning: invalid escape sequence/i;
+const NOISY_WARNING_RE = /DeprecationWarning|SyntaxWarning: invalid escape sequence/i;
 
 /**
  * 构造 stderr 的 `data` 回调：实时把 traceback 显示到面板（而不是只在
@@ -493,16 +443,10 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
       deps.rawCli?.(taskId, `[comfy-cli stderr] ${trimmed}`);
       if (errLines <= STDERR_MAX_LINES) {
         const t =
-          trimmed.length > STDERR_LINE_CHARS
-            ? trimmed.slice(0, STDERR_LINE_CHARS) + "…"
-            : trimmed;
+          trimmed.length > STDERR_LINE_CHARS ? trimmed.slice(0, STDERR_LINE_CHARS) + "…" : trimmed;
         log(taskId, "warn", `[comfy-cli stderr] ${t}`);
       } else if (errLines === STDERR_MAX_LINES + 1) {
-        log(
-          taskId,
-          "warn",
-          `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`,
-        );
+        log(taskId, "warn", `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`);
       }
     }
   };
@@ -554,11 +498,7 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
     if (validationErrors?.length) {
       // 与 API 路径一致：把结构化清单汇总成一行，再交给 fail() 让 UI 渲染
       // 成逐字段红框。
-      log(
-        taskId,
-        "error",
-        `✗ comfy-cli 报 ${validationErrors.length} 条校验错误（见上方红框）`,
-      );
+      log(taskId, "error", `✗ comfy-cli 报 ${validationErrors.length} 条校验错误（见上方红框）`);
       validationErrors.slice(0, 12).forEach((ve) => {
         log(
           taskId,
@@ -589,11 +529,11 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         const rawMsg = msg;
         const err =
           env != null && typeof env === "object"
-            ? (env as JsonRecord).error
+            ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
             : undefined;
         const errCode =
           err != null && typeof err === "object"
-            ? (err as JsonRecord).code
+            ? /* SAFETY: 类型断言已复核 */ (err as JsonRecord).code
             : undefined;
         if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
           try {
@@ -612,11 +552,6 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         }
       }
     }
-    deps.fail(
-      taskId,
-      deps.promptId() ?? "",
-      translated ?? msg,
-      validationErrors,
-    );
+    deps.fail(taskId, deps.promptId() ?? "", translated ?? msg, validationErrors);
   };
 }

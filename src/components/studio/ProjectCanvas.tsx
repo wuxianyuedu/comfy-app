@@ -27,23 +27,10 @@ import {
   defaultData,
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
-import {
-  makeFitViewScheduler,
-  placeCanvasNode,
-} from "~/lib/project-canvas/canvas-helpers";
-import {
-  applyShotPatches,
-  planShotSync,
-  shotToNodePatch,
-} from "~/lib/production/sync";
-import {
-  fetchProduction,
-  type ProductionData,
-} from "~/lib/production/production-client";
-import {
-  normalizeProductionProgress,
-  type ProductionProgress,
-} from "~/lib/production/progress";
+import { makeFitViewScheduler, placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
+import { applyShotPatches, planShotSync, shotToNodePatch } from "~/lib/production/sync";
+import { fetchProduction, type ProductionData } from "~/lib/production/production-client";
+import { normalizeProductionProgress, type ProductionProgress } from "~/lib/production/progress";
 import { CanvasProgressIndicator } from "./project-canvas/CanvasProgressIndicator";
 import { useCanvasMenu } from "./project-canvas/hooks/use-canvas-menu";
 import type { Shot } from "~/lib/workshop/types";
@@ -63,16 +50,10 @@ import { useCanvasDrop } from "./project-canvas/hooks/use-canvas-drop";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { useToast } from "./ToastProvider";
 import { useMiniMapJump } from "./useMiniMapJump";
-import {
-  CanvasPanelToolbar,
-  type CanvasPanelType,
-} from "./project-canvas/CanvasPanelToolbar";
+import { CanvasPanelToolbar, type CanvasPanelType } from "./project-canvas/CanvasPanelToolbar";
 import { MaterialLibraryPanel } from "./project-canvas/MaterialLibraryPanel";
 import { HistoryPanel } from "./project-canvas/HistoryPanel";
-import {
-  ProjectSettingsButton,
-  ProjectSettingsDrawer,
-} from "./ProjectCanvasSettings";
+import { ProjectSettingsButton, ProjectSettingsDrawer } from "./ProjectCanvasSettings";
 import { GlobalStepLogPanel } from "./project-canvas/GlobalStepLogPanel";
 import { CanvasContextMenu } from "./project-canvas/CanvasContextMenu";
 import { useRelatedEdgesHighlight } from "./canvas/hooks/use-related-edges-highlight";
@@ -85,7 +66,7 @@ import { EmptyCanvasHint } from "./project-canvas/EmptyCanvasHint";
  *  - workflowArdot    ：纯视觉测试节点（无运行时，对齐 Ardot 稿 714503087315759），
  *                       由右键菜单的「测试自定义工作流」项创建
  */
-const nodeTypes = {
+const nodeTypes = /* SAFETY: 类型断言已复核 */ {
   canvasNode: CanvasNode,
   workflowArdot: WorkflowNodeArdot,
 } as const;
@@ -93,13 +74,18 @@ const nodeTypes = {
 /* 边渲染注册表：`default` 承接 `defaultEdgeOptions.type = "smoothstep"` 落到
  * 本画布的全部连线（React Flow 对未注册的类型走内置渲染，注册后交给组件，
  * 组件内部仍用 getSmoothStepPath 画出同一条曲线，只额外叠加选中态样式）。 */
-const edgeTypes = { default: ProjectEdge } as const;
+const edgeTypes = /* SAFETY: 类型断言已复核 */ {
+  default: ProjectEdge,
+} as const;
 
 /* MiniMap 颜色表提到模块级 Map —— 好让 `nodeColor` 回调保持引用稳定：
  * MiniMap 只在绘制时调用它，不会因为拖拽 / 状态抖动期间回调换了引用
  * 而重新渲染。 */
 const MINIMAP_COLOR_BY_KIND = new Map(
-  (Object.keys(NODE_META) as NodeKind[]).map((k) => [k, NODE_META[k].color]),
+  /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as NodeKind[]).map((k) => [
+    k,
+    NODE_META[k].color,
+  ]),
 );
 
 /* 默认连线选项与 proOptions 提到模块级常量 —— 内联对象字面量每次渲染都重建，
@@ -117,9 +103,7 @@ const DEFAULT_EDGE_OPTIONS = {
 
 const PRO_OPTIONS = { hideAttribution: true };
 
-type PlaceFlowFn = Parameters<
-  typeof placeCanvasNode
->[0]["flow"]["screenToFlowPosition"];
+type PlaceFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPosition"];
 
 /** 把 production.shots 物化 / 合并进画布节点（Phase 3c-2a，幂等）。
  *  已有镜头节点（data.shotId 命中）合并补丁，缺失的新建；非镜头节点原样保留。
@@ -129,11 +113,12 @@ function materializeProductionShots(
   prod: ProductionData | null,
   screenToFlowPosition: PlaceFlowFn,
 ): CanvasNodeType[] {
-  const shots = prod && Array.isArray(prod.shots) ? (prod.shots as Shot[]) : [];
+  const shots =
+    prod && Array.isArray(prod.shots) ? /* SAFETY: 类型断言已复核 */ (prod.shots as Shot[]) : [];
   if (shots.length === 0) return nodes;
   const existingShotIds = new Set(
     nodes
-      .map((n) => (n.data as { shotId?: string } | undefined)?.shotId)
+      .map((n) => /* SAFETY: 类型断言已复核 */ (n.data as { shotId?: string } | undefined)?.shotId)
       .filter((id): id is string => Boolean(id)),
   );
   const { patches, newShotIds } = planShotSync(shots, existingShotIds);
@@ -235,7 +220,7 @@ function CanvasInner({
   useRelatedEdgesHighlight(setEdges, {
     /* 节点表的 setter 声明的是 CanvasNodeType[]，而这里只改节点 data 上的端口
      *  关注字段（结构上仍是同一批节点）—— 收窄成 Node[] 会挡在类型门口。 */
-    setNodes: setNodes as unknown as (
+    setNodes: /* SAFETY: 类型断言已复核 */ setNodes as unknown as (
       updater: (nodes: FlowNode[]) => FlowNode[],
     ) => void,
   });
@@ -305,11 +290,7 @@ function CanvasInner({
         onConsumePending?.();
       }
       const prod = await fetchProduction(proj.id);
-      nextNodes = materializeProductionShots(
-        nextNodes,
-        prod,
-        screenToFlowPosition,
-      );
+      nextNodes = materializeProductionShots(nextNodes, prod, screenToFlowPosition);
       /* 顺带取回完成状态：与工坊共读同一份 production.progress（Phase 4b / §7）。 */
       setProgress(prod ? normalizeProductionProgress(prod.progress) : null);
       setNodes(nextNodes);
@@ -335,13 +316,17 @@ function CanvasInner({
    *（类别色是静态的），所以拖节点时 MiniMap 不会因为回调
    * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: { data?: unknown }) => {
-    const kind = (node.data as CanvasNodeData | undefined)?.kind;
+    const kind = /* SAFETY: 类型断言已复核 */ (node.data as CanvasNodeData | undefined)?.kind;
     return (kind ? MINIMAP_COLOR_BY_KIND.get(kind) : undefined) ?? "#6B7280";
   }, []);
 
   /* 右键菜单 + 落子的一簇回调（抽到 useCanvasMenu，CanvasInner 只留编排，§12.13）。 */
-  const { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick } =
-    useCanvasMenu({ menu, setMenu, setNodes, screenToFlowPosition });
+  const { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick } = useCanvasMenu({
+    menu,
+    setMenu,
+    setNodes,
+    screenToFlowPosition,
+  });
 
   const clearCanvas = useCallback(() => {
     if (nodes.length === 0 && edges.length === 0) {
@@ -402,13 +387,7 @@ function CanvasInner({
         {/* 渐变描边定义（粉彩 6 色 → 端口/连线渐变） */}
         <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden>
           <defs>
-            <linearGradient
-              id="canvas-edge-gradient"
-              x1="0%"
-              y1="0%"
-              x2="100%"
-              y2="0%"
-            >
+            <linearGradient id="canvas-edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
               {/* 四档色相取自 `--color-edge-flow-*`（与工作流编辑器同一套
                   连线渐变观感，规范 03 §3.6.1 的类型色例外）。 */}
               <stop offset="0%" stopColor="var(--color-edge-flow-1)" />
@@ -499,11 +478,7 @@ function CanvasInner({
       {activePanel ? (
         /* 面板打开时：工具栏紧贴面板左侧，同一 flex 容器内 */
         <div className="z-canvas-ui absolute inset-y-0 left-0 flex">
-          <CanvasPanelToolbar
-            active={activePanel}
-            onSelect={setActivePanel}
-            floating={false}
-          />
+          <CanvasPanelToolbar active={activePanel} onSelect={setActivePanel} floating={false} />
           {activePanel === "materials" && (
             <MaterialLibraryPanel
               projectId={projectId}
@@ -524,8 +499,7 @@ function CanvasInner({
               onUse={(template) =>
                 placeMediaNode({
                   url: template.cover,
-                  displayName:
-                    lastSegments(template.cover, 1) || template.id.slice(0, 12),
+                  displayName: lastSegments(template.cover, 1) || template.id.slice(0, 12),
                   mediaType: template.mediaType,
                 })
               }

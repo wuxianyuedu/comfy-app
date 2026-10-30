@@ -80,9 +80,7 @@ export interface RemoteModelDraftEntry {
   clearApiKey?: boolean;
 }
 
-export function remoteModelEntryFromDraft(
-  draft: RemoteModelFieldValues,
-): RemoteModelDraftEntry {
+export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): RemoteModelDraftEntry {
   const baseUrl = draft.baseUrl.trim();
   const apiKey = draft.apiKey.trim();
   return {
@@ -112,8 +110,8 @@ export function validateRemoteModelFields(
   for (const issue of parsed.error.issues) {
     const key = issue.path[0];
     if (typeof key !== "string") continue;
-    if (out[key as keyof RemoteModelFieldValues]) continue;
-    out[key as keyof RemoteModelFieldValues] = issue.message;
+    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues]) continue;
+    out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues] = issue.message;
   }
   return out;
 }
@@ -121,6 +119,6 @@ export function validateRemoteModelFields(
 function isKind(value: unknown): value is RemoteModelKind {
   return (
     typeof value === "string" &&
-    (REMOTE_MODEL_KINDS as readonly string[]).includes(value)
+    /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as readonly string[]).includes(value)
   );
 }

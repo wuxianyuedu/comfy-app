@@ -23,12 +23,7 @@ import { Button } from "~/components/ui/button";
 import { useWorkflowModes } from "./hooks/use-workflow-modes";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";
-import {
-  NodeChip,
-  PORT_STYLE,
-  StatusBadge,
-  StatusDot,
-} from "./CanvasNodePrimitives";
+import { NodeChip, PORT_STYLE, StatusBadge, StatusDot } from "./CanvasNodePrimitives";
 import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
 import { useFileUpload } from "./hooks/use-file-upload";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
@@ -45,8 +40,7 @@ export const CanvasNode = React.memo(function CanvasNode({
   selected,
 }: NodeProps<CanvasNodeType>) {
   const d = data;
-  const { setNodes, getNode, setEdges, fitView, screenToFlowPosition } =
-    useReactFlow();
+  const { setNodes, getNode, setEdges, fitView, screenToFlowPosition } = useReactFlow();
   const meta = NODE_META[d.kind];
 
   /* 镜头节点生成落定 → 回写对应 Shot（Phase 3c-2b，见 hook 注释）。 */
@@ -57,7 +51,13 @@ export const CanvasNode = React.memo(function CanvasNode({
       setNodes((nds) =>
         nds.map((node) =>
           node.id === id
-            ? { ...node, data: { ...(node.data as CanvasNodeData), ...p } }
+            ? {
+                ...node,
+                data: {
+                  .../* SAFETY: 类型断言已复核 */ (node.data as CanvasNodeData),
+                  ...p,
+                },
+              }
             : node,
         ),
       ),
@@ -73,14 +73,12 @@ export const CanvasNode = React.memo(function CanvasNode({
     void requestShotRedo(getActiveId() ?? "", d.shotId);
   }, [d.shotId, patch]);
 
-  const focusNode = () =>
-    fitView({ nodes: [{ id }], duration: 300, padding: 0.2, maxZoom: 1.2 });
+  const focusNode = () => fitView({ nodes: [{ id }], duration: 300, padding: 0.2, maxZoom: 1.2 });
 
   /* 文件上传管线：生成器图片输入、内容载体媒体选择器与
    * 拖放用的选取 / 上传处理器。隐藏 input 由管线自己持有并渲染
    * （`ImageInput` /`MediaInput`）。 */
-  const { ImageInput, pickFile, MediaInput, pickMedia, onUploadFile } =
-    useFileUpload({ patch });
+  const { ImageInput, pickFile, MediaInput, pickMedia, onUploadFile } = useFileUpload({ patch });
 
   /* 共享工作流列表 + 动态 IO 表 + 模式 / 来源筛选 + 播种。 */
   const {
@@ -159,8 +157,7 @@ export const CanvasNode = React.memo(function CanvasNode({
      * Handle 全部在本组件渲染：右侧 output（同 parent 50%）。内容区与 FAB 抽离到
      * ContentAssetBody 便于复用与单测。输出 Handle
      * 直接骑跨在右侧边框 50% 处。 */
-    const outStyle =
-      d.kind === "text" ? PORT_STYLE.condition : PORT_STYLE.image;
+    const outStyle = d.kind === "text" ? PORT_STYLE.condition : PORT_STYLE.image;
     body = (
       <div className="relative -mx-3.5">
         {/* 右侧 source Handle — 与 picture 左输入 Handle 同 parent
@@ -273,8 +270,7 @@ export const CanvasNode = React.memo(function CanvasNode({
   }
 
   /* 资产节点（text/picture/movie）不参与运行态：头部不渲染状态徽标与删除按钮。 */
-  const isAssetNode =
-    d.kind === "text" || d.kind === "picture" || d.kind === "movie";
+  const isAssetNode = d.kind === "text" || d.kind === "picture" || d.kind === "movie";
 
   return (
     /* 选中态边框 — Card 在 selected 时加 2px 紫色
@@ -346,9 +342,7 @@ export const CanvasNode = React.memo(function CanvasNode({
           onSeedModeChange={(ioKey, mode) =>
             patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
           }
-          onModesChange={(modes, defaultMode) =>
-            saveModes({ modes, defaultMode })
-          }
+          onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
         />
       ) : (
         <>

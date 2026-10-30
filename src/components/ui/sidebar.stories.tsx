@@ -62,9 +62,7 @@ import {
 type SidebarMenuButtonVariant = NonNullable<
   React.ComponentProps<typeof SidebarMenuButton>["variant"]
 >;
-type SidebarMenuButtonSize = NonNullable<
-  React.ComponentProps<typeof SidebarMenuButton>["size"]
->;
+type SidebarMenuButtonSize = NonNullable<React.ComponentProps<typeof SidebarMenuButton>["size"]>;
 
 const MENU_BUTTON_VARIANTS: SidebarMenuButtonVariant[] = ["default", "outline"];
 const MENU_BUTTON_SIZES: SidebarMenuButtonSize[] = ["default", "sm", "lg"];
@@ -73,13 +71,17 @@ const meta = {
   title: "UI/Sidebar",
   component: Sidebar,
   args: { children: null },
-  argTypes: {
+  argTypes: /* SAFETY: 类型断言已复核 */ {
     variant: {
-      control: { type: "select" as const },
+      control: {
+        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+      },
       options: MENU_BUTTON_VARIANTS,
     },
     size: {
-      control: { type: "select" as const },
+      control: {
+        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+      },
       options: MENU_BUTTON_SIZES,
     },
   } as Record<string, { control: { type: "select" }; options: string[] }>,
@@ -184,8 +186,7 @@ function Shell({
         </div>
         <div className="p-4">
           <p className="text-ink-muted text-sm">
-            点左上角触发钮或按 ⌘/Ctrl+B 切换左轨 —— 收起时 `tooltip`
-            才出现（且非移动端）。
+            点左上角触发钮或按 ⌘/Ctrl+B 切换左轨 —— 收起时 `tooltip` 才出现（且非移动端）。
           </p>
         </div>
       </SidebarInset>

@@ -126,7 +126,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .from(filmProject)
       .where(eq(filmProject.id, id))
       .limit(1);
-    const arr = (film[0]?.logs as unknown[] | null) ?? [];
+    const arr = /* SAFETY: 类型断言已复核 */ (film[0]?.logs as unknown[] | null) ?? [];
     arr.push(entry);
     await db
       .update(filmProject)
@@ -140,9 +140,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
    *  刻意**不带 userId**：这条查询的语义是「本机这份库里还有哪些行该有人推进」，
    *  扫描者不知道也不该关心归属；本应用是单用户本地应用，多一层归属条件只会让
    *  「重启后没人续跑」的窗口更难解释。排序与领取队列同口径（先起先续）。 */
-  async listByStatus(
-    statuses: readonly string[],
-  ): Promise<Array<{ id: string; status: string }>> {
+  async listByStatus(statuses: readonly string[]): Promise<Array<{ id: string; status: string }>> {
     if (statuses.length === 0) return [];
     return db
       .select({ id: filmProject.id, status: filmProject.status })
@@ -159,17 +157,11 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   }
 
   async updateProgress(id: string, pct: number): Promise<void> {
-    await db
-      .update(filmProject)
-      .set({ progress: pct })
-      .where(eq(filmProject.id, id));
+    await db.update(filmProject).set({ progress: pct }).where(eq(filmProject.id, id));
   }
 
   async markFailed(id: string, error: string): Promise<void> {
-    await db
-      .update(filmProject)
-      .set({ status: "FAILED", error })
-      .where(eq(filmProject.id, id));
+    await db.update(filmProject).set({ status: "FAILED", error }).where(eq(filmProject.id, id));
   }
 
   async markComposing(id: string): Promise<void> {
@@ -256,10 +248,7 @@ export class FilmShotRepository {
   }
 
   async markFailed(shotId: string): Promise<void> {
-    await db
-      .update(filmShot)
-      .set({ status: "FAILED" })
-      .where(eq(filmShot.id, shotId));
+    await db.update(filmShot).set({ status: "FAILED" }).where(eq(filmShot.id, shotId));
   }
 
   async updateFromTask(
@@ -282,9 +271,7 @@ export class FilmShotRepository {
       .where(eq(filmShot.id, shotId));
   }
 
-  async listActiveWithTask(
-    filmId: string,
-  ): Promise<Array<{ id: string; taskId: string | null }>> {
+  async listActiveWithTask(filmId: string): Promise<Array<{ id: string; taskId: string | null }>> {
     return db
       .select({ id: filmShot.id, taskId: filmShot.taskId })
       .from(filmShot)
@@ -301,12 +288,7 @@ export class FilmShotRepository {
     await db
       .update(filmShot)
       .set({ status: "FAILED" })
-      .where(
-        and(
-          eq(filmShot.filmId, filmId),
-          inArray(filmShot.status, ["QUEUED", "RUNNING"]),
-        ),
-      );
+      .where(and(eq(filmShot.filmId, filmId), inArray(filmShot.status, ["QUEUED", "RUNNING"])));
   }
 }
 

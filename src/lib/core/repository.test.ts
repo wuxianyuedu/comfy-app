@@ -31,10 +31,7 @@ import { projectRepository } from "~/lib/core/repository-project";
 import { taskRepository } from "~/lib/core/repository-task";
 import { workflowTemplateRepository } from "~/lib/core/repository-workflow-template";
 import { workflowModelTagRepository } from "~/lib/core/repository-model-tag";
-import {
-  modelRepository,
-  userModelConfigRepository,
-} from "~/lib/core/repository-model";
+import { modelRepository, userModelConfigRepository } from "~/lib/core/repository-model";
 import { filmRepository, filmShotRepository } from "~/lib/core/repository-film";
 import { skillRepository } from "~/lib/core/repository-skill";
 import {
@@ -77,16 +74,14 @@ describe("DrizzleRepository 基类", () => {
 
     expect((await projectRepository.findById("p1"))?.name).toBe("首版");
     expect(await projectRepository.findById("nope")).toBeNull();
-    expect((await projectRepository.findAll()).map((r) => r.id)).toEqual([
-      "p1",
-    ]);
+    expect((await projectRepository.findAll()).map((r) => r.id)).toEqual(["p1"]);
 
     const updated = await projectRepository.update("p1", { name: "改名" });
     expect(updated.name).toBe("改名");
 
-    await expect(
-      projectRepository.update("nope", { name: "x" }),
-    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(projectRepository.update("nope", { name: "x" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
 
     await projectRepository.delete("p1");
     expect(await projectRepository.findById("p1")).toBeNull();
@@ -99,10 +94,7 @@ describe("DrizzleRepository 基类", () => {
     // `table.id`。用 Project 表 + 明确的主键列构造一个独立实例 —— 表对象与
     // 列对象来自同一张表，但契约是「传入哪列就按哪列定位」。
     const { project } = await import("~/server/db/schema");
-    const repo = new DrizzleRepository<{ id: string; name: string }>(
-      project,
-      project.id,
-    );
+    const repo = new DrizzleRepository<{ id: string; name: string }>(project, project.id);
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     await projectRepository.upsertForUser("u1", {
       id: "p-explicit",
@@ -113,12 +105,8 @@ describe("DrizzleRepository 基类", () => {
 
     expect((await repo.findById("p-explicit"))?.name).toBe("显式主键列");
     // update 走的是同一条 `this.id` 取值路径：命中则更新、未命中抛 NotFoundError
-    expect((await repo.update("p-explicit", { name: "改名" })).name).toBe(
-      "改名",
-    );
-    await expect(repo.update("nope", { name: "x" })).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    expect((await repo.update("p-explicit", { name: "改名" })).name).toBe("改名");
+    await expect(repo.update("nope", { name: "x" })).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("未显式传 id 列时从表定义里取 `id`（基类默认分支）", async () => {
@@ -141,11 +129,13 @@ describe("DrizzleRepository 基类", () => {
 
     /* `as Project` 是基类签名自己的形状：`create(entity: T)` 收整行类型，落库却只给
      * 必填列 —— 想证明「默认列由库补」就必须能少给字段，这里不放宽基类的签名。 */
-    const created = await repo.create({
-      id: "p-create",
-      userId: "u1",
-      name: "基类写入",
-    } as Project);
+    const created = await repo.create(
+      /* SAFETY: 类型断言已复核 */ {
+        id: "p-create",
+        userId: "u1",
+        name: "基类写入",
+      } as Project,
+    );
 
     expect(created).toMatchObject({ id: "p-create", name: "基类写入" });
     expect(created.nodes).toBe("[]");
@@ -222,9 +212,7 @@ describe("SkillRepository", () => {
     await skillRepository.ensureBuiltIns([SEED]);
     await skillRepository.ensureBuiltIns([{ ...SEED, slug: "other" }]);
     expect(await skillRepository.findAll()).toHaveLength(1);
-    expect((await skillRepository.findBySlug("cinematic"))?.isBuiltIn).toBe(
-      true,
-    );
+    expect((await skillRepository.findBySlug("cinematic"))?.isBuiltIn).toBe(true);
     expect(await skillRepository.findBySlug("missing")).toBeNull();
   });
 
@@ -243,28 +231,20 @@ describe("SkillRepository", () => {
     });
     await skillRepository.update(mine.id, { isActive: false });
 
-    expect((await skillRepository.list({})).map((s) => s.slug)).toEqual([
-      "cinematic",
-    ]);
+    expect((await skillRepository.list({})).map((s) => s.slug)).toEqual(["cinematic"]);
     // category:"all" **只**跳过 category 过滤 —— isActive 过滤仍在，
     // 所以停用的那条依然不出现（要看得传 includeInactive）
-    expect(
-      (await skillRepository.list({ category: "all" })).map((row) => row.slug),
-    ).toEqual(["cinematic"]);
-    expect(
-      await skillRepository.list({ category: "all", includeInactive: true }),
-    ).toHaveLength(2);
-    expect(
-      (await skillRepository.list({ category: "style" })).map((s) => s.slug),
-    ).toEqual(["cinematic"]);
+    expect((await skillRepository.list({ category: "all" })).map((row) => row.slug)).toEqual([
+      "cinematic",
+    ]);
+    expect(await skillRepository.list({ category: "all", includeInactive: true })).toHaveLength(2);
+    expect((await skillRepository.list({ category: "style" })).map((s) => s.slug)).toEqual([
+      "cinematic",
+    ]);
     // q 命中 tags 列（JSON 字符串里搜子串）
-    expect(
-      (await skillRepository.list({ q: "film" })).map((s) => s.slug),
-    ).toEqual(["cinematic"]);
+    expect((await skillRepository.list({ q: "film" })).map((s) => s.slug)).toEqual(["cinematic"]);
     // 停用的那条默认不可见，但 includeInactive 可见
-    expect(
-      await skillRepository.list({ q: "自定义", includeInactive: true }),
-    ).toHaveLength(1);
+    expect(await skillRepository.list({ q: "自定义", includeInactive: true })).toHaveLength(1);
   });
 
   it("groupByActiveCategory 只统计启用项，count 是数字不是 BigInt", async () => {
@@ -313,25 +293,16 @@ describe("WorkflowModelTagRepository", () => {
       { name: "已绑定", count: 1 },
       { name: "空标签", count: 0 },
     ]);
-    expect(rows.every((r) => typeof r.id === "string" && r.id !== "")).toBe(
-      true,
-    );
+    expect(rows.every((r) => typeof r.id === "string" && r.id !== "")).toBe(true);
   });
 
   it("upsertByNames 批量补齐缺失标签并按输入顺序返回 id；重复名收敛为同一个", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    const first = await workflowModelTagRepository.upsertByNames("u1", [
-      "风景",
-      "赛博",
-      "风景",
-    ]);
+    const first = await workflowModelTagRepository.upsertByNames("u1", ["风景", "赛博", "风景"]);
     expect(first).toHaveLength(3);
     expect(first[0]).toBe(first[2]);
 
-    const again = await workflowModelTagRepository.upsertByNames("u1", [
-      "风景",
-      "新建",
-    ]);
+    const again = await workflowModelTagRepository.upsertByNames("u1", ["风景", "新建"]);
     expect(again[0]).toBe(first[0]);
     expect(again[1]).not.toBe(first[0]);
     expect(await workflowModelTagRepository.listByUser("u1")).toHaveLength(3);
@@ -343,15 +314,9 @@ describe("WorkflowModelTagRepository", () => {
     const a = await workflowModelTagRepository.upsertByName("u1", "甲");
     await workflowModelTagRepository.upsertByName("u2", "甲");
 
-    expect(await workflowModelTagRepository.listIdsByNames("u1", [])).toEqual(
-      [],
-    );
-    expect(
-      await workflowModelTagRepository.listIdsByNames("u1", ["甲"]),
-    ).toEqual([{ id: a.id }]);
-    expect(
-      await workflowModelTagRepository.findByUserAndName("u1", "乙"),
-    ).toBeNull();
+    expect(await workflowModelTagRepository.listIdsByNames("u1", [])).toEqual([]);
+    expect(await workflowModelTagRepository.listIdsByNames("u1", ["甲"])).toEqual([{ id: a.id }]);
+    expect(await workflowModelTagRepository.findByUserAndName("u1", "乙")).toBeNull();
 
     const renamed = await workflowModelTagRepository.rename(a.id, "乙");
     expect(renamed).toMatchObject({ name: "乙", count: 0 });
@@ -368,7 +333,9 @@ describe("WorkflowModelTagRepository", () => {
 
     expect(await workflowModelTagRepository.getTemplateTagRows([])).toEqual([]);
     expect(
-      await workflowModelTagRepository.getTemplateTagRows([wt.id as string]),
+      await workflowModelTagRepository.getTemplateTagRows([
+        /* SAFETY: 类型断言已复核 */ wt.id as string,
+      ]),
     ).toEqual([{ templateId: "wt1", name: "动漫" }]);
 
     const hit = await workflowTemplateRepository.listForUser("u1", {
@@ -435,23 +402,16 @@ describe("WorkflowTemplateRepository", () => {
 
     const tagA = await workflowModelTagRepository.upsertByName("u1", "A");
     const tagB = await workflowModelTagRepository.upsertByName("u1", "B");
-    await workflowTemplateRepository.setModelTags(created.id, [
-      tagA.id,
-      tagB.id,
-    ]);
-    expect(
-      await workflowModelTagRepository.getTemplateTagRows([created.id]),
-    ).toHaveLength(2);
+    await workflowTemplateRepository.setModelTags(created.id, [tagA.id, tagB.id]);
+    expect(await workflowModelTagRepository.getTemplateTagRows([created.id])).toHaveLength(2);
     // 再设一次 → 旧关联被清掉（不是追加）
     await workflowTemplateRepository.setModelTags(created.id, [tagB.id]);
-    expect(
-      await workflowModelTagRepository.getTemplateTagRows([created.id]),
-    ).toEqual([{ templateId: created.id, name: "B" }]);
+    expect(await workflowModelTagRepository.getTemplateTagRows([created.id])).toEqual([
+      { templateId: created.id, name: "B" },
+    ]);
     // 空数组 = 解绑全部
     await workflowTemplateRepository.setModelTags(created.id, []);
-    expect(
-      await workflowModelTagRepository.getTemplateTagRows([created.id]),
-    ).toEqual([]);
+    expect(await workflowModelTagRepository.getTemplateTagRows([created.id])).toEqual([]);
   });
 
   it("findByIdForUser 隔离他人数据；relinkSourcePath 只改路径两列", async () => {
@@ -464,15 +424,11 @@ describe("WorkflowTemplateRepository", () => {
       rawJson: { keep: true },
     });
 
-    expect(
-      await workflowTemplateRepository.findByIdForUser("u2", "wt1"),
-    ).toBeNull();
-    expect(
-      (await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.name,
-    ).toBe("甲的工作流");
-    expect(
-      (await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.id,
-    ).toBe("wt1");
+    expect(await workflowTemplateRepository.findByIdForUser("u2", "wt1")).toBeNull();
+    expect((await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.name).toBe(
+      "甲的工作流",
+    );
+    expect((await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.id).toBe("wt1");
 
     await workflowTemplateRepository.relinkSourcePath("wt1", {
       sourcePath: "/tmp/new.json",
@@ -487,9 +443,9 @@ describe("WorkflowTemplateRepository", () => {
     });
 
     expect(await workflowTemplateRepository.listByUser("u2")).toEqual([]);
-    expect(
-      (await workflowTemplateRepository.listByUser("u1")).map((t) => t.id),
-    ).toEqual([wt.id as string]);
+    expect((await workflowTemplateRepository.listByUser("u1")).map((t) => t.id)).toEqual([
+      /* SAFETY: 类型断言已复核 */ wt.id as string,
+    ]);
   });
 });
 
@@ -586,17 +542,15 @@ describe("ModelRepository", () => {
     });
     await modelRepository.setAvailabilityByFolder("loras", false);
 
-    expect((await modelRepository.list()).map((m) => m.name)).toEqual([
+    expect((await modelRepository.list()).map((m) => m.name)).toEqual(["DreamShaper"]);
+    expect(await modelRepository.list({ type: "LORA" })).toEqual([]);
+    expect((await modelRepository.list({ q: "dream" })).map((m) => m.name)).toEqual([
       "DreamShaper",
     ]);
-    expect(await modelRepository.list({ type: "LORA" })).toEqual([]);
-    expect(
-      (await modelRepository.list({ q: "dream" })).map((m) => m.name),
-    ).toEqual(["DreamShaper"]);
   });
 
   it("listAvailableFileNamesByFolders 空数组短路、去重且排序", async () => {
-    for (const [fileName, folder] of [
+    for (const [fileName, folder] of /* SAFETY: 类型断言已复核 */ [
       ["b.safetensors", "checkpoints"],
       ["a.safetensors", "checkpoints"],
     ] as const) {
@@ -608,15 +562,12 @@ describe("ModelRepository", () => {
         baseModel: "SDXL",
       });
     }
-    expect(await modelRepository.listAvailableFileNamesByFolders([])).toEqual(
-      [],
-    );
-    expect(
-      await modelRepository.listAvailableFileNamesByFolders(["checkpoints"]),
-    ).toEqual(["a.safetensors", "b.safetensors"]);
-    expect(
-      await modelRepository.listAvailableFileNamesByFolders(["missing"]),
-    ).toEqual([]);
+    expect(await modelRepository.listAvailableFileNamesByFolders([])).toEqual([]);
+    expect(await modelRepository.listAvailableFileNamesByFolders(["checkpoints"])).toEqual([
+      "a.safetensors",
+      "b.safetensors",
+    ]);
+    expect(await modelRepository.listAvailableFileNamesByFolders(["missing"])).toEqual([]);
   });
 
   it("countsByFolder 只数可用项、按文件夹分组", async () => {
@@ -644,33 +595,26 @@ describe("ModelRepository", () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     seedUser(tdb, { id: "u2", email: "u2@test.dev" });
 
-    const c = await userModelConfigRepository.addOrEnable(
-      "u1",
-      "loras",
-      "LoRA",
-    );
+    const c = await userModelConfigRepository.addOrEnable("u1", "loras", "LoRA");
     expect(c).toMatchObject({ enabled: true, isCustom: true });
     await userModelConfigRepository.addOrEnable("u1", "loras", "LoRA 改名");
     expect(await userModelConfigRepository.listByUser("u1")).toHaveLength(1);
 
     // patchForUser 对不存在的行是「先插后冲突更新」
-    const patched = await userModelConfigRepository.patchForUser(
-      "u1",
-      "checkpoints",
-      { enabled: false, label: "CKPT" },
-    );
+    const patched = await userModelConfigRepository.patchForUser("u1", "checkpoints", {
+      enabled: false,
+      label: "CKPT",
+    });
     expect(patched).toMatchObject({ enabled: false, label: "CKPT" });
 
-    expect(await userModelConfigRepository.listEnabledFolders()).toEqual([
-      "loras",
-    ]);
+    expect(await userModelConfigRepository.listEnabledFolders()).toEqual(["loras"]);
 
     await userModelConfigRepository.deleteForUser("u2", "loras");
     expect(await userModelConfigRepository.listByUser("u1")).toHaveLength(2);
     await userModelConfigRepository.deleteForUser("u1", "loras");
-    expect(
-      (await userModelConfigRepository.listByUser("u1")).map((r) => r.folder),
-    ).toEqual(["checkpoints"]);
+    expect((await userModelConfigRepository.listByUser("u1")).map((r) => r.folder)).toEqual([
+      "checkpoints",
+    ]);
   });
 });
 
@@ -716,13 +660,9 @@ describe("TaskRepository", () => {
     // 此前这里会生成 `limit -1 offset ?` 并抛 `near "offset": syntax error`
     expect(await taskRepository.listByUser("u1", { skip: 1 })).toHaveLength(1);
     expect(
-      (await taskRepository.listByUser("u1", { statusList: ["FAILED"] })).map(
-        (r) => r.id,
-      ),
+      (await taskRepository.listByUser("u1", { statusList: ["FAILED"] })).map((r) => r.id),
     ).toEqual([t2.id]);
-    expect(
-      await taskRepository.listByUser("u1", { projectId: "p1" }),
-    ).toHaveLength(1);
+    expect(await taskRepository.listByUser("u1", { projectId: "p1" })).toHaveLength(1);
     // 只出自己的
     expect(await taskRepository.listByUser("u2")).toEqual([]);
     // 不传归属的旧形状调用点落 NULL（不能污染成空串，否则「无归属」与「归属为空」
@@ -759,11 +699,7 @@ describe("TaskRepository", () => {
     const [row] = await taskRepository.listByUser("u1", {
       includeImages: true,
     });
-    expect(row!.images.map((i) => i.localPath)).toEqual([
-      "cover.png",
-      "a.png",
-      "b.png",
-    ]);
+    expect(row!.images.map((i) => i.localPath)).toEqual(["cover.png", "a.png", "b.png"]);
     // includeImages 也支持 take / skip（relational query API 那条分支，
     // 与上面普通 select 分支是**两套** LIMIT/OFFSET 生成逻辑，得各测一遍）
     expect(
@@ -773,9 +709,7 @@ describe("TaskRepository", () => {
         skip: 0,
       }),
     ).toHaveLength(1);
-    expect(
-      await taskRepository.listByUser("u1", { includeImages: true, skip: 1 }),
-    ).toHaveLength(0);
+    expect(await taskRepository.listByUser("u1", { includeImages: true, skip: 1 })).toHaveLength(0);
   });
 
   it("findByIdForUser 隔离他人；updateStatusForUser 对他人任务抛 NotFoundError", async () => {
@@ -783,14 +717,9 @@ describe("TaskRepository", () => {
     expect(await taskRepository.findByIdForUser("u1", t.id)).not.toBeNull();
     expect(await taskRepository.findByIdForUser("u2", t.id)).toBeNull();
 
-    const updated = await taskRepository.updateStatusForUser(
-      "u1",
-      t.id,
-      "RUNNING",
-      {
-        progress: 10,
-      },
-    );
+    const updated = await taskRepository.updateStatusForUser("u1", t.id, "RUNNING", {
+      progress: 10,
+    });
     expect(updated).toMatchObject({ status: "RUNNING", progress: 10 });
     await expect(
       taskRepository.updateStatusForUser("u2", t.id, "CANCELLED"),
@@ -881,9 +810,7 @@ describe("TaskRepository", () => {
       resultImages: [],
       params: {},
     });
-    expect(
-      (await taskRepository.findById(ok2.id))?.workflowSnapshot,
-    ).toBeNull();
+    expect((await taskRepository.findById(ok2.id))?.workflowSnapshot).toBeNull();
 
     const bad = await taskRepository.createQueued(queued);
     await taskRepository.finalizeFailure(bad.id, "上游 500", [{ node: 1 }]);
@@ -894,9 +821,7 @@ describe("TaskRepository", () => {
     // validationErrors 空数组 → 落 null（不是 "[]"）
     const bad2 = await taskRepository.createQueued(queued);
     await taskRepository.finalizeFailure(bad2.id, "x", []);
-    expect(
-      (await taskRepository.findById(bad2.id))?.validationErrors,
-    ).toBeNull();
+    expect((await taskRepository.findById(bad2.id))?.validationErrors).toBeNull();
 
     const c = await taskRepository.createQueued(queued);
     await taskRepository.cancel(c.id);
@@ -915,9 +840,7 @@ describe("TaskRepository", () => {
     await taskRepository.replaceLogs(t.id, [{ msg: "1" }]);
     expect((await taskRepository.findById(t.id))?.logs).toEqual([{ msg: "1" }]);
     // 写不存在的行被 .catch 吞掉，不抛错
-    await expect(
-      taskRepository.replaceLogs("nope", []),
-    ).resolves.toBeUndefined();
+    await expect(taskRepository.replaceLogs("nope", [])).resolves.toBeUndefined();
 
     const cutoff = new Date(Date.now() + 60_000);
     /* 本刀改掉的判据：cutoff 放到未来也只该捞出「没有任何宿主片会领」的行。
@@ -929,9 +852,7 @@ describe("TaskRepository", () => {
     // 有 promptId 的排队任务不算「从未开工」；RUNNING + 有 promptId 才算 stale running
     await taskRepository.markRunning(t.id, "pid-1");
     expect(await taskRepository.listStaleUnownedQueued(cutoff, 10)).toEqual([]);
-    expect(
-      (await taskRepository.listStaleRunning(cutoff, 10)).map((r) => r.id),
-    ).toEqual([t.id]);
+    expect((await taskRepository.listStaleRunning(cutoff, 10)).map((r) => r.id)).toEqual([t.id]);
 
     // cutoff 在过去 / take 限制
     expect(await taskRepository.listStaleRunning(new Date(0), 10)).toEqual([]);
@@ -998,14 +919,10 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
      *  但「少一条」与「每行都带 images」这两件事必须当场成立。 */
     for (const row of page) {
       expect(ids).toContain(row.id);
-      expect(row.images.map((image) => image.localPath)).toEqual([
-        `${row.id}.png`,
-      ]);
+      expect(row.images.map((image) => image.localPath)).toEqual([`${row.id}.png`]);
     }
     expect(new Set(page.map((row) => row.id)).size).toBe(2);
-    expect(
-      all.filter((row) => !page.some((p) => p.id === row.id)),
-    ).toHaveLength(1);
+    expect(all.filter((row) => !page.some((p) => p.id === row.id))).toHaveLength(1);
   });
 
   it("状态栏两格跨归属：host 那条也计入排队数、也认作「当前在跑」", async () => {
@@ -1043,11 +960,7 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
     });
     await taskRepository.updateProgress(a.id, 30);
 
-    const got = await taskRepository.findExecutionProgressMany([
-      a.id,
-      b.id,
-      "nope",
-    ]);
+    const got = await taskRepository.findExecutionProgressMany([a.id, b.id, "nope"]);
     expect(got).toHaveLength(2);
     expect(got.find((row) => row.id === a.id)).toMatchObject({
       status: "RUNNING",
@@ -1080,10 +993,7 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
     expect(snap).not.toHaveProperty("workflowSnapshot");
     expect(snap).toHaveProperty("progressNode");
     /* rawCli 是同一条轮询要的另一列：写进去读得回来，未知行给 null。 */
-    expect(await taskRepository.findRawCli(t.id)).toEqual([
-      "CLI 第一行",
-      "第二行",
-    ]);
+    expect(await taskRepository.findRawCli(t.id)).toEqual(["CLI 第一行", "第二行"]);
     expect(await taskRepository.findRawCli("nope")).toBeNull();
     expect(await taskRepository.findSseSnapshot("nope")).toBeNull();
   });
@@ -1096,12 +1006,8 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
     });
 
     /* 只读窥视：给出 id 而**不领走**（领了不跑正是这一刀要消灭的形态）。 */
-    expect(await taskRepository.listQueuedIds("inline", 5)).toEqual([
-      nullShard.id,
-    ]);
-    expect(await taskRepository.listQueuedIds("host", 5)).toEqual([
-      hostShard.id,
-    ]);
+    expect(await taskRepository.listQueuedIds("inline", 5)).toEqual([nullShard.id]);
+    expect(await taskRepository.listQueuedIds("host", 5)).toEqual([hostShard.id]);
     expect(await taskRepository.findStatusById(nullShard.id)).toMatchObject({
       status: "QUEUED",
     });
@@ -1213,15 +1119,15 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.findByIdForUser("u2", f.id)).toBeNull();
     const plain = await filmRepository.findByIdForUser("u1", f.id);
     expect(plain).not.toBeNull();
-    expect((plain as Record<string, unknown>).shots).toBeUndefined();
+    expect(/* SAFETY: 类型断言已复核 */ (plain as Record<string, unknown>).shots).toBeUndefined();
 
     const withShots = await filmRepository.findByIdForUser("u1", f.id, {
       includeShots: true,
     });
     expect(
-      (withShots as unknown as { shots: Array<{ order: number }> }).shots.map(
-        (s) => s.order,
-      ),
+      /* SAFETY: 类型断言已复核 */ (
+        withShots as unknown as { shots: Array<{ order: number }> }
+      ).shots.map((s) => s.order),
     ).toEqual([0, 2]);
     expect(
       await filmRepository.findByIdForUser("u1", "nope", {
@@ -1285,9 +1191,7 @@ describe("FilmRepository / FilmShotRepository", () => {
 
     await filmShotRepository.markQueued(shots[0]!.id, "task-1");
     expect(
-      (await filmShotRepository.listByFilm(f.id, { status: "QUEUED" })).map(
-        (s) => s.id,
-      ),
+      (await filmShotRepository.listByFilm(f.id, { status: "QUEUED" })).map((s) => s.id),
     ).toEqual([shots[0]!.id]);
 
     await filmShotRepository.updateFromTask(shots[0]!.id, {
@@ -1301,9 +1205,7 @@ describe("FilmRepository / FilmShotRepository", () => {
       progress: 0,
     });
     expect(
-      (await filmShotRepository.listByFilm(f.id, { onlyWithVideo: true })).map(
-        (s) => s.id,
-      ),
+      (await filmShotRepository.listByFilm(f.id, { onlyWithVideo: true })).map((s) => s.id),
     ).toEqual([shots[0]!.id]);
     expect(await filmShotRepository.listActiveWithTask(f.id)).toEqual([]);
     expect((await filmShotRepository.listByFilm(f.id))[0]).toMatchObject({
@@ -1316,9 +1218,7 @@ describe("FilmRepository / FilmShotRepository", () => {
       status: "SUCCEEDED",
       progress: 100,
     });
-    expect((await filmShotRepository.listByFilm(f.id))[0]!.videoPath).toBe(
-      "/tmp/shot0.mp4",
-    );
+    expect((await filmShotRepository.listByFilm(f.id))[0]!.videoPath).toBe("/tmp/shot0.mp4");
   });
 
   it("markAllActiveFailed 只动 QUEUED/RUNNING；markFailed 单条；listActiveWithTask", async () => {
@@ -1336,14 +1236,17 @@ describe("FilmRepository / FilmShotRepository", () => {
       progress: 100,
     });
 
-    expect(
-      (await filmShotRepository.listActiveWithTask(f.id)).map((s) => s.taskId),
-    ).toEqual(["t0", "t1"]);
+    expect((await filmShotRepository.listActiveWithTask(f.id)).map((s) => s.taskId)).toEqual([
+      "t0",
+      "t1",
+    ]);
     await filmShotRepository.markFailed(shots[0]!.id);
     await filmShotRepository.markAllActiveFailed(f.id);
-    expect(
-      (await filmShotRepository.listByFilm(f.id)).map((s) => s.status),
-    ).toEqual(["FAILED", "FAILED", "SUCCEEDED"]);
+    expect((await filmShotRepository.listByFilm(f.id)).map((s) => s.status)).toEqual([
+      "FAILED",
+      "FAILED",
+      "SUCCEEDED",
+    ]);
     expect(await filmShotRepository.listActiveWithTask(f.id)).toEqual([]);
   });
 });
@@ -1361,15 +1264,9 @@ describe("UserRepository", () => {
     });
     expect(created).toMatchObject({ email: "a@test.dev", password: "hash-1" });
 
-    expect((await userRepository.findByEmail("a@test.dev"))?.id).toBe(
-      created.id,
-    );
-    expect(
-      (await userRepository.updateEmail(created.id, "b@test.dev")).email,
-    ).toBe("b@test.dev");
-    expect(
-      (await userRepository.updatePassword(created.id, "hash-2")).password,
-    ).toBe("hash-2");
+    expect((await userRepository.findByEmail("a@test.dev"))?.id).toBe(created.id);
+    expect((await userRepository.updateEmail(created.id, "b@test.dev")).email).toBe("b@test.dev");
+    expect((await userRepository.updatePassword(created.id, "hash-2")).password).toBe("hash-2");
     expect(await userRepository.findByEmail("a@test.dev")).toBeNull();
   });
 });
@@ -1389,14 +1286,12 @@ describe("LlmConfigRepository", () => {
     });
 
     // 关键断言：DB 里存的不是明文（这条只有读原始行才能证明）
-    const raw = tdb.$tables.llmConfig[0]!.apiKey as string;
+    const raw = /* SAFETY: 类型断言已复核 */ tdb.$tables.llmConfig[0]!.apiKey as string;
     expect(raw).not.toBe("sk-plain");
     expect(raw.startsWith("enc:v1:")).toBe(true);
 
     // findSingleton 解密回明文
-    expect((await llmConfigRepository.findSingleton())?.apiKey).toBe(
-      "sk-plain",
-    );
+    expect((await llmConfigRepository.findSingleton())?.apiKey).toBe("sk-plain");
   });
 
   it("二次 upsert 走 update：只覆盖传入字段，未传字段保持原值", async () => {
@@ -1490,9 +1385,7 @@ describe("RemoteModelRepository", () => {
     expect(rows.find((r) => r.name === "甲")).toMatchObject({
       baseUrl: "https://b/v1",
     });
-    expect(decryptLlmKey(rows.find((r) => r.name === "甲")!.apiKey)).toBe(
-      "sk-a",
-    );
+    expect(decryptLlmKey(rows.find((r) => r.name === "甲")!.apiKey)).toBe("sk-a");
     expect(rows.find((r) => r.name === "乙")?.apiKey).toBeNull();
     expect(rows.find((r) => r.name === "乙")?.kind).toBe("video");
 
@@ -1513,7 +1406,10 @@ describe("RemoteModelRepository", () => {
       },
     ];
     const created = await remoteModelRepository.replaceAll([{ name: "甲" }]);
-    await remoteModelRepository.saveWorkshopAdapters("甲", adapters as never);
+    await remoteModelRepository.saveWorkshopAdapters(
+      "甲",
+      /* SAFETY: 类型断言已复核 */ adapters as never,
+    );
     expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
       {
         mode: "T2I",
@@ -1523,9 +1419,7 @@ describe("RemoteModelRepository", () => {
       },
     ]);
 
-    await remoteModelRepository.replaceAll([
-      { name: "甲", baseUrl: "https://new/v1" },
-    ]);
+    await remoteModelRepository.replaceAll([{ name: "甲", baseUrl: "https://new/v1" }]);
     expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
       {
         mode: "T2I",
@@ -1546,14 +1440,11 @@ describe("RemoteModelRepository", () => {
     await remoteModelRepository.replaceAll([
       { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-keep-me" },
     ]);
-    const cipherOf = () =>
-      remoteModelRepository.findByName("甲").then((r) => r?.apiKey ?? null);
+    const cipherOf = () => remoteModelRepository.findByName("甲").then((r) => r?.apiKey ?? null);
 
     // ① 缺键 → 继承既有那份
     const before = await cipherOf();
-    await remoteModelRepository.replaceAll([
-      { name: "甲", baseUrl: "https://a2/v1" },
-    ]);
+    await remoteModelRepository.replaceAll([{ name: "甲", baseUrl: "https://a2/v1" }]);
     const after = await cipherOf();
     /* 继承必须是**原样搬运**：重新加密会换 IV、字节必然不同，而那份「二次加密」的
      * 东西读出来就解不开（`decryptLlmKey` 只解一层）。所以这里比的不是「能解出同一个
@@ -1566,9 +1457,7 @@ describe("RemoteModelRepository", () => {
     expect(await cipherOf()).toBeNull();
 
     // ③ 空串 / 全空白同样按清空处理（表单里「把字段删空」的形态）
-    await remoteModelRepository.replaceAll([
-      { name: "甲", apiKey: "sk-again" },
-    ]);
+    await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "sk-again" }]);
     expect(decryptLlmKey(await cipherOf())).toBe("sk-again");
     await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "   " }]);
     expect(await cipherOf()).toBeNull();
@@ -1592,16 +1481,8 @@ describe("RemoteModelRepository", () => {
      * 写成整段等式而不是逐条 toBeGreaterThan，是因为「多一条藏在事务里」与
      * 「少一条被挪到外面」都必须当场红——只比顺序的话，把 commit 之前塞进
      * 一次额外读也照样绿。 */
-    expect(heads.slice(0, commit + 1)).toEqual([
-      "begin",
-      "select",
-      "delete",
-      "insert",
-      "commit",
-    ]);
-    expect(heads.at(-1), "返回给调用方的那份是 commit **之后**重读的").toBe(
-      "select",
-    );
+    expect(heads.slice(0, commit + 1)).toEqual(["begin", "select", "delete", "insert", "commit"]);
+    expect(heads.at(-1), "返回给调用方的那份是 commit **之后**重读的").toBe("select");
   });
 
   it("第二条写失败 ⇒ 第一条不残留：整份配置与其中的密钥都还在（#2586 的正案）", async () => {
@@ -1611,14 +1492,16 @@ describe("RemoteModelRepository", () => {
     ]);
     /* 注入一个**非锁族**错误：那样有界重试会「认不出原因就原样抛」，
      * 这条用例测到的才是回滚，而不是重试成功后又落了一遍。 */
-    const gate = armStatementFailure((sql) =>
-      sql.toLowerCase().startsWith("insert"),
-    );
+    const gate = armStatementFailure((sql) => sql.toLowerCase().startsWith("insert"));
     const failure = await remoteModelRepository
       .replaceAll([{ name: "乙" }])
       .then(() => null)
       .catch(
-        (e: unknown) => e as { message: string; cause?: { message?: string } },
+        (e: unknown) =>
+          /* SAFETY: 类型断言已复核 */ e as {
+            message: string;
+            cause?: { message?: string };
+          },
       );
     expect(failure, "第二条写失败必须让整条调用失败得看得见").not.toBeNull();
     /* drizzle 会把宿主抛的东西包成 `Failed query: …`，原因挂在 `cause` 上——
@@ -1641,7 +1524,7 @@ describe("RemoteModelRepository", () => {
   it("起事务撞锁 ⇒ 按 SETTINGS_DB_WRITE 的预算重试，成功后一次落定", async () => {
     const busy = () => {
       const e = new Error("database is locked");
-      (e as { code?: string }).code = "SQLITE_BUSY";
+      /* SAFETY: 类型断言已复核 */ (e as { code?: string }).code = "SQLITE_BUSY";
       return e;
     };
     /* 前 maxAttempts-1 次让 `begin` 撞锁，第三次放行：既验「认锁码才重试」，
@@ -1659,9 +1542,7 @@ describe("RemoteModelRepository", () => {
   it("findByName / 适配器读写 / 模型不存在时的空返回", async () => {
     expect(await remoteModelRepository.findByName("nope")).toBeNull();
     expect(await remoteModelRepository.getWorkshopAdapters("nope")).toEqual([]);
-    expect(
-      await remoteModelRepository.saveWorkshopAdapters("nope", []),
-    ).toEqual([]);
+    expect(await remoteModelRepository.saveWorkshopAdapters("nope", [])).toEqual([]);
 
     await remoteModelRepository.replaceAll([{ name: "甲" }]);
     expect((await remoteModelRepository.findByName("甲"))?.name).toBe("甲");
@@ -1678,7 +1559,7 @@ describe("RemoteModelRepository", () => {
 
   it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", async () => {
     seedRemoteModel(tdb, { name: "甲", apiKey: "sk-seed" });
-    const raw = tdb.$tables.remoteModels[0]!.apiKey as string;
+    const raw = /* SAFETY: 类型断言已复核 */ tdb.$tables.remoteModels[0]!.apiKey as string;
     expect(raw).not.toBe("sk-seed");
     expect(raw.startsWith("enc:v1:")).toBe(true);
   });
@@ -1697,10 +1578,8 @@ describe("RemoteModelRepository", () => {
 describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事务里落定", () => {
   const head = (s: string) => (s.trim().split(/\s+/)[0] ?? "").toLowerCase();
   /** 只认「往 llmConfig 写」那两条；同一张表上那条 select 是 read-modify-write 的读。 */
-  const llmConfigWrite = (sql: string) =>
-    /^(insert into|update)\s+"llmconfig"/i.test(sql);
-  const remoteModelInsert = (sql: string) =>
-    /^insert into "remotemodel"/i.test(sql);
+  const llmConfigWrite = (sql: string) => /^(insert into|update)\s+"llmconfig"/i.test(sql);
+  const remoteModelInsert = (sql: string) => /^insert into "remotemodel"/i.test(sql);
 
   /** 起态：库里已有一份单例配置与两条远端模型 —— 回滚的断言要有对照物。 */
   async function seedState(): Promise<void> {
@@ -1713,18 +1592,14 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
       { name: "丙", baseUrl: "https://c/v1" },
     ]);
   }
-  const names = async () =>
-    (await remoteModelRepository.list()).map((r) => r.name).sort();
+  const names = async () => (await remoteModelRepository.list()).map((r) => r.name).sort();
 
   it("一次保存的全部语句落在同一个 begin…commit 里（顺序整段相等，不多不少）", async () => {
     await seedState();
     tdb.$sqlTrace.length = 0;
     await saveLlmSettings({
       model: "新模型",
-      extraModels: [
-        "llama3",
-        { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" },
-      ],
+      extraModels: ["llama3", { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" }],
     });
     expect(tdb.$sqlTrace.map(head)).toEqual([
       "begin",
@@ -1755,7 +1630,11 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     })
       .then(() => null)
       .catch(
-        (e: unknown) => e as { message: string; cause?: { message?: string } },
+        (e: unknown) =>
+          /* SAFETY: 类型断言已复核 */ e as {
+            message: string;
+            cause?: { message?: string };
+          },
       );
     expect(failure, "第二条写失败必须让整条保存失败得看得见").not.toBeNull();
     expect(
@@ -1785,12 +1664,14 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     })
       .then(() => null)
       .catch(
-        (e: unknown) => e as { message: string; cause?: { message?: string } },
+        (e: unknown) =>
+          /* SAFETY: 类型断言已复核 */ e as {
+            message: string;
+            cause?: { message?: string };
+          },
       );
     expect(failure, "远端那一写失败必须让整条保存失败").not.toBeNull();
-    expect(
-      `${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`,
-    ).toContain("测试注入");
+    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("测试注入");
     expect(gate.hits()).toBe(1);
     expect((await llmConfigRepository.findSingleton())?.provider).toBe("local");
     expect((await llmConfigRepository.findSingleton())?.model).toBe("旧模型");
@@ -1811,10 +1692,7 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
 
   it("成功那一跑：本地候选名进 llmConfig、远端条目进 remoteModel，两份是同一次的新态", async () => {
     await saveLlmSettings({
-      extraModels: [
-        "llama3",
-        { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" },
-      ],
+      extraModels: ["llama3", { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" }],
     });
     const cfg = await llmConfigRepository.findSingleton();
     expect(cfg?.extraModels).toEqual(["llama3"]);
@@ -1829,7 +1707,7 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     await seedState();
     const busy = () => {
       const e = new Error("database is locked");
-      (e as { code?: string }).code = "SQLITE_BUSY";
+      /* SAFETY: 类型断言已复核 */ (e as { code?: string }).code = "SQLITE_BUSY";
       return e;
     };
     const gate = armStatementFailure(
@@ -1848,9 +1726,7 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     const heads = tdb.$sqlTrace.map(head);
     /* 每次重试都重新起一条**完整**事务（begin 数 = 尝试数），而只有成功那一次落到
      * commit ——「重试的是某一条语句」的写法会在这里红。 */
-    expect(heads.filter((h) => h === "begin")).toHaveLength(
-      SETTINGS_DB_WRITE.maxAttempts,
-    );
+    expect(heads.filter((h) => h === "begin")).toHaveLength(SETTINGS_DB_WRITE.maxAttempts);
     expect(heads.filter((h) => h === "commit")).toHaveLength(1);
   });
 
@@ -1876,8 +1752,7 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
    * 另一条只会读到提交前的旧行。于是这条钉的是「传进来的到底是谁」。 */
   it("单例的 read-modify-write 把事务对象交给读，而不是让它回落模块级连接", async () => {
     await seedState();
-    const original =
-      llmConfigRepository.findSingleton.bind(llmConfigRepository);
+    const original = llmConfigRepository.findSingleton.bind(llmConfigRepository);
     const seen: Array<DbExecutor | undefined> = [];
     const spy = vi
       .spyOn(llmConfigRepository, "findSingleton")
@@ -1887,14 +1762,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
       });
     await saveLlmSettings({ model: "新模型" });
     spy.mockRestore();
-    expect(
-      seen,
-      "这一次保存里，那份 read-modify-write 的读只发生一次",
-    ).toHaveLength(1);
-    expect(
-      seen[0],
-      "读必须拿到调用方传下来的 executor —— 缺省就回落到模块级连接",
-    ).toBeDefined();
+    expect(seen, "这一次保存里，那份 read-modify-write 的读只发生一次").toHaveLength(1);
+    expect(seen[0], "读必须拿到调用方传下来的 executor —— 缺省就回落到模块级连接").toBeDefined();
     expect(seen[0], "而且拿到的不是模块级那个 db，是事务本身").not.toBe(tdb);
   });
 });

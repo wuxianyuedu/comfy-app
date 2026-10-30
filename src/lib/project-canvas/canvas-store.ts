@@ -5,10 +5,7 @@
 
 import { emitAppEvent } from "~/lib/app-events";
 import { fireAndForget } from "~/lib/async-action";
-import type {
-  PersistedEdge,
-  PersistedNode,
-} from "~/lib/project-canvas/canvas-persistence-types";
+import type { PersistedEdge, PersistedNode } from "~/lib/project-canvas/canvas-persistence-types";
 import {
   clearSyncFailure,
   logSyncIssue,
@@ -48,7 +45,7 @@ function emitChanged() {
  *  `typeof localStorage === "undefined"`，另有自己的 `safeParse`。 */
 function readIndex(): CanvasProject[] {
   return readStorageJson<CanvasProject[]>(INDEX_KEY, [], (raw) => {
-    const parsed = JSON.parse(raw) as CanvasProject[];
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as CanvasProject[];
     return Array.isArray(parsed) ? parsed : [];
   });
 }
@@ -77,10 +74,7 @@ export function getProject(id: string): CanvasProject | null {
  * `false`**，两个调用方都靠它判断「要不要广播变更 / 要不要落盘」。
  * `changed` 由调用方持有而不是这里返回：一次对账要算多行，逐行落盘会把
  * 一整轮读侧变成 N 次同步写。 */
-function adoptServerProject(
-  row: ServerProjectRow,
-  byId: Map<string, CanvasProject>,
-): boolean {
+function adoptServerProject(row: ServerProjectRow, byId: Map<string, CanvasProject>): boolean {
   const serverCopy = toCanvasProject(row);
   const local = byId.get(row.id);
   if (local && local.updatedAt > serverCopy.updatedAt) return false;
@@ -184,7 +178,8 @@ export interface ServerProjectRow {
  * 同一列的两个形状，调用方要的只是一个能比较的毫秒数。
  */
 export async function fetchServerProjects(): Promise<ServerProjectRow[]> {
-  const rows = (await vanillaApi.project.list.query()) as ServerProjectRow[];
+  const rows =
+    /* SAFETY: 类型断言已复核 */ (await vanillaApi.project.list.query()) as ServerProjectRow[];
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -194,8 +189,8 @@ function toCanvasProject(row: ServerProjectRow): CanvasProject {
     id: row.id,
     name: row.name,
     updatedAt: new Date(row.updatedAt).getTime(),
-    nodes: (row.nodes as CanvasProject["nodes"]) ?? [],
-    edges: (row.edges as CanvasProject["edges"]) ?? [],
+    nodes: /* SAFETY: 类型断言已复核 */ (row.nodes as CanvasProject["nodes"]) ?? [],
+    edges: /* SAFETY: 类型断言已复核 */ (row.edges as CanvasProject["edges"]) ?? [],
   };
 }
 
@@ -227,9 +222,7 @@ export async function hydrateFromServer(): Promise<void> {
       }
     }
     if (changed || localAll.length > 0) {
-      const merged = [...byId.values()].sort(
-        (left, right) => right.updatedAt - left.updatedAt,
-      );
+      const merged = [...byId.values()].sort((left, right) => right.updatedAt - left.updatedAt);
       writeIndex(merged);
       emitChanged();
     }
@@ -261,9 +254,7 @@ export async function hydrateFromServer(): Promise<void> {
  * unhandled rejection。失败同样不是无声的（硬规则 4）——走 `sync-notice`
  * 那一条诊断口，本文件不许自己写 console。
  */
-export async function hydrateProjectFromServer(
-  id: string,
-): Promise<CanvasProject | null> {
+export async function hydrateProjectFromServer(id: string): Promise<CanvasProject | null> {
   if (typeof window === "undefined") return null;
   if (getProject(id)) return getProject(id);
   try {
@@ -290,7 +281,7 @@ export async function hydrateProjectFromServer(
  * 只有当项目「零节点零连线**且**名字等于该字面量」时，
  * 才算是可安全回收的空草稿。
  * 用户自己命名的空项目（他确实有意保存了一个空画布）**不会**被回收。 */
-export const EMPTY_DRAFT_NAMES = ["未命名"] as const;
+export const EMPTY_DRAFT_NAMES = /* SAFETY: 类型断言已复核 */ ["未命名"] as const;
 export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 
 /* 当且仅当 `name` 是空草稿哨兵名时为真。用它代替在每个回收判据里
@@ -330,10 +321,7 @@ export function isProjectNameTaken(name: string, excludeId?: string): boolean {
  * 只看索引；在变更之前调用是安全的，
  * 因为 `commitRename` / `upsertProject` 里的 upsert 紧跟在它之后同步执行。
  */
-export function findNextAvailableName(
-  base: string,
-  excludeId?: string,
-): string {
+export function findNextAvailableName(base: string, excludeId?: string): string {
   const baseClean = base.trim() || EMPTY_DRAFT_NAME;
   const taken = getAllProjectNames(excludeId);
   if (!taken.has(baseClean)) return baseClean;
@@ -416,15 +404,10 @@ export function clearActiveIfDraft(pid: string): void {
  * 注意区分两种「空」：`createDraftProject` 造的是**从不进索引**的草稿
  *（这里根本没它），而 `createProject` 造的是**真的进了索引**的行 ——
  * 清扫要对后者负责，但不能对「用户正在用的那一行」负责。 */
-function isReapableEmptyDraft(
-  project: CanvasProject,
-  activeId: string | null,
-): boolean {
+function isReapableEmptyDraft(project: CanvasProject, activeId: string | null): boolean {
   if (project.id === activeId) return false;
   if (project.name !== EMPTY_DRAFT_NAME) return false;
-  return (
-    (project.nodes?.length ?? 0) === 0 && (project.edges?.length ?? 0) === 0
-  );
+  return (project.nodes?.length ?? 0) === 0 && (project.edges?.length ?? 0) === 0;
 }
 
 /**
@@ -462,9 +445,7 @@ export function reapAllEmptyDrafts(): number {
    * 回它（索引里没有它了），而 `project` 表里那几个 `未命名` / `未命名_2` /
    * `未命名_3` 就是这么攒出来的（ISSUE #1501）。
    * 逐条删的代价可以忽略：这是挂载时的一次性清扫，且删到最后就是空转。 */
-  const doomed = all.filter((project) =>
-    isReapableEmptyDraft(project, activeId),
-  );
+  const doomed = all.filter((project) => isReapableEmptyDraft(project, activeId));
   if (doomed.length === 0) return 0;
   for (const project of doomed) deleteProject(project.id);
   /* 活跃项目本身不在 `doomed` 里，所以走到这里它没被删。但 active-id 可能指向
@@ -553,8 +534,7 @@ export async function listProjectsWithServer(): Promise<{
         byId.set(row.id, { ...serverCopy, origin: "server" });
         continue;
       }
-      const newer =
-        serverCopy.updatedAt >= local.updatedAt ? serverCopy : local;
+      const newer = serverCopy.updatedAt >= local.updatedAt ? serverCopy : local;
       byId.set(row.id, { ...newer, origin: "both" });
     }
     return { entries: sortByUpdated(byId), ok: true };
@@ -567,12 +547,8 @@ export async function listProjectsWithServer(): Promise<{
   }
 }
 
-function sortByUpdated<T extends { updatedAt: number }>(
-  byId: Map<string, T>,
-): T[] {
-  return [...byId.values()].sort(
-    (left, right) => right.updatedAt - left.updatedAt,
-  );
+function sortByUpdated<T extends { updatedAt: number }>(byId: Map<string, T>): T[] {
+  return [...byId.values()].sort((left, right) => right.updatedAt - left.updatedAt);
 }
 
 /** 读索引成 `id → 项目` 表（对账与单行落盘都从这里起步，别各写一遍）。

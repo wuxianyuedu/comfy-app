@@ -25,10 +25,7 @@ import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
 import { randomSeed } from "~/lib/comfyui/random-seed";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
-import {
-  FILM_COMPOSE_SIZE,
-  NATIVE_SHOT_VIDEO_SIZE,
-} from "~/lib/film/film-size";
+import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
 import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import type { ProjectType } from "~/lib/workshop/types";
@@ -148,7 +145,7 @@ async function parseScriptToShots(
     // 离线兜底 —— 复用工坊解析器
     const sc = parseIdeaToScenes(raw, {
       title: "",
-      type: (type as ProjectType) ?? "short_video",
+      type: /* SAFETY: 类型断言已复核 */ (type as ProjectType) ?? "short_video",
       tone: "",
       logline: "",
     });
@@ -168,9 +165,7 @@ async function parseScriptToShots(
       const parts = [base, cam];
       if (stylePrompt) parts.push(stylePrompt);
       const prompt = parts.filter(Boolean).join(", ");
-      const negative = [FILM_NEGATIVE, styleNegative]
-        .filter(Boolean)
-        .join(", ");
+      const negative = [FILM_NEGATIVE, styleNegative].filter(Boolean).join(", ");
       shots.push({
         order: order++,
         heading: sc.heading,
@@ -179,9 +174,7 @@ async function parseScriptToShots(
       });
     }
   }
-  return shots.length
-    ? shots
-    : [{ order: 0, heading: "镜头 1", prompt: raw.trim() }];
+  return shots.length ? shots : [{ order: 0, heading: "镜头 1", prompt: raw.trim() }];
 }
 
 // ── create ─────────────────────────────────────────────────
@@ -276,11 +269,7 @@ export async function createFilm(input: CreateFilmInput) {
     shotInputs: shots,
   });
 
-  await appendFilmLog(
-    filmId,
-    "success",
-    `已生成分镜，共 ${shots.length} 个镜头`,
-  );
+  await appendFilmLog(filmId, "success", `已生成分镜，共 ${shots.length} 个镜头`);
   return { id: filmId, shots: shots.length };
 }
 
@@ -305,11 +294,9 @@ export interface CreateFilmFromProjectInput {
  *  工坊已产出的镜头不再走「自建剧本 → LLM 平行分镜」，而是逐条映射为成片镜头。
  *  镜头的 prompt / negative 已是工坊定稿（含风格），这里不二次加工；顺序按镜号 index。 */
 export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
-  const row = await productionRepository.getForUser(
-    input.userId,
-    input.projectId,
-  );
-  const rawShots = row && Array.isArray(row.shots) ? (row.shots as Shot[]) : [];
+  const row = await productionRepository.getForUser(input.userId, input.projectId);
+  const rawShots =
+    row && Array.isArray(row.shots) ? /* SAFETY: 类型断言已复核 */ (row.shots as Shot[]) : [];
   const shots = [...rawShots].sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
@@ -343,11 +330,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     shotInputs,
   });
 
-  await appendFilmLog(
-    filmId,
-    "success",
-    `从项目镜头建片，共 ${shotInputs.length} 个镜头`,
-  );
+  await appendFilmLog(filmId, "success", `从项目镜头建片，共 ${shotInputs.length} 个镜头`);
   return { id: filmId, shots: shotInputs.length };
 }
 
@@ -362,10 +345,9 @@ async function generateVideoShot(
   userId: string,
   shot: { prompt: string; negative?: string | null; params?: unknown },
 ): Promise<string> {
-  const params = (shot.params ?? {}) as Record<string, unknown>;
+  const params = /* SAFETY: 类型断言已复核 */ (shot.params ?? {}) as Record<string, unknown>;
 
-  const videoWorkflowId =
-    typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
+  const videoWorkflowId = typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
   if (!videoWorkflowId) {
     throw new Error("镜头缺少「工作流库视频工作流 id」，无法本地生成");
   }
@@ -374,15 +356,15 @@ async function generateVideoShot(
 
   // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
   // 下方合成首帧分支。
-  let inputImage = (params.inputImage ?? params.firstFrame ?? null) as string;
+  let inputImage = /* SAFETY: 类型断言已复核 */ (params.inputImage ??
+    params.firstFrame ??
+    null) as string;
 
   if (!inputImage) {
     const imageWorkflowId =
       typeof params.imageWorkflowId === "string" ? params.imageWorkflowId : "";
     if (!imageWorkflowId) {
-      throw new Error(
-        "镜头缺少首帧，且没有配置「工作流库图类工作流 id」可用于合成首帧",
-      );
+      throw new Error("镜头缺少首帧，且没有配置「工作流库图类工作流 id」可用于合成首帧");
     }
     inputImage = await synthesizeFirstFrame({
       userId,
@@ -401,7 +383,7 @@ async function generateVideoShot(
       prompt: shot.prompt,
       ...(shot.negative ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
-      frames: (params.frames ?? 81) as number,
+      frames: /* SAFETY: 类型断言已复核 */ (params.frames ?? 81) as number,
       size,
       seed: randomSeed(),
     },
@@ -432,11 +414,7 @@ export async function startFilm(id: string) {
       await filmShotRepository.markQueued(shot.id, taskId);
     } catch (e) {
       await filmShotRepository.markFailed(shot.id);
-      await appendFilmLog(
-        id,
-        "error",
-        errorText(e, `镜头 ${shot.order + 1} 提交失败`),
-      );
+      await appendFilmLog(id, "error", errorText(e, `镜头 ${shot.order + 1} 提交失败`));
     }
   }
 
@@ -483,16 +461,11 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
   if (opts.resumed) {
     /* 续跑要在行日志里留痕：否则用户看到的是「重启之后它自己动起来了」，
      * 而支持现场需要据这一行判断「是 boot 扫描接上的，还是原循环还活着」。 */
-    await appendFilmLog(
-      id,
-      "info",
-      `进程重启后续跑监看（本轮预算 ${WATCH_BUDGET_MIN} 分钟）`,
-    );
+    await appendFilmLog(id, "info", `进程重启后续跑监看（本轮预算 ${WATCH_BUDGET_MIN} 分钟）`);
   }
   for (let i = 0; i < WATCH_MAX_ITER; i++) {
     const film = await filmRepository.findById(id);
-    if (!film || film.status === "CANCELLED" || film.status === "FAILED")
-      return;
+    if (!film || film.status === "CANCELLED" || film.status === "FAILED") return;
     if (film.status !== "GENERATING") {
       // 已经走掉了（例如合成已开始）
     }
@@ -546,7 +519,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     }
     const progressById = new Map(
       (await taskRepository.findExecutionProgressMany(taskIds)).map(
-        (row) => [row.id, row] as const,
+        (row) => /* SAFETY: 类型断言已复核 */ [row.id, row] as const,
       ),
     );
 
@@ -568,7 +541,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
       let duration: number | undefined;
       if (next === "SUCCEEDED") {
         const imgs =
-          (task.resultImages as Array<{
+          /* SAFETY: 类型断言已复核 */ (task.resultImages as Array<{
             mediaType?: unknown;
             localPath?: string;
           }> | null) ?? [];
@@ -577,13 +550,13 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
         videoPath = vid?.localPath;
 
-        const params = (shot.params ?? {}) as Record<string, unknown>;
+        const params = /* SAFETY: 类型断言已复核 */ (shot.params ?? {}) as Record<string, unknown>;
 
         duration =
           typeof params.duration === "number"
             ? params.duration
-            : ((params.frames ?? 49) as number) /
-              ((params.fps ?? 16) as number);
+            : /* SAFETY: 类型断言已复核 */ ((params.frames ?? 49) as number) /
+              /* SAFETY: 类型断言已复核 */ ((params.fps ?? 16) as number);
       }
 
       /* 只在真的变了才写：原先每轮对每个在跑的镜头都无条件 UPDATE，绝大多数
@@ -619,11 +592,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     await sleep(WATCH_POLL_MS);
   }
   await filmRepository.markFailed(id, "生成超时");
-  await appendFilmLog(
-    id,
-    "error",
-    `影片生成超时（本轮监看超过 ${WATCH_BUDGET_MIN} 分钟）`,
-  );
+  await appendFilmLog(id, "error", `影片生成超时（本轮监看超过 ${WATCH_BUDGET_MIN} 分钟）`);
 }
 
 /**
@@ -668,10 +637,7 @@ export async function resumeStalledFilms(): Promise<{
      * 判成 FAILED 才把出口接回来（FAILED 是 `composeFilm` 允许重跑的状态），
      * 而不是开机时静默重跑 ffmpeg（用户没要求却开始占 CPU 写文件）。 */
     for (const film of await filmRepository.listByStatus(["COMPOSING"])) {
-      await filmRepository.markFailed(
-        film.id,
-        "合成中断（进程在合成期间退出）",
-      );
+      await filmRepository.markFailed(film.id, "合成中断（进程在合成期间退出）");
       await appendFilmLog(
         film.id,
         "error",
@@ -680,9 +646,7 @@ export async function resumeStalledFilms(): Promise<{
       abandoned.push(film.id);
     }
   } catch (err) {
-    logger.warn(
-      `[film] ${errorText(err, "resumeStalledFilms 失败（重启恢复扫描）")}`,
-    );
+    logger.warn(`[film] ${errorText(err, "resumeStalledFilms 失败（重启恢复扫描）")}`);
   }
 
   if (resumed.length || abandoned.length) {

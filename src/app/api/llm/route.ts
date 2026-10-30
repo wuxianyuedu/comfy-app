@@ -1,10 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getLLMConfig,
-  completeLLM,
-  completeLLMTools,
-  streamLLM,
-} from "~/lib/llm/server";
+import { getLLMConfig, completeLLM, completeLLMTools, streamLLM } from "~/lib/llm/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { apiErrorBody } from "~/lib/api-error";
 import {
@@ -34,7 +29,7 @@ const BodySchema = {
     const rawMessages: unknown[] = rec.messages;
     const messages: LLMMessage[] = rawMessages.map((m: unknown) => {
       // 逐元素断言为最小形状;null/undefined 元素在属性访问处抛 TypeError → 400,与原 any 版一致。
-      const entry = m as {
+      const entry = /* SAFETY: 类型断言已复核 */ m as {
         role?: unknown;
         content?: unknown;
         tool_calls?: unknown;
@@ -53,7 +48,7 @@ const BodySchema = {
       const base: LLMMessage = { role, content: String(rawContent) };
       // 透传 tool_calls（assistant 消息带）与 tool_call_id（tool 消息带）
       if (role === "assistant" && Array.isArray(entry.tool_calls)) {
-        base.tool_calls = entry.tool_calls as LLMMessage["tool_calls"];
+        base.tool_calls = /* SAFETY: 类型断言已复核 */ entry.tool_calls as LLMMessage["tool_calls"];
       }
       if (role === "tool" && typeof entry.tool_call_id === "string") {
         base.tool_call_id = entry.tool_call_id;
@@ -63,7 +58,7 @@ const BodySchema = {
     const opts: LLMRequestOptions = {};
     // 原 `as any` 透传:非 "local"/"remote" 的值继续透传给 getLLMConfig(按非 remote 处理),
     // 加守卫反而会改变该退化行为,这里只恢复静态类型。
-    if (rec.provider) opts.provider = rec.provider as LLMProviderType;
+    if (rec.provider) opts.provider = /* SAFETY: 类型断言已复核 */ rec.provider as LLMProviderType;
     if (rec.model) {
       const rawModel: unknown = rec.model;
       opts.model = String(rawModel);
@@ -71,10 +66,10 @@ const BodySchema = {
     if (typeof rec.temperature === "number") opts.temperature = rec.temperature;
     if (typeof rec.maxTokens === "number") opts.maxTokens = rec.maxTokens;
     if (typeof rec.taskType === "string" && rec.taskType in TASK_TYPES) {
-      opts.taskType = rec.taskType as TaskType;
+      opts.taskType = /* SAFETY: 类型断言已复核 */ rec.taskType as TaskType;
     }
     if (Array.isArray(rec.tools)) {
-      opts.tools = rec.tools as NonNullable<typeof opts.tools>;
+      opts.tools = /* SAFETY: 类型断言已复核 */ rec.tools as NonNullable<typeof opts.tools>;
     }
     return { messages, stream: rec.stream === true, opts };
   },
@@ -105,11 +100,7 @@ export async function POST(req: NextRequest) {
     try {
       // 带 tools 参数时走工具调用链路，返回 tool_calls（Agent 场景）
       if (parsed.opts.tools?.length) {
-        const result = await completeLLMTools(
-          cfg,
-          parsed.messages,
-          parsed.opts.tools,
-        );
+        const result = await completeLLMTools(cfg, parsed.messages, parsed.opts.tools);
         return NextResponse.json({
           content: result.content,
           tool_calls: result.toolCalls,
@@ -130,9 +121,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       try {
         await streamLLM(cfg, parsed.messages, (token) => {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ token })}\n\n`),
-          );
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
         });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (e) {

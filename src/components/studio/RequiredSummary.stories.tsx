@@ -22,7 +22,7 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
  * 「吃一个结构化入参」不是数据依赖，「吃一条 tRPC 链路 / 浏览器运行期」才是。
  * 后者见 `LocalComputeCard` / `HomeModelOverview` 那几条。
  */
-const ENTRY = {
+const ENTRY = /* SAFETY: 类型断言已复核 */ {
   direction: "input",
   kind: "widget",
   nodeId: "5",

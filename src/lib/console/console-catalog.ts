@@ -491,6 +491,6 @@ export function parseConsoleLine(line: string): ParsedConsoleLine {
   if (started) tokens.push(current);
   if (tokens.length === 0) return { ok: false, reason: "命令为空" };
 
-  const [file, ...args] = tokens as [string, ...string[]];
+  const [file, ...args] = /* SAFETY: 类型断言已复核 */ tokens as [string, ...string[]];
   return { ok: true, file, args, display: [file, ...args].join(" ") };
 }

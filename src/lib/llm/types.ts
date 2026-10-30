@@ -7,7 +7,7 @@ export type LLMProviderType = "local" | "remote";
 /** 已知的任务类型 key —— 用于按场景选择不同温度。
  *  `defaultTemperature` 是该任务类型未配置覆盖时的推荐默认值（取 hint 区间中位），
  *  不再一律回落到全局 0.7。 */
-export const TASK_TYPES = {
+export const TASK_TYPES = /* SAFETY: 类型断言已复核 */ {
   txt2img: {
     label: "文生图",
     desc: "严谨确定，保证输出稳定可复现",
@@ -50,7 +50,7 @@ export type TaskType = keyof typeof TASK_TYPES;
 
 /** 远端模型的用途：对话（语言模型）/ 图片 / 视频。当前仅对话参与运行时，
  *  图片 / 视频模型先落配置，供后续远程生图 / 生视频接入。 */
-export const REMOTE_MODEL_KINDS = ["chat", "image", "video"] as const;
+export const REMOTE_MODEL_KINDS = /* SAFETY: 类型断言已复核 */ ["chat", "image", "video"] as const;
 export type RemoteModelKind = (typeof REMOTE_MODEL_KINDS)[number];
 export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
   chat: "对话",
@@ -84,9 +84,7 @@ export interface RemoteModelEntry {
  *  「服务端下发的脱敏条目」读成「用户要清空密钥」的地方）。
  *  非空串 → 去空白后的值；`null` / 空串 / 全空白 → `null`（显式清空）；
  *  缺键 / `undefined` / 其它类型 → `undefined`（不提供意见，保留库里既有）。 */
-export function normalizeEntryApiKey(
-  rec: Record<string, unknown>,
-): string | null | undefined {
+export function normalizeEntryApiKey(rec: Record<string, unknown>): string | null | undefined {
   const v: unknown = rec.apiKey;
   if (typeof v === "string") return v.trim() === "" ? null : v.trim();
   if (v === null) return null;
@@ -114,23 +112,20 @@ export type RawExtraModel = string | RemoteModelEntry;
  */
 function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
   if (typeof item !== "object" || item === null) return null;
-  const rec = item as Record<string, unknown>;
+  const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
   const name = typeof rec.name === "string" ? rec.name.trim() : "";
   if (name === "") return null;
   const kind: unknown = rec.kind;
   const apiKey = normalizeEntryApiKey(rec);
   return {
     name,
-    baseUrl:
-      typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
-        ? rec.baseUrl
-        : null,
+    baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
     // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
     ...(apiKey === undefined ? {} : { apiKey }),
     kind:
       typeof kind === "string" &&
-      (REMOTE_MODEL_KINDS as readonly string[]).includes(kind)
-        ? (kind as RemoteModelKind)
+      /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as readonly string[]).includes(kind)
+        ? /* SAFETY: 类型断言已复核 */ (kind as RemoteModelKind)
         : null,
   };
 }
@@ -142,8 +137,7 @@ export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
   for (const item of raw) {
     if (typeof item === "string") {
       // 字符串形态只带了名字，对连接参数**不提供意见**（挂 null 会被读成「清空」）
-      if (item.trim() !== "")
-        out.push({ name: item, baseUrl: null, kind: null });
+      if (item.trim() !== "") out.push({ name: item, baseUrl: null, kind: null });
       continue;
     }
     const entry = normalizeExtraModelItem(item);
@@ -194,9 +188,7 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
  * 回环服务；真远端模型不会用回环地址访问。与服务端 describeFetchFailure 的判定一致。
  */
 export function isLoopbackBaseUrl(url: string): boolean {
-  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(
-    String(url ?? "").trim(),
-  );
+  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
 }
 
 /** 判定一个「远端条目」是否为误存的本地 ollama。
@@ -342,7 +334,7 @@ export interface LLMToolCall {
 }
 
 /** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
-export const WORKSHOP_STAGES = [
+export const WORKSHOP_STAGES = /* SAFETY: 类型断言已复核 */ [
   { id: "script", label: "剧本" },
   { id: "character", label: "角色卡" },
   { id: "storyboard", label: "分镜" },

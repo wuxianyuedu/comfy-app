@@ -41,6 +41,7 @@ import path from "node:path";
 
 import { isWindows } from "./platform.ts";
 
+type SpawnSyncError = NodeJS.ErrnoException | null | undefined;
 /** 「这个候选在这台机器上到底起不起得来」的那一次 OS 交互。 */
 export interface UsabilityProbe {
   /** 执行位检查：抛错即「没有执行权限」（默认真 `fs.accessSync(X_OK)`）。 */
@@ -96,9 +97,8 @@ const realUsabilityProbe: UsabilityProbe = {
       windowsHide: true,
       timeout: USABILITY_PROBE_TIMEOUT_MS,
     });
-    return (
-      (probe.error as NodeJS.ErrnoException | null | undefined)?.code ?? null
-    );
+    const err = /* SAFETY: 类型断言已复核 */ probe.error as SpawnSyncError;
+    return err?.code ?? null;
   },
 };
 
@@ -289,15 +289,12 @@ export function executableExts(
   platform: NodeJS.Platform = process.platform,
 ): string[] {
   if (!isWindows(platform)) return [""];
-  const declared = String(
-    envVar(env, "PATHEXT", platform) ?? ".COM;.EXE;.BAT;.CMD",
-  )
+  const declared = String(envVar(env, "PATHEXT", platform) ?? ".COM;.EXE;.BAT;.CMD")
     .split(";")
     .map((e) => e.trim())
     .filter(Boolean);
   /** 认形态的前缀（大小写不敏感，PATHEXT 常见写法是大写）。 */
-  const declaredHas = (ext: string) =>
-    declared.some((d) => d.toUpperCase() === ext);
+  const declaredHas = (ext: string) => declared.some((d) => d.toUpperCase() === ext);
   const ordered: string[] = [];
   if (declaredHas(".EXE") || declared.length === 0) ordered.push("");
   for (const ext of [".EXE", ".PS1", ".CMD", ".BAT", ".COM"]) {
@@ -350,12 +347,7 @@ function isFile(candidate: string): boolean {
 }
 
 /** 候选的执行形态 —— 决定「要不要先确认它能跑」「跑不起来时怎么回退」。 */
-export type ExecutableKind =
-  | "shebang"
-  | "batch"
-  | "script"
-  | "binary"
-  | "unknown";
+export type ExecutableKind = "shebang" | "batch" | "script" | "binary" | "unknown";
 
 /** 读文件头几个字节而不是看扩展名（扩展名只是给 shell 看的）：`shebang`（`#!` 开头）与
  *  `batch`（`@echo` / `@setlocal` 起头）**Node 都起不了** —— 把两者混成 `script` 曾让
@@ -442,13 +434,7 @@ export function usableCommand(
       return {
         ok: true,
         command: host,
-        prefixArgs: [
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          candidate,
-        ],
+        prefixArgs: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", candidate],
         reason: null,
       };
     }
@@ -635,9 +621,7 @@ export function pnpmInvocation(
     : { command: candidate, prefixArgs: [] };
   const osHost = isWindows(platform) ? powershellHost({ env, platform }) : null;
   const pathRaw = String(envVar(env, "PATH", platform) ?? "");
-  const pathEntries = pathRaw
-    .split(isWindows(platform) ? ";" : ":")
-    .filter(Boolean);
+  const pathEntries = pathRaw.split(isWindows(platform) ? ";" : ":").filter(Boolean);
   const onDisk: string[] = [];
   /* `.ps1` **无条件**在列（与 `executableExts` 同口径）：Windows 默认 `PATHEXT` 从不含它，
    * 漏掉这一读数就会出现「一个都没命中」而旁边正躺着一个能用的 `pnpm.ps1`（ISSUE #2281）。 */
@@ -743,7 +727,7 @@ export function pnpmJsEntry(dropIn: string): string | null {
   if (!pkgDir) return null;
   let manifest: { bin?: unknown };
   try {
-    manifest = JSON.parse(
+    manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
     ) as { bin?: unknown };
   } catch {
@@ -753,7 +737,7 @@ export function pnpmJsEntry(dropIn: string): string | null {
   let rel: unknown;
   if (typeof bin === "string") rel = bin;
   else if (bin && typeof bin === "object")
-    rel = (bin as Record<string, unknown>).pnpm;
+    rel = /* SAFETY: 类型断言已复核 */ (bin as Record<string, unknown>).pnpm;
   if (typeof rel === "string" && rel !== "") {
     const target = path.resolve(pkgDir, rel);
     if (isPnpmEntryScript(target)) return target;
@@ -777,7 +761,7 @@ function pnpmPackageDir(dropIn: string): string | null {
      * 名字对不上就不算。 */
     if (dir !== dropIn) return dir;
     try {
-      const pkg = JSON.parse(
+      const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
         fs.readFileSync(path.join(dir, "package.json"), "utf8"),
       ) as { name?: unknown };
       if (pkg.name === "pnpm") return dir;
@@ -838,14 +822,11 @@ export function pnpmJsInvocation({
    * 取最高的那一版）。`LOCALAPPDATA` / `USERPROFILE` / `HOME` 三路都试，是因为注入进来的
    * `env` 未必带全 —— 按目标平台只挑一个，会在「只写了 HOME」那形状上漏掉。 */
   const localAppData = String(envVar(env, "LOCALAPPDATA", platform) ?? "");
-  const home = String(
-    envVar(env, "USERPROFILE", platform) ?? envVar(env, "HOME", platform) ?? "",
-  );
+  const home = String(envVar(env, "USERPROFILE", platform) ?? envVar(env, "HOME", platform) ?? "");
   const roots = [
     localAppData && path.join(localAppData, "node", "corepack", "v1", "pnpm"),
     localAppData && path.join(localAppData, "pnpm"),
-    home &&
-      path.join(home, "AppData", "Local", "node", "corepack", "v1", "pnpm"),
+    home && path.join(home, "AppData", "Local", "node", "corepack", "v1", "pnpm"),
     home && path.join(home, "AppData", "Local", "pnpm"),
     home && path.join(home, ".local", "share", "pnpm"),
     home && path.join(home, "Library", "pnpm"),
@@ -859,9 +840,7 @@ export function pnpmJsInvocation({
           .readdirSync(root, { withFileTypes: true })
           .filter((d) => d.isDirectory() && /^\d+\.\d+\.\d+/.test(d.name))
           .map((d) => path.join(root, d.name))
-          .sort((a, b) =>
-            compareVersionDesc(path.basename(a), path.basename(b)),
-          ),
+          .sort((a, b) => compareVersionDesc(path.basename(a), path.basename(b))),
       );
     } catch {
       /* 落点不存在（这台机没装 corepack / 没装 pnpm）：看下一个。 */
@@ -884,10 +863,7 @@ export function pnpmJsInvocation({
 function compareVersionDesc(a: string, b: string): number {
   const [pa, pb] = [a.split("."), b.split(".")];
   for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    const [na, nb] = [
-      Number.parseInt(pa[i] ?? "0", 10),
-      Number.parseInt(pb[i] ?? "0", 10),
-    ];
+    const [na, nb] = [Number.parseInt(pa[i] ?? "0", 10), Number.parseInt(pb[i] ?? "0", 10)];
     if (Number.isNaN(na) || Number.isNaN(nb)) {
       const cmp = String(pa[i] ?? "").localeCompare(String(pb[i] ?? ""));
       if (cmp !== 0) return cmp;

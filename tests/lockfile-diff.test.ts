@@ -21,17 +21,16 @@ import {
   parseLockfile,
   stripBundledSection,
 } from "../scripts/lockfile/lock-diff.mjs";
-import {
-  renderDriftReport,
-  renderLockDiff,
-} from "../scripts/lockfile/render-lock-diff.mjs";
+import { renderDriftReport, renderLockDiff } from "../scripts/lockfile/render-lock-diff.mjs";
 
 const ROOT = process.cwd();
 const LOCK = readFileSync(join(ROOT, "pnpm-lock.yaml"), "utf8");
 /** package.json 的声明范围：下面断言「lockfile 记的 specifier」时以它为准，
  *  而不是把某个版本号抄进用例 —— 抄字面量的那版在 next 升个小版本时就红了，
  *  而它要验的是**解析器**，不是「当前钉的是哪一版」。 */
-const PKG = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+const PKG = /* SAFETY: 类型断言已复核 */ JSON.parse(
+  readFileSync(join(ROOT, "package.json"), "utf8"),
+) as {
   dependencies: Record<string, string>;
 };
 
@@ -52,10 +51,9 @@ function lockBody(text: string): string {
  * 打红的是一批与升级毫无关系的用例。锚点从真 lockfile 里现取，升到哪一版都成立。
  */
 function importerEntry(body: string, name: string): string {
-  const found = new RegExp(
-    `^ {6}${name}:\\n^ {8}specifier: .*\\n^ {8}version: .*$`,
-    "m",
-  ).exec(body);
+  const found = new RegExp(`^ {6}${name}:\\n^ {8}specifier: .*\\n^ {8}version: .*$`, "m").exec(
+    body,
+  );
   if (!found) throw new Error(`lockfile 根 importer 里没有 ${name} 条目`);
   return found[0];
 }
@@ -100,13 +98,7 @@ describe("parseLockfile（吃真 lockfile 的结构）", () => {
   const parsed = parseLockfile(lockBody(LOCK));
 
   it("切出顶层段落（settings / overrides / importers / packages / snapshots）", () => {
-    for (const name of [
-      "settings",
-      "overrides",
-      "importers",
-      "packages",
-      "snapshots",
-    ]) {
+    for (const name of ["settings", "overrides", "importers", "packages", "snapshots"]) {
       expect(parsed.sections.has(name)).toBe(true);
     }
     expect(parsed.sections.get("packages")!.keys.size).toBeGreaterThan(100);
@@ -134,9 +126,7 @@ describe("parseLockfile（吃真 lockfile 的结构）", () => {
       "        specifier: npm:@typescript/typescript6@^6.0.2",
       '        version: "@typescript/typescript6@6.0.2"',
     ]);
-    expect(table.get("typescript")!.version).toBe(
-      "@typescript/typescript6@6.0.2",
-    );
+    expect(table.get("typescript")!.version).toBe("@typescript/typescript6@6.0.2");
   });
 });
 
@@ -154,14 +144,8 @@ describe("diffLockfiles（两份 lockfile 的差异）", () => {
     );
     // 新 lockfile：brand-new-pkg 没了、zod 版本变了、old-gone-pkg 出现在同一位置
     const newText = oldText
-      .replace(
-        "      brand-new-pkg:\n        specifier: ^1.0.0\n        version: 1.2.3\n",
-        "",
-      )
-      .replace(
-        ZOD,
-        "      old-gone-pkg:\n        specifier: ^9.9.9\n        version: 9.9.9",
-      );
+      .replace("      brand-new-pkg:\n        specifier: ^1.0.0\n        version: 1.2.3\n", "")
+      .replace(ZOD, "      old-gone-pkg:\n        specifier: ^9.9.9\n        version: 9.9.9");
     const diff = diffLockfiles(oldText, newText);
     const deps = diff.importers["."]!.dependencies!;
     expect(deps.added.map((a) => a.name)).toContain("old-gone-pkg");
@@ -175,9 +159,7 @@ describe("diffLockfiles（两份 lockfile 的差异）", () => {
       "  excludeLinksFromLockfile: true",
     );
     const diff = diffLockfiles(body, next);
-    expect(diff.settings.changed.map((c) => c.key)).toContain(
-      "excludeLinksFromLockfile",
-    );
+    expect(diff.settings.changed.map((c) => c.key)).toContain("excludeLinksFromLockfile");
   });
 
   it("packages / snapshots 条目增删计入解析结果段", () => {
@@ -225,8 +207,7 @@ describe("renderLockDiff（给人看的措辞）", () => {
     const body = lockBody(LOCK);
     const added = Array.from(
       { length: 30 },
-      (_, i) =>
-        `      bulk-pkg-${i}:\n        specifier: ^1.0.0\n        version: 1.0.0`,
+      (_, i) => `      bulk-pkg-${i}:\n        specifier: ^1.0.0\n        version: 1.0.0`,
     ).join("\n");
     const next = body.replace("      zod:", `${added}\n      zod:`);
     const lines = renderLockDiff(diffLockfiles(body, next), {

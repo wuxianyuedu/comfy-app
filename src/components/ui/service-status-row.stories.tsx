@@ -79,9 +79,7 @@ export const Narrow: Story = {
       className={`border-border bg-surface-2 w-90 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
     >
       <StatusDot state="busy" />
-      <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
-        ComfyUI 正在启动…（已拉起 8 秒）
-      </span>
+      <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>ComfyUI 正在启动…（已拉起 8 秒）</span>
       <div className={STATUS_ACTIONS_CLASS}>
         <StatusButton onClick={() => undefined} variant="primary">
           打开查看
@@ -93,11 +91,7 @@ export const Narrow: Story = {
         >
           在浏览器打开
         </StatusButton>
-        <StatusButton
-          onClick={() => undefined}
-          variant="primary-solid"
-          disabled
-        >
+        <StatusButton onClick={() => undefined} variant="primary-solid" disabled>
           启动中…
         </StatusButton>
         <StatusButton onClick={() => undefined} variant="primary" disabled>
@@ -116,38 +110,36 @@ export const States: Story = {
   args: { children: "启动 ComfyUI", onClick: () => undefined },
   render: () => (
     <div className="flex flex-col gap-3">
-      {(
-        [
-          ["up", `ComfyUI 运行中（${BASE}）`, "关闭 ComfyUI"],
-          ["busy", "ComfyUI 正在启动…", "启动中…"],
-          ["probing", "ComfyUI 状态检测中…", "启动 ComfyUI"],
-          ["down", "ComfyUI 未运行", "启动 ComfyUI"],
-        ] as const
-      ).map(([state, text, action]) => (
-        <div
-          key={state}
-          className={`border-border bg-surface-2 w-160 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-        >
-          <StatusDot state={state} />
-          <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>{text}</span>
-          <div className={STATUS_ACTIONS_CLASS}>
-            <StatusButton
-              onClick={() => undefined}
-              variant="primary"
-              disabled={state === "busy"}
-            >
-              打开查看
-            </StatusButton>
-            <StatusButton
-              onClick={() => undefined}
-              variant="primary-solid"
-              disabled={state === "busy"}
-            >
-              {action}
-            </StatusButton>
+      {
+        /* SAFETY: 类型断言已复核 */ (
+          [
+            ["up", `ComfyUI 运行中（${BASE}）`, "关闭 ComfyUI"],
+            ["busy", "ComfyUI 正在启动…", "启动中…"],
+            ["probing", "ComfyUI 状态检测中…", "启动 ComfyUI"],
+            ["down", "ComfyUI 未运行", "启动 ComfyUI"],
+          ] as const
+        ).map(([state, text, action]) => (
+          <div
+            key={state}
+            className={`border-border bg-surface-2 w-160 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
+          >
+            <StatusDot state={state} />
+            <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>{text}</span>
+            <div className={STATUS_ACTIONS_CLASS}>
+              <StatusButton onClick={() => undefined} variant="primary" disabled={state === "busy"}>
+                打开查看
+              </StatusButton>
+              <StatusButton
+                onClick={() => undefined}
+                variant="primary-solid"
+                disabled={state === "busy"}
+              >
+                {action}
+              </StatusButton>
+            </div>
           </div>
-        </div>
-      ))}
+        ))
+      }
     </div>
   ),
 };

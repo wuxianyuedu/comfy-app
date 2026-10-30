@@ -3,15 +3,8 @@
 // 保存继承（#2615）：草稿缺键的机器衍生字段从库中同 id 记录继承。
 import { describe, expect, it } from "vitest";
 
-import {
-  buildProductionPayload,
-  inheritDerivedFields,
-  SHOT_DERIVED_FIELDS,
-} from "./payload";
-import {
-  emptyWorkshopDraft,
-  type WorkshopDraft,
-} from "~/lib/workshop/draft-store";
+import { buildProductionPayload, inheritDerivedFields, SHOT_DERIVED_FIELDS } from "./payload";
+import { emptyWorkshopDraft, type WorkshopDraft } from "~/lib/workshop/draft-store";
 import type { Shot } from "~/lib/workshop/types";
 
 describe("buildProductionPayload", () => {
@@ -26,7 +19,7 @@ describe("buildProductionPayload", () => {
         logline: "一句话",
       },
       scriptMarkdown: "# 剧本",
-      shots: [{ id: "a" } as Shot],
+      shots: [/* SAFETY: 类型断言已复核 */ { id: "a" } as Shot],
     };
     const payload = buildProductionPayload(draft, "storyboard", true);
     expect(payload).toMatchObject({
@@ -55,9 +48,7 @@ describe("inheritDerivedFields（#2615 保存继承）", () => {
         scoredAt: "t2",
       },
       humanVerdict: { pass: false, note: "重画", at: "t3" },
-      reviewHistory: [
-        { pass: false, issues: [], suggestion: "", scoredAt: "t0" },
-      ],
+      reviewHistory: [{ pass: false, issues: [], suggestion: "", scoredAt: "t0" }],
     },
     { id: "shot-gone", rev: 9 }, // 库里有、草稿已删 → 不出现在结果里
   ];
@@ -97,22 +88,14 @@ describe("inheritDerivedFields（#2615 保存继承）", () => {
   it("无 id 的入参记录原样保留；库里没有同 id 记录时不凭空造字段", () => {
     const odd = { prompt: "没有 id" };
     const fresh = { id: "shot-new", prompt: "新镜" };
-    const result = inheritDerivedFields(
-      [odd, fresh],
-      existing,
-      SHOT_DERIVED_FIELDS,
-    );
+    const result = inheritDerivedFields([odd, fresh], existing, SHOT_DERIVED_FIELDS);
     expect(result[0]).toBe(odd);
     expect(result[1]).toEqual(fresh);
   });
 
   it("非对象记录原样穿过，不抛", () => {
     expect(
-      inheritDerivedFields(
-        [null, 42, { id: "shot-1" }],
-        existing,
-        SHOT_DERIVED_FIELDS,
-      ),
+      inheritDerivedFields([null, 42, { id: "shot-1" }], existing, SHOT_DERIVED_FIELDS),
     ).toEqual([null, 42, expect.objectContaining({ id: "shot-1", rev: 3 })]);
   });
 });

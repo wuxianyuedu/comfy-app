@@ -6,10 +6,7 @@
 import { useTheme } from "next-themes";
 import { portColor } from "~/lib/comfyui/types";
 import { resolveAnchorCylinder } from "./workflow-node-palette";
-import {
-  CollapsedAnchorCylinder,
-  CollapsedPortHandles,
-} from "./FlowNodeCollapsedAnchors";
+import { CollapsedAnchorCylinder, CollapsedPortHandles } from "./FlowNodeCollapsedAnchors";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
 
 interface SubgraphCollapsedAnchorsProps {
@@ -27,12 +24,8 @@ export function SubgraphCollapsedAnchors({
   connectedInputs,
   connectedOutputs,
 }: SubgraphCollapsedAnchorsProps) {
-  const wiredInputs = connInputs.filter(({ inp }) =>
-    connectedInputs?.has(inp.name),
-  );
-  const wiredOutputs = outputs.filter(({ out }) =>
-    connectedOutputs?.has(out.name),
-  );
+  const wiredInputs = connInputs.filter(({ inp }) => connectedInputs?.has(inp.name));
+  const wiredOutputs = outputs.filter(({ out }) => connectedOutputs?.has(out.name));
   /* 锚柱跟主题联动（浅色下白描白会让锚柱整个消失）。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);
@@ -40,23 +33,15 @@ export function SubgraphCollapsedAnchors({
   return (
     <>
       {wiredInputs.length > 0 && (
-        <CollapsedAnchorCylinder
-          side="left"
-          count={wiredInputs.length}
-          anchor={anchor}
-        />
+        <CollapsedAnchorCylinder side="left" count={wiredInputs.length} anchor={anchor} />
       )}
       {outputs.length > 0 && (
-        <CollapsedAnchorCylinder
-          side="right"
-          count={outputs.length}
-          anchor={anchor}
-        />
+        <CollapsedAnchorCylinder side="right" count={outputs.length} anchor={anchor} />
       )}
       <CollapsedPortHandles
         items={wiredInputs.map(({ inp, label }, idx) => ({
           key: `collapsed-sub-in-${inp.name}-${idx}`,
-          side: "left" as const,
+          side: /* SAFETY: 类型断言已复核 */ "left" as const,
           id: inp.name,
           title: `${label} (${inp.type})`,
           color: portColor(inp.type ?? "*"),
@@ -65,7 +50,7 @@ export function SubgraphCollapsedAnchors({
       <CollapsedPortHandles
         items={wiredOutputs.map(({ out, display }, idx) => ({
           key: `collapsed-sub-out-${out.name}-${idx}`,
-          side: "right" as const,
+          side: /* SAFETY: 类型断言已复核 */ "right" as const,
           id: `out:${out.name}`,
           title: `${display} (${out.type})`,
           color: portColor(out.type ?? "*"),

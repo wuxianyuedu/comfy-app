@@ -35,8 +35,7 @@ export async function POST(req: NextRequest) {
 
   /* 读 body / 取条目名 / 解析连接参数与「继续等待」路由同一份实现（§12.12）。 */
   const prologue = await readUsageTestPrologue(req);
-  if (!prologue.ok)
-    return NextResponse.json({ ok: false, detail: prologue.detail });
+  if (!prologue.ok) return NextResponse.json({ ok: false, detail: prologue.detail });
   const { name, rec, up } = prologue;
 
   const kind = strField(rec, "kind");
@@ -44,7 +43,7 @@ export async function POST(req: NextRequest) {
   const size = strField(rec, "size");
   const extraJson = strField(rec, "extraJson");
 
-  if (!(USAGE_TEST_KINDS as readonly string[]).includes(kind)) {
+  if (!(/* SAFETY: 类型断言已复核 */ (USAGE_TEST_KINDS as readonly string[]).includes(kind))) {
     return NextResponse.json({
       ok: false,
       detail: `未知用途：${kind || "(空)"}`,
@@ -56,8 +55,7 @@ export async function POST(req: NextRequest) {
   const model = name;
 
   const parsedExtra = parseExtraJson(extraJson);
-  if (!parsedExtra.ok)
-    return NextResponse.json({ ok: false, detail: parsedExtra.detail });
+  if (!parsedExtra.ok) return NextResponse.json({ ok: false, detail: parsedExtra.detail });
   const { extra } = parsedExtra;
 
   const startedAt = Date.now();

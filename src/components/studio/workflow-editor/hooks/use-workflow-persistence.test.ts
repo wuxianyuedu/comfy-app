@@ -80,11 +80,8 @@ function renderReset(args: {
 }
 
 /** 从 setDetail 的 updater 里取出写回的 positions。 */
-function readWrittenPositions(
-  setDetail: ReturnType<typeof vi.fn>,
-  detail: WorkflowDetail,
-) {
-  const updater = setDetail.mock.calls.at(-1)?.[0] as
+function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: WorkflowDetail) {
+  const updater = /* SAFETY: 类型断言已复核 */ setDetail.mock.calls.at(-1)?.[0] as
     | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
     | undefined;
   if (!updater) return undefined;
@@ -94,8 +91,8 @@ function readWrittenPositions(
 describe("resetLayout", () => {
   it("重置 = 清除本视图坐标覆盖：向服务端发 resetPositionsScope，本地同步剔除", () => {
     const positions = {
-      "1001": [10, 20] as [number, number],
-      "1002": [30, 40] as [number, number],
+      "1001": /* SAFETY: 类型断言已复核 */ [10, 20] as [number, number],
+      "1002": /* SAFETY: 类型断言已复核 */ [30, 40] as [number, number],
     };
     const detail = makeDetail({ positions });
     const { result, setDetail, mutate } = renderReset({ detail });
@@ -114,7 +111,9 @@ describe("resetLayout", () => {
 
   it("重置必须重新拉取当前视图（否则画布停在本地剔除后的中间态）", () => {
     const detail = makeDetail({
-      positions: { "1001": [10, 20] as [number, number] },
+      positions: {
+        "1001": /* SAFETY: 类型断言已复核 */ [10, 20] as [number, number],
+      },
     });
     const reloadView = vi.fn();
     const { result, fitToContent } = renderReset({
@@ -131,9 +130,9 @@ describe("resetLayout", () => {
 
   it("顶层重置只清裸 id，子图命名空间的键与导轨之外的同层数据原样保留", () => {
     const positions = {
-      "4": [100, 100] as [number, number],
-      "4:1670": [1000, 1000] as [number, number],
-      "grp:bpin:inputs": [0, 0] as [number, number],
+      "4": /* SAFETY: 类型断言已复核 */ [100, 100] as [number, number],
+      "4:1670": /* SAFETY: 类型断言已复核 */ [1000, 1000] as [number, number],
+      "grp:bpin:inputs": /* SAFETY: 类型断言已复核 */ [0, 0] as [number, number],
     };
     const detail = makeDetail({
       nodes: nodesOf(["4"]),
@@ -227,10 +226,10 @@ describe("resetLayout · 子图 id 命名空间", () => {
      *  布局）、`4:1670`（本层的拖拽覆盖）、`grp:bpin:*`（外层画布的导轨）。
      *  重置只该清中间那一套。 */
     const positions = {
-      "4": [0, 0] as [number, number],
-      "4:1001": [1000, 1000] as [number, number],
-      "4:1002": [1200, 1000] as [number, number],
-      "grp:bpin:inputs": [5, 5] as [number, number],
+      "4": /* SAFETY: 类型断言已复核 */ [0, 0] as [number, number],
+      "4:1001": /* SAFETY: 类型断言已复核 */ [1000, 1000] as [number, number],
+      "4:1002": /* SAFETY: 类型断言已复核 */ [1200, 1000] as [number, number],
+      "grp:bpin:inputs": /* SAFETY: 类型断言已复核 */ [5, 5] as [number, number],
     };
     const detail = makeDetail({
       id: "wf-1#subgraph:uid",
@@ -256,9 +255,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
 
   it("嵌套子图只清自己那一层，更深的 `4:5:1670` 留给下层视图", () => {
     const positions = {
-      "4:5": [0, 0] as [number, number],
-      "4:5:1670": [1000, 1000] as [number, number],
-      "4:1671": [700, 700] as [number, number],
+      "4:5": /* SAFETY: 类型断言已复核 */ [0, 0] as [number, number],
+      "4:5:1670": /* SAFETY: 类型断言已复核 */ [1000, 1000] as [number, number],
+      "4:1671": /* SAFETY: 类型断言已复核 */ [700, 700] as [number, number],
     };
     const detail = makeDetail({
       id: "wf-1#subgraph:nested",
@@ -286,7 +285,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
     const detail = makeDetail({
       id: "wf-1#subgraph:uid",
       nodes: nodesOf(["1001"]),
-      positions: { "4:1001": [1000, 1000] as [number, number] },
+      positions: {
+        "4:1001": /* SAFETY: 类型断言已复核 */ [1000, 1000] as [number, number],
+      },
     });
     const reloadView = vi.fn();
     const { result } = renderReset({

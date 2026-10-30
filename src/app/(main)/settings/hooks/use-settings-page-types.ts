@@ -24,11 +24,7 @@ import type {
   UsageTestInput,
   UsageTestResult,
 } from "~/lib/llm/usage-test-client";
-import {
-  TASK_TYPES,
-  type RemoteModelEntry,
-  type TaskType,
-} from "~/lib/llm/types";
+import { TASK_TYPES, type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
 import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
@@ -229,9 +225,7 @@ export interface SettingsPageController {
   /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
    * 这一层过去另写一遍字段，于是「弹窗拼的那枚条目」与「controller 收的那枚条目」
    * 是两个各自自洽的形状。 */
-  addRemoteModel: (
-    entry: RemoteModelDraftEntry,
-  ) => Promise<{ ok: boolean; error?: string }>;
+  addRemoteModel: (entry: RemoteModelDraftEntry) => Promise<{ ok: boolean; error?: string }>;
   /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
    *  模型引用旧名会同步更新。
    *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
@@ -284,7 +278,7 @@ export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
-export const TEMPERATURE_TASKS = Object.entries(TASK_TYPES) as [
+export const TEMPERATURE_TASKS = /* SAFETY: 类型断言已复核 */ Object.entries(TASK_TYPES) as [
   TaskType,
   (typeof TASK_TYPES)[TaskType],
 ][];

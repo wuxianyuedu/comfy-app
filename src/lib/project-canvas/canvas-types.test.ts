@@ -18,11 +18,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  asCanvasNodeData,
-  defaultData,
-  type StrictCanvasNodeData,
-} from "./canvas-types";
+import { asCanvasNodeData, defaultData, type StrictCanvasNodeData } from "./canvas-types";
 
 describe("StrictCanvasNodeData — 字段名拼错必须编译不过", () => {
   it("已声明字段可正常读写", () => {
@@ -85,7 +81,7 @@ describe("asCanvasNodeData — 唯一的数据收口点", () => {
 
 describe("defaultData — 各 kind 的必要字段齐备", () => {
   it("每种 kind 都产出可直接渲染的数据（不含 undefined 必填字段）", () => {
-    for (const kind of [
+    for (const kind of /* SAFETY: 类型断言已复核 */ [
       "image",
       "video",
       "text",

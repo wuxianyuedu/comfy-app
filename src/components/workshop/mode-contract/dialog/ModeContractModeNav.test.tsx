@@ -35,9 +35,7 @@ function categoryTrigger(category: string): HTMLElement {
 function modesOf(container: HTMLElement, category: string): Element[] {
   const slot = container.querySelector(`[data-category="${category}"]`);
   return Array.from(
-    slot
-      ?.closest('[data-slot="disclosure"]')
-      ?.querySelectorAll("[data-mode]") ?? [],
+    slot?.closest('[data-slot="disclosure"]')?.querySelectorAll("[data-mode]") ?? [],
   );
 }
 
@@ -70,35 +68,23 @@ function renderNav(
 describe("模式导航的树形结构（ISSUE #1870）", () => {
   it("渲染出全部模式，且不重复（按 code 集合双向比对）", () => {
     renderNav();
-    const rendered = screen
-      .getAllByRole("radio")
-      .map((el) => el.getAttribute("data-mode"));
-    expect(new Set(rendered)).toEqual(
-      new Set(CONTRACT_MODES.map((t) => t.code)),
-    );
+    const rendered = screen.getAllByRole("radio").map((el) => el.getAttribute("data-mode"));
+    expect(new Set(rendered)).toEqual(new Set(CONTRACT_MODES.map((t) => t.code)));
     expect(rendered.length).toBe(CONTRACT_MODES.length);
   });
 
   it("每个类别都是一个父行 + 它的子行集合", () => {
     const { container } = render(
-      <ModeContractModeNav
-        activeMode={null}
-        storedCustomized={() => false}
-        onSelect={vi.fn()}
-      />,
+      <ModeContractModeNav activeMode={null} storedCustomized={() => false} onSelect={vi.fn()} />,
     );
     const tree = contractModeTree();
     for (const group of tree) {
       /* 父行按类别名可认（它的可读名就在触发按钮里）。 */
       expect(screen.getByText(group.label)).toBeTruthy();
       /* 挂在这一类下的模式数就是 `contractModeTree` 给的那几条 —— 不写字面量。 */
-      expect(modesOf(container, group.category).length).toBe(
-        group.modes.length,
-      );
+      expect(modesOf(container, group.category).length).toBe(group.modes.length);
     }
-    expect(
-      container.querySelectorAll('[data-slot="tree-children"]').length,
-    ).toBe(tree.length);
+    expect(container.querySelectorAll('[data-slot="tree-children"]').length).toBe(tree.length);
   });
 
   it("当前模式带 aria-checked，其余不带", () => {
@@ -107,9 +93,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     const active = screen
       .getAllByRole("radio")
       .filter((el) => el.getAttribute("aria-checked") === "true");
-    expect(active.map((el) => el.getAttribute("data-mode"))).toEqual([
-      first.code,
-    ]);
+    expect(active.map((el) => el.getAttribute("data-mode"))).toEqual([first.code]);
   });
 
   it("点一个模式把它的 code 上抛（不自己改选中态）", async () => {
@@ -119,15 +103,11 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     /* 按 `data-mode` 取行而不是按可访问名：模式中文名互为子串（「图生图」是
        「参考图生图」「图文混合条件生图」的一部分），按名字找会命中多枚。 */
     const { container } = render(
-      <ModeContractModeNav
-        activeMode={null}
-        storedCustomized={() => false}
-        onSelect={onSelect}
-      />,
+      <ModeContractModeNav activeMode={null} storedCustomized={() => false} onSelect={onSelect} />,
     );
     const row = container.querySelector(`[data-mode="${target.code}"]`);
     expect(row).toBeTruthy();
-    await user.click(row as HTMLElement);
+    await user.click(/* SAFETY: 类型断言已复核 */ row as HTMLElement);
     expect(onSelect).toHaveBeenCalledWith(target.code);
   });
 
@@ -136,9 +116,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     renderNav(null, (code) => code === only.code);
     const badges = screen.getAllByText("已改");
     expect(badges.length).toBe(1);
-    expect(badges[0]!.closest("[data-mode]")?.getAttribute("data-mode")).toBe(
-      only.code,
-    );
+    expect(badges[0]!.closest("[data-mode]")?.getAttribute("data-mode")).toBe(only.code);
   });
 });
 
@@ -157,9 +135,7 @@ describe("每个类别可折叠（ISSUE #1870 第二刀）", () => {
   it("默认每个类别都展开（开关 aria-expanded=true）", () => {
     render(<ModeContractModeNav {...navProps()} />);
     for (const group of contractModeTree()) {
-      expect(categoryTrigger(group.label).getAttribute("aria-expanded")).toBe(
-        "true",
-      );
+      expect(categoryTrigger(group.label).getAttribute("aria-expanded")).toBe("true");
     }
   });
 
@@ -172,12 +148,8 @@ describe("每个类别可折叠（ISSUE #1870 第二刀）", () => {
     await user.click(firstTrigger);
     expect(firstTrigger.getAttribute("aria-expanded")).toBe("false");
     /* 只动这一类的**开关**：另一类的开关仍是展开，它的模式行也仍在。 */
-    expect(categoryTrigger(second!.label).getAttribute("aria-expanded")).toBe(
-      "true",
-    );
-    expect(modesOf(container, second!.category).length).toBe(
-      second!.modes.length,
-    );
+    expect(categoryTrigger(second!.label).getAttribute("aria-expanded")).toBe("true");
+    expect(modesOf(container, second!.category).length).toBe(second!.modes.length);
 
     await user.click(firstTrigger);
     expect(firstTrigger.getAttribute("aria-expanded")).toBe("true");
@@ -187,9 +159,7 @@ describe("每个类别可折叠（ISSUE #1870 第二刀）", () => {
     const user = userEvent.setup();
     const { container } = render(<ModeContractModeNav {...navProps()} />);
     const first = contractModeTree()[0]!;
-    const categorySlot = container.querySelector(
-      `[data-category="${first.category}"]`,
-    );
+    const categorySlot = container.querySelector(`[data-category="${first.category}"]`);
     const panel = categorySlot
       ?.closest('[data-slot="disclosure"]')
       ?.querySelector('[data-slot="disclosure-panel"]');

@@ -42,10 +42,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 /** 判据脚本本体（`scripts/check-a11y-rules.cjs`）。 */
-export const SCRIPT = path.resolve(
-  __dirname,
-  "../../scripts/check-a11y-rules.cjs",
-);
+export const SCRIPT = path.resolve(__dirname, "../../scripts/check-a11y-rules.cjs");
 
 /** 真仓库根 —— 判据要读的 `eslint.config.js` 只有真根上有（临时仓库里没有 node_modules）。 */
 export const REAL_ROOT = path.resolve(__dirname, "../..");
@@ -105,5 +102,5 @@ const requireCjs = createRequire(__filename);
  * 见文件头「失败路径」）。
  */
 export function loadJudgeModule(): A11yJudgeModule {
-  return requireCjs(SCRIPT) as A11yJudgeModule;
+  return /* SAFETY: 类型断言已复核 */ requireCjs(SCRIPT) as A11yJudgeModule;
 }

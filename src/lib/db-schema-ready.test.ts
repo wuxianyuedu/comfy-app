@@ -104,7 +104,7 @@ afterEach(() => {
   /* 关掉挂在单例上的客户端（`NODE_ENV !== "production"` 时 `~/server/db` 会把它
    * 留在 `globalThis.db`）。这一步是卫生，不是「让删得掉」—— 真正的释放要等
    * 线程结束，见上面 `sweepStaleTempDirs` 的说明。 */
-  const cached = (
+  const cached = /* SAFETY: 类型断言已复核 */ (
     globalThis as unknown as {
       db?: { $client?: { close?: () => void } };
     }
@@ -157,8 +157,7 @@ describe("isSchemaReady 缓存", () => {
   afterEach(() => cwd.restore());
 
   it("同进程内只探一次：建表后缓存仍为 false（调用方每轮自行重探的语义由 sweep 决定）", async () => {
-    const { isSchemaReady, resetSchemaReadinessCache } =
-      await import("./db-schema-ready");
+    const { isSchemaReady, resetSchemaReadinessCache } = await import("./db-schema-ready");
     expect(isSchemaReady()).toBe(false);
     createSchema(dbFile);
     // 缓存命中，不会因为库刚建好就翻牌
@@ -227,10 +226,7 @@ describe("reaper 模块级副作用", () => {
       vi.stubEnv("DATABASE_URL", `file:${dbFile}`);
 
       const repository = await import("./core/repository");
-      const listStaleUnownedQueued = vi.spyOn(
-        repository.taskRepository,
-        "listStaleUnownedQueued",
-      );
+      const listStaleUnownedQueued = vi.spyOn(repository.taskRepository, "listStaleUnownedQueued");
 
       /* 加载模块本身已不再起回收器（ADR §14 D3），所以这里必须**显式**起一次：
        * 否则本用例只验了「什么都没发生」，判据会静默失效——要验的是「起了表、

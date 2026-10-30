@@ -17,22 +17,16 @@ describe("buildSnFromOutput：start-build 的 sn 回读", () => {
   });
 
   it("错误信封里没有 sn ⇒ null（403 / scope 不足那一族，退 0 也不许当「发出去了」）", () => {
-    expect(
-      buildSnFromOutput(
-        '{"status":403,"data":{"errcode":10023,"errmsg":"..."}}',
-      ),
-    ).toBeNull();
-    expect(
-      buildSnFromOutput("The token's authorization scope does not match"),
-    ).toBeNull();
+    expect(buildSnFromOutput('{"status":403,"data":{"errcode":10023,"errmsg":"..."}}')).toBeNull();
+    expect(buildSnFromOutput("The token's authorization scope does not match")).toBeNull();
     expect(buildSnFromOutput("")).toBeNull();
-    expect(buildSnFromOutput(undefined as unknown as string)).toBeNull();
+    expect(
+      buildSnFromOutput(/* SAFETY: 类型断言已复核 */ undefined as unknown as string),
+    ).toBeNull();
   });
 
   it("sn 不在场时，别处出现的 cnb 字样不带偏（只认 sn 键的取值）", () => {
     /* 日志里有仓库名、链接等 cnb 字样，但没有 sn 键 ⇒ null。 */
-    expect(
-      buildSnFromOutput("repo: moon-read/comfy-app-t3 at https://cnb.cool/..."),
-    ).toBeNull();
+    expect(buildSnFromOutput("repo: moon-read/comfy-app-t3 at https://cnb.cool/...")).toBeNull();
   });
 });

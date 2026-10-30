@@ -39,7 +39,11 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const PATHS = ["style_pack", "style_pack/高光", "style_pack/锐化"] as const;
+const PATHS = /* SAFETY: 类型断言已复核 */ [
+  "style_pack",
+  "style_pack/高光",
+  "style_pack/锐化",
+] as const;
 
 function ExpansionDemo() {
   /* 初始空表 = 全部未表态 = 全部折叠。 */
@@ -47,10 +51,7 @@ function ExpansionDemo() {
   return (
     <div className="flex w-120 flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        <button
-          className="rounded border px-2 py-1 text-xs"
-          onClick={() => nodes.replace({})}
-        >
+        <button className="rounded border px-2 py-1 text-xs" onClick={() => nodes.replace({})}>
           collapseAll（全收起）
         </button>
         <button
@@ -115,10 +116,7 @@ function SeedDemo() {
         >
           seedDefaults(PATHS)
         </button>
-        <button
-          className="rounded border px-2 py-1 text-xs"
-          onClick={() => nodes.replace({})}
-        >
+        <button className="rounded border px-2 py-1 text-xs" onClick={() => nodes.replace({})}>
           replace({"{ }"})
         </button>
       </div>
@@ -126,9 +124,8 @@ function SeedDemo() {
         {JSON.stringify(nodes.map, null, 2)}
       </pre>
       <p className="text-ink-muted text-xs">
-        初始 `{"{ style_pack: false }"}`（= 用户手动收起过）。 点
-        seedDefaults：`style_pack` **保持 false**（键已存在、不许被覆盖）； 点
-        replace({"{}"})：整表换成空 = 回到「全部未表态」。
+        初始 `{"{ style_pack: false }"}`（= 用户手动收起过）。 点 seedDefaults：`style_pack` **保持
+        false**（键已存在、不许被覆盖）； 点 replace({"{}"})：整表换成空 = 回到「全部未表态」。
       </p>
     </div>
   );

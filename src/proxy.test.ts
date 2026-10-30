@@ -26,7 +26,9 @@ import { config, proxy } from "./proxy";
 function reqFor(pathnameWithQuery: string): NextRequest {
   const url = new URL(`http://127.0.0.1:3996${pathnameWithQuery}`);
   const nextUrl = Object.assign(url, { clone: () => new URL(url.href) });
-  return { nextUrl } as unknown as NextRequest;
+  return /* SAFETY: 类型断言已复核 */ {
+    nextUrl,
+  } as unknown as NextRequest;
 }
 
 /** rewrite 的落点（Next 把它写在 `x-middleware-rewrite` 上）；`next()` 时为空。 */
@@ -37,9 +39,7 @@ function rewrittenTo(res: Response): string | null {
 describe("产物前缀折进带闸门的读取口", () => {
   it("/generated/<taskId>/<file> → 改写到 /api/generated/ 同一位置", () => {
     const res = proxy(reqFor("/generated/t1/img_0.png"));
-    expect(rewrittenTo(res)).toBe(
-      "http://127.0.0.1:3996/api/generated/t1/img_0.png",
-    );
+    expect(rewrittenTo(res)).toBe("http://127.0.0.1:3996/api/generated/t1/img_0.png");
   });
 
   it("多层产物路径原样折过去（素材格与项目格都比任务格深）", () => {
@@ -51,9 +51,7 @@ describe("产物前缀折进带闸门的读取口", () => {
 
   it("查询串保留（改写只动 pathname，不该把 ?v= 丢掉）", () => {
     const res = proxy(reqFor("/generated/t1/a.png?v=2"));
-    expect(rewrittenTo(res)).toBe(
-      "http://127.0.0.1:3996/api/generated/t1/a.png?v=2",
-    );
+    expect(rewrittenTo(res)).toBe("http://127.0.0.1:3996/api/generated/t1/a.png?v=2");
   });
 
   it("/generated 这一段本身也折过去（它会解析成产物根，交给 route 判 404）", () => {
@@ -75,9 +73,7 @@ describe("不该被折的都不能折", () => {
   });
 
   it("Next 内部资源不碰", () => {
-    expect(
-      rewrittenTo(proxy(reqFor("/_next/static/chunks/app.js"))),
-    ).toBeNull();
+    expect(rewrittenTo(proxy(reqFor("/_next/static/chunks/app.js")))).toBeNull();
   });
 });
 

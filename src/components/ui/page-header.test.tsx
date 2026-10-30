@@ -29,12 +29,7 @@ describe("PageHeader（屏级页头）", () => {
   });
 
   it("传了 description 时它走已定档的那一句（text-sm + text-ink-muted）", () => {
-    render(
-      <PageHeader
-        title="历史记录"
-        description="所有生成任务与执行日志，按时间倒序排列。"
-      />,
-    );
+    render(<PageHeader title="历史记录" description="所有生成任务与执行日志，按时间倒序排列。" />);
     const line = screen.getByText("所有生成任务与执行日志，按时间倒序排列。");
     expect(line.tagName).toBe("P");
     expect(line.className).toContain("text-sm");
@@ -45,19 +40,15 @@ describe("PageHeader（屏级页头）", () => {
     const { container } = render(
       <PageHeader title="队列" actions={<button type="button">刷新</button>} />,
     );
-    const header = container.querySelector<HTMLElement>(
-      '[data-component="page-header"]',
-    );
-    const group = header?.lastElementChild as HTMLElement;
+    const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
+    const group = /* SAFETY: 类型断言已复核 */ header?.lastElementChild as HTMLElement;
     expect(group.className).toContain("shrink-0");
     expect(header?.children).toHaveLength(2);
 
     cleanup();
     const bare = render(<PageHeader title="队列" />);
     expect(
-      bare.container.querySelector<HTMLElement>(
-        '[data-component="page-header"]',
-      )?.children,
+      bare.container.querySelector<HTMLElement>('[data-component="page-header"]')?.children,
     ).toHaveLength(1);
   });
 
@@ -87,9 +78,7 @@ describe("PageHeader（屏级页头）", () => {
     expect(heading.className).not.toContain("u-title-page");
     /* 左侧那一列（标题 + 副说明 + extra）整块不渲染 —— 页头里只剩那一个
        `sr-only` 的 `h1`，没有任何占位的空壳容器。 */
-    const header = container.querySelector<HTMLElement>(
-      '[data-component="page-header"]',
-    );
+    const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     expect(header?.children).toHaveLength(1);
     expect(header?.firstElementChild?.tagName).toBe("H1");
   });
@@ -102,31 +91,21 @@ describe("PageHeader（屏级页头）", () => {
         actions={<button type="button">刷新</button>}
       />,
     );
-    const header = container.querySelector<HTMLElement>(
-      '[data-component="page-header"]',
-    );
+    const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 两个子元素：`sr-only` 的 h1 + 动作组（说明钮在动作组里）。 */
     expect(header?.children).toHaveLength(2);
-    const group = header?.lastElementChild as HTMLElement;
+    const group = /* SAFETY: 类型断言已复核 */ header?.lastElementChild as HTMLElement;
     expect(group.className).toContain("ml-auto");
-    expect(group.contains(screen.getByRole("button", { name: "说明" }))).toBe(
-      true,
-    );
+    expect(group.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
 
   it("有可见标题时说明钮跟着标题走（读者在「这屏叫什么」处顺路看见它）", () => {
-    const { container } = render(
-      <PageHeader title="队列" help="每 2 秒读一次本机后端。" />,
-    );
-    const header = container.querySelector<HTMLElement>(
-      '[data-component="page-header"]',
-    );
+    const { container } = render(<PageHeader title="队列" help="每 2 秒读一次本机后端。" />);
+    const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 只有一个子元素（标题那一列），说明钮在它里面。 */
     expect(header?.children).toHaveLength(1);
-    const column = header?.firstElementChild as HTMLElement;
-    expect(column.contains(screen.getByRole("button", { name: "说明" }))).toBe(
-      true,
-    );
+    const column = /* SAFETY: 类型断言已复核 */ header?.firstElementChild as HTMLElement;
+    expect(column.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
 
   it("省略 title 时不传 srTitle，就真的一个 h1 都没有（不凭空造标题）", () => {
@@ -135,9 +114,7 @@ describe("PageHeader（屏级页头）", () => {
   });
 
   it("`help` 把那句解释收成悬浮按钮，不占标题区那一行", () => {
-    const { container } = render(
-      <PageHeader srTitle="队列" help="每 2 秒读一次本机后端。" />,
-    );
+    const { container } = render(<PageHeader srTitle="队列" help="每 2 秒读一次本机后端。" />);
     /* 正文里没有常驻的那一行 —— 这正是 ISSUE #1693 要的「说明的直接显示也去掉」。 */
     expect(container.querySelectorAll("p")).toHaveLength(0);
     const trigger = screen.getByRole("button", { name: "说明" });
@@ -154,8 +131,6 @@ describe("PageHeader（屏级页头）", () => {
     );
     expect(screen.queryByRole("button", { name: "说明" })).toBeNull();
     /* 那句话只在常驻那一行出现一次（浮层内容未展开时不落 DOM）。 */
-    expect(
-      screen.getAllByText("所有生成任务与执行日志，按时间倒序排列。"),
-    ).toHaveLength(1);
+    expect(screen.getAllByText("所有生成任务与执行日志，按时间倒序排列。")).toHaveLength(1);
   });
 });

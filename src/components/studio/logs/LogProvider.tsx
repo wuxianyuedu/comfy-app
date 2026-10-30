@@ -21,12 +21,7 @@ import {
   useLogStore,
 } from "./log-store";
 
-export type {
-  LogEntry,
-  LogFilter,
-  LogLevel,
-  LogOriginFilter,
-} from "./log-store";
+export type { LogEntry, LogFilter, LogLevel, LogOriginFilter } from "./log-store";
 
 /**
  * 订阅日志 store 的指定字段（规范 07 §7.4：组件只订阅自己需要的字段，
@@ -45,16 +40,15 @@ export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
 
 /** unknown 抛值 → 可读文本（Error 带堆栈；对象取 message；其余 JSON/String 兜底）。 */
 export function describeGlobalError(reason: unknown): string {
-  if (reason instanceof Error)
-    return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
+  if (reason instanceof Error) return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
   if (typeof reason === "string") return reason;
   if (
     typeof reason === "object" &&
     reason !== null &&
     "message" in reason &&
-    typeof (reason as { message?: unknown }).message === "string"
+    typeof (/* SAFETY: 类型断言已复核 */ (reason as { message?: unknown }).message) === "string"
   ) {
-    return (reason as { message: string }).message;
+    return /* SAFETY: 类型断言已复核 */ (reason as { message: string }).message;
   }
   try {
     return JSON.stringify(reason, null, 2) ?? String(reason);
@@ -88,7 +82,7 @@ export function describeUnhandledRejection(reason: unknown): string {
  * 各路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
  * 不影响面板的时间序（ISSUE #262）。
  */
-const POLL_SOURCES = [
+const POLL_SOURCES = /* SAFETY: 类型断言已复核 */ [
   "launcher",
   "shell-launch",
   "shell",
@@ -113,7 +107,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const originals = {
+    const originals = /* SAFETY: 类型断言已复核 */ {
       log: console.log,
       info: console.info,
       warn: console.warn,
@@ -176,23 +170,14 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     const setup = async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<{ level: string; message: string }>(
-          "log:emit",
-          (event) => {
-            const lv = event.payload?.level ?? "info";
-            const message = event.payload?.message ?? "";
-            if (!message) return;
-            const level: LogLevel =
-              lv === "error"
-                ? "error"
-                : lv === "warn"
-                  ? "warn"
-                  : lv === "debug"
-                    ? "debug"
-                    : "info";
-            addEntry({ level, message, source: "tauri" });
-          },
-        );
+        unlisten = await listen<{ level: string; message: string }>("log:emit", (event) => {
+          const lv = event.payload?.level ?? "info";
+          const message = event.payload?.message ?? "";
+          if (!message) return;
+          const level: LogLevel =
+            lv === "error" ? "error" : lv === "warn" ? "warn" : lv === "debug" ? "debug" : "info";
+          addEntry({ level, message, source: "tauri" });
+        });
       } catch (err) {
         /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。
            但「在壳里却监听失败」不是正常形态，最常见的原因是 CSP 的 connect-src

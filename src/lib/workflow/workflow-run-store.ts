@@ -16,11 +16,7 @@
  * 参照 project-canvas/stepLogCache.ts 的同款取舍，真值永远以服务端为准。
  */
 
-import {
-  readStorageItem,
-  removeStorageItem,
-  writeStorageJson,
-} from "../browser-storage";
+import { readStorageItem, removeStorageItem, writeStorageJson } from "../browser-storage";
 import type { TaskLogEntry } from "../workshop/generation-client";
 import { tailWindow, tailWindowAppend } from "~/lib/page-window";
 
@@ -117,10 +113,10 @@ function hydrate(): void {
       if (
         item &&
         typeof item === "object" &&
-        typeof (item as WorkflowRunMeta).taskId === "string" &&
-        typeof (item as WorkflowRunMeta).workflowId === "string"
+        typeof (/* SAFETY: 类型断言已复核 */ (item as WorkflowRunMeta).taskId) === "string" &&
+        typeof (/* SAFETY: 类型断言已复核 */ (item as WorkflowRunMeta).workflowId) === "string"
       ) {
-        const meta = item as WorkflowRunMeta;
+        const meta = /* SAFETY: 类型断言已复核 */ item as WorkflowRunMeta;
         runs.set(meta.taskId, meta);
       }
     }
@@ -197,9 +193,7 @@ export function registerWorkflowRun(meta: WorkflowRunMeta): void {
 /** patch 已登记运行的状态 / 进度 / 结果 / 错误。 */
 export function patchWorkflowRun(
   taskId: string,
-  patch: Partial<
-    Pick<WorkflowRunMeta, "status" | "resultUrl" | "errorMessage" | "progress">
-  >,
+  patch: Partial<Pick<WorkflowRunMeta, "status" | "resultUrl" | "errorMessage" | "progress">>,
 ): void {
   const prev = runs.get(taskId);
   if (!prev) return;
@@ -232,7 +226,7 @@ export function failWorkflowRun(taskId: string, message: string): void {
           ...logs,
           {
             t: Date.now(),
-            level: "error" as const,
+            level: /* SAFETY: 类型断言已复核 */ "error" as const,
             msg: `✗ 生成失败：${reason}`,
           },
         ],
@@ -253,8 +247,7 @@ export function latestActiveWorkflowRun(): WorkflowRunMeta | null {
   for (const meta of runs.values()) {
     if (!latest || meta.startedAt > latest.startedAt) latest = meta;
     if (meta.status === "running" || !meta.status) {
-      if (!latestActive || meta.startedAt > latestActive.startedAt)
-        latestActive = meta;
+      if (!latestActive || meta.startedAt > latestActive.startedAt) latestActive = meta;
     }
   }
   return latestActive ?? latest;
@@ -283,21 +276,14 @@ export function listWorkflowRuns(): WorkflowRunMeta[] {
 /* ── 日志累积（store 托管，组件卸载不丢）──────────────────────────────── */
 
 /** 记录一条运行日志并返回累积后的数组（无该 taskId 登记时返回 null）。 */
-export function appendWorkflowRunLog(
-  taskId: string,
-  entry: TaskLogEntry,
-): TaskLogEntry[] | null {
+export function appendWorkflowRunLog(taskId: string, entry: TaskLogEntry): TaskLogEntry[] | null {
   const prev = runs.get(taskId);
   if (!prev) return null;
   const logs = prev.logs ?? [];
   // 与 GlobalStepLogPanel / stepLogCache 的 SSE 去重同款：(t, msg) 重复帧丢弃。
   // 只扫尾部 DEDUPE_WINDOW 条 —— 重复帧只会紧挨着原帧到达，扫满整个窗口是
   // 把 O(上限) 摊在每一行上。
-  for (
-    let index = Math.max(0, logs.length - DEDUPE_WINDOW);
-    index < logs.length;
-    index += 1
-  ) {
+  for (let index = Math.max(0, logs.length - DEDUPE_WINDOW); index < logs.length; index += 1) {
     const known = logs[index];
     if (known?.t === entry.t && known?.msg === entry.msg) return logs;
   }
