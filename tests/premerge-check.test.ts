@@ -23,6 +23,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
+
 import {
   combineCodes,
   lastSummary,
@@ -447,6 +449,62 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         // 而且 2 压过 1：合成器不许把「没跑起来」降级成「红了」。
         expect(combineCodes([0, missed.code, 1])).toBe(2);
       }
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("平台那一格：目标 sha 只在 env 里时，`claims` 审的是**这批**而不是 `HEAD`（ISSUE #2788）", () => {
+    /* 立案现场（第 2784 号 PR 的「提交声明核对」那一格，三轮都 0.5 秒红）：
+     * 这一段此前把 `<分叉点>..HEAD` 当**位置参数**交给 `check-commit-claims.mjs`，
+     * 而那份脚本只从 **`--range`** 认区间 —— 位置参数被它当成「审这一个 rev」，
+     * 于是 `git log <sha>..HEAD` 被读成一次提交查询 ⇒ `取不到要审的提交` ⇒ 退 2。
+     * 本机绿是因为那份脚本的 `--commit <rev>` 兜底读到了 env 里的
+     * `CNB_PULL_REQUEST_TARGET_SHA`；而平台**节点不 fetch `origin/master`**，
+     * 本文件算锚点走的是 env，子进程却拿不到同一个来源 —— 两个来源不一致。
+     * 修法：锚点由本文件算、按 `--range` 显式交出去（区间端点与 HEAD 同库）。
+     *
+     * 判的是**调用形状**那一半（子进程确实收到 `--range <分叉点>..HEAD`）；
+     * 「审了几笔」那一半由 `tests/check-commit-claims.test.ts` 的区间那组兜着。 */
+    const repo = mkdtempSync(join(tmpdir(), "premerge-claims-args-"));
+    try {
+      const g = (...args: Array<string>) =>
+        execFileSync(
+          "git",
+          ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args],
+          { cwd: repo, encoding: "utf8" },
+        ).trim();
+      g("init", "-q", "-b", "main");
+      writeFileSync(join(repo, "a.txt"), "1\n");
+      g("add", "-A");
+      g("commit", "-qm", "base");
+      const target = g("rev-parse", "HEAD");
+      g("checkout", "-q", "-b", "work");
+      writeFileSync(join(repo, "b.txt"), "1\n");
+      g("add", "-A");
+      g("commit", "-qm", "mine");
+
+      /* 平台形状：**没有任何 master 引用**，目标 sha 只在 env 里。 */
+      const env = { ...gitSandboxEnv(), CNB_PULL_REQUEST_TARGET_SHA: target };
+      execFileSync(
+        process.execPath,
+        [join(process.cwd(), "scripts", "premerge-check.mjs"), "--only=claims"],
+        {
+          cwd: repo,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          env,
+        },
+      );
+      /* 跑通就说明整条链对上了（旧形状在这里退 2：那边锚点取自安装位置那份检出、
+       * 子进程却在 cwd 那份里找端点）。再独立跑一次同一份区间，钉住「审到的就是
+       * 这一批、一笔不多一笔不少」—— 只判退出码会让「审了 0 笔却报绿」也通过。 */
+      const claims = execFileSync(
+        process.execPath,
+        [join(process.cwd(), "scripts", "check-commit-claims.mjs"), "--range", `${target}..HEAD`],
+        { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
+      );
+      expect(claims).toContain("1 次提交");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

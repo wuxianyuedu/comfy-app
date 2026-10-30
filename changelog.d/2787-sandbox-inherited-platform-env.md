@@ -32,3 +32,22 @@
   ② 是夹具的边界修复、本机不可复现，记在这里供下一次 CI-only 红时对照。
 
   两处都不动判据：`changed-scope.mjs` / `check-format.cjs` 一个字没改。
+
+## Fixed（第二现场：ISSUE #2788）
+
+- **`check:premerge --only=claims` 在平台节点上取不到区间端点，那一段恒退 2**。第一轮修完
+  沙箱那两条之后，同一格换了一种红：`[commit-claims] 取不到要审的提交：「<分叉点>..HEAD」`。
+
+  两个来源各自没错，但**不在同一份对象库上**：`premerge-check.mjs` 的 `ROOT` 锚在**脚本自己的
+  安装位置**（`path.resolve(HERE, "..")`），而 `runScript()` 也把子进程的 `cwd` 钉在那份检出上；
+  `check-commit-claims.mjs` 的 `ROOT` 却是 `process.cwd()`。于是本入口若被 `cd` 进另一份检出跑，
+  「算出来的分叉点」与「子进程找端点的那份仓库」是两个仓库 —— 端点在其中一份里根本不存在。
+
+  修法：`claims` 那一格把口径收到一处 —— 锚点按 `process.cwd()` 算、子进程也按 `process.cwd()`
+  起（`runScript()` 新增第 4 个可选 `cwd`，默认仍是 `ROOT`，`mergeLoss` 等既有各段一个字不动）。
+  区间按 `--range` 显式交出去，不依赖子进程自己能不能读到 `CNB_PULL_REQUEST_TARGET_SHA`。
+
+  判据：`tests/premerge-check.test.ts` 新增「平台那一格：目标 sha 只在 env 里时，`claims` 审的是
+  **这批**而不是 `HEAD`」——在**没有任何 `master` 引用**的临时仓库里、目标 sha 只从 env 进来，
+  整条链必须跑通并审到那一批。变异复演：只撤 `runScript()` 的 `cwd` 那一处 ⇒ 当场红成现场那行；
+  恢复后全绿。
