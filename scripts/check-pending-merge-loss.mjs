@@ -59,7 +59,17 @@ const REPO_ROOT = path.resolve(
   "..",
 );
 
-/** 在仓库内跑一条 git 命令；失败回 `null`（取不到 ≠ 空值，据此保守放行）。 */
+/**
+ * 在仓库内跑一条 git 命令；失败回 `null`（取不到 ≠ 空值，据此保守放行）。
+ *
+ * 形参与返回值必须写出来：这份函数是**当值传进内核**的
+ * （`historyByFile(git, …)` / `resolveBlobs(git, specs)`），那边声明的契约是
+ * `(args: string[], input?: string) => (string | null)` —— 这里留隐式 any，
+ * 那份契约就在边界上被抹掉，传错了（少个参数、返回值折成字符串）类型层读不出来。
+ * @param {string[]} args 跟在 `git` 后面的参数数组（`-c core.quotepath=false` 由本函数加）
+ * @param {string} [input] 要喂 stdin 的内容；不给就关掉 stdin
+ * @returns {string | null} 已 `trim` 的标准输出；跑不起来是 `null`
+ */
 function git(args, input) {
   try {
     return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
@@ -146,13 +156,20 @@ export function scanPendingMerge({ source = "" } = {}) {
   }
 
   /* 候选序与旧实现逐字同：先第一个合并父那条线、再第二个，并排除 HEAD 自己那一版。 */
+  /** @type {Map<string, string[]>} */
   const candidates = new Map();
   const specs = [];
   for (const f of files) {
     specs.push(`:${f}`, `HEAD:${f}`, `${base}:${f}`);
     const older = [];
     for (const hist of perHead) {
-      for (const s of hist.get(f)) if (s !== head) older.push(s);
+      /* `hist.get(f)` 一定取得到：`historyByFile` 在入口就把**传进去的每一份文件**
+       * 预置成空数组（`merged-side-loss-git.mjs:118` 的 `files.map((f) => [f, []])`），
+       * 而这里遍历的 `files` 正是那一份。`?? []` 是写给类型看的（`Map.get` 在
+       * `noUncheckedIndexedAccess` 下带 `| undefined`），不是「防它不在」——
+       * 那一侧的预置由 `tests/merged-side-loss-git.test.ts` 里「日志里一次没出现过的
+       * 文件仍有空条目」那条钉着：撤掉预置，本档会把整份取一侧的真违规**放行**。 */
+      for (const s of hist.get(f) ?? []) if (s !== head) older.push(s);
     }
     candidates.set(f, older);
     for (const s of older) specs.push(`${s}:${f}`);
@@ -180,7 +197,11 @@ export function scanPendingMerge({ source = "" } = {}) {
      * 判定核心取自共用内核；`blobAt` 查已取回的表，不再起进程。 */
     const hit = findEarlierVersion({
       result,
-      historyShas: candidates.get(f),
+      /* 这一格一定取得到：上面那个收集候选的循环对**每一份** `f of files` 都无条件
+       * `candidates.set(f, older)`，而这里遍历的是同一个 `files` 数组。`?? []` 只是
+       * `Map.get` 在 `noUncheckedIndexedAccess` 下的如实写法（内核那边声明收 `string[]`，
+       * 把 `undefined` 递过去才是拿「没这一格」冒充「没有候选」）。 */
+      historyShas: candidates.get(f) ?? [],
       blobAt: (older) => blob.get(`${older}:${f}`) ?? null,
     });
     if (hit) lost.push(f);
@@ -244,7 +265,10 @@ export function acknowledgeReason(message, lost) {
   return { ok: true };
 }
 
-/** 阻断时打印人类可读的出口（怎么改），不只报错。 */
+/**
+ * 阻断时打印人类可读的出口（怎么改），不只报错。
+ * @param {string[]} lost 疑似「整份取一侧」的那些文件路径（逐份点名，与上面的认账判据同一份清单）
+ */
 function printBlockedTip(lost) {
   console.error("");
   console.error(
