@@ -225,7 +225,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  *        起进程的注入缝：typedoc 冷跑实测 31s，契约测试不可能真跑它，于是把
  *        「起了但没写」这种现场直接喂进来（见 `tests/typedoc-run.test.ts`）。
  * @param {(msg: string) => void} [opts.onProgress] 每次尝试的结论（默认打到 stderr）
- * @returns {Promise<{ok: boolean, outDir: string, attempt: number, total: number, files: number, reason: string, log: string, before: object, after: object}>} 结论对象：`ok` 成没成、`attempt` 第几次成的（失败时等于最后一次）、`files` 产物文件数、`reason` 没成的原因（成功时是空串）、`log` 日志尾巴、`before` / `after` 跑前与跑后的产物快照。
+ * @returns {Promise<{ok: boolean, outDir: string, attempt: number, total: number, files: number, reason: string, log: string, before: ReturnType<typeof snapshotOutput>, after: ReturnType<typeof snapshotOutput}>} 结论对象：`ok` 成没成、`attempt` 第几次成的（失败时等于最后一次）、`files` 产物文件数、`reason` 没成的原因（成功时是空串）、`log` 日志尾巴、`before` / `after` 跑前与跑后的产物快照。
+ *   两个快照写成 `ReturnType<typeof snapshotOutput>` 而不是 `object`（同文件
+ *   `judgeRun` 的入参早就是这个引用）：`object` 会把快照的三个字段抹掉，消费点
+ *   （`generate-api-docs.mjs` 打 `files before=/after=`）在声明面上取不到自己
+ *   已经在读的字段。
  */
 export async function runTypedoc({
   outDir,
