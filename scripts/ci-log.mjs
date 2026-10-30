@@ -48,7 +48,8 @@
  * ## 第二层：颜色（ISSUE #2506 的后半句「提高可读性，还有什么手段都用上」）
  *
  * 三态靠前缀分得开，但**同一屏上十几条判决全是同一种灰**时，眼睛仍然要先读字才知道
- * 哪一条是红的。所以这一层还管颜色 —— 而且只有一处口径：`paint()` / `bandLine()`。
+ * 哪一条是红的。所以这一层还管颜色 —— 而且只有一处口径：`paint()` / `bandLine()`，
+ * 两者的合成点是 `paintLine()`（谁要自己往屏幕上写，就调它，不调第三份）。
  *
  * 颜色的三条边界（缺一条就会变成「本地好看、平台一堆乱码」）：
  *
@@ -58,10 +59,11 @@
  *     `tests/ci-log.test.ts` 判：**着色后的字符串去掉色号必须逐字等于不着色的那一份**
  *     （着色不许动内容）。
  *   · **`NO_COLOR` / 非 TTY 一律不着色**（no-color.org 的通行约定）。判据是
- *     `colorEnabled()` —— 它**不在这里被调用**：本文件是纯排版，编排层（`gatePass` /
- *     `gateSkip` / `gateFail` 的默认 `out`）才决定「这一轮要不要上色」。
+ *     `colorEnabled()`：本文件的纯排版部分（`renderVerdict()` 等）一次也不碰它，
+ *     只有真正写屏幕的那一层（`emit()` 的默认出口、`paintLine()` 的调用方）才决定
+ *     「这一轮要不要上色」。
  *     重定向到文件 / 被别的脚本抓输出时不着色，抓出来的仍是那行干净文本
- *     （`ci-heavy-gates.mjs` 就靠这个读回绿步的结论句）。
+ *     （`ci-heavy-gates.mjs` 读回绿步的结论句靠的是**子进程的管道**，不是这条短路）。
  *   · **颜色是附加，不是判决**：删掉所有色号，三态仍然分得开（前缀 + 结构）。
  *     「看不清红」这件事不许只能靠颜色解决。
  *
@@ -472,12 +474,42 @@ export function summarize(items) {
 }
 
 /**
+ * 一行定稿文本 → 屏幕上的那一行：先按三态上色，再挂色带。
+ *
+ * 这是颜色层的**唯一合成点**：`emit()` 的默认出口，与「自己管写」的跑批（
+ * `ci-heavy-gates.mjs` 把判决转交给自己的 `log`）都走它 —— 上色与色带的先后
+ * 顺序不留第二份。
+ *
+ * `color` 是给「不是判决、却要跟着判决走」的那一行留的：合计行自己不带三态前缀，
+ * 但在红的那一跑里它必须读成红。给了它就整行按它着色，认标签那一步不再参与。
+ *
+ * @param {string} line
+ * @param {{enabled?: boolean, color?: string, band?: boolean}} [options]
+ *   `enabled` 省略 ⇒ 按 `colorEnabled()` 判；`band` 省略 ⇒ 与 `enabled` 同值。
+ * @returns {string}
+ */
+export function paintLine(
+  line,
+  { enabled = colorEnabled(), color, band = enabled } = {},
+) {
+  const text = String(line ?? "");
+  if (!enabled) return bandLine(text, { enabled: band, color }).line;
+  const painted = color ? paint(text, color, true) : colorizeLine(text, true);
+  return bandLine(painted, { enabled: band, color }).line;
+}
+
+/**
  * 把渲染好的几行交给 `out`。
  *
- * **上色与色带只在这一处发生**：`renderVerdict()` 等是纯函数（判据与测试都逐字比它），
- * 而「要不要上色」是一个关于宿主的判断（TTY / `NO_COLOR`），两者不能混在一起。
- * 调用方给了自己的 `out`（测试、以及 `ci-heavy-gates.mjs` 那种要抓回文本的场景）⇒
+ * **上色与色带只在 `paintLine()` 那一处合成**：`renderVerdict()` 等是纯函数（判据与
+ * 测试都逐字比它），而「要不要上色」是一个关于宿主的判断（TTY / `NO_COLOR`），两者
+ * 不能混在一起。
+ * 调用方给了自己的 `out`（测试、以及要抓回文本的场景）⇒
  * **整行原样交出去，不着色、不加色带** —— 抓回去的仍是那一行干净文本。
+ *
+ * ⚠️ 「给了 `out`」过去被读成「要抓文本」，于是**只是换个写法**的转述型跑批
+ * （`ci-heavy-gates.mjs`）也被这一条连带短路，颜色层在它那一屏从不生效
+ * （ISSUE #2748）。它现在自己在新界面上补 `paintLine()`，两边共用同一份口径。
  *
  * @param {string[]} lines
  * @param {{out?: (line: string) => void, color?: boolean, band?: boolean}} [options]
@@ -495,9 +527,7 @@ function emit(lines, options = {}) {
     /* 多行内容（`renderTally()` 的那一块）按 `\n` 拆成行重新上色 —— 一行一条，
      * 每一行都要有自己的竖线，否则那一块会在中间「断掉」。 */
     for (const one of String(line).split("\n")) {
-      const colored = colorizeLine(one, enabled);
-      const banded = bandLine(colored, { enabled: band });
-      process.stdout.write(`${banded.line}\n`);
+      process.stdout.write(`${paintLine(one, { enabled, band })}\n`);
     }
   }
 }
