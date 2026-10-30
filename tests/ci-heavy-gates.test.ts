@@ -16,6 +16,7 @@
  * 同一份 glob）⇒ 那 13 条「在平台那一格被 `ifModify` 跳过」的判据不再在这一格照跑全量。
  * 收窄的两条边界在这里钉住：**改动面取不到 ⇒ 一条都不跳**、**跳过的逐条点名且不计入绿**。
  */
+import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
   copyFileSync,
@@ -30,6 +31,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CHANGED_SCOPED } from "../scripts/base-check/hook-steps.mjs";
+import { COLORS } from "../scripts/ci-log.mjs";
 import {
   heavyGateArgv,
   judgmentScriptOf,
@@ -436,5 +438,69 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     expect(all).toContain("静默那一步");
     /* 没判不许混进「绿」里。 */
     expect(all).not.toContain("绿 1");
+  });
+});
+
+/**
+ * 三态前缀在屏幕上要**看得出来**（ISSUE #2748）。
+ *
+ * 现场：这一格把每条判决转交给 `gatePass` / `gateSkip` / `gateFail` 时都带着自己的
+ * `out`（为了统一走一个出口），而 `ci-log.mjs` 的 `emit()` 见到 `out` 就整行原样透传 ——
+ * 那条短路本意是给**抓文本**的调用方，结果把「只是换个写法往 stdout 写」的转述一起短路：
+ * build `cnb-j9g-1k64gcftk` 的 stage-27 里十五条 `[ok]` 与四条 `[skip]` 逐字同灰，
+ * 只有被转述的那份子进程自己带出的 ANSI 才显红。
+ *
+ * 两头各钉一侧：**注入 log 的那一路必须仍是干净文本**（否则用例与抓文本的调用方
+ * 会把色号算进字数），**真往 stdout 写的那一路必须带色号**（否则这一格又回到零颜色）。
+ */
+describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => {
+  it("注入 io.log ⇒ 拿到的仍是干净行，即便 FORCE_COLOR 开着", () => {
+    const lines: string[] = [];
+    main({
+      cwd: ROOT,
+      argv: ["--only=判据自身"],
+      env: { FORCE_COLOR: "1" },
+      log: (line: string) => lines.push(line),
+      changedFiles: null,
+    });
+    expect(lines.length).toBeGreaterThan(0);
+    /* 前缀在场、色号一个都不许多 —— 「给了 out」这一档仍是干净文本。 */
+    expect(lines.some((l) => l.startsWith("[ok]"))).toBe(true);
+    expect(lines.join("\n")).not.toContain("\u001b[");
+  });
+
+  /**
+   * 真起一次子进程：`paintOn` 的判据里就有「有没有注入 log」这一条，
+   * 在进程内怎么调都只会走干净那一路 —— 要证「带色号」只能打生产入口。
+   */
+  function runHeavyChild(extraArgs: string[]) {
+    const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "1" };
+    delete env.NO_COLOR;
+    return spawnSync(
+      process.execPath,
+      ["scripts/ci-heavy-gates.mjs", "--only=判据自身", ...extraArgs],
+      { cwd: ROOT, encoding: "utf8", env, timeout: 120_000 },
+    );
+  }
+
+  it("自己往 stdout 写那一档 ⇒ 判决行与合计行都带色号（真起一次生产入口）", () => {
+    const res = runHeavyChild([]);
+    expect(res.status).toBe(0);
+    const lines = (res.stdout || "").split(/\r?\n/);
+    const verdict = lines.find((l) => l.includes("[ok] 判据自身"));
+    expect(verdict).toBeDefined();
+    expect(verdict ?? "").toContain("\u001b[");
+    /* 合计行自己不带三态前缀，却要跟着判决走：这一跑全绿 ⇒ 绿。 */
+    const tally = lines.find((l) => l.includes("合计"));
+    expect(tally ?? "").toContain(`\u001b[${COLORS.ok}m`);
+    /* 「去掉色号之后仍是那一行原文」不在这里重复钉 —— 那是 `paintLine()` 的判据，
+     * 出处在 `tests/ci-log.test.ts`（这一条只证合成点真的接到了这一格上）。 */
+  });
+
+  it("`--json` 那一档整屏不着色（叙述行与 JSON 共用同一个 stdout）", () => {
+    const res = runHeavyChild(["--json"]);
+    expect(res.status).toBe(0);
+    expect(res.stdout).not.toContain("\u001b[");
+    expect(res.stdout).not.toContain("▌");
   });
 });
