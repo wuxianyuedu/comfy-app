@@ -127,6 +127,19 @@ describe("historyByFile —— 一次遍历换掉逐文件 git log", () => {
     ]);
   });
 
+  /* 消费点（`check-pending-merge-loss.mjs` 收候选那一步）写的是 `hist.get(f) ?? []`，
+   * 而那里的注释说「保证在生产端」—— 保证就是这一行：入口按传进来的 `files` 预置空数组。
+   * 这条断言把那个保证钉住：谁把预置改成「只给日志里出现过的路径建条目」，这里要红，
+   * 而不是让消费点那一句 `?? []` 变成「静默少一个文件的候选」。 */
+  test("日志里一次没出现过的文件，清单里仍有它的空条目（入口预置那一步）", () => {
+    const out = historyByFile(
+      vi.fn(() => log),
+      { ref: "b", files: ["src/a.ts", "src/never-touched.ts"] },
+    )!;
+    expect(out.get("src/never-touched.ts")).toEqual([]);
+    expect([...out.keys()]).toEqual(["src/a.ts", "src/never-touched.ts"]);
+  });
+
   test("③ 没被关心的路径不进清单（也不给它们建条目）", () => {
     const out = historyByFile(
       vi.fn(() => log),
